@@ -90,7 +90,8 @@ def test_barrier_prevents_crossing_and_overlap(tmp_path: Path) -> None:
     source = tmp_path / "barrier.docx"
     doc.save(source)
     span = inspect_docx(source, full=True).by_location("p0")
-    assert BARRIER in span.text
+    assert "\n" in span.text
+    assert len(span.segments) == 2
     old = span.text
     edit = edit_for(source, "p0", old)
     with pytest.raises(DocxError) as error:

@@ -19,3 +19,5 @@ archive/
 workbench/scratch/
 workbench/logs/
 node_modules/
+.playwright-mcp/
+*.baiduyun.uploading.cfg

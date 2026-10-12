@@ -38,6 +38,9 @@ REVISION_TAGS = {
     "moveToRangeStart", "moveToRangeEnd", "cellIns", "cellDel", "cellMerge",
     "trPrChange", "tcPrChange", "pPrChange", "rPrChange", "tblPrChange",
     "sectPrChange", "numberingChange", "customXmlInsRangeStart", "customXmlDelRangeStart",
+    "tblGridChange", "customXmlInsRangeEnd", "customXmlDelRangeEnd",
+    "customXmlMoveFromRangeStart", "customXmlMoveFromRangeEnd",
+    "customXmlMoveToRangeStart", "customXmlMoveToRangeEnd", "delText", "delInstrText",
 }
 BOUNDARY_TAGS = {
     "bookmarkStart", "bookmarkEnd", "commentRangeStart", "commentRangeEnd",
@@ -169,6 +172,8 @@ def _part_name(name: str) -> str:
     if re.search(r"%(?![0-9A-Fa-f]{2})", name):
         raise DocxError("OPC_URI_INVALID", name)
     decoded = unquote(name)
+    if any(ord(char) < 32 for char in decoded) or any(char in decoded for char in {":", "?", "#"}):
+        raise DocxError("OPC_URI_INVALID", name)
     if any("/" in unquote(segment) or "\\" in unquote(segment) for segment in name.split("/")):
         raise DocxError("OPC_URI_INVALID", name)
     segments = decoded.split("/")
@@ -197,6 +202,22 @@ def _validate_package(parts: Mapping[str, bytes], limits: ZipLimits, *, full: bo
     overrides = {item.get("PartName"): item.get("ContentType") for item in content if item.tag == f"{{{CT}}}Override"}
     defaults = {item.get("Extension", "").casefold(): item.get("ContentType")
                 for item in content if item.tag == f"{{{CT}}}Default"}
+    seen_content: set[tuple[str, str]] = set()
+    for item in content:
+        if item.tag == f"{{{CT}}}Override":
+            uri = item.get("PartName", "")
+            if not uri.startswith("/"):
+                raise DocxError("CONTENT_TYPES_INVALID")
+            key = ("override", _part_name(uri[1:]))
+        elif item.tag == f"{{{CT}}}Default":
+            key = ("default", item.get("Extension", "").casefold())
+            if not key[1]:
+                raise DocxError("CONTENT_TYPES_INVALID")
+        else:
+            raise DocxError("CONTENT_TYPES_INVALID")
+        if key in seen_content:
+            raise DocxError("CONTENT_TYPE_DUPLICATE")
+        seen_content.add(key)
     if overrides.get("/" + DOCUMENT) != "application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml":
         raise DocxError("MAIN_CONTENT_TYPE_INVALID")
     for name in parts:
@@ -209,6 +230,8 @@ def _validate_package(parts: Mapping[str, bytes], limits: ZipLimits, *, full: bo
         mime = item.get("ContentType", "")
         if "macroEnabled" in mime or "vbaProject" in mime:
             raise DocxError("MACRO_UNSUPPORTED")
+        if full and "digital-signature" in mime:
+            raise DocxError("SIGNED_OR_MACRO_UNSUPPORTED")
     main_rel_count = 0
     for name, data in parts.items():
         if not name.endswith(".rels"):
@@ -217,6 +240,8 @@ def _validate_package(parts: Mapping[str, bytes], limits: ZipLimits, *, full: bo
         if relroot.tag != f"{{{R}}}Relationships":
             raise DocxError("RELATIONSHIP_INVALID", name)
         source = _relationship_source(name)
+        if source and source not in parts:
+            raise DocxError("RELATIONSHIP_SOURCE_MISSING", source)
         seen_ids: set[str] = set()
         for rel in relroot:
             if rel.tag != f"{{{R}}}Relationship":
@@ -253,22 +278,38 @@ def _validate_package(parts: Mapping[str, bytes], limits: ZipLimits, *, full: bo
             root = _xml(data, limits)
             if root.tag.startswith("{http://purl.oclc.org/ooxml/wordprocessingml/main}"):
                 raise DocxError("STRICT_OOXML_UNSUPPORTED")
-            if name.startswith("word/"):
+            # Story parts can have arbitrary OPC URIs. Namespace, not directory,
+            # determines whether retained XML can contain Word revisions.
+            if any(element.tag == Q("documentProtection") or
+                   (isinstance(element.tag, str) and element.tag.startswith("{" + W + "}"))
+                   for element in root.iter()):
                 for element in root.iter():
+                    if not isinstance(element.tag, str):
+                        continue
                     local = etree.QName(element).localname
                     if element.tag.startswith("{" + W + "}") and local in REVISION_TAGS:
                         raise DocxError("EXISTING_REVISION_UNSUPPORTED", name)
                     if element.tag == Q("documentProtection"):
                         raise DocxError("DOCUMENT_PROTECTED")
+            for element in root.iter():
+                if not isinstance(element.tag, str):
+                    continue
+                if element.tag == "{http://www.w3.org/2001/XInclude}include":
+                    raise DocxError("XML_XINCLUDE_UNSUPPORTED")
+                if element.tag.startswith("{http://purl.oclc.org/ooxml/wordprocessingml/main}"):
+                    raise DocxError("STRICT_OOXML_UNSUPPORTED")
+                required = element.get("{http://schemas.openxmlformats.org/markup-compatibility/2006}MustUnderstand")
+                if required:
+                    raise DocxError("REQUIRED_EXTENSION_UNSUPPORTED")
 
 
 def _read_parts(path: str | Path, limits: ZipLimits) -> dict[str, bytes]:
     path = Path(path)
     if path.suffix.lower() != ".docx":
         raise DocxError("DOCX_ONLY")
-    if path.stat().st_size > limits.max_file_bytes:
-        raise DocxError("ZIP_FILE_LIMIT")
     try:
+        if path.stat().st_size > limits.max_file_bytes:
+            raise DocxError("ZIP_FILE_LIMIT")
         with zipfile.ZipFile(path) as archive:
             infos = archive.infolist()
             if len(infos) > limits.max_entries:
@@ -297,24 +338,47 @@ def _read_parts(path: str | Path, limits: ZipLimits) -> dict[str, bytes]:
 
 
 def _local(element: etree._Element) -> str:
-    return etree.QName(element).localname
+    return etree.QName(element).localname if isinstance(element.tag, str) else ""
 
 
 def _paragraph_text(paragraph: etree._Element) -> str:
-    return "".join((node.text or "") for node in paragraph.iter(Q("t")))
+    return "".join("\n" if node.tag in {Q("br"), Q("cr")} else (node.text or "")
+                   for node in paragraph.iter()
+                   if node.tag in {Q("t"), Q("br"), Q("cr")}
+                   and next(node.iterancestors(Q("p")), None) is paragraph)
 
 
 def _fingerprint(location: str, text: str, zone: str) -> str:
     return _sha((location + "\0" + zone + "\0" + text).encode("utf-8"))
 
 
+def _protected_text_nodes(root: etree._Element) -> set[etree._Element]:
+    """Track ranges in document order, including readonly wrapper paragraphs."""
+    active: set[tuple[str, str]] = set()
+    protected: set[etree._Element] = set()
+    for node in root.iter():
+        name = _local(node)
+        if name in {"bookmarkStart", "commentRangeStart", "permStart"} and node.tag == Q(name):
+            active.add((name.removesuffix("Start"), node.get(Q("id"), "")))
+        elif name in {"bookmarkEnd", "commentRangeEnd", "permEnd"} and node.tag == Q(name):
+            active.discard((name.removesuffix("End"), node.get(Q("id"), "")))
+        elif node.tag == Q("t") and active:
+            protected.add(node)
+    return protected
+
+
 def _project(paragraph: etree._Element, location: str, zone: str, section: str,
-             field_active: int, limits: ZipLimits) -> tuple[ParagraphSpan, int, bool]:
+             field_active: int, limits: ZipLimits,
+             protected_ranges: set[tuple[str, str]] | None = None,
+             protected_nodes: set[etree._Element] | None = None) -> tuple[ParagraphSpan, int, bool]:
     chunks: list[str] = []
     spans: list[tuple[int, int, tuple[str, ...]]] = []
     position = 0
     toc = False
     reasons: list[str] = []
+    protected_ranges = protected_ranges if protected_ranges is not None else set()
+    if protected_nodes is None:
+        protected_nodes = _protected_text_nodes(paragraph.getroottree().getroot())
 
     def barrier() -> None:
         nonlocal position
@@ -339,8 +403,24 @@ def _project(paragraph: etree._Element, location: str, zone: str, section: str,
         spans.append((start, position, (node.getroottree().getpath(node),)))
 
     def visit(node: etree._Element, blocked: bool = False) -> None:
-        nonlocal field_active, toc
+        nonlocal field_active, toc, position
         name = _local(node)
+        if node.tag in {Q("br"), Q("cr")}:
+            chunks.append("\n")
+            position += 1
+            return
+        if name in {"bookmarkStart", "bookmarkEnd", "commentRangeStart", "commentRangeEnd", "permStart", "permEnd"} and node.tag == Q(name):
+            ending = name.endswith("End")
+            category = name.removesuffix("End") if ending else name.removesuffix("Start")
+            key = (category, node.get(Q("id"), ""))
+            if ending:
+                if key not in protected_ranges:
+                    reasons.append("malformed_range")
+                protected_ranges.discard(key)
+            else:
+                protected_ranges.add(key)
+            barrier()
+            return
         if node.tag == Q("fldChar"):
             kind = node.get(Q("fldCharType"))
             if kind == "begin":
@@ -350,6 +430,8 @@ def _project(paragraph: etree._Element, location: str, zone: str, section: str,
                     reasons.append("malformed_field")
                 else:
                     field_active -= 1
+            elif kind != "separate" or field_active == 0:
+                reasons.append("malformed_field")
             barrier()
             return
         if node.tag == Q("instrText"):
@@ -358,12 +440,17 @@ def _project(paragraph: etree._Element, location: str, zone: str, section: str,
             barrier()
             return
         if node.tag == Q("t"):
-            add_text(node, not blocked and not field_active and zone in {"body", "summary"})
+            run = node.getparent()
+            ordinary = run is not None and run.tag == Q("r") and run.getparent() is paragraph
+            ordinary = ordinary and [child.tag for child in run if child.tag != Q("rPr")] == [Q("t")]
+            add_text(node, ordinary and node not in protected_nodes and not blocked and not field_active and not protected_ranges and zone in {"body", "summary"})
             return
         if node.tag.startswith("{" + W + "}") and name in BOUNDARY_TAGS:
             barrier()
             return
-        newly_blocked = blocked or node.tag in {Q("hyperlink"), Q("sdt"), Q("fldSimple"), Q("txbxContent"), Q("smartTag"), Q("customXml")}
+        # Only direct ordinary runs are writable. Unknown extensions and wrappers
+        # may carry alternate or hidden views; never flatten them into candidates.
+        newly_blocked = blocked or node.tag != Q("r")
         if node.tag == Q("fldSimple") and "TOC" in (node.get(Q("instr"), "")).upper():
             toc = True
         if newly_blocked and not blocked:
@@ -405,15 +492,19 @@ def _enumerate_paragraphs(root: etree._Element, limits: ZipLimits) -> tuple[tupl
     field_active = 0
     has_toc = False
     p_index = 0
+    protected_ranges: set[tuple[str, str]] = set()
+    protected_nodes = _protected_text_nodes(root)
+    indexed: set[etree._Element] = set()
 
     def add(p: etree._Element, location: str, inherited: str) -> None:
         nonlocal zone, section, in_toc, field_active, has_toc
+        indexed.add(p)
         plain = _paragraph_text(p).strip().replace(" ", "")
         style = p.find("./" + Q("pPr") + "/" + Q("pStyle"))
         style_value = style.get(Q("val"), "") if style is not None else ""
-        if re.fullmatch(r"(?:基金合同)?内容摘要", plain):
+        if not inherited and re.fullmatch(r"(?:基金合同)?内容摘要", plain):
             zone, section = "summary", plain
-        elif re.fullmatch(r"(?:附录|附件)(?:[一二三四五六七八九十\d].*)?", plain):
+        elif not inherited and re.fullmatch(r"(?:附录|附件)(?:[一二三四五六七八九十\d].*)?", plain):
             zone, section = "appendix", plain
         elif plain and (style_value.lower().startswith("heading") or re.match(r"^第[一二三四五六七八九十\d]+(?:部分|章|节)", plain)):
             section = plain[:120]
@@ -421,13 +512,14 @@ def _enumerate_paragraphs(root: etree._Element, limits: ZipLimits) -> tuple[tupl
             in_toc = True
         elif in_toc and (style_value.lower().startswith("heading") or re.match(r"^第[一二三四五六七八九十\d]+(?:部分|章)", plain)):
             in_toc = False
-        effective = "unsupported_table" if inherited == "unsupported_table" else ("toc" if in_toc or field_active else zone)
-        projected, field_active, toc = _project(p, location, effective, section, field_active, limits)
-        has_toc |= toc or in_toc
+        effective = inherited or ("toc" if in_toc or field_active else zone)
+        projected, field_active, toc = _project(p, location, effective, section, field_active, limits, protected_ranges, protected_nodes)
+        # A static directory label is protected, but is not a TOC field.
+        has_toc |= toc
         if "revision_content" in projected.reasons:
             projected = ParagraphSpan(projected.location, "revision", projected.section_path,
                                       projected.text, (), projected.fingerprint, reasons=projected.reasons)
-        elif (field_active or "malformed_field" in projected.reasons) and projected.zone != "toc":
+        elif field_active or "malformed_field" in projected.reasons or "malformed_range" in projected.reasons:
             projected = ParagraphSpan(projected.location, "field", projected.section_path,
                                       projected.text, (), projected.fingerprint, reasons=("open_field",))
         result.append(projected)
@@ -443,13 +535,20 @@ def _enumerate_paragraphs(root: etree._Element, limits: ZipLimits) -> tuple[tupl
                     unsupported = cell.find(".//" + Q("tbl")) is not None or cell.find("./" + Q("tcPr") + "/" + Q("gridSpan")) is not None or cell.find("./" + Q("tcPr") + "/" + Q("vMerge")) is not None
                     for cell_p_index, paragraph in enumerate(cell.findall(Q("p"))):
                         add(paragraph, f"tbl{table_index}/r{row_index}/c{cell_index}/p{cell_p_index}", "unsupported_table" if unsupported else "")
+    for paragraph in body.iter(Q("p")):
+        if paragraph not in indexed:
+            location = "readonly:" + paragraph.getroottree().getpath(paragraph)
+            projected, _, toc = _project(paragraph, location, "unsupported_structure", "", 0, limits,
+                                       protected_nodes=protected_nodes)
+            result.append(projected)
+            has_toc |= toc
     return tuple(result), has_toc
 
 
 def inspect_docx(path: str | Path, *, full: bool = False, limits: ZipLimits | None = None) -> DocumentInspection:
     limits = limits or ZipLimits()
-    source = Path(path).read_bytes()
     parts = _read_parts(path, limits)
+    source = Path(path).read_bytes()
     _validate_package(parts, limits, full=full)
     root = _xml(parts[DOCUMENT], limits)
     if root.tag != Q("document"):
@@ -462,7 +561,35 @@ def _safe_grapheme_boundary(text: str, index: int) -> bool:
     if index <= 0 or index >= len(text):
         return True
     previous, current = text[index - 1], text[index]
-    return not (unicodedata.combining(current) or current in {"\ufe0e", "\ufe0f", "\u200d"} or previous == "\u200d")
+    # Conservative extended-cluster boundaries. Reject uncertain script joins
+    # rather than splitting an emoji, spacing mark or Indic conjunct.
+    if (unicodedata.category(current).startswith("M") or
+        current in {"\u200d", "\n"} and previous in {"\u200d", "\r"} or
+        current == "\u200d" or previous == "\u200d" or
+        unicodedata.combining(previous) == 9 or
+        0x1F3FB <= ord(current) <= 0x1F3FF or
+        0xE0020 <= ord(current) <= 0xE007F or
+        0x1F1E6 <= ord(previous) <= 0x1F1FF and 0x1F1E6 <= ord(current) <= 0x1F1FF):
+        return False
+
+    def hangul(char: str) -> str:
+        code = ord(char)
+        if 0x1100 <= code <= 0x115F or 0xA960 <= code <= 0xA97C:
+            return "L"
+        if 0x1160 <= code <= 0x11A7 or 0xD7B0 <= code <= 0xD7C6:
+            return "V"
+        if 0x11A8 <= code <= 0x11FF or 0xD7CB <= code <= 0xD7FB:
+            return "T"
+        if 0xAC00 <= code <= 0xD7A3:
+            return "LV" if (code - 0xAC00) % 28 == 0 else "LVT"
+        return ""
+
+    left, right = hangul(previous), hangul(current)
+    if left == "L" and right in {"L", "V", "LV", "LVT"} or left in {"LV", "V"} and right in {"V", "T"} or left in {"LVT", "T"} and right == "T":
+        return False
+    # Format controls can implement Prepend or invisible script joins. Their
+    # boundary semantics are outside the current writable subset.
+    return (previous == BARRIER or unicodedata.category(previous) != "Cf") and (current == BARRIER or unicodedata.category(current) != "Cf")
 
 
 def validate_edit_plan(source: str | Path, edits: Sequence[Mapping[str, Any]],
@@ -488,15 +615,26 @@ def validate_edit_plan(source: str | Path, edits: Sequence[Mapping[str, Any]],
         if template_id not in templates or edit.get("replacement") != templates[template_id]:
             raise DocxError("TEMPLATE_MISMATCH")
         start, end = edit.get("start"), edit.get("end")
-        if not isinstance(start, int) or not isinstance(end, int) or not (0 <= start < end <= len(paragraph.text)):
+        insertion = edit.get("operation") == "insert"
+        if not isinstance(start, int) or not isinstance(end, int) or not (0 <= start <= end <= len(paragraph.text)) or (start == end) != insertion:
             raise DocxError("EDIT_RANGE_INVALID")
+        if insertion:
+            anchor = edit.get("anchor", {})
+            anchor_start, anchor_end = anchor.get("start"), anchor.get("end")
+            if not isinstance(anchor_start, int) or not isinstance(anchor_end, int) or not (0 <= anchor_start < anchor_end == start):
+                raise DocxError("INSERT_ANCHOR_INVALID")
+            anchor_text = paragraph.text[anchor_start:anchor_end]
+            if anchor_text != anchor.get("text") or _sha(anchor_text.encode("utf-8")) != anchor.get("sha256"):
+                raise DocxError("INSERT_ANCHOR_MISMATCH")
+            if not any(s.start <= anchor_start and anchor_end <= s.end for s in paragraph.segments):
+                raise DocxError("INSERT_ANCHOR_UNSAFE")
         old = paragraph.text[start:end]
         if old != edit.get("expected_old_text") or _sha(old.encode("utf-8")) != edit.get("expected_old_hash"):
             raise DocxError("EXPECTED_TEXT_MISMATCH")
-        if not _safe_grapheme_boundary(paragraph.text, start) or not _safe_grapheme_boundary(paragraph.text, end):
-            raise DocxError("GRAPHEME_BOUNDARY_INVALID")
         if not any(segment.start <= start and end <= segment.end for segment in paragraph.segments):
             raise DocxError("EDIT_CROSSES_BARRIER")
+        if not _safe_grapheme_boundary(paragraph.text, start) or not _safe_grapheme_boundary(paragraph.text, end):
+            raise DocxError("GRAPHEME_BOUNDARY_INVALID")
         for existing_start, existing_end in occupied.setdefault(location, []):
             if not (end < existing_start or start > existing_end):
                 raise DocxError("EDIT_OVERLAP_OR_ADJACENT")
@@ -556,6 +694,17 @@ def _revision(tag: str, revision_id: int, author: str, when: str,
     return wrapper
 
 
+def _inserted_runs(template_run: etree._Element, value: str) -> list[etree._Element]:
+    runs: list[etree._Element] = []
+    for number, line in enumerate(value.split("\n")):
+        if number:
+            break_run = etree.Element(Q("r"))
+            etree.SubElement(break_run, Q("br"))
+            runs.append(break_run)
+        runs.append(_make_text_run(template_run, line))
+    return runs
+
+
 def _apply_one(root: etree._Element, edit: Mapping[str, Any], del_id: int,
                ins_id: int, author: str, when: str, limits: ZipLimits) -> None:
     paragraph = _paragraph_element(root, str(edit["location"]))
@@ -575,6 +724,8 @@ def _apply_one(root: etree._Element, edit: Mapping[str, Any], del_id: int,
         nodes.append((node, cursor, node_end))
         cursor = node_end
     selected = [(node, lo, hi) for node, lo, hi in nodes if hi > start and lo < end]
+    if start == end:
+        selected = next(([item] for item in nodes if item[1] < start <= item[2]), [])
     if not selected:
         raise DocxError("XML_MAPPING_DRIFT")
     runs: list[etree._Element] = []
@@ -603,7 +754,7 @@ def _apply_one(root: etree._Element, edit: Mapping[str, Any], del_id: int,
         replacement.append(_make_text_run(first_run, prefix))
     replacement.append(_revision("del", del_id, author, when, deleted_runs))
     replacement.append(_revision("ins", ins_id, author, when,
-                                 [_make_text_run(first_run, str(edit["replacement"]))]))
+                                 _inserted_runs(first_run, str(edit["replacement"])) ))
     if suffix:
         replacement.append(_make_text_run(last_run, suffix))
     insert_at = indexes[0]
@@ -685,6 +836,79 @@ def _non_target_snapshot(root: etree._Element, edited: set[str]) -> dict[str, by
     return snapshot
 
 
+def _structure_snapshot(root: etree._Element, edited: set[str]) -> bytes:
+    """Keep the complete document topology, including target paragraph properties.
+
+    Only ordinary text runs in edited paragraphs can be split by the editor.
+    Everything else (including nested stories, fields and table properties) is
+    compared canonically across independently reopened packages.
+    """
+    clone = deepcopy(root)
+    for location in edited:
+        paragraph = _paragraph_element(clone, location)
+        for node in list(paragraph):
+            if node.tag in {Q("ins"), Q("del")}:
+                paragraph.remove(node)
+            elif node.tag == Q("r") and [c.tag for c in node if c.tag != Q("rPr")] == [Q("t")]:
+                paragraph.remove(node)
+            elif node.tag == Q("r") and len(node) == 1 and node[0].tag == Q("br") and not node.attrib and not node[0].attrib:
+                # Template newlines create plain break runs; their positions and
+                # count are checked by the full expected text projection.
+                paragraph.remove(node)
+    return etree.tostring(clone, method="c14n")
+
+
+def _validate_revision_manifest(root: etree._Element, manifests: Sequence[Mapping[str, Any]]) -> None:
+    seen: set[str] = set()
+    expected = {str(item[key]): (item, tag) for item in manifests
+                for key, tag in (("del_id", "del"), ("ins_id", "ins"))}
+    for node in root.iter():
+        if node.tag not in {Q("ins"), Q("del")}:
+            continue
+        rid = node.get(Q("id"), "")
+        if rid not in expected or rid in seen:
+            raise DocxError("REVISION_ID_UNEXPECTED")
+        seen.add(rid)
+        item, tag = expected[rid]
+        if node.tag != Q(tag) or node.getparent() is not _paragraph_element(root, str(item["location"])):
+            raise DocxError("REVISION_STRUCTURE_INVALID")
+        if not node.get(Q("author"), "").strip():
+            raise DocxError("REVISION_METADATA_INVALID")
+        try:
+            stamp = datetime.fromisoformat(node.get(Q("date"), "").replace("Z", "+00:00"))
+            if stamp.tzinfo is None:
+                raise ValueError("missing timezone")
+        except ValueError as exc:
+            raise DocxError("REVISION_METADATA_INVALID") from exc
+        text_tag = Q("delText") if tag == "del" else Q("t")
+        for run in node:
+            content_tags = [c.tag for c in run if c.tag != Q("rPr")]
+            if run.tag != Q("r") or content_tags not in ([[text_tag], [Q("br")]] if tag == "ins" else [[text_tag]]):
+                raise DocxError("REVISION_STRUCTURE_INVALID")
+        actual = "".join("\n" if t.tag == Q("br") else t.text or ""
+                         for t in node.iter() if t.tag in {text_tag, Q("br")})
+        if actual != item["expected_old_text" if tag == "del" else "replacement"]:
+            raise DocxError("REVISION_TEXT_MISMATCH")
+    if seen != set(expected):
+        raise DocxError("REVISION_COUNT_MISMATCH")
+
+
+def _text_formats(root: etree._Element, location: str, limits: ZipLimits) -> list[bytes | None]:
+    spans, _ = _enumerate_paragraphs(root, limits)
+    paragraph = next(p for p in spans if p.location == location)
+    formats: list[bytes | None] = [None] * len(paragraph.text)
+    for segment in paragraph.segments:
+        cursor = segment.start
+        for path in segment.node_paths:
+            text = root.xpath(path, namespaces=NS)[0]
+            properties = text.getparent().find(Q("rPr"))
+            value = etree.tostring(properties, method="c14n") if properties is not None else b""
+            end = cursor + len(text.text or "")
+            formats[cursor:end] = [value] * (end - cursor)
+            cursor = end
+    return formats
+
+
 def generate_artifacts(source: str | Path, plan: ValidatedPlan, redline_path: str | Path,
                        final_path: str | Path, *, author: str = "FundLex",
                        limits: ZipLimits | None = None) -> ArtifactValidation:
@@ -737,11 +961,15 @@ def generate_artifacts(source: str | Path, plan: ValidatedPlan, redline_path: st
             raise DocxError("NON_DOCUMENT_PART_CHANGED")
         red_reopen = _xml(red_parts[DOCUMENT], limits)
         final_reopen = _xml(final_parts[DOCUMENT], limits)
+        _validate_revision_manifest(red_reopen, manifest)
         accepted = deepcopy(red_reopen)
         _accept_our_revisions(accepted, manifest)
         if etree.tostring(accepted, method="c14n") != etree.tostring(final_reopen, method="c14n"):
             raise DocxError("FINAL_REVISION_MISMATCH")
         edited = {str(edit["location"]) for edit in plan.edits}
+        skeleton = _structure_snapshot(original, edited)
+        if skeleton != _structure_snapshot(red_reopen, edited) or skeleton != _structure_snapshot(final_reopen, edited):
+            raise DocxError("NON_TARGET_STRUCTURE_CHANGED")
         source_snapshot = _non_target_snapshot(original, edited)
         if source_snapshot != _non_target_snapshot(red_reopen, edited) or source_snapshot != _non_target_snapshot(final_reopen, edited):
             raise DocxError("NON_TARGET_CHANGED")
@@ -752,6 +980,13 @@ def generate_artifacts(source: str | Path, plan: ValidatedPlan, redline_path: st
                 expected = expected[:edit["start"]] + str(edit["replacement"]) + expected[edit["end"]:]
             if final_texts.get(location) != expected:
                 raise DocxError("FINAL_TEXT_MISMATCH", location)
+        for location in edited:
+            expected_formats = _text_formats(original, location, limits)
+            for edit in sorted((e for e in plan.edits if e["location"] == location), key=lambda e: -e["start"]):
+                inherited = expected_formats[edit["start"] - 1 if edit["start"] == edit["end"] else edit["start"]]
+                expected_formats[edit["start"]:edit["end"]] = [None if char == "\n" else inherited for char in str(edit["replacement"])]
+            if _text_formats(final_reopen, location, limits) != expected_formats:
+                raise DocxError("RUN_FORMAT_CHANGED", location)
         return ArtifactValidation(_sha(redline_path.read_bytes()), _sha(final_path.read_bytes()),
                                   tuple(manifest), ("package", "revisions", "final_equivalence", "non_target", "template_text"),
                                   plan.has_toc_field, "not_updated" if plan.has_toc_field else "not_present")
@@ -761,14 +996,10 @@ def generate_artifacts(source: str | Path, plan: ValidatedPlan, redline_path: st
         raise
 
 
-def generate_noop_evaluation_artifacts(source: str | Path, redline_path: str | Path,
+def _generate_identical_artifacts(source: str | Path, redline_path: str | Path,
                                        final_path: str | Path,
                                        *, limits: ZipLimits | None = None) -> ArtifactValidation:
-    """Write byte-identical evaluation copies for a validated zero-edit decision.
-
-    These copies are diagnostic work products. The caller must not publish them as
-    a final revised contract or claim that a rule action has been applied.
-    """
+    """Write and independently validate byte-identical supported DOCX copies."""
     limits = limits or ZipLimits()
     source = Path(source)
     redline_path, final_path = Path(redline_path), Path(final_path)
@@ -797,3 +1028,23 @@ def generate_noop_evaluation_artifacts(source: str | Path, redline_path: str | P
         redline_path.unlink(missing_ok=True)
         final_path.unlink(missing_ok=True)
         raise
+
+
+def generate_noop_evaluation_artifacts(source: str | Path, redline_path: str | Path,
+                                       final_path: str | Path, *, limits: ZipLimits | None = None) -> ArtifactValidation:
+    """Diagnostic copies for unreleased rules; not final contract delivery."""
+    return _generate_identical_artifacts(source, redline_path, final_path, limits=limits)
+
+
+def generate_unchanged_artifacts(source: str | Path, plan: ValidatedPlan, redline_path: str | Path,
+                                 final_path: str | Path, *, limits: ZipLimits | None = None) -> ArtifactValidation:
+    """Deliver an unchanged contract from a validated empty released-rule plan.
+
+    The caller verifies action publication and complete candidate decisions.
+    """
+    if not isinstance(plan, ValidatedPlan) or plan.edits:
+        raise DocxError("PLAN_NOT_EMPTY_OR_UNVALIDATED")
+    checked = validate_edit_plan(source, (), plan.templates, limits=limits)
+    if checked.source_sha256 != plan.source_sha256 or checked.plan_sha256 != plan.plan_sha256:
+        raise DocxError("PLAN_DRIFT")
+    return _generate_identical_artifacts(source, redline_path, final_path, limits=limits)
