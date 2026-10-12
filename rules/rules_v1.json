@@ -1,0 +1,51 @@
+{
+  "version": "v1",
+  "schema_version": "1",
+  "source": "references/source/v4存量基金适用销售费用新规的基金合同修改指引_文案勘误版.docx",
+  "release_policy": {
+    "status": "unreleased",
+    "basis": "逐 action 画像、候选、结构、真实模型和独立样本门槛尚未完成；无批准记录",
+    "evaluation_report_id": null,
+    "approval_record": null
+  },
+  "templates": {
+    "R03-A1": {"text": "调低销售服务费率", "source_paragraph": 21},
+    "R03-A2": {"text": "", "source_paragraph": 22},
+    "R04-A1": {"text": "", "source_paragraph": 25},
+    "R08-A1": {"text": "通过直销机构申购本基金不收取申购费，通过其他销售机构申购本基金的申购费用由投资人承担，不列入基金财产。", "source_paragraph": 44}
+  },
+  "actions": [
+    {
+      "rule_id": "R03", "action_id": "R03-A1", "description": "份额类别设置中按已证实的销售服务费属性替换调低赎回费率文字",
+      "section_anchor": "基金的基本情况", "subsection_anchor": "份额类别", "regions": ["body", "summary"],
+      "scope": "phrase", "old_triggers": ["调低赎回费率"], "new_triggers": ["调低销售服务费率"],
+      "operation": "replace", "template_id": "R03-A1", "order": 1, "risk_class": "high",
+      "requires_profile": ["sales_service_fee_by_class"], "on_unknown": "failed", "auto_write": false,
+      "release_threshold": null, "approved": false
+    },
+    {
+      "rule_id": "R03", "action_id": "R03-A2", "description": "份额类别设置中删除备案语句",
+      "section_anchor": "基金的基本情况", "subsection_anchor": "份额类别", "regions": ["body", "summary"],
+      "scope": "phrase", "old_triggers": ["并报中国证监会备案"], "new_triggers": [],
+      "operation": "delete", "template_id": "R03-A2", "order": 2, "risk_class": "high",
+      "requires_profile": [], "on_unknown": "failed", "auto_write": false,
+      "release_threshold": null, "approved": false
+    },
+    {
+      "rule_id": "R04", "action_id": "R04-A1", "description": "份额类别设置中删除不同类别不得互相转换句",
+      "section_anchor": "基金的基本情况", "subsection_anchor": "份额类别", "regions": ["body", "summary"],
+      "scope": "sentence", "old_triggers": ["不同基金份额类别之间不得互相转换"], "new_triggers": [],
+      "operation": "delete", "template_id": "R04-A1", "order": 1, "risk_class": "high",
+      "requires_profile": ["share_classes"], "on_unknown": "failed", "auto_write": false,
+      "release_threshold": null, "approved": false
+    },
+    {
+      "rule_id": "R08", "action_id": "R08-A1", "description": "单类别产品申购费用条款替换候选",
+      "section_anchor": "基金份额的申购与赎回", "subsection_anchor": "申购", "regions": ["body", "summary"],
+      "scope": "sentence", "old_triggers": ["申购费用由投资人承担，不列入基金财产"], "new_triggers": ["通过直销机构申购本基金不收取申购费"],
+      "operation": "replace", "template_id": "R08-A1", "order": 1, "risk_class": "replace",
+      "requires_profile": ["share_classes", "subscription_fee_by_class"], "on_unknown": "failed", "auto_write": false,
+      "release_threshold": null, "approved": false
+    }
+  ]
+}
