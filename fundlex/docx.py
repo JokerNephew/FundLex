@@ -131,6 +131,9 @@ class ValidatedPlan:
     plan_sha256: str
     has_toc_field: bool
     templates: Mapping[str, str] = field(default_factory=dict)
+    # Generated-content edits are re-verified by a trusted server-side closure
+    # at every validation boundary; the model cannot self-assert verification.
+    content_check: Any = None
 
 
 @dataclass(frozen=True)
@@ -615,7 +618,15 @@ def _safe_grapheme_boundary(text: str, index: int) -> bool:
 
 
 def validate_edit_plan(source: str | Path, edits: Sequence[Mapping[str, Any]],
-                       templates: Mapping[str, str], *, limits: ZipLimits | None = None) -> ValidatedPlan:
+                       templates: Mapping[str, str], *, limits: ZipLimits | None = None,
+                       content_check: Any = None) -> ValidatedPlan:
+    """Validate edit geometry, source binding and content provenance.
+
+    ``content_check`` is a trusted closure supplied by the caller for edits whose
+    text was generated under the v2 content-verification pipeline. It must raise
+    ``DocxError`` when the server-side verification record does not bind the
+    edit; edits without a check are rejected rather than published.
+    """
     inspection = inspect_docx(source, full=True, limits=limits)
     validated: list[dict[str, Any]] = []
     occupied: dict[str, list[tuple[int, int]]] = {}
@@ -633,9 +644,17 @@ def validate_edit_plan(source: str | Path, edits: Sequence[Mapping[str, Any]],
             raise DocxError("MAPPING_VERSION_MISMATCH")
         if edit.get("fingerprint", paragraph.fingerprint) != paragraph.fingerprint:
             raise DocxError("PARAGRAPH_DRIFT")
-        template_id = str(edit.get("template_id", ""))
-        if template_id not in templates or edit.get("replacement") != templates[template_id]:
-            raise DocxError("TEMPLATE_MISMATCH")
+        content_source = str(edit.get("content_source", "template"))
+        if content_source == "template":
+            template_id = str(edit.get("template_id", ""))
+            if template_id not in templates or edit.get("replacement") != templates[template_id]:
+                raise DocxError("TEMPLATE_MISMATCH")
+        elif content_source == "generated":
+            if not callable(content_check):
+                raise DocxError("GENERATED_CONTENT_UNVERIFIED")
+            content_check(edit)
+        else:
+            raise DocxError("CONTENT_SOURCE_INVALID")
         start, end = edit.get("start"), edit.get("end")
         insertion = edit.get("operation") == "insert"
         if not isinstance(start, int) or not isinstance(end, int) or not (0 <= start <= end <= len(paragraph.text)) or (start == end) != insertion:
@@ -667,7 +686,7 @@ def validate_edit_plan(source: str | Path, edits: Sequence[Mapping[str, Any]],
     import json
     serialized = json.dumps(validated, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
     return ValidatedPlan(inspection.source_sha256, tuple(validated), _sha(serialized),
-                         inspection.has_toc_field, dict(templates))
+                         inspection.has_toc_field, dict(templates), content_check)
 
 
 def _paragraph_element(root: etree._Element, location: str) -> etree._Element:
@@ -950,7 +969,8 @@ def generate_artifacts(source: str | Path, plan: ValidatedPlan, redline_path: st
         raise DocxError("SOURCE_HASH_MISMATCH")
     # A caller might retain and mutate a dict after validation. Revalidate both
     # template provenance and source mapping at the publication boundary.
-    checked = validate_edit_plan(source, plan.edits, plan.templates, limits=limits)
+    checked = validate_edit_plan(source, plan.edits, plan.templates, limits=limits,
+                                 content_check=plan.content_check)
     if checked.plan_sha256 != plan.plan_sha256 or checked.has_toc_field != plan.has_toc_field:
         raise DocxError("PLAN_DRIFT")
     parts = _read_parts(source, limits)
@@ -965,7 +985,7 @@ def generate_artifacts(source: str | Path, plan: ValidatedPlan, redline_path: st
             _apply_one(root, edit, del_id, ins_id, author, now, limits)
             manifest.append({"edit_id": edit.get("edit_id", f"edit-{number}"), "location": edit["location"],
                              "start": edit["start"], "end": edit["end"], "expected_old_text": edit["expected_old_text"],
-                             "replacement": edit["replacement"], "template_id": edit["template_id"],
+                             "replacement": edit["replacement"], "template_id": edit.get("template_id", ""),
                              "del_id": del_id, "ins_id": ins_id})
         redline_xml = etree.tostring(root, encoding="UTF-8", xml_declaration=True)
         final_root = deepcopy(root)
@@ -1010,7 +1030,8 @@ def generate_artifacts(source: str | Path, plan: ValidatedPlan, redline_path: st
             if _text_formats(final_reopen, location, limits) != expected_formats:
                 raise DocxError("RUN_FORMAT_CHANGED", location)
         return ArtifactValidation(_sha(redline_path.read_bytes()), _sha(final_path.read_bytes()),
-                                  tuple(manifest), ("package", "revisions", "final_equivalence", "non_target", "template_text"),
+                                  tuple(manifest), ("package", "revisions", "final_equivalence", "non_target",
+                                                    "template_text") + (("content_verification",) if plan.content_check is not None else ()),
                                   plan.has_toc_field, "not_updated" if plan.has_toc_field else "not_present")
     except Exception:
         redline_path.unlink(missing_ok=True)
@@ -1066,7 +1087,7 @@ def generate_unchanged_artifacts(source: str | Path, plan: ValidatedPlan, redlin
     """
     if not isinstance(plan, ValidatedPlan) or plan.edits:
         raise DocxError("PLAN_NOT_EMPTY_OR_UNVALIDATED")
-    checked = validate_edit_plan(source, (), plan.templates, limits=limits)
+    checked = validate_edit_plan(source, (), plan.templates, limits=limits, content_check=plan.content_check)
     if checked.source_sha256 != plan.source_sha256 or checked.plan_sha256 != plan.plan_sha256:
         raise DocxError("PLAN_DRIFT")
     return _generate_identical_artifacts(source, redline_path, final_path, limits=limits)
