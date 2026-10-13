@@ -346,7 +346,327 @@ CONTRACTS: dict[str, dict] = {
     },
 }
 
-ACTION_ORDER = ["R01-A1", "R02-A1", "R03-A3", "R04-A1", "R11-A1", "R10-A1"]
+ACTION_ORDER = ["R01-A1", "R02-A1", "R03-A3", "R04-A1", "R11-A1", "R10-A1",
+                "R03-A1", "R03-A2", "R05-A1", "R06-A1", "R07-A1", "R08-A1", "R09-A1",
+                "R12-A1", "R13-A1", "R14-A1", "R15-A1", "R15-A2", "R16-A1",
+                "R17-A1", "R17-A2", "R17-A3"]
+
+
+def _template_requirements(action_id: str, contains: list[str], forbid: list[str] | None = None) -> list[dict]:
+    requirements = [{"id": f"{action_id}-REQ-1", "kind": "must_preserve",
+                     "text": "改写内容必须与规则指引文案逐字一致（类别槽位按当前合同实际类别实例化）",
+                     "check": {"kind": "template_exact"}, "verification": "code"},
+                    {"id": f"{action_id}-REQ-2", "kind": "must_state",
+                     "text": "改写后必须包含规则要求的关键表述",
+                     "check": {"kind": "contains_all", "values": contains}, "verification": "code"}]
+    if forbid:
+        requirements.append({"id": f"{action_id}-REQ-3", "kind": "must_not_state",
+                             "text": "改写后不得保留旧的费用对象或条件表述",
+                             "check": {"kind": "not_contains", "values": forbid}, "verification": "code"})
+    return requirements
+
+
+def _delete_requirements(action_id: str) -> list[dict]:
+    return [{"id": f"{action_id}-REQ-1", "kind": "must_not_state",
+             "text": "目标内容已删除，范围之外文字保持不变",
+             "check": {"kind": "delete_only"}, "verification": "code"},
+            {"id": f"{action_id}-REQ-2", "kind": "must_preserve",
+             "text": "只删除目标内容；同段/相邻文字与其他区域逐字保留",
+             "check": {"kind": "boundary_scope", "boundary": "preserve_outside"}, "verification": "code"}]
+
+
+# The remaining catalogue actions. Their replacement text is the published rule
+# literal (or a deletion), so it is assembled and verified by code with class
+# slots instantiated from the current contract evidence - the model never
+# invents policy text for them.
+CONTRACTS.update({
+    "R03-A1": {
+        "semantics": {
+            "subject": "费率调整条款中的“调低赎回费率”表述",
+            "action": "将“调低赎回费率”替换为“调低销售服务费率”",
+            "condition": "仅当合同存在收取销售服务费的类别（has_service_fee）时适用",
+            "fee_terms": "不新增任何费率数字；只改变可调低费用的对象",
+            "ownership": None,
+            "allowed_changes": ["把“调低赎回费率”替换为“调低销售服务费率”"],
+            "must_preserve": ["同句其余可调费用表述、数字与编号", "其他区域、目录、部件"],
+            "forbidden_additions": ["不得新增费率数字、比例或条件"],
+            "unsupported": ["无销售服务费证据", "目标短语不在费率调整句", "跨段/屏障/无法唯一定位"],
+        },
+        "locate": {"mode": "code_literal", "triggers": ["调低赎回费率"]},
+        "generation": {"mode": "template"},
+        "requirements": _template_requirements("R03-A1", ["调低销售服务费率"], ["调低赎回费率"]),
+        "model_verification": [],
+    },
+    "R03-A2": {
+        "semantics": {
+            "subject": "费率调整条款中的“、调低赎回费率”",
+            "action": "删除该短语，保留同句其他可调费用表述",
+            "condition": "合同没有销售服务费类别（no_service_fee）时适用",
+            "fee_terms": "不改变其他费率数字与表述",
+            "ownership": None,
+            "allowed_changes": ["删除“、调低赎回费率”"],
+            "must_preserve": ["同句其他可调费用表述与数字", "其他区域与部件"],
+            "forbidden_additions": ["不得新增任何文字"],
+            "unsupported": ["存在销售服务费证据", "目标短语不存在", "跨段/屏障/无法唯一定位"],
+        },
+        "locate": {"mode": "code_literal", "triggers": ["、调低赎回费率"]},
+        "generation": {"mode": "delete"},
+        "requirements": _delete_requirements("R03-A2"),
+        "model_verification": [],
+    },
+    "R05-A1": {
+        "semantics": {
+            "subject": "单一类别基金的申购费率条款",
+            "action": "替换为含直销机构豁免的申购费率条款",
+            "condition": "单一类别（single_class）时适用",
+            "fee_terms": "不新增具体费率；保留“由基金管理人决定并在招募说明书列示”",
+            "ownership": None,
+            "allowed_changes": ["整句替换为规则指引文案"],
+            "must_preserve": ["费率决定与列示方式", "非目标区域与部件"],
+            "forbidden_additions": ["不得新增费率数字或条件"],
+            "unsupported": ["多类别合同", "目标句不匹配", "跨段/屏障/不唯一"],
+        },
+        "locate": {"mode": "code_literal", "triggers": ["本基金的申购费率由基金管理人决定，并在招募说明书中列示。"]},
+        "generation": {"mode": "template"},
+        "requirements": _template_requirements("R05-A1", ["通过直销机构申购本基金不收取申购费"]),
+        "model_verification": [],
+    },
+    "R06-A1": {
+        "semantics": {
+            "subject": "多类别基金的申购费率条款",
+            "action": "按当前合同实际类别替换为含类别费用归属与直销豁免的条款",
+            "condition": "多类别（multi_class）且类别收费分组可核验时适用",
+            "fee_terms": "不新增费率数字；类别名称只来自当前合同",
+            "ownership": None,
+            "allowed_changes": ["整句替换为规则指引文案", "类别槽位按实际申购费组/销售服务费组实例化"],
+            "must_preserve": ["费率决定与列示方式", "非目标区域与部件"],
+            "forbidden_additions": ["不得新增费率数字或条件", "不得使用合同之外的类别名称"],
+            "unsupported": ["单类别合同", "类别收费分组不完整", "目标句不匹配", "跨段/屏障/不唯一"],
+        },
+        "locate": {"mode": "code_literal", "triggers": ["本基金的申购费率由基金管理人决定，并在招募说明书中列示。"]},
+        "generation": {"mode": "template"},
+        "requirements": _template_requirements("R06-A1", ["通过直销机构申购本基金", "不收取申购费"]),
+        "model_verification": [],
+    },
+    "R07-A1": {
+        "semantics": {
+            "subject": "多类别基金的赎回金额计算条款",
+            "action": "替换为“按当日该类基金份额净值并扣除或加上相应费用”的表述",
+            "condition": "多类别（multi_class）时适用",
+            "fee_terms": "不新增费率或数字",
+            "ownership": None,
+            "allowed_changes": ["整句替换为规则指引文案"],
+            "must_preserve": ["金额单位与其他计算要素", "非目标区域与部件"],
+            "forbidden_additions": ["不得新增数字或条件"],
+            "unsupported": ["单类别合同", "目标句不匹配", "跨段/屏障/不唯一"],
+        },
+        "locate": {"mode": "code_literal",
+                   "triggers": ["赎回金额为按实际确认的有效赎回份额乘以当日对应份额类别的基金份额净值并扣除相应的费用，赎回金额单位为元。"]},
+        "generation": {"mode": "template"},
+        "requirements": _template_requirements("R07-A1", ["并扣除或加上相应的费用"]),
+        "model_verification": [],
+    },
+    "R08-A1": {
+        "semantics": {
+            "subject": "单一类别基金的申购费用承担条款",
+            "action": "替换为含直销豁免与费用承担的条款",
+            "condition": "单一类别（single_class）时适用",
+            "fee_terms": "不新增费率数字",
+            "ownership": "申购费用由投资人承担、不列入基金财产（保留）",
+            "allowed_changes": ["整句替换为规则指引文案"],
+            "must_preserve": ["费用承担与不列入基金财产的归属关系", "非目标区域与部件"],
+            "forbidden_additions": ["不得新增数字或条件"],
+            "unsupported": ["多类别合同", "目标句不匹配", "跨段/屏障/不唯一"],
+        },
+        "locate": {"mode": "code_literal", "triggers": ["申购费用由投资人承担，不列入基金财产。"]},
+        "generation": {"mode": "template"},
+        "requirements": _template_requirements("R08-A1", ["通过直销机构申购本基金不收取申购费", "不列入基金财产"]),
+        "model_verification": [],
+    },
+    "R09-A1": {
+        "semantics": {
+            "subject": "多类别基金的申购费用承担段落",
+            "action": "整段替换为含实际类别费用归属与直销豁免的段落",
+            "condition": "多类别（multi_class）且类别收费分组可核验时适用",
+            "fee_terms": "不新增费率数字；类别名称只来自当前合同",
+            "ownership": "申购费组类别的申购费用由投资人承担、不列入基金财产；服务费组类别不收取申购费用",
+            "allowed_changes": ["整段替换为规则指引文案", "类别槽位按实际类别分组实例化"],
+            "must_preserve": ["费用归属关系", "非目标区域与部件"],
+            "forbidden_additions": ["不得新增数字或条件", "不得使用合同之外的类别名称"],
+            "unsupported": ["单类别合同", "类别收费分组不完整", "整段与指引旧文不匹配", "跨段/屏障/不唯一"],
+        },
+        "locate": {"mode": "code_literal", "triggers": ["本基金A类基金份额的申购费用由投资人承担，不列入基金财产；C类基金份额不收取申购费用。"]},
+        "generation": {"mode": "template"},
+        "requirements": _template_requirements("R09-A1", ["通过直销机构申购本基金", "不列入基金财产"]),
+        "model_verification": [],
+    },
+    "R12-A1": {
+        "semantics": {
+            "subject": "单一类别基金的促销费率调整句",
+            "action": "替换为仅可调低申购费率的表述",
+            "condition": "单一类别（single_class）时适用",
+            "fee_terms": "不新增费率数字",
+            "ownership": None,
+            "allowed_changes": ["整句替换为规则指引文案"],
+            "must_preserve": ["同段其他费率调整表述", "非目标区域与部件"],
+            "forbidden_additions": ["不得新增赎回费率或转换费率表述"],
+            "unsupported": ["多类别合同", "目标句不匹配", "跨段/屏障/不唯一"],
+        },
+        "locate": {"mode": "code_literal",
+                   "triggers": ["基金管理人可以适当调低基金申购费率和赎回费率。",
+                                "基金管理人可以适当调低基金申购费率、赎回费率和转换费率。"]},
+        "generation": {"mode": "template"},
+        "requirements": _template_requirements("R12-A1", ["适当调低基金申购费率"], ["赎回费率"]),
+        "model_verification": [],
+    },
+    "R13-A1": {
+        "semantics": {
+            "subject": "多类别基金的促销费率调整句",
+            "action": "替换为可调低申购费率与销售服务费率的表述",
+            "condition": "多类别（multi_class）时适用",
+            "fee_terms": "不新增费率数字",
+            "ownership": None,
+            "allowed_changes": ["整句替换为规则指引文案"],
+            "must_preserve": ["同段其他费率调整表述", "非目标区域与部件"],
+            "forbidden_additions": ["不得新增赎回费率或转换费率表述"],
+            "unsupported": ["单类别合同", "目标句不匹配", "跨段/屏障/不唯一"],
+        },
+        "locate": {"mode": "code_literal",
+                   "triggers": ["基金管理人可以适当调低基金申购费率和赎回费率。",
+                                "基金管理人可以适当调低基金申购费率、赎回费率和转换费率。"]},
+        "generation": {"mode": "template"},
+        "requirements": _template_requirements("R13-A1", ["适当调低基金申购费率和销售服务费率"], ["赎回费率"]),
+        "model_verification": [],
+    },
+    "R14-A1": {
+        "semantics": {
+            "subject": "销售服务费支付段落",
+            "action": "整段替换为直销机构返还与其他销售机构支付规则（按实际销售服务费类别实例化）",
+            "condition": "多类别且存在销售服务费类别时适用",
+            "fee_terms": "保留每日计提、按月支付与“超过一年”期限表述；不新增数字",
+            "ownership": "直销机构计提部分在赎回或合同终止时返还投资者；其他销售机构按持有期支付",
+            "allowed_changes": ["整段替换为规则指引文案", "类别槽位按实际销售服务费类别实例化"],
+            "must_preserve": ["费用归属与支付方式的关键条件", "非目标区域与部件"],
+            "forbidden_additions": ["不得新增费率数字或条件", "不得使用合同之外的类别名称"],
+            "unsupported": ["无销售服务费类别", "整段与指引旧文不匹配", "跨段/屏障/不唯一"],
+        },
+        "locate": {"mode": "code_literal",
+                   "triggers": ["C类基金份额的销售服务费每日计提，按月支付。由基金管理人向基金托管人发送基金销售服务费划付指令，经基金托管人复核后于次月首日起10个工作日内从基金财产中一次性支付给登记机构，由登记机构代付给销售机构。若遇法定节假日、公休日等，支付日期顺延。"]},
+        "generation": {"mode": "template"},
+        "requirements": _template_requirements("R14-A1", ["直销机构", "销售服务费每日计提", "随赎回款"]),
+        "model_verification": [],
+    },
+    "R15-A1": {
+        "semantics": {
+            "subject": "销售服务费用途段落",
+            "action": "整段删除",
+            "condition": "多类别且存在销售服务费类别时适用",
+            "fee_terms": None,
+            "ownership": None,
+            "allowed_changes": ["删除该段落"],
+            "must_preserve": ["其他费用段落与全文其余部分", "非目标区域与部件"],
+            "forbidden_additions": ["不得新增任何文字"],
+            "unsupported": ["无销售服务费类别", "整段与指引旧文不匹配", "跨段/屏障/不唯一"],
+        },
+        "locate": {"mode": "code_literal",
+                   "triggers": ["C类基金份额的销售服务费主要用于支付销售机构佣金、以及基金管理人的基金行销广告费、促销活动费、基金份额持有人服务费等。"]},
+        "generation": {"mode": "delete"},
+        "requirements": _delete_requirements("R15-A1"),
+        "model_verification": [],
+    },
+    "R15-A2": {
+        "semantics": {
+            "subject": "销售服务费使用范围段落",
+            "action": "整段删除",
+            "condition": "多类别且存在销售服务费类别时适用",
+            "fee_terms": None,
+            "ownership": None,
+            "allowed_changes": ["删除该段落"],
+            "must_preserve": ["其他费用段落与全文其余部分", "非目标区域与部件"],
+            "forbidden_additions": ["不得新增任何文字"],
+            "unsupported": ["无销售服务费类别", "整段与指引旧文不匹配", "跨段/屏障/不唯一"],
+        },
+        "locate": {"mode": "code_literal",
+                   "triggers": ["C类基金份额的销售服务费使用范围不包括基金募集期间的上述费用。"]},
+        "generation": {"mode": "delete"},
+        "requirements": _delete_requirements("R15-A2"),
+        "model_verification": [],
+    },
+    "R16-A1": {
+        "semantics": {
+            "subject": "收益分配说明中的类别费用差异表述",
+            "action": "替换为“按类别费用收取不同”的表述",
+            "condition": "多类别（multi_class）且类别收费分组可核验时适用",
+            "fee_terms": "不新增费率数字",
+            "ownership": None,
+            "allowed_changes": ["替换“不收取销售服务费，而……收取销售服务费”为“费用收取不同”"],
+            "must_preserve": ["同句其他收益分配表述", "非目标区域与部件"],
+            "forbidden_additions": ["不得新增数字或条件", "不得使用合同之外的类别名称"],
+            "unsupported": ["单类别合同", "类别收费分组不完整", "目标短语不匹配", "跨段/屏障/不唯一"],
+        },
+        "locate": {"mode": "code_literal",
+                   "triggers": ["由于本基金A类基金份额不收取销售服务费，而C类基金份额收取销售服务费"]},
+        "generation": {"mode": "template"},
+        "requirements": _template_requirements("R16-A1", ["费用收取不同"]),
+        "model_verification": [],
+    },
+    "R17-A1": {
+        "semantics": {
+            "subject": "浮动管理费单一类别的清算分配段落",
+            "action": "替换为含返还或有管理费或扣除超额管理费的清算分配表述",
+            "condition": "浮动管理费且单一类别（floating_single）时适用",
+            "fee_terms": "不新增费率数字",
+            "ownership": "或有管理费返还或超额管理费扣除（保留指引表述）",
+            "allowed_changes": ["整段替换为规则指引文案"],
+            "must_preserve": ["清算顺序与分配方式", "非目标区域与部件"],
+            "forbidden_additions": ["不得新增数字或条件"],
+            "unsupported": ["非浮动管理费", "多类别合同", "整段与指引旧文不匹配", "跨段/屏障/不唯一"],
+        },
+        "locate": {"mode": "code_literal",
+                   "triggers": ["依据基金财产清算的分配方案，将基金财产清算后的全部剩余资产扣除基金财产清算费用、交纳所欠税款并清偿基金债务后，按基金份额持有人持有的基金份额比例进行分配，并扣除相应的超额管理费（如涉及）。",
+                                "依据基金财产清算的分配方案，将基金财产清算后的全部剩余资产扣除基金财产清算费用、交纳所欠税款并清偿基金债务后，按基金份额持有人持有的基金份额比例进行分配，并加上返还基金份额持有人的或有管理费（如有）或扣除相应的超额管理费（如有）。"]},
+        "generation": {"mode": "template"},
+        "requirements": _template_requirements("R17-A1", ["或有管理费（如有）", "超额管理费（如有）"]),
+        "model_verification": [],
+    },
+    "R17-A2": {
+        "semantics": {
+            "subject": "浮动管理费多类别的清算分配段落",
+            "action": "替换为含返还或有管理费、销售服务费或扣除超额管理费的清算分配表述",
+            "condition": "浮动管理费且多类别（floating_multi）时适用",
+            "fee_terms": "不新增费率数字",
+            "ownership": "或有管理费与销售服务费返还或超额管理费扣除（保留指引表述）",
+            "allowed_changes": ["整段替换为规则指引文案"],
+            "must_preserve": ["清算顺序与分配方式", "非目标区域与部件"],
+            "forbidden_additions": ["不得新增数字或条件"],
+            "unsupported": ["非浮动管理费", "单类别合同", "整段与指引旧文不匹配", "跨段/屏障/不唯一"],
+        },
+        "locate": {"mode": "code_literal",
+                   "triggers": ["依据基金财产清算的分配方案，将基金财产清算后的全部剩余资产扣除基金财产清算费用、交纳所欠税款并清偿基金债务后，按基金份额持有人持有的基金份额比例进行分配，并扣除相应的超额管理费（如涉及）。",
+                                "依据基金财产清算的分配方案，将基金财产清算后的全部剩余资产扣除基金财产清算费用、交纳所欠税款并清偿基金债务后，按基金份额持有人持有的基金份额比例进行分配，并加上返还基金份额持有人的或有管理费（如有）或扣除相应的超额管理费（如有）。"]},
+        "generation": {"mode": "template"},
+        "requirements": _template_requirements("R17-A2", ["或有管理费（如有）、销售服务费（如有）"]),
+        "model_verification": [],
+    },
+    "R17-A3": {
+        "semantics": {
+            "subject": "非浮动管理费多类别的清算分配段落",
+            "action": "替换为含返还销售服务费的清算分配表述",
+            "condition": "非浮动管理费、多类别且存在销售服务费（nonfloating_service_multi）时适用",
+            "fee_terms": "不新增费率数字",
+            "ownership": "销售服务费返还投资者（保留指引表述）",
+            "allowed_changes": ["整段替换为规则指引文案"],
+            "must_preserve": ["清算顺序与分配方式", "非目标区域与部件"],
+            "forbidden_additions": ["不得新增数字或条件"],
+            "unsupported": ["浮动管理费或无销售服务费", "单类别合同", "整段与指引旧文不匹配", "跨段/屏障/不唯一"],
+        },
+        "locate": {"mode": "code_literal",
+                   "triggers": ["依据基金财产清算的分配方案，将基金财产清算后的全部剩余资产扣除基金财产清算费用、交纳所欠税款并清偿基金债务后，按基金份额持有人持有的基金份额比例进行分配。"]},
+        "generation": {"mode": "template"},
+        "requirements": _template_requirements("R17-A3", ["并加上返还基金份额持有人的销售服务费（如有）"]),
+        "model_verification": [],
+    },
+})
 
 
 def _sha256_bytes(data: bytes) -> str:
@@ -363,6 +683,20 @@ def build() -> dict:
         base = by_id[action_id]
         contract = CONTRACTS[action_id]
         template = templates[base["template_id"]]
+        # Triggers and rule text come from the frozen v1 package; the v2 contract
+        # adds semantics, checks and (for slot actions) class instantiation.
+        locate = dict(contract["locate"])
+        if locate.get("mode") == "code_literal":
+            locate["triggers"] = list(base.get("old_triggers", []))
+            locate["old_texts"] = list(base.get("old_texts", base.get("old_triggers", [])))
+            if base.get("template_slots"):
+                locate["slots"] = dict(base["template_slots"])
+        generation = dict(contract["generation"])
+        if generation.get("mode") == "template":
+            generation["template_text"] = template["text"]
+            generation["max_chars"] = max(len(template["text"]) + 200, 400)
+            if base.get("template_slots"):
+                generation["slots"] = dict(base["template_slots"])
         actions.append({
             "rule_id": base["rule_id"],
             "action_id": action_id,
@@ -378,8 +712,8 @@ def build() -> dict:
             "condition": base["condition"],
             "approval": {"auto_write": False, "approved": False, "status": "unreleased"},
             "semantics": contract["semantics"],
-            "locate": contract["locate"],
-            "generation": contract["generation"],
+            "locate": locate,
+            "generation": generation,
             "requirements": contract["requirements"],
             "model_verification": contract["model_verification"],
             "source_provenance": {

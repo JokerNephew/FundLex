@@ -33,7 +33,7 @@ PROMPT_VERSIONS_V2 = {
 }
 
 LOCATE_MODES = {"code_literal", "code_recognition", "model_assisted", "class_definition"}
-GENERATION_MODES = {"delete", "generate"}
+GENERATION_MODES = {"delete", "generate", "template"}
 CHECK_KINDS = {
     "delete_only",
     "contains_all",
@@ -43,7 +43,15 @@ CHECK_KINDS = {
     "classes_within_profile_and_no_digits",
     "boundary_scope",
     "semantic_review",
+    "template_exact",
 }
+SLOT_GROUPS = {"subscription_group", "service_group"}
+
+
+def _valid_slots(slots: Any) -> bool:
+    return (isinstance(slots, dict) and bool(slots)
+            and all(isinstance(token, str) and token and group in SLOT_GROUPS
+                    for token, group in slots.items()))
 VERIFICATIONS = {"code", "code+model", "model"}
 
 
@@ -145,6 +153,8 @@ def _validate_action(action: dict[str, Any], known_ids: set[str]) -> None:
         raise RuleV2Error("V2_LOCATE_MODE_INVALID")
     if locate["mode"] == "code_literal" and not locate.get("triggers"):
         raise RuleV2Error("V2_LOCATE_TRIGGERS_MISSING")
+    if locate.get("slots") is not None and not _valid_slots(locate.get("slots")):
+        raise RuleV2Error("V2_SLOT_GROUPS_INVALID", {"action": action["action_id"]})
     if locate["mode"] == "code_recognition" and locate.get("recognition_kind") not in {"conversion_prohibition", "short_holding_redemption"}:
         raise RuleV2Error("V2_RECOGNITION_KIND_INVALID")
     if locate["mode"] == "model_assisted":
@@ -162,6 +172,13 @@ def _validate_action(action: dict[str, Any], known_ids: set[str]) -> None:
         # that would gate writes (TEMPLATE_VARIANT_UNNAPROVED in v1).
         if "template_slots" in generation:
             raise RuleV2Error("V2_TEMPLATE_SLOTS_UNSUPPORTED")
+    if generation["mode"] == "template":
+        if not generation.get("template_text") or not generation.get("max_chars"):
+            raise RuleV2Error("V2_GENERATION_CONTRACT_INCOMPLETE")
+        if action["operation"] != "replace":
+            raise RuleV2Error("V2_TEMPLATE_OPERATION_INVALID")
+        if generation.get("slots") is not None and not _valid_slots(generation.get("slots")):
+            raise RuleV2Error("V2_SLOT_GROUPS_INVALID", {"action": action["action_id"]})
     requirements = action["requirements"]
     if not isinstance(requirements, list) or not requirements:
         raise RuleV2Error("V2_REQUIREMENTS_MISSING")
@@ -183,6 +200,9 @@ def _validate_action(action: dict[str, Any], known_ids: set[str]) -> None:
         if action["operation"] != "delete" or any(item["check"]["kind"] != "delete_only"
                                                   and item["check"]["kind"] != "boundary_scope" for item in requirements):
             raise RuleV2Error("V2_DELETE_CONTRACT_INVALID")
+    if generation["mode"] == "template" and not any(item["check"]["kind"] == "template_exact"
+                                                    for item in requirements):
+        raise RuleV2Error("V2_TEMPLATE_CHECK_MISSING")
 
 
 def load_ruleset_v2(version: str = "v2", *, path: Path | None = None) -> RuleSetV2:

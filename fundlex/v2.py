@@ -200,9 +200,63 @@ def _safe_range(span: Any, start: int, end: int) -> bool:
     return bool(span.editable) and any(segment.start <= start and end <= segment.end for segment in span.segments)
 
 
+def _slot_groups(action: dict[str, Any]) -> dict[str, str]:
+    groups: dict[str, str] = {}
+    for key in ("locate", "generation"):
+        groups.update((action.get(key) or {}).get("slots") or {})
+    return groups
+
+
+def _instantiate_slots(text: str, action: dict[str, Any],
+                       profile: dict[str, Any]) -> tuple[str, str | None, dict[str, list[str]]]:
+    """Replace class-slot tokens with the current contract's actual class groups."""
+    slots = _slot_groups(action)
+    if not slots:
+        return text, None, {}
+    if not profile.get("fee_groups_verified"):
+        return text, "V2_SLOT_UNRESOLVED", {}
+    used: dict[str, list[str]] = {}
+    for token, group in slots.items():
+        names = list(profile.get("fee_groups", {}).get(group, []))
+        if not names:
+            return text, "V2_SLOT_UNRESOLVED", {}
+        text = text.replace(token, "、".join(name + "类" for name in names) + "基金份额")
+        used[token] = names
+    return text, None, used
+
+
+def _expand_sentence(text: str, start: int, end: int) -> tuple[int, int]:
+    marks = ("。", "；", "\n", "\ufff9")
+    at = max(text.rfind(mark, 0, start) for mark in marks)
+    start = at + 1
+    stops = [(index, mark) for mark in marks if (index := text.find(mark, end)) >= 0]
+    if stops:
+        position, mark = min(stops)
+        end = position + (1 if mark in "。；" else 0)
+    else:
+        end = len(text)
+    return start, end
+
+
 def _locate_literal(action: dict[str, Any], spans: Sequence[tuple[Any, Any]],
-                    inspection: DocumentInspection) -> list[dict[str, Any]]:
-    triggers = action["locate"]["triggers"]
+                    inspection: DocumentInspection, profile: dict[str, Any]) -> list[dict[str, Any]]:
+    raw_triggers = action["locate"]["triggers"]
+    raw_old_texts = action["locate"].get("old_texts", raw_triggers)
+    triggers: list[str] = []
+    for trigger in raw_triggers:
+        instantiated, error, _ = _instantiate_slots(trigger, action, profile)
+        if error:
+            return [{"status": "failed", "reason": error, "location": "", "region": "",
+                     "char_start": 0, "char_end": 0, "quote": "", "mapping_safe": False}]
+        triggers.append(instantiated)
+    old_texts: list[str] = []
+    for old in raw_old_texts:
+        instantiated, error, _ = _instantiate_slots(old, action, profile)
+        if error:
+            return [{"status": "failed", "reason": error, "location": "", "region": "",
+                     "char_start": 0, "char_end": 0, "quote": "", "mapping_safe": False}]
+        old_texts.append(instantiated)
+    scope = action["scope"]
     targets: list[dict[str, Any]] = []
     for span, previous in spans:
         if span.zone == "unsupported_table":
@@ -216,14 +270,23 @@ def _locate_literal(action: dict[str, Any], spans: Sequence[tuple[Any, Any]],
         seen: set[tuple[int, int]] = set()
         for trigger in triggers:
             for start, end in _normalized_matches(span.text, trigger):
+                if scope == "sentence":
+                    start, end = _expand_sentence(span.text, start, end)
+                elif scope == "paragraph":
+                    start, end = 0, len(span.text)
                 start, end = _trim(span.text, start, end)
                 if (start, end) in seen:
                     continue
                 seen.add((start, end))
+                literal = span.text[start:end]
                 target = {**_base_target(span, inspection), "char_start": start, "char_end": end,
-                          "quote": span.text[start:end], "trigger": trigger,
+                          "quote": literal, "trigger": trigger,
                           "mapping_safe": _safe_range(span, start, end)}
-                if not target["mapping_safe"]:
+                if scope in {"sentence", "paragraph"} and not any(_old_text_equal(literal, old) for old in old_texts):
+                    # The whole sentence/paragraph must equal the published old
+                    # text, otherwise a replacement would drop surrounding text.
+                    target["reason"] = "V2_SCOPE_TEXT_MISMATCH"
+                elif not target["mapping_safe"]:
                     target["reason"] = "UNSAFE_TEXT_MAPPING"
                 else:
                     target["status"] = "located"
@@ -467,7 +530,7 @@ def locate_targets(action: dict[str, Any], spans: Sequence[tuple[Any, Any]],
                    gateway: Any) -> list[dict[str, Any]]:
     mode = action["locate"]["mode"]
     if mode == "code_literal":
-        return _locate_literal(action, spans, inspection)
+        return _locate_literal(action, spans, inspection, profile)
     if mode == "code_recognition":
         return _locate_recognition(action, spans, inspection)
     if mode == "class_definition":
@@ -509,11 +572,20 @@ def direct_sales_parts(text: str, profile: dict[str, Any]) -> dict[str, bool]:
     }
 
 
-def _check_requirement(check: dict[str, Any], text: str, profile: dict[str, Any]) -> tuple[bool | None, dict[str, Any]]:
+def _check_requirement(check: dict[str, Any], text: str, profile: dict[str, Any],
+                       action: dict[str, Any] | None = None) -> tuple[bool | None, dict[str, Any]]:
     kind = check.get("kind")
     compact = _compact(text)
     if kind == "delete_only":
         return text == "", {}
+    if kind == "template_exact":
+        template = (action or {}).get("generation", {}).get("template_text")
+        if not template:
+            return False, {"error": "TEMPLATE_MISSING"}
+        instantiated, error, _ = _instantiate_slots(template, action or {}, profile)
+        if error:
+            return False, {"error": error}
+        return compact == _compact(instantiated), {"expected_prefix": instantiated[:80]}
     if kind == "contains_all":
         missing = [value for value in check["values"] if _compact(value) not in compact]
         return (not missing), ({"missing": missing} if missing else {})
@@ -546,7 +618,7 @@ def run_code_checks(action: dict[str, Any], text: str, profile: dict[str, Any]) 
     for requirement in action["requirements"]:
         if requirement["verification"] == "model":
             continue
-        satisfied, detail = _check_requirement(requirement["check"], text, profile)
+        satisfied, detail = _check_requirement(requirement["check"], text, profile, action)
         results.append({"id": requirement["id"], "result": "satisfied" if satisfied else "unsatisfied",
                         "checker": "code", "detail": detail})
     return results
@@ -699,7 +771,8 @@ def _assemble_record(action: dict[str, Any], target: dict[str, Any], span: Any, 
                      code_results: list[dict[str, Any]], profile: dict[str, Any], ruleset: RuleSetV2,
                      *, engine_build_value: str, content_source: str,
                      model_verify: dict[str, Any] | None, facts: list[dict[str, Any]],
-                     changes: list[dict[str, Any]], normalization: list[str] | None = None) -> dict[str, Any]:
+                     changes: list[dict[str, Any]], normalization: list[str] | None = None,
+                     slot_instantiation: dict[str, list[str]] | None = None) -> dict[str, Any]:
     requirements = []
     by_code = {item["id"]: item for item in code_results}
     by_model = {item["requirement_id"]: item for item in (model_verify or {}).get("items", [])}
@@ -737,6 +810,7 @@ def _assemble_record(action: dict[str, Any], target: dict[str, Any], span: Any, 
         "profile_facts_sha256": _sha_text(profile_facts) if profile_facts is not None else None,
         "boundary_policy": BOUNDARY_POLICY,
         "text_normalization": list(normalization or []),
+        "slot_instantiation": dict(slot_instantiation or {}),
         "requirements": requirements,
         "facts": facts, "changes": changes,
         "model_verify": model_verify,
@@ -753,6 +827,26 @@ def _assemble_record(action: dict[str, Any], target: dict[str, Any], span: Any, 
 def verify_target(action: dict[str, Any], target: dict[str, Any], span: Any, profile: dict[str, Any],
                   ruleset: RuleSetV2, gateway: Any, engine_build_value: str) -> dict[str, Any]:
     """Generate or select replacement text and run the independent content checks."""
+    if action["generation"]["mode"] == "template":
+        # The published rule literal is assembled by code; class slots come from
+        # the current contract evidence and the result is checked by code.
+        replacement, slot_error, slot_used = _instantiate_slots(
+            action["generation"].get("template_text", ""), action, profile)
+        if slot_error:
+            raise V2Error(slot_error)
+        normalization: list[str] = []
+        if action["operation"] == "append" or action["scope"] in {"sentence", "paragraph"}:
+            join_left = target["char_end"] if action["operation"] == "append" else target["char_start"]
+            replacement, normalization = _join_repairs(span.text, join_left, target["char_end"], replacement)
+        if not replacement or len(replacement) > int(action["generation"].get("max_chars", 4000)):
+            raise V2Error("V2_REPLACEMENT_INVALID")
+        code_results = run_code_checks(action, replacement, profile)
+        if any(item["result"] != "satisfied" for item in code_results):
+            failed = [item["id"] for item in code_results if item["result"] != "satisfied"]
+            raise V2Error("V2_CONTENT_CHECK_FAILED", {"requirements": failed, "replacement": replacement[:600]})
+        return {"replacement": replacement, "content_source": "rule_template", "code_results": code_results,
+                "model_verify": None, "facts": [], "changes": [], "normalization": normalization,
+                "slot_instantiation": slot_used}
     if action["generation"]["mode"] == "delete":
         code_results = run_code_checks(action, "", profile)
         return {"replacement": "", "content_source": "rule_delete", "code_results": code_results,
@@ -773,7 +867,8 @@ def verify_target(action: dict[str, Any], target: dict[str, Any], span: Any, pro
     if _old_text_equal(replacement, target["quote"]):
         raise V2Error("V2_REPLACEMENT_UNCHANGED")
     join_left = target["char_end"] if action["operation"] == "append" else target["char_start"]
-    replacement, normalization = _join_repairs(span.text, join_left, target["char_end"], replacement)
+    if action["operation"] == "append" or action["scope"] in {"sentence", "paragraph"}:
+        replacement, normalization = _join_repairs(span.text, join_left, target["char_end"], replacement)
     fact_error, fact_details = _validate_facts(value.get("facts", []), value.get("changes", []), span, action, profile_facts)
     if fact_error:
         raise V2Error(fact_error, fact_details)
@@ -849,13 +944,15 @@ def build_content_check(inspection: DocumentInspection, profile: dict[str, Any],
         replacement = str(edit.get("replacement", ""))
         if replacement != record.get("replacement_text") or _sha_text(replacement) != record.get("replacement_sha256"):
             raise DocxError("CONTENT_RECORD_REPLACEMENT_MISMATCH")
-        join_left = end if insertion else start
-        join_right = end
-        if not isinstance(join_left, int) or not isinstance(join_right, int):
-            raise DocxError("CONTENT_RECORD_RANGE_MISMATCH")
-        _repaired, join_notes = _join_repairs(paragraph.text, join_left, join_right, replacement)
-        if join_notes:
-            raise DocxError("CONTENT_JOIN_UNSAFE")
+        action = ruleset.by_id(str(edit.get("action_id", "")))
+        if edit.get("operation") == "insert" or action["scope"] in {"sentence", "paragraph"}:
+            join_left = end if insertion else start
+            join_right = end
+            if not isinstance(join_left, int) or not isinstance(join_right, int):
+                raise DocxError("CONTENT_RECORD_RANGE_MISMATCH")
+            _repaired, join_notes = _join_repairs(paragraph.text, join_left, join_right, replacement)
+            if join_notes:
+                raise DocxError("CONTENT_JOIN_UNSAFE")
         action = ruleset.by_id(str(edit.get("action_id", "")))
         rule_text = _rule_text(action)
         profile_facts = profile_facts_text(profile) if record.get("profile_facts_sha256") is not None else None
@@ -961,7 +1058,8 @@ def plan_v2(inspection: DocumentInspection, profile: dict[str, Any], ruleset: Ru
                                           content_source=outcome["content_source"],
                                           model_verify=outcome["model_verify"], facts=outcome["facts"],
                                           changes=outcome["changes"],
-                                          normalization=outcome.get("normalization"))
+                                          normalization=outcome.get("normalization"),
+                                          slot_instantiation=outcome.get("slot_instantiation"))
             except ModelError:
                 raise
             except V2Error as exc:

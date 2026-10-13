@@ -809,6 +809,7 @@ def test_check_requirement_kinds_are_declared():
     ruleset = load_ruleset_v2()
     declared = {"delete_only", "contains_all", "not_contains", "no_digits_and_no_conditions",
                 "direct_sales_clause", "classes_within_profile_and_no_digits", "boundary_scope",
-                "semantic_review"}
+                "semantic_review", "template_exact"}
     used = {requirement["check"]["kind"] for action in ruleset.actions for requirement in action["requirements"]}
     assert used.issubset(declared)
+    assert len(ruleset.actions) == 22
