@@ -25,6 +25,17 @@ pwsh -NoProfile -File .\tools\local.ps1 -Mode worker -Model deepseek-flash -Requ
 
 默认状态/文件目录为规范用户目录 `~/AppData/Local/FundLex/runtime`（Windows），可用 `FUNDLEX_DATA_DIR` 配置。活动 SQLite、预算账本、worker 锁和产物应放在非同步的短路径。此次重现外部文件句柄拒绝写共享可引发 SQLite 只读错误；同步程序归因尚未直接证实；MSIX 的 `LOCALAPPDATA` 重定向长路径还会触发 Windows 路径长度错误。默认位置已避开这些运行问题。原有样本保持不动。
 
+## 工作台的两种处理模式（2026-10-13）
+
+任务工作台支持两种模式，导入页可选择：
+
+- **只读诊断**（v1）：资格、候选与失败原因评估，不修改合同。
+- **合同修订（评测）**（v2）：按 6 个已实现语义契约的动作自动定位、局部修改并独立验证，产出 `evaluation_final`（接受修订后）与 `evaluation_redline`（修订痕迹）评测文件；任务、结果与报告显示"已修改（评测）/无需修改（评测）/部分未修改"等状态。**评测产物不能作为正式合同**，正式 `final/redline` 不生成、前端不提供正式合同下载。
+
+正式写入由规则包发布状态决定：未发布包一律评测模式；已发布包必须逐 action 携带评估报告、批准记录、预注册阈值与达标指标（代码强制校验，不能手改开关），此时 worker 自动进入正式交付模式并发布 `final/redline`。当前 v2 包为未发布状态。
+
+真实任务链路复验入口：`tools/evaluation/task_revision_run.py`（任务 API→上传→默认 worker→评测修订→授权下载并核对 SHA）。前端改动检查：`node --check frontend/app.js`。
+
 ## 模型配置与预算
 
 ModelGateway 读取通用变量 `LLM_PROVIDER`、`LLM_BASE_URL`、`LLM_MODEL`、`LLM_API_KEY`。`tools/local.ps1` 在 worker 进程缺变量时安全继承 Windows 用户级配置，仅检查存在性，不输出值或密钥。密钥不从仓库文件加载，不进入规则、日志或报告。
