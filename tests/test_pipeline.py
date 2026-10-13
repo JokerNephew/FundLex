@@ -461,7 +461,9 @@ def test_joint_names_with_different_class_predicates_are_not_shared_evidence(tmp
         def call(self, **kwargs):
             return ModelResult({"classes": [{"name": name, "subscription_fee": {"value": True, "quote": mixed}, "sales_service_fee": {"value": None, "quote": ""}} for name in ("A", "C")], "floating_management_fee": {"value": None, "quote": ""}}, "fixture", 1, 1, 1, 2, None, 1)
     profile = resolve_profile(inspect_docx(path), Gateway())
-    assert all(c["subscription_fee"] is None for c in profile["classes"])
+    by_class={c['name']:c for c in profile['classes']}
+    assert by_class['A']['subscription_fee'] is True
+    assert by_class['C']['subscription_fee'] is None
     assert not profile["fee_groups_verified"]
     assert applicability({"condition": "multi_class", "requires_profile": ["share_classes"]}, profile)[0] == "true"
 
@@ -657,7 +659,8 @@ def test_whitespace_trigger_maps_original_half_open_source_and_punctuation(tmp_p
     doc = Document()
     doc.add_paragraph("第六部分 基金份额的申购与赎回")
     doc.add_paragraph("六、申购和赎回的价格、费用及其用途")
-    original = "前句。  " + raw + "   "
+    host = "本基金的申购费率和赎回费率由基金管理人确定。"
+    original = host + "  " + raw + "   "
     doc.add_paragraph(original)
     doc.save(path)
     result = next(a for a in evaluate_candidates(inspect_docx(path), rules) if a["action_id"] == "R11-A1")
@@ -665,7 +668,7 @@ def test_whitespace_trigger_maps_original_half_open_source_and_punctuation(tmp_p
     candidate = result["candidates"][0]
     assert candidate["target_verified"] and candidate["reason"] == "RELEASE_GATE_CLOSED"
     assert "少于7 日" in candidate["quote"]
-    assert candidate["char_start"] == len("前句。")
+    assert candidate["char_start"] == len(host)+2
     assert original[candidate["char_start"]:candidate["char_end"]] == candidate["quote"]
     assert candidate["normalizer_version"] == NORMALIZER_VERSION
 

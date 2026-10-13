@@ -9,6 +9,8 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+from .qualification_evidence import category_value, investment_spans, basic_spans, QualificationEvidenceError
+from .fee_evidence import fee_value
 
 
 class RuleError(ValueError):
@@ -160,7 +162,7 @@ def load_ruleset(version: str) -> RuleSet:
             raise ValueError("actions")
         required = {"rule_id", "action_id", "section_anchor", "subsection_anchor", "regions",
                     "scope", "old_triggers", "new_triggers", "operation", "template_id", "order",
-                    "risk_class", "requires_profile", "condition", "on_unknown", "auto_write", "release_threshold", "approved"}
+                    "risk_class", "requires_profile", "condition", "on_unknown", "auto_write", "release_threshold", "approved", "recognition_kind"}
         for action in actions:
             if not required.issubset(action) or action["template_id"] not in templates:
                 raise ValueError("action fields")
@@ -170,6 +172,14 @@ def load_ruleset(version: str) -> RuleSet:
                 raise ValueError("operation")
             if action["condition"] not in {"always", "single_class", "multi_class", "has_service_fee", "no_service_fee", "fee_groups", "floating_single", "floating_multi", "nonfloating_service_multi"}:
                 raise ValueError("condition")
+            if action.get('recognition_kind','literal') not in {'literal','conversion_prohibition','short_holding_redemption'}:
+                raise ValueError('recognition kind')
+            if action['recognition_kind']=='short_holding_redemption' and action.get('host_policy')!='fee_rate_or_adjustment':
+                raise ValueError('host policy')
+            if not isinstance(action.get('subsection_aliases',[]),list) or any(not isinstance(v,str) or not v for v in action.get('subsection_aliases',[])):
+                raise ValueError('subsection aliases')
+            if not isinstance(action.get('section_aliases',[]),list) or any(not isinstance(v,str) or not v for v in action.get('section_aliases',[])):
+                raise ValueError('section aliases')
             if not action["section_anchor"] or not action["subsection_anchor"]:
                 raise ValueError("anchors")
             if not action["old_triggers"] or not set(action["regions"]).issubset({"body", "summary"}):
@@ -193,30 +203,10 @@ def load_ruleset(version: str) -> RuleSet:
 
 
 def _category_value(paragraphs: tuple[Any, ...]) -> tuple[str, Any, int] | None:
-    """Find a current-product category clause, never using the filename or title.
-
-    A heading may end with 基金的类别 and its value may occupy the next paragraph.
-    We use that adjacent clause only; a definitions-section ETF mention is not
-    evidence that this contract itself is an ETF.
-    """
-    for index, span in enumerate(paragraphs):
-        if span.zone != "body" or not span.segments:
-            continue
-        text = span.text.replace(" ", "")
-        marker = "基金的类别" if "基金的类别" in text else ("基金的类型" if "基金的类型" in text else None)
-        if not marker:
-            continue
-        after = text.split(marker, 1)[1].strip("：: \t")
-        after = re.split(r"[三四五六七八九十]、(?:基金的|本基金的)", after, maxsplit=1)[0]
-        if after and len(after) <= 100 and any(word in after for word in ("基金", "股票型", "债券型", "混合型")):
-            return after, span, index
-        for following in paragraphs[index + 1:index + 3]:
-            if following.zone != "body" or not following.segments:
-                break
-            candidate = following.text.strip()
-            if candidate and len(candidate) <= 100 and any(word in candidate for word in ("基金", "股票型", "债券型", "混合型")):
-                return candidate, following, index
-    return None
+    try:
+        return category_value(paragraphs)
+    except QualificationEvidenceError as exc:
+        raise RuleError(exc.code) from None
 
 
 def classify_document_identity(inspection: Any) -> dict[str, Any]:
@@ -274,7 +264,10 @@ def classify_fund_type(inspection: Any) -> dict[str, Any]:
     """Classify only from a locatable current-product category clause."""
     identity = classify_document_identity(inspection)
     paragraphs = getattr(inspection, "evidence_paragraphs", inspection.paragraphs)
-    found = _category_value(tuple(paragraphs))
+    try:
+        found = category_value(tuple(paragraphs))
+    except QualificationEvidenceError as exc:
+        raise RuleError(exc.code) from None
     if found is None:
         raise RuleError("FUND_TYPE_EVIDENCE_MISSING")
     quote, span, category_index = found
@@ -303,22 +296,20 @@ def classify_fund_type(inspection: Any) -> dict[str, Any]:
         types.add("ordinary")
     # A generic category (even 混合型) is not proof against a specialised CD
     # product. Identify the CURRENT investment mandate, never the fund name.
-    investment_spans = [p for p in paragraphs if p.zone == "body" and p.segments
-                        and "基金的投资" in p.section_path and "摘要" not in p.section_path]
-    basic_spans = [p for p in paragraphs if p.zone == "body" and p.segments
-                   and "基金的基本情况" in p.section_path]
+    selected_investment = investment_spans(tuple(paragraphs))
+    selected_basic = basic_spans(tuple(paragraphs))
     cd_targets: list[tuple[Any, str]] = []
     cd_positive: list[tuple[Any, str]] = []
     cd_ratios: list[float] = []
     cd_unresolved = False
-    for candidate in investment_spans + basic_spans:
+    for candidate in selected_investment + selected_basic:
         for clause in re.split(r"(?<=[。；])", candidate.text):
             if re.search(r"本基金(?:的)?标的指数(?:为|是).*同业存单.*指数", re.sub(r"\s+", "", clause)):
                 cd_targets.append((candidate, clause))
-    for candidate in investment_spans + basic_spans:
+    for candidate in selected_investment + selected_basic:
         for clause in re.split(r"(?<=[。；])", candidate.text):
             normalized = re.sub(r"\s+", "", clause)
-            if candidate not in investment_spans:
+            if candidate not in selected_investment:
                 continue
             match = re.search(r"本基金投资于同业存单(?:指数成份券(?:和|及|与)备选成份券)?的比例不低于(?:非现金)?基金资产(?:净值)?的?(\d+(?:\.\d+)?)[%％]", normalized)
             if match:
@@ -338,7 +329,7 @@ def classify_fund_type(inspection: Any) -> dict[str, Any]:
         types.add("interbank_cd")
     elif (cd_targets or cd_unresolved) and "interbank_cd" not in types:
         raise RuleError("FUND_TYPE_CD_MANDATE_EVIDENCE_MISSING")
-    elif types == {"ordinary"} and not investment_spans:
+    elif types == {"ordinary"} and not selected_investment:
         raise RuleError("FUND_TYPE_INVESTMENT_EVIDENCE_MISSING")
     if "中国证监会认可的其他基金" in compact:
         types = {"other_excluded"} if not (types - {"ordinary"}) else types | {"other_excluded"}
@@ -373,7 +364,7 @@ def classify_fund_type(inspection: Any) -> dict[str, Any]:
     if kind == "ordinary":
         # Return a mandate paragraph as independent contextual support, rather
         # than generic name/filename features or a list of investable instruments.
-        support = [(p, p.text) for p in investment_spans if "本基金" in p.text and
+        support = [(p, p.text) for p in selected_investment if "本基金" in p.text and
                    any(t in p.text for t in ("比例", "投资目标", "投资于"))][:2]
         if not support:
             raise RuleError("FUND_TYPE_INVESTMENT_EVIDENCE_MISSING")
@@ -407,44 +398,7 @@ def _count_declaration(quote: str) -> tuple[int, set[str]] | None:
 
 def _fee_value(quote: str, field: str, name: str, *, single_bound: bool = False) -> bool | None:
     """Verify explicit same-property class groups; reject mixed attribution."""
-    text = re.sub(r"\s+", "", quote)
-    if any(t in text for t in ("直销机构", "持续持有", "优惠", "特定投资", "养老金")):
-        return None
-    if re.search(r"通过.*(?:销售机构|网上|电子交易)|机构投资者|个人投资者", text):
-        return None
-    names = _class_names(text)
-    if name == "__single__":
-        if not single_bound or names or "本基金" not in text:
-            return None
-    elif name not in names and not (not names and single_bound and "本基金" in text):
-        return None
-    if len(names) > 1:
-        if "分别" in text:
-            return None
-        positions = [m.start() for m in re.finditer(r"[A-ZＡ-Ｚ]类", text)]
-        if len(positions) != len(names):
-            return None
-        fee_positions = [m.start() for m in re.finditer(r"申购费|认购费|销售服务费", text)]
-        # Joint C/E names must precede all fee predicates, or occur together in
-        # a trailing '称为C类及E类' definition. A later other-class predicate
-        # is not shared evidence.
-        if not fee_positions or not (max(positions) < min(fee_positions) or
-                (min(positions) > max(fee_positions) and re.search(r"称为.*类", text))):
-            return None
-    fee = r"(?:认购[、/])?申购(?:费用|费)" if field == "subscription_fee" else "销售服务费"
-    negative_pattern = r"(?:不收取|不再收取|免收|不(?:从(?:本(?:类别|类)?(?:基金)?资产|基金资产)中)?计提)" + fee
-    negative_matches = list(re.finditer(negative_pattern, text))
-    remaining = re.sub(negative_pattern, "", text)
-    positive = bool(re.search(r"(?:收取|计提)" + fee, remaining))
-    negative = bool(negative_matches)
-    for match in re.finditer(fee + r"([^。；\d]*?)(\d+(?:\.\d+)?)[%％]", text):
-        if any(other in match.group(1) for other in ("管理费", "销售服务费", "申购费", "赎回费")):
-            continue
-        negative |= float(match.group(2)) == 0
-        positive |= float(match.group(2)) > 0
-    if negative == positive:
-        return None
-    return positive
+    return fee_value(quote,field,name,single_bound=single_bound)
 
 
 def _count_facts(classes: list[dict[str, Any]], declarations: list[tuple[Any, str]], *, model_count: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -639,7 +593,10 @@ def resolve_profile(inspection: Any, gateway: Any) -> dict[str, Any]:
             if (field["value"] is True and not positive) or (field["value"] is False and not negative):
                 error = "PROFILE_MANAGEMENT_FEE_POLARITY_UNVERIFIED"
         if error:
-            errors.append({"code": error, "class": name, "field": key})
+            record={"code": error, "class": name, "field": key,'proposed_value':field.get('value')}
+            if matches:
+                record['source_evidence']=_evidence(matches[0],quote)
+            errors.append(record)
             return None
         return {**_evidence(matches[0], quote), "value": field["value"], "occurrences": [_evidence(span, quote) for span in matches]}
     classes = []
@@ -704,6 +661,72 @@ def _instantiate_old(text: str, action: dict[str, Any], profile: dict[str, Any])
     return text
 
 
+def _subsection_title(text: str, action: dict[str, Any]) -> bool:
+    compact, _ = _normalized_text(text.strip())
+    compact = re.sub(r'^(?:[一二三四五六七八九十\d]+[、．.]|[（(][一二三四五六七八九十\d]+[）)])', '', compact)
+    names = [action['subsection_anchor']] + action.get('subsection_aliases', [])
+    return any(compact == name or compact.startswith(name+'：') or compact.startswith(name+':')
+               or compact.startswith(name+'\n') for name in names)
+
+
+_CONVERSION = (r'(?:除非[^。；\n\ufff9]{1,80}[，,])?(?:本基金(?:的)?)?'
+    r'(?:不同(?:基金)?份额类别|不同类别(?:的)?基金份额|各类基金份额|不同基金份额类别)'
+    r'(?:之间)?(?:暂)?(?:不得|不能|不允许|不可)(?:互相|相互)?转换[。；]?')
+_SHORT_HOLDING = (r'(?:本基金)?(?:对|对于|针对)持续持有(?:期|时间)?(?:少于|不足|不满)7(?:日|天)的'
+    r'(?:投资者|基金份额持有人)收取(?:不低于)?1[.．]5(?:0)?[%％]的赎回费[，,]'
+    r'并(?:将上述赎回费)?(?:全额|全部)计入基金财产[。；]?')
+_FEE_HOST = r'(?:调整(?:费率|收费方式)|申购费率[^。；\n\ufff9]*?赎回费率|赎回费率按照持有时间|实际执行的赎回费率)'
+
+
+def _recognized_literals(text: str, kind: str) -> list[str]:
+    pattern = {'conversion_prohibition':_CONVERSION,'short_holding_redemption':_SHORT_HOLDING}.get(kind)
+    if pattern is None:
+        return []
+    normalized, positions = _normalized_text(text)
+    return [text[positions[m.start()]:positions[m.end()-1]+1] for m in re.finditer(pattern, normalized)]
+
+
+def _recognition_guard(quote: str, kind: str, host: Any, previous: Any) -> tuple[bool,str | None]:
+    normalized, _ = _normalized_text(quote)
+    if kind == 'conversion_prohibition':
+        return bool(re.fullmatch(_CONVERSION,normalized)), 'CONVERSION_SCOPE_UNVERIFIED'
+    if kind != 'short_holding_redemption':
+        return False, None
+    if '\ufff9' in host.text:
+        return False, 'SHORT_HOLDING_HOST_STRUCTURE_UNVERIFIED'
+    own_host=re.sub(r'\s+','',host.text)
+    if any(t in own_host for t in ('赎回费用由','未归入基金财产的部分','赎回费用归入基金财产的比例')):
+        return False, 'SHORT_HOLDING_NON_TARGET_HOST'
+    if not re.fullmatch(_SHORT_HOLDING,normalized):
+        return False, 'SHORT_HOLDING_VARIANT_UNVERIFIED'
+    context = [host]
+    if previous is not None and previous.zone==host.zone and previous.section_path==host.section_path:
+        context.append(previous)
+    texts=[p.text[s.start:s.end] for p in context for s in p.segments]
+    # Fee-ownership paragraphs belong to the separate whole-paragraph action.
+    fee_context=any(re.search(_FEE_HOST,_normalized_text(t)[0]) for t in texts)
+    return fee_context, None if fee_context else 'SHORT_HOLDING_HOST_UNVERIFIED'
+
+
+def _fragmented_phrase(previous: Any, current: Any, triggers: list[str]) -> list[dict[str, Any]]:
+    if previous is None or previous.zone != current.zone or previous.section_path != current.section_path:
+        return []
+    left, left_positions = _normalized_text(previous.text)
+    right, right_positions = _normalized_text(current.text)
+    matches=[]
+    for trigger in triggers:
+        needle,_ = _normalized_text(trigger)
+        for split in range(1,min(len(needle),120)):
+            if left.endswith(needle[:split]) and right.startswith(needle[split:]):
+                ls,le=left_positions[len(left)-split],left_positions[-1]+1
+                rs,re=right_positions[0],right_positions[len(needle)-split-1]+1
+                matches.append({'trigger':trigger,'location':current.location,'char_start':rs,'char_end':re,
+                    'quote':current.text[rs:re],'evidence_spans':[
+                        {'location':previous.location,'start':ls,'end':le,'quote':previous.text[ls:le]},
+                        {'location':current.location,'start':rs,'end':re,'quote':current.text[rs:re]}]})
+    return matches
+
+
 def evaluate_candidates(inspection: Any, ruleset: RuleSet, profile: dict[str, Any] | None = None,
                         gateway: Any = None) -> list[dict[str, Any]]:
     profile = profile or extract_profile(inspection)
@@ -720,18 +743,22 @@ def evaluate_candidates(inspection: Any, ruleset: RuleSet, profile: dict[str, An
             fixed_template, template_error = None, exc.code
         subsection = ""
         previous_section = None
+        previous_span = None
         for span in inspection.paragraphs:
             logical_zone = getattr(span, "logical_zone", None) or span.zone
             current_section = (logical_zone, span.section_path)
             if current_section != previous_section:
-                subsection, previous_section = "", current_section
+                subsection, previous_section, previous_span = "", current_section, None
             heading = re.sub(r"^(?:[一二三四五六七八九十\d]+[、．.]|[（(][一二三四五六七八九十\d]+[）)])\s*", "", span.text.strip())
-            explicit_label = heading.startswith(action["subsection_anchor"])
-            if explicit_label and (len(span.text) < 100 or heading.startswith(action["subsection_anchor"] + "：")):
+            explicit_label = _subsection_title(span.text, action)
+            if explicit_label:
                 subsection = span.text
+                previous_span = None
             elif len(span.text) < 100 and re.match(r"^[一二三四五六七八九十\d]+[、．.]", span.text):
                 subsection = ""
-            if logical_zone not in action["regions"] or action["section_anchor"] not in span.section_path:
+                previous_span = None
+            sections=[action['section_anchor']]+action.get('section_aliases',[])
+            if logical_zone not in action["regions"] or not any(title in span.section_path for title in sections):
                 continue
             if not subsection:
                 continue
@@ -749,7 +776,15 @@ def evaluate_candidates(inspection: Any, ruleset: RuleSet, profile: dict[str, An
                               "source_sha256": inspection.source_sha256})
                 continue
             old_triggers = [_instantiate_old(t, action, profile) for t in action["old_triggers"]]
+            if action['scope']=='phrase':
+                for fragmented in _fragmented_phrase(previous_span,span,old_triggers):
+                    found.append({**fragmented,'region':logical_zone,'section_path':span.section_path,
+                        'mapping_safe':False,'status':'failed','reason':'CROSS_PARAGRAPH_TARGET_UNSUPPORTED',
+                        'template_id':action['template_id'],'source_sha256':inspection.source_sha256,
+                        'normalizer_version':NORMALIZER_VERSION})
             old_hits = [t for t in old_triggers if _normalized_matches(span.text, t)]
+            kind = action.get('recognition_kind','literal')
+            old_hits += [t for t in _recognized_literals(span.text,kind) if t not in old_hits]
             new_triggers = [_instantiate_old(t, action, profile) for t in action["new_triggers"]]
             appended = action["operation"] == "append" and applies == "true" and fixed_template is not None and fixed_template in span.text
             if appended:
@@ -761,10 +796,13 @@ def evaluate_candidates(inspection: Any, ruleset: RuleSet, profile: dict[str, An
                     if any(start < hi and end > lo for lo, hi in occupied):
                         continue
                     if action["scope"] == "sentence":
-                        start = max(span.text.rfind("。", 0, start), span.text.rfind("；", 0, start)) + 1
+                        start = max(span.text.rfind(mark,0,start) for mark in ('。','；','\n','\ufff9')) + 1
                         if span.text[end - 1] not in "。；":
-                            stops = [i for mark in ("。", "；") if (i := span.text.find(mark, end)) >= 0]
-                            end = min(stops) + 1 if stops else len(span.text)
+                            stops = [(i,mark) for mark in ('。','；','\n','\ufff9') if (i := span.text.find(mark,end)) >= 0]
+                            stop = min(stops) if stops else None
+                            end = stop[0] + (stop[1] in ('。','；')) if stop else len(span.text)
+                        while start < end and span.text[start].isspace(): start += 1
+                        while end > start and span.text[end-1].isspace(): end -= 1
                     elif action["scope"] == "paragraph":
                         start, end = 0, len(span.text)
                     if any(start < hi and end > lo for lo, hi in occupied):
@@ -777,12 +815,32 @@ def evaluate_candidates(inspection: Any, ruleset: RuleSet, profile: dict[str, An
                                  "mapping_safe": safe, "status": "failed", "reason": None,
                                  "normalizer_version": NORMALIZER_VERSION,
                                  "template_id": action["template_id"], "source_sha256": inspection.source_sha256}
+                    recognized, recognition_reason = _recognition_guard(quote,kind,span,previous_span)
+                    candidate['recognition_kind']=kind
+                    if recognized and kind=='short_holding_redemption':
+                        contexts=[span]+([previous_span] if previous_span is not None else [])
+                        evidence=[]
+                        for host_span in contexts:
+                            for segment in host_span.segments:
+                                text=host_span.text[segment.start:segment.end]
+                                compact,positions=_normalized_text(text)
+                                match=re.search(_FEE_HOST,compact)
+                                if match:
+                                    lo=segment.start+positions[match.start()]
+                                    hi=segment.start+positions[match.end()-1]+1
+                                    literal=host_span.text[lo:hi]
+                                    evidence.append({**_evidence(host_span,literal),'char_start':lo,'char_end':hi})
+                        candidate['host_evidence']=evidence
                     if applies == "unknown":
                         candidate["reason"] = basis
                     elif template_error:
                         candidate["reason"] = template_error
                     elif not safe and old_hits:
                         candidate["reason"] = "UNSAFE_TEXT_MAPPING"
+                    elif old_hits and kind=='short_holding_redemption' and not recognized:
+                        candidate.update(status='excluded' if recognition_reason=='SHORT_HOLDING_NON_TARGET_HOST' else 'failed',reason=recognition_reason)
+                    elif old_hits and kind=='conversion_prohibition' and not recognized:
+                        candidate.update(status='failed',reason='CONVERSION_SCOPE_UNVERIFIED')
                     elif not old_hits:
                         template = fixed_template
                         if template and template in quote:
@@ -803,7 +861,7 @@ def evaluate_candidates(inspection: Any, ruleset: RuleSet, profile: dict[str, An
                                 except Exception as exc:
                                     candidate["reason"] = getattr(exc, "code", "MODEL_CANDIDATE_FAILED")
                     else:
-                        exact = any(_old_text_equal(quote, _instantiate_old(t, action, profile)) for t in action.get("old_texts", old_triggers if action["scope"] == "phrase" else []))
+                        exact = recognized or any(_old_text_equal(quote, _instantiate_old(t, action, profile)) for t in action.get("old_texts", old_triggers if action["scope"] == "phrase" else []))
                         if not exact and gateway is not None and hasattr(gateway, "call"):
                             try:
                                 result = gateway.call(task_type="judge_candidate", bounded_context=quote,
@@ -832,6 +890,7 @@ def evaluate_candidates(inspection: Any, ruleset: RuleSet, profile: dict[str, An
                         elif candidate["reason"] is None and candidate["status"] == "failed":
                             candidate["reason"] = "LOCAL_TARGET_VERIFICATION_REQUIRED"
                     found.append(candidate)
+            previous_span = span
         failure_reason = None if applies == "false" else ("UNSUPPORTED_TARGET_STRUCTURE" if unsupported_scope else "TARGET_SCOPE_UNRESOLVED" if not scope_seen else template_error)
         status = "not_applicable" if applies == "false" else ("failed" if failure_reason or applies == "unknown" or any(c["status"] == "failed" for c in found) else "applied" if any(c["status"] == "applied" for c in found) else "satisfied_no_change" if any(c["status"] == "satisfied" for c in found) else "not_matched")
         results.append({"rule_id": action["rule_id"], "action_id": action["action_id"],

@@ -72,6 +72,15 @@ def compile_catalogue():
             "evaluation_metrics": None, "evaluation_report_id": None, "approval_record": None,
             "approved": False,
             "source_provenance": provenance(source), "template_slots": slots})
+        actions[-1]['recognition_kind'] = 'literal'
+        if area == 'classes':
+            actions[-1]['subsection_aliases'] = ['份额类别设置','基金份额类别设置','基金份额类别',
+                '基金份额的类别','基金份额分类','基金份额的分类','基金份额的类别设置',
+                '基金的份额类别设置','基金的份额类别','基金份额类别的设置']
+        if area == 'trade':
+            actions[-1]['section_aliases'] = ['基金份额的申购和赎回','基金份额的申购、赎回与转换']
+            actions[-1]['subsection_aliases'] = ['申购与赎回的价格、费用及其用途','申购和赎回的费用及其用途',
+                '申购与赎回的费用及其用途']
     add(1,1,"definition","paragraph","append","fee_groups",[paragraphs[3]],paragraphs[5],[3,5,7,8,9],"份额类别定义追加直销及持续持有费用规则")
     add(2,1,"classes","paragraph","append","fee_groups",[after(12,"：")],after(13,"："),[12,13,15,16,17],"份额类别设置追加费用规则")
     add(3,1,"classes","phrase","replace","has_service_fee",["调低赎回费率"],"调低销售服务费率",[20,22],"有销售服务费时替换可调低费率")
@@ -96,6 +105,12 @@ def compile_catalogue():
     add(17,1,"liquidation","paragraph","replace","floating_single",floating_old,after(99,"："),[96,97,99],"浮动管理费单类别清算费用调整")
     add(17,2,"liquidation","paragraph","replace","floating_multi",floating_old,paragraphs[101],[96,97,101],"浮动管理费多类别清算费用调整")
     add(17,3,"liquidation","paragraph","replace","nonfloating_service_multi",[after(103,"：")],after(106,"："),[102,103,105,106],"非浮动管理费多类别销售服务费返还")
+    for action in actions:
+        if action['rule_id'] == 'R04':
+            action['recognition_kind'] = 'conversion_prohibition'
+        if action['rule_id'] == 'R11':
+            action['recognition_kind'] = 'short_holding_redemption'
+            action['host_policy'] = 'fee_rate_or_adjustment'
     return {"version": "v1", "schema_version": "1", "source": SOURCE,
         "source_sha256": hashlib.sha256(raw).hexdigest(),
         "source_paragraph_count": len(paragraphs),

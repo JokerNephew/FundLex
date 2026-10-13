@@ -670,7 +670,8 @@
       "template_slots": {
         "A类基金份额": "subscription_group",
         "C类基金份额": "service_group"
-      }
+      },
+      "recognition_kind": "literal"
     },
     {
       "rule_id": "R02",
@@ -831,7 +832,20 @@
       "template_slots": {
         "A类基金份额": "subscription_group",
         "C类基金份额": "service_group"
-      }
+      },
+      "recognition_kind": "literal",
+      "subsection_aliases": [
+        "份额类别设置",
+        "基金份额类别设置",
+        "基金份额类别",
+        "基金份额的类别",
+        "基金份额分类",
+        "基金份额的分类",
+        "基金份额的类别设置",
+        "基金的份额类别设置",
+        "基金的份额类别",
+        "基金份额类别的设置"
+      ]
     },
     {
       "rule_id": "R03",
@@ -935,7 +949,20 @@
           "sha256": "4484ac16816d6b2eae0d4bd3b865e57585195851df4a90ee2938820ee3befe53"
         }
       ],
-      "template_slots": {}
+      "template_slots": {},
+      "recognition_kind": "literal",
+      "subsection_aliases": [
+        "份额类别设置",
+        "基金份额类别设置",
+        "基金份额类别",
+        "基金份额的类别",
+        "基金份额分类",
+        "基金份额的分类",
+        "基金份额的类别设置",
+        "基金的份额类别设置",
+        "基金的份额类别",
+        "基金份额类别的设置"
+      ]
     },
     {
       "rule_id": "R03",
@@ -1037,7 +1064,20 @@
           "sha256": "4484ac16816d6b2eae0d4bd3b865e57585195851df4a90ee2938820ee3befe53"
         }
       ],
-      "template_slots": {}
+      "template_slots": {},
+      "recognition_kind": "literal",
+      "subsection_aliases": [
+        "份额类别设置",
+        "基金份额类别设置",
+        "基金份额类别",
+        "基金份额的类别",
+        "基金份额分类",
+        "基金份额的分类",
+        "基金份额的类别设置",
+        "基金的份额类别设置",
+        "基金的份额类别",
+        "基金份额类别的设置"
+      ]
     },
     {
       "rule_id": "R03",
@@ -1116,7 +1156,20 @@
           "sha256": "55dc8819fe9891619d0b0aaf2566901db70f49a6a1004b56e8dc5b75a3202c29"
         }
       ],
-      "template_slots": {}
+      "template_slots": {},
+      "recognition_kind": "literal",
+      "subsection_aliases": [
+        "份额类别设置",
+        "基金份额类别设置",
+        "基金份额类别",
+        "基金份额的类别",
+        "基金份额分类",
+        "基金份额的分类",
+        "基金份额的类别设置",
+        "基金的份额类别设置",
+        "基金的份额类别",
+        "基金份额类别的设置"
+      ]
     },
     {
       "rule_id": "R04",
@@ -1218,7 +1271,20 @@
           "sha256": "b704eb4cc286c37ec1d5900bafedd53bd2ab90f6e57299a498ea1e95bff181f9"
         }
       ],
-      "template_slots": {}
+      "template_slots": {},
+      "recognition_kind": "conversion_prohibition",
+      "subsection_aliases": [
+        "份额类别设置",
+        "基金份额类别设置",
+        "基金份额类别",
+        "基金份额的类别",
+        "基金份额分类",
+        "基金份额的分类",
+        "基金份额的类别设置",
+        "基金的份额类别设置",
+        "基金的份额类别",
+        "基金份额类别的设置"
+      ]
     },
     {
       "rule_id": "R05",
@@ -1322,7 +1388,17 @@
           "sha256": "ecc20559738590df7a94ab04e9079b97871554cb9fee6f32111459b09b0a23a2"
         }
       ],
-      "template_slots": {}
+      "template_slots": {},
+      "recognition_kind": "literal",
+      "section_aliases": [
+        "基金份额的申购和赎回",
+        "基金份额的申购、赎回与转换"
+      ],
+      "subsection_aliases": [
+        "申购与赎回的价格、费用及其用途",
+        "申购和赎回的费用及其用途",
+        "申购与赎回的费用及其用途"
+      ]
     },
     {
       "rule_id": "R06",
@@ -1475,7 +1551,17 @@
       "template_slots": {
         "A类基金份额": "subscription_group",
         "C类基金份额": "service_group"
-      }
+      },
+      "recognition_kind": "literal",
+      "section_aliases": [
+        "基金份额的申购和赎回",
+        "基金份额的申购、赎回与转换"
+      ],
+      "subsection_aliases": [
+        "申购与赎回的价格、费用及其用途",
+        "申购和赎回的费用及其用途",
+        "申购与赎回的费用及其用途"
+      ]
     },
     {
       "rule_id": "R07",
@@ -1579,7 +1665,17 @@
           "sha256": "272c567a9e80914a67a505b9446a50e95432b8dd7e7d5035f15e1fe8d519e154"
         }
       ],
-      "template_slots": {}
+      "template_slots": {},
+      "recognition_kind": "literal",
+      "section_aliases": [
+        "基金份额的申购和赎回",
+        "基金份额的申购、赎回与转换"
+      ],
+      "subsection_aliases": [
+        "申购与赎回的价格、费用及其用途",
+        "申购和赎回的费用及其用途",
+        "申购与赎回的费用及其用途"
+      ]
     },
     {
       "rule_id": "R08",
@@ -1683,7 +1779,17 @@
           "sha256": "7788b566e567057fac466980599e25fe138ac0e7ffe3d2f621633ea710733570"
         }
       ],
-      "template_slots": {}
+      "template_slots": {},
+      "recognition_kind": "literal",
+      "section_aliases": [
+        "基金份额的申购和赎回",
+        "基金份额的申购、赎回与转换"
+      ],
+      "subsection_aliases": [
+        "申购与赎回的价格、费用及其用途",
+        "申购和赎回的费用及其用途",
+        "申购与赎回的费用及其用途"
+      ]
     },
     {
       "rule_id": "R09",
@@ -1838,7 +1944,17 @@
       "template_slots": {
         "A类基金份额": "subscription_group",
         "C类基金份额": "service_group"
-      }
+      },
+      "recognition_kind": "literal",
+      "section_aliases": [
+        "基金份额的申购和赎回",
+        "基金份额的申购、赎回与转换"
+      ],
+      "subsection_aliases": [
+        "申购与赎回的价格、费用及其用途",
+        "申购和赎回的费用及其用途",
+        "申购与赎回的费用及其用途"
+      ]
     },
     {
       "rule_id": "R10",
@@ -1925,7 +2041,17 @@
           "sha256": "e17339a67fb93deb57f3cfedde8eadb77ce3db8d1153d597286be9f9c458ac44"
         }
       ],
-      "template_slots": {}
+      "template_slots": {},
+      "recognition_kind": "literal",
+      "section_aliases": [
+        "基金份额的申购和赎回",
+        "基金份额的申购、赎回与转换"
+      ],
+      "subsection_aliases": [
+        "申购与赎回的价格、费用及其用途",
+        "申购和赎回的费用及其用途",
+        "申购与赎回的费用及其用途"
+      ]
     },
     {
       "rule_id": "R11",
@@ -2004,7 +2130,18 @@
           "sha256": "19cd9cf838547700a2cf5596f39b6cb30f8b0e6a4c3f0a86e9d67115cf1be4f8"
         }
       ],
-      "template_slots": {}
+      "template_slots": {},
+      "recognition_kind": "short_holding_redemption",
+      "section_aliases": [
+        "基金份额的申购和赎回",
+        "基金份额的申购、赎回与转换"
+      ],
+      "subsection_aliases": [
+        "申购与赎回的价格、费用及其用途",
+        "申购和赎回的费用及其用途",
+        "申购与赎回的费用及其用途"
+      ],
+      "host_policy": "fee_rate_or_adjustment"
     },
     {
       "rule_id": "R12",
@@ -2120,7 +2257,17 @@
           "sha256": "c9778a9e3aeac42745ae47b0de151f19e74982ce34e1a73d738afdbd029c30fe"
         }
       ],
-      "template_slots": {}
+      "template_slots": {},
+      "recognition_kind": "literal",
+      "section_aliases": [
+        "基金份额的申购和赎回",
+        "基金份额的申购、赎回与转换"
+      ],
+      "subsection_aliases": [
+        "申购与赎回的价格、费用及其用途",
+        "申购和赎回的费用及其用途",
+        "申购与赎回的费用及其用途"
+      ]
     },
     {
       "rule_id": "R13",
@@ -2236,7 +2383,17 @@
           "sha256": "02bfcccfbf5046f2a1708b73d960189e6d5b6edafa6cbf1df8e0bd176f75b6a3"
         }
       ],
-      "template_slots": {}
+      "template_slots": {},
+      "recognition_kind": "literal",
+      "section_aliases": [
+        "基金份额的申购和赎回",
+        "基金份额的申购、赎回与转换"
+      ],
+      "subsection_aliases": [
+        "申购与赎回的价格、费用及其用途",
+        "申购和赎回的费用及其用途",
+        "申购与赎回的费用及其用途"
+      ]
     },
     {
       "rule_id": "R14",
@@ -2412,7 +2569,8 @@
       ],
       "template_slots": {
         "C类基金份额": "service_group"
-      }
+      },
+      "recognition_kind": "literal"
     },
     {
       "rule_id": "R15",
@@ -2558,7 +2716,8 @@
       ],
       "template_slots": {
         "C类基金份额": "service_group"
-      }
+      },
+      "recognition_kind": "literal"
     },
     {
       "rule_id": "R15",
@@ -2704,7 +2863,8 @@
       ],
       "template_slots": {
         "C类基金份额": "service_group"
-      }
+      },
+      "recognition_kind": "literal"
     },
     {
       "rule_id": "R16",
@@ -2853,7 +3013,8 @@
       "template_slots": {
         "A类基金份额": "subscription_group",
         "C类基金份额": "service_group"
-      }
+      },
+      "recognition_kind": "literal"
     },
     {
       "rule_id": "R17",
@@ -2984,7 +3145,8 @@
           "sha256": "aba8be8c9160b00cba6e953de79c8d4e556237d4ce120fafa723ab09e6ec4f71"
         }
       ],
-      "template_slots": {}
+      "template_slots": {},
+      "recognition_kind": "literal"
     },
     {
       "rule_id": "R17",
@@ -3115,7 +3277,8 @@
           "sha256": "b2de76a64707886e742ce9f132b52e47b271d2333f4ac95a67e289048828645a"
         }
       ],
-      "template_slots": {}
+      "template_slots": {},
+      "recognition_kind": "literal"
     },
     {
       "rule_id": "R17",
@@ -3269,7 +3432,8 @@
           "sha256": "e57f722af2d7ec909063e41a2e65576755861c8ce36a567a5c1e5f324f283147"
         }
       ],
-      "template_slots": {}
+      "template_slots": {},
+      "recognition_kind": "literal"
     }
   ]
 }

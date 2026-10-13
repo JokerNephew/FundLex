@@ -353,6 +353,20 @@ def _fingerprint(location: str, text: str, zone: str) -> str:
     return _sha((location + "\0" + zone + "\0" + text).encode("utf-8"))
 
 
+def _plain_contract_heading(text: str) -> bool:
+    """Recognize complete alternate chapter labels, never directory page entries."""
+    compact = re.sub(r'\s+', '', text)
+    match = re.fullmatch(r'(?:[一二三四五六七八九十百零〇]+[、．.]|\d+(?:\.\d+)+[、．.]?)(.+)', compact)
+    titles = {'前言','绪言','释义','基金的基本情况','基金的募集','基金的历史沿革',
+        '基金的存续','基金合同的生效','基金备案','基金份额的申购与赎回','基金份额的申购和赎回','基金份额的申购、赎回与转换',
+        '基金合同当事人及权利义务','基金份额持有人大会','基金的投资','基金的托管',
+        '基金管理人、基金托管人的更换条件和程序','基金份额的登记','基金份额的注册登记',
+        '基金的财产','基金资产估值','基金费用与税收','基金的费用与税收','基金的收益与分配',
+        '基金的会计与审计','基金的信息披露','基金合同的变更、终止与基金财产的清算',
+        '违约责任','争议的处理和适用的法律','基金合同的效力','其他事项'}
+    return bool(match and match.group(1) in titles)
+
+
 def _protected_text_nodes(root: etree._Element) -> set[etree._Element]:
     """Track ranges in document order, including readonly wrapper paragraphs."""
     active: set[tuple[str, str]] = set()
@@ -503,15 +517,16 @@ def _enumerate_paragraphs(root: etree._Element, limits: ZipLimits) -> tuple[tupl
         plain = _paragraph_text(p).strip().replace(" ", "")
         style = p.find("./" + Q("pPr") + "/" + Q("pStyle"))
         style_value = style.get(Q("val"), "") if style is not None else ""
-        if not inherited and re.fullmatch(r"(?:基金合同)?内容摘要", plain):
+        plain_heading = _plain_contract_heading(plain)
+        if not inherited and re.fullmatch(r"(?:第[一二三四五六七八九十\d]+(?:部分|章)|[一二三四五六七八九十]+[、．.]|\d+(?:\.\d+)+[、．.]?)?(?:基金合同(?:的)?)?内容摘要", plain):
             zone, section = "summary", plain
         elif not inherited and re.fullmatch(r"(?:附录|附件)(?:[一二三四五六七八九十\d].*)?", plain):
             zone, section = "appendix", plain
-        elif not inherited and plain and (style_value.lower().startswith("heading") or re.match(r"^第[一二三四五六七八九十\d]+(?:部分|章|节)", plain)):
+        elif not inherited and plain and (plain_heading or style_value.lower().startswith("heading") or re.match(r"^第[一二三四五六七八九十\d]+(?:部分|章|节)", plain)):
             section = plain[:120]
         if style_value.lower().startswith("toc") or plain == "目录":
             in_toc = True
-        elif in_toc and (style_value.lower().startswith("heading") or re.match(r"^第[一二三四五六七八九十\d]+(?:部分|章)", plain)):
+        elif in_toc and (plain_heading or style_value.lower().startswith("heading") or re.match(r"^第[一二三四五六七八九十\d]+(?:部分|章)", plain)):
             in_toc = False
         effective = inherited or ("toc" if in_toc or field_active else zone)
         projected, field_active, toc = _project(p, location, effective, section, field_active, limits, protected_ranges, protected_nodes)
