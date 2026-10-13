@@ -120,7 +120,7 @@ def main() -> None:
 
     def processor(source: Path, output: Path, version: str):
         with ModelGateway.from_env() as model:
-            report = process_v2(source, output, version, model)
+            report = process_v2(source, output, version, model, evaluation=True)
         if report.get("error_code") in STOP_CODES:
             stopped.append(report["error_code"])
         if any(target.get("reason") in STOP_CODES

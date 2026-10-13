@@ -235,6 +235,29 @@
 
 未开启内容不变：v2 包未发布（6 个 action 均 `auto_write=false`），正式 `final/redline` 只在已发布包下生成；其余 16 个 action 仍不在 v2 支持范围。
 
+## 全部动作可用与生产化（2026-10-14）
+
+用户指示：全部 22 个 action 可用、不做只读半成品；新增用户登录与持久化；正式服务器 4C8G + MySQL；最终交付完整可部署项目。发布门槛调整按 `docs/RELEASE_POLICY_V2_INTERNAL.md` **运行前预登记**（内部部署政策：确定性动作审计 + 真实运行记录 + 产品负责人指示作为批准记录，不伪造外部批准）。
+
+- [x] v2 规则包扩展到 22 个 action：16 个新增动作用"规则原文代码组装 + 类别槽位实例化"（模板/删除模式，可代码验证，不让模型猜政策）。
+- [x] 引擎扩展：槽位实例化（locate/generation）、句/段范围扩展与整段一致性校验、`template_exact` 核查、短语替换不套用衔接补句号。
+- [x] 确定性动作审计工具（`tools/evaluation/action_fixture_audit.py`）：22/22 正例、23/23 反例通过，0 错误修改。
+- [x] 发布工具（`rules/release_v2.py`）：重跑审计 → 逐 action 生成预注册门槛与实测指标 → 绑定引擎/模型传输指纹 → 写出已发布包；运行期指纹漂移自动拒绝（`V2_RELEASE_CONTEXT_UNVERIFIED`）。
+- [ ] 用户登录（子 agent 进行中）：账号/会话持久化、password 模式、前端登录页。
+- [ ] MySQL 持久化（子 agent 进行中）：`fundlex/db.py` 适配层 + 实库测试。
+- [ ] 最终引擎冻结后：真实运行证据（16+8+5）→ 发布打包 → 交付模式真实链路复验（final/redline）。
+- [ ] 部署文档与配置（4C8G/MySQL/单机多 worker 注意事项）。
+- **最终评测预算登记（2026-10-14，运行前）**：共享账本上限由 1450/USD 0.95 调整为 **2000 次 HTTP / USD 1.40**（登记时实际约 1254 次/USD 0.87）。最终引擎上的全 22 动作运行：16 份回归 + 8 份泛化 + 5 份构造夹具，预计 300—400 次、约 USD 0.30；达到上限即停止并保存。
+
+## 全体动作发布状态（2026-10-14，完成）
+
+- 引擎冻结：`bfe207438e5a2941ef21e53559af5d6aee80a120a148e04742a772e2590d6c18`；发布包 `rules/rules_v2.json` sha256 `09be50244528d4b43597ad3b5c20430b9c09e79d23c8c4ee1f89c8c87194764f`（22 auto_write actions，草案备份 `rules/rules_v2.draft.json`）。
+- 完整测试 357 项通过（含本机 MySQL 8 实库）；确定性动作审计 22 正例 + 23 反例全过；夹具 5/5；回归 16 份（16/16 资格、精度 1.0、13/13 全对）；泛化 8 份（8/8、6/6 全对）；正式交付复验 2/2 `complete_with_exceptions` 并发布 final/redline。
+- 共享账本（action-pilot-20261013\pilot_budget.sqlite，上限 2000 次/USD 1.40）：实际约 1840 次、USD 1.29；不重置。
+- 交付分级政策：`docs/DELIVERY_STATUS_POLICY.md`；发布政策与预注册门槛：`docs/RELEASE_POLICY_V2_INTERNAL.md`；发布证据：`docs/RELEASE_EVIDENCE.md`；部署：`docs/DEPLOYMENT_GUIDE.md`；登录：`docs/AUTH_DESIGN.md`。
+- 重新发布流程（任何引擎/模型配置变化后）：`python -X utf8 -m rules.release_v2 --audit-output var/release-audit`（需部署环境模型变量）。运行期指纹漂移 → `V2_RELEASE_CONTEXT_UNVERIFIED` 失败关闭。
+- 遗留（未验收）：生产 OIDC/SSO、对象存储、多 worker 容量压测、万份任务量级压测、模型固定版本与数据保留合规。
+
 ## 用户要求的三个子 agent 方案评审（2026-10-13）
 
 业务、工程、评测三个 gpt-6.1-sol 子 agent 完成只读评审，汇总于 `docs/AI_EDITING_REVIEW.md`。结论：可以做受控实际修改试验，当前方向设计不足以支撑正式交付。最高优先级为语义契约/未提取事实遗漏、完整目标盘点、来源角色与服务端验证记录、正文摘要整组一致性、evaluation 持久状态和下载、独立实际产物评分。需同时报告正确修改率与自动交付覆盖率，拒绝多不能算可用。评审未调用模型服务或执行样本；没有代码/运行模式变更，不新增逐合同用户审核队列。

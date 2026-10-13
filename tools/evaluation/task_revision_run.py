@@ -96,7 +96,8 @@ def main() -> None:
         folder.mkdir(parents=True, exist_ok=True)
         validation = report.get("output_validation") or {}
         saved = {}
-        for kind, hash_key in (("evaluation_final", "final_sha256"), ("evaluation_redline", "redline_sha256")):
+        for kind, hash_key in (("final", "final_sha256"), ("redline", "redline_sha256"),
+                               ("evaluation_final", "final_sha256"), ("evaluation_redline", "redline_sha256")):
             url = (document.get("downloads") or {}).get(kind)
             if not url:
                 continue
