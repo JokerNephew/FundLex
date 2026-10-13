@@ -172,7 +172,7 @@ def case_report(name: str, item: dict, cohort: str) -> str:
         lines.append("")
     lines += ["## 怎么核对", "",
               "- 打开“最终版（接受修订后）”中的同名文件即为改后版本；",
-              "- 打开“修改痕迹版”中的同名文件，可看到 Word 修订痕迹，逐条接受或拒绝；",
+              "- 本文件夹内的“（修改痕迹版）”文件带 Word 修订痕迹，可逐条查看、接受或拒绝修改；",
               "- 本说明的表格与文件内容一一对应，可对照抽查。",
               ""]
     validation = report.get("output_validation") or {}
@@ -200,7 +200,7 @@ def build_cohort(items: list[dict], names: dict[str, str], used: set[str]) -> li
     return rows
 
 
-def copy_outputs(rows: list[dict], final_dir: Path, redline_dir: Path, notes_dir: Path, cohort: str) -> None:
+def copy_outputs(rows: list[dict], final_dir: Path, notes_dir: Path, cohort: str) -> None:
     for row in rows:
         item, name = row["item"], row["original"]
         stem = Path(name).stem
@@ -213,8 +213,9 @@ def copy_outputs(rows: list[dict], final_dir: Path, redline_dir: Path, notes_dir
             final_dir.mkdir(parents=True, exist_ok=True)
             shutil.copy2(item["final_docx"], final_dir / name)
         if item.get("redline_docx") and Path(item["redline_docx"]).is_file():
-            redline_dir.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(item["redline_docx"], redline_dir / name)
+            # The tracked-changes copy lives with its own explanation folder.
+            redline_name = f"{stem}（修改痕迹版）{Path(name).suffix}"
+            shutil.copy2(item["redline_docx"], folder / redline_name)
 
 
 def summary_row(row: dict) -> str:
@@ -249,7 +250,7 @@ def main() -> None:
     root = Path(args.output).resolve()
     root.mkdir(parents=True, exist_ok=True)
     real_rows, fixture_rows, excluded_rows = [], [], []
-    real_final, real_redline, real_notes = (root / "最终版（接受修订后）", root / "修改痕迹版", root / "逐份修改说明")
+    real_final, real_notes = (root / "最终版（接受修订后）", root / "逐份修改说明")
     fixture_root = root / "供参考-构造测试件"
     excluded_dir = root / "未修改（整份排除）"
     used: set[str] = set()
@@ -260,11 +261,10 @@ def main() -> None:
         inputs = load_inputs(Path(run_dir).resolve(), Path(selection).resolve() if selection else None)
         rows = build_cohort(items, names, used)
         if kind == "fixture":
-            copy_outputs(rows, fixture_root / "最终版", fixture_root / "修改痕迹版",
-                         fixture_root / "逐份修改说明", label)
+            copy_outputs(rows, fixture_root / "最终版", fixture_root / "逐份修改说明", label)
             fixture_rows.extend([{**row, "cohort": label} for row in rows])
         else:
-            copy_outputs(rows, real_final, real_redline, real_notes, label)
+            copy_outputs(rows, real_final, real_notes, label)
             for row in rows:
                 row["cohort"] = label
                 if row["delivery"] == "not_generated" and row["item"]["report"].get("qualification_status") == "excluded_by_fund_type":
@@ -282,8 +282,7 @@ def main() -> None:
              "## 文件夹说明", "",
              "| 文件夹 | 内容 |", "| --- | --- |",
              "| 最终版（接受修订后） | 修改后的合同，文件名与原合同一致，直接打开即可 |",
-             "| 修改痕迹版 | 同样内容，带 Word 修订痕迹，可逐条查看/接受/拒绝修改 |",
-             "| 逐份修改说明 | 每份合同一个文件夹，写明改了什么、为什么、哪项未改及原因 |",
+             "| 逐份修改说明 | 每份合同一个文件夹：修改说明、修改明细，以及带 Word 修订痕迹的版本（可逐条查看/接受/拒绝修改） |",
              "| 未修改（整份排除） | 属于整份排除类型的合同原件副本（未做任何修改） |",
              "| 供参考-构造测试件 | 系统自建样例（非真实合同），用于验证特殊情形 |", "",
              "## 处理结果一览（真实合同）", "",
@@ -299,7 +298,7 @@ def main() -> None:
             lines.append(summary_row(row))
     lines += ["", "## 如何查看修改", "",
               "1. 直接打开“最终版（接受修订后）”中的文件，即为改后合同；",
-              "2. 如需核对改动过程，打开“修改痕迹版”中同名文件，在 Word 的“审阅”中查看修订；",
+              "2. 如需核对改动过程，打开“逐份修改说明/<合同名>/”里的“（修改痕迹版）”文件，在 Word 的“审阅”中查看修订；",
               "3. 每份合同的详细说明见“逐份修改说明/<合同名>/修改说明.md”。"]
     if args.ledger_note:
         lines += ["", f"- 模型用量记录：{args.ledger_note}"]
