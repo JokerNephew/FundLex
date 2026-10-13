@@ -1,0 +1,206 @@
+{
+  "evaluated": 230,
+  "qualification": {
+    "eligible": 149,
+    "failed": 4,
+    "excluded_by_fund_type": 77
+  },
+  "delivery": {
+    "not_generated": 228,
+    "incomplete": 2
+  },
+  "action_statuses": {
+    "R01-A1": {
+      "failed": 149
+    },
+    "R02-A1": {
+      "failed": 149
+    },
+    "R03-A1": {
+      "failed": 149
+    },
+    "R03-A2": {
+      "failed": 58,
+      "not_applicable": 91
+    },
+    "R03-A3": {
+      "failed": 149
+    },
+    "R04-A1": {
+      "failed": 149
+    },
+    "R05-A1": {
+      "not_applicable": 136,
+      "failed": 13
+    },
+    "R06-A1": {
+      "failed": 149
+    },
+    "R07-A1": {
+      "not_matched": 112,
+      "satisfied_no_change": 19,
+      "failed": 18
+    },
+    "R08-A1": {
+      "not_applicable": 136,
+      "failed": 13
+    },
+    "R09-A1": {
+      "failed": 149
+    },
+    "R10-A1": {
+      "not_matched": 46,
+      "failed": 90,
+      "satisfied_no_change": 13
+    },
+    "R11-A1": {
+      "not_matched": 140,
+      "failed": 9
+    },
+    "R12-A1": {
+      "not_applicable": 136,
+      "failed": 13
+    },
+    "R13-A1": {
+      "not_matched": 122,
+      "satisfied_no_change": 7,
+      "failed": 20
+    },
+    "R14-A1": {
+      "failed": 149
+    },
+    "R15-A1": {
+      "failed": 149
+    },
+    "R15-A2": {
+      "failed": 149
+    },
+    "R16-A1": {
+      "failed": 149
+    },
+    "R17-A1": {
+      "not_applicable": 136,
+      "failed": 13
+    },
+    "R17-A2": {
+      "failed": 149
+    },
+    "R17-A3": {
+      "failed": 149
+    }
+  },
+  "candidate_statuses": {
+    "R17-A3": {
+      "failed": 138
+    },
+    "R09-A1": {
+      "failed": 90
+    },
+    "R10-A1": {
+      "failed": 86,
+      "satisfied": 13,
+      "excluded": 3
+    },
+    "R13-A1": {
+      "excluded": 3,
+      "satisfied": 7,
+      "failed": 4
+    },
+    "R07-A1": {
+      "satisfied": 19,
+      "failed": 2
+    },
+    "R06-A1": {
+      "failed": 56
+    },
+    "R05-A1": {
+      "failed": 10
+    },
+    "R08-A1": {
+      "failed": 10
+    },
+    "R12-A1": {
+      "failed": 11
+    },
+    "R16-A1": {
+      "failed": 1
+    },
+    "R17-A2": {
+      "failed": 5
+    },
+    "R01-A1": {
+      "failed": 1
+    },
+    "R11-A1": {
+      "failed": 5
+    }
+  },
+  "candidate_regions": {
+    "body": 464
+  },
+  "errors": {
+    "FUND_TYPE_EVIDENCE_MISSING": 2,
+    "FUND_TYPE_INVESTMENT_EVIDENCE_MISSING": 2
+  },
+  "profile_coverage": {
+    "resolved": 149,
+    "fee_groups_verified": 8,
+    "context_truncated": 0
+  },
+  "model_usage": {
+    "prompt_tokens": 329493,
+    "completion_tokens": 59847,
+    "total_tokens": 389340,
+    "rate_limit_count": 0,
+    "error_count": 5
+  },
+  "latency_ms": {
+    "p50": 4250.0,
+    "p95": 5719,
+    "over_3_minutes": 0
+  },
+  "quality_metrics": {
+    "qualification_accuracy": null,
+    "profile_accuracy": null,
+    "candidate_precision": null,
+    "candidate_recall": null,
+    "reason": "independent_ground_truth_not_available"
+  },
+  "automatic_write_enabled": false,
+  "scope": "230 completed documents accepted by user; remaining 284 cancelled",
+  "completed_batches": 23,
+  "planned_dataset_count": 514,
+  "quality_release_passed": false,
+  "source": "23 completed batches of full-514-v3; partial batch 24 excluded",
+  "budget_note": "cumulative ledger includes previous baseline and experiments; not per-230 invoice",
+  "cumulative_budget_snapshot": {
+    "http_attempts": 624,
+    "estimated_cost_usd": 0.2931204,
+    "max_http_attempts": 4096,
+    "max_cost_usd": 5.0,
+    "concurrency": 1,
+    "statuses": {
+      "completed": 615,
+      "failed": 9
+    },
+    "rates_usd_per_million": {
+      "input": 0.3,
+      "output": 1.2
+    },
+    "cost_is_provider_invoice": false
+  },
+  "actual_230_model_usage": {
+    "http_attempts": 425,
+    "logical_calls": 425,
+    "total_tokens": 389340,
+    "prompt_tokens": 329493,
+    "completion_tokens": 59847,
+    "estimated_cost_usd": 0.1706643000000001,
+    "latency_ms": 474029,
+    "rate_limit_count": 0,
+    "error_count": 5
+  },
+  "source_manifest_all_514_hashes_unchanged": true,
+  "regression_engine_build": "e17891baee83fc2fa9c9a9878e21865f33de54b599e83587528c16aa76f219ec",
+  "ruleset_sha256": "35330dffb129e8034ff1d57caca471066527ec8fc04127352ede34112c59dbd2"
+}

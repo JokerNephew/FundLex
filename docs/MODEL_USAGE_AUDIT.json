@@ -1,0 +1,24 @@
+{
+  "retained_unique_ledger_reservations": 721,
+  "statuses": {
+    "reserved": 3,
+    "failed": 19,
+    "completed": 699
+  },
+  "metadata_available": 718,
+  "metadata_missing": 3,
+  "known_usage": {
+    "prompt_tokens": 767467,
+    "completion_tokens": 86766,
+    "total_tokens": 854233,
+    "latency_ms": 811999
+  },
+  "estimated_charge_usd": 0.3439271,
+  "rate_limits": 0,
+  "errors": {
+    "MODEL_SCHEMA_INVALID": 8,
+    "MODEL_HTTP_ERROR": 1,
+    "MODEL_QUOTE_MISMATCH": 10
+  },
+  "note": "Includes earlier diagnostic experiments and repeated baselines; missing metadata may retain worst-case reservation. Historical pre-ledger attempts may not be fully reconstructable. Charges use configured rates, not provider invoice."
+}

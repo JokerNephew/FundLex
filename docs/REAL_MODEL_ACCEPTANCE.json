@@ -1,0 +1,395 @@
+{
+  "engine_build": "55753716cfededb918baefdf6ce7fd1626aeef8a838f9dc9a4230038700949be",
+  "scenarios": [
+    {
+      "scenario": "normal",
+      "batch_id": "c276d8cd66284dd290b74198a65b1846",
+      "document_id": "8c2f6107dddb4145a95bcaae5f4e3441",
+      "source_sha256": "31a43c78f437ee2184df536ef413ee5ac891d4f42b2b784bea0de16c7cf6b2d9",
+      "qualification_status": "eligible",
+      "delivery_status": "incomplete",
+      "error_code": null,
+      "model": {
+        "logical_calls": 2,
+        "http_attempts": 2,
+        "checkpoint_reuses": 0,
+        "checkpoint_invalidations": 0,
+        "prompt_tokens": 929,
+        "completion_tokens": 138,
+        "total_tokens": 1067,
+        "latency_ms": 1999,
+        "rate_limit_count": 0,
+        "error_count": 0,
+        "estimated_cost_usd": 0.00044429999999999996,
+        "events": [
+          {
+            "task_type": "fund_type",
+            "prompt_version": "fund_type_v3",
+            "context_sha256": "e8ddb7be2aab7fd820c5f83aae4563c5ad8d09b6eedd5a823f4d77702c7fae56",
+            "configured_model": "deepseek-flash",
+            "attempt": 1,
+            "error_code": null,
+            "request_options_sha256": "04e5afe8e30e34b1b1bd22ad95b60a35ef9c71cf5eac8e18da1d7252d7d38c0f",
+            "http_status": 200,
+            "request_id": null,
+            "actual_model": "deepseek-flash",
+            "finish_reason": "stop",
+            "content_chars": 58,
+            "prompt_tokens": 380,
+            "completion_tokens": 20,
+            "total_tokens": 400,
+            "latency_ms": 1031,
+            "estimated_cost_usd": 0.000138
+          },
+          {
+            "task_type": "profile",
+            "prompt_version": "profile_v3",
+            "context_sha256": "c6a26c3d1d5bcdbf1f81dbb27fbe3a826780ae35d4d55eba2759ce10fde63632",
+            "configured_model": "deepseek-flash",
+            "attempt": 1,
+            "error_code": null,
+            "request_options_sha256": "04e5afe8e30e34b1b1bd22ad95b60a35ef9c71cf5eac8e18da1d7252d7d38c0f",
+            "http_status": 200,
+            "request_id": null,
+            "actual_model": "deepseek-flash",
+            "finish_reason": "stop",
+            "content_chars": 377,
+            "prompt_tokens": 549,
+            "completion_tokens": 118,
+            "total_tokens": 667,
+            "latency_ms": 968,
+            "estimated_cost_usd": 0.00030629999999999996
+          }
+        ]
+      },
+      "budget": {
+        "http_attempts": 14,
+        "estimated_cost_usd": 0.0027830999999999997,
+        "max_http_attempts": 16,
+        "max_cost_usd": 0.1,
+        "concurrency": 1,
+        "statuses": {
+          "completed": 13,
+          "failed": 1
+        },
+        "rates_usd_per_million": {
+          "input": 0.3,
+          "output": 1.2
+        },
+        "cost_is_provider_invoice": false
+      },
+      "ruleset_sha256": "35330dffb129e8034ff1d57caca471066527ec8fc04127352ede34112c59dbd2",
+      "plan": {
+        "count": 0,
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "edits": [],
+        "validated": true,
+        "executable": false,
+        "reason": "RELEASE_GATE_CLOSED"
+      },
+      "output_validation": {
+        "kind": "zero_edit_evaluation_only",
+        "source_sha256": "31a43c78f437ee2184df536ef413ee5ac891d4f42b2b784bea0de16c7cf6b2d9",
+        "redline_sha256": "31a43c78f437ee2184df536ef413ee5ac891d4f42b2b784bea0de16c7cf6b2d9",
+        "final_sha256": "31a43c78f437ee2184df536ef413ee5ac891d4f42b2b784bea0de16c7cf6b2d9",
+        "byte_identical_to_source": true,
+        "not_a_final_contract": true
+      },
+      "source_unchanged": true,
+      "api_report_download_verified": true,
+      "final_delivery_withheld": true
+    },
+    {
+      "scenario": "structure_failure",
+      "batch_id": "6bb4c02c94f94f3f805c28c9e956d57c",
+      "document_id": "e77a5914a10c42b69f7fff088fa3ca02",
+      "source_sha256": "1538fb5ae334cf9c62f7478ac04e90d84a52ecb524a8b88aa511fa848d798faa",
+      "qualification_status": "eligible",
+      "delivery_status": "not_generated",
+      "error_code": "EXISTING_REVISION_UNSUPPORTED",
+      "model": {
+        "logical_calls": 1,
+        "http_attempts": 1,
+        "checkpoint_reuses": 0,
+        "checkpoint_invalidations": 0,
+        "prompt_tokens": 380,
+        "completion_tokens": 20,
+        "total_tokens": 400,
+        "latency_ms": 1094,
+        "rate_limit_count": 0,
+        "error_count": 0,
+        "estimated_cost_usd": 0.000138,
+        "events": [
+          {
+            "task_type": "fund_type",
+            "prompt_version": "fund_type_v3",
+            "context_sha256": "e8ddb7be2aab7fd820c5f83aae4563c5ad8d09b6eedd5a823f4d77702c7fae56",
+            "configured_model": "deepseek-flash",
+            "attempt": 1,
+            "error_code": null,
+            "request_options_sha256": "04e5afe8e30e34b1b1bd22ad95b60a35ef9c71cf5eac8e18da1d7252d7d38c0f",
+            "http_status": 200,
+            "request_id": null,
+            "actual_model": "deepseek-flash",
+            "finish_reason": "stop",
+            "content_chars": 58,
+            "prompt_tokens": 380,
+            "completion_tokens": 20,
+            "total_tokens": 400,
+            "latency_ms": 1094,
+            "estimated_cost_usd": 0.000138
+          }
+        ]
+      },
+      "budget": {
+        "http_attempts": 15,
+        "estimated_cost_usd": 0.0029211,
+        "max_http_attempts": 16,
+        "max_cost_usd": 0.1,
+        "concurrency": 1,
+        "statuses": {
+          "completed": 14,
+          "failed": 1
+        },
+        "rates_usd_per_million": {
+          "input": 0.3,
+          "output": 1.2
+        },
+        "cost_is_provider_invoice": false
+      },
+      "ruleset_sha256": "35330dffb129e8034ff1d57caca471066527ec8fc04127352ede34112c59dbd2",
+      "plan": {
+        "count": 0,
+        "sha256": null,
+        "edits": [],
+        "executable": false,
+        "reason": "EXISTING_REVISION_UNSUPPORTED"
+      },
+      "output_validation": null,
+      "source_unchanged": true,
+      "api_report_download_verified": true,
+      "final_delivery_withheld": true
+    },
+    {
+      "scenario": "truncated",
+      "batch_id": "932c809d64314b9da94f81b05ad25672",
+      "document_id": "f1305d4933c94424a3ea93b22c45e7ef",
+      "source_sha256": "1bf3b360403e6d1ee383f520f42e672665ad2002b1e881ff8b0b6afd2ba8c894",
+      "qualification_status": "failed",
+      "delivery_status": "not_generated",
+      "error_code": "MODEL_SCHEMA_INVALID",
+      "model": {
+        "logical_calls": 1,
+        "http_attempts": 1,
+        "checkpoint_reuses": 0,
+        "checkpoint_invalidations": 0,
+        "prompt_tokens": 380,
+        "completion_tokens": 1,
+        "total_tokens": 381,
+        "latency_ms": 610,
+        "rate_limit_count": 0,
+        "error_count": 1,
+        "estimated_cost_usd": 0.00011520000000000001,
+        "events": [
+          {
+            "task_type": "fund_type",
+            "prompt_version": "fund_type_v3",
+            "context_sha256": "e8ddb7be2aab7fd820c5f83aae4563c5ad8d09b6eedd5a823f4d77702c7fae56",
+            "configured_model": "deepseek-flash",
+            "attempt": 1,
+            "error_code": "MODEL_SCHEMA_INVALID",
+            "request_options_sha256": "04e5afe8e30e34b1b1bd22ad95b60a35ef9c71cf5eac8e18da1d7252d7d38c0f",
+            "http_status": 200,
+            "request_id": null,
+            "actual_model": "deepseek-flash",
+            "finish_reason": "length",
+            "content_chars": 2,
+            "prompt_tokens": 380,
+            "completion_tokens": 1,
+            "total_tokens": 381,
+            "latency_ms": 610,
+            "estimated_cost_usd": 0.00011520000000000001
+          }
+        ]
+      },
+      "budget": {
+        "http_attempts": 16,
+        "estimated_cost_usd": 0.0030363,
+        "max_http_attempts": 16,
+        "max_cost_usd": 0.1,
+        "concurrency": 1,
+        "statuses": {
+          "completed": 14,
+          "failed": 2
+        },
+        "rates_usd_per_million": {
+          "input": 0.3,
+          "output": 1.2
+        },
+        "cost_is_provider_invoice": false
+      },
+      "ruleset_sha256": "35330dffb129e8034ff1d57caca471066527ec8fc04127352ede34112c59dbd2",
+      "plan": {
+        "count": 0,
+        "sha256": null,
+        "edits": [],
+        "executable": false,
+        "reason": "MODEL_SCHEMA_INVALID"
+      },
+      "output_validation": null,
+      "source_unchanged": true,
+      "api_report_download_verified": true,
+      "final_delivery_withheld": true
+    }
+  ],
+  "resume": {
+    "scenario": "real_model_stage_resume",
+    "source_unchanged": true,
+    "interruption": "injected storage exception; model remains real",
+    "first_attempt": {
+      "configured_model": "deepseek-flash",
+      "actual_model": "deepseek-flash",
+      "calls": 1,
+      "prompt_tokens": 929,
+      "completion_tokens": 141,
+      "total_tokens": 1070,
+      "latency_ms": 1985,
+      "cost": null,
+      "rate_limit_count": 0,
+      "error_count": 0,
+      "prompt_version": "fund_type_v3",
+      "attempts": 1,
+      "request_id": null,
+      "quote_verification": "verified_against_bounded_context",
+      "logical_calls": 2,
+      "http_attempts": 2,
+      "checkpoint_reuses": 0,
+      "checkpoint_invalidations": 0,
+      "estimated_cost_usd": 0.0004479,
+      "events": [
+        {
+          "task_type": "fund_type",
+          "prompt_version": "fund_type_v3",
+          "context_sha256": "e8ddb7be2aab7fd820c5f83aae4563c5ad8d09b6eedd5a823f4d77702c7fae56",
+          "configured_model": "deepseek-flash",
+          "attempt": 1,
+          "error_code": null,
+          "request_options_sha256": "04e5afe8e30e34b1b1bd22ad95b60a35ef9c71cf5eac8e18da1d7252d7d38c0f",
+          "http_status": 200,
+          "request_id": null,
+          "actual_model": "deepseek-flash",
+          "finish_reason": "stop",
+          "content_chars": 61,
+          "prompt_tokens": 380,
+          "completion_tokens": 23,
+          "total_tokens": 403,
+          "latency_ms": 875,
+          "estimated_cost_usd": 0.0001416
+        },
+        {
+          "task_type": "profile",
+          "prompt_version": "profile_v3",
+          "context_sha256": "c6a26c3d1d5bcdbf1f81dbb27fbe3a826780ae35d4d55eba2759ce10fde63632",
+          "configured_model": "deepseek-flash",
+          "attempt": 1,
+          "error_code": null,
+          "request_options_sha256": "04e5afe8e30e34b1b1bd22ad95b60a35ef9c71cf5eac8e18da1d7252d7d38c0f",
+          "http_status": 200,
+          "request_id": null,
+          "actual_model": "deepseek-flash",
+          "finish_reason": "stop",
+          "content_chars": 377,
+          "prompt_tokens": 549,
+          "completion_tokens": 118,
+          "total_tokens": 667,
+          "latency_ms": 1110,
+          "estimated_cost_usd": 0.00030629999999999996
+        }
+      ]
+    },
+    "resumed_attempt": {
+      "configured_model": "deepseek-flash",
+      "actual_model": "deepseek-flash",
+      "calls": 1,
+      "prompt_tokens": 0,
+      "completion_tokens": 0,
+      "total_tokens": 0,
+      "latency_ms": 0,
+      "cost": null,
+      "rate_limit_count": 0,
+      "error_count": 0,
+      "prompt_version": "fund_type_v3",
+      "attempts": 0,
+      "request_id": null,
+      "quote_verification": "verified_against_bounded_context",
+      "logical_calls": 2,
+      "http_attempts": 0,
+      "checkpoint_reuses": 2,
+      "checkpoint_invalidations": 0,
+      "estimated_cost_usd": 0,
+      "events": [
+        {
+          "task_type": "fund_type",
+          "prompt_version": "fund_type_v3",
+          "context_sha256": "e8ddb7be2aab7fd820c5f83aae4563c5ad8d09b6eedd5a823f4d77702c7fae56",
+          "configured_model": "deepseek-flash",
+          "attempt": 0,
+          "error_code": null,
+          "request_options_sha256": "04e5afe8e30e34b1b1bd22ad95b60a35ef9c71cf5eac8e18da1d7252d7d38c0f",
+          "http_status": 200,
+          "request_id": null,
+          "actual_model": "deepseek-flash",
+          "finish_reason": "stop",
+          "content_chars": 61,
+          "prompt_tokens": 0,
+          "completion_tokens": 0,
+          "total_tokens": 0,
+          "latency_ms": 0,
+          "estimated_cost_usd": 0,
+          "reused_checkpoint": true,
+          "original_response_sha256": "a5a6405ed445ae82354a1727bacbef56ca1805a364704b6f83c37cd1607938a2"
+        },
+        {
+          "task_type": "profile",
+          "prompt_version": "profile_v3",
+          "context_sha256": "c6a26c3d1d5bcdbf1f81dbb27fbe3a826780ae35d4d55eba2759ce10fde63632",
+          "configured_model": "deepseek-flash",
+          "attempt": 0,
+          "error_code": null,
+          "request_options_sha256": "04e5afe8e30e34b1b1bd22ad95b60a35ef9c71cf5eac8e18da1d7252d7d38c0f",
+          "http_status": 200,
+          "request_id": null,
+          "actual_model": "deepseek-flash",
+          "finish_reason": "stop",
+          "content_chars": 377,
+          "prompt_tokens": 0,
+          "completion_tokens": 0,
+          "total_tokens": 0,
+          "latency_ms": 0,
+          "estimated_cost_usd": 0,
+          "reused_checkpoint": true,
+          "original_response_sha256": "b0ef93a66a9e59fa1d7b81e5762046b635681f725376f654b39b3d64f1411ea1"
+        }
+      ]
+    },
+    "edit_plan": {
+      "count": 0,
+      "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "edits": [],
+      "validated": true,
+      "executable": false,
+      "reason": "RELEASE_GATE_CLOSED"
+    },
+    "output_validation": {
+      "kind": "zero_edit_evaluation_only",
+      "source_sha256": "5d6ba323251f6c2ba97d967e502a25195824f96cc2bed33f3e2284352d38b5a9",
+      "redline_sha256": "5d6ba323251f6c2ba97d967e502a25195824f96cc2bed33f3e2284352d38b5a9",
+      "final_sha256": "5d6ba323251f6c2ba97d967e502a25195824f96cc2bed33f3e2284352d38b5a9",
+      "byte_identical_to_source": true,
+      "not_a_final_contract": true
+    },
+    "api_report_download_verified": true,
+    "final_delivery_withheld": true
+  },
+  "version_note": "Resume and browser tests used f0f355cd build; current build differs only by removing a trailing blank line in rules.py. Final three model scenarios repeated after formatting; no changes to rules or behavior."
+}

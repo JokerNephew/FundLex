@@ -1,0 +1,67 @@
+{
+  "engine_build": "f0f355cdc41ae0206a9db7944db77a8a31b686eb6a5a677dc86f981f321b2648",
+  "browser": "Playwright actual browser + loopback API + actual worker and ModelGateway",
+  "latest_batch": "d3ecbed083324915b7fadd4896bb722b",
+  "documents": [
+    {
+      "fixture": "normal.docx",
+      "qualification": "eligible",
+      "delivery": "incomplete",
+      "error": null,
+      "engine_build": "f0f355cdc41ae0206a9db7944db77a8a31b686eb6a5a677dc86f981f321b2648",
+      "model": {
+        "http_attempts": 2,
+        "total_tokens": 1070,
+        "prompt_tokens": 929,
+        "completion_tokens": 141,
+        "estimated_cost_usd": 0.0004479,
+        "latency_ms": 1734,
+        "checkpoint_reuses": 0
+      },
+      "plan_validated": true,
+      "final_download_withheld": true,
+      "report_downloads_verified": true
+    },
+    {
+      "fixture": "structure_failure.docx",
+      "qualification": "eligible",
+      "delivery": "not_generated",
+      "error": "EXISTING_REVISION_UNSUPPORTED",
+      "engine_build": "f0f355cdc41ae0206a9db7944db77a8a31b686eb6a5a677dc86f981f321b2648",
+      "model": {
+        "http_attempts": 1,
+        "total_tokens": 403,
+        "prompt_tokens": 380,
+        "completion_tokens": 23,
+        "estimated_cost_usd": 0.0001416,
+        "latency_ms": 859,
+        "checkpoint_reuses": 0
+      },
+      "plan_validated": false,
+      "final_download_withheld": true,
+      "report_downloads_verified": true
+    }
+  ],
+  "desktop": {
+    "viewport_width": 1440,
+    "horizontal_overflow": false
+  },
+  "mobile": {
+    "viewport_width": 390,
+    "client_width": 375,
+    "horizontal_overflow": false,
+    "outside_panels": 0
+  },
+  "identity_ui_empty_for_other_user": true,
+  "other_user_batch_status": 404,
+  "downloads_clicked": [
+    "JSON report",
+    "Markdown report",
+    "batch Markdown"
+  ],
+  "console_note": "Normal page reload has zero errors/warnings; deliberate forbidden-user lookup produced expected HTTP404 console entry.",
+  "screenshots": [
+    "var/evaluation/ui-desktop-e2e.png",
+    "var/evaluation/ui-mobile-e2e.png"
+  ]
+}
