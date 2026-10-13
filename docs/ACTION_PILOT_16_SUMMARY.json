@@ -1,0 +1,156 @@
+{
+  "scope": 16,
+  "gold_sha256": "76f65517be316f86fefe93fb2573b8ade106e21f93b7b4b78cc4b64041b51b9a",
+  "label_method": "independent AI blind review; not externally approved business truth",
+  "gold_source_evidence_checks": 314,
+  "qualification": {
+    "known_cases": 16,
+    "correct": 13,
+    "actual_eligible": 10,
+    "actual_excluded_by_fund_type": 3,
+    "wrong_or_abstained": 3,
+    "actual_failed": 3,
+    "agreement": 0.8125
+  },
+  "share_classes": {
+    "known_cases": 13,
+    "exact": 10,
+    "missing_or_different": 3,
+    "exact_set_recall": 0.7692307692307693
+  },
+  "fee_fields": {
+    "known_fields": 68,
+    "correct": 41,
+    "unknown": 27,
+    "coverage": 0.6029411764705882,
+    "correct_over_known": 0.6029411764705882,
+    "precision_when_answered": 1.0
+  },
+  "actions": {
+    "R03-A3": {
+      "reviewed_cases": 16,
+      "supported_gold_targets": 5,
+      "explicit_negative_regions": 69,
+      "gold_satisfied": 0,
+      "located_gold_targets": 0,
+      "verified_gold_targets": 0,
+      "overlapping_gold_targets_not_exact": 0,
+      "candidate_proposals": 0,
+      "exact_target_proposals": 0,
+      "confirmed_on_explicit_negative": 0,
+      "satisfied_correct": 0,
+      "unsupported_semantic_targets": 1,
+      "location_recall": 0.0,
+      "verified_target_recall": 0.0,
+      "exact_target_proposal_precision": null,
+      "release_quantity_sufficient": false
+    },
+    "R04-A1": {
+      "reviewed_cases": 16,
+      "supported_gold_targets": 4,
+      "explicit_negative_regions": 42,
+      "gold_satisfied": 0,
+      "located_gold_targets": 0,
+      "verified_gold_targets": 0,
+      "overlapping_gold_targets_not_exact": 0,
+      "candidate_proposals": 0,
+      "exact_target_proposals": 0,
+      "confirmed_on_explicit_negative": 0,
+      "satisfied_correct": 0,
+      "location_recall": 0.0,
+      "verified_target_recall": 0.0,
+      "exact_target_proposal_precision": null,
+      "release_quantity_sufficient": false
+    },
+    "R11-A1": {
+      "reviewed_cases": 16,
+      "supported_gold_targets": 3,
+      "explicit_negative_regions": 40,
+      "gold_satisfied": 0,
+      "located_gold_targets": 0,
+      "verified_gold_targets": 0,
+      "overlapping_gold_targets_not_exact": 0,
+      "candidate_proposals": 0,
+      "exact_target_proposals": 0,
+      "confirmed_on_explicit_negative": 0,
+      "satisfied_correct": 0,
+      "location_recall": 0.0,
+      "verified_target_recall": 0.0,
+      "exact_target_proposal_precision": null,
+      "release_quantity_sufficient": false
+    },
+    "R10-A1": {
+      "reviewed_cases": 5,
+      "supported_gold_targets": 4,
+      "explicit_negative_regions": 0,
+      "gold_satisfied": 1,
+      "located_gold_targets": 0,
+      "verified_gold_targets": 0,
+      "overlapping_gold_targets_not_exact": 3,
+      "candidate_proposals": 3,
+      "exact_target_proposals": 0,
+      "confirmed_on_explicit_negative": 0,
+      "satisfied_correct": 1,
+      "location_recall": 0.0,
+      "verified_target_recall": 0.0,
+      "exact_target_proposal_precision": 0.0,
+      "release_quantity_sufficient": false
+    }
+  },
+  "automatic_write": false,
+  "release_approval": false,
+  "limitations": [
+    "stratified 16-case diagnostic cohort, not population accuracy",
+    "Only explicitly annotated actions scored; others not evaluated",
+    "No-target-found is not satisfied; unknown is not a true negative",
+    "Cross-paragraph unsupported targets excluded from writable recall denominator",
+    "Location matching requires exact source range; wider boundary proposals are not correct edit locations"
+  ],
+  "runtime_summary": {
+    "qualification": {
+      "eligible": 10,
+      "excluded_by_fund_type": 3,
+      "failed": 3
+    },
+    "delivery": {
+      "not_generated": 15,
+      "incomplete": 1
+    },
+    "model_usage": {
+      "prompt_tokens": 20814,
+      "completion_tokens": 4303,
+      "total_tokens": 25117,
+      "rate_limit_count": 0,
+      "error_count": 0
+    },
+    "budget": {
+      "http_attempts": 25,
+      "estimated_cost_usd": 0.0114078,
+      "max_http_attempts": 128,
+      "max_cost_usd": 0.3,
+      "concurrency": 1,
+      "statuses": {
+        "completed": 25
+      },
+      "rates_usd_per_million": {
+        "input": 0.3,
+        "output": 1.2
+      },
+      "cost_is_provider_invoice": false
+    },
+    "latency_ms": {
+      "p50": 4883.0,
+      "p95": 11141,
+      "over_3_minutes": 0
+    },
+    "profile_coverage": {
+      "resolved": 10,
+      "fee_groups_verified": 4,
+      "context_truncated": 0
+    },
+    "completed": true,
+    "engine_build": "55753716cfededb918baefdf6ce7fd1626aeef8a838f9dc9a4230038700949be",
+    "ruleset_sha256": "35330dffb129e8034ff1d57caca471066527ec8fc04127352ede34112c59dbd2"
+  },
+  "original_source_files_unchanged": true
+}
