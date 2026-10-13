@@ -21,7 +21,7 @@
   const badge = (value, override) => `<span class="badge b-${['eligible','succeeded','completed','complete','accepted','satisfied','satisfied_no_change'].includes(value)?'green':['failed','rejected','incomplete'].includes(value)?'red':['running','queued','leased','uploading'].includes(value)?'blue':['paused','excluded_by_fund_type','retry_wait'].includes(value)?'amber':'gray'}">${esc(override || labels[value] || '未确认')}</span>`;
   const state = {view:'overview',epoch:0,controllers:new Set(),tokens:{},tasks:[],selected:null,task:null,cap:null,tasksLoaded:false,guideDismissed:false,imports:[],recover:null,uploading:false,uploadToken:null,createKey:null,taskPage:1,importPage:1,progressPage:1,resultPage:1,taskSize:20,importSize:20,progressSize:20,resultSize:20,detail:null,focusReturn:null};
   function notice(message, error=false) { const box=$('notice');box.textContent=message;box.hidden=!message;box.classList.toggle('error',error);box.classList.toggle('connection',error&&message.startsWith('无法连接')); }
-  const BASE_TITLE='FundLex · 合同处理工作台';let toastTimer=null;
+  const BASE_TITLE='FundLex合同修订工作台';let toastTimer=null;
   function toast(message,error=false){const el=$('toast');el.textContent=message;el.hidden=false;el.classList.toggle('error',error);clearTimeout(toastTimer);toastTimer=setTimeout(()=>{el.hidden=true;},5200);}
   function owner() { return $('dev-user').value.trim(); }
   const identityCurrent = epoch => epoch===state.epoch;
