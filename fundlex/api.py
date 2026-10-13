@@ -152,29 +152,49 @@ def create_app(data_dir: str | Path | None = None) -> FastAPI:
     @application.get("/api/capabilities")
     def capabilities(user: str = Depends(_user)):
         from .rules import RuleError, load_ruleset
+        from .rules_v2 import RuleV2Error, load_ruleset_v2
         try:
             rule = load_ruleset("v1")
         except RuleError as exc:
             raise HTTPException(503, str(exc)) from exc
+        revision: dict = {"revision_ruleset_version": None, "revision_ruleset_sha256": None,
+                          "revision_actions_total": 0, "revision_auto_write_enabled": False,
+                          "revision_mode": None, "revision_action_labels": {}}
+        try:
+            revision_rule = load_ruleset_v2("v2")
+            revision = {"revision_ruleset_version": revision_rule.version,
+                        "revision_ruleset_sha256": revision_rule.sha256,
+                        "revision_actions_total": len(revision_rule.actions),
+                        "revision_auto_write_enabled": revision_rule.auto_write_enabled,
+                        "revision_mode": "delivery" if revision_rule.auto_write_enabled else "evaluation",
+                        "revision_action_labels": {a["action_id"]: a.get("description", "")
+                                                   for a in revision_rule.actions}}
+        except RuleV2Error:
+            pass
         return {"auth_mode": os.environ.get("FUNDLEX_AUTH_MODE", "dev"), "task_api": True,
                 "ruleset_version": rule.version, "ruleset_sha256": rule.sha256,
                 "actions_total": len(rule.actions), "auto_write_enabled": rule.auto_write_enabled,
                 "auto_write_count": sum(bool(a["auto_write"]) for a in rule.actions),
                 "action_labels": {a["action_id"]: a.get("description", "") for a in rule.actions},
                 "upload_limits": {"max_file_bytes": MAX_UPLOAD_BYTES, "max_request_files": MAX_BATCH_DOCUMENTS,
-                                  "max_request_bytes": MAX_BATCH_BYTES}}
+                                  "max_request_bytes": MAX_BATCH_BYTES},
+                **revision}
 
     @application.post("/api/tasks", status_code=201)
     def create_task(payload: TaskSubmission,
                     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
                     user: str = Depends(_user)):
         from .rules import RuleError, load_ruleset
+        from .rules_v2 import RuleV2Error, load_ruleset_v2
         if idempotency_key is not None and (not idempotency_key.strip() or len(idempotency_key) > 128):
             raise HTTPException(422, "invalid idempotency key")
         try:
             rule = load_ruleset(payload.ruleset_version.strip())
-        except RuleError as exc:
-            raise HTTPException(422, str(exc)) from exc
+        except RuleError:
+            try:
+                rule = load_ruleset_v2(payload.ruleset_version.strip())
+            except RuleV2Error as exc:
+                raise HTTPException(422, str(exc)) from exc
         return task_call(tasks.create, user, payload.name, rule, [f.model_dump() for f in payload.files], idempotency_key)
 
     @application.get("/api/tasks")

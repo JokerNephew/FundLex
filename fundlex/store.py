@@ -76,10 +76,15 @@ def validate_delivery(report: dict[str, Any], artifacts: dict[str, Path]) -> Non
     validation = report.get("output_validation")
     if not {"final", "redline"}.issubset(artifacts) or not isinstance(validation, dict):
         raise ValueError("MISSING_VERIFIED_ARTIFACTS")
-    required = {"validated_edits": {"package", "revisions", "final_equivalence", "non_target", "template_text"},
+    required = {"validated_edits": {"package", "revisions", "final_equivalence", "non_target"},
                 "validated_unchanged": {"package", "zero_edit", "byte_identity"}}
     checks = validation.get("checks")
-    if validation.get("kind") not in required or not isinstance(checks, (list, tuple)) or not required[validation["kind"]].issubset(checks):
+    if validation.get("kind") not in required or not isinstance(checks, (list, tuple)):
+        raise ValueError("MISSING_VERIFIED_ARTIFACTS")
+    present = set(checks)
+    if not required[validation["kind"]].issubset(present):
+        raise ValueError("MISSING_VERIFIED_ARTIFACTS")
+    if validation["kind"] == "validated_edits" and not ({"template_text", "content_verification"} & present):
         raise ValueError("MISSING_VERIFIED_ARTIFACTS")
     for kind in ("final", "redline"):
         if not artifacts[kind].is_file() or validation.get(f"{kind}_sha256") != sha256_file(artifacts[kind]):

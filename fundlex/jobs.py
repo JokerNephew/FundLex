@@ -24,6 +24,11 @@ Processor = Callable[[Path, Path, str], dict[str, Any]]
 
 
 def _default_processor(input_path: Path, output_dir: Path, ruleset_version: str, *, checkpoint_dir: Path | None = None) -> dict[str, Any]:
+    if ruleset_version == "v2":
+        # v2 follows the rule package state: unreleased -> evaluation artifacts,
+        # released -> formal delivery artifacts (gates are validated on load).
+        from .v2_pipeline import process_v2
+        return process_v2(input_path, output_dir, ruleset_version)
     from .pipeline import process
     return process(input_path, output_dir, ruleset_version, checkpoint_dir=checkpoint_dir)
 

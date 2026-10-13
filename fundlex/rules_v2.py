@@ -1,14 +1,16 @@
 """Loader for the executable v2 semantic rule package.
 
-The v2 package is evaluation-only until a separate offline release act happens.
-The loader rejects any package that claims auto-write or approved state, and it
-refuses unknown check kinds so that every requirement stays code-verifiable.
+An unreleased package cannot enable writes. A released package must carry, for
+every auto-write action, the same evidence the v1 gate requires (evaluation
+report, approval record, preregistered thresholds and measured results), so the
+write switches cannot be flipped by editing a boolean.
 """
 
 from __future__ import annotations
 
 import hashlib
 import json
+import math
 import re
 from dataclasses import dataclass
 from pathlib import Path
@@ -54,13 +56,65 @@ class RuleSetV2:
 
     @property
     def auto_write_enabled(self) -> bool:
-        return False
+        return any(action["approval"].get("auto_write") is True for action in self.actions)
 
     def by_id(self, action_id: str) -> dict[str, Any]:
         for action in self.actions:
             if action["action_id"] == action_id:
                 return action
         raise RuleV2Error("V2_ACTION_NOT_FOUND")
+
+
+def _validate_released_action(action: dict[str, Any], policy: dict[str, Any]) -> None:
+    """A released auto-write action must carry the same evidence the v1 gate requires.
+
+    The evidence is produced outside this repository (evaluation report + approval
+    record + preregistered thresholds). Editing a boolean cannot bypass it.
+    """
+    approval = action["approval"]
+    if approval.get("approved") is not True:
+        raise RuleV2Error("V2_RELEASE_EVIDENCE_MISSING", {"action": action["action_id"]})
+    if not policy.get("evaluation_report_id") or not policy.get("approval_record") \
+            or not action.get("evaluation_report_id") or not action.get("approval_record"):
+        raise RuleV2Error("V2_RELEASE_EVIDENCE_MISSING", {"action": action["action_id"]})
+    threshold, actual = action.get("release_threshold"), action.get("evaluation_metrics")
+    if not isinstance(threshold, dict) or threshold.get("registration_id") is None \
+            or threshold.get("registered_before_full_evaluation") is not True or not isinstance(actual, dict):
+        raise RuleV2Error("V2_RELEASE_EVIDENCE_MISSING", {"action": action["action_id"]})
+    context = policy.get("evaluation_context")
+    if not isinstance(context, dict) or any(
+            not isinstance(context.get(key), str) or not re.fullmatch(r"[0-9a-f]{64}", context[key])
+            for key in ("engine_build", "model_transport_sha256")):
+        raise RuleV2Error("V2_RELEASE_CONTEXT_UNVERIFIED")
+    if not isinstance(context.get("actual_model"), str) or not context["actual_model"] \
+            or context.get("prompt_versions") != PROMPT_VERSIONS_V2:
+        raise RuleV2Error("V2_RELEASE_CONTEXT_UNVERIFIED")
+    if actual.get("tested_context") != context or actual.get("action_id") != action["action_id"] \
+            or actual.get("evaluation_report_id") != action.get("evaluation_report_id") \
+            or actual.get("threshold_registration_id") != threshold.get("registration_id"):
+        raise RuleV2Error("V2_RELEASE_EVIDENCE_MISSING", {"action": action["action_id"]})
+
+    def check(gates: Any, measured: Any, where: str) -> None:
+        if not isinstance(gates, dict) or not gates or not isinstance(measured, dict):
+            raise RuleV2Error("V2_RELEASE_METRICS_MISSING", {"where": where})
+        for name, bounds in gates.items():
+            value = measured.get(name)
+            if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) or value < 0:
+                raise RuleV2Error("V2_RELEASE_METRICS_MISSING", {"where": where, "metric": name})
+            if not isinstance(bounds, dict) or not bounds or not set(bounds).issubset({"min", "max"}):
+                raise RuleV2Error("V2_RELEASE_THRESHOLD_INVALID", {"where": where, "metric": name})
+            for operator, target in bounds.items():
+                if not isinstance(target, (int, float)) or isinstance(target, bool) or not math.isfinite(target):
+                    raise RuleV2Error("V2_RELEASE_THRESHOLD_INVALID", {"where": where, "metric": name})
+                if (operator == "min" and value < target) or (operator == "max" and value > target):
+                    raise RuleV2Error("V2_RELEASE_METRIC_BELOW_THRESHOLD", {"where": where, "metric": name})
+
+    check(threshold.get("metrics"), actual.get("metrics"), action["action_id"])
+    dependencies = threshold.get("profile_metrics", {})
+    if set(dependencies) != set(action.get("requires_profile", [])):
+        raise RuleV2Error("V2_RELEASE_PROFILE_GATES_MISSING", {"action": action["action_id"]})
+    for field, gates in dependencies.items():
+        check(gates, (actual.get("profile_metrics") or {}).get(field), f"{action['action_id']}:{field}")
 
 
 def _validate_action(action: dict[str, Any], known_ids: set[str]) -> None:
@@ -72,10 +126,9 @@ def _validate_action(action: dict[str, Any], known_ids: set[str]) -> None:
     if action["action_id"] in known_ids:
         raise RuleV2Error("V2_ACTION_DUPLICATE")
     approval = action["approval"]
-    if not isinstance(approval, dict) or approval.get("auto_write") is not False or approval.get("approved") is not False:
-        # v2 is evaluation-only; enabling writes requires a separate release act
-        # with preregistered evidence. Editing this flag cannot enable writes.
-        raise RuleV2Error("V2_RELEASE_NOT_SEPARATE")
+    if not isinstance(approval, dict) or not {"auto_write", "approved"}.issubset(approval) \
+            or not isinstance(approval.get("auto_write"), bool) or not isinstance(approval.get("approved"), bool):
+        raise RuleV2Error("V2_APPROVAL_INVALID", {"action": action.get("action_id")})
     if action["scope"] not in {"phrase", "sentence", "paragraph", "clause"}:
         raise RuleV2Error("V2_SCOPE_INVALID")
     if action["operation"] not in {"replace", "delete", "append"}:
@@ -132,10 +185,10 @@ def _validate_action(action: dict[str, Any], known_ids: set[str]) -> None:
             raise RuleV2Error("V2_DELETE_CONTRACT_INVALID")
 
 
-def load_ruleset_v2(version: str = "v2") -> RuleSetV2:
+def load_ruleset_v2(version: str = "v2", *, path: Path | None = None) -> RuleSetV2:
     if version != "v2":
         raise RuleV2Error("V2_RULESET_NOT_FOUND")
-    path = Path(__file__).resolve().parent.parent / "rules" / f"rules_{version}.json"
+    path = path or Path(__file__).resolve().parent.parent / "rules" / f"rules_{version}.json"
     if not path.is_file():
         raise RuleV2Error("V2_RULESET_NOT_FOUND")
     raw = path.read_bytes()
@@ -144,7 +197,10 @@ def load_ruleset_v2(version: str = "v2") -> RuleSetV2:
         if data.get("version") != "v2" or data.get("schema_version") != "2":
             raise RuleV2Error("V2_RULESET_INVALID")
         policy = data.get("release_policy") or {}
-        if policy.get("auto_write_enabled") is not False or policy.get("status") != "unreleased":
+        status = policy.get("status")
+        if status not in {"unreleased", "released"}:
+            raise RuleV2Error("V2_RELEASE_NOT_SEPARATE")
+        if status == "unreleased" and policy.get("auto_write_enabled") is not False:
             raise RuleV2Error("V2_RELEASE_NOT_SEPARATE")
         actions = data.get("actions")
         if not isinstance(actions, list) or not actions:
@@ -153,6 +209,20 @@ def load_ruleset_v2(version: str = "v2") -> RuleSetV2:
         for action in actions:
             _validate_action(action, known)
             known.add(action["action_id"])
+        if status == "unreleased":
+            for action in actions:
+                approval = action["approval"]
+                if approval["auto_write"] or approval["approved"]:
+                    # A release is a separate, explicit offline act with evidence.
+                    raise RuleV2Error("V2_RELEASE_NOT_SEPARATE", {"action": action["action_id"]})
+        else:
+            if set(policy.get("auto_write_actions", [])) != {a["action_id"] for a in actions if a["approval"]["auto_write"]}:
+                raise RuleV2Error("V2_RELEASE_EVIDENCE_MISSING", {"field": "auto_write_actions"})
+            for action in actions:
+                if action["approval"]["auto_write"]:
+                    _validate_released_action(action, policy)
+                elif action["approval"]["approved"]:
+                    raise RuleV2Error("V2_APPROVAL_INCONSISTENT", {"action": action["action_id"]})
         return RuleSetV2("v2", hashlib.sha256(raw).hexdigest(), tuple(actions), policy)
     except RuleV2Error:
         raise

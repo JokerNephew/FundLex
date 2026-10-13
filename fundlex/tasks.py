@@ -81,6 +81,7 @@ class TaskStore:
                            "client_id": row["client_id"], "name": row["name"], "size": row["size"],
                            "job_status": row["status"] or "not_started", "upload_status": row["upload_status"],
                            "eligibility": row["qualification_status"], "delivery_status": row["delivery_status"] or "not_generated",
+                           "execution_mode": (doc or {}).get("execution_mode", "") if doc else "",
                            "error_code": row["document_error"] or row["error_code"],
                            "report_url": doc["report_url"] if doc and row["report_json"] else None,
                            "downloads": doc["download_urls"] if doc else {}, "source_sha256": row["source_sha256"],
@@ -100,6 +101,10 @@ class TaskStore:
             for candidate in action.get("candidates", []):
                 if isinstance(candidate, dict) and candidate.get("status") == "failed" and candidate.get("reason"):
                     reasons.add(candidate["reason"])
+            # v2 actions expose located targets instead of v1 candidates.
+            for target in action.get("targets", []):
+                if isinstance(target, dict) and target.get("status") == "failed" and target.get("reason"):
+                    reasons.add(target["reason"])
         return sorted(reasons)
 
     @staticmethod
