@@ -42,9 +42,10 @@
 
 ### E. 文档与收尾
 
-- [x] README 增加工作台两种模式、修订评测边界与启动说明。
-- [x] 实施计划与交付计划同步进度。
-- [x] 按功能显式提交（不提交合同、密钥、运行数据库与私有 gold）。
+- [x] README 增加工作台两种模式、修订评测边界与启动说明；新增 `docs/FORMAL_DELIVERY_PLAN.md`（本文件，进度实时更新）。
+- [x] 实施计划同步进度（`IMPLEMENTATION_PLAN.md`「正式交付实施」）。
+- [x] 按功能显式提交：`fdbcf08`（后端接入与发布门槛）、`98fbb7d`（前端模式与评测下载）、`1a94469`（任务链路验收运行器与交付文档）；不提交合同、密钥、运行数据库与私有 gold。
+- [x] 发布冒烟：本地 API 启动后 `/api/health` 正常、`/api/capabilities` 返回 `revision=v2 / mode=evaluation / actions=6 / write=False`、首页 200（静态资源已随前端提交）。
 
 ## 3. 风险与已知限制
 
