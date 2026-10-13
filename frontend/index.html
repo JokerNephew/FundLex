@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>FundLex · 合同处理工作区</title>
+  <link rel="icon" href="/static/assets/gf-logo-web.png">
+  <link rel="stylesheet" href="/static/app.css">
+  <script src="/static/app.js" defer></script>
+</head>
+<body>
+  <div class="shell">
+    <header class="topbar">
+      <div class="brand"><img src="/static/assets/gf-logo-web.png" alt="广发基金标志"><div><strong>广发基金</strong><span>FundLex 合同工作区</span></div></div>
+      <span class="top-context">销售费用规则 · DOCX 批次处理</span>
+      <label class="identity">本地身份 <input id="dev-user" value="local-user" aria-label="本地开发身份"></label>
+      <span class="environment">本地开发环境</span>
+    </header>
+    <div class="layout">
+      <nav class="sidebar" aria-label="主导航">
+        <div class="nav-caption">工作区</div>
+        <a href="#overview" class="nav-link active" data-view="overview"><span aria-hidden="true">▦</span>批次总览</a>
+        <a href="#documents" class="nav-link" data-view="documents"><span aria-hidden="true">▤</span>合同处理</a>
+        <a href="#delivery" class="nav-link" data-view="delivery"><span aria-hidden="true">⇩</span>结果交付</a>
+        <div class="nav-note">仅支持可编辑的 DOCX。报告中的不完整文件不能作为最终合同使用。</div>
+      </nav>
+      <main class="main" id="main">
+        <div class="breadcrumb">FundLex <span>/</span> 工作区 <span>/</span> <span id="crumb-view">批次总览</span></div>
+        <div class="page-head"><div><p class="eyebrow">CONTRACT OPERATIONS</p><h1 id="page-title">批次总览</h1><p id="page-subtitle">提交合同，查看资格、处理进度和可交付文件。</p></div><button id="new-batch-button" class="button primary" type="button">＋ 新建批次</button></div>
+        <div id="notice" class="notice" role="status" aria-live="polite" hidden></div>
+        <section id="upload-panel" class="upload-panel" hidden aria-labelledby="upload-title">
+          <div class="panel-head"><div><h2 id="upload-title">新建处理批次</h2><p>文件按合同逐份处理；只有通过校验的产物会开放下载。</p></div><button class="icon-button" id="close-upload" type="button" aria-label="关闭">×</button></div>
+          <form id="batch-form">
+            <label class="field-label" for="ruleset-version">规则版本</label>
+            <input id="ruleset-version" name="ruleset_version" value="v1" required autocomplete="off">
+            <label class="field-label" for="docx-files">DOCX 合同</label>
+            <input id="docx-files" type="file" name="files" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" multiple required>
+            <div id="file-selection" class="selection-hint">尚未选择文件</div>
+            <div class="form-actions"><button class="button primary" id="submit-batch" type="submit">创建批次</button><span>不接收 PDF、DOC 或扫描件</span></div>
+          </form>
+        </section>
+        <section class="metrics" aria-label="当前批次统计">
+          <div class="metric"><span>本批合同</span><strong id="metric-total">—</strong><small id="metric-total-note">选择批次后显示</small></div>
+          <div class="metric"><span>已有处理结果</span><strong id="metric-finished">—</strong><small>逐合同结果</small></div>
+          <div class="metric"><span>交付不完整</span><strong id="metric-incomplete">—</strong><small>请查看失败原因</small></div>
+          <div class="metric"><span>可直接使用</span><strong id="metric-complete">—</strong><small>已通过产物校验</small></div>
+        </section>
+        <div class="content-grid">
+          <section class="panel batch-panel" aria-labelledby="batch-list-title"><div class="panel-head"><div><h2 id="batch-list-title">处理批次</h2><p>选择批次查看每份合同的真实处理状态。</p></div><button class="text-button" type="button" id="refresh-button">刷新</button></div><div id="batch-list" class="batch-list"><div class="empty">正在加载批次…</div></div></section>
+          <aside class="panel status-panel" aria-labelledby="selected-title"><div class="panel-head"><div><h2 id="selected-title">当前批次</h2><p id="selected-id">尚未选择</p></div></div><div id="batch-status" class="batch-status"><div class="empty">选择左侧批次查看进度。</div></div><div id="batch-download" class="batch-download"></div></aside>
+        </div>
+        <section class="panel documents-panel" id="documents-section" aria-labelledby="documents-title"><div class="panel-head"><div><h2 id="documents-title">合同处理结果</h2><p>资格、交付完整性和文件状态分别呈现。</p></div><span id="documents-count" class="count">0 份</span></div><div class="table-wrap"><table><thead><tr><th scope="col">合同文件</th><th scope="col">资格</th><th scope="col">交付</th><th scope="col">任务状态</th><th scope="col">结果</th></tr></thead><tbody id="document-rows"><tr><td colspan="5" class="empty">选择批次查看合同。</td></tr></tbody></table></div></section>
+        <section class="panel detail-panel" id="detail-panel" hidden aria-labelledby="detail-title"><div class="panel-head"><div><h2 id="detail-title">逐合同证据与动作</h2><p id="detail-subtitle"></p></div><button id="close-detail" class="icon-button" type="button" aria-label="关闭详情">×</button></div><div id="document-detail"></div></section>
+        <footer>结果以逐合同报告为准 · 目录未验证刷新时，请在 Word 中更新目录</footer>
+      </main>
+    </div>
+  </div>
+</body>
+</html>
