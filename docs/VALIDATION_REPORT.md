@@ -118,5 +118,6 @@ pwsh -NoProfile -File .\tools\local.ps1 -Mode worker -Model deepseek-flash -Requ
 | e6c29c8 | 全量固定规则、真实模型边界/预算和检查点 |
 | 90a82bc | 持久状态、租约/隔离/恢复、经验证交付 |
 | de55bf1 | Fluent Office真实API工作台和指定视觉参考 |
+| 81a9d5b | 本地配置、真实模型/UI验收及230份回归记录 |
 
-本报告、配置与评测汇总将在文档收尾提交；提交号随后记录在IMPLEMENTATION_PLAN。原始PRD/Agent/技术设计、简报、references里原有材料、tools/research及未选历史视觉样板保持未跟踪，合同/法规原件和运行产物忽略；没有整体提交目录。
+本报告、配置与评测汇总已提交为`81a9d5b`，最终提交进度记录另按功能提交。源码/测试/配置/正式前端无未提交修改。原始PRD/Agent/技术设计、简报、references里原有材料、tools/research及未选历史视觉样板保持未跟踪，合同/法规原件和运行产物忽略；没有整体提交目录。
