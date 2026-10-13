@@ -44,14 +44,16 @@ def check_evidence(evidence,mapping):
     assert text[evidence['start']:evidence['end']]==evidence['quote'],'gold source coordinate mismatch'
 
 
-def compare(root: Path):
+def compare(root: Path, run: str = 'baseline'):
+    if run not in {'baseline','fixed','fixed-final','fixed-reviewed'}:
+        raise ValueError('unsupported pilot run')
     gold_path=root/'gold.json'
     raw=gold_path.read_bytes();gold=json.loads(raw)
     frozen=json.loads((root/'gold.freeze.json').read_text(encoding='utf-8'))
     digest=hashlib.sha256(raw).hexdigest()
     # Freeze record field names are explicitly checked by the invoking protocol.
     assert digest in json.dumps(frozen),'frozen label hash mismatch'
-    reports=[r for p in sorted((root/'baseline').glob('batch_*.json'))
+    reports=[r for p in sorted((root/run).glob('batch_*.json'))
              for r in json.loads(p.read_text(encoding='utf-8'))]
     by_hash={r['source_sha256']:r for r in reports}
     assert len(reports)==len(gold['cases'])==16
@@ -157,11 +159,14 @@ def compare(root: Path):
             'Cross-paragraph unsupported targets excluded from writable recall denominator',
             'Location matching requires exact source range; wider boundary proposals are not correct edit locations'],
         'cases':details}
-    (root/'comparison.json').write_text(json.dumps(summary,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
+    name='comparison.json' if run=='baseline' else run.replace('-','_')+'_comparison.json'
+    (root/name).write_text(json.dumps(summary,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
     return summary
 
 
 if __name__=='__main__':
     parser=argparse.ArgumentParser();parser.add_argument('--root',required=True)
-    result=compare(Path(parser.parse_args().root))
+    parser.add_argument('--run',choices=['baseline','fixed','fixed-final','fixed-reviewed'],default='baseline')
+    args=parser.parse_args()
+    result=compare(Path(args.root),args.run)
     print(json.dumps({k:v for k,v in result.items() if k!='cases'},ensure_ascii=False))

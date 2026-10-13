@@ -1,0 +1,308 @@
+{
+  "baseline": {
+    "scope": 16,
+    "gold_sha256": "76f65517be316f86fefe93fb2573b8ade106e21f93b7b4b78cc4b64041b51b9a",
+    "label_method": "independent AI blind review; not externally approved business truth",
+    "gold_source_evidence_checks": 314,
+    "qualification": {
+      "known_cases": 16,
+      "correct": 13,
+      "actual_eligible": 10,
+      "actual_excluded_by_fund_type": 3,
+      "wrong_or_abstained": 3,
+      "actual_failed": 3,
+      "agreement": 0.8125
+    },
+    "share_classes": {
+      "known_cases": 13,
+      "exact": 10,
+      "missing_or_different": 3,
+      "exact_set_recall": 0.7692307692307693
+    },
+    "fee_fields": {
+      "known_fields": 68,
+      "correct": 41,
+      "unknown": 27,
+      "coverage": 0.6029411764705882,
+      "correct_over_known": 0.6029411764705882,
+      "precision_when_answered": 1.0
+    },
+    "actions": {
+      "R03-A3": {
+        "reviewed_cases": 16,
+        "supported_gold_targets": 5,
+        "explicit_negative_regions": 69,
+        "gold_satisfied": 0,
+        "located_gold_targets": 0,
+        "verified_gold_targets": 0,
+        "overlapping_gold_targets_not_exact": 0,
+        "candidate_proposals": 0,
+        "exact_target_proposals": 0,
+        "confirmed_on_explicit_negative": 0,
+        "satisfied_correct": 0,
+        "unsupported_semantic_targets": 1,
+        "location_recall": 0.0,
+        "verified_target_recall": 0.0,
+        "exact_target_proposal_precision": null,
+        "release_quantity_sufficient": false
+      },
+      "R04-A1": {
+        "reviewed_cases": 16,
+        "supported_gold_targets": 4,
+        "explicit_negative_regions": 42,
+        "gold_satisfied": 0,
+        "located_gold_targets": 0,
+        "verified_gold_targets": 0,
+        "overlapping_gold_targets_not_exact": 0,
+        "candidate_proposals": 0,
+        "exact_target_proposals": 0,
+        "confirmed_on_explicit_negative": 0,
+        "satisfied_correct": 0,
+        "location_recall": 0.0,
+        "verified_target_recall": 0.0,
+        "exact_target_proposal_precision": null,
+        "release_quantity_sufficient": false
+      },
+      "R11-A1": {
+        "reviewed_cases": 16,
+        "supported_gold_targets": 3,
+        "explicit_negative_regions": 40,
+        "gold_satisfied": 0,
+        "located_gold_targets": 0,
+        "verified_gold_targets": 0,
+        "overlapping_gold_targets_not_exact": 0,
+        "candidate_proposals": 0,
+        "exact_target_proposals": 0,
+        "confirmed_on_explicit_negative": 0,
+        "satisfied_correct": 0,
+        "location_recall": 0.0,
+        "verified_target_recall": 0.0,
+        "exact_target_proposal_precision": null,
+        "release_quantity_sufficient": false
+      },
+      "R10-A1": {
+        "reviewed_cases": 5,
+        "supported_gold_targets": 4,
+        "explicit_negative_regions": 0,
+        "gold_satisfied": 1,
+        "located_gold_targets": 0,
+        "verified_gold_targets": 0,
+        "overlapping_gold_targets_not_exact": 3,
+        "candidate_proposals": 3,
+        "exact_target_proposals": 0,
+        "confirmed_on_explicit_negative": 0,
+        "satisfied_correct": 1,
+        "location_recall": 0.0,
+        "verified_target_recall": 0.0,
+        "exact_target_proposal_precision": 0.0,
+        "release_quantity_sufficient": false
+      }
+    },
+    "automatic_write": false,
+    "release_approval": false,
+    "limitations": [
+      "stratified 16-case diagnostic cohort, not population accuracy",
+      "Only explicitly annotated actions scored; others not evaluated",
+      "No-target-found is not satisfied; unknown is not a true negative",
+      "Cross-paragraph unsupported targets excluded from writable recall denominator",
+      "Location matching requires exact source range; wider boundary proposals are not correct edit locations"
+    ]
+  },
+  "reviewed_run": {
+    "scope": 16,
+    "gold_sha256": "76f65517be316f86fefe93fb2573b8ade106e21f93b7b4b78cc4b64041b51b9a",
+    "label_method": "independent AI blind review; not externally approved business truth",
+    "gold_source_evidence_checks": 314,
+    "qualification": {
+      "known_cases": 16,
+      "correct": 15,
+      "actual_eligible": 13,
+      "wrong_or_abstained": 1,
+      "actual_failed": 1,
+      "actual_excluded_by_fund_type": 2,
+      "agreement": 0.9375
+    },
+    "share_classes": {
+      "known_cases": 13,
+      "exact": 13,
+      "exact_set_recall": 1.0
+    },
+    "fee_fields": {
+      "known_fields": 68,
+      "correct": 68,
+      "coverage": 1.0,
+      "correct_over_known": 1.0,
+      "precision_when_answered": 1.0
+    },
+    "actions": {
+      "R03-A3": {
+        "reviewed_cases": 16,
+        "supported_gold_targets": 5,
+        "explicit_negative_regions": 69,
+        "gold_satisfied": 0,
+        "located_gold_targets": 5,
+        "verified_gold_targets": 5,
+        "overlapping_gold_targets_not_exact": 0,
+        "candidate_proposals": 6,
+        "exact_target_proposals": 5,
+        "confirmed_on_explicit_negative": 0,
+        "satisfied_correct": 0,
+        "unsupported_semantic_targets": 1,
+        "location_recall": 1.0,
+        "verified_target_recall": 1.0,
+        "exact_target_proposal_precision": 0.8333333333333334,
+        "release_quantity_sufficient": false
+      },
+      "R04-A1": {
+        "reviewed_cases": 16,
+        "supported_gold_targets": 4,
+        "explicit_negative_regions": 42,
+        "gold_satisfied": 0,
+        "located_gold_targets": 4,
+        "verified_gold_targets": 4,
+        "overlapping_gold_targets_not_exact": 0,
+        "candidate_proposals": 4,
+        "exact_target_proposals": 4,
+        "confirmed_on_explicit_negative": 0,
+        "satisfied_correct": 0,
+        "location_recall": 1.0,
+        "verified_target_recall": 1.0,
+        "exact_target_proposal_precision": 1.0,
+        "release_quantity_sufficient": false
+      },
+      "R11-A1": {
+        "reviewed_cases": 16,
+        "supported_gold_targets": 3,
+        "explicit_negative_regions": 40,
+        "gold_satisfied": 0,
+        "located_gold_targets": 3,
+        "verified_gold_targets": 3,
+        "overlapping_gold_targets_not_exact": 0,
+        "candidate_proposals": 3,
+        "exact_target_proposals": 3,
+        "confirmed_on_explicit_negative": 0,
+        "satisfied_correct": 0,
+        "location_recall": 1.0,
+        "verified_target_recall": 1.0,
+        "exact_target_proposal_precision": 1.0,
+        "release_quantity_sufficient": false
+      },
+      "R10-A1": {
+        "reviewed_cases": 5,
+        "supported_gold_targets": 4,
+        "explicit_negative_regions": 0,
+        "gold_satisfied": 1,
+        "located_gold_targets": 0,
+        "verified_gold_targets": 0,
+        "overlapping_gold_targets_not_exact": 3,
+        "candidate_proposals": 3,
+        "exact_target_proposals": 0,
+        "confirmed_on_explicit_negative": 0,
+        "satisfied_correct": 1,
+        "location_recall": 0.0,
+        "verified_target_recall": 0.0,
+        "exact_target_proposal_precision": 0.0,
+        "release_quantity_sufficient": false
+      }
+    },
+    "automatic_write": false,
+    "release_approval": false,
+    "limitations": [
+      "stratified 16-case diagnostic cohort, not population accuracy",
+      "Only explicitly annotated actions scored; others not evaluated",
+      "No-target-found is not satisfied; unknown is not a true negative",
+      "Cross-paragraph unsupported targets excluded from writable recall denominator",
+      "Location matching requires exact source range; wider boundary proposals are not correct edit locations"
+    ]
+  },
+  "reviewed_runtime": {
+    "evaluated": 16,
+    "qualification": {
+      "eligible": 13,
+      "failed": 1,
+      "excluded_by_fund_type": 2
+    },
+    "delivery": {
+      "not_generated": 16
+    },
+    "model_usage": {
+      "prompt_tokens": 26345,
+      "completion_tokens": 5500,
+      "total_tokens": 31845,
+      "rate_limit_count": 0,
+      "error_count": 0
+    },
+    "budget": {
+      "http_attempts": 117,
+      "estimated_cost_usd": 0.0551001,
+      "max_http_attempts": 128,
+      "max_cost_usd": 0.3,
+      "concurrency": 1,
+      "statuses": {
+        "completed": 117
+      },
+      "rates_usd_per_million": {
+        "input": 0.3,
+        "output": 1.2
+      },
+      "cost_is_provider_invoice": false
+    },
+    "latency_ms": {
+      "p50": 5047.0,
+      "p95": 6500,
+      "over_3_minutes": 0
+    },
+    "profile_coverage": {
+      "resolved": 13,
+      "fee_groups_verified": 13,
+      "context_truncated": 0
+    },
+    "engine_build": "ccd636a975c946a309b0725c78ae8420fbe1ac7166c43d175a0d05abfff5b647",
+    "ruleset_sha256": "73122317f6f3d6fa9487cf143d8df48c0c2f0a349dc58fbac4a7fe8a7c94c012"
+  },
+  "isolated_recovery": {
+    "case_id": "P04",
+    "reason": "parallel workspace API/store/tasks edits changed engine hash; prior ENGINE_SCHEMA_MISMATCH retained",
+    "qualification": "excluded_by_fund_type",
+    "error_code": null,
+    "engine_build": "fc71b7f87e8e0e3db4d75b3085175b2275d1291be5661bd475a9ede845c0da84",
+    "model_usage": {
+      "http_attempts": 1,
+      "prompt_tokens": 371,
+      "completion_tokens": 13,
+      "total_tokens": 384,
+      "estimated_cost_usd": 0.0001269,
+      "latency_ms": 859
+    },
+    "frozen_runtime_record": "AppData/Local/FundLex/action-pilot-20261013/frozen_runtime.json"
+  },
+  "casewise_outcome_after_recovery": {
+    "eligible": 13,
+    "excluded_by_fund_type": 3,
+    "qualification_agreement": 16,
+    "qualification_total": 16,
+    "not_a_single_engine_full_rerun": true
+  },
+  "source_files_unchanged": true,
+  "gold_unchanged": true,
+  "automatic_write": false,
+  "total_pilot_budget": {
+    "http_attempts": 118,
+    "estimated_cost_usd": 0.055227,
+    "max_http_attempts": 128,
+    "max_cost_usd": 0.3,
+    "concurrency": 1,
+    "statuses": {
+      "completed": 118
+    },
+    "rates_usd_per_million": {
+      "input": 0.3,
+      "output": 1.2
+    },
+    "cost_is_provider_invoice": false
+  },
+  "test_result": {
+    "isolated_snapshot": "277 passed, 2 warnings, 14.12s",
+    "workspace_before_parallel_edits": "277 passed, 2 warnings, 14.16s"
+  }
+}
