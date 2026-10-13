@@ -47,7 +47,30 @@ def sha256_file(path: Path) -> str:
     return digest.hexdigest()
 
 
+EVALUATION_ARTIFACT_HASHES = {"evaluation_redline": "redline_sha256", "evaluation_final": "final_sha256"}
+
+
 def validate_delivery(report: dict[str, Any], artifacts: dict[str, Path]) -> None:
+    if report.get("execution_mode") == "evaluation":
+        # Evaluation outputs are technically validated but never releasable contracts.
+        if report.get("delivery_status") not in {"evaluation_modified", "evaluation_unmodified", "incomplete"}:
+            return
+        validation = report.get("output_validation")
+        if not isinstance(validation, dict):
+            raise ValueError("MISSING_VERIFIED_ARTIFACTS")
+        required = {
+            "evaluated_edits": {"package", "revisions", "final_equivalence", "non_target", "content_verification"},
+            "evaluated_zero_edit": {"package", "zero_edit", "byte_identity"},
+        }
+        checks = validation.get("checks")
+        if validation.get("kind") not in required or not isinstance(checks, (list, tuple)) \
+                or not required[validation["kind"]].issubset(checks) or validation.get("not_a_final_contract") is not True:
+            raise ValueError("MISSING_VERIFIED_ARTIFACTS")
+        for kind, hash_key in EVALUATION_ARTIFACT_HASHES.items():
+            if kind not in artifacts or not artifacts[kind].is_file() \
+                    or validation.get(hash_key) != sha256_file(artifacts[kind]):
+                raise ValueError("ARTIFACT_VERIFICATION_MISMATCH")
+        return
     if report.get("delivery_status") != "complete":
         return
     validation = report.get("output_validation")
@@ -101,6 +124,8 @@ class RunStore:
             for name, definition in {"engine_build": "TEXT NOT NULL DEFAULT ''", "schema_version": "TEXT NOT NULL DEFAULT ''"}.items():
                 if name not in {row["name"] for row in db.execute("PRAGMA table_info(batches)")}:
                     db.execute(f"ALTER TABLE batches ADD COLUMN {name} {definition}")
+            if "execution_mode" not in {row["name"] for row in db.execute("PRAGMA table_info(documents)")}:
+                db.execute("ALTER TABLE documents ADD COLUMN execution_mode TEXT NOT NULL DEFAULT ''")
             if "ruleset_sha256" not in {row["name"] for row in db.execute("PRAGMA table_info(batches)")}:
                 db.execute("ALTER TABLE batches ADD COLUMN ruleset_sha256 TEXT NOT NULL DEFAULT ''")
 
@@ -210,7 +235,8 @@ class RunStore:
     def _document_dict(self, db: sqlite3.Connection, row: sqlite3.Row) -> dict[str, Any]:
         artifacts = db.execute("SELECT kind FROM artifacts WHERE document_id=?", (row["id"],)).fetchall()
         return {key: row[key] for key in ("id", "batch_id", "filename", "source_sha256", "status",
-                                          "qualification_status", "delivery_status", "error_code", "attempt") } | {
+                                          "qualification_status", "delivery_status", "error_code", "attempt",
+                                          "execution_mode")} | {
             "artifacts": [item["kind"] for item in artifacts],
             "report_url": f"/api/batches/{row['batch_id']}/documents/{row['id']}/report",
             "download_urls": {item["kind"]: f"/api/batches/{row['batch_id']}/documents/{row['id']}/download/{item['kind']}" for item in artifacts},
@@ -236,6 +262,12 @@ class RunStore:
         self.get_document(owner, batch_id, document_id)
         with self._connect() as db:
             row = db.execute("SELECT * FROM artifacts WHERE document_id=? AND kind=?", (document_id, kind)).fetchone()
+            if kind in {"evaluation_final", "evaluation_redline"}:
+                document = db.execute("SELECT execution_mode FROM documents WHERE id=?", (document_id,)).fetchone()
+                # Evaluation downloads are bound to the persisted execution mode,
+                # not to a filename or UI label.
+                if row is None or document is None or document["execution_mode"] != "evaluation":
+                    raise NotFound("artifact not available")
         if row is None:
             raise NotFound("artifact not available")
         path = self.object_path(row["object_key"])
@@ -291,13 +323,23 @@ class RunStore:
         except ValueError as exc:
             raise Conflict(str(exc)) from exc
         delivery = report.get("delivery_status", "not_generated")
-        if delivery == "complete" and not {"final", "redline"}.issubset(artifacts):
-            raise Conflict("complete result requires both verified contracts")
-        if delivery != "complete" and ("final" in artifacts or "redline" in artifacts):
-            raise Conflict("incomplete result cannot publish contract downloads")
+        mode = report.get("execution_mode", "delivery")
+        allowed_kinds = {"final", "redline", "report_json", "report_md"}
+        if mode == "evaluation":
+            allowed_kinds = {"evaluation_final", "evaluation_redline", "report_json", "report_md"}
+            if delivery in {"complete"} or {"final", "redline"} & set(artifacts):
+                raise Conflict("evaluation cannot publish final delivery")
+            if delivery in {"evaluation_modified", "evaluation_unmodified", "incomplete"} \
+                    and not {"evaluation_redline", "evaluation_final"}.issubset(artifacts):
+                raise Conflict("evaluation result requires both evaluated contracts")
+        else:
+            if delivery == "complete" and not {"final", "redline"}.issubset(artifacts):
+                raise Conflict("complete result requires both verified contracts")
+            if delivery != "complete" and ("final" in artifacts or "redline" in artifacts):
+                raise Conflict("incomplete result cannot publish contract downloads")
         verified = {}
         for kind, path in artifacts.items():
-            if kind not in {"final", "redline", "report_json", "report_md"} or not path.is_file():
+            if kind not in allowed_kinds or not path.is_file():
                 raise StoreError("invalid artifact")
             verified[kind] = (sha256_file(path), path.stat().st_size)
         now = time.time()
@@ -324,9 +366,9 @@ class RunStore:
                 db.execute("INSERT OR REPLACE INTO artifacts VALUES (?,?,?,?,?)",
                            (document_id, kind, key, digest, size))
             db.execute("""UPDATE documents SET status=?,qualification_status=?,delivery_status=?,error_code=?,
-                report_json=?,lease_until=NULL,updated_at=? WHERE id=?""",
+                report_json=?,execution_mode=?,lease_until=NULL,updated_at=? WHERE id=?""",
                 ("failed" if failed else "succeeded", report.get("qualification_status"), delivery,
-                 error_code, json.dumps(report, ensure_ascii=False), now, document_id))
+                 error_code, json.dumps(report, ensure_ascii=False), str(mode), now, document_id))
             self._refresh_batch(db, row["batch_id"], now)
 
     def retry(self, document_id: str, token: int, *, error_code: str, max_attempts: int = 3,

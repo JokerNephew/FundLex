@@ -106,8 +106,16 @@ class Worker:
                 if not source.is_file() or source.stat().st_size != job["source_size"] or sha256_file(source) != job["source_sha256"]:
                     raise ValueError("INPUT_INTEGRITY_FAILED")
                 if job.get("ruleset_sha256"):
-                    from .rules import load_ruleset
-                    if load_ruleset(job["ruleset_version"]).sha256 != job["ruleset_sha256"]:
+                    from .rules import RuleError, load_ruleset
+                    from .rules_v2 import RuleV2Error, load_ruleset_v2
+                    try:
+                        current_ruleset_sha = load_ruleset(job["ruleset_version"]).sha256
+                    except RuleError:
+                        try:
+                            current_ruleset_sha = load_ruleset_v2(job["ruleset_version"]).sha256
+                        except RuleV2Error as exc:
+                            raise ValueError("RULESET_NOT_FOUND") from exc
+                    if current_ruleset_sha != job["ruleset_sha256"]:
                         raise ValueError("RULESET_HASH_MISMATCH")
                 if job.get("engine_build") and (job["engine_build"] != engine_build() or job["schema_version"] != SCHEMA_VERSION):
                     raise ValueError("ENGINE_SCHEMA_MISMATCH")
@@ -137,7 +145,19 @@ class Worker:
                 if sum(path.stat().st_size for path in paths.values()) > max_output_bytes:
                     raise ValueError("RESULT_SIZE_LIMIT")
                 validate_delivery(report, paths)
-                if report["delivery_status"] != "complete":
+                if report.get("execution_mode") == "evaluation":
+                    paths.pop("final", None)
+                    paths.pop("redline", None)
+                    if isinstance(report.get("artifacts"), dict):
+                        report["artifacts"].pop("final", None)
+                        report["artifacts"].pop("redline", None)
+                    if report.get("delivery_status") not in {"evaluation_modified", "evaluation_unmodified", "incomplete"}:
+                        paths.pop("evaluation_final", None)
+                        paths.pop("evaluation_redline", None)
+                        if isinstance(report.get("artifacts"), dict):
+                            report["artifacts"].pop("evaluation_final", None)
+                            report["artifacts"].pop("evaluation_redline", None)
+                elif report["delivery_status"] != "complete":
                     paths.pop("final", None)
                     paths.pop("redline", None)
                     if isinstance(report.get("artifacts"), dict):
@@ -189,7 +209,13 @@ class Worker:
     def _artifact_paths(report: dict[str, Any], output_dir: Path) -> dict[str, Path]:
         values = report.get("artifacts", {})
         paths: dict[str, Path] = {}
-        for kind, conventional in {"final": "final.docx", "redline": "redline.docx", "report_md": "report.md"}.items():
+        conventions = {"report_md": "report.md"}
+        if report.get("execution_mode") == "evaluation":
+            conventions.update({"evaluation_final": "evaluation_final.docx",
+                                "evaluation_redline": "evaluation_redline.docx"})
+        else:
+            conventions.update({"final": "final.docx", "redline": "redline.docx"})
+        for kind, conventional in conventions.items():
             raw = values.get(kind) if isinstance(values, dict) else None
             path = Path(raw) if raw else output_dir / conventional
             if not path.is_absolute():

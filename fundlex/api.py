@@ -117,6 +117,7 @@ def _public_batch(batch: dict, *, detail: bool) -> dict:
         base["documents"] = [{
             "document_id": d["id"], "name": d["filename"], "job_status": d["status"],
             "eligibility": d["qualification_status"], "delivery_status": d["delivery_status"],
+            "execution_mode": d.get("execution_mode", ""),
             "error_code": d["error_code"], "report_url": d["report_url"],
             "downloads": d["download_urls"], "source_sha256": d["source_sha256"],
         } for d in docs]
@@ -267,10 +268,16 @@ def create_app(data_dir: str | Path | None = None) -> FastAPI:
         if not ruleset_version.strip() or len(ruleset_version) > 128:
             raise HTTPException(422, "invalid ruleset version")
         from .rules import RuleError, load_ruleset
+        from .rules_v2 import RuleV2Error, load_ruleset_v2
         try:
             ruleset = load_ruleset(ruleset_version.strip())
-        except RuleError as exc:
-            raise HTTPException(422, str(exc)) from exc
+        except RuleError:
+            try:
+                # v2 exists for evaluation-mode batches only; the loader refuses
+                # any package that claims auto-write.
+                ruleset = load_ruleset_v2(ruleset_version.strip())
+            except RuleV2Error as exc:
+                raise HTTPException(422, str(exc)) from exc
         if len(files) > MAX_BATCH_DOCUMENTS:
             raise HTTPException(413, "batch document count limit exceeded")
         if idempotency_key and len(idempotency_key) > 128:
@@ -322,7 +329,8 @@ def create_app(data_dir: str | Path | None = None) -> FastAPI:
 
     @application.get("/api/batches/{batch_id}/documents/{document_id}/download/{kind}")
     def download(batch_id: str, document_id: str, kind: str, user: str = Depends(_user)):
-        if kind not in {"final", "redline", "report_json", "report_md"}:
+        docx_kinds = {"final", "redline", "evaluation_final", "evaluation_redline"}
+        if kind not in docx_kinds | {"report_json", "report_md"}:
             raise HTTPException(404, "artifact not found")
         try:
             path, digest = store.get_artifact(user, batch_id, document_id, kind)
@@ -330,7 +338,7 @@ def create_app(data_dir: str | Path | None = None) -> FastAPI:
             raise HTTPException(404, str(exc)) from exc
         except Conflict as exc:
             raise HTTPException(409, str(exc)) from exc
-        media = "application/vnd.openxmlformats-officedocument.wordprocessingml.document" if kind in {"final", "redline"} else ("application/json" if kind == "report_json" else "text/markdown")
+        media = "application/vnd.openxmlformats-officedocument.wordprocessingml.document" if kind in docx_kinds else ("application/json" if kind == "report_json" else "text/markdown")
         return FileResponse(path, media_type=media, filename=f"{document_id}_{kind}{path.suffix}",
                             headers={"ETag": digest, "Cache-Control": "private, no-store"})
 
