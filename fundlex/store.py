@@ -354,9 +354,21 @@ class RunStore:
             self._refresh_batch(db, row["batch_id"], now)
             if not terminal and (pause_required or (row["attempt"] >= 2 and error_code in {"MODEL_NETWORK_ERROR", "MODEL_RETRY_EXHAUSTED"})):
                 db.execute("UPDATE batches SET status='paused',updated_at=? WHERE id=?", (now, row["batch_id"]))
+            if pause_required or (not terminal and row["attempt"] >= 2 and error_code in {"MODEL_NETWORK_ERROR", "MODEL_RETRY_EXHAUSTED"}):
+                # The task layer is optional for legacy RunStore callers. A
+                # global budget stop pauses all associated execution segments.
+                if db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='task_batches'").fetchone():
+                    task = db.execute("SELECT task_id FROM task_batches WHERE batch_id=?", (row["batch_id"],)).fetchone()
+                    if task:
+                        db.execute("UPDATE tasks SET paused=1,pause_reason=?,updated_at=? WHERE id=?", (error_code, now, task["task_id"]))
+                        db.execute("UPDATE batches SET status='paused',updated_at=? WHERE id IN (SELECT batch_id FROM task_batches WHERE task_id=?) AND status!='completed'", (now, task["task_id"]))
 
     def pause(self, owner: str, batch_id: str) -> dict[str, Any]:
         self.get_batch(owner, batch_id)
+        if task_id := self._parent_task(batch_id):
+            from .tasks import TaskStore
+            TaskStore(self).control(owner, task_id, "pause")
+            return self.get_batch(owner, batch_id)
         with self._connect() as db:
             db.execute("UPDATE batches SET status='paused',updated_at=? WHERE id=? AND status!='completed'",
                        (time.time(), batch_id))
@@ -364,12 +376,23 @@ class RunStore:
 
     def resume(self, owner: str, batch_id: str) -> dict[str, Any]:
         self.get_batch(owner, batch_id)
+        if task_id := self._parent_task(batch_id):
+            from .tasks import TaskStore
+            TaskStore(self).control(owner, task_id, "resume")
+            return self.get_batch(owner, batch_id)
         with self._connect() as db:
             db.execute("BEGIN IMMEDIATE")
             row = db.execute("SELECT COUNT(*) AS pending FROM documents WHERE batch_id=? AND status NOT IN ('succeeded','failed')", (batch_id,)).fetchone()
             db.execute("UPDATE batches SET status=?,updated_at=? WHERE id=?",
                        ("queued" if row["pending"] else "completed", time.time(), batch_id))
         return self.get_batch(owner, batch_id)
+
+    def _parent_task(self, batch_id: str) -> str | None:
+        with self._connect() as db:
+            if not db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='task_batches'").fetchone():
+                return None
+            row = db.execute("SELECT task_id FROM task_batches WHERE batch_id=?", (batch_id,)).fetchone()
+            return row["task_id"] if row else None
 
     @staticmethod
     def _refresh_batch(db: sqlite3.Connection, batch_id: str, now: float) -> None:

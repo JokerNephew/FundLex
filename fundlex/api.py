@@ -7,6 +7,7 @@ Production identity integration is deliberately unconfigured and fails closed.
 from __future__ import annotations
 
 import io
+import json
 import os
 import zipfile
 from collections import Counter
@@ -19,6 +20,43 @@ from fastapi.staticfiles import StaticFiles
 
 from .store import Conflict, NotFound, RunStore
 from .config import local_data_dir
+from .tasks import TaskStore
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+
+class ManifestFile(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    client_id: str = Field(min_length=1, max_length=128)
+    name: str = Field(min_length=1, max_length=512)
+    size: int = Field(gt=0, strict=True)
+
+    @field_validator("name")
+    @classmethod
+    def safe_name(cls, value):
+        if not value.strip() or Path(value.replace("\\", "/")).name != value or any(ord(c) < 32 for c in value):
+            raise ValueError("manifest requires a base filename")
+        return value
+
+
+class TaskSubmission(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    name: str = Field(min_length=1, max_length=200)
+    ruleset_version: str = Field(min_length=1, max_length=128)
+    files: list[ManifestFile] = Field(min_length=1, max_length=10000)
+
+    @field_validator("name")
+    @classmethod
+    def task_name(cls, value):
+        if not value.strip() or any(ord(c) < 32 for c in value):
+            raise ValueError("invalid task name")
+        return value.strip()
+
+    @field_validator("files")
+    @classmethod
+    def unique_files(cls, files):
+        if len({f.client_id for f in files}) != len(files):
+            raise ValueError("duplicate client_id")
+        return files
 
 
 MAX_UPLOAD_BYTES = int(os.environ.get("FUNDLEX_MAX_UPLOAD_BYTES", str(25 * 1024 * 1024)))
@@ -87,8 +125,132 @@ def _public_batch(batch: dict, *, detail: bool) -> dict:
 
 def create_app(data_dir: str | Path | None = None) -> FastAPI:
     application = FastAPI(title="FundLex", version="0.1.0")
+
+    @application.middleware("http")
+    async def private_api_responses(request, call_next):
+        response = await call_next(request)
+        if request.url.path.startswith("/api/"):
+            # Owner-scoped metadata and authorization failures must not remain
+            # in a browser/proxy cache after a development identity changes.
+            response.headers["Cache-Control"] = "private, no-store"
+        return response
+
     store = RunStore(data_dir or local_data_dir())
     application.state.store = store
+    tasks = TaskStore(store)
+    application.state.tasks = tasks
+
+    def task_call(fn, *args, **kwargs):
+        try:
+            return fn(*args, **kwargs)
+        except NotFound as exc:
+            raise HTTPException(404, "task not found") from exc
+        except Conflict as exc:
+            raise HTTPException(409, str(exc)) from exc
+
+    @application.get("/api/capabilities")
+    def capabilities(user: str = Depends(_user)):
+        from .rules import RuleError, load_ruleset
+        try:
+            rule = load_ruleset("v1")
+        except RuleError as exc:
+            raise HTTPException(503, str(exc)) from exc
+        return {"auth_mode": os.environ.get("FUNDLEX_AUTH_MODE", "dev"), "task_api": True,
+                "ruleset_version": rule.version, "ruleset_sha256": rule.sha256,
+                "actions_total": len(rule.actions), "auto_write_enabled": rule.auto_write_enabled,
+                "auto_write_count": sum(bool(a["auto_write"]) for a in rule.actions),
+                "action_labels": {a["action_id"]: a.get("description", "") for a in rule.actions},
+                "upload_limits": {"max_file_bytes": MAX_UPLOAD_BYTES, "max_request_files": MAX_BATCH_DOCUMENTS,
+                                  "max_request_bytes": MAX_BATCH_BYTES}}
+
+    @application.post("/api/tasks", status_code=201)
+    def create_task(payload: TaskSubmission,
+                    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+                    user: str = Depends(_user)):
+        from .rules import RuleError, load_ruleset
+        if idempotency_key is not None and (not idempotency_key.strip() or len(idempotency_key) > 128):
+            raise HTTPException(422, "invalid idempotency key")
+        try:
+            rule = load_ruleset(payload.ruleset_version.strip())
+        except RuleError as exc:
+            raise HTTPException(422, str(exc)) from exc
+        return task_call(tasks.create, user, payload.name, rule, [f.model_dump() for f in payload.files], idempotency_key)
+
+    @application.get("/api/tasks")
+    def list_tasks(q: str = "", status: str | None = None, sort: str = "newest",
+                   page: int = 1, page_size: int = 50, user: str = Depends(_user)):
+        check_pagination(page, page_size, sort)
+        return tasks.list(user, q=q, status=status, sort=sort, page=page, page_size=page_size)
+
+    def check_pagination(page, page_size, sort, *, documents=False):
+        allowed = {"newest", "oldest", "name", "name_desc"} | ({"exceptions", "status"} if documents else set())
+        if page < 1 or not 1 <= page_size <= 200 or sort not in allowed:
+            raise HTTPException(422, "invalid pagination or sorting")
+
+    @application.get("/api/tasks/{task_id}")
+    def get_task(task_id: str, user: str = Depends(_user)):
+        return task_call(tasks.get, user, task_id)
+
+    @application.get("/api/tasks/{task_id}/documents")
+    def task_documents(task_id: str, q: str = "", eligibility: str | None = None,
+                       job_status: str | None = None, delivery_status: str | None = None,
+                       error_code: str | None = None, upload_status: str | None = None,
+                       sort: str = "oldest", page: int = 1, page_size: int = 50,
+                       user: str = Depends(_user)):
+        task_call(tasks.get, user, task_id)
+        check_pagination(page, page_size, sort, documents=True)
+        return task_call(tasks.documents, user, task_id, q=q, eligibility=eligibility, job_status=job_status,
+                         delivery_status=delivery_status, error_code=error_code, upload_status=upload_status,
+                         sort=sort, page=page, page_size=page_size)
+
+    @application.post("/api/tasks/{task_id}/uploads")
+    async def upload_task(task_id: str, files: list[UploadFile] = File(...), client_ids: str = Form(...),
+                          user: str = Depends(_user)):
+        task_call(tasks.get, user, task_id)
+        try:
+            ids = json.loads(client_ids)
+        except (ValueError, TypeError):
+            raise HTTPException(422, "invalid client_ids") from None
+        if not isinstance(ids, list) or len(ids) != len(files) or any(not isinstance(i, str) or not 1 <= len(i) <= 128 for i in ids) or len(set(ids)) != len(ids):
+            raise HTTPException(422, "invalid client_ids")
+        if len(files) > MAX_BATCH_DOCUMENTS:
+            raise HTTPException(413, "upload request document count limit exceeded")
+        uploads, total_bytes = [], 0
+        reasons = {"only DOCX files are supported": "UNSUPPORTED_FILE_FORMAT", "DOCX upload size limit exceeded": "UPLOAD_SIZE_LIMIT",
+                   "not an editable DOCX package": "INVALID_DOCX_PACKAGE", "encrypted DOCX is unsupported": "ENCRYPTED_DOCX",
+                   "duplicate DOCX member": "DUPLICATE_DOCX_MEMBER", "DOCX part size limit exceeded": "DOCX_PART_SIZE_LIMIT",
+                   "DOCX compression ratio limit exceeded": "DOCX_COMPRESSION_RATIO_LIMIT",
+                   "DOCX expanded size limit exceeded": "DOCX_EXPANDED_SIZE_LIMIT", "invalid DOCX package": "INVALID_DOCX_PACKAGE"}
+        for cid, upload in zip(ids, files):
+            data = await upload.read(MAX_UPLOAD_BYTES + 1)
+            total_bytes += len(data)
+            name = Path((upload.filename or "").replace("\\", "/")).name
+            error = None
+            try:
+                _validate_upload(name, data)
+            except HTTPException as exc:
+                error = reasons.get(str(exc.detail), "UPLOAD_REJECTED")
+            if total_bytes > MAX_BATCH_BYTES:
+                error = "UPLOAD_REQUEST_SIZE_LIMIT"
+            uploads.append({"client_id": cid, "name": name, "data": data, "error_code": error})
+        return task_call(tasks.uploads, user, task_id, uploads)
+
+    @application.post("/api/tasks/{task_id}/seal")
+    def seal_task(task_id: str, user: str = Depends(_user)):
+        return task_call(tasks.control, user, task_id, "seal")
+
+    @application.post("/api/tasks/{task_id}/pause")
+    def pause_task(task_id: str, user: str = Depends(_user)):
+        return task_call(tasks.control, user, task_id, "pause")
+
+    @application.post("/api/tasks/{task_id}/resume")
+    def resume_task(task_id: str, user: str = Depends(_user)):
+        return task_call(tasks.control, user, task_id, "resume")
+
+    @application.get("/api/tasks/{task_id}/report")
+    def task_report(task_id: str, user: str = Depends(_user)):
+        return PlainTextResponse(task_call(tasks.report, user, task_id), media_type="text/markdown; charset=utf-8",
+                                 headers={"Cache-Control": "private, no-store"})
 
     @application.get("/api/health")
     def health(user: str = Depends(_user)):
