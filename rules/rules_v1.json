@@ -2,50 +2,3274 @@
   "version": "v1",
   "schema_version": "1",
   "source": "references/source/v4存量基金适用销售费用新规的基金合同修改指引_文案勘误版.docx",
+  "source_sha256": "9e1b7771689ce94d07b5a6a780e38ba083f70d9efe6a41bec7483f861ceafeed",
+  "source_paragraph_count": 107,
   "release_policy": {
     "status": "unreleased",
     "basis": "逐 action 画像、候选、结构、真实模型和独立样本门槛尚未完成；无批准记录",
     "evaluation_report_id": null,
     "approval_record": null
   },
+  "template_instantiation": {
+    "mode": "fixed_literal_only",
+    "unknown": "failed",
+    "concrete_variants_approved": false,
+    "slots": {
+      "A类基金份额": "subscription_group",
+      "C类基金份额": "service_group"
+    },
+    "source_provenance": [
+      {
+        "paragraph": 7,
+        "sha256": "6f7599a325d24d9a01c07b49023847c31428fb32a0f39ca0b804a946967bb87d"
+      },
+      {
+        "paragraph": 8,
+        "sha256": "bb052c842adc6d24833c8a53036b7c257a2e5827c6ed8b430b8495c48370dd5b"
+      },
+      {
+        "paragraph": 9,
+        "sha256": "3061de9eafe0f2a2bd7e0dc858545b66d4d5e0890c5853b7ba96b2edf46b64d1"
+      },
+      {
+        "paragraph": 15,
+        "sha256": "6f7599a325d24d9a01c07b49023847c31428fb32a0f39ca0b804a946967bb87d"
+      },
+      {
+        "paragraph": 16,
+        "sha256": "bb052c842adc6d24833c8a53036b7c257a2e5827c6ed8b430b8495c48370dd5b"
+      },
+      {
+        "paragraph": 17,
+        "sha256": "3061de9eafe0f2a2bd7e0dc858545b66d4d5e0890c5853b7ba96b2edf46b64d1"
+      },
+      {
+        "paragraph": 35,
+        "sha256": "40ebb4a75ff1ffa646a2abb53d8671b782da0ce725822d4c9f85703953ea7e27"
+      }
+    ]
+  },
+  "no_change_branches": [
+    {
+      "source_paragraph": 40,
+      "condition": "single_class",
+      "rule_id": "R07"
+    },
+    {
+      "source_paragraph": 105,
+      "condition": "single_class",
+      "rule_id": "R17"
+    }
+  ],
   "templates": {
-    "R03-A1": {"text": "调低销售服务费率", "source_paragraph": 21},
-    "R03-A2": {"text": "", "source_paragraph": 22},
-    "R04-A1": {"text": "", "source_paragraph": 25},
-    "R08-A1": {"text": "通过直销机构申购本基金不收取申购费，通过其他销售机构申购本基金的申购费用由投资人承担，不列入基金财产。", "source_paragraph": 44}
+    "R01-A1": {
+      "text": "投资者通过直销机构（含基金管理人及其销售子公司，下同）申购本基金A类基金份额时，不收取认购/申购费用；通过直销机构申购的C类基金份额，不收取销售服务费。对于投资者通过直销机构之外的其他销售机构申购的C类基金份额且持续持有期限超过一年的，不再继续收取销售服务费。",
+      "source_paragraph": 3,
+      "source_provenance": [
+        {
+          "paragraph": 3,
+          "sha256": "83771e47595d44233114b736a9504544b8951fbc49476768a15b748b7bdac435"
+        },
+        {
+          "paragraph": 5,
+          "sha256": "9edf9ac6f67eef3b1f10427d1d2dd8b15173a19607d6315a29c64dd5dd45b13a"
+        },
+        {
+          "paragraph": 7,
+          "sha256": "6f7599a325d24d9a01c07b49023847c31428fb32a0f39ca0b804a946967bb87d"
+        },
+        {
+          "paragraph": 8,
+          "sha256": "bb052c842adc6d24833c8a53036b7c257a2e5827c6ed8b430b8495c48370dd5b"
+        },
+        {
+          "paragraph": 9,
+          "sha256": "3061de9eafe0f2a2bd7e0dc858545b66d4d5e0890c5853b7ba96b2edf46b64d1"
+        }
+      ],
+      "template_slots": {
+        "A类基金份额": "subscription_group",
+        "C类基金份额": "service_group"
+      }
+    },
+    "R02-A1": {
+      "text": "投资者通过直销机构（含基金管理人及其销售子公司，下同）申购本基金A类基金份额时，不收取认购/申购费用；通过直销机构申购的C类基金份额，不收取销售服务费。对于投资者通过直销机构之外的其他销售机构申购的C类基金份额且持续持有期限超过一年的，不再继续收取销售服务费。",
+      "source_paragraph": 12,
+      "source_provenance": [
+        {
+          "paragraph": 12,
+          "sha256": "c20a93daea0c11d0bec3dfa8c0cddc35d92ed90c7c237c3974819bc49682f4f4"
+        },
+        {
+          "paragraph": 13,
+          "sha256": "8c70de6d5ca5ebacb8b215cfa717c60ec6f93459c857aab819c2be4276a37e64"
+        },
+        {
+          "paragraph": 15,
+          "sha256": "6f7599a325d24d9a01c07b49023847c31428fb32a0f39ca0b804a946967bb87d"
+        },
+        {
+          "paragraph": 16,
+          "sha256": "bb052c842adc6d24833c8a53036b7c257a2e5827c6ed8b430b8495c48370dd5b"
+        },
+        {
+          "paragraph": 17,
+          "sha256": "3061de9eafe0f2a2bd7e0dc858545b66d4d5e0890c5853b7ba96b2edf46b64d1"
+        }
+      ],
+      "template_slots": {
+        "A类基金份额": "subscription_group",
+        "C类基金份额": "service_group"
+      }
+    },
+    "R03-A1": {
+      "text": "调低销售服务费率",
+      "source_paragraph": 20,
+      "source_provenance": [
+        {
+          "paragraph": 20,
+          "sha256": "6c4fe3bced6ee8cf537970bbbf435d83b41ca13662044fb6709ec72e27c5db21"
+        },
+        {
+          "paragraph": 22,
+          "sha256": "4484ac16816d6b2eae0d4bd3b865e57585195851df4a90ee2938820ee3befe53"
+        }
+      ],
+      "template_slots": {}
+    },
+    "R03-A2": {
+      "text": "",
+      "source_paragraph": 20,
+      "source_provenance": [
+        {
+          "paragraph": 20,
+          "sha256": "6c4fe3bced6ee8cf537970bbbf435d83b41ca13662044fb6709ec72e27c5db21"
+        },
+        {
+          "paragraph": 22,
+          "sha256": "4484ac16816d6b2eae0d4bd3b865e57585195851df4a90ee2938820ee3befe53"
+        }
+      ],
+      "template_slots": {}
+    },
+    "R03-A3": {
+      "text": "",
+      "source_paragraph": 20,
+      "source_provenance": [
+        {
+          "paragraph": 20,
+          "sha256": "6c4fe3bced6ee8cf537970bbbf435d83b41ca13662044fb6709ec72e27c5db21"
+        },
+        {
+          "paragraph": 23,
+          "sha256": "55dc8819fe9891619d0b0aaf2566901db70f49a6a1004b56e8dc5b75a3202c29"
+        }
+      ],
+      "template_slots": {}
+    },
+    "R04-A1": {
+      "text": "",
+      "source_paragraph": 25,
+      "source_provenance": [
+        {
+          "paragraph": 25,
+          "sha256": "4f2855035c9ddbdf6681d31243a094127a3e6c50cf78bd9d635af148a052d5ad"
+        },
+        {
+          "paragraph": 26,
+          "sha256": "b704eb4cc286c37ec1d5900bafedd53bd2ab90f6e57299a498ea1e95bff181f9"
+        }
+      ],
+      "template_slots": {}
+    },
+    "R05-A1": {
+      "text": "通过直销机构申购本基金不收取申购费，通过直销机构以外的其他销售机构申购本基金的申购费率由基金管理人决定，并在招募说明书中列示。",
+      "source_paragraph": 29,
+      "source_provenance": [
+        {
+          "paragraph": 29,
+          "sha256": "986c0a2abd222c5b0d175fe1bbce6bed0d631d9474df2ee047aa3ddc52499229"
+        },
+        {
+          "paragraph": 32,
+          "sha256": "ecc20559738590df7a94ab04e9079b97871554cb9fee6f32111459b09b0a23a2"
+        }
+      ],
+      "template_slots": {}
+    },
+    "R06-A1": {
+      "text": "本基金A类基金份额在申购时收取申购费用，C类基金份额不收取申购费用。通过直销机构申购本基金A类基金份额不收取申购费。通过直销机构以外的其他销售机构申购本基金的申购费率由基金管理人决定，并在招募说明书中列示。",
+      "source_paragraph": 29,
+      "source_provenance": [
+        {
+          "paragraph": 29,
+          "sha256": "986c0a2abd222c5b0d175fe1bbce6bed0d631d9474df2ee047aa3ddc52499229"
+        },
+        {
+          "paragraph": 34,
+          "sha256": "64692c671d086c1ac20f83254c7f5d388dae2ce505908069959f89aaf5ddb3dc"
+        },
+        {
+          "paragraph": 35,
+          "sha256": "40ebb4a75ff1ffa646a2abb53d8671b782da0ce725822d4c9f85703953ea7e27"
+        }
+      ],
+      "template_slots": {
+        "A类基金份额": "subscription_group",
+        "C类基金份额": "service_group"
+      }
+    },
+    "R07-A1": {
+      "text": "赎回金额为按实际确认的有效赎回份额乘以当日该类基金份额的基金份额净值并扣除或加上相应的费用，赎回金额单位为元。",
+      "source_paragraph": 37,
+      "source_provenance": [
+        {
+          "paragraph": 37,
+          "sha256": "c610a82c3cb4cc09461bcf0d464c77f05f5b20ff51e1ad2e6d5c07a14ce87c49"
+        },
+        {
+          "paragraph": 41,
+          "sha256": "272c567a9e80914a67a505b9446a50e95432b8dd7e7d5035f15e1fe8d519e154"
+        }
+      ],
+      "template_slots": {}
+    },
+    "R08-A1": {
+      "text": "通过直销机构申购本基金不收取申购费，通过其他销售机构申购本基金的申购费用由投资人承担，不列入基金财产。",
+      "source_paragraph": 44,
+      "source_provenance": [
+        {
+          "paragraph": 44,
+          "sha256": "a8fadc946aae2ce74cba0c07b70eea48b83c35be00163f89f903adadb9248c26"
+        },
+        {
+          "paragraph": 45,
+          "sha256": "7788b566e567057fac466980599e25fe138ac0e7ffe3d2f621633ea710733570"
+        }
+      ],
+      "template_slots": {}
+    },
+    "R09-A1": {
+      "text": "通过直销机构申购本基金A类基金份额不收取申购费，通过其他销售机构申购本基金A类基金份额的申购费用由投资人承担，不列入基金财产。本基金C类基金份额不收取申购费用。",
+      "source_paragraph": 47,
+      "source_provenance": [
+        {
+          "paragraph": 47,
+          "sha256": "b5822d759adb62f2310123f9f4fea9fcbb7e6e22a4c5d644de247ce9cd33e7f2"
+        },
+        {
+          "paragraph": 48,
+          "sha256": "4fe5c02d315a790a79ed83375530559d526ace2ce7179844783ff103fcf84540"
+        },
+        {
+          "paragraph": 49,
+          "sha256": "fe4f76e3a831f7d34539d5353015b1437807816bda00bb04f0ea7fa9b26fd37d"
+        }
+      ],
+      "template_slots": {
+        "A类基金份额": "subscription_group",
+        "C类基金份额": "service_group"
+      }
+    },
+    "R10-A1": {
+      "text": "赎回费用由赎回基金份额的基金份额持有人承担，在基金份额持有人赎回基金份额时收取。赎回费用全额计入基金财产。",
+      "source_paragraph": 52,
+      "source_provenance": [
+        {
+          "paragraph": 52,
+          "sha256": "f2bd5aa20656131d1fca47e6715cfbbfe18713aa49e40077785b88ed7454da97"
+        },
+        {
+          "paragraph": 53,
+          "sha256": "01efc2c7bf5c17bad5ee44c96778b1ad9f282c1e69e590de09a8e86008fbab6b"
+        },
+        {
+          "paragraph": 54,
+          "sha256": "e17339a67fb93deb57f3cfedde8eadb77ce3db8d1153d597286be9f9c458ac44"
+        }
+      ],
+      "template_slots": {}
+    },
+    "R11-A1": {
+      "text": "",
+      "source_paragraph": 56,
+      "source_provenance": [
+        {
+          "paragraph": 56,
+          "sha256": "a1cc3e8e06bbb25143ebb86e6f5ebe4c9fac907789972b5b1db13e4855f9f88d"
+        },
+        {
+          "paragraph": 57,
+          "sha256": "19cd9cf838547700a2cf5596f39b6cb30f8b0e6a4c3f0a86e9d67115cf1be4f8"
+        }
+      ],
+      "template_slots": {}
+    },
+    "R12-A1": {
+      "text": "基金管理人可以适当调低基金申购费率。",
+      "source_paragraph": 61,
+      "source_provenance": [
+        {
+          "paragraph": 61,
+          "sha256": "644d77d031731018f1a15ccd4abcb915f369e454a7ea98f1c0cff1fa4dfd3b08"
+        },
+        {
+          "paragraph": 62,
+          "sha256": "8f5e2fbabbdfd15d54db85f6c2e12472e144686aaaf19c6e53f0decbdd5db022"
+        },
+        {
+          "paragraph": 63,
+          "sha256": "c921834be15eb58e257d888405eb52b43fc2aaf2072502dca8fdaa7b679d5e08"
+        },
+        {
+          "paragraph": 65,
+          "sha256": "c9778a9e3aeac42745ae47b0de151f19e74982ce34e1a73d738afdbd029c30fe"
+        }
+      ],
+      "template_slots": {}
+    },
+    "R13-A1": {
+      "text": "基金管理人可以适当调低基金申购费率和销售服务费率。",
+      "source_paragraph": 61,
+      "source_provenance": [
+        {
+          "paragraph": 61,
+          "sha256": "644d77d031731018f1a15ccd4abcb915f369e454a7ea98f1c0cff1fa4dfd3b08"
+        },
+        {
+          "paragraph": 62,
+          "sha256": "8f5e2fbabbdfd15d54db85f6c2e12472e144686aaaf19c6e53f0decbdd5db022"
+        },
+        {
+          "paragraph": 63,
+          "sha256": "c921834be15eb58e257d888405eb52b43fc2aaf2072502dca8fdaa7b679d5e08"
+        },
+        {
+          "paragraph": 67,
+          "sha256": "02bfcccfbf5046f2a1708b73d960189e6d5b6edafa6cbf1df8e0bd176f75b6a3"
+        }
+      ],
+      "template_slots": {}
+    },
+    "R14-A1": {
+      "text": "销售服务费每日计提。\n（1）直销机构：\n对于投资者通过直销机构持有的C类基金份额计提的销售服务费，在投资者赎回C类基金份额或基金合同终止时，随赎回款（或清算款）一并返还给投资者。\n基金管理人基金销售子公司销售母公司所管理基金的，按照本条要求执行。\n（2）直销机构以外的其他销售机构：\n对于投资者持续持有期限未超过一年（即365天，下同）的基金份额收取的销售服务费，按月支付，基金托管人按照与基金管理人协商一致的方式于次月首日起5个工作日内按照指定的账户路径进行支付。若遇法定节假日、公休日或不可抗力等，支付日期顺延。\n对于持续持有期限超过一年的基金份额，持有超过一年后继续计提的销售服务费，在投资者赎回基金份额或基金合同终止时，随赎回款（或清算款）一并返还给投资者。",
+      "source_paragraph": 74,
+      "source_provenance": [
+        {
+          "paragraph": 74,
+          "sha256": "fede5b6b01ff404e9759f41badef172d3cdbc510a02bc0ca5c2bc10e3741331a"
+        },
+        {
+          "paragraph": 77,
+          "sha256": "fede5b6b01ff404e9759f41badef172d3cdbc510a02bc0ca5c2bc10e3741331a"
+        },
+        {
+          "paragraph": 79,
+          "sha256": "c0defe357cbcd1ed134a4a9038c6dfc4f732316ee90fd9a0fee68060b1974fae"
+        },
+        {
+          "paragraph": 80,
+          "sha256": "81b714b678420dde7ececd0a858ef267d9f8ca600201e18c88fea6a2c33488c0"
+        },
+        {
+          "paragraph": 81,
+          "sha256": "3c81f422d24c2a7de779078a61c8f615031338b9e2933f37ef26f06a565b7834"
+        },
+        {
+          "paragraph": 82,
+          "sha256": "d195c4c8858f0fda66ae8fe73cab8fa3a0c84aadd1e930972b683e165cc1380e"
+        },
+        {
+          "paragraph": 83,
+          "sha256": "297affac82fa3c74eb2a864728b2c5c8a74fe20cfa871db72a815453ed4e0eb0"
+        },
+        {
+          "paragraph": 84,
+          "sha256": "7a6835ca5cdcb75ddaf6981b9d7288b110e96c331ff96811b990efa7e6eef789"
+        },
+        {
+          "paragraph": 85,
+          "sha256": "3a04bf69179d4a494f7aeb2b4da7b9530c63413df330b6852a3c4a07ea7e57b7"
+        }
+      ],
+      "template_slots": {
+        "C类基金份额": "service_group"
+      }
+    },
+    "R15-A1": {
+      "text": "",
+      "source_paragraph": 88,
+      "source_provenance": [
+        {
+          "paragraph": 88,
+          "sha256": "738c885ae8ca82f6537d482462ad8132f84b8328a23d2081d9b4ba15cad5b736"
+        },
+        {
+          "paragraph": 90,
+          "sha256": "77af1295e7162bed4ada7cdfdeef445a8bc781a9b2434e35dcbc36d1d10df8f2"
+        }
+      ],
+      "template_slots": {
+        "C类基金份额": "service_group"
+      }
+    },
+    "R15-A2": {
+      "text": "",
+      "source_paragraph": 89,
+      "source_provenance": [
+        {
+          "paragraph": 89,
+          "sha256": "36dd3cd8a5d441d9b19b5cc6308d1ddd48569cc7c9a9c2fdeefef71b04d1b80d"
+        },
+        {
+          "paragraph": 90,
+          "sha256": "77af1295e7162bed4ada7cdfdeef445a8bc781a9b2434e35dcbc36d1d10df8f2"
+        }
+      ],
+      "template_slots": {
+        "C类基金份额": "service_group"
+      }
+    },
+    "R16-A1": {
+      "text": "由于本基金A类基金份额和C类基金份额费用收取不同",
+      "source_paragraph": 92,
+      "source_provenance": [
+        {
+          "paragraph": 92,
+          "sha256": "154b52a94bd2a876bdbef9e3739f8c3835d3ef9421684775f82099827674ea04"
+        },
+        {
+          "paragraph": 93,
+          "sha256": "efd6396332b3d80b9989e92c5c7e08297f2c6d4dbe85f8e8b55211c7584fdb26"
+        }
+      ],
+      "template_slots": {
+        "A类基金份额": "subscription_group",
+        "C类基金份额": "service_group"
+      }
+    },
+    "R17-A1": {
+      "text": "依据基金财产清算的分配方案，将基金财产清算后的全部剩余资产扣除基金财产清算费用、交纳所欠税款并清偿基金债务后，按基金份额持有人持有的基金份额比例进行分配，并加上返还基金份额持有人的或有管理费（如有）或扣除相应的超额管理费（如有）。",
+      "source_paragraph": 96,
+      "source_provenance": [
+        {
+          "paragraph": 96,
+          "sha256": "b367261e699ca0b883796927fa3e36a35d7e8e52fa0325b4c890af672dd74b73"
+        },
+        {
+          "paragraph": 97,
+          "sha256": "f09acfa81ef104470ed3adcb206b3f2f0a11c3be6333430a8ba70348b93afb39"
+        },
+        {
+          "paragraph": 99,
+          "sha256": "aba8be8c9160b00cba6e953de79c8d4e556237d4ce120fafa723ab09e6ec4f71"
+        }
+      ],
+      "template_slots": {}
+    },
+    "R17-A2": {
+      "text": "依据基金财产清算的分配方案，将基金财产清算后的全部剩余资产扣除基金财产清算费用、交纳所欠税款并清偿基金债务后，按基金份额持有人持有的基金份额比例进行分配，并加上返还基金份额持有人的或有管理费（如有）、销售服务费（如有）或扣除相应的超额管理费（如有）。",
+      "source_paragraph": 96,
+      "source_provenance": [
+        {
+          "paragraph": 96,
+          "sha256": "b367261e699ca0b883796927fa3e36a35d7e8e52fa0325b4c890af672dd74b73"
+        },
+        {
+          "paragraph": 97,
+          "sha256": "f09acfa81ef104470ed3adcb206b3f2f0a11c3be6333430a8ba70348b93afb39"
+        },
+        {
+          "paragraph": 101,
+          "sha256": "b2de76a64707886e742ce9f132b52e47b271d2333f4ac95a67e289048828645a"
+        }
+      ],
+      "template_slots": {}
+    },
+    "R17-A3": {
+      "text": "依据基金财产清算的分配方案，将基金财产清算后的全部剩余资产扣除基金财产清算费用、交纳所欠税款并清偿基金债务后，按基金份额持有人持有的基金份额比例进行分配，并加上返还基金份额持有人的销售服务费（如有）。",
+      "source_paragraph": 102,
+      "source_provenance": [
+        {
+          "paragraph": 102,
+          "sha256": "fa86be3269a293cf07da2e49e55670877e9c5667b6dba24b32b01ac7d5803830"
+        },
+        {
+          "paragraph": 103,
+          "sha256": "3aa9fc7ddac0fc0ab626ce8eeb0f04d8fa1d737a1f6dd1e8c7c9760a3c1a77aa"
+        },
+        {
+          "paragraph": 105,
+          "sha256": "07df249a7e27d2e996bfaf7e4c4804233af53b7008fe3fdcda2d90990e7fa96e"
+        },
+        {
+          "paragraph": 106,
+          "sha256": "e57f722af2d7ec909063e41a2e65576755861c8ce36a567a5c1e5f324f283147"
+        }
+      ],
+      "template_slots": {}
+    }
   },
   "actions": [
     {
-      "rule_id": "R03", "action_id": "R03-A1", "description": "份额类别设置中按已证实的销售服务费属性替换调低赎回费率文字",
-      "section_anchor": "基金的基本情况", "subsection_anchor": "份额类别", "regions": ["body", "summary"],
-      "scope": "phrase", "old_triggers": ["调低赎回费率"], "new_triggers": ["调低销售服务费率"],
-      "operation": "replace", "template_id": "R03-A1", "order": 1, "risk_class": "high",
-      "requires_profile": ["sales_service_fee_by_class"], "on_unknown": "failed", "auto_write": false,
-      "release_threshold": null, "approved": false
+      "rule_id": "R01",
+      "action_id": "R01-A1",
+      "description": "份额类别定义追加直销及持续持有费用规则",
+      "section_anchor": "释义",
+      "subsection_anchor": "基金份额类别",
+      "regions": [
+        "body",
+        "summary"
+      ],
+      "scope": "paragraph",
+      "old_triggers": [
+        "基金份额类别：本基金将基金份额分为A类和C类不同的类别。在投资者认购、申购基金时收取认购、申购费用而不计提销售服务费的，称为A类基金份额；在投资者认购、申购基金份额时不收取认购、申购费用而是从本类别基金资产中计提销售服务费的，称为C类基金份额。"
+      ],
+      "old_texts": [
+        "基金份额类别：本基金将基金份额分为A类和C类不同的类别。在投资者认购、申购基金时收取认购、申购费用而不计提销售服务费的，称为A类基金份额；在投资者认购、申购基金份额时不收取认购、申购费用而是从本类别基金资产中计提销售服务费的，称为C类基金份额。"
+      ],
+      "new_triggers": [
+        "投资者通过直销机构（含基金管理人及其销售子公司，下同）申购本基金A类基金份额时，不收取认购/申购费用；通过直销机构申购的C类基金份额，不收取销售服务费。对于投资者通过直销机构之外的其他销售机构申购的C类基金份额且持续持有期限超过一年的，不再继续收取销售服务费。"
+      ],
+      "operation": "append",
+      "template_id": "R01-A1",
+      "order": 1,
+      "risk_class": "high",
+      "requires_profile": [
+        "share_classes",
+        "subscription_fee_by_class",
+        "sales_service_fee_by_class"
+      ],
+      "condition": "fee_groups",
+      "on_unknown": "failed",
+      "auto_write": false,
+      "release_threshold": {
+        "registration_id": "fundlex-conservative-gates-2026-10-13-v1",
+        "registered_before_full_evaluation": true,
+        "metrics": {
+          "location_precision": {
+            "min": 0.99
+          },
+          "location_recall": {
+            "min": 0.95
+          },
+          "unsafe_edits": {
+            "max": 0
+          },
+          "template_exactness": {
+            "min": 1.0
+          },
+          "positive_cases": {
+            "min": 30
+          },
+          "negative_cases": {
+            "min": 30
+          },
+          "independent_cases": {
+            "min": 10
+          },
+          "body_support_cases": {
+            "min": 10
+          },
+          "summary_support_cases": {
+            "min": 10
+          },
+          "structure_support_cases": {
+            "min": 10
+          }
+        },
+        "profile_metrics": {
+          "share_classes": {
+            "accuracy": {
+              "min": 0.99
+            },
+            "precision": {
+              "min": 0.99
+            },
+            "recall": {
+              "min": 0.95
+            },
+            "positive_cases": {
+              "min": 30
+            },
+            "negative_cases": {
+              "min": 30
+            },
+            "independent_cases": {
+              "min": 10
+            }
+          },
+          "subscription_fee_by_class": {
+            "accuracy": {
+              "min": 0.99
+            },
+            "precision": {
+              "min": 0.99
+            },
+            "recall": {
+              "min": 0.95
+            },
+            "positive_cases": {
+              "min": 30
+            },
+            "negative_cases": {
+              "min": 30
+            },
+            "independent_cases": {
+              "min": 10
+            }
+          },
+          "sales_service_fee_by_class": {
+            "accuracy": {
+              "min": 0.99
+            },
+            "precision": {
+              "min": 0.99
+            },
+            "recall": {
+              "min": 0.95
+            },
+            "positive_cases": {
+              "min": 30
+            },
+            "negative_cases": {
+              "min": 30
+            },
+            "independent_cases": {
+              "min": 10
+            }
+          }
+        }
+      },
+      "evaluation_metrics": null,
+      "evaluation_report_id": null,
+      "approval_record": null,
+      "approved": false,
+      "source_provenance": [
+        {
+          "paragraph": 3,
+          "sha256": "83771e47595d44233114b736a9504544b8951fbc49476768a15b748b7bdac435"
+        },
+        {
+          "paragraph": 5,
+          "sha256": "9edf9ac6f67eef3b1f10427d1d2dd8b15173a19607d6315a29c64dd5dd45b13a"
+        },
+        {
+          "paragraph": 7,
+          "sha256": "6f7599a325d24d9a01c07b49023847c31428fb32a0f39ca0b804a946967bb87d"
+        },
+        {
+          "paragraph": 8,
+          "sha256": "bb052c842adc6d24833c8a53036b7c257a2e5827c6ed8b430b8495c48370dd5b"
+        },
+        {
+          "paragraph": 9,
+          "sha256": "3061de9eafe0f2a2bd7e0dc858545b66d4d5e0890c5853b7ba96b2edf46b64d1"
+        }
+      ],
+      "template_slots": {
+        "A类基金份额": "subscription_group",
+        "C类基金份额": "service_group"
+      }
     },
     {
-      "rule_id": "R03", "action_id": "R03-A2", "description": "份额类别设置中删除备案语句",
-      "section_anchor": "基金的基本情况", "subsection_anchor": "份额类别", "regions": ["body", "summary"],
-      "scope": "phrase", "old_triggers": ["并报中国证监会备案"], "new_triggers": [],
-      "operation": "delete", "template_id": "R03-A2", "order": 2, "risk_class": "high",
-      "requires_profile": [], "on_unknown": "failed", "auto_write": false,
-      "release_threshold": null, "approved": false
+      "rule_id": "R02",
+      "action_id": "R02-A1",
+      "description": "份额类别设置追加费用规则",
+      "section_anchor": "基金的基本情况",
+      "subsection_anchor": "份额类别",
+      "regions": [
+        "body",
+        "summary"
+      ],
+      "scope": "paragraph",
+      "old_triggers": [
+        "本基金根据费用收取方式的不同，将基金份额分为不同的类别。在投资者认购、申购基金份额时收取认购、申购费用，而不计提销售服务费的，称为A类基金份额；在投资者认购、申购基金份额时不收取认购、申购费用，而是从本类别基金资产中计提销售服务费的，称为C类基金份额。"
+      ],
+      "old_texts": [
+        "本基金根据费用收取方式的不同，将基金份额分为不同的类别。在投资者认购、申购基金份额时收取认购、申购费用，而不计提销售服务费的，称为A类基金份额；在投资者认购、申购基金份额时不收取认购、申购费用，而是从本类别基金资产中计提销售服务费的，称为C类基金份额。"
+      ],
+      "new_triggers": [
+        "投资者通过直销机构（含基金管理人及其销售子公司，下同）申购本基金A类基金份额时，不收取认购/申购费用；通过直销机构申购的C类基金份额，不收取销售服务费。对于投资者通过直销机构之外的其他销售机构申购的C类基金份额且持续持有期限超过一年的，不再继续收取销售服务费。"
+      ],
+      "operation": "append",
+      "template_id": "R02-A1",
+      "order": 2,
+      "risk_class": "high",
+      "requires_profile": [
+        "share_classes",
+        "subscription_fee_by_class",
+        "sales_service_fee_by_class"
+      ],
+      "condition": "fee_groups",
+      "on_unknown": "failed",
+      "auto_write": false,
+      "release_threshold": {
+        "registration_id": "fundlex-conservative-gates-2026-10-13-v1",
+        "registered_before_full_evaluation": true,
+        "metrics": {
+          "location_precision": {
+            "min": 0.99
+          },
+          "location_recall": {
+            "min": 0.95
+          },
+          "unsafe_edits": {
+            "max": 0
+          },
+          "template_exactness": {
+            "min": 1.0
+          },
+          "positive_cases": {
+            "min": 30
+          },
+          "negative_cases": {
+            "min": 30
+          },
+          "independent_cases": {
+            "min": 10
+          },
+          "body_support_cases": {
+            "min": 10
+          },
+          "summary_support_cases": {
+            "min": 10
+          },
+          "structure_support_cases": {
+            "min": 10
+          }
+        },
+        "profile_metrics": {
+          "share_classes": {
+            "accuracy": {
+              "min": 0.99
+            },
+            "precision": {
+              "min": 0.99
+            },
+            "recall": {
+              "min": 0.95
+            },
+            "positive_cases": {
+              "min": 30
+            },
+            "negative_cases": {
+              "min": 30
+            },
+            "independent_cases": {
+              "min": 10
+            }
+          },
+          "subscription_fee_by_class": {
+            "accuracy": {
+              "min": 0.99
+            },
+            "precision": {
+              "min": 0.99
+            },
+            "recall": {
+              "min": 0.95
+            },
+            "positive_cases": {
+              "min": 30
+            },
+            "negative_cases": {
+              "min": 30
+            },
+            "independent_cases": {
+              "min": 10
+            }
+          },
+          "sales_service_fee_by_class": {
+            "accuracy": {
+              "min": 0.99
+            },
+            "precision": {
+              "min": 0.99
+            },
+            "recall": {
+              "min": 0.95
+            },
+            "positive_cases": {
+              "min": 30
+            },
+            "negative_cases": {
+              "min": 30
+            },
+            "independent_cases": {
+              "min": 10
+            }
+          }
+        }
+      },
+      "evaluation_metrics": null,
+      "evaluation_report_id": null,
+      "approval_record": null,
+      "approved": false,
+      "source_provenance": [
+        {
+          "paragraph": 12,
+          "sha256": "c20a93daea0c11d0bec3dfa8c0cddc35d92ed90c7c237c3974819bc49682f4f4"
+        },
+        {
+          "paragraph": 13,
+          "sha256": "8c70de6d5ca5ebacb8b215cfa717c60ec6f93459c857aab819c2be4276a37e64"
+        },
+        {
+          "paragraph": 15,
+          "sha256": "6f7599a325d24d9a01c07b49023847c31428fb32a0f39ca0b804a946967bb87d"
+        },
+        {
+          "paragraph": 16,
+          "sha256": "bb052c842adc6d24833c8a53036b7c257a2e5827c6ed8b430b8495c48370dd5b"
+        },
+        {
+          "paragraph": 17,
+          "sha256": "3061de9eafe0f2a2bd7e0dc858545b66d4d5e0890c5853b7ba96b2edf46b64d1"
+        }
+      ],
+      "template_slots": {
+        "A类基金份额": "subscription_group",
+        "C类基金份额": "service_group"
+      }
     },
     {
-      "rule_id": "R04", "action_id": "R04-A1", "description": "份额类别设置中删除不同类别不得互相转换句",
-      "section_anchor": "基金的基本情况", "subsection_anchor": "份额类别", "regions": ["body", "summary"],
-      "scope": "sentence", "old_triggers": ["不同基金份额类别之间不得互相转换"], "new_triggers": [],
-      "operation": "delete", "template_id": "R04-A1", "order": 1, "risk_class": "high",
-      "requires_profile": ["share_classes"], "on_unknown": "failed", "auto_write": false,
-      "release_threshold": null, "approved": false
+      "rule_id": "R03",
+      "action_id": "R03-A1",
+      "description": "有销售服务费时替换可调低费率",
+      "section_anchor": "基金的基本情况",
+      "subsection_anchor": "份额类别",
+      "regions": [
+        "body",
+        "summary"
+      ],
+      "scope": "phrase",
+      "old_triggers": [
+        "调低赎回费率"
+      ],
+      "old_texts": [
+        "调低赎回费率"
+      ],
+      "new_triggers": [
+        "调低销售服务费率"
+      ],
+      "operation": "replace",
+      "template_id": "R03-A1",
+      "order": 3,
+      "risk_class": "high",
+      "requires_profile": [
+        "sales_service_fee_by_class"
+      ],
+      "condition": "has_service_fee",
+      "on_unknown": "failed",
+      "auto_write": false,
+      "release_threshold": {
+        "registration_id": "fundlex-conservative-gates-2026-10-13-v1",
+        "registered_before_full_evaluation": true,
+        "metrics": {
+          "location_precision": {
+            "min": 0.99
+          },
+          "location_recall": {
+            "min": 0.95
+          },
+          "unsafe_edits": {
+            "max": 0
+          },
+          "template_exactness": {
+            "min": 1.0
+          },
+          "positive_cases": {
+            "min": 30
+          },
+          "negative_cases": {
+            "min": 30
+          },
+          "independent_cases": {
+            "min": 10
+          },
+          "body_support_cases": {
+            "min": 10
+          },
+          "summary_support_cases": {
+            "min": 10
+          },
+          "structure_support_cases": {
+            "min": 10
+          }
+        },
+        "profile_metrics": {
+          "sales_service_fee_by_class": {
+            "accuracy": {
+              "min": 0.99
+            },
+            "precision": {
+              "min": 0.99
+            },
+            "recall": {
+              "min": 0.95
+            },
+            "positive_cases": {
+              "min": 30
+            },
+            "negative_cases": {
+              "min": 30
+            },
+            "independent_cases": {
+              "min": 10
+            }
+          }
+        }
+      },
+      "evaluation_metrics": null,
+      "evaluation_report_id": null,
+      "approval_record": null,
+      "approved": false,
+      "source_provenance": [
+        {
+          "paragraph": 20,
+          "sha256": "6c4fe3bced6ee8cf537970bbbf435d83b41ca13662044fb6709ec72e27c5db21"
+        },
+        {
+          "paragraph": 22,
+          "sha256": "4484ac16816d6b2eae0d4bd3b865e57585195851df4a90ee2938820ee3befe53"
+        }
+      ],
+      "template_slots": {}
     },
     {
-      "rule_id": "R08", "action_id": "R08-A1", "description": "单类别产品申购费用条款替换候选",
-      "section_anchor": "基金份额的申购与赎回", "subsection_anchor": "申购", "regions": ["body", "summary"],
-      "scope": "sentence", "old_triggers": ["申购费用由投资人承担，不列入基金财产"], "new_triggers": ["通过直销机构申购本基金不收取申购费"],
-      "operation": "replace", "template_id": "R08-A1", "order": 1, "risk_class": "replace",
-      "requires_profile": ["share_classes", "subscription_fee_by_class"], "on_unknown": "failed", "auto_write": false,
-      "release_threshold": null, "approved": false
+      "rule_id": "R03",
+      "action_id": "R03-A2",
+      "description": "无销售服务费时删除可调低赎回费率",
+      "section_anchor": "基金的基本情况",
+      "subsection_anchor": "份额类别",
+      "regions": [
+        "body",
+        "summary"
+      ],
+      "scope": "phrase",
+      "old_triggers": [
+        "、调低赎回费率"
+      ],
+      "old_texts": [
+        "、调低赎回费率"
+      ],
+      "new_triggers": [],
+      "operation": "delete",
+      "template_id": "R03-A2",
+      "order": 4,
+      "risk_class": "high",
+      "requires_profile": [
+        "sales_service_fee_by_class"
+      ],
+      "condition": "no_service_fee",
+      "on_unknown": "failed",
+      "auto_write": false,
+      "release_threshold": {
+        "registration_id": "fundlex-conservative-gates-2026-10-13-v1",
+        "registered_before_full_evaluation": true,
+        "metrics": {
+          "location_precision": {
+            "min": 0.99
+          },
+          "location_recall": {
+            "min": 0.95
+          },
+          "unsafe_edits": {
+            "max": 0
+          },
+          "template_exactness": {
+            "min": 1.0
+          },
+          "positive_cases": {
+            "min": 30
+          },
+          "negative_cases": {
+            "min": 30
+          },
+          "independent_cases": {
+            "min": 10
+          },
+          "body_support_cases": {
+            "min": 10
+          },
+          "summary_support_cases": {
+            "min": 10
+          },
+          "structure_support_cases": {
+            "min": 10
+          }
+        },
+        "profile_metrics": {
+          "sales_service_fee_by_class": {
+            "accuracy": {
+              "min": 0.99
+            },
+            "precision": {
+              "min": 0.99
+            },
+            "recall": {
+              "min": 0.95
+            },
+            "positive_cases": {
+              "min": 30
+            },
+            "negative_cases": {
+              "min": 30
+            },
+            "independent_cases": {
+              "min": 10
+            }
+          }
+        }
+      },
+      "evaluation_metrics": null,
+      "evaluation_report_id": null,
+      "approval_record": null,
+      "approved": false,
+      "source_provenance": [
+        {
+          "paragraph": 20,
+          "sha256": "6c4fe3bced6ee8cf537970bbbf435d83b41ca13662044fb6709ec72e27c5db21"
+        },
+        {
+          "paragraph": 22,
+          "sha256": "4484ac16816d6b2eae0d4bd3b865e57585195851df4a90ee2938820ee3befe53"
+        }
+      ],
+      "template_slots": {}
+    },
+    {
+      "rule_id": "R03",
+      "action_id": "R03-A3",
+      "description": "删除备案语句",
+      "section_anchor": "基金的基本情况",
+      "subsection_anchor": "份额类别",
+      "regions": [
+        "body",
+        "summary"
+      ],
+      "scope": "phrase",
+      "old_triggers": [
+        "并报中国证监会备案"
+      ],
+      "old_texts": [
+        "并报中国证监会备案"
+      ],
+      "new_triggers": [],
+      "operation": "delete",
+      "template_id": "R03-A3",
+      "order": 5,
+      "risk_class": "high",
+      "requires_profile": [],
+      "condition": "always",
+      "on_unknown": "failed",
+      "auto_write": false,
+      "release_threshold": {
+        "registration_id": "fundlex-conservative-gates-2026-10-13-v1",
+        "registered_before_full_evaluation": true,
+        "metrics": {
+          "location_precision": {
+            "min": 0.99
+          },
+          "location_recall": {
+            "min": 0.95
+          },
+          "unsafe_edits": {
+            "max": 0
+          },
+          "template_exactness": {
+            "min": 1.0
+          },
+          "positive_cases": {
+            "min": 30
+          },
+          "negative_cases": {
+            "min": 30
+          },
+          "independent_cases": {
+            "min": 10
+          },
+          "body_support_cases": {
+            "min": 10
+          },
+          "summary_support_cases": {
+            "min": 10
+          },
+          "structure_support_cases": {
+            "min": 10
+          }
+        },
+        "profile_metrics": {}
+      },
+      "evaluation_metrics": null,
+      "evaluation_report_id": null,
+      "approval_record": null,
+      "approved": false,
+      "source_provenance": [
+        {
+          "paragraph": 20,
+          "sha256": "6c4fe3bced6ee8cf537970bbbf435d83b41ca13662044fb6709ec72e27c5db21"
+        },
+        {
+          "paragraph": 23,
+          "sha256": "55dc8819fe9891619d0b0aaf2566901db70f49a6a1004b56e8dc5b75a3202c29"
+        }
+      ],
+      "template_slots": {}
+    },
+    {
+      "rule_id": "R04",
+      "action_id": "R04-A1",
+      "description": "删除类别不得互相转换完整原句",
+      "section_anchor": "基金的基本情况",
+      "subsection_anchor": "份额类别",
+      "regions": [
+        "body",
+        "summary"
+      ],
+      "scope": "sentence",
+      "old_triggers": [
+        "除非基金管理人在未来条件成熟后另行公告开通相关业务，本基金不同基金份额类别之间不得互相转换。"
+      ],
+      "old_texts": [
+        "除非基金管理人在未来条件成熟后另行公告开通相关业务，本基金不同基金份额类别之间不得互相转换。"
+      ],
+      "new_triggers": [],
+      "operation": "delete",
+      "template_id": "R04-A1",
+      "order": 6,
+      "risk_class": "high",
+      "requires_profile": [
+        "share_classes"
+      ],
+      "condition": "multi_class",
+      "on_unknown": "failed",
+      "auto_write": false,
+      "release_threshold": {
+        "registration_id": "fundlex-conservative-gates-2026-10-13-v1",
+        "registered_before_full_evaluation": true,
+        "metrics": {
+          "location_precision": {
+            "min": 0.99
+          },
+          "location_recall": {
+            "min": 0.95
+          },
+          "unsafe_edits": {
+            "max": 0
+          },
+          "template_exactness": {
+            "min": 1.0
+          },
+          "positive_cases": {
+            "min": 30
+          },
+          "negative_cases": {
+            "min": 30
+          },
+          "independent_cases": {
+            "min": 10
+          },
+          "body_support_cases": {
+            "min": 10
+          },
+          "summary_support_cases": {
+            "min": 10
+          },
+          "structure_support_cases": {
+            "min": 10
+          }
+        },
+        "profile_metrics": {
+          "share_classes": {
+            "accuracy": {
+              "min": 0.99
+            },
+            "precision": {
+              "min": 0.99
+            },
+            "recall": {
+              "min": 0.95
+            },
+            "positive_cases": {
+              "min": 30
+            },
+            "negative_cases": {
+              "min": 30
+            },
+            "independent_cases": {
+              "min": 10
+            }
+          }
+        }
+      },
+      "evaluation_metrics": null,
+      "evaluation_report_id": null,
+      "approval_record": null,
+      "approved": false,
+      "source_provenance": [
+        {
+          "paragraph": 25,
+          "sha256": "4f2855035c9ddbdf6681d31243a094127a3e6c50cf78bd9d635af148a052d5ad"
+        },
+        {
+          "paragraph": 26,
+          "sha256": "b704eb4cc286c37ec1d5900bafedd53bd2ab90f6e57299a498ea1e95bff181f9"
+        }
+      ],
+      "template_slots": {}
+    },
+    {
+      "rule_id": "R05",
+      "action_id": "R05-A1",
+      "description": "单类别申购费率及直销豁免",
+      "section_anchor": "基金份额的申购与赎回",
+      "subsection_anchor": "申购和赎回的价格、费用及其用途",
+      "regions": [
+        "body",
+        "summary"
+      ],
+      "scope": "sentence",
+      "old_triggers": [
+        "本基金的申购费率由基金管理人决定，并在招募说明书中列示。"
+      ],
+      "old_texts": [
+        "本基金的申购费率由基金管理人决定，并在招募说明书中列示。"
+      ],
+      "new_triggers": [
+        "通过直销机构申购本基金不收取申购费，通过直销机构以外的其他销售机构申购本基金的申购费率由基金管理人决定，并在招募说明书中列示。"
+      ],
+      "operation": "replace",
+      "template_id": "R05-A1",
+      "order": 7,
+      "risk_class": "high",
+      "requires_profile": [
+        "share_classes"
+      ],
+      "condition": "single_class",
+      "on_unknown": "failed",
+      "auto_write": false,
+      "release_threshold": {
+        "registration_id": "fundlex-conservative-gates-2026-10-13-v1",
+        "registered_before_full_evaluation": true,
+        "metrics": {
+          "location_precision": {
+            "min": 0.99
+          },
+          "location_recall": {
+            "min": 0.95
+          },
+          "unsafe_edits": {
+            "max": 0
+          },
+          "template_exactness": {
+            "min": 1.0
+          },
+          "positive_cases": {
+            "min": 30
+          },
+          "negative_cases": {
+            "min": 30
+          },
+          "independent_cases": {
+            "min": 10
+          },
+          "body_support_cases": {
+            "min": 10
+          },
+          "summary_support_cases": {
+            "min": 10
+          },
+          "structure_support_cases": {
+            "min": 10
+          }
+        },
+        "profile_metrics": {
+          "share_classes": {
+            "accuracy": {
+              "min": 0.99
+            },
+            "precision": {
+              "min": 0.99
+            },
+            "recall": {
+              "min": 0.95
+            },
+            "positive_cases": {
+              "min": 30
+            },
+            "negative_cases": {
+              "min": 30
+            },
+            "independent_cases": {
+              "min": 10
+            }
+          }
+        }
+      },
+      "evaluation_metrics": null,
+      "evaluation_report_id": null,
+      "approval_record": null,
+      "approved": false,
+      "source_provenance": [
+        {
+          "paragraph": 29,
+          "sha256": "986c0a2abd222c5b0d175fe1bbce6bed0d631d9474df2ee047aa3ddc52499229"
+        },
+        {
+          "paragraph": 32,
+          "sha256": "ecc20559738590df7a94ab04e9079b97871554cb9fee6f32111459b09b0a23a2"
+        }
+      ],
+      "template_slots": {}
+    },
+    {
+      "rule_id": "R06",
+      "action_id": "R06-A1",
+      "description": "多类别申购费率及直销豁免",
+      "section_anchor": "基金份额的申购与赎回",
+      "subsection_anchor": "申购和赎回的价格、费用及其用途",
+      "regions": [
+        "body",
+        "summary"
+      ],
+      "scope": "sentence",
+      "old_triggers": [
+        "本基金的申购费率由基金管理人决定，并在招募说明书中列示。"
+      ],
+      "old_texts": [
+        "本基金的申购费率由基金管理人决定，并在招募说明书中列示。"
+      ],
+      "new_triggers": [
+        "本基金A类基金份额在申购时收取申购费用，C类基金份额不收取申购费用。通过直销机构申购本基金A类基金份额不收取申购费。通过直销机构以外的其他销售机构申购本基金的申购费率由基金管理人决定，并在招募说明书中列示。"
+      ],
+      "operation": "replace",
+      "template_id": "R06-A1",
+      "order": 8,
+      "risk_class": "high",
+      "requires_profile": [
+        "share_classes",
+        "subscription_fee_by_class",
+        "sales_service_fee_by_class"
+      ],
+      "condition": "multi_class",
+      "on_unknown": "failed",
+      "auto_write": false,
+      "release_threshold": {
+        "registration_id": "fundlex-conservative-gates-2026-10-13-v1",
+        "registered_before_full_evaluation": true,
+        "metrics": {
+          "location_precision": {
+            "min": 0.99
+          },
+          "location_recall": {
+            "min": 0.95
+          },
+          "unsafe_edits": {
+            "max": 0
+          },
+          "template_exactness": {
+            "min": 1.0
+          },
+          "positive_cases": {
+            "min": 30
+          },
+          "negative_cases": {
+            "min": 30
+          },
+          "independent_cases": {
+            "min": 10
+          },
+          "body_support_cases": {
+            "min": 10
+          },
+          "summary_support_cases": {
+            "min": 10
+          },
+          "structure_support_cases": {
+            "min": 10
+          }
+        },
+        "profile_metrics": {
+          "share_classes": {
+            "accuracy": {
+              "min": 0.99
+            },
+            "precision": {
+              "min": 0.99
+            },
+            "recall": {
+              "min": 0.95
+            },
+            "positive_cases": {
+              "min": 30
+            },
+            "negative_cases": {
+              "min": 30
+            },
+            "independent_cases": {
+              "min": 10
+            }
+          },
+          "subscription_fee_by_class": {
+            "accuracy": {
+              "min": 0.99
+            },
+            "precision": {
+              "min": 0.99
+            },
+            "recall": {
+              "min": 0.95
+            },
+            "positive_cases": {
+              "min": 30
+            },
+            "negative_cases": {
+              "min": 30
+            },
+            "independent_cases": {
+              "min": 10
+            }
+          },
+          "sales_service_fee_by_class": {
+            "accuracy": {
+              "min": 0.99
+            },
+            "precision": {
+              "min": 0.99
+            },
+            "recall": {
+              "min": 0.95
+            },
+            "positive_cases": {
+              "min": 30
+            },
+            "negative_cases": {
+              "min": 30
+            },
+            "independent_cases": {
+              "min": 10
+            }
+          }
+        }
+      },
+      "evaluation_metrics": null,
+      "evaluation_report_id": null,
+      "approval_record": null,
+      "approved": false,
+      "source_provenance": [
+        {
+          "paragraph": 29,
+          "sha256": "986c0a2abd222c5b0d175fe1bbce6bed0d631d9474df2ee047aa3ddc52499229"
+        },
+        {
+          "paragraph": 34,
+          "sha256": "64692c671d086c1ac20f83254c7f5d388dae2ce505908069959f89aaf5ddb3dc"
+        },
+        {
+          "paragraph": 35,
+          "sha256": "40ebb4a75ff1ffa646a2abb53d8671b782da0ce725822d4c9f85703953ea7e27"
+        }
+      ],
+      "template_slots": {
+        "A类基金份额": "subscription_group",
+        "C类基金份额": "service_group"
+      }
+    },
+    {
+      "rule_id": "R07",
+      "action_id": "R07-A1",
+      "description": "多类别赎回金额扣除或加上费用",
+      "section_anchor": "基金份额的申购与赎回",
+      "subsection_anchor": "申购和赎回的价格、费用及其用途",
+      "regions": [
+        "body",
+        "summary"
+      ],
+      "scope": "sentence",
+      "old_triggers": [
+        "赎回金额为按实际确认的有效赎回份额乘以当日对应份额类别的基金份额净值并扣除相应的费用，赎回金额单位为元。"
+      ],
+      "old_texts": [
+        "赎回金额为按实际确认的有效赎回份额乘以当日对应份额类别的基金份额净值并扣除相应的费用，赎回金额单位为元。"
+      ],
+      "new_triggers": [
+        "赎回金额为按实际确认的有效赎回份额乘以当日该类基金份额的基金份额净值并扣除或加上相应的费用，赎回金额单位为元。"
+      ],
+      "operation": "replace",
+      "template_id": "R07-A1",
+      "order": 9,
+      "risk_class": "high",
+      "requires_profile": [
+        "share_classes"
+      ],
+      "condition": "multi_class",
+      "on_unknown": "failed",
+      "auto_write": false,
+      "release_threshold": {
+        "registration_id": "fundlex-conservative-gates-2026-10-13-v1",
+        "registered_before_full_evaluation": true,
+        "metrics": {
+          "location_precision": {
+            "min": 0.99
+          },
+          "location_recall": {
+            "min": 0.95
+          },
+          "unsafe_edits": {
+            "max": 0
+          },
+          "template_exactness": {
+            "min": 1.0
+          },
+          "positive_cases": {
+            "min": 30
+          },
+          "negative_cases": {
+            "min": 30
+          },
+          "independent_cases": {
+            "min": 10
+          },
+          "body_support_cases": {
+            "min": 10
+          },
+          "summary_support_cases": {
+            "min": 10
+          },
+          "structure_support_cases": {
+            "min": 10
+          }
+        },
+        "profile_metrics": {
+          "share_classes": {
+            "accuracy": {
+              "min": 0.99
+            },
+            "precision": {
+              "min": 0.99
+            },
+            "recall": {
+              "min": 0.95
+            },
+            "positive_cases": {
+              "min": 30
+            },
+            "negative_cases": {
+              "min": 30
+            },
+            "independent_cases": {
+              "min": 10
+            }
+          }
+        }
+      },
+      "evaluation_metrics": null,
+      "evaluation_report_id": null,
+      "approval_record": null,
+      "approved": false,
+      "source_provenance": [
+        {
+          "paragraph": 37,
+          "sha256": "c610a82c3cb4cc09461bcf0d464c77f05f5b20ff51e1ad2e6d5c07a14ce87c49"
+        },
+        {
+          "paragraph": 41,
+          "sha256": "272c567a9e80914a67a505b9446a50e95432b8dd7e7d5035f15e1fe8d519e154"
+        }
+      ],
+      "template_slots": {}
+    },
+    {
+      "rule_id": "R08",
+      "action_id": "R08-A1",
+      "description": "单类别申购费用承担及直销豁免",
+      "section_anchor": "基金份额的申购与赎回",
+      "subsection_anchor": "申购和赎回的价格、费用及其用途",
+      "regions": [
+        "body",
+        "summary"
+      ],
+      "scope": "sentence",
+      "old_triggers": [
+        "申购费用由投资人承担，不列入基金财产。"
+      ],
+      "old_texts": [
+        "申购费用由投资人承担，不列入基金财产。"
+      ],
+      "new_triggers": [
+        "通过直销机构申购本基金不收取申购费，通过其他销售机构申购本基金的申购费用由投资人承担，不列入基金财产。"
+      ],
+      "operation": "replace",
+      "template_id": "R08-A1",
+      "order": 10,
+      "risk_class": "high",
+      "requires_profile": [
+        "share_classes"
+      ],
+      "condition": "single_class",
+      "on_unknown": "failed",
+      "auto_write": false,
+      "release_threshold": {
+        "registration_id": "fundlex-conservative-gates-2026-10-13-v1",
+        "registered_before_full_evaluation": true,
+        "metrics": {
+          "location_precision": {
+            "min": 0.99
+          },
+          "location_recall": {
+            "min": 0.95
+          },
+          "unsafe_edits": {
+            "max": 0
+          },
+          "template_exactness": {
+            "min": 1.0
+          },
+          "positive_cases": {
+            "min": 30
+          },
+          "negative_cases": {
+            "min": 30
+          },
+          "independent_cases": {
+            "min": 10
+          },
+          "body_support_cases": {
+            "min": 10
+          },
+          "summary_support_cases": {
+            "min": 10
+          },
+          "structure_support_cases": {
+            "min": 10
+          }
+        },
+        "profile_metrics": {
+          "share_classes": {
+            "accuracy": {
+              "min": 0.99
+            },
+            "precision": {
+              "min": 0.99
+            },
+            "recall": {
+              "min": 0.95
+            },
+            "positive_cases": {
+              "min": 30
+            },
+            "negative_cases": {
+              "min": 30
+            },
+            "independent_cases": {
+              "min": 10
+            }
+          }
+        }
+      },
+      "evaluation_metrics": null,
+      "evaluation_report_id": null,
+      "approval_record": null,
+      "approved": false,
+      "source_provenance": [
+        {
+          "paragraph": 44,
+          "sha256": "a8fadc946aae2ce74cba0c07b70eea48b83c35be00163f89f903adadb9248c26"
+        },
+        {
+          "paragraph": 45,
+          "sha256": "7788b566e567057fac466980599e25fe138ac0e7ffe3d2f621633ea710733570"
+        }
+      ],
+      "template_slots": {}
+    },
+    {
+      "rule_id": "R09",
+      "action_id": "R09-A1",
+      "description": "多类别申购费用承担及直销豁免",
+      "section_anchor": "基金份额的申购与赎回",
+      "subsection_anchor": "申购和赎回的价格、费用及其用途",
+      "regions": [
+        "body",
+        "summary"
+      ],
+      "scope": "paragraph",
+      "old_triggers": [
+        "本基金A类基金份额的申购费用由投资人承担，不列入基金财产；C类基金份额不收取申购费用。",
+        "申购费用由投资人承担，不列入基金财产。"
+      ],
+      "old_texts": [
+        "本基金A类基金份额的申购费用由投资人承担，不列入基金财产；C类基金份额不收取申购费用。",
+        "申购费用由投资人承担，不列入基金财产。"
+      ],
+      "new_triggers": [
+        "通过直销机构申购本基金A类基金份额不收取申购费，通过其他销售机构申购本基金A类基金份额的申购费用由投资人承担，不列入基金财产。本基金C类基金份额不收取申购费用。"
+      ],
+      "operation": "replace",
+      "template_id": "R09-A1",
+      "order": 11,
+      "risk_class": "high",
+      "requires_profile": [
+        "share_classes",
+        "subscription_fee_by_class",
+        "sales_service_fee_by_class"
+      ],
+      "condition": "multi_class",
+      "on_unknown": "failed",
+      "auto_write": false,
+      "release_threshold": {
+        "registration_id": "fundlex-conservative-gates-2026-10-13-v1",
+        "registered_before_full_evaluation": true,
+        "metrics": {
+          "location_precision": {
+            "min": 0.99
+          },
+          "location_recall": {
+            "min": 0.95
+          },
+          "unsafe_edits": {
+            "max": 0
+          },
+          "template_exactness": {
+            "min": 1.0
+          },
+          "positive_cases": {
+            "min": 30
+          },
+          "negative_cases": {
+            "min": 30
+          },
+          "independent_cases": {
+            "min": 10
+          },
+          "body_support_cases": {
+            "min": 10
+          },
+          "summary_support_cases": {
+            "min": 10
+          },
+          "structure_support_cases": {
+            "min": 10
+          }
+        },
+        "profile_metrics": {
+          "share_classes": {
+            "accuracy": {
+              "min": 0.99
+            },
+            "precision": {
+              "min": 0.99
+            },
+            "recall": {
+              "min": 0.95
+            },
+            "positive_cases": {
+              "min": 30
+            },
+            "negative_cases": {
+              "min": 30
+            },
+            "independent_cases": {
+              "min": 10
+            }
+          },
+          "subscription_fee_by_class": {
+            "accuracy": {
+              "min": 0.99
+            },
+            "precision": {
+              "min": 0.99
+            },
+            "recall": {
+              "min": 0.95
+            },
+            "positive_cases": {
+              "min": 30
+            },
+            "negative_cases": {
+              "min": 30
+            },
+            "independent_cases": {
+              "min": 10
+            }
+          },
+          "sales_service_fee_by_class": {
+            "accuracy": {
+              "min": 0.99
+            },
+            "precision": {
+              "min": 0.99
+            },
+            "recall": {
+              "min": 0.95
+            },
+            "positive_cases": {
+              "min": 30
+            },
+            "negative_cases": {
+              "min": 30
+            },
+            "independent_cases": {
+              "min": 10
+            }
+          }
+        }
+      },
+      "evaluation_metrics": null,
+      "evaluation_report_id": null,
+      "approval_record": null,
+      "approved": false,
+      "source_provenance": [
+        {
+          "paragraph": 47,
+          "sha256": "b5822d759adb62f2310123f9f4fea9fcbb7e6e22a4c5d644de247ce9cd33e7f2"
+        },
+        {
+          "paragraph": 48,
+          "sha256": "4fe5c02d315a790a79ed83375530559d526ace2ce7179844783ff103fcf84540"
+        },
+        {
+          "paragraph": 49,
+          "sha256": "fe4f76e3a831f7d34539d5353015b1437807816bda00bb04f0ea7fa9b26fd37d"
+        }
+      ],
+      "template_slots": {
+        "A类基金份额": "subscription_group",
+        "C类基金份额": "service_group"
+      }
+    },
+    {
+      "rule_id": "R10",
+      "action_id": "R10-A1",
+      "description": "赎回费全额计入基金财产",
+      "section_anchor": "基金份额的申购与赎回",
+      "subsection_anchor": "申购和赎回的价格、费用及其用途",
+      "regions": [
+        "body",
+        "summary"
+      ],
+      "scope": "paragraph",
+      "old_triggers": [
+        "赎回费用由赎回基金份额的基金份额持有人承担，在基金份额持有人赎回基金份额时收取。赎回费用归入基金财产的比例应根据相关规定执行，并在招募说明书中列示。",
+        "赎回费用由赎回基金份额的基金份额持有人承担，在基金份额持有人赎回基金份额时收取。赎回费用归入基金财产的比例依照相关法律法规设定，具体见招募说明书的规定，未归入基金财产的部分用于支付登记费和其他必要的手续费。其中，对持续持有期少于7日的投资者收取不低于1.5%的赎回费，并全额计入基金财产。"
+      ],
+      "old_texts": [
+        "赎回费用由赎回基金份额的基金份额持有人承担，在基金份额持有人赎回基金份额时收取。赎回费用归入基金财产的比例应根据相关规定执行，并在招募说明书中列示。",
+        "赎回费用由赎回基金份额的基金份额持有人承担，在基金份额持有人赎回基金份额时收取。赎回费用归入基金财产的比例依照相关法律法规设定，具体见招募说明书的规定，未归入基金财产的部分用于支付登记费和其他必要的手续费。其中，对持续持有期少于7日的投资者收取不低于1.5%的赎回费，并全额计入基金财产。"
+      ],
+      "new_triggers": [
+        "赎回费用由赎回基金份额的基金份额持有人承担，在基金份额持有人赎回基金份额时收取。赎回费用全额计入基金财产。"
+      ],
+      "operation": "replace",
+      "template_id": "R10-A1",
+      "order": 12,
+      "risk_class": "high",
+      "requires_profile": [],
+      "condition": "always",
+      "on_unknown": "failed",
+      "auto_write": false,
+      "release_threshold": {
+        "registration_id": "fundlex-conservative-gates-2026-10-13-v1",
+        "registered_before_full_evaluation": true,
+        "metrics": {
+          "location_precision": {
+            "min": 0.99
+          },
+          "location_recall": {
+            "min": 0.95
+          },
+          "unsafe_edits": {
+            "max": 0
+          },
+          "template_exactness": {
+            "min": 1.0
+          },
+          "positive_cases": {
+            "min": 30
+          },
+          "negative_cases": {
+            "min": 30
+          },
+          "independent_cases": {
+            "min": 10
+          },
+          "body_support_cases": {
+            "min": 10
+          },
+          "summary_support_cases": {
+            "min": 10
+          },
+          "structure_support_cases": {
+            "min": 10
+          }
+        },
+        "profile_metrics": {}
+      },
+      "evaluation_metrics": null,
+      "evaluation_report_id": null,
+      "approval_record": null,
+      "approved": false,
+      "source_provenance": [
+        {
+          "paragraph": 52,
+          "sha256": "f2bd5aa20656131d1fca47e6715cfbbfe18713aa49e40077785b88ed7454da97"
+        },
+        {
+          "paragraph": 53,
+          "sha256": "01efc2c7bf5c17bad5ee44c96778b1ad9f282c1e69e590de09a8e86008fbab6b"
+        },
+        {
+          "paragraph": 54,
+          "sha256": "e17339a67fb93deb57f3cfedde8eadb77ce3db8d1153d597286be9f9c458ac44"
+        }
+      ],
+      "template_slots": {}
+    },
+    {
+      "rule_id": "R11",
+      "action_id": "R11-A1",
+      "description": "删除旧短期持有赎回费句",
+      "section_anchor": "基金份额的申购与赎回",
+      "subsection_anchor": "申购和赎回的价格、费用及其用途",
+      "regions": [
+        "body",
+        "summary"
+      ],
+      "scope": "sentence",
+      "old_triggers": [
+        "本基金对持续持有期少于7日的投资者收取不低于1.50%的赎回费，并将上述赎回费全额计入基金财产。"
+      ],
+      "old_texts": [
+        "本基金对持续持有期少于7日的投资者收取不低于1.50%的赎回费，并将上述赎回费全额计入基金财产。"
+      ],
+      "new_triggers": [],
+      "operation": "delete",
+      "template_id": "R11-A1",
+      "order": 13,
+      "risk_class": "high",
+      "requires_profile": [],
+      "condition": "always",
+      "on_unknown": "failed",
+      "auto_write": false,
+      "release_threshold": {
+        "registration_id": "fundlex-conservative-gates-2026-10-13-v1",
+        "registered_before_full_evaluation": true,
+        "metrics": {
+          "location_precision": {
+            "min": 0.99
+          },
+          "location_recall": {
+            "min": 0.95
+          },
+          "unsafe_edits": {
+            "max": 0
+          },
+          "template_exactness": {
+            "min": 1.0
+          },
+          "positive_cases": {
+            "min": 30
+          },
+          "negative_cases": {
+            "min": 30
+          },
+          "independent_cases": {
+            "min": 10
+          },
+          "body_support_cases": {
+            "min": 10
+          },
+          "summary_support_cases": {
+            "min": 10
+          },
+          "structure_support_cases": {
+            "min": 10
+          }
+        },
+        "profile_metrics": {}
+      },
+      "evaluation_metrics": null,
+      "evaluation_report_id": null,
+      "approval_record": null,
+      "approved": false,
+      "source_provenance": [
+        {
+          "paragraph": 56,
+          "sha256": "a1cc3e8e06bbb25143ebb86e6f5ebe4c9fac907789972b5b1db13e4855f9f88d"
+        },
+        {
+          "paragraph": 57,
+          "sha256": "19cd9cf838547700a2cf5596f39b6cb30f8b0e6a4c3f0a86e9d67115cf1be4f8"
+        }
+      ],
+      "template_slots": {}
+    },
+    {
+      "rule_id": "R12",
+      "action_id": "R12-A1",
+      "description": "单类别促销可调低申购费率",
+      "section_anchor": "基金份额的申购与赎回",
+      "subsection_anchor": "申购和赎回的价格、费用及其用途",
+      "regions": [
+        "body",
+        "summary"
+      ],
+      "scope": "sentence",
+      "old_triggers": [
+        "基金管理人可以适当调低基金申购费率和赎回费率。",
+        "基金管理人可以适当调低基金申购费率、赎回费率和转换费率。",
+        "基金管理人可以适当调低基金申购费率、赎回费率、转换费率和销售服务费率。"
+      ],
+      "old_texts": [
+        "基金管理人可以适当调低基金申购费率和赎回费率。",
+        "基金管理人可以适当调低基金申购费率、赎回费率和转换费率。",
+        "基金管理人可以适当调低基金申购费率、赎回费率、转换费率和销售服务费率。"
+      ],
+      "new_triggers": [
+        "基金管理人可以适当调低基金申购费率。"
+      ],
+      "operation": "replace",
+      "template_id": "R12-A1",
+      "order": 14,
+      "risk_class": "high",
+      "requires_profile": [
+        "share_classes"
+      ],
+      "condition": "single_class",
+      "on_unknown": "failed",
+      "auto_write": false,
+      "release_threshold": {
+        "registration_id": "fundlex-conservative-gates-2026-10-13-v1",
+        "registered_before_full_evaluation": true,
+        "metrics": {
+          "location_precision": {
+            "min": 0.99
+          },
+          "location_recall": {
+            "min": 0.95
+          },
+          "unsafe_edits": {
+            "max": 0
+          },
+          "template_exactness": {
+            "min": 1.0
+          },
+          "positive_cases": {
+            "min": 30
+          },
+          "negative_cases": {
+            "min": 30
+          },
+          "independent_cases": {
+            "min": 10
+          },
+          "body_support_cases": {
+            "min": 10
+          },
+          "summary_support_cases": {
+            "min": 10
+          },
+          "structure_support_cases": {
+            "min": 10
+          }
+        },
+        "profile_metrics": {
+          "share_classes": {
+            "accuracy": {
+              "min": 0.99
+            },
+            "precision": {
+              "min": 0.99
+            },
+            "recall": {
+              "min": 0.95
+            },
+            "positive_cases": {
+              "min": 30
+            },
+            "negative_cases": {
+              "min": 30
+            },
+            "independent_cases": {
+              "min": 10
+            }
+          }
+        }
+      },
+      "evaluation_metrics": null,
+      "evaluation_report_id": null,
+      "approval_record": null,
+      "approved": false,
+      "source_provenance": [
+        {
+          "paragraph": 61,
+          "sha256": "644d77d031731018f1a15ccd4abcb915f369e454a7ea98f1c0cff1fa4dfd3b08"
+        },
+        {
+          "paragraph": 62,
+          "sha256": "8f5e2fbabbdfd15d54db85f6c2e12472e144686aaaf19c6e53f0decbdd5db022"
+        },
+        {
+          "paragraph": 63,
+          "sha256": "c921834be15eb58e257d888405eb52b43fc2aaf2072502dca8fdaa7b679d5e08"
+        },
+        {
+          "paragraph": 65,
+          "sha256": "c9778a9e3aeac42745ae47b0de151f19e74982ce34e1a73d738afdbd029c30fe"
+        }
+      ],
+      "template_slots": {}
+    },
+    {
+      "rule_id": "R13",
+      "action_id": "R13-A1",
+      "description": "多类别促销可调低申购及销售服务费率",
+      "section_anchor": "基金份额的申购与赎回",
+      "subsection_anchor": "申购和赎回的价格、费用及其用途",
+      "regions": [
+        "body",
+        "summary"
+      ],
+      "scope": "sentence",
+      "old_triggers": [
+        "基金管理人可以适当调低基金申购费率和赎回费率。",
+        "基金管理人可以适当调低基金申购费率、赎回费率和转换费率。",
+        "基金管理人可以适当调低基金申购费率、赎回费率、转换费率和销售服务费率。"
+      ],
+      "old_texts": [
+        "基金管理人可以适当调低基金申购费率和赎回费率。",
+        "基金管理人可以适当调低基金申购费率、赎回费率和转换费率。",
+        "基金管理人可以适当调低基金申购费率、赎回费率、转换费率和销售服务费率。"
+      ],
+      "new_triggers": [
+        "基金管理人可以适当调低基金申购费率和销售服务费率。"
+      ],
+      "operation": "replace",
+      "template_id": "R13-A1",
+      "order": 15,
+      "risk_class": "high",
+      "requires_profile": [
+        "share_classes"
+      ],
+      "condition": "multi_class",
+      "on_unknown": "failed",
+      "auto_write": false,
+      "release_threshold": {
+        "registration_id": "fundlex-conservative-gates-2026-10-13-v1",
+        "registered_before_full_evaluation": true,
+        "metrics": {
+          "location_precision": {
+            "min": 0.99
+          },
+          "location_recall": {
+            "min": 0.95
+          },
+          "unsafe_edits": {
+            "max": 0
+          },
+          "template_exactness": {
+            "min": 1.0
+          },
+          "positive_cases": {
+            "min": 30
+          },
+          "negative_cases": {
+            "min": 30
+          },
+          "independent_cases": {
+            "min": 10
+          },
+          "body_support_cases": {
+            "min": 10
+          },
+          "summary_support_cases": {
+            "min": 10
+          },
+          "structure_support_cases": {
+            "min": 10
+          }
+        },
+        "profile_metrics": {
+          "share_classes": {
+            "accuracy": {
+              "min": 0.99
+            },
+            "precision": {
+              "min": 0.99
+            },
+            "recall": {
+              "min": 0.95
+            },
+            "positive_cases": {
+              "min": 30
+            },
+            "negative_cases": {
+              "min": 30
+            },
+            "independent_cases": {
+              "min": 10
+            }
+          }
+        }
+      },
+      "evaluation_metrics": null,
+      "evaluation_report_id": null,
+      "approval_record": null,
+      "approved": false,
+      "source_provenance": [
+        {
+          "paragraph": 61,
+          "sha256": "644d77d031731018f1a15ccd4abcb915f369e454a7ea98f1c0cff1fa4dfd3b08"
+        },
+        {
+          "paragraph": 62,
+          "sha256": "8f5e2fbabbdfd15d54db85f6c2e12472e144686aaaf19c6e53f0decbdd5db022"
+        },
+        {
+          "paragraph": 63,
+          "sha256": "c921834be15eb58e257d888405eb52b43fc2aaf2072502dca8fdaa7b679d5e08"
+        },
+        {
+          "paragraph": 67,
+          "sha256": "02bfcccfbf5046f2a1708b73d960189e6d5b6edafa6cbf1df8e0bd176f75b6a3"
+        }
+      ],
+      "template_slots": {}
+    },
+    {
+      "rule_id": "R14",
+      "action_id": "R14-A1",
+      "description": "替换旧销售服务费支付段落为直销返还及其他销售机构费用支付规则",
+      "section_anchor": "基金费用与税收",
+      "subsection_anchor": "基金销售服务费",
+      "regions": [
+        "body",
+        "summary"
+      ],
+      "scope": "paragraph",
+      "old_triggers": [
+        "C类基金份额的销售服务费每日计提，按月支付。由基金管理人向基金托管人发送基金销售服务费划付指令，经基金托管人复核后于次月首日起10个工作日内从基金财产中一次性支付给登记机构，由登记机构代付给销售机构。若遇法定节假日、公休日等，支付日期顺延。"
+      ],
+      "old_texts": [
+        "C类基金份额的销售服务费每日计提，按月支付。由基金管理人向基金托管人发送基金销售服务费划付指令，经基金托管人复核后于次月首日起10个工作日内从基金财产中一次性支付给登记机构，由登记机构代付给销售机构。若遇法定节假日、公休日等，支付日期顺延。"
+      ],
+      "new_triggers": [
+        "销售服务费每日计提。\n（1）直销机构：\n对于投资者通过直销机构持有的C类基金份额计提的销售服务费，在投资者赎回C类基金份额或基金合同终止时，随赎回款（或清算款）一并返还给投资者。\n基金管理人基金销售子公司销售母公司所管理基金的，按照本条要求执行。\n（2）直销机构以外的其他销售机构：\n对于投资者持续持有期限未超过一年（即365天，下同）的基金份额收取的销售服务费，按月支付，基金托管人按照与基金管理人协商一致的方式于次月首日起5个工作日内按照指定的账户路径进行支付。若遇法定节假日、公休日或不可抗力等，支付日期顺延。\n对于持续持有期限超过一年的基金份额，持有超过一年后继续计提的销售服务费，在投资者赎回基金份额或基金合同终止时，随赎回款（或清算款）一并返还给投资者。"
+      ],
+      "operation": "replace",
+      "template_id": "R14-A1",
+      "order": 16,
+      "risk_class": "high",
+      "requires_profile": [
+        "share_classes",
+        "subscription_fee_by_class",
+        "sales_service_fee_by_class"
+      ],
+      "condition": "multi_class",
+      "on_unknown": "failed",
+      "auto_write": false,
+      "release_threshold": {
+        "registration_id": "fundlex-conservative-gates-2026-10-13-v1",
+        "registered_before_full_evaluation": true,
+        "metrics": {
+          "location_precision": {
+            "min": 0.99
+          },
+          "location_recall": {
+            "min": 0.95
+          },
+          "unsafe_edits": {
+            "max": 0
+          },
+          "template_exactness": {
+            "min": 1.0
+          },
+          "positive_cases": {
+            "min": 30
+          },
+          "negative_cases": {
+            "min": 30
+          },
+          "independent_cases": {
+            "min": 10
+          },
+          "body_support_cases": {
+            "min": 10
+          },
+          "summary_support_cases": {
+            "min": 10
+          },
+          "structure_support_cases": {
+            "min": 10
+          }
+        },
+        "profile_metrics": {
+          "share_classes": {
+            "accuracy": {
+              "min": 0.99
+            },
+            "precision": {
+              "min": 0.99
+            },
+            "recall": {
+              "min": 0.95
+            },
+            "positive_cases": {
+              "min": 30
+            },
+            "negative_cases": {
+              "min": 30
+            },
+            "independent_cases": {
+              "min": 10
+            }
+          },
+          "subscription_fee_by_class": {
+            "accuracy": {
+              "min": 0.99
+            },
+            "precision": {
+              "min": 0.99
+            },
+            "recall": {
+              "min": 0.95
+            },
+            "positive_cases": {
+              "min": 30
+            },
+            "negative_cases": {
+              "min": 30
+            },
+            "independent_cases": {
+              "min": 10
+            }
+          },
+          "sales_service_fee_by_class": {
+            "accuracy": {
+              "min": 0.99
+            },
+            "precision": {
+              "min": 0.99
+            },
+            "recall": {
+              "min": 0.95
+            },
+            "positive_cases": {
+              "min": 30
+            },
+            "negative_cases": {
+              "min": 30
+            },
+            "independent_cases": {
+              "min": 10
+            }
+          }
+        }
+      },
+      "evaluation_metrics": null,
+      "evaluation_report_id": null,
+      "approval_record": null,
+      "approved": false,
+      "source_provenance": [
+        {
+          "paragraph": 74,
+          "sha256": "fede5b6b01ff404e9759f41badef172d3cdbc510a02bc0ca5c2bc10e3741331a"
+        },
+        {
+          "paragraph": 77,
+          "sha256": "fede5b6b01ff404e9759f41badef172d3cdbc510a02bc0ca5c2bc10e3741331a"
+        },
+        {
+          "paragraph": 79,
+          "sha256": "c0defe357cbcd1ed134a4a9038c6dfc4f732316ee90fd9a0fee68060b1974fae"
+        },
+        {
+          "paragraph": 80,
+          "sha256": "81b714b678420dde7ececd0a858ef267d9f8ca600201e18c88fea6a2c33488c0"
+        },
+        {
+          "paragraph": 81,
+          "sha256": "3c81f422d24c2a7de779078a61c8f615031338b9e2933f37ef26f06a565b7834"
+        },
+        {
+          "paragraph": 82,
+          "sha256": "d195c4c8858f0fda66ae8fe73cab8fa3a0c84aadd1e930972b683e165cc1380e"
+        },
+        {
+          "paragraph": 83,
+          "sha256": "297affac82fa3c74eb2a864728b2c5c8a74fe20cfa871db72a815453ed4e0eb0"
+        },
+        {
+          "paragraph": 84,
+          "sha256": "7a6835ca5cdcb75ddaf6981b9d7288b110e96c331ff96811b990efa7e6eef789"
+        },
+        {
+          "paragraph": 85,
+          "sha256": "3a04bf69179d4a494f7aeb2b4da7b9530c63413df330b6852a3c4a07ea7e57b7"
+        }
+      ],
+      "template_slots": {
+        "C类基金份额": "service_group"
+      }
+    },
+    {
+      "rule_id": "R15",
+      "action_id": "R15-A1",
+      "description": "删除销售服务费用途段落",
+      "section_anchor": "基金费用与税收",
+      "subsection_anchor": "基金销售服务费",
+      "regions": [
+        "body",
+        "summary"
+      ],
+      "scope": "paragraph",
+      "old_triggers": [
+        "C类基金份额的销售服务费主要用于支付销售机构佣金、以及基金管理人的基金行销广告费、促销活动费、基金份额持有人服务费等。"
+      ],
+      "old_texts": [
+        "C类基金份额的销售服务费主要用于支付销售机构佣金、以及基金管理人的基金行销广告费、促销活动费、基金份额持有人服务费等。"
+      ],
+      "new_triggers": [],
+      "operation": "delete",
+      "template_id": "R15-A1",
+      "order": 17,
+      "risk_class": "high",
+      "requires_profile": [
+        "share_classes",
+        "subscription_fee_by_class",
+        "sales_service_fee_by_class"
+      ],
+      "condition": "multi_class",
+      "on_unknown": "failed",
+      "auto_write": false,
+      "release_threshold": {
+        "registration_id": "fundlex-conservative-gates-2026-10-13-v1",
+        "registered_before_full_evaluation": true,
+        "metrics": {
+          "location_precision": {
+            "min": 0.99
+          },
+          "location_recall": {
+            "min": 0.95
+          },
+          "unsafe_edits": {
+            "max": 0
+          },
+          "template_exactness": {
+            "min": 1.0
+          },
+          "positive_cases": {
+            "min": 30
+          },
+          "negative_cases": {
+            "min": 30
+          },
+          "independent_cases": {
+            "min": 10
+          },
+          "body_support_cases": {
+            "min": 10
+          },
+          "summary_support_cases": {
+            "min": 10
+          },
+          "structure_support_cases": {
+            "min": 10
+          }
+        },
+        "profile_metrics": {
+          "share_classes": {
+            "accuracy": {
+              "min": 0.99
+            },
+            "precision": {
+              "min": 0.99
+            },
+            "recall": {
+              "min": 0.95
+            },
+            "positive_cases": {
+              "min": 30
+            },
+            "negative_cases": {
+              "min": 30
+            },
+            "independent_cases": {
+              "min": 10
+            }
+          },
+          "subscription_fee_by_class": {
+            "accuracy": {
+              "min": 0.99
+            },
+            "precision": {
+              "min": 0.99
+            },
+            "recall": {
+              "min": 0.95
+            },
+            "positive_cases": {
+              "min": 30
+            },
+            "negative_cases": {
+              "min": 30
+            },
+            "independent_cases": {
+              "min": 10
+            }
+          },
+          "sales_service_fee_by_class": {
+            "accuracy": {
+              "min": 0.99
+            },
+            "precision": {
+              "min": 0.99
+            },
+            "recall": {
+              "min": 0.95
+            },
+            "positive_cases": {
+              "min": 30
+            },
+            "negative_cases": {
+              "min": 30
+            },
+            "independent_cases": {
+              "min": 10
+            }
+          }
+        }
+      },
+      "evaluation_metrics": null,
+      "evaluation_report_id": null,
+      "approval_record": null,
+      "approved": false,
+      "source_provenance": [
+        {
+          "paragraph": 88,
+          "sha256": "738c885ae8ca82f6537d482462ad8132f84b8328a23d2081d9b4ba15cad5b736"
+        },
+        {
+          "paragraph": 90,
+          "sha256": "77af1295e7162bed4ada7cdfdeef445a8bc781a9b2434e35dcbc36d1d10df8f2"
+        }
+      ],
+      "template_slots": {
+        "C类基金份额": "service_group"
+      }
+    },
+    {
+      "rule_id": "R15",
+      "action_id": "R15-A2",
+      "description": "删除销售服务费使用范围段落",
+      "section_anchor": "基金费用与税收",
+      "subsection_anchor": "基金销售服务费",
+      "regions": [
+        "body",
+        "summary"
+      ],
+      "scope": "paragraph",
+      "old_triggers": [
+        "C类基金份额的销售服务费使用范围不包括基金募集期间的上述费用。"
+      ],
+      "old_texts": [
+        "C类基金份额的销售服务费使用范围不包括基金募集期间的上述费用。"
+      ],
+      "new_triggers": [],
+      "operation": "delete",
+      "template_id": "R15-A2",
+      "order": 18,
+      "risk_class": "high",
+      "requires_profile": [
+        "share_classes",
+        "subscription_fee_by_class",
+        "sales_service_fee_by_class"
+      ],
+      "condition": "multi_class",
+      "on_unknown": "failed",
+      "auto_write": false,
+      "release_threshold": {
+        "registration_id": "fundlex-conservative-gates-2026-10-13-v1",
+        "registered_before_full_evaluation": true,
+        "metrics": {
+          "location_precision": {
+            "min": 0.99
+          },
+          "location_recall": {
+            "min": 0.95
+          },
+          "unsafe_edits": {
+            "max": 0
+          },
+          "template_exactness": {
+            "min": 1.0
+          },
+          "positive_cases": {
+            "min": 30
+          },
+          "negative_cases": {
+            "min": 30
+          },
+          "independent_cases": {
+            "min": 10
+          },
+          "body_support_cases": {
+            "min": 10
+          },
+          "summary_support_cases": {
+            "min": 10
+          },
+          "structure_support_cases": {
+            "min": 10
+          }
+        },
+        "profile_metrics": {
+          "share_classes": {
+            "accuracy": {
+              "min": 0.99
+            },
+            "precision": {
+              "min": 0.99
+            },
+            "recall": {
+              "min": 0.95
+            },
+            "positive_cases": {
+              "min": 30
+            },
+            "negative_cases": {
+              "min": 30
+            },
+            "independent_cases": {
+              "min": 10
+            }
+          },
+          "subscription_fee_by_class": {
+            "accuracy": {
+              "min": 0.99
+            },
+            "precision": {
+              "min": 0.99
+            },
+            "recall": {
+              "min": 0.95
+            },
+            "positive_cases": {
+              "min": 30
+            },
+            "negative_cases": {
+              "min": 30
+            },
+            "independent_cases": {
+              "min": 10
+            }
+          },
+          "sales_service_fee_by_class": {
+            "accuracy": {
+              "min": 0.99
+            },
+            "precision": {
+              "min": 0.99
+            },
+            "recall": {
+              "min": 0.95
+            },
+            "positive_cases": {
+              "min": 30
+            },
+            "negative_cases": {
+              "min": 30
+            },
+            "independent_cases": {
+              "min": 10
+            }
+          }
+        }
+      },
+      "evaluation_metrics": null,
+      "evaluation_report_id": null,
+      "approval_record": null,
+      "approved": false,
+      "source_provenance": [
+        {
+          "paragraph": 89,
+          "sha256": "36dd3cd8a5d441d9b19b5cc6308d1ddd48569cc7c9a9c2fdeefef71b04d1b80d"
+        },
+        {
+          "paragraph": 90,
+          "sha256": "77af1295e7162bed4ada7cdfdeef445a8bc781a9b2434e35dcbc36d1d10df8f2"
+        }
+      ],
+      "template_slots": {
+        "C类基金份额": "service_group"
+      }
+    },
+    {
+      "rule_id": "R16",
+      "action_id": "R16-A1",
+      "description": "收益分配按类别费用收取不同调整",
+      "section_anchor": "基金的收益与分配",
+      "subsection_anchor": "收益分配",
+      "regions": [
+        "body",
+        "summary"
+      ],
+      "scope": "phrase",
+      "old_triggers": [
+        "由于本基金A类基金份额不收取销售服务费，而C类基金份额收取销售服务费"
+      ],
+      "old_texts": [
+        "由于本基金A类基金份额不收取销售服务费，而C类基金份额收取销售服务费"
+      ],
+      "new_triggers": [
+        "由于本基金A类基金份额和C类基金份额费用收取不同"
+      ],
+      "operation": "replace",
+      "template_id": "R16-A1",
+      "order": 19,
+      "risk_class": "high",
+      "requires_profile": [
+        "share_classes",
+        "subscription_fee_by_class",
+        "sales_service_fee_by_class"
+      ],
+      "condition": "multi_class",
+      "on_unknown": "failed",
+      "auto_write": false,
+      "release_threshold": {
+        "registration_id": "fundlex-conservative-gates-2026-10-13-v1",
+        "registered_before_full_evaluation": true,
+        "metrics": {
+          "location_precision": {
+            "min": 0.99
+          },
+          "location_recall": {
+            "min": 0.95
+          },
+          "unsafe_edits": {
+            "max": 0
+          },
+          "template_exactness": {
+            "min": 1.0
+          },
+          "positive_cases": {
+            "min": 30
+          },
+          "negative_cases": {
+            "min": 30
+          },
+          "independent_cases": {
+            "min": 10
+          },
+          "body_support_cases": {
+            "min": 10
+          },
+          "summary_support_cases": {
+            "min": 10
+          },
+          "structure_support_cases": {
+            "min": 10
+          }
+        },
+        "profile_metrics": {
+          "share_classes": {
+            "accuracy": {
+              "min": 0.99
+            },
+            "precision": {
+              "min": 0.99
+            },
+            "recall": {
+              "min": 0.95
+            },
+            "positive_cases": {
+              "min": 30
+            },
+            "negative_cases": {
+              "min": 30
+            },
+            "independent_cases": {
+              "min": 10
+            }
+          },
+          "subscription_fee_by_class": {
+            "accuracy": {
+              "min": 0.99
+            },
+            "precision": {
+              "min": 0.99
+            },
+            "recall": {
+              "min": 0.95
+            },
+            "positive_cases": {
+              "min": 30
+            },
+            "negative_cases": {
+              "min": 30
+            },
+            "independent_cases": {
+              "min": 10
+            }
+          },
+          "sales_service_fee_by_class": {
+            "accuracy": {
+              "min": 0.99
+            },
+            "precision": {
+              "min": 0.99
+            },
+            "recall": {
+              "min": 0.95
+            },
+            "positive_cases": {
+              "min": 30
+            },
+            "negative_cases": {
+              "min": 30
+            },
+            "independent_cases": {
+              "min": 10
+            }
+          }
+        }
+      },
+      "evaluation_metrics": null,
+      "evaluation_report_id": null,
+      "approval_record": null,
+      "approved": false,
+      "source_provenance": [
+        {
+          "paragraph": 92,
+          "sha256": "154b52a94bd2a876bdbef9e3739f8c3835d3ef9421684775f82099827674ea04"
+        },
+        {
+          "paragraph": 93,
+          "sha256": "efd6396332b3d80b9989e92c5c7e08297f2c6d4dbe85f8e8b55211c7584fdb26"
+        }
+      ],
+      "template_slots": {
+        "A类基金份额": "subscription_group",
+        "C类基金份额": "service_group"
+      }
+    },
+    {
+      "rule_id": "R17",
+      "action_id": "R17-A1",
+      "description": "浮动管理费单类别清算费用调整",
+      "section_anchor": "基金合同的变更、终止与基金财产的清算",
+      "subsection_anchor": "基金财产清算剩余资产的分配",
+      "regions": [
+        "body",
+        "summary"
+      ],
+      "scope": "paragraph",
+      "old_triggers": [
+        "依据基金财产清算的分配方案，将基金财产清算后的全部剩余资产扣除基金财产清算费用、交纳所欠税款并清偿基金债务后，按基金份额持有人持有的基金份额比例进行分配，并扣除相应的超额管理费（如涉及）。",
+        "依据基金财产清算的分配方案，将基金财产清算后的全部剩余资产扣除基金财产清算费用、交纳所欠税款并清偿基金债务后，按基金份额持有人持有的基金份额比例进行分配，并加上返还基金份额持有人的或有管理费（如有）或扣除相应的超额管理费（如有）。"
+      ],
+      "old_texts": [
+        "依据基金财产清算的分配方案，将基金财产清算后的全部剩余资产扣除基金财产清算费用、交纳所欠税款并清偿基金债务后，按基金份额持有人持有的基金份额比例进行分配，并扣除相应的超额管理费（如涉及）。",
+        "依据基金财产清算的分配方案，将基金财产清算后的全部剩余资产扣除基金财产清算费用、交纳所欠税款并清偿基金债务后，按基金份额持有人持有的基金份额比例进行分配，并加上返还基金份额持有人的或有管理费（如有）或扣除相应的超额管理费（如有）。"
+      ],
+      "new_triggers": [
+        "依据基金财产清算的分配方案，将基金财产清算后的全部剩余资产扣除基金财产清算费用、交纳所欠税款并清偿基金债务后，按基金份额持有人持有的基金份额比例进行分配，并加上返还基金份额持有人的或有管理费（如有）或扣除相应的超额管理费（如有）。"
+      ],
+      "operation": "replace",
+      "template_id": "R17-A1",
+      "order": 20,
+      "risk_class": "high",
+      "requires_profile": [
+        "share_classes",
+        "floating_management_fee"
+      ],
+      "condition": "floating_single",
+      "on_unknown": "failed",
+      "auto_write": false,
+      "release_threshold": {
+        "registration_id": "fundlex-conservative-gates-2026-10-13-v1",
+        "registered_before_full_evaluation": true,
+        "metrics": {
+          "location_precision": {
+            "min": 0.99
+          },
+          "location_recall": {
+            "min": 0.95
+          },
+          "unsafe_edits": {
+            "max": 0
+          },
+          "template_exactness": {
+            "min": 1.0
+          },
+          "positive_cases": {
+            "min": 30
+          },
+          "negative_cases": {
+            "min": 30
+          },
+          "independent_cases": {
+            "min": 10
+          },
+          "body_support_cases": {
+            "min": 10
+          },
+          "summary_support_cases": {
+            "min": 10
+          },
+          "structure_support_cases": {
+            "min": 10
+          }
+        },
+        "profile_metrics": {
+          "share_classes": {
+            "accuracy": {
+              "min": 0.99
+            },
+            "precision": {
+              "min": 0.99
+            },
+            "recall": {
+              "min": 0.95
+            },
+            "positive_cases": {
+              "min": 30
+            },
+            "negative_cases": {
+              "min": 30
+            },
+            "independent_cases": {
+              "min": 10
+            }
+          },
+          "floating_management_fee": {
+            "accuracy": {
+              "min": 0.99
+            },
+            "precision": {
+              "min": 0.99
+            },
+            "recall": {
+              "min": 0.95
+            },
+            "positive_cases": {
+              "min": 30
+            },
+            "negative_cases": {
+              "min": 30
+            },
+            "independent_cases": {
+              "min": 10
+            }
+          }
+        }
+      },
+      "evaluation_metrics": null,
+      "evaluation_report_id": null,
+      "approval_record": null,
+      "approved": false,
+      "source_provenance": [
+        {
+          "paragraph": 96,
+          "sha256": "b367261e699ca0b883796927fa3e36a35d7e8e52fa0325b4c890af672dd74b73"
+        },
+        {
+          "paragraph": 97,
+          "sha256": "f09acfa81ef104470ed3adcb206b3f2f0a11c3be6333430a8ba70348b93afb39"
+        },
+        {
+          "paragraph": 99,
+          "sha256": "aba8be8c9160b00cba6e953de79c8d4e556237d4ce120fafa723ab09e6ec4f71"
+        }
+      ],
+      "template_slots": {}
+    },
+    {
+      "rule_id": "R17",
+      "action_id": "R17-A2",
+      "description": "浮动管理费多类别清算费用调整",
+      "section_anchor": "基金合同的变更、终止与基金财产的清算",
+      "subsection_anchor": "基金财产清算剩余资产的分配",
+      "regions": [
+        "body",
+        "summary"
+      ],
+      "scope": "paragraph",
+      "old_triggers": [
+        "依据基金财产清算的分配方案，将基金财产清算后的全部剩余资产扣除基金财产清算费用、交纳所欠税款并清偿基金债务后，按基金份额持有人持有的基金份额比例进行分配，并扣除相应的超额管理费（如涉及）。",
+        "依据基金财产清算的分配方案，将基金财产清算后的全部剩余资产扣除基金财产清算费用、交纳所欠税款并清偿基金债务后，按基金份额持有人持有的基金份额比例进行分配，并加上返还基金份额持有人的或有管理费（如有）或扣除相应的超额管理费（如有）。"
+      ],
+      "old_texts": [
+        "依据基金财产清算的分配方案，将基金财产清算后的全部剩余资产扣除基金财产清算费用、交纳所欠税款并清偿基金债务后，按基金份额持有人持有的基金份额比例进行分配，并扣除相应的超额管理费（如涉及）。",
+        "依据基金财产清算的分配方案，将基金财产清算后的全部剩余资产扣除基金财产清算费用、交纳所欠税款并清偿基金债务后，按基金份额持有人持有的基金份额比例进行分配，并加上返还基金份额持有人的或有管理费（如有）或扣除相应的超额管理费（如有）。"
+      ],
+      "new_triggers": [
+        "依据基金财产清算的分配方案，将基金财产清算后的全部剩余资产扣除基金财产清算费用、交纳所欠税款并清偿基金债务后，按基金份额持有人持有的基金份额比例进行分配，并加上返还基金份额持有人的或有管理费（如有）、销售服务费（如有）或扣除相应的超额管理费（如有）。"
+      ],
+      "operation": "replace",
+      "template_id": "R17-A2",
+      "order": 21,
+      "risk_class": "high",
+      "requires_profile": [
+        "share_classes",
+        "floating_management_fee"
+      ],
+      "condition": "floating_multi",
+      "on_unknown": "failed",
+      "auto_write": false,
+      "release_threshold": {
+        "registration_id": "fundlex-conservative-gates-2026-10-13-v1",
+        "registered_before_full_evaluation": true,
+        "metrics": {
+          "location_precision": {
+            "min": 0.99
+          },
+          "location_recall": {
+            "min": 0.95
+          },
+          "unsafe_edits": {
+            "max": 0
+          },
+          "template_exactness": {
+            "min": 1.0
+          },
+          "positive_cases": {
+            "min": 30
+          },
+          "negative_cases": {
+            "min": 30
+          },
+          "independent_cases": {
+            "min": 10
+          },
+          "body_support_cases": {
+            "min": 10
+          },
+          "summary_support_cases": {
+            "min": 10
+          },
+          "structure_support_cases": {
+            "min": 10
+          }
+        },
+        "profile_metrics": {
+          "share_classes": {
+            "accuracy": {
+              "min": 0.99
+            },
+            "precision": {
+              "min": 0.99
+            },
+            "recall": {
+              "min": 0.95
+            },
+            "positive_cases": {
+              "min": 30
+            },
+            "negative_cases": {
+              "min": 30
+            },
+            "independent_cases": {
+              "min": 10
+            }
+          },
+          "floating_management_fee": {
+            "accuracy": {
+              "min": 0.99
+            },
+            "precision": {
+              "min": 0.99
+            },
+            "recall": {
+              "min": 0.95
+            },
+            "positive_cases": {
+              "min": 30
+            },
+            "negative_cases": {
+              "min": 30
+            },
+            "independent_cases": {
+              "min": 10
+            }
+          }
+        }
+      },
+      "evaluation_metrics": null,
+      "evaluation_report_id": null,
+      "approval_record": null,
+      "approved": false,
+      "source_provenance": [
+        {
+          "paragraph": 96,
+          "sha256": "b367261e699ca0b883796927fa3e36a35d7e8e52fa0325b4c890af672dd74b73"
+        },
+        {
+          "paragraph": 97,
+          "sha256": "f09acfa81ef104470ed3adcb206b3f2f0a11c3be6333430a8ba70348b93afb39"
+        },
+        {
+          "paragraph": 101,
+          "sha256": "b2de76a64707886e742ce9f132b52e47b271d2333f4ac95a67e289048828645a"
+        }
+      ],
+      "template_slots": {}
+    },
+    {
+      "rule_id": "R17",
+      "action_id": "R17-A3",
+      "description": "非浮动管理费多类别销售服务费返还",
+      "section_anchor": "基金合同的变更、终止与基金财产的清算",
+      "subsection_anchor": "基金财产清算剩余资产的分配",
+      "regions": [
+        "body",
+        "summary"
+      ],
+      "scope": "paragraph",
+      "old_triggers": [
+        "依据基金财产清算的分配方案，将基金财产清算后的全部剩余资产扣除基金财产清算费用、交纳所欠税款并清偿基金债务后，按基金份额持有人持有的基金份额比例进行分配。"
+      ],
+      "old_texts": [
+        "依据基金财产清算的分配方案，将基金财产清算后的全部剩余资产扣除基金财产清算费用、交纳所欠税款并清偿基金债务后，按基金份额持有人持有的基金份额比例进行分配。"
+      ],
+      "new_triggers": [
+        "依据基金财产清算的分配方案，将基金财产清算后的全部剩余资产扣除基金财产清算费用、交纳所欠税款并清偿基金债务后，按基金份额持有人持有的基金份额比例进行分配，并加上返还基金份额持有人的销售服务费（如有）。"
+      ],
+      "operation": "replace",
+      "template_id": "R17-A3",
+      "order": 22,
+      "risk_class": "high",
+      "requires_profile": [
+        "share_classes",
+        "floating_management_fee",
+        "sales_service_fee_by_class"
+      ],
+      "condition": "nonfloating_service_multi",
+      "on_unknown": "failed",
+      "auto_write": false,
+      "release_threshold": {
+        "registration_id": "fundlex-conservative-gates-2026-10-13-v1",
+        "registered_before_full_evaluation": true,
+        "metrics": {
+          "location_precision": {
+            "min": 0.99
+          },
+          "location_recall": {
+            "min": 0.95
+          },
+          "unsafe_edits": {
+            "max": 0
+          },
+          "template_exactness": {
+            "min": 1.0
+          },
+          "positive_cases": {
+            "min": 30
+          },
+          "negative_cases": {
+            "min": 30
+          },
+          "independent_cases": {
+            "min": 10
+          },
+          "body_support_cases": {
+            "min": 10
+          },
+          "summary_support_cases": {
+            "min": 10
+          },
+          "structure_support_cases": {
+            "min": 10
+          }
+        },
+        "profile_metrics": {
+          "share_classes": {
+            "accuracy": {
+              "min": 0.99
+            },
+            "precision": {
+              "min": 0.99
+            },
+            "recall": {
+              "min": 0.95
+            },
+            "positive_cases": {
+              "min": 30
+            },
+            "negative_cases": {
+              "min": 30
+            },
+            "independent_cases": {
+              "min": 10
+            }
+          },
+          "floating_management_fee": {
+            "accuracy": {
+              "min": 0.99
+            },
+            "precision": {
+              "min": 0.99
+            },
+            "recall": {
+              "min": 0.95
+            },
+            "positive_cases": {
+              "min": 30
+            },
+            "negative_cases": {
+              "min": 30
+            },
+            "independent_cases": {
+              "min": 10
+            }
+          },
+          "sales_service_fee_by_class": {
+            "accuracy": {
+              "min": 0.99
+            },
+            "precision": {
+              "min": 0.99
+            },
+            "recall": {
+              "min": 0.95
+            },
+            "positive_cases": {
+              "min": 30
+            },
+            "negative_cases": {
+              "min": 30
+            },
+            "independent_cases": {
+              "min": 10
+            }
+          }
+        }
+      },
+      "evaluation_metrics": null,
+      "evaluation_report_id": null,
+      "approval_record": null,
+      "approved": false,
+      "source_provenance": [
+        {
+          "paragraph": 102,
+          "sha256": "fa86be3269a293cf07da2e49e55670877e9c5667b6dba24b32b01ac7d5803830"
+        },
+        {
+          "paragraph": 103,
+          "sha256": "3aa9fc7ddac0fc0ab626ce8eeb0f04d8fa1d737a1f6dd1e8c7c9760a3c1a77aa"
+        },
+        {
+          "paragraph": 105,
+          "sha256": "07df249a7e27d2e996bfaf7e4c4804233af53b7008fe3fdcda2d90990e7fa96e"
+        },
+        {
+          "paragraph": 106,
+          "sha256": "e57f722af2d7ec909063e41a2e65576755861c8ce36a567a5c1e5f324f283147"
+        }
+      ],
+      "template_slots": {}
     }
   ]
 }

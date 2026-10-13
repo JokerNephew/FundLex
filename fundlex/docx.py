@@ -7,7 +7,7 @@ Unknown structure is reported as a typed failure before any output is published.
 from __future__ import annotations
 
 from copy import deepcopy
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
 from hashlib import sha256
 from pathlib import Path
@@ -85,6 +85,7 @@ class ParagraphSpan:
     part_uri: str = DOCUMENT
     mapping_version: str = MAPPING_VERSION
     reasons: tuple[str, ...] = ()
+    logical_zone: str | None = None
 
     @property
     def editable(self) -> bool:
@@ -506,7 +507,7 @@ def _enumerate_paragraphs(root: etree._Element, limits: ZipLimits) -> tuple[tupl
             zone, section = "summary", plain
         elif not inherited and re.fullmatch(r"(?:附录|附件)(?:[一二三四五六七八九十\d].*)?", plain):
             zone, section = "appendix", plain
-        elif plain and (style_value.lower().startswith("heading") or re.match(r"^第[一二三四五六七八九十\d]+(?:部分|章|节)", plain)):
+        elif not inherited and plain and (style_value.lower().startswith("heading") or re.match(r"^第[一二三四五六七八九十\d]+(?:部分|章|节)", plain)):
             section = plain[:120]
         if style_value.lower().startswith("toc") or plain == "目录":
             in_toc = True
@@ -522,6 +523,8 @@ def _enumerate_paragraphs(root: etree._Element, limits: ZipLimits) -> tuple[tupl
         elif field_active or "malformed_field" in projected.reasons or "malformed_range" in projected.reasons:
             projected = ParagraphSpan(projected.location, "field", projected.section_path,
                                       projected.text, (), projected.fingerprint, reasons=("open_field",))
+        projected = replace(projected, logical_zone="toc" if in_toc or field_active else zone,
+                            reasons=projected.reasons + (("unsupported_table_structure",) if inherited == "unsupported_table" else ()))
         result.append(projected)
 
     for element in body:
@@ -535,6 +538,10 @@ def _enumerate_paragraphs(root: etree._Element, limits: ZipLimits) -> tuple[tupl
                     unsupported = cell.find(".//" + Q("tbl")) is not None or cell.find("./" + Q("tcPr") + "/" + Q("gridSpan")) is not None or cell.find("./" + Q("tcPr") + "/" + Q("vMerge")) is not None
                     for cell_p_index, paragraph in enumerate(cell.findall(Q("p"))):
                         add(paragraph, f"tbl{table_index}/r{row_index}/c{cell_index}/p{cell_p_index}", "unsupported_table" if unsupported else "")
+                    if unsupported:
+                        for nested_p in cell.iter(Q("p")):
+                            if nested_p not in indexed:
+                                add(nested_p, "readonly:" + nested_p.getroottree().getpath(nested_p), "unsupported_table")
     for paragraph in body.iter(Q("p")):
         if paragraph not in indexed:
             location = "readonly:" + paragraph.getroottree().getpath(paragraph)
