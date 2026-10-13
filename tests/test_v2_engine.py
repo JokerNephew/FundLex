@@ -615,6 +615,103 @@ def test_r10_already_satisfied_skips_generation(tmp_path):
     assert any(target.get("reason") == "V2_ALREADY_SATISFIED" for target in action["targets"])
 
 
+def test_append_join_repairs_missing_separator(tmp_path):
+    # The class-definition paragraph ends without terminal punctuation.
+    definition = ("基金份额类别设置：本基金将基金份额分为 H 类、J 类和 K 类三种不同的类别，"
+                  "在投资者申购 H 类基金份额时收取申购费用，不计提销售服务费")
+    source = build_docx(tmp_path / "join1.docx", [
+        ("heading", "基金的基本情况"),
+        ("text", "份额类别设置"),
+        ("text", definition),
+    ])
+    profile = make_profile(["H", "J", "K"], ["H"], ["J", "K"])
+    clause = ("投资者通过直销机构（含基金管理人及其销售子公司，下同）申购本基金 H 类基金份额时，"
+              "不收取认购/申购费用；通过直销机构申购的 J 类、K 类基金份额，不收取销售服务费。"
+              "对于投资者通过直销机构之外的其他销售机构申购的 J 类、K 类基金份额且持续持有期限超过一年的，"
+              "不再继续收取销售服务费。")
+    responses = [
+        ("generate_clause", valid_generate_value(definition, clause)),
+        ("verify_content", {"items": [
+            {"requirement_id": "R02-REQ-5", "result": "satisfied",
+             "evidence_quote": "不收取认购/申购费用", "evidence_source": "generated"}]}),
+    ]
+    outcome, action, gateway, inspection = plan_for("R02-A1", source, profile, responses)
+    assert action["status"] == "applied"
+    edit = outcome["edits"][0]
+    assert str(edit["replacement"]).startswith("。"), "a missing separator must be repaired with a period"
+    assert edit["verification"]["text_normalization"] == ["prepend_sentence_period"]
+    plan = validate_edit_plan(source, outcome["edits"], {}, content_check=outcome["content_check"])
+    generate_artifacts(source, plan, tmp_path / "join1r.docx", tmp_path / "join1f.docx")
+    final = inspect_docx(tmp_path / "join1f.docx", full=True)
+    text = next(span.text for span in final.paragraphs if "基金份额类别设置" in span.text)
+    assert text == definition + "。" + clause
+
+
+def test_replace_join_repairs_following_text(tmp_path):
+    anchor = "在投资者申购 J 类、K 类基金份额时不收取申购费用，而从本类别基金资产中计提销售服务费；"
+    tail = "本基金各类基金份额分别设置代码"
+    definition = ("基金份额类别设置：本基金将基金份额分为 H 类、J 类和 K 类三种不同的类别。"
+                  + anchor + tail)
+    source = build_docx(tmp_path / "join2.docx", [
+        ("heading", "基金的基本情况"),
+        ("text", "份额类别设置"),
+        ("text", definition),
+    ])
+    profile = make_profile(["H", "J", "K"], ["H"], ["J", "K"])
+    clause = ("投资者通过直销机构（含基金管理人及其销售子公司，下同）申购本基金 H 类基金份额时，"
+              "不收取认购/申购费用；通过直销机构申购的 J 类、K 类基金份额，不收取销售服务费。"
+              "对于投资者通过直销机构之外的其他销售机构申购的 J 类、K 类基金份额且持续持有期限超过一年的，"
+              "不再继续收取销售服务费")  # no final period
+    responses = [
+        ("generate_clause", valid_generate_value(anchor, clause)),
+        ("verify_content", {"items": [
+            {"requirement_id": "R02-REQ-5", "result": "satisfied",
+             "evidence_quote": "不收取认购/申购费用", "evidence_source": "generated"}]}),
+    ]
+    outcome, action, gateway, inspection = plan_for("R02-A1", source, profile, responses)
+    assert action["status"] == "applied"
+    edit = outcome["edits"][0]
+    assert str(edit["replacement"]).endswith("。")
+    assert edit["verification"]["text_normalization"] == ["append_sentence_period"]
+    plan = validate_edit_plan(source, outcome["edits"], {}, content_check=outcome["content_check"])
+    generate_artifacts(source, plan, tmp_path / "join2r.docx", tmp_path / "join2f.docx")
+    final = inspect_docx(tmp_path / "join2f.docx", full=True)
+    text = next(span.text for span in final.paragraphs if "基金份额类别设置" in span.text)
+    assert text == definition[:definition.index(anchor)] + anchor + clause + "。" + tail
+
+
+def test_content_check_rejects_glued_plan(tmp_path):
+    definition = ("基金份额类别设置：本基金将基金份额分为 H 类、J 类和 K 类三种不同的类别，"
+                  "在投资者申购 H 类基金份额时收取申购费用，不计提销售服务费")
+    source = build_docx(tmp_path / "join3.docx", [
+        ("heading", "基金的基本情况"),
+        ("text", "份额类别设置"),
+        ("text", definition),
+    ])
+    profile = make_profile(["H", "J", "K"], ["H"], ["J", "K"])
+    clause = ("投资者通过直销机构（含基金管理人及其销售子公司，下同）申购本基金 H 类基金份额时，"
+              "不收取认购/申购费用；通过直销机构申购的 J 类、K 类基金份额，不收取销售服务费。"
+              "对于投资者通过直销机构之外的其他销售机构申购的 J 类、K 类基金份额且持续持有期限超过一年的，"
+              "不再继续收取销售服务费。")
+    responses = [
+        ("generate_clause", valid_generate_value(definition, clause)),
+        ("verify_content", {"items": [
+            {"requirement_id": "R02-REQ-5", "result": "satisfied",
+             "evidence_quote": "不收取认购/申购费用", "evidence_source": "generated"}]}),
+    ]
+    outcome, action, gateway, inspection = plan_for("R02-A1", source, profile, responses)
+    probe = copy.deepcopy(outcome["edits"][0])
+    probe["replacement"] = str(probe["replacement"])[1:]  # strip the repair, keep business text
+    record = copy.deepcopy(probe["verification"])
+    record["replacement_text"] = probe["replacement"]
+    record["replacement_sha256"] = sha(probe["replacement"])
+    record["record_sha256"] = canonical_sha({key: value for key, value in record.items() if key != "record_sha256"})
+    probe["verification"] = record
+    with pytest.raises(DocxError) as excinfo:
+        validate_edit_plan(source, [probe], {}, content_check=outcome["content_check"])
+    assert excinfo.value.code == "CONTENT_JOIN_UNSAFE"
+
+
 def test_check_requirement_kinds_are_declared():
     ruleset = load_ruleset_v2()
     declared = {"delete_only", "contains_all", "not_contains", "no_digits_and_no_conditions",

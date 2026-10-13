@@ -36,6 +36,45 @@ _VERIFY_INSTRUCTION = (
     "逐项输出 requirement_id、result、evidence_quote、evidence_source。"
 )
 
+# Boundary punctuation used to decide whether an inserted/replaced text would
+# run into its neighbours. A missing separator is repaired with a sentence
+# period by code (never by inventing business content).
+_LEFT_BOUNDARY = set("。；！？：，、,;:.!?）)】」』”\"'…\u3000 \t\r\n")
+_LEFT_LEAD_OK = set("。；！？：，、,;:.!?）】」』”\"'（(“「『《【\u3000 \t")
+_RIGHT_BOUNDARY = set("。；！？：，、,;:）】」』”\"'…\u3000 \t\r\n")
+_RIGHT_TAIL_OK = set("。；！？…：，、,;:.!?\u3000 \t")
+
+
+def _numbering_before(text: str, start: int) -> bool:
+    if start <= 0:
+        return False
+    prefix = text[:start]
+    return bool(re.search(r"(?:^|[\n。；])\s*(?:[（(][一二三四五六七八九十\d]+[）)]|[一二三四五六七八九十\d]+)[、．.]\s*$", prefix))
+
+
+def _join_repairs(text: str, left_at: int, right_at: int, replacement: str) -> tuple[str, list[str]]:
+    """Ensure the written text does not run into its neighbours.
+
+    The repair only adds a sentence period on the joining side; it never invents
+    or removes business content. The repaired replacement is what gets verified
+    and bound in the server-side record.
+    """
+    notes: list[str] = []
+    if not replacement:
+        return replacement, notes
+    left = text[left_at - 1] if 0 < left_at <= len(text) else ""
+    right = text[right_at] if 0 <= right_at < len(text) else ""
+    left_ok = (not left or left in _LEFT_BOUNDARY or _numbering_before(text, left_at)
+               or replacement[0] in _LEFT_LEAD_OK)
+    right_ok = not right or right in _RIGHT_BOUNDARY or replacement[-1] in _RIGHT_TAIL_OK
+    if not left_ok:
+        replacement = "。" + replacement
+        notes.append("prepend_sentence_period")
+    if not right_ok:
+        replacement = replacement + "。"
+        notes.append("append_sentence_period")
+    return replacement, notes
+
 
 class V2Error(ValueError):
     def __init__(self, code: str, details: dict[str, Any] | None = None):
@@ -561,6 +600,12 @@ def _build_generate_context(action: dict[str, Any], span: Any, target: dict[str,
     if action.get("requires_profile"):
         parts += ["[PROFILE_FACTS]", profile_facts_text(profile)]
     paragraphs = [span.text[:2500]] if action["locate"]["mode"] == "class_definition" else []
+    if action["operation"] == "append":
+        left = span.text[target["char_end"] - 1:target["char_end"]] if target["char_end"] > 0 else ""
+        parts += ["[JOIN_CONTEXT]",
+                  f"新条款将插入在 CONTRACT_SOURCE 之后；该处前一个字符是“{left or '（段落开头）'}”。"
+                  "如果它不是句号、分号等分隔标点，新条款必须以合适的标点开头，确保与上文自然衔接，"
+                  "不要与上文文字直接相连。"]
     return _bounded(parts, paragraphs, limit)
 
 
@@ -633,7 +678,7 @@ def _assemble_record(action: dict[str, Any], target: dict[str, Any], span: Any, 
                      code_results: list[dict[str, Any]], profile: dict[str, Any], ruleset: RuleSetV2,
                      *, engine_build_value: str, content_source: str,
                      model_verify: dict[str, Any] | None, facts: list[dict[str, Any]],
-                     changes: list[dict[str, Any]]) -> dict[str, Any]:
+                     changes: list[dict[str, Any]], normalization: list[str] | None = None) -> dict[str, Any]:
     requirements = []
     by_code = {item["id"]: item for item in code_results}
     by_model = {item["requirement_id"]: item for item in (model_verify or {}).get("items", [])}
@@ -670,6 +715,7 @@ def _assemble_record(action: dict[str, Any], target: dict[str, Any], span: Any, 
         "replacement_text": replacement, "replacement_sha256": _sha_text(replacement),
         "profile_facts_sha256": _sha_text(profile_facts) if profile_facts is not None else None,
         "boundary_policy": BOUNDARY_POLICY,
+        "text_normalization": list(normalization or []),
         "requirements": requirements,
         "facts": facts, "changes": changes,
         "model_verify": model_verify,
@@ -705,6 +751,8 @@ def verify_target(action: dict[str, Any], target: dict[str, Any], span: Any, pro
         raise V2Error("V2_REPLACEMENT_INVALID")
     if _old_text_equal(replacement, target["quote"]):
         raise V2Error("V2_REPLACEMENT_UNCHANGED")
+    join_left = target["char_end"] if action["operation"] == "append" else target["char_start"]
+    replacement, normalization = _join_repairs(span.text, join_left, target["char_end"], replacement)
     fact_error = _validate_facts(value.get("facts", []), value.get("changes", []), span, action, profile_facts)
     if fact_error:
         raise V2Error(fact_error)
@@ -726,7 +774,7 @@ def verify_target(action: dict[str, Any], target: dict[str, Any], span: Any, pro
                         **_event_summary(gateway), "items": verified.value["items"]}
     return {"replacement": replacement, "content_source": "model_generated", "code_results": code_results,
             "model_verify": model_verify, "facts": value.get("facts", []),
-            "changes": value.get("changes", []),
+            "changes": value.get("changes", []), "normalization": normalization,
             "generation": {"task_type": "generate_clause", "prompt_version": PROMPT_VERSIONS_V2["generate"],
                            **_event_summary(gateway)}}
 
@@ -780,6 +828,13 @@ def build_content_check(inspection: DocumentInspection, profile: dict[str, Any],
         replacement = str(edit.get("replacement", ""))
         if replacement != record.get("replacement_text") or _sha_text(replacement) != record.get("replacement_sha256"):
             raise DocxError("CONTENT_RECORD_REPLACEMENT_MISMATCH")
+        join_left = end if insertion else start
+        join_right = end
+        if not isinstance(join_left, int) or not isinstance(join_right, int):
+            raise DocxError("CONTENT_RECORD_RANGE_MISMATCH")
+        _repaired, join_notes = _join_repairs(paragraph.text, join_left, join_right, replacement)
+        if join_notes:
+            raise DocxError("CONTENT_JOIN_UNSAFE")
         action = ruleset.by_id(str(edit.get("action_id", "")))
         rule_text = _rule_text(action)
         profile_facts = profile_facts_text(profile) if record.get("profile_facts_sha256") is not None else None
@@ -884,7 +939,8 @@ def plan_v2(inspection: DocumentInspection, profile: dict[str, Any], ruleset: Ru
                                           profile, ruleset, engine_build_value=engine_build_value,
                                           content_source=outcome["content_source"],
                                           model_verify=outcome["model_verify"], facts=outcome["facts"],
-                                          changes=outcome["changes"])
+                                          changes=outcome["changes"],
+                                          normalization=outcome.get("normalization"))
             except ModelError:
                 raise
             except V2Error as exc:
