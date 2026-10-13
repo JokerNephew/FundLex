@@ -10,12 +10,13 @@ import hashlib
 import json
 import os
 import random
-import sqlite3
 import time
 import uuid
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
+
+from .db import Connection, Database
 
 SCHEMA_VERSION = "fundlex-result-v1"
 
@@ -53,7 +54,8 @@ EVALUATION_ARTIFACT_HASHES = {"evaluation_redline": "redline_sha256", "evaluatio
 def validate_delivery(report: dict[str, Any], artifacts: dict[str, Path]) -> None:
     if report.get("execution_mode") == "evaluation":
         # Evaluation outputs are technically validated but never releasable contracts.
-        if report.get("delivery_status") not in {"evaluation_modified", "evaluation_unmodified", "incomplete"}:
+        if report.get("delivery_status") not in {"evaluation_modified", "evaluation_modified_with_exceptions",
+                                                 "evaluation_unmodified", "incomplete"}:
             return
         validation = report.get("output_validation")
         if not isinstance(validation, dict):
@@ -71,7 +73,7 @@ def validate_delivery(report: dict[str, Any], artifacts: dict[str, Path]) -> Non
                     or validation.get(hash_key) != sha256_file(artifacts[kind]):
                 raise ValueError("ARTIFACT_VERIFICATION_MISMATCH")
         return
-    if report.get("delivery_status") != "complete":
+    if report.get("delivery_status") not in {"complete", "complete_with_exceptions"}:
         return
     validation = report.get("output_validation")
     if not {"final", "redline"}.issubset(artifacts) or not isinstance(validation, dict):
@@ -92,12 +94,13 @@ def validate_delivery(report: dict[str, Any], artifacts: dict[str, Path]) -> Non
 
 
 class RunStore:
-    def __init__(self, root: str | Path):
+    def __init__(self, root: str | Path, database_url: str | Path | None = None):
         self.root = Path(root).resolve()
         self.root.mkdir(parents=True, exist_ok=True)
         self.objects = self.root / "objects"
         self.objects.mkdir(exist_ok=True)
         self.db_path = self.root / "runs.sqlite3"
+        self.database = Database(database_url) if database_url else Database.from_env(self.db_path)
         with self._connect() as db:
             db.executescript("""
                 CREATE TABLE IF NOT EXISTS batches (
@@ -136,15 +139,10 @@ class RunStore:
 
     @contextmanager
     def _connect(self):
-        db = sqlite3.connect(self.db_path, timeout=30)
-        db.row_factory = sqlite3.Row
-        db.execute("PRAGMA foreign_keys=ON")
-        db.execute("PRAGMA journal_mode=WAL")
-        try:
-            with db:
-                yield db
-        finally:
-            db.close()
+        with self.database.connect() as db:
+            db.execute("PRAGMA foreign_keys=ON")
+            db.execute("PRAGMA journal_mode=WAL")
+            yield db
 
     def object_path(self, key: str) -> Path:
         # Keys are generated here, but validate again before every read.
@@ -226,7 +224,7 @@ class RunStore:
                 raise NotFound("batch not found")
             return self._batch_dict(db, row)
 
-    def _batch_dict(self, db: sqlite3.Connection, row: sqlite3.Row) -> dict[str, Any]:
+    def _batch_dict(self, db: Connection, row) -> dict[str, Any]:
         docs = db.execute("SELECT * FROM documents WHERE batch_id=? ORDER BY ordinal", (row["id"],)).fetchall()
         result = {key: row[key] for key in ("id", "ruleset_version", "ruleset_sha256", "status", "created_at", "updated_at")}
         result["documents"] = [self._document_dict(db, doc) for doc in docs]
@@ -237,7 +235,7 @@ class RunStore:
         }
         return result
 
-    def _document_dict(self, db: sqlite3.Connection, row: sqlite3.Row) -> dict[str, Any]:
+    def _document_dict(self, db: Connection, row) -> dict[str, Any]:
         artifacts = db.execute("SELECT kind FROM artifacts WHERE document_id=?", (row["id"],)).fetchall()
         return {key: row[key] for key in ("id", "batch_id", "filename", "source_sha256", "status",
                                           "qualification_status", "delivery_status", "error_code", "attempt",
@@ -297,11 +295,16 @@ class RunStore:
                     report_json=?,lease_until=NULL,updated_at=? WHERE id=?""",
                     (json.dumps(report), now, expired["id"]))
                 self._refresh_batch(db, expired["batch_id"], now)
-            row = db.execute("""SELECT d.*, b.ruleset_version, b.ruleset_sha256, b.engine_build, b.schema_version FROM documents d JOIN batches b ON b.id=d.batch_id
+            candidate = """SELECT d.*, b.ruleset_version, b.ruleset_sha256, b.engine_build, b.schema_version FROM documents d JOIN batches b ON b.id=d.batch_id
                 WHERE b.status IN ('queued','running') AND d.attempt < ? AND
                 (d.status='queued' OR (d.status='retry_wait' AND d.next_attempt_at<=?) OR
                  (d.status IN ('leased','running') AND d.lease_until<=?))
-                ORDER BY d.created_at,d.ordinal LIMIT 1""", (max_attempts, now, now)).fetchone()
+                ORDER BY d.created_at,d.ordinal LIMIT 1"""
+            if self.database.dialect == "mysql":
+                # A plain START TRANSACTION does not lock candidates; without the
+                # row lock two workers could claim the same document.
+                candidate += " FOR UPDATE"
+            row = db.execute(candidate, (max_attempts, now, now)).fetchone()
             if not row:
                 return None
             token = row["fencing_token"] + 1
@@ -332,15 +335,16 @@ class RunStore:
         allowed_kinds = {"final", "redline", "report_json", "report_md"}
         if mode == "evaluation":
             allowed_kinds = {"evaluation_final", "evaluation_redline", "report_json", "report_md"}
-            if delivery in {"complete"} or {"final", "redline"} & set(artifacts):
+            if delivery in {"complete", "complete_with_exceptions"} or {"final", "redline"} & set(artifacts):
                 raise Conflict("evaluation cannot publish final delivery")
-            if delivery in {"evaluation_modified", "evaluation_unmodified", "incomplete"} \
+            if delivery in {"evaluation_modified", "evaluation_modified_with_exceptions",
+                            "evaluation_unmodified", "incomplete"} \
                     and not {"evaluation_redline", "evaluation_final"}.issubset(artifacts):
                 raise Conflict("evaluation result requires both evaluated contracts")
         else:
-            if delivery == "complete" and not {"final", "redline"}.issubset(artifacts):
+            if delivery in {"complete", "complete_with_exceptions"} and not {"final", "redline"}.issubset(artifacts):
                 raise Conflict("complete result requires both verified contracts")
-            if delivery != "complete" and ("final" in artifacts or "redline" in artifacts):
+            if delivery not in {"complete", "complete_with_exceptions"} and ("final" in artifacts or "redline" in artifacts):
                 raise Conflict("incomplete result cannot publish contract downloads")
         verified = {}
         for kind, path in artifacts.items():
@@ -442,7 +446,7 @@ class RunStore:
             return row["task_id"] if row else None
 
     @staticmethod
-    def _refresh_batch(db: sqlite3.Connection, batch_id: str, now: float) -> None:
+    def _refresh_batch(db: Connection, batch_id: str, now: float) -> None:
         row = db.execute("SELECT COUNT(*) AS pending FROM documents WHERE batch_id=? AND status NOT IN ('succeeded','failed')", (batch_id,)).fetchone()
         current = db.execute("SELECT status FROM batches WHERE id=?", (batch_id,)).fetchone()["status"]
         state = "completed" if row["pending"] == 0 else ("paused" if current == "paused" else "running")

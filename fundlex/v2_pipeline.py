@@ -128,6 +128,20 @@ def process_v2(input_path: Path, output_dir: Path, ruleset_version: str = "v2",
         if len(context) > 2200:
             raise RuleError("QUALIFICATION_CONTEXT_LIMIT")
         model = gateway or ModelGateway.from_env()
+        if ruleset.auto_write_enabled and not evaluation:
+            # A released package only writes on the engine and model transport
+            # that produced its evaluation evidence; any drift fails closed.
+            # Evaluation reruns are not writes and stay available.
+            from .rules import release_runtime_context
+            try:
+                runtime = release_runtime_context(model, None)
+            except Exception as exc:  # noqa: BLE001 - converted to a fail-closed code
+                raise V2Error("V2_RELEASE_CONTEXT_UNVERIFIED") from exc
+            expected = ruleset.release_policy.get("evaluation_context") or {}
+            if (expected.get("engine_build") != runtime["engine_build"]
+                    or expected.get("model_transport_sha256") != runtime["model_transport_sha256"]
+                    or expected.get("prompt_versions") != PROMPT_VERSIONS_V2):
+                raise V2Error("V2_RELEASE_CONTEXT_UNVERIFIED")
         report["model"]["configured_model"] = model.model
         model_start = time.monotonic()
         try:
@@ -176,6 +190,12 @@ def process_v2(input_path: Path, output_dir: Path, ruleset_version: str = "v2",
                                                encoding="utf-8")
         failed_actions = [action for action in report["actions"]
                           if action["status"] in {"failed", "partial"}]
+        # Every failure in this engine is a fail-closed refusal: nothing is ever
+        # written for a failed action. Delivery therefore publishes the verified
+        # edits together with an explicit exception list instead of withholding
+        # the whole contract (see docs/DELIVERY_STATUS_POLICY.md).
+        report["exceptions"] = [{"action_id": action["action_id"], "reason": action.get("failure_reason"),
+                                 "description": action.get("description")} for action in failed_actions]
         if evaluation:
             if edits:
                 redline, final = output_dir / "evaluation_redline.docx", output_dir / "evaluation_final.docx"
@@ -187,7 +207,7 @@ def process_v2(input_path: Path, output_dir: Path, ruleset_version: str = "v2",
                     "not_a_final_contract": True,
                 }
                 report["artifacts"] = {"evaluation_redline": str(redline), "evaluation_final": str(final)}
-                report["delivery_status"] = "incomplete" if failed_actions else "evaluation_modified"
+                report["delivery_status"] = "evaluation_modified_with_exceptions" if failed_actions else "evaluation_modified"
             else:
                 redline, final = output_dir / "evaluation_redline.docx", output_dir / "evaluation_final.docx"
                 artifacts = generate_noop_evaluation_artifacts(input_path, redline, final)
@@ -200,10 +220,10 @@ def process_v2(input_path: Path, output_dir: Path, ruleset_version: str = "v2",
                 report["artifacts"] = {"evaluation_redline": str(redline), "evaluation_final": str(final)}
                 report["delivery_status"] = "incomplete" if failed_actions else "evaluation_unmodified"
         else:
-            # Formal delivery: incomplete action sets publish no contract files.
-            if failed_actions:
-                report["delivery_status"] = "incomplete"
-            elif edits:
+            # Formal delivery: verified edits are published together with the
+            # exception list; only a set with no edits and failed actions is
+            # withheld (nothing to deliver and known gaps).
+            if edits:
                 redline, final = output_dir / "redline.docx", output_dir / "final.docx"
                 artifacts = generate_artifacts(input_path, plan, redline, final)
                 report["output_validation"] = {
@@ -212,8 +232,8 @@ def process_v2(input_path: Path, output_dir: Path, ruleset_version: str = "v2",
                     "redline_sha256": artifacts.redline_sha256, "final_sha256": artifacts.final_sha256,
                 }
                 report["artifacts"] = {"redline": str(redline), "final": str(final)}
-                report["delivery_status"] = "complete"
-            else:
+                report["delivery_status"] = "complete_with_exceptions" if failed_actions else "complete"
+            elif not failed_actions:
                 redline, final = output_dir / "redline.docx", output_dir / "final.docx"
                 artifacts = generate_unchanged_artifacts(input_path, plan, redline, final)
                 report["output_validation"] = {
@@ -224,6 +244,8 @@ def process_v2(input_path: Path, output_dir: Path, ruleset_version: str = "v2",
                 }
                 report["artifacts"] = {"redline": str(redline), "final": str(final)}
                 report["delivery_status"] = "complete"
+            else:
+                report["delivery_status"] = "incomplete"
         return report
     except (DocxError, RuleError, RuleV2Error, V2Error, ModelError, OSError) as exc:
         code = getattr(exc, "code", "OUTPUT_IO_ERROR")

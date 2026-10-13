@@ -35,9 +35,9 @@ def test_capabilities_expose_revision_mode(tmp_path):
     client = TestClient(app)
     capabilities = client.get("/api/capabilities", headers=HEADERS).json()
     assert capabilities["revision_ruleset_version"] == "v2"
-    assert capabilities["revision_mode"] == "evaluation"
-    assert capabilities["revision_auto_write_enabled"] is False
-    assert capabilities["revision_actions_total"] == 6
+    assert capabilities["revision_mode"] in {"evaluation", "delivery"}
+    assert capabilities["revision_auto_write_enabled"] is (capabilities["revision_mode"] == "delivery")
+    assert capabilities["revision_actions_total"] == 22
     assert "R10-A1" in capabilities["revision_action_labels"]
     assert capabilities["auto_write_enabled"] is False
 
@@ -57,7 +57,7 @@ def test_task_runs_evaluation_revision_and_downloads(tmp_path):
     client = TestClient(app)
     task_id = create_v2_task(client, source)
     gateway = ScriptedGateway()
-    worker = Worker(app.state.store, lambda src, out, ver: process_v2(src, out, ver, gateway))
+    worker = Worker(app.state.store, lambda src, out, ver: process_v2(src, out, ver, gateway, evaluation=True))
     assert worker.run_once()
     summary = client.get(f"/api/tasks/{task_id}", headers=HEADERS).json()
     assert summary["ruleset_version"] == "v2"

@@ -171,8 +171,10 @@ class TaskStore:
     def _page(items, sort="oldest", page=1, page_size=50):
         if sort == "exceptions":
             def exception_rank(d):
-                return (0 if d["job_status"] == "failed" else 1 if d["upload_status"] == "rejected" else
-                        2 if d["delivery_status"] == "incomplete" else 3 if (d["eligibility"] or "").startswith("excluded") else 4,
+                delivery = d["delivery_status"]
+                delivery_rank = (2 if delivery == "incomplete" else 3 if delivery == "complete_with_exceptions"
+                                 else 4 if (d["eligibility"] or "").startswith("excluded") else 5)
+                return (0 if d["job_status"] == "failed" else 1 if d["upload_status"] == "rejected" else delivery_rank,
                         d["ordinal"])
             items.sort(key=exception_rank)
         elif sort == "status":

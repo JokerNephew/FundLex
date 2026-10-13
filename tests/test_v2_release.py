@@ -56,6 +56,17 @@ def build_fixture(path: Path) -> Path:
     return path
 
 
+def extend_with_liquidation(source: Path, data: dict) -> Path:
+    """Add the liquidation section so the R17 variants are actually evaluated."""
+    action = next(item for item in data["actions"] if item["action_id"] == "R17-A2")
+    document = Document(source)
+    document.add_heading("基金合同的变更、终止与基金财产的清算", level=1)
+    document.add_paragraph("基金财产清算剩余资产的分配")
+    document.add_paragraph(action["locate"]["old_texts"][0])
+    document.save(source)
+    return source
+
+
 class ScriptedGateway:
     """Answers fund type, profile, generation and verification for the fixture."""
 
@@ -64,6 +75,13 @@ class ScriptedGateway:
         self.max_context_chars = 12000
         self.calls = 0
         self.events: list[dict] = []
+        # Transport attributes so the released package can bind to this double.
+        self.base_url = "https://scripted.invalid/v1"
+        self.request_options: dict = {}
+        self.max_completion_tokens = 1500
+        self.timeout_s = 5.0
+        self.retries = 0
+        self.provider = "scripted"
 
     def _event(self, task_type: str) -> dict:
         self.calls += 1
@@ -99,11 +117,17 @@ class ScriptedGateway:
 ANCHOR = DEFINITION[DEFINITION.index("在投资者申购 J"):]
 
 
+def transport_context(actual_model: str = "scripted-release") -> dict:
+    from fundlex.rules import release_runtime_context
+    base = release_runtime_context(ScriptedGateway(), actual_model)
+    return {"engine_build": base["engine_build"], "model_transport_sha256": base["model_transport_sha256"],
+            "actual_model": actual_model, "prompt_versions": dict(PROMPT_VERSIONS_V2)}
+
+
 def released_package() -> dict:
     """A released package with complete, preregistered evidence for R02-A1."""
     data = json.loads(REPO_RULES.read_text(encoding="utf-8"))
-    context = {"engine_build": "a" * 64, "model_transport_sha256": "b" * 64,
-               "actual_model": "release-model", "prompt_versions": PROMPT_VERSIONS_V2}
+    context = transport_context()
     data["release_policy"] = {"status": "released", "basis": "test release",
                               "evaluation_report_id": "report-1", "approval_record": "approval-1",
                               "evaluation_context": context, "auto_write_actions": ["R02-A1"]}
@@ -133,6 +157,9 @@ def write_package(tmp_path: Path, data: dict) -> Path:
 
 def test_unreleased_package_rejects_auto_write(tmp_path):
     data = json.loads(REPO_RULES.read_text(encoding="utf-8"))
+    data["release_policy"]["status"] = "unreleased"
+    for action in data["actions"]:
+        action["approval"] = {"auto_write": False, "approved": False, "status": "unreleased"}
     data["actions"][0]["approval"]["auto_write"] = True
     with pytest.raises(RuleV2Error) as excinfo:
         load_ruleset_v2(path=write_package(tmp_path, data))
@@ -171,13 +198,19 @@ def test_released_package_with_evidence_loads(tmp_path):
 def test_delivery_pipeline_publishes_formal_artifacts(tmp_path, monkeypatch):
     source = build_fixture(tmp_path / "delivery.docx")
     data = released_package()
+    extend_with_liquidation(source, data)
     ruleset = RuleSetV2("v2", "f" * 64, tuple(data["actions"]), data["release_policy"])
     monkeypatch.setattr(v2_pipeline, "load_ruleset_v2", lambda version="v2": ruleset)
     gateway = ScriptedGateway()
     output = tmp_path / "out"
     report = v2_pipeline.process_v2(source, output, "v2", gateway)
     assert report["execution_mode"] == "delivery"
-    assert report["delivery_status"] == "complete"
+    # The H/J/K fixture leaves the floating-management-fee fact unverified, so
+    # the R17 variants refuse (fail closed) while R02 still delivers: verified
+    # edits are published together with the exception list.
+    assert report["delivery_status"] == "complete_with_exceptions"
+    assert {item["action_id"] for item in report["exceptions"]} == {"R17-A2", "R17-A3"}
+    assert all(item["reason"] == "PROFILE_EVIDENCE_INCOMPLETE" for item in report["exceptions"])
     assert report["edit_plan"]["executable"] is True
     assert report["output_validation"]["kind"] == "validated_edits"
     assert "content_verification" in report["output_validation"]["checks"]
@@ -189,6 +222,7 @@ def test_delivery_pipeline_publishes_formal_artifacts(tmp_path, monkeypatch):
 def test_delivery_worker_publishes_final_downloads(tmp_path, monkeypatch):
     source = build_fixture(tmp_path / "delivery-worker.docx")
     data = released_package()
+    extend_with_liquidation(source, data)
     ruleset = RuleSetV2("v2", "f" * 64, tuple(data["actions"]), data["release_policy"])
     monkeypatch.setattr(v2_pipeline, "load_ruleset_v2", lambda version="v2": ruleset)
     app = create_app(tmp_path / "state")
@@ -204,7 +238,9 @@ def test_delivery_worker_publishes_final_downloads(tmp_path, monkeypatch):
     detail = client.get(f"/api/batches/{batch_id}", headers=headers).json()
     document = detail["documents"][0]
     assert document["execution_mode"] == "delivery"
-    assert document["delivery_status"] == "complete"
+    assert document["delivery_status"] == "complete_with_exceptions"
+    published = client.get(document["report_url"], headers=headers).json()
+    assert {item["action_id"] for item in published["exceptions"]} == {"R17-A2", "R17-A3"}
     assert {"final", "redline"}.issubset(document["downloads"])
     assert "evaluation_final" not in document["downloads"]
     downloaded = client.get(document["downloads"]["final"], headers=headers)

@@ -108,7 +108,7 @@ def test_evaluation_artifacts_persist_and_download_only_in_evaluation_mode(tmp_p
     assert response.status_code == 201, response.text
     batch_id = response.json()["id"]
     gateway = EvaluationGateway()
-    worker = Worker(app.state.store, lambda src, out, version: process_v2(src, out, version, gateway))
+    worker = Worker(app.state.store, lambda src, out, version: process_v2(src, out, version, gateway, evaluation=True))
     assert worker.run_once()
     detail = client.get(f"/api/batches/{batch_id}", headers=headers).json()
     document = detail["documents"][0]

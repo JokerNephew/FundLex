@@ -11,6 +11,7 @@ from typing import Any
 import httpx
 import jsonschema
 from .model_budget import BudgetError, ModelBudget
+from .db import DatabaseError
 from .config import local_data_dir
 
 class ModelError(RuntimeError):
@@ -128,7 +129,7 @@ class ModelGateway:
                     reservation = self.budget.reserve(input_token_bound=len(system)+len(bounded_context)+1200,
                         output_token_bound=self.max_completion_tokens,lease_seconds=self.timeout_s+30)
             except BudgetError as exc: raise ModelError(str(exc),self.metrics()) from None
-            except sqlite3.Error: raise ModelError('MODEL_LEDGER_UNAVAILABLE',self.metrics()) from None
+            except (sqlite3.Error, DatabaseError): raise ModelError('MODEL_LEDGER_UNAVAILABLE',self.metrics()) from None
             event = {'task_type':task_type,'prompt_version':prompt_version,'context_sha256':context_hash,
                 'configured_model':self.model,'attempt':attempt+1,'error_code':None}
             event['request_options_sha256']=hashlib.sha256(json.dumps(self.request_options,sort_keys=True).encode()).hexdigest()
@@ -192,7 +193,7 @@ class ModelGateway:
                             prompt_tokens=event['prompt_tokens'],completion_tokens=event['completion_tokens'],
                             success=not event['error_code'])
                     except BudgetError as exc: event['error_code']=str(exc)
-                    except sqlite3.Error: event['error_code']='MODEL_LEDGER_UNAVAILABLE'
+                    except (sqlite3.Error, DatabaseError): event['error_code']='MODEL_LEDGER_UNAVAILABLE'
                 self.events.append(event)
             if event['error_code']:
                 if retry and attempt<self.retries:

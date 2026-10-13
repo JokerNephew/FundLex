@@ -14,11 +14,14 @@ from pathlib import Path
 from typing import Any, Callable
 
 from .store import Conflict, RunStore, sha256_file, engine_build, SCHEMA_VERSION, validate_delivery
+from .db import DatabaseError
 from .config import local_data_dir
 
 
 RETRYABLE_MODEL_CODES = {"MODEL_NETWORK_ERROR", "MODEL_RETRY_EXHAUSTED", "MODEL_CIRCUIT_OPEN",
-                         "MODEL_GLOBAL_CALL_BUDGET_EXCEEDED", "MODEL_COST_BUDGET_EXCEEDED", "MODEL_CALL_BUDGET_EXCEEDED", "MODEL_LEDGER_UNAVAILABLE", "MODEL_CHECKPOINT_UNAVAILABLE"}
+                         "MODEL_GLOBAL_CALL_BUDGET_EXCEEDED", "MODEL_COST_BUDGET_EXCEEDED", "MODEL_CALL_BUDGET_EXCEEDED",
+                         "MODEL_LEDGER_UNAVAILABLE", "MODEL_CHECKPOINT_UNAVAILABLE",
+                         "MODEL_CONCURRENCY_LIMIT", "MODEL_RESERVATION_EXPIRED"}
 
 Processor = Callable[[Path, Path, str], dict[str, Any]]
 
@@ -156,13 +159,14 @@ class Worker:
                     if isinstance(report.get("artifacts"), dict):
                         report["artifacts"].pop("final", None)
                         report["artifacts"].pop("redline", None)
-                    if report.get("delivery_status") not in {"evaluation_modified", "evaluation_unmodified", "incomplete"}:
+                    if report.get("delivery_status") not in {"evaluation_modified", "evaluation_modified_with_exceptions",
+                                                              "evaluation_unmodified", "incomplete"}:
                         paths.pop("evaluation_final", None)
                         paths.pop("evaluation_redline", None)
                         if isinstance(report.get("artifacts"), dict):
                             report["artifacts"].pop("evaluation_final", None)
                             report["artifacts"].pop("evaluation_redline", None)
-                elif report["delivery_status"] != "complete":
+                elif report["delivery_status"] not in {"complete", "complete_with_exceptions"}:
                     paths.pop("final", None)
                     paths.pop("redline", None)
                     if isinstance(report.get("artifacts"), dict):
@@ -187,7 +191,7 @@ class Worker:
                     return True
                 raise
             except Exception as exc:
-                if isinstance(exc, (OSError, sqlite3.OperationalError)) or getattr(exc, "code", "") in RETRYABLE_MODEL_CODES:
+                if isinstance(exc, (OSError, sqlite3.OperationalError, DatabaseError)) or getattr(exc, "code", "") in RETRYABLE_MODEL_CODES:
                     self.store.retry(doc_id, token, error_code=getattr(exc, "code", "TEMPORARY_STORAGE_FAILURE"))
                     return True
                 code = str(exc) if str(exc) in {"INPUT_INTEGRITY_FAILED", "RULESET_HASH_MISMATCH",
