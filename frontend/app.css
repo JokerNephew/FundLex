@@ -40,3 +40,6 @@
 #result-rows tr.row-muted .reason-cell{color:#8b949c}
 .table tbody tr.row-muted td{background:#fcfdfd}
 .scope-callout{margin:0 0 12px;border:1px solid #ead9c8;background:#fffaf4;border-radius:7px;padding:9px 12px;font-size:12px;line-height:1.65;color:#6b5136}
+
+.mode-picker {margin:12px 0 2px;display:grid;gap:6px;}
+.mode-picker label {font-weight:600;font-size:13px;color:var(--ink,#1f2937);}
