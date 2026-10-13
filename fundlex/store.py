@@ -9,11 +9,22 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import random
 import sqlite3
 import time
 import uuid
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
+
+SCHEMA_VERSION = "fundlex-result-v1"
+
+def engine_build() -> str:
+    digest = hashlib.sha256()
+    for path in sorted(Path(__file__).parent.glob("*.py")):
+        digest.update(path.name.encode())
+        digest.update(path.read_bytes())
+    return digest.hexdigest()
 
 
 class StoreError(Exception):
@@ -34,6 +45,22 @@ def sha256_file(path: Path) -> str:
         for chunk in iter(lambda: stream.read(1024 * 1024), b""):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def validate_delivery(report: dict[str, Any], artifacts: dict[str, Path]) -> None:
+    if report.get("delivery_status") != "complete":
+        return
+    validation = report.get("output_validation")
+    if not {"final", "redline"}.issubset(artifacts) or not isinstance(validation, dict):
+        raise ValueError("MISSING_VERIFIED_ARTIFACTS")
+    required = {"validated_edits": {"package", "revisions", "final_equivalence", "non_target", "template_text"},
+                "validated_unchanged": {"package", "zero_edit", "byte_identity"}}
+    checks = validation.get("checks")
+    if validation.get("kind") not in required or not isinstance(checks, (list, tuple)) or not required[validation["kind"]].issubset(checks):
+        raise ValueError("MISSING_VERIFIED_ARTIFACTS")
+    for kind in ("final", "redline"):
+        if not artifacts[kind].is_file() or validation.get(f"{kind}_sha256") != sha256_file(artifacts[kind]):
+            raise ValueError("ARTIFACT_VERIFICATION_MISMATCH")
 
 
 class RunStore:
@@ -71,15 +98,23 @@ class RunStore:
                 );
                 CREATE INDEX IF NOT EXISTS documents_work ON documents(status, next_attempt_at, lease_until);
             """)
+            for name, definition in {"engine_build": "TEXT NOT NULL DEFAULT ''", "schema_version": "TEXT NOT NULL DEFAULT ''"}.items():
+                if name not in {row["name"] for row in db.execute("PRAGMA table_info(batches)")}:
+                    db.execute(f"ALTER TABLE batches ADD COLUMN {name} {definition}")
             if "ruleset_sha256" not in {row["name"] for row in db.execute("PRAGMA table_info(batches)")}:
                 db.execute("ALTER TABLE batches ADD COLUMN ruleset_sha256 TEXT NOT NULL DEFAULT ''")
 
-    def _connect(self) -> sqlite3.Connection:
+    @contextmanager
+    def _connect(self):
         db = sqlite3.connect(self.db_path, timeout=30)
         db.row_factory = sqlite3.Row
         db.execute("PRAGMA foreign_keys=ON")
         db.execute("PRAGMA journal_mode=WAL")
-        return db
+        try:
+            with db:
+                yield db
+        finally:
+            db.close()
 
     def object_path(self, key: str) -> Path:
         # Keys are generated here, but validate again before every read.
@@ -107,7 +142,8 @@ class RunStore:
         if not owner or not ruleset_version:
             raise ValueError("owner and ruleset version are required")
         fingerprints = [(name, hashlib.sha256(data).hexdigest()) for name, data in uploads]
-        request_hash = hashlib.sha256(json.dumps([ruleset_version, ruleset_sha256, fingerprints], ensure_ascii=False).encode()).hexdigest()
+        build = engine_build()
+        request_hash = hashlib.sha256(json.dumps([ruleset_version, ruleset_sha256, build, SCHEMA_VERSION, fingerprints], ensure_ascii=False).encode()).hexdigest()
         with self._connect() as db:
             if idempotency_key:
                 existing = db.execute("SELECT id, request_hash FROM batches WHERE owner=? AND idempotency_key=?",
@@ -129,6 +165,7 @@ class RunStore:
                     (id,owner,ruleset_version,ruleset_sha256,status,idempotency_key,request_hash,created_at,updated_at)
                     VALUES (?,?,?,?,?,?,?,?,?)""",
                     (batch_id, owner, ruleset_version, ruleset_sha256, "queued", idempotency_key, request_hash, now, now))
+                db.execute("UPDATE batches SET engine_build=?,schema_version=? WHERE id=?", (build, SCHEMA_VERSION, batch_id))
                 for ordinal, (name, key, digest, size) in enumerate(staged):
                     db.execute("""INSERT INTO documents
                         (id,batch_id,ordinal,filename,source_sha256,source_size,input_key,status,created_at,updated_at)
@@ -223,7 +260,7 @@ class RunStore:
                     report_json=?,lease_until=NULL,updated_at=? WHERE id=?""",
                     (json.dumps(report), now, expired["id"]))
                 self._refresh_batch(db, expired["batch_id"], now)
-            row = db.execute("""SELECT d.*, b.ruleset_version, b.ruleset_sha256 FROM documents d JOIN batches b ON b.id=d.batch_id
+            row = db.execute("""SELECT d.*, b.ruleset_version, b.ruleset_sha256, b.engine_build, b.schema_version FROM documents d JOIN batches b ON b.id=d.batch_id
                 WHERE b.status IN ('queued','running') AND d.attempt < ? AND
                 (d.status='queued' OR (d.status='retry_wait' AND d.next_attempt_at<=?) OR
                  (d.status IN ('leased','running') AND d.lease_until<=?))
@@ -241,15 +278,21 @@ class RunStore:
     def heartbeat(self, document_id: str, token: int, *, lease_seconds: int = 300) -> None:
         with self._connect() as db:
             changed = db.execute("""UPDATE documents SET status='running',lease_until=?,updated_at=?
-                WHERE id=? AND fencing_token=? AND status IN ('leased','running')""",
-                (time.time() + lease_seconds, time.time(), document_id, token)).rowcount
+                WHERE id=? AND fencing_token=? AND status IN ('leased','running') AND lease_until>?""",
+                (time.time() + lease_seconds, time.time(), document_id, token, time.time())).rowcount
             if not changed:
                 raise Conflict("stale worker lease")
 
     def finish(self, document_id: str, token: int, *, report: dict[str, Any],
                artifacts: dict[str, Path], failed: bool = False, error_code: str | None = None) -> None:
         # Verify all outputs before publication. Only report files are allowed for incomplete results.
+        try:
+            validate_delivery(report, artifacts)
+        except ValueError as exc:
+            raise Conflict(str(exc)) from exc
         delivery = report.get("delivery_status", "not_generated")
+        if delivery == "complete" and not {"final", "redline"}.issubset(artifacts):
+            raise Conflict("complete result requires both verified contracts")
         if delivery != "complete" and ("final" in artifacts or "redline" in artifacts):
             raise Conflict("incomplete result cannot publish contract downloads")
         verified = {}
@@ -267,7 +310,7 @@ class RunStore:
                 raise Conflict("expired worker lease")
             for kind, path in artifacts.items():
                 # Attempt objects are immutable. Database pointer is published only while token is current.
-                key = f"results/{document_id}/{token}/{kind}{path.suffix}"
+                key = f"results/{document_id}/{token}/{uuid.uuid4().hex}/{kind}{path.suffix}"
                 target = self.object_path(key)
                 target.parent.mkdir(parents=True, exist_ok=True)
                 with path.open("rb") as source, target.open("xb") as output:
@@ -294,12 +337,23 @@ class RunStore:
             row = db.execute("SELECT * FROM documents WHERE id=?", (document_id,)).fetchone()
             if not row or row["fencing_token"] != token or row["status"] not in ("leased", "running"):
                 raise Conflict("stale worker lease")
+            if row["lease_until"] is None or row["lease_until"] <= now:
+                raise Conflict("expired worker lease")
             terminal = row["attempt"] >= max_attempts
-            delay = min(base_delay_seconds * (2 ** max(row["attempt"] - 1, 0)), 300)
+            pause_required = error_code in {"MODEL_CIRCUIT_OPEN", "MODEL_GLOBAL_CALL_BUDGET_EXCEEDED", "MODEL_COST_BUDGET_EXCEEDED", "MODEL_CALL_BUDGET_EXCEEDED", "MODEL_LEDGER_UNAVAILABLE"}
+            delay = min(base_delay_seconds * (2 ** max(row["attempt"] - 1, 0)) * random.uniform(0.8, 1.2), 300)
             db.execute("""UPDATE documents SET status=?,error_code=?,next_attempt_at=?,lease_until=NULL,
                 updated_at=? WHERE id=?""", ("failed" if terminal else "retry_wait", error_code,
                                                 None if terminal else now + delay, now, document_id))
+            if terminal:
+                report = {"document_id": document_id, "source_sha256": row["source_sha256"],
+                          "qualification_status": "failed", "delivery_status": "not_generated",
+                          "error_code": error_code, "errors": [{"code": error_code, "stage": "worker"}]}
+                db.execute("UPDATE documents SET report_json=?,qualification_status='failed',delivery_status='not_generated' WHERE id=?",
+                           (json.dumps(report), document_id))
             self._refresh_batch(db, row["batch_id"], now)
+            if not terminal and (pause_required or (row["attempt"] >= 2 and error_code in {"MODEL_NETWORK_ERROR", "MODEL_RETRY_EXHAUSTED"})):
+                db.execute("UPDATE batches SET status='paused',updated_at=? WHERE id=?", (now, row["batch_id"]))
 
     def pause(self, owner: str, batch_id: str) -> dict[str, Any]:
         self.get_batch(owner, batch_id)

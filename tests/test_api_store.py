@@ -42,7 +42,11 @@ def test_api_auth_scope_idempotency_and_download(tmp_path: Path, monkeypatch):
                               data={"ruleset_version": "v999"},
                               files=[("files", ("contract.docx", docx_bytes()))])
     assert unsupported.status_code == 422
-    data = docx_bytes()
+    stream = io.BytesIO()
+    contract = Document()
+    contract.add_paragraph("Independent unchanged-artifact transport fixture")
+    contract.save(stream)
+    data = stream.getvalue()
     first = submit(client, data)
     assert first.status_code == 201
     batch_id = first.json()["id"]
@@ -55,9 +59,13 @@ def test_api_auth_scope_idempotency_and_download(tmp_path: Path, monkeypatch):
     def processor(source: Path, output: Path, rules: str):
         assert rules == "v1"
         assert source.read_bytes() == data
-        (output / "final.docx").write_bytes(data)
-        (output / "redline.docx").write_bytes(data)
-        return {"qualification_status": "eligible", "delivery_status": "complete", "actions": []}
+        from fundlex.docx import validate_edit_plan, generate_unchanged_artifacts
+        plan = validate_edit_plan(source, [], {})
+        validation = generate_unchanged_artifacts(source, plan, output / "redline.docx", output / "final.docx")
+        # This exercises verified unchanged DOCX transport, not business rule approval.
+        return {"qualification_status": "eligible", "delivery_status": "complete", "actions": [],
+                "output_validation": {"kind": "validated_unchanged", "checks": validation.checks,
+                                      "final_sha256": validation.final_sha256, "redline_sha256": validation.redline_sha256}}
 
     assert Worker(app.state.store, processor).run_once()
     detail = client.get(f"/api/batches/{batch_id}", headers={"X-FundLex-User": "alice"}).json()
@@ -159,7 +167,8 @@ def test_http_upload_worker_pipeline_report_flow(tmp_path: Path):
     source = tmp_path / "real.docx"
     contract = Document()
     for line in ("示例证券投资基金基金合同", "第四部分 基金的基本情况", "二、基金的类别",
-                 "混合型证券投资基金", "三、基金的运作方式", "契约型开放式", "份额类别设置"):
+                 "混合型证券投资基金", "三、基金的运作方式", "契约型开放式", "份额类别设置",
+                 "第十二部分 基金的投资", "本基金投资于债券的比例不低于基金资产的80%。"):
         contract.add_paragraph(line)
     contract.save(source)
 
@@ -192,3 +201,132 @@ def test_http_upload_worker_pipeline_report_flow(tmp_path: Path):
     assert report["release_gate"]["status"] == "closed"
     report_md = client.get(doc["downloads"]["report_md"], headers={"X-FundLex-User": "alice"})
     assert report_md.status_code == 200 and "不完整" in report_md.text
+
+
+def test_expired_lease_cannot_be_revived_or_retried(tmp_path):
+    store = RunStore(tmp_path)
+    store.create_batch(owner="alice", ruleset_version="v1", uploads=[("a.docx", docx_bytes())])
+    job = store.claim(lease_seconds=0)
+    with pytest.raises(Conflict):
+        store.heartbeat(job["id"], job["fencing_token"])
+    with pytest.raises(Conflict):
+        store.retry(job["id"], job["fencing_token"], error_code="TEMPORARY")
+
+
+def test_worker_discards_expired_attempt_and_survives_for_reclaim(tmp_path):
+    store=RunStore(tmp_path)
+    batch=store.create_batch(owner='alice',ruleset_version='v1',uploads=[('a.docx',docx_bytes())])
+    def interrupted(*_):
+        with store._connect() as db:
+            db.execute('UPDATE documents SET lease_until=0 WHERE batch_id=?',(batch['id'],))
+        return {'qualification_status':'excluded_by_fund_type','delivery_status':'not_generated'}
+    assert Worker(store,interrupted).run_once()
+    doc=store.get_batch('alice',batch['id'])['documents'][0]
+    assert doc['status'] in {'leased','running'} and not doc['artifacts']
+    assert Worker(store,lambda *_:{'qualification_status':'excluded_by_fund_type','delivery_status':'not_generated'}).run_once()
+    doc=store.get_batch('alice',batch['id'])['documents'][0]
+    assert doc['attempt']==2 and doc['status']=='succeeded'
+
+
+def test_long_processor_keeps_lease_and_excludes_second_worker(tmp_path):
+    import time
+    store = RunStore(tmp_path)
+    batch = store.create_batch(owner="alice", ruleset_version="v1", uploads=[("a.docx", docx_bytes())])
+    def processor(*_):
+        with pytest.raises(Conflict, match="one worker"):
+            Worker(RunStore(tmp_path)).run_once()
+        time.sleep(1.3)
+        assert store.claim(lease_seconds=1) is None
+        return {"qualification_status": "excluded_by_fund_type", "delivery_status": "not_generated"}
+    assert Worker(store, processor, lease_seconds=1).run_once()
+    assert store.get_batch("alice", batch["id"])["documents"][0]["attempt"] == 1
+
+
+def test_transient_error_waits_then_terminal_report(tmp_path):
+    store = RunStore(tmp_path)
+    batch = store.create_batch(owner="alice", ruleset_version="v1", uploads=[("a.docx", docx_bytes())])
+    def processor(*_):
+        raise OSError("storage unavailable")
+    worker = Worker(store, processor)
+    for attempt in range(1, 4):
+        assert worker.run_once()
+        doc = store.get_batch("alice", batch["id"])["documents"][0]
+        assert doc["attempt"] == attempt
+        if attempt < 3:
+            assert doc["status"] == "retry_wait"
+            assert worker.run_once() is False
+            with store._connect() as db:
+                db.execute("UPDATE documents SET next_attempt_at=0 WHERE id=?", (doc["id"],))
+    assert doc["status"] == "failed"
+    assert store.get_report("alice", batch["id"], doc["id"])["error_code"] == "TEMPORARY_STORAGE_FAILURE"
+
+
+def test_model_outage_pauses_and_manual_resume_preserves_attempt(tmp_path):
+    store = RunStore(tmp_path)
+    batch = store.create_batch(owner="alice", ruleset_version="v1", uploads=[("a.docx", docx_bytes())])
+    worker = Worker(store, lambda *_: {"error_code": "MODEL_RETRY_EXHAUSTED"})
+    for _ in range(2):
+        assert worker.run_once()
+        with store._connect() as db:
+            db.execute("UPDATE documents SET next_attempt_at=0 WHERE batch_id=?", (batch["id"],))
+    assert store.get_batch("alice", batch["id"])["status"] == "paused"
+    assert worker.run_once() is False
+    store.resume("alice", batch["id"])
+    assert Worker(store, lambda *_: {"qualification_status": "excluded_by_fund_type"}).run_once()
+    assert store.get_batch("alice", batch["id"])["documents"][0]["attempt"] == 3
+
+
+def test_engine_change_invalidates_idempotency_and_queued_work(tmp_path, monkeypatch):
+    import fundlex.store as module
+    import fundlex.jobs as jobs
+    store = RunStore(tmp_path)
+    batch = store.create_batch(owner="alice", ruleset_version="v1", uploads=[("a.docx", docx_bytes())], idempotency_key="same")
+    monkeypatch.setattr(module, "engine_build", lambda: "different-build")
+    with pytest.raises(Conflict):
+        store.create_batch(owner="alice", ruleset_version="v1", uploads=[("a.docx", docx_bytes())], idempotency_key="same")
+    monkeypatch.setattr(jobs, "engine_build", lambda: "different-build")
+    Worker(store, lambda *_: pytest.fail("stale engine must not execute")).run_once()
+    assert store.get_batch("alice", batch["id"])["documents"][0]["error_code"] == "ENGINE_SCHEMA_MISMATCH"
+
+
+def test_corrupt_published_artifact_and_production_auth_fail_closed(tmp_path, monkeypatch):
+    store = RunStore(tmp_path)
+    batch = store.create_batch(owner="alice", ruleset_version="v1", uploads=[("a.docx", docx_bytes())])
+    Worker(store, lambda *_: {"qualification_status": "excluded_by_fund_type"}).run_once()
+    doc = store.get_batch("alice", batch["id"])["documents"][0]
+    path, _ = store.get_artifact("alice", batch["id"], doc["id"], "report_json")
+    path.write_bytes(b"corrupt")
+    with pytest.raises(Conflict, match="integrity"):
+        store.get_artifact("alice", batch["id"], doc["id"], "report_json")
+    monkeypatch.setenv("FUNDLEX_AUTH_MODE", "oidc")
+    client = TestClient(create_app(tmp_path))
+    assert client.get("/api/batches", headers={"X-FundLex-User": "alice"}).status_code == 503
+
+
+@pytest.mark.parametrize("code", ["MODEL_CIRCUIT_OPEN", "MODEL_GLOBAL_CALL_BUDGET_EXCEEDED", "MODEL_COST_BUDGET_EXCEEDED"])
+def test_global_model_stop_pauses_remaining_queue(tmp_path, code):
+    store = RunStore(tmp_path)
+    batch = store.create_batch(owner="alice", ruleset_version="v1", uploads=[("a.docx", docx_bytes()), ("b.docx", docx_bytes())])
+    worker = Worker(store, lambda *_: {"error_code": code})
+    assert worker.run_once()
+    result = store.get_batch("alice", batch["id"])
+    assert result["status"] == "paused"
+    assert [d["status"] for d in result["documents"]] == ["retry_wait", "queued"]
+    assert not worker.run_once()
+
+
+@pytest.mark.parametrize("validation,error", [
+    (None, "MISSING_VERIFIED_ARTIFACTS"),
+    ({"kind": "zero_edit_evaluation_only", "checks": ["package", "byte_identity"]}, "MISSING_VERIFIED_ARTIFACTS"),
+    ({"kind": "validated_unchanged", "checks": ["package", "zero_edit", "byte_identity"], "final_sha256": "wrong", "redline_sha256": "wrong"}, "ARTIFACT_VERIFICATION_MISMATCH")])
+def test_complete_without_independent_validation_fails_closed(tmp_path, validation, error):
+    store = RunStore(tmp_path)
+    batch = store.create_batch(owner="alice", ruleset_version="v1", uploads=[("a.docx", docx_bytes())])
+    def processor(source, output, _):
+        for kind in ("final", "redline"):
+            (output / f"{kind}.docx").write_bytes(source.read_bytes())
+        return {"delivery_status": "complete", "output_validation": validation}
+    Worker(store, processor).run_once()
+    doc = store.get_batch("alice", batch["id"])["documents"][0]
+    assert doc["error_code"] == error
+    assert "final" not in doc["artifacts"]

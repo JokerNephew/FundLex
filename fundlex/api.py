@@ -18,6 +18,7 @@ from fastapi.responses import FileResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 
 from .store import Conflict, NotFound, RunStore
+from .config import local_data_dir
 
 
 MAX_UPLOAD_BYTES = int(os.environ.get("FUNDLEX_MAX_UPLOAD_BYTES", str(25 * 1024 * 1024)))
@@ -70,6 +71,8 @@ def _public_batch(batch: dict, *, detail: bool) -> dict:
         "ruleset_sha256": batch["ruleset_sha256"],
         "total": len(docs), "completed": sum(d["status"] in {"succeeded", "failed"} for d in docs),
         "failed": sum(d["status"] == "failed" for d in docs),
+        "qualification_counts": dict(Counter(d["qualification_status"] or "pending" for d in docs)),
+        "delivery_counts": dict(Counter(d["delivery_status"] for d in docs)),
         "created_at": datetime.fromtimestamp(batch["created_at"], timezone.utc).isoformat(),
     }
     if detail:
@@ -84,7 +87,7 @@ def _public_batch(batch: dict, *, detail: bool) -> dict:
 
 def create_app(data_dir: str | Path | None = None) -> FastAPI:
     application = FastAPI(title="FundLex", version="0.1.0")
-    store = RunStore(data_dir or os.environ.get("FUNDLEX_DATA_DIR", "var/fundlex"))
+    store = RunStore(data_dir or local_data_dir())
     application.state.store = store
 
     @application.get("/api/health")
