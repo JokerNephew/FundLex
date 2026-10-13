@@ -96,6 +96,11 @@ def _compact(text: str) -> str:
     return re.sub(r"\s+", "", text)
 
 
+def _quote_in(quote: str, container: str) -> bool:
+    """Bind a quote to its role source, tolerating CJK typesetting spaces only."""
+    return bool(quote) and (quote in container or _compact(quote) in _compact(container))
+
+
 def _trim(text: str, start: int, end: int) -> tuple[int, int]:
     while start < end and text[start].isspace():
         start += 1
@@ -279,7 +284,15 @@ def _sentence_spans(span: Any) -> list[tuple[int, int]]:
     return spans
 
 
-def _class_definition_sentences(span: Any, action: dict[str, Any]) -> list[tuple[int, int, set[str]]]:
+def _class_definition_sentences(span: Any, action: dict[str, Any],
+                                window_text: str = "") -> list[tuple[int, int, set[str]]]:
+    """Find the class-definition statement; class letters may follow in the block.
+
+    Many contracts write ``将基金份额分为不同的类别。`` first and name the
+    classes in the following sentences or paragraphs. The window text (this
+    paragraph plus the next in-scope paragraphs, bounded by the caller) is used
+    only to collect class names for the consistency check.
+    """
     require_any = action["locate"].get("require_any", [])
     minimum = int(action["locate"].get("require_class_letters_min", 2))
     matches: list[tuple[int, int, set[str]]] = []
@@ -288,6 +301,8 @@ def _class_definition_sentences(span: Any, action: dict[str, Any]) -> list[tuple
         if not any(token in text for token in require_any):
             continue
         letters = set(re.findall(r"([A-ZＡ-Ｚ])类", _compact(text)))
+        if len(letters) < minimum and window_text and window_text.startswith(span.text):
+            letters |= set(re.findall(r"([A-ZＡ-Ｚ])类", _compact(window_text[end:])))
         if len(letters) >= minimum:
             matches.append((start, end, letters))
     return matches
@@ -297,11 +312,17 @@ def _locate_class_definition(action: dict[str, Any], spans: Sequence[tuple[Any, 
                              inspection: DocumentInspection, profile: dict[str, Any]) -> list[dict[str, Any]]:
     targets: list[dict[str, Any]] = []
     profile_classes = set(profile.get("share_classes", []))
-    for span, _previous in spans:
+    span_texts = [pair[0].text for pair in spans]
+
+    def window(index: int) -> str:
+        # This paragraph plus at most two following in-scope paragraphs.
+        return "\n".join(span_texts[index:index + 3])[:2500]
+
+    for index, (span, _previous) in enumerate(spans):
         if span.zone == "unsupported_table":
             targets.append(_structure_failure(span, inspection))
             continue
-        matches = _class_definition_sentences(span, action)
+        matches = _class_definition_sentences(span, action, window(index))
         if not matches:
             continue
         if len(matches) > 1:
@@ -621,37 +642,37 @@ def _build_verify_context(action: dict[str, Any], span: Any, target: dict[str, A
 
 
 def _validate_facts(facts: list[dict[str, Any]], changes: list[dict[str, Any]], span: Any,
-                    action: dict[str, Any], profile_facts: str | None) -> str | None:
+                    action: dict[str, Any], profile_facts: str | None) -> tuple[str | None, dict[str, Any]]:
     rule_text = _rule_text(action)
     ids = set()
     for fact in facts:
         fact_id, quote, role = fact.get("fact_id"), fact.get("quote") or "", fact.get("role")
         if not fact_id or fact_id in ids:
-            return "V2_FACT_ID_INVALID"
+            return "V2_FACT_ID_INVALID", {"fact": fact}
         ids.add(fact_id)
         if not quote or not fact.get("statement"):
-            return "V2_FACT_INCOMPLETE"
+            return "V2_FACT_INCOMPLETE", {"fact": fact}
         if role == "contract":
-            if quote not in span.text:
-                return "V2_FACT_ROLE_MISMATCH"
+            if not _quote_in(quote, span.text):
+                return "V2_FACT_ROLE_MISMATCH", {"fact": fact}
         elif role == "rule":
-            if quote not in rule_text:
-                return "V2_FACT_ROLE_MISMATCH"
+            if not _quote_in(quote, rule_text):
+                return "V2_FACT_ROLE_MISMATCH", {"fact": fact}
         elif role == "profile":
-            if not profile_facts or quote not in profile_facts:
-                return "V2_FACT_ROLE_MISMATCH"
+            if not profile_facts or not _quote_in(quote, profile_facts):
+                return "V2_FACT_ROLE_MISMATCH", {"fact": fact}
         else:
-            return "V2_FACT_ROLE_INVALID"
+            return "V2_FACT_ROLE_INVALID", {"fact": fact}
     requirement_ids = {item["id"] for item in action["requirements"]}
     for change in changes:
         if change.get("fact_id") not in ids:
-            return "V2_CHANGE_FACT_UNKNOWN"
+            return "V2_CHANGE_FACT_UNKNOWN", {"change": change}
         if change.get("change") not in {"removed", "retained", "added"}:
-            return "V2_CHANGE_KIND_INVALID"
+            return "V2_CHANGE_KIND_INVALID", {"change": change}
         basis = change.get("basis_requirement")
         if basis and basis not in requirement_ids:
-            return "V2_CHANGE_BASIS_UNKNOWN"
-    return None
+            return "V2_CHANGE_BASIS_UNKNOWN", {"change": change}
+    return None, {}
 
 
 def _validate_model_verify(value: dict[str, Any], action: dict[str, Any], replacement: str,
@@ -668,7 +689,7 @@ def _validate_model_verify(value: dict[str, Any], action: dict[str, Any], replac
             continue
         quote, source = item.get("evidence_quote") or "", item.get("evidence_source")
         container = {"contract": span.text, "generated": replacement, "rule": rule_text}.get(source)
-        if not quote or container is None or quote not in container:
+        if not quote or container is None or not _quote_in(quote, container):
             raise V2Error("V2_VERIFY_QUOTE_MISMATCH", {"items": value.get("items", [])})
     if unsatisfied:
         raise V2Error("V2_VERIFY_NOT_SATISFIED", {"items": unsatisfied})
@@ -753,9 +774,9 @@ def verify_target(action: dict[str, Any], target: dict[str, Any], span: Any, pro
         raise V2Error("V2_REPLACEMENT_UNCHANGED")
     join_left = target["char_end"] if action["operation"] == "append" else target["char_start"]
     replacement, normalization = _join_repairs(span.text, join_left, target["char_end"], replacement)
-    fact_error = _validate_facts(value.get("facts", []), value.get("changes", []), span, action, profile_facts)
+    fact_error, fact_details = _validate_facts(value.get("facts", []), value.get("changes", []), span, action, profile_facts)
     if fact_error:
-        raise V2Error(fact_error)
+        raise V2Error(fact_error, fact_details)
     code_results = run_code_checks(action, replacement, profile)
     if any(item["result"] != "satisfied" for item in code_results):
         failed = [item["id"] for item in code_results if item["result"] != "satisfied"]
@@ -842,7 +863,7 @@ def build_content_check(inspection: DocumentInspection, profile: dict[str, Any],
             raise DocxError("CONTENT_PROFILE_FACTS_DRIFT")
         for fact in record.get("facts", []):
             container = {"contract": paragraph.text, "rule": rule_text, "profile": profile_facts}.get(fact.get("role"))
-            if not fact.get("quote") or container is None or fact["quote"] not in container:
+            if not fact.get("quote") or container is None or not _quote_in(fact["quote"], container):
                 raise DocxError("CONTENT_FACT_ROLE_MISMATCH")
         rerun = {item["id"]: item for item in run_code_checks(action, replacement, profile)}
         for item in record.get("requirements", []):
@@ -863,7 +884,7 @@ def build_content_check(inspection: DocumentInspection, profile: dict[str, Any],
                 if item.get("result") != "satisfied" or not item.get("evidence_quote"):
                     raise DocxError("CONTENT_MODEL_VERIFY_FAILED")
                 container = {"contract": paragraph.text, "generated": replacement, "rule": rule_text}.get(item.get("evidence_source"))
-                if container is None or item["evidence_quote"] not in container:
+                if container is None or not _quote_in(item["evidence_quote"], container):
                     raise DocxError("CONTENT_MODEL_QUOTE_MISMATCH")
         elif model_verify:
             raise DocxError("CONTENT_MODEL_VERIFY_UNEXPECTED")
@@ -929,7 +950,7 @@ def plan_v2(inspection: DocumentInspection, profile: dict[str, Any], ruleset: Ru
                     # Reusing a generation across body/summary is allowed only when
                     # every contract-role verification quote still exists in this
                     # location; otherwise a fresh verification is required.
-                    if not all(item["evidence_quote"] in span.text for item in outcome["model_verify"]["items"]
+                    if not all(_quote_in(item["evidence_quote"], span.text) for item in outcome["model_verify"]["items"]
                                if item["evidence_source"] == "contract"):
                         outcome = None
                 if outcome is None:

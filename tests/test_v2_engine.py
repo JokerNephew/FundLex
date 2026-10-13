@@ -712,6 +712,99 @@ def test_content_check_rejects_glued_plan(tmp_path):
     assert excinfo.value.code == "CONTENT_JOIN_UNSAFE"
 
 
+def test_class_definition_with_letters_in_following_sentence(tmp_path):
+    definition = ("基金份额类别设置：本基金根据认购、申购费用收取方式的不同，将基金份额分为不同的类别。"
+                  "在投资者认购、申购基金份额时收取认购、申购费用，不计提销售服务费的，称为A类基金份额；"
+                  "在投资者认购、申购基金份额时不收取认购、申购费用，从该类别基金财产中计提销售服务费的，称为C类基金份额。")
+    source = build_docx(tmp_path / "class1.docx", [
+        ("heading", "基金的基本情况"),
+        ("text", "份额类别设置"),
+        ("text", definition),
+    ])
+    profile = make_profile(["A", "C"], ["A"], ["C"])
+    anchor = definition[definition.index("在投资者认购、申购基金份额时不收取"):]
+    clause = ("投资者通过直销机构（含基金管理人及其销售子公司，下同）申购本基金A类基金份额时，"
+              "不收取认购/申购费用；通过直销机构申购的C类基金份额，不收取销售服务费。"
+              "对于投资者通过直销机构之外的其他销售机构申购的C类基金份额且持续持有期限超过一年的，"
+              "不再继续收取销售服务费。")
+    responses = [
+        ("generate_clause", valid_generate_value(anchor, clause)),
+        ("verify_content", {"items": [
+            {"requirement_id": "R02-REQ-5", "result": "satisfied",
+             "evidence_quote": "不收取认购/申购费用", "evidence_source": "generated"}]}),
+    ]
+    outcome, action, gateway, inspection = plan_for("R02-A1", source, profile, responses)
+    assert action["status"] == "applied", action["failure_reason"]
+    target = next(item for item in action["targets"] if item["status"] == "verified")
+    assert target["quote"] == anchor
+    edit = outcome["edits"][0]
+    assert edit["anchor"]["text"] == anchor
+    plan = validate_edit_plan(source, outcome["edits"], {}, content_check=outcome["content_check"])
+    generate_artifacts(source, plan, tmp_path / "class1r.docx", tmp_path / "class1f.docx")
+    final = inspect_docx(tmp_path / "class1f.docx", full=True)
+    text = next(span.text for span in final.paragraphs if "将基金份额分为不同的类别" in span.text)
+    assert text == definition + clause
+
+
+def test_class_definition_with_letters_in_following_paragraphs(tmp_path):
+    first = "本基金根据申购费用、销售服务费收取方式的不同，将基金份额分为不同的类别。"
+    source = build_docx(tmp_path / "class2.docx", [
+        ("heading", "基金的基本情况"),
+        ("text", "份额类别设置"),
+        ("text", first),
+        ("text", "A 类基金份额：投资人申购时收取申购费用，但不从本类别基金资产中计提销售服务费。"),
+        ("text", "C 类基金份额：从本类别基金资产中计提销售服务费而不收取申购费用。"),
+        ("text", "本基金 A 类基金份额、C 类基金份额分别设置代码。"),
+    ])
+    profile = make_profile(["A", "C"], ["A"], ["C"])
+    clause = ("投资者通过直销机构（含基金管理人及其销售子公司，下同）申购本基金A类基金份额时，"
+              "不收取认购/申购费用；通过直销机构申购的C类基金份额，不收取销售服务费。"
+              "对于投资者通过直销机构之外的其他销售机构申购的C类基金份额且持续持有期限超过一年的，"
+              "不再继续收取销售服务费。")
+    responses = [
+        ("generate_clause", valid_generate_value(first, clause)),
+        ("verify_content", {"items": [
+            {"requirement_id": "R02-REQ-5", "result": "satisfied",
+             "evidence_quote": "不收取认购/申购费用", "evidence_source": "generated"}]}),
+    ]
+    outcome, action, gateway, inspection = plan_for("R02-A1", source, profile, responses)
+    assert action["status"] == "applied", action["failure_reason"]
+    target = next(item for item in action["targets"] if item["status"] == "verified")
+    assert target["quote"] == first
+    edit = outcome["edits"][0]
+    assert edit["anchor"]["text"] == first
+    plan = validate_edit_plan(source, outcome["edits"], {}, content_check=outcome["content_check"])
+    generate_artifacts(source, plan, tmp_path / "class2r.docx", tmp_path / "class2f.docx")
+    final = inspect_docx(tmp_path / "class2f.docx", full=True)
+    text = next(span.text for span in final.paragraphs if "将基金份额分为不同的类别" in span.text)
+    assert text == first + clause
+
+
+def test_fact_quote_tolerates_cjk_spacing(tmp_path):
+    paragraph = R10_OLD.replace("赎回基金份额的基金份额持有人", "赎回基金 份额的基金份额持有人")
+    source = build_docx(tmp_path / "spacing.docx", [
+        ("heading", "基金份额的申购与赎回"),
+        ("text", "申购和赎回的价格、费用及其用途"),
+        ("text", paragraph),
+    ])
+    profile = make_profile(["H", "J"], ["H"], ["J"])
+    facts = [{"fact_id": "f1", "statement": "原条款按比例归入",
+              "role": "contract", "quote": "赎回费用由赎回基金份额的基金份额持有人承担"}]
+    responses = [
+        ("locate_target", {"quotes": [{"quote": R10_OLD, "basis": "归属条款"}]}),
+        ("generate_clause", valid_generate_value(R10_OLD, R10_GOOD, facts)),
+        ("verify_content", {"items": [
+            {"requirement_id": "R10-REQ-3", "result": "satisfied",
+             "evidence_quote": "赎回费用全额计入基金财产", "evidence_source": "generated"},
+            {"requirement_id": "R10-REQ-6", "result": "satisfied",
+             "evidence_quote": "赎回费用由赎回基金份额的基金份额持有人承担", "evidence_source": "contract"}]}),
+    ]
+    outcome, action, gateway, inspection = plan_for("R10-A1", source, profile, responses)
+    assert action["status"] == "applied", action["failure_reason"]
+    record = outcome["records"][0]
+    assert record["facts"][0]["quote"] == "赎回费用由赎回基金份额的基金份额持有人承担"
+
+
 def test_check_requirement_kinds_are_declared():
     ruleset = load_ruleset_v2()
     declared = {"delete_only", "contains_all", "not_contains", "no_digits_and_no_conditions",

@@ -140,7 +140,7 @@ def main() -> None:
         response.raise_for_status()
         batch_id = response.json()["id"]
         batches.append(batch_id)
-        deadline = time.monotonic() + len(group) * 300 + 120
+        deadline = time.monotonic() + len(group) * 900 + 240
         while True:
             detail = client.get(f"/api/batches/{batch_id}", headers=headers).json()
             if detail["status"] == "completed":
