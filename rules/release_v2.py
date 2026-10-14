@@ -15,6 +15,7 @@ import argparse
 import json
 import os
 import shutil
+import hashlib
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -22,6 +23,9 @@ from fundlex.model import ModelGateway
 from fundlex.rules import release_runtime_context
 from fundlex.rules_v2 import PROMPT_VERSIONS_V2, load_ruleset_v2
 from fundlex.store import engine_build
+from fundlex.store import validate_delivery
+from tools.evaluation.release_evidence import load_reports
+from fundlex.v2_pipeline import ENGINE_VERSION
 
 ROOT = Path(__file__).resolve().parent.parent
 PACKAGE = ROOT / "rules" / "rules_v2.json"
@@ -60,10 +64,57 @@ def load_draft() -> dict:
     return data
 
 
+def validate_evidence(paths: list[str], context: dict) -> dict:
+    """Require current real-run receipts before issuing a v3 release."""
+    current_rules = load_ruleset_v2()
+    receipts = []
+    sources = set()
+    modified = 0
+    for name in paths:
+        directory = Path(name).resolve()
+        protocol_path = directory / "protocol.json"
+        protocol = json.loads(protocol_path.read_text(encoding="utf-8"))
+        if (protocol.get("engine_build") != context["engine_build"]
+                or protocol.get("model_transport_sha256") != context["model_transport_sha256"]
+                or protocol.get("ruleset_sha256") != current_rules.sha256
+                or protocol.get("prompt_versions") != PROMPT_VERSIONS_V2
+                or protocol.get("execution_mode") != "evaluation"
+                or protocol.get("batch_size") != 1 or protocol.get("model_concurrency") != 1):
+            raise SystemExit("real evidence does not match the frozen engine/rules/transport/protocol")
+        summary_path = directory / "summary.json"
+        summary = json.loads(summary_path.read_text(encoding="utf-8"))
+        reports = load_reports(directory)
+        if summary.get("completed") is not True or len(reports) != protocol["document_count"]:
+            raise SystemExit("real evidence run is incomplete")
+        for report in reports:
+            if (report.get("engine_build") != context["engine_build"]
+                    or report.get("ruleset_sha256") != current_rules.sha256
+                    or report.get("engine_version") != ENGINE_VERSION
+                    or report.get("execution_mode") != "evaluation"
+                    or report.get("model", {}).get("prompt_versions") != PROMPT_VERSIONS_V2):
+                raise SystemExit("real report context mismatch")
+            source_hash = report["source_sha256"]
+            if source_hash in sources:
+                raise SystemExit("duplicate input cannot count twice toward real evidence coverage")
+            sources.add(source_hash)
+            if report.get("edit_plan", {}).get("count", 0):
+                artifacts = {kind: Path(path) for kind, path in report.get("artifacts", {}).items()}
+                validate_delivery(report, artifacts)
+                modified += 1
+        receipts.append({"directory": str(directory), "documents": len(reports),
+                         "protocol_sha256": hashlib.sha256(protocol_path.read_bytes()).hexdigest(),
+                         "summary_sha256": hashlib.sha256(summary_path.read_bytes()).hexdigest()})
+    if len(sources) < 29 or modified == 0:
+        raise SystemExit("v3 release requires current 5+16+8 real evidence and actual reviewed modifications")
+    return {"unique_documents": len(sources), "modified_documents": modified, "runs": receipts}
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--audit-output", default=str(ROOT / "var" / "audit"))
     parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument("--evidence-run", action="append", default=[],
+                        help="completed current real evaluation run (repeat for fixtures, regression and historical generalization)")
     args = parser.parse_args()
     audit = run_audit(Path(args.audit_output))
     if audit.get("failed_actions"):
@@ -82,6 +133,7 @@ def main() -> None:
                "actual_model": configured_model, "prompt_versions": dict(PROMPT_VERSIONS_V2)}
     if engine_build() != context["engine_build"]:
         raise SystemExit("engine build changed during audit; rerun")
+    evidence = validate_evidence(args.evidence_run, context) if "artifact_verify" in PROMPT_VERSIONS_V2 else None
 
     data = load_draft()
     actions = data["actions"]
@@ -124,12 +176,14 @@ def main() -> None:
         "audit_summary": {"positive_cases": audit["positive_cases"], "positive_passed": audit["positive_passed"],
                           "negative_cases": audit["negative_cases"], "negative_passed": audit["negative_passed"]},
     }
+    if evidence is not None:
+        data["release_policy"]["real_evidence"] = evidence
     data["source"] = dict(data.get("source", {})) | {"released": True}
     if args.dry_run:
         print(json.dumps({"dry_run": True, "actions": len(released_actions),
                           "context": context["engine_build"]}, ensure_ascii=False))
         return
-    PACKAGE.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    PACKAGE.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8", newline="\n")
     released = load_ruleset_v2()
     assert released.auto_write_enabled is True and len(released.actions) == 22
     print(json.dumps({"released": str(PACKAGE), "sha256": released.sha256,

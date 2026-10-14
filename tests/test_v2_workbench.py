@@ -62,11 +62,13 @@ def test_task_runs_evaluation_revision_and_downloads(tmp_path):
     summary = client.get(f"/api/tasks/{task_id}", headers=HEADERS).json()
     assert summary["ruleset_version"] == "v2"
     assert summary["status"] == "completed"
-    assert summary["delivery_counts"].get("evaluation_modified") == 1
+    # V3: actions whose scope or target inventory stays unresolved are listed
+    # as delivery exceptions; the validated edits are still published.
+    assert summary["delivery_counts"].get("evaluation_modified_with_exceptions") == 1
     documents = client.get(f"/api/tasks/{task_id}/documents", headers=HEADERS).json()
     document = documents["items"][0]
     assert document["execution_mode"] == "evaluation"
-    assert document["delivery_status"] == "evaluation_modified"
+    assert document["delivery_status"] == "evaluation_modified_with_exceptions"
     assert {"evaluation_final", "evaluation_redline"}.issubset(document["downloads"])
     assert "final" not in document["downloads"] and "redline" not in document["downloads"]
     assert document["report_url"]

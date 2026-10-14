@@ -1,4 +1,4 @@
-"""Evaluation-mode v2 pipeline: locate, generate, verify and publish provenance.
+"""V2 pipeline: source-bound planning and independent actual-artifact review.
 
 The v1 ``process`` path stays untouched and read-only. This path runs under an
 explicit evaluation execution mode: generated edits are allowed only with a
@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import tempfile
 import time
 from pathlib import Path
 from typing import Any
@@ -21,8 +22,9 @@ from .rules import RuleError, classify_document_identity, classify_fund_type, re
 from .rules_v2 import PROMPT_VERSIONS_V2, RuleV2Error, load_ruleset_v2
 from .store import engine_build, SCHEMA_VERSION
 from .v2 import V2Error, plan_v2
+from .artifact_review import review_artifacts
 
-ENGINE_VERSION = "0.2.0"
+ENGINE_VERSION = "0.3.0"
 EXECUTION_MODE = "evaluation"
 STOP_CODES = {"MODEL_GLOBAL_CALL_BUDGET_EXCEEDED", "MODEL_COST_BUDGET_EXCEEDED",
               "MODEL_CIRCUIT_OPEN", "MODEL_CONFIG_MISSING", "MODEL_HTTP_ERROR",
@@ -61,9 +63,19 @@ def _write_v2_markdown(path: Path, report: dict[str, Any]) -> None:
                          f"record_sha256={record['record_sha256'][:16]}…")
             for item in record.get("requirements", []):
                 lines.append(f"  - {item['id']} [{item['checker']}]：{item['result']}")
+    if report.get("actual_content_verifications"):
+        lines.extend(["", "## 实际 DOCX 独立复核", ""])
+        for review in report["actual_content_verifications"]:
+            lines.append(f"- 第 {review['round']} 轮：passed={review['passed']}；"
+                         f"plan={review['plan_sha256']}；final={review['final_sha256']}")
+            for action in review["actions"]:
+                lines.append(f"  - {action['action_id']}：passed={action['passed']}；"
+                             f"{action.get('reason') or '通过'}")
     if report.get("execution_mode") == "delivery":
         if report.get("delivery_status") == "complete":
             lines.extend(["", "**正式交付：修订版与接受修订后版本均通过校验。**"])
+        elif report.get("delivery_status") == "complete_with_exceptions":
+            lines.extend(["", "**附例外交付：已验证的修改已生成正式合同文件；拒绝动作保留原文，请查看例外清单。**"])
         else:
             lines.extend(["", "**不完整交付：存在未处理动作，未生成正式合同文件。**"])
     elif report.get("delivery_status") != "evaluation_modified":
@@ -73,14 +85,67 @@ def _write_v2_markdown(path: Path, report: dict[str, Any]) -> None:
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
+def _revert_actions(outcome: dict, reasons: dict[str, str]) -> None:
+    for action in outcome["actions"]:
+        if action["action_id"] not in reasons:
+            continue
+        reason = reasons[action["action_id"]]
+        action.update(status="failed", failure_reason=reason)
+        for target in action.get("targets", []):
+            if target["status"] == "verified":
+                target.update(status="failed", reason=reason, generated_text=None,
+                              verification=None, previously_verified=True)
+    outcome["edits"] = [e for e in outcome["edits"] if e["action_id"] not in reasons]
+    outcome["records"] = [r for r in outcome["records"] if r["action_id"] not in reasons]
+
+
+def _review_modified_artifacts(input_path: Path, output_dir: Path, full: Any, profile: dict,
+                               ruleset: Any, model: Any, outcome: dict, evaluation: bool,
+                               review_records: list[dict]) -> tuple[Any, Any, bool]:
+    """Generate privately; only the exact successfully reviewed pair is exposed."""
+    plan = validate_edit_plan(input_path, outcome["edits"], {}, content_check=outcome["content_check"])
+    if not outcome["edits"]:
+        return plan, None, False
+    with tempfile.TemporaryDirectory(prefix=".v3-review-", dir=output_dir) as temporary:
+        temporary_dir = Path(temporary)
+        for round_number in (1, 2):
+            redline = temporary_dir / "redline.docx"
+            final = temporary_dir / "final.docx"
+            artifacts = generate_artifacts(input_path, plan, redline, final)
+            actual = inspect_docx(final, full=True)
+            try:
+                review = review_artifacts(full, actual, list(ruleset.actions), outcome["edits"],
+                    profile, model, plan_sha256=plan.plan_sha256,
+                    redline_sha256=artifacts.redline_sha256, final_sha256=artifacts.final_sha256,
+                    round_number=round_number)
+            except ValueError as exc:
+                raise V2Error(str(exc)) from exc
+            review_records.append(review)
+            if review["passed"]:
+                prefix = "evaluation_" if evaluation else ""
+                redline.replace(output_dir / f"{prefix}redline.docx")
+                final.replace(output_dir / f"{prefix}final.docx")
+                return plan, artifacts, False
+            rejected = {entry["action_id"]: entry["reason"] or "V3_ARTIFACT_SEMANTIC_REJECTED"
+                        for entry in review["actions"] if not entry["passed"]}
+            _revert_actions(outcome, rejected)
+            if round_number == 2:
+                _revert_actions(outcome, {edit["action_id"]: "V3_ARTIFACT_REVIEW_LIMIT"
+                                         for edit in outcome["edits"]})
+            plan = validate_edit_plan(input_path, outcome["edits"], {}, content_check=outcome["content_check"])
+            if not outcome["edits"]:
+                return plan, None, True
+    return plan, None, True
+
+
 def process_v2(input_path: Path, output_dir: Path, ruleset_version: str = "v2",
                gateway: ModelGateway | None = None, *, evaluation: bool | None = None) -> dict[str, Any]:
     """Run the v2 pipeline. ``evaluation=None`` follows the rule package state.
 
     Unreleased packages always run as evaluation (evaluation artifacts only).
-    A released package runs as formal delivery: the same frozen plan produces
-    ``redline.docx``/``final.docx`` and an incomplete action set publishes no
-    contract files.
+    A released package runs as formal delivery. Verified modifications can be
+    delivered with explicit exceptions; actual artifact review failures revoke
+    actions before any modified contract becomes downloadable.
     """
     input_path, output_dir = Path(input_path), Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -91,7 +156,7 @@ def process_v2(input_path: Path, output_dir: Path, ruleset_version: str = "v2",
         "source_sha256": source_hash, "ruleset_version": ruleset_version, "ruleset_sha256": None,
         "qualification_status": "failed", "qualification": {"status": "failed", "evidence": None},
         "document_identity": {"status": "failed", "document_type": "unknown", "evidence": []},
-        "profile": {}, "actions": [], "content_verifications": [],
+        "profile": {}, "actions": [], "content_verifications": [], "actual_content_verifications": [],
         "edit_plan": {"count": 0, "sha256": None, "edits": [], "validated": False,
                       "executable": False, "reason": "EVALUATION_MODE"},
         "release_gate": {"status": "closed", "reason": "RULESET_UNRELEASED", "auto_write_actions": []},
@@ -160,7 +225,22 @@ def process_v2(input_path: Path, output_dir: Path, ruleset_version: str = "v2",
             raise RuleError("MODEL_TYPE_CONFLICT")
         model_quote = result.value["quote"]
         if model_quote not in context or len(model_quote) < 4:
-            raise RuleError("MODEL_EVIDENCE_INVALID")
+            # One bounded repair attempt: a formatting slip must not fail the
+            # whole contract. The re-answer is validated against the original
+            # bounded context, so it cannot invent text.
+            repair_context = context + "\nquote必须逐字复制上述上下文中的连续原句，不得改写、合并或补全。"
+            retry = model.extract_fund_type(repair_context)
+            report["model"].update({"calls": report["model"].get("calls", 1) + 1,
+                                    "prompt_tokens": report["model"].get("prompt_tokens", 0) + retry.prompt_tokens,
+                                    "completion_tokens": report["model"].get("completion_tokens", 0) + retry.completion_tokens,
+                                    "total_tokens": report["model"].get("total_tokens", 0) + retry.total_tokens,
+                                    "latency_ms": report["model"].get("latency_ms", 0) + retry.latency_ms,
+                                    "request_id": retry.request_id})
+            if retry.value["fund_type"] != evidence["fund_type"]:
+                raise RuleError("MODEL_TYPE_CONFLICT")
+            model_quote = retry.value["quote"]
+            if model_quote not in context or len(model_quote) < 4:
+                raise RuleError("MODEL_EVIDENCE_INVALID")
         report["model"]["quote_verification"] = "verified_against_bounded_context"
         report["qualification"] = {"status": "eligible", "fund_type": evidence["fund_type"],
                                    "evidence": evidence["evidence"],
@@ -179,30 +259,38 @@ def process_v2(input_path: Path, output_dir: Path, ruleset_version: str = "v2",
         outcome = plan_v2(full, report["profile"], ruleset, model,
                           engine_build_value=engine_build())
         report["actions"] = outcome["actions"]
+        plan, reviewed_artifacts, review_blocked = _review_modified_artifacts(
+            input_path, output_dir, full, report["profile"], ruleset, model, outcome, evaluation,
+            report["actual_content_verifications"])
         report["content_verifications"] = outcome["records"]
         edits = outcome["edits"]
-        plan = validate_edit_plan(input_path, edits, {}, content_check=outcome["content_check"])
         report["edit_plan"] = {"count": len(edits), "sha256": plan.plan_sha256, "edits": edits,
-                               "validated": True, "executable": not evaluation,
+                               "validated": True, "executable": not evaluation and not review_blocked,
                                "reason": "DELIVERY_MODE" if not evaluation else "EVALUATION_MODE",
                                "boundary_policy": "trim-inline-whitespace-sentence-span-v1"}
+        if review_blocked:
+            report["edit_plan"].update(executable=False, reason="V3_ARTIFACT_REVIEW_REJECTED")
         (output_dir / "edits.json").write_text(json.dumps(report["edit_plan"], ensure_ascii=False, indent=2),
                                                encoding="utf-8")
         failed_actions = [action for action in report["actions"]
-                          if action["status"] in {"failed", "partial"}]
+                          if action["status"] in {"failed", "partial", "not_matched"}]
         # Every failure in this engine is a fail-closed refusal: nothing is ever
         # written for a failed action. Delivery therefore publishes the verified
         # edits together with an explicit exception list instead of withholding
         # the whole contract (see docs/DELIVERY_STATUS_POLICY.md).
         report["exceptions"] = [{"action_id": action["action_id"], "reason": action.get("failure_reason"),
                                  "description": action.get("description")} for action in failed_actions]
+        if review_blocked:
+            report["edit_plan"].update(executable=False, reason="V3_ARTIFACT_REVIEW_REJECTED")
+            report["delivery_status"] = "incomplete"
+            return report
         if evaluation:
             if edits:
                 redline, final = output_dir / "evaluation_redline.docx", output_dir / "evaluation_final.docx"
-                artifacts = generate_artifacts(input_path, plan, redline, final)
+                artifacts = reviewed_artifacts
                 report["output_validation"] = {
                     "kind": "evaluated_edits",
-                    "checks": list(artifacts.checks),
+                    "checks": [*artifacts.checks, "actual_content_verification"],
                     "redline_sha256": artifacts.redline_sha256, "final_sha256": artifacts.final_sha256,
                     "not_a_final_contract": True,
                 }
@@ -225,10 +313,10 @@ def process_v2(input_path: Path, output_dir: Path, ruleset_version: str = "v2",
             # withheld (nothing to deliver and known gaps).
             if edits:
                 redline, final = output_dir / "redline.docx", output_dir / "final.docx"
-                artifacts = generate_artifacts(input_path, plan, redline, final)
+                artifacts = reviewed_artifacts
                 report["output_validation"] = {
                     "kind": "validated_edits",
-                    "checks": list(artifacts.checks),
+                    "checks": [*artifacts.checks, "actual_content_verification"],
                     "redline_sha256": artifacts.redline_sha256, "final_sha256": artifacts.final_sha256,
                 }
                 report["artifacts"] = {"redline": str(redline), "final": str(final)}

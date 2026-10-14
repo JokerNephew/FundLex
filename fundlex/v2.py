@@ -184,6 +184,152 @@ def iter_scope_spans(inspection: DocumentInspection, action: dict[str, Any]) -> 
 
 # --------------------------------------------------------------------------- targets
 
+def _failure(reason: str, **details: Any) -> dict[str, Any]:
+    return {"status": "failed", "reason": reason, "location": "", "region": "",
+            "char_start": 0, "char_end": 0, "quote": "", "mapping_safe": False, **details}
+
+
+def _matching_context(action: dict[str, Any], profile: dict[str, Any], spans: Sequence[Any],
+                      gateway: Any) -> str:
+    context = (f"[ACTION {action['action_id']}]\n{_rule_text(action)}\n"
+               f"[PROFILE_FACTS]\n{profile_facts_text(profile)}\n[CONTRACT_SOURCE]\n" +
+               "\n".join(f"[PARAGRAPH {s.location}]\n{s.text}" for s in spans))
+    if len(context) > int(getattr(gateway, "max_context_chars", 12000)):
+        raise V2Error("V3_MATCH_CONTEXT_LIMIT")
+    return context
+
+
+def _scope_windows(action: dict[str, Any], profile: dict[str, Any], chapter: Sequence[Any],
+                   gateway: Any) -> list[list[Any]]:
+    windows: list[list[Any]] = []
+    current: list[Any] = []
+    for span in chapter:
+        try:
+            _matching_context(action, profile, [*current, span], gateway)
+        except V2Error:
+            if not current:
+                raise
+            windows.append(current)
+            overlap = current[-1:]
+            try:
+                _matching_context(action, profile, [*overlap, span], gateway)
+            except V2Error:
+                # Never silently remove an overlap or split a single paragraph.
+                raise V2Error("V3_MATCH_CONTEXT_LIMIT")
+            current = [*overlap, span]
+        else:
+            current.append(span)
+    if current:
+        windows.append(current)
+    return windows
+
+
+def _business_candidate(span: Any, action: dict[str, Any], policy: dict,
+                        text: str | None = None) -> bool:
+    original = _compact(span.text)
+    # Titles provide scope, never a clause to rewrite/delete.
+    if (len(original) <= 80 and not re.search(r"[。；，,]", original)
+            and (_subsection_title(span.text, action) or _numbered_heading_like(span.text)
+                 or original == _compact(span.section_path))):
+        return False
+    candidate = _compact(span.text if text is None else text)
+    return (any(token in candidate for token in policy.get("any", []))
+            and all(token in candidate for token in policy.get("all", [])))
+
+
+def resolve_action_scope(inspection: DocumentInspection, action: dict[str, Any],
+                         profile: dict[str, Any], gateway: Any) -> tuple[list[tuple[Any, Any]], dict[str, Any]]:
+    """Resolve each allowed chapter independently; never infer an absent chapter."""
+    deterministic = list(iter_scope_spans(inspection, action))
+    diagnostic: dict[str, Any] = {"method": "code", "ranges": [], "failures": []}
+    for span, _ in deterministic:
+        diagnostic["ranges"].append({"location": span.location, "method": "code"})
+    policy = action.get("scope_resolution")
+    if not policy:
+        return deterministic, diagnostic
+    sections = [action["section_anchor"]] + list(action.get("section_aliases", []))
+    groups: dict[tuple[str, str], list[Any]] = {}
+    chapters: dict[tuple[str, str], list[Any]] = {}
+    existing_locations = {s.location for s, _ in deterministic}
+    resolved_groups = {((getattr(s, "logical_zone", None) or s.zone), s.section_path) for s, _ in deterministic}
+    for span in inspection.paragraphs:
+        zone = getattr(span, "logical_zone", None) or span.zone
+        if zone in action["regions"] and any(title in span.section_path for title in sections):
+            key = (zone, span.section_path)
+            chapters.setdefault(key, []).append(span)
+    for key, chapter in chapters.items():
+        candidates = policy.get("business_candidates") or action["locate"].get("variant_fallback")
+        if key not in resolved_groups or (candidates and any(
+                s.location not in existing_locations and _business_candidate(s, action, candidates)
+                for s in chapter)):
+            groups[key] = chapter
+    if len(groups) > policy["max_sections"]:
+        diagnostic["failures"].append("V3_SCOPE_SECTION_LIMIT")
+        return [], diagnostic
+    selected = {span.location for span, _ in deterministic}
+    try:
+        windows = [(key, chapter, window) for key, chapter in groups.items()
+                   for window in _scope_windows(action, profile, chapter, gateway)]
+        if len(windows) > policy["max_sections"]:
+            raise V2Error("V3_SCOPE_WINDOW_LIMIT")
+    except V2Error as exc:
+        diagnostic["failures"].append(exc.code)
+        return [], diagnostic
+    found_groups = set()
+    for key, chapter, window in windows:
+        try:
+            context = _matching_context(action, profile, window, gateway)
+            response = gateway.resolve_scope(context, prompt_version=PROMPT_VERSIONS_V2["scope"],
+                instruction=("识别承担目标业务功能的所有连续段落范围，可以无明确子节标题。"
+                             "仅限给定上级章节。每个范围给出首尾段落中的逐字连续引文与依据。"
+                             "不得返回修改文字或坐标；找不到返回 absent，不确定返回 uncertain。"))
+            value = response.value
+            diagnostic.setdefault("windows", []).append({"locations": [s.location for s in window],
+                "status": value.get("status"), "model_event": _event_summary(gateway)})
+            if value.get("status") == "absent" and not value.get("ranges"):
+                continue
+            if value.get("status") != "found" or not value.get("ranges"):
+                raise V2Error("TARGET_SCOPE_UNRESOLVED")
+            group_selected: set[str] = set()
+            for item in value["ranges"]:
+                endpoints = []
+                for field in ("start_quote", "end_quote"):
+                    quote = item.get(field)
+                    occurrences = [i for i, s in enumerate(chapter)
+                                   for _ in range(s.text.count(quote) if isinstance(quote, str) and quote else 0)]
+                    if len(occurrences) != 1:
+                        raise V2Error("V3_SCOPE_QUOTE_UNRESOLVED")
+                    endpoints.append(occurrences[0])
+                lo, hi = endpoints
+                if not item.get("basis") or lo > hi or hi - lo + 1 > policy["max_range_paragraphs"]:
+                    raise V2Error("V3_SCOPE_RANGE_INVALID")
+                if any(s.location not in {w.location for w in window} for s in chapter[lo:hi + 1]):
+                    raise V2Error("V3_SCOPE_OUTSIDE_WINDOW")
+                group_selected.update(s.location for s in chapter[lo:hi + 1])
+                diagnostic["ranges"].append({"method": "model", "region": key[0],
+                    "section_path": key[1], "start_quote": item["start_quote"],
+                    "end_quote": item["end_quote"], "basis": item["basis"],
+                    "locations": [s.location for s in chapter[lo:hi + 1]],
+                    "model_event": _event_summary(gateway)})
+            selected.update(group_selected)
+            found_groups.add(key)
+        except V2Error as exc:
+            diagnostic["failures"].append(exc.code)
+    if set(groups) - found_groups:
+        diagnostic["failures"].append("TARGET_SCOPE_UNRESOLVED")
+    diagnostic["method"] = "code+model" if groups else "code"
+    spans = []
+    previous = None
+    for span in inspection.paragraphs:
+        if span.location in selected:
+            if previous is not None and (span.section_path != previous.section_path or span.zone != previous.zone):
+                previous = None
+            spans.append((span, previous))
+            previous = span
+        else:
+            previous = None
+    return spans, diagnostic
+
 def _base_target(span: Any, inspection: DocumentInspection) -> dict[str, Any]:
     return {"location": span.location, "region": getattr(span, "logical_zone", None) or span.zone,
             "zone": span.zone, "section_path": span.section_path, "source_sha256": inspection.source_sha256,
@@ -229,6 +375,8 @@ def _expand_sentence(text: str, start: int, end: int) -> tuple[int, int]:
     marks = ("。", "；", "\n", "\ufff9")
     at = max(text.rfind(mark, 0, start) for mark in marks)
     start = at + 1
+    if end > start and text[end - 1] in "。；\n":
+        return start, end
     stops = [(index, mark) for mark in marks if (index := text.find(mark, end)) >= 0]
     if stops:
         position, mark = min(stops)
@@ -470,8 +618,11 @@ def _locate_model_assisted(action: dict[str, Any], spans: Sequence[tuple[Any, An
     found: list[dict[str, Any]] = []
     attempts = []
     for span in candidates:
-        context = f"[CONTRACT_PARAGRAPH location={span.location} zone={span.zone}]\n{span.text[:4000]}"
-        result = gateway.locate_target(context, instruction=locate["instruction"])
+        context = f"[CONTRACT_PARAGRAPH location={span.location} zone={span.zone}]\n{span.text}"
+        if len(context) > int(getattr(gateway, "max_context_chars", 12000)):
+            return [_failure("V3_MATCH_CONTEXT_LIMIT")] + targets
+        result = gateway.locate_target(context, instruction=locate["instruction"],
+                                       max_quotes=8, prompt_version=PROMPT_VERSIONS_V2["locate"])
         attempt = {"location": span.location, "quotes": []}
         attempts.append(attempt)
         for item in result.value.get("quotes", []):
@@ -482,6 +633,7 @@ def _locate_model_assisted(action: dict[str, Any], spans: Sequence[tuple[Any, An
             if len(matches) != 1:
                 attempt["quotes"].append({"quote": quote[:160], "result": "V2_LOCATE_UNRESOLVED",
                                           "matches": len(matches)})
+                targets.append(_failure("V2_LOCATE_UNRESOLVED", location=span.location))
                 continue
             start, end = _trim(span.text, matches[0][0], matches[0][1])
             numbering = re.match(r"^[（(]?[一二三四五六七八九十\d]+[）)、．.]\s*", span.text[start:end])
@@ -501,6 +653,7 @@ def _locate_model_assisted(action: dict[str, Any], spans: Sequence[tuple[Any, An
                 reason = "V2_LOCATE_BOUNDARY"
             if reason:
                 attempt["quotes"].append({"quote": quote[:160], "result": reason, "range": [start, end]})
+                targets.append(_failure(reason, location=span.location))
                 continue
             attempt["quotes"].append({"quote": quote[:160], "result": "resolved", "range": [start, end]})
             found.append({"span": span, "start": start, "end": end, "quote": literal,
@@ -511,18 +664,129 @@ def _locate_model_assisted(action: dict[str, Any], spans: Sequence[tuple[Any, An
     if not found:
         return [{**base, "status": "failed", "reason": "V2_TARGET_NOT_LOCATED", "location": "",
                  "char_start": 0, "char_end": 0, "quote": "", "mapping_safe": False}] + targets
-    if len(distinct) > 1:
-        return [{**base, "status": "failed", "reason": "V2_TARGET_AMBIGUOUS", "location": "",
-                 "char_start": 0, "char_end": 0, "quote": "", "mapping_safe": False,
-                 "ranges": sorted(distinct)}] + targets
-    item = found[0]
-    target = {**_base_target(item["span"], inspection), **base, "char_start": item["start"],
-              "char_end": item["end"], "quote": item["quote"], "mapping_safe": item["mapping_safe"]}
-    if target["mapping_safe"]:
-        target["status"] = "located"
-    else:
-        target["reason"] = "UNSAFE_TEXT_MAPPING"
-    return [target] + targets
+    resolved = []
+    for item in found:
+        identity = (item["span"].location, item["start"], item["end"])
+        if identity not in distinct:
+            continue
+        distinct.remove(identity)
+        target = {**_base_target(item["span"], inspection), **base, "char_start": item["start"],
+                  "char_end": item["end"], "quote": item["quote"], "mapping_safe": item["mapping_safe"]}
+        if target["mapping_safe"]:
+            target["status"] = "located"
+        else:
+            target["reason"] = "UNSAFE_TEXT_MAPPING"
+        resolved.append(target)
+    return resolved + targets
+
+
+_SENTENCE_MARKS = "。；！？"
+
+
+def _delete_sentence_span(text: str, start: int, end: int) -> tuple[int, int]:
+    """Delete targets must cover whole business sentences.
+
+    A half-sentence quote would leave an orphaned fragment, and a quote that
+    merges several sentences would swallow non-target content (e.g. payment
+    instructions or fee formulas). Both fail closed.
+    """
+    if end < len(text) and text[end] in _SENTENCE_MARKS:
+        end += 1
+    left_ok = start == 0 or text[start - 1] in _SENTENCE_MARKS
+    right_ok = end == len(text) or text[end - 1] in _SENTENCE_MARKS
+    if not (left_ok and right_ok):
+        raise V2Error("V3_DELETE_SENTENCE_BOUNDARY")
+    body = text[start:end]
+    if body and body[-1] in _SENTENCE_MARKS:
+        body = body[:-1]
+    if any(mark in body for mark in _SENTENCE_MARKS):
+        raise V2Error("V3_DELETE_SENTENCE_MERGED")
+    return start, end
+
+
+def _locate_variants(action: dict[str, Any], spans: Sequence[tuple[Any, Any]],
+                     inspection: DocumentInspection, profile: dict[str, Any], gateway: Any,
+                     deterministic: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    policy = action["locate"].get("variant_fallback")
+    if not policy or policy.get("range_mode") != "policy_core":
+        return deterministic
+    delete_sentence = (action["generation"]["mode"] == "delete"
+                       and action["scope"] in {"sentence", "paragraph"})
+    candidates = []
+    for span, _ in spans:
+        remaining = list(span.text)
+        for target in deterministic:
+            if target["location"] == span.location and target["status"] in {"located", "satisfied"}:
+                remaining[target["char_start"]:target["char_end"]] = " " * (
+                    target["char_end"] - target["char_start"])
+        if _business_candidate(span, action, policy, "".join(remaining)):
+            candidates.append(span)
+    if len(candidates) > policy["max_paragraphs"]:
+        return deterministic + [_failure("V3_VARIANT_CANDIDATE_LIMIT", candidates=len(candidates))]
+    targets = list(deterministic)
+    for span in candidates:
+        if span.zone == "unsupported_table":
+            targets.append(_structure_failure(span, inspection))
+            continue
+        if action["generation"]["mode"] == "template" and all(
+                item["result"] == "satisfied" for item in run_code_checks(action, span.text, profile)):
+            targets.append({**_base_target(span, inspection), "status": "satisfied",
+                            "reason": "V2_ALREADY_SATISFIED", "quote": span.text,
+                            "char_end": len(span.text)})
+            continue
+        try:
+            context = _matching_context(action, profile, [span], gateway)
+            existing = [t["quote"] for t in deterministic if t["location"] == span.location
+                        and t["status"] in {"located", "satisfied"}]
+            instruction = ("盘点本段中该动作全部应修改的旧表述。逐字引用最小完整业务核心，"
+                           "保留核心以外文字；不要生成新文。依据必须说明对应指引。"
+                           "不能确定删除或替换边界时不返回引文。不要把已符合指引的新文作为目标。"
+                           "以下目标已经由代码盘点，不要再次输出，也不得与其重叠：" +
+                           json.dumps(existing, ensure_ascii=False))
+            response = gateway.locate_target(context, max_quotes=8,
+                prompt_version=PROMPT_VERSIONS_V2["locate_variant"],
+                instruction=instruction)
+            items = response.value.get("quotes", [])
+            resolved = []
+            if not items:
+                raise V2Error("V3_VARIANT_TARGET_UNRESOLVED")
+            for item in items:
+                quote = item.get("quote", "")
+                if not quote or span.text.count(quote) != 1 or not item.get("basis"):
+                    raise V2Error("V3_VARIANT_QUOTE_UNRESOLVED")
+                normalized_quote = _compact(quote)
+                if (any(token not in normalized_quote for token in policy["quote_all"])
+                        or not any(token in normalized_quote for token in policy["quote_any"])):
+                    raise V2Error("V3_VARIANT_BUSINESS_CORE_MISMATCH")
+                if item.get("source", "contract") != "contract" or (
+                        item.get("evidence_quote") and item["evidence_quote"] not in span.text):
+                    raise V2Error("V3_VARIANT_EVIDENCE_MISMATCH")
+                start = span.text.index(quote)
+                end = start + len(quote)
+                if delete_sentence:
+                    start, end = _delete_sentence_span(span.text, start, end)
+                    quote = span.text[start:end]
+                if not _safe_range(span, start, end):
+                    raise V2Error("UNSAFE_TEXT_MAPPING")
+                if len(quote) > 4000:
+                    raise V2Error("V2_LOCATE_LENGTH")
+                resolved.append({**_base_target(span, inspection), "status": "located", "reason": None,
+                    "char_start": start, "char_end": end, "quote": quote, "mapping_safe": True,
+                    "locate_method": "model_variant", "basis": item["basis"],
+                    "model_event": _event_summary(gateway)})
+            targets = [t for t in targets if not (t["location"] == span.location
+                       and t.get("reason") == "V2_SCOPE_TEXT_MISMATCH")]
+            seen = set()
+            seen.update((t["char_start"], t["char_end"]) for t in targets
+                        if t["location"] == span.location and t["status"] in {"located", "satisfied"})
+            for target in resolved:
+                key = (target["char_start"], target["char_end"])
+                if key not in seen:
+                    targets.append(target)
+                    seen.add(key)
+        except V2Error as exc:
+            targets.append(_failure(exc.code, location=span.location))
+    return targets
 
 
 def locate_targets(action: dict[str, Any], spans: Sequence[tuple[Any, Any]],
@@ -530,7 +794,24 @@ def locate_targets(action: dict[str, Any], spans: Sequence[tuple[Any, Any]],
                    gateway: Any) -> list[dict[str, Any]]:
     mode = action["locate"]["mode"]
     if mode == "code_literal":
-        return _locate_literal(action, spans, inspection, profile)
+        deterministic = _locate_literal(action, spans, inspection, profile)
+        if action["generation"]["mode"] == "template":
+            template, error, _ = _instantiate_slots(action["generation"]["template_text"], action, profile)
+            if not error:
+                for span, _ in spans:
+                    for start, end in _normalized_matches(span.text, template):
+                        if not _safe_range(span, start, end):
+                            continue
+                        # Old substrings embedded in the complete new policy do
+                        # not prove an outstanding old target.
+                        deterministic = [t for t in deterministic if not (
+                            t["location"] == span.location and start <= t["char_start"]
+                            and t["char_end"] <= end)]
+                        deterministic.append({**_base_target(span, inspection), "status": "satisfied",
+                            "reason": "V2_ALREADY_SATISFIED", "char_start": start, "char_end": end,
+                            "quote": span.text[start:end], "mapping_safe": True})
+        return _locate_variants(action, spans, inspection, profile, gateway,
+                                deterministic)
     if mode == "code_recognition":
         return _locate_recognition(action, spans, inspection)
     if mode == "class_definition":
@@ -649,6 +930,8 @@ def _rule_text(action: dict[str, Any]) -> str:
     reference = action["generation"].get("reference_text")
     if reference:
         parts.append(reference)
+    if action["generation"].get("template_text"):
+        parts.append("[FIXED_POLICY_TEXT]\n" + action["generation"]["template_text"])
     return "\n".join(parts)
 
 
@@ -1009,19 +1292,28 @@ def plan_v2(inspection: DocumentInspection, profile: dict[str, Any], ruleset: Ru
             "applicability_basis": basis, "scope_verified": bool(spans),
             "auto_write": False, "release_gate": "closed", "status": "failed",
             "failure_reason": None, "targets": [], "generated_text": None,
+            "scope_resolution": {"method": "code", "ranges": [
+                {"location": s.location, "method": "code"} for s, _ in spans], "failures": []},
         }
         if applies == "false":
             result["status"] = "not_applicable"
+            actions_out.append(result)
+            continue
+        if applies == "unknown":
+            result["failure_reason"] = basis or "PROFILE_EVIDENCE_INCOMPLETE"
+            actions_out.append(result)
+            continue
+        spans, scope_resolution = resolve_action_scope(inspection, action, profile, gateway)
+        result["scope_resolution"] = scope_resolution
+        result["scope_verified"] = bool(spans) and not scope_resolution["failures"]
+        if scope_resolution["failures"]:
+            result["failure_reason"] = scope_resolution["failures"][0]
             actions_out.append(result)
             continue
         if not spans:
             # An absent section is reported as not matched, never as satisfied.
             result["status"] = "not_matched"
             result["failure_reason"] = "TARGET_SCOPE_UNRESOLVED"
-            actions_out.append(result)
-            continue
-        if applies == "unknown":
-            result["failure_reason"] = basis or "PROFILE_EVIDENCE_INCOMPLETE"
             actions_out.append(result)
             continue
         targets = locate_targets(action, spans, inspection, profile, gateway)
@@ -1040,6 +1332,14 @@ def plan_v2(inspection: DocumentInspection, profile: dict[str, Any], ruleset: Ru
                 if action["operation"] == "replace":
                     pre = run_code_checks(action, target["quote"], profile)
                     if all(item["result"] == "satisfied" for item in pre):
+                        if action["model_verification"]:
+                            context = _build_verify_context(action, span, target, span.text, profile,
+                                int(getattr(gateway, "max_context_chars", 12000)) - 200)
+                            response = gateway.verify_content(context, instruction=_VERIFY_INSTRUCTION,
+                                prompt_version=PROMPT_VERSIONS_V2["verify"])
+                            _validate_model_verify(response.value, action, span.text, span, target)
+                            target["no_change_verification"] = {
+                                "items": response.value["items"], "model_event": _event_summary(gateway)}
                         target.update(status="satisfied", reason="V2_ALREADY_SATISFIED")
                         continue
                 outcome = cache.get(key)
@@ -1122,6 +1422,33 @@ def plan_v2(inspection: DocumentInspection, profile: dict[str, Any], ruleset: Ru
             result["failure_reason"] = result["failure_reason"] or targets[0].get("reason") or "TARGET_FAILED"
         else:
             result["status"] = "not_matched"
+            result["failure_reason"] = "V3_TARGET_INVENTORY_UNRESOLVED"
         actions_out.append(result)
+    # Every range was resolved against the same original document. Conflicts
+    # invalidate whole actions, including their other body/summary edits.
+    conflicts: set[str] = set()
+    for i, left in enumerate(edits):
+        for right in edits[i + 1:]:
+            if left["location"] != right["location"]:
+                continue
+            lo, hi = left["start"], left["end"]
+            rlo, rhi = right["start"], right["end"]
+            overlaps = max(lo, rlo) <= min(hi, rhi)
+            if lo == hi:
+                overlaps = rlo <= lo <= rhi
+            if rlo == rhi:
+                overlaps = overlaps or lo <= rlo <= hi
+            if overlaps:
+                conflicts.update((left["action_id"], right["action_id"]))
+    if conflicts:
+        edits = [e for e in edits if e["action_id"] not in conflicts]
+        records = [r for r in records if r["action_id"] not in conflicts]
+        for result in actions_out:
+            if result["action_id"] in conflicts:
+                result.update(status="failed", failure_reason="V3_ACTION_RANGE_CONFLICT")
+                for target in result["targets"]:
+                    if target["status"] == "verified":
+                        target.update(status="failed", reason="V3_ACTION_RANGE_CONFLICT",
+                                      verification=None, generated_text=None)
     return {"actions": actions_out, "edits": edits, "records": records,
             "content_check": build_content_check(inspection, profile, ruleset, engine_build_value=engine_build_value)}

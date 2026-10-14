@@ -30,6 +30,9 @@ PROMPT_VERSIONS_V2 = {
     "locate": "v2_locate_v1",
     "generate": "v2_generate_v1",
     "verify": "v2_verify_v1",
+    "scope": "v3_scope_v1",
+    "locate_variant": "v3_locate_v1",
+    "artifact_verify": "v3_artifact_verify_v1",
 }
 
 LOCATE_MODES = {"code_literal", "code_recognition", "model_assisted", "class_definition"}
@@ -149,6 +152,21 @@ def _validate_action(action: dict[str, Any], known_ids: set[str]) -> None:
         if key not in semantics or semantics[key] in (None, "", []):
             raise RuleV2Error("V2_SEMANTICS_INCOMPLETE", {"action": action["action_id"], "field": key})
     locate, generation = action["locate"], action["generation"]
+    scope_resolution = action.get("scope_resolution")
+    if scope_resolution is not None and (not isinstance(scope_resolution, dict)
+            or scope_resolution.get("mode") != "model_fallback"
+            or any(type(scope_resolution.get(key)) is not int or not 1 <= scope_resolution[key] <= 16
+                   for key in ("max_sections", "max_range_paragraphs"))):
+        raise RuleV2Error("V3_SCOPE_CONTRACT_INVALID")
+    fallback = locate.get("variant_fallback") if isinstance(locate, dict) else None
+    if fallback is not None and (not isinstance(fallback, dict) or not fallback.get("any")
+            or fallback.get("range_mode") != "policy_core"
+            or any(not isinstance(fallback.get(key), list) or not fallback[key]
+                   or any(not isinstance(token, str) or not token for token in fallback[key])
+                   for key in ("quote_all", "quote_any"))
+            or any(not isinstance(token, str) or not token for token in fallback.get("any", []))
+            or type(fallback.get("max_paragraphs")) is not int or not 1 <= fallback["max_paragraphs"] <= 8):
+        raise RuleV2Error("V3_VARIANT_CONTRACT_INVALID")
     if not isinstance(locate, dict) or locate.get("mode") not in LOCATE_MODES:
         raise RuleV2Error("V2_LOCATE_MODE_INVALID")
     if locate["mode"] == "code_literal" and not locate.get("triggers"):

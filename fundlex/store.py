@@ -51,8 +51,93 @@ def sha256_file(path: Path) -> str:
 EVALUATION_ARTIFACT_HASHES = {"evaluation_redline": "redline_sha256", "evaluation_final": "final_sha256"}
 
 
+def _requires_actual_review(report: dict[str, Any]) -> bool:
+    try:
+        return tuple(int(part) for part in report.get("engine_version", "0.0.0").split(".")) >= (0, 3, 0)
+    except (ValueError, AttributeError):
+        raise ValueError("ENGINE_VERSION_INVALID") from None
+
+
+def _review_rejected_report_only(report: dict[str, Any], artifacts: dict[str, Path]) -> bool:
+    plan = report.get("edit_plan") or {}
+    return (_requires_actual_review(report) and report.get("delivery_status") == "incomplete"
+            and plan.get("count") == 0 and plan.get("executable") is False
+            and plan.get("reason") == "V3_ARTIFACT_REVIEW_REJECTED"
+            and not {"final", "redline", "evaluation_final", "evaluation_redline"} & set(artifacts))
+
+
+def _validate_actual_review(report: dict[str, Any], validation: dict[str, Any]) -> None:
+    if not _requires_actual_review(report) or validation["kind"] not in {"evaluated_edits", "validated_edits"}:
+        return
+    from .v2 import canonical_sha
+    records = report.get("actual_content_verifications")
+    if not isinstance(records, list) or not records or not isinstance(records[-1], dict):
+        raise ValueError("ACTUAL_CONTENT_REVIEW_MISSING")
+    review = records[-1]
+    if review.get("passed") is not True or review.get("record_sha256") != canonical_sha(
+            {key: value for key, value in review.items() if key != "record_sha256"}):
+        raise ValueError("ACTUAL_CONTENT_REVIEW_INVALID")
+    plan = report.get("edit_plan") or {}
+    bindings = {"source_sha256": report.get("source_sha256"), "plan_sha256": plan.get("sha256"),
+                "redline_sha256": validation.get("redline_sha256"),
+                "final_sha256": validation.get("final_sha256")}
+    if any(not digest or review.get(key) != digest for key, digest in bindings.items()):
+        raise ValueError("ACTUAL_CONTENT_REVIEW_BINDING_MISMATCH")
+    edits = plan.get("edits")
+    actions = review.get("actions")
+    if (not isinstance(edits, list) or not edits or plan.get("count") != len(edits)
+            or not isinstance(actions, list) or not actions
+            or "actual_content_verification" not in validation.get("checks", [])):
+        raise ValueError("ACTUAL_CONTENT_REVIEW_COVERAGE_MISSING")
+    if any(not isinstance(edit, dict) or not edit.get("action_id") for edit in edits):
+        raise ValueError("ACTUAL_CONTENT_REVIEW_COVERAGE_MISSING")
+    if canonical_sha(edits) != plan.get("sha256"):
+        raise ValueError("ACTUAL_CONTENT_REVIEW_PLAN_MISMATCH")
+    expected = {edit.get("action_id") for edit in edits}
+    seen = set()
+    for action in actions:
+        if not isinstance(action, dict):
+            raise ValueError("ACTUAL_CONTENT_REVIEW_COVERAGE_MISSING")
+        identifier = action.get("action_id")
+        windows = action.get("windows")
+        if (identifier not in expected or identifier in seen or action.get("passed") is not True
+                or not isinstance(windows, list) or not windows
+                or any(not isinstance(window, dict) or window.get("passed") is not True for window in windows)):
+            raise ValueError("ACTUAL_CONTENT_REVIEW_COVERAGE_MISSING")
+        locations = {edit.get("location") for edit in edits if edit["action_id"] == identifier}
+        covered = {location for window in windows for location in window.get("coverage_locations", [])}
+        edited = {location for window in windows for location in window.get("edit_locations", [])}
+        if not locations or not locations.issubset(covered & edited):
+            raise ValueError("ACTUAL_CONTENT_REVIEW_COVERAGE_MISSING")
+        requirements = {requirement.get("id") for edit in edits if edit["action_id"] == identifier
+                        for requirement in (edit.get("verification") or {}).get("requirements", [])}
+        if not requirements or None in requirements:
+            raise ValueError("ACTUAL_CONTENT_REVIEW_COVERAGE_MISSING")
+        for window in windows:
+            required = {"PRESERVATION"}
+            if window.get("edit_locations"):
+                required |= requirements | {"COVERAGE"}
+            items = window.get("items")
+            if not isinstance(items, list) or not items:
+                raise ValueError("ACTUAL_CONTENT_REVIEW_COVERAGE_MISSING")
+            identifiers = []
+            for item in items:
+                if (not isinstance(item, dict) or item.get("action_id") != identifier
+                        or item.get("result") != "satisfied" or not item.get("evidence_quote")
+                        or item.get("evidence_source") not in {"before", "after"}):
+                    raise ValueError("ACTUAL_CONTENT_REVIEW_INVALID")
+                identifiers.append(item.get("requirement_id"))
+            if len(identifiers) != len(set(identifiers)) or set(identifiers) != required:
+                raise ValueError("ACTUAL_CONTENT_REVIEW_COVERAGE_MISSING")
+        seen.add(identifier)
+    if seen != expected:
+        raise ValueError("ACTUAL_CONTENT_REVIEW_COVERAGE_MISSING")
+
+
 def validate_delivery(report: dict[str, Any], artifacts: dict[str, Path]) -> None:
     if report.get("execution_mode") == "evaluation":
+        if _review_rejected_report_only(report, artifacts):
+            return
         # Evaluation outputs are technically validated but never releasable contracts.
         if report.get("delivery_status") not in {"evaluation_modified", "evaluation_modified_with_exceptions",
                                                  "evaluation_unmodified", "incomplete"}:
@@ -72,6 +157,7 @@ def validate_delivery(report: dict[str, Any], artifacts: dict[str, Path]) -> Non
             if kind not in artifacts or not artifacts[kind].is_file() \
                     or validation.get(hash_key) != sha256_file(artifacts[kind]):
                 raise ValueError("ARTIFACT_VERIFICATION_MISMATCH")
+        _validate_actual_review(report, validation)
         return
     if report.get("delivery_status") not in {"complete", "complete_with_exceptions"}:
         return
@@ -91,6 +177,7 @@ def validate_delivery(report: dict[str, Any], artifacts: dict[str, Path]) -> Non
     for kind in ("final", "redline"):
         if not artifacts[kind].is_file() or validation.get(f"{kind}_sha256") != sha256_file(artifacts[kind]):
             raise ValueError("ARTIFACT_VERIFICATION_MISMATCH")
+    _validate_actual_review(report, validation)
 
 
 class RunStore:
@@ -276,6 +363,26 @@ class RunStore:
         path = self.object_path(row["object_key"])
         if not path.is_file() or path.stat().st_size != row["size"] or sha256_file(path) != row["sha256"]:
             raise Conflict("artifact integrity check failed")
+        if kind in {"final", "redline", "evaluation_final", "evaluation_redline"}:
+            with self._connect() as db:
+                document = db.execute("SELECT execution_mode,report_json,source_sha256 FROM documents WHERE id=?",
+                                      (document_id,)).fetchone()
+                pair_rows = db.execute("SELECT * FROM artifacts WHERE document_id=?", (document_id,)).fetchall()
+            try:
+                report = json.loads(document["report_json"]) if document and document["report_json"] else {}
+                if _requires_actual_review(report):
+                    if report.get("source_sha256") != document["source_sha256"]:
+                        raise ValueError("ACTUAL_CONTENT_REVIEW_SOURCE_MISMATCH")
+                    if report.get("execution_mode") != document["execution_mode"]:
+                        raise ValueError("ACTUAL_CONTENT_REVIEW_BINDING_MISMATCH")
+                    if not kind.startswith("evaluation_") and report.get("delivery_status") not in {"complete", "complete_with_exceptions"}:
+                        raise ValueError("ACTUAL_CONTENT_REVIEW_BINDING_MISMATCH")
+                    expected = {"evaluation_final", "evaluation_redline"} if kind.startswith("evaluation_") else {"final", "redline"}
+                    pairs = {item["kind"]: self.object_path(item["object_key"]) for item in pair_rows
+                             if item["kind"] in expected}
+                    validate_delivery(report, pairs)
+            except (ValueError, TypeError) as exc:
+                raise Conflict(str(exc)) from exc
         return path, row["sha256"]
 
     def claim(self, *, lease_seconds: int = 300, max_attempts: int = 3) -> dict[str, Any] | None:
@@ -339,7 +446,8 @@ class RunStore:
                 raise Conflict("evaluation cannot publish final delivery")
             if delivery in {"evaluation_modified", "evaluation_modified_with_exceptions",
                             "evaluation_unmodified", "incomplete"} \
-                    and not {"evaluation_redline", "evaluation_final"}.issubset(artifacts):
+                    and not {"evaluation_redline", "evaluation_final"}.issubset(artifacts) \
+                    and not _review_rejected_report_only(report, artifacts):
                 raise Conflict("evaluation result requires both evaluated contracts")
         else:
             if delivery in {"complete", "complete_with_exceptions"} and not {"final", "redline"}.issubset(artifacts):
@@ -359,6 +467,8 @@ class RunStore:
                 raise Conflict("stale worker lease")
             if row["lease_until"] is not None and row["lease_until"] < now:
                 raise Conflict("expired worker lease")
+            if _requires_actual_review(report) and report.get("source_sha256") != row["source_sha256"]:
+                raise Conflict("ACTUAL_CONTENT_REVIEW_SOURCE_MISMATCH")
             for kind, path in artifacts.items():
                 # Attempt objects are immutable. Database pointer is published only while token is current.
                 key = f"results/{document_id}/{token}/{uuid.uuid4().hex}/{kind}{path.suffix}"
