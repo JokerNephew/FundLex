@@ -65,6 +65,13 @@ class LoginRequest(BaseModel):
     password: str = Field(min_length=1, max_length=1024)
 
 
+class RegisterRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    username: str = Field(min_length=3, max_length=64)
+    password: str = Field(min_length=8, max_length=1024)
+    display_name: str = Field(default="", max_length=128)
+
+
 class PasswordChangeRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     old_password: str = Field(min_length=1, max_length=1024)
@@ -94,6 +101,15 @@ MAX_COMPRESSION_RATIO = int(os.environ.get("FUNDLEX_MAX_COMPRESSION_RATIO", "100
 
 def _auth_mode() -> str:
     return os.environ.get("FUNDLEX_AUTH_MODE", "dev")
+
+
+def _registration_open() -> bool:
+    """Self-service registration is available in password mode by default.
+
+    Set ``FUNDLEX_ALLOW_REGISTRATION=0`` to close it again without changing the
+    auth mode; the login screen hides the entry when it is closed.
+    """
+    return _auth_mode() == "password" and os.environ.get("FUNDLEX_ALLOW_REGISTRATION", "1") != "0"
 
 
 def _bearer_token(authorization: str | None) -> str | None:
@@ -280,7 +296,8 @@ def create_app(data_dir: str | Path | None = None, *, auth_db=None) -> FastAPI:
         mode = _auth_mode()
         if mode == "password" and identity is None:
             # Minimal pre-login payload: no ruleset or identity metadata leaks.
-            return {"auth_mode": mode, "login_required": True, "task_api": True}
+            return {"auth_mode": mode, "login_required": True, "task_api": True,
+                    "registration_open": _registration_open()}
         from .rules import RuleError, load_ruleset
         from .rules_v2 import RuleV2Error, load_ruleset_v2
         try:
@@ -302,6 +319,7 @@ def create_app(data_dir: str | Path | None = None, *, auth_db=None) -> FastAPI:
         except RuleV2Error:
             pass
         return {"auth_mode": mode, "login_required": mode == "password", "task_api": True,
+                "registration_open": _registration_open(),
                 "ruleset_version": rule.version, "ruleset_sha256": rule.sha256,
                 "actions_total": len(rule.actions), "auto_write_enabled": rule.auto_write_enabled,
                 "auto_write_count": sum(bool(a["auto_write"]) for a in rule.actions),
@@ -322,6 +340,25 @@ def create_app(data_dir: str | Path | None = None, *, auth_db=None) -> FastAPI:
             raise HTTPException(403, "account is disabled") from exc
         except InvalidCredentials as exc:
             raise HTTPException(401, "invalid username or password") from exc
+        return {"token": sessions.login(record["id"]), "user": _public_user(record)}
+
+    @application.post("/api/auth/register", status_code=201)
+    def auth_register(payload: RegisterRequest, request: Request):
+        """Self-service account creation; returns a session like login does."""
+        if _auth_mode() != "password":
+            raise HTTPException(404, "not found")
+        if not _registration_open():
+            raise HTTPException(403, "registration is disabled")
+        from .auth import UserExists
+        from .auth import ValidationError as AuthValidationError
+        users, sessions = request.app.state.users, request.app.state.sessions
+        try:
+            record = users.create_user(payload.username.strip(), payload.password,
+                                       payload.display_name.strip(), "member")
+        except UserExists as exc:
+            raise HTTPException(409, "username already exists") from exc
+        except (AuthValidationError, ValueError) as exc:
+            raise HTTPException(422, str(exc)) from exc
         return {"token": sessions.login(record["id"]), "user": _public_user(record)}
 
     @application.post("/api/auth/logout")

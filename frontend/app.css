@@ -51,6 +51,11 @@
 .login-card{width:min(400px,100%);background:var(--paper);border:1px solid var(--line);border-radius:14px;box-shadow:0 18px 45px rgba(34,40,48,.12);padding:30px 28px;display:flex;flex-direction:column;gap:8px}
 .login-logo{height:40px;width:auto;object-fit:contain;align-self:flex-start}
 .pwd-actions{display:flex;gap:10px;margin-top:10px}.pwd-actions .btn{flex:1}
+.login-alt{font-size:13px;color:var(--muted);margin:6px 0 0;text-align:center}
+.user-create{display:flex;flex-wrap:wrap;gap:10px;align-items:flex-start}
+.user-create input,.user-create select{border:1px solid #cfd5db;border-radius:7px;padding:8px 10px;font:inherit;background:#fff;min-width:0;flex:1 1 230px}
+.user-create .field-error{flex-basis:100%;margin:0}
+.user-create .btn{flex:0 0 auto}
 .login-card h1{font-size:20px;margin:6px 0 0}
 .login-sub{color:var(--muted);font-size:13px;margin:0 0 8px}
 .login-card label{font-size:12px;font-weight:650;color:#4e5964;margin-top:6px}
