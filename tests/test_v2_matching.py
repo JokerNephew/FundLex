@@ -132,7 +132,7 @@ def test_one_paragraph_deterministic_and_variant_targets_both_inventoried(tmp_pa
     assert len(result["edits"]) == 2
 
 
-@pytest.mark.parametrize("value", [quotes("不存在的原文"), quotes("申购费率由管理人决定。"), {"quotes": []}])
+@pytest.mark.parametrize("value", [quotes("不存在的原文"), quotes("申购费率由管理人决定。")])
 def test_unresolved_variant_rejects_whole_action(tmp_path, package, profile, value):
     repeated = "申购费率由管理人决定。"
     result, _, _, _ = execute(tmp_path, package, profile, [
@@ -141,6 +141,18 @@ def test_unresolved_variant_rejects_whole_action(tmp_path, package, profile, val
         [("locate_target", value)])
     assert not result["edits"]
     assert result["actions"][0]["status"] == "failed"
+
+
+def test_empty_variant_answer_records_not_found_without_failing_siblings(tmp_path, package, profile):
+    repeated = "申购费率由管理人决定。"
+    result, _, _, _ = execute(tmp_path, package, profile, [
+        ("heading", "基金份额的申购与赎回"),
+        ("text", "申购和赎回的价格、费用及其用途"), ("text", repeated * 2)],
+        [("locate_target", {"quotes": []})])
+    assert not result["edits"]
+    action = result["actions"][0]
+    assert action["status"] == "not_matched"
+    assert any(target.get("reason") == "V3_VARIANT_NOT_FOUND" for target in action["targets"])
 
 
 def test_variant_budget_stop_propagates(tmp_path, package, profile):
@@ -305,6 +317,28 @@ def test_adjacent_actions_rejected_without_discarding_unrelated_action(tmp_path,
     assert {edit["action_id"] for edit in result["edits"]} == {"R13-A1"}
     assert {action["failure_reason"] for action in result["actions"] if action["status"] == "failed"} == {
         "V3_ACTION_RANGE_CONFLICT"}
+
+
+def test_paragraph_template_variant_core_must_relate_to_rule_text(package, profile):
+    from fundlex.v2 import _template_core_related
+    action = package.by_id("R14-A1")
+    related = ("C 类基金份额的销售服务费每日计提，按月支付，由基金托管人根据与基金管理人核对一致的财务数据，"
+               "自动在次月首5个工作日内从基金财产中一次性支付，管理人无需再出具资金划拨指令。"
+               "若遇法定节假日、休息日等，支付日期顺延。")
+    unrelated = related + "费用自动扣划后，管理人应进行核对，如发现数据不符，及时联系托管人协商解决。"
+    assert _template_core_related(related, action, profile)
+    assert not _template_core_related(unrelated, action, profile)
+
+
+def test_variant_empty_model_answer_is_not_a_failure(tmp_path, package, profile):
+    host = "销售服务费主要用于支付销售机构佣金和促销费用。"
+    result, _, _, _ = execute(tmp_path, package, profile, [
+        ("heading", "基金费用与税收"), ("text", "基金销售服务费"), ("text", host)],
+        [("locate_target", {"quotes": []})], ids=("R15-A1",))
+    action = result["actions"][0]
+    assert not result["edits"]
+    assert action["status"] == "not_matched"
+    assert any(target.get("reason") == "V3_VARIANT_NOT_FOUND" for target in action["targets"])
 
 
 def test_model_variant_context_limit_does_not_truncate(tmp_path, package, profile):

@@ -10,6 +10,7 @@ edit, and the record is re-verified again at every DOCX validation boundary.
 
 from __future__ import annotations
 
+import difflib
 import hashlib
 import json
 import re
@@ -704,6 +705,34 @@ def _delete_sentence_span(text: str, start: int, end: int) -> tuple[int, int]:
     return start, end
 
 
+TEMPLATE_CORE_SIMILARITY_MIN = 0.6
+
+
+def _template_core_related(quote: str, action: dict[str, Any], profile: dict[str, Any]) -> bool:
+    """Paragraph-scope template cores must end in a sentence related to the rule text.
+
+    A variant core may drop the class qualifier or adapt wording, but it must not
+    swallow an extra trailing obligation sentence that the published old text
+    never covered (replacing it would silently delete contract content).
+    """
+    if action["generation"]["mode"] != "template" or action["scope"] != "paragraph":
+        return True
+    sentences = [sentence for sentence in re.split(r"(?<=[。；])", quote) if sentence.strip()]
+    if not sentences:
+        return False
+    last = _compact(sentences[-1])
+    for old in action["locate"].get("old_texts", []):
+        instantiated, error, _slots = _instantiate_slots(old, action, profile)
+        if error or not instantiated:
+            continue
+        for candidate in re.split(r"(?<=[。；])", instantiated):
+            compact_candidate = _compact(candidate)
+            if (compact_candidate and
+                    difflib.SequenceMatcher(None, last, compact_candidate).ratio() >= TEMPLATE_CORE_SIMILARITY_MIN):
+                return True
+    return False
+
+
 def _locate_variants(action: dict[str, Any], spans: Sequence[tuple[Any, Any]],
                      inspection: DocumentInspection, profile: dict[str, Any], gateway: Any,
                      deterministic: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -749,7 +778,13 @@ def _locate_variants(action: dict[str, Any], spans: Sequence[tuple[Any, Any]],
             items = response.value.get("quotes", [])
             resolved = []
             if not items:
-                raise V2Error("V3_VARIANT_TARGET_UNRESOLVED")
+                # The model found no target in this candidate paragraph. Record it
+                # as not-a-target: misses are acceptable, but letting an empty
+                # candidate fail the action would revert its real targets too.
+                targets.append({**_base_target(span, inspection), "status": "excluded",
+                                "reason": "V3_VARIANT_NOT_FOUND", "quote": "",
+                                "model_event": _event_summary(gateway)})
+                continue
             for item in items:
                 quote = item.get("quote", "")
                 if not quote or span.text.count(quote) != 1 or not item.get("basis"):
@@ -761,6 +796,8 @@ def _locate_variants(action: dict[str, Any], spans: Sequence[tuple[Any, Any]],
                 if item.get("source", "contract") != "contract" or (
                         item.get("evidence_quote") and item["evidence_quote"] not in span.text):
                     raise V2Error("V3_VARIANT_EVIDENCE_MISMATCH")
+                if not _template_core_related(quote, action, profile):
+                    raise V2Error("V3_VARIANT_CORE_UNRELATED")
                 start = span.text.index(quote)
                 end = start + len(quote)
                 if delete_sentence:

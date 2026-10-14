@@ -43,6 +43,8 @@ REVIEW_INSTRUCTION = (
     "不得为“不得保留/已被替换”类要求引用BEFORE旧文，应引用AFTER中替代后的原文；所有条目的引文均不得为空；"
     "若目标段落在AFTER已为空或被删除，可引用同窗口邻近段落的AFTER原文作为PRESERVATION/COVERAGE证据。"
     "本动作自身授权的删除或替换目标不计入PRESERVATION损失；PRESERVATION只评估授权范围之外的文字。"
+    "BEFORE中除PUBLISHED_OLD_TEXT（规则旧句，允许类别前缀/措辞差异）及其他动作授权修改覆盖的内容外，"
+    "其余文字必须原样保留在AFTER；缺失即为PRESERVATION不通过。"
     "OTHER_AUTHORIZED_EDITS列出同一窗口内其他动作的已授权修改（含授权删除）；由这些授权造成的差异不构成本动作的PRESERVATION失败，"
     "但本动作不得删除或改动自身授权范围之外的任何内容。"
     "要求只对本动作目标适用，不要求修改其他业务条款。"
@@ -114,6 +116,13 @@ def _contexts(before: DocumentInspection, after: DocumentInspection, action: dic
             "PRESERVATION: 保留要求保留的合同内容，不新增无依据事实，余文不得与指引矛盾。\n"
             "COVERAGE: 所见范围内本动作所有应改目标均已处理。\n"
             f"[PROFILE_FACTS]\n{profile_facts_text(profile)}\n")
+    published = []
+    for old in (action.get("locate") or {}).get("old_texts", [])[:3]:
+        instantiated, error, _slots = _instantiate_slots(old, action, profile)
+        if not error and instantiated:
+            published.append(instantiated)
+    if published:
+        head += "[PUBLISHED_OLD_TEXT]\n" + "\n".join(published) + "\n"
     annotations: dict[str, list[str]] = {}
     for edit in other_edits or []:
         annotations.setdefault(edit["location"], []).append(
@@ -209,8 +218,17 @@ def _evaluate_window(action: dict, window: dict, items: list[dict], expected: se
         seen.add(requirement)
         if item.get("action_id") != action["action_id"]:
             structural.add(requirement)
-        if source not in {"before", "after"} or not quote_text or quote_text not in window[source]:
+        requirement_data = requirements.get(requirement)
+        check = (requirement_data or {}).get("check") or {}
+        kind = check.get("kind")
+        model_judged = (requirement in MODEL_JUDGED or requirement_data is None
+                        or kind in {"semantic_review", "boundary_scope"})
+        if source not in {"before", "after"}:
             structural.add(requirement)
+        elif not quote_text or quote_text not in window[source]:
+            # Unusable evidence on a model-judged item is retryable (consensus);
+            # on a code-provable item it is a hard failure.
+            (model_only if model_judged else structural).add(requirement)
         elif source == "before":
             survives = quote_text in window["after"]
             if requirement in MODEL_JUDGED:
@@ -219,11 +237,6 @@ def _evaluate_window(action: dict, window: dict, items: list[dict], expected: se
                     structural.add(requirement)
             elif action.get("operation") != "delete":
                 structural.add(requirement)
-        requirement_data = requirements.get(requirement)
-        check = (requirement_data or {}).get("check") or {}
-        kind = check.get("kind")
-        model_judged = (requirement in MODEL_JUDGED or requirement_data is None
-                        or kind in {"semantic_review", "boundary_scope"})
         code_ok: bool | None = None
         if requirement_data is not None:
             if kind == "delete_only":

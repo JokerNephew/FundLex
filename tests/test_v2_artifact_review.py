@@ -344,6 +344,20 @@ def test_model_judged_failure_gets_one_consensus_retry():
     assert result["actions"][0]["windows"][0]["consensus_event"] is not None
 
 
+def test_contexts_include_published_old_text_for_preservation_review():
+    action = {"action_id": "R99-A1", "operation": "replace",
+              "locate": {"old_texts": ["收费方式由基金管理人确定。"]},
+              "generation": {"mode": "template", "template_text": "收费方式由基金托管人确定。"},
+              "requirements": [{"id": "R99-REQ-1", "kind": "must_preserve", "text": "固定新文",
+                                "check": {"kind": "template_exact"}, "verification": "code"}],
+              "semantics": ACTION["semantics"]}
+    before = inspection(["收费方式由基金管理人确定。"], "source")
+    after = inspection(["收费方式由基金托管人确定。"], "final")
+    windows = _contexts(before, after, action, [{"action_id": "R99-A1", "location": "p0"}], {}, 4000)
+    assert "[PUBLISHED_OLD_TEXT]" in windows[0]["context"]
+    assert "收费方式由基金管理人确定。" in windows[0]["context"]
+
+
 def test_full_sections_are_split_without_truncating_paragraphs():
     before = inspection(["原文" + str(i) + "甲" * 280 for i in range(3)], "source")
     after = inspection(["产物" + str(i) + "乙" * 280 for i in range(3)], "final")
