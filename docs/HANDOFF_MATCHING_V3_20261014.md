@@ -2,6 +2,8 @@
 
 ## 第二部分：第二次会话收尾（2026-10-14 下午）
 
+**追加更新（当日傍晚，进行中）**：已接入 OpenCode Go 端点（`https://opencode.ai/inference/go/v1`，模型 `deepseek-v4.1-flash`，需 `x-opencode-session` 稳定会话头与自有 User-Agent；用 `FUNDLEX_MODEL_EXTRA_HEADERS_JSON`/`FUNDLEX_MODEL_USER_AGENT` 配置；本地 Windows 用户级环境已切换）。后续协议修复：段落模板变体**尾句相关度保护**（拒绝吞掉尾部义务句，修复 U07 类内容丢失）、**空变体答复记为 `V3_VARIANT_NOT_FOUND`**（不再连坐回滚同动作其余目标，修复 P14 类）、模型判定类证据的空/不可用引文改走**一次有界复核**（修复 P15 类）、后验上下文新增 **`PUBLISHED_OLD_TEXT`** 供保留检查对照；P08 R15-A2 经产品负责人裁定为**标签分歧**（整句删除正确，标签与阈值未改，处置见 `IMPLEMENTATION_PLAN.md`）。最终证据运行 `final4-fixtures/final4-unseen8/final4-pilot16` 已启动（引擎 `6dc8357c…`、规则 `e9aeef0a…`、461 测试通过、审计 22+23）；跑完后按下述清单评分→发布→交付复验。
+
 **冻结状态**：引擎 `8a914ddb3e7aa1c0574786c5a4beef706fae8a7e2f4f17d2133ad5c013c117ab`；规则包 `e9aeef0a5bc9a89f1e055ff67d39d2c97e1c8834d39c46808bfa5fe6fade7a33`（未发布、22 动作、草案同步）；全套 **454 passed**（含 MySQL 实库）；确定性审计 **22 正例 + 23 反例全过、0 错误写入**（`var/matching-upgrade-20261014/audit-final2/`）。
 
 **本轮修复（全部有测试）**：
