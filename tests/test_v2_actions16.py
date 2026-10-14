@@ -193,7 +193,11 @@ def test_paragraph_scope_mismatch_fails_closed(tmp_path):
     document.add_paragraph(old_texts("R15-A1")[0] + "本段还包含其他必须保留的内容。")
     source = tmp_path / "mismatch.docx"
     document.save(source)
-    outcome, action, _ = plan_one("R15-A1", source, MULTI)
+    inspection = inspect_docx(source, full=True)
+    gateway = ScriptedGateway([("locate_target", {"quotes": []})])
+    outcome = plan_v2(inspection, MULTI, load_ruleset_v2(), gateway,
+                      engine_build_value=engine_build(), actions=["R15-A1"])
+    action = outcome["actions"][0]
     assert action["status"] == "failed"
     assert outcome["edits"] == []
     assert any(target.get("reason") == "V2_SCOPE_TEXT_MISMATCH" for target in action["targets"])

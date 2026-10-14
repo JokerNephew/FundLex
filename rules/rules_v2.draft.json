@@ -4,7 +4,7 @@
   "compiled_at": "2026-10-13",
   "source": {
     "description": "由 v1 来源指引整理的可执行语义契约；模板仅作参考文案，不再要求生成文字逐字相等",
-    "v1_rules_sha256": "73122317f6f3d6fa9487cf143d8df48c0c2f0a349dc58fbac4a7fe8a7c94c012",
+    "v1_rules_sha256": "c3edf6476e9e22b999e9b5a574ab2db8e7a632cf26da253580e398ed77fd9050",
     "design_doc": "docs/AI_EDITING_DESIGN.md"
   },
   "release_policy": {
@@ -21,6 +21,20 @@
       "section_aliases": [],
       "subsection_anchor": "基金份额类别",
       "subsection_aliases": [],
+      "scope_resolution": {
+        "mode": "model_fallback",
+        "max_sections": 4,
+        "max_range_paragraphs": 16,
+        "business_candidates": {
+          "all": [
+            "基金份额"
+          ],
+          "any": [
+            "分为",
+            "类别"
+          ]
+        }
+      },
       "regions": [
         "body",
         "summary"
@@ -134,7 +148,7 @@
       ],
       "source_provenance": {
         "v1_rule_source": "rules/rules_v1.json",
-        "v1_rules_sha256": "73122317f6f3d6fa9487cf143d8df48c0c2f0a349dc58fbac4a7fe8a7c94c012",
+        "v1_rules_sha256": "c3edf6476e9e22b999e9b5a574ab2db8e7a632cf26da253580e398ed77fd9050",
         "template_source_paragraph": 3,
         "template_source_provenance": [
           {
@@ -182,6 +196,20 @@
         "基金的份额类别",
         "基金份额类别的设置"
       ],
+      "scope_resolution": {
+        "mode": "model_fallback",
+        "max_sections": 4,
+        "max_range_paragraphs": 16,
+        "business_candidates": {
+          "all": [
+            "基金份额"
+          ],
+          "any": [
+            "分为",
+            "类别"
+          ]
+        }
+      },
       "regions": [
         "body",
         "summary"
@@ -295,7 +323,7 @@
       ],
       "source_provenance": {
         "v1_rule_source": "rules/rules_v1.json",
-        "v1_rules_sha256": "73122317f6f3d6fa9487cf143d8df48c0c2f0a349dc58fbac4a7fe8a7c94c012",
+        "v1_rules_sha256": "c3edf6476e9e22b999e9b5a574ab2db8e7a632cf26da253580e398ed77fd9050",
         "template_source_paragraph": 12,
         "template_source_provenance": [
           {
@@ -343,6 +371,11 @@
         "基金的份额类别",
         "基金份额类别的设置"
       ],
+      "scope_resolution": {
+        "mode": "model_fallback",
+        "max_sections": 4,
+        "max_range_paragraphs": 16
+      },
       "regions": [
         "body",
         "summary"
@@ -387,6 +420,20 @@
           "trim_whitespace": true,
           "require_source_sentence_boundary": false
         },
+        "variant_fallback": {
+          "any": [
+            "备案"
+          ],
+          "max_paragraphs": 8,
+          "range_mode": "policy_core",
+          "quote_all": [
+            "备案"
+          ],
+          "quote_any": [
+            "报",
+            "备案"
+          ]
+        },
         "old_texts": [
           "并报中国证监会备案"
         ]
@@ -419,7 +466,7 @@
       "model_verification": [],
       "source_provenance": {
         "v1_rule_source": "rules/rules_v1.json",
-        "v1_rules_sha256": "73122317f6f3d6fa9487cf143d8df48c0c2f0a349dc58fbac4a7fe8a7c94c012",
+        "v1_rules_sha256": "c3edf6476e9e22b999e9b5a574ab2db8e7a632cf26da253580e398ed77fd9050",
         "template_source_paragraph": 20,
         "template_source_provenance": [
           {
@@ -455,6 +502,16 @@
         "基金的份额类别",
         "基金份额类别的设置"
       ],
+      "scope_resolution": {
+        "mode": "model_fallback",
+        "max_sections": 4,
+        "max_range_paragraphs": 16,
+        "business_candidates": {
+          "any": [
+            "转换"
+          ]
+        }
+      },
       "regions": [
         "body",
         "summary"
@@ -528,7 +585,7 @@
       "model_verification": [],
       "source_provenance": {
         "v1_rule_source": "rules/rules_v1.json",
-        "v1_rules_sha256": "73122317f6f3d6fa9487cf143d8df48c0c2f0a349dc58fbac4a7fe8a7c94c012",
+        "v1_rules_sha256": "c3edf6476e9e22b999e9b5a574ab2db8e7a632cf26da253580e398ed77fd9050",
         "template_source_paragraph": 25,
         "template_source_provenance": [
           {
@@ -560,6 +617,16 @@
         "申购和赎回的费用及其用途",
         "申购与赎回的费用及其用途"
       ],
+      "scope_resolution": {
+        "mode": "model_fallback",
+        "max_sections": 4,
+        "max_range_paragraphs": 16,
+        "business_candidates": {
+          "any": [
+            "持续持有"
+          ]
+        }
+      },
       "regions": [
         "body",
         "summary"
@@ -632,7 +699,7 @@
       "model_verification": [],
       "source_provenance": {
         "v1_rule_source": "rules/rules_v1.json",
-        "v1_rules_sha256": "73122317f6f3d6fa9487cf143d8df48c0c2f0a349dc58fbac4a7fe8a7c94c012",
+        "v1_rules_sha256": "c3edf6476e9e22b999e9b5a574ab2db8e7a632cf26da253580e398ed77fd9050",
         "template_source_paragraph": 56,
         "template_source_provenance": [
           {
@@ -664,6 +731,21 @@
         "申购和赎回的费用及其用途",
         "申购与赎回的费用及其用途"
       ],
+      "scope_resolution": {
+        "mode": "model_fallback",
+        "max_sections": 4,
+        "max_range_paragraphs": 16,
+        "business_candidates": {
+          "all": [
+            "赎回费用"
+          ],
+          "any": [
+            "承担",
+            "归入基金财产",
+            "计入基金财产"
+          ]
+        }
+      },
       "regions": [
         "body",
         "summary"
@@ -827,7 +909,7 @@
       ],
       "source_provenance": {
         "v1_rule_source": "rules/rules_v1.json",
-        "v1_rules_sha256": "73122317f6f3d6fa9487cf143d8df48c0c2f0a349dc58fbac4a7fe8a7c94c012",
+        "v1_rules_sha256": "c3edf6476e9e22b999e9b5a574ab2db8e7a632cf26da253580e398ed77fd9050",
         "template_source_paragraph": 52,
         "template_source_provenance": [
           {
@@ -868,6 +950,11 @@
         "基金的份额类别",
         "基金份额类别的设置"
       ],
+      "scope_resolution": {
+        "mode": "model_fallback",
+        "max_sections": 4,
+        "max_range_paragraphs": 16
+      },
       "regions": [
         "body",
         "summary"
@@ -910,6 +997,20 @@
         "triggers": [
           "调低赎回费率"
         ],
+        "variant_fallback": {
+          "any": [
+            "赎回费率"
+          ],
+          "max_paragraphs": 8,
+          "range_mode": "policy_core",
+          "quote_all": [
+            "赎回费率"
+          ],
+          "quote_any": [
+            "调低",
+            "降低"
+          ]
+        },
         "old_texts": [
           "调低赎回费率"
         ]
@@ -957,7 +1058,7 @@
       "model_verification": [],
       "source_provenance": {
         "v1_rule_source": "rules/rules_v1.json",
-        "v1_rules_sha256": "73122317f6f3d6fa9487cf143d8df48c0c2f0a349dc58fbac4a7fe8a7c94c012",
+        "v1_rules_sha256": "c3edf6476e9e22b999e9b5a574ab2db8e7a632cf26da253580e398ed77fd9050",
         "template_source_paragraph": 20,
         "template_source_provenance": [
           {
@@ -993,6 +1094,11 @@
         "基金的份额类别",
         "基金份额类别的设置"
       ],
+      "scope_resolution": {
+        "mode": "model_fallback",
+        "max_sections": 4,
+        "max_range_paragraphs": 16
+      },
       "regions": [
         "body",
         "summary"
@@ -1035,6 +1141,20 @@
         "triggers": [
           "、调低赎回费率"
         ],
+        "variant_fallback": {
+          "any": [
+            "赎回费率"
+          ],
+          "max_paragraphs": 8,
+          "range_mode": "policy_core",
+          "quote_all": [
+            "赎回费率"
+          ],
+          "quote_any": [
+            "调低",
+            "降低"
+          ]
+        },
         "old_texts": [
           "、调低赎回费率"
         ]
@@ -1066,7 +1186,7 @@
       "model_verification": [],
       "source_provenance": {
         "v1_rule_source": "rules/rules_v1.json",
-        "v1_rules_sha256": "73122317f6f3d6fa9487cf143d8df48c0c2f0a349dc58fbac4a7fe8a7c94c012",
+        "v1_rules_sha256": "c3edf6476e9e22b999e9b5a574ab2db8e7a632cf26da253580e398ed77fd9050",
         "template_source_paragraph": 20,
         "template_source_provenance": [
           {
@@ -1098,6 +1218,11 @@
         "申购和赎回的费用及其用途",
         "申购与赎回的费用及其用途"
       ],
+      "scope_resolution": {
+        "mode": "model_fallback",
+        "max_sections": 4,
+        "max_range_paragraphs": 16
+      },
       "regions": [
         "body",
         "summary"
@@ -1140,6 +1265,25 @@
         "triggers": [
           "本基金的申购费率由基金管理人决定，并在招募说明书中列示。"
         ],
+        "variant_fallback": {
+          "any": [
+            "决定",
+            "列示"
+          ],
+          "max_paragraphs": 8,
+          "range_mode": "policy_core",
+          "all": [
+            "申购费率"
+          ],
+          "quote_all": [
+            "申购费率"
+          ],
+          "quote_any": [
+            "决定",
+            "确定",
+            "列示"
+          ]
+        },
         "old_texts": [
           "本基金的申购费率由基金管理人决定，并在招募说明书中列示。"
         ]
@@ -1175,7 +1319,7 @@
       "model_verification": [],
       "source_provenance": {
         "v1_rule_source": "rules/rules_v1.json",
-        "v1_rules_sha256": "73122317f6f3d6fa9487cf143d8df48c0c2f0a349dc58fbac4a7fe8a7c94c012",
+        "v1_rules_sha256": "c3edf6476e9e22b999e9b5a574ab2db8e7a632cf26da253580e398ed77fd9050",
         "template_source_paragraph": 29,
         "template_source_provenance": [
           {
@@ -1207,6 +1351,11 @@
         "申购和赎回的费用及其用途",
         "申购与赎回的费用及其用途"
       ],
+      "scope_resolution": {
+        "mode": "model_fallback",
+        "max_sections": 4,
+        "max_range_paragraphs": 16
+      },
       "regions": [
         "body",
         "summary"
@@ -1254,6 +1403,25 @@
         "triggers": [
           "本基金的申购费率由基金管理人决定，并在招募说明书中列示。"
         ],
+        "variant_fallback": {
+          "any": [
+            "决定",
+            "列示"
+          ],
+          "max_paragraphs": 8,
+          "range_mode": "policy_core",
+          "all": [
+            "申购费率"
+          ],
+          "quote_all": [
+            "申购费率"
+          ],
+          "quote_any": [
+            "决定",
+            "确定",
+            "列示"
+          ]
+        },
         "old_texts": [
           "本基金的申购费率由基金管理人决定，并在招募说明书中列示。"
         ],
@@ -1298,7 +1466,7 @@
       "model_verification": [],
       "source_provenance": {
         "v1_rule_source": "rules/rules_v1.json",
-        "v1_rules_sha256": "73122317f6f3d6fa9487cf143d8df48c0c2f0a349dc58fbac4a7fe8a7c94c012",
+        "v1_rules_sha256": "c3edf6476e9e22b999e9b5a574ab2db8e7a632cf26da253580e398ed77fd9050",
         "template_source_paragraph": 29,
         "template_source_provenance": [
           {
@@ -1334,6 +1502,11 @@
         "申购和赎回的费用及其用途",
         "申购与赎回的费用及其用途"
       ],
+      "scope_resolution": {
+        "mode": "model_fallback",
+        "max_sections": 4,
+        "max_range_paragraphs": 16
+      },
       "regions": [
         "body",
         "summary"
@@ -1376,6 +1549,21 @@
         "triggers": [
           "赎回金额为按实际确认的有效赎回份额乘以当日对应份额类别的基金份额净值并扣除相应的费用，赎回金额单位为元。"
         ],
+        "variant_fallback": {
+          "any": [
+            "赎回金额"
+          ],
+          "max_paragraphs": 8,
+          "range_mode": "policy_core",
+          "quote_all": [
+            "赎回金额"
+          ],
+          "quote_any": [
+            "净值",
+            "费用",
+            "赎回份额"
+          ]
+        },
         "old_texts": [
           "赎回金额为按实际确认的有效赎回份额乘以当日对应份额类别的基金份额净值并扣除相应的费用，赎回金额单位为元。"
         ]
@@ -1411,7 +1599,7 @@
       "model_verification": [],
       "source_provenance": {
         "v1_rule_source": "rules/rules_v1.json",
-        "v1_rules_sha256": "73122317f6f3d6fa9487cf143d8df48c0c2f0a349dc58fbac4a7fe8a7c94c012",
+        "v1_rules_sha256": "c3edf6476e9e22b999e9b5a574ab2db8e7a632cf26da253580e398ed77fd9050",
         "template_source_paragraph": 37,
         "template_source_provenance": [
           {
@@ -1443,6 +1631,11 @@
         "申购和赎回的费用及其用途",
         "申购与赎回的费用及其用途"
       ],
+      "scope_resolution": {
+        "mode": "model_fallback",
+        "max_sections": 4,
+        "max_range_paragraphs": 16
+      },
       "regions": [
         "body",
         "summary"
@@ -1485,6 +1678,22 @@
         "triggers": [
           "申购费用由投资人承担，不列入基金财产。"
         ],
+        "variant_fallback": {
+          "any": [
+            "申购费用"
+          ],
+          "max_paragraphs": 8,
+          "range_mode": "policy_core",
+          "quote_all": [
+            "申购费用"
+          ],
+          "quote_any": [
+            "承担",
+            "负担",
+            "不列入",
+            "不计入"
+          ]
+        },
         "old_texts": [
           "申购费用由投资人承担，不列入基金财产。"
         ]
@@ -1521,7 +1730,7 @@
       "model_verification": [],
       "source_provenance": {
         "v1_rule_source": "rules/rules_v1.json",
-        "v1_rules_sha256": "73122317f6f3d6fa9487cf143d8df48c0c2f0a349dc58fbac4a7fe8a7c94c012",
+        "v1_rules_sha256": "c3edf6476e9e22b999e9b5a574ab2db8e7a632cf26da253580e398ed77fd9050",
         "template_source_paragraph": 44,
         "template_source_provenance": [
           {
@@ -1553,6 +1762,11 @@
         "申购和赎回的费用及其用途",
         "申购与赎回的费用及其用途"
       ],
+      "scope_resolution": {
+        "mode": "model_fallback",
+        "max_sections": 4,
+        "max_range_paragraphs": 16
+      },
       "regions": [
         "body",
         "summary"
@@ -1601,6 +1815,22 @@
           "本基金A类基金份额的申购费用由投资人承担，不列入基金财产；C类基金份额不收取申购费用。",
           "申购费用由投资人承担，不列入基金财产。"
         ],
+        "variant_fallback": {
+          "any": [
+            "申购费用"
+          ],
+          "max_paragraphs": 8,
+          "range_mode": "policy_core",
+          "quote_all": [
+            "申购费用"
+          ],
+          "quote_any": [
+            "承担",
+            "负担",
+            "不列入",
+            "不计入"
+          ]
+        },
         "old_texts": [
           "本基金A类基金份额的申购费用由投资人承担，不列入基金财产；C类基金份额不收取申购费用。",
           "申购费用由投资人承担，不列入基金财产。"
@@ -1646,7 +1876,7 @@
       "model_verification": [],
       "source_provenance": {
         "v1_rule_source": "rules/rules_v1.json",
-        "v1_rules_sha256": "73122317f6f3d6fa9487cf143d8df48c0c2f0a349dc58fbac4a7fe8a7c94c012",
+        "v1_rules_sha256": "c3edf6476e9e22b999e9b5a574ab2db8e7a632cf26da253580e398ed77fd9050",
         "template_source_paragraph": 47,
         "template_source_provenance": [
           {
@@ -1683,6 +1913,11 @@
         "申购和赎回的费用及其用途",
         "申购与赎回的费用及其用途"
       ],
+      "scope_resolution": {
+        "mode": "model_fallback",
+        "max_sections": 4,
+        "max_range_paragraphs": 16
+      },
       "regions": [
         "body",
         "summary"
@@ -1727,6 +1962,26 @@
           "基金管理人可以适当调低基金申购费率、赎回费率和转换费率。",
           "基金管理人可以适当调低基金申购费率、赎回费率、转换费率和销售服务费率。"
         ],
+        "variant_fallback": {
+          "any": [
+            "调低",
+            "下调",
+            "降低"
+          ],
+          "max_paragraphs": 8,
+          "range_mode": "policy_core",
+          "all": [
+            "申购费率"
+          ],
+          "quote_all": [
+            "申购费率"
+          ],
+          "quote_any": [
+            "调低",
+            "下调",
+            "降低"
+          ]
+        },
         "old_texts": [
           "基金管理人可以适当调低基金申购费率和赎回费率。",
           "基金管理人可以适当调低基金申购费率、赎回费率和转换费率。",
@@ -1776,7 +2031,7 @@
       "model_verification": [],
       "source_provenance": {
         "v1_rule_source": "rules/rules_v1.json",
-        "v1_rules_sha256": "73122317f6f3d6fa9487cf143d8df48c0c2f0a349dc58fbac4a7fe8a7c94c012",
+        "v1_rules_sha256": "c3edf6476e9e22b999e9b5a574ab2db8e7a632cf26da253580e398ed77fd9050",
         "template_source_paragraph": 61,
         "template_source_provenance": [
           {
@@ -1818,6 +2073,11 @@
         "申购和赎回的费用及其用途",
         "申购与赎回的费用及其用途"
       ],
+      "scope_resolution": {
+        "mode": "model_fallback",
+        "max_sections": 4,
+        "max_range_paragraphs": 16
+      },
       "regions": [
         "body",
         "summary"
@@ -1862,6 +2122,26 @@
           "基金管理人可以适当调低基金申购费率、赎回费率和转换费率。",
           "基金管理人可以适当调低基金申购费率、赎回费率、转换费率和销售服务费率。"
         ],
+        "variant_fallback": {
+          "any": [
+            "调低",
+            "下调",
+            "降低"
+          ],
+          "max_paragraphs": 8,
+          "range_mode": "policy_core",
+          "all": [
+            "申购费率"
+          ],
+          "quote_all": [
+            "申购费率"
+          ],
+          "quote_any": [
+            "调低",
+            "下调",
+            "降低"
+          ]
+        },
         "old_texts": [
           "基金管理人可以适当调低基金申购费率和赎回费率。",
           "基金管理人可以适当调低基金申购费率、赎回费率和转换费率。",
@@ -1911,7 +2191,7 @@
       "model_verification": [],
       "source_provenance": {
         "v1_rule_source": "rules/rules_v1.json",
-        "v1_rules_sha256": "73122317f6f3d6fa9487cf143d8df48c0c2f0a349dc58fbac4a7fe8a7c94c012",
+        "v1_rules_sha256": "c3edf6476e9e22b999e9b5a574ab2db8e7a632cf26da253580e398ed77fd9050",
         "template_source_paragraph": 61,
         "template_source_provenance": [
           {
@@ -1946,6 +2226,11 @@
       "section_aliases": [],
       "subsection_anchor": "基金销售服务费",
       "subsection_aliases": [],
+      "scope_resolution": {
+        "mode": "model_fallback",
+        "max_sections": 4,
+        "max_range_paragraphs": 16
+      },
       "regions": [
         "body",
         "summary"
@@ -1992,6 +2277,27 @@
         "triggers": [
           "C类基金份额的销售服务费每日计提，按月支付。由基金管理人向基金托管人发送基金销售服务费划付指令，经基金托管人复核后于次月首日起10个工作日内从基金财产中一次性支付给登记机构，由登记机构代付给销售机构。若遇法定节假日、公休日等，支付日期顺延。"
         ],
+        "variant_fallback": {
+          "any": [
+            "每日计提",
+            "按月",
+            "划付",
+            "支付给"
+          ],
+          "max_paragraphs": 8,
+          "range_mode": "policy_core",
+          "all": [
+            "销售服务费"
+          ],
+          "quote_all": [
+            "销售服务费"
+          ],
+          "quote_any": [
+            "计提",
+            "支付",
+            "划付"
+          ]
+        },
         "old_texts": [
           "C类基金份额的销售服务费每日计提，按月支付。由基金管理人向基金托管人发送基金销售服务费划付指令，经基金托管人复核后于次月首日起10个工作日内从基金财产中一次性支付给登记机构，由登记机构代付给销售机构。若遇法定节假日、公休日等，支付日期顺延。"
         ],
@@ -2035,7 +2341,7 @@
       "model_verification": [],
       "source_provenance": {
         "v1_rule_source": "rules/rules_v1.json",
-        "v1_rules_sha256": "73122317f6f3d6fa9487cf143d8df48c0c2f0a349dc58fbac4a7fe8a7c94c012",
+        "v1_rules_sha256": "c3edf6476e9e22b999e9b5a574ab2db8e7a632cf26da253580e398ed77fd9050",
         "template_source_paragraph": 74,
         "template_source_provenance": [
           {
@@ -2088,6 +2394,11 @@
       "section_aliases": [],
       "subsection_anchor": "基金销售服务费",
       "subsection_aliases": [],
+      "scope_resolution": {
+        "mode": "model_fallback",
+        "max_sections": 4,
+        "max_range_paragraphs": 16
+      },
       "regions": [
         "body",
         "summary"
@@ -2132,6 +2443,28 @@
         "triggers": [
           "C类基金份额的销售服务费主要用于支付销售机构佣金、以及基金管理人的基金行销广告费、促销活动费、基金份额持有人服务费等。"
         ],
+        "variant_fallback": {
+          "any": [
+            "主要用于",
+            "佣金",
+            "广告费",
+            "促销活动费"
+          ],
+          "max_paragraphs": 8,
+          "range_mode": "policy_core",
+          "all": [
+            "销售服务费"
+          ],
+          "quote_all": [
+            "销售服务费"
+          ],
+          "quote_any": [
+            "用于",
+            "佣金",
+            "广告",
+            "促销"
+          ]
+        },
         "old_texts": [
           "C类基金份额的销售服务费主要用于支付销售机构佣金、以及基金管理人的基金行销广告费、促销活动费、基金份额持有人服务费等。"
         ],
@@ -2166,7 +2499,7 @@
       "model_verification": [],
       "source_provenance": {
         "v1_rule_source": "rules/rules_v1.json",
-        "v1_rules_sha256": "73122317f6f3d6fa9487cf143d8df48c0c2f0a349dc58fbac4a7fe8a7c94c012",
+        "v1_rules_sha256": "c3edf6476e9e22b999e9b5a574ab2db8e7a632cf26da253580e398ed77fd9050",
         "template_source_paragraph": 88,
         "template_source_provenance": [
           {
@@ -2191,6 +2524,11 @@
       "section_aliases": [],
       "subsection_anchor": "基金销售服务费",
       "subsection_aliases": [],
+      "scope_resolution": {
+        "mode": "model_fallback",
+        "max_sections": 4,
+        "max_range_paragraphs": 16
+      },
       "regions": [
         "body",
         "summary"
@@ -2235,6 +2573,26 @@
         "triggers": [
           "C类基金份额的销售服务费使用范围不包括基金募集期间的上述费用。"
         ],
+        "variant_fallback": {
+          "any": [
+            "使用范围",
+            "募集期间",
+            "不包括"
+          ],
+          "max_paragraphs": 8,
+          "range_mode": "policy_core",
+          "all": [
+            "销售服务费"
+          ],
+          "quote_all": [
+            "销售服务费"
+          ],
+          "quote_any": [
+            "使用范围",
+            "募集期间",
+            "不包括"
+          ]
+        },
         "old_texts": [
           "C类基金份额的销售服务费使用范围不包括基金募集期间的上述费用。"
         ],
@@ -2269,7 +2627,7 @@
       "model_verification": [],
       "source_provenance": {
         "v1_rule_source": "rules/rules_v1.json",
-        "v1_rules_sha256": "73122317f6f3d6fa9487cf143d8df48c0c2f0a349dc58fbac4a7fe8a7c94c012",
+        "v1_rules_sha256": "c3edf6476e9e22b999e9b5a574ab2db8e7a632cf26da253580e398ed77fd9050",
         "template_source_paragraph": 89,
         "template_source_provenance": [
           {
@@ -2291,9 +2649,17 @@
       "action_id": "R16-A1",
       "description": "收益分配按类别费用收取不同调整",
       "section_anchor": "基金的收益与分配",
-      "section_aliases": [],
+      "section_aliases": [
+        "基金收益与分配",
+        "基金收益分配"
+      ],
       "subsection_anchor": "收益分配",
       "subsection_aliases": [],
+      "scope_resolution": {
+        "mode": "model_fallback",
+        "max_sections": 4,
+        "max_range_paragraphs": 16
+      },
       "regions": [
         "body",
         "summary"
@@ -2340,6 +2706,27 @@
         "triggers": [
           "由于本基金A类基金份额不收取销售服务费，而C类基金份额收取销售服务费"
         ],
+        "variant_fallback": {
+          "any": [
+            "由于",
+            "费用收取",
+            "可供分配利润"
+          ],
+          "max_paragraphs": 8,
+          "range_mode": "policy_core",
+          "all": [
+            "销售服务费"
+          ],
+          "quote_all": [
+            "基金份额",
+            "销售服务费"
+          ],
+          "quote_any": [
+            "由于",
+            "收取",
+            "费用"
+          ]
+        },
         "old_texts": [
           "由于本基金A类基金份额不收取销售服务费，而C类基金份额收取销售服务费"
         ],
@@ -2383,7 +2770,7 @@
       "model_verification": [],
       "source_provenance": {
         "v1_rule_source": "rules/rules_v1.json",
-        "v1_rules_sha256": "73122317f6f3d6fa9487cf143d8df48c0c2f0a349dc58fbac4a7fe8a7c94c012",
+        "v1_rules_sha256": "c3edf6476e9e22b999e9b5a574ab2db8e7a632cf26da253580e398ed77fd9050",
         "template_source_paragraph": 92,
         "template_source_provenance": [
           {
@@ -2408,6 +2795,11 @@
       "section_aliases": [],
       "subsection_anchor": "基金财产清算剩余资产的分配",
       "subsection_aliases": [],
+      "scope_resolution": {
+        "mode": "model_fallback",
+        "max_sections": 4,
+        "max_range_paragraphs": 16
+      },
       "regions": [
         "body",
         "summary"
@@ -2453,6 +2845,22 @@
           "依据基金财产清算的分配方案，将基金财产清算后的全部剩余资产扣除基金财产清算费用、交纳所欠税款并清偿基金债务后，按基金份额持有人持有的基金份额比例进行分配，并扣除相应的超额管理费（如涉及）。",
           "依据基金财产清算的分配方案，将基金财产清算后的全部剩余资产扣除基金财产清算费用、交纳所欠税款并清偿基金债务后，按基金份额持有人持有的基金份额比例进行分配，并加上返还基金份额持有人的或有管理费（如有）或扣除相应的超额管理费（如有）。"
         ],
+        "variant_fallback": {
+          "any": [
+            "清算",
+            "剩余资产"
+          ],
+          "max_paragraphs": 8,
+          "range_mode": "policy_core",
+          "quote_all": [
+            "基金财产"
+          ],
+          "quote_any": [
+            "清算",
+            "剩余资产",
+            "基金债务"
+          ]
+        },
         "old_texts": [
           "依据基金财产清算的分配方案，将基金财产清算后的全部剩余资产扣除基金财产清算费用、交纳所欠税款并清偿基金债务后，按基金份额持有人持有的基金份额比例进行分配，并扣除相应的超额管理费（如涉及）。",
           "依据基金财产清算的分配方案，将基金财产清算后的全部剩余资产扣除基金财产清算费用、交纳所欠税款并清偿基金债务后，按基金份额持有人持有的基金份额比例进行分配，并加上返还基金份额持有人的或有管理费（如有）或扣除相应的超额管理费（如有）。"
@@ -2490,7 +2898,7 @@
       "model_verification": [],
       "source_provenance": {
         "v1_rule_source": "rules/rules_v1.json",
-        "v1_rules_sha256": "73122317f6f3d6fa9487cf143d8df48c0c2f0a349dc58fbac4a7fe8a7c94c012",
+        "v1_rules_sha256": "c3edf6476e9e22b999e9b5a574ab2db8e7a632cf26da253580e398ed77fd9050",
         "template_source_paragraph": 96,
         "template_source_provenance": [
           {
@@ -2520,6 +2928,11 @@
       "section_aliases": [],
       "subsection_anchor": "基金财产清算剩余资产的分配",
       "subsection_aliases": [],
+      "scope_resolution": {
+        "mode": "model_fallback",
+        "max_sections": 4,
+        "max_range_paragraphs": 16
+      },
       "regions": [
         "body",
         "summary"
@@ -2565,6 +2978,22 @@
           "依据基金财产清算的分配方案，将基金财产清算后的全部剩余资产扣除基金财产清算费用、交纳所欠税款并清偿基金债务后，按基金份额持有人持有的基金份额比例进行分配，并扣除相应的超额管理费（如涉及）。",
           "依据基金财产清算的分配方案，将基金财产清算后的全部剩余资产扣除基金财产清算费用、交纳所欠税款并清偿基金债务后，按基金份额持有人持有的基金份额比例进行分配，并加上返还基金份额持有人的或有管理费（如有）或扣除相应的超额管理费（如有）。"
         ],
+        "variant_fallback": {
+          "any": [
+            "清算",
+            "剩余资产"
+          ],
+          "max_paragraphs": 8,
+          "range_mode": "policy_core",
+          "quote_all": [
+            "基金财产"
+          ],
+          "quote_any": [
+            "清算",
+            "剩余资产",
+            "基金债务"
+          ]
+        },
         "old_texts": [
           "依据基金财产清算的分配方案，将基金财产清算后的全部剩余资产扣除基金财产清算费用、交纳所欠税款并清偿基金债务后，按基金份额持有人持有的基金份额比例进行分配，并扣除相应的超额管理费（如涉及）。",
           "依据基金财产清算的分配方案，将基金财产清算后的全部剩余资产扣除基金财产清算费用、交纳所欠税款并清偿基金债务后，按基金份额持有人持有的基金份额比例进行分配，并加上返还基金份额持有人的或有管理费（如有）或扣除相应的超额管理费（如有）。"
@@ -2601,7 +3030,7 @@
       "model_verification": [],
       "source_provenance": {
         "v1_rule_source": "rules/rules_v1.json",
-        "v1_rules_sha256": "73122317f6f3d6fa9487cf143d8df48c0c2f0a349dc58fbac4a7fe8a7c94c012",
+        "v1_rules_sha256": "c3edf6476e9e22b999e9b5a574ab2db8e7a632cf26da253580e398ed77fd9050",
         "template_source_paragraph": 96,
         "template_source_provenance": [
           {
@@ -2631,6 +3060,11 @@
       "section_aliases": [],
       "subsection_anchor": "基金财产清算剩余资产的分配",
       "subsection_aliases": [],
+      "scope_resolution": {
+        "mode": "model_fallback",
+        "max_sections": 4,
+        "max_range_paragraphs": 16
+      },
       "regions": [
         "body",
         "summary"
@@ -2676,6 +3110,22 @@
         "triggers": [
           "依据基金财产清算的分配方案，将基金财产清算后的全部剩余资产扣除基金财产清算费用、交纳所欠税款并清偿基金债务后，按基金份额持有人持有的基金份额比例进行分配。"
         ],
+        "variant_fallback": {
+          "any": [
+            "清算",
+            "剩余资产"
+          ],
+          "max_paragraphs": 8,
+          "range_mode": "policy_core",
+          "quote_all": [
+            "基金财产"
+          ],
+          "quote_any": [
+            "清算",
+            "剩余资产",
+            "基金债务"
+          ]
+        },
         "old_texts": [
           "依据基金财产清算的分配方案，将基金财产清算后的全部剩余资产扣除基金财产清算费用、交纳所欠税款并清偿基金债务后，按基金份额持有人持有的基金份额比例进行分配。"
         ]
@@ -2711,7 +3161,7 @@
       "model_verification": [],
       "source_provenance": {
         "v1_rule_source": "rules/rules_v1.json",
-        "v1_rules_sha256": "73122317f6f3d6fa9487cf143d8df48c0c2f0a349dc58fbac4a7fe8a7c94c012",
+        "v1_rules_sha256": "c3edf6476e9e22b999e9b5a574ab2db8e7a632cf26da253580e398ed77fd9050",
         "template_source_paragraph": 102,
         "template_source_provenance": [
           {

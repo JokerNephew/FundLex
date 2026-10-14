@@ -1,6 +1,6 @@
 # FundLex 部署参数与本地运行边界
 
-截至 2026-10-13，本文列出代码实际实现的本地 profile 和生产部署待定项。默认值是开发保护措施，不构成吞吐、延迟或业务规则发布承诺。业务 action 是否允许自动写入仍由规则包发布门槛决定；诊断性零编辑副本不能当作最终合同。
+截至 2026-10-14，本文列出代码默认值和生产部署边界。4C8G 初始部署参数见 `DEPLOYMENT_GUIDE.md`（2 API / 1 worker / 模型并发 1）；该配置通过环境变量注入，不等于下表的开发默认值。默认值不构成吞吐或延迟承诺；action 写入仍由发布门槛决定。
 
 ## 本地存储、身份与 worker
 
@@ -8,7 +8,7 @@
 | --- | --- |
 | `FUNDLEX_DATA_DIR` | Windows 默认 `Path.home()/AppData/Local/FundLex/runtime`，典型为 `C:\Users\<用户>\AppData\Local\FundLex\runtime`。显式配置会覆盖默认；API 与 worker 必须指向同一目录。 |
 | `FUNDLEX_MODEL_LEDGER` | 默认数据目录下 `model_budget.sqlite`；所有属于同一预算范围的 gateway 必须使用同一 ledger。 |
-| `FUNDLEX_AUTH_MODE` | 默认 `dev`；请求必须带非空、最长 128 字符的 `X-FundLex-User`。任何其他模式返回 503，生产身份适配尚未实现。此头可由调用者自行填写，仅适合可信本机开发环境。 |
+| `FUNDLEX_AUTH_MODE` | 默认 `dev`，使用 `X-FundLex-User`，仅适合可信本机开发；生产使用已实现的 `password` 本地账号和持久会话。其他模式返回 503；OIDC/SSO 尚未实现。 |
 | worker 运行模式 | 本地目录 OS 文件锁限制同时只有一个执行中的 worker；SQLite 状态库启用 WAL。该机制没有完成多主机或生产并发验收。 |
 | worker 租约 | `Worker(..., lease_seconds=900)` 默认 900 秒；构造参数须为正数。处理期间以约租约三分之一间隔心跳，当前 token 且租约未过期才可续租、重试和发布。不是环境变量配置。 |
 | 合同尝试次数 | store 默认最多 3 次；退避基数 2 秒、指数增长并带 0.8–1.2 抖动，延迟上限 300 秒。可经 Python 参数调整，当前无对应环境变量。 |
@@ -43,7 +43,7 @@ API 限制在导入 `fundlex.api` 时读取；变更环境后须重启 API 进�
 | 环境变量 | 默认值 / 范围 |
 | --- | --- |
 | `FUNDLEX_MODEL_CONTEXT_CHARS` | 12000，单请求局部上下文字符上限 |
-| `FUNDLEX_MODEL_MAX_CALLS` | 16，单 gateway 实例逻辑调用上限 |
+| `FUNDLEX_MODEL_MAX_CALLS` | 默认 16；多对多定位及产物复核部署推荐 192，单 gateway 实例逻辑调用上限 |
 | `FUNDLEX_MODEL_MAX_OUTPUT_TOKENS` | 1500，单请求输出上限 |
 | `FUNDLEX_MODEL_TIMEOUT_S` | 45 秒；连接超时不超过 10 秒，读取与每次响应处理有界；重试会增加整个逻辑调用耗时。 |
 | `FUNDLEX_MODEL_RETRIES` | 1，即每逻辑请求最多初次加一次可重试尝试 |

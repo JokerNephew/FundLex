@@ -686,6 +686,55 @@ def build() -> dict:
         # Triggers and rule text come from the frozen v1 package; the v2 contract
         # adds semantics, checks and (for slot actions) class instantiation.
         locate = dict(contract["locate"])
+        # Authored business terms select candidates, never authorize writes.
+        # Position and the full policy requirements must still be model-bound.
+        variant_terms = {
+            "R03-A1": ["赎回费率"], "R03-A2": ["赎回费率"],
+            "R03-A3": ["备案"], "R05-A1": ["申购费率"], "R06-A1": ["申购费率"],
+            "R07-A1": ["赎回金额"], "R08-A1": ["申购费用"], "R09-A1": ["申购费用"],
+            "R12-A1": ["调低", "调整费率"], "R13-A1": ["调低", "调整费率"],
+            "R14-A1": ["销售服务费"], "R15-A1": ["销售服务费"], "R15-A2": ["销售服务费"],
+            "R16-A1": ["销售服务费"],
+            "R17-A1": ["清算", "剩余资产"], "R17-A2": ["清算", "剩余资产"],
+            "R17-A3": ["清算", "剩余资产"],
+        }
+        if action_id in variant_terms:
+            locate["variant_fallback"] = {"any": variant_terms[action_id], "max_paragraphs": 8,
+                                          "range_mode": "policy_core"}
+            business_filters = {
+                "R05-A1": (["申购费率"], ["决定", "列示"]),
+                "R06-A1": (["申购费率"], ["决定", "列示"]),
+                "R12-A1": (["申购费率"], ["调低", "下调", "降低"]),
+                "R13-A1": (["申购费率"], ["调低", "下调", "降低"]),
+                "R14-A1": (["销售服务费"], ["每日计提", "按月", "划付", "支付给"]),
+                "R15-A1": (["销售服务费"], ["主要用于", "佣金", "广告费", "促销活动费"]),
+                "R15-A2": (["销售服务费"], ["使用范围", "募集期间", "不包括"]),
+                "R16-A1": (["销售服务费"], ["由于", "费用收取", "可供分配利润"]),
+            }
+            if action_id in business_filters:
+                all_terms, any_terms = business_filters[action_id]
+                locate["variant_fallback"].update(all=all_terms, any=any_terms)
+            quote_filters = {
+                "R03-A1": (["赎回费率"], ["调低", "降低"]),
+                "R03-A2": (["赎回费率"], ["调低", "降低"]),
+                "R03-A3": (["备案"], ["报", "备案"]),
+                "R05-A1": (["申购费率"], ["决定", "确定", "列示"]),
+                "R06-A1": (["申购费率"], ["决定", "确定", "列示"]),
+                "R07-A1": (["赎回金额"], ["净值", "费用", "赎回份额"]),
+                "R08-A1": (["申购费用"], ["承担", "负担", "不列入", "不计入"]),
+                "R09-A1": (["申购费用"], ["承担", "负担", "不列入", "不计入"]),
+                "R12-A1": (["申购费率"], ["调低", "下调", "降低"]),
+                "R13-A1": (["申购费率"], ["调低", "下调", "降低"]),
+                "R14-A1": (["销售服务费"], ["计提", "支付", "划付"]),
+                "R15-A1": (["销售服务费"], ["用于", "佣金", "广告", "促销"]),
+                "R15-A2": (["销售服务费"], ["使用范围", "募集期间", "不包括"]),
+                "R16-A1": (["基金份额", "销售服务费"], ["由于", "收取", "费用"]),
+                "R17-A1": (["基金财产"], ["清算", "剩余资产", "基金债务"]),
+                "R17-A2": (["基金财产"], ["清算", "剩余资产", "基金债务"]),
+                "R17-A3": (["基金财产"], ["清算", "剩余资产", "基金债务"]),
+            }
+            quote_all, quote_any = quote_filters[action_id]
+            locate["variant_fallback"].update(quote_all=quote_all, quote_any=quote_any)
         if locate.get("mode") == "code_literal":
             locate["triggers"] = list(base.get("old_triggers", []))
             locate["old_texts"] = list(base.get("old_texts", base.get("old_triggers", [])))
@@ -697,14 +746,27 @@ def build() -> dict:
             generation["max_chars"] = max(len(template["text"]) + 200, 400)
             if base.get("template_slots"):
                 generation["slots"] = dict(base["template_slots"])
+        section_aliases = list(base.get("section_aliases", []))
+        if action_id == "R16-A1":
+            section_aliases.extend(name for name in ("基金收益与分配", "基金收益分配")
+                                   if name not in section_aliases)
+        scope_resolution = {"mode": "model_fallback", "max_sections": 4, "max_range_paragraphs": 16}
+        if locate["mode"] == "class_definition":
+            scope_resolution["business_candidates"] = {"all": ["基金份额"], "any": ["分为", "类别"]}
+        elif locate["mode"] == "model_assisted":
+            scope_resolution["business_candidates"] = dict(locate.get("prefilter") or {})
+        elif locate["mode"] == "code_recognition":
+            scope_resolution["business_candidates"] = {"any": [
+                "转换" if locate["recognition_kind"] == "conversion_prohibition" else "持续持有"]}
         actions.append({
             "rule_id": base["rule_id"],
             "action_id": action_id,
             "description": base["description"],
             "section_anchor": base["section_anchor"],
-            "section_aliases": list(base.get("section_aliases", [])),
+            "section_aliases": section_aliases,
             "subsection_anchor": base["subsection_anchor"],
             "subsection_aliases": list(base.get("subsection_aliases", [])),
+            "scope_resolution": scope_resolution,
             "regions": list(base["regions"]),
             "scope": base["scope"],
             "operation": base["operation"],
@@ -744,7 +806,7 @@ def build() -> dict:
 
 def main() -> None:
     package = build()
-    V2_PATH.write_text(json.dumps(package, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    V2_PATH.write_text(json.dumps(package, ensure_ascii=False, indent=2) + "\n", encoding="utf-8", newline="\n")
     digest = _sha256_bytes(V2_PATH.read_bytes())
     print(json.dumps({"path": str(V2_PATH), "sha256": digest, "actions": [a["action_id"] for a in package["actions"]]}, ensure_ascii=False))
 

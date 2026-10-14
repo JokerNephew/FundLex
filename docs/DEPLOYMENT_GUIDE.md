@@ -1,6 +1,6 @@
 # FundLex 部署指南（4 核 8G + MySQL 8）
 
-版本：2026-10-14。适用：单机部署（1 个 API 进程组 + **1 个 worker 进程** + MySQL 8 + 本地磁盘存储）。本指南随"全部 22 个动作可用"版本一起发布。
+版本：2026-10-14。适用：4C8G 单机部署（**2 个 API 进程 + 1 个 worker 进程** + MySQL 8 + 本地磁盘存储）。合同及模型调用串行，API 独立处理查询、上传和下载。以下为初始配置；本机评测不能代替目标服务器容量验收。
 
 ## 1. 组件与目录
 
@@ -34,11 +34,14 @@ FUNDLEX_BOOTSTRAP_ADMIN=admin:<强密码>   # 仅首次启动且用户表为空�
 FUNDLEX_MODEL_LEDGER=mysql://fundlex:****@127.0.0.1:3306/fundlex?charset=utf8mb4
 FUNDLEX_MODEL_MAX_REQUESTS=20000
 FUNDLEX_MODEL_MAX_COST_USD=50
-FUNDLEX_MODEL_CONCURRENCY=2
+FUNDLEX_MODEL_CONCURRENCY=1
 FUNDLEX_MODEL_INPUT_USD_PER_M=0.3
 FUNDLEX_MODEL_OUTPUT_USD_PER_M=1.2
-FUNDLEX_MODEL_CONTEXT_CHARS=12000
-FUNDLEX_MODEL_MAX_OUTPUT_TOKENS=2500
+FUNDLEX_MODEL_CONTEXT_CHARS=20000
+FUNDLEX_MODEL_MAX_OUTPUT_TOKENS=3000
+FUNDLEX_MODEL_MAX_CALLS=192
+FUNDLEX_MODEL_TIMEOUT_S=60
+FUNDLEX_MODEL_RETRIES=1
 FUNDLEX_MODEL_REQUEST_OPTIONS_JSON={"thinking":{"type":"disabled"}}
 ```
 
@@ -51,7 +54,7 @@ GRANT ALL PRIVILEGES ON fundlex.* TO 'fundlex'@'127.0.0.1';
 FLUSH PRIVILEGES;
 ```
 
-应用启动自动建表；升级后首次启动会补齐缺列。
+应用启动自动建表；升级后首次启动会补齐缺列。MySQL 与应用共用 8 GB 内存时，建议初始 `innodb_buffer_pool_size=1536M`、`max_connections=40`，其余内存留给操作系统、API、worker 和文件页缓存；以实际峰值及慢查询再调整。数据库密码仅经服务进程环境注入。
 
 ## 4. 部署步骤
 
@@ -62,11 +65,14 @@ set -a; source /etc/fundlex.env; set +a
 # 首次登录账号
 .venv/bin/python -m fundlex.api      # 或直接由 systemd 启动；启动时创建 admin（如已配置）
 
-# 发布规则包（重要）：用部署环境的模型配置运行
-.venv/bin/python -X utf8 -m rules.release_v2 --audit-output /var/lib/fundlex/audit
+# 发布规则包：先按预登记协议完成当前引擎/模型配置的5+16+8隔离评测
+.venv/bin/python -X utf8 -m rules.release_v2 --audit-output /var/lib/fundlex/audit \
+  --evidence-run /var/lib/fundlex/evidence/fixtures \
+  --evidence-run /var/lib/fundlex/evidence/regression \
+  --evidence-run /var/lib/fundlex/evidence/historical-generalization
 ```
 
-发布说明：`rules/release_v2.py` 重跑确定性动作审计（22 动作正反例）并把发布包绑定到**当前引擎构建与模型传输指纹**。任何代码或模型配置变化都会让已发布包在运行期被拒绝（`V2_RELEASE_CONTEXT_UNVERIFIED`），需重新运行发布命令。
+发布说明：`rules/release_v2.py` 重跑确定性动作审计，并验证传入的完整真实运行证据属于当前引擎、规则、提示与模型传输配置；v3 修改产物还必须通过最终实际产物复核授权门禁。证据目录必须是评测工具实际生成的当前运行，不能手工填写批准或仅重新绑定指纹。任何代码或模型配置变化都需重新取得证据并发布。源码以 LF 固定换行，避免 Windows/Linux checkout 换行造成构建字节漂移；源码内容变化仍会被指纹拒绝。
 
 ## 5. systemd（示例）
 
@@ -92,10 +98,12 @@ Nginx 反代 8000，开启 `client_max_body_size`（与 `FUNDLEX_MAX_REQUEST_BYT
 
 ## 6. 运行与容量注意
 
-- 单份合同处理会调用模型 5—20 次（视命中动作数），4C8G 下单 worker 串行是稳定的默认值；模型并发由 `FUNDLEX_MODEL_CONCURRENCY` 控制（建议 ≤ 2）。
+- 单份合同的调用量取决于命中动作、子节备用定位、原文变体以及实际产物复核窗口；新增流程不能再沿用旧版 5—20 次估计。单 gateway 最多 192 次逻辑调用，每次最多 2 次 HTTP 尝试；共享请求及费用硬上限同时生效，192 是拒绝边界而非预计用量。
+- 模型并发设为 1，单 worker 每次只处理一份合同。2 个 API 进程负责交互；增加 API 进程不会增加修订并发。先记录每合同耗时、HTTP 尝试、worker 峰值内存与排队长度，待有目标机证据再增加处理并发。
+- 上下文上限 20000 字符，输出上限 3000 token，超长章节按段落边界分窗；到窗口上限明确拒绝，不静默截断。这些模型传输参数改变后必须重新取得对应证据并发布规则包。
 - 任务查询在服务端聚合任务元数据后筛选，不是数据库 SQL 分页；已验证数百份任务交互，万份规模需另做压测。
 - 数据库备份覆盖 MySQL 与 `FUNDLEX_DATA_DIR`；对象存储（S3 等）适配尚未实现，当前为本地磁盘。
-- 数据保留/地域、模型固定版本、费用上限需按业务合规确认后再上线。
+- 数据保留/地域、模型固定版本、费用上限需按业务合规确认后再上线。示例生产预算 20000 次/USD 50 是独立生产额度的配置示例；本轮评测严格沿用实施计划登记的私有共享账本上限，不能把生产示例用于绕过评测上限。
 
 ## 7. 安全清单
 

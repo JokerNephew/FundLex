@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import re
 from types import SimpleNamespace
 
 from docx import Document
@@ -91,6 +92,18 @@ class EvaluationGateway:
              "evidence_quote": "不收取认购/申购费用", "evidence_source": "generated"}]}, "verify_content")
 
 
+    def verify_artifact(self, context, **kwargs):
+        action_id = re.search(r"\[ACTION ([^]]+)\]", context).group(1)
+        identifiers = re.findall(r"^- (\S+) \[", context, re.MULTILINE)
+        location = context.split("[EDIT_LOCATIONS]\n", 1)[1].split("\n", 1)[0].split(",")[0]
+        quote = context.split(f"[AFTER location={location}]\n", 1)[1].split("\n", 1)[0]
+        if action_id == "R02-A1":
+            quote = GENERATED
+        return self._result({"items": [{"action_id": action_id, "requirement_id": identifier,
+            "result": "satisfied", "evidence_quote": quote, "evidence_source": "after"}
+            for identifier in [*identifiers, "PRESERVATION", "COVERAGE"]]}, "verify_artifact")
+
+
 ANCHOR_SENTENCE = DEFINITION[DEFINITION.index("在投资者申购 J"):]
 
 
@@ -113,7 +126,7 @@ def test_evaluation_artifacts_persist_and_download_only_in_evaluation_mode(tmp_p
     detail = client.get(f"/api/batches/{batch_id}", headers=headers).json()
     document = detail["documents"][0]
     assert document["execution_mode"] == "evaluation"
-    assert document["delivery_status"] == "evaluation_modified"
+    assert document["delivery_status"] == "evaluation_modified_with_exceptions"
     assert {"evaluation_final", "evaluation_redline"}.issubset(document["downloads"])
     assert "final" not in document["downloads"] and "redline" not in document["downloads"]
 
@@ -135,6 +148,30 @@ def test_evaluation_artifacts_persist_and_download_only_in_evaluation_mode(tmp_p
                       headers=headers).status_code == 404
     assert client.get(f"/api/batches/{batch_id}/documents/{document['document_id']}/download/evaluation_redline",
                       headers=headers).status_code == 200
+
+
+def test_qualification_quote_repair_retry_is_bounded(tmp_path):
+    source = build_fixture(tmp_path / "fixture-retry.docx")
+
+    class RepairGateway(EvaluationGateway):
+        def __init__(self):
+            super().__init__()
+            self.fund_type_calls = 0
+
+        def extract_fund_type(self, context: str, *, prompt_version: str = "fund_type_v3"):
+            self.fund_type_calls += 1
+            result = super().extract_fund_type(context, prompt_version=prompt_version)
+            if self.fund_type_calls == 1:
+                result.value = {"quote": "这条引文并非上下文中的逐字原文", "fund_type": "ordinary"}
+            return result
+
+    gateway = RepairGateway()
+    report = process_v2(source, tmp_path / "out-retry", "v2", gateway, evaluation=True)
+    assert report["qualification_status"] == "eligible"
+    assert gateway.fund_type_calls == 2
+    assert report["model"]["calls"] == 2
+    assert report["qualification"]["model_verification"] == "verified"
+    assert report["qualification"]["model_quote"]
 
 
 def test_delivery_mode_document_cannot_expose_evaluation_kinds(tmp_path):

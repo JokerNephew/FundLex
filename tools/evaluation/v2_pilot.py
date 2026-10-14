@@ -26,10 +26,50 @@ from fundlex.api import create_app
 from fundlex.jobs import Worker
 from fundlex.model import ModelGateway
 from fundlex.rules_v2 import PROMPT_VERSIONS_V2, load_ruleset_v2
+from fundlex.rules import release_runtime_context
 from fundlex.store import engine_build
 from fundlex.v2_pipeline import STOP_CODES, process_v2
 
 OWNER = "v2-evaluation"
+
+
+def call_bound(ruleset, gateway) -> int:
+    """Conservative logical-call ceiling, also bounded by the gateway hard cap."""
+    total = 2  # qualification and profile
+    for action in ruleset.actions:
+        scope = action.get("scope_resolution", {})
+        total += int(scope.get("max_sections", 0))
+        variant = action.get("locate", {}).get("variant_fallback", {})
+        total += int(variant.get("max_paragraphs", 0))
+        if action["locate"]["mode"] == "model_assisted":
+            total += int(action["locate"].get("max_locate_paragraphs", 3))
+        if action["generation"]["mode"] == "generate":
+            total += 2 * int(action["locate"].get("max_quotes", 8))
+        total += 24  # 3 windows per action per round, up to 2+2 requests each, 2 rounds
+    return min(total, gateway.max_calls)
+
+
+def resources() -> dict:
+    """Peak process memory on Windows; no extra dependency or model request."""
+    result = {"cpu_seconds": round(time.process_time(), 3), "peak_rss_bytes": None}
+    if os.name == "nt":
+        import ctypes
+        from ctypes import wintypes
+
+        class Counters(ctypes.Structure):
+            _fields_ = [("cb", wintypes.DWORD), ("page_faults", wintypes.DWORD)] + [
+                (name, ctypes.c_size_t) for name in ("peak_rss", "rss", "peak_paged", "paged",
+                    "peak_nonpaged", "nonpaged", "pagefile", "peak_pagefile")]
+
+        kernel = ctypes.WinDLL("kernel32", use_last_error=True)
+        kernel.GetCurrentProcess.restype = wintypes.HANDLE
+        psapi = ctypes.WinDLL("psapi", use_last_error=True)
+        psapi.GetProcessMemoryInfo.argtypes = [wintypes.HANDLE, ctypes.POINTER(Counters), wintypes.DWORD]
+        counters = Counters()
+        counters.cb = ctypes.sizeof(counters)
+        if psapi.GetProcessMemoryInfo(kernel.GetCurrentProcess(), ctypes.byref(counters), counters.cb):
+            result["peak_rss_bytes"] = counters.peak_rss
+    return result
 
 
 def sha256_bytes(data: bytes) -> str:
@@ -51,7 +91,7 @@ def main() -> None:
     parser.add_argument("--input", required=True)
     parser.add_argument("--output", required=True)
     parser.add_argument("--expected-count", type=int)
-    parser.add_argument("--batch-size", type=int, default=1, choices=[1, 2, 3])
+    parser.add_argument("--batch-size", type=int, default=1, choices=[1])
     args = parser.parse_args()
     files = sorted(Path(args.input).glob("*.docx"))
     if args.expected_count is not None and len(files) != args.expected_count:
@@ -64,14 +104,11 @@ def main() -> None:
                  "size": path.stat().st_size} for path in files]
     dataset_hash = sha256_bytes(json.dumps(manifest, ensure_ascii=False, sort_keys=True).encode())
     ruleset = load_ruleset_v2("v2")
-    if ruleset.auto_write_enabled:
-        raise SystemExit("v2 evaluation requires closed write gates")
     gateway = ModelGateway.from_env()
-    # Worst case per contract: 1 fund type + 1 profile + up to 3 locate windows
-    # + up to 3 generation calls + up to 3 verification calls = 11 logical calls
-    # (each HTTP attempt additionally reserves its own worst-case cost and a
-    # retry reserves again; the shared ledger enforces the registered cap).
-    worst_case_per_contract = 2 + 3 + 3 + 3
+    if gateway.budget.concurrency != 1:
+        gateway.close()
+        raise SystemExit("registered evaluation requires model concurrency 1")
+    worst_case_per_contract = call_bound(ruleset, gateway)
     protocol = {
         "schema": "v2-evaluation-1",
         "dataset_sha256": dataset_hash,
@@ -92,6 +129,8 @@ def main() -> None:
         "budget": gateway.budget.snapshot(),
         "worst_case_calls_per_contract": worst_case_per_contract,
         "worst_case_calls_total": worst_case_per_contract * len(files),
+        "worst_case_http_total": worst_case_per_contract * (gateway.retries + 1) * len(files),
+        "model_transport_sha256": release_runtime_context(gateway)["model_transport_sha256"],
         "purpose": "bounded evaluation of rule-constrained locate/generate/verify edits",
         "automatic_write": False,
         "releasable_contract": False,
@@ -103,12 +142,14 @@ def main() -> None:
     if protocol_path.exists():
         old = json.loads(protocol_path.read_text(encoding="utf-8"))
         keys = ("dataset_sha256", "ruleset_sha256", "engine_build", "model",
-                "request_options_sha256", "prompt_versions", "budget_configuration")
+                "request_options_sha256", "prompt_versions", "budget_configuration",
+                "model_transport_sha256", "batch_size")
         if any(old.get(key) != protocol.get(key) for key in keys):
             raise SystemExit("protocol changed: use a new evaluation run directory")
     else:
         write(protocol_path, protocol)
         write(root / "manifest.json", manifest)
+    gateway.close()
     state_root = Path(os.environ.get("FUNDLEX_V2_STATE_DIR",
                                      str(Path(os.environ.get("FUNDLEX_DATA_DIR", root)) / "state")))
     app = create_app(state_root)
@@ -132,6 +173,8 @@ def main() -> None:
     batches: list[str] = []
     records: list[dict] = []
     for offset in range(0, len(files), args.batch_size):
+        if engine_build() != protocol["engine_build"] or load_ruleset_v2().sha256 != protocol["ruleset_sha256"]:
+            raise SystemExit("engine or rules changed during run: preserve this run and use a new directory")
         group = files[offset:offset + args.batch_size]
         request_key = sha256_bytes((dataset_hash + ":" + str(offset)).encode())
         response = client.post("/api/batches", headers={**headers, "Idempotency-Key": request_key},
@@ -187,6 +230,7 @@ def main() -> None:
         records.extend(batch_reports)
         budget = ModelGateway.from_env().budget.snapshot()
         summary = summarize(records, batches, budget, dataset_hash, len(files), ruleset.sha256, protocol["engine_build"])
+        summary["resources"] = resources()
         write(root / "summary.json", summary)
         print(json.dumps({"batch": offset // args.batch_size + 1, "evaluated": summary["evaluated"],
                           "delivery": summary["delivery"], "http_attempts": budget["http_attempts"],
@@ -197,6 +241,7 @@ def main() -> None:
                         len(files), ruleset.sha256, protocol["engine_build"])
     summary["source_files_unchanged"] = unchanged
     summary["completed"] = unchanged and summary["evaluated"] == len(files)
+    summary["resources"] = resources()
     write(root / "summary.json", summary)
     lines = ["# FundLex v2 评测运行", "",
              f"- 文档：{summary['evaluated']}/{len(files)}",

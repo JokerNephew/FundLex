@@ -69,6 +69,12 @@ class Scripted:
         self.events: list[dict] = []
 
     def _take(self, task_type):
+        if not self.responses and task_type in {"locate_target", "resolve_scope"}:
+            # Unscripted discovery is deliberately inconclusive. It must never
+            # invent a target or approve a write to make a negative case pass.
+            self.calls += 1
+            value = {"quotes": []} if task_type == "locate_target" else {"status": "uncertain", "ranges": []}
+            return SimpleNamespace(value=value, model=self.model, attempts=0)
         expected, value = self.responses.pop(0)
         assert expected == task_type, f"expected {expected}, got {task_type}"
         self.calls += 1
@@ -81,6 +87,9 @@ class Scripted:
 
     def locate_target(self, context, *, instruction, **kwargs):
         return self._take("locate_target")
+
+    def resolve_scope(self, context, *, instruction, **kwargs):
+        return self._take("resolve_scope")
 
     def generate_clause(self, context, *, instruction, **kwargs):
         return self._take("generate_clause")

@@ -607,12 +607,50 @@ def test_r10_already_satisfied_skips_generation(tmp_path):
         ("text", R10_GOOD),
     ])
     profile = make_profile(["H", "J"], ["H"], ["J"])
-    responses = [("locate_target", {"quotes": [{"quote": R10_GOOD, "basis": "归属条款"}]})]
+    responses = [("locate_target", {"quotes": [{"quote": R10_GOOD, "basis": "归属条款"}]}),
+                 ("verify_content", {"items": [{"requirement_id": identifier, "result": "satisfied",
+                     "evidence_quote": R10_GOOD, "evidence_source": "generated"}
+                     for identifier in ("R10-REQ-3", "R10-REQ-6")]})]
     outcome, action, gateway, inspection = plan_for("R10-A1", source, profile, responses)
     assert action["status"] == "satisfied_no_change"
     assert outcome["edits"] == []
-    assert gateway.calls == 1, "only the locate call is spent when the clause already complies"
+    assert gateway.calls == 2, "existing positive phrases still require independent semantic review"
     assert any(target.get("reason") == "V2_ALREADY_SATISFIED" for target in action["targets"])
+
+
+def test_r10_already_satisfied_rejected_when_model_unsatisfied(tmp_path):
+    source = build_docx(tmp_path / "m7b.docx", [
+        ("heading", "基金份额的申购与赎回"),
+        ("text", "申购和赎回的价格、费用及其用途"),
+        ("text", R10_GOOD),
+    ])
+    profile = make_profile(["H", "J"], ["H"], ["J"])
+    contradiction = "但部分赎回费用归基金管理人所有。"
+    responses = [("locate_target", {"quotes": [{"quote": R10_GOOD, "basis": "归属条款"}]}),
+                 ("verify_content", {"items": [{"requirement_id": identifier, "result": "unsatisfied",
+                     "evidence_quote": contradiction, "evidence_source": "generated"}
+                     for identifier in ("R10-REQ-3", "R10-REQ-6")]})]
+    outcome, action, gateway, inspection = plan_for("R10-A1", source, profile, responses)
+    assert action["status"] == "failed"
+    assert action["failure_reason"] == "V2_VERIFY_NOT_SATISFIED"
+    assert outcome["edits"] == []
+
+
+def test_r10_already_satisfied_rejected_on_unresolvable_quote(tmp_path):
+    source = build_docx(tmp_path / "m7c.docx", [
+        ("heading", "基金份额的申购与赎回"),
+        ("text", "申购和赎回的价格、费用及其用途"),
+        ("text", R10_GOOD),
+    ])
+    profile = make_profile(["H", "J"], ["H"], ["J"])
+    responses = [("locate_target", {"quotes": [{"quote": R10_GOOD, "basis": "归属条款"}]}),
+                 ("verify_content", {"items": [{"requirement_id": identifier, "result": "satisfied",
+                     "evidence_quote": "该引文并不存在于合同正文", "evidence_source": "contract"}
+                     for identifier in ("R10-REQ-3", "R10-REQ-6")]})]
+    outcome, action, gateway, inspection = plan_for("R10-A1", source, profile, responses)
+    assert action["status"] == "failed"
+    assert action["failure_reason"] == "V2_VERIFY_QUOTE_MISMATCH"
+    assert outcome["edits"] == []
 
 
 def test_append_join_repairs_missing_separator(tmp_path):

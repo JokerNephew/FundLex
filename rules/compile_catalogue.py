@@ -124,4 +124,5 @@ def compile_catalogue():
         "templates": templates, "actions": actions}
 
 if __name__ == "__main__":
-    (ROOT / "rules/rules_v1.json").write_text(json.dumps(compile_catalogue(), ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    (ROOT / "rules/rules_v1.json").write_text(json.dumps(compile_catalogue(), ensure_ascii=False, indent=2) + "\n",
+                                              encoding="utf-8", newline="\n")

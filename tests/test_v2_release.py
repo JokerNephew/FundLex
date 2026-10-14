@@ -5,6 +5,7 @@ import copy
 import json
 from pathlib import Path
 from types import SimpleNamespace
+from test_v2_evaluation import EvaluationGateway
 
 import pytest
 from docx import Document
@@ -114,7 +115,25 @@ class ScriptedGateway:
              "evidence_quote": "不收取认购/申购费用", "evidence_source": "generated"}]}, "verify_content")
 
 
+    verify_artifact = EvaluationGateway.verify_artifact
+
+
 ANCHOR = DEFINITION[DEFINITION.index("在投资者申购 J"):]
+
+
+def assert_sparse_fixture_exceptions(exceptions):
+    # This fixture contains only class definitions and liquidation. Missing
+    # business chapters and unknown target inventories are explicit exceptions.
+    expected_scope = {"R01-A1", "R11-A1", "R10-A1", "R06-A1", "R07-A1", "R09-A1",
+                      "R13-A1", "R14-A1", "R15-A1", "R15-A2", "R16-A1"}
+    expected_inventory = {"R03-A3", "R04-A1", "R03-A1"}
+    expected_profile = {"R17-A2", "R17-A3"}
+    actual = {entry["action_id"]: entry["reason"] for entry in exceptions}
+    assert actual == {
+        **{identifier: "TARGET_SCOPE_UNRESOLVED" for identifier in expected_scope},
+        **{identifier: "V3_TARGET_INVENTORY_UNRESOLVED" for identifier in expected_inventory},
+        **{identifier: "PROFILE_EVIDENCE_INCOMPLETE" for identifier in expected_profile},
+    }
 
 
 def transport_context(actual_model: str = "scripted-release") -> dict:
@@ -209,8 +228,7 @@ def test_delivery_pipeline_publishes_formal_artifacts(tmp_path, monkeypatch):
     # the R17 variants refuse (fail closed) while R02 still delivers: verified
     # edits are published together with the exception list.
     assert report["delivery_status"] == "complete_with_exceptions"
-    assert {item["action_id"] for item in report["exceptions"]} == {"R17-A2", "R17-A3"}
-    assert all(item["reason"] == "PROFILE_EVIDENCE_INCOMPLETE" for item in report["exceptions"])
+    assert_sparse_fixture_exceptions(report["exceptions"])
     assert report["edit_plan"]["executable"] is True
     assert report["output_validation"]["kind"] == "validated_edits"
     assert "content_verification" in report["output_validation"]["checks"]
@@ -240,7 +258,7 @@ def test_delivery_worker_publishes_final_downloads(tmp_path, monkeypatch):
     assert document["execution_mode"] == "delivery"
     assert document["delivery_status"] == "complete_with_exceptions"
     published = client.get(document["report_url"], headers=headers).json()
-    assert {item["action_id"] for item in published["exceptions"]} == {"R17-A2", "R17-A3"}
+    assert_sparse_fixture_exceptions(published["exceptions"])
     assert {"final", "redline"}.issubset(document["downloads"])
     assert "evaluation_final" not in document["downloads"]
     downloaded = client.get(document["downloads"]["final"], headers=headers)
