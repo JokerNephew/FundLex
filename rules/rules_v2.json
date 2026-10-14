@@ -1,0 +1,4236 @@
+{
+  "version": "v2",
+  "schema_version": "2",
+  "compiled_at": "2026-10-13",
+  "source": {
+    "description": "由 v1 来源指引整理的可执行语义契约；模板仅作参考文案，不再要求生成文字逐字相等",
+    "v1_rules_sha256": "73122317f6f3d6fa9487cf143d8df48c0c2f0a349dc58fbac4a7fe8a7c94c012",
+    "design_doc": "docs/AI_EDITING_DESIGN.md",
+    "released": true
+  },
+  "release_policy": {
+    "status": "released",
+    "basis": "内部部署发布：用户（产品负责人）2026-10-14 指示全部动作可用；证据为确定性动作审计（docs/RELEASE_POLICY_V2_INTERNAL.md 预登记）与真实运行记录；非外部业务批准",
+    "evaluation_report_id": "fundlex-internal-deploy-report-2026-10-14",
+    "approval_record": "product-owner-directive-2026-10-14",
+    "evaluation_context": {
+      "engine_build": "bfe207438e5a2941ef21e53559af5d6aee80a120a148e04742a772e2590d6c18",
+      "model_transport_sha256": "f7646078cd812be501a3e535cfd7708acc1b48b31ba6af32bf5be9a66c21eede",
+      "actual_model": "deepseek-flash",
+      "prompt_versions": {
+        "fund_type": "fund_type_v3",
+        "profile": "profile_v3",
+        "locate": "v2_locate_v1",
+        "generate": "v2_generate_v1",
+        "verify": "v2_verify_v1"
+      }
+    },
+    "auto_write_actions": [
+      "R01-A1",
+      "R02-A1",
+      "R03-A3",
+      "R04-A1",
+      "R11-A1",
+      "R10-A1",
+      "R03-A1",
+      "R03-A2",
+      "R05-A1",
+      "R06-A1",
+      "R07-A1",
+      "R08-A1",
+      "R09-A1",
+      "R12-A1",
+      "R13-A1",
+      "R14-A1",
+      "R15-A1",
+      "R15-A2",
+      "R16-A1",
+      "R17-A1",
+      "R17-A2",
+      "R17-A3"
+    ],
+    "policy_document": "docs/RELEASE_POLICY_V2_INTERNAL.md",
+    "released_at": "2026-10-13T17:54:25.404126+00:00",
+    "audit_summary": {
+      "positive_cases": 22,
+      "positive_passed": 22,
+      "negative_cases": 23,
+      "negative_passed": 23
+    }
+  },
+  "actions": [
+    {
+      "rule_id": "R01",
+      "action_id": "R01-A1",
+      "description": "份额类别定义追加直销及持续持有费用规则",
+      "section_anchor": "释义",
+      "section_aliases": [],
+      "subsection_anchor": "基金份额类别",
+      "subsection_aliases": [],
+      "regions": [
+        "body",
+        "summary"
+      ],
+      "scope": "paragraph",
+      "operation": "append",
+      "requires_profile": [
+        "share_classes",
+        "subscription_fee_by_class",
+        "sales_service_fee_by_class"
+      ],
+      "condition": "fee_groups",
+      "approval": {
+        "auto_write": true,
+        "approved": true,
+        "status": "released"
+      },
+      "semantics": {
+        "subject": "投资者与基金管理人（直销机构）之间的费用豁免关系",
+        "action": "在原份额类别定义段落之后追加直销机构费用豁免及持续持有超一年销售服务费停止收取条款",
+        "condition": "仅当合同证据证明所有类别分别属于申购费组（收申购费、不计提销售服务费）或销售服务费组（不收申购费、计提销售服务费）时适用；存在混合类别或证据不足时拒绝",
+        "fee_terms": "不新增具体费率、数字或比例；类别名称与费用归属只能来自当前合同证据",
+        "ownership": "销售服务费仍归属基金资产；条款只涉及直销机构豁免及销售机构持续持有超一年后不再收取",
+        "allowed_changes": [
+          "在目标定义段落末尾追加一段新条款",
+          "用当前合同实际类别替换参考文案中的 A/C 字样"
+        ],
+        "must_preserve": [
+          "原份额类别定义段落逐字保留，不做任何删除或改写",
+          "其他章节、编号、目录、表格与部件不得改动"
+        ],
+        "forbidden_additions": [
+          "不得新增未经证据支持的费率、比例、期限或渠道条件",
+          "不得把混合收费类别强行归入申购费组或销售服务费组",
+          "不得按合同名称、文件名或样本编号选择类别"
+        ],
+        "unsupported": [
+          "类别证据不足",
+          "收费属性混合或未知",
+          "目标段落存在结构屏障"
+        ]
+      },
+      "locate": {
+        "mode": "class_definition",
+        "section": "class_definition",
+        "require_class_letters_min": 2,
+        "require_any": [
+          "将基金份额分为",
+          "分为不同的类别"
+        ]
+      },
+      "generation": {
+        "mode": "generate",
+        "kind": "direct_sales_clause",
+        "instruction": "以 REFERENCE_TEXT 为句式参考，为当前合同实际类别生成直销机构费用豁免及持续持有超一年服务费停止收取条款。必须使用 PROFILE_FACTS 中全部类别名称逐一点名，禁止使用不在当前合同类别集合中的类别字母；禁止新增费率、比例或数字；只生成要追加的条款正文，不得改写或重复原定义段落。source_quote 必须逐字等于 CONTRACT_SOURCE 内容。changes[].basis_requirement 只能使用 RULE_REQUIREMENTS 中列出的 id，或不提供该字段。",
+        "reference_text": "投资者通过直销机构（含基金管理人及其销售子公司，下同）申购本基金A类基金份额时，不收取认购/申购费用；通过直销机构申购的C类基金份额，不收取销售服务费。对于投资者通过直销机构之外的其他销售机构申购的C类基金份额且持续持有期限超过一年的，不再继续收取销售服务费。",
+        "max_chars": 400
+      },
+      "requirements": [
+        {
+          "id": "R01-REQ-1",
+          "kind": "must_state",
+          "text": "通过直销机构申购申购费组类别时不收取认购/申购费用，且逐一点名当前合同全部申购费组类别",
+          "check": {
+            "kind": "direct_sales_clause",
+            "part": "subscription_group"
+          },
+          "verification": "code"
+        },
+        {
+          "id": "R01-REQ-2",
+          "kind": "must_state",
+          "text": "通过直销机构申购销售服务费组类别时不收取销售服务费，且逐一点名当前合同全部销售服务费组类别",
+          "check": {
+            "kind": "direct_sales_clause",
+            "part": "service_group"
+          },
+          "verification": "code"
+        },
+        {
+          "id": "R01-REQ-3",
+          "kind": "must_state",
+          "text": "通过直销机构之外的其他销售机构申购销售服务费组类别且持续持有期限超过一年的，不再继续收取销售服务费",
+          "check": {
+            "kind": "direct_sales_clause",
+            "part": "long_holding"
+          },
+          "verification": "code"
+        },
+        {
+          "id": "R01-REQ-4",
+          "kind": "must_not_state",
+          "text": "不得出现合同类别之外的类别字母，不得出现具体费率数字",
+          "check": {
+            "kind": "classes_within_profile_and_no_digits"
+          },
+          "verification": "code"
+        },
+        {
+          "id": "R01-REQ-5",
+          "kind": "must_preserve",
+          "text": "新文不得出现具体费率数字，除直销豁免与超过一年停止收取外不得设置其他条件",
+          "check": {
+            "kind": "semantic_review"
+          },
+          "verification": "model"
+        }
+      ],
+      "model_verification": [
+        "R01-REQ-5"
+      ],
+      "source_provenance": {
+        "v1_rule_source": "rules/rules_v1.json",
+        "v1_rules_sha256": "73122317f6f3d6fa9487cf143d8df48c0c2f0a349dc58fbac4a7fe8a7c94c012",
+        "template_source_paragraph": 3,
+        "template_source_provenance": [
+          {
+            "paragraph": 3,
+            "sha256": "83771e47595d44233114b736a9504544b8951fbc49476768a15b748b7bdac435"
+          },
+          {
+            "paragraph": 5,
+            "sha256": "9edf9ac6f67eef3b1f10427d1d2dd8b15173a19607d6315a29c64dd5dd45b13a"
+          },
+          {
+            "paragraph": 7,
+            "sha256": "6f7599a325d24d9a01c07b49023847c31428fb32a0f39ca0b804a946967bb87d"
+          },
+          {
+            "paragraph": 8,
+            "sha256": "bb052c842adc6d24833c8a53036b7c257a2e5827c6ed8b430b8495c48370dd5b"
+          },
+          {
+            "paragraph": 9,
+            "sha256": "3061de9eafe0f2a2bd7e0dc858545b66d4d5e0890c5853b7ba96b2edf46b64d1"
+          }
+        ],
+        "old_texts": [
+          "基金份额类别：本基金将基金份额分为A类和C类不同的类别。在投资者认购、申购基金时收取认购、申购费用而不计提销售服务费的，称为A类基金份额；在投资者认购、申购基金份额时不收取认购、申购费用而是从本类别基金资产中计提销售服务费的，称为C类基金份额。"
+        ]
+      },
+      "evaluation_report_id": "fundlex-internal-deploy-report-2026-10-14",
+      "approval_record": "product-owner-directive-2026-10-14",
+      "release_threshold": {
+        "registration_id": "fundlex-internal-deploy-2026-10-14",
+        "registered_before_full_evaluation": true,
+        "metrics": {
+          "positive_cases": {
+            "min": 1
+          },
+          "negative_cases": {
+            "min": 1
+          },
+          "fixture_pass_rate": {
+            "min": 1.0
+          },
+          "unsafe_edits": {
+            "max": 0
+          },
+          "artifact_checks": {
+            "min": 1.0
+          }
+        },
+        "profile_metrics": {
+          "share_classes": {
+            "accuracy": {
+              "min": 0.0
+            }
+          },
+          "subscription_fee_by_class": {
+            "accuracy": {
+              "min": 0.0
+            }
+          },
+          "sales_service_fee_by_class": {
+            "accuracy": {
+              "min": 0.0
+            }
+          }
+        }
+      },
+      "evaluation_metrics": {
+        "tested_context": {
+          "engine_build": "bfe207438e5a2941ef21e53559af5d6aee80a120a148e04742a772e2590d6c18",
+          "model_transport_sha256": "f7646078cd812be501a3e535cfd7708acc1b48b31ba6af32bf5be9a66c21eede",
+          "actual_model": "deepseek-flash",
+          "prompt_versions": {
+            "fund_type": "fund_type_v3",
+            "profile": "profile_v3",
+            "locate": "v2_locate_v1",
+            "generate": "v2_generate_v1",
+            "verify": "v2_verify_v1"
+          }
+        },
+        "action_id": "R01-A1",
+        "evaluation_report_id": "fundlex-internal-deploy-report-2026-10-14",
+        "threshold_registration_id": "fundlex-internal-deploy-2026-10-14",
+        "metrics": {
+          "positive_cases": 1,
+          "negative_cases": 1,
+          "fixture_pass_rate": 1.0,
+          "unsafe_edits": 0,
+          "artifact_checks": 1.0
+        },
+        "profile_metrics": {
+          "share_classes": {
+            "accuracy": 1.0
+          },
+          "subscription_fee_by_class": {
+            "accuracy": 1.0
+          },
+          "sales_service_fee_by_class": {
+            "accuracy": 1.0
+          }
+        },
+        "profile_metric_note": "code-verified profile evidence; threshold min 0.0; no independent accuracy measurement claimed"
+      }
+    },
+    {
+      "rule_id": "R02",
+      "action_id": "R02-A1",
+      "description": "份额类别设置追加费用规则",
+      "section_anchor": "基金的基本情况",
+      "section_aliases": [],
+      "subsection_anchor": "份额类别",
+      "subsection_aliases": [
+        "份额类别设置",
+        "基金份额类别设置",
+        "基金份额类别",
+        "基金份额的类别",
+        "基金份额分类",
+        "基金份额的分类",
+        "基金份额的类别设置",
+        "基金的份额类别设置",
+        "基金的份额类别",
+        "基金份额类别的设置"
+      ],
+      "regions": [
+        "body",
+        "summary"
+      ],
+      "scope": "paragraph",
+      "operation": "append",
+      "requires_profile": [
+        "share_classes",
+        "subscription_fee_by_class",
+        "sales_service_fee_by_class"
+      ],
+      "condition": "fee_groups",
+      "approval": {
+        "auto_write": true,
+        "approved": true,
+        "status": "released"
+      },
+      "semantics": {
+        "subject": "投资者与基金管理人（直销机构）之间的费用豁免关系",
+        "action": "在基本情况份额类别定义段落之后追加直销售费用豁免及持续持有超一年销售服务费停止收取条款",
+        "condition": "仅当合同证据证明所有类别分别属于申购费组或销售服务费组时适用；混合或证据不足拒绝",
+        "fee_terms": "不新增具体费率、数字或比例；类别名称与费用归属只能来自当前合同证据",
+        "ownership": "销售服务费仍归属基金资产；条款只涉及直销机构豁免及销售机构持续持有超一年后不再收取",
+        "allowed_changes": [
+          "在目标定义段落末尾追加一段新条款",
+          "用当前合同实际类别替换参考文案中的 A/C 字样"
+        ],
+        "must_preserve": [
+          "原份额类别定义段落逐字保留，不做任何删除或改写",
+          "其他章节、编号、目录、表格与部件不得改动"
+        ],
+        "forbidden_additions": [
+          "不得新增未经证据支持的费率、比例、期限或渠道条件",
+          "不得把混合收费类别强行归入申购费组或销售服务费组",
+          "不得按合同名称、文件名或样本编号选择类别"
+        ],
+        "unsupported": [
+          "类别证据不足",
+          "收费属性混合或未知",
+          "目标段落存在结构屏障"
+        ]
+      },
+      "locate": {
+        "mode": "class_definition",
+        "section": "class_definition",
+        "require_class_letters_min": 2,
+        "require_any": [
+          "将基金份额分为",
+          "分为不同的类别"
+        ]
+      },
+      "generation": {
+        "mode": "generate",
+        "kind": "direct_sales_clause",
+        "instruction": "以 REFERENCE_TEXT 为句式参考，为当前合同实际类别生成直销机构费用豁免及持续持有超一年服务费停止收取条款。必须使用 PROFILE_FACTS 中全部类别名称逐一点名，禁止使用不在当前合同类别集合中的类别字母；禁止新增费率、比例或数字；只生成要追加的条款正文，不得改写或重复原定义段落。source_quote 必须逐字等于 CONTRACT_SOURCE 内容。changes[].basis_requirement 只能使用 RULE_REQUIREMENTS 中列出的 id，或不提供该字段。",
+        "reference_text": "投资者通过直销机构（含基金管理人及其销售子公司，下同）申购本基金A类基金份额时，不收取认购/申购费用；通过直销机构申购的C类基金份额，不收取销售服务费。对于投资者通过直销机构之外的其他销售机构申购的C类基金份额且持续持有期限超过一年的，不再继续收取销售服务费。",
+        "max_chars": 400
+      },
+      "requirements": [
+        {
+          "id": "R02-REQ-1",
+          "kind": "must_state",
+          "text": "通过直销机构申购申购费组类别时不收取认购/申购费用，且逐一点名当前合同全部申购费组类别",
+          "check": {
+            "kind": "direct_sales_clause",
+            "part": "subscription_group"
+          },
+          "verification": "code"
+        },
+        {
+          "id": "R02-REQ-2",
+          "kind": "must_state",
+          "text": "通过直销机构申购销售服务费组类别时不收取销售服务费，且逐一点名当前合同全部销售服务费组类别",
+          "check": {
+            "kind": "direct_sales_clause",
+            "part": "service_group"
+          },
+          "verification": "code"
+        },
+        {
+          "id": "R02-REQ-3",
+          "kind": "must_state",
+          "text": "通过直销机构之外的其他销售机构申购销售服务费组类别且持续持有期限超过一年的，不再继续收取销售服务费",
+          "check": {
+            "kind": "direct_sales_clause",
+            "part": "long_holding"
+          },
+          "verification": "code"
+        },
+        {
+          "id": "R02-REQ-4",
+          "kind": "must_not_state",
+          "text": "不得出现合同类别之外的类别字母，不得出现具体费率数字",
+          "check": {
+            "kind": "classes_within_profile_and_no_digits"
+          },
+          "verification": "code"
+        },
+        {
+          "id": "R02-REQ-5",
+          "kind": "must_preserve",
+          "text": "新文不得出现具体费率数字，除直销豁免与超过一年停止收取外不得设置其他条件",
+          "check": {
+            "kind": "semantic_review"
+          },
+          "verification": "model"
+        }
+      ],
+      "model_verification": [
+        "R02-REQ-5"
+      ],
+      "source_provenance": {
+        "v1_rule_source": "rules/rules_v1.json",
+        "v1_rules_sha256": "73122317f6f3d6fa9487cf143d8df48c0c2f0a349dc58fbac4a7fe8a7c94c012",
+        "template_source_paragraph": 12,
+        "template_source_provenance": [
+          {
+            "paragraph": 12,
+            "sha256": "c20a93daea0c11d0bec3dfa8c0cddc35d92ed90c7c237c3974819bc49682f4f4"
+          },
+          {
+            "paragraph": 13,
+            "sha256": "8c70de6d5ca5ebacb8b215cfa717c60ec6f93459c857aab819c2be4276a37e64"
+          },
+          {
+            "paragraph": 15,
+            "sha256": "6f7599a325d24d9a01c07b49023847c31428fb32a0f39ca0b804a946967bb87d"
+          },
+          {
+            "paragraph": 16,
+            "sha256": "bb052c842adc6d24833c8a53036b7c257a2e5827c6ed8b430b8495c48370dd5b"
+          },
+          {
+            "paragraph": 17,
+            "sha256": "3061de9eafe0f2a2bd7e0dc858545b66d4d5e0890c5853b7ba96b2edf46b64d1"
+          }
+        ],
+        "old_texts": [
+          "本基金根据费用收取方式的不同，将基金份额分为不同的类别。在投资者认购、申购基金份额时收取认购、申购费用，而不计提销售服务费的，称为A类基金份额；在投资者认购、申购基金份额时不收取认购、申购费用，而是从本类别基金资产中计提销售服务费的，称为C类基金份额。"
+        ]
+      },
+      "evaluation_report_id": "fundlex-internal-deploy-report-2026-10-14",
+      "approval_record": "product-owner-directive-2026-10-14",
+      "release_threshold": {
+        "registration_id": "fundlex-internal-deploy-2026-10-14",
+        "registered_before_full_evaluation": true,
+        "metrics": {
+          "positive_cases": {
+            "min": 1
+          },
+          "negative_cases": {
+            "min": 1
+          },
+          "fixture_pass_rate": {
+            "min": 1.0
+          },
+          "unsafe_edits": {
+            "max": 0
+          },
+          "artifact_checks": {
+            "min": 1.0
+          }
+        },
+        "profile_metrics": {
+          "share_classes": {
+            "accuracy": {
+              "min": 0.0
+            }
+          },
+          "subscription_fee_by_class": {
+            "accuracy": {
+              "min": 0.0
+            }
+          },
+          "sales_service_fee_by_class": {
+            "accuracy": {
+              "min": 0.0
+            }
+          }
+        }
+      },
+      "evaluation_metrics": {
+        "tested_context": {
+          "engine_build": "bfe207438e5a2941ef21e53559af5d6aee80a120a148e04742a772e2590d6c18",
+          "model_transport_sha256": "f7646078cd812be501a3e535cfd7708acc1b48b31ba6af32bf5be9a66c21eede",
+          "actual_model": "deepseek-flash",
+          "prompt_versions": {
+            "fund_type": "fund_type_v3",
+            "profile": "profile_v3",
+            "locate": "v2_locate_v1",
+            "generate": "v2_generate_v1",
+            "verify": "v2_verify_v1"
+          }
+        },
+        "action_id": "R02-A1",
+        "evaluation_report_id": "fundlex-internal-deploy-report-2026-10-14",
+        "threshold_registration_id": "fundlex-internal-deploy-2026-10-14",
+        "metrics": {
+          "positive_cases": 1,
+          "negative_cases": 1,
+          "fixture_pass_rate": 1.0,
+          "unsafe_edits": 0,
+          "artifact_checks": 1.0
+        },
+        "profile_metrics": {
+          "share_classes": {
+            "accuracy": 1.0
+          },
+          "subscription_fee_by_class": {
+            "accuracy": 1.0
+          },
+          "sales_service_fee_by_class": {
+            "accuracy": 1.0
+          }
+        },
+        "profile_metric_note": "code-verified profile evidence; threshold min 0.0; no independent accuracy measurement claimed"
+      }
+    },
+    {
+      "rule_id": "R03",
+      "action_id": "R03-A3",
+      "description": "删除备案语句",
+      "section_anchor": "基金的基本情况",
+      "section_aliases": [],
+      "subsection_anchor": "份额类别",
+      "subsection_aliases": [
+        "份额类别设置",
+        "基金份额类别设置",
+        "基金份额类别",
+        "基金份额的类别",
+        "基金份额分类",
+        "基金份额的分类",
+        "基金份额的类别设置",
+        "基金的份额类别设置",
+        "基金的份额类别",
+        "基金份额类别的设置"
+      ],
+      "regions": [
+        "body",
+        "summary"
+      ],
+      "scope": "phrase",
+      "operation": "delete",
+      "requires_profile": [],
+      "condition": "always",
+      "approval": {
+        "auto_write": true,
+        "approved": true,
+        "status": "released"
+      },
+      "semantics": {
+        "subject": "份额类别设置段落中的备案语句",
+        "action": "删除“并报中国证监会备案”短语，保留同句其他内容",
+        "condition": "仅限基金的基本情况/份额类别设置范围内出现该短语时适用",
+        "fee_terms": null,
+        "ownership": null,
+        "allowed_changes": [
+          "删除目标短语本身"
+        ],
+        "must_preserve": [
+          "同段其余文字、编号、标点及其他章节内同短语不得改动"
+        ],
+        "forbidden_additions": [
+          "不得新增任何文字"
+        ],
+        "unsupported": [
+          "跨段目标",
+          "跨 cell 目标",
+          "结构屏障",
+          "同位置无法唯一定位"
+        ]
+      },
+      "locate": {
+        "mode": "code_literal",
+        "triggers": [
+          "并报中国证监会备案"
+        ],
+        "boundary": {
+          "trim_whitespace": true,
+          "require_source_sentence_boundary": false
+        },
+        "old_texts": [
+          "并报中国证监会备案"
+        ]
+      },
+      "generation": {
+        "mode": "delete",
+        "max_chars": 0
+      },
+      "requirements": [
+        {
+          "id": "R03-REQ-1",
+          "kind": "must_not_state",
+          "text": "目标范围内不得残留“并报中国证监会备案”",
+          "check": {
+            "kind": "delete_only"
+          },
+          "verification": "code"
+        },
+        {
+          "id": "R03-REQ-2",
+          "kind": "must_preserve",
+          "text": "仅删除该短语；同段其他文字与文档其他部分逐字保留",
+          "check": {
+            "kind": "boundary_scope",
+            "boundary": "preserve_outside"
+          },
+          "verification": "code"
+        }
+      ],
+      "model_verification": [],
+      "source_provenance": {
+        "v1_rule_source": "rules/rules_v1.json",
+        "v1_rules_sha256": "73122317f6f3d6fa9487cf143d8df48c0c2f0a349dc58fbac4a7fe8a7c94c012",
+        "template_source_paragraph": 20,
+        "template_source_provenance": [
+          {
+            "paragraph": 20,
+            "sha256": "6c4fe3bced6ee8cf537970bbbf435d83b41ca13662044fb6709ec72e27c5db21"
+          },
+          {
+            "paragraph": 23,
+            "sha256": "55dc8819fe9891619d0b0aaf2566901db70f49a6a1004b56e8dc5b75a3202c29"
+          }
+        ],
+        "old_texts": [
+          "并报中国证监会备案"
+        ]
+      },
+      "evaluation_report_id": "fundlex-internal-deploy-report-2026-10-14",
+      "approval_record": "product-owner-directive-2026-10-14",
+      "release_threshold": {
+        "registration_id": "fundlex-internal-deploy-2026-10-14",
+        "registered_before_full_evaluation": true,
+        "metrics": {
+          "positive_cases": {
+            "min": 1
+          },
+          "negative_cases": {
+            "min": 1
+          },
+          "fixture_pass_rate": {
+            "min": 1.0
+          },
+          "unsafe_edits": {
+            "max": 0
+          },
+          "artifact_checks": {
+            "min": 1.0
+          }
+        },
+        "profile_metrics": {}
+      },
+      "evaluation_metrics": {
+        "tested_context": {
+          "engine_build": "bfe207438e5a2941ef21e53559af5d6aee80a120a148e04742a772e2590d6c18",
+          "model_transport_sha256": "f7646078cd812be501a3e535cfd7708acc1b48b31ba6af32bf5be9a66c21eede",
+          "actual_model": "deepseek-flash",
+          "prompt_versions": {
+            "fund_type": "fund_type_v3",
+            "profile": "profile_v3",
+            "locate": "v2_locate_v1",
+            "generate": "v2_generate_v1",
+            "verify": "v2_verify_v1"
+          }
+        },
+        "action_id": "R03-A3",
+        "evaluation_report_id": "fundlex-internal-deploy-report-2026-10-14",
+        "threshold_registration_id": "fundlex-internal-deploy-2026-10-14",
+        "metrics": {
+          "positive_cases": 1,
+          "negative_cases": 1,
+          "fixture_pass_rate": 1.0,
+          "unsafe_edits": 0,
+          "artifact_checks": 1.0
+        },
+        "profile_metrics": {},
+        "profile_metric_note": "code-verified profile evidence; threshold min 0.0; no independent accuracy measurement claimed"
+      }
+    },
+    {
+      "rule_id": "R04",
+      "action_id": "R04-A1",
+      "description": "删除类别不得互相转换完整原句",
+      "section_anchor": "基金的基本情况",
+      "section_aliases": [],
+      "subsection_anchor": "份额类别",
+      "subsection_aliases": [
+        "份额类别设置",
+        "基金份额类别设置",
+        "基金份额类别",
+        "基金份额的类别",
+        "基金份额分类",
+        "基金份额的分类",
+        "基金份额的类别设置",
+        "基金的份额类别设置",
+        "基金的份额类别",
+        "基金份额类别的设置"
+      ],
+      "regions": [
+        "body",
+        "summary"
+      ],
+      "scope": "sentence",
+      "operation": "delete",
+      "requires_profile": [
+        "share_classes"
+      ],
+      "condition": "multi_class",
+      "approval": {
+        "auto_write": true,
+        "approved": true,
+        "status": "released"
+      },
+      "semantics": {
+        "subject": "份额类别设置中的类别互相转换禁止句",
+        "action": "删除不同份额类别之间不得互相转换的完整原句",
+        "condition": "仅适用于基金的基本情况/份额类别设置；需多类别份额",
+        "fee_terms": null,
+        "ownership": null,
+        "allowed_changes": [
+          "删除目标完整句"
+        ],
+        "must_preserve": [
+          "同段其他句式、编号与转换业务章节内容不得改动"
+        ],
+        "forbidden_additions": [
+          "不得新增任何文字"
+        ],
+        "unsupported": [
+          "跨段目标",
+          "转换业务章节或其他区域",
+          "结构屏障",
+          "范围无法唯一确认"
+        ]
+      },
+      "locate": {
+        "mode": "code_recognition",
+        "recognition_kind": "conversion_prohibition",
+        "boundary": {
+          "trim_whitespace": true,
+          "require_sentence_span": true
+        }
+      },
+      "generation": {
+        "mode": "delete",
+        "max_chars": 0
+      },
+      "requirements": [
+        {
+          "id": "R04-REQ-1",
+          "kind": "must_not_state",
+          "text": "目标句已删除，其他文本保留",
+          "check": {
+            "kind": "delete_only"
+          },
+          "verification": "code"
+        },
+        {
+          "id": "R04-REQ-2",
+          "kind": "must_preserve",
+          "text": "只删除完整目标句；转换业务章节及同段其他内容逐字保留",
+          "check": {
+            "kind": "boundary_scope",
+            "boundary": "preserve_outside"
+          },
+          "verification": "code"
+        }
+      ],
+      "model_verification": [],
+      "source_provenance": {
+        "v1_rule_source": "rules/rules_v1.json",
+        "v1_rules_sha256": "73122317f6f3d6fa9487cf143d8df48c0c2f0a349dc58fbac4a7fe8a7c94c012",
+        "template_source_paragraph": 25,
+        "template_source_provenance": [
+          {
+            "paragraph": 25,
+            "sha256": "4f2855035c9ddbdf6681d31243a094127a3e6c50cf78bd9d635af148a052d5ad"
+          },
+          {
+            "paragraph": 26,
+            "sha256": "b704eb4cc286c37ec1d5900bafedd53bd2ab90f6e57299a498ea1e95bff181f9"
+          }
+        ],
+        "old_texts": [
+          "除非基金管理人在未来条件成熟后另行公告开通相关业务，本基金不同基金份额类别之间不得互相转换。"
+        ]
+      },
+      "evaluation_report_id": "fundlex-internal-deploy-report-2026-10-14",
+      "approval_record": "product-owner-directive-2026-10-14",
+      "release_threshold": {
+        "registration_id": "fundlex-internal-deploy-2026-10-14",
+        "registered_before_full_evaluation": true,
+        "metrics": {
+          "positive_cases": {
+            "min": 1
+          },
+          "negative_cases": {
+            "min": 1
+          },
+          "fixture_pass_rate": {
+            "min": 1.0
+          },
+          "unsafe_edits": {
+            "max": 0
+          },
+          "artifact_checks": {
+            "min": 1.0
+          }
+        },
+        "profile_metrics": {
+          "share_classes": {
+            "accuracy": {
+              "min": 0.0
+            }
+          }
+        }
+      },
+      "evaluation_metrics": {
+        "tested_context": {
+          "engine_build": "bfe207438e5a2941ef21e53559af5d6aee80a120a148e04742a772e2590d6c18",
+          "model_transport_sha256": "f7646078cd812be501a3e535cfd7708acc1b48b31ba6af32bf5be9a66c21eede",
+          "actual_model": "deepseek-flash",
+          "prompt_versions": {
+            "fund_type": "fund_type_v3",
+            "profile": "profile_v3",
+            "locate": "v2_locate_v1",
+            "generate": "v2_generate_v1",
+            "verify": "v2_verify_v1"
+          }
+        },
+        "action_id": "R04-A1",
+        "evaluation_report_id": "fundlex-internal-deploy-report-2026-10-14",
+        "threshold_registration_id": "fundlex-internal-deploy-2026-10-14",
+        "metrics": {
+          "positive_cases": 1,
+          "negative_cases": 1,
+          "fixture_pass_rate": 1.0,
+          "unsafe_edits": 0,
+          "artifact_checks": 1.0
+        },
+        "profile_metrics": {
+          "share_classes": {
+            "accuracy": 1.0
+          }
+        },
+        "profile_metric_note": "code-verified profile evidence; threshold min 0.0; no independent accuracy measurement claimed"
+      }
+    },
+    {
+      "rule_id": "R11",
+      "action_id": "R11-A1",
+      "description": "删除旧短期持有赎回费句",
+      "section_anchor": "基金份额的申购与赎回",
+      "section_aliases": [
+        "基金份额的申购和赎回",
+        "基金份额的申购、赎回与转换"
+      ],
+      "subsection_anchor": "申购和赎回的价格、费用及其用途",
+      "subsection_aliases": [
+        "申购与赎回的价格、费用及其用途",
+        "申购和赎回的费用及其用途",
+        "申购与赎回的费用及其用途"
+      ],
+      "regions": [
+        "body",
+        "summary"
+      ],
+      "scope": "sentence",
+      "operation": "delete",
+      "requires_profile": [],
+      "condition": "always",
+      "approval": {
+        "auto_write": true,
+        "approved": true,
+        "status": "released"
+      },
+      "semantics": {
+        "subject": "费率调整段落中的短期持有赎回费旧句",
+        "action": "删除持续持有期少于 7 日收取不低于 1.5% 赎回费并全额计入基金财产的旧句",
+        "condition": "仅限申购与赎回价格费用章节的费率调整类宿主段落；费用归属段由 R10 处理",
+        "fee_terms": "删除旧费率句；不得改动其他费率数字",
+        "ownership": null,
+        "allowed_changes": [
+          "删除目标完整句"
+        ],
+        "must_preserve": [
+          "宿主段落中的费率调整语句、费率数字与其他文本不得改动"
+        ],
+        "forbidden_additions": [
+          "不得新增任何文字"
+        ],
+        "unsupported": [
+          "费用归属段（属 R10）",
+          "结构屏障",
+          "宿主段落不明确",
+          "变体无法确认"
+        ]
+      },
+      "locate": {
+        "mode": "code_recognition",
+        "recognition_kind": "short_holding_redemption",
+        "host_policy": "fee_rate_or_adjustment",
+        "boundary": {
+          "trim_whitespace": true,
+          "require_sentence_span": true
+        }
+      },
+      "generation": {
+        "mode": "delete",
+        "max_chars": 0
+      },
+      "requirements": [
+        {
+          "id": "R11-REQ-1",
+          "kind": "must_not_state",
+          "text": "费率调整段中的短期持有赎回费旧句已删除",
+          "check": {
+            "kind": "delete_only"
+          },
+          "verification": "code"
+        },
+        {
+          "id": "R11-REQ-2",
+          "kind": "must_preserve",
+          "text": "宿主段落费率调整内容逐字保留；费用归属段不被本动作扩大",
+          "check": {
+            "kind": "boundary_scope",
+            "boundary": "preserve_host"
+          },
+          "verification": "code"
+        }
+      ],
+      "model_verification": [],
+      "source_provenance": {
+        "v1_rule_source": "rules/rules_v1.json",
+        "v1_rules_sha256": "73122317f6f3d6fa9487cf143d8df48c0c2f0a349dc58fbac4a7fe8a7c94c012",
+        "template_source_paragraph": 56,
+        "template_source_provenance": [
+          {
+            "paragraph": 56,
+            "sha256": "a1cc3e8e06bbb25143ebb86e6f5ebe4c9fac907789972b5b1db13e4855f9f88d"
+          },
+          {
+            "paragraph": 57,
+            "sha256": "19cd9cf838547700a2cf5596f39b6cb30f8b0e6a4c3f0a86e9d67115cf1be4f8"
+          }
+        ],
+        "old_texts": [
+          "本基金对持续持有期少于7日的投资者收取不低于1.50%的赎回费，并将上述赎回费全额计入基金财产。"
+        ]
+      },
+      "evaluation_report_id": "fundlex-internal-deploy-report-2026-10-14",
+      "approval_record": "product-owner-directive-2026-10-14",
+      "release_threshold": {
+        "registration_id": "fundlex-internal-deploy-2026-10-14",
+        "registered_before_full_evaluation": true,
+        "metrics": {
+          "positive_cases": {
+            "min": 1
+          },
+          "negative_cases": {
+            "min": 1
+          },
+          "fixture_pass_rate": {
+            "min": 1.0
+          },
+          "unsafe_edits": {
+            "max": 0
+          },
+          "artifact_checks": {
+            "min": 1.0
+          }
+        },
+        "profile_metrics": {}
+      },
+      "evaluation_metrics": {
+        "tested_context": {
+          "engine_build": "bfe207438e5a2941ef21e53559af5d6aee80a120a148e04742a772e2590d6c18",
+          "model_transport_sha256": "f7646078cd812be501a3e535cfd7708acc1b48b31ba6af32bf5be9a66c21eede",
+          "actual_model": "deepseek-flash",
+          "prompt_versions": {
+            "fund_type": "fund_type_v3",
+            "profile": "profile_v3",
+            "locate": "v2_locate_v1",
+            "generate": "v2_generate_v1",
+            "verify": "v2_verify_v1"
+          }
+        },
+        "action_id": "R11-A1",
+        "evaluation_report_id": "fundlex-internal-deploy-report-2026-10-14",
+        "threshold_registration_id": "fundlex-internal-deploy-2026-10-14",
+        "metrics": {
+          "positive_cases": 1,
+          "negative_cases": 1,
+          "fixture_pass_rate": 1.0,
+          "unsafe_edits": 0,
+          "artifact_checks": 1.0
+        },
+        "profile_metrics": {},
+        "profile_metric_note": "code-verified profile evidence; threshold min 0.0; no independent accuracy measurement claimed"
+      }
+    },
+    {
+      "rule_id": "R10",
+      "action_id": "R10-A1",
+      "description": "赎回费全额计入基金财产",
+      "section_anchor": "基金份额的申购与赎回",
+      "section_aliases": [
+        "基金份额的申购和赎回",
+        "基金份额的申购、赎回与转换"
+      ],
+      "subsection_anchor": "申购和赎回的价格、费用及其用途",
+      "subsection_aliases": [
+        "申购与赎回的价格、费用及其用途",
+        "申购和赎回的费用及其用途",
+        "申购与赎回的费用及其用途"
+      ],
+      "regions": [
+        "body",
+        "summary"
+      ],
+      "scope": "paragraph",
+      "operation": "replace",
+      "requires_profile": [],
+      "condition": "always",
+      "approval": {
+        "auto_write": true,
+        "approved": true,
+        "status": "released"
+      },
+      "semantics": {
+        "subject": "赎回基金份额的基金份额持有人",
+        "action": "承担赎回费用并在赎回时收取，赎回费用全额计入基金财产",
+        "condition": "无条件全额计入；删除按比例归入、招募说明书比例与未归入部分用途的旧表述",
+        "fee_terms": "不保留也不新增任何费用比例或数字",
+        "ownership": "赎回费用全额计入基金财产",
+        "allowed_changes": [
+          "删除按比例归入基金财产、按招募说明书列示比例、未归入部分用于登记费等旧表述",
+          "删除目标范围内与短期持有赎回费绑定的旧句"
+        ],
+        "must_preserve": [
+          "同段目标范围之前的申购费、费用列表、编号等非目标内容逐字保留",
+          "同段目标范围之后的文本逐字保留"
+        ],
+        "forbidden_additions": [
+          "不得新增持有期、渠道、投资者类别等条件",
+          "不得新增费用比例或数字",
+          "不得改变费用承担主体或归属关系"
+        ],
+        "unsupported": [
+          "跨段目标",
+          "跨 cell 目标",
+          "结构屏障",
+          "同段内无法唯一确定费用归属范围"
+        ]
+      },
+      "locate": {
+        "mode": "model_assisted",
+        "instruction": "在给定的单个段落中定位唯一的、完整的旧赎回费用承担与归入基金财产条款范围。范围必须以“赎回费用由”开头，覆盖该费用承担、收取时点、归入基金财产比例或全额表述，直至相应句号结束；如果该段落还把短期持有赎回费句并入同一归属条款，也一并纳入范围。不得包含申购费、认购费、赎回费率表、编号或与赎回费用归属无关的句子。quote 必须是段落中的逐字连续原文，不允许省略、改写或拼接；找不到时返回空 quote。",
+        "start_prefixes": [
+          "赎回费用由"
+        ],
+        "forbid_contains": [
+          "申购费",
+          "认购费",
+          "管理费",
+          "托管费",
+          "销售服务费"
+        ],
+        "require_end": [
+          "。",
+          "；"
+        ],
+        "min_chars": 20,
+        "max_chars": 500,
+        "prefilter": {
+          "all": [
+            "赎回费用"
+          ],
+          "any": [
+            "承担",
+            "归入基金财产",
+            "计入基金财产"
+          ]
+        },
+        "max_locate_paragraphs": 3
+      },
+      "generation": {
+        "mode": "generate",
+        "kind": "redemption_fee_ownership",
+        "instruction": "根据 RULE_REQUIREMENTS 与 CONTRACT_SOURCE，写出替换后的赎回费用承担与归属条款正文。只保留持有人承担、赎回时收取、全额计入基金财产；删除按比例归入、招募说明书、登记费及短期持有条件相关旧表述；不得新增条件、渠道、类别或数字。replacement_text 仅为替换范围的新正文，不包含替换范围之外的文字。source_quote 必须逐字等于 CONTRACT_SOURCE 内容；changes[].basis_requirement 只能使用 RULE_REQUIREMENTS 中列出的 id，或不提供该字段。",
+        "reference_text": "赎回费用由赎回基金份额的基金份额持有人承担，在基金份额持有人赎回基金份额时收取。赎回费用全额计入基金财产。",
+        "max_chars": 200
+      },
+      "requirements": [
+        {
+          "id": "R10-REQ-1",
+          "kind": "must_state",
+          "text": "赎回费用由赎回基金份额的基金份额持有人承担",
+          "check": {
+            "kind": "contains_all",
+            "values": [
+              "赎回费用由赎回基金份额的基金份额持有人承担"
+            ]
+          },
+          "verification": "code"
+        },
+        {
+          "id": "R10-REQ-2",
+          "kind": "must_state",
+          "text": "在基金份额持有人赎回基金份额时收取",
+          "check": {
+            "kind": "contains_all",
+            "values": [
+              "在基金份额持有人赎回基金份额时收取"
+            ]
+          },
+          "verification": "code"
+        },
+        {
+          "id": "R10-REQ-3",
+          "kind": "must_state",
+          "text": "赎回费用全额计入基金财产",
+          "check": {
+            "kind": "contains_all",
+            "values": [
+              "全额计入基金财产"
+            ]
+          },
+          "verification": "code+model"
+        },
+        {
+          "id": "R10-REQ-4",
+          "kind": "must_not_state",
+          "text": "不得保留按比例归入、招募说明书比例或未归入部分用途的旧表述",
+          "check": {
+            "kind": "not_contains",
+            "values": [
+              "未归入基金财产",
+              "登记费",
+              "招募说明书",
+              "比例"
+            ]
+          },
+          "verification": "code"
+        },
+        {
+          "id": "R10-REQ-5",
+          "kind": "must_not_state",
+          "text": "不得新增条件、渠道或数字",
+          "check": {
+            "kind": "no_digits_and_no_conditions",
+            "conditions": [
+              "超过一年",
+              "少于",
+              "不足",
+              "持有期",
+              "直销",
+              "渠道",
+              "特定"
+            ]
+          },
+          "verification": "code"
+        },
+        {
+          "id": "R10-REQ-6",
+          "kind": "must_preserve",
+          "text": "费用承担主体、收取时点与全额归属与规则要求一致，未改变归属关系或加入未授权条件",
+          "check": {
+            "kind": "semantic_review"
+          },
+          "verification": "model"
+        }
+      ],
+      "model_verification": [
+        "R10-REQ-3",
+        "R10-REQ-6"
+      ],
+      "source_provenance": {
+        "v1_rule_source": "rules/rules_v1.json",
+        "v1_rules_sha256": "73122317f6f3d6fa9487cf143d8df48c0c2f0a349dc58fbac4a7fe8a7c94c012",
+        "template_source_paragraph": 52,
+        "template_source_provenance": [
+          {
+            "paragraph": 52,
+            "sha256": "f2bd5aa20656131d1fca47e6715cfbbfe18713aa49e40077785b88ed7454da97"
+          },
+          {
+            "paragraph": 53,
+            "sha256": "01efc2c7bf5c17bad5ee44c96778b1ad9f282c1e69e590de09a8e86008fbab6b"
+          },
+          {
+            "paragraph": 54,
+            "sha256": "e17339a67fb93deb57f3cfedde8eadb77ce3db8d1153d597286be9f9c458ac44"
+          }
+        ],
+        "old_texts": [
+          "赎回费用由赎回基金份额的基金份额持有人承担，在基金份额持有人赎回基金份额时收取。赎回费用归入基金财产的比例应根据相关规定执行，并在招募说明书中列示。",
+          "赎回费用由赎回基金份额的基金份额持有人承担，在基金份额持有人赎回基金份额时收取。赎回费用归入基金财产的比例依照相关法律法规设定，具体见招募说明书的规定，未归入基金财产的部分用于支付登记费和其他必要的手续费。其中，对持续持有期少于7日的投资者收取不低于1.5%的赎回费，并全额计入基金财产。"
+        ]
+      },
+      "evaluation_report_id": "fundlex-internal-deploy-report-2026-10-14",
+      "approval_record": "product-owner-directive-2026-10-14",
+      "release_threshold": {
+        "registration_id": "fundlex-internal-deploy-2026-10-14",
+        "registered_before_full_evaluation": true,
+        "metrics": {
+          "positive_cases": {
+            "min": 1
+          },
+          "negative_cases": {
+            "min": 1
+          },
+          "fixture_pass_rate": {
+            "min": 1.0
+          },
+          "unsafe_edits": {
+            "max": 0
+          },
+          "artifact_checks": {
+            "min": 1.0
+          }
+        },
+        "profile_metrics": {}
+      },
+      "evaluation_metrics": {
+        "tested_context": {
+          "engine_build": "bfe207438e5a2941ef21e53559af5d6aee80a120a148e04742a772e2590d6c18",
+          "model_transport_sha256": "f7646078cd812be501a3e535cfd7708acc1b48b31ba6af32bf5be9a66c21eede",
+          "actual_model": "deepseek-flash",
+          "prompt_versions": {
+            "fund_type": "fund_type_v3",
+            "profile": "profile_v3",
+            "locate": "v2_locate_v1",
+            "generate": "v2_generate_v1",
+            "verify": "v2_verify_v1"
+          }
+        },
+        "action_id": "R10-A1",
+        "evaluation_report_id": "fundlex-internal-deploy-report-2026-10-14",
+        "threshold_registration_id": "fundlex-internal-deploy-2026-10-14",
+        "metrics": {
+          "positive_cases": 1,
+          "negative_cases": 1,
+          "fixture_pass_rate": 1.0,
+          "unsafe_edits": 0,
+          "artifact_checks": 1.0
+        },
+        "profile_metrics": {},
+        "profile_metric_note": "code-verified profile evidence; threshold min 0.0; no independent accuracy measurement claimed"
+      }
+    },
+    {
+      "rule_id": "R03",
+      "action_id": "R03-A1",
+      "description": "有销售服务费时替换可调低费率",
+      "section_anchor": "基金的基本情况",
+      "section_aliases": [],
+      "subsection_anchor": "份额类别",
+      "subsection_aliases": [
+        "份额类别设置",
+        "基金份额类别设置",
+        "基金份额类别",
+        "基金份额的类别",
+        "基金份额分类",
+        "基金份额的分类",
+        "基金份额的类别设置",
+        "基金的份额类别设置",
+        "基金的份额类别",
+        "基金份额类别的设置"
+      ],
+      "regions": [
+        "body",
+        "summary"
+      ],
+      "scope": "phrase",
+      "operation": "replace",
+      "requires_profile": [
+        "sales_service_fee_by_class"
+      ],
+      "condition": "has_service_fee",
+      "approval": {
+        "auto_write": true,
+        "approved": true,
+        "status": "released"
+      },
+      "semantics": {
+        "subject": "费率调整条款中的“调低赎回费率”表述",
+        "action": "将“调低赎回费率”替换为“调低销售服务费率”",
+        "condition": "仅当合同存在收取销售服务费的类别（has_service_fee）时适用",
+        "fee_terms": "不新增任何费率数字；只改变可调低费用的对象",
+        "ownership": null,
+        "allowed_changes": [
+          "把“调低赎回费率”替换为“调低销售服务费率”"
+        ],
+        "must_preserve": [
+          "同句其余可调费用表述、数字与编号",
+          "其他区域、目录、部件"
+        ],
+        "forbidden_additions": [
+          "不得新增费率数字、比例或条件"
+        ],
+        "unsupported": [
+          "无销售服务费证据",
+          "目标短语不在费率调整句",
+          "跨段/屏障/无法唯一定位"
+        ]
+      },
+      "locate": {
+        "mode": "code_literal",
+        "triggers": [
+          "调低赎回费率"
+        ],
+        "old_texts": [
+          "调低赎回费率"
+        ]
+      },
+      "generation": {
+        "mode": "template",
+        "template_text": "调低销售服务费率",
+        "max_chars": 400
+      },
+      "requirements": [
+        {
+          "id": "R03-A1-REQ-1",
+          "kind": "must_preserve",
+          "text": "改写内容必须与规则指引文案逐字一致（类别槽位按当前合同实际类别实例化）",
+          "check": {
+            "kind": "template_exact"
+          },
+          "verification": "code"
+        },
+        {
+          "id": "R03-A1-REQ-2",
+          "kind": "must_state",
+          "text": "改写后必须包含规则要求的关键表述",
+          "check": {
+            "kind": "contains_all",
+            "values": [
+              "调低销售服务费率"
+            ]
+          },
+          "verification": "code"
+        },
+        {
+          "id": "R03-A1-REQ-3",
+          "kind": "must_not_state",
+          "text": "改写后不得保留旧的费用对象或条件表述",
+          "check": {
+            "kind": "not_contains",
+            "values": [
+              "调低赎回费率"
+            ]
+          },
+          "verification": "code"
+        }
+      ],
+      "model_verification": [],
+      "source_provenance": {
+        "v1_rule_source": "rules/rules_v1.json",
+        "v1_rules_sha256": "73122317f6f3d6fa9487cf143d8df48c0c2f0a349dc58fbac4a7fe8a7c94c012",
+        "template_source_paragraph": 20,
+        "template_source_provenance": [
+          {
+            "paragraph": 20,
+            "sha256": "6c4fe3bced6ee8cf537970bbbf435d83b41ca13662044fb6709ec72e27c5db21"
+          },
+          {
+            "paragraph": 22,
+            "sha256": "4484ac16816d6b2eae0d4bd3b865e57585195851df4a90ee2938820ee3befe53"
+          }
+        ],
+        "old_texts": [
+          "调低赎回费率"
+        ]
+      },
+      "evaluation_report_id": "fundlex-internal-deploy-report-2026-10-14",
+      "approval_record": "product-owner-directive-2026-10-14",
+      "release_threshold": {
+        "registration_id": "fundlex-internal-deploy-2026-10-14",
+        "registered_before_full_evaluation": true,
+        "metrics": {
+          "positive_cases": {
+            "min": 1
+          },
+          "negative_cases": {
+            "min": 1
+          },
+          "fixture_pass_rate": {
+            "min": 1.0
+          },
+          "unsafe_edits": {
+            "max": 0
+          },
+          "artifact_checks": {
+            "min": 1.0
+          }
+        },
+        "profile_metrics": {
+          "sales_service_fee_by_class": {
+            "accuracy": {
+              "min": 0.0
+            }
+          }
+        }
+      },
+      "evaluation_metrics": {
+        "tested_context": {
+          "engine_build": "bfe207438e5a2941ef21e53559af5d6aee80a120a148e04742a772e2590d6c18",
+          "model_transport_sha256": "f7646078cd812be501a3e535cfd7708acc1b48b31ba6af32bf5be9a66c21eede",
+          "actual_model": "deepseek-flash",
+          "prompt_versions": {
+            "fund_type": "fund_type_v3",
+            "profile": "profile_v3",
+            "locate": "v2_locate_v1",
+            "generate": "v2_generate_v1",
+            "verify": "v2_verify_v1"
+          }
+        },
+        "action_id": "R03-A1",
+        "evaluation_report_id": "fundlex-internal-deploy-report-2026-10-14",
+        "threshold_registration_id": "fundlex-internal-deploy-2026-10-14",
+        "metrics": {
+          "positive_cases": 1,
+          "negative_cases": 1,
+          "fixture_pass_rate": 1.0,
+          "unsafe_edits": 0,
+          "artifact_checks": 1.0
+        },
+        "profile_metrics": {
+          "sales_service_fee_by_class": {
+            "accuracy": 1.0
+          }
+        },
+        "profile_metric_note": "code-verified profile evidence; threshold min 0.0; no independent accuracy measurement claimed"
+      }
+    },
+    {
+      "rule_id": "R03",
+      "action_id": "R03-A2",
+      "description": "无销售服务费时删除可调低赎回费率",
+      "section_anchor": "基金的基本情况",
+      "section_aliases": [],
+      "subsection_anchor": "份额类别",
+      "subsection_aliases": [
+        "份额类别设置",
+        "基金份额类别设置",
+        "基金份额类别",
+        "基金份额的类别",
+        "基金份额分类",
+        "基金份额的分类",
+        "基金份额的类别设置",
+        "基金的份额类别设置",
+        "基金的份额类别",
+        "基金份额类别的设置"
+      ],
+      "regions": [
+        "body",
+        "summary"
+      ],
+      "scope": "phrase",
+      "operation": "delete",
+      "requires_profile": [
+        "sales_service_fee_by_class"
+      ],
+      "condition": "no_service_fee",
+      "approval": {
+        "auto_write": true,
+        "approved": true,
+        "status": "released"
+      },
+      "semantics": {
+        "subject": "费率调整条款中的“、调低赎回费率”",
+        "action": "删除该短语，保留同句其他可调费用表述",
+        "condition": "合同没有销售服务费类别（no_service_fee）时适用",
+        "fee_terms": "不改变其他费率数字与表述",
+        "ownership": null,
+        "allowed_changes": [
+          "删除“、调低赎回费率”"
+        ],
+        "must_preserve": [
+          "同句其他可调费用表述与数字",
+          "其他区域与部件"
+        ],
+        "forbidden_additions": [
+          "不得新增任何文字"
+        ],
+        "unsupported": [
+          "存在销售服务费证据",
+          "目标短语不存在",
+          "跨段/屏障/无法唯一定位"
+        ]
+      },
+      "locate": {
+        "mode": "code_literal",
+        "triggers": [
+          "、调低赎回费率"
+        ],
+        "old_texts": [
+          "、调低赎回费率"
+        ]
+      },
+      "generation": {
+        "mode": "delete"
+      },
+      "requirements": [
+        {
+          "id": "R03-A2-REQ-1",
+          "kind": "must_not_state",
+          "text": "目标内容已删除，范围之外文字保持不变",
+          "check": {
+            "kind": "delete_only"
+          },
+          "verification": "code"
+        },
+        {
+          "id": "R03-A2-REQ-2",
+          "kind": "must_preserve",
+          "text": "只删除目标内容；同段/相邻文字与其他区域逐字保留",
+          "check": {
+            "kind": "boundary_scope",
+            "boundary": "preserve_outside"
+          },
+          "verification": "code"
+        }
+      ],
+      "model_verification": [],
+      "source_provenance": {
+        "v1_rule_source": "rules/rules_v1.json",
+        "v1_rules_sha256": "73122317f6f3d6fa9487cf143d8df48c0c2f0a349dc58fbac4a7fe8a7c94c012",
+        "template_source_paragraph": 20,
+        "template_source_provenance": [
+          {
+            "paragraph": 20,
+            "sha256": "6c4fe3bced6ee8cf537970bbbf435d83b41ca13662044fb6709ec72e27c5db21"
+          },
+          {
+            "paragraph": 22,
+            "sha256": "4484ac16816d6b2eae0d4bd3b865e57585195851df4a90ee2938820ee3befe53"
+          }
+        ],
+        "old_texts": [
+          "、调低赎回费率"
+        ]
+      },
+      "evaluation_report_id": "fundlex-internal-deploy-report-2026-10-14",
+      "approval_record": "product-owner-directive-2026-10-14",
+      "release_threshold": {
+        "registration_id": "fundlex-internal-deploy-2026-10-14",
+        "registered_before_full_evaluation": true,
+        "metrics": {
+          "positive_cases": {
+            "min": 1
+          },
+          "negative_cases": {
+            "min": 1
+          },
+          "fixture_pass_rate": {
+            "min": 1.0
+          },
+          "unsafe_edits": {
+            "max": 0
+          },
+          "artifact_checks": {
+            "min": 1.0
+          }
+        },
+        "profile_metrics": {
+          "sales_service_fee_by_class": {
+            "accuracy": {
+              "min": 0.0
+            }
+          }
+        }
+      },
+      "evaluation_metrics": {
+        "tested_context": {
+          "engine_build": "bfe207438e5a2941ef21e53559af5d6aee80a120a148e04742a772e2590d6c18",
+          "model_transport_sha256": "f7646078cd812be501a3e535cfd7708acc1b48b31ba6af32bf5be9a66c21eede",
+          "actual_model": "deepseek-flash",
+          "prompt_versions": {
+            "fund_type": "fund_type_v3",
+            "profile": "profile_v3",
+            "locate": "v2_locate_v1",
+            "generate": "v2_generate_v1",
+            "verify": "v2_verify_v1"
+          }
+        },
+        "action_id": "R03-A2",
+        "evaluation_report_id": "fundlex-internal-deploy-report-2026-10-14",
+        "threshold_registration_id": "fundlex-internal-deploy-2026-10-14",
+        "metrics": {
+          "positive_cases": 1,
+          "negative_cases": 1,
+          "fixture_pass_rate": 1.0,
+          "unsafe_edits": 0,
+          "artifact_checks": 1.0
+        },
+        "profile_metrics": {
+          "sales_service_fee_by_class": {
+            "accuracy": 1.0
+          }
+        },
+        "profile_metric_note": "code-verified profile evidence; threshold min 0.0; no independent accuracy measurement claimed"
+      }
+    },
+    {
+      "rule_id": "R05",
+      "action_id": "R05-A1",
+      "description": "单类别申购费率及直销豁免",
+      "section_anchor": "基金份额的申购与赎回",
+      "section_aliases": [
+        "基金份额的申购和赎回",
+        "基金份额的申购、赎回与转换"
+      ],
+      "subsection_anchor": "申购和赎回的价格、费用及其用途",
+      "subsection_aliases": [
+        "申购与赎回的价格、费用及其用途",
+        "申购和赎回的费用及其用途",
+        "申购与赎回的费用及其用途"
+      ],
+      "regions": [
+        "body",
+        "summary"
+      ],
+      "scope": "sentence",
+      "operation": "replace",
+      "requires_profile": [
+        "share_classes"
+      ],
+      "condition": "single_class",
+      "approval": {
+        "auto_write": true,
+        "approved": true,
+        "status": "released"
+      },
+      "semantics": {
+        "subject": "单一类别基金的申购费率条款",
+        "action": "替换为含直销机构豁免的申购费率条款",
+        "condition": "单一类别（single_class）时适用",
+        "fee_terms": "不新增具体费率；保留“由基金管理人决定并在招募说明书列示”",
+        "ownership": null,
+        "allowed_changes": [
+          "整句替换为规则指引文案"
+        ],
+        "must_preserve": [
+          "费率决定与列示方式",
+          "非目标区域与部件"
+        ],
+        "forbidden_additions": [
+          "不得新增费率数字或条件"
+        ],
+        "unsupported": [
+          "多类别合同",
+          "目标句不匹配",
+          "跨段/屏障/不唯一"
+        ]
+      },
+      "locate": {
+        "mode": "code_literal",
+        "triggers": [
+          "本基金的申购费率由基金管理人决定，并在招募说明书中列示。"
+        ],
+        "old_texts": [
+          "本基金的申购费率由基金管理人决定，并在招募说明书中列示。"
+        ]
+      },
+      "generation": {
+        "mode": "template",
+        "template_text": "通过直销机构申购本基金不收取申购费，通过直销机构以外的其他销售机构申购本基金的申购费率由基金管理人决定，并在招募说明书中列示。",
+        "max_chars": 400
+      },
+      "requirements": [
+        {
+          "id": "R05-A1-REQ-1",
+          "kind": "must_preserve",
+          "text": "改写内容必须与规则指引文案逐字一致（类别槽位按当前合同实际类别实例化）",
+          "check": {
+            "kind": "template_exact"
+          },
+          "verification": "code"
+        },
+        {
+          "id": "R05-A1-REQ-2",
+          "kind": "must_state",
+          "text": "改写后必须包含规则要求的关键表述",
+          "check": {
+            "kind": "contains_all",
+            "values": [
+              "通过直销机构申购本基金不收取申购费"
+            ]
+          },
+          "verification": "code"
+        }
+      ],
+      "model_verification": [],
+      "source_provenance": {
+        "v1_rule_source": "rules/rules_v1.json",
+        "v1_rules_sha256": "73122317f6f3d6fa9487cf143d8df48c0c2f0a349dc58fbac4a7fe8a7c94c012",
+        "template_source_paragraph": 29,
+        "template_source_provenance": [
+          {
+            "paragraph": 29,
+            "sha256": "986c0a2abd222c5b0d175fe1bbce6bed0d631d9474df2ee047aa3ddc52499229"
+          },
+          {
+            "paragraph": 32,
+            "sha256": "ecc20559738590df7a94ab04e9079b97871554cb9fee6f32111459b09b0a23a2"
+          }
+        ],
+        "old_texts": [
+          "本基金的申购费率由基金管理人决定，并在招募说明书中列示。"
+        ]
+      },
+      "evaluation_report_id": "fundlex-internal-deploy-report-2026-10-14",
+      "approval_record": "product-owner-directive-2026-10-14",
+      "release_threshold": {
+        "registration_id": "fundlex-internal-deploy-2026-10-14",
+        "registered_before_full_evaluation": true,
+        "metrics": {
+          "positive_cases": {
+            "min": 1
+          },
+          "negative_cases": {
+            "min": 1
+          },
+          "fixture_pass_rate": {
+            "min": 1.0
+          },
+          "unsafe_edits": {
+            "max": 0
+          },
+          "artifact_checks": {
+            "min": 1.0
+          }
+        },
+        "profile_metrics": {
+          "share_classes": {
+            "accuracy": {
+              "min": 0.0
+            }
+          }
+        }
+      },
+      "evaluation_metrics": {
+        "tested_context": {
+          "engine_build": "bfe207438e5a2941ef21e53559af5d6aee80a120a148e04742a772e2590d6c18",
+          "model_transport_sha256": "f7646078cd812be501a3e535cfd7708acc1b48b31ba6af32bf5be9a66c21eede",
+          "actual_model": "deepseek-flash",
+          "prompt_versions": {
+            "fund_type": "fund_type_v3",
+            "profile": "profile_v3",
+            "locate": "v2_locate_v1",
+            "generate": "v2_generate_v1",
+            "verify": "v2_verify_v1"
+          }
+        },
+        "action_id": "R05-A1",
+        "evaluation_report_id": "fundlex-internal-deploy-report-2026-10-14",
+        "threshold_registration_id": "fundlex-internal-deploy-2026-10-14",
+        "metrics": {
+          "positive_cases": 1,
+          "negative_cases": 1,
+          "fixture_pass_rate": 1.0,
+          "unsafe_edits": 0,
+          "artifact_checks": 1.0
+        },
+        "profile_metrics": {
+          "share_classes": {
+            "accuracy": 1.0
+          }
+        },
+        "profile_metric_note": "code-verified profile evidence; threshold min 0.0; no independent accuracy measurement claimed"
+      }
+    },
+    {
+      "rule_id": "R06",
+      "action_id": "R06-A1",
+      "description": "多类别申购费率及直销豁免",
+      "section_anchor": "基金份额的申购与赎回",
+      "section_aliases": [
+        "基金份额的申购和赎回",
+        "基金份额的申购、赎回与转换"
+      ],
+      "subsection_anchor": "申购和赎回的价格、费用及其用途",
+      "subsection_aliases": [
+        "申购与赎回的价格、费用及其用途",
+        "申购和赎回的费用及其用途",
+        "申购与赎回的费用及其用途"
+      ],
+      "regions": [
+        "body",
+        "summary"
+      ],
+      "scope": "sentence",
+      "operation": "replace",
+      "requires_profile": [
+        "share_classes",
+        "subscription_fee_by_class",
+        "sales_service_fee_by_class"
+      ],
+      "condition": "multi_class",
+      "approval": {
+        "auto_write": true,
+        "approved": true,
+        "status": "released"
+      },
+      "semantics": {
+        "subject": "多类别基金的申购费率条款",
+        "action": "按当前合同实际类别替换为含类别费用归属与直销豁免的条款",
+        "condition": "多类别（multi_class）且类别收费分组可核验时适用",
+        "fee_terms": "不新增费率数字；类别名称只来自当前合同",
+        "ownership": null,
+        "allowed_changes": [
+          "整句替换为规则指引文案",
+          "类别槽位按实际申购费组/销售服务费组实例化"
+        ],
+        "must_preserve": [
+          "费率决定与列示方式",
+          "非目标区域与部件"
+        ],
+        "forbidden_additions": [
+          "不得新增费率数字或条件",
+          "不得使用合同之外的类别名称"
+        ],
+        "unsupported": [
+          "单类别合同",
+          "类别收费分组不完整",
+          "目标句不匹配",
+          "跨段/屏障/不唯一"
+        ]
+      },
+      "locate": {
+        "mode": "code_literal",
+        "triggers": [
+          "本基金的申购费率由基金管理人决定，并在招募说明书中列示。"
+        ],
+        "old_texts": [
+          "本基金的申购费率由基金管理人决定，并在招募说明书中列示。"
+        ],
+        "slots": {
+          "A类基金份额": "subscription_group",
+          "C类基金份额": "service_group"
+        }
+      },
+      "generation": {
+        "mode": "template",
+        "template_text": "本基金A类基金份额在申购时收取申购费用，C类基金份额不收取申购费用。通过直销机构申购本基金A类基金份额不收取申购费。通过直销机构以外的其他销售机构申购本基金的申购费率由基金管理人决定，并在招募说明书中列示。",
+        "max_chars": 400,
+        "slots": {
+          "A类基金份额": "subscription_group",
+          "C类基金份额": "service_group"
+        }
+      },
+      "requirements": [
+        {
+          "id": "R06-A1-REQ-1",
+          "kind": "must_preserve",
+          "text": "改写内容必须与规则指引文案逐字一致（类别槽位按当前合同实际类别实例化）",
+          "check": {
+            "kind": "template_exact"
+          },
+          "verification": "code"
+        },
+        {
+          "id": "R06-A1-REQ-2",
+          "kind": "must_state",
+          "text": "改写后必须包含规则要求的关键表述",
+          "check": {
+            "kind": "contains_all",
+            "values": [
+              "通过直销机构申购本基金",
+              "不收取申购费"
+            ]
+          },
+          "verification": "code"
+        }
+      ],
+      "model_verification": [],
+      "source_provenance": {
+        "v1_rule_source": "rules/rules_v1.json",
+        "v1_rules_sha256": "73122317f6f3d6fa9487cf143d8df48c0c2f0a349dc58fbac4a7fe8a7c94c012",
+        "template_source_paragraph": 29,
+        "template_source_provenance": [
+          {
+            "paragraph": 29,
+            "sha256": "986c0a2abd222c5b0d175fe1bbce6bed0d631d9474df2ee047aa3ddc52499229"
+          },
+          {
+            "paragraph": 34,
+            "sha256": "64692c671d086c1ac20f83254c7f5d388dae2ce505908069959f89aaf5ddb3dc"
+          },
+          {
+            "paragraph": 35,
+            "sha256": "40ebb4a75ff1ffa646a2abb53d8671b782da0ce725822d4c9f85703953ea7e27"
+          }
+        ],
+        "old_texts": [
+          "本基金的申购费率由基金管理人决定，并在招募说明书中列示。"
+        ]
+      },
+      "evaluation_report_id": "fundlex-internal-deploy-report-2026-10-14",
+      "approval_record": "product-owner-directive-2026-10-14",
+      "release_threshold": {
+        "registration_id": "fundlex-internal-deploy-2026-10-14",
+        "registered_before_full_evaluation": true,
+        "metrics": {
+          "positive_cases": {
+            "min": 1
+          },
+          "negative_cases": {
+            "min": 1
+          },
+          "fixture_pass_rate": {
+            "min": 1.0
+          },
+          "unsafe_edits": {
+            "max": 0
+          },
+          "artifact_checks": {
+            "min": 1.0
+          }
+        },
+        "profile_metrics": {
+          "share_classes": {
+            "accuracy": {
+              "min": 0.0
+            }
+          },
+          "subscription_fee_by_class": {
+            "accuracy": {
+              "min": 0.0
+            }
+          },
+          "sales_service_fee_by_class": {
+            "accuracy": {
+              "min": 0.0
+            }
+          }
+        }
+      },
+      "evaluation_metrics": {
+        "tested_context": {
+          "engine_build": "bfe207438e5a2941ef21e53559af5d6aee80a120a148e04742a772e2590d6c18",
+          "model_transport_sha256": "f7646078cd812be501a3e535cfd7708acc1b48b31ba6af32bf5be9a66c21eede",
+          "actual_model": "deepseek-flash",
+          "prompt_versions": {
+            "fund_type": "fund_type_v3",
+            "profile": "profile_v3",
+            "locate": "v2_locate_v1",
+            "generate": "v2_generate_v1",
+            "verify": "v2_verify_v1"
+          }
+        },
+        "action_id": "R06-A1",
+        "evaluation_report_id": "fundlex-internal-deploy-report-2026-10-14",
+        "threshold_registration_id": "fundlex-internal-deploy-2026-10-14",
+        "metrics": {
+          "positive_cases": 1,
+          "negative_cases": 2,
+          "fixture_pass_rate": 1.0,
+          "unsafe_edits": 0,
+          "artifact_checks": 1.0
+        },
+        "profile_metrics": {
+          "share_classes": {
+            "accuracy": 1.0
+          },
+          "subscription_fee_by_class": {
+            "accuracy": 1.0
+          },
+          "sales_service_fee_by_class": {
+            "accuracy": 1.0
+          }
+        },
+        "profile_metric_note": "code-verified profile evidence; threshold min 0.0; no independent accuracy measurement claimed"
+      }
+    },
+    {
+      "rule_id": "R07",
+      "action_id": "R07-A1",
+      "description": "多类别赎回金额扣除或加上费用",
+      "section_anchor": "基金份额的申购与赎回",
+      "section_aliases": [
+        "基金份额的申购和赎回",
+        "基金份额的申购、赎回与转换"
+      ],
+      "subsection_anchor": "申购和赎回的价格、费用及其用途",
+      "subsection_aliases": [
+        "申购与赎回的价格、费用及其用途",
+        "申购和赎回的费用及其用途",
+        "申购与赎回的费用及其用途"
+      ],
+      "regions": [
+        "body",
+        "summary"
+      ],
+      "scope": "sentence",
+      "operation": "replace",
+      "requires_profile": [
+        "share_classes"
+      ],
+      "condition": "multi_class",
+      "approval": {
+        "auto_write": true,
+        "approved": true,
+        "status": "released"
+      },
+      "semantics": {
+        "subject": "多类别基金的赎回金额计算条款",
+        "action": "替换为“按当日该类基金份额净值并扣除或加上相应费用”的表述",
+        "condition": "多类别（multi_class）时适用",
+        "fee_terms": "不新增费率或数字",
+        "ownership": null,
+        "allowed_changes": [
+          "整句替换为规则指引文案"
+        ],
+        "must_preserve": [
+          "金额单位与其他计算要素",
+          "非目标区域与部件"
+        ],
+        "forbidden_additions": [
+          "不得新增数字或条件"
+        ],
+        "unsupported": [
+          "单类别合同",
+          "目标句不匹配",
+          "跨段/屏障/不唯一"
+        ]
+      },
+      "locate": {
+        "mode": "code_literal",
+        "triggers": [
+          "赎回金额为按实际确认的有效赎回份额乘以当日对应份额类别的基金份额净值并扣除相应的费用，赎回金额单位为元。"
+        ],
+        "old_texts": [
+          "赎回金额为按实际确认的有效赎回份额乘以当日对应份额类别的基金份额净值并扣除相应的费用，赎回金额单位为元。"
+        ]
+      },
+      "generation": {
+        "mode": "template",
+        "template_text": "赎回金额为按实际确认的有效赎回份额乘以当日该类基金份额的基金份额净值并扣除或加上相应的费用，赎回金额单位为元。",
+        "max_chars": 400
+      },
+      "requirements": [
+        {
+          "id": "R07-A1-REQ-1",
+          "kind": "must_preserve",
+          "text": "改写内容必须与规则指引文案逐字一致（类别槽位按当前合同实际类别实例化）",
+          "check": {
+            "kind": "template_exact"
+          },
+          "verification": "code"
+        },
+        {
+          "id": "R07-A1-REQ-2",
+          "kind": "must_state",
+          "text": "改写后必须包含规则要求的关键表述",
+          "check": {
+            "kind": "contains_all",
+            "values": [
+              "并扣除或加上相应的费用"
+            ]
+          },
+          "verification": "code"
+        }
+      ],
+      "model_verification": [],
+      "source_provenance": {
+        "v1_rule_source": "rules/rules_v1.json",
+        "v1_rules_sha256": "73122317f6f3d6fa9487cf143d8df48c0c2f0a349dc58fbac4a7fe8a7c94c012",
+        "template_source_paragraph": 37,
+        "template_source_provenance": [
+          {
+            "paragraph": 37,
+            "sha256": "c610a82c3cb4cc09461bcf0d464c77f05f5b20ff51e1ad2e6d5c07a14ce87c49"
+          },
+          {
+            "paragraph": 41,
+            "sha256": "272c567a9e80914a67a505b9446a50e95432b8dd7e7d5035f15e1fe8d519e154"
+          }
+        ],
+        "old_texts": [
+          "赎回金额为按实际确认的有效赎回份额乘以当日对应份额类别的基金份额净值并扣除相应的费用，赎回金额单位为元。"
+        ]
+      },
+      "evaluation_report_id": "fundlex-internal-deploy-report-2026-10-14",
+      "approval_record": "product-owner-directive-2026-10-14",
+      "release_threshold": {
+        "registration_id": "fundlex-internal-deploy-2026-10-14",
+        "registered_before_full_evaluation": true,
+        "metrics": {
+          "positive_cases": {
+            "min": 1
+          },
+          "negative_cases": {
+            "min": 1
+          },
+          "fixture_pass_rate": {
+            "min": 1.0
+          },
+          "unsafe_edits": {
+            "max": 0
+          },
+          "artifact_checks": {
+            "min": 1.0
+          }
+        },
+        "profile_metrics": {
+          "share_classes": {
+            "accuracy": {
+              "min": 0.0
+            }
+          }
+        }
+      },
+      "evaluation_metrics": {
+        "tested_context": {
+          "engine_build": "bfe207438e5a2941ef21e53559af5d6aee80a120a148e04742a772e2590d6c18",
+          "model_transport_sha256": "f7646078cd812be501a3e535cfd7708acc1b48b31ba6af32bf5be9a66c21eede",
+          "actual_model": "deepseek-flash",
+          "prompt_versions": {
+            "fund_type": "fund_type_v3",
+            "profile": "profile_v3",
+            "locate": "v2_locate_v1",
+            "generate": "v2_generate_v1",
+            "verify": "v2_verify_v1"
+          }
+        },
+        "action_id": "R07-A1",
+        "evaluation_report_id": "fundlex-internal-deploy-report-2026-10-14",
+        "threshold_registration_id": "fundlex-internal-deploy-2026-10-14",
+        "metrics": {
+          "positive_cases": 1,
+          "negative_cases": 1,
+          "fixture_pass_rate": 1.0,
+          "unsafe_edits": 0,
+          "artifact_checks": 1.0
+        },
+        "profile_metrics": {
+          "share_classes": {
+            "accuracy": 1.0
+          }
+        },
+        "profile_metric_note": "code-verified profile evidence; threshold min 0.0; no independent accuracy measurement claimed"
+      }
+    },
+    {
+      "rule_id": "R08",
+      "action_id": "R08-A1",
+      "description": "单类别申购费用承担及直销豁免",
+      "section_anchor": "基金份额的申购与赎回",
+      "section_aliases": [
+        "基金份额的申购和赎回",
+        "基金份额的申购、赎回与转换"
+      ],
+      "subsection_anchor": "申购和赎回的价格、费用及其用途",
+      "subsection_aliases": [
+        "申购与赎回的价格、费用及其用途",
+        "申购和赎回的费用及其用途",
+        "申购与赎回的费用及其用途"
+      ],
+      "regions": [
+        "body",
+        "summary"
+      ],
+      "scope": "sentence",
+      "operation": "replace",
+      "requires_profile": [
+        "share_classes"
+      ],
+      "condition": "single_class",
+      "approval": {
+        "auto_write": true,
+        "approved": true,
+        "status": "released"
+      },
+      "semantics": {
+        "subject": "单一类别基金的申购费用承担条款",
+        "action": "替换为含直销豁免与费用承担的条款",
+        "condition": "单一类别（single_class）时适用",
+        "fee_terms": "不新增费率数字",
+        "ownership": "申购费用由投资人承担、不列入基金财产（保留）",
+        "allowed_changes": [
+          "整句替换为规则指引文案"
+        ],
+        "must_preserve": [
+          "费用承担与不列入基金财产的归属关系",
+          "非目标区域与部件"
+        ],
+        "forbidden_additions": [
+          "不得新增数字或条件"
+        ],
+        "unsupported": [
+          "多类别合同",
+          "目标句不匹配",
+          "跨段/屏障/不唯一"
+        ]
+      },
+      "locate": {
+        "mode": "code_literal",
+        "triggers": [
+          "申购费用由投资人承担，不列入基金财产。"
+        ],
+        "old_texts": [
+          "申购费用由投资人承担，不列入基金财产。"
+        ]
+      },
+      "generation": {
+        "mode": "template",
+        "template_text": "通过直销机构申购本基金不收取申购费，通过其他销售机构申购本基金的申购费用由投资人承担，不列入基金财产。",
+        "max_chars": 400
+      },
+      "requirements": [
+        {
+          "id": "R08-A1-REQ-1",
+          "kind": "must_preserve",
+          "text": "改写内容必须与规则指引文案逐字一致（类别槽位按当前合同实际类别实例化）",
+          "check": {
+            "kind": "template_exact"
+          },
+          "verification": "code"
+        },
+        {
+          "id": "R08-A1-REQ-2",
+          "kind": "must_state",
+          "text": "改写后必须包含规则要求的关键表述",
+          "check": {
+            "kind": "contains_all",
+            "values": [
+              "通过直销机构申购本基金不收取申购费",
+              "不列入基金财产"
+            ]
+          },
+          "verification": "code"
+        }
+      ],
+      "model_verification": [],
+      "source_provenance": {
+        "v1_rule_source": "rules/rules_v1.json",
+        "v1_rules_sha256": "73122317f6f3d6fa9487cf143d8df48c0c2f0a349dc58fbac4a7fe8a7c94c012",
+        "template_source_paragraph": 44,
+        "template_source_provenance": [
+          {
+            "paragraph": 44,
+            "sha256": "a8fadc946aae2ce74cba0c07b70eea48b83c35be00163f89f903adadb9248c26"
+          },
+          {
+            "paragraph": 45,
+            "sha256": "7788b566e567057fac466980599e25fe138ac0e7ffe3d2f621633ea710733570"
+          }
+        ],
+        "old_texts": [
+          "申购费用由投资人承担，不列入基金财产。"
+        ]
+      },
+      "evaluation_report_id": "fundlex-internal-deploy-report-2026-10-14",
+      "approval_record": "product-owner-directive-2026-10-14",
+      "release_threshold": {
+        "registration_id": "fundlex-internal-deploy-2026-10-14",
+        "registered_before_full_evaluation": true,
+        "metrics": {
+          "positive_cases": {
+            "min": 1
+          },
+          "negative_cases": {
+            "min": 1
+          },
+          "fixture_pass_rate": {
+            "min": 1.0
+          },
+          "unsafe_edits": {
+            "max": 0
+          },
+          "artifact_checks": {
+            "min": 1.0
+          }
+        },
+        "profile_metrics": {
+          "share_classes": {
+            "accuracy": {
+              "min": 0.0
+            }
+          }
+        }
+      },
+      "evaluation_metrics": {
+        "tested_context": {
+          "engine_build": "bfe207438e5a2941ef21e53559af5d6aee80a120a148e04742a772e2590d6c18",
+          "model_transport_sha256": "f7646078cd812be501a3e535cfd7708acc1b48b31ba6af32bf5be9a66c21eede",
+          "actual_model": "deepseek-flash",
+          "prompt_versions": {
+            "fund_type": "fund_type_v3",
+            "profile": "profile_v3",
+            "locate": "v2_locate_v1",
+            "generate": "v2_generate_v1",
+            "verify": "v2_verify_v1"
+          }
+        },
+        "action_id": "R08-A1",
+        "evaluation_report_id": "fundlex-internal-deploy-report-2026-10-14",
+        "threshold_registration_id": "fundlex-internal-deploy-2026-10-14",
+        "metrics": {
+          "positive_cases": 1,
+          "negative_cases": 1,
+          "fixture_pass_rate": 1.0,
+          "unsafe_edits": 0,
+          "artifact_checks": 1.0
+        },
+        "profile_metrics": {
+          "share_classes": {
+            "accuracy": 1.0
+          }
+        },
+        "profile_metric_note": "code-verified profile evidence; threshold min 0.0; no independent accuracy measurement claimed"
+      }
+    },
+    {
+      "rule_id": "R09",
+      "action_id": "R09-A1",
+      "description": "多类别申购费用承担及直销豁免",
+      "section_anchor": "基金份额的申购与赎回",
+      "section_aliases": [
+        "基金份额的申购和赎回",
+        "基金份额的申购、赎回与转换"
+      ],
+      "subsection_anchor": "申购和赎回的价格、费用及其用途",
+      "subsection_aliases": [
+        "申购与赎回的价格、费用及其用途",
+        "申购和赎回的费用及其用途",
+        "申购与赎回的费用及其用途"
+      ],
+      "regions": [
+        "body",
+        "summary"
+      ],
+      "scope": "paragraph",
+      "operation": "replace",
+      "requires_profile": [
+        "share_classes",
+        "subscription_fee_by_class",
+        "sales_service_fee_by_class"
+      ],
+      "condition": "multi_class",
+      "approval": {
+        "auto_write": true,
+        "approved": true,
+        "status": "released"
+      },
+      "semantics": {
+        "subject": "多类别基金的申购费用承担段落",
+        "action": "整段替换为含实际类别费用归属与直销豁免的段落",
+        "condition": "多类别（multi_class）且类别收费分组可核验时适用",
+        "fee_terms": "不新增费率数字；类别名称只来自当前合同",
+        "ownership": "申购费组类别的申购费用由投资人承担、不列入基金财产；服务费组类别不收取申购费用",
+        "allowed_changes": [
+          "整段替换为规则指引文案",
+          "类别槽位按实际类别分组实例化"
+        ],
+        "must_preserve": [
+          "费用归属关系",
+          "非目标区域与部件"
+        ],
+        "forbidden_additions": [
+          "不得新增数字或条件",
+          "不得使用合同之外的类别名称"
+        ],
+        "unsupported": [
+          "单类别合同",
+          "类别收费分组不完整",
+          "整段与指引旧文不匹配",
+          "跨段/屏障/不唯一"
+        ]
+      },
+      "locate": {
+        "mode": "code_literal",
+        "triggers": [
+          "本基金A类基金份额的申购费用由投资人承担，不列入基金财产；C类基金份额不收取申购费用。",
+          "申购费用由投资人承担，不列入基金财产。"
+        ],
+        "old_texts": [
+          "本基金A类基金份额的申购费用由投资人承担，不列入基金财产；C类基金份额不收取申购费用。",
+          "申购费用由投资人承担，不列入基金财产。"
+        ],
+        "slots": {
+          "A类基金份额": "subscription_group",
+          "C类基金份额": "service_group"
+        }
+      },
+      "generation": {
+        "mode": "template",
+        "template_text": "通过直销机构申购本基金A类基金份额不收取申购费，通过其他销售机构申购本基金A类基金份额的申购费用由投资人承担，不列入基金财产。本基金C类基金份额不收取申购费用。",
+        "max_chars": 400,
+        "slots": {
+          "A类基金份额": "subscription_group",
+          "C类基金份额": "service_group"
+        }
+      },
+      "requirements": [
+        {
+          "id": "R09-A1-REQ-1",
+          "kind": "must_preserve",
+          "text": "改写内容必须与规则指引文案逐字一致（类别槽位按当前合同实际类别实例化）",
+          "check": {
+            "kind": "template_exact"
+          },
+          "verification": "code"
+        },
+        {
+          "id": "R09-A1-REQ-2",
+          "kind": "must_state",
+          "text": "改写后必须包含规则要求的关键表述",
+          "check": {
+            "kind": "contains_all",
+            "values": [
+              "通过直销机构申购本基金",
+              "不列入基金财产"
+            ]
+          },
+          "verification": "code"
+        }
+      ],
+      "model_verification": [],
+      "source_provenance": {
+        "v1_rule_source": "rules/rules_v1.json",
+        "v1_rules_sha256": "73122317f6f3d6fa9487cf143d8df48c0c2f0a349dc58fbac4a7fe8a7c94c012",
+        "template_source_paragraph": 47,
+        "template_source_provenance": [
+          {
+            "paragraph": 47,
+            "sha256": "b5822d759adb62f2310123f9f4fea9fcbb7e6e22a4c5d644de247ce9cd33e7f2"
+          },
+          {
+            "paragraph": 48,
+            "sha256": "4fe5c02d315a790a79ed83375530559d526ace2ce7179844783ff103fcf84540"
+          },
+          {
+            "paragraph": 49,
+            "sha256": "fe4f76e3a831f7d34539d5353015b1437807816bda00bb04f0ea7fa9b26fd37d"
+          }
+        ],
+        "old_texts": [
+          "本基金A类基金份额的申购费用由投资人承担，不列入基金财产；C类基金份额不收取申购费用。",
+          "申购费用由投资人承担，不列入基金财产。"
+        ]
+      },
+      "evaluation_report_id": "fundlex-internal-deploy-report-2026-10-14",
+      "approval_record": "product-owner-directive-2026-10-14",
+      "release_threshold": {
+        "registration_id": "fundlex-internal-deploy-2026-10-14",
+        "registered_before_full_evaluation": true,
+        "metrics": {
+          "positive_cases": {
+            "min": 1
+          },
+          "negative_cases": {
+            "min": 1
+          },
+          "fixture_pass_rate": {
+            "min": 1.0
+          },
+          "unsafe_edits": {
+            "max": 0
+          },
+          "artifact_checks": {
+            "min": 1.0
+          }
+        },
+        "profile_metrics": {
+          "share_classes": {
+            "accuracy": {
+              "min": 0.0
+            }
+          },
+          "subscription_fee_by_class": {
+            "accuracy": {
+              "min": 0.0
+            }
+          },
+          "sales_service_fee_by_class": {
+            "accuracy": {
+              "min": 0.0
+            }
+          }
+        }
+      },
+      "evaluation_metrics": {
+        "tested_context": {
+          "engine_build": "bfe207438e5a2941ef21e53559af5d6aee80a120a148e04742a772e2590d6c18",
+          "model_transport_sha256": "f7646078cd812be501a3e535cfd7708acc1b48b31ba6af32bf5be9a66c21eede",
+          "actual_model": "deepseek-flash",
+          "prompt_versions": {
+            "fund_type": "fund_type_v3",
+            "profile": "profile_v3",
+            "locate": "v2_locate_v1",
+            "generate": "v2_generate_v1",
+            "verify": "v2_verify_v1"
+          }
+        },
+        "action_id": "R09-A1",
+        "evaluation_report_id": "fundlex-internal-deploy-report-2026-10-14",
+        "threshold_registration_id": "fundlex-internal-deploy-2026-10-14",
+        "metrics": {
+          "positive_cases": 1,
+          "negative_cases": 1,
+          "fixture_pass_rate": 1.0,
+          "unsafe_edits": 0,
+          "artifact_checks": 1.0
+        },
+        "profile_metrics": {
+          "share_classes": {
+            "accuracy": 1.0
+          },
+          "subscription_fee_by_class": {
+            "accuracy": 1.0
+          },
+          "sales_service_fee_by_class": {
+            "accuracy": 1.0
+          }
+        },
+        "profile_metric_note": "code-verified profile evidence; threshold min 0.0; no independent accuracy measurement claimed"
+      }
+    },
+    {
+      "rule_id": "R12",
+      "action_id": "R12-A1",
+      "description": "单类别促销可调低申购费率",
+      "section_anchor": "基金份额的申购与赎回",
+      "section_aliases": [
+        "基金份额的申购和赎回",
+        "基金份额的申购、赎回与转换"
+      ],
+      "subsection_anchor": "申购和赎回的价格、费用及其用途",
+      "subsection_aliases": [
+        "申购与赎回的价格、费用及其用途",
+        "申购和赎回的费用及其用途",
+        "申购与赎回的费用及其用途"
+      ],
+      "regions": [
+        "body",
+        "summary"
+      ],
+      "scope": "sentence",
+      "operation": "replace",
+      "requires_profile": [
+        "share_classes"
+      ],
+      "condition": "single_class",
+      "approval": {
+        "auto_write": true,
+        "approved": true,
+        "status": "released"
+      },
+      "semantics": {
+        "subject": "单一类别基金的促销费率调整句",
+        "action": "替换为仅可调低申购费率的表述",
+        "condition": "单一类别（single_class）时适用",
+        "fee_terms": "不新增费率数字",
+        "ownership": null,
+        "allowed_changes": [
+          "整句替换为规则指引文案"
+        ],
+        "must_preserve": [
+          "同段其他费率调整表述",
+          "非目标区域与部件"
+        ],
+        "forbidden_additions": [
+          "不得新增赎回费率或转换费率表述"
+        ],
+        "unsupported": [
+          "多类别合同",
+          "目标句不匹配",
+          "跨段/屏障/不唯一"
+        ]
+      },
+      "locate": {
+        "mode": "code_literal",
+        "triggers": [
+          "基金管理人可以适当调低基金申购费率和赎回费率。",
+          "基金管理人可以适当调低基金申购费率、赎回费率和转换费率。",
+          "基金管理人可以适当调低基金申购费率、赎回费率、转换费率和销售服务费率。"
+        ],
+        "old_texts": [
+          "基金管理人可以适当调低基金申购费率和赎回费率。",
+          "基金管理人可以适当调低基金申购费率、赎回费率和转换费率。",
+          "基金管理人可以适当调低基金申购费率、赎回费率、转换费率和销售服务费率。"
+        ]
+      },
+      "generation": {
+        "mode": "template",
+        "template_text": "基金管理人可以适当调低基金申购费率。",
+        "max_chars": 400
+      },
+      "requirements": [
+        {
+          "id": "R12-A1-REQ-1",
+          "kind": "must_preserve",
+          "text": "改写内容必须与规则指引文案逐字一致（类别槽位按当前合同实际类别实例化）",
+          "check": {
+            "kind": "template_exact"
+          },
+          "verification": "code"
+        },
+        {
+          "id": "R12-A1-REQ-2",
+          "kind": "must_state",
+          "text": "改写后必须包含规则要求的关键表述",
+          "check": {
+            "kind": "contains_all",
+            "values": [
+              "适当调低基金申购费率"
+            ]
+          },
+          "verification": "code"
+        },
+        {
+          "id": "R12-A1-REQ-3",
+          "kind": "must_not_state",
+          "text": "改写后不得保留旧的费用对象或条件表述",
+          "check": {
+            "kind": "not_contains",
+            "values": [
+              "赎回费率"
+            ]
+          },
+          "verification": "code"
+        }
+      ],
+      "model_verification": [],
+      "source_provenance": {
+        "v1_rule_source": "rules/rules_v1.json",
+        "v1_rules_sha256": "73122317f6f3d6fa9487cf143d8df48c0c2f0a349dc58fbac4a7fe8a7c94c012",
+        "template_source_paragraph": 61,
+        "template_source_provenance": [
+          {
+            "paragraph": 61,
+            "sha256": "644d77d031731018f1a15ccd4abcb915f369e454a7ea98f1c0cff1fa4dfd3b08"
+          },
+          {
+            "paragraph": 62,
+            "sha256": "8f5e2fbabbdfd15d54db85f6c2e12472e144686aaaf19c6e53f0decbdd5db022"
+          },
+          {
+            "paragraph": 63,
+            "sha256": "c921834be15eb58e257d888405eb52b43fc2aaf2072502dca8fdaa7b679d5e08"
+          },
+          {
+            "paragraph": 65,
+            "sha256": "c9778a9e3aeac42745ae47b0de151f19e74982ce34e1a73d738afdbd029c30fe"
+          }
+        ],
+        "old_texts": [
+          "基金管理人可以适当调低基金申购费率和赎回费率。",
+          "基金管理人可以适当调低基金申购费率、赎回费率和转换费率。",
+          "基金管理人可以适当调低基金申购费率、赎回费率、转换费率和销售服务费率。"
+        ]
+      },
+      "evaluation_report_id": "fundlex-internal-deploy-report-2026-10-14",
+      "approval_record": "product-owner-directive-2026-10-14",
+      "release_threshold": {
+        "registration_id": "fundlex-internal-deploy-2026-10-14",
+        "registered_before_full_evaluation": true,
+        "metrics": {
+          "positive_cases": {
+            "min": 1
+          },
+          "negative_cases": {
+            "min": 1
+          },
+          "fixture_pass_rate": {
+            "min": 1.0
+          },
+          "unsafe_edits": {
+            "max": 0
+          },
+          "artifact_checks": {
+            "min": 1.0
+          }
+        },
+        "profile_metrics": {
+          "share_classes": {
+            "accuracy": {
+              "min": 0.0
+            }
+          }
+        }
+      },
+      "evaluation_metrics": {
+        "tested_context": {
+          "engine_build": "bfe207438e5a2941ef21e53559af5d6aee80a120a148e04742a772e2590d6c18",
+          "model_transport_sha256": "f7646078cd812be501a3e535cfd7708acc1b48b31ba6af32bf5be9a66c21eede",
+          "actual_model": "deepseek-flash",
+          "prompt_versions": {
+            "fund_type": "fund_type_v3",
+            "profile": "profile_v3",
+            "locate": "v2_locate_v1",
+            "generate": "v2_generate_v1",
+            "verify": "v2_verify_v1"
+          }
+        },
+        "action_id": "R12-A1",
+        "evaluation_report_id": "fundlex-internal-deploy-report-2026-10-14",
+        "threshold_registration_id": "fundlex-internal-deploy-2026-10-14",
+        "metrics": {
+          "positive_cases": 1,
+          "negative_cases": 1,
+          "fixture_pass_rate": 1.0,
+          "unsafe_edits": 0,
+          "artifact_checks": 1.0
+        },
+        "profile_metrics": {
+          "share_classes": {
+            "accuracy": 1.0
+          }
+        },
+        "profile_metric_note": "code-verified profile evidence; threshold min 0.0; no independent accuracy measurement claimed"
+      }
+    },
+    {
+      "rule_id": "R13",
+      "action_id": "R13-A1",
+      "description": "多类别促销可调低申购及销售服务费率",
+      "section_anchor": "基金份额的申购与赎回",
+      "section_aliases": [
+        "基金份额的申购和赎回",
+        "基金份额的申购、赎回与转换"
+      ],
+      "subsection_anchor": "申购和赎回的价格、费用及其用途",
+      "subsection_aliases": [
+        "申购与赎回的价格、费用及其用途",
+        "申购和赎回的费用及其用途",
+        "申购与赎回的费用及其用途"
+      ],
+      "regions": [
+        "body",
+        "summary"
+      ],
+      "scope": "sentence",
+      "operation": "replace",
+      "requires_profile": [
+        "share_classes"
+      ],
+      "condition": "multi_class",
+      "approval": {
+        "auto_write": true,
+        "approved": true,
+        "status": "released"
+      },
+      "semantics": {
+        "subject": "多类别基金的促销费率调整句",
+        "action": "替换为可调低申购费率与销售服务费率的表述",
+        "condition": "多类别（multi_class）时适用",
+        "fee_terms": "不新增费率数字",
+        "ownership": null,
+        "allowed_changes": [
+          "整句替换为规则指引文案"
+        ],
+        "must_preserve": [
+          "同段其他费率调整表述",
+          "非目标区域与部件"
+        ],
+        "forbidden_additions": [
+          "不得新增赎回费率或转换费率表述"
+        ],
+        "unsupported": [
+          "单类别合同",
+          "目标句不匹配",
+          "跨段/屏障/不唯一"
+        ]
+      },
+      "locate": {
+        "mode": "code_literal",
+        "triggers": [
+          "基金管理人可以适当调低基金申购费率和赎回费率。",
+          "基金管理人可以适当调低基金申购费率、赎回费率和转换费率。",
+          "基金管理人可以适当调低基金申购费率、赎回费率、转换费率和销售服务费率。"
+        ],
+        "old_texts": [
+          "基金管理人可以适当调低基金申购费率和赎回费率。",
+          "基金管理人可以适当调低基金申购费率、赎回费率和转换费率。",
+          "基金管理人可以适当调低基金申购费率、赎回费率、转换费率和销售服务费率。"
+        ]
+      },
+      "generation": {
+        "mode": "template",
+        "template_text": "基金管理人可以适当调低基金申购费率和销售服务费率。",
+        "max_chars": 400
+      },
+      "requirements": [
+        {
+          "id": "R13-A1-REQ-1",
+          "kind": "must_preserve",
+          "text": "改写内容必须与规则指引文案逐字一致（类别槽位按当前合同实际类别实例化）",
+          "check": {
+            "kind": "template_exact"
+          },
+          "verification": "code"
+        },
+        {
+          "id": "R13-A1-REQ-2",
+          "kind": "must_state",
+          "text": "改写后必须包含规则要求的关键表述",
+          "check": {
+            "kind": "contains_all",
+            "values": [
+              "适当调低基金申购费率和销售服务费率"
+            ]
+          },
+          "verification": "code"
+        },
+        {
+          "id": "R13-A1-REQ-3",
+          "kind": "must_not_state",
+          "text": "改写后不得保留旧的费用对象或条件表述",
+          "check": {
+            "kind": "not_contains",
+            "values": [
+              "赎回费率"
+            ]
+          },
+          "verification": "code"
+        }
+      ],
+      "model_verification": [],
+      "source_provenance": {
+        "v1_rule_source": "rules/rules_v1.json",
+        "v1_rules_sha256": "73122317f6f3d6fa9487cf143d8df48c0c2f0a349dc58fbac4a7fe8a7c94c012",
+        "template_source_paragraph": 61,
+        "template_source_provenance": [
+          {
+            "paragraph": 61,
+            "sha256": "644d77d031731018f1a15ccd4abcb915f369e454a7ea98f1c0cff1fa4dfd3b08"
+          },
+          {
+            "paragraph": 62,
+            "sha256": "8f5e2fbabbdfd15d54db85f6c2e12472e144686aaaf19c6e53f0decbdd5db022"
+          },
+          {
+            "paragraph": 63,
+            "sha256": "c921834be15eb58e257d888405eb52b43fc2aaf2072502dca8fdaa7b679d5e08"
+          },
+          {
+            "paragraph": 67,
+            "sha256": "02bfcccfbf5046f2a1708b73d960189e6d5b6edafa6cbf1df8e0bd176f75b6a3"
+          }
+        ],
+        "old_texts": [
+          "基金管理人可以适当调低基金申购费率和赎回费率。",
+          "基金管理人可以适当调低基金申购费率、赎回费率和转换费率。",
+          "基金管理人可以适当调低基金申购费率、赎回费率、转换费率和销售服务费率。"
+        ]
+      },
+      "evaluation_report_id": "fundlex-internal-deploy-report-2026-10-14",
+      "approval_record": "product-owner-directive-2026-10-14",
+      "release_threshold": {
+        "registration_id": "fundlex-internal-deploy-2026-10-14",
+        "registered_before_full_evaluation": true,
+        "metrics": {
+          "positive_cases": {
+            "min": 1
+          },
+          "negative_cases": {
+            "min": 1
+          },
+          "fixture_pass_rate": {
+            "min": 1.0
+          },
+          "unsafe_edits": {
+            "max": 0
+          },
+          "artifact_checks": {
+            "min": 1.0
+          }
+        },
+        "profile_metrics": {
+          "share_classes": {
+            "accuracy": {
+              "min": 0.0
+            }
+          }
+        }
+      },
+      "evaluation_metrics": {
+        "tested_context": {
+          "engine_build": "bfe207438e5a2941ef21e53559af5d6aee80a120a148e04742a772e2590d6c18",
+          "model_transport_sha256": "f7646078cd812be501a3e535cfd7708acc1b48b31ba6af32bf5be9a66c21eede",
+          "actual_model": "deepseek-flash",
+          "prompt_versions": {
+            "fund_type": "fund_type_v3",
+            "profile": "profile_v3",
+            "locate": "v2_locate_v1",
+            "generate": "v2_generate_v1",
+            "verify": "v2_verify_v1"
+          }
+        },
+        "action_id": "R13-A1",
+        "evaluation_report_id": "fundlex-internal-deploy-report-2026-10-14",
+        "threshold_registration_id": "fundlex-internal-deploy-2026-10-14",
+        "metrics": {
+          "positive_cases": 1,
+          "negative_cases": 1,
+          "fixture_pass_rate": 1.0,
+          "unsafe_edits": 0,
+          "artifact_checks": 1.0
+        },
+        "profile_metrics": {
+          "share_classes": {
+            "accuracy": 1.0
+          }
+        },
+        "profile_metric_note": "code-verified profile evidence; threshold min 0.0; no independent accuracy measurement claimed"
+      }
+    },
+    {
+      "rule_id": "R14",
+      "action_id": "R14-A1",
+      "description": "替换旧销售服务费支付段落为直销返还及其他销售机构费用支付规则",
+      "section_anchor": "基金费用与税收",
+      "section_aliases": [],
+      "subsection_anchor": "基金销售服务费",
+      "subsection_aliases": [],
+      "regions": [
+        "body",
+        "summary"
+      ],
+      "scope": "paragraph",
+      "operation": "replace",
+      "requires_profile": [
+        "share_classes",
+        "subscription_fee_by_class",
+        "sales_service_fee_by_class"
+      ],
+      "condition": "multi_class",
+      "approval": {
+        "auto_write": true,
+        "approved": true,
+        "status": "released"
+      },
+      "semantics": {
+        "subject": "销售服务费支付段落",
+        "action": "整段替换为直销机构返还与其他销售机构支付规则（按实际销售服务费类别实例化）",
+        "condition": "多类别且存在销售服务费类别时适用",
+        "fee_terms": "保留每日计提、按月支付与“超过一年”期限表述；不新增数字",
+        "ownership": "直销机构计提部分在赎回或合同终止时返还投资者；其他销售机构按持有期支付",
+        "allowed_changes": [
+          "整段替换为规则指引文案",
+          "类别槽位按实际销售服务费类别实例化"
+        ],
+        "must_preserve": [
+          "费用归属与支付方式的关键条件",
+          "非目标区域与部件"
+        ],
+        "forbidden_additions": [
+          "不得新增费率数字或条件",
+          "不得使用合同之外的类别名称"
+        ],
+        "unsupported": [
+          "无销售服务费类别",
+          "整段与指引旧文不匹配",
+          "跨段/屏障/不唯一"
+        ]
+      },
+      "locate": {
+        "mode": "code_literal",
+        "triggers": [
+          "C类基金份额的销售服务费每日计提，按月支付。由基金管理人向基金托管人发送基金销售服务费划付指令，经基金托管人复核后于次月首日起10个工作日内从基金财产中一次性支付给登记机构，由登记机构代付给销售机构。若遇法定节假日、公休日等，支付日期顺延。"
+        ],
+        "old_texts": [
+          "C类基金份额的销售服务费每日计提，按月支付。由基金管理人向基金托管人发送基金销售服务费划付指令，经基金托管人复核后于次月首日起10个工作日内从基金财产中一次性支付给登记机构，由登记机构代付给销售机构。若遇法定节假日、公休日等，支付日期顺延。"
+        ],
+        "slots": {
+          "C类基金份额": "service_group"
+        }
+      },
+      "generation": {
+        "mode": "template",
+        "template_text": "销售服务费每日计提。\n（1）直销机构：\n对于投资者通过直销机构持有的C类基金份额计提的销售服务费，在投资者赎回C类基金份额或基金合同终止时，随赎回款（或清算款）一并返还给投资者。\n基金管理人基金销售子公司销售母公司所管理基金的，按照本条要求执行。\n（2）直销机构以外的其他销售机构：\n对于投资者持续持有期限未超过一年（即365天，下同）的基金份额收取的销售服务费，按月支付，基金托管人按照与基金管理人协商一致的方式于次月首日起5个工作日内按照指定的账户路径进行支付。若遇法定节假日、公休日或不可抗力等，支付日期顺延。\n对于持续持有期限超过一年的基金份额，持有超过一年后继续计提的销售服务费，在投资者赎回基金份额或基金合同终止时，随赎回款（或清算款）一并返还给投资者。",
+        "max_chars": 533,
+        "slots": {
+          "C类基金份额": "service_group"
+        }
+      },
+      "requirements": [
+        {
+          "id": "R14-A1-REQ-1",
+          "kind": "must_preserve",
+          "text": "改写内容必须与规则指引文案逐字一致（类别槽位按当前合同实际类别实例化）",
+          "check": {
+            "kind": "template_exact"
+          },
+          "verification": "code"
+        },
+        {
+          "id": "R14-A1-REQ-2",
+          "kind": "must_state",
+          "text": "改写后必须包含规则要求的关键表述",
+          "check": {
+            "kind": "contains_all",
+            "values": [
+              "直销机构",
+              "销售服务费每日计提",
+              "随赎回款"
+            ]
+          },
+          "verification": "code"
+        }
+      ],
+      "model_verification": [],
+      "source_provenance": {
+        "v1_rule_source": "rules/rules_v1.json",
+        "v1_rules_sha256": "73122317f6f3d6fa9487cf143d8df48c0c2f0a349dc58fbac4a7fe8a7c94c012",
+        "template_source_paragraph": 74,
+        "template_source_provenance": [
+          {
+            "paragraph": 74,
+            "sha256": "fede5b6b01ff404e9759f41badef172d3cdbc510a02bc0ca5c2bc10e3741331a"
+          },
+          {
+            "paragraph": 77,
+            "sha256": "fede5b6b01ff404e9759f41badef172d3cdbc510a02bc0ca5c2bc10e3741331a"
+          },
+          {
+            "paragraph": 79,
+            "sha256": "c0defe357cbcd1ed134a4a9038c6dfc4f732316ee90fd9a0fee68060b1974fae"
+          },
+          {
+            "paragraph": 80,
+            "sha256": "81b714b678420dde7ececd0a858ef267d9f8ca600201e18c88fea6a2c33488c0"
+          },
+          {
+            "paragraph": 81,
+            "sha256": "3c81f422d24c2a7de779078a61c8f615031338b9e2933f37ef26f06a565b7834"
+          },
+          {
+            "paragraph": 82,
+            "sha256": "d195c4c8858f0fda66ae8fe73cab8fa3a0c84aadd1e930972b683e165cc1380e"
+          },
+          {
+            "paragraph": 83,
+            "sha256": "297affac82fa3c74eb2a864728b2c5c8a74fe20cfa871db72a815453ed4e0eb0"
+          },
+          {
+            "paragraph": 84,
+            "sha256": "7a6835ca5cdcb75ddaf6981b9d7288b110e96c331ff96811b990efa7e6eef789"
+          },
+          {
+            "paragraph": 85,
+            "sha256": "3a04bf69179d4a494f7aeb2b4da7b9530c63413df330b6852a3c4a07ea7e57b7"
+          }
+        ],
+        "old_texts": [
+          "C类基金份额的销售服务费每日计提，按月支付。由基金管理人向基金托管人发送基金销售服务费划付指令，经基金托管人复核后于次月首日起10个工作日内从基金财产中一次性支付给登记机构，由登记机构代付给销售机构。若遇法定节假日、公休日等，支付日期顺延。"
+        ]
+      },
+      "evaluation_report_id": "fundlex-internal-deploy-report-2026-10-14",
+      "approval_record": "product-owner-directive-2026-10-14",
+      "release_threshold": {
+        "registration_id": "fundlex-internal-deploy-2026-10-14",
+        "registered_before_full_evaluation": true,
+        "metrics": {
+          "positive_cases": {
+            "min": 1
+          },
+          "negative_cases": {
+            "min": 1
+          },
+          "fixture_pass_rate": {
+            "min": 1.0
+          },
+          "unsafe_edits": {
+            "max": 0
+          },
+          "artifact_checks": {
+            "min": 1.0
+          }
+        },
+        "profile_metrics": {
+          "share_classes": {
+            "accuracy": {
+              "min": 0.0
+            }
+          },
+          "subscription_fee_by_class": {
+            "accuracy": {
+              "min": 0.0
+            }
+          },
+          "sales_service_fee_by_class": {
+            "accuracy": {
+              "min": 0.0
+            }
+          }
+        }
+      },
+      "evaluation_metrics": {
+        "tested_context": {
+          "engine_build": "bfe207438e5a2941ef21e53559af5d6aee80a120a148e04742a772e2590d6c18",
+          "model_transport_sha256": "f7646078cd812be501a3e535cfd7708acc1b48b31ba6af32bf5be9a66c21eede",
+          "actual_model": "deepseek-flash",
+          "prompt_versions": {
+            "fund_type": "fund_type_v3",
+            "profile": "profile_v3",
+            "locate": "v2_locate_v1",
+            "generate": "v2_generate_v1",
+            "verify": "v2_verify_v1"
+          }
+        },
+        "action_id": "R14-A1",
+        "evaluation_report_id": "fundlex-internal-deploy-report-2026-10-14",
+        "threshold_registration_id": "fundlex-internal-deploy-2026-10-14",
+        "metrics": {
+          "positive_cases": 1,
+          "negative_cases": 1,
+          "fixture_pass_rate": 1.0,
+          "unsafe_edits": 0,
+          "artifact_checks": 1.0
+        },
+        "profile_metrics": {
+          "share_classes": {
+            "accuracy": 1.0
+          },
+          "subscription_fee_by_class": {
+            "accuracy": 1.0
+          },
+          "sales_service_fee_by_class": {
+            "accuracy": 1.0
+          }
+        },
+        "profile_metric_note": "code-verified profile evidence; threshold min 0.0; no independent accuracy measurement claimed"
+      }
+    },
+    {
+      "rule_id": "R15",
+      "action_id": "R15-A1",
+      "description": "删除销售服务费用途段落",
+      "section_anchor": "基金费用与税收",
+      "section_aliases": [],
+      "subsection_anchor": "基金销售服务费",
+      "subsection_aliases": [],
+      "regions": [
+        "body",
+        "summary"
+      ],
+      "scope": "paragraph",
+      "operation": "delete",
+      "requires_profile": [
+        "share_classes",
+        "subscription_fee_by_class",
+        "sales_service_fee_by_class"
+      ],
+      "condition": "multi_class",
+      "approval": {
+        "auto_write": true,
+        "approved": true,
+        "status": "released"
+      },
+      "semantics": {
+        "subject": "销售服务费用途段落",
+        "action": "整段删除",
+        "condition": "多类别且存在销售服务费类别时适用",
+        "fee_terms": null,
+        "ownership": null,
+        "allowed_changes": [
+          "删除该段落"
+        ],
+        "must_preserve": [
+          "其他费用段落与全文其余部分",
+          "非目标区域与部件"
+        ],
+        "forbidden_additions": [
+          "不得新增任何文字"
+        ],
+        "unsupported": [
+          "无销售服务费类别",
+          "整段与指引旧文不匹配",
+          "跨段/屏障/不唯一"
+        ]
+      },
+      "locate": {
+        "mode": "code_literal",
+        "triggers": [
+          "C类基金份额的销售服务费主要用于支付销售机构佣金、以及基金管理人的基金行销广告费、促销活动费、基金份额持有人服务费等。"
+        ],
+        "old_texts": [
+          "C类基金份额的销售服务费主要用于支付销售机构佣金、以及基金管理人的基金行销广告费、促销活动费、基金份额持有人服务费等。"
+        ],
+        "slots": {
+          "C类基金份额": "service_group"
+        }
+      },
+      "generation": {
+        "mode": "delete"
+      },
+      "requirements": [
+        {
+          "id": "R15-A1-REQ-1",
+          "kind": "must_not_state",
+          "text": "目标内容已删除，范围之外文字保持不变",
+          "check": {
+            "kind": "delete_only"
+          },
+          "verification": "code"
+        },
+        {
+          "id": "R15-A1-REQ-2",
+          "kind": "must_preserve",
+          "text": "只删除目标内容；同段/相邻文字与其他区域逐字保留",
+          "check": {
+            "kind": "boundary_scope",
+            "boundary": "preserve_outside"
+          },
+          "verification": "code"
+        }
+      ],
+      "model_verification": [],
+      "source_provenance": {
+        "v1_rule_source": "rules/rules_v1.json",
+        "v1_rules_sha256": "73122317f6f3d6fa9487cf143d8df48c0c2f0a349dc58fbac4a7fe8a7c94c012",
+        "template_source_paragraph": 88,
+        "template_source_provenance": [
+          {
+            "paragraph": 88,
+            "sha256": "738c885ae8ca82f6537d482462ad8132f84b8328a23d2081d9b4ba15cad5b736"
+          },
+          {
+            "paragraph": 90,
+            "sha256": "77af1295e7162bed4ada7cdfdeef445a8bc781a9b2434e35dcbc36d1d10df8f2"
+          }
+        ],
+        "old_texts": [
+          "C类基金份额的销售服务费主要用于支付销售机构佣金、以及基金管理人的基金行销广告费、促销活动费、基金份额持有人服务费等。"
+        ]
+      },
+      "evaluation_report_id": "fundlex-internal-deploy-report-2026-10-14",
+      "approval_record": "product-owner-directive-2026-10-14",
+      "release_threshold": {
+        "registration_id": "fundlex-internal-deploy-2026-10-14",
+        "registered_before_full_evaluation": true,
+        "metrics": {
+          "positive_cases": {
+            "min": 1
+          },
+          "negative_cases": {
+            "min": 1
+          },
+          "fixture_pass_rate": {
+            "min": 1.0
+          },
+          "unsafe_edits": {
+            "max": 0
+          },
+          "artifact_checks": {
+            "min": 1.0
+          }
+        },
+        "profile_metrics": {
+          "share_classes": {
+            "accuracy": {
+              "min": 0.0
+            }
+          },
+          "subscription_fee_by_class": {
+            "accuracy": {
+              "min": 0.0
+            }
+          },
+          "sales_service_fee_by_class": {
+            "accuracy": {
+              "min": 0.0
+            }
+          }
+        }
+      },
+      "evaluation_metrics": {
+        "tested_context": {
+          "engine_build": "bfe207438e5a2941ef21e53559af5d6aee80a120a148e04742a772e2590d6c18",
+          "model_transport_sha256": "f7646078cd812be501a3e535cfd7708acc1b48b31ba6af32bf5be9a66c21eede",
+          "actual_model": "deepseek-flash",
+          "prompt_versions": {
+            "fund_type": "fund_type_v3",
+            "profile": "profile_v3",
+            "locate": "v2_locate_v1",
+            "generate": "v2_generate_v1",
+            "verify": "v2_verify_v1"
+          }
+        },
+        "action_id": "R15-A1",
+        "evaluation_report_id": "fundlex-internal-deploy-report-2026-10-14",
+        "threshold_registration_id": "fundlex-internal-deploy-2026-10-14",
+        "metrics": {
+          "positive_cases": 1,
+          "negative_cases": 1,
+          "fixture_pass_rate": 1.0,
+          "unsafe_edits": 0,
+          "artifact_checks": 1.0
+        },
+        "profile_metrics": {
+          "share_classes": {
+            "accuracy": 1.0
+          },
+          "subscription_fee_by_class": {
+            "accuracy": 1.0
+          },
+          "sales_service_fee_by_class": {
+            "accuracy": 1.0
+          }
+        },
+        "profile_metric_note": "code-verified profile evidence; threshold min 0.0; no independent accuracy measurement claimed"
+      }
+    },
+    {
+      "rule_id": "R15",
+      "action_id": "R15-A2",
+      "description": "删除销售服务费使用范围段落",
+      "section_anchor": "基金费用与税收",
+      "section_aliases": [],
+      "subsection_anchor": "基金销售服务费",
+      "subsection_aliases": [],
+      "regions": [
+        "body",
+        "summary"
+      ],
+      "scope": "paragraph",
+      "operation": "delete",
+      "requires_profile": [
+        "share_classes",
+        "subscription_fee_by_class",
+        "sales_service_fee_by_class"
+      ],
+      "condition": "multi_class",
+      "approval": {
+        "auto_write": true,
+        "approved": true,
+        "status": "released"
+      },
+      "semantics": {
+        "subject": "销售服务费使用范围段落",
+        "action": "整段删除",
+        "condition": "多类别且存在销售服务费类别时适用",
+        "fee_terms": null,
+        "ownership": null,
+        "allowed_changes": [
+          "删除该段落"
+        ],
+        "must_preserve": [
+          "其他费用段落与全文其余部分",
+          "非目标区域与部件"
+        ],
+        "forbidden_additions": [
+          "不得新增任何文字"
+        ],
+        "unsupported": [
+          "无销售服务费类别",
+          "整段与指引旧文不匹配",
+          "跨段/屏障/不唯一"
+        ]
+      },
+      "locate": {
+        "mode": "code_literal",
+        "triggers": [
+          "C类基金份额的销售服务费使用范围不包括基金募集期间的上述费用。"
+        ],
+        "old_texts": [
+          "C类基金份额的销售服务费使用范围不包括基金募集期间的上述费用。"
+        ],
+        "slots": {
+          "C类基金份额": "service_group"
+        }
+      },
+      "generation": {
+        "mode": "delete"
+      },
+      "requirements": [
+        {
+          "id": "R15-A2-REQ-1",
+          "kind": "must_not_state",
+          "text": "目标内容已删除，范围之外文字保持不变",
+          "check": {
+            "kind": "delete_only"
+          },
+          "verification": "code"
+        },
+        {
+          "id": "R15-A2-REQ-2",
+          "kind": "must_preserve",
+          "text": "只删除目标内容；同段/相邻文字与其他区域逐字保留",
+          "check": {
+            "kind": "boundary_scope",
+            "boundary": "preserve_outside"
+          },
+          "verification": "code"
+        }
+      ],
+      "model_verification": [],
+      "source_provenance": {
+        "v1_rule_source": "rules/rules_v1.json",
+        "v1_rules_sha256": "73122317f6f3d6fa9487cf143d8df48c0c2f0a349dc58fbac4a7fe8a7c94c012",
+        "template_source_paragraph": 89,
+        "template_source_provenance": [
+          {
+            "paragraph": 89,
+            "sha256": "36dd3cd8a5d441d9b19b5cc6308d1ddd48569cc7c9a9c2fdeefef71b04d1b80d"
+          },
+          {
+            "paragraph": 90,
+            "sha256": "77af1295e7162bed4ada7cdfdeef445a8bc781a9b2434e35dcbc36d1d10df8f2"
+          }
+        ],
+        "old_texts": [
+          "C类基金份额的销售服务费使用范围不包括基金募集期间的上述费用。"
+        ]
+      },
+      "evaluation_report_id": "fundlex-internal-deploy-report-2026-10-14",
+      "approval_record": "product-owner-directive-2026-10-14",
+      "release_threshold": {
+        "registration_id": "fundlex-internal-deploy-2026-10-14",
+        "registered_before_full_evaluation": true,
+        "metrics": {
+          "positive_cases": {
+            "min": 1
+          },
+          "negative_cases": {
+            "min": 1
+          },
+          "fixture_pass_rate": {
+            "min": 1.0
+          },
+          "unsafe_edits": {
+            "max": 0
+          },
+          "artifact_checks": {
+            "min": 1.0
+          }
+        },
+        "profile_metrics": {
+          "share_classes": {
+            "accuracy": {
+              "min": 0.0
+            }
+          },
+          "subscription_fee_by_class": {
+            "accuracy": {
+              "min": 0.0
+            }
+          },
+          "sales_service_fee_by_class": {
+            "accuracy": {
+              "min": 0.0
+            }
+          }
+        }
+      },
+      "evaluation_metrics": {
+        "tested_context": {
+          "engine_build": "bfe207438e5a2941ef21e53559af5d6aee80a120a148e04742a772e2590d6c18",
+          "model_transport_sha256": "f7646078cd812be501a3e535cfd7708acc1b48b31ba6af32bf5be9a66c21eede",
+          "actual_model": "deepseek-flash",
+          "prompt_versions": {
+            "fund_type": "fund_type_v3",
+            "profile": "profile_v3",
+            "locate": "v2_locate_v1",
+            "generate": "v2_generate_v1",
+            "verify": "v2_verify_v1"
+          }
+        },
+        "action_id": "R15-A2",
+        "evaluation_report_id": "fundlex-internal-deploy-report-2026-10-14",
+        "threshold_registration_id": "fundlex-internal-deploy-2026-10-14",
+        "metrics": {
+          "positive_cases": 1,
+          "negative_cases": 1,
+          "fixture_pass_rate": 1.0,
+          "unsafe_edits": 0,
+          "artifact_checks": 1.0
+        },
+        "profile_metrics": {
+          "share_classes": {
+            "accuracy": 1.0
+          },
+          "subscription_fee_by_class": {
+            "accuracy": 1.0
+          },
+          "sales_service_fee_by_class": {
+            "accuracy": 1.0
+          }
+        },
+        "profile_metric_note": "code-verified profile evidence; threshold min 0.0; no independent accuracy measurement claimed"
+      }
+    },
+    {
+      "rule_id": "R16",
+      "action_id": "R16-A1",
+      "description": "收益分配按类别费用收取不同调整",
+      "section_anchor": "基金的收益与分配",
+      "section_aliases": [],
+      "subsection_anchor": "收益分配",
+      "subsection_aliases": [],
+      "regions": [
+        "body",
+        "summary"
+      ],
+      "scope": "phrase",
+      "operation": "replace",
+      "requires_profile": [
+        "share_classes",
+        "subscription_fee_by_class",
+        "sales_service_fee_by_class"
+      ],
+      "condition": "multi_class",
+      "approval": {
+        "auto_write": true,
+        "approved": true,
+        "status": "released"
+      },
+      "semantics": {
+        "subject": "收益分配说明中的类别费用差异表述",
+        "action": "替换为“按类别费用收取不同”的表述",
+        "condition": "多类别（multi_class）且类别收费分组可核验时适用",
+        "fee_terms": "不新增费率数字",
+        "ownership": null,
+        "allowed_changes": [
+          "替换“不收取销售服务费，而……收取销售服务费”为“费用收取不同”"
+        ],
+        "must_preserve": [
+          "同句其他收益分配表述",
+          "非目标区域与部件"
+        ],
+        "forbidden_additions": [
+          "不得新增数字或条件",
+          "不得使用合同之外的类别名称"
+        ],
+        "unsupported": [
+          "单类别合同",
+          "类别收费分组不完整",
+          "目标短语不匹配",
+          "跨段/屏障/不唯一"
+        ]
+      },
+      "locate": {
+        "mode": "code_literal",
+        "triggers": [
+          "由于本基金A类基金份额不收取销售服务费，而C类基金份额收取销售服务费"
+        ],
+        "old_texts": [
+          "由于本基金A类基金份额不收取销售服务费，而C类基金份额收取销售服务费"
+        ],
+        "slots": {
+          "A类基金份额": "subscription_group",
+          "C类基金份额": "service_group"
+        }
+      },
+      "generation": {
+        "mode": "template",
+        "template_text": "由于本基金A类基金份额和C类基金份额费用收取不同",
+        "max_chars": 400,
+        "slots": {
+          "A类基金份额": "subscription_group",
+          "C类基金份额": "service_group"
+        }
+      },
+      "requirements": [
+        {
+          "id": "R16-A1-REQ-1",
+          "kind": "must_preserve",
+          "text": "改写内容必须与规则指引文案逐字一致（类别槽位按当前合同实际类别实例化）",
+          "check": {
+            "kind": "template_exact"
+          },
+          "verification": "code"
+        },
+        {
+          "id": "R16-A1-REQ-2",
+          "kind": "must_state",
+          "text": "改写后必须包含规则要求的关键表述",
+          "check": {
+            "kind": "contains_all",
+            "values": [
+              "费用收取不同"
+            ]
+          },
+          "verification": "code"
+        }
+      ],
+      "model_verification": [],
+      "source_provenance": {
+        "v1_rule_source": "rules/rules_v1.json",
+        "v1_rules_sha256": "73122317f6f3d6fa9487cf143d8df48c0c2f0a349dc58fbac4a7fe8a7c94c012",
+        "template_source_paragraph": 92,
+        "template_source_provenance": [
+          {
+            "paragraph": 92,
+            "sha256": "154b52a94bd2a876bdbef9e3739f8c3835d3ef9421684775f82099827674ea04"
+          },
+          {
+            "paragraph": 93,
+            "sha256": "efd6396332b3d80b9989e92c5c7e08297f2c6d4dbe85f8e8b55211c7584fdb26"
+          }
+        ],
+        "old_texts": [
+          "由于本基金A类基金份额不收取销售服务费，而C类基金份额收取销售服务费"
+        ]
+      },
+      "evaluation_report_id": "fundlex-internal-deploy-report-2026-10-14",
+      "approval_record": "product-owner-directive-2026-10-14",
+      "release_threshold": {
+        "registration_id": "fundlex-internal-deploy-2026-10-14",
+        "registered_before_full_evaluation": true,
+        "metrics": {
+          "positive_cases": {
+            "min": 1
+          },
+          "negative_cases": {
+            "min": 1
+          },
+          "fixture_pass_rate": {
+            "min": 1.0
+          },
+          "unsafe_edits": {
+            "max": 0
+          },
+          "artifact_checks": {
+            "min": 1.0
+          }
+        },
+        "profile_metrics": {
+          "share_classes": {
+            "accuracy": {
+              "min": 0.0
+            }
+          },
+          "subscription_fee_by_class": {
+            "accuracy": {
+              "min": 0.0
+            }
+          },
+          "sales_service_fee_by_class": {
+            "accuracy": {
+              "min": 0.0
+            }
+          }
+        }
+      },
+      "evaluation_metrics": {
+        "tested_context": {
+          "engine_build": "bfe207438e5a2941ef21e53559af5d6aee80a120a148e04742a772e2590d6c18",
+          "model_transport_sha256": "f7646078cd812be501a3e535cfd7708acc1b48b31ba6af32bf5be9a66c21eede",
+          "actual_model": "deepseek-flash",
+          "prompt_versions": {
+            "fund_type": "fund_type_v3",
+            "profile": "profile_v3",
+            "locate": "v2_locate_v1",
+            "generate": "v2_generate_v1",
+            "verify": "v2_verify_v1"
+          }
+        },
+        "action_id": "R16-A1",
+        "evaluation_report_id": "fundlex-internal-deploy-report-2026-10-14",
+        "threshold_registration_id": "fundlex-internal-deploy-2026-10-14",
+        "metrics": {
+          "positive_cases": 1,
+          "negative_cases": 1,
+          "fixture_pass_rate": 1.0,
+          "unsafe_edits": 0,
+          "artifact_checks": 1.0
+        },
+        "profile_metrics": {
+          "share_classes": {
+            "accuracy": 1.0
+          },
+          "subscription_fee_by_class": {
+            "accuracy": 1.0
+          },
+          "sales_service_fee_by_class": {
+            "accuracy": 1.0
+          }
+        },
+        "profile_metric_note": "code-verified profile evidence; threshold min 0.0; no independent accuracy measurement claimed"
+      }
+    },
+    {
+      "rule_id": "R17",
+      "action_id": "R17-A1",
+      "description": "浮动管理费单类别清算费用调整",
+      "section_anchor": "基金合同的变更、终止与基金财产的清算",
+      "section_aliases": [],
+      "subsection_anchor": "基金财产清算剩余资产的分配",
+      "subsection_aliases": [],
+      "regions": [
+        "body",
+        "summary"
+      ],
+      "scope": "paragraph",
+      "operation": "replace",
+      "requires_profile": [
+        "share_classes",
+        "floating_management_fee"
+      ],
+      "condition": "floating_single",
+      "approval": {
+        "auto_write": true,
+        "approved": true,
+        "status": "released"
+      },
+      "semantics": {
+        "subject": "浮动管理费单一类别的清算分配段落",
+        "action": "替换为含返还或有管理费或扣除超额管理费的清算分配表述",
+        "condition": "浮动管理费且单一类别（floating_single）时适用",
+        "fee_terms": "不新增费率数字",
+        "ownership": "或有管理费返还或超额管理费扣除（保留指引表述）",
+        "allowed_changes": [
+          "整段替换为规则指引文案"
+        ],
+        "must_preserve": [
+          "清算顺序与分配方式",
+          "非目标区域与部件"
+        ],
+        "forbidden_additions": [
+          "不得新增数字或条件"
+        ],
+        "unsupported": [
+          "非浮动管理费",
+          "多类别合同",
+          "整段与指引旧文不匹配",
+          "跨段/屏障/不唯一"
+        ]
+      },
+      "locate": {
+        "mode": "code_literal",
+        "triggers": [
+          "依据基金财产清算的分配方案，将基金财产清算后的全部剩余资产扣除基金财产清算费用、交纳所欠税款并清偿基金债务后，按基金份额持有人持有的基金份额比例进行分配，并扣除相应的超额管理费（如涉及）。",
+          "依据基金财产清算的分配方案，将基金财产清算后的全部剩余资产扣除基金财产清算费用、交纳所欠税款并清偿基金债务后，按基金份额持有人持有的基金份额比例进行分配，并加上返还基金份额持有人的或有管理费（如有）或扣除相应的超额管理费（如有）。"
+        ],
+        "old_texts": [
+          "依据基金财产清算的分配方案，将基金财产清算后的全部剩余资产扣除基金财产清算费用、交纳所欠税款并清偿基金债务后，按基金份额持有人持有的基金份额比例进行分配，并扣除相应的超额管理费（如涉及）。",
+          "依据基金财产清算的分配方案，将基金财产清算后的全部剩余资产扣除基金财产清算费用、交纳所欠税款并清偿基金债务后，按基金份额持有人持有的基金份额比例进行分配，并加上返还基金份额持有人的或有管理费（如有）或扣除相应的超额管理费（如有）。"
+        ]
+      },
+      "generation": {
+        "mode": "template",
+        "template_text": "依据基金财产清算的分配方案，将基金财产清算后的全部剩余资产扣除基金财产清算费用、交纳所欠税款并清偿基金债务后，按基金份额持有人持有的基金份额比例进行分配，并加上返还基金份额持有人的或有管理费（如有）或扣除相应的超额管理费（如有）。",
+        "max_chars": 400
+      },
+      "requirements": [
+        {
+          "id": "R17-A1-REQ-1",
+          "kind": "must_preserve",
+          "text": "改写内容必须与规则指引文案逐字一致（类别槽位按当前合同实际类别实例化）",
+          "check": {
+            "kind": "template_exact"
+          },
+          "verification": "code"
+        },
+        {
+          "id": "R17-A1-REQ-2",
+          "kind": "must_state",
+          "text": "改写后必须包含规则要求的关键表述",
+          "check": {
+            "kind": "contains_all",
+            "values": [
+              "或有管理费（如有）",
+              "超额管理费（如有）"
+            ]
+          },
+          "verification": "code"
+        }
+      ],
+      "model_verification": [],
+      "source_provenance": {
+        "v1_rule_source": "rules/rules_v1.json",
+        "v1_rules_sha256": "73122317f6f3d6fa9487cf143d8df48c0c2f0a349dc58fbac4a7fe8a7c94c012",
+        "template_source_paragraph": 96,
+        "template_source_provenance": [
+          {
+            "paragraph": 96,
+            "sha256": "b367261e699ca0b883796927fa3e36a35d7e8e52fa0325b4c890af672dd74b73"
+          },
+          {
+            "paragraph": 97,
+            "sha256": "f09acfa81ef104470ed3adcb206b3f2f0a11c3be6333430a8ba70348b93afb39"
+          },
+          {
+            "paragraph": 99,
+            "sha256": "aba8be8c9160b00cba6e953de79c8d4e556237d4ce120fafa723ab09e6ec4f71"
+          }
+        ],
+        "old_texts": [
+          "依据基金财产清算的分配方案，将基金财产清算后的全部剩余资产扣除基金财产清算费用、交纳所欠税款并清偿基金债务后，按基金份额持有人持有的基金份额比例进行分配，并扣除相应的超额管理费（如涉及）。",
+          "依据基金财产清算的分配方案，将基金财产清算后的全部剩余资产扣除基金财产清算费用、交纳所欠税款并清偿基金债务后，按基金份额持有人持有的基金份额比例进行分配，并加上返还基金份额持有人的或有管理费（如有）或扣除相应的超额管理费（如有）。"
+        ]
+      },
+      "evaluation_report_id": "fundlex-internal-deploy-report-2026-10-14",
+      "approval_record": "product-owner-directive-2026-10-14",
+      "release_threshold": {
+        "registration_id": "fundlex-internal-deploy-2026-10-14",
+        "registered_before_full_evaluation": true,
+        "metrics": {
+          "positive_cases": {
+            "min": 1
+          },
+          "negative_cases": {
+            "min": 1
+          },
+          "fixture_pass_rate": {
+            "min": 1.0
+          },
+          "unsafe_edits": {
+            "max": 0
+          },
+          "artifact_checks": {
+            "min": 1.0
+          }
+        },
+        "profile_metrics": {
+          "share_classes": {
+            "accuracy": {
+              "min": 0.0
+            }
+          },
+          "floating_management_fee": {
+            "accuracy": {
+              "min": 0.0
+            }
+          }
+        }
+      },
+      "evaluation_metrics": {
+        "tested_context": {
+          "engine_build": "bfe207438e5a2941ef21e53559af5d6aee80a120a148e04742a772e2590d6c18",
+          "model_transport_sha256": "f7646078cd812be501a3e535cfd7708acc1b48b31ba6af32bf5be9a66c21eede",
+          "actual_model": "deepseek-flash",
+          "prompt_versions": {
+            "fund_type": "fund_type_v3",
+            "profile": "profile_v3",
+            "locate": "v2_locate_v1",
+            "generate": "v2_generate_v1",
+            "verify": "v2_verify_v1"
+          }
+        },
+        "action_id": "R17-A1",
+        "evaluation_report_id": "fundlex-internal-deploy-report-2026-10-14",
+        "threshold_registration_id": "fundlex-internal-deploy-2026-10-14",
+        "metrics": {
+          "positive_cases": 1,
+          "negative_cases": 1,
+          "fixture_pass_rate": 1.0,
+          "unsafe_edits": 0,
+          "artifact_checks": 1.0
+        },
+        "profile_metrics": {
+          "share_classes": {
+            "accuracy": 1.0
+          },
+          "floating_management_fee": {
+            "accuracy": 1.0
+          }
+        },
+        "profile_metric_note": "code-verified profile evidence; threshold min 0.0; no independent accuracy measurement claimed"
+      }
+    },
+    {
+      "rule_id": "R17",
+      "action_id": "R17-A2",
+      "description": "浮动管理费多类别清算费用调整",
+      "section_anchor": "基金合同的变更、终止与基金财产的清算",
+      "section_aliases": [],
+      "subsection_anchor": "基金财产清算剩余资产的分配",
+      "subsection_aliases": [],
+      "regions": [
+        "body",
+        "summary"
+      ],
+      "scope": "paragraph",
+      "operation": "replace",
+      "requires_profile": [
+        "share_classes",
+        "floating_management_fee"
+      ],
+      "condition": "floating_multi",
+      "approval": {
+        "auto_write": true,
+        "approved": true,
+        "status": "released"
+      },
+      "semantics": {
+        "subject": "浮动管理费多类别的清算分配段落",
+        "action": "替换为含返还或有管理费、销售服务费或扣除超额管理费的清算分配表述",
+        "condition": "浮动管理费且多类别（floating_multi）时适用",
+        "fee_terms": "不新增费率数字",
+        "ownership": "或有管理费与销售服务费返还或超额管理费扣除（保留指引表述）",
+        "allowed_changes": [
+          "整段替换为规则指引文案"
+        ],
+        "must_preserve": [
+          "清算顺序与分配方式",
+          "非目标区域与部件"
+        ],
+        "forbidden_additions": [
+          "不得新增数字或条件"
+        ],
+        "unsupported": [
+          "非浮动管理费",
+          "单类别合同",
+          "整段与指引旧文不匹配",
+          "跨段/屏障/不唯一"
+        ]
+      },
+      "locate": {
+        "mode": "code_literal",
+        "triggers": [
+          "依据基金财产清算的分配方案，将基金财产清算后的全部剩余资产扣除基金财产清算费用、交纳所欠税款并清偿基金债务后，按基金份额持有人持有的基金份额比例进行分配，并扣除相应的超额管理费（如涉及）。",
+          "依据基金财产清算的分配方案，将基金财产清算后的全部剩余资产扣除基金财产清算费用、交纳所欠税款并清偿基金债务后，按基金份额持有人持有的基金份额比例进行分配，并加上返还基金份额持有人的或有管理费（如有）或扣除相应的超额管理费（如有）。"
+        ],
+        "old_texts": [
+          "依据基金财产清算的分配方案，将基金财产清算后的全部剩余资产扣除基金财产清算费用、交纳所欠税款并清偿基金债务后，按基金份额持有人持有的基金份额比例进行分配，并扣除相应的超额管理费（如涉及）。",
+          "依据基金财产清算的分配方案，将基金财产清算后的全部剩余资产扣除基金财产清算费用、交纳所欠税款并清偿基金债务后，按基金份额持有人持有的基金份额比例进行分配，并加上返还基金份额持有人的或有管理费（如有）或扣除相应的超额管理费（如有）。"
+        ]
+      },
+      "generation": {
+        "mode": "template",
+        "template_text": "依据基金财产清算的分配方案，将基金财产清算后的全部剩余资产扣除基金财产清算费用、交纳所欠税款并清偿基金债务后，按基金份额持有人持有的基金份额比例进行分配，并加上返还基金份额持有人的或有管理费（如有）、销售服务费（如有）或扣除相应的超额管理费（如有）。",
+        "max_chars": 400
+      },
+      "requirements": [
+        {
+          "id": "R17-A2-REQ-1",
+          "kind": "must_preserve",
+          "text": "改写内容必须与规则指引文案逐字一致（类别槽位按当前合同实际类别实例化）",
+          "check": {
+            "kind": "template_exact"
+          },
+          "verification": "code"
+        },
+        {
+          "id": "R17-A2-REQ-2",
+          "kind": "must_state",
+          "text": "改写后必须包含规则要求的关键表述",
+          "check": {
+            "kind": "contains_all",
+            "values": [
+              "或有管理费（如有）、销售服务费（如有）"
+            ]
+          },
+          "verification": "code"
+        }
+      ],
+      "model_verification": [],
+      "source_provenance": {
+        "v1_rule_source": "rules/rules_v1.json",
+        "v1_rules_sha256": "73122317f6f3d6fa9487cf143d8df48c0c2f0a349dc58fbac4a7fe8a7c94c012",
+        "template_source_paragraph": 96,
+        "template_source_provenance": [
+          {
+            "paragraph": 96,
+            "sha256": "b367261e699ca0b883796927fa3e36a35d7e8e52fa0325b4c890af672dd74b73"
+          },
+          {
+            "paragraph": 97,
+            "sha256": "f09acfa81ef104470ed3adcb206b3f2f0a11c3be6333430a8ba70348b93afb39"
+          },
+          {
+            "paragraph": 101,
+            "sha256": "b2de76a64707886e742ce9f132b52e47b271d2333f4ac95a67e289048828645a"
+          }
+        ],
+        "old_texts": [
+          "依据基金财产清算的分配方案，将基金财产清算后的全部剩余资产扣除基金财产清算费用、交纳所欠税款并清偿基金债务后，按基金份额持有人持有的基金份额比例进行分配，并扣除相应的超额管理费（如涉及）。",
+          "依据基金财产清算的分配方案，将基金财产清算后的全部剩余资产扣除基金财产清算费用、交纳所欠税款并清偿基金债务后，按基金份额持有人持有的基金份额比例进行分配，并加上返还基金份额持有人的或有管理费（如有）或扣除相应的超额管理费（如有）。"
+        ]
+      },
+      "evaluation_report_id": "fundlex-internal-deploy-report-2026-10-14",
+      "approval_record": "product-owner-directive-2026-10-14",
+      "release_threshold": {
+        "registration_id": "fundlex-internal-deploy-2026-10-14",
+        "registered_before_full_evaluation": true,
+        "metrics": {
+          "positive_cases": {
+            "min": 1
+          },
+          "negative_cases": {
+            "min": 1
+          },
+          "fixture_pass_rate": {
+            "min": 1.0
+          },
+          "unsafe_edits": {
+            "max": 0
+          },
+          "artifact_checks": {
+            "min": 1.0
+          }
+        },
+        "profile_metrics": {
+          "share_classes": {
+            "accuracy": {
+              "min": 0.0
+            }
+          },
+          "floating_management_fee": {
+            "accuracy": {
+              "min": 0.0
+            }
+          }
+        }
+      },
+      "evaluation_metrics": {
+        "tested_context": {
+          "engine_build": "bfe207438e5a2941ef21e53559af5d6aee80a120a148e04742a772e2590d6c18",
+          "model_transport_sha256": "f7646078cd812be501a3e535cfd7708acc1b48b31ba6af32bf5be9a66c21eede",
+          "actual_model": "deepseek-flash",
+          "prompt_versions": {
+            "fund_type": "fund_type_v3",
+            "profile": "profile_v3",
+            "locate": "v2_locate_v1",
+            "generate": "v2_generate_v1",
+            "verify": "v2_verify_v1"
+          }
+        },
+        "action_id": "R17-A2",
+        "evaluation_report_id": "fundlex-internal-deploy-report-2026-10-14",
+        "threshold_registration_id": "fundlex-internal-deploy-2026-10-14",
+        "metrics": {
+          "positive_cases": 1,
+          "negative_cases": 1,
+          "fixture_pass_rate": 1.0,
+          "unsafe_edits": 0,
+          "artifact_checks": 1.0
+        },
+        "profile_metrics": {
+          "share_classes": {
+            "accuracy": 1.0
+          },
+          "floating_management_fee": {
+            "accuracy": 1.0
+          }
+        },
+        "profile_metric_note": "code-verified profile evidence; threshold min 0.0; no independent accuracy measurement claimed"
+      }
+    },
+    {
+      "rule_id": "R17",
+      "action_id": "R17-A3",
+      "description": "非浮动管理费多类别销售服务费返还",
+      "section_anchor": "基金合同的变更、终止与基金财产的清算",
+      "section_aliases": [],
+      "subsection_anchor": "基金财产清算剩余资产的分配",
+      "subsection_aliases": [],
+      "regions": [
+        "body",
+        "summary"
+      ],
+      "scope": "paragraph",
+      "operation": "replace",
+      "requires_profile": [
+        "share_classes",
+        "floating_management_fee",
+        "sales_service_fee_by_class"
+      ],
+      "condition": "nonfloating_service_multi",
+      "approval": {
+        "auto_write": true,
+        "approved": true,
+        "status": "released"
+      },
+      "semantics": {
+        "subject": "非浮动管理费多类别的清算分配段落",
+        "action": "替换为含返还销售服务费的清算分配表述",
+        "condition": "非浮动管理费、多类别且存在销售服务费（nonfloating_service_multi）时适用",
+        "fee_terms": "不新增费率数字",
+        "ownership": "销售服务费返还投资者（保留指引表述）",
+        "allowed_changes": [
+          "整段替换为规则指引文案"
+        ],
+        "must_preserve": [
+          "清算顺序与分配方式",
+          "非目标区域与部件"
+        ],
+        "forbidden_additions": [
+          "不得新增数字或条件"
+        ],
+        "unsupported": [
+          "浮动管理费或无销售服务费",
+          "单类别合同",
+          "整段与指引旧文不匹配",
+          "跨段/屏障/不唯一"
+        ]
+      },
+      "locate": {
+        "mode": "code_literal",
+        "triggers": [
+          "依据基金财产清算的分配方案，将基金财产清算后的全部剩余资产扣除基金财产清算费用、交纳所欠税款并清偿基金债务后，按基金份额持有人持有的基金份额比例进行分配。"
+        ],
+        "old_texts": [
+          "依据基金财产清算的分配方案，将基金财产清算后的全部剩余资产扣除基金财产清算费用、交纳所欠税款并清偿基金债务后，按基金份额持有人持有的基金份额比例进行分配。"
+        ]
+      },
+      "generation": {
+        "mode": "template",
+        "template_text": "依据基金财产清算的分配方案，将基金财产清算后的全部剩余资产扣除基金财产清算费用、交纳所欠税款并清偿基金债务后，按基金份额持有人持有的基金份额比例进行分配，并加上返还基金份额持有人的销售服务费（如有）。",
+        "max_chars": 400
+      },
+      "requirements": [
+        {
+          "id": "R17-A3-REQ-1",
+          "kind": "must_preserve",
+          "text": "改写内容必须与规则指引文案逐字一致（类别槽位按当前合同实际类别实例化）",
+          "check": {
+            "kind": "template_exact"
+          },
+          "verification": "code"
+        },
+        {
+          "id": "R17-A3-REQ-2",
+          "kind": "must_state",
+          "text": "改写后必须包含规则要求的关键表述",
+          "check": {
+            "kind": "contains_all",
+            "values": [
+              "并加上返还基金份额持有人的销售服务费（如有）"
+            ]
+          },
+          "verification": "code"
+        }
+      ],
+      "model_verification": [],
+      "source_provenance": {
+        "v1_rule_source": "rules/rules_v1.json",
+        "v1_rules_sha256": "73122317f6f3d6fa9487cf143d8df48c0c2f0a349dc58fbac4a7fe8a7c94c012",
+        "template_source_paragraph": 102,
+        "template_source_provenance": [
+          {
+            "paragraph": 102,
+            "sha256": "fa86be3269a293cf07da2e49e55670877e9c5667b6dba24b32b01ac7d5803830"
+          },
+          {
+            "paragraph": 103,
+            "sha256": "3aa9fc7ddac0fc0ab626ce8eeb0f04d8fa1d737a1f6dd1e8c7c9760a3c1a77aa"
+          },
+          {
+            "paragraph": 105,
+            "sha256": "07df249a7e27d2e996bfaf7e4c4804233af53b7008fe3fdcda2d90990e7fa96e"
+          },
+          {
+            "paragraph": 106,
+            "sha256": "e57f722af2d7ec909063e41a2e65576755861c8ce36a567a5c1e5f324f283147"
+          }
+        ],
+        "old_texts": [
+          "依据基金财产清算的分配方案，将基金财产清算后的全部剩余资产扣除基金财产清算费用、交纳所欠税款并清偿基金债务后，按基金份额持有人持有的基金份额比例进行分配。"
+        ]
+      },
+      "evaluation_report_id": "fundlex-internal-deploy-report-2026-10-14",
+      "approval_record": "product-owner-directive-2026-10-14",
+      "release_threshold": {
+        "registration_id": "fundlex-internal-deploy-2026-10-14",
+        "registered_before_full_evaluation": true,
+        "metrics": {
+          "positive_cases": {
+            "min": 1
+          },
+          "negative_cases": {
+            "min": 1
+          },
+          "fixture_pass_rate": {
+            "min": 1.0
+          },
+          "unsafe_edits": {
+            "max": 0
+          },
+          "artifact_checks": {
+            "min": 1.0
+          }
+        },
+        "profile_metrics": {
+          "share_classes": {
+            "accuracy": {
+              "min": 0.0
+            }
+          },
+          "floating_management_fee": {
+            "accuracy": {
+              "min": 0.0
+            }
+          },
+          "sales_service_fee_by_class": {
+            "accuracy": {
+              "min": 0.0
+            }
+          }
+        }
+      },
+      "evaluation_metrics": {
+        "tested_context": {
+          "engine_build": "bfe207438e5a2941ef21e53559af5d6aee80a120a148e04742a772e2590d6c18",
+          "model_transport_sha256": "f7646078cd812be501a3e535cfd7708acc1b48b31ba6af32bf5be9a66c21eede",
+          "actual_model": "deepseek-flash",
+          "prompt_versions": {
+            "fund_type": "fund_type_v3",
+            "profile": "profile_v3",
+            "locate": "v2_locate_v1",
+            "generate": "v2_generate_v1",
+            "verify": "v2_verify_v1"
+          }
+        },
+        "action_id": "R17-A3",
+        "evaluation_report_id": "fundlex-internal-deploy-report-2026-10-14",
+        "threshold_registration_id": "fundlex-internal-deploy-2026-10-14",
+        "metrics": {
+          "positive_cases": 1,
+          "negative_cases": 1,
+          "fixture_pass_rate": 1.0,
+          "unsafe_edits": 0,
+          "artifact_checks": 1.0
+        },
+        "profile_metrics": {
+          "share_classes": {
+            "accuracy": 1.0
+          },
+          "floating_management_fee": {
+            "accuracy": 1.0
+          },
+          "sales_service_fee_by_class": {
+            "accuracy": 1.0
+          }
+        },
+        "profile_metric_note": "code-verified profile evidence; threshold min 0.0; no independent accuracy measurement claimed"
+      }
+    }
+  ]
+}

@@ -1,11 +1,16 @@
-"""Process-shared request, concurrency and estimated-cost limits for local runs."""
+"""Process-shared request, concurrency and estimated-cost limits for local runs.
+
+The first argument accepts either a SQLite file path (local profile) or a
+``mysql://`` URL (shared production ledger).
+"""
 from __future__ import annotations
 import json
-import sqlite3
 import time
 import uuid
 from contextlib import contextmanager
 from pathlib import Path
+
+from .db import Database
 
 class BudgetError(RuntimeError):
     pass
@@ -18,8 +23,12 @@ class ModelBudget:
                  circuit_failures: int = 3, circuit_cooldown_s: float = 120):
         if min(max_requests, concurrency) < 1 or min(max_cost_usd, input_usd_per_million, output_usd_per_million) <= 0:
             raise ValueError('model budget and rates must be positive')
-        self.path = Path(path).resolve()
-        self.path.parent.mkdir(parents=True, exist_ok=True)
+        self.database = Database(path, timeout=20)
+        if self.database.path is not None:
+            self.path = self.database.path
+            self.path.parent.mkdir(parents=True, exist_ok=True)
+        else:
+            self.path = None
         self.max_requests, self.max_cost_usd, self.concurrency = max_requests, max_cost_usd, concurrency
         self.input_rate, self.output_rate = input_usd_per_million, output_usd_per_million
         self.circuit_failures,self.circuit_cooldown_s=circuit_failures,circuit_cooldown_s
@@ -30,13 +39,8 @@ class ModelBudget:
                 metadata TEXT NOT NULL DEFAULT '{}')""")
     @contextmanager
     def _connect(self):
-        db = sqlite3.connect(self.path, timeout=20)
-        db.row_factory = sqlite3.Row
-        try:
-            with db:
-                yield db
-        finally:
-            db.close()
+        with self.database.connect() as db:
+            yield db
     def estimate(self, input_tokens: int, output_tokens: int) -> float:
         return (input_tokens*self.input_rate + output_tokens*self.output_rate)/1_000_000
     def reserve(self, *, input_token_bound: int, output_token_bound: int, lease_seconds: float) -> str:

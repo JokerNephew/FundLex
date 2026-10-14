@@ -40,3 +40,21 @@
 #result-rows tr.row-muted .reason-cell{color:#8b949c}
 .table tbody tr.row-muted td{background:#fcfdfd}
 .scope-callout{margin:0 0 12px;border:1px solid #ead9c8;background:#fffaf4;border-radius:7px;padding:9px 12px;font-size:12px;line-height:1.65;color:#6b5136}
+
+.mode-picker {margin:12px 0 2px;display:grid;gap:6px;}
+.mode-picker label {font-weight:600;font-size:13px;color:var(--ink,#1f2937);}
+
+/* Account login (password auth mode) */
+.topbar-user{margin-left:auto;display:flex;align-items:center;gap:10px;white-space:nowrap}
+.topbar-user-name{font-size:13px;font-weight:650;color:var(--ink);max-width:220px;overflow:hidden;text-overflow:ellipsis}
+.login-overlay{position:fixed;inset:0;z-index:80;display:flex;align-items:center;justify-content:center;background:linear-gradient(160deg,#fdf8f4,#f2f4f7 60%);padding:24px}
+.login-card{width:min(400px,100%);background:var(--paper);border:1px solid var(--line);border-radius:14px;box-shadow:0 18px 45px rgba(34,40,48,.12);padding:30px 28px;display:flex;flex-direction:column;gap:8px}
+.login-logo{height:40px;width:auto;object-fit:contain;align-self:flex-start}
+.login-card h1{font-size:20px;margin:6px 0 0}
+.login-sub{color:var(--muted);font-size:13px;margin:0 0 8px}
+.login-card label{font-size:12px;font-weight:650;color:#4e5964;margin-top:6px}
+.login-card input{border:1px solid #cfd5db;border-radius:7px;padding:10px 12px;font:inherit;background:#fff}
+.login-card input:focus{border-color:var(--accent)}
+.login-card .btn{margin-top:12px;justify-content:center}
+.login-card #login-error{margin:6px 0 0}
+@media(max-width:760px){.topbar-user-name{display:none}}
