@@ -1,0 +1,4 @@
+# Release fingerprints hash Python source bytes. Keep checkout bytes stable on
+# Windows and Linux so a fresh checkout does not change an evaluated build.
+*.py text eol=lf
+rules/*.json text eol=lf
