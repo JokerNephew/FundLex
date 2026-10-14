@@ -24,7 +24,7 @@ pwsh -NoProfile -File .\tools\local.ps1 -Mode api
 在另一个终端启动 worker：
 
 ```powershell
-pwsh -NoProfile -File .\tools\local.ps1 -Mode worker -Model deepseek-flash -RequestOptionsJson '{"thinking":{"type":"disabled"}}'
+pwsh -NoProfile -File .\tools\local.ps1 -Mode worker -Model deepseek-v4.1-flash -RequestOptionsJson '{"thinking":{"type":"disabled"}}'
 ```
 
 打开 [本地工作台](http://127.0.0.1:8000)。两种身份模式：
@@ -49,7 +49,7 @@ pwsh -NoProfile -File .\tools\local.ps1 -Mode worker -Model deepseek-flash -Requ
 
 ModelGateway 读取通用变量 `LLM_PROVIDER`、`LLM_BASE_URL`、`LLM_MODEL`、`LLM_API_KEY`。`tools/local.ps1` 在 worker 进程缺变量时安全继承 Windows 用户级配置，仅检查存在性，不输出值或密钥。密钥不从仓库文件加载，不进入规则、日志或报告。
 
-当前联调模型版本显示名是 DeepSeek-V4.1-Flash，官方 API 请求名称是 `deepseek-flash`，base URL `https://api.deepseek.com`。初始模型配置请求曾返回 HTTP 400；测试进程改用官方 API 名称后成功。上面的 `-Model` 只改变该 worker 子进程，未修改 Windows 用户级变量。[官方模型与价格](https://api-docs.deepseek.com/quick_start/pricing/)。供应商/模型可替换，模块和业务规则不含供应商分支。
+当前联调端点：OpenCode Go（`https://opencode.ai/inference/go/v1`，模型 `deepseek-v4.1-flash`；该服务要求客户端发送稳定 `x-opencode-session` 会话头与自有 User-Agent，用 `FUNDLEX_MODEL_EXTRA_HEADERS_JSON` / `FUNDLEX_MODEL_USER_AGENT` 配置；DeepSeek V4.1 Flash 在该网关声明数据不用于训练、0 天保留）。供应商/模型可替换，模块和业务规则不含供应商分支；发布包绑定当前模型传输指纹（头名与 UA 在内，会话值轮换不失效）。
 
 默认全局预算账本累计最多 16 次 HTTP 请求、USD 1 的配置价格估计、并发 1。`FUNDLEX_MODEL_MAX_REQUESTS`、`FUNDLEX_MODEL_MAX_COST_USD`、输入/输出单价、上下文和输出上限可配置；每次重试也预留预算，未知 token 用量保留保守预留值，账本不随重启清零。修改模型、价格或预算前应重新登记和验证。估计费用不是供应商账单。当前联调的低延迟请求选项通过 `FUNDLEX_MODEL_REQUEST_OPTIONS_JSON` 注入；不能覆盖输入、模型、输出长度或 schema 校验。
 

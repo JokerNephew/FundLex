@@ -38,10 +38,12 @@ API 限制在导入 `fundlex.api` 时读取；变更环境后须重启 API 进�
 
 ## 模型、请求和预算
 
-`LLM_BASE_URL`、`LLM_MODEL`、`LLM_API_KEY` 必须由运行进程配置；`LLM_PROVIDER` 为供应商元数据。密钥不写入仓库、报告或日志，也不回显。当前测试供应商与模型并不代表生产选型。
+`LLM_BASE_URL`、`LLM_MODEL`、`LLM_API_KEY` 必须由运行进程配置；`LLM_PROVIDER` 为供应商元数据。密钥不写入仓库、报告或日志，也不回显。当前测试供应商与模型并不代表生产选型。若端点要求客户端标识（例如 OpenCode Go 要求 `x-opencode-session` 稳定会话头），用下列两个变量配置，不写供应商分支代码。
 
 | 环境变量 | 默认值 / 范围 |
 | --- | --- |
+| `FUNDLEX_MODEL_EXTRA_HEADERS_JSON` | `{}`；附加请求头（JSON 对象，字符串值）。禁止覆盖 `Authorization`/`Content-Type`；头**名称**进入发布传输指纹，会话值轮换不使发布失效。 |
+| `FUNDLEX_MODEL_USER_AGENT` | `fundlex/0.3.0`；客户端标识，进入发布传输指纹。 |
 | `FUNDLEX_MODEL_CONTEXT_CHARS` | 12000，单请求局部上下文字符上限 |
 | `FUNDLEX_MODEL_MAX_CALLS` | 默认 16；多对多定位及产物复核部署推荐 192，单 gateway 实例逻辑调用上限 |
 | `FUNDLEX_MODEL_MAX_OUTPUT_TOKENS` | 1500，单请求输出上限 |

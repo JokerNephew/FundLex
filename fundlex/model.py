@@ -38,7 +38,8 @@ class ModelGateway:
                  max_context_chars: int = 12000, max_calls: int = 16,
                  max_completion_tokens: int = 1500, timeout_s: float = 45.0,
                  retries: int = 1, client: httpx.Client | None = None,
-                 budget: ModelBudget | None = None, provider: str = '', request_options: dict | None = None):
+                 budget: ModelBudget | None = None, provider: str = '', request_options: dict | None = None,
+                 extra_headers: dict | None = None, user_agent: str = 'fundlex/0.3.0'):
         if not base_url or not model or not api_key: raise ModelError('MODEL_CONFIG_MISSING')
         if not base_url.startswith(('https://','http://127.0.0.1','http://localhost')):
             raise ModelError('MODEL_ENDPOINT_INVALID')
@@ -47,6 +48,12 @@ class ModelGateway:
         self.request_options=request_options or {}
         if not isinstance(self.request_options,dict) or not set(self.request_options).issubset({'reasoning_effort','thinking','reasoning'}):
             raise ModelError('MODEL_REQUEST_OPTIONS_INVALID')
+        self.extra_headers = dict(extra_headers or {})
+        if (not all(isinstance(key, str) and key and isinstance(value, str)
+                    and key.lower() not in {'authorization', 'content-type'}
+                    for key, value in self.extra_headers.items())):
+            raise ModelError('MODEL_EXTRA_HEADERS_INVALID')
+        self.user_agent = user_agent or 'fundlex/0.3.0'
         self.max_context_chars,self.max_calls = max_context_chars,max_calls
         self.max_completion_tokens,self.timeout_s,self.retries = max_completion_tokens,timeout_s,retries
         self.calls = 0
@@ -57,6 +64,7 @@ class ModelGateway:
         from .checkpoints import ModelCheckpoints
         transport = {key: getattr(self, key) for key in ('provider','base_url','model','request_options',
             'max_context_chars','max_completion_tokens','timeout_s','retries')}
+        transport.update(user_agent=self.user_agent, extra_header_names=sorted(self.extra_headers))
         self.checkpoints = ModelCheckpoints(directory, {**dependencies, 'transport': transport})
     def close(self):
         self._client.close()
@@ -67,6 +75,10 @@ class ModelGateway:
     @classmethod
     def from_env(cls) -> 'ModelGateway':
         data_dir = local_data_dir()
+        try:
+            extra_headers = json.loads(os.environ.get('FUNDLEX_MODEL_EXTRA_HEADERS_JSON', '{}'))
+        except ValueError as exc:
+            raise ModelError('MODEL_EXTRA_HEADERS_INVALID') from exc
         budget = ModelBudget(os.environ.get('FUNDLEX_MODEL_LEDGER',str(data_dir/'model_budget.sqlite')),
             max_requests=int(os.environ.get('FUNDLEX_MODEL_MAX_REQUESTS','16')),
             max_cost_usd=float(os.environ.get('FUNDLEX_MODEL_MAX_COST_USD','1')),
@@ -80,7 +92,9 @@ class ModelGateway:
             max_completion_tokens=int(os.environ.get('FUNDLEX_MODEL_MAX_OUTPUT_TOKENS','1500')),
             timeout_s=float(os.environ.get('FUNDLEX_MODEL_TIMEOUT_S','45')),
             retries=int(os.environ.get('FUNDLEX_MODEL_RETRIES','1')),
-            request_options=json.loads(os.environ.get('FUNDLEX_MODEL_REQUEST_OPTIONS_JSON','{}')))
+            request_options=json.loads(os.environ.get('FUNDLEX_MODEL_REQUEST_OPTIONS_JSON','{}')),
+            extra_headers=extra_headers,
+            user_agent=os.environ.get('FUNDLEX_MODEL_USER_AGENT','fundlex/0.3.0'))
     def metrics(self) -> dict:
         return {'logical_calls':self.calls,'http_attempts':sum(not e.get('reused_checkpoint') for e in self.events),
             'checkpoint_reuses':sum(bool(e.get('reused_checkpoint')) for e in self.events),
@@ -135,8 +149,12 @@ class ModelGateway:
             event['request_options_sha256']=hashlib.sha256(json.dumps(self.request_options,sort_keys=True).encode()).hexdigest()
             attempt_start,usage,value,retry = time.monotonic(),{},None,False
             try:
+                request_headers = {'Authorization': 'Bearer ' + self.api_key,
+                                   'Content-Type': 'application/json',
+                                   'User-Agent': self.user_agent}
+                request_headers.update(self.extra_headers)
                 with self._client.stream('POST',self.base_url+'/chat/completions',json=payload,
-                        headers={'Authorization':'Bearer '+self.api_key,'Content-Type':'application/json'},
+                        headers=request_headers,
                         timeout=httpx.Timeout(self.timeout_s,connect=min(10,self.timeout_s))) as response:
                     event['http_status'],event['request_id']=response.status_code,response.headers.get('x-request-id')
                     if response.status_code==429 or 500<=response.status_code<=599:

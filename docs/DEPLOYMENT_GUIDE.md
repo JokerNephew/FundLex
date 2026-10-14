@@ -16,10 +16,14 @@
 
 ```ini
 # 模型（供应商中立；发布包绑定该配置的指纹，改动后需重新发布）
-LLM_PROVIDER=DeepSeek
-LLM_BASE_URL=https://api.deepseek.com
-LLM_MODEL=deepseek-flash
+# 示例：OpenCode Go（需稳定会话头与自定义 User-Agent；数据不用于训练、0 天保留）
+LLM_PROVIDER=OpenCodeGo
+LLM_BASE_URL=https://opencode.ai/inference/go/v1
+LLM_MODEL=deepseek-v4.1-flash
 LLM_API_KEY=...                      # 只放服务端环境，禁止入库/入日志
+FUNDLEX_MODEL_USER_AGENT=fundlex/0.3.0
+FUNDLEX_MODEL_EXTRA_HEADERS_JSON={"x-opencode-session":"fundlex-prod-001"}
+# 其他供应商同样适用：只改 LLM_*；若端点要求客户端标识，用上面两个变量，不写供应商分支代码。
 
 # 数据库与存储
 FUNDLEX_DATABASE_URL=mysql://fundlex:****@127.0.0.1:3306/fundlex?charset=utf8mb4

@@ -14,6 +14,56 @@ def gateway(handler, budget=None, retries=0):
     return ModelGateway(base_url='https://model.invalid',model='test',api_key='never-log-this',
         client=httpx.Client(transport=httpx.MockTransport(handler)),budget=budget,retries=retries)
 
+def test_extra_headers_and_user_agent_are_sent():
+    seen = {}
+
+    def handler(request):
+        seen.update(request.headers)
+        return response({'quote': '混合型', 'fund_type': 'ordinary'})
+
+    model = ModelGateway(base_url='https://model.invalid', model='test', api_key='never-log-this',
+                         client=httpx.Client(transport=httpx.MockTransport(handler)), retries=0,
+                         extra_headers={'x-opencode-session': 'session-1'}, user_agent='fundlex/0.3.0')
+    model.extract_fund_type('混合型证券投资基金')
+    assert seen.get('x-opencode-session') == 'session-1'
+    assert seen.get('user-agent') == 'fundlex/0.3.0'
+    assert seen.get('authorization') == 'Bearer never-log-this'
+
+
+def test_extra_headers_cannot_override_credentials():
+    with pytest.raises(ModelError, match='MODEL_EXTRA_HEADERS_INVALID'):
+        ModelGateway(base_url='https://model.invalid', model='x', api_key='x',
+                     extra_headers={'Authorization': 'Bearer other'})
+    with pytest.raises(ModelError, match='MODEL_EXTRA_HEADERS_INVALID'):
+        ModelGateway(base_url='https://model.invalid', model='x', api_key='x',
+                     extra_headers={'content-type': 'text/plain'})
+
+
+def test_release_fingerprint_tracks_header_names_not_values():
+    from fundlex.rules import release_runtime_context
+
+    def build(extra):
+        return ModelGateway(base_url='https://model.invalid/v1', model='test', api_key='k', extra_headers=extra)
+
+    base = release_runtime_context(build({}), 'test')['model_transport_sha256']
+    same = release_runtime_context(build({'x-opencode-session': 'a'}), 'test')['model_transport_sha256']
+    rotated = release_runtime_context(build({'x-opencode-session': 'b'}), 'test')['model_transport_sha256']
+    named = release_runtime_context(build({'x-other-header': 'a'}), 'test')['model_transport_sha256']
+    assert same == rotated, 'session-value rotation must not invalidate a release'
+    assert named != same
+    assert base != same
+
+
+def test_from_env_rejects_invalid_extra_headers(tmp_path, monkeypatch):
+    monkeypatch.setenv('LLM_BASE_URL', 'https://model.invalid')
+    monkeypatch.setenv('LLM_MODEL', 'x')
+    monkeypatch.setenv('LLM_API_KEY', 'x')
+    monkeypatch.setenv('FUNDLEX_MODEL_LEDGER', str(tmp_path / 'ledger.sqlite'))
+    monkeypatch.setenv('FUNDLEX_MODEL_EXTRA_HEADERS_JSON', '{not json')
+    with pytest.raises(ModelError, match='MODEL_EXTRA_HEADERS_INVALID'):
+        ModelGateway.from_env()
+
+
 def test_invalid_quote_preserves_usage_and_never_retries(tmp_path: Path):
     budget=ModelBudget(tmp_path/'ledger.sqlite',max_requests=2)
     model=gateway(lambda _:response({'quote':'invented','fund_type':'ordinary'}),budget,retries=1)

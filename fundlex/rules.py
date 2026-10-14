@@ -61,7 +61,10 @@ def release_runtime_context(gateway: Any, actual_model: str | None = None) -> di
     if any(not hasattr(gateway, key) for key in required):
         raise RuleError("RELEASE_CONTEXT_UNVERIFIED")
     transport = {key: getattr(gateway, key) for key in required}
-    transport.update(provider=getattr(gateway, "provider", ""), gateway_type=type(gateway).__module__ + "." + type(gateway).__qualname__)
+    transport.update(provider=getattr(gateway, "provider", ""),
+                     user_agent=getattr(gateway, "user_agent", ""),
+                     extra_header_names=sorted(getattr(gateway, "extra_headers", {}) or {}),
+                     gateway_type=type(gateway).__module__ + "." + type(gateway).__qualname__)
     fingerprint = hashlib.sha256(json.dumps(transport, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode()).hexdigest()
     return {"engine_build": engine_build(), "model_transport_sha256": fingerprint,
             "actual_model": actual_model or gateway.model, "prompt_versions": dict(PROMPT_VERSIONS)}
