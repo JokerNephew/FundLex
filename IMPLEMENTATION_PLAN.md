@@ -14,6 +14,7 @@
   - `final2-pilot16`：**在 P08/P09 遇供应商 HTTP 402（账户余额不足）安全停止**；P01–P08 完成，P10–P16 未跑。旧 gold 部分 6/9、精度 1.0；P02 的 R11 因第二轮误拒级联被撤（协议 v2 已针对成因修复）。
   - 上述三次运行绑定引擎 a590c858，**对最终引擎 8a914ddb 已过期**，发布前必须重跑 5+16+8。
 - **预算**：3152 HTTP / 约 USD 2.99（cap 7500 / 6.0 未及）。停因是**供应商账户 402（外部额度）**，非账本上限。
+- **备选端点探测（2026-10-14，用户提供，密钥不入库）**：`https://opencode.ai/inference/openai/v1` + `deepseek-v4.1-flash`——认证通过（非 401），但连续两次调用均返回 **402 "Upstream request failed: Insufficient account funds"**；`/v1/models` 返回 404。结论：端点与密钥格式可用，账户余额不足，与直连 DeepSeek key 的 402 同因。**未切换本地配置**；充值任一账户后可继续（若切换 opencode 端点，发布证据将绑定该模型传输）。
 - **续跑清单**（账户恢复后）：① 三组证据运行到新目录（fixtures/unseen/pilot16）→ ② `v2_compare`（fixtures + 两个 gold）+ `matching_audit`（labels）→ ③ `rules.release_v2 --audit-output … --evidence-run …×3`（部署环境变量）→ ④ 全套测试 + `task_revision_run` ≥2 份正式交付（final/redline/SHA/例外）→ ⑤ README/证据文档与提交。
 
 ### 上一轮接续进度（第一次会话，已被上文替代；保留作历史）
