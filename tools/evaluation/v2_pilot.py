@@ -202,7 +202,12 @@ def main() -> None:
             report = client.get(document["report_url"], headers=headers)
             report.raise_for_status()
             report = report.json()
-            assert report.get("execution_mode") == "evaluation", "evaluation mode must persist"
+            # A document that failed on infrastructure (e.g. the model circuit
+            # opened) carries a failure report without an execution mode; it is
+            # recorded as-is and must not abort the whole run.
+            failed_document = bool(report.get("error_code"))
+            if not failed_document:
+                assert report.get("execution_mode") == "evaluation", "evaluation mode must persist"
             assert "final" not in document["downloads"] and "redline" not in document["downloads"]
             folder = artifacts_root / Path(document["name"]).stem
             folder.mkdir(parents=True, exist_ok=True)

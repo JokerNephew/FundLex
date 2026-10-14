@@ -330,6 +330,25 @@ def test_paragraph_template_variant_core_must_relate_to_rule_text(package, profi
     assert not _template_core_related(unrelated, action, profile)
 
 
+def test_paragraph_template_candidate_excluded_when_core_present_elsewhere(tmp_path, package, profile):
+    # U04-class: the rest of the section already carries the template core
+    # (daily accrual + direct-sales redemption refund), so the "other sales
+    # agencies" sub-paragraph must not be replaced by the full template.
+    core = ("销售服务费每日计提。对于投资者通过直销机构持有的C类基金份额计提的销售服务费，"
+            "在投资者赎回C类基金份额或基金合同终止时，随赎回款（或清算款）一并返还给投资者。")
+    candidate = "对于投资者持续持有期限未超过一年的基金份额收取的销售服务费，按月支付给基金管理人。"
+    result, gateway, _, _ = execute(tmp_path, package, profile, [
+        ("heading", "基金费用与税收"), ("text", "基金销售服务费"),
+        ("text", core), ("text", candidate)],
+        [("locate_target", {"quotes": []})], ids=("R14-A1",))
+    action = result["actions"][0]
+    assert not result["edits"]
+    assert action["status"] != "failed"
+    excluded = [t for t in action["targets"] if t.get("reason") == "V3_TEMPLATE_ALREADY_PRESENT"]
+    assert [t["location"] for t in excluded] == ["p3"]
+    assert gateway.calls == 1, "the guarded candidate must be refused before any model call"
+
+
 def test_variant_empty_model_answer_is_not_a_failure(tmp_path, package, profile):
     host = "销售服务费主要用于支付销售机构佣金和促销费用。"
     result, _, _, _ = execute(tmp_path, package, profile, [

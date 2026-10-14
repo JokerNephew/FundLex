@@ -37,6 +37,13 @@ _VERIFY_INSTRUCTION = (
     "逐项输出 requirement_id、result、evidence_quote、evidence_source。"
 )
 
+_FACT_QUOTE_RETRY_INSTRUCTION = (
+    "上一次答复的 facts 引文未通过来源校验：facts[].quote 必须逐字复制自其 role 对应的来源——"
+    "contract 必须来自 [CONTRACT_SOURCE] 原文，rule 必须来自 [RULE_REQUIREMENTS]/[SEMANTICS]/规则文本原文，"
+    "profile 必须来自 [PROFILE_FACTS] 原文；不得改写、概括、补字、删字或拼接要求文字。"
+    "请重新输出完整 JSON：业务结论保持不变，仅把每条 fact 的 quote 修正为对应来源中的逐字连续原文。"
+)
+
 # Boundary punctuation used to decide whether an inserted/replaced text would
 # run into its neighbours. A missing separator is repaired with a sentence
 # period by code (never by inventing business content).
@@ -733,6 +740,43 @@ def _template_core_related(quote: str, action: dict[str, Any], profile: dict[str
     return False
 
 
+def _template_already_present(action: dict[str, Any], span: Any,
+                              spans: Sequence[tuple[Any, Any]]) -> bool:
+    """Refuse a paragraph-scope template candidate when its section already carries core text.
+
+    U04-class defect: the model proposed replacing one channel-specific
+    sub-paragraph (e.g. the "other sales agencies" payment rule) with the whole
+    fixed template although other paragraphs of the same resolved section
+    already carry the template's required core statements (daily accrual,
+    redemption refund rules), duplicating or overriding the direct-sales
+    clauses. A required core statement found in *any other paragraph of the
+    section* is enough to refuse: the section is already structured around that
+    core, so a full-template replacement of a sub-paragraph would duplicate or
+    override it. The contract may name the same concept with different words
+    (e.g. "基金管理人或其基金销售子公司" for 直销机构), which is why a partial
+    core hit already refuses. The guard only refuses; a missed edit is
+    acceptable, a duplicated/overridden clause is not.
+    """
+    if action["generation"]["mode"] != "template" or action["scope"] != "paragraph":
+        return False
+    values: list[str] = []
+    for requirement in action["requirements"]:
+        check = requirement["check"]
+        if check["kind"] == "contains_all":
+            values.extend(check["values"])
+    if not values:
+        return False
+    zone = getattr(span, "logical_zone", None) or span.zone
+    others = "\n".join(
+        other.text for other, _ in spans
+        if other.location != span.location
+        and (getattr(other, "logical_zone", None) or other.zone) == zone
+        and other.section_path == span.section_path)
+    if not others:
+        return False
+    return any(_quote_in(value, others) for value in values)
+
+
 def _locate_variants(action: dict[str, Any], spans: Sequence[tuple[Any, Any]],
                      inspection: DocumentInspection, profile: dict[str, Any], gateway: Any,
                      deterministic: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -762,6 +806,10 @@ def _locate_variants(action: dict[str, Any], spans: Sequence[tuple[Any, Any]],
             targets.append({**_base_target(span, inspection), "status": "satisfied",
                             "reason": "V2_ALREADY_SATISFIED", "quote": span.text,
                             "char_end": len(span.text)})
+            continue
+        if _template_already_present(action, span, spans):
+            targets.append({**_base_target(span, inspection), "status": "excluded",
+                            "reason": "V3_TEMPLATE_ALREADY_PRESENT", "quote": ""})
             continue
         try:
             context = _matching_context(action, profile, [span], gateway)
@@ -1174,24 +1222,43 @@ def verify_target(action: dict[str, Any], target: dict[str, Any], span: Any, pro
     profile_facts = profile_facts_text(profile) if action.get("requires_profile") else None
     context = _build_generate_context(action, span, target, profile, int(getattr(gateway, "max_context_chars", 12000)) - 200)
     result = gateway.generate_clause(context, instruction=action["generation"]["instruction"])
+
+    def accept_generated(value: dict[str, Any]) -> tuple[str, list[str]]:
+        """Validate one generation answer exactly like the original inline chain."""
+        if not _old_text_equal(value["source_quote"], target["quote"]):
+            raise V2Error("V2_SOURCE_QUOTE_MISMATCH")
+        replacement = str(value["replacement_text"])
+        if not replacement or "\n" in replacement or "\r" in replacement or "\ufffd" in replacement:
+            raise V2Error("V2_REPLACEMENT_INVALID")
+        if len(replacement) > int(action["generation"]["max_chars"]):
+            raise V2Error("V2_REPLACEMENT_TOO_LONG")
+        if any(ord(char) < 32 for char in replacement):
+            raise V2Error("V2_REPLACEMENT_INVALID")
+        if _old_text_equal(replacement, target["quote"]):
+            raise V2Error("V2_REPLACEMENT_UNCHANGED")
+        join_left = target["char_end"] if action["operation"] == "append" else target["char_start"]
+        normalization: list[str] = []
+        if action["operation"] == "append" or action["scope"] in {"sentence", "paragraph"}:
+            replacement, normalization = _join_repairs(span.text, join_left, target["char_end"], replacement)
+        fact_error, fact_details = _validate_facts(value.get("facts", []), value.get("changes", []), span,
+                                                   action, profile_facts)
+        if fact_error:
+            raise V2Error(fact_error, fact_details)
+        return replacement, normalization
+
+    try:
+        replacement, normalization = accept_generated(result.value)
+    except V2Error as exc:
+        if exc.code != "V2_FACT_ROLE_MISMATCH":
+            raise
+        # Bounded re-ask (U07-class): the model rewrote requirement wording
+        # instead of quoting its source verbatim. Only this failure code is
+        # retried, exactly once; the second answer runs the same validation and
+        # is rejected by the original logic when it fails again.
+        result = gateway.generate_clause(context, instruction=_FACT_QUOTE_RETRY_INSTRUCTION,
+                                         prompt_version=PROMPT_VERSIONS_V2["generate"])
+        replacement, normalization = accept_generated(result.value)
     value = result.value
-    if not _old_text_equal(value["source_quote"], target["quote"]):
-        raise V2Error("V2_SOURCE_QUOTE_MISMATCH")
-    replacement = str(value["replacement_text"])
-    if not replacement or "\n" in replacement or "\r" in replacement or "\ufffd" in replacement:
-        raise V2Error("V2_REPLACEMENT_INVALID")
-    if len(replacement) > int(action["generation"]["max_chars"]):
-        raise V2Error("V2_REPLACEMENT_TOO_LONG")
-    if any(ord(char) < 32 for char in replacement):
-        raise V2Error("V2_REPLACEMENT_INVALID")
-    if _old_text_equal(replacement, target["quote"]):
-        raise V2Error("V2_REPLACEMENT_UNCHANGED")
-    join_left = target["char_end"] if action["operation"] == "append" else target["char_start"]
-    if action["operation"] == "append" or action["scope"] in {"sentence", "paragraph"}:
-        replacement, normalization = _join_repairs(span.text, join_left, target["char_end"], replacement)
-    fact_error, fact_details = _validate_facts(value.get("facts", []), value.get("changes", []), span, action, profile_facts)
-    if fact_error:
-        raise V2Error(fact_error, fact_details)
     code_results = run_code_checks(action, replacement, profile)
     if any(item["result"] != "satisfied" for item in code_results):
         failed = [item["id"] for item in code_results if item["result"] != "satisfied"]

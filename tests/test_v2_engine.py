@@ -843,6 +843,72 @@ def test_fact_quote_tolerates_cjk_spacing(tmp_path):
     assert record["facts"][0]["quote"] == "赎回费用由赎回基金份额的基金份额持有人承担"
 
 
+VERIFY_GOOD = ("verify_content", {"items": [
+    {"requirement_id": "R10-REQ-3", "result": "satisfied",
+     "evidence_quote": "赎回费用全额计入基金财产", "evidence_source": "generated"},
+    {"requirement_id": "R10-REQ-6", "result": "satisfied",
+     "evidence_quote": "赎回费用由赎回基金份额的基金份额持有人承担", "evidence_source": "contract"}]})
+BAD_RULE_FACT = [{"fact_id": "f1", "statement": "规则要求全额计入基金财产",
+                  "role": "rule", "quote": "赎回费用应当全额计入基金财产"}]
+GOOD_RULE_FACT = [{"fact_id": "f1", "statement": "规则要求全额计入基金财产",
+                   "role": "rule", "quote": "赎回费用全额计入基金财产"}]
+
+
+def test_fact_role_mismatch_gets_one_bounded_generate_retry(tmp_path):
+    # U07-class: the model paraphrased requirement wording instead of quoting
+    # it verbatim; one bounded re-ask must rescue the action.
+    paragraph = R10_OLD
+    profile = make_profile(["H", "J"], ["H"], ["J"])
+    source = build_docx(tmp_path / "factretry.docx", [
+        ("heading", "基金份额的申购与赎回"),
+        ("text", "申购和赎回的价格、费用及其用途"),
+        ("text", paragraph),
+    ])
+    responses = [
+        ("locate_target", {"quotes": [{"quote": paragraph, "basis": "归属条款"}]}),
+        ("generate_clause", valid_generate_value(paragraph, R10_GOOD, BAD_RULE_FACT)),
+        ("generate_clause", valid_generate_value(paragraph, R10_GOOD, GOOD_RULE_FACT)),
+        VERIFY_GOOD,
+    ]
+    outcome, action, gateway, inspection = plan_for("R10-A1", source, profile, responses)
+    assert action["status"] == "applied", action["failure_reason"]
+    assert outcome["records"][0]["facts"][0]["quote"] == "赎回费用全额计入基金财产"
+    assert gateway.calls == 4, "locate + generate + exactly one re-ask + verify"
+
+    # Both answers paraphrasing the rule text fail closed; no second re-ask.
+    source2 = build_docx(tmp_path / "factretry2.docx", [
+        ("heading", "基金份额的申购与赎回"),
+        ("text", "申购和赎回的价格、费用及其用途"),
+        ("text", paragraph),
+    ])
+    responses = [
+        ("locate_target", {"quotes": [{"quote": paragraph, "basis": "归属条款"}]}),
+        ("generate_clause", valid_generate_value(paragraph, R10_GOOD, BAD_RULE_FACT)),
+        ("generate_clause", valid_generate_value(paragraph, R10_GOOD, BAD_RULE_FACT)),
+    ]
+    outcome, action, gateway, inspection = plan_for("R10-A1", source2, profile, responses)
+    assert action["status"] == "failed"
+    assert action["failure_reason"] == "V2_FACT_ROLE_MISMATCH"
+    assert outcome["edits"] == []
+    assert gateway.calls == 3
+
+    # Any other fact failure code is rejected without a re-ask.
+    source3 = build_docx(tmp_path / "factretry3.docx", [
+        ("heading", "基金份额的申购与赎回"),
+        ("text", "申购和赎回的价格、费用及其用途"),
+        ("text", paragraph),
+    ])
+    responses = [
+        ("locate_target", {"quotes": [{"quote": paragraph, "basis": "归属条款"}]}),
+        ("generate_clause", valid_generate_value(paragraph, R10_GOOD,
+            [{"fact_id": "f1", "statement": "外部事实", "role": "invalid", "quote": "赎回费用"}])),
+    ]
+    outcome, action, gateway, inspection = plan_for("R10-A1", source3, profile, responses)
+    assert action["status"] == "failed"
+    assert action["failure_reason"] == "V2_FACT_ROLE_INVALID"
+    assert gateway.calls == 2
+
+
 def test_check_requirement_kinds_are_declared():
     ruleset = load_ruleset_v2()
     declared = {"delete_only", "contains_all", "not_contains", "no_digits_and_no_conditions",
