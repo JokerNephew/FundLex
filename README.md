@@ -1,5 +1,7 @@
 # FundLex
 
+> **开发接续状态（2026-10-14）：正在升级多对多定位与实际产物复核，工作区为未发布评测草案（False / 22）。下方已发布状态描述的是 `0786f99` 基线，不能作为当前未提交版本验收。下一 agent 先读 [接续断点](docs/HANDOFF_MATCHING_V3_20261014.md)。**
+
 FundLex 是 DOCX 基金合同处理的本地开发应用，包含 Fluent Office 工作台、持久批次队列、证据画像、通用规则、固定模板编辑器及报告交付。
 
 > **当前状态（2026-10-14）：全部 22 个 action 已实现并已按内部部署政策发布，正式交付（自动写入）可用。** v2 按规则语义契约、当前合同证据、精确范围和内容验证执行；16 个新增动作用"规则原文代码组装 + 类别槽位按实际类别实例化"（不让模型猜政策），模板/删除模式由代码逐字核验。发布包 `rules/rules_v2.json` 绑定引擎构建与模型传输指纹（`evaluation_context`），并携带逐动作预注册门槛与实测指标（确定性审计：22 正例 + 23 反例全部通过、0 错误写入）；引擎或模型配置漂移时运行期自动拒绝（`V2_RELEASE_CONTEXT_UNVERIFIED`），重新发布用 `rules/release_v2.py`。正式交付按"已校验修改 + 显式例外清单"分级（`complete` / `complete_with_exceptions` / `incomplete`，见 [交付状态政策](docs/DELIVERY_STATUS_POLICY.md)）。真实运行证据（夹具 5/5、回归 16/16、泛化 8/8、正式交付复验 2/2）见 [发布证据](docs/RELEASE_EVIDENCE.md) 与 [v2 结果](docs/AI_EDITING_V2_RESULTS.md)。

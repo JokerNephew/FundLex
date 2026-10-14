@@ -1,5 +1,53 @@
 # FundLex 实施计划与验收记录
 
+> **最新状态见下方「接续 agent 进展（第二次会话收尾）」。断点文档 `docs/HANDOFF_MATCHING_V3_20261014.md`（含第二部分）。账本现为 3152 HTTP / 约 USD 2.99（cap 7500 / USD 6）；真实运行当前被**供应商账户 HTTP 402（外部余额）**阻塞；冻结引擎 `8a914ddb…`、规则 `e9aeef0a…`、454 测试通过、审计 22+23 全过；发布与交付复验待账户恢复后按清单执行。**
+
+### 接续 agent 进展（第二次会话收尾，2026-10-14 下午）
+
+- **引擎冻结候选**：`8a914ddb3e7aa1c0574786c5a4beef706fae8a7e2f4f17d2133ad5c013c117ab`；规则包 `e9aeef0a5bc9a89f1e055ff67d39d2c97e1c8834d39c46808bfa5fe6fade7a33`（22 动作、未发布）、草案同步一致。
+- **来源文件重存修复**：`references/source/…_文案勘误版.docx` 于 11:05 被重存（逐段文本与规范哈希不变、容器字节变化），仅更新 `rules_v1.json` 的 `source_sha256`（9e1b7771→b77be53c），业务值/门槛未动；v1 新 SHA `c3edf647…`，v2 按新来源哈希重建。`compile_catalogue.py`/`compile_v2.py` 写出统一 LF。
+- **后验协议 v2（本轮完成）**：必需 ID 指令 + 一次有界补问；schema 不合规仅限单窗口失败（预算停止仍上抛）；同段其他动作授权修改披露（OTHER_AUTHORIZED_EDITS）；删除动作披露被删目标且允许 BEFORE 引用或 AFTER 邻近引用（代码核验目标已消失）；**代码可证属性以代码为准**（模型异议记入 `model_dissents`，不因此撤销）；before 引文在产物中仍存在时可用于 PRESERVATION/COVERAGE；仅模型判定类失败做一次有界复核（`consensus_event`，不适用于代码失败）；区域数字检查去除段首编号、数字类检查改查"本动作写入文字"；无编辑窗口仅要求 PRESERVATION。
+- **验证**：全套 **454 passed**（含本机 MySQL）；确定性动作审计 **22 正例 + 23 反例全过、0 错误写入**（`var/matching-upgrade-20261014/audit-final2/`）。
+- **证据运行状态（重要：因外部额度阻塞，未完成）**：
+  - `final2-fixtures`（引擎 a590c858 时跑）：3 修改（含例外）+ 2 设计内拒绝；夹具评分器按旧期望 1/5——动作级断言全过，差异仅为交付状态口径（`*_with_exceptions`）与 FX03 拒绝标签；未改任何期望文件。
+  - `final2-unseen8`：6 修改 + 2 类型排除；旧 gold 5/6（U05 R10 被后验误拒，协议 v2 已修），精度 1.0、越界 0。
+  - `final2-pilot16`：**在 P08/P09 遇供应商 HTTP 402（账户余额不足）安全停止**；P01–P08 完成，P10–P16 未跑。旧 gold 部分 6/9、精度 1.0；P02 的 R11 因第二轮误拒级联被撤（协议 v2 已针对成因修复）。
+  - 上述三次运行绑定引擎 a590c858，**对最终引擎 8a914ddb 已过期**，发布前必须重跑 5+16+8。
+- **预算**：3152 HTTP / 约 USD 2.99（cap 7500 / 6.0 未及）。停因是**供应商账户 402（外部额度）**，非账本上限。
+- **续跑清单**（账户恢复后）：① 三组证据运行到新目录（fixtures/unseen/pilot16）→ ② `v2_compare`（fixtures + 两个 gold）+ `matching_audit`（labels）→ ③ `rules.release_v2 --audit-output … --evidence-run …×3`（部署环境变量）→ ④ 全套测试 + `task_revision_run` ≥2 份正式交付（final/redline/SHA/例外）→ ⑤ README/证据文档与提交。
+
+### 上一轮接续进度（第一次会话，已被上文替代；保留作历史）
+
+- [x] 断点核对：dirty workspace 全部保留（无清理/还原）；旧发布包与 31 份报告在 `var/matching-upgrade-20261014/baseline/`；标签 SHA 复核一致（`73c42e92…`）。
+- [x] 收尾安全边界：删除动作完整业务句边界（新增 `V3_DELETE_SENTENCE_BOUNDARY`/`V3_DELETE_SENTENCE_MERGED`，防截半句与吞支付/公式；3 个匹配测试含 1 正例）；R10 已符合独立核验负例 2 个（模型判不满足、引文不可回查均拒绝）；workbench 状态语义更新为 `evaluation_modified_with_exceptions`。
+- [x] LF 规范化：10 个 CRLF 文件（含 api/jobs/rules/store 与两个 v2 JSON）转为 LF；`compile_v2` 写入改为 `newline="\n"`；草案重建 `rules_v2.json` = `rules_v2.draft.json`，sha256 前缀 `0f50182ba5d8aba7`，0 CRLF。
+- [x] 验证：全套 **437 passed**（含本机 MySQL 8 实库；node --check 通过）；确定性动作审计 **22/22 正例 + 23/23 反例全过**（R13 已修复，`var/matching-upgrade-20261014/audit-rerun/`）；引擎冻结候选 `ce4a7aa1b42c92260c19298aa276c56e0de096e7b5e1fb07d7e7fc56789825f9`。
+- [ ] 下一步：P05/P13 诊断（私有 `matching-upgrade-20261014/spot-input`）→ 5 夹具 + 16 回归 + 8 历史泛化 → 旧 gold 与新标签评分 → `release_v2 --evidence-run` 重新发布 → 全套测试 + `task_revision_run` 正式交付 ≥2 份。
+
+## 当前开发状态（2026-10-14 多对多定位/实际产物复核）
+
+- 用户已授权自主开发和进度管理，生产目标 4C8G。规格见 `docs/SEMANTIC_MATCHING_V3_SPEC.md`；保留现有编辑器、22 action、失败关闭、发布指纹绑定。无 push。
+- 基线 HEAD `0786f99`，全套 357 passed（含本机 MySQL）；旧引擎 `bfe20743`。既有实测零错误写入仅代表已测证据，不能宣称任意合同零误改。
+- root 只读核实共享预算：累计 1798 HTTP / USD 1.2809772，completed 1791 / failed 6 / abandoned 1；既有 cap 2000 / USD 1.40。不重置账本；新真实运行前由 root 登记新 cap，核心开发不真实调用。
+- [x] A：有界多对多范围解析、模板变体辅助定位、全部目标盘点、跨 action 冲突拒绝（worker，母 agent 规格/质量两轮审查）；新增 16 单测通过。既有完整回归待隔离评测包准备。
+- [x] B：实际 DOCX 独立复核、整 action 回滚、最终组合及产物绑定、有界重生成（worker，母 agent 两轮审查）；B/实际复核/既有评测/发布测试 29 passed、1 warning，母 agent 复跑通过。
+- [ ] C：集成安全回归、规则/模型任务提示同步、not_matched 例外及报告修正。
+- [ ] 主 agent：真实诊断/评测工具、预算登记、真实评测与审计、新发布、全套测试与交付链路复验、4C8G 部署参数。
+- 当前仅核心设计已冻结，旧发布包尚未改；任何 fundlex 改动后正式交付必须重新发布。原始资料/gold/未提交资产保持只读。
+- 进度证据：母 agent 新增 `fundlex/artifact_review.py`（实际 final 完整相关章节按段落分窗、单 action 最多 3 窗、逐要求+保留+覆盖证据校验、绑定 source/plan/redline/final）；独立测试 `tests/test_v2_artifact_review.py` 12 passed。非目标窗口仅查保留/覆盖，存在目标窗口查全部要求；仅引用政策不能作为完成证据。管道两轮回滚已通过伪 transport 实际 DOCX 测试，真实模型尚未执行。
+- C 正在收尾：候选标题误入/精确命中尾句误入、同章未覆盖业务 scope、摘要章节 alias、policy_core 显式契约、精确固定新文嵌入余文的已符合识别、边界反例；新增 0.3.0 storage/download 最终后验记录哈希/完整 action 覆盖门禁，历史 0.2.0 下载兼容。先前 engine/actions16 26 passed / 4 failed 已定位上述候选问题，未掩盖失败。
+- A 冻结接口：`resolve_scope` / `v3_scope_v1` 最多 4 调用/action（段落分窗共享一段）；`locate_target` / `v3_locate_v1` 最多 8 变体候选段/action。未知适用性先拒绝，不触发范围模型调用。`verify_artifact` / `v3_artifact_verify_v1` 最多 3 窗/action/轮、最多 2 轮。所有上下文不静默截断，硬预算 ModelError 传播停止。
+- 明确余项：variant 单段业务核心允许小于原整句/段范围，固定新文代码组装，余文原样保留并由实际章节复核检查矛盾；将补显式 `policy_core` 契约。模型无引文不能当已符合，非逐字等同但语义已符合的独立无改动复核仍待实现/评估，不虚报完整性。
+- 隔离评测包：root 已完整备份旧 published/draft/31 份 baseline report，并从新版 draft 准备 `rules/rules_v2.json`（unreleased，False / 22，SHA `f2793588`）；正式交付门禁暂关闭。B/C 冻结、真实审计与新发布完成前不能恢复 formal 写入。
+
+### 新真实运行预算预登记（2026-10-14，运行前）
+
+- 累计共享 cap 从 **2000 HTTP / USD 1.40** 提升为 **7500 HTTP / USD 6.00**。只增加授权上限，账本不重置、不修改消费；登记时精确基线 **1798 HTTP / USD 1.2809772**。输入价格 USD 0.3/M、输出 USD 1.2/M；模型并发 1、批大小 1。
+- 范围：诊断 1—2 份；最终既有夹具 5 + 回归 16 + 历史泛化 8；至少 2 份正式 delivery 复验。必要修复重跑使用新目录，全部旧证据保留，仍共享同一累计 cap。预计新增 1000—1800 HTTP、约 USD 1—2；此估计不是消费承诺或无限调用许可。
+- 真实传输冻结参数：每合同 192 logical calls、context 20000 chars、output 3000 tokens、timeout 60s、retries 1（每 logical 最多 2 HTTP）。runner 另登记单合同和整数据最坏调用 bound；理论单合同 384 HTTP 与共享剩余 5702 HTTP 是不同限制，不能按合同上限乘样本数绕过共享 cap。
+- 达到 logical / 共享 HTTP / 费用任何上限立即停止，不能追加未登记预算或跳过复核。root 仅在核心 B/C 自动检查冻结后发起真实模型调用；核心 agent 不真实调用。
+- 验收在结果前预注册于 `docs/MATCHING_UPGRADE_EVALUATION_PROTOCOL.md`：保留既有 gold16+6 目标与冻结标签；0 确认误改；新确证变体至少 1 项提升；全部文件硬检查及实际产物复核通过。独立 AI 参考标签不伪称专家金标，不能随预测重标，也不能倒推阈值。
+
 > 2026-10-12 从无提交的 `main` 和未跟踪资料开始。此文件记录执行状态；未验证的阶段保持未完成。用户已授权分阶段自主推进。`funds/` 的 PDF 不进入运行链路，`funds_word/` 的 514 份 DOCX 仅作评测与回归。
 
 ## 基线与资料口径
