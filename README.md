@@ -4,6 +4,8 @@
 
 FundLex 是 DOCX 基金合同处理的本地开发应用，包含 Fluent Office 工作台、持久批次队列、证据画像、通用规则、固定模板编辑器及报告交付。
 
+> **匹配升级（v3）进行中：** 当前仓库规则包是由新引擎重建的**未发布评测包**（正式写入保持关闭，运行自动进入评测模式）；发布需在最终引擎上重跑 5+16+8 证据并执行 `rules/release_v2 --evidence-run`，步骤与当前阻塞见 [实施计划](IMPLEMENTATION_PLAN.md) 与 [接续断点](docs/HANDOFF_MATCHING_V3_20261014.md)。下方"当前状态"描述的是上一版已发布引擎的行为。
+>
 > **当前状态（2026-10-14）：全部 22 个 action 已实现并已按内部部署政策发布，正式交付（自动写入）可用。** v2 按规则语义契约、当前合同证据、精确范围和内容验证执行；16 个新增动作用"规则原文代码组装 + 类别槽位按实际类别实例化"（不让模型猜政策），模板/删除模式由代码逐字核验。发布包 `rules/rules_v2.json` 绑定引擎构建与模型传输指纹（`evaluation_context`），并携带逐动作预注册门槛与实测指标（确定性审计：22 正例 + 23 反例全部通过、0 错误写入）；引擎或模型配置漂移时运行期自动拒绝（`V2_RELEASE_CONTEXT_UNVERIFIED`），重新发布用 `rules/release_v2.py`。正式交付按"已校验修改 + 显式例外清单"分级（`complete` / `complete_with_exceptions` / `incomplete`，见 [交付状态政策](docs/DELIVERY_STATUS_POLICY.md)）。真实运行证据（夹具 5/5、回归 16/16、泛化 8/8、正式交付复验 2/2）见 [发布证据](docs/RELEASE_EVIDENCE.md) 与 [v2 结果](docs/AI_EDITING_V2_RESULTS.md)。
 >
 > **生产化：** 用户登录（本地账号 + 会话持久化，`FUNDLEX_AUTH_MODE=password`）、MySQL 8 持久化（`FUNDLEX_DATABASE_URL`，本机 8.0 实库测试通过）、4C8G 单机部署（1 个 API 进程组 + 1 个 worker 进程）见 [部署指南](docs/DEPLOYMENT_GUIDE.md)。
