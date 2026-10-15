@@ -80,6 +80,14 @@ set -a; source /etc/fundlex.env; set +a
 
 ## 5. systemd（示例）
 
+> **当前服务器实况**（与下方示例不同，以实况为准）：
+> - 部署目录 `/opt/fundlex-recall-first`（示例写 `/opt/fundlex`）
+> - 环境文件 `/etc/fundlex-recall.env`（示例写 `/etc/fundlex.env`）
+> - 服务名 `fundlex-recall-api` / `fundlex-recall-worker`（示例写 `fundlex-api` / `fundlex-worker`）
+> - API 监听 `127.0.0.1:8010`（示例写 `:8000`）
+> - 运行用户 `fundlex`；发布走 `/home/opencode/fundlex/tools/deploy/publish_workspace.sh`（内部调 root 的 `/usr/local/sbin/fundlex-publish`）
+> 下方示例为通用模板，保留供新环境参考。
+
 ```ini
 # /etc/systemd/system/fundlex-api.service
 [Service]
