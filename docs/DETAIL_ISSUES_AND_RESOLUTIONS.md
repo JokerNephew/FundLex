@@ -1096,6 +1096,34 @@
 - 状态与验证：已确认。真实默认入口产出 17 条修订并完成逐条选择与下载（见 FL-D088 验证）。
 - 变更记录：2026-10-16 新增。
 
+## FL-D088 Langfuse 云端两区均丢 payload，改用本地 JSONL trace 兜底（用户选定）
+
+- 发现日期：2026-10-16（承接 FL-D085；用户指示「退化到本地 JSONL trace 兜底，并用来帮助评测优化」）。
+- 问题与影响：FL-D085 已证明**我方发送正确、云端两区（`jp.cloud.langfuse.com` 与 `cloud.langfuse.com`）都丢 payload**（含官方 `@observe()` 复现）。用户换标准区新 key 后现象不变，故不可依赖云端做根因定位。
+- 处理方法（已实施）：新增 `fundlex/trace_sink.py`——纯标准库的本地 JSONL 记录器，**一个合同一个 trace**（`trace_id = sha256(fundlex:{document_id})[:32]`，与云端 seed 同构、可复现），**一次模型调用一条 generation**（含 input/output/usage/cost/metadata），**一个评测结论一条 score**。开关 `FUNDLEX_TRACE_JSONL`（未设则完全 no-op）；`FUNDLEX_TRACE_CAPTURE_TEXT=0` 时只存哈希与长度。活动文档 id 以 **thread-local** 携带，使引擎深处的模型调用自动归到正确 trace（worker 每线程一个文档）。接线点与云端并列：`model.py:_trace_attempt`、`jobs.py:_document_trace`；`tools/evaluation/p6_langfuse_sync.py` 同时写两路。
+- 配套工具：`tools/evaluation/p6_trace_report.py`——把 JSONL 与评分结果按 trace_id 关联，产出「按规则/按阶段」的失败画像。单测 `tests/test_trace_sink.py`（6 项）。
+- 部署：生产 worker 以 `fundlex` 用户运行，`/var/lib/fundlex/traces/`（0750 fundlex）为可写落点；`/etc/fundlex-recall.env` 追加 `FUNDLEX_TRACE_JSONL` / `FUNDLEX_TRACE_CAPTURE_TEXT`（备份 `…env.bak-tracesink`），并经 `publish_workspace.sh` 发布重启。
+- 状态与验证：**已实施、已发布、已用真实批次验证**。2026-10-16 开发集 20 例（594 调用 / $0.5158）真实链路写入 **1085 行** JSONL，单条 generation 达 25KB（真实合同原文），19/20 案例 trace 匹配、0 个缺失、0 次模型错误。
+- 变更记录：2026-10-16 新增（FL-D085 的处置结果）。
+
+## FL-D089 评分器把「已正确追加的政策句」误判为 not_executed（份额类别枚举差异）
+
+- 发现日期：2026-10-16（用 FL-D088 的 JSONL trace 对照真实终稿时发现）。
+- 问题与影响：`p6_score.appendix_present()` 对 G01/G03/G16 的 append 判定，用 `required_text` 的**首分句字面匹配**（`认购/申购→申购` 等归一化后）。但标签模板按「A类/C类」写，真实合同常为「A类、D类」「A类、B类」，**引擎正确地用合同自身的份额类别追加**（如「申购本基金A类、D类基金份额时，不收取申购/认购费用」），字面比对即失配。模糊兜底按 4 字符步长滑动、阈值 0.85，也跨过了唯一匹配窗口。→ 把**引擎的正确工作**记成漏改，压低指标。**三重证据**：① D01 `report.json` 的 ledger 显示 G01/G03/G16 状态为 `planned/insert` 且带位置 p92/p135/p758；② D01 终稿 p92/p758 **确实含**该政策句（A类、D类变体）；③ D01 评分却是 `not_executed`。
+- 处理方法（已实施）：新增 `_normalise_policy()`，在归一化时把**份额类别枚举整体折叠**（`A类、D类基金份额` / `A类、B类和C类基金份额` → 同一 token）；模糊兜底改为**逐字符**步进，避免跳过匹配窗口。新增回归测试 `tests/test_p6_score_append.py`（6 项，含「枚举差异应通过」与「确实缺失不得通过」两类）。
+- 状态与验证：**已实施并验证**。同一开发集重评：**0.7892 → 0.8161**（223 目标，completed 176→182，`not_executed` 17→11），**无任何引擎改动**。反例核对：D09（确无政策句）仍为 `False`，未被误放；D19（原件已有 A/B/C 三类别）由误判纠正为 `True`，经查 p101/p130 确有该句，属真阳性。
+- 变更记录：2026-10-16 新增。
+
+## FL-D090 G01/G03/G16 append 目标在「直销渠道」措辞合同上被模型盘点判 not_applicable（FL-D060 的残留子集）
+
+- 发现日期：2026-10-16（FL-D089 修复后，剩余 `not_executed` 全部落在此家族时定位）。
+- 问题与影响：修掉评分器误判后，开发集剩余 `not_executed` 11 例**全部是 append 规则**（G01×4、G03×4、G16×3，分布 D07/D09/D12/D13）。逐案例核对：
+  - **D07：真漏改**。原件 `…FOF基金合同_20221116.docx` 含「直销」2 次、但措辞为**「直销渠道」**（p231/p854），非模板的「直销机构」；含「基金份额类别」9 次、「销售服务费」4 次，**追加对象存在**。引擎 ledger 却记 `G01/G03/G16 = not_applicable`（`RECALL_RULE_NOT_APPLICABLE` / 「无销售服务费条款」），终稿确无该政策句。→ **模型盘点在措辞变体下漏判可适用性**，正对应 FL-D060 所述「完全依赖模型盘点、窗口覆盖不足即漏」。
+  - **D09/D13：属「原件已含相近义务」**（p212/p214、p224/p226 已有「通过直销机构申购本基金不收取申购费」），引擎判 `not_applicable`，与标注器 FL-D060 记录的「append 过标」同源，非引擎漏改，**不改冻结标签**。
+- 处理方法：**待实施**。方向（承 FL-D060）：① 盘点对 `appendix` 类规则增加**确定性适用性兜底**——当 `section_hint` 命中且原文无该义务政策句（含「直销渠道/直销机构」等措辞归一化）时，直接生成 append 目标，不再完全依赖模型判 `not_applicable`；② 归一化直销渠道措辞，避免变体导致漏判。需评估误加风险与跨样本出现率。
+- 状态与验证：**已定位、未修复**。证据：D07 原件词频与 ledger 对照、终稿无政策句；D09/D13 原件已有相近句。
+- 变更记录：2026-10-16 新增。
+
 ## 后续条目模板
 
 ### FL-Dxxx 问题名称
