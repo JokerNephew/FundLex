@@ -45,8 +45,10 @@
 - **T3 前端 8 项 UX（问题 1–8）已实施**（`frontend/index.html|app.js|app.css`）：多任务并行、证据侧栏改「章节+改之前/改成了什么」、精简小字、结果页 ZIP 按钮置首、删顶部横幅+铃铛只收重要消息、总进度指标单行、导入 KPI 并入筛选栏。→ **FL-D071**。验证：`node --check` 通过、120 个 id 引用完整、`#2` 用真实报告核对 22 行可读无技术字段。**未做浏览器端点击验收。**
 - **P6 第 1 轮评分（FL-D070）**：`p6-dev-round1-01` 20/20 完成，677 调用，$0.5738。**开发集 236 目标：基线 178（0.7542）→ 187（0.7924，+3.8pt）**；G15 +9、G05 +2、G17 −2；`applicability_conflicts` 29→13；**假完成仍 12**。评分产物 `/tmp/opencode/p6-round1-score.json`。**仍未达阈值（0.95/0.9）**。
 - 测试：`.venv/bin/python -m pytest tests -q` → **561 passed / 1 expected（references/）/ 6 skipped**。
-- **未发布、未 commit**：改动仅在 `/home/opencode/fundlex` 工作区；部署副本 `/opt/fundlex-recall-first` 仍为上一版。
-- 下一动作：① 用真实工作台浏览器端逐条验收前端问题 1/2/4/6/7/8；② 经用户确认后 `bash tools/deploy/publish_workspace.sh` 发布；③ 继续修 P6 开发集 `not_executed`（17，G01/G03/G16）+ `kept`（32，G17/G15/G14/G11/G08/G18），达标后再跑留出。
+- **已提交（本地，10 个逻辑提交 `cc558ab..3a3f524`），push 被凭据阻塞**：工作树干净；`origin` 为私有仓库 `github.com/JokerNephew/FundLex`，本机无 HTTPS 凭据/SSH 私钥/`gh`，`git ls-remote` 报 `could not read Username`，SSH 报 `Permission denied (publickey)`。已配置仓库级代理 `http.proxy=http://127.0.0.1:9981`（GitHub 直连可达但走代理更稳）。→ **FL-D072**
+- **未发布**：部署副本 `/opt/fundlex-recall-first` 仍为上一版。
+- **预览服务（临时）**：`FUNDLEX_DATA_DIR=/tmp/opencode/fundlex-preview FUNDLEX_AUTH_MODE=dev .venv/bin/uvicorn fundlex.api:app --host 127.0.0.1 --port 8020`，供浏览器（经 SSH `-L 8020:127.0.0.1:8020` 转发）查看新代码；验证完应停掉。
+- 下一动作：① 用户提供 GitHub 凭据后 `git push -u origin codex/fundlex-recall-first`（或新分支/PR）；② 浏览器端验收前端问题 1/2/4/6/7/8；③ 经确认后 `bash tools/deploy/publish_workspace.sh` 发布；④ 继续修 P6 开发集 `not_executed`（17，G01/G03/G16）+ `kept`（32，G17/G15/G14/G11/G08/G18）。
 
 ## 第 5 轮进度（服务器，2026-10-15）
 
