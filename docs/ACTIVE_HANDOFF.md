@@ -26,6 +26,31 @@
 > `FL-D069→FL-D075`（G17 跨段删除）、`FL-D066→FL-D076`（Codex bwrap）。
 > **注意**：本文下文第 5/6 轮的历史叙述写于更正之前，个别处仍写旧编号，含义以更正后为准；新增条目一律先查重再编号。
 
+## 当前断点（第 10 轮，2026-10-16，前端逐条审查修订 + HTML 呈现，**已完整端到端交付**）
+
+- **本轮任务**：用户选定 **A 服务端 HTML 方案**，要求：用户在结果页看到合同的 Word 呈现、**逐条勾选接受/拒绝修订**（与 Word 一致，任意组合自由）、据此生成**独立最终版产物**、支持一键接受全部；并指出 A 页**目录丢失**，要求排查是否还有其他丢失；指定全链路改造 + 进度管控 + 版本管理 + **完整端到端交付**，中途不得停下。
+- **目录丢失根因（FL-D087，已查明并修复）**：demo 转换器只遍历 `body` 顶层 `w:p`/`w:tbl`，**整份目录位于唯一 `w:sdt`（20806 字符）内被静默丢弃**。完整丢失清单：目录 sdt（24 超链接 + 23 PAGEREF + 24 bookmark + 24 个 TOC1 段）、75 个 fldChar / 29 个 instrText 域、超链接不输出 `<a href>`、`w:tab` 硬编码、`sectPr` 分页信息。原文档 1363 个 `w:p` vs A 页 1252 个 `doc-p`。
+- **方案规格与进度台账**：`docs/HTML_PRESENTATION_PLAN.md`（P0–P6 全部 ✅）。
+- **实施（5 个 commit，全部已 push 到本地分支，未 push 远程）**：
+  - `da86401` P1 投影层 `fundlex/html_view.py`（新增，只读）：通用块级遍历（含 `w:sdt`/表格）、`w:hyperlink`→真实 `<a href>`（经 rels 解析，协议白名单）、域代码隐藏仅留缓存结果、`w:bookmarkStart`→锚点、`w:tab`/`w:br type=page`/`sectPr` 投影；修订锚点直接取 OOXML `w:id`（**零文本匹配**）。
+  - `40c53da` P2 选择性写入 `fundlex/selective.py`（新增）：`accept` 提升 `w:ins` 并删除 `w:del`；`reject` 删除 `w:ins` 并把 `w:delText` 还原为 `w:t`；未托管修订 id 只报告不改写；产物独立重开校验无残留。
+  - `b9ff52a` P3 新 kind `selected_final` + 端点 `GET /revisions`、`POST /decisions`、`POST /accept-all`；`store.save_selected_artifact`（用户产物存 `selected/`，与 worker 产物隔离；`finish()` 白名单**故意不含** `selected_final`）。
+  - `e9e51ac` P4 前端审查面板（单滚动容器 + 点清单 `scrollIntoView` 定位，**不做双栏同步滚动**——已实测两侧高度差 22% 无解）。
+  - `b938a21` P6 文档与问题登记。
+- **验证证据（全部真实、可复现）**：
+  - 单元/集成：新增 19 项测试（`tests/test_selective.py`、`tests/test_revision_api.py`）；全套 **596 passed**（唯一失败 `test_rules_catalogue.py::test_source_provenance_and_reproducible_compilation` 经 `git stash` 对照确认为**既有基线失败**，与本次无关）。
+  - P2 关键正确性：全部接受输出与引擎自身 `working_final` **逐段一致**（1363/1363，0 差异）；全部拒绝恢复每一条 `expected_old_text`；单条拒绝只影响其所在段落（p1191）；纯删除型拒绝恢复被删文本。
+  - **真实云端端到端（默认工作台入口，非遗留 `/api/batches`，未改任何发布标志）**：`POST /api/auth/login` → `POST /api/tasks`（`engine_id=recall_first`）→ `/uploads` → `/seal` → 真实 Worker + 真实模型 → `/revisions` → `/decisions` → 下载 `selected_final`。输入为干净原件 D01（sha256 `2f2f7a36…`，0 条既有修订）。结果：17 条修订全部映射、`has_toc True`、14 页；拒绝第 1 条 + 接受其余 → 下载文件 **0 条残留修订**、被拒条目还原原文、被接受条目保留替换文本、**目录 sdt 完整保留**、1338 个顶层段落结构未变；一键接受全部成功；引擎原有产物仍可下载未被替换。**incomplete 交付情形同样通过**（16 条修订 / `working_*` 产物）。
+  - **真实浏览器（生产端点 127.0.0.1:8010，真实密码登录）**：17/16 条修订、目录 24 条 + 24 链接、勾选联动、点清单精确定位、生成与下载成功、**0 控制台错误**。脚本 `/tmp/opencode/browser_prod.py`。
+- **验证中修复的真实缺陷（FL-D088）**：① 存储产物保留原始上传名无 `.docx` 后缀，`_read_parts` 以上传防护拒读 → `/revisions`、`/decisions` 对真实任务一律 422（真实路径才会暴露）；已改为经临时 `.docx` 副本读取，包限制不减。② 前端 `pathDoc` 用 `doc.id`，实际字段是 `document_id` → 请求 `/documents/undefined/revisions` 404；已修正。
+- **易错点（接续必读）**：
+  - 端到端验证**必须**用默认入口 `POST /api/tasks` + `engine_id=recall_first`（FL-D089）。遗留 `/api/batches` 建的批次 `engine_id` 为空 → 走遗留 ruleset-only 路径 → 报告 `guide groups 0 / targets 0`，**会误判成"引擎找不到条款"**。
+  - 任务 `id` 与上传回执的 `batch_id` **不是同一个值**；文档/报告/产物端点用 `batch_id`。
+  - ruleset v1 处于 `unreleased`（`auto_write_enabled: false`）只关门 ruleset 路径；recall-first 引擎走绑定指引快照，**不受该门限制**，实测正常交付（FL-D090）。不得为"制造交付"手改发布标志。
+  - 引擎在真实模型下**非确定**：同一份合同不同批次可能得 17 条（complete）或 16/17 条（incomplete，如 `RECALL_EDIT_OVERLAP`）。incomplete 时产物是 `working_final`/`working_redline`，`final`/`redline` 会 404，属**正确行为**。
+- **部署状态**：`bash tools/deploy/publish_workspace.sh` 已执行；`/opt/fundlex-recall-first` 与仓库**逐文件 sha256 一致**（html_view/selective/api/store/app.js/app.css 全部 SAME）；`fundlex-recall-api`/`fundlex-recall-worker` 均 active，`/api/capabilities` 200。
+- **下一动作**：功能已按用户要求完整端到端交付，无待办阻塞。可选后续：① 若要求修订审查的**确定性交付**，需先解决引擎 `RECALL_EDIT_OVERLAP`（属引擎既有议题，非本功能）；② 合并到主分支/推送远程需用户明确要求（本轮**未 push**）。
+
 ## 当前断点（第 9 轮，2026-10-15，前端合并「处理进度/合同结果」）
 
 - **本轮任务**：用户提出前端「处理进度」与「合同结果」两页几乎一样，要求合并。用户**明确选定**方案：**一张表 + 全部列常显**（明确否决"视图切换"方案）。
