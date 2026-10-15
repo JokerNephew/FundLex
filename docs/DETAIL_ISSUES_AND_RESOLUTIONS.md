@@ -1063,6 +1063,39 @@
 - 下一步：按计划实施服务端投影 + 逐条接受/拒绝 API + 新产物 kind + 前端交互，并做真实端到端验证。
 - 变更记录：2026-10-16 新增条目并完成根因定位与丢失清单核对。
 
+## FL-D088 修订审查端到端验证中发现的两个集成缺陷（已修复）
+
+- 发现日期：2026-10-16（HTML 呈现方案 P6 真实云端端到端验证过程中）。
+- 问题与影响：
+  1. **产物无 `.docx` 后缀导致读取被拒**。存储产物保留原始上传文件名（无扩展名），而 `_read_parts` 以 `.docx` 后缀作为上传防护直接抛 `DOCX_ONLY`。表现为 `/revisions` 与 `/decisions` 端点对真实任务一律返回 422，新功能在真实路径上完全不可用。本地用 `.docx` 命名的测试副本时不会暴露，只有在真实存储路径上才出现。
+  2. **前端 `pathDoc` 取错字段**。文档行接口暴露的是 `document_id`（`_public_batch` 的 `documents[]`），前端却拼接 `doc.id`，生成 `/api/batches/{b}/documents/undefined/revisions`，浏览器实测 404、面板显示"无法生成合同呈现"。
+- 证据：
+  - 缺陷 1：`tests/test_revision_api.py` 首轮实测 `422 {"detail":"DOCX_ONLY"}`；真实云端 `POST /decisions` 同样 422。
+  - 缺陷 2：真实 Chromium 抓到的请求 URL 为 `.../documents/undefined/revisions`，响应 404，控制台报 `Failed to load resource: 404`。
+- 处理方法：
+  1. `html_view.project_docx` 与 `selective._read_redline_parts` 在路径后缀不是 `.docx` 时，先写入临时 `.docx` 副本再读，读取后删除；`_read_parts` 的全部包限制（大小、条目数、压缩比、加密、重复成员）仍然生效，未降低上传防护强度。
+  2. 前端 `pathDoc` 改用 `doc.document_id`。
+- 状态与验证：**已修复并已在真实云端验证**。真实生产任务（`recall_first`、delivery complete、17 条修订）经 `/revisions` → `/decisions`（拒绝第 1 条）→ 下载 `selected_final`：0 条残留修订、被拒条目还原原文、被接受条目保留替换文本；真实浏览器走完同一路径，0 控制台错误。回归：全套 596 通过。
+- 变更记录：2026-10-16 新增并修复，附真实云端验证。
+
+## FL-D089 端到端验证必须使用默认工作台入口（`POST /api/tasks`），不能用遗留 `/api/batches` 或直接建批次
+
+- 发现日期：2026-10-16（P6 验证中三次误判后定位）。
+- 问题与影响：验证脚本若用遗留 `/api/batches` 或直接调 `store.create_batch` 建批次，批次 `engine_id` 为空，会被路由到**遗留 `pipeline.process`（仅 ruleset）**路径，而不是 recall-first 引擎。表现为报告 `guide groups: 0`、`targets: 0`、`plan edits: 0`、`delivery_status: not_generated`，看上去像"引擎找不到条款"，实际是入口错了。我一度据此误判为"规则未发布导致无修订"，险些把错误结论写进交付说明。
+- 证据：同一份干净合同 D01（sha256 `2f2f7a36…`）两种入口对比——遗留 `/api/batches`：`engine_id=''`、guide groups 0、targets 0；默认 `POST /api/tasks` + `engine_id='recall_first'` + `/uploads` + `/seal`：guide groups 22、targets 30、plan edits 17、delivery complete，产出 `final`/`redline`。
+- 处理方法：端到端验证一律使用前端实际调用的默认入口 `POST /api/tasks`（`engine_id=recall_first`）→ `POST /api/tasks/{id}/uploads`（带 `client_ids` 表单字段）→ `POST /api/tasks/{id}/seal`；注意任务 `id` 与上传回执返回的 `batch_id` **不是同一个值**，文档/报告/产物端点要用 `batch_id`。
+- 状态与验证：已确认并写入 `docs/HTML_PRESENTATION_PLAN.md` 的验证说明，后续验证按此执行。
+- 变更记录：2026-10-16 新增。
+
+## FL-D090 规则未发布状态下默认入口产出 0 条修订是当前正确行为（非缺陷）
+
+- 发现日期：2026-10-16（P6 验证中确认）。
+- 问题与影响：`rules/rules_v1.json` 的 `release_policy.status = "unreleased"`，22 个 action 全部 `auto_write: false`、`approved: false`；`/api/capabilities` 返回 `auto_write_enabled: false`、`auto_write_count: 0`。因此**基于 ruleset 的发布门是关闭的**。但默认入口走 recall-first 引擎 + 绑定指引快照（`guides/builtin_guide_v1.json`，22 组规则），该路径**不读取 ruleset 的发布门**，实测能正常产出 17 条修订与 `final`/`redline`。需要区分这两条路径，避免把"ruleset 未发布"误当成"默认入口无法交付"。
+- 证据：默认入口实测 `delivery_status: complete`、17 条修订（见 FL-D089 对比）；`/api/capabilities` 的 `auto_write_enabled: false` 只反映 ruleset 路径。
+- 处理方法：不修改任何发布标志。修订审查新功能对两条路径都兼容：`_report_has_revisions` 判定报告是否含可选择的修订，无修订时 `/revisions` 明确返回 `409 REVISION_REVIEW_UNAVAILABLE`，前端显示不可用提示，不伪造交付。
+- 状态与验证：已确认。真实默认入口产出 17 条修订并完成逐条选择与下载（见 FL-D088 验证）。
+- 变更记录：2026-10-16 新增。
+
 ## 后续条目模板
 
 ### FL-Dxxx 问题名称

@@ -93,7 +93,7 @@ generate_selected_artifacts(source, plan, target_path, decisions, *, author, lim
 | P3 | 新 kind + API 端点 | ✅ 已完成，已验证 |
 | P4 | 前端交互面板 | ✅ 已完成，真实浏览器已验证 |
 | P5 | 单元/集成验证 | ✅ 已完成（19 项新测试；全套 596 通过） |
-| P6 | 真实云端端到端交付验证 | ⬜ 进行中 |
+| P6 | 真实云端端到端交付验证 | ✅ 已完成（默认入口，真实模型，产出并下载校验通过） |
 
 ### 已完成阶段的验证证据
 
@@ -107,6 +107,25 @@ generate_selected_artifacts(source, plan, target_path, decisions, *, author, lim
 1. **产物无 `.docx` 后缀**：存储产物保留原始上传名，而 `_read_parts` 以 `.docx` 后缀作为上传防护拒绝读取；`html_view` 与 `selective` 改为经临时 `.docx` 副本读取，包限制仍全部生效。
 2. **前端 `pathDoc` 用错字段**：文档行暴露 `document_id` 而非 `id`，导致请求 `/documents/undefined/revisions` 返回 404。
 3. **删除文本未被采集**：`w:delText` 不在 `w:t` 中，导致修订清单 `before` 全为空。
+
+### P6 真实云端端到端验证（已完成）
+
+验证入口为**前端实际使用的默认工作台入口**，未使用遗留 `/api/batches`、未直接建批次、未改任何发布标志：
+
+`POST /api/auth/login`（密码登录）→ `POST /api/tasks`（`engine_id=recall_first`）→ `POST /api/tasks/{id}/uploads` → `POST /api/tasks/{id}/seal` → 真实 Worker + 真实模型调用 → `/revisions` → `/decisions` → 下载 `selected_final` → 复核文件。
+
+输入为项目评测集中的干净原件 D01（`广发上海清算所0-4年央企80债券指数证券投资基金基金合同_20250319.docx`，sha256 `2f2f7a36…`，0 条既有修订）。
+
+实测结果：
+
+- 处理成功：`delivery_status: complete`，产出 `final` + `redline`，指引 22 组规则、30 个目标、17 条计划修订。
+- `/revisions`：`revision_count 17`、`has_toc True`、17 条全部映射到规则 id、14 页。
+- 逐条决策：拒绝第 1 条 + 接受其余 16 条 → 下载 `selected_final`（136301 字节，合法 DOCX）。
+- 产物复核：**0 条残留修订**；被拒绝的第 1 条在 p1191 **还原为原文**；被接受的条目**保留替换文本**；目录 `w:sdt` **完整保留**；文档结构未变（1338 个顶层段落）。
+- 一键接受全部：17 条全部接受成功；引擎原有 `final`/`redline` 仍可下载、未被替换。
+- 真实浏览器（生产端点）走完同一路径：17 条修订 / 17 个勾选、目录 24 条 + 24 个链接、勾选联动、点清单精确定位、生成与下载成功、**0 控制台错误**。
+
+验证中修复的两处真实集成缺陷（已登记 FL-D088）：产物无 `.docx` 后缀导致读取被拒；前端 `pathDoc` 取错字段导致 404。
 
 ## 5. 版本与回退
 
