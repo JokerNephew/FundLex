@@ -110,3 +110,38 @@
 .evidence.quote.quote-before{border-left-color:#a6b7c6;background:#f7f9fa}
 .evidence.quote.quote-after{border-left-color:var(--green);background:var(--green-soft)}
 .evidence.quote.quote-after .quote-label{color:var(--green)}
+
+/* 逐条审查修订：单滚动容器 + 点清单精确定位（不做双栏同步滚动） */
+.review-layout{display:grid;grid-template-columns:minmax(0,1fr) 330px;gap:14px;align-items:start}
+.review-doc-wrap{min-width:0;border:1px solid var(--line);border-radius:8px;background:#fff}
+.review-toolbar{display:flex;align-items:center;gap:9px;padding:9px 12px;border-bottom:1px solid var(--line);position:sticky;top:0;background:#fff;z-index:2;border-radius:8px 8px 0 0;flex-wrap:wrap}
+.review-toolbar .spacer{flex:1}
+.review-doc{max-height:62vh;overflow:auto;padding:16px 20px;font-size:13px;line-height:1.9;overscroll-behavior:contain}
+.review-doc .doc-p{margin:0 0 9px;text-align:justify;overflow-wrap:anywhere}
+.review-doc .doc-heading{font-weight:700}
+.review-doc .doc-toc{color:#4a5560}
+.review-doc .doc-tbl{border-collapse:collapse;width:100%;margin:9px 0}
+.review-doc .doc-tbl td{border:1px solid var(--line);padding:5px 7px;font-size:12px}
+.review-doc a{color:var(--accent-dark);text-decoration:underline}
+.review-doc .page-break-line{border:0;border-top:1px dashed #d3dae0;margin:16px 0}
+.review-doc .page-break{display:block;height:0}
+.review-doc ins.rev{background:rgba(15,122,61,.14);color:#0f7a3d;text-decoration:none;border-radius:3px;padding:0 2px;cursor:pointer;border-bottom:1px solid rgba(15,122,61,.45)}
+.review-doc del.rev{background:rgba(180,35,24,.10);color:#b42318;text-decoration:line-through;border-radius:3px;padding:0 2px;cursor:pointer}
+.review-doc ins.rev.rejected{background:#f1f3f5;color:#9aa4ae;text-decoration:line-through}
+.review-doc del.rev.rejected{background:transparent;color:var(--ink);text-decoration:none}
+.review-doc ins.rev.active,.review-doc del.rev.active{outline:2px solid var(--accent);outline-offset:1px}
+.review-list{min-width:0}
+.review-list h3{font-size:13px;margin:0 0 10px;color:#525e69}
+.rev-list{list-style:none;margin:0;padding:0;max-height:62vh;overflow:auto;overscroll-behavior:contain}
+.rev-item{border:1px solid var(--line);border-radius:9px;padding:9px 11px;margin-bottom:9px;font-size:12px;cursor:pointer}
+.rev-item.rejected{opacity:.55}
+.rev-item:hover{border-color:#b9c3cc}
+.rev-head{display:flex;align-items:center;gap:7px;margin-bottom:5px;flex-wrap:wrap}
+.rev-head .rid{font-size:11px;color:var(--muted);font-variant-numeric:tabular-nums}
+.rev-head .rule{font-size:11px;background:#eef2f6;border-radius:5px;padding:1px 6px;color:#475569}
+.rev-head .rev-op{font-size:11px;color:var(--accent-dark)}
+.rev-head label{margin-left:auto;display:flex;align-items:center;gap:5px;cursor:pointer;font-size:12px}
+.rev-sec{font-weight:650;margin:0 0 5px}
+.review-actions{display:flex;align-items:center;gap:9px;margin-top:14px;flex-wrap:wrap}
+#detail-panel:has(.review-layout){width:min(1180px,100%)}
+@media(max-width:1000px){.review-layout{grid-template-columns:minmax(0,1fr)}.review-doc,.rev-list{max-height:none}}
