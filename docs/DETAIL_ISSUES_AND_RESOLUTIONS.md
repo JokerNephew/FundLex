@@ -711,6 +711,7 @@
 - 下一步：后续增量提交直接 `git push`（upstream 已设）；**不把凭据写入仓库/文档/prompt/日志**；不 push 资料/样本/密钥。
 - 变更记录：2026-10-15 新增；同日编号由误用的 FL-D072 更正为 **FL-D078**（FL-D072 已用于「sweep 误报 G02/G04」，编号冲突，见 FL-D077）；同日完成 push（原「push 未做」结论作废）。
 - 凭据持久化（2026-10-15 晚，用户要求「你帮我保存凭据」）：token 存于**仓库外** `/home/opencode/.github_token`（`600`），推送统一走 `bash tools/deploy/push_with_token.sh`（默认读该文件；token 不打印、不入命令行/仓库/日志，经 `GIT_ASKPASS` 传入）。已用该脚本成功推送 `51ae7e6..0e2ae9b`。**记录只写文件路径与用法，不写 token 值**；撤销方式为删除该文件并轮换 GitHub token。
+- 续推记录（2026-10-15 晚，本轮）：`99509fb`（push 助手脚本）、`e37aa21`（FL-D079 交付包 + 变体 span 句边界吸附）、`dcc715e`（FL-D080 复合偏移）经 `bash tools/deploy/push_with_token.sh ~/.github_token` 成功推送 → 远端 `807ba68..dcc715e`；本地 `codex/fundlex-recall-first` 与 `origin/…` 一致。仓库内 217 个跟踪文件扫描无密钥/样本/原件（`var/`、`references/`、`funds_word/` 均被 `.gitignore` 覆盖）。
 
 ## FL-D071 结果页可用性与多任务并行：前端 8 项 UX 问题（用户第 7 轮反馈）
 
