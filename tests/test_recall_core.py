@@ -1029,3 +1029,25 @@ def test_append_at_unpunctuated_paragraph_end_generates_valid_docx(tmp_path, end
     assert artifacts.final_sha256
     final = inspect_docx(final_path, full=True)
     assert final.by_location("p0").text == original + separator + added
+
+
+def test_fuzzy_span_clause_snaps_to_sentence_boundary():
+    """A fuzzy variant whose span stops mid-sentence must not leave a stub (FL-D079).
+
+    ``find_fuzzy`` matched "…比例进行分" (end=77) of the contract's
+    "…比例进行分配。" and the kept suffix "配。" was appended after the replacement,
+    yielding "…（如有）。配。". The clause-snapped matcher extends to the real
+    sentence stop instead.
+    """
+    from fundlex.recall import fuzzy_span, fuzzy_span_clause
+    actual = ("依据基金财产清算的分配方案，将基金财产清算后的全部剩余资产扣除基金财产清算费用、"
+              "交纳所欠税款并清偿基金债务后，按基金份额持有人持有的各类基金份额比例进行分配。")
+    reference = ("依据基金财产清算的分配方案，将基金财产清算后的全部剩余资产扣除基金财产清算费用、"
+                 "交纳所欠税款并清偿基金债务后，按基金份额持有人持有的基金份额比例进行分配。")
+    raw = fuzzy_span(actual, reference, threshold=0.95)
+    snapped = fuzzy_span_clause(actual, reference, threshold=0.95)
+    assert raw is not None and snapped is not None
+    # The raw matcher leaves a "配。" stub; the snapped matcher consumes the whole clause.
+    assert actual[raw[1]:] == "配。"
+    assert actual[snapped[1]:] == ""
+    assert actual[snapped[0]:snapped[1]].endswith("。")

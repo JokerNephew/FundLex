@@ -188,6 +188,42 @@ def fuzzy_span(span_text: str, needle: str, *,
     return index_map[start_clean], index_map[end_clean - 1] + 1, ratio
 
 
+def fuzzy_span_clause(span_text: str, needle: str, *,
+                      threshold: float = FUZZY_MATCH_THRESHOLD) -> tuple[int, int, float] | None:
+    """``fuzzy_span`` snapped to a sentence boundary.
+
+    ``find_fuzzy`` matches the best character window, so a reference ending in "。" can
+    stop a couple of characters short of the paragraph's own full stop ("…比例进行分"
+    leaving "配。"). Replacing that window keeps the leftover stub and produces
+    "…（如有）。配。" (FL-D079). When the needle itself ends at sentence punctuation, the
+    returned span is extended to (or trimmed back to) the paragraph's matching stop so the
+    kept suffix starts a fresh sentence.
+    """
+    span = fuzzy_span(span_text, needle, threshold=threshold)
+    if span is None:
+        return None
+    start_raw, end_raw, ratio = span
+    cleaned_needle = _compact(needle)
+    if not cleaned_needle or cleaned_needle[-1] not in "。！？；":
+        return start_raw, end_raw, ratio
+    # Extend forward to the next sentence terminator so the whole clause is covered.
+    stop = "。！？；"
+    extended = end_raw
+    limit = min(len(span_text), end_raw + 12)
+    while extended < limit and span_text[extended] not in stop:
+        extended += 1
+    if extended < limit and span_text[extended] in stop:
+        return start_raw, extended + 1, ratio
+    # No terminator within reach: trim back to the last complete sentence boundary so a
+    # half-clause tail ("配。") is not left behind.
+    trimmed = end_raw
+    while trimmed > start_raw and span_text[trimmed - 1] not in stop:
+        trimmed -= 1
+    if trimmed > start_raw:
+        return start_raw, trimmed, ratio
+    return start_raw, end_raw, ratio
+
+
 def resolve_quote(span: ParagraphSpan, quote: str) -> tuple[int, int] | None:
     """Resolve a model quote to raw offsets inside one paragraph span.
 
@@ -1962,7 +1998,7 @@ def plan_target(rule: dict, target: Target, inspection: DocumentInspection, fact
         old_text = str(operation.get("old_text") or "")
         if _same_compact(old_text, actual) or len(_compact(old_text)) < VARIANT_MIN_CHARS:
             continue
-        variant = fuzzy_span(actual, old_text, threshold=VARIANT_MATCH_RATIO)
+        variant = fuzzy_span_clause(actual, old_text, threshold=VARIANT_MATCH_RATIO)
         if variant is None:
             continue
         start_raw, end_raw, ratio = variant
@@ -1981,7 +2017,7 @@ def plan_target(rule: dict, target: Target, inspection: DocumentInspection, fact
             raise RecallError("RECALL_SLOT_UNRESOLVED", {"rule": rule["rule_id"], "issues": issues})
         if len(_compact(old_text)) < VARIANT_MIN_CHARS:
             continue
-        variant = fuzzy_span(actual, old_text, threshold=VARIANT_MATCH_RATIO)
+        variant = fuzzy_span_clause(actual, old_text, threshold=VARIANT_MATCH_RATIO)
         if variant is None:
             continue
         start_raw, end_raw, ratio = variant
@@ -2437,7 +2473,7 @@ def _component_ok(component: dict[str, Any], inspection: DocumentInspection) -> 
         actual = expected or ""
         if len(_compact(matched)) < VARIANT_MIN_CHARS:
             return False
-        variant = fuzzy_span(actual, matched, threshold=VARIANT_MATCH_RATIO) if matched and actual else None
+        variant = fuzzy_span_clause(actual, matched, threshold=VARIANT_MATCH_RATIO) if matched and actual else None
         if variant is None:
             return False
         recorded = evidence.get("variant_ratio")

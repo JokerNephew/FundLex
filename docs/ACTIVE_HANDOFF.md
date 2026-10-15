@@ -28,13 +28,12 @@
 
 ## 当前断点（第 8 轮，2026-10-15，接续请从此处读）
 
-- **本轮已完成的非批次工作（第 8 轮）**：① 修正集中问题记录的 5 组**编号冲突**（FL-D077），并同步修正 `tools/evaluation/p6_score.py` 与断点/计划文档的引用（后出现的重复项改为 FL-D072/073/074/075/076，保留首次出现编号之一义）；② 全量测试 **562 passed / 1 expected / 6 skipped**（与更正前一致，说明只动注释与文档）。**未 commit、未 push、未发布。**
-- **正在运行**：P6 开发集优化第 1 轮的**第 3 次重跑** `p6-dev-round1-01`（后台，日志 `/tmp/opencode/p6-dev-round1-01.log`，`var/recall-first-evaluation/p6-dev-round1-01/`，`--timeout 1800`，构建 `fundlex/recall.py` `07b39288b87dfa14…`）。已完成 D01 `incomplete`（4 未解决）、D02 `incomplete`（10 未解决，ETF 排除集）、D03 `incomplete`（4 未解决）。**一次跑 20 例约 2 小时**；**不要 kill 在途任务**（见 FL-D066）。
-- **跑完后**：`bash -lc '.venv/bin/python -X utf8 -m tools.evaluation.p6_score --run-id p6-dev-round1-01'`（产物默认写 `/tmp/opencode/`，与基线/第 2 次对比：基线 0.754、第 2 次 0.792）。
+- **本轮已完成的非批次工作（第 8 轮）**：① 修正集中问题记录的 5 组**编号冲突**（FL-D077），并同步修正 `tools/evaluation/p6_score.py` 与断点/计划文档的引用（后出现的重复项改为 FL-D072/073/074/075/076，保留首次出现编号之一义）；② **新增交付包工具 `tools/evaluation/p6_package.py`**（把 P6 运行目录打成业务读者可读的「结果总览.md + 最终版（接受修订后）/ + 逐份修改说明/<合同>/{修改说明.md,修改明细.json,（修改痕迹版）.docx}」，结构对齐参考包 `FundLex-合同修改结果-本次抽查-20261013`），已用它生成 **`var/recall-first-evaluation/FundLex-合同修改结果-P6开发集-20261015/`**（20 份合同，81 文件）；③ 复核交付包时发现并修复**真实缺陷 FL-D079**（变体模糊匹配 span 停在句中，留下“…（如有）。配。”碎片）→ 新增 `fuzzy_span_clause()` 句边界吸附，`variant_replace/variant_delete/审计复核`三处统一；④ 新增测试 `tests/test_p6_package.py`（3 项）与 `test_fuzzy_span_clause_snaps_to_sentence_boundary`；⑤ 全量测试 **566 passed / 1 expected（references/）/ 6 skipped**。
+- **P6 第 1 轮（第 3 次重跑）已完成**：`p6-dev-round1-01` 20/20、604 调用、$0.5533；评分 `.venv/bin/python -X utf8 -m tools.evaluation.p6_score --run var/recall-first-evaluation/p6-dev-round1-01 --output /tmp/opencode/p6-round1-final.json` → 全量 347 目标/184 完成/0.5303；**开发集口径 236 目标/184 完成/0.7797**（基线 0.754、第 2 次 0.792）；integrated_complete 0/20；applicability_conflicts 19。产物 `var/recall-first-evaluation/p6-dev-round1-01/`。
 - **P6 关键文件（仓库外）**：`/home/opencode/data/funds_word/`、`/home/opencode/data/MANIFEST.sha256`；仓库内 `var/recall-first-evaluation/p6/`（selection/labels/protocol/freeze）。
 - **账本（仓库外，勿入库）**：应用调用记 `/var/lib/fundlex/model_budget.sqlite`（root 只读，opencode 读不到；数字取自各 `report.json` 的 `model` 段）。基线 581 调用/$0.5624；第 2 次 677/$0.5738。**agent 自用 0 次**。
 - **禁止**：把资料/样本/密钥入库。发布只能用 `bash tools/deploy/publish_workspace.sh`。（**更新**：用户已授权自行判断 git 提交/推送——第 7 轮已完成本地提交并推送；但**不 push 资料/样本/密钥**的底线不变。）
-- **下一步（按序）**：① 等批次结束并评分，对比基线/第 1 轮，统计 G01/G03/G16（FL-D060 无条件 append 漏加）、G17（FL-D075）等残留；② 修 FL-D060 后只在**开发集**再跑 1—2 轮（≤3 轮），直到 dev 达标（0.95 / 整合 0.9）并冻结；③ 冻结版跑 8 留出例（`--group holdout`）；④ 写 `docs/REAL_REVISION_EVALUATION_RESULTS.md`；⑤ P7 浏览器端到端、断点续跑、双身份隔离、指引切换、MySQL 备份/恢复。
+- **下一步（按序）**：①（可选）发布 FL-D079 修复后用 D01 等含 G22 变体的样本复跑，确认终稿无“……（如有）。配。”碎片；② 修 FL-D060（无条件 append 漏加 G01/G03/G16）后只在**开发集**再跑 1—2 轮（≤3 轮），直到 dev 达标（0.95 / 整合 0.9）并冻结；③ 冻结版跑 8 留出例（`--group holdout`）；④ 写 `docs/REAL_REVISION_EVALUATION_RESULTS.md`（用 `tools/evaluation/p6_package.py` 出交付包）；⑤ P7 浏览器端到端、断点续跑、双身份隔离、指引切换、MySQL 备份/恢复。
 
 ## 第 7 轮进度（服务器，2026-10-15）：用户 8 项 UX/修改问题 + P6 第 1 轮评分
 
