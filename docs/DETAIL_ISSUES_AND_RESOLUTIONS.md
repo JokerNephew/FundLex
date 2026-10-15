@@ -967,6 +967,16 @@
 - 下一步：① 用户提供 Langfuse Cloud public/secret key → 跑 2 例验证真实 trace 入库，再跑整轮开发集；② 可选把批次 id 作为 tag 便于回归对比。
 - 变更记录：2026-10-15 新增；同日完成代码实施与本地 OTLP 验证。
 
+## FL-D081 交付包需包含工作台同格式的「结果清单.csv」（用户要求放根目录）
+
+- 发现日期：2026-10-15（用户对交付包提出要求）。
+- 问题与影响：`tools/evaluation/p6_package.py` 打出的交付包原先只有 `结果总览.md` + 最终版 + 逐份说明，缺**工作台点「导出结果清单」时下载的那个 CSV**。用户明确要求把它加上并放在**根目录**（`结果总览.md` 保持不变）。
+- 证据：`frontend/app.js:156` 的 `exportResults()` 生成 `${task.name}_结果清单.csv`，列为 `序号,文件名,资格,处理状态,交付完整性,业务提示,原始原因码`，内容为 `'\ufeff'+ rows.map(csvEscape).join(',')`、行以 `\r\n` 连接（`csvEscape` 对含 `",\n\r` 的值加引号并双写引号）。
+- 处理方法（已实施）：`p6_package.py` 新增 `build_result_csv()`/`delivery_reason()`/`reason_codes()`/`csv_escape()` 与 `CSV_LABELS`，在根目录写出 `结果清单.csv`，逐列对齐工作台：资格/处理状态/交付完整性走同一套中文标签，业务提示复刻 `docReason()` 的措辞，原始原因码只用**短机器码**（`RECALL_*`/`AUDIT_*`，不含审计散文）。文件带 UTF-8 BOM、CRLF 行、含逗号/引号/换行的字段按工作台规则转义；`结果总览.md` 的文件夹说明表新增一行指向该 CSV。
+- 状态与验证：**已实施并验证**。用 `p6-dev-round1-01` 重新出包 `var/recall-first-evaluation/FundLex-合同修改结果-P6开发集-20261015/`：根目录出现 `结果清单.csv`（BOM+CRLF，21 行=表头+20 份，列头与工作台完全一致；失败样本的最后列是 `RECALL_TARGET_COMPOSITE_UNRESOLVED；AUDIT_NOT_COMPLETED` 等短码）。新增测试 `test_result_csv_matches_workbench_columns`（断言 BOM、CRLF、列头、末列为机器码）；全量 **572 passed / 1 expected（references/）/ 6 skipped**。
+- 下一步：交付含留出集的完整包时同样带上该 CSV；如工作台列顺序调整需同步本工具。
+- 变更记录：2026-10-15 新增。
+
 ## 后续条目模板
 
 ### FL-Dxxx 问题名称

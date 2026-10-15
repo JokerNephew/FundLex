@@ -5,6 +5,7 @@ The layout mirrors the earlier business-reader package (see
 
     <output>/
       结果总览.md
+      结果清单.csv                              与工作台「导出结果清单」同格式的状态清单
       最终版（接受修订后）/<原合同名>.docx     接受修订后的改后合同
       逐份修改说明/<原合同名>/
           修改说明.md
@@ -296,6 +297,91 @@ def unique_name(name: str, used: set[str]) -> str:
     return result
 
 
+# ── 结果清单.csv (same columns as the workbench "导出结果清单") ──────────────────────
+# The frontend writes ["序号","文件名","资格","处理状态","交付完整性","业务提示","原始原因码"];
+# reproducing it here means the packaged folder carries the same status list a user would
+# download from the workbench (a state list, not the contract deliverable).
+CSV_LABELS = {
+    "eligible": "资格符合", "excluded_by_fund_type": "已排除", "pending": "未判定",
+    "completed": "处理完成", "succeeded": "已处理", "failed": "失败关闭",
+    "complete": "产物完整", "incomplete": "结果不完整", "not_generated": "未生成",
+    "complete_with_exceptions": "已交付（含例外条款）",
+}
+
+
+def delivery_reason(report: dict, result: dict) -> str:
+    """The workbench's ``docReason`` wording for this document's most important state."""
+    qualification = (report.get("qualification_status")
+                     or (result.get("qualification") or {}).get("status"))
+    if qualification == "excluded_by_fund_type":
+        return "基金类型不在本流程范围，已整份排除"
+    delivery = report.get("delivery_status") or result.get("delivery_status")
+    if delivery == "complete":
+        return "文件校验通过，仍需结合自动写入能力判断可用性"
+    if delivery == "complete_with_exceptions":
+        return "合同已修订并校验通过；有条款未自动修改，请按例外清单人工核对"
+    if delivery == "incomplete":
+        return "部分条款未修改或处理未完整结束，不能直接使用"
+    if delivery == "not_generated":
+        return "处理已结束，未生成可交付合同文件"
+    if result.get("job_status") == "succeeded":
+        return "处理已结束，未生成可交付合同文件"
+    return "尚未生成合同产物"
+
+
+def reason_codes(report: dict) -> str:
+    """Distinct short machine codes behind the outcome, for the 原始原因码 column.
+
+    The workbench exports short codes (``RECALL_…``/``AUDIT_…``), never the model's prose
+    explanation, so audit entries contribute their ``code`` and only ``reason`` values that
+    look like a code (upper-case snake) are taken from target entries.
+    """
+    def looks_like_code(value: object) -> bool:
+        text = str(value or "")
+        return bool(text) and text.replace("_", "").isalnum() and text.upper() == text
+
+    codes: list[str] = []
+    for entry in report.get("unresolved") or []:
+        code = entry.get("code")
+        if not code and looks_like_code(entry.get("reason")):
+            code = entry.get("reason")
+        if code and code not in codes:
+            codes.append(code)
+    for finding in (report.get("sweep") or {}).get("findings") or []:
+        if finding.get("status") in {"pending", "unresolved"}:
+            code = finding.get("code")
+            if code and code not in codes:
+                codes.append(code)
+    return "；".join(codes)
+
+
+def csv_escape(value: object) -> str:
+    text = "" if value is None else str(value)
+    if any(char in text for char in '",\n\r'):
+        return '"' + text.replace('"', '""') + '"'
+    return text
+
+
+def build_result_csv(rows: list[dict]) -> str:
+    """Reproduce the workbench's exported 结果清单.csv content (BOM + CRLF rows)."""
+    header = ["序号", "文件名", "资格", "处理状态", "交付完整性", "业务提示", "原始原因码"]
+    lines = [",".join(header)]
+    for index, item in enumerate(rows, start=1):
+        report, result = item["report"], item["result"]
+        qualification = (report.get("qualification_status")
+                         or (result.get("qualification") or {}).get("status") or "pending")
+        job_status = result.get("job_status") or report.get("job_status") or ""
+        delivery = report.get("delivery_status") or result.get("delivery_status") or ""
+        cells = [index, item["original"],
+                 CSV_LABELS.get(qualification, qualification),
+                 CSV_LABELS.get(job_status, job_status),
+                 CSV_LABELS.get(delivery, delivery),
+                 delivery_reason(report, result),
+                 reason_codes(report)]
+        lines.append(",".join(csv_escape(cell) for cell in cells))
+    return "\ufeff" + "\r\n".join(lines) + "\r\n"
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--run", required=True, help="P6 run directory (has <case>/result.json)")
@@ -344,6 +430,9 @@ def main() -> None:
             shutil.copy2(redline, folder / f"{stem}（修改痕迹版）{Path(name).suffix}")
         rows.append(item)
 
+    # The workbench's 结果清单.csv, reproduced for the packaged folder (root level).
+    (root / "结果清单.csv").write_text(build_result_csv(rows), encoding="utf-8")
+
     lines = [f"# FundLex 合同修改结果总览{args.title_suffix}"
              + (f"（{args.run_date}）" if args.run_date else ""), "",
              "本结果由 FundLex 按既定业务规则自动定位并修改合同条款，每处修改都经过系统规则校验与独立复核"
@@ -351,6 +440,8 @@ def main() -> None:
              "**重要提示：本批文件为评测验证结果，不构成正式发布批准；正式使用前建议人工抽查。**", "",
              "## 文件夹说明", "",
              "| 文件夹 | 内容 |", "| --- | --- |",
+             "| 结果清单.csv | 工作台「导出结果清单」同格式的状态清单（序号/文件名/资格/处理状态/"
+             "交付完整性/业务提示/原始原因码），供筛选汇总 |",
              "| 最终版（接受修订后） | 修改后的合同，文件名与原合同一致，直接打开即可 |",
              "| 逐份修改说明 | 每份合同一个文件夹：修改说明、修改明细，以及带 Word 修订痕迹的版本"
              "（可逐条查看/接受/拒绝修改） |", "",

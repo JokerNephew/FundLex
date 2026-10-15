@@ -6,7 +6,12 @@ from pathlib import Path
 
 from docx import Document
 
-from tools.evaluation.p6_package import case_explanation, load_run, summary_row
+from tools.evaluation.p6_package import (
+    build_result_csv,
+    case_explanation,
+    load_run,
+    summary_row,
+)
 
 
 def _make_run(tmp_path: Path) -> Path:
@@ -71,3 +76,19 @@ def test_summary_row_reports_delivery_and_edits(tmp_path):
     assert "测试基金合同.docx" in row
     assert "部分条款未修改" in row
     assert "| 1 |" in row
+
+
+def test_result_csv_matches_workbench_columns(tmp_path):
+    """结果清单.csv reproduces the workbench export: BOM, CRLF and 7 columns."""
+    run = _make_run(tmp_path)
+    items = load_run(run)
+    items[0]["original"] = "测试基金合同.docx"
+    content = build_result_csv(items)
+    assert content.startswith("\ufeff"), "Excel needs the UTF-8 BOM"
+    assert "\r\n" in content, "the workbench writes CRLF rows"
+    header = content.lstrip("\ufeff").split("\r\n", 1)[0]
+    assert header == "序号,文件名,资格,处理状态,交付完整性,业务提示,原始原因码"
+    body = content.split("\r\n")[1]
+    assert body.startswith("1,测试基金合同.docx")
+    # Only short machine codes go in the last column, never the audit's prose verdict.
+    assert "RECALL_TARGET_UNRESOLVED" in body
