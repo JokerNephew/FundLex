@@ -260,3 +260,89 @@ def test_invalid_manifest_rejected(client, changes):
     files = manifest(1, package())
     files[0].update(changes)
     assert create(client, files).status_code == 422
+
+
+def test_task_archive_authorization_names_and_integrity(client, tmp_path):
+    from fundlex.jobs import Worker
+    data = package()
+    files = manifest(3, data)
+    files[1]["name"] = files[0]["name"]  # repeated filenames must not overwrite ZIP entries
+    task = create(client, files).json()["id"]
+    url = f"/api/tasks/{task}/download/all"
+    assert client.get(url, headers=BOB).status_code == 404
+    assert client.get(url, headers=ALICE).status_code == 409
+    upload(client, task, files[:2], data)
+    store = client.app.state.store
+    worker = Worker(store, lambda *_: {"qualification_status": "excluded_by_fund_type",
+                                      "delivery_status": "not_generated"})
+    assert worker.run_until_idle() == 2
+    response = client.get(url, headers=ALICE)
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "application/zip"
+    with zipfile.ZipFile(io.BytesIO(response.content)) as archive:
+        assert len(archive.namelist()) == len(set(archive.namelist()))
+        assert len([n for n in archive.namelist() if n.endswith("report_json.json")]) == 2
+        assert "not_started" in archive.read("结果清单.csv").decode("utf-8-sig")
+        assert "任务汇总.md" in archive.namelist()
+    documents = client.get(f"/api/tasks/{task}/documents", headers=ALICE).json()["items"]
+    doc = documents[0]
+    path, _ = store.get_artifact("alice", doc["batch_id"], doc["document_id"], "report_json")
+    path.write_bytes(b"tampered")
+    assert client.get(url, headers=ALICE).status_code == 409
+
+
+def test_multiple_tasks_really_execute_concurrently(client):
+    import threading
+    import time
+    from fundlex.jobs import Worker
+    data = package()
+    files = manifest(1, data)
+    first = create(client, files, name="first", key="first").json()["id"]
+    upload(client, first, files, data)
+    # The second task is created after the first already owns a running job.
+    store = client.app.state.store
+    entered = threading.Barrier(3)
+    release, stop = threading.Event(), threading.Event()
+    def processor(*_):
+        entered.wait(timeout=10)
+        assert release.wait(10)
+        return {"qualification_status": "excluded_by_fund_type", "delivery_status": "not_generated"}
+    worker = Worker(store, processor)
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        future = pool.submit(worker.run_forever, poll_seconds=0.02, concurrency=2, stop_event=stop)
+        try:
+            deadline = time.monotonic() + 5
+            while client.get(f"/api/tasks/{first}", headers=ALICE).json()["status"] != "running":
+                assert time.monotonic() < deadline
+                time.sleep(0.02)
+            second_response = create(client, files, name="second", key="second")
+            assert second_response.status_code == 201
+            second = second_response.json()["id"]
+            upload(client, second, files, data)
+            entered.wait(timeout=10)
+            for task_id in (first, second):
+                assert client.get(f"/api/tasks/{task_id}", headers=ALICE).json()["status"] == "running"
+            release.set()
+            deadline = time.monotonic() + 10
+            while any(client.get(f"/api/tasks/{t}", headers=ALICE).json()["status"] != "completed"
+                      for t in (first, second)):
+                assert time.monotonic() < deadline
+                time.sleep(0.02)
+        finally:
+            release.set()
+            stop.set()
+        future.result(timeout=10)
+
+
+def test_scheduler_prefers_different_task_across_upload_batches(client):
+    data, files = package(), manifest(3, package())
+    first = create(client, files, key="large").json()["id"]
+    for entry in files:
+        upload(client, first, [entry], data)
+    store = client.app.state.store
+    claimed = store.claim()
+    assert claimed
+    second = create(client, files[:1], key="small").json()["id"]
+    receipt = upload(client, second, files[:1], data).json()["receipts"][0]
+    next_job = store.claim()
+    assert next_job["id"] == receipt["document_id"]

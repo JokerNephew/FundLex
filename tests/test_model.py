@@ -177,3 +177,24 @@ def test_ledger_failure_preserves_usage_and_keeps_reservation(tmp_path: Path,mon
         model.extract_fund_type('混合型')
     assert error.value.metrics['total_tokens']==120
     assert budget.snapshot()['statuses']=={'reserved':1}
+
+
+def test_model_capacity_waits_without_consuming_request_attempts(monkeypatch):
+    from fundlex.model import _budget_reserve_with_retry
+    from fundlex.model_budget import BudgetError
+    class BusyBudget:
+        calls = 0
+        def reserve(self, **kwargs):
+            self.calls += 1
+            if self.calls < 3:
+                raise BudgetError("MODEL_CONCURRENCY_LIMIT")
+            return "reservation"
+    monkeypatch.setattr("fundlex.model.time.sleep", lambda *_: None)
+    budget = BusyBudget()
+    assert _budget_reserve_with_retry(budget, lease_seconds=10) == "reservation"
+    assert budget.calls == 3
+    class ExhaustedBudget:
+        def reserve(self, **kwargs):
+            raise BudgetError("MODEL_COST_BUDGET_EXCEEDED")
+    with pytest.raises(BudgetError, match="MODEL_COST_BUDGET_EXCEEDED"):
+        _budget_reserve_with_retry(ExhaustedBudget(), lease_seconds=10)

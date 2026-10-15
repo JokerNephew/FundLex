@@ -40,6 +40,11 @@ class TaskStore:
                     batch_id TEXT PRIMARY KEY REFERENCES batches(id)
                 );
             """)
+            for name, definition in {"engine_id": "TEXT NOT NULL DEFAULT ''",
+                                     "guide_version_id": "TEXT NOT NULL DEFAULT ''",
+                                     "guide_rules_sha256": "TEXT NOT NULL DEFAULT ''"}.items():
+                if name not in {row["name"] for row in db.execute("PRAGMA table_info(tasks)")}:
+                    db.execute(f"ALTER TABLE tasks ADD COLUMN {name} {definition}")
 
     @staticmethod
     def _owned(db, owner, task_id):
@@ -48,9 +53,15 @@ class TaskStore:
             raise NotFound("task not found")
         return row
 
-    def create(self, owner, name, ruleset, files, idempotency_key=None):
-        fingerprint = hashlib.sha256(json.dumps([name, ruleset.version, ruleset.sha256, files],
-                                                ensure_ascii=False, sort_keys=True).encode()).hexdigest()
+    def create(self, owner, name, ruleset, files, idempotency_key=None,
+               engine_id="", guide_version_id="", guide_rules_sha256=""):
+        binding = [engine_id, guide_version_id, guide_rules_sha256]
+        payload = [name, ruleset.version, ruleset.sha256, files]
+        if any(binding):
+            # Legacy requests keep their previous fingerprint; a bound engine is
+            # part of the identity of a new-style task.
+            payload.append(binding)
+        fingerprint = hashlib.sha256(json.dumps(payload, ensure_ascii=False, sort_keys=True).encode()).hexdigest()
         with self.store._connect() as db:
             db.execute("BEGIN IMMEDIATE")
             if idempotency_key:
@@ -61,9 +72,11 @@ class TaskStore:
                         raise Conflict("TASK_IDEMPOTENCY_CONFLICT")
                     return self._snapshot(db, self._owned(db, owner, old["id"]))
             task_id, now = uuid.uuid4().hex, time.time()
-            db.execute("""INSERT INTO tasks(id,owner,name,ruleset_version,ruleset_sha256,
-                idempotency_key,request_hash,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?)""",
-                       (task_id, owner, name, ruleset.version, ruleset.sha256, idempotency_key, fingerprint, now, now))
+            db.execute("""INSERT INTO tasks(id,owner,name,ruleset_version,ruleset_sha256,engine_id,
+                guide_version_id,guide_rules_sha256,idempotency_key,request_hash,created_at,updated_at)
+                VALUES(?,?,?,?,?,?,?,?,?,?,?,?)""",
+                       (task_id, owner, name, ruleset.version, ruleset.sha256, engine_id,
+                        guide_version_id, guide_rules_sha256, idempotency_key, fingerprint, now, now))
             db.executemany("INSERT INTO task_files(task_id,client_id,ordinal,name,size) VALUES(?,?,?,?,?)",
                            [(task_id, item["client_id"], i, item["name"], item["size"]) for i, item in enumerate(files)])
             return self._snapshot(db, self._owned(db, owner, task_id))
@@ -117,6 +130,9 @@ class TaskStore:
                   "running" if processing else "queued" if uploaded > completed else "uploading")
         return {"id": row["id"], "name": row["name"], "legacy": legacy, "ruleset_version": row["ruleset_version"],
                 "ruleset_sha256": row["ruleset_sha256"], "status": status,
+                "engine_id": row["engine_id"],
+                "guide_snapshot": {"version_id": row["guide_version_id"],
+                                   "rules_sha256": row["guide_rules_sha256"]},
                 "upload_status": "complete" if uploaded == total else "sealed_incomplete" if row["sealed"] else "partial" if uploaded else "pending",
                 "total": total, "uploaded": uploaded, "pending_upload": sum(d["upload_status"] == "pending" for d in docs),
                 "rejected": sum(d["upload_status"] == "rejected" for d in docs),
@@ -253,9 +269,12 @@ class TaskStore:
                         continue
                     if ordinal == 0:
                         db.execute("""INSERT INTO batches(id,owner,ruleset_version,ruleset_sha256,status,request_hash,
-                            created_at,updated_at,engine_build,schema_version) VALUES(?,?,?,?,?,?,?,?,?,?)""",
-                                   (batch_id, owner, task["ruleset_version"], task["ruleset_sha256"], "paused" if task["paused"] else "queued",
-                                    uuid.uuid4().hex, now, now, build, SCHEMA_VERSION))
+                            created_at,updated_at,engine_build,schema_version,engine_id,guide_version_id,
+                            guide_rules_sha256) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                                   (batch_id, owner, task["ruleset_version"], task["ruleset_sha256"],
+                                    "paused" if task["paused"] else "queued",
+                                    uuid.uuid4().hex, now, now, build, SCHEMA_VERSION, task["engine_id"],
+                                    task["guide_version_id"], task["guide_rules_sha256"]))
                         db.execute("INSERT INTO task_batches VALUES(?,?)", (task_id, batch_id))
                     document_id = uuid.uuid4().hex
                     db.execute("""INSERT INTO documents(id,batch_id,ordinal,filename,source_sha256,source_size,input_key,

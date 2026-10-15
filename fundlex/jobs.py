@@ -6,6 +6,7 @@ import json
 import tempfile
 import time
 import threading
+from concurrent.futures import ThreadPoolExecutor
 import os
 import sqlite3
 import shutil
@@ -13,7 +14,8 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Callable
 
-from .store import Conflict, RunStore, sha256_file, engine_build, SCHEMA_VERSION, validate_delivery
+from .store import (Conflict, RunStore, sha256_file, engine_build, SCHEMA_VERSION,
+                    validate_delivery, is_recall_report)
 from .db import DatabaseError
 from .config import local_data_dir
 
@@ -26,7 +28,16 @@ RETRYABLE_MODEL_CODES = {"MODEL_NETWORK_ERROR", "MODEL_RETRY_EXHAUSTED", "MODEL_
 Processor = Callable[[Path, Path, str], dict[str, Any]]
 
 
-def _default_processor(input_path: Path, output_dir: Path, ruleset_version: str, *, checkpoint_dir: Path | None = None) -> dict[str, Any]:
+def _default_processor(input_path: Path, output_dir: Path, ruleset_version: str, *, engine_id: str = "",
+                       guide_version_id: str = "", guide_document: dict[str, Any] | None = None,
+                       checkpoint_dir: Path | None = None, gateway: Any = None) -> dict[str, Any]:
+    if engine_id == "recall_first":
+        # The recall-first engine consumes the bound guide snapshot, never a
+        # ruleset file; an unbound call is a caller bug and fails inside the
+        # pipeline with its own error report.
+        from .recall_pipeline import process_recall_first
+        return process_recall_first(input_path, output_dir, guide_document=guide_document, gateway=gateway,
+                                    checkpoint_dir=checkpoint_dir)
     if ruleset_version == "v2":
         # v2 follows the rule package state: unreleased -> evaluation artifacts,
         # released -> formal delivery artifacts (gates are validated on load).
@@ -39,6 +50,7 @@ def _default_processor(input_path: Path, output_dir: Path, ruleset_version: str,
 class Worker:
     def __init__(self, store: RunStore, processor: Processor | None = None, *, lease_seconds: int = 900):
         self.store = store
+        self._guide_lock = threading.Lock()
         self.processor = processor or _default_processor
         if lease_seconds <= 0:
             raise ValueError("lease_seconds must be positive")
@@ -102,6 +114,8 @@ class Worker:
         min_free = int(os.environ.get("FUNDLEX_MIN_FREE_BYTES", str(256 * 1024 * 1024)))
         if shutil.disk_usage(self.store.root).free < min_free:
             raise OSError("local storage below configured free-space reserve")
+        if self._run_guide_job():
+            return True
         job = self.store.claim(lease_seconds=self.lease_seconds)
         if job is None:
             return False
@@ -127,10 +141,12 @@ class Worker:
                         raise ValueError("RULESET_HASH_MISMATCH")
                 if job.get("engine_build") and (job["engine_build"] != engine_build() or job["schema_version"] != SCHEMA_VERSION):
                     raise ValueError("ENGINE_SCHEMA_MISMATCH")
+                guide_document = self._bound_guide_document(job)
                 with self._lease_heartbeat(doc_id, token):
                     if self.processor is _default_processor:
                         report = self.processor(source, output_dir, job["ruleset_version"],
-                            checkpoint_dir=self.store.root / "checkpoints" / doc_id)
+                            engine_id=job.get("engine_id", ""), guide_version_id=job.get("guide_version_id", ""),
+                            guide_document=guide_document, checkpoint_dir=self.store.root / "checkpoints" / doc_id)
                     else:
                         report = self.processor(source, output_dir, job["ruleset_version"])
                 if isinstance(report, dict) and report.get("error_code") in RETRYABLE_MODEL_CODES:
@@ -140,7 +156,12 @@ class Worker:
                     raise ValueError("INVALID_PIPELINE_REPORT")
                 report["document_id"] = doc_id
                 report["engine_build"] = job.get("engine_build", "")
-                report["schema_version"] = job.get("schema_version", "")
+                if is_recall_report(report):
+                    # The recall report keeps its own schema 3; the worker schema
+                    # stays in the batch row and is not allowed to overwrite it.
+                    report.setdefault("schema_version", job.get("schema_version", ""))
+                else:
+                    report["schema_version"] = job.get("schema_version", "")
                 report.setdefault("source_sha256", job["source_sha256"])
                 report.setdefault("ruleset_version", job["ruleset_version"])
                 report.setdefault("ruleset_sha256", job.get("ruleset_sha256", ""))
@@ -191,12 +212,19 @@ class Worker:
                     return True
                 raise
             except Exception as exc:
+                if self._is_recall_stop(exc):
+                    # Recoverable model/transport stop: retry under the normal
+                    # lease policy (budget/circuit stops also pause the task) and
+                    # leave the model budget ledger to the next attempt.
+                    self.store.retry(doc_id, token, error_code=exc.code)
+                    return True
                 if isinstance(exc, (OSError, sqlite3.OperationalError, DatabaseError)) or getattr(exc, "code", "") in RETRYABLE_MODEL_CODES:
                     self.store.retry(doc_id, token, error_code=getattr(exc, "code", "TEMPORARY_STORAGE_FAILURE"))
                     return True
                 code = str(exc) if str(exc) in {"INPUT_INTEGRITY_FAILED", "RULESET_HASH_MISMATCH",
                                                   "INVALID_PIPELINE_REPORT", "ENGINE_SCHEMA_MISMATCH", "RESULT_SIZE_LIMIT",
-                                                  "MISSING_VERIFIED_ARTIFACTS", "ARTIFACT_VERIFICATION_MISMATCH"} else "PROCESSING_FAILED"
+                                                  "MISSING_VERIFIED_ARTIFACTS", "ARTIFACT_VERIFICATION_MISMATCH",
+                                                  "GUIDE_VERSION_MISSING", "GUIDE_RULESET_HASH_MISMATCH"} else "PROCESSING_FAILED"
                 report = {
                     "document_id": doc_id, "source_sha256": job["source_sha256"],
                     "ruleset_version": job["ruleset_version"], "ruleset_sha256": job.get("ruleset_sha256", ""),
@@ -214,16 +242,96 @@ class Worker:
                                   failed=True, error_code=code)
         return True
 
+    def _run_guide_job(self) -> bool:
+        if not self._guide_lock.acquire(blocking=False):
+            return False
+        try:
+            return self._run_guide_job_locked()
+        finally:
+            self._guide_lock.release()
+
+    def _run_guide_job_locked(self) -> bool:
+        """Parse one queued guide version; ``False`` when no job is available.
+
+        A model stop (config missing, circuit open, budget/ledger stop, transport
+        stop) releases the lease without consuming the attempt so the next run
+        can retry; every other error is recorded on the job and the version.
+        """
+        from . import guide_store
+        job = guide_store.claim_guide_job(self.store, lease_seconds=max(self.lease_seconds, 600))
+        if job is None:
+            return False
+        from .guide import GuideError, build_guide_document, extract_guide_source
+        from .model import ModelGateway
+        try:
+            path = guide_store.guide_source_path(self.store, job["guide_version_id"])
+            if not path.is_file():
+                raise GuideError("GUIDE_SOURCE_UNREADABLE", {"path": str(path)})
+            source = extract_guide_source(path)
+            document = build_guide_document(source, ModelGateway.from_env())
+        except Exception as exc:  # noqa: BLE001 - job errors must not kill the worker
+            if self._is_guide_stop(exc):
+                guide_store.release_guide_job(self.store, job["id"])
+                return True
+            code = getattr(exc, "code", None) or "GUIDE_PARSE_FAILED"
+            guide_store.finish_guide_job(self.store, job["id"], error_code=str(code))
+            return True
+        guide_store.finish_guide_job(self.store, job["id"], document=document)
+        return True
+
+    def _bound_guide_document(self, job: dict[str, Any]) -> dict[str, Any] | None:
+        """Resolve and verify the guide snapshot bound to a recall-first job.
+
+        The batch records the version id and rules hash at task creation; a
+        version that disappeared or changed since is a hard failure, never a
+        silent fallback to a different guide.
+        """
+        if job.get("engine_id") != "recall_first":
+            return None
+        from . import guide_store
+        version_id = job.get("guide_version_id") or ""
+        try:
+            version = guide_store.get_version(self.store, job.get("owner", ""), version_id)
+        except KeyError:
+            raise ValueError("GUIDE_VERSION_MISSING") from None
+        if (version.get("rules_sha256") or "") != (job.get("guide_rules_sha256") or ""):
+            raise ValueError("GUIDE_RULESET_HASH_MISMATCH")
+        try:
+            return guide_store.guide_document(self.store, version_id)
+        except KeyError:
+            raise ValueError("GUIDE_VERSION_MISSING") from None
+
+    @staticmethod
+    def _is_recall_stop(exc: BaseException) -> bool:
+        from .recall_pipeline import RecallPipelineStop
+        return isinstance(exc, RecallPipelineStop)
+
+    @staticmethod
+    def _is_guide_stop(exc: BaseException) -> bool:
+        from .recall_pipeline import STOP_CODES
+        code = getattr(exc, "code", "")
+        if not isinstance(code, str) or not code:
+            return False
+        if code.startswith("GUIDE_MODEL_FAILED:"):
+            code = code.split(":", 1)[1]
+        return code in STOP_CODES
+
     @staticmethod
     def _artifact_paths(report: dict[str, Any], output_dir: Path) -> dict[str, Path]:
         values = report.get("artifacts", {})
         paths: dict[str, Path] = {}
-        conventions = {"report_md": "report.md"}
+        # report_json is normally written by the worker after validation; an
+        # already present report file is picked up like report_md.
+        conventions = {"report_md": "report.md", "report_json": "report.json"}
         if report.get("execution_mode") == "evaluation":
             conventions.update({"evaluation_final": "evaluation_final.docx",
                                 "evaluation_redline": "evaluation_redline.docx"})
         else:
-            conventions.update({"final": "final.docx", "redline": "redline.docx"})
+            # Incomplete recall results keep their produced pair under the
+            # working names; the worker never strips them for those reports.
+            conventions.update({"final": "final.docx", "redline": "redline.docx",
+                                "working_final": "working_final.docx",
+                                "working_redline": "working_redline.docx"})
         for kind, conventional in conventions.items():
             raw = values.get(kind) if isinstance(values, dict) else None
             path = Path(raw) if raw else output_dir / conventional
@@ -258,10 +366,29 @@ class Worker:
             completed += 1
         return completed
 
-    def run_forever(self, *, poll_seconds: float = 1.0) -> None:
-        while True:
-            if not self.run_once():
-                time.sleep(poll_seconds)
+    def run_forever(self, *, poll_seconds: float = 1.0, concurrency: int = 2,
+                    stop_event: threading.Event | None = None) -> None:
+        if not 1 <= concurrency <= 8:
+            raise ValueError("workflow concurrency must be between 1 and 8")
+        # Keep one process owner; only its bounded execution slots bypass run_once's lock.
+        from . import guide_store
+        guide_store._ensure_tables(self.store)
+        stopped = stop_event or threading.Event()
+        def consume():
+            while not stopped.is_set():
+                if not self._run_once():
+                    stopped.wait(poll_seconds)
+        with self._worker_lock():
+            with ThreadPoolExecutor(max_workers=concurrency, thread_name_prefix="fundlex") as pool:
+                futures = [pool.submit(consume) for _ in range(concurrency)]
+                try:
+                    while not stopped.wait(poll_seconds):
+                        for future in futures:
+                            if future.done():
+                                future.result()
+                                raise RuntimeError("workflow slot stopped unexpectedly")
+                finally:
+                    stopped.set()
 
 
 def main() -> None:
@@ -275,7 +402,7 @@ def main() -> None:
     if args.once:
         print(f"processed {worker.run_until_idle()} document(s)")
     else:
-        worker.run_forever()
+        worker.run_forever(concurrency=int(os.environ.get("FUNDLEX_WORKFLOW_CONCURRENCY", "2")))
 
 
 if __name__ == "__main__":

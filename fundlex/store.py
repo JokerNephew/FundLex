@@ -58,6 +58,66 @@ def _requires_actual_review(report: dict[str, Any]) -> bool:
         raise ValueError("ENGINE_VERSION_INVALID") from None
 
 
+def is_recall_report(report: dict[str, Any]) -> bool:
+    """True for the recall-first engine report (engine id or schema 3)."""
+    return report.get("engine_id") == "recall_first" or str(report.get("schema_version") or "") == "3"
+
+
+_RECALL_EDIT_CHECKS = {"package", "revisions", "final_equivalence", "non_target",
+                       "content_verification", "actual_content_verification"}
+_RECALL_UNCHANGED_CHECKS = {"package", "zero_edit", "byte_identity"}
+_RECALL_ARTIFACT_HASHES = {"final": "final_sha256", "redline": "redline_sha256",
+                           "working_final": "final_sha256", "working_redline": "redline_sha256"}
+
+
+def _require_recall_pair(artifacts: dict[str, Path], validation: dict[str, Any],
+                         kinds: tuple[str, str]) -> None:
+    if not set(kinds).issubset(artifacts):
+        raise ValueError("MISSING_VERIFIED_ARTIFACTS")
+    for kind in kinds:
+        path = artifacts[kind]
+        if not path.is_file() or validation.get(_RECALL_ARTIFACT_HASHES[kind]) != sha256_file(path):
+            raise ValueError("ARTIFACT_VERIFICATION_MISMATCH")
+
+
+def _validate_recall_delivery(report: dict[str, Any], artifacts: dict[str, Path]) -> None:
+    """Delivery gate for the recall-first engine (schema 3).
+
+    ``recall_validated_edits``/``recall_validated_unchanged`` publish the final
+    pair under the contract names; ``recall_working_edits`` keeps an incomplete
+    produced pair strictly under the working names; ``excluded`` and
+    ``not_generated`` carry no artifact requirements.  Any other combination
+    fails closed.
+    """
+    validation = report.get("output_validation")
+    validation = validation if isinstance(validation, dict) else {}
+    kind = validation.get("kind")
+    status = report.get("delivery_status")
+    checks = validation.get("checks")
+    checks = set(checks) if isinstance(checks, (list, tuple)) else set()
+    if status in {"excluded", "not_generated"}:
+        return
+    if kind == "recall_validated_edits":
+        if status != "complete" or not _RECALL_EDIT_CHECKS.issubset(checks):
+            raise ValueError("MISSING_VERIFIED_ARTIFACTS")
+        _require_recall_pair(artifacts, validation, ("final", "redline"))
+        return
+    if kind == "recall_validated_unchanged":
+        if status != "complete" or not _RECALL_UNCHANGED_CHECKS.issubset(checks):
+            raise ValueError("MISSING_VERIFIED_ARTIFACTS")
+        _require_recall_pair(artifacts, validation, ("final", "redline"))
+        return
+    if kind == "recall_working_edits":
+        unresolved = report.get("unresolved")
+        if status != "incomplete" or not isinstance(unresolved, list) or not unresolved:
+            raise ValueError("MISSING_VERIFIED_ARTIFACTS")
+        if {"final", "redline"} & set(artifacts):
+            raise ValueError("MISSING_VERIFIED_ARTIFACTS")
+        _require_recall_pair(artifacts, validation, ("working_final", "working_redline"))
+        return
+    raise ValueError("MISSING_VERIFIED_ARTIFACTS")
+
+
 def _review_rejected_report_only(report: dict[str, Any], artifacts: dict[str, Path]) -> bool:
     plan = report.get("edit_plan") or {}
     return (_requires_actual_review(report) and report.get("delivery_status") == "incomplete"
@@ -135,6 +195,9 @@ def _validate_actual_review(report: dict[str, Any], validation: dict[str, Any]) 
 
 
 def validate_delivery(report: dict[str, Any], artifacts: dict[str, Path]) -> None:
+    if is_recall_report(report):
+        _validate_recall_delivery(report, artifacts)
+        return
     if report.get("execution_mode") == "evaluation":
         if _review_rejected_report_only(report, artifacts):
             return
@@ -216,7 +279,10 @@ class RunStore:
                 );
                 CREATE INDEX IF NOT EXISTS documents_work ON documents(status, next_attempt_at, lease_until);
             """)
-            for name, definition in {"engine_build": "TEXT NOT NULL DEFAULT ''", "schema_version": "TEXT NOT NULL DEFAULT ''"}.items():
+            for name, definition in {"engine_build": "TEXT NOT NULL DEFAULT ''", "schema_version": "TEXT NOT NULL DEFAULT ''",
+                                     "engine_id": "TEXT NOT NULL DEFAULT ''",
+                                     "guide_version_id": "TEXT NOT NULL DEFAULT ''",
+                                     "guide_rules_sha256": "TEXT NOT NULL DEFAULT ''"}.items():
                 if name not in {row["name"] for row in db.execute("PRAGMA table_info(batches)")}:
                     db.execute(f"ALTER TABLE batches ADD COLUMN {name} {definition}")
             if "execution_mode" not in {row["name"] for row in db.execute("PRAGMA table_info(documents)")}:
@@ -363,14 +429,28 @@ class RunStore:
         path = self.object_path(row["object_key"])
         if not path.is_file() or path.stat().st_size != row["size"] or sha256_file(path) != row["sha256"]:
             raise Conflict("artifact integrity check failed")
-        if kind in {"final", "redline", "evaluation_final", "evaluation_redline"}:
+        if kind in {"final", "redline", "evaluation_final", "evaluation_redline",
+                    "working_final", "working_redline"}:
             with self._connect() as db:
                 document = db.execute("SELECT execution_mode,report_json,source_sha256 FROM documents WHERE id=?",
                                       (document_id,)).fetchone()
                 pair_rows = db.execute("SELECT * FROM artifacts WHERE document_id=?", (document_id,)).fetchall()
             try:
                 report = json.loads(document["report_json"]) if document and document["report_json"] else {}
-                if _requires_actual_review(report):
+                if is_recall_report(report):
+                    # A recall download is bound to the persisted delivery state and
+                    # re-validated against the actual stored pair.
+                    status = report.get("delivery_status")
+                    if kind in {"final", "redline"} and status != "complete":
+                        raise ValueError("RECALL_DELIVERY_NOT_COMPLETE")
+                    if kind in {"working_final", "working_redline"} and status != "incomplete":
+                        raise ValueError("RECALL_DELIVERY_NOT_INCOMPLETE")
+                    expected = ({"working_final", "working_redline"} if kind.startswith("working_")
+                                else {"final", "redline"})
+                    pairs = {item["kind"]: self.object_path(item["object_key"]) for item in pair_rows
+                             if item["kind"] in expected}
+                    validate_delivery(report, pairs)
+                elif _requires_actual_review(report):
                     if report.get("source_sha256") != document["source_sha256"]:
                         raise ValueError("ACTUAL_CONTENT_REVIEW_SOURCE_MISMATCH")
                     if report.get("execution_mode") != document["execution_mode"]:
@@ -402,16 +482,24 @@ class RunStore:
                     report_json=?,lease_until=NULL,updated_at=? WHERE id=?""",
                     (json.dumps(report), now, expired["id"]))
                 self._refresh_batch(db, expired["batch_id"], now)
-            candidate = """SELECT d.*, b.ruleset_version, b.ruleset_sha256, b.engine_build, b.schema_version FROM documents d JOIN batches b ON b.id=d.batch_id
+            active_scope = "active.batch_id=d.batch_id"
+            if db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='task_batches'").fetchone():
+                active_scope = """COALESCE((SELECT task_id FROM task_batches WHERE batch_id=active.batch_id),active.batch_id)
+                    = COALESCE((SELECT task_id FROM task_batches WHERE batch_id=d.batch_id),d.batch_id)"""
+            candidate = f"""SELECT d.*, b.ruleset_version, b.ruleset_sha256, b.engine_build, b.schema_version,
+                b.engine_id, b.guide_version_id, b.guide_rules_sha256, b.owner
+                FROM documents d JOIN batches b ON b.id=d.batch_id
                 WHERE b.status IN ('queued','running') AND d.attempt < ? AND
                 (d.status='queued' OR (d.status='retry_wait' AND d.next_attempt_at<=?) OR
                  (d.status IN ('leased','running') AND d.lease_until<=?))
-                ORDER BY d.created_at,d.ordinal LIMIT 1"""
+                ORDER BY (SELECT COUNT(*) FROM documents active
+                    WHERE {active_scope} AND active.status IN ('leased','running')
+                    AND active.lease_until>?) ASC, b.updated_at,d.created_at,d.ordinal LIMIT 1"""
             if self.database.dialect == "mysql":
                 # A plain START TRANSACTION does not lock candidates; without the
                 # row lock two workers could claim the same document.
                 candidate += " FOR UPDATE"
-            row = db.execute(candidate, (max_attempts, now, now)).fetchone()
+            row = db.execute(candidate, (max_attempts, now, now, now)).fetchone()
             if not row:
                 return None
             token = row["fencing_token"] + 1
@@ -439,7 +527,7 @@ class RunStore:
             raise Conflict(str(exc)) from exc
         delivery = report.get("delivery_status", "not_generated")
         mode = report.get("execution_mode", "delivery")
-        allowed_kinds = {"final", "redline", "report_json", "report_md"}
+        allowed_kinds = {"final", "redline", "working_final", "working_redline", "report_json", "report_md"}
         if mode == "evaluation":
             allowed_kinds = {"evaluation_final", "evaluation_redline", "report_json", "report_md"}
             if delivery in {"complete", "complete_with_exceptions"} or {"final", "redline"} & set(artifacts):
@@ -450,6 +538,9 @@ class RunStore:
                     and not _review_rejected_report_only(report, artifacts):
                 raise Conflict("evaluation result requires both evaluated contracts")
         else:
+            if {"working_final", "working_redline"} & set(artifacts) and not is_recall_report(report):
+                # Working files are a recall-first delivery state, never a legacy result.
+                raise Conflict("working artifacts require a recall report")
             if delivery in {"complete", "complete_with_exceptions"} and not {"final", "redline"}.issubset(artifacts):
                 raise Conflict("complete result requires both verified contracts")
             if delivery not in {"complete", "complete_with_exceptions"} and ("final" in artifacts or "redline" in artifacts):
