@@ -691,7 +691,7 @@
   - G13（7 份标签）与 G06（3 份）亦有同类短锚漏配，待查措辞变体后评估。
   - 基线中 G15 漏删同时来自“模型盘点判 not_applicable”（D04 p845、D10/D11/D12 全部）与“survey 漏扫”，不能只靠 code 侧修复。
 
-## FL-D072 工作区长期未提交、版本管理缺失（本轮完成规范化提交，push 受凭据阻塞）
+## FL-D078 工作区长期未提交、版本管理缺失（本轮完成规范化提交，push 受凭据阻塞）
 
 - 发现日期：2026-10-15（用户要求「git 事情可自主判断，做好版本管理」）。
 - 问题与影响：工作区自 `3ed4e96` 起长期未提交——整个 recall-first 引擎、指引、API/持久化扩展、前端工作台、测试、评测工具与文档共 **46 个未跟踪 + 11 个已跟踪修改** 堆积，无增量历史、无法回退、容易误入库样本/密钥。
@@ -709,7 +709,7 @@
   - 验证：提交后工作树**干净**（`git status` 空）；全量测试 **562 passed / 1 expected（references/ 未在服务器）/ 6 skipped**。
 - 状态与验证：**已实施**（本地提交完成）。**push 未做**：`origin`=`https://github.com/JokerNephew/FundLex.git`，本机无 HTTPS 凭据助手、无 `~/.git-credentials`、无 GitHub SSH 私钥、无 `gh`；`git ls-remote origin` 报 `could not read Username`。分支 `codex/fundlex-recall-first` 无 upstream。
 - 下一步：需要 push 时，由用户在服务器配置 GitHub 令牌/凭据（或告知改用其他 remote），再 `git push -u origin codex/fundlex-recall-first`（或新建分支/PR）。**不把凭据写入仓库/文档/prompt/日志。**
-- 变更记录：2026-10-15 新增。
+- 变更记录：2026-10-15 新增；同日编号由误用的 FL-D072 更正为 **FL-D078**（FL-D072 已用于「sweep 误报 G02/G04」，编号冲突，见 FL-D077）。
 
 ## FL-D071 结果页可用性与多任务并行：前端 8 项 UX 问题（用户第 7 轮反馈）
 
@@ -921,6 +921,7 @@
   - FL-D057 → **FL-D072**（sweep 误报 G02/G04）；② FL-D058 → **FL-D073**（无服务费结论）；③ FL-D068 → **FL-D074**（评分器短锚误判）；④ FL-D069 → **FL-D075**（G17 跨段删除）；⑤ FL-D066 → **FL-D076**（Codex bwrap）。
   同步修正唯一一处代码内引用：`tools/evaluation/p6_score.py`（评分器短锚说明）FL-D068 → FL-D074。
 - 状态与验证：**已实施并验证**。`grep -oP "^## FL-D\K[0-9]+" | sort | uniq -d` 输出为空（75 条编号全部唯一）；`grep -rn "FL-D068\|FL-D069"` 确认其余引用（TASK_PLAN/archive README/ACTIVE_HANDOFF）指向的正是保留原编号的那一层含义，故无需改动。**未 commit、未 push**。
+- 复发（同日）：规范化提交轮次又新增一条占用 FL-D072 的条目（「工作区长期未提交、版本管理缺失」）→ 已按同一规则改号为 **FL-D078**，冲突清零。
 - 下一步：后续新增条目必须先在全文搜 `^## FL-D` 确认编号未被占用；编号更正一律"保留旧条目 + 新增一行变更记录"，禁止原地重排。
 - 变更记录：2026-10-15 新增。
 
