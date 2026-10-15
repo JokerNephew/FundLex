@@ -19,12 +19,27 @@
 > `curl http://100.100.100.200/latest/meta-data/instance-id`，用事实确认自己所在的机器。
 > （本机器块为 FL-D061 的处置结果，见集中问题记录。）
 
-更新：2026-10-15（服务器开发主副本 `/home/opencode/fundlex`，接续 agent **第 5 轮**：修 qr-local-12 的 12 项未解决，FL-D052；三轮真实链路复验后 FL-D052 全部收敛，quality-return-12 单份合同完整交付）。规则：50% 整理、60% 前完成压缩/交接；本文只记状态与下一动作，不写密码。
+更新：2026-10-15（服务器开发主副本 `/home/opencode/fundlex`，接续 agent **第 9 轮**：前端「处理进度」+「合同结果」两页合并为单一「任务详情」页，FL-D086，真实浏览器验证通过）。规则：50% 整理、60% 前完成压缩/交接；本文只记状态与下一动作，不写密码。
 
 > **编号更正（FL-D077，2026-10-15）**：集中问题记录曾有 5 组编号重号，已把后出现者改为新编号（保留首次出现的原编号）：
 > `FL-D057→FL-D072`（sweep 误报 G02/G04）、`FL-D058→FL-D073`（无服务费结论）、`FL-D068→FL-D074`（评分器短锚误判）、
 > `FL-D069→FL-D075`（G17 跨段删除）、`FL-D066→FL-D076`（Codex bwrap）。
 > **注意**：本文下文第 5/6 轮的历史叙述写于更正之前，个别处仍写旧编号，含义以更正后为准；新增条目一律先查重再编号。
+
+## 当前断点（第 9 轮，2026-10-15，前端合并「处理进度/合同结果」）
+
+- **本轮任务**：用户提出前端「处理进度」与「合同结果」两页几乎一样，要求合并。用户**明确选定**方案：**一张表 + 全部列常显**（明确否决"视图切换"方案）。
+- **合并依据（代码证据）**：两页消费**同一接口** `GET /api/tasks/{id}/documents`（`fundlex/api.py:720`），共用 `loadDocuments()`、任务选择器循环、`showDetail`、分页；差异仅列/筛选/页头按钮。→ 同一实体，非两个功能。
+- **已实施**（仅 3 个前端文件，**无后端/数据库/引擎改动**，单 commit 可 revert）：
+  - `frontend/index.html`：`#view-progress` + `#view-results` → 单个 `#view-task`；侧边栏两项 → 一项「任务详情」(`data-nav="task"`)，总览页英雄区两按钮 → 一个；固定 7 列表头常显（合同文件/上传状态/资格/交付完整性/处理状态/业务提示/操作）；工具栏 7 个筛选控件（`doc-search`/`doc-upload-filter`/`doc-qualification-filter`/`doc-completeness-filter`/`doc-status-filter`/`doc-reason-filter`/`doc-sort`）；两组统计 `#overall-counts`+`#result-counts` 常显；页头运行态+交付态按钮并列。顺带删掉无人引用的死标记 `release-notice`。
+  - `frontend/app.js`：`state` 的 `progressPage/resultPage/progressSize/resultSize/progressDocs/resultDocs` → 单一 `docPage/docSize/taskDocs`；`VIEW_TITLES`/`go()` 支持 `task`；`renderTask`/`deliveryCounts`/`updateDeliveryNote`/`selectTask`/`loadDocuments`/`refresh`/`seal`/`exportResults`/`resetWorkspace`/`data-detail`/分页/`changed`/事件绑定全部改到 `doc-*`；`renderTask` 里失效的 `selected-task-ruleset` 已移除。
+  - `frontend/app.css`：`#result-scope-note`→`#doc-scope-note`、`#result-rows`→`#doc-rows`（行置灰规则随合并变为常显）。
+- **关键坑（勿再错改）**：分页名**必须**用 `name='doc'`。`pagination()` 按 `name` 推导 `state[`${name}Page`]`，而 `taskPage/taskSize` 已被**任务列表**占用，若沿用会把两处分页串在一起。`data-detail` 统一 `doc:i` 并统一读 `state.taskDocs`。
+- **顺带修复**：原 `emptyRow(cols)` 列数与真实表头不符（progress 传 5 / results 传 7 / reset 传 6、5）→ 统一 7，空态 `colspan=7`，列错位消除。
+- **真实浏览器验证（已做，非静态检查）**：装了 Playwright + Chromium（`dnf install atk gtk3 …` 补系统库）驱动**真实页面 + 真实 API**。脚本 `/tmp/opencode/browser_accept.py`、`/tmp/opencode/browser_accept2.py`。结果：**0 页面/控制台报错**；`#view-task` 唯一，旧两页已无；导航只剩一个「任务详情」；表头 7 列全部可见；数据行 7 单元格；`data-detail="doc:0"`；空态 `colspan=7`；筛选真实下发（`upload_status=pending`）；分页 `data-page='doc'`；`#overall-counts`/`#result-counts` 正常填充；刷新后一致。另：`app.js` 过 modern JS 引擎语法校验；HTML 结构闭合 0 错；118 个 JS 引用 id 全部存在。
+- **测试**：572 passed / 6 skipped / 1 failed；该 1 失败经 `git stash` 对照确认是**既有环境问题**（缺 `references/source/…文案勘误版.docx`），**与本改动无关**。
+- **已登记**：`docs/DETAIL_ISSUES_AND_RESOLUTIONS.md` **FL-D086**（两页重复 + `emptyRow` 列数缺陷，含验证证据）。
+- **下一步**：①（用户已确认实施完毕则跳过）发布前端到 `/opt/fundlex-recall-first`（`bash tools/deploy/publish_workspace.sh`）并在 `https://fundlex.club` 复核真实页面；② 回到第 8 轮主线：修 **FL-D060**（无条件 append 漏加 G01/G03/G16）→ 开发集再跑 1—2 轮 → 冻结 → 留出 8 例 → `docs/REAL_REVISION_EVALUATION_RESULTS.md`。
 
 ## 当前断点（第 8 轮，2026-10-15，接续请从此处读）
 

@@ -25,7 +25,7 @@
 .task-name-field input{width:100%}
 #task-name.invalid{border-color:#d98f8f;box-shadow:0 0 0 3px rgba(165,43,54,.08)}
 .field-error{color:var(--red);font-size:12px;margin:0}
-#result-scope-note{margin:0 0 11px}
+#doc-scope-note{margin:0 0 11px}
 .evidence.quote{cursor:zoom-in;background:#f7f9fa;border:1px solid var(--line-soft);border-radius:6px;padding:9px 11px;margin-bottom:9px}
 .evidence.quote .quote-label{display:block;color:#88919a;font-size:10px;font-weight:700;letter-spacing:.08em;margin-bottom:4px}
 .evidence.quote .quote-text{display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden}
@@ -37,8 +37,8 @@
 @media(min-width:1181px){.stats{grid-template-columns:repeat(4,minmax(0,1fr))}}
 @media(max-width:760px){.counts-kpis .mini-kpi{min-width:78px;padding:8px 9px}.counts-kpis .mini-kpi b{font-size:16px}.guide-steps{grid-template-columns:minmax(0,1fr)}.guide-head{flex-wrap:wrap}}
 /* Result scanning: quiet rows for plain successes, notice box for the delivery summary */
-#result-rows tr.row-muted .badge.b-green{background:#f4f6f5;color:#69736d;border-color:#e8ebe9}
-#result-rows tr.row-muted .reason-cell{color:#8b949c}
+#doc-rows tr.row-muted .badge.b-green{background:#f4f6f5;color:#69736d;border-color:#e8ebe9}
+#doc-rows tr.row-muted .reason-cell{color:#8b949c}
 .table tbody tr.row-muted td{background:#fcfdfd}
 .scope-callout{margin:0 0 12px;border:1px solid #ead9c8;background:#fffaf4;border-radius:7px;padding:9px 12px;font-size:12px;line-height:1.65;color:#6b5136}
 
