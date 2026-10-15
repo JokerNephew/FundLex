@@ -111,36 +111,52 @@ def locate_paragraph(final_paragraphs: list[str], original_paragraph: str,
     return best if best_score >= 0.6 else -1
 
 
+def _normalise_policy(value: str) -> str:
+    """Canonicalise the wording variants contracts legitimately introduce.
+
+    Beyond the punctuation/pronoun variants, contracts refer to fund share
+    classes by their real letters. The rule templates assume "A类"/"C类", but a
+    contract with three classes writes "A类、D类基金份额" where the template
+    says "A类基金份额". The obligation is identical, so collapse every
+    share-class enumeration to a single token before comparing.
+    """
+    value = compact(value)
+    for variant, canonical in (("认购/申购", "申购"), ("认购、申购", "申购"),
+                               ("的基金份额", "基金份额")):
+        value = value.replace(variant, canonical)
+    # "A类、D类基金份额" -> "类基金份额"; "A类" -> "类基金份额"-compatible form.
+    value = re.sub(r"[A-ZＡ-Ｚ](?:类|份额)?(?:[、和及与][A-ZＡ-Ｚ](?:类|份额)?)*类?基金份额", "类基金份额", value)
+    value = re.sub(r"[A-ZＡ-Ｚ]类基金份额", "类基金份额", value)
+    return value
+
+
 def appendix_present(required: str, final_compact: str) -> bool:
     """True when the appended policy sentence appears in the final document.
 
-    The appended wording is a full sentence that contracts reproduce with small variations:
-    an extra parenthetical, "申购" extended to "认购/申购". A fixed prefix test misfires on
-    those. Normalise the frequent variants, then require the obligation's leading clause to
-    be present (the leading clause is the distinctive part; the trailing clause also appears
-    in other sections).
+    The appended wording is a full sentence that contracts reproduce with small
+    variations: an extra parenthetical, "申购" extended to "认购/申购", or a
+    different set of fund share classes ("A类、D类" where the template says
+    "A类"). A fixed prefix test misfires on those. Normalise the frequent
+    variants, then require the obligation's leading clause to be present (the
+    leading clause is the distinctive part; the trailing clause also appears in
+    other sections).
     """
-    def normalise(value: str) -> str:
-        value = compact(value)
-        for variant, canonical in (("认购/申购", "申购"), ("认购、申购", "申购"),
-                                   ("的基金份额", "基金份额")):
-            value = value.replace(variant, canonical)
-        return value
-
-    policy = normalise(required)
-    haystack = normalise(final_compact)
+    policy = _normalise_policy(required)
+    haystack = _normalise_policy(final_compact)
     if len(policy) < 12:
         return policy in haystack
     # The lead clause runs to the first full stop / semicolon in the policy.
     lead = policy.split("；")[0].split("。")[0]
     if lead and lead in haystack:
         return True
-    # Fall back to a high-overlap fuzzy check for the leading segment.
+    # Fall back to a high-overlap fuzzy check for the leading segment. Step by
+    # one character: the distinctive content is dense, and a coarse stride can
+    # step over the single window that matches.
     segment = policy[: min(len(policy), 120)]
     window = len(segment)
     if window == 0:
         return False
-    for start in range(0, max(1, len(haystack) - window), 4):
+    for start in range(0, max(1, len(haystack) - window) + 1):
         candidate = haystack[start:start + window]
         common = sum(1 for a, b in zip(segment, candidate) if a == b)
         if common / window >= 0.85:
