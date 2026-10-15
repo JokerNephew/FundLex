@@ -948,6 +948,25 @@
 - 变更记录：2026-10-15 新增（构建结果交付包时发现）；同日实施 `_raw_to_compact` 与 parts 偏移修正并验证。
 - 变更记录：2026-10-15 新增（构建结果交付包时发现）。
 
+## FL-D081 模型中间结果缺乏可观测性，无法做评测回归对比与根因定位（接入 Langfuse Cloud）
+
+- 发现日期：2026-10-15（用户提问「能否接入 Langfuse 对中间结果监控以改进评测」）。
+- 问题与影响：模型调用的中间结果没有可检索的落点——`ModelGateway.call` 的 `event` 只存在于内存 `self.events`，report.json 只留最终决策；因此**无法跨轮对比逐目标 diff、无法把某个失败 verdict 追到具体模型调用与 prompt 阶段**，只能靠人工翻 report。用户要求按「①回归对比 ②根因定位 ③成本效率」的顺序解决。
+- 选型证据：本机（生产服务器）**无 Docker/podman/containerd**，无 Postgres/ClickHouse/Redis/MinIO；内存 7.4GB、磁盘 40GB，且已跑生产 API/worker/nginx/MySQL。自托管 Langfuse v4 需 Postgres+ClickHouse+Redis+MinIO+web+worker 共 6 个常驻服务，官方建议 4 核/16GB/100GB → **自托管不可行**。用户明确「合同均为公开资料，可入库、可出服务器」，故采用 **Langfuse Cloud（方案 A）**：本机仅装 `langfuse==5.0.1`（+OTel 依赖），零常驻服务。
+- 处理方法（已实施）：
+  - 新增 `fundlex/observability.py`：所有 Langfuse 交互的唯一收口。**无 key 时纯 no-op**；任何导入/配置/网络异常都降级为「不追踪」并被吞掉（可观测性绝不能让一次修改失败）。
+  - `fundlex/model.py`：`call()` 内新增 `_trace_attempt()`，每次模型尝试发一个 generation（复用已有 event 字段：task_type/prompt_version/model/usage/cost/latency/http_status/error_code/reused_checkpoint）。
+  - `fundlex/jobs.py`：新增 `_document_trace(job, store)`，以 **document_id 为确定性 trace seed** 开根 span（重跑/重试落同一 trace，不重复）。
+  - 新增 `tools/evaluation/p6_langfuse_sync.py`：把 `score.json` 的逐目标 verdict 作为 CATEGORICAL score 回写同一 trace，实现「过程↔结果」对齐；支持 `--dry-run`。
+  - `.env.example` 登记 `FUNDLEX_LANGFUSE_PUBLIC_KEY/SECRET_KEY/HOST/CAPTURE_TEXT`（默认关、默认存原文；`CAPTURE_TEXT=0` 时只发 sha256+长度）。
+  - 合同资料政策更新（用户授权）：`AGENTS.md` 注明合同为公开资料，可入库、可出服务器；**仅凭据仍严禁入库/写入日志/第三方**。
+- 状态与验证：**已实施并本地验证；云接入待用户 API key**。
+  - 用本地 OTLP 收集桩（`/tmp/opencode/otlp_stub.py`）验证真实发射：收到 `/api/public/otel/v1/traces`（根 span `recall-first:<file>` + 子 span `recall_facts`，**trace id 一致**）与 `/api/public/scores`；generation 带 input/output/model/usage_details/cost_details/`langfuse.version`；score 带完整 metadata（case_id/rule_id/target_id）。
+  - 新增 `tests/test_observability.py`（5 项）：无 key no-op、双 key 才启用、脱敏哈希、真实 `call()` 发 span、trace seed 确定性。全量测试 **568 passed / 6 skipped**（无回归）。
+  - 文档：`docs/LANGFUSE_OBSERVABILITY.md`（选型、架构、用法、验证、待办）。
+- 下一步：① 用户提供 Langfuse Cloud public/secret key → 跑 2 例验证真实 trace 入库，再跑整轮开发集；② 可选把批次 id 作为 tag 便于回归对比。
+- 变更记录：2026-10-15 新增；同日完成代码实施与本地 OTLP 验证。
+
 ## 后续条目模板
 
 ### FL-Dxxx 问题名称

@@ -67,7 +67,7 @@
 - **多 agent 并行**：仓库内有另一 agent 在跑 P6（第 8 轮）。改 `docs/ACTIVE_HANDOFF.md`、`docs/DETAIL_ISSUES_AND_RESOLUTIONS.md` 前先看 mtime，尽量小改、追加，避免冲突。
 - **FL-D066**：不要 kill 在途 P6 批次；中止后残留模型账本 `reserved` 会阻塞后续（`MODEL_CONCURRENCY_LIMIT`），需重启 worker。
 - **凭据**：只在内存/临时文件用，不写入仓库/文档/prompt/日志。
-- **样本/原件**：`funds_word/`、`references/`、`var/` 由 `.gitignore` 覆盖，勿入库。
+- **样本/原件**：`funds_word/`、`references/`、`var/` 因体积大仍由 `.gitignore` 覆盖（**非**安全要求）。**政策已更新（用户 2026-10-15）**：合同为公开资料，**可入库、可出服务器**（含 Langfuse Cloud）；只有**密钥/凭据**仍严禁入库、严禁写入文档/prompt/日志/第三方服务。
 
 ## 5. 关键文件
 

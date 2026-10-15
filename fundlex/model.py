@@ -14,6 +14,22 @@ import jsonschema
 from .model_budget import BudgetError, ModelBudget
 from .db import DatabaseError
 from .config import local_data_dir
+from . import observability
+
+def _trace_attempt(*, task_type: str, prompt_version: str, system: str,
+                   bounded_context: str, value: Any, event: dict) -> None:
+    """Best-effort: publish one model attempt to Langfuse (no-op when disabled)."""
+    if not observability.enabled():
+        return
+    completion = None
+    if isinstance(value, dict):
+        try: completion = json.dumps(value, ensure_ascii=False)
+        except (TypeError, ValueError): completion = None
+    elif isinstance(value, str):
+        completion = value
+    observability.record_generation(task_type=task_type, prompt_version=prompt_version,
+        model=event.get('actual_model') or event.get('configured_model') or '',
+        prompt_text=system + '\n' + bounded_context, completion=completion, event=event)
 
 class ModelError(RuntimeError):
     def __init__(self, code: str, metrics: dict | None = None):
@@ -275,6 +291,8 @@ class ModelGateway:
                     except BudgetError as exc: event['error_code']=str(exc)
                     except (sqlite3.Error, DatabaseError): event['error_code']='MODEL_LEDGER_UNAVAILABLE'
                 self.events.append(event)
+                _trace_attempt(task_type=task_type,prompt_version=prompt_version,
+                    system=system,bounded_context=bounded_context,value=value,event=event)
             if event['error_code']:
                 if retry and attempt<self.retries:
                     time.sleep(min(2**attempt,2))

@@ -12,7 +12,7 @@ import sqlite3
 import shutil
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any, Callable, Iterator
 
 from .store import (Conflict, RunStore, sha256_file, engine_build, SCHEMA_VERSION,
                     validate_delivery, is_recall_report)
@@ -26,6 +26,34 @@ RETRYABLE_MODEL_CODES = {"MODEL_NETWORK_ERROR", "MODEL_RETRY_EXHAUSTED", "MODEL_
                          "MODEL_CONCURRENCY_LIMIT", "MODEL_RESERVATION_EXPIRED"}
 
 Processor = Callable[[Path, Path, str], dict[str, Any]]
+
+
+@contextmanager
+def _document_trace(job: dict[str, Any], store: RunStore) -> Iterator[None]:
+    """Open one Langfuse trace per document revision (no-op when tracing is off).
+
+    Tracing is best-effort: a failure here must never block a revision, so any
+    exception from the observability layer is contained by that layer itself.
+    """
+    from . import observability
+    if not observability.enabled():
+        yield
+        return
+    document_id = job.get("id") or ""
+    input_key = job.get("input_key") or ""
+    metadata = {
+        "document_id": document_id,
+        "engine_id": job.get("engine_id", ""),
+        "input_key": input_key,
+        "source_sha256": job.get("source_sha256", ""),
+        "guide_version_id": job.get("guide_version_id", ""),
+        "owner": job.get("owner", ""),
+    }
+    with observability.trace_document(name=f"recall-first:{input_key or document_id}",
+                                      document_id=document_id, metadata=metadata,
+                                      tags=["recall-first", job.get("engine_id", "")]):
+        yield
+    observability.flush()
 
 
 def _default_processor(input_path: Path, output_dir: Path, ruleset_version: str, *, engine_id: str = "",
@@ -144,9 +172,10 @@ class Worker:
                 guide_document = self._bound_guide_document(job)
                 with self._lease_heartbeat(doc_id, token):
                     if self.processor is _default_processor:
-                        report = self.processor(source, output_dir, job["ruleset_version"],
-                            engine_id=job.get("engine_id", ""), guide_version_id=job.get("guide_version_id", ""),
-                            guide_document=guide_document, checkpoint_dir=self.store.root / "checkpoints" / doc_id)
+                        with _document_trace(job, self.store):
+                            report = self.processor(source, output_dir, job["ruleset_version"],
+                                engine_id=job.get("engine_id", ""), guide_version_id=job.get("guide_version_id", ""),
+                                guide_document=guide_document, checkpoint_dir=self.store.root / "checkpoints" / doc_id)
                     else:
                         report = self.processor(source, output_dir, job["ruleset_version"])
                 if isinstance(report, dict) and report.get("error_code") in RETRYABLE_MODEL_CODES:
