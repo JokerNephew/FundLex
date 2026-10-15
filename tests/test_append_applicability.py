@@ -45,6 +45,12 @@ class _FakeInspection:
     def __init__(self, paragraphs):
         self.paragraphs = [_FakeParagraph(loc, text) for loc, text in paragraphs]
 
+    def by_location(self, location):
+        for span in self.paragraphs:
+            if span.location == location:
+                return span
+        raise KeyError(location)
+
 
 def _facts(classes=()):
     return Facts(fund_type="open_regular", fund_type_quote="", fund_type_basis="",
@@ -182,3 +188,51 @@ def test_heading_hint_is_ignored_in_favour_of_section_end():
     hits = append_applicability_targets(inspection, [APPEND_RULE], _facts(), sections,
                                         hinted={"G01": "p1"})
     assert hits[0].locations == ("p3",)
+
+
+def test_override_rules_let_an_absent_target_be_replaced():
+    """An inventory "absent" target must not mask the append the pass just located.
+
+    ``_survey_targets_from_hits`` normally skips a hit whose rule already has a target at
+    the same location. The append pass names its rules in ``override_rules`` so an
+    ``absent`` judgment — the very thing it exists to correct (D09/D13) — cannot suppress
+    the discovered clause.
+    """
+    from fundlex.recall import SurveyHit
+    from fundlex.recall_pipeline import _survey_targets_from_hits
+
+    quote = "基金份额类别：本基金分A类、B类。"
+
+    class _Segment:
+        start = 0
+        end = 10_000
+
+    class _Span:
+        location = "p2"
+        text = quote
+        segments = (_Segment(),)
+
+    class _Doc:
+        def by_location(self, location):
+            return _Span()
+
+    class _Existing:
+        rule_id = "G01"
+        location = "p2"
+        composite = []
+        start = 0
+        end = 0
+
+    hit = SurveyHit(rule_id="G01", operation="append", locations=("p2",), quote=quote,
+                    start=0, end=0, ratio=1.0, index=1)
+    hit.with_parts([("p2", 0, len(quote))])
+    rules_by_id = {"G01": APPEND_RULE}
+
+    without = _survey_targets_from_hits([hit], rules_by_id, _Doc(), [_Existing()],
+                                        start_index=0)
+    assert without[0] == []                     # suppressed by the existing target
+
+    with_override = _survey_targets_from_hits([hit], rules_by_id, _Doc(), [_Existing()],
+                                              start_index=0,
+                                              override_rules=frozenset({"G01"}))
+    assert [t.rule_id for t in with_override[0]] == ["G01"]

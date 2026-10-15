@@ -255,7 +255,9 @@ def _collect_targets(entries: Sequence[_WindowState], synthetic: Sequence[Target
 
 def _survey_targets_from_hits(hits: Sequence[SurveyHit], rules_by_id: dict[str, dict],
                               inspection: DocumentInspection, existing_targets: Sequence[Target],
-                              *, start_index: int) -> tuple[list[Target], list[dict[str, Any]]]:
+                              *, start_index: int,
+                              override_rules: frozenset[str] = frozenset()
+                              ) -> tuple[list[Target], list[dict[str, Any]]]:
     """Turn deterministic survey hits into source-bound targets and coverage gaps.
 
     A hit whose reference runs across paragraphs becomes ONE target that lists every
@@ -263,6 +265,10 @@ def _survey_targets_from_hits(hits: Sequence[SurveyHit], rules_by_id: dict[str, 
     paragraph separately and keeps the rest of each paragraph verbatim (FL-D047).
     Hits whose text no longer resolves are reported as coverage gaps instead of being
     silently dropped.
+
+    ``override_rules`` names rules whose existing targets must not suppress a new hit —
+    the append pass uses it so an inventory judgment of "absent" cannot mask the clause
+    the pass just located (FL-D090).
     """
     known: set[tuple[str, str]] = {(target.rule_id, location) for target in existing_targets
                                    for location in _target_locations(target)}
@@ -272,7 +278,7 @@ def _survey_targets_from_hits(hits: Sequence[SurveyHit], rules_by_id: dict[str, 
     for hit in hits:
         if hit.operation == "satisfied":
             continue
-        if (hit.rule_id, hit.locations[0]) in known:
+        if hit.rule_id not in override_rules and (hit.rule_id, hit.locations[0]) in known:
             continue
         counter += 1
         target_id = f"Y{counter:03d}"
@@ -373,7 +379,8 @@ def _run_survey(model: Any, rules: Sequence[dict], rules_by_id: dict[str, dict],
         synthetic.append(target)
         origins[target_id] = "survey_satisfied"
     discovered, new_gaps = _survey_targets_from_hits(
-        hits, rules_by_id, inspection, [*targets, *synthetic], start_index=len(synthetic))
+        hits, rules_by_id, inspection, [*targets, *synthetic], start_index=len(synthetic),
+        override_rules=frozenset(hit.rule_id for hit in append_hits))
     synthetic.extend(discovered)
     for target in discovered:
         origins[target.target_id] = "survey"
