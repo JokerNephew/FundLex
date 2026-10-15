@@ -1724,6 +1724,37 @@ def instantiate_slots(text: str, facts: Facts) -> tuple[str, list[str]]:
     return output, issues
 
 
+def _append_without_missing_group(text: str, facts: Facts) -> str | None:
+    """Instantiate an append whose wording names a class group the product lacks (FL-D090).
+
+    The guide's append policy mentions the subscription class group and the service-fee
+    class group. A product whose classes are A/Y (no service-fee class) still has to
+    receive the policy for the classes it does have; the service-fee sentence is simply
+    not applicable, so it is dropped rather than aborting the whole append. Returns
+    ``None`` when the wording still needs a group after that, so the caller keeps raising
+    the original ``RECALL_SLOT_UNRESOLVED``.
+    """
+    resolved = text
+    if "A类基金份额" in resolved:
+        if not facts.subscription_group:
+            return None
+        resolved = resolved.replace("A类基金份额", class_label(facts.subscription_group))
+    if "C类基金份额" in resolved:
+        if facts.service_group:
+            resolved = resolved.replace("C类基金份额", class_label(facts.service_group))
+        else:
+            # Drop the service-fee sentence(s) that name the missing class and keep the
+            # rest, so the appended clause reads as a complete policy for this product.
+            kept = [sentence for sentence in re.split(r"(?<=[。；])", resolved)
+                    if "C类基金份额" not in sentence]
+            resolved = "".join(kept).strip()
+            # Removing a trailing clause can leave a dangling separator ("…费用；");
+            # close the sentence with a full stop instead.
+            resolved = resolved.rstrip("；;，,、") + "。" if resolved else ""
+    resolved = resolved.strip()
+    return resolved or None
+
+
 def _missing_slot_groups(rule: dict, operations: Sequence[dict], facts: Facts) -> set[str]:
     """Class groups a rule's required text names but the product does not have.
 
@@ -1759,6 +1790,26 @@ def _needs_service_class(rule: dict, operations: Sequence[dict], facts: Facts) -
     return False
 
 
+def _needs_missing_class_group(rule: dict, operations: Sequence[dict], facts: Facts) -> bool:
+    """True when the rule cannot be carried out because a class group is missing.
+
+    The class-substitution out-of-scope gate exists because re-writing a class group
+    requires that group to exist. A **pure append** does not re-group anything — it adds
+    the policy text wholesale, and ``plan_target``'s append path drops the sentence naming
+    a class the product lacks — so a rule whose only applicable operation is an append is
+    never out of scope on this ground (FL-D090).
+    """
+    carried = [operation for operation in operations if operation.get("op") != "noop"]
+    if carried and all(operation.get("op") == "append" for operation in carried):
+        return False
+    for operation in operations:
+        if operation.get("op") == "append":
+            continue
+        if "C类基金份额" in str(operation.get("new_text") or ""):
+            return True
+    return bool(rule.get("class_substitution")) and fee_homogeneous_classes(facts)
+
+
 def _drop_empty_group_operations(rule: dict, operations: Sequence[dict],
                                  facts: Facts) -> list[dict]:
     """Drop the operations whose replacement needs a class group the product lacks.
@@ -1770,8 +1821,12 @@ def _drop_empty_group_operations(rule: dict, operations: Sequence[dict],
     """
     if not rule.get("class_substitution") or facts.service_group:
         return list(operations)
+    # An append is never dropped here: ``plan_target``'s append path handles a missing
+    # service-fee class by dropping only the sentence that names it (FL-D090), so removing
+    # the whole operation would silently lose the obligation.
     kept = [operation for operation in operations
-            if "C类基金份额" not in str(operation.get("new_text") or "")]
+            if operation.get("op") == "append"
+            or "C类基金份额" not in str(operation.get("new_text") or "")]
     return kept
 
 
@@ -1999,16 +2054,21 @@ def plan_target(rule: dict, target: Target, inspection: DocumentInspection, fact
         # branch on a multi-class contract, a floating-fee branch on a fixed-fee one):
         # the rule does not apply here, which is not a failure.
         raise RecallError("RECALL_RULE_NOT_APPLICABLE", {"rule": rule["rule_id"]})
+    if slot_group_missing(rule, operations, facts) and _needs_missing_class_group(rule, operations, facts):
+        # A group-substitution rule needs both groups to re-group the classes. When the
+        # product lacks the service-fee group (or all its classes share one fee profile)
+        # there is no grouping to apply, so the rule is out of scope as a whole; keeping
+        # its remaining half would call instantiate_slots on the C-class placeholder and
+        # fail with RECALL_SLOT_UNRESOLVED (FL-D056).
+        #
+        # A **pure append** is different: the policy text is added wholesale and no
+        # existing class is re-grouped, so a contract whose classes are A/Y (no C
+        # service-fee class) still has to receive the appended clause. Aborting there
+        # dropped the obligation entirely (FL-D090, D07).
+        raise RecallError("RECALL_RULE_NOT_APPLICABLE",
+                          {"rule": rule["rule_id"],
+                           "groups": sorted(_missing_slot_groups(rule, operations, facts))})
     if slot_group_missing(rule, operations, facts):
-        if rule.get("class_substitution"):
-            # A group-substitution rule needs both groups to re-group the classes. When the
-            # product lacks the service-fee group (or all its classes share one fee profile)
-            # there is no grouping to apply, so the rule is out of scope as a whole; keeping
-            # its remaining half would call instantiate_slots on the C-class placeholder and
-            # fail with RECALL_SLOT_UNRESOLVED (FL-D056).
-            raise RecallError("RECALL_RULE_NOT_APPLICABLE",
-                              {"rule": rule["rule_id"],
-                               "groups": sorted(_missing_slot_groups(rule, operations, facts))})
         operations = _drop_empty_group_operations(rule, operations, facts)
     if not operations:
         # Every operation needed a class group this product does not have.
@@ -2033,7 +2093,14 @@ def plan_target(rule: dict, target: Target, inspection: DocumentInspection, fact
         operation = append_ops[0]
         new_text, issues = instantiate_slots(str(operation.get("new_text") or ""), facts)
         if issues or not new_text.strip():
-            raise RecallError("RECALL_SLOT_UNRESOLVED", {"rule": rule["rule_id"], "issues": issues})
+            # The guide's append wording names an assumed class group ("C类基金份额"). A
+            # product with no service-fee class still receives the appended policy — the
+            # sentence is added wholesale and names no existing class it must re-group —
+            # so an unfillable class placeholder must not abort the append (FL-D090).
+            fallback = _append_without_missing_group(str(operation.get("new_text") or ""), facts)
+            if fallback is None:
+                raise RecallError("RECALL_SLOT_UNRESOLVED", {"rule": rule["rule_id"], "issues": issues})
+            new_text, issues = fallback, []
         prefix = append_separator(span.text[:target.end], new_text)
         return PlannedEdit(target_id=target.target_id, rule_id=rule["rule_id"], location=target.location,
                            start=target.end, end=target.end, replacement=prefix + new_text, operation="insert",

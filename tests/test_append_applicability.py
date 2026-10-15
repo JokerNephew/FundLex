@@ -117,3 +117,33 @@ def test_service_group_empty_does_not_suppress_the_append():
     sections = [_section("S1", "第二条 释义", ["p1", "p2"])]
     hits = append_applicability_targets(inspection, [rule], _facts(), sections)
     assert len(hits) == 1
+
+
+def test_append_with_missing_service_class_is_not_out_of_scope():
+    """The append path drops only the sentence naming the absent class (FL-D090).
+
+    The guide's policy names a C-class service-fee group; a product with A/Y classes
+    has none, but the policy still belongs in the document. The append must be planned
+    rather than declared out of scope, and the resulting text must read as a complete
+    sentence with the class names the product actually has.
+    """
+    from fundlex.recall import _append_without_missing_group
+
+    policy = ("投资者通过直销机构申购本基金A类基金份额时，不收取认购/申购费用；"
+              "通过直销机构申购的C类基金份额，不收取销售服务费。")
+    facts = _facts([ClassFact(name="A类基金份额", subscription_fee=True, service_fee=False,
+                              current=True, rate=None, quote=""),
+                    ClassFact(name="Y类基金份额", subscription_fee=True, service_fee=False,
+                              current=True, rate=None, quote="")])
+    resolved = _append_without_missing_group(policy, facts)
+    assert resolved is not None
+    assert "C类基金份额" not in resolved          # the absent class is not mentioned
+    assert "A类、Y类基金份额" in resolved          # the real classes are named
+    assert resolved.endswith("。")
+
+
+def test_append_without_missing_group_returns_none_when_subscription_class_absent():
+    from fundlex.recall import _append_without_missing_group
+
+    policy = "投资者通过直销机构申购本基金A类基金份额时，不收取费用。"
+    assert _append_without_missing_group(policy, _facts()) is None
