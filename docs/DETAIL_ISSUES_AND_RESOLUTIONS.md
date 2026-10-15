@@ -1004,6 +1004,42 @@
 - 下一步：装包→发布→重启→跑 2 例真实链路→确认 Langfuse 六阶段 trace。
 - 变更记录：2026-10-15 新增。
 
+## FL-D085 Langfuse JP 区（jp.cloud.langfuse.com）接收到的 span 丢失 input/output/usage/cost/metadata
+
+- 发现日期：2026-10-15（跑完 2 例真实链路后核对 Langfuse 云端数据）。
+- 问题与影响：真实 2 例（D04/D05，118 调用，$0.0867）的 trace **结构完整**（根 span + 六阶段 generation，`sessionId` 分组正确），但**每次调用的输入、输出、token 用量、成本、metadata 全部为空**。这直接废掉可观测性的核心价值（根因定位、成本效率），只剩「调过几次」。
+- 证据（关键，已定位到平台侧，**排除我方代码**）：
+  1. **我方发送正确**：用本地 OTLP 收集桩（`/tmp/opencode/otlp_stub.py`）抓取，`recall_facts` generation 的 span 属性含 `langfuse.observation.input`（原文）、`…output`（原文）、`…usage_details={"input":120,"output":30,"total":150}`、`…cost_details={"total":0.0001}`、11 个 `metadata.*`。
+  2. **云端存储为空**：`GET /api/public/v2/observations?traceId=…` 与 SDK `observations.get_many` 对同一批 span 返回 `input=None, output=None, usage_details=None, cost_details=None, metadata=None, model=None`；`latency=0`。等待 60s 后复读仍为空。
+  3. **纯 SDK 复现**：不经过 FundLex 任何代码，用教科书写法（`Langfuse()` + `start_as_current_observation(as_type="generation", input=..., output=..., usage_details=..., metadata=...)`）发一条，JP 区读取**同样全为 None**（trace `997b7c28…`）。→ **非本项目缺陷**。
+  3b. **官方 `@observe()` 装饰器复现**：用 Langfuse 官方最惯用写法（`from langfuse import observe, get_client` + `@observe()` 函数返回 dict）发送，JP 区读取仍是 `input=None, output=None`（`my_llm` span）。→ 彻底排除我方调用方式问题。
+  4. 账号/鉴权/ingest 均正常：`/api/public/projects` 200、`/api/public/v2/observations` 200、观测条数与名称正确；`auth_check` 偶发 UnauthorizedError（疑似限流，稍后即恢复）。
+- 影响范围：`jp.cloud.langfuse.com`；同一对 key 在其他区（`cloud/us/eu.cloud.langfuse.com`）均 UnauthorizedError（key 仅属 JP 组织）。
+- 处理方法（**待定，需用户决定/或向 Langfuse 报障**）：候选 ① 在 Langfuse 项目设置里检查是否开了 data masking / retention 仅存结构；② 换区（用户在有数据的区新建项目并给 key）；③ 向 Langfuse 支持报障（JP 区 ingest 丢 payload）；④ 退化为**本地 JSONL trace**（我方发送链已证明可靠），必要时再回灌。
+- 状态与验证：**已复现并定位（平台侧，非我方代码）**。我方代码侧无改动必要；本地发送链已验证正确。
+- 下一步：等用户确认走 ②/③/④ 之一；在此之前不宣称「Langfuse 中间结果监控可用」。
+- 变更记录：2026-10-15 新增。
+
+## FL-D086 前端「处理进度」与「合同结果」两页高度重复（同一数据源、同一加载逻辑）
+
+- 发现日期：2026-10-15（用户在前端试用时指出两页「几乎一样」）。
+- 问题与影响：`#view-progress` 与 `#view-results` 都调用同一个接口 `GET /api/tasks/{task_id}/documents`，共用 `loadDocuments()`、任务选择器循环、`showDetail()` 与分页逻辑；差异只在列、筛选项和头部按钮。用户要在两页之间来回切换才能看全「上传/资格/交付/处理」四类状态，容易漏看；维护上任何一处改动都要同步两份，属于**重复实现且易漂移**的问题。
+- 处理方法（用户选定方案：**一张表 + 全部列常显**，明确否决「视图切换」方案）：
+  - 合并为单页「任务详情」（`id="view-task"`，`data-nav="task"`），不删除任何一页的既有能力，能力全部保留到该页。
+  - **一张 `<table>`，固定 7 列表头常显**：合同文件 / 上传状态 / 资格 / 交付完整性 / 处理状态 / 业务提示 / 操作。**不做视图切换、不做列切换、不做双表头**。
+  - 用**筛选器**承担聚焦职责，而非切换视图：搜索 + 上传状态 + 资格 + 交付 + 处理状态 + 原因 + 排序。
+  - 头部同时展示运行态与交付态两组按钮；`#overall-counts` 与 `#result-counts` 两组统计**始终显示**。
+  - 统一 DOM id 前缀为 `doc-*`；`data-detail` 统一为 `doc:i`，状态合并为单数组 `state.taskDocs`。
+  - 分页名必须用 `name='doc'`（→ `state.docPage/docSize`）：`pagination()` 按 `name` 推导 `state[`${name}Page`]`，而 `taskPage/taskSize` 已被任务列表占用，若沿用会把两处分页串在一起。
+- 附带修复的隐性缺陷：原 `emptyRow(cols)` 传的列数与实际表头列数不一致（progress 传 5、results 传 7、`resetWorkspace` 传 6/5，而实际分别是 5/7）。合并后统一为 7，空态用 `colspan=7`，列错位问题消除。
+- 状态与验证：**已实施并已在真实浏览器验证**（Chromium/Playwright，非仅静态检查）。
+  - 验证方式：本地起真实 API（`FUNDLEX_AUTH_MODE=dev`），用真实接口种子任务与文档，驱动真实页面；脚本 `/tmp/opencode/browser_accept.py`、`/tmp/opencode/browser_accept2.py`。
+  - 实测结果：控制台/页面 **0 报错**；`#view-task` 唯一存在，`#view-progress`/`#view-results` 已删除；导航只剩一个「任务详情」；表头 7 列且全部可见；数据行 7 个单元格；`data-detail="doc:0"`；空态 `colspan=7`；筛选会以 `upload_status=pending` 等参数真实请求接口；分页 `data-page` 为 `doc`；`#overall-counts`/`#result-counts` 均正常填充；刷新后页面保持一致。
+  - 另有 572 passed / 6 skipped（`tests/test_rules_catalogue.py` 1 例失败为既有基线失败，与本改动无关）；`app.js` 通过 modern JS 引擎（quickjs）语法校验；HTML 结构闭合校验 0 错误；JS 引用的 118 个 DOM id 全部存在于 HTML。
+- 影响范围：仅前端 3 个文件（`frontend/index.html`、`frontend/app.js`、`frontend/app.css`），无后端/数据库/引擎改动，可用单次 commit revert 回退。
+- 下一步：发布到 `/opt/fundlex-recall-first` 后在公网入口复核一次真实页面。
+- 变更记录：2026-10-15 新增；同日完成后端无关的浏览器实测验证。
+
 ## 后续条目模板
 
 ### FL-Dxxx 问题名称
