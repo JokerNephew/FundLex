@@ -691,6 +691,26 @@
   - G13（7 份标签）与 G06（3 份）亦有同类短锚漏配，待查措辞变体后评估。
   - 基线中 G15 漏删同时来自“模型盘点判 not_applicable”（D04 p845、D10/D11/D12 全部）与“survey 漏扫”，不能只靠 code 侧修复。
 
+## FL-D072 工作区长期未提交、版本管理缺失（本轮完成规范化提交，push 受凭据阻塞）
+
+- 发现日期：2026-10-15（用户要求「git 事情可自主判断，做好版本管理」）。
+- 问题与影响：工作区自 `3ed4e96` 起长期未提交——整个 recall-first 引擎、指引、API/持久化扩展、前端工作台、测试、评测工具与文档共 **46 个未跟踪 + 11 个已跟踪修改** 堆积，无增量历史、无法回退、容易误入库样本/密钥。
+- 处理方法（已实施）：按功能拆成 **9 个逻辑提交**（`3ed4e96..HEAD`）：
+  1. `cc558ab` docs: 归档 early-prototype / v2-matching 旧文档（纯移动）。
+  2. `35b0be6` feat(recall-first): 引擎 + 指引 + 提示词 + P6 评测工具 + 测试。
+  3. `71ab437` feat(api): 多任务工作台 API、引擎绑定、模型账本 + 测试。
+  4. `d37d633` feat(frontend): 工作台 UI（并发任务、可读证据、ZIP、去横幅、单行 KPI 等，含本轮 8 项）。
+  5. `0896409` docs: 断点/交接/问题记录/评测计划/AGENTS。
+  6. `b3d68f9` chore(deploy): 发布与迁移工具。
+  7. `d7472c3` chore(research): 一次性研究脚本与工作台原型。
+  8. `d7af552` docs(archive): 归档计划指向 recall-first 交接。
+  9. `43626c2` chore: 忽略 3 个无引用散图（`640.png`/`t0183cba9196d3d9cc9.jpg`/`去白底 .png`，加 `.gitignore`）。
+  - 提交前已扫描全部拟入库文件：无口令/密钥/私钥模式；原件/样本目录（`funds_word/`、`references/`、`var/`）由 `.gitignore` 覆盖。git 身份设为 `FundLex Agent <agent@fundlex.local>`（仅本地）。
+  - 验证：提交后工作树**干净**（`git status` 空）；全量测试 **562 passed / 1 expected（references/ 未在服务器）/ 6 skipped**。
+- 状态与验证：**已实施**（本地提交完成）。**push 未做**：`origin`=`https://github.com/JokerNephew/FundLex.git`，本机无 HTTPS 凭据助手、无 `~/.git-credentials`、无 GitHub SSH 私钥、无 `gh`；`git ls-remote origin` 报 `could not read Username`。分支 `codex/fundlex-recall-first` 无 upstream。
+- 下一步：需要 push 时，由用户在服务器配置 GitHub 令牌/凭据（或告知改用其他 remote），再 `git push -u origin codex/fundlex-recall-first`（或新建分支/PR）。**不把凭据写入仓库/文档/prompt/日志。**
+- 变更记录：2026-10-15 新增。
+
 ## FL-D071 结果页可用性与多任务并行：前端 8 项 UX 问题（用户第 7 轮反馈）
 
 - 发现日期：2026-10-15（用户反馈第 7 轮问题 1–8，前端部分）。
