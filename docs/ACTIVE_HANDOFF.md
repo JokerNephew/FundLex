@@ -39,7 +39,9 @@
 - **真实浏览器验证（已做，非静态检查）**：装了 Playwright + Chromium（`dnf install atk gtk3 …` 补系统库）驱动**真实页面 + 真实 API**。脚本 `/tmp/opencode/browser_accept.py`、`/tmp/opencode/browser_accept2.py`。结果：**0 页面/控制台报错**；`#view-task` 唯一，旧两页已无；导航只剩一个「任务详情」；表头 7 列全部可见；数据行 7 单元格；`data-detail="doc:0"`；空态 `colspan=7`；筛选真实下发（`upload_status=pending`）；分页 `data-page='doc'`；`#overall-counts`/`#result-counts` 正常填充；刷新后一致。另：`app.js` 过 modern JS 引擎语法校验；HTML 结构闭合 0 错；118 个 JS 引用 id 全部存在。
 - **测试**：572 passed / 6 skipped / 1 failed；该 1 失败经 `git stash` 对照确认是**既有环境问题**（缺 `references/source/…文案勘误版.docx`），**与本改动无关**。
 - **已登记**：`docs/DETAIL_ISSUES_AND_RESOLUTIONS.md` **FL-D086**（两页重复 + `emptyRow` 列数缺陷，含验证证据）。
-- **下一步**：①（用户已确认实施完毕则跳过）发布前端到 `/opt/fundlex-recall-first`（`bash tools/deploy/publish_workspace.sh`）并在 `https://fundlex.club` 复核真实页面；② 回到第 8 轮主线：修 **FL-D060**（无条件 append 漏加 G01/G03/G16）→ 开发集再跑 1—2 轮 → 冻结 → 留出 8 例 → `docs/REAL_REVISION_EVALUATION_RESULTS.md`。
+- **已发布到线上（已完成）**：`bash tools/deploy/publish_workspace.sh` → `api/worker` 均 active，`/api/capabilities` 200。公网 `https://fundlex.club` 已复核（真实 Chromium）：`#view-task` 唯一、旧两页不存在、导航只剩一个「任务详情」、0 报错。脚本 `/tmp/opencode/live_check.py`。
+- **git**：commit `3f4d8cf`（前端合并）已推送 origin（`341be2b..3f4d8cf`）。注：FL-D086 文档条目被并行 agent 的 `341be2b` 一并提交，内容完整。
+- **下一步**：① 前端合并已完成并上线，如需可让用户在线上点一遍确认交互手感；② 回到第 8 轮主线：修 **FL-D060**（无条件 append 漏加 G01/G03/G16）→ 开发集再跑 1—2 轮 → 冻结 → 留出 8 例 → `docs/REAL_REVISION_EVALUATION_RESULTS.md`。
 
 ## 当前断点（第 8 轮，2026-10-15，接续请从此处读）
 
