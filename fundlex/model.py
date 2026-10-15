@@ -14,12 +14,13 @@ import jsonschema
 from .model_budget import BudgetError, ModelBudget
 from .db import DatabaseError
 from .config import local_data_dir
-from . import observability
+from . import observability, trace_sink
 
 def _trace_attempt(*, task_type: str, prompt_version: str, system: str,
                    bounded_context: str, value: Any, event: dict) -> None:
-    """Best-effort: publish one model attempt to Langfuse (no-op when disabled)."""
-    if not observability.enabled():
+    """Best-effort: publish one model attempt to the local JSONL sink and,
+    when configured, to Langfuse (both are no-ops when disabled)."""
+    if not (observability.enabled() or trace_sink.enabled()):
         return
     completion = None
     if isinstance(value, dict):
@@ -27,9 +28,16 @@ def _trace_attempt(*, task_type: str, prompt_version: str, system: str,
         except (TypeError, ValueError): completion = None
     elif isinstance(value, str):
         completion = value
+    prompt_text = system + '\n' + bounded_context
     observability.record_generation(task_type=task_type, prompt_version=prompt_version,
         model=event.get('actual_model') or event.get('configured_model') or '',
-        prompt_text=system + '\n' + bounded_context, completion=completion, event=event)
+        prompt_text=prompt_text, completion=completion, event=event)
+    seed = trace_sink.current_seed()
+    if seed:
+        trace_sink.record_generation(trace_seed=seed, task_type=task_type,
+            prompt_version=prompt_version,
+            model=event.get('actual_model') or event.get('configured_model') or '',
+            prompt_text=prompt_text, completion=completion, event=event)
 
 class ModelError(RuntimeError):
     def __init__(self, code: str, metrics: dict | None = None):

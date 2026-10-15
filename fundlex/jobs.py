@@ -35,8 +35,8 @@ def _document_trace(job: dict[str, Any], store: RunStore) -> Iterator[None]:
     Tracing is best-effort: a failure here must never block a revision, so any
     exception from the observability layer is contained by that layer itself.
     """
-    from . import observability
-    if not observability.enabled():
+    from . import observability, trace_sink
+    if not (observability.enabled() or trace_sink.enabled()):
         yield
         return
     document_id = job.get("id") or ""
@@ -49,10 +49,13 @@ def _document_trace(job: dict[str, Any], store: RunStore) -> Iterator[None]:
         "guide_version_id": job.get("guide_version_id", ""),
         "owner": job.get("owner", ""),
     }
-    with observability.trace_document(name=f"recall-first:{input_key or document_id}",
-                                      document_id=document_id, metadata=metadata,
-                                      tags=["recall-first", job.get("engine_id", "")]):
-        yield
+    name = f"recall-first:{input_key or document_id}"
+    with trace_sink.trace_document(name=name, document_id=document_id,
+                                   metadata=metadata,
+                                   tags=["recall-first", job.get("engine_id", "")]):
+        with observability.trace_document(name=name, document_id=document_id, metadata=metadata,
+                                          tags=["recall-first", job.get("engine_id", "")]):
+            yield
     observability.flush()
 
 

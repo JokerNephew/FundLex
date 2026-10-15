@@ -30,7 +30,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from fundlex import observability  # noqa: E402
+from fundlex import observability, trace_sink  # noqa: E402
 
 
 def _document_id(case_dir: Path) -> str | None:
@@ -57,8 +57,9 @@ def main() -> int:
         return 2
     payload = json.loads(score_path.read_text(encoding="utf-8"))
 
-    if not args.dry_run and not observability.enabled():
-        print("Langfuse is not configured (set FUNDLEX_LANGFUSE_PUBLIC_KEY/SECRET_KEY).", file=sys.stderr)
+    if not args.dry_run and not (observability.enabled() or trace_sink.enabled()):
+        print("No score sink configured: set FUNDLEX_TRACE_JSONL (local) and/or "
+              "FUNDLEX_LANGFUSE_PUBLIC_KEY/SECRET_KEY (cloud).", file=sys.stderr)
         return 3
 
     sent, skipped = 0, 0
@@ -79,22 +80,26 @@ def main() -> int:
                 print(f"      {v.get('rule_id')} {v.get('target_id')} = {v.get('verdict')}")
             continue
         for v in verdicts:
-            observability.record_score(
+            score = dict(
                 name="target_verdict", value=v.get("verdict") or "unknown",
                 trace_seed=document_id, data_type="CATEGORICAL",
                 comment=v.get("detail") or None,
                 metadata={"case_id": case_id, "rule_id": v.get("rule_id"),
                           "target_id": v.get("target_id")})
+            observability.record_score(**score)
+            trace_sink.record_score(**score)
             sent += 1
-        observability.record_score(
-            name="target_completion_rate", value=rate, trace_seed=document_id,
-            data_type="NUMERIC", metadata={"case_id": case_id})
+        rate_score = dict(name="target_completion_rate", value=rate, trace_seed=document_id,
+                          data_type="NUMERIC", metadata={"case_id": case_id})
+        observability.record_score(**rate_score)
+        trace_sink.record_score(**rate_score)
         false_complete = bool(case.get("reported_complete")) and not bool(case.get("actually_complete"))
         if case.get("reported_complete") is not None:
-            observability.record_score(
-                name="delivery_false_complete", value=false_complete,
-                trace_seed=document_id, data_type="BOOLEAN",
-                metadata={"case_id": case_id})
+            fc_score = dict(name="delivery_false_complete", value=false_complete,
+                            trace_seed=document_id, data_type="BOOLEAN",
+                            metadata={"case_id": case_id})
+            observability.record_score(**fc_score)
+            trace_sink.record_score(**fc_score)
 
     if not args.dry_run:
         observability.flush()
