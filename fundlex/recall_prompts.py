@@ -1,0 +1,280 @@
+"""Versioned instructions and JSON schemas for the recall-first engine tasks.
+
+Every schema is strict enough to catch malformed answers but never so strict that a
+faithful answer fails. Quotes are validated by the engine module, not here.
+"""
+from __future__ import annotations
+
+FACTS_PROMPT_VERSION = "recall_facts_v1"
+SCOPE_PROMPT_VERSION = "recall_scope_v1"
+INVENTORY_PROMPT_VERSION = "recall_inventory_v2"
+COMPOSE_PROMPT_VERSION = "recall_compose_v1"
+AUDIT_PROMPT_VERSION = "recall_audit_v1"
+SWEEP_PROMPT_VERSION = "recall_sweep_v2"
+
+PROMPT_VERSIONS = {
+    "facts": FACTS_PROMPT_VERSION,
+    "scope": SCOPE_PROMPT_VERSION,
+    "inventory": INVENTORY_PROMPT_VERSION,
+    "compose": COMPOSE_PROMPT_VERSION,
+    "audit": AUDIT_PROMPT_VERSION,
+    "sweep": SWEEP_PROMPT_VERSION,
+}
+
+FUND_TYPES = ("open_regular", "etf", "money_market", "interbank_cd", "qdii", "reits", "other")
+
+FACTS_SCHEMA = {
+    "type": "object",
+    "required": ["fund_type", "classes", "floating_management_fee"],
+    "properties": {
+        "fund_type": {
+            "type": "object", "required": ["value", "quote"],
+            "properties": {
+                "value": {"enum": list(FUND_TYPES)},
+                "quote": {"type": "string"},
+                "basis": {"type": "string"},
+            },
+        },
+        "classes": {
+            "type": "array", "maxItems": 24,
+            "items": {
+                "type": "object",
+                "required": ["name", "subscription_fee", "service_fee", "current", "quote"],
+                "properties": {
+                    "name": {"type": "string"},
+                    "subscription_fee": {"type": "boolean"},
+                    "service_fee": {"type": "boolean"},
+                    "rate": {"type": "string"},
+                    "current": {"type": "boolean"},
+                    "quote": {"type": "string"},
+                },
+            },
+        },
+        "floating_management_fee": {
+            "type": "object", "required": ["value", "quote"],
+            "properties": {
+                "value": {"type": "boolean"},
+                "quote": {"type": "string"},
+                "basis": {"type": "string"},
+            },
+        },
+        "notes": {"type": "string"},
+    },
+}
+
+FACTS_INSTRUCTION = (
+    "Read [CONTRACT_SOURCE]; the [loc] markers are stable paragraph addresses, not part of the text. "
+    "Extract the product's fee and qualification facts. fund_type value: open_regular for an ordinary "
+    "open-ended fund contract; etf for an exchange-traded fund; money_market; interbank_cd; qdii for a "
+    "qualified-domestic-institutional-investor fund; reits for a closed-end infrastructure/real-estate "
+    "fund; other only when none fits. A future possibility (for example text saying the fund may later "
+    "convert to an ETF feeder) never changes the current fund_type. classes lists the share classes the "
+    "contract currently sets up, one entry per class letter or currency variant: subscription_fee is true "
+    "when investors pay a subscription/purchase fee for that class, service_fee is true when a sales "
+    "service fee is accrued from that class's assets; current is false for a class the contract only "
+    "permits to be added in the future. Every quote must be an exact contiguous copy from "
+    "[CONTRACT_SOURCE] and must directly support the value it is attached to. Never infer a class letter "
+    "from habit: read the actual fee clauses. floating_management_fee is true only when the contract ties "
+    "management fee to investor holding period or performance (contingent management fee returned to "
+    "investors or excess management fee deducted); an ordinary fixed management fee is false."
+)
+
+SCOPE_SCHEMA = {
+    "type": "object",
+    "required": ["mappings"],
+    "properties": {
+        "mappings": {
+            "type": "array", "maxItems": 60,
+            "items": {
+                "type": "object",
+                "required": ["rule_id", "section_ids", "reason"],
+                "properties": {
+                    "rule_id": {"type": "string"},
+                    "section_ids": {"type": "array", "maxItems": 12, "items": {"type": "string"}},
+                    "reason": {"type": "string"},
+                },
+            },
+        },
+        "notes": {"type": "string"},
+    },
+}
+
+SCOPE_INSTRUCTION = (
+    "Read [GUIDE_RULES] and [CONTRACT_STRUCTURE]. For every rule decide which contract sections may "
+    "contain its targets. Section ids come from [CONTRACT_STRUCTURE]; a section may be chosen for "
+    "several rules and a rule may need several sections (for example both the definition chapter and the "
+    "fund-basics chapter, or both a main clause and the contract summary). Chapters are navigation only: "
+    "never drop a plausible section because the rule's hint names a different chapter. Choose every "
+    "section that could contain the business clause, including the summary section when the rule has a "
+    "summary counterpart. Return one mapping per rule with a short reason. An empty section_ids list is "
+    "allowed only when no section could contain the rule."
+)
+
+INVENTORY_SCHEMA = {
+    "type": "object",
+    "required": ["targets"],
+    "properties": {
+        "targets": {
+            "type": "array", "maxItems": 60,
+            "items": {
+                "type": "object",
+                "required": ["rule_id", "location", "quote", "state", "reason"],
+                "properties": {
+                    "rule_id": {"type": "string"},
+                    "location": {"type": "string"},
+                    "quote": {"type": "string"},
+                    "state": {"enum": ["needs_edit", "satisfied", "absent"]},
+                    "reason": {"type": "string"},
+                },
+            },
+        },
+        "notes": {"type": "string"},
+    },
+}
+
+INVENTORY_INSTRUCTION = (
+    "Read [CONTRACT_WINDOW] (the [loc] markers are stable paragraph addresses) together with "
+    "[GUIDE_RULES] and [FACTS]. For every rule, report every location in this window where the rule's "
+    "business clause exists or is required. A rule may list several operations (a replacement, a "
+    "deletion, an append, or a branch selected by the facts): report a separate target for each "
+    "operation that applies in this window and quote the exact text that operation targets; never merge "
+    "two operations into one target and never skip an operation because another one already has a "
+    "target. The same clause often appears twice — once in a main chapter and once in the contract "
+    "summary — so report each occurrence as its own target instead of assuming one edit covers both. "
+    "state=needs_edit when the clause exists but does not yet "
+    "meet the rule; state=satisfied when the clause already meets the rule (including wording different "
+    "from the guide's reference text); state=absent only when you are certain this window contains no "
+    "such clause and no place to add it. quote must be an exact contiguous copy from the window at the "
+    "given location: for a replace or delete requirement quote the exact text the operation targets; for "
+    "an append requirement quote the sentence after which the new content belongs. Read the whole window "
+    "before answering; never answer from a keyword alone. Do not invent locations and do not report the "
+    "same clause twice for the same rule and operation."
+)
+
+COMPOSE_SCHEMA = {
+    "type": "object",
+    "required": ["replacement", "preserved", "basis"],
+    "properties": {
+        "replacement": {"type": "string"},
+        "preserved": {"type": "array", "maxItems": 12, "items": {"type": "string"}},
+        "basis": {"type": "string"},
+    },
+}
+
+COMPOSE_INSTRUCTION = (
+    "Read [CONTRACT_TARGET] (the actual contract text to be rewritten), [GUIDE_OPERATION] (the guide's "
+    "requirement, the reference old text and the fixed policy text) and [FACTS]. Produce the replacement "
+    "text for exactly this target span. The fixed policy text given in [GUIDE_OPERATION] must appear in "
+    "the replacement verbatim (with share-class slots already instantiated as instructed in the context). "
+    "Keep every other element of the target span that the guide does not require changing, especially "
+    "fee formulas, calculation rules, rates and conditions; list those kept elements in preserved. Never "
+    "add policy, numbers or promises the guide does not state. Write plain Chinese contract text only, no "
+    "markdown, no quotes around the whole answer."
+)
+
+COMPOSE_DELETE_INSTRUCTION = (
+    "Read [CONTRACT_TARGET] (the actual contract text that must be deleted or trimmed) and "
+    "[GUIDE_OPERATION] (the guide's deletion requirement with its reference text). Produce the "
+    "replacement for exactly this target span: remove the content the guide requires to be deleted and "
+    "keep, unchanged, any other content inside the span that the guide does not ask to remove. Return an "
+    "empty replacement when the whole span is deleted. Never add policy, numbers or promises, and never "
+    "reword the kept content; list what you kept in preserved. Write plain Chinese contract text only, no "
+    "markdown, no quotes around the whole answer."
+)
+
+AUDIT_SCHEMA = {
+    "type": "object",
+    "required": ["results"],
+    "properties": {
+        "results": {
+            "type": "array", "maxItems": 60,
+            "items": {
+                "type": "object",
+                "required": ["target_id", "verdict", "reason"],
+                "properties": {
+                    "target_id": {"type": "string"},
+                    "verdict": {"enum": ["completed", "incomplete", "wrong"]},
+                    "reason": {"type": "string"},
+                    "evidence_quote": {"type": "string"},
+                },
+            },
+        },
+        "missed_targets": {
+            "type": "array", "maxItems": 20,
+            "items": {
+                "type": "object",
+                "required": ["rule_id", "location", "quote", "reason"],
+                "properties": {
+                    "rule_id": {"type": "string"},
+                    "location": {"type": "string"},
+                    "quote": {"type": "string"},
+                    "reason": {"type": "string"},
+                },
+            },
+        },
+        "notes": {"type": "string"},
+    },
+}
+
+AUDIT_INSTRUCTION = (
+    "Read [BEFORE] (the original contract region), [AFTER] (the actual rewritten region taken from the "
+    "produced file), [REQUIREMENTS] (the guide rules with their fixed policy text and the target "
+    "ledger) and [OTHER_AUTHORIZED_EDITS] (changes other guide rules legitimately made in the same "
+    "locations). Independently judge each target in the ledger: completed when the AFTER text satisfies "
+    "the requirement with no lost content, incomplete when part of the requirement is missing, wrong "
+    "when the AFTER text contradicts the requirement, drops required content, or adds policy the guide "
+    "does not state. A rule whose slot classes are placeholders means the AFTER text must name the "
+    "product's actual share classes that fall in that group: adding a real class the contract defines "
+    "(for example including a D类 class in the group the guide wrote as A类) is correct instantiation, "
+    "not an unauthorized addition, as long as [FACTS] lists that class in the group. Never report an "
+    "OTHER_AUTHORIZED_EDITS change as an unauthorized addition. A region "
+    "shown as （该位置内容已删除） means the content was removed: for a deletion requirement that is "
+    "completed, and for a replacement requirement judge it against the requirement and the ledger, not "
+    "against the absence itself. Cite an exact contiguous evidence_quote from AFTER (or BEFORE when "
+    "judging a loss) for every verdict. Also report missed_targets when you find a clause in AFTER that "
+    "still needs editing but is absent from the ledger. Never trust the ledger over the actual text; "
+    "never mark completed without reading AFTER."
+)
+
+SWEEP_SCHEMA = {
+    "type": "object",
+    "required": ["findings"],
+    "properties": {
+        "findings": {
+            "type": "array", "maxItems": 40,
+            "items": {
+                "type": "object",
+                "required": ["rule_id", "location", "quote", "issue"],
+                "properties": {
+                    "rule_id": {"type": "string"},
+                    "location": {"type": "string"},
+                    "quote": {"type": "string"},
+                    "issue": {"enum": ["residual_old_text", "missing_new_text", "wrong_text",
+                                       "unaddressed_requirement"]},
+                    "reason": {"type": "string"},
+                },
+            },
+        },
+        "notes": {"type": "string"},
+    },
+}
+
+SWEEP_INSTRUCTION = (
+    "Read [GUIDE_REQUIREMENTS] (the complete authorization), [FACTS] (the product's actual share-class "
+    "and fee facts) and [ARTIFACT_WINDOW] (a chunk of the rewritten contract with [loc] paragraph "
+    "addresses). Find every place in this chunk where a guide requirement is still unmet: an old clause "
+    "that should have been replaced or deleted but survives, a required new clause that is missing, a "
+    "rewritten clause that contradicts the guide, or a business clause the guide clearly covers but that "
+    "was never addressed. Judge semantically against [FACTS]: when a clause already satisfies the "
+    "requirement — including wording that differs from the guide's reference, class names already "
+    "instantiated for the actual classes, or a substitution that is a no-op because the actual class "
+    "group is unchanged — do NOT report it. When a rule's condition is not met by [FACTS] (for example a "
+    "single-class branch on a multi-class product, or a floating-fee branch on a fixed-fee product), do "
+    "NOT report it either. Every finding must be a real unmet requirement: the quoted text must be the "
+    "clause that still needs work, and your reason must state which part of the requirement is missing "
+    "or which old text survives. Never report a clause that already carries out the requirement, and "
+    "never report a clause whose own reason says the requirement is met. Output only unmet requirements. "
+    "quote must be an exact contiguous copy from the chunk. Report "
+    "only real, checkable findings; do not report style preferences. Use the ledger excerpt only to avoid "
+    "duplicate reports, never as a reason to skip reading the chunk."
+)
