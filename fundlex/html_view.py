@@ -23,6 +23,8 @@ Design rules
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from pathlib import Path
+from tempfile import NamedTemporaryFile
 from typing import Any, Mapping
 from urllib.parse import unquote
 import zipfile
@@ -461,10 +463,26 @@ def _as_int(value: Any) -> int | None:
         return None
 
 
-def project_docx(path: str, *, report: Mapping[str, Any] | None = None,
+def project_docx(path: str | Path, *, report: Mapping[str, Any] | None = None,
                  limits: ZipLimits | None = None) -> dict[str, Any]:
-    """Project a revision DOCX into reviewable HTML plus its revision list."""
+    """Project a revision DOCX into reviewable HTML plus its revision list.
+
+    Stored artifacts keep their original upload name and may lack a ``.docx``
+    suffix, while :func:`fundlex.docx._read_parts` deliberately rejects
+    non-``.docx`` inputs (an upload-validation guard). Stage such files through
+    a temporary ``.docx`` path so the read still applies every package limit.
+    """
     limits = limits or ZipLimits()
-    parts = _read_parts(path, limits)
+    path = Path(path)
+    if path.suffix.lower() == ".docx":
+        parts = _read_parts(path, limits)
+    else:
+        with NamedTemporaryFile(prefix=".fundlex-view-", suffix=".docx", delete=False) as temp:
+            temporary = Path(temp.name)
+            temp.write(path.read_bytes())
+        try:
+            parts = _read_parts(temporary, limits)
+        finally:
+            temporary.unlink(missing_ok=True)
     projection = HtmlProjection(parts, limits)
     return projection.render(report=report)

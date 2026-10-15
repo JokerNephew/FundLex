@@ -68,6 +68,19 @@ _RECALL_EDIT_CHECKS = {"package", "revisions", "final_equivalence", "non_target"
 _RECALL_UNCHANGED_CHECKS = {"package", "zero_edit", "byte_identity"}
 _RECALL_ARTIFACT_HASHES = {"final": "final_sha256", "redline": "redline_sha256",
                            "working_final": "final_sha256", "working_redline": "redline_sha256"}
+# User-driven artifacts derived from an engine revision artifact. They live
+# alongside delivery artifacts but are not part of delivery validation.
+SELECTED_KINDS = {"selected_final"}
+
+
+def _manifests_available(report: dict[str, Any]) -> bool:
+    """Whether a persisted report can still drive selective decisions."""
+    manifest = report.get("revision_manifest")
+    if isinstance(manifest, list) and manifest:
+        return True
+    plan = report.get("plan")
+    edits = plan.get("edits") if isinstance(plan, dict) else None
+    return isinstance(edits, list) and bool(edits)
 
 
 def _require_recall_pair(artifacts: dict[str, Path], validation: dict[str, Any],
@@ -414,6 +427,70 @@ class RunStore:
             raise NotFound("report not available")
         return json.loads(row["report_json"])
 
+    def save_selected_artifact(self, owner: str, batch_id: str, document_id: str,
+                               kind: str, source: Path) -> tuple[str, int]:
+        """Publish a user-selected DOCX produced from the document's redline.
+
+        ``selected_final`` is a *user* artifact: it is derived from an existing
+        revision artifact and is therefore not part of the engine delivery
+        validation. It is still integrity-checked and served through the normal
+        download path.
+        """
+        document = self.get_document(owner, batch_id, document_id)
+        if kind not in SELECTED_KINDS:
+            raise StoreError("invalid artifact")
+        if document["execution_mode"] == "evaluation":
+            raise Conflict("SELECTED_ARTIFACT_EVALUATION_UNSUPPORTED")
+        source = Path(source)
+        if not source.is_file():
+            raise StoreError("invalid artifact")
+        digest = sha256_file(source)
+        size = source.stat().st_size
+        key = f"selected/{document_id}/{uuid.uuid4().hex}/{kind}{source.suffix}"
+        target = self.object_path(key)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        with source.open("rb") as incoming, target.open("xb") as output:
+            for chunk in iter(lambda: incoming.read(1024 * 1024), b""):
+                output.write(chunk)
+            output.flush()
+            os.fsync(output.fileno())
+        if sha256_file(target) != digest:
+            raise Conflict("artifact copy verification failed")
+        with self._connect() as db:
+            db.execute("BEGIN IMMEDIATE")
+            db.execute("INSERT OR REPLACE INTO artifacts VALUES (?,?,?,?,?)",
+                       (document_id, kind, key, digest, size))
+        return key, size
+
+    def _verify_selected_source(self, document_id: str, kind: str) -> None:
+        """A selected artifact is valid only while its source redline is intact.
+
+        The redline is the engine revision artifact the user made decisions on.
+        If that artifact is gone or changed, the selection can no longer be
+        trusted and must not be served.
+        """
+        with self._connect() as db:
+            document = db.execute("SELECT report_json,execution_mode FROM documents WHERE id=?",
+                                  (document_id,)).fetchone()
+            rows = db.execute("SELECT kind,object_key,sha256,size FROM artifacts WHERE document_id=?",
+                              (document_id,)).fetchall()
+        if document is None or not document["report_json"]:
+            raise Conflict("SELECTED_SOURCE_UNAVAILABLE")
+        try:
+            report = json.loads(document["report_json"])
+        except (TypeError, ValueError) as exc:
+            raise Conflict("SELECTED_SOURCE_UNAVAILABLE") from exc
+        candidates = ("redline", "working_redline", "evaluation_redline")
+        source = next((item for name in candidates for item in rows if item["kind"] == name), None)
+        if source is None:
+            raise Conflict("SELECTED_SOURCE_UNAVAILABLE")
+        path = self.object_path(source["object_key"])
+        if not path.is_file() or path.stat().st_size != source["size"] \
+                or sha256_file(path) != source["sha256"]:
+            raise Conflict("SELECTED_SOURCE_INTEGRITY_FAILED")
+        if not _manifests_available(report):
+            raise Conflict("SELECTED_SOURCE_UNAVAILABLE")
+
     def get_artifact(self, owner: str, batch_id: str, document_id: str, kind: str) -> tuple[Path, str]:
         self.get_document(owner, batch_id, document_id)
         with self._connect() as db:
@@ -429,6 +506,11 @@ class RunStore:
         path = self.object_path(row["object_key"])
         if not path.is_file() or path.stat().st_size != row["size"] or sha256_file(path) != row["sha256"]:
             raise Conflict("artifact integrity check failed")
+        if kind in SELECTED_KINDS:
+            # User-selected artifacts are bound to the redline they were derived
+            # from; re-check that the source revision artifact is still intact.
+            self._verify_selected_source(document_id, kind)
+            return path, row["sha256"]
         if kind in {"final", "redline", "evaluation_final", "evaluation_redline",
                     "working_final", "working_redline"}:
             with self._connect() as db:

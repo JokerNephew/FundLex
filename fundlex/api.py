@@ -9,6 +9,7 @@ from __future__ import annotations
 import io
 import csv
 import hashlib
+import shutil
 import tempfile
 import json
 import os
@@ -23,6 +24,9 @@ from starlette.background import BackgroundTask
 from fastapi.staticfiles import StaticFiles
 
 from . import guide_store
+from .docx import DocxError
+from .html_view import project_docx
+from .selective import accept_all as selective_accept_all, generate_selected_artifact
 from .store import Conflict, NotFound, RunStore, StoreError
 from .config import auth_db_target, local_data_dir
 from .tasks import TaskStore
@@ -106,6 +110,21 @@ class GuideSettingRequest(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
     version_id: str | None = Field(default=None, max_length=128)
+
+
+class RevisionDecision(BaseModel):
+    """One user decision on a single engine revision pair."""
+
+    model_config = ConfigDict(extra="forbid")
+    del_id: int = Field(ge=1)
+    decision: str = Field(pattern="^(accept|reject)$")
+
+
+class DecisionRequest(BaseModel):
+    """Per-revision accept/reject for one document's redline."""
+
+    model_config = ConfigDict(extra="forbid")
+    decisions: list[RevisionDecision] = Field(default_factory=list, max_length=1000)
 
 
 MAX_UPLOAD_BYTES = int(os.environ.get("FUNDLEX_MAX_UPLOAD_BYTES", str(25 * 1024 * 1024)))
@@ -241,6 +260,16 @@ RECALL_ENGINE_ID = "recall_first"
 _GUIDE_RESET_IDS = frozenset({"", "builtin"})
 _RECALL_TARGET_DONE = frozenset({"planned", "satisfied", "not_applicable"})
 _RECALL_TARGET_UNRESOLVED = frozenset({"unresolved", "not_planned"})
+
+
+def _report_has_revisions(report: dict) -> bool:
+    """Whether a persisted report describes engine revisions we can select on."""
+    manifest = report.get("revision_manifest")
+    if isinstance(manifest, list) and manifest:
+        return True
+    plan = report.get("plan")
+    edits = plan.get("edits") if isinstance(plan, dict) else None
+    return isinstance(edits, list) and bool(edits)
 
 
 def _recall_phase(report: dict) -> str:
@@ -417,6 +446,52 @@ def create_app(data_dir: str | Path | None = None, *, auth_db=None) -> FastAPI:
             raise HTTPException(404, "task not found") from exc
         except Conflict as exc:
             raise HTTPException(409, str(exc)) from exc
+
+    # --- revision review (HTML presentation + per-revision selection) -------
+
+    def _redline_for(owner: str, batch_id: str, document_id: str) -> tuple[Path, dict]:
+        """Locate the revision artifact a user makes decisions on."""
+        document = store.get_document(owner, batch_id, document_id)
+        if document["execution_mode"] == "evaluation":
+            raise Conflict("REVISION_REVIEW_EVALUATION_UNSUPPORTED")
+        report = store.get_report(owner, batch_id, document_id)
+        if not _report_has_revisions(report):
+            raise Conflict("REVISION_REVIEW_UNAVAILABLE")
+        for kind in ("working_redline", "redline"):
+            if kind in document["artifacts"]:
+                path, _ = store.get_artifact(owner, batch_id, document_id, kind)
+                return path, report
+        raise Conflict("REVISION_REVIEW_UNAVAILABLE")
+
+    def _revision_view(owner: str, batch_id: str, document_id: str) -> dict:
+        path, report = _redline_for(owner, batch_id, document_id)
+        view = project_docx(str(path), report=report)
+        return {
+            "document_id": document_id,
+            "html": view["html"],
+            "revisions": view["revisions"],
+            "meta": view["meta"],
+            "download_url": f"/api/batches/{batch_id}/documents/{document_id}/download/selected_final",
+        }
+
+    def _apply_selection(owner: str, batch_id: str, document_id: str,
+                         decisions: dict[int, str] | None) -> dict:
+        path, report = _redline_for(owner, batch_id, document_id)
+        chosen = decisions if decisions is not None else selective_accept_all(str(path), report)
+        temp_dir = Path(tempfile.mkdtemp(prefix="fundlex-selected-"))
+        target = temp_dir / "selected_final.docx"
+        try:
+            result = generate_selected_artifact(path, target, report, chosen)
+            store.save_selected_artifact(owner, batch_id, document_id, "selected_final", target)
+        finally:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+        return {
+            "document_id": document_id,
+            "accepted": list(result.accepted),
+            "rejected": list(result.rejected),
+            "sha256": result.sha256,
+            "download_url": f"/api/batches/{batch_id}/documents/{document_id}/download/selected_final",
+        }
 
     def bound_guide_version(owner: str, version_id: str | None) -> dict:
         """Resolve the guide snapshot for a new recall task (never a fallback)."""
@@ -911,10 +986,46 @@ def create_app(data_dir: str | Path | None = None, *, auth_db=None) -> FastAPI:
         except NotFound as exc:
             raise HTTPException(404, str(exc)) from exc
 
+    @application.get("/api/batches/{batch_id}/documents/{document_id}/revisions")
+    def document_revisions(batch_id: str, document_id: str, user: str = Depends(_user)):
+        """HTML view of the contract with per-revision accept/reject anchors."""
+        try:
+            return task_call(_revision_view, user, batch_id, document_id)
+        except NotFound as exc:
+            raise HTTPException(404, str(exc)) from exc
+        except Conflict as exc:
+            raise HTTPException(409, str(exc)) from exc
+
+    @application.post("/api/batches/{batch_id}/documents/{document_id}/decisions")
+    def document_decisions(batch_id: str, document_id: str, payload: DecisionRequest,
+                           user: str = Depends(_user)):
+        """Apply per-revision decisions and publish ``selected_final``."""
+        decisions = {item.del_id: item.decision for item in payload.decisions}
+        try:
+            return task_call(_apply_selection, user, batch_id, document_id, decisions)
+        except NotFound as exc:
+            raise HTTPException(404, str(exc)) from exc
+        except Conflict as exc:
+            raise HTTPException(409, str(exc)) from exc
+        except DocxError as exc:
+            raise HTTPException(422, str(exc)) from exc
+
+    @application.post("/api/batches/{batch_id}/documents/{document_id}/accept-all")
+    def document_accept_all(batch_id: str, document_id: str, user: str = Depends(_user)):
+        """Accept every revision and publish ``selected_final``."""
+        try:
+            return task_call(_apply_selection, user, batch_id, document_id, None)
+        except NotFound as exc:
+            raise HTTPException(404, str(exc)) from exc
+        except Conflict as exc:
+            raise HTTPException(409, str(exc)) from exc
+        except DocxError as exc:
+            raise HTTPException(422, str(exc)) from exc
+
     @application.get("/api/batches/{batch_id}/documents/{document_id}/download/{kind}")
     def download(batch_id: str, document_id: str, kind: str, user: str = Depends(_user)):
         docx_kinds = {"final", "redline", "evaluation_final", "evaluation_redline",
-                      "working_final", "working_redline"}
+                      "working_final", "working_redline", "selected_final"}
         if kind not in docx_kinds | {"report_json", "report_md"}:
             raise HTTPException(404, "artifact not found")
         try:

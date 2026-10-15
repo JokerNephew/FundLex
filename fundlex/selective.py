@@ -28,6 +28,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+from tempfile import NamedTemporaryFile
 from typing import Any, Iterable, Mapping, Sequence
 
 from lxml import etree
@@ -204,6 +205,23 @@ def apply_decisions(root: etree._Element, manifests: Sequence[Mapping[str, Any]]
     return tuple(int(rid) for rid in per_id if rid not in seen)
 
 
+def _read_redline_parts(path: Path, limits: ZipLimits) -> dict[str, bytes]:
+    """Read an artifact even when it lacks a ``.docx`` suffix.
+
+    Stored artifacts keep their original upload name; ``_read_parts`` rejects
+    non-``.docx`` paths as an upload guard, so stage a temporary copy.
+    """
+    if path.suffix.lower() == ".docx":
+        return _read_parts(path, limits)
+    with NamedTemporaryFile(prefix=".fundlex-redline-", suffix=".docx", delete=False) as temp:
+        temporary = Path(temp.name)
+        temp.write(path.read_bytes())
+    try:
+        return _read_parts(temporary, limits)
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
 def _expected_old(edit: Mapping[str, Any]) -> str:
     value = edit.get("expected_old_text")
     if isinstance(value, str) and value:
@@ -233,7 +251,7 @@ def generate_selected_artifact(redline: str | Path, target: str | Path,
     manifests = _manifests_from_report(report)
     if not manifests:
         raise DocxError("REVISION_MANIFEST_UNAVAILABLE")
-    parts = _read_parts(redline, limits)
+    parts = _read_redline_parts(redline, limits)
     _validate_package(parts, limits, full=False)
     root = _xml(parts[DOCUMENT], limits)
     # Fail closed if the artifact does not match the expected manifest exactly.
