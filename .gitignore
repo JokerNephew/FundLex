@@ -21,3 +21,8 @@ workbench/logs/
 node_modules/
 .playwright-mcp/
 *.baiduyun.uploading.cfg
+
+# Unreferenced stray image downloads kept out of version control.
+frontend/assets/640.png
+frontend/assets/t0183cba9196d3d9cc9.jpg
+frontend/assets/去白底 .png
