@@ -46,8 +46,10 @@
 ### 2.4 Git 版本管理 → FL-D078
 - 本地 11 个逻辑提交（`cc558ab..05fc90f`），工作树干净，全量测试 **562 passed / 1 expected（references/ 未迁移）/ 6 skipped**。
 - **已推送到远端**：`origin = https://github.com/JokerNephew/FundLex.git`（私有），分支 `codex/fundlex-recall-first`（新建并设 upstream）。
-- 凭据：用户提供 OAuth token（`gho_…`，**已在对话中出现，用户应撤销/轮换**）。使用方式：临时文件 + `GIT_ASKPASS`，未入命令行历史/仓库/日志，用后即删。
+- 凭据（**已按用户要求持久保存，2026-10-15 晚**）：token 存于仓库外 `/home/opencode/.github_token`（权限 `600`）；推送用 `bash tools/deploy/push_with_token.sh`（默认读该文件，token 不打印、不入命令行/仓库/日志）。**文件中不含明文到其他任何位置**；如需撤销请删除该文件并轮换 GitHub token。
+  - 早期一次用的是对话中出现的 OAuth token（`gho_…`，视为已暴露）——用户如已轮换，请把新 token 写入 `/home/opencode/.github_token` 即可，其余流程不变。
 - 仓库级代理已配置：`http.proxy=http://127.0.0.1:9981`（mihomo）。
+- **push 操作约定**：以后增量提交后直接 `bash tools/deploy/push_with_token.sh`（默认 `origin` / 当前分支）；并行 agent 有提交时先 `git pull --rebase`。
 - 提交前安全扫描：无口令/密钥/私钥；样本与原件目录由 `.gitignore` 覆盖；3 个无引用散图（`frontend/assets/{640.png,t0183cba9196d3d9cc9.jpg,去白底 .png}`）已加入 `.gitignore` 不入库。
 
 ## 3. 未完成 / 待办（按优先级）
