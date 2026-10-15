@@ -63,6 +63,10 @@
 - 用户提供的服务器地址可用于部署说明，登录秘密不得写入仓库、文档、prompt或日志；未核实OS/资源、未完成云端真实路径验证时，不宣称部署或完整项目交付完成。
 - **合同资料政策（用户 2026-10-15 更新）**：本项目使用的合同均为**公开资料**，用户已授权**可以入库、可以传出服务器**（例如发送到 Langfuse Cloud 等第三方可观测性/评测服务）。因此不再要求对合同原文做「不入库/不出服务器」处理。**此授权仅覆盖合同与规则等公开文本，不覆盖凭据**——密钥、令牌、口令、SSH 密码等仍严禁写入仓库、文档、prompt、日志或第三方服务（见下条与「细节问题」条款）。
 - 用户已授权将SSH连接信息保存在本机Windows用户级环境变量FUNDLEX_SSH_HOST、FUNDLEX_SSH_USER、FUNDLEX_SSH_PASSWORD。同一用户的接续agent显式读取User作用域并安全传入连接子进程，只检查存在性，不打印值或展开密码到命令参数。其他机器/用户不共享该配置。
+- **root 写权限（用户 2026-10-15 授予，全部接续 agent 须知）**：用户已给 `opencode` 用户在**本机（这台云服务器）**加 sudo 规则 `/etc/sudoers.d/fundlex-agent`：`opencode ALL=(root) NOPASSWD: ALL`。因此 `sudo -n` 可直接提权，用于**部署与运维**：发布代码（`bash tools/deploy/publish_workspace.sh`，经 `/usr/local/sbin/fundlex-publish`，会 `cp` 到 `/opt/fundlex-recall-first` 并 `systemctl restart fundlex-recall-api fundlex-recall-worker`）、改 `/etc/fundlex-recall.env`、重启 FundLex 服务、读部署配置与 root-only 文件（如 `/var/lib/fundlex/`）。
+  - **使用边界**：只用于 FundLex 的部署、配置、服务与验证；不动无关系统配置；**不把凭据（值）写入仓库/文档/prompt/日志**，只记录变量名与文件路径；改配置前先备份（如 `.bak-*`）。
+  - 自检：`sudo -n true && echo ok`。
+  - 注意：sudo 提权仅对**本机 Linux** 有效；已停用的 Windows 开发机不适用。
 
 ## 上下文控制：在60%之前压缩
 

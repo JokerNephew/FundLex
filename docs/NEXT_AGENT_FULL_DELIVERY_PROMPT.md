@@ -31,6 +31,8 @@
 
 真实模型运行前核对环境、共享账本、价格和授权额度，预登记调用及费用上限；不重置账本、不泄露密钥、不无限重跑。历史预算数字不是当前可用性或新额度授权。缺凭据或预算时只问必要信息并继续独立工作。
 
+**root 写权限（用户 2026-10-15 授予，全部 agent 须知）**：本机（云服务器）`opencode` 用户已有 sudo `ALL`（`/etc/sudoers.d/fundlex-agent`：`opencode ALL=(root) NOPASSWD: ALL`），`sudo -n` 可直接提权。用于 FundLex 的**部署/配置/服务/验证**：`bash tools/deploy/publish_workspace.sh`（经 `/usr/local/sbin/fundlex-publish`，`cp` 到 `/opt/fundlex-recall-first` 并 `systemctl restart fundlex-recall-api fundlex-recall-worker`）、改 `/etc/fundlex-recall.env`（**改前先备份**）、读 `/var/lib/fundlex/` 等 root-only 文件。**边界**：只动 FundLex 相关，不动无关系统配置；**凭据值严禁写入仓库/文档/prompt/日志**（只记变量名与路径）。详见 `AGENTS.md` 与 FL-D084。
+
 你可以使用多agent分工核心、前端、评测和独立审查，但统一接口、文件归属、问题记录和真实调用预算。常规实现选择自主完成，无需逐步重复问是否继续。按阶段实现、测试、修复、发布和部署，最后按功能审阅提交；未经要求不要push，不把原件/样本/密钥或无关未跟踪文件混入提交。
 
 现在请先核对起点，建立实施计划，然后持续执行到整个项目交付完成。汇报实际完成、验证证据、文件与访问入口和剩余阻塞，不把方案或测试数量当作交付结果。

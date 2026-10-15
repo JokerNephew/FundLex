@@ -967,7 +967,9 @@
 - 下一步：① 用户提供 Langfuse Cloud public/secret key → 跑 2 例验证真实 trace 入库，再跑整轮开发集；② 可选把批次 id 作为 tag 便于回归对比。
 - 变更记录：2026-10-15 新增；同日完成代码实施与本地 OTLP 验证。
 
-## FL-D081 交付包需包含工作台同格式的「结果清单.csv」（用户要求放根目录）
+## FL-D082 交付包需包含工作台同格式的「结果清单.csv」（用户要求放根目录）
+
+> **编号更正**：本条原误用 FL-D081，与更早的「模型中间结果缺乏可观测性（Langfuse）」重号；按 FL-D077 规则（首次出现者保留编号），观测性条目保留 FL-D081，本条改号 **FL-D082**。
 
 - 发现日期：2026-10-15（用户对交付包提出要求）。
 - 问题与影响：`tools/evaluation/p6_package.py` 打出的交付包原先只有 `结果总览.md` + 最终版 + 逐份说明，缺**工作台点「导出结果清单」时下载的那个 CSV**。用户明确要求把它加上并放在**根目录**（`结果总览.md` 保持不变）。
@@ -975,6 +977,31 @@
 - 处理方法（已实施）：`p6_package.py` 新增 `build_result_csv()`/`delivery_reason()`/`reason_codes()`/`csv_escape()` 与 `CSV_LABELS`，在根目录写出 `结果清单.csv`，逐列对齐工作台：资格/处理状态/交付完整性走同一套中文标签，业务提示复刻 `docReason()` 的措辞，原始原因码只用**短机器码**（`RECALL_*`/`AUDIT_*`，不含审计散文）。文件带 UTF-8 BOM、CRLF 行、含逗号/引号/换行的字段按工作台规则转义；`结果总览.md` 的文件夹说明表新增一行指向该 CSV。
 - 状态与验证：**已实施并验证**。用 `p6-dev-round1-01` 重新出包 `var/recall-first-evaluation/FundLex-合同修改结果-P6开发集-20261015/`：根目录出现 `结果清单.csv`（BOM+CRLF，21 行=表头+20 份，列头与工作台完全一致；失败样本的最后列是 `RECALL_TARGET_COMPOSITE_UNRESOLVED；AUDIT_NOT_COMPLETED` 等短码）。新增测试 `test_result_csv_matches_workbench_columns`（断言 BOM、CRLF、列头、末列为机器码）；全量 **572 passed / 1 expected（references/）/ 6 skipped**。
 - 下一步：交付含留出集的完整包时同样带上该 CSV；如工作台列顺序调整需同步本工具。
+- 变更记录：2026-10-15 新增。
+
+## FL-D083 Langfuse 新组织禁用 legacy REST API；凭据已配置并跑通真实云端链路
+
+- 发现日期：2026-10-15（用户提供 Langfuse Cloud 凭据后做真实链路验证）。
+- 问题与影响：Langfuse 对 **2026-09-16 及之后新建的组织**禁用了 legacy REST API——`/api/public/traces`、`/api/public/observations`、`/api/public/scores`、`/api/public/sessions` 均返回 **410 `LEGACY_API_UNAVAILABLE_FOR_NEW_ORGANIZATION`**。这不影响**写入**（v5 SDK 走 OTLP，正常），但会影响日后写**查询/导出**脚本（如按 trace 拉评分做回归对比）。
+- 证据：`GET https://jp.cloud.langfuse.com/api/public/observations` → `410 LEGACY_API_UNAVAILABLE_FOR_NEW_ORGANIZATION`；`GET /api/public/traces/<id>` → `410`；正确端点为 **`GET /api/public/v2/observations?traceId=<id>`** 与 **`GET /api/public/v3/scores?traceId=<id>`**（均返回 200）。
+- 处理方法（已实施）：凭据写入**仓库外** `/home/opencode/.env`（权限 `600`，已 gitignore；键名从用户的 `LANGFUSE_*` 映射为项目前缀 `FUNDLEX_LANGFUSE_*`，`FUNDLEX_LANGFUSE_HOST=https://jp.cloud.langfuse.com` 日本区）。查询脚本一律用 v2/v3 端点。
+- 状态与验证：**真实云端链路已跑通并验证**。
+  - `auth_check: True`（`jp.cloud.langfuse.com`）。
+  - 冒烟 trace `b1648f73fd644bd3e0d81e04271db3c6`：根 span `recall-first:smoke-test.docx`（SPAN）与 generation `recall_facts`（`version=facts_v1`）**同一 trace**；`/api/public/v2/observations?traceId=` 返回二者。
+  - score `target_verdict=completed`（CATEGORICAL）经 `/api/public/v3/scores?traceId=` 过滤确认**已挂在该 trace 上**（返回 1 条）。trace URL：`https://jp.cloud.langfuse.com/project/cmv9mjp4a0007ad0l1xzij95v/traces/b1648f73fd644bd3e0d81e04271db3c6`。
+- 下一步：跑 2 例真实开发集，确认六阶段（facts/scope/inventory/compose/audit/sweep）完整 trace 后跑整轮；查询脚本统一 v2/v3 端点。凭据仍严禁入库/写日志。
+- 变更记录：2026-10-15 新增；同日发现 legacy API 410 并确认正确端点、跑通冒烟链路。
+
+## FL-D084 用户授予 opencode 本机 root 写权限（部署/运维可用，全部 agent 须知）
+
+- 发现日期：2026-10-15（用户明确要求「把这个信息记下来，让其他 agent 都知道有 root 的写权限」）。
+- 问题与影响：此前 `opencode` 用户只有一条受限 sudo（`/usr/local/sbin/fundlex-publish`），无法改 `/etc/fundlex-recall.env`（root 600）、无法读 `/var/lib/fundlex/`、无法直接重启服务——导致 Langfuse 环境变量加不进生产 worker、部分运维验证做不了。用户已授予完整 root。
+- 证据：`sudo -n -l` 显示 `(root) NOPASSWD: ALL`；规则文件 `/etc/sudoers.d/fundlex-agent`（用户提供的原文含两行：既有 `fundlex-publish` 白名单 + 新增 `ALL`）。`sudo -n true` 成功；已确认 `/etc/fundlex-recall.env` 可读（`item_count=23`）。
+- 处理方法（已实施）：① 写入本文件与 `AGENTS.md`（项目级规定，含使用边界）；② 断点文档 `docs/ACTIVE_HANDOFF.md` 记录；③ **使用边界**：仅用于 FundLex 部署/配置/服务/验证，不动无关系统配置；**凭据值严禁写入仓库/文档/prompt/日志**，只记变量名与路径；改配置先备份。
+- 状态与验证：**已实施并验证可用**。
+  - 已用它完成：读 `/etc/fundlex-recall.env` 结构、**备份** 为 `.bak-langfuse`、**追加** `FUNDLEX_LANGFUSE_*` 四项（值已在文件中，未入库）。
+  - 部署侧待办：`/opt/fundlex-recall-first` 尚无 `observability.py`，且该 venv **未装 `langfuse`**；需 `sudo -n /opt/fundlex-recall-first/.venv/bin/pip install langfuse` + `bash tools/deploy/publish_workspace.sh`（会 `cp` 并 `systemctl restart fundlex-recall-api fundlex-recall-worker`）后才能让生产 worker 发真实 trace。
+- 下一步：装包→发布→重启→跑 2 例真实链路→确认 Langfuse 六阶段 trace。
 - 变更记录：2026-10-15 新增。
 
 ## 后续条目模板
