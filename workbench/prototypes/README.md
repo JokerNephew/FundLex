@@ -9,4 +9,4 @@
 
 文件选择只读取名称与大小，不读取合同内容。页面不上传文件、不调用模型。所有记录、统计及下载内容均为虚构示例。22 个业务动作的自动写入仍关闭，原型不提供最终合同下载。
 
-产品诊断、信息架构与正式实现的后端缺口见 `docs/BULK_WORKBENCH_PROTOTYPE_DESIGN.md`；验证记录见 `docs/BULK_WORKBENCH_PROTOTYPE_VALIDATION.md`。
+产品诊断、信息架构与正式实现的后端缺口见 `docs/archive/early-prototypes/BULK_WORKBENCH_PROTOTYPE_DESIGN.md`；验证记录见 `docs/archive/early-prototypes/BULK_WORKBENCH_PROTOTYPE_VALIDATION.md`。
