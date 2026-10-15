@@ -147,3 +147,38 @@ def test_append_without_missing_group_returns_none_when_subscription_class_absen
 
     policy = "投资者通过直销机构申购本基金A类基金份额时，不收取费用。"
     assert _append_without_missing_group(policy, _facts()) is None
+
+
+def test_heading_hint_falls_back_to_section_end():
+    """A heading is never used as the append anchor (the clause would land after it)."""
+    from fundlex.recall import _looks_like_heading
+
+    assert _looks_like_heading("第二部分  释义")
+    assert _looks_like_heading("第十五部分基金费用与税收")
+    assert _looks_like_heading("七、基金合同的变更、终止与基金财产的清算")
+    assert not _looks_like_heading("不可抗力：指本基金合同当事人不能预见、不能避免且不能克服的客观事件")
+    assert not _looks_like_heading("投资者通过直销机构申购本基金A类基金份额时，不收取认购/申购费用。")
+
+
+def test_hinted_location_wins_over_section_end():
+    inspection = _FakeInspection([
+        ("p1", "第二部分  释义"),
+        ("p2", "基金份额类别：本基金分A类、B类。"),
+        ("p3", "不可抗力：客观事件。"),
+    ])
+    sections = [_section("S1", "第二部分 释义", ["p1", "p2", "p3"])]
+    hits = append_applicability_targets(inspection, [APPEND_RULE], _facts(), sections,
+                                        hinted={"G01": "p2"})
+    assert hits[0].locations == ("p2",)
+
+
+def test_heading_hint_is_ignored_in_favour_of_section_end():
+    inspection = _FakeInspection([
+        ("p1", "第二部分  释义"),
+        ("p2", "基金份额类别定义。"),
+        ("p3", "不可抗力：客观事件。"),
+    ])
+    sections = [_section("S1", "第二部分 释义", ["p1", "p2", "p3"])]
+    hits = append_applicability_targets(inspection, [APPEND_RULE], _facts(), sections,
+                                        hinted={"G01": "p1"})
+    assert hits[0].locations == ("p3",)

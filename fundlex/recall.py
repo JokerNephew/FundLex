@@ -1363,7 +1363,8 @@ def survey_targets(inspection: DocumentInspection, rules: Sequence[dict], facts:
 
 def append_applicability_targets(inspection: DocumentInspection, rules: Sequence[dict],
                                  facts: Facts, sections: Sequence[Section], *,
-                                 known: Sequence[tuple[str, str]] = ()) -> list[SurveyHit]:
+                                 known: Sequence[tuple[str, str]] = (),
+                                 hinted: dict[str, str] | None = None) -> list[SurveyHit]:
     """Deterministic targets for conditional appends the model inventory missed (FL-D060/090).
 
     An append rule carries no ``old_text`` anchor, so the reference-anchored survey
@@ -1421,13 +1422,42 @@ def append_applicability_targets(inspection: DocumentInspection, rules: Sequence
         members = [span for span in paragraphs if span.location in set(section.locations)]
         if not members:
             continue
-        anchor = members[-1]
+        # Prefer the paragraph the inventory already pointed at (its "absent"/unresolved
+        # target names the clause the rule belongs to), and fall back to the section's
+        # last paragraph only when there is no such hint.
+        prefer = (hinted or {}).get(rule_id)
+        anchor = None
+        if prefer:
+            anchor = next((span for span in members if span.location == prefer), None)
+            if anchor is not None and _looks_like_heading(anchor.text):
+                # The inventory sometimes points at a section heading; appending directly
+                # after "第二部分 释义" would place the clause before the definitions it
+                # belongs to. Fall back to the section's last paragraph in that case.
+                anchor = None
+        if anchor is None:
+            anchor = members[-1]
         counter += 1
         hits.append(SurveyHit(rule_id=rule_id, operation="append",
                               locations=(anchor.location,), quote=anchor.text.strip(),
                               start=0, end=0, ratio=1.0, index=counter)
                     .with_parts([(anchor.location, 0, len(_compact(anchor.text)))]))
     return hits
+
+
+def _looks_like_heading(text: str) -> bool:
+    """True for a section/chapter heading rather than body text.
+
+    Headings read like "第二部分释义", "第十五部分基金费用与税收" or "七、基金合同的变更":
+    a short ordinal prefix followed by the section name, with no full stop.
+    """
+    compacted = _compact(display_text(text)[0])
+    if not compacted or len(compacted) > 30:
+        return False
+    if compacted.endswith(("。", "；", "，", "：")) and len(compacted) > 12:
+        return False
+    if re.match(r"^第[一二三四五六七八九十百零〇\d]+部分", compacted):
+        return True
+    return bool(re.match(r"^[一二三四五六七八九十]+[、.]", compacted))
 
 
 def _section_for_hint(sections: Sequence[Section], hint: Any) -> Section | None:

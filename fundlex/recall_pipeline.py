@@ -346,8 +346,24 @@ def _run_survey(model: Any, rules: Sequence[dict], rules_by_id: dict[str, dict],
     # Append rules have no reference anchor, so the survey above cannot see them.
     # Add the deterministic append pass so a conditional append the model inventory
     # wrongly called not_applicable still gets an executable target (FL-D060/090).
+    # It is gated on targets that will actually be edited and could bind to real text
+    # (needs_edit with a resolved quote): an inventory judgment of "absent" — or a
+    # needs_edit target whose model quote never resolved — is exactly the not-applicable
+    # call this pass exists to override, so neither may count as coverage here.
+    editable_known = [(target.rule_id, location)
+                      for target in [*targets, *synthetic]
+                      if target.state == "needs_edit" and target.resolution == "resolved"
+                      for location in _target_locations(target)]
+    # The inventory's own "absent" or unresolved targets name the clause each rule belongs
+    # to; reuse that location as the append anchor instead of guessing the section end.
+    hinted: dict[str, str] = {}
+    for target in [*targets, *synthetic]:
+        if target.state == "needs_edit":
+            continue
+        if target.location and target.rule_id not in hinted:
+            hinted[target.rule_id] = target.location
     append_hits = append_applicability_targets(inspection, rules, facts, sections,
-                                               known=known)
+                                               known=editable_known, hinted=hinted)
     hits.extend(append_hits)
     satisfied = [hit for hit in hits if hit.operation == "satisfied"]
     for hit in satisfied:
