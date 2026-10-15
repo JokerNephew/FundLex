@@ -35,7 +35,8 @@ from .recall import (BOUNDARY_POLICY, ENGINE_ID, ENGINE_VERSION, SCHEMA_VERSION,
                      extract_facts, inventory_window, plan_edits, plan_windows,
                      condition_matches, find_old_text_all, fuzzy_span, instantiate_slots,
                      resolve_old_text, resolve_quote, rule_context, scope_map,
-                     structure_index, survey_targets, compact_offsets)
+                     structure_index, survey_targets, compact_offsets,
+                     append_applicability_targets, Section)
 from .recall_prompts import (AUDIT_INSTRUCTION, AUDIT_PROMPT_VERSION, AUDIT_SCHEMA,
                              PROMPT_VERSIONS, SWEEP_INSTRUCTION, SWEEP_PROMPT_VERSION,
                              SWEEP_SCHEMA)
@@ -334,13 +335,20 @@ def _target_locations(target: Target) -> list[str]:
 def _run_survey(model: Any, rules: Sequence[dict], rules_by_id: dict[str, dict], facts: Facts,
                 inspection: DocumentInspection, targets: Sequence[Target],
                 synthetic: list[Target], origins: dict[str, str], ledger: list[dict[str, Any]],
-                gaps: list[dict[str, Any]]) -> list[SurveyHit]:
+                gaps: list[dict[str, Any]],
+                sections: Sequence[Section] = ()) -> list[SurveyHit]:
     """Code-driven coverage pass: find rule targets the model inventory never reported."""
     known = [(target.rule_id, location) for target in targets for location in _target_locations(target)]
     for item in synthetic:
         for location in _target_locations(item):
             known.append((item.rule_id, location))
     hits = survey_targets(inspection, rules, facts, known=known)
+    # Append rules have no reference anchor, so the survey above cannot see them.
+    # Add the deterministic append pass so a conditional append the model inventory
+    # wrongly called not_applicable still gets an executable target (FL-D060/090).
+    append_hits = append_applicability_targets(inspection, rules, facts, sections,
+                                               known=known)
+    hits.extend(append_hits)
     satisfied = [hit for hit in hits if hit.operation == "satisfied"]
     for hit in satisfied:
         target_id = f"Y{len(synthetic) + len(hits) + 1:03d}"
@@ -1557,7 +1565,7 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
         survey_ledger: list[dict[str, Any]] = []
         coverage_gaps: list[dict[str, Any]] = []
         _run_survey(model, rules, rules_by_id, facts, inspection, _collect_targets(entries, synthetic),
-                    synthetic, origins, survey_ledger, coverage_gaps)
+                    synthetic, origins, survey_ledger, coverage_gaps, sections)
         targets = _collect_targets(entries, synthetic)
         rebinds = _rebind_unresolved_targets(targets, origins, inspection,
                                              rules_by_id=rules_by_id, facts=facts,
@@ -1606,7 +1614,7 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
                                round_number=round_number)
                 targets = _collect_targets(entries, synthetic)
                 _run_survey(model, rules, rules_by_id, facts, inspection, targets,
-                            synthetic, origins, survey_ledger, coverage_gaps)
+                            synthetic, origins, survey_ledger, coverage_gaps, sections)
                 targets = _collect_targets(entries, synthetic)
                 report["rebind"] = _rebind_unresolved_targets(
                     targets, origins, inspection, rules_by_id=rules_by_id, facts=facts)
@@ -1659,7 +1667,7 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
                                round_number=round_number)
                 targets = _collect_targets(entries, synthetic)
                 _run_survey(model, rules, rules_by_id, facts, inspection, targets,
-                            synthetic, origins, survey_ledger, coverage_gaps)
+                            synthetic, origins, survey_ledger, coverage_gaps, sections)
                 targets = _collect_targets(entries, synthetic)
                 report["rebind"] = _rebind_unresolved_targets(
                     targets, origins, inspection, rules_by_id=rules_by_id, facts=facts)

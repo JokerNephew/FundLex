@@ -1361,6 +1361,91 @@ def survey_targets(inspection: DocumentInspection, rules: Sequence[dict], facts:
     return hits
 
 
+def append_applicability_targets(inspection: DocumentInspection, rules: Sequence[dict],
+                                 facts: Facts, sections: Sequence[Section], *,
+                                 known: Sequence[tuple[str, str]] = ()) -> list[SurveyHit]:
+    """Deterministic targets for conditional appends the model inventory missed (FL-D060/090).
+
+    An append rule carries no ``old_text`` anchor, so the reference-anchored survey
+    cannot find it and the whole decision rests on the windowed model inventory.
+    When that judgment says ``not_applicable`` — for instance because the contract
+    writes "直销渠道" where the guide writes "直销机构" — the obligation is silently
+    dropped even though the section it belongs to plainly exists (D07).
+
+    This pass only fires when every conservative condition holds:
+
+    * the rule has an append operation whose condition is unconditionally true;
+    * the section named by the rule's ``section_hint`` exists in the document;
+    * the required policy text is **not already present** anywhere in the document;
+    * no inventory/survey target for that rule was already recorded.
+
+    It then anchors one target at the last paragraph of that section, so the append
+    lands inside the clause the guide names rather than somewhere unrelated.
+    """
+    existing_rules = {rule_id for rule_id, _location in known}
+    paragraphs = [span for span in inspection.paragraphs if span.text.strip()]
+    if not paragraphs:
+        return []
+    document_compact = _compact("".join(display_text(span.text)[0] for span in paragraphs))
+    hits: list[SurveyHit] = []
+    counter = 0
+    for rule in rules:
+        rule_id = str(rule.get("rule_id") or "")
+        if not rule_id or rule_id in existing_rules:
+            continue
+        append_ops = [operation for operation in (rule.get("operations") or [])
+                      if operation.get("op") == "append"
+                      and condition_matches(operation.get("condition"), facts)]
+        if not append_ops:
+            continue
+        # The obligation must not already be satisfied: if a policy sentence is present,
+        # the contract already carries it and there is nothing to append (this is what
+        # keeps the pass from adding duplicate clauses). Slot instantiation may fail when
+        # this product lacks a class group (SERVICE_GROUP_EMPTY on a contract with no
+        # service-fee class); the append is still unconditional, so fall back to the raw
+        # template wording for the presence test rather than skipping the rule.
+        required = ""
+        for operation in append_ops:
+            template = str(operation.get("new_text") or "")
+            instantiated, issues = instantiate_slots(template, facts)
+            required = template if issues else instantiated
+            if required:
+                break
+        if not required:
+            continue
+        if _compact(required.split("。")[0]) in document_compact:
+            continue
+        section = _section_for_hint(sections, rule.get("section_hint"))
+        if section is None:
+            continue
+        members = [span for span in paragraphs if span.location in set(section.locations)]
+        if not members:
+            continue
+        anchor = members[-1]
+        counter += 1
+        hits.append(SurveyHit(rule_id=rule_id, operation="append",
+                              locations=(anchor.location,), quote=anchor.text.strip(),
+                              start=0, end=0, ratio=1.0, index=counter)
+                    .with_parts([(anchor.location, 0, len(_compact(anchor.text)))]))
+    return hits
+
+
+def _section_for_hint(sections: Sequence[Section], hint: Any) -> Section | None:
+    """The section whose title contains the rule's section hint (longest match wins)."""
+    text = str(hint or "").strip()
+    if not text:
+        return None
+    compact_hint = _compact(text)
+    best: Section | None = None
+    best_length = 0
+    for section in sections:
+        compact_title = _compact(section.title)
+        if compact_hint and compact_hint in compact_title:
+            if len(compact_title) > best_length:
+                best, best_length = section, len(compact_title)
+    return best
+
+
 def _reference_continuation(rule: dict, facts: "Facts | None", matched_quote: str,
                             span: Any, compact_text: dict[str, str],
                             by_location: dict[str, Any]) -> tuple[str, int, int] | None:
