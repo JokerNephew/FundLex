@@ -707,9 +707,9 @@
   9. `43626c2` chore: 忽略 3 个无引用散图（`640.png`/`t0183cba9196d3d9cc9.jpg`/`去白底 .png`，加 `.gitignore`）。
   - 提交前已扫描全部拟入库文件：无口令/密钥/私钥模式；原件/样本目录（`funds_word/`、`references/`、`var/`）由 `.gitignore` 覆盖。git 身份设为 `FundLex Agent <agent@fundlex.local>`（仅本地）。
   - 验证：提交后工作树**干净**（`git status` 空）；全量测试 **562 passed / 1 expected（references/ 未在服务器）/ 6 skipped**。
-- 状态与验证：**已实施**（本地提交完成）。**push 未做**：`origin`=`https://github.com/JokerNephew/FundLex.git`，本机无 HTTPS 凭据助手、无 `~/.git-credentials`、无 GitHub SSH 私钥、无 `gh`；`git ls-remote origin` 报 `could not read Username`。分支 `codex/fundlex-recall-first` 无 upstream。
-- 下一步：需要 push 时，由用户在服务器配置 GitHub 令牌/凭据（或告知改用其他 remote），再 `git push -u origin codex/fundlex-recall-first`（或新建分支/PR）。**不把凭据写入仓库/文档/prompt/日志。**
-- 变更记录：2026-10-15 新增；同日编号由误用的 FL-D072 更正为 **FL-D078**（FL-D072 已用于「sweep 误报 G02/G04」，编号冲突，见 FL-D077）。
+- 状态与验证：**已实施并已推送**（2026-10-15 晚）。本地提交 11 个（增 `3a3f524` 问题记录、`b1b084c` 断点、`05fc90f` 编号更正），工作树干净；全量测试 **562 passed / 1 expected / 6 skipped**。**push 已完成**：`git push -u origin codex/fundlex-recall-first` → 远端 `b1b084c..05fc90f`，本地与 `origin/codex/fundlex-recall-first` 一致。凭据由用户提供（OAuth token `gho_…`，经临时文件 + `GIT_ASKPASS` 使用，未入命令行历史/仓库/日志，用后即删）。**该 token 已在对话中出现，用户应撤销/轮换。** 已配置仓库级代理 `http.proxy=http://127.0.0.1:9981`。
+- 下一步：后续增量提交直接 `git push`（upstream 已设）；**不把凭据写入仓库/文档/prompt/日志**；不 push 资料/样本/密钥。
+- 变更记录：2026-10-15 新增；同日编号由误用的 FL-D072 更正为 **FL-D078**（FL-D072 已用于「sweep 误报 G02/G04」，编号冲突，见 FL-D077）；同日完成 push（原「push 未做」结论作废）。
 
 ## FL-D071 结果页可用性与多任务并行：前端 8 项 UX 问题（用户第 7 轮反馈）
 

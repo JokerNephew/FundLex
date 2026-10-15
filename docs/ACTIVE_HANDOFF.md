@@ -33,7 +33,7 @@
 - **跑完后**：`bash -lc '.venv/bin/python -X utf8 -m tools.evaluation.p6_score --run-id p6-dev-round1-01'`（产物默认写 `/tmp/opencode/`，与基线/第 2 次对比：基线 0.754、第 2 次 0.792）。
 - **P6 关键文件（仓库外）**：`/home/opencode/data/funds_word/`、`/home/opencode/data/MANIFEST.sha256`；仓库内 `var/recall-first-evaluation/p6/`（selection/labels/protocol/freeze）。
 - **账本（仓库外，勿入库）**：应用调用记 `/var/lib/fundlex/model_budget.sqlite`（root 只读，opencode 读不到；数字取自各 `report.json` 的 `model` 段）。基线 581 调用/$0.5624；第 2 次 677/$0.5738。**agent 自用 0 次**。
-- **禁止**：commit、push、把资料/样本/密钥入库。发布只能用 `bash tools/deploy/publish_workspace.sh`。
+- **禁止**：把资料/样本/密钥入库。发布只能用 `bash tools/deploy/publish_workspace.sh`。（**更新**：用户已授权自行判断 git 提交/推送——第 7 轮已完成本地提交并推送；但**不 push 资料/样本/密钥**的底线不变。）
 - **下一步（按序）**：① 等批次结束并评分，对比基线/第 1 轮，统计 G01/G03/G16（FL-D060 无条件 append 漏加）、G17（FL-D075）等残留；② 修 FL-D060 后只在**开发集**再跑 1—2 轮（≤3 轮），直到 dev 达标（0.95 / 整合 0.9）并冻结；③ 冻结版跑 8 留出例（`--group holdout`）；④ 写 `docs/REAL_REVISION_EVALUATION_RESULTS.md`；⑤ P7 浏览器端到端、断点续跑、双身份隔离、指引切换、MySQL 备份/恢复。
 
 ## 第 7 轮进度（服务器，2026-10-15）：用户 8 项 UX/修改问题 + P6 第 1 轮评分
@@ -45,7 +45,7 @@
 - **T3 前端 8 项 UX（问题 1–8）已实施**（`frontend/index.html|app.js|app.css`）：多任务并行、证据侧栏改「章节+改之前/改成了什么」、精简小字、结果页 ZIP 按钮置首、删顶部横幅+铃铛只收重要消息、总进度指标单行、导入 KPI 并入筛选栏。→ **FL-D071**。验证：`node --check` 通过、120 个 id 引用完整、`#2` 用真实报告核对 22 行可读无技术字段。**未做浏览器端点击验收。**
 - **P6 第 1 轮评分（FL-D070）**：`p6-dev-round1-01` 20/20 完成，677 调用，$0.5738。**开发集 236 目标：基线 178（0.7542）→ 187（0.7924，+3.8pt）**；G15 +9、G05 +2、G17 −2；`applicability_conflicts` 29→13；**假完成仍 12**。评分产物 `/tmp/opencode/p6-round1-score.json`。**仍未达阈值（0.95/0.9）**。
 - 测试：`.venv/bin/python -m pytest tests -q` → **561 passed / 1 expected（references/）/ 6 skipped**。
-- **已提交（本地，10 个逻辑提交 `cc558ab..3a3f524`），push 被凭据阻塞**：工作树干净；`origin` 为私有仓库 `github.com/JokerNephew/FundLex`，本机无 HTTPS 凭据/SSH 私钥/`gh`，`git ls-remote` 报 `could not read Username`，SSH 报 `Permission denied (publickey)`。已配置仓库级代理 `http.proxy=http://127.0.0.1:9981`（GitHub 直连可达但走代理更稳）。→ **FL-D072**
+- **已提交并已推送（第 7 轮，11 个逻辑提交 `cc558ab..05fc90f`）**：工作树干净；`origin` 为私有仓库 `github.com/JokerNephew/FundLex`，分支 `codex/fundlex-recall-first`（新建 + upstream）。凭据为用户提供的 OAuth token（`gho_…`，经临时文件 + `GIT_ASKPASS` 使用，未入仓库/日志，用后即删；**用户应撤销该 token**）。仓库级代理 `http.proxy=http://127.0.0.1:9981`。详见 `docs/HANDOFF_ROUND7_UX_AND_GIT_20261015.md`。→ **FL-D078**（原 FL-D072，编号冲突后更正）。
 - **未发布**：部署副本 `/opt/fundlex-recall-first` 仍为上一版。
 - **预览服务（临时）**：`FUNDLEX_DATA_DIR=/tmp/opencode/fundlex-preview FUNDLEX_AUTH_MODE=dev .venv/bin/uvicorn fundlex.api:app --host 127.0.0.1 --port 8020`，供浏览器（经 SSH `-L 8020:127.0.0.1:8020` 转发）查看新代码；验证完应停掉。
 - 下一动作：① 用户提供 GitHub 凭据后 `git push -u origin codex/fundlex-recall-first`（或新分支/PR）；② 浏览器端验收前端问题 1/2/4/6/7/8；③ 经确认后 `bash tools/deploy/publish_workspace.sh` 发布；④ 继续修 P6 开发集 `not_executed`（17，G01/G03/G16）+ `kept`（32，G17/G15/G14/G11/G08/G18）。
