@@ -855,6 +855,14 @@ def test_delete_reference_continues_into_next_paragraph(tmp_path: Path):
     assert survey, "the split delete reference must produce a survey hit"
     locations = survey[0].locations
     assert len(locations) == 2, locations
+    # The composite parts must be usable offsets: measured in each paragraph's compact
+    # text and never past its end, or plan_composite_target raises
+    # RECALL_TARGET_COMPOSITE_UNRESOLVED and leaves the clause behind (FL-D080).
+    from fundlex.recall import compact_offsets
+    assert survey[0].parts, "a split delete must carry composite parts"
+    for part_location, start, end in survey[0].parts:
+        body, _ = compact_offsets(inspection.by_location(part_location).text)
+        assert 0 <= start < end <= len(body), (part_location, start, end, len(body))
 
 
 def test_delete_anchor_extends_to_the_whole_clause(tmp_path: Path):

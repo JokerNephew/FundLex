@@ -97,6 +97,16 @@ def _nfkc_compact(value: str) -> str:
     return _compact(unicodedata.normalize("NFKC", value))
 
 
+def _raw_to_compact(compact_map: list[int], raw: int) -> int:
+    """Inverse of ``compact_map``: the compact offset for a raw document offset.
+
+    ``compact_map[i]`` is the raw offset of compact character ``i``, so the number of
+    compact characters before ``raw`` is the count of mapped positions below it.
+    """
+    import bisect
+    return bisect.bisect_left(compact_map, raw)
+
+
 def find_normalized(haystack: str, needle: str) -> tuple[int, int] | None:
     """Locate ``needle`` in ``haystack`` tolerating whitespace and width differences.
 
@@ -1285,8 +1295,20 @@ def survey_targets(inspection: DocumentInspection, rules: Sequence[dict], facts:
                     follower_part = _reference_continuation(rule, facts, quote, span,
                                                             compact_text, by_location)
                     if follower_part is not None:
-                        parts = [parts[0], follower_part]
-                        locations = (locations[0], follower_part[0])
+                        # ``parts`` offsets are measured in each paragraph's compact text
+                        # (plan_composite_target maps them back through compact_offsets), so
+                        # the first part must use the *extended* span from this hit rather
+                        # than the raw ``find_old_text_all`` window it started from. The
+                        # follower comes back as a full-paragraph raw span and is converted
+                        # to that same compact space (FL-D080).
+                        first_compact_body, first_map = compact_offsets(span.text)
+                        # Map the extended raw span back into compact offsets for part 0.
+                        compact_start = _raw_to_compact(first_map, raw_start)
+                        compact_end = _raw_to_compact(first_map, raw_end)
+                        follower_text = by_location[follower_part[0]].text
+                        parts = [(first[0], compact_start, compact_end),
+                                 (follower_part[0], 0, len(_compact(follower_text)))]
+                        locations = (first[0], follower_part[0])
                 counter += 1
                 hits.append(SurveyHit(rule_id=rule_id, operation="survey", locations=locations,
                                       quote=quote or key, start=first[1], end=first[2],

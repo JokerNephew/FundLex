@@ -941,9 +941,10 @@
 - 发现日期：2026-10-15（P6 开发集第 1 轮交付包复核，D01）。
 - 问题与影响：G17（删除“C类基金份额的销售服务费主要用于支付销售机构佣金…/使用范围不包括…”）的措辞在合同中出现**两次**：正文 p759+p760 一处、后部“基金费用与税收”重复章节 p1222+p1223 一处。规划侧只把 p759 绑为 `planned`（`variant_delete`，已删除）；survey 另把 p1222+p1223 绑为复合目标 `Y006`，但该目标进入 `unresolved`（未产出编辑），**次处条款原样保留**；同时 p760 的续句“销售服务费使用范围不包括基金募集期间的上述费用。”也因复合删除只覆盖 p759 分片而残留。开发集 G17 `kept` 11 例多由此引起（评分器按标签 `compact_start` 区域判定，次处仍在即判 `kept`）。
 - 证据：`var/recall-first-evaluation/p6-dev-round1-01/D01/report.json` → `targets` 中 G17 有 `T019`（p759, planned）与 `Y006`（p1222+p1223, unresolved, `composite=["p1222:0:17","p1223:0:25"]`）；`plan.edits` 仅 p759（`variant_delete`）。终稿实读：p759=`' '`（已删）、p760 仍含“使用范围不包括…”、p1222=`'销售服务费主要用于支付销售机构佣金…'`、p1223=`'销售服务费使用范围不包括基金募集期间的上述费用。'`（两处均未删）。审计对 p759 判 `completed`、对 p1222 判 `wrong/incomplete`。
-- 处理方法（待定）：① survey 的复合删除目标 `Y*` 未能规划，需定位 `unresolved` 原因（`RECALL_TARGET_*`）并让“同义务多处出现”全部成为可规划目标，而非只处理模型盘点命中的首处；② 复合删除的续段（p760）残留属分片边界问题，需与 FL-D063/FL-D075 的跨段合并路径一并核对。**尚未实现**，需先看 `unresolved` 的 reason 代码。
-- 状态与验证：**未解决**（已记录；P6 开发集 G17 残留 11 例，为主要失分点之一）。**未改代码**。
-- 下一步：打印 D01 `Y006` 的规划异常代码，修复“同义务多处/次处未删”，在开发集复跑验证 G17 完成率。
+- 处理方法（已实施）：修正 `survey_targets` 中“引用续接”分支构建复合 parts 的方式。原代码 `parts = [parts[0], follower_part]` 直接复用 `find_old_text_all` 的**未延伸窗口**（`p1222:0:17`）并把 `_reference_continuation` 返回的**裸长**（`p1223:0:25`，含尾空格）混入同一 parts；`plan_composite_target` 要求 parts 的偏移都在**各段 compact 文本**内，`25 > compact_len(24)` 即抛 `RECALL_TARGET_COMPOSITE_UNRESOLVED`。现改为：part0 用本命中**延伸后的 raw span** 经新增 `_raw_to_compact()` 映射回 compact 偏移；part1 用跟随段 compact 长度。这样“同一删除义务多处出现”（正文 + 后部重复章节）都能产出可规划的复合目标。
+- 状态与验证：**已实施并验证**。同一 D01 合同离线复算 G17 survey：两处（`p759+p760`、`p1222+p1223`）parts 均为 `(loc,0,compact_len)` 且 `0<=start<end<=compact_len` 全部 OK（修复前第二处为 `17/25` 越界）。新增断言到既有测试 `test_delete_reference_continues_into_next_paragraph`（校验每个 part 的偏移合法）。全量 **567 passed / 1 expected（references/）/ 6 skipped**。
+- 下一步：用真实链路复跑 D01 等含 G17 双处出现的样本，确认两处均删除、`Y006` 不再 unresolved；再量化 G17 `kept` 是否随之下降（开发集 G17 残留 11 例）。
+- 变更记录：2026-10-15 新增（构建结果交付包时发现）；同日实施 `_raw_to_compact` 与 parts 偏移修正并验证。
 - 变更记录：2026-10-15 新增（构建结果交付包时发现）。
 
 ## 后续条目模板
