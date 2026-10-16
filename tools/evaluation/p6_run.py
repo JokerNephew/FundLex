@@ -66,7 +66,7 @@ def main() -> int:
         # jobs then fail closed with ENGINE_SCHEMA_MISMATCH and the run is no longer a
         # single-engine comparison (FL-D096). The per-case error code below is the signal:
         # abort loudly instead of scoring a mixture of engine revisions.
-        print("BATCH_START", args.run_id, args.group)
+        print("BATCH_START", args.run_id, args.group, flush=True)
 
         for case in cases:
             contract = words_root / case["file"]

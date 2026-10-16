@@ -1293,12 +1293,27 @@
 - 处理过程与额外发现的真实缺陷：
   1. **配对被拆开的缺陷（已存在，非本次引入）**：`selective.apply_decisions()` 用 `_normalise_decisions()` 只看调用方传来的 id；前端只按 `del_id` 下发决策（`RevisionDecision` 仅含 `del_id`，`frontend/app.js` 亦然），于是配对的 `ins_id` 走默认 `ACCEPT` 被内联，**拒绝一条替换后原文与新文会同时留在文档里**（实测 p1191：拒绝 del_id=1 后旧句与新句并存）。只有同时下发 `del_id` 与 `ins_id` 才会正确拒绝。
      - 修复：新增 `selective._explicit_verdicts()`，把判定展开到整对修订（同一对的任一 id 被提及即整对生效），`apply_decisions` 与新的痕迹版生成共用。
-  2. **新增 `selective.generate_selected_redline()`**：把源痕迹版重写为与选择一致的版本 —— 接受的整对修订内联（`w:ins` 展开、`w:del` 移除），拒绝的保留 `w:ins`/`w:del` 痕迹，**未提及的一律保留为痕迹**（不默认接受，避免隐瞒用户没做过的决定）。写盘后独立重开核对：修订集合必须恰好等于「源集合 − 显式接受集合」，否则 `SELECTED_REDLINE_MISMATCH` 并删除产物。
+  2. **新增 `selective.generate_selected_redline()`**：把源痕迹版重写为与选择一致的版本。**该函数的语义在首次实现后被产品负责人复核纠正过一次，见下方「语义纠正」。**
   3. `fundlex/store.py`：`SELECTED_KINDS` 增加 `selected_redline`；新增 `remove_selected_artifact()`（新痕迹版派生失败时删除过期的旧 `selected_redline`，避免与最新选择不一致而被误当可信产物；`selected_final` 不允许被该方法删除）。
   4. `fundlex/api.py`：决策后同时发布 `selected_redline`；下载白名单加入 `selected_redline`。派生失败只影响该痕迹版，不回滚已发布的 `selected_final`。
-  5. `fundlex/edit_summary.py`：新增 `archive_kinds()` 与 `ARCHIVE_PREFERENCE` —— ZIP 每个槽位取最优候选（`selected_final` > `final` > `working_final`；`selected_redline` > `redline` > `working_redline`），报告类无竞争项照旧；`archive_entry()` 让所选版本复用同样的归档路径。
-  6. `fundlex/tasks.py`：「结果总览」的「每份合同的修改情况」新增**版本**列（有 `selected_final` 记「按人工选择」，否则「按引擎全量」），并加说明文字。
-  7. `tools/evaluation/p6_package.py`：离线包同样优先取 `selected_final`/`selected_redline`。
+  5. `fundlex/edit_summary.py`：新增 `archive_kinds()` 与 `ARCHIVE_PREFERENCE` —— 最终版槽位取最优候选（`selected_final` > `final` > `working_final`）；修订痕迹槽位**保留引擎全量痕迹**（`redline` > `working_redline`），另设 `selected_redline` 槽位（见「语义纠正」）。报告类无竞争项照旧；`archive_entry()` 用 `（全量痕迹版）`/`（选择修订版）` 两个名字分别归档两份痕迹文件。
+  6. `fundlex/tasks.py`：「结果总览」的「每份合同的修改情况」新增**版本**列（有 `selected_redline` 记「按人工选择」，否则「引擎全量」），并加说明文字解释两种值。
+  7. `tools/evaluation/p6_package.py`：离线包同样优先取 `selected_final`，并同时归档 `（全量痕迹版）` 与 `（选择修订版）`。
+- 语义纠正（2026-10-16，产品负责人复核后）：首次实现把**拒绝**的修订保留为痕迹，理由是「仍可复查」。
+  这是错的，与最终版自相矛盾：最终版里该处是原文（拒绝已生效），痕迹版却标着「这里要改成新文」；
+  而且「接受全部修订」会把用户已否决的改动再加回去，无法还原出最终版。
+  - **正确语义**（已按此重写 `generate_selected_redline()` / `_keep_accepted_only()`）：痕迹版只保留**接受的**
+    修订为痕迹；**拒绝的修订回到原文、不再留痕迹**。于是「接受痕迹版中的全部修订」即得到最终版，两份文件自洽。
+  - **未表态的修订**：按**接受**处理（与 `apply_decisions()` 的默认一致）。前端下发的决策覆盖每条修订，
+    正常不会出现未表态；用同一默认值可保证 `selected_redline` 与 `selected_final` 口径一致。
+  - **产品负责人决定分两份痕迹文件**（避免丢失「引擎本来想改什么」的审计信息）：
+    - `<合同名>（全量痕迹版）.docx` —— 引擎原始全量痕迹，不受选择影响；
+    - `<合同名>（选择修订版）.docx` —— 审查后只含接受修订的痕迹；接受其全部修订即得到最终版。
+    - **只在用户确实把某些修订从接受改成不接受时才生成第二份**；全部保持默认接受的合同与引擎结果一致，
+      只发「（全量痕迹版）」以免重复。判定见 `api.py:_selection_overrides_default()`。
+  - 相应改动：`archive_entry()` 采用两个名字（`（全量痕迹版）`/`（选择修订版）`）；`ARCHIVE_PREFERENCE` 让
+    全量痕迹与选择痕迹各占一个槽位而不再互相覆盖；`tasks.report()` 的版本列改按 `selected_redline` 判定；
+    前端下载按钮与文件名区分两份；`p6_package.py` 同步输出两份。
 - 状态与验证：**已实施、已发布、已线上端到端验证通过**。
   - 单测：`tests/test_selective.py` 17 项（含「拒绝与接受各半时痕迹保留/消失」「未提及的修订必须保留痕迹」「痕迹版与所选合同一致」「须有 manifest」「不得覆盖源痕迹版」）；`tests/test_revision_api.py` 8 项（含决策后 `selected_redline` 与 `selected_final` 均可下载且内容不同、accept-all 也会生成痕迹版）；`tests/test_tasks_api.py` 增加 ZIP 槽位与偏好用例。全量 **638 passed / 6 skipped**，仅余已知基线失败 `test_rules_catalogue.py::test_source_provenance_and_reproducible_compilation`（服务器缺 `references/`，与本条无关）。
   - 离线复现配对缺陷：仅下发 `del_id=1: reject` 时，修复前 p1191 修订 id 为 `[]` 但旧句与新句并存；修复后旧句恢复、新句消失。

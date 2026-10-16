@@ -218,7 +218,10 @@
       </div>
       <div class="review-actions"><button class="btn btn-primary" data-action="generate-selected">生成最终版合同</button>
         <button class="btn" data-action="review-close">返回报告</button>
-        <span class="subnote" id="review-message"></span></div>`;
+        <span class="subnote" id="review-message"></span></div>
+      <p class="subnote">提示：把某条修订改为“不接受”后，交付包会同时给出「（全量痕迹版）」（引擎全部改动）
+        和「（选择修订版）」（只保留你接受的修订，接受它的全部修订即得到最终版）；若全部保持默认接受，
+        只给出「（全量痕迹版）」，因为它已经等于最终版。</p>`;
     syncReview();
   }
   function syncReview(){
