@@ -19,7 +19,12 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Request, UploadFile
-from fastapi.responses import FileResponse, PlainTextResponse, StreamingResponse
+from fastapi.responses import (
+    FileResponse,
+    HTMLResponse,
+    PlainTextResponse,
+    StreamingResponse,
+)
 from starlette.background import BackgroundTask
 from fastapi.staticfiles import StaticFiles
 
@@ -1078,9 +1083,39 @@ def create_app(data_dir: str | Path | None = None, *, auth_db=None) -> FastAPI:
     if frontend.is_dir():
         application.mount("/static", StaticFiles(directory=frontend), name="static")
 
+        def _asset_version(*names: str) -> str:
+            """内容哈希做缓存标识：任一静态资源变化即生成新 URL，避免浏览器沿用旧缓存。"""
+            digest = hashlib.sha256()
+            for name in names:
+                path = frontend / name
+                digest.update(name.encode("utf-8"))
+                try:
+                    digest.update(path.read_bytes())
+                except OSError:
+                    digest.update(b"missing")
+            return digest.hexdigest()[:16]
+
         @application.get("/", include_in_schema=False)
         def home():
-            return FileResponse(frontend / "index.html", media_type="text/html")
+            html = (frontend / "index.html").read_text(encoding="utf-8")
+            version = _asset_version("app.css", "app.js")
+            html = html.replace('/static/app.css"', f'/static/app.css?v={version}"')
+            html = html.replace('/static/app.js"', f'/static/app.js?v={version}"')
+            return HTMLResponse(
+                html,
+                headers={"Cache-Control": "no-store, must-revalidate"},
+            )
+
+        @application.middleware("http")
+        async def static_cache_control(request, call_next):
+            response = await call_next(request)
+            path = request.url.path
+            if path.startswith("/static/"):
+                # 静态资源 URL 带内容哈希，可长期缓存；入口 HTML 必须每次校验。
+                response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+            elif path in ("/", "/index.html"):
+                response.headers["Cache-Control"] = "no-store, must-revalidate"
+            return response
 
     return application
 
