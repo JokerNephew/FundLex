@@ -160,19 +160,48 @@ def _unwrap_revision(node: etree._Element, *, restoring_delete: bool) -> None:
     parent.remove(node)
 
 
+def _explicit_verdicts(manifests: Sequence[Mapping[str, Any]],
+                       decisions: Mapping[Any, Any] | Iterable[Any]) -> dict[int, str]:
+    """Verdicts for the edits the caller actually named, spread over each pair.
+
+    A caller (the workbench) addresses an edit by its ``del_id``, but the pair
+    also owns an ``ins_id``. Rejecting only half of a replacement would leave the
+    document holding both the original and the new wording, so every id of a pair
+    takes the verdict given for either of its ids.
+
+    Only edits the caller mentioned are returned. An edit left unmentioned has no
+    entry, so callers can tell "accepted" apart from "no decision given" — the
+    distinction the derived redline depends on.
+    """
+    named = _normalise_decisions(decisions)
+    resolved: dict[int, str] = {}
+    for item in manifests:
+        ids = [_as_int(item.get(key)) for key in ("del_id", "ins_id")]
+        ids = [rid for rid in ids if rid is not None]
+        verdict = next((named[rid] for rid in ids if rid in named), None)
+        if verdict is None:
+            continue
+        for rid in ids:
+            resolved[rid] = verdict
+    return resolved
+
+
 def apply_decisions(root: etree._Element, manifests: Sequence[Mapping[str, Any]],
                     decisions: Mapping[Any, Any] | Iterable[Any]) -> tuple[int, ...]:
-    """Apply decisions in place and return the ids that were not found."""
-    verdicts = _normalise_decisions(decisions)
-    # Every id defaults to accept, matching "accept all" semantics.
+    """Apply decisions in place and return the ids that were not found.
+
+    "Accept all" is the default: ids the caller never mentions are accepted, and
+    every verdict is spread across the whole edit pair (see
+    :func:`_explicit_verdicts`) so a rejection addresses both halves.
+    """
     per_id: dict[str, str] = {}
     for item in manifests:
-        for key, default_tag in (("del_id", "del"), ("ins_id", "ins")):
-            try:
-                rid = str(int(item[key]))
-            except (KeyError, TypeError, ValueError):
-                continue
-            per_id[rid] = verdicts.get(int(rid), ACCEPT)
+        for key in ("del_id", "ins_id"):
+            rid = _as_int(item.get(key))
+            if rid is not None:
+                per_id[str(rid)] = ACCEPT
+    per_id.update({str(rid): verdict
+                   for rid, verdict in _explicit_verdicts(manifests, decisions).items()})
     seen: set[str] = set()
     for node in list(root.iter()):
         if node.tag not in {Q("ins"), Q("del")}:
@@ -287,6 +316,118 @@ def _verify_selection(path: Path, manifests: Sequence[Mapping[str, Any]],
                 if node.tag in {Q("ins"), Q("del")} and node.get(Q("id"), "") in managed}
     if leftover:
         raise DocxError("SELECTED_REVISION_LEFTOVER")
+
+
+def generate_selected_redline(redline: str | Path, target: str | Path,
+                              report: Mapping[str, Any],
+                              decisions: Mapping[Any, Any] | Iterable[Any],
+                              *, limits: ZipLimits | None = None) -> SelectionResult:
+    """Write a revision artifact that matches a selection.
+
+    The engine's redline tracks *every* edit it planned. When a user rejects
+    some of them, the accepted-revision contract (``selected_final``) no longer
+    matches that redline: opening it in Word would show edits the user already
+    turned down.
+
+    This function rewrites the redline so it agrees with the selection:
+
+    * an **accepted** edit is inlined the same way ``accept`` does it in Word
+      (``w:ins`` unwrapped, ``w:del`` dropped) — it reads as final text with no
+      revision mark, exactly as it appears in ``selected_final``;
+    * a **rejected** edit keeps its ``w:ins``/``w:del`` markup untouched — it
+      still shows as a tracked change, which is the point of the redline.
+
+    Word's own review pane does the same thing: it only lists changes that are
+    still pending.
+    """
+    limits = limits or ZipLimits()
+    redline, target = Path(redline), Path(target)
+    if redline.resolve() == target.resolve():
+        raise DocxError("OUTPUT_PATH_INVALID")
+    manifests = _manifests_from_report(report)
+    if not manifests:
+        raise DocxError("REVISION_MANIFEST_UNAVAILABLE")
+    parts = _read_redline_parts(redline, limits)
+    _validate_package(parts, limits, full=False)
+    root = _xml(parts[DOCUMENT], limits)
+    _validate_revision_manifest(root, manifests)
+    before = _managed_ids(root)
+    absent = _settle_accepted(root, manifests, decisions)
+    document_xml = etree.tostring(root, encoding="UTF-8", xml_declaration=True)
+    try:
+        _write_package(target, parts, document_xml)
+        _verify_redline_selection(target, before, manifests, decisions, limits)
+        return SelectionResult(accepted=(), rejected=(), absent=absent,
+                               path=str(target), sha256=_sha(target.read_bytes()))
+    except Exception:
+        target.unlink(missing_ok=True)
+        raise
+
+
+def _settle_accepted(root: etree._Element, manifests: Sequence[Mapping[str, Any]],
+                     decisions: Mapping[Any, Any] | Iterable[Any]) -> tuple[int, ...]:
+    """Inline explicitly accepted edits; leave every other revision tracked.
+
+    Unlike :func:`apply_decisions` this never *removes* revision markup for a
+    rejected edit; it only settles the accepted ones. An edit the caller did not
+    mention is left tracked rather than treated as accepted — silently settling
+    it would hide a decision the user never made.
+
+    The expectation is read from the markup rather than the manifest, because the
+    engine omits a half for some edit shapes (a pure deletion carries only
+    ``w:del``).
+    """
+    settled_ids = {rid for rid, verdict in _explicit_verdicts(manifests, decisions).items()
+                   if verdict == ACCEPT}
+    seen: set[int] = set()
+    for node in list(root.iter()):
+        if node.tag not in {Q("ins"), Q("del")}:
+            continue
+        rid = _int_or_none(node.get(Q("id"), ""))
+        # A revision we did not generate, or one we are not accepting: leave it
+        # untouched rather than silently rewriting someone else's markup.
+        if node.getparent() is None or rid is None or rid not in settled_ids or rid in seen:
+            continue
+        seen.add(rid)
+        if node.tag == Q("del"):
+            node.getparent().remove(node)
+        else:
+            _unwrap_revision(node, restoring_delete=False)
+    return tuple(sorted(settled_ids - seen))
+
+
+def _managed_ids(root: etree._Element) -> set[str]:
+    """Every revision id the markup actually carries, including foreign ones."""
+    return {node.get(Q("id")) for node in root.iter()
+            if node.tag in {Q("ins"), Q("del")} and node.get(Q("id"))}
+
+
+def _int_or_none(value: Any) -> int | None:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _verify_redline_selection(path: Path, before: set[str],
+                              manifests: Sequence[Mapping[str, Any]],
+                              decisions: Mapping[Any, Any] | Iterable[Any],
+                              limits: ZipLimits) -> None:
+    """Re-open the artifact and compare its revisions with the source.
+
+    Exactly the explicitly accepted revisions must be gone; everything else the
+    source carried must still be there, and nothing new may appear.
+    """
+    settled = {str(rid) for rid, verdict in _explicit_verdicts(manifests, decisions).items()
+               if verdict == ACCEPT}
+    if _revision_ids(path, limits) != before - settled:
+        raise DocxError("SELECTED_REDLINE_MISMATCH")
+
+
+def _revision_ids(path: Path, limits: ZipLimits) -> set[str]:
+    parts = _read_redline_parts(path, limits)
+    _validate_package(parts, limits, full=False)
+    return _managed_ids(_xml(parts[DOCUMENT], limits))
 
 
 def accept_all(redline: str | Path, report: Mapping[str, Any]) -> dict[Any, Any]:

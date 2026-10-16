@@ -312,8 +312,12 @@ def main() -> None:
         # The app writes accepted-revision artifacts as ``final``/``redline`` for a
         # complete delivery and ``working_final``/``working_redline`` when the run is
         # fail-closed (delivery != complete). Both are the real DOCX to hand over.
-        source = _first_existing(case_dir / "final", case_dir / "working_final")
-        redline = _first_existing(case_dir / "redline", case_dir / "working_redline")
+        # A user-reviewed contract also has a derived pair; it wins, because it is
+        # the version the user actually chose.
+        source = _first_existing(case_dir / "selected_final",
+                                 case_dir / "final", case_dir / "working_final")
+        redline = _first_existing(case_dir / "selected_redline",
+                                  case_dir / "redline", case_dir / "working_redline")
         stem = Path(name).stem
         folder = notes_dir / stem
         folder.mkdir(parents=True, exist_ok=True)

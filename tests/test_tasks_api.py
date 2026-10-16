@@ -336,6 +336,35 @@ def test_task_archive_groups_final_and_notes_by_folder(client, tmp_path):
     assert notes_root == "逐份修改说明" and report_path == "逐份修改说明/甲合同/report_md.md"
 
 
+def test_archive_entry_places_a_reviewed_pair_in_the_same_slots():
+    """A user-selected pair fills the final/redline slots, like the engine pair."""
+    from fundlex.edit_summary import archive_entry
+
+    assert archive_entry("selected_final", "甲合同", ".docx") == \
+        archive_entry("final", "甲合同", ".docx")
+    assert archive_entry("selected_redline", "甲合同", ".docx") == \
+        archive_entry("redline", "甲合同", ".docx")
+
+
+def test_archive_kinds_prefers_a_user_selection_over_the_engine_pair():
+    from fundlex.edit_summary import archive_kinds
+
+    # No review: the engine's own pair is packaged.
+    assert sorted(archive_kinds({"final": "u", "redline": "u", "report_md": "u"})) == \
+        ["final", "redline", "report_md"]
+    # Reviewed: the derived pair replaces it, and reports still come along.
+    chosen = archive_kinds({"final": "u", "redline": "u", "report_md": "u",
+                            "selected_final": "u", "selected_redline": "u"})
+    assert sorted(chosen) == ["report_md", "selected_final", "selected_redline"]
+    # An incomplete run keeps its working pair when nothing was reviewed.
+    assert sorted(archive_kinds({"working_final": "u", "working_redline": "u"})) == \
+        ["working_final", "working_redline"]
+    # A reviewed incomplete run still prefers the selection.
+    assert sorted(archive_kinds({"working_final": "u", "working_redline": "u",
+                                 "selected_final": "u"})) == \
+        ["selected_final", "working_redline"]
+
+
 def test_multiple_tasks_really_execute_concurrently(client):
     import threading
     import time

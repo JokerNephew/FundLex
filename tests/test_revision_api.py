@@ -86,6 +86,37 @@ def test_decisions_endpoint_accepts_partial_rejection(seeded):
 
 
 @requires_real
+def test_decisions_publish_a_matching_redline(seeded):
+    """A review must leave a redline that agrees with the selected contract."""
+    client, batch, doc = seeded
+    response = client.post(f"/api/batches/{batch['id']}/documents/{doc}/decisions",
+                           headers=_headers(),
+                           json={"decisions": [{"del_id": 1, "decision": "reject"},
+                                               {"del_id": 3, "decision": "accept"}]})
+    assert response.status_code == 200, response.text
+
+    redline = client.get(f"/api/batches/{batch['id']}/documents/{doc}/download/selected_redline",
+                         headers=_headers())
+    assert redline.status_code == 200, redline.text
+    names = client.get(f"/api/batches/{batch['id']}/documents/{doc}/download/selected_final",
+                       headers=_headers())
+    assert names.status_code == 200, names.text
+    # The two artifacts are distinct files: one settles the selection, the other
+    # keeps it reviewable.
+    assert redline.content != names.content
+
+
+@requires_real
+def test_accept_all_also_publishes_a_redline(seeded):
+    client, batch, doc = seeded
+    assert client.post(f"/api/batches/{batch['id']}/documents/{doc}/accept-all",
+                       headers=_headers()).status_code == 200
+    response = client.get(f"/api/batches/{batch['id']}/documents/{doc}/download/selected_redline",
+                          headers=_headers())
+    assert response.status_code == 200, response.text
+
+
+@requires_real
 def test_decisions_rejects_invalid_verdict(seeded):
     client, batch, doc = seeded
     response = client.post(f"/api/batches/{batch['id']}/documents/{doc}/decisions",

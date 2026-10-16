@@ -70,7 +70,7 @@ _RECALL_ARTIFACT_HASHES = {"final": "final_sha256", "redline": "redline_sha256",
                            "working_final": "final_sha256", "working_redline": "redline_sha256"}
 # User-driven artifacts derived from an engine revision artifact. They live
 # alongside delivery artifacts but are not part of delivery validation.
-SELECTED_KINDS = {"selected_final"}
+SELECTED_KINDS = {"selected_final", "selected_redline"}
 
 
 def _manifests_available(report: dict[str, Any]) -> bool:
@@ -461,6 +461,26 @@ class RunStore:
             db.execute("INSERT OR REPLACE INTO artifacts VALUES (?,?,?,?,?)",
                        (document_id, kind, key, digest, size))
         return key, size
+
+    def remove_selected_artifact(self, owner: str, batch_id: str, document_id: str,
+                                 kind: str) -> None:
+        """Drop a derived user artifact that is no longer trustworthy.
+
+        Used when a freshly derived redline cannot be produced or verified: the
+        previous one no longer matches the newest selection, so serving it would
+        misrepresent which edits the user accepted.
+        """
+        self.get_document(owner, batch_id, document_id)
+        if kind not in SELECTED_KINDS or kind == "selected_final":
+            raise StoreError("invalid artifact")
+        with self._connect() as db:
+            row = db.execute("SELECT object_key FROM artifacts WHERE document_id=? AND kind=?",
+                             (document_id, kind)).fetchone()
+            if row is None:
+                return
+            db.execute("BEGIN IMMEDIATE")
+            db.execute("DELETE FROM artifacts WHERE document_id=? AND kind=?", (document_id, kind))
+        self.object_path(row["object_key"]).unlink(missing_ok=True)
 
     def _verify_selected_source(self, document_id: str, kind: str) -> None:
         """A selected artifact is valid only while its source redline is intact.

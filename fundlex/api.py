@@ -30,9 +30,10 @@ from fastapi.staticfiles import StaticFiles
 
 from . import guide_store
 from .docx import DocxError
-from .edit_summary import archive_entry
+from .edit_summary import archive_entry, archive_kinds
 from .html_view import project_docx
-from .selective import accept_all as selective_accept_all, generate_selected_artifact
+from .selective import (accept_all as selective_accept_all, generate_selected_artifact,
+                        generate_selected_redline)
 from .store import Conflict, NotFound, RunStore, StoreError
 from .config import auth_db_target, local_data_dir
 from .tasks import TaskStore
@@ -486,9 +487,21 @@ def create_app(data_dir: str | Path | None = None, *, auth_db=None) -> FastAPI:
         chosen = decisions if decisions is not None else selective_accept_all(str(path), report)
         temp_dir = Path(tempfile.mkdtemp(prefix="fundlex-selected-"))
         target = temp_dir / "selected_final.docx"
+        derived_redline = temp_dir / "selected_redline.docx"
         try:
             result = generate_selected_artifact(path, target, report, chosen)
             store.save_selected_artifact(owner, batch_id, document_id, "selected_final", target)
+            # The engine redline tracks every planned edit, including the ones the
+            # user just turned down. Publish a redline that agrees with this
+            # selection so the delivered pair stays consistent.
+            try:
+                generate_selected_redline(path, derived_redline, report, chosen)
+                store.save_selected_artifact(owner, batch_id, document_id,
+                                             "selected_redline", derived_redline)
+            except (DocxError, Conflict, StoreError):
+                # The selected contract is already published; a redline that
+                # cannot be derived must not fail the whole decision request.
+                store.remove_selected_artifact(owner, batch_id, document_id, "selected_redline")
         finally:
             shutil.rmtree(temp_dir, ignore_errors=True)
         return {
@@ -875,7 +888,7 @@ def create_app(data_dir: str | Path | None = None, *, auth_db=None) -> FastAPI:
                     name = "".join(c for c in name if c.isalnum() or c in " _-（）()")[:100] or "合同"
                     name = unique(name)
                     included = []
-                    for kind in doc.get("downloads", {}):
+                    for kind in archive_kinds(doc.get("downloads")):
                         path, digest = store.get_artifact(user, doc["batch_id"], doc["document_id"], kind)
                         data = path.read_bytes()
                         if hashlib.sha256(data).hexdigest() != digest:
@@ -996,7 +1009,7 @@ def create_app(data_dir: str | Path | None = None, *, auth_db=None) -> FastAPI:
     @application.get("/api/batches/{batch_id}/documents/{document_id}/download/{kind}")
     def download(batch_id: str, document_id: str, kind: str, user: str = Depends(_user)):
         docx_kinds = {"final", "redline", "evaluation_final", "evaluation_redline",
-                      "working_final", "working_redline", "selected_final"}
+                      "working_final", "working_redline", "selected_final", "selected_redline"}
         if kind not in docx_kinds | {"report_json", "report_md"}:
             raise HTTPException(404, "artifact not found")
         try:

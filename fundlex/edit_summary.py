@@ -194,14 +194,42 @@ def archive_entry(kind: str, name: str, suffix: str) -> tuple[str, str]:
     definition. The accepted-revision contract goes in its own root folder
     (``最终版（接受修订后）``); the tracked-changes version and the report live next to
     that contract's notes under ``逐份修改说明/<合同>/``.
+
+    A user-selected pair (``selected_final``/``selected_redline``) wins over the
+    engine's own artifacts: it is the version the user actually chose.
     """
     final_root = "最终版（接受修订后）"
     notes_root = "逐份修改说明"
-    if kind in {"final", "working_final"}:
+    if kind in {"final", "working_final", "selected_final"}:
         return final_root, f"{final_root}/{name}{suffix}"
-    if kind in {"redline", "working_redline"}:
+    if kind in {"redline", "working_redline", "selected_redline"}:
         return notes_root, f"{notes_root}/{name}/{name}（修改痕迹版）{suffix}"
     return notes_root, f"{notes_root}/{name}/{kind}{suffix}"
+
+
+# Which artifact actually fills each ZIP slot, most specific first. When the user
+# has reviewed a contract, the derived pair replaces the engine pair.
+ARCHIVE_PREFERENCE = {
+    "final": ("selected_final", "final", "working_final"),
+    "redline": ("selected_redline", "redline", "working_redline"),
+}
+
+
+def archive_kinds(downloads) -> list[str]:
+    """The artifact kinds to package, collapsing each slot to its best candidate.
+
+    ``downloads`` is the document's available ``kind -> url`` mapping. When the
+    user has reviewed a contract, ``selected_final``/``selected_redline`` replace
+    the engine's pair; otherwise the engine pair is used. Kinds with no competing
+    alternative (reports) are kept as-is, in the order they were recorded.
+    """
+    available = set(downloads or ())
+    contested = {kind for group in ARCHIVE_PREFERENCE.values() for kind in group}
+    chosen = [next((kind for kind in group if kind in available), None)
+              for group in ARCHIVE_PREFERENCE.values()]
+    chosen = [kind for kind in chosen if kind is not None]
+    chosen.extend(kind for kind in (downloads or ()) if kind not in contested)
+    return chosen
 
 
 def clip(text: str, limit: int) -> str:
@@ -221,5 +249,5 @@ __all__ = [
     "plan_edits", "rule_title", "rule_label", "audit_verdicts", "verdict_text",
     "edit_count", "edit_labels", "unresolved_entries", "delivery_text",
     "summary_detail", "edit_before_after", "operation_text", "archive_entry",
-    "clip", "rule_requirement",
+    "archive_kinds", "ARCHIVE_PREFERENCE", "clip", "rule_requirement",
 ]

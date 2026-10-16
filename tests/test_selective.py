@@ -15,6 +15,7 @@ from fundlex.selective import (
     _normalise_decisions,
     apply_decisions,
     generate_selected_artifact,
+    generate_selected_redline,
 )
 
 REAL = Path("var/recall-first-evaluation/p6-dev-round1-01/D01")
@@ -166,6 +167,68 @@ def test_missing_manifest_fails_closed(tmp_path):
     redline = _redline_copy(tmp_path)
     with pytest.raises(DocxError):
         generate_selected_artifact(redline, tmp_path / "out.docx", {}, {1: ACCEPT})
+
+
+@requires_real
+def test_selected_redline_drops_accepted_and_keeps_rejected(tmp_path):
+    """A derived redline shows only the edits the user did not accept."""
+    report = _report()
+    redline = _redline_copy(tmp_path)
+    manifests = _manifests_from_report(report)
+    kept = manifests[0]
+    settled = manifests[1]
+    decisions = {int(kept["del_id"]): REJECT, int(settled["del_id"]): ACCEPT}
+    out = tmp_path / "selected_redline.docx"
+    generate_selected_redline(redline, out, report, decisions)
+    ids = set(_managed_revisions(out))
+    assert str(settled["del_id"]) not in ids and str(settled["ins_id"]) not in ids
+    assert str(kept["del_id"]) in ids and str(kept["ins_id"]) in ids
+
+
+@requires_real
+def test_selected_redline_agrees_with_the_selected_contract(tmp_path):
+    """The derived redline carries every edit that survives in the selection.
+
+    For a rejected edit neither half may be inlined (it must stay reviewable);
+    for an accepted edit both halves must be settled. That is precisely what keeps
+    the redline consistent with ``selected_final``.
+    """
+    report = _report()
+    redline = _redline_copy(tmp_path)
+    manifests = _manifests_from_report(report)
+    rejected = manifests[:3]
+    accepted = manifests[3]
+    decisions = {int(m["del_id"]): REJECT for m in rejected}
+    decisions[int(accepted["del_id"])] = ACCEPT
+
+    derived = tmp_path / "selected_redline.docx"
+    generate_selected_redline(redline, derived, report, decisions)
+    ids = set(_managed_revisions(derived))
+
+    # Accepted: both halves settled, so the text reads as final in Word.
+    assert str(accepted["del_id"]) not in ids and str(accepted["ins_id"]) not in ids
+    # Rejected: both halves kept, so the change is still reviewable.
+    for item in rejected:
+        assert str(item["del_id"]) in ids and str(item["ins_id"]) in ids
+
+    # An edit the caller never mentioned stays tracked rather than being
+    # silently accepted behind the user's back.
+    untouched = manifests[5]
+    assert str(untouched["del_id"]) in ids and str(untouched["ins_id"]) in ids
+
+
+@requires_real
+def test_selected_redline_requires_the_manifest(tmp_path):
+    redline = _redline_copy(tmp_path)
+    with pytest.raises(DocxError):
+        generate_selected_redline(redline, tmp_path / "out.docx", {}, {1: ACCEPT})
+
+
+@requires_real
+def test_selected_redline_may_not_replace_the_redline(tmp_path):
+    redline = _redline_copy(tmp_path)
+    with pytest.raises(DocxError):
+        generate_selected_redline(redline, redline, _report(), {1: ACCEPT})
 
 
 @requires_real
