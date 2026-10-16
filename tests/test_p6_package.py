@@ -59,8 +59,12 @@ def test_case_explanation_has_business_columns_and_reasons(tmp_path):
     items = load_run(run)
     items[0]["original"] = "测试基金合同.docx"
     text = case_explanation("测试基金合同.docx", items[0])
-    assert "## 修改清单" in text
+    assert "## 逐处修改对照" in text
+    assert "### 逐处修改详情" in text
     assert "## 未修改的内容及原因" in text
+    # Each modification states what it was before and after.
+    assert "**修改前**" in text
+    assert "**修改后**" in text
     # The audit verdict column and the readable rule label are present.
     assert "通过（规则校验＋独立复核）" in text
     assert "非浮动多类别：清算分配表述" in text

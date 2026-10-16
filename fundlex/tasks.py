@@ -12,6 +12,8 @@ import uuid
 from collections import Counter
 from datetime import datetime, timezone
 
+from .edit_summary import (DELIVERY_TEXT, edit_count,
+                           summary_detail)
 from .recall import ENGINE_ID as RECALL_ENGINE_ID
 from .store import Conflict, NotFound, RunStore, SCHEMA_VERSION, engine_build
 
@@ -352,14 +354,33 @@ class TaskStore:
         docs = self.documents(owner, task_id, page_size=100000)["items"]
         def safe(value):
             return str(value or "—").replace("|", "\\|").replace("\r", " ").replace("\n", " ")
-        lines = ["# FundLex 任务汇总", "", f"- 任务：{safe(summary['name'])}", f"- 规则版本：{summary['ruleset_version']}",
-                 f"- 合同总数：{summary['total']}", f"- 已接收：{summary['uploaded']}", f"- 尚未上传：{summary['pending_upload']}",
-                 f"- 接收失败：{summary['rejected']}", f"- 处理结束：{summary['completed']}", f"- 失败关闭：{summary['failed']}",
+        lines = ["# FundLex 合同修改结果总览", "", f"- 任务：{safe(summary['name'])}",
+                 f"- 合同总数：{summary['total']}", f"- 已接收：{summary['uploaded']}",
+                 f"- 尚未上传：{summary['pending_upload']}", f"- 接收失败：{summary['rejected']}",
+                 f"- 处理结束：{summary['completed']}", f"- 失败关闭：{summary['failed']}",
                  f"- 资格统计：{summary['qualification_counts']}", f"- 交付统计：{summary['delivery_counts']}",
-                 "", "处理结束、资格符合和合同可直接使用分别记录；仅交付完整并通过验证的合同开放下载。", "",
-                 "| 文件 | 上传 | 处理 | 资格 | 交付 | 原因码 |", "|---|---|---|---|---|---|"]
-        lines.extend("| " + " | ".join(safe(d[k]) for k in ("name", "upload_status", "job_status", "eligibility", "delivery_status"))
-                     + " | " + safe(", ".join(d["reason_codes"])) + " |" for d in docs)
+                 "", "## 每份合同的修改情况", "",
+                 "下表逐份列出合同改了几处、涉及哪些条款；逐处「改之前 / 改之后」的对照见"
+                 "结果包内「逐份修改说明」下的同名修改说明。", "",
+                 "| 合同文件 | 交付完整性 | 修改处数 | 涉及条款 |", "| --- | --- | --- | --- |"]
+        rows = []
+        for doc in docs:
+            report: dict = {}
+            if doc["document_id"]:
+                try:
+                    report = self.store.get_report(owner, doc["batch_id"], doc["document_id"])
+                except NotFound:
+                    report = {}
+            count = edit_count(report)
+            detail = summary_detail(report) if report else "—"
+            rows.append([safe(doc["name"]),
+                         safe(DELIVERY_TEXT.get(doc["delivery_status"], doc["delivery_status"])),
+                         str(count), safe(detail)])
+            lines.append("| " + " | ".join(rows[-1]) + " |")
+        lines += ["", "处理结束、资格符合和合同可直接使用分别记录；仅交付完整并通过验证的合同开放下载。", "",
+                  "| 文件 | 上传 | 处理 | 资格 | 交付 | 原因码 |", "|---|---|---|---|---|---|"]
+        lines.extend("| " + " | ".join(safe(doc[k]) for k in ("name", "upload_status", "job_status", "eligibility", "delivery_status"))
+                     + " | " + safe(", ".join(doc["reason_codes"])) + " |" for doc in docs)
         actions, candidates = Counter(), Counter()
         for d in docs:
             if not d["document_id"]:
@@ -374,5 +395,7 @@ class TaskStore:
                     for candidate in action.get("candidates", []):
                         if isinstance(candidate, dict):
                             candidates[candidate.get("status") or candidate.get("result") or "unknown"] += 1
-        lines.extend(["", "## 规则与候选核验汇总", "", f"- action 状态：{dict(actions)}", f"- 候选位置状态：{dict(candidates)}"])
+        if actions or candidates:
+            lines.extend(["", "## 规则与候选核验汇总", "", f"- action 状态：{dict(actions)}",
+                          f"- 候选位置状态：{dict(candidates)}"])
         return "\n".join(lines) + "\n"

@@ -30,6 +30,7 @@ from fastapi.staticfiles import StaticFiles
 
 from . import guide_store
 from .docx import DocxError
+from .edit_summary import archive_entry
 from .html_view import project_docx
 from .selective import accept_all as selective_accept_all, generate_selected_artifact
 from .store import Conflict, NotFound, RunStore, StoreError
@@ -850,17 +851,37 @@ def create_app(data_dir: str | Path | None = None, *, auth_db=None) -> FastAPI:
         try:
             count = 0
             rows = [["合同", "处理状态", "交付状态", "已打包文件"]]
+            # The accepted-revision contracts go into their own folder so the deliverable
+            # is the same shape as the offline package: 结果总览.md + 结果清单.csv +
+            # 最终版（接受修订后）/<合同>.docx + 逐份修改说明/<合同>/.
+            final_dir = "最终版（接受修订后）"
+            notes_dir = "逐份修改说明"
+            used_names: set[str] = set()
+
+            def unique(name: str) -> str:
+                if name not in used_names:
+                    used_names.add(name)
+                    return name
+                index = 2
+                while f"{name} ({index})" in used_names:
+                    index += 1
+                result = f"{name} ({index})"
+                used_names.add(result)
+                return result
+
             with zipfile.ZipFile(output, "w", compression=zipfile.ZIP_DEFLATED) as archive:
                 for index, doc in enumerate(docs, 1):
                     name = Path(doc["name"].replace("\\", "/")).stem
                     name = "".join(c for c in name if c.isalnum() or c in " _-（）()")[:100] or "合同"
+                    name = unique(name)
                     included = []
                     for kind in doc.get("downloads", {}):
                         path, digest = store.get_artifact(user, doc["batch_id"], doc["document_id"], kind)
                         data = path.read_bytes()
                         if hashlib.sha256(data).hexdigest() != digest:
                             raise Conflict("ARTIFACT_VERIFICATION_MISMATCH")
-                        archive.writestr(f"{index:04d}_{name}/{kind}{path.suffix}", data)
+                        _, arcname = archive_entry(kind, name, path.suffix)
+                        archive.writestr(arcname, data)
                         included.append(kind)
                         count += 1
                     rows.append([doc["name"], doc["job_status"], doc["delivery_status"], "; ".join(included)])
@@ -869,7 +890,7 @@ def create_app(data_dir: str | Path | None = None, *, auth_db=None) -> FastAPI:
                 summary = io.StringIO()
                 csv.writer(summary).writerows(rows)
                 archive.writestr("结果清单.csv", summary.getvalue().encode("utf-8-sig"))
-                archive.writestr("任务汇总.md", task_call(tasks.report, user, task_id))
+                archive.writestr("结果总览.md", task_call(tasks.report, user, task_id))
             output.seek(0)
         except (NotFound, Conflict) as exc:
             output.close()

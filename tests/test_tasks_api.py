@@ -307,12 +307,33 @@ def test_task_archive_authorization_names_and_integrity(client, tmp_path):
         assert len(archive.namelist()) == len(set(archive.namelist()))
         assert len([n for n in archive.namelist() if n.endswith("report_json.json")]) == 2
         assert "not_started" in archive.read("结果清单.csv").decode("utf-8-sig")
-        assert "任务汇总.md" in archive.namelist()
+        assert "结果总览.md" in archive.namelist()
+        overview = archive.read("结果总览.md").decode("utf-8")
+        assert "每份合同的修改情况" in overview
     documents = client.get(f"/api/tasks/{task}/documents", headers=ALICE).json()["items"]
     doc = documents[0]
     path, _ = store.get_artifact("alice", doc["batch_id"], doc["document_id"], "report_json")
     path.write_bytes(b"tampered")
     assert client.get(url, headers=ALICE).status_code == 409
+
+
+def test_task_archive_groups_final_and_notes_by_folder(client, tmp_path):
+    """The ZIP mirrors the offline package: 结果总览.md + 结果清单.csv +
+    最终版（接受修订后）/<合同>.docx + 逐份修改说明/<合同>/（修改痕迹版）.docx."""
+    from fundlex.edit_summary import archive_entry
+
+    final_root = "最终版（接受修订后）"
+    final_root_name, final_path = archive_entry("final", "甲合同", ".docx")
+    assert final_root_name == final_root and final_path == f"{final_root}/甲合同.docx"
+    _, working_path = archive_entry("working_final", "甲合同", ".docx")
+    assert working_path == f"{final_root}/甲合同.docx"
+    _, redline_path = archive_entry("redline", "甲合同", ".docx")
+    assert redline_path == "逐份修改说明/甲合同/甲合同（修改痕迹版）.docx"
+    _, working_redline_path = archive_entry("working_redline", "甲合同", ".docx")
+    assert working_redline_path == redline_path
+    # Reports stay with the notes, never in the final folder.
+    notes_root, report_path = archive_entry("report_md", "甲合同", ".md")
+    assert notes_root == "逐份修改说明" and report_path == "逐份修改说明/甲合同/report_md.md"
 
 
 def test_multiple_tasks_really_execute_concurrently(client):

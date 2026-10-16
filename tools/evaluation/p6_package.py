@@ -4,11 +4,11 @@ The layout mirrors the earlier business-reader package (see
 ``FundLex-合同修改结果-本次抽查-20261013``) so the deliverable reads the same way:
 
     <output>/
-      结果总览.md
+      结果总览.md                              每份合同改了几处、涉及哪些条款
       结果清单.csv                              与工作台「导出结果清单」同格式的状态清单
-      最终版（接受修订后）/<原合同名>.docx     接受修订后的改后合同
+      最终版（接受修订后）/<原合同名>.docx     接受修订后的改后合同（单独一个文件夹）
       逐份修改说明/<原合同名>/
-          修改说明.md
+          修改说明.md                          逐处列出「改之前 / 改之后」
           修改明细.json
           <原合同名>（修改痕迹版）.docx        带 Word 修订痕迹，可逐条接受/拒绝
 
@@ -17,6 +17,9 @@ The recall-first engine's report differs from the v2 one: it uses ``plan.edits``
 ``replacement`` string, and the guide carries the per-rule titles/requirements. This tool
 maps those onto the readable tables the reference package uses, without inventing content:
 every row comes from the run's own report/plan, the source DOCX and the guide.
+
+The edit extraction itself lives in :mod:`fundlex.edit_summary` so the workbench
+(its ZIP archive and task overview) and this offline tool can never drift apart.
 """
 from __future__ import annotations
 
@@ -25,43 +28,12 @@ import json
 import shutil
 from pathlib import Path
 
-# ── rule wording ────────────────────────────────────────────────────────────────
-# Short business labels for the table's "修改内容" column. Long titles from the guide
-# are used verbatim in the per-case explanation; these stay concise for the overview.
-RULE_SHORT = {
-    "G01": "补充直销豁免（释义）",
-    "G02": "释义份额类别按费用分组",
-    "G03": "补充直销豁免（基本情况）",
-    "G04": "基本情况份额类别按费用分组",
-    "G05": "调整“调低赎回费率”/删除备案表述",
-    "G06": "删除不同类别不得转换旧句",
-    "G07": "单类别：补充直销申购豁免",
-    "G08": "多类别：补充直销申购豁免",
-    "G09": "赎回金额表述改为“扣除或加上”",
-    "G10": "单类别：申购费用承担表述",
-    "G11": "多类别：申购费用承担表述",
-    "G12": "赎回费归属改为全额计入基金财产",
-    "G13": "删除 7 日短期持有赎回费旧句",
-    "G14": "调整可调低费率范围",
-    "G15": "删除销售服务费支付旧条款",
-    "G16": "补充销售服务费计提/返还条款",
-    "G17": "删除销售服务费用途旧条款",
-    "G18": "收益分配费用差异表述",
-    "G19": "单类别浮动费：清算分配表述",
-    "G20": "多类别浮动费：清算分配表述",
-    "G22": "非浮动多类别：清算分配表述",
-}
-
-OP_TEXT = {"insert": "新增", "replace": "替换", "delete": "删除"}
-
-DELIVERY_TEXT = {
-    "complete": "已修改并复核通过",
-    "incomplete": "部分条款未修改（详见修改说明）",
-    "not_generated": "未生成产物",
-    "duplicate": "重复提交（同文件已处理）",
-    "excluded": "整份排除类型，未修改",
-    "excluded_by_fund_type": "整份排除类型，未修改",
-}
+from fundlex.edit_summary import (CLIP_LIMIT_BEFORE, CLIP_LIMIT_AFTER,
+                                  audit_verdicts, clip as _clip,
+                                  delivery_text, edit_before_after, edit_count,
+                                  operation_text, plan_edits, rule_label,
+                                  rule_requirement, summary_detail,
+                                  unresolved_entries, verdict_text)
 
 
 def load_run(run_dir: Path) -> list[dict]:
@@ -78,41 +50,8 @@ def load_run(run_dir: Path) -> list[dict]:
     return items
 
 
-def rule_label(guide: dict, rule_id: str) -> str:
-    """Readable label for one edit's rule, joining composite ids ("G12+G13")."""
-    if not rule_id:
-        return ""
-    parts = [part.strip() for part in str(rule_id).split("+") if part.strip()]
-    labels = [RULE_SHORT.get(part) or rule_title(guide, part) for part in parts]
-    return "＋".join(labels)
-
-
-def rule_title(guide: dict, rule_id: str) -> str:
-    for group in guide.get("groups") or []:
-        if group.get("rule_id") == rule_id:
-            title = group.get("title") or ""
-            # Titles carry a trailing "…：" separator; strip it for readability.
-            return title.rstrip("：:")
-    return rule_id
-
-
-def rule_requirement(guide: dict, rule_id: str) -> str:
-    for group in guide.get("groups") or []:
-        if group.get("rule_id") == rule_id:
-            return group.get("requirement") or ""
-    return ""
-
-
 def guide_rules(report: dict) -> dict:
     return (report.get("guide") or {})
-
-
-def report_plan_edits(report: dict) -> list[dict]:
-    plan = report.get("plan") or {}
-    if plan.get("edits"):
-        return plan["edits"]
-    # Older captures nest the same list under edit_plan.edits without rule ids.
-    return (report.get("edit_plan") or {}).get("edits") or []
 
 
 def failed_targets(report: dict) -> list[dict]:
@@ -125,41 +64,14 @@ def failed_targets(report: dict) -> list[dict]:
     return out
 
 
-def unresolved_entries(report: dict) -> list[dict]:
-    return list(report.get("unresolved") or [])
-
-
-def audit_verdicts(report: dict) -> dict[str, str]:
-    """rule_id -> the audit's own verdict for that rule, for the 校验 column."""
-    out: dict[str, str] = {}
-    audit = report.get("audit") or {}
-    for round_info in audit.get("rounds") or []:
-        for result in round_info.get("results") or []:
-            rule_id = result.get("rule_id")
-            verdict = result.get("verdict")
-            if rule_id and verdict:
-                out[rule_id] = verdict
-    return out
-
-
-def verdict_text(verdict: str | None) -> str:
-    return {
-        "completed": "通过（规则校验＋独立复核）",
-        "satisfied": "通过（原合同已符合）",
-        "wrong": "未通过（独立复核认为不符）",
-        "missing": "未通过（独立复核认为缺失）",
-    }.get(verdict or "", "通过（规则校验＋独立复核）" if verdict else "—")
-
-
 def case_explanation(name: str, item: dict) -> str:
     result, report = item["result"], item["report"]
     guide = guide_rules(report)
-    edits = report_plan_edits(report)
-    delivery = report.get("delivery_status") or result.get("delivery_status")
+    edits = plan_edits(report)
     lines = [f"# {name} 修改说明", "",
              "- 来源：P6 真实合同评测（应用链路：上传→真实模型→DOCX 修改→复核）",
-             f"- 处理结果：{DELIVERY_TEXT.get(delivery, delivery or '未知')}",
-             f"- 实际修改：{len(edits)} 处"]
+             f"- 处理结果：{delivery_text(report, result)}",
+             f"- 实际修改：{edit_count(report)} 处（下表逐处对照「改之前 / 改之后」）"]
     unresolved = unresolved_entries(report)
     if unresolved:
         lines[-1] += f"；未修改：{len(unresolved)} 项（原因见下）"
@@ -167,20 +79,36 @@ def case_explanation(name: str, item: dict) -> str:
 
     verdicts = audit_verdicts(report)
     if edits:
-        lines += ["## 修改清单", "",
-                  "| 序号 | 修改内容 | 修改前（节选） | 修改后（节选） | 校验 |",
-                  "| --- | --- | --- | --- | --- |"]
+        lines += ["## 逐处修改对照", "",
+                  "| 序号 | 修改内容 | 位置 | 操作 | 修改前（节选） | 修改后（节选） | 校验 |",
+                  "| --- | --- | --- | --- | --- | --- | --- |"]
         for index, edit in enumerate(edits, start=1):
             rule_id = edit.get("rule_id") or ""
             label = rule_label(guide, rule_id)
-            op = edit.get("operation") or ""
-            before = ("（保留原文，在其后追加新条款）" if op == "insert"
-                      else _clip(_old_text(edit), 160))
-            after = ("（删除该句）" if not edit.get("replacement")
-                     else _clip(str(edit["replacement"]), 200))
+            before, after = edit_before_after(edit)
             verdict = next((verdicts.get(part.strip()) for part in str(rule_id).split("+")
                             if verdicts.get(part.strip())), None)
-            lines.append(f"| {index} | {label} | {before} | {after} | {verdict_text(verdict)} |")
+            op = operation_text(edit)
+            lines.append(f"| {index} | {label} | {edit.get('location') or '—'} | {op} "
+                         f"| {_clip(before, CLIP_LIMIT_BEFORE) or '—'} "
+                         f"| {_clip(after, CLIP_LIMIT_AFTER) or '—'} "
+                         f"| {verdict_text(verdict)} |")
+        lines.append("")
+        lines += ["### 逐处修改详情", "",
+                  "以下逐处写明修改前的合同原文与修改后的文字（节选），完整上下文请看"
+                  "本文件夹内的“（修改痕迹版）”。", ""]
+        for index, edit in enumerate(edits, start=1):
+            rule_id = edit.get("rule_id") or ""
+            label = rule_label(guide, rule_id)
+            before, after = edit_before_after(edit)
+            op = operation_text(edit)
+            requirement = rule_requirement(guide, rule_id.split("+")[0].strip())
+            lines.append(f"#### 第 {index} 处 · {label}")
+            lines.append(f"- 位置：{edit.get('location') or '—'}（操作：{op}）")
+            if requirement:
+                lines.append(f"- 指引要求：{requirement}")
+            lines += ["- **修改前**：", "", "  > " + (before or "（无）").replace("\n", " "), "",
+                      "- **修改后**：", "", "  > " + (after or "（无）").replace("\n", " "), ""]
         lines.append("")
 
     if unresolved:
@@ -234,24 +162,6 @@ def _clip(text: str, limit: int) -> str:
     return text if len(text) <= limit else text[:limit] + "…"
 
 
-def _old_text(edit: dict) -> str:
-    """Best-effort original wording for the "修改前" column.
-
-    The recall-first edit records ``start``/``end`` offsets into the paragraph but not the
-    removed string; the plan ledger and evidence carry it under a few keys instead
-    (``matched_old_text`` for a delete/replace, ``delete_texts`` for a composite delete).
-    """
-    evidence = edit.get("evidence") or {}
-    for key in ("matched_old_text", "old_text", "source_quote", "original"):
-        value = edit.get(key) or evidence.get(key)
-        if value:
-            return str(value)
-    delete_texts = evidence.get("delete_texts")
-    if delete_texts:
-        return " ".join(str(item) for item in delete_texts)
-    return ""
-
-
 def _unresolved_text(reason: str, detail: dict) -> str:
     """A plain-language version of the engine's reason code, keeping the code for audit."""
     friendly = {
@@ -268,20 +178,10 @@ def _unresolved_text(reason: str, detail: dict) -> str:
 
 def summary_row(item: dict) -> str:
     result, report = item["result"], item["report"]
-    guide = guide_rules(report)
-    edits = report_plan_edits(report)
     name = item["original"]
-    delivery = report.get("delivery_status") or result.get("delivery_status")
-    text = DELIVERY_TEXT.get(delivery, delivery or "未知")
-    detail = ""
-    labels = list(dict.fromkeys(rule_label(guide, e.get("rule_id") or "") for e in edits))
-    if labels:
-        detail = "涉及：" + "、".join(labels)
-    unresolved = unresolved_entries(report)
-    if unresolved and not labels:
-        text = DELIVERY_TEXT.get("incomplete")
-        detail = f"{len(unresolved)} 项按安全规则保持原文"
-    return f"| {name} | {text} | {len(edits)} | {detail} |"
+    text = delivery_text(report, result)
+    detail = summary_detail(report, result)
+    return f"| {name} | {text} | {edit_count(report)} | {detail} |"
 
 
 def unique_name(name: str, used: set[str]) -> str:
@@ -419,8 +319,8 @@ def main() -> None:
         folder.mkdir(parents=True, exist_ok=True)
         (folder / "修改说明.md").write_text(case_explanation(name, item), encoding="utf-8")
         (folder / "修改明细.json").write_text(
-            json.dumps({"count": len(report_plan_edits(item["report"])),
-                        "edits": report_plan_edits(item["report"]),
+            json.dumps({"count": edit_count(item["report"]),
+                        "edits": plan_edits(item["report"]),
                         "unresolved": unresolved_entries(item["report"]),
                         "output_validation": item["report"].get("output_validation")},
                        ensure_ascii=False, indent=2), encoding="utf-8")
@@ -442,11 +342,12 @@ def main() -> None:
              "| 文件夹 | 内容 |", "| --- | --- |",
              "| 结果清单.csv | 工作台「导出结果清单」同格式的状态清单（序号/文件名/资格/处理状态/"
              "交付完整性/业务提示/原始原因码），供筛选汇总 |",
-             "| 最终版（接受修订后） | 修改后的合同，文件名与原合同一致，直接打开即可 |",
-             "| 逐份修改说明 | 每份合同一个文件夹：修改说明、修改明细，以及带 Word 修订痕迹的版本"
-             "（可逐条查看/接受/拒绝修改） |", "",
-             "## 处理结果一览（真实合同）", "",
-             "| 合同文件 | 处理结果 | 修改处数 | 说明 |", "| --- | --- | --- | --- |"]
+             "| 最终版（接受修订后） | 全部已接受修订的改后合同，文件名与原合同一致，直接打开即可 |",
+             "| 逐份修改说明 | 每份合同一个文件夹：修改说明（逐处列出「改之前 / 改之后」）、修改明细，"
+             "以及带 Word 修订痕迹的版本（可逐条查看/接受/拒绝修改） |", "",
+             "## 每份合同的修改情况", "",
+             "下表逐份列出合同改了几处、涉及哪些条款；详细对照见“逐份修改说明/<合同名>/修改说明.md”。", "",
+             "| 合同文件 | 处理结果 | 修改处数 | 涉及条款 |", "| --- | --- | --- | --- |"]
     for row in rows:
         lines.append(summary_row(row))
     lines += ["", "## 如何查看修改", "",
