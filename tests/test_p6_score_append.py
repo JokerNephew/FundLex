@@ -117,3 +117,32 @@ def test_single_sentence_quotation_still_detects_a_surviving_clause():
     assert _superseded_survives(target, "", final) is True
     # With the clause actually removed, the same target reads as completed.
     assert _superseded_survives(target, "", "基金销售服务费按月支付。") is False
+
+
+def test_deleted_paragraph_that_no_longer_exists_scores_completed():
+    """A successful deletion leaves no paragraph for the scorer to locate.
+
+    ``score_target`` searches the final document for the paragraph that carried the
+    clause. A completed deletion changes that paragraph, so the search returns -1.
+    Requiring a located paragraph turned the engine's correct work into ``kept`` for
+    five dev-set cases (FL-D098).
+    """
+    from tools.evaluation.p6_score import score_target
+
+    clause = ("C类基金份额的销售服务费主要用于支付销售机构佣金、以及基金管理人的基金行销广告费、"
+              "促销活动费、基金份额持有人服务费等。")
+    target = {
+        "target_id": "t1", "rule_id": "G17", "op": "delete",
+        "old_text": "销售服务费主要用于支付销售机构佣金",
+        "requirement": f"删除原条款“{clause}”。",
+        "compact_start": 0,
+    }
+    # The clause (and its paragraph) is gone from the final document.
+    final = ["基金管理人应当在每年结束之日起三个月内，编制完成基金年度报告。"]
+    verdict = score_target(target, {"classes": []}, final, [clause])
+    assert verdict["verdict"] == "completed"
+    assert verdict["final_paragraph"] < 0
+
+    # A surviving clause still reads as kept.
+    verdict2 = score_target(target, {"classes": []}, [clause], [clause])
+    assert verdict2["verdict"] == "kept"

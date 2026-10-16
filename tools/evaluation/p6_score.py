@@ -307,7 +307,14 @@ def score_target(target: dict, facts: dict, final_paragraphs: list[str],
         return result
 
     if operation == "delete":
-        if final_index >= 0 and not _superseded_survives(target, region, final_compact):
+        if final_index < 0:
+            # The paragraph that carried the clause no longer exists in the final file.
+            # For a deletion that is the expected outcome (the engine removed it), so the
+            # target is carried out — requiring a located paragraph scored a completed
+            # deletion as kept (FL-D098). The clause is confirmed absent from the whole
+            # document, so a surviving copy elsewhere would still be caught.
+            result.update(verdict="completed", detail="deleted clause gone with its paragraph")
+        elif not _superseded_survives(target, region, final_compact):
             result.update(verdict="completed", detail="deleted clause gone from its region")
         else:
             result.update(verdict="kept", detail="deleted clause still in its region")

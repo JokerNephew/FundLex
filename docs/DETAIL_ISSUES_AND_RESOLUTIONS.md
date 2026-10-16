@@ -1209,6 +1209,15 @@
 - 状态与验证：**已实施并验证**。开发集 **0.8602 → 0.8644**（236 目标 / completed 203→204，`kept` 32→31）。回归：`tests/test_p6_score_append.py` 11 项（新增「多句引文不要求末句」「单句引文仍能识别残留」两项）；全量 607 passed。反例核对：D17/G17 的 `old_text` **确实仍在终稿**，仍判 `kept`，未被误放。
 - 变更记录：2026-10-16 新增。
 
+## FL-D098 删除成功后原段落在终稿消失，评分器因找不到段落把已完成的删除判 kept
+
+- 发现日期：2026-10-16（P6 开发集 round7 重评，按 `final_paragraph` 分布定位）。
+- 问题与影响：`p6_score.score_target()` 的 `delete` 分支要求「能在终稿按内容定位到原段落」（`final_index >= 0`）**并且**该段落内不再含被删条款，两者同时成立才判 `completed`。但**删除正是让该段落消失的原因**：引擎删掉条款后原段落文本改变、内容匹配失败，`locate_paragraph()` 返回 `-1`，于是**已正确完成的删除被判 `kept`**（detail「deleted clause still in its region」）。开发集 round7 中 G17 一族 10 例 `kept` 有 5 例（D01/D03/D05/D11/D16）的真实原因是 `final_index = -1`，`old_text` 早已不在终稿。
+- 证据：`/tmp/opencode/p6-round7-rescore3.json` 中这 5 例 `final_paragraph = -1` 且 `old_text` 全文不存在；D04/D08/D17/D19/D20 的 `final_index >= 0`（另因条款确实残留，属真实 `kept`，其中 D17/G17 核对终稿 p815 仍含原文，属引擎应改未改）。
+- 处理方法（已实施）：`delete` 分支改为——`final_index < 0` 时判 `completed`（detail `deleted clause gone with its paragraph`）；`final_index >= 0` 且 `_superseded_survives()` 为假亦判 `completed`；仅当段落仍在且条款特征片段仍命中才判 `kept`。删除的判据是「条款在**全文**已不存在」，锚点消失即达标。
+- 状态与验证：**已实施并验证**。开发集 **0.8644 → 0.9110**（236 目标 / completed 204→215，`kept` 31→20，`not_executed` 仍 1 例 D07/G16）。回归：`tests/test_p6_score_append.py` 12 项（新增「段落消失的删除判完成」并含「条款仍存则判 kept」反例）；全量 607 passed。反例核对：D17/G17 条款仍在终稿、仍判 `kept`，未被误放。
+- 变更记录：2026-10-16 新增。
+
 ## 后续条目模板
 
 ### FL-Dxxx 问题名称
