@@ -1191,6 +1191,15 @@
 - 下一步：无（已完成）。
 - 变更记录：2026-10-16 新增；同日实施并通过回归与真实浏览器验证。
 
+## FL-D096 批次运行中重新发布导致引擎版本不匹配，整批作废（原编号 FL-D095，与他人条目冲突后改号）
+
+- 发现日期：2026-10-16（P6 开发集 `round7` 首批）。
+- 问题与影响：P6 批次运行期间执行 `publish_workspace.sh` 会更新 `engine_build()`。已在队列中的任务在**建任务时**已 pin 了旧 `engine_build`/`schema_version`，worker 取出时校验不符，直接 `ENGINE_SCHEMA_MISMATCH` 判 `job_status=failed` / `delivery_status=not_generated`（本批 D08 命中，D09 亦中断）。该批数据不可用于评分。
+- 证据：`var/recall-first-evaluation/p6-dev-round7-01-invalid-publish-midrun/D08/result.json` → `error_code=ENGINE_SCHEMA_MISMATCH`；`fundlex/jobs.py:166` 的校验；`/tmp/opencode/p6-round7.log`。
+- 处理方法（运维规程，已执行）：**批次运行期间禁止发布**。已将该批目录改名为 `…-invalid-publish-midrun` 留证，清空 trace 文件后以同一 run-id 重跑。
+- 状态与验证：**已确认、已规避**（重跑进行中）。属 FL-D066「不要在飞批次期间干预」的同类，但触发原因是**发布**而非中断；补记于此以免重犯。
+- 变更记录：2026-10-16 新增；同日因编号与 FL-D095（遗留任务 legacy 标记）重号改为 FL-D096。
+
 ## 后续条目模板
 
 ### FL-Dxxx 问题名称
