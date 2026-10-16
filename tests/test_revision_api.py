@@ -87,7 +87,7 @@ def test_decisions_endpoint_accepts_partial_rejection(seeded):
 
 @requires_real
 def test_decisions_publish_a_matching_redline(seeded):
-    """A review must leave a redline that agrees with the selected contract."""
+    """A review that rejects something ships both revision files."""
     client, batch, doc = seeded
     response = client.post(f"/api/batches/{batch['id']}/documents/{doc}/decisions",
                            headers=_headers(),
@@ -101,19 +101,45 @@ def test_decisions_publish_a_matching_redline(seeded):
     names = client.get(f"/api/batches/{batch['id']}/documents/{doc}/download/selected_final",
                        headers=_headers())
     assert names.status_code == 200, names.text
-    # The two artifacts are distinct files: one settles the selection, the other
-    # keeps it reviewable.
-    assert redline.content != names.content
+    # The engine's own revision file is still served alongside the selection.
+    engine = client.get(f"/api/batches/{batch['id']}/documents/{doc}/download/working_redline",
+                        headers=_headers())
+    assert engine.status_code == 200, engine.text
+    # The two revision files are distinct artifacts, and neither is the contract.
+    assert redline.content not in (names.content, engine.content)
 
 
 @requires_real
-def test_accept_all_also_publishes_a_redline(seeded):
+def test_decisions_that_reject_nothing_ship_no_second_revision_file(seeded):
+    """Accepting every edit matches the engine result, so only one file is needed."""
+    client, batch, doc = seeded
+    total = len(client.get(f"/api/batches/{batch['id']}/documents/{doc}/revisions",
+                           headers=_headers()).json()["revisions"])
+    assert total, "the fixture must offer at least one revision"
+    response = client.post(f"/api/batches/{batch['id']}/documents/{doc}/decisions",
+                           headers=_headers(),
+                           json={"decisions": [{"del_id": n, "decision": "accept"}
+                                               for n in range(1, 2 * total + 1)]})
+    assert response.status_code == 200, response.text
+    assert response.json()["rejected"] == []
+    selected = client.get(f"/api/batches/{batch['id']}/documents/{doc}/download/selected_redline",
+                          headers=_headers())
+    assert selected.status_code == 404, selected.text
+
+
+@requires_real
+def test_accept_all_publishes_no_extra_redline(seeded):
+    """Accepting everything matches the engine result, so nothing extra is shipped."""
     client, batch, doc = seeded
     assert client.post(f"/api/batches/{batch['id']}/documents/{doc}/accept-all",
                        headers=_headers()).status_code == 200
     response = client.get(f"/api/batches/{batch['id']}/documents/{doc}/download/selected_redline",
                           headers=_headers())
-    assert response.status_code == 200, response.text
+    # The engine redline already records that choice; a duplicate would confuse.
+    assert response.status_code == 404, response.text
+    engine = client.get(f"/api/batches/{batch['id']}/documents/{doc}/download/working_redline",
+                        headers=_headers())
+    assert engine.status_code == 200, engine.text
 
 
 @requires_real

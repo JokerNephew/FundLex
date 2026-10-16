@@ -362,8 +362,12 @@ class TaskStore:
                  "", "## 每份合同的修改情况", "",
                  "下表逐份列出合同改了几处、涉及哪些条款；逐处「改之前 / 改之后」的对照见"
                  "结果包内「逐份修改说明」下的同名修改说明。", "",
-                 "已在工作台逐条选择过修订的合同，「版本」列标为「按人工选择」："
-                 "结果包中的最终版与修改痕迹版都是该选择的版本，未接受的修订不再出现。", "",
+                 "「版本」列说明交付包里的最终版来自哪里，以及附带几份修订痕迹文件：", "",
+                 "- **引擎全量**：未在工作台逐条选择，最终版与引擎结果一致；"
+                 "附「（全量痕迹版）」，即引擎打算做的全部改动。",
+                 "- **按人工选择**：在工作台把部分修订改成了「不接受」，最终版按该选择生成；"
+                 "附「（全量痕迹版）」和「（选择修订版）」两份 —— 后者只保留你接受的修订，"
+                 "接受它的全部修订即可得到最终版。", "",
                  "| 合同文件 | 交付完整性 | 版本 | 修改处数 | 涉及条款 |",
                  "| --- | --- | --- | --- | --- |"]
         rows = []
@@ -376,10 +380,14 @@ class TaskStore:
                     report = {}
             count = edit_count(report)
             detail = summary_detail(report) if report else "—"
-            reviewed = "selected_final" in (doc.get("downloads") or {})
+            downloads = doc.get("downloads") or {}
+            # A reviewed contract ships a second revision file only when the review
+            # actually turned something down; otherwise the engine redline already
+            # is the record of the choice.
+            reviewed = "selected_redline" in downloads
             rows.append([safe(doc["name"]),
                          safe(DELIVERY_TEXT.get(doc["delivery_status"], doc["delivery_status"])),
-                         "按人工选择" if reviewed else "按引擎全量",
+                         "按人工选择" if reviewed else "引擎全量",
                          str(count), safe(detail)])
             lines.append("| " + " | ".join(rows[-1]) + " |")
         lines += ["", "处理结束、资格符合和合同可直接使用分别记录；仅交付完整并通过验证的合同开放下载。", "",

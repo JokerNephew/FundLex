@@ -322,23 +322,21 @@ def generate_selected_redline(redline: str | Path, target: str | Path,
                               report: Mapping[str, Any],
                               decisions: Mapping[Any, Any] | Iterable[Any],
                               *, limits: ZipLimits | None = None) -> SelectionResult:
-    """Write a revision artifact that matches a selection.
+    """Write a revision artifact showing only the edits kept in the selection.
 
-    The engine's redline tracks *every* edit it planned. When a user rejects
-    some of them, the accepted-revision contract (``selected_final``) no longer
-    matches that redline: opening it in Word would show edits the user already
-    turned down.
+    The engine's redline tracks *every* edit it planned. After a review only the
+    edits the user **accepted** still belong in the tracked changes, so the
+    artifact stays consistent with ``selected_final``.
 
-    This function rewrites the redline so it agrees with the selection:
+    * an **accepted** edit keeps its ``w:ins``/``w:del`` markup — it remains a
+      reviewable change, and accepting it in Word gives the selected wording;
+    * a **rejected** edit is settled back to the original text and loses its
+      markup — it reads as ordinary text, so Word no longer offers it for review.
 
-    * an **accepted** edit is inlined the same way ``accept`` does it in Word
-      (``w:ins`` unwrapped, ``w:del`` dropped) — it reads as final text with no
-      revision mark, exactly as it appears in ``selected_final``;
-    * a **rejected** edit keeps its ``w:ins``/``w:del`` markup untouched — it
-      still shows as a tracked change, which is the point of the redline.
-
-    Word's own review pane does the same thing: it only lists changes that are
-    still pending.
+    An edit the caller never mentioned keeps the **engine's** intent, i.e. it stays
+    tracked as a change. That matches ``apply_decisions``' "accept all by default"
+    semantics and keeps this artifact consistent with ``selected_final``, which
+    also only changes what a verdict actually named.
     """
     limits = limits or ZipLimits()
     redline, target = Path(redline), Path(target)
@@ -351,49 +349,46 @@ def generate_selected_redline(redline: str | Path, target: str | Path,
     _validate_package(parts, limits, full=False)
     root = _xml(parts[DOCUMENT], limits)
     _validate_revision_manifest(root, manifests)
-    before = _managed_ids(root)
-    absent = _settle_accepted(root, manifests, decisions)
+    kept = _keep_accepted_only(root, manifests, decisions)
     document_xml = etree.tostring(root, encoding="UTF-8", xml_declaration=True)
     try:
         _write_package(target, parts, document_xml)
-        _verify_redline_selection(target, before, manifests, decisions, limits)
-        return SelectionResult(accepted=(), rejected=(), absent=absent,
+        # Independent re-open: only the accepted revisions may remain.
+        if _managed_ids(_xml(_read_redline_parts(target, limits)[DOCUMENT], limits)) != kept:
+            raise DocxError("SELECTED_REDLINE_MISMATCH")
+        return SelectionResult(accepted=tuple(sorted(int(rid) for rid in kept)),
+                               rejected=(), absent=(),
                                path=str(target), sha256=_sha(target.read_bytes()))
     except Exception:
         target.unlink(missing_ok=True)
         raise
 
 
-def _settle_accepted(root: etree._Element, manifests: Sequence[Mapping[str, Any]],
-                     decisions: Mapping[Any, Any] | Iterable[Any]) -> tuple[int, ...]:
-    """Inline explicitly accepted edits; leave every other revision tracked.
+def _keep_accepted_only(root: etree._Element, manifests: Sequence[Mapping[str, Any]],
+                        decisions: Mapping[Any, Any] | Iterable[Any]) -> set[str]:
+    """Leave accepted (or undecided) edits tracked; settle rejected ones.
 
-    Unlike :func:`apply_decisions` this never *removes* revision markup for a
-    rejected edit; it only settles the accepted ones. An edit the caller did not
-    mention is left tracked rather than treated as accepted — silently settling
-    it would hide a decision the user never made.
-
-    The expectation is read from the markup rather than the manifest, because the
-    engine omits a half for some edit shapes (a pure deletion carries only
-    ``w:del``).
+    Undecided edits keep the engine's intent — they stay reviewable, matching the
+    default-accept semantics used everywhere else. Returns the revision ids still
+    present once the pass is done.
     """
-    settled_ids = {rid for rid, verdict in _explicit_verdicts(manifests, decisions).items()
-                   if verdict == ACCEPT}
-    seen: set[int] = set()
+    rejected = {rid for rid, verdict in _explicit_verdicts(manifests, decisions).items()
+                if verdict == REJECT}
     for node in list(root.iter()):
         if node.tag not in {Q("ins"), Q("del")}:
             continue
         rid = _int_or_none(node.get(Q("id"), ""))
-        # A revision we did not generate, or one we are not accepting: leave it
-        # untouched rather than silently rewriting someone else's markup.
-        if node.getparent() is None or rid is None or rid not in settled_ids or rid in seen:
+        # A revision we did not generate, or one the caller did not reject, stays
+        # exactly as the engine left it.
+        if node.getparent() is None or rid is None or rid not in rejected:
             continue
-        seen.add(rid)
         if node.tag == Q("del"):
-            node.getparent().remove(node)
+            # Undoing a deletion: the original text returns as ordinary text.
+            _unwrap_revision(node, restoring_delete=True)
         else:
-            _unwrap_revision(node, restoring_delete=False)
-    return tuple(sorted(settled_ids - seen))
+            # Undoing an insertion: the new text disappears.
+            node.getparent().remove(node)
+    return _managed_ids(root)
 
 
 def _managed_ids(root: etree._Element) -> set[str]:
@@ -407,27 +402,6 @@ def _int_or_none(value: Any) -> int | None:
         return int(value)
     except (TypeError, ValueError):
         return None
-
-
-def _verify_redline_selection(path: Path, before: set[str],
-                              manifests: Sequence[Mapping[str, Any]],
-                              decisions: Mapping[Any, Any] | Iterable[Any],
-                              limits: ZipLimits) -> None:
-    """Re-open the artifact and compare its revisions with the source.
-
-    Exactly the explicitly accepted revisions must be gone; everything else the
-    source carried must still be there, and nothing new may appear.
-    """
-    settled = {str(rid) for rid, verdict in _explicit_verdicts(manifests, decisions).items()
-               if verdict == ACCEPT}
-    if _revision_ids(path, limits) != before - settled:
-        raise DocxError("SELECTED_REDLINE_MISMATCH")
-
-
-def _revision_ids(path: Path, limits: ZipLimits) -> set[str]:
-    parts = _read_redline_parts(path, limits)
-    _validate_package(parts, limits, full=False)
-    return _managed_ids(_xml(parts[DOCUMENT], limits))
 
 
 def accept_all(redline: str | Path, report: Mapping[str, Any]) -> dict[Any, Any]:

@@ -279,6 +279,19 @@ def _report_has_revisions(report: dict) -> bool:
     return isinstance(edits, list) and bool(edits)
 
 
+def _selection_overrides_default(report: dict, decisions: dict, rejected) -> bool:
+    """Whether a review actually turned any of the engine's edits down.
+
+    "Accept everything" is the engine's own result, so a review that rejects
+    nothing is indistinguishable from not having reviewed at all. In that case
+    there is no separate selection to publish: the engine redline already *is* the
+    record of that choice.
+    """
+    if rejected:
+        return True
+    return any(str(verdict).strip().lower() == "reject" for verdict in (decisions or {}).values())
+
+
 def _recall_phase(report: dict) -> str:
     """Last non-empty window/round stage, or ``""`` when none was recorded."""
     windows = report.get("windows")
@@ -491,17 +504,23 @@ def create_app(data_dir: str | Path | None = None, *, auth_db=None) -> FastAPI:
         try:
             result = generate_selected_artifact(path, target, report, chosen)
             store.save_selected_artifact(owner, batch_id, document_id, "selected_final", target)
-            # The engine redline tracks every planned edit, including the ones the
-            # user just turned down. Publish a redline that agrees with this
-            # selection so the delivered pair stays consistent.
-            try:
-                generate_selected_redline(path, derived_redline, report, chosen)
-                store.save_selected_artifact(owner, batch_id, document_id,
-                                             "selected_redline", derived_redline)
-            except (DocxError, Conflict, StoreError):
-                # The selected contract is already published; a redline that
-                # cannot be derived must not fail the whole decision request.
-                store.remove_selected_artifact(owner, batch_id, document_id, "selected_redline")
+            # The engine redline always stays available as the full record of what
+            # the engine planned. A second revision file is only worth publishing
+            # when the user actually departed from "accept everything": otherwise it
+            # would duplicate the engine redline under a different name.
+            if _selection_overrides_default(report, chosen, result.rejected):
+                try:
+                    generate_selected_redline(path, derived_redline, report, chosen)
+                    store.save_selected_artifact(owner, batch_id, document_id,
+                                                 "selected_redline", derived_redline)
+                except (DocxError, Conflict, StoreError):
+                    # The selected contract is already published; a revision file
+                    # that cannot be derived must not fail the decision request.
+                    store.remove_selected_artifact(owner, batch_id, document_id,
+                                                   "selected_redline")
+            else:
+                store.remove_selected_artifact(owner, batch_id, document_id,
+                                               "selected_redline")
         finally:
             shutil.rmtree(temp_dir, ignore_errors=True)
         return {

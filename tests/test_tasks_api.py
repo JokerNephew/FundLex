@@ -310,6 +310,11 @@ def test_task_archive_authorization_names_and_integrity(client, tmp_path):
         assert "结果总览.md" in archive.namelist()
         overview = archive.read("结果总览.md").decode("utf-8")
         assert "每份合同的修改情况" in overview
+        # The version column states where the delivered final comes from, and the
+        # note explains what each value means.
+        assert "| 合同文件 | 交付完整性 | 版本 | 修改处数 | 涉及条款 |" in overview
+        assert "引擎全量" in overview
+        assert "（全量痕迹版）" in overview and "（选择修订版）" in overview
     documents = client.get(f"/api/tasks/{task}/documents", headers=ALICE).json()["items"]
     doc = documents[0]
     path, _ = store.get_artifact("alice", doc["batch_id"], doc["document_id"], "report_json")
@@ -319,7 +324,7 @@ def test_task_archive_authorization_names_and_integrity(client, tmp_path):
 
 def test_task_archive_groups_final_and_notes_by_folder(client, tmp_path):
     """The ZIP mirrors the offline package: 结果总览.md + 结果清单.csv +
-    最终版（接受修订后）/<合同>.docx + 逐份修改说明/<合同>/（修改痕迹版）.docx."""
+    最终版（接受修订后）/<合同>.docx + 逐份修改说明/<合同>/（全量痕迹版）.docx."""
     from fundlex.edit_summary import archive_entry
 
     final_root = "最终版（接受修订后）"
@@ -328,38 +333,43 @@ def test_task_archive_groups_final_and_notes_by_folder(client, tmp_path):
     _, working_path = archive_entry("working_final", "甲合同", ".docx")
     assert working_path == f"{final_root}/甲合同.docx"
     _, redline_path = archive_entry("redline", "甲合同", ".docx")
-    assert redline_path == "逐份修改说明/甲合同/甲合同（修改痕迹版）.docx"
+    assert redline_path == "逐份修改说明/甲合同/甲合同（全量痕迹版）.docx"
     _, working_redline_path = archive_entry("working_redline", "甲合同", ".docx")
     assert working_redline_path == redline_path
+    # A reviewed contract ships a second revision file, named for what it holds.
+    _, selected_redline_path = archive_entry("selected_redline", "甲合同", ".docx")
+    assert selected_redline_path == "逐份修改说明/甲合同/甲合同（选择修订版）.docx"
     # Reports stay with the notes, never in the final folder.
     notes_root, report_path = archive_entry("report_md", "甲合同", ".md")
     assert notes_root == "逐份修改说明" and report_path == "逐份修改说明/甲合同/report_md.md"
 
 
-def test_archive_entry_places_a_reviewed_pair_in_the_same_slots():
-    """A user-selected pair fills the final/redline slots, like the engine pair."""
+def test_archive_entry_places_a_selected_final_in_the_final_folder():
+    """The user's selection fills the final slot, but has its own revision file."""
     from fundlex.edit_summary import archive_entry
 
     assert archive_entry("selected_final", "甲合同", ".docx") == \
         archive_entry("final", "甲合同", ".docx")
-    assert archive_entry("selected_redline", "甲合同", ".docx") == \
+    assert archive_entry("selected_redline", "甲合同", ".docx") != \
         archive_entry("redline", "甲合同", ".docx")
 
 
-def test_archive_kinds_prefers_a_user_selection_over_the_engine_pair():
+def test_archive_kinds_ships_two_revision_files_only_after_a_choice():
     from fundlex.edit_summary import archive_kinds
 
-    # No review: the engine's own pair is packaged.
+    # No review: one final version and the engine's own revision file.
     assert sorted(archive_kinds({"final": "u", "redline": "u", "report_md": "u"})) == \
         ["final", "redline", "report_md"]
-    # Reviewed: the derived pair replaces it, and reports still come along.
+    # Reviewed and something was turned down: both revision files, plus the
+    # selected final version.
     chosen = archive_kinds({"final": "u", "redline": "u", "report_md": "u",
                             "selected_final": "u", "selected_redline": "u"})
-    assert sorted(chosen) == ["report_md", "selected_final", "selected_redline"]
-    # An incomplete run keeps its working pair when nothing was reviewed.
+    assert sorted(chosen) == ["redline", "report_md", "selected_final", "selected_redline"]
+    # An incomplete run keeps its working final when nothing was reviewed.
     assert sorted(archive_kinds({"working_final": "u", "working_redline": "u"})) == \
         ["working_final", "working_redline"]
-    # A reviewed incomplete run still prefers the selection.
+    # A reviewed incomplete run prefers the selection for the final version while
+    # still shipping the engine's revision file.
     assert sorted(archive_kinds({"working_final": "u", "working_redline": "u",
                                  "selected_final": "u"})) == \
         ["selected_final", "working_redline"]

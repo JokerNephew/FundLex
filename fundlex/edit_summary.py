@@ -187,41 +187,54 @@ def operation_text(edit: dict) -> str:
     return OP_TEXT.get(operation, operation or "—")
 
 
+FINAL_ROOT = "最终版（接受修订后）"
+NOTES_ROOT = "逐份修改说明"
+
+
 def archive_entry(kind: str, name: str, suffix: str) -> tuple[str, str]:
     """Where one downloaded artifact goes inside the task ZIP.
 
     Returns ``(folder_root, arcname)`` so both the caller and its tests share one
     definition. The accepted-revision contract goes in its own root folder
-    (``最终版（接受修订后）``); the tracked-changes version and the report live next to
-    that contract's notes under ``逐份修改说明/<合同>/``.
+    (``最终版（接受修订后）``); revision and report files live next to that
+    contract's notes under ``逐份修改说明/<合同>/``.
 
-    A user-selected pair (``selected_final``/``selected_redline``) wins over the
-    engine's own artifacts: it is the version the user actually chose.
+    The final contract is whichever version applies to the delivery — the user's
+    selection when there is one, otherwise the engine's own. Two revision
+    artifacts can coexist:
+
+    * ``redline`` — the engine's full tracked changes, always present;
+    * ``selected_redline`` — the same artefact after a review, i.e. the tracked
+      changes the user kept.
+
+    They are named ``（全量痕迹版）`` and ``（选择修订版）`` so a reader can tell which
+    is which without opening them.
     """
-    final_root = "最终版（接受修订后）"
-    notes_root = "逐份修改说明"
     if kind in {"final", "working_final", "selected_final"}:
-        return final_root, f"{final_root}/{name}{suffix}"
-    if kind in {"redline", "working_redline", "selected_redline"}:
-        return notes_root, f"{notes_root}/{name}/{name}（修改痕迹版）{suffix}"
-    return notes_root, f"{notes_root}/{name}/{kind}{suffix}"
+        return FINAL_ROOT, f"{FINAL_ROOT}/{name}{suffix}"
+    if kind in {"redline", "working_redline"}:
+        return NOTES_ROOT, f"{NOTES_ROOT}/{name}/{name}（全量痕迹版）{suffix}"
+    if kind == "selected_redline":
+        return NOTES_ROOT, f"{NOTES_ROOT}/{name}/{name}（选择修订版）{suffix}"
+    return NOTES_ROOT, f"{NOTES_ROOT}/{name}/{kind}{suffix}"
 
 
-# Which artifact actually fills each ZIP slot, most specific first. When the user
-# has reviewed a contract, the derived pair replaces the engine pair.
+# Which artifact fills each ZIP slot, most specific first. A user's selection, when
+# it differs from "accept everything", replaces the engine's own version.
 ARCHIVE_PREFERENCE = {
     "final": ("selected_final", "final", "working_final"),
-    "redline": ("selected_redline", "redline", "working_redline"),
+    "redline": ("redline", "working_redline"),
+    "selected_redline": ("selected_redline",),
 }
 
 
 def archive_kinds(downloads) -> list[str]:
     """The artifact kinds to package, collapsing each slot to its best candidate.
 
-    ``downloads`` is the document's available ``kind -> url`` mapping. When the
-    user has reviewed a contract, ``selected_final``/``selected_redline`` replace
-    the engine's pair; otherwise the engine pair is used. Kinds with no competing
-    alternative (reports) are kept as-is, in the order they were recorded.
+    ``downloads`` is the document's available ``kind -> url`` mapping. A reviewed
+    contract contributes *two* revision files: the engine's full redline plus the
+    post-review selection. Kinds with no competing alternative (reports) are kept
+    as-is, in the order they were recorded.
     """
     available = set(downloads or ())
     contested = {kind for group in ARCHIVE_PREFERENCE.values() for kind in group}
@@ -246,6 +259,7 @@ def rule_requirement(guide: dict, rule_id: str) -> str:
 
 __all__ = [
     "RULE_SHORT", "OP_TEXT", "DELIVERY_TEXT", "CLIP_LIMIT_BEFORE", "CLIP_LIMIT_AFTER",
+    "FINAL_ROOT", "NOTES_ROOT",
     "plan_edits", "rule_title", "rule_label", "audit_verdicts", "verdict_text",
     "edit_count", "edit_labels", "unresolved_entries", "delivery_text",
     "summary_detail", "edit_before_after", "operation_text", "archive_entry",

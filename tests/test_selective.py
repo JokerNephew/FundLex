@@ -170,51 +170,94 @@ def test_missing_manifest_fails_closed(tmp_path):
 
 
 @requires_real
-def test_selected_redline_drops_accepted_and_keeps_rejected(tmp_path):
-    """A derived redline shows only the edits the user did not accept."""
+def test_selected_redline_keeps_only_accepted_edits(tmp_path):
+    """The derived redline shows the accepted edits and nothing else."""
     report = _report()
     redline = _redline_copy(tmp_path)
     manifests = _manifests_from_report(report)
-    kept = manifests[0]
-    settled = manifests[1]
-    decisions = {int(kept["del_id"]): REJECT, int(settled["del_id"]): ACCEPT}
+    kept, dropped = manifests[0], manifests[1]
+    decisions = {int(kept["del_id"]): ACCEPT, int(dropped["del_id"]): REJECT}
     out = tmp_path / "selected_redline.docx"
     generate_selected_redline(redline, out, report, decisions)
     ids = set(_managed_revisions(out))
-    assert str(settled["del_id"]) not in ids and str(settled["ins_id"]) not in ids
+    # Accepted: still tracked, so it can be reviewed and settled to the new text.
     assert str(kept["del_id"]) in ids and str(kept["ins_id"]) in ids
+    # Rejected: settled back to the original wording, no longer offered.
+    assert str(dropped["del_id"]) not in ids and str(dropped["ins_id"]) not in ids
 
 
 @requires_real
-def test_selected_redline_agrees_with_the_selected_contract(tmp_path):
-    """The derived redline carries every edit that survives in the selection.
+def test_selected_redline_reverts_rejected_edits_to_the_original(tmp_path):
+    """A rejected edit reads as the original sentence, with no revision markup."""
+    report = _report()
+    redline = _redline_copy(tmp_path)
+    manifest = _manifests_from_report(report)[0]
+    out = tmp_path / "selected_redline.docx"
+    generate_selected_redline(redline, out, report, {int(manifest["del_id"]): REJECT})
+    # The rejected edit is settled back to the original wording and is no longer
+    # offered for review...
+    ids = set(_managed_revisions(out))
+    assert str(manifest["del_id"]) not in ids and str(manifest["ins_id"]) not in ids
+    # The rejected edit's wording is back as plain text (the original sentence).
+    assert any(manifest["expected_old_text"] in para for para in _paragraph_texts(out))
 
-    For a rejected edit neither half may be inlined (it must stay reviewable);
-    for an accepted edit both halves must be settled. That is precisely what keeps
-    the redline consistent with ``selected_final``.
-    """
+
+@requires_real
+def test_selected_redline_matches_the_selected_contract(tmp_path):
+    """Only the accepted edits stay tracked, and settling them gives selected_final."""
     report = _report()
     redline = _redline_copy(tmp_path)
     manifests = _manifests_from_report(report)
-    rejected = manifests[:3]
-    accepted = manifests[3]
-    decisions = {int(m["del_id"]): REJECT for m in rejected}
-    decisions[int(accepted["del_id"])] = ACCEPT
+    # The workbench sends a verdict for every revision; accept all but the first.
+    decisions = {int(m["del_id"]): ACCEPT for m in manifests}
+    decisions[int(manifests[0]["del_id"])] = REJECT
 
+    selected = tmp_path / "selected.docx"
+    generate_selected_artifact(redline, selected, report, decisions)
     derived = tmp_path / "selected_redline.docx"
     generate_selected_redline(redline, derived, report, decisions)
-    ids = set(_managed_revisions(derived))
 
-    # Accepted: both halves settled, so the text reads as final in Word.
-    assert str(accepted["del_id"]) not in ids and str(accepted["ins_id"]) not in ids
-    # Rejected: both halves kept, so the change is still reviewable.
-    for item in rejected:
-        assert str(item["del_id"]) in ids and str(item["ins_id"]) in ids
+    # Exactly the accepted edits remain reviewable...
+    expected = {str(m[key]) for m in manifests[1:] for key in ("del_id", "ins_id")}
+    assert set(_managed_revisions(derived)) == expected
+    # ...and reading the artifact as "accept what is tracked" gives selected_final.
+    assert _accepted_view_texts(derived) == _paragraph_texts(selected)
 
-    # An edit the caller never mentioned stays tracked rather than being
-    # silently accepted behind the user's back.
-    untouched = manifests[5]
-    assert str(untouched["del_id"]) in ids and str(untouched["ins_id"]) in ids
+
+@requires_real
+def test_selected_redline_keeps_undecided_edits_tracked(tmp_path):
+    """An edit the caller never mentioned keeps the engine's intent."""
+    report = _report()
+    redline = _redline_copy(tmp_path)
+    manifests = _manifests_from_report(report)
+    out = tmp_path / "selected_redline.docx"
+    # Reject one edit and say nothing about the others.
+    generate_selected_redline(redline, out, report, {int(manifests[0]["del_id"]): REJECT})
+    remaining = set(_managed_revisions(out))
+    # Everything except the rejected pair is still there, exactly as the engine
+    # left it: an unmentioned edit is not silently turned down.
+    assert remaining == set(_managed_revisions(redline)) - {str(manifests[0]["del_id"]),
+                                                            str(manifests[0]["ins_id"])}
+
+
+def _accepted_view_texts(path: Path) -> list[str]:
+    """Paragraph text after accepting every change still tracked in the artifact.
+
+    Accepting a change keeps its insertion and discards its deletion, so ``w:ins``
+    text counts and ``w:del`` text does not.
+    """
+    root = etree.fromstring(_read_parts(str(path), ZipLimits())[DOCUMENT])
+    texts = []
+    for para in root.iter(Q("p")):
+        parts = []
+        for node in para.iter():
+            if node.tag != Q("t"):
+                continue
+            if any(ancestor.tag == Q("del") for ancestor in node.iterancestors()):
+                continue
+            parts.append(node.text or "")
+        texts.append("".join(parts))
+    return texts
 
 
 @requires_real

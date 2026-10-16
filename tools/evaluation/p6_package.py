@@ -10,7 +10,8 @@ The layout mirrors the earlier business-reader package (see
       逐份修改说明/<原合同名>/
           修改说明.md                          逐处列出「改之前 / 改之后」
           修改明细.json
-          <原合同名>（修改痕迹版）.docx        带 Word 修订痕迹，可逐条接受/拒绝
+          <原合同名>（全量痕迹版）.docx        引擎全部修订痕迹，可逐条接受/拒绝
+          <原合同名>（选择修订版）.docx        仅人工选择保留的修订（有选择时才生成）
 
 The recall-first engine's report differs from the v2 one: it uses ``plan.edits`` with
 ``rule_id`` (G01..G22), ``location`` (pNNN), ``operation`` (insert/replace) and a
@@ -96,7 +97,7 @@ def case_explanation(name: str, item: dict) -> str:
         lines.append("")
         lines += ["### 逐处修改详情", "",
                   "以下逐处写明修改前的合同原文与修改后的文字（节选），完整上下文请看"
-                  "本文件夹内的“（修改痕迹版）”。", ""]
+                  "本文件夹内的“（全量痕迹版）”。", ""]
         for index, edit in enumerate(edits, start=1):
             rule_id = edit.get("rule_id") or ""
             label = rule_label(guide, rule_id)
@@ -131,7 +132,9 @@ def case_explanation(name: str, item: dict) -> str:
 
     lines += ["## 怎么核对", "",
               "- 打开“最终版（接受修订后）”中的同名文件即为改后版本；",
-              "- 本文件夹内的“（修改痕迹版）”文件带 Word 修订痕迹，可逐条查看、接受或拒绝修改；",
+              "- 本文件夹内的“（全量痕迹版）”文件带全部 Word 修订痕迹，可逐条查看、"
+              "接受或拒绝修改；若有“（选择修订版）”，其中只保留人工接受的修订，"
+              "接受其全部修订即得到“最终版（接受修订后）”；",
               "- 本说明的表格与文件内容一一对应，可对照抽查。",
               ""]
 
@@ -140,7 +143,7 @@ def case_explanation(name: str, item: dict) -> str:
     lines += ["## 追溯信息（如需审计再看）", "",
               f"- 源文件 SHA-256：{report.get('source_sha256') or result.get('sha256')}",
               f"- 修改后文件 SHA-256：{validation.get('final_sha256')}",
-              f"- 修改痕迹版 SHA-256：{validation.get('redline_sha256')}",
+              f"- 引擎修订痕迹版（全量）SHA-256：{validation.get('redline_sha256')}",
               f"- 规则版本：{report.get('ruleset_version')}（{report.get('ruleset_sha256')}）",
               f"- 引擎标识（技术追溯）：{report.get('engine_build')}",
               f"- 模型调用：{model.get('http_attempts', '—')} 次"
@@ -312,12 +315,13 @@ def main() -> None:
         # The app writes accepted-revision artifacts as ``final``/``redline`` for a
         # complete delivery and ``working_final``/``working_redline`` when the run is
         # fail-closed (delivery != complete). Both are the real DOCX to hand over.
-        # A user-reviewed contract also has a derived pair; it wins, because it is
-        # the version the user actually chose.
+        # A reviewed contract additionally has the post-review selection; it wins for
+        # the final version, and its revision file is shipped alongside the engine's.
         source = _first_existing(case_dir / "selected_final",
                                  case_dir / "final", case_dir / "working_final")
-        redline = _first_existing(case_dir / "selected_redline",
-                                  case_dir / "redline", case_dir / "working_redline")
+        engine_redline = _first_existing(case_dir / "redline", case_dir / "working_redline",
+                                         case_dir / "selected_redline")
+        selected_redline = _first_existing(case_dir / "selected_redline")
         stem = Path(name).stem
         folder = notes_dir / stem
         folder.mkdir(parents=True, exist_ok=True)
@@ -330,8 +334,11 @@ def main() -> None:
                        ensure_ascii=False, indent=2), encoding="utf-8")
         if source is not None:
             shutil.copy2(source, final_dir / name)
-        if redline is not None:
-            shutil.copy2(redline, folder / f"{stem}（修改痕迹版）{Path(name).suffix}")
+        suffix = Path(name).suffix
+        if engine_redline is not None:
+            shutil.copy2(engine_redline, folder / f"{stem}（全量痕迹版）{suffix}")
+        if selected_redline is not None:
+            shutil.copy2(selected_redline, folder / f"{stem}（选择修订版）{suffix}")
         rows.append(item)
 
     # The workbench's 结果清单.csv, reproduced for the packaged folder (root level).
@@ -348,7 +355,8 @@ def main() -> None:
              "交付完整性/业务提示/原始原因码），供筛选汇总 |",
              "| 最终版（接受修订后） | 全部已接受修订的改后合同，文件名与原合同一致，直接打开即可 |",
              "| 逐份修改说明 | 每份合同一个文件夹：修改说明（逐处列出「改之前 / 改之后」）、修改明细，"
-             "以及带 Word 修订痕迹的版本（可逐条查看/接受/拒绝修改） |", "",
+             "以及带 Word 修订痕迹的版本。「（全量痕迹版）」为引擎全部改动；"
+             "若在工作台把部分修订改为不接受，另附「（选择修订版）」，只保留接受的修订 |", "",
              "## 每份合同的修改情况", "",
              "下表逐份列出合同改了几处、涉及哪些条款；详细对照见“逐份修改说明/<合同名>/修改说明.md”。", "",
              "| 合同文件 | 处理结果 | 修改处数 | 涉及条款 |", "| --- | --- | --- | --- |"]
@@ -356,8 +364,9 @@ def main() -> None:
         lines.append(summary_row(row))
     lines += ["", "## 如何查看修改", "",
               "1. 直接打开“最终版（接受修订后）”中的文件，即为改后合同；",
-              "2. 如需核对改动过程，打开“逐份修改说明/<合同名>/”里的“（修改痕迹版）”文件，"
-              "在 Word 的“审阅”中查看修订；",
+              "2. 如需核对改动过程，打开“逐份修改说明/<合同名>/”里的“（全量痕迹版）”文件，"
+              "在 Word 的“审阅”中查看引擎的全部修订；若有“（选择修订版）”，"
+              "它只含人工接受的修订，接受其全部修订即得到最终版；",
               "3. 每份合同的详细说明见“逐份修改说明/<合同名>/修改说明.md”。"]
     if args.ledger_note:
         lines += ["", f"- 模型用量记录：{args.ledger_note}"]
