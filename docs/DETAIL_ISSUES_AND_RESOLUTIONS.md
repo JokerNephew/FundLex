@@ -1156,6 +1156,29 @@
 - 后续：如后续仍出现页面未更新，先按「响应头 + URL 版本号 + 实取字节 sha」三步核对，再排查客户端。
 - 变更记录：2026-10-16 新增。
 
+## FL-D093 前端用遗留 ruleset 发布标志判断全局可用性，致 healthy 的 recall-first 交付显示「不可认定」
+
+- 发现日期：2026-10-16
+- 问题与影响：结果页「可直接使用」恒显示「不可认定」，用户据此怀疑功能未生效。根因：前端 `renderReport` 的 `usable` 四条件之一为 `state.cap.auto_write_enabled`，该字段来自**遗留 ruleset v1/v2 的 `release_policy`**（当前 `unreleased`），与用户实际使用的 recall-first（指引快照）路径**毫无关系**。同时 `downloadSection` 用 `!(kind==='final' && !usable)` 过滤，连「最终版 DOCX」按钮一并隐藏，用户误以为两处独立故障。
+- 证据：
+  - `frontend/app.js:289` `usable = auto_write_enabled && eligibility==='eligible' && (delivery∈complete[+exceptions]) && doc.downloads.final`；`:302` 的 final 过滤。
+  - 生产 `/api/capabilities`：`auto_write_enabled=False`、`auto_write_count=0`、`ruleset_version='v1'`、`revision_ruleset_version='v2'`、`revision_mode='evaluation'`。
+  - 生产任务分布：`engine_id='recall_first'` 212 个 vs `engine_id=''` 1 个；UI 永远传 `engine_id='recall_first'`（`app.js:137`），capabilities 的 `engine_id` 写死（`api.py:572`）。
+- 处理方法：A/B 运行时下线（见 `docs/LEGACY_RULESET_RETIREMENT.md`）。发布门随 B 下线；「可直接使用」改按任务实际引擎路径判断，`usable` 去除所有 ruleset 字段。
+- 状态与验证：**方案已确认，实施中**（产品负责人 2026-10-16 选定：发布门随 B 下线，交付语义由指引版本状态决定）。
+- 下一步：按方案 P1–P8 实施并在生产做真实端到端验收。
+- 变更记录：2026-10-16 新增。
+
+## FL-D094 A 规则集空壳载体拖垮 recall-first 建任务（无功能作用却可致 503）
+
+- 发现日期：2026-10-16
+- 问题与影响：建立 recall-first 任务时，`api.py:767` 执行 `carrier = load_ruleset("v1")`，仅为满足 `tasks.ruleset_version NOT NULL` 而加载遗留 A 规则集。该字段对 recall-first **没有任何业务作用**（真正生效的是 `guide_version_id` + `guide_rules_sha256`），但**若 A 加载失败（文件损坏、校验不通过、路径缺失），建任务直接 503，连带拖垮健康的 recall-first 路径**。生产 212 个 recall-first 任务全部携带这一无用的 `ruleset_version='v1'` 空壳值。
+- 证据：`api.py:764-773`；`tasks.py:25`（`ruleset_version TEXT NOT NULL`）、`:57-79`；生产任务分布实测（`ruleset_version`：`v1` 212 / `v2` 1）。
+- 处理方法：从建任务路径移除 A carrier 依赖；recall-first 任务写入固定占位而非 A 版本；保留列以兼容历史行。
+- 状态与验证：**待实施**（纳入 `docs/LEGACY_RULESET_RETIREMENT.md` P2/P4）。
+- 下一步：实施后新增回归测试（monkeypatch 令 `load_ruleset` 抛错，验证 recall-first 建任务仍成功）。
+- 变更记录：2026-10-16 新增。
+
 ## 后续条目模板
 
 ### FL-Dxxx 问题名称
