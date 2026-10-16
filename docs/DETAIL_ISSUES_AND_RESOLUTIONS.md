@@ -1244,6 +1244,20 @@
 - 下一步：待产品负责人就轮次/预算给出意见后，再决定是否实施删除类确定性兜底并复测。
 - 变更记录：2026-10-16 新增。
 
+## FL-D101 模型盘点判「absent」的删除规则被 survey 跳过，删除义务静默丢弃（FL-D091 的删除类同源）
+
+- 发现日期：2026-10-16（P6 开发集 round7 评分后按 `kept` 家族定位，D04/D08/D17/D19/D20 全中）。
+- 问题与影响：G17 的指引 `old_text` 是**两句、带 `C类基金份额的` 前缀**（`C类基金份额的销售服务费主要用于…等。C类基金份额的销售服务费使用范围不包括…。`），实测合同为**无前缀**的单句、第二句措辞各异（`销售服务费的使用范围不包括…` / `销售服务费不包括…`），**D04/D17 无第二句**，D19 为 `持有人服务费`。因此模型盘点判 `absent`，其目标**恰好落在该条款所在段落**；`survey_targets()` 的 `existing` 集合含该 `(rule_id, location)`，把本应命中的 hit **静默跳过**，删除义务整条丢失。这与 FL-D091（append 被 `absent` 目标压制）是同一根因的不同规则类型。
+  - 复现（离线重放）：G17 的 `operation_search_keys` 已包含有效定位键 `销售服务费主要用于支付销售机构佣金`（`_strip_class_lead` 剥离类前缀的产物），且该键在 D08 `p800` **命中**；但 `override_rules` 缺省时五例 G17 hits 均为 **0**。
+- 证据：`/tmp/opencode/dbg_keys.py`、`/tmp/opencode/dbg_g17_pass.py` 输出——加 `override_rules={'G17'}` 后 D04 0→2、D08 0→1、D17 0→2、D19 0→2、D20 0→1 个 hit，全部 `operation=survey`、`ratio=1.000`（真实文档偏移，非臆造）。
+- 处理方法（已实施）：
+  1. `recall.survey_targets(..., override_rules=…)`——命中规则进入该集合时，`known` 中的既有目标不再压制 hit（与 FL-D091 的 `_survey_targets_from_hits(override_rules=…)` 同构）。
+  2. 新增 `recall.is_delete_only_rule(rule, facts)`——判定「所有适用操作均为 delete」（`noop` 不计）。
+  3. `recall_pipeline._run_survey()` 计算 `override_rules = 纯删除规则 － 已有 resolved needs_edit 目标的规则`，同时传入 `survey_targets` 与 `_survey_targets_from_hits`。**只覆盖模型判错（无 resolved needs_edit）的删除规则**，正在被正常编辑的规则不受影响。
+- 状态与验证：**已实施、已发布**，真实批次 `p6-dev-round8-01` 复测进行中。离线重放证明五例目标恢复；单测 `tests/test_delete_applicability.py` 3 项（纯删除判定、absent 不压制、已 resolved 不被重复触发）；全量 613 passed / 6 skipped。
+- 下一步：待 round8 评分确认 G17 五例由 `kept` 转 `completed`，再攻 G18「替换未落地」。
+- 变更记录：2026-10-16 新增。
+
 ## 后续条目模板
 
 ### FL-Dxxx 问题名称

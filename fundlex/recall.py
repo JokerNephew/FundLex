@@ -1216,7 +1216,8 @@ def _anchor_present(parts: tuple[tuple[str, int, int], ...], anchors: Sequence[s
 
 def survey_targets(inspection: DocumentInspection, rules: Sequence[dict], facts: Facts, *,
                    known: Sequence[tuple[str, str]] = (),
-                   threshold: float = FUZZY_MATCH_THRESHOLD) -> list[SurveyHit]:
+                   threshold: float = FUZZY_MATCH_THRESHOLD,
+                   override_rules: frozenset[str] = frozenset()) -> list[SurveyHit]:
     """Find rule targets the windowed inventory never reported (code-driven recall).
 
     ``known`` holds the (rule_id, location) pairs already covered by model inventory
@@ -1226,8 +1227,15 @@ def survey_targets(inspection: DocumentInspection, rules: Sequence[dict], facts:
     the real document. ``operation="satisfied"`` marks locations where the rule's
     instantiated new text is already in place, so the sweep does not report the
     transformed clause as missing (FL-D047).
+
+    ``override_rules`` names rules whose existing targets must not suppress a new hit.
+    A model inventory that judges the clause ``absent`` — which is precisely the
+    not-applicable call this pass exists to correct — records a target at the very
+    location the reference text still occupies, so the (rule, location) check would
+    skip the hit and the obligation is dropped silently (FL-D101).
     """
-    existing = {(rule_id, location) for rule_id, location in known}
+    existing = {(rule_id, location) for rule_id, location in known
+                if rule_id not in override_rules}
     paragraphs = [span for span in inspection.paragraphs if span.text.strip()]
     by_location = {span.location: span for span in paragraphs}
     _PARAGRAPH_GRAMS_CACHE.clear()
@@ -1654,6 +1662,26 @@ def _delete_keyword_bag(rule: dict, facts: Facts | None) -> tuple[str, ...]:
     # Require the whole signature (a domain term, an action and a period) so the fallback
     # cannot degrade into a generic fee mention.
     return tuple(bag) if len(bag) == 3 else ()
+
+
+def is_delete_only_rule(rule: dict, facts: "Facts | None" = None) -> bool:
+    """True when every applicable operation of the rule is a pure deletion.
+
+    Used to decide which rules get the deterministic delete-applicability override
+    (FL-D101). ``noop`` operations do not count against the rule: a branch that
+    requires no change alongside a delete still leaves the rule delete-only.
+    """
+    seen = False
+    for operation in rule.get("operations") or []:
+        kind = operation.get("op")
+        if kind == "noop":
+            continue
+        if facts is not None and not condition_matches(operation.get("condition"), facts):
+            continue
+        if kind != "delete":
+            return False
+        seen = True
+    return seen
 
 
 def _sequence_ratio(left: str, right: str) -> float:

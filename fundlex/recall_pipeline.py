@@ -36,7 +36,7 @@ from .recall import (BOUNDARY_POLICY, ENGINE_ID, ENGINE_VERSION, SCHEMA_VERSION,
                      condition_matches, find_old_text_all, fuzzy_span, instantiate_slots,
                      resolve_old_text, resolve_quote, rule_context, scope_map,
                      structure_index, survey_targets, compact_offsets,
-                     append_applicability_targets, Section)
+                     append_applicability_targets, is_delete_only_rule, Section)
 from .recall_prompts import (AUDIT_INSTRUCTION, AUDIT_PROMPT_VERSION, AUDIT_SCHEMA,
                              PROMPT_VERSIONS, SWEEP_INSTRUCTION, SWEEP_PROMPT_VERSION,
                              SWEEP_SCHEMA)
@@ -348,7 +348,17 @@ def _run_survey(model: Any, rules: Sequence[dict], rules_by_id: dict[str, dict],
     for item in synthetic:
         for location in _target_locations(item):
             known.append((item.rule_id, location))
-    hits = survey_targets(inspection, rules, facts, known=known)
+    # A delete rule the inventory judged "absent" or left unresolved is exactly the
+    # not-applicable call this pass exists to correct: the model recorded a target at the
+    # location the reference text still occupies, so that (rule, location) pair would
+    # suppress the hit and the deletion is dropped (D04/D08/D17/D19/D20, FL-D101). Rules
+    # that already have a resolved needs_edit target keep their coverage.
+    resolved_needs_edit = {target.rule_id for target in [*targets, *synthetic]
+                           if target.state == "needs_edit" and target.resolution == "resolved"}
+    delete_rules = {str(rule.get("rule_id") or "") for rule in rules
+                    if is_delete_only_rule(rule, facts)}
+    override_rules = frozenset(delete_rules - resolved_needs_edit)
+    hits = survey_targets(inspection, rules, facts, known=known, override_rules=override_rules)
     # Append rules have no reference anchor, so the survey above cannot see them.
     # Add the deterministic append pass so a conditional append the model inventory
     # wrongly called not_applicable still gets an executable target (FL-D060/090).
@@ -380,7 +390,7 @@ def _run_survey(model: Any, rules: Sequence[dict], rules_by_id: dict[str, dict],
         origins[target_id] = "survey_satisfied"
     discovered, new_gaps = _survey_targets_from_hits(
         hits, rules_by_id, inspection, [*targets, *synthetic], start_index=len(synthetic),
-        override_rules=frozenset(hit.rule_id for hit in append_hits))
+        override_rules=frozenset(hit.rule_id for hit in append_hits) | override_rules)
     synthetic.extend(discovered)
     for target in discovered:
         origins[target.target_id] = "survey"
