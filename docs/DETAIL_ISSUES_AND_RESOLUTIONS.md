@@ -1281,6 +1281,28 @@
 - 待办：`修改说明.md` 仍按用户选择保持**节选截断**（160/200 字），完整上下文引导读者看「（修改痕迹版）」；离线 `FundLex-合同修改结果-P6开发集-20261015` 旧包如需同步新结构，可用新生成器重跑。
 - 变更记录：2026-10-16 新增（用户四条要求 → 生成器 + 工作台两处实现）；同日完成发布与线上端到端验证。
 
+## FL-D103 用户选择过修订的合同，交付包仍给引擎全量版本（方案A：改为交付所选版本）
+
+- 发现日期：2026-10-16（产品负责人问「选择过修订的合同，<合同名>（修改痕迹版）.docx 是原版还是按用户想法的版本」后核实）。
+- 问题与影响：工作台逐条接受/拒绝修订后，产物落成独立 artifact `selected_final`（`api.py:_apply_selection`），与引擎的 `redline` 互不覆盖。但 ZIP 打包只按 `final/working_final`、`redline/working_redline` 分派，**`selected_final` 不进「最终版（接受修订后）」**，所以只要用户选择过，交付包给的仍是引擎「全量接受修订」版本，与文件夹名含义不符，也与用户的意图不符。
+- 用户决定：采用**方案A** —— ZIP 里最终版用 `selected_final`，并据此生成一致的痕迹版；未接受的修订不再出现在交付文件中。
+- 处理过程与额外发现的真实缺陷：
+  1. **配对被拆开的缺陷（已存在，非本次引入）**：`selective.apply_decisions()` 用 `_normalise_decisions()` 只看调用方传来的 id；前端只按 `del_id` 下发决策（`RevisionDecision` 仅含 `del_id`，`frontend/app.js` 亦然），于是配对的 `ins_id` 走默认 `ACCEPT` 被内联，**拒绝一条替换后原文与新文会同时留在文档里**（实测 p1191：拒绝 del_id=1 后旧句与新句并存）。只有同时下发 `del_id` 与 `ins_id` 才会正确拒绝。
+     - 修复：新增 `selective._explicit_verdicts()`，把判定展开到整对修订（同一对的任一 id 被提及即整对生效），`apply_decisions` 与新的痕迹版生成共用。
+  2. **新增 `selective.generate_selected_redline()`**：把源痕迹版重写为与选择一致的版本 —— 接受的整对修订内联（`w:ins` 展开、`w:del` 移除），拒绝的保留 `w:ins`/`w:del` 痕迹，**未提及的一律保留为痕迹**（不默认接受，避免隐瞒用户没做过的决定）。写盘后独立重开核对：修订集合必须恰好等于「源集合 − 显式接受集合」，否则 `SELECTED_REDLINE_MISMATCH` 并删除产物。
+  3. `fundlex/store.py`：`SELECTED_KINDS` 增加 `selected_redline`；新增 `remove_selected_artifact()`（新痕迹版派生失败时删除过期的旧 `selected_redline`，避免与最新选择不一致而被误当可信产物；`selected_final` 不允许被该方法删除）。
+  4. `fundlex/api.py`：决策后同时发布 `selected_redline`；下载白名单加入 `selected_redline`。派生失败只影响该痕迹版，不回滚已发布的 `selected_final`。
+  5. `fundlex/edit_summary.py`：新增 `archive_kinds()` 与 `ARCHIVE_PREFERENCE` —— ZIP 每个槽位取最优候选（`selected_final` > `final` > `working_final`；`selected_redline` > `redline` > `working_redline`），报告类无竞争项照旧；`archive_entry()` 让所选版本复用同样的归档路径。
+  6. `fundlex/tasks.py`：「结果总览」的「每份合同的修改情况」新增**版本**列（有 `selected_final` 记「按人工选择」，否则「按引擎全量」），并加说明文字。
+  7. `tools/evaluation/p6_package.py`：离线包同样优先取 `selected_final`/`selected_redline`。
+- 状态与验证：**已实施、已发布、已线上端到端验证通过**。
+  - 单测：`tests/test_selective.py` 17 项（含「拒绝与接受各半时痕迹保留/消失」「未提及的修订必须保留痕迹」「痕迹版与所选合同一致」「须有 manifest」「不得覆盖源痕迹版」）；`tests/test_revision_api.py` 8 项（含决策后 `selected_redline` 与 `selected_final` 均可下载且内容不同、accept-all 也会生成痕迹版）；`tests/test_tasks_api.py` 增加 ZIP 槽位与偏好用例。全量 **638 passed / 6 skipped**，仅余已知基线失败 `test_rules_catalogue.py::test_source_provenance_and_reproducible_compilation`（服务器缺 `references/`，与本条无关）。
+  - 离线复现配对缺陷：仅下发 `del_id=1: reject` 时，修复前 p1191 修订 id 为 `[]` 但旧句与新句并存；修复后旧句恢复、新句消失。
+  - **线上真实路径验证**（发布后，密码登录 → 真实合同上传 → 真实模型处理 → 工作台取 20 条修订 → 按前端形式（仅 `del_id`）逐条决策，拒绝其中 2 条、接受 18 条 → 下载全部结果 ZIP）：决策后该文档 artifact 由 `working_final, working_redline` 变为 **`selected_final, selected_redline` + 原引擎产物**；ZIP 336416 字节、重复条目 0，「最终版（接受修订后）」放的正是所选版本，`（修改痕迹版）` 与「逐份修改说明」同名成对；`结果总览.md` 版本列显示「按人工选择」，处数 20 与修订条数一致。
+  - 产物核对（解压后实际读取 XML）：**最终版无任何 `w:ins`/`w:del` 残留**（0/0），**痕迹版恰好保留 2 条 `w:ins` + 2 条 `w:del`**，与用户拒绝 2 条一致；两份 DOCX 均可正常打开（各 1385 段）。
+- 下一步：无（用户所选方案已完成）。若后续希望把选择也计入引擎交付校验或让 `selected_final` 反哺评测口径，需另行确认，因为 `selected_final` 目前是**用户产物**，不参与引擎交付验证（`store.py:SELECTED_KINDS`）。
+- 变更记录：2026-10-16 新增（用户问询 → 核实 → 用户选方案A → 实施 → 线上验证通过）。
+
 ## 后续条目模板
 
 ### FL-Dxxx 问题名称
