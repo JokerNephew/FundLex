@@ -1059,3 +1059,18 @@ def test_fuzzy_span_clause_snaps_to_sentence_boundary():
     assert actual[raw[1]:] == "配。"
     assert actual[snapped[1]:] == ""
     assert actual[snapped[0]:snapped[1]].endswith("。")
+
+
+def test_class_label_strips_share_variants_and_drops_placeholders():
+    """Class names must render as the canonical "A类基金份额", never doubled (FL-D091).
+
+    Contracts name a class "A类份额" or "A类基金份额" interchangeably, and the fact
+    extractor sometimes writes "default" for a single unnamed class. The first produced
+    "A类份额类基金份额" and the second "default类基金份额" in a real dev-set run.
+    """
+    assert class_label(["A类份额", "C类份额"]) == "A类、C类基金份额"
+    assert class_label(["A类基金份额", "Y类基金份额"]) == "A类、Y类基金份额"
+    assert class_label(["default", "A"]) == "A类基金份额"
+    # A single unnamed class still yields grammatical wording rather than a placeholder.
+    assert class_label(["default"]) == "基金份额"
+    assert "default" not in class_label(["default", "default"])

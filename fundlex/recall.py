@@ -1705,10 +1705,23 @@ def composite_fragment(rule: dict, facts: Facts, paragraph: ParagraphSpan,
 # Slots, conditions and planning
 # ---------------------------------------------------------------------------
 
-_CLASS_NAME_SUFFIXES = ("类基金份额", "基金份额", "类")
+_CLASS_NAME_SUFFIXES = ("类基金份额", "类份额", "基金份额", "份额", "类")
+
+# A class name that is not a real identifier (the extractor sometimes writes
+# "default" for a contract with a single unnamed class) must never be rendered into
+# the document. Such a name is ignored when building the group label (FL-D091).
+_PLACEHOLDER_CLASS_NAMES = frozenset({"default", "none", "unknown", "n/a", "na", "其他"})
+
 
 def class_label(names: Sequence[str]) -> str:
-    """Build the guide's class-group label from fact names such as "A", "A类基金份额"."""
+    """Build the guide's class-group label from fact names such as "A", "A类基金份额".
+
+    Contracts name the same class in several ways ("A类基金份额", "A类份额", "A类",
+    "A"), so every suffix is stripped before the canonical "A类基金份额" form is
+    rebuilt. Missing the "份额" variants produced a doubled label such as
+    "A类份额类基金份额" (FL-D091). Placeholder names ("default") are dropped: the
+    contract has no such class and the wording must not appear in the document.
+    """
     cleaned = []
     for name in names:
         label = name.strip()
@@ -1716,7 +1729,9 @@ def class_label(names: Sequence[str]) -> str:
             if label.endswith(suffix) and len(label) > len(suffix):
                 label = label[: -len(suffix)]
                 break
-        if label and label not in cleaned:
+        if not label or label.lower() in _PLACEHOLDER_CLASS_NAMES:
+            continue
+        if label not in cleaned:
             cleaned.append(label)
     return "、".join(label + "类" for label in cleaned) + "基金份额"
 
