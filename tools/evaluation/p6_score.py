@@ -212,6 +212,12 @@ def _superseded_survives(target: dict, region: str, final_compact: str) -> bool:
     kept on purpose (the appended policy text). Judging on that fragment alone reports a
     completed deletion as ``kept``. The requirement quotes the whole clause, so the verdict
     is decided on a distinctive long fragment of it (FL-D074).
+
+    A quotation that names more than one sentence ("…服务费等。C类基金份额的销售服务费
+    使用范围不包括…") is not a single deletion: only the sentence carrying the anchor is the
+    target, and a later sentence can legitimately survive as its own clause. The trailing
+    fragment is therefore only evidence when the anchor reaches the end of the quotation
+    (FL-D097).
     """
     anchor = compact(target.get("old_text") or "")
     clause = compact(_requirement_clause(target.get("requirement") or ""))
@@ -219,8 +225,13 @@ def _superseded_survives(target: dict, region: str, final_compact: str) -> bool:
     # the kept policy text) and take interior runs.
     fragments: list[str] = []
     if len(clause) >= 24:
-        fragments.extend([clause[8:40], clause[len(clause) // 2:len(clause) // 2 + 24],
-                          clause[-24:]])
+        fragments.extend([clause[8:40], clause[len(clause) // 2:len(clause) // 2 + 24]])
+    # The trailing run is only distinctive when the anchor belongs to the quotation's last
+    # sentence: a surviving later sentence is a separate clause, not a missed deletion.
+    if len(clause) >= 24:
+        last_sentence = [part for part in re.split(r"(?<=[。；])", clause) if part.strip()][-1]
+        if anchor and anchor in last_sentence:
+            fragments.append(clause[-24:])
     fragments = [frag for frag in fragments if len(frag) >= 12]
     if fragments:
         # The clause survives when any distinctive fragment is still present.

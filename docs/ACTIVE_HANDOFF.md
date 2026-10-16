@@ -31,6 +31,21 @@
 > `FL-D069→FL-D075`（G17 跨段删除）、`FL-D066→FL-D076`（Codex bwrap）。
 > **注意**：本文下文第 5/6 轮的历史叙述写于更正之前，个别处仍写旧编号，含义以更正后为准；新增条目一律先查重再编号。
 
+## 当前断点（第 12 轮，2026-10-16，P6 开发集真实修改评测收敛到 0.8602）
+
+- **本轮任务**：用户指示「做二和三」——(三) Langfuse 退化为**本地 JSONL trace 兜底**，(二) 用它帮助 P6 评测优化。
+- **(三) 已完成**：`fundlex/trace_sink.py`（FL-D088）。纯标准库、无网络、`FUNDLEX_TRACE_JSONL` 未设即 no-op；一合同一 trace（确定 seed）、一次调用一 generation、一条评测 score；活动文档 id 走 thread-local，引擎深处模型调用自动归入正确 trace。接线于 `model.py:_trace_attempt` + `jobs.py:_document_trace`（与 Langfuse 并列，可同开）。生产落点 `/var/lib/fundlex/traces/model-calls.jsonl`（env 备份 `…env.bak-tracesink`）。真实 20 例验证：1085 行、单条 25KB 含合同原文、19/20 trace 匹配、0 错误。分析器 `tools/evaluation/p6_trace_report.py` 把 trace 与评分按 trace_id 关联，直接产出「按规则/按阶段」失败画像。单测 `tests/test_trace_sink.py`。
+- **(二) 已完成 — 用 trace 定位并修掉 3 个真实缺陷**：
+  - **FL-D089 评分器误判**（commit `64dab0c`）：`appendix_present()` 因份额类别枚举差异把**已正确追加**的政策句判 `not_executed`。改为折叠枚举 + 模糊兜底逐字符步进。0.7892 → 0.8161，无引擎改动。
+  - **FL-D091 append 家族缺陷**（commits `fc08350`/`c6c00aa`/`8331233`/`b78c26e`）：三层叠加——①措辞变体致盘点判 `not_applicable`；②缺 class group 时 append 被整体判不适用；③hit 被既有 `absent`/未解析目标压制。新增 `append_applicability_targets()` 确定性兜底 + 收窄 class-substitution 门限 + `override_rules`。
+  - **FL-D091 类别名渲染缺陷**（commit `d900fb2`）：终稿出现 `default类基金份额`、`A类份额类基金份额`。修正 `class_label()` 剥离份额变体并丢弃占位名。
+  - **FL-D089 补充**（commit `48fe3ca`）：单类别合同只应追加适用分句，评分器不再索要不存在的 C 类分句。
+- **当前指标（开发集 20 例 / 236 目标）**：**0.8602**（completed 203 / kept 32 / `not_executed` **1**），目标 0.95。唯一残留 `not_executed` 是 **D07/G16**——该合同 `基金费用与税收` 章节**确无销售服务费条款**，引擎判不适用属正确。整合完成 0/20，目标 0.9（`kept` 32 为主要来源）。
+- **预算**：round2–round7 累计约 **$3.7**（单批 ~$0.52–0.70）；协议预算 dev ≤2000 calls/≤$6。
+- **运维教训（FL-D096）**：**批次运行期间禁止 `publish_workspace.sh`**。已在飞批次的任务 pin 了旧 `engine_build`，重发布后 worker 校验失败 → 整批 `ENGINE_SCHEMA_MISMATCH`。round7 首批已作废留证并重跑。
+- **并行协作**：另一 agent 同期推进前端（FL-D092 缓存、FL-D093/094 A/B 遗留规则集下线、HTML 呈现 + 逐条审查）。共享文档编号曾两次冲突（我的条目被并入 FL-D091、FL-D096），**改共享文档前先看 mtime，只做追加**。
+- **下一动作**：① 评估 `kept` 32 例（G17×8/G14×5/G11×4/G18×3/G15×3/G08×3/G13×2/G05×2）是否含应改未改，以决定能否逼近 0.95；② 若开发集稳定，冻结并跑留出 H01–H08；③ 出交付包 `tools/evaluation/p6_package.py` 与 `docs/REAL_REVISION_EVALUATION_RESULTS.md`。
+
 ## 当前断点（第 11 轮，2026-10-16，静态资源缓存失效修复，**已生产验证**）
 
 - **本轮任务**：用户反馈「我这里看着还是没变」——区块顺序调整已发布但页面仍旧版。

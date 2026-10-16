@@ -82,3 +82,38 @@ def test_service_fee_contract_requires_the_full_policy():
                 "不收取认购/申购费用。")
     # The contract has a service-fee class, so the C-class clause must also be present.
     assert appendix_present_applicable_clauses(POLICY, document, _facts(True)) is False
+
+
+def test_multi_sentence_quotation_does_not_require_its_last_sentence():
+    """A quotation naming a later clause must not make a completed deletion look kept.
+
+    D01's G17 requirement quotes two sentences: the clause to delete, then a neighbouring
+    sentence ("…使用范围不包括基金募集期间的上述费用。") that the engine keeps on purpose
+    as its own paragraph. The trailing fragment alone reported the deletion as ``kept``.
+    """
+    from tools.evaluation.p6_score import _superseded_survives
+
+    target = {
+        "old_text": "销售服务费主要用于支付销售机构佣金",
+        "requirement": ("删除原条款“C类基金份额的销售服务费主要用于支付销售机构佣金、以及基金管理人的"
+                        "基金行销广告费、促销活动费、基金份额持有人服务费等。C类基金份额的销售服务费"
+                        "使用范围不包括基金募集期间的上述费用。”。"),
+    }
+    # The deleted sentence is gone; only the neighbouring sentence survives.
+    final = "销售服务费使用范围不包括基金募集期间的上述费用。"
+    assert _superseded_survives(target, "", final) is False
+
+
+def test_single_sentence_quotation_still_detects_a_surviving_clause():
+    from tools.evaluation.p6_score import _superseded_survives
+
+    # One sentence, anchor at the end: the whole quotation is the deletion target.
+    target = {
+        "old_text": "由登记机构代付给销售机构",
+        "requirement": ("删除原条款中“经基金托管人复核后于次月首日起10个工作日内从基金财产中一次性"
+                        "支付给登记机构，由登记机构代付给销售机构。”。"),
+    }
+    final = "经基金托管人复核后于次月首日起10个工作日内从基金财产中一次性支付给登记机构，由登记机构代付给销售机构。"
+    assert _superseded_survives(target, "", final) is True
+    # With the clause actually removed, the same target reads as completed.
+    assert _superseded_survives(target, "", "基金销售服务费按月支付。") is False
