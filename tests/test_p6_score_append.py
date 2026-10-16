@@ -45,3 +45,40 @@ def test_unrelated_text_is_not_accepted():
 def test_normalisation_collapses_class_enumerations():
     assert _normalise_policy("申购本基金A类、D类基金份额时") == _normalise_policy("申购本基金A类基金份额时")
     assert _normalise_policy("申购本基金A类、B类和C类基金份额时") == _normalise_policy("申购本基金A类基金份额时")
+
+
+SINGLE_CLASS_POLICY = POLICY  # the same template used above
+
+
+def _facts(service_fee: bool):
+    return {"classes": [{"name": "基金份额", "service_fee": service_fee}]}
+
+
+def test_single_class_contract_scores_the_applicable_clause():
+    """A single-class fund gets the subscription clause without a C-class clause.
+
+    The engine must not invent a C class that charges no sales service fee, so the
+    service clauses of the policy cannot appear. Scoring the full template would read
+    the engine's correct work as a miss (found on D09/D13 of the real dev set).
+    """
+    from tools.evaluation.p6_score import appendix_present_applicable_clauses
+
+    document = ("不可抗力：客观事件。投资者通过直销机构（含基金管理人及其销售子公司，下同）"
+                "申购本基金基金份额时，不收取认购/申购费用。")
+    assert appendix_present_applicable_clauses(POLICY, document, _facts(False)) is True
+
+
+def test_single_class_contract_still_needs_the_subscription_clause():
+    from tools.evaluation.p6_score import appendix_present_applicable_clauses
+
+    assert appendix_present_applicable_clauses(POLICY, "基金管理人应当公告年度报告。",
+                                               _facts(False)) is False
+
+
+def test_service_fee_contract_requires_the_full_policy():
+    from tools.evaluation.p6_score import appendix_present_applicable_clauses
+
+    document = ("投资者通过直销机构（含基金管理人及其销售子公司，下同）申购本基金A类基金份额时，"
+                "不收取认购/申购费用。")
+    # The contract has a service-fee class, so the C-class clause must also be present.
+    assert appendix_present_applicable_clauses(POLICY, document, _facts(True)) is False

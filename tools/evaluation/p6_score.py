@@ -127,6 +127,10 @@ def _normalise_policy(value: str) -> str:
     # "A类、D类基金份额" -> "类基金份额"; "A类" -> "类基金份额"-compatible form.
     value = re.sub(r"[A-ZＡ-Ｚ](?:类|份额)?(?:[、和及与][A-ZＡ-Ｚ](?:类|份额)?)*类?基金份额", "类基金份额", value)
     value = re.sub(r"[A-ZＡ-Ｚ]类基金份额", "类基金份额", value)
+    # A single-class contract names no class letter at all ("申购本基金基金份额时"),
+    # which is the same obligation as the template's "A类基金份额". Collapse the bare
+    # form so a correct single-class append is not read as a miss.
+    value = value.replace("类基金份额", "基金份额")
     return value
 
 
@@ -162,6 +166,30 @@ def appendix_present(required: str, final_compact: str) -> bool:
         if common / window >= 0.85:
             return True
     return False
+
+
+def appendix_present_applicable_clauses(required: str, final_compact: str,
+                                        facts: dict) -> bool:
+    """True when every clause that *can* apply to this contract is present.
+
+    An append policy bundles clauses for two class groups: the subscription class
+    ("A类基金份额不收取认购/申购费用") and the service-fee class ("C类基金份额不收取
+    销售服务费…持有超过一年不再收取"). A contract with a single class charges no
+    sales service fee, so the service clauses have no subject: the engine correctly
+    appends only the subscription clause and must not invent a C class. Score those
+    contracts on the clauses that apply, otherwise the engine's correct work reads
+    as a miss and the reported completion rate is too low.
+    """
+    classes = facts.get("classes") or []
+    if any(item.get("service_fee") for item in classes if isinstance(item, dict)):
+        return False  # the contract does have a service-fee class: the full policy applies
+    policy = _normalise_policy(required)
+    # Keep only the clauses that do not name the absent service-fee class.
+    applicable = [clause for clause in re.split(r"(?<=[。；])", policy)
+                  if clause.strip() and "销售服务费" not in clause]
+    if not applicable:
+        return False
+    return all(appendix_present(clause, final_compact) for clause in applicable if clause.strip())
 
 
 def _requirement_clause(requirement: str) -> str:
@@ -238,6 +266,12 @@ def score_target(target: dict, facts: dict, final_paragraphs: list[str],
         # because the engine may insert the paragraph at a different but equivalent anchor.
         if appendix_present(required, final_compact):
             result.update(verdict="completed", detail="appended policy text present")
+        elif appendix_present_applicable_clauses(required, final_compact, facts):
+            # The policy mixes clauses for two class groups. A contract with no
+            # service-fee class legitimately receives only the subscription clause (the
+            # engine must not invent a C class), so score the clauses that can apply.
+            result.update(verdict="completed",
+                          detail="appended policy text present (applicable clauses only)")
         else:
             result.update(verdict="not_executed", detail="appended policy text absent")
         return result
