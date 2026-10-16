@@ -50,7 +50,8 @@
 - **预算**：round2–round7 累计约 **$3.7**（单批 ~$0.52–0.70）；协议预算 dev ≤2000 calls/≤$6。
 - **运维教训（FL-D096）**：**批次运行期间禁止 `publish_workspace.sh`**。已在飞批次的任务 pin 了旧 `engine_build`，重发布后 worker 校验失败 → 整批 `ENGINE_SCHEMA_MISMATCH`。round7 首批已作废留证并重跑。
 - **并行协作**：另一 agent 同期推进前端（FL-D092 缓存、FL-D093/094 A/B 遗留规则集下线、HTML 呈现 + 逐条审查）。共享文档编号曾两次冲突（我的条目被并入 FL-D091、FL-D096），**改共享文档前先看 mtime，只做追加**。
-- **下一动作**：① 评估 `kept` 32 例（G17×8/G14×5/G11×4/G18×3/G15×3/G08×3/G13×2/G05×2）是否含应改未改，以决定能否逼近 0.95；② 若开发集稳定，冻结并跑留出 H01–H08；③ 出交付包 `tools/evaluation/p6_package.py` 与 `docs/REAL_REVISION_EVALUATION_RESULTS.md`。
+- **下一动作**：① 就「优化轮次已达 baseline+7，超协议 3 轮上限；应用账本 charged $9.06 / 协议 total $10」请产品负责人定夺是否继续；② 若继续，按 `append_applicability_targets` 成例为**删除类规则**加确定性适用性兜底（FL-D100①），并单独排查 G18「替换未落地」；③ 达标前**不得冻结、不得读留出 H01–H08**。
+- **预算与轮次（须如实上报）**：`protocol.json` 明文 optimisation rounds ≤3、total ≤$10；实际 baseline+7 轮；账本 charged **$9.0593**。协议指定的 per-run 来源 `report.json`（model 段）在各 `p6-dev-*` 目录下**不存在**，per-run 花费当前不可核验（FL-D100②）。
 
 ## 当前断点（第 11 轮，2026-10-16，静态资源缓存失效修复，**已生产验证**）
 
