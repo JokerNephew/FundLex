@@ -134,6 +134,41 @@ def _normalise_policy(value: str) -> str:
     return value
 
 
+def _obligation_in_region(required: str, region: str, *, threshold: float = 0.9) -> bool:
+    """True when the required obligation appears in the region up to small wording noise.
+
+    A replacement can differ from the label only by a couple of characters: the G14
+    policy "基金管理人可以适当调低基金申购费率和销售服务费率。" is delivered as
+    "…调低基金申购费率和基金销售服务费率。" (one extra "基金"). A fixed-window
+    comparison fails on an insertion because it shifts every later character, so measure
+    the best alignment ratio over candidate windows with ``difflib`` instead. Only used
+    as a fallback after the exact and normalised checks, and the threshold is high so a
+    genuinely different obligation does not pass (FL-D099).
+    """
+    from difflib import SequenceMatcher
+
+    obligation = compact(required)
+    haystack = compact(region)
+    if not obligation or not haystack:
+        return False
+    if obligation in haystack:
+        return True
+    # The obligation is a sentence; rarely longer than the region's paragraph, but compare
+    # against windows of its own length stepped one character at a time.
+    window = len(obligation)
+    matcher = SequenceMatcher(autojunk=False)
+    best = 0.0
+    for start in range(0, max(1, len(haystack) - window) + 1):
+        matcher.set_seq2(haystack[start:start + window])
+        matcher.set_seq1(obligation)
+        ratio = matcher.ratio()
+        if ratio > best:
+            best = ratio
+            if best >= 0.999:
+                break
+    return best >= threshold
+
+
 def appendix_present(required: str, final_compact: str) -> bool:
     """True when the appended policy sentence appears in the final document.
 
@@ -328,6 +363,14 @@ def score_target(target: dict, facts: dict, final_paragraphs: list[str],
         result.update(verdict="completed", detail="required replacement present in its region")
     elif replacement and replacement[:24] and replacement[:24] in final_compact:
         result.update(verdict="completed", detail="required replacement present elsewhere")
+    elif replacement and _obligation_in_region(replacement, region):
+        # The region carries the obligation but not with the label's exact wording: an
+        # extra "基金" ("调低基金申购费率和基金销售服务费率" against the label's
+        # "…和销售服务费率") diverges inside the first 24 characters, so the prefix test
+        # above misses it. A correct replacement was scored kept because the label's
+        # old_text is a substring of the corrected sentence (FL-D099).
+        result.update(verdict="completed",
+                      detail="required replacement present in its region (wording variant)")
     elif final_index >= 0 and needle not in region:
         result.update(verdict="completed", detail="superseded wording gone")
     else:

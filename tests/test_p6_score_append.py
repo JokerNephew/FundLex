@@ -146,3 +146,44 @@ def test_deleted_paragraph_that_no_longer_exists_scores_completed():
     # A surviving clause still reads as kept.
     verdict2 = score_target(target, {"classes": []}, [clause], [clause])
     assert verdict2["verdict"] == "kept"
+
+
+def test_replace_with_a_small_wording_variant_scores_completed():
+    """A correct replacement must not be scored kept just because of one extra word.
+
+    G14 asks for "基金管理人可以适当调低基金申购费率和销售服务费率。", which contracts
+    deliver as "…调低基金申购费率和基金销售服务费率。" (one extra "基金"). The label's
+    old_text ("可以适当调低基金申购费率") is a substring of that corrected sentence, so the
+    "old wording still in its region" fallback fired and the engine's correct work read as a
+    miss for four dev-set cases (FL-D099).
+    """
+    from tools.evaluation.p6_score import score_target
+
+    required = "基金管理人可以适当调低基金申购费率和销售服务费率。"
+    old = "可以适当调低基金申购费率"
+    region = ("在对基金份额持有人利益无实质性不利影响的前提下，基金管理人可以在不违反法律法规规定及"
+              "基金合同约定的情形下根据市场情况制定基金促销计划。在基金促销活动期间，按相关监管部门"
+              "要求履行必要手续后，基金管理人可以适当调低基金申购费率和基金销售服务费率。")
+    target = {"target_id": "t", "rule_id": "G14", "op": "replace", "old_text": old,
+              "required_text": required, "compact_start": 0}
+    verdict = score_target(target, {"classes": []}, [region], [region])
+    assert verdict["verdict"] == "completed"
+
+
+def test_replace_that_was_never_made_still_scores_kept():
+    """The alignment fallback must not accept a clause the engine left untouched.
+
+    D12/G14 keeps the original "…调低基金申购费率、基金赎回费率、转换费率和销售服务费率。"
+    and the engine's own audit agrees it was never edited (`RECALL_EDIT_OVERLAP`).
+    """
+    from tools.evaluation.p6_score import score_target
+
+    required = "基金管理人可以适当调低基金申购费率和销售服务费率。"
+    old = "可以适当调低基金申购费率、基金赎回费率"
+    region = ("对基金份额持有人无实质性不利影响的前提下，基金管理人可以在不违反法律法规规定及基金合同"
+              "约定的情形下根据市场情况制定基金促销计划。在基金促销活动期间，按相关监管部门要求履行必要"
+              "手续后，基金管理人可以适当调低基金申购费率、基金赎回费率、转换费率和销售服务费率。")
+    target = {"target_id": "t", "rule_id": "G14", "op": "replace", "old_text": old,
+              "required_text": required, "compact_start": 0}
+    verdict = score_target(target, {"classes": []}, [region], [region])
+    assert verdict["verdict"] == "kept"

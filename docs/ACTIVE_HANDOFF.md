@@ -40,11 +40,13 @@
   - **FL-D091 append 家族缺陷**（commits `fc08350`/`c6c00aa`/`8331233`/`b78c26e`）：三层叠加——①措辞变体致盘点判 `not_applicable`；②缺 class group 时 append 被整体判不适用；③hit 被既有 `absent`/未解析目标压制。新增 `append_applicability_targets()` 确定性兜底 + 收窄 class-substitution 门限 + `override_rules`。
   - **FL-D091 类别名渲染缺陷**（commit `d900fb2`）：终稿出现 `default类基金份额`、`A类份额类基金份额`。修正 `class_label()` 剥离份额变体并丢弃占位名。
   - **FL-D089 补充**（commit `48fe3ca`）：单类别合同只应追加适用分句，评分器不再索要不存在的 C 类分句。
-- **当前指标（开发集 20 例 / 236 目标）**：**0.9110**（completed 215 / kept 20 / `not_executed` **1**），目标 0.95。唯一残留 `not_executed` 是 **D07/G16**——该合同 `基金费用与税收` 章节**确无销售服务费条款**，引擎判不适用属正确。整合完成见 `delivery.actually_complete`，目标 0.9（`kept` 20 为主要来源）。
+- **当前指标（开发集 20 例 / 236 目标）**：**0.9322**（completed 220 / kept 15 / `not_executed` **1**），目标 0.95。唯一残留 `not_executed` 是 **D07/G16**——该合同 `基金费用与税收` 章节**确无销售服务费条款**，引擎判不适用属正确。整合完成 `actually_complete` 5→8，目标 0.9（`kept` 15 为主要来源）。
 - **评分器又修两处误判（同源：把「引擎做对了」读成没做）**：
   - **FL-D097**（commit `c68434d`）：删除规则的引文**跨多句**时，`_superseded_survives()` 的末句片段属于**相邻的、引擎有意保留**的条款，命中它就把已完成的删除判 `kept`。改为仅当锚点落在引文末句才计末句片段。
-  - **FL-D098**（本轮）：删除成功后**原段落在终稿消失**，`locate_paragraph()` 返回 `-1`，而 `delete` 分支要求定位成功，于是**正确删除被判 `kept`**。改为「条款在全文已不存在即达标」。
-  - 两处合计：0.8602 → **0.9110**（`kept` 32 → 20，`not_executed` 恒为 1）。
+  - **FL-D098**（commit `1b478b2`）：删除成功后**原段落在终稿消失**，`locate_paragraph()` 返回 `-1`，而 `delete` 分支要求定位成功，于是**正确删除被判 `kept`**。改为「条款在全文已不存在即达标」。
+  - **FL-D099**（本轮）：`replace` 的「新义务是否出现」用 24 字前缀精确判定，一处措辞差异（多一个「基金」、或合同真实类别 `A类、D类`）即分叉；同时标签 `old_text` 恰是修正后句子的子串，于是**正确替换被判 `kept`**。新增 `_obligation_in_region()`（规范化＋`difflib` 滑窗，阈值 0.9）作第三顺位回退。
+  - 三处合计：0.8602 → **0.9322**（`kept` 32 → 15，`not_executed` 恒为 1）。逐目标核对确认**仅预期目标翻转、无误放**，并以**引擎自身审计**为独立佐证（D12/G14 仍判 `kept`，引擎审计同判未执行）。
+- **剩余 `kept` 15 = 真实引擎缺陷（非评分器问题）**：G17 删除 ×5、G18 替换 ×3、G08 ×2、G11 ×2、G05 ×2、G14 ×1（D12 `RECALL_EDIT_OVERLAP`）。引擎 ledger 显示多为 `not_applicable`（作用域判定与终稿残留矛盾）或 `planned` 但未落地。
 - **预算**：round2–round7 累计约 **$3.7**（单批 ~$0.52–0.70）；协议预算 dev ≤2000 calls/≤$6。
 - **运维教训（FL-D096）**：**批次运行期间禁止 `publish_workspace.sh`**。已在飞批次的任务 pin 了旧 `engine_build`，重发布后 worker 校验失败 → 整批 `ENGINE_SCHEMA_MISMATCH`。round7 首批已作废留证并重跑。
 - **并行协作**：另一 agent 同期推进前端（FL-D092 缓存、FL-D093/094 A/B 遗留规则集下线、HTML 呈现 + 逐条审查）。共享文档编号曾两次冲突（我的条目被并入 FL-D091、FL-D096），**改共享文档前先看 mtime，只做追加**。
