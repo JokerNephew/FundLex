@@ -1273,12 +1273,13 @@
   3. `fundlex/api.py` `task_archive()`：ZIP 改为 `结果总览.md` + `结果清单.csv` + `最终版（接受修订后）/<合同>.docx` + `逐份修改说明/<合同>/`（含 `（修改痕迹版）.docx`、报告）。`final`/`working_final` 只进最终版文件夹，`redline` 与报告只进逐份文件夹；并对同名合同做去重（`name (2)`），修复同 stem 合同导致的 ZIP 重名（原先会产生重复条目）。
   4. `tools/evaluation/p6_package.py`：改用共享模块；`修改说明.md` 新增「逐处修改对照」表（序号/修改内容/位置/操作/修改前/修改后/校验）与「逐处修改详情」（含指引要求、逐处改前改后引用块）；「操作」列把「替换但 replacement 为空」正确标为**删除**；`修改前` 取自 `components[*].expected_old_text`（此前该字段未读取，导致改前栏为空）。
   5. 前端：按钮「↓ 下载任务汇总 .md」→「↓ 下载结果总览 .md」，下载文件名同步为 `<任务名>_结果总览.md`。
-- 状态与验证：**已实施、已本地验证**。
+- 状态与验证：**已实施、已发布、已线上端到端验证**。
   - 生成器实跑 `p6-dev-round1-01`（20 例）产出目标结构；抽查「广发上海清算所…_20250319」修改说明含 17 处对照，改前/改后为真实原文（如赎回费归属、赎回金额表述、删除 7 日旧句），删除类显示「（删除该句）」。
   - 新增/调整单测：`tests/test_tasks_api.py::test_task_archive_groups_final_and_notes_by_folder`（ZIP 归档路径与重名去重）、`test_task_archive_authorization_names_and_integrity`（断言 `结果总览.md` 与「每份合同的修改情况」）、`tests/test_p6_package.py`（断言「逐处修改对照」「逐处修改详情」「修改前/后」）。
   - 全量测试 **630 passed / 6 skipped**，仅余已知基线失败 `test_rules_catalogue.py::test_source_provenance_and_reproducible_compilation`（服务器缺 `references/`，与本次无关）。
-- 下一步：发布到 `/opt/fundlex-recall-first`（`bash tools/deploy/publish_workspace.sh`）后，在真实工作台走一遍「↓ 下载全部结果 ZIP / ↓ 下载结果总览 .md」确认线上结构与本地一致；`修改说明.md` 仍按用户选择保持**节选截断**（160/200 字），完整上下文引导读者看「（修改痕迹版）」。
-- 变更记录：2026-10-16 新增（用户四条要求 → 生成器 + 工作台两处实现）。
+  - **线上真实路径验证**（提交 `e235730` 发布后，走 `https`/本机 `127.0.0.1:8010` 密码登录 → `POST /api/tasks` → 上传 → seal → 真实 Worker+真实模型处理 → `GET /api/tasks/{id}/download/all`）：2 份真实合同任务 `completed`，交付统计 `{incomplete: 1, complete: 1}`；ZIP 641706 字节，**重复条目 0**，结构为 `结果总览.md` + `结果清单.csv` + `最终版（接受修订后）/<2 份合同>.docx` + `逐份修改说明/<合同>/{修改痕迹版.docx, report_md.md, report_json.json}`，与参考包一致；`结果总览.md` 逐份写明修改处数（17 / 18）与涉及条款。解压后最终版 DOCX 可正常打开（1338 / 1385 段），修订痕迹版含 `w:ins` 17/18 与对应 `w:del`，与总览所报处数一致。
+- 待办：`修改说明.md` 仍按用户选择保持**节选截断**（160/200 字），完整上下文引导读者看「（修改痕迹版）」；离线 `FundLex-合同修改结果-P6开发集-20261015` 旧包如需同步新结构，可用新生成器重跑。
+- 变更记录：2026-10-16 新增（用户四条要求 → 生成器 + 工作台两处实现）；同日完成发布与线上端到端验证。
 
 ## 后续条目模板
 
