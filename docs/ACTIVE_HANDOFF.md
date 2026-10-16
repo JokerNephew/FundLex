@@ -26,6 +26,23 @@
 > `FL-D069→FL-D075`（G17 跨段删除）、`FL-D066→FL-D076`（Codex bwrap）。
 > **注意**：本文下文第 5/6 轮的历史叙述写于更正之前，个别处仍写旧编号，含义以更正后为准；新增条目一律先查重再编号。
 
+## 当前断点（第 11 轮，2026-10-16，静态资源缓存失效修复，**已生产验证**）
+
+- **本轮任务**：用户反馈「我这里看着还是没变」——区块顺序调整已发布但页面仍旧版。
+- **根因（FL-D092）**：`index.html` 以**无版本号固定路径**引用 `/static/app.js`、`/static/app.css`，nginx 也不下发 `Cache-Control`，浏览器沿用旧缓存。HTTPS 实取字节 sha 与仓库/部署一致（`bc5ac9c7d044e90d`），证明**服务端早已是新代码**，问题在客户端缓存。
+- **修复（commit `64b0302`）**：`fundlex/api.py`
+  - `_asset_version("app.css","app.js")` 按资源内容 sha256 生成 16 位版本标识，**每次发布自动变化**。
+  - 入口 `/` 改为读 `index.html` 文本并注入 `?v=<hash>`，下发 `Cache-Control: no-store, must-revalidate`。
+  - 新增 HTTP 中间件：`/static/*` → `public, max-age=31536000, immutable`（URL 带哈希，安全长期缓存）；`/`、`/index.html` → `no-store`。
+- **验证证据**：
+  - `TestClient`：`/` 返回 `no-store` 且引用 `app.js?v=a751d9b7f43c2426`；`/static/app.js|app.css` 返回 `immutable`。
+  - 生产（nginx/`127.0.0.1:8010`）：首页含 `?v=a751d9b7f43c2426` + `no-store`；带版本静态资源 `immutable`。
+  - **真实浏览器（生产、真实登录）**：16 条修订、目录 24 条 + 24 链接、拒绝 1 + 接受 15 → 下载 `selected_final` 136235 字节、**残留修订 0**、**控制台错误 0**。
+  - 回归 `611 passed / 6 skipped`（排除既有基线失败 `test_rules_catalogue.py`）。
+  - 已 `bash tools/deploy/publish_workspace.sh` 发布，api/worker active。
+- **易错点**：若再遇「页面没变」，按「响应头 → URL 版本号 → HTTPS 实取字节 sha」三步先判定是客户端还是服务端，勿直接改代码或重发。
+- **下一动作**：无阻塞。用户如仍见旧版，请**硬刷新（Ctrl+Shift+R）**一次即可清掉历史缓存；此后发布自动带新版本号，不再需要手动清缓存。
+
 ## 当前断点（第 10 轮，2026-10-16，前端逐条审查修订 + HTML 呈现，**已完整端到端交付**）
 
 - **本轮任务**：用户选定 **A 服务端 HTML 方案**，要求：用户在结果页看到合同的 Word 呈现、**逐条勾选接受/拒绝修订**（与 Word 一致，任意组合自由）、据此生成**独立最终版产物**、支持一键接受全部；并指出 A 页**目录丢失**，要求排查是否还有其他丢失；指定全链路改造 + 进度管控 + 版本管理 + **完整端到端交付**，中途不得停下。

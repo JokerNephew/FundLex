@@ -1114,14 +1114,46 @@
 - 状态与验证：**已实施并验证**。同一开发集重评：**0.7892 → 0.8161**（223 目标，completed 176→182，`not_executed` 17→11），**无任何引擎改动**。反例核对：D09（确无政策句）仍为 `False`，未被误放；D19（原件已有 A/B/C 三类别）由误判纠正为 `True`，经查 p101/p130 确有该句，属真阳性。
 - 变更记录：2026-10-16 新增。
 
-## FL-D090 G01/G03/G16 append 目标在「直销渠道」措辞合同上被模型盘点判 not_applicable（FL-D060 的残留子集）
+## FL-D091 G01/G03/G16 append 目标在「直销渠道」措辞合同上被模型盘点判 not_applicable（FL-D060 的残留子集）（原编号 FL-D090，与他人条目冲突后改号）
 
 - 发现日期：2026-10-16（FL-D089 修复后，剩余 `not_executed` 全部落在此家族时定位）。
-- 问题与影响：修掉评分器误判后，开发集剩余 `not_executed` 11 例**全部是 append 规则**（G01×4、G03×4、G16×3，分布 D07/D09/D12/D13）。逐案例核对：
-  - **D07：真漏改**。原件 `…FOF基金合同_20221116.docx` 含「直销」2 次、但措辞为**「直销渠道」**（p231/p854），非模板的「直销机构」；含「基金份额类别」9 次、「销售服务费」4 次，**追加对象存在**。引擎 ledger 却记 `G01/G03/G16 = not_applicable`（`RECALL_RULE_NOT_APPLICABLE` / 「无销售服务费条款」），终稿确无该政策句。→ **模型盘点在措辞变体下漏判可适用性**，正对应 FL-D060 所述「完全依赖模型盘点、窗口覆盖不足即漏」。
-  - **D09/D13：属「原件已含相近义务」**（p212/p214、p224/p226 已有「通过直销机构申购本基金不收取申购费」），引擎判 `not_applicable`，与标注器 FL-D060 记录的「append 过标」同源，非引擎漏改，**不改冻结标签**。
-- 处理方法：**待实施**。方向（承 FL-D060）：① 盘点对 `appendix` 类规则增加**确定性适用性兜底**——当 `section_hint` 命中且原文无该义务政策句（含「直销渠道/直销机构」等措辞归一化）时，直接生成 append 目标，不再完全依赖模型判 `not_applicable`；② 归一化直销渠道措辞，避免变体导致漏判。需评估误加风险与跨样本出现率。
-- 状态与验证：**已定位、未修复**。证据：D07 原件词频与 ledger 对照、终稿无政策句；D09/D13 原件已有相近句。
+- 问题与影响：修掉评分器误判后，开发集剩余 `not_executed` 全部是 append 规则（G01/G03/G16）。逐案例核对，实为**三层叠加**缺陷：
+  - **① 措辞变体致盘点漏判**（D07）：原件 `…FOF基金合同_20221116.docx` 含「直销」2 次、措辞为**「直销渠道」**（p231/p854），非模板的「直销机构」；含「基金份额类别」9 次、「消费服务费」4 次，**追加对象存在**。引擎 ledger 却记 `not_applicable`（`RECALL_RULE_NOT_APPLICABLE` / 「无销售服务费条款」），终稿确无政策句。
+  - **② 缺 class group 时 append 被整体判不适用**（D07 二次确认）：盘点其实**已生成** `needs_edit` 目标（G01@p114、G03@p142，位置与指引条款一致），但 `plan_target` 阶段因 `slot_group_missing` 为真且规则带 `class_substitution` → 直接 `RECALL_RULE_NOT_APPLICABLE`；`_drop_empty_group_operations` 又把 append 整条丢弃，最终 0 个可执行操作。
+  - **③ 目标被 `absent`/未解析判定挡住**（D09/D13/D12）：pass 产出了正确 hit，但 `_survey_targets_from_hits` 的 `known` 集合含该规则既有的 `absent` 目标，hit 被静默跳过；D12 的 G03 是 `needs_edit` 但模型引文（"本基金 A 类份额、C 类份额分别设置代码…"）在原件中**不存在**，rebind 亦失败（`RECALL_TARGET_REBIND_FAILED`）。
+- 证据：`p6-dev-round3-01`/`round4-01`/`round5-01` 各案例 `report.json` 的 `plan.ledger`、`targets`、`survey`；D07 原件词频；各终稿实测段落。
+- 处理方法（**已实施**，承 FL-D060 方向①）：
+  1. **`recall.append_applicability_targets()`**（确定性 append 适用性兜底）：对条件为 `none` 的 append 规则，在 ①`section_hint` 命中章节、②该义务政策句全文缺失、③规则无**可执行**目标 时生成目标；锚点**优先用盘点已指向段落**，指向标题（`_looks_like_heading`）时回退章节末段。`SERVICE_GROUP_EMPTY` 不再跳过（append 本就无条件）。
+  2. **`plan_target` 的 class-substitution 门限收窄**：新增 `_needs_missing_class_group()`——可执行操作**全为 append** 时不算「缺组致不适用」；`_drop_empty_group_operations` 保留 append 操作；append 路径用新增 `_append_without_missing_group()` 只删掉点名缺失类别的分句并补正句末标点，其余政策句照常追加。
+  3. **`_survey_targets_from_hits(override_rules=…)`**：append pass 的命中规则进入 `override_rules`，不再被既有 `absent`/未解析目标压制；pass 的 `known` 只统计**已解析的 `needs_edit`** 目标。
+- 状态与验证：**已实施、已发布、真实批次逐步验证**。
+  - 评分器修复（FL-D089）：0.7892 → 0.8161。
+  - `round3`：0.8051（分母因新增目标变大）。
+  - `round4`（append 兜底 + class-group 收窄）：**0.8178**，`not_executed` 15→9；**D07 终稿 p114/p142 实测确含政策句**（A类、Y类变体，p142 追加到真实份额类别条款之后），G01/G03 由 `not_applicable` 变 `completed`。
+  - `round5`（absent/unresolved 覆盖 + 锚点修正）：**0.8333**（222 目标 / completed 185），`not_executed` **仅剩 8 例且全为 append**。
+  - `round6`（override_rules 修复 hit 被既有目标压制）：进行中。
+  - 回归：`tests/test_append_applicability.py` 12 项；全量 597 passed（排除在飞的 `test_selective.py`、缺源文件的 `test_rules_catalogue.py`）。
+- 下一步：视 `round6` 结果决定是否继续收敛 D09/D12/D13 残留；达标后冻结并跑留出 H01–H08。
+- 变更记录：2026-10-16 新增；同日 编号 FL-D090→FL-D091（与并行 agent 的 FL-D090 冲突），并补记 round3–round6 证据。
+
+## FL-D092 前端改动已部署但用户页面看到旧版（静态资源无缓存标识）
+
+- 发现日期：2026-10-16
+- 问题与影响：详情面板区块顺序调整已发布，用户浏览器仍显示旧版式，误判为「服务器没生效/改动丢失」。根因：`frontend/index.html` 以无版本号的固定路径 `<script src="/static/app.js">`、`<link href="/static/app.css">` 引用资源，且 nginx 未下发 `Cache-Control`，浏览器沿用本地缓存的旧 `app.js`/`app.css`。影响所有后续前端发布：改动虽已上线，用户端可能长期看不到，且容易被误判成功能未交付。
+- 证据：
+  - HTTPS 实取字节与仓库/部署副本 sha256 一致（`bc5ac9c7d044e90d`），证明**服务端已是新代码**，问题在客户端缓存。
+  - 修复前响应头无 `cache-control`，仅 `last-modified` + `etag`，静态资源 URL 无版本号。
+- 处理方法：在 `fundlex/api.py` 的 `create_app` 中：
+  - 新增 `_asset_version("app.css","app.js")`，按资源内容 sha256 生成 16 位版本标识，**每次发布自动变化**。
+  - 入口 `/` 由 `FileResponse` 改为读取 `index.html` 文本并注入 `?v=<hash>` 后再返回，并下发 `Cache-Control: no-store, must-revalidate`。
+  - 新增 HTTP 中间件：`/static/*` 下发 `public, max-age=31536000, immutable`（URL 带内容哈希，安全长期缓存）；`/`、`/index.html` 下发 `no-store`。
+- 状态与验证：**已验证（生产）**。
+  - 单元/接口：`TestClient` 校验 `/` 返回 `Cache-Control: no-store, must-revalidate` 且引用为 `app.css?v=a751d9b7f43c2426`、`app.js?v=a751d9b7f43c2426`；`/static/app.js|app.css` 返回 `public, max-age=31536000, immutable`。
+  - 生产（`127.0.0.1:8010`/nginx）：首页实取含 `?v=a751d9b7f43c2426`、`no-store`；带版本号静态资源 `immutable`。
+  - 真实浏览器（生产端点、真实登录）：16 条修订、目录 24 条 + 24 条链接、拒绝 1 条 + 接受 15 条 → 下载 `selected_final` 136235 字节、**残留修订 0**、**控制台错误 0**。
+  - 全量回归 `611 passed / 6 skipped`（排除既有基线失败的 `test_rules_catalogue.py`）。
+  - 提交 `64b0302`，已 `bash tools/deploy/publish_workspace.sh` 发布（api/worker active）。
+- 后续：如后续仍出现页面未更新，先按「响应头 + URL 版本号 + 实取字节 sha」三步核对，再排查客户端。
 - 变更记录：2026-10-16 新增。
 
 ## 后续条目模板
