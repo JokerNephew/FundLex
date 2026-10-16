@@ -149,6 +149,26 @@ def test_results_four_dimensions_filtering_paging_and_summary(client):
     assert "RELEASE_GATE_CLOSED" in report and "'failed': 4" in report
 
 
+def test_retired_engine_task_row_is_flagged_legacy(client):
+    # Production history keeps first-class task rows written by the retired
+    # ruleset engine (engine_id=''). They must be flagged read-only, otherwise
+    # the UI would offer controls the runtime no longer honours.
+    store = client.app.state.store
+    seeded = store.create_batch(owner="alice", ruleset_version="v2", ruleset_sha256="0" * 64,
+                                uploads=[("retired.docx", package())])
+    with store._connect() as db:
+        db.execute("""INSERT INTO tasks(id,owner,name,ruleset_version,ruleset_sha256,engine_id,
+            guide_version_id,guide_rules_sha256,idempotency_key,request_hash,created_at,updated_at)
+            VALUES(?,?,?,?,?,?,?,?,?,?,?,?)""",
+                   ("retired-task-1", "alice", "历史任务", "v2", "0" * 64, "", "", "",
+                    None, "hash", 1.0, 1.0))
+        db.execute("""INSERT INTO task_batches VALUES(?,?)""",
+                   ("retired-task-1", seeded["id"]))
+    detail = client.get("/api/tasks/retired-task-1", headers=ALICE).json()
+    assert detail["legacy"] is True
+    assert detail["engine_id"] == "" and detail["ruleset_version"] == "v2"
+
+
 def test_identity_isolation_capabilities_and_historical_mapping(client, monkeypatch):
     data, files = package(), manifest(1, package())
     task = create(client, files).json()["id"]
@@ -178,6 +198,8 @@ def test_identity_isolation_capabilities_and_historical_mapping(client, monkeypa
     assert client.post(f"/api/tasks/{legacy}/seal", headers=ALICE).status_code == 409
     assert upload(client, legacy, files, data).status_code == 409
     assert client.get(f"/api/tasks/{legacy}/documents", headers=BOB).status_code == 404
+    # Legacy history is flagged for the read-only UI.
+    assert client.get(f"/api/tasks/{legacy}", headers=ALICE).json()["legacy"] is True
     assert client.get("/api/tasks", headers=ALICE).json()["total"] == 2
     monkeypatch.setenv("FUNDLEX_AUTH_MODE", "production")
     assert client.get("/api/capabilities", headers=ALICE).status_code == 503

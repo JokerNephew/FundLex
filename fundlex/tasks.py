@@ -12,6 +12,7 @@ import uuid
 from collections import Counter
 from datetime import datetime, timezone
 
+from .recall import ENGINE_ID as RECALL_ENGINE_ID
 from .store import Conflict, NotFound, RunStore, SCHEMA_VERSION, engine_build
 
 
@@ -150,6 +151,10 @@ class TaskStore:
         processing = sum(d["job_status"] in {"leased", "running"} for d in docs)
         status = "completed" if uploaded == total and completed == total else ("paused" if row["paused"] else
                   "running" if processing else "queued" if uploaded > completed else "uploading")
+        # A task is legacy once it was produced by a retired engine. The runtime
+        # serves the guide-bound engine only, so anything else is read-only
+        # history even when it still has a first-class task row.
+        legacy = legacy or (row["engine_id"] or "") != RECALL_ENGINE_ID
         return {"id": row["id"], "name": row["name"], "legacy": legacy, "ruleset_version": row["ruleset_version"],
                 "ruleset_sha256": row["ruleset_sha256"], "status": status,
                 "engine_id": row["engine_id"],
