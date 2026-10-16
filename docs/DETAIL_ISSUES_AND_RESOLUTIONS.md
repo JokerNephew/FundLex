@@ -1165,19 +1165,31 @@
   - 生产 `/api/capabilities`：`auto_write_enabled=False`、`auto_write_count=0`、`ruleset_version='v1'`、`revision_ruleset_version='v2'`、`revision_mode='evaluation'`。
   - 生产任务分布：`engine_id='recall_first'` 212 个 vs `engine_id=''` 1 个；UI 永远传 `engine_id='recall_first'`（`app.js:137`），capabilities 的 `engine_id` 写死（`api.py:572`）。
 - 处理方法：A/B 运行时下线（见 `docs/LEGACY_RULESET_RETIREMENT.md`）。发布门随 B 下线；「可直接使用」改按任务实际引擎路径判断，`usable` 去除所有 ruleset 字段。
-- 状态与验证：**方案已确认，实施中**（产品负责人 2026-10-16 选定：发布门随 B 下线，交付语义由指引版本状态决定）。
-- 下一步：按方案 P1–P8 实施并在生产做真实端到端验收。
-- 变更记录：2026-10-16 新增。
+- 状态与验证：**已实施并已验证**（2026-10-16）。生产 `GET /api/capabilities` 只返回 engine 契约；完整交付任务下真实浏览器「可直接使用」=「已通过交付校验」，最终版 DOCX 按钮可见，0 console error。前端 `usable` 已完全去除 ruleset 字段。
+- 下一步：无（已完成）。
+- 变更记录：2026-10-16 新增；同日方案确认并实施，生产端到端验证通过。
 
 ## FL-D094 A 规则集空壳载体拖垮 recall-first 建任务（无功能作用却可致 503）
 
 - 发现日期：2026-10-16
 - 问题与影响：建立 recall-first 任务时，`api.py:767` 执行 `carrier = load_ruleset("v1")`，仅为满足 `tasks.ruleset_version NOT NULL` 而加载遗留 A 规则集。该字段对 recall-first **没有任何业务作用**（真正生效的是 `guide_version_id` + `guide_rules_sha256`），但**若 A 加载失败（文件损坏、校验不通过、路径缺失），建任务直接 503，连带拖垮健康的 recall-first 路径**。生产 212 个 recall-first 任务全部携带这一无用的 `ruleset_version='v1'` 空壳值。
 - 证据：`api.py:764-773`；`tasks.py:25`（`ruleset_version TEXT NOT NULL`）、`:57-79`；生产任务分布实测（`ruleset_version`：`v1` 212 / `v2` 1）。
-- 处理方法：从建任务路径移除 A carrier 依赖；recall-first 任务写入固定占位而非 A 版本；保留列以兼容历史行。
-- 状态与验证：**待实施**（纳入 `docs/LEGACY_RULESET_RETIREMENT.md` P2/P4）。
-- 下一步：实施后新增回归测试（monkeypatch 令 `load_ruleset` 抛错，验证 recall-first 建任务仍成功）。
-- 变更记录：2026-10-16 新增。
+- 处理方法：从建任务路径移除 A carrier 依赖；recall-first 任务写入空 `ruleset_version`/`ruleset_sha256`；保留列以兼容历史行。`tasks.create` 改为接受指引版本或 carrier（`_source_field` 兼容两者），运行时不再加载任何遗留规则集。
+- 状态与验证：**已实施并已验证**（2026-10-16）。新增回归：monkeypatch 令 `load_ruleset`/`load_ruleset_v2` 抛错，recall-first 建任务仍返回 201；生产新任务实测 `ruleset_version=''`、`ruleset_sha256=''`。
+- 下一步：无（已完成）。
+- 变更记录：2026-10-16 新增；同日实施并通过回归与生产验证。
+
+## FL-D095 遗留引擎任务行未标记 legacy，只读标注失效且仍暴露可操作入口
+
+- 发现日期：2026-10-16
+- 问题与影响：生产存在由已下线规则集引擎写入的**一等任务行**（`tasks.engine_id=''`、`ruleset_version='v2'`，如 `efce8a8eacf7491a844d838970c2158f`）。前端按 `state.task.legacy` 决定是否显示「遗留任务 · 只读」横幅，但 `legacy` 仅在 `task_id` 形如 `legacy-<batch_id>` 的合成镜像任务上为 `true`；这类真实任务行恒为 `false`。后果：列表芯片已显示「遗留任务 · 规则 v2」，详情页却不给只读提示；且 `recover-btn` 等入口仍按普通任务渲染（仅靠服务端 409 拦截），用户看到可点但会被拒。
+- 证据：
+  - `fundlex/tasks.py` `_summary(..., legacy=False)` 原实现只在 `_legacy()` 调用时传 `legacy=True`；`_snapshot()`（正常任务行）恒用默认值。
+  - 生产实测：`GET /api/tasks/efce8a8eacf7491a844d838970c2158f` → `legacy: false`、`engine_id: ''`、`ruleset_version: 'v2'`；真实浏览器任务芯片显示「遗留任务 · 规则 v2」而详情无只读标注。
+- 处理方法：`legacy` 改按引擎判定——`engine_id` 不等于当前引擎（`recall_first`）即为历史任务，与合成镜像任务的 `legacy=True` 取或。`RECALL_ENGINE_ID` 从 `fundlex/recall.py` 的 `ENGINE_ID` 复用，避免 `tasks.py` 反向导入 `api.py` 形成循环。
+- 状态与验证：**已实施并已验证**（2026-10-16，提交 `012ba18`）。新增回归 `test_retired_engine_task_row_is_flagged_legacy`（植入带文档的遗留引擎任务行，断言 `legacy is True`）；`test_identity_isolation_capabilities_and_historical_mapping` 补充断言。真实浏览器（本地隔离实例，不污染生产）确认：`legacy: True`、详情页出现「遗留任务 · 只读」与「不能补传」、芯片「遗留任务 · 规则 v2」、0 console error。生产同型号任务（0 文档）芯片已正确显示遗留标注。
+- 下一步：无（已完成）。
+- 变更记录：2026-10-16 新增；同日实施并通过回归与真实浏览器验证。
 
 ## 后续条目模板
 

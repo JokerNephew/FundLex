@@ -1,6 +1,6 @@
 # A/B 遗留规则集运行时下线改造方案（LEGACY_RULESET_RETIREMENT）
 
-- 状态：**方案已确认，实施中**（产品负责人 2026-10-16 决定：A/B 运行时下线，发布门随 B 一起下线，交付语义改由指引版本状态决定）
+- 状态：**已实施并完成生产端到端验收**（产品负责人 2026-10-16 决定：A/B 运行时下线，发布门随 B 一起下线，交付语义改由指引版本状态决定）
 - 关联问题：FL-D092（静态资源缓存，已修）、FL-D093（前端用 ruleset 标志判断全局可用性）、FL-D094（A 空壳载体会拖垮 recall-first 建任务）
 - 关联文档：`docs/DETAIL_ISSUES_AND_RESOLUTIONS.md`、`docs/ACTIVE_HANDOFF.md`、`docs/HTML_PRESENTATION_PLAN.md`
 
@@ -179,16 +179,53 @@ batches：completed 215 / running 1
 
 ---
 
-## 7. 进度台账
+## 7. 进度台账（全部完成）
 
-| 阶段 | 状态 |
+| 阶段 | 状态 | 提交 | 验证 |
+|---|---|---|---|
+| P0 方案文档 + 问题登记 | ✅ | `5615609` | FL-D093/FL-D094 已登记 |
+| P1 能力接口收敛 | ✅ | `beee73e` | `test_guide_api`/`test_tasks_api`/`test_v2_workbench` 断言 engine 契约 |
+| P2 建任务路径收敛 | ✅ | `beee73e` | `RULESET_RETIRED` 契约测试；FL-D094 monkeypatch 回归 |
+| P3 处理器分流收敛 | ✅ | `beee73e` | `_default_processor` 拒绝遗留引擎；离线 runner 走自注入 processor |
+| P4 任务表字段解耦 | ✅ | `beee73e` | recall-first 任务 `ruleset_version=''`（生产实测） |
+| P5 前端改造 | ✅ | `beee73e` | 真实浏览器：能力面板、`usable`、下载区 |
+| P6 遗留任务标注 | ✅ | `93196d9`、`012ba18` | 真实浏览器：只读横幅 + 芯片一致 |
+| P7 文档收尾 | ✅ | 本次 | 台账 + 集中问题记录更新 |
+| P8 发布与端到端验收 | ✅ | 部署 | 见 §8 |
+
+## 8. 验收证据（真实端到端）
+
+### 8.1 单元/集成
+
+- 全量：**615 passed / 6 skipped**（排除既有基线失败 `tests/test_rules_catalogue.py::test_source_provenance_and_reproducible_compilation`，缺参考文件，与本工作无关）。
+- 新增回归：
+  - FL-D094：`load_ruleset`/`load_ruleset_v2` 被 monkeypatch 抛错时，recall-first 建任务仍 201；
+  - 遗留引擎任务行必须 `legacy=True`。
+
+### 8.2 生产能力接口
+
+```
+GET /api/capabilities
+keys = [auth_mode, engine, login_required, registration_open, task_api, upload_limits]
+engine = {id: recall_first, rule_source: guide, guide: {version_id: builtin-v1, status: released,
+          groups: 22, ...}, delivery_mode: formal, auto_write_enabled: true, actions_total: 22}
+```
+
+遗留平铺字段（`ruleset_version`/`actions_total`/`auto_write_enabled`/`engine_id`/`guide`/`revision_*`）**全部不再出现**。
+
+### 8.3 生产真实任务（默认入口 `POST /api/tasks` + `engine_id=recall_first`）
+
+| 项 | 结果 |
 |---|---|
-| P0 方案文档 + 问题登记 | ✅ |
-| P1 能力接口收敛 | ⬜ |
-| P2 建任务路径收敛 | ⬜ |
-| P3 处理器分流收敛 | ⬜ |
-| P4 任务表字段解耦 | ⬜ |
-| P5 前端改造 | ⬜ |
-| P6 遗留任务标注 | ⬜ |
-| P7 文档收尾 | ⬜ |
-| P8 发布与端到端验收 | ⬜ |
+| 建任务 | 201；`engine_id=recall_first`、`legacy=false`、`ruleset_version=''`、`guide_snapshot={builtin-v1, 3932d4ca…}` |
+| 真实 Worker + 真实模型 | `succeeded`，`delivery_status=complete` |
+| 交付产物 | `final`、`redline`、`report_json`、`report_md` 全部可下载 |
+| 逐条审查 | 18 条修订，全部映射；HTML 含目录（sdt）+24 超链接 |
+| 逐条决策 | 拒绝 1 + 接受 17 → 200；下载 `selected_final` 136275 字节 |
+| 一键接受全部 | 200；下载 136192 字节 |
+| 产物校验 | 0 条残留 `w:ins`/`w:del`；目录 sdt 保留；23 个 PAGEREF；1338 顶层段落 |
+| 浏览器 | 0 console error；「可直接使用」=「已通过交付校验」；最终版 DOCX 按钮可见 |
+| 遗留任务 | `legacy=true`（`engine_id=''`）；真实浏览器显示「遗留任务 · 只读」 |
+| member 账号 | 能力接口只含 engine 契约；遗留提交 422；遗留批次 410 |
+| 部署一致性 | `fundlex/`+`frontend/`+`tools/deploy/` 60 个文件 sha256 与仓库一致 |
+
