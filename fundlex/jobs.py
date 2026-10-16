@@ -62,20 +62,18 @@ def _document_trace(job: dict[str, Any], store: RunStore) -> Iterator[None]:
 def _default_processor(input_path: Path, output_dir: Path, ruleset_version: str, *, engine_id: str = "",
                        guide_version_id: str = "", guide_document: dict[str, Any] | None = None,
                        checkpoint_dir: Path | None = None, gateway: Any = None) -> dict[str, Any]:
-    if engine_id == "recall_first":
-        # The recall-first engine consumes the bound guide snapshot, never a
-        # ruleset file; an unbound call is a caller bug and fails inside the
-        # pipeline with its own error report.
-        from .recall_pipeline import process_recall_first
-        return process_recall_first(input_path, output_dir, guide_document=guide_document, gateway=gateway,
-                                    checkpoint_dir=checkpoint_dir)
-    if ruleset_version == "v2":
-        # v2 follows the rule package state: unreleased -> evaluation artifacts,
-        # released -> formal delivery artifacts (gates are validated on load).
-        from .v2_pipeline import process_v2
-        return process_v2(input_path, output_dir, ruleset_version)
-    from .pipeline import process
-    return process(input_path, output_dir, ruleset_version, checkpoint_dir=checkpoint_dir)
+    # The runtime serves exactly one engine: the guide-bound recall-first
+    # pipeline. The retired rulesets are no longer reachable from the worker, so
+    # an unbound or legacy job fails closed instead of silently running the old
+    # ruleset-only path. Their offline runners import the pipelines directly.
+    if engine_id != "recall_first":
+        raise ValueError("ENGINE_RETIRED")
+    # The recall-first engine consumes the bound guide snapshot, never a ruleset
+    # file; an unbound call is a caller bug and fails inside the pipeline with
+    # its own error report.
+    from .recall_pipeline import process_recall_first
+    return process_recall_first(input_path, output_dir, guide_document=guide_document, gateway=gateway,
+                                checkpoint_dir=checkpoint_dir)
 
 
 class Worker:
@@ -158,18 +156,13 @@ class Worker:
             try:
                 if not source.is_file() or source.stat().st_size != job["source_size"] or sha256_file(source) != job["source_sha256"]:
                     raise ValueError("INPUT_INTEGRITY_FAILED")
-                if job.get("ruleset_sha256"):
-                    from .rules import RuleError, load_ruleset
-                    from .rules_v2 import RuleV2Error, load_ruleset_v2
-                    try:
-                        current_ruleset_sha = load_ruleset(job["ruleset_version"]).sha256
-                    except RuleError:
-                        try:
-                            current_ruleset_sha = load_ruleset_v2(job["ruleset_version"]).sha256
-                        except RuleV2Error as exc:
-                            raise ValueError("RULESET_NOT_FOUND") from exc
-                    if current_ruleset_sha != job["ruleset_sha256"]:
-                        raise ValueError("RULESET_HASH_MISMATCH")
+                if (self.processor is _default_processor and job.get("engine_id") != "recall_first"
+                        and job.get("ruleset_sha256")):
+                    # The runtime worker serves the guide-bound engine only. A
+                    # legacy job that still names a retired ruleset fails closed
+                    # rather than silently running against a different package.
+                    # Offline runners inject their own processor and are exempt.
+                    raise ValueError("RULESET_RETIRED")
                 if job.get("engine_build") and (job["engine_build"] != engine_build() or job["schema_version"] != SCHEMA_VERSION):
                     raise ValueError("ENGINE_SCHEMA_MISMATCH")
                 guide_document = self._bound_guide_document(job)
@@ -253,7 +246,7 @@ class Worker:
                 if isinstance(exc, (OSError, sqlite3.OperationalError, DatabaseError)) or getattr(exc, "code", "") in RETRYABLE_MODEL_CODES:
                     self.store.retry(doc_id, token, error_code=getattr(exc, "code", "TEMPORARY_STORAGE_FAILURE"))
                     return True
-                code = str(exc) if str(exc) in {"INPUT_INTEGRITY_FAILED", "RULESET_HASH_MISMATCH",
+                code = str(exc) if str(exc) in {"INPUT_INTEGRITY_FAILED", "RULESET_HASH_MISMATCH", "RULESET_RETIRED",
                                                   "INVALID_PIPELINE_REPORT", "ENGINE_SCHEMA_MISMATCH", "RESULT_SIZE_LIMIT",
                                                   "MISSING_VERIFIED_ARTIFACTS", "ARTIFACT_VERIFICATION_MISMATCH",
                                                   "GUIDE_VERSION_MISSING", "GUIDE_RULESET_HASH_MISMATCH"} else "PROCESSING_FAILED"

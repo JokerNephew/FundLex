@@ -55,9 +55,9 @@ class ManifestFile(BaseModel):
 class TaskSubmission(BaseModel):
     model_config = ConfigDict(extra="forbid")
     name: str = Field(min_length=1, max_length=200)
-    # Legacy submissions name a ruleset; new submissions name the recall engine
-    # and let the server bind the owner's current guide snapshot. Exactly one of
-    # the two paths is accepted per request.
+    # New submissions name the recall engine and let the server bind the owner's
+    # current guide snapshot. The legacy ``ruleset_version`` path was retired from
+    # the runtime and is rejected with RULESET_RETIRED.
     ruleset_version: str | None = Field(default=None, min_length=1, max_length=128)
     engine_id: str | None = Field(default=None, min_length=1, max_length=64)
     guide_version_id: str | None = Field(default=None, min_length=1, max_length=128)
@@ -533,26 +533,9 @@ def create_app(data_dir: str | Path | None = None, *, auth_db=None) -> FastAPI:
             # Minimal pre-login payload: no ruleset or identity metadata leaks.
             return {"auth_mode": mode, "login_required": True, "task_api": True,
                     "registration_open": _registration_open()}
-        from .rules import RuleError, load_ruleset
-        from .rules_v2 import RuleV2Error, load_ruleset_v2
-        try:
-            rule = load_ruleset("v1")
-        except RuleError as exc:
-            raise HTTPException(503, str(exc)) from exc
-        revision: dict = {"revision_ruleset_version": None, "revision_ruleset_sha256": None,
-                          "revision_actions_total": 0, "revision_auto_write_enabled": False,
-                          "revision_mode": None, "revision_action_labels": {}}
-        try:
-            revision_rule = load_ruleset_v2("v2")
-            revision = {"revision_ruleset_version": revision_rule.version,
-                        "revision_ruleset_sha256": revision_rule.sha256,
-                        "revision_actions_total": len(revision_rule.actions),
-                        "revision_auto_write_enabled": revision_rule.auto_write_enabled,
-                        "revision_mode": "delivery" if revision_rule.auto_write_enabled else "evaluation",
-                        "revision_action_labels": {a["action_id"]: a.get("description", "")
-                                                   for a in revision_rule.actions}}
-        except RuleV2Error:
-            pass
+        # The runtime has a single rule source: the bound guide snapshot. The
+        # legacy rulesets no longer participate, so capabilities must not load
+        # or expose them (a broken legacy file must not break the engine).
         try:
             current = guide_store.current_guide(store, identity["id"])
             guide = {"version_id": current["id"], "built_in": bool(current["built_in"]),
@@ -561,16 +544,20 @@ def create_app(data_dir: str | Path | None = None, *, auth_db=None) -> FastAPI:
         except (KeyError, OSError, ValueError, StoreError):
             # A broken guide installation must not hide the rest of capabilities.
             guide = None
+        enabled = bool(guide) and guide.get("status") in {"parsed", "released"}
+        engine = {
+            "id": RECALL_ENGINE_ID,
+            "rule_source": "guide",
+            "guide": guide,
+            "delivery_mode": "formal" if enabled else "unavailable",
+            "auto_write_enabled": enabled,
+            "actions_total": int(guide.get("groups") or 0) if guide else 0,
+        }
         return {"auth_mode": mode, "login_required": mode == "password", "task_api": True,
                 "registration_open": _registration_open(),
-                "ruleset_version": rule.version, "ruleset_sha256": rule.sha256,
-                "actions_total": len(rule.actions), "auto_write_enabled": rule.auto_write_enabled,
-                "auto_write_count": sum(bool(a["auto_write"]) for a in rule.actions),
-                "action_labels": {a["action_id"]: a.get("description", "") for a in rule.actions},
                 "upload_limits": {"max_file_bytes": MAX_UPLOAD_BYTES, "max_request_files": MAX_BATCH_DOCUMENTS,
                                   "max_request_bytes": MAX_BATCH_BYTES},
-                "engine_id": RECALL_ENGINE_ID, "guide": guide,
-                **revision}
+                "engine": engine}
 
     @application.post("/api/auth/login")
     def auth_login(payload: LoginRequest, request: Request):
@@ -751,36 +738,23 @@ def create_app(data_dir: str | Path | None = None, *, auth_db=None) -> FastAPI:
     def create_task(payload: TaskSubmission,
                     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
                     user: str = Depends(_user)):
-        from .rules import RuleError, load_ruleset
-        from .rules_v2 import RuleV2Error, load_ruleset_v2
         if idempotency_key is not None and (not idempotency_key.strip() or len(idempotency_key) > 128):
             raise HTTPException(422, "invalid idempotency key")
         engine = (payload.engine_id or "").strip()
         ruleset_version = (payload.ruleset_version or "").strip()
-        if engine and ruleset_version:
-            raise HTTPException(422, "ENGINE_CONFLICT")
-        if not engine and not ruleset_version:
-            raise HTTPException(422, "ENGINE_OR_RULESET_REQUIRED")
-        if engine == RECALL_ENGINE_ID:
-            version = bound_guide_version(user, payload.guide_version_id)
-            try:
-                carrier = load_ruleset("v1")
-            except RuleError as exc:
-                raise HTTPException(503, str(exc)) from exc
-            return task_call(tasks.create, user, payload.name, carrier,
-                             [f.model_dump() for f in payload.files], idempotency_key,
-                             engine_id=RECALL_ENGINE_ID, guide_version_id=version["id"],
-                             guide_rules_sha256=version["rules_sha256"])
-        if engine:
+        if ruleset_version:
+            # The legacy rulesets were retired from the runtime; the guide-bound
+            # engine is the only way to create a task now.
+            raise HTTPException(422, "RULESET_RETIRED")
+        if not engine:
+            raise HTTPException(422, "ENGINE_REQUIRED")
+        if engine != RECALL_ENGINE_ID:
             raise HTTPException(422, "ENGINE_UNSUPPORTED")
-        try:
-            rule = load_ruleset(ruleset_version)
-        except RuleError:
-            try:
-                rule = load_ruleset_v2(ruleset_version)
-            except RuleV2Error as exc:
-                raise HTTPException(422, str(exc)) from exc
-        return task_call(tasks.create, user, payload.name, rule, [f.model_dump() for f in payload.files], idempotency_key)
+        version = bound_guide_version(user, payload.guide_version_id)
+        return task_call(tasks.create, user, payload.name, version,
+                         [f.model_dump() for f in payload.files], idempotency_key,
+                         engine_id=RECALL_ENGINE_ID, guide_version_id=version["id"],
+                         guide_rules_sha256=version["rules_sha256"])
 
     @application.get("/api/tasks")
     def list_tasks(q: str = "", status: str | None = None, sort: str = "newest",
@@ -926,39 +900,10 @@ def create_app(data_dir: str | Path | None = None, *, auth_db=None) -> FastAPI:
     async def submit_batch(files: list[UploadFile] = File(...), ruleset_version: str = Form(...),
                            idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
                            user: str = Depends(_user)):
-        if not ruleset_version.strip() or len(ruleset_version) > 128:
-            raise HTTPException(422, "invalid ruleset version")
-        from .rules import RuleError, load_ruleset
-        from .rules_v2 import RuleV2Error, load_ruleset_v2
-        try:
-            ruleset = load_ruleset(ruleset_version.strip())
-        except RuleError:
-            try:
-                # v2 exists for evaluation-mode batches only; the loader refuses
-                # any package that claims auto-write.
-                ruleset = load_ruleset_v2(ruleset_version.strip())
-            except RuleV2Error as exc:
-                raise HTTPException(422, str(exc)) from exc
-        if len(files) > MAX_BATCH_DOCUMENTS:
-            raise HTTPException(413, "batch document count limit exceeded")
-        if idempotency_key and len(idempotency_key) > 128:
-            raise HTTPException(422, "idempotency key too long")
-        uploads = []
-        total_bytes = 0
-        for upload in files:
-            data = await upload.read(MAX_UPLOAD_BYTES + 1)
-            total_bytes += len(data)
-            if total_bytes > MAX_BATCH_BYTES:
-                raise HTTPException(413, "batch upload size limit exceeded")
-            name = _validate_upload(upload.filename or "", data)
-            uploads.append((name, data))
-        try:
-            result = store.create_batch(owner=user, ruleset_version=ruleset_version.strip(),
-                                        ruleset_sha256=ruleset.sha256,
-                                        uploads=uploads, idempotency_key=idempotency_key)
-        except Conflict as exc:
-            raise HTTPException(409, str(exc)) from exc
-        return _public_batch(result, detail=True, metrics=_recall_metrics(store, result["documents"], "id"))
+        # The legacy rulesets are retired from the runtime; batches created here
+        # used to run the ruleset-only path and produced no guide-bound edits.
+        # Existing batches stay readable, but no new ones can be created.
+        raise HTTPException(410, "RULESET_RETIRED")
 
     @application.get("/api/batches/{batch_id}")
     def get_batch(batch_id: str, user: str = Depends(_user)):

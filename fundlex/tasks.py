@@ -15,6 +15,20 @@ from datetime import datetime, timezone
 from .store import Conflict, NotFound, RunStore, SCHEMA_VERSION, engine_build
 
 
+def _source_field(source, name: str) -> str:
+    """Read a rule-source identifier from either a mapping or an object.
+
+    The recall-first engine binds a guide version (a dict); the retired rulesets
+    exposed ``version``/``sha256`` attributes. Accepting both keeps the legacy
+    offline runners working while the runtime uses the guide binding only.
+    """
+    if isinstance(source, dict):
+        value = source.get(name)
+    else:
+        value = getattr(source, name, None)
+    return str(value or "")
+
+
 class TaskStore:
     def __init__(self, store: RunStore):
         self.store = store
@@ -53,10 +67,18 @@ class TaskStore:
             raise NotFound("task not found")
         return row
 
-    def create(self, owner, name, ruleset, files, idempotency_key=None,
+    def create(self, owner, name, source, files, idempotency_key=None,
                engine_id="", guide_version_id="", guide_rules_sha256=""):
+        """Create a task bound to a rule source.
+
+        ``source`` is the bound guide version for the recall-first engine; the
+        retired rulesets provide a ``version``/``sha256`` pair instead. Either
+        way the binding is part of the request fingerprint.
+        """
         binding = [engine_id, guide_version_id, guide_rules_sha256]
-        payload = [name, ruleset.version, ruleset.sha256, files]
+        source_version = _source_field(source, "version")
+        source_sha256 = _source_field(source, "sha256")
+        payload = [name, source_version, source_sha256, files]
         if any(binding):
             # Legacy requests keep their previous fingerprint; a bound engine is
             # part of the identity of a new-style task.
@@ -75,7 +97,7 @@ class TaskStore:
             db.execute("""INSERT INTO tasks(id,owner,name,ruleset_version,ruleset_sha256,engine_id,
                 guide_version_id,guide_rules_sha256,idempotency_key,request_hash,created_at,updated_at)
                 VALUES(?,?,?,?,?,?,?,?,?,?,?,?)""",
-                       (task_id, owner, name, ruleset.version, ruleset.sha256, engine_id,
+                       (task_id, owner, name, source_version, source_sha256, engine_id,
                         guide_version_id, guide_rules_sha256, idempotency_key, fingerprint, now, now))
             db.executemany("INSERT INTO task_files(task_id,client_id,ordinal,name,size) VALUES(?,?,?,?,?)",
                            [(task_id, item["client_id"], i, item["name"], item["size"]) for i, item in enumerate(files)])

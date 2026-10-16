@@ -60,9 +60,10 @@ try:
         caps = client.get("/api/capabilities", headers=headers)
         results["capabilities"] = caps.status_code
         caps_json = caps.json()
-        results["engine_id"] = caps_json.get("engine_id")
-        results["guide"] = (caps_json.get("guide") or {}).get("version_id")
-        results["guide_status"] = (caps_json.get("guide") or {}).get("status")
+        engine = caps_json.get("engine") or {}
+        results["engine_id"] = engine.get("id")
+        results["guide"] = (engine.get("guide") or {}).get("version_id")
+        results["guide_status"] = (engine.get("guide") or {}).get("status")
         guides = client.get("/api/guides", headers=headers)
         results["guides"] = guides.status_code
         results["guide_count"] = len(guides.json().get("items") or [])
