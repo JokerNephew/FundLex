@@ -62,6 +62,12 @@ def main() -> int:
         login = client.post("/api/auth/login", json={"username": username, "password": password})
         headers = {"Authorization": "Bearer " + login.json()["token"]}
 
+        # A republish while the batch is in flight changes ``engine_build()``; the queued
+        # jobs then fail closed with ENGINE_SCHEMA_MISMATCH and the run is no longer a
+        # single-engine comparison (FL-D096). The per-case error code below is the signal:
+        # abort loudly instead of scoring a mixture of engine revisions.
+        print("BATCH_START", args.run_id, args.group)
+
         for case in cases:
             contract = words_root / case["file"]
             payload = contract.read_bytes()
@@ -152,6 +158,15 @@ def main() -> int:
                   "unresolved=", len(entry.get("unresolved") or []),
                   "cost=", (entry.get("model") or {}).get("estimated_cost_usd"),
                   flush=True)
+            if entry.get("error_code") == "ENGINE_SCHEMA_MISMATCH":
+                # A republish changed engine_build() while the batch was queued. The
+                # remaining cases would run under a different engine revision, so the run
+                # is not a single-engine comparison and must not be scored (FL-D096).
+                batch["aborted"] = "ENGINE_SCHEMA_MISMATCH"
+                batch["aborted_at"] = case["case_id"]
+                print("BATCH_ABORTED ENGINE_SCHEMA_MISMATCH at", case["case_id"],
+                      "- republished mid-run; discard this run", flush=True)
+                break
 
     batch["results"] = results
     (run_dir / "batch.json").write_text(json.dumps(batch, ensure_ascii=False, indent=1),
