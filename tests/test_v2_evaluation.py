@@ -107,9 +107,11 @@ class EvaluationGateway:
 ANCHOR_SENTENCE = DEFINITION[DEFINITION.index("在投资者申购 J"):]
 
 
-def submit(client: TestClient, data: bytes, ruleset: str = "v2"):
-    return client.post("/api/batches", headers={"X-FundLex-User": OWNER},
-                       data={"ruleset_version": ruleset}, files=[("files", ("fixture.docx", data))])
+def submit(client: TestClient, data: bytes, ruleset: str = "v2", *, sha256: str = "0" * 64):
+    """Seed a retired-ruleset batch directly; the HTTP route is gone."""
+    return client.app.state.store.create_batch(
+        owner=OWNER, ruleset_version=ruleset, ruleset_sha256=sha256,
+        uploads=[("fixture.docx", data)])
 
 
 def test_evaluation_artifacts_persist_and_download_only_in_evaluation_mode(tmp_path):
@@ -117,9 +119,8 @@ def test_evaluation_artifacts_persist_and_download_only_in_evaluation_mode(tmp_p
     app = create_app(tmp_path / "state")
     client = TestClient(app)
     headers = {"X-FundLex-User": OWNER}
-    response = submit(client, source.read_bytes())
-    assert response.status_code == 201, response.text
-    batch_id = response.json()["id"]
+    batch = submit(client, source.read_bytes())
+    batch_id = batch["id"]
     gateway = EvaluationGateway()
     worker = Worker(app.state.store, lambda src, out, version: process_v2(src, out, version, gateway, evaluation=True))
     assert worker.run_once()
@@ -180,9 +181,8 @@ def test_delivery_mode_document_cannot_expose_evaluation_kinds(tmp_path):
     source = build_fixture(tmp_path / "fixture2.docx")
     app = create_app(tmp_path / "state2")
     client = TestClient(app)
-    response = submit(client, source.read_bytes(), ruleset="v1")
-    assert response.status_code == 201, response.text
-    batch_id = response.json()["id"]
+    batch = submit(client, source.read_bytes(), ruleset="v1")
+    batch_id = batch["id"]
 
     class Gateway:
         model = "test-gateway"

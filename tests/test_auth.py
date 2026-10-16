@@ -208,7 +208,7 @@ def test_owner_isolation_between_password_users(password_client):
     bob = login(client, *BOB).json()["token"]
     manifest = [{"client_id": "file-1", "name": "合同.docx", "size": 128}]
     created = client.post("/api/tasks", headers=bearer(alice),
-                          json={"name": "Alice 任务", "ruleset_version": "v1", "files": manifest})
+                          json={"name": "Alice 任务", "engine_id": "recall_first", "files": manifest})
     assert created.status_code == 201
     task_id = created.json()["id"]
     assert client.get(f"/api/tasks/{task_id}", headers=bearer(alice)).status_code == 200
@@ -218,7 +218,7 @@ def test_owner_isolation_between_password_users(password_client):
     assert client.get("/api/tasks", headers=bearer(alice)).json()["total"] == 1
 
     second = client.post("/api/tasks", headers=bearer(bob),
-                         json={"name": "Bob 任务", "ruleset_version": "v1", "files": manifest})
+                         json={"name": "Bob 任务", "engine_id": "recall_first", "files": manifest})
     assert second.status_code == 201
     assert client.get(f"/api/tasks/{second.json()['id']}", headers=bearer(alice)).status_code == 404
     assert client.get("/api/tasks", headers=bearer(alice)).json()["total"] == 1

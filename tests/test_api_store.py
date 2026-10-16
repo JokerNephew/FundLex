@@ -26,57 +26,56 @@ def docx_bytes(label: str = "x") -> bytes:
 
 
 def submit(client: TestClient, data: bytes, *, owner: str = "alice", key: str = "key-1"):
+    """Post to the retired ruleset-only creation route (kept for its 410 contract)."""
     return client.post("/api/batches", headers={"X-FundLex-User": owner, "Idempotency-Key": key},
                        data={"ruleset_version": "v1"}, files=[("files", ("contract.docx", data))])
 
 
-def test_api_auth_scope_idempotency_and_download(tmp_path: Path, monkeypatch):
+def test_legacy_batch_creation_is_retired(tmp_path: Path, monkeypatch):
     monkeypatch.setenv("FUNDLEX_AUTH_MODE", "dev")
     app = create_app(tmp_path)
     client = TestClient(app)
     assert client.get("/").status_code == 200
     assert client.get("/static/app.js").status_code == 200
     assert client.get("/api/batches").status_code == 401
-    assert submit(client, b"%PDF").status_code == 415
-    unsupported = client.post("/api/batches", headers={"X-FundLex-User": "alice"},
-                              data={"ruleset_version": "v999"},
-                              files=[("files", ("contract.docx", docx_bytes()))])
-    assert unsupported.status_code == 422
+    # The ruleset-only creation route is gone; reads of existing batches stay.
+    retired = submit(client, docx_bytes())
+    assert retired.status_code == 410
+    assert retired.json()["detail"] == "RULESET_RETIRED"
+
+
+def test_api_auth_scope_idempotency_and_download(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("FUNDLEX_AUTH_MODE", "dev")
+    app = create_app(tmp_path)
+    client = TestClient(app)
     stream = io.BytesIO()
     contract = Document()
     contract.add_paragraph("Independent unchanged-artifact transport fixture")
     contract.save(stream)
     data = stream.getvalue()
-    first = submit(client, data)
-    assert first.status_code == 201
-    batch_id = first.json()["id"]
-    assert len(first.json()["ruleset_sha256"]) == 64
-    doc_id = first.json()["documents"][0]["document_id"]
-    assert submit(client, data).json()["id"] == batch_id
-    assert submit(client, docx_bytes("other")).status_code == 409
+    store = app.state.store
+    first = store.create_batch(owner="alice", ruleset_version="v1", ruleset_sha256="a" * 64,
+                               uploads=[("contract.docx", data)], idempotency_key="key-1")
+    batch_id = first["id"]
+    assert len(first["ruleset_sha256"]) == 64
+    doc_id = first["documents"][0]["id"]
+    repeat = store.create_batch(owner="alice", ruleset_version="v1", ruleset_sha256="a" * 64,
+                                uploads=[("contract.docx", data)], idempotency_key="key-1")
+    assert repeat["id"] == batch_id
+    with pytest.raises(Conflict):
+        store.create_batch(owner="alice", ruleset_version="v1", ruleset_sha256="a" * 64,
+                           uploads=[("contract.docx", docx_bytes("other"))], idempotency_key="key-1")
     assert client.get(f"/api/batches/{batch_id}", headers={"X-FundLex-User": "bob"}).status_code == 404
 
-    def processor(source: Path, output: Path, rules: str):
-        assert rules == "v1"
-        assert source.read_bytes() == data
-        from fundlex.docx import validate_edit_plan, generate_unchanged_artifacts
-        plan = validate_edit_plan(source, [], {})
-        validation = generate_unchanged_artifacts(source, plan, output / "redline.docx", output / "final.docx")
-        # This exercises verified unchanged DOCX transport, not business rule approval.
-        return {"qualification_status": "eligible", "delivery_status": "complete", "actions": [],
-                "output_validation": {"kind": "validated_unchanged", "checks": validation.checks,
-                                      "final_sha256": validation.final_sha256, "redline_sha256": validation.redline_sha256}}
-
-    assert Worker(app.state.store, processor).run_once()
+    # A legacy batch that still names a retired ruleset fails closed under the
+    # runtime worker; the processor must not be reached.
+    assert Worker(app.state.store).run_once()
     detail = client.get(f"/api/batches/{batch_id}", headers={"X-FundLex-User": "alice"}).json()
-    assert detail["status"] == "completed" and detail["completed"] == 1
-    assert detail["documents"][0]["downloads"]["final"]
-    assert client.get(f"/api/batches/{batch_id}/documents/{doc_id}/report", headers={"X-FundLex-User": "bob"}).status_code == 404
-    url = detail["documents"][0]["downloads"]["final"]
-    assert client.get(url, headers={"X-FundLex-User": "alice"}).content == data
-    assert client.get(url, headers={"X-FundLex-User": "bob"}).status_code == 404
+    assert detail["documents"][0]["error_code"] == "RULESET_RETIRED"
+    assert client.get(f"/api/batches/{batch_id}/documents/{doc_id}/report",
+                      headers={"X-FundLex-User": "bob"}).status_code == 404
     summary = client.get(f"/api/batches/{batch_id}/report", headers={"X-FundLex-User": "alice"})
-    assert summary.status_code == 200 and "eligible" in summary.text and "complete" in summary.text
+    assert summary.status_code == 200
 
 
 def test_single_document_failure_does_not_block_batch(tmp_path: Path):
@@ -153,13 +152,15 @@ def test_complete_without_both_verified_contracts_fails_closed(tmp_path: Path):
     assert "final" not in doc["artifacts"]
 
 
-def test_ruleset_hash_change_blocks_processing(tmp_path: Path):
+def test_retired_ruleset_batch_blocks_processing(tmp_path: Path):
+    # A batch bound to a retired ruleset must fail closed under the runtime
+    # worker instead of running the old ruleset-only path.
     store = RunStore(tmp_path)
     batch = store.create_batch(owner="alice", ruleset_version="v1", ruleset_sha256="0" * 64,
                                uploads=[("a.docx", docx_bytes())])
-    Worker(store, lambda *_: pytest.fail("processor must not run")).run_once()
+    Worker(store).run_once()
     doc = store.get_batch("alice", batch["id"])["documents"][0]
-    assert doc["error_code"] == "RULESET_HASH_MISMATCH"
+    assert doc["error_code"] == "RULESET_RETIRED"
     assert doc["delivery_status"] == "not_generated"
 
 
@@ -183,9 +184,11 @@ def test_http_upload_worker_pipeline_report_flow(tmp_path: Path):
 
     app = create_app(tmp_path / "data")
     client = TestClient(app)
-    response = submit(client, source.read_bytes())
-    assert response.status_code == 201
-    batch_id = response.json()["id"]
+    # The legacy ruleset path is retired from the HTTP surface, so this drives
+    # the retired pipeline through the store directly (offline-runner style).
+    store = app.state.store
+    batch = store.create_batch(owner="alice", ruleset_version="v1", uploads=[("a.docx", source.read_bytes())])
+    batch_id = batch["id"]
     gateway = Gateway()
     worker = Worker(app.state.store, lambda source, output, version: process(source, output, version, gateway))
     assert worker.run_once()

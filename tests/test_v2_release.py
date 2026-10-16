@@ -246,10 +246,12 @@ def test_delivery_worker_publishes_final_downloads(tmp_path, monkeypatch):
     app = create_app(tmp_path / "state")
     client = TestClient(app)
     headers = {"X-FundLex-User": "delivery-user"}
-    response = client.post("/api/batches", headers=headers, data={"ruleset_version": "v2"},
-                           files=[("files", ("delivery.docx", source.read_bytes()))])
-    assert response.status_code == 201, response.text
-    batch_id = response.json()["id"]
+    # The legacy ruleset route is retired from HTTP; drive the retired pipeline
+    # through a store-seeded batch, the way its offline runners do.
+    batch = app.state.store.create_batch(owner="delivery-user", ruleset_version="v2",
+                                         ruleset_sha256=ruleset.sha256,
+                                         uploads=[("delivery.docx", source.read_bytes())])
+    batch_id = batch["id"]
     gateway = ScriptedGateway()
     worker = Worker(app.state.store, lambda src, out, ver: v2_pipeline.process_v2(src, out, ver, gateway))
     assert worker.run_once()
@@ -293,12 +295,7 @@ def test_delivery_with_failed_action_publishes_no_contract(tmp_path, monkeypatch
 
 
 def test_default_processor_dispatches_v2(tmp_path, monkeypatch):
-    called = {}
-
-    def fake_process_v2(source, output, version, gateway=None, *, evaluation=None):
-        called["version"] = version
-        return {"ok": True}
-
-    monkeypatch.setattr(v2_pipeline, "process_v2", fake_process_v2)
-    result = _default_processor(tmp_path / "x.docx", tmp_path / "out", "v2")
-    assert result == {"ok": True} and called["version"] == "v2"
+    # The worker runtime serves the guide-bound engine only; the retired
+    # rulesets are reachable exclusively through their direct pipelines.
+    with pytest.raises(ValueError, match="ENGINE_RETIRED"):
+        _default_processor(tmp_path / "x.docx", tmp_path / "out", "v2")

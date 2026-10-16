@@ -79,12 +79,17 @@ def test_builtin_guide_is_listed_and_current_by_default(client):
     assert settings["current"]["current"] is True
     assert [item["id"] for item in settings["available"]] == [guide_store.BUILTIN_GUIDE_ID]
     capabilities = client.get("/api/capabilities", headers=ALICE).json()
-    assert capabilities["engine_id"] == "recall_first"
-    assert capabilities["guide"] == {"version_id": guide_store.BUILTIN_GUIDE_ID, "built_in": True,
-                                     "status": "released", "rules_sha256": builtin["rules_sha256"],
-                                     "groups": builtin["groups"], "filename": builtin["filename"]}
-    # Every existing capabilities key stays in place.
-    assert capabilities["ruleset_version"] == "v1" and capabilities["actions_total"] > 0
+    engine = capabilities["engine"]
+    assert engine["id"] == "recall_first" and engine["rule_source"] == "guide"
+    assert engine["guide"] == {"version_id": guide_store.BUILTIN_GUIDE_ID, "built_in": True,
+                               "status": "released", "rules_sha256": builtin["rules_sha256"],
+                               "groups": builtin["groups"], "filename": builtin["filename"]}
+    # The engine payload carries the guide contract and nothing from the retired rulesets.
+    assert engine["delivery_mode"] == "formal" and engine["auto_write_enabled"] is True
+    assert engine["actions_total"] == builtin["groups"]
+    for retired in ("ruleset_version", "actions_total", "auto_write_enabled", "engine_id", "guide",
+                    "revision_ruleset_version", "revision_mode"):
+        assert retired not in capabilities
     assert [item["id"] for item in client.get("/api/guides", headers=BOB).json()["items"]] == \
         [guide_store.BUILTIN_GUIDE_ID]
 
@@ -219,9 +224,15 @@ def test_recall_task_creation_binds_guide_snapshot(client):
     again = client.post("/api/tasks", headers=ALICE | {"Idempotency-Key": "recall-1"},
                         json={"name": "召回任务", "engine_id": "recall_first", "files": files})
     assert again.status_code == 201 and again.json()["id"] == task["id"]
-    conflict = client.post("/api/tasks", headers=ALICE | {"Idempotency-Key": "recall-1"},
-                           json={"name": "召回任务", "ruleset_version": "v1", "files": files})
-    assert conflict.status_code == 409
+    # A retired ruleset submission is rejected outright, and the legacy
+    # engine-conflict path no longer exists.
+    retired = client.post("/api/tasks", headers=ALICE | {"Idempotency-Key": "recall-1"},
+                          json={"name": "召回任务", "ruleset_version": "v1", "files": files})
+    assert retired.status_code == 422 and retired.json()["detail"] == "RULESET_RETIRED"
+    both = client.post("/api/tasks", headers=ALICE | {"Idempotency-Key": "recall-1"},
+                       json={"name": "召回任务", "engine_id": "recall_first",
+                             "ruleset_version": "v1", "files": files})
+    assert both.status_code == 422 and both.json()["detail"] == "RULESET_RETIRED"
     # The configured custom guide is what a new task binds without an explicit id.
     custom = parsed_custom(client)
     assert client.put("/api/settings/guide", headers=ALICE, json={"version_id": custom["id"]}).status_code == 200
@@ -243,13 +254,36 @@ def test_recall_task_creation_binds_guide_snapshot(client):
     assert pinned.json()["guide_snapshot"]["version_id"] == guide_store.BUILTIN_GUIDE_ID
 
 
+def test_recall_task_creation_does_not_load_retired_ruleset(client, monkeypatch):
+    # FL-D094: creating a recall-first task must not depend on the retired
+    # ruleset package. If it did, a broken legacy file would 503 a healthy task.
+    import fundlex.rules as rules_module
+    import fundlex.rules_v2 as rules_v2_module
+
+    def explode(*args, **kwargs):
+        raise AssertionError("retired ruleset must not be loaded at task creation")
+
+    monkeypatch.setattr(rules_module, "load_ruleset", explode)
+    monkeypatch.setattr(rules_v2_module, "load_ruleset_v2", explode)
+    files = manifest(docx_bytes("合同正文示例"))
+    created = client.post("/api/tasks", headers=ALICE | {"Idempotency-Key": "no-legacy"},
+                          json={"name": "无残留依赖", "engine_id": "recall_first", "files": files})
+    assert created.status_code == 201, created.text
+    task = created.json()
+    builtin = guide_store.get_version(client.app.state.store, "alice", guide_store.BUILTIN_GUIDE_ID)
+    assert task["engine_id"] == "recall_first"
+    assert task["guide_snapshot"] == {"version_id": guide_store.BUILTIN_GUIDE_ID,
+                                      "rules_sha256": builtin["rules_sha256"]}
+    assert task["ruleset_version"] == "" and task["ruleset_sha256"] == ""
+
+
 def test_task_creation_engine_and_ruleset_contract(client):
     files = manifest(docx_bytes("合同正文示例"))
     both = client.post("/api/tasks", headers=ALICE,
                        json={"name": "冲突", "engine_id": "recall_first", "ruleset_version": "v1", "files": files})
-    assert both.status_code == 422 and both.json()["detail"] == "ENGINE_CONFLICT"
+    assert both.status_code == 422 and both.json()["detail"] == "RULESET_RETIRED"
     neither = client.post("/api/tasks", headers=ALICE, json={"name": "缺失", "files": files})
-    assert neither.status_code == 422 and neither.json()["detail"] == "ENGINE_OR_RULESET_REQUIRED"
+    assert neither.status_code == 422 and neither.json()["detail"] == "ENGINE_REQUIRED"
     unknown = client.post("/api/tasks", headers=ALICE,
                           json={"name": "未知引擎", "engine_id": "v9", "files": files})
     assert unknown.status_code == 422
@@ -270,12 +304,10 @@ def test_task_creation_engine_and_ruleset_contract(client):
                          json={"name": "越权", "engine_id": "recall_first",
                                "guide_version_id": other["id"], "files": files})
     assert hidden.status_code == 404
-    # The legacy ruleset path stays unchanged.
+    # The legacy ruleset path is retired from the runtime.
     legacy = client.post("/api/tasks", headers=ALICE | {"Idempotency-Key": "legacy-1"},
                          json={"name": "旧任务", "ruleset_version": "v1", "files": files})
-    assert legacy.status_code == 201
-    assert legacy.json()["engine_id"] == ""
-    assert legacy.json()["guide_snapshot"] == {"version_id": "", "rules_sha256": ""}
+    assert legacy.status_code == 422 and legacy.json()["detail"] == "RULESET_RETIRED"
 
 
 def test_recall_document_surface_and_working_downloads(client):
@@ -330,14 +362,13 @@ def test_recall_document_surface_and_working_downloads(client):
     assert batch["documents"][0]["target_counts"] == {"total": 3, "completed": 2, "unresolved": 1}
     assert batch["documents"][0]["phase"] == "inventory"
     assert "windows" not in batch["documents"][0] and "targets" not in batch["documents"][0]
-    # A non-recall document keeps the legacy listing shape untouched.
-    legacy_task = client.post("/api/tasks", headers=ALICE | {"Idempotency-Key": "legacy-surface"},
-                              json={"name": "旧任务", "ruleset_version": "v1",
-                                    "files": manifest(data)}).json()["id"]
-    assert client.post(f"/api/tasks/{legacy_task}/uploads", headers=ALICE,
-                       data={"client_ids": json.dumps(["c1"])},
-                       files=[("files", ("合同.docx", data))]).status_code == 200
-    legacy_item = client.get(f"/api/tasks/{legacy_task}/documents", headers=ALICE).json()["items"][0]
+    # A non-recall document keeps the legacy listing shape untouched. Legacy
+    # batches are no longer created over HTTP, so seed one directly: the batch
+    # surface must not grow recall-only counters for a non-recall document.
+    store = client.app.state.store
+    seeded = store.create_batch(owner="alice", ruleset_version="v1", ruleset_sha256="0" * 64,
+                                uploads=[("合同.docx", data)])
+    legacy_item = store.get_batch("alice", seeded["id"])["documents"][0]
     assert "target_counts" not in legacy_item and "phase" not in legacy_item
     legacy_batch = client.get(f"/api/batches/{legacy_item['batch_id']}", headers=ALICE).json()
     assert "target_counts" not in legacy_batch["documents"][0]

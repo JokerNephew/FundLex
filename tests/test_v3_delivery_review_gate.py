@@ -76,10 +76,12 @@ def run_worker(tmp_path, monkeypatch, decisions):
     app = create_app(tmp_path / "state")
     client = TestClient(app)
     headers = {"X-FundLex-User": "review-test-owner"}
-    response = client.post("/api/batches", headers=headers, data={"ruleset_version": "v2"},
-                           files=[("files", ("source.docx", source.read_bytes()))])
-    assert response.status_code == 201, response.text
-    batch_id = response.json()["id"]
+    # The legacy ruleset HTTP route is retired; seed the batch directly, as the
+    # offline v2 runner does.
+    batch = app.state.store.create_batch(owner="review-test-owner", ruleset_version="v2",
+                                         ruleset_sha256="0" * 64,
+                                         uploads=[("source.docx", source.read_bytes())])
+    batch_id = batch["id"]
     gateway = ArtifactGateway(decisions, tmp_path / "unused-output")
     worker = Worker(app.state.store, lambda source, output, version:
                     v2_pipeline.process_v2(source, output, version, gateway, evaluation=True))

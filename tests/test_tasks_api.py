@@ -36,7 +36,7 @@ def client(tmp_path, monkeypatch):
 
 def create(client, entries, name="季度合同处理", key="task-key"):
     return client.post("/api/tasks", headers=ALICE | {"Idempotency-Key": key},
-                       json={"name": name, "ruleset_version": "v1", "files": entries})
+                       json={"name": name, "engine_id": "recall_first", "files": entries})
 
 
 def manifest(count, data):
@@ -163,13 +163,15 @@ def test_identity_isolation_capabilities_and_historical_mapping(client, monkeypa
     assert client.get(f"/api/batches/{result['batch_id']}/documents/{result['document_id']}/report", headers=BOB).status_code == 404
     assert client.get("/api/capabilities").status_code == 401
     caps = client.get("/api/capabilities", headers=ALICE).json()
-    from fundlex.rules import load_ruleset
-    rule = load_ruleset("v1")
-    assert caps["actions_total"] == len(rule.actions) and caps["auto_write_count"] == sum(a["auto_write"] for a in rule.actions)
-    assert caps["action_labels"] == {a["action_id"]: a.get("description", "") for a in rule.actions}
+    engine = caps["engine"]
+    assert engine["id"] == "recall_first" and engine["rule_source"] == "guide"
+    assert engine["actions_total"] == int((engine["guide"] or {}).get("groups") or 0)
     assert caps["upload_limits"]["max_request_files"] == 20
-    old = client.post("/api/batches", headers=ALICE, data={"ruleset_version": "v1"}, files=[("files", ("legacy.docx", data))]).json()
-    legacy = "legacy-" + old["id"]
+    # Legacy batches can no longer be created over HTTP; the historical read and
+    # control mapping they exercise is still supported, so seed one directly.
+    seeded = client.app.state.store.create_batch(owner="alice", ruleset_version="v1", ruleset_sha256="0" * 64,
+                                                 uploads=[("legacy.docx", data)])
+    legacy = "legacy-" + seeded["id"]
     assert client.get(f"/api/tasks/{legacy}", headers=ALICE).json()["legacy"] is True
     assert client.post(f"/api/tasks/{legacy}/pause", headers=ALICE).json()["status"] == "paused"
     assert client.post(f"/api/tasks/{legacy}/resume", headers=ALICE).json()["status"] == "queued"
