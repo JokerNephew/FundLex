@@ -1453,6 +1453,36 @@
 - 证据：改动 `fundlex/model.py`、`fundlex/recall_pipeline.py`、新增 `tests/test_sweep_truncation.py`；数据 `/tmp/opencode/model-calls-round9.jsonl`（输出分布）；前序 FL-D107。
 - 变更记录：2026-10-17 新增。
 
+## FL-D109 sweep 按字符全量切窗 + 向每个窗口灌全部规则：改为「章节对齐切窗 + 按窗口章节收敛规则」并保留硬兜底
+
+- 发现日期：2026-10-17
+- 背景：产品负责人指出"给模型看合同是按上下文长度拆分的，为什么不是按章节拆分"，并追问"符合（指规则）的时候是只符合涉及到的这一章节吗"。查证后确认**两个独立错配**，**均非原设计允许的"宽召回"那么简单**：
+  1. **窗口切分**：`_artifact_chunks()` 纯按字符累加（`total + len(line) > max_chars`），**忽略章节边界**，一个窗口可横跨多个章节（实测 D08：1 个窗口覆盖 S03/S04/S07/S16/S17/S20/S26 共 7 节）。
+  2. **规则分配**：`_sweep_requirements(rules)` 收到的是 `_guide_rules(guide_document)`——**全本指引的全部 22 条规则**，且**每个窗口都灌这一份全量**。故"符合涉及章节吗"的答案是**否**：窗口既非按章节切，规则也未按章节过滤。
+- 影响：把"不该管的章节"交给模型判断，模型照答、代码再丢——round9 实测 `SWEEP_LOCATION_OUT_OF_SCOPE` **362** 次；requirements 文本按窗口数重复发送（D09 发 10 次）；密集章节堆叠导致 findings 爆长，是 **FL-D108 截断**的诱因之一。
+- **更正前序结论**：本人先前称"现状违反设计 8.2"，措辞过强。设计 7.3/8.2 约束的是"候选判读限定在 action 声明章节内"，而 sweep 是**最终查漏**阶段，`SWEEP_LOCATION_OUT_OF_SCOPE` 的存在表明设计**允许** sweep 宽召回后再按 `rule_locations` 事后剔除。真正的问题是：**`rule_locations`（规则→章节映射）本已算出，却只用于事后丢弃，未用于切窗或收敛规则**——是实现错配，不是违反设计。
+- 客观设计判断：切分与规则分配是**两个独立变量**，现状"字符 × 全量规则"是最差组合。**规则分配这一维改动更小、风险更低、收益更直接**（362 次丢弃主要由此产生），故先做（第一步），再做窗口切分（第二步）。
+- 处理方法（**两步均已实施**）：
+  - **第一步：规则按窗口章节收敛 + 硬兜底。** 新增 `_window_rule_scope()`：窗口覆盖的段落 → 所属 chapter 集合 → 仅取映射到这些 chapter 的规则；新增 `_sweep_requirements_for()` 只渲染该子集。**两道保险防止"收敛"变成"漏判"**：①`mandatory`（仍有 `needs_edit` 未完成目标的规则）强制进入其映射 chapter 所在窗口，**即便映射与实际不一致**；②**映射到任何窗口都覆盖不到的 chapter 的规则 → 回退为每个窗口都问**；③映射为空的 mandatory 规则 → 同样每个窗口都问。`_sweep_batch()` 新增 `requirements_by_chunk` / `scope_by_chunk`，并对越界 finding 记 `SWEEP_RULE_OUT_OF_WINDOW`。
+  - **第二步：窗口按章节对齐 + 字符兜底。** 新增 `_section_aware_chunks()`：把**整节**打包进窗口直到预算将溢出（不切节）；单节自身超预算才在**节内**按字符拆；**不属于任何章节的段落**（`structure_index` 上限 80 节，尾部内容可能未分配）单独收集为窗口，**保证零覆盖损失**。以 `FUNDLEX_SWEEP_SECTION_WINDOWS=0` 可回退到字符切，便于同批对比。
+- 验证（真实批次 + 离线，均为**同评分器/同 347 目标标签集**）：
+
+| 批次 | 引擎 | completed | rate | kept | not_executed | 成本 |
+| --- | --- | --- | --- | --- | --- | --- |
+| round9-01 | FL-D106 | 219 | 0.6311 | 9 | 119 | $0.5561 |
+| **round11-01** | **+FL-D109 第一步** | **225** | **0.6484** | 11 | 111 | $0.6769 |
+| round12-01 | +FL-D109 第二步 | 见下 | | | | |
+
+  - 第一步实测（round11，20/20 完成、无 abort、无 not_generated、**零 `MODEL_*` 错误**，D09 亦恢复正常）：`SWEEP_LOCATION_OUT_OF_SCOPE` **362 → 146（−60%）**、`SWEEP_QUOTE_NOT_IN_WINDOW` **74 → 22（−70%）**、`SWEEP_FINDING_INVALID` **124 → 82**；`SWEEP_ALREADY_SATISFIED` 172 → 386（收敛后窗口**正确地**看到已满足条款，是该过滤器在起作用而非异常）。completed **+6**、rate **+0.0173**。
+  - 离线验证（第一步）：12 份合同 requirements 文本量**下降 87.7%**，需问规则数由**每窗 22 条降至 mean 2.0–5.1 / max 8–11**，且**0 条规则不可达**（兜底未被触发但必要）。
+  - 离线验证（第二步）：3 份真实合同窗口 19→26 / 18→25 / 20→27，**覆盖零损失**（1311/1311、1337/1337、1374/1374），**无窗口超预算**。
+  - 单测：新增 `tests/test_sweep_rule_scope.py`（5 项：收敛、mandatory 强制、不可达回退、空映射 mandatory、子集渲染）与 `tests/test_sweep_section_windows.py`（6 项：章节对齐、预算受限分组、超长节内拆、未分配段落仍被扫、非可读区域排除、ID 稠密唯一）；`tests/test_sweep_truncation.py`（7 项，FL-D108）。
+  - **全量 `pytest tests`：667 passed / 6 skipped / 1 failed**，唯一失败为既有无关项 `tests/test_rules_catalogue.py::test_source_provenance_and_reproducible_compilation`（缺 `references/source/*.docx`）。
+- 状态与验证：**两步均已实施并通过单测与全量回归**；第一步**经真实批次验证有效**；第二步已离线验证覆盖性与预算，**真实批次效果见下方变更记录**。
+- 边界与风险：第一步的收敛依赖模型产出的 `rule_locations`，故设三道硬兜底；第二步使窗口数增加约 35%（19→26），即调用数与成本上升，需在真实批次确认收益大于代价。两者均未改动规则语义、评分器或标签。
+- 证据：改动 `fundlex/recall_pipeline.py`、新增 `tests/test_sweep_rule_scope.py`、`tests/test_sweep_section_windows.py`、`tools/evaluation/sweep_scope_probe.py`；数据 `/tmp/opencode/p6-round11.log`、`/tmp/opencode/score-round11.json`、`/tmp/opencode/sweep_scope_probe.json`、`/tmp/opencode/model-calls-round11.jsonl`。
+- 变更记录：2026-10-17 新增（两步同日实施；第一步已实测，第二步待 real batch）。
+
 ## 后续条目模板
 
 ### FL-Dxxx 问题名称
