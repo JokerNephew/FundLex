@@ -1933,10 +1933,11 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
             counter = [0]
             requirements = _sweep_requirements(rules)
             chunk_chars = _sweep_chunk_chars(model, requirements, facts_text)
-            # Section-first windowing with a character fallback for unassigned content
-            # (FL-D109 step 2). The env switch exists so the two chunkings can be compared
-            # on the same batch before the section-first one is made unconditional.
-            if os.environ.get("FUNDLEX_SWEEP_SECTION_WINDOWS", "1") != "0":
+            # Section-first windowing is available but OFF by default: measured over two
+            # full dev batches it showed no metric gain and raised the sweep call count
+            # (~26 windows vs ~19), so the character chunker stays the default (FL-D109).
+            # Set FUNDLEX_SWEEP_SECTION_WINDOWS=1 to switch it on and re-measure.
+            if os.environ.get("FUNDLEX_SWEEP_SECTION_WINDOWS", "0") == "1":
                 chunks = _section_aware_chunks(actual, sections, max_chars=chunk_chars)
             else:
                 chunks = _artifact_chunks(actual, max_chars=chunk_chars)
