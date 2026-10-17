@@ -282,9 +282,18 @@ class ModelGateway:
             except ModelError as exc: event['error_code']=exc.code
             except jsonschema.ValidationError as exc:
                 event['schema_failure']=exc.validator
-                event['error_code']='MODEL_SCHEMA_INVALID'
+                # A validation failure on a response the provider cut off at the output
+                # cap is NOT a malformed answer: the model was still writing valid JSON
+                # when it ran out of room. Classify it as truncation so the caller can
+                # shrink the unit of work instead of retrying the same oversized request
+                # (FL-D108). Retrying an identical over-long request would truncate again.
+                event['error_code'] = ('MODEL_OUTPUT_TRUNCATED'
+                                       if event.get('finish_reason') == 'length'
+                                       else 'MODEL_SCHEMA_INVALID')
             except (KeyError,IndexError,TypeError,ValueError):
-                event['error_code']='MODEL_SCHEMA_INVALID'
+                event['error_code']=('MODEL_OUTPUT_TRUNCATED'
+                                     if event.get('finish_reason') == 'length'
+                                     else 'MODEL_SCHEMA_INVALID')
             finally:
                 for field in ('prompt_tokens','completion_tokens','total_tokens'):
                     raw=usage.get(field)

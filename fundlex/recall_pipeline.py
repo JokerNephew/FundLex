@@ -57,7 +57,10 @@ MAX_REPAIR_NOTE_CHARS = 1400
 # A malformed or mis-quoted model answer is recoverable: pausing and resuming from the
 # checkpoint is better than failing the contract on one bad response.
 SOFT_STOP_CODES = {"MODEL_SCHEMA_INVALID", "MODEL_QUOTE_MISMATCH",
-                   "MODEL_EVIDENCE_UNKNOWN", "MODEL_RESPONSE_LIMIT"}
+                   "MODEL_EVIDENCE_UNKNOWN", "MODEL_RESPONSE_LIMIT",
+                   # A response cut off at the provider's output cap (FL-D108): recoverable,
+                   # so pause and resume rather than failing the contract outright.
+                   "MODEL_OUTPUT_TRUNCATED"}
 
 
 class RecallPipelineStop(RuntimeError):
@@ -1283,22 +1286,73 @@ def _document_compact(actual: DocumentInspection) -> str:
     return cached
 
 
+# Split a window that provably cannot be swept in one answer (FL-D108). The sweep's
+# output (findings) scales with how many violations the window holds, not with its input
+# size, so a dense stretch of a long contract can exhaust the output cap even though the
+# context fits. Halving the window narrows both the search space and the answer.
+_SWEEP_MIN_SPLIT_CHARS = 400
+
+
+def _split_chunk(chunk: _Chunk, *, min_chars: int = _SWEEP_MIN_SPLIT_CHARS) -> list[_Chunk]:
+    """Halve a sweep window on whole paragraphs, keeping paragraph addresses stable.
+
+    Returns one or two chunks; a window that is already a single paragraph, or shorter
+    than ``min_chars``, cannot be usefully reduced and is returned unchanged — which lets
+    the caller record a real gap instead of splitting forever.
+    """
+    lines = chunk.text.split("\n")
+    if len(lines) < 2 or len(chunk.text) <= min_chars:
+        return [chunk]
+    cut = max(1, len(lines) // 2)
+    pieces = [lines[:cut], lines[cut:]]
+    out: list[_Chunk] = []
+    for part in pieces:
+        locations = tuple(line.split("]", 1)[0][1:] for line in part if line.startswith("["))
+        out.append(_Chunk(id=chunk.id, locations=locations, text="\n".join(part)))
+    return out
+
+
 def _sweep_batch(model: Any, rules_by_id: dict[str, dict], requirements: str,
                  chunks: Sequence[_Chunk], actual: DocumentInspection, *,
                  round_number: int, counter: list[int], facts: Facts | None = None,
                  facts_text: str = "", rule_locations: dict[str, set[str]] | None = None
                  ) -> dict[str, Any]:
+    """Sweep every window, splitting a window whose answer hits the output cap (FL-D108).
+
+    Each window is swept independently; a window the provider cut off at the output limit
+    is replaced by two smaller windows and swept again, so a dense stretch of a long
+    contract yields partial findings instead of failing the whole contract. A window that
+    is already a single paragraph cannot be split and is recorded as an honest gap.
+    """
     ledger: dict[str, Any] = {"round": round_number, "chunks": [], "findings": [],
                               "dropped": [], "calls": 0}
     seen: set[tuple[str, str, str]] = set()
-    for chunk in chunks:
-        parts = [f"[GUIDE_REQUIREMENTS]\n{requirements}"]
-        if facts_text:
-            parts.append(f"[FACTS]\n{facts_text}")
-        parts.append(f"[ARTIFACT_WINDOW]\n{chunk.text}")
-        context = "\n\n".join(parts)
-        call = model.call(task_type="recall_sweep", bounded_context=context, response_schema=SWEEP_SCHEMA,
-                          instruction=SWEEP_INSTRUCTION, prompt_version=SWEEP_PROMPT_VERSION)
+    parts = [f"[GUIDE_REQUIREMENTS]\n{requirements}"]
+    if facts_text:
+        parts.append(f"[FACTS]\n{facts_text}")
+    pending: list[_Chunk] = list(chunks)
+    while pending:
+        chunk = pending.pop(0)
+        context = "\n\n".join(parts + [f"[ARTIFACT_WINDOW]\n{chunk.text}"])
+        try:
+            call = model.call(task_type="recall_sweep", bounded_context=context,
+                              response_schema=SWEEP_SCHEMA,
+                              instruction=SWEEP_INSTRUCTION, prompt_version=SWEEP_PROMPT_VERSION)
+        except ModelError as exc:
+            if exc.code != "MODEL_OUTPUT_TRUNCATED":
+                raise
+            pieces = _split_chunk(chunk)
+            if len(pieces) == 1:
+                # A single paragraph already exhausts the output cap: splitting cannot
+                # help. Record an honest gap instead of looping or dropping it silently.
+                ledger.setdefault("truncated", []).append(
+                    {"chunk": chunk.id, "locations": list(chunk.locations)})
+                continue
+            ledger.setdefault("splits", []).append(
+                {"chunk": chunk.id, "locations": list(chunk.locations),
+                 "into": [list(piece.locations) for piece in pieces]})
+            pending = pieces + pending
+            continue
         ledger["calls"] += 1
         value = call.value if isinstance(call.value, dict) else {}
         chunk_locations = set(chunk.locations)
