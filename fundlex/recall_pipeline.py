@@ -1420,6 +1420,20 @@ def _split_chunk(chunk: _Chunk, *, min_chars: int = _SWEEP_MIN_SPLIT_CHARS) -> l
     return out
 
 
+def _sweep_chunks(actual: DocumentInspection, sections: Sequence[Any], *, max_chars: int) -> list[_Chunk]:
+    """The one chunking the sweep uses, initial and incremental (FL-D109).
+
+    Both sweep passes must window the artifact the same way: the incremental re-sweep
+    decides which windows are "changed" by comparing chunk text against what was already
+    swept, so a second chunker would make an unchanged window look new (or a changed one
+    look unchanged). Keeping the choice in one place also keeps the section-first switch
+    honest for re-sweeps.
+    """
+    if os.environ.get("FUNDLEX_SWEEP_SECTION_WINDOWS", "0") == "1":
+        return _section_aware_chunks(actual, sections, max_chars=max_chars)
+    return _artifact_chunks(actual, max_chars=max_chars)
+
+
 def _sweep_requirements_for(rules: Sequence[dict], rule_ids: set[str]) -> str:
     """Requirements block restricted to the rules a window can actually be about."""
     subset = [rule for rule in rules if str(rule.get("rule_id")) in rule_ids]
@@ -1937,10 +1951,7 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
             # full dev batches it showed no metric gain and raised the sweep call count
             # (~26 windows vs ~19), so the character chunker stays the default (FL-D109).
             # Set FUNDLEX_SWEEP_SECTION_WINDOWS=1 to switch it on and re-measure.
-            if os.environ.get("FUNDLEX_SWEEP_SECTION_WINDOWS", "0") == "1":
-                chunks = _section_aware_chunks(actual, sections, max_chars=chunk_chars)
-            else:
-                chunks = _artifact_chunks(actual, max_chars=chunk_chars)
+            chunks = _sweep_chunks(actual, sections, max_chars=chunk_chars)
             rule_locations = {rule_id: _rule_mapped_locations(rule_id, mapping, sections)
                               for rule_id in rules_by_id}
             # Rules with an obligation the run still has to carry out must be asked about
@@ -2004,15 +2015,23 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
                     _merge_audit_state(audit_state, round_ledger, targets)
                     round_ledger["issues"] = [issue for issue in _audit_issues(audit_state, targets)
                                               if issue.get("rule_id") in reaudit]
-                changed = [chunk for chunk in _artifact_chunks(actual, max_chars=chunk_chars)
+                changed = [chunk for chunk in _sweep_chunks(actual, sections, max_chars=chunk_chars)
                            if chunk.text not in swept_texts]
                 batch = _take_batch(changed, max_sweep_chunks - swept_calls, gaps, planned=len(changed))
                 if not batch:
                     break  # nothing re-swept: the findings stay pending and block complete
+                # Re-scope the changed windows exactly as the initial pass does, so a
+                # re-sweep is not asked a different question than the window it revisits
+                # (FL-D109): same chunker, same per-window rule subset, same enforcement.
+                rescoped = _window_rule_scope(batch, mapping=mapping, sections=sections,
+                                              rules=rules, mandatory=mandatory)
                 batch_ledger = _sweep_batch(model, rules_by_id, requirements, batch, actual,
                                             round_number=round_number, counter=counter,
                                             facts=facts, facts_text=facts_text,
-                                            rule_locations=rule_locations)
+                                            rule_locations=rule_locations,
+                                            requirements_by_chunk={chunk.id: _sweep_requirements_for(rules, ids)
+                                                                   for chunk, ids in rescoped},
+                                            scope_by_chunk={chunk.id: ids for chunk, ids in rescoped})
                 swept_calls += len(batch)
                 swept_texts.update(chunk.text for chunk in batch)
                 _resolve_pending(findings, batch_ledger)

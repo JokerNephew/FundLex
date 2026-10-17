@@ -103,3 +103,36 @@ def test_requirements_for_subset_is_smaller_and_contains_only_those_rules():
     assert len(narrow) < len(full)
     assert "G02" in narrow
     assert "G01" not in narrow and "G03" not in narrow
+
+
+def test_sweep_chunks_are_the_same_for_initial_and_incremental_passes(monkeypatch):
+    """Both sweep passes must window identically, or a re-sweep revisits the wrong windows.
+
+    The incremental pass decides what is "changed" by comparing chunk text against the
+    text already swept. If the initial pass used the section chunker and the incremental
+    pass used the character chunker, an unchanged window could look changed (wasted calls)
+    or a changed one could look identical (a missed re-sweep). ``_sweep_chunks`` exists to
+    make that impossible; this pins the dispatch for both switch settings.
+    """
+    from fundlex.recall_pipeline import _artifact_chunks, _section_aware_chunks, _sweep_chunks
+
+    calls: list[str] = []
+
+    def fake_char(actual, *, max_chars):
+        calls.append("char")
+        return ["char"]
+
+    def fake_section(actual, sections, *, max_chars):
+        calls.append("section")
+        return ["section"]
+
+    monkeypatch.setattr("fundlex.recall_pipeline._artifact_chunks", fake_char)
+    monkeypatch.setattr("fundlex.recall_pipeline._section_aware_chunks", fake_section)
+
+    monkeypatch.delenv("FUNDLEX_SWEEP_SECTION_WINDOWS", raising=False)
+    assert _sweep_chunks(object(), [], max_chars=10) == ["char"]
+    monkeypatch.setenv("FUNDLEX_SWEEP_SECTION_WINDOWS", "1")
+    assert _sweep_chunks(object(), [], max_chars=10) == ["section"]
+    # The real functions must not have been reached (i.e. the dispatch actually happened).
+    assert calls == ["char", "section"]
+
