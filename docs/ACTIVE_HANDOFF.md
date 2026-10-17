@@ -305,3 +305,10 @@
 - **FL-D104**（已提交 `e780202`，未推送）：514 份全量 B 类（业务含义偏差）排查。报告 `/home/opencode/B_CLASS_REPORT_FINAL.md`，数据 `/tmp/opencode/b_gap_findings_clean.csv`（1638 行 / 509 份），分规则 CSV `/tmp/opencode/b_class_by_rule/*.csv`。**19 项口径待产品负责人裁决**，裁定前不得据以改动引擎/评分。
 - **FL-D105**（已提交 `5fc3d70`，未推送）：合同语料 × 指引**结构性适配排查**（确定性、无模型）。报告 `/home/opencode/GUIDE_CORPUS_FIT_REPORT.md`，产物 `/tmp/opencode/{guide_fit_probe2,clause_material,verify_findings}.json`。核心：空格陷阱 386/514、真实类别超 A/C（E/F/Y/D/B/H）、删除型 old_text 大面积对不上（G15 1/514、G17 5/514）、已满足新机制 46/41 份、货币基金 8 份不兼容；**Q1–Q8 待裁决**。
 - 两项均只登记"发现与待决"，未改动代码、未发布、未宣称达标。P6 开发集冻结/留出状态不受影响。
+
+## FL-D106 代码改动断点（2026-10-17）
+
+- **已实施但未发布**：`fundlex/recall.py`、`fundlex/recall_pipeline.py`、新增 `tests/test_hard_fact_veto.py`（提交 `bd82207`）；集中问题记录 FL-D106（提交 `24f4d6b`）。
+- 改动要点：新增 `hard_fact_topic_absent()`（唯一可否决模型的硬事实）；新增 `weak_rule_signals()`（语义信号改为标注不丢弃）；拆分 `class_substitution_letter_stable()`（硬事实分支仍可合法丢弃）；`_rule_already_satisfied` / `_rule_location_absent` / `plan_target` 的**软否决**改为硬事实门控。
+- 验证：`pytest tests` → **649 passed / 6 skipped / 1 failed**（唯一失败为既有无关项 `test_rules_catalogue.py`，缺 `references/source/*.docx`）。真实批次效果**未验证**。
+- **未做**：未 `publish_workspace.sh`（生产 `/opt/fundlex-recall-first` 仍是旧引擎），未跑真实 P6 批次，未宣称指标改善。下一条动作：择机发布并在安静窗口跑 P6 开发集验证（注意 FL-D096：发布会使在飞批次作废）。
