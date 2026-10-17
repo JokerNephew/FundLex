@@ -1431,6 +1431,28 @@
 - 证据：`var/recall-first-evaluation/p6-dev-round9-01/`、`/tmp/opencode/score-round7.json|score-round8.json|score-round9.json`、`/tmp/opencode/model-calls-round9.jsonl`、`/tmp/opencode/p6-round9.log`；对比表见 `docs/ACTIVE_HANDOFF.md`。
 - 变更记录：2026-10-17 新增。
 
+## FL-D108 sweep 响应触到输出上限被截断导致整份合同失败：改为「识别截断并把工作单元拆小」而非重试同一超长请求
+
+- 发现日期：2026-10-17
+- 背景：FL-D107 查实 P6 第 9 轮 D09 失败为 `recall_sweep` 响应 `finish_reason="length"`（输出 4000 token 上限被截断）→ JSON 不完整 → `MODEL_SCHEMA_INVALID` → 整份合同 `PROCESSING_FAILED`。用户要求**治本而非治标**。
+- **根因（两层，均已定位）**：
+  1. **截断被误判为"格式错误"**：`fundlex/model.py` 中，`jsonschema.ValidationError` / 解析异常一律记为 `MODEL_SCHEMA_INVALID`，且 `retry` 保持 False —— 既**不重试**，又没有区分"模型写了废话"与"模型还没写完就被截断"。
+  2. **工作单元粒度与输出预算不匹配**：`_sweep_chunk_chars()` 只按**输入**上下文（4000 字符窗口）切块，而 sweep 的**输出**（findings 条数）与该窗口内违规点多寡成正比，与输入长度无关。合同越密集，单个窗口可能产出越多 findings，最终超出输出上限。**因此重试同一请求必然再次截断**——这正是"治标"的做法（也浪费预算）。
+- **实测数据（说明治本点选对了）**：第 9 轮 82 次 `recall_sweep` 的输出 token 分布——`p50=146`、`p90=2874`、除截断外**最大值 3607**，仅 **1/82** 触及 4000 上限。故**不应全局提高上限**（90% 的调用用不到 3000，提上限只是多花钱），而应**把超限的那个窗口拆小**。D09 合同 1338 段、10 个窗口，其中含密集违规的窗口产出超长。
+- 处理方法（**已实施**，符合"代码只兜硬事实、可核验"的边界——截断是 `finish_reason=length` 这一**逐字可核验的事实**，非语义判断）：
+  1. `fundlex/model.py`：新增截断识别。当 `finish_reason == "length"` 时，`jsonschema.ValidationError` 与解析异常改记为 **`MODEL_OUTPUT_TRUNCATED`**（与 `MODEL_SCHEMA_INVALID` 明确区分）；`finish_reason` 在解析前已记录，判断可靠。
+  2. `fundlex/recall_pipeline.py`：`_sweep_batch()` 改为**工作队列**。捕获 `MODEL_OUTPUT_TRUNCATED` 时调用新增的 `_split_chunk()` 将该窗口**按整段折半**，把两半压回队首继续 sweep；拆到**单段（或低于下限 `_SWEEP_MIN_SPLIT_CHARS=400`）无法再拆**时，记入 `ledger["truncated"]` 作为**诚实缺口**，不空转、不静默丢弃。拆分过程记入 `ledger["splits"]` 便于审计。
+  3. `fundlex/recall_pipeline.py`：`MODEL_OUTPUT_TRUNCATED` 加入 `SOFT_STOP_CODES`，使**其他**任务遇到截断时按"可恢复暂停"处理，而非硬失败。
+  4. 关键性质：`_split_chunk()` **保留原段落地址**（按 `[loc]` 行切分），故拆分后 quote 解析与 location 校验仍然有效。
+- 验证：
+  - 新增 `tests/test_sweep_truncation.py`（7 项）：拆分按整段且无损、单段窗口不变、下限保护、截断时拆成两个更小窗口并继续、单段窗口记诚实缺口且不空转、非截断错误原样抛出。
+  - **真实合同验证**：对 D09 实际合同（`广发悦享一年持有期混合型FOF`，1338 段）实测——10 个窗口（7900–8000 字符）各拆一次均**无损**，子窗口地址**全部存在于文档**，quote/location 链路不受影响。
+  - **全量回归 `pytest tests`：656 passed / 6 skipped / 1 failed**，唯一失败为**既有无关项** `tests/test_rules_catalogue.py::test_source_provenance_and_reproducible_compilation`（缺 `references/source/*.docx`）。
+- 状态与验证：**已实施，单元与全量回归通过，真实合同离线验证通过**；**真实批次效果待发布后验证**（未经批次前不宣称 D09 恢复或指标改善）。
+- 边界与风险：未改动全局 `max_completion_tokens`（`FUNDLEX_MODEL_MAX_OUTPUT_TOKENS`）；拆分只发生在**确实截断**的窗口，其余窗口行为不变，故对第 9 轮 81/82 次正常调用无影响。
+- 证据：改动 `fundlex/model.py`、`fundlex/recall_pipeline.py`、新增 `tests/test_sweep_truncation.py`；数据 `/tmp/opencode/model-calls-round9.jsonl`（输出分布）；前序 FL-D107。
+- 变更记录：2026-10-17 新增。
+
 ## 后续条目模板
 
 ### FL-Dxxx 问题名称
