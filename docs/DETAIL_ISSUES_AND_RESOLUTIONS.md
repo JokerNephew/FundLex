@@ -1374,6 +1374,32 @@
   - 2026-10-17 新增。
   - 2026-10-17 按用户要求，将本适配性排查**并入 B 类总报告并明确分区**：`/home/opencode/B_CLASS_REPORT_FINAL.md` 现为**两部分**报告——第一部分（第一~五节）为 B 类合同语义偏差（模型判定，口径编号 1–19），第二部分（第六~八节）为本适配性排查（确定性统计，口径编号 **Q1–Q8**，用户要求"注意区分开"）。正文中本条目所述"报告第四节 Q1–Q8"在合并后位于**第二部分第七节**；独立副本 `/home/opencode/GUIDE_CORPUS_FIT_REPORT.md` 保留。两部分口径各自独立裁决，编号不通用。
 
+## FL-D106 引擎把「规则是否适用」交给代码判断属设计错位：改为模型判、代码只兜硬事实
+
+- 发现日期：2026-10-17
+- 背景与用户要求：产品负责人指出——**"适不适合"这类判断不应由代码来做，代码判不准**；要求**让模型多承担判断，只有确实更适合代码的才交给代码**；并**把"为什么用模型而不是用代码"的理由登记进本清单**。
+- 问题定位（设计错位）：现有链路为「模型读事实 → 代码 `condition_matches()` 依 `class_count`/`has_service_fee` 判规则适不适用 → 代码用 old_text 逐字命中判是否命中」。模型的 INVENTORY 提示**本来就要求它判 `needs_edit`/`satisfied`/`absent` 并明确"措辞可与指引范本不同"**，但代码事后用**同样是语义判断**的确定性测试把模型结论推翻，导致"模型已看到、代码却丢弃"（FL-D091 ③、FL-D101 同源）。
+- **为什么这些必须用模型、不能用代码（用户要求登记的核心理由）**：
+  1. **判断答案不唯一**：同一份合同不同次跑、不同人判，结论会不同（如"给管理人多留调低赎回费的权限算不算要改"）。代码只能给一个固定答案，必然系统性判错。
+  2. **不可逐字核验**：语义判断无法在原文指出唯一证据。"这段是不是在讲指引那件事"没有可核验的字面依据；而同义异构写法（"直销渠道"对"直销机构"、少一个"基金"、`A 类` 对 `A类`）无穷，代码锚点永远穷举不完（对应 FL-D105 的 6.2：G15 仅 1/514、G17 5/514 逐字命中）。
+  3. **换种说法结论就变**：只要把"对不上措辞"当成"不适用"，换一种合法写法就会被误判——这正是漏判根因。
+  4. **指引本身未定义的维度，代码无从判断**：`class_count` 只给 1/multiple，真实语料有 0 字母、A+C+D+E、货币基金 A/B/E 无 C 类等形态；"多类别"按字母还是按费率组、货币基金是否适用，**指引没定义，代码只能瞎猜**（对应 FL-D105 的 H2/M3/M6）。
+- 判定边界（三问标准，**三问全"是"才交给代码**）：①答案唯一；②可逐字核验；③不需要理解。任一为"否"→ 交模型。
+- **代码只兜"硬事实"（F1–F7）**：F1 某确切字符串在不在；F2 计数；F3 new_text 是否逐字已存在；F4 删除型相关词共现（`_delete_keyword_bag`）；F5 段落定位；F6 改后是否真的变了；F7 引文能否逐字核验。这些只用于**补充召回**与**硬否决**，不用于**软否决**。
+- 处理方法（**已实施**）：
+  1. 新增 `fundlex/recall.py::hard_fact_topic_absent(rule, document_compact)`——**唯一允许否决模型判断的硬事实**：合同全文**确无**该规则主题词（如 G15 无"销售服务费/支付"）才判不适用；主题词表 `_RULE_TOPIC_TOKENS` 为纯存在性测试，不含解释。
+  2. 新增 `weak_rule_signals()`——把原先会**丢弃**目标的语义信号（`slot_group_missing`、`class_substitution_noop` 的语义分支、`fee_homogeneous_classes`）改为**标注待复核**，不再静默丢弃。
+  3. 拆分 `class_substitution_noop`：新增 `class_substitution_letter_stable()` 承接其中的**硬事实**分支（实例化后 new_text **等于** old_text，即"改了等于没改"，F3 类），该分支**仍可合法丢弃**；`fee_homogeneous_classes` 分支改判为语义信号。
+  4. `recall_pipeline._rule_already_satisfied()`：删除原 `class_substitution_noop`/`slot_group_missing` 的**软否决**；只保留硬事实分支与"逐字已满足"过滤。
+  5. `recall_pipeline._rule_location_absent()`：原"段落不含任何参考文本"本身是语义判断，现**追加硬事实前提**——仅当"文档确无该规则主题词（`hard_fact_topic_absent`）且要求已满足"才判噪声，否则保留待复核。
+  6. `recall.plan_target()`：原 `RECALL_RULE_NOT_APPLICABLE`（因缺类别组）改为**先查硬事实**；主题词仍在时**不整体判不适用**，改为按可用操作继续规划。
+- 效果与实证：对 A/Y 产品（无 C 类）含"申购费用由"段落的真实合同（`广发上证科创板50成份ETF联接_20260924`）离线验证：G11 类规则由"被 `slot_group_missing` 丢弃"变为**保留**（`_rule_already_satisfied=False`、`_rule_location_absent=False`）。符合"可以错杀不能漏判"。
+- 测试：新增 `tests/test_hard_fact_veto.py`（8 项，覆盖硬事实否决/语义不否决/字母稳定硬事实/弱信号标注）；`tests/test_recall_pipeline.py` 既有 FL-D052 用例（A+C 产品 G02 字母稳定=无改动）保持通过。**全量 `pytest tests`：649 passed / 6 skipped / 1 failed**，唯一失败为**既有无关项** `test_rules_catalogue.py::test_source_provenance_and_reproducible_compilation`（缺 `references/source/*.docx`，非本次引入）。
+- 状态与验证：**已实施，单元与全量回归通过；真实批次效果待 P6 运行验证**（未经真实批次前不宣称指标改善）。
+- 边界与风险：本次**未改** `condition_matches` 对 `class_count/has_service_fee` 的**选择**功能（它仍在多条分支里用于挑操作），只改"缺类别组即整体判不适用"的**整体否决**；类别模型（H2）、货币基金（M6）等未定义维度**仍需产品负责人按 FL-D105 Q2/Q3 定口径**，代码不得自行拍板。
+- 证据：改动 `fundlex/recall.py`、`fundlex/recall_pipeline.py`、新增 `tests/test_hard_fact_veto.py`；说理来源 FL-D105 报告 `/home/opencode/GUIDE_CORPUS_FIT_REPORT.md` 及 `docs/DETAIL_ISSUES_AND_RESOLUTIONS.md` FL-D091/D101。
+- 变更记录：2026-10-17 新增。
+
 ## 后续条目模板
 
 ### FL-Dxxx 问题名称
