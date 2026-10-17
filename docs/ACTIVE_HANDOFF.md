@@ -308,7 +308,8 @@
 
 ## FL-D106 代码改动断点（2026-10-17）
 
-- **已实施但未发布**：`fundlex/recall.py`、`fundlex/recall_pipeline.py`、新增 `tests/test_hard_fact_veto.py`（提交 `bd82207`）；集中问题记录 FL-D106（提交 `24f4d6b`）。
-- 改动要点：新增 `hard_fact_topic_absent()`（唯一可否决模型的硬事实）；新增 `weak_rule_signals()`（语义信号改为标注不丢弃）；拆分 `class_substitution_letter_stable()`（硬事实分支仍可合法丢弃）；`_rule_already_satisfied` / `_rule_location_absent` / `plan_target` 的**软否决**改为硬事实门控。
-- 验证：`pytest tests` → **649 passed / 6 skipped / 1 failed**（唯一失败为既有无关项 `test_rules_catalogue.py`，缺 `references/source/*.docx`）。真实批次效果**未验证**。
-- **未做**：未 `publish_workspace.sh`（生产 `/opt/fundlex-recall-first` 仍是旧引擎），未跑真实 P6 批次，未宣称指标改善。下一条动作：择机发布并在安静窗口跑 P6 开发集验证（注意 FL-D096：发布会使在飞批次作废）。
+- **已发布并完成一轮真实批次验证**：发布哈希 `recall.py 1f898fe1…` / `recall_pipeline.py ccb2ff94…`，服务 13:59:47 重启；批次 `p6-dev-round9-01`（20/20 完成，$0.5561，无 abort）。
+- **指标（同一评分器/标签集，347 目标）**：round7 220/0.6340/kept15；round8-03 211/0.6081/kept11；**round9 219/0.6311/kept9**。相对紧邻的 round8-03：completed **+8**、kept **−2**；相对 round7：kept **15→9**。明显改善：D04/D08/D17/D19 的 G17 删除型 kept→completed、D07 G16 not_executed→completed、D12 G14、D19 G08。
+- **D09 崩溃为非本次引入**：82 次 sweep 中仅 1 次 `finish_reason=length`（输出 4000 上限截断）→ `MODEL_SCHEMA_INVALID`；sweep 工作量 84→79 反而下降。属既有输出截断脆弱点（FL-D107），待定处理。
+- **未做**：未冻结版本、未跑留出 H01–H08、未写评测结果文档、未打包；未宣称达成 0.9。
+- 详见集中问题记录 FL-D106、**FL-D107**。
