@@ -1471,16 +1471,18 @@
 | --- | --- | --- | --- | --- | --- | --- |
 | round9-01 | FL-D106 | 219 | 0.6311 | 9 | 119 | $0.5561 |
 | **round11-01** | **+FL-D109 第一步** | **225** | **0.6484** | 11 | 111 | $0.6769 |
-| round12-01 | +FL-D109 第二步 | 见下 | | | | |
+| round12-01 | +FL-D109 第二步 | 219 | 0.6311 | 10 | 118 | $0.802 |
+| round13-01 | +FL-D109 第二步（重复） | 222 | 0.6398 | 10 | 115 | $0.6487 |
 
   - 第一步实测（round11，20/20 完成、无 abort、无 not_generated、**零 `MODEL_*` 错误**，D09 亦恢复正常）：`SWEEP_LOCATION_OUT_OF_SCOPE` **362 → 146（−60%）**、`SWEEP_QUOTE_NOT_IN_WINDOW` **74 → 22（−70%）**、`SWEEP_FINDING_INVALID` **124 → 82**；`SWEEP_ALREADY_SATISFIED` 172 → 386（收敛后窗口**正确地**看到已满足条款，是该过滤器在起作用而非异常）。completed **+6**、rate **+0.0173**。
   - 离线验证（第一步）：12 份合同 requirements 文本量**下降 87.7%**，需问规则数由**每窗 22 条降至 mean 2.0–5.1 / max 8–11**，且**0 条规则不可达**（兜底未被触发但必要）。
   - 离线验证（第二步）：3 份真实合同窗口 19→26 / 18→25 / 20→27，**覆盖零损失**（1311/1311、1337/1337、1374/1374），**无窗口超预算**。
   - 单测：新增 `tests/test_sweep_rule_scope.py`（5 项：收敛、mandatory 强制、不可达回退、空映射 mandatory、子集渲染）与 `tests/test_sweep_section_windows.py`（6 项：章节对齐、预算受限分组、超长节内拆、未分配段落仍被扫、非可读区域排除、ID 稠密唯一）；`tests/test_sweep_truncation.py`（7 项，FL-D108）。
   - **全量 `pytest tests`：667 passed / 6 skipped / 1 failed**，唯一失败为既有无关项 `tests/test_rules_catalogue.py::test_source_provenance_and_reproducible_compilation`（缺 `references/source/*.docx`）。
-- 状态与验证：**两步均已实施并通过单测与全量回归**；第一步**经真实批次验证有效**；第二步已离线验证覆盖性与预算，**真实批次效果见下方变更记录**。
-- 边界与风险：第一步的收敛依赖模型产出的 `rule_locations`，故设三道硬兜底；第二步使窗口数增加约 35%（19→26），即调用数与成本上升，需在真实批次确认收益大于代价。两者均未改动规则语义、评分器或标签。
+- 状态与验证：**第一步经真实批次验证有效并已作为默认**（round11：completed 225 / rate 0.6484，优于 round9 的 219 / 0.6311）。**第二步经两次真实批次（round12 219、round13 222）测得无指标增益**，且 sweep 调用数上升（约 26 窗 vs 19 窗），故**默认关闭**（`FUNDLEX_SWEEP_SECTION_WINDOWS=0`），实现保留、留待后续在特定合同上再评估。**未宣称第二步有效**。
+- 边界与风险：第一步的收敛依赖模型产出的 `rule_locations`，故设三道硬兜底。第二步经实测代价（调用数与成本上升）大于收益，保持关闭。两次 step-2 批次（219/222）与 step-1 单批（225）的差异落在**观测到的运行间噪声**内（D09 跨轮 spread 达 7；D04 为 12/11/13/13/9/13），故不宣称 step-2 有实质恶化，但同样**不宣称其有效**。两者均未改动规则语义、评分器或标签。
 - 证据：改动 `fundlex/recall_pipeline.py`、新增 `tests/test_sweep_rule_scope.py`、`tests/test_sweep_section_windows.py`、`tools/evaluation/sweep_scope_probe.py`；数据 `/tmp/opencode/p6-round11.log`、`/tmp/opencode/score-round11.json`、`/tmp/opencode/sweep_scope_probe.json`、`/tmp/opencode/model-calls-round11.jsonl`。
+- 变更记录（续）：2026-10-17 第二步实测无增益，改为默认关闭（opt-in）。
 - 变更记录：2026-10-17 新增（两步同日实施；第一步已实测，第二步待 real batch）。
 
 ## 后续条目模板
