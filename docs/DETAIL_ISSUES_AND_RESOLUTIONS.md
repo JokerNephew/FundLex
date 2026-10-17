@@ -1485,6 +1485,39 @@
 - 变更记录（续）：2026-10-17 第二步实测无增益，改为默认关闭（opt-in）。
 - 变更记录：2026-10-17 新增（两步同日实施；第一步已实测，第二步待 real batch）。
 
+## FL-D110 引擎全链路复查：增量重扫与初次重扫不一致（已修）+ 审计/回绑三处语义缺陷（记录待决）
+
+- 发现日期：2026-10-18
+- 背景：产品负责人要求"对整个逻辑再进行检查看还有没有别的问题"。对 `fundlex/recall_pipeline.py`（2113 行）按阶段（inspect → facts → scope → inventory → survey → write → audit → sweep → deliver）逐段复查，并对 round11/12/13 三批真实产物做数据核对。
+- 复查范围与已核实"无缺陷"的结论（避免后续重复排查）：
+  - `_publish()` 只对 `temp_dir/final.docx` 做 `os.replace`，与审计读取的 `actual` 是同一文件对象，不存在"审计看 A、发布 B"；
+  - 实测 round11–13 全部 **27 份 delivered `final` 产物 sha256 与报告 `output_validation.final_sha256` 逐一相符**（红本同理），报告哈希即产物哈希；
+  - `_plan_and_generate()` 对"计划中有、但 `build_docx_edits` 未产出"的编辑回写 `RECALL_EDIT_NOT_EXECUTABLE` 并把 ledger 状态由 `planned` 改为 `unresolved`，该防线存在且有效（对应既有 `test_tampered_plan_not_generated`）。
+- 缺陷 1（**已修，本次改动**）：增量重扫与初次重扫不一致。
+  - 位置：`process_recall_first` sweep 段的增量重扫分支（原 `_artifact_chunks(actual, ...)` 硬编码 + `_sweep_batch(...)` 未传 `requirements_by_chunk` / `scope_by_chunk`）。
+  - 问题：初次重扫在开关开启时用 `_section_aware_chunks`，增量重扫**始终**用 `_artifact_chunks`；且增量重扫**不带 FL-D109 的按窗口规则收敛**，即重新变回"给该窗灌全部 22 条规则且不校验越界"。同一轮 sweep 内两次扫描口径不同。
+  - 影响规模（实测）：round11 有 **7/20** 个 case 触发增量重扫，round12 4/20，round13 4/20；D12 单案最多 3 轮。即约 **1/3 的 case 受影响**。后果：`changed` 判定（按 chunk 文本与 `swept_texts` 比对）在两次口径不同时会误判——未变窗口看似新增（浪费调用）、已变窗口看似未变（漏扫）；且增量重扫的 finding 未受窗口规则约束，`SWEEP_LOCATION_OUT_OF_SCOPE` 类噪声在重扫轮回升。
+  - 处理：新增 `_sweep_chunks(actual, sections, *, max_chars)` 作为**唯一**切窗入口（初次与增量共用），增量重扫改用该入口，并对 changed 窗口重新执行 `_window_rule_scope()` 后传入 `requirements_by_chunk` / `scope_by_chunk`，与初次扫描完全同口径。
+  - 验证：新增 `tests/test_sweep_rule_scope.py::test_sweep_chunks_are_the_same_for_initial_and_incremental_passes`（用 monkeypatch 断言两种开关下初次/增量派发一致）；`pytest tests/test_sweep_*.py tests/test_recall_pipeline.py tests/test_recall_integration.py` **50 passed**。**尚未跑真实批次确认指标**（见状态）。
+- 缺陷 2（**记录待决，未改**）：`_target_identity` 截断 60 字导致审计结论可跨绑定存活。
+  - 位置：`recall_pipeline.py:231`（`_compact(target.quote)[:60]`）、`_stale_rules()`（:876-888）、`_merge_audit_state()`（:834-849）。
+  - 问题：若重扫/re-inventory 后同一 (rule, location) 的目标引文在**第 60 个压缩字符之后**才变化，`_target_identity` 不变 → `_stale_rules` 判定"不陈旧" → 旧的 `completed`+`evidence_verified` 结论**继续生效**，`_audit_issues` 不报错，交付门（:2054）可被满足。已用代码实测：`identity(quote='x'*100) == identity('x'*60+'TOTALLY DIFFERENT')` 为 `True`，且 `_stale_rules(state, [changed_target])` 返回 `set()`。
+  - 可达性：需"引文 >60 字且前 60 字不变"才触发；round11–13 实测未观测到同案内真实触发（唯一一处 identity 相同者经核查为同案内 inventory/survey **重复目标**被正确去重，非缺陷）。故**实际风险低但机制真实**。
+  - 建议方向（待产品负责人定夺，未实施）：identity 用 `quote` 的**哈希**而非前 60 字（或加长度），使任何引文变化都判为陈旧并触发重审。
+- 缺陷 3（**记录待决，未改**）：复合(target)删除证据只检查第一个位置。
+  - 位置：`recall_pipeline.py:752-754`，`for location in {target.location}`（单元素集合）；对照 `_target_locations(target)` 会返回全部复合位置。
+  - 问题：模型对复合删除目标返回 `completed` 但未附可验证证据时，兜底逻辑只验证 `target.location`（锚点段）是否已空；若**续段（第二段）仍留有原文**，仍可判 `verified/deletion_evidence` 成立并清除该 issue。
+  - 影响面收窄说明：`_audit_context()`（:650-654）在 [AFTER] 中**已包含全部复合位置**，模型通常能看到续段是否删除，故该兜底为**次要路径**；实测 round11–13 复合 needs_edit 目标 27 个、`deletion_evidence` 审计 **0 次**，尚未真实触发。
+  - 建议方向（待定，未实施）：兜底改判 `all(_region_text(actual, loc, ...).strip()=="" for loc in _target_locations(target))`。
+- 缺陷 4（**记录待决，未改，潜在**）：无 ledger 条目的编辑成分默认 `status="planned"`。
+  - 位置：`recall_pipeline.py:215-217`（`_plan_by_target` 用 `setdefault(..., {"status": "planned"})`）、交付门 `:2027-2029`。
+  - 问题：若某编辑成分的 `target_id` 无对应 ledger 记录，会被**默认判为 planned** 并计入交付门的"已解决"集合，且 `replacement` 为 `None`；正常路径 `plan_edits` 每目标必写一条 ledger，故当前不触发。实测 round11–13 未发现"报告 targets 中 status=planned 却无 ledger 条目"的情形。属**潜伏**缺陷。
+  - 建议方向（待定，未实施）：默认状态改为 `unresolved` 或对"仅存在于 edits 成分、无 ledger"显式告警。
+- 状态与验证：**缺陷 1 已实施并单测通过**（未跑真实批次）；缺陷 2/3/4 为**已确认机制、待产品负责人决定是否修改**，均未改动代码。本次未改动规则语义、评分器与标签。
+- 边界与风险：缺陷 1 的修复使增量重扫口径与初次一致，预期降低重扫轮噪声与调用量，但也可能改变重扫轮 finding 集合，需真实批次确认不引入回归；缺陷 2/3/4 的修改涉及审计/交付门语义，按项目规定**须待产品负责人裁定 FL-D105 Q1–Q8 / FL-D104 1–19 后再动**。
+- 证据：改动 `fundlex/recall_pipeline.py`（新增 `_sweep_chunks`、增量重扫复用收敛）、`tests/test_sweep_rule_scope.py`（+1 测试）；数据核对脚本基于 `var/recall-first-evaluation/p6-dev-round1[123]-01/*/report.json`。
+- 变更记录：2026-10-18 新增（缺陷 1 已修并单测；缺陷 2/3/4 记录待决）。
+
 ## 后续条目模板
 
 ### FL-Dxxx 问题名称
