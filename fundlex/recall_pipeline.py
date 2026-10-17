@@ -1087,6 +1087,114 @@ def _artifact_chunks(actual: DocumentInspection, *, max_chars: int) -> list[_Chu
     return chunks
 
 
+def _section_aware_chunks(actual: DocumentInspection, sections: Sequence[Any],
+                          *, max_chars: int) -> list[_Chunk]:
+    """Chunk the artifact by section first, char-splitting only when a section overflows.
+
+    The final sweep used a pure character window (``_artifact_chunks``), so one window
+    could straddle several unrelated sections — the model was asked to judge "收益分配"
+    paragraphs against 清算 rules, and a clause cut across two windows lost its context
+    (FL-D109 step 2). Section-aligned windows make the unit of judgement the business unit.
+
+    Two properties keep this from opening the coverage hole that a naive section split
+    would create:
+
+    * a section longer than ``max_chars`` is split **inside** the section, so no section
+      ever exceeds the context budget;
+    * paragraphs that belong to **no** section (``structure_index`` caps at 80 sections,
+      so trailing content can be unassigned) are collected into character windows at the
+      end, so no readable paragraph is ever left unswept.
+    """
+    section_of: dict[str, str] = {}
+    order: list[str] = []
+    for section in sections:
+        for location in section.locations:
+            if location not in section_of:
+                section_of[location] = section.id
+        order.append(section.id)
+
+    def spans_for(locations: Sequence[str]) -> list[tuple[str, str]]:
+        out = []
+        for location in locations:
+            try:
+                span = actual.by_location(location)
+            except DocxError:
+                continue
+            if (span.logical_zone or span.zone) not in READABLE_ZONES:
+                continue
+            cleaned, _ = display_text(span.text)
+            out.append((location, cleaned))
+        return out
+
+    def emit_section(section_id: str, spans: list[tuple[str, str]]) -> list[_Chunk]:
+        """Split one section's paragraphs into windows no longer than max_chars."""
+        out: list[_Chunk] = []
+        lines: list[str] = []
+        locations: list[str] = []
+        total = 0
+
+        def flush() -> None:
+            nonlocal lines, locations, total
+            if lines:
+                out.append(_Chunk(id=section_id, locations=tuple(locations),
+                                  text="\n".join(lines)))
+                lines, locations, total = [], [], 0
+
+        for location, cleaned in spans:
+            line = f"[{location}] {cleaned}"
+            if lines and total + len(line) + 1 > max_chars:
+                flush()
+            lines.append(line)
+            locations.append(location)
+            total += len(line) + 1
+        flush()
+        return out
+
+    # Pack whole sections into a window until the next section would overflow the budget.
+    # This keeps section boundaries intact (a window never splits a section unless that
+    # section alone is too big) while avoiding one model call per small section.
+    by_section: dict[str, list[tuple[str, str]]] = {section_id: [] for section_id in order}
+    unassigned: list[tuple[str, str]] = []
+    for span in actual.paragraphs:
+        zone = span.logical_zone or span.zone
+        if zone not in READABLE_ZONES:
+            continue
+        cleaned, _ = display_text(span.text)
+        section_id = section_of.get(span.location)
+        if section_id is None:
+            unassigned.append((span.location, cleaned))
+        else:
+            by_section[section_id].append((span.location, cleaned))
+
+    grouped: list[tuple[list[str], list[tuple[str, str]]]] = []
+    current_ids: list[str] = []
+    current_spans: list[tuple[str, str]] = []
+    current_chars = 0
+    for section_id in order:
+        spans = by_section[section_id]
+        if not spans:
+            continue
+        section_chars = sum(len(cleaned) + len(location) + 4 for location, cleaned in spans)
+        if current_spans and current_chars + section_chars > max_chars:
+            grouped.append((current_ids, current_spans))
+            current_ids, current_spans, current_chars = [], [], 0
+        current_ids.append(section_id)
+        current_spans.extend(spans)
+        current_chars += section_chars
+    if current_spans:
+        grouped.append((current_ids, current_spans))
+
+    chunks: list[_Chunk] = []
+    for _ids, spans in grouped:
+        chunks.extend(emit_section("C", spans))
+    if unassigned:
+        chunks.extend(emit_section("unassigned", unassigned))
+    for index, chunk in enumerate(chunks, start=1):
+        chunks[index - 1] = _Chunk(id=f"C{index:03d}", locations=chunk.locations,
+                                   text=chunk.text)
+    return chunks
+
+
 def _sweep_requirements(rules: Sequence[dict]) -> str:
     lines = ["GUIDE_REQUIREMENTS"]
     for rule in rules:
@@ -1312,10 +1420,67 @@ def _split_chunk(chunk: _Chunk, *, min_chars: int = _SWEEP_MIN_SPLIT_CHARS) -> l
     return out
 
 
+def _sweep_requirements_for(rules: Sequence[dict], rule_ids: set[str]) -> str:
+    """Requirements block restricted to the rules a window can actually be about."""
+    subset = [rule for rule in rules if str(rule.get("rule_id")) in rule_ids]
+    return _sweep_requirements(subset)
+
+
+def _window_rule_scope(chunks: Sequence[_Chunk], *, mapping: dict[str, list[str]],
+                       sections: Sequence[Any], rules: Sequence[dict],
+                       mandatory: set[str]) -> list[tuple[_Chunk, set[str]]]:
+    """Pair each sweep window with the guide rules that can apply inside it (FL-D109).
+
+    The final sweep used to hand **every** guide rule to **every** window: a window over
+    the 收益分配 section was asked to judge 清算 and 申购费 rules too, so the model
+    reported noise the code then discarded (round 9: ``SWEEP_LOCATION_OUT_OF_SCOPE`` 362
+    times) and the requirements block was re-sent once per window (D09: 10 times).
+
+    A window only needs the rules whose mapped sections it contains. Two guards keep that
+    scoping from opening a hole in the "不能漏判" requirement:
+
+    * ``mandatory`` — a rule that still has an unmet target anywhere in the document is
+      forced into every window its mapped sections touch, even if the target ledger and
+      the section mapping disagree (the mapping is model-produced and can be wrong);
+    * a rule whose mapped sections no window touches is attached to **every** window, so
+      a mapping miss degrades to the old behaviour instead of silently skipping the rule.
+    """
+    by_section = {section.id: section for section in sections}
+    location_to_section: dict[str, str] = {}
+    for section in sections:
+        for location in section.locations:
+            location_to_section.setdefault(location, section.id)
+
+    covered: set[str] = set()
+    scoped: list[tuple[_Chunk, set[str]]] = []
+    for chunk in chunks:
+        window_sections = {location_to_section[loc] for loc in chunk.locations
+                           if loc in location_to_section}
+        ids = {rule_id for rule_id, mapped in mapping.items() if set(mapped) & window_sections}
+        # A rule with an outstanding target is forced in whenever this window overlaps
+        # the sections it is mapped to, even if the window's own section set and the
+        # mapping disagree about the finer boundaries.
+        ids |= {rule_id for rule_id in mandatory if set(mapping.get(rule_id) or []) & window_sections}
+        covered.update(ids)
+        scoped.append((chunk, ids))
+
+    unreachable = {str(rule.get("rule_id")) for rule in rules} - covered
+    if unreachable:
+        scoped = [(chunk, ids | unreachable) for chunk, ids in scoped]
+    # A mandatory rule the section mapping never reaches anywhere must still be asked:
+    # losing it would drop a known unmet obligation, so attach it to every window.
+    still_missing = mandatory - {rule_id for _, ids in scoped for rule_id in ids}
+    if still_missing:
+        scoped = [(chunk, ids | still_missing) for chunk, ids in scoped]
+    return scoped
+
+
 def _sweep_batch(model: Any, rules_by_id: dict[str, dict], requirements: str,
                  chunks: Sequence[_Chunk], actual: DocumentInspection, *,
                  round_number: int, counter: list[int], facts: Facts | None = None,
-                 facts_text: str = "", rule_locations: dict[str, set[str]] | None = None
+                 facts_text: str = "", rule_locations: dict[str, set[str]] | None = None,
+                 requirements_by_chunk: dict[str, str] | None = None,
+                 scope_by_chunk: dict[str, set[str]] | None = None
                  ) -> dict[str, Any]:
     """Sweep every window, splitting a window whose answer hits the output cap (FL-D108).
 
@@ -1327,13 +1492,15 @@ def _sweep_batch(model: Any, rules_by_id: dict[str, dict], requirements: str,
     ledger: dict[str, Any] = {"round": round_number, "chunks": [], "findings": [],
                               "dropped": [], "calls": 0}
     seen: set[tuple[str, str, str]] = set()
-    parts = [f"[GUIDE_REQUIREMENTS]\n{requirements}"]
-    if facts_text:
-        parts.append(f"[FACTS]\n{facts_text}")
     pending: list[_Chunk] = list(chunks)
     while pending:
         chunk = pending.pop(0)
-        context = "\n\n".join(parts + [f"[ARTIFACT_WINDOW]\n{chunk.text}"])
+        window_requirements = (requirements_by_chunk or {}).get(chunk.id, requirements)
+        window_scope = (scope_by_chunk or {}).get(chunk.id)
+        preamble = [f"[GUIDE_REQUIREMENTS]\n{window_requirements}"]
+        if facts_text:
+            preamble.append(f"[FACTS]\n{facts_text}")
+        context = "\n\n".join(preamble + [f"[ARTIFACT_WINDOW]\n{chunk.text}"])
         try:
             call = model.call(task_type="recall_sweep", bounded_context=context,
                               response_schema=SWEEP_SCHEMA,
@@ -1367,6 +1534,13 @@ def _sweep_batch(model: Any, rules_by_id: dict[str, dict], requirements: str,
             quote = str(item.get("quote") or "")
             issue = str(item.get("issue") or "")
             key = (rule_id, location, _compact(quote))
+            if window_scope is not None and rule_id not in window_scope:
+                # The window was asked only about the rules its sections can host (FL-D109);
+                # a finding about any other rule is the model reaching beyond its window.
+                chunk_ledger["dropped"].append({"code": "SWEEP_RULE_OUT_OF_WINDOW",
+                                                "chunk": chunk.id, "rule_id": rule_id,
+                                                "location": location, "quote": _clip(quote, 80)})
+                continue
             if rule_id not in rules_by_id or location not in chunk_locations or issue not in SWEEP_ISSUES:
                 chunk_ledger["dropped"].append({"code": "SWEEP_FINDING_INVALID", "chunk": chunk.id,
                                                 "rule_id": rule_id, "location": location, "issue": issue})
@@ -1759,13 +1933,31 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
             counter = [0]
             requirements = _sweep_requirements(rules)
             chunk_chars = _sweep_chunk_chars(model, requirements, facts_text)
-            chunks = _artifact_chunks(actual, max_chars=chunk_chars)
+            # Section-first windowing with a character fallback for unassigned content
+            # (FL-D109 step 2). The env switch exists so the two chunkings can be compared
+            # on the same batch before the section-first one is made unconditional.
+            if os.environ.get("FUNDLEX_SWEEP_SECTION_WINDOWS", "1") != "0":
+                chunks = _section_aware_chunks(actual, sections, max_chars=chunk_chars)
+            else:
+                chunks = _artifact_chunks(actual, max_chars=chunk_chars)
             rule_locations = {rule_id: _rule_mapped_locations(rule_id, mapping, sections)
                               for rule_id in rules_by_id}
+            # Rules with an obligation the run still has to carry out must be asked about
+            # in every window their sections touch, whatever the mapping says (FL-D109).
+            mandatory = {str(target.rule_id) for target in targets
+                         if target.state == "needs_edit" and not target.out_of_scope}
+            mandatory |= {str(target.rule_id) for target in synthetic}
+            scoped = _window_rule_scope(chunks, mapping=mapping, sections=sections,
+                                        rules=rules, mandatory=mandatory)
+            requirements_by_chunk = {chunk.id: _sweep_requirements_for(rules, ids)
+                                     for chunk, ids in scoped}
+            scope_by_chunk = {chunk.id: ids for chunk, ids in scoped}
             batch = _take_batch(chunks, max_sweep_chunks - swept_calls, gaps, planned=len(chunks))
             batch_ledger = _sweep_batch(model, rules_by_id, requirements, batch, actual,
                                         round_number=0, counter=counter, facts=facts,
-                                        facts_text=facts_text, rule_locations=rule_locations)
+                                        facts_text=facts_text, rule_locations=rule_locations,
+                                        requirements_by_chunk=requirements_by_chunk,
+                                        scope_by_chunk=scope_by_chunk)
             swept_calls += len(batch)
             swept_texts.update(chunk.text for chunk in batch)
             findings.extend(batch_ledger["findings"])
