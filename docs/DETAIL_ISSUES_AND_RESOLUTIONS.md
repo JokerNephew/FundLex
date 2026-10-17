@@ -1400,6 +1400,37 @@
 - 证据：改动 `fundlex/recall.py`、`fundlex/recall_pipeline.py`、新增 `tests/test_hard_fact_veto.py`；说理来源 FL-D105 报告 `/home/opencode/GUIDE_CORPUS_FIT_REPORT.md` 及 `docs/DETAIL_ISSUES_AND_RESOLUTIONS.md` FL-D091/D101。
 - 变更记录：2026-10-17 新增。
 
+## FL-D107 P6 第 9 轮（FL-D106 发布后）真实批次：结果对比、D09 崩溃归因、以及 sweep 输出截断这一既有脆弱点
+
+- 发现日期：2026-10-17
+- 背景：FL-D106（模型判适用/代码只兜硬事实）代码提交 `bd82207`、问题记录 `24f4d6b`、断点 `015fbaa` 后，按用户要求**发布并测试**。发布经 `tools/deploy/publish_workspace.sh` 完成，部署哈希与仓库一致（`recall.py` `1f898fe1…`、`recall_pipeline.py` `ccb2ff94…`），服务 `fundlex-recall-api`/`fundlex-recall-worker` 于 13:59:47 重启。
+- 批次：`p6-dev-round9-01`，20 例开发集，20/20 完成、无 abort、成本 $0.5561。trace 已清空后独立采集并备份至 `/tmp/opencode/model-calls-round9.jsonl`。
+- **结果对比（同一评分器 `tools/evaluation/p6_score.py`，同一 347 目标标签集）**：
+
+| 批次 | 引擎 | completed | rate | kept | not_executed | delivery: reported/actually/false_complete |
+| --- | --- | --- | --- | --- | --- | --- |
+| round7-01 | 旧 | 220 | 0.6340 | 15 | 112 | 9 / 8 / 4 |
+| round8-03 | 旧（含 FL-D101） | 211 | 0.6081 | 11 | 125 | 9 / 10 / 2 |
+| **round9-01** | **新（FL-D106）** | **219** | **0.6311** | **9** | 119 | 10 / 11 / 3 |
+
+- 结论：相对**紧接的** round8-03，completed **211 → 219（+8）**、`kept` **11 → 9（−2）**；相对 round7 为 220 → 219（−1，在噪声内）、`kept` **15 → 9（−6，明显改善）**。`kept` 是\"该删/该替换的原文仍在\"的直接指标，对应\"不能漏判\"，连续下降是本轮最实在的收益。
+- 明确好转的目标（r7 → r9 判定变化，共 16 项变化里 9 项为改善）：**D04/D08/D17/D19 的 G17 删除型由 `kept` → `completed`**（FL-D101+FL-D106 主目标）、**D07 G16 由 `not_executed` → `completed`**、D12 G14 `kept` → `completed`、D19 G08 `kept` → `completed`。
+- 明确回落的目标：**D09 的 7 个目标由 `completed` → `not_executed`**（原因见下，非本次逻辑缺陷）；D13 G05 `completed` → `kept`。
+- **D09 崩溃归因（已查实，非 FL-D106 引入）**：
+  - 现象：D09 报 `delivery_status=not_generated`、`error_code=PROCESSING_FAILED`、worker 日志 `fundlex.model.ModelError: MODEL_SCHEMA_INVALID`，发生在 `recall_sweep` 调用；单例重跑（`p6-dev-d09-check-01`）**可复现**。
+  - 精确证据（`/tmp/opencode/model-calls-round9.jsonl`）：D09 的 `recall_sweep` 第 3 次调用 `finish_reason="length"`、`usage.output=4000`（**触到输出上限被截断**）、`output=None` → JSON 不完整 → schema 校验失败；同轮 D09 还有 1 次 `recall_inventory` `http_status=503` 后重试（provider 抖动）。
+  - **全批次统计**：82 次 `recall_sweep` 中仅 **1 次** `finish_reason=length`（即 D09 该次），其余 81 次 `stop`；非 200 的 http 记录在 sweep 为 0；worker 日志全轮仅 4 次 `MODEL_SCHEMA_INVALID`（全部来自 D09 的重试）。
+  - **排除 FL-D106 加重**：round8-03 sweep 调用/chunk **84**、round7 **80**、round9 **79** —— 发布后 sweep 工作量**反而减少**，FL-D106 并未加大 sweep 输入（sweep 上下文 `[GUIDE_REQUIREMENTS]+[FACTS]+[ARTIFACT_WINDOW]` 由代码构造，本次未改）。D09 合同（`广发悦享一年持有期混合型FOF`，1338 段）为密集长文，输出上限 4000 token 处被截断属**既有脆弱点**。
+  - 配置线索：`fundlex/model.py` 的 `max_completion_tokens` 由环境变量 `FUNDLEX_MODEL_MAX_OUTPUT_TOKENS` 控制（`/etc/fundlex-recall.env` 中已设，值不记录），请求以 `max_tokens` 传入；生产实际为 4000。
+- **另需说明（避免误读为失败）**：D02 本轮 `targets=0` 是正确的 `excluded_by_fund_type`（ETF 联接，`qualification.status=excluded_by_fund_type`）；round8-03 中 \"D01 crash\" 是**那一轮**的输出截断所致，D01 在 round9 正常 `complete`。
+- 机制验证（改动确实生效）：round9 sweep 丢弃原因统计 `SWEEP_LOCATION_OUT_OF_SCOPE 362 / SWEEP_ALREADY_SATISFIED 172 / SWEEP_QUOTE_NOT_IN_WINDOW 74 / SWEEP_RULE_NOT_APPLICABLE 42 / SWEEP_FINDING_INVALID 124 / SWEEP_QUOTE_NOT_RESOLVED 6` —— 硬事实门控后的 `SWEEP_RULE_NOT_APPLICABLE` 仍工作，`SWEEP_ALREADY_SATISFIED` 逐字过滤仍工作。
+- 处理方法：
+  1. FL-D106 已发布并完成一轮真实批次验证（本条记录结果，**不宣称已达 0.9 目标**，集成完成度仍偏低）。
+  2. D09 崩溃按\"既有输出截断脆弱点\"登记，**待定处理**（候选：sweep 输出上限提高 / 截断响应不做重试而是缩小该 chunk 重发 / 显式识别 `finish_reason=length` 并拆分重试）。**未实施**。
+- 状态与验证：批次 `p6-dev-round9-01` 为有效批（无并发发布污染，发布发生在批次之前且已核对）；D09 失败已查实归因；指标对比基于同评分器同标签集，可比。**未做的**：未冻结版本、未跑留出 H01–H08、未生成评测结果文档、未打包。
+- 证据：`var/recall-first-evaluation/p6-dev-round9-01/`、`/tmp/opencode/score-round7.json|score-round8.json|score-round9.json`、`/tmp/opencode/model-calls-round9.jsonl`、`/tmp/opencode/p6-round9.log`；对比表见 `docs/ACTIVE_HANDOFF.md`。
+- 变更记录：2026-10-17 新增。
+
 ## 后续条目模板
 
 ### FL-Dxxx 问题名称
