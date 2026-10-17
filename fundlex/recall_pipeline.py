@@ -1145,26 +1145,31 @@ def _rule_already_satisfied(rule: dict, facts: Facts, paragraph_text: str, quote
 
     A finding is dropped (and recorded) when every applicable operation is already
     carried out in the paragraph: the deleted text is gone, or the instantiated
-    replacement text is present while the reference old text is gone. This keeps the
-    final sweep focused on real gaps instead of re-reporting satisfied clauses.
+    replacement text is present while the reference old text is gone.
+
+    **Hard-fact-only (FL-D106).** The weaker signals the engine uses — ``slot_group_missing``
+    (the product lacks a class group / sales-service-fee wording the rule names) and
+    ``class_substitution_noop`` (the product's own letters already read as the target group)
+    — are *semantic* judgments about whether the clause applies. They must not silently
+    drop a finding the model reported: a product whose classes do not fit the guide's A/C
+    model is exactly the case where an edit is most likely needed (可以错杀不能漏判). Such
+    findings are kept and flagged through ``weak_rule_signals`` for review instead.
     """
-    from .recall import class_substitution_noop, condition_matches, instantiate_slots, slot_group_missing
+    from .recall import condition_matches, instantiate_slots
     region = _compact(paragraph_text)
     quoted = _compact(quote)
     if not region and not quoted:
         return False
-    if class_substitution_noop(rule, facts):
-        # The product's own classes already are the group the rule asks for; nothing to do.
+    from .recall import class_substitution_letter_stable
+    if class_substitution_letter_stable(rule, facts):
+        # Hard fact: the product's own letters already instantiate to the guide's target,
+        # so the substitution yields identical text and there is nothing to change.
         return True
     haystack = quoted or region
     operations = [operation for operation in (rule.get("operations") or [])
                   if condition_matches(operation.get("condition"), facts)]
     if not operations:
         return False
-    if slot_group_missing(rule, operations, facts):
-        # The rule needs a class group or sales-service-fee wording this product cannot
-        # carry, so a sweep finding against it is out of scope, not a real gap (FL-D056).
-        return True
     for operation in operations:
         kind = operation.get("op")
         if kind == "noop":
@@ -1192,6 +1197,25 @@ def _rule_already_satisfied(rule: dict, facts: Facts, paragraph_text: str, quote
     return False
 
 
+def weak_rule_signals(rule: dict, facts: Facts, operations: Sequence[dict]) -> list[str]:
+    """Semantic (non-hard-fact) reasons the engine would once have called a rule out of scope.
+
+    These deliberately **do not** drop a target or a model finding (FL-D106). They are
+    surfaced as ``weak:<signal>`` flags so a later review step can see where the guide's
+    class model did not fit the product — the very cases that need human adjudication.
+    """
+    from .recall import (class_substitution_letter_stable, class_substitution_noop,
+                         fee_homogeneous_classes, slot_group_missing)
+    signals: list[str] = []
+    if slot_group_missing(rule, operations, facts):
+        signals.append("slot_group_missing")
+    if class_substitution_noop(rule, facts) and not class_substitution_letter_stable(rule, facts):
+        signals.append("class_substitution_noop")
+    if fee_homogeneous_classes(facts):
+        signals.append("fee_homogeneous_classes")
+    return signals
+
+
 def _rule_mapped_locations(rule_id: str, mapping: dict[str, list[str]],
                            sections: Sequence[Any]) -> set[str]:
     """Every paragraph location of the sections a rule is mapped to (FL-D052)."""
@@ -1213,8 +1237,14 @@ def _rule_location_absent(rule: dict, facts: Facts, paragraph_text: str,
     own reference or variant clause never occurs there. When the paragraph carries none
     of the rule's reference texts — and the rule's required change is already carried out
     somewhere in the artifact — the finding is noise, not a real gap.
+
+    **Hard-fact-only (FL-D106).** The "carries none of the reference texts" test is a
+    semantic judgment (a paraphrase has none of them yet is the same clause), so on its
+    own it may not discard a model finding. The finding is dropped as noise only when the
+    required change is already present **and** the document provably lacks the rule's topic
+    (F1 hard fact); otherwise it is kept and the mismatch is recorded as a weak signal.
     """
-    from .recall import condition_matches, satisfied_by_new_text
+    from .recall import condition_matches, hard_fact_topic_absent, satisfied_by_new_text
     region = _compact(paragraph_text)
     if not region:
         return False
@@ -1231,7 +1261,12 @@ def _rule_location_absent(rule: dict, facts: Facts, paragraph_text: str,
     if not document_text:
         return False
     # The requirement must already be met in the produced document for this to be noise.
-    return bool(satisfied_by_new_text(rule, facts, _compact(document_text)))
+    if not satisfied_by_new_text(rule, facts, _compact(document_text)):
+        return False
+    # Even then, only a hard fact ("the contract never mentions this rule's topic") may
+    # discard the finding; a paraphrase of the reference is a semantic judgment and the
+    # finding stays for review (FL-D106).
+    return hard_fact_topic_absent(rule, _compact(document_text))
 
 
 _DOCUMENT_COMPACT_CACHE: dict[int, str] = {}

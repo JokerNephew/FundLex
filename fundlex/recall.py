@@ -1920,6 +1920,58 @@ def slot_group_missing(rule: dict, operations: Sequence[dict], facts: Facts) -> 
     return bool(rule.get("class_substitution")) and fee_homogeneous_classes(facts)
 
 
+# Hard-fact topic tokens per rule family (F1: a plain presence test, no interpretation).
+# The engine may only veto a model judgment when the contract provably lacks the topic
+# the rule is about; anything weaker (a paraphrase of the reference text) is a semantic
+# judgment and must stay with the model (FL-D106).
+_RULE_TOPIC_TOKENS: dict[str, tuple[str, ...]] = {
+    "G01": ("销售服务费", "直销", "份额类别"),
+    "G02": ("基金份额",),
+    "G03": ("销售服务费", "份额类别"),
+    "G04": ("基金份额",),
+    "G05": ("调低", "费率"),
+    "G06": ("份额类别", "转换"),
+    "G07": ("申购费",),
+    "G08": ("申购费",),
+    "G09": ("赎回金额",),
+    "G10": ("申购费",),
+    "G11": ("申购费",),
+    "G12": ("赎回费",),
+    "G13": ("赎回费",),
+    "G14": ("调低", "费率"),
+    "G15": ("销售服务费", "支付"),
+    "G16": ("销售服务费",),
+    "G17": ("销售服务费",),
+    "G18": ("销售服务费", "费用"),
+    "G19": ("清算", "分配"),
+    "G20": ("清算", "分配"),
+    "G21": ("清算", "分配"),
+    "G22": ("清算", "分配"),
+}
+
+
+def hard_fact_topic_absent(rule: dict, document_compact: str) -> bool:
+    """True only when the contract provably lacks the rule's topic (F1, hard fact).
+
+    This is the one deterministic veto that may override a model judgment, because
+    "the contract never mentions the subject of this rule" is a verifiable fact, not
+    an interpretation: a document with no ``销售服务费`` occurrence genuinely has no
+    sales-service-fee clause to edit.
+
+    Every weaker signal the engine currently uses — a reference text that does not
+    appear verbatim, a class group the product lacks, a paraphrase — is a **semantic**
+    judgment. Per FL-D106 those must not silently drop a target the model reported;
+    they are returned as "needs review" instead (see ``weak_rule_signals``).
+    """
+    if not document_compact:
+        return False
+    tokens = _RULE_TOPIC_TOKENS.get(str(rule.get("rule_id") or ""))
+    if not tokens:
+        return False
+    # Every topic token must be absent for this to be a hard fact.
+    return all(_compact(token) not in document_compact for token in tokens)
+
+
 def fee_homogeneous_classes(facts: Facts) -> bool:
     """True when every current share class shares the same fee profile.
 
@@ -1941,13 +1993,27 @@ def class_substitution_noop(rule: dict, facts: Facts) -> bool:
     the product actually has. When each instantiated replacement equals its reference —
     i.e. the product's own class letters already are the group the rule asks for — the
     clause is already correct and no edit may be planned (FL-D052).
+
+    Two reasons return True; they are **not** equivalent under FL-D106:
+
+    * ``class_substitution_letter_stable`` — the instantiated replacement equals the
+      reference (a *hard fact*: the substitution provably yields identical text, so there
+      is nothing to change);
+    * ``fee_homogeneous_classes`` — the product's classes share one fee profile, so the
+      guide's grouping selects nothing (a *semantic* judgment: whether the clause applies
+      is exactly what needs adjudication, so it must not silently drop a model target).
     """
     if not rule.get("class_substitution"):
         return False
-    if fee_homogeneous_classes(facts):
-        # No fee-rule split exists, so the guide's group substitution selects nothing;
-        # leave the clause as it is (FL-D056).
+    if class_substitution_letter_stable(rule, facts):
         return True
+    return fee_homogeneous_classes(facts)
+
+
+def class_substitution_letter_stable(rule: dict, facts: Facts) -> bool:
+    """Hard fact: every instantiated replacement equals its reference (nothing to change)."""
+    if not rule.get("class_substitution") or fee_homogeneous_classes(facts):
+        return False
     checked = False
     for operation in rule.get("operations") or []:
         if not condition_matches(operation.get("condition"), facts):
@@ -2138,9 +2204,20 @@ def plan_target(rule: dict, target: Target, inspection: DocumentInspection, fact
         # existing class is re-grouped, so a contract whose classes are A/Y (no C
         # service-fee class) still has to receive the appended clause. Aborting there
         # dropped the obligation entirely (FL-D090, D07).
-        raise RecallError("RECALL_RULE_NOT_APPLICABLE",
-                          {"rule": rule["rule_id"],
-                           "groups": sorted(_missing_slot_groups(rule, operations, facts))})
+        #
+        # Hard-fact gate (FL-D106): "the product lacks the class group the guide names"
+        # is a semantic judgment, so it may not silently discard a target the model
+        # reported. When the contract still mentions the rule's topic, keep the target and
+        # plan what the operations can actually carry; only a provable topic absence is a
+        # genuine not-applicable.
+        if not hard_fact_topic_absent(
+                rule, _compact("".join(display_text(span.text)[0]
+                                       for span in inspection.paragraphs))):
+            operations = _drop_empty_group_operations(rule, operations, facts) or operations
+        else:
+            raise RecallError("RECALL_RULE_NOT_APPLICABLE",
+                              {"rule": rule["rule_id"],
+                               "groups": sorted(_missing_slot_groups(rule, operations, facts))})
     if slot_group_missing(rule, operations, facts):
         operations = _drop_empty_group_operations(rule, operations, facts)
     if not operations:
