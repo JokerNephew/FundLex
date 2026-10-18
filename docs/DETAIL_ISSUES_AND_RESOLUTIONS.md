@@ -1534,10 +1534,15 @@
 - **外部阻塞（非代码）**：上游模型服务返回 **HTTP 429 `GoUsageLimitError: Go usage limit exceeded`**，`metadata.limitName = weekly`，`retry-after: 70343` 秒（**≈19.5 小时**）。已用**独立账本**单次探测复现（避免污染生产 circuit 状态）：`UPSTREAM FAIL: ModelError MODEL_RETRY_EXHAUSTED`，账本内 `http_status=429`。
   - 影响：**当前无法进行任何真实模型批次**（含 FL-D110 的验证批次），直至上游周限额重置。此期间仍可做离线验证、单测与文档工作。
 - **批次作废声明**：`p6-dev-round14-01` 与 `p6-dev-round14-02` **均不得用于评分或指标对比**——前者 19/20 个 case 空跑，后者 20/20 空跑；两者 `not_generated` 是环境所致，**与 FL-D110 改动无关**（空跑发生在 `facts` 阶段之前，根本没进入 sweep）。
-- 状态与验证：**缺陷 A、B 均已实施并单测通过**（未发布、未跑真实批次）；上游限额为外部阻塞，需等待重置后重跑 round14 验证 FL-D110。
+- 状态与验证：**缺陷 A、B 均已实施、单测通过、已发布，并完成真实端到端验证**。真实验证方法：在上游限额耗尽（模型必然失败）的条件下，通过生产 API 提交一份真实合同任务（D01 类小合同），观察 job 结局。
+  - **修复前（round14 生产数据）**：`status=failed, attempt=1, error_code=PROCESSING_FAILED, delivery_status=not_generated` —— 永久失败、真实停止码丢失。
+  - **修复后（本次真实验证）**：`task status=paused`、`job_status=retry_wait`、`error_code=MODEL_CIRCUIT_OPEN`、`delivery_status=not_generated` —— **按设计暂停并保留真实停止码**，限额恢复后可由 resume 续跑。
+  - 该验证任务（临时账号）批次处于 `paused`；`store.claim()` 仅从 `queued/running` 批次取件，故**不会自行续跑**，不会意外产生模型开销。
+  - 上游限额仍为外部阻塞（需等待重置），重置后仍需重跑 round14 验证 FL-D110（该项**尚未验证**）。
 - 边界与风险：缺陷 A 的修复恢复了"暂停/续跑"语义；修复后遇到上游限额，任务会按设计进入 `retry_wait`/暂停而不是永久失败（`attempt` 上限 3，暂停类错误码在 `store.retry()` 中会置批次为 `paused`）。未改动规则语义、评分器与标签。
 - 证据：改动 `fundlex/observability.py`、`tools/evaluation/p6_run.py`、`tests/test_observability.py`（+3 测试）；日志 `sudo -n journalctl -u fundlex-recall-worker --since "2026-10-18 12:25:50" --until "2026-10-18 12:26:10"`；数据库行 `documents.status/attempt/error_code`；批次日志 `/tmp/opencode/p6-round14.log`、`/tmp/opencode/p6-round14b.log`。
 - 变更记录：2026-10-18 新增（缺陷 A、B 已修并单测；上游周限额阻塞待重置）。
+- 变更记录（续）：2026-10-18 缺陷 A 已发布并经**真实任务端到端验证**（暂停+真实停止码，详见上）；FL-D110 的真实批次验证仍待限额重置。
 
 ## 后续条目模板
 
