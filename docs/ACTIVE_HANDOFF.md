@@ -44,12 +44,18 @@
   - **FL-D114（新）**：未核验 Facts 仍参与 `excluded_by_fund_type`（整份结束）与 `condition_matches` 分支；round11/12/13 有 3/4/6 个案例含未核验引文，多为省略号/跨段导致的验证假阴性，`FUND_TYPE_QUOTE_UNVERIFIED` 每轮 1 例但均为 `open_regular`（未排除）。待裁定。
   - **FL-D115（新）**：sweep finding 以“重扫未再报”判 `resolved`，无针对性产物证据；round11 resolved 18 / pending 15，round12 8 / 19，round13 8 / 16。待裁定。
   - **复查中被证伪/夸大的项**：`structure_index` 80 段上限在 514 份语料中**不可达**（groups 中位 26、p90 30、最大 34，0 份超 80）；`facts_context` 的 `break` 在 29500 字符预算下抽样 120 份 **0 份截断**；target identity/复合删除/无 ledger 默认 planned 三点**已在 FL-D110 记录待决**，非新问题。
+- **本轮已实施（2026-10-18，commit `ebcd9de`，尚未发布）**：按 [`REVISION_PLAN_2026-10-18.md`](REVISION_PLAN_2026-10-18.md) 完成 FL-D112 / FL-D113 / FL-D114（引文核验部分）与 FL-D110 缺陷 2/3/4：
+  - 内容校验真正接线（False → 拒绝；坏 edit 丢弃并记 `RECALL_EDIT_CONTENT_UNVERIFIED`，其余继续）；composite 坐标改用 `compact_offsets` 并按整段校验，follower 不再走旁路；fragment 记录并重放 `fragments` 轨迹；variant/span-delete/composite_replace 证据与生产者对齐；`content_check_factory` 查找键加入 span。
+  - target 身份改为全文 span hash；复合删除逐 part 校验；缺 ledger → `unresolved/LEDGER_MISSING`。
+  - sweep 新增 `blind_windows` 记录 + 空范围窗口回退 mandatory 规则。
+  - `_verify_quote` 支持省略号分段与跨段边界（fund_type 排除策略未改）。
+  - 测试：新增 9 项；全量 **680 passed / 6 skipped / 1 failed**（唯一失败为既有 references 缺失项）。
 - **下一动作**：
-  1. 用新供应商跑 **`p6-dev-round14-03`**（20 例，预算 ≤1000 calls / ≈$0.5–0.8；批前清空 `/var/lib/fundlex/traces/model-calls.jsonl`，批中禁止发布），验证 FL-D110 修复在新供应商下的真实表现，并与 round11（225 / 0.6484）对照；**供应商变更作为混杂因素写入批次说明**。
-  2. FL-D112 的修复方案（统一校验契约 + composite 坐标）需产品负责人裁定后实施；实施后同一批次验证拒绝率/完成率。
-  3. 之后：冻结版本 → 留出 H01–H08 → `REAL_REVISION_EVALUATION_RESULTS.md` → 打包。
-- **预算/账本**：真实运行前在批次说明预登记；账本 `/var/lib/fundlex/model_budget.sqlite`（requests=17462，charged=$14.4908）。
-- **约束**：FL-D105 Q1–Q8、FL-D104 1–19 未裁定前不改引擎适用性/评分语义；合同可入库/出境（公开资料），凭据不入库/不入文档。
+  1. 等 `p6-dev-round14-03`（新供应商基线，跑的是旧部署）结束后，记录指标并核对是否出现 `MODEL_*` 失败；随后发布 `ebcd9de`，跑 **`p6-dev-round14-04`** 对照（21 项修正合并验证；供应商切换与修正合并，作为混杂因素注明）。
+  2. 对照重点：`RECALL_EDIT_CONTENT_UNVERIFIED` 数量、`blind_windows`/`SWEEP_RULE_OUT_OF_WINDOW`、working/incomplete 比例、kept 变化。
+  3. 结果稳定后再冻结版本 → 留出 H01–H08 → 评测报告 → 打包。
+- **预算/账本**：真实运行前在批次说明预登记；账本 `/var/lib/fundlex/model_budget.sqlite`（切换前 requests=17462，charged=$14.4908；上限 40000 / $50）。
+- **约束**：FL-D105 Q1–Q8、FL-D104 1–19 未裁定前不改规则适用性/评分语义；合同可入库/出境（公开资料），凭据不入库/不入文档。
 
 ## 当前断点（第 12 轮，2026-10-16，P6 开发集真实修改评测收敛到 0.8602）
 

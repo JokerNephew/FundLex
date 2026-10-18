@@ -1517,6 +1517,7 @@
 - 边界与风险：缺陷 1 的修复使增量重扫口径与初次一致，预期降低重扫轮噪声与调用量，但也可能改变重扫轮 finding 集合，需真实批次确认不引入回归；缺陷 2/3/4 的修改涉及审计/交付门语义，按项目规定**须待产品负责人裁定 FL-D105 Q1–Q8 / FL-D104 1–19 后再动**。
 - 证据：改动 `fundlex/recall_pipeline.py`（新增 `_sweep_chunks`、增量重扫复用收敛）、`tests/test_sweep_rule_scope.py`（+1 测试）；数据核对脚本基于 `var/recall-first-evaluation/p6-dev-round1[123]-01/*/report.json`。
 - 变更记录：2026-10-18 新增（缺陷 1 已修并单测；缺陷 2/3/4 记录待决）。
+- 变更记录（续）：2026-10-18 **缺陷 2/3/4 已实施**（commit `ebcd9de`）：身份键改为 `rule_id + location + sha256(start/end/全文 quote/composite)`，不再截断 60 字；复合删除证据新增 `_composite_parts_gone()`，逐 part 校验原切片已从各自段落消失；`_plan_by_target` 缺 ledger 改为 `unresolved` + `LEDGER_MISSING`。新增 5 项回归测试，全量 `pytest tests -q` → 680 passed / 6 skipped / 1 failed（既有 references 缺失项）。**待真实批次验证**。
 
 ## FL-D111 Langfuse 追踪层吞掉引擎可恢复停止：暂停/续跑机制被破坏（已修）+ 上游周限额耗尽（外部阻塞）+ round14/14-02 批次作废
 
@@ -1561,9 +1562,16 @@
   1. 统一校验契约：`validate_edit_plan` 对 `content_check(edit) is False` 抛 `DocxError`（或让 recall 闭包抛错，二选一，建议前者，保持 v2 兼容）；
   2. `_composite_part_slice()` 改用 `compact_offsets(span.text)`，与 `plan_composite_target()` 同一坐标系；
   3. 补回归测试：篡改 composite/replace 必须被拒；带空白锚点的 composite 必须通过。
-- 状态与验证：**已确认（离线复现），未实施**。该修复会改变交付行为（过去被静默放行的 edit 将被拒绝），按项目规定属于交付校验语义变更，需产品负责人裁定并在真实批次（round14-03 及留出集）验证拒绝率、完成率与 kept 变化后再发布。
-- 下一步：等待裁定；实施后与 FL-D110 的真实批次验证合并进行。
+- 状态与验证：**已实施（2026-10-18，commit `ebcd9de`），待真实批次验证**。实现内容：
+  - `validate_edit_plan` 对 `content_check(edit) is False` 抛 `DocxError("CONTENT_CHECK_FAILED")`；
+  - recall 侧新增“逐条预检”：未通过内容校验的 edit 被丢弃，其 target 记为 `RECALL_EDIT_CONTENT_UNVERIFIED` → `unresolved`，其余 edit 继续生成，交付门因此只会给出 `incomplete`，不会把坏 edit 当完成；
+  - `_composite_part_slice` 改用 `compact_offsets`；composite 校验改为按整段原文比较前缀/后缀（含 follower part），不再走“follower 直接放行”的旁路；
+  - fragment 编辑记录 `fragments` 轨迹，内容校验用 `_replay_fragments` 从原文重放证明替换来源；`variant_delete`（`deleted_quote`）与 `target_span_delete` 增加确定性校验；`composite_replace` 记录 `fixed_text`；
+  - `content_check_factory` 的查找键改为 target/location/span（composite 多个 part 共享 edit_id，旧键会让所有 part 只对最后一个校验）。
+- 验证：`tests/test_docx.py` 新增 2 项（False 拒绝 / True 接受）、`tests/test_recall_core.py` 新增 2 项（省略号/跨段引文、带空白 composite 坐标与篡改拒绝）、`tests/test_recall_pipeline.py` 新增 5 项（identity 全文哈希、缺 ledger、盲窗回退、空 mandatory、复合删除逐段）；全量 `pytest tests -q` → **680 passed / 6 skipped / 1 failed**（唯一失败仍为既有 `test_rules_catalogue.py::test_source_provenance_and_reproducible_compilation`，缺 references 源文件）。
+- 下一步：round14-03 基线完成后发布，跑 round14-04 对照；重点看 `RECALL_EDIT_CONTENT_UNVERIFIED` 数量、working/incomplete 比例与 kept 变化。
 - 变更记录：2026-10-18 新增（外部模型复查核验时发现；该项不在其原清单内）。
+- 变更记录（续）：2026-10-18 已实施并补测试，等待真实批次验证。
 
 ## FL-D113 sweep 规则范围为空的窗口：整窗 findings 被丢弃（已确认，未实施）
 
@@ -1575,9 +1583,10 @@
   - round11 离线重算（报告 round-0 chunk locations + `scope_mapping` + `structure_index`；mandatory 用 targets `needs_edit` 近似）：**80 个窗口里 14 个零规则**；D02 各窗规则数 `[14,0,8,4]`、D12 `[14,0,8,0]`、D16 `[14,0,8,0]`，每案 1–2 个盲窗。
   - section 级：round11 约 **69% 的 section 字符**所在 section 未被任何规则映射；其中含“基金合同内容摘要”等确实承载规则目标的 section（D10/D15/D19/D20 共有 43 处规则映射进摘要，说明模型是否映射摘要并不稳定）。
 - 处理方法（建议）：空范围窗口回退——至少把 `mandatory` 规则并入，或整体回退全规则，并在报告中记录 `blind_windows` 以支持评测归因；任何回退都会提高噪声与调用量，需按 round11 口径做 A/B 后再定。
-- 状态与验证：**已确认（离线重算），未实施**；属于覆盖/交付语义变更，待产品负责人裁定 + A/B。
-- 下一步：先加 `blind_windows` 观测字段（无行为变化）用于下一批归因；回退策略待裁定。
+- 状态与验证：**已实施（2026-10-18，commit `ebcd9de`），待 A/B**：sweep 报告新增 `blind_windows` 记录（chunk/locations/fallback_rules），并在空范围窗口回退到 `mandatory` 规则集合（无 mandatory 时保持空并记录）。新增 2 项单测（回退/空 mandatory）；全量测试 680 passed / 6 skipped / 1 failed（既有）。
+- 下一步：round14-04 对照 round11/14-03，重点看盲窗数量、sweep 调用量、`SWEEP_RULE_OUT_OF_WINDOW` 与 kept 变化；若噪声/成本上升明显再考虑只保留观测字段、关闭回退。
 - 变更记录：2026-10-18 新增。
+- 变更记录（续）：2026-10-18 已实施观测 + mandatory 回退，等待 A/B。
 
 ## FL-D114 未核验 Facts 直接参与排除/分支决策（已确认，待裁定）
 
@@ -1590,9 +1599,10 @@
   1. 最小改动：`fund_type in excluded_types` 且引文未核验时，先做一次“重新取证/仲裁”调用（要求单段内逐字短引文）；仍不可核验则不排除、继续处理并在报告标注 `fund_type_unverified`；
   2. 中期：FactClaim 三态（verified/unknown/conflict）+ evidence，`condition_matches` 无 verified 时转语义裁定；
   3. 改进 `_verify_quote`：支持省略号分段校验与跨段拼接，降低假阴性。
-- 状态与验证：**已确认（代码 + 真实批次统计），未实施**；涉及适用性/排除语义，按项目规定待产品负责人裁定。
-- 下一步：与 FL-D105/FL-D104 待决项一并裁定；裁定前不改引擎。
+- 状态与验证：**部分实施（2026-10-18，commit `ebcd9de`）**：`_verify_quote` 已支持省略号分段校验（每段必须逐字存在）与跨段落边界拼接（要求命中真正跨越边界）；`fund_type` 排除策略**未改**（未核验仍排除，待裁定）。新增 1 项单测（省略号/跨段/伪造引文）；全量测试 680 passed / 6 skipped / 1 failed（既有）。
+- 下一步：与 FL-D105/FL-D104 待决项一并裁定排除策略（重新取证/仲裁 vs 不排除）；裁定前不改。
 - 变更记录：2026-10-18 新增。
+- 变更记录（续）：2026-10-18 引文核验已改进，排除策略保持原样。
 
 ## FL-D115 sweep 以“重扫未再报”判定 finding resolved（已确认，待裁定）
 
