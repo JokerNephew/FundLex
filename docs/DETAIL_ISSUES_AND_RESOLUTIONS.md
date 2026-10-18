@@ -1518,6 +1518,27 @@
 - 证据：改动 `fundlex/recall_pipeline.py`（新增 `_sweep_chunks`、增量重扫复用收敛）、`tests/test_sweep_rule_scope.py`（+1 测试）；数据核对脚本基于 `var/recall-first-evaluation/p6-dev-round1[123]-01/*/report.json`。
 - 变更记录：2026-10-18 新增（缺陷 1 已修并单测；缺陷 2/3/4 记录待决）。
 
+## FL-D111 Langfuse 追踪层吞掉引擎可恢复停止：暂停/续跑机制被破坏（已修）+ 上游周限额耗尽（外部阻塞）+ round14/14-02 批次作废
+
+- 发现日期：2026-10-18
+- 背景：产品负责人要求"对整个逻辑再进行检查看还有没有别的问题"；复查交付链路时，实测发现 `p6-dev-round14-01`（20/20 显示完成）与 `p6-dev-round14-02` 两个真实批次中，除 D01 外**全部 case 未做任何工作**（`not_generated`、targets=0、无模型调用），但批次日志显示 `completed: 20`。深挖后确认是**两个叠加问题**：一个代码缺陷（追踪层吞异常）+ 一个外部阻塞（上游周限额耗尽）。
+- **缺陷 A（代码，已修）**：`observability.trace_document()` 用 `except Exception` 包住了 `yield`，把**被追踪主体抛出的异常**也一并吞掉，然后在 handler 里再次 `yield`。`contextlib` 语义下，generator 在 `throw()` 后再次 yield 会转为 **`RuntimeError("generator didn't stop after throw()")`**。
+  - 后果：引擎设计中的**可恢复停止**（`RecallPipelineStop`：`MODEL_CIRCUIT_OPEN`、`MODEL_RETRY_EXHAUSTED`、预算类停止等）在到达 worker 前被替换为普通 `RuntimeError`，`Worker._is_recall_stop()` 判定失败 → 走通用失败分支 → `PROCESSING_FAILED`、`attempt=1`、**永久失败**，而设计规定的"暂停并在条件恢复后续跑"完全不生效。
+  - 触发条件：Langfuse 凭据已配置（本机已配置）**且**主体抛异常；追踪关闭时该路径不经过，故此前未被发现。模块自身文档承诺"any import, configuration or network error degrades to tracing off … Observability must never turn a contract run into a failure"——该实现恰好在**最需要暂停续跑**（模型不可用）时把可恢复运行变成永久失败。
+  - 生产证据：worker 日志出现 `langfuse trace failed for recall-first:inputs/<hash>.docx` 并附带 `RecallPipelineStop: MODEL_CIRCUIT_OPEN` 回溯；数据库中 round14/14-02 全部文档行为 `status=failed, attempt=1, error_code='PROCESSING_FAILED', delivery_status='not_generated'`（`attempt=1` 即终态，证明未走重试/暂停分支）。
+  - 复现：新增 `tests/test_observability.py::test_body_exception_propagates_through_trace_document` 等 3 项测试，**在修复前实测复现 `RuntimeError: generator didn't stop after throw()`**（与生产一致）。
+  - 处理：重写 `trace_document()`——**只吞追踪自身的建立/收尾错误**（建立失败则 `yield None` 降级为"无追踪"，主体照常执行）；主体异常原样向上传播；span 关闭放在 `finally` 且其自身错误只记日志、不替换主体结果。同时给 `trace_sink.trace_document()` 复核确认其用的是 `try/finally`，**无此问题**。
+  - 验证：`tests/test_observability.py` **8 passed**（含 3 项新增）；全量 `pytest tests` → **671 passed / 6 skipped / 1 failed**，唯一失败仍为既有无关项 `test_rules_catalogue.py::test_source_provenance_and_reproducible_compilation`（缺 `references/source/*.docx`）。
+- **缺陷 B（评测工具，已修）**：`tools/evaluation/p6_run.py` 只有 `ENGINE_SCHEMA_MISMATCH` 一个中止条件。上游/预算整体不可用时，批次会继续跑完 20 个 case，每个都空跑失败，最终日志显示 `cases: 20, completed: 20`——**看起来是有效批次，评分却会读成"引擎灾难性回归"**（复盘时极易误判，本人此前一次误读即源于类似形态）。
+  - 处理：新增 `ENVIRONMENT_BLOCKED_CODES`（模型/预算全局不可用类错误码），并增加"零调用 + 零目标 + not_generated"的兜底判定；命中即 `BATCH_ABORTED <code> at <case>` 并中止批次、提示 discard。
+- **外部阻塞（非代码）**：上游模型服务返回 **HTTP 429 `GoUsageLimitError: Go usage limit exceeded`**，`metadata.limitName = weekly`，`retry-after: 70343` 秒（**≈19.5 小时**）。已用**独立账本**单次探测复现（避免污染生产 circuit 状态）：`UPSTREAM FAIL: ModelError MODEL_RETRY_EXHAUSTED`，账本内 `http_status=429`。
+  - 影响：**当前无法进行任何真实模型批次**（含 FL-D110 的验证批次），直至上游周限额重置。此期间仍可做离线验证、单测与文档工作。
+- **批次作废声明**：`p6-dev-round14-01` 与 `p6-dev-round14-02` **均不得用于评分或指标对比**——前者 19/20 个 case 空跑，后者 20/20 空跑；两者 `not_generated` 是环境所致，**与 FL-D110 改动无关**（空跑发生在 `facts` 阶段之前，根本没进入 sweep）。
+- 状态与验证：**缺陷 A、B 均已实施并单测通过**（未发布、未跑真实批次）；上游限额为外部阻塞，需等待重置后重跑 round14 验证 FL-D110。
+- 边界与风险：缺陷 A 的修复恢复了"暂停/续跑"语义；修复后遇到上游限额，任务会按设计进入 `retry_wait`/暂停而不是永久失败（`attempt` 上限 3，暂停类错误码在 `store.retry()` 中会置批次为 `paused`）。未改动规则语义、评分器与标签。
+- 证据：改动 `fundlex/observability.py`、`tools/evaluation/p6_run.py`、`tests/test_observability.py`（+3 测试）；日志 `sudo -n journalctl -u fundlex-recall-worker --since "2026-10-18 12:25:50" --until "2026-10-18 12:26:10"`；数据库行 `documents.status/attempt/error_code`；批次日志 `/tmp/opencode/p6-round14.log`、`/tmp/opencode/p6-round14b.log`。
+- 变更记录：2026-10-18 新增（缺陷 A、B 已修并单测；上游周限额阻塞待重置）。
+
 ## 后续条目模板
 
 ### FL-Dxxx 问题名称
