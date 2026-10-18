@@ -24,6 +24,17 @@ import httpx
 
 BASE = "http://127.0.0.1:8010"
 
+# Error codes that mean the model provider or the model budget is globally
+# unavailable: every later case in the batch would fail identically without doing
+# any work. Continuing would produce a run that looks valid ("completed 20/20")
+# but scores like a catastrophic engine regression (FL-D111).
+ENVIRONMENT_BLOCKED_CODES = {
+    "MODEL_CIRCUIT_OPEN", "MODEL_RETRY_EXHAUSTED", "MODEL_NETWORK_ERROR",
+    "MODEL_GLOBAL_CALL_BUDGET_EXCEEDED", "MODEL_COST_BUDGET_EXCEEDED",
+    "MODEL_CALL_BUDGET_EXCEEDED", "MODEL_CONCURRENCY_LIMIT",
+    "MODEL_LEDGER_UNAVAILABLE", "MODEL_RESERVATION_EXPIRED",
+}
+
 
 def main() -> int:
     parser = argparse.ArgumentParser()
@@ -166,6 +177,21 @@ def main() -> int:
                 batch["aborted_at"] = case["case_id"]
                 print("BATCH_ABORTED ENGINE_SCHEMA_MISMATCH at", case["case_id"],
                       "- republished mid-run; discard this run", flush=True)
+                break
+            blocked_code = entry.get("error_code") in ENVIRONMENT_BLOCKED_CODES
+            nothing_ran = (entry.get("report_delivery_status") == "not_generated"
+                           and not (entry.get("targets") or [])
+                           and not ((entry.get("model") or {}).get("calls")
+                                    or (entry.get("model") or {}).get("http_attempts")))
+            if (blocked_code or nothing_ran) and not (entry.get("targets") or []):
+                # The provider/budget is unavailable, so every later case would fail
+                # the same way with no work done. Left alone the run looks like a
+                # valid "completed 20/20" batch whose score then reads as a massive
+                # engine regression (FL-D111). Stop and say so instead.
+                batch["aborted"] = entry.get("error_code") or "NO_WORK_DONE"
+                batch["aborted_at"] = case["case_id"]
+                print("BATCH_ABORTED", batch["aborted"], "at", case["case_id"],
+                      "- model provider or budget unavailable; discard this run", flush=True)
                 break
 
     batch["results"] = results
