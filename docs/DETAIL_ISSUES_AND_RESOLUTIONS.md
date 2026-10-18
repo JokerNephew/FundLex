@@ -1651,6 +1651,7 @@
   - `override_rules` 只覆盖“delete-only 且未被 resolved needs_edit 覆盖”的规则；G05 是 replace+delete 混合规则，不在保护范围。
   - 第二个路径仍存在：模型 inventory 只报了同段一个 operation 的 target 时，`(rule, location)` 同样会压制其他 operation 的 survey 补召回——这需要 operation 级覆盖键，本轮未改。
 - 证据：`fundlex/recall.py` `satisfied_by_new_text()`（约 925-970）、`survey_targets()`（约 1285-1292、1302）；新增 `tests/test_recall_core.py::test_satisfied_replace_does_not_suppress_delete_survey`（含“delete 仍残留 → 必须再出 hit”与“delete 已干净 → 不得重复 hit”两侧）。
+- **残留路径（2026-10-18 复核确认）**：`_delete_operation_still_pending()` 只用**精确** `old_text in compact_body`，而 survey 的 `find_old_text_all()` 还有 fuzzy 路径（目标长度 ≥24、阈值 0.9）以及 fragment/keyword-bag 路径。离线复现：delete old_text 为“基金管理人应当在调整前及时公告并报中国证监会备案”，合同写作“基金管理人应当在调整前**事先**公告并报中国证监会备案”（difflib ratio 0.917）；当前 survey 只返回 satisfied hit；把该 helper 临时改为恒 True 后，survey 立即找到该 fuzzy delete hit。说明本修复只覆盖精确路径，fuzzy/变体仍会被 `(rule, location)` 压制；必须用 operation-aware 覆盖键根治。
 - 处理方法（已实施）：新增 `_delete_operation_still_pending(rule, facts, compact_body)`；satisfied 命中后，仅当该规则没有仍残留的适用 delete old_text 时才把 `(rule, location)` 加入 `existing`。delete 已真正完成时不会产生重复 hit；仍残留时 survey 继续搜索。
 - 状态与验证：**已实施，单测通过；待真实批次验证**（将随下一批 dev 运行观察 `kept`/`not_executed` 与重复 target 数）。全量回归在本轮后续统一跑。
 - 下一步：把覆盖键升级为 `(rule_id, operation_key, location)`（先内部 key，暂不改 Guide schema），覆盖模型 target 路径；再评估是否把 operation 正式加入 Inventory schema / Target。
