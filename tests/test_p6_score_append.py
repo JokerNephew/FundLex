@@ -187,3 +187,18 @@ def test_replace_that_was_never_made_still_scores_kept():
               "required_text": required, "compact_start": 0}
     verdict = score_target(target, {"classes": []}, [region], [region])
     assert verdict["verdict"] == "kept"
+
+
+def test_score_selects_only_run_cases_by_default(tmp_path):
+    """A dev-only run must not be diluted by unrun holdout labels (FL-D116)."""
+    import json
+    from tools.evaluation.p6_score import _select_label_cases
+    labels = [{"case_id": "D01", "group": "dev"}, {"case_id": "H01", "group": "holdout"}]
+    (tmp_path / "batch.json").write_text(json.dumps({"cases": ["D01"]}), encoding="utf-8")
+    selected, missing, warning = _select_label_cases(labels, tmp_path, "run")
+    assert [case["case_id"] for case in selected] == ["D01"]
+    assert missing == {"H01"}
+    assert warning is None
+    selected, missing, _ = _select_label_cases(labels, tmp_path, "all")
+    assert [case["case_id"] for case in selected] == ["D01", "H01"]
+    assert missing == set()

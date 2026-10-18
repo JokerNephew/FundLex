@@ -51,7 +51,7 @@
   - `_verify_quote` 支持省略号分段与跨段边界（fund_type 排除策略未改）。
   - 测试：新增 9 项；全量 **680 passed / 6 skipped / 1 failed**（唯一失败为既有 references 缺失项）。
 - **下一动作**：
-  1. **`p6-dev-round14-03` 基线已完成**（DeepSeek 直连、旧引擎）：**218/347 = 0.6282**（kept 11 / not_executed 118），6 报 complete / 10 实际 complete / 1 false_complete；1019 calls / $0.7372。对照 round11（旧供应商）225/347 = 0.6484。
+  1. **`p6-dev-round14-03` 基线已完成**（DeepSeek 直连、旧引擎）：dev-only **218/236 = 0.9237**（kept 11 / not_executed 7），6 报 complete / 10 实际 complete / 1 false_complete；1019 calls / $0.7372。对照 round11 dev-only 225/236 = 0.9534（旧供应商）。**注意 FL-D116**：此前 218/347 = 0.6282 与 225/347 = 0.6484 是评分器把 111 个未运行留出目标计入分母导致的低估；`p6_score.py` 已改为默认只评本次批次实际运行的 case（`--group run`），并支持 `--group dev|holdout|all`。
   2. 修正版 `ebcd9de` 已于 2026-10-18 14:16 CST 发布（部署文件 sha 与仓库一致，服务 active）；**`p6-dev-round14-04` 运行中**，用于验证 21 项修正合并后的真实表现。
   3. 对照重点：`RECALL_EDIT_CONTENT_UNVERIFIED` 数量、`blind_windows`/`SWEEP_RULE_OUT_OF_WINDOW`、working/incomplete 比例、kept 变化；供应商切换与修正合并，作为混杂因素注明。
   4. 结果稳定后再冻结版本 → 留出 H01–H08 → 评测报告 → 打包。

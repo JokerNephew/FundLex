@@ -1413,6 +1413,8 @@
 | round8-03 | 旧（含 FL-D101） | 211 | 0.6081 | 11 | 125 | 9 / 10 / 2 |
 | **round9-01** | **新（FL-D106）** | **219** | **0.6311** | **9** | 119 | 10 / 11 / 3 |
 
+- **2026-10-18 更正（FL-D116）**：上表 347 分母含 **111 个未运行的留出目标**；开发集实际为 **236 目标**。按 dev-only 复算：round7 **220/236 = 0.9322**、round8-03 **211/236 = 0.8941**、round9 **219/236 = 0.9280**。`not_executed` 中的 111 项是留出标签，不是引擎失败；相对比较仍成立，绝对率以 dev-only 为准。
+
 - 结论：相对**紧接的** round8-03，completed **211 → 219（+8）**、`kept` **11 → 9（−2）**；相对 round7 为 220 → 219（−1，在噪声内）、`kept` **15 → 9（−6，明显改善）**。`kept` 是\"该删/该替换的原文仍在\"的直接指标，对应\"不能漏判\"，连续下降是本轮最实在的收益。
 - 明确好转的目标（r7 → r9 判定变化，共 16 项变化里 9 项为改善）：**D04/D08/D17/D19 的 G17 删除型由 `kept` → `completed`**（FL-D101+FL-D106 主目标）、**D07 G16 由 `not_executed` → `completed`**、D12 G14 `kept` → `completed`、D19 G08 `kept` → `completed`。
 - 明确回落的目标：**D09 的 7 个目标由 `completed` → `not_executed`**（原因见下，非本次逻辑缺陷）；D13 G05 `completed` → `kept`。
@@ -1518,7 +1520,7 @@
 - 证据：改动 `fundlex/recall_pipeline.py`（新增 `_sweep_chunks`、增量重扫复用收敛）、`tests/test_sweep_rule_scope.py`（+1 测试）；数据核对脚本基于 `var/recall-first-evaluation/p6-dev-round1[123]-01/*/report.json`。
 - 变更记录：2026-10-18 新增（缺陷 1 已修并单测；缺陷 2/3/4 记录待决）。
 - 变更记录（续）：2026-10-18 **缺陷 2/3/4 已实施**（commit `ebcd9de`）：身份键改为 `rule_id + location + sha256(start/end/全文 quote/composite)`，不再截断 60 字；复合删除证据新增 `_composite_parts_gone()`，逐 part 校验原切片已从各自段落消失；`_plan_by_target` 缺 ledger 改为 `unresolved` + `LEDGER_MISSING`。新增 5 项回归测试，全量 `pytest tests -q` → 680 passed / 6 skipped / 1 failed（既有 references 缺失项）。**待真实批次验证**。
-- 变更记录（续 2）：2026-10-18 `p6-dev-round14-03`（DeepSeek 直连、**旧引擎**）基线：**218/347 = 0.6282**（kept 11 / not_executed 118），报 complete 6 / 实际 complete 10 / false_complete 1；1019 calls / **$0.7372**。对照 round11（旧供应商）225/347 = 0.6484；供应商切换是混杂因素。修正版（`ebcd9de`）已于 14:16 CST 发布，`round14-04` 运行中。
+- 变更记录（续 2）：2026-10-18 `p6-dev-round14-03`（DeepSeek 直连、**旧引擎**）基线：dev-only **218/236 = 0.9237**（kept 11 / not_executed 7），报 complete 6 / 实际 complete 10 / false_complete 1；1019 calls / **$0.7372**。原记录的 218/347 = 0.6282 是 FL-D116 的评分器分母问题（含 111 个未运行留出目标）。对照 round11 dev-only 225/236 = 0.9534；供应商切换是混杂因素。修正版（`ebcd9de`）已于 14:16 CST 发布，`round14-04` 运行中。
 
 ## FL-D111 Langfuse 追踪层吞掉引擎可恢复停止：暂停/续跑机制被破坏（已修）+ 上游周限额耗尽（外部阻塞）+ round14/14-02 批次作废
 
@@ -1616,6 +1618,29 @@
 - 状态与验证：**已确认（代码 + 真实批次计数），未实施**；属于审计/交付门语义，待产品负责人裁定。
 - 下一步：与 FL-D105/FL-D104 一并裁定；裁定前只在报告里记录 `resolution=re-sweep clean`（已有）供归因。
 - 变更记录：2026-10-18 新增。
+
+## FL-D116 P6 评分器把未运行的留出标签计入 not_executed：开发集绝对完成率被系统性低估（已修，已复算）
+
+- 发现日期：2026-10-18
+- 问题与影响：
+  - `tools/evaluation/p6_score.py` 遍历 `labels.json` 的**全部 28 个 case**（dev 20 + holdout 8）；dev 批次目录里没有 H01–H08 的产物，评分器就把 **111 个留出目标全部判 `not_executed`**，与开发集的 236 个目标一起形成 **347** 的分母。
+  - 结果：开发集真实完成率被稀释。round11 记录为 **225/347 = 64.84%**，实际开发集是 **225/236 = 95.34%**；round14-03 记录 218/347 = 62.82%，实际 **218/236 = 92.37%**。项目此前基于 347 口径得出的“离自动修订可靠还有明显距离”结论被显著夸大。
+  - 该问题不改变同一轮内的相对比较（分子均为 dev），但所有绝对率、以及“not_executed 118”之类的读数都需要按 dev-only 重新解释。
+- 证据（同一评分器修正后复算，均为 dev-only）：
+  | 批次 | completed | rate | kept | not_executed | reported/actually/false_complete |
+  | --- | --- | --- | --- | --- | --- |
+  | round7-01 | 220 | 0.9322 | 15 | 1 | 9 / 8 / 4 |
+  | round8-03 | 211 | 0.8941 | 11 | 14 | 9 / 10 / 2 |
+  | round9-01 | 219 | 0.9280 | 9 | 8 | 10 / 11 / 3 |
+  | **round11-01** | **225** | **0.9534** | 11 | 0 | 10 / 11 / 3 |
+  | round12-01 | 219 | 0.9280 | 10 | 7 | 7 / 10 / 3 |
+  | round13-01 | 222 | 0.9407 | 10 | 4 | 10 / 11 / 3 |
+  | round14-03 | 218 | 0.9237 | 11 | 7 | 6 / 10 / 1 |
+- 处理方法（已实施）：`p6_score.py` 新增 `--group {run,dev,holdout,all}`，默认 **`run`**——从 `batch.json` 的 `cases`/`results` 读取本次实际运行的 case，只评这些标签；`--group all` 仍可用于最终 dev+holdout 全量验收。输出新增 `cases_scored`/`groups` 并打印未评分标签数。
+- 状态与验证：**已实施并复算**（commit 见变更记录）；新增 `tests/test_p6_score_append.py::test_score_selects_only_run_cases_by_default`，该文件 15 passed。修正后 round11 = 225/236、round14-03 = 218/236。
+- 边界与影响：评分语义本身未变（每个目标的 verdict 规则不变），只修正分母；此前所有 347 口径的表按上表重新解释。留出验收必须在冻结版本后用 `--group holdout` 或 `--group all` 单独报告，不得再与 dev 混算。
+- 下一步：round14-04 用修正后的评分器出 dev-only 指标；最终报告同时列 dev 与 holdout 两组分母。
+- 变更记录：2026-10-18 新增并修复。
 
 ## 后续条目模板
 

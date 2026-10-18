@@ -378,12 +378,42 @@ def score_target(target: dict, facts: dict, final_paragraphs: list[str],
     return result
 
 
+def _select_label_cases(label_cases: list[dict], run_dir: Path, group: str
+                        ) -> tuple[list[dict], set[str], str | None]:
+    """Pick the label cases this run actually covers (FL-D116).
+
+    The frozen label file contains both the dev and holdout sets. A dev-only batch has
+    no holdout artifacts, so scoring every label would count 111 unrun holdout targets
+    as ``not_executed`` and make a 95% dev run look like 65%.
+    """
+    if group == "all":
+        return list(label_cases), set(), None
+    if group in {"dev", "holdout"}:
+        return [case for case in label_cases if case.get("group") == group], set(), None
+    batch_path = run_dir / "batch.json"
+    run_cases: set[str] = set()
+    if batch_path.exists():
+        batch = json.loads(batch_path.read_text(encoding="utf-8"))
+        run_cases = {str(case) for case in batch.get("cases") or []}
+        run_cases |= {str(row.get("case_id")) for row in batch.get("results") or []
+                      if row.get("case_id")}
+    if not run_cases:
+        return list(label_cases), set(), "no batch.json case list; scoring every label case"
+    selected = [case for case in label_cases if case["case_id"] in run_cases]
+    missing = {case["case_id"] for case in label_cases} - {case["case_id"] for case in selected}
+    return selected, missing, None
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--labels", default="var/recall-first-evaluation/p6/labels.json")
     parser.add_argument("--run", required=True)
     parser.add_argument("--data-root", default="/home/opencode/data")
     parser.add_argument("--output", default=None)
+    parser.add_argument("--group", choices=("run", "dev", "holdout", "all"), default="run",
+                        help="Label cases to score. 'run' (default) scores exactly the cases "
+                             "listed in the run's batch.json, so a dev-only run is not diluted "
+                             "by unrun holdout labels (FL-D116).")
     args = parser.parse_args()
 
     labels = json.loads(Path(args.labels).read_text(encoding="utf-8"))
@@ -391,13 +421,24 @@ def main() -> int:
     words_root = Path(args.data_root) / "funds_word"
     output = Path(args.output) if args.output else run_dir / "score.json"
 
+    label_cases = labels["cases"]
+    selected, missing, warning = _select_label_cases(label_cases, run_dir, args.group)
+    if warning:
+        print("WARNING:", warning, flush=True)
+    groups = {group: sum(1 for case in selected if case.get("group") == group)
+              for group in sorted({case.get("group") or "?" for case in selected})}
+    print(f"scored_cases={len(selected)}/{len(label_cases)} groups={json.dumps(groups, ensure_ascii=False)}",
+          flush=True)
+    if missing and args.group == "run":
+        print(f"note: {len(missing)} label cases not in this run (not scored)", flush=True)
+
     case_rows: list[dict] = []
     verdict_totals: dict[str, int] = {}
     rule_stats: dict[str, dict[str, int]] = {}
     delivery = {"reported_complete": 0, "actually_complete": 0, "false_complete": 0,
                 "editable_cases": 0}
 
-    for label in labels["cases"]:
+    for label in selected:
         case_id = label["case_id"]
         case_dir = run_dir / case_id
         entry: dict = {"case_id": case_id, "group": label["group"],
@@ -490,6 +531,8 @@ def main() -> int:
             "applicability_conflicts": conflicts_total,
         },
         "delivery": delivery,
+        "cases_scored": len(selected),
+        "groups": groups,
         "rule_completion": {
             rule: {"completed": stats["completed"], "total": stats["total"],
                    "rate": round(stats["completed"] / stats["total"], 4)}
