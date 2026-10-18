@@ -1150,3 +1150,49 @@ def test_satisfied_replace_does_not_suppress_delete_survey(tmp_path: Path):
     clean_hits = survey_targets(inspect_docx(clean_path, full=True), [rule], _facts())
     assert any(hit.operation == "satisfied" for hit in clean_hits)
     assert not any("备案" in hit.quote for hit in clean_hits if hit.operation != "satisfied")
+
+
+def test_satisfied_replace_does_not_suppress_fuzzy_delete_variant(tmp_path: Path):
+    """The delete survey also covers a bounded fuzzy variant (FL-D117 residual)."""
+    from fundlex.recall import survey_targets
+    path = tmp_path / "fuzzy-delete.docx"
+    document = Document()
+    document.add_paragraph(
+        "基金管理人可以适当调低销售服务费率。"
+        "基金管理人应当在调整前事先公告并报中国证监会备案。")
+    document.save(path)
+    inspection = inspect_docx(path, full=True)
+    rule = {"rule_id": "GX", "title": "类别调整句",
+            "requirement": "调低销售服务费率并删除备案句。",
+            "operations": [
+                {"op": "replace", "old_text": "调低赎回费率",
+                 "new_text": "调低销售服务费率", "condition": {"kind": "none", "value": None}},
+                {"op": "delete",
+                 "old_text": "基金管理人应当在调整前及时公告并报中国证监会备案",
+                 "condition": {"kind": "none", "value": None}},
+            ]}
+    hits = survey_targets(inspection, [rule], _facts())
+    assert any(hit.operation == "satisfied" for hit in hits)
+    assert any("事先公告" in hit.quote for hit in hits if hit.operation != "satisfied")
+
+
+def test_survey_operation_coverage_does_not_hide_other_operations(tmp_path: Path):
+    """A target covering only the replace operation must not suppress the delete hit."""
+    from fundlex.recall import survey_targets
+    path = tmp_path / "operation-coverage.docx"
+    document = Document()
+    document.add_paragraph("基金管理人可以适当调低赎回费率，并报中国证监会备案。")
+    document.save(path)
+    inspection = inspect_docx(path, full=True)
+    rule = {"rule_id": "GX", "title": "类别调整句",
+            "requirement": "调低销售服务费率并删除备案句。",
+            "operations": [
+                {"op": "replace", "old_text": "调低赎回费率",
+                 "new_text": "调低销售服务费率", "condition": {"kind": "none", "value": None}},
+                {"op": "delete", "old_text": "并报中国证监会备案",
+                 "condition": {"kind": "none", "value": None}},
+            ]}
+    hits = survey_targets(inspection, [rule], _facts(),
+                          known={("GX", "p0"): {"GX:0"}})
+    assert not any("调低赎回费率" in hit.quote for hit in hits)
+    assert any("备案" in hit.quote for hit in hits)

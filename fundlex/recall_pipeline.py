@@ -37,7 +37,8 @@ from .recall import (BOUNDARY_POLICY, ENGINE_ID, ENGINE_VERSION, SCHEMA_VERSION,
                      condition_matches, find_old_text_all, fuzzy_span, instantiate_slots,
                      resolve_old_text, resolve_quote, rule_context, scope_map,
                      structure_index, survey_targets, compact_offsets,
-                     append_applicability_targets, is_delete_only_rule, Section)
+                     append_applicability_targets, is_delete_only_rule, Section,
+                     known_operations_from_targets, operations_cover_hit)
 from .recall_prompts import (AUDIT_INSTRUCTION, AUDIT_PROMPT_VERSION, AUDIT_SCHEMA,
                              PROMPT_VERSIONS, SWEEP_INSTRUCTION, SWEEP_PROMPT_VERSION,
                              SWEEP_SCHEMA)
@@ -82,6 +83,22 @@ def _compact(value: str) -> str:
 
 def _clip(value: str, limit: int) -> str:
     return value if len(value) <= limit else value[:limit] + "…"
+
+
+def _qualification_status(facts: Facts, excluded_types: Sequence[str]) -> tuple[str, bool]:
+    """Qualification decision plus whether the contract may stop here.
+
+    A whole-contract exclusion is irreversible, so it needs verified evidence. An
+    unverified excluded type is not allowed to end the run; it continues and the
+    delivery gate marks it incomplete (FL-D114).
+    """
+    excluded = facts.fund_type in excluded_types
+    verified = bool(facts.quotes_verified.get("fund_type"))
+    if excluded and verified:
+        return "excluded_by_fund_type", True
+    if excluded:
+        return "eligible_fund_type_unverified", False
+    return "eligible", False
 
 
 def _excluded_types() -> tuple[str, ...]:
@@ -289,15 +306,15 @@ def _survey_targets_from_hits(hits: Sequence[SurveyHit], rules_by_id: dict[str, 
     the append pass uses it so an inventory judgment of "absent" cannot mask the clause
     the pass just located (FL-D090).
     """
-    known: set[tuple[str, str]] = {(target.rule_id, location) for target in existing_targets
-                                   for location in _target_locations(target)}
+    known = known_operations_from_targets(existing_targets, rules_by_id, inspection)
     targets: list[Target] = []
     gaps: list[dict[str, Any]] = []
     counter = start_index
     for hit in hits:
         if hit.operation == "satisfied":
             continue
-        if hit.rule_id not in override_rules and (hit.rule_id, hit.locations[0]) in known:
+        if hit.rule_id not in override_rules and operations_cover_hit(
+                known, hit.rule_id, hit.locations, hit.operation_keys):
             continue
         counter += 1
         target_id = f"Y{counter:03d}"
@@ -317,7 +334,8 @@ def _survey_targets_from_hits(hits: Sequence[SurveyHit], rules_by_id: dict[str, 
                          "location": location, "quote": _clip(hit.quote, 80)})
             continue
         target = Target(target_id=target_id, rule_id=hit.rule_id, location=location,
-                        quote=hit.quote, state="needs_edit", reason=reason)
+                        quote=hit.quote, state="needs_edit", reason=reason,
+                        operations=hit.operation_keys)
         target.start, target.end = located
         if len(hit.parts) > 1:
             target.composite = parts
@@ -326,8 +344,12 @@ def _survey_targets_from_hits(hits: Sequence[SurveyHit], rules_by_id: dict[str, 
             target.segment_ok = containing_segment(span, *located) is not None
             target.resolution = "resolved"
         targets.append(target)
-        for part_location in hit.locations:
-            known.add((hit.rule_id, part_location))
+        if hit.operation_keys:
+            for part_location in hit.locations:
+                known.setdefault((hit.rule_id, part_location), set()).update(hit.operation_keys)
+        else:
+            for part_location in hit.locations:
+                known[(hit.rule_id, part_location)] = None
     return targets, gaps
 
 
@@ -397,10 +419,7 @@ def _run_survey(model: Any, rules: Sequence[dict], rules_by_id: dict[str, dict],
                 gaps: list[dict[str, Any]],
                 sections: Sequence[Section] = ()) -> list[SurveyHit]:
     """Code-driven coverage pass: find rule targets the model inventory never reported."""
-    known = [(target.rule_id, location) for target in targets for location in _target_locations(target)]
-    for item in synthetic:
-        for location in _target_locations(item):
-            known.append((item.rule_id, location))
+    known = known_operations_from_targets([*targets, *synthetic], rules_by_id, inspection)
     # A delete rule the inventory judged "absent" or left unresolved is exactly the
     # not-applicable call this pass exists to correct: the model recorded a target at the
     # location the reference text still occupies, so that (rule, location) pair would
@@ -438,7 +457,8 @@ def _run_survey(model: Any, rules: Sequence[dict], rules_by_id: dict[str, dict],
     for hit in satisfied:
         target_id = f"Y{len(synthetic) + len(hits) + 1:03d}"
         target = Target(target_id=target_id, rule_id=hit.rule_id, location=hit.locations[0],
-                        quote=hit.quote, state="satisfied", reason="survey_new_text_present")
+                        quote=hit.quote, state="satisfied", reason="survey_new_text_present",
+                        operations=hit.operation_keys)
         synthetic.append(target)
         origins[target_id] = "survey_satisfied"
     discovered, new_gaps = _survey_targets_from_hits(
@@ -1560,13 +1580,15 @@ def _window_rule_scope(chunks: Sequence[_Chunk], *, mapping: dict[str, list[str]
         if not ids:
             # A window whose sections no rule is mapped to used to be swept with an
             # empty requirements block; every finding in it was then dropped as
-            # out-of-window (FL-D113). Ask at least the rules with a known unmet
-            # obligation, so a duplicate of an existing target in an unmapped section
-            # (for example the summary) is still found.
+            # out-of-window (FL-D113). The final sweep exists to find unknown misses,
+            # so a zero-rule window falls back to the full guide rather than only the
+            # rules that already have a known unmet target. Only these windows pay the
+            # cost; mapped windows keep the FL-D109 scoping.
+            all_rule_ids = {str(rule.get("rule_id")) for rule in rules}
             if blind_windows is not None:
                 blind_windows.append({"chunk": chunk.id, "locations": list(chunk.locations),
-                                      "fallback_rules": sorted(mandatory)})
-            ids = set(mandatory)
+                                      "fallback_rules": sorted(all_rule_ids)})
+            ids = all_rule_ids
         scoped.append((chunk, ids))
 
     unreachable = {str(rule.get("rule_id")) for rule in rules} - covered
@@ -1711,8 +1733,58 @@ def _sweep_batch(model: Any, rules_by_id: dict[str, dict], requirements: str,
     return ledger
 
 
-def _resolve_pending(findings: list[dict[str, Any]], batch_ledger: dict[str, Any]) -> None:
-    """A re-swept chunk clears pending findings it no longer reports."""
+def _rule_required_text(rule: dict, facts: Facts) -> str:
+    """First applicable replace/append text the guide requires for this rule."""
+    for operation in rule.get("operations") or []:
+        if operation.get("op") not in {"replace", "append"}:
+            continue
+        if not condition_matches(operation.get("condition"), facts):
+            continue
+        instantiated, issues = instantiate_slots(str(operation.get("new_text") or ""), facts)
+        if not issues and instantiated:
+            return instantiated
+    return ""
+
+
+def _finding_evidence(finding: dict[str, Any], actual: DocumentInspection,
+                      rules_by_id: dict[str, dict], facts: Facts) -> str:
+    """Deterministic proof that a re-swept finding is really gone, or ''.
+
+    - ``residual_old_text`` / ``wrong_text``: the quoted old text is absent from the
+      artifact paragraph (a disappeared paragraph also counts).
+    - ``missing_new_text``: the rule's required replacement/append text is present.
+    - unknown issue types keep the old model-clean behaviour in the caller.
+    """
+    issue = str(finding.get("issue") or "")
+    location = str(finding.get("location") or "")
+    quote = str(finding.get("quote") or "")
+    rule = rules_by_id.get(str(finding.get("rule_id") or ""))
+    required = _rule_required_text(rule, facts) if rule else ""
+    try:
+        span = actual.by_location(location)
+    except DocxError:
+        return "location_gone"
+    body = _compact(display_text(span.text)[0])
+    if issue == "missing_new_text":
+        return "required_text_present" if required and _compact(required) in body else ""
+    if issue == "wrong_text" and required and _compact(required) in body:
+        return "required_text_present"
+    if issue in {"residual_old_text", "wrong_text"}:
+        return "old_text_absent" if quote and _compact(quote) not in body else ""
+    return ""
+
+
+def _resolve_pending(findings: list[dict[str, Any]], batch_ledger: dict[str, Any], *,
+                     actual: DocumentInspection | None = None,
+                     rules_by_id: dict[str, dict] | None = None,
+                     facts: Facts | None = None) -> None:
+    """Close pending findings only with deterministic evidence (FL-D115).
+
+    A model that no longer reports a finding is a *candidate* resolution; the old
+    implementation accepted that alone, so a stochastic miss could mark an unfixed
+    obligation resolved. When the artifact and rule are supplied, require the artifact
+    to prove the fix; otherwise keep the finding pending (blocking ``complete``).
+    """
     for chunk_ledger in batch_ledger.get("chunks") or []:
         locations = set(chunk_ledger["locations"])
         reported = {(item["rule_id"], item["location"]) for item in chunk_ledger["findings"]}
@@ -1722,9 +1794,22 @@ def _resolve_pending(findings: list[dict[str, Any]], batch_ledger: dict[str, Any
             if (finding["rule_id"], finding["location"]) in reported:
                 finding["status"] = "unresolved"
                 finding["resolution"] = "still_reported"
+                continue
+            issue = str(finding.get("issue") or "")
+            evidence = ""
+            if actual is not None and rules_by_id is not None and facts is not None:
+                evidence = _finding_evidence(finding, actual, rules_by_id, facts)
+            if evidence:
+                finding["status"] = "resolved"
+                finding["resolution"] = f"re-sweep round {batch_ledger['round']} clean"
+                finding["resolution_evidence"] = evidence
+            elif issue in {"residual_old_text", "missing_new_text", "wrong_text"}:
+                # The model stayed silent but the artifact does not prove the repair.
+                finding["resolution"] = "model_clean_but_evidence_missing"
             else:
                 finding["status"] = "resolved"
                 finding["resolution"] = f"re-sweep round {batch_ledger['round']} clean"
+                finding["resolution_evidence"] = "model_clean"
 
 
 # ---------------------------------------------------------------------------
@@ -1933,15 +2018,17 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
         facts = extract_facts(inspection, model)
         report["facts"] = facts.as_ledger()
         excluded_types = _excluded_types()
+        qualification_status, excluded_now = _qualification_status(facts, excluded_types)
+        qualification_gap = qualification_status == "eligible_fund_type_unverified"
         report["qualification"] = {
-            "status": "excluded_by_fund_type" if facts.fund_type in excluded_types else "eligible",
+            "status": qualification_status,
             "fund_type": facts.fund_type, "fund_type_quote": facts.fund_type_quote,
             "fund_type_basis": facts.fund_type_basis,
             "fund_type_quote_verified": bool(facts.quotes_verified.get("fund_type")),
             "excluded_types": list(excluded_types), "basis": "facts.fund_type",
             "problems": list(facts.problems),
         }
-        if facts.fund_type in excluded_types:
+        if excluded_now:
             report["delivery_status"] = "excluded"
             return report
 
@@ -2129,7 +2216,8 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
                                             scope_by_chunk={chunk.id: ids for chunk, ids in rescoped})
                 swept_calls += len(batch)
                 swept_texts.update(chunk.text for chunk in batch)
-                _resolve_pending(findings, batch_ledger)
+                _resolve_pending(findings, batch_ledger, actual=actual,
+                                 rules_by_id=rules_by_id, facts=facts)
                 findings.extend(batch_ledger["findings"])
                 sweep_rounds.append(batch_ledger)
                 report["sweep"] = {"chunks": swept_calls, "findings": findings,
@@ -2160,13 +2248,20 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
                                                         "status", "reason")}})
             for gap in [*gaps, *coverage_gaps]:
                 unresolved.append({"kind": "coverage", **gap})
+            if qualification_gap:
+                unresolved.append({
+                    "kind": "qualification", "code": "FUND_TYPE_UNVERIFIED",
+                    "fund_type": facts.fund_type,
+                    "message": "fund_type is an excluded type but its quote could not be verified; "
+                               "the run continues but delivery must not be complete"})
             report["unresolved"] = unresolved
             report["audit"] = {"rounds": audit_rounds, "issues": audit_issues}
             report["targets"] = _target_ledger(targets, planned, audit_state, origins)
             report["windows"] = [_window_ledger(entry) for entry in entries]
             checks = [*artifacts.checks, "actual_content_verification"]
             hashes = {"final_sha256": artifacts.final_sha256, "redline_sha256": artifacts.redline_sha256}
-            complete = (not unresolved_targets and not audit_issues and not pending_findings and not gaps)
+            complete = (not unresolved_targets and not audit_issues and not pending_findings
+                        and not gaps and not qualification_gap)
             if complete:
                 _publish(temp_dir, output_dir, {"redline.docx": "redline.docx", "final.docx": "final.docx"},
                          published)

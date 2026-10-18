@@ -697,6 +697,10 @@ class Target:
     # does not hold, or it needs a class group / sales-service-fee wording the product
     # cannot carry). The audit must not re-demand such a target (FL-D056).
     out_of_scope: bool = False
+    # Operation identities this target covers (``G05:0`` = rule G05, operation index 0).
+    # Inventory targets usually leave this empty; survey targets and satisfied hits set
+    # it so coverage is operation-aware (FL-D117).
+    operations: tuple[str, ...] = ()
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -704,6 +708,7 @@ class Target:
             "quote": self.quote, "state": self.state, "reason": self.reason,
             "start": self.start, "end": self.end, "resolution": self.resolution,
             "segment_ok": self.segment_ok, "composite": list(self.composite),
+            "operations": list(self.operations),
         }
 
 
@@ -734,7 +739,7 @@ def inventory_window(window: Window, rules: Sequence[dict], facts: Facts, gatewa
         if rule_id not in rule_ids or location not in window_locations or state not in {"needs_edit", "satisfied", "absent"}:
             dropped.append({"reason": "INVENTORY_ITEM_INVALID", "item": item})
             continue
-        key = (rule_id, location, _compact(quote)[:40])
+        key = (rule_id, location, _compact(quote))
         if key in seen:
             continue
         seen.add(key)
@@ -783,6 +788,7 @@ class SurveyHit:
     end: int
     ratio: float
     index: int = 0
+    operation_keys: tuple[str, ...] = ()
 
     @property
     def parts(self) -> tuple[tuple[str, int, int], ...]:
@@ -792,6 +798,73 @@ class SurveyHit:
     def with_parts(self, parts: tuple[tuple[str, int, int], ...]) -> "SurveyHit":
         object.__setattr__(self, "_parts", parts)
         return self
+
+
+def operation_search_key_pairs(rule: dict, condition_facts: "Facts | None" = None
+                               ) -> list[tuple[str, str]]:
+    """Search keys paired with the operation identity that produced them.
+
+    ``G05:1`` identifies the second operation of rule G05 (zero-based array index).
+    The key drives the deterministic search; the identity lets coverage be tracked per
+    operation, so a satisfied replacement cannot hide a still-present deletion
+    (FL-D117). Variants not tied to one operation use ``"*"``.
+    """
+    rule_id = str(rule.get("rule_id") or "")
+    pairs: list[tuple[str, str]] = []
+    seen: set[tuple[str, str]] = set()
+
+    def add(key: str, operation_key: str) -> None:
+        compact = _compact(key)
+        if compact and (operation_key, compact) not in seen:
+            seen.add((operation_key, compact))
+            pairs.append((operation_key, compact))
+
+    core = f"{rule.get('title') or ''}{rule.get('requirement') or ''}"
+    core_grams = _character_ngrams(_compact(core), 3) if core else set()
+    operations = list(rule.get("operations") or [])
+    for index, operation in enumerate(operations):
+        if condition_facts is not None and not condition_matches(operation.get("condition"), condition_facts):
+            continue
+        operation_key = f"{rule_id}:{index}"
+        old_raw = str(operation.get("old_text") or "")
+        old_text = _compact(old_raw)
+        if len(old_text) < 8:
+            continue
+        add(old_text, operation_key)
+        if operation.get("op") != "delete":
+            continue
+        for fragment in reference_fragments(old_raw):
+            if not old_text.endswith(fragment):
+                continue
+            if any(fragment in _compact(str(other.get("new_text") or ""))
+                   or fragment in _compact(str(other.get("old_text") or ""))
+                   for other in operations):
+                # The fragment also lives in a sibling operation's own text, so that
+                # operation (not this one) covers it.
+                continue
+            if core_grams and not (_character_ngrams(fragment, 3) & core_grams):
+                continue
+            add(fragment, operation_key)
+        # Contracts spell the same clause with a different lead-in and a different tail:
+        # the guide writes "C类基金份额的销售服务费每日计提，按月支付。由基金管理人向基金
+        # 托管人发送…" while a contract writes "基金销售服务费每日计提，逐日累计至每月月末，
+        # 按月支付，经基金管理人与基金托管人核对一致后…". Neither the long reference nor
+        # its tail matches, so the rule's leading domain phrase (the reference without its
+        # class prefix, up to the first clause boundary) is the anchor that does (FL-D052).
+        first_clause = _CLAUSE_SPLIT.split(_strip_class_lead(old_text) or old_text)[0]
+        if len(first_clause) >= 8:
+            if any(first_clause in _compact(str(other.get("new_text") or ""))
+                   or (other is not operation
+                       and first_clause in _compact(str(other.get("old_text") or "")))
+                   for other in operations):
+                continue
+            if core_grams and (_character_ngrams(first_clause, 3) & core_grams):
+                add(first_clause, operation_key)
+    for variant in rule.get("old_text_variants") or []:
+        compact = _compact(str(variant))
+        if len(compact) >= 8:
+            add(compact, "*")
+    return pairs
 
 
 def operation_search_keys(rule: dict, condition_facts: "Facts | None" = None) -> list[str]:
@@ -804,55 +877,9 @@ def operation_search_keys(rule: dict, condition_facts: "Facts | None" = None) ->
     coincide with unrelated generic sentences (FL-D047).
     """
     keys: list[str] = []
-    delete_only = True
-    core = f"{rule.get('title') or ''}{rule.get('requirement') or ''}"
-    core_grams = _character_ngrams(_compact(core), 3) if core else set()
-    for operation in rule.get("operations") or []:
-        if condition_facts is not None and not condition_matches(operation.get("condition"), condition_facts):
-            continue
-        old_text = _compact(str(operation.get("old_text") or ""))
-        if len(old_text) < 8:
-            continue
-        if old_text not in keys:
-            keys.append(old_text)
-        if operation.get("op") != "delete":
-            delete_only = False
-            continue
-        for fragment in reference_fragments(str(operation.get("old_text") or "")):
-            if fragment in keys:
-                continue
-            if not _compact(str(operation.get("old_text") or "")).endswith(fragment):
-                continue
-            if any(fragment in _compact(str(other.get("new_text") or ""))
-                   or fragment in _compact(str(other.get("old_text") or ""))
-                   for other in rule.get("operations") or []):
-                # The fragment also lives in a sibling operation's own text, so that
-                # operation (not this one) covers it.
-                continue
-            if core_grams and not (_character_ngrams(fragment, 3) & core_grams):
-                continue
-            keys.append(fragment)
-        # Contracts spell the same clause with a different lead-in and a different tail:
-        # the guide writes "C类基金份额的销售服务费每日计提，按月支付。由基金管理人向基金
-        # 托管人发送…" while a contract writes "基金销售服务费每日计提，逐日累计至每月月末，
-        # 按月支付，经基金管理人与基金托管人核对一致后…". Neither the long reference nor
-        # its tail matches, so the rule's leading domain phrase (the reference without its
-        # class prefix, up to the first clause boundary) is the anchor that does. Only a
-        # delete-only rule takes this path, the phrase must keep eight characters, and it
-        # must share domain wording with the rule (FL-D052).
-        first_clause = _CLAUSE_SPLIT.split(_strip_class_lead(old_text) or old_text)[0]
-        if len(first_clause) >= 8 and first_clause not in keys:
-            if any(first_clause in _compact(str(other.get("new_text") or ""))
-                   or (other is not operation
-                       and first_clause in _compact(str(other.get("old_text") or "")))
-                   for other in rule.get("operations") or []):
-                continue
-            if core_grams and (_character_ngrams(first_clause, 3) & core_grams):
-                keys.append(first_clause)
-    for variant in rule.get("old_text_variants") or []:
-        compact = _compact(str(variant))
-        if len(compact) >= 8 and compact not in keys:
-            keys.append(compact)
+    for _operation_key, key in operation_search_key_pairs(rule, condition_facts):
+        if key not in keys:
+            keys.append(key)
     return keys
 
 
@@ -1243,30 +1270,120 @@ def _anchor_present(parts: tuple[tuple[str, int, int], ...], anchors: Sequence[s
     return False
 
 
-def _delete_operation_still_pending(rule: dict, facts: Facts, compact_body: str) -> bool:
-    """True when an applicable delete operation's own text is still in the paragraph.
+def operation_key(rule_id: str, index: int) -> str:
+    """Stable internal identity for one guide operation (``G05:1``)."""
+    return f"{rule_id}:{index}"
 
-    ``satisfied_by_new_text`` is a rule-level signal: it proves a replace/append is
-    already in place, but it says nothing about the rule's other operations. Marking
-    the whole ``(rule, location)`` covered then suppressed the deterministic survey for
-    a deletion that still remains in the same paragraph (for example G05's replace is
-    satisfied while "并报中国证监会备案" is still present). Only a delete whose own
-    reference text survives blocks the suppression; a genuinely deleted clause has no
-    old text left to hit.
+
+def satisfied_operation_keys(rule: dict, facts: Facts, compact_body: str) -> set[str]:
+    """Operation keys whose own replacement/append text is already present.
+
+    ``satisfied_by_new_text`` is a rule-level signal; the per-operation keys let the
+    caller mark only the operations that are actually carried out, so G05's satisfied
+    replace no longer covers its still-pending delete (FL-D117).
     """
-    for operation in rule.get("operations") or []:
-        if operation.get("op") != "delete":
+    keys: set[str] = set()
+    rule_id = str(rule.get("rule_id") or "")
+    for index, operation in enumerate(rule.get("operations") or []):
+        if operation.get("op") not in {"replace", "append"}:
             continue
         if not condition_matches(operation.get("condition"), facts):
             continue
+        instantiated, issues = instantiate_slots(str(operation.get("new_text") or ""), facts)
+        if issues or not instantiated:
+            continue
+        compact = _compact(instantiated)
+        if compact and compact in compact_body:
+            keys.add(operation_key(rule_id, index))
+    return keys
+
+
+def _target_paragraphs(target: Target) -> list[str]:
+    composite = getattr(target, "composite", ()) or ()
+    if composite:
+        return [part.rsplit(":", 2)[0] for part in composite]
+    return [target.location]
+
+
+def target_operation_keys(target: Target, rule: dict | None,
+                          inspection: DocumentInspection | None) -> set[str]:
+    """Operations this target actually contains (explicit keys first, then span text)."""
+    keys = set(getattr(target, "operations", ()) or ())
+    if keys or rule is None or inspection is None:
+        return keys
+    bodies: list[str] = []
+    for location in _target_paragraphs(target):
+        try:
+            span = inspection.by_location(location)
+        except DocxError:
+            continue
+        if target.composite:
+            bodies.append(_compact(display_text(span.text)[0]))
+        elif target.start is not None and target.end is not None:
+            bodies.append(_compact(span.text[int(target.start):int(target.end)]))
+        else:
+            bodies.append(_compact(display_text(span.text)[0]))
+    body = "".join(bodies)
+    rule_id = str(rule.get("rule_id") or "")
+    for index, operation in enumerate(rule.get("operations") or []):
         old = _compact(str(operation.get("old_text") or ""))
-        if old and old in compact_body:
-            return True
-    return False
+        if old and old in body:
+            keys.add(operation_key(rule_id, index))
+    return keys
+
+
+def known_operations_from_targets(targets: Sequence[Target], rules_by_id: dict[str, dict],
+                                  inspection: DocumentInspection
+                                  ) -> dict[tuple[str, str], set[str] | None]:
+    known: dict[tuple[str, str], set[str] | None] = {}
+    for target in targets:
+        keys = target_operation_keys(target, rules_by_id.get(target.rule_id), inspection)
+        for location in _target_paragraphs(target):
+            pair = (target.rule_id, location)
+            if keys:
+                current = known.get(pair, set())
+                if current is None:
+                    continue
+                current.update(keys)
+                known[pair] = current
+            else:
+                known[pair] = None
+    return known
+
+
+def normalise_known_operations(known: Any) -> dict[tuple[str, str], set[str] | None]:
+    if isinstance(known, dict):
+        return {key: (None if value is None else set(value)) for key, value in known.items()}
+    return {(rule_id, location): None for rule_id, location in known}
+
+
+_MISSING = object()
+
+
+def operations_cover_hit(known: dict[tuple[str, str], set[str] | None], rule_id: str,
+                         locations: Sequence[str], operation_keys: Sequence[str]) -> bool:
+    """True when every location already covers this hit's operation.
+
+    A ``None`` state means "location covered, operation unknown" (legacy/inventory
+    target); a specific operation hit at a location covered by other operations is not
+    suppressed. A wildcard hit (no operation identity) keeps the old location-level
+    behaviour.
+    """
+    for location in locations:
+        state = known.get((rule_id, location), _MISSING)
+        if state is _MISSING:
+            return False
+        if state is None:
+            continue
+        if not state:
+            return False
+        if operation_keys and not (set(operation_keys) & state):
+            return False
+    return True
 
 
 def survey_targets(inspection: DocumentInspection, rules: Sequence[dict], facts: Facts, *,
-                   known: Sequence[tuple[str, str]] = (),
+                   known: Any = (),
                    threshold: float = FUZZY_MATCH_THRESHOLD,
                    override_rules: frozenset[str] = frozenset()) -> list[SurveyHit]:
     """Find rule targets the windowed inventory never reported (code-driven recall).
@@ -1285,8 +1402,10 @@ def survey_targets(inspection: DocumentInspection, rules: Sequence[dict], facts:
     location the reference text still occupies, so the (rule, location) check would
     skip the hit and the obligation is dropped silently (FL-D101).
     """
-    existing = {(rule_id, location) for rule_id, location in known
-                if rule_id not in override_rules}
+    existing = normalise_known_operations(known)
+    for rule_id, location in list(existing):
+        if rule_id in override_rules:
+            del existing[(rule_id, location)]
     paragraphs = [span for span in inspection.paragraphs if span.text.strip()]
     by_location = {span.location: span for span in paragraphs}
     _PARAGRAPH_GRAMS_CACHE.clear()
@@ -1308,21 +1427,26 @@ def survey_targets(inspection: DocumentInspection, rules: Sequence[dict], facts:
             if not matched:
                 continue
             counter += 1
+            satisfied_keys = satisfied_operation_keys(rule, facts, body)
             hits.append(SurveyHit(rule_id=rule_id, operation="satisfied",
                                   locations=(location,), quote=matched,
-                                  start=0, end=0, ratio=1.0, index=counter))
-            if not _delete_operation_still_pending(rule, facts, body):
-                existing.add((rule_id, location))
+                                  start=0, end=0, ratio=1.0, index=counter,
+                                  operation_keys=tuple(sorted(satisfied_keys))))
+            if satisfied_keys:
+                existing.setdefault((rule_id, location), set()).update(satisfied_keys)
+            else:
+                existing[(rule_id, location)] = None
         tail_keys = set(bare_tail_keys(rule, facts))
         anchors = rule_context_anchors(rule, facts)
         delete_only_rule = _delete_keyword_bag(rule, facts) != () or all(
             op.get("op") == "delete" for op in (rule.get("operations") or []) if op.get("op") != "noop")
         rule_hits_before = len(hits)
-        for key in operation_search_keys(rule, facts):
+        for operation_key_value, key in operation_search_key_pairs(rule, facts):
+            hit_keys = () if operation_key_value == "*" else (operation_key_value,)
             occurrences = find_old_text_all(paragraphs, key, threshold=SURVEY_FUZZY_THRESHOLD)
             for parts in occurrences:
                 locations = tuple(item[0] for item in parts)
-                if all((rule_id, location) in existing for location in locations):
+                if operations_cover_hit(existing, rule_id, locations, hit_keys):
                     continue
                 if key in tail_keys and not _anchor_present(parts, anchors, compact_text):
                     # A bare clause tail ("并报中国证监会备案") also closes unrelated
@@ -1372,8 +1496,14 @@ def survey_targets(inspection: DocumentInspection, rules: Sequence[dict], facts:
                 counter += 1
                 hits.append(SurveyHit(rule_id=rule_id, operation="survey", locations=locations,
                                       quote=quote or key, start=first[1], end=first[2],
-                                      ratio=1.0, index=counter).with_parts(parts))
-                existing.add((rule_id, locations[0]))
+                                      ratio=1.0, index=counter,
+                                      operation_keys=hit_keys).with_parts(parts))
+                if hit_keys:
+                    for location in locations:
+                        existing.setdefault((rule_id, location), set()).update(hit_keys)
+                else:
+                    for location in locations:
+                        existing[(rule_id, location)] = None
         if len(hits) == rule_hits_before:
             # No reference anchor matched. A pure deletion may still be present under a
             # paraphrase (FL-D062); fall back to the rule's own keyword signature, and only
@@ -1417,7 +1547,7 @@ def survey_targets(inspection: DocumentInspection, rules: Sequence[dict], facts:
                                           locations=locations, quote=span.text.strip(),
                                           start=0, end=0, ratio=1.0, index=counter).with_parts(parts))
                     for item in locations:
-                        existing.add((rule_id, item))
+                        existing[(rule_id, item)] = None
     return hits
 
 

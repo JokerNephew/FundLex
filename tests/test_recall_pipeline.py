@@ -818,7 +818,7 @@ def test_plan_by_target_missing_ledger_is_unresolved():
     assert record["reason"] == "LEDGER_MISSING"
 
 
-def test_window_scope_blind_window_falls_back_to_mandatory():
+def test_window_scope_blind_window_falls_back_to_all_rules():
     from types import SimpleNamespace
     from fundlex.recall_pipeline import _Chunk, _window_rule_scope
     sections = [SimpleNamespace(id="S1", locations=("p0",)),
@@ -832,11 +832,11 @@ def test_window_scope_blind_window_falls_back_to_mandatory():
                                 mandatory={"G02"}, blind_windows=blind)
     by_id = {chunk.id: ids for chunk, ids in scoped}
     assert by_id["C1"] == {"G01", "G02"}
-    assert by_id["C2"] == {"G02"}
-    assert blind == [{"chunk": "C2", "locations": ["p2"], "fallback_rules": ["G02"]}]
+    assert by_id["C2"] == {"G01", "G02"}
+    assert blind == [{"chunk": "C2", "locations": ["p2"], "fallback_rules": ["G01", "G02"]}]
 
 
-def test_window_scope_blind_window_without_mandatory_has_no_rules():
+def test_window_scope_blind_window_without_mandatory_still_gets_all_rules():
     from types import SimpleNamespace
     from fundlex.recall_pipeline import _Chunk, _window_rule_scope
     sections = [SimpleNamespace(id="S1", locations=("p0",))]
@@ -844,11 +844,11 @@ def test_window_scope_blind_window_without_mandatory_has_no_rules():
               _Chunk(id="C1", locations=("p1",), text="")]
     blind: list[dict] = []
     scoped = _window_rule_scope(chunks, mapping={"G01": ["S1"]}, sections=sections,
-                                rules=[{"rule_id": "G01"}], mandatory=set(),
-                                blind_windows=blind)
+                                rules=[{"rule_id": "G01"}, {"rule_id": "G02"}],
+                                mandatory=set(), blind_windows=blind)
     by_id = {chunk.id: ids for chunk, ids in scoped}
-    assert by_id["C1"] == set()
-    assert blind[0]["fallback_rules"] == []
+    assert by_id["C1"] == {"G01", "G02"}
+    assert blind[0]["fallback_rules"] == ["G01", "G02"]
 
 
 def test_composite_parts_gone_checks_every_paragraph(tmp_path: Path):
@@ -886,3 +886,73 @@ def test_composite_parts_gone_checks_every_paragraph(tmp_path: Path):
     document.add_paragraph("后段保留，删除销售服务费。")
     document.save(half_path)
     assert _composite_parts_gone(target, original, inspect_docx(half_path, full=True)) is False
+
+
+def test_resolve_pending_requires_artifact_evidence(tmp_path: Path):
+    """A silent re-sweep is only a candidate resolution; require artifact proof (FL-D115)."""
+    from docx import Document
+    from fundlex.docx import inspect_docx
+    from fundlex.recall_pipeline import _resolve_pending
+
+    rule = {"rule_id": "GX", "title": "测试规则", "requirement": "追加新条款。",
+            "operations": [{"op": "append", "new_text": "新增条款内容。",
+                            "condition": {"kind": "none", "value": None}}]}
+    rules = {"GX": rule}
+    facts = _core_facts()
+    path = tmp_path / "actual.docx"
+
+    def findings():
+        return [
+            {"finding_id": "S1", "rule_id": "GX", "location": "p0",
+             "issue": "missing_new_text", "quote": "本基金销售服务费每日计提。", "status": "pending"},
+            {"finding_id": "S2", "rule_id": "GX", "location": "p1",
+             "issue": "residual_old_text", "quote": "旧条款仍在。", "status": "pending"},
+            {"finding_id": "S3", "rule_id": "GX", "location": "p1",
+             "issue": "unknown", "quote": "", "status": "pending"},
+        ]
+
+    batch = {"round": 3, "chunks": [{"locations": ["p0", "p1"], "findings": []}]}
+    document = Document()
+    document.add_paragraph("本基金销售服务费每日计提。")
+    document.add_paragraph("旧条款仍在。")
+    document.save(path)
+    pending = findings()
+    _resolve_pending(pending, batch, actual=inspect_docx(path, full=True),
+                     rules_by_id=rules, facts=facts)
+    assert pending[0]["status"] == "pending"
+    assert pending[0]["resolution"] == "model_clean_but_evidence_missing"
+    assert pending[1]["status"] == "pending"
+    assert pending[2]["status"] == "resolved" and pending[2]["resolution_evidence"] == "model_clean"
+
+    document = Document()
+    document.add_paragraph("本基金销售服务费每日计提。新增条款内容。")
+    document.add_paragraph("旧条款已删除。")
+    document.save(path)
+    repaired = findings()
+    _resolve_pending(repaired, batch, actual=inspect_docx(path, full=True),
+                     rules_by_id=rules, facts=facts)
+    assert repaired[0]["status"] == "resolved"
+    assert repaired[0]["resolution_evidence"] == "required_text_present"
+    assert repaired[1]["status"] == "resolved"
+    assert repaired[1]["resolution_evidence"] == "old_text_absent"
+
+    reported = findings()[:1]
+    still = {"round": 4, "chunks": [{"locations": ["p0"],
+                                    "findings": [{"rule_id": "GX", "location": "p0"}]}]}
+    _resolve_pending(reported, still, actual=inspect_docx(path, full=True),
+                     rules_by_id=rules, facts=facts)
+    assert reported[0]["status"] == "unresolved" and reported[0]["resolution"] == "still_reported"
+
+
+def test_unverified_excluded_fund_type_does_not_exclude():
+    """An irreversible whole-contract exclusion needs verified evidence (FL-D114)."""
+    from fundlex.recall import Facts
+    from fundlex.recall_pipeline import _qualification_status
+
+    def facts(verified: bool) -> Facts:
+        return Facts("etf", "ETF 联接基金", "", (), False, "", "", "",
+                     {"fund_type": verified}, ())
+
+    assert _qualification_status(facts(False), ("etf",)) == ("eligible_fund_type_unverified", False)
+    assert _qualification_status(facts(True), ("etf",)) == ("excluded_by_fund_type", True)
+    assert _qualification_status(facts(False), ("money_market",)) == ("eligible", False)
