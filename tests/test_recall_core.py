@@ -1074,3 +1074,45 @@ def test_class_label_strips_share_variants_and_drops_placeholders():
     # A single unnamed class still yields grammatical wording rather than a placeholder.
     assert class_label(["default"]) == "基金份额"
     assert "default" not in class_label(["default", "default"])
+
+
+def test_verify_quote_accepts_ellipsis_and_paragraph_boundary(tmp_path: Path):
+    from fundlex.recall import _verify_quote
+    path = tmp_path / "quote.docx"
+    document = Document()
+    document.add_paragraph("本基金销售服务费每日计提，按月支付。")
+    document.add_paragraph("基金的运作方式")
+    document.add_paragraph("契约型开放式")
+    document.save(path)
+    inspection = inspect_docx(path, full=True)
+    assert _verify_quote(inspection, "销售服务费每日计提……按月支付")
+    assert _verify_quote(inspection, "基金的运作方式\n契约型开放式")
+    assert not _verify_quote(inspection, "本基金销售服务费按年支付")
+
+
+def test_composite_part_verification_uses_compact_offsets(tmp_path: Path):
+    from fundlex.recall import _component_ok, compact_offsets
+    path = tmp_path / "composite.docx"
+    document = Document()
+    document.add_paragraph("本基金销售服务 费每日计提，按月支付。")
+    document.save(path)
+    inspection = inspect_docx(path, full=True)
+    span = inspection.by_location("p0")
+    compact, compact_map = compact_offsets(span.text)
+    start_clean = compact.index("销售服务费")
+    end_clean = start_clean + len("销售服务费")
+    start_raw = compact_map[start_clean]
+    end_raw = compact_map[end_clean - 1] + 1
+    component = {
+        "rule_id": "G15", "target_id": "T1", "location": "p0",
+        "start": start_raw, "end": end_raw,
+        "expected_old_text": span.text[start_raw:end_raw],
+        "replacement": span.text[:start_raw] + span.text[end_raw:],
+        "content_source": "composite_delete",
+        "evidence": {"parts": [f"p0:{start_clean}:{end_clean}"],
+                     "part_index": 0, "unit": "G15"},
+    }
+    assert _component_ok(component, inspection) is True
+    tampered = dict(component)
+    tampered["replacement"] = component["replacement"][:-2]
+    assert _component_ok(tampered, inspection) is False

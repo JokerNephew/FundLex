@@ -652,7 +652,12 @@ def validate_edit_plan(source: str | Path, edits: Sequence[Mapping[str, Any]],
         elif content_source == "generated":
             if not callable(content_check):
                 raise DocxError("GENERATED_CONTENT_UNVERIFIED")
-            content_check(edit)
+            # The trusted closure may either raise DocxError itself (v2) or return
+            # False when the record does not bind the edit (recall-first). Both mean
+            # "do not publish"; ignoring the boolean would make the check decorative
+            # (FL-D112).
+            if content_check(edit) is False:
+                raise DocxError("CONTENT_CHECK_FAILED")
         else:
             raise DocxError("CONTENT_SOURCE_INVALID")
         start, end = edit.get("start"), edit.get("end")

@@ -534,11 +534,12 @@ def test_tampered_plan_not_generated(tmp_path: Path):
     finally:
         monkeypatch.undo()
 
-    assert report["delivery_status"] == "not_generated"
-    assert report["errors"] and report["errors"][0]["code"] == "EXPECTED_TEXT_MISMATCH"
-    assert report["artifacts"] == {}
-    assert report["output_validation"]["kind"] is None
-    assert docx_names(output_dir) == set()
+    assert report["delivery_status"] == "incomplete"
+    assert report["artifacts"].get("working_final") == "working_final.docx"
+    assert "final" not in report["artifacts"]
+    assert any(item.get("reason") == "RECALL_EDIT_CONTENT_UNVERIFIED"
+               for item in report["unresolved"])
+    assert "working_final.docx" in docx_names(output_dir)
     assert_no_temp_artifacts(output_dir)
 
 
@@ -795,3 +796,93 @@ def test_checkpoint_binding_dependencies(tmp_path: Path):
     assert dependencies["engine_id"] == ENGINE_ID
     assert dependencies["engine_version"] == ENGINE_VERSION
     assert dependencies["boundary_policy"] == report["plan"]["boundary_policy"]
+
+
+def test_target_identity_hashes_the_full_span():
+    from fundlex.recall import Target
+    from fundlex.recall_pipeline import _target_identity
+    common = {"target_id": "T1", "rule_id": "G15", "location": "p1",
+              "state": "needs_edit", "reason": "", "start": 0, "end": 61}
+    first = Target(**common, quote="甲" * 60 + "乙")
+    second = Target(**common, quote="甲" * 60 + "丙")
+    assert _target_identity(first) != _target_identity(second)
+    assert _target_identity(first) == _target_identity(Target(**common, quote="甲" * 60 + "乙"))
+
+
+def test_plan_by_target_missing_ledger_is_unresolved():
+    from fundlex.recall_pipeline import _plan_by_target
+    planned = {"ledger": [], "edits": [{"components": [
+        {"target_id": "T1", "rule_id": "G15", "operation": "replace", "replacement": "x"}]}]}
+    record = _plan_by_target(planned)["T1"]
+    assert record["status"] == "unresolved"
+    assert record["reason"] == "LEDGER_MISSING"
+
+
+def test_window_scope_blind_window_falls_back_to_mandatory():
+    from types import SimpleNamespace
+    from fundlex.recall_pipeline import _Chunk, _window_rule_scope
+    sections = [SimpleNamespace(id="S1", locations=("p0",)),
+                SimpleNamespace(id="S2", locations=("p1",))]
+    chunks = [_Chunk(id="C1", locations=("p0",), text=""),
+              _Chunk(id="C2", locations=("p2",), text="")]
+    blind: list[dict] = []
+    scoped = _window_rule_scope(chunks, mapping={"G01": ["S1"], "G02": ["S1"]},
+                                sections=sections,
+                                rules=[{"rule_id": "G01"}, {"rule_id": "G02"}],
+                                mandatory={"G02"}, blind_windows=blind)
+    by_id = {chunk.id: ids for chunk, ids in scoped}
+    assert by_id["C1"] == {"G01", "G02"}
+    assert by_id["C2"] == {"G02"}
+    assert blind == [{"chunk": "C2", "locations": ["p2"], "fallback_rules": ["G02"]}]
+
+
+def test_window_scope_blind_window_without_mandatory_has_no_rules():
+    from types import SimpleNamespace
+    from fundlex.recall_pipeline import _Chunk, _window_rule_scope
+    sections = [SimpleNamespace(id="S1", locations=("p0",))]
+    chunks = [_Chunk(id="C0", locations=("p0",), text=""),
+              _Chunk(id="C1", locations=("p1",), text="")]
+    blind: list[dict] = []
+    scoped = _window_rule_scope(chunks, mapping={"G01": ["S1"]}, sections=sections,
+                                rules=[{"rule_id": "G01"}], mandatory=set(),
+                                blind_windows=blind)
+    by_id = {chunk.id: ids for chunk, ids in scoped}
+    assert by_id["C1"] == set()
+    assert blind[0]["fallback_rules"] == []
+
+
+def test_composite_parts_gone_checks_every_paragraph(tmp_path: Path):
+    from docx import Document
+    from fundlex.docx import inspect_docx
+    from fundlex.recall import Target, compact_offsets
+    from fundlex.recall_pipeline import _composite_parts_gone
+
+    original_path = tmp_path / "original.docx"
+    document = Document()
+    document.add_paragraph("前段保留，删除销售服务费。")
+    document.add_paragraph("后段保留，删除销售服务费。")
+    document.save(original_path)
+    original = inspect_docx(original_path, full=True)
+    parts = []
+    for location in ("p0", "p1"):
+        span = original.by_location(location)
+        compact, _map = compact_offsets(span.text)
+        start = compact.index("销售服务费")
+        parts.append(f"{location}:{start}:{start + len('销售服务费')}")
+    target = Target(target_id="T1", rule_id="G15", location="p0",
+                    quote=original.by_location("p0").text, state="needs_edit",
+                    reason="", composite=tuple(parts))
+
+    both_path = tmp_path / "both.docx"
+    document = Document()
+    document.add_paragraph("前段保留，删除。")
+    document.add_paragraph("后段保留，删除。")
+    document.save(both_path)
+    assert _composite_parts_gone(target, original, inspect_docx(both_path, full=True)) is True
+
+    half_path = tmp_path / "half.docx"
+    document = Document()
+    document.add_paragraph("前段保留，删除。")
+    document.add_paragraph("后段保留，删除销售服务费。")
+    document.save(half_path)
+    assert _composite_parts_gone(target, original, inspect_docx(half_path, full=True)) is False

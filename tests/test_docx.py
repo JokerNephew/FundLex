@@ -242,3 +242,23 @@ def test_noop_evaluation_artifacts_are_byte_identical(tmp_path: Path) -> None:
     assert result.checks == ("package", "zero_edit", "byte_identity")
     assert (tmp_path / "eval-redline.docx").read_bytes() == source.read_bytes()
     assert (tmp_path / "eval-final.docx").read_bytes() == source.read_bytes()
+
+
+def test_generated_content_check_false_is_rejected(tmp_path: Path) -> None:
+    """A trusted check that returns False must block publication (FL-D112)."""
+    source = fixture_docx(tmp_path)
+    edit = edit_for(source, "p2", "原有收费条款")
+    edit.pop("template_id")
+    edit["content_source"] = "generated"
+    with pytest.raises(DocxError) as error:
+        validate_edit_plan(source, [edit], {}, content_check=lambda _edit: False)
+    assert error.value.code == "CONTENT_CHECK_FAILED"
+
+
+def test_generated_content_check_true_is_accepted(tmp_path: Path) -> None:
+    source = fixture_docx(tmp_path)
+    edit = edit_for(source, "p2", "原有收费条款")
+    edit.pop("template_id")
+    edit["content_source"] = "generated"
+    plan = validate_edit_plan(source, [edit], {}, content_check=lambda _edit: True)
+    assert plan.edits and plan.edits[0]["replacement"] == "已确认的新条款"

@@ -396,17 +396,46 @@ def facts_context(inspection: DocumentInspection, *, limit: int = 16000) -> str:
     return "\n".join(lines)
 
 
+_ELLIPSIS_RE = re.compile(r"…+|\.{3,}")
+
+
+def _quote_present(inspection: DocumentInspection, fragment: str) -> bool:
+    """True when a compact fragment appears in one paragraph or across a boundary."""
+    cleaned = _compact(fragment)
+    if not cleaned:
+        return False
+    texts: list[str] = []
+    for span in inspection.paragraphs:
+        text, _ = display_text(span.text)
+        compact_text = _compact(text)
+        if cleaned in compact_text:
+            return True
+        texts.append(compact_text)
+    # Facts are often quoted with a heading/paragraph boundary inside the quote
+    # (D14: "基金的运作方式\n契约型开放式"). Only accept a cross-boundary match if
+    # the fragment actually straddles the boundary, not merely appears in both.
+    for left, right in zip(texts, texts[1:]):
+        if not left or not right:
+            continue
+        joined = left + right
+        index = joined.find(cleaned)
+        if index != -1 and index < len(left) < index + len(cleaned):
+            return True
+    return False
+
+
 def _verify_quote(inspection: DocumentInspection, quote: str) -> bool:
     if not quote or len(quote.strip()) < 2:
         return False
-    cleaned_quote = _compact(quote)
-    if not cleaned_quote:
+    # A model may abbreviate a long quote with an ellipsis; every retained fragment
+    # is still literal source text and must be verifiable. Treating the whole string
+    # as one quote made those evidence records fail verification even when correct
+    # (FL-D114).
+    fragments = [fragment for fragment in _ELLIPSIS_RE.split(quote)
+                 if len(_compact(fragment)) >= 2]
+    if not fragments:
         return False
-    for span in inspection.paragraphs:
-        cleaned, _ = display_text(span.text)
-        if cleaned_quote in _compact(cleaned):
-            return True
-    return False
+    return all(_quote_present(inspection, fragment) for fragment in fragments)
 
 
 def extract_facts(inspection: DocumentInspection, gateway: Any) -> Facts:
@@ -2077,6 +2106,27 @@ def _same_compact(left: str, right: str) -> bool:
     return _compact(left) == _compact(right)
 
 
+def _replay_fragments(actual: str, fragments: Sequence[dict[str, Any]]) -> str | None:
+    """Re-apply recorded fragment operations to the source span for verification.
+
+    The planner records each splice it actually applied; replaying them on the
+    original span proves the replacement came from the source text and the authorized
+    fragments, instead of trusting the planner's output (FL-D112).
+    """
+    current = actual
+    for item in fragments:
+        old_text = str(item.get("old_text") or "")
+        new_text = str(item.get("new_text") or "")
+        if _same_compact(old_text, current):
+            current = new_text
+            continue
+        updated = _splice_fragment(current, old_text, new_text)
+        if updated is None:
+            return None
+        current = updated
+    return current
+
+
 def _splice_fragment(actual: str, old_text: str, new_text: str) -> str | None:
     """Deterministically replace one fragment inside the actual span, keeping the rest.
 
@@ -2158,12 +2208,18 @@ def plan_composite_target(rule: dict, target: Target, inspection: DocumentInspec
         else:
             replacement = span.text[:start_raw] + span.text[end_raw:]
             content_source = "composite_delete"
+        evidence: dict[str, Any] = {
+            "composite": True, "unit": target.rule_id, "parts": list(target.composite),
+            "part_index": index,
+        }
+        if content_source == "composite_replace" and new_text:
+            # Record the authorized replacement text so the content check can prove it
+            # is present instead of trusting the produced paragraph (FL-D112).
+            evidence["fixed_text"] = new_text
         edits.append(PlannedEdit(
             target_id=target.target_id, rule_id=target.rule_id, location=location,
             start=start_raw, end=end_raw, replacement=replacement, operation="replace",
-            content_source=content_source,
-            evidence={"composite": True, "unit": target.rule_id, "parts": list(target.composite),
-                      "part_index": index}))
+            content_source=content_source, evidence=evidence))
     if not edits:
         raise RecallError("RECALL_TARGET_COMPOSITE_UNRESOLVED", {"target": target.target_id})
     return edits
@@ -2266,6 +2322,7 @@ def plan_target(rule: dict, target: Target, inspection: DocumentInspection, fact
     # so every deterministic fragment operation is accumulated onto one replacement.
     spliced = actual
     applied: list[str] = []
+    fragments: list[dict[str, str]] = []
     for operation in [*delete_ops, *replace_ops]:
         op_kind = operation.get("op")
         old_text = str(operation.get("old_text") or "")
@@ -2278,11 +2335,15 @@ def plan_target(rule: dict, target: Target, inspection: DocumentInspection, fact
         if _same_compact(old_text, spliced):
             spliced = new_fragment
             applied.append(f"{op_kind}:full")
+            fragments.append({"op": str(op_kind), "old_text": old_text,
+                              "new_text": new_fragment, "mode": "full"})
             continue
         updated = _splice_fragment(spliced, old_text, new_fragment)
         if updated is not None:
             spliced = updated
             applied.append(f"{op_kind}:fragment")
+            fragments.append({"op": str(op_kind), "old_text": old_text,
+                              "new_text": new_fragment, "mode": "fragment"})
     if applied:
         if _same_compact(spliced, actual):
             return None  # already satisfied
@@ -2294,7 +2355,7 @@ def plan_target(rule: dict, target: Target, inspection: DocumentInspection, fact
                            start=target.start, end=target.end, replacement=spliced,
                            operation="replace", content_source=content_source,
                            evidence={"guide_paragraphs": rule.get("source_paragraphs") or [],
-                                     "applied": applied})
+                                     "applied": applied, "fragments": fragments})
     # A delete-only rule whose reference text runs across several sentences or
     # paragraphs (G17 concatenates "…基金份额持有人服务费等。" with "…不包括基金募集期间
     # 的上述费用。"): one target carries one sentence of it verbatim and nothing else.
@@ -2746,7 +2807,11 @@ def _composite_part_slice(component: dict[str, Any], span: ParagraphSpan
         start_clean, end_clean = int(start_text), int(end_text)
     except (ValueError, AttributeError):
         return None
-    _cleaned, index_map = display_text(span.text)
+    # Composite offsets are measured in the paragraph's whitespace-free text
+    # (find_old_text_all), exactly like ``plan_composite_target``. Mapping them
+    # through ``display_text``'s index table would shift every offset after the
+    # first whitespace (FL-D052/FL-D112).
+    _cleaned, index_map = compact_offsets(span.text)
     if start_clean < 0 or end_clean > len(index_map) or start_clean >= end_clean:
         return None
     return index_map[start_clean], index_map[end_clean - 1] + 1
@@ -2766,6 +2831,16 @@ def _component_ok(component: dict[str, Any], inspection: DocumentInspection) -> 
     replacement = str(component.get("replacement") or "")
     evidence = component.get("evidence") or {}
     content_source = component.get("content_source")
+    fragments = evidence.get("fragments") or []
+    if content_source in {"fragment_delete", "fragment_replace", "fragment_mixed"} and fragments:
+        replayed = _replay_fragments(expected or "", fragments)
+        if replayed is None or replayed != replacement:
+            return False
+        if content_source == "fragment_delete":
+            return len(_compact(replacement)) < len(_compact(expected or ""))
+        if content_source == "fragment_replace":
+            return any(str(item.get("new_text") or "") for item in fragments)
+        return True
     if content_source == "fragment_delete":
         deleted = str(evidence.get("deleted_fragment") or "")
         if deleted and compact_in(deleted, replacement):
@@ -2790,10 +2865,21 @@ def _component_ok(component: dict[str, Any], inspection: DocumentInspection) -> 
             if len(_compact(replacement)) >= len(_compact(expected or "")):
                 return False
         return True
+    if content_source == "target_span_delete":
+        # The planner deletes exactly the bound target span; there is no separate
+        # fragment trace to replay (FL-D112).
+        return replacement == "" and bool(expected)
     if content_source in {"variant_delete", "variant_replace"}:
         # The whole variant span is the target span: verify the recorded ratio by
         # re-running the same bounded fuzzy match (FL-D047).
         matched = str(evidence.get("matched_old_text") or "")
+        if not matched:
+            # The target-span delete producer records the deleted quote instead of a
+            # fuzzy match: the span itself is the material to remove.
+            deleted_quote = str(evidence.get("deleted_quote") or "")
+            if content_source == "variant_delete" and deleted_quote:
+                return replacement == "" and _same_compact(deleted_quote, expected or "")
+            return False
         actual = expected or ""
         if len(_compact(matched)) < VARIANT_MIN_CHARS:
             return False
@@ -2812,23 +2898,20 @@ def _component_ok(component: dict[str, Any], inspection: DocumentInspection) -> 
         return actual[:start_raw] + actual[end_raw:] == replacement
     if content_source in {"composite_delete", "composite_replace"}:
         # A composite part deletes only its own slice of the reference text inside one
-        # paragraph and keeps the rest of that paragraph verbatim (FL-D047).
+        # paragraph and keeps the rest of that paragraph verbatim (FL-D047). The part
+        # offsets are relative to the whole paragraph, while ``expected`` is only the
+        # slice; compare the replacement against the paragraph outside the slice.
         if not expected or replacement == expected:
             return False
-        unit = str(evidence.get("unit") or "")
-        anchor = str((component.get("parts") or [None])[0] or "")
-        if unit and anchor and str(component.get("location")) != anchor.split(":")[0]:
-            # follower parts carry no prefix of their own before the reference
-            return replacement == "" or replacement == expected
         deleted = _composite_part_slice(component, span)
         if deleted is None or not deleted:
             return False
         start_offset, end_offset = deleted
-        prefix, suffix = expected[:start_offset], expected[end_offset:]
+        prefix, suffix = span.text[:start_offset], span.text[end_offset:]
         if content_source == "composite_delete":
             return replacement == prefix + suffix
         fixed = str(evidence.get("fixed_text") or "")
-        if not fixed or not compact_in(fixed, replacement) and fixed not in replacement:
+        if not fixed or (not compact_in(fixed, replacement) and fixed not in replacement):
             return False
         return replacement.startswith(prefix) and replacement.endswith(suffix)
     if content_source in {"guide_text", "composed"}:
@@ -2842,11 +2925,29 @@ def _component_ok(component: dict[str, Any], inspection: DocumentInspection) -> 
 
 
 def content_check_factory(planned: Sequence[dict], inspection: DocumentInspection):
-    """docx.validate_edit_plan content_check: re-verify generated/composed text."""
-    by_id = {f"{item['rule_id']}:{item['target_id']}": item for item in planned}
+    """docx.validate_edit_plan content_check: re-verify generated/composed text.
+
+    Composite targets emit one edit per paragraph with the same ``edit_id``; the
+    lookup key therefore includes target/location/span. Keying only by ``edit_id``
+    would validate every part against the last part (FL-D112).
+    """
+    by_key: dict[tuple[str, str, str, int, int], dict[str, Any]] = {}
+    for item in planned:
+        try:
+            key = (str(item.get("target_id")), str(item.get("rule_id")),
+                   str(item.get("location")), int(item["start"]), int(item["end"]))
+        except (KeyError, TypeError, ValueError):
+            continue
+        by_key[key] = item
 
     def check(edit: dict[str, Any]) -> bool:
-        item = by_id.get(edit.get("edit_id"))
+        try:
+            key = (str(edit.get("target_id")), str(edit.get("rule_id")),
+                   str(edit.get("location")), int(edit.get("start", -1)),
+                   int(edit.get("end", -2)))
+        except (TypeError, ValueError):
+            return False
+        item = by_key.get(key)
         if item is None:
             return False
         if edit.get("replacement") != item.get("replacement"):

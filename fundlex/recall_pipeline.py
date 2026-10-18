@@ -16,6 +16,7 @@ Two invariants are enforced here on top of the core:
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
@@ -212,9 +213,13 @@ def _plan_by_target(planned: dict[str, Any]) -> dict[str, dict[str, Any]]:
         by_target[str(entry.get("target_id"))] = dict(entry)
     for edit in planned.get("edits") or []:
         for component in edit.get("components") or []:
+            # A component without a ledger entry is an invariant violation, not a
+            # successful plan: the delivery gate treats "planned" as resolved, so the
+            # old default could turn a missing record into a false ``complete``
+            # (FL-D110). Keep it unresolved so it blocks delivery honestly.
             record = by_target.setdefault(str(component.get("target_id")), {
                 "target_id": component.get("target_id"), "rule_id": component.get("rule_id"),
-                "status": "planned"})
+                "status": "unresolved", "reason": "LEDGER_MISSING"})
             record["operation"] = component.get("operation")
             record["replacement"] = component.get("replacement")
     return by_target
@@ -227,8 +232,19 @@ def _plan_ledger(planned: dict[str, Any], plan: Any) -> dict[str, Any]:
 
 
 def _target_identity(target: Target) -> tuple[str, str, str]:
-    """Stable audit key: re-inventory renumbers target ids but keeps this triple."""
-    return (target.rule_id, target.location, _compact(target.quote)[:60])
+    """Stable audit key: rule + paragraph + exact source span.
+
+    The quote is evidence, not identity. The old key truncated it to 60 characters,
+    so a repair that only changed the tail kept the identity and the stale
+    ``completed`` verdict survived (FL-D110). Hash the full span (and the composite
+    parts) instead; any content change re-opens the audit.
+    """
+    material = "\x1f".join((
+        str(target.start), str(target.end), _compact(target.quote),
+        "|".join(target.composite),
+    ))
+    return (target.rule_id, target.location,
+            hashlib.sha256(material.encode("utf-8")).hexdigest())
 
 
 def _target_ledger(targets: Sequence[Target], planned: dict[str, Any],
@@ -337,6 +353,40 @@ def _target_locations(target: Target) -> list[str]:
     if target.composite:
         return [part.rsplit(":", 2)[0] for part in target.composite]
     return [target.location]
+
+
+def _composite_parts_gone(target: Target, original: DocumentInspection,
+                          actual: DocumentInspection) -> bool:
+    """True when every deleted composite slice is absent from its own paragraph.
+
+    A composite deletion removes one slice per paragraph. The old deletion evidence
+    only looked at ``target.location`` (the first paragraph), so deleting part one and
+    leaving part two could be accepted as complete (FL-D110). Each part is checked
+    against the original slice it was supposed to remove.
+    """
+    if not target.composite:
+        return False
+    for part in target.composite:
+        try:
+            location, start_text, end_text = part.rsplit(":", 2)
+            start_clean, end_clean = int(start_text), int(end_text)
+        except (ValueError, AttributeError):
+            return False
+        try:
+            before = original.by_location(location)
+            after = actual.by_location(location)
+        except DocxError:
+            return False
+        compact_before, _map = compact_offsets(before.text)
+        if start_clean < 0 or end_clean > len(compact_before) or start_clean >= end_clean:
+            return False
+        deleted = _compact(compact_before[start_clean:end_clean])
+        if not deleted:
+            return False
+        after_clean, _ = display_text(after.text)
+        if deleted in _compact(after_clean):
+            return False
+    return True
 
 
 
@@ -591,6 +641,34 @@ def _plan_and_generate(model: Any, rules_by_id: dict[str, dict], targets: Sequen
     planned = plan_edits(rules_by_id, targets, inspection, facts, model,
                          max_compose_calls=max_compose_calls)
     edits = build_docx_edits(planned["edits"], inspection)
+    content_check = content_check_factory(planned["edits"], inspection)
+    # A generated edit whose content record does not bind the source must not be
+    # published. Drop just that edit and keep the target unresolved, the same way an
+    # unexecutable edit is handled below; failing the whole contract over one bad
+    # component would discard otherwise valid edits (FL-D112).
+    rejected = [edit for edit in edits if content_check(edit) is False]
+    if rejected:
+        rejected_keys = {(str(edit.get("target_id")), str(edit.get("location")),
+                          int(edit.get("start", -1)), int(edit.get("end", -2)))
+                         for edit in rejected}
+        rejected_ids = {id(edit) for edit in rejected}
+        removed: set[str] = set()
+        kept_records: list[dict[str, Any]] = []
+        for record in planned["edits"]:
+            key = (str(record.get("target_id")), str(record.get("location")),
+                   int(record.get("start", -1)), int(record.get("end", -2)))
+            if key in rejected_keys:
+                removed.add(str(record.get("target_id")))
+                removed.update(str(component.get("target_id"))
+                               for component in record.get("components") or [])
+                continue
+            kept_records.append(record)
+        planned["edits"] = kept_records
+        edits = [edit for edit in edits if id(edit) not in rejected_ids]
+        for entry in planned["ledger"]:
+            if entry.get("target_id") in removed and entry.get("status") == "planned":
+                entry["status"] = "unresolved"
+                entry["reason"] = "RECALL_EDIT_CONTENT_UNVERIFIED"
     present = {str(edit.get("edit_id")) for edit in edits}
     not_executable: set[str] = set()
     for record in planned["edits"]:
@@ -601,8 +679,7 @@ def _plan_and_generate(model: Any, rules_by_id: dict[str, dict], targets: Sequen
             if entry.get("target_id") in not_executable and entry.get("status") == "planned":
                 entry["status"] = "unresolved"
                 entry["reason"] = "RECALL_EDIT_NOT_EXECUTABLE"
-    plan = validate_edit_plan(input_path, edits, {},
-                              content_check=content_check_factory(planned["edits"], inspection))
+    plan = validate_edit_plan(input_path, edits, {}, content_check=content_check)
     redline, final = temp_dir / "redline.docx", temp_dir / "final.docx"
     if edits:
         artifacts = generate_artifacts(input_path, plan, redline, final)
@@ -749,9 +826,11 @@ def _run_audit(model: Any, rules_by_id: dict[str, dict], targets: Sequence[Targe
                 # quote still present in BEFORE is accepted as the deletion evidence.
                 target = next((entry for entry in rule_targets if entry.target_id == target_id), None)
                 if target is not None and target.quote:
-                    after_empty = all(
-                        not _region_text(actual, location, rule_targets, 1200).strip()
-                        for location in {target.location})
+                    if target.composite:
+                        after_empty = _composite_parts_gone(target, original, actual)
+                    else:
+                        after_empty = not _region_text(
+                            actual, target.location, rule_targets, 1200).strip()
                     if after_empty and _compact(target.quote) in _compact(before_text):
                         verified, deletion_evidence = True, True
                         evidence = evidence or target.quote
@@ -1442,7 +1521,9 @@ def _sweep_requirements_for(rules: Sequence[dict], rule_ids: set[str]) -> str:
 
 def _window_rule_scope(chunks: Sequence[_Chunk], *, mapping: dict[str, list[str]],
                        sections: Sequence[Any], rules: Sequence[dict],
-                       mandatory: set[str]) -> list[tuple[_Chunk, set[str]]]:
+                       mandatory: set[str],
+                       blind_windows: list[dict[str, Any]] | None = None
+                       ) -> list[tuple[_Chunk, set[str]]]:
     """Pair each sweep window with the guide rules that can apply inside it (FL-D109).
 
     The final sweep used to hand **every** guide rule to **every** window: a window over
@@ -1476,6 +1557,16 @@ def _window_rule_scope(chunks: Sequence[_Chunk], *, mapping: dict[str, list[str]
         # mapping disagree about the finer boundaries.
         ids |= {rule_id for rule_id in mandatory if set(mapping.get(rule_id) or []) & window_sections}
         covered.update(ids)
+        if not ids:
+            # A window whose sections no rule is mapped to used to be swept with an
+            # empty requirements block; every finding in it was then dropped as
+            # out-of-window (FL-D113). Ask at least the rules with a known unmet
+            # obligation, so a duplicate of an existing target in an unmapped section
+            # (for example the summary) is still found.
+            if blind_windows is not None:
+                blind_windows.append({"chunk": chunk.id, "locations": list(chunk.locations),
+                                      "fallback_rules": sorted(mandatory)})
+            ids = set(mandatory)
         scoped.append((chunk, ids))
 
     unreachable = {str(rule.get("rule_id")) for rule in rules} - covered
@@ -1942,6 +2033,7 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
             sweep_rounds: list[dict[str, Any]] = []
             findings: list[dict[str, Any]] = []
             gaps: list[dict[str, Any]] = []
+            blind_windows: list[dict[str, Any]] = []
             swept_texts: set[str] = set()
             swept_calls = 0
             counter = [0]
@@ -1960,7 +2052,8 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
                          if target.state == "needs_edit" and not target.out_of_scope}
             mandatory |= {str(target.rule_id) for target in synthetic}
             scoped = _window_rule_scope(chunks, mapping=mapping, sections=sections,
-                                        rules=rules, mandatory=mandatory)
+                                        rules=rules, mandatory=mandatory,
+                                        blind_windows=blind_windows)
             requirements_by_chunk = {chunk.id: _sweep_requirements_for(rules, ids)
                                      for chunk, ids in scoped}
             scope_by_chunk = {chunk.id: ids for chunk, ids in scoped}
@@ -1975,7 +2068,8 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
             findings.extend(batch_ledger["findings"])
             sweep_rounds.append(batch_ledger)
             report["sweep"] = {"chunks": swept_calls, "findings": findings,
-                               "rounds": sweep_rounds, "gaps": gaps}
+                               "rounds": sweep_rounds, "gaps": gaps,
+                               "blind_windows": blind_windows}
             while True:
                 pending = [finding for finding in findings if finding["status"] == "pending"]
                 if not pending or rounds_used >= max_business_rounds:
@@ -2024,7 +2118,8 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
                 # re-sweep is not asked a different question than the window it revisits
                 # (FL-D109): same chunker, same per-window rule subset, same enforcement.
                 rescoped = _window_rule_scope(batch, mapping=mapping, sections=sections,
-                                              rules=rules, mandatory=mandatory)
+                                              rules=rules, mandatory=mandatory,
+                                              blind_windows=blind_windows)
                 batch_ledger = _sweep_batch(model, rules_by_id, requirements, batch, actual,
                                             round_number=round_number, counter=counter,
                                             facts=facts, facts_text=facts_text,
@@ -2038,7 +2133,8 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
                 findings.extend(batch_ledger["findings"])
                 sweep_rounds.append(batch_ledger)
                 report["sweep"] = {"chunks": swept_calls, "findings": findings,
-                                   "rounds": sweep_rounds, "gaps": gaps}
+                                   "rounds": sweep_rounds, "gaps": gaps,
+                                   "blind_windows": blind_windows}
 
             # --- delivery decision -------------------------------------------
             stage = "deliver"
