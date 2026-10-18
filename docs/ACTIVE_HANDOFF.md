@@ -51,9 +51,10 @@
   - `_verify_quote` 支持省略号分段与跨段边界（fund_type 排除策略未改）。
   - 测试：新增 9 项；全量 **680 passed / 6 skipped / 1 failed**（唯一失败为既有 references 缺失项）。
 - **下一动作**：
-  1. 等 `p6-dev-round14-03`（新供应商基线，跑的是旧部署）结束后，记录指标并核对是否出现 `MODEL_*` 失败；随后发布 `ebcd9de`，跑 **`p6-dev-round14-04`** 对照（21 项修正合并验证；供应商切换与修正合并，作为混杂因素注明）。
-  2. 对照重点：`RECALL_EDIT_CONTENT_UNVERIFIED` 数量、`blind_windows`/`SWEEP_RULE_OUT_OF_WINDOW`、working/incomplete 比例、kept 变化。
-  3. 结果稳定后再冻结版本 → 留出 H01–H08 → 评测报告 → 打包。
+  1. **`p6-dev-round14-03` 基线已完成**（DeepSeek 直连、旧引擎）：**218/347 = 0.6282**（kept 11 / not_executed 118），6 报 complete / 10 实际 complete / 1 false_complete；1019 calls / $0.7372。对照 round11（旧供应商）225/347 = 0.6484。
+  2. 修正版 `ebcd9de` 已于 2026-10-18 14:16 CST 发布（部署文件 sha 与仓库一致，服务 active）；**`p6-dev-round14-04` 运行中**，用于验证 21 项修正合并后的真实表现。
+  3. 对照重点：`RECALL_EDIT_CONTENT_UNVERIFIED` 数量、`blind_windows`/`SWEEP_RULE_OUT_OF_WINDOW`、working/incomplete 比例、kept 变化；供应商切换与修正合并，作为混杂因素注明。
+  4. 结果稳定后再冻结版本 → 留出 H01–H08 → 评测报告 → 打包。
 - **预算/账本**：真实运行前在批次说明预登记；账本 `/var/lib/fundlex/model_budget.sqlite`（切换前 requests=17462，charged=$14.4908；上限 40000 / $50）。
 - **约束**：FL-D105 Q1–Q8、FL-D104 1–19 未裁定前不改规则适用性/评分语义；合同可入库/出境（公开资料），凭据不入库/不入文档。
 

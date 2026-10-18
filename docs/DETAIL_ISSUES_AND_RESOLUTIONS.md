@@ -1518,6 +1518,7 @@
 - 证据：改动 `fundlex/recall_pipeline.py`（新增 `_sweep_chunks`、增量重扫复用收敛）、`tests/test_sweep_rule_scope.py`（+1 测试）；数据核对脚本基于 `var/recall-first-evaluation/p6-dev-round1[123]-01/*/report.json`。
 - 变更记录：2026-10-18 新增（缺陷 1 已修并单测；缺陷 2/3/4 记录待决）。
 - 变更记录（续）：2026-10-18 **缺陷 2/3/4 已实施**（commit `ebcd9de`）：身份键改为 `rule_id + location + sha256(start/end/全文 quote/composite)`，不再截断 60 字；复合删除证据新增 `_composite_parts_gone()`，逐 part 校验原切片已从各自段落消失；`_plan_by_target` 缺 ledger 改为 `unresolved` + `LEDGER_MISSING`。新增 5 项回归测试，全量 `pytest tests -q` → 680 passed / 6 skipped / 1 failed（既有 references 缺失项）。**待真实批次验证**。
+- 变更记录（续 2）：2026-10-18 `p6-dev-round14-03`（DeepSeek 直连、**旧引擎**）基线：**218/347 = 0.6282**（kept 11 / not_executed 118），报 complete 6 / 实际 complete 10 / false_complete 1；1019 calls / **$0.7372**。对照 round11（旧供应商）225/347 = 0.6484；供应商切换是混杂因素。修正版（`ebcd9de`）已于 14:16 CST 发布，`round14-04` 运行中。
 
 ## FL-D111 Langfuse 追踪层吞掉引擎可恢复停止：暂停/续跑机制被破坏（已修）+ 上游周限额耗尽（外部阻塞）+ round14/14-02 批次作废
 
