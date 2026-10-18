@@ -31,6 +31,26 @@
 > `FL-D069→FL-D075`（G17 跨段删除）、`FL-D066→FL-D076`（Codex bwrap）。
 > **注意**：本文下文第 5/6 轮的历史叙述写于更正之前，个别处仍写旧编号，含义以更正后为准；新增条目一律先查重再编号。
 
+## 当前断点（2026-10-18，模型供应商切换 + 外部模型复查核验）
+
+- **供应商切换（按用户指示，先不切回）**：原 `OpenCodeGo` 周限额耗尽（429 `GoUsageLimitError`，retry-after ≈19.5h，见 FL-D111）。已改为 **DeepSeek 直连**：
+  - `/etc/fundlex-recall.env`（备份 `/etc/fundlex-recall.env.bak-20261018-132608`）：`LLM_PROVIDER=deepseek`、`LLM_BASE_URL=https://api.deepseek.com`、`LLM_MODEL=deepseek-flash`；API key 只在 env 文件，不写仓库/文档/聊天记录。
+  - 请求选项保持 `{"thinking":{"type":"disabled"}}`（实测该端点接受且 `reasoning_tokens=0`）；`FUNDLEX_MODEL_MAX_REQUESTS` 20000→40000，`FUNDLEX_MODEL_MAX_COST_USD=50` 不变；单价按目录价输入 $0.15/M、输出 $0.60/M。
+  - 2026-10-18 13:26 CST 重启 `fundlex-recall-api` / `fundlex-recall-worker`；`/api/capabilities` 200；独立账本探测（`/tmp/opencode/upstream_probe2.py`）`UPSTREAM OK: {"ok": true}`。
+  - 账本（切换前）：`17462` requests / charged **$14.4908**（上限 40000 / $50）。**用户明确指示前不切回原供应商。**
+- **外部模型复查核验（已完成，未改引擎）**：对另一模型对核心链路的分析逐条对照当前代码与真实批次，新增 4 条记录（FL-D112～FL-D115）：
+  - **FL-D112（新，最高价值）**：recall 生成内容复核闭包返回 bool 且 `validate_edit_plan` **忽略返回值** → 所有 `_component_ok` 复核（composite/fragment/variant）实际未生效；同时 `_composite_part_slice` 用 `display_text` 解释 compact 偏移，一旦校验生效会误拒带空白锚点的 composite。两处需一起修，属交付校验语义变更，待裁定。
+  - **FL-D113（新）**：sweep 的按窗口规则范围在“该窗口 section 无任何规则映射”时为空 → 整窗 findings 被丢弃；round11 实测 14/80 个窗口零规则（D02/D12/D16 等每案 1–2 个盲窗）；约 69% section 字符所在 section 未被规则映射（含部分摘要）。待裁定 + A/B。
+  - **FL-D114（新）**：未核验 Facts 仍参与 `excluded_by_fund_type`（整份结束）与 `condition_matches` 分支；round11/12/13 有 3/4/6 个案例含未核验引文，多为省略号/跨段导致的验证假阴性，`FUND_TYPE_QUOTE_UNVERIFIED` 每轮 1 例但均为 `open_regular`（未排除）。待裁定。
+  - **FL-D115（新）**：sweep finding 以“重扫未再报”判 `resolved`，无针对性产物证据；round11 resolved 18 / pending 15，round12 8 / 19，round13 8 / 16。待裁定。
+  - **复查中被证伪/夸大的项**：`structure_index` 80 段上限在 514 份语料中**不可达**（groups 中位 26、p90 30、最大 34，0 份超 80）；`facts_context` 的 `break` 在 29500 字符预算下抽样 120 份 **0 份截断**；target identity/复合删除/无 ledger 默认 planned 三点**已在 FL-D110 记录待决**，非新问题。
+- **下一动作**：
+  1. 用新供应商跑 **`p6-dev-round14-03`**（20 例，预算 ≤1000 calls / ≈$0.5–0.8；批前清空 `/var/lib/fundlex/traces/model-calls.jsonl`，批中禁止发布），验证 FL-D110 修复在新供应商下的真实表现，并与 round11（225 / 0.6484）对照；**供应商变更作为混杂因素写入批次说明**。
+  2. FL-D112 的修复方案（统一校验契约 + composite 坐标）需产品负责人裁定后实施；实施后同一批次验证拒绝率/完成率。
+  3. 之后：冻结版本 → 留出 H01–H08 → `REAL_REVISION_EVALUATION_RESULTS.md` → 打包。
+- **预算/账本**：真实运行前在批次说明预登记；账本 `/var/lib/fundlex/model_budget.sqlite`（requests=17462，charged=$14.4908）。
+- **约束**：FL-D105 Q1–Q8、FL-D104 1–19 未裁定前不改引擎适用性/评分语义；合同可入库/出境（公开资料），凭据不入库/不入文档。
+
 ## 当前断点（第 12 轮，2026-10-16，P6 开发集真实修改评测收敛到 0.8602）
 
 - **本轮任务**：用户指示「做二和三」——(三) Langfuse 退化为**本地 JSONL trace 兜底**，(二) 用它帮助 P6 评测优化。

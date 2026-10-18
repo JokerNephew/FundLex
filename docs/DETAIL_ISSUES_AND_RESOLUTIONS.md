@@ -1543,6 +1543,68 @@
 - 证据：改动 `fundlex/observability.py`、`tools/evaluation/p6_run.py`、`tests/test_observability.py`（+3 测试）；日志 `sudo -n journalctl -u fundlex-recall-worker --since "2026-10-18 12:25:50" --until "2026-10-18 12:26:10"`；数据库行 `documents.status/attempt/error_code`；批次日志 `/tmp/opencode/p6-round14.log`、`/tmp/opencode/p6-round14b.log`。
 - 变更记录：2026-10-18 新增（缺陷 A、B 已修并单测；上游周限额阻塞待重置）。
 - 变更记录（续）：2026-10-18 缺陷 A 已发布并经**真实任务端到端验证**（暂停+真实停止码，详见上）；FL-D110 的真实批次验证仍待限额重置。
+- 变更记录（续 2）：2026-10-18 13:26 CST 按用户指示**切换模型供应商**，绕过该周限额阻塞：`/etc/fundlex-recall.env`（备份 `…bak-20261018-132608`）改为 `LLM_PROVIDER=deepseek`、`LLM_BASE_URL=https://api.deepseek.com`、`LLM_MODEL=deepseek-flash`；API key 仅存于该 env 文件（未写入仓库/文档）。`FUNDLEX_MODEL_REQUEST_OPTIONS_JSON` 保持 `thinking disabled`（实测 reasoning_tokens=0）；`FUNDLEX_MODEL_MAX_REQUESTS` 20000→40000（成本上限 $50 不变，切换前账本 17462 requests / charged **$14.4908**）。服务已重启，`/api/capabilities` 200，独立账本探测 `UPSTREAM OK`。**在用户明确指示前不切回原供应商**；原供应商周限额仍处于耗尽状态。
+
+## FL-D112 recall 生成内容复核闭包实际未生效（返回值被忽略）+ composite 分片坐标系不一致（已确认，未修）
+
+- 发现日期：2026-10-18
+- 问题与影响：
+  - `docx.validate_edit_plan()` 对 `content_source=="generated"` 只执行 `content_check(edit)`，**不检查返回值**（`fundlex/docx.py:652-655`）；其函数契约（docstring）是“闭包必须 `raise DocxError`”。
+  - recall 侧 `content_check_factory()` 的 `check()` 所有失败路径都是 `return False`（`fundlex/recall.py:2848-2872`），**从不抛出**；v2 侧 `build_content_check()` 是抛错实现（`fundlex/v2.py:1291-1305`），因此只有 recall-first 链路受影响。
+  - 结果：recall 管线的生成内容复核（`_component_ok` 覆盖 `composite_delete/composite_replace`、`fragment_delete/fragment_replace`、`variant_*`、`composed/guide_text` 等）**在生产中不会拒绝任何 edit**，属于“校验存在但未接线”。
+  - 关联缺陷：`_composite_part_slice()` 用 `display_text()` 的索引表解释 composite parts 的 whitespace-free 偏移（`fundlex/recall.py:2749-2752`），而 `plan_composite_target()` 明确按 `compact_offsets` 解释（`2118+`，注释 FL-D052）。两者在 slice 前存在空白时不一致：实测段落 `"本基金销售服务 费每日计提。"`，compact 偏移 `8` 被 display 表映射到 raw `7`（空格），正确应为 `8`。当前因返回值被忽略而未生效；一旦让校验生效，带空白锚点的 composite edit 会被**误拒**。
+- 证据：
+  - 离线探针 `/tmp/opencode/content_check_probe.py`：`validate_edit_plan(..., content_check=lambda e: False)` **接受** edit 并返回 plan sha；抛出 `DocxError` 的闭包会被拒绝（证明“必须 raise”的契约）。
+  - 离线探针 `/tmp/opencode/review_checks.py` 第 1 项同样复现；坐标差异由 `compact_offsets` / `display_text` 对照实测。
+  - 代码路径：`fundlex/recall_pipeline.py:605`（传入工厂）、`fundlex/docx.py:655`（忽略返回值）、`fundlex/recall.py:2823`（调用 `_composite_part_slice`）。
+- 处理方法（建议，两处必须一起改）：
+  1. 统一校验契约：`validate_edit_plan` 对 `content_check(edit) is False` 抛 `DocxError`（或让 recall 闭包抛错，二选一，建议前者，保持 v2 兼容）；
+  2. `_composite_part_slice()` 改用 `compact_offsets(span.text)`，与 `plan_composite_target()` 同一坐标系；
+  3. 补回归测试：篡改 composite/replace 必须被拒；带空白锚点的 composite 必须通过。
+- 状态与验证：**已确认（离线复现），未实施**。该修复会改变交付行为（过去被静默放行的 edit 将被拒绝），按项目规定属于交付校验语义变更，需产品负责人裁定并在真实批次（round14-03 及留出集）验证拒绝率、完成率与 kept 变化后再发布。
+- 下一步：等待裁定；实施后与 FL-D110 的真实批次验证合并进行。
+- 变更记录：2026-10-18 新增（外部模型复查核验时发现；该项不在其原清单内）。
+
+## FL-D113 sweep 规则范围为空的窗口：整窗 findings 被丢弃（已确认，未实施）
+
+- 发现日期：2026-10-18
+- 问题与影响：
+  - `_window_rule_scope()` 只在“某规则在全文档任何窗口都不可达”时回退到全规则（`fundlex/recall_pipeline.py:1481-1488`）；若某个 sweep 窗口覆盖的 section 没有任何规则映射，该窗口 `ids=∅` → `requirements_by_chunk` 为空、`scope_by_chunk=∅`，窗口内模型上报的 findings 全部按 `SWEEP_RULE_OUT_OF_WINDOW` 丢弃（`1497+`）。确定性 survey 只覆盖可按 reference 文本命中的规则，**语义型条款在这些窗口完全不可见**。
+  - 这是 FL-D109 step 1（按窗口收敛规则）留下的覆盖缺口：收益是砍掉跨章节噪声，代价是 scope_map 漏映射的 section 变成“盲窗”。
+- 证据：
+  - round11 离线重算（报告 round-0 chunk locations + `scope_mapping` + `structure_index`；mandatory 用 targets `needs_edit` 近似）：**80 个窗口里 14 个零规则**；D02 各窗规则数 `[14,0,8,4]`、D12 `[14,0,8,0]`、D16 `[14,0,8,0]`，每案 1–2 个盲窗。
+  - section 级：round11 约 **69% 的 section 字符**所在 section 未被任何规则映射；其中含“基金合同内容摘要”等确实承载规则目标的 section（D10/D15/D19/D20 共有 43 处规则映射进摘要，说明模型是否映射摘要并不稳定）。
+- 处理方法（建议）：空范围窗口回退——至少把 `mandatory` 规则并入，或整体回退全规则，并在报告中记录 `blind_windows` 以支持评测归因；任何回退都会提高噪声与调用量，需按 round11 口径做 A/B 后再定。
+- 状态与验证：**已确认（离线重算），未实施**；属于覆盖/交付语义变更，待产品负责人裁定 + A/B。
+- 下一步：先加 `blind_windows` 观测字段（无行为变化）用于下一批归因；回退策略待裁定。
+- 变更记录：2026-10-18 新增。
+
+## FL-D114 未核验 Facts 直接参与排除/分支决策（已确认，待裁定）
+
+- 发现日期：2026-10-18
+- 问题与影响：
+  - `quotes_verified` 只写入报告（`fundlex/recall_pipeline.py:1849`），**不参与任何门控**；`facts.fund_type` 即使引文未核验也可触发 `excluded_by_fund_type` 并直接结束整份合同（`1846-1855`）；`condition_matches()` 用 `class_count/has_service_fee/floating_management_fee` 选择 operation，同样不看核验状态（`fundlex/recall.py:2032-2051`）。
+  - 真实批次统计：round11/12/13 分别有 **3/4/6** 个 case 至少一个 `*_QUOTE_UNVERIFIED`（约 5–10%）；其中 `FUND_TYPE_QUOTE_UNVERIFIED` 每轮 1 例，三例 `fund_type` 均为 `open_regular`（未被排除）。
+  - 抽查未核验引文（D06/D14 等）：`……` 省略号、跨段换行导致 `_verify_quote` 假阴性，**并非事实错误**。因此“未核验即阻断”会误伤正确事实；真正的高风险点是**未核验的 fund_type 触发整份排除**。
+- 处理方法（建议）：
+  1. 最小改动：`fund_type in excluded_types` 且引文未核验时，先做一次“重新取证/仲裁”调用（要求单段内逐字短引文）；仍不可核验则不排除、继续处理并在报告标注 `fund_type_unverified`；
+  2. 中期：FactClaim 三态（verified/unknown/conflict）+ evidence，`condition_matches` 无 verified 时转语义裁定；
+  3. 改进 `_verify_quote`：支持省略号分段校验与跨段拼接，降低假阴性。
+- 状态与验证：**已确认（代码 + 真实批次统计），未实施**；涉及适用性/排除语义，按项目规定待产品负责人裁定。
+- 下一步：与 FL-D105/FL-D104 待决项一并裁定；裁定前不改引擎。
+- 变更记录：2026-10-18 新增。
+
+## FL-D115 sweep 以“重扫未再报”判定 finding resolved（已确认，待裁定）
+
+- 发现日期：2026-10-18
+- 问题与影响：
+  - `_resolve_pending()` 对“被重扫窗口覆盖、且本轮未再报告同一 `(rule_id, location)`”的 pending finding 直接置为 `resolved`（`fundlex/recall_pipeline.py:1623-1636`），**不要求任何针对该 finding 的产物证据**（旧义务消失、新义务出现、锚点关系等）。
+  - 模型重扫存在随机漏报；修复失败 + 下一轮漏报 → `resolved`，而 `resolved` 不进入 `pending_findings`，不阻塞 `complete`。
+  - 真实批次：round11 `resolved=18 / pending=15 / unresolved=1`；round12 `8 / 19 / 0`；round13 `8 / 16 / 0`——多数 finding 走“静默 resolved”路径。
+- 处理方法（建议）：finding 关闭改为**针对性证据校验**（delete：旧证据消失且保留内容仍在；replace：旧义务消失且新义务出现；append：必需条款存在于正确锚点关系）；模型未再报仅作为“候选 resolved”，需确定性证据确认。可先为 delete/replace/append 三类各加一条 evidence 规则，再评估 pending 清零率。
+- 状态与验证：**已确认（代码 + 真实批次计数），未实施**；属于审计/交付门语义，待产品负责人裁定。
+- 下一步：与 FL-D105/FL-D104 一并裁定；裁定前只在报告里记录 `resolution=re-sweep clean`（已有）供归因。
+- 变更记录：2026-10-18 新增。
 
 ## 后续条目模板
 
