@@ -35,6 +35,7 @@ from __future__ import annotations
 import hashlib
 import logging
 import os
+import sys
 from contextlib import contextmanager
 from typing import Any, Iterator
 
@@ -100,27 +101,43 @@ def trace_document(*, name: str, document_id: str, metadata: dict | None = None,
     re-runs of the same document land on the same trace instead of scattering
     duplicates. Yields the root span (or ``None`` when tracing is off) so the
     caller can attach scores.
+
+    Only tracing's own setup/teardown failures are swallowed. An exception raised by
+    the traced body propagates unchanged: a broad handler around the ``yield`` would
+    swallow the engine's recoverable model/transport stops and then yield again, which
+    contextlib reports as ``RuntimeError("generator didn't stop after throw()")`` -
+    destroying the stop code the worker needs to pause and resume the task (FL-D111).
     """
     client = _client()
     if client is None:
         yield None
         return
     root: Any = None
+    span: Any = None
     try:
         trace_id = client.create_trace_id(seed=f"fundlex:{document_id}")
-        with client.start_as_current_observation(
-                name=name, as_type="span", trace_context={"trace_id": trace_id},
-                metadata=metadata or {}) as root:
-            try:
-                from langfuse import propagate_attributes
-                with propagate_attributes(session_id=document_id, tags=tags or [],
-                                          trace_name=name, metadata=metadata or {}):
-                    yield root
-            except ImportError:  # pragma: no cover - older SDK without propagate_attributes
-                yield root
-    except Exception:  # pragma: no cover - defensive: tracing must never break a run
+        span = client.start_as_current_observation(
+            name=name, as_type="span", trace_context={"trace_id": trace_id},
+            metadata=metadata or {})
+        root = span.__enter__()
+    except Exception:  # pragma: no cover - defensive: tracing setup must never break a run
         _LOGGER.warning("langfuse trace failed for %s", name, exc_info=True)
-        yield root if root is not None else None
+        yield None
+        return
+    try:
+        try:
+            from langfuse import propagate_attributes
+        except ImportError:  # pragma: no cover - older SDK without propagate_attributes
+            yield root
+        else:
+            with propagate_attributes(session_id=document_id, tags=tags or [],
+                                      trace_name=name, metadata=metadata or {}):
+                yield root
+    finally:
+        try:
+            span.__exit__(*sys.exc_info())
+        except Exception:  # pragma: no cover - teardown must not replace the body's outcome
+            _LOGGER.warning("langfuse span close failed for %s", name, exc_info=True)
 
 
 def record_generation(*, task_type: str, prompt_version: str, model: str,
