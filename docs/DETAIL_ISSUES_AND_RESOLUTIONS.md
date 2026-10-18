@@ -1660,6 +1660,8 @@
 - 状态与验证：**已实施，单测通过**：精确 delete、fuzzy delete variant、模型 target 只覆盖 replace 时 delete 仍可补召回（新增 3 项测试）；全量 `pytest tests -q` → 686 passed / 6 skipped / 1 failed（既有 references 缺失项）。**待真实批次验证**（round14-06）。
 - 下一步：round14-06 对照 14-04；观察 `kept`/`not_executed`、重复 target 与 sweep 调用量。之后才考虑把 operation 正式加入 Inventory schema / Target API。
 - 变更记录：2026-10-18 新增并修 delete 路径。
+- 变更记录（续 2）：2026-10-18 `p6-dev-round14-05`（仅 `c04d51a` 精确路径，Dev 20 例）dev-only **220/236 = 0.9322**（kept 10 / not_executed 6），reported complete **2** / actual 11 / false 1；**1240 calls / $0.9053**。目标完成率与 14-04 持平，但 survey 补出的 delete targets 使 unresolved 增多、complete 从 7 降到 2（交付更保守），调用/成本 +23%。结论：**精确补丁单独没有指标收益**；operation-aware 合并版见 `61e210c` / round14-06。
+- 变更记录（续 3）：2026-10-18 `61e210c` 已发布（部署 sha 与仓库一致），round14-06 运行中。
 
 ## 后续条目模板
 
