@@ -1586,10 +1586,10 @@
   - round11 离线重算（报告 round-0 chunk locations + `scope_mapping` + `structure_index`；mandatory 用 targets `needs_edit` 近似）：**80 个窗口里 14 个零规则**；D02 各窗规则数 `[14,0,8,4]`、D12 `[14,0,8,0]`、D16 `[14,0,8,0]`，每案 1–2 个盲窗。
   - section 级：round11 约 **69% 的 section 字符**所在 section 未被任何规则映射；其中含“基金合同内容摘要”等确实承载规则目标的 section（D10/D15/D19/D20 共有 43 处规则映射进摘要，说明模型是否映射摘要并不稳定）。
 - 处理方法（建议）：空范围窗口回退——至少把 `mandatory` 规则并入，或整体回退全规则，并在报告中记录 `blind_windows` 以支持评测归因；任何回退都会提高噪声与调用量，需按 round11 口径做 A/B 后再定。
-- 状态与验证：**已实施（2026-10-18，commit `ebcd9de`），待 A/B**：sweep 报告新增 `blind_windows` 记录（chunk/locations/fallback_rules），并在空范围窗口回退到 `mandatory` 规则集合（无 mandatory 时保持空并记录）。新增 2 项单测（回退/空 mandatory）；全量测试 680 passed / 6 skipped / 1 failed（既有）。
-- 下一步：round14-04 对照 round11/14-03，重点看盲窗数量、sweep 调用量、`SWEEP_RULE_OUT_OF_WINDOW` 与 kept 变化；若噪声/成本上升明显再考虑只保留观测字段、关闭回退。
+- 状态与验证：**已实施（2026-10-18，commit `61e210c`），待 A/B**：零规则窗口现在回退 **全部 guide 规则**（不再只给 mandatory），`blind_windows` 记录完整 fallback_rules；新增/更新的 2 项单测覆盖“有 mandatory / 无 mandatory 都回退全规则”；全量测试 686 passed / 6 skipped / 1 failed（既有）。
+- 下一步：round14-06 对照 round14-04，重点看盲窗数量、sweep 调用量、`SWEEP_RULE_OUT_OF_WINDOW` 与 kept 变化；若噪声/成本上升明显再回退到 mandatory 或改为只记录观测。
 - 变更记录：2026-10-18 新增。
-- 变更记录（续）：2026-10-18 已实施观测 + mandatory 回退，等待 A/B。
+- 变更记录（续）：2026-10-18 已实施观测 + **全规则**回退，等待 A/B。
 
 ## FL-D114 未核验 Facts 直接参与排除/分支决策（已确认，待裁定）
 
@@ -1602,10 +1602,10 @@
   1. 最小改动：`fund_type in excluded_types` 且引文未核验时，先做一次“重新取证/仲裁”调用（要求单段内逐字短引文）；仍不可核验则不排除、继续处理并在报告标注 `fund_type_unverified`；
   2. 中期：FactClaim 三态（verified/unknown/conflict）+ evidence，`condition_matches` 无 verified 时转语义裁定；
   3. 改进 `_verify_quote`：支持省略号分段校验与跨段拼接，降低假阴性。
-- 状态与验证：**部分实施（2026-10-18，commit `ebcd9de`）**：`_verify_quote` 已支持省略号分段校验（每段必须逐字存在）与跨段落边界拼接（要求命中真正跨越边界）；`fund_type` 排除策略**未改**（未核验仍排除，待裁定）。新增 1 项单测（省略号/跨段/伪造引文）；全量测试 680 passed / 6 skipped / 1 failed（既有）。
-- 下一步：与 FL-D105/FL-D104 待决项一并裁定排除策略（重新取证/仲裁 vs 不排除）；裁定前不改。
+- 状态与验证：**部分实施（2026-10-18，commit `ebcd9de`）**：`_verify_quote` 已支持省略号分段校验（每段必须逐字存在）与跨段落边界拼接（要求命中真正跨越边界）；**最小 hard-gate 保护已于 `61e210c` 实施**：`excluded_types` 且 `quotes_verified["fund_type"]` 为假时不再 `return excluded`，而是继续处理、qualification 记为 `eligible_fund_type_unverified`，并在交付门加入 `FUND_TYPE_UNVERIFIED` unresolved，禁止 complete。新增 1 项单测（未核验不排除 / 已核验排除 / 非排除类型）；全量测试 686 passed / 6 skipped / 1 failed（既有）。
+- 下一步：`fund_type` 的严格证据协议（单一连续/同 section）与“重新取证/仲裁”仍待裁定；当前只是 fail-open + 不能 complete。
 - 变更记录：2026-10-18 新增。
-- 变更记录（续）：2026-10-18 引文核验已改进，排除策略保持原样。
+- 变更记录（续）：2026-10-18 引文核验改进 + 未核验排除保护已实施。
 
 ## FL-D115 sweep 以“重扫未再报”判定 finding resolved（已确认，待裁定）
 
@@ -1615,9 +1615,13 @@
   - 模型重扫存在随机漏报；修复失败 + 下一轮漏报 → `resolved`，而 `resolved` 不进入 `pending_findings`，不阻塞 `complete`。
   - 真实批次：round11 `resolved=18 / pending=15 / unresolved=1`；round12 `8 / 19 / 0`；round13 `8 / 16 / 0`——多数 finding 走“静默 resolved”路径。
 - 处理方法（建议）：finding 关闭改为**针对性证据校验**（delete：旧证据消失且保留内容仍在；replace：旧义务消失且新义务出现；append：必需条款存在于正确锚点关系）；模型未再报仅作为“候选 resolved”，需确定性证据确认。可先为 delete/replace/append 三类各加一条 evidence 规则，再评估 pending 清零率。
-- 状态与验证：**已确认（代码 + 真实批次计数），未实施**；属于审计/交付门语义，待产品负责人裁定。
-- 下一步：与 FL-D105/FL-D104 一并裁定；裁定前只在报告里记录 `resolution=re-sweep clean`（已有）供归因。
+- 状态与验证：**已实施（2026-10-18，commit `61e210c`），待真实批次验证**：
+  - `_resolve_pending()` 对 `residual_old_text` 要求引文已从产物段落消失；`missing_new_text` 要求规则的 required replacement/append 文本已出现；`wrong_text` 优先要求 required 文本出现、否则引文消失；`location_gone` 视为已消失；未知 issue 类型保留 `model_clean` 旧行为。
+  - 模型“没再报”但证据不成立时，finding 保持 `pending`（`resolution=model_clean_but_evidence_missing`），继续阻塞 complete；已重新报告 → `unresolved`。
+  - 新增 1 项单测覆盖 pending/resolved/unknown/still_reported 四类；全量测试 686 passed / 6 skipped / 1 failed（既有）。
+- 下一步：round14-06 观察 pending/unresolved 与 complete 数量变化；若误伤过多（append 的 required 文本匹配过严），再细化 append 的证据匹配。
 - 变更记录：2026-10-18 新增。
+- 变更记录（续）：2026-10-18 已实施 evidence-gated closure（三类 issue），等待批次验证。
 
 ## FL-D116 P6 评分器把未运行的留出标签计入 not_executed：开发集绝对完成率被系统性低估（已修，已复算）
 
@@ -1652,9 +1656,9 @@
   - 第二个路径仍存在：模型 inventory 只报了同段一个 operation 的 target 时，`(rule, location)` 同样会压制其他 operation 的 survey 补召回——这需要 operation 级覆盖键，本轮未改。
 - 证据：`fundlex/recall.py` `satisfied_by_new_text()`（约 925-970）、`survey_targets()`（约 1285-1292、1302）；新增 `tests/test_recall_core.py::test_satisfied_replace_does_not_suppress_delete_survey`（含“delete 仍残留 → 必须再出 hit”与“delete 已干净 → 不得重复 hit”两侧）。
 - **残留路径（2026-10-18 复核确认）**：`_delete_operation_still_pending()` 只用**精确** `old_text in compact_body`，而 survey 的 `find_old_text_all()` 还有 fuzzy 路径（目标长度 ≥24、阈值 0.9）以及 fragment/keyword-bag 路径。离线复现：delete old_text 为“基金管理人应当在调整前及时公告并报中国证监会备案”，合同写作“基金管理人应当在调整前**事先**公告并报中国证监会备案”（difflib ratio 0.917）；当前 survey 只返回 satisfied hit；把该 helper 临时改为恒 True 后，survey 立即找到该 fuzzy delete hit。说明本修复只覆盖精确路径，fuzzy/变体仍会被 `(rule, location)` 压制；必须用 operation-aware 覆盖键根治。
-- 处理方法（已实施）：新增 `_delete_operation_still_pending(rule, facts, compact_body)`；satisfied 命中后，仅当该规则没有仍残留的适用 delete old_text 时才把 `(rule, location)` 加入 `existing`。delete 已真正完成时不会产生重复 hit；仍残留时 survey 继续搜索。
-- 状态与验证：**已实施，单测通过；待真实批次验证**（将随下一批 dev 运行观察 `kept`/`not_executed` 与重复 target 数）。全量回归在本轮后续统一跑。
-- 下一步：把覆盖键升级为 `(rule_id, operation_key, location)`（先内部 key，暂不改 Guide schema），覆盖模型 target 路径；再评估是否把 operation 正式加入 Inventory schema / Target。
+- 处理方法（已实施，commit `61e210c`）：覆盖键升级为 `(rule_id, operation_key, location)`；`operation_search_key_pairs()` 给每个 search key 标注操作；`satisfied_operation_keys()` 只标记**自身新文本已存在**的 replace/append；`known_operations_from_targets()` 从 target 的显式 operations 或 span 内容计算覆盖；`_delete_operation_still_pending()` 已删除，不再逐个打补丁。
+- 状态与验证：**已实施，单测通过**：精确 delete、fuzzy delete variant、模型 target 只覆盖 replace 时 delete 仍可补召回（新增 3 项测试）；全量 `pytest tests -q` → 686 passed / 6 skipped / 1 failed（既有 references 缺失项）。**待真实批次验证**（round14-06）。
+- 下一步：round14-06 对照 14-04；观察 `kept`/`not_executed`、重复 target 与 sweep 调用量。之后才考虑把 operation 正式加入 Inventory schema / Target API。
 - 变更记录：2026-10-18 新增并修 delete 路径。
 
 ## 后续条目模板
