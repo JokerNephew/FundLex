@@ -1243,6 +1243,28 @@ def _anchor_present(parts: tuple[tuple[str, int, int], ...], anchors: Sequence[s
     return False
 
 
+def _delete_operation_still_pending(rule: dict, facts: Facts, compact_body: str) -> bool:
+    """True when an applicable delete operation's own text is still in the paragraph.
+
+    ``satisfied_by_new_text`` is a rule-level signal: it proves a replace/append is
+    already in place, but it says nothing about the rule's other operations. Marking
+    the whole ``(rule, location)`` covered then suppressed the deterministic survey for
+    a deletion that still remains in the same paragraph (for example G05's replace is
+    satisfied while "并报中国证监会备案" is still present). Only a delete whose own
+    reference text survives blocks the suppression; a genuinely deleted clause has no
+    old text left to hit.
+    """
+    for operation in rule.get("operations") or []:
+        if operation.get("op") != "delete":
+            continue
+        if not condition_matches(operation.get("condition"), facts):
+            continue
+        old = _compact(str(operation.get("old_text") or ""))
+        if old and old in compact_body:
+            return True
+    return False
+
+
 def survey_targets(inspection: DocumentInspection, rules: Sequence[dict], facts: Facts, *,
                    known: Sequence[tuple[str, str]] = (),
                    threshold: float = FUZZY_MATCH_THRESHOLD,
@@ -1289,7 +1311,8 @@ def survey_targets(inspection: DocumentInspection, rules: Sequence[dict], facts:
             hits.append(SurveyHit(rule_id=rule_id, operation="satisfied",
                                   locations=(location,), quote=matched,
                                   start=0, end=0, ratio=1.0, index=counter))
-            existing.add((rule_id, location))
+            if not _delete_operation_still_pending(rule, facts, body):
+                existing.add((rule_id, location))
         tail_keys = set(bare_tail_keys(rule, facts))
         anchors = rule_context_anchors(rule, facts)
         delete_only_rule = _delete_keyword_bag(rule, facts) != () or all(

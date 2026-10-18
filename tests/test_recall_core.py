@@ -1116,3 +1116,37 @@ def test_composite_part_verification_uses_compact_offsets(tmp_path: Path):
     tampered = dict(component)
     tampered["replacement"] = component["replacement"][:-2]
     assert _component_ok(tampered, inspection) is False
+
+
+def test_satisfied_replace_does_not_suppress_delete_survey(tmp_path: Path):
+    """G05: a satisfied replace must not hide the still-present delete operation.
+
+    ``satisfied_by_new_text`` is rule-level, so it used to mark the whole
+    (rule, location) covered and the survey skipped the deletion ("并报中国证监会
+    备案") that was still in the same paragraph.
+    """
+    from fundlex.recall import survey_targets
+    path = tmp_path / "satisfied-and-delete.docx"
+    document = Document()
+    document.add_paragraph("基金管理人可以适当调低销售服务费率，并报中国证监会备案。")
+    document.save(path)
+    inspection = inspect_docx(path, full=True)
+    rule = {"rule_id": "GX", "title": "类别调整句",
+            "requirement": "调低销售服务费率并删除备案句。",
+            "operations": [
+                {"op": "replace", "old_text": "调低赎回费率",
+                 "new_text": "调低销售服务费率", "condition": {"kind": "none", "value": None}},
+                {"op": "delete", "old_text": "并报中国证监会备案",
+                 "condition": {"kind": "none", "value": None}},
+            ]}
+    hits = survey_targets(inspection, [rule], _facts())
+    assert any(hit.operation == "satisfied" for hit in hits)
+    assert any("备案" in hit.quote for hit in hits if hit.operation != "satisfied")
+
+    clean_path = tmp_path / "satisfied-only.docx"
+    document = Document()
+    document.add_paragraph("基金管理人可以适当调低销售服务费率。")
+    document.save(clean_path)
+    clean_hits = survey_targets(inspect_docx(clean_path, full=True), [rule], _facts())
+    assert any(hit.operation == "satisfied" for hit in clean_hits)
+    assert not any("备案" in hit.quote for hit in clean_hits if hit.operation != "satisfied")

@@ -1642,6 +1642,20 @@
 - 下一步：round14-04 用修正后的评分器出 dev-only 指标；最终报告同时列 dev 与 holdout 两组分母。
 - 变更记录：2026-10-18 新增并修复。
 
+## FL-D117 satisfied 命中的规则级覆盖吞掉同段 delete operation 的 survey 补召回（delete 路径已修；模型 target 路径待 operation-aware 改造）
+
+- 发现日期：2026-10-18
+- 问题与影响：
+  - `survey_targets()` 的覆盖率键是 `(rule_id, location)`。`satisfied_by_new_text()` 是**规则级**信号：它只证明 replace/append 的新文本已在段落中，对 delete operation 一无所知；命中后代码执行 `existing.add((rule_id, location))`，随后同一段里 `operation_search_keys()` 的 delete old_text 命中会被跳过。
+  - 典型路径（G05）：同段 replace 已满足（“调低销售服务费率”已存在），但 delete 的“并报中国证监会备案”仍残留 → survey 不再补召回，planner 也没有 target 可执行该删除。
+  - `override_rules` 只覆盖“delete-only 且未被 resolved needs_edit 覆盖”的规则；G05 是 replace+delete 混合规则，不在保护范围。
+  - 第二个路径仍存在：模型 inventory 只报了同段一个 operation 的 target 时，`(rule, location)` 同样会压制其他 operation 的 survey 补召回——这需要 operation 级覆盖键，本轮未改。
+- 证据：`fundlex/recall.py` `satisfied_by_new_text()`（约 925-970）、`survey_targets()`（约 1285-1292、1302）；新增 `tests/test_recall_core.py::test_satisfied_replace_does_not_suppress_delete_survey`（含“delete 仍残留 → 必须再出 hit”与“delete 已干净 → 不得重复 hit”两侧）。
+- 处理方法（已实施）：新增 `_delete_operation_still_pending(rule, facts, compact_body)`；satisfied 命中后，仅当该规则没有仍残留的适用 delete old_text 时才把 `(rule, location)` 加入 `existing`。delete 已真正完成时不会产生重复 hit；仍残留时 survey 继续搜索。
+- 状态与验证：**已实施，单测通过；待真实批次验证**（将随下一批 dev 运行观察 `kept`/`not_executed` 与重复 target 数）。全量回归在本轮后续统一跑。
+- 下一步：把覆盖键升级为 `(rule_id, operation_key, location)`（先内部 key，暂不改 Guide schema），覆盖模型 target 路径；再评估是否把 operation 正式加入 Inventory schema / Target。
+- 变更记录：2026-10-18 新增并修 delete 路径。
+
 ## 后续条目模板
 
 ### FL-Dxxx 问题名称

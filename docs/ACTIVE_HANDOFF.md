@@ -52,9 +52,10 @@
   - 测试：新增 9 项；全量 **680 passed / 6 skipped / 1 failed**（唯一失败为既有 references 缺失项）。
 - **下一动作**：
   1. **`p6-dev-round14-03` 基线已完成**（DeepSeek 直连、旧引擎）：dev-only **218/236 = 0.9237**（kept 11 / not_executed 7），6 报 complete / 10 实际 complete / 1 false_complete；1019 calls / $0.7372。对照 round11 dev-only 225/236 = 0.9534（旧供应商）。**注意 FL-D116**：此前 218/347 = 0.6282 与 225/347 = 0.6484 是评分器把 111 个未运行留出目标计入分母导致的低估；`p6_score.py` 已改为默认只评本次批次实际运行的 case（`--group run`），并支持 `--group dev|holdout|all`。
-  2. 修正版 `ebcd9de` 已于 2026-10-18 14:16 CST 发布（部署文件 sha 与仓库一致，服务 active）；**`p6-dev-round14-04` 运行中**，用于验证 21 项修正合并后的真实表现。
-  3. 对照重点：`RECALL_EDIT_CONTENT_UNVERIFIED` 数量、`blind_windows`/`SWEEP_RULE_OUT_OF_WINDOW`、working/incomplete 比例、kept 变化；供应商切换与修正合并，作为混杂因素注明。
-  4. 结果稳定后再冻结版本 → 留出 H01–H08 → 评测报告 → 打包。
+  2. 修正版 `ebcd9de` 已于 2026-10-18 14:16 CST 发布（部署文件 sha 与仓库一致，服务 active）；**`p6-dev-round14-04` 已完成**：dev-only **220/236 = 0.9322**（kept 10 / not_executed 6），7 报 complete / 11 实际 complete / 1 false_complete；1008 calls / $0.7536。对照 14-03（同供应商、旧引擎）218/236 = 0.9237：**+2 目标，无回归**；`RECALL_EDIT_CONTENT_UNVERIFIED` 两轮均为 **0**（校验接线未造成拒绝），14-04 记录 **16 个 blind_windows**。
+  3. 已修 FL-D117 的 delete 路径（satisfied replace 不再压制仍残留的 delete survey），单测通过；待发布后跑下一批验证。模型 target 的 operation 粒度覆盖仍待改造。
+  4. 对照重点：`RECALL_EDIT_CONTENT_UNVERIFIED` 数量、`blind_windows`/`SWEEP_RULE_OUT_OF_WINDOW`、working/incomplete 比例、kept 变化；供应商切换与修正合并，作为混杂因素注明。
+  5. 结果稳定后再冻结版本 → 留出 H01–H08 → 评测报告 → 打包。
 - **预算/账本**：真实运行前在批次说明预登记；账本 `/var/lib/fundlex/model_budget.sqlite`（切换前 requests=17462，charged=$14.4908；上限 40000 / $50）。
 - **约束**：FL-D105 Q1–Q8、FL-D104 1–19 未裁定前不改规则适用性/评分语义；合同可入库/出境（公开资料），凭据不入库/不入文档。
 
