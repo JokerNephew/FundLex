@@ -31,12 +31,13 @@
 > `FL-D069→FL-D075`（G17 跨段删除）、`FL-D066→FL-D076`（Codex bwrap）。
 > **注意**：本文下文第 5/6 轮的历史叙述写于更正之前，个别处仍写旧编号，含义以更正后为准；新增条目一律先查重再编号。
 
-## 当前断点（2026-10-19，前端改造第一批，已本地验证；**未发布**）
+## 当前断点（2026-10-19，前端改造第一批，已本地验证并发布）
 
 - **范围**：全局 Toast（修复 FL-D121 成功提示不可见）、面包屑、页脚 + 版本号（`capabilities.app_version`）与帮助弹窗、筛选 Chip、任务列表“合同份数/成功异常/进度”、任务详情统计条与异常行高亮、批量导入进度条/异常标红/替换/条件跳转、修订审查 A/R + Toast + 上一份/下一份、指引问题展开 + “重新解析（自动修复）”。
 - **文件**：`frontend/index.html|app.js|app.css`、`fundlex/api.py`（仅 `app_version`）、`tests/test_tasks_api.py`；问题状态见 FL-D121 / FL-D126 / FL-D127 / FL-D128 / FL-D129。
 - **验证**：全量 `pytest tests -q` → **752 passed / 6 skipped**；本地 dev 实例真实浏览器四组：`ui_smoke` 25/25、`ui_review` 20/20、`ui_guide` 10/10、`ui_redirect` 6/6，0 页面/控制台错误。
-- **未发布**：并行 agent 的引擎提交 `839ffe0` 尚未发布；为避免把未协调的引擎改动一起带入生产，本轮未执行 `publish_workspace.sh`。下一动作：与并行 agent 协调后统一发布并在生产复验前端批次。
+- **已发布（2026-10-19，commit `c2851a8` 快照）**：`bash tools/deploy/publish_workspace.sh` 成功，api/worker active；`frontend/index.html|app.js|app.css`、`fundlex/api.py` 与部署副本 sha256 一致；`https://fundlex.club/api/capabilities` 返回 `app_version=0.1.0`；首页资源版本已变化（`app.js?v=35788dcc…`）；生产匿名页真实 Chromium 检查 0 页面/控制台错误。发布快照同时包含并行 agent 的引擎提交 `839ffe0`（其自测全量通过；如该引擎变更需单独批次验证，由对应 agent 继续）。
+- 下一动作：用户在真实登录环境复验第一批交互；第二批待拍板项（月度统计/消息持久化/全局搜索/重试/审计）见集中问题记录 FL-D122～FL-D125。
 
 ## 当前断点（2026-10-18，模型供应商切换 + 外部模型复查核验）
 
