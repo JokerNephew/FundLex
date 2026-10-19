@@ -183,6 +183,7 @@ def test_identity_isolation_capabilities_and_historical_mapping(client, monkeypa
     assert client.get(f"/api/batches/{result['batch_id']}/documents/{result['document_id']}/report", headers=BOB).status_code == 404
     assert client.get("/api/capabilities").status_code == 401
     caps = client.get("/api/capabilities", headers=ALICE).json()
+    assert caps["app_version"] == "0.1.0"
     engine = caps["engine"]
     assert engine["id"] == "recall_first" and engine["rule_source"] == "guide"
     assert engine["actions_total"] == int((engine["guide"] or {}).get("groups") or 0)

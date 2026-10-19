@@ -28,7 +28,7 @@ from fastapi.responses import (
 from starlette.background import BackgroundTask
 from fastapi.staticfiles import StaticFiles
 
-from . import guide_store
+from . import __version__, guide_store
 from .docx import DocxError
 from .edit_summary import archive_entry, archive_kinds
 from .html_view import project_docx
@@ -565,7 +565,7 @@ def create_app(data_dir: str | Path | None = None, *, auth_db=None) -> FastAPI:
         if mode == "password" and identity is None:
             # Minimal pre-login payload: no ruleset or identity metadata leaks.
             return {"auth_mode": mode, "login_required": True, "task_api": True,
-                    "registration_open": _registration_open()}
+                    "app_version": __version__, "registration_open": _registration_open()}
         # The runtime has a single rule source: the bound guide snapshot. The
         # legacy rulesets no longer participate, so capabilities must not load
         # or expose them (a broken legacy file must not break the engine).
@@ -587,7 +587,7 @@ def create_app(data_dir: str | Path | None = None, *, auth_db=None) -> FastAPI:
             "actions_total": int(guide.get("groups") or 0) if guide else 0,
         }
         return {"auth_mode": mode, "login_required": mode == "password", "task_api": True,
-                "registration_open": _registration_open(),
+                "app_version": __version__, "registration_open": _registration_open(),
                 "upload_limits": {"max_file_bytes": MAX_UPLOAD_BYTES, "max_request_files": MAX_BATCH_DOCUMENTS,
                                   "max_request_bytes": MAX_BATCH_BYTES},
                 "engine": engine}
