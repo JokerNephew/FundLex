@@ -38,7 +38,8 @@ from .recall import (BOUNDARY_POLICY, ENGINE_ID, ENGINE_VERSION, SCHEMA_VERSION,
                      resolve_old_text, resolve_quote, rule_context, scope_map,
                      structure_index, survey_targets, compact_offsets,
                      append_applicability_targets, is_delete_only_rule, Section,
-                     known_operations_from_targets, operations_cover_hit)
+                     known_operations_from_targets, operations_cover_hit,
+                     _add_operation_coverage)
 from .recall_prompts import (AUDIT_INSTRUCTION, AUDIT_PROMPT_VERSION, AUDIT_SCHEMA,
                              PROMPT_VERSIONS, SWEEP_INSTRUCTION, SWEEP_PROMPT_VERSION,
                              SWEEP_SCHEMA)
@@ -366,7 +367,7 @@ def _survey_targets_from_hits(hits: Sequence[SurveyHit], rules_by_id: dict[str, 
         targets.append(target)
         if hit.operation_keys:
             for part_location in hit.locations:
-                known.setdefault((hit.rule_id, part_location), set()).update(hit.operation_keys)
+                _add_operation_coverage(known, hit.rule_id, part_location, hit.operation_keys)
         else:
             for part_location in hit.locations:
                 known[(hit.rule_id, part_location)] = None

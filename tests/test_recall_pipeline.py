@@ -1003,3 +1003,31 @@ def test_delivery_complete_blocks_on_any_unresolved():
     assert _delivery_complete([]) is True
     assert _delivery_complete([{"kind": "coverage", "code": "SURVEY_QUOTE_UNRESOLVED"}]) is False
     assert _delivery_complete([{"kind": "qualification", "code": "FUND_TYPE_UNVERIFIED"}]) is False
+
+
+def test_survey_targets_from_hits_handles_unknown_coverage(tmp_path):
+    """A specific hit must survive an existing target with unknown operation coverage."""
+    from docx import Document
+    from fundlex.docx import inspect_docx
+    from fundlex.recall import SurveyHit, Target
+    from fundlex.recall_pipeline import _survey_targets_from_hits
+
+    path = tmp_path / "survey-hit.docx"
+    document = Document()
+    document.add_paragraph("销售服务费主要用于支付销售机构佣金。")
+    document.save(path)
+    inspection = inspect_docx(path, full=True)
+    rule = {"rule_id": "GX", "title": "删除服务费用途", "requirement": "删除该句。",
+            "operations": [{"op": "delete", "old_text": "销售服务费主要用于支付销售机构佣金",
+                            "condition": {"kind": "none", "value": None}}]}
+    existing = Target(target_id="T1", rule_id="GX", location="p0", quote="本",
+                      state="needs_edit", reason="", start=0, end=1)
+    hit = SurveyHit(rule_id="GX", operation="survey", locations=("p0",),
+                    quote="销售服务费主要用于支付销售机构佣金",
+                    start=0, end=0, ratio=1.0, index=1,
+                    operation_keys=("GX:0",)).with_parts((("p0", 0, 17),))
+    targets, gaps = _survey_targets_from_hits([hit], {"GX": rule}, inspection, [existing],
+                                              start_index=0)
+    assert [target.target_id for target in targets] == ["Y001"]
+    assert targets[0].operations == ("GX:0",)
+    assert gaps == []
