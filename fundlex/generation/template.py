@@ -25,6 +25,35 @@ class TemplateResult:
     evidence: dict
 
 
+def plan_policy_replacement(before: str, instantiated: str, rule_id: str) -> TemplateResult | None:
+    """Tier-2 (plan §8, §19.1/§19.2): a *clean* clause becomes the guide sentence.
+
+    Only fires when the span is exactly the reference clause — no redemption /
+    conversion / calculation / announcement content mixed in. Mixed clauses
+    (the B-report "范围大于指引" shapes) are rejected here and keep the
+    splice/compose cascade, so nothing extra is ever swallowed.
+    """
+    compact = _compact(before)
+    if not compact or not instantiated or not instantiated.strip():
+        return None
+    if rule_id == "G08":
+        anchor_ok = "申购费率由基金管理人决定" in compact and "招募说明书" in compact
+        forbidden = ("赎回", "转换", "计算方法", "公告", "收费方式", "认购")
+    elif rule_id == "G11":
+        anchor_ok = "申购费用由" in compact and ("承担" in compact or "不列入基金财产" in compact)
+        forbidden = ("赎回", "认购", "转换", "公告", "计算方法")
+    else:
+        return None
+    if not anchor_ok or any(word in compact for word in forbidden):
+        return None
+    replacement = instantiated.strip()
+    if _compact(replacement) == compact:
+        return None
+    return TemplateResult(replacement=replacement, content_source="tier1_template",
+                          evidence={"mode": "clean_clause_policy_replacement",
+                                    "rule": rule_id})
+
+
 def _compact(value: str) -> str:
     return re.sub(r"[\s\u3000\u00a0\u200b]+", "", value or "")
 

@@ -7,6 +7,7 @@ from fundlex.generation.template import (
     fee_items,
     plan_fee_item_removal,
     plan_g09_splice,
+    plan_policy_replacement,
     plan_splice,
     splice_pairs,
 )
@@ -101,3 +102,28 @@ def test_g09_bounded_splice_applies_guide_pair():
 def test_fee_item_extraction():
     assert fee_items("调低基金申购费率、基金赎回费率") == {"申购费率", "赎回费率"}
     assert fee_items("无费率字样") == set()
+
+
+def test_g08_clean_clause_replaced_deterministically():
+    before = "本基金的申购费率由基金管理人决定，并在招募说明书中列示。"
+    policy = ("本基金A类基金份额在申购时收取申购费用，C类基金份额不收取申购费用。"
+              "通过直销机构申购本基金A类基金份额不收取申购费。"
+              "通过直销机构以外的其他销售机构申购本基金的申购费率由基金管理人决定，并在招募说明书中列示。")
+    result = plan_policy_replacement(before, policy, "G08")
+    assert result is not None
+    assert result.replacement == policy
+
+
+def test_g08_mixed_clause_is_rejected():
+    mixed = ("本基金的申购费率、申购份额具体的计算方法、赎回费率、赎回金额具体的计算方法"
+             "和收费方式由基金管理人根据基金合同的规定确定，并在招募说明书中列示。")
+    assert plan_policy_replacement(mixed, "X" * 40, "G08") is None
+
+
+def test_g11_clean_clause_replaced_deterministically():
+    before = "申购费用由投资人承担，不列入基金财产。"
+    policy = ("通过直销机构申购本基金A类基金份额不收取申购费，通过其他销售机构申购本基金A类基金份额的"
+              "申购费用由投资人承担，不列入基金财产。本基金C类基金份额不收取申购费用。")
+    result = plan_policy_replacement(before, policy, "G11")
+    assert result is not None
+    assert result.replacement == policy

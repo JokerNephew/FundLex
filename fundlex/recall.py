@@ -2569,8 +2569,21 @@ def _plan_tier1(rule: dict, operations: Sequence[dict], facts: Facts,
     rule_id = str(rule.get("rule_id") or "")
     replace_ops = [operation for operation in operations
                    if operation.get("op") == "replace"]
-    if not replace_ops or rule_id not in {"G14", "G09"}:
+    if not replace_ops or rule_id not in {"G14", "G09", "G08", "G11"}:
         return None
+    if rule_id in {"G08", "G11"}:
+        from .generation.template import plan_policy_replacement
+        candidates: list[str] = []
+        for operation in replace_ops:
+            instantiated, issues = instantiate_slots(
+                str(operation.get("new_text") or ""), facts)
+            if issues or not instantiated:
+                continue
+            if instantiated not in candidates:
+                candidates.append(instantiated)
+        if len(candidates) != 1:
+            return None
+        return plan_policy_replacement(actual, candidates[0], rule_id)
     if rule_id == "G14":
         allowed: set[str] = set()
         allowed_order: list[str] = []
