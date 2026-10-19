@@ -1687,8 +1687,10 @@
   - 处理：新增 `_delivery_complete(unresolved)`，**最终 unresolved 非空即不得 complete**；报告与门禁同源。
 - 缺陷 4（**P1**）：D115 三边界——`missing_new_text` 接受 `location_gone`（段落消失但 required 文本未出现也判 resolved）；`wrong_text` 在 required 已知时仅凭旧文消失即 resolved；`unaddressed_requirement` 落入 unknown → model-clean。
   - 处理：`location_gone` 只作为 `residual_old_text`（及无 required 的 `wrong_text`）的证据；`missing_new_text`/`unaddressed_requirement` 必须有 required 文本出现；`wrong_text` 有 required 时必须 required 出现；`unaddressed_requirement` 纳入 evidence-required 集合。
-- 证据与验证：新增/更新 6 项测试（`_collect_targets` 同位置双 operation、unknown fail-open、`_delivery_complete`、D115 六种 finding 场景）；全量 `pytest tests -q` → **689 passed / 6 skipped / 1 failed**（唯一失败仍为既有 references 缺失项）。
-- 状态：**已实施（commit `9ae799a`），单测通过；尚未发布、未经真实批次验证**——发布被 DeepSeek 账户余额阻塞（见 FL-D111 变更记录续 3）。
+- 缺陷 5（**P0，2026-10-19**）：`_survey_targets_from_hits()` 在已有 target 的 operation 覆盖为 `None` 时执行 `known.setdefault((rule_id, location), set()).update(hit.operation_keys)` → `None.update` 抛 `AttributeError`；round14-07 的 D01 因此 `PROCESSING_FAILED`、批次作废。
+  - 处理：改用 `_add_operation_coverage()`（把 unknown 状态替换为具体 key 集合，不 update None）；新增回归测试 `test_survey_targets_from_hits_handles_unknown_coverage`。
+- 证据与验证：新增/更新 7 项测试（`_collect_targets` 同位置双 operation、unknown fail-open、`_delivery_complete`、D115 六种 finding 场景、unknown-coverage survey hit）；全量 `pytest tests -q` → **690 passed / 6 skipped / 1 failed**（唯一失败仍为既有 references 缺失项）。
+- 状态：**已实施（commits `9ae799a` + `03fbbfa`），单测通过；`03fbbfa` 已发布（部署 sha 一致）；round14-08 运行中**（round14-06/14-07 均作废，不得评分）。
 - 下一步：供应商恢复后发布并跑 round14-07（对照 round14-04 的 220/236 与 14-05 的保守交付）。
 - 变更记录：2026-10-19 新增并修复。
 
