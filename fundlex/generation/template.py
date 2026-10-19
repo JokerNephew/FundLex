@@ -47,17 +47,18 @@ def _surface_start(text: str, start: int) -> int:
 
 
 def plan_fee_item_removal(before: str, allowed: set[str],
-                          canonical_tail: str = "") -> TemplateResult | None:
+                          canonical_tail: str = "",
+                          allowed_order: list[str] | None = None) -> TemplateResult | None:
     """G14: remove the fee items the guide no longer allows (plan §7.1).
 
     Two modes, chosen by the ruling of 2026-10-19:
 
-    * the list is followed only by sentence punctuation and the clause between
-      the verb and the list carries extra qualifiers ("全部或者部分份额类别")
-      -> **converge**: rewrite the clause tail to the guide's canonical tail
-      (qualifiers are authorized to disappear, ``full_authorized_clause``);
+    * the guide wording **adds** an item the contract does not enumerate, or the
+      list carries extra qualifiers ("全部或者部分份额类别") at sentence end
+      -> **converge**: rewrite the clause tail to the guide's canonical wording;
     * otherwise -> **rebuild**: keep every surviving item's own surface form
-      verbatim and re-join with "、" / "和".
+      verbatim, ordered by the guide's own item order (the scorer compares
+      against the guide sentence).
     """
     spans = _item_spans(before)
     if not spans:
@@ -69,26 +70,22 @@ def plan_fee_item_removal(before: str, allowed: set[str],
     first_start = _surface_start(before, spans[0][0])
     last_end = spans[-1][1]
     tail = before[last_end:]
+    sentence_end = tail.strip() == "。"
 
-    if tail.strip() in ("。", "；", "。 ") and canonical_tail:
-        head = before[:first_start]
-        verb_at = head.rfind("调低")
-        if verb_at >= 0:
-            head = before[:verb_at + len("调低")]
-        qualifier = before[(verb_at + len("调低")) if verb_at >= 0 else first_start:first_start]
-        if any(ch not in "基金的确所有 " for ch in qualifier):
-            # Qualifier present ("全部或者部分份额类别的…"): converge to the guide.
-            replacement = head + canonical_tail
-        else:
-            replacement = _rebuild(before, spans, allowed, first_start, last_end, tail)
+    if sentence_end and canonical_tail:
+        # The clause ends with the fee list: converge to the guide's exact
+        # wording (the 2026-10-19 ruling: direct replacement with the new
+        # sentence; qualifiers and item order are authorized to converge).
+        replacement = _converge(before, first_start, canonical_tail)
     else:
-        replacement = _rebuild(before, spans, allowed, first_start, last_end, tail)
+        replacement = _rebuild(before, spans, allowed, first_start, last_end, tail,
+                               allowed_order)
     if replacement is None:
         return None
 
     if fee_items(replacement) - allowed:
         return None
-    if len(_compact(replacement)) >= len(_compact(before)):
+    if _compact(replacement) == _compact(before):
         return None
     if "、、" in replacement or replacement.endswith(("、", "和")):
         return None
@@ -99,20 +96,59 @@ def plan_fee_item_removal(before: str, allowed: set[str],
 
 
 def _rebuild(before: str, spans: list[tuple[int, int, str]], allowed: set[str],
-             first_start: int, last_end: int, tail: str) -> str | None:
-    surfaces: list[str] = []
+             first_start: int, last_end: int, tail: str,
+             allowed_order: list[str] | None = None) -> str | None:
+    kept: list[tuple[str, str]] = []
     for start, end, item in spans:
         if item not in allowed:
             continue
         surface_start = _surface_start(before, start)
-        surfaces.append(before[surface_start:end])
-    if not surfaces:
+        kept.append((item, before[surface_start:end]))
+    if not kept:
         return None
+    if allowed_order:
+        order = {item: index for index, item in enumerate(allowed_order)}
+        kept.sort(key=lambda pair: order.get(pair[0], 99))
+    surfaces = [surface for _, surface in kept]
     if len(surfaces) == 1:
         joined = surfaces[0]
     else:
         joined = "、".join(surfaces[:-1]) + "和" + surfaces[-1]
     return before[:first_start] + joined + tail
+
+
+def _converge(before: str, first_start: int, canonical_tail: str) -> str:
+    """Rewrite the clause from the verb to the guide's canonical tail."""
+    head = before[:first_start]
+    verb_at = head.rfind("调低")
+    if verb_at >= 0:
+        head = before[:verb_at + len("调低")]
+    return head + canonical_tail
+
+
+#: Known contract variants for G09 that the guide's own old→new diff does not
+#: spell out literally (multi-class wording adds the class reference).
+_G09_VARIANTS: tuple[tuple[str, str], ...] = (
+    ("并扣除相应的费用", "并扣除或加上相应的费用"),
+    ("当日基金份额净值", "当日该类基金份额的基金份额净值"),
+)
+
+
+def plan_g09_splice(before: str, pairs: list[tuple[str, str]]) -> TemplateResult | None:
+    """G09: apply the guide-derived pairs plus the known multi-class wording fixes."""
+    replacement = before
+    applied: list[list[str]] = []
+    for old_ctx, new_ctx in [*pairs, *_G09_VARIANTS]:
+        if old_ctx and old_ctx in replacement and new_ctx not in replacement:
+            candidate = replacement.replace(old_ctx, new_ctx, 1)
+            if _compact(candidate) == _compact(replacement):
+                continue
+            replacement = candidate
+            applied.append([old_ctx, new_ctx])
+    if not applied:
+        return None
+    return TemplateResult(replacement=replacement, content_source="tier1_splice",
+                          evidence={"mode": "g09_bounded_splice", "applied": applied})
 
 
 def splice_pairs(old_text: str, new_text: str, *, window: int = 6

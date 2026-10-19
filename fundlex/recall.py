@@ -2573,18 +2573,22 @@ def _plan_tier1(rule: dict, operations: Sequence[dict], facts: Facts,
         return None
     if rule_id == "G14":
         allowed: set[str] = set()
+        allowed_order: list[str] = []
         canonical_tail = ""
         for operation in replace_ops:
             instantiated, issues = instantiate_slots(
                 str(operation.get("new_text") or ""), facts)
             if issues or not instantiated:
                 continue
+            for item in fee_items(instantiated):
+                if item not in allowed_order:
+                    allowed_order.append(item)
             allowed |= fee_items(instantiated)
             if not canonical_tail and "调低" in instantiated:
                 canonical_tail = instantiated.split("调低", 1)[1].strip()
         if not allowed:
             return None
-        return plan_fee_item_removal(actual, allowed, canonical_tail)
+        return plan_fee_item_removal(actual, allowed, canonical_tail, allowed_order)
     pairs: list[tuple[str, str]] = []
     for operation in replace_ops:
         instantiated, issues = instantiate_slots(
@@ -2592,9 +2596,8 @@ def _plan_tier1(rule: dict, operations: Sequence[dict], facts: Facts,
         if issues or not instantiated:
             continue
         pairs.extend(splice_pairs(str(operation.get("old_text") or ""), instantiated))
-    if not pairs:
-        return None
-    return plan_splice(actual, pairs)
+    from .generation.template import plan_g09_splice
+    return plan_g09_splice(actual, pairs)
 
 
 def plan_target(rule: dict, target: Target, inspection: DocumentInspection, facts: Facts,
