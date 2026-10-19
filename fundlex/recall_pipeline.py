@@ -312,21 +312,32 @@ def _collect_targets(entries: Sequence[_WindowState], synthetic: Sequence[Target
                      rules_by_id: dict[str, dict], inspection: DocumentInspection) -> list[Target]:
     """Merge inventory and survey targets with operation-aware duplicate suppression.
 
-    A synthetic target is kept only when its own operation is not already covered at
-    every location (for example the delete hit for G05:1 where inventory reported
-    G05:0). Exact duplicates and unknown-coverage duplicates are dropped, so the
-    operation-aware survey cannot turn into overlapping edits (FL-D118).
+    A synthetic target is kept when its own operation is not already covered at every
+    location (for example the delete hit for G05:1 where inventory reported G05:0).
+    Exact duplicates and unknown-coverage duplicates are dropped. A wildcard synthetic
+    target (the deterministic append pass) is only suppressed by a ``needs_edit``
+    inventory target that will actually plan that operation; an ``absent`` inventory
+    judgment must not swallow the append the pass just located (FL-D118).
     """
     window_targets = [target for entry in entries for target in entry.targets]
     known = known_operations_from_targets(window_targets, rules_by_id, inspection)
+    # A wildcard synthetic target (the deterministic append pass) is suppressed by an
+    # inventory target that will plan the operation or that already satisfies it. An
+    # ``absent`` judgment is exactly what the pass corrects, so it must not block.
+    blocking_locations = {(target.rule_id, location) for target in window_targets
+                          if target.state in {"needs_edit", "satisfied"}
+                          for location in _target_locations(target)}
     collected = list(window_targets)
     for target in synthetic:
         rule = rules_by_id.get(target.rule_id)
         operations = tuple(getattr(target, "operations", ()) or ()) or tuple(
             target_operation_keys(target, rule, inspection))
         locations = _target_locations(target)
-        if all(_collection_covered(known, target.rule_id, location, operations)
-               for location in locations):
+        if operations:
+            if all(_collection_covered(known, target.rule_id, location, operations)
+                   for location in locations):
+                continue
+        elif all((target.rule_id, location) in blocking_locations for location in locations):
             continue
         collected.append(target)
         if operations:

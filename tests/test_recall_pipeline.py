@@ -1026,6 +1026,43 @@ def test_delivery_complete_blocks_on_any_unresolved():
     assert _delivery_complete([{"kind": "qualification", "code": "FUND_TYPE_UNVERIFIED"}]) is False
 
 
+def test_collect_targets_keeps_append_after_absent_inventory(tmp_path: Path):
+    """An absent inventory judgment must not swallow the deterministic append (FL-D118)."""
+    from types import SimpleNamespace
+    from docx import Document
+    from fundlex.docx import inspect_docx
+    from fundlex.recall import Target
+    from fundlex.recall_pipeline import _collect_targets
+
+    path = tmp_path / "append.docx"
+    document = Document()
+    document.add_paragraph("基金份额类别：本基金将基金份额分为A类和C类。")
+    document.save(path)
+    inspection = inspect_docx(path, full=True)
+    rule = {"rule_id": "G01", "title": "释义-份额类别定义", "requirement": "追加政策条款。",
+            "operations": [{"op": "append", "new_text": "投资者通过直销机构申购不收取申购费用。",
+                            "condition": {"kind": "none", "value": None}}]}
+    append_target = Target(target_id="Y1", rule_id="G01", location="p0", quote="本基金将基金份额分为A类和C类。",
+                           state="needs_edit", reason="survey_append")
+    absent = Target(target_id="T1", rule_id="G01", location="p0", quote="本基金将基金份额分为A类和C类。",
+                    state="absent", reason="")
+    collected = _collect_targets([SimpleNamespace(targets=[absent])], [append_target],
+                                 {"G01": rule}, inspection)
+    assert {target.target_id for target in collected} == {"T1", "Y1"}
+
+    needs_edit = Target(target_id="T2", rule_id="G01", location="p0",
+                        quote="本基金将基金份额分为A类和C类。", state="needs_edit", reason="")
+    collected = _collect_targets([SimpleNamespace(targets=[needs_edit])], [append_target],
+                                 {"G01": rule}, inspection)
+    assert {target.target_id for target in collected} == {"T2"}
+
+    satisfied = Target(target_id="T3", rule_id="G01", location="p0",
+                       quote="本基金将基金份额分为A类和C类。", state="satisfied", reason="")
+    collected = _collect_targets([SimpleNamespace(targets=[satisfied])], [append_target],
+                                 {"G01": rule}, inspection)
+    assert {target.target_id for target in collected} == {"T3"}
+
+
 def test_survey_targets_from_hits_handles_unknown_coverage(tmp_path):
     """A specific hit must survive an existing target with unknown operation coverage."""
     from docx import Document
