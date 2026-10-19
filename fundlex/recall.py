@@ -2891,12 +2891,12 @@ def _verify_composed(rule: dict, target: Target, actual: str, replacement: str,
                      mode: str) -> tuple[bool, str]:
     """Three-layer validation for composed edits (plan v4 §11–§13, §27).
 
-    Program checks (V1/V2-B) always run when the strategy flag is on; the V3
-    model critic runs only for tier-3 rules (``default_tier == COMPOSE``).
-    Returns ``(ok, reason)``.
+    Program checks (V1/V2-B) always run when the strategy flag is on. The V3
+    model critic runs **whenever the composed path is reached**: entering
+    ``compose_variant`` already means the deterministic tiers could not carry
+    the edit (actual tier = COMPOSE), regardless of the rule's default tier
+    (external review 2026-10-19, P0-2). Returns ``(ok, reason)``.
     """
-    from .generation.registry import strategy_for
-    from .generation.types import GenerationTier
     from .generation.validators import Authorization, run_validation
 
     op_removals = [str(operation.get("old_text") or "")
@@ -2913,10 +2913,6 @@ def _verify_composed(rule: dict, target: Target, actual: str, replacement: str,
         hard = [record.reason for record in validation.changes
                 if record.explanation == "UNEXPLAINED_HARD"]
         return False, "program_check:" + ",".join(codes or hard or ["UNEXPLAINED_CHANGE"])
-
-    if strategy_for(str(rule.get("rule_id") or "")).default_tier \
-            is not GenerationTier.COMPOSE:
-        return True, "program_only"
 
     context = "\n\n".join([
         f"BEFORE\n{_clip(actual, 1200)}",

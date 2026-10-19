@@ -39,7 +39,7 @@
   - 已知限制：位置对齐为按段落序号（产物删段后可能错位）；每段授权并集可能高估宽松度；均在工具 docstring 注明。
 - 下一步：Phase 3（Facts 扩展 + 三态证据），随后 Phase 4 Tier1（G14/G09/G15/G17）。
 
-## Phase 3–8 实施记录（✅ 代码与单测完成；批次验证见下）
+## Phase 3–8 实施记录（代码已落地；外部复查遗留见下）
 
 | Phase | 内容 | commit |
 | --- | --- | --- |
@@ -47,7 +47,22 @@
 | 4 | Tier1：G14 结构化集合删除（句尾收敛/保序重建两模式）、G15/G17 删除前置路由、G09 短语 splice；开关 `FUNDLEX_GENERATION_STRATEGY=registry` | `24e39d6` `9b0fdb0` |
 | 5 | Tier2：G08/G11 干净整句的确定性政策替换 | `287be26` |
 | 6 | Tier3：compose 三层验证（V1/V2 程序门 + V3 独立模型复核 `recall_verify_v1`；失败重试 1 次后 unresolved） | `1ecd93c` |
+| 7 | **G16 Pilot：未按试点实现**——G16 是 append，planner 在 append 分支直达 `guide_text`，compose 永不触发；Registry 写 COMPOSE 与执行不一致。**待产品裁定 A（确定性 append + 智能 satisfied，推荐）/ B（组件融合）** | — |
 | 8 | Artifact Claim Replay：对**已写入 DOCX** 重放替换缺失/未变化/数字/未授权检查，失败进 unresolved（阻塞 complete） | `1ecd93c` |
+
+## 外部复查（2026-10-19，另一 agent）响应
+
+**结论**：复查基本准确。认领两处过度陈述：① "Phase 0–8 code complete" 应表述为"代码落地，Phase 7 未按试点实现"；② V3 触发条件实现与计划语义不符（P0-2）。登记见 `DETAIL_ISSUES_AND_RESOLUTIONS.md` FL-D130。
+
+| 项 | 状态 |
+| --- | --- |
+| **P0-1** Router 未接入 planner（UNKNOWN FACT 阻断未从架构保证） | 待修（下一有效批次前） |
+| **P0-2** V3 按 default_tier 而非 actual tier 触发 | **已修**（进入 compose 即 actual tier3 → V3 必跑；新增 G08/G14 fallback-compose 测试） |
+| **P0-3** G16 Tier3 pilot 未实现 | **待产品裁定 A/B**（推荐 A） |
+| **P0-4** Coverage Ledger 未接 gate + `operation_id` 回退 | 待修（条目加 operation_id；gate 先读投影证明） |
+| **P1-1** Tier 标签/遥测 | 部分已修（docstring 勘误：干净整句=Template 级符合计划 §19.1；显式 tier 字段随 P0-1） |
+| **P1-2** VERIFIED_EMPTY 闭环 | 待办（保守方向） |
+| CI（GitHub Actions） | 建议项，非优先 |
 
 **本地真实链路验证（registry 开关，真实模型）**：
 

@@ -26,12 +26,12 @@ class TemplateResult:
 
 
 def plan_policy_replacement(before: str, instantiated: str, rule_id: str) -> TemplateResult | None:
-    """Tier-2 (plan §8, §19.1/§19.2): a *clean* clause becomes the guide sentence.
+    """Clean-clause deterministic policy replacement (plan §19.1).
 
-    Only fires when the span is exactly the reference clause — no redemption /
-    conversion / calculation / announcement content mixed in. Mixed clauses
-    (the B-report "范围大于指引" shapes) are rejected here and keep the
-    splice/compose cascade, so nothing extra is ever swallowed.
+    A *clean* clause (no redemption / conversion / calculation / announcement
+    content mixed in) converges to the guide sentence as a **Template-tier**
+    edit; mixed clauses are rejected here and keep the splice/compose cascade,
+    so nothing extra is ever swallowed.
     """
     compact = _compact(before)
     if not compact or not instantiated or not instantiated.strip():

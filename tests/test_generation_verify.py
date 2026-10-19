@@ -77,8 +77,10 @@ def test_tier3_rule_passes_with_v3():
     assert reason == "v3_pass"
 
 
-def test_non_tier3_rules_get_program_checks_only():
-    gateway = _Gateway()
+def test_g08_fallback_compose_still_runs_v3():
+    """P0-2: reaching compose means actual tier = COMPOSE — V3 must run even
+    when the rule's default tier is SPLICE (external review 2026-10-19)."""
+    gateway = _Gateway({"recall_verify": {"verdict": "pass", "reason": ""}})
     rule = _rule("G08", "老句", "新句")
     ok, reason = _verify_composed(
         rule, _target("G08"),
@@ -86,5 +88,18 @@ def test_non_tier3_rules_get_program_checks_only():
         replacement="本基金的申购费率由基金管理人决定，并在招募说明书中列示。",
         fixed_text="", facts=_facts(), gateway=gateway, mode="replace")
     assert ok is True
-    assert reason == "program_only"
-    assert gateway.calls == []
+    assert reason == "v3_pass"
+    assert gateway.calls == ["recall_verify"]
+
+
+def test_g14_fallback_compose_runs_v3_and_can_fail():
+    gateway = _Gateway({"recall_verify": {"verdict": "fail", "reason": "限定条件被误删"}})
+    rule = _rule("G14", "老句", "新句")
+    ok, reason = _verify_composed(
+        rule, _target("G14"),
+        actual="基金管理人可以适当调低基金申购费率和基金赎回费率。",
+        replacement="基金管理人可以适当调低基金申购费率和基金赎回费率。",
+        fixed_text="", facts=_facts(), gateway=gateway, mode="replace")
+    assert ok is False
+    assert reason.startswith("v3_fail")
+    assert gateway.calls == ["recall_verify"]
