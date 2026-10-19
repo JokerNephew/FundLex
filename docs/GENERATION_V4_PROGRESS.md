@@ -52,7 +52,31 @@
 
 ## 外部复查（2026-10-19，另一 agent）响应
 
-**结论**：复查基本准确。认领两处过度陈述：① "Phase 0–8 code complete" 应表述为"代码落地，Phase 7 未按试点实现"；② V3 触发条件实现与计划语义不符（P0-2）。登记见 `DETAIL_ISSUES_AND_RESOLUTIONS.md` FL-D130。
+> **第二份复查（源材料版，同日）**：另一 agent 在阅读**指引原文（68–88 段）+ 合同原文**后提出 **6 项 P0 + 6 项 P1**，核心结论：风险重心应从"生成策略"前移到"Facts/Applicability 层"（"程序越确定，错得越稳定"）。已核对其关键代码断言全部属实（append 首句 satisfied=`required.split("。")[0]`、`condition_matches` 裸 bool、`class_label('人民币份额')='人民币类基金份额'` 叠字、`DEFAULT_EXCLUDED_TYPES=etf,money_market,interbank_cd`、`service_group` 定义不严格、G16 registry 的 `preserve existing_payment_*` 与指引冲突）。**处置队列（P0-A~D + P1 列表）见下方"待实施队列"；用户指示暂缓动手。**
+>
+> **ETF/同业存单范围裁定（2026-10-19 用户确认）**：**维持全局排除**（`DEFAULT_EXCLUDED_TYPES` 现状），依据 C-R 设计文档 §9 的默认 + 本次用户确认；后续按"policy override + 依据"记录，不再作为未审视默认。（货币基金排除已有既有裁定。）
+
+### 已核对的代码断言（证据行号，2026-10-19）
+
+| 断言 | 位置 |
+| --- | --- |
+| append 已满足仅看首句 | `fundlex/recall.py:1765` |
+| `condition_matches` 裸 bool，UNKNOWN 被吞成 False | `fundlex/recall.py:2372` |
+| `class_label` 对非标准类别名生成叠字 | 实测：`人民币类、美元现汇类基金份额` / `A类人民币类基金份额` |
+| 全局排除默认值 | `fundlex/recall_pipeline.py:52` |
+| `service_group` 不要求 `subscription_fee==False` | `fundlex/recall.py`（service_group property） |
+| G16 registry `preserve existing_payment_*` 与指引冲突 | `fundlex/generation/registry.py`（待改） |
+
+### 待实施队列（P0，用户批准后按序开工）
+
+- **P0-A** Condition 三值（TRUE/FALSE/UNKNOWN）+ UNKNOWN 不得进修改分支 + **Router 接成 planner 唯一入口**（两层同修）；
+- **P0-B** 类别事实模型（`source_display_name`、币种维度分离、`class_label` 保原文、严格 fee group、VERIFIED_EMPTY）；
+- **P0-C** G15+G16+G17 业务闭环 + G16 组件级 coverage + **B 融合（修正后：不保留旧支付机制，融合仅整合 4 个新组件）**；
+- **P0-D** G08/G11 缺服务组改为"按组件丢弃"而非丢整条 operation。
+
+### P1 队列
+
+append semantic site anchor、`(operation_id, site)` 覆盖粒度、G06/G13/G17 确定性签名、G14 集合双差、claim replay 按 operation 重放、CI（非优先）等。
 
 | 项 | 状态 |
 | --- | --- |
