@@ -57,10 +57,12 @@
 
 ## 批次预登记（Phase 4–8 验收）
 
+> **状态（2026-10-19）**：**用户指示停止**——`p6-dev-round14-11` runner 与守候脚本均已终止；D01 有一个在飞任务在 worker 上自然结束后即无运行批次；**批次作废、不得评分**（对照 round14-06/14-07 惯例）。已完成的 D01 无 result.json，产物不予采信。
+
 | 项 | 值 |
 | --- | --- |
-| 批次 | `p6-dev-round14-11`（dev 20 例） |
-| 开关 | `FUNDLEX_GENERATION_STRATEGY=registry`（env 备份 `.bak-genv4`） |
+| 批次 | `p6-dev-round14-11`（dev 20 例；**已停止/作废**） |
+| 开关 | `FUNDLEX_GENERATION_STRATEGY=registry`（env 备份 `.bak-genv4`；**当前仍启用，未回滚**——如需回到验证过的行为：还原该备份并重启服务） |
 | 目的 | Phase 4–8 验收：确定性占比、compose 下降、claim replay 结果、完成率不降（对照 14-09 221/236） |
 | 预算 | ≤1100 calls / ≤$1.0（flash 目录价） |
 | 回滚 | 批内异常 → 还原 env 备份并重启；不达标 → 记录并保留 `legacy` 默认 |
