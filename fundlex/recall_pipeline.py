@@ -39,7 +39,7 @@ from .recall import (BOUNDARY_POLICY, ENGINE_ID, ENGINE_VERSION, SCHEMA_VERSION,
                      structure_index, survey_targets, compact_offsets,
                      append_applicability_targets, is_delete_only_rule, Section,
                      known_operations_from_targets, operations_cover_hit,
-                     _add_operation_coverage)
+                     target_operation_keys, _add_operation_coverage)
 from .recall_prompts import (AUDIT_INSTRUCTION, AUDIT_PROMPT_VERSION, AUDIT_SCHEMA,
                              PROMPT_VERSIONS, SWEEP_INSTRUCTION, SWEEP_PROMPT_VERSION,
                              SWEEP_SCHEMA)
@@ -283,30 +283,58 @@ def _target_ledger(targets: Sequence[Target], planned: dict[str, Any],
     return records
 
 
-def _target_key(target: Target) -> tuple:
-    """Exact target identity for duplicate suppression in the collection step."""
-    return (target.rule_id, target.location, tuple(getattr(target, "operations", ()) or ()),
-            target.start, target.end, _compact(target.quote))
+
+_COLLECTION_MISSING = object()
 
 
-def _collect_targets(entries: Sequence[_WindowState], synthetic: Sequence[Target]) -> list[Target]:
-    """Merge inventory and survey targets without re-doing semantic coverage.
+def _collection_covered(known: dict[tuple[str, str], set[str] | None], rule_id: str,
+                        location: str, operations: Sequence[str]) -> bool:
+    """Operation-aware duplicate suppression for the collection step.
 
-    The old implementation dropped every synthetic target whose (rule, location) matched
-    an inventory target. That undid the operation-aware survey: a delete hit for G05:1
-    at a location where inventory had reported G05:0 was silently removed (FL-D117).
-    Only exact duplicates are suppressed here; coverage decisions belong to the survey
-    that produced the hit.
+    Unlike the survey fail-open rule, the collection step is fail-closed on an unknown
+    coverage state: an inventory target whose operation could not be determined must
+    not let a duplicate synthetic target through, or overlapping edits conflict and the
+    real obligation is lost (round14-08: RECALL_EDIT_OVERLAP 66 vs 8).
+    """
+    state = known.get((rule_id, location), _COLLECTION_MISSING)
+    if state is _COLLECTION_MISSING:
+        return False
+    if state is None:
+        return True
+    if not state:
+        return False
+    if operations:
+        return bool(set(operations) & state)
+    return True
+
+
+def _collect_targets(entries: Sequence[_WindowState], synthetic: Sequence[Target],
+                     rules_by_id: dict[str, dict], inspection: DocumentInspection) -> list[Target]:
+    """Merge inventory and survey targets with operation-aware duplicate suppression.
+
+    A synthetic target is kept only when its own operation is not already covered at
+    every location (for example the delete hit for G05:1 where inventory reported
+    G05:0). Exact duplicates and unknown-coverage duplicates are dropped, so the
+    operation-aware survey cannot turn into overlapping edits (FL-D118).
     """
     window_targets = [target for entry in entries for target in entry.targets]
-    seen = {_target_key(target) for target in window_targets}
+    known = known_operations_from_targets(window_targets, rules_by_id, inspection)
     collected = list(window_targets)
     for target in synthetic:
-        key = _target_key(target)
-        if key in seen:
+        rule = rules_by_id.get(target.rule_id)
+        operations = tuple(getattr(target, "operations", ()) or ()) or tuple(
+            target_operation_keys(target, rule, inspection))
+        locations = _target_locations(target)
+        if all(_collection_covered(known, target.rule_id, location, operations)
+               for location in locations):
             continue
-        seen.add(key)
         collected.append(target)
+        if operations:
+            for location in locations:
+                _add_operation_coverage(known, target.rule_id, location, operations)
+        else:
+            for location in locations:
+                known[(target.rule_id, location)] = None
     return collected
 
 
@@ -2105,9 +2133,9 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
         stage = "survey"
         survey_ledger: list[dict[str, Any]] = []
         coverage_gaps: list[dict[str, Any]] = []
-        _run_survey(model, rules, rules_by_id, facts, inspection, _collect_targets(entries, synthetic),
+        _run_survey(model, rules, rules_by_id, facts, inspection, _collect_targets(entries, synthetic, rules_by_id, inspection),
                     synthetic, origins, survey_ledger, coverage_gaps, sections)
-        targets = _collect_targets(entries, synthetic)
+        targets = _collect_targets(entries, synthetic, rules_by_id, inspection)
         rebinds = _rebind_unresolved_targets(targets, origins, inspection,
                                              rules_by_id=rules_by_id, facts=facts,
                                              extend_resolved=True)
@@ -2153,10 +2181,10 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
                 for entry in _affected_windows(entries, notes):
                     _inventory(entry, notes[entry.window.id], facts, model, inspection,
                                round_number=round_number)
-                targets = _collect_targets(entries, synthetic)
+                targets = _collect_targets(entries, synthetic, rules_by_id, inspection)
                 _run_survey(model, rules, rules_by_id, facts, inspection, targets,
                             synthetic, origins, survey_ledger, coverage_gaps, sections)
-                targets = _collect_targets(entries, synthetic)
+                targets = _collect_targets(entries, synthetic, rules_by_id, inspection)
                 report["rebind"] = _rebind_unresolved_targets(
                     targets, origins, inspection, rules_by_id=rules_by_id, facts=facts)
                 planned, edits, plan, artifacts, actual = _plan_and_generate(
@@ -2225,10 +2253,10 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
                 for entry in _affected_windows(entries, notes):
                     _inventory(entry, notes[entry.window.id], facts, model, inspection,
                                round_number=round_number)
-                targets = _collect_targets(entries, synthetic)
+                targets = _collect_targets(entries, synthetic, rules_by_id, inspection)
                 _run_survey(model, rules, rules_by_id, facts, inspection, targets,
                             synthetic, origins, survey_ledger, coverage_gaps, sections)
-                targets = _collect_targets(entries, synthetic)
+                targets = _collect_targets(entries, synthetic, rules_by_id, inspection)
                 report["rebind"] = _rebind_unresolved_targets(
                     targets, origins, inspection, rules_by_id=rules_by_id, facts=facts)
                 planned, edits, plan, artifacts, actual = _plan_and_generate(

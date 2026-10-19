@@ -977,23 +977,44 @@ def test_unverified_excluded_fund_type_does_not_exclude():
     assert _qualification_status(facts(False), ("money_market",)) == ("eligible", False)
 
 
-def test_collect_targets_keeps_different_operations_at_one_location():
-    """The collection step must not drop a synthetic target for another operation (FL-D118)."""
+def test_collect_targets_keeps_different_operations_at_one_location(tmp_path: Path):
+    """The collection step keeps a synthetic target for an uncovered operation (FL-D118)."""
     from types import SimpleNamespace
+    from docx import Document
+    from fundlex.docx import inspect_docx
     from fundlex.recall import Target
     from fundlex.recall_pipeline import _collect_targets
 
+    path = tmp_path / "collect.docx"
+    document = Document()
+    document.add_paragraph("基金管理人可以适当调低赎回费率，并报中国证监会备案。")
+    document.save(path)
+    inspection = inspect_docx(path, full=True)
+    span = inspection.by_location("p0")
+    replace_start = span.text.index("调低赎回费率")
+    delete_start = span.text.index("并报中国证监会备案")
+    rule = {"rule_id": "G05", "title": "类别调整句", "requirement": "替换并删除。",
+            "operations": [
+                {"op": "replace", "old_text": "调低赎回费率",
+                 "new_text": "调低销售服务费率", "condition": {"kind": "none", "value": None}},
+                {"op": "delete", "old_text": "并报中国证监会备案",
+                 "condition": {"kind": "none", "value": None}},
+            ]}
     inventory = Target(target_id="T1", rule_id="G05", location="p0", quote="调低赎回费率",
-                       state="needs_edit", reason="", start=0, end=6,
-                       operations=("G05:0",))
+                       state="needs_edit", reason="", start=replace_start,
+                       end=replace_start + len("调低赎回费率"))
     survey_delete = Target(target_id="Y1", rule_id="G05", location="p0",
                            quote="并报中国证监会备案", state="needs_edit", reason="",
-                           start=20, end=29, operations=("G05:1",))
-    exact_duplicate = Target(target_id="Y2", rule_id="G05", location="p0",
-                             quote="并报中国证监会备案", state="needs_edit", reason="",
-                             start=20, end=29, operations=("G05:1",))
+                           start=delete_start, end=delete_start + len("并报中国证监会备案"),
+                           operations=("G05:1",))
+    duplicate = Target(target_id="Y2", rule_id="G05", location="p0", quote="调低赎回费率",
+                       state="needs_edit", reason="", start=replace_start,
+                       end=replace_start + len("调低赎回费率"), operations=("G05:0",))
+    unknown = Target(target_id="Y3", rule_id="G05", location="p0", quote="本",
+                     state="needs_edit", reason="", start=0, end=1)
     collected = _collect_targets([SimpleNamespace(targets=[inventory])],
-                                 [survey_delete, exact_duplicate])
+                                 [survey_delete, duplicate, unknown],
+                                 {"G05": rule}, inspection)
     assert {target.target_id for target in collected} == {"T1", "Y1"}
 
 
