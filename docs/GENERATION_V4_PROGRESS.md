@@ -25,15 +25,27 @@
   - `generation_mix` 在 `p6-dev-round14-05` 精确复现基线：**284 条编辑 / 确定性 183（64.4%）/ 模型 71（25.0%）/ merged 30（机械合并）**；
   - Registry 覆盖全部 22 条规则（测试对 guide 强制比对）；未登记规则回退 Tier3 安全侧；事实未核验 → 阻断（不降级 Tier3）。
 
-## Phase 2 —— V1/V2 影子验证 + FL-D119 根因修复 + G11 定位回归（进行中）
+## Phase 2 —— V1/V2 影子验证 + FL-D119 根因修复 + G11 定位回归（✅ commit `a6d7e60`）
 
-- 见下方 commit 记录。
+- 交付物：
+  - `fundlex/generation/validators.py`：V1（保护字面量/数字溯源/必需项覆盖）、V2-A（边界门）、V2-B（变更解释门，三级处置 EXPLAINED / UNEXPLAINED_SOFT→V3 / UNEXPLAINED_HARD→FAIL）；
+  - `fundlex/recall.py` 根因修复：① `find_old_text_all` 模糊分支加"主题翻转/数字翻转"守卫（申购↔赎回等一字之差不再是命中；FL-D119）；② `satisfied_by_new_text` 尾句通道要求规则主题词（"并在招募说明书中列示。"类通用尾句不再误判已满足）；
+  - `tools/evaluation/validator_shadow.py`：对既有批次产物离线回放（零模型调用；每段落一次校验、授权取该段全部编辑的并集）；
+  - 测试新增 **18 项**（validators 11 + FL-D119 常驻回归 7，含 `D01/p227` fixture）。
+- 验收：
+  - 全量 `pytest tests -q` → **722 passed / 6 skipped / 1 failed**（既有 references 缺失项；Phase 2 新增 18 项全过）；
+  - **FL-D119 常驻回归**：`D01/p227` 在影子回放中被抓（`UNEXPLAINED_HARD: protected:赎回`）；真阳性同时覆盖 G05 p135（真实误改：覆盖"调整前基金管理人需及时"＋句号断句，与引擎自身 audit 的 `wrong` 一致）；
+  - **影子统计（round14-09，有效批次 13 例）**：155 个段落校验 → **FAIL 1（0.6%）**、soft-flagged 54（≈35%，后续 Phase 的 V3 路由样本）；唯一 FAIL（D04 G12 p198，`protected:25%`）为**待人工复核**项——离线授权推导未命中合同变体，初步判为工具侧误报；
+  - 已知限制：位置对齐为按段落序号（产物删段后可能错位）；每段授权并集可能高估宽松度；均在工具 docstring 注明。
+- 下一步：Phase 3（Facts 扩展 + 三态证据），随后 Phase 4 Tier1（G14/G09/G15/G17）。
 
 ## Commit 记录（本计划）
 
 | commit | 内容 | 测试 |
 | --- | --- | --- |
 | `53b6d0f` | Phase 1：registry + router + coverage view + mix tool（flag 默认 legacy） | 新增 13 项通过；全量 704/6/1（既有失败） |
+| `2e37253` | Phase 0/1 文档：基线冻结 + 计划状态改"已批准/实施中" | — |
+| `a6d7e60` | Phase 2：V1/V2A/V2B 影子验证器 + FL-D119 根因修复 + G11 回归 + 离线回放工具 | 新增 18 项通过；全量 722/6/1（既有失败） |
 
 ## 遗留与阻塞
 
