@@ -1005,9 +1005,16 @@ def satisfied_by_new_text(rule: dict, facts: Facts, compact_body: str) -> str | 
     # carries the guide's own sentence with a leading connector and a following
     # consequence clause ("由于费用收取不同，…将分别计算基金份额净值"). The longest
     # comma clause that precedes the difference must still be intact (FL-D047).
+    topic_tokens = _RULE_TOPIC_TOKENS.get(str(rule.get("rule_id") or ""), ())
     best: tuple[int, str] | None = None
     for candidate in _final_clause_candidates(_compact(combined)):
         if candidate not in compact_body:
+            continue
+        # A generic closing formula ("并在招募说明书中列示。") shares trigrams with the
+        # requirement but proves nothing about this rule: the candidate must carry the
+        # rule's own topic wording, otherwise a neighbouring clause that happens to end
+        # the same way reads as "already satisfied" (FL-D119).
+        if topic_tokens and not any(token in candidate for token in topic_tokens):
             continue
         prefix = _character_ngrams(candidate, 3) & core_grams
         if len(prefix) < 2:
@@ -1147,6 +1154,40 @@ def _lead_nearby(body: str, position: int, lead: str) -> bool:
     return False
 
 
+# The survey fuzzy pass must not turn a *topic flip* into a hit: contracts write
+# "本基金的赎回费率由基金管理人决定…" while the G08 reference reads "申购费率";
+# one swapped word is a different clause, not a wording variant (FL-D119).
+_CONFUSABLE_SWAPS: tuple[tuple[str, str], ...] = (
+    ("申购", "赎回"), ("认购", "申购"), ("认购", "赎回"),
+    ("基金托管人", "基金管理人"), ("托管费", "管理费"), ("A类", "C类"),
+)
+
+
+def _semantic_flip_only(target: str, window: str) -> bool:
+    """True when ``window`` equals ``target`` with only a confusable word swapped."""
+    target_clean, window_clean = _compact(target), _compact(window)
+    if not target_clean or not window_clean or target_clean == window_clean:
+        return False
+    for left, right in _CONFUSABLE_SWAPS:
+        for old, new in ((left, right), (right, left)):
+            if target_clean.count(old) and window_clean == target_clean.replace(old, new):
+                return True
+    return False
+
+
+def _numeric_flip_only(target: str, window: str) -> bool:
+    """True when ``window`` equals ``target`` with only numeric tokens swapped."""
+    target_clean, window_clean = _compact(target), _compact(window)
+    number = re.compile(r"\d+(?:\.\d+)?%?")
+    target_numbers = number.findall(target_clean)
+    window_numbers = number.findall(window_clean)
+    if not target_numbers or len(target_numbers) != len(window_numbers):
+        return False
+    if target_numbers == window_numbers:
+        return False
+    return number.split(target_clean) == number.split(window_clean)
+
+
 def find_old_text_all(paragraphs: Sequence[Any], old_text: str, *,
                       threshold: float = FUZZY_MATCH_THRESHOLD
                       ) -> list[tuple[tuple[str, int, int], ...]]:
@@ -1234,6 +1275,12 @@ def find_old_text_all(paragraphs: Sequence[Any], old_text: str, *,
             continue
         variant = fuzzy_span(span.text, old_text, threshold=threshold)
         if variant is None:
+            continue
+        matched_window = span.text[variant[0]:variant[1]]
+        # A one-word topic flip (申购/赎回, 认购/申购, …) or a bare number swap is
+        # a different clause, never a wording variant (FL-D119).
+        if _semantic_flip_only(old_text, matched_window) \
+                or _numeric_flip_only(old_text, matched_window):
             continue
         start_raw, end_raw, _ratio = variant
         cleaned, _index_map = display_text(span.text)
