@@ -5,7 +5,7 @@ faithful answer fails. Quotes are validated by the engine module, not here.
 """
 from __future__ import annotations
 
-FACTS_PROMPT_VERSION = "recall_facts_v1"
+FACTS_PROMPT_VERSION = "recall_facts_v2"
 SCOPE_PROMPT_VERSION = "recall_scope_v1"
 INVENTORY_PROMPT_VERSION = "recall_inventory_v2"
 COMPOSE_PROMPT_VERSION = "recall_compose_v1"
@@ -58,6 +58,22 @@ FACTS_SCHEMA = {
                 "basis": {"type": "string"},
             },
         },
+        "direct_sales_exempt": {
+            "type": "object",
+            "properties": {
+                "classes": {"type": "array", "maxItems": 24, "items": {"type": "string"}},
+                "quote": {"type": "string"},
+                "basis": {"type": "string"},
+            },
+        },
+        "other_sales_charged": {
+            "type": "object",
+            "properties": {
+                "classes": {"type": "array", "maxItems": 24, "items": {"type": "string"}},
+                "quote": {"type": "string"},
+                "basis": {"type": "string"},
+            },
+        },
         "notes": {"type": "string"},
     },
 }
@@ -76,7 +92,12 @@ FACTS_INSTRUCTION = (
     "[CONTRACT_SOURCE] and must directly support the value it is attached to. Never infer a class letter "
     "from habit: read the actual fee clauses. floating_management_fee is true only when the contract ties "
     "management fee to investor holding period or performance (contingent management fee returned to "
-    "investors or excess management fee deducted); an ordinary fixed management fee is false."
+    "investors or excess management fee deducted); an ordinary fixed management fee is false. "
+    "direct_sales_exempt lists the share classes the contract says are NOT charged a subscription fee when "
+    "purchased through the direct channel (直销机构), with a quote; other_sales_charged lists the classes "
+    "the contract says ARE charged a subscription fee through other sales agencies, with a quote. When the "
+    "contract states no such channel rule for any class, return empty lists with an empty quote — never "
+    "guess a class letter or infer a rule the contract does not state."
 )
 
 SCOPE_SCHEMA = {

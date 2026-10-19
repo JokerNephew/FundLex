@@ -314,6 +314,25 @@ class Facts:
     notes: str
     quotes_verified: dict[str, bool]
     problems: tuple[str, ...]
+    #: Plan §24/§20: channel facts must be *verified* tri-state, never guessed.
+    direct_sales_exempt_group: tuple[str, ...] = ()
+    other_sales_charged_group: tuple[str, ...] = ()
+    #: Per-fact tri-state: VERIFIED | UNKNOWN | CONFLICT (missing means UNKNOWN).
+    fact_status: dict[str, str] = field(default_factory=dict)
+
+    @property
+    def share_class_structure(self) -> str:
+        """SINGLE | MULTIPLE | UNKNOWN — the plan's replacement for bare class_count."""
+        current = len(self.current_classes)
+        if current == 1:
+            return "SINGLE"
+        if current > 1:
+            return "MULTIPLE"
+        return "UNKNOWN"
+
+    def status_of(self, name: str) -> str:
+        """Tri-state of one fact; an unrecorded fact is UNKNOWN, never VERIFIED."""
+        return self.fact_status.get(name, "UNKNOWN")
 
     @property
     def current_classes(self) -> tuple[ClassFact, ...]:
@@ -349,6 +368,10 @@ class Facts:
             ],
             "subscription_group": list(self.subscription_group),
             "service_group": list(self.service_group),
+            "share_class_structure": self.share_class_structure,
+            "direct_sales_exempt_group": list(self.direct_sales_exempt_group),
+            "other_sales_charged_group": list(self.other_sales_charged_group),
+            "fact_status": dict(self.fact_status),
             "has_service_fee": self.has_service_fee,
             "is_floating_fee": self.floating_management_fee,
             "floating_quote": self.floating_quote,
@@ -356,6 +379,41 @@ class Facts:
             "quotes_verified": dict(self.quotes_verified),
             "problems": list(self.problems),
         }
+
+
+def derive_fact_statuses(*, fund_type_ok: bool, classes: Sequence[ClassFact],
+                         class_quotes: dict[str, bool],
+                         direct_classes: Sequence[str], direct_ok: bool,
+                         other_classes: Sequence[str], other_ok: bool) -> dict[str, str]:
+    """Tri-state statuses for the phase-3 fact schema (plan v4 §24, §20).
+
+    * ``VERIFIED`` — backed by a verified quote and internally consistent;
+    * ``UNKNOWN``  — no verified evidence; callers must not treat this as "empty"
+      (a missing direct-sales exemption may never be inferred from a failed
+      extraction — the plan's VERIFIED_EMPTY ≠ UNKNOWN rule);
+    * ``CONFLICT`` — the evidence names a class the contract does not define.
+    """
+    statuses: dict[str, str] = {"fund_type": "VERIFIED" if fund_type_ok else "UNKNOWN"}
+    class_names = {item.name for item in classes}
+    current_ok = bool(classes) and all(
+        class_quotes.get(item.name, False) for item in classes if item.current)
+    statuses["share_class_structure"] = "VERIFIED" if current_ok else "UNKNOWN"
+    statuses["subscription_fee_group"] = statuses["share_class_structure"]
+    statuses["service_fee_group"] = statuses["share_class_structure"]
+
+    def channel_status(names: Sequence[str], quote_ok: bool) -> str:
+        if not quote_ok:
+            return "UNKNOWN"
+        unknown = [name for name in names if name not in class_names]
+        if unknown:
+            return "CONFLICT"
+        # An empty, verified list still cannot prove VERIFIED_EMPTY offline; the
+        # hard-fact topic check in the generator upgrades it later (plan §20).
+        return "VERIFIED" if names else "UNKNOWN"
+
+    statuses["direct_sales_exempt_group"] = channel_status(direct_classes, direct_ok)
+    statuses["other_sales_charged_group"] = channel_status(other_classes, other_ok)
+    return statuses
 
 
 _FACTS_SECTION_HINTS = ("释义", "基金的基本情况", "基本情况", "费用", "税收", "申购", "赎回", "清算", "收益")
@@ -483,6 +541,29 @@ def extract_facts(inspection: DocumentInspection, gateway: Any) -> Facts:
     if not quotes_verified["floating"]:
         problems.append("FLOATING_QUOTE_UNVERIFIED")
 
+    def _channel(key: str) -> tuple[list[str], bool]:
+        raw = value.get(key) if isinstance(value.get(key), dict) else {}
+        names = [str(name).strip() for name in (raw.get("classes") or []) if str(name).strip()]
+        quote = str(raw.get("quote") or "")
+        ok = _verify_quote(inspection, quote) if quote else False
+        if quote:
+            # Record only claimed facts: "not stated" stays absent (UNKNOWN),
+            # keeping ``quotes_verified`` semantics unchanged (back-compat).
+            quotes_verified[key] = ok
+        if names and not ok:
+            problems.append(f"CHANNEL_QUOTE_UNVERIFIED:{key}")
+        return names, ok
+
+    direct_names, direct_ok = _channel("direct_sales_exempt")
+    other_names, other_ok = _channel("other_sales_charged")
+    class_quotes = {name.split(":", 1)[1]: ok
+                    for name, ok in quotes_verified.items() if name.startswith("class:")}
+    fact_status = derive_fact_statuses(
+        fund_type_ok=quotes_verified["fund_type"], classes=classes,
+        class_quotes=class_quotes,
+        direct_classes=direct_names, direct_ok=direct_ok,
+        other_classes=other_names, other_ok=other_ok)
+
     return Facts(
         fund_type=fund_type_value,
         fund_type_quote=fund_quote,
@@ -494,6 +575,9 @@ def extract_facts(inspection: DocumentInspection, gateway: Any) -> Facts:
         notes=str(value.get("notes") or ""),
         quotes_verified=quotes_verified,
         problems=tuple(problems),
+        direct_sales_exempt_group=tuple(direct_names),
+        other_sales_charged_group=tuple(other_names),
+        fact_status=fact_status,
     )
 
 
