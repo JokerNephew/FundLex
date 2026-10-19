@@ -29,6 +29,9 @@ class CoverageEntry:
     state: str
     basis: str
     target_id: str = ""
+    #: Operation identities this entry covers (``G05:0``); empty means location-level.
+    #: Kept so a satisfied replace cannot hide a still-open delete (FL-D117; P0-4).
+    operation_keys: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -39,6 +42,16 @@ class CoverageLedgerView:
     def state_of(self, rule_id: str, location: str) -> str | None:
         for entry in self.entries:
             if entry.rule_id == rule_id and entry.location == location:
+                return entry.state
+        return None
+
+    def state_of_operation(self, rule_id: str, location: str,
+                           operation_key: str) -> str | None:
+        """State of one operation; falls back to location-level entries when unkeyed."""
+        for entry in self.entries:
+            if entry.rule_id != rule_id or entry.location != location:
+                continue
+            if not entry.operation_keys or operation_key in entry.operation_keys:
                 return entry.state
         return None
 
@@ -90,22 +103,23 @@ def build_coverage_view(report: Mapping[str, Any]) -> CoverageLedgerView:
         target_id = str(target.get("target_id") or "")
         state = str(target.get("state") or target.get("status") or "")
         verdict = verdicts.get(target_id, "")
+        operation_keys = tuple(str(key) for key in (target.get("operations") or []))
         if state == "satisfied" or str(target.get("reason") or "").startswith("survey_new_text_present"):
             entries.append(CoverageEntry(rule_id, location, "ALREADY_SATISFIED",
-                                         "engine_satisfied", target_id))
+                                         "engine_satisfied", target_id, operation_keys))
         elif state in ("absent", "out_of_scope", "not_applicable"):
             entries.append(CoverageEntry(rule_id, location, "NOT_APPLICABLE",
-                                         f"engine_{state}", target_id))
+                                         f"engine_{state}", target_id, operation_keys))
         elif verdict == "completed":
             state_value = "ARTIFACT_VERIFIED" if artifact_verified else "SATISFIED"
             entries.append(CoverageEntry(rule_id, location, state_value,
-                                         "audit_completed", target_id))
+                                         "audit_completed", target_id, operation_keys))
         elif verdict in ("wrong", "incomplete"):
             entries.append(CoverageEntry(rule_id, location, "UNRESOLVED",
-                                         f"audit_{verdict}", target_id))
+                                         f"audit_{verdict}", target_id, operation_keys))
         else:
             entries.append(CoverageEntry(rule_id, location, "UNRESOLVED",
-                                         "no_audit_record", target_id))
+                                         "no_audit_record", target_id, operation_keys))
 
     for item in report.get("unresolved") or []:
         if not isinstance(item, dict):

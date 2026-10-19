@@ -49,6 +49,8 @@ STOP_CODES = {"MODEL_GLOBAL_CALL_BUDGET_EXCEEDED", "MODEL_COST_BUDGET_EXCEEDED",
               "MODEL_CALL_BUDGET_EXCEEDED", "MODEL_CIRCUIT_OPEN", "MODEL_LEDGER_UNAVAILABLE",
               "MODEL_CONFIG_MISSING", "MODEL_HTTP_ERROR", "MODEL_RETRY_EXHAUSTED"}
 
+# Global exclusions (product ruling 2026-10-19: ETF / money-market / interbank-CD funds
+# stay out of the modification scope; rationale and provenance recorded in DETAIL FL-D130).
 DEFAULT_EXCLUDED_TYPES = "etf,money_market,interbank_cd"
 DEFAULT_MAX_COMPOSE_CALLS = 8
 SWEEP_ISSUES = {"residual_old_text", "missing_new_text", "wrong_text", "unaddressed_requirement"}
@@ -2027,6 +2029,11 @@ def _write_report_markdown(path: Path, report: dict[str, Any]) -> None:
         lines.append(f"  - {finding.get('finding_id')}：{finding.get('rule_id')} "
                      f"{finding.get('location')} {finding.get('issue')} → {finding.get('status')}")
     unresolved = report.get("unresolved") or []
+    if report.get("business_notices"):
+        lines.extend(["", "## 业务提示（不影响交付状态）", ""])
+        for notice in report["business_notices"]:
+            lines.append(f"- [{notice.get('code')}] {notice.get('rule_id')} {notice.get('location')}："
+                         f"{notice.get('message')}")
     lines.extend(["", "## 未完成清单", ""])
     if not unresolved:
         lines.append("- （无）")
@@ -2320,6 +2327,30 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
             # --- delivery decision -------------------------------------------
             stage = "deliver"
             plan_by_target = _plan_by_target(planned)
+            # Business notices (user ruling 2026-10-19): G15 deletions whose clause
+            # deviates from the guide reference are reported as "the original contract
+            # may be in error". They are warnings only — never validation errors, never
+            # part of ``unresolved``, and they never affect completion.
+            notices: list[dict[str, Any]] = []
+            seen_notices: set[tuple] = set()
+            for edit in planned.get("edits") or []:
+                candidates = [edit, *(edit.get("components") or [])]
+                for candidate in candidates:
+                    for notice in (candidate.get("evidence") or {}).get("business_notices") or []:
+                        rule_label = candidate.get("rule_id") or edit.get("rule_id")
+                        location_label = candidate.get("location") or edit.get("location")
+                        key = (notice.get("code"), notice.get("message"),
+                               rule_label, location_label)
+                        if key in seen_notices:
+                            continue
+                        seen_notices.add(key)
+                        notices.append({
+                            "rule_id": rule_label,
+                            "location": location_label,
+                            **notice,
+                        })
+            if notices:
+                report["business_notices"] = notices
             unresolved_targets = [target for target in targets if target.state == "needs_edit"
                                   and plan_by_target.get(target.target_id, {}).get("status")
                                   not in {"planned", "satisfied", "not_applicable"}]
@@ -2356,10 +2387,30 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
                     "fund_type": facts.fund_type,
                     "message": "fund_type is an excluded type but its quote could not be verified; "
                                "the run continues but delivery must not be complete"})
+            # Repair rounds can append the same failure several times; keep one entry per
+            # (kind, rule, location, code) so the report and the coverage view agree.
+            deduped: list[dict[str, Any]] = []
+            seen_unresolved: set[tuple] = set()
+            for item in unresolved:
+                key = (item.get("kind"), item.get("rule_id"), item.get("location"),
+                       item.get("code") or item.get("reason") or item.get("issue"))
+                if key in seen_unresolved:
+                    continue
+                seen_unresolved.add(key)
+                deduped.append(item)
+            unresolved[:] = deduped
             report["unresolved"] = unresolved
             report["audit"] = {"rounds": audit_rounds, "issues": audit_issues}
             report["targets"] = _target_ledger(targets, planned, audit_state, origins)
             report["windows"] = [_window_ledger(entry) for entry in entries]
+            # Operation-level coverage projection (P0-4): the delivery gate reads the
+            # same view and fails closed on a disagreement instead of completing silently.
+            from .generation.coverage import build_coverage_view
+            coverage_view = build_coverage_view(report)
+            report["operation_coverage"] = {"counts": dict(coverage_view.counts)}
+            if coverage_view.unresolved and _delivery_complete(unresolved):
+                unresolved.append({"kind": "coverage_view", "code": "COVERAGE_MISMATCH",
+                                   "reason": "operation coverage view reports unresolved entries"})
             checks = [*artifacts.checks, "actual_content_verification"]
             hashes = {"final_sha256": artifacts.final_sha256, "redline_sha256": artifacts.redline_sha256}
             complete = _delivery_complete(unresolved)

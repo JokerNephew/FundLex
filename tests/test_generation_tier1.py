@@ -127,3 +127,14 @@ def test_g11_clean_clause_replaced_deterministically():
     result = plan_policy_replacement(before, policy, "G11")
     assert result is not None
     assert result.replacement == policy
+
+
+def test_g14_extended_clause_adds_missing_item():
+    """Plan P1: an extended clause (list followed by more content) still gains the
+    item the guide adds for multi-class products."""
+    before = "基金管理人可以适当调低基金申购费率和基金赎回费率，并最迟应于新的费率实施日前公告。"
+    result = plan_fee_item_removal(before, _allowed_multi(), CANONICAL_MULTI,
+                                   ["申购费率", "销售服务费率"])
+    assert result is not None
+    assert result.replacement == ("基金管理人可以适当调低基金申购费率和基金销售服务费率，"
+                                  "并最迟应于新的费率实施日前公告。")

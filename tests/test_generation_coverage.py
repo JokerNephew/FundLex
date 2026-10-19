@@ -65,3 +65,18 @@ def test_artifact_claim_replay_upgrades_satisfied():
 def test_missing_audit_record_is_unresolved_not_silent():
     report = _report(audit={}, unresolved=[])
     assert build_coverage_view(report).state_of("G08", "p20") == "UNRESOLVED"
+
+
+def test_state_of_operation_is_operation_aware():
+    report = {
+        "targets": [
+            {"target_id": "T5", "rule_id": "G05", "location": "p50",
+             "state": "needs_edit", "operations": ["G05:0"]},
+        ],
+        "audit": {"rounds": [{"results": [
+            {"target_id": "T5", "rule_id": "G05", "verdict": "completed"}]}]},
+        "unresolved": [],
+    }
+    view = build_coverage_view(report)
+    assert view.state_of_operation("G05", "p50", "G05:0") == "SATISFIED"
+    assert view.state_of_operation("G05", "p50", "G05:1") is None

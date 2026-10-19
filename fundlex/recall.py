@@ -346,16 +346,27 @@ class Facts:
 
     @property
     def subscription_group(self) -> tuple[str, ...]:
+        # Guide definition: charges subscription/purchase fees AND accrues no service fee.
         return tuple(item.name for item in self.current_classes
                      if item.subscription_fee and not item.service_fee)
 
     @property
     def service_group(self) -> tuple[str, ...]:
-        return tuple(item.name for item in self.current_classes if item.service_fee)
+        # Guide definition: charges no subscription/purchase fee AND accrues the
+        # service fee. A class carrying both flags is ambiguous, not a service class
+        # (external review 2026-10-19, P0-B) — see ``ambiguous_classes``.
+        return tuple(item.name for item in self.current_classes
+                     if item.service_fee and not item.subscription_fee)
+
+    @property
+    def ambiguous_classes(self) -> tuple[str, ...]:
+        """Classes carrying both fee flags: neither group can claim them."""
+        return tuple(item.name for item in self.current_classes
+                     if item.subscription_fee and item.service_fee)
 
     @property
     def has_service_fee(self) -> bool:
-        return bool(self.service_group)
+        return any(item.service_fee for item in self.current_classes)
 
     def as_ledger(self) -> dict[str, Any]:
         return {
@@ -400,8 +411,18 @@ def derive_fact_statuses(*, fund_type_ok: bool, classes: Sequence[ClassFact],
     current_ok = bool(classes) and all(
         class_quotes.get(item.name, False) for item in classes if item.current)
     statuses["share_class_structure"] = "VERIFIED" if current_ok else "UNKNOWN"
-    statuses["subscription_fee_group"] = statuses["share_class_structure"]
-    statuses["service_fee_group"] = statuses["share_class_structure"]
+    ambiguous = [item for item in classes
+                 if item.current and item.subscription_fee and item.service_fee]
+    if current_ok and ambiguous:
+        # A class carrying both fee flags cannot be placed in either the subscription
+        # or the service group; the grouping facts are in conflict (P0-B).
+        fee_status = "CONFLICT"
+    elif current_ok:
+        fee_status = "VERIFIED"
+    else:
+        fee_status = "UNKNOWN"
+    statuses["subscription_fee_group"] = fee_status
+    statuses["service_fee_group"] = fee_status
 
     def channel_status(names: Sequence[str], quote_ok: bool) -> str:
         if not quote_ok:
@@ -1709,6 +1730,31 @@ def survey_targets(inspection: DocumentInspection, rules: Sequence[dict], facts:
     return hits
 
 
+_G16_MECHANISM_TOKENS: tuple[tuple[str, ...], ...] = (
+    ("直销",),
+    ("返还",),
+    ("超过一年", "一年（即365天）", "365"),
+)
+
+
+def _append_obligation_present(rule_id: str, required: str, document_compact: str) -> bool:
+    """Is the append obligation already present in the contract?
+
+    G16 is special: the OLD payment clause also opens with "销售服务费每日计提", so
+    accepting the lead sentence alone would let "old clause deleted, new mechanism not
+    added" pass (external review 2026-10-19, P0-C). Its new mechanism counts as present
+    only when the direct-sales refund and the over-one-year refund wording are present
+    as well — otherwise the deterministic append target is created.
+    """
+    lead = _compact(required.split("。")[0])
+    if not lead or lead not in document_compact:
+        return False
+    if str(rule_id) == "G16" and _tier1_enabled():
+        return all(any(_compact(token) in document_compact for token in group)
+                   for group in _G16_MECHANISM_TOKENS)
+    return True
+
+
 def append_applicability_targets(inspection: DocumentInspection, rules: Sequence[dict],
                                  facts: Facts, sections: Sequence[Section], *,
                                  known: Sequence[tuple[str, str]] = (),
@@ -1762,7 +1808,7 @@ def append_applicability_targets(inspection: DocumentInspection, rules: Sequence
                 break
         if not required:
             continue
-        if _compact(required.split("。")[0]) in document_compact:
+        if _append_obligation_present(rule_id, required, document_compact):
             continue
         section = _section_for_hint(sections, rule.get("section_hint"))
         if section is None:
@@ -1974,14 +2020,21 @@ def _delete_keyword_bag(rule: dict, facts: Facts | None) -> tuple[str, ...]:
 
     A pure deletion frequently survives in contracts in several paraphrases ("每日计提"
     against "每日计算", "按月支付" against "次月支付"), so no single string anchor covers
-    every wording. The rule's own reference text still names the domain terms, the payment
-    action and the payment period it is about; requiring those to co-occur in one paragraph
-    finds the clause across the paraphrases while staying specific enough not to hit the
-    fee-formula or fee-purpose lines (FL-D062).
+    every wording. The rule's own reference text still names the domain terms, the action
+    it is about, and (for the payment clause) a period or purpose marker; requiring the
+    matched markers to co-occur in one window finds the clause across paraphrases while
+    staying specific enough not to hit neighbouring fee lines (FL-D062).
+
+    Groups are collected independently and at least two must match — G06 carries a domain
+    term plus the conversion action, G13 a domain term plus collection action and holding
+    period, G17 a domain term plus the purpose markers (external review 2026-10-19, P1:
+    deterministic recall for G06/G13/G17).
     """
-    domain = ("销售服务费", "申购费", "赎回费", "认购费", "管理费", "托管费", "销售服务费率")
-    action = ("支付", "划付", "划出", "划款", "计提", "计算")
-    period = ("按月", "次月", "每月", "逐日", "每季")
+    domain = ("销售服务费", "申购费", "赎回费", "认购费", "管理费", "托管费",
+              "销售服务费率", "份额类别")
+    action = ("支付", "划付", "划出", "划款", "计提", "计算", "收取", "计入", "转换")
+    period = ("按月", "次月", "每月", "逐日", "每季", "持有期", "少于7日", "7日", "七日")
+    purpose = ("佣金", "广告", "促销", "持有人服务", "使用范围")
     references = []
     delete_only = True
     for operation in rule.get("operations") or []:
@@ -1995,13 +2048,12 @@ def _delete_keyword_bag(rule: dict, facts: Facts | None) -> tuple[str, ...]:
         return ()
     body = "".join(references)
     bag: list[str] = []
-    for group in (domain, action, period):
-        matched = [token for token in group if token in body]
+    for group in (domain, action, period, purpose):
+        matched = next((token for token in group if token in body), None)
         if matched:
-            bag.append(matched[0])
-    # Require the whole signature (a domain term, an action and a period) so the fallback
-    # cannot degrade into a generic fee mention.
-    return tuple(bag) if len(bag) == 3 else ()
+            bag.append(matched)
+    # At least a domain term plus one more marker; a lone fee mention must not qualify.
+    return tuple(bag) if len(bag) >= 2 else ()
 
 
 def is_delete_only_rule(rule: dict, facts: "Facts | None" = None) -> bool:
@@ -2081,27 +2133,36 @@ _CLASS_NAME_SUFFIXES = ("类基金份额", "类份额", "基金份额", "份额"
 _PLACEHOLDER_CLASS_NAMES = frozenset({"default", "none", "unknown", "n/a", "na", "其他"})
 
 
+_CLASS_LETTER_FORM = re.compile(
+    r"^([A-Za-zＡ-Ｚａ-ｚ0-9]+)(?:类(?:基金份额|份额)?|基金份额|份额|类)?$")
+
+
 def class_label(names: Sequence[str]) -> str:
     """Build the guide's class-group label from fact names such as "A", "A类基金份额".
 
-    Contracts name the same class in several ways ("A类基金份额", "A类份额", "A类",
-    "A"), so every suffix is stripped before the canonical "A类基金份额" form is
-    rebuilt. Missing the "份额" variants produced a doubled label such as
-    "A类份额类基金份额" (FL-D091). Placeholder names ("default") are dropped: the
-    contract has no such class and the wording must not appear in the document.
+    Letter-type names are canonicalised ("A", "A类份额" → "A类"); names the contract
+    writes descriptively ("人民币份额", "A类人民币份额") are kept **verbatim** — the
+    guide requires the product's own class wording, and rebuilding those names produced
+    doubled labels such as "人民币类基金份额" / "A类人民币类基金份额" (external review
+    2026-10-19, P0-B). The trailing "基金份额" is appended only when every component is
+    a bare "X类" form. Placeholder names ("default") are dropped.
     """
-    cleaned = []
+    cleaned: list[str] = []
     for name in names:
-        label = name.strip()
-        for suffix in _CLASS_NAME_SUFFIXES:
-            if label.endswith(suffix) and len(label) > len(suffix):
-                label = label[: -len(suffix)]
-                break
+        label = re.sub(r"\s+", "", name or "")
         if not label or label.lower() in _PLACEHOLDER_CLASS_NAMES:
             continue
+        match = _CLASS_LETTER_FORM.match(label)
+        if match:
+            label = match.group(1) + "类"
         if label not in cleaned:
             cleaned.append(label)
-    return "、".join(label + "类" for label in cleaned) + "基金份额"
+    if not cleaned:
+        return "基金份额"
+    joined = "、".join(cleaned)
+    if all(label.endswith("类") and "份额" not in label for label in cleaned):
+        joined += "基金份额"
+    return joined
 
 
 # The guide expresses the substitution rule with example class letters: the A/B example
@@ -2223,24 +2284,73 @@ def _needs_missing_class_group(rule: dict, operations: Sequence[dict], facts: Fa
     return bool(rule.get("class_substitution")) and fee_homogeneous_classes(facts)
 
 
+def _trim_missing_group_text(text: str, missing: str = "C类基金份额") -> str:
+    """Drop only the sentences/clauses naming the missing class group (plan P0-D).
+
+    G08/G11 carry one combined replacement: the subscription-group policy, the
+    service-group sentence and the channel policy. When the product lacks the
+    service-fee class, only the clauses naming it disappear — the rest of the
+    obligation (subscription group + channel policy) still applies, so the whole
+    operation must not be dropped (external review 2026-10-19).
+    """
+    kept_sentences: list[str] = []
+    for sentence in re.split(r"(?<=[。；])", text):
+        if not sentence:
+            continue
+        if missing not in sentence:
+            kept_sentences.append(sentence)
+            continue
+        clauses = re.split(r"(?<=，)", sentence)
+        kept_clauses = [clause for clause in clauses if missing not in clause]
+        kept_sentences.append("".join(kept_clauses))
+    trimmed = "".join(kept_sentences).strip()
+    trimmed = re.sub(r"[，、；]+(?=。)", "。", trimmed)
+    trimmed = re.sub(r"[；，、]+$", "。", trimmed)
+    return trimmed
+
+
+def _reduce_missing_group_operation(operation: dict, facts: Facts) -> dict | None:
+    """Rewrite one replace operation without its missing-service-group clauses."""
+    text = str(operation.get("new_text") or "")
+    if "C类基金份额" not in text:
+        return operation
+    trimmed = _trim_missing_group_text(text)
+    if not trimmed.strip():
+        return None
+    if not trimmed.endswith(("。", "；")):
+        trimmed += "。"
+    reduced = dict(operation)
+    reduced["new_text"] = trimmed
+    reduced["dropped_component"] = "service_fee_group"
+    return reduced
+
+
 def _drop_empty_group_operations(rule: dict, operations: Sequence[dict],
                                  facts: Facts) -> list[dict]:
-    """Drop the operations whose replacement needs a class group the product lacks.
+    """Resolve operations whose replacement names a class group the product lacks.
 
-    A group-substitution rule normally rewrites the subscription class group and the
-    service-fee class group. When the product has no service-fee class there is nothing
-    to rewrite on that side, so that operation is dropped and the remaining substitution
-    still applies; dropping only affects rules that carry the service-fee placeholder.
+    Registry mode (plan P0-D) trims only the clauses naming the missing group and keeps
+    the remaining obligation; legacy mode keeps the historical whole-operation drop.
     """
     if not rule.get("class_substitution") or facts.service_group:
         return list(operations)
-    # An append is never dropped here: ``plan_target``'s append path handles a missing
-    # service-fee class by dropping only the sentence that names it (FL-D090), so removing
-    # the whole operation would silently lose the obligation.
-    kept = [operation for operation in operations
-            if operation.get("op") == "append"
-            or "C类基金份额" not in str(operation.get("new_text") or "")]
-    return kept
+    if not _tier1_enabled():
+        # An append is never dropped here: ``plan_target``'s append path handles a
+        # missing service-fee class by dropping only the sentence that names it
+        # (FL-D090), so removing the whole operation would silently lose the obligation.
+        kept = [operation for operation in operations
+                if operation.get("op") == "append"
+                or "C类基金份额" not in str(operation.get("new_text") or "")]
+        return kept
+    reduced_ops: list[dict] = []
+    for operation in operations:
+        if operation.get("op") == "append":
+            reduced_ops.append(operation)
+            continue
+        reduced = _reduce_missing_group_operation(operation, facts)
+        if reduced is not None:
+            reduced_ops.append(reduced)
+    return reduced_ops
 
 
 def slot_group_missing(rule: dict, operations: Sequence[dict], facts: Facts) -> bool:
@@ -2389,6 +2499,56 @@ def condition_matches(condition: dict | None, facts: Facts) -> bool:
     if kind == "compound":
         return all(condition_matches(part, facts) for part in value or [])
     return False
+
+
+def condition_status(condition: dict | None, facts: Facts) -> str:
+    """Tri-state applicability: ``TRUE | FALSE | UNKNOWN`` (external review 2026-10-19).
+
+    UNKNOWN means the contract's facts do not prove either branch. Callers must keep
+    the target unresolved instead of guessing one (plan §3.3: an unknown fact never
+    falls through to generation). Only consulted in registry mode; the legacy
+    ``condition_matches`` behaviour is unchanged.
+    """
+    if not condition:
+        return "TRUE"
+    kind = condition.get("kind")
+    value = condition.get("value")
+    if kind == "none":
+        return "TRUE"
+    if kind == "compound":
+        statuses = [condition_status(part, facts) for part in value or []]
+        if any(status == "FALSE" for status in statuses):
+            return "FALSE"
+        if any(status == "UNKNOWN" for status in statuses):
+            return "UNKNOWN"
+        return "TRUE"
+    if kind == "class_count":
+        if facts.status_of("share_class_structure") != "VERIFIED":
+            return "UNKNOWN"
+        count = facts.class_count
+        if value == 1:
+            return "TRUE" if count == 1 else "FALSE"
+        if value == "multiple":
+            return "TRUE" if count > 1 else "FALSE"
+        return "FALSE"
+    if kind == "has_service_fee":
+        if facts.status_of("share_class_structure") != "VERIFIED":
+            return "UNKNOWN"
+        return "TRUE" if bool(value) == facts.has_service_fee else "FALSE"
+    if kind == "is_floating_fee":
+        if not facts.quotes_verified.get("floating", False):
+            return "UNKNOWN"
+        return "TRUE" if bool(value) == facts.floating_management_fee else "FALSE"
+    return "UNKNOWN"
+
+
+_FACT_STATUS_KEYS = ("fund_type", "share_class_structure", "subscription_fee_group",
+                     "service_fee_group", "direct_sales_exempt_group",
+                     "other_sales_charged_group")
+
+
+def _fact_status_map(facts: Facts) -> dict[str, str]:
+    return {key: facts.status_of(key) for key in _FACT_STATUS_KEYS}
 
 
 @dataclass
@@ -2616,6 +2776,65 @@ def _plan_tier1(rule: dict, operations: Sequence[dict], facts: Facts,
 
 def plan_target(rule: dict, target: Target, inspection: DocumentInspection, facts: Facts,
                 gateway: Any, *, compose_budget: list[int]) -> PlannedEdit | None:
+    """Plan one target; registry mode adds tri-state applicability and routing records.
+
+    Tri-state (external review 2026-10-19): an operation whose condition cannot be
+    decided from VERIFIED facts never executes — if nothing else is applicable the
+    target resolves as ``RECALL_FACT_UNVERIFIED`` instead of guessing a branch. The
+    per-operation routing decision (requested/actual tier, fallback reason) is recorded
+    on the edit evidence for telemetry.
+    """
+    if not _tier1_enabled():
+        return _plan_target_inner(rule, target, inspection, facts, gateway,
+                                  compose_budget=compose_budget)
+    applicable: list[dict] = []
+    unknown: list[dict] = []
+    for operation in rule.get("operations") or []:
+        status = condition_status(operation.get("condition"), facts)
+        if status == "TRUE":
+            applicable.append(operation)
+        elif status == "UNKNOWN":
+            unknown.append(operation)
+    if not applicable and unknown:
+        raise RecallError("RECALL_FACT_UNVERIFIED", {
+            "rule": rule["rule_id"],
+            "kinds": sorted({str((operation.get("condition") or {}).get("kind"))
+                             for operation in unknown}),
+        })
+    from .generation.router import route_operation
+    fact_status = _fact_status_map(facts)
+    decisions: list[dict[str, Any]] = []
+    blocked_applicable = 0
+    for index, operation in enumerate(rule.get("operations") or []):
+        operation_key = f"{rule['rule_id']}:{index}"
+        decision = route_operation(operation_key, fact_status=fact_status)
+        is_applicable = any(operation is candidate for candidate in applicable)
+        decisions.append({
+            "operation": operation_key,
+            "requested": decision.requested_tier.value,
+            "actual": decision.actual_tier.value if decision.actual_tier else None,
+            "fallback_reason": decision.fallback_reason,
+            "blocked": decision.blocked,
+            "applicable": is_applicable,
+        })
+        if is_applicable and decision.blocked:
+            blocked_applicable += 1
+    if applicable and blocked_applicable == len(applicable):
+        raise RecallError("RECALL_FACT_UNVERIFIED", {
+            "rule": rule["rule_id"], "reason": "route_blocked"})
+    edit = _plan_target_inner(rule, target, inspection, facts, gateway,
+                              compose_budget=compose_budget)
+    if edit is not None:
+        evidence = dict(edit.evidence or {})
+        evidence["strategy"] = decisions
+        if rule.get("class_substitution") and not facts.service_group:
+            evidence.setdefault("component_not_applicable", ["service_fee_group"])
+        edit.evidence = evidence
+    return edit
+
+
+def _plan_target_inner(rule: dict, target: Target, inspection: DocumentInspection, facts: Facts,
+                       gateway: Any, *, compose_budget: list[int]) -> PlannedEdit | None:
     """Turn one needs_edit target into a concrete edit, or raise RecallError."""
     operations = [operation for operation in (rule.get("operations") or [])
                   if condition_matches(operation.get("condition"), facts)]
@@ -3127,6 +3346,79 @@ def merge_edits(edits: Sequence[PlannedEdit], inspection: DocumentInspection
     return merged, conflicts, covered
 
 
+_G15_TERM = re.compile(r"\d+\s*个?工作日")
+#: Subject mentions mapped to families, so "注册登记机构" and "登记机构" compare equal.
+_G15_SUBJECT_FAMILIES: tuple[tuple[str, re.Pattern[str]], ...] = (
+    ("基金管理人", re.compile(r"基金管理人|管理人")),
+    ("基金托管人", re.compile(r"基金托管人|托管人")),
+    ("登记机构", re.compile(r"注册登记机构|登记机构|登记结算机构")),
+    ("销售机构", re.compile(r"销售机构")),
+)
+#: Payment-path mentions that are only flagged when the guide reference lacks them.
+_G15_PATHS: tuple[tuple[str, re.Pattern[str]], ...] = (
+    ("划付指令", re.compile(r"划付指令|划拨指令|划款指令")),
+    ("自动支付/扣划", re.compile(r"自动.{0,6}(支付|扣划|划)")),
+    ("一次性支付", re.compile(r"一次性(支付|划出|划付|划款)")),
+    ("代收/代付", re.compile(r"代收|代付")),
+    ("指定账户路径", re.compile(r"指定的?账户路径|指定账户")),
+    ("无需出具指令", re.compile(r"无需.{0,8}出具.{0,8}指令|无需再出具")),
+)
+
+
+def g15_contract_deviation(reference_texts: Sequence[str], deleted_text: str) -> list[str]:
+    """Substantive elements where a deleted G15 clause differs from the guide reference.
+
+    The clause is deleted either way; the difference is reported to the reviewer as
+    "the original contract may be in error" (user ruling 2026-10-19). Comparisons are
+    deliberately narrow — payment deadline, payment subject, payment path — so ordinary
+    wording variants produce no notice.
+    """
+    reference = _compact("".join(reference_texts))
+    deleted = _compact(deleted_text or "")
+    if not reference or not deleted:
+        return []
+    reasons: list[str] = []
+    reference_terms = sorted(set(_G15_TERM.findall(reference)))
+    deleted_terms = sorted(set(_G15_TERM.findall(deleted)))
+    if deleted_terms and reference_terms and deleted_terms != reference_terms:
+        reasons.append("支付时限与指引参照不同（合同 " + "、".join(deleted_terms) +
+                       "；指引 " + "、".join(reference_terms) + "）")
+    for label, pattern in _G15_SUBJECT_FAMILIES:
+        if pattern.search(deleted) and not pattern.search(reference):
+            reasons.append(f"支付主体出现“{label}”（指引参照未涉及）")
+    for label, pattern in _G15_PATHS:
+        if pattern.search(deleted) and not pattern.search(reference):
+            reasons.append(f"支付路径/方式出现“{label}”（指引参照未涉及）")
+    return reasons
+
+
+def _g15_notice_for_edit(edit: "PlannedEdit", rule: dict,
+                         inspection: DocumentInspection) -> list[dict[str, Any]]:
+    """Business notice for a G15 deletion whose clause deviates from the guide."""
+    if "G15" not in str(edit.rule_id).split("+"):
+        return []
+    try:
+        span = inspection.by_location(edit.location)
+    except Exception:
+        return []
+    deleted = span.text[edit.start:edit.end]
+    if not deleted.strip():
+        return []
+    references = [str(operation.get("old_text") or "")
+                  for operation in (rule.get("operations") or [])]
+    references += [str(variant) for variant in (rule.get("old_text_variants") or [])]
+    reasons = g15_contract_deviation(references, deleted)
+    if not reasons:
+        return []
+    return [{
+        "code": "CONTRACT_POSSIBLY_ERRONEOUS",
+        "severity": "warning",
+        "affects_completion": False,
+        "message": "原合同可能有误：" + "；".join(reasons),
+        "reasons": reasons,
+    }]
+
+
 def plan_edits(rules_by_id: dict[str, dict], targets: Sequence[Target], inspection: DocumentInspection,
                facts: Facts, gateway: Any, *, max_compose_calls: int = 6) -> dict[str, Any]:
     """Build the edit list, isolating per-target failures into the ledger."""
@@ -3188,6 +3480,9 @@ def plan_edits(rules_by_id: dict[str, dict], targets: Sequence[Target], inspecti
             ledger.append({"target_id": target.target_id, "rule_id": target.rule_id,
                            "status": "satisfied", "reason": "already_satisfied"})
             continue
+        notices = _g15_notice_for_edit(edit, rule, inspection)
+        if notices:
+            edit.evidence = {**(edit.evidence or {}), "business_notices": notices}
         planned.append(edit)
         ledger.append({"target_id": target.target_id, "rule_id": target.rule_id,
                        "status": "planned", "operation": edit.operation})

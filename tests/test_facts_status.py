@@ -91,3 +91,15 @@ def test_facts_schema_carries_channel_fields():
     assert "direct_sales_exempt" in properties
     assert "other_sales_charged" in properties
     assert FACTS_SCHEMA["required"] == ["fund_type", "classes", "floating_management_fee"]
+
+
+def test_ambiguous_double_flag_class_is_conflict():
+    classes = (_class("A类", True, False), _class("E类", True, True))
+    statuses = derive_fact_statuses(
+        fund_type_ok=True, classes=classes,
+        class_quotes={"A类": True, "E类": True},
+        direct_classes=[], direct_ok=False,
+        other_classes=[], other_ok=False)
+    assert statuses["share_class_structure"] == "VERIFIED"
+    assert statuses["service_fee_group"] == "CONFLICT"
+    assert statuses["subscription_fee_group"] == "CONFLICT"

@@ -539,8 +539,10 @@ def _source_header(source: GuideSource) -> str:
         f"source_path_hint: {Path(source.path).name}",
         f"source_sha256: {source.source_sha256}",
         f"paragraph_count: {len(source.paragraphs)}",
-        f"red_paragraphs: {_index_list(red)}",
-        f"bold_paragraphs: {_index_list(bold)}",
+        # Red/bold carry no meaning in the errata guide (user clarification 2026-10-19,
+        # FL-D131): record counts for diagnostics only, never the paragraph lists.
+        f"red_paragraph_count: {len(red)}",
+        f"bold_paragraph_count: {len(bold)}",
     ])
 
 

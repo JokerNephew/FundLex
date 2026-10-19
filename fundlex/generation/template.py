@@ -128,11 +128,19 @@ def _rebuild(before: str, spans: list[tuple[int, int, str]], allowed: set[str],
              first_start: int, last_end: int, tail: str,
              allowed_order: list[str] | None = None) -> str | None:
     kept: list[tuple[str, str]] = []
+    present: set[str] = set()
     for start, end, item in spans:
         if item not in allowed:
             continue
         surface_start = _surface_start(before, start)
         kept.append((item, before[surface_start:end]))
+        present.add(item)
+    missing = [item for item in (allowed_order or []) if item not in present]
+    if missing and not allowed_order:
+        # The guide wording adds an item we cannot name safely; let compose handle it.
+        return None
+    for item in missing:
+        kept.append((item, "基金" + item))
     if not kept:
         return None
     if allowed_order:
