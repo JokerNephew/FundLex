@@ -39,6 +39,32 @@
   - 已知限制：位置对齐为按段落序号（产物删段后可能错位）；每段授权并集可能高估宽松度；均在工具 docstring 注明。
 - 下一步：Phase 3（Facts 扩展 + 三态证据），随后 Phase 4 Tier1（G14/G09/G15/G17）。
 
+## Phase 3–8 实施记录（✅ 代码与单测完成；批次验证见下）
+
+| Phase | 内容 | commit |
+| --- | --- | --- |
+| 3 | Facts schema v2 三态（`share_class_structure` + 渠道组 + `fact_status`；facts prompt v2） | `f492701` |
+| 4 | Tier1：G14 结构化集合删除（句尾收敛/保序重建两模式）、G15/G17 删除前置路由、G09 短语 splice；开关 `FUNDLEX_GENERATION_STRATEGY=registry` | `24e39d6` `9b0fdb0` |
+| 5 | Tier2：G08/G11 干净整句的确定性政策替换 | `287be26` |
+| 6 | Tier3：compose 三层验证（V1/V2 程序门 + V3 独立模型复核 `recall_verify_v1`；失败重试 1 次后 unresolved） | `1ecd93c` |
+| 8 | Artifact Claim Replay：对**已写入 DOCX** 重放替换缺失/未变化/数字/未授权检查，失败进 unresolved（阻塞 complete） | `1ecd93c` |
+
+**本地真实链路验证（registry 开关，真实模型）**：
+
+- D01：G14 p231 收敛为指引原文、G09 p227 splice、G15 p1221 前置删除，audit 均 `completed`；**claim replay: checked=17 / failures=0（verified）**。
+- D16：G14 p224 正确附加"销售服务费率"、G09 p219 双修正（audit 由 incomplete→completed）；`composed` 归零。
+- 测试：全量 **750 passed / 6 skipped / 1 failed**（唯一失败为既有 references 缺失项）。
+
+## 批次预登记（Phase 4–8 验收）
+
+| 项 | 值 |
+| --- | --- |
+| 批次 | `p6-dev-round14-11`（dev 20 例） |
+| 开关 | `FUNDLEX_GENERATION_STRATEGY=registry`（env 备份 `.bak-genv4`） |
+| 目的 | Phase 4–8 验收：确定性占比、compose 下降、claim replay 结果、完成率不降（对照 14-09 221/236） |
+| 预算 | ≤1100 calls / ≤$1.0（flash 目录价） |
+| 回滚 | 批内异常 → 还原 env 备份并重启；不达标 → 记录并保留 `legacy` 默认 |
+
 ## Commit 记录（本计划）
 
 | commit | 内容 | 测试 |
