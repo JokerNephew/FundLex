@@ -909,9 +909,16 @@ def test_resolve_pending_requires_artifact_evidence(tmp_path: Path):
              "issue": "residual_old_text", "quote": "旧条款仍在。", "status": "pending"},
             {"finding_id": "S3", "rule_id": "GX", "location": "p1",
              "issue": "unknown", "quote": "", "status": "pending"},
+            {"finding_id": "S4", "rule_id": "GX", "location": "p9",
+             "issue": "missing_new_text", "quote": "已消失的段落。", "status": "pending"},
+            {"finding_id": "S5", "rule_id": "GX", "location": "p1",
+             "issue": "wrong_text", "quote": "旧条款仍在。", "status": "pending"},
+            {"finding_id": "S6", "rule_id": "GX", "location": "p0",
+             "issue": "unaddressed_requirement", "quote": "本基金销售服务费每日计提。",
+             "status": "pending"},
         ]
 
-    batch = {"round": 3, "chunks": [{"locations": ["p0", "p1"], "findings": []}]}
+    batch = {"round": 3, "chunks": [{"locations": ["p0", "p1", "p9"], "findings": []}]}
     document = Document()
     document.add_paragraph("本基金销售服务费每日计提。")
     document.add_paragraph("旧条款仍在。")
@@ -923,10 +930,16 @@ def test_resolve_pending_requires_artifact_evidence(tmp_path: Path):
     assert pending[0]["resolution"] == "model_clean_but_evidence_missing"
     assert pending[1]["status"] == "pending"
     assert pending[2]["status"] == "resolved" and pending[2]["resolution_evidence"] == "model_clean"
+    # A disappeared paragraph is not evidence for a missing required text.
+    assert pending[3]["status"] == "pending"
+    # wrong_text with a known required text: quote absence alone is not enough.
+    assert pending[4]["status"] == "pending"
+    # unaddressed_requirement is evidence-required, not model-clean.
+    assert pending[5]["status"] == "pending"
 
     document = Document()
     document.add_paragraph("本基金销售服务费每日计提。新增条款内容。")
-    document.add_paragraph("旧条款已删除。")
+    document.add_paragraph("旧条款已删除。新增条款内容。")
     document.save(path)
     repaired = findings()
     _resolve_pending(repaired, batch, actual=inspect_docx(path, full=True),
@@ -935,6 +948,12 @@ def test_resolve_pending_requires_artifact_evidence(tmp_path: Path):
     assert repaired[0]["resolution_evidence"] == "required_text_present"
     assert repaired[1]["status"] == "resolved"
     assert repaired[1]["resolution_evidence"] == "old_text_absent"
+    # The paragraph is gone but the required text never appeared: still pending.
+    assert repaired[3]["status"] == "pending"
+    assert repaired[4]["status"] == "resolved"
+    assert repaired[4]["resolution_evidence"] == "required_text_present"
+    assert repaired[5]["status"] == "resolved"
+    assert repaired[5]["resolution_evidence"] == "required_text_present"
 
     reported = findings()[:1]
     still = {"round": 4, "chunks": [{"locations": ["p0"],
@@ -956,3 +975,31 @@ def test_unverified_excluded_fund_type_does_not_exclude():
     assert _qualification_status(facts(False), ("etf",)) == ("eligible_fund_type_unverified", False)
     assert _qualification_status(facts(True), ("etf",)) == ("excluded_by_fund_type", True)
     assert _qualification_status(facts(False), ("money_market",)) == ("eligible", False)
+
+
+def test_collect_targets_keeps_different_operations_at_one_location():
+    """The collection step must not drop a synthetic target for another operation (FL-D118)."""
+    from types import SimpleNamespace
+    from fundlex.recall import Target
+    from fundlex.recall_pipeline import _collect_targets
+
+    inventory = Target(target_id="T1", rule_id="G05", location="p0", quote="调低赎回费率",
+                       state="needs_edit", reason="", start=0, end=6,
+                       operations=("G05:0",))
+    survey_delete = Target(target_id="Y1", rule_id="G05", location="p0",
+                           quote="并报中国证监会备案", state="needs_edit", reason="",
+                           start=20, end=29, operations=("G05:1",))
+    exact_duplicate = Target(target_id="Y2", rule_id="G05", location="p0",
+                             quote="并报中国证监会备案", state="needs_edit", reason="",
+                             start=20, end=29, operations=("G05:1",))
+    collected = _collect_targets([SimpleNamespace(targets=[inventory])],
+                                 [survey_delete, exact_duplicate])
+    assert {target.target_id for target in collected} == {"T1", "Y1"}
+
+
+def test_delivery_complete_blocks_on_any_unresolved():
+    """A report that lists unresolved items must not publish complete (FL-D118)."""
+    from fundlex.recall_pipeline import _delivery_complete
+    assert _delivery_complete([]) is True
+    assert _delivery_complete([{"kind": "coverage", "code": "SURVEY_QUOTE_UNRESOLVED"}]) is False
+    assert _delivery_complete([{"kind": "qualification", "code": "FUND_TYPE_UNVERIFIED"}]) is False

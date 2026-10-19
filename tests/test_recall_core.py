@@ -1196,3 +1196,13 @@ def test_survey_operation_coverage_does_not_hide_other_operations(tmp_path: Path
                           known={("GX", "p0"): {"GX:0"}})
     assert not any("调低赎回费率" in hit.quote for hit in hits)
     assert any("备案" in hit.quote for hit in hits)
+
+
+def test_unknown_operation_state_fails_open_for_specific_hit():
+    """An unknown operation identity must not suppress a specific operation hit (FL-D118)."""
+    from fundlex.recall import operations_cover_hit
+    known = {("GX", "p0"): None}
+    assert operations_cover_hit(known, "GX", ["p0"], ("GX:1",)) is False
+    assert operations_cover_hit(known, "GX", ["p0"], ()) is True
+    assert operations_cover_hit({("GX", "p0"): {"GX:1"}}, "GX", ["p0"], ("GX:1",)) is True
+    assert operations_cover_hit({("GX", "p0"): {"GX:0"}}, "GX", ["p0"], ("GX:1",)) is False

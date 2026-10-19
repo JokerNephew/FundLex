@@ -1351,13 +1351,30 @@ def known_operations_from_targets(targets: Sequence[Target], rules_by_id: dict[s
     return known
 
 
-def normalise_known_operations(known: Any) -> dict[tuple[str, str], set[str] | None]:
+def normalise_known_operations(known: Any) -> dict[tuple[str, str], Any]:
     if isinstance(known, dict):
         return {key: (None if value is None else set(value)) for key, value in known.items()}
-    return {(rule_id, location): None for rule_id, location in known}
+    return {(rule_id, location): _LOCATION_WILDCARD for rule_id, location in known}
 
 
 _MISSING = object()
+# Legacy callers pass ``known`` as (rule_id, location) pairs: the location is covered
+# but the operation is unknown, and a hit there is suppressed (old behaviour). Target
+# derived coverage uses ``None`` for "operation unknown" and lets specific operation
+# hits through (FL-D118).
+_LOCATION_WILDCARD = object()
+
+
+def _add_operation_coverage(known: dict[tuple[str, str], set[str] | None], rule_id: str,
+                            location: str, keys: Sequence[str]) -> None:
+    """Record covered operations at a location without crashing on a wildcard state."""
+    current = known.get((rule_id, location))
+    if current is _LOCATION_WILDCARD:
+        return
+    if current is None:
+        known[(rule_id, location)] = set(keys)
+    else:
+        current.update(keys)
 
 
 def operations_cover_hit(known: dict[tuple[str, str], set[str] | None], rule_id: str,
@@ -1373,7 +1390,15 @@ def operations_cover_hit(known: dict[tuple[str, str], set[str] | None], rule_id:
         state = known.get((rule_id, location), _MISSING)
         if state is _MISSING:
             return False
+        if state is _LOCATION_WILDCARD:
+            continue
         if state is None:
+            # Unknown operation identity must fail open for a specific operation hit:
+            # an inventory target whose span contains none of the operation references
+            # may be an append/satisfied target, and must not hide a real delete hit at
+            # the same location. A wildcard hit keeps the old location-level behaviour.
+            if operation_keys:
+                return False
             continue
         if not state:
             return False
@@ -1433,7 +1458,7 @@ def survey_targets(inspection: DocumentInspection, rules: Sequence[dict], facts:
                                   start=0, end=0, ratio=1.0, index=counter,
                                   operation_keys=tuple(sorted(satisfied_keys))))
             if satisfied_keys:
-                existing.setdefault((rule_id, location), set()).update(satisfied_keys)
+                _add_operation_coverage(existing, rule_id, location, satisfied_keys)
             else:
                 existing[(rule_id, location)] = None
         tail_keys = set(bare_tail_keys(rule, facts))
@@ -1500,7 +1525,7 @@ def survey_targets(inspection: DocumentInspection, rules: Sequence[dict], facts:
                                       operation_keys=hit_keys).with_parts(parts))
                 if hit_keys:
                     for location in locations:
-                        existing.setdefault((rule_id, location), set()).update(hit_keys)
+                        _add_operation_coverage(existing, rule_id, location, hit_keys)
                 else:
                     for location in locations:
                         existing[(rule_id, location)] = None

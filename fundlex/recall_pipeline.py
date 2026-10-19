@@ -282,11 +282,31 @@ def _target_ledger(targets: Sequence[Target], planned: dict[str, Any],
     return records
 
 
+def _target_key(target: Target) -> tuple:
+    """Exact target identity for duplicate suppression in the collection step."""
+    return (target.rule_id, target.location, tuple(getattr(target, "operations", ()) or ()),
+            target.start, target.end, _compact(target.quote))
+
+
 def _collect_targets(entries: Sequence[_WindowState], synthetic: Sequence[Target]) -> list[Target]:
+    """Merge inventory and survey targets without re-doing semantic coverage.
+
+    The old implementation dropped every synthetic target whose (rule, location) matched
+    an inventory target. That undid the operation-aware survey: a delete hit for G05:1
+    at a location where inventory had reported G05:0 was silently removed (FL-D117).
+    Only exact duplicates are suppressed here; coverage decisions belong to the survey
+    that produced the hit.
+    """
     window_targets = [target for entry in entries for target in entry.targets]
-    existing = {(target.rule_id, target.location) for target in window_targets}
-    return window_targets + [target for target in synthetic
-                             if (target.rule_id, target.location) not in existing]
+    seen = {_target_key(target) for target in window_targets}
+    collected = list(window_targets)
+    for target in synthetic:
+        key = _target_key(target)
+        if key in seen:
+            continue
+        seen.add(key)
+        collected.append(target)
+    return collected
 
 
 def _survey_targets_from_hits(hits: Sequence[SurveyHit], rules_by_id: dict[str, dict],
@@ -1733,6 +1753,17 @@ def _sweep_batch(model: Any, rules_by_id: dict[str, dict], requirements: str,
     return ledger
 
 
+def _delivery_complete(unresolved: Sequence[dict[str, Any]]) -> bool:
+    """Every reported unresolved item blocks final delivery (FL-D118).
+
+    The old gate listed the blocking categories one by one and missed
+    ``coverage_gaps``: a report could list unresolved coverage gaps and still publish
+    ``complete``. Deriving the decision from the final unresolved list keeps the report
+    and the gate consistent.
+    """
+    return not unresolved
+
+
 def _rule_required_text(rule: dict, facts: Facts) -> str:
     """First applicable replace/append text the guide requires for this rule."""
     for operation in rule.get("operations") or []:
@@ -1760,16 +1791,36 @@ def _finding_evidence(finding: dict[str, Any], actual: DocumentInspection,
     quote = str(finding.get("quote") or "")
     rule = rules_by_id.get(str(finding.get("rule_id") or ""))
     required = _rule_required_text(rule, facts) if rule else ""
-    try:
-        span = actual.by_location(location)
-    except DocxError:
-        return "location_gone"
-    body = _compact(display_text(span.text)[0])
-    if issue == "missing_new_text":
-        return "required_text_present" if required and _compact(required) in body else ""
-    if issue == "wrong_text" and required and _compact(required) in body:
-        return "required_text_present"
-    if issue in {"residual_old_text", "wrong_text"}:
+    # A disappeared paragraph is deletion evidence only. For a missing/required
+    # replacement it proves nothing: the paragraph may have been rewritten without the
+    # required text (FL-D118).
+    if issue in {"missing_new_text", "unaddressed_requirement"}:
+        if not required:
+            return ""
+        try:
+            span = actual.by_location(location)
+        except DocxError:
+            return ""
+        body = _compact(display_text(span.text)[0])
+        return "required_text_present" if _compact(required) in body else ""
+    if issue == "wrong_text":
+        try:
+            span = actual.by_location(location)
+        except DocxError:
+            return "" if required else "location_gone"
+        body = _compact(display_text(span.text)[0])
+        if required:
+            # With a known required text, only its presence proves the repair; the old
+            # wrong text disappearing is not enough (it could be replaced by another
+            # wrong wording).
+            return "required_text_present" if _compact(required) in body else ""
+        return "old_text_absent" if quote and _compact(quote) not in body else ""
+    if issue == "residual_old_text":
+        try:
+            span = actual.by_location(location)
+        except DocxError:
+            return "location_gone"
+        body = _compact(display_text(span.text)[0])
         return "old_text_absent" if quote and _compact(quote) not in body else ""
     return ""
 
@@ -1803,7 +1854,8 @@ def _resolve_pending(findings: list[dict[str, Any]], batch_ledger: dict[str, Any
                 finding["status"] = "resolved"
                 finding["resolution"] = f"re-sweep round {batch_ledger['round']} clean"
                 finding["resolution_evidence"] = evidence
-            elif issue in {"residual_old_text", "missing_new_text", "wrong_text"}:
+            elif issue in {"residual_old_text", "missing_new_text", "wrong_text",
+                           "unaddressed_requirement"}:
                 # The model stayed silent but the artifact does not prove the repair.
                 finding["resolution"] = "model_clean_but_evidence_missing"
             else:
@@ -2260,8 +2312,7 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
             report["windows"] = [_window_ledger(entry) for entry in entries]
             checks = [*artifacts.checks, "actual_content_verification"]
             hashes = {"final_sha256": artifacts.final_sha256, "redline_sha256": artifacts.redline_sha256}
-            complete = (not unresolved_targets and not audit_issues and not pending_findings
-                        and not gaps and not qualification_gap)
+            complete = _delivery_complete(unresolved)
             if complete:
                 _publish(temp_dir, output_dir, {"redline.docx": "redline.docx", "final.docx": "final.docx"},
                          published)
