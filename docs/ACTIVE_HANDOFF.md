@@ -60,6 +60,7 @@
   3d. **2026-10-19 09:16 CST 已切回 OpenCode Go**（新 key 仅在 `/etc/fundlex-recall.env`，未入库/文档；env 备份 `…bak-20261019-091621`）；`9ae799a` 已发布（部署 sha 一致）、capabilities 200、独立账本探测 `UPSTREAM OK`；**round14-07 运行中**。
   3e. **2026-10-19 更新**：round14-07 在 D01 触发 `PROCESSING_FAILED`（`AttributeError`，`_survey_targets_from_hits` 对 unknown 覆盖 update None）——**批次作废**；已修并发布 `03fbbfa`（改用 `_add_operation_coverage` + 回归测试），全量 **690 passed / 6 skipped / 1 failed**（既有）；**round14-08 运行中**。
   3f. **2026-10-19 更新**：round14-08（FL-D118 缺陷 1–5，同供应商）dev-only **211/236 = 0.8941**（kept 20 / not_executed 5），`RECALL_EDIT_OVERLAP` **66**（round11 为 8）、plan conflicts 38、G17 完成 2/11、reported complete 1/actual 4/false 1；1305 calls / $0.9074 —— 判定收集层去重过宽（缺陷 6）。已修并发布 `d6cc8ce`（operation-aware + unknown fail-closed），全量 690 passed；**round14-09 运行中**。
+  3g. **2026-10-19 更新**：round14-09（`d6cc8ce`）dev-only **221/236 = 0.9364**（kept 11 / not_executed 4），overlaps 回到 **8**、conflicts 5、findings 11 resolved（evidence=required_text_present）/16 pending/1 unresolved；891 calls / $0.7435。剩余差距集中在 D01/D19 的 G01/G03 append（被 `absent` inventory 目标经 unknown fail-closed 丢弃）——已修并发布 `46afe2f`（wildcard synthetic 仅在 needs_edit/satisfied 位置被抑制），全量 691 passed；**round14-10 运行中**。
   4. 对照重点：`RECALL_EDIT_CONTENT_UNVERIFIED` 数量、`blind_windows`/`SWEEP_RULE_OUT_OF_WINDOW`、working/incomplete 比例、kept 变化；供应商切换与修正合并，作为混杂因素注明。
   5. 结果稳定后再冻结版本 → 留出 H01–H08 → 评测报告 → 打包。
 - **预算/账本**：真实运行前在批次说明预登记；账本 `/var/lib/fundlex/model_budget.sqlite`（切换前 requests=17462，charged=$14.4908；上限 40000 / $50）。

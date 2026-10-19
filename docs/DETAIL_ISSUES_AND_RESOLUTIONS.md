@@ -1706,8 +1706,10 @@
 - 缺陷 6（**P0，2026-10-19，对缺陷 1 的修正**）：`_collect_targets` 的“只做精确重复去重”过宽——同位置重叠的 survey targets 大量进入 planner。round14-08 实测：`RECALL_EDIT_OVERLAP` **66**（round11 为 8）、plan conflicts **38**（5）、G17 完成 **2/11**（10/11）、dev **211/236 = 0.8941**（kept 20）。
   - 处理：`_collect_targets` 改为 **operation-aware + unknown 覆盖 fail-closed**：synthetic target 的 operation 在每个位置都已被覆盖（含 unknown）才丢弃；真正未覆盖的 operation（如 inventory 报 G05:0 时的 G05:1 delete）仍保留。`_collection_covered()` 与 survey 层的 fail-open 规则分开，避免重复编辑。
   - 验证：新增/更新测试 `test_collect_targets_keeps_different_operations_at_one_location`（未覆盖 delete 保留、covered duplicate 与 unknown duplicate 丢弃）；全量 **690 passed / 6 skipped / 1 failed**（既有）。
-- 证据与验证：新增/更新 7 项测试（`_collect_targets` 同位置双 operation、unknown fail-open、`_delivery_complete`、D115 六种 finding 场景、unknown-coverage survey hit）；全量 `pytest tests -q` → **690 passed / 6 skipped / 1 failed**（唯一失败仍为既有 references 缺失项）。
-- 状态：**已实施（commits `9ae799a` + `03fbbfa` + `d6cc8ce`），单测通过；`d6cc8ce` 已发布（部署 sha 一致）；round14-09 运行中**（round14-06/14-07 作废；14-08 为重叠回归证据，不作为有效提升）。
+- 缺陷 7（**P0，2026-10-19**）：`_collect_targets` 的 unknown fail-closed 对 **wildcard synthetic（确定性 append）**过严：inventory 的 `absent` 目标把位置标成 unknown coverage，导致 append pass 已定位的 G01/G03 目标被丢弃（round14-09 中 D01/D19 的 G01/G03 共 4 个 `not_executed`，dev 221/236）。
+  - 处理：wildcard synthetic 只在**所有位置**都有 `needs_edit` 或 `satisfied` inventory target 时丢弃；`absent` 判定不阻止（正是 append pass 要纠正的情形）。新增 satisfied/absent 两侧测试；全量 **691 passed / 6 skipped / 1 failed**（既有）。
+- 证据与验证：新增/更新 7 项测试（`_collect_targets` 同位置双 operation、unknown fail-open、`_delivery_complete`、D115 六种 finding 场景、unknown-coverage survey hit）；全量 `pytest tests -q` → **691 passed / 6 skipped / 1 failed**（唯一失败仍为既有 references 缺失项）。
+- 状态：**已实施（commits `9ae799a` + `03fbbfa` + `d6cc8ce` + `46afe2f`），单测通过；`46afe2f` 已发布（部署 sha 一致）；round14-10 运行中**（round14-06/14-07 作废；14-08 为重叠回归证据；14-09 为 append 丢失证据，均不作为有效提升）。
 - 下一步：供应商恢复后发布并跑 round14-07（对照 round14-04 的 220/236 与 14-05 的保守交付）。
 - 变更记录：2026-10-19 新增并修复。
 
