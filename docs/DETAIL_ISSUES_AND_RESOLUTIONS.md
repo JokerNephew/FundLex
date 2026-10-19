@@ -1758,6 +1758,7 @@
   - 2026-10-19 **八项业务裁定并入（v3）**：G11-1 认购/申购"错位"族经全量核查为**材料/定位问题**（454 行全量字段核查：368 行材料含真实申购目标句、85 行以场内 ETF 为主；按 B 报告勘误）；"按收费性质"归类基准确认（扩展 G11）；G14 四类费用句与"138 已含服务费 / 40 部分类别"**直接替换为新表述**；G15 删除照常 + 与指引参考有出入时**标记"原合同可能有误"**；"每日计算、逐日累计"≡"每日计提"；**货币基金不在修改范围**；class_count/无字母按**实际份额类别结构**。计划文档（v3）与映射文档已同步。
   - 2026-10-19 **二次工程评审并入（v4）**：V2 拆 **V2-A 边界门 / V2-B 变更解释门**（EXPLAINED / UNEXPLAINED_SOFT→V3 / UNEXPLAINED_HARD→FAIL 三级）；Coverage Ledger 先**只读视图**（Phase 1）；新增 **Phase 3 Facts 扩展 + 三态**（`share_class_structure` 替代裸 `class_count`）；**FL-D119 根因修复 + G11 定位回归**入 Phase 2；**Artifact Verification 升为 Claim Replay**（Phase 8）；`VERIFIED_EMPTY ≠ UNKNOWN`；阶段重排 **Phase 0–8**、commit 序 8 个。计划文档（v4）已同步，**附录 A 全部并入正文**。
   - 2026-10-19 B 类报告处理映射已建：`docs/B_CLASS_PROCESSING_MAP_2026-10-19.md`（逐形态 / 逐 Q 映射；收敛出仍待业务裁定 8 项、统计口径 4 项）。
+  - 2026-10-19 **实施（Phase 0–8 代码完成）**：按 v4 计划完成全部 Phase 的代码与单测（registry/router/coverage 只读视图；V1/V2/A/B 影子验证；FL-D119 根因修复；Facts 三态；Tier1/Tier2 确定性生成；Tier3 V3 独立复核；Artifact Claim Replay 接线），全量 750 passed / 6 skipped / 1 failed（既有）；已发布并启用 `FUNDLEX_GENERATION_STRATEGY=registry`（env 备份 `.bak-genv4`），批次 `p6-dev-round14-11` 验收中。进度与证据：`docs/GENERATION_V4_PROGRESS.md`。
 
 ## 后续条目模板
 
