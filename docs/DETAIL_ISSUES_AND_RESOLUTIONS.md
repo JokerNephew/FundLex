@@ -1548,6 +1548,8 @@
 - 变更记录：2026-10-18 新增（缺陷 A、B 已修并单测；上游周限额阻塞待重置）。
 - 变更记录（续）：2026-10-18 缺陷 A 已发布并经**真实任务端到端验证**（暂停+真实停止码，详见上）；FL-D110 的真实批次验证仍待限额重置。
 - 变更记录（续 2）：2026-10-18 13:26 CST 按用户指示**切换模型供应商**，绕过该周限额阻塞：`/etc/fundlex-recall.env`（备份 `…bak-20261018-132608`）改为 `LLM_PROVIDER=deepseek`、`LLM_BASE_URL=https://api.deepseek.com`、`LLM_MODEL=deepseek-flash`；API key 仅存于该 env 文件（未写入仓库/文档）。`FUNDLEX_MODEL_REQUEST_OPTIONS_JSON` 保持 `thinking disabled`（实测 reasoning_tokens=0）；`FUNDLEX_MODEL_MAX_REQUESTS` 20000→40000（成本上限 $50 不变，切换前账本 17462 requests / charged **$14.4908**）。服务已重启，`/api/capabilities` 200，独立账本探测 `UPSTREAM OK`。**在用户明确指示前不切回原供应商**；原供应商周限额仍处于耗尽状态。
+- 变更记录（续 3）：2026-10-19 **DeepSeek 直连账户余额耗尽**：`POST https://api.deepseek.com/chat/completions` 返回 **HTTP 402 `Insufficient Balance`**（用原 key 直连复现）；round14-06 在 D02 触发 `BATCH_ABORTED MODEL_CIRCUIT_OPEN`（FL-D111 守卫按设计中止），该批次**作废**（仅 2 例、无有效工作，不得评分）。旧供应商 OpenCodeGo 的周限额**已恢复**：带 `x-opencode-session` 的探测返回 200。按用户“等我告诉你再切回去”的指示**未自行切回**；等待用户决定“充值 DeepSeek / 允许切回 OpenCodeGo”。
+- 变更记录（续 3）：2026-10-19 08:33 CST 用备份 `…bak-20261018-132608` 中的旧 OpenCode Go key 做最小探测（`POST https://opencode.ai/inference/go/v1/chat/completions`，`deepseek-v4.1-flash`，`max_tokens=1`）→ **HTTP 200**（usage 31 prompt / 1 completion）。结合 429 的 `retry-after: 70343s`（约 2026-10-19 07:57 CST 重置），判定**周限额已重置、key 可用**。项目供应商仍保持 DeepSeek 直连、未切回；同日 DeepSeek 直连返回 402，见 FL-D118。
 
 ## FL-D112 recall 生成内容复核闭包实际未生效（返回值被忽略）+ composite 分片坐标系不一致（已确认，未修）
 
@@ -1662,6 +1664,32 @@
 - 变更记录：2026-10-18 新增并修 delete 路径。
 - 变更记录（续 2）：2026-10-18 `p6-dev-round14-05`（仅 `c04d51a` 精确路径，Dev 20 例）dev-only **220/236 = 0.9322**（kept 10 / not_executed 6），reported complete **2** / actual 11 / false 1；**1240 calls / $0.9053**。目标完成率与 14-04 持平，但 survey 补出的 delete targets 使 unresolved 增多、complete 从 7 降到 2（交付更保守），调用/成本 +23%。结论：**精确补丁单独没有指标收益**；operation-aware 合并版见 `61e210c` / round14-06。
 - 变更记录（续 3）：2026-10-18 `61e210c` 已发布（部署 sha 与仓库一致），round14-06 运行中。
+
+## FL-D118 DeepSeek 直连余额耗尽（HTTP 402），真实模型批次再次受阻
+
+- 发现日期：2026-10-19
+- 问题与影响：2026-10-18 为绕开 OpenCode Go 周限额（FL-D111）把 `/etc/fundlex-recall.env` 切到 DeepSeek 直连；2026-10-19 08:32 CST 最小请求探测返回 **402 Insufficient Balance**。round14-06 及 FL-D110、FL-D112–D117 的真实批次验证再次无法继续；离线工作与 OpenCode 免费模型不受影响。
+- 证据：`POST https://api.deepseek.com/chat/completions`（`LLM_MODEL=deepseek-flash`，`max_tokens=1`）→ HTTP 402，响应体 `{"error":{"message":"Insufficient Balance (request_id: 7fe02cf1-a4a3-4bac-8339-2e385f3ee987)","type":"unknown_error","code":"invalid_request_error"}}`。密钥仅存于 `/etc/fundlex-recall.env`，未打印。
+- 处理方法：按外部余额阻塞处理，暂停真实模型批次并保留断点；不重置账本、不用替身结果冒充交付。需用户充值 DeepSeek 或提供可用 key/端点；切回 OpenCode Go 需用户明确指示（该 key 已于同日探测为 HTTP 200，见 FL-D111 续 3）。
+- 状态与验证：**已实测确认**（2026-10-19，402 原始响应）；阻塞（外部余额）。
+- 下一步：用户确认余额/新端点后，先做单次 `UPSTREAM OK` 探测，再续跑 round14-06。
+- 变更记录：2026-10-19 新增。
+
+## FL-D118 operation-aware 后续漏接四处：汇总二次吞并 / unknown 压制 / 交付门漏 coverage_gaps / D115 三边界（已修，未发布）
+
+- 发现日期：2026-10-18（外部复查指出，2026-10-19 核实并修复）
+- 缺陷 1（**P0**）：`_collect_targets()` 仍按 `(rule_id, location)` 去重，把 survey 为同位置**另一个 operation** 生成的 synthetic target 丢弃，直接抵消 operation-aware 改造。
+  - 处理：只做**精确重复**去重（key = rule/location/operations/start/end/quote）；语义覆盖判断只保留在 survey 层。
+- 缺陷 2（**P0/P1**）：`operations_cover_hit()` 对 `state is None`（target 存在但 operation 不可判定）返回 covered，会压制 specific operation hit。
+  - 处理：`None` 对 specific operation **fail-open**（返回未覆盖）；wildcard hit 维持旧语义。为兼容旧调用方，`known` 传 `(rule, location)` 列表时用 `_LOCATION_WILDCARD` 哨兵，仍按位置覆盖压制。
+- 缺陷 3（**P0**）：`complete` 条件逐项列举但漏了 `coverage_gaps`，报告可同时出现 `unresolved`（如 `SURVEY_QUOTE_UNRESOLVED`）与 `delivery_status=complete`。
+  - 处理：新增 `_delivery_complete(unresolved)`，**最终 unresolved 非空即不得 complete**；报告与门禁同源。
+- 缺陷 4（**P1**）：D115 三边界——`missing_new_text` 接受 `location_gone`（段落消失但 required 文本未出现也判 resolved）；`wrong_text` 在 required 已知时仅凭旧文消失即 resolved；`unaddressed_requirement` 落入 unknown → model-clean。
+  - 处理：`location_gone` 只作为 `residual_old_text`（及无 required 的 `wrong_text`）的证据；`missing_new_text`/`unaddressed_requirement` 必须有 required 文本出现；`wrong_text` 有 required 时必须 required 出现；`unaddressed_requirement` 纳入 evidence-required 集合。
+- 证据与验证：新增/更新 6 项测试（`_collect_targets` 同位置双 operation、unknown fail-open、`_delivery_complete`、D115 六种 finding 场景）；全量 `pytest tests -q` → **689 passed / 6 skipped / 1 failed**（唯一失败仍为既有 references 缺失项）。
+- 状态：**已实施（commit `9ae799a`），单测通过；尚未发布、未经真实批次验证**——发布被 DeepSeek 账户余额阻塞（见 FL-D111 变更记录续 3）。
+- 下一步：供应商恢复后发布并跑 round14-07（对照 round14-04 的 220/236 与 14-05 的保守交付）。
+- 变更记录：2026-10-19 新增并修复。
 
 ## 后续条目模板
 
