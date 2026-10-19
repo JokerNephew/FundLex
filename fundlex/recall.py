@@ -22,6 +22,7 @@ from .recall_prompts import (
     INVENTORY_INSTRUCTION, INVENTORY_PROMPT_VERSION, INVENTORY_SCHEMA,
     PROMPT_VERSIONS, SCOPE_INSTRUCTION, SCOPE_PROMPT_VERSION, SCOPE_SCHEMA,
     SWEEP_INSTRUCTION, SWEEP_PROMPT_VERSION, SWEEP_SCHEMA,
+    VERIFY_INSTRUCTION, VERIFY_PROMPT_VERSION, VERIFY_SCHEMA,
 )
 
 ENGINE_ID = "recall_first"
@@ -2885,6 +2886,57 @@ def _is_subsequence(shorter: str, longer: str) -> bool:
     return all(char in iterator for char in shorter)
 
 
+def _verify_composed(rule: dict, target: Target, actual: str, replacement: str,
+                     fixed_text: str, facts: Facts, gateway: Any, *,
+                     mode: str) -> tuple[bool, str]:
+    """Three-layer validation for composed edits (plan v4 §11–§13, §27).
+
+    Program checks (V1/V2-B) always run when the strategy flag is on; the V3
+    model critic runs only for tier-3 rules (``default_tier == COMPOSE``).
+    Returns ``(ok, reason)``.
+    """
+    from .generation.registry import strategy_for
+    from .generation.types import GenerationTier
+    from .generation.validators import Authorization, run_validation
+
+    op_removals = [str(operation.get("old_text") or "")
+                   for operation in (rule.get("operations") or [])]
+    op_removals += [str(variant) for variant in (rule.get("old_text_variants") or [])]
+    auth = Authorization(
+        must_add=tuple(part for part in re.split(r"(?<=[。；])", fixed_text or "")
+                       if len(_compact(part)) >= 6),
+        remove_patterns=tuple(text for text in op_removals if text),
+        removals_authorized=(mode == "delete"))
+    validation = run_validation(actual, replacement, auth=auth)
+    if validation.verdict == "FAIL":
+        codes = sorted({finding.code for finding in validation.findings})
+        hard = [record.reason for record in validation.changes
+                if record.explanation == "UNEXPLAINED_HARD"]
+        return False, "program_check:" + ",".join(codes or hard or ["UNEXPLAINED_CHANGE"])
+
+    if strategy_for(str(rule.get("rule_id") or "")).default_tier \
+            is not GenerationTier.COMPOSE:
+        return True, "program_only"
+
+    context = "\n\n".join([
+        f"BEFORE\n{_clip(actual, 1200)}",
+        f"AFTER\n{_clip(replacement, 1600)}",
+        "GUIDE_OPERATION\n" + json.dumps(
+            {"rule_id": rule.get("rule_id"), "requirement": _clip(str(rule.get("requirement") or ""), 600),
+             "fixed_policy_text": _clip(fixed_text or "", 600)}, ensure_ascii=False),
+        "FACTS\n" + json.dumps(facts.as_ledger(), ensure_ascii=False)[:900],
+    ])
+    if len(context) > gateway.max_context_chars:
+        return False, "verify_context_limit"
+    result = gateway.call(task_type="recall_verify", bounded_context=context,
+                          response_schema=VERIFY_SCHEMA, instruction=VERIFY_INSTRUCTION,
+                          prompt_version=VERIFY_PROMPT_VERSION)
+    value = result.value if isinstance(result.value, dict) else {}
+    if str(value.get("verdict") or "") == "pass":
+        return True, "v3_pass"
+    return False, "v3_fail:" + _clip(str(value.get("reason") or ""), 120)
+
+
 def compose_variant(span: ParagraphSpan, target: Target, rule: dict, actual: str,
                     fixed_text: str, facts: Facts, gateway: Any, *, mode: str = "replace",
                     variants: Sequence[str] | None = None) -> dict[str, Any]:
@@ -2911,14 +2963,19 @@ def compose_variant(span: ParagraphSpan, target: Target, rule: dict, actual: str
         "GUIDE_OPERATION\n" + json.dumps(operation, ensure_ascii=False, indent=1),
         "FACTS\n" + json.dumps(facts.as_ledger(), ensure_ascii=False, indent=1),
     ])
-    attempts = 2 if mode == "delete" else 1
+    attempts = 2 if mode == "delete" or _tier1_enabled() else 1
     last_error: RecallError | None = None
     for attempt in range(attempts):
         context = base_context
         if attempt:
-            context = base_context + (
-                "\n\n[RETRY_NOTE]\n上一次回答没有删减目标文本。请删除指引要求删除的内容，只保留"
-                "指引不要求删除的部分；整句删除时 replacement 必须为空字符串。")
+            if mode == "delete":
+                note = ("上一次回答没有删减目标文本。请删除指引要求删除的内容，只保留"
+                        "指引不要求删除的部分；整句删除时 replacement 必须为空字符串。")
+            else:
+                note = ("上一次回答没有通过独立复核（{code}）。请重新给出替换文本：完整落实指引政策、"
+                        "保留未授权内容、不得新增未授权内容或数字。").format(
+                            code=last_error.code if last_error else "-")
+            context = base_context + "\n\n[RETRY_NOTE]\n" + note
         if len(context) > gateway.max_context_chars:
             raise RecallError("RECALL_COMPOSE_CONTEXT_LIMIT", {"target": target.target_id})
         result = gateway.call(task_type="recall_compose", bounded_context=context,
@@ -2943,10 +3000,16 @@ def compose_variant(span: ParagraphSpan, target: Target, rule: dict, actual: str
                 elif len(_compact(replacement)) >= len(_compact(actual)):
                     last_error = RecallError("RECALL_COMPOSE_DELETE_NOT_SHRINKING",
                                              {"target": target.target_id})
-            if new_digits:
+            if new_digits and not _tier1_enabled():
                 last_error = RecallError("RECALL_COMPOSE_NEW_NUMBERS",
                                          {"target": target.target_id,
                                           "numbers": sorted(new_digits)[:6]})
+            if last_error is None and _tier1_enabled():
+                verified, reason = _verify_composed(rule, target, actual, replacement,
+                                                    fixed_text, facts, gateway, mode=mode)
+                if not verified:
+                    last_error = RecallError("RECALL_COMPOSE_UNVERIFIED",
+                                             {"target": target.target_id, "reason": reason})
             if last_error is None:
                 return {"replacement": replacement, "preserved": verified_preserved,
                         "preserved_unverified": unverified_preserved, "basis": basis}
@@ -2959,8 +3022,20 @@ def compose_variant(span: ParagraphSpan, target: Target, rule: dict, actual: str
             raise RecallError("RECALL_COMPOSE_FIXED_TEXT_MISSING",
                               {"target": target.target_id, "fixed_text": _clip(fixed_text, 80)})
         if new_digits:
-            raise RecallError("RECALL_COMPOSE_NEW_NUMBERS",
-                              {"target": target.target_id, "numbers": sorted(new_digits)[:6]})
+            if not _tier1_enabled():
+                raise RecallError("RECALL_COMPOSE_NEW_NUMBERS",
+                                  {"target": target.target_id, "numbers": sorted(new_digits)[:6]})
+            # Flag on: number provenance moves to the V1 validator inside
+            # ``_verify_composed`` (plan §27: upgrade, not simply remove).
+        if _tier1_enabled():
+            verified, reason = _verify_composed(rule, target, actual, replacement,
+                                                fixed_text, facts, gateway, mode="replace")
+            if not verified:
+                last_error = RecallError("RECALL_COMPOSE_UNVERIFIED",
+                                         {"target": target.target_id, "reason": reason})
+                if attempt + 1 >= attempts:
+                    raise last_error
+                continue
         return {"replacement": replacement, "preserved": verified_preserved,
                 "preserved_unverified": unverified_preserved, "basis": basis}
     raise last_error or RecallError("RECALL_COMPOSE_EMPTY", {"target": target.target_id})

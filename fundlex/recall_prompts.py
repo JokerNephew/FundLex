@@ -9,6 +9,7 @@ FACTS_PROMPT_VERSION = "recall_facts_v2"
 SCOPE_PROMPT_VERSION = "recall_scope_v1"
 INVENTORY_PROMPT_VERSION = "recall_inventory_v2"
 COMPOSE_PROMPT_VERSION = "recall_compose_v1"
+VERIFY_PROMPT_VERSION = "recall_verify_v1"
 AUDIT_PROMPT_VERSION = "recall_audit_v1"
 SWEEP_PROMPT_VERSION = "recall_sweep_v2"
 
@@ -17,6 +18,7 @@ PROMPT_VERSIONS = {
     "scope": SCOPE_PROMPT_VERSION,
     "inventory": INVENTORY_PROMPT_VERSION,
     "compose": COMPOSE_PROMPT_VERSION,
+    "verify": VERIFY_PROMPT_VERSION,
     "audit": AUDIT_PROMPT_VERSION,
     "sweep": SWEEP_PROMPT_VERSION,
 }
@@ -201,6 +203,28 @@ COMPOSE_DELETE_INSTRUCTION = (
     "empty replacement when the whole span is deleted. Never add policy, numbers or promises, and never "
     "reword the kept content; list what you kept in preserved. Write plain Chinese contract text only, no "
     "markdown, no quotes around the whole answer."
+)
+
+VERIFY_SCHEMA = {
+    "type": "object",
+    "required": ["verdict", "reason"],
+    "properties": {
+        "verdict": {"enum": ["pass", "fail"]},
+        "reason": {"type": "string"},
+    },
+}
+
+#: V3 independent semantic critic (plan v4 §13): only the questions code cannot
+#: prove. Numbers, class coverage and boundary checks are verified by V1/V2 and
+#: must not be repeated here.
+VERIFY_INSTRUCTION = (
+    "Read [BEFORE] (the contract text that was rewritten), [AFTER] (the proposed replacement), "
+    "[GUIDE_OPERATION] and [FACTS]. Answer only what cannot be proven mechanically: (1) does AFTER carry "
+    "out the guide requirement in business meaning — paraphrasing is allowed, exact wording is not "
+    "required; (2) does it keep the parts of BEFORE the guide does not authorize changing; (3) does it "
+    "avoid obligations, promises or content the guide does not state. Do NOT re-check numbers, share-class "
+    "letters or the text outside the span — those are verified separately. Reply verdict=pass only when "
+    "all three hold; otherwise verdict=fail with one short reason."
 )
 
 AUDIT_SCHEMA = {

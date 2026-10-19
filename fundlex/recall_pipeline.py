@@ -28,6 +28,7 @@ from typing import Any, Sequence
 
 from .docx import (DocxError, DocumentInspection, generate_artifacts,
                    generate_unchanged_artifacts, inspect_docx, validate_edit_plan)
+from .generation.flags import strategy_mode
 from .guide import guide_document_sha256
 from .model import ModelError, ModelGateway
 from .recall import (BOUNDARY_POLICY, ENGINE_ID, ENGINE_VERSION, SCHEMA_VERSION,
@@ -2340,6 +2341,15 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
                                                         "status", "reason")}})
             for gap in [*gaps, *coverage_gaps]:
                 unresolved.append({"kind": "coverage", **gap})
+            # --- artifact claim replay (plan v4 §28.2, phase 8) --------------
+            if strategy_mode() == "registry":
+                from .generation.claim_replay import replay_claims
+                replay = replay_claims(planned.get("edits") or [], inspection, actual,
+                                       rules_by_id=rules_by_id, facts=facts)
+                report["artifact_claim_replay"] = replay
+                for failure in replay["failures"]:
+                    unresolved.append({"kind": "claim_replay",
+                                       "code": "CLAIM_REPLAY_FAILED", **failure})
             if qualification_gap:
                 unresolved.append({
                     "kind": "qualification", "code": "FUND_TYPE_UNVERIFIED",
