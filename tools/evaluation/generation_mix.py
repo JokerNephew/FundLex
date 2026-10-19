@@ -20,6 +20,7 @@ DETERMINISTIC_SOURCES = frozenset({
     "guide_text", "fragment_replace", "fragment_delete", "fragment_mixed",
     "variant_replace", "variant_delete", "target_span_delete",
     "composite_replace", "composite_delete", "whole_paragraph_delete",
+    "tier1_template", "tier1_splice", "tier1_delete",
 })
 #: Values that involve a model call (``merged`` is a mechanical merge whose
 #: components may themselves be deterministic or composed — counted separately).

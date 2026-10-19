@@ -13,6 +13,7 @@ from dataclasses import dataclass, field
 from typing import Any, Iterable, Sequence
 
 from .docx import BARRIER, DocumentInspection, ParagraphSpan, TextSegment
+from .generation.flags import strategy_mode
 from .model import ModelError
 from .recall_prompts import (
     AUDIT_INSTRUCTION, AUDIT_PROMPT_VERSION, AUDIT_SCHEMA,
@@ -2548,6 +2549,54 @@ def append_separator(left: str, right: str) -> str:
     return "。"
 
 
+def _tier1_enabled() -> bool:
+    """Phase-4 tier-1 generators are opt-in (plan §25): ``registry`` mode only."""
+    try:
+        return strategy_mode() == "registry"
+    except Exception:  # pragma: no cover - flag reading must never break planning
+        return False
+
+
+def _plan_tier1(rule: dict, operations: Sequence[dict], facts: Facts,
+                actual: str) -> Any | None:
+    """Deterministic generators: G14 structured removal, G09 bounded splice (§7.1/§7.2).
+
+    Returns a ``TemplateResult`` or ``None``; when ``None`` the caller keeps the
+    existing cascade (splice → variant → compose).
+    """
+    from .generation.template import (fee_items, plan_fee_item_removal, plan_splice,
+                                      splice_pairs)
+    rule_id = str(rule.get("rule_id") or "")
+    replace_ops = [operation for operation in operations
+                   if operation.get("op") == "replace"]
+    if not replace_ops or rule_id not in {"G14", "G09"}:
+        return None
+    if rule_id == "G14":
+        allowed: set[str] = set()
+        canonical_tail = ""
+        for operation in replace_ops:
+            instantiated, issues = instantiate_slots(
+                str(operation.get("new_text") or ""), facts)
+            if issues or not instantiated:
+                continue
+            allowed |= fee_items(instantiated)
+            if not canonical_tail and "调低" in instantiated:
+                canonical_tail = instantiated.split("调低", 1)[1].strip()
+        if not allowed:
+            return None
+        return plan_fee_item_removal(actual, allowed, canonical_tail)
+    pairs: list[tuple[str, str]] = []
+    for operation in replace_ops:
+        instantiated, issues = instantiate_slots(
+            str(operation.get("new_text") or ""), facts)
+        if issues or not instantiated:
+            continue
+        pairs.extend(splice_pairs(str(operation.get("old_text") or ""), instantiated))
+    if not pairs:
+        return None
+    return plan_splice(actual, pairs)
+
+
 def plan_target(rule: dict, target: Target, inspection: DocumentInspection, facts: Facts,
                 gateway: Any, *, compose_budget: list[int]) -> PlannedEdit | None:
     """Turn one needs_edit target into a concrete edit, or raise RecallError."""
@@ -2598,6 +2647,15 @@ def plan_target(rule: dict, target: Target, inspection: DocumentInspection, fact
     if not containing_segment(span, target.start, target.end) and not (target.start == target.end):
         raise RecallError("RECALL_TARGET_STRUCTURE", {"target": target.target_id})
     actual = span.text[target.start:target.end]
+    if _tier1_enabled():
+        tier1 = _plan_tier1(rule, operations, facts, actual)
+        if tier1 is not None:
+            return PlannedEdit(target_id=target.target_id, rule_id=rule["rule_id"],
+                               location=target.location, start=target.start, end=target.end,
+                               replacement=tier1.replacement, operation="replace",
+                               content_source=tier1.content_source,
+                               evidence={"guide_paragraphs": rule.get("source_paragraphs") or [],
+                                         **tier1.evidence})
     append_ops = [operation for operation in operations if operation.get("op") == "append"]
     delete_ops = [operation for operation in operations if operation.get("op") == "delete"]
     replace_ops = [operation for operation in operations if operation.get("op") == "replace"]
@@ -2746,6 +2804,21 @@ def plan_target(rule: dict, target: Target, inspection: DocumentInspection, fact
                                      "fixed_text": instantiated, "preserved": composed["preserved"],
                                      "basis": composed["basis"]})
     if delete_ops:
+        # Tier-1 delete pre-route (plan §25): when the whole paragraph is the bound
+        # clause AND the rule's keyword evidence covers it, the composer can only
+        # report DELETE_NOT_SHRINKING — delete deterministically without the futile
+        # model call (round14-05: 24 whole-paragraph deletes were compose-failed).
+        if _tier1_enabled() and target.quote and not replace_ops:
+            bag = _delete_keyword_bag(rule, facts)
+            if (bag and _same_compact(target.quote, actual) and _same_compact(actual, span.text)
+                    and _keyword_bag_in_clause(_compact(actual), bag)):
+                return PlannedEdit(target_id=target.target_id, rule_id=rule["rule_id"],
+                                   location=target.location, start=target.start, end=target.end,
+                                   replacement="", operation="replace",
+                                   content_source="tier1_delete",
+                                   evidence={"guide_paragraphs": rule.get("source_paragraphs") or [],
+                                             "strategy": "tier1_delete_pre_route",
+                                             "deleted_paragraph": _clip(target.quote, 120)})
         # A deletion whose reference text differs from the contract's wording: the model
         # trims the actual span down to what the guide keeps (often nothing).
         try:
