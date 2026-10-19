@@ -80,12 +80,12 @@ append semantic site anchor、`(operation_id, site)` 覆盖粒度、G06/G13/G17 
 
 | 项 | 状态 |
 | --- | --- |
-| **P0-1** Router 未接入 planner（UNKNOWN FACT 阻断未从架构保证） | 待修（下一有效批次前） |
+| **P0-1** Router 未接入 planner（UNKNOWN FACT 阻断未从架构保证） | **已实施**（三态 + Router gate/route 记录，registry） |
 | **P0-2** V3 按 default_tier 而非 actual tier 触发 | **已修**（进入 compose 即 actual tier3 → V3 必跑；新增 G08/G14 fallback-compose 测试） |
 | **P0-3** G16 Tier3 pilot 未实现 | **待产品裁定 A/B**（推荐 A） |
-| **P0-4** Coverage Ledger 未接 gate + `operation_id` 回退 | 待修（条目加 operation_id；gate 先读投影证明） |
+| **P0-4** Coverage Ledger 未接 gate + `operation_id` 回退 | **已实施**（operation_keys + gate 读投影、失配 fail-closed） |
 | **P1-1** Tier 标签/遥测 | 部分已修（docstring 勘误：干净整句=Template 级符合计划 §19.1；显式 tier 字段随 P0-1） |
-| **P1-2** VERIFIED_EMPTY 闭环 | 待办（保守方向） |
+| **P1-2** VERIFIED_EMPTY 闭环 | 部分：空组仍 UNKNOWN（保守）；G16 已按组件判定 |
 | CI（GitHub Actions） | 建议项，非优先 |
 
 **本地真实链路验证（registry 开关，真实模型）**：
@@ -100,7 +100,7 @@ append semantic site anchor、`(operation_id, site)` 覆盖粒度、G06/G13/G17 
 
 | 项 | 值 |
 | --- | --- |
-| 批次 | `p6-dev-round14-11`（dev 20 例；**已停止/作废**） |
+| 批次 | `p6-dev-round14-12`（dev 20 例；14-11 已停止作废，本批为 P0 修复后的重跑） |
 | 开关 | `FUNDLEX_GENERATION_STRATEGY=registry`（env 备份 `.bak-genv4`；**当前仍启用，未回滚**——如需回到验证过的行为：还原该备份并重启服务） |
 | 目的 | Phase 4–8 验收：确定性占比、compose 下降、claim replay 结果、完成率不降（对照 14-09 221/236） |
 | 预算 | ≤1100 calls / ≤$1.0（flash 目录价） |

@@ -1842,8 +1842,21 @@
 - **P1-1 Tier 标签/遥测**：勘误——按计划 §19.1，干净整句即 Template 级，`tier1_template` 记录本身符合计划；`plan_policy_replacement` 的 docstring 误写 "Tier-2"，**已改为 §19.1 表述**；显式 `requested/actual tier` 字段随 P0-1 接入时补。状态：部分已修（docstring），字段待随 P0-1。
 - **P1-2 VERIFIED_EMPTY 闭环未实现**：空 group 现一律 UNKNOWN（保守、不会误生成）；generation routing 尚未消费 VERIFIED_EMPTY。状态：待办（P1）。
 - 其他：GitHub HEAD 无 CI 状态（建议加 Actions，非优先）；复查时段 HEAD=`f19039a`，其后已推进数据入库与停止确认两个提交。
+- **第二份复查（源材料版，同日）**：阅读指引原文（68–88 段）+ 合同原文后提出 **6 项 P0 + 6 项 P1**（Facts 三态真接线 / 类别与币种模型 / `class_label` 叠字 / G15+G16+G17 业务闭环 / G16 组件级 coverage / G08-G11 组件级 drop / Router 唯一入口等）；关键代码断言经核对**全部属实**（证据行号见 `GENERATION_V4_PROGRESS.md`）。**处置：队列为 P0-A~D + P1，用户指示暂缓实施。**
+- **ETF/同业存单范围裁定（2026-10-19 用户确认）**：**维持全局排除**（来源=C-R 设计文档 §9 默认 + 本次确认；后续按 policy override+依据 记录）。
 - 关联：`docs/GENERATION_V4_PROGRESS.md`（外部复查响应节）、`docs/GENERATION_STRATEGY_PLAN_2026-10-19.md`。
-- 变更记录：2026-10-19 新增（外部复查登记）；同日 P0-2 修复并加测试。
+- 变更记录：2026-10-19 新增（外部复查登记）；同日 P0-2 修复并加测试；同日追加第二份复查清单与 ETF 范围裁定。
+  - 2026-10-19 **实施 P0 批次**（commit 见 git log）：P0-A（`condition_status` 三值 + `plan_target` 入口 gate/route 记录）、P0-B 部分（`class_label` 保合同原文称谓、`service_group` 严格定义、两费皆真→CONFLICT）、P0-C（G16 组件级 satisfied、G15 `business_notices` 接线并去重）、P0-D（G08/G11 仅裁缺失组子句，registry）、P1 部分（G06/G13/G17 关键词签名、G14 扩展句补项、coverage `operation_keys` + delivery gate 读投影、claim replay 已接线）；另修 V3 的 `recall_verify` 未在网关白名单导致 `MODEL_TASK_UNSUPPORTED`。**全量 773 passed / 0 failed**。残余：币种维度拆分、semantic site anchor、per-operation claim replay、CI、红色盲核（FL-D131③）。
+
+## FL-D131（用户澄清，待办）指引文件中的红色字并没有特殊含义
+
+- 发现日期：2026-10-19（产品负责人澄清）。
+- 问题与影响：此前多处把指引中的红色字当作有特殊含义——① `docs/CONTRACT_AND_GUIDE_READING_20261014.md` 的阅读记录写明"核对部分红色、加粗文字"；② 源文档 G18 的标题自带"，标红部分为变动内容"，编译产物 `guides/builtin_guide_v1.json` 的 G18 `title` 原样保留；③ 解析管线 `fundlex/guide.py` 把 `red_paragraphs`/`bold_paragraphs` 的段落索引列表作为源信息头（`_source_header`）喂给解析（`_parse_context`）与复核（`_verify_context`）模型——指令文本本身**未解释**红色含义，但模型可能自行将其读作"变动/重点内容"的暗示。**用户澄清：红色字没有特殊含义。**
+- 影响盘点：**运行时引擎（识别/修改/验证/交付）完全不使用红色**（仅 `guide.py` 编译期引用；全仓 grep 确认）→ 对现网交付零影响。受影响面仅限：编译期提示的潜在偏置（未证实）、G18 标题尾缀（装饰性）、阅读记录的表述。
+- 处理方法（建议，**未实施**）：① 从 `_source_header` 移除 `red_paragraphs`/`bold_paragraphs`（或保留提取但不传给模型，仅做统计）；② 清理 G18 `title` 的"标红部分为变动内容"尾缀（或其保留但注明为来源原文照抄）；③ 可选：对现有 22 组做一次"不看红色"的盲核（离线比对 `requirement`/`operations` 与源文本），确认现包未被红色暗示影响。
+- 状态与验证：**部分已实施**（2026-10-19）：解析/复核上下文改为仅输出 red/bold **计数**（不再传段落索引）；G18 标题尾缀已清理。剩余可选项：不看红色的盲核。
+- 下一步：随 P0 队列一并处理；若做盲核，结果记回本条目。
+- 变更记录：2026-10-19 新增（用户澄清 + 影响盘点 + 处理建议）。
 
 ## 后续条目模板
 
