@@ -11,9 +11,10 @@ dist/
 build/
 *.egg-info/
 funds/
-funds_word/
-references/source/
-references/evidence/
+# 合同与指引资料（公开资料；用户 2026-10-15 政策：可入库、可出服务器）——自 2026-10-19 起纳入仓库
+# funds_word/
+# references/source/
+# references/evidence/
 archive/
 .workbuddy/
 workbench/scratch/
