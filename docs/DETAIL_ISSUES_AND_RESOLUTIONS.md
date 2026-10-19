@@ -1760,6 +1760,91 @@
   - 2026-10-19 B 类报告处理映射已建：`docs/B_CLASS_PROCESSING_MAP_2026-10-19.md`（逐形态 / 逐 Q 映射；收敛出仍待业务裁定 8 项、统计口径 4 项）。
   - 2026-10-19 **实施（Phase 0–8 代码完成）**：按 v4 计划完成全部 Phase 的代码与单测（registry/router/coverage 只读视图；V1/V2/A/B 影子验证；FL-D119 根因修复；Facts 三态；Tier1/Tier2 确定性生成；Tier3 V3 独立复核；Artifact Claim Replay 接线），全量 750 passed / 6 skipped / 1 failed（既有）；已发布并启用 `FUNDLEX_GENERATION_STRATEGY=registry`（env 备份 `.bak-genv4`），批次 `p6-dev-round14-11` 验收中。进度与证据：`docs/GENERATION_V4_PROGRESS.md`。
 
+## FL-D121（已核实，未修复）成功操作提示在任务总览/任务详情/指引配置页不可见
+
+- 发现日期：2026-10-19（前端改造方案评审）
+- 问题与影响：`toast()` 的成功分支调用 `flash()`，后者只写 `#upload-message`（仅批量导入页存在），没有全局提示容器；`notice()` 的成功分支直接丢弃。`togglePause`、`exportResults`、`enableGuide`、`resetToBuiltinGuide`、`reparseGuide` 等在非导入页的成功反馈不可见；错误则进铃铛。用户会重复点击，误以为操作未生效。
+- 证据：`frontend/app.js` 第 31–35 行 `notice`/`toast`/`flash`；`#upload-message` 只在 `#view-import`。`frontend/index.html` 第 35 行已有 `#toast` 元素，但上述函数未使用。
+- 处理方法（**已实施，2026-10-19**）：新增全局 toast 栈组件，`toast(message, kind)` 使用 `#toast`，支持 success/error/info、自动消失、`aria-live` 与 8 秒内同文案去重；`flash()` 改为成功 toast，`errorNotice()` 同时进铃铛与错误 toast；导入页上传进度仍保留行内提示。状态：已实施；本地 dev 实例真实浏览器验证 25/25 通过（`/tmp/opencode/ui_smoke.py`）。
+- 下一步：随第一批前端改动一起发布时复验生产页面；后台自动刷新不弹成功提示。
+
+## FL-D122（已核实，未修复）消息中心仅内存态，不能作为持久消息中心使用
+
+- 发现日期：2026-10-19（前端改造方案评审）
+- 问题与影响：`notifications` 是页面内存数组；刷新/重新登录清空；`monitorTasks` 只在页面打开且轮询时检测状态变化，用户离线期间完成的任务不会产生消息；打开面板即全部标记已读，无单条已读/全部已读/查看全部；无消息类型字段。
+- 证据：`frontend/app.js` 第 27–40 行；`resetWorkspace()` 清空 notifications。
+- 处理方法（待决定）：A. 本地持久化（localStorage 按账号保存，启动时从近期任务派生完成/暂停事件）——快，但不能跨设备；B. 服务端 `notifications` 表 + `/api/notifications`（列表/单条已读/全部已读），任务状态变更时写入——真正的消息中心，需迁移与测试。建议 B；若本期只做 UI，则用 A 并明确限制。状态：待产品决定，未实施。
+- 下一步：确认持久化范围后实现。
+
+## FL-D123（已核实，未修复）任务总览“本月合同数/完成率/平均处理时长”缺少后端数据契约
+
+- 发现日期：2026-10-19（前端改造方案评审）
+- 问题与影响：当前 `/api/tasks` 只返回当前账号的任务分页；`_summary` 只有 `created_at`/`updated_at`，没有 `started_at`/`finished_at`，无法准确计算处理时长；前端若用当前页 20 条聚合会失真。`completed` 含 `failed`，完成率必须区分“进入终态”和“成功完成”；“异常”也未定义（failed/rejected/incomplete/excluded）。
+- 证据：`fundlex/tasks.py` 的 `_summary`；`fundlex/api.py` 的 `GET /api/tasks`；`frontend/app.js` 的 `stats()`。
+- 处理方法（建议）：新增服务端聚合接口（如 `GET /api/tasks/stats?month=YYYY-MM`），按账号和 `Asia/Shanghai` 时区聚合；增加 `started_at`/`finished_at` 或任务事件表并做迁移；先固定口径：本月创建合同数、成功完成/总数、平均单合同处理时长（开始处理到终态）、待处理（queued+processing+retry_wait）、异常（failed+rejected+delivery incomplete，excluded 单列）。
+- 状态与验证：口径和实现均待确认，未改代码。
+- 下一步：确认指标定义后做迁移、API 和测试。
+
+## FL-D124（已核实，未实现）“重试选中异常”没有后端契约，现有 failed 为终态
+
+- 发现日期：2026-10-19（前端改造方案评审）
+- 问题与影响：API 没有 retry 端点；`TaskStore._summary` 的 failed 对应 `job_status=failed`；worker 内部只在临时故障时 `store.retry`，业务失败、资格失败、非合同、格式错误等不可重试。前端若直接对 failed 调 retry，可能重复计费、重复修订或对不可恢复错误无效。批量多选还需幂等、epoch 和预算控制。
+- 处理方法（建议）：新增 `POST /api/tasks/{id}/documents/retry`（body 为 document_ids），服务端白名单只允许临时性错误（如 MODEL_NETWORK_ERROR、MODEL_RETRY_EXHAUSTED、TEMPORARY_STORAGE_FAILURE 及明确可重试的处理异常），排除资格/非合同/格式/权限/预算停止；保留原产物历史，生成新 attempt/version，记录操作人、时间和预算。前端只对可重试行启用，确认框说明会重新消耗模型额度。
+- 状态与验证：建议，未实施；是否需要本期做待产品确认。
+- 下一步：先定可重试错误白名单；不做则从方案移除或明确标“暂不支持”。
+
+## FL-D125（已核实，未实现）任务级“完整审计日志”没有事件表/API
+
+- 发现日期：2026-10-19（前端改造方案评审）
+- 问题与影响：任务只有 `created_at`/`updated_at`，没有 stage/event 记录；报告里的 audit 是规则复核轮次，不是任务操作审计。可由任务/文档状态近似展示“创建→上传→封存→开始处理→处理中”的精简时间线，但“时间/操作人/操作”的完整日志无法从现有数据还原，历史任务尤其不可能。
+- 处理方法（建议）：A. 本期只做派生精简时间线，不提供“完整审计日志”死入口；B. 新增 `task_events` 表，在创建/上传/封存/暂停/恢复/重试/完成等写入，提供 `GET /api/tasks/{id}/events`，历史任务标记“无事件记录”。建议 B，避免以后补历史。状态：待决定，未实施。
+- 下一步：确认范围后建表和接线。
+
+## FL-D126（已核实，未实现）指引“按建议修复”无后端，现有解析器已自动修复
+
+- 发现日期：2026-10-19（前端改造方案评审）
+- 问题与影响：`POST /api/guides/{id}/parse` 只是重新入队；`build_guide_document` 内部已有基于 validation/verification 的 repair 轮次，但没有按 issue id 定向修复的 API。`issues_detail` 的 errors/warnings 有 code/rule_id/detail，coverage_gaps 有段落号，但不总有结构化的“问题位置/修复建议”。前端若放“按建议修复”按钮只能触发重新解析，不能保证定向修复，属于误导。
+- 处理方法（建议）：A. 本期把问题条目展开为“规则/段落/原因/建议（按错误码映射）”，按钮改为“重新解析（自动修复）”，并说明会重新调用模型、消耗预算；B. 后端新增结构化 issue（location/suggestion/repair_action）与定向修复端点（需防重复、预算与审计）。建议先 A，B 另立。
+- 状态与验证：**UI 侧已实施（2026-10-19）**：问题条目改为可展开详情（问题位置/失败原因/修复建议），错误与核验发现默认展开，面板内新增“重新解析（自动修复）”按钮（内部仍调用 `POST /api/guides/{id}/parse`）；定向修复端点未实现。真实浏览器验证 10/10 通过（`/tmp/opencode/ui_guide_check.py`）。
+- 下一步：若要真定向修复，另立后端契约；当前按钮文案已明确“自动修复”实际是重新解析。
+
+## FL-D127（已核实，未实现）全局搜索与审查“上一份/下一份”受现有 API/分页限制
+
+- 发现日期：2026-10-19（前端改造方案评审）
+- 问题与影响：`/api/tasks?q=` 只搜任务名称；合同搜索必须带 task_id（`/api/tasks/{id}/documents?q=`）；没有跨任务合同名/全文搜索接口。`state.taskDocs` 只保存当前页（默认 20 条），审查页“上一份/下一份”只能在本页切换；`openReview` 每次重置 `chosen`，切换会丢未生成的勾选。
+- 处理方法（建议）：全局搜索先做命令面板（页面导航 + 任务名搜索 + 当前任务合同搜索），或新增 `/api/search?q=`（owner 范围、任务/合同名、分页；全文检索需索引，另议）。审查切换按“当前筛选结果”跨页懒加载，切换前保存每份合同 decisions，跳过无修订合同；文件名/内容随 `showDetail` 更新。
+- 状态与验证：**部分已实施（2026-10-19）**：修订审查新增“上一份/下一份”，按当前筛选结果懒加载跨页合同、跳过无修订合同，切换前保存每份合同的勾选；A/R 快捷键、点击定位与列表/文档联动均已实现并在本地真实浏览器验证 20/20 通过（`/tmp/opencode/ui_review_check.py`）。全局搜索仍未实施，待范围决策。
+- 下一步：确认全局搜索范围（仅名称/当前任务，还是跨任务全文）后实施。
+
+## FL-D128（设计冲突，待确认）批量导入“创建成功后自动跳转”与补传流程冲突
+
+- 发现日期：2026-10-19（前端改造方案评审）
+- 问题与影响：任务在创建时即存在，上传按组进行；部分文件被拒/未传时，当前页面保留补传清单和“导出待补传清单”。若创建成功立即跳任务详情，用户看不到上传进度/失败原因，也失去补传入口。现有代码只在 `seal` 后且本页文件全部接收时跳转。
+- 处理方法（建议）：改为“封存且全部接收后自动跳转；存在 pending/rejected 时留在导入页并显示‘去任务详情’按钮”，或跳转后在任务详情保留补传卡片。建议前者，保留现有失败恢复能力。
+- 状态与验证：**已按建议实施（2026-10-19）**：封存后仅在全部文件接收时自动跳转任务详情；存在待补传/接收失败时留在导入页，显示上传结束状态、待补传与接收失败数量，并保留补传清单。真实浏览器验证：全部接收 6/6、部分失败路径通过（`/tmp/opencode/ui_smoke.py`、`/tmp/opencode/ui_redirect_check.py`）。
+- 下一步：无；随第一批前端改动发布。
+
+## FL-D129（内容依赖，待确认）页脚“帮助中心/隐私/服务条款”缺少可发布内容与版本来源
+
+- 发现日期：2026-10-19（前端改造方案评审）
+- 问题与影响：`/api/capabilities` 未返回应用版本；仓库中没有可对外发布的帮助中心、隐私政策、服务条款文本。直接放链接会形成死链或未经审阅的法律文本。
+- 处理方法（建议）：在 capabilities 增加 `app_version`/`build`（或使用静态资源内容哈希）；帮助中心先用应用内弹窗承载真实操作说明；隐私/服务条款需由产品/法务提供正式文本后再接入，未提供前不显示可点击链接。
+- 状态与验证：**部分已实施（2026-10-19）**：`/api/capabilities` 新增 `app_version`（当前 0.1.0），页脚显示 © 广发基金 · FundLex 版本号 · 帮助中心；帮助中心为应用内弹窗（真实操作说明）；隐私政策/服务条款暂为不可点击占位（title 提示“正式文本待发布”）。真实浏览器验证通过（`/tmp/opencode/ui_smoke.py`）。
+- 下一步：待产品/法务提供正式文本后再接入可点击链接。
+
+## FL-D130（外部复查，2026-10-19）v4 生成策略落地复查：4 项 P0 未闭合 + 2 项 P1
+
+- 发现日期：2026-10-19（另一 agent 对 GitHub HEAD `f19039a` 的代码复查；本条目为其结论与处理响应）。
+- **P0-1 Router 未接入 planner（待修）**：`route_operation()` 与 Registry 目前属旁路设施；`recall.plan_target()` 仍自行按 condition+cascade 决定路径→"UNKNOWN FACT ≠ Tier3"尚未从架构上保证。处理：Router 成为生成路径唯一入口（fact 门→blocked→unresolved；记录 requested/actual tier）。状态：待修（下一有效批次前）。
+- **P0-2 V3 按 default_tier 而非 actual tier 触发（已修）**：进入 `compose_variant` 即 actual tier = COMPOSE；原实现仅对 `default_tier==COMPOSE` 调用 V3，G08/G11/G14 的 fallback compose 会跳过复核。处理：删除 default_tier 门，composed 路径一律执行 V3（开关开启时）；新增 G08/G14 fallback-compose 测试替换原写死错误行为的测试。状态：**已实施（本提交）**。
+- **P0-3 G16 Tier3 pilot 未按试点实现（待产品裁定）**：Guide G16 为 append，planner 在 append 分支直接 `guide_text` 返回，走不到 compose；Registry 写 COMPOSE 与执行不一致。两个方向：A=确定性 append + 智能 satisfied（推荐）；B=真正的组件融合（component extraction→compose→V1/V2/V3）。状态：**待裁定**（进度文档"Phase 0–8 代码完成"表述已订正）。
+- **P0-4 Coverage Ledger 未接 Delivery Gate + operation 粒度回退（待修）**：`CoverageEntry` 缺 `operation_id`（FL-D117 operation-aware 成果未继承）；delivery 仍是 `_delivery_complete(unresolved)`，非 ledger 正向证明。处理：条目加 operation_id；gate 至少先读 ledger 投影（projection→proof），storage 统一仍后置。状态：待修。
+- **P1-1 Tier 标签/遥测**：勘误——按计划 §19.1，干净整句即 Template 级，`tier1_template` 记录本身符合计划；`plan_policy_replacement` 的 docstring 误写 "Tier-2"，**已改为 §19.1 表述**；显式 `requested/actual tier` 字段随 P0-1 接入时补。状态：部分已修（docstring），字段待随 P0-1。
+- **P1-2 VERIFIED_EMPTY 闭环未实现**：空 group 现一律 UNKNOWN（保守、不会误生成）；generation routing 尚未消费 VERIFIED_EMPTY。状态：待办（P1）。
+- 其他：GitHub HEAD 无 CI 状态（建议加 Actions，非优先）；复查时段 HEAD=`f19039a`，其后已推进数据入库与停止确认两个提交。
+- 关联：`docs/GENERATION_V4_PROGRESS.md`（外部复查响应节）、`docs/GENERATION_STRATEGY_PLAN_2026-10-19.md`。
+- 变更记录：2026-10-19 新增（外部复查登记）；同日 P0-2 修复并加测试。
+
 ## 后续条目模板
 
 ### FL-Dxxx 问题名称
