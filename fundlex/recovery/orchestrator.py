@@ -32,17 +32,18 @@ class RecoveryOrchestrator:
         candidates = self._candidates(failure_class, context)
         for action, budget_key in candidates:
             limit = self.policy.limit(budget_key)
-            if history.count(action) >= limit:
+            if history.count(action, context=context) >= limit:
                 continue
             if action in {_A.RETRY_DETERMINISTIC, _A.REGENERATE_ARTIFACT} and \
                     history.identical_attempt(action, stage=stage,
                                               error_code=context.error_code,
-                                              reason=context.reason):
+                                              reason=context.reason,
+                                              context=context):
                 # Same deterministic method, same reason: repeating it cannot change
                 # the result. Model-assisted actions carry new structured feedback.
                 continue
             return RecoveryDecision(action, f"{failure_class.value}:{budget_key}",
-                                    budget_key, history.count(action) + 1)
+                                    budget_key, history.count(action, context=context) + 1)
         return RecoveryDecision(_A.MARK_UNRESOLVED,
                                 f"{failure_class.value}:recovery_budget_exhausted")
 
@@ -66,9 +67,19 @@ class RecoveryOrchestrator:
             return [(_A.REBUILD_PLAN, "execution_rebuild"),
                     (_A.REGENERATE_ARTIFACT, "artifact_recovery")]
         if failure_class is FailureClass.VERIFICATION:
+            if str(context.error_code).startswith("AUDIT_"):
+                # A missing/negative audit verdict is re-audited once against the same
+                # artifact; it is not a business regeneration by default.
+                return [(_A.RETRY_DETERMINISTIC, "audit_reaudit")]
             if str(context.error_code).startswith("CLAIM_"):
                 return [(_A.REGENERATE_ARTIFACT, "artifact_recovery"),
                         (_A.REBUILD_PLAN, "execution_rebuild")]
+            # Audit/review failures are routed back to the layer that owns the failure
+            # (external review 2026-10-20 P0-2): a verification failure is not retried as
+            # the same generation step; its metadata names the root-cause class.
+            route = str(context.metadata.get("route_class") or "").upper()
+            if route in FailureClass.__members__ and route != "VERIFICATION":
+                return self._candidates(FailureClass(route), context)
             return []
         if failure_class is FailureClass.RESOURCE:
             return [(_A.SPLIT_CONTEXT, "context_split")]
@@ -79,12 +90,17 @@ class RecoveryOrchestrator:
     # -- execution helpers ------------------------------------------------------
     def record(self, history: RecoveryHistory, context: RecoveryContext,
                decision: RecoveryDecision, *, outcome: str, detail: str = "") -> RecoveryAttempt:
-        attempt = RecoveryAttempt(action=decision.action,
-                                  stage=context.stage or context.resolved_class.value.lower(),
-                                  failure_class=context.resolved_class,
-                                  error_code=context.error_code,
-                                  reason=context.reason,
-                                  outcome=outcome, detail=detail)
+        attempt = RecoveryAttempt(
+            action=decision.action,
+            stage=context.stage or context.resolved_class.value.lower(),
+            failure_class=context.resolved_class,
+            error_code=context.error_code,
+            reason=context.reason,
+            outcome=outcome, detail=detail,
+            rule_id=context.rule_id, operation_id=context.operation_id,
+            obligation_id=context.obligation_id, target_id=context.target_id,
+            site_id=context.site_id, attempt=decision.attempt,
+            budget_key=decision.budget_key)
         history.append(attempt)
         return attempt
 
@@ -109,7 +125,8 @@ class RecoveryOrchestrator:
                         outcome="succeeded" if succeeded else "failed", detail=detail)
             if succeeded:
                 return history
-            if history.count(decision.action) >= self.policy.limit(decision.budget_key):
+            if history.count(decision.action, context=context) >= \
+                    self.policy.limit(decision.budget_key):
                 # Count against the exhausted key, then let decide() route onward.
                 continue
 

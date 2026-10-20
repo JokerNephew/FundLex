@@ -248,3 +248,34 @@ corpus 评测使用。
 5. **Review 与 Primary 允许同型号**（按用户方案 §4.2），独立的是任务、prompt、上下文与
    调用记录，不是模型权重；若生产要求“更强 Review”，需在 env 配置不同型号。
 6. 前端尚未展示新的 `user_summary` / `failure_class` 字段；报告与 API 已带数据。
+
+## 9. 2026-10-20 收口：operation-level Claim Replay、统一恢复、open obligation、occurrence-safe span
+
+本轮不扩张架构，只补齐外部复查指出的四个缺口；所有 hard gate、UNKNOWN 不执行、OPEN obligation 不消失、Delivery Gate 语义保持不变。
+
+### 9.1 Claim Replay：paragraph + operation/obligation 双层证明
+
+- 段落层仍保留：artifact 段内结果必须等于“计划 edits 应用到原件”；目标段外 0 变化；正文/摘要重复副本一致性。
+- 业务授权下沉到 operation unit：每个 edit（merged edit 拆到 component）按其 target 的 operation keys 建独立 `Authorization`；target 无 keys 时由该 unit 的 `old_text`/`new_text` 反推，绝不回退到同段 sibling 的 union。
+- 每个 unit 独立跑同一个 `validate_edit`，输出 `rule_id / operation_id / obligation_id / target_id / location / authorized_span / source_text / expected_effect / actual_effect / validation`；`operations[]` 与 `obligations{}` 写入 replay 结果。
+- 借用检测：append-only 操作吞掉既有文本 → `CLAIM_OPERATION_SPAN_UNAUTHORIZED`；替换段使用未选中 sibling 的 `new_text` → `CLAIM_OPERATION_EFFECT_MISSING`；带 occurrence 身份的 target 编辑了别的 occurrence → `CLAIM_OCCURRENCE_MISMATCH`。
+- 同段 span overlap 不逐条 offset 重建，进入显式 Joint 验证：union 授权 + Validator 证明组合结果，同时逐 unit 复核各自新文本效果；任一项失败，整组 obligation FAIL。
+
+### 9.2 Recovery：audit/repair 也走 RecoveryOrchestrator
+
+- `RecoveryOrchestrator` 的 VERIFICATION 分支读取 `metadata.route_class`，按根因回到 TARGET/GENERATION/FACT/EXECUTION 候选动作；无根因证据的 VERIFICATION 不盲目重试，进入 UNRESOLVED。
+- audit/repair 每轮把 issue 去重分类成 `RecoveryContext`（rule/target/obligation/failure_class/error_code/reason）并调用 `decide()`；未终局动作进入统一 `RecoveryHistory`，下一轮按 issue 数是否下降记录 `succeeded/failed`。报告保留 `recovery.business_rounds`，claim replay 的 artifact recovery 历史保留在顶层。
+- `max_business_rounds` 仍是唯一全局断路器，不再承担具体 recovery policy。
+
+### 9.3 Open obligation：代码先限制候选，再让模型定位
+
+- `FUNDLEX_TARGET_LOCATOR_OPEN_RULES` 默认 `auto`：只对 applicable、无 target、scope 已映射的规则工作；候选段落由 topic tokens、class tokens、delete keyword bag、reference fragments 在 mapped section 内确定性筛出。
+- 无候选 → 不调用模型，obligation 保持 OPEN；显式 `1/on` 仅用于调试旧的 section-first 行为；`0/off` 关闭。
+- locator 只能看到候选段落；quote 必须唯一、location 必须在候选内、必须通过 topic/class/keyword 复核；越界、歧义、anchor 不符全部 rejected，保持 unresolved。
+- 同一 quote 在正文/摘要重复出现时，为其他候选位置创建受控 duplicate-copy target，避免只改一处。
+
+### 9.4 G02/G04：occurrence-safe span
+
+- Target 新增 `site_candidates`、`occurrence_index`、`occurrence_anchor`。
+- `resolve_occurrence()` 按 inventory quote 的局部上下文给每个相同 token 打分；唯一最高才绑定，否则抛 `RECALL_TARGET_OCCURRENCE_AMBIGUOUS`（TARGET），由 Recovery 决定是否定位；绝不默认第一个。
+- Claim Replay 对带 occurrence 身份的 target 复核：编辑 span 必须覆盖授权 occurrence；编辑了同段另一个相同 token 会失败。

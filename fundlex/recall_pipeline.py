@@ -666,6 +666,10 @@ def _rebind_unresolved_targets(targets: Sequence[Target], origins: dict[str, str
             continue
         if target.resolution == "composite":
             continue
+        if getattr(target, "site_candidates", ()):
+            # Open-obligation targets are bound only by the anchored locator; the generic
+            # operation-reference rebind has no anchor/candidate verification.
+            continue
         if target.resolution == "resolved" and not extend_resolved:
             continue
         if target.resolution not in {"resolved", "unresolved", "quote_not_found"}:
@@ -1120,6 +1124,63 @@ def _merge_audit_state(state: dict[str, Any], round_ledger: dict[str, Any],
         state["missed"][rule_id] = []
     for item in round_ledger["missed_targets"]:
         state["missed"].setdefault(item["rule_id"], []).append(item)
+
+
+def _audit_issue_key(issue: Mapping[str, Any]) -> str:
+    """Stable identity of one audit issue across repair rounds."""
+    return "|".join(str(issue.get(name) or "") for name in
+                    ("code", "rule_id", "location", "affected_obligation"))
+
+
+def _audit_context_key(context: Any) -> str:
+    return "|".join((str(context.error_code or ""), str(context.rule_id or ""),
+                     str(context.site_id or ""), str(context.obligation_id or "")))
+
+
+def _audit_recovery_contexts(issues: Sequence[dict[str, Any]]) -> list[Any]:
+    """Classify audit/review issues into root-cause recovery contexts.
+
+    One context per (code, rule, target, location, obligation): two targets of one rule
+    must each get their own decision/history.  The caller bounds how many decisions are
+    taken per round and records the overflow as ``skipped`` instead of dropping it.
+    """
+    from .recovery import FailureClass, RecoveryContext
+
+    contexts: list[Any] = []
+    seen: set[str] = set()
+    for issue in issues:
+        code = str(issue.get("code") or "")
+        declared = str(issue.get("failure_class") or "").upper()
+        if declared in FailureClass.__members__:
+            failure_class = FailureClass(declared)
+        elif code == "AUDIT_MISSED_TARGET":
+            failure_class = FailureClass.TARGET
+        elif code in {"AUDIT_VERDICT_MISSING"}:
+            # The audit itself has not produced a verdict yet; re-generating a new
+            # artifact is not a recovery for that.  Fail closed and re-audit next round.
+            failure_class = FailureClass.VERIFICATION
+        else:
+            # A negative verdict without a declared class is re-proved against a changed
+            # artifact; generation is the only safe executable route.
+            failure_class = FailureClass.GENERATION
+        context = RecoveryContext(
+            rule_id=str(issue.get("rule_id") or ""),
+            target_id=str(issue.get("target_id") or ""),
+            obligation_id=str(issue.get("affected_obligation") or ""),
+            site_id=str(issue.get("location") or ""),
+            stage="audit",
+            failure_class=failure_class,
+            error_code=code or "AUDIT_NOT_COMPLETED",
+            reason=str(issue.get("reason") or issue.get("issue") or "audit incomplete"),
+            metadata={"route_class": (declared if declared in FailureClass.__members__
+                                      and declared != "VERIFICATION" else ""),
+                      "affected_fact": str(issue.get("affected_fact") or "")})
+        key = _audit_context_key(context)
+        if key in seen:
+            continue
+        seen.add(key)
+        contexts.append(context)
+    return contexts
 
 
 def _audit_issues(state: dict[str, Any], targets: Sequence[Target]) -> list[dict[str, Any]]:
@@ -2324,6 +2385,8 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
                                              extend_resolved=True)
         locator_records = locate_unresolved_targets(targets, inspection, rules_by_id,
                                                     facts, model)
+        for target in targets:
+            origins.setdefault(target.target_id, "T3_open_rule")
         if locator_records:
             report["target_locator"] = locator_records
         report["rebind"] = rebinds
@@ -2363,6 +2426,16 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
             audit_rounds: list[dict[str, Any]] = []
             rounds_used = 0
             round_number = 0
+            # Unified business-failure recovery (external review 2026-10-20 P0-2): every
+            # audit failure is classified and routed by RecoveryOrchestrator; the report
+            # keeps the root-cause history instead of an untraceable round counter.
+            from .recovery import (FailureClass, RecoveryAction, RecoveryContext,
+                                   RecoveryDecision, RecoveryHistory,
+                                   RecoveryOrchestrator)
+            audit_recovery = RecoveryHistory()
+            audit_orchestrator = RecoveryOrchestrator()
+            audit_pending: list[tuple[RecoveryContext, RecoveryDecision, str]] = []
+            terminal_keys: set[str] = set()
             while True:
                 round_ledger = _run_audit(model, rules_by_id, targets, planned, inspection, actual,
                                           facts=facts)
@@ -2373,19 +2446,58 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
                 round_ledger["issues"] = issues
                 report["audit"] = {"rounds": audit_rounds, "issues": issues}
                 report["targets"] = _target_ledger(targets, planned, audit_state, origins)
+                current_keys = {_audit_issue_key(issue) for issue in issues}
+                if audit_pending:
+                    # Honest per-obligation outcome: succeeded only when the exact issue
+                    # this action targeted disappeared, not when some unrelated count fell.
+                    for context, decision, key in audit_pending:
+                        succeeded = key not in current_keys
+                        audit_orchestrator.record(
+                            audit_recovery, context, decision,
+                            outcome="succeeded" if succeeded else "failed",
+                            detail=("issue_resolved" if succeeded else "issue_remains")
+                                   + f";issues={len(issues)}")
+                    audit_pending = []
                 if not issues:
                     break
+                decisions: list[tuple[RecoveryContext, RecoveryDecision, str]] = []
+                for index, context in enumerate(_audit_recovery_contexts(issues)):
+                    key = _audit_context_key(context)
+                    if key in terminal_keys:
+                        continue
+                    if index >= 8:
+                        skipped = RecoveryDecision(RecoveryAction.MARK_UNRESOLVED,
+                                                   "audit_context_budget", "", 0)
+                        audit_orchestrator.record(audit_recovery, context, skipped,
+                                                  outcome="skipped",
+                                                  detail="audit_context_budget")
+                        # Deferred, not terminal: a later round may decide this context
+                        # once the earlier ones resolve.
+                        continue
+                    decision = audit_orchestrator.decide(context, audit_recovery)
+                    if decision.terminal:
+                        audit_orchestrator.record(audit_recovery, context, decision,
+                                                  outcome="unresolved",
+                                                  detail="no further safe recovery layer")
+                        terminal_keys.add(key)
+                    else:
+                        decisions.append((context, decision, key))
+                if not decisions:
+                    break
+                actions = {decision.action for _, decision, _ in decisions}
+                classes = {context.resolved_class for context, _, _ in decisions}
                 fact_changed = False
-                fact_issues = [issue for issue in issues
-                               if str(issue.get("failure_class") or "").upper() == "FACT"]
-                if fact_issues:
+                if FailureClass.FACT in classes or actions & {
+                        RecoveryAction.FOCUSED_FACT_RESOLVE,
+                        RecoveryAction.FACT_ARBITRATION}:
                     # Audit FACT failure returns to the fact layer (plan §22.2), not to
                     # another inventory retry. The forced pass still needs review
                     # arbitration and verified quotes before it changes anything.
                     from .facts_recovery import recover_fee_facts
                     names = tuple(sorted({str(issue.get("affected_fact") or "")
-                                          for issue in fact_issues
-                                          if issue.get("affected_fact")}))
+                                          for issue in issues
+                                          if str(issue.get("failure_class") or "").upper() == "FACT"
+                                          and issue.get("affected_fact")}))
                     recovered, summary = recover_fee_facts(
                         inspection, facts, model,
                         force_names=names or ("share_class_structure",
@@ -2398,13 +2510,70 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
                         apply_facts(obligation_ledger, facts)
                         report["obligations"] = obligation_ledger.as_dict()
                         fact_changed = True
-                absorbed = _absorb_missed_targets(audit_state, targets, synthetic, origins, inspection)
+                applicability_changed = False
+                if FailureClass.APPLICABILITY in classes or \
+                        RecoveryAction.APPLICABILITY_ARBITRATION in actions:
+                    from .applicability import resolve_ledger
+                    unknown_rules = {record.spec.rule_id
+                                     for record in obligation_ledger.records
+                                     if record.applicability.status == "UNKNOWN"}
+                    evidence_by_rule = _rule_evidence(mapping, sections, inspection,
+                                                      unknown_rules & set(mapping))
+                    if evidence_by_rule:
+                        history = resolve_ledger(obligation_ledger.records, gateway=model,
+                                                 inspection=inspection, facts=facts,
+                                                 evidence_by_rule=evidence_by_rule)
+                        if history:
+                            report.setdefault("applicability_recovery", []).extend(history)
+                        report["obligations"] = obligation_ledger.as_dict()
+                        applicability_changed = True
+                target_repair = FailureClass.TARGET in classes
+                if target_repair:
+                    _absorb_missed_targets(audit_state, targets, synthetic, origins, inspection)
                 notes = _audit_repair_notes(issues, targets, entries)
-                if rounds_used >= max_business_rounds or (not notes and not absorbed
-                                                          and not fact_changed):
+                reaudit_only = bool(decisions) and all(
+                    context.resolved_class is FailureClass.VERIFICATION
+                    for context, _, _ in decisions)
+                executable = (fact_changed or applicability_changed or target_repair
+                              or reaudit_only
+                              or bool(classes & {FailureClass.GENERATION,
+                                                 FailureClass.EXECUTION}))
+                if rounds_used >= max_business_rounds or not executable:
+                    breaker = rounds_used >= max_business_rounds
+                    for context, decision, _ in decisions:
+                        if breaker:
+                            terminal = RecoveryDecision(
+                                RecoveryAction.MARK_UNRESOLVED,
+                                "global_business_rounds", "", decision.attempt)
+                            audit_orchestrator.record(
+                                audit_recovery, context, terminal, outcome="unresolved",
+                                detail="global_business_rounds")
+                        else:
+                            audit_orchestrator.record(
+                                audit_recovery, context, decision, outcome="skipped",
+                                detail="no_executable_action")
+                    audit_pending = []
                     break
+                executable_classes = {FailureClass.FACT, FailureClass.APPLICABILITY,
+                                      FailureClass.TARGET, FailureClass.GENERATION,
+                                      FailureClass.EXECUTION}
+                audit_pending = []
+                for context, decision, key in decisions:
+                    if (context.resolved_class in executable_classes
+                            or context.resolved_class is FailureClass.VERIFICATION) and \
+                            decision.action not in {RecoveryAction.SPLIT_CONTEXT,
+                                                    RecoveryAction.PAUSE_RESUME}:
+                        audit_pending.append((context, decision, key))
+                    else:
+                        audit_orchestrator.record(
+                            audit_recovery, context, decision, outcome="skipped",
+                            detail="action_not_executable_in_audit_stage")
                 rounds_used += 1
                 round_number += 1
+                if reaudit_only:
+                    # No artifact change: the next loop iteration re-runs the audit and
+                    # records whether the transient missing verdict cleared.
+                    continue
                 for entry in _affected_windows(entries, notes):
                     _inventory(entry, notes[entry.window.id], facts, model, inspection,
                                round_number=round_number)
@@ -2416,6 +2585,8 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
                     targets, origins, inspection, rules_by_id=rules_by_id, facts=facts)
                 report.setdefault("target_locator", []).extend(
                     locate_unresolved_targets(targets, inspection, rules_by_id, facts, model))
+                for target in targets:
+                    origins.setdefault(target.target_id, "T3_open_rule")
                 planned, edits, plan, artifacts, actual = _plan_and_generate(
                     model, rules_by_id, targets, inspection, facts, input_path, temp_dir,
                     max_compose_calls=compose_calls)
@@ -2424,6 +2595,14 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
                 report["windows"] = [_window_ledger(entry) for entry in entries]
                 report["survey"] = survey_ledger
                 report["limits"]["business_rounds_used"] = rounds_used
+            if audit_pending:
+                for context, decision, _ in audit_pending:
+                    audit_orchestrator.record(
+                        audit_recovery, context, decision, outcome="skipped",
+                        detail="repair_round_not_executed")
+                audit_pending = []
+            report.setdefault("recovery", {})["business_rounds"] = \
+                audit_recovery.as_list()
 
             # --- final sweep on the actual artifact --------------------------
             stage = "sweep"
@@ -2479,6 +2658,10 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
                     break
                 rounds_used += 1
                 round_number += 1
+                if reaudit_only:
+                    # No artifact change: the next loop iteration re-runs the audit and
+                    # records whether the transient missing verdict cleared.
+                    continue
                 for entry in _affected_windows(entries, notes):
                     _inventory(entry, notes[entry.window.id], facts, model, inspection,
                                round_number=round_number)
@@ -2490,6 +2673,8 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
                     targets, origins, inspection, rules_by_id=rules_by_id, facts=facts)
                 report.setdefault("target_locator", []).extend(
                     locate_unresolved_targets(targets, inspection, rules_by_id, facts, model))
+                for target in targets:
+                    origins.setdefault(target.target_id, "T3_open_rule")
                 planned, edits, plan, artifacts, actual = _plan_and_generate(
                     model, rules_by_id, targets, inspection, facts, input_path, temp_dir,
                     max_compose_calls=compose_calls)
@@ -2624,7 +2809,10 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
                         rules_by_id=rules_by_id, facts=facts,
                         components_by_rule=components_by_rule,
                         required_terms_by_rule=required_terms_by_rule,
-                        target_rules=target_rules)
+                        target_rules=target_rules,
+                        targets_by_id={target.target_id: target.as_dict()
+                                       for target in targets},
+                        obligations=obligation_ledger)
                     residuals = check_delete_residuals(
                         rules_by_id, actual, edits=plan.get("edits") or [])
                     if residuals:
@@ -2644,6 +2832,7 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
                 recovery_attempts = 0
                 artifact_recovery_used = False
                 recovery_sweep_unverified = False
+                terminal_recorded = False
                 while replay.get("failures") and \
                         recovery_attempts < recovery.policy.limit("artifact_recovery"):
                     failure = replay["failures"][0]
@@ -2652,19 +2841,28 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
                         error_code=str(failure.get("code") or "CLAIM_REPLAY_FAILED"),
                         reason=str(failure.get("reason") or ""),
                         rule_id=str(failure.get("rule_id") or ""),
+                        operation_id=str(failure.get("operation_id") or ""),
+                        obligation_id=str(failure.get("obligation_id") or ""),
+                        target_id=str(failure.get("target_id") or ""),
                         site_id=str(failure.get("location") or ""),
                         validator_findings=tuple(replay.get("failures") or ()))
+                    executable = {RecoveryAction.REGENERATE_ARTIFACT,
+                                  RecoveryAction.REBUILD_PLAN,
+                                  RecoveryAction.RETRY_DETERMINISTIC}
                     decision = recovery.decide(context, recovery_history)
+                    # Actions owned by a later business stage (LLM_COMPOSE/LLM_LOCATE)
+                    # cannot run inside delivery; record them as skipped and continue to
+                    # the next executable candidate instead of stopping the whole loop.
+                    while not decision.terminal and decision.action not in executable:
+                        recovery.record(recovery_history, context, decision,
+                                        outcome="skipped",
+                                        detail="action_requires_later_business_stage")
+                        decision = recovery.decide(context, recovery_history)
                     if decision.action is RecoveryAction.MARK_UNRESOLVED:
                         recovery.record(recovery_history, context, decision,
-                                        outcome="failed", detail="recovery budget exhausted")
-                        break
-                    if decision.action not in {RecoveryAction.REGENERATE_ARTIFACT,
-                                               RecoveryAction.REBUILD_PLAN,
-                                               RecoveryAction.RETRY_DETERMINISTIC}:
-                        recovery.record(recovery_history, context, decision,
-                                        outcome="failed",
-                                        detail="action requires a later business stage")
+                                        outcome="unresolved",
+                                        detail="recovery budget exhausted")
+                        terminal_recorded = True
                         break
                     try:
                         planned, edits, plan, artifacts, actual = _plan_and_generate(
@@ -2726,6 +2924,24 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
                                     outcome="succeeded" if replay.get("verified") else "failed",
                                     detail=f"checked={replay.get('checked')}")
                     recovery_attempts += 1
+                if replay.get("failures") and not terminal_recorded:
+                    # The loop cap is a circuit breaker, but the history must still state
+                    # that the obligation ended unresolved rather than simply stopping.
+                    failure = replay["failures"][0]
+                    context = RecoveryContext(
+                        stage="deliver", failure_class=None,
+                        error_code=str(failure.get("code") or "CLAIM_REPLAY_FAILED"),
+                        reason=str(failure.get("reason") or ""),
+                        rule_id=str(failure.get("rule_id") or ""),
+                        operation_id=str(failure.get("operation_id") or ""),
+                        obligation_id=str(failure.get("obligation_id") or ""),
+                        target_id=str(failure.get("target_id") or ""),
+                        site_id=str(failure.get("location") or ""))
+                    recovery.record(recovery_history, context,
+                                    RecoveryDecision(RecoveryAction.MARK_UNRESOLVED,
+                                                     "artifact_recovery_budget"),
+                                    outcome="unresolved",
+                                    detail="artifact recovery circuit breaker")
                 if artifact_recovery_used:
                     # Replace every audit/sweep/claim verdict tied to the old artifact
                     # with the verdicts of the regenerated one.
@@ -2750,8 +2966,50 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
                                            "code": "SWEEP_RECOVERY_UNVERIFIED",
                                            "reason": "artifact was regenerated but the "
                                                      "sweep budget could not re-check it"})
+                # The recovery loop may have regenerated the artifact. Every target,
+                # audit and sweep verdict is recomputed from the CURRENT plan so the
+                # report cannot present a pre-recovery verdict as final.
+                plan_by_target = _plan_by_target(planned)
+                unresolved_targets = [
+                    target for target in targets if target.state == "needs_edit"
+                    and plan_by_target.get(target.target_id, {}).get("status")
+                    not in {"planned", "satisfied", "not_applicable"}]
+                audit_issues = _audit_issues(audit_state, targets)
+                pending_findings = [finding for finding in findings
+                                    if finding["status"] in {"pending", "unresolved"}]
+                unresolved[:] = [item for item in unresolved
+                                 if item.get("kind") not in {"target", "audit", "sweep"}]
+                for target in unresolved_targets:
+                    entry = plan_by_target.get(target.target_id) or {}
+                    unresolved.append({"kind": "target", "rule_id": target.rule_id,
+                                       "target_id": target.target_id,
+                                       "location": target.location,
+                                       "reason": entry.get("reason") or "RECALL_TARGET_UNRESOLVED",
+                                       "quote": _clip(target.quote, 120)})
+                for issue in audit_issues:
+                    unresolved.append({"kind": "audit", **issue})
+                for finding in pending_findings:
+                    unresolved.append({"kind": "sweep", **{key: finding[key] for key in
+                                                           ("finding_id", "rule_id", "location",
+                                                            "issue", "status", "reason",
+                                                            "failure_class")}})
+                report["audit"] = {"rounds": audit_rounds, "issues": audit_issues}
                 report["artifact_claim_replay"] = replay
-                report["recovery"] = recovery_history.summary()
+                claim_summary = recovery_history.summary()
+                audit_attempts = report.get("recovery", {}).get("business_rounds", [])
+                combined_history = [*audit_attempts, *recovery_history.as_list()]
+                final_outcome = "not_started"
+                if combined_history:
+                    final_outcome = str(combined_history[-1].get("outcome") or "")
+                report["recovery"] = {
+                    "attempts": len(combined_history),
+                    "actions": [item.get("action") for item in combined_history],
+                    "final": final_outcome,
+                    "subject": claim_summary.get("subject") or {},
+                    "claim_replay": claim_summary,
+                    "business_rounds": audit_attempts,
+                    "history": combined_history,
+                }
                 for failure in replay["failures"]:
                     code = str(failure.get("code") or "CLAIM_REPLAY_FAILED")
                     unresolved.append({"kind": "claim_replay",
@@ -2820,6 +3078,11 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
             checks = [*artifacts.checks, "actual_content_verification"]
             hashes = {"final_sha256": artifacts.final_sha256, "redline_sha256": artifacts.redline_sha256}
             complete = _delivery_complete(unresolved)
+            if isinstance(report.get("recovery"), dict):
+                # ``final`` describes the run, not merely the last attempted action.
+                report["recovery"]["last_outcome"] = report["recovery"].get("final")
+                if not complete and unresolved:
+                    report["recovery"]["final"] = "unresolved"
             if complete:
                 _publish(temp_dir, output_dir, {"redline.docx": "redline.docx", "final.docx": "final.docx"},
                          published)

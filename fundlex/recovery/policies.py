@@ -19,6 +19,7 @@ DEFAULT_RECOVERY_POLICY: dict[str, int] = {
     "joint_compose": 1,
     "execution_rebuild": 1,
     "artifact_recovery": 2,
+    "audit_reaudit": 2,
     "global_business_rounds": 3,
     "context_split": 2,
     "infrastructure_pause_resume": 1,

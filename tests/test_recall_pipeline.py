@@ -276,6 +276,12 @@ def test_audit_failure_repaired_then_complete(tmp_path: Path):
     assert report["audit"]["issues"] == []
     assert any("[REPAIR_CONTEXT]" in context for context in gateway.contexts["recall_inventory"])
     assert report["limits"]["business_rounds_used"] == 1
+    # The audit repair is visible in the unified recovery history with obligation identity
+    # and an honest per-issue outcome (the scripted failure disappeared next round).
+    attempts = report["recovery"]["business_rounds"]
+    assert attempts and attempts[-1]["outcome"] == "succeeded"
+    assert attempts[-1]["rule_id"] == "G05"
+    assert attempts[-1]["target_id"]
     assert docx_names(output_dir) == {"final.docx", "redline.docx"}
 
 
@@ -292,6 +298,9 @@ def test_audit_failure_persists_incomplete_working_pair(tmp_path: Path):
                                    "working_redline": "working_redline.docx"}
     assert docx_names(output_dir) == {"working_final.docx", "working_redline.docx"}
     assert any(item["kind"] == "audit" for item in report["unresolved"])
+    attempts = report["recovery"]["business_rounds"]
+    assert attempts and all(item["rule_id"] == "G05" for item in attempts)
+    assert attempts[-1]["outcome"] in {"failed", "skipped", "unresolved"}
     assert_no_temp_artifacts(output_dir)
 
 

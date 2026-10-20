@@ -110,11 +110,14 @@ FAILURE_CODE_MAP: dict[str, FailureClass] = {
     "COMPONENT_OUTSIDE_SITE": FailureClass.GENERATION,
     "TOPIC_LOST": FailureClass.GENERATION,
     "REVIEW_FAILED": FailureClass.VERIFICATION,
+    "APPLICABILITY_UNKNOWN": FailureClass.APPLICABILITY,
+    "APPLICABILITY_CONFLICT": FailureClass.APPLICABILITY,
 }
 
 _PREFIX_CLASSES = (
     ("FUND_TYPE_", FailureClass.FACT),
     ("MODEL_", FailureClass.INFRASTRUCTURE),
+    ("APPLICABILITY_", FailureClass.APPLICABILITY),
     ("CLAIM_", FailureClass.VERIFICATION),
     ("SWEEP_", FailureClass.VERIFICATION),
     ("RECALL_TARGET_", FailureClass.TARGET),
@@ -146,8 +149,17 @@ class RecoveryAttempt:
     failure_class: FailureClass
     error_code: str
     reason: str = ""
-    outcome: str = "pending"     # pending | succeeded | failed | skipped
+    outcome: str = "pending"     # pending | succeeded | failed | skipped | unresolved
     detail: str = ""
+    # Obligation identity: the report must answer "why did THIS obligation end
+    # unresolved", not just which action ran globally.
+    rule_id: str = ""
+    operation_id: str = ""
+    obligation_id: str = ""
+    target_id: str = ""
+    site_id: str = ""
+    attempt: int = 0
+    budget_key: str = ""
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -158,6 +170,13 @@ class RecoveryAttempt:
             "reason": self.reason,
             "outcome": self.outcome,
             "detail": self.detail,
+            "rule_id": self.rule_id,
+            "operation_id": self.operation_id,
+            "obligation_id": self.obligation_id,
+            "target_id": self.target_id,
+            "site_id": self.site_id,
+            "attempt": self.attempt,
+            "budget_key": self.budget_key,
         }
 
 

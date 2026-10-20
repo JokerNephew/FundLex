@@ -24,8 +24,21 @@ class RecoveryHistory:
     def extend(self, attempts: Iterable[RecoveryAttempt]) -> None:
         self.attempts.extend(attempts)
 
-    def count(self, action: RecoveryAction) -> int:
-        return sum(1 for item in self.attempts if item.action is action)
+    def count(self, action: RecoveryAction, *,
+              context: RecoveryContext | None = None) -> int:
+        """Attempts of one action, optionally scoped to one obligation identity.
+
+        Budgets are per obligation/target: one target's failed deterministic retry must
+        not consume the retry another target never used.
+        """
+        items = [item for item in self.attempts if item.action is action]
+        if context is not None:
+            items = [item for item in items
+                     if item.rule_id == context.rule_id
+                     and item.obligation_id == context.obligation_id
+                     and item.target_id == context.target_id
+                     and item.site_id == context.site_id]
+        return len(items)
 
     def attempted(self, action: RecoveryAction, *, stage: str | None = None,
                   error_code: str | None = None) -> bool:
@@ -40,11 +53,22 @@ class RecoveryHistory:
         return False
 
     def identical_attempt(self, action: RecoveryAction, *, stage: str,
-                          error_code: str, reason: str) -> bool:
+                          error_code: str, reason: str,
+                          context: RecoveryContext | None = None) -> bool:
         """Plan §20: the exact same method must not repeat unchanged."""
-        return any(item.action is action and item.stage == stage
-                   and item.error_code == error_code and item.reason == reason
-                   for item in self.attempts)
+        for item in self.attempts:
+            if item.action is not action or item.stage != stage:
+                continue
+            if item.error_code != error_code or item.reason != reason:
+                continue
+            if context is not None and (
+                    item.rule_id != context.rule_id
+                    or item.obligation_id != context.obligation_id
+                    or item.target_id != context.target_id
+                    or item.site_id != context.site_id):
+                continue
+            return True
+        return False
 
     def last_failure(self) -> RecoveryAttempt | None:
         for item in reversed(self.attempts):

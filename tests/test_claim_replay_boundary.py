@@ -110,3 +110,22 @@ def test_added_paragraph_outside_targets_is_rejected():
     assert replay["verified"] is False
     assert any(item["code"] == "CLAIM_UNEXPECTED_PARAGRAPH"
                for item in replay["failures"])
+
+
+def test_identical_copies_edited_to_different_content_fail():
+    before = "基金管理人应当每日计提销售服务费，并按月支付。"
+    first = before.replace("每日计提", "按季计提")
+    second = before.replace("每日计提", "按年计提")
+    before_inspection = Inspection([before, before])
+    after_inspection = Inspection([first, second])
+    result = replay_claims(
+        [{"rule_id": "G15", "location": "p0", "start": 0, "end": len(before),
+          "replacement": first},
+         {"rule_id": "G15", "location": "p1", "start": 0, "end": len(before),
+          "replacement": second}],
+        before_inspection, after_inspection,
+        rules_by_id={"G15": {"rule_id": "G15", "operations": [
+            {"op": "delete", "old_text": "每日计提", "new_text": ""}]}})
+    assert result["verified"] is False
+    codes = {failure["code"] for failure in result["failures"]}
+    assert "DUPLICATE_SITE_DIVERGED" in codes

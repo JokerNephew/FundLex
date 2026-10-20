@@ -773,7 +773,7 @@ def test_plan_target_applies_delete_and_replace_in_one_span(tmp_path: Path):
     rule = {"rule_id": "G05", "title": "类别调整句", "requirement": "替换费率并删除备案句。",
             "operations": [
                 {"op": "replace", "old_text": "调低赎回费率", "new_text": "调低销售服务费率",
-                 "condition": {"kind": "has_service_fee", "value": True}},
+                 "condition": {"kind": "none", "value": None}},
                 {"op": "delete", "old_text": "并报中国证监会备案",
                  "condition": {"kind": "none", "value": None}},
             ], "source_paragraphs": [17]}

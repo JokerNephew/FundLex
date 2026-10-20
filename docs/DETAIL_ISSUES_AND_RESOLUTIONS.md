@@ -1941,3 +1941,25 @@
 - 状态与验证：**临时修复已验证**。产物解析成功且可启用；但版本仍报 1 个确定性错误 `GUIDE_SLOT_NOT_IN_TEXT`（G12，`C类基金份额` 未出现在任何 `new_text`）与 12 条独立核验 findings，属指引内容/模型理解问题，不是输出截断。该上传为非勘误版（15 组），与内置勘误版（22 组）不同。
 - 下一步：① 给 `guide_parse` 增加专用输出上限（目标 8000）或分块解析，避免依赖全局 env；② 允许 `failed` 版本重新解析并同步 API/前端；③ 更新部署默认值与文档；④ 由用户决定启用该 15 组指引、改用勘误版，还是继续使用内置指引。
 - 变更记录：2026-10-20 新增；同日完成临时配置修复、重新解析和证据登记。
+
+## FL-D136 Recovery 架构收口：operation-level Claim Replay、统一恢复与 open obligation（2026-10-20）
+
+- 发现日期：2026-10-20（产品负责人第二轮外部复查，要求以 `refactor/recovery-architecture` 最新 HEAD 为基线收口，不再扩张架构）。
+- 问题与影响：
+  1. `claim_replay` 的 `_authorization_for_group()` 按 paragraph 合并同一 location 下多个 operation 的授权，operation B 理论上可借用 sibling A 的删除或新增权限；段落级通过不能证明每个 obligation 各自的 span/授权/必需项。
+  2. `RecoveryOrchestrator` 只在 claim replay 深度接入；audit/repair 仍主要依赖 `rounds_used → notes → reinventory → regenerate`，恢复决策没有统一 history，无法从报告看出某 obligation 为何 unresolved。
+  3. `FUNDLEX_TARGET_LOCATOR_OPEN_RULES` 默认关闭，applicable obligation 被 inventory 完全漏掉时只能 partial，系统发现问题却不能安全恢复。
+  4. G02/G04 同段多个相同 `A类基金份额`/`C类基金份额` 时，`resolve_quote(span, old_text)` 绑定第一个 occurrence，可能改错位置。
+- 处理方法（分支 `refactor/recovery-architecture` 工作区，待提交）：
+  - Claim Replay：按 edit/component 建立 operation unit；授权只取该 unit 的 target operation keys（无 keys 时由该 unit 的 old_text/new_text 反推），每个 unit 独立跑 `validate_edit`；新增 borrow 检测（append-only 操作吞掉既有文本 = `CLAIM_OPERATION_SPAN_UNAUTHORIZED`；替换段使用未选中 sibling 的 new_text = `CLAIM_OPERATION_EFFECT_MISSING`）；重叠 edit 进入显式 Joint 验证（union 授权 + 每个 unit 自身效果），不再用错误的 offset 逐条重建；返回 `operations[]`（rule/operation/obligation/target/location/span/scope/verdict/effect_errors）与 `obligations{}` 状态，一个 operation 失败则整组 FAIL。pipeline 传入 `targets_by_id` 与 `obligation_ledger`。
+  - Recovery：`RecoveryOrchestrator` 的 VERIFICATION 分支支持 `metadata.route_class` 回到 TARGET/GENERATION/FACT 等根因层；audit/repair 每轮把 issue 分类为 `RecoveryContext` 并调用 `decide()`，未终局动作写入统一 `RecoveryHistory`，下一轮按 issue 数变化记录 succeeded/failed；`max_business_rounds` 仍是唯一全局断路器；报告保留 `recovery.business_rounds`。
+  - Open obligation：新增确定性候选搜索（scope section + 规则 topic tokens + class tokens + delete keyword bag + reference fragments）；`FUNDLEX_TARGET_LOCATOR_OPEN_RULES` 默认改为 `auto`，无 anchor 证据不调用模型并保持 OPEN；locator 上下文只含候选段落，quote 必须唯一且通过 topic/class/keyword 复核，越界/歧义/不符即 rejected；同一 quote 在正文/摘要重复副本时创建受控 duplicate-copy target。
+  - G02/G04：Target 新增 `site_candidates/occurrence_index/occurrence_anchor`；`resolve_occurrence()` 用 inventory quote 的上下文打分选择 occurrence，未命中或多候选无法区分时抛 `RECALL_TARGET_OCCURRENCE_AMBIGUOUS`（TARGET），不猜；Claim Replay 对带 occurrence 身份的 target 复核编辑 span 是否覆盖授权 occurrence（`CLAIM_OCCURRENCE_MISMATCH`）。
+- 新增测试：`tests/test_claim_replay_operation_authorization.py`（6）、`tests/test_open_obligation_recovery.py`（5）、`tests/test_g02_g04_occurrence.py`（4）、`tests/test_recovery.py` 补 APPLICABILITY/EXECUTION/VERIFICATION 根因路由（3）。
+- 状态与验证：**代码收口完成，待最终真实子集回归与第二轮 Reviewer 确认**；未发布生产。
+  - 全量 `pytest tests -q`：**916 passed / 6 skipped / 0 failed**（新增 18 条本轮测试）。
+  - 独立 Reviewer（Architecture/Test/Recovery）首轮发现并已修复：无 target/无法反推的 multi-op edit 仍走 rule-wide union；oversized delete、replace 借用删除、拼接 sibling 新增、缺失自身 new_text、component 绕过；overlap 分支不记录 unit 失败、any 判定、无边界证明；audit 恢复只记录不执行、pending 未赋值导致 history 为空、terminal 不终止、context 按 rule 合并/静默截断；RecoveryAttempt 无 obligation 身份、预算全局串扰；open locator 不过滤 quote 锚点/站点、duplicate clone 过宽、auto 对宽 topic 不安全、rebind 绕过 open 校验；G02 quote/offset 冲突未拒绝，Claim Replay 未复核 occurrence_anchor。
+  - 首轮探索性真实子集（代码在运行中逐步变化，仅作参考，不作最终结论）：D01 incomplete 76 calls、D02 incomplete 43、D11 incomplete 93、D16 incomplete 87；四例均如实 partial，D11/D16 出现 `DUPLICATE_SITE_DIVERGED`（待最终批次复核是真实正文/摘要分歧还是过阻）。
+  - 第二轮 Reviewer 后追加修复：移除 legacy paragraph-scoped multi-op rule-wide union fallback（无 attribution 一律 `CLAIM_OPERATION_UNATTRIBUTED`）；composed edit 按 composer/validator 语义不强制逐字 guide new_text；delete operation 必须真正移除旧句；ONE_OF alternatives 授权与 unselected alternative 测试补齐；audit 预算身份加入 `site_id`；issue 成功判定改用稳定 `(code,rule,location,obligation)`；非执行类 decision 立即记 skipped；claim regeneration 后重新计算 target/audit/sweep unresolved 与 `report["audit"]`，`recovery.final` 在仍有 unresolved 时改为 `unresolved`；audit 修复体异常时保留已产生的 recovery history。
+- 下一步：用当前最终代码重跑 D01/D02/D11/D16（临时账本），对照 FL-D133 基线（D01 93/$0.0516、D02 56/$0.0636、D11 125/$0.0906、D16 61/$0.0554）；逐条解释 partial 原因；处理第二轮 Reviewer 残余；确认未降低 hard gate/delivery gate；再决定是否发布。
+- 变更记录：2026-10-20 新增；同日补全量测试与首轮 Reviewer 修复记录。

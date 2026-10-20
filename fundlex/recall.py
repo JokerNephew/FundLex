@@ -274,6 +274,89 @@ def resolve_quote(span: ParagraphSpan, quote: str) -> tuple[int, int] | None:
     return None
 
 
+def _compact_positions(text: str, needle: str) -> list[tuple[int, int]]:
+    """Raw occurrences of ``needle`` after whitespace normalization.
+
+    Real DOCX text often renders ``A 类基金份额`` with a space; the guide token has
+    none.  Both sides are compacted and the start/end are mapped back to raw offsets.
+    """
+    compact_chars: list[str] = []
+    raw_index: list[int] = []
+    for index, char in enumerate(text or ""):
+        if char.isspace() or char in {"\u3000", "\u00a0", "\u200b"}:
+            continue
+        compact_chars.append(char)
+        raw_index.append(index)
+    compact_text = "".join(compact_chars)
+    needle_compact = _compact(needle)
+    if not needle_compact or not compact_text:
+        return []
+    found: list[tuple[int, int]] = []
+    cursor = 0
+    while True:
+        position = compact_text.find(needle_compact, cursor)
+        if position < 0:
+            break
+        start = raw_index[position]
+        end = raw_index[position + len(needle_compact) - 1] + 1
+        found.append((start, end))
+        cursor = position + 1
+    return found
+
+
+def _occurrence_index(text: str, needle: str, start: int) -> int:
+    """Index of the occurrence whose raw start is ``start`` (-1 when not exact)."""
+    positions = [position for position, _ in _compact_positions(text, needle)]
+    try:
+        return positions.index(start)
+    except ValueError:
+        return -1
+
+
+def resolve_occurrence(span: ParagraphSpan, needle: str, *, anchor: str = "",
+                      window: int = 24) -> tuple[int, int] | None:
+    """Resolve one occurrence of ``needle`` using the target's original context.
+
+    Multiple identical tokens in one paragraph (``A类基金份额`` twice) cannot be told
+    apart by :func:`resolve_quote`, which returns the first match.  The inventory quote
+    is the occurrence identity: score every exact occurrence by how much of its local
+    lead/tail appears in that quote.  A tie (or no anchor) returns ``None`` — the caller
+    must leave the target unresolved rather than edit the wrong occurrence.
+    """
+    if not needle:
+        return None
+    text = str(getattr(span, "text", ""))
+    positions = _compact_positions(text, needle)
+    if not positions:
+        return resolve_quote(span, needle)
+    if len(positions) == 1:
+        return positions[0]
+    anchor_compact = _compact(anchor)
+    if not anchor_compact:
+        return None
+    from difflib import SequenceMatcher
+
+    def overlap(value: str) -> float:
+        value = _compact(value)
+        if not value:
+            return 0.0
+        match = SequenceMatcher(None, value, anchor_compact).find_longest_match(
+            0, len(value), 0, len(anchor_compact))
+        return match.size / len(value)
+
+    scored: list[tuple[float, tuple[int, int]]] = []
+    for start, end in positions:
+        lead = text[max(0, start - window):start]
+        tail = text[end:end + window]
+        scored.append((max(overlap(lead), overlap(tail)), (start, end)))
+    scored.sort(reverse=True)
+    if scored[0][0] <= 0.0:
+        return None
+    if len(scored) > 1 and scored[0][0] - scored[1][0] < 0.1:
+        return None
+    return scored[0][1]
+
+
 def containing_segment(span: ParagraphSpan, start: int, end: int) -> TextSegment | None:
     for segment in span.segments:
         if segment.start <= start and end <= segment.end:
@@ -884,6 +967,13 @@ class Target:
     # Inventory targets usually leave this empty; survey targets and satisfied hits set
     # it so coverage is operation-aware (FL-D117).
     operations: tuple[str, ...] = ()
+    # Deterministic paragraph candidates for an open-obligation T3 locate (each one
+    # passed the code anchor gate).  The locator may only choose inside this set.
+    site_candidates: tuple[str, ...] = ()
+    # Which exact occurrence of the operation's old_text this target owns, and the
+    # inventory quote that identifies it (G02/G04 same-paragraph occurrences).
+    occurrence_index: int = -1
+    occurrence_anchor: str = ""
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -892,6 +982,9 @@ class Target:
             "start": self.start, "end": self.end, "resolution": self.resolution,
             "segment_ok": self.segment_ok, "composite": list(self.composite),
             "operations": list(self.operations),
+            "site_candidates": list(self.site_candidates),
+            "occurrence_index": self.occurrence_index,
+            "occurrence_anchor": self.occurrence_anchor,
             "out_of_scope": self.out_of_scope,
         }
 
@@ -2955,7 +3048,7 @@ def _plan_target_inner(rule: dict, target: Target, inspection: DocumentInspectio
                        gateway: Any, *, compose_budget: list[int]) -> PlannedEdit | None:
     """Turn one needs_edit target into a concrete edit, or raise RecallError."""
     operations = [operation for operation in (rule.get("operations") or [])
-                  if condition_matches(operation.get("condition"), facts)]
+                  if condition_status(operation.get("condition"), facts) == "TRUE"]
     if not operations:
         # The rule's own condition does not hold for this product (a single-class
         # branch on a multi-class contract, a floating-fee branch on a fixed-fee one):
@@ -3001,23 +3094,55 @@ def _plan_target_inner(rule: dict, target: Target, inspection: DocumentInspectio
     if not containing_segment(span, target.start, target.end) and not (target.start == target.end):
         raise RecallError("RECALL_TARGET_STRUCTURE", {"target": target.target_id})
     rule_id = str(rule.get("rule_id") or "")
-    if rule_id in {"G02", "G04"} and len(target.operations) == 1:
-        # The inventory often quotes the whole A/C class-definition sentence for each
-        # operation. Narrow the edit to that operation's own old_text so the A and C
-        # substitutions do not overlap in merge_edits.
-        key = str(target.operations[0] or "")
-        if key.startswith(rule_id + ":"):
-            try:
-                operation_index = int(key.split(":", 1)[1])
-            except ValueError:
-                operation_index = -1
-            operations = rule.get("operations") or []
-            if 0 <= operation_index < len(operations):
-                old_text = str(operations[operation_index].get("old_text") or "")
-                if old_text:
-                    narrowed = resolve_quote(span, old_text)
-                    if narrowed is not None:
-                        target.start, target.end = narrowed
+    if rule_id in {"G02", "G04"}:
+        # The inventory often quotes the whole A/C class-definition sentence.  Narrow the
+        # edit to the one operation the target actually owns, and prove which identical
+        # occurrence the inventory quote meant (G02/G04 same-paragraph class tokens).
+        operations = rule.get("operations") or []
+        candidate_indices: list[int] = []
+        for key in target.operations:
+            text_key = str(key or "")
+            if text_key.startswith(rule_id + ":"):
+                tail = text_key.split(":", 1)[1]
+                if tail.isdigit() and 0 <= int(tail) < len(operations):
+                    candidate_indices.append(int(tail))
+        if not candidate_indices:
+            quote_compact = _compact(target.quote)
+            candidate_indices = [
+                index for index, operation in enumerate(operations)
+                if _compact(str(operation.get("old_text") or ""))
+                and _compact(str(operation.get("old_text") or "")) in quote_compact]
+        candidate_indices = sorted(set(candidate_indices))
+        if len(candidate_indices) == 1:
+            operation_index = candidate_indices[0]
+            old_text = str(operations[operation_index].get("old_text") or "")
+            if old_text:
+                narrowed = resolve_occurrence(span, old_text, anchor=target.quote)
+                if narrowed is None:
+                    raise RecallError(
+                        "RECALL_TARGET_OCCURRENCE_AMBIGUOUS",
+                        {"target": target.target_id, "occurrence": old_text[:80]})
+                current = _compact(span.text[target.start:target.end])
+                if current == _compact(old_text) and narrowed != (target.start, target.end):
+                    # The target's bound offset and its own quote point to different
+                    # identical tokens: do not guess which one the inventory meant.
+                    raise RecallError(
+                        "RECALL_TARGET_OCCURRENCE_AMBIGUOUS",
+                        {"target": target.target_id, "occurrence": old_text[:80]})
+                original_start, original_end = target.start, target.end
+                if original_end > original_start and not (
+                        original_start <= narrowed[0] and narrowed[1] <= original_end):
+                    raise RecallError(
+                        "RECALL_TARGET_OCCURRENCE_AMBIGUOUS",
+                        {"target": target.target_id, "occurrence": old_text[:80]})
+                target.start, target.end = narrowed
+                if not containing_segment(span, target.start, target.end) and \
+                        target.start != target.end:
+                    raise RecallError("RECALL_TARGET_STRUCTURE",
+                                      {"target": target.target_id})
+                target.occurrence_index = _occurrence_index(
+                    span.text, old_text, narrowed[0])
+                target.occurrence_anchor = target.quote
     actual = span.text[target.start:target.end]
     if not target_site_ok(rule_id, span, inspection):
         raise RecallError("TARGET_SOURCE_MISMATCH",
@@ -3668,33 +3793,33 @@ def _resolve_overlaps_with_joint_compose(
 
 def _blocked_recovery_trace(code: str, *, rule_id: str, target_id: str,
                             stage: str = "plan") -> dict[str, Any]:
-    """Record the failing planner layer and its terminal state (plan §18.3).
+    """Record the failing planner layer without fabricating an executed retry.
 
-    Only the layer that actually produced the error is recorded; no retry is claimed
-    when it was not executed.
+    The planner failed before any recovery action could run, so the first orchestrator
+    candidate is recorded as ``skipped`` with an explicit reason.  Callers that can
+    actually execute it (audit replan, locator, claim regeneration) record the real
+    outcome in their own unified history.
     """
-    from .recovery import (RecoveryAction, RecoveryAttempt, RecoveryContext,
-                           RecoveryHistory, RecoveryOrchestrator, classify)
+    from .recovery import (RecoveryContext, RecoveryHistory, RecoveryOrchestrator)
 
-    failure_class = classify(code)
-    if code.startswith("RECALL_COMPOSE_"):
-        action = RecoveryAction.LLM_COMPOSE
-    elif failure_class.value == "TARGET":
-        action = RecoveryAction.RETRY_DETERMINISTIC
-    elif failure_class.value == "FACT":
-        action = RecoveryAction.FOCUSED_FACT_RESOLVE
-    else:
-        action = RecoveryAction.RETRY_DETERMINISTIC
+    if code == "RECALL_RULE_NOT_APPLICABLE":
+        # Out of scope is a decision, not a failure to recover.
+        return {}
     context = RecoveryContext(rule_id=rule_id, target_id=target_id, stage=stage,
                               error_code=code, reason=code)
     history = RecoveryHistory()
     orchestrator = RecoveryOrchestrator()
-    history.append(RecoveryAttempt(action, stage, failure_class, code, code,
-                                   outcome="failed", detail="planner_layer_failed"))
-    terminal = orchestrator.decide(context, history)
-    if terminal.terminal:
-        orchestrator.record(history, context, terminal, outcome="failed",
-                            detail="no further safe recovery layer")
+    decision = orchestrator.decide(context, history)
+    if decision.terminal:
+        orchestrator.record(history, context, decision, outcome="unresolved",
+                            detail="planner_layer_failed")
+    else:
+        orchestrator.record(history, context, decision, outcome="skipped",
+                            detail="planner_layer_failed_before_action")
+        following = orchestrator.decide(context, history)
+        if following.terminal:
+            orchestrator.record(history, context, following, outcome="unresolved",
+                                detail="no further safe recovery layer")
     return history.summary(context)
 
 
@@ -4057,6 +4182,10 @@ _TARGET_ANCHORS: dict[str, tuple[tuple[str, ...], str]] = {
 
 def target_site_ok(rule_id: str, span: Any, inspection: DocumentInspection) -> bool:
     """Whether this target paragraph carries the rule's own clause (site guard)."""
+    if rule_id in {"G02", "G04"}:
+        paragraph, _ = display_text(span.text)
+        return any(token in paragraph for token in
+                   ("基金份额类别", "份额类别", "将基金份额分为", "分类"))
     if rule_id == "G15":
         paragraph, _ = display_text(span.text)
         return "销售服务费" in paragraph and "支付" in paragraph
