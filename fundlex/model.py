@@ -93,7 +93,8 @@ TASK_TYPES = frozenset({
     'locate_target','resolve_scope','generate_clause','verify_content','verify_artifact',
     'guide_parse','guide_verify',
     'recall_facts','recall_scope','recall_inventory','recall_compose','recall_verify',
-    'recall_audit','recall_sweep','recall_arbitrate',
+    'recall_audit','recall_sweep','recall_arbitrate','recall_fact_recover',
+    'recall_applicability','recall_locate','recall_joint_compose','recall_compose_review',
 })
 # Task types that bind quotes to labelled source roles inside their own module;
 # the generic "quote must be a literal substring of the context" check is
@@ -102,6 +103,8 @@ QUOTE_SELF_VALIDATED_TASKS = frozenset({
     'locate_target','resolve_scope','generate_clause','verify_content','verify_artifact',
     'guide_parse','guide_verify','recall_facts','recall_scope','recall_inventory',
     'recall_compose','recall_verify','recall_audit','recall_sweep','recall_arbitrate',
+    'recall_fact_recover','recall_applicability','recall_locate',
+    'recall_joint_compose','recall_compose_review',
 })
 
 @dataclass(frozen=True)
