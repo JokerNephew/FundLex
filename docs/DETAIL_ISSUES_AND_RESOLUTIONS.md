@@ -1922,3 +1922,20 @@
 - 验证：全量 `pytest tests -q` → **875 passed / 6 skipped**；headless Chromium 对本地真实 API 验证 **23/23**（总览数字、5 卡片、指引名称/筛选、Chip、刷新、0 控制台错误），截图 `/tmp/opencode/ui-batch2/overview.png`。测试 seed 当前月 2 份处理（1 完成/1 异常）、待处理 1、平均 90 秒、上月 1 份；页面显示 50%/+100%/1 分 30 秒与 90 秒描述，与接口一致。
 - 未发布原因：工作区存在另一 agent 未提交的 `fundlex/generation/template.py`、`fundlex/recall.py` 等引擎改动；此时执行 `publish_workspace.sh` 会把未协调改动一并带到生产，故本轮只提交本功能文件，待并行改动收敛后再发布。
 - 下一步：并行引擎改动提交/发布后，执行统一发布并在生产真实登录页复验；若要跨任务批量导出，另立后端接口。
+
+## FL-D135（已定位，生产已临时修复）自定义指引解析在 4000 输出 token 处被截断
+
+- 发现日期：2026-10-20（用户反馈：指引配置页上传自有 DOCX 后显示“解析失败”）。
+- 问题与影响：DOCX 本身可正常读取，失败发生在模型解析阶段。`fundlex/guide.py` 的 `parse_guide()` 要求模型一次返回完整 `groups` JSON；生产 Worker 的全局输出上限为 4000 token。本指引完整解析约需 5500–7800 completion token，三次尝试均在 4000 处收到 `finish_reason=length`，JSON 被截断。用尽 `MAX_GUIDE_JOB_ATTEMPTS=3` 后版本状态变为 `failed`；而 API 与前端只允许 `uploaded/parse_failed/parsed` 重新解析，导致“重新解析”按钮禁用，用户只能重复上传。
+- 证据：
+  - 源文件 `v4存量基金适用销售费用新规的基金合同修改指引.docx`（sha256 `9bc1ff24…`）可提取 107 段 / 105 非空段 / 6359 字符，非 DOCX 损坏。
+  - 两个自定义版本 `08ac8c239c8d444a862edd0b7b0d8dfa`、`5f5392bbe48549d7badbbaa43c47586c` 为同一文件；最近版本 `issues_json = {"error_code":"GUIDE_MODEL_FAILED:MODEL_OUTPUT_TRUNCATED", "attempts":3}`。
+  - 账本 `/var/lib/fundlex/model_budget.sqlite` 中最近 6 次 `guide_parse`：`completion_tokens=4000`、`finish_reason=length`、`content_chars=8763–9361`，错误为 `MODEL_OUTPUT_TRUNCATED`（旧代码记为 `MODEL_SCHEMA_INVALID`）。
+  - 内置指引 `guides/builtin_guide_v1.json` 的模型事件显示历史解析 completion 为 6514 / 7798 / 7657 token；`tools/build_builtin_guide.py` 默认 `DEFAULT_MAX_COMPLETION_TOKENS=8000`，而生产环境变量为 4000，故内置指引可用、同规模自定义上传失败。
+- 处理方法（生产临时修复，2026-10-20）：
+  - 备份 `/etc/fundlex-recall.env` 为 `.bak-guide-output-*`，将 `FUNDLEX_MODEL_MAX_OUTPUT_TOKENS` 从 4000 调整为 8000，重启 `fundlex-recall-worker` 并核对进程环境。
+  - 将版本 `08ac8c23…` 从 `failed` 置回 `parse_failed` 并重新入队；Worker 第 1 次即完成（completion 5712、`finish_reason=stop`），状态 `parsed`、15 个规则组、`coverage_gaps=0`。
+  - 未改代码、未执行 `publish_workspace.sh`（工作区仍有其他 agent 未提交的引擎改动）。
+- 状态与验证：**临时修复已验证**。产物解析成功且可启用；但版本仍报 1 个确定性错误 `GUIDE_SLOT_NOT_IN_TEXT`（G12，`C类基金份额` 未出现在任何 `new_text`）与 12 条独立核验 findings，属指引内容/模型理解问题，不是输出截断。该上传为非勘误版（15 组），与内置勘误版（22 组）不同。
+- 下一步：① 给 `guide_parse` 增加专用输出上限（目标 8000）或分块解析，避免依赖全局 env；② 允许 `failed` 版本重新解析并同步 API/前端；③ 更新部署默认值与文档；④ 由用户决定启用该 15 组指引、改用勘误版，还是继续使用内置指引。
+- 变更记录：2026-10-20 新增；同日完成临时配置修复、重新解析和证据登记。
