@@ -378,18 +378,33 @@ def _own_effect_errors(rule: Mapping[str, Any], indices: Sequence[int],
                     continue
                 errors.add("CLAIM_OPERATION_EFFECT_MISSING")
         for operation in selected:
-            if operation.get("op") != "delete":
+            if operation.get("op") not in {"delete", "replace"}:
                 continue
             old_text = _compact(str(operation.get("old_text") or ""))
-            if old_text and old_text in before_compact and old_text in replacement_compact:
+            new_text = _compact(str(operation.get("new_text") or ""))
+            if not old_text or old_text not in before_compact:
+                continue
+            if old_text in new_text:
+                continue  # the replacement legitimately retains the old wording
+            if old_text in replacement_compact:
+                # Keeping the old sentence and appending the new policy is not a replace.
                 errors.add("CLAIM_OPERATION_EFFECT_MISSING")
 
-    # Composed output is reviewed word-by-word by the composer validator; re-proving
-    # every re-worded segment here would reject legitimate compose output.  A
-    # delete-only composed unit is different: it may not remove text its own reference
-    # does not own (a whole-paragraph quote could otherwise swallow a neighbouring fee
-    # clause because delete mode authorizes removals).
-    if composed and not all(operation.get("op") == "delete" for operation in selected):
+    # Composed output is re-worded by the composer validator, but it still may not
+    # remove source text its own operation does not own.  Only the sibling-add wording
+    # checks below are skipped for composed units.
+    if composed:
+        residual = before_compact
+        for owned in sorted((value for value in owned_removals if value),
+                            key=len, reverse=True):
+            residual = residual.replace(owned, "")
+
+        def _meaningful_composed(value: str) -> str:
+            return re.sub(r"[，,。；;：:、\s]", "", value)
+
+        if _meaningful_composed(residual) and _meaningful_composed(
+                residual) not in _meaningful_composed(replacement_compact):
+            errors.add("CLAIM_OPERATION_SPAN_UNAUTHORIZED")
         return sorted(errors)
 
     # 2. Everything in the source slice that is not one of the selected operations'
@@ -559,7 +574,7 @@ def _operation_units(group: Sequence[Mapping[str, Any]],
                 # from the whole paragraph (a genuine missing class).
                 after_compact_full = _compact(after)
                 terms = tuple(term for term in terms
-                              if _compact(term) in after_compact_full)
+                              if _compact(term) not in after_compact_full)
                 validation = validate_edit(before_unit, after_unit, auth=auth,
                                            components=components, required_terms=terms,
                                            authorized_numbers=facts_numbers)
@@ -957,6 +972,44 @@ def replay_claims(edits: Sequence[Mapping[str, Any]], before_inspection: Any,
                                            "the authorized span"})
         if len(failures) >= max_failures:
             break
+    # Artifact-level obligation proof: a rule with edits cannot close a sibling
+    # operation that was never planned.  This is independent of target-level coverage
+    # (a location-level target used to "cover" every operation of the rule).
+    if obligations is not None:
+        edited_rules = {rule_id for edit in edits for rule_id in _rule_ids(edit)}
+        after_full = _compact("".join(
+            str(getattr(span, "text", ""))
+            for span in getattr(after_inspection, "paragraphs", ())))
+        from ..recall import instantiate_slots
+        for record in getattr(obligations, "records", ()):
+            spec = record.spec
+            if spec.rule_id not in edited_rules:
+                continue
+            if str(getattr(record.applicability, "status", "")) != "TRUE":
+                continue
+            code = "CLAIM_OPERATION_NOT_PLANNED"
+            if spec.op in {"replace", "append"}:
+                expected = {_compact(spec.new_text)}
+                try:
+                    instantiated, issues = instantiate_slots(spec.new_text, facts)
+                    if not issues and instantiated:
+                        expected.add(_compact(instantiated))
+                except Exception:  # noqa: BLE001
+                    pass
+                if not any(value and value in after_full for value in expected):
+                    failures.append({
+                        "rule_id": spec.rule_id, "operation_id": spec.operation_id,
+                        "obligation_id": getattr(record, "obligation_id", ""),
+                        "code": code,
+                        "reason": "an applicable operation has no planned artifact effect"})
+            elif spec.op == "delete":
+                old_text = _compact(spec.old_text)
+                if old_text and old_text in after_full:
+                    failures.append({
+                        "rule_id": spec.rule_id, "operation_id": spec.operation_id,
+                        "obligation_id": getattr(record, "obligation_id", ""),
+                        "code": code,
+                        "reason": "an applicable delete operation survives in the artifact"})
     obligation_state: dict[str, dict[str, Any]] = {}
     for record in operation_records:
         obligation_id = str(record.get("obligation_id") or "")

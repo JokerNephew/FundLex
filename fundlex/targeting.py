@@ -185,6 +185,16 @@ def _open_rule_quote_ok(rule: dict, facts: Any, paragraph_text: str, quote: str,
     if rule.get("class_substitution"):
         if class_tokens and not any(token in compact_quote for token in class_tokens):
             return False, "quote_class_missing"
+        if not class_tokens:
+            # Append-style class guidance (G01/G03): a heading such as "基金份额类别"
+            # must not become the insertion point; require the policy wording itself.
+            if not any(token in compact_quote for token in
+                       ("直销", "不收取", "销售服务费")):
+                return False, "quote_policy_anchor_missing"
+        if rule.get("rule_id") in {"G02", "G04"}:
+            if not any(token in compact_quote for token in
+                       ("基金份额类别", "份额类别", "将基金份额分为", "分类")):
+                return False, "quote_site_missing"
     bag = _delete_keyword_bag(rule, facts)
     if bag and not _keyword_bag_in_clause(compact_quote, bag, window=80):
         return False, "quote_keyword_bag_missing"
@@ -347,7 +357,11 @@ def targets_for_open_rules(obligations: Any, targets: Sequence[Any], rules_by_id
     if mode in {"0", "false", "off", "no"}:
         return []
     auto = mode in {"", "auto", "default"}
-    covered_rules = {str(target.rule_id) for target in targets}
+    # Only a real editable target proves the obligation is covered.  An "absent" or
+    # out-of-scope inventory verdict must not suppress open-obligation recovery for a
+    # rule whose topic is still present in the contract.
+    covered_rules = {str(target.rule_id) for target in targets
+                     if target.state == "needs_edit" and not target.out_of_scope}
     section_by_id = {section.id: section for section in sections}
     body = _compact("\n".join(str(getattr(span, "text", ""))
                               for span in getattr(inspection, "paragraphs", ())))

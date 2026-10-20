@@ -500,3 +500,47 @@ def test_joint_result_must_preserve_gaps_between_disjoint_spans():
     # The mutated gap is rejected; diff alignment may report it as a changed gap or
     # as unexplained text introduced inside the union.
     assert result["failures"]
+
+
+def test_artifact_proof_rejects_an_unplanned_sibling_operation():
+    class Spec(SimpleNamespace):
+        pass
+
+    class Record:
+        def __init__(self, index, op, old_text, new_text):
+            self.obligation_id = f"G96:B1:O{index + 1}"
+            self.spec = SimpleNamespace(
+                rule_id="G96", operation_id=f"G96:{index}", operation_index=index,
+                op=op, old_text=old_text, new_text=new_text, one_of_group="",
+                alternatives=())
+            self.applicability = SimpleNamespace(status="TRUE")
+
+    class Ledger:
+        def __init__(self, records):
+            self.records = records
+
+        def record(self, key):
+            for item in self.records:
+                if item.spec.operation_id == str(key):
+                    return item
+            return None
+
+    rule = {"rule_id": "G96",
+            "operations": [{"op": "replace", "old_text": "旧说法。",
+                            "new_text": "新说法。"},
+                           {"op": "delete", "old_text": "备案句。", "new_text": ""}],
+            "old_text_variants": []}
+    ledger = Ledger([Record(0, "replace", "旧说法。", "新说法。"),
+                     Record(1, "delete", "备案句。", "")])
+    before = "旧说法。备案句。"
+    after = "新说法。备案句。"
+    result = replay_claims(
+        [{"rule_id": "G96", "target_id": "T0", "location": "p0", "start": 0,
+          "end": len("旧说法。"), "replacement": "新说法。", "components": []}],
+        Inspection([before]), Inspection([after]),
+        rules_by_id={"G96": rule}, targets_by_id={
+            "T0": {"target_id": "T0", "operations": ["G96:0"]}},
+        obligations=ledger)
+    assert result["verified"] is False
+    codes = {failure["code"] for failure in result["failures"]}
+    assert "CLAIM_OPERATION_NOT_PLANNED" in codes
