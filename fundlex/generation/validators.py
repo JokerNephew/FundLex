@@ -18,10 +18,15 @@ Layers:
 import re
 from dataclasses import dataclass
 from difflib import SequenceMatcher
+from typing import Any, Mapping, Sequence
 
 #: Tokens whose unauthorized change is always a hard failure (V2-B HARD).
 _FEE_ITEM = re.compile(r"(申购|赎回|认购|转换|销售服务|管理|托管)费率")
-_TOPIC_FEE = re.compile(r"赎回|认购")  # topic flips (申购↔赎回) are never paraphrases
+#: Fee topics. A topic may never disappear because a neighbouring fee clause was
+#: matched (FL-D119: 申购 authorization applied to a 赎回 clause). Cover every
+#: topic the plan requires, not only 赎回/认购.
+_TOPIC_FEE = re.compile(r"(?:认购|申购|赎回|转换|销售服务)(?:费|费率|费用)?|"
+                        r"(?:管理|托管)(?:费|费率|费用)")
 _NUMBER = re.compile(r"\d+(?:\.\d+)?%?")
 _TERM = re.compile(r"\d+\s*个?工作日|\d+\s*个月|\d+\s*年")
 _SUBJECT = re.compile(r"基金管理人|基金托管人|注册登记机构|登记机构|销售机构|"
@@ -29,6 +34,34 @@ _SUBJECT = re.compile(r"基金管理人|基金托管人|注册登记机构|登�
 _CLASS = re.compile(r"[A-ZＡ-Ｚ]\s*类(?:基金份额)?")
 
 _PROTECTED_PATTERNS = (_FEE_ITEM, _TOPIC_FEE, _NUMBER, _TERM, _SUBJECT, _CLASS)
+
+#: Finding codes that always reject an edit (plan §15.2). Kept here so every caller
+#: (compose verification, claim replay, plan gate) agrees on the hard set.
+HARD_CODES = frozenset({
+    "MISSING_REQUIRED_TERM",
+    "OUTSIDE_SPAN_CHANGED",
+    "UNAUTHORIZED_NUMBER",
+    "LOST_PROTECTED_LITERAL",
+    "UNEXPLAINED_HARD",
+    "TARGET_SOURCE_MISMATCH",
+    "STRUCTURE_UNSAFE",
+    "COMPONENT_MISSING",
+    "COMPONENT_OUTSIDE_SITE",
+    "TOPIC_LOST",
+})
+
+_FAILURE_CLASSES = {
+    "MISSING_REQUIRED_TERM": "GENERATION",
+    "OUTSIDE_SPAN_CHANGED": "GENERATION",
+    "UNAUTHORIZED_NUMBER": "GENERATION",
+    "LOST_PROTECTED_LITERAL": "GENERATION",
+    "UNEXPLAINED_HARD": "GENERATION",
+    "TARGET_SOURCE_MISMATCH": "TARGET",
+    "STRUCTURE_UNSAFE": "GENERATION",
+    "COMPONENT_MISSING": "GENERATION",
+    "COMPONENT_OUTSIDE_SITE": "GENERATION",
+    "TOPIC_LOST": "GENERATION",
+}
 
 
 @dataclass(frozen=True)
@@ -49,6 +82,17 @@ class Authorization:
 class Finding:
     code: str
     detail: str
+    severity: str = "hard"
+    failure_class: str = ""
+
+    def __post_init__(self) -> None:
+        if not self.failure_class:
+            object.__setattr__(self, "failure_class",
+                               _FAILURE_CLASSES.get(self.code, "VERIFICATION"))
+
+    def as_dict(self) -> dict[str, str]:
+        return {"code": self.code, "detail": self.detail,
+                "severity": self.severity, "failure_class": self.failure_class}
 
 
 @dataclass(frozen=True)
@@ -69,10 +113,18 @@ class ValidationReport:
     def verdict(self) -> str:
         if any(record.explanation == "UNEXPLAINED_HARD" for record in self.changes):
             return "FAIL"
-        if any(finding.code in {"LOST_PROTECTED_LITERAL", "UNAUTHORIZED_NUMBER"}
-               for finding in self.findings):
+        if any(finding.code in HARD_CODES for finding in self.findings):
             return "FAIL"
         return "PASS"
+
+    def as_dict(self) -> dict[str, object]:
+        return {
+            "verdict": self.verdict,
+            "findings": [finding.as_dict() for finding in self.findings],
+            "changes": [{"kind": record.kind, "before": record.before,
+                         "after": record.after, "explanation": record.explanation,
+                         "reason": record.reason} for record in self.changes],
+        }
 
     @property
     def soft_changes(self) -> tuple[ChangeRecord, ...]:
@@ -80,11 +132,29 @@ class ValidationReport:
                      if record.explanation == "UNEXPLAINED_SOFT")
 
 
+def _ordinal_number(text: str, match: "re.Match[str]") -> bool:
+    """A bare integer used as a list/clause ordinal is not a financial number."""
+    token = match.group(0)
+    if "%" in token:
+        return False
+    rest = text[match.end():]
+    index = 0
+    while index < len(rest) and rest[index] in " \u3000":
+        index += 1
+    if index >= len(rest):
+        return False
+    following = rest[index]
+    return following in {"、", "．", "）", ")"} or (
+        following == "." and not rest[index + 1:index + 2].isdigit())
+
+
 def protected_tokens(text: str) -> list[str]:
     """Literals that must survive an edit unless explicitly authorized."""
     found: list[str] = []
     for pattern in _PROTECTED_PATTERNS:
         for match in pattern.finditer(text or ""):
+            if pattern is _NUMBER and _ordinal_number(text or "", match):
+                continue
             token = re.sub(r"\s+", "", match.group(0))
             if token not in found:
                 found.append(token)
@@ -168,7 +238,8 @@ def _pattern_hit(cleaned: str, auth: Authorization) -> bool:
     return False
 
 
-_TOPIC_EXPANSIONS = ("费率", "费")
+_TOPIC_EXPANSIONS = ("费率", "费", "费用")
+_BARE_TOPICS = ("赎回", "认购", "申购", "转换", "销售服务")
 
 
 def _token_authorized(token: str, auth: Authorization, context: str = "") -> bool:
@@ -182,7 +253,7 @@ def _token_authorized(token: str, auth: Authorization, context: str = "") -> boo
     unexplained (申购 clause matched to the 赎回 sentence, FL-D119).
     """
     cleaned = _compact(token)
-    if cleaned in ("赎回", "认购"):
+    if cleaned in _BARE_TOPICS:
         if not context:
             return False
         compact_context = _compact(context)
@@ -242,8 +313,17 @@ def explain_changes(before: str, after: str,
 def run_validation(before: str, after: str, *, auth: Authorization,
                    required_terms: tuple[str, ...] = (),
                    before_full: str | None = None,
-                   after_full: str | None = None) -> ValidationReport:
-    """V1 + V2-B (and V2-A when full paragraphs are supplied)."""
+                   after_full: str | None = None,
+                   components: tuple[Mapping[str, Any], ...] | list[Mapping[str, Any]] = (),
+                   authorized_numbers: tuple[str, ...] = ()) -> ValidationReport:
+    """V1 + V2-B (and V2-A when full paragraphs are supplied).
+
+    ``components`` are required policy components that must all appear **inside the
+    same output span** (one semantic site); a term found elsewhere in the document
+    does not prove completeness (plan §16.1).  ``authorized_numbers`` lists numbers
+    whose provenance is a guide/fact source, in addition to numbers already present
+    in ``before`` or in the authorized new text.
+    """
     findings: list[Finding] = []
 
     # V1: protected literals must survive unless authorized to be removed.
@@ -259,8 +339,11 @@ def run_validation(before: str, after: str, *, auth: Authorization,
 
     # V1: every new number must be traceable (guide text / facts / source).
     known = {t for t in protected_tokens(before) if _NUMBER.fullmatch(t)}
+    known.update(_compact(token) for token in authorized_numbers if token)
     additions = {addition for addition in map(_compact, auth.must_add)}
     for match in _NUMBER.finditer(after):
+        if _ordinal_number(after, match):
+            continue
         token = match.group(0)
         if token in before_compact or token in known:
             continue
@@ -273,6 +356,10 @@ def run_validation(before: str, after: str, *, auth: Authorization,
         if term and _compact(term) not in after_compact:
             findings.append(Finding("MISSING_REQUIRED_TERM", term))
 
+    # V1: component × site coverage (plan §16.1).
+    if components:
+        findings.extend(check_components(after, components))
+
     # V2-A (only when the caller supplied whole paragraphs).
     if before_full is not None and after_full is not None:
         boundary = check_boundary(before_full, after_full, before, after)
@@ -282,6 +369,48 @@ def run_validation(before: str, after: str, *, auth: Authorization,
     # V2-B.
     changes = tuple(explain_changes(before, after, auth))
     return ValidationReport(findings=tuple(findings), changes=changes)
+
+
+def check_components(site_text: str,
+                     components: "Mapping[str, Any] | Sequence[Mapping[str, Any]]"
+                     ) -> list[Finding]:
+    """All required components must be present in the same semantic site.
+
+    A component is ``{"id": "...", "terms": ["...", ...]}`` (``text`` or
+    ``required_terms`` are accepted aliases).  Presence anywhere outside this span
+    does not count: the caller passes the output of the one site being verified.
+    """
+    findings: list[Finding] = []
+    if isinstance(components, Mapping):
+        components = [components]
+    compact_site = _compact(site_text)
+    for component in components:
+        if not isinstance(component, Mapping):
+            continue
+        component_id = str(component.get("id") or component.get("component_id") or "")
+        raw_terms = component.get("terms") or component.get("required_terms") \
+            or ([component.get("text")] if component.get("text") else [])
+        terms = [str(term) for term in raw_terms if str(term).strip()]
+        # Terms inside one component are alternative wordings (其他销售机构 /
+        # 直销机构之外; 超过一年 / 超过1年 / 满一年), not a conjunction.
+        if terms and not any(_compact(term) in compact_site for term in terms):
+            findings.append(Finding(
+                "COMPONENT_MISSING",
+                (component_id + ":" if component_id else "") + ",".join(terms[:4]),
+                failure_class="GENERATION"))
+    return findings
+
+
+def validate_edit(before: str, after: str, *, auth: Authorization,
+                  required_terms: tuple[str, ...] = (),
+                  components: "tuple[Mapping[str, Any], ...]" = (),
+                  authorized_numbers: tuple[str, ...] = (),
+                  before_full: str | None = None,
+                  after_full: str | None = None) -> ValidationReport:
+    """Single entry point used by every generation tier (deterministic or model)."""
+    return run_validation(before, after, auth=auth, required_terms=required_terms,
+                          before_full=before_full, after_full=after_full,
+                          components=components, authorized_numbers=authorized_numbers)
 
 
 def _token_context(text: str, token: str) -> str:
