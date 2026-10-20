@@ -3773,6 +3773,23 @@ def plan_edits(rules_by_id: dict[str, dict], targets: Sequence[Target], inspecti
         ledger.append({"target_id": target.target_id, "rule_id": target.rule_id,
                        "status": "planned", "operation": edit.operation})
     merged, conflicts, covered = merge_edits(planned, inspection)
+    if conflicts:
+        # Same-rule overlapping edits are alternatives or duplicate applications:
+        # keep the richest non-destructive edit and drop the others before any
+        # cross-rule Joint Compose is considered (G05 replace vs delete variant).
+        dropped: set[str] = set()
+        for conflict in conflicts:
+            location = str(conflict.get("location") or "")
+            edits = [edit for edit in planned if edit.location == location]
+            if len(edits) < 2 or len({edit.rule_id for edit in edits}) != 1:
+                continue
+            best = max(edits, key=lambda edit: (bool(edit.replacement.strip()),
+                                                int(edit.end) - int(edit.start)))
+            dropped.update(edit.target_id for edit in edits if edit is not best)
+        if dropped:
+            planned = [edit for edit in planned if edit.target_id not in dropped]
+            covered.extend(sorted(dropped))
+            merged, conflicts, covered = merge_edits(planned, inspection)
     if conflicts and _tier1_enabled():
         planned, conflicts = _resolve_overlaps_with_joint_compose(
             conflicts, planned, inspection, rules_by_id, facts, gateway)
