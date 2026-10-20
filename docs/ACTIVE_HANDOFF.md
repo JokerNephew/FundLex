@@ -44,8 +44,15 @@
   - 临时账本合计约 **963 requests / $0.5792**；以上为 agent 真实调用，生产账本未动。
   - **结论**：新架构已能发现旧版 false_complete，但尚未取得“最新硬门下真实合同 complete”的验收样例。Final Architecture Reviewer 的 G05 satisfied-target 隐藏 delete、G11 ONE_OF 被新文误判残留两个 blocker 已在 `039519f` 修复并有回归测试。
 - **独立审查**：Architecture Reviewer 提出 5 个 BLOCKER + 5 个 HIGH；已修复 scope 遗漏静默、plan not_applicable 覆盖 TRUE、Validator/Replay flag 开关、claim recovery 旧 audit/sweep、类别枚举前缀、单 completed 掩盖 siblings、infra stop 吞咽。保留限制见 `RECOVERY_ARCHITECTURE.md` §10：无目标规则 T3 默认关闭、audit context 分批未实现、514 全量未跑、G09/G15 业务残留、前端未展示新字段。
-- **未发布**：生产仍为旧代码（`/opt/fundlex-recall-first` 未更新）。发布前必须先跑 20 例 dev 集对照 round14-12，并完成真实工作台端到端。
-- **下一动作**：① 跑 20 例 dev 集（新架构，预算约 1200 calls/$1）；② 修 G09/G15 与 audit 分批；③ 评估通过后 `publish_workspace.sh` 发布；④ 真实工作台登录→上传→worker→下载→修订接受/拒绝验收；⑤ 514 全量/留出与最终报告。
+- **已发布（2026-10-20 20:37 CST，快照 commit `0fae88e`）**：`bash tools/deploy/publish_workspace.sh` 成功；`fundlex-recall-api` / `fundlex-recall-worker` active；`/opt/fundlex-recall-first` 与仓库 `obligations.py` / `recovery/orchestrator.py` / `models/roles.py` / `recall.py` / `recall_pipeline.py` / `frontend/app.js` sha256 一致；`/api/capabilities` 200。生产 env：`FUNDLEX_GENERATION_STRATEGY=registry`、`FUNDLEX_MODEL_MAX_OUTPUT_TOKENS=8000`。
+- **真实工作台端到端（已通过）**：默认入口 `POST /api/tasks`（`engine_id=recall_first`）→ 上传 D01 → seal → 真实 Worker/模型 → `/revisions` 19 条全部映射、目录保留、14 页 → 拒绝第 1 条 + 接受其余 18 条 → 下载 `selected_final` **136125 bytes / sha256 `efd9f20c59fddb96224876782e9b73f5c0670201440947aeeac4e90f62faeb1f`**，残留修订 0，被拒条目恢复原文，接受条目保留替换；`accept-all` 19 条成功；`working_final`/`working_redline` 仍可下载。任务 `db67ed71…`、文档 `9a0810a9…`、批次 `b72d9b42…`；交付状态 `incomplete`（如实，不冒充 complete）。
+- **子集回归（最终代码，用户授权只跑部分，不跑全量）**：
+  - D01：partial；93 calls / $0.0516；claim replay 17/17 verified；残留问题集中在 G05/G01/G08 审计与 G06/G15/G17 查漏（具体见任务报告）。
+  - D02（ETF 联接基金）：partial；56 calls / $0.0636；claim verified 17 段；TARGET 7 / GENERATION 1。
+  - D11：partial；125 calls / $0.0906；claim 失败集中在重复正文/摘要副本（DUPLICATE_SITE_UNEDITED）与 G15/G17 残留。
+  - D16：partial；61 calls / $0.0554；G06 复合目标、G14/G16/G18/G22 audit pending 等。
+  - 对照 round14-12：D02 原先可能被排除，现正确进入处理；D11 旧版报 complete 但属 false_complete，现 blocked；D16 旧版 integrated complete，现因更严格 target/audit 门 partial（需人工复核是否为过度阻塞）。
+- **下一动作**：① 用户自行跑全量 514（agent 不自行跑）；② 修 G05/G06/G15/G17 目标与审计残留、D16 过度阻塞复核；③ 用子集结果调优后再发布；④ 全量/留出验收与最终报告。
 - **预算/账本**：生产账本 `/var/lib/fundlex/model_budget.sqlite` 本轮未读写；agent 使用临时账本 `/tmp/opencode/realcheck.sqlite`（约 $0.45）。
 
 ## 当前断点（2026-10-19，前端改造第一批，已本地验证并发布）

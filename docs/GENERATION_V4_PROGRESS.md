@@ -129,3 +129,11 @@ append semantic site anchor、`(operation_id, site)` 覆盖粒度、G06/G13/G17 
 - 硬门：`validate_edit` 成为确定性/Compose/Joint 的统一入口；claim replay 增加文档级与段内边界证明；G16 组件×站点；费用主题与列表序号修复。
 - 验证：全量 **872 passed / 6 skipped**；round14-12 离线 shadow **222 段 / 0 hard FAIL**；真实 D01 早期一版报 complete，但 Business Reviewer 发现 G17 残句/G15 正文摘要不一致，属 false_complete；新增残留与副本硬门后 D01 被如实阻塞为 partial。D02/D03/D11 的失败也被标 partial（D11 旧版为 false_complete）。
 - 未完成：20 例 dev 对照、514 全量、生产发布与工作台端到端；G09/G01/G15 业务残留、audit context 分批、无目标规则 T3 默认关闭；尚未取得最新硬门下真实 complete 样例。
+
+## Recovery 架构收口与发布（2026-10-20）
+
+- 全量测试 **878 passed / 6 skipped**；离线 shadow round14-12 **222 段 / 0 hard FAIL**。
+- 已发布快照 `0fae88e`：API/Worker active，关键模块与部署副本 sha256 一致，生产 `registry` + 输出上限 8000。
+- 真实工作台默认入口 D01：19 条修订、目录保留、14 页；拒绝 1/接受 18 → `selected_final` 136125 bytes / sha256 `efd9f20c…` / 0 残留修订；accept-all 19 条成功；交付 incomplete 如实。
+- 子集回归：D01/D02/D11/D16 均 partial（用户授权只跑部分，不跑 514）；主要残留为 G05/G06/G15/G17 目标/审计、G01/G08 audit pending、D11 重复正文/摘要副本、D16 G06 复合目标。
+- 下一步：修上述残留与 D16 过度阻塞；用户跑 514 全量/留出；前端展示 `user_summary`/`failure_class`。

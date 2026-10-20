@@ -1896,13 +1896,15 @@
   - `/home/opencode/fundlex/fundlex/recovery/` + `delivery.py`：FailureClass、RecoveryAction、预算、历史、用户三态输出；Claim Replay 失败重建后重新 audit/sweep/replay。
   - `/home/opencode/fundlex/fundlex/targeting.py`：T3 模型定位只返回 quote/location，代码重新 `resolve_quote`/`containing_segment`；无目标规则的自动 T3 默认关闭（见限制 2）。
 - 验证：
-  - 全量 `pytest tests -q` → **872 passed / 6 skipped**。
+  - 全量 `pytest tests -q` → **878 passed / 6 skipped**。
   - 离线 `validator_shadow` 对 `p6-dev-round14-12`：19 例 / 222 段编辑 / **0 hard FAIL**；修复了 D03 列表序号 “4、” 被误判为受保护金额的 false positive。
   - 真实模型（临时账本，OpenCode Go）：D01 早期一版报 `complete_with_notices`（27 calls），但 Business Reviewer 复核 DOCX 发现 G17 p760 残句、G15 正文/摘要不一致，属 **false_complete**；新增 delete-only 逐句残留、重复副本一致性、G05/G06/G01/G03 目标锚点后，D01 被如实阻塞为 partial（96 calls / 约 $0.052）。D02（ETF 联接基金）`eligible/open_regular`，G05 compose 失败如实标记 partial；D03 G06 复合目标未解决 partial；D11 旧版 false_complete 被新门改为 partial（G15 误绑托管费、G09 第二处措辞缺失）。临时账本合计约 963 requests / $0.5792，未触碰生产账本。
-  - 独立 Architecture Reviewer 发现并已修复：scope 遗漏被静默 NOT_APPLICABLE、plan `not_applicable` 覆盖 TRUE、Validator/Claim Replay 受 flag 开关、claim recovery 复用旧 audit/sweep、类别枚举前缀漏洞、审计一个 completed 掩盖另一个 wrong、Infrastructure stop 被吞。Business Reviewer 另发现并已部分修复：delete-only 短 span 残留、正文/摘要重复副本不一致、G05/G06 错误站点、中文数字时限通知、VERIFIED fact 被 applicability override 推翻、G02/G04/G08/G11 fee-group CONFLICT 未阻断、货币/描述性类别枚举、ONE_OF 残留变体。仍保留：无目标规则 T3 默认关闭、audit context 分批未实现、514 全量未跑、G09/G01 真实业务残留、尚未取得最新硬门下真实 complete。
-- 状态与验证范围：**已实施/本地已验证，未发布生产**。不宣称 §51 全量验收完成；514 corpus 与生产部署是下一步。
-- 下一步：① 用 20 例 dev 集跑新架构并对照 round14-12；② 修 G09/G15 真实残留与 audit context 分批；③ 生产发布 + 真实工作台端到端；④ 514 全量/留出验收；⑤ 前端展示 `user_summary`/`failure_class`。
-- 变更记录：2026-10-20 新增。
+  - 独立 Architecture Reviewer 发现并已修复：scope 遗漏被静默 NOT_APPLICABLE、plan `not_applicable` 覆盖 TRUE、Validator/Claim Replay 受 flag 开关、claim recovery 复用旧 audit/sweep、类别枚举前缀漏洞、审计一个 completed 掩盖另一个 wrong、Infrastructure stop 被吞。Business Reviewer 另发现并已部分修复：delete-only 短 span 残留、正文/摘要重复副本不一致、G05/G06 错误站点、中文数字时限通知、VERIFIED fact 被 applicability override 推翻、G02/G04/G08/G11 fee-group CONFLICT 未阻断、货币/描述性类别枚举、ONE_OF 残留变体。仍保留：无目标规则 T3 默认关闭、audit context 分批未实现、514 全量未跑、G05/G06/G15/G17 真实业务残留、尚未取得最新硬门下真实 complete。
+- 生产发布与端到端（2026-10-20 20:37 CST，快照 `0fae88e`）：`publish_workspace.sh` 成功，API/Worker active；关键模块与部署副本 sha256 一致。真实工作台默认入口 D01：19 条修订、目录保留、14 页；拒绝 1/接受 18 → `selected_final` 136125 bytes、sha256 `efd9f20c…`、0 残留修订；accept-all 19 条成功；working 产物可下载；交付 `incomplete` 如实。任务 `db67ed71…`、文档 `9a0810a9…`。
+- 子集回归（用户授权只跑部分，未跑 514）：D01 partial 93 calls/$0.0516；D02 partial 56/$0.0636；D11 partial 125/$0.0906；D16 partial 61/$0.0554。D11 旧版 false complete 被 blocked；D16 旧版 integrated complete 变 partial，需复核是否过度阻塞。
+- 状态与验证范围：**已实施/已发布/真实工作台端到端通过**；但**未完成 §51 全量验收**。用户明确要求 agent 不自行跑全量，只跑子集；514 由用户运行。
+- 下一步：① 修 G05/G06/G15/G17 目标/审计残留与 D16 过度阻塞；② 用户跑 514 全量/留出；③ 前端展示 `user_summary`/`failure_class`；④ 根据全量结果继续调优。
+- 变更记录：2026-10-20 新增；同日发布并完成真实工作台 E2E；同日补子集回归。
 
 ## FL-D134（评估，未实施）任务总览改版（2026-10-20）的前端可改范围与后端缺口
 

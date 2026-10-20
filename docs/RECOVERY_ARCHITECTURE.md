@@ -221,11 +221,20 @@ corpus 评测使用。
 - 临时账本合计约 **963 requests / $0.5792**（未触碰生产账本）。
 - **结论**：新架构已证明能发现旧版的 false_complete；尚未取得“最新硬门下真实合同
   complete”的验收样例。Final Architecture Reviewer 的 G05 satisfied-target 隐藏 delete、
-  G11 ONE_OF 被新文误判残留两个 blocker 已修复并有回归测试（872 passed）。
+  G11 ONE_OF 被新文误判残留两个 blocker 已修复并有回归测试（878 passed）。
+- **生产发布（2026-10-20 20:37 CST，快照 `0fae88e`）**：`publish_workspace.sh` 成功，
+  API/Worker active；关键模块与部署副本 sha256 一致；生产 `registry` + 输出上限 8000。
+- **真实工作台端到端（通过）**：D01 经默认 `POST /api/tasks` → 上传 → seal → 真实 Worker/模型
+  → 19 条修订（目录保留、14 页）→ 拒绝 1/接受 18 → `selected_final` 136125 bytes
+  sha256 `efd9f20c…`，0 残留修订；`accept-all` 19 条成功；working 产物可下载；交付
+  `incomplete` 如实。
+- **子集回归（最终代码，未跑全量）**：D01 partial 93 calls/$0.0516，D02 partial 56/$0.0636，
+  D11 partial 125/$0.0906，D16 partial 61/$0.0554；D11 旧版 false complete 被 blocked，
+  D16 旧版 integrated complete 变 partial（需复核是否过度阻塞）。
 
 ## 10. 已知限制（未宣称完成）
 
-1. **未取得最新硬门下的真实 complete，也未跑 514 全量 corpus**。本轮真实合同
+1. **未取得最新硬门下的真实 complete，也未跑 514 全量 corpus（按用户指示由用户自行跑全量，agent 只跑子集）**。本轮真实合同
    暴露了 G09 部分替换、G01 错误站点、G06/G11 目标/变体残留等既有业务缺陷；全量需要
    约 3–4 万次模型调用、数十小时与约 $20–40，超出单次会话可执行范围。
    这不影响“新增硬门不会误拒既有好编辑”的离线证据，但不能替代 §51 的 514 验收。
