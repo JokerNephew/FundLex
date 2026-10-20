@@ -1896,10 +1896,21 @@
   - `/home/opencode/fundlex/fundlex/recovery/` + `delivery.py`：FailureClass、RecoveryAction、预算、历史、用户三态输出；Claim Replay 失败重建后重新 audit/sweep/replay。
   - `/home/opencode/fundlex/fundlex/targeting.py`：T3 模型定位只返回 quote/location，代码重新 `resolve_quote`/`containing_segment`；无目标规则的自动 T3 默认关闭（见限制 2）。
 - 验证：
-  - 全量 `pytest tests -q` → **864 passed / 6 skipped**。
+  - 全量 `pytest tests -q` → **872 passed / 6 skipped**。
   - 离线 `validator_shadow` 对 `p6-dev-round14-12`：19 例 / 222 段编辑 / **0 hard FAIL**；修复了 D03 列表序号 “4、” 被误判为受保护金额的 false positive。
   - 真实模型（临时账本，OpenCode Go）：D01 早期一版报 `complete_with_notices`（27 calls），但 Business Reviewer 复核 DOCX 发现 G17 p760 残句、G15 正文/摘要不一致，属 **false_complete**；新增 delete-only 逐句残留、重复副本一致性、G05/G06/G01/G03 目标锚点后，D01 被如实阻塞为 partial（96 calls / 约 $0.052）。D02（ETF 联接基金）`eligible/open_regular`，G05 compose 失败如实标记 partial；D03 G06 复合目标未解决 partial；D11 旧版 false_complete 被新门改为 partial（G15 误绑托管费、G09 第二处措辞缺失）。临时账本合计约 963 requests / $0.5792，未触碰生产账本。
   - 独立 Architecture Reviewer 发现并已修复：scope 遗漏被静默 NOT_APPLICABLE、plan `not_applicable` 覆盖 TRUE、Validator/Claim Replay 受 flag 开关、claim recovery 复用旧 audit/sweep、类别枚举前缀漏洞、审计一个 completed 掩盖另一个 wrong、Infrastructure stop 被吞。Business Reviewer 另发现并已部分修复：delete-only 短 span 残留、正文/摘要重复副本不一致、G05/G06 错误站点、中文数字时限通知、VERIFIED fact 被 applicability override 推翻、G02/G04/G08/G11 fee-group CONFLICT 未阻断、货币/描述性类别枚举、ONE_OF 残留变体。仍保留：无目标规则 T3 默认关闭、audit context 分批未实现、514 全量未跑、G09/G01 真实业务残留、尚未取得最新硬门下真实 complete。
 - 状态与验证范围：**已实施/本地已验证，未发布生产**。不宣称 §51 全量验收完成；514 corpus 与生产部署是下一步。
 - 下一步：① 用 20 例 dev 集跑新架构并对照 round14-12；② 修 G09/G15 真实残留与 audit context 分批；③ 生产发布 + 真实工作台端到端；④ 514 全量/留出验收；⑤ 前端展示 `user_summary`/`failure_class`。
 - 变更记录：2026-10-20 新增。
+
+## FL-D134（评估，未实施）任务总览改版（2026-10-20）的前端可改范围与后端缺口
+
+- 发现日期：2026-10-20（产品负责人提出总览页改版需求后核对现有 API/前端）。
+- 可**不动后端**完成：侧边栏「批量导入」改「新建任务」（图标不变）；右上角「角色 · 姓名」格式（`/api/auth/me` 有 `display_name`、`role`；但 `role` 仅 `admin/member`，见下）；保留面包屑；移除单任务卡片、替换为批量总览卡片的结构/文案/按钮（新建 `newTask()`、刷新 `refresh()` 均已有）；5 个指标卡的布局/文案/占位；「我的任务」标题、右侧新建按钮、「查看」文案、状态标签；任务名下方指引名称可用 `/api/guides` 的 `filename` 与任务 `guide_snapshot.version_id` 前端映射；通知铃铛与红点保持不动。
+- **需取舍**：按指引名称筛选。`/api/tasks` 目前只支持 `q/status/sort/page`，没有 `guide_version_id` 参数；纯前端正确实现需拉取全部任务后本地筛选/分页（任务量小可行，量大不建议），或后端增加筛选参数。
+- **必须后端或只能占位**：本月处理合同数、本月完成率、待处理合同、异常合同、平均处理时长、环比变化。现 `/api/tasks` 的任务摘要只有 `created_at`/`updated_at`，没有 `started_at`/`finished_at`，平均时长无法准确计算；也没有月度聚合/环比接口。按需求「数值后端渲染，前端只做占位结构」，本轮可先用 `—` 占位，真实值另立 `GET /api/tasks/stats?month=...`（含完成/待处理/异常/平均秒数/环比）并补时间戳或任务事件表。
+- **批量导出**：描述文案可写；现有能力是单任务 ZIP（`/api/tasks/{id}/download/all`）与单任务 CSV，没有跨任务批量导出接口。若只是描述任务内批量导出，文案成立；若要做总览页跨任务导出，需后端。
+- **角色名称**：当前用户字段只有 `role=admin/member`，没有「法务专员」等职务字段。可先前端映射 `member→法务专员`、`admin→管理员`；若要每个账号显示真实职务，需后端增加 `job_title`/`title` 字段。
+- 状态与验证：**评估/未实施**；未改代码，未发布。若按占位结构实施，可纯前端完成并复用现有 `.hero/.stat/.table/.badge/.progress-line` 样式，不新增图表、不改配色/Logo/全局基础样式。
+- 下一步：产品确认是否接受占位数值与前端映射角色名；确认指引筛选采用前端全量筛选还是后端参数；再实施页面改版。

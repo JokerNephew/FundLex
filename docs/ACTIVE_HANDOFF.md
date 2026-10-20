@@ -35,7 +35,7 @@
 
 - **分支**：`refactor/recovery-architecture`（基于 `a2905ac` + REITs/ETF feeder 提交 `374440a`）。本轮架构提交：`f98d95c` 模型角色、`69a6a24` Obligation IR、`3e257f0` Validator 硬门、`c6bbf1d` Recovery、`838c9a6` 管线接线；文档提交待补。
 - **完成内容**：`docs/RECOVERY_ARCHITECTURE.md` 与集中问题 **FL-D133**。核心为 obligation-first ledger、Primary/Review 独立角色、tri-state applicability、focused fact recovery、T3 locator、Joint Compose、Validator hard gate、claim replay 边界证明、统一 Recovery/FailureClass、用户三态交付摘要。
-- **测试**：全量 `pytest tests -q` → **864 passed / 6 skipped**。离线 validator shadow（round14-12）：19 例 / 222 段 / **0 hard FAIL**。
+- **测试**：全量 `pytest tests -q` → **872 passed / 6 skipped**。离线 validator shadow（round14-12）：19 例 / 222 段 / **0 hard FAIL**。
 - **真实模型（临时账本 `/tmp/opencode/realcheck.sqlite`，未触碰生产账本）**：
   - **D01 曾出现 false_complete，已修复门禁**：早期一版报 `complete_with_notices`（27 calls），独立 Business Reviewer 复核最终 DOCX 发现 G17 第二句仍留在 p760、G15 正文/摘要处理不一致。新增 delete-only 逐句残留检测、重复条款副本一致性、G05/G06/G01/G03 目标锚点后，D01 被如实阻塞为 partial（96 calls / 约 $0.052；audit 另发现 G09 第二处措辞缺失、G01 追加位置错误、G11 变体残留）。
   - **D02**（ETF 联接基金）：`eligible/open_regular`；116 calls / $0.0615；G05 compose 固定文本缺失 → partial（诚实失败）。
