@@ -4040,6 +4040,16 @@ _TARGET_ANCHORS: dict[str, tuple[tuple[str, ...], str]] = {
 
 def target_site_ok(rule_id: str, span: Any, inspection: DocumentInspection) -> bool:
     """Whether this target paragraph carries the rule's own clause (site guard)."""
+    if rule_id == "G15":
+        paragraph, _ = display_text(span.text)
+        return "销售服务费" in paragraph and "支付" in paragraph
+    if rule_id == "G16":
+        paragraph, _ = display_text(span.text)
+        return "销售服务费" in paragraph and "计提" in paragraph
+    if rule_id == "G17":
+        paragraph, _ = display_text(span.text)
+        return "销售服务费" in paragraph and (
+            "主要用于" in paragraph or "使用范围" in paragraph)
     if rule_id not in _TARGET_ANCHORS:
         return True
     paragraph, _ = display_text(span.text)
