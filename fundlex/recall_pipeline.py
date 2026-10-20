@@ -584,7 +584,10 @@ def _run_survey(model: Any, rules: Sequence[dict], rules_by_id: dict[str, dict],
                            if target.state == "needs_edit" and target.resolution == "resolved"}
     delete_rules = {str(rule.get("rule_id") or "") for rule in rules
                     if is_delete_only_rule(rule, facts)}
-    override_rules = frozenset(delete_rules - resolved_needs_edit)
+    # A resolved delete target at one location must not suppress the survey at a
+    # different copy of the same clause (D01 p758 vs p1221). Coverage is tracked per
+    # (rule, location) by ``known``, so every delete rule may override here.
+    override_rules = frozenset(delete_rules)
     hits = survey_targets(inspection, rules, facts, known=known, override_rules=override_rules)
     # Append rules have no reference anchor, so the survey above cannot see them.
     # Add the deterministic append pass so a conditional append the model inventory
@@ -813,6 +816,17 @@ def _plan_and_generate(model: Any, rules_by_id: dict[str, dict], targets: Sequen
                        temp_dir: Path, *, max_compose_calls: int
                        ) -> tuple[dict[str, Any], list[dict[str, Any]], Any, Any, DocumentInspection]:
     """Plan from the ORIGINAL inspection, validate, generate and re-read the final."""
+    from .recall import target_site_ok
+    for target in targets:
+        if (target.state == "needs_edit" and not target.out_of_scope
+                and not target.composite and target.resolution == "resolved"):
+            try:
+                span = inspection.by_location(target.location)
+            except DocxError:
+                continue
+            if not target_site_ok(target.rule_id, span, inspection):
+                target.out_of_scope = True
+                target.reason = f"{target.reason}|TARGET_SOURCE_MISMATCH"
     planned = plan_edits(rules_by_id, targets, inspection, facts, model,
                          max_compose_calls=max_compose_calls)
     edits = build_docx_edits(planned["edits"], inspection)
@@ -1220,6 +1234,12 @@ def _absorb_missed_targets(audit_state: dict[str, Any], targets: Sequence[Target
             key = (rule_id, item["location"])
             if key in existing or len(_compact(str(item.get("quote") or ""))) < 4:
                 continue
+            if any(target.location == item["location"]
+                   for target in [*targets, *synthetic]):
+                # The audit may report a missed clause at a paragraph already owned by
+                # another rule; a second overlapping synthetic target is not safe. The
+                # repair note still asks the inventory to re-read the window.
+                continue
             target = _make_synthetic_target(f"A{len(synthetic) + 1:03d}", rule_id, item["location"],
                                             item["quote"],
                                             f"audit_missed:{_clip(str(item.get('reason') or ''), 80)}",
@@ -1296,6 +1316,13 @@ def _absorb_sweep_findings(pending: Sequence[dict[str, Any]], targets: Sequence[
             continue
         key = (rule_id, finding["location"])
         if key in existing:
+            continue
+        if is_delete_only_rule(rule, facts) and any(
+                target.location == finding["location"]
+                for target in [*targets, *synthetic]):
+            # A delete finding at a location already owned by another rule must not
+            # become a second overlapping target (D01 G15 p760 vs G17): let the
+            # existing target's repair note carry it, and keep the finding for audit.
             continue
         target = _make_synthetic_target(f"A{len(synthetic) + 1:03d}", rule_id,
                                         finding["location"], quote,
@@ -2280,9 +2307,12 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
                     synthetic, origins, survey_ledger, coverage_gaps, sections)
         targets = _collect_targets(entries, synthetic, rules_by_id, inspection)
         from .recall import ensure_delete_targets
-        for target in ensure_delete_targets(targets, rules_by_id, inspection):
-            targets.append(target)
-            origins[target.target_id] = "delete_residual_copy"
+        if os.environ.get("FUNDLEX_DELETE_RESIDUAL_TARGETS", "1").strip().lower() in {
+                "1", "true", "on", "yes"}:
+            for target in ensure_delete_targets(targets, rules_by_id, inspection):
+                synthetic.append(target)
+                targets.append(target)
+                origins[target.target_id] = "delete_residual_copy"
         from .targeting import locate_unresolved_targets, targets_for_open_rules
         open_targets = targets_for_open_rules(obligation_ledger, targets, rules_by_id, facts,
                                               inspection, mapping, sections)

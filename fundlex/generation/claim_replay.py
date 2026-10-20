@@ -276,7 +276,14 @@ def check_delete_residuals(rules_by_id: Mapping[str, dict], after_inspection: An
             authorized_new += _compact(text)
             authorized_sentences.extend(_compact(part) for part in
                                         re.split(r"(?<=[。；;])", text) if part.strip())
+    sentence_anchors = {
+        "G06": ("份额类别", "转换"),
+        "G13": ("7日", "赎回费", "短期"),
+        "G15": ("销售服务费",),
+        "G17": ("销售服务费",),
+    }
     for rule_id, rule in rules_by_id.items():
+        anchors = sentence_anchors.get(str(rule_id), ())
         operations = [operation for operation in (rule.get("operations") or [])
                       if isinstance(operation, Mapping)]
         carried = [operation for operation in operations if operation.get("op") != "noop"]
@@ -293,6 +300,8 @@ def check_delete_residuals(rules_by_id: Mapping[str, dict], after_inspection: An
                 # 不包括…" sentence is still caught.
                 probes = [sentence, re.sub(r"^[A-ZＡ-Ｚ]\s*类(?:基金份额)?的?", "",
                                             sentence).strip()]
+                if anchors and not any(anchor in sentence for anchor in anchors):
+                    continue
                 for probe in probes:
                     if len(_compact(probe)) >= 8 and probe not in sentences:
                         sentences.append(probe)

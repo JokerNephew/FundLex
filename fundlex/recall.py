@@ -892,6 +892,7 @@ class Target:
             "start": self.start, "end": self.end, "resolution": self.resolution,
             "segment_ok": self.segment_ok, "composite": list(self.composite),
             "operations": list(self.operations),
+            "out_of_scope": self.out_of_scope,
         }
 
 
@@ -2999,30 +3000,29 @@ def _plan_target_inner(rule: dict, target: Target, inspection: DocumentInspectio
     span = inspection.by_location(target.location)
     if not containing_segment(span, target.start, target.end) and not (target.start == target.end):
         raise RecallError("RECALL_TARGET_STRUCTURE", {"target": target.target_id})
-    actual = span.text[target.start:target.end]
-    _TARGET_ANCHORS = {
-        # G05 only authorises edits inside the share-class setup / fee-adjustment
-        # clause. A bare "并报中国证监会备案" also occurs in the fund-contract amendment
-        # clause; deleting it there corrupts an unrelated provision (D11 p1320).
-        "G05": (("份额类别", "基金份额类别", "调整前", "调低"), "any"),
-        # G06 deletes only the class-conversion prohibition, never every paragraph
-        # that happens to contain "转换" (D03 p419/p1102).
-        "G06": (("份额类别", "不得"), "all"),
-        # Append rules must land in the share-class definition, not in any other
-        # definition that happens to be nearby (D01 p100 基金产品资料概要).
-        "G01": (("基金份额", "分为"), "all"),
-        "G03": (("基金份额", "分为"), "all"),
-    }
     rule_id = str(rule.get("rule_id") or "")
-    if rule_id in _TARGET_ANCHORS:
-        paragraph, _ = display_text(span.text)
-        anchors, mode = _TARGET_ANCHORS[rule_id]
-        matched = (any(anchor in paragraph for anchor in anchors) if mode == "any"
-                   else all(anchor in paragraph for anchor in anchors))
-        if not matched:
-            raise RecallError("TARGET_SOURCE_MISMATCH",
-                              {"rule": rule_id, "target": target.target_id,
-                               "location": target.location})
+    if rule_id in {"G02", "G04"} and len(target.operations) == 1:
+        # The inventory often quotes the whole A/C class-definition sentence for each
+        # operation. Narrow the edit to that operation's own old_text so the A and C
+        # substitutions do not overlap in merge_edits.
+        key = str(target.operations[0] or "")
+        if key.startswith(rule_id + ":"):
+            try:
+                operation_index = int(key.split(":", 1)[1])
+            except ValueError:
+                operation_index = -1
+            operations = rule.get("operations") or []
+            if 0 <= operation_index < len(operations):
+                old_text = str(operations[operation_index].get("old_text") or "")
+                if old_text:
+                    narrowed = resolve_quote(span, old_text)
+                    if narrowed is not None:
+                        target.start, target.end = narrowed
+    actual = span.text[target.start:target.end]
+    if not target_site_ok(rule_id, span, inspection):
+        raise RecallError("TARGET_SOURCE_MISMATCH",
+                          {"rule": rule_id, "target": target.target_id,
+                           "location": target.location})
     if _tier1_enabled():
         tier1 = _plan_tier1(rule, operations, facts, actual)
         if tier1 is not None:
@@ -3474,6 +3474,22 @@ def merge_edits(edits: Sequence[PlannedEdit], inspection: DocumentInspection
                     current = item
                     current_components = [item_component]
                     continue
+            if current.rule_id == item.rule_id:
+                # Same-rule overlapping operations are alternatives, not two edits:
+                # G05's replace and its delete variant target the same phrase, and
+                # G11's two old-text variants produce the same policy. Prefer the
+                # non-destructive replacement and record the other target as covered.
+                if not item.replacement.strip() and current.replacement.strip():
+                    covered.append(item.target_id)
+                    continue
+                if not current.replacement.strip() and item.replacement.strip():
+                    covered.append(current.target_id)
+                    current = item
+                    current_components = [item_component]
+                    continue
+                if _compact(current.replacement) == _compact(item.replacement):
+                    covered.append(item.target_id)
+                    continue
             conflicts.append({"code": "RECALL_EDIT_OVERLAP", "location": location,
                               "targets": [current.target_id, item.target_id],
                               "spans": [[current.start, current.end], [item.start, item.end]]})
@@ -3689,6 +3705,10 @@ def plan_edits(rules_by_id: dict[str, dict], targets: Sequence[Target], inspecti
     ledger: list[dict[str, Any]] = []
     compose_budget = [max_compose_calls]
     for target in targets:
+        if target.out_of_scope:
+            ledger.append({"target_id": target.target_id, "rule_id": target.rule_id,
+                           "status": "not_applicable", "reason": "TARGET_SOURCE_MISMATCH"})
+            continue
         if target.state != "needs_edit":
             ledger.append({"target_id": target.target_id, "rule_id": target.rule_id,
                            "status": "satisfied" if target.state == "satisfied" else "not_applicable",
@@ -4005,6 +4025,36 @@ def content_check_factory(planned: Sequence[dict], inspection: DocumentInspectio
         return _component_ok({**item, "expected_old_text": span.text[start:end]}, inspection)
 
     return check
+
+
+_TARGET_ANCHORS: dict[str, tuple[tuple[str, ...], str]] = {
+    # G05 only authorises edits inside the share-class setup / fee-adjustment clause.
+    "G05": (("份额类别", "基金份额类别", "调整前", "调低"), "any"),
+    # G06 deletes only the class-conversion prohibition.
+    "G06": (("份额类别", "不得"), "all"),
+    # Append rules must land in the share-class definition, not another definition.
+    "G01": (("基金份额类别", "将基金份额分为", "份额类别："), "any"),
+    "G03": (("基金份额类别", "将基金份额分为", "份额类别："), "any"),
+}
+
+
+def target_site_ok(rule_id: str, span: Any, inspection: DocumentInspection) -> bool:
+    """Whether this target paragraph carries the rule's own clause (site guard)."""
+    if rule_id not in _TARGET_ANCHORS:
+        return True
+    paragraph, _ = display_text(span.text)
+    if rule_id in {"G01", "G03"}:
+        locations = [item.location for item in inspection.paragraphs]
+        try:
+            index = locations.index(span.location)
+        except ValueError:
+            index = -1
+        if index > 0:
+            previous, _ = display_text(inspection.paragraphs[index - 1].text)
+            paragraph = previous + paragraph
+    anchors, mode = _TARGET_ANCHORS[rule_id]
+    return (any(anchor in paragraph for anchor in anchors) if mode == "any"
+            else all(anchor in paragraph for anchor in anchors))
 
 
 _DELETE_SENTENCE_ANCHORS = {

@@ -168,6 +168,8 @@ def _converge(before: str, first_start: int, canonical_tail: str) -> str:
 _G09_VARIANTS: tuple[tuple[str, str], ...] = (
     ("并扣除相应的费用", "并扣除或加上相应的费用"),
     ("当日基金份额净值", "当日该类基金份额的基金份额净值"),
+    ("当日该类基金份额净值", "当日该类基金份额的基金份额净值"),
+    ("当日对应份额类别的基金份额净值", "当日该类基金份额的基金份额净值"),
 )
 
 

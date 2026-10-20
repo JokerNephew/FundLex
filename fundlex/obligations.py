@@ -474,6 +474,7 @@ def project(ledger: ObligationLedger, report: Mapping[str, Any], *,
 
         relevant = [target for target in targets
                     if str(target.get("rule_id") or "") == item.spec.rule_id
+                    and not target.get("out_of_scope")
                     and _target_covers_operation(target, item)]
         relevant_ids = tuple(str(target.get("target_id") or "") for target in relevant)
         item.targets = relevant_ids

@@ -1306,3 +1306,31 @@ def test_g01_accepts_a_class_definition_without_the_word_fenzlei(tmp_path: Path)
                        compose_budget=[1])
     assert edit is not None
     assert "直销机构" in edit.replacement
+
+
+def test_g01_rejects_a_product_summary_definition_site(tmp_path: Path):
+    from docx import Document
+    from fundlex.docx import inspect_docx
+    from fundlex.recall import RecallError, Target, plan_target
+
+    path = tmp_path / "g01-wrong-site.docx"
+    document = Document()
+    sentence = "基金产品资料概要：指基金产品资料概要及其更新，是基金份额持有人了解基金情况的文件。"
+    document.add_paragraph(sentence)
+    document.save(path)
+    inspection = inspect_docx(path, full=True)
+    rule = {"rule_id": "G01", "title": "类别定义", "requirement": "追加直销政策",
+            "operations": [{"op": "append", "new_text": "通过直销机构申购不收取申购费。",
+                            "condition": {"kind": "none", "value": None}}],
+            "class_substitution": True}
+    span = inspection.by_location("p0")
+    facts = _facts()
+    facts.fact_status.update({"share_class_structure": "VERIFIED",
+                              "subscription_fee_group": "VERIFIED",
+                              "service_fee_group": "VERIFIED"})
+    target = Target("T1", "G01", "p0", sentence, "needs_edit", "",
+                    0, len(span.text), "resolved")
+    with pytest.raises(RecallError) as excinfo:
+        plan_target(rule, target, inspection, facts, ScriptedGateway({}),
+                    compose_budget=[1])
+    assert excinfo.value.code == "TARGET_SOURCE_MISMATCH"
