@@ -279,3 +279,9 @@ corpus 评测使用。
 - Target 新增 `site_candidates`、`occurrence_index`、`occurrence_anchor`。
 - `resolve_occurrence()` 按 inventory quote 的局部上下文给每个相同 token 打分；唯一最高才绑定，否则抛 `RECALL_TARGET_OCCURRENCE_AMBIGUOUS`（TARGET），由 Recovery 决定是否定位；绝不默认第一个。
 - Claim Replay 对带 occurrence 身份的 target 复核：编辑 span 必须覆盖授权 occurrence；编辑了同段另一个相同 token 会失败。
+
+### 9.5 最终验证（2026-10-21）
+
+- 全量 `pytest tests -q`：**929 passed / 6 skipped / 0 failed**。
+- 真实模型子集（临时账本，最终代码）：D01 incomplete 79 calls/$0.0591；D02 incomplete 135/$0.0889；D11 incomplete 149/$0.0946；D16 incomplete 85/$0.0483。四例均保持 fail-closed partial，claim replay 能区分真实业务残留与未计划 sibling operation。
+- 已知残余：重复正文/摘要副本（D01 p135、D16 p822）仍会因目标重叠或分歧阻塞；G06 composite、G15/G17 旧支付/用途句、G13/G14 残留仍是真实业务问题；sweep 修复尚未接入 RecoveryOrchestrator；AUDIT_NOT_COMPLETED（无根因 route）仍终局阻塞。
