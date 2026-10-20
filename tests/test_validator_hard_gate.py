@@ -126,3 +126,11 @@ def test_g05_authorized_topic_shift_is_not_a_flip():
                          remove_patterns=("基金管理人可以调低赎回费率。",))
     report = run_validation(before, after, auth=auth)
     assert report.verdict == "PASS", (report.findings, report.changes)
+
+
+def test_list_ordinal_removed_with_its_sentence_is_not_a_lost_literal():
+    before = "4、申购费用由投资人承担，不列入基金财产。"
+    after = "通过直销机构申购本基金A类基金份额不收取申购费。"
+    auth = Authorization(must_add=(after,), remove_patterns=(before,))
+    report = run_validation(before, after, auth=auth)
+    assert report.verdict == "PASS", (report.findings, report.changes)

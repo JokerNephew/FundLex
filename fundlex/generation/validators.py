@@ -213,6 +213,13 @@ def check_boundary(before_full: str, after_full: str,
 _CLASS_TOKEN = re.compile(r"([A-ZＡ-Ｚ])\s*类")
 
 
+def _ordinal_token_in(token: str, text: str) -> bool:
+    """A bare list number ("4、", "（4）") is not a lost financial literal."""
+    if not token.isdigit() or len(token) > 3:
+        return False
+    return re.search(rf"(?:^|[\s\n]){re.escape(token)}\s*[、.．)）]", text or "") is not None
+
+
 def _survives(token: str, after_compact: str) -> bool:
     """Does the protected token still exist in the edited text?
 
@@ -315,7 +322,8 @@ def explain_changes(before: str, after: str,
 
         lost = [token for token in protected_tokens(before_segment)
                 if not _survives(token, _compact(after_segment))
-                and not _token_authorized(token, auth, before)]
+                and not _token_authorized(token, auth, before)
+                and not _ordinal_token_in(token, before)]
 
         if tag == "delete" or tag == "replace":
             if authorized_old and authorized_new:
