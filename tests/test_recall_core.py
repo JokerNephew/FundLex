@@ -48,9 +48,9 @@ LIQUIDATION_CLAUSE = (
 )
 
 
-def build_contract(path: Path) -> None:
+def build_contract(path: Path, *, title: str = "某某灵活配置混合型证券投资基金基金合同") -> None:
     document = Document()
-    document.add_paragraph("某某灵活配置混合型证券投资基金基金合同")
+    document.add_paragraph(title)
     document.add_paragraph("一、前言")
     document.add_paragraph("本基金合同经中国证监会核准。")
     document.add_paragraph("二、释义")

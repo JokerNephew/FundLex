@@ -195,9 +195,13 @@ def base_responses(**overrides) -> dict[str, object]:
 
 
 def run(tmp_path: Path, responses: dict | None = None, *, gateway: PipelineGateway | None = None,
-        guide: dict | None = None, checkpoint_dir: Path | None = None, **kwargs):
+        guide: dict | None = None, checkpoint_dir: Path | None = None, title: str | None = None,
+        **kwargs):
     source = tmp_path / "contract.docx"
-    build_contract(source)
+    if title is None:
+        build_contract(source)
+    else:
+        build_contract(source, title=title)
     output_dir = tmp_path / "out"
     model = gateway or PipelineGateway(base_responses(**(responses or {})))
     report = process_recall_first(source, output_dir, guide_document=guide or guide_document(),
@@ -433,12 +437,61 @@ def test_excluded_fund_type_report(tmp_path: Path):
     assert report["qualification"]["fund_type"] == "etf"
     assert report["qualification"]["fund_type_quote_verified"] is True
     assert "etf" in report["qualification"]["excluded_types"]
+    assert report["qualification"]["excluded_types"] == ["etf", "money_market", "interbank_cd", "reits"]
     assert report["facts"]["fund_type"] == "etf"
     assert report["artifacts"] == {} and report["output_validation"]["kind"] is None
     assert docx_names(output_dir) == set()
     assert [task for task, _ in gateway.calls] == ["recall_facts"]
     assert (output_dir / "report.md").exists()
     assert_no_temp_artifacts(output_dir)
+
+
+def test_excluded_reits_fund_type_report(tmp_path: Path):
+    """REITs (infrastructure and closed-end commercial real estate) are out of scope.
+
+    The quote is verified against the source; the exclusion must stop the run after
+    the facts stage and publish no artifact (business ruling 2026-10-20).
+    """
+    def reits_facts(context: str) -> dict:
+        value = facts_response(context)
+        value["fund_type"] = {"value": "reits", "quote": "某某灵活配置混合型证券投资基金基金合同",
+                              "basis": "scripted reits"}
+        return value
+
+    _, output_dir, gateway, report = run(tmp_path, {"recall_facts": reits_facts})
+
+    assert report["delivery_status"] == "excluded"
+    assert report["qualification"]["status"] == "excluded_by_fund_type"
+    assert report["qualification"]["fund_type"] == "reits"
+    assert report["qualification"]["fund_type_quote_verified"] is True
+    assert "reits" in report["qualification"]["excluded_types"]
+    assert report["artifacts"] == {} and report["output_validation"]["kind"] is None
+    assert docx_names(output_dir) == set()
+    assert [task for task, _ in gateway.calls] == ["recall_facts"]
+    assert_no_temp_artifacts(output_dir)
+
+
+def test_etf_feeder_is_eligible_and_revised(tmp_path: Path):
+    """An ETF feeder fund is an ordinary open-end contract, not an excluded ETF.
+
+    Business ruling 2026-10-20 (FL-D132): even if the model labels the feeder
+    ``etf`` because of the title, the deterministic feeder check must keep it in
+    scope and the pipeline must still produce artifacts.
+    """
+    title = "某某交易型开放式指数证券投资基金发起式联接基金基金合同"
+
+    def feeder_facts(context: str) -> dict:
+        value = facts_response(context)
+        value["fund_type"] = {"value": "etf", "quote": title, "basis": "title says ETF"}
+        return value
+
+    _, output_dir, _, report = run(tmp_path, {"recall_facts": feeder_facts}, title=title)
+
+    assert report["qualification"]["status"] == "eligible"
+    assert report["facts"]["fund_type"] == "open_regular"
+    assert report["qualification"]["fund_type_basis"] == "etf_feeder_is_open_regular"
+    assert report["delivery_status"] != "excluded"
+    assert docx_names(output_dir)
 
 
 def test_excluded_types_env_override(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):

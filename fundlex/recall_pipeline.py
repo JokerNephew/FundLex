@@ -49,9 +49,10 @@ STOP_CODES = {"MODEL_GLOBAL_CALL_BUDGET_EXCEEDED", "MODEL_COST_BUDGET_EXCEEDED",
               "MODEL_CALL_BUDGET_EXCEEDED", "MODEL_CIRCUIT_OPEN", "MODEL_LEDGER_UNAVAILABLE",
               "MODEL_CONFIG_MISSING", "MODEL_HTTP_ERROR", "MODEL_RETRY_EXHAUSTED"}
 
-# Global exclusions (product ruling 2026-10-19: ETF / money-market / interbank-CD funds
-# stay out of the modification scope; rationale and provenance recorded in DETAIL FL-D130).
-DEFAULT_EXCLUDED_TYPES = "etf,money_market,interbank_cd"
+# Global exclusions (product rulings 2026-10-19/20: ETF / money-market / interbank-CD /
+# REITs (including closed-end commercial real estate) stay out of the modification scope;
+# rationale and provenance recorded in DETAIL FL-D130).
+DEFAULT_EXCLUDED_TYPES = "etf,money_market,interbank_cd,reits"
 DEFAULT_MAX_COMPOSE_CALLS = 8
 SWEEP_ISSUES = {"residual_old_text", "missing_new_text", "wrong_text", "unaddressed_requirement"}
 READABLE_ZONES = {"body", "summary"}

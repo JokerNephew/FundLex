@@ -519,6 +519,22 @@ def _verify_quote(inspection: DocumentInspection, quote: str) -> bool:
     return all(_quote_present(inspection, fragment) for fragment in fragments)
 
 
+def _is_etf_feeder(inspection: DocumentInspection) -> bool:
+    """True when the contract is an ETF feeder fund (联接基金), not the ETF itself.
+
+    The cover/title paragraph names both the product and the document, for example
+    ``…交易型开放式指数证券投资基金发起式联接基金基金合同``. A true ETF contract's
+    title has no ``联接基金``; a body reference to the ETF's feeder does not carry
+    ``基金合同`` in the same paragraph. Business ruling 2026-10-20 (FL-D132): feeder
+    funds are ordinary open-ended contracts and must be revised.
+    """
+    for span in inspection.paragraphs[:30]:
+        text, _ = display_text(span.text)
+        if "联接基金" in text and "基金合同" in text:
+            return True
+    return False
+
+
 def extract_facts(inspection: DocumentInspection, gateway: Any) -> Facts:
     context = facts_context(inspection, limit=max(4000, gateway.max_context_chars - 2500))
     result = gateway.call(task_type="recall_facts", bounded_context=context,
@@ -530,7 +546,14 @@ def extract_facts(inspection: DocumentInspection, gateway: Any) -> Facts:
 
     fund_type = (value.get("fund_type") or {}) if isinstance(value.get("fund_type"), dict) else {}
     fund_type_value = str(fund_type.get("value") or "other")
+    fund_basis = str(fund_type.get("basis") or "")
     fund_quote = str(fund_type.get("quote") or "")
+    if fund_type_value == "etf" and _is_etf_feeder(inspection):
+        # The model occasionally treats an ETF feeder contract as an ETF because the
+        # title contains "ETF … 联接基金" (D02 vs D06, FL-D132). Only the ETF itself
+        # is excluded; the feeder is an ordinary open-end fund and is revised.
+        fund_type_value = "open_regular"
+        fund_basis = "etf_feeder_is_open_regular"
     quotes_verified["fund_type"] = _verify_quote(inspection, fund_quote)
     if not quotes_verified["fund_type"]:
         problems.append("FUND_TYPE_QUOTE_UNVERIFIED")
@@ -590,7 +613,7 @@ def extract_facts(inspection: DocumentInspection, gateway: Any) -> Facts:
     return Facts(
         fund_type=fund_type_value,
         fund_type_quote=fund_quote,
-        fund_type_basis=str(fund_type.get("basis") or ""),
+        fund_type_basis=fund_basis,
         classes=tuple(classes),
         floating_management_fee=floating_value,
         floating_quote=floating_quote,

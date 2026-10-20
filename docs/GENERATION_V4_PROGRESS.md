@@ -55,6 +55,8 @@
 > **第二份复查（源材料版，同日）**：另一 agent 在阅读**指引原文（68–88 段）+ 合同原文**后提出 **6 项 P0 + 6 项 P1**，核心结论：风险重心应从"生成策略"前移到"Facts/Applicability 层"（"程序越确定，错得越稳定"）。已核对其关键代码断言全部属实（append 首句 satisfied=`required.split("。")[0]`、`condition_matches` 裸 bool、`class_label('人民币份额')='人民币类基金份额'` 叠字、`DEFAULT_EXCLUDED_TYPES=etf,money_market,interbank_cd`、`service_group` 定义不严格、G16 registry 的 `preserve existing_payment_*` 与指引冲突）。**处置队列（P0-A~D + P1 列表）见下方"待实施队列"；用户指示暂缓动手。**
 >
 > **ETF/同业存单范围裁定（2026-10-19 用户确认）**：**维持全局排除**（`DEFAULT_EXCLUDED_TYPES` 现状），依据 C-R 设计文档 §9 的默认 + 本次用户确认；后续按"policy override + 依据"记录，不再作为未审视默认。（货币基金排除已有既有裁定。）
+>
+> **REITs/封闭式商业不动产补充裁定（2026-10-20 用户确认）**：REITs（基础设施、封闭式商业不动产）同样不用修改，纳入整份排除；默认集合扩为 `etf,money_market,interbank_cd,reits`。**ETF 联接基金不属于 ETF，正常修改**（`_is_etf_feeder` + `recall_facts_v3`，FL-D132）。代码、测试与真实模型核验已完成（**未发布**），详见 FL-D130/FL-D132。
 
 ### 已核对的代码断言（证据行号，2026-10-19）
 

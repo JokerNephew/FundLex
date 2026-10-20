@@ -1844,8 +1844,12 @@
 - 其他：GitHub HEAD 无 CI 状态（建议加 Actions，非优先）；复查时段 HEAD=`f19039a`，其后已推进数据入库与停止确认两个提交。
 - **第二份复查（源材料版，同日）**：阅读指引原文（68–88 段）+ 合同原文后提出 **6 项 P0 + 6 项 P1**（Facts 三态真接线 / 类别与币种模型 / `class_label` 叠字 / G15+G16+G17 业务闭环 / G16 组件级 coverage / G08-G11 组件级 drop / Router 唯一入口等）；关键代码断言经核对**全部属实**（证据行号见 `GENERATION_V4_PROGRESS.md`）。**处置：队列为 P0-A~D + P1，用户指示暂缓实施。**
 - **ETF/同业存单范围裁定（2026-10-19 用户确认）**：**维持全局排除**（来源=C-R 设计文档 §9 默认 + 本次确认；后续按 policy override+依据 记录）。
+- **REITs/封闭式商业不动产范围裁定（2026-10-20 用户确认）**：**REITs（基础设施 REITs 与封闭式商业不动产）同样不用修改**，纳入整份排除。默认集合由 `etf,money_market,interbank_cd` 扩为 **`etf,money_market,interbank_cd,reits`**（`fundlex/recall_pipeline.py::DEFAULT_EXCLUDED_TYPES`，2026-10-20 已改并新增排除回归测试；**未发布**）。合同自述口径：`广发成都高投产业园封闭式基础设施证券投资基金`（p43"本基金为基础设施基金"）与 `广发新城吾悦封闭式商业不动产证券投资基金`（p44"本基金为不动产投资信托基金（REITs）"）均归 `reits`。生产 env 未设 `FUNDLEX_RECALL_EXCLUDED_TYPES`，代码默认生效。
+  - **真实模型核验（2026-10-20，临时账本，2 calls / $0.00514）**：两份合同均返回 `fund_type=reits`、`quotes_verified=true`；排除分支会在 facts 阶段结束后终止，不产生修改产物。注：成都高投的 `fund_type_quote` 取的是"存续期、封闭期…上市交易"句，虽可回查但未直接自述 REITs/基础设施基金；分类正确、证据指向性偏弱，后续可要求模型引用"本基金为基础设施基金"类自述句（**未实施**）。
+  - **ETF 联接基金不属于 ETF**：用户 2026-10-20 进一步确认"ETF 联接基金正常修改"；只有 ETF 本身排除。确定性 feeder 判定与真实核验见 FL-D132。
+  - 单测：`tests/test_recall_pipeline.py::test_excluded_reits_fund_type_report`（新增）与 `test_excluded_fund_type_report`（默认集合断言）通过；`tests/test_recall_pipeline.py + tests/test_recall_core.py` 76 passed（含 feeder 测试）。
 - 关联：`docs/GENERATION_V4_PROGRESS.md`（外部复查响应节）、`docs/GENERATION_STRATEGY_PLAN_2026-10-19.md`。
-- 变更记录：2026-10-19 新增（外部复查登记）；同日 P0-2 修复并加测试；同日追加第二份复查清单与 ETF 范围裁定。
+- 变更记录：2026-10-19 新增（外部复查登记）；同日 P0-2 修复并加测试；同日追加第二份复查清单与 ETF 范围裁定；2026-10-20 追加 REITs/封闭式商业不动产排除裁定与代码/测试变更。
   - 2026-10-19 **实施 P0 批次**（commit 见 git log）：P0-A（`condition_status` 三值 + `plan_target` 入口 gate/route 记录）、P0-B 部分（`class_label` 保合同原文称谓、`service_group` 严格定义、两费皆真→CONFLICT）、P0-C（G16 组件级 satisfied、G15 `business_notices` 接线并去重）、P0-D（G08/G11 仅裁缺失组子句，registry）、P1 部分（G06/G13/G17 关键词签名、G14 扩展句补项、coverage `operation_keys` + delivery gate 读投影、claim replay 已接线）；另修 V3 的 `recall_verify` 未在网关白名单导致 `MODEL_TASK_UNSUPPORTED`。**全量 773 passed / 0 failed**。残余：币种维度拆分、semantic site anchor、per-operation claim replay、CI、红色盲核（FL-D131③）。
 
 ## FL-D131（用户澄清，待办）指引文件中的红色字并没有特殊含义
@@ -1857,6 +1861,16 @@
 - 状态与验证：**部分已实施**（2026-10-19）：解析/复核上下文改为仅输出 red/bold **计数**（不再传段落索引）；G18 标题尾缀已清理。剩余可选项：不看红色的盲核。
 - 下一步：随 P0 队列一并处理；若做盲核，结果记回本条目。
 - 变更记录：2026-10-19 新增（用户澄清 + 影响盘点 + 处理建议）。
+
+## FL-D132 ETF联接基金的 fund_type 判定不一致：同一引文既判 etf 又判 open_regular
+
+- 发现日期：2026-10-19（核对合同样本类型时发现）。
+- 问题与影响：D02《广发上证50交易型开放式指数证券投资基金发起式联接基金》与 D06《广发创业板交易型开放式指数证券投资基金发起式联接基金》都是 **ETF 联接基金**，`facts.fund_type_quote` 都是同一句 `ETF 联接基金` 且 `quotes_verified=true`；但 `p6-dev-round14-09` 中 **D02 判 `etf` → `excluded_by_fund_type`（整份排除、零修改）**，**D06 判 `open_regular` → 继续处理**（delivery=incomplete）。两份合同正文 p28/p29 均自述"…发起式联接基金由基金管理人…募集"，并非 ETF 本身。影响：① 同类产品因一次模型抽取差异被整份排除，属漏改；② 评分分母把排除项剔除后，该漏改不会体现在完成率里。
+- 证据：`var/recall-first-evaluation/p6-dev-round14-09/D02/report.json`（`qualification.status=excluded_by_fund_type`、`fund_type=etf`、quote=`ETF 联接基金`）对比 `.../D06/report.json`（`status=eligible`、`fund_type=open_regular`、同一 quote）；合同原文 p28/p29（`funds_word/广发上证50…联接基金…20241113.docx`、`…创业板…联接基金…20250319.docx`）。
+- 处理方法（**已实施**，2026-10-20）：① 用户裁定 **ETF 联接基金正常修改**，只有 ETF 本身排除；② `fundlex/recall.py` 新增 `_is_etf_feeder()`（封面/标题段同时含"联接基金"与"基金合同"即判为联接基金），`extract_facts()` 在模型返回 `etf` 且合同为联接基金时确定性改为 `open_regular`，`fund_type_basis=etf_feeder_is_open_regular`；③ facts prompt 升为 `recall_facts_v3`，明确"联接基金属普通开放式基金，不是 etf"。
+- 状态与验证：**已实施/已验证（本地，未发布）**。`tests/test_recall_pipeline.py` 新增 `test_etf_feeder_is_eligible_and_revised`；`test_recall_pipeline.py + test_recall_core.py` **76 passed**。真实模型核验（临时账本，3 calls / $0.00650）：D02、D06 均 `open_regular`（`feeder=True`，引文回查通过）；对照真 ETF `广发中证全指食品ETF` → `etf`（`feeder=False`），排除逻辑未被放宽。
+- 下一步：发布后跑下一有效开发集批次，确认 D02 不再 `excluded_by_fund_type`、D06 正常；与 FL-D130 的 REITs 排除一并观察。
+- 变更记录：2026-10-19 新增；2026-10-20 用户确认"ETF 不用修改"；同日进一步确认 **"ETF 联接基金正常修改"**，据此实施确定性 feeder 判定 + prompt v3 + 回归测试与真实模型核验。
 
 ## 后续条目模板
 

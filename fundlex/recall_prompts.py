@@ -5,7 +5,7 @@ faithful answer fails. Quotes are validated by the engine module, not here.
 """
 from __future__ import annotations
 
-FACTS_PROMPT_VERSION = "recall_facts_v2"
+FACTS_PROMPT_VERSION = "recall_facts_v3"
 SCOPE_PROMPT_VERSION = "recall_scope_v1"
 INVENTORY_PROMPT_VERSION = "recall_inventory_v2"
 COMPOSE_PROMPT_VERSION = "recall_compose_v1"
@@ -83,9 +83,12 @@ FACTS_SCHEMA = {
 FACTS_INSTRUCTION = (
     "Read [CONTRACT_SOURCE]; the [loc] markers are stable paragraph addresses, not part of the text. "
     "Extract the product's fee and qualification facts. fund_type value: open_regular for an ordinary "
-    "open-ended fund contract; etf for an exchange-traded fund; money_market; interbank_cd; qdii for a "
-    "qualified-domestic-institutional-investor fund; reits for a closed-end infrastructure/real-estate "
-    "fund; other only when none fits. A future possibility (for example text saying the fund may later "
+    "open-ended fund contract; etf for an exchange-traded fund itself; a fund whose contract describes "
+    "it as a feeder (联接基金) of an ETF is an ordinary open-ended fund (open_regular), not etf; "
+    "money_market; interbank_cd; qdii for a "
+    "qualified-domestic-institutional-investor fund; reits for a closed-end infrastructure or "
+    "commercial real-estate (不动产) fund, including REITs; other only when none fits. A future "
+    "possibility (for example text saying the fund may later "
     "convert to an ETF feeder) never changes the current fund_type. classes lists the share classes the "
     "contract currently sets up, one entry per class letter or currency variant: subscription_fee is true "
     "when investors pay a subscription/purchase fee for that class, service_fee is true when a sales "
