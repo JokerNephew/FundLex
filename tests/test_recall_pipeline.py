@@ -539,8 +539,15 @@ def test_zero_edit_already_satisfied_unchanged(tmp_path: Path):
              "state": "absent", "reason": "scripted not applicable"},
         ]}
 
+    # G22's condition requires a non-floating product; make it FALSE so the scripted
+    # "absent" verdict is genuinely not-applicable rather than a missed applicable rule.
+    from test_recall_core import facts_response
+    floating_facts = facts_response("")
+    floating_facts["floating_management_fee"] = {
+        "value": True, "quote": "本基金合同经中国证监会核准。", "basis": "浮动管理费"}
     source, output_dir, gateway, report = run(
-        tmp_path, {"recall_inventory": satisfied_inventory},
+        tmp_path, {"recall_inventory": satisfied_inventory,
+                   "recall_facts": lambda _context: floating_facts},
         guide=guide_document(rules_subset("G01", "G22")))
 
     assert report["delivery_status"] == "complete"
