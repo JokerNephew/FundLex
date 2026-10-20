@@ -1,0 +1,602 @@
+"""Operation / Obligation IR and the Obligation-first ledger (plan §6, §10).
+
+A guide rule is no longer an unstructured list of operations.  Every operation has a
+stable obligation identity and explicit group semantics:
+
+* ``ALL_OF``       — every obligation in the branch must complete;
+* ``ONE_OF``       — only one alternative old-text variant must be handled (a rule
+                     may carry several historical wordings that never coexist);
+* ``BRANCH``       — conditional branches; an ``UNKNOWN`` condition runs no branch;
+* ``INDEPENDENT``  — a single obligation without a sibling.
+
+The ledger is the single view the delivery gate reads.  It is built *before* target
+discovery and updated from the real run state, so an applicable obligation cannot
+disappear silently when the inventory finds no target for it.
+"""
+from __future__ import annotations
+
+import re
+from dataclasses import dataclass, field
+from enum import Enum
+from typing import Any, Iterable, Mapping, Sequence
+
+from .applicability import ApplicabilityDecision, branch_key, describe_condition, evaluate
+
+
+class GroupKind(str, Enum):
+    ALL_OF = "ALL_OF"
+    ONE_OF = "ONE_OF"
+    BRANCH = "BRANCH"
+    INDEPENDENT = "INDEPENDENT"
+
+
+COMPLETION_STATES = (
+    "SATISFIED",
+    "ARTIFACT_VERIFIED",
+    "ALREADY_SATISFIED",
+    "NOT_APPLICABLE",
+    "UNRESOLVED",
+)
+CLOSED_STATES = frozenset({"SATISFIED", "ARTIFACT_VERIFIED", "ALREADY_SATISFIED",
+                           "NOT_APPLICABLE"})
+
+
+@dataclass(frozen=True)
+class ObligationSpec:
+    obligation_id: str
+    rule_id: str
+    operation_id: str          # existing engine identity, e.g. G05:1
+    operation_index: int
+    branch_id: str
+    group_kind: GroupKind
+    op: str
+    condition: Mapping[str, Any] | None
+    requirement: str = ""
+    expected_site: str = ""
+    required_facts: tuple[str, ...] = ()
+    alternatives: tuple[str, ...] = ()
+    one_of_group: str = ""
+
+    def as_dict(self) -> dict[str, Any]:
+        return {
+            "obligation_id": self.obligation_id,
+            "rule_id": self.rule_id,
+            "operation_id": self.operation_id,
+            "operation_index": self.operation_index,
+            "branch_id": self.branch_id,
+            "group_kind": self.group_kind.value,
+            "op": self.op,
+            "condition": dict(self.condition or {}),
+            "condition_text": describe_condition(self.condition),
+            "requirement": self.requirement,
+            "expected_site": self.expected_site,
+            "required_facts": list(self.required_facts),
+            "alternatives": list(self.alternatives),
+            "one_of_group": self.one_of_group,
+        }
+
+
+@dataclass
+class ObligationRecord:
+    spec: ObligationSpec
+    applicability: ApplicabilityDecision
+    targets: tuple[str, ...] = ()
+    statuses: dict[str, str] = field(default_factory=dict)
+    completion: str = "UNRESOLVED"
+    completion_evidence: str = ""
+    attempt_history: list[dict[str, Any]] = field(default_factory=list)
+
+    @property
+    def obligation_id(self) -> str:
+        return self.spec.obligation_id
+
+    @property
+    def closed(self) -> bool:
+        return self.completion in CLOSED_STATES
+
+    def as_dict(self) -> dict[str, Any]:
+        return {
+            **self.spec.as_dict(),
+            "applicability": self.applicability.as_dict(),
+            "targets": list(self.targets),
+            "statuses": dict(self.statuses),
+            "completion": self.completion,
+            "completion_evidence": self.completion_evidence,
+            "attempt_history": list(self.attempt_history),
+        }
+
+
+@dataclass(frozen=True)
+class RuleObligationGroup:
+    rule_id: str
+    group_kind: GroupKind
+    branch_ids: tuple[str, ...]
+    obligation_ids: tuple[str, ...]
+    variant_alternatives: tuple[str, ...] = ()
+
+    def as_dict(self) -> dict[str, Any]:
+        return {
+            "rule_id": self.rule_id,
+            "group_kind": self.group_kind.value,
+            "branch_ids": list(self.branch_ids),
+            "obligation_ids": list(self.obligation_ids),
+            "variant_alternatives": list(self.variant_alternatives),
+        }
+
+
+@dataclass
+class ObligationLedger:
+    records: list[ObligationRecord]
+    groups: dict[str, RuleObligationGroup]
+    aliases: dict[str, str] = field(default_factory=dict)
+
+    def record(self, obligation_id: str) -> ObligationRecord | None:
+        for item in self.records:
+            if item.obligation_id == obligation_id:
+                return item
+        canonical = self.aliases.get(obligation_id)
+        if canonical:
+            return self.record(canonical)
+        return None
+
+    def for_rule(self, rule_id: str) -> tuple[ObligationRecord, ...]:
+        return tuple(item for item in self.records if item.spec.rule_id == rule_id)
+
+    def unresolved(self) -> tuple[ObligationRecord, ...]:
+        return tuple(item for item in self.records if item.completion == "UNRESOLVED")
+
+    @property
+    def counts(self) -> dict[str, int]:
+        counts = {state: 0 for state in COMPLETION_STATES}
+        for item in self.records:
+            counts[item.completion] = counts.get(item.completion, 0) + 1
+        return counts
+
+    def as_dict(self) -> dict[str, Any]:
+        return {
+            "records": [item.as_dict() for item in self.records],
+            "groups": [group.as_dict() for group in self.groups.values()],
+            "aliases": dict(self.aliases),
+            "counts": self.counts,
+            "open_obligations": [
+                {"obligation_id": item.obligation_id,
+                 "rule_id": item.spec.rule_id,
+                 "operation_id": item.spec.operation_id,
+                 "applicability": item.applicability.status,
+                 "reason": item.completion_evidence}
+                for item in self.unresolved()
+            ],
+        }
+
+
+#: Condition kinds imply the fact that must be VERIFIED before either branch can run.
+_CONDITION_FACTS = {
+    "class_count": ("share_class_structure",),
+    "has_service_fee": ("share_class_structure",),
+    "is_floating_fee": ("floating_management_fee",),
+}
+
+
+def _required_facts(condition: Mapping[str, Any] | None,
+                    rule_required: Sequence[str]) -> tuple[str, ...]:
+    names = list(rule_required)
+    if condition:
+        kind = str(condition.get("kind") or "")
+        names.extend(_CONDITION_FACTS.get(kind, ()))
+        if kind == "compound":
+            for part in condition.get("value") or []:
+                names.extend(_required_facts(part, ()))
+    return tuple(sorted({name for name in names if name}))
+
+
+def compile_obligations(guide_document: Mapping[str, Any]) -> ObligationLedger:
+    """Compile every guide operation into the Obligation IR (before any target work)."""
+    from .generation.registry import strategy_for
+
+    records: list[ObligationRecord] = []
+    groups: dict[str, RuleObligationGroup] = {}
+    aliases: dict[str, str] = {}
+    for rule in guide_document.get("groups") or []:
+        if not isinstance(rule, Mapping):
+            continue
+        rule_id = str(rule.get("rule_id") or "").strip().upper()
+        if not rule_id:
+            continue
+        operations = [operation for operation in (rule.get("operations") or [])
+                      if isinstance(operation, Mapping)]
+        if not operations:
+            continue
+        # Group the operations by condition: distinct conditions are branches, the
+        # operations inside one condition form an ALL_OF set.
+        branch_order: list[str] = []
+        branch_operations: dict[str, list[tuple[int, Mapping[str, Any]]]] = {}
+        for index, operation in enumerate(operations):
+            condition = operation.get("condition") or {"kind": "none"}
+            key = branch_key(condition)
+            if key not in branch_operations:
+                branch_order.append(key)
+                branch_operations[key] = []
+            branch_operations[key].append((index, operation))
+        spec = strategy_for(rule_id)
+        variants = tuple(str(value) for value in (rule.get("old_text_variants") or []))
+        rule_groups: list[str] = []
+        one_of_seen = False
+        for branch_index, key in enumerate(branch_order, start=1):
+            branch_id = f"B{branch_index}"
+            rule_groups.append(branch_id)
+            entries = branch_operations[key]
+            branch_kind = GroupKind.ALL_OF if len(entries) > 1 else GroupKind.INDEPENDENT
+            # Operations with the same replacement text and the same condition are
+            # alternative historical wordings (G11/G12/G14 old_text variants), not
+            # independent obligations: only the variant actually present in the
+            # contract must be handled (plan §6.3, §27).
+            variant_groups: dict[tuple[str, str], list[tuple[int, Mapping[str, Any]]]] = {}
+            for index, operation in entries:
+                identity = (str(operation.get("op") or ""),
+                            re.sub(r"\s+", "", str(operation.get("new_text") or "")))
+                variant_groups.setdefault(identity, []).append((index, operation))
+            one_of_by_index: dict[int, str] = {}
+            for group_number, group in enumerate(variant_groups.values(), start=1):
+                if len(group) < 2:
+                    continue
+                if len({str(op.get("old_text") or "") for _index, op in group}) < 2:
+                    continue
+                group_id = f"{rule_id}:{branch_id}:ONE{group_number}"
+                one_of_seen = True
+                for index, _operation in group:
+                    one_of_by_index[index] = group_id
+            for position, (index, operation) in enumerate(entries, start=1):
+                obligation_id = f"{rule_id}:{branch_id}:O{position}"
+                alias = f"{rule_id}:{index}"
+                condition = operation.get("condition") or {"kind": "none"}
+                variant_group = (one_of_by_index.get(index) or
+                                 (f"{rule_id}:{branch_id}:VARIANTS" if variants else ""))
+                spec_item = ObligationSpec(
+                    obligation_id=obligation_id,
+                    rule_id=rule_id,
+                    operation_id=alias,
+                    operation_index=index,
+                    branch_id=branch_id,
+                    group_kind=(GroupKind.ONE_OF if one_of_by_index.get(index)
+                                else branch_kind),
+                    op=str(operation.get("op") or ""),
+                    condition=condition,
+                    requirement=str(rule.get("requirement") or ""),
+                    expected_site=str(rule.get("section_hint") or ""),
+                    required_facts=_required_facts(condition, spec.required_fact_status),
+                    alternatives=variants,
+                    one_of_group=variant_group,
+                )
+                records.append(ObligationRecord(
+                    spec=spec_item,
+                    applicability=evaluate(condition, _EMPTY_FACTS,
+                                           rule_id=rule_id,
+                                           operation_id=alias),
+                    statuses={"applicability": "UNKNOWN", "target": "PENDING",
+                              "generation": "PENDING", "validation": "PENDING",
+                              "review": "PENDING", "artifact": "PENDING",
+                              "audit": "PENDING", "sweep": "PENDING"},
+                ))
+                aliases[alias] = obligation_id
+                aliases[obligation_id] = obligation_id
+        if len(branch_order) > 1:
+            group_kind = GroupKind.BRANCH
+        elif variants or one_of_seen:
+            group_kind = GroupKind.ONE_OF
+        elif any(len(items) > 1 for items in branch_operations.values()):
+            group_kind = GroupKind.ALL_OF
+        else:
+            group_kind = GroupKind.INDEPENDENT
+        groups[rule_id] = RuleObligationGroup(
+            rule_id=rule_id,
+            group_kind=group_kind,
+            branch_ids=tuple(rule_groups),
+            obligation_ids=tuple(item.obligation_id for item in records
+                                 if item.spec.rule_id == rule_id),
+            variant_alternatives=variants,
+        )
+    return ObligationLedger(records=records, groups=groups, aliases=aliases)
+
+
+class _EmptyFacts:
+    """Compile-time placeholder: facts are not known when the IR is built."""
+
+    fact_status: dict[str, str] = {}
+    quotes_verified: dict[str, bool] = {}
+    class_count = 0
+    has_service_fee = False
+    floating_management_fee = False
+
+    def status_of(self, name: str) -> str:
+        return "UNKNOWN"
+
+
+_EMPTY_FACTS = _EmptyFacts()
+
+
+def apply_facts(ledger: ObligationLedger, facts: Any, *,
+                gateway: Any = None, evidence: str = "",
+                inspection: Any = None, resolve_unknown: bool = False) -> None:
+    """Attach tri-state applicability; optionally recover UNKNOWN via the models."""
+    for item in ledger.records:
+        if resolve_unknown and gateway is not None and inspection is not None:
+            decision = __import__("fundlex.applicability", fromlist=["resolve"]).resolve(
+                item.spec.condition, facts, gateway=gateway, evidence=evidence,
+                inspection=inspection, rule_id=item.spec.rule_id,
+                operation_id=item.spec.operation_id)
+        else:
+            decision = evaluate(item.spec.condition, facts,
+                                rule_id=item.spec.rule_id,
+                                operation_id=item.spec.operation_id)
+        item.applicability = decision
+        item.statuses["applicability"] = decision.status
+        if decision.status == "FALSE":
+            item.completion = "NOT_APPLICABLE"
+            item.completion_evidence = f"applicability_false:{decision.reason}"
+        elif decision.status == "UNKNOWN":
+            item.completion = "UNRESOLVED"
+            item.completion_evidence = f"applicability_unknown:{decision.reason}"
+
+
+def _audit_verdicts(node: Any, depth: int = 0) -> Iterable[tuple[str, str]]:
+    if depth > 6:
+        return
+    if isinstance(node, Mapping):
+        target_id = node.get("target_id")
+        verdict = node.get("verdict")
+        if isinstance(target_id, str) and isinstance(verdict, str):
+            yield target_id, verdict
+        for value in node.values():
+            yield from _audit_verdicts(value, depth + 1)
+    elif isinstance(node, list):
+        for value in node:
+            yield from _audit_verdicts(value, depth + 1)
+
+
+def _iter_targets(report: Mapping[str, Any]) -> list[Mapping[str, Any]]:
+    targets = report.get("targets")
+    if isinstance(targets, list):
+        return [item for item in targets if isinstance(item, Mapping)]
+    if isinstance(targets, Mapping):
+        inner = targets.get("targets")
+        if isinstance(inner, list):
+            return [item for item in inner if isinstance(item, Mapping)]
+    return []
+
+
+def _plan_by_target(report: Mapping[str, Any]) -> dict[str, Mapping[str, Any]]:
+    plan = report.get("plan") or {}
+    return {str(entry.get("target_id")): entry
+            for entry in (plan.get("ledger") or []) if isinstance(entry, Mapping)}
+
+
+def _target_covers_operation(target: Mapping[str, Any], record: ObligationRecord) -> bool:
+    operations = tuple(str(value) for value in (target.get("operations") or []))
+    if not operations:
+        # Location-level target: it covers the rule, including every branch operation.
+        return True
+    return record.spec.operation_id in operations or record.obligation_id in operations
+
+
+def _satisfied_operations(report: Mapping[str, Any]) -> set[str]:
+    """Operation keys for which the contract already carries the policy text."""
+    satisfied: set[str] = set()
+    for entry in report.get("survey") or []:
+        if not isinstance(entry, Mapping):
+            continue
+        for record in entry.get("records") or []:
+            if not isinstance(record, Mapping):
+                continue
+            if str(record.get("operation") or "") == "satisfied":
+                satisfied.update(str(key) for key in record.get("operation_keys") or [])
+    for target in _iter_targets(report):
+        if str(target.get("state") or "") == "satisfied":
+            satisfied.update(str(key) for key in target.get("operations") or [])
+    return satisfied
+
+
+def project(ledger: ObligationLedger, report: Mapping[str, Any], *,
+            rules_by_id: Mapping[str, Mapping[str, Any]] | None = None,
+            scoped_rules: set[str] | None = None) -> None:
+    """Derive each obligation's completion from the *actual* run state."""
+    targets = _iter_targets(report)
+    plan_by_target = _plan_by_target(report)
+    verdicts: dict[str, str] = {}
+    for target_id, verdict in _audit_verdicts(report.get("audit")):
+        verdicts[target_id] = verdict
+    replay = report.get("artifact_claim_replay") or {}
+    replayed = bool(replay.get("verified"))
+    replay_failures = {(str(item.get("rule_id") or ""), str(item.get("location") or ""))
+                       for item in replay.get("failures") or [] if isinstance(item, Mapping)}
+    unresolved_items = [item for item in (report.get("unresolved") or [])
+                        if isinstance(item, Mapping)]
+    satisfied_operations = _satisfied_operations(report)
+    if scoped_rules is None:
+        scope = report.get("scope_mapping")
+        if isinstance(scope, Mapping) and isinstance(scope.get("mappings"), Mapping):
+            scoped_rules = {str(rule_id) for rule_id, ids in scope["mappings"].items() if ids}
+        # No scope information at all: do not invent a document-level exclusion.
+
+    for record in ledger.records:
+        item = record
+        if item.applicability.status == "FALSE":
+            item.completion = "NOT_APPLICABLE"
+            item.completion_evidence = item.completion_evidence or "applicability_false"
+            item.statuses.update(target="NOT_REQUIRED", generation="NOT_REQUIRED",
+                                 validation="NOT_REQUIRED", review="NOT_REQUIRED",
+                                 artifact="NOT_REQUIRED", audit="NOT_REQUIRED",
+                                 sweep="NOT_REQUIRED")
+            continue
+        if item.applicability.status == "UNKNOWN":
+            item.completion = "UNRESOLVED"
+            item.completion_evidence = item.completion_evidence or "applicability_unknown"
+            item.statuses["validation"] = "BLOCKED"
+            continue
+
+        relevant = [target for target in targets
+                    if str(target.get("rule_id") or "") == item.spec.rule_id
+                    and _target_covers_operation(target, item)]
+        relevant_ids = tuple(str(target.get("target_id") or "") for target in relevant)
+        item.targets = relevant_ids
+        item.statuses["target"] = "FOUND" if relevant else "MISSING"
+
+        if not relevant:
+            if item.spec.operation_id in satisfied_operations or \
+                    item.obligation_id in satisfied_operations:
+                item.completion = "ALREADY_SATISFIED"
+                item.completion_evidence = "survey_new_text_present"
+                item.statuses.update(target="SATISFIED", generation="NOT_REQUIRED",
+                                     validation="PASS", audit="NOT_REQUIRED")
+                continue
+            rule_targets = [entry for entry in targets
+                            if str(entry.get("rule_id") or "") == item.spec.rule_id]
+            rule_plan = [plan_by_target.get(str(entry.get("target_id") or ""))
+                         for entry in rule_targets]
+            rule_plan = [entry for entry in rule_plan if entry]
+            sibling_satisfied = (
+                rule_targets
+                and not any(str(entry.get("state") or "") == "needs_edit"
+                            for entry in rule_targets)
+                and any(str(entry.get("state") or "") == "satisfied"
+                        for entry in rule_targets))
+            plan_satisfied = (
+                rule_plan
+                and all(str(entry.get("status") or "") in {"satisfied", "not_applicable"}
+                        for entry in rule_plan))
+            if item.spec.op in {"replace", "append"} and (sibling_satisfied or plan_satisfied):
+                # One rule-level target/plan already satisfies the clause and no sibling
+                # still needs an edit: the other replacement of the same rule is part of
+                # that satisfied clause, not an open obligation.
+                item.completion = "ALREADY_SATISFIED"
+                item.completion_evidence = ("plan_satisfied" if plan_satisfied
+                                            else "sibling_target_satisfied")
+                item.statuses.update(target="SATISFIED", generation="NOT_REQUIRED",
+                                     validation="PASS", audit="NOT_REQUIRED")
+                continue
+            rule_unresolved = [entry for entry in unresolved_items
+                               if str(entry.get("rule_id") or "") == item.spec.rule_id]
+            if rule_unresolved:
+                item.completion = "UNRESOLVED"
+                item.completion_evidence = ("unresolved:" +
+                                            str(rule_unresolved[0].get("code") or
+                                                rule_unresolved[0].get("reason") or "rule"))
+            elif item.spec.op == "noop":
+                item.completion = "NOT_APPLICABLE"
+                item.completion_evidence = "noop_operation"
+            elif scoped_rules is not None and item.spec.rule_id not in scoped_rules:
+                # The scope pass found no section for this rule in this contract.
+                # That is a document-level not-applicable decision, not a silent
+                # success: it is recorded and remains visible in the ledger.
+                item.completion = "NOT_APPLICABLE"
+                item.completion_evidence = "scope_not_mapped"
+            else:
+                # Plan §10.2: applicable but no target is an OPEN obligation.
+                item.completion = "UNRESOLVED"
+                item.completion_evidence = "OPEN_OBLIGATION:applicable_without_target"
+            item.statuses["validation"] = ("PASS" if item.completion == "NOT_APPLICABLE"
+                                           else "FAIL")
+            continue
+
+        states = {str(target.get("state") or "") for target in relevant}
+        if states and states <= {"absent", "out_of_scope"}:
+            item.completion = "NOT_APPLICABLE"
+            item.completion_evidence = "target_absent_or_out_of_scope"
+            item.statuses.update(target="ABSENT", generation="NOT_REQUIRED",
+                                 validation="PASS", audit="NOT_REQUIRED")
+            continue
+        if states and states <= {"satisfied"}:
+            item.completion = "ALREADY_SATISFIED"
+            item.completion_evidence = "target_satisfied"
+            item.statuses.update(target="SATISFIED", generation="NOT_REQUIRED",
+                                 validation="PASS", audit="NOT_REQUIRED")
+            continue
+
+        planned = [plan_by_target.get(target_id) for target_id in relevant_ids
+                   if plan_by_target.get(target_id)]
+        plan_statuses = {str(entry.get("status") or "") for entry in planned}
+        if "unresolved" in plan_statuses:
+            entry = next(entry for entry in planned if entry.get("status") == "unresolved")
+            item.completion = "UNRESOLVED"
+            item.completion_evidence = "plan:" + str(entry.get("reason") or "unresolved")
+            item.statuses.update(generation="FAIL", validation="FAIL")
+            continue
+        if "planned" not in plan_statuses:
+            if plan_statuses and plan_statuses <= {"satisfied", "not_applicable"}:
+                item.completion = "ALREADY_SATISFIED" \
+                    if "satisfied" in plan_statuses else "NOT_APPLICABLE"
+                item.completion_evidence = "plan:" + ",".join(sorted(plan_statuses))
+                item.statuses.update(generation="NOT_REQUIRED", validation="PASS")
+                continue
+            item.completion = "UNRESOLVED"
+            item.completion_evidence = "no_plan_record"
+            item.statuses.update(generation="FAIL", validation="FAIL")
+            continue
+
+        item.statuses["generation"] = "PLANNED"
+        audit_verdicts = {verdicts.get(target_id, "") for target_id in relevant_ids}
+        if "completed" in audit_verdicts:
+            item.statuses["audit"] = "COMPLETED"
+            item.statuses["validation"] = "PASS"
+            item.completion = "SATISFIED"
+            item.completion_evidence = "audit_completed"
+            if replayed:
+                item.statuses["artifact"] = "VERIFIED"
+                item.completion = "ARTIFACT_VERIFIED"
+            else:
+                item.statuses["artifact"] = "UNVERIFIED"
+            failure = any(str(target.get("location") or "") in
+                          {location for _rule, location in replay_failures}
+                          for target in relevant)
+            if failure:
+                item.completion = "UNRESOLVED"
+                item.completion_evidence = "CLAIM_REPLAY_FAILED"
+                item.statuses["artifact"] = "FAIL"
+            continue
+        if audit_verdicts & {"wrong", "incomplete"}:
+            item.statuses["audit"] = "FAILED"
+            item.completion = "UNRESOLVED"
+            item.completion_evidence = "audit_" + sorted(audit_verdicts & {"wrong", "incomplete"})[0]
+            continue
+        item.completion = "UNRESOLVED"
+        item.completion_evidence = "audit_pending"
+        item.statuses["audit"] = "PENDING"
+
+    # ONE_OF alternatives: if any alternative actually present in the contract was
+    # carried out (or the rule resolves as not applicable), its siblings are closed by
+    # that evidence. They are not independent obligations (plan §6.3).
+    groups: dict[str, list[ObligationRecord]] = {}
+    for record in ledger.records:
+        if record.spec.one_of_group:
+            groups.setdefault(record.spec.one_of_group, []).append(record)
+    priority = {"ARTIFACT_VERIFIED": 4, "SATISFIED": 3, "ALREADY_SATISFIED": 2,
+                "NOT_APPLICABLE": 1}
+    for group in groups.values():
+        closed = [record for record in group if record.completion in priority]
+        if not closed:
+            continue
+        best = max(closed, key=lambda record: priority[record.completion])
+        for record in group:
+            if record.completion == "UNRESOLVED":
+                record.completion = best.completion
+                record.completion_evidence = (f"ONE_OF_ALTERNATIVE:{best.obligation_id}:"
+                                              f"{best.completion_evidence}")
+
+
+def open_obligations(ledger: ObligationLedger) -> list[dict[str, Any]]:
+    """Unresolved records in report form (for the delivery gate and the user summary)."""
+    items: list[dict[str, Any]] = []
+    for record in ledger.unresolved():
+        items.append({
+            "kind": "obligation",
+            "code": "OPEN_OBLIGATION",
+            "rule_id": record.spec.rule_id,
+            "obligation_id": record.obligation_id,
+            "operation_id": record.spec.operation_id,
+            "branch_id": record.spec.branch_id,
+            "applicability": record.applicability.status,
+            "failure_class": ("APPLICABILITY"
+                              if record.applicability.status == "UNKNOWN" else "TARGET"),
+            "reason": record.completion_evidence,
+            "expected_site": record.spec.expected_site,
+        })
+    return items
