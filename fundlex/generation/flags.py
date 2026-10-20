@@ -3,9 +3,9 @@
 The plan (v4 §22) requires that the new logic is unreachable unless the flag is
 switched on, so that Phase 1 proves "behavior diff = 0" by construction:
 
-* ``legacy``           — default; none of the new code runs;
+* ``registry``         — default: deterministic-first routing and validation;
 * ``registry_shadow``  — routing/telemetry computed for observation only;
-* ``registry``         — the registry actually drives generation (later phases).
+* ``legacy``           — compatibility escape hatch; safety gates still run.
 """
 import os
 
@@ -16,5 +16,5 @@ _ENV_VAR = "FUNDLEX_GENERATION_STRATEGY"
 
 def strategy_mode() -> str:
     """Current strategy mode; unknown values fall back to the safe default."""
-    value = os.environ.get(_ENV_VAR, "legacy").strip().lower()
-    return value if value in STRATEGY_MODES else "legacy"
+    value = os.environ.get(_ENV_VAR, "registry").strip().lower()
+    return value if value in STRATEGY_MODES else "registry"

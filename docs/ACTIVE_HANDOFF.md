@@ -31,6 +31,23 @@
 > `FL-D069→FL-D075`（G17 跨段删除）、`FL-D066→FL-D076`（Codex bwrap）。
 > **注意**：本文下文第 5/6 轮的历史叙述写于更正之前，个别处仍写旧编号，含义以更正后为准；新增条目一律先查重再编号。
 
+## 当前断点（2026-10-20，Recovery 架构改造，本地已验证/未发布）
+
+- **分支**：`refactor/recovery-architecture`（基于 `a2905ac` + REITs/ETF feeder 提交 `374440a`）。本轮架构提交：`f98d95c` 模型角色、`69a6a24` Obligation IR、`3e257f0` Validator 硬门、`c6bbf1d` Recovery、`838c9a6` 管线接线；文档提交待补。
+- **完成内容**：`docs/RECOVERY_ARCHITECTURE.md` 与集中问题 **FL-D133**。核心为 obligation-first ledger、Primary/Review 独立角色、tri-state applicability、focused fact recovery、T3 locator、Joint Compose、Validator hard gate、claim replay 边界证明、统一 Recovery/FailureClass、用户三态交付摘要。
+- **测试**：全量 `pytest tests -q` → **860 passed / 6 skipped**。离线 validator shadow（round14-12）：19 例 / 222 段 / **0 hard FAIL**。
+- **真实模型（临时账本 `/tmp/opencode/realcheck.sqlite`，未触碰生产账本）**：
+  - **D01 曾出现 false_complete，已修复门禁**：早期一版报 `complete_with_notices`（27 calls），独立 Business Reviewer 复核最终 DOCX 发现 G17 第二句仍留在 p760、G15 正文/摘要处理不一致。新增 delete-only 逐句残留检测、重复条款副本一致性、G05/G06/G01/G03 目标锚点后，D01 被如实阻塞为 partial（96 calls / 约 $0.052；audit 另发现 G09 第二处措辞缺失、G01 追加位置错误、G11 变体残留）。
+  - **D02**（ETF 联接基金）：`eligible/open_regular`；116 calls / $0.0615；G05 compose 固定文本缺失 → partial（诚实失败）。
+  - **D03**：32 calls / $0.0222；G06 复合目标未解决 → partial。
+  - **D11**：99 calls / $0.0658；旧版 false_complete 被新门改为 partial（G15 误绑托管费、G09 第二处措辞缺失）。
+  - 临时账本合计约 **963 requests / $0.5792**；以上为 agent 真实调用，生产账本未动。
+  - **结论**：新架构已能发现旧版 false_complete，但尚未取得“最新硬门下真实合同 complete”的验收样例。
+- **独立审查**：Architecture Reviewer 提出 5 个 BLOCKER + 5 个 HIGH；已修复 scope 遗漏静默、plan not_applicable 覆盖 TRUE、Validator/Replay flag 开关、claim recovery 旧 audit/sweep、类别枚举前缀、单 completed 掩盖 siblings、infra stop 吞咽。保留限制见 `RECOVERY_ARCHITECTURE.md` §10：无目标规则 T3 默认关闭、audit context 分批未实现、514 全量未跑、G09/G15 业务残留、前端未展示新字段。
+- **未发布**：生产仍为旧代码（`/opt/fundlex-recall-first` 未更新）。发布前必须先跑 20 例 dev 集对照 round14-12，并完成真实工作台端到端。
+- **下一动作**：① 跑 20 例 dev 集（新架构，预算约 1200 calls/$1）；② 修 G09/G15 与 audit 分批；③ 评估通过后 `publish_workspace.sh` 发布；④ 真实工作台登录→上传→worker→下载→修订接受/拒绝验收；⑤ 514 全量/留出与最终报告。
+- **预算/账本**：生产账本 `/var/lib/fundlex/model_budget.sqlite` 本轮未读写；agent 使用临时账本 `/tmp/opencode/realcheck.sqlite`（约 $0.45）。
+
 ## 当前断点（2026-10-19，前端改造第一批，已本地验证并发布）
 
 - **范围**：全局 Toast（修复 FL-D121 成功提示不可见）、面包屑、页脚 + 版本号（`capabilities.app_version`）与帮助弹窗、筛选 Chip、任务列表“合同份数/成功异常/进度”、任务详情统计条与异常行高亮、批量导入进度条/异常标红/替换/条件跳转、修订审查 A/R + Toast + 上一份/下一份、指引问题展开 + “重新解析（自动修复）”。

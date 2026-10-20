@@ -95,6 +95,9 @@ def build_coverage_view(report: Mapping[str, Any]) -> CoverageLedgerView:
         verdicts[target_id] = verdict
     artifact_verified = bool(
         (report.get("artifact_claim_replay") or {}).get("verified"))
+    plan_status = {str(entry.get("target_id")): str(entry.get("status") or "")
+                   for entry in ((report.get("plan") or {}).get("ledger") or [])
+                   if isinstance(entry, dict)}
 
     entries: list[CoverageEntry] = []
     for target in _iter_targets(report):
@@ -103,13 +106,16 @@ def build_coverage_view(report: Mapping[str, Any]) -> CoverageLedgerView:
         target_id = str(target.get("target_id") or "")
         state = str(target.get("state") or target.get("status") or "")
         verdict = verdicts.get(target_id, "")
+        status = plan_status.get(target_id, "")
         operation_keys = tuple(str(key) for key in (target.get("operations") or []))
         if state == "satisfied" or str(target.get("reason") or "").startswith("survey_new_text_present"):
             entries.append(CoverageEntry(rule_id, location, "ALREADY_SATISFIED",
                                          "engine_satisfied", target_id, operation_keys))
-        elif state in ("absent", "out_of_scope", "not_applicable"):
+        elif state in ("absent", "out_of_scope", "not_applicable") or \
+                status in ("satisfied", "not_applicable"):
             entries.append(CoverageEntry(rule_id, location, "NOT_APPLICABLE",
-                                         f"engine_{state}", target_id, operation_keys))
+                                         f"engine_{state or status}", target_id,
+                                         operation_keys))
         elif verdict == "completed":
             state_value = "ARTIFACT_VERIFIED" if artifact_verified else "SATISFIED"
             entries.append(CoverageEntry(rule_id, location, state_value,

@@ -211,3 +211,49 @@ def test_rule_level_plan_satisfied_closes_sibling_replace_operations():
     ))
     assert {item.completion for item in ledger.records} == {"ALREADY_SATISFIED"}
     assert not open_obligations(ledger)
+
+
+def test_one_completed_target_cannot_hide_another_wrong_occurrence():
+    ledger = compile_obligations(guide(rule(rule_id="G18", operations=[
+        {"op": "replace", "old_text": "旧句", "new_text": "新句",
+         "condition": {"kind": "none", "value": None}}])))
+    apply_facts(ledger, FakeFacts())
+    project(ledger, report_with(
+        targets=[target("G18", target_id="T1", operations=["G18:0"]),
+                 target("G18", target_id="T2", operations=["G18:0"])],
+        plan_ledger=[{"target_id": "T1", "status": "planned"},
+                     {"target_id": "T2", "status": "planned"}],
+        audit=[{"target_id": "T1", "verdict": "completed"},
+               {"target_id": "T2", "verdict": "wrong"}],
+    ))
+    assert ledger.records[0].completion == "UNRESOLVED"
+    assert ledger.records[0].completion_evidence == "audit_wrong"
+
+
+def test_one_of_variant_closure_requires_the_other_variant_to_be_gone():
+    ledger = compile_obligations(guide(rule(rule_id="G11", operations=[
+        {"op": "replace", "old_text": "旧写法一", "new_text": "统一的新政策",
+         "condition": {"kind": "class_count", "value": "multiple"}},
+        {"op": "replace", "old_text": "旧写法二", "new_text": "统一的新政策",
+         "condition": {"kind": "class_count", "value": "multiple"}},
+    ])))
+    apply_facts(ledger, FakeFacts(class_count=2))
+    project(ledger, report_with(
+        targets=[target("G11", operations=["G11:0"])],
+        plan_ledger=[{"target_id": "T1", "status": "planned"}],
+        audit=[{"target_id": "T1", "verdict": "completed"}],
+    ), artifact_text="条款仍写旧写法二。")
+    assert ledger.records[0].completion == "SATISFIED"
+    assert ledger.records[1].completion == "UNRESOLVED"
+    assert ledger.records[1].completion_evidence == "ONE_OF_VARIANT_RESIDUAL"
+
+
+def test_absent_delete_reference_is_not_an_open_obligation():
+    ledger = compile_obligations(guide(rule(rule_id="G06", operations=[
+        {"op": "delete", "old_text": "本基金不同基金份额类别之间不得互相转换。",
+         "condition": {"kind": "none", "value": None}}])))
+    apply_facts(ledger, FakeFacts())
+    project(ledger, report_with(), artifact_text="本基金合同经中国证监会核准。")
+    assert ledger.records[0].completion == "NOT_APPLICABLE"
+    assert ledger.records[0].completion_evidence == "delete_reference_absent"
+    assert not open_obligations(ledger)

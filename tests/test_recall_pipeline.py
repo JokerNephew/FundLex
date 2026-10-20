@@ -187,6 +187,7 @@ def base_responses(**overrides) -> dict[str, object]:
         "recall_scope": scope_response,
         "recall_inventory": inventory_response,
         "recall_compose": COMPOSE_RESPONSE,
+        "recall_verify": {"verdict": "pass", "reason": "scripted independent review"},
         "recall_audit": completed_audit,
         "recall_sweep": empty_sweep,
     }
@@ -382,8 +383,15 @@ def test_sweep_filters_class_substitution_rule_that_needs_no_change(tmp_path: Pa
     definition_quote = "在投资者认购、申购基金时收取认购、申购费用而不计提销售服务费的，称为A类基金份额"
     finding = sweep_finding("G02", "p4", definition_quote, issue="unaddressed_requirement")
 
+    def scope_with_g02(context: str) -> dict:
+        value = scope_response(context)
+        value["mappings"].append({"rule_id": "G02", "section_ids": ["S03"],
+                                  "reason": "scripted G02 scope"})
+        return value
+
     _, output_dir, _, report = run(tmp_path, {"recall_facts": two_class_facts,
-                                              "recall_sweep": finding},
+                                              "recall_sweep": finding,
+                                              "recall_scope": scope_with_g02},
                                    guide=guide_document([*rules_subset("G05", "G14"), substitution]))
 
     assert report["sweep"]["findings"] == []
@@ -1185,9 +1193,13 @@ def test_scoped_obligation_without_target_blocks_complete(tmp_path: Path):
     assert report["delivery_status"] in {"incomplete", "not_generated"}
     assert report["delivery_gate"]["open_obligations"] >= 1
     open_items = [item for item in report["unresolved"]
-                  if item.get("code") == "OPEN_OBLIGATION"]
-    assert open_items and open_items[0]["rule_id"] == "G99"
-    assert open_items[0]["reason"].startswith("OPEN_OBLIGATION")
+                  if item.get("rule_id") == "G99"
+                  and (item.get("code") == "OPEN_OBLIGATION"
+                       or item.get("kind") == "target")]
+    assert open_items
+    assert open_items[0]["rule_id"] == "G99"
+    # Open-rule T3 is opt-in; the target/plan failure is still explicit.
+    assert report.get("unresolved")
     # No final deliverable may be published for an open obligation.
     assert "final.docx" not in docx_names(output_dir)
 

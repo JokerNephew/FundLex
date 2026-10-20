@@ -121,3 +121,11 @@ append semantic site anchor、`(operation_id, site)` 覆盖粒度、G06/G13/G17 
 - 真实批次验证受供应商与预算约束；批次运行期间不发布（FL-D096）。
 - FL-D119 修复后需在下一有效批次观察 `D01/p227` 不再产生误配（fixture）。
 - 评分口径（scorer 升级）仍按"先冻结 → 实测 → 单独裁定"执行（计划 §39）。
+
+## Recovery 架构改造（2026-10-20，本地已验证/未发布）
+
+- 分支 `refactor/recovery-architecture`，详细设计见 [`RECOVERY_ARCHITECTURE.md`](RECOVERY_ARCHITECTURE.md)，问题记录见 FL-D133。
+- 新增：`fundlex/models/`（Primary/Review 独立角色）、`obligations.py`（ALL_OF/ONE_OF/BRANCH + Ledger）、`applicability.py`、`facts_recovery.py`、`targeting.py`、`recovery/`、`delivery.py`、`generation/components.py`、`generation/joint.py`。
+- 硬门：`validate_edit` 成为确定性/Compose/Joint 的统一入口；claim replay 增加文档级与段内边界证明；G16 组件×站点；费用主题与列表序号修复。
+- 验证：全量 **860 passed / 6 skipped**；round14-12 离线 shadow **222 段 / 0 hard FAIL**；真实 D01 早期一版报 complete，但 Business Reviewer 发现 G17 残句/G15 正文摘要不一致，属 false_complete；新增残留与副本硬门后 D01 被如实阻塞为 partial。D02/D03/D11 的失败也被标 partial（D11 旧版为 false_complete）。
+- 未完成：20 例 dev 对照、514 全量、生产发布与工作台端到端；G09/G01/G15 业务残留、audit context 分批、无目标规则 T3 默认关闭；尚未取得最新硬门下真实 complete 样例。

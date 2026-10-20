@@ -122,3 +122,19 @@ def test_review_can_choose_the_original_evidence(tmp_path: Path):
     assert recovered.status_of("share_class_structure") == "UNKNOWN"
     assert summary["final"] == "failed"
     assert summary["history"][-1]["detail"].startswith("choice=original")
+
+
+def test_enumeration_quote_must_name_every_candidate_class(tmp_path: Path):
+    """A prefix enumeration cannot hide C/D behind an A-only candidate (plan §7.3)."""
+    source = tmp_path / "contract.docx"
+    build_contract(source)
+    inspection = inspect_docx(source, full=True)
+    value = candidate_value()
+    value["classes"] = value["classes"][:1]  # A only
+    value["class_set_quote"] = "基金份额类别：本基金将基金份额分为A类、C类和D类不同的类别"
+    gateway = FakeGateway({"recall_fact_recover": value,
+                           "recall_arbitrate": {"choice": "unknown", "quote": "",
+                                                "reason": "cannot prove"}})
+    recovered, summary = recover_fee_facts(inspection, unknown_facts(), gateway)
+    assert recovered.status_of("share_class_structure") == "UNKNOWN"
+    assert summary["final"] == "failed"

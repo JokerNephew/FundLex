@@ -80,3 +80,23 @@ def test_state_of_operation_is_operation_aware():
     view = build_coverage_view(report)
     assert view.state_of_operation("G05", "p50", "G05:0") == "SATISFIED"
     assert view.state_of_operation("G05", "p50", "G05:1") is None
+
+
+def test_plan_level_not_applicable_or_satisfied_closes_the_target():
+    report = {
+        "targets": [
+            {"target_id": "T1", "rule_id": "G20", "location": "p1",
+             "state": "needs_edit", "operations": ["G20:0"]},
+            {"target_id": "T2", "rule_id": "G02", "location": "p2",
+             "state": "needs_edit", "operations": ["G02:0"]},
+        ],
+        "plan": {"ledger": [
+            {"target_id": "T1", "status": "not_applicable"},
+            {"target_id": "T2", "status": "satisfied"},
+        ]},
+        "audit": {"rounds": []}, "unresolved": [],
+    }
+    view = build_coverage_view(report)
+    assert view.state_of("G20", "p1") == "NOT_APPLICABLE"
+    assert view.state_of("G02", "p2") == "NOT_APPLICABLE"
+    assert not view.unresolved

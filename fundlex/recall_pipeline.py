@@ -2249,7 +2249,10 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
 
         stage = "scope"
         sections = structure_index(inspection)
-        mapping = scope_map(rules, sections, model)
+        scope_gaps: list[dict[str, Any]] = []
+        mapping = scope_map(rules, sections, model, gaps=scope_gaps)
+        if scope_gaps:
+            report["scope_gaps"] = scope_gaps
         facts_text = json.dumps(facts.as_ledger(), ensure_ascii=False, indent=1)
         rules_text = rule_context(rules, full=True)
         window_chars = max(MIN_WINDOW_CHARS,
@@ -2270,10 +2273,19 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
         _run_survey(model, rules, rules_by_id, facts, inspection, _collect_targets(entries, synthetic, rules_by_id, inspection),
                     synthetic, origins, survey_ledger, coverage_gaps, sections)
         targets = _collect_targets(entries, synthetic, rules_by_id, inspection)
+        from .recall import ensure_delete_targets
+        for target in ensure_delete_targets(targets, rules_by_id, inspection):
+            targets.append(target)
+            origins[target.target_id] = "delete_residual_copy"
+        from .targeting import locate_unresolved_targets, targets_for_open_rules
+        open_targets = targets_for_open_rules(obligation_ledger, targets, rules_by_id, facts,
+                                              inspection, mapping, sections)
+        for target in open_targets:
+            targets.append(target)
+            origins[target.target_id] = "T3_open_rule"
         rebinds = _rebind_unresolved_targets(targets, origins, inspection,
                                              rules_by_id=rules_by_id, facts=facts,
                                              extend_resolved=True)
-        from .targeting import locate_unresolved_targets
         locator_records = locate_unresolved_targets(targets, inspection, rules_by_id,
                                                     facts, model)
         if locator_records:
@@ -2536,48 +2548,67 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
                                                         "status", "reason", "failure_class")}})
             for gap in [*gaps, *coverage_gaps]:
                 unresolved.append({"kind": "coverage", **gap})
-            # --- artifact claim replay (plan v4 §28.2, phase 8) --------------
-            if strategy_mode() == "registry":
-                from .generation.claim_replay import replay_claims
+            # --- artifact claim replay (hard gate, always on) -----------------
+            if True:
+                from .generation.claim_replay import (check_delete_residuals,
+                                                      replay_claims)
                 from .generation.components import claim_components_for_rules
                 from .recovery import (RecoveryContext, RecoveryHistory,
                                        RecoveryOrchestrator, RecoveryAction)
 
-                edit_rule_ids: set[str] = set()
-                for edit in planned.get("edits") or []:
-                    edit_rule_ids.update(part.strip()
-                                         for part in str(edit.get("rule_id") or "").split("+")
-                                         if part.strip())
-                    for component in edit.get("components") or []:
-                        edit_rule_ids.update(
-                            part.strip() for part in
-                            str(component.get("rule_id") or "").split("+")
-                            if part.strip())
-                components_by_rule = {rule_id: claim_components_for_rules(
-                                          [rule_id], rules_by_id)
-                                      for rule_id in edit_rule_ids}
-                required_terms_by_rule: dict[str, tuple[str, ...]] = {}
-                if facts.status_of("subscription_fee_group") == "VERIFIED" and \
-                        facts.status_of("service_fee_group") == "VERIFIED":
-                    class_terms = tuple(
-                        name if "类" in name else f"{name}类"
-                        for name in (*facts.subscription_group, *facts.service_group))
-                    # Only the two group-substitution rules require every group label
-                    # in the target paragraph (plan §13). Appends (G01/G03/G16) have
-                    # their own fixed wording and are covered by their components.
-                    for rule_id in edit_rule_ids & {"G02", "G04"}:
-                        required_terms_by_rule[rule_id] = class_terms
-                replay = replay_claims(planned.get("edits") or [], inspection, actual,
-                                       rules_by_id=rules_by_id, facts=facts,
-                                       components_by_rule=components_by_rule,
-                                       required_terms_by_rule=required_terms_by_rule)
+                def _claim_maps(plan: dict[str, Any]) -> tuple[dict, dict]:
+                    rule_ids: set[str] = set()
+                    for edit in plan.get("edits") or []:
+                        rule_ids.update(part.strip()
+                                        for part in str(edit.get("rule_id") or "").split("+")
+                                        if part.strip())
+                        for component in edit.get("components") or []:
+                            rule_ids.update(
+                                part.strip() for part in
+                                str(component.get("rule_id") or "").split("+")
+                                if part.strip())
+                    components = {rule_id: claim_components_for_rules([rule_id], rules_by_id)
+                                  for rule_id in rule_ids}
+                    terms: dict[str, tuple[str, ...]] = {}
+                    if facts.status_of("subscription_fee_group") == "VERIFIED" and \
+                            facts.status_of("service_fee_group") == "VERIFIED":
+                        class_terms = tuple(
+                            name if "类" in name else f"{name}类"
+                            for name in (*facts.subscription_group, *facts.service_group))
+                        # Only G02/G04 require every group label in the target paragraph.
+                        for rule_id in rule_ids & {"G02", "G04"}:
+                            terms[rule_id] = class_terms
+                    return components, terms
+
+                components_by_rule, required_terms_by_rule = _claim_maps(planned)
+
+                def _replay(plan: dict[str, Any]) -> dict[str, Any]:
+                    result = replay_claims(
+                        plan.get("edits") or [], inspection, actual,
+                        rules_by_id=rules_by_id, facts=facts,
+                        components_by_rule=components_by_rule,
+                        required_terms_by_rule=required_terms_by_rule,
+                        target_rules=target_rules)
+                    residuals = check_delete_residuals(rules_by_id, actual)
+                    if residuals:
+                        result["failures"].extend(residuals)
+                        result["verified"] = False
+                    return result
+
+                target_rules: dict[str, list[str]] = {}
+                for target in targets:
+                    target_rules.setdefault(target.location, []).append(target.rule_id)
+                replay = _replay(planned)
                 # Claim replay is a recoverable stage (plan §24): a failed replay
                 # rebuilds the plan from the ORIGINAL source and replays again before
                 # the obligation is allowed to become unresolved.
                 recovery = RecoveryOrchestrator()
                 recovery_history = RecoveryHistory()
                 recovery_attempts = 0
-                while replay.get("failures") and recovery_attempts < 2:
+                artifact_recovery_used = False
+                recovery_sweep_unverified = False
+                while replay.get("failures") and \
+                        recovery_attempts < recovery.policy.limit("artifact_recovery"):
                     failure = replay["failures"][0]
                     context = RecoveryContext(
                         stage="deliver", failure_class=None,
@@ -2602,13 +2633,48 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
                         planned, edits, plan, artifacts, actual = _plan_and_generate(
                             model, rules_by_id, targets, inspection, facts, input_path,
                             temp_dir, max_compose_calls=compose_calls)
+                        artifact_recovery_used = True
                         report["plan"] = _plan_ledger(planned, plan)
-                        report["targets"] = _target_ledger(targets, planned, audit_state, origins)
-                        replay = replay_claims(
-                            planned.get("edits") or [], inspection, actual,
-                            rules_by_id=rules_by_id, facts=facts,
-                            components_by_rule=components_by_rule,
-                            required_terms_by_rule=required_terms_by_rule)
+                        # Audit and sweep describe the previous artifact. Re-run both on
+                        # the regenerated file before any verdict can be reused.
+                        recovery_audit = _run_audit(model, rules_by_id, targets, planned,
+                                                    inspection, actual, facts=facts)
+                        recovery_audit.update(round=round_number + 1,
+                                              scope="artifact_recovery")
+                        audit_rounds.append(recovery_audit)
+                        _merge_audit_state(audit_state, recovery_audit, targets)
+                        report["audit"] = {"rounds": audit_rounds,
+                                           "issues": _audit_issues(audit_state, targets)}
+                        report["targets"] = _target_ledger(targets, planned, audit_state,
+                                                           origins)
+                        components_by_rule, required_terms_by_rule = _claim_maps(planned)
+                        replay = _replay(planned)
+                        # Re-sweep the regenerated artifact. Old findings are stale.
+                        recovery_chunks = _sweep_chunks(actual, sections, max_chars=chunk_chars)
+                        recovery_scoped = _window_rule_scope(
+                            recovery_chunks, mapping=mapping, sections=sections,
+                            rules=rules, mandatory=mandatory, blind_windows=blind_windows)
+                        recovery_batch = _take_batch(
+                            recovery_chunks, max_sweep_chunks - swept_calls, gaps,
+                            planned=len(recovery_chunks))
+                        if recovery_batch:
+                            recovery_ledger = _sweep_batch(
+                                model, rules_by_id, requirements, recovery_batch, actual,
+                                round_number=round_number + 1, counter=counter, facts=facts,
+                                facts_text=facts_text, rule_locations=rule_locations,
+                                requirements_by_chunk={
+                                    chunk.id: _sweep_requirements_for(rules, ids)
+                                    for chunk, ids in recovery_scoped},
+                                scope_by_chunk={chunk.id: ids
+                                                for chunk, ids in recovery_scoped})
+                            findings[:] = recovery_ledger["findings"]
+                            sweep_rounds.append(recovery_ledger)
+                            swept_calls += len(recovery_batch)
+                            report["sweep"] = {"chunks": swept_calls, "findings": findings,
+                                                "rounds": sweep_rounds, "gaps": gaps,
+                                                "blind_windows": blind_windows}
+                        else:
+                            recovery_sweep_unverified = True
                     except (RecallError, ModelError) as exc:
                         recovery.record(recovery_history, context, decision,
                                         outcome="failed", detail=f"{type(exc).__name__}:"
@@ -2618,6 +2684,30 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
                                     outcome="succeeded" if replay.get("verified") else "failed",
                                     detail=f"checked={replay.get('checked')}")
                     recovery_attempts += 1
+                if artifact_recovery_used:
+                    # Replace every audit/sweep/claim verdict tied to the old artifact
+                    # with the verdicts of the regenerated one.
+                    unresolved[:] = [item for item in unresolved
+                                     if item.get("kind") not in {"audit", "sweep",
+                                                                 "claim_replay"}]
+                    for issue in _audit_issues(audit_state, targets):
+                        unresolved.append({"kind": "audit", **issue})
+                    for finding in findings:
+                        if finding.get("status") in {"pending", "unresolved"}:
+                            unresolved.append({"kind": "sweep",
+                                               **{key: finding[key] for key in
+                                                  ("finding_id", "rule_id", "location",
+                                                   "issue", "status", "reason",
+                                                   "failure_class")}})
+                    report["audit"] = {"rounds": audit_rounds,
+                                       "issues": _audit_issues(audit_state, targets)}
+                    report["targets"] = _target_ledger(targets, planned, audit_state,
+                                                       origins)
+                    if recovery_sweep_unverified:
+                        unresolved.append({"kind": "coverage",
+                                           "code": "SWEEP_RECOVERY_UNVERIFIED",
+                                           "reason": "artifact was regenerated but the "
+                                                     "sweep budget could not re-check it"})
                 report["artifact_claim_replay"] = replay
                 report["recovery"] = recovery_history.summary()
                 for failure in replay["failures"]:
@@ -2664,7 +2754,10 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
             # obligation must have a closed terminal state. An open obligation that is
             # not already represented by a more specific unresolved entry blocks
             # completion instead of disappearing silently.
-            project(obligation_ledger, report)
+            project(obligation_ledger, report,
+                    scope_gaps={str(item.get("rule_id")) for item in scope_gaps},
+                    rules_by_id=rules_by_id,
+                    artifact_text=_document_compact(actual))
             report["obligations"] = obligation_ledger.as_dict()
             represented_rules = {str(item.get("rule_id") or "") for item in unresolved}
             open_items = [item for item in open_obligations(obligation_ledger)

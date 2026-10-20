@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from dataclasses import replace
 from typing import Any
 
@@ -121,11 +122,24 @@ def _class_set_complete(inspection: Any, candidate: Facts, quote: str) -> bool:
     compact_quote = _compact(quote)
     if "分为" not in compact_quote and "类别" not in compact_quote:
         return False
+    # Parse the class labels the enumeration sentence actually names. A prefix such as
+    # "本基金将基金份额分为A类" cannot prove C/D exist; the sets must be equal.
+    labels = set(re.findall(r"([A-ZＡ-Ｚ])\s*类", compact_quote))
+    expected: set[str] = set()
     for item in candidate.current_classes:
-        letter = str(item.name).strip()
-        # Display names may be "A", "A类人民币" etc.; require the class label itself.
-        if f"{letter}类" not in compact_quote and letter not in compact_quote:
+        name = str(item.name).strip()
+        if re.fullmatch(r"[A-ZＡ-Ｚ]", name):
+            expected.add(name)
+        elif name and name not in compact_quote:
             return False
+    if labels and expected:
+        return labels == expected
+    if labels and not expected:
+        # Currency / descriptive variants: every full display name must appear in the
+        # enumeration sentence; the label set alone cannot distinguish A类人民币 from
+        # A类美元.
+        return all(str(item.name).strip() in compact_quote
+                   for item in candidate.current_classes)
     return True
 
 
@@ -145,13 +159,20 @@ def _merge_candidate(original: Facts, candidate: Facts) -> Facts:
     status = dict(original.fact_status)
     for name in _FEE_FACTS:
         status[name] = candidate.status_of(name)
-    status["direct_sales_exempt_group"] = candidate.status_of("direct_sales_exempt_group")
-    status["other_sales_charged_group"] = candidate.status_of("other_sales_charged_group")
+    for channel in ("direct_sales_exempt_group", "other_sales_charged_group"):
+        if candidate.status_of(channel) == "VERIFIED":
+            status[channel] = "VERIFIED"
+        else:
+            status[channel] = original.status_of(channel)
     return replace(
         original,
         classes=candidate.classes,
-        direct_sales_exempt_group=candidate.direct_sales_exempt_group,
-        other_sales_charged_group=candidate.other_sales_charged_group,
+        direct_sales_exempt_group=(candidate.direct_sales_exempt_group
+                                   if status.get("direct_sales_exempt_group") == "VERIFIED"
+                                   else original.direct_sales_exempt_group),
+        other_sales_charged_group=(candidate.other_sales_charged_group
+                                   if status.get("other_sales_charged_group") == "VERIFIED"
+                                   else original.other_sales_charged_group),
         fact_status=status,
         quotes_verified={**original.quotes_verified, **candidate.quotes_verified},
         problems=tuple(sorted(set(original.problems) | set(candidate.problems))),
@@ -205,6 +226,12 @@ def recover_fee_facts(inspection: Any, facts: Facts, gateway: Any, *,
                                                       "quote": facts.floating_quote,
                                                       "basis": facts.floating_basis}})
     except Exception as exc:  # noqa: BLE001 - recorded, caller keeps the original facts
+        from .model import ModelError
+        if isinstance(exc, ModelError):
+            from .recovery import classify as _classify
+            if _classify(exc.code) in {FailureClass.INFRASTRUCTURE,
+                                       FailureClass.RESOURCE}:
+                raise
         attempt.detail = f"{type(exc).__name__}:{getattr(exc, 'code', '')}"
     if candidate is not None and not forced and _candidate_usable(
             candidate, facts, inspection=inspection, class_set_quote=class_set_quote):
@@ -245,6 +272,12 @@ def recover_fee_facts(inspection: Any, facts: Facts, gateway: Any, *,
             arb_attempt.detail = (f"choice={choice};quote_verified={quote_ok}"
                                   if quote else f"choice={choice}")
         except Exception as exc:  # noqa: BLE001
+            from .model import ModelError
+            if isinstance(exc, ModelError):
+                from .recovery import classify as _classify
+                if _classify(exc.code) in {FailureClass.INFRASTRUCTURE,
+                                           FailureClass.RESOURCE}:
+                    raise
             arb_attempt.detail = f"{type(exc).__name__}:{getattr(exc, 'code', '')}"
     else:
         arb_attempt.detail = "no_candidate_or_context_limit"

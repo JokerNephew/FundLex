@@ -93,12 +93,11 @@ def locate_unresolved_targets(targets: Sequence[Any], inspection: Any,
                                   prompt_version=LOCATE_PROMPT_VERSION)
         except Exception as exc:  # noqa: BLE001 - recorded; deterministic failure remains
             from .model import ModelError
-            if isinstance(exc, ModelError) and exc.code in {
-                    "MODEL_GLOBAL_CALL_BUDGET_EXCEEDED", "MODEL_COST_BUDGET_EXCEEDED",
-                    "MODEL_CALL_BUDGET_EXCEEDED", "MODEL_CIRCUIT_OPEN",
-                    "MODEL_LEDGER_UNAVAILABLE", "MODEL_CONFIG_MISSING",
-                    "MODEL_HTTP_ERROR", "MODEL_RETRY_EXHAUSTED"}:
-                raise
+            if isinstance(exc, ModelError):
+                from .recovery import FailureClass, classify
+                if classify(exc.code) in {FailureClass.INFRASTRUCTURE,
+                                          FailureClass.RESOURCE}:
+                    raise
             record.update(status="error", reason=f"{type(exc).__name__}:"
                           f"{getattr(exc, 'code', '')}")
             records.append(record)
@@ -142,3 +141,58 @@ def locate_unresolved_targets(targets: Sequence[Any], inspection: Any,
         record["status"] = "bound"
         records.append(record)
     return records
+
+
+def targets_for_open_rules(obligations: Any, targets: Sequence[Any], rules_by_id: dict[str, dict],
+                           facts: Any, inspection: Any, mapping: dict[str, list[str]],
+                           sections: Sequence[Any], *, limit: int = 12) -> list[Any]:
+    """Create T3 locate candidates for applicable rules with no target at all.
+
+    A rule that the scope pass mapped to a real section but the inventory/survey never
+    found is exactly where T3 is needed. Rules whose policy text is already present
+    (or whose class substitution is a no-op) are skipped with code evidence.
+    """
+    from .recall import Target, _compact, class_substitution_noop, satisfied_by_new_text
+
+    if not _enabled():
+        return []
+    # Creating a locator task for a rule with no target is opt-in: a model can bind an
+    # unrelated clause, so production keeps T3 for already-identified unresolved targets.
+    if os.environ.get("FUNDLEX_TARGET_LOCATOR_OPEN_RULES", "0").strip().lower() not in {
+            "1", "true", "on", "yes"}:
+        return []
+    covered_rules = {str(target.rule_id) for target in targets}
+    section_by_id = {section.id: section for section in sections}
+    body = _compact("\n".join(str(getattr(span, "text", ""))
+                              for span in getattr(inspection, "paragraphs", ())))
+    created: list[Any] = []
+    seen_rules: set[str] = set()
+    for record in getattr(obligations, "records", ()):
+        rule_id = record.spec.rule_id
+        if rule_id in seen_rules or rule_id in covered_rules:
+            continue
+        if record.applicability.status != "TRUE":
+            continue
+        section_ids = mapping.get(rule_id) or []
+        if not section_ids:
+            continue
+        seen_rules.add(rule_id)
+        if len(created) >= limit:
+            break
+        rule = rules_by_id.get(rule_id)
+        if rule is None:
+            continue
+        if satisfied_by_new_text(rule, facts, body) or class_substitution_noop(rule, facts):
+            continue
+        location = ""
+        for section_id in section_ids:
+            section = section_by_id.get(section_id)
+            if section is not None and section.locations:
+                location = section.locations[0]
+                break
+        if not location:
+            continue
+        created.append(Target(target_id=f"T3{len(created) + 1:03d}", rule_id=rule_id,
+                              location=location, quote="", state="needs_edit",
+                              reason="T3_open_rule", resolution="unresolved"))
+    return created

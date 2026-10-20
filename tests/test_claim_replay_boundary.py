@@ -60,3 +60,44 @@ def test_missing_replacement_is_still_reported_after_boundary_passes():
     replay = replay_claims([_edit()], before, after, rules_by_id=RULES)
     assert replay["verified"] is False
     assert replay["failures"][0]["code"] == "CLAIM_NO_CHANGE_APPLIED"
+
+
+def test_delete_only_rule_leaves_no_old_sentence_behind():
+    from fundlex.generation.claim_replay import check_delete_residuals
+    rules = {"G15": {"rule_id": "G15", "operations": [
+        {"op": "delete", "old_text": "C类基金份额的销售服务费每日计提，按月支付。"
+                                     "C类基金份额的销售服务费使用范围不包括基金募集期间的上述费用。"}]}}
+    after = Inspection(["销售服务费每日计提。销售服务费使用范围不包括基金募集期间的上述费用。"])
+    failures = check_delete_residuals(rules, after)
+    assert failures
+    assert failures[0]["code"] == "RESIDUAL_OLD_TEXT"
+    assert "使用范围不包括" in failures[0]["quote"]
+    clean = Inspection(["销售服务费每日计提。"])
+    assert check_delete_residuals(rules, clean) == []
+
+
+def test_identical_body_and_summary_copy_must_not_diverge():
+    text = "C类基金份额的销售服务费每日计提，按月支付。由基金管理人向基金托管人发送划付指令。"
+    before = Inspection([text, text])
+    after = Inspection(["销售服务费每日计提。", text])
+    edit = {"rule_id": "G15", "location": "p0", "start": 0, "end": len(text),
+            "replacement": "销售服务费每日计提。", "components": []}
+    rules = {"G15": {"rule_id": "G15", "operations": [
+        {"op": "delete", "old_text": text, "condition": {"kind": "none"}}]}}
+    replay = replay_claims([edit], before, after, rules_by_id=rules,
+                           target_rules={"p1": ["G15"]})
+    assert replay["verified"] is False
+    assert any(item["code"] == "DUPLICATE_SITE_UNEDITED"
+               for item in replay["failures"])
+
+
+def test_residual_check_accepts_a_near_equivalent_new_policy_sentence():
+    from fundlex.generation.claim_replay import check_delete_residuals
+    rules = {
+        "G15": {"rule_id": "G15", "operations": [
+            {"op": "delete", "old_text": "若遇法定节假日、公休日等，支付日期顺延。"}]},
+        "G16": {"rule_id": "G16", "operations": [
+            {"op": "append", "new_text": "若遇法定节假日、公休日或不可抗力等，支付日期顺延。"}]},
+    }
+    after = Inspection(["若遇法定节假日、公休日等，支付日期顺延。"])
+    assert check_delete_residuals(rules, after) == []

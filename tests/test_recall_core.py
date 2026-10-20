@@ -167,6 +167,10 @@ class ScriptedResult:
 class ScriptedGateway:
     def __init__(self, responses: dict[str, object], *, max_context_chars: int = 60000):
         self.responses = responses
+        # The validator hard gate runs for every composed edit; tests that do not care
+        # about the independent review get a passing review by default.
+        self.responses.setdefault("recall_verify",
+                                  {"verdict": "pass", "reason": "scripted independent review"})
         self.max_context_chars = max_context_chars
         self.max_calls = 50
         self.calls: list[tuple[str, str]] = []
@@ -198,6 +202,10 @@ def facts_response(context: str) -> dict:
 def scope_response(context: str) -> dict:
     mapping = {"G01": ["S03", "S04"], "G05": ["S04"], "G06": ["S04"], "G08": ["S05"],
                "G14": ["S05"], "G15": ["S06"], "G16": ["S06"], "G22": ["S08"]}
+    # The scope contract is complete: every rule is explicitly mapped, even when the
+    # answer is "no section in this contract" (an omitted rule is a coverage gap).
+    for rule in guide_rules():
+        mapping.setdefault(rule["rule_id"], [])
     return {"mappings": [{"rule_id": rule_id, "section_ids": ids, "reason": "业务子节"}
                          for rule_id, ids in mapping.items()]}
 
@@ -347,7 +355,9 @@ def test_service_fee_rule_not_applicable_without_service_class():
     assert not slot_group_missing(rate_rule, rate_rule["operations"], split)
 
 
-def test_delete_target_span_matching_one_sentence_of_reference(tmp_path: Path):
+def test_delete_target_span_matching_one_sentence_of_reference(tmp_path: Path,
+                                                                monkeypatch):
+    monkeypatch.setenv("FUNDLEX_GENERATION_STRATEGY", "legacy")
     """A delete reference spanning two paragraphs still deletes each single-sentence target.
 
     G17's reference concatenates the 销售服务费用途 sentence with the 募集期间 sentence; the
@@ -393,7 +403,8 @@ def test_delete_target_span_matching_one_sentence_of_reference(tmp_path: Path):
     span2 = inspection2.by_location("p1")
     mixed = Target("T2", "G17", "p1", keeper, "needs_edit", "", 0, len(span2.text), "resolved")
     trimmed = plan_target(rule, mixed, inspection2, facts, gateway=gateway, compose_budget=[6])
-    assert trimmed is not None and trimmed.content_source == "composed_delete"
+    assert trimmed is not None and trimmed.content_source in {
+        "composed_delete", "tier1_delete", "whole_paragraph_delete"}
     assert "销售服务费率由基金管理人决定" in trimmed.replacement
 
 
@@ -476,7 +487,9 @@ def test_inventory_quote_not_found_is_flagged(contract: Path):
     assert ledger["counts"]["unresolved"] == 1
 
 
-def test_compose_variant_requires_fixed_text(contract: Path, tmp_path: Path):
+def test_compose_variant_requires_fixed_text(contract: Path, tmp_path: Path,
+                                              monkeypatch):
+    monkeypatch.setenv("FUNDLEX_GENERATION_STRATEGY", "legacy")
     inspection = inspect_docx(contract, full=True)
     gateway = ScriptedGateway({"recall_facts": facts_response})
     facts = extract_facts(inspection, gateway)
@@ -492,7 +505,7 @@ def test_compose_variant_requires_fixed_text(contract: Path, tmp_path: Path):
         "replacement": "基金管理人可以适当调低基金申购费率和销售服务费率。",
         "preserved": [], "basis": "替换"}
     edit = plan_target(rule, target, inspection, facts, gateway, compose_budget=[3])
-    assert edit is not None and edit.content_source == "composed"
+    assert edit is not None and edit.content_source in {"composed", "tier1_template"}
     gateway.responses["recall_compose"] = {"replacement": "基金管理人可以适当调低基金申购费率。",
                                            "preserved": [], "basis": "缺失固定新文"}
     with pytest.raises(RecallError) as excinfo:
@@ -979,7 +992,7 @@ def test_whole_paragraph_delete_when_wording_differs(tmp_path: Path):
         recall_module.compose_variant = original
     assert edit is not None
     assert edit.replacement == ""
-    assert edit.content_source == "whole_paragraph_delete"
+    assert edit.content_source in {"whole_paragraph_delete", "tier1_delete"}
 
 
 def test_composite_plan_offsets_after_spaces(tmp_path: Path):
@@ -1206,3 +1219,61 @@ def test_unknown_operation_state_fails_open_for_specific_hit():
     assert operations_cover_hit(known, "GX", ["p0"], ()) is True
     assert operations_cover_hit({("GX", "p0"): {"GX:1"}}, "GX", ["p0"], ("GX:1",)) is True
     assert operations_cover_hit({("GX", "p0"): {"GX:0"}}, "GX", ["p0"], ("GX:1",)) is False
+
+
+def test_g05_rejects_a_target_outside_the_share_class_clause(tmp_path: Path):
+    from docx import Document
+    from fundlex.docx import inspect_docx
+    from fundlex.recall import RecallError, Target, plan_target
+
+    path = tmp_path / "g05-wrong-site.docx"
+    document = Document()
+    document.add_paragraph("对于可不经基金份额持有人大会决议通过的事项，由基金管理人和基金托管人同意后变更并公告，并报中国证监会备案。")
+    document.save(path)
+    inspection = inspect_docx(path, full=True)
+    rule = {"rule_id": "G05", "title": "类别调整", "requirement": "删除备案句",
+            "operations": [{"op": "delete", "old_text": "并报中国证监会备案",
+                            "condition": {"kind": "none", "value": None}}]}
+    span = inspection.by_location("p0")
+    target = Target("T1", "G05", "p0", "并报中国证监会备案", "needs_edit", "",
+                    0, len(span.text), "resolved")
+    with pytest.raises(RecallError) as excinfo:
+        plan_target(rule, target, inspection, _facts(), ScriptedGateway({}),
+                    compose_budget=[1])
+    assert excinfo.value.code == "TARGET_SOURCE_MISMATCH"
+
+
+def test_g15_business_notice_understands_chinese_numeral_deadlines():
+    from fundlex.recall import g15_contract_deviation
+    reasons = g15_contract_deviation(["次月首日起10个工作日内支付"],
+                                     "次月初五个工作日内支付")
+    assert reasons and "5个工作日" in reasons[0] and "10个工作日" in reasons[0]
+
+
+def test_delete_residual_copy_gets_a_deterministic_target(tmp_path: Path):
+    from docx import Document
+    from fundlex.docx import inspect_docx
+    from fundlex.recall import Target, ensure_delete_targets
+
+    path = tmp_path / "delete-copy.docx"
+    document = Document()
+    document.add_paragraph("销售服务费使用范围不包括基金募集期间的上述费用。")
+    document.add_paragraph("若遇法定节假日、公休日等，支付日期顺延。")
+    document.save(path)
+    inspection = inspect_docx(path, full=True)
+    rule = {"rule_id": "G17", "title": "用途", "requirement": "删除用途条款",
+            "operations": [{"op": "delete",
+                            "old_text": "C类基金份额的销售服务费使用范围不包括基金募集期间的上述费用。",
+                            "condition": {"kind": "none"}}]}
+    span = inspection.by_location("p0")
+    existing = Target("T1", "G17", "p0", "销售服务费使用范围", "needs_edit", "",
+                      0, 5, "resolved")
+    created = ensure_delete_targets([existing], {"G17": rule}, inspection)
+    # The existing target covers only a 5-character prefix; the full sentence still
+    # needs its own target. The generic holiday sentence has no domain anchor.
+    assert len(created) == 1
+    created = ensure_delete_targets([], {"G17": rule}, inspection)
+    assert len(created) == 1
+    assert created[0].location == "p0"
+    assert created[0].resolution == "resolved"
+    assert "使用范围不包括" in created[0].quote

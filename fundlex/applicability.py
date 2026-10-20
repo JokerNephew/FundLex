@@ -273,4 +273,10 @@ def resolve_ledger(records: Iterable[Any], *, gateway: Any, inspection: Any, fac
         elif decision.status == "UNKNOWN":
             record.completion = "UNRESOLVED"
             record.completion_evidence = f"applicability_unknown:{decision.reason}"
+        if decision.status in {"TRUE", "FALSE"}:
+            overrides = getattr(facts, "condition_overrides", None)
+            if isinstance(overrides, dict):
+                import json
+                overrides[json.dumps(spec.condition or {"kind": "none"}, sort_keys=True,
+                                     ensure_ascii=False, separators=(",", ":"))] = decision.status
     return history

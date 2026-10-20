@@ -134,3 +134,25 @@ def test_resolve_ledger_reuses_one_decision_per_condition(tmp_path: Path):
     assert gateway.calls == ["recall_applicability"]
     assert [item["status"] for item in history] == ["TRUE"]
     assert {record.applicability.status for record in ledger.records} == {"TRUE"}
+
+
+def test_recovered_branch_decision_reaches_planning():
+    from fundlex.recall import condition_matches, condition_status
+    condition = {"kind": "has_service_fee", "value": True}
+    facts = Facts(status="UNKNOWN")
+    assert condition_status(condition, facts) == "UNKNOWN"
+    facts.condition_overrides = {
+        __import__("json").dumps(condition, sort_keys=True, ensure_ascii=False,
+                                 separators=(",", ":")): "TRUE"}
+    assert condition_status(condition, facts) == "TRUE"
+    assert condition_matches(condition, facts) is True
+
+
+def test_verified_fact_is_not_overturned_by_an_override():
+    from fundlex.recall import condition_status
+    condition = {"kind": "class_count", "value": 1}
+    facts = Facts(class_count=2)
+    facts.condition_overrides = {
+        __import__("json").dumps(condition, sort_keys=True, ensure_ascii=False,
+                                 separators=(",", ":")): "TRUE"}
+    assert condition_status(condition, facts) == "FALSE"

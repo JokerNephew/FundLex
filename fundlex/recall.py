@@ -321,6 +321,9 @@ class Facts:
     other_sales_charged_group: tuple[str, ...] = ()
     #: Per-fact tri-state: VERIFIED | UNKNOWN | CONFLICT (missing means UNKNOWN).
     fact_status: dict[str, str] = field(default_factory=dict)
+    #: Applicability decisions recovered from literal evidence (condition key -> TRUE/FALSE).
+    #: They are branch decisions, not new fee facts; planning must obey them.
+    condition_overrides: dict[str, str] = field(default_factory=dict)
 
     @property
     def share_class_structure(self) -> str:
@@ -385,6 +388,7 @@ class Facts:
             "direct_sales_exempt_group": list(self.direct_sales_exempt_group),
             "other_sales_charged_group": list(self.other_sales_charged_group),
             "fact_status": dict(self.fact_status),
+            "condition_overrides": dict(self.condition_overrides),
             "has_service_fee": self.has_service_fee,
             "is_floating_fee": self.floating_management_fee,
             "floating_quote": self.floating_quote,
@@ -411,9 +415,11 @@ def derive_fact_statuses(*, fund_type_ok: bool, classes: Sequence[ClassFact],
     current_ok = bool(classes) and all(
         class_quotes.get(item.name, False) for item in classes if item.current)
     statuses["share_class_structure"] = "VERIFIED" if current_ok else "UNKNOWN"
+    current_names = [item.name for item in classes if item.current]
+    duplicate_names = len(current_names) != len(set(current_names))
     ambiguous = [item for item in classes
                  if item.current and item.subscription_fee and item.service_fee]
-    if current_ok and ambiguous:
+    if current_ok and (ambiguous or duplicate_names):
         # A class carrying both fee flags cannot be placed in either the subscription
         # or the service group; the grouping facts are in conflict (P0-B).
         fee_status = "CONFLICT"
@@ -794,11 +800,13 @@ def _clip(value: str, limit: int) -> str:
     return value if len(value) <= limit else value[:limit] + "…"
 
 
-def scope_map(rules: Sequence[dict], sections: Sequence[Section], gateway: Any) -> dict[str, list[str]]:
+def scope_map(rules: Sequence[dict], sections: Sequence[Section], gateway: Any,
+              gaps: list[dict[str, Any]] | None = None) -> dict[str, list[str]]:
     structure = structure_context(sections)
     valid_ids = {section.id for section in sections}
     rule_ids = {rule["rule_id"] for rule in rules}
     mapping: dict[str, list[str]] = {rule_id: [] for rule_id in rule_ids}
+    mentioned: set[str] = set()
 
     def _run(batch: Sequence[dict]) -> None:
         context = "\n\n".join([structure, rule_context(batch, full=False)])
@@ -823,6 +831,7 @@ def scope_map(rules: Sequence[dict], sections: Sequence[Section], gateway: Any) 
             rule_id = str(item.get("rule_id") or "")
             if rule_id not in batch_ids:
                 continue
+            mentioned.add(rule_id)
             ids = [str(section_id) for section_id in (item.get("section_ids") or [])
                    if str(section_id) in valid_ids]
             current = mapping.get(rule_id) or []
@@ -832,6 +841,18 @@ def scope_map(rules: Sequence[dict], sections: Sequence[Section], gateway: Any) 
             mapping[rule_id] = current
 
     _run(list(rules))
+    omitted = [rule for rule in rules if str(rule.get("rule_id")) not in mentioned]
+    if omitted:
+        # One bounded retry with only the omitted rules. A model answer that silently
+        # drops a rule is not evidence that the clause is absent (plan §32).
+        _run(omitted)
+        still_omitted = [rule for rule in omitted
+                         if str(rule.get("rule_id")) not in mentioned]
+        if gaps is not None:
+            for rule in still_omitted:
+                gaps.append({"rule_id": str(rule.get("rule_id")),
+                             "code": "SCOPE_RULE_OMITTED",
+                             "reason": "scope answer omitted the rule after a focused retry"})
     return mapping
 
 
@@ -2537,7 +2558,42 @@ def class_substitution_letter_stable(rule: dict, facts: Facts) -> bool:
     return checked
 
 
+def _condition_fact_names(condition: dict | None) -> set[str]:
+    if not condition:
+        return set()
+    kind = condition.get("kind")
+    if kind == "compound":
+        names: set[str] = set()
+        for part in condition.get("value") or []:
+            names |= _condition_fact_names(part)
+        return names
+    if kind in {"class_count", "has_service_fee"}:
+        return {"share_class_structure"}
+    if kind == "is_floating_fee":
+        return {"floating_management_fee"}
+    return set()
+
+
+def _condition_override(condition: dict | None, facts: Facts) -> str | None:
+    if not condition:
+        return None
+    import json
+    key = json.dumps(condition, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
+    value = getattr(facts, "condition_overrides", {}).get(key)
+    if value not in {"TRUE", "FALSE"}:
+        return None
+    # VERIFIED facts always win: a model applicability decision may fill an UNKNOWN
+    # gap, never overturn the class/fee facts themselves (plan §2.3).
+    names = _condition_fact_names(condition)
+    if names and all(facts.status_of(name) == "VERIFIED" for name in names):
+        return None
+    return value
+
+
 def condition_matches(condition: dict | None, facts: Facts) -> bool:
+    override = _condition_override(condition, facts)
+    if override is not None:
+        return override == "TRUE"
     if not condition:
         return True
     kind = condition.get("kind")
@@ -2567,6 +2623,9 @@ def condition_status(condition: dict | None, facts: Facts) -> str:
     falls through to generation). Only consulted in registry mode; the legacy
     ``condition_matches`` behaviour is unchanged.
     """
+    override = _condition_override(condition, facts)
+    if override is not None:
+        return override
     if not condition:
         return "TRUE"
     kind = condition.get("kind")
@@ -2941,6 +3000,29 @@ def _plan_target_inner(rule: dict, target: Target, inspection: DocumentInspectio
     if not containing_segment(span, target.start, target.end) and not (target.start == target.end):
         raise RecallError("RECALL_TARGET_STRUCTURE", {"target": target.target_id})
     actual = span.text[target.start:target.end]
+    _TARGET_ANCHORS = {
+        # G05 only authorises edits inside the share-class setup / fee-adjustment
+        # clause. A bare "并报中国证监会备案" also occurs in the fund-contract amendment
+        # clause; deleting it there corrupts an unrelated provision (D11 p1320).
+        "G05": (("份额类别", "基金份额类别", "调整前", "调低"), "any"),
+        # G06 deletes only the class-conversion prohibition, never every paragraph
+        # that happens to contain "转换" (D03 p419/p1102).
+        "G06": (("份额类别", "不得"), "all"),
+        # Append rules must land in the share-class definition, not in any other
+        # definition that happens to be nearby (D01 p100 基金产品资料概要).
+        "G01": (("份额类别", "分为"), "all"),
+        "G03": (("份额类别", "分为"), "all"),
+    }
+    rule_id = str(rule.get("rule_id") or "")
+    if rule_id in _TARGET_ANCHORS:
+        paragraph, _ = display_text(span.text)
+        anchors, mode = _TARGET_ANCHORS[rule_id]
+        matched = (any(anchor in paragraph for anchor in anchors) if mode == "any"
+                   else all(anchor in paragraph for anchor in anchors))
+        if not matched:
+            raise RecallError("TARGET_SOURCE_MISMATCH",
+                              {"rule": rule_id, "target": target.target_id,
+                               "location": target.location})
     if _tier1_enabled():
         tier1 = _plan_tier1(rule, operations, facts, actual)
         if tier1 is not None:
@@ -3277,7 +3359,7 @@ def compose_variant(span: ParagraphSpan, target: Target, rule: dict, actual: str
                 last_error = RecallError("RECALL_COMPOSE_NEW_NUMBERS",
                                          {"target": target.target_id,
                                           "numbers": sorted(new_digits)[:6]})
-            if last_error is None and _tier1_enabled():
+            if last_error is None:
                 verified, reason = _verify_composed(rule, target, actual, replacement,
                                                     fixed_text, facts, gateway, mode=mode)
                 if not verified:
@@ -3300,15 +3382,14 @@ def compose_variant(span: ParagraphSpan, target: Target, rule: dict, actual: str
                                   {"target": target.target_id, "numbers": sorted(new_digits)[:6]})
             # Flag on: number provenance moves to the V1 validator inside
             # ``_verify_composed`` (plan §27: upgrade, not simply remove).
-        if _tier1_enabled():
-            verified, reason = _verify_composed(rule, target, actual, replacement,
-                                                fixed_text, facts, gateway, mode="replace")
-            if not verified:
-                last_error = RecallError("RECALL_COMPOSE_UNVERIFIED",
-                                         {"target": target.target_id, "reason": reason})
-                if attempt + 1 >= attempts:
-                    raise last_error
-                continue
+        verified, reason = _verify_composed(rule, target, actual, replacement,
+                                            fixed_text, facts, gateway, mode="replace")
+        if not verified:
+            last_error = RecallError("RECALL_COMPOSE_UNVERIFIED",
+                                     {"target": target.target_id, "reason": reason})
+            if attempt + 1 >= attempts:
+                raise last_error
+            continue
         return {"replacement": replacement, "preserved": verified_preserved,
                 "preserved_unverified": unverified_preserved, "basis": basis}
     raise last_error or RecallError("RECALL_COMPOSE_EMPTY", {"target": target.target_id})
@@ -3404,7 +3485,26 @@ def merge_edits(edits: Sequence[PlannedEdit], inspection: DocumentInspection
     return merged, conflicts, covered
 
 
-_G15_TERM = re.compile(r"\d+\s*个?工作日")
+_G15_TERM = re.compile(r"(?:\d+|[一二三四五六七八九十]+)\s*个?工作日")
+
+_G15_CN_DIGITS = {"一": 1, "二": 2, "三": 3, "四": 4, "五": 5, "六": 6,
+                   "七": 7, "八": 8, "九": 9}
+
+
+def _g15_normalise_term(term: str) -> str:
+    raw = re.sub(r"\s+", "", term).removesuffix("工作日").removesuffix("个")
+    if raw.isdigit():
+        return f"{int(raw)}个工作日"
+    if raw == "十":
+        return "10个工作日"
+    if "十" in raw:
+        left, _, right = raw.partition("十")
+        tens = _G15_CN_DIGITS.get(left, 1) if left else 1
+        units = _G15_CN_DIGITS.get(right, 0) if right else 0
+        return f"{tens * 10 + units}个工作日"
+    if raw in _G15_CN_DIGITS:
+        return f"{_G15_CN_DIGITS[raw]}个工作日"
+    return term
 #: Subject mentions mapped to families, so "注册登记机构" and "登记机构" compare equal.
 _G15_SUBJECT_FAMILIES: tuple[tuple[str, re.Pattern[str]], ...] = (
     ("基金管理人", re.compile(r"基金管理人|管理人")),
@@ -3436,8 +3536,10 @@ def g15_contract_deviation(reference_texts: Sequence[str], deleted_text: str) ->
     if not reference or not deleted:
         return []
     reasons: list[str] = []
-    reference_terms = sorted(set(_G15_TERM.findall(reference)))
-    deleted_terms = sorted(set(_G15_TERM.findall(deleted)))
+    reference_terms = sorted({_g15_normalise_term(term)
+                              for term in _G15_TERM.findall(reference)})
+    deleted_terms = sorted({_g15_normalise_term(term)
+                            for term in _G15_TERM.findall(deleted)})
     if deleted_terms and reference_terms and deleted_terms != reference_terms:
         reasons.append("支付时限与指引参照不同（合同 " + "、".join(deleted_terms) +
                        "；指引 " + "、".join(reference_terms) + "）")
@@ -3550,25 +3652,33 @@ def _resolve_overlaps_with_joint_compose(
 
 def _blocked_recovery_trace(code: str, *, rule_id: str, target_id: str,
                             stage: str = "plan") -> dict[str, Any]:
-    """Record which recovery layers a planner failure already exhausted (plan §18.3).
+    """Record the failing planner layer and its terminal state (plan §18.3).
 
-    The planner attempts deterministic generation and constrained compose before it
-    reports failure; this trace makes that chain visible instead of a bare error code.
+    Only the layer that actually produced the error is recorded; no retry is claimed
+    when it was not executed.
     """
-    from .recovery import (RecoveryContext, RecoveryHistory, RecoveryOrchestrator)
+    from .recovery import (RecoveryAction, RecoveryAttempt, RecoveryContext,
+                           RecoveryHistory, RecoveryOrchestrator, classify)
 
-    history = RecoveryHistory()
-    orchestrator = RecoveryOrchestrator()
+    failure_class = classify(code)
+    if code.startswith("RECALL_COMPOSE_"):
+        action = RecoveryAction.LLM_COMPOSE
+    elif failure_class.value == "TARGET":
+        action = RecoveryAction.RETRY_DETERMINISTIC
+    elif failure_class.value == "FACT":
+        action = RecoveryAction.FOCUSED_FACT_RESOLVE
+    else:
+        action = RecoveryAction.RETRY_DETERMINISTIC
     context = RecoveryContext(rule_id=rule_id, target_id=target_id, stage=stage,
                               error_code=code, reason=code)
-    for _ in range(12):
-        decision = orchestrator.decide(context, history)
-        if decision.terminal:
-            orchestrator.record(history, context, decision, outcome="failed",
-                                detail="planner recovery layers exhausted")
-            break
-        orchestrator.record(history, context, decision, outcome="failed",
-                            detail="attempted_by_planner")
+    history = RecoveryHistory()
+    orchestrator = RecoveryOrchestrator()
+    history.append(RecoveryAttempt(action, stage, failure_class, code, code,
+                                   outcome="failed", detail="planner_layer_failed"))
+    terminal = orchestrator.decide(context, history)
+    if terminal.terminal:
+        orchestrator.record(history, context, terminal, outcome="failed",
+                            detail="no further safe recovery layer")
     return history.summary(context)
 
 
@@ -3895,3 +4005,92 @@ def content_check_factory(planned: Sequence[dict], inspection: DocumentInspectio
         return _component_ok({**item, "expected_old_text": span.text[start:end]}, inspection)
 
     return check
+
+
+_DELETE_SENTENCE_ANCHORS = {
+    "G06": ("份额类别", "转换"),
+    "G13": ("7日", "赎回费", "短期"),
+    "G15": ("销售服务费",),
+    "G17": ("销售服务费",),
+}
+
+
+def ensure_delete_targets(targets: Sequence[Target], rules_by_id: dict[str, dict],
+                          inspection: DocumentInspection, *, limit: int = 20) -> list[Target]:
+    """Create targets for delete-only sentences that no inventory/survey target covers.
+
+    Inventory often binds only the head of a two-sentence clause; the tail then survives
+    while the audit marks the deletion complete (D01 G17 p760, D03 G15 p751). This
+    document-wide pass creates a deterministic target for every remaining copy of a
+    delete sentence that carries the rule's domain anchor, so the planner deletes it.
+    """
+    if not targets and not rules_by_id:
+        return []
+    paragraphs = [span for span in inspection.paragraphs if span.text.strip()]
+    covered: dict[str, list[tuple[str, str]]] = {}
+    for target in targets:
+        if str(target.rule_id) not in _DELETE_SENTENCE_ANCHORS:
+            continue
+        locations = ([part.rsplit(":", 2)[0] for part in target.composite]
+                     if target.composite else [target.location])
+        for location in locations:
+            covered.setdefault(target.rule_id, []).append(
+                (location, _compact(target.quote)))
+    created: list[Target] = []
+    for rule_id, anchors in _DELETE_SENTENCE_ANCHORS.items():
+        rule = rules_by_id.get(rule_id)
+        if rule is None:
+            continue
+        operations = [operation for operation in (rule.get("operations") or [])
+                      if isinstance(operation, dict) and operation.get("op") == "delete"]
+        if not operations:
+            continue
+        sentences: list[str] = []
+        for operation in operations:
+            for sentence in re.split(r"(?<=[。；;])", str(operation.get("old_text") or "")):
+                sentence = sentence.strip()
+                if len(_compact(sentence)) < 8:
+                    continue
+                if not any(anchor in sentence for anchor in anchors):
+                    continue
+                if sentence not in sentences:
+                    sentences.append(sentence)
+        for sentence in sentences:
+            probes = [sentence]
+            stripped = re.sub(r"^[A-ZＡ-Ｚ]\s*类(?:基金份额)?的?", "",
+                              sentence).strip()
+            if stripped and stripped != sentence:
+                probes.append(stripped)
+            for probe in probes:
+                for parts in find_old_text_all(paragraphs, probe):
+                    location = parts[0][0]
+                    already = any(item[0] == location and
+                                  (_compact(probe) in item[1] or not item[1])
+                                  for item in covered.get(rule_id, []))
+                    if already:
+                        continue
+                    if len(parts) == 1:
+                        span = inspection.by_location(location)
+                        located = resolve_quote(span, probe)
+                        if located is None:
+                            continue
+                        start, end = located
+                        target = Target(target_id=f"DEL{len(created) + 1:03d}",
+                                        rule_id=rule_id, location=location, quote=probe,
+                                        state="needs_edit", reason="delete_residual_copy",
+                                        start=start, end=end, resolution="resolved",
+                                        segment_ok=containing_segment(span, start, end) is not None,
+                                        operations=(operation_key(rule_id, 0),))
+                    else:
+                        target = Target(target_id=f"DEL{len(created) + 1:03d}",
+                                        rule_id=rule_id, location=location, quote=probe,
+                                        state="needs_edit", reason="delete_residual_copy",
+                                        composite=tuple(f"{loc}:{start}:{end}"
+                                                        for loc, start, end in parts),
+                                        resolution="composite",
+                                        operations=(operation_key(rule_id, 0),))
+                    created.append(target)
+                    covered.setdefault(rule_id, []).append((location, _compact(probe)))
+                    if len(created) >= limit:
+                        return created
+    return created

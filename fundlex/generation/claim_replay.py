@@ -107,7 +107,8 @@ def replay_claims(edits: Sequence[Mapping[str, Any]], before_inspection: Any,
                   after_inspection: Any, *, rules_by_id: Mapping[str, dict],
                   facts: Any = None, max_failures: int = 40,
                   components_by_rule: Mapping[str, Sequence[Mapping[str, Any]]] | None = None,
-                  required_terms_by_rule: Mapping[str, Sequence[str]] | None = None
+                  required_terms_by_rule: Mapping[str, Sequence[str]] | None = None,
+                  target_rules: Mapping[str, Sequence[str]] | None = None
                   ) -> dict:
     """Replay every edit's claim against the actual artifact paragraphs.
 
@@ -123,6 +124,38 @@ def replay_claims(edits: Sequence[Mapping[str, Any]], before_inspection: Any,
     failures: list[dict[str, Any]] = []
     checked = 0
     allowed_locations = set(by_location)
+    # Duplicate clause copies (body and contract summary) must not diverge: if an
+    # identical source paragraph exists elsewhere and is left untouched, the same
+    # clause now has two different dispositions (D01 G15 p758 vs p1221).
+    duplicate_groups: dict[str, list[str]] = {}
+    for span in getattr(before_inspection, "paragraphs", ()):
+        text = _compact(str(getattr(span, "text", "")))
+        if len(text) >= 20:
+            duplicate_groups.setdefault(text, []).append(str(span.location))
+    duplicate_failures: list[dict[str, Any]] = []
+    location_rules = {location: {rule_id for edit in group for rule_id in _rule_ids(edit)}
+                      for location, group in by_location.items()}
+    for location in allowed_locations:
+        span = before_inspection.by_location(location)
+        text = _compact(str(getattr(span, "text", "")))
+        duplicates = []
+        for item in duplicate_groups.get(text, []):
+            if item == location or item in allowed_locations:
+                continue
+            duplicate_rule_ids = set((target_rules or {}).get(item) or ())
+            # Only a copy that another rule target actually owns can be required here;
+            # an untargeted identical paragraph may belong to a different section.
+            if not duplicate_rule_ids:
+                continue
+            if duplicate_rule_ids and not (duplicate_rule_ids & location_rules.get(location, set())):
+                continue
+            duplicates.append(item)
+        if duplicates:
+            duplicate_failures.append({
+                "rule_id": "", "location": duplicates[0],
+                "code": "DUPLICATE_SITE_UNEDITED",
+                "reason": "an identical clause copy was left unedited"})
+    failures.extend(duplicate_failures)
     # Document-level boundary: no paragraph outside the authorized target locations may
     # change. This is the proof behind G02/G04 ("outside the target paragraph diff = 0").
     before_spans = {span.location: span.text
@@ -199,3 +232,79 @@ def replay_claims(edits: Sequence[Mapping[str, Any]], before_inspection: Any,
             break
     return {"verified": not failures, "checked": checked,
             "failures": failures[:max_failures]}
+
+
+def _similar(left: str, right: str) -> bool:
+    from difflib import SequenceMatcher
+    if not left or not right:
+        return False
+    if left in right or right in left:
+        return True
+    return SequenceMatcher(None, left, right).ratio() >= 0.85
+
+
+def check_delete_residuals(rules_by_id: Mapping[str, dict], after_inspection: Any,
+                           max_failures: int = 40) -> list[dict[str, Any]]:
+    """Every sentence of a delete-only rule's reference must be absent from the artifact.
+
+    A short inventory quote can bind only the head of a two-sentence clause; the audit
+    then marks the deletion completed while the tail survives (D01 G17, D03 G15). This
+    document-level check is independent of targets and audit verdicts.
+    """
+    failures: list[dict[str, Any]] = []
+    after_spans = list(getattr(after_inspection, "paragraphs", ()))
+    compact_after = _compact("".join(str(getattr(span, "text", "")) for span in after_spans))
+    if not compact_after:
+        return failures
+    authorized_new = ""
+    authorized_sentences: list[str] = []
+    for rule in rules_by_id.values():
+        for operation in (rule.get("operations") or []):
+            if not isinstance(operation, Mapping):
+                continue
+            text = str(operation.get("new_text") or "")
+            authorized_new += _compact(text)
+            authorized_sentences.extend(_compact(part) for part in
+                                        re.split(r"(?<=[。；;])", text) if part.strip())
+    for rule_id, rule in rules_by_id.items():
+        operations = [operation for operation in (rule.get("operations") or [])
+                      if isinstance(operation, Mapping)]
+        carried = [operation for operation in operations if operation.get("op") != "noop"]
+        if not carried or any(operation.get("op") != "delete" for operation in carried):
+            continue
+        texts = [str(operation.get("old_text") or "") for operation in carried]
+        texts.extend(str(value) for value in (rule.get("old_text_variants") or []))
+        sentences: list[str] = []
+        for text in texts:
+            for sentence in re.split(r"(?<=[。；;])", text):
+                sentence = sentence.strip()
+                # The contract often omits the class prefix the guide writes. Probe the
+                # sentence itself and its prefix-stripped tail so a surviving "使用范围
+                # 不包括…" sentence is still caught.
+                probes = [sentence, re.sub(r"^[A-ZＡ-Ｚ]\s*类(?:基金份额)?的?", "",
+                                            sentence).strip()]
+                for probe in probes:
+                    if len(_compact(probe)) >= 8 and probe not in sentences:
+                        sentences.append(probe)
+        for sentence in sentences:
+            if _compact(sentence) not in compact_after:
+                continue
+            probe = _compact(sentence)
+            if probe in authorized_new or any(
+                    _similar(probe, part) for part in authorized_sentences):
+                # The sentence is also part of the new policy text (for example G16's
+                # holiday/payment-date sentence): its presence is authorised, not a
+                # residual of the old mechanism.
+                continue
+            location = ""
+            for span in after_spans:
+                if _compact(sentence) in _compact(str(getattr(span, "text", ""))):
+                    location = str(getattr(span, "location", ""))
+                    break
+            failures.append({"rule_id": rule_id, "location": location,
+                             "code": "RESIDUAL_OLD_TEXT",
+                             "reason": "a delete-only rule's old sentence is still present",
+                             "quote": sentence[:160]})
+            if len(failures) >= max_failures:
+                return failures
+    return failures

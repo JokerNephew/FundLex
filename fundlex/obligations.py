@@ -51,6 +51,8 @@ class ObligationSpec:
     group_kind: GroupKind
     op: str
     condition: Mapping[str, Any] | None
+    old_text: str = ""
+    new_text: str = ""
     requirement: str = ""
     expected_site: str = ""
     required_facts: tuple[str, ...] = ()
@@ -66,6 +68,8 @@ class ObligationSpec:
             "branch_id": self.branch_id,
             "group_kind": self.group_kind.value,
             "op": self.op,
+            "old_text": self.old_text,
+            "new_text": self.new_text,
             "condition": dict(self.condition or {}),
             "condition_text": describe_condition(self.condition),
             "requirement": self.requirement,
@@ -261,6 +265,8 @@ def compile_obligations(guide_document: Mapping[str, Any]) -> ObligationLedger:
                                 else branch_kind),
                     op=str(operation.get("op") or ""),
                     condition=condition,
+                    old_text=str(operation.get("old_text") or ""),
+                    new_text=str(operation.get("new_text") or ""),
                     requirement=str(rule.get("requirement") or ""),
                     expected_site=str(rule.get("section_hint") or ""),
                     required_facts=_required_facts(condition, spec.required_fact_status),
@@ -378,6 +384,20 @@ def _target_covers_operation(target: Mapping[str, Any], record: ObligationRecord
     return record.spec.operation_id in operations or record.obligation_id in operations
 
 
+def _satisfied_rules(report: Mapping[str, Any]) -> set[str]:
+    """Rules the deterministic filters proved already satisfied (no edit needed)."""
+    rules: set[str] = set()
+    for round_ledger in (report.get("sweep") or {}).get("rounds") or []:
+        for dropped in round_ledger.get("dropped") or []:
+            if isinstance(dropped, Mapping) and \
+                    str(dropped.get("code") or "") in {"SWEEP_ALREADY_SATISFIED",
+                                                       "SWEEP_RULE_NOT_APPLICABLE"}:
+                rule_id = str(dropped.get("rule_id") or "")
+                if rule_id:
+                    rules.add(rule_id)
+    return rules
+
+
 def _satisfied_operations(report: Mapping[str, Any]) -> set[str]:
     """Operation keys for which the contract already carries the policy text."""
     satisfied: set[str] = set()
@@ -397,7 +417,9 @@ def _satisfied_operations(report: Mapping[str, Any]) -> set[str]:
 
 def project(ledger: ObligationLedger, report: Mapping[str, Any], *,
             rules_by_id: Mapping[str, Mapping[str, Any]] | None = None,
-            scoped_rules: set[str] | None = None) -> None:
+            scoped_rules: set[str] | None = None,
+            scope_gaps: set[str] | None = None,
+            artifact_text: str | None = None) -> None:
     """Derive each obligation's completion from the *actual* run state."""
     targets = _iter_targets(report)
     plan_by_target = _plan_by_target(report)
@@ -411,6 +433,7 @@ def project(ledger: ObligationLedger, report: Mapping[str, Any], *,
     unresolved_items = [item for item in (report.get("unresolved") or [])
                         if isinstance(item, Mapping)]
     satisfied_operations = _satisfied_operations(report)
+    satisfied_rules = _satisfied_rules(report)
     if scoped_rules is None:
         scope = report.get("scope_mapping")
         if isinstance(scope, Mapping) and isinstance(scope.get("mappings"), Mapping):
@@ -433,6 +456,17 @@ def project(ledger: ObligationLedger, report: Mapping[str, Any], *,
             item.statuses["validation"] = "BLOCKED"
             continue
 
+        if artifact_text is not None and item.spec.one_of_group:
+            import re as _re
+            probe = _re.sub(r"\s+", "", item.spec.old_text)
+            if probe and probe in _re.sub(r"\s+", "", artifact_text):
+                # The alternative's own wording still exists in the artifact: a
+                # different sibling's success cannot close it (plan §6.3).
+                item.completion = "UNRESOLVED"
+                item.completion_evidence = "ONE_OF_VARIANT_RESIDUAL"
+                item.statuses["validation"] = "FAIL"
+                continue
+
         relevant = [target for target in targets
                     if str(target.get("rule_id") or "") == item.spec.rule_id
                     and _target_covers_operation(target, item)]
@@ -441,6 +475,12 @@ def project(ledger: ObligationLedger, report: Mapping[str, Any], *,
         item.statuses["target"] = "FOUND" if relevant else "MISSING"
 
         if not relevant:
+            if item.spec.rule_id in satisfied_rules:
+                item.completion = "ALREADY_SATISFIED"
+                item.completion_evidence = "deterministic_rule_already_satisfied"
+                item.statuses.update(target="SATISFIED", generation="NOT_REQUIRED",
+                                     validation="PASS", audit="NOT_REQUIRED")
+                continue
             if item.spec.operation_id in satisfied_operations or \
                     item.obligation_id in satisfied_operations:
                 item.completion = "ALREADY_SATISFIED"
@@ -473,6 +513,21 @@ def project(ledger: ObligationLedger, report: Mapping[str, Any], *,
                 item.statuses.update(target="SATISFIED", generation="NOT_REQUIRED",
                                      validation="PASS", audit="NOT_REQUIRED")
                 continue
+            if item.spec.op == "delete" and artifact_text is not None:
+                import re as _re
+                compact_artifact = _re.sub(r"\s+", "", artifact_text)
+                probes: list[str] = []
+                for sentence in _re.split(r"(?<=[。；;])", item.spec.old_text):
+                    probe = _re.sub(r"^[A-ZＡ-Ｚ]\s*类(?:基金份额)?的?", "",
+                                    sentence).strip()
+                    if len(_re.sub(r"\s+", "", probe)) >= 8:
+                        probes.append(_re.sub(r"\s+", "", probe))
+                if probes and not any(probe in compact_artifact for probe in probes):
+                    item.completion = "NOT_APPLICABLE"
+                    item.completion_evidence = "delete_reference_absent"
+                    item.statuses.update(target="ABSENT", generation="NOT_REQUIRED",
+                                         validation="PASS", audit="NOT_REQUIRED")
+                    continue
             rule_unresolved = [entry for entry in unresolved_items
                                if str(entry.get("rule_id") or "") == item.spec.rule_id]
             if rule_unresolved:
@@ -483,12 +538,16 @@ def project(ledger: ObligationLedger, report: Mapping[str, Any], *,
             elif item.spec.op == "noop":
                 item.completion = "NOT_APPLICABLE"
                 item.completion_evidence = "noop_operation"
+            elif scope_gaps is not None and item.spec.rule_id in scope_gaps:
+                # The model omitted this rule from its scope answer even after a
+                # focused retry. That is a coverage gap, never proof of absence.
+                item.completion = "UNRESOLVED"
+                item.completion_evidence = "SCOPE_RULE_OMITTED"
             elif scoped_rules is not None and item.spec.rule_id not in scoped_rules:
-                # The scope pass found no section for this rule in this contract.
-                # That is a document-level not-applicable decision, not a silent
-                # success: it is recorded and remains visible in the ledger.
+                # The scope answer explicitly mapped no section for this rule. That is
+                # a recorded document-level decision, not a silent success.
                 item.completion = "NOT_APPLICABLE"
-                item.completion_evidence = "scope_not_mapped"
+                item.completion_evidence = "scope_explicitly_empty"
             else:
                 # Plan §10.2: applicable but no target is an OPEN obligation.
                 item.completion = "UNRESOLVED"
@@ -522,6 +581,14 @@ def project(ledger: ObligationLedger, report: Mapping[str, Any], *,
             continue
         if "planned" not in plan_statuses:
             if plan_statuses and plan_statuses <= {"satisfied", "not_applicable"}:
+                if "not_applicable" in plan_statuses and item.applicability.status != "FALSE":
+                    # A plan-level not-applicable cannot override an obligation whose
+                    # applicability is TRUE/UNKNOWN; that contradiction is unresolved.
+                    item.completion = "UNRESOLVED"
+                    item.completion_evidence = "plan_not_applicable_but_applicability_" + \
+                        item.applicability.status.lower()
+                    item.statuses.update(generation="FAIL", validation="FAIL")
+                    continue
                 item.completion = "ALREADY_SATISFIED" \
                     if "satisfied" in plan_statuses else "NOT_APPLICABLE"
                 item.completion_evidence = "plan:" + ",".join(sorted(plan_statuses))
@@ -534,7 +601,12 @@ def project(ledger: ObligationLedger, report: Mapping[str, Any], *,
 
         item.statuses["generation"] = "PLANNED"
         audit_verdicts = {verdicts.get(target_id, "") for target_id in relevant_ids}
-        if "completed" in audit_verdicts:
+        planned_ids = {target_id for target_id in relevant_ids
+                       if str((plan_by_target.get(target_id) or {}).get("status") or "")
+                       == "planned"}
+        all_planned_completed = bool(planned_ids) and all(
+            verdicts.get(target_id) == "completed" for target_id in planned_ids)
+        if all_planned_completed and not (audit_verdicts & {"wrong", "incomplete"}):
             item.statuses["audit"] = "COMPLETED"
             item.statuses["validation"] = "PASS"
             item.completion = "SATISFIED"
@@ -576,10 +648,20 @@ def project(ledger: ObligationLedger, report: Mapping[str, Any], *,
             continue
         best = max(closed, key=lambda record: priority[record.completion])
         for record in group:
-            if record.completion == "UNRESOLVED":
-                record.completion = best.completion
-                record.completion_evidence = (f"ONE_OF_ALTERNATIVE:{best.obligation_id}:"
-                                              f"{best.completion_evidence}")
+            if record.completion != "UNRESOLVED":
+                continue
+            old_text = ""
+            # A variant may still exist in another copy of the clause. Only a sibling
+            # whose own old wording is gone (or was itself handled) may inherit closure.
+            if artifact_text is not None:
+                import re as _re
+                probe = _re.sub(r"\s+", "", record.spec.old_text)
+                if probe and probe in _re.sub(r"\s+", "", artifact_text):
+                    record.completion_evidence = "ONE_OF_VARIANT_RESIDUAL"
+                    continue
+            record.completion = best.completion
+            record.completion_evidence = (f"ONE_OF_ALTERNATIVE:{best.obligation_id}:"
+                                          f"{best.completion_evidence}")
 
 
 def open_obligations(ledger: ObligationLedger) -> list[dict[str, Any]]:

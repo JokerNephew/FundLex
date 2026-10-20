@@ -30,8 +30,8 @@ _BUSINESS_REASONS = (
 )
 
 _REASON_ORDER = ("OPEN_OBLIGATION", "APPLICABILITY", "RECALL_FACT", "FUND_TYPE",
-                 "CLAIM_REPLAY", "VALIDATION", "OVERLAP", "COMPOSE", "TARGET",
-                 "COVERAGE", "SWEEP", "AUDIT")
+                 "CLAIM_REPLAY", "VALIDATION", "OVERLAP", "COMPOSE", "AUDIT",
+                 "SWEEP", "COVERAGE", "TARGET")
 
 
 def business_reason(item: Mapping[str, Any]) -> str:

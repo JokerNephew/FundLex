@@ -1883,3 +1883,23 @@
 - 状态与验证：注明建议/已确认/已实施/已验证及具体范围。
 - 下一步：
 - 变更记录：
+
+## FL-D133 Obligation-first / 双模型 / Recovery 架构改造（2026-10-20）
+
+- 发现日期：2026-10-20（用户提出最终改造方案后立项）。
+- 目标与影响：把原有 Guide/Facts/Applicability/Target/Generation/Validator/Audit/Sweep/Claim Replay/Coverage/Delivery 统一为 obligation-first、evidence-backed、deterministic-first、model-assisted、fail-closed、recoverable 的链路；解决“UNKNOWN 静默当 FALSE/TRUE、模型 offset、Validator 只影子、Repair 叠加错误 artifact、Claim Replay 一次失败即终局、Review 与 Primary 不可独立配置”等结构性问题。
+- 证据与实施（分支 `refactor/recovery-architecture`，commit `374440a..HEAD`）：
+  - `/home/opencode/fundlex/fundlex/models/`：Primary/Review 独立配置、任务角色路由、独立调用记录、共享预算账本；允许同型号但角色/任务/prompt/上下文独立。
+  - `/home/opencode/fundlex/fundlex/obligations.py` + `applicability.py`：ALL_OF/ONE_OF/BRANCH/INDEPENDENT、`G05:B1:O1` 身份与旧 `G05:1` alias、tri-state 适用性、UNKNOWN 不执行、applicable 无 target → OPEN_OBLIGATION、scope 遗漏规则 → `SCOPE_RULE_OMITTED` 而非静默不适用。
+  - `/home/opencode/fundlex/fundlex/facts_recovery.py`：UNKNOWN/CONFLICT 聚焦重取、类别枚举句集合完整性、Review 仲裁、引文代码回查；恢复决定写入 `Facts.condition_overrides` 并进入 planning。
+  - `/home/opencode/fundlex/fundlex/generation/validators.py` + `components.py` + `joint.py` + `claim_replay.py`：硬校验（必需项/边界/数字来源/受保护字面量/费用主题/组件×站点）、G16 四组件、Joint Compose 先 Validator 再 Review、claim replay 文档级与段内边界证明、重复列表序号不再误判为金额。
+  - `/home/opencode/fundlex/fundlex/recovery/` + `delivery.py`：FailureClass、RecoveryAction、预算、历史、用户三态输出；Claim Replay 失败重建后重新 audit/sweep/replay。
+  - `/home/opencode/fundlex/fundlex/targeting.py`：T3 模型定位只返回 quote/location，代码重新 `resolve_quote`/`containing_segment`；无目标规则的自动 T3 默认关闭（见限制 2）。
+- 验证：
+  - 全量 `pytest tests -q` → **860 passed / 6 skipped**。
+  - 离线 `validator_shadow` 对 `p6-dev-round14-12`：19 例 / 222 段编辑 / **0 hard FAIL**；修复了 D03 列表序号 “4、” 被误判为受保护金额的 false positive。
+  - 真实模型（临时账本，OpenCode Go）：D01 早期一版报 `complete_with_notices`（27 calls），但 Business Reviewer 复核 DOCX 发现 G17 p760 残句、G15 正文/摘要不一致，属 **false_complete**；新增 delete-only 逐句残留、重复副本一致性、G05/G06/G01/G03 目标锚点后，D01 被如实阻塞为 partial（96 calls / 约 $0.052）。D02（ETF 联接基金）`eligible/open_regular`，G05 compose 失败如实标记 partial；D03 G06 复合目标未解决 partial；D11 旧版 false_complete 被新门改为 partial（G15 误绑托管费、G09 第二处措辞缺失）。临时账本合计约 963 requests / $0.5792，未触碰生产账本。
+  - 独立 Architecture Reviewer 发现并已修复：scope 遗漏被静默 NOT_APPLICABLE、plan `not_applicable` 覆盖 TRUE、Validator/Claim Replay 受 flag 开关、claim recovery 复用旧 audit/sweep、类别枚举前缀漏洞、审计一个 completed 掩盖另一个 wrong、Infrastructure stop 被吞。Business Reviewer 另发现并已部分修复：delete-only 短 span 残留、正文/摘要重复副本不一致、G05/G06 错误站点、中文数字时限通知、VERIFIED fact 被 applicability override 推翻、G02/G04/G08/G11 fee-group CONFLICT 未阻断、货币/描述性类别枚举、ONE_OF 残留变体。仍保留：无目标规则 T3 默认关闭、audit context 分批未实现、514 全量未跑、G09/G01 真实业务残留、尚未取得最新硬门下真实 complete。
+- 状态与验证范围：**已实施/本地已验证，未发布生产**。不宣称 §51 全量验收完成；514 corpus 与生产部署是下一步。
+- 下一步：① 用 20 例 dev 集跑新架构并对照 round14-12；② 修 G09/G15 真实残留与 audit context 分批；③ 生产发布 + 真实工作台端到端；④ 514 全量/留出验收；⑤ 前端展示 `user_summary`/`failure_class`。
+- 变更记录：2026-10-20 新增。

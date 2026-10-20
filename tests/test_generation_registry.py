@@ -50,9 +50,13 @@ def test_unknown_fact_blocks_instead_of_falling_through_to_tier3():
     assert decision.fallback_reason.startswith("FACT_NOT_VERIFIED")
     # CONFLICT behaves like UNKNOWN; only VERIFIED passes the gate.
     assert route_operation(
-        "G08:0", fact_status={"share_class_structure": "CONFLICT"}).blocked is True
+        "G08:0", fact_status={"share_class_structure": "CONFLICT",
+                              "subscription_fee_group": "VERIFIED",
+                              "service_fee_group": "VERIFIED"}).blocked is True
     assert route_operation(
-        "G08:0", fact_status={"share_class_structure": "VERIFIED"}).resolved is True
+        "G08:0", fact_status={"share_class_structure": "VERIFIED",
+                              "subscription_fee_group": "VERIFIED",
+                              "service_fee_group": "VERIFIED"}).resolved is True
 
 
 def test_route_degrades_only_on_structure():
@@ -63,7 +67,11 @@ def test_route_degrades_only_on_structure():
     unsafe = route_operation("G14:0", fact_status=verified, structure="unsafe")
     assert unsafe.actual_tier is GenerationTier.COMPOSE
     assert unsafe.fallback_reason == "structure_unsafe_for_splice"
-    clean = route_operation("G08:0", fact_status=verified, structure="clean")
+    clean = route_operation("G08:0",
+                            fact_status={**verified,
+                                         "subscription_fee_group": "VERIFIED",
+                                         "service_fee_group": "VERIFIED"},
+                            structure="clean")
     assert clean.actual_tier is GenerationTier.TEMPLATE
     assert clean.fallback_reason == "clean_single_sentence"
 
@@ -73,11 +81,11 @@ def test_delete_rules_keep_their_deterministic_path():
     assert decision.actual_tier is GenerationTier.DELETE
 
 
-def test_flag_default_is_legacy_and_unknown_values_fall_back(monkeypatch):
+def test_flag_default_is_registry_and_unknown_values_fall_back(monkeypatch):
     monkeypatch.delenv("FUNDLEX_GENERATION_STRATEGY", raising=False)
-    assert strategy_mode() == "legacy"
+    assert strategy_mode() == "registry"
     monkeypatch.setenv("FUNDLEX_GENERATION_STRATEGY", "bogus")
-    assert strategy_mode() == "legacy"
+    assert strategy_mode() == "registry"
     monkeypatch.setenv("FUNDLEX_GENERATION_STRATEGY", "registry_shadow")
     assert strategy_mode() == "registry_shadow"
 
