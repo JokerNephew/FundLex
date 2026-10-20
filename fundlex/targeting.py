@@ -357,14 +357,26 @@ def targets_for_open_rules(obligations: Any, targets: Sequence[Any], rules_by_id
     if mode in {"0", "false", "off", "no"}:
         return []
     auto = mode in {"", "auto", "default"}
-    # Only a real editable target proves the obligation is covered.  An "absent" or
-    # out-of-scope inventory verdict must not suppress open-obligation recovery for a
-    # rule whose topic is still present in the contract.
-    covered_rules = {str(target.rule_id) for target in targets
-                     if target.state == "needs_edit" and not target.out_of_scope}
     section_by_id = {section.id: section for section in sections}
     body = _compact("\n".join(str(getattr(span, "text", ""))
                               for span in getattr(inspection, "paragraphs", ())))
+    covered_rules: set[str] = set()
+    for target in targets:
+        rule_id = str(target.rule_id)
+        if target.state == "needs_edit" and not target.out_of_scope:
+            covered_rules.add(rule_id)
+        elif target.state == "absent":
+            # An "absent" verdict suppresses recovery only when the rule's own wording
+            # is genuinely absent.  A wrong absent verdict on a contract that still
+            # carries the reference must not close the obligation.
+            rule = rules_by_id.get(rule_id) or {}
+            old_present = any(
+                len(_compact(str(operation.get("old_text") or ""))) >= 4
+                and _compact(str(operation.get("old_text") or "")) in body
+                for operation in rule.get("operations") or []
+                if operation.get("op") in {"replace", "delete"})
+            if not old_present:
+                covered_rules.add(rule_id)
     created: list[Any] = []
     seen_rules: set[str] = set()
     for record in getattr(obligations, "records", ()):
@@ -384,6 +396,7 @@ def targets_for_open_rules(obligations: Any, targets: Sequence[Any], rules_by_id
             continue
         if satisfied_by_new_text(rule, facts, body) or class_substitution_noop(rule, facts):
             continue
+
         if auto:
             from .recall import _compact as _compact_rule, condition_status
             applicable = [operation for operation in rule.get("operations") or []
