@@ -298,8 +298,20 @@ class RunStore:
                                      "guide_rules_sha256": "TEXT NOT NULL DEFAULT ''"}.items():
                 if name not in {row["name"] for row in db.execute("PRAGMA table_info(batches)")}:
                     db.execute(f"ALTER TABLE batches ADD COLUMN {name} {definition}")
-            if "execution_mode" not in {row["name"] for row in db.execute("PRAGMA table_info(documents)")}:
+            document_columns = {row["name"] for row in db.execute("PRAGMA table_info(documents)")}
+            if "execution_mode" not in document_columns:
                 db.execute("ALTER TABLE documents ADD COLUMN execution_mode TEXT NOT NULL DEFAULT ''")
+            for name in ("started_at", "finished_at"):
+                if name not in document_columns:
+                    db.execute(f"ALTER TABLE documents ADD COLUMN {name} REAL")
+            # Historical rows predate the timing columns. Terminal rows get the
+            # best available approximation; new rows are stamped by claim/finish.
+            db.execute("""UPDATE documents SET started_at=COALESCE(started_at, created_at)
+                WHERE status IN ('succeeded','failed') AND started_at IS NULL""")
+            db.execute("""UPDATE documents SET finished_at=COALESCE(finished_at, updated_at)
+                WHERE status IN ('succeeded','failed') AND finished_at IS NULL""")
+            db.execute("""UPDATE documents SET started_at=COALESCE(started_at, updated_at)
+                WHERE status IN ('leased','running') AND started_at IS NULL""")
             if "ruleset_sha256" not in {row["name"] for row in db.execute("PRAGMA table_info(batches)")}:
                 db.execute("ALTER TABLE batches ADD COLUMN ruleset_sha256 TEXT NOT NULL DEFAULT ''")
 
@@ -581,8 +593,9 @@ class RunStore:
                           "errors": [{"code": "WORKER_ATTEMPTS_EXHAUSTED", "stage": "worker"}]}
                 db.execute("""UPDATE documents SET status='failed',qualification_status='failed',
                     delivery_status='not_generated',error_code='WORKER_ATTEMPTS_EXHAUSTED',
-                    report_json=?,lease_until=NULL,updated_at=? WHERE id=?""",
-                    (json.dumps(report), now, expired["id"]))
+                    report_json=?,lease_until=NULL,started_at=COALESCE(started_at,created_at),
+                    finished_at=?,updated_at=? WHERE id=?""",
+                    (json.dumps(report), now, now, expired["id"]))
                 self._refresh_batch(db, expired["batch_id"], now)
             active_scope = "active.batch_id=d.batch_id"
             if db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='task_batches'").fetchone():
@@ -607,8 +620,8 @@ class RunStore:
             token = row["fencing_token"] + 1
             attempt = row["attempt"] + 1
             db.execute("""UPDATE documents SET status='leased', attempt=?, fencing_token=?, lease_until=?,
-                next_attempt_at=NULL, updated_at=? WHERE id=?""",
-                (attempt, token, now + lease_seconds, now, row["id"]))
+                next_attempt_at=NULL, started_at=COALESCE(started_at,?), updated_at=? WHERE id=?""",
+                (attempt, token, now + lease_seconds, now, now, row["id"]))
             db.execute("UPDATE batches SET status='running',updated_at=? WHERE id=?", (now, row["batch_id"]))
             return dict(row) | {"attempt": attempt, "fencing_token": token}
 
@@ -678,9 +691,9 @@ class RunStore:
                 db.execute("INSERT OR REPLACE INTO artifacts VALUES (?,?,?,?,?)",
                            (document_id, kind, key, digest, size))
             db.execute("""UPDATE documents SET status=?,qualification_status=?,delivery_status=?,error_code=?,
-                report_json=?,execution_mode=?,lease_until=NULL,updated_at=? WHERE id=?""",
+                report_json=?,execution_mode=?,lease_until=NULL,finished_at=?,updated_at=? WHERE id=?""",
                 ("failed" if failed else "succeeded", report.get("qualification_status"), delivery,
-                 error_code, json.dumps(report, ensure_ascii=False), str(mode), now, document_id))
+                 error_code, json.dumps(report, ensure_ascii=False), str(mode), now, now, document_id))
             self._refresh_batch(db, row["batch_id"], now)
 
     def retry(self, document_id: str, token: int, *, error_code: str, max_attempts: int = 3,
@@ -697,8 +710,9 @@ class RunStore:
             pause_required = error_code in {"MODEL_CIRCUIT_OPEN", "MODEL_GLOBAL_CALL_BUDGET_EXCEEDED", "MODEL_COST_BUDGET_EXCEEDED", "MODEL_CALL_BUDGET_EXCEEDED", "MODEL_LEDGER_UNAVAILABLE"}
             delay = min(base_delay_seconds * (2 ** max(row["attempt"] - 1, 0)) * random.uniform(0.8, 1.2), 300)
             db.execute("""UPDATE documents SET status=?,error_code=?,next_attempt_at=?,lease_until=NULL,
-                updated_at=? WHERE id=?""", ("failed" if terminal else "retry_wait", error_code,
-                                                None if terminal else now + delay, now, document_id))
+                finished_at=CASE WHEN ? THEN ? ELSE finished_at END,updated_at=? WHERE id=?""",
+                       ("failed" if terminal else "retry_wait", error_code,
+                        None if terminal else now + delay, 1 if terminal else 0, now, now, document_id))
             if terminal:
                 report = {"document_id": document_id, "source_sha256": row["source_sha256"],
                           "qualification_status": "failed", "delivery_status": "not_generated",

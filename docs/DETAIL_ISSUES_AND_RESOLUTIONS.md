@@ -1912,5 +1912,13 @@
 - **必须后端或只能占位**：本月处理合同数、本月完成率、待处理合同、异常合同、平均处理时长、环比变化。现 `/api/tasks` 的任务摘要只有 `created_at`/`updated_at`，没有 `started_at`/`finished_at`，平均时长无法准确计算；也没有月度聚合/环比接口。按需求「数值后端渲染，前端只做占位结构」，本轮可先用 `—` 占位，真实值另立 `GET /api/tasks/stats?month=...`（含完成/待处理/异常/平均秒数/环比）并补时间戳或任务事件表。
 - **批量导出**：描述文案可写；现有能力是单任务 ZIP（`/api/tasks/{id}/download/all`）与单任务 CSV，没有跨任务批量导出接口。若只是描述任务内批量导出，文案成立；若要做总览页跨任务导出，需后端。
 - **角色名称**：当前用户字段只有 `role=admin/member`，没有「法务专员」等职务字段。可先前端映射 `member→法务专员`、`admin→管理员`；若要每个账号显示真实职务，需后端增加 `job_title`/`title` 字段。
-- 状态与验证：**评估/未实施**；未改代码，未发布。若按占位结构实施，可纯前端完成并复用现有 `.hero/.stat/.table/.badge/.progress-line` 样式，不新增图表、不改配色/Logo/全局基础样式。
-- 下一步：产品确认是否接受占位数值与前端映射角色名；确认指引筛选采用前端全量筛选还是后端参数；再实施页面改版。
+- 状态与验证：**已实施（2026-10-20，方案 B），本地验证通过，未发布生产**。右上角用户区按产品负责人更正**未改**。
+- **实施内容**：
+  - 后端 `GET /api/tasks/stats?month=YYYY-MM`（owner 范围）：本月处理合同数（按 `finished_at`）、完成数/完成率、待处理、进行中任务数、异常合同、平均每份处理秒数（`started_at→finished_at`）、上月处理数及环比；月份按 `Asia/Shanghai`（固定 UTC+8）边界。
+  - `documents` 表新增 `started_at`/`finished_at`：`claim` 首次领取写 `started_at`，`finish`/终态 `retry`/租约耗尽写 `finished_at`；迁移对历史终态行用 `created_at`/`updated_at` 回填近似值（新行精确）。
+  - `GET /api/tasks` 新增 `guide_version_id` 筛选参数；`TaskStore.list` 在所有者任务范围内过滤。
+  - 前端总览改版：侧栏「新建任务」；批量总览卡片（BATCH OVERVIEW、标题、描述、新建/刷新、本月完成率进度）；5 个指标卡（本月处理合同/完成率/待处理/平均时长/异常）；「我的任务」表格、按指引筛选、任务名下方指引名称、「查看」按钮；数值接入 stats 接口，加载/失败时保留 `—` 占位。
+  - 样式复用现有 `.hero/.stat/.table/.badge/.progress-line`，仅新增局部作用域规则；未改配色、Logo、全局基础样式，未新增图表。
+- 验证：全量 `pytest tests -q` → **875 passed / 6 skipped**；headless Chromium 对本地真实 API 验证 **23/23**（总览数字、5 卡片、指引名称/筛选、Chip、刷新、0 控制台错误），截图 `/tmp/opencode/ui-batch2/overview.png`。测试 seed 当前月 2 份处理（1 完成/1 异常）、待处理 1、平均 90 秒、上月 1 份；页面显示 50%/+100%/1 分 30 秒与 90 秒描述，与接口一致。
+- 未发布原因：工作区存在另一 agent 未提交的 `fundlex/generation/template.py`、`fundlex/recall.py` 等引擎改动；此时执行 `publish_workspace.sh` 会把未协调改动一并带到生产，故本轮只提交本功能文件，待并行改动收敛后再发布。
+- 下一步：并行引擎改动提交/发布后，执行统一发布并在生产真实登录页复验；若要跨任务批量导出，另立后端接口。

@@ -56,6 +56,15 @@
 - **已发布（2026-10-19，commit `c2851a8` 快照）**：`bash tools/deploy/publish_workspace.sh` 成功，api/worker active；`frontend/index.html|app.js|app.css`、`fundlex/api.py` 与部署副本 sha256 一致；`https://fundlex.club/api/capabilities` 返回 `app_version=0.1.0`；首页资源版本已变化（`app.js?v=35788dcc…`）；生产匿名页真实 Chromium 检查 0 页面/控制台错误。发布快照同时包含并行 agent 的引擎提交 `839ffe0`（其自测全量通过；如该引擎变更需单独批次验证，由对应 agent 继续）。
 - 下一动作：用户在真实登录环境复验第一批交互；第二批待拍板项（月度统计/消息持久化/全局搜索/重试/审计）见集中问题记录 FL-D122～FL-D125。
 
+## 当前断点（2026-10-20，任务总览改版方案 B，本地验证；**未发布**）
+
+- **需求**：侧栏「批量导入」→「新建任务」；右上角用户区**不改**（产品负责人更正）；批量总览头部卡片（BATCH OVERVIEW、本月累计处理/平均秒数、完成率进度、新建/刷新）；5 个指标卡（本月处理合同/完成率/待处理/平均时长/异常）；「我的任务」表格 + 指引名称/筛选 + 「查看」；不改配色/Logo/全局基础样式/不新增图表。
+- **后端**：`GET /api/tasks/stats?month=YYYY-MM`（owner 范围，CST 月边界；处理数/完成率/待处理/进行中任务/异常/平均秒数/环比）；`documents.started_at|finished_at` 迁移与 claim/finish/terminal retry 写入；`GET /api/tasks?guide_version_id=...` 筛选。
+- **前端**：`frontend/index.html|app.js|app.css` 总览重构；用户区未改；指引名称由 `/api/guides` + `guide_snapshot.version_id` 映射；数值接 stats 接口，加载中 `—`。
+- **验证**：全量 `pytest tests -q` → **875 passed / 6 skipped**；本地 dev 真实浏览器 **23/23**（总览数字、5 卡片、指引筛选、Chip、刷新、0 控制台错误），截图 `/tmp/opencode/ui-batch2/overview.png`。
+- **未发布**：工作区仍有另一 agent 未提交的 `fundlex/generation/template.py`、`fundlex/recall.py`、`tests/test_recall_core.py` 等引擎改动；现在执行 `publish_workspace.sh` 会把未协调改动一并带入生产，故本轮只提交本功能文件，待并行改动收敛后统一发布。
+- **下一步**：并行引擎改动提交/发布后统一发布，并在生产真实登录页复验总览；如需要跨任务批量导出，另立后端接口。
+
 ## 当前断点（2026-10-18，模型供应商切换 + 外部模型复查核验）
 
 - **供应商切换（按用户指示，先不切回）**：原 `OpenCodeGo` 周限额耗尽（429 `GoUsageLimitError`，retry-after ≈19.5h，见 FL-D111）。已改为 **DeepSeek 直连**：

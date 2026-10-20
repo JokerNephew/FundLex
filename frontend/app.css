@@ -225,3 +225,12 @@ button.footer-link:hover{color:var(--accent-dark);text-decoration:underline}
   .task-progress{min-width:96px}
   .filter-chip span{max-width:190px}
 }
+
+/* Batch overview: reuse existing hero/stat language, only local structure tweaks */
+.batch-overview-hero .hero-copy p strong{color:var(--ink);font-weight:700}
+@media(min-width:1181px){.batch-overview-hero + .stats{grid-template-columns:repeat(5,minmax(0,1fr))}}
+.batch-overview-hero .hero-copy p{max-width:760px}
+.batch-overview-hero .hero-side .progress-line{margin:12px 0 8px}
+.batch-overview-hero .hero-side small{font-size:11px;line-height:1.55;color:#754a35}
+.task-guide-name{max-width:min(520px,42vw);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#7b858f}
+@media(max-width:760px){.batch-overview-hero .hero-copy p{max-width:none}.task-guide-name{max-width:240px}}

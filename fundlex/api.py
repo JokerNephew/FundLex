@@ -791,9 +791,21 @@ def create_app(data_dir: str | Path | None = None, *, auth_db=None) -> FastAPI:
 
     @application.get("/api/tasks")
     def list_tasks(q: str = "", status: str | None = None, sort: str = "newest",
+                   guide_version_id: str | None = None,
                    page: int = 1, page_size: int = 50, user: str = Depends(_user)):
         check_pagination(page, page_size, sort)
-        return tasks.list(user, q=q, status=status, sort=sort, page=page, page_size=page_size)
+        if guide_version_id is not None and len(guide_version_id) > 128:
+            raise HTTPException(422, "invalid guide_version_id")
+        return tasks.list(user, q=q, status=status, sort=sort,
+                          guide_version_id=guide_version_id,
+                          page=page, page_size=page_size)
+
+    @application.get("/api/tasks/stats")
+    def task_stats(month: str | None = None, user: str = Depends(_user)):
+        try:
+            return tasks.stats(user, month=month)
+        except ValueError as exc:
+            raise HTTPException(422, "invalid month") from exc
 
     def check_pagination(page, page_size, sort, *, documents=False):
         allowed = {"newest", "oldest", "name", "name_desc"} | ({"exceptions", "status"} if documents else set())

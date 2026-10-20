@@ -10,7 +10,7 @@ import json
 import time
 import uuid
 from collections import Counter
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from .edit_summary import (DELIVERY_TEXT, edit_count,
                            summary_detail)
@@ -209,7 +209,10 @@ class TaskStore:
             legacy_ids = [r["id"] for r in db.execute("SELECT id FROM batches WHERE owner=? AND NOT EXISTS(SELECT 1 FROM task_batches WHERE batch_id=batches.id)", (owner,))]
         items.extend(self._legacy(owner, "legacy-" + bid)[0] for bid in legacy_ids)
         q, state = filters.get("q", "").casefold(), filters.get("status")
-        items = [d for d in items if q in d["name"].casefold() and (not state or state == d["status"])]
+        guide = filters.get("guide_version_id")
+        items = [d for d in items if q in d["name"].casefold()
+                 and (not state or state == d["status"])
+                 and (not guide or (d.get("guide_snapshot") or {}).get("version_id") == guide)]
         return self._page(items, **{k: v for k, v in filters.items() if k in {"sort", "page", "page_size"}})
 
     @staticmethod
@@ -230,6 +233,73 @@ class TaskStore:
             items.sort(key=lambda x: str(x[key]).casefold() if key == "name" else x[key], reverse=sort in {"newest", "name_desc"})
         return {"items": [{k: v for k, v in d.items() if k != "ordinal"} for d in items[(page-1)*page_size:page*page_size]],
                 "total": len(items), "page": page, "page_size": page_size}
+
+    def stats(self, owner: str, month: str | None = None) -> dict:
+        """Owner-scoped monthly contract statistics for the overview page.
+
+        ``processed_contracts`` counts terminal documents by ``finished_at``;
+        ``pending_contracts`` counts the current backlog. ``average_seconds``
+        uses the processing window (claim to terminal), not upload/queue time.
+        Historical terminal rows are backfilled by the schema migration.
+        """
+        cst = timezone(timedelta(hours=8))
+        month = month or datetime.now(cst).strftime("%Y-%m")
+        try:
+            start = datetime.strptime(month, "%Y-%m").replace(tzinfo=cst)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("invalid month") from exc
+        if start.strftime("%Y-%m") != month:
+            raise ValueError("invalid month")
+        end = (start.replace(year=start.year + 1, month=1) if start.month == 12
+               else start.replace(month=start.month + 1))
+        prev_start = (start - timedelta(days=1)).replace(day=1)
+        start_ts, end_ts, prev_ts = start.timestamp(), end.timestamp(), prev_start.timestamp()
+        with self.store._connect() as db:
+            rows = db.execute("""SELECT tf.task_id,tf.upload_status,
+                d.id AS document_id,d.status,d.delivery_status,
+                d.created_at AS doc_created_at,d.updated_at AS doc_updated_at,
+                d.started_at,d.finished_at
+                FROM task_files tf JOIN tasks t ON t.id=tf.task_id
+                LEFT JOIN documents d ON d.id=tf.document_id
+                WHERE t.owner=?""", (owner,)).fetchall()
+        processed = completed = previous = 0
+        pending = exceptions = 0
+        active_tasks: set[str] = set()
+        durations: list[float] = []
+        for row in rows:
+            status = row["status"] or "not_started"
+            terminal = status in {"succeeded", "failed"}
+            finished = row["finished_at"] if row["finished_at"] is not None else (
+                row["doc_updated_at"] if terminal else None)
+            started = row["started_at"] if row["started_at"] is not None else (
+                row["doc_created_at"] if terminal else None)
+            if terminal and finished is not None:
+                if start_ts <= float(finished) < end_ts:
+                    processed += 1
+                    if status == "succeeded" and (row["delivery_status"] or "") not in {"incomplete", "not_generated"}:
+                        completed += 1
+                    if started is not None and float(finished) >= float(started):
+                        durations.append(float(finished) - float(started))
+                elif prev_ts <= float(finished) < start_ts:
+                    previous += 1
+            rejected = (row["upload_status"] or "") == "rejected"
+            bad_delivery = terminal and (status == "failed" or (row["delivery_status"] or "") in {"incomplete", "not_generated"})
+            if rejected or bad_delivery:
+                exceptions += 1
+            if (row["document_id"] is None and (row["upload_status"] or "pending") == "pending") \
+                    or status in {"queued", "retry_wait", "leased", "running"}:
+                pending += 1
+                active_tasks.add(row["task_id"])
+        average = round(sum(durations) / len(durations), 1) if durations else None
+        rate = round(completed / processed, 4) if processed else 0.0
+        change = round((processed - previous) / previous, 4) if previous else None
+        return {"month": month, "processed_contracts": processed,
+                "completed_contracts": completed, "completion_rate": rate,
+                "pending_contracts": pending, "active_tasks": len(active_tasks),
+                "average_seconds": average, "exception_contracts": exceptions,
+                "previous_processed_contracts": previous,
+                "month_over_month": change,
+                "generated_at": datetime.now(timezone.utc).isoformat()}
 
     def documents(self, owner, task_id, **filters):
         if task_id.startswith("legacy-"):

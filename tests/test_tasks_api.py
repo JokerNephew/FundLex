@@ -4,6 +4,7 @@ These checks exercise persistence, queue controls and owner authorization.
 Report classification values are explicit fixtures, not model evaluation.
 """
 from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime, timedelta, timezone
 import io
 import json
 from pathlib import Path
@@ -417,6 +418,77 @@ def test_multiple_tasks_really_execute_concurrently(client):
             release.set()
             stop.set()
         future.result(timeout=10)
+
+
+def test_overview_stats_monthly_counts_and_average(client):
+    data = package()
+    files = manifest(4, data)
+    task = create(client, files).json()["id"]
+    assert upload(client, task, files, data).status_code == 200
+    store = client.app.state.store
+    docs = client.get(f"/api/tasks/{task}/documents", headers=ALICE).json()["items"]
+    docs = sorted(docs, key=lambda item: item["name"])
+    cst = timezone(timedelta(hours=8))
+    oct_start = datetime(2026, 10, 10, 10, 0, tzinfo=cst).timestamp()
+    with store._connect() as db:
+        db.execute("""UPDATE documents SET status='succeeded',delivery_status='complete',
+            started_at=?,finished_at=? WHERE id=?""",
+                   (oct_start, oct_start + 60, docs[0]["document_id"]))
+        db.execute("""UPDATE documents SET status='succeeded',delivery_status='incomplete',
+            started_at=?,finished_at=? WHERE id=?""",
+                   (oct_start, oct_start + 120, docs[1]["document_id"]))
+        db.execute("""UPDATE documents SET status='queued',delivery_status='not_generated'
+            WHERE id=?""", (docs[2]["document_id"],))
+        sep_start = datetime(2026, 9, 12, 10, 0, tzinfo=cst).timestamp()
+        db.execute("""UPDATE documents SET status='succeeded',delivery_status='complete',
+            started_at=?,finished_at=? WHERE id=?""",
+                   (sep_start, sep_start + 30, docs[3]["document_id"]))
+    stats = client.get("/api/tasks/stats?month=2026-10", headers=ALICE)
+    assert stats.status_code == 200, stats.text
+    body = stats.json()
+    assert body["month"] == "2026-10"
+    assert body["processed_contracts"] == 2
+    assert body["completed_contracts"] == 1
+    assert body["completion_rate"] == 0.5
+    assert body["pending_contracts"] == 1
+    assert body["active_tasks"] == 1
+    assert body["exception_contracts"] == 1
+    assert body["average_seconds"] == 90.0
+    assert body["previous_processed_contracts"] == 1
+    assert body["month_over_month"] == 1.0
+    assert client.get("/api/tasks/stats?month=2026-13", headers=ALICE).status_code == 422
+    assert client.get("/api/tasks/stats?month=2026-10", headers=BOB).json()["processed_contracts"] == 0
+
+
+def test_processing_timestamps_are_recorded_on_claim_and_terminal_retry(client):
+    data, files = package(), manifest(1, package())
+    task = create(client, files).json()["id"]
+    assert upload(client, task, files, data).status_code == 200
+    store = client.app.state.store
+    claimed = store.claim(lease_seconds=60)
+    assert claimed is not None
+    with store._connect() as db:
+        row = db.execute("SELECT started_at,finished_at FROM documents WHERE id=?", (claimed["id"],)).fetchone()
+    assert row["started_at"] is not None and row["finished_at"] is None
+    store.retry(claimed["id"], claimed["fencing_token"], error_code="MODEL_NETWORK_ERROR", max_attempts=1)
+    with store._connect() as db:
+        row = db.execute("SELECT status,started_at,finished_at FROM documents WHERE id=?", (claimed["id"],)).fetchone()
+    assert row["status"] == "failed"
+    assert row["started_at"] is not None and row["finished_at"] is not None
+
+
+def test_task_list_can_filter_by_bound_guide(client):
+    data, files = package(), manifest(1, package())
+    first = create(client, files, key="guide-a").json()["id"]
+    second = create(client, files, name="第二任务", key="guide-b").json()["id"]
+    store = client.app.state.store
+    with store._connect() as db:
+        db.execute("UPDATE tasks SET guide_version_id='guide-a' WHERE id=?", (first,))
+        db.execute("UPDATE tasks SET guide_version_id='guide-b' WHERE id=?", (second,))
+    result = client.get("/api/tasks?guide_version_id=guide-a", headers=ALICE).json()
+    assert result["total"] == 1
+    assert result["items"][0]["id"] == first
+    assert client.get("/api/tasks?guide_version_id=missing", headers=ALICE).json()["total"] == 0
 
 
 def test_scheduler_prefers_different_task_across_upload_batches(client):
