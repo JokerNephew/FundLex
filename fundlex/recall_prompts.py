@@ -151,6 +151,9 @@ INVENTORY_SCHEMA = {
                     "quote": {"type": "string"},
                     "state": {"enum": ["needs_edit", "satisfied", "absent"]},
                     "reason": {"type": "string"},
+                    "operation_id": {"type": "string"},
+                    "obligation_id": {"type": "string"},
+                    "site_id": {"type": "string"},
                 },
             },
         },
@@ -165,7 +168,10 @@ INVENTORY_INSTRUCTION = (
     "deletion, an append, or a branch selected by the facts): report a separate target for each "
     "operation that applies in this window and quote the exact text that operation targets; never merge "
     "two operations into one target and never skip an operation because another one already has a "
-    "target. The same clause often appears twice — once in a main chapter and once in the contract "
+    "target. For every target also copy the operation identity from [GUIDE_RULES] "
+    "(`operation_id`, for example G05:1, and `obligation_id` when shown) so coverage can "
+    "be tracked per obligation instead of being guessed later from the quote. The same "
+    "clause often appears twice — once in a main chapter and once in the contract "
     "summary — so report each occurrence as its own target instead of assuming one edit covers both. "
     "state=needs_edit when the clause exists but does not yet "
     "meet the rule; state=satisfied when the clause already meets the rule (including wording different "
@@ -244,6 +250,11 @@ AUDIT_SCHEMA = {
                     "verdict": {"enum": ["completed", "incomplete", "wrong"]},
                     "reason": {"type": "string"},
                     "evidence_quote": {"type": "string"},
+                    "failure_class": {"enum": ["FACT", "APPLICABILITY", "TARGET",
+                                               "GENERATION", "EXECUTION",
+                                               "VERIFICATION"]},
+                    "affected_fact": {"type": "string"},
+                    "affected_obligation": {"type": "string"},
                 },
             },
         },
@@ -275,7 +286,9 @@ AUDIT_INSTRUCTION = (
     "product's actual share classes that fall in that group: adding a real class the contract defines "
     "(for example including a D类 class in the group the guide wrote as A类) is correct instantiation, "
     "not an unauthorized addition, as long as [FACTS] lists that class in the group. Never report an "
-    "OTHER_AUTHORIZED_EDITS change as an unauthorized addition. A region "
+    "OTHER_AUTHORIZED_EDITS change as an unauthorized addition. For every non-completed "
+    "target also classify the root cause (failure_class) and, when known, the affected_fact "
+    "or affected_obligation, so recovery can return to the correct business layer. A region "
     "shown as （该位置内容已删除） means the content was removed: for a deletion requirement that is "
     "completed, and for a replacement requirement judge it against the requirement and the ledger, not "
     "against the absence itself. Cite an exact contiguous evidence_quote from AFTER (or BEFORE when "
@@ -300,6 +313,9 @@ SWEEP_SCHEMA = {
                     "issue": {"enum": ["residual_old_text", "missing_new_text", "wrong_text",
                                        "unaddressed_requirement"]},
                     "reason": {"type": "string"},
+                    "failure_class": {"enum": ["FACT", "APPLICABILITY", "TARGET",
+                                               "GENERATION", "EXECUTION",
+                                               "VERIFICATION"]},
                 },
             },
         },

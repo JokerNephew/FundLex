@@ -31,6 +31,8 @@ from .docx import (DocxError, DocumentInspection, generate_artifacts,
 from .generation.flags import strategy_mode
 from .guide import guide_document_sha256
 from .model import ModelError, ModelGateway
+from .models.config import RoleConfigError
+from .models.roles import build_role_gateway
 from .recall import (BOUNDARY_POLICY, ENGINE_ID, ENGINE_VERSION, SCHEMA_VERSION,
                      Facts, RecallError, SurveyHit, Target, Window, build_docx_edits,
                      containing_segment, content_check_factory, display_text,
@@ -68,6 +70,29 @@ SOFT_STOP_CODES = {"MODEL_SCHEMA_INVALID", "MODEL_QUOTE_MISMATCH",
                    # A response cut off at the provider's output cap (FL-D108): recoverable,
                    # so pause and resume rather than failing the contract outright.
                    "MODEL_OUTPUT_TRUNCATED"}
+
+
+def _default_gateway() -> Any:
+    """Build the primary/review role gateway (plan §4).
+
+    A deployment that only sets ``LLM_*`` resolves both roles to that endpoint; the
+    review role remains a separate task role with its own call records.  Invalid role
+    configuration stops the run as an infrastructure error instead of silently
+    falling back to a single model.
+
+    When no endpoint is configured at all, defer to ``ModelGateway.from_env`` so
+    existing worker/test seams (which may monkeypatch that classmethod) keep working.
+    """
+    configured = any(os.environ.get(name) for name in
+                     ("LLM_BASE_URL", "LLM_MODEL", "LLM_API_KEY",
+                      "FUNDLEX_MODEL_ROLES_FILE", "FUNDLEX_PRIMARY_MODEL",
+                      "FUNDLEX_REVIEW_MODEL"))
+    if not configured:
+        return ModelGateway.from_env()
+    try:
+        return build_role_gateway()
+    except RoleConfigError as exc:
+        raise ModelError("MODEL_CONFIG_MISSING", {"detail": str(exc)}) from exc
 
 
 class RecallPipelineStop(RuntimeError):
@@ -158,10 +183,42 @@ def _inventory(entry: _WindowState, note: str | None, facts: Facts, model: Any,
     if note:
         window = Window(id=window.id, section_ids=window.section_ids, locations=window.locations,
                         text=window.text + "\n\n[REPAIR_CONTEXT]\n" + _clip(note, MAX_REPAIR_NOTE_CHARS))
-    targets, ledger = inventory_window(window, entry.rules, facts, model, inspection)
-    entry.targets = list(targets)
-    entry.ledgers.append({**ledger, "round": round_number,
-                          "repair_context": _clip(note, MAX_REPAIR_NOTE_CHARS) if note else None})
+
+    def _sub_window(source: Window, locations: Sequence[str], suffix: str) -> Window:
+        lines: list[str] = []
+        for location in locations:
+            span = inspection.by_location(location)
+            cleaned, _ = display_text(span.text)
+            lines.append(f"[{location}] {cleaned}")
+        return Window(id=f"{source.id}{suffix}", section_ids=source.section_ids,
+                      locations=tuple(locations), text="\n".join(lines))
+
+    def _run(source: Window) -> tuple[list[Target], list[dict[str, Any]]]:
+        try:
+            targets, ledger = inventory_window(source, entry.rules, facts, model, inspection)
+            return list(targets), [ledger]
+        except RecallError as exc:
+            # Context-limit recovery (plan §31): split the window and retry, never end
+            # the contract because one inventory call was too large.
+            if exc.code != "RECALL_INVENTORY_CONTEXT_LIMIT" or len(source.locations) < 2:
+                raise
+            middle = len(source.locations) // 2
+            left = _sub_window(source, source.locations[:middle], "~a")
+            right = _sub_window(source, source.locations[middle:], "~b")
+            left_targets, left_ledgers = _run(left)
+            right_targets, right_ledgers = _run(right)
+            return left_targets + right_targets, [
+                {"window": source.id, "split": 2,
+                 "parts": [left.id, right.id],
+                 "targets": [target.as_dict() for target in left_targets + right_targets]},
+                *left_ledgers, *right_ledgers,
+            ]
+
+    targets, ledgers = _run(window)
+    entry.targets = targets
+    for ledger in ledgers:
+        entry.ledgers.append({**ledger, "round": round_number,
+                              "repair_context": _clip(note, MAX_REPAIR_NOTE_CHARS) if note else None})
 
 
 def _window_ledger(entry: _WindowState) -> dict[str, Any]:
@@ -227,6 +284,40 @@ def _scope_mapping_ledger(mapping: dict[str, list[str]], sections: Sequence[Any]
         "no_target_rules": [item["rule_id"] for item in coverage
                             if item["coverage"] == "no_target_found"],
     }
+
+
+def _rule_evidence(mapping: dict[str, list[str]], sections: Sequence[Section],
+                   inspection: DocumentInspection, rule_ids: set[str],
+                   *, limit: int = 9000) -> dict[str, str]:
+    """Section text for applicability recovery, one bounded string per rule."""
+    if not rule_ids:
+        return {}
+    by_id = {section.id: section for section in sections}
+    evidence: dict[str, str] = {}
+    for rule_id in rule_ids:
+        parts: list[str] = []
+        for section_id in mapping.get(rule_id) or []:
+            section = by_id.get(section_id)
+            if section is None:
+                continue
+            for location in section.locations:
+                try:
+                    span = inspection.by_location(location)
+                except DocxError:
+                    continue
+                text, _ = display_text(span.text)
+                if text.strip():
+                    parts.append(f"[{location}] {text}")
+            if sum(len(part) for part in parts) >= limit:
+                break
+        if parts:
+            evidence[rule_id] = "\n".join(parts)[:limit]
+    return evidence
+
+
+def _applicability_recovery_enabled() -> bool:
+    return os.environ.get("FUNDLEX_APPLICABILITY_RECOVERY", "1").strip().lower() not in {
+        "0", "false", "off", "no"}
 
 
 def _plan_by_target(planned: dict[str, Any]) -> dict[str, dict[str, Any]]:
@@ -936,7 +1027,10 @@ def _run_audit(model: Any, rules_by_id: dict[str, dict], targets: Sequence[Targe
                             "reason": str(item.get("reason") or ""),
                             "evidence_quote": evidence, "evidence_verified": verified,
                             "deletion_evidence": deletion_evidence,
-                            "deterministic": deterministic})
+                            "deterministic": deterministic,
+                            "failure_class": str(item.get("failure_class") or ""),
+                            "affected_fact": str(item.get("affected_fact") or ""),
+                            "affected_obligation": str(item.get("affected_obligation") or "")})
         for item in value.get("missed_targets") or []:
             if not isinstance(item, dict):
                 dropped.append({"code": "AUDIT_MISSED_ITEM_INVALID", "rule_id": rule_id})
@@ -974,8 +1068,10 @@ def _confirm_merged_append(rule: dict, plan_entry: dict[str, Any], location: str
                and condition_matches(operation.get("condition"), facts)
                for operation in rule.get("operations") or []):
         return None
-    if not any(operation.get("op") == "delete" for operation in rule.get("operations") or []):
-        return None
+    # The base clause may be deleted by a SIBLING rule at the same site (G03+G06,
+    # G16+G17), not only by another operation of the same rule. The evidence check
+    # below still requires a real append text and a real delete edit at this location;
+    # the sibling's own rule definition is used to prove that operation is a delete.
     try:
         span = actual.by_location(location)
     except DocxError:
@@ -1027,7 +1123,10 @@ def _audit_issues(state: dict[str, Any], targets: Sequence[Target]) -> list[dict
             issues.append({"code": "AUDIT_NOT_COMPLETED", "rule_id": target.rule_id,
                            "target_id": target.target_id, "location": target.location,
                            "verdict": result["verdict"], "reason": result["reason"],
-                           "evidence_verified": result["evidence_verified"]})
+                           "evidence_verified": result["evidence_verified"],
+                           "failure_class": result.get("failure_class") or "",
+                           "affected_fact": result.get("affected_fact") or "",
+                           "affected_obligation": result.get("affected_obligation") or ""})
     for rule_id in sorted(state.get("missed") or {}):
         for item in state["missed"][rule_id]:
             issues.append({"code": "AUDIT_MISSED_TARGET", "rule_id": rule_id,
@@ -1789,6 +1888,7 @@ def _sweep_batch(model: Any, rules_by_id: dict[str, dict], requirements: str,
                 "source_location": location, "quote": quote, "issue": issue,
                 "reason": str(item.get("reason") or ""), "artifact_start": located[0],
                 "artifact_end": located[1], "chunk": chunk.id, "round": round_number,
+                "failure_class": str(item.get("failure_class") or ""),
                 "status": "pending",
             })
         ledger["chunks"].append(chunk_ledger)
@@ -2106,7 +2206,10 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
         if len(rules_by_id) != len(rules):
             raise RecallError("RECALL_GUIDE_DUPLICATE_RULE",
                               {"rules": len(rules), "unique": len(rules_by_id)})
-        model = gateway or ModelGateway.from_env()
+        from .obligations import apply_facts, compile_obligations, open_obligations, project
+        obligation_ledger = compile_obligations(guide_document)
+        report["obligations"] = obligation_ledger.as_dict()
+        model = gateway or _default_gateway()
         if checkpoint_dir is not None and hasattr(model, "bind_checkpoints"):
             model.bind_checkpoints(Path(checkpoint_dir), {
                 "source_sha256": inspection.source_sha256,
@@ -2132,6 +2235,17 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
         if excluded_now:
             report["delivery_status"] = "excluded"
             return report
+
+        # Focused fact recovery (plan §8): UNKNOWN/CONFLICT fee facts get one focused
+        # resolver pass and, if still undecided, independent review arbitration. The
+        # recovered values pass the same code quote verification as the first answer.
+        from .facts_recovery import recover_fee_facts
+        facts, fact_recovery = recover_fee_facts(inspection, facts, model)
+        if fact_recovery.get("attempts"):
+            report["fact_recovery"] = fact_recovery
+            report["facts"] = facts.as_ledger()
+        apply_facts(obligation_ledger, facts)
+        report["obligations"] = obligation_ledger.as_dict()
 
         stage = "scope"
         sections = structure_index(inspection)
@@ -2159,10 +2273,31 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
         rebinds = _rebind_unresolved_targets(targets, origins, inspection,
                                              rules_by_id=rules_by_id, facts=facts,
                                              extend_resolved=True)
+        from .targeting import locate_unresolved_targets
+        locator_records = locate_unresolved_targets(targets, inspection, rules_by_id,
+                                                    facts, model)
+        if locator_records:
+            report["target_locator"] = locator_records
         report["rebind"] = rebinds
         report["survey"] = survey_ledger
         report["scope_mapping"] = _scope_mapping_ledger(mapping, sections, entries, rules)
         report["windows"] = [_window_ledger(entry) for entry in entries]
+
+        # Applicability recovery (plan §9): only scoped rules with an UNKNOWN
+        # condition are sent to the primary judge / review arbitration. UNKNOWN never
+        # executes a branch either before or after this pass.
+        from .applicability import resolve_ledger
+        unknown_rules = {record.spec.rule_id for record in obligation_ledger.records
+                         if record.applicability.status == "UNKNOWN"}
+        evidence_by_rule = _rule_evidence(mapping, sections, inspection,
+                                          unknown_rules & set(mapping))
+        if evidence_by_rule and _applicability_recovery_enabled():
+            history = resolve_ledger(obligation_ledger.records, gateway=model,
+                                     inspection=inspection, facts=facts,
+                                     evidence_by_rule=evidence_by_rule)
+            if history:
+                report["applicability_recovery"] = history
+            report["obligations"] = obligation_ledger.as_dict()
 
         stage = "write"
         compose_calls = max(DEFAULT_MAX_COMPOSE_CALLS, len(rules))
@@ -2192,9 +2327,33 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
                 report["targets"] = _target_ledger(targets, planned, audit_state, origins)
                 if not issues:
                     break
+                fact_changed = False
+                fact_issues = [issue for issue in issues
+                               if str(issue.get("failure_class") or "").upper() == "FACT"]
+                if fact_issues:
+                    # Audit FACT failure returns to the fact layer (plan §22.2), not to
+                    # another inventory retry. The forced pass still needs review
+                    # arbitration and verified quotes before it changes anything.
+                    from .facts_recovery import recover_fee_facts
+                    names = tuple(sorted({str(issue.get("affected_fact") or "")
+                                          for issue in fact_issues
+                                          if issue.get("affected_fact")}))
+                    recovered, summary = recover_fee_facts(
+                        inspection, facts, model,
+                        force_names=names or ("share_class_structure",
+                                              "subscription_fee_group",
+                                              "service_fee_group"))
+                    report.setdefault("fact_recovery_rounds", []).append(summary)
+                    if recovered is not facts:
+                        facts = recovered
+                        report["facts"] = facts.as_ledger()
+                        apply_facts(obligation_ledger, facts)
+                        report["obligations"] = obligation_ledger.as_dict()
+                        fact_changed = True
                 absorbed = _absorb_missed_targets(audit_state, targets, synthetic, origins, inspection)
                 notes = _audit_repair_notes(issues, targets, entries)
-                if rounds_used >= max_business_rounds or (not notes and not absorbed):
+                if rounds_used >= max_business_rounds or (not notes and not absorbed
+                                                          and not fact_changed):
                     break
                 rounds_used += 1
                 round_number += 1
@@ -2207,6 +2366,8 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
                 targets = _collect_targets(entries, synthetic, rules_by_id, inspection)
                 report["rebind"] = _rebind_unresolved_targets(
                     targets, origins, inspection, rules_by_id=rules_by_id, facts=facts)
+                report.setdefault("target_locator", []).extend(
+                    locate_unresolved_targets(targets, inspection, rules_by_id, facts, model))
                 planned, edits, plan, artifacts, actual = _plan_and_generate(
                     model, rules_by_id, targets, inspection, facts, input_path, temp_dir,
                     max_compose_calls=compose_calls)
@@ -2279,6 +2440,8 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
                 targets = _collect_targets(entries, synthetic, rules_by_id, inspection)
                 report["rebind"] = _rebind_unresolved_targets(
                     targets, origins, inspection, rules_by_id=rules_by_id, facts=facts)
+                report.setdefault("target_locator", []).extend(
+                    locate_unresolved_targets(targets, inspection, rules_by_id, facts, model))
                 planned, edits, plan, artifacts, actual = _plan_and_generate(
                     model, rules_by_id, targets, inspection, facts, input_path, temp_dir,
                     max_compose_calls=compose_calls)
@@ -2370,18 +2533,100 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
             for finding in pending_findings:
                 unresolved.append({"kind": "sweep", **{key: finding[key] for key in
                                                        ("finding_id", "rule_id", "location", "issue",
-                                                        "status", "reason")}})
+                                                        "status", "reason", "failure_class")}})
             for gap in [*gaps, *coverage_gaps]:
                 unresolved.append({"kind": "coverage", **gap})
             # --- artifact claim replay (plan v4 §28.2, phase 8) --------------
             if strategy_mode() == "registry":
                 from .generation.claim_replay import replay_claims
+                from .generation.components import claim_components_for_rules
+                from .recovery import (RecoveryContext, RecoveryHistory,
+                                       RecoveryOrchestrator, RecoveryAction)
+
+                edit_rule_ids: set[str] = set()
+                for edit in planned.get("edits") or []:
+                    edit_rule_ids.update(part.strip()
+                                         for part in str(edit.get("rule_id") or "").split("+")
+                                         if part.strip())
+                    for component in edit.get("components") or []:
+                        edit_rule_ids.update(
+                            part.strip() for part in
+                            str(component.get("rule_id") or "").split("+")
+                            if part.strip())
+                components_by_rule = {rule_id: claim_components_for_rules(
+                                          [rule_id], rules_by_id)
+                                      for rule_id in edit_rule_ids}
+                required_terms_by_rule: dict[str, tuple[str, ...]] = {}
+                if facts.status_of("subscription_fee_group") == "VERIFIED" and \
+                        facts.status_of("service_fee_group") == "VERIFIED":
+                    class_terms = tuple(
+                        name if "类" in name else f"{name}类"
+                        for name in (*facts.subscription_group, *facts.service_group))
+                    # Only the two group-substitution rules require every group label
+                    # in the target paragraph (plan §13). Appends (G01/G03/G16) have
+                    # their own fixed wording and are covered by their components.
+                    for rule_id in edit_rule_ids & {"G02", "G04"}:
+                        required_terms_by_rule[rule_id] = class_terms
                 replay = replay_claims(planned.get("edits") or [], inspection, actual,
-                                       rules_by_id=rules_by_id, facts=facts)
+                                       rules_by_id=rules_by_id, facts=facts,
+                                       components_by_rule=components_by_rule,
+                                       required_terms_by_rule=required_terms_by_rule)
+                # Claim replay is a recoverable stage (plan §24): a failed replay
+                # rebuilds the plan from the ORIGINAL source and replays again before
+                # the obligation is allowed to become unresolved.
+                recovery = RecoveryOrchestrator()
+                recovery_history = RecoveryHistory()
+                recovery_attempts = 0
+                while replay.get("failures") and recovery_attempts < 2:
+                    failure = replay["failures"][0]
+                    context = RecoveryContext(
+                        stage="deliver", failure_class=None,
+                        error_code=str(failure.get("code") or "CLAIM_REPLAY_FAILED"),
+                        reason=str(failure.get("reason") or ""),
+                        rule_id=str(failure.get("rule_id") or ""),
+                        site_id=str(failure.get("location") or ""),
+                        validator_findings=tuple(replay.get("failures") or ()))
+                    decision = recovery.decide(context, recovery_history)
+                    if decision.action is RecoveryAction.MARK_UNRESOLVED:
+                        recovery.record(recovery_history, context, decision,
+                                        outcome="failed", detail="recovery budget exhausted")
+                        break
+                    if decision.action not in {RecoveryAction.REGENERATE_ARTIFACT,
+                                               RecoveryAction.REBUILD_PLAN,
+                                               RecoveryAction.RETRY_DETERMINISTIC}:
+                        recovery.record(recovery_history, context, decision,
+                                        outcome="failed",
+                                        detail="action requires a later business stage")
+                        break
+                    try:
+                        planned, edits, plan, artifacts, actual = _plan_and_generate(
+                            model, rules_by_id, targets, inspection, facts, input_path,
+                            temp_dir, max_compose_calls=compose_calls)
+                        report["plan"] = _plan_ledger(planned, plan)
+                        report["targets"] = _target_ledger(targets, planned, audit_state, origins)
+                        replay = replay_claims(
+                            planned.get("edits") or [], inspection, actual,
+                            rules_by_id=rules_by_id, facts=facts,
+                            components_by_rule=components_by_rule,
+                            required_terms_by_rule=required_terms_by_rule)
+                    except (RecallError, ModelError) as exc:
+                        recovery.record(recovery_history, context, decision,
+                                        outcome="failed", detail=f"{type(exc).__name__}:"
+                                        f"{getattr(exc, 'code', '')}")
+                        break
+                    recovery.record(recovery_history, context, decision,
+                                    outcome="succeeded" if replay.get("verified") else "failed",
+                                    detail=f"checked={replay.get('checked')}")
+                    recovery_attempts += 1
                 report["artifact_claim_replay"] = replay
+                report["recovery"] = recovery_history.summary()
                 for failure in replay["failures"]:
+                    code = str(failure.get("code") or "CLAIM_REPLAY_FAILED")
                     unresolved.append({"kind": "claim_replay",
-                                       "code": "CLAIM_REPLAY_FAILED", **failure})
+                                       "code": code,
+                                       "claim_code": code,
+                                       "claim_replay_failed": True,
+                                       **failure})
             if qualification_gap:
                 unresolved.append({
                     "kind": "qualification", "code": "FUND_TYPE_UNVERIFIED",
@@ -2392,7 +2637,10 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
             # (kind, rule, location, code) so the report and the coverage view agree.
             deduped: list[dict[str, Any]] = []
             seen_unresolved: set[tuple] = set()
+            from .recovery import classify
             for item in unresolved:
+                code = str(item.get("code") or item.get("reason") or item.get("issue") or "")
+                item.setdefault("failure_class", classify(code).value)
                 key = (item.get("kind"), item.get("rule_id"), item.get("location"),
                        item.get("code") or item.get("reason") or item.get("issue"))
                 if key in seen_unresolved:
@@ -2412,6 +2660,28 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
             if coverage_view.unresolved and _delivery_complete(unresolved):
                 unresolved.append({"kind": "coverage_view", "code": "COVERAGE_MISMATCH",
                                    "reason": "operation coverage view reports unresolved entries"})
+            # Obligation-first delivery gate (plan §10, §32): every applicable
+            # obligation must have a closed terminal state. An open obligation that is
+            # not already represented by a more specific unresolved entry blocks
+            # completion instead of disappearing silently.
+            project(obligation_ledger, report)
+            report["obligations"] = obligation_ledger.as_dict()
+            represented_rules = {str(item.get("rule_id") or "") for item in unresolved}
+            open_items = [item for item in open_obligations(obligation_ledger)
+                          if str(item.get("rule_id") or "") not in represented_rules]
+            unresolved.extend(open_items)
+            report["unresolved"] = unresolved
+            report["delivery_gate"] = {
+                "basis": "obligation_ledger",
+                "counts": obligation_ledger.counts,
+                "open_obligations": len(open_obligations(obligation_ledger)),
+                "blocking_unresolved": len(unresolved),
+            }
+            class_counts: dict[str, int] = {}
+            for item in unresolved:
+                label = str(item.get("failure_class") or "VERIFICATION")
+                class_counts[label] = class_counts.get(label, 0) + 1
+            report["failure_classes"] = class_counts
             checks = [*artifacts.checks, "actual_content_verification"]
             hashes = {"final_sha256": artifacts.final_sha256, "redline_sha256": artifacts.redline_sha256}
             complete = _delivery_complete(unresolved)
@@ -2466,6 +2736,11 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
                 pass
         report["duration_ms"] = round((time.monotonic() - started) * 1000)
         report["edit_plan"] = report["plan"]
+        try:
+            from .delivery import build_user_summary
+            report["user_summary"] = build_user_summary(report)
+        except Exception:  # noqa: BLE001 - the summary must never break the report
+            pass
         try:
             _write_report_markdown(output_dir / "report.md", report)
             _write_edits(output_dir / "edits.json", report)

@@ -541,6 +541,15 @@ def extract_facts(inspection: DocumentInspection, gateway: Any) -> Facts:
                           response_schema=FACTS_SCHEMA, instruction=FACTS_INSTRUCTION,
                           prompt_version=FACTS_PROMPT_VERSION)
     value = result.value if isinstance(result.value, dict) else {}
+    return facts_from_value(inspection, value)
+
+
+def facts_from_value(inspection: DocumentInspection, value: dict[str, Any]) -> Facts:
+    """Parse one FACTS_SCHEMA answer and verify every quote against the source.
+
+    Shared by the generic extraction and the focused fact-recovery resolver, so a
+    recovered fact passes exactly the same code verification as the first answer.
+    """
     problems: list[str] = []
     quotes_verified: dict[str, bool] = {}
 
@@ -761,17 +770,21 @@ def rule_context(rules: Sequence[dict], *, full: bool) -> str:
         requirement = str(rule.get("requirement") or "")
         if full:
             lines.append(f"  requirement: {requirement}")
-            for operation in rule.get("operations") or []:
+            for index, operation in enumerate(rule.get("operations") or []):
                 kind = operation.get("op")
+                identity = f"{rule['rule_id']}:{index}"
                 if kind == "append":
-                    lines.append(f"  append: {_clip(operation.get('new_text') or '', 400)}")
+                    lines.append(f"  [{identity}] append: "
+                                 f"{_clip(operation.get('new_text') or '', 400)}")
                 elif kind == "replace":
-                    lines.append(f"  replace: {_clip(operation.get('old_text') or '', 160)} -> "
+                    lines.append(f"  [{identity}] replace: "
+                                 f"{_clip(operation.get('old_text') or '', 160)} -> "
                                  f"{_clip(operation.get('new_text') or '', 400)}")
                 elif kind == "delete":
-                    lines.append(f"  delete: {_clip(operation.get('old_text') or '', 240)}")
+                    lines.append(f"  [{identity}] delete: "
+                                 f"{_clip(operation.get('old_text') or '', 240)}")
                 elif kind == "noop":
-                    lines.append("  no change required by this branch")
+                    lines.append(f"  [{identity}] no change required by this branch")
         else:
             lines.append(f"  requirement: {_clip(requirement, 300)}")
     return "\n".join(lines)
@@ -782,24 +795,43 @@ def _clip(value: str, limit: int) -> str:
 
 
 def scope_map(rules: Sequence[dict], sections: Sequence[Section], gateway: Any) -> dict[str, list[str]]:
-    context = "\n\n".join([structure_context(sections), rule_context(rules, full=False)])
-    if len(context) > gateway.max_context_chars:
-        raise RecallError("RECALL_SCOPE_CONTEXT_LIMIT", {"chars": len(context)})
-    result = gateway.call(task_type="recall_scope", bounded_context=context,
-                          response_schema=SCOPE_SCHEMA, instruction=SCOPE_INSTRUCTION,
-                          prompt_version=SCOPE_PROMPT_VERSION)
-    value = result.value if isinstance(result.value, dict) else {}
+    structure = structure_context(sections)
     valid_ids = {section.id for section in sections}
     rule_ids = {rule["rule_id"] for rule in rules}
     mapping: dict[str, list[str]] = {rule_id: [] for rule_id in rule_ids}
-    for item in value.get("mappings") or []:
-        if not isinstance(item, dict):
-            continue
-        rule_id = str(item.get("rule_id") or "")
-        if rule_id not in rule_ids:
-            continue
-        ids = [str(section_id) for section_id in (item.get("section_ids") or [])]
-        mapping[rule_id] = [section_id for section_id in ids if section_id in valid_ids]
+
+    def _run(batch: Sequence[dict]) -> None:
+        context = "\n\n".join([structure, rule_context(batch, full=False)])
+        if len(context) > gateway.max_context_chars:
+            if len(batch) > 1:
+                # Context-limit recovery (plan §31): split the rule set, never end the
+                # contract because one scope call was too large.
+                middle = len(batch) // 2
+                _run(batch[:middle])
+                _run(batch[middle:])
+                return
+            raise RecallError("RECALL_SCOPE_CONTEXT_LIMIT",
+                              {"chars": len(context), "rule": batch[0].get("rule_id")})
+        result = gateway.call(task_type="recall_scope", bounded_context=context,
+                              response_schema=SCOPE_SCHEMA, instruction=SCOPE_INSTRUCTION,
+                              prompt_version=SCOPE_PROMPT_VERSION)
+        value = result.value if isinstance(result.value, dict) else {}
+        batch_ids = {rule["rule_id"] for rule in batch}
+        for item in value.get("mappings") or []:
+            if not isinstance(item, dict):
+                continue
+            rule_id = str(item.get("rule_id") or "")
+            if rule_id not in batch_ids:
+                continue
+            ids = [str(section_id) for section_id in (item.get("section_ids") or [])
+                   if str(section_id) in valid_ids]
+            current = mapping.get(rule_id) or []
+            for section_id in ids:
+                if section_id not in current:
+                    current.append(section_id)
+            mapping[rule_id] = current
+
+    _run(list(rules))
     return mapping
 
 
@@ -876,6 +908,9 @@ def inventory_window(window: Window, rules: Sequence[dict], facts: Facts, gatewa
         counter += 1
         target = Target(target_id=f"{window.id}:T{counter:03d}", rule_id=rule_id, location=location,
                         quote=quote, state=state, reason=str(item.get("reason") or ""))
+        operation_id = str(item.get("operation_id") or "").strip()
+        if re.fullmatch(re.escape(rule_id) + r":\d+", operation_id):
+            target.operations = (operation_id,)
         if quote:
             try:
                 span = inspection.by_location(location)
@@ -3442,6 +3477,101 @@ def _g15_notice_for_edit(edit: "PlannedEdit", rule: dict,
     }]
 
 
+def _resolve_overlaps_with_joint_compose(
+        conflicts: Sequence[dict[str, Any]], planned: Sequence[PlannedEdit],
+        inspection: DocumentInspection, rules_by_id: dict[str, dict], facts: Facts,
+        gateway: Any) -> tuple[list[PlannedEdit], list[dict[str, Any]]]:
+    """Try Joint Compose for real overlaps; unprovable overlaps stay conflicts."""
+    from .generation.joint import plan_joint_compose
+
+    by_target = {edit.target_id: edit for edit in planned}
+    resolved: list[PlannedEdit] = []
+    remaining: list[dict[str, Any]] = []
+    consumed: set[str] = set()
+    for conflict in conflicts:
+        target_ids = [str(value) for value in conflict.get("targets") or []]
+        edits: list[PlannedEdit] = []
+        for target_id in target_ids:
+            for part in target_id.split("+"):
+                edit = by_target.get(part)
+                if edit is not None and edit not in edits:
+                    edits.append(edit)
+        if len(edits) < 2 or any(edit.target_id in consumed for edit in edits):
+            remaining.append(conflict)
+            continue
+        location = conflict.get("location") or edits[0].location
+        if any(edit.location != location for edit in edits):
+            remaining.append(conflict)
+            continue
+        span = inspection.by_location(location)
+        start = min(int(edit.start) for edit in edits)
+        end = max(int(edit.end) for edit in edits)
+        rule_ids: list[str] = []
+        obligations: list[dict[str, Any]] = []
+        fixed_texts: list[str] = []
+        for edit in edits:
+            for rule_id in str(edit.rule_id).split("+"):
+                rule_id = rule_id.strip()
+                if not rule_id or rule_id in rule_ids:
+                    continue
+                rule_ids.append(rule_id)
+                rule = rules_by_id.get(rule_id) or {}
+                operations = [operation for operation in (rule.get("operations") or [])
+                              if operation.get("op") != "noop"]
+                obligations.append({"rule_id": rule_id,
+                                    "requirement": str(rule.get("requirement") or ""),
+                                    "operations": operations})
+                fixed = str((edit.evidence or {}).get("fixed_text") or "")
+                if fixed:
+                    fixed_texts.append(fixed)
+        try:
+            result = plan_joint_compose(span_text=span.text, start=start, end=end,
+                                        obligations=obligations, fixed_texts=fixed_texts,
+                                        facts=facts, gateway=gateway, rule_ids=rule_ids)
+        except (RecallError, ModelError):
+            raise
+        except Exception:  # noqa: BLE001 - a failed joint attempt is not a crash
+            result = None
+        if result is None:
+            remaining.append(conflict)
+            continue
+        consumed.update(edit.target_id for edit in edits)
+        resolved.append(PlannedEdit(
+            target_id="+".join(edit.target_id for edit in edits),
+            rule_id="+".join(rule_ids), location=location, start=start, end=end,
+            replacement=result["replacement"], operation="replace",
+            content_source="joint_compose",
+            evidence={"joint_rules": rule_ids, "fixed_text": "".join(fixed_texts),
+                      "basis": result.get("basis") or "",
+                      "validation": result.get("validation") or {}}))
+    kept = [edit for edit in planned if edit.target_id not in consumed]
+    return kept + resolved, remaining
+
+
+def _blocked_recovery_trace(code: str, *, rule_id: str, target_id: str,
+                            stage: str = "plan") -> dict[str, Any]:
+    """Record which recovery layers a planner failure already exhausted (plan §18.3).
+
+    The planner attempts deterministic generation and constrained compose before it
+    reports failure; this trace makes that chain visible instead of a bare error code.
+    """
+    from .recovery import (RecoveryContext, RecoveryHistory, RecoveryOrchestrator)
+
+    history = RecoveryHistory()
+    orchestrator = RecoveryOrchestrator()
+    context = RecoveryContext(rule_id=rule_id, target_id=target_id, stage=stage,
+                              error_code=code, reason=code)
+    for _ in range(12):
+        decision = orchestrator.decide(context, history)
+        if decision.terminal:
+            orchestrator.record(history, context, decision, outcome="failed",
+                                detail="planner recovery layers exhausted")
+            break
+        orchestrator.record(history, context, decision, outcome="failed",
+                            detail="attempted_by_planner")
+    return history.summary(context)
+
+
 def plan_edits(rules_by_id: dict[str, dict], targets: Sequence[Target], inspection: DocumentInspection,
                facts: Facts, gateway: Any, *, max_compose_calls: int = 6) -> dict[str, Any]:
     """Build the edit list, isolating per-target failures into the ledger."""
@@ -3488,7 +3618,10 @@ def plan_edits(rules_by_id: dict[str, dict], targets: Sequence[Target], inspecti
             if status == "not_applicable":
                 target.out_of_scope = True
             ledger.append({"target_id": target.target_id, "rule_id": target.rule_id,
-                           "status": status, "reason": exc.code, "detail": exc.detail})
+                           "status": status, "reason": exc.code, "detail": exc.detail,
+                           "recovery": _blocked_recovery_trace(
+                               exc.code, rule_id=target.rule_id,
+                               target_id=target.target_id)})
             continue
         except ModelError as exc:
             if exc.code in _STOP_CODES:
@@ -3510,6 +3643,10 @@ def plan_edits(rules_by_id: dict[str, dict], targets: Sequence[Target], inspecti
         ledger.append({"target_id": target.target_id, "rule_id": target.rule_id,
                        "status": "planned", "operation": edit.operation})
     merged, conflicts, covered = merge_edits(planned, inspection)
+    if conflicts and _tier1_enabled():
+        planned, conflicts = _resolve_overlaps_with_joint_compose(
+            conflicts, planned, inspection, rules_by_id, facts, gateway)
+        merged, conflicts, covered = merge_edits(planned, inspection)
     conflict_ids = {target_id for conflict in conflicts for target_id in conflict["targets"]}
     for entry in ledger:
         if entry.get("target_id") in conflict_ids:

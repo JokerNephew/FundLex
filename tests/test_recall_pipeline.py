@@ -1142,3 +1142,63 @@ def test_survey_targets_from_hits_handles_unknown_coverage(tmp_path):
     assert [target.target_id for target in targets] == ["Y001"]
     assert targets[0].operations == ("GX:0",)
     assert gaps == []
+
+
+def test_report_carries_obligation_ledger_and_delivery_gate(tmp_path: Path):
+    """The delivery gate is derived from the obligation ledger (plan §10, §32)."""
+    _, _, _, report = run(tmp_path)
+    assert report["delivery_status"] == "complete"
+    ledger = report["obligations"]
+    assert ledger["records"] and ledger["groups"]
+    assert report["delivery_gate"]["basis"] == "obligation_ledger"
+    assert report["delivery_gate"]["open_obligations"] == 0
+    assert set(report["delivery_gate"]["counts"]) == {
+        "SATISFIED", "ARTIFACT_VERIFIED", "ALREADY_SATISFIED", "NOT_APPLICABLE",
+        "UNRESOLVED"}
+    # G05 has two branches, and both operations of the service-fee branch are ALL_OF.
+    g05 = next(item for item in ledger["groups"] if item["rule_id"] == "G05")
+    assert g05["group_kind"] == "BRANCH"
+    assert len(g05["branch_ids"]) == 3  # true / false / unconditional
+
+
+def test_scoped_obligation_without_target_blocks_complete(tmp_path: Path):
+    """Applicable + no target must be an OPEN_OBLIGATION, never a silent complete."""
+    from fundlex.model import ModelResult
+
+    custom_rule = {
+        "rule_id": "G99", "title": "自定义缺失条款", "section_hint": "基金的基本情况",
+        "requirement": "把缺失的旧句改为新句。",
+        "operations": [{"op": "replace", "old_text": "本合同不存在的旧句子",
+                        "new_text": "本合同应当存在的新句子",
+                        "condition": {"kind": "none", "value": None}}],
+        "old_text_variants": [], "slot_tokens": [], "class_substitution": False,
+        "references": [], "source_paragraphs": [5],
+    }
+
+    def only_g99_scope(context: str) -> dict:
+        return {"mappings": [{"rule_id": "G99", "section_ids": ["S04"],
+                              "reason": "scripted scope"}]}
+
+    responses = base_responses(recall_scope=only_g99_scope)
+    _, output_dir, _, report = run(tmp_path, responses,
+                                   guide=guide_document([custom_rule]))
+    assert report["delivery_status"] in {"incomplete", "not_generated"}
+    assert report["delivery_gate"]["open_obligations"] >= 1
+    open_items = [item for item in report["unresolved"]
+                  if item.get("code") == "OPEN_OBLIGATION"]
+    assert open_items and open_items[0]["rule_id"] == "G99"
+    assert open_items[0]["reason"].startswith("OPEN_OBLIGATION")
+    # No final deliverable may be published for an open obligation.
+    assert "final.docx" not in docx_names(output_dir)
+
+
+def test_registry_mode_replays_claims_against_the_written_artifact(tmp_path: Path,
+                                                                  monkeypatch):
+    """Every deterministic edit must prove it reached the DOCX (plan §24)."""
+    monkeypatch.setenv("FUNDLEX_GENERATION_STRATEGY", "registry")
+    _, _, _, report = run(tmp_path)
+    replay = report["artifact_claim_replay"]
+    assert replay["verified"] is True, replay["failures"]
+    assert replay["checked"] >= 1
+    assert report["delivery_status"] == "complete"
+    assert report["delivery_gate"]["open_obligations"] == 0
