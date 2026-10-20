@@ -285,7 +285,9 @@ def _own_effect_errors(rule: Mapping[str, Any], indices: Sequence[int],
                        obligations: Any, *, explicit_span: bool,
                        is_component: bool, before_unit: str,
                        replacement: str, validation: Any,
-                       content_source: str = "", facts: Any = None) -> list[str]:
+                       content_source: str = "", facts: Any = None,
+                       evidence: Mapping[str, Any] | None = None,
+                       expected_old_text: str = "") -> list[str]:
     """Prove the operation used its own authorization, not a sibling's.
 
     For a multi-operation rule each selected operation must carry its own required
@@ -316,6 +318,28 @@ def _own_effect_errors(rule: Mapping[str, Any], indices: Sequence[int],
     own_old_texts = [_compact(str(operation.get("old_text") or ""))
                      for operation in selected]
     owned_removals = list(own_old_texts)
+    # Real contracts often paraphrase the guide reference; the planner records the
+    # wording it actually matched (variant, evidence, component source). Those are the
+    # operation's own authorized removals, not sibling text.
+    owned_removals.extend(_compact(str(value))
+                          for value in rule.get("old_text_variants") or [] if value)
+    if expected_old_text:
+        owned_removals.append(_compact(expected_old_text))
+    evidence = evidence or {}
+    for key in ("matched_old_text", "deleted_quote", "deleted_paragraph",
+                "expected_old_text", "old_text", "deleted_fragment"):
+        value = evidence.get(key)
+        if isinstance(value, str) and value:
+            owned_removals.append(_compact(value))
+    for key in ("delete_texts", "deleted_texts"):
+        values = evidence.get(key)
+        if isinstance(values, (list, tuple)):
+            owned_removals.extend(_compact(str(value)) for value in values if value)
+    for fragment in evidence.get("fragments") or []:
+        if isinstance(fragment, Mapping):
+            value = fragment.get("old_text")
+            if value:
+                owned_removals.append(_compact(str(value)))
     if obligations is not None:
         for index in indices:
             record = obligations.record(f"{rule.get('rule_id')}:{index}")
@@ -546,7 +570,9 @@ def _operation_units(group: Sequence[Mapping[str, Any]],
                     validation=validation,
                     content_source=str(unit.get("content_source")
                                       or edit.get("content_source") or ""),
-                    facts=facts)
+                    facts=facts,
+                    evidence=dict(unit.get("evidence") or edit.get("evidence") or {}),
+                    expected_old_text=str(unit.get("expected_old_text") or ""))
                 target_id = str(unit.get("target_id") or edit.get("target_id") or "")
                 target = (targets_by_id or {}).get(target_id)
                 if isinstance(target, Mapping) and indices:
@@ -590,6 +616,8 @@ def _operation_units(group: Sequence[Mapping[str, Any]],
                                 else "PASS"),
                     "components": components,
                     "required_terms": terms,
+                    "evidence": dict(unit.get("evidence") or edit.get("evidence") or {}),
+                    "expected_old_text": str(unit.get("expected_old_text") or ""),
                 })
     return units
 
