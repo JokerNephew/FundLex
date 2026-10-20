@@ -3010,8 +3010,8 @@ def _plan_target_inner(rule: dict, target: Target, inspection: DocumentInspectio
         "G06": (("份额类别", "不得"), "all"),
         # Append rules must land in the share-class definition, not in any other
         # definition that happens to be nearby (D01 p100 基金产品资料概要).
-        "G01": (("份额类别", "分为"), "all"),
-        "G03": (("份额类别", "分为"), "all"),
+        "G01": (("基金份额", "分为"), "all"),
+        "G03": (("基金份额", "分为"), "all"),
     }
     rule_id = str(rule.get("rule_id") or "")
     if rule_id in _TARGET_ANCHORS:

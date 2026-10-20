@@ -100,4 +100,4 @@ def test_residual_check_accepts_a_near_equivalent_new_policy_sentence():
             {"op": "append", "new_text": "若遇法定节假日、公休日或不可抗力等，支付日期顺延。"}]},
     }
     after = Inspection(["若遇法定节假日、公休日等，支付日期顺延。"])
-    assert check_delete_residuals(rules, after) == []
+    assert check_delete_residuals(rules, after, edits=[{"location": "p0"}]) == []

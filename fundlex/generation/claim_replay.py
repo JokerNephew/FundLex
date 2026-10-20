@@ -244,6 +244,7 @@ def _similar(left: str, right: str) -> bool:
 
 
 def check_delete_residuals(rules_by_id: Mapping[str, dict], after_inspection: Any,
+                           edits: Sequence[Mapping[str, Any]] | None = None,
                            max_failures: int = 40) -> list[dict[str, Any]]:
     """Every sentence of a delete-only rule's reference must be absent from the artifact.
 
@@ -256,6 +257,10 @@ def check_delete_residuals(rules_by_id: Mapping[str, dict], after_inspection: An
     compact_after = _compact("".join(str(getattr(span, "text", "")) for span in after_spans))
     if not compact_after:
         return failures
+    edited_locations = {str(edit.get("location") or "") for edit in (edits or [])}
+    edited_compact = _compact("".join(
+        str(getattr(after_inspection.by_location(location), "text", ""))
+        for location in edited_locations if location))
     authorized_new = ""
     authorized_sentences: list[str] = []
     for rule in rules_by_id.values():
@@ -290,8 +295,8 @@ def check_delete_residuals(rules_by_id: Mapping[str, dict], after_inspection: An
             if _compact(sentence) not in compact_after:
                 continue
             probe = _compact(sentence)
-            if probe in authorized_new or any(
-                    _similar(probe, part) for part in authorized_sentences):
+            if probe in edited_compact and (probe in authorized_new or any(
+                    _similar(probe, part) for part in authorized_sentences)):
                 # The sentence is also part of the new policy text (for example G16's
                 # holiday/payment-date sentence): its presence is authorised, not a
                 # residual of the old mechanism.

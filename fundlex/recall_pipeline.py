@@ -1543,31 +1543,37 @@ def _rule_already_satisfied(rule: dict, facts: Facts, paragraph_text: str, quote
                   if condition_matches(operation.get("condition"), facts)]
     if not operations:
         return False
+    delete_pending = False
+    checked = 0
     for operation in operations:
         kind = operation.get("op")
         if kind == "noop":
             continue
+        checked += 1
         if kind == "delete":
             old = _compact(str(operation.get("old_text") or ""))
-            if old and old not in region:
-                return True
+            if old and old in region:
+                delete_pending = True
             continue
         new_text, issues = instantiate_slots(str(operation.get("new_text") or ""), facts)
         if issues or not new_text:
-            continue
+            return False
         new_compact = _compact(new_text)
         old_compact = _compact(str(operation.get("old_text") or ""))
         if kind == "append":
-            if new_compact and new_compact in region:
-                return True
+            if not new_compact or new_compact not in region:
+                return False
             continue
         if kind == "replace":
-            if new_compact and new_compact in haystack and (not old_compact or old_compact not in region):
-                return True
+            if not new_compact or new_compact not in haystack or \
+                    (old_compact and old_compact in region):
+                return False
+            continue
+        return False
+    if delete_pending:
+        return False
     from .recall import satisfied_by_new_text
-    if satisfied_by_new_text(rule, facts, region):
-        return True
-    return False
+    return bool(checked) and satisfied_by_new_text(rule, facts, region)
 
 
 def weak_rule_signals(rule: dict, facts: Facts, operations: Sequence[dict]) -> list[str]:
@@ -2589,7 +2595,8 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
                         components_by_rule=components_by_rule,
                         required_terms_by_rule=required_terms_by_rule,
                         target_rules=target_rules)
-                    residuals = check_delete_residuals(rules_by_id, actual)
+                    residuals = check_delete_residuals(
+                        rules_by_id, actual, edits=plan.get("edits") or [])
                     if residuals:
                         result["failures"].extend(residuals)
                         result["verified"] = False
@@ -2658,6 +2665,8 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
                             recovery_chunks, max_sweep_chunks - swept_calls, gaps,
                             planned=len(recovery_chunks))
                         if recovery_batch:
+                            if len(recovery_batch) < len(recovery_chunks):
+                                recovery_sweep_unverified = True
                             recovery_ledger = _sweep_batch(
                                 model, rules_by_id, requirements, recovery_batch, actual,
                                 round_number=round_number + 1, counter=counter, facts=facts,
@@ -2676,6 +2685,9 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
                         else:
                             recovery_sweep_unverified = True
                     except (RecallError, ModelError) as exc:
+                        if isinstance(exc, ModelError) and (
+                                exc.code in STOP_CODES or exc.code in SOFT_STOP_CODES):
+                            raise
                         recovery.record(recovery_history, context, decision,
                                         outcome="failed", detail=f"{type(exc).__name__}:"
                                         f"{getattr(exc, 'code', '')}")

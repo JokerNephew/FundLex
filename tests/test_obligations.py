@@ -257,3 +257,32 @@ def test_absent_delete_reference_is_not_an_open_obligation():
     assert ledger.records[0].completion == "NOT_APPLICABLE"
     assert ledger.records[0].completion_evidence == "delete_reference_absent"
     assert not open_obligations(ledger)
+
+
+def test_satisfied_unkeyed_target_cannot_hide_a_residual_delete():
+    ledger = compile_obligations(guide(rule()))
+    apply_facts(ledger, FakeFacts(service=False))
+    project(ledger, report_with(targets=[target("G05", state="satisfied")]),
+            artifact_text="基金份额类别调整并报中国证监会备案。")
+    b2 = ledger.record("G05:B2:O1")
+    assert b2.completion == "UNRESOLVED"
+    assert b2.completion_evidence == "SATISFIED_TARGET_RESIDUAL_DELETE"
+
+
+def test_one_of_variant_present_inside_the_authorized_new_text_closes():
+    new_policy = ("通过直销机构申购本基金A类基金份额不收取申购费，通过其他销售机构申购本基金A类基金份额的"
+                  "申购费用由投资人承担，不列入基金财产。本基金C类基金份额不收取申购费用。")
+    ledger = compile_obligations(guide(rule(rule_id="G11", operations=[
+        {"op": "replace", "old_text": "申购费用由投资人承担，不列入基金财产。",
+         "new_text": new_policy, "condition": {"kind": "class_count", "value": "multiple"}},
+        {"op": "replace", "old_text": "本基金A类基金份额的申购费用由投资人承担，不列入基金财产。",
+         "new_text": new_policy, "condition": {"kind": "class_count", "value": "multiple"}},
+    ])))
+    apply_facts(ledger, FakeFacts(class_count=2))
+    project(ledger, report_with(
+        targets=[target("G11", operations=["G11:0"])],
+        plan_ledger=[{"target_id": "T1", "status": "planned"}],
+        audit=[{"target_id": "T1", "verdict": "completed"}],
+    ), artifact_text=new_policy)
+    assert {item.completion for item in ledger.records} == {"SATISFIED"}
+    assert not open_obligations(ledger)

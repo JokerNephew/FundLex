@@ -138,3 +138,18 @@ def test_enumeration_quote_must_name_every_candidate_class(tmp_path: Path):
     recovered, summary = recover_fee_facts(inspection, unknown_facts(), gateway)
     assert recovered.status_of("share_class_structure") == "UNKNOWN"
     assert summary["final"] == "failed"
+
+
+def test_prefix_enumeration_ending_after_a_rejects_an_a_only_candidate(tmp_path: Path):
+    source = tmp_path / "contract.docx"
+    build_contract(source)
+    inspection = inspect_docx(source, full=True)
+    value = candidate_value()
+    value["classes"] = value["classes"][:1]
+    value["class_set_quote"] = "基金份额类别：本基金将基金份额分为A类"
+    gateway = FakeGateway({"recall_fact_recover": value,
+                           "recall_arbitrate": {"choice": "unknown", "quote": "",
+                                                "reason": "truncated"}})
+    recovered, summary = recover_fee_facts(inspection, unknown_facts(), gateway)
+    assert recovered.status_of("share_class_structure") == "UNKNOWN"
+    assert summary["final"] == "failed"

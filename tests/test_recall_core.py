@@ -1277,3 +1277,32 @@ def test_delete_residual_copy_gets_a_deterministic_target(tmp_path: Path):
     assert created[0].location == "p0"
     assert created[0].resolution == "resolved"
     assert "使用范围不包括" in created[0].quote
+
+
+def test_g01_accepts_a_class_definition_without_the_word_fenzlei(tmp_path: Path):
+    from docx import Document
+    from fundlex.docx import inspect_docx
+    from fundlex.recall import Target, plan_target
+
+    path = tmp_path / "g01-definition.docx"
+    document = Document()
+    sentence = "本基金根据认购费、申购费、销售服务费收取方式的不同，将基金份额分为不同的类别。"
+    document.add_paragraph(sentence)
+    document.save(path)
+    inspection = inspect_docx(path, full=True)
+    rule = {"rule_id": "G01", "title": "类别定义", "requirement": "追加直销政策",
+            "operations": [{"op": "append",
+                            "new_text": "通过直销机构申购本基金A类基金份额不收取申购费。",
+                            "condition": {"kind": "none", "value": None}}],
+            "slot_tokens": ["A类基金份额"], "class_substitution": True}
+    span = inspection.by_location("p0")
+    facts = _facts()
+    facts.fact_status.update({"share_class_structure": "VERIFIED",
+                              "subscription_fee_group": "VERIFIED",
+                              "service_fee_group": "VERIFIED"})
+    target = Target("T1", "G01", "p0", sentence, "needs_edit", "",
+                    0, len(span.text), "resolved")
+    edit = plan_target(rule, target, inspection, facts, ScriptedGateway({}),
+                       compose_budget=[1])
+    assert edit is not None
+    assert "直销机构" in edit.replacement

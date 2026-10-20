@@ -125,6 +125,16 @@ def _class_set_complete(inspection: Any, candidate: Facts, quote: str) -> bool:
     # Parse the class labels the enumeration sentence actually names. A prefix such as
     # "本基金将基金份额分为A类" cannot prove C/D exist; the sets must be equal.
     labels = set(re.findall(r"([A-ZＡ-Ｚ])\s*类", compact_quote))
+    # The document's own enumeration is the completeness ceiling: a truncated quote
+    # that only names A must not pass on a contract that defines A/C/D.
+    document_labels: set[str] = set()
+    for span in getattr(inspection, "paragraphs", ()):
+        from .recall import display_text
+        text, _ = display_text(str(getattr(span, "text", "")))
+        if "分为" in text or "类别" in text:
+            document_labels |= set(re.findall(r"([A-ZＡ-Ｚ])\s*类", text))
+    if document_labels and labels != document_labels:
+        return False
     expected: set[str] = set()
     for item in candidate.current_classes:
         name = str(item.name).strip()

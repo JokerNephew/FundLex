@@ -434,6 +434,9 @@ def project(ledger: ObligationLedger, report: Mapping[str, Any], *,
                         if isinstance(item, Mapping)]
     satisfied_operations = _satisfied_operations(report)
     satisfied_rules = _satisfied_rules(report)
+    import re as _re
+    authorized_new = _re.sub(r"\s+", "", "".join(
+        str(record.spec.new_text or "") for record in ledger.records))
     if scoped_rules is None:
         scope = report.get("scope_mapping")
         if isinstance(scope, Mapping) and isinstance(scope.get("mappings"), Mapping):
@@ -459,9 +462,11 @@ def project(ledger: ObligationLedger, report: Mapping[str, Any], *,
         if artifact_text is not None and item.spec.one_of_group:
             import re as _re
             probe = _re.sub(r"\s+", "", item.spec.old_text)
-            if probe and probe in _re.sub(r"\s+", "", artifact_text):
-                # The alternative's own wording still exists in the artifact: a
-                # different sibling's success cannot close it (plan §6.3).
+            if probe and probe not in authorized_new and \
+                    probe in _re.sub(r"\s+", "", artifact_text):
+                # The alternative's own wording still exists in the artifact and is
+                # not part of any authorized new policy text: a different sibling's
+                # success cannot close it (plan §6.3).
                 item.completion = "UNRESOLVED"
                 item.completion_evidence = "ONE_OF_VARIANT_RESIDUAL"
                 item.statuses["validation"] = "FAIL"
@@ -564,6 +569,18 @@ def project(ledger: ObligationLedger, report: Mapping[str, Any], *,
                                  validation="PASS", audit="NOT_REQUIRED")
             continue
         if states and states <= {"satisfied"}:
+            if item.spec.op == "delete" and artifact_text is not None:
+                import re as _re
+                compact_artifact = _re.sub(r"\s+", "", artifact_text)
+                probes = [_re.sub(r"\s+", "", _re.sub(
+                              r"^[A-ZＡ-Ｚ]\s*类(?:基金份额)?的?", "", sentence).strip())
+                          for sentence in _re.split(r"(?<=[。；;])", item.spec.old_text)]
+                if any(probe and probe in compact_artifact for probe in probes):
+                    item.completion = "UNRESOLVED"
+                    item.completion_evidence = "SATISFIED_TARGET_RESIDUAL_DELETE"
+                    item.statuses.update(target="SATISFIED", generation="FAIL",
+                                         validation="FAIL")
+                    continue
             item.completion = "ALREADY_SATISFIED"
             item.completion_evidence = "target_satisfied"
             item.statuses.update(target="SATISFIED", generation="NOT_REQUIRED",
@@ -656,7 +673,8 @@ def project(ledger: ObligationLedger, report: Mapping[str, Any], *,
             if artifact_text is not None:
                 import re as _re
                 probe = _re.sub(r"\s+", "", record.spec.old_text)
-                if probe and probe in _re.sub(r"\s+", "", artifact_text):
+                if probe and probe not in authorized_new and \
+                        probe in _re.sub(r"\s+", "", artifact_text):
                     record.completion_evidence = "ONE_OF_VARIANT_RESIDUAL"
                     continue
             record.completion = best.completion
