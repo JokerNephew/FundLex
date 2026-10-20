@@ -41,7 +41,7 @@ def _enabled() -> bool:
 
 
 def _candidate_context(inspection: Any, target: Any, rule: dict, facts: Any,
-                       *, limit: int, radius: int = 6) -> str:
+                       *, limit: int, radius: int = 6) -> tuple[str, set[str]]:
     from .recall import display_text, rule_context
 
     locations = [span.location for span in inspection.paragraphs]
@@ -64,7 +64,7 @@ def _candidate_context(inspection: Any, target: Any, rule: dict, facts: Any,
                               ensure_ascii=False),
         "FAILED_QUOTE\n" + str(getattr(target, "quote", "") or ""),
     ])
-    return context[:limit]
+    return context[:limit], set(locations[start:end])
 
 
 def locate_unresolved_targets(targets: Sequence[Any], inspection: Any,
@@ -83,8 +83,8 @@ def locate_unresolved_targets(targets: Sequence[Any], inspection: Any,
         rule = rules_by_id.get(target.rule_id)
         if rule is None:
             continue
-        context = _candidate_context(inspection, target, rule, facts,
-                                     limit=gateway.max_context_chars)
+        context, allowed_locations = _candidate_context(
+            inspection, target, rule, facts, limit=gateway.max_context_chars)
         record = {"target_id": target.target_id, "rule_id": target.rule_id}
         try:
             result = gateway.call(task_type="recall_locate", bounded_context=context,
@@ -111,6 +111,11 @@ def locate_unresolved_targets(targets: Sequence[Any], inspection: Any,
         if not location or not quote:
             record["status"] = "rejected"
             record["reject_reason"] = "empty_location_or_quote"
+            records.append(record)
+            continue
+        if location not in allowed_locations:
+            record["status"] = "rejected"
+            record["reject_reason"] = "location_outside_candidate_window"
             records.append(record)
             continue
         try:

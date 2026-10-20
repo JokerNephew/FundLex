@@ -286,3 +286,27 @@ def test_one_of_variant_present_inside_the_authorized_new_text_closes():
     ), artifact_text=new_policy)
     assert {item.completion for item in ledger.records} == {"SATISFIED"}
     assert not open_obligations(ledger)
+
+
+def test_explicit_empty_scope_cannot_close_an_append_obligation():
+    ledger = compile_obligations(guide(rule(rule_id="G01", operations=[
+        {"op": "append", "new_text": "通过直销机构申购A类基金份额不收取申购费。",
+         "condition": {"kind": "none", "value": None}}])))
+    apply_facts(ledger, FakeFacts())
+    report = report_with()
+    report["scope_mapping"] = {"mappings": {"G01": []}}
+    project(ledger, report, artifact_text="本基金合同。")
+    assert ledger.records[0].completion == "UNRESOLVED"
+    assert ledger.records[0].completion_evidence == "SCOPE_EMPTY_APPEND_UNPROVEN"
+
+
+def test_survey_satisfied_delete_cannot_hide_a_residual_sentence():
+    ledger = compile_obligations(guide(rule()))
+    apply_facts(ledger, FakeFacts(service=False))
+    report = report_with()
+    report["survey"] = [{"records": [{"operation": "satisfied",
+                                      "operation_keys": ["G05:2"]}]}]
+    project(ledger, report, artifact_text="并报中国证监会备案。")
+    record = ledger.record("G05:B2:O1")
+    assert record.completion == "UNRESOLVED"
+    assert record.completion_evidence == "SURVEY_SATISFIED_RESIDUAL_DELETE"

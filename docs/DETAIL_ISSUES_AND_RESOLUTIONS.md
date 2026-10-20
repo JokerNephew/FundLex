@@ -1896,7 +1896,7 @@
   - `/home/opencode/fundlex/fundlex/recovery/` + `delivery.py`：FailureClass、RecoveryAction、预算、历史、用户三态输出；Claim Replay 失败重建后重新 audit/sweep/replay。
   - `/home/opencode/fundlex/fundlex/targeting.py`：T3 模型定位只返回 quote/location，代码重新 `resolve_quote`/`containing_segment`；无目标规则的自动 T3 默认关闭（见限制 2）。
 - 验证：
-  - 全量 `pytest tests -q` → **860 passed / 6 skipped**。
+  - 全量 `pytest tests -q` → **864 passed / 6 skipped**。
   - 离线 `validator_shadow` 对 `p6-dev-round14-12`：19 例 / 222 段编辑 / **0 hard FAIL**；修复了 D03 列表序号 “4、” 被误判为受保护金额的 false positive。
   - 真实模型（临时账本，OpenCode Go）：D01 早期一版报 `complete_with_notices`（27 calls），但 Business Reviewer 复核 DOCX 发现 G17 p760 残句、G15 正文/摘要不一致，属 **false_complete**；新增 delete-only 逐句残留、重复副本一致性、G05/G06/G01/G03 目标锚点后，D01 被如实阻塞为 partial（96 calls / 约 $0.052）。D02（ETF 联接基金）`eligible/open_regular`，G05 compose 失败如实标记 partial；D03 G06 复合目标未解决 partial；D11 旧版 false_complete 被新门改为 partial（G15 误绑托管费、G09 第二处措辞缺失）。临时账本合计约 963 requests / $0.5792，未触碰生产账本。
   - 独立 Architecture Reviewer 发现并已修复：scope 遗漏被静默 NOT_APPLICABLE、plan `not_applicable` 覆盖 TRUE、Validator/Claim Replay 受 flag 开关、claim recovery 复用旧 audit/sweep、类别枚举前缀漏洞、审计一个 completed 掩盖另一个 wrong、Infrastructure stop 被吞。Business Reviewer 另发现并已部分修复：delete-only 短 span 残留、正文/摘要重复副本不一致、G05/G06 错误站点、中文数字时限通知、VERIFIED fact 被 applicability override 推翻、G02/G04/G08/G11 fee-group CONFLICT 未阻断、货币/描述性类别枚举、ONE_OF 残留变体。仍保留：无目标规则 T3 默认关闭、audit context 分批未实现、514 全量未跑、G09/G01 真实业务残留、尚未取得最新硬门下真实 complete。

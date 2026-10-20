@@ -84,4 +84,19 @@ def test_model_locator_rejects_an_unknown_location(tmp_path: Path):
     records = locate_unresolved_targets([target], inspection, {"G02": rule()},
                                         Facts(), gateway)
     assert records[0]["status"] == "rejected"
-    assert records[0]["reject_reason"] == "location_not_found"
+    assert records[0]["reject_reason"] in {"location_not_found",
+                                           "location_outside_candidate_window"}
+
+
+def test_model_locator_rejects_a_real_quote_from_outside_the_candidate_window(tmp_path: Path):
+    source = tmp_path / "contract.docx"
+    build_contract(source)
+    inspection = inspect_docx(source, full=True)
+    target = unresolved_target()
+    target.location = "p10"
+    gateway = Gateway({"location": "p0", "quote": "某某灵活配置混合型证券投资基金基金合同",
+                       "semantic_role": "title", "reason": "guess"})
+    records = locate_unresolved_targets([target], inspection, {"G02": rule()},
+                                        Facts(), gateway)
+    assert records[0]["status"] == "rejected"
+    assert records[0]["reject_reason"] == "location_outside_candidate_window"

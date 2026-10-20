@@ -205,7 +205,7 @@ corpus 评测使用。
 
 ## 9. 验证证据（2026-10-20，本地临时账本）
 
-- 全量测试：`860 passed / 6 skipped`。
+- 全量测试：`864 passed / 6 skipped`。
 - 离线 validator shadow：`p6-dev-round14-12` 19 例 / 222 段编辑 / **0 hard FAIL**。
 - 真实模型 D01（OpenCode Go，临时账本）：早期一版曾报 `complete_with_notices`
   （27 calls），但独立 Business Reviewer 复核 DOCX 后发现 G17 第二句仍留在 p760、
@@ -220,7 +220,8 @@ corpus 评测使用。
   交付 partial；此前旧版把该例报成 complete，属于 false_complete。
 - 临时账本合计约 **963 requests / $0.5792**（未触碰生产账本）。
 - **结论**：新架构已证明能发现旧版的 false_complete；尚未取得“最新硬门下真实合同
-  complete”的验收样例。
+  complete”的验收样例。Final Architecture Reviewer 的 G05 satisfied-target 隐藏 delete、
+  G11 ONE_OF 被新文误判残留两个 blocker 已修复并有回归测试（864 passed）。
 
 ## 10. 已知限制（未宣称完成）
 

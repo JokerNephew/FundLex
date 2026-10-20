@@ -101,3 +101,12 @@ def test_residual_check_accepts_a_near_equivalent_new_policy_sentence():
     }
     after = Inspection(["若遇法定节假日、公休日等，支付日期顺延。"])
     assert check_delete_residuals(rules, after, edits=[{"location": "p0"}]) == []
+
+
+def test_added_paragraph_outside_targets_is_rejected():
+    before = Inspection(["授权句。", "后文。"])
+    after = Inspection(["新授权句。", "后文。", "授权句。"])
+    replay = replay_claims([_edit()], before, after, rules_by_id=RULES)
+    assert replay["verified"] is False
+    assert any(item["code"] == "CLAIM_UNEXPECTED_PARAGRAPH"
+               for item in replay["failures"])

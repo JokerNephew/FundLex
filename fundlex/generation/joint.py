@@ -76,6 +76,14 @@ def plan_joint_compose(*, span_text: str, start: int, end: int,
     operations: list[Mapping[str, Any]] = []
     for obligation in obligations:
         operations.extend(obligation.get("operations") or [])
+    for operation in operations:
+        if operation.get("op") != "delete":
+            continue
+        deleted = _compact(str(operation.get("old_text") or ""))
+        if deleted and deleted in _compact(replacement):
+            # A joint replacement must actually satisfy every delete obligation; it
+            # cannot keep the text the delete was supposed to remove.
+            return None
     auth = Authorization(
         must_add=tuple(part.strip() for text in fixed_texts
                        for part in __import__("re").split(r"(?<=[。；])", text)

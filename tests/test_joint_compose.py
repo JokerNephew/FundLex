@@ -87,3 +87,17 @@ def test_joint_compose_rejects_a_missing_fixed_text():
                                 gateway=gateway, rule_ids=["G05"])
     assert result is None
     assert gateway.calls == ["recall_joint_compose"]
+
+
+def test_joint_compose_rejects_a_replacement_that_keeps_the_delete_text():
+    gateway = Gateway({
+        "recall_joint_compose": {"replacement": "基金管理人可以调低销售服务费率。并报中国证监会备案。",
+                                 "preserved": [], "basis": "kept delete"},
+        "recall_verify": {"verdict": "pass", "reason": "should not be reached"},
+    })
+    result = plan_joint_compose(span_text=SPAN, start=0, end=len(SPAN),
+                                obligations=OBLIGATIONS,
+                                fixed_texts=["调低销售服务费率"], facts=Facts(),
+                                gateway=gateway, rule_ids=["G05"])
+    assert result is None
+    assert gateway.calls == ["recall_joint_compose"]

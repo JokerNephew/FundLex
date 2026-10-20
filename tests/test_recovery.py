@@ -147,3 +147,12 @@ def test_infrastructure_pauses_instead_of_using_a_business_fallback():
     context = RecoveryContext(stage="facts", error_code="MODEL_HTTP_ERROR",
                               reason="timeout")
     assert orchestrator.decide(context, RecoveryHistory()).action is RecoveryAction.PAUSE_RESUME
+
+
+def test_delete_residual_failure_enters_generation_recovery():
+    orchestrator = RecoveryOrchestrator()
+    context = RecoveryContext(stage="deliver", error_code="RESIDUAL_OLD_TEXT",
+                              reason="old sentence survives")
+    decision = orchestrator.decide(context, RecoveryHistory())
+    assert decision.action is RecoveryAction.RETRY_DETERMINISTIC
+    assert classify("RESIDUAL_OLD_TEXT") is FailureClass.GENERATION

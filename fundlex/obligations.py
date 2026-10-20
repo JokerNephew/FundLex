@@ -488,6 +488,17 @@ def project(ledger: ObligationLedger, report: Mapping[str, Any], *,
                 continue
             if item.spec.operation_id in satisfied_operations or \
                     item.obligation_id in satisfied_operations:
+                if item.spec.op == "delete" and artifact_text is not None:
+                    import re as _re
+                    compact_artifact = _re.sub(r"\s+", "", artifact_text)
+                    probes = [_re.sub(r"\s+", "", _re.sub(
+                                  r"^[A-ZＡ-Ｚ]\s*类(?:基金份额)?的?", "", sentence).strip())
+                              for sentence in _re.split(r"(?<=[。；;])", item.spec.old_text)]
+                    if any(probe and probe in compact_artifact for probe in probes):
+                        item.completion = "UNRESOLVED"
+                        item.completion_evidence = "SURVEY_SATISFIED_RESIDUAL_DELETE"
+                        item.statuses["validation"] = "FAIL"
+                        continue
                 item.completion = "ALREADY_SATISFIED"
                 item.completion_evidence = "survey_new_text_present"
                 item.statuses.update(target="SATISFIED", generation="NOT_REQUIRED",
@@ -550,9 +561,14 @@ def project(ledger: ObligationLedger, report: Mapping[str, Any], *,
                 item.completion_evidence = "SCOPE_RULE_OMITTED"
             elif scoped_rules is not None and item.spec.rule_id not in scoped_rules:
                 # The scope answer explicitly mapped no section for this rule. That is
-                # a recorded document-level decision, not a silent success.
-                item.completion = "NOT_APPLICABLE"
-                item.completion_evidence = "scope_explicitly_empty"
+                # a recorded document-level decision, but an append has no old-text
+                # absence proof: an empty mapping cannot close it.
+                if item.spec.op == "append":
+                    item.completion = "UNRESOLVED"
+                    item.completion_evidence = "SCOPE_EMPTY_APPEND_UNPROVEN"
+                else:
+                    item.completion = "NOT_APPLICABLE"
+                    item.completion_evidence = "scope_explicitly_empty"
             else:
                 # Plan §10.2: applicable but no target is an OPEN obligation.
                 item.completion = "UNRESOLVED"

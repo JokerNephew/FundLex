@@ -174,6 +174,11 @@ def replay_claims(edits: Sequence[Mapping[str, Any]], before_inspection: Any,
             failures.append({"rule_id": "", "location": location,
                              "code": "CLAIM_OUTSIDE_SPAN_CHANGED",
                              "reason": "paragraph text changed outside the authorized targets"})
+    for location in after_spans:
+        if location not in before_spans:
+            failures.append({"rule_id": "", "location": location,
+                             "code": "CLAIM_UNEXPECTED_PARAGRAPH",
+                             "reason": "a paragraph was added outside the authorized targets"})
     for location, group in by_location.items():
         rule_label = "+".join(_rule_ids(group[0])) or str(group[0].get("rule_id") or "")
         try:

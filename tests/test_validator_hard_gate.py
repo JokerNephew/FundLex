@@ -105,3 +105,24 @@ def test_list_ordinals_are_not_financial_protected_literals():
     # A genuine amount is still protected.
     tokens = protected_tokens("管理费按前一日资产净值的0.40%计提，共10个工作日。")
     assert "0.40%" in tokens and ("10个工作日" in tokens or "10" in tokens)
+
+
+def test_fee_topic_flip_is_hard_with_the_rules_own_removal_pattern():
+    before = "本基金的管理费按前一日基金资产净值的0.40%年费率计提。"
+    after = "本基金的托管费按前一日基金资产净值的0.40%年费率计提。"
+    # The authorization names the old clause but its policy text still says 管理费;
+    # it does not authorize inventing a 托管费 clause.
+    auth = Authorization(must_add=("本基金的管理费按前一日基金资产净值的0.40%年费率计提。",),
+                         remove_patterns=(before,))
+    report = run_validation(before, after, auth=auth)
+    assert report.verdict == "FAIL"
+    assert any(item.code == "TOPIC_LOST" for item in report.findings)
+
+
+def test_g05_authorized_topic_shift_is_not_a_flip():
+    before = "基金管理人可以调低赎回费率。"
+    after = "基金管理人可以调低销售服务费率。"
+    auth = Authorization(must_add=("基金管理人可以调低销售服务费率。",),
+                         remove_patterns=("基金管理人可以调低赎回费率。",))
+    report = run_validation(before, after, auth=auth)
+    assert report.verdict == "PASS", (report.findings, report.changes)

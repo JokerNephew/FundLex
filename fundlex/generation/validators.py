@@ -239,7 +239,28 @@ def _pattern_hit(cleaned: str, auth: Authorization) -> bool:
 
 
 _TOPIC_EXPANSIONS = ("费率", "费", "费用")
+_FEE_TOPIC_ROOTS = ("认购", "申购", "赎回", "转换", "销售服务", "管理", "托管")
 _BARE_TOPICS = ("赎回", "认购", "申购", "转换", "销售服务")
+
+
+def _fee_roots(text: str) -> set[str]:
+    compact = _compact(text)
+    return {root for root in _FEE_TOPIC_ROOTS
+            if (root + "费") in compact or (root + "费率") in compact
+            or compact == root}
+
+
+def _fee_topic_flip(before: str, after: str) -> bool:
+    """A single fee topic replaced by a different single fee topic is a flip.
+
+    Removing one of several fee items (G14) is not a flip; changing the only fee topic
+    (管理费 → 托管费, 申购 → 赎回) is never a paraphrase.
+    """
+    before_roots, after_roots = _fee_roots(before), _fee_roots(after)
+    if not before_roots or not after_roots:
+        return False
+    lost, gained = before_roots - after_roots, after_roots - before_roots
+    return len(before_roots) == 1 and len(lost) == 1 and len(gained) == 1
 
 
 def _token_authorized(token: str, auth: Authorization, context: str = "") -> bool:
@@ -336,6 +357,17 @@ def run_validation(before: str, after: str, *, auth: Authorization,
             if _token_authorized(token, auth, before):
                 continue
             findings.append(Finding("LOST_PROTECTED_LITERAL", token))
+
+    # V1: the only fee topic in the span may not be replaced by a different one,
+    # unless the authorized new text itself names the replacement topic (G05's
+    # 赎回费率 → 销售服务费率 is an explicit guide policy).
+    if _fee_topic_flip(before, after):
+        after_roots = _fee_roots(after)
+        additions = {_compact(addition) for addition in auth.must_add}
+        authorized = all(any((root + "费") in addition for addition in additions)
+                         for root in after_roots)
+        if not authorized:
+            findings.append(Finding("TOPIC_LOST", "fee_topic_flip"))
 
     # V1: every new number must be traceable (guide text / facts / source).
     known = {t for t in protected_tokens(before) if _NUMBER.fullmatch(t)}
