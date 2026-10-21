@@ -2040,9 +2040,21 @@
 - 最近真实子集（临时账本；均 `incomplete`，未发布生产）：
   - D01（D01f）：37 targets / 18 edits / 133 calls / $0.0806；Claim 仅 `G17 p760 RESIDUAL_OLD_TEXT`。之后又修 G17 span 阈值/duplicate repair，尚未重跑。
   - D02（D02b）：35 targets / 17 edits / 109 calls / $0.0831；Claim `G16 CLAIM_PLANNED_EFFECT_MISSING`、`G17 p823 RESIDUAL_OLD_TEXT`，另有 G05 satisfied-target residual 误报。之后修 G16 site/target recovery、scoped delete residual、duplicate repair，尚未重跑。
+  - D02（D02c，提交 `21c7ae8` 后复跑）：35 targets / 18 edits / 84 calls / $0.0683 / 1464s；`incomplete`。首轮 `G16 CLAIM_PLANNED_EFFECT_MISSING`，missing-operation recovery 在 p1287 新增 R035 后 G16 artifact PASS；最终只剩 `p821/p1287 DUPLICATE_SITE_DIVERGED`，以及该 paragraph-level failure 被错误归因到 G15，导致 G15 自身 replay PASS 却在 obligation projection 中显示 UNRESOLVED。根因：p821 的旧 G16 目标是 `out_of_scope`，却仍被 `duplicate_copy_targets()` 当作“已存在”而抑制修复副本；`project()` 又把 `rule_id=""` 的 duplicate failure 按 location 匹配给所有同位置 obligation。已改为仅 active target 阻止 duplicate copy、复制时 supersede 旧 stale target，并只允许 replay failure 的 rule 标签包含该 obligation 的 rule 时影响它（merged edit 的 `G15+G16` 按成员匹配，`rule_id=""` 的 paragraph-integrity failure 仅由全局 delivery gate 阻塞）；新增 3 条单测。D02d 正在用该修复复跑，尚未完成，不能提前宣称通过。
   - D11：29 targets / 16 edits / 104 calls / $0.0936；Claim `G05:2 CLAIM_OPERATION_NOT_PLANNED`、`G16 missing`；同时 G22 audit `evidence_verified=false` 仍报 wrong。之后修 G05 unrelated-site scoped residual、G16 site，尚未重跑。
   - D16：40 targets / 20 edits / 78 calls / $0.0476；Claim `p822/p1306 DUPLICATE_SITE_DIVERGED`；G06 composite p431/p1169 仍 unresolved。之后加 duplicate repair，尚未重跑确认。
-- 验证与状态：**代码实施基本完成；最终真实回归/全量测试/tests after last patch/Reviewer 未完成**。最近一次全量 `pytest tests -q` 为 **939 passed / 6 skipped**，但最后几处 target/duplicate/site 修复后需重跑。未提交、未推送、未发布、未跑 514。模型服务在 2026-10-21 多次返回 HTTP 429；为完成真实调用临时加入 6–20s 节流和 30s 429 backoff，导致 wall time 明显高于基线（D11 单例约 47 分钟），不能把该 wall time 当作性能结论。
-- 已知残余：G06 composite（D16 p431/p1169，按用户允许留专项）；G13/G14/G15/G17 真实业务残留；D11 G22 audit evidence unverified 但 wrong；`CLAIM_PLANNED_EFFECT_MISSING` 的 G16 恢复依赖 locator candidate；duplicate repair 的最终收敛未验证；Sweep deterministic prefilter、rule artifact signature 复用、严格两次 Full Sweep 调度、5 类 Reviewer 尚未完成。
-- 下一步：① 等 D02c 后台结果并重跑 D01/D16（必要时 D11）；② 全量 pytest + 新测试；③ 补 REVIEW/性能表；④ 按 7 个逻辑 commit 提交并推送；⑤ 不发布生产、不跑 514。
+- 验证与状态：**代码实施基本完成；最终真实回归/Reviewer 未完成**。修复 D02c 的 duplicate/projection 两处问题后，全量 `pytest tests -q` 为 **942 passed / 6 skipped**（2026-10-21）；提交 `21c7ae8` 已推送，上述两处修复见本次后续提交。D02d 真实复跑仍在进行。未发布生产、未跑 514。模型服务在 2026-10-21 多次返回 HTTP 429；为完成真实调用临时加入 6–20s 节流和 30s 429 backoff，导致 wall time 明显高于基线（D11 单例约 47 分钟），不能把该 wall time 当作性能结论。
+- 已知残余：G06 composite（D16 p431/p1169，按用户允许留专项）；G13/G14/G15/G17 真实业务残留；D11 G22 audit evidence unverified 但 wrong；`CLAIM_PLANNED_EFFECT_MISSING` 的 G16 恢复依赖 locator candidate；duplicate repair 的最终收敛待 D02d 验证；Sweep deterministic prefilter、rule artifact signature 复用、严格两次 Full Sweep 调度、5 类 Reviewer 尚未完成。
+- 下一步：① 读取 D02d 与全量测试结果；② 重跑 D01/D16（必要时 D11）；③ 补 REVIEW/性能表；④ 记录 D02d 结果并提交推送；⑤ 不发布生产、不跑 514。
+- 变更记录：2026-10-21 新增。
+
+## FL-D139 本机 systemd 服务状态与默认 API 端口可达性不一致（2026-10-21）
+
+- 发现日期：2026-10-21。
+- 问题与影响：本机 `systemctl is-active fundlex-recall-api fundlex-recall-worker` 返回 `active active`，但访问默认工作台/API 地址 `http://127.0.0.1:8000/api/health` 与 `/api/capabilities` 均返回 connection refused。当前不能据此确认工作台入口可用或完成运行态验收。
+- 证据或复现线索：在 `/home/opencode/fundlex` 执行上述 systemd 状态检查及 `curl --max-time 5`；主机名 `iZf8zemhifedxdow1zefr0Z`，网卡地址为 `172.28.217.241`。本次检查未打印凭据，也未修改服务。
+- 处理方法：暂登记为环境/入口核验问题；后续读取 FundLex 服务 unit 的实际监听地址、端口和日志，按部署配置核对反向代理或启动参数，再进行 `/api/health`、真实登录和用户端到端验证。
+- 当前状态：未解决；未宣称部署或端到端交付完成。
+- 验证结果：测试套件通过（939 passed、6 skipped）只证明代码测试，不证明当前服务端口可达。
+- 下一步：核对 `fundlex-recall-api` unit、监听 socket 与部署环境变量；恢复可达后运行真实工作台路径并补充证据。
 - 变更记录：2026-10-21 新增。

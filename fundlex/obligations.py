@@ -775,9 +775,20 @@ def project(ledger: ObligationLedger, report: Mapping[str, Any], *,
                     "CLAIM_REPLAY_OBLIGATION_MISSING"
                     if not isinstance(replay_item, Mapping)
                     else "CLAIM_REPLAY_" + str(replay_item.get("state") or "FAIL"))
-            failure = any(str(target.get("location") or "") in
-                          {location for _rule, location in replay_failures}
-                          for target in relevant)
+            # A paragraph-level integrity failure (duplicate divergence, an
+            # unauthorized outside-span change) blocks delivery globally, but it must
+            # not be attributed to an unrelated obligation: otherwise a duplicate
+            # finding at p821 marks every obligation at p821 failed, including the
+            # G15 delete whose own operation/artifact proof passed.  A merged
+            # delete+append edit is labelled "G15+G16", so match rule *membership*,
+            # not string equality.  Ruleless failures stay document-level.
+            relevant_locations = {str(target.get("location") or "")
+                                  for target in relevant}
+            failure = any(
+                item.spec.rule_id in {part for part in str(label or "").split("+")
+                                      if part}
+                and str(location or "") in relevant_locations
+                for label, location in replay_failures)
             if failure:
                 item.completion = "UNRESOLVED"
                 item.completion_evidence = "CLAIM_REPLAY_FAILED"

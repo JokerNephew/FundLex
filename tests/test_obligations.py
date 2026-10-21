@@ -308,6 +308,47 @@ def test_one_of_variant_present_inside_the_authorized_new_text_closes():
     assert not open_obligations(ledger)
 
 
+def test_ruleless_duplicate_failure_does_not_poison_a_passed_obligation():
+    ledger = compile_obligations(guide(rule()))
+    apply_facts(ledger, FakeFacts(service=True))
+    project(ledger, report_with(
+        targets=[target("G05", operations=["G05:0", "G05:1"])],
+        plan_ledger=[{"target_id": "T1", "status": "planned"}],
+        audit=[{"target_id": "T1", "verdict": "completed"}],
+        replay={"verified": False,
+                "failures": [{"rule_id": "", "location": "p1",
+                              "code": "DUPLICATE_SITE_DIVERGED"}],
+                "obligations": {
+                    "G05:B1:O1": {"state": "PASS",
+                                  "artifact_status": "EXPECTED_EFFECT_PRESENT"},
+                    "G05:B1:O2": {"state": "PASS",
+                                  "artifact_status": "VERIFIED_ABSENT"}}},
+    ))
+    b1 = [item for item in ledger.records if item.spec.branch_id == "B1"]
+    assert {item.completion for item in b1} == {"ARTIFACT_VERIFIED"}
+
+
+def test_composite_replay_failure_marks_each_member_rule():
+    ledger = compile_obligations(guide(rule()))
+    apply_facts(ledger, FakeFacts(service=True))
+    project(ledger, report_with(
+        targets=[target("G05", operations=["G05:0", "G05:1"])],
+        plan_ledger=[{"target_id": "T1", "status": "planned"}],
+        audit=[{"target_id": "T1", "verdict": "completed"}],
+        replay={"verified": False,
+                "failures": [{"rule_id": "G05+G99", "location": "p1",
+                              "code": "CLAIM_NO_CHANGE_APPLIED"}],
+                "obligations": {
+                    "G05:B1:O1": {"state": "PASS",
+                                  "artifact_status": "EXPECTED_EFFECT_PRESENT"},
+                    "G05:B1:O2": {"state": "PASS",
+                                  "artifact_status": "VERIFIED_ABSENT"}}},
+    ))
+    b1 = [item for item in ledger.records if item.spec.branch_id == "B1"]
+    assert {item.completion for item in b1} == {"UNRESOLVED"}
+    assert {item.completion_evidence for item in b1} == {"CLAIM_REPLAY_FAILED"}
+
+
 def test_explicit_empty_scope_cannot_close_an_append_obligation():
     ledger = compile_obligations(guide(rule(rule_id="G01", operations=[
         {"op": "append", "new_text": "通过直销机构申购A类基金份额不收取申购费。",

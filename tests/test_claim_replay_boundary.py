@@ -112,6 +112,26 @@ def test_added_paragraph_outside_targets_is_rejected():
                for item in replay["failures"])
 
 
+def test_duplicate_copy_clone_is_not_blocked_by_a_stale_out_of_scope_target():
+    from fundlex.recall import Target, duplicate_copy_targets
+    text = "基金销售服务费每日计算，逐月支付。由基金托管人自动划付。"
+    span = SimpleNamespace(location="p0", text=text,
+                           segments=[SimpleNamespace(start=0, end=len(text))])
+    span2 = SimpleNamespace(location="p1", text=text,
+                            segments=[SimpleNamespace(start=0, end=len(text))])
+    inspection = SimpleNamespace(paragraphs=[span, span2],
+                                 by_location=lambda location: {"p0": span, "p1": span2}[location])
+    stale = Target("T1", "G16", "p0", "基金销售服务费每日计算，逐月支付。",
+                   "needs_edit", "stale", start=0, end=18,
+                   operations=("G16:0",), out_of_scope=True)
+    source = Target("T2", "G16", "p1", "基金销售服务费每日计算，逐月支付。",
+                    "needs_edit", "recovered", start=0, end=18,
+                    operations=("G16:0",))
+    clones = duplicate_copy_targets([stale, source], {"G16": {}}, inspection)
+    assert [(clone.location, clone.rule_id, clone.operations)
+            for clone in clones] == [("p0", "G16", ("G16:0",))]
+
+
 def test_identical_copies_edited_to_different_content_fail():
     before = "基金管理人应当每日计提销售服务费，并按月支付。"
     first = before.replace("每日计提", "按季计提")

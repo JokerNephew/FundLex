@@ -2553,6 +2553,12 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
             report["duplicate_targets"] = duplicate_targets
         copy_targets = duplicate_copy_targets(targets, rules_by_id, inspection)
         for target in copy_targets:
+            for old in targets:
+                if old is not target and old.rule_id == target.rule_id \
+                        and old.location == target.location \
+                        and set(old.operations) == set(target.operations):
+                    old.out_of_scope = True
+                    old.reason = f"{old.reason}|SUPERSEDED_BY_DUPLICATE_COPY"
             targets.append(target)
             synthetic.append(target)
             origins[target.target_id] = "duplicate_copy"
@@ -3191,6 +3197,14 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
                                 recovery_copies = duplicate_copy_targets(
                                     targets, rules_by_id, inspection)
                                 for copy in recovery_copies:
+                                    for old in targets:
+                                        if old is not copy \
+                                                and old.rule_id == copy.rule_id \
+                                                and old.location == copy.location \
+                                                and set(old.operations) == set(copy.operations):
+                                            old.out_of_scope = True
+                                            old.reason = (f"{old.reason}|"
+                                                          "SUPERSEDED_BY_DUPLICATE_COPY")
                                     targets.append(copy)
                                     synthetic.append(copy)
                                     origins[copy.target_id] = "duplicate_copy"

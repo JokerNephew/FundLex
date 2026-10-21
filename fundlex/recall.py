@@ -1886,8 +1886,15 @@ def duplicate_copy_targets(targets: Sequence[Target], rules_by_id: dict[str, dic
     Only identical compact paragraph text is cloned; a paragraph merely sharing a phrase
     is not the same obligation site.
     """
+    # Only an *active* target blocks a duplicate copy.  A stale target that was
+    # already judged out of scope (for example G16 on the body copy before missing-
+    # operation recovery located the summary copy) must not suppress the repair copy;
+    # otherwise the recovered operation is applied to one copy only and the identical
+    # body/summary clauses diverge at final replay.
     existing = {(target.rule_id, location, tuple(sorted(target.operations)))
                 for target in targets
+                if target.state == "needs_edit" and not target.out_of_scope
+                and not target.attribution_error
                 for location in _target_paragraphs(target)}
     paragraph_text = {span.location: _compact(display_text(span.text)[0])
                       for span in inspection.paragraphs}
