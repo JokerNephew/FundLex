@@ -54,6 +54,8 @@ def test_frozen_pipeline_stages_recompute_without_network(tmp_path, monkeypatch)
     assert results["facts"]["value"]["set_complete_verified"] is True
     assert results["plan"]["value"]["edits"] == report["plan"]["edits"]
     assert results["claim_replay"]["value"]["verified"] is True
+    for key in ("verified", "failures", "obligations"):
+        assert results["claim_replay"]["value"][key] == report["artifact_claim_replay"][key]
     assert results["obligations"]["value"]["counts"] == report["obligations"]["counts"]
     with pytest.raises(FrozenError, match="FROZEN_STAGE_INPUT_MISSING"):
         replay_stage(run_dir, "plan", revision=99)

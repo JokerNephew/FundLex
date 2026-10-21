@@ -1,5 +1,16 @@
 # FundLex 当前断点（ACTIVE_HANDOFF）
 
+## 最终验证接续（2026-10-21；优先于以下历史）
+
+- 用户最新任务是最终验证、证据收口、最小修复、独立审查、Gate、提交 push；不是旧“只push”任务。起始 HEAD `4f3229d901bda33332a8abee3d909b7550f07ff0`，branch `refactor/recovery-architecture`，已fetch/checkout/pull，起始clean。
+- 全量fresh离线 976 passed / 0 failed / 6 skipped / 199.41s；compileall通过。日志/四例真实证据 `docs/evidence/final-validation-20261021/`。
+- 四例record首试均not_generated，无最终DOCX：D01 cassette conflict；D02/D11/D16 inventory output truncated。87 calls / $0.08997255；本轮总预登记768/$2.40、每case192/$0.60，后续扣除已用，不加预算。未部署、未改生产配置/账本、未跑20/514。
+- FL-D142登记全部发现。主agent正在做bounded truncation split、cassette full-request复用/错误录制、无凭据replay、Stage参数/边界、occurrence dedupe、class-set label最小修复。源码未提交，`git status --short`为准；新tests fixture尚待通过；必须修后全量重跑。
+- 三位独立Architecture/Recovery/Test reviewer已完成初审并发现BLOCKER/HIGH；Business Reviewer运行中，后续实际artifact需复审。没有运行中的record进程。
+- 下一动作：完成小修/回归→提交代码冻结新SHA→以剩余预算独立录制四例（保留首试）→full/stage零网络replay→DOCX逐operation证据审查→四Reviewer复审→Gate→证据提交push。不能用历史artifact替代，不把缺验证当0缺陷。
+- 无手动压缩工具；断点已持久化。所有凭据只在进程内读取，不打印/入库。
+
+
 ## 最新状态（2026-10-21，按用户要求仅提交和推送）
 
 - 用户最新指示：“我只是让你继续推送而已，不用做别的”。本次停止其余开发、真实模型验收与部署，仅提交并推送当前 `refactor/recovery-architecture` 工作区。

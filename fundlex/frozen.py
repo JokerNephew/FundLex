@@ -7,6 +7,7 @@ import os
 import re
 import shutil
 import tempfile
+import threading
 from pathlib import Path
 from typing import Any
 
@@ -43,6 +44,9 @@ class FrozenError(ValueError):
 
 
 class ModelCassette:
+    _locks_guard = threading.Lock()
+    _locks: dict[str, Any] = {}
+
     def __init__(self, directory: Path):
         self.directory = Path(directory)
 
@@ -52,16 +56,29 @@ class ModelCassette:
             raise FrozenError("MODEL_CASSETTE_TASK_INVALID")
         identity = {key: request[key] for key in
                     ("task_type", "prompt_version", "configured_model", "context_sha256")}
-        return self.directory / task / (digest(identity) + ".json")
+        return self.directory / task / (digest(request) + ".json")
+
+    def request_lock(self, request: dict) -> Any:
+        key = str(self.directory.resolve()) + ":" + digest(request)
+        with self._locks_guard:
+            return self._locks.setdefault(key, threading.RLock())
 
     def load(self, request: dict[str, Any], schema: dict) -> tuple[dict, dict]:
         path = self._path(request)
+        if not path.exists():
+            # Read legacy recordings without rewriting their immutable contents.
+            identity = {key: request[key] for key in
+                        ("task_type", "prompt_version", "configured_model", "context_sha256")}
+            legacy = path.parent / (digest(identity) + ".json")
+            if legacy.exists():
+                path = legacy
         try:
             envelope = json.loads(path.read_text(encoding="utf-8"))
             body = envelope["body"]
             if envelope["sha256"] != digest(body) or body["request"] != request:
                 raise FrozenError("MODEL_CASSETTE_MISMATCH")
-            jsonschema.validate(body["response"], schema)
+            if not body["event"].get("error_code"):
+                jsonschema.validate(body["response"], schema)
             return body["response"], body["event"]
         except FileNotFoundError as exc:
             raise FrozenError("MODEL_REPLAY_MISS") from exc
@@ -70,13 +87,13 @@ class ModelCassette:
                 raise
             raise FrozenError("MODEL_CASSETTE_INVALID") from exc
 
-    def save(self, request: dict, response: dict, event: dict) -> None:
+    def save(self, request: dict, response: Any, event: dict) -> None:
         path = self._path(request)
         # Capture ONLY the semantic request. Never headers, API keys, endpoint URLs,
         # environment variables or transport object representations.
         safe_event = {key: event.get(key) for key in (
             "task_type", "prompt_version", "context_sha256", "configured_model",
-            "actual_model", "http_status", "finish_reason")}
+            "actual_model", "http_status", "finish_reason", "error_code")}
         body = {"schema_version": "fundlex-model-cassette-v1", "request": request,
                 "response": response, "event": safe_event}
         envelope = {"body": body, "sha256": digest(body)}

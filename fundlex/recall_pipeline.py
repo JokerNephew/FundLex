@@ -201,6 +201,25 @@ def _inventory(entry: _WindowState, note: str | None, facts: Facts, model: Any,
         try:
             targets, ledger = inventory_window(source, entry.rules, facts, model, inspection)
             return list(targets), [ledger]
+        except ModelError as exc:
+            # A provider can return a syntactically incomplete inventory even when the
+            # request fits the context limit.  Treat output truncation like the
+            # deterministic context split: divide the bounded window on paragraph
+            # addresses and retry each half.  This is a bounded recovery, not another
+            # retry of the same request, and therefore cannot hide a missing operation.
+            if exc.code != "MODEL_OUTPUT_TRUNCATED" or len(source.locations) < 2:
+                raise
+            middle = len(source.locations) // 2
+            left = _sub_window(source, source.locations[:middle], "~a")
+            right = _sub_window(source, source.locations[middle:], "~b")
+            left_targets, left_ledgers = _run(left)
+            right_targets, right_ledgers = _run(right)
+            return left_targets + right_targets, [
+                {"window": source.id, "split": 2, "reason": exc.code,
+                 "parts": [left.id, right.id],
+                 "targets": [target.as_dict() for target in left_targets + right_targets]},
+                *left_ledgers, *right_ledgers,
+            ]
         except RecallError as exc:
             # Context-limit recovery (plan §31): split the window and retry, never end
             # the contract because one inventory call was too large.
@@ -334,12 +353,12 @@ def _recovery_snapshot(targets: Sequence[Target], planned: dict[str, Any],
     claim failures cannot produce a different result by rebuilding the same inputs.
     """
     material = {
-        "targets": sorted(
-            (target.target_id, target.rule_id, target.location,
-             tuple(target.operations), target.quote, target.state, target.resolution)
-            for target in targets),
+        "targets": [
+            (target.rule_id, target.location, target.start, target.end,
+             tuple(target.operations), target.quote, target.state, target.resolution, target.out_of_scope)
+            for target in targets],
         "plan": sorted(
-            (str(edit.get("target_id")), str(edit.get("location")),
+            (tuple(edit.get("operation_keys") or []), str(edit.get("location")),
              int(edit.get("start") or 0), int(edit.get("end") or 0),
              str(edit.get("replacement") or ""))
             for edit in planned.get("edits") or []),
@@ -357,6 +376,7 @@ def _recovery_snapshot(targets: Sequence[Target], planned: dict[str, Any],
     material["operation_coverage"] = sorted(
         (target.location, key) for target in targets for key in target.operations
         if not target.out_of_scope)
+    material["targets"].sort(key=lambda row: json.dumps(row, ensure_ascii=False))
     from .frozen import digest
     # Keep the individual boundaries inspectable in every recovery round.
     hashes = {name + "_hash": digest(value) for name, value in material.items()}
@@ -432,6 +452,7 @@ def _target_identity(target: Target) -> tuple[str, str, str]:
     material = "\x1f".join((
         str(target.start), str(target.end), _compact(target.quote),
         "|".join(target.composite),
+        "|".join(sorted(target.operations)), str(target.occurrence_index),
     ))
     return (target.rule_id, target.location,
             hashlib.sha256(material.encode("utf-8")).hexdigest())
@@ -1246,7 +1267,8 @@ def _run_audit(model: Any, rules_by_id: dict[str, dict], targets: Sequence[Targe
             missed.append({"rule_id": missed_rule, "location": location, "quote": quote,
                            "operation_id": str(item.get("operation_id") or ""),
                            "reason": str(item.get("reason") or "")})
-    return {"rules": rule_ids, "results": results, "missed_targets": missed, "dropped": dropped}
+    return {"rules": rule_ids, "results": results, "missed_targets": missed, "dropped": dropped,
+            "artifact_failures": artifact_failures}
 
 
 def _confirm_merged_append(rule: dict, plan_entry: dict[str, Any], location: str,
@@ -1316,10 +1338,13 @@ def _audit_issue_key(issue: Mapping[str, Any]) -> str:
 
 def _audit_context_key(context: Any) -> str:
     return "|".join((str(context.error_code or ""), str(context.rule_id or ""),
-                     str(context.site_id or ""), str(context.obligation_id or "")))
+                     str(context.site_id or ""), str(context.operation_id or ""),
+                     str(context.metadata.get("source_span") or "")))
 
 
-def _audit_recovery_contexts(issues: Sequence[dict[str, Any]]) -> list[Any]:
+def _audit_recovery_contexts(issues: Sequence[dict[str, Any]], *,
+                             targets: Sequence[Target] = (), planned: dict | None = None,
+                             artifact_failures: Sequence[dict] = ()) -> list[Any]:
     """Classify audit/review issues into root-cause recovery contexts.
 
     One context per (code, rule, target, location, obligation): two targets of one rule
@@ -1333,7 +1358,9 @@ def _audit_recovery_contexts(issues: Sequence[dict[str, Any]]) -> list[Any]:
     for issue in issues:
         code = str(issue.get("code") or "")
         declared = str(issue.get("failure_class") or "").upper()
-        if declared in FailureClass.__members__:
+        if code in {"AUDIT_VERDICT_MISSING", "REVIEW_UNPROVEN"}:
+            failure_class = FailureClass.VERIFICATION
+        elif declared in FailureClass.__members__:
             failure_class = FailureClass(declared)
         elif code == "AUDIT_MISSED_TARGET":
             failure_class = FailureClass.TARGET
@@ -1345,10 +1372,18 @@ def _audit_recovery_contexts(issues: Sequence[dict[str, Any]]) -> list[Any]:
             # A negative verdict without a declared class is re-proved against a changed
             # artifact; generation is the only safe executable route.
             failure_class = FailureClass.GENERATION
+        target = next((target for target in targets
+                       if target.target_id == issue.get("target_id")), None)
+        owned = [failure for failure in artifact_failures
+                 if failure.get("location") == issue.get("location")
+                 and (not target or failure.get("operation_id") in target.operations)]
+        operation_id = str(issue.get("operation_id") or
+                           (",".join(target.operations) if target else ""))
         context = RecoveryContext(
             rule_id=str(issue.get("rule_id") or ""),
             target_id=str(issue.get("target_id") or ""),
-            obligation_id=str(issue.get("affected_obligation") or ""),
+            operation_id=operation_id,
+            obligation_id=operation_id,
             site_id=str(issue.get("location") or ""),
             stage="audit",
             failure_class=failure_class,
@@ -1356,12 +1391,24 @@ def _audit_recovery_contexts(issues: Sequence[dict[str, Any]]) -> list[Any]:
             reason=str(issue.get("reason") or issue.get("issue") or "audit incomplete"),
             metadata={"route_class": (declared if declared in FailureClass.__members__
                                       and declared != "VERIFICATION" else ""),
+                      "source_span": (f"{target.start}:{target.end}" if target else str(issue.get("quote") or "")),
                       "affected_fact": str(issue.get("affected_fact") or "")})
-        key = _audit_context_key(context)
-        if key in seen:
-            continue
-        seen.add(key)
-        contexts.append(context)
+        from dataclasses import replace
+        for operation in (target.operations if target and target.operations else (operation_id,)):
+            owned_class = failure_class
+            if target is not None and failure_class in {FailureClass.EXECUTION, FailureClass.GENERATION}:
+                # Root cause is operation-specific even in a same-site atomic edit.
+                own_failure = next((failure for failure in owned
+                                    if failure.get("operation_id") == operation), None)
+                owned_class = (_claim_failure_context(own_failure, targets,
+                    (planned or {}).get("edits") or []).resolved_class if own_failure
+                    else FailureClass.GENERATION)
+            owned_context = replace(context, operation_id=operation, obligation_id=operation,
+                                    failure_class=owned_class)
+            key = _audit_context_key(owned_context)
+            if key not in seen:
+                seen.add(key)
+                contexts.append(owned_context)
     return contexts
 
 
@@ -1494,8 +1541,11 @@ def _absorb_missed_targets(audit_state: dict[str, Any], targets: Sequence[Target
                            rules_by_id: dict[str, dict], facts: Facts,
                            obligations: Any = None) -> int:
     """Promote verified missed-target reports into source-bound repair targets."""
-    existing = {(target.rule_id, operation_id, target.location)
-                for target in [*targets, *synthetic] for operation_id in target.operations}
+    def identity(target: Target, operation_id: str) -> tuple:
+        return (target.rule_id, operation_id, target.location, target.start, target.end)
+    existing = {identity(target, operation_id)
+                for target in [*targets, *synthetic] if not target.out_of_scope
+                for operation_id in target.operations}
     added = 0
     for rule_id, items in sorted((audit_state.get("missed") or {}).items()):
         for item in items:
@@ -1516,12 +1566,12 @@ def _absorb_missed_targets(audit_state: dict[str, Any], targets: Sequence[Target
             if claimed and claimed not in target.operations:
                 continue
             target.operations = tuple(operation_id for operation_id in target.operations
-                if (rule_id, operation_id, target.location) not in existing)
+                if identity(target, operation_id) not in existing)
             if not target.operations:
                 continue
             synthetic.append(target)
             origins[target.target_id] = "audit_missed"
-            existing.update((rule_id, operation_id, target.location)
+            existing.update(identity(target, operation_id)
                             for operation_id in target.operations)
             added += 1
     return added
@@ -2583,6 +2633,7 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
                                               inspection, mapping, sections)
         for target in open_targets:
             targets.append(target)
+            synthetic.append(target)
             origins[target.target_id] = "T3_open_rule"
         report["target_attribution"].extend(assign_target_operations(
             open_targets, rules_by_id, inspection, facts, obligation_ledger))
@@ -2651,6 +2702,7 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
             audit_dirty: set[str] | None = None
             full_audit_count = 0
             incremental_audit_count = 0
+            previous_audit_snapshot = None
             while True:
                 round_ledger = _run_audit(model, rules_by_id, targets, planned, inspection,
                                           actual, facts=facts, only_rules=audit_dirty,
@@ -2667,7 +2719,16 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
                 round_ledger["issues"] = issues
                 report["audit"] = {"rounds": audit_rounds, "issues": issues}
                 report["targets"] = _target_ledger(targets, planned, audit_state, origins)
-                current_keys = {_audit_issue_key(issue) for issue in issues}
+                contexts = _audit_recovery_contexts(issues, targets=targets, planned=planned,
+                    artifact_failures=round_ledger.get("artifact_failures") or [])
+                current_keys = {_audit_context_key(context) for context in contexts}
+                state = {"failures": [{"code": context.error_code,
+                    "operation_id": context.operation_id, "location": context.site_id}
+                    for context in contexts]}
+                audit_snapshot = _recovery_snapshot(targets, planned, actual, state,
+                    facts=facts, obligations=obligation_ledger, scope=mapping)
+                round_ledger["recovery_state_hashes"] = state["recovery_state_hashes"]
+                stalled = bool(audit_pending) and audit_snapshot == previous_audit_snapshot
                 if audit_pending:
                     # Honest per-obligation outcome: succeeded only when the exact issue
                     # this action targeted disappeared, not when some unrelated count fell.
@@ -2679,10 +2740,18 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
                             detail=("issue_resolved" if succeeded else "issue_remains")
                                    + f";issues={len(issues)}")
                     audit_pending = []
+                if stalled:
+                    no_progress_stop_count += 1
+                    for context in contexts:
+                        audit_orchestrator.record(audit_recovery, context,
+                            RecoveryDecision(RecoveryAction.MARK_UNRESOLVED, "RECOVERY_NO_PROGRESS"),
+                            outcome="unresolved", detail="RECOVERY_NO_PROGRESS:unchanged audit state")
+                    break
+                previous_audit_snapshot = audit_snapshot
                 if not issues:
                     break
                 decisions: list[tuple[RecoveryContext, RecoveryDecision, str]] = []
-                for index, context in enumerate(_audit_recovery_contexts(issues)):
+                for index, context in enumerate(contexts):
                     key = _audit_context_key(context)
                     if key in terminal_keys:
                         continue
@@ -2799,20 +2868,20 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
                     audit_dirty = {str(issue.get("rule_id") or "") for issue in issues
                                    if issue.get("rule_id")}
                     continue
-                affected = _affected_windows(entries, notes)
+                needs_discovery = target_repair or fact_changed or applicability_changed
+                affected = _affected_windows(entries, notes) if needs_discovery else []
                 # Only rules whose artifact site / plan / verdict changed are re-audited.
-                audit_dirty = {target.rule_id for entry in affected
-                               for target in entry.targets}
-                audit_dirty |= {str(issue.get("rule_id") or "") for issue in issues
-                                if issue.get("rule_id")}
+                audit_dirty = {context.rule_id for context, _, _ in decisions if context.rule_id}
                 inventory_rerun_count += len(affected)
                 for entry in affected:
                     _inventory(entry, notes[entry.window.id], facts, model, inspection,
                                round_number=round_number)
-                targets = _collect_targets(entries, synthetic, rules_by_id, inspection)
-                _run_survey(model, rules, rules_by_id, facts, inspection, targets,
-                            synthetic, origins, survey_ledger, coverage_gaps, sections)
-                targets = _collect_targets(entries, synthetic, rules_by_id, inspection)
+                if needs_discovery:
+                    targets = _collect_targets(entries, synthetic, rules_by_id, inspection)
+                    _run_survey(model, rules, rules_by_id, facts, inspection, targets,
+                                synthetic, origins, survey_ledger, coverage_gaps, sections)
+                if needs_discovery:
+                    targets = _collect_targets(entries, synthetic, rules_by_id, inspection)
                 report["rebind"] = _rebind_unresolved_targets(
                     targets, origins, inspection, rules_by_id=rules_by_id, facts=facts)
                 report.setdefault("target_attribution", []).extend(
@@ -2822,14 +2891,21 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
                     targets, rules_by_id, inspection)
                 if duplicates:
                     report.setdefault("duplicate_targets", []).extend(duplicates)
-                report.setdefault("target_locator", []).extend(
-                    locate_unresolved_targets(targets, inspection, rules_by_id, facts, model))
+                if needs_discovery:
+                    report.setdefault("target_locator", []).extend(
+                        locate_unresolved_targets(targets, inspection, rules_by_id, facts, model))
                 for target in targets:
                     origins.setdefault(target.target_id, "T3_open_rule")
                 planned, edits, plan, artifacts, actual = _plan_and_generate(
                     model, rules_by_id, targets, inspection, facts, input_path, temp_dir,
                     max_compose_calls=compose_calls, obligations=obligation_ledger,
-                    frozen_run=frozen_run)
+                    frozen_run=frozen_run,
+                    existing_plan=planned,
+                    dirty_locations=({target.location for target in targets
+                        if fact_changed or applicability_changed}
+                        | {context.site_id for context, _, _ in decisions
+                        if context.site_id and context.resolved_class is not FailureClass.EXECUTION}
+                        if needs_discovery or FailureClass.GENERATION in classes else None))
                 report["plan"] = _plan_ledger(planned, plan)
                 report["targets"] = _target_ledger(targets, planned, audit_state, origins)
                 report["windows"] = [_window_ledger(entry) for entry in entries]
@@ -2941,7 +3017,10 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
                             shutil.copyfile(temp_dir / "final.docx", destination)
                         frozen_run.boundary("claim_replay", {"facts": facts.as_ledger(),
                             "targets": [target.as_dict() for target in targets],
-                            "plan": plan, "artifact": artifact_name})
+                            "plan": plan, "artifact": artifact_name,
+                            "components_by_rule": components_by_rule,
+                            "required_terms_by_rule": required_terms_by_rule,
+                            "target_rules": target_rules})
                     result = replay_claims(
                         plan.get("edits") or [], inspection, actual,
                         rules_by_id=rules_by_id, facts=facts,
@@ -3499,6 +3578,9 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
             report["windows"] = [_window_ledger(entry) for entry in entries]
             # Operation-level coverage projection (P0-4): the delivery gate reads the
             # same view and fails closed on a disagreement instead of completing silently.
+            if frozen_run is not None:
+                frozen_run.boundary("obligations", {"facts": facts.as_ledger(),
+                    "report": report, "scope_gaps": sorted(str(item.get("rule_id")) for item in scope_gaps)})
             project(obligation_ledger, report,
                     scope_gaps={str(item.get("rule_id")) for item in scope_gaps},
                     rules_by_id=rules_by_id, artifact_text=_document_compact(actual))

@@ -1857,7 +1857,7 @@ def assign_target_operations(targets: Sequence[Target], rules_by_id: dict[str, d
 
 def dedupe_operation_targets(targets: Sequence[Target], rules_by_id: dict[str, dict],
                              inspection: DocumentInspection) -> tuple[list[Target], list[str]]:
-    """Drop same-location duplicate targets for the same operation set.
+    """Drop duplicate bindings to the same occurrence, retaining disjoint sites.
 
     The inventory sometimes reports the broad clause and the exact operation phrase as
     two targets (D01 G05 p135).  Planning both creates an artificial overlap and can
@@ -1900,12 +1900,34 @@ def dedupe_operation_targets(targets: Sequence[Target], rules_by_id: dict[str, d
             width = ((int(target.end) - int(target.start))
                      if target.start is not None and target.end is not None else 10**9)
             return (exact, -width)
-        best = max(items, key=score)
-        for item in items:
-            if item is not best:
+        kept: list[Target] = []
+        for item in sorted(items, key=score, reverse=True):
+            def same_occurrence(other: Target) -> bool:
+                if item.composite or other.composite:
+                    return item.composite == other.composite and item.quote == other.quote
+                if any(value is None for value in (item.start, item.end, other.start, other.end)):
+                    return False
+                a, b = max(item.start, other.start), min(item.end, other.end)
+                if a >= b:
+                    return False
+                if (item.start, item.end) == (other.start, other.end):
+                    return True
+                if item.occurrence_index is not None and other.occurrence_index is not None \
+                        and item.occurrence_index != other.occurrence_index:
+                    return False
+                union = inspection.by_location(item.location).text[
+                    min(item.start, other.start):max(item.end, other.end)]
+                olds = [str(operation.get("old_text") or "")
+                        for operation in rule.get("operations") or []]
+                counts = [_compact(union).count(_compact(old)) for old in olds if old]
+                return bool(counts) and max(counts) == 1
+            best = next((other for other in kept if same_occurrence(other)), None)
+            if best is not None:
                 item.out_of_scope = True
                 item.reason = f"{item.reason}|DUPLICATE_OPERATION_TARGET:{best.target_id}"
                 removed.add(item.target_id)
+            else:
+                kept.append(item)
     return list(targets), sorted(removed)
 
 
@@ -3565,6 +3587,16 @@ def _plan_target_inner(rule: dict, target: Target, inspection: DocumentInspectio
         return None  # branch explicitly requires no change
     if append_ops:
         operation = append_ops[0]
+        # A DOCX paragraph can end in the middle of a business sentence. Never
+        # inject policy between its fragments (for example a definition continued
+        # in the next paragraph). The locator must supply a complete clause site.
+        if rule_id in {"G01", "G03", "G16"} and target.end \
+                and span.text[:target.end].rstrip(" \t\n\r\"”’）)")[-1:] not in "。！？；;":
+            suffix = re.search(r"[。！？；;]", span.text[target.end:])
+            if suffix is None:
+                raise RecallError("RECALL_APPEND_CLAUSE_INCOMPLETE",
+                                  {"rule": rule_id, "target": target.target_id})
+            target.end += suffix.end()
         new_text, issues = instantiate_slots(str(operation.get("new_text") or ""), facts)
         if issues or not new_text.strip():
             # The guide's append wording names an assumed class group ("C类基金份额"). A
@@ -3606,8 +3638,8 @@ def _plan_target_inner(rule: dict, target: Target, inspection: DocumentInspectio
             fragments.append({"op": str(op_kind), "old_text": old_text,
                               "new_text": new_fragment, "mode": "full"})
             continue
-        updated = _splice_fragment(spliced, old_text, new_fragment)
-        if updated is None and op_kind == "replace" and rule_id == "G05" \
+        updated = None
+        if op_kind == "replace" and rule_id == "G05" \
                 and _compact(old_text) == "调低赎回费率":
             g05 = plan_g05_splice(spliced)
             if g05 is not None:
@@ -3616,6 +3648,8 @@ def _plan_target_inner(rule: dict, target: Target, inspection: DocumentInspectio
                                   "new_text": new_fragment, "mode": "g05_splice",
                                   "evidence": g05_evidence})
                 applied.append(f"{op_kind}:g05_splice")
+        if updated is None:
+            updated = _splice_fragment(spliced, old_text, new_fragment)
         if updated is not None:
             spliced = updated
             if op_kind == "delete":

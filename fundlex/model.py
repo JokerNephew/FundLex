@@ -231,6 +231,20 @@ class ModelGateway:
             'events':events}
     def call(self, *, task_type: str, bounded_context: str, response_schema: dict,
              instruction: str, prompt_version: str = 'v1') -> ModelResult:
+        kwargs = dict(task_type=task_type, bounded_context=bounded_context,
+                      response_schema=response_schema, instruction=instruction,
+                      prompt_version=prompt_version)
+        if self.mode == 'record':
+            # One live outcome per full request, including across role gateways.
+            # Other keys remain concurrent; the immutable cassette is never overwritten.
+            with self.cassette.request_lock({**kwargs, 'model': self.model,
+                    'request_options': self.request_options,
+                    'max_completion_tokens': self.max_completion_tokens}):
+                return self._call(**kwargs)
+        return self._call(**kwargs)
+
+    def _call(self, *, task_type: str, bounded_context: str, response_schema: dict,
+              instruction: str, prompt_version: str = 'v1') -> ModelResult:
         if not bounded_context or len(bounded_context)>self.max_context_chars:
             raise ModelError('MODEL_CONTEXT_LIMIT')
         if task_type not in TASK_TYPES:
@@ -246,20 +260,24 @@ class ModelGateway:
             'request':{'bounded_context':bounded_context, 'instruction':instruction,
                        'response_schema':response_schema, 'request_options':self.request_options,
                        'max_completion_tokens':self.max_completion_tokens}}
-        if self.mode == 'replay':
+        if self.mode in {'replay', 'record'}:
             from .frozen import FrozenError
             try:
                 value, original = self.cassette.load(cassette_request, response_schema)
             except (FrozenError, OSError) as exc:
-                raise ModelError(str(exc) if isinstance(exc, FrozenError) else
-                                 'MODEL_CASSETTE_UNAVAILABLE', self.metrics()) from None
-            event = {**original, 'replayed':True, 'attempt':0, 'latency_ms':0,
-                     'prompt_tokens':0, 'completion_tokens':0, 'total_tokens':0,
-                     'estimated_cost_usd':0, 'error_code':None}
-            with self._state_lock:
-                self.events.append(event)
-            return ModelResult(value, str(original.get('actual_model') or self.model),
-                0, 0, 0, 0, None, 0, 0, task_type, query['bounded_context_sha256'])
+                if self.mode != 'record' or not isinstance(exc, FrozenError) or exc.code != 'MODEL_REPLAY_MISS':
+                    raise ModelError(str(exc) if isinstance(exc, FrozenError) else
+                                     'MODEL_CASSETTE_UNAVAILABLE', self.metrics()) from None
+            else:
+                event = {**original, 'replayed':True, 'attempt':0, 'latency_ms':0,
+                         'prompt_tokens':0, 'completion_tokens':0, 'total_tokens':0,
+                         'estimated_cost_usd':0}
+                with self._state_lock:
+                    self.events.append(event)
+                if original.get('error_code'):
+                    raise ModelError(original['error_code'], self.metrics())
+                return ModelResult(value, str(original.get('actual_model') or self.model),
+                    0, 0, 0, 0, None, 0, 0, task_type, query['bounded_context_sha256'])
         if self.checkpoints and self.mode == 'live':
             with self._checkpoint_lock:
                 cached = self.checkpoints.load(query, bounded_context, response_schema)
@@ -374,6 +392,8 @@ class ModelGateway:
                 if retry and attempt<self.retries:
                     time.sleep(min(2**attempt,2))
                     continue
+                if self.mode == 'record':
+                    self.cassette.save(cassette_request, None, event)
                 raise ModelError(event['error_code'],self.metrics())
             if self.mode == 'record':
                 from .frozen import FrozenError

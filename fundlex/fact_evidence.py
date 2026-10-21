@@ -47,7 +47,7 @@ def verify_class_set(inspection: Any, classes: Sequence[Any], quote: str) -> dic
     if not expected or len(current) != len(expected):
         result["reason"] = "CLASS_SET_EMPTY_OR_DUPLICATE"
         return result
-    if all(re.fullmatch(r"[A-Z](?:类(?:基金)?份额)?", name) for name in expected):
+    if all(re.fullmatch(r"[A-Z](?:类(?:(?:基金)?份额)?)?", name) for name in expected):
         expected = {name[0] for name in expected}
         complete = bool(labels) and labels == expected
     else:

@@ -197,7 +197,7 @@ class RoleGateway:
         base = dict(self.primary.metrics())
         if self.review is not self.primary:
             other = self.review.metrics()
-            for key in ("logical_calls", "http_attempts", "checkpoint_reuses",
+            for key in ("logical_calls", "http_attempts", "cassette_replays", "checkpoint_reuses",
                         "checkpoint_invalidations", "prompt_tokens", "completion_tokens",
                         "total_tokens", "latency_ms", "rate_limit_count", "error_count",
                         "estimated_cost_usd"):

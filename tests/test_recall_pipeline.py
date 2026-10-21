@@ -285,7 +285,7 @@ def test_audit_failure_repaired_then_complete(tmp_path: Path):
     assert len(report["audit"]["rounds"]) == 2
     assert report["audit"]["rounds"][0]["issues"], "round 0 must record the scripted failure"
     assert report["audit"]["issues"] == []
-    assert any("[REPAIR_CONTEXT]" in context for context in gateway.contexts["recall_inventory"])
+    assert not any("[REPAIR_CONTEXT]" in context for context in gateway.contexts["recall_inventory"])
     assert report["limits"]["business_rounds_used"] == 1
     # The audit repair is visible in the unified recovery history with obligation identity
     # and an honest per-issue outcome (the scripted failure disappeared next round).
@@ -301,8 +301,10 @@ def test_audit_failure_persists_incomplete_working_pair(tmp_path: Path):
         tmp_path, {"recall_audit": persistent_failing_audit("G05")})
 
     assert report["delivery_status"] == "incomplete"
-    assert report["limits"]["business_rounds_used"] == 3
-    assert len(report["audit"]["rounds"]) == 4
+    assert report["limits"]["business_rounds_used"] == 1
+    assert len(report["audit"]["rounds"]) == 2
+    assert any("RECOVERY_NO_PROGRESS" in (item.get("reason", "") + item.get("detail", ""))
+               for item in report["recovery"]["business_rounds"])
     assert report["audit"]["issues"]
     assert report["output_validation"]["kind"] == "recall_working_edits"
     assert report["artifacts"] == {"working_final": "working_final.docx",

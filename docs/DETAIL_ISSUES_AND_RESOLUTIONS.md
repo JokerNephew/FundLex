@@ -2105,3 +2105,20 @@
 - 发现剩余 Sweep rule-level satisfied 与 first-required-text 路径可独立关闭 finding；已移除，统一等待 operation/site artifact proof。静默 re-sweep 不再充当完成证据；Projection 未使用的旧 satisfaction helpers 一并删除。
 - 针对性验证：`tests/test_recovery_final_invariants.py`、`tests/test_hard_fact_veto.py`、`tests/test_recall_pipeline.py` 合计 **77 passed / 22.59s**（`/tmp/fundlex-final-review-tests-2.txt`）；`git diff --check` 通过。中间误删 `_document_compact` 的回归已恢复；旧 `_finding_evidence` 为有意移除。审查补充后尚未重跑完整测试，不能沿用 977 项结果冒称当前全量已测。
 - 用户随后明确只要求继续推送，故停止其他开发/真实验收/部署，将当前源码、测试与记录提交并推送。live 调用/费用仍为 0；真实工作台验收未完成，最终业务收口状态保持未验收。
+
+## FL-D142 Exact-HEAD 最终验证发现运行录制/回放与 occurrence 缺陷（2026-10-21）
+
+- 起始版本：`4f3229d901bda33332a8abee3d909b7550f07ff0`，`refactor/recovery-architecture`，fetch/checkout/pull 后 clean。全量离线实跑 976 passed / 0 failed / 6 skipped / 199.41s；compileall 通过。
+- 实际证据：`docs/evidence/final-validation-20261021/`；D01 76 calls/$0.04448760，D02 3/$0.01303800，D11 3/$0.01213515，D16 5/$0.02031180；合计 87 calls/$0.08997255。四例均 `not_generated`，无最终 DOCX，artifact 安全指标为 UNVERIFIED，不能填写已验证的 0。原始四例 bundle 保留，不覆盖或用旧 SHA 产物补位。
+- 已复现 root causes：record 相同完整请求再次 live 后遇不可覆写 cassette 冲突（D01）；失败响应在保存前抛出，D02/D11/D16 output truncation 无法 replay；无凭据 replay 在 role config 校验先失败；Inventory output truncation 未使用已有 bounded split；Stage Claim 缺 live target_rules/required_terms 参数、缺 boundary 仍宣称 replay；同段不同 G02 occurrence 被 location-level dedupe 隐藏，少改后 Claim 可 PASS（P0）；Audit missed-target 也缺 span identity；D16 `A 类/C 类` display labels 的 complete-set regex 漏识别 `A类`（false block）。独立 Architecture/Test/Recovery/Business 审查已分别确认。
+- Recovery 额外 HIGH：Audit repair 分类后仍统一重跑 Inventory/Planner，Execution 不复用计划；Audit 无稳定状态 no-progress 阻断。
+- 处理方法：仅针对上述 generic root causes 最小修复，新增回归；不改业务规则、Validator/Claim/safety，不加 retry/预算；修复后新 SHA 全量回归、独立新录制与零网络 Replay。当前状态：实施中，尚未验证修复、未部署，Gate FAIL；不运行 20/514。
+- 预算：本轮预登记总上限 768 HTTP attempts/$2.40，每case 192/$0.60，后续必须扣除已用，不静默重置账本或增加额度。生产配置/数据库/账本未修改。
+- 下一步：修复→完整离线→新 SHA四例record/replay→实际artifact独立复审→Gate；原始失败 cassette 缺失是历史证据缺口，不伪造补录。
+
+### FL-D142 最小修复与离线复审补记（真实重录前）
+
+- 已实施：Inventory按段有界拆分output-truncated窗口；record完整请求key与并发single-flight/首个outcome复用，失败错误码可零网络重放，legacy cassette只读兼容；replay role无需凭据；同段disjoint occurrences/同址sibling Audit identity分别保留；missed target按绑定span去重；A类display names正常集合验证；G05优先bounded token splice；G01/G03/G16拒绝在不完整跨段句中插入。
+- Audit恢复最小接线：deterministic Claim证据逐operation判root cause；Execution复用final plan，Generation仅dirty site，Target才Inventory；真实fact/applicability变化使依赖计划失效；open targets保存在synthetic集合；稳定snapshot支持bound/unbound offsets，Audit无变化停止。没有更改Validator、业务适用性标准或预算。
+- Stage必须有真实boundary；Claim与live使用相同components/required terms/target rules；返回recorded/replay HEAD与same_head，允许明确跨版本调试，不冒称exact-HEAD。多模型同一prompt的stage lookup仍可能ambiguous并fail closed（MEDIUM已知限制，当前四例单模型未触发）。
+- 回归：中间完整989 passed/6 skipped（197.02s），之后又补Audit identity/None-offset/逐sibling rootcause与open-target持久化，故989不作为最终SHA证明。最终冻结后必须完整重跑。Architecture已确认原P0反例修复；Recovery复审95相关测试通过。实际artifact审查仍未完成。

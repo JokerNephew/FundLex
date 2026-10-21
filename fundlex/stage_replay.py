@@ -62,6 +62,9 @@ class _RecordedGateway:
             raise FrozenError("MODEL_REPLAY_MISS" if not matches else "MODEL_REPLAY_AMBIGUOUS")
         value, event = ModelCassette(self.directory).load(matches[0], kwargs["response_schema"])
         self.calls += 1
+        if event.get("error_code"):
+            from .model import ModelError
+            raise ModelError(event["error_code"])
         return SimpleNamespace(value=value, model=event.get("actual_model"), attempts=0)
 
 
@@ -83,7 +86,7 @@ def replay_stage(run_dir: str | Path, stage: str, *, revision: int = 0) -> dict[
         inputs = boundary["inputs"]
         if boundary.get("inputs_sha256") != digest(inputs) or boundary.get("stage") != stage:
             raise FrozenError("FROZEN_STAGE_INTEGRITY_MISMATCH")
-    elif revision:
+    else:
         raise FrozenError("FROZEN_STAGE_INPUT_MISSING:" + str(boundary_path.name))
     def read(name: str) -> Any:
         if name in inputs:
@@ -106,7 +109,7 @@ def replay_stage(run_dir: str | Path, stage: str, *, revision: int = 0) -> dict[
     elif stage == "applicability":
         value = {item.obligation_id: item.applicability.as_dict() for item in obligations.records}
     elif stage == "obligations":
-        project(obligations, read("report"))
+        project(obligations, read("report"), scope_gaps=set(inputs.get("scope_gaps") or []))
         value = obligations.as_dict()
     else:
         allowed = {item.name for item in fields(Target)}
@@ -135,12 +138,24 @@ def replay_stage(run_dir: str | Path, stage: str, *, revision: int = 0) -> dict[
             actual = inspect_docx(artifact, full=True)
             edits = read("plan").get("edits") or []
             value = replay_claims(edits, original, actual, rules_by_id=rules, facts=facts,
-                                  components_by_rule={key: claim_components_for_rules([key], rules) for key in rules},
+                                  components_by_rule=inputs["components_by_rule"],
+                                  required_terms_by_rule=inputs["required_terms_by_rule"],
+                                  target_rules=inputs["target_rules"],
                                   targets_by_id={target.target_id: target.as_dict() for target in targets},
                                   obligations=obligations)
             residuals = check_delete_residuals(rules, actual, edits=edits, original=original,
                 targets=[target.as_dict() for target in targets], facts=facts, obligations=obligations)
             value["failures"].extend(residuals)
             value["verified"] = bool(value["verified"] and not residuals)
+    import subprocess
+    try:
+        replay_head = subprocess.check_output(["git", "rev-parse", "HEAD"],
+            cwd=Path(__file__).resolve().parents[1], text=True).strip()
+    except (OSError, subprocess.CalledProcessError):
+        replay_head = None
+    binding_path = directory / "validation-config.json"
+    binding = json.loads(binding_path.read_text()) if binding_path.is_file() else {}
     return {"stage": stage, "run_dir": str(Path(run_dir)), "value": value,
+            "recorded_head": binding.get("head"), "replay_head": replay_head,
+            "same_head": binding.get("head") == replay_head if binding else None,
             "model_calls": 0, "cassette_replays": gateway.calls, "replayed": True}

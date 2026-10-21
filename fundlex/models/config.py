@@ -234,10 +234,15 @@ def load_role_config() -> tuple[dict[str, ModelRoleConfig], dict[str, str]]:
                 retries=_int_env("FUNDLEX_MODEL_RETRIES", primary.retries),
             )
     primary = _apply_env(primary, "PRIMARY")
+    replay = _env("FUNDLEX_MODEL_MODE") == "replay"
+    if replay:
+        primary = replace(primary, base_url="http://localhost", api_key="replay-unused")
 
     review_entry = models.get("review") or {}
     review = _merge_endpoint(review_entry, role="review", inherited=primary)
     review = _apply_env(review, "REVIEW")
+    if replay:
+        review = replace(review, base_url="http://localhost", api_key="replay-unused")
     if not review.configured:
         # A partially configured review role must not silently borrow a different
         # endpoint: inherit only when nothing review-specific was supplied.
