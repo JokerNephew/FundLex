@@ -174,8 +174,8 @@ def test_claim_replay_checks_an_applicable_operation_with_no_edit():
     result = replay_claims([], before, after, rules_by_id={
         "G03": guide["groups"][0]}, obligations=ledger)
     assert result["verified"] is False
-    assert result["obligations"]["G03:B1:O1"]["state"] == "FAIL"
-    assert result["failures"][0]["code"] == "CLAIM_PLANNED_EFFECT_MISSING"
+    assert result["obligations"]["G03:B1:O1"]["state"] == "OPEN"
+    assert result["failures"][0]["code"] == "CLAIM_OPERATION_UNPROVEN"
 
 
 def test_sweep_removal_unconfirmed_yields_to_artifact_proof():
@@ -184,7 +184,13 @@ def test_sweep_removal_unconfirmed_yields_to_artifact_proof():
         spec=SimpleNamespace(operation_id="G17:0", rule_id="G17", operation_index=0),
         obligation_id="G17:B1:O1")])
     replay = {"obligations": {"G17:B1:O1": {
-        "state": "PASS", "artifact_status": "VERIFIED_ABSENT"}}}
+        "state": "PASS", "artifact_status": "VERIFIED_ABSENT",
+        "operation_id": "G17:0", "obligation_id": "G17:B1:O1",
+        "sites": ["p0"], "evidence": [{"location": "p0", "site_id": "p0",
+                                           "operation_id": "G17:0",
+                                           "obligation_id": "G17:B1:O1",
+                                           "proof_kind": "site_delete"}],
+        "site_effects": [{"state": "PASS"}]}}}
     findings = [{"status": "pending", "finding_id": "SW1", "rule_id": "G17",
                  "location": "p0", "issue": "unaddressed_requirement",
                  "quote": "旧句"}]

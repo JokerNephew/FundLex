@@ -121,6 +121,7 @@ def guide_rules() -> list[dict]:
             "rule_id": "G14", "title": "促销费率调整句", "section_hint": "基金份额的申购与赎回",
             "requirement": "把促销费率句替换为多类别新文。",
             "operations": [{"op": "replace", "old_text": "基金管理人可以适当调低基金申购费率和赎回费率。",
+                            "old_text_variants": ["基金管理人可以适当调低基金申购费率、赎回费率和转换费率。"],
                             "new_text": "基金管理人可以适当调低基金申购费率和销售服务费率。",
                             "condition": {"kind": "class_count", "value": "multiple"}}],
             "old_text_variants": ["基金管理人可以适当调低基金申购费率、赎回费率和转换费率。"],
@@ -186,6 +187,7 @@ class ScriptedGateway:
 
 def facts_response(context: str) -> dict:
     return {
+        "class_set_quote": CLASS_DEFINITION.split("。")[0] + "。",
         "fund_type": {"value": "open_regular", "quote": "某某灵活配置混合型证券投资基金基金合同", "basis": "标题"},
         "classes": [
             {"name": "A", "subscription_fee": True, "service_fee": False, "current": True,
@@ -266,7 +268,9 @@ def test_class_label_and_slots():
                            ClassFact("C", False, True, True, None, ""),
                            ClassFact("D", True, False, True, None, "")),
                   floating_management_fee=False, floating_quote="", floating_basis="",
-                  notes="", quotes_verified={}, problems=())
+                  notes="", quotes_verified={"floating": True}, problems=(),
+                  fact_status={"share_class_structure": "VERIFIED", "subscription_fee_group": "VERIFIED",
+                               "service_fee_group": "VERIFIED"})
     assert class_label(facts.subscription_group) == "A类、D类基金份额"
     text, issues = instantiate_slots("本基金A类基金份额与C类基金份额。", facts)
     assert text == "本基金A类、D类基金份额与C类基金份额。" and not issues
@@ -282,7 +286,10 @@ def test_class_name_suffixes_and_example_tokens():
                   classes=(ClassFact("A类基金份额", True, False, True, None, ""),
                            ClassFact("C类基金份额", False, True, True, None, "")),
                   floating_management_fee=False, floating_quote="", floating_basis="",
-                  notes="", quotes_verified={}, problems=())
+                  notes="", quotes_verified={}, problems=(),
+                  fact_status={"share_class_structure": "VERIFIED",
+                               "subscription_fee_group": "VERIFIED", "service_fee_group": "VERIFIED"},
+                  set_complete_verified=True)
     assert class_label(facts.subscription_group) == "A类基金份额"
     assert class_label(facts.service_group) == "C类基金份额"
     text, issues = instantiate_slots(
@@ -562,7 +569,9 @@ def _facts() -> object:
                           ClassFact(name="C类基金份额", subscription_fee=False, service_fee=True,
                                     current=True, rate="0.4%", quote="C类")),
                  floating_management_fee=False, floating_quote="本基金合同经中国证监会核准。",
-                 floating_basis="无浮动安排", notes="", quotes_verified={}, problems=())
+                 floating_basis="无浮动安排", notes="", quotes_verified={"floating": True}, problems=(),
+                 fact_status={"share_class_structure": "VERIFIED", "subscription_fee_group": "VERIFIED",
+                              "service_fee_group": "VERIFIED"})
 
 
 def test_survey_finds_summary_counterpart_and_satisfied_targets(tmp_path: Path):

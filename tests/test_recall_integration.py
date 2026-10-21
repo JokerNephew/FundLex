@@ -26,7 +26,7 @@ from fundlex.tasks import TaskStore
 
 from test_guide import (GUIDE_PARAGRAPHS, ScriptedGateway, build_docx, clean_verification, valid_parsed)
 from test_recall_core import build_contract, guide_rules
-from test_recall_pipeline import GUIDE_SHA, PipelineGateway, base_responses
+from test_recall_pipeline import GUIDE_SHA, PipelineGateway, base_responses, guide_document
 
 OWNER = "recall-user"
 HEADERS = {"X-FundLex-User": OWNER}
@@ -221,13 +221,14 @@ def test_worker_runs_real_recall_pipeline_with_bound_guide(tmp_path, monkeypatch
     store = RunStore(tmp_path / "state")
     guide_store.ensure_builtin_guide(store)
     version = guide_store.create_custom_version(store, OWNER, "guide.docx", b"placeholder")
-    document = {"schema_version": GUIDE_SCHEMA_VERSION, "parser_version": "guide-parse-1",
-                "groups": guide_rules(), "document_sha256": GUIDE_SHA,
-                "prompt_versions": {"guide_parse": "guide_parse_v1", "guide_verify": "guide_verify_v1"},
-                "validation": {"errors": [], "warnings": [], "coverage_gaps": []}}
+    from fundlex.guide import certify_guide_document
+    document = guide_document()
+    document["source_sha256"] = version["source_sha256"]
+    document = certify_guide_document(document, source_sha256=version["source_sha256"])
+    approved_sha = document["document_sha256"]
     guide_store.finish_guide_job(store, version["job_id"], document=document)
     parsed = guide_store.get_version(store, OWNER, version["id"])
-    assert parsed["rules_sha256"] == GUIDE_SHA
+    assert parsed["rules_sha256"] == approved_sha
     tasks, task_id, batch_id, document_id = submit_task(
         store, data=data, guide_version_id=version["id"], guide_rules_sha256=parsed["rules_sha256"])
     gateway = PipelineGateway(base_responses())
@@ -240,11 +241,11 @@ def test_worker_runs_real_recall_pipeline_with_bound_guide(tmp_path, monkeypatch
     report = store.get_report(OWNER, batch_id, document_id)
     assert report["engine_id"] == "recall_first" and report["schema_version"] == "3"
     assert report["output_validation"]["kind"] == "recall_validated_edits"
-    assert report["guide"]["document_sha256"] == GUIDE_SHA
+    assert report["guide"]["document_sha256"] == approved_sha
     final_path, _ = store.get_artifact(OWNER, batch_id, document_id, "final")
     final_text = "\n".join(paragraph.text for paragraph in Document(final_path).paragraphs)
     assert "调低销售服务费率" in final_text
-    assert gateway.bindings and gateway.bindings[0][1]["guide_document_sha256"] == GUIDE_SHA
+    assert gateway.bindings and gateway.bindings[0][1]["guide_document_sha256"] == approved_sha
 
 
 def test_worker_parses_queued_guide_job(tmp_path, monkeypatch):

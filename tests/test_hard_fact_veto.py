@@ -30,7 +30,7 @@ def facts(classes, floating=False):
         fund_type="equity", fund_type_quote="", fund_type_basis="",
         classes=tuple(classes), floating_management_fee=floating,
         floating_quote="", floating_basis="", notes="",
-        quotes_verified={}, problems=(),
+        quotes_verified={}, problems=(), fact_status={"share_class_structure":"VERIFIED", "subscription_fee_group":"VERIFIED", "service_fee_group":"VERIFIED"}, set_complete_verified=True,
     )
 
 
@@ -101,18 +101,27 @@ def test_weak_rule_signals_empty_for_stable_ac_product():
     assert "class_substitution_noop" not in signals
 
 
-def test_rule_already_satisfied_no_longer_drops_on_semantic_group():
-    """A model finding is not discarded merely because the product lacks the class group."""
-    from fundlex.recall_pipeline import _rule_already_satisfied
-    # A/Y product where the paragraph is the class definition (topic present), and the
-    # guide asks to swap C类 wording the product cannot carry. Previously
-    # slot_group_missing dropped this; now it must be kept.
+def test_sweep_keeps_class_candidate_until_operation_site_proof(tmp_path):
+    """Even a letter-stable product needs the shared artifact proof at this site."""
+    from types import SimpleNamespace
+    from docx import Document
+    from fundlex.docx import inspect_docx
+    from fundlex.recall_pipeline import _Chunk, _sweep_batch
     text = ("本基金将基金份额分为A类和Y类不同的类别。在投资者申购基金份额时收取申购费用，"
             "而不计提销售服务费的，称为A类基金份额。")
-    assert _rule_already_satisfied(G02_RULE, AY_FACTS, text, "") is False
-
-
-def test_rule_already_satisfied_still_drops_hard_fact_noop():
-    from fundlex.recall_pipeline import _rule_already_satisfied
-    text = "在投资者认购、申购基金时收取认购、申购费用而不计提销售服务费的，称为A类基金份额"
-    assert _rule_already_satisfied(G02_RULE, AC_FACTS, text, "") is True
+    path = tmp_path / "classes.docx"
+    document = Document()
+    document.add_paragraph(text)
+    document.save(path)
+    actual = inspect_docx(path, full=True)
+    location = actual.paragraphs[0].location
+    class Gateway:
+        def call(self, **kwargs):
+            return SimpleNamespace(value={"findings": [{"rule_id": "G02", "location": location,
+                "quote": text, "issue": "unaddressed_requirement"}]})
+    for profile in (AY_FACTS, AC_FACTS):
+        result = _sweep_batch(Gateway(), {"G02": G02_RULE}, "class substitution",
+            [_Chunk("C1", (location,), f"[{location}] {text}")], actual,
+            round_number=0, counter=[0], facts=profile)
+        assert len(result["findings"]) == 1
+        assert not result["dropped"]

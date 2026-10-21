@@ -95,6 +95,7 @@ TASK_TYPES = frozenset({
     'recall_facts','recall_scope','recall_inventory','recall_compose','recall_verify',
     'recall_audit','recall_sweep','recall_arbitrate','recall_fact_recover',
     'recall_applicability','recall_locate','recall_joint_compose','recall_compose_review',
+    'recall_qualification_review',
 })
 # Task types that bind quotes to labelled source roles inside their own module;
 # the generic "quote must be a literal substring of the context" check is
@@ -104,7 +105,7 @@ QUOTE_SELF_VALIDATED_TASKS = frozenset({
     'guide_parse','guide_verify','recall_facts','recall_scope','recall_inventory',
     'recall_compose','recall_verify','recall_audit','recall_sweep','recall_arbitrate',
     'recall_fact_recover','recall_applicability','recall_locate',
-    'recall_joint_compose','recall_compose_review',
+    'recall_joint_compose','recall_compose_review','recall_qualification_review',
 })
 
 @dataclass(frozen=True)
@@ -127,10 +128,24 @@ class ModelGateway:
                  max_completion_tokens: int = 1500, timeout_s: float = 45.0,
                  retries: int = 1, client: httpx.Client | None = None,
                  budget: ModelBudget | None = None, provider: str = '', request_options: dict | None = None,
-                 extra_headers: dict | None = None, user_agent: str = 'fundlex/0.3.0'):
-        if not base_url or not model or not api_key: raise ModelError('MODEL_CONFIG_MISSING')
-        if not base_url.startswith(('https://','http://127.0.0.1','http://localhost')):
+                 extra_headers: dict | None = None, user_agent: str = 'fundlex/0.3.0',
+                 mode: str | None = None, cassette_dir: str | Path | None = None):
+        self.mode = mode or os.environ.get('FUNDLEX_MODEL_MODE', 'live')
+        if self.mode not in {'live', 'record', 'replay'}:
+            raise ModelError('MODEL_MODE_INVALID')
+        if not model or (self.mode != 'replay' and (not base_url or not api_key)):
+            raise ModelError('MODEL_CONFIG_MISSING')
+        if self.mode != 'replay' and not base_url.startswith(('https://','http://127.0.0.1','http://localhost')):
             raise ModelError('MODEL_ENDPOINT_INVALID')
+        self.cassette = None
+        if self.mode in {'record', 'replay'}:
+            from .frozen import ModelCassette
+            directory = cassette_dir or os.environ.get('FUNDLEX_MODEL_CASSETTE_DIR')
+            if not directory and os.environ.get('FUNDLEX_FROZEN_RUN_DIR'):
+                directory = Path(os.environ['FUNDLEX_FROZEN_RUN_DIR']) / 'model_calls'
+            if not directory:
+                raise ModelError('MODEL_CASSETTE_CONFIG_MISSING')
+            self.cassette = ModelCassette(Path(directory))
         self.base_url,self.model,self.api_key = base_url.rstrip('/'),model,api_key
         self.provider,self.budget = provider,budget
         self.request_options=request_options or {}
@@ -145,7 +160,8 @@ class ModelGateway:
         self.max_context_chars,self.max_calls = max_context_chars,max_calls
         self.max_completion_tokens,self.timeout_s,self.retries = max_completion_tokens,timeout_s,retries
         self.calls = 0
-        self._client = client or httpx.Client(timeout=httpx.Timeout(timeout_s,connect=min(10,timeout_s)))
+        self._client = client or (None if self.mode == 'replay' else
+            httpx.Client(timeout=httpx.Timeout(timeout_s,connect=min(10,timeout_s))))
         self.events: list[dict] = []
         self.checkpoints = None
         # Audit rules can run concurrently.  The lock protects the logical-call counter,
@@ -161,13 +177,20 @@ class ModelGateway:
         transport.update(user_agent=self.user_agent, extra_header_names=sorted(self.extra_headers))
         self.checkpoints = ModelCheckpoints(directory, {**dependencies, 'transport': transport})
     def close(self):
-        self._client.close()
+        if self._client is not None:
+            self._client.close()
     def __enter__(self):
         return self
     def __exit__(self,*_):
         self.close()
     @classmethod
     def from_env(cls) -> 'ModelGateway':
+        if os.environ.get('FUNDLEX_MODEL_MODE') == 'replay':
+            return cls(base_url='', model=os.environ.get('LLM_MODEL', ''), api_key='',
+                       mode='replay', max_context_chars=int(os.environ.get('FUNDLEX_MODEL_CONTEXT_CHARS','12000')),
+                       max_calls=int(os.environ.get('FUNDLEX_MODEL_MAX_CALLS','16')),
+                       max_completion_tokens=int(os.environ.get('FUNDLEX_MODEL_MAX_OUTPUT_TOKENS','1500')),
+                       request_options=json.loads(os.environ.get('FUNDLEX_MODEL_REQUEST_OPTIONS_JSON','{}')))
         data_dir = local_data_dir()
         try:
             extra_headers = json.loads(os.environ.get('FUNDLEX_MODEL_EXTRA_HEADERS_JSON', '{}'))
@@ -194,7 +217,8 @@ class ModelGateway:
             events = list(self.events)
             calls = self.calls
             invalidations = self.checkpoints.invalidations if self.checkpoints else 0
-        return {'logical_calls':calls,'http_attempts':sum(not e.get('reused_checkpoint') for e in events),
+        return {'logical_calls':calls,'http_attempts':sum(not (e.get('reused_checkpoint') or e.get('replayed')) for e in events),
+            'cassette_replays':sum(bool(e.get('replayed')) for e in events),
             'checkpoint_reuses':sum(bool(e.get('reused_checkpoint')) for e in events),
             'checkpoint_invalidations':invalidations,
             'prompt_tokens':sum(e.get('prompt_tokens') or 0 for e in events),
@@ -217,7 +241,26 @@ class ModelGateway:
             self.calls += 1
         query = {'task_type':task_type,'bounded_context_sha256':hashlib.sha256(bounded_context.encode()).hexdigest(),
                  'response_schema':response_schema,'instruction':instruction,'prompt_version':prompt_version}
-        if self.checkpoints:
+        cassette_request = {'task_type':task_type, 'prompt_version':prompt_version,
+            'configured_model':self.model, 'context_sha256':query['bounded_context_sha256'],
+            'request':{'bounded_context':bounded_context, 'instruction':instruction,
+                       'response_schema':response_schema, 'request_options':self.request_options,
+                       'max_completion_tokens':self.max_completion_tokens}}
+        if self.mode == 'replay':
+            from .frozen import FrozenError
+            try:
+                value, original = self.cassette.load(cassette_request, response_schema)
+            except (FrozenError, OSError) as exc:
+                raise ModelError(str(exc) if isinstance(exc, FrozenError) else
+                                 'MODEL_CASSETTE_UNAVAILABLE', self.metrics()) from None
+            event = {**original, 'replayed':True, 'attempt':0, 'latency_ms':0,
+                     'prompt_tokens':0, 'completion_tokens':0, 'total_tokens':0,
+                     'estimated_cost_usd':0, 'error_code':None}
+            with self._state_lock:
+                self.events.append(event)
+            return ModelResult(value, str(original.get('actual_model') or self.model),
+                0, 0, 0, 0, None, 0, 0, task_type, query['bounded_context_sha256'])
+        if self.checkpoints and self.mode == 'live':
             with self._checkpoint_lock:
                 cached = self.checkpoints.load(query, bounded_context, response_schema)
             if cached:
@@ -332,6 +375,13 @@ class ModelGateway:
                     time.sleep(min(2**attempt,2))
                     continue
                 raise ModelError(event['error_code'],self.metrics())
+            if self.mode == 'record':
+                from .frozen import FrozenError
+                try:
+                    self.cassette.save(cassette_request, value, event)
+                except (FrozenError, OSError) as exc:
+                    raise ModelError(str(exc) if isinstance(exc, FrozenError) else
+                                     'MODEL_CASSETTE_UNAVAILABLE', self.metrics()) from None
             if self.checkpoints and isinstance(value, dict) and value.get('fund_type') != 'unknown':
                 try:
                     with self._checkpoint_lock:

@@ -183,7 +183,7 @@ class ObligationLedger:
 #: Condition kinds imply the fact that must be VERIFIED before either branch can run.
 _CONDITION_FACTS = {
     "class_count": ("share_class_structure",),
-    "has_service_fee": ("share_class_structure",),
+    "has_service_fee": ("share_class_structure", "subscription_fee_group", "service_fee_group"),
     "is_floating_fee": ("floating_management_fee",),
 }
 
@@ -237,31 +237,24 @@ def compile_obligations(guide_document: Mapping[str, Any]) -> ObligationLedger:
             rule_groups.append(branch_id)
             entries = branch_operations[key]
             branch_kind = GroupKind.ALL_OF if len(entries) > 1 else GroupKind.INDEPENDENT
-            # Operations with the same replacement text and the same condition are
-            # alternative historical wordings (G11/G12/G14 old_text variants), not
-            # independent obligations: only the variant actually present in the
-            # contract must be handled (plan §6.3, §27).
-            variant_groups: dict[tuple[str, str], list[tuple[int, Mapping[str, Any]]]] = {}
-            for index, operation in entries:
-                identity = (str(operation.get("op") or ""),
-                            re.sub(r"\s+", "", str(operation.get("new_text") or "")))
-                variant_groups.setdefault(identity, []).append((index, operation))
             one_of_by_index: dict[int, str] = {}
-            for group_number, group in enumerate(variant_groups.values(), start=1):
-                if len(group) < 2:
-                    continue
-                if len({str(op.get("old_text") or "") for _index, op in group}) < 2:
-                    continue
-                group_id = f"{rule_id}:{branch_id}:ONE{group_number}"
-                one_of_seen = True
-                for index, _operation in group:
+            for index, operation in entries:
+                # ONLY certified, explicit historical-alternative metadata creates
+                # ONE_OF. Wording lists, equal replacements and locations are not
+                # business relationships (G05 filing deletion stays independent).
+                group_id = str(operation.get("one_of_group") or "")
+                if group_id:
+                    if operation.get("group_kind") != GroupKind.ONE_OF.value:
+                        raise ValueError("GUIDE_ONE_OF_SEMANTICS_INVALID")
+                    one_of_seen = True
                     one_of_by_index[index] = group_id
             for position, (index, operation) in enumerate(entries, start=1):
                 obligation_id = f"{rule_id}:{branch_id}:O{position}"
-                alias = f"{rule_id}:{index}"
+                alias = str(operation.get("operation_id") or f"{rule_id}:{index}")
+                if alias != f"{rule_id}:{index}" or alias in aliases:
+                    raise ValueError("GUIDE_OPERATION_ID_INVALID")
                 condition = operation.get("condition") or {"kind": "none"}
-                variant_group = (one_of_by_index.get(index) or
-                                 (f"{rule_id}:{branch_id}:VARIANTS" if variants else ""))
+                variant_group = one_of_by_index.get(index, "")
                 spec_item = ObligationSpec(
                     obligation_id=obligation_id,
                     rule_id=rule_id,
@@ -269,7 +262,7 @@ def compile_obligations(guide_document: Mapping[str, Any]) -> ObligationLedger:
                     operation_index=index,
                     branch_id=branch_id,
                     group_kind=(GroupKind.ONE_OF if one_of_by_index.get(index)
-                                else branch_kind),
+                                else GroupKind(operation.get("group_kind") or branch_kind)),
                     op=str(operation.get("op") or ""),
                     condition=condition,
                     old_text=str(operation.get("old_text") or ""),
@@ -277,7 +270,11 @@ def compile_obligations(guide_document: Mapping[str, Any]) -> ObligationLedger:
                     requirement=str(rule.get("requirement") or ""),
                     expected_site=str(rule.get("section_hint") or ""),
                     required_facts=_required_facts(condition, spec.required_fact_status),
-                    alternatives=variants,
+                    alternatives=tuple(dict.fromkeys(
+                        [str(value) for value in operation.get("old_text_variants") or []]
+                        + [str(other.get("old_text") or "") for _, other in entries
+                           if variant_group and other.get("one_of_group") == variant_group
+                           and other.get("old_text")])),
                     one_of_group=variant_group,
                 )
                 records.append(ObligationRecord(
@@ -295,7 +292,7 @@ def compile_obligations(guide_document: Mapping[str, Any]) -> ObligationLedger:
                 aliases[obligation_id] = obligation_id
         if len(branch_order) > 1:
             group_kind = GroupKind.BRANCH
-        elif variants or one_of_seen:
+        elif one_of_seen:
             group_kind = GroupKind.ONE_OF
         elif any(len(items) > 1 for items in branch_operations.values()):
             group_kind = GroupKind.ALL_OF
@@ -333,7 +330,16 @@ def apply_facts(ledger: ObligationLedger, facts: Any, *,
                 inspection: Any = None, resolve_unknown: bool = False) -> None:
     """Attach tri-state applicability; optionally recover UNKNOWN via the models."""
     for item in ledger.records:
-        if resolve_unknown and gateway is not None and inspection is not None:
+        missing = [name for name in item.spec.required_facts
+                   if (not facts.quotes_verified.get("floating", False)
+                       if name == "floating_management_fee"
+                       else facts.status_of(name) != "VERIFIED")]
+        if missing:
+            decision = ApplicabilityDecision(
+                "UNKNOWN", condition=item.spec.condition, rule_id=item.spec.rule_id,
+                operation_id=item.spec.operation_id,
+                reason="FACT_PREREQUISITE_UNVERIFIED:" + ",".join(missing))
+        elif resolve_unknown and gateway is not None and inspection is not None:
             decision = __import__("fundlex.applicability", fromlist=["resolve"]).resolve(
                 item.spec.condition, facts, gateway=gateway, evidence=evidence,
                 inspection=inspection, rule_id=item.spec.rule_id,
@@ -350,6 +356,10 @@ def apply_facts(ledger: ObligationLedger, facts: Any, *,
         elif decision.status == "UNKNOWN":
             item.completion = "UNRESOLVED"
             item.completion_evidence = f"applicability_unknown:{decision.reason}"
+        else:
+            # A newly TRUE obligation cannot retain an old FALSE completion.
+            item.completion = "UNRESOLVED"
+            item.completion_evidence = "OPEN_OBLIGATION:applicability_true"
 
 
 def _audit_verdicts(node: Any, depth: int = 0) -> Iterable[tuple[str, str]]:
@@ -399,467 +409,81 @@ def _target_covers_operation(target: Mapping[str, Any], record: ObligationRecord
             or record.spec.obligation_id in operations)
 
 
-def _satisfied_rules(report: Mapping[str, Any]) -> set[str]:
-    """Rules the deterministic filters proved already satisfied (no edit needed)."""
-    rules: set[str] = set()
-    for round_ledger in (report.get("sweep") or {}).get("rounds") or []:
-        for dropped in round_ledger.get("dropped") or []:
-            if isinstance(dropped, Mapping) and \
-                    str(dropped.get("code") or "") in {"SWEEP_ALREADY_SATISFIED",
-                                                       "SWEEP_RULE_NOT_APPLICABLE"}:
-                rule_id = str(dropped.get("rule_id") or "")
-                if rule_id:
-                    rules.add(rule_id)
-    return rules
-
-
-def _satisfied_operations(report: Mapping[str, Any]) -> set[str]:
-    """Operation keys for which the contract already carries the policy text."""
-    satisfied: set[str] = set()
-    for entry in report.get("survey") or []:
-        if not isinstance(entry, Mapping):
-            continue
-        for record in entry.get("records") or []:
-            if not isinstance(record, Mapping):
-                continue
-            if str(record.get("operation") or "") == "satisfied":
-                satisfied.update(str(key) for key in record.get("operation_keys") or [])
-    for target in _iter_targets(report):
-        if str(target.get("state") or "") == "satisfied":
-            satisfied.update(str(key) for key in target.get("operations") or [])
-    return satisfied
-
-
 def project(ledger: ObligationLedger, report: Mapping[str, Any], *,
             rules_by_id: Mapping[str, Mapping[str, Any]] | None = None,
             scoped_rules: set[str] | None = None,
             scope_gaps: set[str] | None = None,
             artifact_text: str | None = None) -> None:
-    """Derive each obligation's completion from the *actual* run state."""
+    """Project only per-obligation artifact proof; scope/target absence never waives TRUE."""
+    from .generation.effects import effect_proof_passed
     targets = _iter_targets(report)
-    plan_by_target = _plan_by_target(report)
-    verdicts: dict[str, str] = {}
-    for target_id, verdict in _audit_verdicts(report.get("audit")):
-        verdicts[target_id] = verdict
+    plans = _plan_by_target(report)
     replay = report.get("artifact_claim_replay") or {}
-    replay_obligations = (replay.get("obligations") or {}
-                          if isinstance(replay, Mapping) else {})
-    if not isinstance(replay_obligations, Mapping):
-        replay_obligations = {}
-    replay_failures = {(str(item.get("rule_id") or ""), str(item.get("location") or ""))
-                       for item in replay.get("failures") or [] if isinstance(item, Mapping)}
-    unresolved_items = [item for item in (report.get("unresolved") or [])
-                        if isinstance(item, Mapping)]
-    satisfied_operations = _satisfied_operations(report)
-    satisfied_rules = _satisfied_rules(report)
-    import re as _re
-    authorized_new = _re.sub(r"\s+", "", "".join(
-        str(record.spec.new_text or "") for record in ledger.records))
-    if scoped_rules is None:
-        scope = report.get("scope_mapping")
-        if isinstance(scope, Mapping) and isinstance(scope.get("mappings"), Mapping):
-            scoped_rules = {str(rule_id) for rule_id, ids in scope["mappings"].items() if ids}
-        # No scope information at all: do not invent a document-level exclusion.
-
-    for record in ledger.records:
-        item = record
+    proofs = replay.get("obligations") or {}
+    failures = replay.get("failures") or []
+    scope = report.get("scope_mapping") or {}
+    if scoped_rules is None and isinstance(scope.get("mappings"), Mapping):
+        scoped_rules = {str(key) for key, locations in scope["mappings"].items() if locations}
+    for item in ledger.records:
+        item.edit_ids = ()
+        item.artifact_evidence = []
         if item.applicability.status == "FALSE":
             item.completion = "NOT_APPLICABLE"
-            item.completion_evidence = item.completion_evidence or "applicability_false"
-            item.statuses.update(target="NOT_REQUIRED", generation="NOT_REQUIRED",
-                                 validation="NOT_REQUIRED", review="NOT_REQUIRED",
-                                 artifact="NOT_REQUIRED", audit="NOT_REQUIRED",
-                                 sweep="NOT_REQUIRED")
-            continue
-        if item.applicability.status == "UNKNOWN":
-            item.completion = "UNRESOLVED"
-            item.completion_evidence = item.completion_evidence or "applicability_unknown"
-            item.statuses["validation"] = "BLOCKED"
-            continue
-
-        if artifact_text is not None and item.spec.one_of_group:
-            import re as _re
-            probe = _re.sub(r"\s+", "", item.spec.old_text)
-            if probe and probe not in authorized_new and \
-                    probe in _re.sub(r"\s+", "", artifact_text):
-                # The alternative's own wording still exists in the artifact and is
-                # not part of any authorized new policy text: a different sibling's
-                # success cannot close it (plan §6.3).
-                item.completion = "UNRESOLVED"
-                item.completion_evidence = "ONE_OF_VARIANT_RESIDUAL"
-                item.statuses["validation"] = "FAIL"
-                continue
-
-        relevant = [target for target in targets
-                    if str(target.get("rule_id") or "") == item.spec.rule_id
-                    and not target.get("out_of_scope")
-                    and _target_covers_operation(target, item)]
-        relevant_ids = tuple(str(target.get("target_id") or "") for target in relevant)
-        item.targets = relevant_ids
-        item.statuses["target"] = "FOUND" if relevant else "MISSING"
-
-        if not relevant:
-            # Claim Replay may have closed the operation at its own site even when the
-            # planner's target was judged out of scope (for example a delete whose old
-            # wording is already absent).  Its operation-scoped PASS is authoritative.
-            replay_item = replay_obligations.get(item.obligation_id)
-            if isinstance(replay_item, Mapping) and replay_item.get("state") == "PASS" \
-                    and str(replay_item.get("artifact_status") or "") in {
-                        "ALREADY_SATISFIED", "VERIFIED_ABSENT",
-                        "EXPECTED_EFFECT_PRESENT", "NOT_REQUIRED",
-                        "ALTERNATIVE_NOT_SELECTED"}:
-                item.completion = ("ARTIFACT_VERIFIED"
-                                   if replay_item.get("artifact_status") ==
-                                   "EXPECTED_EFFECT_PRESENT" else "ALREADY_SATISFIED")
-                item.completion_evidence = "claim_replay:" + str(
-                    replay_item.get("artifact_status"))
-                item.statuses.update(target="SATISFIED", generation="NOT_REQUIRED",
-                                     validation="PASS", artifact="VERIFIED")
-                item.edit_ids = tuple(str(value) for value in
-                                      (replay_item.get("edit_ids") or []) if value)
-                item.artifact_evidence = [dict(value) for value in
-                                          (replay_item.get("evidence") or [])
-                                          if isinstance(value, Mapping)]
-                continue
-            rule_absent_targets = [target for target in targets
-                                   if str(target.get("rule_id") or "") == item.spec.rule_id
-                                   and str(target.get("state") or "") == "absent"
-                                   and not target.get("out_of_scope")]
-            rule_satisfied_targets = [target for target in targets
-                                      if str(target.get("rule_id") or "") == item.spec.rule_id
-                                      and str(target.get("state") or "") == "satisfied"
-                                      and not target.get("out_of_scope")]
-            if rule_satisfied_targets and artifact_text is not None and \
-                    item.spec.op in {"delete", "replace"}:
-                import re as _re
-                compact_artifact = _re.sub(r"\s+", "", artifact_text)
-                probes = [_re.sub(r"\s+", "", _re.sub(
-                              r"^[A-ZＡ-Ｚ]\s*类(?:基金份额)?的?", "", sentence).strip())
-                          for sentence in _re.split(r"(?<=[。；;])", item.spec.old_text)]
-                if any(probe and probe in compact_artifact for probe in probes):
-                    item.completion = "UNRESOLVED"
-                    item.completion_evidence = "SATISFIED_TARGET_RESIDUAL_DELETE"
-                    item.statuses.update(target="SATISFIED", generation="FAIL",
-                                         validation="FAIL")
-                    continue
-            if rule_absent_targets and artifact_text is not None:
-                # An "absent" verdict is coverage only for the operation whose reference
-                # is genuinely absent.  It is not a rule-wide waiver.
-                import re as _re
-                compact_artifact = _re.sub(r"\s+", "", artifact_text)
-                probes: list[str] = []
-                for sentence in _re.split(r"(?<=[。；;])", item.spec.old_text):
-                    probe = _re.sub(r"^[A-ZＡ-Ｚ]\s*类(?:基金份额)?的?", "",
-                                    sentence).strip()
-                    if len(_re.sub(r"\s+", "", probe)) >= 8:
-                        probes.append(_re.sub(r"\s+", "", probe))
-                residual = any(probe in compact_artifact for probe in probes)
-                if item.spec.op in {"delete", "replace"} and residual:
-                    item.completion = "UNRESOLVED"
-                    item.completion_evidence = "ABSENT_TARGET_RESIDUAL_OLD_TEXT"
-                    item.statuses.update(target="ABSENT", generation="FAIL",
-                                         validation="FAIL")
-                    continue
-                if item.spec.op == "delete":
-                    item.completion = "NOT_APPLICABLE"
-                    item.completion_evidence = "target_absent_reference_absent"
-                    item.statuses.update(target="ABSENT", generation="NOT_REQUIRED",
-                                         validation="PASS", audit="NOT_REQUIRED")
-                    continue
-                if item.spec.op == "replace":
-                    new_compact = _re.sub(r"\s+", "", item.spec.new_text)
-                    if new_compact and new_compact in compact_artifact:
-                        item.completion = "ALREADY_SATISFIED"
-                        item.completion_evidence = "target_absent_new_effect_present"
-                        item.statuses.update(target="ABSENT", generation="NOT_REQUIRED",
-                                             validation="PASS", audit="NOT_REQUIRED")
-                        continue
-            if item.spec.rule_id in satisfied_rules:
-                item.completion = "ALREADY_SATISFIED"
-                item.completion_evidence = "deterministic_rule_already_satisfied"
-                item.statuses.update(target="SATISFIED", generation="NOT_REQUIRED",
-                                     validation="PASS", audit="NOT_REQUIRED")
-                continue
-            if item.spec.operation_id in satisfied_operations or \
-                    item.obligation_id in satisfied_operations:
-                if item.spec.op == "delete" and artifact_text is not None:
-                    import re as _re
-                    compact_artifact = _re.sub(r"\s+", "", artifact_text)
-                    probes = [_re.sub(r"\s+", "", _re.sub(
-                                  r"^[A-ZＡ-Ｚ]\s*类(?:基金份额)?的?", "", sentence).strip())
-                              for sentence in _re.split(r"(?<=[。；;])", item.spec.old_text)]
-                    if any(probe and probe in compact_artifact for probe in probes):
-                        item.completion = "UNRESOLVED"
-                        item.completion_evidence = "SURVEY_SATISFIED_RESIDUAL_DELETE"
-                        item.statuses["validation"] = "FAIL"
-                        continue
-                item.completion = "ALREADY_SATISFIED"
-                item.completion_evidence = "survey_new_text_present"
-                item.statuses.update(target="SATISFIED", generation="NOT_REQUIRED",
-                                     validation="PASS", audit="NOT_REQUIRED")
-                continue
-            rule_targets = [entry for entry in targets
-                            if str(entry.get("rule_id") or "") == item.spec.rule_id]
-            rule_plan = [plan_by_target.get(str(entry.get("target_id") or ""))
-                         for entry in rule_targets]
-            rule_plan = [entry for entry in rule_plan if entry]
-            sibling_satisfied = (
-                rule_targets
-                and not any(str(entry.get("state") or "") == "needs_edit"
-                            for entry in rule_targets)
-                and any(str(entry.get("state") or "") == "satisfied"
-                        for entry in rule_targets))
-            plan_satisfied = (
-                rule_plan
-                and all(str(entry.get("status") or "") in {"satisfied", "not_applicable"}
-                        for entry in rule_plan))
-            if item.spec.op in {"replace", "append"} and (sibling_satisfied or plan_satisfied):
-                # One rule-level target/plan already satisfies the clause and no sibling
-                # still needs an edit: the other replacement of the same rule is part of
-                # that satisfied clause, not an open obligation.
-                item.completion = "ALREADY_SATISFIED"
-                item.completion_evidence = ("plan_satisfied" if plan_satisfied
-                                            else "sibling_target_satisfied")
-                item.statuses.update(target="SATISFIED", generation="NOT_REQUIRED",
-                                     validation="PASS", audit="NOT_REQUIRED")
-                continue
-            if item.spec.op == "delete" and artifact_text is not None:
-                import re as _re
-                compact_artifact = _re.sub(r"\s+", "", artifact_text)
-                probes: list[str] = []
-                for sentence in _re.split(r"(?<=[。；;])", item.spec.old_text):
-                    probe = _re.sub(r"^[A-ZＡ-Ｚ]\s*类(?:基金份额)?的?", "",
-                                    sentence).strip()
-                    if len(_re.sub(r"\s+", "", probe)) >= 8:
-                        probes.append(_re.sub(r"\s+", "", probe))
-                if probes and not any(probe in compact_artifact for probe in probes):
-                    item.completion = "NOT_APPLICABLE"
-                    item.completion_evidence = "delete_reference_absent"
-                    item.statuses.update(target="ABSENT", generation="NOT_REQUIRED",
-                                         validation="PASS", audit="NOT_REQUIRED")
-                    continue
-            rule_unresolved = [entry for entry in unresolved_items
-                               if str(entry.get("rule_id") or "") == item.spec.rule_id]
-            if rule_unresolved:
-                item.completion = "UNRESOLVED"
-                item.completion_evidence = ("unresolved:" +
-                                            str(rule_unresolved[0].get("code") or
-                                                rule_unresolved[0].get("reason") or "rule"))
-            elif item.spec.op == "noop":
-                item.completion = "NOT_APPLICABLE"
-                item.completion_evidence = "noop_operation"
-            elif scope_gaps is not None and item.spec.rule_id in scope_gaps:
-                # The model omitted this rule from its scope answer even after a
-                # focused retry. That is a coverage gap, never proof of absence.
-                item.completion = "UNRESOLVED"
-                item.completion_evidence = "SCOPE_RULE_OMITTED"
-            elif scoped_rules is not None and item.spec.rule_id not in scoped_rules:
-                # The scope answer explicitly mapped no section for this rule. That is
-                # a recorded document-level decision, but an append has no old-text
-                # absence proof: an empty mapping cannot close it.
-                if item.spec.op == "append":
-                    item.completion = "UNRESOLVED"
-                    item.completion_evidence = "SCOPE_EMPTY_APPEND_UNPROVEN"
-                else:
-                    item.completion = "NOT_APPLICABLE"
-                    item.completion_evidence = "scope_explicitly_empty"
-            else:
-                # Plan §10.2: applicable but no target is an OPEN obligation.
-                item.completion = "UNRESOLVED"
-                item.completion_evidence = "OPEN_OBLIGATION:applicable_without_target"
-            item.statuses["validation"] = ("PASS" if item.completion == "NOT_APPLICABLE"
-                                           else "FAIL")
-            continue
-
-        states = {str(target.get("state") or "") for target in relevant}
-        replay_item = replay_obligations.get(item.obligation_id)
-        if isinstance(replay_item, Mapping) and replay_item.get("state") == "PASS" \
-                and states <= {"satisfied", "absent", "out_of_scope"}:
-            item.completion = ("ARTIFACT_VERIFIED"
-                               if replay_item.get("artifact_status") ==
-                               "EXPECTED_EFFECT_PRESENT" else "ALREADY_SATISFIED")
-            item.completion_evidence = "claim_replay:" + str(
-                replay_item.get("artifact_status"))
-            item.statuses.update(target="SATISFIED", generation="NOT_REQUIRED",
-                                 validation="PASS", artifact="VERIFIED")
-            item.edit_ids = tuple(str(value) for value in
-                                  (replay_item.get("edit_ids") or []) if value)
-            item.artifact_evidence = [dict(value) for value in
-                                      (replay_item.get("evidence") or [])
-                                      if isinstance(value, Mapping)]
-            continue
-        if states and states <= {"absent", "out_of_scope"}:
-            item.completion = "NOT_APPLICABLE"
-            item.completion_evidence = "target_absent_or_out_of_scope"
-            item.statuses.update(target="ABSENT", generation="NOT_REQUIRED",
-                                 validation="PASS", audit="NOT_REQUIRED")
-            continue
-        if states and states <= {"satisfied"}:
-            if item.spec.op == "delete" and artifact_text is not None:
-                import re as _re
-                compact_artifact = _re.sub(r"\s+", "", artifact_text)
-                probes = [_re.sub(r"\s+", "", _re.sub(
-                              r"^[A-ZＡ-Ｚ]\s*类(?:基金份额)?的?", "", sentence).strip())
-                          for sentence in _re.split(r"(?<=[。；;])", item.spec.old_text)]
-                if any(probe and probe in compact_artifact for probe in probes):
-                    item.completion = "UNRESOLVED"
-                    item.completion_evidence = "SATISFIED_TARGET_RESIDUAL_DELETE"
-                    item.statuses.update(target="SATISFIED", generation="FAIL",
-                                         validation="FAIL")
-                    continue
-            item.completion = "ALREADY_SATISFIED"
-            item.completion_evidence = "target_satisfied"
-            item.statuses.update(target="SATISFIED", generation="NOT_REQUIRED",
-                                 validation="PASS", audit="NOT_REQUIRED")
-            continue
-
-        planned = [plan_by_target.get(target_id) for target_id in relevant_ids
-                   if plan_by_target.get(target_id)]
-        plan_statuses = {str(entry.get("status") or "") for entry in planned}
-        if "unresolved" in plan_statuses:
-            entry = next(entry for entry in planned if entry.get("status") == "unresolved")
-            item.completion = "UNRESOLVED"
-            item.completion_evidence = "plan:" + str(entry.get("reason") or "unresolved")
-            item.statuses.update(generation="FAIL", validation="FAIL")
-            continue
-        if "planned" not in plan_statuses:
-            if plan_statuses and plan_statuses <= {"satisfied", "not_applicable"}:
-                if "not_applicable" in plan_statuses and item.applicability.status != "FALSE":
-                    # A plan-level not-applicable cannot override an obligation whose
-                    # applicability is TRUE/UNKNOWN; that contradiction is unresolved.
-                    item.completion = "UNRESOLVED"
-                    item.completion_evidence = "plan_not_applicable_but_applicability_" + \
-                        item.applicability.status.lower()
-                    item.statuses.update(generation="FAIL", validation="FAIL")
-                    continue
-                item.completion = "ALREADY_SATISFIED" \
-                    if "satisfied" in plan_statuses else "NOT_APPLICABLE"
-                item.completion_evidence = "plan:" + ",".join(sorted(plan_statuses))
-                item.statuses.update(generation="NOT_REQUIRED", validation="PASS")
-                continue
-            item.completion = "UNRESOLVED"
-            item.completion_evidence = "no_plan_record"
-            item.statuses.update(generation="FAIL", validation="FAIL")
-            continue
-
-        item.statuses["generation"] = "PLANNED"
-        audit_verdicts = {verdicts.get(target_id, "") for target_id in relevant_ids}
-        planned_ids = {target_id for target_id in relevant_ids
-                       if str((plan_by_target.get(target_id) or {}).get("status") or "")
-                       == "planned"}
-        all_planned_completed = bool(planned_ids) and all(
-            verdicts.get(target_id) == "completed" for target_id in planned_ids)
-        if all_planned_completed and not (audit_verdicts & {"wrong", "incomplete"}):
-            item.statuses["audit"] = "COMPLETED"
-            item.statuses["validation"] = "PASS"
-            item.completion = "SATISFIED"
-            item.completion_evidence = "audit_completed"
-            replay_item = replay_obligations.get(item.obligation_id)
-            if isinstance(replay_item, Mapping) and replay_item.get("state") == "PASS":
-                item.statuses["artifact"] = "VERIFIED"
-                item.completion = "ARTIFACT_VERIFIED"
-                item.completion_evidence = (
-                    "claim_replay:" + str(replay_item.get("artifact_status")
-                                          or "EXPECTED_EFFECT_PRESENT"))
-                item.edit_ids = tuple(str(value) for value in
-                                      (replay_item.get("edit_ids") or []) if value)
-                item.artifact_evidence = [dict(value) for value in
-                                          (replay_item.get("evidence") or [])
-                                          if isinstance(value, Mapping)]
-            else:
-                # A whole-document replay PASS is not proof for this obligation.  It
-                # must carry its own operation/obligation artifact record (plan §29).
-                item.statuses["artifact"] = "UNVERIFIED"
-                item.completion = "UNRESOLVED"
-                item.completion_evidence = (
-                    "CLAIM_REPLAY_OBLIGATION_MISSING"
-                    if not isinstance(replay_item, Mapping)
-                    else "CLAIM_REPLAY_" + str(replay_item.get("state") or "FAIL"))
-            # A paragraph-level integrity failure (duplicate divergence, an
-            # unauthorized outside-span change) blocks delivery globally, but it must
-            # not be attributed to an unrelated obligation: otherwise a duplicate
-            # finding at p821 marks every obligation at p821 failed, including the
-            # G15 delete whose own operation/artifact proof passed.  A merged
-            # delete+append edit is labelled "G15+G16", so match rule *membership*,
-            # not string equality.  Ruleless failures stay document-level.
-            relevant_locations = {str(target.get("location") or "")
-                                  for target in relevant}
-            failure = any(
-                item.spec.rule_id in {part for part in str(label or "").split("+")
-                                      if part}
-                and str(location or "") in relevant_locations
-                for label, location in replay_failures)
-            if failure:
-                item.completion = "UNRESOLVED"
-                item.completion_evidence = "CLAIM_REPLAY_FAILED"
-                item.statuses["artifact"] = "FAIL"
-            continue
-        if audit_verdicts & {"wrong", "incomplete"}:
-            item.statuses["audit"] = "FAILED"
-            item.completion = "UNRESOLVED"
-            item.completion_evidence = "audit_" + sorted(audit_verdicts & {"wrong", "incomplete"})[0]
+            item.completion_evidence = "applicability_false:" + item.applicability.reason
+            item.statuses.update(artifact="NOT_REQUIRED", validation="NOT_REQUIRED")
             continue
         item.completion = "UNRESOLVED"
-        item.completion_evidence = "audit_pending"
-        item.statuses["audit"] = "PENDING"
+        if item.applicability.status != "TRUE":
+            item.completion_evidence = "applicability_unknown:" + item.applicability.reason
+            item.statuses.update(artifact="UNPROVEN", validation="BLOCKED")
+            continue
+        relevant = [target for target in targets if not target.get("out_of_scope")
+                    and _target_covers_operation(target, item)]
+        item.targets = tuple(str(target.get("target_id") or "") for target in relevant)
+        item.statuses["target"] = "FOUND" if relevant else "MISSING"
+        proof = proofs.get(item.obligation_id)
+        locations = {str(target.get("location") or "") for target in relevant}
+        conflicting = [failure for failure in failures
+                       if str(failure.get("obligation_id") or "") == item.obligation_id
+                       or (item.spec.rule_id in str(failure.get("rule_id") or "").split("+")
+                           and str(failure.get("location") or "") in locations
+                           and (not failure.get("operation_id") or
+                                failure.get("operation_id") == item.spec.operation_id))]
+        if conflicting:
+            item.completion_evidence = "CLAIM_REPLAY_FAILED"
+            item.statuses.update(artifact="FAIL", validation="FAIL")
+        elif effect_proof_passed(proof, operation_id=item.spec.operation_id,
+                                 obligation_id=item.obligation_id):
+            item.completion = ("ARTIFACT_VERIFIED" if proof.get("edit_ids") or
+                proof.get("artifact_status") == "EXPECTED_EFFECT_PRESENT" else "ALREADY_SATISFIED")
+            item.completion_evidence = "claim_replay:" + str(proof.get("artifact_status"))
+            item.edit_ids = tuple(str(value) for value in proof.get("edit_ids") or [])
+            item.artifact_evidence = list(proof.get("evidence") or [])
+            item.statuses.update(artifact="VERIFIED", validation="PASS")
+        else:
+            failed_plan = next((plans[target_id] for target_id in item.targets
+                               if target_id in plans and plans[target_id].get("status") == "unresolved"), None)
+            if failed_plan:
+                item.completion_evidence = "plan:" + str(failed_plan.get("reason") or "unresolved")
+            elif isinstance(proof, Mapping):
+                item.completion_evidence = str(proof.get("failure_code") or "CLAIM_REPLAY_UNPROVEN")
+            elif scope_gaps and item.spec.rule_id in scope_gaps:
+                item.completion_evidence = "SCOPE_RULE_OMITTED"
+            elif scoped_rules is not None and item.spec.rule_id not in scoped_rules:
+                item.completion_evidence = "TARGET_COVERAGE_GAP"
+            else:
+                item.completion_evidence = "OPEN_OBLIGATION:applicable_without_site_proof"
+            item.statuses.update(artifact="UNPROVEN", validation="BLOCKED")
+    validate_completion_invariants(ledger)
 
-    # ONE_OF alternatives: if any alternative actually present in the contract was
-    # carried out (or the rule resolves as not applicable), its siblings are closed by
-    # that evidence. They are not independent obligations (plan §6.3).
-    groups: dict[str, list[ObligationRecord]] = {}
-    for record in ledger.records:
-        if record.spec.one_of_group:
-            groups.setdefault(record.spec.one_of_group, []).append(record)
-    priority = {"ARTIFACT_VERIFIED": 4, "SATISFIED": 3, "ALREADY_SATISFIED": 2,
-                "NOT_APPLICABLE": 1}
-    for group in groups.values():
-        closed = [record for record in group if record.completion in priority]
-        if not closed:
-            continue
-        best = max(closed, key=lambda record: priority[record.completion])
-        for record in group:
-            if record.completion != "UNRESOLVED":
-                continue
-            old_text = ""
-            # A variant may still exist in another copy of the clause. Only a sibling
-            # whose own old wording is gone (or was itself handled) may inherit closure.
-            if artifact_text is not None:
-                import re as _re
-                probe = _re.sub(r"\s+", "", record.spec.old_text)
-                if probe and probe not in authorized_new and \
-                        probe in _re.sub(r"\s+", "", artifact_text):
-                    record.completion_evidence = "ONE_OF_VARIANT_RESIDUAL"
-                    continue
-            record.completion = best.completion
-            record.completion_evidence = (f"ONE_OF_ALTERNATIVE:{best.obligation_id}:"
-                                          f"{best.completion_evidence}")
 
-    # Final artifact-proof gate (plan §25–§29): a TRUE obligation may only remain
-    # closed when Claim Replay produced its OWN PASS record.  A closed state derived
-    # from audit/survey/target heuristics is downgraded here if the artifact proof is
-    # missing, so "all actual edits passed" can never stand in for "every required
-    # obligation is proven".
-    for record in ledger.records:
-        if record.applicability.status != "TRUE":
-            continue
-        if record.completion not in {"SATISFIED", "ARTIFACT_VERIFIED",
-                                     "ALREADY_SATISFIED"}:
-            continue
-        replay_item = replay_obligations.get(record.obligation_id)
-        if isinstance(replay_item, Mapping) and replay_item.get("state") == "PASS":
-            record.statuses["artifact"] = "VERIFIED"
-            record.edit_ids = tuple(str(value) for value in
-                                    (replay_item.get("edit_ids") or []) if value)
-            record.artifact_evidence = [dict(value) for value in
-                                        (replay_item.get("evidence") or [])
-                                        if isinstance(value, Mapping)]
-            continue
-        record.completion = "UNRESOLVED"
-        record.statuses["artifact"] = "UNVERIFIED"
-        record.completion_evidence = (
-            "CLAIM_REPLAY_OBLIGATION_MISSING"
-            if not isinstance(replay_item, Mapping)
-            else "CLAIM_REPLAY_" + str(replay_item.get("state") or "FAIL"))
+def validate_completion_invariants(ledger: ObligationLedger) -> None:
+    for item in ledger.records:
+        allowed = ({"NOT_APPLICABLE"} if item.applicability.status == "FALSE" else
+                   {"UNRESOLVED"} if item.applicability.status == "UNKNOWN" else
+                   {"ARTIFACT_VERIFIED", "ALREADY_SATISFIED", "UNRESOLVED"})
+        if item.completion not in allowed:
+            raise ValueError("OBLIGATION_COMPLETION_INVARIANT:" + item.obligation_id)
 
 
 def open_obligations(ledger: ObligationLedger) -> list[dict[str, Any]]:

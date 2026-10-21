@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import os
 import threading
+from pathlib import Path
 from dataclasses import dataclass
 from typing import Any, Mapping
 
@@ -34,6 +35,7 @@ DEFAULT_TASK_ROLES: dict[str, str] = {
     "recall_sweep": "review",
     "recall_arbitrate": "review",
     "recall_compose_review": "review",
+    "recall_qualification_review": "review",
 }
 
 #: Configuration aliases used by a role file / product terminology.
@@ -91,6 +93,10 @@ def _make_gateway(cfg: ModelRoleConfig, budget: ModelBudget | None) -> ModelGate
         request_options=dict(cfg.request_options),
         extra_headers=dict(cfg.extra_headers),
         user_agent=cfg.user_agent,
+        mode=os.environ.get("FUNDLEX_MODEL_MODE"),
+        cassette_dir=os.environ.get("FUNDLEX_MODEL_CASSETTE_DIR") or
+                     (Path(os.environ["FUNDLEX_FROZEN_RUN_DIR"]) / "model_calls"
+                      if os.environ.get("FUNDLEX_FROZEN_RUN_DIR") else None),
     )
 
 
@@ -236,13 +242,19 @@ def build_role_gateway(*, budget: ModelBudget | None = None,
     ``gateway_factory`` is a test seam with the :func:`_make_gateway` signature.
     """
     configs, overrides = load_role_config()
+    if os.environ.get("FUNDLEX_MODEL_MODE") == "replay":
+        from dataclasses import replace
+        configs = {role: replace(config, api_key=config.api_key or "replay-unused",
+                                base_url=config.base_url or "http://localhost")
+                   for role, config in configs.items()}
     primary_cfg, review_cfg = configs["primary"], configs["review"]
     if not primary_cfg.configured:
         raise ModelError("MODEL_CONFIG_MISSING")
     if not review_cfg.configured:
         raise RoleConfigError("review model role is not configured")
     factory = gateway_factory or _make_gateway
-    shared_budget = budget if budget is not None else _budget_from_env()
+    shared_budget = (None if os.environ.get("FUNDLEX_MODEL_MODE") == "replay"
+                     else budget if budget is not None else _budget_from_env())
     primary = factory(primary_cfg, shared_budget)
     review = primary if review_cfg.same_endpoint(primary_cfg) else \
         factory(review_cfg, shared_budget)

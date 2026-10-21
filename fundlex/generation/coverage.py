@@ -89,6 +89,21 @@ def _iter_audit_verdicts(node: Any, depth: int = 0) -> Iterable[tuple[str, str]]
 
 def build_coverage_view(report: Mapping[str, Any]) -> CoverageLedgerView:
     """Project one report into the Coverage Ledger view."""
+    # The runtime's canonical operation ledger already consumes the shared effect
+    # proofs. Never derive a conflicting completion state from model opinions.
+    records = (report.get("obligations") or {}).get("records")
+    if isinstance(records, list):
+        canonical = [CoverageEntry(str(record.get("rule_id") or ""), "",
+            str(record.get("completion") or "UNRESOLVED"),
+            str(record.get("completion_evidence") or "operation_ledger"),
+            operation_keys=(str(record.get("operation_id") or ""),))
+            for record in records]
+        canonical.extend(CoverageEntry(str(item.get("rule_id") or ""),
+            str(item.get("location") or ""), "UNRESOLVED",
+            "unresolved:" + str(item.get("code") or item.get("kind") or "unknown"))
+            for item in report.get("unresolved") or [])
+        return CoverageLedgerView(tuple(canonical), {
+            state: sum(entry.state == state for entry in canonical) for state in TERMINAL_STATES})
     # The last audit verdict for a target wins (repair rounds overwrite).
     verdicts: dict[str, str] = {}
     for target_id, verdict in _iter_audit_verdicts(report.get("audit")):

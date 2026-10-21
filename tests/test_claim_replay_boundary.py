@@ -19,12 +19,12 @@ class Inspection:
 
 
 RULES = {"G01": {"rule_id": "G01", "operations": [
-    {"op": "append", "new_text": "新授权句", "condition": {"kind": "none"}}]}}
+    {"operation_id": "G01:0", "op": "append", "new_text": "新授权句", "condition": {"kind": "none"}}]}}
 
 
 def _edit():
     return {"rule_id": "G01", "location": "p0", "start": 0, "end": 3,
-            "replacement": "新授权句", "components": []}
+            "replacement": "新授权句", "components": [], "operation_keys": ["G01:0"]}
 
 
 def test_replay_proves_the_edit_reached_the_artifact():

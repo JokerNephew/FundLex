@@ -63,6 +63,38 @@ def report_with(*, targets=(), plan_ledger=(), audit=(), replay=None, unresolved
     }
 
 
+def site_proof(ledger, key, before, after, *, location="p1", planned=False):
+    """Compute the proof from actual before/after sites, including edit authorization."""
+    from fundlex.generation.effects import evaluate_operation_effect
+    from fundlex.generation.claim_replay import replay_claims
+    record = ledger.record(key)
+    def inspection(text):
+        span = SimpleNamespace(location=location, text=text)
+        return SimpleNamespace(paragraphs=[span], by_location=lambda address: span)
+    original, artifact = inspection(before), inspection(after)
+    sites = [{"location": location, "quote": before}]
+    if not planned:
+        return evaluate_operation_effect(record, original, artifact, sites, [], FakeFacts()).as_dict()
+    edit = {"target_id": "T1", "rule_id": record.spec.rule_id, "location": location,
+            "start": 0, "end": len(before), "replacement": after,
+            "operation_keys": [key], "operation": "replace"}
+    operation = {"op": record.spec.op, "old_text": record.spec.old_text,
+                 "new_text": record.spec.new_text, "condition": {"kind": "none"}}
+    # Preserve the actual operation index used by authorization replay.
+    operations = [{"op": "noop"}] * (record.spec.operation_index + 1)
+    operations[record.spec.operation_index] = operation
+    result = replay_claims([edit], original, artifact, facts=FakeFacts(), obligations=ledger,
+        rules_by_id={record.spec.rule_id: {"rule_id": record.spec.rule_id, "operations": operations}},
+        targets_by_id={"T1": {"target_id": "T1", "location": location,
+                                "quote": before, "operations": [key]}})
+    return result["obligations"][record.obligation_id]
+
+
+def historical(*operations, group="G11:B1:ONE1"):
+    return [{**operation, "group_kind": "ONE_OF", "one_of_group": group}
+            for operation in operations]
+
+
 def test_compile_creates_all_of_branches_and_stable_ids():
     ledger = compile_obligations(guide(rule()))
     assert [item.obligation_id for item in ledger.records] == [
@@ -112,10 +144,8 @@ def test_audit_completed_and_claim_replay_close_the_obligation():
         audit=[{"target_id": "T1", "verdict": "completed"}],
         replay={"verified": True, "checked": 1, "failures": [],
                 "obligations": {
-                    "G05:B1:O1": {"state": "PASS",
-                                  "artifact_status": "EXPECTED_EFFECT_PRESENT"},
-                    "G05:B1:O2": {"state": "PASS",
-                                  "artifact_status": "VERIFIED_ABSENT"}}},
+                    "G05:B1:O1": site_proof(ledger, "G05:0", "调低赎回费率", "调低销售服务费率", planned=True),
+                    "G05:B1:O2": site_proof(ledger, "G05:1", "并报中国证监会备案", "", planned=True)}},
     ))
     b1 = [item for item in ledger.records if item.spec.branch_id == "B1"]
     assert {item.completion for item in b1} == {"ARTIFACT_VERIFIED"}
@@ -138,25 +168,25 @@ def test_plan_unresolved_keeps_only_that_branch_open():
     assert ledger.record("G05:B1:O2").completion == "UNRESOLVED"
 
 
-def test_absent_target_is_verified_not_applicable():
+def test_absent_target_without_site_proof_stays_open():
     ledger = compile_obligations(guide(rule(rule_id="G15", operations=[
         {"op": "delete", "old_text": "销售服务费按月支付", "condition": {"kind": "none"}}])))
     apply_facts(ledger, FakeFacts())
     project(ledger, report_with(targets=[target("G15", state="absent")]),
             artifact_text="本基金合同。")
-    assert ledger.records[0].completion == "NOT_APPLICABLE"
-    assert not open_obligations(ledger)
+    assert ledger.records[0].completion == "UNRESOLVED"
+    assert open_obligations(ledger)
 
 
-def test_variants_are_one_of_not_all_of():
+def test_rule_wording_list_does_not_implicitly_create_one_of():
     ledger = compile_obligations(guide(rule(rule_id="G14", operations=[
         {"op": "replace", "old_text": "调低申购费率", "new_text": "调低销售服务费率",
          "condition": {"kind": "class_count", "value": "multiple"}}],
         variants=["调低申购费率", "调低申购、赎回费率"])))
     group = ledger.groups["G14"]
-    assert group.group_kind is GroupKind.ONE_OF
+    assert group.group_kind is GroupKind.INDEPENDENT
     assert group.variant_alternatives == ("调低申购费率", "调低申购、赎回费率")
-    assert ledger.records[0].spec.one_of_group == "G14:B1:VARIANTS"
+    assert ledger.records[0].spec.one_of_group == ""
 
 
 def test_artifact_replay_failure_reopens_the_obligation():
@@ -179,18 +209,19 @@ def test_delivery_closed_states_are_exhaustive_and_fail_closed():
     apply_facts(ledger, FakeFacts(service=False))
     project(ledger, report_with(targets=[target("G05", state="absent")]),
             artifact_text="本基金合同。")
-    # Both branches now have a target: B1 false, B2's reference is proven absent.
-    assert all(item.closed for item in ledger.records)
-    assert not open_obligations(ledger)
+    # FALSE closes only its own branches. An absent target is not site proof.
+    assert ledger.records[0].closed and ledger.records[1].closed
+    assert ledger.records[2].completion == "UNRESOLVED"
+    assert open_obligations(ledger)
 
 
 def test_same_replacement_old_text_variants_are_one_of_and_close_together():
-    ledger = compile_obligations(guide(rule(rule_id="G11", operations=[
+    ledger = compile_obligations(guide(rule(rule_id="G11", operations=historical(
         {"op": "replace", "old_text": "旧写法一", "new_text": "统一的新政策",
          "condition": {"kind": "class_count", "value": "multiple"}},
         {"op": "replace", "old_text": "旧写法二", "new_text": "统一的新政策",
          "condition": {"kind": "class_count", "value": "multiple"}},
-    ])))
+    ))))
     assert ledger.records[0].spec.one_of_group == "G11:B1:ONE1"
     assert ledger.records[1].spec.one_of_group == "G11:B1:ONE1"
     assert ledger.records[0].spec.group_kind is GroupKind.ONE_OF
@@ -200,8 +231,8 @@ def test_same_replacement_old_text_variants_are_one_of_and_close_together():
         plan_ledger=[{"target_id": "T1", "status": "planned"}],
         audit=[{"target_id": "T1", "verdict": "completed"}],
         replay={"verified": True, "obligations": {
-            "G11:B1:O1": {"state": "PASS", "artifact_status": "EXPECTED_EFFECT_PRESENT"},
-            "G11:B1:O2": {"state": "PASS", "artifact_status": "ALTERNATIVE_NOT_SELECTED"}}},
+            "G11:B1:O1": site_proof(ledger, "G11:0", "旧写法一", "统一的新政策", planned=True),
+            "G11:B1:O2": site_proof(ledger, "G11:1", "旧写法一", "统一的新政策")}},
     ))
     assert {item.completion for item in ledger.records} <= {"ARTIFACT_VERIFIED", "ALREADY_SATISFIED"}
     assert not open_obligations(ledger)
@@ -241,39 +272,38 @@ def test_one_completed_target_cannot_hide_another_wrong_occurrence():
                {"target_id": "T2", "verdict": "wrong"}],
     ))
     assert ledger.records[0].completion == "UNRESOLVED"
-    assert ledger.records[0].completion_evidence == "audit_wrong"
+    assert ledger.records[0].completion_evidence == "OPEN_OBLIGATION:applicable_without_site_proof"
 
 
 def test_one_of_variant_closure_requires_the_other_variant_to_be_gone():
-    ledger = compile_obligations(guide(rule(rule_id="G11", operations=[
+    ledger = compile_obligations(guide(rule(rule_id="G11", operations=historical(
         {"op": "replace", "old_text": "旧写法一", "new_text": "统一的新政策",
          "condition": {"kind": "class_count", "value": "multiple"}},
         {"op": "replace", "old_text": "旧写法二", "new_text": "统一的新政策",
          "condition": {"kind": "class_count", "value": "multiple"}},
-    ])))
+    ))))
     apply_facts(ledger, FakeFacts(class_count=2))
     project(ledger, report_with(
         targets=[target("G11", operations=["G11:0"])],
         plan_ledger=[{"target_id": "T1", "status": "planned"}],
         audit=[{"target_id": "T1", "verdict": "completed"}],
         replay={"verified": True, "obligations": {
-            "G11:B1:O1": {"state": "PASS", "artifact_status": "EXPECTED_EFFECT_PRESENT"},
-            "G11:B1:O2": {"state": "PASS", "artifact_status": "ALTERNATIVE_NOT_SELECTED"}}},
+            "G11:B1:O1": site_proof(ledger, "G11:0", "旧写法一", "统一的新政策", planned=True),
+            "G11:B1:O2": site_proof(ledger, "G11:1", "条款仍写旧写法二。", "条款仍写旧写法二。", location="p2")}},
     ), artifact_text="条款仍写旧写法二。")
     assert ledger.records[0].completion == "ARTIFACT_VERIFIED"
     assert ledger.records[1].completion == "UNRESOLVED"
-    assert ledger.records[1].completion_evidence == "ONE_OF_VARIANT_RESIDUAL"
+    assert ledger.records[1].completion_evidence == "CLAIM_OPERATION_NOT_PLANNED"
 
 
-def test_absent_delete_reference_is_not_an_open_obligation():
+def test_global_delete_absence_without_site_proof_stays_open():
     ledger = compile_obligations(guide(rule(rule_id="G06", operations=[
         {"op": "delete", "old_text": "本基金不同基金份额类别之间不得互相转换。",
          "condition": {"kind": "none", "value": None}}])))
     apply_facts(ledger, FakeFacts())
     project(ledger, report_with(), artifact_text="本基金合同经中国证监会核准。")
-    assert ledger.records[0].completion == "NOT_APPLICABLE"
-    assert ledger.records[0].completion_evidence == "delete_reference_absent"
-    assert not open_obligations(ledger)
+    assert ledger.records[0].completion == "UNRESOLVED"
+    assert open_obligations(ledger)
 
 
 def test_satisfied_unkeyed_target_cannot_hide_a_residual_delete():
@@ -283,26 +313,26 @@ def test_satisfied_unkeyed_target_cannot_hide_a_residual_delete():
             artifact_text="基金份额类别调整并报中国证监会备案。")
     b2 = ledger.record("G05:B2:O1")
     assert b2.completion == "UNRESOLVED"
-    assert b2.completion_evidence == "SATISFIED_TARGET_RESIDUAL_DELETE"
+    assert b2.completion_evidence == "OPEN_OBLIGATION:applicable_without_site_proof"
 
 
 def test_one_of_variant_present_inside_the_authorized_new_text_closes():
     new_policy = ("通过直销机构申购本基金A类基金份额不收取申购费，通过其他销售机构申购本基金A类基金份额的"
                   "申购费用由投资人承担，不列入基金财产。本基金C类基金份额不收取申购费用。")
-    ledger = compile_obligations(guide(rule(rule_id="G11", operations=[
+    ledger = compile_obligations(guide(rule(rule_id="G11", operations=historical(
         {"op": "replace", "old_text": "申购费用由投资人承担，不列入基金财产。",
          "new_text": new_policy, "condition": {"kind": "class_count", "value": "multiple"}},
         {"op": "replace", "old_text": "本基金A类基金份额的申购费用由投资人承担，不列入基金财产。",
          "new_text": new_policy, "condition": {"kind": "class_count", "value": "multiple"}},
-    ])))
+    ))))
     apply_facts(ledger, FakeFacts(class_count=2))
     project(ledger, report_with(
         targets=[target("G11", operations=["G11:0"])],
         plan_ledger=[{"target_id": "T1", "status": "planned"}],
         audit=[{"target_id": "T1", "verdict": "completed"}],
         replay={"verified": True, "obligations": {
-            "G11:B1:O1": {"state": "PASS", "artifact_status": "EXPECTED_EFFECT_PRESENT"},
-            "G11:B1:O2": {"state": "PASS", "artifact_status": "ALTERNATIVE_NOT_SELECTED"}}},
+            "G11:B1:O1": site_proof(ledger, "G11:0", new_policy, new_policy),
+            "G11:B1:O2": site_proof(ledger, "G11:1", new_policy, new_policy)}},
     ), artifact_text=new_policy)
     assert {item.completion for item in ledger.records} <= {"ARTIFACT_VERIFIED", "ALREADY_SATISFIED"}
     assert not open_obligations(ledger)
@@ -319,10 +349,8 @@ def test_ruleless_duplicate_failure_does_not_poison_a_passed_obligation():
                 "failures": [{"rule_id": "", "location": "p1",
                               "code": "DUPLICATE_SITE_DIVERGED"}],
                 "obligations": {
-                    "G05:B1:O1": {"state": "PASS",
-                                  "artifact_status": "EXPECTED_EFFECT_PRESENT"},
-                    "G05:B1:O2": {"state": "PASS",
-                                  "artifact_status": "VERIFIED_ABSENT"}}},
+                    "G05:B1:O1": site_proof(ledger, "G05:0", "调低赎回费率", "调低销售服务费率", planned=True),
+                    "G05:B1:O2": site_proof(ledger, "G05:1", "并报中国证监会备案", "", planned=True)}},
     ))
     b1 = [item for item in ledger.records if item.spec.branch_id == "B1"]
     assert {item.completion for item in b1} == {"ARTIFACT_VERIFIED"}
@@ -339,10 +367,8 @@ def test_composite_replay_failure_marks_each_member_rule():
                 "failures": [{"rule_id": "G05+G99", "location": "p1",
                               "code": "CLAIM_NO_CHANGE_APPLIED"}],
                 "obligations": {
-                    "G05:B1:O1": {"state": "PASS",
-                                  "artifact_status": "EXPECTED_EFFECT_PRESENT"},
-                    "G05:B1:O2": {"state": "PASS",
-                                  "artifact_status": "VERIFIED_ABSENT"}}},
+                    "G05:B1:O1": site_proof(ledger, "G05:0", "调低赎回费率", "调低销售服务费率", planned=True),
+                    "G05:B1:O2": site_proof(ledger, "G05:1", "并报中国证监会备案", "", planned=True)}},
     ))
     b1 = [item for item in ledger.records if item.spec.branch_id == "B1"]
     assert {item.completion for item in b1} == {"UNRESOLVED"}
@@ -358,7 +384,7 @@ def test_explicit_empty_scope_cannot_close_an_append_obligation():
     report["scope_mapping"] = {"mappings": {"G01": []}}
     project(ledger, report, artifact_text="本基金合同。")
     assert ledger.records[0].completion == "UNRESOLVED"
-    assert ledger.records[0].completion_evidence == "SCOPE_EMPTY_APPEND_UNPROVEN"
+    assert ledger.records[0].completion_evidence == "TARGET_COVERAGE_GAP"
 
 
 def test_survey_satisfied_delete_cannot_hide_a_residual_sentence():
@@ -370,4 +396,4 @@ def test_survey_satisfied_delete_cannot_hide_a_residual_sentence():
     project(ledger, report, artifact_text="并报中国证监会备案。")
     record = ledger.record("G05:B2:O1")
     assert record.completion == "UNRESOLVED"
-    assert record.completion_evidence == "SURVEY_SATISFIED_RESIDUAL_DELETE"
+    assert record.completion_evidence == "OPEN_OBLIGATION:applicable_without_site_proof"

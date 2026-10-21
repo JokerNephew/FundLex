@@ -101,7 +101,7 @@ def guide_source(tmp_path: Path, name: str = "guide.docx"):
 
 
 def valid_parsed() -> dict:
-    return {
+    result = {
         "groups": [
             {
                 "rule_id": "G01",
@@ -154,6 +154,12 @@ def valid_parsed() -> dict:
         ],
         "notes": "synthetic guide",
     }
+
+    for group in result["groups"]:
+        for operation in group["operations"]:
+            operation["group_kind"] = "INDEPENDENT"
+            operation["one_of_group"] = ""
+    return result
 
 
 class ScriptedGateway:
@@ -290,8 +296,10 @@ def test_validation_rejects_bad_conditions_and_operations(tmp_path):
     parsed["groups"][1]["operations"][0]["condition"] = {"kind": "class_count", "value": 2}
     parsed["groups"][1]["operations"][1]["condition"] = {"kind": "none", "value": True}
     parsed["groups"][1]["operations"].append({"op": "move", "new_text": DIRECT_SALES_NEW,
-                                              "condition": {"kind": "none", "value": None}})
-    parsed["groups"][1]["operations"].append({"op": "append", "condition": {"kind": "none", "value": None}})
+                                              "condition": {"kind": "none", "value": None},
+                                              "group_kind": "INDEPENDENT", "one_of_group": ""})
+    parsed["groups"][1]["operations"].append({"op": "append", "condition": {"kind": "none", "value": None},
+                                              "group_kind": "INDEPENDENT", "one_of_group": ""})
     result = validate_parsed_guide(source, parsed)
     codes = [error["code"] for error in result["errors"]]
     assert codes == ["GUIDE_GROUP_INVALID"] * 4

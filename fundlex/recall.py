@@ -407,6 +407,12 @@ class Facts:
     #: Applicability decisions recovered from literal evidence (condition key -> TRUE/FALSE).
     #: They are branch decisions, not new fee facts; planning must obey them.
     condition_overrides: dict[str, str] = field(default_factory=dict)
+    class_set_quote: str = ""
+    class_set_evidence: dict[str, Any] = field(default_factory=dict)
+    value_verified: bool = False
+    set_complete_verified: bool = False
+    fund_type_certification: dict[str, Any] = field(default_factory=dict)
+    channel_evidence: dict[str, str] = field(default_factory=dict)
 
     @property
     def share_class_structure(self) -> str:
@@ -420,6 +426,8 @@ class Facts:
 
     def status_of(self, name: str) -> str:
         """Tri-state of one fact; an unrecorded fact is UNKNOWN, never VERIFIED."""
+        if name == "floating_management_fee":
+            return "VERIFIED" if self.quotes_verified.get("floating") else "UNKNOWN"
         return self.fact_status.get(name, "UNKNOWN")
 
     @property
@@ -458,6 +466,7 @@ class Facts:
         return {
             "fund_type": self.fund_type,
             "fund_type_quote": self.fund_type_quote,
+            "fund_type_basis": self.fund_type_basis,
             "class_count": self.class_count,
             "classes": [
                 {"name": item.name, "subscription_fee": item.subscription_fee,
@@ -475,8 +484,15 @@ class Facts:
             "has_service_fee": self.has_service_fee,
             "is_floating_fee": self.floating_management_fee,
             "floating_quote": self.floating_quote,
+            "floating_basis": self.floating_basis,
             "notes": self.notes,
             "quotes_verified": dict(self.quotes_verified),
+            "class_set_quote": self.class_set_quote,
+            "class_set_evidence": dict(self.class_set_evidence),
+            "value_verified": self.value_verified,
+            "set_complete_verified": self.set_complete_verified,
+            "fund_type_certification": dict(self.fund_type_certification),
+            "channel_evidence": dict(self.channel_evidence),
             "problems": list(self.problems),
         }
 
@@ -484,7 +500,8 @@ class Facts:
 def derive_fact_statuses(*, fund_type_ok: bool, classes: Sequence[ClassFact],
                          class_quotes: dict[str, bool],
                          direct_classes: Sequence[str], direct_ok: bool,
-                         other_classes: Sequence[str], other_ok: bool) -> dict[str, str]:
+                         other_classes: Sequence[str], other_ok: bool,
+                         set_complete_verified: bool = False) -> dict[str, str]:
     """Tri-state statuses for the phase-3 fact schema (plan v4 §24, §20).
 
     * ``VERIFIED`` — backed by a verified quote and internally consistent;
@@ -495,7 +512,7 @@ def derive_fact_statuses(*, fund_type_ok: bool, classes: Sequence[ClassFact],
     """
     statuses: dict[str, str] = {"fund_type": "VERIFIED" if fund_type_ok else "UNKNOWN"}
     class_names = {item.name for item in classes}
-    current_ok = bool(classes) and all(
+    current_ok = bool([item for item in classes if item.current]) and set_complete_verified and all(
         class_quotes.get(item.name, False) for item in classes if item.current)
     statuses["share_class_structure"] = "VERIFIED" if current_ok else "UNKNOWN"
     current_names = [item.name for item in classes if item.current]
@@ -702,11 +719,21 @@ def facts_from_value(inspection: DocumentInspection, value: dict[str, Any]) -> F
     other_names, other_ok = _channel("other_sales_charged")
     class_quotes = {name.split(":", 1)[1]: ok
                     for name, ok in quotes_verified.items() if name.startswith("class:")}
+    from .fact_evidence import verify_class_set
+    class_set_quote = str(value.get("class_set_quote") or "")
+    class_set_evidence = verify_class_set(inspection, classes, class_set_quote)
+    set_complete = bool(class_set_evidence["set_complete_verified"])
+    value_verified = bool([item for item in classes if item.current]) and all(
+        class_quotes.get(item.name, False) for item in classes if item.current)
+    quotes_verified["class_set"] = bool(class_set_evidence["quote_verified"])
+    if not set_complete:
+        problems.append(str(class_set_evidence["reason"]))
     fact_status = derive_fact_statuses(
         fund_type_ok=quotes_verified["fund_type"], classes=classes,
         class_quotes=class_quotes,
         direct_classes=direct_names, direct_ok=direct_ok,
-        other_classes=other_names, other_ok=other_ok)
+        other_classes=other_names, other_ok=other_ok,
+        set_complete_verified=set_complete)
 
     return Facts(
         fund_type=fund_type_value,
@@ -722,6 +749,11 @@ def facts_from_value(inspection: DocumentInspection, value: dict[str, Any]) -> F
         direct_sales_exempt_group=tuple(direct_names),
         other_sales_charged_group=tuple(other_names),
         fact_status=fact_status,
+        class_set_quote=class_set_quote, class_set_evidence=class_set_evidence,
+        value_verified=value_verified, set_complete_verified=set_complete,
+        channel_evidence={key: str((value.get(key) or {}).get("quote") or "")
+                          for key in ("direct_sales_exempt", "other_sales_charged")
+                          if isinstance(value.get(key), dict)},
     )
 
 
@@ -2217,81 +2249,46 @@ def append_applicability_targets(inspection: DocumentInspection, rules: Sequence
                                  facts: Facts, sections: Sequence[Section], *,
                                  known: Sequence[tuple[str, str]] = (),
                                  hinted: dict[str, str] | None = None) -> list[SurveyHit]:
-    """Deterministic targets for conditional appends the model inventory missed (FL-D060/090).
+    """Find missing append effects at rule-specific anchors in every routed section.
 
-    An append rule carries no ``old_text`` anchor, so the reference-anchored survey
-    cannot find it and the whole decision rests on the windowed model inventory.
-    When that judgment says ``not_applicable`` — for instance because the contract
-    writes "直销渠道" where the guide writes "直销机构" — the obligation is silently
-    dropped even though the section it belongs to plainly exists (D07).
-
-    This pass only fires when every conservative condition holds:
-
-    * the rule has an append operation whose condition is unconditionally true;
-    * the section named by the rule's ``section_hint`` exists in the document;
-    * the required policy text is **not already present** anywhere in the document;
-    * no inventory/survey target for that rule was already recorded.
-
-    It then anchors one target at the last paragraph of that section, so the append
-    lands inside the clause the guide names rather than somewhere unrelated.
+    Existing targets and policy text cover only their own business site. A policy in
+    the definition cannot satisfy the basic-information clause or its summary copy.
+    An ambiguous or missing anchor stays open for the bounded operation locator.
     """
-    existing_rules = {rule_id for rule_id, _location in known}
+    existing = set(known)
     paragraphs = [span for span in inspection.paragraphs if span.text.strip()]
-    if not paragraphs:
-        return []
-    document_compact = _compact("".join(display_text(span.text)[0] for span in paragraphs))
     hits: list[SurveyHit] = []
-    counter = 0
     for rule in rules:
         rule_id = str(rule.get("rule_id") or "")
-        if not rule_id or rule_id in existing_rules:
-            continue
-        append_ops = [operation for operation in (rule.get("operations") or [])
+        append_ops = [(index, operation) for index, operation in enumerate(rule.get("operations") or [])
                       if operation.get("op") == "append"
                       and condition_matches(operation.get("condition"), facts)]
-        if not append_ops:
+        if not rule_id or not append_ops:
             continue
-        # The obligation must not already be satisfied: if a policy sentence is present,
-        # the contract already carries it and there is nothing to append (this is what
-        # keeps the pass from adding duplicate clauses). Slot instantiation may fail when
-        # this product lacks a class group (SERVICE_GROUP_EMPTY on a contract with no
-        # service-fee class); the append is still unconditional, so fall back to the raw
-        # template wording for the presence test rather than skipping the rule.
-        required = ""
-        for operation in append_ops:
-            template = str(operation.get("new_text") or "")
-            instantiated, issues = instantiate_slots(template, facts)
-            required = template if issues else instantiated
-            if required:
-                break
-        if not required:
-            continue
-        if _append_obligation_present(rule_id, required, document_compact):
-            continue
-        section = _section_for_hint(sections, rule.get("section_hint"))
-        if section is None:
-            continue
-        members = [span for span in paragraphs if span.location in set(section.locations)]
-        if not members:
-            continue
-        # Prefer the paragraph the inventory already pointed at (its "absent"/unresolved
-        # target names the clause the rule belongs to), and fall back to the section's
-        # last paragraph only when there is no such hint.
-        prefer = (hinted or {}).get(rule_id)
-        anchor = None
-        if prefer:
+        hint = _compact(str(rule.get("section_hint") or ""))
+        routed = [section for section in sections if hint and hint in _compact(section.title)]
+        for section in routed:
+            members = [span for span in paragraphs if span.location in set(section.locations)
+                       and not _looks_like_heading(span.text)
+                       and append_site_ok(rule_id, span, inspection)]
+            prefer = (hinted or {}).get(rule_id)
             anchor = next((span for span in members if span.location == prefer), None)
-            if anchor is not None and _looks_like_heading(anchor.text):
-                # The inventory sometimes points at a section heading; appending directly
-                # after "第二部分 释义" would place the clause before the definitions it
-                # belongs to. Fall back to the section's last paragraph in that case.
-                anchor = None
-        if anchor is None:
-            anchor = members[-1]
-        counter += 1
-        hits.append(SurveyHit(rule_id=rule_id, operation="append",
-                              locations=(anchor.location,), quote=anchor.text.strip(),
-                              start=0, end=0, ratio=1.0, index=counter)
+            if anchor is None:
+                if len(members) != 1:
+                    continue
+                anchor = members[0]
+            if (rule_id, anchor.location) in existing:
+                continue
+            for index, operation in append_ops:
+                template = str(operation.get("new_text") or "")
+                instantiated, issues = instantiate_slots(template, facts)
+                required = template if issues else instantiated
+                if not required or _append_obligation_present(rule_id, required, _compact(anchor.text)):
+                    continue
+                hits.append(SurveyHit(rule_id=rule_id, operation="append",
+                    locations=(anchor.location,), quote=anchor.text.strip(),
+                    start=0, end=0, ratio=1.0, index=len(hits) + 1,
+                    operation_keys=(operation_key(rule_id, index),))
                     .with_parts([(anchor.location, 0, len(_compact(anchor.text)))]))
     return hits
 
@@ -2920,6 +2917,9 @@ def class_substitution_noop(rule: dict, facts: Facts) -> bool:
 
 def class_substitution_letter_stable(rule: dict, facts: Facts) -> bool:
     """Hard fact: every instantiated replacement equals its reference (nothing to change)."""
+    if any(facts.status_of(name) != "VERIFIED" for name in (
+            "share_class_structure", "subscription_fee_group", "service_fee_group")):
+        return False
     if not rule.get("class_substitution") or fee_homogeneous_classes(facts):
         return False
     checked = False
@@ -2946,8 +2946,10 @@ def _condition_fact_names(condition: dict | None) -> set[str]:
         for part in condition.get("value") or []:
             names |= _condition_fact_names(part)
         return names
-    if kind in {"class_count", "has_service_fee"}:
+    if kind == "class_count":
         return {"share_class_structure"}
+    if kind == "has_service_fee":
+        return {"share_class_structure", "subscription_fee_group", "service_fee_group"}
     if kind == "is_floating_fee":
         return {"floating_management_fee"}
     return set()
@@ -2961,15 +2963,19 @@ def _condition_override(condition: dict | None, facts: Facts) -> str | None:
     value = getattr(facts, "condition_overrides", {}).get(key)
     if value not in {"TRUE", "FALSE"}:
         return None
-    # VERIFIED facts always win: a model applicability decision may fill an UNKNOWN
-    # gap, never overturn the class/fee facts themselves (plan §2.3).
+    # A branch opinion cannot substitute for a missing prerequisite fact.
     names = _condition_fact_names(condition)
-    if names and all(facts.status_of(name) == "VERIFIED" for name in names):
+    if names:
         return None
     return value
 
 
 def condition_matches(condition: dict | None, facts: Facts) -> bool:
+    names = _condition_fact_names(condition)
+    if any((not facts.quotes_verified.get("floating", False)
+            if name == "floating_management_fee" else facts.status_of(name) != "VERIFIED")
+           for name in names):
+        return False
     override = _condition_override(condition, facts)
     if override is not None:
         return override == "TRUE"
@@ -3028,7 +3034,8 @@ def condition_status(condition: dict | None, facts: Facts) -> str:
             return "TRUE" if count > 1 else "FALSE"
         return "FALSE"
     if kind == "has_service_fee":
-        if facts.status_of("share_class_structure") != "VERIFIED":
+        if any(facts.status_of(name) != "VERIFIED" for name in
+               ("share_class_structure", "subscription_fee_group", "service_fee_group")):
             return "UNKNOWN"
         return "TRUE" if bool(value) == facts.has_service_fee else "FALSE"
     if kind == "is_floating_fee":
@@ -3353,6 +3360,9 @@ def plan_target(rule: dict, target: Target, inspection: DocumentInspection, fact
         evidence = dict(edit.evidence or {})
         evidence.setdefault("operation_keys", list(edit.operation_keys))
         evidence.setdefault("obligation_ids", list(edit.obligation_ids))
+        if obligations is not None:
+            evidence["operation_refs"] = [record.spec.as_dict() for key in edit.operation_keys
+                                          if (record := obligations.record(key)) is not None]
         edit.evidence = evidence
         return edit
 
@@ -3383,7 +3393,8 @@ def plan_target(rule: dict, target: Target, inspection: DocumentInspection, fact
     for index, operation in enumerate(rule.get("operations") or []):
         operation_label = f"{rule['rule_id']}:{index}"
         decision = route_operation(operation_label, fact_status=fact_status)
-        is_applicable = any(operation is candidate for candidate in applicable)
+        is_applicable = index in selected_indices and condition_status(
+            operation.get("condition"), facts) == "TRUE"
         decisions.append({
             "operation": operation_label,
             "requested": decision.requested_tier.value,
@@ -3420,7 +3431,7 @@ def _plan_target_inner(rule: dict, target: Target, inspection: DocumentInspectio
     rule_id = str(rule.get("rule_id") or "")
     selected_indices = _selected_operation_indices(rule, target, inspection, facts,
                                                    obligations)
-    operations = [rule["operations"][index] for index in selected_indices
+    operations = [{**rule["operations"][index], "_operation_index": index} for index in selected_indices
                   if 0 <= index < len(rule.get("operations") or [])]
 
     def finish(edit: PlannedEdit) -> PlannedEdit:
@@ -3471,8 +3482,7 @@ def _plan_target_inner(rule: dict, target: Target, inspection: DocumentInspectio
                                "groups": sorted(_missing_slot_groups(rule, operations, facts))})
     if slot_group_missing(rule, operations, facts):
         operations = _drop_empty_group_operations(rule, operations, facts)
-    selected_indices = [index for index, operation in enumerate(rule.get("operations") or [])
-                        if any(operation is kept for kept in operations)]
+    selected_indices = [int(operation["_operation_index"]) for operation in operations]
     if not operations:
         # Every operation needed a class group this product does not have.
         raise RecallError("RECALL_RULE_NOT_APPLICABLE",
@@ -3532,7 +3542,9 @@ def _plan_target_inner(rule: dict, target: Target, inspection: DocumentInspectio
                     span.text, old_text, narrowed[0])
                 target.occurrence_anchor = target.quote
     actual = span.text[target.start:target.end]
-    if not target_site_ok(rule_id, span, inspection):
+    if not target_site_ok(rule_id, span, inspection) or (
+            any(operation.get("op") == "append" for operation in operations)
+            and not append_site_ok(rule_id, span, inspection)):
         raise RecallError("TARGET_SOURCE_MISMATCH",
                           {"rule": rule_id, "target": target.target_id,
                            "location": target.location})
@@ -3933,6 +3945,36 @@ def _component(edit: PlannedEdit, inspection: DocumentInspection) -> dict[str, A
     }
 
 
+def _atomic_paragraph_edits(planned: Sequence[PlannedEdit], inspection: DocumentInspection
+                            ) -> list[PlannedEdit]:
+    from .generation.atomic import compose_paragraph
+    by_location: dict[str, list[PlannedEdit]] = {}
+    for edit in planned:
+        by_location.setdefault(edit.location, []).append(edit)
+    result: list[PlannedEdit] = []
+    for location, entries in by_location.items():
+        # Composed changes require their own joint semantic review. Deterministic
+        # candidates can combine without another model request.
+        if len(entries) < 2 or any("compose" in edit.content_source for edit in entries):
+            result.extend(entries)
+            continue
+        paragraph = inspection.by_location(location).text
+        components = [_component(edit, inspection) for edit in entries]
+        replacement = compose_paragraph(paragraph, components)
+        if replacement is None:
+            result.extend(entries)
+            continue
+        result.append(PlannedEdit(
+            target_id="+".join(edit.target_id for edit in entries),
+            rule_id="+".join(dict.fromkeys(edit.rule_id for edit in entries)),
+            location=location, start=0, end=len(paragraph), replacement=replacement,
+            operation="replace", content_source="atomic_paragraph",
+            evidence={"atomic_components": components},
+            operation_keys=tuple(dict.fromkeys(key for edit in entries for key in edit.operation_keys)),
+            obligation_ids=tuple(dict.fromkeys(key for edit in entries for key in edit.obligation_ids))))
+    return result
+
+
 def _component_covered(component: dict[str, Any], outer_replacement: str) -> bool:
     """True when the outer edit's replacement already carries out the inner operation."""
     evidence = component.get("evidence") or {}
@@ -4223,8 +4265,9 @@ def _resolve_overlaps_with_joint_compose(
         rule_ids: list[str] = []
         joint_obligations: list[dict[str, Any]] = []
         fixed_texts: list[str] = []
+        all_selected_keys = tuple(dict.fromkeys(key for edit in edits for key in edit.operation_keys))
+        unattributed = False
         for edit in edits:
-            selected_keys = [str(value) for value in (edit.operation_keys or ()) if value]
             for rule_id in str(edit.rule_id).split("+"):
                 rule_id = rule_id.strip()
                 if not rule_id or rule_id in rule_ids:
@@ -4232,18 +4275,21 @@ def _resolve_overlaps_with_joint_compose(
                 rule_ids.append(rule_id)
                 rule = rules_by_id.get(rule_id) or {}
                 operations = list(rule.get("operations") or [])
-                selected_indices = _normalise_operation_ids(rule, selected_keys, obligations)
+                selected_indices = _normalise_operation_ids(rule, all_selected_keys, obligations)
                 if selected_indices:
                     operations = [operations[index] for index in selected_indices]
                 else:
-                    operations = [operation for operation in operations
-                                  if operation.get("op") != "noop"]
+                    unattributed = True
+                    break
                 joint_obligations.append({"rule_id": rule_id,
                                           "requirement": str(rule.get("requirement") or ""),
                                           "operations": operations})
                 fixed = str((edit.evidence or {}).get("fixed_text") or "")
                 if fixed:
                     fixed_texts.append(fixed)
+        if unattributed:
+            remaining.append(conflict)
+            continue
         try:
             result = plan_joint_compose(span_text=span.text, start=start, end=end,
                                         obligations=joint_obligations,
@@ -4317,62 +4363,40 @@ def _reconcile_final_plan_ledger(
     artifact.  Reconciling after merge/conflict/Joint Compose makes the invariant true:
     ``ledger=planned`` only when the operation exists in a final edit.
     """
-    target_to_edit_ids: dict[str, list[str]] = {}
-    operation_to_edit_ids: dict[str, list[str]] = {}
+    components: dict[tuple[str, str], set[str]] = {}
     final_target_ids: set[str] = set()
-    final_operation_ids: set[str] = set()
     for record in records:
         edit_id = f"{record.get('rule_id')}:{record.get('target_id')}"
-        target_ids: set[str] = set()
-        operation_ids: set[str] = set()
-        for raw in (record.get("target_id"),):
-            target_ids.update(part for part in str(raw or "").split("+") if part)
-        operation_ids.update(str(value) for value in (record.get("operation_keys") or ())
-                             if value)
-        for component in record.get("components") or []:
-            target_ids.update(part for part in
-                              str(component.get("target_id") or "").split("+") if part)
-            operation_ids.update(str(value) for value in
-                                 (component.get("operation_keys") or ()) if value)
-            evidence = component.get("evidence") or {}
-            operation_ids.update(str(value) for value in
-                                 (evidence.get("operation_keys") or ()) if value)
-        evidence = record.get("evidence") or {}
-        operation_ids.update(str(value) for value in
-                             (evidence.get("operation_keys") or ()) if value)
-        final_target_ids.update(target_ids)
-        final_operation_ids.update(operation_ids)
-        for target_id in target_ids:
-            target_to_edit_ids.setdefault(target_id, []).append(edit_id)
-        for operation_id in operation_ids:
-            operation_to_edit_ids.setdefault(operation_id, []).append(edit_id)
-    conflict_ids: set[str] = set()
-    for conflict in conflicts:
-        for raw in conflict.get("targets") or ():
-            conflict_ids.update(part for part in str(raw or "").split("+") if part)
-    covered_ids = {str(value) for value in covered if value}
+        for unit in record.get("components") or [record]:
+            target_ids = {part for part in str(unit.get("target_id") or "").split("+") if part}
+            evidence = unit.get("evidence") or {}
+            operation_ids = set(unit.get("operation_keys") or evidence.get("operation_keys") or [])
+            final_target_ids.update(target_ids)
+            for target_id in target_ids:
+                for operation_id in operation_ids:
+                    components.setdefault((target_id, str(operation_id)), set()).add(edit_id)
+    conflict_ids = {part for conflict in conflicts for raw in conflict.get("targets") or []
+                    for part in str(raw).split("+") if part}
+    covered_ids = set(covered)
     baseline_ids = {edit.target_id for edit in baseline}
     for entry in ledger:
         target_id = str(entry.get("target_id") or "")
-        edit_ids = target_to_edit_ids.get(target_id) or []
-        operation_keys = [str(value) for value in (entry.get("operation_keys") or ())
-                          if value]
-        operation_edit_ids = sorted({edit_id for key in operation_keys
-                                     for edit_id in operation_to_edit_ids.get(key, [])})
-        entry["operation_keys"] = operation_keys
-        if edit_ids or operation_edit_ids:
+        keys = list(dict.fromkeys(str(key) for key in entry.get("operation_keys") or []))
+        effects = {key: {"status": "planned" if components.get((target_id, key)) else "unresolved",
+                         "edit_ids": sorted(components.get((target_id, key)) or [])}
+                   for key in keys}
+        entry["operation_effects"] = effects
+        entry["edit_ids"] = sorted({value for effect in effects.values() for value in effect["edit_ids"]})
+        if effects and all(effect["status"] == "planned" for effect in effects.values()):
             entry["status"] = "planned"
-            entry["edit_ids"] = sorted(set(edit_ids or operation_edit_ids))
             entry.pop("reason", None)
         elif target_id in covered_ids:
             entry["status"] = "satisfied"
             entry["reason"] = "RECALL_COVERED_BY_ALTERNATIVE"
-            entry["edit_ids"] = sorted({edit_id for key in operation_keys
-                                        for edit_id in operation_to_edit_ids.get(key, [])})
-        elif target_id in conflict_ids or target_id in final_target_ids:
+        elif target_id in conflict_ids:
             entry["status"] = "unresolved"
             entry["reason"] = "RECALL_EDIT_OVERLAP"
-        elif target_id in baseline_ids and entry.get("status") == "planned":
+        elif target_id in baseline_ids or target_id in final_target_ids or entry.get("status") == "planned":
             entry["status"] = "unresolved"
             entry["reason"] = "RECALL_PLAN_COMPONENT_DROPPED"
 
@@ -4474,6 +4498,7 @@ def plan_edits(rules_by_id: dict[str, dict], targets: Sequence[Target], inspecti
                        "operation_keys": list(edit.operation_keys),
                        "obligation_ids": list(edit.obligation_ids)})
     baseline = list(planned)
+    planned = _atomic_paragraph_edits(planned, inspection)
     merged, conflicts, covered = merge_edits(planned, inspection, obligations)
     if conflicts and _tier1_enabled():
         planned, conflicts = _resolve_overlaps_with_joint_compose(
@@ -4492,10 +4517,44 @@ def plan_edits(rules_by_id: dict[str, dict], targets: Sequence[Target], inspecti
         ids = _component_target_ids(edit, components)
         if ids & conflict_ids:
             continue
-        records.append({**edit.as_dict(), "components": components})
+        owned_components = (edit.evidence or {}).get("atomic_components")
+        records.append({**edit.as_dict(), "components": owned_components or components})
     _reconcile_final_plan_ledger(ledger, records, conflicts, covered, baseline)
     return {"edits": records, "ledger": ledger, "conflicts": conflicts,
             "covered": sorted(covered)}
+
+
+def replan_sites(existing: dict[str, Any], dirty_locations: set[str], rules_by_id: dict[str, dict],
+                 targets: Sequence[Target], inspection: DocumentInspection, facts: Facts,
+                 gateway: Any, *, max_compose_calls: int, obligations: Any = None) -> dict[str, Any]:
+    """Recompute dirty paragraph plans and reuse all unchanged final components."""
+    from copy import deepcopy
+    dirty_targets = [target for target in targets if target.location in dirty_locations
+                     or any(part.rsplit(":", 2)[0] in dirty_locations for part in target.composite)]
+    dirty_ids = {target.target_id for target in dirty_targets}
+    retained_edits = []
+    for edit in existing.get("edits") or []:
+        components = edit.get("components") or [edit]
+        if str(edit.get("location") or "") in dirty_locations or any(
+                set(str(unit.get("target_id") or "").split("+")) & dirty_ids for unit in components):
+            dirty_ids.update(part for unit in components
+                             for part in str(unit.get("target_id") or "").split("+"))
+        else:
+            retained_edits.append(deepcopy(edit))
+    # Composite operations are indivisible: replan all their source parts together.
+    dirty_targets = [target for target in targets if target.target_id in dirty_ids]
+    fresh = plan_edits(rules_by_id, dirty_targets, inspection, facts, gateway,
+                       max_compose_calls=max_compose_calls, obligations=obligations)
+    records = retained_edits + fresh["edits"]
+    ledger = [deepcopy(entry) for entry in existing.get("ledger") or []
+              if entry.get("target_id") not in dirty_ids] + fresh["ledger"]
+    conflicts = [deepcopy(conflict) for conflict in existing.get("conflicts") or []
+                 if conflict.get("location") not in dirty_locations and not any(
+                     set(str(raw).split("+")) & dirty_ids for raw in conflict.get("targets") or [])]
+    conflicts += fresh["conflicts"]
+    covered = sorted((set(existing.get("covered") or []) - dirty_ids) | set(fresh["covered"]))
+    _reconcile_final_plan_ledger(ledger, records, conflicts, covered, [])
+    return {"edits": records, "ledger": ledger, "conflicts": conflicts, "covered": covered}
 
 
 def build_docx_edits(planned: Sequence[Any], inspection: DocumentInspection) -> list[dict[str, Any]]:
@@ -4529,6 +4588,10 @@ def build_docx_edits(planned: Sequence[Any], inspection: DocumentInspection) -> 
             "rule_id": item["rule_id"],
             "target_id": item["target_id"],
             "operation": item["operation"],
+            "operation_keys": list(item.get("operation_keys") or []),
+            "obligation_ids": list(item.get("obligation_ids") or []),
+            "evidence": dict(item.get("evidence") or {}),
+            "planning_content_source": item.get("content_source") or "",
             "components": item.get("components") or [],
         }
         if item["operation"] == "insert":
@@ -4719,6 +4782,12 @@ def content_check_factory(planned: Sequence[dict], inspection: DocumentInspectio
         if edit.get("expected_old_text") != span.text[start:end]:
             return False
         components = item.get("components") or []
+        if item.get("content_source") == "atomic_paragraph":
+            from .generation.atomic import compose_paragraph
+            return (start == 0 and end == len(span.text)
+                    and components == (item.get("evidence") or {}).get("atomic_components")
+                    and all(_component_ok(component, inspection) for component in components)
+                    and compose_paragraph(span.text, components) == str(item["replacement"]))
         if components:
             if "".join(str(component.get("replacement") or "") for component in components) != str(item["replacement"]):
                 return False
@@ -4737,6 +4806,14 @@ _TARGET_ANCHORS: dict[str, tuple[tuple[str, ...], str]] = {
     "G01": (("基金份额类别", "将基金份额分为", "份额类别："), "any"),
     "G03": (("基金份额类别", "将基金份额分为", "份额类别："), "any"),
 }
+
+
+def append_site_ok(rule_id: str, span: Any, inspection: DocumentInspection) -> bool:
+    """An append anchor must carry its own clause, never a neighbour's anchor."""
+    if rule_id in {"G01", "G03"}:
+        paragraph, _ = display_text(span.text)
+        return any(anchor in paragraph for anchor in _TARGET_ANCHORS[rule_id][0])
+    return target_site_ok(rule_id, span, inspection)
 
 
 def target_site_ok(rule_id: str, span: Any, inspection: DocumentInspection) -> bool:

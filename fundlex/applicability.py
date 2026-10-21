@@ -189,6 +189,9 @@ def resolve(condition: Mapping[str, Any] | None, facts: Any, *,
     Without a gateway (offline/unit tests) this is exactly :func:`evaluate`.
     """
     decision = evaluate(condition, facts, rule_id=rule_id, operation_id=operation_id)
+    from .recall import _condition_fact_names
+    if any(facts.status_of(name) != "VERIFIED" for name in _condition_fact_names(condition)):
+        return decision
     if decision.decidable or gateway is None or inspection is None:
         return decision
     decision = judge(decision, gateway=gateway, evidence=evidence, facts=facts,
@@ -241,6 +244,8 @@ def resolve_ledger(records: Iterable[Any], *, gateway: Any, inspection: Any, fac
         current = getattr(record, "applicability", None)
         if current is None or current.status != "UNKNOWN":
             continue
+        if any(facts.status_of(name) != "VERIFIED" for name in spec.required_facts):
+            continue
         evidence = evidence_by_rule.get(spec.rule_id)
         if evidence is None:
             continue
@@ -273,6 +278,9 @@ def resolve_ledger(records: Iterable[Any], *, gateway: Any, inspection: Any, fac
         elif decision.status == "UNKNOWN":
             record.completion = "UNRESOLVED"
             record.completion_evidence = f"applicability_unknown:{decision.reason}"
+        else:
+            record.completion = "UNRESOLVED"
+            record.completion_evidence = "OPEN_OBLIGATION:applicability_true"
         if decision.status in {"TRUE", "FALSE"}:
             overrides = getattr(facts, "condition_overrides", None)
             if isinstance(overrides, dict):

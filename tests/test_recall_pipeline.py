@@ -26,9 +26,18 @@ GUIDE_SHA = "ab" * 32
 
 
 def guide_document(rules: list[dict] | None = None) -> dict:
-    return {"schema_version": "guide-rules-v1", "groups": rules if rules is not None else guide_rules(),
-            "document_sha256": GUIDE_SHA,
-            "validation": {"errors": [], "warnings": [], "coverage_gaps": []}}
+    from copy import deepcopy
+    from fundlex.guide import bind_operation_identities, certify_guide_document
+    document = {"schema_version": "guide-rules-v1", "source_sha256": GUIDE_SHA,
+                "groups": deepcopy(rules if rules is not None else guide_rules()),
+                "validation": {"errors": [], "warnings": [], "coverage_gaps": [],
+                               "verification": {"findings": [], "invalid_findings": 0}}}
+    for rule in document["groups"]:
+        for operation in rule["operations"]:
+            operation.setdefault("group_kind", "INDEPENDENT")
+            operation.setdefault("one_of_group", "")
+    bind_operation_identities(document)
+    return certify_guide_document(document, source_sha256=GUIDE_SHA)
 
 
 def rules_subset(*rule_ids: str) -> list[dict]:
@@ -230,9 +239,11 @@ def test_happy_path_complete_delivery(tmp_path: Path):
     assert report["engine_version"] == ENGINE_VERSION
     assert report["execution_mode"] == "delivery"
     assert report["source_sha256"] == source_sha
-    assert report["guide"]["document_sha256"] == GUIDE_SHA
+    assert report["guide"]["document_sha256"] == guide_document()["document_sha256"]
     assert report["guide"]["prompt_versions"] == dict(PROMPT_VERSIONS)
-    assert report["guide"]["groups"] == guide_rules()
+    # Runtime reports the certified Guide IR, including bound operation identities
+    # and explicit group semantics.
+    assert report["guide"]["groups"] == guide_document()["groups"]
     assert report["qualification"]["status"] == "eligible"
     assert report["facts"]["fund_type"] == "open_regular"
     assert report["scope_mapping"]["coverage"]
@@ -363,13 +374,11 @@ def test_sweep_filters_finding_when_rule_already_carried_out(tmp_path: Path):
     assert docx_names(output_dir) == {"final.docx", "redline.docx"}
 
 
-def test_sweep_filters_class_substitution_rule_that_needs_no_change(tmp_path: Path):
-    """A class-substitution finding is dropped when the product's classes already match.
+def test_incomplete_class_set_blocks_delivery_even_when_sweep_finding_looks_satisfied(tmp_path: Path):
+    """A partial class set cannot certify a class-substitution branch.
 
-    G02/G04 ask to regroup the share classes with the guide's example letters (A类、B类).
-    For a product that only has A and C, the instantiated replacement equals the reference,
-    so the clause is already correct and the sweep finding is noise, not a real gap
-    (FL-D052).
+    The source defines A/C/D while the primary only returns A/C. Authentic value
+    quotes cannot make the returned set complete or waive an operation.
     """
     substitution = {
         "rule_id": "G02", "title": "释义-基金份额类别定义", "section_hint": "释义",
@@ -403,12 +412,13 @@ def test_sweep_filters_class_substitution_rule_that_needs_no_change(tmp_path: Pa
                                               "recall_scope": scope_with_g02},
                                    guide=guide_document([*rules_subset("G05", "G14"), substitution]))
 
-    assert report["sweep"]["findings"] == []
+    assert report["delivery_status"] != "complete"
+    assert report["facts"]["fact_status"]["share_class_structure"] != "VERIFIED"
     dropped = [item for round_ledger in report["sweep"]["rounds"]
                for item in round_ledger["dropped"]]
-    assert any(item["code"] == "SWEEP_ALREADY_SATISFIED" and item.get("rule_id") == "G02"
+    assert not any(item["code"] == "SWEEP_ALREADY_SATISFIED" and item.get("rule_id") == "G02"
                for item in dropped)
-    assert docx_names(output_dir) == {"final.docx", "redline.docx"}
+    assert docx_names(output_dir) in ({"working_final.docx", "working_redline.docx"}, set())
 
 
 def test_sweep_filters_finding_outside_rule_section(tmp_path: Path):
@@ -443,11 +453,13 @@ def test_sweep_filters_finding_outside_rule_section(tmp_path: Path):
 def test_excluded_fund_type_report(tmp_path: Path):
     def etf_facts(context: str) -> dict:
         value = facts_response(context)
-        value["fund_type"] = {"value": "etf", "quote": "某某灵活配置混合型证券投资基金基金合同",
+        value["fund_type"] = {"value": "etf", "quote": "某某交易型开放式指数证券投资基金基金合同",
                               "basis": "scripted etf"}
         return value
 
-    _, output_dir, gateway, report = run(tmp_path, {"recall_facts": etf_facts})
+    _, output_dir, gateway, report = run(tmp_path, {"recall_facts": etf_facts, "recall_qualification_review": {
+        "fund_type": "etf", "quote": "某某交易型开放式指数证券投资基金基金合同", "reason": "current title"}},
+        title="某某交易型开放式指数证券投资基金基金合同")
 
     assert report["delivery_status"] == "excluded"
     assert report["qualification"]["status"] == "excluded_by_fund_type"
@@ -458,7 +470,7 @@ def test_excluded_fund_type_report(tmp_path: Path):
     assert report["facts"]["fund_type"] == "etf"
     assert report["artifacts"] == {} and report["output_validation"]["kind"] is None
     assert docx_names(output_dir) == set()
-    assert [task for task, _ in gateway.calls] == ["recall_facts"]
+    assert [task for task, _ in gateway.calls] == ["recall_facts", "recall_qualification_review"]
     assert (output_dir / "report.md").exists()
     assert_no_temp_artifacts(output_dir)
 
@@ -471,11 +483,13 @@ def test_excluded_reits_fund_type_report(tmp_path: Path):
     """
     def reits_facts(context: str) -> dict:
         value = facts_response(context)
-        value["fund_type"] = {"value": "reits", "quote": "某某灵活配置混合型证券投资基金基金合同",
+        value["fund_type"] = {"value": "reits", "quote": "某某封闭式基础设施证券投资基金基金合同",
                               "basis": "scripted reits"}
         return value
 
-    _, output_dir, gateway, report = run(tmp_path, {"recall_facts": reits_facts})
+    _, output_dir, gateway, report = run(tmp_path, {"recall_facts": reits_facts, "recall_qualification_review": {
+        "fund_type": "reits", "quote": "某某封闭式基础设施证券投资基金基金合同", "reason": "current title"}},
+        title="某某封闭式基础设施证券投资基金基金合同")
 
     assert report["delivery_status"] == "excluded"
     assert report["qualification"]["status"] == "excluded_by_fund_type"
@@ -484,7 +498,7 @@ def test_excluded_reits_fund_type_report(tmp_path: Path):
     assert "reits" in report["qualification"]["excluded_types"]
     assert report["artifacts"] == {} and report["output_validation"]["kind"] is None
     assert docx_names(output_dir) == set()
-    assert [task for task, _ in gateway.calls] == ["recall_facts"]
+    assert [task for task, _ in gateway.calls] == ["recall_facts", "recall_qualification_review"]
     assert_no_temp_artifacts(output_dir)
 
 
@@ -516,11 +530,13 @@ def test_excluded_types_env_override(tmp_path: Path, monkeypatch: pytest.MonkeyP
 
     def etf_facts(context: str) -> dict:
         value = facts_response(context)
-        value["fund_type"] = {"value": "etf", "quote": "某某灵活配置混合型证券投资基金基金合同",
+        value["fund_type"] = {"value": "etf", "quote": "某某交易型开放式指数证券投资基金基金合同",
                               "basis": "scripted etf"}
         return value
 
-    _, output_dir, _, report = run(tmp_path, {"recall_facts": etf_facts})
+    _, output_dir, _, report = run(tmp_path, {"recall_facts": etf_facts, "recall_qualification_review": {
+        "fund_type": "etf", "quote": "某某交易型开放式指数证券投资基金基金合同", "reason": "current title"}},
+        title="某某交易型开放式指数证券投资基金基金合同")
 
     assert report["delivery_status"] == "complete"
     assert report["qualification"]["status"] == "eligible"
@@ -731,7 +747,7 @@ def test_audit_missed_target_triggers_repair(tmp_path: Path):
     assert docx_names(output_dir) == {"final.docx", "redline.docx"}
 
 
-def test_audit_evidence_unverified_blocks_complete(tmp_path: Path):
+def test_unproven_audit_cannot_overturn_verified_artifact(tmp_path: Path):
     def hallucinating_audit(context: str) -> dict:
         _, _, ledger = _audit_sections(context)
         return {"results": [{"target_id": item["target_id"], "verdict": "completed",
@@ -741,13 +757,14 @@ def test_audit_evidence_unverified_blocks_complete(tmp_path: Path):
 
     _, output_dir, _, report = run(tmp_path, {"recall_audit": hallucinating_audit})
 
-    assert report["delivery_status"] == "incomplete"
-    assert any(item["kind"] == "audit" and item["code"] == "AUDIT_NOT_COMPLETED"
-               for item in report["unresolved"])
+    # A review opinion without verifiable contradictory evidence cannot overturn
+    # deterministic site proof. The dropped opinion remains auditable metadata.
+    assert report["delivery_status"] == "complete"
+    assert not any(item["kind"] == "audit" for item in report["unresolved"])
     dropped = [item for round_ledger in report["audit"]["rounds"]
                for item in round_ledger["dropped"]]
     assert any(item["code"] == "AUDIT_EVIDENCE_UNVERIFIED" for item in dropped)
-    assert docx_names(output_dir) == {"working_final.docx", "working_redline.docx"}
+    assert docx_names(output_dir) == {"final.docx", "redline.docx"}
 
 
 def test_unresolved_inventory_target_is_rebound_cross_paragraph(tmp_path: Path):
@@ -861,7 +878,7 @@ def test_checkpoint_binding_dependencies(tmp_path: Path):
     bound_dir, dependencies = gateway.bindings[0]
     assert bound_dir == checkpoint_dir
     assert dependencies["source_sha256"] == hashlib.sha256(source.read_bytes()).hexdigest()
-    assert dependencies["guide_document_sha256"] == GUIDE_SHA
+    assert dependencies["guide_document_sha256"] == guide_document()["document_sha256"]
     assert dependencies["prompt_versions"] == dict(PROMPT_VERSIONS)
     assert dependencies["engine_id"] == ENGINE_ID
     assert dependencies["engine_version"] == ENGINE_VERSION
@@ -999,7 +1016,7 @@ def test_resolve_pending_requires_artifact_evidence(tmp_path: Path):
     assert pending[0]["status"] == "pending"
     assert pending[0]["resolution"] == "model_clean_but_evidence_missing"
     assert pending[1]["status"] == "pending"
-    assert pending[2]["status"] == "resolved" and pending[2]["resolution_evidence"] == "model_clean"
+    assert pending[2]["status"] == "pending"
     # A disappeared paragraph is not evidence for a missing required text.
     assert pending[3]["status"] == "pending"
     # wrong_text with a known required text: quote absence alone is not enough.
@@ -1014,16 +1031,25 @@ def test_resolve_pending_requires_artifact_evidence(tmp_path: Path):
     repaired = findings()
     _resolve_pending(repaired, batch, actual=inspect_docx(path, full=True),
                      rules_by_id=rules, facts=facts)
+    # A first required text and a silent model no longer resolve independent
+    # operations. Only canonical operation/site effect proof may close findings.
+    assert all(finding["status"] == "pending" for finding in repaired)
+    from fundlex.generation.effects import evaluate_operation_effect
+    from fundlex.obligations import apply_facts, compile_obligations
+    from fundlex.recall_pipeline import _apply_artifact_proof_to_findings
+    ledger = compile_obligations({"groups": [rule]})
+    apply_facts(ledger, facts)
+    actual = inspect_docx(path, full=True)
+    record = ledger.records[0]
+    proof = evaluate_operation_effect(record, actual, actual,
+        [{"location": span.location, "quote": span.text} for span in actual.paragraphs], [], facts)
+    replay = {"obligations": {record.obligation_id: proof.as_dict()}}
+    _apply_artifact_proof_to_findings(repaired, replay, actual, ledger, rules)
     assert repaired[0]["status"] == "resolved"
-    assert repaired[0]["resolution_evidence"] == "required_text_present"
     assert repaired[1]["status"] == "resolved"
-    assert repaired[1]["resolution_evidence"] == "old_text_absent"
-    # The paragraph is gone but the required text never appeared: still pending.
-    assert repaired[3]["status"] == "pending"
+    assert repaired[3]["status"] == "pending"  # disappeared site is unproven
     assert repaired[4]["status"] == "resolved"
-    assert repaired[4]["resolution_evidence"] == "required_text_present"
     assert repaired[5]["status"] == "resolved"
-    assert repaired[5]["resolution_evidence"] == "required_text_present"
 
     reported = findings()[:1]
     still = {"round": 4, "chunks": [{"locations": ["p0"],
@@ -1043,7 +1069,7 @@ def test_unverified_excluded_fund_type_does_not_exclude():
                      {"fund_type": verified}, ())
 
     assert _qualification_status(facts(False), ("etf",)) == ("eligible_fund_type_unverified", False)
-    assert _qualification_status(facts(True), ("etf",)) == ("excluded_by_fund_type", True)
+    assert _qualification_status(facts(True), ("etf",)) == ("eligible_fund_type_unverified", False)
     assert _qualification_status(facts(False), ("money_market",)) == ("eligible", False)
 
 

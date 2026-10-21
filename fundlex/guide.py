@@ -317,6 +317,13 @@ def validate_parsed_guide(source: GuideSource, parsed: dict) -> dict:
                                      f"{label}.op {kind!r} is not append/replace/delete/noop"))
                 continue
             operations_by_kind[kind] += 1
+            relation = operation.get("group_kind")
+            if relation not in {"INDEPENDENT", "ALL_OF", "ONE_OF", "BRANCH"}:
+                errors.append(_issue("GUIDE_GROUP_INVALID", rule_id,
+                                     f"{label}.group_kind must be explicit"))
+            if (relation == "ONE_OF") != bool(operation.get("one_of_group")):
+                errors.append(_issue("GUIDE_GROUP_INVALID", rule_id,
+                                     f"{label}.one_of_group does not match group_kind"))
             required = {"append": ("new_text",), "replace": ("old_text", "new_text"),
                         "delete": ("old_text",), "noop": ("text",)}[kind]
             for field in required:
@@ -382,6 +389,9 @@ _PARSE_INSTRUCTION = (
     "Read the complete guide in [GUIDE_TEXT] before answering; the leading [n] markers are guide paragraph "
     "indices, not part of the text. Return one group per distinct business requirement of the guide, in "
     "document order. rule_id is sequential: G01, G02, ... . title copies the guide's own group heading. "
+    "Each operation explicitly sets group_kind to INDEPENDENT, ALL_OF, ONE_OF or BRANCH. "
+    "Set one_of_group only for historical wording alternatives of the SAME business obligation, "
+    "never for independent operations belonging to the same rule. "
     "section_hint names the business domain, one of 释义, 基金的基本情况, 基金份额的申购与赎回, "
     "基金费用与税收, 基金的收益与分配, 基金财产的清算. requirement is a faithful natural-language "
     "description of what must change; it never adds policy the guide does not state. operations contains one "
@@ -443,13 +453,15 @@ _CONDITION_SCHEMA = {
 
 _OPERATION_SCHEMA = {
     "type": "object",
-    "required": ["op", "condition"],
+    "required": ["op", "condition", "group_kind", "one_of_group"],
     "properties": {
         "op": {"enum": list(OPERATIONS)},
         "old_text": {"type": "string"},
         "new_text": {"type": "string"},
         "text": {"type": "string"},
         "condition": _CONDITION_SCHEMA,
+        "group_kind": {"enum": ["INDEPENDENT", "ALL_OF", "ONE_OF", "BRANCH"]},
+        "one_of_group": {"type": "string"},
     },
 }
 
@@ -714,7 +726,8 @@ def build_guide_document(source: GuideSource, gateway: Any, *, max_repair_rounds
         validation = validate_parsed_guide(source, parsed)
         verification = verify_guide(source, parsed, gateway)
         rounds += 1
-        clean = not validation["errors"] and not verification["findings"]
+        clean = (not validation["errors"] and not validation["coverage_gaps"]
+                 and not verification["findings"] and not verification["invalid_findings"])
         rounds_detail.append({
             "round": rounds,
             "repair_context_used": repair_context is not None,
@@ -728,7 +741,7 @@ def build_guide_document(source: GuideSource, gateway: Any, *, max_repair_rounds
         if clean or rounds > max_repair_rounds:
             break
         repair_context = _render_repair_context(validation, verification)
-    return {
+    document = {
         "schema_version": GUIDE_SCHEMA_VERSION,
         "parser_version": PARSER_VERSION,
         "source_sha256": source.source_sha256,
@@ -752,6 +765,10 @@ def build_guide_document(source: GuideSource, gateway: Any, *, max_repair_rounds
         "built_at": datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z"),
         "model": _model_summary(gateway, rounds),
     }
+    bind_operation_identities(document)
+    if clean:
+        document = certify_guide_document(document, source_sha256=source.source_sha256)
+    return document
 
 
 # ---------------------------------------------------------------------------
@@ -759,9 +776,170 @@ def build_guide_document(source: GuideSource, gateway: Any, *, max_repair_rounds
 # ---------------------------------------------------------------------------
 
 def guide_document_sha256(doc: dict) -> str:
-    payload = {key: value for key, value in doc.items() if key not in {"built_at", "model"}}
+    # Certification and display hashes are envelopes, never part of their own digest.
+    payload = {key: value for key, value in doc.items()
+               if key not in {"built_at", "model", "document_sha256", "certification"}}
     return hashlib.sha256(json.dumps(payload, ensure_ascii=False, sort_keys=True,
                                      separators=(",", ":")).encode("utf-8")).hexdigest()
+
+
+def finding_id(finding: dict) -> str:
+    payload = {key: value for key, value in finding.items() if key != "finding_id"}
+    return "finding-" + hashlib.sha256(json.dumps(
+        payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+    ).encode()).hexdigest()[:24]
+
+
+def validate_runtime_guide(doc: dict, *, approved_source_sha256: str | None = None,
+                           approved_document_sha256: str | None = None) -> dict:
+    """Validate the actual payload against its approved envelope before model work.
+
+    A parsed/clean flag is not certification. Finding dispositions bind both immutable
+    source and payload digests. No runtime path creates or upgrades an approval.
+    """
+    failures: list[str] = []
+    if not isinstance(doc, dict):
+        raise GuideError("GUIDE_NOT_CERTIFIED", {"failures": ["document_invalid"]})
+    source_sha = str(doc.get("source_sha256") or "")
+    document_sha = guide_document_sha256(doc)
+    certificate = doc.get("certification") or {}
+    if not isinstance(certificate, dict):
+        certificate = {}
+    if doc.get("schema_version") != GUIDE_SCHEMA_VERSION:
+        failures.append("schema_unsupported")
+    if not re.fullmatch(r"[0-9a-f]{64}", source_sha):
+        failures.append("source_sha_invalid")
+    if certificate.get("approved") is not True:
+        failures.append("approval_missing")
+    for key, actual, expected in (
+            ("source_sha256", source_sha, approved_source_sha256),
+            ("guide_document_sha256", document_sha, approved_document_sha256)):
+        if certificate.get(key) != actual or (expected is not None and expected != actual):
+            failures.append(key + "_mismatch")
+    if doc.get("document_sha256") not in (None, document_sha):
+        failures.append("stored_document_sha_mismatch")
+    validation = doc.get("validation")
+    if not isinstance(validation, dict):
+        failures.append("validation_missing")
+        validation = {}
+    if validation.get("errors") != []:
+        failures.append("deterministic_errors")
+    if validation.get("coverage_gaps") != []:
+        failures.append("coverage_gaps")
+    verification = validation.get("verification") or {}
+    if not isinstance(verification, dict) or verification.get("invalid_findings") != 0:
+        failures.append("invalid_verifier_findings")
+        verification = verification if isinstance(verification, dict) else {}
+    findings = verification.get("findings")
+    if not isinstance(findings, list):
+        failures.append("verification_missing")
+        findings = []
+    dispositions = certificate.get("finding_dispositions") or []
+    disposition_map = {item.get("finding_id"): item for item in dispositions
+                       if isinstance(item, dict)}
+    if len(disposition_map) != len(dispositions):
+        failures.append("duplicate_disposition")
+    for finding in findings:
+        if not isinstance(finding, dict):
+            failures.append("finding_invalid")
+            continue
+        stable_id = finding_id(finding)
+        decision = disposition_map.get(stable_id, {})
+        if finding.get("finding_id") != stable_id or decision.get("approved") is not True \
+                or not decision.get("disposition") or not decision.get("reason") \
+                or decision.get("source_sha256") != source_sha \
+                or decision.get("guide_document_sha256") != document_sha:
+            failures.append("finding_uncertified:" + stable_id)
+    groups = doc.get("groups") or []
+    if not isinstance(groups, list) or not groups or certificate.get("rule_count") != len(groups):
+        failures.append("rule_count_mismatch")
+    seen_rules: set[str] = set()
+    seen_operations: set[str] = set()
+    operation_count = 0
+    for rule in groups if isinstance(groups, list) else []:
+        if not isinstance(rule, dict):
+            failures.append("rule_invalid")
+            continue
+        rule_id = str(rule.get("rule_id") or "")
+        if not rule_id or rule_id in seen_rules:
+            failures.append("rule_id_duplicate_or_missing")
+        seen_rules.add(rule_id)
+        operations = rule.get("operations") or []
+        if not operations:
+            failures.append("operations_missing:" + rule_id)
+        one_of: dict[str, list[dict]] = {}
+        for index, operation in enumerate(operations):
+            operation_count += 1
+            if not isinstance(operation, dict):
+                failures.append("operation_invalid")
+                continue
+            operation_id = operation.get("operation_id")
+            if operation_id != f"{rule_id}:{index}" or operation_id in seen_operations:
+                failures.append("operation_id_invalid_or_duplicate")
+            seen_operations.add(str(operation_id))
+            if operation.get("op") not in OPERATIONS or _condition_error(operation.get("condition")):
+                failures.append("operation_compile_invalid:" + str(operation_id))
+            kind = operation.get("group_kind")
+            if kind not in {"INDEPENDENT", "ALL_OF", "ONE_OF", "BRANCH"}:
+                failures.append("group_semantics_missing:" + str(operation_id))
+            group = operation.get("one_of_group")
+            if (kind == "ONE_OF") != bool(group):
+                failures.append("one_of_semantics_invalid:" + str(operation_id))
+            if group:
+                one_of.setdefault(str(group), []).append(operation)
+        for name, alternatives in one_of.items():
+            if len(alternatives) < 2 or any(item.get("op") != "replace" for item in alternatives) \
+                    or len({branch_key_for_guide(item.get("condition"))
+                            for item in alternatives}) != 1 \
+                    or len({item.get("new_text") for item in alternatives}) != 1:
+                failures.append("one_of_not_historical_alternatives:" + name)
+    if certificate.get("operation_count") != operation_count:
+        failures.append("operation_count_mismatch")
+    if not failures:
+        try:
+            from .obligations import compile_obligations
+            compiled = compile_obligations(doc)
+            if len(compiled.records) != operation_count:
+                failures.append("operation_compile_count_mismatch")
+        except (ValueError, TypeError, KeyError, IndexError):
+            failures.append("operation_compile_failed")
+    if failures:
+        raise GuideError("GUIDE_NOT_CERTIFIED", {"failures": sorted(set(failures))})
+    return {"state": "CERTIFIED", "source_sha256": source_sha,
+            "guide_document_sha256": document_sha, "rule_count": len(groups),
+            "operation_count": operation_count}
+
+
+def branch_key_for_guide(condition: Any) -> str:
+    return json.dumps(condition, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+
+
+def bind_operation_identities(doc: dict) -> None:
+    """Assign stable indices; never infer ONE_OF from text similarity."""
+    for rule in doc.get("groups") or []:
+        for index, operation in enumerate(rule.get("operations") or []):
+            operation["operation_id"] = f"{rule['rule_id']}:{index}"
+
+
+def certify_guide_document(doc: dict, *, source_sha256: str,
+                           finding_dispositions: list[dict] | None = None) -> dict:
+    """Bind a completed source review to its exact payload, then validate it.
+
+    Findings require pre-existing approved dispositions; this function never approves
+    findings or repairs validation data. Call only after independent source review.
+    """
+    certificate = {
+        "approved": True, "source_sha256": source_sha256,
+        "guide_document_sha256": guide_document_sha256(doc),
+        "rule_count": len(doc.get("groups") or []),
+        "operation_count": sum(len(rule.get("operations") or [])
+                               for rule in doc.get("groups") or []),
+        "finding_dispositions": copy.deepcopy(finding_dispositions or []),
+    }
+    candidate = {**doc, "certification": certificate}
+    candidate["document_sha256"] = certificate["guide_document_sha256"]
+    validate_runtime_guide(candidate, approved_source_sha256=source_sha256)
+    return candidate
 
 
 def save_guide_document(doc: dict, path: str | Path) -> str:

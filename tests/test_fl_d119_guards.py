@@ -55,7 +55,7 @@ def _facts() -> Facts:
                           ClassFact("D类", True, False, True, None, ""),
                           ClassFact("C类", False, True, True, "0.10%", "")),
                  floating_management_fee=False, floating_quote="",
-                 floating_basis="", notes="", quotes_verified={}, problems=())
+                 floating_basis="", notes="", quotes_verified={}, problems=(), fact_status={"share_class_structure":"VERIFIED", "subscription_fee_group":"VERIFIED", "service_fee_group":"VERIFIED"}, set_complete_verified=True)
 
 
 def test_g08_fuzzy_pass_rejects_topic_flip():

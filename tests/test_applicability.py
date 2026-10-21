@@ -75,7 +75,7 @@ def test_primary_judge_requires_a_verified_quote(tmp_path: Path):
     assert rejected.reason == "APPLICABILITY_QUOTE_UNVERIFIED"
 
 
-def test_review_arbitration_can_resolve_after_primary_leaves_unknown(tmp_path: Path):
+def test_review_cannot_replace_unverified_class_set(tmp_path: Path):
     source = tmp_path / "contract.docx"
     build_contract(source)
     inspection = inspect_docx(source, full=True)
@@ -88,10 +88,8 @@ def test_review_arbitration_can_resolve_after_primary_leaves_unknown(tmp_path: P
     })
     resolved = resolve(decision.condition, Facts(status="UNKNOWN"), gateway=gateway,
                        evidence=CLASS_DEFINITION, inspection=inspection)
-    assert resolved.status == "TRUE"
-    assert resolved.source == "review"
-    assert gateway.calls == ["recall_applicability", "recall_arbitrate"]
-    assert [item["stage"] for item in resolved.history] == ["primary", "review"]
+    assert resolved.status == "UNKNOWN"
+    assert gateway.calls == []
 
 
 def test_unknown_remains_unknown_when_no_quote_proves_it(tmp_path: Path):
@@ -109,7 +107,7 @@ def test_unknown_remains_unknown_when_no_quote_proves_it(tmp_path: Path):
     assert resolved.decidable is False
 
 
-def test_resolve_ledger_reuses_one_decision_per_condition(tmp_path: Path):
+def test_resolve_ledger_requires_fact_recovery_before_branch_judgment(tmp_path: Path):
     source = tmp_path / "contract.docx"
     build_contract(source)
     inspection = inspect_docx(source, full=True)
@@ -131,12 +129,12 @@ def test_resolve_ledger_reuses_one_decision_per_condition(tmp_path: Path):
     history = resolve_ledger(ledger.records, gateway=gateway, inspection=inspection,
                              facts=Facts(status="UNKNOWN"),
                              evidence_by_rule={"G05": CLASS_DEFINITION})
-    assert gateway.calls == ["recall_applicability"]
-    assert [item["status"] for item in history] == ["TRUE"]
-    assert {record.applicability.status for record in ledger.records} == {"TRUE"}
+    assert gateway.calls == []
+    assert history == []
+    assert {record.applicability.status for record in ledger.records} == {"UNKNOWN"}
 
 
-def test_recovered_branch_decision_reaches_planning():
+def test_branch_override_cannot_bypass_fact_completeness():
     from fundlex.recall import condition_matches, condition_status
     condition = {"kind": "has_service_fee", "value": True}
     facts = Facts(status="UNKNOWN")
@@ -144,8 +142,8 @@ def test_recovered_branch_decision_reaches_planning():
     facts.condition_overrides = {
         __import__("json").dumps(condition, sort_keys=True, ensure_ascii=False,
                                  separators=(",", ":")): "TRUE"}
-    assert condition_status(condition, facts) == "TRUE"
-    assert condition_matches(condition, facts) is True
+    assert condition_status(condition, facts) == "UNKNOWN"
+    assert condition_matches(condition, facts) is False
 
 
 def test_verified_fact_is_not_overturned_by_an_override():

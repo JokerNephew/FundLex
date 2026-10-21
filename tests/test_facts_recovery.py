@@ -63,6 +63,7 @@ def test_all_verified_facts_need_no_recovery_call(tmp_path: Path):
     facts = facts_from_value(inspection, {
         "fund_type": {"value": "open_regular", "quote": CLASS_DEFINITION},
         "classes": candidate_value()["classes"],
+        "class_set_quote": candidate_value()["class_set_quote"],
         "floating_management_fee": {"value": False, "quote": CLASS_DEFINITION},
     })
     assert all(facts.status_of(name) == "VERIFIED" for name in

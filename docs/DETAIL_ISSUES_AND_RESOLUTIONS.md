@@ -2055,7 +2055,53 @@
 - 问题与影响：本机 `systemctl is-active fundlex-recall-api fundlex-recall-worker` 返回 `active active`，但访问默认工作台/API 地址 `http://127.0.0.1:8000/api/health` 与 `/api/capabilities` 均返回 connection refused。当前不能据此确认工作台入口可用或完成运行态验收。
 - 证据或复现线索：在 `/home/opencode/fundlex` 执行上述 systemd 状态检查及 `curl --max-time 5`；主机名 `iZf8zemhifedxdow1zefr0Z`，网卡地址为 `172.28.217.241`。本次检查未打印凭据，也未修改服务。
 - 处理方法：暂登记为环境/入口核验问题；后续读取 FundLex 服务 unit 的实际监听地址、端口和日志，按部署配置核对反向代理或启动参数，再进行 `/api/health`、真实登录和用户端到端验证。
-- 当前状态：未解决；未宣称部署或端到端交付完成。
+- 当前状态：入口误判已更正；原记录使用了错误的默认端口，不能作为服务故障证据。真实交付验收仍未由此完成。
 - 验证结果：测试套件通过（939 passed、6 skipped）只证明代码测试，不证明当前服务端口可达。
 - 下一步：核对 `fundlex-recall-api` unit、监听 socket 与部署环境变量；恢复可达后运行真实工作台路径并补充证据。
 - 变更记录：2026-10-21 新增。
+
+### FL-D139 更正（2026-10-21）
+
+- `ACTIVE_HANDOFF.md` 已明确实际 API 为 `127.0.0.1:8010`，公网为 `https://fundlex.club`。匿名请求实际端口的 `/api/health` 返回 HTTP 401，证明监听及认证入口存在；8000 connection refused 是错误入口推断，并非服务故障。未更改服务，也未将 401 当作真实用户端到端验收。
+
+## FL-D140 最终收口审计：认证、完整 Facts 与逐 operation/site 产物证明（2026-10-21）
+
+- 发现日期：2026-10-21；任务起始 HEAD `00312e3bae7047c4ca04762d8f2739bd130894ed`，分支 `refactor/recovery-architecture`，起始工作区 clean。
+- 问题与影响：runtime 没有 Certified Guide gate，内置 Guide 的历史 findings 裁定缺稳定身份和双 SHA；Primary Facts 只有类别值证据、没有完整集合证据；Applicability resolve 晚于目标发现；TRUE obligation 存在 target/scope absent→NOT_APPLICABLE 分支；Claim Replay 用全文替代 site 证据；merged component spans 串用；Audit 无证据负面意见仍触发恢复；planned-effect 缺失错误路由 TARGET；缺少冻结模型与阶段回放。
+- 证据：逐层职责/输入输出/粒度/确定性/风险表见 `docs/RECOVERY_FINAL_AUDIT_20261021.md`；主要代码在 `guide.py`、`obligations.py`、`recall.py`、`recall_pipeline.py`、`generation/claim_replay.py`。内置实际为 22 rules/34 operations，旧统计 31；source SHA `b77be53c3439d785a9ffad0f09d8d03ba74f7722397576b999ae6f5dd6eef895`，旧文档自存 hash 与重新计算不一致。
+- 处理方法：先认证 Guide/显式关系/TRUE invariant，再完整 Facts 与顺序，统一 OperationEffectEvaluator 和 root-cause recovery；新增 live/record/replay cassette 与 Stage Replay。保留全部 Validator、Claim Replay、residual 与 G02/G04 occurrence 边界。
+- 当前状态：**实施中，尚未通过本轮回归，未部署**。已有 Guide/Projection/effects/Claim 接线改动；语法编译通过，初次针对性测试已暴露旧 fixture 和新证明接线不一致，待修复并分层验证。不得把这些改动当作最终完成。
+- 验证与预算：本轮新 live 模型调用 0、费用 0；不跑 514、不反复 live E2E 调试。此前 942 passed 属旧版本，不作为当前验证。
+- 下一步：完成 Primary class-set/依赖门、身份/站点证明及回放基础设施，运行针对性与全量离线回归；真实工作台最终交付仍须单独完成。
+- 变更记录：2026-10-21 新增，保留 FL-D133/136/138 历史真实 incomplete 证据。
+
+### FL-D140 实施补记（2026-10-21，进行中）
+
+- 已完成一批针对性回归 146 passed（仅限当时 Guide/Facts/Claim/core/recovery 模块）；后续新改动仍在回归，不宣称整体完成。
+- 新证据：Claim operation unit 仍有按文字和 single-operation fallback，merged component 可借父级 keys；Sweep repair 引用了前一 Audit loop 的 `reaudit_only`，无 Audit issues 时导致 UnboundLocalError。已去掉这些 fallback，并把 Claim Recovery 移至 Final Sweep 之前，待回归。
+- 正在实施：Audit REVIEW_UNPROVEN 与确定性证明仲裁、相关站点签名、final executable edits 账本重算、四层 root-cause route、执行故障复用计划、Final Sweep 最多两轮。模型调用/新增费用仍 0，未部署。
+
+### FL-D140 离线收口补记（2026-10-21，真实验收未完成）
+
+- 新发现/影响：Audit missed-target 的 rule/location 去重会漏掉同址独立 operation；Sweep 按 rule 聚合 PASS 可跨 site 借证明；append 发现仍用全文政策和邻段关键词，正文已有政策可能掩盖摘要；Claim 用重叠 component spans 重建产物会重复应用；Joint Compose 同 rule 去重可能漏带后续独立 operation；residual repair 用第一个 delete index 和 location-level planned 判断可能修错 sibling。
+- 已实施：去重和 residual repair 按 operation/site；Sweep 证明绑定 operation/obligation/site；append 仅在自身业务锚点检查政策并处理各 routed section；新增 `generation/atomic.py` 将独立 deterministic paragraph transforms 合成一个实际 edit、保留原 component 权限与 ledger；产物重建按 FINAL parent edit set；Joint Compose 汇总各 rule 全部显式 selected keys、无归因 fail closed；Claim Generation 用 `replan_sites` 保留未变 site 的最终计划，Execution 复用计划。
+- Frozen Run/Stage Replay：model cassette 与 boundary/artifact 纳入 SHA manifest；六个阶段 CLI 支持修复 revision；无网络、无预算预留的回放测试通过，缺 cassette/输入/完整性失败均 fail closed。阶段为 facts/applicability/targets/obligations/plan/claim_replay；Facts 阶段为证据重认证，非重新请求事实模型。
+- 测试迁移：旧 fixture 依赖 TRUE→NOT_APPLICABLE、无 site mock PASS、隐式 ONE_OF、章节末尾 append、文本推断 operation 等行为，已改为显式关系和实际 before/after site 证明；未修改业务规则数或评测 gold。新增 Scope correction、Audit 同址 sibling、duplicate/无关 delete residual、跨 site Sweep、atomic planning 和 dirty-site replan 回归。
+- 验证：完整离线 **977 passed / 6 skipped / 2 warnings**（199.30s，`/tmp/fundlex-final-offline-3.txt`）；compileall/diff-check 通过。内置 Guide Gate 为 22 rules/34 operations，source/document SHA 见 ACTIVE_HANDOFF。
+- 当前状态：**离线已验证，最终任务未完成、未提交/未部署**。本轮 live/费用 0；还需最终 diff/认证裁定审查、真实合同 Frozen run 与真实工作台交付，离线不能替代。保留所有历史 incomplete 分母，不能把现有通过数当业务 complete 证明。
+- 下一步：在现有预算内做一次真实交付验收并录制；失败用 Frozen/Stage Replay 修复，禁止反复 live E2E 调试或提高预算/retry。
+
+## FL-D141 Worker 停机时将正常退出误报为执行槽异常（2026-10-21）
+
+- 发现日期：2026-10-21；本轮完整离线回归偶发复现。
+- 问题与影响：`run_forever` 外层 wait 后、检查 consumer Future 之前，stop event 可被置位；consumer 正常返回却被报 `workflow slot stopped unexpectedly`，导致正常停机抛错。
+- 证据/复现：`tests/test_tasks_api.py::test_multiple_tasks_really_execute_concurrently`；`/tmp/fundlex-final-offline-2.txt`（973 passed/1 failed/6 skipped），栈指向 `jobs.py` Future 完成判断。
+- 处理方法：Future 正常完成后重新核对 stop event；stop 已置位即正常退出。Future 真异常仍通过 `future.result()` 抛出，不吞执行异常。
+- 当前状态：**已实施并离线验证，未部署**；单独并发测试通过，随后完整回归 977 passed/6 skipped；适用当前未提交工作区。
+- 下一步：随主分支工作统一发布后验证 systemd 正常停止；无新增模型调用/费用。
+
+### FL-D140 推送前审查补记（2026-10-21）
+
+- 发现剩余 Sweep rule-level satisfied 与 first-required-text 路径可独立关闭 finding；已移除，统一等待 operation/site artifact proof。静默 re-sweep 不再充当完成证据；Projection 未使用的旧 satisfaction helpers 一并删除。
+- 针对性验证：`tests/test_recovery_final_invariants.py`、`tests/test_hard_fact_veto.py`、`tests/test_recall_pipeline.py` 合计 **77 passed / 22.59s**（`/tmp/fundlex-final-review-tests-2.txt`）；`git diff --check` 通过。中间误删 `_document_compact` 的回归已恢复；旧 `_finding_evidence` 为有意移除。审查补充后尚未重跑完整测试，不能沿用 977 项结果冒称当前全量已测。
+- 用户随后明确只要求继续推送，故停止其他开发/真实验收/部署，将当前源码、测试与记录提交并推送。live 调用/费用仍为 0；真实工作台验收未完成，最终业务收口状态保持未验收。

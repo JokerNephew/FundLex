@@ -249,7 +249,8 @@ class Worker:
                 code = str(exc) if str(exc) in {"INPUT_INTEGRITY_FAILED", "RULESET_HASH_MISMATCH", "RULESET_RETIRED",
                                                   "INVALID_PIPELINE_REPORT", "ENGINE_SCHEMA_MISMATCH", "RESULT_SIZE_LIMIT",
                                                   "MISSING_VERIFIED_ARTIFACTS", "ARTIFACT_VERIFICATION_MISMATCH",
-                                                  "GUIDE_VERSION_MISSING", "GUIDE_RULESET_HASH_MISMATCH"} else "PROCESSING_FAILED"
+                                                  "GUIDE_VERSION_MISSING", "GUIDE_RULESET_HASH_MISMATCH",
+                                                  "GUIDE_NOT_CERTIFIED"} else "PROCESSING_FAILED"
                 report = {
                     "document_id": doc_id, "source_sha256": job["source_sha256"],
                     "ruleset_version": job["ruleset_version"], "ruleset_sha256": job.get("ruleset_sha256", ""),
@@ -322,7 +323,12 @@ class Worker:
         if (version.get("rules_sha256") or "") != (job.get("guide_rules_sha256") or ""):
             raise ValueError("GUIDE_RULESET_HASH_MISMATCH")
         try:
-            return guide_store.guide_document(self.store, version_id)
+            document = guide_store.guide_document(self.store, version_id)
+            from .guide import validate_runtime_guide
+            validate_runtime_guide(
+                document, approved_source_sha256=version["source_sha256"],
+                approved_document_sha256=job.get("guide_rules_sha256"))
+            return document
         except KeyError:
             raise ValueError("GUIDE_VERSION_MISSING") from None
 
@@ -411,6 +417,10 @@ class Worker:
                         for future in futures:
                             if future.done():
                                 future.result()
+                                # A consumer may observe stop between the outer wait
+                                # and this completion check. That is a clean shutdown.
+                                if stopped.is_set():
+                                    break
                                 raise RuntimeError("workflow slot stopped unexpectedly")
                 finally:
                     stopped.set()

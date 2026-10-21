@@ -64,13 +64,13 @@ def _section(id_, title, locations):
 
 
 def test_fires_when_section_exists_and_policy_missing():
-    inspection = _FakeInspection([("p1", "第一条 本基金的名称"), ("p2", "第二条 释义的其他内容")])
+    inspection = _FakeInspection([("p1", "第一条 本基金的名称"), ("p2", "基金份额类别：第二条释义的其他内容")])
     sections = [_section("S1", "第二条 释义", ["p1", "p2"])]
     hits = append_applicability_targets(inspection, [APPEND_RULE], _facts(), sections)
     assert len(hits) == 1
     assert hits[0].rule_id == "G01"
     assert hits[0].operation == "append"
-    # The append anchors at the last paragraph of the named section.
+    # The append anchors at the rule's own business clause.
     assert hits[0].locations == ("p2",)
 
 
@@ -93,10 +93,10 @@ def test_silent_when_section_absent():
 
 
 def test_silent_when_rule_already_has_a_target():
-    inspection = _FakeInspection([("p1", "第二条 释义"), ("p2", "第二条 释义的其他内容")])
+    inspection = _FakeInspection([("p1", "第二条 释义"), ("p2", "基金份额类别：第二条释义的其他内容")])
     sections = [_section("S1", "第二条 释义", ["p1", "p2"])]
     hits = append_applicability_targets(inspection, [APPEND_RULE], _facts(), sections,
-                                        known=[("G01", "p1")])
+                                        known=[("G01", "p2")])
     assert hits == []
 
 
@@ -119,7 +119,7 @@ def test_service_group_empty_does_not_suppress_the_append():
         "op": "append", "condition": {"kind": "none", "value": None},
         "new_text": "投资者通过直销机构申购本基金A类基金份额时，不收取费用。{{SERVICE_GROUP}}",
     }]}
-    inspection = _FakeInspection([("p1", "第二条 释义"), ("p2", "第二条 释义的其他内容")])
+    inspection = _FakeInspection([("p1", "第二条 释义"), ("p2", "基金份额类别：第二条释义的其他内容")])
     sections = [_section("S1", "第二条 释义", ["p1", "p2"])]
     hits = append_applicability_targets(inspection, [rule], _facts(), sections)
     assert len(hits) == 1
@@ -178,7 +178,7 @@ def test_hinted_location_wins_over_section_end():
     assert hits[0].locations == ("p2",)
 
 
-def test_heading_hint_is_ignored_in_favour_of_section_end():
+def test_heading_hint_is_ignored_in_favour_of_business_anchor():
     inspection = _FakeInspection([
         ("p1", "第二部分  释义"),
         ("p2", "基金份额类别定义。"),
@@ -187,7 +187,7 @@ def test_heading_hint_is_ignored_in_favour_of_section_end():
     sections = [_section("S1", "第二部分 释义", ["p1", "p2", "p3"])]
     hits = append_applicability_targets(inspection, [APPEND_RULE], _facts(), sections,
                                         hinted={"G01": "p1"})
-    assert hits[0].locations == ("p3",)
+    assert hits[0].locations == ("p2",)
 
 
 def test_override_rules_let_an_absent_target_be_replaced():
@@ -236,3 +236,21 @@ def test_override_rules_let_an_absent_target_be_replaced():
                                               start_index=0,
                                               override_rules=frozenset({"G01"}))
     assert [t.rule_id for t in with_override[0]] == ["G01"]
+
+
+def test_existing_policy_in_definition_does_not_cover_summary_copy():
+    policy = APPEND_RULE['operations'][0]['new_text']
+    inspection = _FakeInspection([
+        ('p1', '基金份额类别：A类、C类。' + policy),
+        ('p2', '基金合同摘要'), ('p3', '基金份额类别：A类、C类。')])
+    sections = [_section('S1', '释义', ['p1']), _section('S2', '摘要释义', ['p2', 'p3'])]
+    hits = append_applicability_targets(inspection, [APPEND_RULE], _facts(), sections,
+                                        known=[('G01', 'p1')])
+    assert [hit.locations for hit in hits] == [('p3',)]
+    assert hits[0].operation_keys == ('G01:0',)
+
+
+def test_no_business_anchor_leaves_append_open():
+    inspection = _FakeInspection([('p1', '第二部分 释义'), ('p2', '不可抗力：客观事件。')])
+    sections = [_section('S1', '释义', ['p1', 'p2'])]
+    assert append_applicability_targets(inspection, [APPEND_RULE], _facts(), sections) == []

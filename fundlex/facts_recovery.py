@@ -114,43 +114,8 @@ def _class_set_complete(inspection: Any, candidate: Facts, quote: str) -> bool:
     exists (plan §7.3).  The focused resolver therefore has to supply the contract's
     own enumeration sentence; code checks that every recovered class appears in it.
     """
-    if not quote:
-        return False
-    from .recall import _verify_quote, _compact
-    if not _verify_quote(inspection, quote):
-        return False
-    compact_quote = _compact(quote)
-    if "分为" not in compact_quote and "类别" not in compact_quote:
-        return False
-    # Parse the class labels the enumeration sentence actually names. A prefix such as
-    # "本基金将基金份额分为A类" cannot prove C/D exist; the sets must be equal.
-    labels = set(re.findall(r"([A-ZＡ-Ｚ])\s*类", compact_quote))
-    # The document's own enumeration is the completeness ceiling: a truncated quote
-    # that only names A must not pass on a contract that defines A/C/D.
-    document_labels: set[str] = set()
-    for span in getattr(inspection, "paragraphs", ()):
-        from .recall import display_text
-        text, _ = display_text(str(getattr(span, "text", "")))
-        if "分为" in text or "类别" in text:
-            document_labels |= set(re.findall(r"([A-ZＡ-Ｚ])\s*类", text))
-    if document_labels and labels != document_labels:
-        return False
-    expected: set[str] = set()
-    for item in candidate.current_classes:
-        name = str(item.name).strip()
-        if re.fullmatch(r"[A-ZＡ-Ｚ]", name):
-            expected.add(name)
-        elif name and name not in compact_quote:
-            return False
-    if labels and expected:
-        return labels == expected
-    if labels and not expected:
-        # Currency / descriptive variants: every full display name must appear in the
-        # enumeration sentence; the label set alone cannot distinguish A类人民币 from
-        # A类美元.
-        return all(str(item.name).strip() in compact_quote
-                   for item in candidate.current_classes)
-    return True
+    from .fact_evidence import verify_class_set
+    return bool(verify_class_set(inspection, candidate.classes, quote)["set_complete_verified"])
 
 
 def _candidate_usable(candidate: Facts, original: Facts, *, inspection: Any,
@@ -177,6 +142,10 @@ def _merge_candidate(original: Facts, candidate: Facts) -> Facts:
     return replace(
         original,
         classes=candidate.classes,
+        class_set_quote=candidate.class_set_quote,
+        class_set_evidence=candidate.class_set_evidence,
+        value_verified=candidate.value_verified,
+        set_complete_verified=candidate.set_complete_verified,
         direct_sales_exempt_group=(candidate.direct_sales_exempt_group
                                    if status.get("direct_sales_exempt_group") == "VERIFIED"
                                    else original.direct_sales_exempt_group),
@@ -184,6 +153,7 @@ def _merge_candidate(original: Facts, candidate: Facts) -> Facts:
                                    if status.get("other_sales_charged_group") == "VERIFIED"
                                    else original.other_sales_charged_group),
         fact_status=status,
+        channel_evidence={**original.channel_evidence, **candidate.channel_evidence},
         quotes_verified={**original.quotes_verified, **candidate.quotes_verified},
         problems=tuple(sorted(set(original.problems) | set(candidate.problems))),
         notes=(original.notes + " | " + candidate.notes).strip(" |"),

@@ -37,6 +37,7 @@ AFTER_OK = "基金管理人可以适当调低基金申购费率和销售服务�
 
 def _edit(replacement: str = AFTER_OK, location: str = "p0") -> dict:
     return {"rule_id": "G14", "location": location, "start": 0, "end": len(BEFORE),
+            "operation_keys": ["G14:0"],
             "replacement": replacement, "content_source": "tier1_template", "evidence": {}}
 
 
@@ -72,6 +73,7 @@ def test_mutation_number_change_is_caught():
     before = "C类基金份额的销售服务费按前一日资产净值的0.40%年费率计提。"
     after_ok = "C类基金份额的销售服务费每日计提。"
     edit = {"rule_id": "G16", "location": "p0", "replacement": after_ok,
+            "operation_keys": ["G16:0"], "start": 0, "end": len(before),
             "content_source": "composed", "evidence": {"fixed_text": after_ok}}
     assert replay_claims([edit], _Inspection([before]), _Inspection([after_ok]),
                          rules_by_id=rules)["verified"] is True
@@ -89,6 +91,7 @@ def test_mutation_unauthorized_insertion_is_caught():
     before = "基金管理人可以适当调低赎回费率。"
     after_ok = "基金管理人可以适当调低销售服务费率。"
     edit = {"rule_id": "G05", "location": "p0", "replacement": after_ok,
+            "operation_keys": ["G05:0"], "start": 0, "end": len(before),
             "content_source": "fragment_replace", "evidence": {}}
     assert replay_claims([edit], _Inspection([before]), _Inspection([after_ok]),
                          rules_by_id=rules)["verified"] is True

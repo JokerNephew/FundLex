@@ -116,9 +116,6 @@ def _json_or(raw: Any, default: Any) -> Any:
 
 
 def _document_sha(doc: dict[str, Any]) -> str:
-    stored = str(doc.get("document_sha256") or "")
-    if stored:
-        return stored
     from .guide import guide_document_sha256
     return guide_document_sha256(doc)
 

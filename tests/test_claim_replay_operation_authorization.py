@@ -27,8 +27,13 @@ class Inspection:
 class Record:
     def __init__(self, operation_id, obligation_id, index):
         self.obligation_id = obligation_id
-        self.spec = SimpleNamespace(operation_index=index, one_of_group="",
-                                    alternatives=())
+        operation = RULE["operations"][index] if operation_id.startswith("G99:") else {
+            "op": "replace", "old_text": "旧说法甲。", "new_text": "新说法。"}
+        self.spec = SimpleNamespace(rule_id=operation_id.split(":")[0], operation_id=operation_id,
+                                    operation_index=index, one_of_group="", alternatives=(),
+                                    op=operation["op"], old_text=operation.get("old_text", ""),
+                                    new_text=operation.get("new_text", ""))
+        self.applicability = SimpleNamespace(status="TRUE")
 
 
 class Ledger:
@@ -112,9 +117,8 @@ def test_sibling_cannot_lend_add_permission():
     assert ("G99:1", "CLAIM_OPERATION_EFFECT_MISSING") in failures
 
 
-def test_inferred_operation_attribution_isolates_siblings():
-    # Inventory targets often carry no operation keys; the edited wording itself is
-    # enough to attribute the unit, without falling back to a rule-wide union.
+def test_missing_operation_attribution_fails_closed():
+    # Operation identity must survive planning; text inference is not authorization.
     before = "旧句甲。保留句。"
     tampered = "新增乙。"
     result = _replay([_edit("", 0, 4, ""), _edit("", 4, 8, "新增乙。")],
@@ -122,7 +126,7 @@ def test_inferred_operation_attribution_isolates_siblings():
     assert result["verified"] is False
     failures = {(failure["operation_id"], failure["code"])
                 for failure in result["failures"] if failure.get("operation_id")}
-    assert ("G99:1", "CLAIM_OPERATION_SPAN_UNAUTHORIZED") in failures
+    assert ("G99:?", "CLAIM_OPERATION_UNATTRIBUTED") in failures
 
 
 def test_overlapping_operations_use_explicit_joint_verification():
@@ -543,4 +547,4 @@ def test_artifact_proof_rejects_an_unplanned_sibling_operation():
         obligations=ledger)
     assert result["verified"] is False
     codes = {failure["code"] for failure in result["failures"]}
-    assert "CLAIM_OPERATION_NOT_PLANNED" in codes
+    assert "CLAIM_OPERATION_UNPROVEN" in codes

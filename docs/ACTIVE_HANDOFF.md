@@ -1,5 +1,54 @@
 # FundLex 当前断点（ACTIVE_HANDOFF）
 
+## 最新状态（2026-10-21，按用户要求仅提交和推送）
+
+- 用户最新指示：“我只是让你继续推送而已，不用做别的”。本次停止其余开发、真实模型验收与部署，仅提交并推送当前 `refactor/recovery-architecture` 工作区。
+- 推送前基线 HEAD `00312e3bae7047c4ca04762d8f2739bd130894ed`；fetch → checkout → pull 已再次完成，origin 未变化；工作区包含本轮最终收口改动。
+- 本次审查补充：移除 Sweep 的旧 rule-level satisfied/first-required-text 关闭路径，统一由 operation/site artifact proof 仲裁；静默 re-sweep 不再单独关闭 finding；删除 Projection 未使用的旧 satisfaction helpers。针对性回归 **77 passed / 22.59s**，输出 `/tmp/fundlex-final-review-tests-2.txt`；`git diff --check` 通过。
+- 历史完整离线回归 **977 passed / 6 skipped** 适用于上述审查补充之前；补充后未重新跑完整回归。中间误删 `_document_compact` 引发 NameError，已恢复并由 77 项回归验证；`_finding_evidence` 是本次有意移除的旧独立判断路径。
+- 本次 live 调用/费用 0，未部署。真实合同 Frozen record 与真实工作台交付仍未完成，不能将推送或离线验证宣称业务验收完成。
+- 源码、测试与集中问题记录随同一次提交；实际提交 SHA 以 `git log -1` 为准。
+
+
+## 最新接续断点（2026-10-21，离线回归通过；最终收口尚未验收）
+
+此段优先于下方历史断点；下方 883/59、90/4 等结果只保留历史，不代表当前工作区。
+
+- 目标/约束：完成用户 1—40 项整链路收口；不降低 Validator/Claim/G02/G04、不忽略 residual、不加 retry/模型预算。用户末尾只写了 Stage Replay 标题，因此现有接口按冻结阶段输入实现，不杜撰额外规格。
+- branch `refactor/recovery-architecture`；HEAD `00312e3bae7047c4ca04762d8f2739bd130894ed`。起始 fetch→checkout→pull 已完成且当时 clean；本轮继续时已重读 HEAD/status。全部工作区改动未提交、未推送、未部署，`git status --short` 为准。
+- 最新完整离线测试：`.venv/bin/python -m pytest tests -q` → **977 passed / 6 skipped / 2 warnings / 199.30s**，输出 `/tmp/fundlex-final-offline-3.txt`。`compileall`、`git diff --check` 通过。第二轮曾 973 passed/1 failed（Worker 停机竞态），已修复并完整重测。针对性 dirty-site/Frozen 测试 33 passed，主链路 99 passed。
+- 完成并验证：Guide Gate/显式历史 ONE_OF、TRUE completion invariant、Primary class-set completeness、排除双认证、Applicability 前置、site-scoped OperationEffectEvaluator/Claim/Projection、Audit 无证据意见仲裁、final ledger 重算、四层 Claim root-cause 路由、Final Sweep 至多两轮、相关站点签名复用与冻结回放。
+- 本次新增实质修复：Audit missed-target 按 operation/site 去重；Sweep 不借其它 site 的 proof；delete residual site-first + 无关邻段反例；append 不再借用全文政策证明或邻段锚点，摘要独立发现；同段 deterministic edits 合为 atomic paragraph 并保留 component 账本；Claim 按 FINAL parent edits 重建实际产物；Joint Compose 同 rule 独立 operations 全部保留；Claim generation recovery 只重算 dirty sites，execution 复用原计划。见 FL-D140。
+- 新文件：`fundlex/fact_evidence.py`、`qualification.py`、`frozen.py`、`stage_replay.py`、`generation/effects.py`、`generation/atomic.py`、`tools/replay_stage.py` 与两组新增测试。已迁移旧测试中的隐式 ONE_OF/无证据关闭/章节末尾 append/缺少 operation identity 等断言；未改独立评测 gold。
+- Guide 运行门实测：source `b77be53c3439d785a9ffad0f09d8d03ba74f7722397576b999ae6f5dd6eef895`，document `45dd77460f2ef93d29001c0833c220f89de99dafb19d32a8b73653b55f92c8d7`，22 rules/34 operations。
+- 模型/预算：本轮 live 请求 **0**、费用 **0**，无新生产任务、无子 agent、无运行中的本轮进程；未改 `/etc/fundlex-recall.env` 或生产账本，未跑 514。机器主机名/实例/内网均已核实，curl ifconfig.me 返回 IPv6 出口，不把内网当其它机器。
+- **仍未完成**：最终变更审查（尤其认证裁定来源、真实 wording/duplicate 完整覆盖、Audit/Sweep 共用 evaluator 的剩余旧 helper）、真实合同 Frozen record/replay 验收、真实工作台登录→上传→Worker/模型→修改 DOCX→结果页→授权下载→实际文件/红线/报告哈希核验；没有真实 complete 验收，不能宣称总体完成。
+- 下一条动作：先审阅当前 diff 与 `docs/RECOVERY_FINAL_AUDIT_20261021.md`/FL-D140；确认冻结回放目录与现有预算账本，在现有授权/预算内安排一次真实工作台验收并录制 cassette。失败时从冻结阶段回放定位修复，不重复 live 调试；若预算/服务阻塞，如实登记，勿增加预算或绕过发布门。
+- 上下文：本环境没有可调用的手动压缩工具；已持久保存源码/测试/断点，下一上下文从本段继续，不重复审计或旧真实调用。
+
+
+## 本轮实施补充断点（2026-10-21，未完成/未部署）
+
+- HEAD 仍为 `00312e3bae7047c4ca04762d8f2739bd130894ed`；全部最终收口改动未提交，`git status --short` 可核对。无子 agent，live 调用 0/费用 0。
+- 已完成针对性一批 146 passed；后续 pipeline 37 passed/2 failed 属旧 fixture（缺 operation metadata、故意漏 D 类），已迁移为认证 IR 与不完整集合阻塞测试。该结果不代表当前全部代码通过。
+- 新增/接线：Guide certification、Primary class-set proof、exclusion 独立认证、Applicability 前置、site-scoped effects/Claim/Projection、final ledger components、模型 cassette 与 Stage Replay。
+- 最新正在验证：消除 Claim 的文字/单 operation 归因 fallback；Audit 无引文意见用 operation proof 仲裁；audit site signature；Claim 四层 root-cause 路由；执行故障复用计划；Sweep 移至 Claim Recovery 之后，最多两轮；FINAL_EDIT 过滤后重新 reconcile。
+- 当前测试：`/tmp/fundlex-proof-recovery-tests-2.txt`（运行状态需核实）；前一轮 90 passed/4 failed，包含已发现 Sweep 引用旧 reaudit_only 和旧断言，尚待再次核对。
+- 未完成：site-first delete residual、Audit missed operation 去重、显式 Guide schema/业务批准边界核查、Frozen 完整 boundary serialization/阶段实际回放、dirty recovery/no-progress 全链路和完整回归，以及最终真实工作台交付。
+- 下一动作：查看当前测试文件并修复；为四层 recovery/ledger same-operation 不同 site/Scope correction/回放零网络增加实质性回归。禁止把离线通过或历史真实 incomplete 当作最终交付。
+
+## 最新任务（2026-10-21，最终收口，进行中）
+
+- 用户最新指令：完成整条 Guide→Facts→Applicability→Target→Plan→Artifact→Audit/Claim/Sweep→Recovery→Delivery 收口；先完整审计后实施。详细审计/分批实施账本：`docs/RECOVERY_FINAL_AUDIT_20261021.md`。用户消息末尾为“40. 新增 Stage Replay”（未附具体阶段接口）；按冻结输入+确定性阶段 CLI 实施，不虚构额外要求。
+- 起始同步已完成：`git fetch`→`git checkout refactor/recovery-architecture`→`git pull`；HEAD `00312e3bae7047c4ca04762d8f2739bd130894ed`，branch `refactor/recovery-architecture`，working tree clean。
+- 硬约束：不降低 Validator/Claim、不中断 G02/G04 occurrence safety、不把 failure 降 warning、不忽略 residual、不减少规则、不增 retry/预算。不用反复 live E2E debug。后续最终端到端仍须真实路径验证，不宣称离线替代。
+- 已做：全链路审计表已保存；未启动新 live 模型调用；未部署。上轮理解项目时测试 939 passed/6 skipped 属旧 HEAD，当前基线历史记录为 942 passed/6 skipped，不挪用为新改动验收。
+- 发现：内置 Guide 10 findings 的历史裁定缺 finding_id/approved/双 SHA，内置 document_sha 与实际 payload 不一致；Primary Facts 没有完整 class_set；Projection 仍多处 TRUE→NOT_APPLICABLE；Claim append/replace 用 after_full 跨 site 借证据；Applicability resolve 晚于 Inventory。
+- 运行环境：同台 Linux 云服务器，API `127.0.0.1:8010`，公网 `https://fundlex.club`；本次 health 返回 401，匿名不可用是认证行为，不是监听失败。FL-D139 待更正。
+- 预算/账本：本轮 live 请求 0，费用 0；不改生产 `/etc/fundlex-recall.env` 或 `/var/lib/fundlex/`。不自行跑 514。
+- 下一动作：实现 certified guide + 显式 group semantics + TRUE invariant；继而 facts set completeness、统一 operation/site effects 与 frozen replay。每批保存 tests/剩余项；上下文不可观测，保守分段接续，不虚构压缩完成。
+- 进程/agent：本轮无子 agent；既有 D02e 后台若仍运行属于前序会话，不重启或重复花费。
+
 > ## ⚠️ 机器身份（先读这一段，禁止凭内网地址判断机器）
 >
 > **当前工作机 = 云服务器**，即本仓库所在处：
@@ -434,3 +483,12 @@
   - D16 40 / 20 / 78 / $0.0476；p822/p1306 duplicate + G06 composite。
 - **待完成**：D02c 后台结果；D01/D11/D16 用最后修复重跑；全量 pytest；5 类 Reviewer；文档/证据包；按逻辑 commit 提交推送。
 - **明确未做**：未发布生产、未跑 514。
+
+## 本轮实现断点（2026-10-21，未完成）
+
+- 当前 HEAD 仍为 `00312e3bae7047c4ca04762d8f2739bd130894ed`，分支 `refactor/recovery-architecture`；未提交改动包含 Guide certification、Facts class-set、qualification review、site-scoped effects、frozen cassette/run/stage replay、Claim Replay 与 recovery 路由调整。
+- 新增 `fundlex/fact_evidence.py`、`fundlex/qualification.py`、`fundlex/frozen.py`、`fundlex/stage_replay.py`、`tools/replay_stage.py`，并新增 `tests/test_recovery_final_invariants.py`。
+- 内置 Guide runtime gate 实测通过：source SHA `b77be53c...`, guide SHA `45dd7746...`, 22 rules / 34 operations；未部署。
+- 语法编译和 diff check 通过。旧全量测试在新硬不变量下为 883 passed / 59 failed / 6 skipped；失败混合旧测试预期（TRUE→NOT_APPLICABLE、隐式 ONE_OF、未认证 synthetic guide）和实际接线缺陷，不能作为最终验收。新增 invariant 测试尚未单独通过。
+- 已修复：`CLAIM_PLANNED_EFFECT_MISSING` 路由至 generation；Audit evidence 按目标 site 验证；append fallback 要求 rule-specific site anchor；ModelGateway 支持 `FUNDLEX_MODEL_MODE=live|record|replay`；frozen run manifest 与 stage replay 均 fail closed。
+- 待做：修复新增测试与事实解析边界；审查 all TRUE replay universe、delete residual site-first、scope correction、final sweep 次数与 no-progress hash；更新 Worker `GUIDE_NOT_CERTIFIED` 错误映射；运行针对性测试并记录结果；不进行 live E2E/部署。

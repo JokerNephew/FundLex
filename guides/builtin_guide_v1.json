@@ -20,7 +20,10 @@
      "condition": {
       "kind": "none",
       "value": null
-     }
+     },
+     "operation_id": "G01:0",
+     "group_kind": "INDEPENDENT",
+     "one_of_group": ""
     }
    ],
    "old_text_variants": [],
@@ -52,7 +55,10 @@
      "condition": {
       "kind": "none",
       "value": null
-     }
+     },
+     "operation_id": "G02:0",
+     "group_kind": "INDEPENDENT",
+     "one_of_group": ""
     },
     {
      "op": "replace",
@@ -61,7 +67,10 @@
      "condition": {
       "kind": "none",
       "value": null
-     }
+     },
+     "operation_id": "G02:1",
+     "group_kind": "INDEPENDENT",
+     "one_of_group": ""
     }
    ],
    "old_text_variants": [],
@@ -91,7 +100,10 @@
      "condition": {
       "kind": "none",
       "value": null
-     }
+     },
+     "operation_id": "G03:0",
+     "group_kind": "INDEPENDENT",
+     "one_of_group": ""
     }
    ],
    "old_text_variants": [],
@@ -121,7 +133,10 @@
      "condition": {
       "kind": "none",
       "value": null
-     }
+     },
+     "operation_id": "G04:0",
+     "group_kind": "INDEPENDENT",
+     "one_of_group": ""
     },
     {
      "op": "replace",
@@ -130,7 +145,10 @@
      "condition": {
       "kind": "none",
       "value": null
-     }
+     },
+     "operation_id": "G04:1",
+     "group_kind": "INDEPENDENT",
+     "one_of_group": ""
     }
    ],
    "old_text_variants": [],
@@ -161,7 +179,10 @@
      "condition": {
       "kind": "has_service_fee",
       "value": true
-     }
+     },
+     "operation_id": "G05:0",
+     "group_kind": "BRANCH",
+     "one_of_group": ""
     },
     {
      "op": "delete",
@@ -169,7 +190,10 @@
      "condition": {
       "kind": "has_service_fee",
       "value": false
-     }
+     },
+     "operation_id": "G05:1",
+     "group_kind": "BRANCH",
+     "one_of_group": ""
     },
     {
      "op": "delete",
@@ -177,7 +201,10 @@
      "condition": {
       "kind": "none",
       "value": null
-     }
+     },
+     "operation_id": "G05:2",
+     "group_kind": "INDEPENDENT",
+     "one_of_group": ""
     }
    ],
    "old_text_variants": [],
@@ -206,7 +233,10 @@
      "condition": {
       "kind": "none",
       "value": null
-     }
+     },
+     "operation_id": "G06:0",
+     "group_kind": "INDEPENDENT",
+     "one_of_group": ""
     }
    ],
    "old_text_variants": [],
@@ -233,7 +263,10 @@
      "condition": {
       "kind": "class_count",
       "value": 1
-     }
+     },
+     "operation_id": "G07:0",
+     "group_kind": "INDEPENDENT",
+     "one_of_group": ""
     }
    ],
    "old_text_variants": [],
@@ -263,7 +296,10 @@
      "condition": {
       "kind": "class_count",
       "value": "multiple"
-     }
+     },
+     "operation_id": "G08:0",
+     "group_kind": "INDEPENDENT",
+     "one_of_group": ""
     }
    ],
    "old_text_variants": [],
@@ -295,7 +331,10 @@
      "condition": {
       "kind": "class_count",
       "value": "multiple"
-     }
+     },
+     "operation_id": "G09:0",
+     "group_kind": "INDEPENDENT",
+     "one_of_group": ""
     }
    ],
    "old_text_variants": [],
@@ -325,7 +364,10 @@
      "condition": {
       "kind": "class_count",
       "value": 1
-     }
+     },
+     "operation_id": "G10:0",
+     "group_kind": "INDEPENDENT",
+     "one_of_group": ""
     }
    ],
    "old_text_variants": [],
@@ -353,7 +395,10 @@
      "condition": {
       "kind": "class_count",
       "value": "multiple"
-     }
+     },
+     "operation_id": "G11:0",
+     "group_kind": "ONE_OF",
+     "one_of_group": "G11:history:wording"
     },
     {
      "op": "replace",
@@ -362,7 +407,10 @@
      "condition": {
       "kind": "class_count",
       "value": "multiple"
-     }
+     },
+     "operation_id": "G11:1",
+     "group_kind": "ONE_OF",
+     "one_of_group": "G11:history:wording"
     }
    ],
    "old_text_variants": [
@@ -396,7 +444,10 @@
      "condition": {
       "kind": "none",
       "value": null
-     }
+     },
+     "operation_id": "G12:0",
+     "group_kind": "ONE_OF",
+     "one_of_group": "G12:history:wording"
     },
     {
      "op": "replace",
@@ -405,7 +456,10 @@
      "condition": {
       "kind": "none",
       "value": null
-     }
+     },
+     "operation_id": "G12:1",
+     "group_kind": "ONE_OF",
+     "one_of_group": "G12:history:wording"
     }
    ],
    "old_text_variants": [
@@ -436,7 +490,10 @@
      "condition": {
       "kind": "none",
       "value": null
-     }
+     },
+     "operation_id": "G13:0",
+     "group_kind": "INDEPENDENT",
+     "one_of_group": ""
     }
    ],
    "old_text_variants": [],
@@ -463,7 +520,10 @@
      "condition": {
       "kind": "class_count",
       "value": 1
-     }
+     },
+     "operation_id": "G14:0",
+     "group_kind": "ONE_OF",
+     "one_of_group": "G14:history:single"
     },
     {
      "op": "replace",
@@ -472,7 +532,10 @@
      "condition": {
       "kind": "class_count",
       "value": 1
-     }
+     },
+     "operation_id": "G14:1",
+     "group_kind": "ONE_OF",
+     "one_of_group": "G14:history:single"
     },
     {
      "op": "replace",
@@ -481,7 +544,10 @@
      "condition": {
       "kind": "class_count",
       "value": 1
-     }
+     },
+     "operation_id": "G14:2",
+     "group_kind": "ONE_OF",
+     "one_of_group": "G14:history:single"
     },
     {
      "op": "replace",
@@ -490,7 +556,10 @@
      "condition": {
       "kind": "class_count",
       "value": "multiple"
-     }
+     },
+     "operation_id": "G14:3",
+     "group_kind": "ONE_OF",
+     "one_of_group": "G14:history:multiple"
     },
     {
      "op": "replace",
@@ -499,7 +568,10 @@
      "condition": {
       "kind": "class_count",
       "value": "multiple"
-     }
+     },
+     "operation_id": "G14:4",
+     "group_kind": "ONE_OF",
+     "one_of_group": "G14:history:multiple"
     },
     {
      "op": "replace",
@@ -508,7 +580,10 @@
      "condition": {
       "kind": "class_count",
       "value": "multiple"
-     }
+     },
+     "operation_id": "G14:5",
+     "group_kind": "ONE_OF",
+     "one_of_group": "G14:history:multiple"
     }
    ],
    "old_text_variants": [
@@ -545,7 +620,10 @@
      "condition": {
       "kind": "none",
       "value": null
-     }
+     },
+     "operation_id": "G15:0",
+     "group_kind": "INDEPENDENT",
+     "one_of_group": ""
     }
    ],
    "old_text_variants": [],
@@ -578,7 +656,10 @@
      "condition": {
       "kind": "none",
       "value": null
-     }
+     },
+     "operation_id": "G16:0",
+     "group_kind": "INDEPENDENT",
+     "one_of_group": ""
     }
    ],
    "old_text_variants": [],
@@ -612,7 +693,10 @@
      "condition": {
       "kind": "none",
       "value": null
-     }
+     },
+     "operation_id": "G17:0",
+     "group_kind": "INDEPENDENT",
+     "one_of_group": ""
     }
    ],
    "old_text_variants": [],
@@ -641,7 +725,10 @@
      "condition": {
       "kind": "none",
       "value": null
-     }
+     },
+     "operation_id": "G18:0",
+     "group_kind": "INDEPENDENT",
+     "one_of_group": ""
     }
    ],
    "old_text_variants": [],
@@ -680,7 +767,10 @@
         "value": 1
        }
       ]
-     }
+     },
+     "operation_id": "G19:0",
+     "group_kind": "INDEPENDENT",
+     "one_of_group": ""
     }
    ],
    "old_text_variants": [
@@ -722,7 +812,10 @@
         "value": "multiple"
        }
       ]
-     }
+     },
+     "operation_id": "G20:0",
+     "group_kind": "ONE_OF",
+     "one_of_group": "G20:history:wording"
     },
     {
      "op": "replace",
@@ -740,7 +833,10 @@
         "value": "multiple"
        }
       ]
-     }
+     },
+     "operation_id": "G20:1",
+     "group_kind": "ONE_OF",
+     "one_of_group": "G20:history:wording"
     }
    ],
    "old_text_variants": [
@@ -778,7 +874,10 @@
         "value": 1
        }
       ]
-     }
+     },
+     "operation_id": "G21:0",
+     "group_kind": "INDEPENDENT",
+     "one_of_group": ""
     }
    ],
    "old_text_variants": [],
@@ -819,7 +918,10 @@
         "value": "multiple"
        }
       ]
-     }
+     },
+     "operation_id": "G22:0",
+     "group_kind": "INDEPENDENT",
+     "one_of_group": ""
     }
    ],
    "old_text_variants": [],
@@ -849,7 +951,8 @@
      "paragraphs": [
       104,
       105
-     ]
+     ],
+     "finding_id": "finding-67f0972560424eee781f3da2"
     },
     {
      "kind": "wrong_condition",
@@ -857,7 +960,8 @@
      "evidence_quote": "如果有收取销售服务费的份额类别，则将其中的“调低赎回费率”改为“调低销售服务费率”，否则直接删除“、调低赎回费率”",
      "paragraphs": [
       21
-     ]
+     ],
+     "finding_id": "finding-b52165200a03a69aa5b1a156"
     },
     {
      "kind": "wrong_operation",
@@ -865,7 +969,8 @@
      "evidence_quote": "如果有收取销售服务费的份额类别，则将其中的“调低赎回费率”改为“调低销售服务费率”，否则直接删除“、调低赎回费率”",
      "paragraphs": [
       21
-     ]
+     ],
+     "finding_id": "finding-93be4ea9760bb6c8b7ce69d2"
     },
     {
      "kind": "wrong_text",
@@ -874,7 +979,8 @@
      "paragraphs": [
       47,
       48
-     ]
+     ],
+     "finding_id": "finding-fa9aea5a2c7dd657aebbae90"
     },
     {
      "kind": "missing_reference",
@@ -882,7 +988,8 @@
      "evidence_quote": "新条款中份额类别描述替换规则与前述说明一致，此处不再赘述，下同。",
      "paragraphs": [
       34
-     ]
+     ],
+     "finding_id": "finding-5d51168717d38828d089b2ef"
     },
     {
      "kind": "ambiguous_branch",
@@ -894,7 +1001,8 @@
       96,
       97,
       98
-     ]
+     ],
+     "finding_id": "finding-12efc0b8100016d667139eed"
     },
     {
      "kind": "wrong_condition",
@@ -903,7 +1011,8 @@
      "paragraphs": [
       101,
       104
-     ]
+     ],
+     "finding_id": "finding-0bd210e2f87c48d6dbd3a47f"
     },
     {
      "kind": "wrong_operation",
@@ -918,7 +1027,8 @@
       82,
       83,
       84
-     ]
+     ],
+     "finding_id": "finding-2f764e6c0ec4cf622b25d6e5"
     },
     {
      "kind": "wrong_text",
@@ -927,7 +1037,8 @@
      "paragraphs": [
       75,
       76
-     ]
+     ],
+     "finding_id": "finding-0217d6eb2862321273857508"
     },
     {
      "kind": "wrong_condition",
@@ -936,7 +1047,8 @@
      "paragraphs": [
       64,
       66
-     ]
+     ],
+     "finding_id": "finding-c2f26917a3522429735d3930"
     }
    ],
    "coverage_explanation": "候选共22组，覆盖指引第0-106段的大部分内容：G01-G02覆盖释义部分（第0-8段），G03-G04覆盖基金基本情况份额类别设置（第10-16段），G05-G06覆盖基金基本情况调整与删除（第17-25段），G07-G14覆盖申购赎回价格费用及用途（第26-66段），G15-G17覆盖基金费用与税收销售服务费（第67-89段），G18覆盖收益分配（第90-92段），G19-G22覆盖清算剩余资产分配（第93-105段）。未覆盖段落：第9段为空行；第26、35、41、49、54、57、67、85、90、93段为标题或章节标记，候选通过source_paragraphs间接引用但未单独建组；第59-62段为三种表述变体，候选在G14中作为old_text_variants覆盖；第70-73段为销售服务费计算公式，候选在G15中作为原条款上下文覆盖但未单独操作；第79-84段为新增销售服务费处理分项，候选在G16中合并覆盖；第95-96段为浮动管理费产品原条款描述1和描述2，候选在G19-G20中作为old_text_variants覆盖；第102段为非浮动管理费产品原条款，候选在G21-G22中覆盖。整体覆盖较全，但存在条件简化、引用未解析、分支歧义及文本合并等问题。",
@@ -979,17 +1091,19 @@
   "stats": {
    "paragraphs": 107,
    "groups": 22,
-   "operations": 31,
+   "operations": 34,
    "operations_by_kind": {
     "append": 3,
-    "replace": 22,
-    "delete": 6
+    "replace": 24,
+    "delete": 6,
+    "noop": 1
    },
    "conditions_by_kind": {
     "none": 15,
-    "class_count": 8,
-    "has_service_fee": 3,
-    "is_floating_fee": 5
+    "class_count": 12,
+    "has_service_fee": 2,
+    "is_floating_fee": 0,
+    "compound": 5
    },
    "covered_paragraphs": 105,
    "coverage_gaps": 0,
@@ -1209,5 +1323,104 @@
    "cost_is_provider_invoice": false
   }
  },
- "document_sha256": "3932d4cac5f2b9a2a34de005440b2616ded681d114fa59112a44ad82e8475e57"
+ "document_sha256": "45dd77460f2ef93d29001c0833c220f89de99dafb19d32a8b73653b55f92c8d7",
+ "certification": {
+  "approved": true,
+  "source_sha256": "b77be53c3439d785a9ffad0f09d8d03ba74f7722397576b999ae6f5dd6eef895",
+  "guide_document_sha256": "45dd77460f2ef93d29001c0833c220f89de99dafb19d32a8b73653b55f92c8d7",
+  "rule_count": 22,
+  "operation_count": 34,
+  "finding_dispositions": [
+   {
+    "finding_id": "finding-67f0972560424eee781f3da2",
+    "disposition": "accepted_interpretation",
+    "reason": "销售服务费按指引G15标题适用于多类别产品；加 class_count=multiple 与 G21 的单类别不替换分支互斥，避免同一清算句被两条规则同时命中。若真实合同出现单类别且收取销售服务费的边界，由引擎仲裁并登记。",
+    "approved": true,
+    "source_sha256": "b77be53c3439d785a9ffad0f09d8d03ba74f7722397576b999ae6f5dd6eef895",
+    "guide_document_sha256": "45dd77460f2ef93d29001c0833c220f89de99dafb19d32a8b73653b55f92c8d7",
+    "review_basis": "Recorded source review, rechecked against source paragraphs on 2026-10-21; engineering certification, not a new user business ruling."
+   },
+   {
+    "finding_id": "finding-b52165200a03a69aa5b1a156",
+    "disposition": "accepted_interpretation",
+    "reason": "段21条件'如果有收取销售服务费的份额类别'为产品级存在性判断，has_service_fee 即其编码；类别级解读会与段21的互斥分支语义冲突。",
+    "approved": true,
+    "source_sha256": "b77be53c3439d785a9ffad0f09d8d03ba74f7722397576b999ae6f5dd6eef895",
+    "guide_document_sha256": "45dd77460f2ef93d29001c0833c220f89de99dafb19d32a8b73653b55f92c8d7",
+    "review_basis": "Recorded source review, rechecked against source paragraphs on 2026-10-21; engineering certification, not a new user business ruling."
+   },
+   {
+    "finding_id": "finding-93be4ea9760bb6c8b7ce69d2",
+    "disposition": "false_positive",
+    "reason": "两个操作分别带 has_service_fee=true/false 条件，引擎按条件择一执行，即为互斥编码。",
+    "approved": true,
+    "source_sha256": "b77be53c3439d785a9ffad0f09d8d03ba74f7722397576b999ae6f5dd6eef895",
+    "guide_document_sha256": "45dd77460f2ef93d29001c0833c220f89de99dafb19d32a8b73653b55f92c8d7",
+    "review_basis": "Recorded source review, rechecked against source paragraphs on 2026-10-21; engineering certification, not a new user business ruling."
+   },
+   {
+    "finding_id": "finding-fa9aea5a2c7dd657aebbae90",
+    "disposition": "false_positive",
+    "reason": "条款1/条款2 已分别作为两个 replace 操作；variants 仅为定位参考。",
+    "approved": true,
+    "source_sha256": "b77be53c3439d785a9ffad0f09d8d03ba74f7722397576b999ae6f5dd6eef895",
+    "guide_document_sha256": "45dd77460f2ef93d29001c0833c220f89de99dafb19d32a8b73653b55f92c8d7",
+    "review_basis": "Recorded source review, rechecked against source paragraphs on 2026-10-21; engineering certification, not a new user business ruling."
+   },
+   {
+    "finding_id": "finding-5d51168717d38828d089b2ef",
+    "disposition": "accepted_interpretation",
+    "reason": "class_substitution=true 已表达该引用语义（与段5-8/13-16 的分组替换规则一致），引擎按槽位实例化执行。",
+    "approved": true,
+    "source_sha256": "b77be53c3439d785a9ffad0f09d8d03ba74f7722397576b999ae6f5dd6eef895",
+    "guide_document_sha256": "45dd77460f2ef93d29001c0833c220f89de99dafb19d32a8b73653b55f92c8d7",
+    "review_basis": "Recorded source review, rechecked against source paragraphs on 2026-10-21; engineering certification, not a new user business ruling."
+   },
+   {
+    "finding_id": "finding-12efc0b8100016d667139eed",
+    "disposition": "accepted_interpretation",
+    "reason": "notes 为说明性文字，不构成新增政策；描述2与单类别新文逐字一致，按已满足处理是代码可判定的等价关系，不改变指引要求。",
+    "approved": true,
+    "source_sha256": "b77be53c3439d785a9ffad0f09d8d03ba74f7722397576b999ae6f5dd6eef895",
+    "guide_document_sha256": "45dd77460f2ef93d29001c0833c220f89de99dafb19d32a8b73653b55f92c8d7",
+    "review_basis": "Recorded source review, rechecked against source paragraphs on 2026-10-21; engineering certification, not a new user business ruling."
+   },
+   {
+    "finding_id": "finding-0bd210e2f87c48d6dbd3a47f",
+    "disposition": "false_positive",
+    "reason": "指引段104明确'如果仅有一个份额类别，则不做替换'，class_count=1 即该分支的机器可执行编码。",
+    "approved": true,
+    "source_sha256": "b77be53c3439d785a9ffad0f09d8d03ba74f7722397576b999ae6f5dd6eef895",
+    "guide_document_sha256": "45dd77460f2ef93d29001c0833c220f89de99dafb19d32a8b73653b55f92c8d7",
+    "review_basis": "Recorded source review, rechecked against source paragraphs on 2026-10-21; engineering certification, not a new user business ruling."
+   },
+   {
+    "finding_id": "finding-2f764e6c0ec4cf622b25d6e5",
+    "disposition": "accepted_limitation",
+    "reason": "当前写入能力以段内文本+换行(<w:br/>)表达分项，保留（1）（2）文本层级；段级插入为已知限制 FL-D032，真实产物审计将检查可读性。",
+    "approved": true,
+    "source_sha256": "b77be53c3439d785a9ffad0f09d8d03ba74f7722397576b999ae6f5dd6eef895",
+    "guide_document_sha256": "45dd77460f2ef93d29001c0833c220f89de99dafb19d32a8b73653b55f92c8d7",
+    "review_basis": "Recorded source review, rechecked against source paragraphs on 2026-10-21; engineering certification, not a new user business ruling."
+   },
+   {
+    "finding_id": "finding-0217d6eb2862321273857508",
+    "disposition": "false_positive",
+    "reason": "source_paragraphs 记录组来源段落区间（含标题与原条款说明），删除操作文本本身逐字一致。",
+    "approved": true,
+    "source_sha256": "b77be53c3439d785a9ffad0f09d8d03ba74f7722397576b999ae6f5dd6eef895",
+    "guide_document_sha256": "45dd77460f2ef93d29001c0833c220f89de99dafb19d32a8b73653b55f92c8d7",
+    "review_basis": "Recorded source review, rechecked against source paragraphs on 2026-10-21; engineering certification, not a new user business ruling."
+   },
+   {
+    "finding_id": "finding-c2f26917a3522429735d3930",
+    "disposition": "false_positive",
+    "reason": "三种表述各自带 class_count 条件成为独立操作，任一命中即替换，条件已编码。",
+    "approved": true,
+    "source_sha256": "b77be53c3439d785a9ffad0f09d8d03ba74f7722397576b999ae6f5dd6eef895",
+    "guide_document_sha256": "45dd77460f2ef93d29001c0833c220f89de99dafb19d32a8b73653b55f92c8d7",
+    "review_basis": "Recorded source review, rechecked against source paragraphs on 2026-10-21; engineering certification, not a new user business ruling."
+   }
+  ]
+ }
 }

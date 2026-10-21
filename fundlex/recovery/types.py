@@ -35,6 +35,7 @@ class RecoveryAction(str, Enum):
 #: Internal error code → business failure class.  Unlisted codes are classified by
 #: prefix; the fallback is ``VERIFICATION`` (never a silent business retry).
 FAILURE_CODE_MAP: dict[str, FailureClass] = {
+    "REVIEW_UNPROVEN": FailureClass.VERIFICATION,
     "RECALL_FACT_UNVERIFIED": FailureClass.FACT,
     "FUND_TYPE_QUOTE_UNVERIFIED": FailureClass.FACT,
     "FUND_TYPE_UNVERIFIED": FailureClass.FACT,
@@ -75,7 +76,7 @@ FAILURE_CODE_MAP: dict[str, FailureClass] = {
     "CLAIM_VALIDATION_FAILED": FailureClass.VERIFICATION,
     "CLAIM_REPLAY_FAILED": FailureClass.VERIFICATION,
     "CLAIM_OPERATION_NOT_PLANNED": FailureClass.TARGET,
-    "CLAIM_PLANNED_EFFECT_MISSING": FailureClass.EXECUTION,
+    "CLAIM_PLANNED_EFFECT_MISSING": FailureClass.GENERATION,
     "CLAIM_EXECUTION_EFFECT_MISSING": FailureClass.EXECUTION,
     "CLAIM_OPERATION_UNPROVEN": FailureClass.TARGET,
     "CLAIM_OPERATION_UNATTRIBUTED": FailureClass.TARGET,
