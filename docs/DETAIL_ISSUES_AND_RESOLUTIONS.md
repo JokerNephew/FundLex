@@ -2153,3 +2153,29 @@
 
 - Architecture交叉复现CROSS-002（HIGH/P1）：Sweep已有target但matching Claim_OPERATION_NOT_PLANNED/UNPROVEN直接classify为TARGET，绕过已有claim root-cause helper，导致重复discovery。Recovery reviewer最小复用_claim_failure_context并补已有target/no-plan→GENERATION回归；其余stable retry identity、semantic no-progress交叉审查通过。
 - 用户2026-10-22补充：本任务收口后继续多agent前后端/性能/准确完整修改，至少5份真实合同展示；先当前Gate，不以demo目标降低安全标准或改写失败分母。
+
+### FL-D142 682e68a Exact-HEAD验证与新发现（2026-10-22）
+
+- 冻结runtime682e68a5b3ef2a58feb77460af70afabdb314379，full1024passed/0failed/6skipped/200.45s，compileall/diff-check过。CROSS001/002独立反例复审关闭；新root final-validation-20261022。
+- D01 record35HTTP/$0.02569695/158.46s not_generated：EDIT_OVERLAP_OR_ADJACENT阻断写出。零HTTP frozen replay复现；不是writer错误，replan_sites用可重编号target_id单遍扩dirty_ids，保留旧G08 T007@p226后又用新T010@p226追加相同edit，证据diagnostics/D01-overlap-root-cause.md。状态：已定位通用P1，待最小stable operation/site修复及回归。
+- D02 record26/$0.02805225/127.21s incomplete，实际final/redline与FINAL_EDIT_SET零差异；独立Business新P0：absent占位heading p1036经claimed_operations进入Verified Site Set，多规则falseblock；G05:2/G06:0仅凭无关heading PASS VERIFIED_ABSENT。状态：真实复现，须排除absent/unattributed占位proof，TRUE无site继续OPEN，不改变业务适用性。
+- D11 record25/$0.02588070/109.45s incomplete，D16同SHA record进行中。当前Gate FAIL，尚不可进入20-case或声称任何完美示范合同。
+
+### FL-D142 接续修复（2026-10-22，未提交/未冻结）
+
+- 发现于前序 agent 断线后的工作区：HEAD 仍为 `682e68a`，工作区有未提交修复与 `docs/evidence/final-validation-20261022/`。先保留全部证据，不重录、不覆盖旧 cassette。
+- 已实施（未提交）：
+  - Claim Replay 不再把 `state=absent`、`attribution_error` 或仅有 `claimed_operations` 的占位 target 当作 operation/site proof；这也移除 G05:2/G06 仅凭无关 heading 的 `VERIFIED_ABSENT` 假 PASS。
+  - G02/G04 already-satisfied 判定按类别集合比较，接受真实合同常见的 `A类及D类`/`A类、D类` 分隔符差异；split 段落的份额类别定义允许由包含两类费用条款的报价证明站点，但仍拒绝只有 heading 的 p91 片段。
+  - G05 effect/residual proof 绑定份额类别设置/费率调整站；持有人会议费用豁免条款（p138/p1109 等）不能证明 G05:2 已删除。
+  - `replan_sites` 用稳定 operation/site 保留和重绑 old plan；保留 p758 G15 duplicate delete，修复 D01 `EDIT_OVERLAP_OR_ADJACENT` 与 `DUPLICATE_SITE_UNEDITED p758`。
+  - G01/G03 split class-definition：段落没有句末标点时，若内容是完整 clause（末字非“的/和/与/及/、/：”），直接在段末追加并由 `append_separator` 补句号；只有真正的 open-ended heading 才转到下一段 continuation。D02 p93、D11 p91 的 G01 已能生成追加 edit。
+  - G05 `absent` target 若在真实份额类别设置/费率调整段，允许用该段原文作为 site quote 证明独立 literal 已不存在；generic heading 仍拒绝，因此 D02 p1036/P0 不回归，D01 T007 p135 的 G05:2 可 VERIFIED_ABSENT。
+  - G02/G04 split 段落重新分类：`assign_target_operations` 在 target 被前一轮标成 out_of_scope、但实际报价含完整费用组时清除误标；`plan_target` 在 selected class groups 全部已存在时标 satisfied，不再进入 occurrence ambiguity。
+- 离线证据（当前工作区，未调用模型）：
+  - D01 plan revision 2：19 edits、0 conflicts（G01 p92 追加、G15 p758/p1221 删除）；程序化 build/validate/generate 成功。用 live 等价的 assign+target mutation 重放时只剩 G06/G16 open，G01/G02/G05/G15 已关闭；冻结 stage 仍保留旧 target 状态，不能把 stage 的 G01/G02 失败当作新代码失败。
+  - D02 claim replay failures 12→3（G02/G03/G04/G08/G09/G11/G12/G14/G22 false failure 转 PASS，G05:2 由真实 class-setup absent 证明；剩 G01/G06/G16）。
+  - D11 claim replay：G02 分隔符 false failure 消失，G01 p91 现可生成追加 edit；claim 剩 G01/G06/G16（G05:2 已由 class-setup 证明）。
+  - D16 claim replay：G05 会务条款 false failure 消失；剩 G01、G06、G12/G13、G16、G17 residual。
+- 当前状态：**全量离线 1061 passed / 6 skipped / 2 warnings（219.40s）**；修复已提交到本地分支（未 push），Gate 仍 FAIL。D01 冻结 stage 的 target 旧状态导致 stage claim 仍报 G01/G02，live 等价模拟已验证关闭；BUS-FINAL-003（Audit 无证据负面意见）尚未处理。G06/G16 在四例中仍缺有效 site/target。未部署、未跑 20/514。
+- 下一步：① 提交当前代码/测试/记录（未经用户要求不 push）；② 逐条处理 G06/G16 的 site/target 发现与 D16 G12/G13/G17 residual；③ 新 SHA 重新四例 record/replay 与独立业务复核；④ 之后再推进 ≥5 份真实合同，不降低 Gate。

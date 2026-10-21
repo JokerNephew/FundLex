@@ -15,6 +15,30 @@ def _compact(value: str) -> str:
     return re.sub(r"\s+", "", value)
 
 
+def _class_labels(value: str) -> set[str]:
+    """Share-class labels in a G02/G04 phrase (``A类及D类`` -> {A, D})."""
+    return set(re.findall(r"([A-Z])类", _compact(value)))
+
+
+def _class_group_equivalent(expected: str, source_quote: str) -> bool:
+    """Treat ``A类及D类`` and ``A类、D类`` as the same already-correct group.
+
+    G02/G04 authorize the *class set* in a fee-group definition, not a particular
+    Chinese list delimiter.  The guide/canonical template uses ``、`` while real
+    contracts commonly use ``及``/``和``; an exact string comparison falsely reported
+    a multi-class group as an unperformed replacement.  Require the same non-empty
+    label set so a missing or extra class still fails closed.
+    """
+    labels = _class_labels(expected)
+    if not labels:
+        return False
+    # A fee-group quote often contains both clauses in one paragraph
+    # ("A/D类…；C类…"). Compare within each clause so the expected A/D group is
+    # not rejected merely because the C-class sibling is also present.
+    return any(_class_labels(clause) == labels
+               for clause in re.split(r"[；;。！？!?]", source_quote or ""))
+
+
 @dataclass(frozen=True)
 class OperationEffect:
     state: str
@@ -100,6 +124,109 @@ def _delete_quote_belongs(quote: str, references: Sequence[str]) -> bool:
     return False
 
 
+def operation_site_bound(spec: Any, quote: str, original: Any, location: str,
+                         facts: Any, *, parts: Sequence[Mapping[str, Any]] = (),
+                         occurrence_index: int = -1) -> bool:
+    """Require a rule's business site as well as a resolvable source quote.
+
+    Inventory can attach an explicit operation key to a generic heading or a
+    sibling clause. Reuse the existing site guards and operation wording rather
+    than treating model attribution as source evidence. An already absent filing
+    phrase can still be proven at its share-class setup site; a generic heading
+    cannot supply that negative proof.
+    """
+    from types import SimpleNamespace
+    from ..recall import (append_site_ok, instantiate_slots, reference_fragments,
+                          target_site_ok, _looks_like_heading, _sequence_ratio)
+    try:
+        span = original.by_location(location)
+    except (KeyError, ValueError, IndexError, AttributeError):
+        return False
+    if parts:
+        body = "".join(str(part.get("quote") or "") for part in parts)
+        span = SimpleNamespace(location=location, text=body)
+    else:
+        body = str(span.text)
+    if not quote or _compact(quote) not in _compact(body) or _looks_like_heading(body):
+        return False
+    site_ok = (append_site_ok(spec.rule_id, span, original) if spec.op == "append"
+               else target_site_ok(spec.rule_id, span, original))
+    if not site_ok and spec.rule_id in {"G02", "G04"} and occurrence_index >= 0:
+        # Narrow class substitutions authorize an exact occurrence within their
+        # actual fee-group paragraph. The small quote is just the class label;
+        # dropping it for lacking a paragraph-level heading could hide a second
+        # unmodified occurrence behind another edit's successful proof.
+        site_ok = (_compact(quote) == _compact(str(spec.old_text or "")) and
+                   any(token in _compact(body) for token in
+                       ("申购费", "认购费", "销售服务费")))
+    if not site_ok and spec.rule_id in {"G02", "G04"}:
+        # Split DOCX paragraphs put the heading ("基金份额类别：…") and the
+        # fee-group wording ("…申购A类及D类…；…C类…") in adjacent paragraphs.
+        # The target quote can still prove both fee groups and multiple class
+        # labels even when its own paragraph has no heading token.
+        q = _compact(quote)
+        if (any(token in q for token in ("申购费", "认购费"))
+                and "销售服务费" in q and len(_class_labels(q)) >= 2):
+            site_ok = True
+    if not site_ok:
+        return False
+    if spec.rule_id in {"G02", "G04"} and not any(
+            token in _compact(body) for token in ("申购费", "认购费", "销售服务费")):
+        # A split class-definition heading (for example "基金份额类别：本基金将
+        # 基金份额分为 A 类、C 类和 D 类三种不同的") is not the fee-group clause
+        # that G02/G04 authorize.  The actual group wording continues in the next
+        # paragraph; treating the heading as a verified site both hides the real
+        # occurrence and creates a false MISSING_EFFECT.
+        return False
+    if spec.rule_id == "G05":
+        # G05 authorizes the manager's add/change/stop share-class setup clause.
+        # Meeting-convening exemptions independently mention lowering redemption
+        # fees; their matching fee words are neither duplicate G05 sites nor
+        # evidence that G05's independent filing deletion is already satisfied.
+        class_setup = _compact(body)
+        if not ("份额类别的具体设置" in class_setup or re.search(
+                r"(?:增加|增设|新增|变更|停止)[^。；;]{0,12}(?:基金)?份额类别",
+                class_setup)):
+            return False
+    if spec.op == "append" and spec.rule_id in {"G01", "G03", "G16"}:
+        # These append rules already have explicit rule-specific clause anchors.
+        return True
+    references = [str(spec.old_text or ""), *getattr(spec, "alternatives", ())]
+    compact = _compact(quote)
+    if spec.rule_id in {"G02", "G04"}:
+        label = re.fullmatch(r"([A-Z])类基金份额", _compact(str(spec.old_text or "")))
+        if label is not None and label.group(1) + "类" in compact:
+            return True
+    for reference in references:
+        old = _compact(reference)
+        if old and (old in compact or (len(compact) >= 8 and compact in old)):
+            return True
+        if any(_compact(fragment) in compact for fragment in reference_fragments(reference)):
+            return True
+    if spec.op == "delete":
+        if _delete_quote_belongs(quote, references):
+            return True
+        # G05 filing is a bounded literal deletion within the class-setup/fee
+        # adjustment clause. Its already-absent effect needs this own business
+        # site, not the deleted literal, to remain a provable no-op.
+        return spec.rule_id == "G05" and bool(references) and all(
+            "备案" in _compact(reference) for reference in references if reference)
+    expected = str(spec.new_text or "")
+    try:
+        instantiated, issues = instantiate_slots(expected, facts)
+        if not issues:
+            expected = instantiated
+    except (AttributeError, TypeError):
+        pass
+    if expected and _compact(expected) in _compact(body):
+        return True
+    # The existing attribution layer accepts bounded wording variants at this
+    # threshold. Keep its operation semantics while adding the site guard above.
+    return any(len(_compact(reference)) >= 24 and
+               _sequence_ratio(_compact(reference), compact) >= 0.35
+               for reference in references)
+
+
 def _verified_site_closure(sites: Sequence[Mapping[str, Any]], original: Any,
                            spec: Any) -> list[dict[str, Any]]:
     """Keep source duplicates and split-clause tails in the required site set.
@@ -116,6 +243,14 @@ def _verified_site_closure(sites: Sequence[Mapping[str, Any]], original: Any,
     closed: list[dict[str, Any]] = []
     for raw in sites:
         site = dict(raw)
+        # Inventory's ``absent`` state means that no operation-specific source site
+        # was found in that window.  It is never proof that a delete effect is
+        # already absent, and it must not become a verified site merely because its
+        # generic quote happens to resolve in the source document.  Claim Replay
+        # filters these targets before calling the evaluator; keep this defensive
+        # guard here for direct callers and future effect consumers.
+        if str(site.get("state") or "") == "absent":
+            continue
         location = str(site.get("location") or site.get("site_id") or "")
         if location not in index:
             closed.append(site)
@@ -253,7 +388,10 @@ def evaluate_operation_effect(obligation: Any, original: Any, artifact: Any,
                        and operation_id in {value.strip() for value in
                                             str(unit.get("operation_id") or "").split(",")}]
         validated = bool(unit_proofs) and all(unit.get("verdict") == "PASS" for unit in unit_proofs)
-        expected_present = bool(expected) and _compact(expected) in _compact(after)
+        expected_present = bool(expected) and (
+            _compact(expected) in _compact(after)
+            or (spec.rule_id in {"G02", "G04"} and spec.op == "replace"
+                and _class_group_equivalent(expected, quote)))
         if occurrence >= 0 and spec.op == "replace":
             from .claim_replay import _occurrence_positions
             positions = _occurrence_positions(before, str(spec.old_text or ""))

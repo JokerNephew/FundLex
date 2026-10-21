@@ -1,6 +1,33 @@
 # FundLex 当前断点（ACTIVE_HANDOFF）
 
 
+## 接续断点（2026-10-22 07:00，前序 agent 断开后）
+
+- **当前版本**：HEAD `682e68a5b3ef2a58feb77460af70afabdb314379`，分支 `refactor/recovery-architecture`，ahead 2（`22c15aa`、`682e68a`），未 push。工作区有未提交修复，涉及 `fundlex/recall.py`、`recall_pipeline.py`、`generation/claim_replay.py`、`generation/effects.py`、两个验证测试文件及未跟踪的 `docs/evidence/final-validation-20261022/`。
+- **上一冻结证据**：exact-HEAD `682e68a` 全量 1024 passed/0 failed/6 skipped；四例 record 均完成但 Gate FAIL：D01 `not_generated`（EDIT_OVERLAP_OR_ADJACENT，无 DOCX），D02/D11/D16 `incomplete`，业务复核 5 项 BLOCKER/HIGH（absent 占位 proof、G02 分隔符、G05 会务条款误绑、Audit 无证据意见、D01 重叠）。D02/D11/D16 final/redline 与 FINAL_EDIT_SET 程序化零差异。
+- **已实施未提交的最小修复**：
+  1. Claim Replay 排除 `state=absent`、`attribution_error` 和 `claimed_operations` 作为 operation/site proof；避免无关 heading 产生 VERIFIED_ABSENT 或 falseblock。
+  2. G02/G04 already-satisfied proof 按类别集合等价，接受 `A类及D类` 与 `A类、D类`；split 段落允许由含两类费用条款的报价证明 site，但仍拒绝 heading。
+  3. G05 residual/effect proof 绑定份额类别设置/费率调整业务站，拒绝持有人会议费用豁免条款。
+  4. `replan_sites` 改为按稳定 operation/site（而非会重编号的 target_id）保留/重绑；保留旧计划中合法的 p758 G15 duplicate delete，避免 duplicate-site 未编辑和 EDIT_OVERLAP。
+- **离线验证（当前工作区，无模型调用）**：
+  - D01 plan revision 2：18 edits / 0 conflicts；`build_docx_edits`→validate→generate 成功，G15 p758/p1221 均删除。Claim 仍剩 G01 p91、G02 p91/p92、G05:2、G06、G16；不是本轮 duplicate/overlap 误报。
+  - D02 claim replay：12→4 failures；G02/G03/G04/G08/G09/G11/G12/G14/G22 已由 false failure 转 PASS；G05:2/G06/G16 继续 OPEN，G01 p93 真实 missing。
+  - D11 claim replay：G02 delimiter false failure 消失；剩 G01 p91、G05:2、G06、G16。
+  - D16 claim replay：G05 会务条款 false failure 消失；剩 G01、G06、G12/G13、G16、G17 真实 residual/缺失。
+- **当前验证**：工作区全量离线 **1061 passed / 6 skipped / 2 warnings，219.40s**；修复已提交到本地分支，用户未要求 push，默认不 push。D01 split class-definition 的 G02 site 归属与 G01 append 已由 live 等价模拟关闭；G06/G16 仍缺有效 site/target；D16 G12/G13/G17 residual、BUS-FINAL-003 Audit 无证据意见仍待处理。之后新 SHA 重新四例 record/replay 与 ≥5 份真实合同验收。未部署、未跑 20/514，Gate 仍 FAIL。
+
+## 新SHA四例record断点（2026-10-22，优先于以下）
+
+- runtime冻结682e68a5b3ef2a58feb77460af70afabdb314379（ahead2，未push）。exact SHA完整1024passed/0failed/6skipped/200.45s；compileall/diff-check过。新证据docs/evidence/final-validation-20261022，原root20261021保留。
+- D01新record35calls/$0.02569695/158.46s，not_generated EDIT_OVERLAP_OR_ADJACENT stage audit，无DOCX。Recovery agent零HTTP full replay复现，定位replan_sites单遍dirty_ids依赖target重新编号，旧G08 T007被保留+新T010 G08重复规划。diagnostics/D01-overlap-root-cause.md及capture/trace均保存。最小修复待D16当前record结束后实施，不重构writer。
+- D02新record26calls/$0.02805225/127.21s，incomplete，24TRUE=7verified/5already/12unresolved。真实final/redline存在；programmatic source+finaledit→actual零差异，接受redline=final/拒绝=source。Business发现P0：state=absent占位heading p1036通过claimed_operations进入Claim verified site；导致falseblock以及G05:2/G06:0无关site VERIFIED_ABSENT。须排除absent/rejected/unattributed占位为proof，TRUE保持OPEN。Business reviewer继续只读，未修。
+- D11新record25calls/$0.02588070/109.45s，incomplete，24TRUE=12verified/8already/4unresolved，artifact待business review。
+- D16新record正在exec session23552，已22completed+1reserved（以实际状态为准），不要重启。完成前不改runtime，以保四例SHA一致。
+- 活跃agents recovery_final_review只读诊断D01+absent入口；test_review只读stage/failclosed验证（D01sixstage缺Claim/obligation边界正确failclosed，D02全stage待结果）；business_final_review直接读新DOCX。Architecture上一轮CROSS001/002复审已0BLOCKER/HIGH，但新P0/P1尚未修，Gate FAIL。
+- 预算原每case192/$0.60不变，已用累计：D01 164/$0.11800455余28calls；D02 76/$0.09072705余116；D11 79/$0.08133990余113；D16此前48/$0.06087105+当前未完。凭据仅进程内，ledger /tmp/opencode/final-validation-20261022，不改生产。
+- 下一动作：D16完成→保存四例此SHA完整record/replay与business failure baseline→最小修复D01稳定op/site dirty closure与Claim absent proof gate+regression→新full freeze。不要旧cassette冒新record；D01剩余28不足一整轮平均calls，必须如实标预算限制，不增加预算。最新用户要求后续≥5完美合同+全前后端+性能，不能因此放松验证或伪称完成。
+
 ## 最新用户补充（2026-10-22）
 
 - 当前最终验证任务完成后，用户要求继续组织多个agent自行推进后续修复/前后端逻辑检查，中途不自停/不询问，目标至少5份真实合同准确完整修改且单份耗时合理，为次日展示准备。不得放松原Gate、验证标准、预算/retry或伪称完美；先当前Gate再推进后续。

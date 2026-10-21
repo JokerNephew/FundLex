@@ -238,14 +238,72 @@ def test_sweep_corrects_scope_for_verified_business_clause(tmp_path):
 def test_delete_scan_keeps_duplicate_sites_and_rejects_unrelated_filing(tmp_path):
     from fundlex.generation.claim_replay import check_delete_residuals
     old = "并报中国证监会备案"
-    source = _inspection(tmp_path, "调整基金份额类别并报中国证监会备案。",
-        "信息披露计划并报中国证监会备案。", "调整基金份额类别并报中国证监会备案。")
+    setup = "基金管理人可以增加新的基金份额类别，调整前需公告并报中国证监会备案。"
+    source = _inspection(tmp_path, setup, "信息披露计划并报中国证监会备案。", setup)
     locations = [span.location for span in source.paragraphs]
     rules = {"G05": {"rule_id": "G05", "operations": [{"op": "delete", "old_text": old}]}}
     findings = check_delete_residuals(rules, source, original=source,
         targets=[{"location": locations[0], "operations": ["G05:0"]}])
     assert {item["location"] for item in findings} == {locations[0], locations[2]}
     assert findings[0]["scan"] == "known_site"
+
+
+@pytest.fixture
+def g05_rules_and_obligations():
+    import json
+    from pathlib import Path
+    guide_path = Path(__file__).resolve().parents[1] / "guides" / "builtin_guide_v1.json"
+    guide = json.loads(guide_path.read_text(encoding="utf-8"))
+    rule = next(item for item in guide["groups"] if item["rule_id"] == "G05")
+    obligations = compile_obligations({"groups": [rule]})
+    apply_facts(obligations, Facts())
+    assert obligations.record("G05:2").applicability.status == "TRUE"
+    assert obligations.record("G05:2").spec.old_text == "并报中国证监会备案"
+    return {"G05": rule}, obligations
+
+
+@pytest.mark.parametrize("with_obligations", [True, False])
+def test_g05_residual_scan_rejects_holder_meeting_fee_list_as_business_site(
+        tmp_path, g05_rules_and_obligations, with_obligations):
+    from fundlex.generation.claim_replay import check_delete_residuals
+    rules, obligations = g05_rules_and_obligations
+    source = _inspection(tmp_path,
+        "本基金在履行适当程序后可以增加新的基金份额类别、变更现有基金份额类别的申购费率、"
+        "调低赎回费率。调整前需及时公告并报中国证监会备案。",
+        "下列事项不需召开基金份额持有人大会：调低赎回费率、调低销售服务费率，并报中国证监会备案。")
+    findings = check_delete_residuals(rules, source, original=source, facts=Facts(),
+        obligations=obligations if with_obligations else None,
+        targets=[{"location": "p1", "operations": ["G05:2"]}])
+    assert {item["location"] for item in findings} == {"p0"}
+    assert {item["operation_id"] for item in findings} == {"G05:2"}
+    assert findings[0]["quote"] == "并报中国证监会备案"
+
+
+@pytest.mark.parametrize("with_obligations", [True, False])
+@pytest.mark.parametrize("filing_residual", [True, False])
+def test_g05_residual_scan_binds_source_site_after_sibling_operation_changed_paragraph(
+        tmp_path, g05_rules_and_obligations, with_obligations, filing_residual):
+    from fundlex.generation.claim_replay import check_delete_residuals
+    rules, obligations = g05_rules_and_obligations
+    text = ("基金管理人在履行适当程序后可以增加新的基金份额类别、变更现有基金份额类别的申购费率、"
+            "调低赎回费率或变更收费方式。调整前需及时公告并报中国证监会备案。")
+    source = _inspection(tmp_path, text)
+    changed = text.replace("调低赎回费率", "调低销售服务费率")
+    if not filing_residual:
+        changed = changed.replace("并报中国证监会备案", "")
+    actual = _inspection(tmp_path, changed)
+    assert actual.paragraphs[0].text not in source.paragraphs[0].text
+    findings = check_delete_residuals(rules, actual, original=source, facts=Facts(),
+        obligations=obligations if with_obligations else None,
+        targets=[{"location": "p0", "operations": ["G05:2"]}])
+    if filing_residual:
+        assert len(findings) == 1
+        assert findings[0]["operation_id"] == "G05:2"
+        assert findings[0]["location"] == "p0"
+        assert findings[0]["quote"] == "并报中国证监会备案"
+        assert findings[0]["proof_kind"] == "RESIDUAL_CONFIRMED"
+    else:
+        assert findings == []
 
 
 def test_same_paragraph_independent_operations_use_one_atomic_edit_without_model(tmp_path):
@@ -295,15 +353,19 @@ def test_sweep_cannot_borrow_delete_proof_from_another_site(tmp_path):
         "group_kind": "INDEPENDENT", "condition": {"kind": "none"}}]}
     ledger = compile_obligations({"groups": [rule]})
     apply_facts(ledger, Facts())
-    source = _inspection(tmp_path, "业务条款已满足。", "另一个业务条款。")
+    source = _inspection(tmp_path, "旧业务删除句。", "另一个业务条款。")
+    actual = _inspection(tmp_path, "", "另一个业务条款。")
     first, second = [span.location for span in source.paragraphs]
-    replay = replay_claims([], source, source, rules_by_id={"G99": rule}, facts=Facts(),
+    edit = {"rule_id": "G99", "target_id": "T", "location": first,
+            "start": 0, "end": len("旧业务删除句。"), "replacement": "",
+            "operation_keys": ["G99:0"], "content_source": "fragment_delete"}
+    replay = replay_claims([edit], source, actual, rules_by_id={"G99": rule}, facts=Facts(),
         obligations=ledger, targets_by_id={"T": {"target_id": "T", "location": first,
-            "quote": "业务条款已满足。", "operations": ["G99:0"]}})
+            "quote": "旧业务删除句。", "state": "needs_edit", "operations": ["G99:0"]}})
     assert replay["verified"] is True
     finding = {"status": "pending", "rule_id": "G99", "location": second,
         "quote": "另一个业务条款。", "issue": "unaddressed_requirement"}
-    _apply_artifact_proof_to_findings([finding], replay, source, ledger, {"G99": rule})
+    _apply_artifact_proof_to_findings([finding], replay, actual, ledger, {"G99": rule})
     assert finding["status"] == "pending"
     assert finding["proof_kind"] == "SEMANTIC_UNCERTAIN"
 
@@ -340,3 +402,48 @@ def test_generation_recovery_replans_only_dirty_sites(tmp_path, monkeypatch):
     assert {edit['location']: edit['replacement'] for edit in repaired['edits']} == {
         span.location: '新业务条款。保留句。' for span in source.paragraphs}
     assert all(entry['status'] == 'planned' for entry in repaired['ledger'])
+
+
+def test_dirty_site_replan_survives_target_id_permutation(tmp_path, monkeypatch):
+    from copy import deepcopy
+    from dataclasses import replace
+    from fundlex import recall
+    from test_recall_core import _facts
+    source = _inspection(tmp_path, '旧业务条款。保留甲。', '旧业务条款。保留乙。')
+    rule = {'rule_id': 'G99', 'operations': [{'op': 'replace', 'old_text': '旧业务条款。',
+        'new_text': '新业务条款。', 'group_kind': 'INDEPENDENT', 'condition': {'kind': 'none'}}]}
+    targets = [recall.Target(f'T{index}', 'G99', span.location, span.text, 'needs_edit', '',
+        start=0, end=len(span.text), segment_ok=True, resolution='resolved', operations=('G99:0',))
+        for index, span in enumerate(source.paragraphs)]
+    class Gateway:
+        def call(self, **kwargs):
+            raise AssertionError('deterministic recovery called a model')
+    facts = _facts()
+    original = recall.plan_edits({'G99': rule}, targets, source, facts, Gateway())
+    retained = deepcopy(original['edits'][0])
+    # An inventory refresh reuses T0 for the dirty second site. The retained first
+    # site's old T0 must not make it dirty or appear again as the refreshed T1.
+    refreshed = [replace(targets[0], target_id='T1'), replace(targets[1], target_id='T0')]
+    called = []
+    planner = recall.plan_target
+    def traced(rule, target, *args, **kwargs):
+        called.append((target.target_id, target.location))
+        return planner(rule, target, *args, **kwargs)
+    monkeypatch.setattr(recall, 'plan_target', traced)
+    repaired = recall.replan_sites(original, {source.paragraphs[1].location}, {'G99': rule},
+        refreshed, source, facts, Gateway(), max_compose_calls=1)
+    assert called == [('T0', source.paragraphs[1].location)]
+    retained_after = next(edit for edit in repaired['edits'] if edit['location'] == source.paragraphs[0].location)
+    assert retained_after['target_id'] == 'T1'
+    assert retained_after['rule_id'] == retained['rule_id']
+    assert retained_after['location'] == retained['location']
+    assert retained_after['start'] == retained['start']
+    assert retained_after['end'] == retained['end']
+    assert retained_after['replacement'] == retained['replacement']
+    assert retained_after['components'][0]['target_id'] == 'T1'
+    assert len(repaired['edits']) == 2
+    assert len({(edit['location'], edit['start'], edit['end']) for edit in repaired['edits']}) == 2
+    retained_ledger = next(entry for entry in repaired['ledger'] if entry['location'] == source.paragraphs[0].location)
+    assert retained_ledger['target_id'] == 'T1'
+    assert retained_ledger['operation_keys'] == ['G99:0']
+    assert retained_ledger['operation_effects']['G99:0']['status'] == 'planned'

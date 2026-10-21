@@ -946,7 +946,7 @@ def replay_claims(edits: Sequence[Mapping[str, Any]], before_inspection: Any,
             break
     # Every TRUE obligation receives a site-scoped proof from the shared evaluator.
     # The integrity/authorization checks above remain mandatory and independent.
-    from .effects import evaluate_operation_effect
+    from .effects import evaluate_operation_effect, operation_site_bound
     effect_edits = []
     for edit in edits:
         enriched = dict(edit)
@@ -993,8 +993,18 @@ def replay_claims(edits: Sequence[Mapping[str, Any]], before_inspection: Any,
         operation_id = str(record.spec.operation_id)
         sites: list[dict[str, Any]] = []
         for target in targets:
+            # Inventory ``absent`` is a window-level negative assertion, not a
+            # verified business site.  A generic heading (for example a summary
+            # heading) must never prove a delete's VERIFIED_ABSENT state or add a
+            # required site that can make a valid operation fail.  A real business
+            # paragraph can, however, prove that an independent literal is already
+            # absent (G05:2 at the class-setup clause); use that paragraph's own
+            # body as the site quote and let the rule/site guard reject headings.
+            # ``claimed_operations`` remains an attribution failure marker; only the
+            # target's operation binding is authoritative for effect proof.
+            if target.get("attribution_error"):
+                continue
             keys = {str(key) for key in (target.get("operations") or ())}
-            keys.update(str(key) for key in (target.get("claimed_operations") or ()))
             if operation_id not in keys or target.get("out_of_scope"):
                 continue
             location = str(target.get("location") or "")
@@ -1002,21 +1012,39 @@ def replay_claims(edits: Sequence[Mapping[str, Any]], before_inspection: Any,
                 before_text = str(before_inspection.by_location(location).text)
             except (KeyError, ValueError, IndexError, AttributeError):
                 continue
-            quote = str(target.get("quote") or "")
-            if quote and _compact(quote) in _compact(before_text):
-                sites.append({"location": location, "quote": quote,
-                              "occurrence_index": target.get("occurrence_index", -1),
-                              "target_id": target.get("target_id")})
+            state = str(target.get("state") or "")
+            if state == "absent":
+                from ..recall import _looks_like_heading
+                if _looks_like_heading(before_text):
+                    continue
+                quote = before_text
+            else:
+                quote = str(target.get("quote") or "")
+            parts = []
             for part in target.get("composite") or []:
                 from ..recall import display_text
-                part_location, start, end = str(part).rsplit(":", 2)
                 try:
+                    part_location, start, end = str(part).rsplit(":", 2)
                     part_span = before_inspection.by_location(part_location)
                     normalized, _ = display_text(part_span.text)
-                    sites.append({"location": part_location,
+                    parts.append({"location": part_location,
                                   "quote": normalized[int(start):int(end)]})
                 except (KeyError, ValueError, IndexError, AttributeError):
                     continue
+            if not operation_site_bound(record.spec, quote, before_inspection,
+                                        location, facts, parts=parts,
+                                        occurrence_index=int(target.get("occurrence_index", -1))):
+                continue
+            identity = {"state": ("satisfied" if state == "absent"
+                                  else target.get("state")),
+                        "operation_id": operation_id,
+                        "obligation_id": record.obligation_id,
+                        "target_id": target.get("target_id")}
+            if quote and _compact(quote) in _compact(before_text):
+                sites.append({"location": location, "quote": quote,
+                              "occurrence_index": target.get("occurrence_index", -1),
+                              **identity})
+            sites.extend({**part, **identity} for part in parts)
         own_records = []
         for unit in operation_records:
             keys = {key.strip() for key in str(unit.get("operation_id") or "").split(",")}
@@ -1104,14 +1132,23 @@ def check_delete_residuals(rules_by_id: Mapping[str, dict], after_inspection: An
     can explain a retained sentence only at the site where that policy was applied.
     """
     from ..recall import target_site_ok, resolve_quote, condition_status
+    from .effects import operation_site_bound
     from types import SimpleNamespace
     spans = list(getattr(after_inspection, "paragraphs", ()))
     source = original or after_inspection
     source_spans = list(getattr(source, "paragraphs", ()))
+    source_by_location = {str(span.location): span for span in source_spans}
     failures: list[dict[str, Any]] = []
     seen: set[tuple[str, str, str]] = set()
     edits = list(edits or [])
     for rule_id, rule in rules_by_id.items():
+        site_specs = {}
+        if str(rule_id) == "G05":
+            from ..obligations import compile_obligations
+            # The same business-site boundary applies to callers without a runtime
+            # ledger. Compile only the static operation identity, not applicability.
+            site_specs = {item.spec.operation_id: item.spec for item in compile_obligations(
+                {"groups": [{**rule, "rule_id": rule_id}]}).records}
         operations = list(rule.get("operations") or [])
         for index, operation in enumerate(operations):
             if operation.get("op") != "delete":
@@ -1143,8 +1180,12 @@ def check_delete_residuals(rules_by_id: Mapping[str, dict], after_inspection: An
                 str(getattr(pair[1], "location", "")) not in known, pair[0]))
             for span_index, span in ordered:
                 location = str(getattr(span, "location", ""))
-                source_span = source_spans[span_index] if span_index < len(source_spans) else span
+                source_span = source_by_location.get(location)
+                if source_span is None:
+                    continue
                 semantic = location in known or target_site_ok(str(rule_id), source_span, source)
+                site_quote = str(source_span.text)
+                site_parts = ()
                 if not semantic:
                     # Delete residuals may be the continuation sentence of a known
                     # clause and therefore lack the target anchor (for example G15's
@@ -1161,6 +1202,18 @@ def check_delete_residuals(rules_by_id: Mapping[str, dict], after_inspection: An
                     continuation = SimpleNamespace(text=str(previous.text) + str(source_span.text),
                                                    location=location)
                     semantic = target_site_ok(str(rule_id), continuation, source)
+                    site_quote = continuation.text
+                    site_parts = ({"location": str(previous.location), "quote": str(previous.text)},
+                                  {"location": location, "quote": str(source_span.text)})
+                if semantic and str(rule_id) == "G05":
+                    # Bind WHERE to the original site: a sibling operation can
+                    # legitimately change the artifact paragraph while leaving this
+                    # delete's exact residual. Artifact text is checked below only
+                    # for that residual, never used as a source quote. Apply this
+                    # guard after continuation handling so it cannot be bypassed.
+                    spec = record.spec if record is not None else site_specs[operation_id]
+                    semantic = operation_site_bound(spec, site_quote, source, location,
+                                                    facts, parts=site_parts)
                 if not semantic:
                     continue
                 for probe in sorted(probes):

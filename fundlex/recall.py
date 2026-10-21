@@ -1776,6 +1776,23 @@ def _selected_operation_indices(rule: dict, target: Target,
             else:
                 span_bodies.append(_compact(display_text(span.text)[0]))
         span_body = "".join(span_bodies)
+        if rule_id in {"G02", "G04"} and bool(rule.get("class_substitution")):
+            # A full fee-group clause can prove both class substitutions even when
+            # Inventory attached only one explicit operation id.  A heading that
+            # merely lists A/C/D has no fee wording and must not gain sibling keys.
+            from .generation.effects import _class_group_equivalent
+            quote_body = _compact(target.quote) or span_body
+            if any(token in quote_body for token in ("申购费", "认购费", "销售服务费")):
+                for index in true_indices:
+                    if index in selected:
+                        continue
+                    operation = operations[index]
+                    expected, issues = instantiate_slots(
+                        str(operation.get("new_text") or ""), facts)
+                    if not issues and expected and _class_group_equivalent(
+                            expected, quote_body):
+                        selected.append(index)
+                selected = sorted(set(selected))
         variants = [_compact(str(value)) for value in (rule.get("old_text_variants") or [])]
         for index in selected:
             operation = operations[index]
@@ -1830,8 +1847,36 @@ def assign_target_operations(targets: Sequence[Target], rules_by_id: dict[str, d
     with ``RECALL_TARGET_OPERATION_UNATTRIBUTED``.
     """
     errors: list[dict[str, Any]] = []
+    from .generation.effects import _class_group_equivalent
     for target in targets:
-        if target.state != "needs_edit" or target.out_of_scope:
+        if target.state != "needs_edit":
+            continue
+        # A previous planning pass may have marked a valid, already-satisfied
+        # G02/G04 target as TARGET_SOURCE_MISMATCH when the canonical guide letters
+        # did not occur verbatim.  Reclassify only when the actual fee-group clause
+        # already contains every selected class group; headings without fee wording
+        # remain excluded.
+        if target.out_of_scope and target.rule_id in {"G02", "G04"}:
+            rule = rules_by_id.get(target.rule_id) or {}
+            quote_body = _compact(target.quote)
+            if rule.get("class_substitution") and any(
+                    token in quote_body for token in ("申购费", "认购费", "销售服务费")):
+                true_indices = [index for index, operation in enumerate(
+                    rule.get("operations") or ())
+                    if condition_status(operation.get("condition"), facts) == "TRUE"]
+                matched = 0
+                for index in true_indices:
+                    expected, issues = instantiate_slots(
+                        str((rule.get("operations") or ())[index].get("new_text") or ""),
+                        facts)
+                    if not issues and expected and _class_group_equivalent(
+                            expected, quote_body):
+                        matched += 1
+                if true_indices and matched == len(true_indices):
+                    target.out_of_scope = False
+                    target.reason = (f"{target.reason}|"
+                                     "RECLASSIFIED_CLASS_GROUP_PRESENT")
+        if target.out_of_scope:
             continue
         rule = rules_by_id.get(target.rule_id)
         if rule is None:
@@ -3524,6 +3569,25 @@ def _plan_target_inner(rule: dict, target: Target, inspection: DocumentInspectio
     if not containing_segment(span, target.start, target.end) and not (target.start == target.end):
         raise RecallError("RECALL_TARGET_STRUCTURE", {"target": target.target_id})
     rule_id = str(rule.get("rule_id") or "")
+    if rule_id in {"G02", "G04"} and operations:
+        # If the bound fee-group clause already contains every selected class group
+        # (common `A类及D类` / `C类` wording), there is nothing to replace.  This is
+        # also the only sound way to close a split class-definition paragraph whose
+        # heading and fee-group wording live in adjacent DOCX paragraphs.
+        from .generation.effects import _class_group_equivalent
+        quote_body = _compact(target.quote) or _compact(span.text[target.start:target.end])
+        if any(token in quote_body for token in ("申购费", "认购费", "销售服务费")):
+            matched = 0
+            for operation in operations:
+                expected, issues = instantiate_slots(
+                    str(operation.get("new_text") or ""), facts)
+                if not issues and expected and _class_group_equivalent(expected, quote_body):
+                    matched += 1
+            if matched == len(operations):
+                target.state = "satisfied"
+                target.out_of_scope = False
+                target.reason = f"{target.reason}|CLASS_GROUP_ALREADY_PRESENT"
+                return None
     if rule_id in {"G02", "G04"}:
         # The inventory often quotes the whole A/C class-definition sentence.  Narrow the
         # edit to the one operation the target actually owns, and prove which identical
@@ -3600,9 +3664,37 @@ def _plan_target_inner(rule: dict, target: Target, inspection: DocumentInspectio
                 and span.text[:target.end].rstrip(" \t\n\r\"”’）)")[-1:] not in "。！？；;":
             suffix = re.search(r"[。！？；;]", span.text[target.end:])
             if suffix is None:
-                raise RecallError("RECALL_APPEND_CLAUSE_INCOMPLETE",
-                                  {"rule": rule_id, "target": target.target_id})
-            target.end += suffix.end()
+                tail = span.text[:target.end].rstrip(" \t\n\r\"”’）)")
+                if tail and tail[-1] not in "的和与及、，,（(：:":
+                    # The paragraph holds a complete clause but simply omits the final
+                    # full stop (D02 p93 "...称为 C 类基金份额 ").  Append at its end;
+                    # append_separator supplies the missing stop.
+                    target.end = len(tail)
+                else:
+                    # A split definition ends the heading in this paragraph and puts
+                    # the rest of the sentence in the next one.  Move the append site
+                    # to that continuation only when the previous paragraph has the
+                    # rule anchor and no sentence terminator.
+                    locations = [item.location for item in inspection.paragraphs]
+                    try:
+                        index = locations.index(span.location)
+                    except ValueError:
+                        index = -1
+                    next_span = (inspection.paragraphs[index + 1]
+                                 if 0 <= index < len(inspection.paragraphs) - 1 else None)
+                    if next_span is None or not append_site_ok(rule_id, next_span, inspection):
+                        raise RecallError("RECALL_APPEND_CLAUSE_INCOMPLETE",
+                                          {"rule": rule_id, "target": target.target_id})
+                    span = next_span
+                    target.location = str(span.location)
+                    target.quote = str(span.text)
+                    target.start, target.end = 0, len(str(span.text))
+                    suffix = re.search(r"[。！？；;]", span.text[target.end:])
+                    if suffix is not None:
+                        target.end += suffix.end()
+                    actual = span.text[target.start:target.end]
+            else:
+                target.end += suffix.end()
         new_text, issues = instantiate_slots(str(operation.get("new_text") or ""), facts)
         if issues or not new_text.strip():
             # The guide's append wording names an assumed class group ("C类基金份额"). A
@@ -4563,6 +4655,14 @@ def plan_edits(rules_by_id: dict[str, dict], targets: Sequence[Target], inspecti
                        "status": "planned", "operation": edit.operation,
                        "operation_keys": list(edit.operation_keys),
                        "obligation_ids": list(edit.obligation_ids)})
+    target_by_id = {target.target_id: target for target in targets}
+    for entry in ledger:
+        target = target_by_id.get(str(entry.get("target_id") or ""))
+        if target is not None:
+            entry.update(location=target.location, start=target.start, end=target.end,
+                         occurrence_index=target.occurrence_index,
+                         quote=target.quote, composite=list(target.composite))
+            entry.setdefault("operation_keys", list(target.operations))
     baseline = list(planned)
     planned = _atomic_paragraph_edits(planned, inspection, obligations)
     merged, conflicts, covered = merge_edits(planned, inspection, obligations)
@@ -4595,30 +4695,231 @@ def replan_sites(existing: dict[str, Any], dirty_locations: set[str], rules_by_i
                  gateway: Any, *, max_compose_calls: int, obligations: Any = None) -> dict[str, Any]:
     """Recompute dirty paragraph plans and reuse all unchanged final components."""
     from copy import deepcopy
-    dirty_targets = [target for target in targets if target.location in dirty_locations
-                     or any(part.rsplit(":", 2)[0] in dirty_locations for part in target.composite)]
-    dirty_ids = {target.target_id for target in dirty_targets}
+    def target_sites(target: Target) -> set[tuple[str, str]]:
+        """Return stable operation/site keys for one target.
+
+        Target ids are discovery artifacts and can be reassigned when a dirty
+        inventory window is refreshed. Recovery must therefore match the plan by
+        operation and source location, while retaining composite operation parts.
+        """
+        locations = {str(target.location)}
+        for part in target.composite:
+            try:
+                locations.add(str(part).rsplit(":", 2)[0])
+            except (AttributeError, ValueError):
+                continue
+        return {(str(operation), location)
+                for operation in target.operations for location in locations}
+
+    def edit_sites(edit: dict[str, Any]) -> set[tuple[str, str]]:
+        return {(str(operation), str(unit.get("location") or edit.get("location") or ""))
+                for unit in edit.get("components") or [edit]
+                for operation in unit.get("operation_keys") or edit.get("operation_keys") or ()}
+
+    def operation_keys(item: dict[str, Any]) -> set[str]:
+        return set(item.get("operation_keys") or
+                   (item.get("evidence") or {}).get("operation_keys") or ())
+
+    def bind_reference(unit: dict[str, Any]) -> Target | None:
+        """Find a current target from source geometry, never its discovery id."""
+        keys = operation_keys(unit)
+        location = str(unit.get("location") or "")
+        try:
+            span = inspection.by_location(location)
+            start, end = int(unit["start"]), int(unit["end"])
+        except (KeyError, TypeError, ValueError):
+            return None
+        if not keys or not 0 <= start <= end <= len(span.text):
+            return None
+        expected = unit.get("expected_old_text")
+        if isinstance(expected, str) and expected != span.text[start:end]:
+            return None
+        parts = tuple((unit.get("evidence") or {}).get("parts") or unit.get("composite") or ())
+        if (unit.get("evidence") or {}).get("parts"):
+            own_slice = _composite_part_slice(unit, span)
+            if own_slice is None:
+                return None
+            start, end = own_slice
+        candidates: list[tuple[tuple[int, int, int], tuple[Any, ...], Target]] = []
+        for target in targets:
+            if (target.rule_id != unit.get("rule_id") or not keys <= set(target.operations)
+                    or target.state not in {"needs_edit", "satisfied", "absent"}
+                    or target.out_of_scope or target.attribution_error):
+                continue
+            # A previously composite component must keep its complete source-part
+            # identity. A direct component may bind a newly discovered composite.
+            if parts and tuple(target.composite) != parts:
+                continue
+            ranges = []
+            if target.composite:
+                for index, raw in enumerate(target.composite):
+                    if str(raw).rsplit(":", 2)[0] != location:
+                        continue
+                    bound = _composite_part_slice({"evidence": {
+                        "parts": list(target.composite), "part_index": index}}, span)
+                    if bound is not None:
+                        ranges.append(bound)
+            elif target.location == location:
+                left, right = target.start, target.end
+                if left is None or right is None:
+                    bound = resolve_quote(span, target.quote)
+                    if bound is not None:
+                        left, right = bound
+                if left is not None and right is not None and 0 <= left <= right <= len(span.text) \
+                        and target.quote and _compact(target.quote) in _compact(span.text[left:right]):
+                    ranges.append((left, right))
+            occurrence = int(unit.get("occurrence_index", -1))
+            if occurrence >= 0 and target.occurrence_index != occurrence:
+                continue
+            for left, right in ranges:
+                if not left <= start <= end <= right:
+                    # Inventory quotes often omit a trailing space that the old
+                    # planned delete included.  The target still identifies the
+                    # same source clause; only whitespace may extend past it.
+                    if not (left <= start and right <= end
+                            and not span.text[right:end].strip()):
+                        continue
+                # G02/G04 may never borrow a sibling occurrence in a broad span.
+                if target.occurrence_index >= 0 and (start, end) != (left, right):
+                    continue
+                rank = (int((left, right) != (start, end)),
+                        int(bool(target.composite) and not parts), right - left)
+                identity = (target.rule_id, tuple(sorted(target.operations)), location,
+                            left, right, target.occurrence_index, tuple(target.composite))
+                candidates.append((rank, identity, target))
+        if not candidates:
+            return None
+        best = min(rank for rank, _identity, _target in candidates)
+        matches = [(identity, target) for rank, identity, target in candidates if rank == best]
+        if len({identity for identity, _target in matches}) != 1:
+            return None
+        # Duplicate inventory aliases of the exact same operation/source identity
+        # are equivalent; their order must not change the selected reference.
+        return min((target for _identity, target in matches), key=lambda target: target.target_id)
+
+    def target_metadata(target: Target) -> dict[str, Any]:
+        return {"target_id": target.target_id, "location": target.location,
+                "start": target.start, "end": target.end, "quote": target.quote,
+                "composite": list(target.composite), "occurrence_index": target.occurrence_index}
+
+    def unbound_entry(item: dict[str, Any]) -> dict[str, Any]:
+        old_id = str(item.get("target_id") or "")
+        identity = "|".join(str(item.get(key) or "") for key in (
+            "rule_id", "location", "start", "end")) + "|" + ",".join(sorted(operation_keys(item)))
+        return {**deepcopy(item), "target_id": "UNBOUND:" + _sha256(identity + "|" + old_id)[:20],
+                "original_target_id": old_id, "status": "unresolved",
+                "reason": "RECALL_PLAN_REFERENCE_UNBOUND", "edit_ids": [],
+                "operation_effects": {}}
+
+    dirty_locations = set(dirty_locations)
+    dirty_keys: set[tuple[str, str]] = set()
+    # Resolve the complete composite dependency closure before retaining anything.
+    # A single pass can retain an earlier component before a later one makes its
+    # site dirty. The result must be independent of the final edit order.
+    while True:
+        previous = (set(dirty_locations), set(dirty_keys))
+        for target in targets:
+            keys = target_sites(target)
+            if any(location in dirty_locations for _operation, location in keys):
+                dirty_keys.update(keys)
+                dirty_locations.update(location for _operation, location in keys)
+        for edit in existing.get("edits") or []:
+            keys = edit_sites(edit)
+            if str(edit.get("location") or "") in dirty_locations or keys & dirty_keys:
+                dirty_keys.update(keys)
+                dirty_locations.update(location for _operation, location in keys)
+        if previous == (dirty_locations, dirty_keys):
+            break
+
     retained_edits = []
-    for edit in existing.get("edits") or []:
+    # These records belong to the OLD plan. Recover old ledger geometry only
+    # from them; the same serial id in current Inventory may be another rule.
+    old_units = [((edit_index, component_index), unit)
+                 for edit_index, edit in enumerate(existing.get("edits") or [])
+                 for component_index, unit in enumerate(edit.get("components") or [edit])]
+    bound_units: dict[tuple[int, int], Target] = {}
+    dropped_units: dict[tuple[int, int], dict[str, Any]] = {}
+    for edit_index, edit in enumerate(existing.get("edits") or []):
         components = edit.get("components") or [edit]
-        if str(edit.get("location") or "") in dirty_locations or any(
-                set(str(unit.get("target_id") or "").split("+")) & dirty_ids for unit in components):
-            dirty_ids.update(part for unit in components
-                             for part in str(unit.get("target_id") or "").split("+"))
-        else:
-            retained_edits.append(deepcopy(edit))
+        if (str(edit.get("location") or "") in dirty_locations
+                or edit_sites(edit) & dirty_keys):
+            continue
+        bindings = [bind_reference(unit) for unit in components]
+        if any(target is None for target in bindings):
+            # The parent edit is atomic. Keeping only some of its components
+            # would change its authorized paragraph transformation.
+            dropped_units.update({(edit_index, index): unit
+                                  for index, unit in enumerate(components)})
+            continue
+        retained = deepcopy(edit)
+        rebound = retained.get("components") or [retained]
+        for component_index, (copied, target) in enumerate(zip(rebound, bindings)):
+            assert target is not None
+            bound_units[(edit_index, component_index)] = target
+            copied["target_id"] = target.target_id
+        retained["target_id"] = "+".join(dict.fromkeys(unit["target_id"] for unit in rebound))
+        if (retained.get("evidence") or {}).get("atomic_components") is not None:
+            retained["evidence"]["atomic_components"] = deepcopy(rebound)
+        retained_edits.append(retained)
     # Composite operations are indivisible: replan all their source parts together.
-    dirty_targets = [target for target in targets if target.target_id in dirty_ids]
+    dirty_targets = [target for target in targets
+                     if target.location in dirty_locations or target_sites(target) & dirty_keys]
     fresh = plan_edits(rules_by_id, dirty_targets, inspection, facts, gateway,
                        max_compose_calls=max_compose_calls, obligations=obligations)
     records = retained_edits + fresh["edits"]
-    ledger = [deepcopy(entry) for entry in existing.get("ledger") or []
-              if entry.get("target_id") not in dirty_ids] + fresh["ledger"]
-    conflicts = [deepcopy(conflict) for conflict in existing.get("conflicts") or []
-                 if conflict.get("location") not in dirty_locations and not any(
-                     set(str(raw).split("+")) & dirty_ids for raw in conflict.get("targets") or [])]
+    ledger = []
+    covered = set(fresh["covered"])
+    represented_units: set[tuple[int, int]] = set()
+    old_references: dict[str, list[dict[str, Any]]] = {}
+    for entry in existing.get("ledger") or []:
+        keys = operation_keys(entry)
+        units = [(index, unit) for index, unit in old_units
+                 if unit.get("target_id") == entry.get("target_id")
+                 and unit.get("rule_id") == entry.get("rule_id")
+                 and (not keys or keys <= operation_keys(unit))]
+        sources = [unit for _index, unit in units] or [entry]
+        old_references.setdefault(str(entry.get("target_id") or ""), []).extend(sources)
+        represented_units.update(index for index, _unit in units)
+        if any(str(source.get("location") or "") in dirty_locations
+               or edit_sites(source) & dirty_keys for source in sources):
+            continue
+        bindings = [bound_units.get(index) for index, _unit in units] if units else [bind_reference(entry)]
+        if not bindings or any(target is None for target in bindings):
+            ledger.append(unbound_entry(entry))
+            continue
+        unique = {target.target_id: target for target in bindings if target is not None}
+        for target in unique.values():
+            rebound_entry = {**deepcopy(entry), **target_metadata(target)}
+            rebound_entry.setdefault("operation_keys", list(target.operations))
+            ledger.append(rebound_entry)
+            if entry.get("target_id") in set(existing.get("covered") or ()):
+                covered.add(target.target_id)
+    ledger.extend(unbound_entry(unit) for index, unit in dropped_units.items()
+                  if index not in represented_units)
+    ledger.extend(fresh["ledger"])
+    conflicts = []
+    for conflict in existing.get("conflicts") or []:
+        location = str(conflict.get("location") or "")
+        if location in dirty_locations or any((str(key), location) in dirty_keys
+                                              for key in conflict.get("operation_keys") or []):
+            continue
+        rebound = deepcopy(conflict)
+        rebound_ids = []
+        for raw in conflict.get("targets") or []:
+            parts = []
+            for old_id in str(raw).split("+"):
+                references = old_references.get(old_id) or []
+                matches = [bind_reference(reference) for reference in references]
+                if not matches or any(target is None for target in matches):
+                    parts.append("UNBOUND:" + _sha256(location + "|" + old_id)[:20])
+                    rebound["reference_status"] = "RECALL_PLAN_REFERENCE_UNBOUND"
+                else:
+                    parts.extend(target.target_id for target in matches if target is not None)
+            rebound_ids.append("+".join(dict.fromkeys(parts)))
+        rebound["targets"] = list(dict.fromkeys(rebound_ids))
+        conflicts.append(rebound)
     conflicts += fresh["conflicts"]
-    covered = sorted((set(existing.get("covered") or []) - dirty_ids) | set(fresh["covered"]))
+    covered = sorted(covered)
     _reconcile_final_plan_ledger(ledger, records, conflicts, covered, [])
     return {"edits": records, "ledger": ledger, "conflicts": conflicts, "covered": covered}
 
@@ -4878,7 +5179,32 @@ def append_site_ok(rule_id: str, span: Any, inspection: DocumentInspection) -> b
     """An append anchor must carry its own clause, never a neighbour's anchor."""
     if rule_id in {"G01", "G03"}:
         paragraph, _ = display_text(span.text)
-        return any(anchor in paragraph for anchor in _TARGET_ANCHORS[rule_id][0])
+        if any(anchor in paragraph for anchor in _TARGET_ANCHORS[rule_id][0]):
+            return True
+        # A DOCX paragraph can split the class-definition sentence immediately
+        # before the fee-group wording ("…三种不同的" | "类别。在投资者…").  The
+        # append belongs after the continuation paragraph, but the anchor remains
+        # in the previous paragraph.  Only accept a direct, unfinished-heading
+        # continuation, never an unrelated preceding paragraph.
+        locations = [item.location for item in inspection.paragraphs]
+        try:
+            index = locations.index(span.location)
+        except ValueError:
+            return False
+        if index <= 0:
+            return False
+        previous = inspection.paragraphs[index - 1]
+        previous_text, _ = display_text(previous.text)
+        current_text, _ = display_text(span.text)
+        if previous_text.rstrip().endswith(("。", "；", ";", "！", "？", "!", "?")):
+            return False
+        if not any(anchor in previous_text for anchor in _TARGET_ANCHORS[rule_id][0]):
+            return False
+        return (bool(current_text.strip())
+                and current_text.lstrip().startswith(
+                    ("类别", "份额类别", "基金份额类别"))
+                and any(token in current_text for token in
+                        ("基金份额", "申购费", "认购费", "销售服务费")))
     return target_site_ok(rule_id, span, inspection)
 
 

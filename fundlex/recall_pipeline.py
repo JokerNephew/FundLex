@@ -1268,6 +1268,13 @@ def _quote_is_expected_effect(quote: str, record: Any, facts: Facts | None, *,
         return False
     if expected and compact in _compact(expected):
         return True
+    if getattr(record.spec, "rule_id", "") in {"G02", "G04"} and expected and re.fullmatch(
+            r"称为" + re.escape(_compact(expected)) + r"[。；;]?", compact):
+        # A definition's grammatical label prefix is preserved source wording.
+        # Its instantiated class group is already proven at this exact operation
+        # and site by the caller; an unchanged correct group is not evidence that
+        # a model's example-only extra classes should have been inserted.
+        return True
     authorized_units = [(parent, component) for parent, component in
                         operation_units(edits, record.spec.operation_id)
                         if str(component.get("location") or parent.get("location") or "") == location

@@ -285,6 +285,48 @@ def test_append_refuses_incomplete_cross_paragraph_clause(monkeypatch):
         plan_target(rule, target, Inspection([text, '类别。其他内容。']), Facts(), None, compose_budget=[0])
 
 
+def test_append_complete_clause_without_final_stop_appends_at_paragraph_end():
+    from test_operation_execution_closure import Facts, Inspection
+    text = ("基金份额类别：本基金将基金份额分为A类和C类不同的类别。"
+            "在投资者认购、申购基金份额时收取认购、申购费用，不计提销售服务费的，"
+            "称为A类基金份额；在投资者认购、申购基金份额时不收取认购、申购费用，"
+            "而是从本类别基金资产中计提销售服务费的，称为C类基金份额 ")
+    rule = {"rule_id": "G01", "operations": [{
+        "op": "append", "new_text": "新政策。", "condition": {"kind": "none"}}]}
+    target = Target("T", "G01", "p0", text, "needs_edit", "",
+                    start=0, end=len(text), operations=("G01:0",),
+                    resolution="resolved", segment_ok=True)
+    edit = plan_target(rule, target, Inspection([text]), Facts(), None,
+                       compose_budget=[0])
+    assert edit.operation == "insert"
+    assert edit.location == "p0"
+    assert edit.start == edit.end == len(text.rstrip())
+    assert edit.replacement.startswith("。")
+
+
+def test_absent_delete_target_at_real_class_setup_proves_verified_absent():
+    from test_operation_execution_closure import Facts
+    setup = ("有关基金份额类别的具体设置等由基金管理人确定。基金管理人可以增加新的"
+             "基金份额类别、变更现有基金份额类别的申购费率、调低赎回费率或者停止现有"
+             "基金份额类别的销售等，调整前需及时公告。")
+    source = Inspection(setup)
+    rule = {"rule_id": "G05", "operations": [{
+        "op": "delete", "old_text": "并报中国证监会备案",
+        "condition": {"kind": "none"}}]}
+    ledger = compile_obligations({"groups": [rule]})
+    ledger.records[0].applicability = SimpleNamespace(status="TRUE")
+    target = {"target_id": "absent", "rule_id": "G05", "location": "p0",
+              "quote": "并报中国证监会备案", "state": "absent",
+              "operations": ["G05:0"]}
+    result = replay_claims([], source, source, rules_by_id={"G05": rule},
+                           facts=Facts(), obligations=ledger,
+                           targets_by_id={"absent": target})
+    proof = result["obligations"][ledger.records[0].obligation_id]
+    assert proof["state"] == "PASS"
+    assert proof["artifact_status"] == "VERIFIED_ABSENT"
+    assert proof["sites"] == ["p0"]
+
+
 def test_audit_model_execution_hint_cannot_route_missing_plan_to_writer():
     from fundlex.recall_pipeline import _audit_recovery_contexts
     from fundlex.recovery import FailureClass
@@ -738,3 +780,288 @@ def test_full_paragraph_negative_quote_can_prove_unchanged_source_suffix(tmp_pat
     _apply_artifact_proof_to_findings([finding], replay, actual, ledger, rules,
         facts=facts, edits=planned["edits"], original=original)
     assert finding["status"] == "resolved" and finding["proof_kind"] == "REVIEW_UNPROVEN"
+
+
+@pytest.mark.parametrize(
+    "case_id,rule_id,operation_id,old_text",
+    [
+        ("D02", "G05", "G05:2", "并报中国证监会备案"),
+        ("D02", "G06", "G06:0", "不同基金份额类别之间不得互相转换"),
+        ("D02", "G13", "G13:0", "持续持有期少于7日的投资者收取不低于1.50%的赎回费"),
+        ("D11", "G06", "G06:0", "不同基金份额类别之间不得互相转换"),
+    ],
+)
+@pytest.mark.parametrize("state", ["absent", "needs_edit", "satisfied"])
+def test_absent_inventory_placeholder_never_becomes_verified_operation_site(
+        case_id, rule_id, operation_id, old_text, state):
+    """Window-level ``absent`` is not an operation/site absence proof (D02/D11 P0)."""
+    from fundlex.generation.effects import evaluate_operation_effect
+    from test_operation_execution_closure import Facts
+
+    operations = [{"op": "noop", "condition": {"kind": "none"}}
+                  for _ in range(int(operation_id.rsplit(":", 1)[1]))]
+    operations.append({"op": "delete", "old_text": old_text,
+                       "condition": {"kind": "none"},
+                       "operation_id": operation_id})
+    guide = {"groups": [{"rule_id": rule_id, "operations": operations}]}
+    ledger = compile_obligations(guide)
+    for record in ledger.records:
+        if record.spec.operation_id == operation_id:
+            record.applicability = SimpleNamespace(status="TRUE")
+            target_record = record
+            break
+    else:  # pragma: no cover - protects the fixture if guide compilation changes
+        raise AssertionError(operation_id)
+    before = Inspection("一、基金份额持有人、基金管理人和基金托管人的权利与义务")
+    if state == "absent":
+        absent_site = {"location": "p0", "quote": before.paragraphs[0].text,
+                       "state": "absent", "operation_id": operation_id}
+        proof = evaluate_operation_effect(target_record, before, before,
+                                          [absent_site], [], Facts())
+        assert proof.state == "OPEN"
+        assert proof.artifact_status == "UNPROVEN"
+        assert proof.failure_code == "CLAIM_OPERATION_UNPROVEN"
+        assert not proof.sites
+
+    result = replay_claims(
+        [], before, before, rules_by_id={rule_id: guide["groups"][0]}, facts=Facts(),
+        targets_by_id={"placeholder": {"target_id": "placeholder", "rule_id": rule_id,
+            "location": "p0", "quote": before.paragraphs[0].text,
+            "state": state, "operations": [operation_id]}},
+        obligations=ledger,
+    )
+    assert result["verified"] is False
+    item = result["obligations"][target_record.obligation_id]
+    assert item["state"] == "OPEN"
+    assert item["artifact_status"] == "UNPROVEN"
+    assert item["sites"] == []
+    assert not any(failure.get("code") == "RESIDUAL_OLD_TEXT"
+                   and failure.get("location") == "p0" for failure in result["failures"])
+
+
+def test_satisfied_operation_site_can_close_as_already_satisfied():
+    """A real satisfied target remains eligible for operation effect proof."""
+    from test_operation_execution_closure import Facts
+    guide = {"groups": [{"rule_id": "G02", "operations": [{
+        "op": "replace", "old_text": "A类基金份额", "new_text": "A类基金份额",
+        "condition": {"kind": "none"}, "operation_id": "G02:0"}]}]}
+    ledger = compile_obligations(guide)
+    record = ledger.records[0]
+    record.applicability = SimpleNamespace(status="TRUE")
+    before = Inspection("基金份额类别：收取申购费用且不计提销售服务费的，称为 A类基金份额。")
+    target_record = {"target_id": "satisfied", "rule_id": "G02", "location": "p0",
+                     "quote": "A类基金份额", "state": "satisfied",
+                     "operations": ["G02:0"]}
+    result = replay_claims([], before, before, rules_by_id={"G02": guide["groups"][0]},
+                           facts=Facts(), targets_by_id={"satisfied": target_record},
+                           obligations=ledger)
+    assert result["verified"] is True
+    proof = result["obligations"][record.obligation_id]
+    assert proof["state"] == "PASS"
+    assert proof["artifact_status"] == "ALREADY_SATISFIED"
+    assert proof["sites"] == ["p0"]
+
+
+def test_satisfied_delete_with_already_absent_literal_keeps_own_business_site():
+    from test_operation_execution_closure import Facts
+    guide = {"groups": [{"rule_id": "G05", "operations": [{
+        "op": "delete", "old_text": "并报中国证监会备案", "condition": {"kind": "none"}}]}]}
+    ledger = compile_obligations(guide)
+    ledger.records[0].applicability = SimpleNamespace(status="TRUE")
+    text = "基金管理人可以增加新的基金份额类别，调整前应及时公告后实施。"
+    source = Inspection(text)
+    target = {"target_id": "satisfied", "rule_id": "G05", "location": "p0",
+              "quote": text, "state": "satisfied", "operations": ["G05:0"]}
+    replay = replay_claims([], source, source, rules_by_id={"G05": guide["groups"][0]},
+                           facts=Facts(), obligations=ledger,
+                           targets_by_id={"satisfied": target})
+    proof = replay["obligations"][ledger.records[0].obligation_id]
+    assert replay["verified"] is True
+    assert proof["state"] == "PASS"
+    assert proof["artifact_status"] == "VERIFIED_ABSENT"
+    assert proof["sites"] == ["p0"]
+    assert proof["evidence"][0]["before_quote"] == text
+
+
+def test_unattributed_target_cannot_lend_claimed_operation_to_delete_proof():
+    from test_operation_execution_closure import Facts
+    guide = {"groups": [{"rule_id": "G06", "operations": [{
+        "op": "delete", "old_text": "本基金不同基金份额类别之间不得互相转换。",
+        "condition": {"kind": "none"}}]}]}
+    ledger = compile_obligations(guide)
+    ledger.records[0].applicability = SimpleNamespace(status="TRUE")
+    text = "本基金不同基金份额类别之间不得互相转换。"
+    source = Inspection(text)
+    replay = replay_claims([], source, source, rules_by_id={"G06": guide["groups"][0]},
+        facts=Facts(), obligations=ledger, targets_by_id={"bad": {
+            "target_id": "bad", "rule_id": "G06", "location": "p0", "quote": text,
+            "state": "needs_edit", "operations": [], "claimed_operations": ["G06:0"],
+            "attribution_error": "RECALL_TARGET_OPERATION_UNATTRIBUTED"}})
+    proof = replay["obligations"][ledger.records[0].obligation_id]
+    assert replay["verified"] is False
+    assert proof["state"] == "OPEN"
+    assert proof["sites"] == []
+
+
+def test_g06_generic_business_adjustment_clause_is_not_a_delete_site():
+    from test_operation_execution_closure import Facts
+    guide = {"groups": [{"rule_id": "G06", "operations": [{
+        "op": "delete", "old_text": "本基金不同基金份额类别之间不得互相转换。",
+        "condition": {"kind": "none"}}]}]}
+    ledger = compile_obligations(guide)
+    ledger.records[0].applicability = SimpleNamespace(status="TRUE")
+    text = "基金管理人可调整有关申购、赎回、转换、非交易过户等业务规则，应及时公告。"
+    source = Inspection(text)
+    replay = replay_claims([], source, source, rules_by_id={"G06": guide["groups"][0]},
+        facts=Facts(), obligations=ledger, targets_by_id={"bad": {
+            "target_id": "bad", "rule_id": "G06", "location": "p0", "quote": text,
+            "state": "needs_edit", "operations": ["G06:0"]}})
+    assert replay["verified"] is False
+    proof = replay["obligations"][ledger.records[0].obligation_id]
+    assert proof["state"] == "OPEN"
+    assert proof["sites"] == []
+
+
+@pytest.mark.parametrize("old_text,new_text", [
+    ("调低赎回费率", "调低销售服务费率"),
+    ("并报中国证监会备案", ""),
+])
+@pytest.mark.parametrize("source,valid", [
+    # Class-setting authority is a required G05 site, including the independent
+    # filing operation whose old phrase is already absent in the first variant.
+    ("有关基金份额类别的具体设置、费率水平等由基金管理人确定。基金管理人在履行适当程序后"
+     "可以增加新的基金份额类别、或者在法律法规和基金合同规定的范围内变更现有基金份额类别"
+     "的申购费率、调低赎回费率或变更收费方式，或者停止现有基金份额类别的销售等。"
+     "调整前，基金管理人需履行适当程序并及时公告。", True),
+    ("有关基金份额类别的具体设置等由基金管理人确定。基金管理人在履行适当程序后可以增加"
+     "新的基金份额类别、或者变更现有基金份额类别的申购费率、调低赎回费率或变更收费方式、"
+     "或者停止现有基金份额类别的销售等，调整前基金管理人需及时公告并报中国证监会备案。", True),
+    # Body and summary copies of meeting exemptions remain outside G05 even
+    # where the literal matches, or there is no filing phrase to delete.
+    ("在法律法规和《基金合同》规定的范围内调整本基金全部或者部分份额类别的申购费率、"
+     "调低全部或者部分份额类别的赎回费率、调低销售服务费率或变更收费方式；", False),
+    ("在法律法规和《基金合同》规定的范围内调整本基金的申购费率、调低赎回费率、"
+     "调低销售服务费率或变更收费方式；", False),
+])
+def test_g05_effect_proof_binds_class_setting_not_meeting_exemption(source, valid,
+                                                                 old_text, new_text):
+    from fundlex.generation.effects import operation_site_bound
+    from test_operation_execution_closure import Facts
+    rule = {"rule_id": "G05", "operations": [{
+        "op": "replace" if new_text else "delete", "old_text": old_text,
+        "new_text": new_text, "condition": {"kind": "none"}}]}
+    spec = compile_obligations({"groups": [rule]}).records[0].spec
+    inspection = Inspection(source)
+    assert operation_site_bound(spec, source, inspection, "p0", Facts()) is valid
+    if not valid:
+        ledger = compile_obligations({"groups": [rule]})
+        ledger.records[0].applicability = SimpleNamespace(status="TRUE")
+        replay = replay_claims([], inspection, inspection, facts=Facts(),
+            rules_by_id={"G05": rule}, obligations=ledger, targets_by_id={"unrelated": {
+                "target_id": "unrelated", "rule_id": "G05", "location": "p0",
+                "quote": source, "state": "needs_edit", "operations": ["G05:0"]}})
+        proof = replay["obligations"][ledger.records[0].obligation_id]
+        assert proof["state"] == "OPEN"
+        assert proof["sites"] == []
+
+
+def test_atomic_replan_unbound_components_are_recorded_once(tmp_path):
+    from docx import Document
+    from fundlex.docx import inspect_docx
+    from fundlex.recall import plan_edits, replan_sites
+    from test_recall_core import _facts
+    doc = Document()
+    doc.add_paragraph("旧业务甲句。旧业务乙句。")
+    path = tmp_path / "source.docx"
+    doc.save(path)
+    source = inspect_docx(path, full=True)
+    rule = {"rule_id": "G99", "operations": [
+        {"op": "replace", "old_text": "旧业务甲句。", "new_text": "新业务甲句。"},
+        {"op": "delete", "old_text": "旧业务乙句。"}]}
+    targets = [Target(f"Old{i}", "G99", "p0", source.paragraphs[0].text,
+        "needs_edit", "", start=0, end=len(source.paragraphs[0].text),
+        operations=(f"G99:{i}",), resolution="resolved", segment_ok=True) for i in range(2)]
+    class Gateway:
+        def call(self, **kwargs):
+            raise AssertionError("deterministic replan called model")
+    facts = _facts()
+    original = plan_edits({"G99": rule}, targets, source, facts, Gateway())
+    assert len(original["edits"]) == 1
+    repaired = replan_sites(original, set(), {"G99": rule}, targets[:1], source,
+                           facts, Gateway(), max_compose_calls=0)
+    assert repaired["edits"] == []
+    assert len(repaired["ledger"]) == 2
+    assert len({entry["target_id"] for entry in repaired["ledger"]}) == 2
+    assert all(entry["reason"] == "RECALL_PLAN_REFERENCE_UNBOUND"
+               and entry["status"] == "unresolved" for entry in repaired["ledger"])
+
+
+def test_g02_already_correct_class_group_accepts_ji_delimiter():
+    """D11 p91 uses ``A类及D类``; that is the same class set as the guide's ``A类、D类``."""
+    from fundlex.generation.claim_replay import replay_claims
+    from test_operation_execution_closure import Facts
+    guide = {"groups": [{"rule_id": "G02", "operations": [{
+        "op": "replace", "old_text": "A类基金份额", "new_text": "A类、D类基金份额",
+        "condition": {"kind": "none"}, "operation_id": "G02:0"}]}]}
+    ledger = compile_obligations(guide)
+    ledger.records[0].applicability = SimpleNamespace(status="TRUE")
+    quote = "在投资者申购A类及D类基金份额时收取申购费用，不计提销售服务费"
+    source = Inspection("基金份额类别：" + quote + "。")
+    target = {"target_id": "satisfied", "rule_id": "G02", "location": "p0",
+              "quote": quote, "state": "satisfied", "operations": ["G02:0"]}
+    replay = replay_claims([], source, source, rules_by_id={"G02": guide["groups"][0]},
+                           facts=Facts(), obligations=ledger,
+                           targets_by_id={"satisfied": target})
+    proof = replay["obligations"][ledger.records[0].obligation_id]
+    assert proof["state"] == "PASS"
+    assert proof["artifact_status"] == "ALREADY_SATISFIED"
+    assert proof["sites"] == ["p0"]
+
+
+def test_g02_split_definition_reclassifies_out_of_scope_target_before_plan():
+    """A valid split p91/p92 definition must not stay out_of_scope from an earlier pass."""
+    from fundlex.recall import Target, assign_target_operations, plan_edits
+    from test_operation_execution_closure import Facts, Inspection as ClosureInspection
+    text = ("类别。在投资者申购A类及D类基金份额时收取申购费用，不计提销售服务费；"
+            "在投资者申购C类基金份额时不收取申购费用，而从本类别基金资产中计提销售服务费 ")
+    rule = {"rule_id": "G02", "class_substitution": True, "title": "份额类别",
+            "operations": [
+                {"op": "replace", "old_text": "A类基金份额", "new_text": "A类、B类基金份额",
+                 "condition": {"kind": "none"}, "operation_id": "G02:0"},
+                {"op": "replace", "old_text": "C类基金份额", "new_text": "C类、D类基金份额",
+                 "condition": {"kind": "none"}, "operation_id": "G02:1"}]}
+    facts = Facts()
+    facts.subscription_group = ("A类", "D类")
+    facts.service_group = ("C类",)
+    facts.statuses = {"share_class_structure": "VERIFIED",
+                      "subscription_fee_group": "VERIFIED",
+                      "service_fee_group": "VERIFIED"}
+    target = Target("T", "G02", "p0", text, "needs_edit",
+                    "TARGET_SOURCE_MISMATCH", start=0, end=len(text),
+                    operations=("G02:0",), out_of_scope=True,
+                    resolution="resolved", segment_ok=True)
+    inspection = ClosureInspection([text])
+    assign_target_operations([target], {"G02": rule}, inspection, facts)
+    assert target.out_of_scope is False
+    assert set(target.operations) == {"G02:0", "G02:1"}
+    planned = plan_edits({"G02": rule}, [target], inspection, facts, gateway=None)
+    assert planned["edits"] == []
+    assert [entry["status"] for entry in planned["ledger"]] == ["satisfied"]
+
+
+def test_replan_conflict_cannot_refer_to_reassigned_target_id():
+    from fundlex.recall import replan_sites
+    from test_recall_core import _facts
+    source = Inspection("旧业务甲句。")
+    metadata = dict(rule_id="G99", location="p0", start=0, end=6,
+                    operation_keys=["G99:0"], quote=source.paragraphs[0].text)
+    original = {"edits": [], "covered": [], "ledger": [dict(metadata,
+        target_id="Old", status="unresolved", reason="RECALL_EDIT_OVERLAP")],
+        "conflicts": [{"code": "RECALL_EDIT_OVERLAP", "location": "p0", "targets": ["Old"]}]}
+    current = Target("New", "G99", "p0", source.paragraphs[0].text, "needs_edit", "",
+                     start=0, end=6, operations=("G99:0",))
+    repaired = replan_sites(original, set(), {}, [current], source, _facts(), None,
+                           max_compose_calls=0)
+    assert repaired["ledger"][0]["target_id"] == "New"
+    assert repaired["conflicts"][0]["targets"] == ["New"]
+    assert repaired["ledger"][0]["reason"] == "RECALL_EDIT_OVERLAP"
