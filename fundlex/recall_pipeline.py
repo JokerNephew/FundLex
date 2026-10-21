@@ -42,7 +42,9 @@ from .recall import (BOUNDARY_POLICY, ENGINE_ID, ENGINE_VERSION, SCHEMA_VERSION,
                      structure_index, survey_targets, compact_offsets,
                      append_applicability_targets, is_delete_only_rule, Section,
                      known_operations_from_targets, operations_cover_hit,
-                     target_operation_keys, _add_operation_coverage)
+                     target_operation_keys, _add_operation_coverage,
+                     assign_target_operations, duplicate_copy_targets,
+                     dedupe_operation_targets)
 from .recall_prompts import (AUDIT_INSTRUCTION, AUDIT_PROMPT_VERSION, AUDIT_SCHEMA,
                              PROMPT_VERSIONS, SWEEP_INSTRUCTION, SWEEP_PROMPT_VERSION,
                              SWEEP_SCHEMA)
@@ -318,6 +320,34 @@ def _rule_evidence(mapping: dict[str, list[str]], sections: Sequence[Section],
 def _applicability_recovery_enabled() -> bool:
     return os.environ.get("FUNDLEX_APPLICABILITY_RECOVERY", "1").strip().lower() not in {
         "0", "false", "off", "no"}
+
+
+def _recovery_snapshot(targets: Sequence[Target], planned: dict[str, Any],
+                       actual: DocumentInspection, replay: dict[str, Any]) -> str:
+    """Stable fingerprint of everything a recovery action could change.
+
+    Two consecutive rounds with the same target set, plan, artifact text and unresolved
+    claim failures cannot produce a different result by rebuilding the same inputs.
+    """
+    material = {
+        "targets": sorted(
+            (target.target_id, target.rule_id, target.location,
+             tuple(target.operations), target.quote, target.state, target.resolution)
+            for target in targets),
+        "plan": sorted(
+            (str(edit.get("target_id")), str(edit.get("location")),
+             int(edit.get("start") or 0), int(edit.get("end") or 0),
+             str(edit.get("replacement") or ""))
+            for edit in planned.get("edits") or []),
+        "artifact": [str(getattr(span, "text", ""))
+                     for span in getattr(actual, "paragraphs", ())],
+        "failures": sorted(
+            (str(item.get("code") or ""), str(item.get("operation_id") or ""),
+             str(item.get("location") or ""))
+            for item in replay.get("failures") or []),
+    }
+    return hashlib.sha256(json.dumps(material, ensure_ascii=False, sort_keys=True)
+                          .encode("utf-8")).hexdigest()
 
 
 def _plan_by_target(planned: dict[str, Any]) -> dict[str, dict[str, Any]]:
@@ -817,7 +847,8 @@ def _make_synthetic_target(target_id: str, rule_id: str, location: str, quote: s
 
 def _plan_and_generate(model: Any, rules_by_id: dict[str, dict], targets: Sequence[Target],
                        inspection: DocumentInspection, facts: Facts, input_path: Path,
-                       temp_dir: Path, *, max_compose_calls: int
+                       temp_dir: Path, *, max_compose_calls: int,
+                       obligations: Any = None
                        ) -> tuple[dict[str, Any], list[dict[str, Any]], Any, Any, DocumentInspection]:
     """Plan from the ORIGINAL inspection, validate, generate and re-read the final."""
     from .recall import target_site_ok
@@ -832,7 +863,7 @@ def _plan_and_generate(model: Any, rules_by_id: dict[str, dict], targets: Sequen
                 target.out_of_scope = True
                 target.reason = f"{target.reason}|TARGET_SOURCE_MISMATCH"
     planned = plan_edits(rules_by_id, targets, inspection, facts, model,
-                         max_compose_calls=max_compose_calls)
+                         max_compose_calls=max_compose_calls, obligations=obligations)
     edits = build_docx_edits(planned["edits"], inspection)
     content_check = content_check_factory(planned["edits"], inspection)
     # A generated edit whose content record does not bind the source must not be
@@ -955,6 +986,23 @@ def _audit_context(rule: dict, rule_targets: Sequence[Target], plan_by_target: d
                       {"rule": rule["rule_id"], "chars": len(context), "limit": limit})
 
 
+def _review_concurrency(model: Any, rule_count: int) -> int:
+    """Requested review concurrency bounded by the model budget's hard limit."""
+    try:
+        requested = int(os.environ.get("FUNDLEX_REVIEW_CONCURRENCY", "4"))
+    except (TypeError, ValueError):
+        requested = 4
+    budget = getattr(model, "budget", None)
+    if budget is None:
+        budget_limit = requested
+    else:
+        try:
+            budget_limit = int(getattr(budget, "concurrency", 1) or 1)
+        except (TypeError, ValueError):
+            budget_limit = 1
+    return max(1, min(requested, budget_limit, max(1, rule_count)))
+
+
 def _run_audit(model: Any, rules_by_id: dict[str, dict], targets: Sequence[Target],
                planned: dict[str, Any], original: DocumentInspection, actual: DocumentInspection,
                *, only_rules: set[str] | None = None, facts: Facts | None = None) -> dict[str, Any]:
@@ -965,13 +1013,16 @@ def _run_audit(model: Any, rules_by_id: dict[str, dict], targets: Sequence[Targe
     # engine deliberately did not fill (FL-D056).
     out_of_scope = {target.target_id for target in targets if target.out_of_scope}
     auditable = [target for target in targets
-                 if target.state == "needs_edit" and target.target_id not in out_of_scope]
+                 if target.state == "needs_edit" and target.target_id not in out_of_scope
+                 and not target.attribution_error]
     rule_ids = sorted({target.rule_id for target in auditable})
     if only_rules is not None:
         rule_ids = [rule_id for rule_id in rule_ids if rule_id in only_rules]
     results: list[dict[str, Any]] = []
     missed: list[dict[str, Any]] = []
     dropped: list[dict[str, Any]] = []
+    prepared: list[dict[str, Any]] = []
+    auditable_by_rule = _targets_by_rule(auditable)
     for rule_id in rule_ids:
         rule = rules_by_id.get(rule_id)
         if rule is None:
@@ -980,7 +1031,7 @@ def _run_audit(model: Any, rules_by_id: dict[str, dict], targets: Sequence[Targe
         ledger_ids = {target.target_id for target in rule_targets}
         supplied = {target.location for target in rule_targets}
         other_edits = []
-        for other_id, other_targets in _targets_by_rule(auditable).items():
+        for other_id, other_targets in auditable_by_rule.items():
             if other_id == rule_id:
                 continue
             for other in other_targets:
@@ -997,8 +1048,34 @@ def _run_audit(model: Any, rules_by_id: dict[str, dict], targets: Sequence[Targe
         context, before_text, after_text = _audit_context(
             rule, rule_targets, plan_by_target, original, actual,
             limit=model.max_context_chars, other_edits=other_edits)
-        call = model.call(task_type="recall_audit", bounded_context=context, response_schema=AUDIT_SCHEMA,
-                          instruction=AUDIT_INSTRUCTION, prompt_version=AUDIT_PROMPT_VERSION)
+        prepared.append({"rule_id": rule_id, "rule": rule, "rule_targets": rule_targets,
+                         "ledger_ids": ledger_ids, "supplied": supplied,
+                         "other_edits": other_edits, "context": context,
+                         "before_text": before_text, "after_text": after_text})
+
+    def _invoke(entry: dict[str, Any]) -> Any:
+        return model.call(task_type="recall_audit", bounded_context=entry["context"],
+                          response_schema=AUDIT_SCHEMA,
+                          instruction=AUDIT_INSTRUCTION,
+                          prompt_version=AUDIT_PROMPT_VERSION)
+
+    concurrency = _review_concurrency(model, len(prepared))
+    if concurrency > 1 and len(prepared) > 1:
+        from concurrent.futures import ThreadPoolExecutor
+        with ThreadPoolExecutor(max_workers=concurrency) as executor:
+            calls = list(executor.map(_invoke, prepared))
+    else:
+        calls = [_invoke(entry) for entry in prepared]
+
+    for entry, call in zip(prepared, calls):
+        rule_id = str(entry["rule_id"])
+        rule = entry["rule"]
+        rule_targets = entry["rule_targets"]
+        ledger_ids = entry["ledger_ids"]
+        supplied = entry["supplied"]
+        other_edits = entry["other_edits"]
+        before_text = entry["before_text"]
+        after_text = entry["after_text"]
         value = call.value if isinstance(call.value, dict) else {}
         for item in value.get("results") or []:
             if not isinstance(item, dict):
@@ -1326,8 +1403,21 @@ def _absorb_sweep_findings(pending: Sequence[dict[str, Any]], targets: Sequence[
     may have missed. A finding at an unregistered location still becomes a synthetic
     target, as before.
     """
-    existing = {(target.rule_id, target.location) for target in targets}
-    existing |= {(target.rule_id, target.location) for target in synthetic}
+    def finding_operation(rule: dict, quote: str) -> str:
+        blob = _compact(quote)
+        for index, operation in enumerate(rule.get("operations") or []):
+            old_text = _compact(str(operation.get("old_text") or ""))
+            if old_text and (old_text in blob or blob in old_text):
+                return f"{rule.get('rule_id')}:{index}"
+        return ""
+
+    def identity(rule_id: str, operation_id: str, location: str) -> tuple[str, str, str]:
+        return (rule_id, operation_id, location)
+
+    existing = {identity(target.rule_id, key, target.location)
+                for target in targets for key in (target.operations or ("",))}
+    existing |= {identity(target.rule_id, key, target.location)
+                 for target in synthetic for key in (target.operations or ("",))}
     paragraphs = [span for span in inspection.paragraphs if span.text.strip()]
     added = 0
 
@@ -1368,28 +1458,35 @@ def _absorb_sweep_findings(pending: Sequence[dict[str, Any]], targets: Sequence[
         rule = rules_by_id.get(rule_id)
         if rule is None:
             continue
+        operation_id = finding_operation(rule, quote)
+        key = identity(rule_id, operation_id, finding["location"])
         matched = next((target for target in targets
-                        if target.rule_id == rule_id and target.location == finding["location"]),
+                        if target.rule_id == rule_id
+                        and target.location == finding["location"]
+                        and (not operation_id or not target.operations
+                             or operation_id in target.operations)),
                        None)
         if matched is not None:
+            if operation_id and not matched.operations:
+                matched.operations = (operation_id,)
             if rebind(matched, rule, quote):
                 added += 1
             continue
-        key = (rule_id, finding["location"])
         if key in existing:
             continue
-        if is_delete_only_rule(rule, facts) and any(
-                target.location == finding["location"]
-                for target in [*targets, *synthetic]):
-            # A delete finding at a location already owned by another rule must not
-            # become a second overlapping target (D01 G15 p760 vs G17): let the
-            # existing target's repair note carry it, and keep the finding for audit.
+        if operation_id and identity(rule_id, operation_id,
+                                     finding["location"]) in existing:
             continue
+        # Different operations/rules at the same paragraph are independent.  The old
+        # location-only dedupe prevented G17 from creating a repair target merely
+        # because G16 already owned p822; operation identity is now part of the key.
         target = _make_synthetic_target(f"A{len(synthetic) + 1:03d}", rule_id,
                                         finding["location"], quote,
                                         f"sweep:{finding['issue']}", inspection)
         if target is None:
             continue
+        if operation_id:
+            target.operations = (operation_id,)
         rebind(target, rule, quote)
         synthetic.append(target)
         origins[target.target_id] = "sweep"
@@ -2063,6 +2160,63 @@ def _finding_evidence(finding: dict[str, Any], actual: DocumentInspection,
     return ""
 
 
+def _apply_artifact_proof_to_findings(findings: list[dict[str, Any]], replay: dict[str, Any],
+                                      actual: DocumentInspection, obligations: Any,
+                                      rules_by_id: dict[str, dict]) -> None:
+    """Resolve only "removal unconfirmed" sweep findings with obligation artifact proof.
+
+    A finding whose exact quote still resolves in the artifact is a confirmed residual and
+    always blocks.  A finding that merely says "I did not see a deletion confirmation"
+    cannot override a Claim Replay ``VERIFIED_ABSENT`` / ``EXPECTED_EFFECT_PRESENT`` proof
+    for the same obligation (plan §36–§38, D11 G17).
+    """
+    states = {str(key): value for key, value in (replay.get("obligations") or {}).items()
+              if isinstance(value, dict)}
+    for finding in findings:
+        if finding.get("status") not in {"pending", "unresolved"}:
+            continue
+        rule_id = str(finding.get("rule_id") or "")
+        related = []
+        for obligation_id, state in states.items():
+            record = obligations.record(obligation_id) if obligations is not None else None
+            if record is not None and record.spec.rule_id == rule_id:
+                related.append(state)
+        quote = _compact(str(finding.get("quote") or ""))
+        body = ""
+        try:
+            body = _compact(str(actual.by_location(str(finding.get("location") or "")).text))
+        except Exception:  # noqa: BLE001
+            body = ""
+        residual = bool(quote and quote in body)
+        rule = rules_by_id.get(rule_id) or {}
+        old_sentences = []
+        for operation in rule.get("operations") or []:
+            if operation.get("op") not in {"replace", "delete"}:
+                continue
+            for sentence in re.split(r"(?<=[。；;])",
+                                     str(operation.get("old_text") or "")):
+                compact = _compact(sentence)
+                if len(compact) >= 8:
+                    old_sentences.append(compact)
+        quote_matches_old = any(
+            sentence in quote or (len(quote) >= 8 and quote in sentence)
+            for sentence in old_sentences)
+        authorized = _compact("".join(
+            str(operation.get("new_text") or "")
+            for operation in rule.get("operations") or []))
+        if residual and quote_matches_old and quote not in authorized:
+            finding["proof_kind"] = "RESIDUAL_CONFIRMED"
+            continue
+        if not related or any(state.get("state") != "PASS" for state in related):
+            finding["proof_kind"] = "REMOVAL_UNCONFIRMED"
+            continue
+        statuses = sorted({str(state.get("artifact_status") or "") for state in related})
+        finding["status"] = "resolved"
+        finding["resolution"] = "artifact_proof"
+        finding["resolution_evidence"] = ",".join(statuses)
+        finding["proof_kind"] = "REMOVAL_UNCONFIRMED"
+
+
 def _resolve_pending(findings: list[dict[str, Any]], batch_ledger: dict[str, Any], *,
                      actual: DocumentInspection | None = None,
                      rules_by_id: dict[str, dict] | None = None,
@@ -2285,6 +2439,19 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
         "limits": {"max_business_rounds": max_business_rounds, "max_sweep_chunks": max_sweep_chunks,
                    "business_rounds_used": 0},
     }
+    timings: dict[str, int] = {}
+    _last_stage = [started]
+
+    def mark_stage(name: str) -> None:
+        now = time.monotonic()
+        timings[name] = round((now - _last_stage[0]) * 1000)
+        _last_stage[0] = now
+
+    inventory_rerun_count = 0
+    full_sweep_count = 0
+    incremental_audit_count = 0
+    full_audit_count = 0
+    no_progress_stop_count = 0
     try:
         inspection = inspect_docx(input_path, full=True)
         output_dir.mkdir(parents=True, exist_ok=True)
@@ -2340,6 +2507,7 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
             report["facts"] = facts.as_ledger()
         apply_facts(obligation_ledger, facts)
         report["obligations"] = obligation_ledger.as_dict()
+        mark_stage("facts")
 
         stage = "scope"
         sections = structure_index(inspection)
@@ -2367,22 +2535,42 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
         _run_survey(model, rules, rules_by_id, facts, inspection, _collect_targets(entries, synthetic, rules_by_id, inspection),
                     synthetic, origins, survey_ledger, coverage_gaps, sections)
         targets = _collect_targets(entries, synthetic, rules_by_id, inspection)
-        from .recall import ensure_delete_targets
+        from .recall import assign_target_operations, ensure_delete_targets
         if os.environ.get("FUNDLEX_DELETE_RESIDUAL_TARGETS", "1").strip().lower() in {
                 "1", "true", "on", "yes"}:
             for target in ensure_delete_targets(targets, rules_by_id, inspection):
                 synthetic.append(target)
                 targets.append(target)
                 origins[target.target_id] = "delete_residual_copy"
+        # Attribution happens before open-obligation discovery: a target without an
+        # operation identity covers nothing, and the open pass must see exactly which
+        # sibling operations are still uncovered.
+        report["target_attribution"] = assign_target_operations(
+            targets, rules_by_id, inspection, facts, obligation_ledger)
+        targets, duplicate_targets = dedupe_operation_targets(
+            targets, rules_by_id, inspection)
+        if duplicate_targets:
+            report["duplicate_targets"] = duplicate_targets
+        copy_targets = duplicate_copy_targets(targets, rules_by_id, inspection)
+        for target in copy_targets:
+            targets.append(target)
+            synthetic.append(target)
+            origins[target.target_id] = "duplicate_copy"
+            report["target_attribution"].extend(assign_target_operations(
+                [target], rules_by_id, inspection, facts, obligation_ledger))
         from .targeting import locate_unresolved_targets, targets_for_open_rules
         open_targets = targets_for_open_rules(obligation_ledger, targets, rules_by_id, facts,
                                               inspection, mapping, sections)
         for target in open_targets:
             targets.append(target)
             origins[target.target_id] = "T3_open_rule"
+        report["target_attribution"].extend(assign_target_operations(
+            open_targets, rules_by_id, inspection, facts, obligation_ledger))
         rebinds = _rebind_unresolved_targets(targets, origins, inspection,
                                              rules_by_id=rules_by_id, facts=facts,
                                              extend_resolved=True)
+        report["target_attribution"].extend(assign_target_operations(
+            targets, rules_by_id, inspection, facts, obligation_ledger))
         locator_records = locate_unresolved_targets(targets, inspection, rules_by_id,
                                                     facts, model)
         for target in targets:
@@ -2393,6 +2581,7 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
         report["survey"] = survey_ledger
         report["scope_mapping"] = _scope_mapping_ledger(mapping, sections, entries, rules)
         report["windows"] = [_window_ledger(entry) for entry in entries]
+        mark_stage("scope_inventory_survey")
 
         # Applicability recovery (plan §9): only scoped rules with an UNKNOWN
         # condition are sent to the primary judge / review arbitration. UNKNOWN never
@@ -2416,9 +2605,10 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
             temp_dir = Path(temporary)
             planned, edits, plan, artifacts, actual = _plan_and_generate(
                 model, rules_by_id, targets, inspection, facts, input_path, temp_dir,
-                max_compose_calls=compose_calls)
+                max_compose_calls=compose_calls, obligations=obligation_ledger)
             report["plan"] = _plan_ledger(planned, plan)
             report["targets"] = _target_ledger(targets, planned, {}, origins)
+            mark_stage("planning_generation")
 
             # --- audit + repair loop (business rounds) -----------------------
             stage = "audit"
@@ -2436,10 +2626,18 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
             audit_orchestrator = RecoveryOrchestrator()
             audit_pending: list[tuple[RecoveryContext, RecoveryDecision, str]] = []
             terminal_keys: set[str] = set()
+            audit_dirty: set[str] | None = None
+            full_audit_count = 0
+            incremental_audit_count = 0
             while True:
-                round_ledger = _run_audit(model, rules_by_id, targets, planned, inspection, actual,
-                                          facts=facts)
-                round_ledger.update(round=round_number, scope="full")
+                round_ledger = _run_audit(model, rules_by_id, targets, planned, inspection,
+                                          actual, facts=facts, only_rules=audit_dirty)
+                scope = "incremental" if audit_dirty is not None else "full"
+                if audit_dirty is None:
+                    full_audit_count += 1
+                else:
+                    incremental_audit_count += 1
+                round_ledger.update(round=round_number, scope=scope)
                 audit_rounds.append(round_ledger)
                 _merge_audit_state(audit_state, round_ledger, targets)
                 issues = _audit_issues(audit_state, targets)
@@ -2573,8 +2771,17 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
                 if reaudit_only:
                     # No artifact change: the next loop iteration re-runs the audit and
                     # records whether the transient missing verdict cleared.
+                    audit_dirty = {str(issue.get("rule_id") or "") for issue in issues
+                                   if issue.get("rule_id")}
                     continue
-                for entry in _affected_windows(entries, notes):
+                affected = _affected_windows(entries, notes)
+                # Only rules whose artifact site / plan / verdict changed are re-audited.
+                audit_dirty = {target.rule_id for entry in affected
+                               for target in entry.targets}
+                audit_dirty |= {str(issue.get("rule_id") or "") for issue in issues
+                                if issue.get("rule_id")}
+                inventory_rerun_count += len(affected)
+                for entry in affected:
                     _inventory(entry, notes[entry.window.id], facts, model, inspection,
                                round_number=round_number)
                 targets = _collect_targets(entries, synthetic, rules_by_id, inspection)
@@ -2583,13 +2790,20 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
                 targets = _collect_targets(entries, synthetic, rules_by_id, inspection)
                 report["rebind"] = _rebind_unresolved_targets(
                     targets, origins, inspection, rules_by_id=rules_by_id, facts=facts)
+                report.setdefault("target_attribution", []).extend(
+                    assign_target_operations(targets, rules_by_id, inspection, facts,
+                                             obligation_ledger))
+                targets, duplicates = dedupe_operation_targets(
+                    targets, rules_by_id, inspection)
+                if duplicates:
+                    report.setdefault("duplicate_targets", []).extend(duplicates)
                 report.setdefault("target_locator", []).extend(
                     locate_unresolved_targets(targets, inspection, rules_by_id, facts, model))
                 for target in targets:
                     origins.setdefault(target.target_id, "T3_open_rule")
                 planned, edits, plan, artifacts, actual = _plan_and_generate(
                     model, rules_by_id, targets, inspection, facts, input_path, temp_dir,
-                    max_compose_calls=compose_calls)
+                    max_compose_calls=compose_calls, obligations=obligation_ledger)
                 report["plan"] = _plan_ledger(planned, plan)
                 report["targets"] = _target_ledger(targets, planned, audit_state, origins)
                 report["windows"] = [_window_ledger(entry) for entry in entries]
@@ -2603,6 +2817,7 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
                 audit_pending = []
             report.setdefault("recovery", {})["business_rounds"] = \
                 audit_recovery.as_list()
+            mark_stage("audit_recovery")
 
             # --- final sweep on the actual artifact --------------------------
             stage = "sweep"
@@ -2640,6 +2855,7 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
                                         requirements_by_chunk=requirements_by_chunk,
                                         scope_by_chunk=scope_by_chunk)
             swept_calls += len(batch)
+            full_sweep_count += 1
             swept_texts.update(chunk.text for chunk in batch)
             findings.extend(batch_ledger["findings"])
             sweep_rounds.append(batch_ledger)
@@ -2662,7 +2878,9 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
                     # No artifact change: the next loop iteration re-runs the audit and
                     # records whether the transient missing verdict cleared.
                     continue
-                for entry in _affected_windows(entries, notes):
+                sweep_affected = _affected_windows(entries, notes)
+                inventory_rerun_count += len(sweep_affected)
+                for entry in sweep_affected:
                     _inventory(entry, notes[entry.window.id], facts, model, inspection,
                                round_number=round_number)
                 targets = _collect_targets(entries, synthetic, rules_by_id, inspection)
@@ -2671,13 +2889,20 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
                 targets = _collect_targets(entries, synthetic, rules_by_id, inspection)
                 report["rebind"] = _rebind_unresolved_targets(
                     targets, origins, inspection, rules_by_id=rules_by_id, facts=facts)
+                report.setdefault("target_attribution", []).extend(
+                    assign_target_operations(targets, rules_by_id, inspection, facts,
+                                             obligation_ledger))
+                targets, duplicates = dedupe_operation_targets(
+                    targets, rules_by_id, inspection)
+                if duplicates:
+                    report.setdefault("duplicate_targets", []).extend(duplicates)
                 report.setdefault("target_locator", []).extend(
                     locate_unresolved_targets(targets, inspection, rules_by_id, facts, model))
                 for target in targets:
                     origins.setdefault(target.target_id, "T3_open_rule")
                 planned, edits, plan, artifacts, actual = _plan_and_generate(
                     model, rules_by_id, targets, inspection, facts, input_path, temp_dir,
-                    max_compose_calls=compose_calls)
+                    max_compose_calls=compose_calls, obligations=obligation_ledger)
                 report["plan"] = _plan_ledger(planned, plan)
                 report["windows"] = [_window_ledger(entry) for entry in entries]
                 report["survey"] = survey_ledger
@@ -2721,6 +2946,7 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
                                    "rounds": sweep_rounds, "gaps": gaps,
                                    "blind_windows": blind_windows}
 
+            mark_stage("sweep")
             # --- delivery decision -------------------------------------------
             stage = "deliver"
             plan_by_target = _plan_by_target(planned)
@@ -2833,9 +3059,19 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
                 artifact_recovery_used = False
                 recovery_sweep_unverified = False
                 terminal_recorded = False
+                no_progress_rounds = 0
+                previous_snapshot = _recovery_snapshot(targets, planned, actual, replay)
                 while replay.get("failures") and \
                         recovery_attempts < recovery.policy.limit("artifact_recovery"):
-                    failure = replay["failures"][0]
+                    # Duplicate-copy divergence is repaired by generating the missing
+                    # copy, not by rebuilding the same plan; process an actionable
+                    # operation/residual failure first when both exist.
+                    failure = next(
+                        (item for item in replay["failures"]
+                         if str(item.get("code") or "") not in {
+                             "DUPLICATE_SITE_DIVERGED", "DUPLICATE_SITE_UNEDITED"}),
+                        replay["failures"][0])
+                    code = str(failure.get("code") or "CLAIM_REPLAY_FAILED")
                     context = RecoveryContext(
                         stage="deliver", failure_class=None,
                         error_code=str(failure.get("code") or "CLAIM_REPLAY_FAILED"),
@@ -2846,6 +3082,137 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
                         target_id=str(failure.get("target_id") or ""),
                         site_id=str(failure.get("location") or ""),
                         validator_findings=tuple(replay.get("failures") or ()))
+                    operation_added = False
+                    if code in {"DUPLICATE_SITE_DIVERGED", "DUPLICATE_SITE_UNEDITED"} \
+                            and failure.get("locations"):
+                        duplicate_locations = [str(value) for value in
+                                               failure.get("locations") or ()]
+                        edited_locations = {str(edit.get("location") or "")
+                                            for edit in planned.get("edits") or []}
+                        for missing_location in duplicate_locations:
+                            if missing_location in edited_locations:
+                                continue
+                            for source_target in list(targets):
+                                if source_target.location not in edited_locations:
+                                    continue
+                                if not source_target.operations:
+                                    continue
+                                for clone in duplicate_copy_targets(
+                                        [source_target], rules_by_id, inspection):
+                                    if clone.location != missing_location:
+                                        continue
+                                    for old_target in targets:
+                                        if old_target.location == missing_location and \
+                                                old_target.rule_id == clone.rule_id:
+                                            old_target.out_of_scope = True
+                                            old_target.reason = (
+                                                f"{old_target.reason}|"
+                                                "SUPERSEDED_BY_DUPLICATE_REPAIR")
+                                    targets.append(clone)
+                                    synthetic.append(clone)
+                                    origins[clone.target_id] = "duplicate_repair"
+                                    report.setdefault("target_attribution", []).extend(
+                                        assign_target_operations(
+                                            [clone], rules_by_id, inspection, facts,
+                                            obligation_ledger))
+                                    operation_added = True
+                                    break
+                                if operation_added:
+                                    break
+                    if code == "RESIDUAL_OLD_TEXT" and failure.get("quote") \
+                            and failure.get("location"):
+                        from .recall import resolve_quote
+                        location = str(failure.get("location"))
+                        quote = str(failure.get("quote") or "")
+                        try:
+                            span = inspection.by_location(location)
+                            located = resolve_quote(span, quote)
+                        except Exception:  # noqa: BLE001
+                            located = None
+                        rule_id = str(failure.get("rule_id") or "")
+                        rule = rules_by_id.get(rule_id) or {}
+                        delete_indices = [index for index, operation in
+                                          enumerate(rule.get("operations") or [])
+                                          if operation.get("op") == "delete"
+                                          and condition_matches(operation.get("condition"), facts)]
+                        existing = {(target.rule_id, target.location)
+                                    for target in targets}
+                        location_planned = any(
+                            str(edit.get("location") or "") == location
+                            for edit in planned.get("edits") or [])
+                        if located is not None and delete_indices and \
+                                ((rule_id, location) not in existing
+                                 or not location_planned):
+                            for old_target in targets:
+                                if old_target.rule_id == rule_id and \
+                                        old_target.location == location and \
+                                        not location_planned:
+                                    old_target.out_of_scope = True
+                                    old_target.reason = (f"{old_target.reason}|"
+                                                         "SUPERSEDED_BY_RESIDUAL_TARGET")
+                            repair_target = Target(
+                                target_id=f"R{len(targets) + 1:03d}", rule_id=rule_id,
+                                location=location, quote=quote, state="needs_edit",
+                                reason=f"claim_residual:{code}", start=located[0],
+                                end=located[1], resolution="resolved",
+                                segment_ok=True,
+                                operations=(f"{rule_id}:{delete_indices[0]}",))
+                            targets.append(repair_target)
+                            synthetic.append(repair_target)
+                            origins[repair_target.target_id] = "claim_residual"
+                            report.setdefault("target_attribution", []).extend(
+                                assign_target_operations([repair_target], rules_by_id,
+                                                         inspection, facts,
+                                                         obligation_ledger))
+                            operation_added = True
+                    if code in {"CLAIM_OPERATION_NOT_PLANNED",
+                                "CLAIM_OPERATION_UNPROVEN",
+                                "CLAIM_PLANNED_EFFECT_MISSING"}:
+                        from .targeting import target_for_missing_operation
+                        record = None
+                        if failure.get("obligation_id"):
+                            record = obligation_ledger.record(
+                                str(failure.get("obligation_id")))
+                        if record is None and failure.get("operation_id"):
+                            record = obligation_ledger.record(
+                                str(failure.get("operation_id")))
+                        if record is not None:
+                            repair_target = target_for_missing_operation(
+                                record, targets, rules_by_id, facts, inspection,
+                                mapping, sections,
+                                target_id=f"R{len(targets) + 1:03d}")
+                            if repair_target is not None:
+                                targets.append(repair_target)
+                                origins[repair_target.target_id] = "claim_operation_recovery"
+                                report.setdefault("target_attribution", []).extend(
+                                    assign_target_operations(
+                                        [repair_target], rules_by_id, inspection, facts,
+                                        obligation_ledger))
+                                recovery_copies = duplicate_copy_targets(
+                                    targets, rules_by_id, inspection)
+                                for copy in recovery_copies:
+                                    targets.append(copy)
+                                    synthetic.append(copy)
+                                    origins[copy.target_id] = "duplicate_copy"
+                                    report.setdefault("target_attribution", []).extend(
+                                        assign_target_operations(
+                                            [copy], rules_by_id, inspection, facts,
+                                            obligation_ledger))
+                                from .targeting import locate_unresolved_targets
+                                report.setdefault("target_locator", []).extend(
+                                    locate_unresolved_targets(
+                                        [repair_target], inspection, rules_by_id, facts,
+                                        model))
+                                operation_added = True
+                        if not operation_added:
+                            recovery.record(
+                                recovery_history, context,
+                                RecoveryDecision(RecoveryAction.REBUILD_PLAN,
+                                                 "no_operation_target", "", recovery_attempts + 1),
+                                outcome="failed",
+                                detail="CLAIM_OPERATION_NOT_PLANNED:no_code_proven_site")
+                            recovery_attempts += 1
+                            break
                     executable = {RecoveryAction.REGENERATE_ARTIFACT,
                                   RecoveryAction.REBUILD_PLAN,
                                   RecoveryAction.RETRY_DETERMINISTIC}
@@ -2867,7 +3234,8 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
                     try:
                         planned, edits, plan, artifacts, actual = _plan_and_generate(
                             model, rules_by_id, targets, inspection, facts, input_path,
-                            temp_dir, max_compose_calls=compose_calls)
+                            temp_dir, max_compose_calls=compose_calls,
+                            obligations=obligation_ledger)
                         artifact_recovery_used = True
                         report["plan"] = _plan_ledger(planned, plan)
                         # Audit and sweep describe the previous artifact. Re-run both on
@@ -2884,6 +3252,21 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
                                                            origins)
                         components_by_rule, required_terms_by_rule = _claim_maps(planned)
                         replay = _replay(planned)
+                        current_snapshot = _recovery_snapshot(targets, planned, actual, replay)
+                        if current_snapshot == previous_snapshot:
+                            no_progress_rounds += 1
+                            no_progress_stop_count += 1
+                            recovery.record(
+                                recovery_history, context,
+                                RecoveryDecision(RecoveryAction.MARK_UNRESOLVED,
+                                                 "RECOVERY_NO_PROGRESS", "",
+                                                 recovery_attempts + 1),
+                                outcome="unresolved",
+                                detail="targets/plan/artifact/unresolved are unchanged")
+                            terminal_recorded = True
+                            break
+                        previous_snapshot = current_snapshot
+                        no_progress_rounds = 0
                         # Re-sweep the regenerated artifact. Old findings are stale.
                         recovery_chunks = _sweep_chunks(actual, sections, max_chars=chunk_chars)
                         recovery_scoped = _window_rule_scope(
@@ -2907,6 +3290,7 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
                             findings[:] = recovery_ledger["findings"]
                             sweep_rounds.append(recovery_ledger)
                             swept_calls += len(recovery_batch)
+                            full_sweep_count += 1
                             report["sweep"] = {"chunks": swept_calls, "findings": findings,
                                                 "rounds": sweep_rounds, "gaps": gaps,
                                                 "blind_windows": blind_windows}
@@ -2975,6 +3359,8 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
                     and plan_by_target.get(target.target_id, {}).get("status")
                     not in {"planned", "satisfied", "not_applicable"}]
                 audit_issues = _audit_issues(audit_state, targets)
+                _apply_artifact_proof_to_findings(findings, replay, actual,
+                                                  obligation_ledger, rules_by_id)
                 pending_findings = [finding for finding in findings
                                     if finding["status"] in {"pending", "unresolved"}]
                 unresolved[:] = [item for item in unresolved
@@ -3017,6 +3403,7 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
                                        "claim_code": code,
                                        "claim_replay_failed": True,
                                        **failure})
+            mark_stage("claim_replay_recovery")
             if qualification_gap:
                 unresolved.append({
                     "kind": "qualification", "code": "FUND_TYPE_UNVERIFIED",
@@ -3106,6 +3493,42 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
                                                "redline_sha256": None}
                 report["artifacts"] = {}
                 report["delivery_status"] = "not_generated"
+            mark_stage("delivery")
+            events = []
+            try:
+                events = list(getattr(model, "events", ()) or ())
+                if not events and hasattr(model, "metrics"):
+                    events = list(model.metrics().get("events") or ())
+            except Exception:  # noqa: BLE001 - metrics must not break the report
+                events = []
+            by_task: dict[str, dict[str, Any]] = {}
+            for event in events:
+                task = str(event.get("task_type") or "")
+                if not task:
+                    continue
+                item = by_task.setdefault(task, {"call_count": 0, "prompt_tokens": 0,
+                                                 "completion_tokens": 0,
+                                                 "total_latency_ms": 0,
+                                                 "max_latency_ms": 0})
+                item["call_count"] += 1
+                item["prompt_tokens"] += int(event.get("prompt_tokens") or 0)
+                item["completion_tokens"] += int(event.get("completion_tokens") or 0)
+                latency = int(event.get("latency_ms") or 0)
+                item["total_latency_ms"] += latency
+                item["max_latency_ms"] = max(item["max_latency_ms"], latency)
+            for item in by_task.values():
+                item["avg_latency_ms"] = (round(item["total_latency_ms"] /
+                                                item["call_count"], 1)
+                                          if item["call_count"] else 0)
+            report["performance"] = {
+                "wall_ms": {**timings, "total": round((time.monotonic() - started) * 1000)},
+                "model_by_task": by_task,
+                "full_audit_count": full_audit_count,
+                "incremental_audit_count": incremental_audit_count,
+                "full_sweep_count": full_sweep_count,
+                "inventory_rerun_count": inventory_rerun_count,
+                "no_progress_stop_count": no_progress_stop_count,
+            }
             return report
     except ModelError as exc:
         if exc.code in STOP_CODES or exc.code in SOFT_STOP_CODES:

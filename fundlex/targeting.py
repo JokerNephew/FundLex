@@ -88,6 +88,140 @@ def _candidate_context(inspection: Any, target: Any, rule: dict, facts: Any,
     return context[:limit], set(locations)
 
 
+def _open_operation_candidates(
+        inspection: Any, rule: dict, record: Any, section_ids: Sequence[str],
+        section_by_id: dict[str, Any], facts: Any,
+        existing_targets: Sequence[Any] = ()) -> list[str]:
+    """Operation-specific candidate discovery, strongest evidence first.
+
+    P1 same-rule sibling site, P2 exact operation old_text, P3 variant/reference
+    fragment, P4 rule keyword bag + topic/site guard.  The returned paragraphs are the
+    only places the bounded locator may choose from; no candidate means the obligation
+    stays OPEN instead of searching the whole contract.
+    """
+    from .recall import (_RULE_TOPIC_TOKENS, _compact, _delete_keyword_bag,
+                         _keyword_bag_in_clause, _looks_like_heading,
+                         condition_status, reference_fragments, target_operation_keys)
+
+    rule_id = str(rule.get("rule_id") or "")
+    operation_index = int(getattr(record.spec, "operation_index", 0) or 0)
+    operation = (rule.get("operations") or [])[operation_index]
+    old_text = _compact(str(operation.get("old_text") or ""))
+    variants = [_compact(str(value)) for value in (rule.get("old_text_variants") or [])
+                if _compact(str(value))]
+    fragments: list[str] = []
+    if len(old_text) >= 4:
+        fragments.append(old_text)
+    for variant in variants:
+        if len(variant) >= 4:
+            fragments.append(variant)
+        fragments.extend(_compact(fragment) for fragment in reference_fragments(variant))
+    topic = tuple(_RULE_TOPIC_TOKENS.get(rule_id, ()))
+    bag = _delete_keyword_bag(rule, facts)
+    class_rule = bool(rule.get("class_substitution"))
+    append_site = (str(operation.get("op") or "") == "append"
+                   and rule_id not in {"G01", "G03"})
+    class_tokens = ["基金份额类别", "份额类别", "将基金份额分为", "分为A类", "分为C类",
+                    "收费方式", "不同类别", "基金份额设置"]
+    facts_classes = tuple(f"{item.name}类" if "类" not in item.name else item.name
+                         for item in getattr(facts, "current_classes", ()) or ())
+
+    def classify(text: str) -> int:
+        """0 = no candidate, 1 = class/topic only, 2 = strong anchor."""
+        if len(text) < 12:
+            return 0
+        if topic and not all(token in text for token in topic):
+            return 0
+        if append_site:
+            # G16 appends into the sales-service-fee accrual/payment clause, not the
+            # class-definition paragraph or a fee formula row (its class_substitution
+            # is only a slot).  Payment-mechanism wording ranks above a bare accrual
+            # mention.
+            if "销售服务费" not in text:
+                return 0
+            if any(token in text for token in ("按月支付", "支付日期", "划出",
+                                                "次月", "一次性")):
+                return 3
+            if any(token in text for token in ("计提", "支付", "按月")):
+                return 2
+            return 0
+        if class_rule:
+            has_class = any(token in text for token in class_tokens)
+            has_fact_class = (not facts_classes or
+                              any(_compact(name) in text for name in facts_classes))
+            return 2 if has_class and has_fact_class else 0
+        if fragments and any(fragment in text for fragment in fragments):
+            return 2
+        if bag and _keyword_bag_in_clause(text, bag, window=80):
+            return 2
+        return 0
+
+    ordered: list[str] = []
+    scores: dict[str, int] = {}
+
+    def add(location: str, score: int) -> None:
+        if not location or location in scores and scores[location] >= score:
+            return
+        scores[location] = score
+        if location not in ordered:
+            ordered.append(location)
+
+    def body_at(location: str) -> str:
+        try:
+            return _compact(str(getattr(inspection.by_location(location), "text", "")))
+        except Exception:  # noqa: BLE001 - a vanished candidate is not fatal
+            return ""
+
+    # P1: a sibling operation of the same rule already proved this clause site.
+    sibling_locations: list[str] = []
+    for target in existing_targets:
+        if str(getattr(target, "rule_id", "")) != rule_id:
+            continue
+        if getattr(target, "out_of_scope", False) or getattr(target, "state", "") not in {
+                "needs_edit", "satisfied"}:
+            continue
+        sibling_keys = set(getattr(target, "operations", ()) or ())
+        if not sibling_keys:
+            sibling_keys = target_operation_keys(target, rule, inspection)
+        current_id = str(getattr(record.spec, "operation_id", "") or
+                         f"{rule_id}:{operation_index}")
+        if current_id in sibling_keys:
+            continue
+        for location in ([target.location] if not getattr(target, "composite", ())
+                         else [part.rsplit(":", 2)[0] for part in target.composite]):
+            if location not in sibling_locations:
+                sibling_locations.append(location)
+    for location in sibling_locations:
+        if classify(body_at(location)) == 2:
+            add(location, 3)
+
+    # P2/P3/P4: scan only the scope-mapped sections, strongest anchor first.
+    for section_id in section_ids:
+        section = section_by_id.get(section_id)
+        for location in (getattr(section, "locations", ()) if section is not None else ()):
+            text = body_at(location)
+            if not text:
+                continue
+            score = classify(text)
+            if score == 0:
+                continue
+            if class_rule and _looks_like_heading(
+                    str(getattr(inspection.by_location(location), "text", ""))):
+                continue
+            if old_text and old_text in text:
+                score = 3
+            elif any(fragment and fragment in text for fragment in fragments):
+                score = 2
+            add(location, score)
+    def sort_key(location: str) -> tuple[int, int]:
+        return (-scores.get(location, 0), ordered.index(location))
+    if append_site:
+        strong = [location for location in ordered if scores.get(location, 0) >= 3]
+        if strong:
+            return sorted(strong, key=sort_key)[:12]
+    return sorted(ordered, key=sort_key)[:12]
+
+
 def _open_rule_candidates(inspection: Any, rule: dict, section_ids: Sequence[str],
                           section_by_id: dict[str, Any], facts: Any) -> list[str]:
     """Deterministic source search for an applicable rule that has no target.
@@ -186,11 +320,28 @@ def _open_rule_quote_ok(rule: dict, facts: Any, paragraph_text: str, quote: str,
         if class_tokens and not any(token in compact_quote for token in class_tokens):
             return False, "quote_class_missing"
         if not class_tokens:
-            # Append-style class guidance (G01/G03): a heading such as "基金份额类别"
-            # must not become the insertion point; require the policy wording itself.
-            if not any(token in compact_quote for token in
-                       ("直销", "不收取", "销售服务费")):
-                return False, "quote_policy_anchor_missing"
+            # Append-style class guidance (G01/G03): the edit site is the class-
+            # definition clause, NOT the new policy wording.  "直销/不收取/销售服务费"
+            # are expected artifact effects and must not be required in the source
+            # quote (plan §8).  Require a real class-definition/setup site instead.
+            if str(rule.get("rule_id")) == "G16":
+                if not ("销售服务费" in compact_quote and
+                        any(token in compact_quote for token in ("计提", "支付", "按月"))):
+                    return False, "quote_sales_service_site_missing"
+            else:
+                class_site_tokens = ("基金份额类别", "份额类别", "将基金份额分为",
+                                     "分为A类", "分为C类", "收费方式", "不同类别",
+                                     "基金份额设置")
+                if not any(token in compact_quote or token in text
+                           for token in class_site_tokens):
+                    return False, "quote_class_site_missing"
+                fact_classes = tuple(
+                    f"{item.name}类" if "类" not in item.name else item.name
+                    for item in getattr(facts, "current_classes", ()) or ())
+                if fact_classes and not any(_compact(name) in text for name in fact_classes):
+                    return False, "class_structure_missing"
+            if not compact_quote:
+                return False, "quote_too_short"
         if rule.get("rule_id") in {"G02", "G04"}:
             if not any(token in compact_quote for token in
                        ("基金份额类别", "份额类别", "将基金份额分为", "分类")):
@@ -336,23 +487,63 @@ def locate_unresolved_targets(targets: Sequence[Any], inspection: Any,
     return records
 
 
+def target_for_missing_operation(
+        record: Any, targets: Sequence[Any], rules_by_id: dict[str, dict], facts: Any,
+        inspection: Any, mapping: dict[str, list[str]], sections: Sequence[Any],
+        *, target_id: str = "") -> Any | None:
+    """Recovery target for one applicable operation Claim Replay proved missing.
+
+    Candidate discovery is the same operation-first ladder as open-obligation recovery
+    (sibling site -> operation old_text -> variants -> keyword bag).  No code-proven
+    candidate means no model location guess; the operation stays unresolved.
+    """
+    if not _enabled():
+        return None
+    from .recall import Target
+
+    rule_id = str(getattr(record.spec, "rule_id", "") or "")
+    operation_index = int(getattr(record.spec, "operation_index", 0) or 0)
+    operation_id = str(getattr(record.spec, "operation_id", "") or
+                       f"{rule_id}:{operation_index}")
+    rule = rules_by_id.get(rule_id)
+    if rule is None:
+        return None
+    for target in targets:
+        keys = set(getattr(target, "operations", ()) or ())
+        if operation_id in keys and getattr(target, "state", "") == "needs_edit" \
+                and not getattr(target, "out_of_scope", False):
+            return None
+    section_ids = mapping.get(rule_id) or []
+    section_by_id = {section.id: section for section in sections}
+    candidates = _open_operation_candidates(
+        inspection, rule, record, section_ids, section_by_id, facts,
+        existing_targets=targets)
+    if not candidates:
+        return None
+    return Target(target_id=target_id or f"R{operation_index + 1:03d}",
+                  rule_id=rule_id, location=candidates[0], quote="",
+                  state="needs_edit",
+                  reason=f"recovery_missing_operation:{operation_id}:"
+                         f"candidates={len(candidates)}",
+                  resolution="unresolved", operations=(operation_id,),
+                  site_candidates=tuple(candidates))
+
+
 def targets_for_open_rules(obligations: Any, targets: Sequence[Any], rules_by_id: dict[str, dict],
                            facts: Any, inspection: Any, mapping: dict[str, list[str]],
                            sections: Sequence[Any], *, limit: int = 12) -> list[Any]:
-    """Create T3 locate candidates for applicable rules with no target at all.
+    """Create T3 locate candidates for applicable OPERATIONS with no target.
 
-    A rule that the scope pass mapped to a real section but the inventory/survey never
-    found is exactly where T3 is needed. Rules whose policy text is already present
-    (or whose class substitution is a no-op) are skipped with code evidence.
+    Coverage is operation-first: ``G05:0`` having a target does not cover ``G05:2``.
+    The function keeps its historical name for callers, but no rule-level
+    ``seen_rules``/``covered_rules`` shortcut remains.
     """
-    from .recall import Target, _compact, class_substitution_noop, satisfied_by_new_text
+    from .recall import (Target, _compact, _append_obligation_present,
+                         class_substitution_noop, instantiate_slots,
+                         satisfied_operation_keys, target_operation_keys)
 
     if not _enabled():
         return []
-    # Open-obligation recovery (external review 2026-10-20 P1): "auto" enables the
-    # locator only for applicable rules whose candidate paragraphs were narrowed by code
-    # anchors; no anchor evidence means no model call and the obligation stays OPEN.
-    # "1"/"on" keeps the legacy section-first candidate for debugging; "0" disables.
     mode = os.environ.get("FUNDLEX_TARGET_LOCATOR_OPEN_RULES", "auto").strip().lower()
     if mode in {"0", "false", "off", "no"}:
         return []
@@ -360,57 +551,107 @@ def targets_for_open_rules(obligations: Any, targets: Sequence[Any], rules_by_id
     section_by_id = {section.id: section for section in sections}
     body = _compact("\n".join(str(getattr(span, "text", ""))
                               for span in getattr(inspection, "paragraphs", ())))
-    covered_rules: set[str] = set()
+    covered_operations: set[str] = set()
+
+    def target_body(target: Any) -> str:
+        locations = ([target.location] if not getattr(target, "composite", ())
+                     else [part.rsplit(":", 2)[0] for part in target.composite])
+        chunks: list[str] = []
+        for location in locations:
+            try:
+                chunks.append(_compact(str(getattr(inspection.by_location(location), "text", ""))))
+            except Exception:  # noqa: BLE001
+                continue
+        return "".join(chunks)
+
     for target in targets:
         rule_id = str(target.rule_id)
+        rule = rules_by_id.get(rule_id) or {}
+        keys = set(getattr(target, "operations", ()) or ())
+        if not keys:
+            keys = target_operation_keys(target, rule, inspection)
         if target.state == "needs_edit" and not target.out_of_scope:
-            covered_rules.add(rule_id)
+            covered_operations.update(keys)
+        elif target.state == "satisfied":
+            if keys:
+                covered_operations.update(keys)
+            else:
+                covered_operations.update(
+                    satisfied_operation_keys(rule, facts, target_body(target)))
         elif target.state == "absent":
-            # An "absent" verdict suppresses recovery only when the rule's own wording
-            # is genuinely absent.  A wrong absent verdict on a contract that still
-            # carries the reference must not close the obligation.
-            rule = rules_by_id.get(rule_id) or {}
-            old_present = any(
-                len(_compact(str(operation.get("old_text") or ""))) >= 4
-                and _compact(str(operation.get("old_text") or "")) in body
-                for operation in rule.get("operations") or []
-                if operation.get("op") in {"replace", "delete"})
-            if not old_present:
-                covered_rules.add(rule_id)
+            # An "absent" verdict suppresses recovery only for the operation whose own
+            # old wording is genuinely absent.  A wrong absent verdict for one sibling
+            # must not close another still-present operation.
+            for index, operation in enumerate(rule.get("operations") or []):
+                old_text = _compact(str(operation.get("old_text") or ""))
+                if operation.get("op") in {"replace", "delete"} and old_text \
+                        and old_text not in body:
+                    covered_operations.add(f"{rule_id}:{index}")
+
+    def operation_closed(rule: dict, record: Any) -> bool:
+        operation_index = int(getattr(record.spec, "operation_index", 0) or 0)
+        operation = (rule.get("operations") or [])[operation_index]
+        old_text = _compact(str(operation.get("old_text") or ""))
+        new_text = str(operation.get("new_text") or "")
+        if operation.get("op") == "append":
+            instantiated, issues = instantiate_slots(new_text, facts)
+            required = new_text if issues else instantiated
+            return bool(required) and _append_obligation_present(
+                str(rule.get("rule_id") or ""), required, body)
+        if operation.get("op") == "delete":
+            return bool(old_text) and old_text not in body
+        if operation.get("op") == "replace":
+            instantiated, issues = instantiate_slots(new_text, facts)
+            required = _compact(instantiated if not issues else new_text)
+            # New policy present and old wording gone: already satisfied.  An absent
+            # source old wording with the new effect present is also already satisfied
+            # (the inventory/survey may discover it after the applicable branch ran).
+            return bool(required) and required in body and (
+                not old_text or old_text not in body or
+                _compact(new_text).find(old_text) >= 0)
+        return False
+
     created: list[Any] = []
-    seen_rules: set[str] = set()
+    seen_operations: set[str] = set()
     for record in getattr(obligations, "records", ()):
-        rule_id = record.spec.rule_id
-        if rule_id in seen_rules or rule_id in covered_rules:
+        rule_id = str(getattr(record.spec, "rule_id", "") or "")
+        operation_index = int(getattr(record.spec, "operation_index", 0) or 0)
+        operation_id = str(getattr(record.spec, "operation_id", "") or
+                           f"{rule_id}:{operation_index}")
+        if operation_id in seen_operations or operation_id in covered_operations:
             continue
         if record.applicability.status != "TRUE":
             continue
         section_ids = mapping.get(rule_id) or []
         if not section_ids:
             continue
-        seen_rules.add(rule_id)
+        seen_operations.add(operation_id)
         if len(created) >= limit:
             break
         rule = rules_by_id.get(rule_id)
-        if rule is None:
+        if rule is None or operation_closed(rule, record):
             continue
-        if satisfied_by_new_text(rule, facts, body) or class_substitution_noop(rule, facts):
+        if rule.get("class_substitution") and all(
+                operation.get("op") == "replace"
+                for operation in rule.get("operations") or []) and \
+                class_substitution_noop(rule, facts):
             continue
 
         if auto:
             from .recall import _compact as _compact_rule, condition_status
-            applicable = [operation for operation in rule.get("operations") or []
-                          if condition_status(operation.get("condition"), facts) == "TRUE"]
-            strong = bool(rule.get("class_substitution")) or any(
-                len(_compact_rule(str(operation.get("old_text") or ""))) >= 4
-                for operation in applicable)
+            operation = (rule.get("operations") or [])[operation_index]
+            strong = bool(rule.get("class_substitution")) or (
+                condition_status(operation.get("condition"), facts) == "TRUE"
+                and len(_compact_rule(str(operation.get("old_text") or ""))) >= 4)
             if not strong:
                 continue
-        candidates = _open_rule_candidates(inspection, rule, section_ids, section_by_id, facts)
+        candidates = _open_operation_candidates(
+            inspection, rule, record, section_ids, section_by_id, facts,
+            existing_targets=targets)
         if not candidates:
             if auto:
-                # The system found the missed obligation but cannot prove where it is;
-                # do not let a model search the whole contract.
+                # The missed operation has no code-proven site; keep it OPEN rather
+                # than letting the model search the whole contract.
                 continue
             candidates = [section_by_id[section_id].locations[0]
                           for section_id in section_ids
@@ -420,7 +661,9 @@ def targets_for_open_rules(obligations: Any, targets: Sequence[Any], rules_by_id
             continue
         created.append(Target(target_id=f"T3{len(created) + 1:03d}", rule_id=rule_id,
                               location=candidates[0], quote="", state="needs_edit",
-                              reason=f"T3_open_rule:candidates={len(candidates)}",
+                              reason=f"T3_open_operation:{operation_id}:"
+                                     f"candidates={len(candidates)}",
                               resolution="unresolved",
+                              operations=(operation_id,),
                               site_candidates=tuple(candidates)))
     return created

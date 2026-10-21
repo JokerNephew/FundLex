@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import os
+import threading
 from dataclasses import dataclass
 from typing import Any, Mapping
 
@@ -124,6 +125,7 @@ class RoleGateway:
         self.task_roles = _normalise_task_roles(task_roles)
         self.configs = dict(configs or {})
         self.calls: list[RoleCall] = []
+        self._calls_lock = threading.Lock()
 
     # -- pipeline-facing surface ------------------------------------------------
     @property
@@ -161,13 +163,15 @@ class RoleGateway:
     def call(self, *, task_type: str, **kwargs: Any) -> Any:
         role = role_for_task(task_type, self.task_roles)
         gateway = self.primary if role == "primary" else self.review
-        before = len(gateway.events)
         result = gateway.call(task_type=task_type, **kwargs)
-        events = gateway.events[before:]
-        reused = bool(events and events[-1].get("reused_checkpoint"))
-        self.calls.append(RoleCall(role=role, task_type=task_type,
-                                   model=getattr(result, "model", gateway.model),
-                                   reused_checkpoint=reused))
+        # ``ModelResult.attempts == 0`` is the checkpoint-reuse contract.  The old
+        # ``events[before:]`` slice assumed one call at a time and would attribute a
+        # concurrent thread's event to this call (plan §46).
+        reused = int(getattr(result, "attempts", 1)) == 0
+        with self._calls_lock:
+            self.calls.append(RoleCall(role=role, task_type=task_type,
+                                       model=getattr(result, "model", gateway.model),
+                                       reused_checkpoint=reused))
         return result
 
     def bind_checkpoints(self, directory: Any, dependencies: dict) -> None:

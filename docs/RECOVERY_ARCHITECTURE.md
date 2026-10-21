@@ -285,3 +285,29 @@ corpus 评测使用。
 - 全量 `pytest tests -q`：**929 passed / 6 skipped / 0 failed**。
 - 真实模型子集（临时账本，最终代码）：D01 incomplete 79 calls/$0.0591；D02 incomplete 135/$0.0889；D11 incomplete 149/$0.0946；D16 incomplete 85/$0.0483。四例均保持 fail-closed partial，claim replay 能区分真实业务残留与未计划 sibling operation。
 - 已知残余：重复正文/摘要副本（D01 p135、D16 p822）仍会因目标重叠或分歧阻塞；G06 composite、G15/G17 旧支付/用途句、G13/G14 残留仍是真实业务问题；sweep 修复尚未接入 RecoveryOrchestrator；AUDIT_NOT_COMPLETED（无根因 route）仍终局阻塞。
+
+## 10. Operation Execution Closure（2026-10-21）
+
+本轮不新增架构层，只把既有链路补齐为一条可追踪的 operation 闭包：
+
+```text
+Applicable Operation
+  -> attributed Target (operation_keys)
+  -> Planner (only selected operations)
+  -> Final Edit Set (merge/conflict/joint compose)
+  -> ledger reconciliation (planned only if final edit exists)
+  -> DOCX Artifact
+  -> per-obligation Claim Replay proof
+```
+
+关键约束：
+
+1. `location target` 无 operation identity 时覆盖 0 个 operation，不再默认覆盖整条 rule；归因失败必须进入 OPEN/recovery，而不是计划整条规则。
+2. `PlannedEdit` 自身携带 `operation_keys`/`obligation_ids`；Planner 只执行 target 归属的 operation。G05 的“调低…赎回费率”用有界 splice 保留中间修饰语，不靠整句 Compose。
+3. Merge 的 alternative 只允许同一 `one_of_group`；同 rule 的独立 operation 重叠进入 Joint Compose/冲突，不再因“同 rule”被 covered。
+4. Final plan ledger 从最终 edit set（含 component target ids）反推；`ledger=planned` 必须意味着该 operation 存在于 final edit set。
+5. Claim Replay 检查全部 `applicability=TRUE` obligation，而不是只检查 `edited_rules`；replace/append/delete 分别要求 artifact 新效果、旧效果消失、`VERIFIED_ABSENT`；ONE_OF 只要求 source-present alternative 被处理。
+6. Delivery 的 artifact proof 反过来可以关闭“未看到删除确认”的 sweep finding；但 exact residual 仍必须 block。
+7. Recovery 增加 missing-operation target、no-progress snapshot、duplicate-copy repair；audit 只重审 dirty rules，并发受模型预算并发上限约束。
+
+当前真实子集仍是 **incomplete**：D01f 仅剩 G17 p760 残句；D02b 为 G16/P823；D11 为 G05:2/G16 + G22 audit；D16 为 p822/p1306 duplicate 与 G06 composite。上述结果之后的修复尚未全部重跑；详见 FL-D138。未发布生产，未跑 514。

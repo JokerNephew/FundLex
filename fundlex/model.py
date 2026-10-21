@@ -148,6 +148,12 @@ class ModelGateway:
         self._client = client or httpx.Client(timeout=httpx.Timeout(timeout_s,connect=min(10,timeout_s)))
         self.events: list[dict] = []
         self.checkpoints = None
+        # Audit rules can run concurrently.  The lock protects the logical-call counter,
+        # the event ledger and metrics snapshots only; HTTP requests stay outside it so
+        # concurrency has a real effect.  Budget concurrency remains the hard provider
+        # limit (plan §45–§47).
+        self._state_lock = threading.Lock()
+        self._checkpoint_lock = threading.Lock()
     def bind_checkpoints(self, directory: Path, dependencies: dict) -> None:
         from .checkpoints import ModelCheckpoints
         transport = {key: getattr(self, key) for key in ('provider','base_url','model','request_options',
@@ -184,36 +190,43 @@ class ModelGateway:
             extra_headers=extra_headers,
             user_agent=os.environ.get('FUNDLEX_MODEL_USER_AGENT','fundlex/0.3.0'))
     def metrics(self) -> dict:
-        return {'logical_calls':self.calls,'http_attempts':sum(not e.get('reused_checkpoint') for e in self.events),
-            'checkpoint_reuses':sum(bool(e.get('reused_checkpoint')) for e in self.events),
-            'checkpoint_invalidations':self.checkpoints.invalidations if self.checkpoints else 0,
-            'prompt_tokens':sum(e.get('prompt_tokens') or 0 for e in self.events),
-            'completion_tokens':sum(e.get('completion_tokens') or 0 for e in self.events),
-            'total_tokens':sum(e.get('total_tokens') or 0 for e in self.events),
-            'latency_ms':sum(e['latency_ms'] for e in self.events),
-            'rate_limit_count':sum(e.get('http_status')==429 for e in self.events),
-            'error_count':sum(bool(e.get('error_code')) for e in self.events),
-            'estimated_cost_usd':sum(e.get('estimated_cost_usd') or 0 for e in self.events),
-            'events':list(self.events)}
+        with self._state_lock:
+            events = list(self.events)
+            calls = self.calls
+            invalidations = self.checkpoints.invalidations if self.checkpoints else 0
+        return {'logical_calls':calls,'http_attempts':sum(not e.get('reused_checkpoint') for e in events),
+            'checkpoint_reuses':sum(bool(e.get('reused_checkpoint')) for e in events),
+            'checkpoint_invalidations':invalidations,
+            'prompt_tokens':sum(e.get('prompt_tokens') or 0 for e in events),
+            'completion_tokens':sum(e.get('completion_tokens') or 0 for e in events),
+            'total_tokens':sum(e.get('total_tokens') or 0 for e in events),
+            'latency_ms':sum(e['latency_ms'] for e in events),
+            'rate_limit_count':sum(e.get('http_status')==429 for e in events),
+            'error_count':sum(bool(e.get('error_code')) for e in events),
+            'estimated_cost_usd':sum(e.get('estimated_cost_usd') or 0 for e in events),
+            'events':events}
     def call(self, *, task_type: str, bounded_context: str, response_schema: dict,
              instruction: str, prompt_version: str = 'v1') -> ModelResult:
         if not bounded_context or len(bounded_context)>self.max_context_chars:
             raise ModelError('MODEL_CONTEXT_LIMIT')
-        if self.calls>=self.max_calls: raise ModelError('MODEL_CALL_BUDGET_EXCEEDED')
         if task_type not in TASK_TYPES:
             raise ModelError('MODEL_TASK_UNSUPPORTED')
         jsonschema.Draft202012Validator.check_schema(response_schema)
-        self.calls += 1
+        with self._state_lock:
+            if self.calls>=self.max_calls: raise ModelError('MODEL_CALL_BUDGET_EXCEEDED')
+            self.calls += 1
         query = {'task_type':task_type,'bounded_context_sha256':hashlib.sha256(bounded_context.encode()).hexdigest(),
                  'response_schema':response_schema,'instruction':instruction,'prompt_version':prompt_version}
         if self.checkpoints:
-            cached = self.checkpoints.load(query, bounded_context, response_schema)
+            with self._checkpoint_lock:
+                cached = self.checkpoints.load(query, bounded_context, response_schema)
             if cached:
                 value, original = cached
                 event = {**original, 'reused_checkpoint':True, 'attempt':0, 'latency_ms':0,
                          'prompt_tokens':0,'completion_tokens':0,'total_tokens':0,'estimated_cost_usd':0,
                          'original_response_sha256':self.checkpoints.digest(original)}
-                self.events.append(event)
+                with self._state_lock:
+                    self.events.append(event)
                 return ModelResult(value,event['actual_model'],0,0,0,0,event.get('request_id'),0,0,
                                    task_type,query['bounded_context_sha256'])
         system = self._system_prompt(task_type, instruction, response_schema)
@@ -310,7 +323,8 @@ class ModelGateway:
                             success=not event['error_code'])
                     except BudgetError as exc: event['error_code']=str(exc)
                     except (sqlite3.Error, DatabaseError): event['error_code']='MODEL_LEDGER_UNAVAILABLE'
-                self.events.append(event)
+                with self._state_lock:
+                    self.events.append(event)
                 _trace_attempt(task_type=task_type,prompt_version=prompt_version,
                     system=system,bounded_context=bounded_context,value=value,event=event)
             if event['error_code']:
@@ -320,7 +334,8 @@ class ModelGateway:
                 raise ModelError(event['error_code'],self.metrics())
             if self.checkpoints and isinstance(value, dict) and value.get('fund_type') != 'unknown':
                 try:
-                    self.checkpoints.save(query,value,event)
+                    with self._checkpoint_lock:
+                        self.checkpoints.save(query,value,event)
                 except OSError:
                     raise ModelError('MODEL_CHECKPOINT_UNAVAILABLE',self.metrics()) from None
             return ModelResult(value,event['actual_model'],round((time.monotonic()-started)*1000),

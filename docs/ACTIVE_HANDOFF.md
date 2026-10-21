@@ -421,3 +421,16 @@
 - **待决定/待决（未实施）**：FL-D110 记录的 3 项机制缺陷；FL-D105 Q1–Q8 与 FL-D104 1–19 仍待产品负责人裁定。
 - **待推送提交**：无（已全部推送；此后新增提交需再次运行 `bash tools/deploy/push_with_token.sh`）。
 - **安全提示**：2026-10-18 复查期间，读取服务环境时曾有一处命令未能完整脱敏，导致 `FUNDLEX_DATABASE_URL` 中的数据库口令出现在会话输出中。已停止再读该行；如需可评估轮换该口令。
+
+## 当前断点（2026-10-21，Operation Execution Closure）
+
+- **任务**：按用户方案完成 operation identity、final-plan ledger reconciliation、全 applicable obligation Claim Replay、G05 bounded splice、sweep/delete artifact proof、missing-operation recovery、dirty audit/并发/性能。
+- **代码**：工作区已修改（未提交）：`fundlex/obligations.py`、`recall.py`、`targeting.py`、`recall_pipeline.py`、`generation/claim_replay.py`、`recovery/types.py`、`model.py`、`models/roles.py`；新增 `tests/test_operation_execution_closure.py`。
+- **测试**：最近一次全量 `pytest tests -q` = 939 passed / 6 skipped；最后几处 target/duplicate/site 修复后需重跑。
+- **真实子集（临时账本，均 incomplete）**：
+  - D01f 37 targets / 18 edits / 133 calls / $0.0806；仅 G17 p760 残句。
+  - D02b 35 / 17 / 109 / $0.0831；G16 missing + G17 p823 + G05 residual。
+  - D11 29 / 16 / 104 / $0.0936；G05:2 + G16 + G22 audit。
+  - D16 40 / 20 / 78 / $0.0476；p822/p1306 duplicate + G06 composite。
+- **待完成**：D02c 后台结果；D01/D11/D16 用最后修复重跑；全量 pytest；5 类 Reviewer；文档/证据包；按逻辑 commit 提交推送。
+- **明确未做**：未发布生产、未跑 514。

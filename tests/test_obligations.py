@@ -110,7 +110,12 @@ def test_audit_completed_and_claim_replay_close_the_obligation():
         targets=[target("G05", operations=["G05:0", "G05:1"])],
         plan_ledger=[{"target_id": "T1", "status": "planned"}],
         audit=[{"target_id": "T1", "verdict": "completed"}],
-        replay={"verified": True, "checked": 1, "failures": []},
+        replay={"verified": True, "checked": 1, "failures": [],
+                "obligations": {
+                    "G05:B1:O1": {"state": "PASS",
+                                  "artifact_status": "EXPECTED_EFFECT_PRESENT"},
+                    "G05:B1:O2": {"state": "PASS",
+                                  "artifact_status": "VERIFIED_ABSENT"}}},
     ))
     b1 = [item for item in ledger.records if item.spec.branch_id == "B1"]
     assert {item.completion for item in b1} == {"ARTIFACT_VERIFIED"}
@@ -137,7 +142,8 @@ def test_absent_target_is_verified_not_applicable():
     ledger = compile_obligations(guide(rule(rule_id="G15", operations=[
         {"op": "delete", "old_text": "销售服务费按月支付", "condition": {"kind": "none"}}])))
     apply_facts(ledger, FakeFacts())
-    project(ledger, report_with(targets=[target("G15", state="absent")]))
+    project(ledger, report_with(targets=[target("G15", state="absent")]),
+            artifact_text="本基金合同。")
     assert ledger.records[0].completion == "NOT_APPLICABLE"
     assert not open_obligations(ledger)
 
@@ -171,8 +177,9 @@ def test_artifact_replay_failure_reopens_the_obligation():
 def test_delivery_closed_states_are_exhaustive_and_fail_closed():
     ledger = compile_obligations(guide(rule()))
     apply_facts(ledger, FakeFacts(service=False))
-    project(ledger, report_with(targets=[target("G05", state="absent")]))
-    # Both branches now have a target: B1 false, B2 absent → all closed.
+    project(ledger, report_with(targets=[target("G05", state="absent")]),
+            artifact_text="本基金合同。")
+    # Both branches now have a target: B1 false, B2's reference is proven absent.
     assert all(item.closed for item in ledger.records)
     assert not open_obligations(ledger)
 
@@ -192,12 +199,15 @@ def test_same_replacement_old_text_variants_are_one_of_and_close_together():
         targets=[target("G11", operations=["G11:0"])],
         plan_ledger=[{"target_id": "T1", "status": "planned"}],
         audit=[{"target_id": "T1", "verdict": "completed"}],
+        replay={"verified": True, "obligations": {
+            "G11:B1:O1": {"state": "PASS", "artifact_status": "EXPECTED_EFFECT_PRESENT"},
+            "G11:B1:O2": {"state": "PASS", "artifact_status": "ALTERNATIVE_NOT_SELECTED"}}},
     ))
-    assert {item.completion for item in ledger.records} == {"SATISFIED"}
+    assert {item.completion for item in ledger.records} <= {"ARTIFACT_VERIFIED", "ALREADY_SATISFIED"}
     assert not open_obligations(ledger)
 
 
-def test_rule_level_plan_satisfied_closes_sibling_replace_operations():
+def test_rule_level_plan_satisfied_cannot_close_an_unattributed_sibling():
     ledger = compile_obligations(guide(rule(rule_id="G02", operations=[
         {"op": "replace", "old_text": "A类基金份额", "new_text": "A类、D类基金份额",
          "condition": {"kind": "none", "value": None}},
@@ -209,8 +219,12 @@ def test_rule_level_plan_satisfied_closes_sibling_replace_operations():
         targets=[target("G02", operations=["G02:0"], state="needs_edit")],
         plan_ledger=[{"target_id": "T1", "status": "satisfied"}],
     ))
-    assert {item.completion for item in ledger.records} == {"ALREADY_SATISFIED"}
-    assert not open_obligations(ledger)
+    # A location/plan verdict for G02:0 does not cover G02:1.  The sibling stays OPEN
+    # until it has its own target/artifact proof.
+    assert ledger.record("G02:B1:O1").completion == "UNRESOLVED"
+    assert ledger.record("G02:B1:O2").completion == "UNRESOLVED"
+    assert {item["operation_id"] for item in open_obligations(ledger)} == {
+        "G02:0", "G02:1"}
 
 
 def test_one_completed_target_cannot_hide_another_wrong_occurrence():
@@ -242,8 +256,11 @@ def test_one_of_variant_closure_requires_the_other_variant_to_be_gone():
         targets=[target("G11", operations=["G11:0"])],
         plan_ledger=[{"target_id": "T1", "status": "planned"}],
         audit=[{"target_id": "T1", "verdict": "completed"}],
+        replay={"verified": True, "obligations": {
+            "G11:B1:O1": {"state": "PASS", "artifact_status": "EXPECTED_EFFECT_PRESENT"},
+            "G11:B1:O2": {"state": "PASS", "artifact_status": "ALTERNATIVE_NOT_SELECTED"}}},
     ), artifact_text="条款仍写旧写法二。")
-    assert ledger.records[0].completion == "SATISFIED"
+    assert ledger.records[0].completion == "ARTIFACT_VERIFIED"
     assert ledger.records[1].completion == "UNRESOLVED"
     assert ledger.records[1].completion_evidence == "ONE_OF_VARIANT_RESIDUAL"
 
@@ -283,8 +300,11 @@ def test_one_of_variant_present_inside_the_authorized_new_text_closes():
         targets=[target("G11", operations=["G11:0"])],
         plan_ledger=[{"target_id": "T1", "status": "planned"}],
         audit=[{"target_id": "T1", "verdict": "completed"}],
+        replay={"verified": True, "obligations": {
+            "G11:B1:O1": {"state": "PASS", "artifact_status": "EXPECTED_EFFECT_PRESENT"},
+            "G11:B1:O2": {"state": "PASS", "artifact_status": "ALTERNATIVE_NOT_SELECTED"}}},
     ), artifact_text=new_policy)
-    assert {item.completion for item in ledger.records} == {"SATISFIED"}
+    assert {item.completion for item in ledger.records} <= {"ARTIFACT_VERIFIED", "ALREADY_SATISFIED"}
     assert not open_obligations(ledger)
 
 

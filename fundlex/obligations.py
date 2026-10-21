@@ -89,6 +89,11 @@ class ObligationRecord:
     completion: str = "UNRESOLVED"
     completion_evidence: str = ""
     attempt_history: list[dict[str, Any]] = field(default_factory=list)
+    # Final execution evidence: the edit(s) that actually carry this obligation and
+    # the artifact proof produced by Claim Replay.  Keeping these on the record makes
+    # the report traceable from obligation -> edit -> artifact paragraph.
+    edit_ids: tuple[str, ...] = ()
+    artifact_evidence: list[dict[str, Any]] = field(default_factory=list)
 
     @property
     def obligation_id(self) -> str:
@@ -107,6 +112,8 @@ class ObligationRecord:
             "completion": self.completion,
             "completion_evidence": self.completion_evidence,
             "attempt_history": list(self.attempt_history),
+            "edit_ids": list(self.edit_ids),
+            "artifact_evidence": list(self.artifact_evidence),
         }
 
 
@@ -279,9 +286,10 @@ def compile_obligations(guide_document: Mapping[str, Any]) -> ObligationLedger:
                                            rule_id=rule_id,
                                            operation_id=alias),
                     statuses={"applicability": "UNKNOWN", "target": "PENDING",
-                              "generation": "PENDING", "validation": "PENDING",
-                              "review": "PENDING", "artifact": "PENDING",
-                              "audit": "PENDING", "sweep": "PENDING"},
+                              "generation": "PENDING", "execution": "PENDING",
+                              "validation": "PENDING", "review": "PENDING",
+                              "artifact": "PENDING", "audit": "PENDING",
+                              "sweep": "PENDING"},
                 ))
                 aliases[alias] = obligation_id
                 aliases[obligation_id] = obligation_id
@@ -379,9 +387,16 @@ def _plan_by_target(report: Mapping[str, Any]) -> dict[str, Mapping[str, Any]]:
 def _target_covers_operation(target: Mapping[str, Any], record: ObligationRecord) -> bool:
     operations = tuple(str(value) for value in (target.get("operations") or []))
     if not operations:
-        # Location-level target: it covers the rule, including every branch operation.
-        return True
-    return record.spec.operation_id in operations or record.obligation_id in operations
+        # An unknown operation attribution is NOT coverage of the whole rule.  A
+        # location-level target must be assigned an operation before it can close an
+        # obligation (plan §2: unknown attribution != covers entire rule).  Leaving
+        # this as False keeps the obligation OPEN and lets the operation recovery
+        # path create a properly attributed target instead of silently dropping a
+        # sibling operation.
+        return False
+    return (record.spec.operation_id in operations
+            or record.obligation_id in operations
+            or record.spec.obligation_id in operations)
 
 
 def _satisfied_rules(report: Mapping[str, Any]) -> set[str]:
@@ -427,7 +442,10 @@ def project(ledger: ObligationLedger, report: Mapping[str, Any], *,
     for target_id, verdict in _audit_verdicts(report.get("audit")):
         verdicts[target_id] = verdict
     replay = report.get("artifact_claim_replay") or {}
-    replayed = bool(replay.get("verified"))
+    replay_obligations = (replay.get("obligations") or {}
+                          if isinstance(replay, Mapping) else {})
+    if not isinstance(replay_obligations, Mapping):
+        replay_obligations = {}
     replay_failures = {(str(item.get("rule_id") or ""), str(item.get("location") or ""))
                        for item in replay.get("failures") or [] if isinstance(item, Mapping)}
     unresolved_items = [item for item in (report.get("unresolved") or [])
@@ -481,6 +499,81 @@ def project(ledger: ObligationLedger, report: Mapping[str, Any], *,
         item.statuses["target"] = "FOUND" if relevant else "MISSING"
 
         if not relevant:
+            # Claim Replay may have closed the operation at its own site even when the
+            # planner's target was judged out of scope (for example a delete whose old
+            # wording is already absent).  Its operation-scoped PASS is authoritative.
+            replay_item = replay_obligations.get(item.obligation_id)
+            if isinstance(replay_item, Mapping) and replay_item.get("state") == "PASS" \
+                    and str(replay_item.get("artifact_status") or "") in {
+                        "ALREADY_SATISFIED", "VERIFIED_ABSENT",
+                        "EXPECTED_EFFECT_PRESENT", "NOT_REQUIRED",
+                        "ALTERNATIVE_NOT_SELECTED"}:
+                item.completion = ("ARTIFACT_VERIFIED"
+                                   if replay_item.get("artifact_status") ==
+                                   "EXPECTED_EFFECT_PRESENT" else "ALREADY_SATISFIED")
+                item.completion_evidence = "claim_replay:" + str(
+                    replay_item.get("artifact_status"))
+                item.statuses.update(target="SATISFIED", generation="NOT_REQUIRED",
+                                     validation="PASS", artifact="VERIFIED")
+                item.edit_ids = tuple(str(value) for value in
+                                      (replay_item.get("edit_ids") or []) if value)
+                item.artifact_evidence = [dict(value) for value in
+                                          (replay_item.get("evidence") or [])
+                                          if isinstance(value, Mapping)]
+                continue
+            rule_absent_targets = [target for target in targets
+                                   if str(target.get("rule_id") or "") == item.spec.rule_id
+                                   and str(target.get("state") or "") == "absent"
+                                   and not target.get("out_of_scope")]
+            rule_satisfied_targets = [target for target in targets
+                                      if str(target.get("rule_id") or "") == item.spec.rule_id
+                                      and str(target.get("state") or "") == "satisfied"
+                                      and not target.get("out_of_scope")]
+            if rule_satisfied_targets and artifact_text is not None and \
+                    item.spec.op in {"delete", "replace"}:
+                import re as _re
+                compact_artifact = _re.sub(r"\s+", "", artifact_text)
+                probes = [_re.sub(r"\s+", "", _re.sub(
+                              r"^[A-ZＡ-Ｚ]\s*类(?:基金份额)?的?", "", sentence).strip())
+                          for sentence in _re.split(r"(?<=[。；;])", item.spec.old_text)]
+                if any(probe and probe in compact_artifact for probe in probes):
+                    item.completion = "UNRESOLVED"
+                    item.completion_evidence = "SATISFIED_TARGET_RESIDUAL_DELETE"
+                    item.statuses.update(target="SATISFIED", generation="FAIL",
+                                         validation="FAIL")
+                    continue
+            if rule_absent_targets and artifact_text is not None:
+                # An "absent" verdict is coverage only for the operation whose reference
+                # is genuinely absent.  It is not a rule-wide waiver.
+                import re as _re
+                compact_artifact = _re.sub(r"\s+", "", artifact_text)
+                probes: list[str] = []
+                for sentence in _re.split(r"(?<=[。；;])", item.spec.old_text):
+                    probe = _re.sub(r"^[A-ZＡ-Ｚ]\s*类(?:基金份额)?的?", "",
+                                    sentence).strip()
+                    if len(_re.sub(r"\s+", "", probe)) >= 8:
+                        probes.append(_re.sub(r"\s+", "", probe))
+                residual = any(probe in compact_artifact for probe in probes)
+                if item.spec.op in {"delete", "replace"} and residual:
+                    item.completion = "UNRESOLVED"
+                    item.completion_evidence = "ABSENT_TARGET_RESIDUAL_OLD_TEXT"
+                    item.statuses.update(target="ABSENT", generation="FAIL",
+                                         validation="FAIL")
+                    continue
+                if item.spec.op == "delete":
+                    item.completion = "NOT_APPLICABLE"
+                    item.completion_evidence = "target_absent_reference_absent"
+                    item.statuses.update(target="ABSENT", generation="NOT_REQUIRED",
+                                         validation="PASS", audit="NOT_REQUIRED")
+                    continue
+                if item.spec.op == "replace":
+                    new_compact = _re.sub(r"\s+", "", item.spec.new_text)
+                    if new_compact and new_compact in compact_artifact:
+                        item.completion = "ALREADY_SATISFIED"
+                        item.completion_evidence = "target_absent_new_effect_present"
+                        item.statuses.update(target="ABSENT", generation="NOT_REQUIRED",
+                                             validation="PASS", audit="NOT_REQUIRED")
+                        continue
             if item.spec.rule_id in satisfied_rules:
                 item.completion = "ALREADY_SATISFIED"
                 item.completion_evidence = "deterministic_rule_already_satisfied"
@@ -579,6 +672,22 @@ def project(ledger: ObligationLedger, report: Mapping[str, Any], *,
             continue
 
         states = {str(target.get("state") or "") for target in relevant}
+        replay_item = replay_obligations.get(item.obligation_id)
+        if isinstance(replay_item, Mapping) and replay_item.get("state") == "PASS" \
+                and states <= {"satisfied", "absent", "out_of_scope"}:
+            item.completion = ("ARTIFACT_VERIFIED"
+                               if replay_item.get("artifact_status") ==
+                               "EXPECTED_EFFECT_PRESENT" else "ALREADY_SATISFIED")
+            item.completion_evidence = "claim_replay:" + str(
+                replay_item.get("artifact_status"))
+            item.statuses.update(target="SATISFIED", generation="NOT_REQUIRED",
+                                 validation="PASS", artifact="VERIFIED")
+            item.edit_ids = tuple(str(value) for value in
+                                  (replay_item.get("edit_ids") or []) if value)
+            item.artifact_evidence = [dict(value) for value in
+                                      (replay_item.get("evidence") or [])
+                                      if isinstance(value, Mapping)]
+            continue
         if states and states <= {"absent", "out_of_scope"}:
             item.completion = "NOT_APPLICABLE"
             item.completion_evidence = "target_absent_or_out_of_scope"
@@ -645,11 +754,27 @@ def project(ledger: ObligationLedger, report: Mapping[str, Any], *,
             item.statuses["validation"] = "PASS"
             item.completion = "SATISFIED"
             item.completion_evidence = "audit_completed"
-            if replayed:
+            replay_item = replay_obligations.get(item.obligation_id)
+            if isinstance(replay_item, Mapping) and replay_item.get("state") == "PASS":
                 item.statuses["artifact"] = "VERIFIED"
                 item.completion = "ARTIFACT_VERIFIED"
+                item.completion_evidence = (
+                    "claim_replay:" + str(replay_item.get("artifact_status")
+                                          or "EXPECTED_EFFECT_PRESENT"))
+                item.edit_ids = tuple(str(value) for value in
+                                      (replay_item.get("edit_ids") or []) if value)
+                item.artifact_evidence = [dict(value) for value in
+                                          (replay_item.get("evidence") or [])
+                                          if isinstance(value, Mapping)]
             else:
+                # A whole-document replay PASS is not proof for this obligation.  It
+                # must carry its own operation/obligation artifact record (plan §29).
                 item.statuses["artifact"] = "UNVERIFIED"
+                item.completion = "UNRESOLVED"
+                item.completion_evidence = (
+                    "CLAIM_REPLAY_OBLIGATION_MISSING"
+                    if not isinstance(replay_item, Mapping)
+                    else "CLAIM_REPLAY_" + str(replay_item.get("state") or "FAIL"))
             failure = any(str(target.get("location") or "") in
                           {location for _rule, location in replay_failures}
                           for target in relevant)
@@ -697,6 +822,33 @@ def project(ledger: ObligationLedger, report: Mapping[str, Any], *,
             record.completion = best.completion
             record.completion_evidence = (f"ONE_OF_ALTERNATIVE:{best.obligation_id}:"
                                           f"{best.completion_evidence}")
+
+    # Final artifact-proof gate (plan §25–§29): a TRUE obligation may only remain
+    # closed when Claim Replay produced its OWN PASS record.  A closed state derived
+    # from audit/survey/target heuristics is downgraded here if the artifact proof is
+    # missing, so "all actual edits passed" can never stand in for "every required
+    # obligation is proven".
+    for record in ledger.records:
+        if record.applicability.status != "TRUE":
+            continue
+        if record.completion not in {"SATISFIED", "ARTIFACT_VERIFIED",
+                                     "ALREADY_SATISFIED"}:
+            continue
+        replay_item = replay_obligations.get(record.obligation_id)
+        if isinstance(replay_item, Mapping) and replay_item.get("state") == "PASS":
+            record.statuses["artifact"] = "VERIFIED"
+            record.edit_ids = tuple(str(value) for value in
+                                    (replay_item.get("edit_ids") or []) if value)
+            record.artifact_evidence = [dict(value) for value in
+                                        (replay_item.get("evidence") or [])
+                                        if isinstance(value, Mapping)]
+            continue
+        record.completion = "UNRESOLVED"
+        record.statuses["artifact"] = "UNVERIFIED"
+        record.completion_evidence = (
+            "CLAIM_REPLAY_OBLIGATION_MISSING"
+            if not isinstance(replay_item, Mapping)
+            else "CLAIM_REPLAY_" + str(replay_item.get("state") or "FAIL"))
 
 
 def open_obligations(ledger: ObligationLedger) -> list[dict[str, Any]]:

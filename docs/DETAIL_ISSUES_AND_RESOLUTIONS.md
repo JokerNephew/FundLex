@@ -1971,3 +1971,78 @@
   - 调用数上升主要来自 open-obligation locator、audit re-audit 与重复副本/复合目标修复轮；成本仍在个例 $0.05–0.095。
 - 下一步：模型服务恢复后用当前最终代码重跑 D01/D02/D11/D16（临时账本），对照 FL-D133 基线（D01 93/$0.0516、D02 56/$0.0636、D11 125/$0.0906、D16 61/$0.0554）；逐条解释 partial 原因；处理第二轮 Reviewer 残余；确认未降低 hard gate/delivery gate；再决定是否发布。
 - 变更记录：2026-10-20 新增；同日补全量测试与首轮 Reviewer 修复记录。
+
+## FL-D137 本机安装 cc-switch 管理 Codex 配置：glibc 版本不足需改用 musl 静态包（2026-10-21）
+
+- 发现日期：2026-10-21（用户要求安装 ccswitch 用于设置 Codex 配置）。
+- 环境事实（实测）：本机为无图形界面云服务器（`DISPLAY` 为空、无 `/tmp/.X11-unix`），OS `Alibaba Cloud Linux 3` / x86_64，glibc **2.32**；无 `node`/`npm`/`cargo`。外网访问经本机代理 `127.0.0.1:9981`（环境变量 `HTTP(S)_PROXY` 已设），`api.github.com` 因共享出口 IP 触发**限流 403**，但 `github.com` 网页与 release 下载正常。
+- 问题与影响：
+  1. 常见的 `farion1231/cc-switch` 是 Tauri **桌面 GUI**，本机无 X11/Wayland，装上也无法启动，不适合作为服务器侧 Codex 配置工具。
+  2. `SaladDay/cc-switch-cli`（该 GUI 的 CLI fork，v5.11.2）`linux-x64` 包依赖 glibc ≥ 2.33，本机 2.32 报 `version 'GLIBC_2.33' not found`，二进制无法运行。
+  3. GitHub API 限流会让按 API 取 release 资产的脚本返回空，改用 `releases/expanded_assets/<tag>` 网页列表获取资产名。
+- 处理方法：
+  - 下载 `cc-switch-cli-v5.11.2-linux-x64-musl.tar.gz`（static-pie，无 glibc 依赖），用 release 自带 `checksums.txt` 校验 sha256（`1d623ea8…53dc4bc`）后 `install -m 755` 到 `~/.local/bin/cc-switch`，`--version` 输出 `cc-switch 5.11.2`。
+  - 首次运行在 `~/.cc-switch/` 生成 `cc-switch.db`、`settings.json`，并把现有 Codex 配置导入为 `default` 供应商（另有内置 `codex-official`）；**未改写** `~/.codex/config.toml`（安装前后内容一致）。
+  - 未添加任何真实供应商、未写入任何 Key，未改动 `~/.codex/auth.json`。
+- 状态与验证：**工具已安装并验证可运行**（`--app codex provider list/current` 正常）；Codex 供应商配置**尚未设置**，等待用户提供名称、Base URL、模型与 Key。
+- 下一步：按用户给的供应商信息执行 `cc-switch --app codex provider add ...` 与 `provider switch`；切换前先备份 `~/.codex/config.toml`、`auth.json`；切换后重启 Codex 验证实际请求。
+- 变更记录：2026-10-21 新增。
+
+### FL-D137 追加：用户提供的 quanthatch 中转配置实测 401（2026-10-21）
+
+- 用户提供的 `config.toml`：`model_provider = "OpenAI"` → `https://free.quanthatch.com/v1`，`wire_api = "responses"`，`requires_openai_auth = true`，`model/review_model = gpt-6.1-sol`，`model_catalog_url = .../v1/models`，`features.api_key_model_discovery/goals = true`。
+- 实测结论：
+  1. `codex doctor`：`config.toml parse ok`，默认 provider 为 `OpenAI`，端点可达；但 `disable_response_storage`、`network_access`、`windows_wsl_setup_acknowledged` 三项在 Codex 0.162.1 已被判为 **unrecognized / ignored**（3 条启动警告），属旧版或 Windows 专用键，无功能作用。
+  2. 真实请求失败：`POST /v1/responses` → **401 `INVALID_API_KEY`**；用 `auth.json` 的 ChatGPT `access_token` 分别以 `Authorization: Bearer` 和 `x-api-key` 直接打 `GET /v1/models`，同样 401。说明该 relay **不接受本机 ChatGPT 登录态**，只接受它自己签发的 API Key；`requires_openai_auth = true` 在本机无法成立。
+  3. 本机无 `OPENAI_API_KEY` / `CODEX_API_KEY` 环境变量，shell rc 中也无该域名相关配置，Key 无处可取。
+  4. 附带噪声：`chatgpt.com/backend-api/ps/mcp` 连接失败导致 `rmcp` worker 反复重连（与主请求无关，但会刷 ERROR 日志）；`gpt-6.1-sol` 无内置模型元数据，提示会退化到 fallback。
+- 处理方法：写入前已备份 `~/.codex/config.toml.bak-20261021-161752`；实测 401 后**立即回滚 live 配置**到备份，保证 Codex 仍可用 ChatGPT 登录态工作；把待启用配置暂存为 `~/.codex/config.quanthatch.toml`，等拿到 Key 再切换。
+- 状态与验证：**阻塞在凭据**。配置结构已验证可加载，但端到端不可用；未向任何文档或日志写入 Key（本就没有 Key）。
+- 下一步：① 向用户索取该 relay 的 API Key，改用 `requires_openai_auth = false` + `experimental_bearer_token`（或由 cc-switch 供应商写入 `experimental_bearer_token`）；② 或确认该 relay 是否本应支持 ChatGPT token（若是，则需排查账号/套餐或 relay 侧策略）；③ 拿到 Key 后先用 `GET /v1/models` 验 200，再跑一次最小 `codex exec`，最后决定是否长期启用。
+- 变更记录：2026-10-21 追加。
+
+### FL-D137 追加：quanthatch 接入 OpenCode 成功（2026-10-21）
+
+- 用户提供该 relay 的 API Key 后，改为接入 **OpenCode**（原定 Codex 供应商配置暂缓）。
+- 验证：`GET https://free.quanthatch.com/v1/models` 带 Bearer → **HTTP 200**，返回 59 个模型，含 `gpt-6.1-sol`、`gpt-6-sol`、`gpt-5.6-sol`、`deepseek-v4-flash`、`glm-5.2` 等。
+- 处理方法（OpenCode V2 全局配置 `~/.config/opencode/opencode.json`）：
+  - 新增 provider `quanthatch`，`package = "@opencode/ai/providers/openai-compatible"`，`settings.baseURL = https://free.quanthatch.com/v1`，`settings.apiKey = {file:~/.config/opencode/secrets/quanthatch.key}`，模型 `gpt-6.1-sol`。写法与同文件既有 `fundlex` provider 保持一致。
+  - Key **不写入主配置**：单独存放 `~/.config/opencode/secrets/quanthatch.key`（目录 700、文件 600），通过 `{file:…}` 变量注入。
+  - 修改前备份 `opencode.json.bak-20261021-162326`。
+- 状态与验证：**已可用**。`opencode models` 列出 `quanthatch/gpt-6.1-sol`；`opencode run --model quanthatch/gpt-6.1-sol "Reply with exactly: OK"` 实际返回 `OK`，端到端打通。默认模型仍为 `fundlex/deepseek-v4.1-flash`，未改动。
+- 备注：同一 Key 可复用于 Codex，但需改写 `requires_openai_auth = false` + `experimental_bearer_token`，并去掉 3 个已失效键；用户当前未要求在 Codex 侧启用。
+- 变更记录：2026-10-21 追加。
+
+### FL-D137 追加：OpenCode 扩到 12 个模型 + Codex 经 cc-switch 切换成功（2026-10-21）
+
+- OpenCode：为 `quanthatch` provider 增加 12 个模型（`gpt-6.1-sol`/`gpt-6-sol`/`gpt-6`/`gpt-5.6-sol`/`gpt-5.5`/`gpt-5.4`/`gpt-5.3-codex-spark`/`gpt-5.2`/`deepseek-v4-flash`/`deepseek-v4-pro`/`glm-5.2`/`claude-sonnet-4-6`），`opencode models` 全部可列出；relay 实际共 59 个模型，其余未加入以免选择器过载。
+- Codex：用 `cc-switch --app codex provider add --id quanthatch --api-format responses ...` 建供应商并 `use quanthatch`，cc-switch 生成的配置为 `model_provider = "custom"` + `requires_openai_auth = false` + `experimental_bearer_token`，**与手写方案一致**。真实 `codex exec` 返回 `OK`（234 tokens），`codex doctor` 解析正常、端点可达（`reachability mode: provider auth`）。
+- 副作用与处理：
+  1. 切到第三方供应商时 cc-switch **移除了 `~/.codex/auth.json`**，官方 ChatGPT 登录被暂存到 `~/.cc-switch/codex-login-stash.json`；`cc-switch --app codex use default` 可恢复。当前停留在 quanthatch，故 auth.json 不在位。
+  2. cc-switch 每次切换都会重新写入 `disable_response_storage = true`，而 Codex 0.162.1 把它判为 unrecognized（每次启动 1 条警告）。`provider edit` 无脚本化参数、只能进 TUI 改，因此选择**在每次切换后 `sed` 删除该行**；已确认删除后 `codex doctor` 零警告且不影响请求。属**已知外观问题，未彻底根治**（根因在 cc-switch 模板）。
+- 状态与验证：**OpenCode 与 Codex 两条链路均已真实打通**；备份 `~/.codex/config.toml.bak-quanthatch-*` 与原始 `config.toml.bak-20261021-161752` 保留。
+- 变更记录：2026-10-21 追加。
+
+## FL-D138 Operation Execution Closure：operation identity、final-plan ledger、全 obligation Claim Replay（2026-10-21）
+
+- 发现日期：2026-10-21（用户要求基于 `refactor/recovery-architecture` 最新代码继续收口，不重设架构）。
+- 问题与影响：真实 D01/D02/D11/D16 报告暴露了四层状态不一致：`operation TRUE` 可以没有 target；target 有但 sibling operation 未进入 plan；ledger 仍记 planned 但 final edit set 已丢弃该 component；Claim Replay 因 `edited_rules` gate 不检查未计划 operation；delete 已被 artifact 证明不存在时 Sweep 仍仅凭“没看到删除确认”阻塞。结果可能是 false complete，也可能是 sibling 消失后无人负责。
+- 处理方法（本轮已实施）：
+  - **Operation identity**：`obligations._target_covers_operation()` 不再把无 operation 的 location target 默认视为整条 rule 覆盖；`recall.assign_target_operations()` 统一给 `needs_edit` target 归属 operation，校验 operation 属于当前 rule、condition TRUE、并校验绑定 span 与 operation old_text/variant 有真实证据；无法归因时不进入 Planner，open/recovery 层再处理。
+  - **Open recovery operation-first**：`targeting.targets_for_open_rules()` 改为 `covered_operations`/`seen_operations`，同一 rule 的 G05:0 不再覆盖 G05:2；新增 `_open_operation_candidates()`（P1 同 rule sibling site、P2 operation old_text、P3 variant/reference、P4 keyword bag/topic/site），append 规则（G01/G03/G16）按各自 site 语义找候选；G01/G03 的“直销/不收取/销售服务费”只作为最终 artifact 效果，不再要求出现在 source quote；G16 接受“每日计算/按月支付”等真实 payment site。
+  - **Planner**：`PlannedEdit` 增加 `operation_keys`/`obligation_ids`；`_selected_operation_indices()` 只选择 target 归属 operation；G05 增加有界 `plan_g05_splice()`，支持“调低全部或者部分份额类别的赎回费率”，删除后仅做局部标点归一。
+  - **Merge / ledger**：删除“同 rule 即 alternative”的旧逻辑；只有 `one_of_group` 相同才允许 alternative；同 rule 独立 operation 进入 conflict → Joint Compose；新增 `_reconcile_final_plan_ledger()`，从最终 edit set 与 component target ids 反推 planned/unresolved，冲突展开 `T1+T2` synthetic id；`RECALL_PLAN_COMPONENT_DROPPED` 不再被静默忽略。
+  - **Claim Replay**：删除 `edited_rules` gate，检查所有 `applicability=TRUE` obligation；replace/append/delete 分别要求 artifact 新效果/旧效果消失/`VERIFIED_ABSENT`；delete residual 按 operation target/edit site 检查，避免把无关条款里的同短语误判；ONE_OF 只要求任一 source-present alternative 被处理，其余为 `ALTERNATIVE_NOT_SELECTED`；`verified` 改为“无 failure 且所有 required executable obligation 均 closure”。
+  - **Projection**：`obligations.project()` 不再使用全局 `replayed`，必须读取 `replay["obligations"][obligation_id]` 的 own PASS；无记录时 `UNVERIFIED/UNRESOLVED`。
+  - **Recovery / Sweep**：新增 `CLAIM_OPERATION_NOT_PLANNED`→TARGET、`CLAIM_PLANNED_EFFECT_MISSING`/`CLAIM_EXECUTION_EFFECT_MISSING`→EXECUTION、`RECOVERY_NO_PROGRESS`→EXECUTION；claim missing operation 创建 operation-specific target；每轮计算 target/plan/artifact/failure snapshot，连续无变化终止；Sweep finding 区分 `RESIDUAL_CONFIRMED` 与 `REMOVAL_UNCONFIRMED`，后者在有 obligation artifact proof 时 resolved；同 location 不同 rule/operation 不再按 location 去重；duplicate body/summary copy 增加 clone/repair。
+  - **性能/并发**：`ModelGateway` 增加 state lock（calls/events/metrics），`RoleGateway.call()` 改用 `result.attempts == 0` 判断 checkpoint；audit 规则级 `ThreadPoolExecutor`，有效并发受 `ModelBudget.concurrency` 限制；audit 首次 full、后续 dirty-rule incremental；report 增加 `performance`（wall_ms、model_by_task、full/incremental audit、full sweep、inventory rerun、no-progress）。
+- 新增测试：`tests/test_operation_execution_closure.py`（10 条）覆盖 location target 不覆盖整 rule、Planner 只执行 target operation、same-rule independent 不是 alternative、ONE_OF 仍为 alternative、final ledger reconciliation、无 edit applicable operation Claim FAIL、delete VERIFIED_ABSENT 接受 sweep removal unconfirmed、真实 residual 仍阻塞、no-progress snapshot、audit 并发/顺序。
+- 最近真实子集（临时账本；均 `incomplete`，未发布生产）：
+  - D01（D01f）：37 targets / 18 edits / 133 calls / $0.0806；Claim 仅 `G17 p760 RESIDUAL_OLD_TEXT`。之后又修 G17 span 阈值/duplicate repair，尚未重跑。
+  - D02（D02b）：35 targets / 17 edits / 109 calls / $0.0831；Claim `G16 CLAIM_PLANNED_EFFECT_MISSING`、`G17 p823 RESIDUAL_OLD_TEXT`，另有 G05 satisfied-target residual 误报。之后修 G16 site/target recovery、scoped delete residual、duplicate repair，尚未重跑。
+  - D11：29 targets / 16 edits / 104 calls / $0.0936；Claim `G05:2 CLAIM_OPERATION_NOT_PLANNED`、`G16 missing`；同时 G22 audit `evidence_verified=false` 仍报 wrong。之后修 G05 unrelated-site scoped residual、G16 site，尚未重跑。
+  - D16：40 targets / 20 edits / 78 calls / $0.0476；Claim `p822/p1306 DUPLICATE_SITE_DIVERGED`；G06 composite p431/p1169 仍 unresolved。之后加 duplicate repair，尚未重跑确认。
+- 验证与状态：**代码实施基本完成；最终真实回归/全量测试/tests after last patch/Reviewer 未完成**。最近一次全量 `pytest tests -q` 为 **939 passed / 6 skipped**，但最后几处 target/duplicate/site 修复后需重跑。未提交、未推送、未发布、未跑 514。模型服务在 2026-10-21 多次返回 HTTP 429；为完成真实调用临时加入 6–20s 节流和 30s 429 backoff，导致 wall time 明显高于基线（D11 单例约 47 分钟），不能把该 wall time 当作性能结论。
+- 已知残余：G06 composite（D16 p431/p1169，按用户允许留专项）；G13/G14/G15/G17 真实业务残留；D11 G22 audit evidence unverified 但 wrong；`CLAIM_PLANNED_EFFECT_MISSING` 的 G16 恢复依赖 locator candidate；duplicate repair 的最终收敛未验证；Sweep deterministic prefilter、rule artifact signature 复用、严格两次 Full Sweep 调度、5 类 Reviewer 尚未完成。
+- 下一步：① 等 D02c 后台结果并重跑 D01/D16（必要时 D11）；② 全量 pytest + 新测试；③ 补 REVIEW/性能表；④ 按 7 个逻辑 commit 提交并推送；⑤ 不发布生产、不跑 514。
+- 变更记录：2026-10-21 新增。

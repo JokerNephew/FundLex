@@ -967,6 +967,13 @@ class Target:
     # Inventory targets usually leave this empty; survey targets and satisfied hits set
     # it so coverage is operation-aware (FL-D117).
     operations: tuple[str, ...] = ()
+    # Inventory/model claimed identity that failed code attribution.  Kept for report
+    # traceability and site-scoped Claim Replay, but never used for planning/coverage.
+    claimed_operations: tuple[str, ...] = ()
+    # Set when the target's claimed operation identity could not be proven on the bound
+    # span.  Such a target must not be planned or audited; the operation recovery layer
+    # may create a correct operation-specific target instead.
+    attribution_error: str = ""
     # Deterministic paragraph candidates for an open-obligation T3 locate (each one
     # passed the code anchor gate).  The locator may only choose inside this set.
     site_candidates: tuple[str, ...] = ()
@@ -982,6 +989,8 @@ class Target:
             "start": self.start, "end": self.end, "resolution": self.resolution,
             "segment_ok": self.segment_ok, "composite": list(self.composite),
             "operations": list(self.operations),
+            "claimed_operations": list(self.claimed_operations),
+            "attribution_error": self.attribution_error,
             "site_candidates": list(self.site_candidates),
             "occurrence_index": self.occurrence_index,
             "occurrence_anchor": self.occurrence_anchor,
@@ -1657,6 +1666,275 @@ def target_operation_keys(target: Target, rule: dict | None,
         if old and old in body:
             keys.add(operation_key(rule_id, index))
     return keys
+
+
+def _normalise_operation_ids(rule: dict, keys: Sequence[str], obligations: Any = None) -> list[int]:
+    """Map operation aliases/obligation ids to valid, condition-TRUE operation indices."""
+    rule_id = str(rule.get("rule_id") or "")
+    operations = list(rule.get("operations") or [])
+    indices: set[int] = set()
+    for raw in keys:
+        key = str(raw or "").strip()
+        if not key:
+            continue
+        record = obligations.record(key) if obligations is not None else None
+        if record is not None and str(getattr(record.spec, "rule_id", "") or
+                                      rule_id) == rule_id:
+            indices.add(int(record.spec.operation_index))
+            continue
+        if key.startswith(rule_id + ":"):
+            tail = key.split(":", 1)[1]
+            if tail.isdigit():
+                indices.add(int(tail))
+    return sorted(index for index in indices if 0 <= index < len(operations))
+
+
+def _selected_operation_indices(rule: dict, target: Target,
+                                inspection: DocumentInspection, facts: Facts,
+                                obligations: Any = None) -> list[int]:
+    """Operation indices this target is authorized to execute.
+
+    Explicit target operation identity wins.  Otherwise the real bound span is the
+    evidence: operations whose own old_text is inside it are selected.  A target with
+    no text attribution is only auto-assigned when the rule has exactly one applicable
+    operation; anything else fails closed instead of re-running the whole rule.
+    """
+    rule_id = str(rule.get("rule_id") or "")
+    operations = list(rule.get("operations") or [])
+    if not operations:
+        return []
+    true_indices = [index for index, operation in enumerate(operations)
+                    if condition_status(operation.get("condition"), facts) == "TRUE"]
+    if not true_indices:
+        return []
+    explicit = [str(key) for key in (getattr(target, "operations", ()) or ()) if str(key)]
+    if explicit:
+        selected = _normalise_operation_ids(rule, explicit, obligations)
+        invalid = [key for key in explicit
+                   if not _normalise_operation_ids(rule, [key], obligations)]
+        if invalid:
+            raise RecallError("RECALL_TARGET_OPERATION_UNATTRIBUTED",
+                              {"target": target.target_id, "rule": rule_id,
+                               "operations": invalid})
+        selected = [index for index in selected if index in true_indices]
+        if not selected:
+            raise RecallError("RECALL_TARGET_OPERATION_UNATTRIBUTED",
+                              {"target": target.target_id, "rule": rule_id,
+                               "reason": "explicit_operation_not_applicable"})
+        # An explicit operation id is not enough: the bound span must actually carry the
+        # operation's reference wording (or a declared variant).  Otherwise a model
+        # "absent" target with the wrong quote could make the planner delete an
+        # unrelated sentence (D01 G05 p135).
+        span_bodies: list[str] = []
+        for location in _target_paragraphs(target):
+            try:
+                span = inspection.by_location(location)
+            except DocxError:
+                continue
+            if target.composite:
+                span_bodies.append(_compact(display_text(span.text)[0]))
+            elif target.start is not None and target.end is not None:
+                span_bodies.append(_compact(span.text[int(target.start):int(target.end)]))
+            else:
+                span_bodies.append(_compact(display_text(span.text)[0]))
+        span_body = "".join(span_bodies)
+        variants = [_compact(str(value)) for value in (rule.get("old_text_variants") or [])]
+        for index in selected:
+            operation = operations[index]
+            old_text = _compact(str(operation.get("old_text") or ""))
+            if operation.get("op") not in {"replace", "delete"} or not old_text:
+                continue
+            if rule_id in {"G02", "G04"} and bool(rule.get("class_substitution")):
+                # G02/G04 rewrite the class-definition sentence with the product's
+                # actual class groups; the guide's example letters need not appear.
+                continue
+            if old_text in span_body:
+                continue
+            if any(value and value in span_body for value in variants):
+                continue
+            if any(_compact(fragment) in span_body
+                   for value in variants for fragment in reference_fragments(value)):
+                continue
+            # Real contracts paraphrase or prefix-strip the reference ("C类基金份额的
+            # 销售服务费每日计提…" vs "基金销售服务费每日计提…").  Accept a bounded
+            # similarity, never a completely different sentence.
+            if _sequence_ratio(old_text, span_body) >= 0.35:
+                continue
+            raise RecallError("RECALL_TARGET_OPERATION_UNATTRIBUTED",
+                              {"target": target.target_id, "rule": rule_id,
+                               "operation": operation_key(rule_id, index),
+                               "reason": "operation_span_mismatch"})
+        return selected
+    inferred = _normalise_operation_ids(
+        rule, sorted(target_operation_keys(target, rule, inspection)), obligations)
+    inferred = [index for index in inferred if index in true_indices]
+    if inferred:
+        # The bound span itself contains these operations' reference wording; every
+        # one of them is carried by this target (G05's whole-paragraph inventory quote
+        # legitimately contains both the replace and the delete).  A span that proves
+        # no operation is the ambiguous case and fails closed below.
+        return sorted(set(inferred))
+    if len(true_indices) == 1:
+        return [true_indices[0]]
+    raise RecallError("RECALL_TARGET_OPERATION_UNATTRIBUTED",
+                      {"target": target.target_id, "rule": rule_id,
+                       "operations": [operation_key(rule_id, index) for index in true_indices]})
+
+
+def assign_target_operations(targets: Sequence[Target], rules_by_id: dict[str, dict],
+                             inspection: DocumentInspection, facts: Facts,
+                             obligations: Any = None) -> list[dict[str, Any]]:
+    """Assign one operation identity to every actionable target before planning.
+
+    This is the single attribution point used by the planner, open-obligation recovery,
+    Claim Replay and the delivery projection.  A target that cannot be attributed is
+    left empty (and therefore cannot cover any obligation); the planner will fail closed
+    with ``RECALL_TARGET_OPERATION_UNATTRIBUTED``.
+    """
+    errors: list[dict[str, Any]] = []
+    for target in targets:
+        if target.state != "needs_edit" or target.out_of_scope:
+            continue
+        rule = rules_by_id.get(target.rule_id)
+        if rule is None:
+            continue
+        try:
+            indices = _selected_operation_indices(rule, target, inspection, facts,
+                                                  obligations)
+        except RecallError as exc:
+            if target.operations:
+                target.claimed_operations = tuple(target.operations)
+                target.operations = ()
+            # The target has no provable operation/site attribution.  It must not be
+            # planned or audited, but it also must not become a permanent blocking
+            # "target" entry: the operation-level open/claim recovery is the layer that
+            # must close or keep the obligation.  Mark the target as an invalid site.
+            target.out_of_scope = True
+            target.reason = (f"{target.reason}|TARGET_OPERATION_NOT_APPLICABLE"
+                             if str((exc.detail or {}).get("reason") or "") ==
+                             "explicit_operation_not_applicable"
+                             else f"{target.reason}|TARGET_SOURCE_MISMATCH")
+            errors.append({"target_id": target.target_id, "rule_id": target.rule_id,
+                           "code": exc.code, "detail": dict(exc.detail or {})})
+            continue
+        if indices:
+            target.operations = tuple(operation_key(target.rule_id, index)
+                                      for index in indices)
+    return errors
+
+
+def dedupe_operation_targets(targets: Sequence[Target], rules_by_id: dict[str, dict],
+                             inspection: DocumentInspection) -> tuple[list[Target], list[str]]:
+    """Drop same-location duplicate targets for the same operation set.
+
+    The inventory sometimes reports the broad clause and the exact operation phrase as
+    two targets (D01 G05 p135).  Planning both creates an artificial overlap and can
+    drop the operation.  Prefer the target whose quote is the operation's own old_text,
+    then the narrower span.  Different locations (body vs contract summary) are real
+    duplicate copies and are both kept.
+    """
+    groups: dict[tuple[str, str, tuple[str, ...]], list[Target]] = {}
+    for target in targets:
+        if target.state != "needs_edit" or target.out_of_scope:
+            continue
+        if not target.operations:
+            continue
+        key = (target.rule_id, target.location, tuple(sorted(target.operations)))
+        groups.setdefault(key, []).append(target)
+    removed: set[str] = set()
+    for key, items in groups.items():
+        if len(items) < 2:
+            continue
+        rule = rules_by_id.get(key[0]) or {}
+
+        def score(target: Target) -> tuple[int, int]:
+            quote = _compact(target.quote)
+            exact = 0
+            for operation in rule.get("operations") or []:
+                old = _compact(str(operation.get("old_text") or ""))
+                if not old:
+                    continue
+                if quote and quote == old:
+                    exact = max(exact, 3)
+                elif target.start is not None and target.end is not None:
+                    try:
+                        span = inspection.by_location(target.location)
+                    except DocxError:
+                        continue
+                    if old in _compact(span.text[int(target.start):int(target.end)]):
+                        exact = max(exact, 2)
+                elif old in quote:
+                    exact = max(exact, 1)
+            width = ((int(target.end) - int(target.start))
+                     if target.start is not None and target.end is not None else 10**9)
+            return (exact, -width)
+        best = max(items, key=score)
+        for item in items:
+            if item is not best:
+                item.out_of_scope = True
+                item.reason = f"{item.reason}|DUPLICATE_OPERATION_TARGET:{best.target_id}"
+                removed.add(item.target_id)
+    return list(targets), sorted(removed)
+
+
+def duplicate_copy_targets(targets: Sequence[Target], rules_by_id: dict[str, dict],
+                           inspection: DocumentInspection) -> list[Target]:
+    """Clone an operation target onto byte-identical body/summary clause copies.
+
+    The contract repeats the same clause in the body and in the contract summary.  Editing
+    only one copy makes the two dispositions diverge (D01 p758/p1221, D16 p822/p1306).
+    Only identical compact paragraph text is cloned; a paragraph merely sharing a phrase
+    is not the same obligation site.
+    """
+    existing = {(target.rule_id, location, tuple(sorted(target.operations)))
+                for target in targets
+                for location in _target_paragraphs(target)}
+    paragraph_text = {span.location: _compact(display_text(span.text)[0])
+                      for span in inspection.paragraphs}
+    by_text: dict[str, list[str]] = {}
+    for location, text in paragraph_text.items():
+        if len(text) >= 20:
+            by_text.setdefault(text, []).append(location)
+    clones: list[Target] = []
+    for target in list(targets):
+        if target.state != "needs_edit" or target.out_of_scope or target.composite:
+            continue
+        if not target.operations:
+            continue
+        source_text = paragraph_text.get(target.location, "")
+        if len(source_text) < 20:
+            continue
+        for location in by_text.get(source_text, ()):
+            if location == target.location:
+                continue
+            key = (target.rule_id, location, tuple(sorted(target.operations)))
+            if key in existing:
+                continue
+            try:
+                span = inspection.by_location(location)
+            except DocxError:
+                continue
+            if target.start is None or target.end is None:
+                continue
+            start, end = target.start, target.end
+            if _compact(target.quote):
+                located = resolve_quote(span, target.quote)
+                if located is None:
+                    continue
+                start, end = located
+            elif span.text[start:end] != inspection.by_location(
+                    target.location).text[start:end]:
+                continue
+            clone = Target(
+                target_id=f"{target.target_id}-D{len(clones) + 1}",
+                rule_id=target.rule_id, location=location, quote=target.quote,
+                state="needs_edit", reason=f"duplicate_copy:{target.reason}",
+                start=start, end=end, resolution="resolved",
+                segment_ok=containing_segment(span, start, end) is not None,
+                operations=target.operations)
+            clones.append(clone)
+            existing.add(key)
+    return clones
 
 
 def known_operations_from_targets(targets: Sequence[Target], rules_by_id: dict[str, dict],
@@ -2774,6 +3052,11 @@ class PlannedEdit:
     content_source: str
     evidence: dict[str, Any]
     anchor_sha256: str = ""
+    # The guide operation(s) and obligation(s) this edit actually executes.  This is
+    # the edit's own identity; Claim Replay must not have to re-derive it from a
+    # target id, which can be synthesized/merged.
+    operation_keys: tuple[str, ...] = ()
+    obligation_ids: tuple[str, ...] = ()
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -2781,6 +3064,8 @@ class PlannedEdit:
             "start": self.start, "end": self.end, "replacement": self.replacement,
             "operation": self.operation, "content_source": self.content_source,
             "evidence": self.evidence, "anchor_sha256": self.anchor_sha256,
+            "operation_keys": list(self.operation_keys),
+            "obligation_ids": list(self.obligation_ids),
         }
 
 
@@ -2806,6 +3091,55 @@ def _replay_fragments(actual: str, fragments: Sequence[dict[str, Any]]) -> str |
         if updated is None:
             return None
         current = updated
+    return current
+
+
+_G05_SPLICE = re.compile(r"调低[^。；;]*?赎回费率")
+
+
+def plan_g05_splice(actual: str) -> tuple[str, dict[str, Any]] | None:
+    """Bounded G05:0 splice: replace the terminal term, keep every modifier.
+
+    The guide's reference is the short "调低赎回费率", but contracts legitimately write
+    "调低全部或者部分份额类别的赎回费率".  The old composer then failed with
+    RECALL_COMPOSE_FIXED_TEXT_MISSING because the reference was not a literal suffix.
+    The operation's real semantics are: inside one sentence, after the unique "调低"
+    anchor, replace the terminal "赎回费率" with "销售服务费率".  If the anchor or the
+    terminal is not unique in the bound span, this function refuses to guess.
+    """
+    if not actual:
+        return None
+    matches = list(_G05_SPLICE.finditer(actual))
+    if len(matches) != 1:
+        return None
+    match = matches[0]
+    terminal = "赎回费率"
+    cut = actual.rfind(terminal, match.start(), match.end())
+    if cut < 0:
+        return None
+    updated = actual[:cut] + "销售服务费率" + actual[cut + len(terminal):]
+    if _compact(updated) == _compact(actual):
+        return None
+    return updated, {
+        "strategy": "g05_bounded_splice",
+        "anchor": "调低",
+        "old_terminal": terminal,
+        "new_terminal": "销售服务费率",
+        "matched": actual[match.start():match.end()],
+    }
+
+
+def _normalise_local_punctuation(text: str) -> str:
+    """Remove punctuation left empty by a bounded deletion; never rewrite prose."""
+    previous = None
+    current = text
+    pairs = (("，。", "。"), ("；。", "。"), ("、。", "。"), ("，；", "；"),
+             ("；，", "；"), ("、，", "，"), ("，、", "，"), ("，，", "，"),
+             ("、、", "、"), ("；；", "；"), ("。。", "。"))
+    while current != previous:
+        previous = current
+        for left, right in pairs:
+            current = current.replace(left, right)
     return current
 
 
@@ -2986,7 +3320,8 @@ def _plan_tier1(rule: dict, operations: Sequence[dict], facts: Facts,
 
 
 def plan_target(rule: dict, target: Target, inspection: DocumentInspection, facts: Facts,
-                gateway: Any, *, compose_budget: list[int]) -> PlannedEdit | None:
+                gateway: Any, *, compose_budget: list[int],
+                obligations: Any = None) -> PlannedEdit | None:
     """Plan one target; registry mode adds tri-state applicability and routing records.
 
     Tri-state (external review 2026-10-19): an operation whose condition cannot be
@@ -2995,14 +3330,36 @@ def plan_target(rule: dict, target: Target, inspection: DocumentInspection, fact
     per-operation routing decision (requested/actual tier, fallback reason) is recorded
     on the edit evidence for telemetry.
     """
+    def _attach(edit: PlannedEdit | None) -> PlannedEdit | None:
+        if edit is None:
+            return None
+        if not edit.operation_keys:
+            indices = _selected_operation_indices(rule, target, inspection, facts,
+                                                  obligations)
+            edit.operation_keys = tuple(operation_key(str(rule.get("rule_id") or ""), index)
+                                        for index in indices)
+            if obligations is not None:
+                edit.obligation_ids = tuple(
+                    record.obligation_id for index in indices
+                    if (record := obligations.record(operation_key(
+                        str(rule.get("rule_id") or ""), index))) is not None)
+        evidence = dict(edit.evidence or {})
+        evidence.setdefault("operation_keys", list(edit.operation_keys))
+        evidence.setdefault("obligation_ids", list(edit.obligation_ids))
+        edit.evidence = evidence
+        return edit
+
     if not _tier1_enabled():
-        return _plan_target_inner(rule, target, inspection, facts, gateway,
-                                  compose_budget=compose_budget)
+        return _attach(_plan_target_inner(rule, target, inspection, facts, gateway,
+                                          compose_budget=compose_budget,
+                                          obligations=obligations))
+    selected_indices = _selected_operation_indices(rule, target, inspection, facts,
+                                                   obligations)
     applicable: list[dict] = []
     unknown: list[dict] = []
-    for operation in rule.get("operations") or []:
+    for index, operation in enumerate(rule.get("operations") or []):
         status = condition_status(operation.get("condition"), facts)
-        if status == "TRUE":
+        if status == "TRUE" and index in selected_indices:
             applicable.append(operation)
         elif status == "UNKNOWN":
             unknown.append(operation)
@@ -3017,11 +3374,11 @@ def plan_target(rule: dict, target: Target, inspection: DocumentInspection, fact
     decisions: list[dict[str, Any]] = []
     blocked_applicable = 0
     for index, operation in enumerate(rule.get("operations") or []):
-        operation_key = f"{rule['rule_id']}:{index}"
-        decision = route_operation(operation_key, fact_status=fact_status)
+        operation_label = f"{rule['rule_id']}:{index}"
+        decision = route_operation(operation_label, fact_status=fact_status)
         is_applicable = any(operation is candidate for candidate in applicable)
         decisions.append({
-            "operation": operation_key,
+            "operation": operation_label,
             "requested": decision.requested_tier.value,
             "actual": decision.actual_tier.value if decision.actual_tier else None,
             "fallback_reason": decision.fallback_reason,
@@ -3034,21 +3391,47 @@ def plan_target(rule: dict, target: Target, inspection: DocumentInspection, fact
         raise RecallError("RECALL_FACT_UNVERIFIED", {
             "rule": rule["rule_id"], "reason": "route_blocked"})
     edit = _plan_target_inner(rule, target, inspection, facts, gateway,
-                              compose_budget=compose_budget)
+                              compose_budget=compose_budget, obligations=obligations)
     if edit is not None:
         evidence = dict(edit.evidence or {})
         evidence["strategy"] = decisions
         if rule.get("class_substitution") and not facts.service_group:
             evidence.setdefault("component_not_applicable", ["service_fee_group"])
         edit.evidence = evidence
-    return edit
+    return _attach(edit)
 
 
 def _plan_target_inner(rule: dict, target: Target, inspection: DocumentInspection, facts: Facts,
-                       gateway: Any, *, compose_budget: list[int]) -> PlannedEdit | None:
-    """Turn one needs_edit target into a concrete edit, or raise RecallError."""
-    operations = [operation for operation in (rule.get("operations") or [])
-                  if condition_status(operation.get("condition"), facts) == "TRUE"]
+                       gateway: Any, *, compose_budget: list[int],
+                       obligations: Any = None) -> PlannedEdit | None:
+    """Turn one needs_edit target into a concrete edit, or raise RecallError.
+
+    Only the operations attributed to THIS target are eligible.  Re-scanning every
+    operation of the rule was the source of sibling operations being silently carried
+    by an unrelated target or dropped from the final edit set (plan §11).
+    """
+    rule_id = str(rule.get("rule_id") or "")
+    selected_indices = _selected_operation_indices(rule, target, inspection, facts,
+                                                   obligations)
+    operations = [rule["operations"][index] for index in selected_indices
+                  if 0 <= index < len(rule.get("operations") or [])]
+
+    def finish(edit: PlannedEdit) -> PlannedEdit:
+        edit.operation_keys = tuple(operation_key(rule_id, index)
+                                    for index in selected_indices)
+        if obligations is not None:
+            obligation_ids: list[str] = []
+            for index in selected_indices:
+                record = obligations.record(operation_key(rule_id, index))
+                if record is not None and record.obligation_id not in obligation_ids:
+                    obligation_ids.append(record.obligation_id)
+            edit.obligation_ids = tuple(obligation_ids)
+        evidence = dict(edit.evidence or {})
+        evidence["operation_keys"] = list(edit.operation_keys)
+        evidence["obligation_ids"] = list(edit.obligation_ids)
+        edit.evidence = evidence
+        return edit
+
     if not operations:
         # The rule's own condition does not hold for this product (a single-class
         # branch on a multi-class contract, a floating-fee branch on a fixed-fee one):
@@ -3081,6 +3464,8 @@ def _plan_target_inner(rule: dict, target: Target, inspection: DocumentInspectio
                                "groups": sorted(_missing_slot_groups(rule, operations, facts))})
     if slot_group_missing(rule, operations, facts):
         operations = _drop_empty_group_operations(rule, operations, facts)
+    selected_indices = [index for index, operation in enumerate(rule.get("operations") or [])
+                        if any(operation is kept for kept in operations)]
     if not operations:
         # Every operation needed a class group this product does not have.
         raise RecallError("RECALL_RULE_NOT_APPLICABLE",
@@ -3098,24 +3483,20 @@ def _plan_target_inner(rule: dict, target: Target, inspection: DocumentInspectio
         # The inventory often quotes the whole A/C class-definition sentence.  Narrow the
         # edit to the one operation the target actually owns, and prove which identical
         # occurrence the inventory quote meant (G02/G04 same-paragraph class tokens).
-        operations = rule.get("operations") or []
-        candidate_indices: list[int] = []
-        for key in target.operations:
-            text_key = str(key or "")
-            if text_key.startswith(rule_id + ":"):
-                tail = text_key.split(":", 1)[1]
-                if tail.isdigit() and 0 <= int(tail) < len(operations):
-                    candidate_indices.append(int(tail))
+        all_operations = rule.get("operations") or []
+        candidate_indices: list[int] = list(selected_indices)
         if not candidate_indices:
             quote_compact = _compact(target.quote)
             candidate_indices = [
-                index for index, operation in enumerate(operations)
+                index for index, operation in enumerate(all_operations)
                 if _compact(str(operation.get("old_text") or ""))
                 and _compact(str(operation.get("old_text") or "")) in quote_compact]
         candidate_indices = sorted(set(candidate_indices))
         if len(candidate_indices) == 1:
             operation_index = candidate_indices[0]
-            old_text = str(operations[operation_index].get("old_text") or "")
+            selected_indices = [operation_index]
+            operations = [all_operations[operation_index]]
+            old_text = str(all_operations[operation_index].get("old_text") or "")
             if old_text:
                 narrowed = resolve_occurrence(span, old_text, anchor=target.quote)
                 if narrowed is None:
@@ -3207,11 +3588,23 @@ def _plan_target_inner(rule: dict, target: Target, inspection: DocumentInspectio
                               "new_text": new_fragment, "mode": "full"})
             continue
         updated = _splice_fragment(spliced, old_text, new_fragment)
+        if updated is None and op_kind == "replace" and rule_id == "G05" \
+                and _compact(old_text) == "调低赎回费率":
+            g05 = plan_g05_splice(spliced)
+            if g05 is not None:
+                updated, g05_evidence = g05
+                fragments.append({"op": str(op_kind), "old_text": old_text,
+                                  "new_text": new_fragment, "mode": "g05_splice",
+                                  "evidence": g05_evidence})
+                applied.append(f"{op_kind}:g05_splice")
         if updated is not None:
             spliced = updated
-            applied.append(f"{op_kind}:fragment")
-            fragments.append({"op": str(op_kind), "old_text": old_text,
-                              "new_text": new_fragment, "mode": "fragment"})
+            if op_kind == "delete":
+                spliced = _normalise_local_punctuation(spliced)
+            if not any(item.endswith(f"{op_kind}:g05_splice") for item in applied):
+                applied.append(f"{op_kind}:fragment")
+                fragments.append({"op": str(op_kind), "old_text": old_text,
+                                  "new_text": new_fragment, "mode": "fragment"})
     if applied:
         if _same_compact(spliced, actual):
             return None  # already satisfied
@@ -3527,6 +3920,8 @@ def _component(edit: PlannedEdit, inspection: DocumentInspection) -> dict[str, A
         "start": edit.start, "end": edit.end, "replacement": edit.replacement,
         "operation": edit.operation, "content_source": edit.content_source,
         "evidence": edit.evidence,
+        "operation_keys": list(edit.operation_keys),
+        "obligation_ids": list(edit.obligation_ids),
         "expected_old_text": span.text[edit.start:edit.end],
     }
 
@@ -3544,7 +3939,56 @@ def _component_covered(component: dict[str, Any], outer_replacement: str) -> boo
     return False
 
 
-def merge_edits(edits: Sequence[PlannedEdit], inspection: DocumentInspection
+def _operations_are_alternatives(left: PlannedEdit, right: PlannedEdit,
+                                 obligations: Any = None) -> bool:
+    """Only a declared ONE_OF group may treat two operations as alternatives.
+
+    Sharing a rule id is NOT alternative semantics: G05:0 (replace the redemption-fee
+    wording) and G05:2 (delete the filing sentence) are independent obligations that can
+    both be applicable at the same location.  The old same-rule shortcut silently dropped
+    one of them (plan §15–§19).
+    """
+    if obligations is None:
+        return False
+    left_groups: set[str] = set()
+    right_groups: set[str] = set()
+    for edit, groups in ((left, left_groups), (right, right_groups)):
+        keys = edit.operation_keys or ()
+        if not keys:
+            return False
+        for key in keys:
+            record = obligations.record(str(key))
+            if record is None or not record.spec.one_of_group:
+                return False
+            groups.add(record.spec.one_of_group)
+    return bool(left_groups & right_groups)
+
+
+def _edit_operation_keys(left: PlannedEdit, right: PlannedEdit) -> tuple[str, ...]:
+    return tuple(dict.fromkeys((*left.operation_keys, *right.operation_keys)))
+
+
+def _edit_obligation_ids(left: PlannedEdit, right: PlannedEdit) -> tuple[str, ...]:
+    return tuple(dict.fromkeys((*left.obligation_ids, *right.obligation_ids)))
+
+
+def _component_target_ids(edit: PlannedEdit, components: Sequence[dict[str, Any]] | None = None
+                          ) -> set[str]:
+    """Expand a synthetic merged target id (``T005+T002``) into its real components."""
+    values: set[str] = set()
+    for raw in (edit.target_id,):
+        for part in str(raw or "").split("+"):
+            if part:
+                values.add(part)
+    for component in components or ():
+        for part in str(component.get("target_id") or "").split("+"):
+            if part:
+                values.add(part)
+    return values
+
+
+def merge_edits(edits: Sequence[PlannedEdit], inspection: DocumentInspection,
+                obligations: Any = None
                 ) -> tuple[list[tuple[PlannedEdit, list[dict[str, Any]]]], list[dict[str, Any]],
                            list[str]]:
     """Merge adjacent edits per location; absorb contained edits; flag real overlaps.
@@ -3584,36 +4028,55 @@ def merge_edits(edits: Sequence[PlannedEdit], inspection: DocumentInspection
                     operation="insert" if merged_start == merged_end else "replace",
                     content_source="merged",
                     evidence={"merged": [current.evidence, item.evidence]},
+                    operation_keys=_edit_operation_keys(current, item),
+                    obligation_ids=_edit_obligation_ids(current, item),
                 )
                 continue
             item_component = _component(item, inspection)
+            # An append point inside a sibling deletion is the common G15 (delete old
+            # payment clause) + G16 (append new mechanism) case.  The append is not an
+            # overlap: after the deletion it is exactly the content that remains.
+            if (item.start == item.end and item.operation == "insert"
+                    and current.start <= item.start <= current.end):
+                inserted = str((item.evidence or {}).get("fixed_text") or "")
+                if not inserted:
+                    inserted = item.replacement
+                if not current.replacement.strip():
+                    combined_replacement = inserted
+                elif item.start == current.end:
+                    combined_replacement = current.replacement + inserted
+                else:
+                    combined_replacement = None
+                if combined_replacement is not None:
+                    current_components = current_components + [item_component]
+                    current = PlannedEdit(
+                        target_id=current.target_id + "+" + item.target_id,
+                        rule_id=current.rule_id + "+" + item.rule_id,
+                        location=location, start=current.start, end=current.end,
+                        replacement=combined_replacement, operation="replace",
+                        content_source="merged_delete_append",
+                        evidence={"merged": [current.evidence, item.evidence],
+                                  "append_inside_delete": True},
+                        operation_keys=_edit_operation_keys(current, item),
+                        obligation_ids=_edit_obligation_ids(current, item),
+                    )
+                    continue
+            alternative = _operations_are_alternatives(current, item, obligations)
             if item.start >= current.start and item.end <= current.end:
-                # contained edit: keep the outer replacement when it already covers it
-                if _component_covered(item_component, current.replacement):
+                # A contained edit may only be absorbed by a declared ONE_OF sibling
+                # whose replacement really carries it.  Same-rule independent operations
+                # must flow to Joint Compose instead of being dropped as "covered".
+                if alternative and (_component_covered(item_component, current.replacement)
+                                    or _compact(item.replacement) == _compact(current.replacement)):
                     covered.append(item.target_id)
                     continue
             current_component = _component(current, inspection)
             if current.start >= item.start and current.end <= item.end:
-                if _component_covered(current_component, item.replacement):
+                if alternative and (_component_covered(current_component, item.replacement)
+                                    or _compact(current.replacement) == _compact(item.replacement)):
                     covered.append(current.target_id)
                     current = item
                     current_components = [item_component]
-                    continue
-            if current.rule_id == item.rule_id:
-                # Same-rule overlapping operations are alternatives, not two edits:
-                # G05's replace and its delete variant target the same phrase, and
-                # G11's two old-text variants produce the same policy. Prefer the
-                # non-destructive replacement and record the other target as covered.
-                if not item.replacement.strip() and current.replacement.strip():
-                    covered.append(item.target_id)
-                    continue
-                if not current.replacement.strip() and item.replacement.strip():
-                    covered.append(current.target_id)
-                    current = item
-                    current_components = [item_component]
-                    continue
-                if _compact(current.replacement) == _compact(item.replacement):
-                    covered.append(item.target_id)
                     continue
             conflicts.append({"code": "RECALL_EDIT_OVERLAP", "location": location,
                               "targets": [current.target_id, item.target_id],
@@ -3723,7 +4186,8 @@ def _g15_notice_for_edit(edit: "PlannedEdit", rule: dict,
 def _resolve_overlaps_with_joint_compose(
         conflicts: Sequence[dict[str, Any]], planned: Sequence[PlannedEdit],
         inspection: DocumentInspection, rules_by_id: dict[str, dict], facts: Facts,
-        gateway: Any) -> tuple[list[PlannedEdit], list[dict[str, Any]]]:
+        gateway: Any, *, obligations: Any = None
+        ) -> tuple[list[PlannedEdit], list[dict[str, Any]]]:
     """Try Joint Compose for real overlaps; unprovable overlaps stay conflicts."""
     from .generation.joint import plan_joint_compose
 
@@ -3750,26 +4214,33 @@ def _resolve_overlaps_with_joint_compose(
         start = min(int(edit.start) for edit in edits)
         end = max(int(edit.end) for edit in edits)
         rule_ids: list[str] = []
-        obligations: list[dict[str, Any]] = []
+        joint_obligations: list[dict[str, Any]] = []
         fixed_texts: list[str] = []
         for edit in edits:
+            selected_keys = [str(value) for value in (edit.operation_keys or ()) if value]
             for rule_id in str(edit.rule_id).split("+"):
                 rule_id = rule_id.strip()
                 if not rule_id or rule_id in rule_ids:
                     continue
                 rule_ids.append(rule_id)
                 rule = rules_by_id.get(rule_id) or {}
-                operations = [operation for operation in (rule.get("operations") or [])
-                              if operation.get("op") != "noop"]
-                obligations.append({"rule_id": rule_id,
-                                    "requirement": str(rule.get("requirement") or ""),
-                                    "operations": operations})
+                operations = list(rule.get("operations") or [])
+                selected_indices = _normalise_operation_ids(rule, selected_keys, obligations)
+                if selected_indices:
+                    operations = [operations[index] for index in selected_indices]
+                else:
+                    operations = [operation for operation in operations
+                                  if operation.get("op") != "noop"]
+                joint_obligations.append({"rule_id": rule_id,
+                                          "requirement": str(rule.get("requirement") or ""),
+                                          "operations": operations})
                 fixed = str((edit.evidence or {}).get("fixed_text") or "")
                 if fixed:
                     fixed_texts.append(fixed)
         try:
             result = plan_joint_compose(span_text=span.text, start=start, end=end,
-                                        obligations=obligations, fixed_texts=fixed_texts,
+                                        obligations=joint_obligations,
+                                        fixed_texts=fixed_texts,
                                         facts=facts, gateway=gateway, rule_ids=rule_ids)
         except (RecallError, ModelError):
             raise
@@ -3786,7 +4257,13 @@ def _resolve_overlaps_with_joint_compose(
             content_source="joint_compose",
             evidence={"joint_rules": rule_ids, "fixed_text": "".join(fixed_texts),
                       "basis": result.get("basis") or "",
-                      "validation": result.get("validation") or {}}))
+                      "validation": result.get("validation") or {},
+                      "operation_keys": [key for edit in edits
+                                         for key in (edit.operation_keys or ())]},
+            operation_keys=tuple(dict.fromkeys(
+                key for edit in edits for key in (edit.operation_keys or ()))),
+            obligation_ids=tuple(dict.fromkeys(
+                value for edit in edits for value in (edit.obligation_ids or ())))))
     kept = [edit for edit in planned if edit.target_id not in consumed]
     return kept + resolved, remaining
 
@@ -3823,13 +4300,90 @@ def _blocked_recovery_trace(code: str, *, rule_id: str, target_id: str,
     return history.summary(context)
 
 
+def _reconcile_final_plan_ledger(
+        ledger: list[dict[str, Any]], records: Sequence[dict[str, Any]],
+        conflicts: Sequence[dict[str, Any]], covered: Sequence[str],
+        baseline: Sequence[PlannedEdit]) -> None:
+    """Re-derive every ledger status from the FINAL edit set (plan §17–§20).
+
+    A pre-merge ``planned`` status is not evidence that the operation reached the
+    artifact.  Reconciling after merge/conflict/Joint Compose makes the invariant true:
+    ``ledger=planned`` only when the operation exists in a final edit.
+    """
+    target_to_edit_ids: dict[str, list[str]] = {}
+    operation_to_edit_ids: dict[str, list[str]] = {}
+    final_target_ids: set[str] = set()
+    final_operation_ids: set[str] = set()
+    for record in records:
+        edit_id = f"{record.get('rule_id')}:{record.get('target_id')}"
+        target_ids: set[str] = set()
+        operation_ids: set[str] = set()
+        for raw in (record.get("target_id"),):
+            target_ids.update(part for part in str(raw or "").split("+") if part)
+        operation_ids.update(str(value) for value in (record.get("operation_keys") or ())
+                             if value)
+        for component in record.get("components") or []:
+            target_ids.update(part for part in
+                              str(component.get("target_id") or "").split("+") if part)
+            operation_ids.update(str(value) for value in
+                                 (component.get("operation_keys") or ()) if value)
+            evidence = component.get("evidence") or {}
+            operation_ids.update(str(value) for value in
+                                 (evidence.get("operation_keys") or ()) if value)
+        evidence = record.get("evidence") or {}
+        operation_ids.update(str(value) for value in
+                             (evidence.get("operation_keys") or ()) if value)
+        final_target_ids.update(target_ids)
+        final_operation_ids.update(operation_ids)
+        for target_id in target_ids:
+            target_to_edit_ids.setdefault(target_id, []).append(edit_id)
+        for operation_id in operation_ids:
+            operation_to_edit_ids.setdefault(operation_id, []).append(edit_id)
+    conflict_ids: set[str] = set()
+    for conflict in conflicts:
+        for raw in conflict.get("targets") or ():
+            conflict_ids.update(part for part in str(raw or "").split("+") if part)
+    covered_ids = {str(value) for value in covered if value}
+    baseline_ids = {edit.target_id for edit in baseline}
+    for entry in ledger:
+        target_id = str(entry.get("target_id") or "")
+        edit_ids = target_to_edit_ids.get(target_id) or []
+        operation_keys = [str(value) for value in (entry.get("operation_keys") or ())
+                          if value]
+        operation_edit_ids = sorted({edit_id for key in operation_keys
+                                     for edit_id in operation_to_edit_ids.get(key, [])})
+        entry["operation_keys"] = operation_keys
+        if edit_ids or operation_edit_ids:
+            entry["status"] = "planned"
+            entry["edit_ids"] = sorted(set(edit_ids or operation_edit_ids))
+            entry.pop("reason", None)
+        elif target_id in covered_ids:
+            entry["status"] = "satisfied"
+            entry["reason"] = "RECALL_COVERED_BY_ALTERNATIVE"
+            entry["edit_ids"] = sorted({edit_id for key in operation_keys
+                                        for edit_id in operation_to_edit_ids.get(key, [])})
+        elif target_id in conflict_ids or target_id in final_target_ids:
+            entry["status"] = "unresolved"
+            entry["reason"] = "RECALL_EDIT_OVERLAP"
+        elif target_id in baseline_ids and entry.get("status") == "planned":
+            entry["status"] = "unresolved"
+            entry["reason"] = "RECALL_PLAN_COMPONENT_DROPPED"
+
+
 def plan_edits(rules_by_id: dict[str, dict], targets: Sequence[Target], inspection: DocumentInspection,
-               facts: Facts, gateway: Any, *, max_compose_calls: int = 6) -> dict[str, Any]:
+               facts: Facts, gateway: Any, *, max_compose_calls: int = 6,
+               obligations: Any = None) -> dict[str, Any]:
     """Build the edit list, isolating per-target failures into the ledger."""
     planned: list[PlannedEdit] = []
     ledger: list[dict[str, Any]] = []
     compose_budget = [max_compose_calls]
     for target in targets:
+        if target.attribution_error:
+            ledger.append({"target_id": target.target_id, "rule_id": target.rule_id,
+                           "status": "unresolved",
+                           "reason": target.attribution_error,
+                           "operation_keys": list(target.claimed_operations)})
+            continue
         if target.out_of_scope:
             ledger.append({"target_id": target.target_id, "rule_id": target.rule_id,
                            "status": "not_applicable", "reason": "TARGET_SOURCE_MISMATCH"})
@@ -3861,13 +4415,26 @@ def plan_edits(rules_by_id: dict[str, dict], targets: Sequence[Target], inspecti
                     break
                 composite_edits = plan_composite_target(rule, target, inspection, facts,
                                                         new_text=replacement)
+                for composite_edit in composite_edits:
+                    composite_edit.operation_keys = tuple(target.operations)
+                    if obligations is not None:
+                        composite_edit.obligation_ids = tuple(
+                            record.obligation_id for key in target.operations
+                            if (record := obligations.record(key)) is not None)
+                    composite_edit.evidence = {
+                        **(composite_edit.evidence or {}),
+                        "operation_keys": list(composite_edit.operation_keys),
+                        "obligation_ids": list(composite_edit.obligation_ids),
+                    }
                 planned.extend(composite_edits)
                 ledger.append({"target_id": target.target_id, "rule_id": target.rule_id,
                                "status": "planned",
                                "operation": composite_edits[0].operation,
+                               "operation_keys": list(target.operations),
                                "parts": [edit.location for edit in composite_edits]})
                 continue
-            edit = plan_target(rule, target, inspection, facts, gateway, compose_budget=compose_budget)
+            edit = plan_target(rule, target, inspection, facts, gateway,
+                               compose_budget=compose_budget, obligations=obligations)
         except RecallError as exc:
             status = "not_applicable" if exc.code == "RECALL_RULE_NOT_APPLICABLE" else "unresolved"
             if status == "not_applicable":
@@ -3896,45 +4463,30 @@ def plan_edits(rules_by_id: dict[str, dict], targets: Sequence[Target], inspecti
             edit.evidence = {**(edit.evidence or {}), "business_notices": notices}
         planned.append(edit)
         ledger.append({"target_id": target.target_id, "rule_id": target.rule_id,
-                       "status": "planned", "operation": edit.operation})
-    merged, conflicts, covered = merge_edits(planned, inspection)
-    if conflicts:
-        # Same-rule overlapping edits are alternatives or duplicate applications:
-        # keep the richest non-destructive edit and drop the others before any
-        # cross-rule Joint Compose is considered (G05 replace vs delete variant).
-        dropped: set[str] = set()
-        for conflict in conflicts:
-            location = str(conflict.get("location") or "")
-            edits = [edit for edit in planned if edit.location == location]
-            if len(edits) < 2 or len({edit.rule_id for edit in edits}) != 1:
-                continue
-            best = max(edits, key=lambda edit: (bool(edit.replacement.strip()),
-                                                int(edit.end) - int(edit.start)))
-            dropped.update(edit.target_id for edit in edits if edit is not best)
-        if dropped:
-            planned = [edit for edit in planned if edit.target_id not in dropped]
-            covered.extend(sorted(dropped))
-            merged, conflicts, covered = merge_edits(planned, inspection)
+                       "status": "planned", "operation": edit.operation,
+                       "operation_keys": list(edit.operation_keys),
+                       "obligation_ids": list(edit.obligation_ids)})
+    baseline = list(planned)
+    merged, conflicts, covered = merge_edits(planned, inspection, obligations)
     if conflicts and _tier1_enabled():
         planned, conflicts = _resolve_overlaps_with_joint_compose(
-            conflicts, planned, inspection, rules_by_id, facts, gateway)
-        merged, conflicts, covered = merge_edits(planned, inspection)
-    conflict_ids = {target_id for conflict in conflicts for target_id in conflict["targets"]}
-    for entry in ledger:
-        if entry.get("target_id") in conflict_ids:
-            entry["status"] = "unresolved"
-            entry["reason"] = "RECALL_EDIT_OVERLAP"
-        elif entry.get("target_id") in covered and entry.get("status") == "planned":
-            entry["status"] = "satisfied"
-            entry["reason"] = "RECALL_COVERED_BY_OUTER"
-    def _conflicted(edit: PlannedEdit, components: list[dict[str, Any]]) -> bool:
-        ids = {str(component.get("target_id")) for component in components}
-        ids.add(edit.target_id)
-        return any(identifier in conflict_ids for identifier in ids)
-    merged = [(edit, components) for edit, components in merged if not _conflicted(edit, components)]
+            conflicts, planned, inspection, rules_by_id, facts, gateway,
+            obligations=obligations)
+        merged, conflicts, covered = merge_edits(planned, inspection, obligations)
+    conflict_ids: set[str] = set()
+    for conflict in conflicts:
+        for raw in conflict.get("targets") or ():
+            conflict_ids.update(part for part in str(raw or "").split("+") if part)
+    # A conflict is only allowed to remove an edit from the final set after Joint
+    # Compose had a chance.  Anything still conflicting is unresolved, including every
+    # component of a synthetic merged id.
     records: list[dict[str, Any]] = []
     for edit, components in merged:
+        ids = _component_target_ids(edit, components)
+        if ids & conflict_ids:
+            continue
         records.append({**edit.as_dict(), "components": components})
+    _reconcile_final_plan_ledger(ledger, records, conflicts, covered, baseline)
     return {"edits": records, "ledger": ledger, "conflicts": conflicts,
             "covered": sorted(covered)}
 
@@ -4191,7 +4743,8 @@ def target_site_ok(rule_id: str, span: Any, inspection: DocumentInspection) -> b
         return "销售服务费" in paragraph and "支付" in paragraph
     if rule_id == "G16":
         paragraph, _ = display_text(span.text)
-        return "销售服务费" in paragraph and "计提" in paragraph
+        return "销售服务费" in paragraph and any(
+            token in paragraph for token in ("计提", "每日计算", "按月支付", "支付日期"))
     if rule_id == "G17":
         paragraph, _ = display_text(span.text)
         return "销售服务费" in paragraph and (

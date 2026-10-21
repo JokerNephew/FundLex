@@ -42,6 +42,20 @@ def _rule_ids(edit: Mapping[str, Any]) -> list[str]:
 
 def _operation_keys(edit: Mapping[str, Any],
                     targets_by_id: Mapping[str, Mapping[str, Any]] | None) -> list[str]:
+    """Operation identity priority: edit/component own keys, then target, then empty.
+
+    The target is deliberately no longer the primary source: a merged or cloned target
+    id can be synthetic, and a target can cover several operations.  The edit itself is
+    the execution record (plan §23).
+    """
+    keys = [str(key) for key in (edit.get("operation_keys") or ()) if str(key).strip()]
+    if keys:
+        return keys
+    evidence = edit.get("evidence") or {}
+    keys = [str(key) for key in (evidence.get("operation_keys") or ())
+            if str(key).strip()]
+    if keys:
+        return keys
     target = (targets_by_id or {}).get(str(edit.get("target_id") or ""))
     if isinstance(target, Mapping):
         keys = [str(key) for key in (target.get("operations") or []) if str(key).strip()]
@@ -562,9 +576,17 @@ def _operation_units(group: Sequence[Mapping[str, Any]],
                 before_unit = before[start:end] if explicit_span else before
                 after_unit = (str(unit.get("replacement") or "")
                               if explicit_span else after)
+                is_joint_unit = str(unit.get("content_source") or
+                                    edit.get("content_source") or "") == "joint_compose"
                 if attribution_errors:
                     # Fail-closed: validate with no borrowed authorization at all.
                     auth = Authorization()
+                elif is_joint_unit:
+                    # The joint composer rewrote one shared span for several operations;
+                    # the union authorization is the explicitly documented exception.
+                    # Each operation still has to prove its own effect through
+                    # ``_joint_operation_effects`` below.
+                    auth = _authorization_for_group(group, rules_by_id)
                 else:
                     auth = _authorization_for_operation(rule, indices, obligations, keys)
                 components = tuple((components_by_rule or {}).get(rule_id) or ())
@@ -578,7 +600,7 @@ def _operation_units(group: Sequence[Mapping[str, Any]],
                 validation = validate_edit(before_unit, after_unit, auth=auth,
                                            components=components, required_terms=terms,
                                            authorized_numbers=facts_numbers)
-                effect_errors = attribution_errors + _own_effect_errors(
+                effect_errors = attribution_errors + ([] if is_joint_unit else _own_effect_errors(
                     rule, indices, obligations, explicit_span=explicit_span,
                     is_component=bool(edit.get("components")),
                     before_unit=before_unit, replacement=after_unit,
@@ -587,7 +609,7 @@ def _operation_units(group: Sequence[Mapping[str, Any]],
                                       or edit.get("content_source") or ""),
                     facts=facts,
                     evidence=dict(unit.get("evidence") or edit.get("evidence") or {}),
-                    expected_old_text=str(unit.get("expected_old_text") or ""))
+                    expected_old_text=str(unit.get("expected_old_text") or "")))
                 target_id = str(unit.get("target_id") or edit.get("target_id") or "")
                 target = (targets_by_id or {}).get(target_id)
                 if isinstance(target, Mapping) and indices:
@@ -972,58 +994,385 @@ def replay_claims(edits: Sequence[Mapping[str, Any]], before_inspection: Any,
                                            "the authorized span"})
         if len(failures) >= max_failures:
             break
-    # Artifact-level obligation proof: a rule with edits cannot close a sibling
-    # operation that was never planned.  This is independent of target-level coverage
-    # (a location-level target used to "cover" every operation of the rule).
-    if obligations is not None:
-        edited_rules = {rule_id for edit in edits for rule_id in _rule_ids(edit)}
-        after_full = _compact("".join(
-            str(getattr(span, "text", ""))
-            for span in getattr(after_inspection, "paragraphs", ())))
-        from ..recall import instantiate_slots
-        for record in getattr(obligations, "records", ()):
-            spec = record.spec
-            if spec.rule_id not in edited_rules:
+    # ------------------------------------------------------------------
+    # Artifact-level proof for EVERY applicable operation/obligation (plan §24–§29).
+    # This is deliberately independent of ``edited_rules``: an operation that never
+    # reached the final edit set must still be checked, otherwise D01's G03 append is
+    # invisible to replay and ``verified`` can be true with the policy text missing.
+    # ------------------------------------------------------------------
+    from ..recall import instantiate_slots
+
+    before_full = _compact("".join(
+        str(getattr(span, "text", "")) for span in getattr(before_inspection, "paragraphs", ())))
+    after_full = _compact("".join(
+        str(getattr(span, "text", "")) for span in getattr(after_inspection, "paragraphs", ())))
+    authorized_new = _compact("".join(
+        str(record.spec.new_text or "") for record in getattr(obligations, "records", ())))
+    operation_edit_ids: dict[str, list[str]] = {}
+    operation_locations: dict[str, list[str]] = {}
+    operation_spans: dict[str, list[tuple[str, int, int]]] = {}
+    edit_records: list[Mapping[str, Any]] = []
+    for edit in edits:
+        edit_id = f"{edit.get('rule_id')}:{edit.get('target_id')}"
+        units = [edit, *(component for component in (edit.get("components") or [])
+                         if isinstance(component, Mapping))]
+        keys: list[str] = []
+        for unit in units:
+            keys.extend(_operation_keys(unit, targets_by_id))
+            keys.extend(str(value) for value in
+                        ((unit.get("evidence") or {}).get("operation_keys") or ())
+                        if value)
+        for key in dict.fromkeys(keys):
+            operation_edit_ids.setdefault(str(key), []).append(edit_id)
+            location = str(edit.get("location") or "")
+            if location and location not in operation_locations.setdefault(str(key), []):
+                operation_locations[str(key)].append(location)
+        for unit in units:
+            unit_start, unit_end = unit.get("start"), unit.get("end")
+            unit_location = str(unit.get("location") or edit.get("location") or "")
+            if unit_start is None or unit_end is None or not unit_location:
                 continue
-            if str(getattr(record.applicability, "status", "")) != "TRUE":
+            for key in dict.fromkeys(keys):
+                item = (unit_location, int(unit_start), int(unit_end))
+                if item not in operation_spans.setdefault(str(key), []):
+                    operation_spans[str(key)].append(item)
+        edit_records.append(edit)
+
+    unit_failures: dict[str, list[str]] = {}
+    unit_operations: dict[str, set[str]] = {}
+    for unit in operation_records:
+        for key in re.split(r"[,，]", str(unit.get("operation_id") or "")):
+            key = key.strip()
+            if not key:
                 continue
-            code = "CLAIM_OPERATION_NOT_PLANNED"
-            if spec.op in {"replace", "append"}:
-                expected = {_compact(spec.new_text)}
-                try:
-                    instantiated, issues = instantiate_slots(spec.new_text, facts)
-                    if not issues and instantiated:
-                        expected.add(_compact(instantiated))
-                except Exception:  # noqa: BLE001
-                    pass
-                if not any(value and value in after_full for value in expected):
-                    failures.append({
-                        "rule_id": spec.rule_id, "operation_id": spec.operation_id,
-                        "obligation_id": getattr(record, "obligation_id", ""),
-                        "code": code,
-                        "reason": "an applicable operation has no planned artifact effect"})
-            elif spec.op == "delete":
-                old_text = _compact(spec.old_text)
-                if old_text and old_text in after_full:
-                    failures.append({
-                        "rule_id": spec.rule_id, "operation_id": spec.operation_id,
-                        "obligation_id": getattr(record, "obligation_id", ""),
-                        "code": code,
-                        "reason": "an applicable delete operation survives in the artifact"})
-    obligation_state: dict[str, dict[str, Any]] = {}
-    for record in operation_records:
-        obligation_id = str(record.get("obligation_id") or "")
-        if not obligation_id:
+            unit_operations.setdefault(key, set()).add(str(unit.get("target_id") or ""))
+            if str(unit.get("verdict")) == "FAIL":
+                unit_failures.setdefault(key, []).append(str(unit.get("code") or
+                                                                 "CLAIM_VALIDATION_FAILED"))
+
+    def _new_effects(new_text_value: str) -> set[str]:
+        expected = {_compact(new_text_value)}
+        try:
+            instantiated, issues = instantiate_slots(new_text_value, facts)
+            if not issues and instantiated:
+                expected.add(_compact(instantiated))
+        except Exception:  # noqa: BLE001 - raw template is still a valid check target
+            pass
+        return {value for value in expected if value}
+
+    operation_target_locations: dict[str, list[str]] = {}
+    for target_id, target in (targets_by_id or {}).items():
+        if not isinstance(target, Mapping):
             continue
-        state = obligation_state.setdefault(obligation_id, {"units": 0, "failed": 0,
-                                                            "operations": []})
-        state["units"] += 1
-        state["operations"].append(record.get("operation_id", ""))
-        if str(record.get("verdict")) == "FAIL":
-            state["failed"] += 1
-    for obligation_id, state in obligation_state.items():
-        state["state"] = "PASS" if state["failed"] == 0 else "FAIL"
-    return {"verified": not failures, "checked": checked, "units_checked": units_checked,
+        locations = ([str(target.get("location") or "")]
+                     if not target.get("composite")
+                     else [str(part).rsplit(":", 2)[0]
+                           for part in target.get("composite") or []])
+        rule = rules_by_id.get(str(target.get("rule_id") or "")) or {}
+        from ..recall import _RULE_TOPIC_TOKENS
+        topic = tuple(_RULE_TOPIC_TOKENS.get(str(target.get("rule_id") or ""), ()))
+        if topic:
+            filtered: list[str] = []
+            for location in locations:
+                try:
+                    text = _compact(str(getattr(
+                        after_inspection.by_location(location), "text", "")))
+                except Exception:  # noqa: BLE001
+                    try:
+                        text = _compact(str(getattr(
+                            before_inspection.by_location(location), "text", "")))
+                    except Exception:  # noqa: BLE001
+                        text = ""
+                if not text or all(token in text for token in topic):
+                    filtered.append(location)
+            locations = filtered
+        for key in [*(target.get("operations") or ()),
+                    *(target.get("claimed_operations") or ())]:
+            for location in locations:
+                if location and location not in operation_target_locations.setdefault(
+                        str(key), []):
+                    operation_target_locations[str(key)].append(location)
+
+    def _delete_residual(old_text: str,
+                         locations: Sequence[str] | None = None) -> str:
+        """The first meaningful old sentence still present in the artifact.
+
+        When the operation has a target/edit site, only those paragraphs are probed.  A
+        short phrase such as "并报中国证监会备案" also occurs in unrelated clauses; a
+        document-wide probe would turn that unrelated occurrence into a false residual.
+        """
+        compact_old = _compact(old_text)
+        if not compact_old:
+            return ""
+        scoped = ""
+        if locations:
+            for location in locations:
+                try:
+                    scoped += _compact(str(getattr(
+                        after_inspection.by_location(location), "text", "")))
+                except Exception:  # noqa: BLE001
+                    continue
+            if scoped or locations:
+                after_scope = scoped
+            else:
+                after_scope = after_full
+        else:
+            after_scope = after_full
+        probes: list[str] = [compact_old] if compact_old else []
+        for sentence in re.split(r"(?<=[。；;])", old_text):
+            sentence = sentence.strip()
+            if not sentence:
+                continue
+            tail = re.sub(r"^[A-ZＡ-Ｚ]\s*类(?:基金份额)?的?", "", sentence).strip()
+            for probe in (sentence, tail):
+                probe_compact = _compact(probe)
+                if len(probe_compact) >= 8 and probe_compact not in probes:
+                    probes.append(probe_compact)
+        for probe in probes:
+            if probe in after_scope and probe not in authorized_new:
+                return probe
+        return ""
+
+    def _append_failure(rule_id: str, operation_id: str, obligation_id: str,
+                        code: str, reason: str, location: str = "") -> None:
+        key = (rule_id, operation_id, code)
+        if any(str(item.get("rule_id")) == rule_id
+               and str(item.get("operation_id")) == operation_id
+               and str(item.get("code")) == code for item in failures):
+            return
+        failures.append({"rule_id": rule_id, "operation_id": operation_id,
+                         "obligation_id": obligation_id, "location": location,
+                         "code": code, "reason": reason})
+
+    obligation_state: dict[str, dict[str, Any]] = {}
+    fallback_rule_id = (next(iter(rules_by_id)) if len(rules_by_id) == 1 else "")
+    obligation_records = getattr(obligations, "records", None)
+    if obligation_records is None:
+        # Test/legacy ledgers expose an internal id->record mapping.
+        mapping = getattr(obligations, "_records", {}) or {}
+        obligation_records = list(mapping.values()) if isinstance(mapping, Mapping) else ()
+    for record in obligation_records:
+        spec = record.spec
+        applicability = getattr(record, "applicability", None)
+        if applicability is not None and str(getattr(applicability, "status", "TRUE")) != "TRUE":
+            continue
+        rule_id = str(getattr(spec, "rule_id", "") or fallback_rule_id)
+        rule = rules_by_id.get(rule_id)
+        if rule is None:
+            continue
+        try:
+            operation_index = int(getattr(spec, "operation_index", 0))
+            operation = (rule.get("operations") or [])[operation_index]
+        except (IndexError, TypeError, ValueError):
+            operation = {}
+        op = str(getattr(spec, "op", "") or operation.get("op") or "")
+        old_text = str(getattr(spec, "old_text", "") or operation.get("old_text") or "")
+        new_text = str(getattr(spec, "new_text", "") or operation.get("new_text") or "")
+        operation_id = str(getattr(spec, "operation_id", "") or
+                           f"{rule_id}:{operation_index}")
+        obligation_id = str(getattr(record, "obligation_id", "") or operation_id)
+        if op == "replace" and bool(rule.get("class_substitution")):
+            from ..recall import class_substitution_noop
+            try:
+                if class_substitution_noop(rule, facts):
+                    obligation_state[obligation_id] = {
+                        "state": "PASS", "artifact_status": "NOT_REQUIRED",
+                        "operations": [operation_id], "sites": [],
+                        "edit_ids": [], "evidence": [{
+                            "location": "", "effect": "",
+                            "proof": "class_substitution_noop"}],
+                        "failure_code": ""}
+                    continue
+            except Exception:  # noqa: BLE001 - fall through to the normal proof
+                pass
+        one_of_group = str(getattr(spec, "one_of_group", "") or "")
+        has_edit = bool(operation_edit_ids.get(operation_id) or
+                        unit_operations.get(operation_id))
+        sites = list(dict.fromkeys((*operation_locations.get(operation_id, ()),
+                                    *sorted(unit_operations.get(operation_id, ())))))
+        edit_ids = list(dict.fromkeys(operation_edit_ids.get(operation_id, ())))
+        old_compact = _compact(old_text)
+        source_present = (True if op == "append"
+                          else bool(old_compact) and old_compact in before_full)
+        state = "PASS"
+        status = "EXPECTED_EFFECT_PRESENT"
+        evidence: list[dict[str, Any]] = []
+        failure_code = ""
+        failure_reason = ""
+        if op == "append":
+            effects = _new_effects(new_text)
+            present = next((value for value in effects if value in after_full), "")
+            if present:
+                status = "EXPECTED_EFFECT_PRESENT" if has_edit else "ALREADY_SATISFIED"
+                evidence.append({"location": sites[0] if sites else "",
+                                 "effect": present[:120],
+                                 "proof": "required_append_text_present"})
+            else:
+                state = "FAIL"
+                status = "MISSING"
+                failure_code = "CLAIM_PLANNED_EFFECT_MISSING"
+                failure_reason = "an applicable append operation has no artifact effect"
+        elif op == "delete":
+            delete_locations = ([item[0] for item in operation_spans.get(operation_id, ())]
+                                if has_edit and operation_spans.get(operation_id)
+                                else operation_target_locations.get(operation_id))
+            residual = _delete_residual(old_text, delete_locations)
+            if residual:
+                state = "FAIL"
+                status = "RESIDUAL_OLD_TEXT"
+                failure_code = "RESIDUAL_OLD_TEXT" if has_edit else "CLAIM_OPERATION_NOT_PLANNED"
+                failure_reason = "an applicable delete operation still survives in the artifact"
+                evidence.append({"location": sites[0] if sites else "", "effect": residual[:120],
+                                 "proof": "old_sentence_present"})
+            else:
+                status = "VERIFIED_ABSENT" if has_edit else "ALREADY_SATISFIED"
+                evidence.append({"location": sites[0] if sites else "", "effect": "",
+                                 "proof": "old_sentence_absent"})
+        elif op == "replace":
+            effects = _new_effects(new_text)
+            present = next((value for value in effects if value in after_full), "")
+            # An old wording that survives only as part of the authorized new effect is
+            # not a residual (G02: "A类基金份额" -> "A类、D类基金份额").  For an executed
+            # edit, only its own authorized site(s) are probed; the same class token
+            # appears in many unrelated fee clauses and must not reopen this obligation.
+            old_survives = False
+            if old_compact and old_compact not in _compact(new_text):
+                sites = operation_spans.get(operation_id, [])
+                if has_edit and sites:
+                    for site_location, site_start, site_end in sites:
+                        try:
+                            site_text = _compact(
+                                str(getattr(after_inspection.by_location(site_location),
+                                            "text", "")))
+                        except Exception:  # noqa: BLE001
+                            continue
+                        start_compact = len(_compact(
+                            str(getattr(after_inspection.by_location(site_location),
+                                        "text", ""))[:site_start]))
+                        end_compact = len(_compact(
+                            str(getattr(after_inspection.by_location(site_location),
+                                        "text", ""))[:site_end]))
+                        if old_compact in site_text[start_compact:end_compact]:
+                            old_survives = True
+                            break
+                elif not has_edit:
+                    # No edit was planned: a present new effect is already-satisfied
+                    # proof; otherwise a surviving old wording is a missing operation.
+                    old_survives = (not present) and old_compact in after_full
+                else:
+                    old_survives = old_compact in after_full
+            if present and not old_survives:
+                status = "EXPECTED_EFFECT_PRESENT" if has_edit else "ALREADY_SATISFIED"
+                evidence.append({"location": sites[0] if sites else "",
+                                 "effect": present[:120],
+                                 "proof": "new_effect_present_old_effect_absent"})
+            elif old_survives:
+                state = "FAIL"
+                status = "RESIDUAL_OLD_TEXT"
+                failure_code = ("CLAIM_EXECUTION_EFFECT_MISSING" if has_edit
+                                else "CLAIM_OPERATION_NOT_PLANNED")
+                failure_reason = "an applicable replace operation still has its old effect"
+                evidence.append({"location": sites[0] if sites else "",
+                                 "effect": old_compact[:120],
+                                 "proof": "old_effect_present"})
+            elif not source_present and not has_edit:
+                # Neither source nor artifact carries the effect: cannot prove the
+                # obligation was already satisfied or executed.
+                state = "FAIL"
+                status = "UNPROVEN"
+                failure_code = "CLAIM_OPERATION_UNPROVEN"
+                failure_reason = "neither the source old wording nor the required new effect exists"
+            else:
+                state = "FAIL"
+                status = "MISSING"
+                failure_code = ("CLAIM_EXECUTION_EFFECT_MISSING" if has_edit
+                                else "CLAIM_OPERATION_NOT_PLANNED")
+                failure_reason = "an applicable replace operation has no new artifact effect"
+        else:
+            # noop operations carry no artifact requirement.
+            status = "NOT_REQUIRED"
+
+        if one_of_group and not source_present and op != "append":
+            # Historical wording variants that never existed in this contract are not
+            # missing operations.  They are recorded explicitly, not silently omitted.
+            state = "PASS" if not unit_failures.get(operation_id) else "FAIL"
+            status = "ALTERNATIVE_NOT_SELECTED"
+            evidence = [{"location": "", "effect": "", "proof": "variant_absent_in_source"}]
+
+        if unit_failures.get(operation_id):
+            state = "FAIL"
+            if not failure_code:
+                failure_code = unit_failures[operation_id][0]
+                failure_reason = "the operation's own artifact replay failed"
+            status = "FAILED"
+        if failure_code:
+            _append_failure(rule_id, operation_id, obligation_id, failure_code,
+                            failure_reason, sites[0] if sites else "")
+        obligation_state[obligation_id] = {
+            "state": state,
+            "artifact_status": status,
+            "operations": [operation_id],
+            "sites": sites,
+            "edit_ids": edit_ids,
+            "evidence": evidence,
+            "failure_code": failure_code,
+        }
+
+    # ONE_OF aggregation: a group is closed when at least one source-present
+    # alternative was handled; absent historical variants close as
+    # ALTERNATIVE_NOT_SELECTED.  A failed source-present alternative still fails.
+    groups: dict[str, list[str]] = {}
+    for record in getattr(obligations, "records", ()):
+        if record.spec.one_of_group:
+            groups.setdefault(record.spec.one_of_group, []).append(record.obligation_id)
+    for obligation_ids in groups.values():
+        items = [obligation_state[obligation_id] for obligation_id in obligation_ids
+                 if isinstance(obligation_state.get(obligation_id), dict)]
+        if not items:
+            continue
+        source_present = []
+        for obligation_id in obligation_ids:
+            item = obligation_state.get(obligation_id)
+            record = obligations.record(obligation_id)
+            if not isinstance(item, dict) or record is None:
+                continue
+            old_text = _compact(str(record.spec.old_text or ""))
+            present = (True if record.spec.op == "append"
+                       else bool(old_text) and old_text in before_full)
+            if present:
+                source_present.append(item)
+        if not source_present:
+            continue
+        if any(item.get("state") == "PASS" for item in source_present):
+            for item in items:
+                if item.get("state") == "FAIL" and \
+                        item.get("artifact_status") == "ALTERNATIVE_NOT_SELECTED":
+                    item["state"] = "PASS"
+            continue
+        for item in source_present:
+            if item.get("state") != "FAIL":
+                item["state"] = "FAIL"
+                item["artifact_status"] = "UNPROVEN"
+
+    for obligation_id, item in obligation_state.items():
+        if item.get("state") != "FAIL":
+            continue
+        if any(str(failure.get("obligation_id") or "") == obligation_id
+               for failure in failures):
+            continue
+        record = obligations.record(obligation_id) if obligations is not None else None
+        if record is None:
+            continue
+        failures.append({
+            "rule_id": record.spec.rule_id,
+            "operation_id": record.spec.operation_id,
+            "obligation_id": obligation_id,
+            "code": "CLAIM_OPERATION_UNPROVEN",
+            "reason": "the obligation has no artifact proof"})
+
+    return {"verified": not failures and all(
+                item.get("state") == "PASS" for item in obligation_state.values()),
+            "checked": checked, "units_checked": units_checked,
             "operations": operation_records,
             "obligations": obligation_state,
             "failures": failures[:max_failures]}
