@@ -167,6 +167,7 @@ class RecoveryAttempt:
     obligation_id: str = ""
     target_id: str = ""
     site_id: str = ""
+    source_span: str = ""
     attempt: int = 0
     budget_key: str = ""
 
@@ -184,6 +185,7 @@ class RecoveryAttempt:
             "obligation_id": self.obligation_id,
             "target_id": self.target_id,
             "site_id": self.site_id,
+            "source_span": self.source_span,
             "attempt": self.attempt,
             "budget_key": self.budget_key,
         }

@@ -182,6 +182,7 @@ def test_sweep_removal_unconfirmed_yields_to_artifact_proof():
     inspection = Inspection(["本段已删除。"])
     obligations = Ledger([SimpleNamespace(
         spec=SimpleNamespace(operation_id="G17:0", rule_id="G17", operation_index=0),
+        applicability=SimpleNamespace(status="TRUE"),
         obligation_id="G17:B1:O1")])
     replay = {"obligations": {"G17:B1:O1": {
         "state": "PASS", "artifact_status": "VERIFIED_ABSENT",
@@ -228,6 +229,19 @@ def test_no_progress_snapshot_changes_only_when_inputs_change():
     changed = _recovery_snapshot([target(operations=("G05:0", "G05:1"))], planned,
                                  inspection, replay)
     assert changed != first
+
+
+def test_artifact_text_signature_ignores_container_source_hash():
+    from fundlex.recall_pipeline import _artifact_text_signature
+    first = Inspection(["保留句", "修改后句"])
+    second = Inspection(["保留句", "修改后句"])
+    # DOCX ZIP bytes/source hashes can differ after a write even when the semantic
+    # paragraph artifact is unchanged; sweep must not treat that as progress.
+    first.source_sha256 = "zip-a"
+    second.source_sha256 = "zip-b"
+    assert _artifact_text_signature(first) == _artifact_text_signature(second)
+    second.paragraphs[1].text = "真正变化"
+    assert _artifact_text_signature(first) != _artifact_text_signature(second)
 
 
 def test_review_concurrency_keeps_rule_order_and_runs_in_parallel(monkeypatch):

@@ -77,10 +77,109 @@ def effect_proof_passed(proof: Mapping[str, Any] | None, *, operation_id: str = 
         item.get("state") == "PASS" for item in effects)
 
 
+def _delete_quote_belongs(quote: str, references: Sequence[str]) -> bool:
+    """Bind actual contract wording to this deletion, including verified variants.
+
+    A target quote is not itself an old-effect signature: it can be an already
+    satisfied business site. Require the operation's literal or bounded semantic
+    signature before treating its unchanged source wording as a residual.
+    """
+    from ..recall import _delete_keyword_bag, _keyword_bag_in_clause
+    body = _compact(quote)
+    if len(body) < 8:
+        return False
+    for reference in references:
+        old = _compact(reference)
+        if not old:
+            continue
+        if old in body or body in old:
+            return True
+        bag = _delete_keyword_bag({"operations": [{"op": "delete", "old_text": old}]}, None)
+        if bag and _keyword_bag_in_clause(body, bag):
+            return True
+    return False
+
+
+def _verified_site_closure(sites: Sequence[Mapping[str, Any]], original: Any,
+                           spec: Any) -> list[dict[str, Any]]:
+    """Keep source duplicates and split-clause tails in the required site set.
+
+    Only exact source paragraph copies inherit an established operation binding.
+    A continuation must follow an unterminated bound quote and independently
+    match that operation's reference; proximity alone never creates a site.
+    """
+    from ..recall import resolve_quote
+    spans = list(getattr(original, "paragraphs", ()))
+    index = {str(span.location): position for position, span in enumerate(spans)}
+    references = [str(getattr(spec, "old_text", "") or ""),
+                  *[str(value) for value in getattr(spec, "alternatives", ())]]
+    closed: list[dict[str, Any]] = []
+    for raw in sites:
+        site = dict(raw)
+        location = str(site.get("location") or site.get("site_id") or "")
+        if location not in index:
+            closed.append(site)
+            continue
+        span = spans[index[location]]
+        quote = str(site.get("quote") or "")
+        bound = resolve_quote(span, quote) if quote else None
+        if bound is None:
+            closed.append(site)
+            continue
+        belongs = spec.op == "delete" and _delete_quote_belongs(quote, references)
+        continuation = None
+        if spec.op == "delete" and bound and quote.rstrip()[-1:] not in "。；;！？!?":
+            # Survey may bind only the first physical paragraph of a clause. Use
+            # the source offset and one immediately following paragraph to prove
+            # that this is the operation's split effect before closing the site.
+            start = bound[0]
+            current = str(span.text)[start:]
+            for follower in spans[index[location] + 1:]:
+                follower_text = str(follower.text)
+                if not follower_text.strip():
+                    continue
+                candidate = current + follower_text
+                follows_reference = any(
+                    len(_compact(follower_text)) >= 8 and
+                    _compact(follower_text) in _compact(reference) for reference in references)
+                if (_delete_quote_belongs(candidate, references)
+                        and (not _delete_quote_belongs(current, references) or follows_reference)):
+                    continuation = follower
+                break
+        if belongs or continuation is not None:
+            start, end = bound
+            # Complete a mid-sentence locator quote in its own source paragraph.
+            if quote.rstrip()[-1:] not in "。；;！？!?":
+                terminal = re.search(r"[。；;！？!?]", str(span.text)[end:])
+                end = end + terminal.end() if terminal else len(str(span.text))
+                site["quote"] = str(span.text)[start:end]
+                if terminal is None and continuation is not None:
+                    closed.append({"location": str(continuation.location),
+                                   "quote": str(continuation.text),
+                                   "source_binding": "operation_reference_continuation"})
+        closed.append(site)
+        # Repeated body/summary paragraphs remain separate required sites. Never
+        # infer occurrence identity for the narrow G02/G04 substitution path.
+        if int(site.get("occurrence_index", -1)) >= 0:
+            continue
+        body = _compact(str(span.text))
+        if len(body) < 20:
+            continue
+        for duplicate in spans:
+            if str(duplicate.location) != location and _compact(str(duplicate.text)) == body:
+                match = resolve_quote(duplicate, str(site.get("quote") or ""))
+                if match is not None:
+                    closed.append({"location": str(duplicate.location),
+                                   "quote": str(duplicate.text)[match[0]:match[1]],
+                                   "source_binding": "exact_source_duplicate"})
+    return closed
+
+
 def evaluate_operation_effect(obligation: Any, original: Any, artifact: Any,
                               sites: Sequence[Mapping[str, Any]],
                               edits: Sequence[Mapping[str, Any]], facts: Any,
-                              *, validated_units: Sequence[Mapping[str, Any]] = ()
+                              *, validated_units: Sequence[Mapping[str, Any]] = (),
+                              authorized_new_texts: Mapping[str, Sequence[str]] | None = None
                               ) -> OperationEffect:
     spec = obligation.spec
     rule_id, operation_id = spec.rule_id, spec.operation_id
@@ -96,6 +195,7 @@ def evaluate_operation_effect(obligation: Any, original: Any, artifact: Any,
         return OperationEffect("PASS", "NOT_REQUIRED", **base, evidence=({
             "proof_kind": "certified_noop_branch", "operation_id": operation_id,
             "obligation_id": obligation_id},))
+    sites = _verified_site_closure(sites, original, spec)
     if not sites:
         return OperationEffect("OPEN", "UNPROVEN", **base,
                                failure_code="CLAIM_OPERATION_UNPROVEN", reason="verified site missing")
@@ -113,6 +213,12 @@ def evaluate_operation_effect(obligation: Any, original: Any, artifact: Any,
     results: list[dict[str, Any]] = []
     edit_ids: list[str] = []
     seen: set[str] = set()
+    # Several targets can bind different fragments in one paragraph. Retain all
+    # operation-specific source quotes before deduplicating its proof site.
+    bound_quotes: dict[str, list[str]] = {}
+    for site in sites:
+        location = str(site.get("location") or site.get("site_id") or "")
+        bound_quotes.setdefault(location, []).append(str(site.get("quote") or ""))
     for site in sites:
         location = str(site.get("location") or site.get("site_id") or "")
         occurrence = int(site.get("occurrence_index", -1))
@@ -129,8 +235,10 @@ def evaluate_operation_effect(obligation: Any, original: Any, artifact: Any,
         except (KeyError, ValueError, AttributeError, IndexError):
             results.append(item)
             continue
-        quote = str(site.get("quote") or "")
-        if not quote or _compact(quote) not in _compact(before):
+        quotes = [candidate for candidate in bound_quotes.get(location, ())
+                  if candidate and _compact(candidate) in _compact(before)]
+        quote = max(quotes, key=lambda value: len(_compact(value)), default="")
+        if not quote:
             results.append(item)
             continue
         parent_edits = [edit for edit in edits if str(edit.get("location") or "") == location]
@@ -167,9 +275,26 @@ def evaluate_operation_effect(obligation: Any, original: Any, artifact: Any,
                         break
                 expected_present = bounded and _compact(after[left + shift:right + shift]) == _compact(expected)
         old_wordings = [str(spec.old_text or ""), *getattr(spec, "alternatives", ())]
+        allowed_new = [str(value) for value in (authorized_new_texts or {}).get(location, ())
+                       if _compact(str(value)) in _compact(after)]
+        def retained_as_authorized_new(value: str) -> bool:
+            return any(_compact(value) in _compact(new) for new in allowed_new)
         # Residual is evaluated in this verified site. Source offsets never slice AFTER.
         residual = any(_compact(old) and _compact(old) in _compact(after)
-                       and _compact(old) not in _compact(expected) for old in old_wordings)
+                       and _compact(old) not in _compact(expected)
+                       and not retained_as_authorized_new(str(old)) for old in old_wordings)
+        if spec.op == "delete":
+            # The actual source wording is proof too. Canonical absence cannot
+            # certify an unchanged variant or a composite paragraph component.
+            residual = residual or any(
+                _compact(candidate) in _compact(after)
+                and _delete_quote_belongs(candidate, old_wordings)
+                and not retained_as_authorized_new(candidate) for candidate in quotes)
+            if not residual and any(str(item.get("location") or "") == location
+                                    and item.get("source_binding") ==
+                                    "operation_reference_continuation" for item in sites):
+                residual = bool(_compact(quote) and _compact(quote) in _compact(after)
+                                and not retained_as_authorized_new(quote))
         if own:
             edit_ids.extend(str(edit.get("edit_id") or
                                 f"{edit.get('rule_id')}:{edit.get('target_id')}")

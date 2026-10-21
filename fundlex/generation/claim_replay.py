@@ -958,6 +958,32 @@ def replay_claims(edits: Sequence[Mapping[str, Any]], before_inspection: Any,
     records = getattr(obligations, "records", None)
     if records is None:
         records = list((getattr(obligations, "_records", {}) or {}).values())
+    # A deletion may legitimately remove a sentence that another certified
+    # operation reintroduces in its NEW policy at this same site. Only a validated
+    # final component and its complete guide text can provide that authorization.
+    from ..recall import instantiate_slots
+    new_texts = {}
+    for record in records:
+        if record.spec.op not in {"append", "replace"}:
+            continue
+        value = str(record.spec.new_text or "")
+        try:
+            instantiated, issues = instantiate_slots(value, facts)
+            if issues:
+                continue
+            value = instantiated
+        except (AttributeError, TypeError):
+            continue
+        if value:
+            new_texts[record.spec.operation_id] = value
+    authorized_new_texts: dict[str, list[str]] = {}
+    for unit in operation_records:
+        if unit.get("verdict") != "PASS":
+            continue
+        for key in str(unit.get("operation_id") or "").split(","):
+            value = new_texts.get(key.strip())
+            if value and _compact(value) in _compact(str(unit.get("replacement") or "")):
+                authorized_new_texts.setdefault(str(unit.get("location") or ""), []).append(value)
     targets = list((targets_by_id or {}).values())
     obligation_state: dict[str, dict[str, Any]] = {}
     for record in records:
@@ -1004,7 +1030,8 @@ def replay_claims(edits: Sequence[Mapping[str, Any]], before_inspection: Any,
                 continue
             sites.append({"location": location, "quote": before_text})
         result = evaluate_operation_effect(record, before_inspection, after_inspection,
-                                          sites, effect_edits, facts, validated_units=own_records)
+            sites, effect_edits, facts, validated_units=own_records,
+            authorized_new_texts=authorized_new_texts)
         obligation_state[record.obligation_id] = result.as_dict()
 
     # Explicit ONE_OF wording alternatives share only their verified BUSINESS SITE.

@@ -228,6 +228,42 @@ def test_budget_is_scoped_to_one_obligation_identity():
     assert orchestrator.decide(second, history).action is RecoveryAction.RETRY_DETERMINISTIC
 
 
+def test_retry_budget_survives_target_renumbering_for_same_operation_site():
+    """Inventory refreshes may replace a target id without changing its subject."""
+    orchestrator = RecoveryOrchestrator()
+    history = RecoveryHistory()
+    first = RecoveryContext(stage="audit", rule_id="G01", operation_id="G01:0",
+                            obligation_id="G01:B1:O1", target_id="T005", site_id="p92",
+                            error_code="AUDIT_NOT_COMPLETED", reason="append missing",
+                            failure_class=FailureClass.GENERATION)
+    decision = orchestrator.decide(first, history)
+    assert decision.action is RecoveryAction.RETRY_DETERMINISTIC
+    orchestrator.record(history, first, decision, outcome="failed")
+    renumbered = RecoveryContext(stage="audit", rule_id="G01", operation_id="G01:0",
+                                 obligation_id="G01:B1:O1", target_id="T001", site_id="p92",
+                                 error_code="AUDIT_NOT_COMPLETED", reason="append missing",
+                                 failure_class=FailureClass.GENERATION)
+    # The deterministic action has already been attempted for this operation/site;
+    # target renumbering must not grant a second copy of the same action.
+    assert orchestrator.decide(renumbered, history).action is RecoveryAction.LLM_COMPOSE
+
+
+def test_same_paragraph_independent_occurrences_keep_separate_recovery_budget():
+    orchestrator = RecoveryOrchestrator()
+    history = RecoveryHistory()
+    first = RecoveryContext(stage="audit", rule_id="G02", operation_id="G02:0",
+        target_id="T1", site_id="p4", failure_class=FailureClass.GENERATION,
+        error_code="AUDIT_NOT_COMPLETED", reason="occurrence missing",
+        metadata={"source_span": "5:10"})
+    decision = orchestrator.decide(first, history)
+    orchestrator.record(history, first, decision, outcome="failed")
+    second = RecoveryContext(stage="audit", rule_id="G02", operation_id="G02:0",
+        target_id="T2", site_id="p4", failure_class=FailureClass.GENERATION,
+        error_code="AUDIT_NOT_COMPLETED", reason="occurrence missing",
+        metadata={"source_span": "20:25"})
+    assert orchestrator.decide(second, history).action is RecoveryAction.RETRY_DETERMINISTIC
+
+
 def test_audit_contexts_keep_target_identity_and_classify_missing_verdicts():
     from fundlex.recall_pipeline import _audit_recovery_contexts
 

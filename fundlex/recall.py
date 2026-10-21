@@ -919,8 +919,14 @@ def scope_map(rules: Sequence[dict], sections: Sequence[Section], gateway: Any,
               gaps: list[dict[str, Any]] | None = None) -> dict[str, list[str]]:
     structure = structure_context(sections)
     valid_ids = {section.id for section in sections}
-    rule_ids = {rule["rule_id"] for rule in rules}
-    mapping: dict[str, list[str]] = {rule_id: [] for rule_id in rule_ids}
+    # Preserve guide order when constructing the mapping.  The previous set based
+    # comprehension made the insertion order depend on PYTHONHASHSEED, so a
+    # record run and a fresh replay could build the same scope with different
+    # rule ordering.  That changed inventory window prompt bytes and caused a
+    # cassette miss even though all semantic inputs were identical.
+    mapping: dict[str, list[str]] = {
+        str(rule["rule_id"]): [] for rule in rules if rule.get("rule_id")
+    }
     mentioned: set[str] = set()
 
     def _run(batch: Sequence[dict]) -> None:
@@ -3720,6 +3726,23 @@ def _plan_target_inner(rule: dict, target: Target, inspection: DocumentInspectio
         if variant is None:
             continue
         start_raw, end_raw, ratio = variant
+        # Survey fuzzy windows can stop just before the source sentence ends.
+        # Matching that already-truncated window again cannot see the remaining
+        # characters, so a whole-sentence policy would leave a dangling tail.
+        # Rebind only a proved near-identical clause in the SAME paragraph, with
+        # the same start and a bounded sentence terminator; otherwise fail closed.
+        if (_compact(old_text).endswith(tuple("。！？；"))
+                and actual[:end_raw].rstrip()[-1:] not in "。！？；"):
+            bound = fuzzy_span_clause(span.text, old_text, threshold=VARIANT_MATCH_RATIO)
+            if (bound is None or bound[0] != target.start + start_raw
+                    or bound[1] < target.end or bound[1] - target.end > 12
+                    or span.text[bound[1] - 1:bound[1]] not in "。！？；"
+                    or not containing_segment(span, target.start, bound[1])):
+                raise RecallError("RECALL_VARIANT_CLAUSE_INCOMPLETE", {"target": target.target_id})
+            target.end = bound[1]
+            actual = span.text[target.start:target.end]
+            end_raw = len(actual)
+            ratio = bound[2]
         replacement = actual[:start_raw] + instantiated + actual[end_raw:]
         if _same_compact(replacement, actual):
             continue
@@ -3979,7 +4002,8 @@ def _component(edit: PlannedEdit, inspection: DocumentInspection) -> dict[str, A
     }
 
 
-def _atomic_paragraph_edits(planned: Sequence[PlannedEdit], inspection: DocumentInspection
+def _atomic_paragraph_edits(planned: Sequence[PlannedEdit], inspection: DocumentInspection,
+                            obligations: Any = None
                             ) -> list[PlannedEdit]:
     from .generation.atomic import compose_paragraph
     by_location: dict[str, list[PlannedEdit]] = {}
@@ -3990,6 +4014,14 @@ def _atomic_paragraph_edits(planned: Sequence[PlannedEdit], inspection: Document
         # Composed changes require their own joint semantic review. Deterministic
         # candidates can combine without another model request.
         if len(entries) < 2 or any("compose" in edit.content_source for edit in entries):
+            result.extend(entries)
+            continue
+        if any(max(left.start, right.start) < min(left.end, right.end)
+               and _operations_are_alternatives(left, right, obligations)
+               for index, left in enumerate(entries) for right in entries[index + 1:]):
+            # Historical wording alternatives represent one effect. Let the
+            # existing explicit ONE_OF merge choose the containing variant before
+            # any paragraph composition can apply the same policy twice.
             result.extend(entries)
             continue
         paragraph = inspection.by_location(location).text
@@ -4532,7 +4564,7 @@ def plan_edits(rules_by_id: dict[str, dict], targets: Sequence[Target], inspecti
                        "operation_keys": list(edit.operation_keys),
                        "obligation_ids": list(edit.obligation_ids)})
     baseline = list(planned)
-    planned = _atomic_paragraph_edits(planned, inspection)
+    planned = _atomic_paragraph_edits(planned, inspection, obligations)
     merged, conflicts, covered = merge_edits(planned, inspection, obligations)
     if conflicts and _tier1_enabled():
         planned, conflicts = _resolve_overlaps_with_joint_compose(

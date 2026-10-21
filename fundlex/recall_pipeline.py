@@ -386,6 +386,109 @@ def _recovery_snapshot(targets: Sequence[Target], planned: dict[str, Any],
                           .encode("utf-8")).hexdigest()
 
 
+def _artifact_text_signature(actual: DocumentInspection) -> str:
+    """Fingerprint the semantic artifact state, excluding DOCX container bytes.
+
+    A DOCX write refreshes ZIP entry timestamps and can therefore change
+    ``source_sha256`` even when every paragraph is byte-for-byte identical. Sweep
+    recovery must only be allowed to perform a second pass after a meaningful
+    artifact text/structure change.
+    """
+    from .frozen import digest
+    paragraphs = [(str(span.location), str(span.text), str(getattr(span, "zone", "")),
+                   str(getattr(span, "part_uri", "")), str(getattr(span, "section_path", "")))
+                  for span in actual.paragraphs]
+    return digest({"paragraphs": paragraphs, "parts": list(getattr(actual, "parts", ()) or ()),
+                   "has_toc_field": bool(getattr(actual, "has_toc_field", False))})
+
+
+def _sweep_recovery_contexts(pending: Sequence[dict[str, Any]], targets: Sequence[Target],
+                             planned: dict[str, Any], replay: dict[str, Any],
+                             rules_by_id: dict[str, dict] | None = None) -> list[Any]:
+    """Route a sweep candidate by the missing layer at its own business site.
+
+    A model's GENERATION/TARGET hint cannot make an existing, attributed target
+    disappear. Reuse the same operation-specific root-cause classifier as Audit;
+    only a genuinely unbound site needs target discovery.
+    """
+    from .recovery import FailureClass, RecoveryContext
+    contexts = []
+    seen = set()
+    for finding in pending:
+        rule_id = str(finding.get("rule_id") or "")
+        location = str(finding.get("location") or "")
+        own = [target for target in targets if target.rule_id == rule_id
+               and target.location == location and not target.out_of_scope
+               and target.operations and target.state != "absent"]
+        if own:
+            operation_id = str(finding.get("operation_id") or "")
+            if not operation_id and rules_by_id:
+                quote = _compact(str(finding.get("quote") or ""))
+                rule = rules_by_id.get(rule_id) or {}
+                matches = [f"{rule_id}:{index}" for index, operation in
+                           enumerate(rule.get("operations") or [])
+                           if _compact(str(operation.get("old_text") or ""))
+                           and (_compact(str(operation.get("old_text") or "")) in quote
+                                or quote in _compact(str(operation.get("old_text") or "")))]
+                if len(matches) == 1:
+                    operation_id = matches[0]
+            target = next((item for item in own if operation_id in item.operations), None)
+            if target is None and len(own) == 1 and len(own[0].operations) == 1:
+                target, operation_id = own[0], own[0].operations[0]
+            if target is None or not operation_id:
+                routed = [RecoveryContext(stage="sweep", rule_id=rule_id, site_id=location,
+                    target_id=own[0].target_id, error_code="SWEEP_OPERATION_UNBOUND",
+                    failure_class=FailureClass.TARGET,
+                    reason=str(finding.get("reason") or ""),
+                    metadata={"finding_id": str(finding.get("finding_id") or "")})]
+            else:
+                matching_failure = next((failure for failure in replay.get("failures") or []
+                    if str(failure.get("operation_id") or "") == operation_id
+                    and str(failure.get("location") or "") == location), None)
+                if matching_failure:
+                    # Claim failures carry the authoritative root cause. In
+                    # particular, CLAIM_OPERATION_NOT_PLANNED/UNPROVEN with an
+                    # existing target is TARGET_EXISTS_NO_PLAN and therefore
+                    # Generation recovery; classify(code) alone would incorrectly
+                    # route it back to Target discovery.
+                    failure = {**matching_failure,
+                               "rule_id": matching_failure.get("rule_id") or rule_id,
+                               "location": matching_failure.get("location") or location,
+                               "target_id": matching_failure.get("target_id") or target.target_id,
+                               "operation_id": operation_id,
+                               "reason": matching_failure.get("reason") or finding.get("reason")}
+                    routed_context = _claim_failure_context(
+                        failure, targets, planned.get("edits") or [])
+                    routed_context.stage = "sweep"
+                    routed_context.metadata = {
+                        **routed_context.metadata,
+                        "finding_id": str(finding.get("finding_id") or ""),
+                        "source_span": f"{target.start}:{target.end}",
+                    }
+                    routed = [routed_context]
+                else:
+                    routed = [RecoveryContext(stage="sweep", rule_id=rule_id,
+                        operation_id=operation_id, obligation_id=operation_id,
+                        target_id=target.target_id, site_id=location,
+                        error_code="SWEEP_EFFECT_UNRESOLVED",
+                        failure_class=FailureClass.GENERATION,
+                        reason=str(finding.get("reason") or ""),
+                        metadata={"finding_id": str(finding.get("finding_id") or ""),
+                                  "source_span": f"{target.start}:{target.end}"})]
+        else:
+            routed = [RecoveryContext(stage="sweep", rule_id=rule_id, site_id=location,
+                operation_id=str(finding.get("operation_id") or ""),
+                error_code="SWEEP_TARGET_UNBOUND", failure_class=FailureClass.TARGET,
+                reason=str(finding.get("reason") or ""),
+                metadata={"finding_id": str(finding.get("finding_id") or "")})]
+        for context in routed:
+            key = _audit_context_key(context)
+            if key not in seen:
+                seen.add(key)
+                contexts.append(context)
+    return contexts
+
+
 def _claim_failure_context(failure: dict, targets: Sequence[Target], edits: Sequence[dict]) -> Any:
     """Route the missing layer, retaining the dirty operation and business site."""
     from .generation.effects import operation_units
@@ -924,11 +1027,28 @@ def _plan_and_generate(model: Any, rules_by_id: dict[str, dict], targets: Sequen
     from .recall import target_site_ok
     for target in targets:
         if (target.state == "needs_edit" and not target.out_of_scope
-                and not target.composite and target.resolution == "resolved"):
+                and target.resolution in {"resolved", "composite"}):
+            # Composite quotes still need the rule-specific business-site guard.
+            # Structural cross-paragraph resolution alone must not turn a sibling
+            # clause into a valid target (for example G06 versus generic business
+            # rule text); G16/G17 fee composites pass their own anchors.
             try:
                 span = inspection.by_location(target.location)
             except DocxError:
                 continue
+            if target.composite:
+                # Use only the bound source slices, including an anchor split
+                # across paragraphs, rather than borrowing a neighbour's clause.
+                from types import SimpleNamespace
+                pieces = []
+                try:
+                    for part in target.composite:
+                        location, start, end = part.rsplit(":", 2)
+                        body, _ = compact_offsets(inspection.by_location(location).text)
+                        pieces.append(body[int(start):int(end)])
+                except (ValueError, DocxError):
+                    continue  # The planner retains its structural failure diagnosis.
+                span = SimpleNamespace(location=target.location, text="".join(pieces))
             if not target_site_ok(target.rule_id, span, inspection):
                 target.out_of_scope = True
                 target.reason = f"{target.reason}|TARGET_SOURCE_MISMATCH"
@@ -1093,6 +1213,161 @@ def _review_concurrency(model: Any, rule_count: int) -> int:
     return max(1, min(requested, budget_limit, max(1, rule_count)))
 
 
+def _local_operation_proofs(proof: Any, operation_id: str, obligation_id: str,
+                            location: str) -> list[dict[str, Any]]:
+    """Select one operation's actual site; an aggregate PASS cannot lend a site."""
+    if not isinstance(proof, dict) or proof.get("operation_id") != operation_id \
+            or proof.get("obligation_id") != obligation_id:
+        return []
+    evidence = [item for item in proof.get("evidence") or []
+                if str(item.get("location") or item.get("site_id") or "") == location
+                and item.get("operation_id") == operation_id
+                and item.get("obligation_id") == obligation_id]
+    if not evidence:
+        return []
+    effects = proof.get("site_effects") or []
+    local = [effect for effect in effects
+             if str(effect.get("location") or effect.get("site_id") or "") == location]
+    if local:
+        return [{**proof, **effect, "sites": [effect.get("site_id") or location], "evidence": evidence,
+                 "site_effects": [effect]} for effect in local]
+    # Older fixtures have no per-site coordinates. Their aggregate proof is
+    # usable only when it explicitly includes the requested site's evidence.
+    if not any(effect.get("location") or effect.get("site_id") for effect in effects):
+        return [proof]
+    return []
+
+
+def _quote_is_expected_effect(quote: str, record: Any, facts: Facts | None, *,
+                              edits: Sequence[dict[str, Any]] = (), location: str,
+                              before_text: str = "", actual_text: str = "",
+                              target_id: str = "", obligations: Any = None,
+                              proofs: dict[str, Any] | None = None) -> bool:
+    """An exact quote of authorized new wording is not contradictory evidence.
+
+    Only the quoted operation's instantiated policy or final component may
+    authorize it. Unchanged source wording and sibling components cannot do so.
+    The caller separately requires this operation/site's complete effect proof.
+    """
+    from .generation.effects import effect_proof_passed, operation_units
+    compact = _compact(quote)
+    if not compact or record.spec.op not in {"append", "replace"}:
+        return False
+    expected = str(record.spec.new_text or "")
+    if facts is not None:
+        expected, issues = instantiate_slots(expected, facts)
+        if issues:
+            expected = ""
+    elif "{" in expected:
+        expected = ""
+    references = [str(record.spec.old_text or ""), *record.spec.alternatives]
+    old_parts = [_compact(sentence) for reference in references
+                 for sentence in re.split(r"(?<=[。；;])", reference)
+                 if len(_compact(sentence)) >= 8]
+    if any(part in compact or compact in part for part in old_parts):
+        return False
+    if expected and compact in _compact(expected):
+        return True
+    authorized_units = [(parent, component) for parent, component in
+                        operation_units(edits, record.spec.operation_id)
+                        if str(component.get("location") or parent.get("location") or "") == location
+                        and (not target_id or str(component.get("target_id") or "") == target_id)]
+    # A paragraph quote may include preserved source or an authorized sibling.
+    # Rebuild it only from components whose replacement is exactly guide policy
+    # (or an exact bounded splice). Merely appearing in compose output, fixed_text
+    # evidence, or the final parent edit does not authorize an extra assertion.
+    if len(_compact(expected)) >= 8 and _compact(expected) in compact and actual_text \
+            and authorized_units and before_text and obligations is not None and proofs:
+        from .generation.atomic import compose_paragraph
+        components = []
+        for parent in edits:
+            if str(parent.get("location") or "") != location:
+                continue
+            for component in parent.get("components") or [parent]:
+                keys = list(component.get("operation_keys") or
+                            (component.get("evidence") or {}).get("operation_keys") or [])
+                if len(keys) != 1:
+                    return False
+                owner = obligations.record(keys[0])
+                if owner is None or owner.applicability.status != "TRUE":
+                    return False
+                local = _local_operation_proofs(proofs.get(owner.obligation_id),
+                    owner.spec.operation_id, owner.obligation_id, location)
+                if not local or not all(effect_proof_passed(proof) for proof in local):
+                    return False
+                try:
+                    start, end = int(component["start"]), int(component["end"])
+                except (KeyError, TypeError, ValueError):
+                    return False
+                if not 0 <= start <= end <= len(before_text):
+                    return False
+                source = before_text[start:end]
+                replacement = str(component.get("replacement") or "")
+                fixed = str(owner.spec.new_text or "")
+                if facts is not None:
+                    fixed, issues = instantiate_slots(fixed, facts)
+                    if issues:
+                        return False
+                authorized = owner.spec.op == "delete" and not replacement
+                if owner.spec.op in {"replace", "append"}:
+                    authorized = _compact(replacement) == _compact(fixed)
+                    old = str(owner.spec.old_text or "")
+                    if old and source.count(old) == 1:
+                        authorized |= source.replace(old, fixed, 1) == replacement
+                if not authorized:
+                    return False
+                components.append({**component, "expected_old_text": source})
+        rebuilt = compose_paragraph(before_text, components) if components else None
+        return rebuilt is not None and rebuilt == actual_text and compact in _compact(rebuilt)
+    return False
+
+
+def _quote_confirms_class_facts(quote: str, facts: Facts | None) -> bool:
+    """Recognize literal class-set/fee evidence that agrees with certified Facts.
+
+    Exact source presence alone cannot prove a review's contrary interpretation.
+    This bounded grammar accepts only explicit enumeration and fee statements;
+    unfamiliar semantics stay reviewable instead of being guessed.
+    """
+    from .fact_evidence import class_labels
+    if facts is None or not facts.value_verified or not facts.set_complete_verified \
+            or any(facts.status_of(name) != "VERIFIED" for name in (
+                "share_class_structure", "subscription_fee_group", "service_fee_group")):
+        return False
+    current = list(facts.current_classes)
+    if not current or any(not facts.quotes_verified.get(f"class:{item.name}", False)
+                          for item in current):
+        return False
+    entries = {next(iter(labels)): item for item in current
+               if len(labels := class_labels(item.name)) == 1}
+    if len(entries) != len(current):
+        return False
+
+    def flag(text: str, pattern: str) -> bool | None:
+        negative = bool(re.search("不" + pattern, text))
+        positive = bool(re.search(pattern, re.sub("不" + pattern, "", text)))
+        return None if positive == negative else positive
+
+    clauses = [part for part in re.split(r"[。；;]", _compact(quote)) if part]
+    if not clauses:
+        return False
+    for clause in clauses:
+        labels = class_labels(clause)
+        if not labels or not labels <= set(entries):
+            return False
+        if re.search(r"分为|分设|设置|设立|分成", clause):
+            if labels != set(entries) or re.search(r"收取|计提", clause):
+                return False
+            continue
+        subscription = flag(clause, r"收取(?:认购[、及和/])?申购(?:费用|费)")
+        service = flag(clause, r"(?:收取|计提)销售服务费")
+        if subscription is None or service is None or any(
+                item.subscription_fee != subscription or item.service_fee != service
+                for label, item in entries.items() if label in labels):
+            return False
+    return True
+
+
 def _run_audit(model: Any, rules_by_id: dict[str, dict], targets: Sequence[Target],
                planned: dict[str, Any], original: DocumentInspection, actual: DocumentInspection,
                *, only_rules: set[str] | None = None, facts: Facts | None = None,
@@ -1232,20 +1507,38 @@ def _run_audit(model: Any, rules_by_id: dict[str, dict], targets: Sequence[Targe
                             "affected_obligation": str(item.get("affected_obligation") or "")})
             result = results[-1]
             result["site_signature"] = _audit_site_signature(rule_id, targets, planned, actual)
-            if not verified:
+            if not verified or verdict in {"wrong", "incomplete"}:
                 from .generation.effects import effect_proof_passed
                 owned = [record for record in (obligations.records if obligations is not None else [])
                          if node is not None and record.spec.operation_id in node.operations
                          and record.applicability.status == "TRUE"]
-                proven = bool(owned) and all(effect_proof_passed(artifact_proofs.get(record.obligation_id),
-                                             operation_id=record.spec.operation_id,
-                                             obligation_id=record.obligation_id)
-                                             for record in owned)
+                local = {record.obligation_id: _local_operation_proofs(
+                    artifact_proofs.get(record.obligation_id), record.spec.operation_id,
+                    record.obligation_id, node.location) for record in owned}
+                proven = bool(owned) and all(local[record.obligation_id] and all(
+                    effect_proof_passed(proof, operation_id=record.spec.operation_id,
+                                        obligation_id=record.obligation_id)
+                    for proof in local[record.obligation_id]) for record in owned)
                 contradicted = any(
                     str(failure.get("location") or "") == (node.location if node else "")
+                    and failure.get("operation_id") in {record.spec.operation_id for record in owned}
                     for failure in artifact_failures)
-                result["review_status"] = "REVIEW_UNPROVEN"
-                result["artifact_proven"] = proven and not contradicted
+                expected_quote = bool(verified and node is not None and any(
+                    _quote_is_expected_effect(evidence, record, facts,
+                        edits=planned.get("edits") or [], location=node.location,
+                        before_text=evidence_before, actual_text=evidence_after,
+                        target_id=node.target_id, obligations=obligations,
+                        proofs=artifact_proofs)
+                    for record in owned))
+                certified_fact_quote = (verified and str(item.get("failure_class") or "").upper()
+                                        == "FACT" and _quote_confirms_class_facts(evidence, facts))
+                if not verified or expected_quote or certified_fact_quote:
+                    result["review_status"] = "REVIEW_UNPROVEN"
+                    result["artifact_proven"] = proven and not contradicted
+                    if expected_quote:
+                        result["review_evidence_status"] = "EXPECTED_EFFECT_QUOTED_AS_ERROR"
+                    elif certified_fact_quote:
+                        result["review_evidence_status"] = "CERTIFIED_FACT_QUOTED_AS_ERROR"
         for item in value.get("missed_targets") or []:
             if not isinstance(item, dict):
                 dropped.append({"code": "AUDIT_MISSED_ITEM_INVALID", "rule_id": rule_id})
@@ -2143,12 +2436,21 @@ def _sweep_batch(model: Any, rules_by_id: dict[str, dict], requirements: str,
             paragraph_text = span.text if span is not None else ""
             allowed = (rule_locations or {}).get(rule_id)
             scope_correction = outside_window or allowed is not None and location not in allowed
-            if scope_correction:
-                if not _scope_correction_valid(rule, span, quote, actual):
-                    chunk_ledger["dropped"].append({"code": "SWEEP_LOCATION_OUT_OF_SCOPE",
-                                                    "chunk": chunk.id, "rule_id": rule_id,
-                                                    "location": location, "quote": _clip(quote, 80)})
-                    continue
+            # A mapped window is not proof that the quote carries this rule's
+            # business clause. Keep unknown wording candidates when the semantic
+            # site anchor fits; outside-scope candidates still need the stronger
+            # existing reference/variant check before correcting the routing.
+            from .recall import target_site_ok
+            if not target_site_ok(rule_id, span, actual):
+                chunk_ledger["dropped"].append({"code": "SWEEP_SEMANTIC_SITE_INVALID",
+                                                "chunk": chunk.id, "rule_id": rule_id,
+                                                "location": location, "quote": _clip(quote, 80)})
+                continue
+            if scope_correction and not _scope_correction_valid(rule, span, quote, actual):
+                chunk_ledger["dropped"].append({"code": "SWEEP_LOCATION_OUT_OF_SCOPE",
+                                                "chunk": chunk.id, "rule_id": rule_id,
+                                                "location": location, "quote": _clip(quote, 80)})
+                continue
             if facts is not None:
                 applicable = [operation for operation in (rule.get("operations") or [])
                               if condition_matches(operation.get("condition"), facts)]
@@ -2189,13 +2491,13 @@ def _delivery_complete(unresolved: Sequence[dict[str, Any]]) -> bool:
 
 def _apply_artifact_proof_to_findings(findings: list[dict[str, Any]], replay: dict[str, Any],
                                       actual: DocumentInspection, obligations: Any,
-                                      rules_by_id: dict[str, dict]) -> None:
-    """Resolve only "removal unconfirmed" sweep findings with obligation artifact proof.
+                                      rules_by_id: dict[str, dict], *, facts: Facts | None = None,
+                                      edits: Sequence[dict[str, Any]] = (),
+                                      original: DocumentInspection | None = None) -> None:
+    """Arbitrate sweep opinions against the same operation's local artifact proof.
 
-    A finding whose exact quote still resolves in the artifact is a confirmed residual and
-    always blocks.  A finding that merely says "I did not see a deletion confirmation"
-    cannot override a Claim Replay ``VERIFIED_ABSENT`` / ``EXPECTED_EFFECT_PRESENT`` proof
-    for the same obligation (plan §36–§38, D11 G17).
+    Exact old-effect residuals block. An unsupported removal opinion or a quote of
+    authorized new wording cannot overturn a conclusive proof at that same site.
     """
     states = {str(key): value for key, value in (replay.get("obligations") or {}).items()
               if isinstance(value, dict)}
@@ -2207,19 +2509,26 @@ def _apply_artifact_proof_to_findings(findings: list[dict[str, Any]], replay: di
         location = str(finding.get("location") or "")
         operation_id = str(finding.get("operation_id") or "")
         related = []
+        related_records = []
         for obligation_id, state in states.items():
             record = obligations.record(obligation_id) if obligations is not None else None
             if (record is not None and record.spec.rule_id == rule_id
                     and (not operation_id or operation_id == record.spec.operation_id)
                     and state.get("operation_id") == record.spec.operation_id
                     and state.get("obligation_id") == record.obligation_id
-                    and any(str(evidence.get("location") or evidence.get("site_id") or "") == location
-                            for evidence in state.get("evidence") or [])):
-                related.append(state)
+                    and getattr(getattr(record, "applicability", None), "status", "UNKNOWN") == "TRUE"):
+                local = _local_operation_proofs(state, record.spec.operation_id,
+                                                record.obligation_id, location)
+                if local:
+                    related.extend(local)
+                    related_records.append(record)
         quote = _compact(str(finding.get("quote") or ""))
-        body = ""
+        body = artifact_text = source_text = ""
         try:
-            body = _compact(str(actual.by_location(str(finding.get("location") or "")).text))
+            artifact_text = str(actual.by_location(location).text)
+            body = _compact(artifact_text)
+            if original is not None:
+                source_text = str(original.by_location(location).text)
         except Exception:  # noqa: BLE001
             body = ""
         residual = bool(quote and quote in body)
@@ -2236,25 +2545,24 @@ def _apply_artifact_proof_to_findings(findings: list[dict[str, Any]], replay: di
         quote_matches_old = any(
             sentence in quote or (len(quote) >= 8 and quote in sentence)
             for sentence in old_sentences)
-        authorized = _compact("".join(
-            str(operation.get("new_text") or "")
-            for operation in rule.get("operations") or []))
-        if residual and quote_matches_old and quote not in authorized:
+        expected_quote = finding.get("issue") == "wrong_text" and residual and any(_quote_is_expected_effect(
+            str(finding.get("quote") or ""), record, facts, edits=edits,
+            location=location, before_text=source_text, actual_text=artifact_text, obligations=obligations,
+            proofs=states) for record in related_records)
+        if residual and quote_matches_old and not expected_quote:
             finding["proof_kind"] = "RESIDUAL_CONFIRMED"
             continue
         if not related or not all(effect_proof_passed(state) for state in related):
             finding["proof_kind"] = "SEMANTIC_UNCERTAIN"
             continue
-        if finding.get("issue") == "wrong_text" and residual:
-            # Exact evidence of a semantic objection needs adjudication; mere
-            # presence of the fixed text does not disprove every business mismatch.
+        if finding.get("issue") == "wrong_text" and residual and not expected_quote:
             finding["proof_kind"] = "SEMANTIC_UNCERTAIN"
             continue
         statuses = sorted({str(state.get("artifact_status") or "") for state in related})
         finding["status"] = "resolved"
         finding["resolution"] = "artifact_proof"
         finding["resolution_evidence"] = ",".join(statuses)
-        finding["proof_kind"] = "REMOVAL_UNCONFIRMED"
+        finding["proof_kind"] = "REVIEW_UNPROVEN" if expected_quote else "REMOVAL_UNCONFIRMED"
 
 
 def _resolve_pending(findings: list[dict[str, Any]], batch_ledger: dict[str, Any], *,
@@ -3351,7 +3659,8 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
                     not in {"planned", "satisfied", "not_applicable"}]
                 audit_issues = _audit_issues(audit_state, targets)
                 _apply_artifact_proof_to_findings(findings, replay, actual,
-                                                  obligation_ledger, rules_by_id)
+                                                  obligation_ledger, rules_by_id,
+                                                  facts=facts, edits=planned.get("edits") or [], original=inspection)
                 pending_findings = [finding for finding in findings
                                     if finding["status"] in {"pending", "unresolved"}]
                 unresolved[:] = [item for item in unresolved
@@ -3438,18 +3747,60 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
             report["sweep"] = {"chunks": swept_calls, "findings": findings,
                                "rounds": sweep_rounds, "gaps": gaps,
                                "blind_windows": blind_windows}
+            sweep_recovery = RecoveryHistory([*audit_recovery.attempts,
+                                               *recovery_history.attempts])
+            sweep_history_start = len(sweep_recovery.attempts)
             while len(sweep_rounds) < 2:
                 _apply_artifact_proof_to_findings(findings, replay, actual,
-                                                  obligation_ledger, rules_by_id)
+                                                  obligation_ledger, rules_by_id,
+                                                  facts=facts, edits=planned.get("edits") or [], original=inspection)
                 pending = [finding for finding in findings if finding["status"] == "pending"]
                 if not pending or rounds_used >= max_business_rounds:
                     break
-                affected_rules = {finding["rule_id"] for finding in pending}
-                absorbed = _absorb_sweep_findings(pending, targets, synthetic, origins, inspection,
-                                                  rules_by_id=rules_by_id, facts=facts)
-                notes = _finding_repair_notes(pending, entries)
-                if not notes and not absorbed:
+                contexts = _sweep_recovery_contexts(pending, targets, planned, replay,
+                                                    rules_by_id=rules_by_id)
+                decisions = []
+                for context in contexts:
+                    stalled = any(
+                        item.action is RecoveryAction.MARK_UNRESOLVED
+                        and "unchanged" in item.detail
+                        and RecoveryHistory._same_subject(item, context)
+                        for item in sweep_recovery.attempts)
+                    if stalled and context.resolved_class is not FailureClass.TARGET:
+                        audit_orchestrator.record(sweep_recovery, context,
+                            RecoveryDecision(RecoveryAction.MARK_UNRESOLVED,
+                                             "RECOVERY_NO_PROGRESS"),
+                            outcome="unresolved", detail="RECOVERY_NO_PROGRESS:known unchanged operation/site")
+                        continue
+                    decision = audit_orchestrator.decide(context, sweep_recovery)
+                    if decision.terminal:
+                        audit_orchestrator.record(sweep_recovery, context, decision,
+                            outcome="unresolved", detail="no safe sweep repair layer")
+                    else:
+                        decisions.append((context, decision))
+                if not decisions:
                     break
+                affected_rules = {context.rule_id for context, _ in decisions}
+                dirty_locations = {context.site_id for context, _ in decisions if context.site_id}
+                target_sites = {(context.rule_id, context.site_id) for context, _ in decisions
+                                if context.resolved_class is FailureClass.TARGET}
+                target_findings = [finding for finding in pending
+                    if (finding["rule_id"], finding["location"]) in target_sites]
+                absorbed = _absorb_sweep_findings(target_findings, targets, synthetic, origins,
+                    inspection, rules_by_id=rules_by_id, facts=facts) if target_findings else 0
+                if absorbed:
+                    targets = _collect_targets(entries, synthetic, rules_by_id, inspection)
+                    report.setdefault("target_attribution", []).extend(
+                        assign_target_operations(targets, rules_by_id, inspection, facts,
+                                                 obligation_ledger))
+                # A code-bound sweep target is already usable. Only still-unbound
+                # sites need an inventory window, and that window may replace only
+                # the dirty operation/sites, preserving every unaffected target.
+                undiscovered = [finding for finding in target_findings if not any(
+                    target.rule_id == finding["rule_id"] and target.location == finding["location"]
+                    and not target.out_of_scope and target.operations
+                    and target.resolution in {"resolved", "composite"} for target in targets)]
+                notes = _finding_repair_notes(undiscovered, entries)
                 rounds_used += 1
                 round_number += 1
                 sweep_affected = _affected_windows(entries, notes)
@@ -3457,35 +3808,54 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
                 for entry in sweep_affected:
                     _inventory(entry, notes[entry.window.id], facts, model, inspection,
                                round_number=round_number)
-                targets = _collect_targets(entries, synthetic, rules_by_id, inspection)
-                _run_survey(model, rules, rules_by_id, facts, inspection, targets,
-                            synthetic, origins, survey_ledger, coverage_gaps, sections)
-                targets = _collect_targets(entries, synthetic, rules_by_id, inspection)
+                if sweep_affected:
+                    discovered = _collect_targets(entries, synthetic, rules_by_id, inspection)
+                    targets = [target for target in targets
+                               if (target.rule_id, target.location) not in target_sites]
+                    targets.extend(target for target in discovered
+                                   if (target.rule_id, target.location) in target_sites)
+                dirty_targets = [target for target in targets if target.location in dirty_locations]
                 report["rebind"] = _rebind_unresolved_targets(
-                    targets, origins, inspection, rules_by_id=rules_by_id, facts=facts)
+                    dirty_targets, origins, inspection, rules_by_id=rules_by_id, facts=facts)
                 report.setdefault("target_attribution", []).extend(
-                    assign_target_operations(targets, rules_by_id, inspection, facts,
+                    assign_target_operations(dirty_targets, rules_by_id, inspection, facts,
                                              obligation_ledger))
                 targets, duplicates = dedupe_operation_targets(
                     targets, rules_by_id, inspection)
                 if duplicates:
                     report.setdefault("duplicate_targets", []).extend(duplicates)
                 report.setdefault("target_locator", []).extend(
-                    locate_unresolved_targets(targets, inspection, rules_by_id, facts, model))
+                    locate_unresolved_targets([target for target in dirty_targets
+                        if (target.rule_id, target.location) in target_sites],
+                        inspection, rules_by_id, facts, model))
                 for target in targets:
                     origins.setdefault(target.target_id, "T3_open_rule")
-                before_repair_sha = actual.source_sha256
+                before_repair_signature = _artifact_text_signature(actual)
                 planned, edits, plan, artifacts, actual = _plan_and_generate(
                     model, rules_by_id, targets, inspection, facts, input_path, temp_dir,
                     max_compose_calls=compose_calls, obligations=obligation_ledger,
-                    frozen_run=frozen_run)
+                    frozen_run=frozen_run, existing_plan=planned,
+                    dirty_locations=dirty_locations if any(
+                        context.resolved_class is not FailureClass.EXECUTION
+                        for context, _ in decisions) else None)
                 report["plan"] = _plan_ledger(planned, plan)
                 components_by_rule, required_terms_by_rule = _claim_maps(planned)
                 replay = _replay(planned)
                 report["artifact_claim_replay"] = replay
-                if actual.source_sha256 == before_repair_sha:
+                if _artifact_text_signature(actual) == before_repair_signature:
                     no_progress_stop_count += 1
+                    for context, decision in decisions:
+                        audit_orchestrator.record(sweep_recovery, context, decision,
+                            outcome="unresolved", detail="RECOVERY_NO_PROGRESS:unchanged artifact")
                     break
+                for context, decision in decisions:
+                    own_failures = [failure for failure in replay.get("failures") or []
+                        if failure.get("location") == context.site_id
+                        and (not context.operation_id
+                             or failure.get("operation_id") == context.operation_id)]
+                    audit_orchestrator.record(sweep_recovery, context, decision,
+                        outcome="failed" if own_failures else "pending",
+                        detail="artifact changed; operation proof rechecked; awaiting final sweep")
                 report["windows"] = [_window_ledger(entry) for entry in entries]
                 report["survey"] = survey_ledger
                 report["limits"]["business_rounds_used"] = rounds_used
@@ -3530,9 +3900,19 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
                                    "rounds": sweep_rounds, "gaps": gaps,
                                    "blind_windows": blind_windows}
 
+            sweep_attempts = sweep_recovery.as_list()[sweep_history_start:]
+            if sweep_attempts:
+                summary = report.setdefault("recovery", {})
+                summary["sweep"] = sweep_attempts
+                summary["history"] = [*(summary.get("history") or []), *sweep_attempts]
+                summary["attempts"] = len(summary["history"])
+                summary["actions"] = [item.get("action") for item in summary["history"]]
+                summary["final"] = sweep_attempts[-1]["outcome"]
+
             mark_stage("sweep")
             _apply_artifact_proof_to_findings(findings, replay, actual,
-                                              obligation_ledger, rules_by_id)
+                                              obligation_ledger, rules_by_id,
+                                              facts=facts, edits=planned.get("edits") or [], original=inspection)
             report["artifact_claim_replay"] = replay
             unresolved[:] = [item for item in unresolved if item.get("kind") not in {
                 "target", "audit", "sweep", "claim_replay", "coverage"}]

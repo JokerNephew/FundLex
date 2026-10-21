@@ -1,5 +1,38 @@
 # FundLex 当前断点（ACTIVE_HANDOFF）
 
+
+## 最新用户补充（2026-10-22）
+
+- 当前最终验证任务完成后，用户要求继续组织多个agent自行推进后续修复/前后端逻辑检查，中途不自停/不询问，目标至少5份真实合同准确完整修改且单份耗时合理，为次日展示准备。不得放松原Gate、验证标准、预算/retry或伪称完美；先当前Gate再推进后续。
+- 当前runtime编辑未冻结：Test agent正在修Architecture复现CROSS-001（compose任意replacement子串自授权负面review），Recovery agent正在修CROSS-002（Sweep已有target/no-plan被classify送TARGET）。Architecture只读反例交叉验证。完整1019pass/6skip是两条HIGH修复前，修后须完整实跑。
+
+## 最终冻结准备（2026-10-22，优先于以下历史）
+
+- 再次fetch/checkout/pull，HEAD22c15aa，remote4f3229d，ahead1；所有已有改动/证据保留。机器身份符合AGENTS规定。
+- Architecture/Test/Recovery源码修复结束，正在完整重跑pytest；第一次1018passed/1failed/6skipped为末次编辑竞态，当前单项已通过；最终全量日志/tmp/fundlex-pytest-final.txt，exec session54854（查询实际状态）。compileall/diff-check通过。
+- 未冻结/未push，未新live。接下来完整通过→commit runtime→新独立root四例record/replay，剩余预算继续扣：D01 63HTTP/$0.5076924，D02 142/$0.5373252，D11 138/$0.5445408，D16 144/$0.53912895。
+- 当前Gate仍FAIL/PENDING，Business旧artifact问题已通用修复，但需最终新SHA artifact/四Reviewer验收；不得替换旧cassette。
+
+## 最终证据收口接续（2026-10-22，优先于以下历史）
+
+- 当前分支refactor/recovery-architecture；HEAD 22c15aa（未push）；fetch→checkout→pull已再次完成，remote仍4f3229d。本轮开始工作区已有ACTIVE_HANDOFF/runner修改和untracked全部evidence，已保留。
+- 四例22c15aa live record均完成：D01 53/$0.04782，D02 47/$0.0496368，D11 51/$0.04332405，D16 43/$0.04055925；均incomplete、24 TRUE、TRUE→NOT_APPLICABLE=0。含旧4f3229d失败录制累计281HTTP/$0.27131265；每case192/$0.60总限额不增加。新录制前须继续扣除D01累计129、D02 50、D11 54、D16 48。
+- 四例实际DOCX全部存在；programmatic source+FINAL EDIT SET→final零差异，final零修订；Business独立确认redline接受=final/拒绝=original均0差异。现有4例artifact可用作failure regression，不能证明后续新SHA。
+- Business审查 `docs/evidence/final-validation-20261021/revalidation-22c15aa/summaries/business-review.md/json` 报BLOCKER1/HIGH3：delete residual虚假PASS与G16 duplicate只证一份、G11 explicit ONE_OF nested重复写、G22目标截尾留下“配。”、unsupported audit/sweep falseblock。细节FL-D142已更新。
+- 主agent已修scope_map用set导致跨进程rule order变化/Inventory cassette miss，保Guide顺序。3个不同PYTHONHASHSEED context SHA一致已独立验证。新增tools/compare_frozen_replay.py比较facts/scope/targets/attribution/obligations/plan/replay/delivery/recovery和实际DOCX文本，检查0HTTP。
+- 活跃agent：architecture_review负责effects.py/Claim跨段residual、原文duplicates独立siteproof，continuation regression先失败（joint绑定后单段语义再次False），现agent报告已修并在跑全组和四例Claim stage；test_review负责recall.py/recall_pipeline.py的G06 composite site guard、G17 sweep semantic、G11 ONE_OF绕过atomic先merge、G22 fuzzy同段句尾重绑定（最多12 chars且句界证据），新tests已82passed/1deselected（唯一失败属architecture正在修）；recovery_final_review独立审查真实history与源码，未交报告；business_review完成并idle，最终新SHA四例待复审。不要并行编辑同一agent所管源码/集中记录。
+- 未完成：effects全组/四例旧artifact当前Claim离线重算；BR004其余G02/G04/G18错误facts意见/G05无备案证据仲裁；完整pytest（最终代码必须重跑）；冻结提交新SHA；以剩余额度新根目录四例record（不要旧cassette补位）→全replay0HTTP+semantic比较→D16六stage/revision selection→四Reviewer复审→Gate→证据提交push。不部署，不跑20/514，当前Gate FAIL。
+- 运行中没有live任务；最新pytest运行已退出。系统Python3.6不可用，所有命令用.venv/bin/python。凭据只从sudo读取env到record进程内存，不输出/入库。现证据目录约40MB，安全模式扫描未见API key/Bearer；实际提交前再查。
+- 当前运行代码未提交（git status为准），targeted回归仅局部，不可用992passed旧SHA当新证明。本环境无手动context压缩工具，已持久化本断点，接续优先读本段+FL-D142。
+
+## 冻结版本与真实重录（2026-10-21，进行中）
+
+- 运行代码已提交 `22c15aa4d8d736f2a2fc46a29bc3ed8611475f2f`，未push/未部署。该SHA完整实跑992 passed/0 failed/6 skipped/196.14s，compileall/diff-check通过；日志 `/tmp/fundlex-pytest-22c15aa.txt` 和 revalidation目录logs。
+- 两处P0 occurrence、Audit同址sibling identity、record/error replay、class-set display、G05标点、incomplete append anchor、Audit dirty-site/no-progress已修，有新增regression；Architecture/Recovery复审代码范围BLOCKER0/HIGH0，业务实际artifact待验证。
+- 新证据 `docs/evidence/final-validation-20261021/revalidation-22c15aa/`，index绑定SHA和剩余额度。旧四例保留原位。runner `tools/validate_frozen_case.py <case> record|replay --root <directory>`。当前外层exec session **68057** 顺序D16→D01→D02→D11 record（须用write_stdin轮询，不用functions.wait）；进程是否仍运行以ps为准。未增加模型并发/retry/总预算。
+- 每case后续限额已扣首轮：D01 116 attempts/$0.5555124；D02 189/$0.586962；D11 189/$0.58786485；D16 187/$0.5796882。真实模型deepseek-v4.1-flash/上下文32000/output8000继承配置，凭据只内存。
+- 增加evidence `review_artifacts.py` 可独立逐段对比source→final plan→DOCX并生成TRUE obligation证据表（无模型）；实际结果尚待。下一步：等待record、artifact复核、四例零网络full replay与D16六stage/revision selection、四Reviewer实际证据复审→Gate→提交push。不得旧bundle补齐或将无artifact填0安全错误。
+
 ## 最终验证接续（2026-10-21；优先于以下历史）
 
 - 用户最新任务是最终验证、证据收口、最小修复、独立审查、Gate、提交 push；不是旧“只push”任务。起始 HEAD `4f3229d901bda33332a8abee3d909b7550f07ff0`，branch `refactor/recovery-architecture`，已fetch/checkout/pull，起始clean。

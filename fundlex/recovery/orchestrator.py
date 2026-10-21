@@ -99,7 +99,8 @@ class RecoveryOrchestrator:
             outcome=outcome, detail=detail,
             rule_id=context.rule_id, operation_id=context.operation_id,
             obligation_id=context.obligation_id, target_id=context.target_id,
-            site_id=context.site_id, attempt=decision.attempt,
+            site_id=context.site_id, source_span=str(context.metadata.get("source_span") or ""),
+            attempt=decision.attempt,
             budget_key=decision.budget_key)
         history.append(attempt)
         return attempt

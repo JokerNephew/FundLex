@@ -24,20 +24,43 @@ class RecoveryHistory:
     def extend(self, attempts: Iterable[RecoveryAttempt]) -> None:
         self.attempts.extend(attempts)
 
+    @staticmethod
+    def _same_subject(item: RecoveryAttempt, context: RecoveryContext) -> bool:
+        """Match recovery budgets to a stable business identity.
+
+        Target ids are discovery artifacts and may be regenerated when an inventory
+        window is refreshed.  They therefore cannot partition retry budgets.  A
+        bound operation/site (or obligation/site when an operation is unavailable) is
+        stable across discovery rounds and is the identity used for retry accounting.
+        Target id remains a fallback for legacy, unbound diagnostics only.
+        """
+        if item.rule_id != context.rule_id or item.site_id != context.site_id:
+            return False
+        source_span = str(context.metadata.get("source_span") or "")
+        if item.source_span and source_span and item.source_span != source_span:
+            return False
+        operation = str(context.operation_id or "")
+        obligation = str(context.obligation_id or "")
+        item_operation = str(item.operation_id or "")
+        item_obligation = str(item.obligation_id or "")
+        if operation or item_operation:
+            return operation == item_operation
+        if obligation or item_obligation:
+            return obligation == item_obligation
+        # Legacy contexts with no stable operation/obligation are still isolated by
+        # target id, preserving the old behavior where no better identity exists.
+        return str(item.target_id or "") == str(context.target_id or "")
+
     def count(self, action: RecoveryAction, *,
               context: RecoveryContext | None = None) -> int:
         """Attempts of one action, optionally scoped to one obligation identity.
 
-        Budgets are per obligation/target: one target's failed deterministic retry must
-        not consume the retry another target never used.
+        Budgets are per operation/site. Discovery may assign a new target id to the
+        same site after an inventory refresh; that must not reset the budget.
         """
         items = [item for item in self.attempts if item.action is action]
         if context is not None:
-            items = [item for item in items
-                     if item.rule_id == context.rule_id
-                     and item.obligation_id == context.obligation_id
-                     and item.target_id == context.target_id
-                     and item.site_id == context.site_id]
+            items = [item for item in items if self._same_subject(item, context)]
         return len(items)
 
     def attempted(self, action: RecoveryAction, *, stage: str | None = None,
@@ -61,11 +84,7 @@ class RecoveryHistory:
                 continue
             if item.error_code != error_code or item.reason != reason:
                 continue
-            if context is not None and (
-                    item.rule_id != context.rule_id
-                    or item.obligation_id != context.obligation_id
-                    or item.target_id != context.target_id
-                    or item.site_id != context.site_id):
+            if context is not None and not self._same_subject(item, context):
                 continue
             return True
         return False

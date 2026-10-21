@@ -2122,3 +2122,34 @@
 - Audit恢复最小接线：deterministic Claim证据逐operation判root cause；Execution复用final plan，Generation仅dirty site，Target才Inventory；真实fact/applicability变化使依赖计划失效；open targets保存在synthetic集合；稳定snapshot支持bound/unbound offsets，Audit无变化停止。没有更改Validator、业务适用性标准或预算。
 - Stage必须有真实boundary；Claim与live使用相同components/required terms/target rules；返回recorded/replay HEAD与same_head，允许明确跨版本调试，不冒称exact-HEAD。多模型同一prompt的stage lookup仍可能ambiguous并fail closed（MEDIUM已知限制，当前四例单模型未触发）。
 - 回归：中间完整989 passed/6 skipped（197.02s），之后又补Audit identity/None-offset/逐sibling rootcause与open-target持久化，故989不作为最终SHA证明。最终冻结后必须完整重跑。Architecture已确认原P0反例修复；Recovery复审95相关测试通过。实际artifact审查仍未完成。
+
+### FL-D142 `22c15aa` 真实重录与独立产物复查（2026-10-21，未验收）
+
+- 实际版本 `22c15aa4d8d736f2a2fc46a29bc3ed8611475f2f`；全量992 passed/0 failed/6 skipped/196.14s，compileall/diff-check通过。新bundle在 `docs/evidence/final-validation-20261021/revalidation-22c15aa/`，不覆盖4f3229d的失败录制。
+- D01：53 calls/$0.04782000，24 TRUE，7 ARTIFACT_VERIFIED/6 ALREADY_SATISFIED/11 UNRESOLVED；D02：47/$0.04963680，24 TRUE，10/5/9；D11：51/$0.04332405，24 TRUE，11/5/8；D16：43/$0.04055925，24 TRUE，10/10/4。四例均incomplete且TRUE→NOT_APPLICABLE=0；这些中间proof数字存在下述缺陷，不能当业务成功指标。
+- DOCX程序化对比：四例分别变更12/14/13/15段，final与final edit set重建文本0差异，final修订元素0。独立Business Reviewer核验接受redline=final、拒绝redline=original均0段落差异，未发现Writer丢失edit。
+- 新可复现P0/HIGH：D16 G13跨段prefix p221被G12改写但p222续句仍在，Claim却VERIFIED_ABSENT；D01 G13/G15/G17与D02 G17存在真实旧文残留而operation proof PASS；G16只一份正文/摘要完成就PASS；D02 G11显式ONE_OF嵌套span在atomic阶段被重复应用；G22 fuzzy variant目标截断句尾，留下“配。”但该operation仍PASS。详见独立 `summaries/business-review.md`，原始产物保留。
+- D16 G06 p431/p1169是通用业务规则调整条款，非不同份额类别不可互转禁令；G17 p822是G15支付机制，不是用途条款。两类模型错误attribution不应要求删除这些正确原文，正在增加通用site校验与回归。
+- D16 full replay零HTTP但Inventory `MODEL_REPLAY_MISS`：`scope_map`用set建立dict，跨进程hash seed改变rule prompt顺序；已定位并改为Guide顺序，旧cassette保持不改，尚待最终SHA新录制/重放。
+- 累计本轮真实HTTP 281次/$0.27131265；未增加每case192/$0.60总额度，下一轮必须继续扣除；未改生产配置/账本，未部署、未跑20/514。当前Gate仍FAIL。处理原则仍是最小通用修复、regression、全量重测、新SHA独立record/replay与四角色复审，不能通过降低proof或用旧SHA产物补位。
+
+### FL-D142 后续最小修复与离线验证（2026-10-22，尚未冻结）
+
+- 逐operation/site effect修复：真实source wording残留检测、跨段operation-reference continuation补证、精确原文正文/摘要duplicate独立site验证；同site合法新政策只接受已通过component证明的授权复用，不允许借另一site新文。对四例最终Claim boundary离线重算已挡住D01 G13/G15/G16/G17、D02 G16/G17、D16 G13 p222/G15 p822的虚假operation PASS；D11 G16无site仍OPEN。旧报告和artifact不重写为新结果。
+- Planner最小修复：explicit ONE_OF重叠历史wording先交既有merge选择，避免atomic重复应用；whole-sentence fuzzy替换在同paragraph复核真实句界，最多延展12字符，无法证实则RECALL_VARIANT_CLAUSE_INCOMPLETE。D02冻结输入重算G11只保留1份policy、G22完整覆盖句尾；未更改G02/G04授权范围。
+- site校验：composite也按绑定parts而非邻段检查业务site，阻止G06误绑通用业务规则；Sweep mapped candidate执行semantic site guard，未知wording保留有效业务锚点，Scope外候选仍需更强reference/variant证明。
+- 独立Recovery发现：target重新编号会重置旧history预算；Sweep将Generation/Execution也统一Inventory且不留history。正在修复为stable operation/site预算、dirty-site/root-cause路由与Sweep history；无语义变化使用实际paragraph签名识别，避免DOCX ZIP时间戳触发多余工作。未增加任何retry/model预算。
+- 真实negative Review quote即使可绑定，也不必然构成反证；正在按同operation/site已实例化授权新文、完整effect证明和hard findings仲裁。其它copy失败不能推翻本site确定性证明，但仍阻塞该obligation；真实残留和无证据缺口继续fail-closed。
+- 工作区中间全量实跑1006 passed/0 failed/6 skipped/2 warnings/200.44s；此后仍有上述修复变更，所以该数字不作为最终SHA证明。compileall/diff-check通过；环境无node，未改frontend，`node --check frontend/app.js`未执行成功，须如实保留该工具缺失。最终冻结后完整重测。
+
+### FL-D142 最终冻结前交叉复审（2026-10-22）
+
+- Recovery最小修复已完成：budget按稳定operation/site/source span计数，target重新编号不重置；Sweep operation-first归因、按Target/Generation/Execution路由、复用dirty-site和统一history；语义artifact签名排除ZIP时间戳假进展。73项相关回归通过。
+- 无证据Review仲裁修复完成：只使用同operation/site确定性PASS；授权新文被wrong_text引用时可标REVIEW_UNPROVEN，mixed旧文优先RESIDUAL_CONFIRMED；真实residual、其它copy失败、缺proof继续block。116项组合回归通过。
+- Architecture交叉审查撤回G16 source anchor必须含新四组件的建议：旧支付机制是合法append锚点，四组件在artifact effect验证；也确认mixed paragraph旧文优先检查有效。源码编辑已停止，准备冻结。
+- 全量首轮1018 passed/1 failed/6 skipped/202.43s；失败为Sweep proof_kind断言，实跑期间与最后issue guard修复交错。当前单测已通过，必须再完整重跑，不以局部结果替代。日志/tmp/fundlex-pytest-final-precommit.txt。
+
+- 最终交叉审查新增CROSS-001（HIGH）：Compose replacement中的任意新句被当作授权fixed_text，可能把可验证语义矛盾意见错误标REVIEW_UNPROVEN。Architecture用通用G99原文/新文/矛盾追加句实际复现；由Test reviewer删除自授权fallback并补回归，修复后需再次完整测试及独立反例复审。中间完整1019 passed/6 skipped/199.89s不覆盖此末次修复。
+
+- Architecture交叉复现CROSS-002（HIGH/P1）：Sweep已有target但matching Claim_OPERATION_NOT_PLANNED/UNPROVEN直接classify为TARGET，绕过已有claim root-cause helper，导致重复discovery。Recovery reviewer最小复用_claim_failure_context并补已有target/no-plan→GENERATION回归；其余stable retry identity、semantic no-progress交叉审查通过。
+- 用户2026-10-22补充：本任务收口后继续多agent前后端/性能/准确完整修改，至少5份真实合同展示；先当前Gate，不以demo目标降低安全标准或改写失败分母。

@@ -31,11 +31,19 @@ def main():
     parser.add_argument("--root", type=Path, required=True)
     args = parser.parse_args()
     ROOT = args.root.resolve()
+    for name in ("logs", "ledgers", "reports", "summaries"):
+        (ROOT / name).mkdir(parents=True, exist_ok=True)
     plan = json.loads((ROOT / "index.json").read_text())
     RUNTIME = Path(plan["runtime_ledger_root"])
     head = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=REPO, text=True).strip()
     if head != plan["validation_head"]:
         raise SystemExit("VALIDATION_HEAD_MISMATCH")
+    runtime_paths = ("fundlex", "guides", "tools", "tests", "pyproject.toml", "uv.lock")
+    dirty = subprocess.check_output(["git", "status", "--porcelain", "--untracked-files=all",
+                                     "--", *runtime_paths], cwd=REPO, text=True)
+    if dirty.strip():
+        raise SystemExit("VALIDATION_RUNTIME_WORKTREE_DIRTY")
+    runtime_tree = subprocess.check_output(["git", "ls-tree", "-r", head, "--", *runtime_paths], cwd=REPO)
     frozen = ROOT / "frozen" / args.case
     output = ROOT / ("artifacts" if args.mode == "record" else "replay") / args.case
     output.mkdir(parents=True, exist_ok=True)
@@ -80,7 +88,9 @@ def main():
     guide = json.loads(((REPO / "guides/builtin_guide_v1.json") if args.mode == "record"
                         else frozen / "guide.json").read_text())
     binding = {"case_id": args.case, "head": head, "branch": plan["branch"],
+               "runtime_tree_sha256": hashlib.sha256(runtime_tree).hexdigest(),
                "document_sha256": hashlib.sha256(source.read_bytes()).hexdigest(),
+               "guide_source_sha256": plan["guide"]["source_sha256"],
                "guide_document_sha256": plan["guide"]["guide_document_sha256"], "mode": args.mode}
     started = time.monotonic()
     gateway = build_role_gateway()
