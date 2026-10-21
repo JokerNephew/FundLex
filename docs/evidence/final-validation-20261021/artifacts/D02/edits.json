@@ -1,0 +1,16 @@
+{
+  "schema_version": "3",
+  "engine_id": "recall_first",
+  "engine_version": "0.1.0",
+  "source_sha256": "c02ae5a04ffbb1a8c63a7408fb3c69fab4f54cd60ff44575f42031ab00e1289b",
+  "guide_document_sha256": "45dd77460f2ef93d29001c0833c220f89de99dafb19d32a8b73653b55f92c8d7",
+  "delivery_status": "not_generated",
+  "plan": {
+    "count": 0,
+    "sha256": null,
+    "edits": [],
+    "conflicts": [],
+    "boundary_policy": "sentence-span-preserve-v1"
+  },
+  "targets": []
+}

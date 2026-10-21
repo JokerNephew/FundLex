@@ -1,0 +1,731 @@
+{
+  "review_type": "independent_business_review",
+  "head": "22c15aa4d8d736f2a2fc46a29bc3ed8611475f2f",
+  "branch": "refactor/recovery-architecture",
+  "guide_document_sha256": "45dd77460f2ef93d29001c0833c220f89de99dafb19d32a8b73653b55f92c8d7",
+  "scope": "Direct comparison of approved Guide, source DOCX, current-H​​EAD final DOCX and redline XML; no live model calls; no source changes.",
+  "overall": {
+    "delivery_false_complete_observed": false,
+    "operation_level_false_passes_observed": true,
+    "unauthorized_edits_observed_in_reviewed_sites": false,
+    "cross_site_proof_or_duplicate_site_defects_observed": true,
+    "planned_but_not_final_observed": false,
+    "planned_wrong_effect_observed": true,
+    "business_gate": "FAIL",
+    "reviewer_findings": {
+      "BLOCKER": 1,
+      "HIGH": 3,
+      "MEDIUM": 0,
+      "LOW": 0
+    }
+  },
+  "mechanical_method": {
+    "redline_accept_reject_parser": "lxml paragraph-level extraction from word/document.xml; w:ins excluded for rejected and w:del excluded for accepted",
+    "all_cases": {
+      "accepted_equals_final": true,
+      "rejected_equals_original": true,
+      "paragraph_differences": 0
+    },
+    "hash_binding": "artifact binding.json and report source_sha256 match original document SHA for all four cases",
+    "paragraph_count_note": "body_paragraphs_xml counts direct body paragraphs; all_inspected_paragraphs includes all inspect_docx sites; native pNNN locations in findings are inspect_docx locations, not one-based Word paragraph order."
+  },
+  "cases": {
+    "D01": {
+      "document_sha256": "2f2f7a36000af8135feb625c0c7d6f9f3e8b291d1628f0879993d6987e2d278d",
+      "final_sha256": "ae8498744dc08d57ff8a18a32bdbd22e1948de81bdc8d0657f440d372beb33c0",
+      "redline_sha256": "3d042fd12c754e564d80443a518dc6079d64d660da492ba3355be5ccf78e5358",
+      "changed_paragraphs": 12,
+      "calls": 53,
+      "cost_usd": 0.04782,
+      "true_obligations": 24,
+      "completion": {
+        "ARTIFACT_VERIFIED": 7,
+        "ALREADY_SATISFIED": 6,
+        "NOT_APPLICABLE": 10,
+        "UNRESOLVED": 11
+      },
+      "redline": {
+        "accepted_equals_final": true,
+        "rejected_equals_original": true,
+        "paragraph_differences": 0
+      },
+      "artifact": {
+        "unauthorized_edit": "none observed in reviewed changed sites",
+        "false_complete": false,
+        "cross_site_proof_issue": true,
+        "planned_but_not_final": false,
+        "confirmed_incomplete": [
+          "G01 p91/p92 definition unchanged; required append absent",
+          "G03 direct-sales policy absent at p130/basic-setting copy",
+          "G05 p135 rate fixed but p434/p1100 unrelated fee-change sites remain and require scope distinction",
+          "G13 p230 full 7-day/1.50% sentence remains",
+          "G14 p231 still permits redemption-rate reduction",
+          "G15 body p758 old payment mechanism remains while summary p1221 changed",
+          "G16 body p758 new payment policy absent while summary p1221 contains it",
+          "G17 body p759 usage sentence remains; body p760 deleted; summary p1222/p1223 deleted",
+          "G22 summary p1299 remains unchanged while body p934 changed"
+        ],
+        "false_passes": [
+          "G13:B1:O1 PASS/VERIFIED_ABSENT at p230 despite exact old charge sentence surviving",
+          "G15:B1:O1 PASS/VERIFIED_ABSENT/ARTIFACT_VERIFIED despite unchanged body p758",
+          "G16:B1:O1 PASS/EXPECTED_EFFECT_PRESENT based only on summary p1221 despite body p758 missing"
+        ],
+        "unsupported_review_blocks": [
+          "Audit G02 p91 invents B class; certified actual set is A/C/D with A/D subscription and C service",
+          "Audit G04 p130 repeats wrong A/B/C/D grouping and conflicts with facts",
+          "Sweep G18 p782 is unrelated dividend clause; sweep G18 p785 rejects correct A/D/C instantiation",
+          "Sweep G22 p934 says wrong although exact required text is present"
+        ],
+        "positive": [
+          "G05 p135 replacement and filing deletion are correct; G05 B3 verified absent",
+          "G08/G09/G11/G12/G18/G22 body p934 effects are textually authorized where changed"
+        ]
+      },
+      "unresolved_count": 36,
+      "head": "22c15aa4d8d736f2a2fc46a29bc3ed8611475f2f",
+      "branch": "refactor/recovery-architecture",
+      "guide_document_sha256": "45dd77460f2ef93d29001c0833c220f89de99dafb19d32a8b73653b55f92c8d7",
+      "delivery": "incomplete",
+      "true_not_applicable": 0,
+      "body_paragraphs_xml": 1338,
+      "all_inspected_paragraphs": 1363,
+      "proof_evidence": [
+        {
+          "obligation_id": "G13:B1:O1",
+          "operation_id": "G13:0",
+          "applicability": "TRUE",
+          "projection": "ALREADY_SATISFIED",
+          "claim_state": "PASS",
+          "artifact_status": "VERIFIED_ABSENT",
+          "claimed_sites": [
+            "p230"
+          ],
+          "actual_sites": [
+            {
+              "site_id": "p230",
+              "before_quote": "本基金 A 类基金份额和 D 类基金份额收取申购费用，C 类份额不收取申购费用，但从该类别基金资产中计提销售服务费。本基金的申购费率、申购份额具体的计算方法、赎回费率、赎回金额具体的计算方法和收费方式由基金管理人根据基金合同的规定确定，并在招募说明书中列示。基金管理人可以在基金合同约定的范围内调整费率或收费方式，并最迟应于新的费率或收费方式实施日前依照《信息披露办法》的有关规定在规定媒介上公告。本基金对持续持有期少于 7 日的投资者收取 1.50%的赎回费，并将上述赎回费全额计入基金财产。 ",
+              "after_quote": "本基金 A 类基金份额和 D 类基金份额收取申购费用，C 类份额不收取申购费用，但从该类别基金资产中计提销售服务费。本基金的申购费率、申购份额具体的计算方法、赎回费率、赎回金额具体的计算方法和收费方式由基金管理人根据基金合同的规定确定，并在招募说明书中列示。基金管理人可以在基金合同约定的范围内调整费率或收费方式，并最迟应于新的费率或收费方式实施日前依照《信息披露办法》的有关规定在规定媒介上公告。本基金对持续持有期少于 7 日的投资者收取 1.50%的赎回费，并将上述赎回费全额计入基金财产。 ",
+              "unchanged": true
+            }
+          ]
+        },
+        {
+          "obligation_id": "G15:B1:O1",
+          "operation_id": "G15:0",
+          "applicability": "TRUE",
+          "projection": "ARTIFACT_VERIFIED",
+          "claim_state": "PASS",
+          "artifact_status": "VERIFIED_ABSENT",
+          "claimed_sites": [
+            "p758",
+            "p1221"
+          ],
+          "actual_sites": [
+            {
+              "site_id": "p758",
+              "before_quote": "基金销售服务费每日计提，逐日累计至每月月末，按月支付，经基金管理人与基金托管人核对一致后，由基金托管人于次月前 5 个工作日内从基金财产中一次性划出，由基金管理人代收，基金管理人收到后按相关合同规定支付给基金销售机构等。若遇法定节假日、公休假或不可抗力等，支付日期顺延。 ",
+              "after_quote": "基金销售服务费每日计提，逐日累计至每月月末，按月支付，经基金管理人与基金托管人核对一致后，由基金托管人于次月前 5 个工作日内从基金财产中一次性划出，由基金管理人代收，基金管理人收到后按相关合同规定支付给基金销售机构等。若遇法定节假日、公休假或不可抗力等，支付日期顺延。 ",
+              "unchanged": true
+            },
+            {
+              "site_id": "p1221",
+              "before_quote": "基金销售服务费每日计提，逐日累计至每月月末，按月支付，经基金管理人与基金托管人核对一致后，由基金托管人于次月前 5 个工作日内从基金财产中一次性划出，由基金管理人代收，基金管理人收到后按相关合同规定支付给基金销售机构等。若遇法定节假日、公休假或不可抗力等，支付日期顺延。 ",
+              "after_quote": "销售服务费每日计提。（1）直销机构：对于投资者通过直销机构持有的C类基金份额计提的销售服务费，在投资者赎回C类基金份额或基金合同终止时，随赎回款（或清算款）一并返还给投资者。基金管理人基金销售子公司销售母公司所管理基金的，按照本条要求执行。（2）直销机构以外的其他销售机构：对于投资者持续持有期限未超过一年（即365天，下同）的基金份额收取的销售服务费，按月支付，基金托管人按照与基金管理人协商一致的方式于次月首日起5个工作日内按照指定的账户路径进行支付。若遇法定节假日、公休日或不可抗力等，支付日期顺延。对于持续持有期限超过一年的基金份额，持有超过一年后继续计提的销售服务费，在投资者赎回基金份额或基金合同终止时，随赎回款（或清算款）一并返还给投资者。",
+              "unchanged": false
+            }
+          ]
+        },
+        {
+          "obligation_id": "G16:B1:O1",
+          "operation_id": "G16:0",
+          "applicability": "TRUE",
+          "projection": "ARTIFACT_VERIFIED",
+          "claim_state": "PASS",
+          "artifact_status": "EXPECTED_EFFECT_PRESENT",
+          "claimed_sites": [
+            "p1221"
+          ],
+          "actual_sites": [
+            {
+              "site_id": "p758",
+              "before_quote": "基金销售服务费每日计提，逐日累计至每月月末，按月支付，经基金管理人与基金托管人核对一致后，由基金托管人于次月前 5 个工作日内从基金财产中一次性划出，由基金管理人代收，基金管理人收到后按相关合同规定支付给基金销售机构等。若遇法定节假日、公休假或不可抗力等，支付日期顺延。 ",
+              "after_quote": "基金销售服务费每日计提，逐日累计至每月月末，按月支付，经基金管理人与基金托管人核对一致后，由基金托管人于次月前 5 个工作日内从基金财产中一次性划出，由基金管理人代收，基金管理人收到后按相关合同规定支付给基金销售机构等。若遇法定节假日、公休假或不可抗力等，支付日期顺延。 ",
+              "unchanged": true
+            },
+            {
+              "site_id": "p1221",
+              "before_quote": "基金销售服务费每日计提，逐日累计至每月月末，按月支付，经基金管理人与基金托管人核对一致后，由基金托管人于次月前 5 个工作日内从基金财产中一次性划出，由基金管理人代收，基金管理人收到后按相关合同规定支付给基金销售机构等。若遇法定节假日、公休假或不可抗力等，支付日期顺延。 ",
+              "after_quote": "销售服务费每日计提。（1）直销机构：对于投资者通过直销机构持有的C类基金份额计提的销售服务费，在投资者赎回C类基金份额或基金合同终止时，随赎回款（或清算款）一并返还给投资者。基金管理人基金销售子公司销售母公司所管理基金的，按照本条要求执行。（2）直销机构以外的其他销售机构：对于投资者持续持有期限未超过一年（即365天，下同）的基金份额收取的销售服务费，按月支付，基金托管人按照与基金管理人协商一致的方式于次月首日起5个工作日内按照指定的账户路径进行支付。若遇法定节假日、公休日或不可抗力等，支付日期顺延。对于持续持有期限超过一年的基金份额，持有超过一年后继续计提的销售服务费，在投资者赎回基金份额或基金合同终止时，随赎回款（或清算款）一并返还给投资者。",
+              "unchanged": false
+            }
+          ]
+        },
+        {
+          "obligation_id": "G17:B1:O1",
+          "operation_id": "G17:0",
+          "applicability": "TRUE",
+          "projection": "UNRESOLVED",
+          "claim_state": "PASS",
+          "artifact_status": "VERIFIED_ABSENT",
+          "claimed_sites": [
+            "p759",
+            "p760",
+            "p1222",
+            "p1223"
+          ],
+          "actual_sites": [
+            {
+              "site_id": "p759",
+              "before_quote": "销售服务费主要用于支付销售机构佣金、以及基金管理人的基金行销广告费、促销活动费、基金份额持有人服务费等。 ",
+              "after_quote": "销售服务费主要用于支付销售机构佣金、以及基金管理人的基金行销广告费、促销活动费、基金份额持有人服务费等。 ",
+              "unchanged": true
+            },
+            {
+              "site_id": "p760",
+              "before_quote": "销售服务费使用范围不包括基金募集期间的上述费用。 ",
+              "after_quote": " ",
+              "unchanged": false
+            },
+            {
+              "site_id": "p1222",
+              "before_quote": "销售服务费主要用于支付销售机构佣金、以及基金管理人的基金行销广告费、促销活动费、基金份额持有人服务费等。 ",
+              "after_quote": "  ",
+              "unchanged": false
+            },
+            {
+              "site_id": "p1223",
+              "before_quote": "销售服务费使用范围不包括基金募集期间的上述费用。 ",
+              "after_quote": "  ",
+              "unchanged": false
+            }
+          ]
+        }
+      ]
+    },
+    "D02": {
+      "document_sha256": "c02ae5a04ffbb1a8c63a7408fb3c69fab4f54cd60ff44575f42031ab00e1289b",
+      "final_sha256": "77b6b3f56445e84da01cebe6e44da0df9b0ba4d0a2a0146927fa028aac7caf18",
+      "redline_sha256": "5fcc76f475675526f60ebe6762b0ede3947d907a670a321c8a547a0e37b26bd2",
+      "changed_paragraphs": 14,
+      "calls": 47,
+      "cost_usd": 0.0496368,
+      "true_obligations": 24,
+      "completion": {
+        "ARTIFACT_VERIFIED": 10,
+        "ALREADY_SATISFIED": 5,
+        "NOT_APPLICABLE": 10,
+        "UNRESOLVED": 9
+      },
+      "redline": {
+        "accepted_equals_final": true,
+        "rejected_equals_original": true,
+        "paragraph_differences": 0
+      },
+      "artifact": {
+        "unauthorized_edit": "none observed outside authorized business sites; p1371 suffix is a generation error at an authorized site",
+        "false_complete": false,
+        "cross_site_proof_issue": true,
+        "planned_but_not_final": false,
+        "confirmed_incomplete": [
+          "G01 p93 unchanged; G01 cannot borrow G03 p135",
+          "G14 p232 unchanged and still includes redemption/conversion rates",
+          "G16 summary p1287 blank while body p821 contains policy",
+          "G17 body p822/p823 deleted but summary p1288/p1289 unchanged",
+          "G05 filing operation at p138 is source-absent and is OPEN/UNPROVEN rather than proven already absent",
+          "G06 prohibition is absent in source and remains fail-closed"
+        ],
+        "false_passes": [
+          "G22:B1:O1 PASS/EXPECTED_EFFECT_PRESENT despite p1371 ending with orphan source suffix “配。”; effect proof checked prefix, not exact final site",
+          "G16:B1:O1 PASS from body p821 despite duplicate summary p1287 missing",
+          "G17 operation-level PASS evidence includes only body deletion while summary residuals remain (projection is separately unresolved)"
+        ],
+        "generation_failures": [
+          "G11 p228 applies both historical ONE_OF operations to overlapping/nested spans (0:50 and 12:31), producing duplicated malformed text",
+          "G22 p1371 replacement span ends mid-source phrase and leaves “配。” after the fixed text"
+        ],
+        "positive": [
+          "G03 p135, G05 rate p138, G12 p229, G13 p230, G15 p821, G22 p1001, G18 copies are textually authorized where changed"
+        ]
+      },
+      "unresolved_count": 33,
+      "head": "22c15aa4d8d736f2a2fc46a29bc3ed8611475f2f",
+      "branch": "refactor/recovery-architecture",
+      "guide_document_sha256": "45dd77460f2ef93d29001c0833c220f89de99dafb19d32a8b73653b55f92c8d7",
+      "delivery": "incomplete",
+      "true_not_applicable": 0,
+      "body_paragraphs_xml": 1405,
+      "all_inspected_paragraphs": 1430,
+      "proof_evidence": [
+        {
+          "obligation_id": "G11:B1:O1",
+          "operation_id": "G11:0",
+          "applicability": "TRUE",
+          "projection": "UNRESOLVED",
+          "claim_state": "FAIL",
+          "artifact_status": "WRONG_EFFECT",
+          "claimed_sites": [
+            "p228"
+          ],
+          "actual_sites": [
+            {
+              "site_id": "p228",
+              "before_quote": "本基金 A 类基金份额的申购费用由投资人承担，不列入基金财产。本基金 C 类基金份额不收取申购费用。 ",
+              "after_quote": "通过直销机构申购本基金A类基金份额不收取申购费，通过其他销售机构申购本基金A类基金份额的通过直销机构申购本基金A类基金份额不收取申购费，通过其他销售机构申购本基金A类基金份额的申购费用由投资人承担，不列入基金财产。本基金C类基金份额不收取申购费用。本基金C类基金份额不收取申购费用。 ",
+              "unchanged": false
+            }
+          ]
+        },
+        {
+          "obligation_id": "G11:B1:O2",
+          "operation_id": "G11:1",
+          "applicability": "TRUE",
+          "projection": "UNRESOLVED",
+          "claim_state": "FAIL",
+          "artifact_status": "WRONG_EFFECT",
+          "claimed_sites": [
+            "p228"
+          ],
+          "actual_sites": [
+            {
+              "site_id": "p228",
+              "before_quote": "本基金 A 类基金份额的申购费用由投资人承担，不列入基金财产。本基金 C 类基金份额不收取申购费用。 ",
+              "after_quote": "通过直销机构申购本基金A类基金份额不收取申购费，通过其他销售机构申购本基金A类基金份额的通过直销机构申购本基金A类基金份额不收取申购费，通过其他销售机构申购本基金A类基金份额的申购费用由投资人承担，不列入基金财产。本基金C类基金份额不收取申购费用。本基金C类基金份额不收取申购费用。 ",
+              "unchanged": false
+            }
+          ]
+        },
+        {
+          "obligation_id": "G16:B1:O1",
+          "operation_id": "G16:0",
+          "applicability": "TRUE",
+          "projection": "ARTIFACT_VERIFIED",
+          "claim_state": "PASS",
+          "artifact_status": "EXPECTED_EFFECT_PRESENT",
+          "claimed_sites": [
+            "p821"
+          ],
+          "actual_sites": [
+            {
+              "site_id": "p821",
+              "before_quote": "基金销售服务费每日计算，逐日累计至每月月末，按月支付，由基金托管人根据与基金管理人核对一致的财务数据，自动在月初 5 个工作日内、按照指定的账户路径进行资金支付，基金管理人无需再出具资金划拨指令。若遇法定节假日、公休日等，支付日期顺延。费用自动扣划后，基金管理人应进行核对，如发现数据不符，及时联系基金托管人协商解决。 ",
+              "after_quote": "销售服务费每日计提。（1）直销机构：对于投资者通过直销机构持有的C类基金份额计提的销售服务费，在投资者赎回C类基金份额或基金合同终止时，随赎回款（或清算款）一并返还给投资者。基金管理人基金销售子公司销售母公司所管理基金的，按照本条要求执行。（2）直销机构以外的其他销售机构：对于投资者持续持有期限未超过一年（即365天，下同）的基金份额收取的销售服务费，按月支付，基金托管人按照与基金管理人协商一致的方式于次月首日起5个工作日内按照指定的账户路径进行支付。若遇法定节假日、公休日或不可抗力等，支付日期顺延。对于持续持有期限超过一年的基金份额，持有超过一年后继续计提的销售服务费，在投资者赎回基金份额或基金合同终止时，随赎回款（或清算款）一并返还给投资者。 ",
+              "unchanged": false
+            },
+            {
+              "site_id": "p1287",
+              "before_quote": "基金销售服务费每日计算，逐日累计至每月月末，按月支付，由基金托管人根据与基金管理人核对一致的财务数据，自动在月初5个工作日内、按照指定的账户路径进行资金支付，基金管理人无需再出具资金划拨指令。若遇法定节假日、公休日等，支付日期顺延。费用自动扣划后，基金管理人应进行核对，如发现数据不符，及时联系基金托管人协商解决。 ",
+              "after_quote": " ",
+              "unchanged": false
+            }
+          ]
+        },
+        {
+          "obligation_id": "G17:B1:O1",
+          "operation_id": "G17:0",
+          "applicability": "TRUE",
+          "projection": "UNRESOLVED",
+          "claim_state": "PASS",
+          "artifact_status": "VERIFIED_ABSENT",
+          "claimed_sites": [
+            "p822",
+            "p1289",
+            "p823",
+            "p1288"
+          ],
+          "actual_sites": [
+            {
+              "site_id": "p822",
+              "before_quote": "销售服务费主要用于支付销售机构佣金，及基金管理人的基金行销广告费、促销活动费、基金份额持有人服务费等。 ",
+              "after_quote": "  ",
+              "unchanged": false
+            },
+            {
+              "site_id": "p823",
+              "before_quote": "销售服务费使用范围不包括基金募集期间的上述费用。 ",
+              "after_quote": "  ",
+              "unchanged": false
+            },
+            {
+              "site_id": "p1288",
+              "before_quote": "销售服务费主要用于支付销售机构佣金，及基金管理人的基金行销广告费、促销活动费、基金份额持有人服务费等。 ",
+              "after_quote": "销售服务费主要用于支付销售机构佣金，及基金管理人的基金行销广告费、促销活动费、基金份额持有人服务费等。 ",
+              "unchanged": true
+            },
+            {
+              "site_id": "p1289",
+              "before_quote": "销售服务费使用范围不包括基金募集期间的上述费用。 ",
+              "after_quote": "销售服务费使用范围不包括基金募集期间的上述费用。 ",
+              "unchanged": true
+            }
+          ]
+        },
+        {
+          "obligation_id": "G22:B1:O1",
+          "operation_id": "G22:0",
+          "applicability": "TRUE",
+          "projection": "ARTIFACT_VERIFIED",
+          "claim_state": "PASS",
+          "artifact_status": "EXPECTED_EFFECT_PRESENT",
+          "claimed_sites": [
+            "p1001",
+            "p1371"
+          ],
+          "actual_sites": [
+            {
+              "site_id": "p1001",
+              "before_quote": "依据基金财产清算的分配方案，将基金财产清算后的全部剩余资产扣除基金财产清算费用、交纳所欠税款并清偿基金债务后，按基金份额持有人持有的各类基金份额比例进行分配。 ",
+              "after_quote": "依据基金财产清算的分配方案，将基金财产清算后的全部剩余资产扣除基金财产清算费用、交纳所欠税款并清偿基金债务后，按基金份额持有人持有的基金份额比例进行分配，并加上返还基金份额持有人的销售服务费（如有）。 ",
+              "unchanged": false
+            },
+            {
+              "site_id": "p1371",
+              "before_quote": "依据基金财产清算的分配方案，将基金财产清算后的全部剩余资产扣除基金财产清算费用、交纳所欠税款并清偿基金债务后，按基金份额持有人持有的各类基金份额比例进行分配。 ",
+              "after_quote": "依据基金财产清算的分配方案，将基金财产清算后的全部剩余资产扣除基金财产清算费用、交纳所欠税款并清偿基金债务后，按基金份额持有人持有的基金份额比例进行分配，并加上返还基金份额持有人的销售服务费（如有）。配。 ",
+              "unchanged": false
+            }
+          ]
+        }
+      ]
+    },
+    "D11": {
+      "document_sha256": "74920e09c398f086091ca2b522c5d3bb0ed574d8ccd8c6e00ecf416b508ba93a",
+      "final_sha256": "c2e4736a9a3fd0b4eef273788ae3228be2550f6f62c4409cdb929f5a4aeb589b",
+      "redline_sha256": "c6fc86bd7d711d798a573d5ec7c061755c8165cf11d1247da8f00b66559034c0",
+      "changed_paragraphs": 13,
+      "calls": 51,
+      "cost_usd": 0.04332405,
+      "true_obligations": 24,
+      "completion": {
+        "ARTIFACT_VERIFIED": 11,
+        "ALREADY_SATISFIED": 5,
+        "NOT_APPLICABLE": 10,
+        "UNRESOLVED": 8
+      },
+      "redline": {
+        "accepted_equals_final": true,
+        "rejected_equals_original": true,
+        "paragraph_differences": 0
+      },
+      "artifact": {
+        "unauthorized_edit": "none observed in reviewed changed sites",
+        "false_complete": false,
+        "cross_site_proof_issue": false,
+        "planned_but_not_final": false,
+        "confirmed_incomplete": [
+          "G01 p91 unchanged",
+          "G05 p129 retains “调低赎回费率”; genuine missing effect",
+          "G11 operation O1 is unresolved at p211; p209 O2 text is correct but same rule semantics require site review",
+          "G16 new payment policy absent at all body/summary sites after G15 deletion",
+          "G17 body and summary deletions are complete",
+          "G18 body/summary A/D/C substitution is correct under certified facts",
+          "G22 body/summary additions are correct"
+        ],
+        "false_passes": [
+          "G16 remains OPEN (correct fail-closed), but no artifact contains required policy",
+          "G17 PASS is valid for its known deletion sites; no cross-site success should be inferred for G16"
+        ],
+        "unsupported_review_blocks": [
+          "Sweep G18 p800 insists literal A/C and rejects correct A/D/C instantiation",
+          "Sweep G05 p129 incorrectly treats “调整前基金管理人需及时公告” as evidence of备案 residual; actual备案 text absent",
+          "Sweep G05 p129 duplicate findings should distinguish p129 rate residual from filing deletion"
+        ],
+        "positive": [
+          "G03/G08/G09+G11 atomic merge/G12+G13/G14/G15/G17/G18/G22 effects are textually correct at reviewed sites"
+        ]
+      },
+      "unresolved_count": 21,
+      "head": "22c15aa4d8d736f2a2fc46a29bc3ed8611475f2f",
+      "branch": "refactor/recovery-architecture",
+      "guide_document_sha256": "45dd77460f2ef93d29001c0833c220f89de99dafb19d32a8b73653b55f92c8d7",
+      "delivery": "incomplete",
+      "true_not_applicable": 0,
+      "body_paragraphs_xml": 1380,
+      "all_inspected_paragraphs": 1405,
+      "proof_evidence": [
+        {
+          "obligation_id": "G05:B1:O1",
+          "operation_id": "G05:0",
+          "applicability": "TRUE",
+          "projection": "UNRESOLVED",
+          "claim_state": "FAIL",
+          "artifact_status": "RESIDUAL_OLD_TEXT",
+          "claimed_sites": [
+            "p129"
+          ],
+          "actual_sites": [
+            {
+              "site_id": "p129",
+              "before_quote": "有关基金份额类别的具体设置等由基金管理人确定，并在招募说明书中公告。根据基金销售情况，在符合法律法规且不损害已有基金份额持有人权益的情况下，基金管理人在履行适当程序后可以增加新的基金份额类别、或者在法律法规和基金合同规定的范围内变更现有基金份额类别的申购费率、调低赎回费率或变更收费方式、或者停止现有基金份额类别的销售等，调整前基金管理人需及时公告。 \n",
+              "after_quote": "有关基金份额类别的具体设置等由基金管理人确定，并在招募说明书中公告。根据基金销售情况，在符合法律法规且不损害已有基金份额持有人权益的情况下，基金管理人在履行适当程序后可以增加新的基金份额类别、或者在法律法规和基金合同规定的范围内变更现有基金份额类别的申购费率、调低赎回费率或变更收费方式、或者停止现有基金份额类别的销售等，调整前基金管理人需及时公告。 \n",
+              "unchanged": true
+            }
+          ]
+        },
+        {
+          "obligation_id": "G16:B1:O1",
+          "operation_id": "G16:0",
+          "applicability": "TRUE",
+          "projection": "UNRESOLVED",
+          "claim_state": "OPEN",
+          "artifact_status": "UNPROVEN",
+          "claimed_sites": [],
+          "actual_sites": [
+            {
+              "site_id": "p772",
+              "before_quote": "C 类基金份额的销售服务费每日计提，逐日累计至每个月月末，按月支付。经基金管理人与基金托管人核对一致后，由基金托管人在次月初五个工作日内从基金财产中一次性支付，由注册登记机构代收，注册登记机构收到后按相关合同规定支付给基金销售机构等。 ",
+              "after_quote": " ",
+              "unchanged": false
+            },
+            {
+              "site_id": "p1247",
+              "before_quote": "C类基金份额的销售服务费每日计提，逐日累计至每个月月末，按月支付。经基金管理人与基金托管人核对一致后，由基金托管人在次月初五个工作日内从基金财产中一次性支付，由注册登记机构代收，注册登记机构收到后按相关合同规定支付给基金销售机构等。 ",
+              "after_quote": " ",
+              "unchanged": false
+            }
+          ]
+        },
+        {
+          "obligation_id": "G17:B1:O1",
+          "operation_id": "G17:0",
+          "applicability": "TRUE",
+          "projection": "ARTIFACT_VERIFIED",
+          "claim_state": "PASS",
+          "artifact_status": "VERIFIED_ABSENT",
+          "claimed_sites": [
+            "p773",
+            "p1248"
+          ],
+          "actual_sites": [
+            {
+              "site_id": "p773",
+              "before_quote": "销售服务费主要用于支付销售机构佣金、以及基金管理人的基金行销广告费、促销活动费、持有人服务费等。销售服务费不包括基金募集期间的上述费用。 ",
+              "after_quote": " ",
+              "unchanged": false
+            },
+            {
+              "site_id": "p1248",
+              "before_quote": "销售服务费主要用于支付销售机构佣金、以及基金管理人的基金行销广告费、促销活动费、持有人服务费等。销售服务费不包括基金募集期间的上述费用。 ",
+              "after_quote": " ",
+              "unchanged": false
+            }
+          ]
+        }
+      ]
+    },
+    "D16": {
+      "document_sha256": "8beacaba3446f7e7e6db1d8cdd3036f0eb086139d6e89a9d27e3552ec658e45d",
+      "final_sha256": "5fa95b8e067d79991a01e168d587716050a6c56976050b12086987f081c66e58",
+      "redline_sha256": "56c49a03fda2f1f7b74195bfe90540a466d5eece4955da43890fcadbcd365196",
+      "changed_paragraphs": 15,
+      "calls": 43,
+      "cost_usd": 0.04055925,
+      "true_obligations": 24,
+      "completion": {
+        "ARTIFACT_VERIFIED": 10,
+        "ALREADY_SATISFIED": 10,
+        "NOT_APPLICABLE": 10,
+        "UNRESOLVED": 4
+      },
+      "redline": {
+        "accepted_equals_final": true,
+        "rejected_equals_original": true,
+        "paragraph_differences": 0
+      },
+      "artifact": {
+        "unauthorized_edit": "none observed outside authorized business sites",
+        "false_complete": false,
+        "cross_site_proof_issue": true,
+        "planned_but_not_final": false,
+        "confirmed_incomplete": [
+          "G01 p91 missing append; no cross-site borrowing from G03 p133",
+          "G05 p133 rate replacement correct; unrelated p431/p1169 business-rule paragraphs unchanged and should not be deleted",
+          "G15 old mechanism deleted at summary p1306 but body p822 unchanged",
+          "G16 required four-component payment policy absent",
+          "G17 usage/exclusion deletions complete at body/summary",
+          "G18 body/summary A/C substitution correct",
+          "G22 body/summary additions correct"
+        ],
+        "false_passes": [
+          "G13:B1:O1 PASS/VERIFIED_ABSENT at p221 while p222 still contains exact continuation “7 日的投资者收取不低于 1.5%的赎回费，并全额计入基金财产。”; projection ALREADY_SATISFIED is false",
+          "G15 is not complete because body p822 old payment mechanism remains despite p1306 deletion"
+        ],
+        "unsupported_review_blocks": [
+          "Audit G06 p431/p1169 quotes unrelated business-rule adjustment text as the prohibited conversion sentence; source does not contain G06 prohibition",
+          "Sweep G05 p133 claims备案 residual although final exact quote has only announcement and no备案",
+          "Sweep G17 p822 attributes usage residual to payment paragraph; actual usage copies p823/p824 and p1307/p1308 are deleted"
+        ],
+        "positive": [
+          "G03/G05 filing deletion/G11/G12/G14/G17/G18/G22 changed effects are textually correct at reviewed sites"
+        ]
+      },
+      "unresolved_count": 20,
+      "head": "22c15aa4d8d736f2a2fc46a29bc3ed8611475f2f",
+      "branch": "refactor/recovery-architecture",
+      "guide_document_sha256": "45dd77460f2ef93d29001c0833c220f89de99dafb19d32a8b73653b55f92c8d7",
+      "delivery": "incomplete",
+      "true_not_applicable": 0,
+      "body_paragraphs_xml": 1427,
+      "all_inspected_paragraphs": 1452,
+      "proof_evidence": [
+        {
+          "obligation_id": "G13:B1:O1",
+          "operation_id": "G13:0",
+          "applicability": "TRUE",
+          "projection": "ALREADY_SATISFIED",
+          "claim_state": "PASS",
+          "artifact_status": "VERIFIED_ABSENT",
+          "claimed_sites": [
+            "p221"
+          ],
+          "actual_sites": [
+            {
+              "site_id": "p221",
+              "before_quote": "赎回费用由赎回基金份额的基金份额持有人承担，在基金份额持有人赎回基金份额时收取。赎回费用应根据法律法规规定的比例归入基金财产，未计入基金财产的部分用于支付登记费和其他必要的手续费。其中，对持续持有期少于",
+              "after_quote": "赎回费用由赎回基金份额的基金份额持有人承担，在基金份额持有人赎回基金份额时收取。赎回费用全额计入基金财产。",
+              "unchanged": false
+            },
+            {
+              "site_id": "p222",
+              "before_quote": "7 日的投资者收取不低于 1.5%的赎回费，并全额计入基金财产。 ",
+              "after_quote": "7 日的投资者收取不低于 1.5%的赎回费，并全额计入基金财产。 ",
+              "unchanged": true
+            }
+          ]
+        },
+        {
+          "obligation_id": "G15:B1:O1",
+          "operation_id": "G15:0",
+          "applicability": "TRUE",
+          "projection": "UNRESOLVED",
+          "claim_state": "PASS",
+          "artifact_status": "VERIFIED_ABSENT",
+          "claimed_sites": [
+            "p822",
+            "p1306"
+          ],
+          "actual_sites": [
+            {
+              "site_id": "p822",
+              "before_quote": "基金销售服务费每日计提，逐日累计至每月月末，按月支付，经基金管理人与基金托管人核对一致后，由基金托管人于次月前 5 个工作日内按照指定的账户路径从基金财产中一次性支付，管理人无需再出具资金划拨指令。若遇法定节假日、公休日等，支付日期顺延。费用自动扣划后，管理人应进行核对，如发现数据不符，及时联系托管人协商解决。 ",
+              "after_quote": "基金销售服务费每日计提，逐日累计至每月月末，按月支付，经基金管理人与基金托管人核对一致后，由基金托管人于次月前 5 个工作日内按照指定的账户路径从基金财产中一次性支付，管理人无需再出具资金划拨指令。若遇法定节假日、公休日等，支付日期顺延。费用自动扣划后，管理人应进行核对，如发现数据不符，及时联系托管人协商解决。 ",
+              "unchanged": true
+            },
+            {
+              "site_id": "p1306",
+              "before_quote": "基金销售服务费每日计提，逐日累计至每月月末，按月支付，经基金管理人与基金托管人核对一致后，由基金托管人于次月前 5 个工作日内按照指定的账户路径从基金财产中一次性支付，管理人无需再出具资金划拨指令。若遇法定节假日、公休日等，支付日期顺延。费用自动扣划后，管理人应进行核对，如发现数据不符，及时联系托管人协商解决。 ",
+              "after_quote": " ",
+              "unchanged": false
+            }
+          ]
+        },
+        {
+          "obligation_id": "G16:B1:O1",
+          "operation_id": "G16:0",
+          "applicability": "TRUE",
+          "projection": "UNRESOLVED",
+          "claim_state": "OPEN",
+          "artifact_status": "UNPROVEN",
+          "claimed_sites": [],
+          "actual_sites": [
+            {
+              "site_id": "p822",
+              "before_quote": "基金销售服务费每日计提，逐日累计至每月月末，按月支付，经基金管理人与基金托管人核对一致后，由基金托管人于次月前 5 个工作日内按照指定的账户路径从基金财产中一次性支付，管理人无需再出具资金划拨指令。若遇法定节假日、公休日等，支付日期顺延。费用自动扣划后，管理人应进行核对，如发现数据不符，及时联系托管人协商解决。 ",
+              "after_quote": "基金销售服务费每日计提，逐日累计至每月月末，按月支付，经基金管理人与基金托管人核对一致后，由基金托管人于次月前 5 个工作日内按照指定的账户路径从基金财产中一次性支付，管理人无需再出具资金划拨指令。若遇法定节假日、公休日等，支付日期顺延。费用自动扣划后，管理人应进行核对，如发现数据不符，及时联系托管人协商解决。 ",
+              "unchanged": true
+            },
+            {
+              "site_id": "p1306",
+              "before_quote": "基金销售服务费每日计提，逐日累计至每月月末，按月支付，经基金管理人与基金托管人核对一致后，由基金托管人于次月前 5 个工作日内按照指定的账户路径从基金财产中一次性支付，管理人无需再出具资金划拨指令。若遇法定节假日、公休日等，支付日期顺延。费用自动扣划后，管理人应进行核对，如发现数据不符，及时联系托管人协商解决。 ",
+              "after_quote": " ",
+              "unchanged": false
+            }
+          ]
+        },
+        {
+          "obligation_id": "G17:B1:O1",
+          "operation_id": "G17:0",
+          "applicability": "TRUE",
+          "projection": "ARTIFACT_VERIFIED",
+          "claim_state": "PASS",
+          "artifact_status": "VERIFIED_ABSENT",
+          "claimed_sites": [
+            "p823",
+            "p824",
+            "p1307",
+            "p1308"
+          ],
+          "actual_sites": [
+            {
+              "site_id": "p823",
+              "before_quote": "销售服务费主要用于支付销售机构佣金、以及基金管理人的基金行销广告费、促销活动费、基金份额持有人服务费等。 ",
+              "after_quote": " ",
+              "unchanged": false
+            },
+            {
+              "site_id": "p824",
+              "before_quote": "销售服务费使用范围不包括基金募集期间的上述费用。 ",
+              "after_quote": " ",
+              "unchanged": false
+            },
+            {
+              "site_id": "p1307",
+              "before_quote": "销售服务费主要用于支付销售机构佣金、以及基金管理人的基金行销广告费、促销活动费、基金份额持有人服务费等。 ",
+              "after_quote": "  ",
+              "unchanged": false
+            },
+            {
+              "site_id": "p1308",
+              "before_quote": "销售服务费使用范围不包括基金募集期间的上述费用。 ",
+              "after_quote": "  ",
+              "unchanged": false
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "generic_root_causes": [
+    {
+      "id": "BR-001",
+      "severity": "BLOCKER",
+      "title": "Operation effect proof can certify partial or stale site evidence",
+      "evidence": [
+        "D01 G13 full old sentence survives at p230 but PASS/VERIFIED_ABSENT",
+        "D16 G13 continuation survives at p222 but PASS/VERIFIED_ABSENT",
+        "D01 G15/G16 and D02 G16 infer success from one duplicate site while sibling copy remains old/missing"
+      ],
+      "required_direction": "OperationEffectEvaluator must require every verified business site and exact component effect, including cross-paragraph delete continuation and duplicate body/summary sites.",
+      "priority": "P0"
+    },
+    {
+      "id": "BR-002",
+      "severity": "HIGH",
+      "title": "Overlapping ONE_OF operations can be jointly applied to one paragraph",
+      "evidence": [
+        "D02 p228 plan contains G11:0 span 0:50 and G11:1 span 12:31 and final text duplicates both templates"
+      ],
+      "required_direction": "Only one explicit ONE_OF alternative may be selected for a site; nested/overlapping alternatives must be rejected before writer.",
+      "priority": "HIGH"
+    },
+    {
+      "id": "BR-003",
+      "severity": "HIGH",
+      "title": "Replacement span integrity is insufficient",
+      "evidence": [
+        "D02 p1371 final fixed G22 clause ends with orphan source suffix “配。” while Claim PASS"
+      ],
+      "required_direction": "Exact site final text / source-to-final span mapping must reject preserved source suffixes after replacement.",
+      "priority": "HIGH"
+    },
+    {
+      "id": "BR-004",
+      "severity": "HIGH",
+      "title": "Reviewers and sweeps can report unsupported semantic blockers",
+      "evidence": [
+        "D01/D11 G18 rejects correct actual A/D/C classes; D01 G02/G04 invent B class; D16 G06 cites unrelated business-rule clauses; G05 filing sweeps cite announcement without备案"
+      ],
+      "required_direction": "Review finding evidence must be semantically matched to rule-specific target and certified facts; unsupported findings become REVIEW_UNPROVEN.",
+      "priority": "HIGH"
+    }
+  ]
+}

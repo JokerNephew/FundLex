@@ -1,0 +1,54 @@
+{
+  "body": {
+    "schema_version": "fundlex-model-cassette-v1",
+    "request": {
+      "task_type": "recall_verify",
+      "prompt_version": "recall_verify_v1",
+      "configured_model": "deepseek-v4.1-flash",
+      "context_sha256": "36a239c8549b0e3cc41d9f9de8d8d32088098d488755f3380c2d6202f847dd12",
+      "request": {
+        "bounded_context": "BEFORE\n其中，对持续持有期少于 7 日的投资者收取不低于 1.5%的赎回费，并全额计入基金财产。\n\nAFTER\n\n\nGUIDE_OPERATION\n{\"rule_id\": \"G13\", \"requirement\": \"删除“本基金对持续持有期少于7日的投资者收取不低于1.50%的赎回费，并将上述赎回费全额计入基金财产。”。\", \"fixed_policy_text\": \"\"}\n\nFACTS\n{\"fund_type\": \"open_regular\", \"fund_type_quote\": \"ETF 联接基金\", \"fund_type_basis\": \"本基金为广发上证50ETF的联接基金，采用契约型开放式运作，属于普通开放式基金，而非ETF本身。\", \"class_count\": 2, \"classes\": [{\"name\": \"A类\", \"subscription_fee\": true, \"service_fee\": false, \"current\": true, \"rate\": null, \"quote\": \"在投资者认购、申购基金份额时收取认购、申购费用，而不计提销售服务费的，称为 A 类基金份额\"}, {\"name\": \"C类\", \"subscription_fee\": false, \"service_fee\": true, \"current\": true, \"rate\": null, \"quote\": \"在投资者认购、申购基金份额时不收取认购、申购费用，而是从本类别基金资产中计提销售服务费的，称为 C 类基金份额\"}], \"subscription_group\": [\"A类\"], \"service_group\": [\"C类\"], \"share_class_structure\": \"MULTIPLE\", \"direct_sales_exempt_group\": [], \"other_sales_charged_group\": [], \"fact_status\": {\"fund_type\": \"VERIFIED\", \"share_class_structure\": \"VERIFIED\", \"subscription_fee_group\": \"VERIFIED\", \"service_fee_group\": \"VERIFIED\", \"direct_sales_exempt_group\": \"UNKNOWN\", \"other_sales_charged_group\": \"UNKNOWN\"}, \"condition_overrides\": {}, \"has_s",
+        "instruction": "Read [BEFORE] (the contract text that was rewritten), [AFTER] (the proposed replacement), [GUIDE_OPERATION] and [FACTS]. Answer only what cannot be proven mechanically: (1) does AFTER carry out the guide requirement in business meaning — paraphrasing is allowed, exact wording is not required; (2) does it keep the parts of BEFORE the guide does not authorize changing; (3) does it avoid obligations, promises or content the guide does not state. Do NOT re-check numbers, share-class letters or the text outside the span — those are verified separately. Reply verdict=pass only when all three hold; otherwise verdict=fail with one short reason.",
+        "response_schema": {
+          "type": "object",
+          "required": [
+            "verdict",
+            "reason"
+          ],
+          "properties": {
+            "verdict": {
+              "enum": [
+                "pass",
+                "fail"
+              ]
+            },
+            "reason": {
+              "type": "string"
+            }
+          }
+        },
+        "request_options": {
+          "thinking": {
+            "type": "disabled"
+          }
+        },
+        "max_completion_tokens": 8000
+      }
+    },
+    "response": {
+      "verdict": "pass",
+      "reason": "AFTER 为空，符合指南要求删除该句；未保留指南未授权保留的内容，也未新增任何义务或承诺。"
+    },
+    "event": {
+      "task_type": "recall_verify",
+      "prompt_version": "recall_verify_v1",
+      "context_sha256": "36a239c8549b0e3cc41d9f9de8d8d32088098d488755f3380c2d6202f847dd12",
+      "configured_model": "deepseek-v4.1-flash",
+      "actual_model": "deepseek-v4.1-flash",
+      "http_status": 200,
+      "finish_reason": "stop",
+      "error_code": null
+    }
+  },
+  "sha256": "af6429cc289d9af10593227a7bfaeb806d1852f5322edd8cb0421b9d7118cbf5"
+}

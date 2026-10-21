@@ -1,0 +1,12 @@
+Traceback (most recent call last):
+  File "/home/opencode/fundlex/docs/evidence/final-validation-20261021/run_case.py", line 133, in <module>
+    main()
+  File "/home/opencode/fundlex/docs/evidence/final-validation-20261021/run_case.py", line 82, in main
+    gateway = build_role_gateway()
+              ^^^^^^^^^^^^^^^^^^^^
+  File "/home/opencode/fundlex/fundlex/models/roles.py", line 244, in build_role_gateway
+    configs, overrides = load_role_config()
+                         ^^^^^^^^^^^^^^^^^^
+  File "/home/opencode/fundlex/fundlex/models/config.py", line 246, in load_role_config
+    raise RoleConfigError("review model role is only partially configured")
+fundlex.models.config.RoleConfigError: review model role is only partially configured

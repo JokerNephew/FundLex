@@ -1,0 +1,54 @@
+{
+  "body": {
+    "schema_version": "fundlex-model-cassette-v1",
+    "request": {
+      "task_type": "recall_verify",
+      "prompt_version": "recall_verify_v1",
+      "configured_model": "deepseek-v4.1-flash",
+      "context_sha256": "a58c19026a42c95c1e94cc41906e546b421614d33f55674263b32b6fda5cef64",
+      "request": {
+        "bounded_context": "BEFORE\n本基金对持续持有期少于 7 日的投资者收取 1.50%的赎回费，并将上述赎回费全额计入基金财产。\n\nAFTER\n\n\nGUIDE_OPERATION\n{\"rule_id\": \"G13\", \"requirement\": \"删除“本基金对持续持有期少于7日的投资者收取不低于1.50%的赎回费，并将上述赎回费全额计入基金财产。”。\", \"fixed_policy_text\": \"\"}\n\nFACTS\n{\"fund_type\": \"open_regular\", \"fund_type_quote\": \"契约型开放式\", \"fund_type_basis\": \"基金运作方式为契约型开放式，属于普通开放式基金；虽提及未来可能转换为ETF联接基金，但当前并非ETF或联接基金。\", \"class_count\": 3, \"classes\": [{\"name\": \"A类\", \"subscription_fee\": true, \"service_fee\": false, \"current\": true, \"rate\": null, \"quote\": \"在投资者申购 A 类及 D 类基金份额时收取申购费用，不计提销售服务费\"}, {\"name\": \"C类\", \"subscription_fee\": false, \"service_fee\": true, \"current\": true, \"rate\": null, \"quote\": \"在投资者申购 C 类基金份额时不收取申购费用，而从本类别基金资产中计提销售服务费\"}, {\"name\": \"D类\", \"subscription_fee\": true, \"service_fee\": false, \"current\": true, \"rate\": null, \"quote\": \"在投资者申购 A 类及 D 类基金份额时收取申购费用，不计提销售服务费\"}], \"subscription_group\": [\"A类\", \"D类\"], \"service_group\": [\"C类\"], \"share_class_structure\": \"MULTIPLE\", \"direct_sales_exempt_group\": [], \"other_sales_charged_group\": [], \"fact_status\": {\"fund_type\": \"VERIFIED\", \"share_class_structure\": \"VERIFIED\", \"subscription_fee_group\": \"VERIFIED\", \"service_fee_grou",
+        "instruction": "Read [BEFORE] (the contract text that was rewritten), [AFTER] (the proposed replacement), [GUIDE_OPERATION] and [FACTS]. Answer only what cannot be proven mechanically: (1) does AFTER carry out the guide requirement in business meaning — paraphrasing is allowed, exact wording is not required; (2) does it keep the parts of BEFORE the guide does not authorize changing; (3) does it avoid obligations, promises or content the guide does not state. Do NOT re-check numbers, share-class letters or the text outside the span — those are verified separately. Reply verdict=pass only when all three hold; otherwise verdict=fail with one short reason.",
+        "response_schema": {
+          "type": "object",
+          "required": [
+            "verdict",
+            "reason"
+          ],
+          "properties": {
+            "verdict": {
+              "enum": [
+                "pass",
+                "fail"
+              ]
+            },
+            "reason": {
+              "type": "string"
+            }
+          }
+        },
+        "request_options": {
+          "thinking": {
+            "type": "disabled"
+          }
+        },
+        "max_completion_tokens": 8000
+      }
+    },
+    "response": {
+      "verdict": "pass",
+      "reason": "指南要求删除该赎回费条款，AFTER 为空，已完全删除；未保留任何未经授权修改的内容，也未新增义务或承诺。"
+    },
+    "event": {
+      "task_type": "recall_verify",
+      "prompt_version": "recall_verify_v1",
+      "context_sha256": "a58c19026a42c95c1e94cc41906e546b421614d33f55674263b32b6fda5cef64",
+      "configured_model": "deepseek-v4.1-flash",
+      "actual_model": "deepseek-v4.1-flash",
+      "http_status": 200,
+      "finish_reason": "stop",
+      "error_code": null
+    }
+  },
+  "sha256": "2affc9303df84be4b458e15400247ff93bbddd0e1b3fd8ef7d724d55e81701d4"
+}

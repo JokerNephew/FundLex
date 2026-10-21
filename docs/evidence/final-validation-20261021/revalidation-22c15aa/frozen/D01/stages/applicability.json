@@ -1,0 +1,90 @@
+{
+  "schema_version": "fundlex-stage-v1",
+  "stage": "applicability",
+  "inputs": {
+    "facts": {
+      "fund_type": "open_regular",
+      "fund_type_quote": "契约型开放式",
+      "fund_type_basis": "基金运作方式为契约型开放式，属于普通开放式基金；虽提及未来可能转换为ETF联接基金，但当前并非ETF或联接基金。",
+      "class_count": 3,
+      "classes": [
+        {
+          "name": "A类",
+          "subscription_fee": true,
+          "service_fee": false,
+          "current": true,
+          "rate": null,
+          "quote": "在投资者申购 A 类及 D 类基金份额时收取申购费用，不计提销售服务费"
+        },
+        {
+          "name": "C类",
+          "subscription_fee": false,
+          "service_fee": true,
+          "current": true,
+          "rate": null,
+          "quote": "在投资者申购 C 类基金份额时不收取申购费用，而从本类别基金资产中计提销售服务费"
+        },
+        {
+          "name": "D类",
+          "subscription_fee": true,
+          "service_fee": false,
+          "current": true,
+          "rate": null,
+          "quote": "在投资者申购 A 类及 D 类基金份额时收取申购费用，不计提销售服务费"
+        }
+      ],
+      "subscription_group": [
+        "A类",
+        "D类"
+      ],
+      "service_group": [
+        "C类"
+      ],
+      "share_class_structure": "MULTIPLE",
+      "direct_sales_exempt_group": [],
+      "other_sales_charged_group": [],
+      "fact_status": {
+        "fund_type": "VERIFIED",
+        "share_class_structure": "VERIFIED",
+        "subscription_fee_group": "VERIFIED",
+        "service_fee_group": "VERIFIED",
+        "direct_sales_exempt_group": "UNKNOWN",
+        "other_sales_charged_group": "UNKNOWN"
+      },
+      "condition_overrides": {},
+      "has_service_fee": true,
+      "is_floating_fee": false,
+      "floating_quote": "本基金的管理费按前一日基金资产净值的 0.15%年费率计提。",
+      "floating_basis": "管理费为固定年费率，未与持有期限或业绩挂钩。",
+      "notes": "A类、D类收取申购费且不计提销售服务费；C类不收申购费但计提销售服务费（0.10%年费率）。管理费0.15%、托管费0.05%均为固定费率。",
+      "quotes_verified": {
+        "fund_type": true,
+        "class:A类": true,
+        "class:C类": true,
+        "class:D类": true,
+        "floating": true,
+        "class_set": true
+      },
+      "class_set_quote": "本基金将基金份额分为 A 类、C 类和 D 类三种不同的类别。在投资者申购 A 类及 D 类基金份额时收取申购费用，不计提销售服务费；在投资者申购 C 类基金份额时不收取申购费用，而从本类别基金资产中计提销售服务费。",
+      "class_set_evidence": {
+        "quote_verified": true,
+        "set_complete_verified": true,
+        "parsed_classes": [
+          "A",
+          "C",
+          "D"
+        ],
+        "reason": "CLASS_SET_VERIFIED"
+      },
+      "value_verified": true,
+      "set_complete_verified": true,
+      "fund_type_certification": {},
+      "channel_evidence": {
+        "direct_sales_exempt": "",
+        "other_sales_charged": ""
+      },
+      "problems": []
+    }
+  },
+  "inputs_sha256": "2ecc55de00730d8bc48b61c670a7072d60bf512391b238a7ea9bd3b4ae61c961"
+}

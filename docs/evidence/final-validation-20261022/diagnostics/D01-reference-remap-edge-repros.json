@@ -1,0 +1,74 @@
+{
+  "runtime_state": "uncommitted retained-reference fix based on 682e68a",
+  "atomic_unbound": {
+    "retained_edit_count": 0,
+    "unbound_rows": [
+      {
+        "target_id": "UNBOUND:8cd8ed4acf09a171b974",
+        "old_id": "T0",
+        "rule_id": "G99",
+        "operation_keys": [
+          "G99:0"
+        ],
+        "status": "unresolved",
+        "reason": "RECALL_PLAN_REFERENCE_UNBOUND"
+      },
+      {
+        "target_id": "UNBOUND:8ae30c8134f0003cdfdc",
+        "old_id": "T1",
+        "rule_id": "G99",
+        "operation_keys": [
+          "G99:1"
+        ],
+        "status": "unresolved",
+        "reason": "RECALL_PLAN_REFERENCE_UNBOUND"
+      },
+      {
+        "target_id": "UNBOUND:8cd8ed4acf09a171b974",
+        "old_id": "T0",
+        "rule_id": "G99",
+        "operation_keys": [
+          "G99:0"
+        ],
+        "status": "unresolved",
+        "reason": "RECALL_PLAN_REFERENCE_UNBOUND"
+      },
+      {
+        "target_id": "UNBOUND:8ae30c8134f0003cdfdc",
+        "old_id": "T1",
+        "rule_id": "G99",
+        "operation_keys": [
+          "G99:1"
+        ],
+        "status": "unresolved",
+        "reason": "RECALL_PLAN_REFERENCE_UNBOUND"
+      }
+    ]
+  },
+  "stale_conflict": {
+    "current_target_ids": [
+      "New"
+    ],
+    "ledger": [
+      {
+        "target_id": "New",
+        "reason": "RECALL_EDIT_OVERLAP"
+      }
+    ],
+    "conflicts": [
+      {
+        "code": "RECALL_EDIT_OVERLAP",
+        "location": "p0",
+        "targets": [
+          "Old"
+        ],
+        "spans": [
+          [
+            0,
+            16
+          ]
+        ]
+      }
+    ]
+  }
+}

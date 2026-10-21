@@ -1,0 +1,416 @@
+{
+  "head": "682e68a5b3ef2a58feb77460af70afabdb314379",
+  "runtime_state": "uncommitted stable dirty closure change; baseline HEAD is not full current-runtime certification",
+  "classification": "HIGH / RETAINED_REFERENCE_ID_REUSE",
+  "case": "D01",
+  "boundary": "plan-2",
+  "mismatched_components": [
+    {
+      "component": {
+        "target_id": "S03_S04_S07_S16_S17_S20_S26#1:T003",
+        "rule_id": "G05",
+        "operation_keys": [
+          "G05:0"
+        ],
+        "location": "p135",
+        "start": 130,
+        "end": 136
+      },
+      "same_id_current_target": {
+        "target_id": "S03_S04_S07_S16_S17_S20_S26#1:T003",
+        "rule_id": "G03",
+        "operations": [
+          "G03:0"
+        ],
+        "location": "p130",
+        "start": 0,
+        "end": 108
+      },
+      "stable_op_site_candidates": [
+        {
+          "target_id": "S03_S04_S07_S16_S17_S20_S26#1:T005",
+          "rule_id": "G05",
+          "operations": [
+            "G05:0"
+          ],
+          "location": "p135",
+          "start": 130,
+          "end": 136,
+          "composite": [],
+          "occurrence_index": -1
+        }
+      ]
+    },
+    {
+      "component": {
+        "target_id": "S03_S04_S07_S16_S17_S20_S26#1:T007",
+        "rule_id": "G08",
+        "operation_keys": [
+          "G08:0"
+        ],
+        "location": "p226",
+        "start": 5,
+        "end": 50
+      },
+      "same_id_current_target": {
+        "target_id": "S03_S04_S07_S16_S17_S20_S26#1:T007",
+        "rule_id": "G05",
+        "operations": [
+          "G05:2"
+        ],
+        "location": "p135",
+        "start": null,
+        "end": null
+      },
+      "stable_op_site_candidates": [
+        {
+          "target_id": "S03_S04_S07_S16_S17_S20_S26#1:T010",
+          "rule_id": "G08",
+          "operations": [
+            "G08:0"
+          ],
+          "location": "p226",
+          "start": 5,
+          "end": 50,
+          "composite": [],
+          "occurrence_index": -1
+        }
+      ]
+    },
+    {
+      "component": {
+        "target_id": "S03_S04_S07_S16_S17_S20_S26#1:T008",
+        "rule_id": "G09",
+        "operation_keys": [
+          "G09:0"
+        ],
+        "location": "p227",
+        "start": 61,
+        "end": 108
+      },
+      "same_id_current_target": {
+        "target_id": "S03_S04_S07_S16_S17_S20_S26#1:T008",
+        "rule_id": "G06",
+        "operations": [
+          "G06:0"
+        ],
+        "location": "p135",
+        "start": 0,
+        "end": 172
+      },
+      "stable_op_site_candidates": [
+        {
+          "target_id": "S03_S04_S07_S16_S17_S20_S26#1:T011",
+          "rule_id": "G09",
+          "operations": [
+            "G09:0"
+          ],
+          "location": "p227",
+          "start": 61,
+          "end": 108,
+          "composite": [],
+          "occurrence_index": -1
+        }
+      ]
+    },
+    {
+      "component": {
+        "target_id": "S03_S04_S07_S16_S17_S20_S26#1:T011",
+        "rule_id": "G13",
+        "operation_keys": [
+          "G13:0"
+        ],
+        "location": "p230",
+        "start": 199,
+        "end": 247
+      },
+      "same_id_current_target": {
+        "target_id": "S03_S04_S07_S16_S17_S20_S26#1:T011",
+        "rule_id": "G09",
+        "operations": [
+          "G09:0"
+        ],
+        "location": "p227",
+        "start": 61,
+        "end": 108
+      },
+      "stable_op_site_candidates": [
+        {
+          "target_id": "S03_S04_S07_S16_S17_S20_S26#1:T016",
+          "rule_id": "G13",
+          "operations": [
+            "G13:0"
+          ],
+          "location": "p230",
+          "start": 199,
+          "end": 247,
+          "composite": [],
+          "occurrence_index": -1
+        }
+      ]
+    },
+    {
+      "component": {
+        "target_id": "S03_S04_S07_S16_S17_S20_S26#1:T012",
+        "rule_id": "G14",
+        "operation_keys": [
+          "G14:3"
+        ],
+        "location": "p231",
+        "start": 112,
+        "end": 146
+      },
+      "same_id_current_target": {
+        "target_id": "S03_S04_S07_S16_S17_S20_S26#1:T012",
+        "rule_id": "G10",
+        "operations": [
+          "G10:0"
+        ],
+        "location": "p228",
+        "start": 0,
+        "end": 47
+      },
+      "stable_op_site_candidates": [
+        {
+          "target_id": "S03_S04_S07_S16_S17_S20_S26#1:T017",
+          "rule_id": "G14",
+          "operations": [
+            "G14:3"
+          ],
+          "location": "p231",
+          "start": 112,
+          "end": 146,
+          "composite": [],
+          "occurrence_index": -1
+        }
+      ]
+    },
+    {
+      "component": {
+        "target_id": "S03_S04_S07_S16_S17_S20_S26#1:T015",
+        "rule_id": "G18",
+        "operation_keys": [
+          "G18:0"
+        ],
+        "location": "p785",
+        "start": 0,
+        "end": 47
+      },
+      "same_id_current_target": {
+        "target_id": "S03_S04_S07_S16_S17_S20_S26#1:T015",
+        "rule_id": "G12",
+        "operations": [
+          "G12:1"
+        ],
+        "location": "p229",
+        "start": 0,
+        "end": 103
+      },
+      "stable_op_site_candidates": [
+        {
+          "target_id": "S03_S04_S07_S16_S17_S20_S26#1:T021",
+          "rule_id": "G18",
+          "operations": [
+            "G18:0"
+          ],
+          "location": "p785",
+          "start": 0,
+          "end": 47,
+          "composite": [],
+          "occurrence_index": -1
+        }
+      ]
+    },
+    {
+      "component": {
+        "target_id": "S03_S04_S07_S16_S17_S20_S26#1:T016",
+        "rule_id": "G22",
+        "operation_keys": [
+          "G22:0"
+        ],
+        "location": "p934",
+        "start": 0,
+        "end": 79
+      },
+      "same_id_current_target": {
+        "target_id": "S03_S04_S07_S16_S17_S20_S26#1:T016",
+        "rule_id": "G13",
+        "operations": [
+          "G13:0"
+        ],
+        "location": "p230",
+        "start": 199,
+        "end": 247
+      },
+      "stable_op_site_candidates": [
+        {
+          "target_id": "S03_S04_S07_S16_S17_S20_S26#1:T025",
+          "rule_id": "G22",
+          "operations": [
+            "G22:0"
+          ],
+          "location": "p934",
+          "start": 0,
+          "end": 79,
+          "composite": [],
+          "occurrence_index": -1
+        }
+      ]
+    },
+    {
+      "component": {
+        "target_id": "S03_S04_S07_S16_S17_S20_S26#1:T017",
+        "rule_id": "G22",
+        "operation_keys": [
+          "G22:0"
+        ],
+        "location": "p1299",
+        "start": 0,
+        "end": 79
+      },
+      "same_id_current_target": {
+        "target_id": "S03_S04_S07_S16_S17_S20_S26#1:T017",
+        "rule_id": "G14",
+        "operations": [
+          "G14:3"
+        ],
+        "location": "p231",
+        "start": 112,
+        "end": 146
+      },
+      "stable_op_site_candidates": [
+        {
+          "target_id": "S03_S04_S07_S16_S17_S20_S26#1:T026",
+          "rule_id": "G22",
+          "operations": [
+            "G22:0"
+          ],
+          "location": "p1299",
+          "start": 0,
+          "end": 79,
+          "composite": [],
+          "occurrence_index": -1
+        }
+      ]
+    },
+    {
+      "component": {
+        "target_id": "Y005-D3",
+        "rule_id": "G15",
+        "operation_keys": [
+          "G15:0"
+        ],
+        "location": "p758",
+        "start": 0,
+        "end": 136
+      },
+      "same_id_current_target": null,
+      "stable_op_site_candidates": [
+        {
+          "target_id": "S03_S04_S07_S16_S17_S20_S26#1:T018",
+          "rule_id": "G15",
+          "operations": [
+            "G15:0"
+          ],
+          "location": "p758",
+          "start": 0,
+          "end": 135,
+          "composite": [],
+          "occurrence_index": -1
+        }
+      ]
+    },
+    {
+      "component": {
+        "target_id": "S03_S04_S07_S16_S17_S20_S26#1:T019",
+        "rule_id": "G17",
+        "operation_keys": [
+          "G17:0"
+        ],
+        "location": "p759",
+        "start": 0,
+        "end": 52
+      },
+      "same_id_current_target": {
+        "target_id": "S03_S04_S07_S16_S17_S20_S26#1:T019",
+        "rule_id": "G16",
+        "operations": [
+          "G16:0"
+        ],
+        "location": "p760",
+        "start": 0,
+        "end": 24
+      },
+      "stable_op_site_candidates": [
+        {
+          "target_id": "S03_S04_S07_S16_S17_S20_S26#1:T020",
+          "rule_id": "G17",
+          "operations": [
+            "G17:0"
+          ],
+          "location": "p759",
+          "start": 0,
+          "end": 52,
+          "composite": [],
+          "occurrence_index": -1
+        },
+        {
+          "target_id": "Y006",
+          "rule_id": "G17",
+          "operations": [
+            "G17:0"
+          ],
+          "location": "p759",
+          "start": 0,
+          "end": 52,
+          "composite": [
+            "p759:0:52",
+            "p760:0:24"
+          ],
+          "occurrence_index": -1
+        }
+      ]
+    },
+    {
+      "component": {
+        "target_id": "S03_S04_S07_S16_S17_S20_S26#1:T020",
+        "rule_id": "G17",
+        "operation_keys": [
+          "G17:0"
+        ],
+        "location": "p760",
+        "start": 0,
+        "end": 24
+      },
+      "same_id_current_target": {
+        "target_id": "S03_S04_S07_S16_S17_S20_S26#1:T020",
+        "rule_id": "G17",
+        "operations": [
+          "G17:0"
+        ],
+        "location": "p759",
+        "start": 0,
+        "end": 52
+      },
+      "stable_op_site_candidates": [
+        {
+          "target_id": "Y006",
+          "rule_id": "G17",
+          "operations": [
+            "G17:0"
+          ],
+          "location": "p759",
+          "start": 0,
+          "end": 52,
+          "composite": [
+            "p759:0:52",
+            "p760:0:24"
+          ],
+          "occurrence_index": -1
+        }
+      ]
+    }
+  ],
+  "note": "This structural check only identifies stale IDs and operation/site candidates. A repair must additionally verify source spans and occurrence identity before rebinding.",
+  "mismatched_component_count": 11
+}

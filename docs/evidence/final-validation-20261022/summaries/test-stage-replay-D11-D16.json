@@ -1,0 +1,146 @@
+{
+  "reviewed_head": "682e68a5b3ef2a58feb77460af70afabdb314379",
+  "created_at": "2026-10-21T17:22:25.272211+00:00",
+  "network_ban": [
+    "httpx.Client.send",
+    "httpx.AsyncClient.send",
+    "ModelGateway.from_env"
+  ],
+  "cases": {
+    "D11": {
+      "frozen_integrity": "PASS",
+      "stages": [
+        {
+          "stage": "facts",
+          "state": "PASS",
+          "same_head": true,
+          "cassette_replays": 0,
+          "model_calls": 0,
+          "repeat_semantics_equal": true,
+          "value_sha256": "14ffcf29a25be37e197625098d482991f853c0488ebeb37192936667352159a9",
+          "seconds": 1.158
+        },
+        {
+          "stage": "applicability",
+          "state": "PASS",
+          "same_head": true,
+          "cassette_replays": 0,
+          "model_calls": 0,
+          "repeat_semantics_equal": true,
+          "value_sha256": "2843614439184fd764e1bd1c17e6323a08aced6a637b35052bc9c7da99ee67e4",
+          "seconds": 1.074
+        },
+        {
+          "stage": "targets",
+          "state": "PASS",
+          "same_head": true,
+          "cassette_replays": 0,
+          "model_calls": 0,
+          "repeat_semantics_equal": true,
+          "value_sha256": "43072463accd2eabd419be9880a66518fd4adbc2c9926ea19075a731b21ad4de",
+          "seconds": 1.044
+        },
+        {
+          "stage": "obligations",
+          "state": "PASS",
+          "same_head": true,
+          "cassette_replays": 0,
+          "model_calls": 0,
+          "repeat_semantics_equal": true,
+          "value_sha256": "f6cffed166fad1b8ca88c1d1f770a4974c6c8c36e0ba17fc91243aa376759942",
+          "seconds": 1.13
+        },
+        {
+          "stage": "plan",
+          "state": "PASS",
+          "same_head": true,
+          "cassette_replays": 4,
+          "model_calls": 0,
+          "repeat_semantics_equal": true,
+          "value_sha256": "9267379f66d416bd86432710ac71d63036b0bfa2bcd45e7785e5a93eb0d63df8",
+          "seconds": 1.262
+        },
+        {
+          "stage": "claim_replay",
+          "state": "PASS",
+          "same_head": true,
+          "cassette_replays": 0,
+          "model_calls": 0,
+          "repeat_semantics_equal": true,
+          "value_sha256": "3f7d772ae6b348e07d57faa958a7fa3f2cc82c7e853bde8deec6899e6e12c2f8",
+          "seconds": 2.65,
+          "verified": false,
+          "failures": 4
+        }
+      ]
+    },
+    "D16": {
+      "frozen_integrity": "PASS",
+      "stages": [
+        {
+          "stage": "facts",
+          "state": "PASS",
+          "same_head": true,
+          "cassette_replays": 0,
+          "model_calls": 0,
+          "repeat_semantics_equal": true,
+          "value_sha256": "99aafc5ad416ce2ae7b870cb907032e440dbaca2dfd6d0dbef8d714c8f7dfd84",
+          "seconds": 1.221
+        },
+        {
+          "stage": "applicability",
+          "state": "PASS",
+          "same_head": true,
+          "cassette_replays": 0,
+          "model_calls": 0,
+          "repeat_semantics_equal": true,
+          "value_sha256": "2843614439184fd764e1bd1c17e6323a08aced6a637b35052bc9c7da99ee67e4",
+          "seconds": 1.291
+        },
+        {
+          "stage": "targets",
+          "state": "PASS",
+          "same_head": true,
+          "cassette_replays": 0,
+          "model_calls": 0,
+          "repeat_semantics_equal": true,
+          "value_sha256": "aa2d9d9eb9cda0b29eb97c1ff78da6e89f3cb0165c03c6ad359836c7cb23a8e6",
+          "seconds": 1.177
+        },
+        {
+          "stage": "obligations",
+          "state": "PASS",
+          "same_head": true,
+          "cassette_replays": 0,
+          "model_calls": 0,
+          "repeat_semantics_equal": true,
+          "value_sha256": "7bc266569c10c7e25ce7943aa20756a6ac753913e3f212d57c77ed3b91fec0f6",
+          "seconds": 1.277
+        },
+        {
+          "stage": "plan",
+          "state": "PASS",
+          "same_head": true,
+          "cassette_replays": 6,
+          "model_calls": 0,
+          "repeat_semantics_equal": true,
+          "value_sha256": "b5a193cd49d533441d93c591caccfdfdfe5080dc5e1e4f3bb4fdeffd00fdc84d",
+          "seconds": 1.328
+        },
+        {
+          "stage": "claim_replay",
+          "state": "PASS",
+          "same_head": true,
+          "cassette_replays": 0,
+          "model_calls": 0,
+          "repeat_semantics_equal": true,
+          "value_sha256": "c6e987b996ba8e5ab5ac914f229c9819edfc853d688060be62b314d60251408c",
+          "seconds": 2.805,
+          "verified": false,
+          "failures": 12
+        }
+      ]
+    }
+  },
+  "network_attempts": 0
+}

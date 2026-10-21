@@ -1,0 +1,140 @@
+{
+  "body": {
+    "schema_version": "fundlex-model-cassette-v1",
+    "request": {
+      "task_type": "recall_audit",
+      "prompt_version": "recall_audit_v1",
+      "configured_model": "deepseek-v4.1-flash",
+      "context_sha256": "db5bfbc1ed47f649fa76e39fe44382403f46ba4007d0cf969390f66f8c9b5a71",
+      "request": {
+        "bounded_context": "[BEFORE]\n[p129] 本基金根据认申购费用收取方式的不同，将基金份额分为不同的类别。在投资者认申购基金份额时收取认申购费用，而不计提销售服务费的，称为 A 类基金份额；在投资者认申购基金份额时不收取认申购费用，而是从本类别基金资产中计提销售服务费的，称为 C 类基金份额。 \n\n[AFTER]\n[p129] 本基金根据认申购费用收取方式的不同，将基金份额分为不同的类别。在投资者认申购基金份额时收取认申购费用，而不计提销售服务费的，称为 A 类基金份额；在投资者认申购基金份额时不收取认申购费用，而是从本类别基金资产中计提销售服务费的，称为 C 类基金份额。 \n\n[REQUIREMENTS]\nGUIDE_RULES\n[G04] 基金的基本情况-份额类别设置： | section_hint=基金的基本情况\n  requirement: 根据产品实际设置的基金份额类别及各类别适用的收费规则，对原描述中的份额类别进行分组替换：将适用“收取认购、申购费用且不计提销售服务费”规则的“A类基金份额”替换为实际适用该规则的全部基金份额类别，将适用“不收取认购、申购费用且计提销售服务费”规则的“C类基金份额”替换为实际适用该规则的全部基金份额类别。\n  [G04:0] replace: A类基金份额 -> A类、B类基金份额\n  [G04:1] replace: C类基金份额 -> C类、D类基金份额\n\n[TARGET_LEDGER]\n[\n {\n  \"target_id\": \"S03_S04_S07_S16_S17_S20#1:T005\",\n  \"rule_id\": \"G04\",\n  \"location\": \"p129\",\n  \"state\": \"needs_edit\",\n  \"quote\": \"称为 A 类基金份额\",\n  \"reason\": \"基金基本情况中A类份额描述需按分组替换规则处理。\",\n  \"plan_status\": \"satisfied\",\n  \"operation\": null,\n  \"replacement\": \"\"\n },\n {\n  \"target_id\": \"S03_S04_S07_S16_S17_S20#1:T006\",\n  \"rule_id\": \"G04\",\n  \"location\": \"p129\",\n  \"state\": \"needs_edit\",\n  \"quote\": \"称为 C 类基金份额\",\n  \"reason\": \"基金基本情况中C类份额描述需按分组替换规则处理。\",\n  \"plan_status\": \"satisfied\",\n  \"operation\": null,\n  \"replacement\": \"\"\n }\n]\n\n[OTHER_AUTHORIZED_EDITS]\n[]",
+        "instruction": "Read [BEFORE] (the original contract region), [AFTER] (the actual rewritten region taken from the produced file), [REQUIREMENTS] (the guide rules with their fixed policy text and the target ledger) and [OTHER_AUTHORIZED_EDITS] (changes other guide rules legitimately made in the same locations). Independently judge each target in the ledger: completed when the AFTER text satisfies the requirement with no lost content, incomplete when part of the requirement is missing, wrong when the AFTER text contradicts the requirement, drops required content, or adds policy the guide does not state. A rule whose slot classes are placeholders means the AFTER text must name the product's actual share classes that fall in that group: adding a real class the contract defines (for example including a D类 class in the group the guide wrote as A类) is correct instantiation, not an unauthorized addition, as long as [FACTS] lists that class in the group. Never report an OTHER_AUTHORIZED_EDITS change as an unauthorized addition. For every non-completed target also classify the root cause (failure_class) and, when known, the affected_fact or affected_obligation, so recovery can return to the correct business layer. A region shown as （该位置内容已删除） means the content was removed: for a deletion requirement that is completed, and for a replacement requirement judge it against the requirement and the ledger, not against the absence itself. Cite an exact contiguous evidence_quote from AFTER (or BEFORE when judging a loss) for every verdict. Also report missed_targets when you find a clause in AFTER that still needs editing but is absent from the ledger. Never trust the ledger over the actual text; never mark completed without reading AFTER.",
+        "response_schema": {
+          "type": "object",
+          "required": [
+            "results"
+          ],
+          "properties": {
+            "results": {
+              "type": "array",
+              "maxItems": 60,
+              "items": {
+                "type": "object",
+                "required": [
+                  "target_id",
+                  "verdict",
+                  "reason"
+                ],
+                "properties": {
+                  "target_id": {
+                    "type": "string"
+                  },
+                  "verdict": {
+                    "enum": [
+                      "completed",
+                      "incomplete",
+                      "wrong"
+                    ]
+                  },
+                  "reason": {
+                    "type": "string"
+                  },
+                  "evidence_quote": {
+                    "type": "string"
+                  },
+                  "failure_class": {
+                    "enum": [
+                      "FACT",
+                      "APPLICABILITY",
+                      "TARGET",
+                      "GENERATION",
+                      "EXECUTION",
+                      "VERIFICATION"
+                    ]
+                  },
+                  "affected_fact": {
+                    "type": "string"
+                  },
+                  "affected_obligation": {
+                    "type": "string"
+                  }
+                }
+              }
+            },
+            "missed_targets": {
+              "type": "array",
+              "maxItems": 20,
+              "items": {
+                "type": "object",
+                "required": [
+                  "rule_id",
+                  "location",
+                  "quote",
+                  "reason"
+                ],
+                "properties": {
+                  "rule_id": {
+                    "type": "string"
+                  },
+                  "location": {
+                    "type": "string"
+                  },
+                  "quote": {
+                    "type": "string"
+                  },
+                  "reason": {
+                    "type": "string"
+                  }
+                }
+              }
+            },
+            "notes": {
+              "type": "string"
+            }
+          }
+        },
+        "request_options": {
+          "thinking": {
+            "type": "disabled"
+          }
+        },
+        "max_completion_tokens": 8000
+      }
+    },
+    "response": {
+      "results": [
+        {
+          "target_id": "S03_S04_S07_S16_S17_S20#1:T005",
+          "verdict": "incomplete",
+          "reason": "The A类 group was not replaced with the actual classes A类、B类 as required by G04:0; the text still reads only A 类基金份额.",
+          "evidence_quote": "称为 A 类基金份额",
+          "failure_class": "GENERATION",
+          "affected_fact": "A类基金份额应替换为A类、B类基金份额",
+          "affected_obligation": "G04:0 replace A类基金份额 -> A类、B类基金份额"
+        },
+        {
+          "target_id": "S03_S04_S07_S16_S17_S20#1:T006",
+          "verdict": "incomplete",
+          "reason": "The C类 group was not replaced with the actual classes C类、D类 as required by G04:1; the text still reads only C 类基金份额.",
+          "evidence_quote": "称为 C 类基金份额",
+          "failure_class": "GENERATION",
+          "affected_fact": "C类基金份额应替换为C类、D类基金份额",
+          "affected_obligation": "G04:1 replace C类基金份额 -> C类、D类基金份额"
+        }
+      ],
+      "missed_targets": [],
+      "notes": "AFTER is identical to BEFORE at p129; neither share-class grouping replacement was applied."
+    },
+    "event": {
+      "task_type": "recall_audit",
+      "prompt_version": "recall_audit_v1",
+      "context_sha256": "db5bfbc1ed47f649fa76e39fe44382403f46ba4007d0cf969390f66f8c9b5a71",
+      "configured_model": "deepseek-v4.1-flash",
+      "actual_model": "deepseek-v4.1-flash",
+      "http_status": 200,
+      "finish_reason": "stop",
+      "error_code": null
+    }
+  },
+  "sha256": "09b62eb60b6395c744e8bfdf0f8d2770093ebcc8b1917c99613cbb94500330e4"
+}

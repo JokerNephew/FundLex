@@ -1,0 +1,5249 @@
+{
+  "schema_version": "fundlex-stage-v1",
+  "stage": "claim_replay",
+  "inputs": {
+    "facts": {
+      "fund_type": "open_regular",
+      "fund_type_quote": "ETF 联接基金",
+      "fund_type_basis": "本基金为广发上证50ETF的联接基金，采用契约型开放式运作，属于普通开放式基金，而非ETF本身。",
+      "class_count": 2,
+      "classes": [
+        {
+          "name": "A类",
+          "subscription_fee": true,
+          "service_fee": false,
+          "current": true,
+          "rate": null,
+          "quote": "在投资者认购、申购基金份额时收取认购、申购费用，而不计提销售服务费的，称为 A 类基金份额"
+        },
+        {
+          "name": "C类",
+          "subscription_fee": false,
+          "service_fee": true,
+          "current": true,
+          "rate": null,
+          "quote": "在投资者认购、申购基金份额时不收取认购、申购费用，而是从本类别基金资产中计提销售服务费的，称为 C 类基金份额"
+        }
+      ],
+      "subscription_group": [
+        "A类"
+      ],
+      "service_group": [
+        "C类"
+      ],
+      "share_class_structure": "MULTIPLE",
+      "direct_sales_exempt_group": [],
+      "other_sales_charged_group": [],
+      "fact_status": {
+        "fund_type": "VERIFIED",
+        "share_class_structure": "VERIFIED",
+        "subscription_fee_group": "VERIFIED",
+        "service_fee_group": "VERIFIED",
+        "direct_sales_exempt_group": "UNKNOWN",
+        "other_sales_charged_group": "UNKNOWN"
+      },
+      "condition_overrides": {},
+      "has_service_fee": true,
+      "is_floating_fee": false,
+      "floating_quote": "本基金管理费按前一日基金资产净值扣除所持有目标 ETF 基金份额部分的基金资产净值后的余额（若为负数，则取 0）的 0.15%年费率计提。",
+      "floating_basis": "管理费按固定年费率0.15%计提，未与持有期限或业绩挂钩。",
+      "notes": "A类收取申购费、不计提销售服务费；C类不收申购费、按0.20%年费率计提销售服务费。",
+      "quotes_verified": {
+        "fund_type": true,
+        "class:A类": true,
+        "class:C类": true,
+        "floating": true,
+        "class_set": true
+      },
+      "class_set_quote": "本基金将基金份额分为 A 类和 C 类不同的类别。",
+      "class_set_evidence": {
+        "quote_verified": true,
+        "set_complete_verified": true,
+        "parsed_classes": [
+          "A",
+          "C"
+        ],
+        "reason": "CLASS_SET_VERIFIED"
+      },
+      "value_verified": true,
+      "set_complete_verified": true,
+      "fund_type_certification": {},
+      "channel_evidence": {
+        "direct_sales_exempt": "",
+        "other_sales_charged": ""
+      },
+      "problems": []
+    },
+    "targets": [
+      {
+        "target_id": "S03_S04_S07_S16_S17_S20#1:T001",
+        "rule_id": "G05",
+        "location": "p138",
+        "quote": "调低赎回费率",
+        "state": "needs_edit",
+        "reason": "产品有收取销售服务费的C类份额，应将“调低赎回费率”改为“调低销售服务费率”。",
+        "start": 135,
+        "end": 141,
+        "resolution": "resolved",
+        "segment_ok": true,
+        "composite": [],
+        "operations": [
+          "G05:0"
+        ],
+        "claimed_operations": [],
+        "attribution_error": "",
+        "site_candidates": [],
+        "occurrence_index": -1,
+        "occurrence_anchor": "",
+        "out_of_scope": false
+      },
+      {
+        "target_id": "S03_S04_S07_S16_S17_S20#1:T002",
+        "rule_id": "G05",
+        "location": "p138",
+        "quote": "调整前，基金管理人需履行适当程序并及时公告。",
+        "state": "needs_edit",
+        "reason": "原条款含“并报中国证监会备案”，应删除。|TARGET_SOURCE_MISMATCH|locator:share_class_adjustment_procedure",
+        "start": 166,
+        "end": 188,
+        "resolution": "resolved",
+        "segment_ok": true,
+        "composite": [],
+        "operations": [],
+        "claimed_operations": [
+          "G05:2"
+        ],
+        "attribution_error": "",
+        "site_candidates": [],
+        "occurrence_index": -1,
+        "occurrence_anchor": "",
+        "out_of_scope": true
+      },
+      {
+        "target_id": "S03_S04_S07_S16_S17_S20#1:T003",
+        "rule_id": "G06",
+        "location": "p138",
+        "quote": "除非基金管理人在未来条件成熟后另行公告开通相关业务，本基金不同基金份额类别之间不得互相转换。",
+        "state": "absent",
+        "reason": "本窗口未出现该条款，无法定位删除目标。",
+        "start": null,
+        "end": null,
+        "resolution": "quote_not_found",
+        "segment_ok": false,
+        "composite": [],
+        "operations": [
+          "G06:0"
+        ],
+        "claimed_operations": [],
+        "attribution_error": "",
+        "site_candidates": [],
+        "occurrence_index": -1,
+        "occurrence_anchor": "",
+        "out_of_scope": false
+      },
+      {
+        "target_id": "S03_S04_S07_S16_S17_S20#1:T004",
+        "rule_id": "G19",
+        "location": "p1001",
+        "quote": "依据基金财产清算的分配方案，将基金财产清算后的全部剩余资产扣除基金财产清算费用、交纳所欠税款并清偿基金债务后，按基金份额持有人持有的各类基金份额比例进行分配。",
+        "state": "absent",
+        "reason": "本基金非浮动管理费产品，G19分支不适用；且原文与G19目标文本不同。",
+        "start": 0,
+        "end": 79,
+        "resolution": "resolved",
+        "segment_ok": true,
+        "composite": [],
+        "operations": [
+          "G19:0"
+        ],
+        "claimed_operations": [],
+        "attribution_error": "",
+        "site_candidates": [],
+        "occurrence_index": -1,
+        "occurrence_anchor": "",
+        "out_of_scope": false
+      },
+      {
+        "target_id": "S03_S04_S07_S16_S17_S20#1:T005",
+        "rule_id": "G10",
+        "location": "p228",
+        "quote": "本基金 A 类基金份额的申购费用由投资人承担，不列入基金财产。本基金 C 类基金份额不收取申购费用。",
+        "state": "absent",
+        "reason": "产品有多个份额类别，G10仅适用于单一类别，不适用。",
+        "start": 0,
+        "end": 50,
+        "resolution": "resolved",
+        "segment_ok": true,
+        "composite": [],
+        "operations": [
+          "G10:0"
+        ],
+        "claimed_operations": [],
+        "attribution_error": "",
+        "site_candidates": [],
+        "occurrence_index": -1,
+        "occurrence_anchor": "",
+        "out_of_scope": false
+      },
+      {
+        "target_id": "S03_S04_S07_S16_S17_S20#1:T006",
+        "rule_id": "G11",
+        "location": "p228",
+        "quote": "本基金 A 类基金份额的申购费用由投资人承担，不列入基金财产。本基金 C 类基金份额不收取申购费用。",
+        "state": "needs_edit",
+        "reason": "多份额类别时应替换为含直销机构免申购费表述的新条款。",
+        "start": 0,
+        "end": 50,
+        "resolution": "resolved",
+        "segment_ok": true,
+        "composite": [],
+        "operations": [
+          "G11:0"
+        ],
+        "claimed_operations": [],
+        "attribution_error": "",
+        "site_candidates": [],
+        "occurrence_index": -1,
+        "occurrence_anchor": "",
+        "out_of_scope": false
+      },
+      {
+        "target_id": "S03_S04_S07_S16_S17_S20#1:T007",
+        "rule_id": "G11",
+        "location": "p228",
+        "quote": "申购费用由投资人承担，不列入基金财产。",
+        "state": "needs_edit",
+        "reason": "多份额类别时应替换为含直销机构免申购费表述的新条款。",
+        "start": 12,
+        "end": 31,
+        "resolution": "resolved",
+        "segment_ok": true,
+        "composite": [],
+        "operations": [
+          "G11:1"
+        ],
+        "claimed_operations": [],
+        "attribution_error": "",
+        "site_candidates": [],
+        "occurrence_index": -1,
+        "occurrence_anchor": "",
+        "out_of_scope": false
+      },
+      {
+        "target_id": "S03_S04_S07_S16_S17_S20#1:T008",
+        "rule_id": "G03",
+        "location": "p138",
+        "quote": "调整前，基金管理人需履行适当程序并及时公告。",
+        "state": "needs_edit",
+        "reason": "应在份额类别设置条款后增加直销机构收费规则新条款。",
+        "start": 166,
+        "end": 188,
+        "resolution": "resolved",
+        "segment_ok": true,
+        "composite": [],
+        "operations": [
+          "G03:0"
+        ],
+        "claimed_operations": [],
+        "attribution_error": "",
+        "site_candidates": [],
+        "occurrence_index": -1,
+        "occurrence_anchor": "",
+        "out_of_scope": false
+      },
+      {
+        "target_id": "S03_S04_S07_S16_S17_S20#1:T009",
+        "rule_id": "G15",
+        "location": "p821",
+        "quote": "基金销售服务费每日计算，逐日累计至每月月末，按月支付，由基金托管人根据与基金管理人核对一致的财务数据，自动在月初 5 个工作日内、按照指定的账户路径进行资金支付，基金管理人无需再出具资金划拨指令。若遇法定节假日、公休日等，支付日期顺延。费用自动扣划后，基金管理人应进行核对，如发现数据不符，及时联系基金托管人协商解决。",
+        "state": "absent",
+        "reason": "本窗口未出现G15所指的“C类基金份额的销售服务费每日计提，按月支付……”原文，无法定位删除目标。",
+        "start": 0,
+        "end": 159,
+        "resolution": "resolved",
+        "segment_ok": true,
+        "composite": [],
+        "operations": [
+          "G15:0"
+        ],
+        "claimed_operations": [],
+        "attribution_error": "",
+        "site_candidates": [],
+        "occurrence_index": -1,
+        "occurrence_anchor": "",
+        "out_of_scope": false
+      },
+      {
+        "target_id": "S03_S04_S07_S16_S17_S20#1:T010",
+        "rule_id": "G01",
+        "location": "p93",
+        "quote": "在投资者认购、申购基金份额时不收取认购、申购费用，而是从本类别基金资产中计提销售服务费的，称为 C 类基金份额",
+        "state": "needs_edit",
+        "reason": "应在释义的基金份额类别定义后增加直销机构收费规则新条款。",
+        "start": 77,
+        "end": 132,
+        "resolution": "resolved",
+        "segment_ok": true,
+        "composite": [],
+        "operations": [
+          "G01:0"
+        ],
+        "claimed_operations": [],
+        "attribution_error": "",
+        "site_candidates": [],
+        "occurrence_index": -1,
+        "occurrence_anchor": "",
+        "out_of_scope": false
+      },
+      {
+        "target_id": "S03_S04_S07_S16_S17_S20#1:T011",
+        "rule_id": "G04",
+        "location": "p93",
+        "quote": "A 类基金份额",
+        "state": "satisfied",
+        "reason": "实际适用“收取认购、申购费用且不计提销售服务费”规则的类别仅为A类，无需替换为B类。",
+        "start": 69,
+        "end": 76,
+        "resolution": "resolved",
+        "segment_ok": true,
+        "composite": [],
+        "operations": [
+          "G04:0"
+        ],
+        "claimed_operations": [],
+        "attribution_error": "",
+        "site_candidates": [],
+        "occurrence_index": -1,
+        "occurrence_anchor": "",
+        "out_of_scope": false
+      },
+      {
+        "target_id": "S03_S04_S07_S16_S17_S20#1:T012",
+        "rule_id": "G04",
+        "location": "p93",
+        "quote": "C 类基金份额",
+        "state": "satisfied",
+        "reason": "实际适用“不收取认购、申购费用且计提销售服务费”规则的类别仅为C类，无需替换为D类。",
+        "start": 125,
+        "end": 132,
+        "resolution": "resolved",
+        "segment_ok": true,
+        "composite": [],
+        "operations": [
+          "G04:1"
+        ],
+        "claimed_operations": [],
+        "attribution_error": "",
+        "site_candidates": [],
+        "occurrence_index": -1,
+        "occurrence_anchor": "",
+        "out_of_scope": false
+      },
+      {
+        "target_id": "S03_S04_S07_S16_S17_S20#1:T013",
+        "rule_id": "G17",
+        "location": "p822",
+        "quote": "销售服务费主要用于支付销售机构佣金，及基金管理人的基金行销广告费、促销活动费、基金份额持有人服务费等。",
+        "state": "absent",
+        "reason": "本窗口未出现G17所指的“C类基金份额的销售服务费主要用于支付……”原文，无法定位删除目标。",
+        "start": 0,
+        "end": 51,
+        "resolution": "resolved",
+        "segment_ok": true,
+        "composite": [],
+        "operations": [
+          "G17:0"
+        ],
+        "claimed_operations": [],
+        "attribution_error": "",
+        "site_candidates": [],
+        "occurrence_index": -1,
+        "occurrence_anchor": "",
+        "out_of_scope": false
+      },
+      {
+        "target_id": "S03_S04_S07_S16_S17_S20#1:T014",
+        "rule_id": "G08",
+        "location": "p226",
+        "quote": "本基金 A 类基金份额的申购费率由基金管理人决定，并在招募说明书中列示。",
+        "state": "needs_edit",
+        "reason": "多份额类别时应变更为含A类收取、C类不收取及直销机构免申购费表述的新条款。",
+        "start": 36,
+        "end": 72,
+        "resolution": "resolved",
+        "segment_ok": true,
+        "composite": [],
+        "operations": [
+          "G08:0"
+        ],
+        "claimed_operations": [],
+        "attribution_error": "",
+        "site_candidates": [],
+        "occurrence_index": -1,
+        "occurrence_anchor": "",
+        "out_of_scope": false
+      },
+      {
+        "target_id": "S03_S04_S07_S16_S17_S20#1:T015",
+        "rule_id": "G18",
+        "location": "p848",
+        "quote": "由于本基金 A 类基金份额不收取销售服务费，而 C 类基金份额收取销售服务费",
+        "state": "needs_edit",
+        "reason": "应替换为“由于本基金A类基金份额和C类基金份额费用收取不同”。",
+        "start": 22,
+        "end": 60,
+        "resolution": "resolved",
+        "segment_ok": true,
+        "composite": [],
+        "operations": [
+          "G18:0"
+        ],
+        "claimed_operations": [],
+        "attribution_error": "",
+        "site_candidates": [],
+        "occurrence_index": -1,
+        "occurrence_anchor": "",
+        "out_of_scope": false
+      },
+      {
+        "target_id": "S03_S04_S07_S16_S17_S20#1:T016",
+        "rule_id": "G20",
+        "location": "p1001",
+        "quote": "依据基金财产清算的分配方案，将基金财产清算后的全部剩余资产扣除基金财产清算费用、交纳所欠税款并清偿基金债务后，按基金份额持有人持有的各类基金份额比例进行分配。",
+        "state": "absent",
+        "reason": "本基金非浮动管理费产品，G20分支不适用；且原文与G20目标文本不同。",
+        "start": 0,
+        "end": 79,
+        "resolution": "resolved",
+        "segment_ok": true,
+        "composite": [],
+        "operations": [
+          "G20:0"
+        ],
+        "claimed_operations": [],
+        "attribution_error": "",
+        "site_candidates": [],
+        "occurrence_index": -1,
+        "occurrence_anchor": "",
+        "out_of_scope": false
+      },
+      {
+        "target_id": "S03_S04_S07_S16_S17_S20#1:T017",
+        "rule_id": "G21",
+        "location": "p1001",
+        "quote": "依据基金财产清算的分配方案，将基金财产清算后的全部剩余资产扣除基金财产清算费用、交纳所欠税款并清偿基金债务后，按基金份额持有人持有的各类基金份额比例进行分配。",
+        "state": "satisfied",
+        "reason": "本基金非浮动管理费产品且为多份额类别，G21分支不要求替换。",
+        "start": 0,
+        "end": 79,
+        "resolution": "resolved",
+        "segment_ok": true,
+        "composite": [],
+        "operations": [
+          "G21:0"
+        ],
+        "claimed_operations": [],
+        "attribution_error": "",
+        "site_candidates": [],
+        "occurrence_index": -1,
+        "occurrence_anchor": "",
+        "out_of_scope": false
+      },
+      {
+        "target_id": "S03_S04_S07_S16_S17_S20#1:T018",
+        "rule_id": "G07",
+        "location": "p226",
+        "quote": "本基金 A 类基金份额的申购费率由基金管理人决定，并在招募说明书中列示。",
+        "state": "absent",
+        "reason": "产品有多个份额类别，G07仅适用于单一类别，不适用。",
+        "start": 36,
+        "end": 72,
+        "resolution": "resolved",
+        "segment_ok": true,
+        "composite": [],
+        "operations": [
+          "G07:0"
+        ],
+        "claimed_operations": [],
+        "attribution_error": "",
+        "site_candidates": [],
+        "occurrence_index": -1,
+        "occurrence_anchor": "",
+        "out_of_scope": false
+      },
+      {
+        "target_id": "S03_S04_S07_S16_S17_S20#1:T019",
+        "rule_id": "G09",
+        "location": "p227",
+        "quote": "赎回金额为按实际确认的有效赎回份额乘以当日该类基金份额的基金份额净值并扣除相应的费用，赎回金额单位为元。",
+        "state": "needs_edit",
+        "reason": "多份额类别时应将“扣除相应的费用”变更为“扣除或加上相应的费用”。",
+        "start": 61,
+        "end": 113,
+        "resolution": "resolved",
+        "segment_ok": true,
+        "composite": [],
+        "operations": [
+          "G09:0"
+        ],
+        "claimed_operations": [],
+        "attribution_error": "",
+        "site_candidates": [],
+        "occurrence_index": -1,
+        "occurrence_anchor": "",
+        "out_of_scope": false
+      },
+      {
+        "target_id": "S03_S04_S07_S16_S17_S20#1:T020",
+        "rule_id": "G12",
+        "location": "p229",
+        "quote": "赎回费用由赎回基金份额的基金份额持有人承担，在基金份额持有人赎回基金份额时收取。赎回费用归入基金财产的比例依照相关法律法规设定，具体见招募说明书的规定，未归入基金财产的部分用于支付登记费和其他必要的手续费。其中，对持续持有期少于 7 日的投资者收取不低于 1.5%的赎回费，并全额计入基金财产。",
+        "state": "needs_edit",
+        "reason": "应替换为“赎回费用全额计入基金财产”的新条款。",
+        "start": 0,
+        "end": 147,
+        "resolution": "resolved",
+        "segment_ok": true,
+        "composite": [],
+        "operations": [
+          "G12:1"
+        ],
+        "claimed_operations": [],
+        "attribution_error": "",
+        "site_candidates": [],
+        "occurrence_index": -1,
+        "occurrence_anchor": "",
+        "out_of_scope": false
+      },
+      {
+        "target_id": "S03_S04_S07_S16_S17_S20#1:T021",
+        "rule_id": "G16",
+        "location": "p823",
+        "quote": "销售服务费使用范围不包括基金募集期间的上述费用。",
+        "state": "needs_edit",
+        "reason": "应在销售服务费条款最后增加每日计提、直销机构返还、其他销售机构按月支付及持有超过一年后返还等内容。|TARGET_SOURCE_MISMATCH",
+        "start": 0,
+        "end": 24,
+        "resolution": "resolved",
+        "segment_ok": true,
+        "composite": [],
+        "operations": [
+          "G16:0"
+        ],
+        "claimed_operations": [],
+        "attribution_error": "",
+        "site_candidates": [],
+        "occurrence_index": -1,
+        "occurrence_anchor": "",
+        "out_of_scope": true
+      },
+      {
+        "target_id": "S03_S04_S07_S16_S17_S20#1:T022",
+        "rule_id": "G13",
+        "location": "p229",
+        "quote": "其中，对持续持有期少于 7 日的投资者收取不低于 1.5%的赎回费，并全额计入基金财产。",
+        "state": "needs_edit",
+        "reason": "应删除对持续持有期少于7日投资者收取不低于1.50%赎回费并全额计入基金财产的表述。",
+        "start": 103,
+        "end": 147,
+        "resolution": "resolved",
+        "segment_ok": true,
+        "composite": [],
+        "operations": [
+          "G13:0"
+        ],
+        "claimed_operations": [],
+        "attribution_error": "",
+        "site_candidates": [],
+        "occurrence_index": -1,
+        "occurrence_anchor": "",
+        "out_of_scope": false
+      },
+      {
+        "target_id": "S03_S04_S07_S16_S17_S20#1:T023",
+        "rule_id": "G02",
+        "location": "p93",
+        "quote": "A 类基金份额",
+        "state": "satisfied",
+        "reason": "实际适用“收取认购、申购费用且不计提销售服务费”规则的类别仅为A类，无需替换为B类。",
+        "start": 69,
+        "end": 76,
+        "resolution": "resolved",
+        "segment_ok": true,
+        "composite": [],
+        "operations": [
+          "G02:0"
+        ],
+        "claimed_operations": [],
+        "attribution_error": "",
+        "site_candidates": [],
+        "occurrence_index": -1,
+        "occurrence_anchor": "",
+        "out_of_scope": false
+      },
+      {
+        "target_id": "S03_S04_S07_S16_S17_S20#1:T024",
+        "rule_id": "G02",
+        "location": "p93",
+        "quote": "C 类基金份额",
+        "state": "satisfied",
+        "reason": "实际适用“不收取认购、申购费用且计提销售服务费”规则的类别仅为C类，无需替换为D类。",
+        "start": 125,
+        "end": 132,
+        "resolution": "resolved",
+        "segment_ok": true,
+        "composite": [],
+        "operations": [
+          "G02:1"
+        ],
+        "claimed_operations": [],
+        "attribution_error": "",
+        "site_candidates": [],
+        "occurrence_index": -1,
+        "occurrence_anchor": "",
+        "out_of_scope": false
+      },
+      {
+        "target_id": "S03_S04_S07_S16_S17_S20#1:T025",
+        "rule_id": "G22",
+        "location": "p1001",
+        "quote": "依据基金财产清算的分配方案，将基金财产清算后的全部剩余资产扣除基金财产清算费用、交纳所欠税款并清偿基金债务后，按基金份额持有人持有的各类基金份额比例进行分配。",
+        "state": "needs_edit",
+        "reason": "本基金非浮动管理费产品且收取销售服务费，应替换为含返还销售服务费表述的新条款。",
+        "start": 0,
+        "end": 79,
+        "resolution": "resolved",
+        "segment_ok": true,
+        "composite": [],
+        "operations": [
+          "G22:0"
+        ],
+        "claimed_operations": [],
+        "attribution_error": "",
+        "site_candidates": [],
+        "occurrence_index": -1,
+        "occurrence_anchor": "",
+        "out_of_scope": false
+      },
+      {
+        "target_id": "S03_S04_S07_S16_S17_S20#1:T026",
+        "rule_id": "G14",
+        "location": "p232",
+        "quote": "基金管理人可以适当调低基金申购费率、基金赎回费率、转换费率和销售服务费率。",
+        "state": "needs_edit",
+        "reason": "多份额类别时应变更为“基金管理人可以适当调低基金申购费率和销售服务费率。”。",
+        "start": 112,
+        "end": 149,
+        "resolution": "resolved",
+        "segment_ok": true,
+        "composite": [],
+        "operations": [
+          "G14:5"
+        ],
+        "claimed_operations": [],
+        "attribution_error": "",
+        "site_candidates": [],
+        "occurrence_index": -1,
+        "occurrence_anchor": "",
+        "out_of_scope": false
+      },
+      {
+        "target_id": "S25_S26#1:T001",
+        "rule_id": "G05",
+        "location": "p1162",
+        "quote": "在法律法规和《基金合同》规定的范围内调整本基金全部或者部分份额类别的申购费率、调低全部或者部分份额类别的赎回费率、调低销售服务费率或变更收费方式；",
+        "state": "needs_edit",
+        "reason": "该条款含“调低赎回费率”，产品有收取销售服务费的C类，应改为“调低销售服务费率”。|TARGET_SOURCE_MISMATCH",
+        "start": 0,
+        "end": 73,
+        "resolution": "resolved",
+        "segment_ok": true,
+        "composite": [],
+        "operations": [],
+        "claimed_operations": [
+          "G05:0"
+        ],
+        "attribution_error": "",
+        "site_candidates": [],
+        "occurrence_index": -1,
+        "occurrence_anchor": "",
+        "out_of_scope": true
+      },
+      {
+        "target_id": "S25_S26#1:T002",
+        "rule_id": "G05",
+        "location": "p1162",
+        "quote": "调低全部或者部分份额类别的赎回费率",
+        "state": "needs_edit",
+        "reason": "若适用删除分支，应删除“、调低赎回费率”；但本产品有销售服务费类别，故以替换操作为准，此处仅记录删除操作目标。|TARGET_OPERATION_NOT_APPLICABLE",
+        "start": 39,
+        "end": 56,
+        "resolution": "resolved",
+        "segment_ok": true,
+        "composite": [],
+        "operations": [],
+        "claimed_operations": [
+          "G05:1"
+        ],
+        "attribution_error": "",
+        "site_candidates": [],
+        "occurrence_index": -1,
+        "occurrence_anchor": "",
+        "out_of_scope": true
+      },
+      {
+        "target_id": "S25_S26#1:T003",
+        "rule_id": "G06",
+        "location": "p1034",
+        "quote": "第二十四部分  基金合同内容摘要",
+        "state": "absent",
+        "reason": "本窗口未出现“除非基金管理人在未来条件成熟后另行公告开通相关业务，本基金不同基金份额类别之间不得互相转换。”条款。",
+        "start": 1,
+        "end": 19,
+        "resolution": "resolved",
+        "segment_ok": false,
+        "composite": [],
+        "operations": [
+          "G06:0"
+        ],
+        "claimed_operations": [],
+        "attribution_error": "",
+        "site_candidates": [],
+        "occurrence_index": -1,
+        "occurrence_anchor": "",
+        "out_of_scope": false
+      },
+      {
+        "target_id": "S25_S26#1:T004",
+        "rule_id": "G19",
+        "location": "p1034",
+        "quote": "第二十四部分  基金合同内容摘要",
+        "state": "absent",
+        "reason": "本窗口未出现基金财产清算剩余资产分配条款，且产品非浮动管理费，不适用该分支。",
+        "start": 1,
+        "end": 19,
+        "resolution": "resolved",
+        "segment_ok": false,
+        "composite": [],
+        "operations": [
+          "G19:0"
+        ],
+        "claimed_operations": [],
+        "attribution_error": "",
+        "site_candidates": [],
+        "occurrence_index": -1,
+        "occurrence_anchor": "",
+        "out_of_scope": false
+      },
+      {
+        "target_id": "S25_S26#1:T005",
+        "rule_id": "G10",
+        "location": "p1034",
+        "quote": "第二十四部分  基金合同内容摘要",
+        "state": "absent",
+        "reason": "本窗口未出现“申购费用由投资人承担，不列入基金财产。”条款，且产品有多个份额类别，不适用单一类别分支。",
+        "start": 1,
+        "end": 19,
+        "resolution": "resolved",
+        "segment_ok": false,
+        "composite": [],
+        "operations": [
+          "G10:0"
+        ],
+        "claimed_operations": [],
+        "attribution_error": "",
+        "site_candidates": [],
+        "occurrence_index": -1,
+        "occurrence_anchor": "",
+        "out_of_scope": false
+      },
+      {
+        "target_id": "S25_S26#1:T006",
+        "rule_id": "G11",
+        "location": "p1034",
+        "quote": "第二十四部分  基金合同内容摘要",
+        "state": "absent",
+        "reason": "本窗口未出现申购费用承担条款（“本基金A类基金份额的申购费用由投资人承担，不列入基金财产；C类基金份额不收取申购费用。”或“申购费用由投资人承担，不列入基金财产。”）。",
+        "start": 1,
+        "end": 19,
+        "resolution": "resolved",
+        "segment_ok": false,
+        "composite": [],
+        "operations": [
+          "G11:0"
+        ],
+        "claimed_operations": [],
+        "attribution_error": "",
+        "site_candidates": [],
+        "occurrence_index": -1,
+        "occurrence_anchor": "",
+        "out_of_scope": false
+      },
+      {
+        "target_id": "S25_S26#1:T007",
+        "rule_id": "G03",
+        "location": "p1034",
+        "quote": "第二十四部分  基金合同内容摘要",
+        "state": "absent",
+        "reason": "本窗口为基金合同内容摘要，未包含基金的基本情况份额类别设置条款，无法定位追加位置。",
+        "start": 1,
+        "end": 19,
+        "resolution": "resolved",
+        "segment_ok": false,
+        "composite": [],
+        "operations": [
+          "G03:0"
+        ],
+        "claimed_operations": [],
+        "attribution_error": "",
+        "site_candidates": [],
+        "occurrence_index": -1,
+        "occurrence_anchor": "",
+        "out_of_scope": false
+      },
+      {
+        "target_id": "S25_S26#1:T008",
+        "rule_id": "G15",
+        "location": "p1287",
+        "quote": "基金销售服务费每日计算，逐日累计至每月月末，按月支付，由基金托管人根据与基金管理人核对一致的财务数据，自动在月初5个工作日内、按照指定的账户路径进行资金支付，基金管理人无需再出具资金划拨指令。若遇法定节假日、公休日等，支付日期顺延。费用自动扣划后，基金管理人应进行核对，如发现数据不符，及时联系基金托管人协商解决。",
+        "state": "needs_edit",
+        "reason": "该销售服务费支付条款与应删除的旧表述不同，但本窗口存在销售服务费支付安排，需按规则删除旧式“每日计提，按月支付……次月首日起10个工作日内……由登记机构代付”表述；本窗口未见该旧表述，故标记为需核对。",
+        "start": 0,
+        "end": 157,
+        "resolution": "resolved",
+        "segment_ok": true,
+        "composite": [],
+        "operations": [
+          "G15:0"
+        ],
+        "claimed_operations": [],
+        "attribution_error": "",
+        "site_candidates": [],
+        "occurrence_index": -1,
+        "occurrence_anchor": "",
+        "out_of_scope": false
+      },
+      {
+        "target_id": "S25_S26#1:T009",
+        "rule_id": "G01",
+        "location": "p1034",
+        "quote": "第二十四部分  基金合同内容摘要",
+        "state": "absent",
+        "reason": "本窗口为基金合同内容摘要，未包含释义的基金份额类别定义条款，无法定位追加位置。",
+        "start": 1,
+        "end": 19,
+        "resolution": "resolved",
+        "segment_ok": false,
+        "composite": [],
+        "operations": [
+          "G01:0"
+        ],
+        "claimed_operations": [],
+        "attribution_error": "",
+        "site_candidates": [],
+        "occurrence_index": -1,
+        "occurrence_anchor": "",
+        "out_of_scope": false
+      },
+      {
+        "target_id": "S25_S26#1:T010",
+        "rule_id": "G04",
+        "location": "p1034",
+        "quote": "第二十四部分  基金合同内容摘要",
+        "state": "absent",
+        "reason": "本窗口未出现基金的基本情况份额类别设置中“A类基金份额”“C类基金份额”分组描述条款。",
+        "start": 1,
+        "end": 19,
+        "resolution": "resolved",
+        "segment_ok": false,
+        "composite": [],
+        "operations": [
+          "G04:0"
+        ],
+        "claimed_operations": [],
+        "attribution_error": "",
+        "site_candidates": [],
+        "occurrence_index": -1,
+        "occurrence_anchor": "",
+        "out_of_scope": false
+      },
+      {
+        "target_id": "S25_S26#1:T011",
+        "rule_id": "G17",
+        "location": "p1288",
+        "quote": "销售服务费主要用于支付销售机构佣金，及基金管理人的基金行销广告费、促销活动费、基金份额持有人服务费等。",
+        "state": "needs_edit",
+        "reason": "该条款为销售服务费用途条款，规则要求删除“C类基金份额的销售服务费主要用于支付销售机构佣金……使用范围不包括基金募集期间的上述费用。”，本窗口表述略有不同但属同一内容，需删除。",
+        "start": 0,
+        "end": 51,
+        "resolution": "resolved",
+        "segment_ok": true,
+        "composite": [],
+        "operations": [
+          "G17:0"
+        ],
+        "claimed_operations": [],
+        "attribution_error": "",
+        "site_candidates": [],
+        "occurrence_index": -1,
+        "occurrence_anchor": "",
+        "out_of_scope": false
+      },
+      {
+        "target_id": "S25_S26#1:T012",
+        "rule_id": "G08",
+        "location": "p1034",
+        "quote": "第二十四部分  基金合同内容摘要",
+        "state": "absent",
+        "reason": "本窗口未出现“本基金的申购费率由基金管理人决定，并在招募说明书中列示。”条款。",
+        "start": 1,
+        "end": 19,
+        "resolution": "resolved",
+        "segment_ok": false,
+        "composite": [],
+        "operations": [
+          "G08:0"
+        ],
+        "claimed_operations": [],
+        "attribution_error": "",
+        "site_candidates": [],
+        "occurrence_index": -1,
+        "occurrence_anchor": "",
+        "out_of_scope": false
+      },
+      {
+        "target_id": "S25_S26#1:T013",
+        "rule_id": "G18",
+        "location": "p1257",
+        "quote": "本基金同一类别的每一基金份额享有同等分配权。由于本基金 A 类基金份额不收取销售服务费，而 C 类基金份额收取销售服务费，各基金份额类别对应的可分配收益将有所不同；",
+        "state": "needs_edit",
+        "reason": "该收益分配条款含“由于本基金A类基金份额不收取销售服务费，而C类基金份额收取销售服务费”，应改为“由于本基金A类基金份额和C类基金份额费用收取不同”。",
+        "start": 0,
+        "end": 82,
+        "resolution": "resolved",
+        "segment_ok": true,
+        "composite": [],
+        "operations": [
+          "G18:0"
+        ],
+        "claimed_operations": [],
+        "attribution_error": "",
+        "site_candidates": [],
+        "occurrence_index": -1,
+        "occurrence_anchor": "",
+        "out_of_scope": false
+      },
+      {
+        "target_id": "S25_S26#1:T014",
+        "rule_id": "G20",
+        "location": "p1034",
+        "quote": "第二十四部分  基金合同内容摘要",
+        "state": "absent",
+        "reason": "本窗口未出现基金财产清算剩余资产分配条款，且产品非浮动管理费，不适用该分支。",
+        "start": 1,
+        "end": 19,
+        "resolution": "resolved",
+        "segment_ok": false,
+        "composite": [],
+        "operations": [
+          "G20:0"
+        ],
+        "claimed_operations": [],
+        "attribution_error": "",
+        "site_candidates": [],
+        "occurrence_index": -1,
+        "occurrence_anchor": "",
+        "out_of_scope": false
+      },
+      {
+        "target_id": "S25_S26#1:T015",
+        "rule_id": "G21",
+        "location": "p1034",
+        "quote": "第二十四部分  基金合同内容摘要",
+        "state": "satisfied",
+        "reason": "产品非浮动管理费且为多份额类别，不适用该分支，无需替换。",
+        "start": 1,
+        "end": 19,
+        "resolution": "resolved",
+        "segment_ok": false,
+        "composite": [],
+        "operations": [
+          "G21:0"
+        ],
+        "claimed_operations": [],
+        "attribution_error": "",
+        "site_candidates": [],
+        "occurrence_index": -1,
+        "occurrence_anchor": "",
+        "out_of_scope": false
+      },
+      {
+        "target_id": "S25_S26#1:T016",
+        "rule_id": "G07",
+        "location": "p1034",
+        "quote": "第二十四部分  基金合同内容摘要",
+        "state": "absent",
+        "reason": "本窗口未出现“本基金的申购费率由基金管理人决定，并在招募说明书中列示。”条款，且产品为多份额类别，不适用单一类别分支。",
+        "start": 1,
+        "end": 19,
+        "resolution": "resolved",
+        "segment_ok": false,
+        "composite": [],
+        "operations": [
+          "G07:0"
+        ],
+        "claimed_operations": [],
+        "attribution_error": "",
+        "site_candidates": [],
+        "occurrence_index": -1,
+        "occurrence_anchor": "",
+        "out_of_scope": false
+      },
+      {
+        "target_id": "S25_S26#1:T017",
+        "rule_id": "G09",
+        "location": "p1034",
+        "quote": "第二十四部分  基金合同内容摘要",
+        "state": "absent",
+        "reason": "本窗口未出现“赎回金额为按实际确认的有效赎回份额乘以当日对应份额类别的基金份额净值并扣除相应的费用，赎回金额单位为元。”条款。",
+        "start": 1,
+        "end": 19,
+        "resolution": "resolved",
+        "segment_ok": false,
+        "composite": [],
+        "operations": [
+          "G09:0"
+        ],
+        "claimed_operations": [],
+        "attribution_error": "",
+        "site_candidates": [],
+        "occurrence_index": -1,
+        "occurrence_anchor": "",
+        "out_of_scope": false
+      },
+      {
+        "target_id": "S25_S26#1:T018",
+        "rule_id": "G12",
+        "location": "p1034",
+        "quote": "第二十四部分  基金合同内容摘要",
+        "state": "absent",
+        "reason": "本窗口未出现赎回费用归入基金财产比例的相关条款。",
+        "start": 1,
+        "end": 19,
+        "resolution": "resolved",
+        "segment_ok": false,
+        "composite": [],
+        "operations": [
+          "G12:0"
+        ],
+        "claimed_operations": [],
+        "attribution_error": "",
+        "site_candidates": [],
+        "occurrence_index": -1,
+        "occurrence_anchor": "",
+        "out_of_scope": false
+      },
+      {
+        "target_id": "S25_S26#1:T019",
+        "rule_id": "G16",
+        "location": "p1287",
+        "quote": "基金销售服务费每日计算，逐日累计至每月月末，按月支付，由基金托管人根据与基金管理人核对一致的财务数据，自动在月初5个工作日内、按照指定的账户路径进行资金支付，基金管理人无需再出具资金划拨指令。若遇法定节假日、公休日等，支付日期顺延。费用自动扣划后，基金管理人应进行核对，如发现数据不符，及时联系基金托管人协商解决。",
+        "state": "needs_edit",
+        "reason": "该销售服务费条款末尾需追加每日计提、直销机构返还、其他销售机构按月支付及持有超过一年后返还等内容。",
+        "start": 0,
+        "end": 157,
+        "resolution": "resolved",
+        "segment_ok": true,
+        "composite": [],
+        "operations": [
+          "G16:0"
+        ],
+        "claimed_operations": [],
+        "attribution_error": "",
+        "site_candidates": [],
+        "occurrence_index": -1,
+        "occurrence_anchor": "",
+        "out_of_scope": false
+      },
+      {
+        "target_id": "S25_S26#1:T020",
+        "rule_id": "G13",
+        "location": "p1034",
+        "quote": "第二十四部分  基金合同内容摘要",
+        "state": "absent",
+        "reason": "本窗口未出现“本基金对持续持有期少于7日的投资者收取不低于1.50%的赎回费，并将上述赎回费全额计入基金财产。”条款。",
+        "start": 1,
+        "end": 19,
+        "resolution": "resolved",
+        "segment_ok": false,
+        "composite": [],
+        "operations": [
+          "G13:0"
+        ],
+        "claimed_operations": [],
+        "attribution_error": "",
+        "site_candidates": [],
+        "occurrence_index": -1,
+        "occurrence_anchor": "",
+        "out_of_scope": false
+      },
+      {
+        "target_id": "S25_S26#1:T021",
+        "rule_id": "G02",
+        "location": "p1034",
+        "quote": "第二十四部分  基金合同内容摘要",
+        "state": "absent",
+        "reason": "本窗口为基金合同内容摘要，未包含释义的基金份额类别定义条款。",
+        "start": 1,
+        "end": 19,
+        "resolution": "resolved",
+        "segment_ok": false,
+        "composite": [],
+        "operations": [
+          "G02:0"
+        ],
+        "claimed_operations": [],
+        "attribution_error": "",
+        "site_candidates": [],
+        "occurrence_index": -1,
+        "occurrence_anchor": "",
+        "out_of_scope": false
+      },
+      {
+        "target_id": "S25_S26#1:T022",
+        "rule_id": "G22",
+        "location": "p1034",
+        "quote": "第二十四部分  基金合同内容摘要",
+        "state": "absent",
+        "reason": "本窗口未出现基金财产清算剩余资产分配条款。",
+        "start": 1,
+        "end": 19,
+        "resolution": "resolved",
+        "segment_ok": false,
+        "composite": [],
+        "operations": [
+          "G22:0"
+        ],
+        "claimed_operations": [],
+        "attribution_error": "",
+        "site_candidates": [],
+        "occurrence_index": -1,
+        "occurrence_anchor": "",
+        "out_of_scope": false
+      },
+      {
+        "target_id": "S25_S26#1:T023",
+        "rule_id": "G14",
+        "location": "p1034",
+        "quote": "第二十四部分  基金合同内容摘要",
+        "state": "absent",
+        "reason": "本窗口未出现“基金管理人可以适当调低基金申购费率和赎回费率。”等费率调整条款。",
+        "start": 1,
+        "end": 19,
+        "resolution": "resolved",
+        "segment_ok": false,
+        "composite": [],
+        "operations": [
+          "G14:0"
+        ],
+        "claimed_operations": [],
+        "attribution_error": "",
+        "site_candidates": [],
+        "occurrence_index": -1,
+        "occurrence_anchor": "",
+        "out_of_scope": false
+      },
+      {
+        "target_id": "S25_S26#2:T001",
+        "rule_id": "G19",
+        "location": "p1371",
+        "quote": "依据基金财产清算的分配方案，将基金财产清算后的全部剩余资产扣除基金财产清算费用、交纳所欠税款并清偿基金债务后，按基金份额持有人持有的各类基金份额比例进行分配。",
+        "state": "needs_edit",
+        "reason": "本基金为非浮动管理费产品且有两个份额类别，G19不适用；但G22要求非浮动管理费且收取销售服务费的产品在清算分配条款中增加返还销售服务费的表述，当前条款未包含该内容。",
+        "start": 0,
+        "end": 79,
+        "resolution": "resolved",
+        "segment_ok": true,
+        "composite": [],
+        "operations": [],
+        "claimed_operations": [],
+        "attribution_error": "",
+        "site_candidates": [],
+        "occurrence_index": -1,
+        "occurrence_anchor": "",
+        "out_of_scope": true
+      },
+      {
+        "target_id": "S25_S26#2:T002",
+        "rule_id": "G20",
+        "location": "p1371",
+        "quote": "依据基金财产清算的分配方案，将基金财产清算后的全部剩余资产扣除基金财产清算费用、交纳所欠税款并清偿基金债务后，按基金份额持有人持有的各类基金份额比例进行分配。",
+        "state": "satisfied",
+        "reason": "G20仅适用于浮动管理费产品，本基金为非浮动管理费产品，因此无需按G20替换。",
+        "start": 0,
+        "end": 79,
+        "resolution": "resolved",
+        "segment_ok": true,
+        "composite": [],
+        "operations": [
+          "G20:0"
+        ],
+        "claimed_operations": [],
+        "attribution_error": "",
+        "site_candidates": [],
+        "occurrence_index": -1,
+        "occurrence_anchor": "",
+        "out_of_scope": false
+      },
+      {
+        "target_id": "S25_S26#2:T003",
+        "rule_id": "G21",
+        "location": "p1371",
+        "quote": "依据基金财产清算的分配方案，将基金财产清算后的全部剩余资产扣除基金财产清算费用、交纳所欠税款并清偿基金债务后，按基金份额持有人持有的各类基金份额比例进行分配。",
+        "state": "satisfied",
+        "reason": "G21适用于非浮动管理费且仅有一个份额类别的情形，本基金有两个份额类别，因此该分支不适用，无需修改。",
+        "start": 0,
+        "end": 79,
+        "resolution": "resolved",
+        "segment_ok": true,
+        "composite": [],
+        "operations": [
+          "G21:0"
+        ],
+        "claimed_operations": [],
+        "attribution_error": "",
+        "site_candidates": [],
+        "occurrence_index": -1,
+        "occurrence_anchor": "",
+        "out_of_scope": false
+      },
+      {
+        "target_id": "Y009",
+        "rule_id": "G05",
+        "location": "p429",
+        "quote": "调低销售服务费率",
+        "state": "satisfied",
+        "reason": "survey_new_text_present",
+        "start": null,
+        "end": null,
+        "resolution": "unresolved",
+        "segment_ok": false,
+        "composite": [],
+        "operations": [
+          "G05:0"
+        ],
+        "claimed_operations": [],
+        "attribution_error": "",
+        "site_candidates": [],
+        "occurrence_index": -1,
+        "occurrence_anchor": "",
+        "out_of_scope": false
+      },
+      {
+        "target_id": "Y010",
+        "rule_id": "G18",
+        "location": "p136",
+        "quote": "额分别设置代码。由于基金费用的不同，本基金A类基金份额和C",
+        "state": "satisfied",
+        "reason": "survey_new_text_present",
+        "start": null,
+        "end": null,
+        "resolution": "unresolved",
+        "segment_ok": false,
+        "composite": [],
+        "operations": [],
+        "claimed_operations": [],
+        "attribution_error": "",
+        "site_candidates": [],
+        "occurrence_index": -1,
+        "occurrence_anchor": "",
+        "out_of_scope": false
+      },
+      {
+        "target_id": "Y011",
+        "rule_id": "G18",
+        "location": "p223",
+        "quote": "由于基金费用的不同，本基金A类基金份额和C",
+        "state": "satisfied",
+        "reason": "survey_new_text_present",
+        "start": null,
+        "end": null,
+        "resolution": "unresolved",
+        "segment_ok": false,
+        "composite": [],
+        "operations": [],
+        "claimed_operations": [],
+        "attribution_error": "",
+        "site_candidates": [],
+        "occurrence_index": -1,
+        "occurrence_anchor": "",
+        "out_of_scope": false
+      },
+      {
+        "target_id": "Y004",
+        "rule_id": "G15",
+        "location": "p821",
+        "quote": "基金销售服务费每日计算，逐日累计至每月月末，按月支付，由基金托管人根据与基金管理人核对一致的财务数据，自动在月初 5 个工作日内、按照指定的账户路径进行资金支付，基金管理人无需再出具资金划拨指令。若遇法定节假日、公休日等，支付日期顺延。费用自动扣划后，基金管理人应进行核对，如发现数据不符，及时联系基金托管人协商解决。",
+        "state": "needs_edit",
+        "reason": "survey_reference:1.00",
+        "start": 0,
+        "end": 159,
+        "resolution": "resolved",
+        "segment_ok": true,
+        "composite": [],
+        "operations": [
+          "G15:0"
+        ],
+        "claimed_operations": [],
+        "attribution_error": "",
+        "site_candidates": [],
+        "occurrence_index": -1,
+        "occurrence_anchor": "",
+        "out_of_scope": false
+      },
+      {
+        "target_id": "Y006",
+        "rule_id": "G17",
+        "location": "p822",
+        "quote": "销售服务费主要用于支付销售机构佣金，及基金管理人的基金行销广告费、促销活动费、基金份额持有人服务费等。 ",
+        "state": "needs_edit",
+        "reason": "survey_reference:1.00",
+        "start": 0,
+        "end": 51,
+        "resolution": "composite",
+        "segment_ok": false,
+        "composite": [
+          "p822:0:51",
+          "p823:0:24"
+        ],
+        "operations": [
+          "G17:0"
+        ],
+        "claimed_operations": [],
+        "attribution_error": "",
+        "site_candidates": [],
+        "occurrence_index": -1,
+        "occurrence_anchor": "",
+        "out_of_scope": false
+      },
+      {
+        "target_id": "Y007",
+        "rule_id": "G17",
+        "location": "p1288",
+        "quote": "销售服务费主要用于支付销售机构佣金，及基金管理人的基金行销广告费、促销活动费、基金份额持有人服务费等。 ",
+        "state": "needs_edit",
+        "reason": "survey_reference:1.00",
+        "start": 0,
+        "end": 51,
+        "resolution": "composite",
+        "segment_ok": false,
+        "composite": [
+          "p1288:0:51",
+          "p1289:0:24"
+        ],
+        "operations": [
+          "G17:0"
+        ],
+        "claimed_operations": [],
+        "attribution_error": "",
+        "site_candidates": [],
+        "occurrence_index": -1,
+        "occurrence_anchor": "",
+        "out_of_scope": false
+      },
+      {
+        "target_id": "Y008",
+        "rule_id": "G22",
+        "location": "p1371",
+        "quote": "依据基金财产清算的分配方案，将基金财产清算后的全部剩余资产扣除基金财产清算费用、交纳所欠税款并清偿基金债务后，按基金份额持有人持有的各类基金份额比例进行分",
+        "state": "needs_edit",
+        "reason": "survey_reference:1.00",
+        "start": 0,
+        "end": 77,
+        "resolution": "resolved",
+        "segment_ok": true,
+        "composite": [],
+        "operations": [
+          "G22:0"
+        ],
+        "claimed_operations": [],
+        "attribution_error": "",
+        "site_candidates": [],
+        "occurrence_index": -1,
+        "occurrence_anchor": "",
+        "out_of_scope": false
+      },
+      {
+        "target_id": "DEL001",
+        "rule_id": "G17",
+        "location": "p823",
+        "quote": "销售服务费使用范围不包括基金募集期间的上述费用。",
+        "state": "needs_edit",
+        "reason": "delete_residual_copy",
+        "start": 0,
+        "end": 24,
+        "resolution": "resolved",
+        "segment_ok": true,
+        "composite": [],
+        "operations": [
+          "G17:0"
+        ],
+        "claimed_operations": [],
+        "attribution_error": "",
+        "site_candidates": [],
+        "occurrence_index": -1,
+        "occurrence_anchor": "",
+        "out_of_scope": false
+      },
+      {
+        "target_id": "DEL002",
+        "rule_id": "G17",
+        "location": "p1289",
+        "quote": "销售服务费使用范围不包括基金募集期间的上述费用。",
+        "state": "needs_edit",
+        "reason": "delete_residual_copy",
+        "start": 0,
+        "end": 24,
+        "resolution": "resolved",
+        "segment_ok": true,
+        "composite": [],
+        "operations": [
+          "G17:0"
+        ],
+        "claimed_operations": [],
+        "attribution_error": "",
+        "site_candidates": [],
+        "occurrence_index": -1,
+        "occurrence_anchor": "",
+        "out_of_scope": false
+      },
+      {
+        "target_id": "S03_S04_S07_S16_S17_S20#1:T021-D1",
+        "rule_id": "G16",
+        "location": "p1289",
+        "quote": "销售服务费使用范围不包括基金募集期间的上述费用。",
+        "state": "needs_edit",
+        "reason": "duplicate_copy:应在销售服务费条款最后增加每日计提、直销机构返还、其他销售机构按月支付及持有超过一年后返还等内容。|TARGET_SOURCE_MISMATCH",
+        "start": 0,
+        "end": 24,
+        "resolution": "resolved",
+        "segment_ok": true,
+        "composite": [],
+        "operations": [
+          "G16:0"
+        ],
+        "claimed_operations": [],
+        "attribution_error": "",
+        "site_candidates": [],
+        "occurrence_index": -1,
+        "occurrence_anchor": "",
+        "out_of_scope": true
+      },
+      {
+        "target_id": "S25_S26#1:T019-D2",
+        "rule_id": "G16",
+        "location": "p821",
+        "quote": "基金销售服务费每日计算，逐日累计至每月月末，按月支付，由基金托管人根据与基金管理人核对一致的财务数据，自动在月初5个工作日内、按照指定的账户路径进行资金支付，基金管理人无需再出具资金划拨指令。若遇法定节假日、公休日等，支付日期顺延。费用自动扣划后，基金管理人应进行核对，如发现数据不符，及时联系基金托管人协商解决。",
+        "state": "needs_edit",
+        "reason": "duplicate_copy:该销售服务费条款末尾需追加每日计提、直销机构返还、其他销售机构按月支付及持有超过一年后返还等内容。",
+        "start": 0,
+        "end": 159,
+        "resolution": "resolved",
+        "segment_ok": true,
+        "composite": [],
+        "operations": [
+          "G16:0"
+        ],
+        "claimed_operations": [],
+        "attribution_error": "",
+        "site_candidates": [],
+        "occurrence_index": -1,
+        "occurrence_anchor": "",
+        "out_of_scope": false
+      }
+    ],
+    "plan": {
+      "edits": [
+        {
+          "target_id": "S03_S04_S07_S16_S17_S20#1:T001+S03_S04_S07_S16_S17_S20#1:T008",
+          "rule_id": "G05+G03",
+          "location": "p138",
+          "start": 0,
+          "end": 189,
+          "replacement": "有关基金份额类别的具体设置、费率水平等由基金管理人确定，并在招募说明书中公告。根据基金销售情况，在符合法律法规且不损害已有基金份额持有人权益的情况下，基金管理人在履行适当程序后可以增加新的基金份额类别、或者在法律法规和基金合同规定的范围内变更现有基金份额类别的申购费率、调低销售服务费率或变更收费方式，或者停止现有基金份额类别的销售等。调整前，基金管理人需履行适当程序并及时公告。投资者通过直销机构（含基金管理人及其销售子公司，下同）申购本基金A类基金份额时，不收取认购/申购费用；通过直销机构申购的C类基金份额，不收取销售服务费。对于投资者通过直销机构之外的其他销售机构申购的C类基金份额且持续持有期限超过一年的，不再继续收取销售服务费。 ",
+          "operation": "replace",
+          "content_source": "atomic_paragraph",
+          "evidence": {
+            "atomic_components": [
+              {
+                "target_id": "S03_S04_S07_S16_S17_S20#1:T001",
+                "rule_id": "G05",
+                "location": "p138",
+                "start": 135,
+                "end": 141,
+                "replacement": "调低销售服务费率",
+                "operation": "replace",
+                "content_source": "fragment_replace",
+                "evidence": {
+                  "guide_paragraphs": [
+                    17,
+                    18,
+                    19,
+                    20,
+                    21,
+                    22
+                  ],
+                  "applied": [
+                    "replace:full"
+                  ],
+                  "fragments": [
+                    {
+                      "op": "replace",
+                      "old_text": "调低赎回费率",
+                      "new_text": "调低销售服务费率",
+                      "mode": "full"
+                    }
+                  ],
+                  "strategy": [
+                    {
+                      "operation": "G05:0",
+                      "requested": "tier2_minimal_splice",
+                      "actual": "tier2_minimal_splice",
+                      "fallback_reason": null,
+                      "blocked": false,
+                      "applicable": true
+                    },
+                    {
+                      "operation": "G05:1",
+                      "requested": "tier2_minimal_splice",
+                      "actual": "tier2_minimal_splice",
+                      "fallback_reason": null,
+                      "blocked": false,
+                      "applicable": false
+                    },
+                    {
+                      "operation": "G05:2",
+                      "requested": "tier2_minimal_splice",
+                      "actual": "tier2_minimal_splice",
+                      "fallback_reason": null,
+                      "blocked": false,
+                      "applicable": false
+                    }
+                  ],
+                  "operation_keys": [
+                    "G05:0"
+                  ],
+                  "obligation_ids": [
+                    "G05:B1:O1"
+                  ],
+                  "operation_refs": [
+                    {
+                      "obligation_id": "G05:B1:O1",
+                      "rule_id": "G05",
+                      "operation_id": "G05:0",
+                      "operation_index": 0,
+                      "branch_id": "B1",
+                      "group_kind": "BRANCH",
+                      "op": "replace",
+                      "old_text": "调低赎回费率",
+                      "new_text": "调低销售服务费率",
+                      "condition": {
+                        "kind": "has_service_fee",
+                        "value": true
+                      },
+                      "condition_text": "has_service_fee=True",
+                      "requirement": "对原条款进行调整：如果有收取销售服务费的份额类别，则将其中的“调低赎回费率”改为“调低销售服务费率”，否则直接删除“、调低赎回费率”；并删除“并报中国证监会备案”。",
+                      "expected_site": "基金的基本情况",
+                      "required_facts": [
+                        "service_fee_group",
+                        "share_class_structure",
+                        "subscription_fee_group"
+                      ],
+                      "alternatives": [],
+                      "one_of_group": ""
+                    }
+                  ]
+                },
+                "operation_keys": [
+                  "G05:0"
+                ],
+                "obligation_ids": [
+                  "G05:B1:O1"
+                ],
+                "expected_old_text": "调低赎回费率"
+              },
+              {
+                "target_id": "S03_S04_S07_S16_S17_S20#1:T008",
+                "rule_id": "G03",
+                "location": "p138",
+                "start": 188,
+                "end": 188,
+                "replacement": "投资者通过直销机构（含基金管理人及其销售子公司，下同）申购本基金A类基金份额时，不收取认购/申购费用；通过直销机构申购的C类基金份额，不收取销售服务费。对于投资者通过直销机构之外的其他销售机构申购的C类基金份额且持续持有期限超过一年的，不再继续收取销售服务费。",
+                "operation": "insert",
+                "content_source": "guide_text",
+                "evidence": {
+                  "guide_paragraphs": [
+                    10,
+                    11,
+                    12
+                  ],
+                  "slots": [
+                    "A类基金份额",
+                    "C类基金份额"
+                  ],
+                  "fixed_text": "投资者通过直销机构（含基金管理人及其销售子公司，下同）申购本基金A类基金份额时，不收取认购/申购费用；通过直销机构申购的C类基金份额，不收取销售服务费。对于投资者通过直销机构之外的其他销售机构申购的C类基金份额且持续持有期限超过一年的，不再继续收取销售服务费。",
+                  "join_separator": "",
+                  "issues": [],
+                  "strategy": [
+                    {
+                      "operation": "G03:0",
+                      "requested": "tier1_template",
+                      "actual": "tier1_template",
+                      "fallback_reason": null,
+                      "blocked": false,
+                      "applicable": true
+                    }
+                  ],
+                  "operation_keys": [
+                    "G03:0"
+                  ],
+                  "obligation_ids": [
+                    "G03:B1:O1"
+                  ],
+                  "operation_refs": [
+                    {
+                      "obligation_id": "G03:B1:O1",
+                      "rule_id": "G03",
+                      "operation_id": "G03:0",
+                      "operation_index": 0,
+                      "branch_id": "B1",
+                      "group_kind": "INDEPENDENT",
+                      "op": "append",
+                      "old_text": "",
+                      "new_text": "投资者通过直销机构（含基金管理人及其销售子公司，下同）申购本基金A类基金份额时，不收取认购/申购费用；通过直销机构申购的C类基金份额，不收取销售服务费。对于投资者通过直销机构之外的其他销售机构申购的C类基金份额且持续持有期限超过一年的，不再继续收取销售服务费。",
+                      "condition": {
+                        "kind": "none",
+                        "value": null
+                      },
+                      "condition_text": "none",
+                      "requirement": "在基金的基本情况份额类别设置原条款后增加新条款，明确通过直销机构申购A类基金份额不收取认购/申购费用、通过直销机构申购的C类基金份额不收取销售服务费，以及通过其他销售机构申购的C类基金份额持续持有超过一年不再继续收取销售服务费。",
+                      "expected_site": "基金的基本情况",
+                      "required_facts": [
+                        "share_class_structure"
+                      ],
+                      "alternatives": [],
+                      "one_of_group": ""
+                    }
+                  ]
+                },
+                "operation_keys": [
+                  "G03:0"
+                ],
+                "obligation_ids": [
+                  "G03:B1:O1"
+                ],
+                "expected_old_text": ""
+              }
+            ]
+          },
+          "anchor_sha256": "",
+          "operation_keys": [
+            "G05:0",
+            "G03:0"
+          ],
+          "obligation_ids": [
+            "G05:B1:O1",
+            "G03:B1:O1"
+          ],
+          "components": [
+            {
+              "target_id": "S03_S04_S07_S16_S17_S20#1:T001",
+              "rule_id": "G05",
+              "location": "p138",
+              "start": 135,
+              "end": 141,
+              "replacement": "调低销售服务费率",
+              "operation": "replace",
+              "content_source": "fragment_replace",
+              "evidence": {
+                "guide_paragraphs": [
+                  17,
+                  18,
+                  19,
+                  20,
+                  21,
+                  22
+                ],
+                "applied": [
+                  "replace:full"
+                ],
+                "fragments": [
+                  {
+                    "op": "replace",
+                    "old_text": "调低赎回费率",
+                    "new_text": "调低销售服务费率",
+                    "mode": "full"
+                  }
+                ],
+                "strategy": [
+                  {
+                    "operation": "G05:0",
+                    "requested": "tier2_minimal_splice",
+                    "actual": "tier2_minimal_splice",
+                    "fallback_reason": null,
+                    "blocked": false,
+                    "applicable": true
+                  },
+                  {
+                    "operation": "G05:1",
+                    "requested": "tier2_minimal_splice",
+                    "actual": "tier2_minimal_splice",
+                    "fallback_reason": null,
+                    "blocked": false,
+                    "applicable": false
+                  },
+                  {
+                    "operation": "G05:2",
+                    "requested": "tier2_minimal_splice",
+                    "actual": "tier2_minimal_splice",
+                    "fallback_reason": null,
+                    "blocked": false,
+                    "applicable": false
+                  }
+                ],
+                "operation_keys": [
+                  "G05:0"
+                ],
+                "obligation_ids": [
+                  "G05:B1:O1"
+                ],
+                "operation_refs": [
+                  {
+                    "obligation_id": "G05:B1:O1",
+                    "rule_id": "G05",
+                    "operation_id": "G05:0",
+                    "operation_index": 0,
+                    "branch_id": "B1",
+                    "group_kind": "BRANCH",
+                    "op": "replace",
+                    "old_text": "调低赎回费率",
+                    "new_text": "调低销售服务费率",
+                    "condition": {
+                      "kind": "has_service_fee",
+                      "value": true
+                    },
+                    "condition_text": "has_service_fee=True",
+                    "requirement": "对原条款进行调整：如果有收取销售服务费的份额类别，则将其中的“调低赎回费率”改为“调低销售服务费率”，否则直接删除“、调低赎回费率”；并删除“并报中国证监会备案”。",
+                    "expected_site": "基金的基本情况",
+                    "required_facts": [
+                      "service_fee_group",
+                      "share_class_structure",
+                      "subscription_fee_group"
+                    ],
+                    "alternatives": [],
+                    "one_of_group": ""
+                  }
+                ]
+              },
+              "operation_keys": [
+                "G05:0"
+              ],
+              "obligation_ids": [
+                "G05:B1:O1"
+              ],
+              "expected_old_text": "调低赎回费率"
+            },
+            {
+              "target_id": "S03_S04_S07_S16_S17_S20#1:T008",
+              "rule_id": "G03",
+              "location": "p138",
+              "start": 188,
+              "end": 188,
+              "replacement": "投资者通过直销机构（含基金管理人及其销售子公司，下同）申购本基金A类基金份额时，不收取认购/申购费用；通过直销机构申购的C类基金份额，不收取销售服务费。对于投资者通过直销机构之外的其他销售机构申购的C类基金份额且持续持有期限超过一年的，不再继续收取销售服务费。",
+              "operation": "insert",
+              "content_source": "guide_text",
+              "evidence": {
+                "guide_paragraphs": [
+                  10,
+                  11,
+                  12
+                ],
+                "slots": [
+                  "A类基金份额",
+                  "C类基金份额"
+                ],
+                "fixed_text": "投资者通过直销机构（含基金管理人及其销售子公司，下同）申购本基金A类基金份额时，不收取认购/申购费用；通过直销机构申购的C类基金份额，不收取销售服务费。对于投资者通过直销机构之外的其他销售机构申购的C类基金份额且持续持有期限超过一年的，不再继续收取销售服务费。",
+                "join_separator": "",
+                "issues": [],
+                "strategy": [
+                  {
+                    "operation": "G03:0",
+                    "requested": "tier1_template",
+                    "actual": "tier1_template",
+                    "fallback_reason": null,
+                    "blocked": false,
+                    "applicable": true
+                  }
+                ],
+                "operation_keys": [
+                  "G03:0"
+                ],
+                "obligation_ids": [
+                  "G03:B1:O1"
+                ],
+                "operation_refs": [
+                  {
+                    "obligation_id": "G03:B1:O1",
+                    "rule_id": "G03",
+                    "operation_id": "G03:0",
+                    "operation_index": 0,
+                    "branch_id": "B1",
+                    "group_kind": "INDEPENDENT",
+                    "op": "append",
+                    "old_text": "",
+                    "new_text": "投资者通过直销机构（含基金管理人及其销售子公司，下同）申购本基金A类基金份额时，不收取认购/申购费用；通过直销机构申购的C类基金份额，不收取销售服务费。对于投资者通过直销机构之外的其他销售机构申购的C类基金份额且持续持有期限超过一年的，不再继续收取销售服务费。",
+                    "condition": {
+                      "kind": "none",
+                      "value": null
+                    },
+                    "condition_text": "none",
+                    "requirement": "在基金的基本情况份额类别设置原条款后增加新条款，明确通过直销机构申购A类基金份额不收取认购/申购费用、通过直销机构申购的C类基金份额不收取销售服务费，以及通过其他销售机构申购的C类基金份额持续持有超过一年不再继续收取销售服务费。",
+                    "expected_site": "基金的基本情况",
+                    "required_facts": [
+                      "share_class_structure"
+                    ],
+                    "alternatives": [],
+                    "one_of_group": ""
+                  }
+                ]
+              },
+              "operation_keys": [
+                "G03:0"
+              ],
+              "obligation_ids": [
+                "G03:B1:O1"
+              ],
+              "expected_old_text": ""
+            }
+          ]
+        },
+        {
+          "target_id": "S03_S04_S07_S16_S17_S20#1:T014",
+          "rule_id": "G08",
+          "location": "p226",
+          "start": 36,
+          "end": 72,
+          "replacement": "本基金A类基金份额在申购时收取申购费用，C类基金份额不收取申购费用。通过直销机构申购本基金A类基金份额不收取申购费。通过直销机构以外的其他销售机构申购本基金的申购费率由基金管理人决定，并在招募说明书中列示。",
+          "operation": "replace",
+          "content_source": "tier1_template",
+          "evidence": {
+            "guide_paragraphs": [
+              32,
+              33,
+              34
+            ],
+            "mode": "clean_clause_policy_replacement",
+            "rule": "G08",
+            "strategy": [
+              {
+                "operation": "G08:0",
+                "requested": "tier2_minimal_splice",
+                "actual": "tier2_minimal_splice",
+                "fallback_reason": null,
+                "blocked": false,
+                "applicable": true
+              }
+            ],
+            "operation_keys": [
+              "G08:0"
+            ],
+            "obligation_ids": [
+              "G08:B1:O1"
+            ],
+            "operation_refs": [
+              {
+                "obligation_id": "G08:B1:O1",
+                "rule_id": "G08",
+                "operation_id": "G08:0",
+                "operation_index": 0,
+                "branch_id": "B1",
+                "group_kind": "INDEPENDENT",
+                "op": "replace",
+                "old_text": "本基金的申购费率由基金管理人决定，并在招募说明书中列示。",
+                "new_text": "本基金A类基金份额在申购时收取申购费用，C类基金份额不收取申购费用。通过直销机构申购本基金A类基金份额不收取申购费。通过直销机构以外的其他销售机构申购本基金的申购费率由基金管理人决定，并在招募说明书中列示。",
+                "condition": {
+                  "kind": "class_count",
+                  "value": "multiple"
+                },
+                "condition_text": "class_count=multiple",
+                "requirement": "产品有多个份额类别时，将“本基金的申购费率由基金管理人决定，并在招募说明书中列示。”变更为“本基金A类基金份额在申购时收取申购费用，C类基金份额不收取申购费用。通过直销机构申购本基金A类基金份额不收取申购费。通过直销机构以外的其他销售机构申购本基金的申购费率由基金管理人决定，并在招募说明书中列示。”。",
+                "expected_site": "基金份额的申购与赎回",
+                "required_facts": [
+                  "service_fee_group",
+                  "share_class_structure",
+                  "subscription_fee_group"
+                ],
+                "alternatives": [],
+                "one_of_group": ""
+              }
+            ]
+          },
+          "anchor_sha256": "",
+          "operation_keys": [
+            "G08:0"
+          ],
+          "obligation_ids": [
+            "G08:B1:O1"
+          ],
+          "components": [
+            {
+              "target_id": "S03_S04_S07_S16_S17_S20#1:T014",
+              "rule_id": "G08",
+              "location": "p226",
+              "start": 36,
+              "end": 72,
+              "replacement": "本基金A类基金份额在申购时收取申购费用，C类基金份额不收取申购费用。通过直销机构申购本基金A类基金份额不收取申购费。通过直销机构以外的其他销售机构申购本基金的申购费率由基金管理人决定，并在招募说明书中列示。",
+              "operation": "replace",
+              "content_source": "tier1_template",
+              "evidence": {
+                "guide_paragraphs": [
+                  32,
+                  33,
+                  34
+                ],
+                "mode": "clean_clause_policy_replacement",
+                "rule": "G08",
+                "strategy": [
+                  {
+                    "operation": "G08:0",
+                    "requested": "tier2_minimal_splice",
+                    "actual": "tier2_minimal_splice",
+                    "fallback_reason": null,
+                    "blocked": false,
+                    "applicable": true
+                  }
+                ],
+                "operation_keys": [
+                  "G08:0"
+                ],
+                "obligation_ids": [
+                  "G08:B1:O1"
+                ],
+                "operation_refs": [
+                  {
+                    "obligation_id": "G08:B1:O1",
+                    "rule_id": "G08",
+                    "operation_id": "G08:0",
+                    "operation_index": 0,
+                    "branch_id": "B1",
+                    "group_kind": "INDEPENDENT",
+                    "op": "replace",
+                    "old_text": "本基金的申购费率由基金管理人决定，并在招募说明书中列示。",
+                    "new_text": "本基金A类基金份额在申购时收取申购费用，C类基金份额不收取申购费用。通过直销机构申购本基金A类基金份额不收取申购费。通过直销机构以外的其他销售机构申购本基金的申购费率由基金管理人决定，并在招募说明书中列示。",
+                    "condition": {
+                      "kind": "class_count",
+                      "value": "multiple"
+                    },
+                    "condition_text": "class_count=multiple",
+                    "requirement": "产品有多个份额类别时，将“本基金的申购费率由基金管理人决定，并在招募说明书中列示。”变更为“本基金A类基金份额在申购时收取申购费用，C类基金份额不收取申购费用。通过直销机构申购本基金A类基金份额不收取申购费。通过直销机构以外的其他销售机构申购本基金的申购费率由基金管理人决定，并在招募说明书中列示。”。",
+                    "expected_site": "基金份额的申购与赎回",
+                    "required_facts": [
+                      "service_fee_group",
+                      "share_class_structure",
+                      "subscription_fee_group"
+                    ],
+                    "alternatives": [],
+                    "one_of_group": ""
+                  }
+                ]
+              },
+              "operation_keys": [
+                "G08:0"
+              ],
+              "obligation_ids": [
+                "G08:B1:O1"
+              ],
+              "expected_old_text": "本基金 A 类基金份额的申购费率由基金管理人决定，并在招募说明书中列示。"
+            }
+          ]
+        },
+        {
+          "target_id": "S03_S04_S07_S16_S17_S20#1:T015",
+          "rule_id": "G18",
+          "location": "p848",
+          "start": 22,
+          "end": 60,
+          "replacement": "由于本基金A类基金份额和C类基金份额费用收取不同",
+          "operation": "replace",
+          "content_source": "fragment_replace",
+          "evidence": {
+            "guide_paragraphs": [
+              90,
+              91,
+              92
+            ],
+            "applied": [
+              "replace:full"
+            ],
+            "fragments": [
+              {
+                "op": "replace",
+                "old_text": "由于本基金A类基金份额不收取销售服务费，而C类基金份额收取销售服务费",
+                "new_text": "由于本基金A类基金份额和C类基金份额费用收取不同",
+                "mode": "full"
+              }
+            ],
+            "strategy": [
+              {
+                "operation": "G18:0",
+                "requested": "tier2_minimal_splice",
+                "actual": "tier2_minimal_splice",
+                "fallback_reason": null,
+                "blocked": false,
+                "applicable": true
+              }
+            ],
+            "operation_keys": [
+              "G18:0"
+            ],
+            "obligation_ids": [
+              "G18:B1:O1"
+            ],
+            "operation_refs": [
+              {
+                "obligation_id": "G18:B1:O1",
+                "rule_id": "G18",
+                "operation_id": "G18:0",
+                "operation_index": 0,
+                "branch_id": "B1",
+                "group_kind": "INDEPENDENT",
+                "op": "replace",
+                "old_text": "由于本基金A类基金份额不收取销售服务费，而C类基金份额收取销售服务费",
+                "new_text": "由于本基金A类基金份额和C类基金份额费用收取不同",
+                "condition": {
+                  "kind": "none",
+                  "value": null
+                },
+                "condition_text": "none",
+                "requirement": "将“由于本基金A类基金份额不收取销售服务费，而C类基金份额收取销售服务费”变更为“由于本基金A类基金份额和C类基金份额费用收取不同”。",
+                "expected_site": "基金的收益与分配",
+                "required_facts": [],
+                "alternatives": [],
+                "one_of_group": ""
+              }
+            ]
+          },
+          "anchor_sha256": "",
+          "operation_keys": [
+            "G18:0"
+          ],
+          "obligation_ids": [
+            "G18:B1:O1"
+          ],
+          "components": [
+            {
+              "target_id": "S03_S04_S07_S16_S17_S20#1:T015",
+              "rule_id": "G18",
+              "location": "p848",
+              "start": 22,
+              "end": 60,
+              "replacement": "由于本基金A类基金份额和C类基金份额费用收取不同",
+              "operation": "replace",
+              "content_source": "fragment_replace",
+              "evidence": {
+                "guide_paragraphs": [
+                  90,
+                  91,
+                  92
+                ],
+                "applied": [
+                  "replace:full"
+                ],
+                "fragments": [
+                  {
+                    "op": "replace",
+                    "old_text": "由于本基金A类基金份额不收取销售服务费，而C类基金份额收取销售服务费",
+                    "new_text": "由于本基金A类基金份额和C类基金份额费用收取不同",
+                    "mode": "full"
+                  }
+                ],
+                "strategy": [
+                  {
+                    "operation": "G18:0",
+                    "requested": "tier2_minimal_splice",
+                    "actual": "tier2_minimal_splice",
+                    "fallback_reason": null,
+                    "blocked": false,
+                    "applicable": true
+                  }
+                ],
+                "operation_keys": [
+                  "G18:0"
+                ],
+                "obligation_ids": [
+                  "G18:B1:O1"
+                ],
+                "operation_refs": [
+                  {
+                    "obligation_id": "G18:B1:O1",
+                    "rule_id": "G18",
+                    "operation_id": "G18:0",
+                    "operation_index": 0,
+                    "branch_id": "B1",
+                    "group_kind": "INDEPENDENT",
+                    "op": "replace",
+                    "old_text": "由于本基金A类基金份额不收取销售服务费，而C类基金份额收取销售服务费",
+                    "new_text": "由于本基金A类基金份额和C类基金份额费用收取不同",
+                    "condition": {
+                      "kind": "none",
+                      "value": null
+                    },
+                    "condition_text": "none",
+                    "requirement": "将“由于本基金A类基金份额不收取销售服务费，而C类基金份额收取销售服务费”变更为“由于本基金A类基金份额和C类基金份额费用收取不同”。",
+                    "expected_site": "基金的收益与分配",
+                    "required_facts": [],
+                    "alternatives": [],
+                    "one_of_group": ""
+                  }
+                ]
+              },
+              "operation_keys": [
+                "G18:0"
+              ],
+              "obligation_ids": [
+                "G18:B1:O1"
+              ],
+              "expected_old_text": "由于本基金 A 类基金份额不收取销售服务费，而 C 类基金份额收取销售服务费"
+            }
+          ]
+        },
+        {
+          "target_id": "S03_S04_S07_S16_S17_S20#1:T019",
+          "rule_id": "G09",
+          "location": "p227",
+          "start": 61,
+          "end": 113,
+          "replacement": "赎回金额为按实际确认的有效赎回份额乘以当日该类基金份额的基金份额净值并扣除或加上相应的费用，赎回金额单位为元。",
+          "operation": "replace",
+          "content_source": "tier1_splice",
+          "evidence": {
+            "guide_paragraphs": [
+              35,
+              36,
+              37,
+              38,
+              39,
+              40
+            ],
+            "mode": "g09_bounded_splice",
+            "applied": [
+              [
+                "额净值并扣除相应的费用，",
+                "额净值并扣除或加上相应的费用，"
+              ]
+            ],
+            "strategy": [
+              {
+                "operation": "G09:0",
+                "requested": "tier2_minimal_splice",
+                "actual": "tier2_minimal_splice",
+                "fallback_reason": null,
+                "blocked": false,
+                "applicable": true
+              }
+            ],
+            "operation_keys": [
+              "G09:0"
+            ],
+            "obligation_ids": [
+              "G09:B1:O1"
+            ],
+            "operation_refs": [
+              {
+                "obligation_id": "G09:B1:O1",
+                "rule_id": "G09",
+                "operation_id": "G09:0",
+                "operation_index": 0,
+                "branch_id": "B1",
+                "group_kind": "INDEPENDENT",
+                "op": "replace",
+                "old_text": "赎回金额为按实际确认的有效赎回份额乘以当日对应份额类别的基金份额净值并扣除相应的费用，赎回金额单位为元。",
+                "new_text": "赎回金额为按实际确认的有效赎回份额乘以当日该类基金份额的基金份额净值并扣除或加上相应的费用，赎回金额单位为元。",
+                "condition": {
+                  "kind": "class_count",
+                  "value": "multiple"
+                },
+                "condition_text": "class_count=multiple",
+                "requirement": "产品有多个份额类别时，将“赎回金额为按实际确认的有效赎回份额乘以当日对应份额类别的基金份额净值并扣除相应的费用，赎回金额单位为元。”变更为“赎回金额为按实际确认的有效赎回份额乘以当日该类基金份额的基金份额净值并扣除或加上相应的费用，赎回金额单位为元。”。",
+                "expected_site": "基金份额的申购与赎回",
+                "required_facts": [
+                  "share_class_structure"
+                ],
+                "alternatives": [],
+                "one_of_group": ""
+              }
+            ]
+          },
+          "anchor_sha256": "",
+          "operation_keys": [
+            "G09:0"
+          ],
+          "obligation_ids": [
+            "G09:B1:O1"
+          ],
+          "components": [
+            {
+              "target_id": "S03_S04_S07_S16_S17_S20#1:T019",
+              "rule_id": "G09",
+              "location": "p227",
+              "start": 61,
+              "end": 113,
+              "replacement": "赎回金额为按实际确认的有效赎回份额乘以当日该类基金份额的基金份额净值并扣除或加上相应的费用，赎回金额单位为元。",
+              "operation": "replace",
+              "content_source": "tier1_splice",
+              "evidence": {
+                "guide_paragraphs": [
+                  35,
+                  36,
+                  37,
+                  38,
+                  39,
+                  40
+                ],
+                "mode": "g09_bounded_splice",
+                "applied": [
+                  [
+                    "额净值并扣除相应的费用，",
+                    "额净值并扣除或加上相应的费用，"
+                  ]
+                ],
+                "strategy": [
+                  {
+                    "operation": "G09:0",
+                    "requested": "tier2_minimal_splice",
+                    "actual": "tier2_minimal_splice",
+                    "fallback_reason": null,
+                    "blocked": false,
+                    "applicable": true
+                  }
+                ],
+                "operation_keys": [
+                  "G09:0"
+                ],
+                "obligation_ids": [
+                  "G09:B1:O1"
+                ],
+                "operation_refs": [
+                  {
+                    "obligation_id": "G09:B1:O1",
+                    "rule_id": "G09",
+                    "operation_id": "G09:0",
+                    "operation_index": 0,
+                    "branch_id": "B1",
+                    "group_kind": "INDEPENDENT",
+                    "op": "replace",
+                    "old_text": "赎回金额为按实际确认的有效赎回份额乘以当日对应份额类别的基金份额净值并扣除相应的费用，赎回金额单位为元。",
+                    "new_text": "赎回金额为按实际确认的有效赎回份额乘以当日该类基金份额的基金份额净值并扣除或加上相应的费用，赎回金额单位为元。",
+                    "condition": {
+                      "kind": "class_count",
+                      "value": "multiple"
+                    },
+                    "condition_text": "class_count=multiple",
+                    "requirement": "产品有多个份额类别时，将“赎回金额为按实际确认的有效赎回份额乘以当日对应份额类别的基金份额净值并扣除相应的费用，赎回金额单位为元。”变更为“赎回金额为按实际确认的有效赎回份额乘以当日该类基金份额的基金份额净值并扣除或加上相应的费用，赎回金额单位为元。”。",
+                    "expected_site": "基金份额的申购与赎回",
+                    "required_facts": [
+                      "share_class_structure"
+                    ],
+                    "alternatives": [],
+                    "one_of_group": ""
+                  }
+                ]
+              },
+              "operation_keys": [
+                "G09:0"
+              ],
+              "obligation_ids": [
+                "G09:B1:O1"
+              ],
+              "expected_old_text": "赎回金额为按实际确认的有效赎回份额乘以当日该类基金份额的基金份额净值并扣除相应的费用，赎回金额单位为元。"
+            }
+          ]
+        },
+        {
+          "target_id": "S03_S04_S07_S16_S17_S20#1:T025",
+          "rule_id": "G22",
+          "location": "p1001",
+          "start": 0,
+          "end": 79,
+          "replacement": "依据基金财产清算的分配方案，将基金财产清算后的全部剩余资产扣除基金财产清算费用、交纳所欠税款并清偿基金债务后，按基金份额持有人持有的基金份额比例进行分配，并加上返还基金份额持有人的销售服务费（如有）。",
+          "operation": "replace",
+          "content_source": "variant_replace",
+          "evidence": {
+            "guide_paragraphs": [
+              101,
+              102,
+              103,
+              105
+            ],
+            "matched_old_text": "依据基金财产清算的分配方案，将基金财产清算后的全部剩余资产扣除基金财产清算费用、交纳所欠税款并清偿基金债务后，按基金份额持有人持有的基金份额比例进行分配。",
+            "fixed_text": "依据基金财产清算的分配方案，将基金财产清算后的全部剩余资产扣除基金财产清算费用、交纳所欠税款并清偿基金债务后，按基金份额持有人持有的基金份额比例进行分配，并加上返还基金份额持有人的销售服务费（如有）。",
+            "variant_ratio": 0.974,
+            "strategy": [
+              {
+                "operation": "G22:0",
+                "requested": "tier2_minimal_splice",
+                "actual": "tier2_minimal_splice",
+                "fallback_reason": null,
+                "blocked": false,
+                "applicable": true
+              }
+            ],
+            "operation_keys": [
+              "G22:0"
+            ],
+            "obligation_ids": [
+              "G22:B1:O1"
+            ],
+            "operation_refs": [
+              {
+                "obligation_id": "G22:B1:O1",
+                "rule_id": "G22",
+                "operation_id": "G22:0",
+                "operation_index": 0,
+                "branch_id": "B1",
+                "group_kind": "INDEPENDENT",
+                "op": "replace",
+                "old_text": "依据基金财产清算的分配方案，将基金财产清算后的全部剩余资产扣除基金财产清算费用、交纳所欠税款并清偿基金债务后，按基金份额持有人持有的基金份额比例进行分配。",
+                "new_text": "依据基金财产清算的分配方案，将基金财产清算后的全部剩余资产扣除基金财产清算费用、交纳所欠税款并清偿基金债务后，按基金份额持有人持有的基金份额比例进行分配，并加上返还基金份额持有人的销售服务费（如有）。",
+                "condition": {
+                  "kind": "compound",
+                  "value": [
+                    {
+                      "kind": "is_floating_fee",
+                      "value": false
+                    },
+                    {
+                      "kind": "has_service_fee",
+                      "value": true
+                    },
+                    {
+                      "kind": "class_count",
+                      "value": "multiple"
+                    }
+                  ]
+                },
+                "condition_text": "compound(is_floating_fee=False,has_service_fee=True,class_count=multiple)",
+                "requirement": "如果不是浮动管理费产品且收取销售服务费，将原条款替换为“依据基金财产清算的分配方案，将基金财产清算后的全部剩余资产扣除基金财产清算费用、交纳所欠税款并清偿基金债务后，按基金份额持有人持有的基金份额比例进行分配，并加上返还基金份额持有人的销售服务费（如有）。”。",
+                "expected_site": "基金财产的清算",
+                "required_facts": [
+                  "floating_management_fee",
+                  "service_fee_group",
+                  "share_class_structure",
+                  "subscription_fee_group"
+                ],
+                "alternatives": [],
+                "one_of_group": ""
+              }
+            ]
+          },
+          "anchor_sha256": "",
+          "operation_keys": [
+            "G22:0"
+          ],
+          "obligation_ids": [
+            "G22:B1:O1"
+          ],
+          "components": [
+            {
+              "target_id": "S03_S04_S07_S16_S17_S20#1:T025",
+              "rule_id": "G22",
+              "location": "p1001",
+              "start": 0,
+              "end": 79,
+              "replacement": "依据基金财产清算的分配方案，将基金财产清算后的全部剩余资产扣除基金财产清算费用、交纳所欠税款并清偿基金债务后，按基金份额持有人持有的基金份额比例进行分配，并加上返还基金份额持有人的销售服务费（如有）。",
+              "operation": "replace",
+              "content_source": "variant_replace",
+              "evidence": {
+                "guide_paragraphs": [
+                  101,
+                  102,
+                  103,
+                  105
+                ],
+                "matched_old_text": "依据基金财产清算的分配方案，将基金财产清算后的全部剩余资产扣除基金财产清算费用、交纳所欠税款并清偿基金债务后，按基金份额持有人持有的基金份额比例进行分配。",
+                "fixed_text": "依据基金财产清算的分配方案，将基金财产清算后的全部剩余资产扣除基金财产清算费用、交纳所欠税款并清偿基金债务后，按基金份额持有人持有的基金份额比例进行分配，并加上返还基金份额持有人的销售服务费（如有）。",
+                "variant_ratio": 0.974,
+                "strategy": [
+                  {
+                    "operation": "G22:0",
+                    "requested": "tier2_minimal_splice",
+                    "actual": "tier2_minimal_splice",
+                    "fallback_reason": null,
+                    "blocked": false,
+                    "applicable": true
+                  }
+                ],
+                "operation_keys": [
+                  "G22:0"
+                ],
+                "obligation_ids": [
+                  "G22:B1:O1"
+                ],
+                "operation_refs": [
+                  {
+                    "obligation_id": "G22:B1:O1",
+                    "rule_id": "G22",
+                    "operation_id": "G22:0",
+                    "operation_index": 0,
+                    "branch_id": "B1",
+                    "group_kind": "INDEPENDENT",
+                    "op": "replace",
+                    "old_text": "依据基金财产清算的分配方案，将基金财产清算后的全部剩余资产扣除基金财产清算费用、交纳所欠税款并清偿基金债务后，按基金份额持有人持有的基金份额比例进行分配。",
+                    "new_text": "依据基金财产清算的分配方案，将基金财产清算后的全部剩余资产扣除基金财产清算费用、交纳所欠税款并清偿基金债务后，按基金份额持有人持有的基金份额比例进行分配，并加上返还基金份额持有人的销售服务费（如有）。",
+                    "condition": {
+                      "kind": "compound",
+                      "value": [
+                        {
+                          "kind": "is_floating_fee",
+                          "value": false
+                        },
+                        {
+                          "kind": "has_service_fee",
+                          "value": true
+                        },
+                        {
+                          "kind": "class_count",
+                          "value": "multiple"
+                        }
+                      ]
+                    },
+                    "condition_text": "compound(is_floating_fee=False,has_service_fee=True,class_count=multiple)",
+                    "requirement": "如果不是浮动管理费产品且收取销售服务费，将原条款替换为“依据基金财产清算的分配方案，将基金财产清算后的全部剩余资产扣除基金财产清算费用、交纳所欠税款并清偿基金债务后，按基金份额持有人持有的基金份额比例进行分配，并加上返还基金份额持有人的销售服务费（如有）。”。",
+                    "expected_site": "基金财产的清算",
+                    "required_facts": [
+                      "floating_management_fee",
+                      "service_fee_group",
+                      "share_class_structure",
+                      "subscription_fee_group"
+                    ],
+                    "alternatives": [],
+                    "one_of_group": ""
+                  }
+                ]
+              },
+              "operation_keys": [
+                "G22:0"
+              ],
+              "obligation_ids": [
+                "G22:B1:O1"
+              ],
+              "expected_old_text": "依据基金财产清算的分配方案，将基金财产清算后的全部剩余资产扣除基金财产清算费用、交纳所欠税款并清偿基金债务后，按基金份额持有人持有的各类基金份额比例进行分配。"
+            }
+          ]
+        },
+        {
+          "target_id": "S03_S04_S07_S16_S17_S20#1:T026",
+          "rule_id": "G14",
+          "location": "p232",
+          "start": 112,
+          "end": 149,
+          "replacement": "基金管理人可以适当调低基金申购费率和销售服务费率。",
+          "operation": "replace",
+          "content_source": "tier1_template",
+          "evidence": {
+            "guide_paragraphs": [
+              57,
+              58,
+              59,
+              60,
+              61,
+              62,
+              63,
+              64,
+              65,
+              66
+            ],
+            "mode": "g14_fee_item_removal",
+            "removed": [
+              "赎回费率",
+              "转换费率"
+            ],
+            "allowed": [
+              "申购费率",
+              "销售服务费率"
+            ],
+            "strategy": [
+              {
+                "operation": "G14:0",
+                "requested": "tier1_template",
+                "actual": "tier1_template",
+                "fallback_reason": null,
+                "blocked": false,
+                "applicable": false
+              },
+              {
+                "operation": "G14:1",
+                "requested": "tier1_template",
+                "actual": "tier1_template",
+                "fallback_reason": null,
+                "blocked": false,
+                "applicable": false
+              },
+              {
+                "operation": "G14:2",
+                "requested": "tier1_template",
+                "actual": "tier1_template",
+                "fallback_reason": null,
+                "blocked": false,
+                "applicable": false
+              },
+              {
+                "operation": "G14:3",
+                "requested": "tier1_template",
+                "actual": "tier1_template",
+                "fallback_reason": null,
+                "blocked": false,
+                "applicable": false
+              },
+              {
+                "operation": "G14:4",
+                "requested": "tier1_template",
+                "actual": "tier1_template",
+                "fallback_reason": null,
+                "blocked": false,
+                "applicable": false
+              },
+              {
+                "operation": "G14:5",
+                "requested": "tier1_template",
+                "actual": "tier1_template",
+                "fallback_reason": null,
+                "blocked": false,
+                "applicable": true
+              }
+            ],
+            "operation_keys": [
+              "G14:5"
+            ],
+            "obligation_ids": [
+              "G14:B2:O3"
+            ],
+            "operation_refs": [
+              {
+                "obligation_id": "G14:B2:O3",
+                "rule_id": "G14",
+                "operation_id": "G14:5",
+                "operation_index": 5,
+                "branch_id": "B2",
+                "group_kind": "ONE_OF",
+                "op": "replace",
+                "old_text": "基金管理人可以适当调低基金申购费率、赎回费率、转换费率和销售服务费率。",
+                "new_text": "基金管理人可以适当调低基金申购费率和销售服务费率。",
+                "condition": {
+                  "kind": "class_count",
+                  "value": "multiple"
+                },
+                "condition_text": "class_count=multiple",
+                "requirement": "产品仅有一个份额类别时，将“基金管理人可以适当调低基金申购费率和赎回费率。”变更为“基金管理人可以适当调低基金申购费率。”；产品有多个份额类别时，将“基金管理人可以适当调低基金申购费率和赎回费率。”变更为“基金管理人可以适当调低基金申购费率和销售服务费率。”。",
+                "expected_site": "基金份额的申购与赎回",
+                "required_facts": [
+                  "share_class_structure"
+                ],
+                "alternatives": [
+                  "基金管理人可以适当调低基金申购费率和赎回费率。",
+                  "基金管理人可以适当调低基金申购费率、赎回费率和转换费率。",
+                  "基金管理人可以适当调低基金申购费率、赎回费率、转换费率和销售服务费率。"
+                ],
+                "one_of_group": "G14:history:multiple"
+              }
+            ]
+          },
+          "anchor_sha256": "",
+          "operation_keys": [
+            "G14:5"
+          ],
+          "obligation_ids": [
+            "G14:B2:O3"
+          ],
+          "components": [
+            {
+              "target_id": "S03_S04_S07_S16_S17_S20#1:T026",
+              "rule_id": "G14",
+              "location": "p232",
+              "start": 112,
+              "end": 149,
+              "replacement": "基金管理人可以适当调低基金申购费率和销售服务费率。",
+              "operation": "replace",
+              "content_source": "tier1_template",
+              "evidence": {
+                "guide_paragraphs": [
+                  57,
+                  58,
+                  59,
+                  60,
+                  61,
+                  62,
+                  63,
+                  64,
+                  65,
+                  66
+                ],
+                "mode": "g14_fee_item_removal",
+                "removed": [
+                  "赎回费率",
+                  "转换费率"
+                ],
+                "allowed": [
+                  "申购费率",
+                  "销售服务费率"
+                ],
+                "strategy": [
+                  {
+                    "operation": "G14:0",
+                    "requested": "tier1_template",
+                    "actual": "tier1_template",
+                    "fallback_reason": null,
+                    "blocked": false,
+                    "applicable": false
+                  },
+                  {
+                    "operation": "G14:1",
+                    "requested": "tier1_template",
+                    "actual": "tier1_template",
+                    "fallback_reason": null,
+                    "blocked": false,
+                    "applicable": false
+                  },
+                  {
+                    "operation": "G14:2",
+                    "requested": "tier1_template",
+                    "actual": "tier1_template",
+                    "fallback_reason": null,
+                    "blocked": false,
+                    "applicable": false
+                  },
+                  {
+                    "operation": "G14:3",
+                    "requested": "tier1_template",
+                    "actual": "tier1_template",
+                    "fallback_reason": null,
+                    "blocked": false,
+                    "applicable": false
+                  },
+                  {
+                    "operation": "G14:4",
+                    "requested": "tier1_template",
+                    "actual": "tier1_template",
+                    "fallback_reason": null,
+                    "blocked": false,
+                    "applicable": false
+                  },
+                  {
+                    "operation": "G14:5",
+                    "requested": "tier1_template",
+                    "actual": "tier1_template",
+                    "fallback_reason": null,
+                    "blocked": false,
+                    "applicable": true
+                  }
+                ],
+                "operation_keys": [
+                  "G14:5"
+                ],
+                "obligation_ids": [
+                  "G14:B2:O3"
+                ],
+                "operation_refs": [
+                  {
+                    "obligation_id": "G14:B2:O3",
+                    "rule_id": "G14",
+                    "operation_id": "G14:5",
+                    "operation_index": 5,
+                    "branch_id": "B2",
+                    "group_kind": "ONE_OF",
+                    "op": "replace",
+                    "old_text": "基金管理人可以适当调低基金申购费率、赎回费率、转换费率和销售服务费率。",
+                    "new_text": "基金管理人可以适当调低基金申购费率和销售服务费率。",
+                    "condition": {
+                      "kind": "class_count",
+                      "value": "multiple"
+                    },
+                    "condition_text": "class_count=multiple",
+                    "requirement": "产品仅有一个份额类别时，将“基金管理人可以适当调低基金申购费率和赎回费率。”变更为“基金管理人可以适当调低基金申购费率。”；产品有多个份额类别时，将“基金管理人可以适当调低基金申购费率和赎回费率。”变更为“基金管理人可以适当调低基金申购费率和销售服务费率。”。",
+                    "expected_site": "基金份额的申购与赎回",
+                    "required_facts": [
+                      "share_class_structure"
+                    ],
+                    "alternatives": [
+                      "基金管理人可以适当调低基金申购费率和赎回费率。",
+                      "基金管理人可以适当调低基金申购费率、赎回费率和转换费率。",
+                      "基金管理人可以适当调低基金申购费率、赎回费率、转换费率和销售服务费率。"
+                    ],
+                    "one_of_group": "G14:history:multiple"
+                  }
+                ]
+              },
+              "operation_keys": [
+                "G14:5"
+              ],
+              "obligation_ids": [
+                "G14:B2:O3"
+              ],
+              "expected_old_text": "基金管理人可以适当调低基金申购费率、基金赎回费率、转换费率和销售服务费率。"
+            }
+          ]
+        },
+        {
+          "target_id": "S25_S26#1:T008+S25_S26#1:T019",
+          "rule_id": "G15+G16",
+          "location": "p1287",
+          "start": 0,
+          "end": 158,
+          "replacement": "销售服务费每日计提。（1）直销机构：对于投资者通过直销机构持有的C类基金份额计提的销售服务费，在投资者赎回C类基金份额或基金合同终止时，随赎回款（或清算款）一并返还给投资者。基金管理人基金销售子公司销售母公司所管理基金的，按照本条要求执行。（2）直销机构以外的其他销售机构：对于投资者持续持有期限未超过一年（即365天，下同）的基金份额收取的销售服务费，按月支付，基金托管人按照与基金管理人协商一致的方式于次月首日起5个工作日内按照指定的账户路径进行支付。若遇法定节假日、公休日或不可抗力等，支付日期顺延。对于持续持有期限超过一年的基金份额，持有超过一年后继续计提的销售服务费，在投资者赎回基金份额或基金合同终止时，随赎回款（或清算款）一并返还给投资者。 ",
+          "operation": "replace",
+          "content_source": "atomic_paragraph",
+          "evidence": {
+            "atomic_components": [
+              {
+                "target_id": "S25_S26#1:T008",
+                "rule_id": "G15",
+                "location": "p1287",
+                "start": 0,
+                "end": 157,
+                "replacement": "",
+                "operation": "replace",
+                "content_source": "tier1_delete",
+                "evidence": {
+                  "guide_paragraphs": [
+                    67,
+                    68,
+                    69,
+                    70,
+                    71,
+                    72,
+                    73,
+                    74,
+                    75,
+                    76
+                  ],
+                  "strategy": [
+                    {
+                      "operation": "G15:0",
+                      "requested": "deterministic_delete",
+                      "actual": "deterministic_delete",
+                      "fallback_reason": null,
+                      "blocked": false,
+                      "applicable": true
+                    }
+                  ],
+                  "deleted_paragraph": "基金销售服务费每日计算，逐日累计至每月月末，按月支付，由基金托管人根据与基金管理人核对一致的财务数据，自动在月初5个工作日内、按照指定的账户路径进行资金支付，基金管理人无需再出具资金划拨指令。若遇法定节假日、公休日等，支付日期顺延。费用自动…",
+                  "operation_keys": [
+                    "G15:0"
+                  ],
+                  "obligation_ids": [
+                    "G15:B1:O1"
+                  ],
+                  "operation_refs": [
+                    {
+                      "obligation_id": "G15:B1:O1",
+                      "rule_id": "G15",
+                      "operation_id": "G15:0",
+                      "operation_index": 0,
+                      "branch_id": "B1",
+                      "group_kind": "INDEPENDENT",
+                      "op": "delete",
+                      "old_text": "C类基金份额的销售服务费每日计提，按月支付。由基金管理人向基金托管人发送基金销售服务费划付指令，经基金托管人复核后于次月首日起10个工作日内从基金财产中一次性支付给登记机构，由登记机构代付给销售机构。若遇法定节假日、公休日等，支付日期顺延。",
+                      "new_text": "",
+                      "condition": {
+                        "kind": "none",
+                        "value": null
+                      },
+                      "condition_text": "none",
+                      "requirement": "删除原条款中“C类基金份额的销售服务费每日计提，按月支付。由基金管理人向基金托管人发送基金销售服务费划付指令，经基金托管人复核后于次月首日起10个工作日内从基金财产中一次性支付给登记机构，由登记机构代付给销售机构。若遇法定节假日、公休日等，支付日期顺延。”。",
+                      "expected_site": "基金费用与税收",
+                      "required_facts": [],
+                      "alternatives": [],
+                      "one_of_group": ""
+                    }
+                  ],
+                  "business_notices": [
+                    {
+                      "code": "CONTRACT_POSSIBLY_ERRONEOUS",
+                      "severity": "warning",
+                      "affects_completion": false,
+                      "message": "原合同可能有误：支付时限与指引参照不同（合同 5个工作日；指引 10个工作日）；支付路径/方式出现“自动支付/扣划”（指引参照未涉及）；支付路径/方式出现“指定账户路径”（指引参照未涉及）；支付路径/方式出现“无需出具指令”（指引参照未涉及）",
+                      "reasons": [
+                        "支付时限与指引参照不同（合同 5个工作日；指引 10个工作日）",
+                        "支付路径/方式出现“自动支付/扣划”（指引参照未涉及）",
+                        "支付路径/方式出现“指定账户路径”（指引参照未涉及）",
+                        "支付路径/方式出现“无需出具指令”（指引参照未涉及）"
+                      ]
+                    }
+                  ]
+                },
+                "operation_keys": [
+                  "G15:0"
+                ],
+                "obligation_ids": [
+                  "G15:B1:O1"
+                ],
+                "expected_old_text": "基金销售服务费每日计算，逐日累计至每月月末，按月支付，由基金托管人根据与基金管理人核对一致的财务数据，自动在月初5个工作日内、按照指定的账户路径进行资金支付，基金管理人无需再出具资金划拨指令。若遇法定节假日、公休日等，支付日期顺延。费用自动扣划后，基金管理人应进行核对，如发现数据不符，及时联系基金托管人协商解决。"
+              },
+              {
+                "target_id": "S25_S26#1:T019",
+                "rule_id": "G16",
+                "location": "p1287",
+                "start": 157,
+                "end": 157,
+                "replacement": "销售服务费每日计提。（1）直销机构：对于投资者通过直销机构持有的C类基金份额计提的销售服务费，在投资者赎回C类基金份额或基金合同终止时，随赎回款（或清算款）一并返还给投资者。基金管理人基金销售子公司销售母公司所管理基金的，按照本条要求执行。（2）直销机构以外的其他销售机构：对于投资者持续持有期限未超过一年（即365天，下同）的基金份额收取的销售服务费，按月支付，基金托管人按照与基金管理人协商一致的方式于次月首日起5个工作日内按照指定的账户路径进行支付。若遇法定节假日、公休日或不可抗力等，支付日期顺延。对于持续持有期限超过一年的基金份额，持有超过一年后继续计提的销售服务费，在投资者赎回基金份额或基金合同终止时，随赎回款（或清算款）一并返还给投资者。",
+                "operation": "insert",
+                "content_source": "guide_text",
+                "evidence": {
+                  "guide_paragraphs": [
+                    74,
+                    77,
+                    78,
+                    79,
+                    80,
+                    81,
+                    82,
+                    83,
+                    84
+                  ],
+                  "slots": [
+                    "C类基金份额"
+                  ],
+                  "fixed_text": "销售服务费每日计提。（1）直销机构：对于投资者通过直销机构持有的C类基金份额计提的销售服务费，在投资者赎回C类基金份额或基金合同终止时，随赎回款（或清算款）一并返还给投资者。基金管理人基金销售子公司销售母公司所管理基金的，按照本条要求执行。（2）直销机构以外的其他销售机构：对于投资者持续持有期限未超过一年（即365天，下同）的基金份额收取的销售服务费，按月支付，基金托管人按照与基金管理人协商一致的方式于次月首日起5个工作日内按照指定的账户路径进行支付。若遇法定节假日、公休日或不可抗力等，支付日期顺延。对于持续持有期限超过一年的基金份额，持有超过一年后继续计提的销售服务费，在投资者赎回基金份额或基金合同终止时，随赎回款（或清算款）一并返还给投资者。",
+                  "join_separator": "",
+                  "issues": [],
+                  "strategy": [
+                    {
+                      "operation": "G16:0",
+                      "requested": "tier3_model_compose",
+                      "actual": "tier3_model_compose",
+                      "fallback_reason": null,
+                      "blocked": false,
+                      "applicable": true
+                    }
+                  ],
+                  "operation_keys": [
+                    "G16:0"
+                  ],
+                  "obligation_ids": [
+                    "G16:B1:O1"
+                  ],
+                  "operation_refs": [
+                    {
+                      "obligation_id": "G16:B1:O1",
+                      "rule_id": "G16",
+                      "operation_id": "G16:0",
+                      "operation_index": 0,
+                      "branch_id": "B1",
+                      "group_kind": "INDEPENDENT",
+                      "op": "append",
+                      "old_text": "",
+                      "new_text": "销售服务费每日计提。（1）直销机构：对于投资者通过直销机构持有的C类基金份额计提的销售服务费，在投资者赎回C类基金份额或基金合同终止时，随赎回款（或清算款）一并返还给投资者。基金管理人基金销售子公司销售母公司所管理基金的，按照本条要求执行。（2）直销机构以外的其他销售机构：对于投资者持续持有期限未超过一年（即365天，下同）的基金份额收取的销售服务费，按月支付，基金托管人按照与基金管理人协商一致的方式于次月首日起5个工作日内按照指定的账户路径进行支付。若遇法定节假日、公休日或不可抗力等，支付日期顺延。对于持续持有期限超过一年的基金份额，持有超过一年后继续计提的销售服务费，在投资者赎回基金份额或基金合同终止时，随赎回款（或清算款）一并返还给投资者。",
+                      "condition": {
+                        "kind": "none",
+                        "value": null
+                      },
+                      "condition_text": "none",
+                      "requirement": "在原条款最后增加销售服务费每日计提、直销机构返还、其他销售机构按月支付及持有超过一年后返还等内容。",
+                      "expected_site": "基金费用与税收",
+                      "required_facts": [
+                        "service_fee_group",
+                        "share_class_structure"
+                      ],
+                      "alternatives": [],
+                      "one_of_group": ""
+                    }
+                  ]
+                },
+                "operation_keys": [
+                  "G16:0"
+                ],
+                "obligation_ids": [
+                  "G16:B1:O1"
+                ],
+                "expected_old_text": ""
+              }
+            ]
+          },
+          "anchor_sha256": "",
+          "operation_keys": [
+            "G15:0",
+            "G16:0"
+          ],
+          "obligation_ids": [
+            "G15:B1:O1",
+            "G16:B1:O1"
+          ],
+          "components": [
+            {
+              "target_id": "S25_S26#1:T008",
+              "rule_id": "G15",
+              "location": "p1287",
+              "start": 0,
+              "end": 157,
+              "replacement": "",
+              "operation": "replace",
+              "content_source": "tier1_delete",
+              "evidence": {
+                "guide_paragraphs": [
+                  67,
+                  68,
+                  69,
+                  70,
+                  71,
+                  72,
+                  73,
+                  74,
+                  75,
+                  76
+                ],
+                "strategy": [
+                  {
+                    "operation": "G15:0",
+                    "requested": "deterministic_delete",
+                    "actual": "deterministic_delete",
+                    "fallback_reason": null,
+                    "blocked": false,
+                    "applicable": true
+                  }
+                ],
+                "deleted_paragraph": "基金销售服务费每日计算，逐日累计至每月月末，按月支付，由基金托管人根据与基金管理人核对一致的财务数据，自动在月初5个工作日内、按照指定的账户路径进行资金支付，基金管理人无需再出具资金划拨指令。若遇法定节假日、公休日等，支付日期顺延。费用自动…",
+                "operation_keys": [
+                  "G15:0"
+                ],
+                "obligation_ids": [
+                  "G15:B1:O1"
+                ],
+                "operation_refs": [
+                  {
+                    "obligation_id": "G15:B1:O1",
+                    "rule_id": "G15",
+                    "operation_id": "G15:0",
+                    "operation_index": 0,
+                    "branch_id": "B1",
+                    "group_kind": "INDEPENDENT",
+                    "op": "delete",
+                    "old_text": "C类基金份额的销售服务费每日计提，按月支付。由基金管理人向基金托管人发送基金销售服务费划付指令，经基金托管人复核后于次月首日起10个工作日内从基金财产中一次性支付给登记机构，由登记机构代付给销售机构。若遇法定节假日、公休日等，支付日期顺延。",
+                    "new_text": "",
+                    "condition": {
+                      "kind": "none",
+                      "value": null
+                    },
+                    "condition_text": "none",
+                    "requirement": "删除原条款中“C类基金份额的销售服务费每日计提，按月支付。由基金管理人向基金托管人发送基金销售服务费划付指令，经基金托管人复核后于次月首日起10个工作日内从基金财产中一次性支付给登记机构，由登记机构代付给销售机构。若遇法定节假日、公休日等，支付日期顺延。”。",
+                    "expected_site": "基金费用与税收",
+                    "required_facts": [],
+                    "alternatives": [],
+                    "one_of_group": ""
+                  }
+                ],
+                "business_notices": [
+                  {
+                    "code": "CONTRACT_POSSIBLY_ERRONEOUS",
+                    "severity": "warning",
+                    "affects_completion": false,
+                    "message": "原合同可能有误：支付时限与指引参照不同（合同 5个工作日；指引 10个工作日）；支付路径/方式出现“自动支付/扣划”（指引参照未涉及）；支付路径/方式出现“指定账户路径”（指引参照未涉及）；支付路径/方式出现“无需出具指令”（指引参照未涉及）",
+                    "reasons": [
+                      "支付时限与指引参照不同（合同 5个工作日；指引 10个工作日）",
+                      "支付路径/方式出现“自动支付/扣划”（指引参照未涉及）",
+                      "支付路径/方式出现“指定账户路径”（指引参照未涉及）",
+                      "支付路径/方式出现“无需出具指令”（指引参照未涉及）"
+                    ]
+                  }
+                ]
+              },
+              "operation_keys": [
+                "G15:0"
+              ],
+              "obligation_ids": [
+                "G15:B1:O1"
+              ],
+              "expected_old_text": "基金销售服务费每日计算，逐日累计至每月月末，按月支付，由基金托管人根据与基金管理人核对一致的财务数据，自动在月初5个工作日内、按照指定的账户路径进行资金支付，基金管理人无需再出具资金划拨指令。若遇法定节假日、公休日等，支付日期顺延。费用自动扣划后，基金管理人应进行核对，如发现数据不符，及时联系基金托管人协商解决。"
+            },
+            {
+              "target_id": "S25_S26#1:T019",
+              "rule_id": "G16",
+              "location": "p1287",
+              "start": 157,
+              "end": 157,
+              "replacement": "销售服务费每日计提。（1）直销机构：对于投资者通过直销机构持有的C类基金份额计提的销售服务费，在投资者赎回C类基金份额或基金合同终止时，随赎回款（或清算款）一并返还给投资者。基金管理人基金销售子公司销售母公司所管理基金的，按照本条要求执行。（2）直销机构以外的其他销售机构：对于投资者持续持有期限未超过一年（即365天，下同）的基金份额收取的销售服务费，按月支付，基金托管人按照与基金管理人协商一致的方式于次月首日起5个工作日内按照指定的账户路径进行支付。若遇法定节假日、公休日或不可抗力等，支付日期顺延。对于持续持有期限超过一年的基金份额，持有超过一年后继续计提的销售服务费，在投资者赎回基金份额或基金合同终止时，随赎回款（或清算款）一并返还给投资者。",
+              "operation": "insert",
+              "content_source": "guide_text",
+              "evidence": {
+                "guide_paragraphs": [
+                  74,
+                  77,
+                  78,
+                  79,
+                  80,
+                  81,
+                  82,
+                  83,
+                  84
+                ],
+                "slots": [
+                  "C类基金份额"
+                ],
+                "fixed_text": "销售服务费每日计提。（1）直销机构：对于投资者通过直销机构持有的C类基金份额计提的销售服务费，在投资者赎回C类基金份额或基金合同终止时，随赎回款（或清算款）一并返还给投资者。基金管理人基金销售子公司销售母公司所管理基金的，按照本条要求执行。（2）直销机构以外的其他销售机构：对于投资者持续持有期限未超过一年（即365天，下同）的基金份额收取的销售服务费，按月支付，基金托管人按照与基金管理人协商一致的方式于次月首日起5个工作日内按照指定的账户路径进行支付。若遇法定节假日、公休日或不可抗力等，支付日期顺延。对于持续持有期限超过一年的基金份额，持有超过一年后继续计提的销售服务费，在投资者赎回基金份额或基金合同终止时，随赎回款（或清算款）一并返还给投资者。",
+                "join_separator": "",
+                "issues": [],
+                "strategy": [
+                  {
+                    "operation": "G16:0",
+                    "requested": "tier3_model_compose",
+                    "actual": "tier3_model_compose",
+                    "fallback_reason": null,
+                    "blocked": false,
+                    "applicable": true
+                  }
+                ],
+                "operation_keys": [
+                  "G16:0"
+                ],
+                "obligation_ids": [
+                  "G16:B1:O1"
+                ],
+                "operation_refs": [
+                  {
+                    "obligation_id": "G16:B1:O1",
+                    "rule_id": "G16",
+                    "operation_id": "G16:0",
+                    "operation_index": 0,
+                    "branch_id": "B1",
+                    "group_kind": "INDEPENDENT",
+                    "op": "append",
+                    "old_text": "",
+                    "new_text": "销售服务费每日计提。（1）直销机构：对于投资者通过直销机构持有的C类基金份额计提的销售服务费，在投资者赎回C类基金份额或基金合同终止时，随赎回款（或清算款）一并返还给投资者。基金管理人基金销售子公司销售母公司所管理基金的，按照本条要求执行。（2）直销机构以外的其他销售机构：对于投资者持续持有期限未超过一年（即365天，下同）的基金份额收取的销售服务费，按月支付，基金托管人按照与基金管理人协商一致的方式于次月首日起5个工作日内按照指定的账户路径进行支付。若遇法定节假日、公休日或不可抗力等，支付日期顺延。对于持续持有期限超过一年的基金份额，持有超过一年后继续计提的销售服务费，在投资者赎回基金份额或基金合同终止时，随赎回款（或清算款）一并返还给投资者。",
+                    "condition": {
+                      "kind": "none",
+                      "value": null
+                    },
+                    "condition_text": "none",
+                    "requirement": "在原条款最后增加销售服务费每日计提、直销机构返还、其他销售机构按月支付及持有超过一年后返还等内容。",
+                    "expected_site": "基金费用与税收",
+                    "required_facts": [
+                      "service_fee_group",
+                      "share_class_structure"
+                    ],
+                    "alternatives": [],
+                    "one_of_group": ""
+                  }
+                ]
+              },
+              "operation_keys": [
+                "G16:0"
+              ],
+              "obligation_ids": [
+                "G16:B1:O1"
+              ],
+              "expected_old_text": ""
+            }
+          ]
+        },
+        {
+          "target_id": "S25_S26#1:T013",
+          "rule_id": "G18",
+          "location": "p1257",
+          "start": 0,
+          "end": 82,
+          "replacement": "本基金同一类别的每一基金份额享有同等分配权。由于本基金A类基金份额和C类基金份额费用收取不同，各基金份额类别对应的可分配收益将有所不同；",
+          "operation": "replace",
+          "content_source": "fragment_replace",
+          "evidence": {
+            "guide_paragraphs": [
+              90,
+              91,
+              92
+            ],
+            "applied": [
+              "replace:fragment"
+            ],
+            "fragments": [
+              {
+                "op": "replace",
+                "old_text": "由于本基金A类基金份额不收取销售服务费，而C类基金份额收取销售服务费",
+                "new_text": "由于本基金A类基金份额和C类基金份额费用收取不同",
+                "mode": "fragment"
+              }
+            ],
+            "strategy": [
+              {
+                "operation": "G18:0",
+                "requested": "tier2_minimal_splice",
+                "actual": "tier2_minimal_splice",
+                "fallback_reason": null,
+                "blocked": false,
+                "applicable": true
+              }
+            ],
+            "operation_keys": [
+              "G18:0"
+            ],
+            "obligation_ids": [
+              "G18:B1:O1"
+            ],
+            "operation_refs": [
+              {
+                "obligation_id": "G18:B1:O1",
+                "rule_id": "G18",
+                "operation_id": "G18:0",
+                "operation_index": 0,
+                "branch_id": "B1",
+                "group_kind": "INDEPENDENT",
+                "op": "replace",
+                "old_text": "由于本基金A类基金份额不收取销售服务费，而C类基金份额收取销售服务费",
+                "new_text": "由于本基金A类基金份额和C类基金份额费用收取不同",
+                "condition": {
+                  "kind": "none",
+                  "value": null
+                },
+                "condition_text": "none",
+                "requirement": "将“由于本基金A类基金份额不收取销售服务费，而C类基金份额收取销售服务费”变更为“由于本基金A类基金份额和C类基金份额费用收取不同”。",
+                "expected_site": "基金的收益与分配",
+                "required_facts": [],
+                "alternatives": [],
+                "one_of_group": ""
+              }
+            ]
+          },
+          "anchor_sha256": "",
+          "operation_keys": [
+            "G18:0"
+          ],
+          "obligation_ids": [
+            "G18:B1:O1"
+          ],
+          "components": [
+            {
+              "target_id": "S25_S26#1:T013",
+              "rule_id": "G18",
+              "location": "p1257",
+              "start": 0,
+              "end": 82,
+              "replacement": "本基金同一类别的每一基金份额享有同等分配权。由于本基金A类基金份额和C类基金份额费用收取不同，各基金份额类别对应的可分配收益将有所不同；",
+              "operation": "replace",
+              "content_source": "fragment_replace",
+              "evidence": {
+                "guide_paragraphs": [
+                  90,
+                  91,
+                  92
+                ],
+                "applied": [
+                  "replace:fragment"
+                ],
+                "fragments": [
+                  {
+                    "op": "replace",
+                    "old_text": "由于本基金A类基金份额不收取销售服务费，而C类基金份额收取销售服务费",
+                    "new_text": "由于本基金A类基金份额和C类基金份额费用收取不同",
+                    "mode": "fragment"
+                  }
+                ],
+                "strategy": [
+                  {
+                    "operation": "G18:0",
+                    "requested": "tier2_minimal_splice",
+                    "actual": "tier2_minimal_splice",
+                    "fallback_reason": null,
+                    "blocked": false,
+                    "applicable": true
+                  }
+                ],
+                "operation_keys": [
+                  "G18:0"
+                ],
+                "obligation_ids": [
+                  "G18:B1:O1"
+                ],
+                "operation_refs": [
+                  {
+                    "obligation_id": "G18:B1:O1",
+                    "rule_id": "G18",
+                    "operation_id": "G18:0",
+                    "operation_index": 0,
+                    "branch_id": "B1",
+                    "group_kind": "INDEPENDENT",
+                    "op": "replace",
+                    "old_text": "由于本基金A类基金份额不收取销售服务费，而C类基金份额收取销售服务费",
+                    "new_text": "由于本基金A类基金份额和C类基金份额费用收取不同",
+                    "condition": {
+                      "kind": "none",
+                      "value": null
+                    },
+                    "condition_text": "none",
+                    "requirement": "将“由于本基金A类基金份额不收取销售服务费，而C类基金份额收取销售服务费”变更为“由于本基金A类基金份额和C类基金份额费用收取不同”。",
+                    "expected_site": "基金的收益与分配",
+                    "required_facts": [],
+                    "alternatives": [],
+                    "one_of_group": ""
+                  }
+                ]
+              },
+              "operation_keys": [
+                "G18:0"
+              ],
+              "obligation_ids": [
+                "G18:B1:O1"
+              ],
+              "expected_old_text": "本基金同一类别的每一基金份额享有同等分配权。由于本基金 A 类基金份额不收取销售服务费，而 C 类基金份额收取销售服务费，各基金份额类别对应的可分配收益将有所不同；"
+            }
+          ]
+        },
+        {
+          "target_id": "Y004+S25_S26#1:T019-D2",
+          "rule_id": "G15+G16",
+          "location": "p821",
+          "start": 0,
+          "end": 160,
+          "replacement": "销售服务费每日计提。（1）直销机构：对于投资者通过直销机构持有的C类基金份额计提的销售服务费，在投资者赎回C类基金份额或基金合同终止时，随赎回款（或清算款）一并返还给投资者。基金管理人基金销售子公司销售母公司所管理基金的，按照本条要求执行。（2）直销机构以外的其他销售机构：对于投资者持续持有期限未超过一年（即365天，下同）的基金份额收取的销售服务费，按月支付，基金托管人按照与基金管理人协商一致的方式于次月首日起5个工作日内按照指定的账户路径进行支付。若遇法定节假日、公休日或不可抗力等，支付日期顺延。对于持续持有期限超过一年的基金份额，持有超过一年后继续计提的销售服务费，在投资者赎回基金份额或基金合同终止时，随赎回款（或清算款）一并返还给投资者。 ",
+          "operation": "replace",
+          "content_source": "atomic_paragraph",
+          "evidence": {
+            "atomic_components": [
+              {
+                "target_id": "Y004",
+                "rule_id": "G15",
+                "location": "p821",
+                "start": 0,
+                "end": 159,
+                "replacement": "",
+                "operation": "replace",
+                "content_source": "tier1_delete",
+                "evidence": {
+                  "guide_paragraphs": [
+                    67,
+                    68,
+                    69,
+                    70,
+                    71,
+                    72,
+                    73,
+                    74,
+                    75,
+                    76
+                  ],
+                  "strategy": [
+                    {
+                      "operation": "G15:0",
+                      "requested": "deterministic_delete",
+                      "actual": "deterministic_delete",
+                      "fallback_reason": null,
+                      "blocked": false,
+                      "applicable": true
+                    }
+                  ],
+                  "deleted_paragraph": "基金销售服务费每日计算，逐日累计至每月月末，按月支付，由基金托管人根据与基金管理人核对一致的财务数据，自动在月初 5 个工作日内、按照指定的账户路径进行资金支付，基金管理人无需再出具资金划拨指令。若遇法定节假日、公休日等，支付日期顺延。费用…",
+                  "operation_keys": [
+                    "G15:0"
+                  ],
+                  "obligation_ids": [
+                    "G15:B1:O1"
+                  ],
+                  "operation_refs": [
+                    {
+                      "obligation_id": "G15:B1:O1",
+                      "rule_id": "G15",
+                      "operation_id": "G15:0",
+                      "operation_index": 0,
+                      "branch_id": "B1",
+                      "group_kind": "INDEPENDENT",
+                      "op": "delete",
+                      "old_text": "C类基金份额的销售服务费每日计提，按月支付。由基金管理人向基金托管人发送基金销售服务费划付指令，经基金托管人复核后于次月首日起10个工作日内从基金财产中一次性支付给登记机构，由登记机构代付给销售机构。若遇法定节假日、公休日等，支付日期顺延。",
+                      "new_text": "",
+                      "condition": {
+                        "kind": "none",
+                        "value": null
+                      },
+                      "condition_text": "none",
+                      "requirement": "删除原条款中“C类基金份额的销售服务费每日计提，按月支付。由基金管理人向基金托管人发送基金销售服务费划付指令，经基金托管人复核后于次月首日起10个工作日内从基金财产中一次性支付给登记机构，由登记机构代付给销售机构。若遇法定节假日、公休日等，支付日期顺延。”。",
+                      "expected_site": "基金费用与税收",
+                      "required_facts": [],
+                      "alternatives": [],
+                      "one_of_group": ""
+                    }
+                  ],
+                  "business_notices": [
+                    {
+                      "code": "CONTRACT_POSSIBLY_ERRONEOUS",
+                      "severity": "warning",
+                      "affects_completion": false,
+                      "message": "原合同可能有误：支付时限与指引参照不同（合同 5个工作日；指引 10个工作日）；支付路径/方式出现“自动支付/扣划”（指引参照未涉及）；支付路径/方式出现“指定账户路径”（指引参照未涉及）；支付路径/方式出现“无需出具指令”（指引参照未涉及）",
+                      "reasons": [
+                        "支付时限与指引参照不同（合同 5个工作日；指引 10个工作日）",
+                        "支付路径/方式出现“自动支付/扣划”（指引参照未涉及）",
+                        "支付路径/方式出现“指定账户路径”（指引参照未涉及）",
+                        "支付路径/方式出现“无需出具指令”（指引参照未涉及）"
+                      ]
+                    }
+                  ]
+                },
+                "operation_keys": [
+                  "G15:0"
+                ],
+                "obligation_ids": [
+                  "G15:B1:O1"
+                ],
+                "expected_old_text": "基金销售服务费每日计算，逐日累计至每月月末，按月支付，由基金托管人根据与基金管理人核对一致的财务数据，自动在月初 5 个工作日内、按照指定的账户路径进行资金支付，基金管理人无需再出具资金划拨指令。若遇法定节假日、公休日等，支付日期顺延。费用自动扣划后，基金管理人应进行核对，如发现数据不符，及时联系基金托管人协商解决。"
+              },
+              {
+                "target_id": "S25_S26#1:T019-D2",
+                "rule_id": "G16",
+                "location": "p821",
+                "start": 159,
+                "end": 159,
+                "replacement": "销售服务费每日计提。（1）直销机构：对于投资者通过直销机构持有的C类基金份额计提的销售服务费，在投资者赎回C类基金份额或基金合同终止时，随赎回款（或清算款）一并返还给投资者。基金管理人基金销售子公司销售母公司所管理基金的，按照本条要求执行。（2）直销机构以外的其他销售机构：对于投资者持续持有期限未超过一年（即365天，下同）的基金份额收取的销售服务费，按月支付，基金托管人按照与基金管理人协商一致的方式于次月首日起5个工作日内按照指定的账户路径进行支付。若遇法定节假日、公休日或不可抗力等，支付日期顺延。对于持续持有期限超过一年的基金份额，持有超过一年后继续计提的销售服务费，在投资者赎回基金份额或基金合同终止时，随赎回款（或清算款）一并返还给投资者。",
+                "operation": "insert",
+                "content_source": "guide_text",
+                "evidence": {
+                  "guide_paragraphs": [
+                    74,
+                    77,
+                    78,
+                    79,
+                    80,
+                    81,
+                    82,
+                    83,
+                    84
+                  ],
+                  "slots": [
+                    "C类基金份额"
+                  ],
+                  "fixed_text": "销售服务费每日计提。（1）直销机构：对于投资者通过直销机构持有的C类基金份额计提的销售服务费，在投资者赎回C类基金份额或基金合同终止时，随赎回款（或清算款）一并返还给投资者。基金管理人基金销售子公司销售母公司所管理基金的，按照本条要求执行。（2）直销机构以外的其他销售机构：对于投资者持续持有期限未超过一年（即365天，下同）的基金份额收取的销售服务费，按月支付，基金托管人按照与基金管理人协商一致的方式于次月首日起5个工作日内按照指定的账户路径进行支付。若遇法定节假日、公休日或不可抗力等，支付日期顺延。对于持续持有期限超过一年的基金份额，持有超过一年后继续计提的销售服务费，在投资者赎回基金份额或基金合同终止时，随赎回款（或清算款）一并返还给投资者。",
+                  "join_separator": "",
+                  "issues": [],
+                  "strategy": [
+                    {
+                      "operation": "G16:0",
+                      "requested": "tier3_model_compose",
+                      "actual": "tier3_model_compose",
+                      "fallback_reason": null,
+                      "blocked": false,
+                      "applicable": true
+                    }
+                  ],
+                  "operation_keys": [
+                    "G16:0"
+                  ],
+                  "obligation_ids": [
+                    "G16:B1:O1"
+                  ],
+                  "operation_refs": [
+                    {
+                      "obligation_id": "G16:B1:O1",
+                      "rule_id": "G16",
+                      "operation_id": "G16:0",
+                      "operation_index": 0,
+                      "branch_id": "B1",
+                      "group_kind": "INDEPENDENT",
+                      "op": "append",
+                      "old_text": "",
+                      "new_text": "销售服务费每日计提。（1）直销机构：对于投资者通过直销机构持有的C类基金份额计提的销售服务费，在投资者赎回C类基金份额或基金合同终止时，随赎回款（或清算款）一并返还给投资者。基金管理人基金销售子公司销售母公司所管理基金的，按照本条要求执行。（2）直销机构以外的其他销售机构：对于投资者持续持有期限未超过一年（即365天，下同）的基金份额收取的销售服务费，按月支付，基金托管人按照与基金管理人协商一致的方式于次月首日起5个工作日内按照指定的账户路径进行支付。若遇法定节假日、公休日或不可抗力等，支付日期顺延。对于持续持有期限超过一年的基金份额，持有超过一年后继续计提的销售服务费，在投资者赎回基金份额或基金合同终止时，随赎回款（或清算款）一并返还给投资者。",
+                      "condition": {
+                        "kind": "none",
+                        "value": null
+                      },
+                      "condition_text": "none",
+                      "requirement": "在原条款最后增加销售服务费每日计提、直销机构返还、其他销售机构按月支付及持有超过一年后返还等内容。",
+                      "expected_site": "基金费用与税收",
+                      "required_facts": [
+                        "service_fee_group",
+                        "share_class_structure"
+                      ],
+                      "alternatives": [],
+                      "one_of_group": ""
+                    }
+                  ]
+                },
+                "operation_keys": [
+                  "G16:0"
+                ],
+                "obligation_ids": [
+                  "G16:B1:O1"
+                ],
+                "expected_old_text": ""
+              }
+            ]
+          },
+          "anchor_sha256": "",
+          "operation_keys": [
+            "G15:0",
+            "G16:0"
+          ],
+          "obligation_ids": [
+            "G15:B1:O1",
+            "G16:B1:O1"
+          ],
+          "components": [
+            {
+              "target_id": "Y004",
+              "rule_id": "G15",
+              "location": "p821",
+              "start": 0,
+              "end": 159,
+              "replacement": "",
+              "operation": "replace",
+              "content_source": "tier1_delete",
+              "evidence": {
+                "guide_paragraphs": [
+                  67,
+                  68,
+                  69,
+                  70,
+                  71,
+                  72,
+                  73,
+                  74,
+                  75,
+                  76
+                ],
+                "strategy": [
+                  {
+                    "operation": "G15:0",
+                    "requested": "deterministic_delete",
+                    "actual": "deterministic_delete",
+                    "fallback_reason": null,
+                    "blocked": false,
+                    "applicable": true
+                  }
+                ],
+                "deleted_paragraph": "基金销售服务费每日计算，逐日累计至每月月末，按月支付，由基金托管人根据与基金管理人核对一致的财务数据，自动在月初 5 个工作日内、按照指定的账户路径进行资金支付，基金管理人无需再出具资金划拨指令。若遇法定节假日、公休日等，支付日期顺延。费用…",
+                "operation_keys": [
+                  "G15:0"
+                ],
+                "obligation_ids": [
+                  "G15:B1:O1"
+                ],
+                "operation_refs": [
+                  {
+                    "obligation_id": "G15:B1:O1",
+                    "rule_id": "G15",
+                    "operation_id": "G15:0",
+                    "operation_index": 0,
+                    "branch_id": "B1",
+                    "group_kind": "INDEPENDENT",
+                    "op": "delete",
+                    "old_text": "C类基金份额的销售服务费每日计提，按月支付。由基金管理人向基金托管人发送基金销售服务费划付指令，经基金托管人复核后于次月首日起10个工作日内从基金财产中一次性支付给登记机构，由登记机构代付给销售机构。若遇法定节假日、公休日等，支付日期顺延。",
+                    "new_text": "",
+                    "condition": {
+                      "kind": "none",
+                      "value": null
+                    },
+                    "condition_text": "none",
+                    "requirement": "删除原条款中“C类基金份额的销售服务费每日计提，按月支付。由基金管理人向基金托管人发送基金销售服务费划付指令，经基金托管人复核后于次月首日起10个工作日内从基金财产中一次性支付给登记机构，由登记机构代付给销售机构。若遇法定节假日、公休日等，支付日期顺延。”。",
+                    "expected_site": "基金费用与税收",
+                    "required_facts": [],
+                    "alternatives": [],
+                    "one_of_group": ""
+                  }
+                ],
+                "business_notices": [
+                  {
+                    "code": "CONTRACT_POSSIBLY_ERRONEOUS",
+                    "severity": "warning",
+                    "affects_completion": false,
+                    "message": "原合同可能有误：支付时限与指引参照不同（合同 5个工作日；指引 10个工作日）；支付路径/方式出现“自动支付/扣划”（指引参照未涉及）；支付路径/方式出现“指定账户路径”（指引参照未涉及）；支付路径/方式出现“无需出具指令”（指引参照未涉及）",
+                    "reasons": [
+                      "支付时限与指引参照不同（合同 5个工作日；指引 10个工作日）",
+                      "支付路径/方式出现“自动支付/扣划”（指引参照未涉及）",
+                      "支付路径/方式出现“指定账户路径”（指引参照未涉及）",
+                      "支付路径/方式出现“无需出具指令”（指引参照未涉及）"
+                    ]
+                  }
+                ]
+              },
+              "operation_keys": [
+                "G15:0"
+              ],
+              "obligation_ids": [
+                "G15:B1:O1"
+              ],
+              "expected_old_text": "基金销售服务费每日计算，逐日累计至每月月末，按月支付，由基金托管人根据与基金管理人核对一致的财务数据，自动在月初 5 个工作日内、按照指定的账户路径进行资金支付，基金管理人无需再出具资金划拨指令。若遇法定节假日、公休日等，支付日期顺延。费用自动扣划后，基金管理人应进行核对，如发现数据不符，及时联系基金托管人协商解决。"
+            },
+            {
+              "target_id": "S25_S26#1:T019-D2",
+              "rule_id": "G16",
+              "location": "p821",
+              "start": 159,
+              "end": 159,
+              "replacement": "销售服务费每日计提。（1）直销机构：对于投资者通过直销机构持有的C类基金份额计提的销售服务费，在投资者赎回C类基金份额或基金合同终止时，随赎回款（或清算款）一并返还给投资者。基金管理人基金销售子公司销售母公司所管理基金的，按照本条要求执行。（2）直销机构以外的其他销售机构：对于投资者持续持有期限未超过一年（即365天，下同）的基金份额收取的销售服务费，按月支付，基金托管人按照与基金管理人协商一致的方式于次月首日起5个工作日内按照指定的账户路径进行支付。若遇法定节假日、公休日或不可抗力等，支付日期顺延。对于持续持有期限超过一年的基金份额，持有超过一年后继续计提的销售服务费，在投资者赎回基金份额或基金合同终止时，随赎回款（或清算款）一并返还给投资者。",
+              "operation": "insert",
+              "content_source": "guide_text",
+              "evidence": {
+                "guide_paragraphs": [
+                  74,
+                  77,
+                  78,
+                  79,
+                  80,
+                  81,
+                  82,
+                  83,
+                  84
+                ],
+                "slots": [
+                  "C类基金份额"
+                ],
+                "fixed_text": "销售服务费每日计提。（1）直销机构：对于投资者通过直销机构持有的C类基金份额计提的销售服务费，在投资者赎回C类基金份额或基金合同终止时，随赎回款（或清算款）一并返还给投资者。基金管理人基金销售子公司销售母公司所管理基金的，按照本条要求执行。（2）直销机构以外的其他销售机构：对于投资者持续持有期限未超过一年（即365天，下同）的基金份额收取的销售服务费，按月支付，基金托管人按照与基金管理人协商一致的方式于次月首日起5个工作日内按照指定的账户路径进行支付。若遇法定节假日、公休日或不可抗力等，支付日期顺延。对于持续持有期限超过一年的基金份额，持有超过一年后继续计提的销售服务费，在投资者赎回基金份额或基金合同终止时，随赎回款（或清算款）一并返还给投资者。",
+                "join_separator": "",
+                "issues": [],
+                "strategy": [
+                  {
+                    "operation": "G16:0",
+                    "requested": "tier3_model_compose",
+                    "actual": "tier3_model_compose",
+                    "fallback_reason": null,
+                    "blocked": false,
+                    "applicable": true
+                  }
+                ],
+                "operation_keys": [
+                  "G16:0"
+                ],
+                "obligation_ids": [
+                  "G16:B1:O1"
+                ],
+                "operation_refs": [
+                  {
+                    "obligation_id": "G16:B1:O1",
+                    "rule_id": "G16",
+                    "operation_id": "G16:0",
+                    "operation_index": 0,
+                    "branch_id": "B1",
+                    "group_kind": "INDEPENDENT",
+                    "op": "append",
+                    "old_text": "",
+                    "new_text": "销售服务费每日计提。（1）直销机构：对于投资者通过直销机构持有的C类基金份额计提的销售服务费，在投资者赎回C类基金份额或基金合同终止时，随赎回款（或清算款）一并返还给投资者。基金管理人基金销售子公司销售母公司所管理基金的，按照本条要求执行。（2）直销机构以外的其他销售机构：对于投资者持续持有期限未超过一年（即365天，下同）的基金份额收取的销售服务费，按月支付，基金托管人按照与基金管理人协商一致的方式于次月首日起5个工作日内按照指定的账户路径进行支付。若遇法定节假日、公休日或不可抗力等，支付日期顺延。对于持续持有期限超过一年的基金份额，持有超过一年后继续计提的销售服务费，在投资者赎回基金份额或基金合同终止时，随赎回款（或清算款）一并返还给投资者。",
+                    "condition": {
+                      "kind": "none",
+                      "value": null
+                    },
+                    "condition_text": "none",
+                    "requirement": "在原条款最后增加销售服务费每日计提、直销机构返还、其他销售机构按月支付及持有超过一年后返还等内容。",
+                    "expected_site": "基金费用与税收",
+                    "required_facts": [
+                      "service_fee_group",
+                      "share_class_structure"
+                    ],
+                    "alternatives": [],
+                    "one_of_group": ""
+                  }
+                ]
+              },
+              "operation_keys": [
+                "G16:0"
+              ],
+              "obligation_ids": [
+                "G16:B1:O1"
+              ],
+              "expected_old_text": ""
+            }
+          ]
+        },
+        {
+          "target_id": "S03_S04_S07_S16_S17_S20#1:T020+S03_S04_S07_S16_S17_S20#1:T022",
+          "rule_id": "G12+G13",
+          "location": "p229",
+          "start": 0,
+          "end": 147,
+          "replacement": "赎回费用由赎回基金份额的基金份额持有人承担，在基金份额持有人赎回基金份额时收取。赎回费用全额计入基金财产。",
+          "operation": "replace",
+          "content_source": "joint_compose",
+          "evidence": {
+            "joint_rules": [
+              "G12",
+              "G13"
+            ],
+            "fixed_text": "",
+            "basis": "G12 requires replacing the original clause with the exact wording: 赎回费用由赎回基金份额的基金份额持有人承担，在基金份额持有人赎回基金份额时收取。赎回费用全额计入基金财产。 G13 requires deleting the 7-day/1.50% sentence, which is absent from the replacement. The replacement is the G12 new_text verbatim; no numbers, rates, dates, subjects, or accounts are introduced.",
+            "validation": {
+              "verdict": "PASS",
+              "findings": [],
+              "changes": [
+                {
+                  "kind": "delete",
+                  "before": "归入基金财产的比例依照相关法律法规设定，具体见招募说明书的规定，未归入基金财产的部分用于支付登记费和其他必要的手续费。其中，对持续持有期少于 7 日的投资者收取不低于 1.5%的赎回费，并",
+                  "after": "",
+                  "explanation": "EXPLAINED",
+                  "reason": "authorized_replace"
+                }
+              ]
+            },
+            "operation_keys": [
+              "G12:1",
+              "G13:0"
+            ]
+          },
+          "anchor_sha256": "",
+          "operation_keys": [
+            "G12:1",
+            "G13:0"
+          ],
+          "obligation_ids": [
+            "G12:B1:O2",
+            "G13:B1:O1"
+          ],
+          "components": [
+            {
+              "target_id": "S03_S04_S07_S16_S17_S20#1:T020+S03_S04_S07_S16_S17_S20#1:T022",
+              "rule_id": "G12+G13",
+              "location": "p229",
+              "start": 0,
+              "end": 147,
+              "replacement": "赎回费用由赎回基金份额的基金份额持有人承担，在基金份额持有人赎回基金份额时收取。赎回费用全额计入基金财产。",
+              "operation": "replace",
+              "content_source": "joint_compose",
+              "evidence": {
+                "joint_rules": [
+                  "G12",
+                  "G13"
+                ],
+                "fixed_text": "",
+                "basis": "G12 requires replacing the original clause with the exact wording: 赎回费用由赎回基金份额的基金份额持有人承担，在基金份额持有人赎回基金份额时收取。赎回费用全额计入基金财产。 G13 requires deleting the 7-day/1.50% sentence, which is absent from the replacement. The replacement is the G12 new_text verbatim; no numbers, rates, dates, subjects, or accounts are introduced.",
+                "validation": {
+                  "verdict": "PASS",
+                  "findings": [],
+                  "changes": [
+                    {
+                      "kind": "delete",
+                      "before": "归入基金财产的比例依照相关法律法规设定，具体见招募说明书的规定，未归入基金财产的部分用于支付登记费和其他必要的手续费。其中，对持续持有期少于 7 日的投资者收取不低于 1.5%的赎回费，并",
+                      "after": "",
+                      "explanation": "EXPLAINED",
+                      "reason": "authorized_replace"
+                    }
+                  ]
+                },
+                "operation_keys": [
+                  "G12:1",
+                  "G13:0"
+                ]
+              },
+              "operation_keys": [
+                "G12:1",
+                "G13:0"
+              ],
+              "obligation_ids": [
+                "G12:B1:O2",
+                "G13:B1:O1"
+              ],
+              "expected_old_text": "赎回费用由赎回基金份额的基金份额持有人承担，在基金份额持有人赎回基金份额时收取。赎回费用归入基金财产的比例依照相关法律法规设定，具体见招募说明书的规定，未归入基金财产的部分用于支付登记费和其他必要的手续费。其中，对持续持有期少于 7 日的投资者收取不低于 1.5%的赎回费，并全额计入基金财产。"
+            }
+          ]
+        },
+        {
+          "target_id": "Y008",
+          "rule_id": "G22",
+          "location": "p1371",
+          "start": 0,
+          "end": 77,
+          "replacement": "依据基金财产清算的分配方案，将基金财产清算后的全部剩余资产扣除基金财产清算费用、交纳所欠税款并清偿基金债务后，按基金份额持有人持有的基金份额比例进行分配，并加上返还基金份额持有人的销售服务费（如有）。",
+          "operation": "replace",
+          "content_source": "variant_replace",
+          "evidence": {
+            "guide_paragraphs": [
+              101,
+              102,
+              103,
+              105
+            ],
+            "matched_old_text": "依据基金财产清算的分配方案，将基金财产清算后的全部剩余资产扣除基金财产清算费用、交纳所欠税款并清偿基金债务后，按基金份额持有人持有的基金份额比例进行分配。",
+            "fixed_text": "依据基金财产清算的分配方案，将基金财产清算后的全部剩余资产扣除基金财产清算费用、交纳所欠税款并清偿基金债务后，按基金份额持有人持有的基金份额比例进行分配，并加上返还基金份额持有人的销售服务费（如有）。",
+            "variant_ratio": 0.974,
+            "strategy": [
+              {
+                "operation": "G22:0",
+                "requested": "tier2_minimal_splice",
+                "actual": "tier2_minimal_splice",
+                "fallback_reason": null,
+                "blocked": false,
+                "applicable": true
+              }
+            ],
+            "operation_keys": [
+              "G22:0"
+            ],
+            "obligation_ids": [
+              "G22:B1:O1"
+            ],
+            "operation_refs": [
+              {
+                "obligation_id": "G22:B1:O1",
+                "rule_id": "G22",
+                "operation_id": "G22:0",
+                "operation_index": 0,
+                "branch_id": "B1",
+                "group_kind": "INDEPENDENT",
+                "op": "replace",
+                "old_text": "依据基金财产清算的分配方案，将基金财产清算后的全部剩余资产扣除基金财产清算费用、交纳所欠税款并清偿基金债务后，按基金份额持有人持有的基金份额比例进行分配。",
+                "new_text": "依据基金财产清算的分配方案，将基金财产清算后的全部剩余资产扣除基金财产清算费用、交纳所欠税款并清偿基金债务后，按基金份额持有人持有的基金份额比例进行分配，并加上返还基金份额持有人的销售服务费（如有）。",
+                "condition": {
+                  "kind": "compound",
+                  "value": [
+                    {
+                      "kind": "is_floating_fee",
+                      "value": false
+                    },
+                    {
+                      "kind": "has_service_fee",
+                      "value": true
+                    },
+                    {
+                      "kind": "class_count",
+                      "value": "multiple"
+                    }
+                  ]
+                },
+                "condition_text": "compound(is_floating_fee=False,has_service_fee=True,class_count=multiple)",
+                "requirement": "如果不是浮动管理费产品且收取销售服务费，将原条款替换为“依据基金财产清算的分配方案，将基金财产清算后的全部剩余资产扣除基金财产清算费用、交纳所欠税款并清偿基金债务后，按基金份额持有人持有的基金份额比例进行分配，并加上返还基金份额持有人的销售服务费（如有）。”。",
+                "expected_site": "基金财产的清算",
+                "required_facts": [
+                  "floating_management_fee",
+                  "service_fee_group",
+                  "share_class_structure",
+                  "subscription_fee_group"
+                ],
+                "alternatives": [],
+                "one_of_group": ""
+              }
+            ]
+          },
+          "anchor_sha256": "",
+          "operation_keys": [
+            "G22:0"
+          ],
+          "obligation_ids": [
+            "G22:B1:O1"
+          ],
+          "components": [
+            {
+              "target_id": "Y008",
+              "rule_id": "G22",
+              "location": "p1371",
+              "start": 0,
+              "end": 77,
+              "replacement": "依据基金财产清算的分配方案，将基金财产清算后的全部剩余资产扣除基金财产清算费用、交纳所欠税款并清偿基金债务后，按基金份额持有人持有的基金份额比例进行分配，并加上返还基金份额持有人的销售服务费（如有）。",
+              "operation": "replace",
+              "content_source": "variant_replace",
+              "evidence": {
+                "guide_paragraphs": [
+                  101,
+                  102,
+                  103,
+                  105
+                ],
+                "matched_old_text": "依据基金财产清算的分配方案，将基金财产清算后的全部剩余资产扣除基金财产清算费用、交纳所欠税款并清偿基金债务后，按基金份额持有人持有的基金份额比例进行分配。",
+                "fixed_text": "依据基金财产清算的分配方案，将基金财产清算后的全部剩余资产扣除基金财产清算费用、交纳所欠税款并清偿基金债务后，按基金份额持有人持有的基金份额比例进行分配，并加上返还基金份额持有人的销售服务费（如有）。",
+                "variant_ratio": 0.974,
+                "strategy": [
+                  {
+                    "operation": "G22:0",
+                    "requested": "tier2_minimal_splice",
+                    "actual": "tier2_minimal_splice",
+                    "fallback_reason": null,
+                    "blocked": false,
+                    "applicable": true
+                  }
+                ],
+                "operation_keys": [
+                  "G22:0"
+                ],
+                "obligation_ids": [
+                  "G22:B1:O1"
+                ],
+                "operation_refs": [
+                  {
+                    "obligation_id": "G22:B1:O1",
+                    "rule_id": "G22",
+                    "operation_id": "G22:0",
+                    "operation_index": 0,
+                    "branch_id": "B1",
+                    "group_kind": "INDEPENDENT",
+                    "op": "replace",
+                    "old_text": "依据基金财产清算的分配方案，将基金财产清算后的全部剩余资产扣除基金财产清算费用、交纳所欠税款并清偿基金债务后，按基金份额持有人持有的基金份额比例进行分配。",
+                    "new_text": "依据基金财产清算的分配方案，将基金财产清算后的全部剩余资产扣除基金财产清算费用、交纳所欠税款并清偿基金债务后，按基金份额持有人持有的基金份额比例进行分配，并加上返还基金份额持有人的销售服务费（如有）。",
+                    "condition": {
+                      "kind": "compound",
+                      "value": [
+                        {
+                          "kind": "is_floating_fee",
+                          "value": false
+                        },
+                        {
+                          "kind": "has_service_fee",
+                          "value": true
+                        },
+                        {
+                          "kind": "class_count",
+                          "value": "multiple"
+                        }
+                      ]
+                    },
+                    "condition_text": "compound(is_floating_fee=False,has_service_fee=True,class_count=multiple)",
+                    "requirement": "如果不是浮动管理费产品且收取销售服务费，将原条款替换为“依据基金财产清算的分配方案，将基金财产清算后的全部剩余资产扣除基金财产清算费用、交纳所欠税款并清偿基金债务后，按基金份额持有人持有的基金份额比例进行分配，并加上返还基金份额持有人的销售服务费（如有）。”。",
+                    "expected_site": "基金财产的清算",
+                    "required_facts": [
+                      "floating_management_fee",
+                      "service_fee_group",
+                      "share_class_structure",
+                      "subscription_fee_group"
+                    ],
+                    "alternatives": [],
+                    "one_of_group": ""
+                  }
+                ]
+              },
+              "operation_keys": [
+                "G22:0"
+              ],
+              "obligation_ids": [
+                "G22:B1:O1"
+              ],
+              "expected_old_text": "依据基金财产清算的分配方案，将基金财产清算后的全部剩余资产扣除基金财产清算费用、交纳所欠税款并清偿基金债务后，按基金份额持有人持有的各类基金份额比例进行分"
+            }
+          ]
+        },
+        {
+          "target_id": "S03_S04_S07_S16_S17_S20#1:T006+S03_S04_S07_S16_S17_S20#1:T007",
+          "rule_id": "G11",
+          "location": "p228",
+          "start": 0,
+          "end": 51,
+          "replacement": "通过直销机构申购本基金A类基金份额不收取申购费，通过其他销售机构申购本基金A类基金份额的通过直销机构申购本基金A类基金份额不收取申购费，通过其他销售机构申购本基金A类基金份额的申购费用由投资人承担，不列入基金财产。本基金C类基金份额不收取申购费用。本基金C类基金份额不收取申购费用。 ",
+          "operation": "replace",
+          "content_source": "atomic_paragraph",
+          "evidence": {
+            "atomic_components": [
+              {
+                "target_id": "S03_S04_S07_S16_S17_S20#1:T006",
+                "rule_id": "G11",
+                "location": "p228",
+                "start": 0,
+                "end": 50,
+                "replacement": "通过直销机构申购本基金A类基金份额不收取申购费，通过其他销售机构申购本基金A类基金份额的申购费用由投资人承担，不列入基金财产。本基金C类基金份额不收取申购费用。",
+                "operation": "replace",
+                "content_source": "tier1_template",
+                "evidence": {
+                  "guide_paragraphs": [
+                    45,
+                    46,
+                    47,
+                    48
+                  ],
+                  "mode": "clean_clause_policy_replacement",
+                  "rule": "G11",
+                  "strategy": [
+                    {
+                      "operation": "G11:0",
+                      "requested": "tier2_minimal_splice",
+                      "actual": "tier2_minimal_splice",
+                      "fallback_reason": null,
+                      "blocked": false,
+                      "applicable": true
+                    },
+                    {
+                      "operation": "G11:1",
+                      "requested": "tier2_minimal_splice",
+                      "actual": "tier2_minimal_splice",
+                      "fallback_reason": null,
+                      "blocked": false,
+                      "applicable": false
+                    }
+                  ],
+                  "operation_keys": [
+                    "G11:0"
+                  ],
+                  "obligation_ids": [
+                    "G11:B1:O1"
+                  ],
+                  "operation_refs": [
+                    {
+                      "obligation_id": "G11:B1:O1",
+                      "rule_id": "G11",
+                      "operation_id": "G11:0",
+                      "operation_index": 0,
+                      "branch_id": "B1",
+                      "group_kind": "ONE_OF",
+                      "op": "replace",
+                      "old_text": "本基金A类基金份额的申购费用由投资人承担，不列入基金财产；C类基金份额不收取申购费用。",
+                      "new_text": "通过直销机构申购本基金A类基金份额不收取申购费，通过其他销售机构申购本基金A类基金份额的申购费用由投资人承担，不列入基金财产。本基金C类基金份额不收取申购费用。",
+                      "condition": {
+                        "kind": "class_count",
+                        "value": "multiple"
+                      },
+                      "condition_text": "class_count=multiple",
+                      "requirement": "产品有多个份额类别时，将原条款直接替换为“通过直销机构申购本基金A类基金份额不收取申购费，通过其他销售机构申购本基金A类基金份额的申购费用由投资人承担，不列入基金财产。本基金C类基金份额不收取申购费用。”。",
+                      "expected_site": "基金份额的申购与赎回",
+                      "required_facts": [
+                        "service_fee_group",
+                        "share_class_structure",
+                        "subscription_fee_group"
+                      ],
+                      "alternatives": [
+                        "本基金A类基金份额的申购费用由投资人承担，不列入基金财产；C类基金份额不收取申购费用。",
+                        "申购费用由投资人承担，不列入基金财产。"
+                      ],
+                      "one_of_group": "G11:history:wording"
+                    }
+                  ]
+                },
+                "operation_keys": [
+                  "G11:0"
+                ],
+                "obligation_ids": [
+                  "G11:B1:O1"
+                ],
+                "expected_old_text": "本基金 A 类基金份额的申购费用由投资人承担，不列入基金财产。本基金 C 类基金份额不收取申购费用。"
+              },
+              {
+                "target_id": "S03_S04_S07_S16_S17_S20#1:T007",
+                "rule_id": "G11",
+                "location": "p228",
+                "start": 12,
+                "end": 31,
+                "replacement": "通过直销机构申购本基金A类基金份额不收取申购费，通过其他销售机构申购本基金A类基金份额的申购费用由投资人承担，不列入基金财产。本基金C类基金份额不收取申购费用。",
+                "operation": "replace",
+                "content_source": "tier1_template",
+                "evidence": {
+                  "guide_paragraphs": [
+                    45,
+                    46,
+                    47,
+                    48
+                  ],
+                  "mode": "clean_clause_policy_replacement",
+                  "rule": "G11",
+                  "strategy": [
+                    {
+                      "operation": "G11:0",
+                      "requested": "tier2_minimal_splice",
+                      "actual": "tier2_minimal_splice",
+                      "fallback_reason": null,
+                      "blocked": false,
+                      "applicable": false
+                    },
+                    {
+                      "operation": "G11:1",
+                      "requested": "tier2_minimal_splice",
+                      "actual": "tier2_minimal_splice",
+                      "fallback_reason": null,
+                      "blocked": false,
+                      "applicable": true
+                    }
+                  ],
+                  "operation_keys": [
+                    "G11:1"
+                  ],
+                  "obligation_ids": [
+                    "G11:B1:O2"
+                  ],
+                  "operation_refs": [
+                    {
+                      "obligation_id": "G11:B1:O2",
+                      "rule_id": "G11",
+                      "operation_id": "G11:1",
+                      "operation_index": 1,
+                      "branch_id": "B1",
+                      "group_kind": "ONE_OF",
+                      "op": "replace",
+                      "old_text": "申购费用由投资人承担，不列入基金财产。",
+                      "new_text": "通过直销机构申购本基金A类基金份额不收取申购费，通过其他销售机构申购本基金A类基金份额的申购费用由投资人承担，不列入基金财产。本基金C类基金份额不收取申购费用。",
+                      "condition": {
+                        "kind": "class_count",
+                        "value": "multiple"
+                      },
+                      "condition_text": "class_count=multiple",
+                      "requirement": "产品有多个份额类别时，将原条款直接替换为“通过直销机构申购本基金A类基金份额不收取申购费，通过其他销售机构申购本基金A类基金份额的申购费用由投资人承担，不列入基金财产。本基金C类基金份额不收取申购费用。”。",
+                      "expected_site": "基金份额的申购与赎回",
+                      "required_facts": [
+                        "service_fee_group",
+                        "share_class_structure",
+                        "subscription_fee_group"
+                      ],
+                      "alternatives": [
+                        "本基金A类基金份额的申购费用由投资人承担，不列入基金财产；C类基金份额不收取申购费用。",
+                        "申购费用由投资人承担，不列入基金财产。"
+                      ],
+                      "one_of_group": "G11:history:wording"
+                    }
+                  ]
+                },
+                "operation_keys": [
+                  "G11:1"
+                ],
+                "obligation_ids": [
+                  "G11:B1:O2"
+                ],
+                "expected_old_text": "申购费用由投资人承担，不列入基金财产。"
+              }
+            ]
+          },
+          "anchor_sha256": "",
+          "operation_keys": [
+            "G11:0",
+            "G11:1"
+          ],
+          "obligation_ids": [
+            "G11:B1:O1",
+            "G11:B1:O2"
+          ],
+          "components": [
+            {
+              "target_id": "S03_S04_S07_S16_S17_S20#1:T006",
+              "rule_id": "G11",
+              "location": "p228",
+              "start": 0,
+              "end": 50,
+              "replacement": "通过直销机构申购本基金A类基金份额不收取申购费，通过其他销售机构申购本基金A类基金份额的申购费用由投资人承担，不列入基金财产。本基金C类基金份额不收取申购费用。",
+              "operation": "replace",
+              "content_source": "tier1_template",
+              "evidence": {
+                "guide_paragraphs": [
+                  45,
+                  46,
+                  47,
+                  48
+                ],
+                "mode": "clean_clause_policy_replacement",
+                "rule": "G11",
+                "strategy": [
+                  {
+                    "operation": "G11:0",
+                    "requested": "tier2_minimal_splice",
+                    "actual": "tier2_minimal_splice",
+                    "fallback_reason": null,
+                    "blocked": false,
+                    "applicable": true
+                  },
+                  {
+                    "operation": "G11:1",
+                    "requested": "tier2_minimal_splice",
+                    "actual": "tier2_minimal_splice",
+                    "fallback_reason": null,
+                    "blocked": false,
+                    "applicable": false
+                  }
+                ],
+                "operation_keys": [
+                  "G11:0"
+                ],
+                "obligation_ids": [
+                  "G11:B1:O1"
+                ],
+                "operation_refs": [
+                  {
+                    "obligation_id": "G11:B1:O1",
+                    "rule_id": "G11",
+                    "operation_id": "G11:0",
+                    "operation_index": 0,
+                    "branch_id": "B1",
+                    "group_kind": "ONE_OF",
+                    "op": "replace",
+                    "old_text": "本基金A类基金份额的申购费用由投资人承担，不列入基金财产；C类基金份额不收取申购费用。",
+                    "new_text": "通过直销机构申购本基金A类基金份额不收取申购费，通过其他销售机构申购本基金A类基金份额的申购费用由投资人承担，不列入基金财产。本基金C类基金份额不收取申购费用。",
+                    "condition": {
+                      "kind": "class_count",
+                      "value": "multiple"
+                    },
+                    "condition_text": "class_count=multiple",
+                    "requirement": "产品有多个份额类别时，将原条款直接替换为“通过直销机构申购本基金A类基金份额不收取申购费，通过其他销售机构申购本基金A类基金份额的申购费用由投资人承担，不列入基金财产。本基金C类基金份额不收取申购费用。”。",
+                    "expected_site": "基金份额的申购与赎回",
+                    "required_facts": [
+                      "service_fee_group",
+                      "share_class_structure",
+                      "subscription_fee_group"
+                    ],
+                    "alternatives": [
+                      "本基金A类基金份额的申购费用由投资人承担，不列入基金财产；C类基金份额不收取申购费用。",
+                      "申购费用由投资人承担，不列入基金财产。"
+                    ],
+                    "one_of_group": "G11:history:wording"
+                  }
+                ]
+              },
+              "operation_keys": [
+                "G11:0"
+              ],
+              "obligation_ids": [
+                "G11:B1:O1"
+              ],
+              "expected_old_text": "本基金 A 类基金份额的申购费用由投资人承担，不列入基金财产。本基金 C 类基金份额不收取申购费用。"
+            },
+            {
+              "target_id": "S03_S04_S07_S16_S17_S20#1:T007",
+              "rule_id": "G11",
+              "location": "p228",
+              "start": 12,
+              "end": 31,
+              "replacement": "通过直销机构申购本基金A类基金份额不收取申购费，通过其他销售机构申购本基金A类基金份额的申购费用由投资人承担，不列入基金财产。本基金C类基金份额不收取申购费用。",
+              "operation": "replace",
+              "content_source": "tier1_template",
+              "evidence": {
+                "guide_paragraphs": [
+                  45,
+                  46,
+                  47,
+                  48
+                ],
+                "mode": "clean_clause_policy_replacement",
+                "rule": "G11",
+                "strategy": [
+                  {
+                    "operation": "G11:0",
+                    "requested": "tier2_minimal_splice",
+                    "actual": "tier2_minimal_splice",
+                    "fallback_reason": null,
+                    "blocked": false,
+                    "applicable": false
+                  },
+                  {
+                    "operation": "G11:1",
+                    "requested": "tier2_minimal_splice",
+                    "actual": "tier2_minimal_splice",
+                    "fallback_reason": null,
+                    "blocked": false,
+                    "applicable": true
+                  }
+                ],
+                "operation_keys": [
+                  "G11:1"
+                ],
+                "obligation_ids": [
+                  "G11:B1:O2"
+                ],
+                "operation_refs": [
+                  {
+                    "obligation_id": "G11:B1:O2",
+                    "rule_id": "G11",
+                    "operation_id": "G11:1",
+                    "operation_index": 1,
+                    "branch_id": "B1",
+                    "group_kind": "ONE_OF",
+                    "op": "replace",
+                    "old_text": "申购费用由投资人承担，不列入基金财产。",
+                    "new_text": "通过直销机构申购本基金A类基金份额不收取申购费，通过其他销售机构申购本基金A类基金份额的申购费用由投资人承担，不列入基金财产。本基金C类基金份额不收取申购费用。",
+                    "condition": {
+                      "kind": "class_count",
+                      "value": "multiple"
+                    },
+                    "condition_text": "class_count=multiple",
+                    "requirement": "产品有多个份额类别时，将原条款直接替换为“通过直销机构申购本基金A类基金份额不收取申购费，通过其他销售机构申购本基金A类基金份额的申购费用由投资人承担，不列入基金财产。本基金C类基金份额不收取申购费用。”。",
+                    "expected_site": "基金份额的申购与赎回",
+                    "required_facts": [
+                      "service_fee_group",
+                      "share_class_structure",
+                      "subscription_fee_group"
+                    ],
+                    "alternatives": [
+                      "本基金A类基金份额的申购费用由投资人承担，不列入基金财产；C类基金份额不收取申购费用。",
+                      "申购费用由投资人承担，不列入基金财产。"
+                    ],
+                    "one_of_group": "G11:history:wording"
+                  }
+                ]
+              },
+              "operation_keys": [
+                "G11:1"
+              ],
+              "obligation_ids": [
+                "G11:B1:O2"
+              ],
+              "expected_old_text": "申购费用由投资人承担，不列入基金财产。"
+            }
+          ]
+        }
+      ],
+      "ledger": [
+        {
+          "target_id": "S03_S04_S07_S16_S17_S20#1:T001",
+          "rule_id": "G05",
+          "status": "planned",
+          "operation": "replace",
+          "operation_keys": [
+            "G05:0"
+          ],
+          "obligation_ids": [
+            "G05:B1:O1"
+          ],
+          "operation_effects": {
+            "G05:0": {
+              "status": "planned",
+              "edit_ids": [
+                "G05+G03:S03_S04_S07_S16_S17_S20#1:T001+S03_S04_S07_S16_S17_S20#1:T008"
+              ]
+            }
+          },
+          "edit_ids": [
+            "G05+G03:S03_S04_S07_S16_S17_S20#1:T001+S03_S04_S07_S16_S17_S20#1:T008"
+          ]
+        },
+        {
+          "target_id": "S03_S04_S07_S16_S17_S20#1:T002",
+          "rule_id": "G05",
+          "status": "not_applicable",
+          "reason": "TARGET_SOURCE_MISMATCH",
+          "operation_effects": {},
+          "edit_ids": []
+        },
+        {
+          "target_id": "S03_S04_S07_S16_S17_S20#1:T003",
+          "rule_id": "G06",
+          "status": "not_applicable",
+          "reason": "本窗口未出现该条款，无法定位删除目标。",
+          "operation_effects": {},
+          "edit_ids": []
+        },
+        {
+          "target_id": "S03_S04_S07_S16_S17_S20#1:T004",
+          "rule_id": "G19",
+          "status": "not_applicable",
+          "reason": "本基金非浮动管理费产品，G19分支不适用；且原文与G19目标文本不同。",
+          "operation_effects": {},
+          "edit_ids": []
+        },
+        {
+          "target_id": "S03_S04_S07_S16_S17_S20#1:T008",
+          "rule_id": "G03",
+          "status": "planned",
+          "operation": "insert",
+          "operation_keys": [
+            "G03:0"
+          ],
+          "obligation_ids": [
+            "G03:B1:O1"
+          ],
+          "operation_effects": {
+            "G03:0": {
+              "status": "planned",
+              "edit_ids": [
+                "G05+G03:S03_S04_S07_S16_S17_S20#1:T001+S03_S04_S07_S16_S17_S20#1:T008"
+              ]
+            }
+          },
+          "edit_ids": [
+            "G05+G03:S03_S04_S07_S16_S17_S20#1:T001+S03_S04_S07_S16_S17_S20#1:T008"
+          ]
+        },
+        {
+          "target_id": "S03_S04_S07_S16_S17_S20#1:T009",
+          "rule_id": "G15",
+          "status": "not_applicable",
+          "reason": "本窗口未出现G15所指的“C类基金份额的销售服务费每日计提，按月支付……”原文，无法定位删除目标。",
+          "operation_effects": {},
+          "edit_ids": []
+        },
+        {
+          "target_id": "S03_S04_S07_S16_S17_S20#1:T014",
+          "rule_id": "G08",
+          "status": "planned",
+          "operation": "replace",
+          "operation_keys": [
+            "G08:0"
+          ],
+          "obligation_ids": [
+            "G08:B1:O1"
+          ],
+          "operation_effects": {
+            "G08:0": {
+              "status": "planned",
+              "edit_ids": [
+                "G08:S03_S04_S07_S16_S17_S20#1:T014"
+              ]
+            }
+          },
+          "edit_ids": [
+            "G08:S03_S04_S07_S16_S17_S20#1:T014"
+          ]
+        },
+        {
+          "target_id": "S03_S04_S07_S16_S17_S20#1:T015",
+          "rule_id": "G18",
+          "status": "planned",
+          "operation": "replace",
+          "operation_keys": [
+            "G18:0"
+          ],
+          "obligation_ids": [
+            "G18:B1:O1"
+          ],
+          "operation_effects": {
+            "G18:0": {
+              "status": "planned",
+              "edit_ids": [
+                "G18:S03_S04_S07_S16_S17_S20#1:T015"
+              ]
+            }
+          },
+          "edit_ids": [
+            "G18:S03_S04_S07_S16_S17_S20#1:T015"
+          ]
+        },
+        {
+          "target_id": "S03_S04_S07_S16_S17_S20#1:T016",
+          "rule_id": "G20",
+          "status": "not_applicable",
+          "reason": "本基金非浮动管理费产品，G20分支不适用；且原文与G20目标文本不同。",
+          "operation_effects": {},
+          "edit_ids": []
+        },
+        {
+          "target_id": "S03_S04_S07_S16_S17_S20#1:T017",
+          "rule_id": "G21",
+          "status": "satisfied",
+          "reason": "本基金非浮动管理费产品且为多份额类别，G21分支不要求替换。",
+          "operation_effects": {},
+          "edit_ids": []
+        },
+        {
+          "target_id": "S03_S04_S07_S16_S17_S20#1:T018",
+          "rule_id": "G07",
+          "status": "not_applicable",
+          "reason": "产品有多个份额类别，G07仅适用于单一类别，不适用。",
+          "operation_effects": {},
+          "edit_ids": []
+        },
+        {
+          "target_id": "S03_S04_S07_S16_S17_S20#1:T019",
+          "rule_id": "G09",
+          "status": "planned",
+          "operation": "replace",
+          "operation_keys": [
+            "G09:0"
+          ],
+          "obligation_ids": [
+            "G09:B1:O1"
+          ],
+          "operation_effects": {
+            "G09:0": {
+              "status": "planned",
+              "edit_ids": [
+                "G09:S03_S04_S07_S16_S17_S20#1:T019"
+              ]
+            }
+          },
+          "edit_ids": [
+            "G09:S03_S04_S07_S16_S17_S20#1:T019"
+          ]
+        },
+        {
+          "target_id": "S03_S04_S07_S16_S17_S20#1:T020",
+          "rule_id": "G12",
+          "status": "planned",
+          "operation": "replace",
+          "operation_keys": [
+            "G12:1"
+          ],
+          "obligation_ids": [
+            "G12:B1:O2"
+          ],
+          "operation_effects": {
+            "G12:1": {
+              "status": "planned",
+              "edit_ids": [
+                "G12+G13:S03_S04_S07_S16_S17_S20#1:T020+S03_S04_S07_S16_S17_S20#1:T022"
+              ]
+            }
+          },
+          "edit_ids": [
+            "G12+G13:S03_S04_S07_S16_S17_S20#1:T020+S03_S04_S07_S16_S17_S20#1:T022"
+          ]
+        },
+        {
+          "target_id": "S03_S04_S07_S16_S17_S20#1:T022",
+          "rule_id": "G13",
+          "status": "planned",
+          "operation": "replace",
+          "operation_keys": [
+            "G13:0"
+          ],
+          "obligation_ids": [
+            "G13:B1:O1"
+          ],
+          "operation_effects": {
+            "G13:0": {
+              "status": "planned",
+              "edit_ids": [
+                "G12+G13:S03_S04_S07_S16_S17_S20#1:T020+S03_S04_S07_S16_S17_S20#1:T022"
+              ]
+            }
+          },
+          "edit_ids": [
+            "G12+G13:S03_S04_S07_S16_S17_S20#1:T020+S03_S04_S07_S16_S17_S20#1:T022"
+          ]
+        },
+        {
+          "target_id": "S03_S04_S07_S16_S17_S20#1:T025",
+          "rule_id": "G22",
+          "status": "planned",
+          "operation": "replace",
+          "operation_keys": [
+            "G22:0"
+          ],
+          "obligation_ids": [
+            "G22:B1:O1"
+          ],
+          "operation_effects": {
+            "G22:0": {
+              "status": "planned",
+              "edit_ids": [
+                "G22:S03_S04_S07_S16_S17_S20#1:T025"
+              ]
+            }
+          },
+          "edit_ids": [
+            "G22:S03_S04_S07_S16_S17_S20#1:T025"
+          ]
+        },
+        {
+          "target_id": "S03_S04_S07_S16_S17_S20#1:T026",
+          "rule_id": "G14",
+          "status": "planned",
+          "operation": "replace",
+          "operation_keys": [
+            "G14:5"
+          ],
+          "obligation_ids": [
+            "G14:B2:O3"
+          ],
+          "operation_effects": {
+            "G14:5": {
+              "status": "planned",
+              "edit_ids": [
+                "G14:S03_S04_S07_S16_S17_S20#1:T026"
+              ]
+            }
+          },
+          "edit_ids": [
+            "G14:S03_S04_S07_S16_S17_S20#1:T026"
+          ]
+        },
+        {
+          "target_id": "S25_S26#1:T001",
+          "rule_id": "G05",
+          "status": "not_applicable",
+          "reason": "TARGET_SOURCE_MISMATCH",
+          "operation_effects": {},
+          "edit_ids": []
+        },
+        {
+          "target_id": "S25_S26#1:T002",
+          "rule_id": "G05",
+          "status": "not_applicable",
+          "reason": "TARGET_SOURCE_MISMATCH",
+          "operation_effects": {},
+          "edit_ids": []
+        },
+        {
+          "target_id": "S25_S26#1:T003",
+          "rule_id": "G06",
+          "status": "not_applicable",
+          "reason": "本窗口未出现“除非基金管理人在未来条件成熟后另行公告开通相关业务，本基金不同基金份额类别之间不得互相转换。”条款。",
+          "operation_effects": {},
+          "edit_ids": []
+        },
+        {
+          "target_id": "S25_S26#1:T004",
+          "rule_id": "G19",
+          "status": "not_applicable",
+          "reason": "本窗口未出现基金财产清算剩余资产分配条款，且产品非浮动管理费，不适用该分支。",
+          "operation_effects": {},
+          "edit_ids": []
+        },
+        {
+          "target_id": "S25_S26#1:T005",
+          "rule_id": "G10",
+          "status": "not_applicable",
+          "reason": "本窗口未出现“申购费用由投资人承担，不列入基金财产。”条款，且产品有多个份额类别，不适用单一类别分支。",
+          "operation_effects": {},
+          "edit_ids": []
+        },
+        {
+          "target_id": "S25_S26#1:T006",
+          "rule_id": "G11",
+          "status": "not_applicable",
+          "reason": "本窗口未出现申购费用承担条款（“本基金A类基金份额的申购费用由投资人承担，不列入基金财产；C类基金份额不收取申购费用。”或“申购费用由投资人承担，不列入基金财产。”）。",
+          "operation_effects": {},
+          "edit_ids": []
+        },
+        {
+          "target_id": "S25_S26#1:T007",
+          "rule_id": "G03",
+          "status": "not_applicable",
+          "reason": "本窗口为基金合同内容摘要，未包含基金的基本情况份额类别设置条款，无法定位追加位置。",
+          "operation_effects": {},
+          "edit_ids": []
+        },
+        {
+          "target_id": "S25_S26#1:T008",
+          "rule_id": "G15",
+          "status": "planned",
+          "operation": "replace",
+          "operation_keys": [
+            "G15:0"
+          ],
+          "obligation_ids": [
+            "G15:B1:O1"
+          ],
+          "operation_effects": {
+            "G15:0": {
+              "status": "planned",
+              "edit_ids": [
+                "G15+G16:S25_S26#1:T008+S25_S26#1:T019"
+              ]
+            }
+          },
+          "edit_ids": [
+            "G15+G16:S25_S26#1:T008+S25_S26#1:T019"
+          ]
+        },
+        {
+          "target_id": "S25_S26#1:T009",
+          "rule_id": "G01",
+          "status": "not_applicable",
+          "reason": "本窗口为基金合同内容摘要，未包含释义的基金份额类别定义条款，无法定位追加位置。",
+          "operation_effects": {},
+          "edit_ids": []
+        },
+        {
+          "target_id": "S25_S26#1:T010",
+          "rule_id": "G04",
+          "status": "not_applicable",
+          "reason": "本窗口未出现基金的基本情况份额类别设置中“A类基金份额”“C类基金份额”分组描述条款。",
+          "operation_effects": {},
+          "edit_ids": []
+        },
+        {
+          "target_id": "S25_S26#1:T012",
+          "rule_id": "G08",
+          "status": "not_applicable",
+          "reason": "本窗口未出现“本基金的申购费率由基金管理人决定，并在招募说明书中列示。”条款。",
+          "operation_effects": {},
+          "edit_ids": []
+        },
+        {
+          "target_id": "S25_S26#1:T013",
+          "rule_id": "G18",
+          "status": "planned",
+          "operation": "replace",
+          "operation_keys": [
+            "G18:0"
+          ],
+          "obligation_ids": [
+            "G18:B1:O1"
+          ],
+          "operation_effects": {
+            "G18:0": {
+              "status": "planned",
+              "edit_ids": [
+                "G18:S25_S26#1:T013"
+              ]
+            }
+          },
+          "edit_ids": [
+            "G18:S25_S26#1:T013"
+          ]
+        },
+        {
+          "target_id": "S25_S26#1:T014",
+          "rule_id": "G20",
+          "status": "not_applicable",
+          "reason": "本窗口未出现基金财产清算剩余资产分配条款，且产品非浮动管理费，不适用该分支。",
+          "operation_effects": {},
+          "edit_ids": []
+        },
+        {
+          "target_id": "S25_S26#1:T015",
+          "rule_id": "G21",
+          "status": "satisfied",
+          "reason": "产品非浮动管理费且为多份额类别，不适用该分支，无需替换。",
+          "operation_effects": {},
+          "edit_ids": []
+        },
+        {
+          "target_id": "S25_S26#1:T016",
+          "rule_id": "G07",
+          "status": "not_applicable",
+          "reason": "本窗口未出现“本基金的申购费率由基金管理人决定，并在招募说明书中列示。”条款，且产品为多份额类别，不适用单一类别分支。",
+          "operation_effects": {},
+          "edit_ids": []
+        },
+        {
+          "target_id": "S25_S26#1:T017",
+          "rule_id": "G09",
+          "status": "not_applicable",
+          "reason": "本窗口未出现“赎回金额为按实际确认的有效赎回份额乘以当日对应份额类别的基金份额净值并扣除相应的费用，赎回金额单位为元。”条款。",
+          "operation_effects": {},
+          "edit_ids": []
+        },
+        {
+          "target_id": "S25_S26#1:T018",
+          "rule_id": "G12",
+          "status": "not_applicable",
+          "reason": "本窗口未出现赎回费用归入基金财产比例的相关条款。",
+          "operation_effects": {},
+          "edit_ids": []
+        },
+        {
+          "target_id": "S25_S26#1:T019",
+          "rule_id": "G16",
+          "status": "planned",
+          "operation": "insert",
+          "operation_keys": [
+            "G16:0"
+          ],
+          "obligation_ids": [
+            "G16:B1:O1"
+          ],
+          "operation_effects": {
+            "G16:0": {
+              "status": "planned",
+              "edit_ids": [
+                "G15+G16:S25_S26#1:T008+S25_S26#1:T019"
+              ]
+            }
+          },
+          "edit_ids": [
+            "G15+G16:S25_S26#1:T008+S25_S26#1:T019"
+          ]
+        },
+        {
+          "target_id": "S25_S26#1:T020",
+          "rule_id": "G13",
+          "status": "not_applicable",
+          "reason": "本窗口未出现“本基金对持续持有期少于7日的投资者收取不低于1.50%的赎回费，并将上述赎回费全额计入基金财产。”条款。",
+          "operation_effects": {},
+          "edit_ids": []
+        },
+        {
+          "target_id": "S25_S26#1:T021",
+          "rule_id": "G02",
+          "status": "not_applicable",
+          "reason": "本窗口为基金合同内容摘要，未包含释义的基金份额类别定义条款。",
+          "operation_effects": {},
+          "edit_ids": []
+        },
+        {
+          "target_id": "S25_S26#1:T022",
+          "rule_id": "G22",
+          "status": "not_applicable",
+          "reason": "本窗口未出现基金财产清算剩余资产分配条款。",
+          "operation_effects": {},
+          "edit_ids": []
+        },
+        {
+          "target_id": "S25_S26#1:T023",
+          "rule_id": "G14",
+          "status": "not_applicable",
+          "reason": "本窗口未出现“基金管理人可以适当调低基金申购费率和赎回费率。”等费率调整条款。",
+          "operation_effects": {},
+          "edit_ids": []
+        },
+        {
+          "target_id": "Y009",
+          "rule_id": "G05",
+          "status": "satisfied",
+          "reason": "survey_new_text_present",
+          "operation_effects": {},
+          "edit_ids": []
+        },
+        {
+          "target_id": "Y010",
+          "rule_id": "G18",
+          "status": "satisfied",
+          "reason": "survey_new_text_present",
+          "operation_effects": {},
+          "edit_ids": []
+        },
+        {
+          "target_id": "Y011",
+          "rule_id": "G18",
+          "status": "satisfied",
+          "reason": "survey_new_text_present",
+          "operation_effects": {},
+          "edit_ids": []
+        },
+        {
+          "target_id": "Y004",
+          "rule_id": "G15",
+          "status": "planned",
+          "operation": "replace",
+          "operation_keys": [
+            "G15:0"
+          ],
+          "obligation_ids": [
+            "G15:B1:O1"
+          ],
+          "operation_effects": {
+            "G15:0": {
+              "status": "planned",
+              "edit_ids": [
+                "G15+G16:Y004+S25_S26#1:T019-D2"
+              ]
+            }
+          },
+          "edit_ids": [
+            "G15+G16:Y004+S25_S26#1:T019-D2"
+          ]
+        },
+        {
+          "target_id": "S25_S26#1:T019-D2",
+          "rule_id": "G16",
+          "status": "planned",
+          "operation": "insert",
+          "operation_keys": [
+            "G16:0"
+          ],
+          "obligation_ids": [
+            "G16:B1:O1"
+          ],
+          "operation_effects": {
+            "G16:0": {
+              "status": "planned",
+              "edit_ids": [
+                "G15+G16:Y004+S25_S26#1:T019-D2"
+              ]
+            }
+          },
+          "edit_ids": [
+            "G15+G16:Y004+S25_S26#1:T019-D2"
+          ]
+        },
+        {
+          "target_id": "S03_S04_S07_S16_S17_S20#1:T010",
+          "rule_id": "G01",
+          "status": "unresolved",
+          "reason": "RECALL_APPEND_CLAUSE_INCOMPLETE",
+          "detail": {
+            "rule": "G01",
+            "target": "S03_S04_S07_S16_S17_S20#1:T010"
+          },
+          "recovery": {
+            "subject": {
+              "rule_id": "G01",
+              "operation_id": "",
+              "obligation_id": "",
+              "site_id": "",
+              "target_id": "S03_S04_S07_S16_S17_S20#1:T010",
+              "stage": "plan",
+              "failure_class": "VERIFICATION",
+              "error_code": "RECALL_APPEND_CLAUSE_INCOMPLETE",
+              "reason": "RECALL_APPEND_CLAUSE_INCOMPLETE",
+              "original_text": "",
+              "candidate_text": "",
+              "validator_findings": [],
+              "review_findings": []
+            },
+            "attempts": 1,
+            "actions": [
+              "MARK_UNRESOLVED"
+            ],
+            "final": "unresolved",
+            "history": [
+              {
+                "action": "MARK_UNRESOLVED",
+                "stage": "plan",
+                "failure_class": "VERIFICATION",
+                "error_code": "RECALL_APPEND_CLAUSE_INCOMPLETE",
+                "reason": "RECALL_APPEND_CLAUSE_INCOMPLETE",
+                "outcome": "unresolved",
+                "detail": "planner_layer_failed",
+                "rule_id": "G01",
+                "operation_id": "",
+                "obligation_id": "",
+                "target_id": "S03_S04_S07_S16_S17_S20#1:T010",
+                "site_id": "",
+                "attempt": 1,
+                "budget_key": ""
+              }
+            ]
+          },
+          "operation_effects": {},
+          "edit_ids": []
+        },
+        {
+          "target_id": "S03_S04_S07_S16_S17_S20#1:T011",
+          "rule_id": "G04",
+          "status": "satisfied",
+          "reason": "实际适用“收取认购、申购费用且不计提销售服务费”规则的类别仅为A类，无需替换为B类。",
+          "operation_effects": {},
+          "edit_ids": []
+        },
+        {
+          "target_id": "S03_S04_S07_S16_S17_S20#1:T012",
+          "rule_id": "G04",
+          "status": "satisfied",
+          "reason": "实际适用“不收取认购、申购费用且计提销售服务费”规则的类别仅为C类，无需替换为D类。",
+          "operation_effects": {},
+          "edit_ids": []
+        },
+        {
+          "target_id": "S03_S04_S07_S16_S17_S20#1:T013",
+          "rule_id": "G17",
+          "status": "not_applicable",
+          "reason": "本窗口未出现G17所指的“C类基金份额的销售服务费主要用于支付……”原文，无法定位删除目标。",
+          "operation_effects": {},
+          "edit_ids": []
+        },
+        {
+          "target_id": "S03_S04_S07_S16_S17_S20#1:T021",
+          "rule_id": "G16",
+          "status": "not_applicable",
+          "reason": "TARGET_SOURCE_MISMATCH",
+          "operation_effects": {},
+          "edit_ids": []
+        },
+        {
+          "target_id": "S03_S04_S07_S16_S17_S20#1:T023",
+          "rule_id": "G02",
+          "status": "satisfied",
+          "reason": "实际适用“收取认购、申购费用且不计提销售服务费”规则的类别仅为A类，无需替换为B类。",
+          "operation_effects": {},
+          "edit_ids": []
+        },
+        {
+          "target_id": "S03_S04_S07_S16_S17_S20#1:T024",
+          "rule_id": "G02",
+          "status": "satisfied",
+          "reason": "实际适用“不收取认购、申购费用且计提销售服务费”规则的类别仅为C类，无需替换为D类。",
+          "operation_effects": {},
+          "edit_ids": []
+        },
+        {
+          "target_id": "S25_S26#1:T011",
+          "rule_id": "G17",
+          "status": "unresolved",
+          "operation": "replace",
+          "operation_keys": [
+            "G17:0"
+          ],
+          "obligation_ids": [
+            "G17:B1:O1"
+          ],
+          "operation_effects": {
+            "G17:0": {
+              "status": "unresolved",
+              "edit_ids": []
+            }
+          },
+          "edit_ids": [],
+          "reason": "RECALL_EDIT_OVERLAP"
+        },
+        {
+          "target_id": "S25_S26#2:T001",
+          "rule_id": "G19",
+          "status": "not_applicable",
+          "reason": "TARGET_SOURCE_MISMATCH",
+          "operation_effects": {},
+          "edit_ids": []
+        },
+        {
+          "target_id": "S25_S26#2:T002",
+          "rule_id": "G20",
+          "status": "satisfied",
+          "reason": "G20仅适用于浮动管理费产品，本基金为非浮动管理费产品，因此无需按G20替换。",
+          "operation_effects": {},
+          "edit_ids": []
+        },
+        {
+          "target_id": "S25_S26#2:T003",
+          "rule_id": "G21",
+          "status": "satisfied",
+          "reason": "G21适用于非浮动管理费且仅有一个份额类别的情形，本基金有两个份额类别，因此该分支不适用，无需修改。",
+          "operation_effects": {},
+          "edit_ids": []
+        },
+        {
+          "target_id": "Y006",
+          "rule_id": "G17",
+          "status": "unresolved",
+          "operation": "replace",
+          "operation_keys": [
+            "G17:0"
+          ],
+          "parts": [
+            "p822",
+            "p823"
+          ],
+          "operation_effects": {
+            "G17:0": {
+              "status": "unresolved",
+              "edit_ids": []
+            }
+          },
+          "edit_ids": [],
+          "reason": "RECALL_EDIT_OVERLAP"
+        },
+        {
+          "target_id": "Y007",
+          "rule_id": "G17",
+          "status": "unresolved",
+          "operation": "replace",
+          "operation_keys": [
+            "G17:0"
+          ],
+          "parts": [
+            "p1288",
+            "p1289"
+          ],
+          "operation_effects": {
+            "G17:0": {
+              "status": "unresolved",
+              "edit_ids": []
+            }
+          },
+          "edit_ids": [],
+          "reason": "RECALL_EDIT_OVERLAP"
+        },
+        {
+          "target_id": "Y008",
+          "rule_id": "G22",
+          "status": "planned",
+          "operation": "replace",
+          "operation_keys": [
+            "G22:0"
+          ],
+          "obligation_ids": [
+            "G22:B1:O1"
+          ],
+          "operation_effects": {
+            "G22:0": {
+              "status": "planned",
+              "edit_ids": [
+                "G22:Y008"
+              ]
+            }
+          },
+          "edit_ids": [
+            "G22:Y008"
+          ]
+        },
+        {
+          "target_id": "DEL001",
+          "rule_id": "G17",
+          "status": "unresolved",
+          "operation": "replace",
+          "operation_keys": [
+            "G17:0"
+          ],
+          "obligation_ids": [
+            "G17:B1:O1"
+          ],
+          "operation_effects": {
+            "G17:0": {
+              "status": "unresolved",
+              "edit_ids": []
+            }
+          },
+          "edit_ids": [],
+          "reason": "RECALL_EDIT_OVERLAP"
+        },
+        {
+          "target_id": "DEL002",
+          "rule_id": "G17",
+          "status": "unresolved",
+          "operation": "replace",
+          "operation_keys": [
+            "G17:0"
+          ],
+          "obligation_ids": [
+            "G17:B1:O1"
+          ],
+          "operation_effects": {
+            "G17:0": {
+              "status": "unresolved",
+              "edit_ids": []
+            }
+          },
+          "edit_ids": [],
+          "reason": "RECALL_EDIT_OVERLAP"
+        },
+        {
+          "target_id": "S03_S04_S07_S16_S17_S20#1:T021-D1",
+          "rule_id": "G16",
+          "status": "not_applicable",
+          "reason": "TARGET_SOURCE_MISMATCH",
+          "operation_effects": {},
+          "edit_ids": []
+        },
+        {
+          "target_id": "S03_S04_S07_S16_S17_S20#1:T005",
+          "rule_id": "G10",
+          "status": "not_applicable",
+          "reason": "产品有多个份额类别，G10仅适用于单一类别，不适用。",
+          "operation_effects": {},
+          "edit_ids": []
+        },
+        {
+          "target_id": "S03_S04_S07_S16_S17_S20#1:T006",
+          "rule_id": "G11",
+          "status": "planned",
+          "operation": "replace",
+          "operation_keys": [
+            "G11:0"
+          ],
+          "obligation_ids": [
+            "G11:B1:O1"
+          ],
+          "operation_effects": {
+            "G11:0": {
+              "status": "planned",
+              "edit_ids": [
+                "G11:S03_S04_S07_S16_S17_S20#1:T006+S03_S04_S07_S16_S17_S20#1:T007"
+              ]
+            }
+          },
+          "edit_ids": [
+            "G11:S03_S04_S07_S16_S17_S20#1:T006+S03_S04_S07_S16_S17_S20#1:T007"
+          ]
+        },
+        {
+          "target_id": "S03_S04_S07_S16_S17_S20#1:T007",
+          "rule_id": "G11",
+          "status": "planned",
+          "operation": "replace",
+          "operation_keys": [
+            "G11:1"
+          ],
+          "obligation_ids": [
+            "G11:B1:O2"
+          ],
+          "operation_effects": {
+            "G11:1": {
+              "status": "planned",
+              "edit_ids": [
+                "G11:S03_S04_S07_S16_S17_S20#1:T006+S03_S04_S07_S16_S17_S20#1:T007"
+              ]
+            }
+          },
+          "edit_ids": [
+            "G11:S03_S04_S07_S16_S17_S20#1:T006+S03_S04_S07_S16_S17_S20#1:T007"
+          ]
+        }
+      ],
+      "conflicts": [
+        {
+          "code": "RECALL_EDIT_OVERLAP",
+          "location": "p1288",
+          "targets": [
+            "S25_S26#1:T011",
+            "Y007"
+          ],
+          "spans": [
+            [
+              0,
+              51
+            ],
+            [
+              0,
+              51
+            ]
+          ]
+        },
+        {
+          "code": "RECALL_EDIT_OVERLAP",
+          "location": "p823",
+          "targets": [
+            "Y006",
+            "DEL001"
+          ],
+          "spans": [
+            [
+              0,
+              24
+            ],
+            [
+              0,
+              24
+            ]
+          ]
+        },
+        {
+          "code": "RECALL_EDIT_OVERLAP",
+          "location": "p1289",
+          "targets": [
+            "Y007",
+            "DEL002"
+          ],
+          "spans": [
+            [
+              0,
+              24
+            ],
+            [
+              0,
+              24
+            ]
+          ]
+        }
+      ],
+      "covered": []
+    },
+    "artifact": "artifacts/ff5351b6e38cd6a1487573a347a023037355828c42a5ff87259cc0a29bd47a7a.docx",
+    "components_by_rule": {
+      "G09": [],
+      "G05": [],
+      "G22": [],
+      "G12": [],
+      "G08": [],
+      "G18": [],
+      "G14": [],
+      "G16": [
+        {
+          "id": "daily_accrual",
+          "terms": [
+            "每日计提",
+            "计提"
+          ]
+        },
+        {
+          "id": "direct_refund",
+          "terms": [
+            "直销"
+          ]
+        },
+        {
+          "id": "non_direct_sales_policy",
+          "terms": [
+            "其他销售机构",
+            "直销机构之外"
+          ]
+        },
+        {
+          "id": "over_one_year_refund",
+          "terms": [
+            "超过一年",
+            "超过1年",
+            "满一年"
+          ]
+        }
+      ],
+      "G11": [],
+      "G03": [
+        {
+          "id": "direct_sales_fee_exemption",
+          "terms": [
+            "直销",
+            "不收取"
+          ]
+        }
+      ],
+      "G13": [],
+      "G15": []
+    },
+    "required_terms_by_rule": {},
+    "target_rules": {
+      "p138": [
+        "G05",
+        "G05",
+        "G06",
+        "G03"
+      ],
+      "p1001": [
+        "G19",
+        "G20",
+        "G21",
+        "G22"
+      ],
+      "p228": [
+        "G10",
+        "G11",
+        "G11"
+      ],
+      "p821": [
+        "G15",
+        "G15",
+        "G16"
+      ],
+      "p93": [
+        "G01",
+        "G04",
+        "G04",
+        "G02",
+        "G02"
+      ],
+      "p822": [
+        "G17",
+        "G17"
+      ],
+      "p226": [
+        "G08",
+        "G07"
+      ],
+      "p848": [
+        "G18"
+      ],
+      "p227": [
+        "G09"
+      ],
+      "p229": [
+        "G12",
+        "G13"
+      ],
+      "p823": [
+        "G16",
+        "G17"
+      ],
+      "p232": [
+        "G14"
+      ],
+      "p1162": [
+        "G05",
+        "G05"
+      ],
+      "p1034": [
+        "G06",
+        "G19",
+        "G10",
+        "G11",
+        "G03",
+        "G01",
+        "G04",
+        "G08",
+        "G20",
+        "G21",
+        "G07",
+        "G09",
+        "G12",
+        "G13",
+        "G02",
+        "G22",
+        "G14"
+      ],
+      "p1287": [
+        "G15",
+        "G16"
+      ],
+      "p1288": [
+        "G17",
+        "G17"
+      ],
+      "p1257": [
+        "G18"
+      ],
+      "p1371": [
+        "G19",
+        "G20",
+        "G21",
+        "G22"
+      ],
+      "p429": [
+        "G05"
+      ],
+      "p136": [
+        "G18"
+      ],
+      "p223": [
+        "G18"
+      ],
+      "p1289": [
+        "G17",
+        "G16"
+      ]
+    }
+  },
+  "inputs_sha256": "1a7620230d7e5bd57c1bc47dc13d628108aab189bf25cce47353393cdee31867"
+}

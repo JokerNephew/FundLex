@@ -1,0 +1,493 @@
+{
+  "G01:B1:O1": {
+    "status": "UNKNOWN",
+    "condition": {
+      "kind": "none",
+      "value": null
+    },
+    "rule_id": "G01",
+    "operation_id": "G01:0",
+    "source": "deterministic",
+    "evidence_quote": "",
+    "reason": "FACT_PREREQUISITE_UNVERIFIED:share_class_structure",
+    "history": []
+  },
+  "G02:B1:O1": {
+    "status": "UNKNOWN",
+    "condition": {
+      "kind": "none",
+      "value": null
+    },
+    "rule_id": "G02",
+    "operation_id": "G02:0",
+    "source": "deterministic",
+    "evidence_quote": "",
+    "reason": "FACT_PREREQUISITE_UNVERIFIED:service_fee_group,share_class_structure,subscription_fee_group",
+    "history": []
+  },
+  "G02:B1:O2": {
+    "status": "UNKNOWN",
+    "condition": {
+      "kind": "none",
+      "value": null
+    },
+    "rule_id": "G02",
+    "operation_id": "G02:1",
+    "source": "deterministic",
+    "evidence_quote": "",
+    "reason": "FACT_PREREQUISITE_UNVERIFIED:service_fee_group,share_class_structure,subscription_fee_group",
+    "history": []
+  },
+  "G03:B1:O1": {
+    "status": "UNKNOWN",
+    "condition": {
+      "kind": "none",
+      "value": null
+    },
+    "rule_id": "G03",
+    "operation_id": "G03:0",
+    "source": "deterministic",
+    "evidence_quote": "",
+    "reason": "FACT_PREREQUISITE_UNVERIFIED:share_class_structure",
+    "history": []
+  },
+  "G04:B1:O1": {
+    "status": "UNKNOWN",
+    "condition": {
+      "kind": "none",
+      "value": null
+    },
+    "rule_id": "G04",
+    "operation_id": "G04:0",
+    "source": "deterministic",
+    "evidence_quote": "",
+    "reason": "FACT_PREREQUISITE_UNVERIFIED:service_fee_group,share_class_structure,subscription_fee_group",
+    "history": []
+  },
+  "G04:B1:O2": {
+    "status": "UNKNOWN",
+    "condition": {
+      "kind": "none",
+      "value": null
+    },
+    "rule_id": "G04",
+    "operation_id": "G04:1",
+    "source": "deterministic",
+    "evidence_quote": "",
+    "reason": "FACT_PREREQUISITE_UNVERIFIED:service_fee_group,share_class_structure,subscription_fee_group",
+    "history": []
+  },
+  "G05:B1:O1": {
+    "status": "UNKNOWN",
+    "condition": {
+      "kind": "has_service_fee",
+      "value": true
+    },
+    "rule_id": "G05",
+    "operation_id": "G05:0",
+    "source": "deterministic",
+    "evidence_quote": "",
+    "reason": "FACT_PREREQUISITE_UNVERIFIED:service_fee_group,share_class_structure,subscription_fee_group",
+    "history": []
+  },
+  "G05:B2:O1": {
+    "status": "UNKNOWN",
+    "condition": {
+      "kind": "has_service_fee",
+      "value": false
+    },
+    "rule_id": "G05",
+    "operation_id": "G05:1",
+    "source": "deterministic",
+    "evidence_quote": "",
+    "reason": "FACT_PREREQUISITE_UNVERIFIED:service_fee_group,share_class_structure,subscription_fee_group",
+    "history": []
+  },
+  "G05:B3:O1": {
+    "status": "TRUE",
+    "condition": {
+      "kind": "none",
+      "value": null
+    },
+    "rule_id": "G05",
+    "operation_id": "G05:2",
+    "source": "deterministic",
+    "evidence_quote": "",
+    "reason": "condition_status:TRUE",
+    "history": []
+  },
+  "G06:B1:O1": {
+    "status": "TRUE",
+    "condition": {
+      "kind": "none",
+      "value": null
+    },
+    "rule_id": "G06",
+    "operation_id": "G06:0",
+    "source": "deterministic",
+    "evidence_quote": "",
+    "reason": "condition_status:TRUE",
+    "history": []
+  },
+  "G07:B1:O1": {
+    "status": "UNKNOWN",
+    "condition": {
+      "kind": "class_count",
+      "value": 1
+    },
+    "rule_id": "G07",
+    "operation_id": "G07:0",
+    "source": "deterministic",
+    "evidence_quote": "",
+    "reason": "FACT_PREREQUISITE_UNVERIFIED:share_class_structure",
+    "history": []
+  },
+  "G08:B1:O1": {
+    "status": "UNKNOWN",
+    "condition": {
+      "kind": "class_count",
+      "value": "multiple"
+    },
+    "rule_id": "G08",
+    "operation_id": "G08:0",
+    "source": "deterministic",
+    "evidence_quote": "",
+    "reason": "FACT_PREREQUISITE_UNVERIFIED:service_fee_group,share_class_structure,subscription_fee_group",
+    "history": []
+  },
+  "G09:B1:O1": {
+    "status": "UNKNOWN",
+    "condition": {
+      "kind": "class_count",
+      "value": "multiple"
+    },
+    "rule_id": "G09",
+    "operation_id": "G09:0",
+    "source": "deterministic",
+    "evidence_quote": "",
+    "reason": "FACT_PREREQUISITE_UNVERIFIED:share_class_structure",
+    "history": []
+  },
+  "G10:B1:O1": {
+    "status": "UNKNOWN",
+    "condition": {
+      "kind": "class_count",
+      "value": 1
+    },
+    "rule_id": "G10",
+    "operation_id": "G10:0",
+    "source": "deterministic",
+    "evidence_quote": "",
+    "reason": "FACT_PREREQUISITE_UNVERIFIED:share_class_structure",
+    "history": []
+  },
+  "G11:B1:O1": {
+    "status": "UNKNOWN",
+    "condition": {
+      "kind": "class_count",
+      "value": "multiple"
+    },
+    "rule_id": "G11",
+    "operation_id": "G11:0",
+    "source": "deterministic",
+    "evidence_quote": "",
+    "reason": "FACT_PREREQUISITE_UNVERIFIED:service_fee_group,share_class_structure,subscription_fee_group",
+    "history": []
+  },
+  "G11:B1:O2": {
+    "status": "UNKNOWN",
+    "condition": {
+      "kind": "class_count",
+      "value": "multiple"
+    },
+    "rule_id": "G11",
+    "operation_id": "G11:1",
+    "source": "deterministic",
+    "evidence_quote": "",
+    "reason": "FACT_PREREQUISITE_UNVERIFIED:service_fee_group,share_class_structure,subscription_fee_group",
+    "history": []
+  },
+  "G12:B1:O1": {
+    "status": "TRUE",
+    "condition": {
+      "kind": "none",
+      "value": null
+    },
+    "rule_id": "G12",
+    "operation_id": "G12:0",
+    "source": "deterministic",
+    "evidence_quote": "",
+    "reason": "condition_status:TRUE",
+    "history": []
+  },
+  "G12:B1:O2": {
+    "status": "TRUE",
+    "condition": {
+      "kind": "none",
+      "value": null
+    },
+    "rule_id": "G12",
+    "operation_id": "G12:1",
+    "source": "deterministic",
+    "evidence_quote": "",
+    "reason": "condition_status:TRUE",
+    "history": []
+  },
+  "G13:B1:O1": {
+    "status": "TRUE",
+    "condition": {
+      "kind": "none",
+      "value": null
+    },
+    "rule_id": "G13",
+    "operation_id": "G13:0",
+    "source": "deterministic",
+    "evidence_quote": "",
+    "reason": "condition_status:TRUE",
+    "history": []
+  },
+  "G14:B1:O1": {
+    "status": "UNKNOWN",
+    "condition": {
+      "kind": "class_count",
+      "value": 1
+    },
+    "rule_id": "G14",
+    "operation_id": "G14:0",
+    "source": "deterministic",
+    "evidence_quote": "",
+    "reason": "FACT_PREREQUISITE_UNVERIFIED:share_class_structure",
+    "history": []
+  },
+  "G14:B1:O2": {
+    "status": "UNKNOWN",
+    "condition": {
+      "kind": "class_count",
+      "value": 1
+    },
+    "rule_id": "G14",
+    "operation_id": "G14:1",
+    "source": "deterministic",
+    "evidence_quote": "",
+    "reason": "FACT_PREREQUISITE_UNVERIFIED:share_class_structure",
+    "history": []
+  },
+  "G14:B1:O3": {
+    "status": "UNKNOWN",
+    "condition": {
+      "kind": "class_count",
+      "value": 1
+    },
+    "rule_id": "G14",
+    "operation_id": "G14:2",
+    "source": "deterministic",
+    "evidence_quote": "",
+    "reason": "FACT_PREREQUISITE_UNVERIFIED:share_class_structure",
+    "history": []
+  },
+  "G14:B2:O1": {
+    "status": "UNKNOWN",
+    "condition": {
+      "kind": "class_count",
+      "value": "multiple"
+    },
+    "rule_id": "G14",
+    "operation_id": "G14:3",
+    "source": "deterministic",
+    "evidence_quote": "",
+    "reason": "FACT_PREREQUISITE_UNVERIFIED:share_class_structure",
+    "history": []
+  },
+  "G14:B2:O2": {
+    "status": "UNKNOWN",
+    "condition": {
+      "kind": "class_count",
+      "value": "multiple"
+    },
+    "rule_id": "G14",
+    "operation_id": "G14:4",
+    "source": "deterministic",
+    "evidence_quote": "",
+    "reason": "FACT_PREREQUISITE_UNVERIFIED:share_class_structure",
+    "history": []
+  },
+  "G14:B2:O3": {
+    "status": "UNKNOWN",
+    "condition": {
+      "kind": "class_count",
+      "value": "multiple"
+    },
+    "rule_id": "G14",
+    "operation_id": "G14:5",
+    "source": "deterministic",
+    "evidence_quote": "",
+    "reason": "FACT_PREREQUISITE_UNVERIFIED:share_class_structure",
+    "history": []
+  },
+  "G15:B1:O1": {
+    "status": "TRUE",
+    "condition": {
+      "kind": "none",
+      "value": null
+    },
+    "rule_id": "G15",
+    "operation_id": "G15:0",
+    "source": "deterministic",
+    "evidence_quote": "",
+    "reason": "condition_status:TRUE",
+    "history": []
+  },
+  "G16:B1:O1": {
+    "status": "UNKNOWN",
+    "condition": {
+      "kind": "none",
+      "value": null
+    },
+    "rule_id": "G16",
+    "operation_id": "G16:0",
+    "source": "deterministic",
+    "evidence_quote": "",
+    "reason": "FACT_PREREQUISITE_UNVERIFIED:service_fee_group,share_class_structure",
+    "history": []
+  },
+  "G17:B1:O1": {
+    "status": "TRUE",
+    "condition": {
+      "kind": "none",
+      "value": null
+    },
+    "rule_id": "G17",
+    "operation_id": "G17:0",
+    "source": "deterministic",
+    "evidence_quote": "",
+    "reason": "condition_status:TRUE",
+    "history": []
+  },
+  "G18:B1:O1": {
+    "status": "TRUE",
+    "condition": {
+      "kind": "none",
+      "value": null
+    },
+    "rule_id": "G18",
+    "operation_id": "G18:0",
+    "source": "deterministic",
+    "evidence_quote": "",
+    "reason": "condition_status:TRUE",
+    "history": []
+  },
+  "G19:B1:O1": {
+    "status": "UNKNOWN",
+    "condition": {
+      "kind": "compound",
+      "value": [
+        {
+          "kind": "is_floating_fee",
+          "value": true
+        },
+        {
+          "kind": "class_count",
+          "value": 1
+        }
+      ]
+    },
+    "rule_id": "G19",
+    "operation_id": "G19:0",
+    "source": "deterministic",
+    "evidence_quote": "",
+    "reason": "FACT_PREREQUISITE_UNVERIFIED:share_class_structure",
+    "history": []
+  },
+  "G20:B1:O1": {
+    "status": "UNKNOWN",
+    "condition": {
+      "kind": "compound",
+      "value": [
+        {
+          "kind": "is_floating_fee",
+          "value": true
+        },
+        {
+          "kind": "class_count",
+          "value": "multiple"
+        }
+      ]
+    },
+    "rule_id": "G20",
+    "operation_id": "G20:0",
+    "source": "deterministic",
+    "evidence_quote": "",
+    "reason": "FACT_PREREQUISITE_UNVERIFIED:share_class_structure",
+    "history": []
+  },
+  "G20:B1:O2": {
+    "status": "UNKNOWN",
+    "condition": {
+      "kind": "compound",
+      "value": [
+        {
+          "kind": "is_floating_fee",
+          "value": true
+        },
+        {
+          "kind": "class_count",
+          "value": "multiple"
+        }
+      ]
+    },
+    "rule_id": "G20",
+    "operation_id": "G20:1",
+    "source": "deterministic",
+    "evidence_quote": "",
+    "reason": "FACT_PREREQUISITE_UNVERIFIED:share_class_structure",
+    "history": []
+  },
+  "G21:B1:O1": {
+    "status": "UNKNOWN",
+    "condition": {
+      "kind": "compound",
+      "value": [
+        {
+          "kind": "is_floating_fee",
+          "value": false
+        },
+        {
+          "kind": "class_count",
+          "value": 1
+        }
+      ]
+    },
+    "rule_id": "G21",
+    "operation_id": "G21:0",
+    "source": "deterministic",
+    "evidence_quote": "",
+    "reason": "FACT_PREREQUISITE_UNVERIFIED:share_class_structure",
+    "history": []
+  },
+  "G22:B1:O1": {
+    "status": "UNKNOWN",
+    "condition": {
+      "kind": "compound",
+      "value": [
+        {
+          "kind": "is_floating_fee",
+          "value": false
+        },
+        {
+          "kind": "has_service_fee",
+          "value": true
+        },
+        {
+          "kind": "class_count",
+          "value": "multiple"
+        }
+      ]
+    },
+    "rule_id": "G22",
+    "operation_id": "G22:0",
+    "source": "deterministic",
+    "evidence_quote": "",
+    "reason": "FACT_PREREQUISITE_UNVERIFIED:service_fee_group,share_class_structure,subscription_fee_group",
+    "history": []
+  }
+}

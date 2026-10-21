@@ -1,0 +1,21 @@
+{
+  "case_id": "D16",
+  "head": "22c15aa4d8d736f2a2fc46a29bc3ed8611475f2f",
+  "delivery": "incomplete",
+  "calls": 43,
+  "tokens": 213329,
+  "cost_usd": 0.04055925000000002,
+  "true_obligations": 24,
+  "completion_counts": {
+    "SATISFIED": 0,
+    "ARTIFACT_VERIFIED": 10,
+    "ALREADY_SATISFIED": 10,
+    "NOT_APPLICABLE": 10,
+    "UNRESOLVED": 4
+  },
+  "true_not_applicable": 0,
+  "claim_verified": false,
+  "unresolved_count": 20,
+  "errors": [],
+  "stop": null
+}

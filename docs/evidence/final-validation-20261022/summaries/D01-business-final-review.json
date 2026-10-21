@@ -1,0 +1,545 @@
+{
+  "head": "682e68a5b3ef2a58feb77460af70afabdb314379",
+  "branch": "refactor/recovery-architecture",
+  "reviewer": "independent business reviewer",
+  "models_used": false,
+  "runtime_modified": false,
+  "case_id": "D01",
+  "verdict": "UNVERIFIED",
+  "delivery": "not_generated",
+  "artifact_available": false,
+  "severity": "BLOCKER",
+  "findings": [
+    {
+      "id": "BR-D01-001",
+      "severity": "BLOCKER",
+      "class": "GENERATION/EXECUTION",
+      "finding": "No working_final.docx was generated; EDIT_OVERLAP_OR_ADJACENT stopped audit. No artifact business conclusion can be made.",
+      "evidence": "summaries/D01-record.json; artifacts/D01/report.json"
+    },
+    {
+      "id": "BR-D01-002",
+      "severity": "HIGH",
+      "class": "EFFECT_PROOF_UNVERIFIED",
+      "finding": "All 24 TRUE obligations remain unresolved because no artifact exists; do not count as complete or safe.",
+      "evidence": "summaries/D01-record.json"
+    }
+  ],
+  "positive": [],
+  "gate": "BLOCK",
+  "true_operation_review": [
+    {
+      "obligation_id": "G01:B1:O1",
+      "operation_id": "G01:0",
+      "applicability": "TRUE",
+      "guide_op": "append",
+      "review_state": "UNVERIFIED",
+      "review_reason": "No actual artifact generated",
+      "projection_state": "UNRESOLVED",
+      "claim_state": null,
+      "claim_artifact_status": null,
+      "planned_final_edit_count": 0,
+      "business_sites": [
+        {
+          "location": "p91",
+          "source_text": "基金份额类别：本基金将基金份额分为 A 类、C 类和 D 类三种不同的",
+          "artifact_text": null
+        }
+      ],
+      "absent_locator_targets": []
+    },
+    {
+      "obligation_id": "G02:B1:O1",
+      "operation_id": "G02:0",
+      "applicability": "TRUE",
+      "guide_op": "replace",
+      "review_state": "UNVERIFIED",
+      "review_reason": "No actual artifact generated",
+      "projection_state": "UNRESOLVED",
+      "claim_state": null,
+      "claim_artifact_status": null,
+      "planned_final_edit_count": 0,
+      "business_sites": [
+        {
+          "location": "p91",
+          "source_text": "基金份额类别：本基金将基金份额分为 A 类、C 类和 D 类三种不同的",
+          "artifact_text": null
+        },
+        {
+          "location": "p92",
+          "source_text": "类别。在投资者申购 A 类及 D 类基金份额时收取申购费用，不计提销售服务费；在投资者申购 C 类基金份额时不收取申购费用，而从本类别基金资产中计提销售服务费 ",
+          "artifact_text": null
+        }
+      ],
+      "absent_locator_targets": []
+    },
+    {
+      "obligation_id": "G02:B1:O2",
+      "operation_id": "G02:1",
+      "applicability": "TRUE",
+      "guide_op": "replace",
+      "review_state": "UNVERIFIED",
+      "review_reason": "No actual artifact generated",
+      "projection_state": "UNRESOLVED",
+      "claim_state": null,
+      "claim_artifact_status": null,
+      "planned_final_edit_count": 0,
+      "business_sites": [
+        {
+          "location": "p91",
+          "source_text": "基金份额类别：本基金将基金份额分为 A 类、C 类和 D 类三种不同的",
+          "artifact_text": null
+        }
+      ],
+      "absent_locator_targets": []
+    },
+    {
+      "obligation_id": "G03:B1:O1",
+      "operation_id": "G03:0",
+      "applicability": "TRUE",
+      "guide_op": "append",
+      "review_state": "UNVERIFIED",
+      "review_reason": "No actual artifact generated",
+      "projection_state": "UNRESOLVED",
+      "claim_state": null,
+      "claim_artifact_status": null,
+      "planned_final_edit_count": 0,
+      "business_sites": [
+        {
+          "location": "p130",
+          "source_text": "本基金将基金份额分为 A 类、C 类和 D 类三种不同的类别。在投资者申购 A 类及 D 类基金份额时收取申购费用，不计提销售服务费；在投资者申购 C 类基金份额时不收取申购费用，而从本类别基金资产中计提销售服务费。 ",
+          "artifact_text": null
+        }
+      ],
+      "absent_locator_targets": []
+    },
+    {
+      "obligation_id": "G04:B1:O1",
+      "operation_id": "G04:0",
+      "applicability": "TRUE",
+      "guide_op": "replace",
+      "review_state": "UNVERIFIED",
+      "review_reason": "No actual artifact generated",
+      "projection_state": "UNRESOLVED",
+      "claim_state": null,
+      "claim_artifact_status": null,
+      "planned_final_edit_count": 0,
+      "business_sites": [
+        {
+          "location": "p130",
+          "source_text": "本基金将基金份额分为 A 类、C 类和 D 类三种不同的类别。在投资者申购 A 类及 D 类基金份额时收取申购费用，不计提销售服务费；在投资者申购 C 类基金份额时不收取申购费用，而从本类别基金资产中计提销售服务费。 ",
+          "artifact_text": null
+        }
+      ],
+      "absent_locator_targets": []
+    },
+    {
+      "obligation_id": "G04:B1:O2",
+      "operation_id": "G04:1",
+      "applicability": "TRUE",
+      "guide_op": "replace",
+      "review_state": "UNVERIFIED",
+      "review_reason": "No actual artifact generated",
+      "projection_state": "UNRESOLVED",
+      "claim_state": null,
+      "claim_artifact_status": null,
+      "planned_final_edit_count": 0,
+      "business_sites": [
+        {
+          "location": "p130",
+          "source_text": "本基金将基金份额分为 A 类、C 类和 D 类三种不同的类别。在投资者申购 A 类及 D 类基金份额时收取申购费用，不计提销售服务费；在投资者申购 C 类基金份额时不收取申购费用，而从本类别基金资产中计提销售服务费。 ",
+          "artifact_text": null
+        }
+      ],
+      "absent_locator_targets": []
+    },
+    {
+      "obligation_id": "G05:B1:O1",
+      "operation_id": "G05:0",
+      "applicability": "TRUE",
+      "guide_op": "replace",
+      "review_state": "UNVERIFIED",
+      "review_reason": "No actual artifact generated",
+      "projection_state": "UNRESOLVED",
+      "claim_state": null,
+      "claim_artifact_status": null,
+      "planned_final_edit_count": 1,
+      "business_sites": [
+        {
+          "location": "p1100",
+          "source_text": "在法律法规和《基金合同》规定的范围内并对基金份额持有人利益无实质性不利影响的前提下，调整本基金的申购费率、调低赎回费率、调低销售服务费率或变更收费方式； ",
+          "artifact_text": null
+        },
+        {
+          "location": "p135",
+          "source_text": "有关基金份额类别的具体设置等由基金管理人确定，并在招募说明书中公告。根据基金销售情况，在符合法律法规且不损害已有基金份额持有人权益的情况下，基金管理人在履行适当程序后可以增加新的基金份额类别、或者在法律法规和基金合同规定的范围内变更现有基金份额类别的申购费率、调低赎回费率或变更收费方式、或者停止现有基金份额类别的销售等，调整前基金管理人需及时",
+          "artifact_text": null
+        },
+        {
+          "location": "p434",
+          "source_text": "在法律法规和《基金合同》规定的范围内并对基金份额持有人利益无实质性不利影响的前提下，调整本基金的申购费率、调低赎回费率、调低销售服务费率或变更收费方式； ",
+          "artifact_text": null
+        }
+      ],
+      "absent_locator_targets": []
+    },
+    {
+      "obligation_id": "G05:B3:O1",
+      "operation_id": "G05:2",
+      "applicability": "TRUE",
+      "guide_op": "delete",
+      "review_state": "UNVERIFIED",
+      "review_reason": "No actual artifact generated",
+      "projection_state": "UNRESOLVED",
+      "claim_state": null,
+      "claim_artifact_status": null,
+      "planned_final_edit_count": 0,
+      "business_sites": [],
+      "absent_locator_targets": [
+        {
+          "target_id": "S03_S04_S07_S16_S17_S20_S26#1:T007",
+          "location": "p135",
+          "quote": "并报中国证监会备案",
+          "state": "absent",
+          "status": "planned"
+        }
+      ]
+    },
+    {
+      "obligation_id": "G06:B1:O1",
+      "operation_id": "G06:0",
+      "applicability": "TRUE",
+      "guide_op": "delete",
+      "review_state": "UNVERIFIED",
+      "review_reason": "No actual artifact generated",
+      "projection_state": "UNRESOLVED",
+      "claim_state": null,
+      "claim_artifact_status": null,
+      "planned_final_edit_count": 0,
+      "business_sites": [],
+      "absent_locator_targets": [
+        {
+          "target_id": "S03_S04_S07_S16_S17_S20_S26#1:T008",
+          "location": "p135",
+          "quote": "有关基金份额类别的具体设置等由基金管理人确定，并在招募说明书中公告。根据基金销售情况，在符合法律法规且不损害已有基金份额持有人权益的情况下，基金管理人在履行适当程序后可以增加新的基金份额类别、或者在法律法规和基金合同规定的范围内变更现有基金份额类别的申购费率、调低赎回费率或变更收费方式、或者停止现有基金份额类别的销售等，调整前基金管理人需及时",
+          "state": "absent",
+          "status": "planned"
+        }
+      ]
+    },
+    {
+      "obligation_id": "G08:B1:O1",
+      "operation_id": "G08:0",
+      "applicability": "TRUE",
+      "guide_op": "replace",
+      "review_state": "UNVERIFIED",
+      "review_reason": "No actual artifact generated",
+      "projection_state": "UNRESOLVED",
+      "claim_state": null,
+      "claim_artifact_status": null,
+      "planned_final_edit_count": 1,
+      "business_sites": [
+        {
+          "location": "p226",
+          "source_text": "说明书》。本基金 A 类基金份额及 D 类基金份额的申购费率由基金管理人决定，并在招募说明书中列示。申购的有效份额为净申购金额除以当日该类基金份额净值，有效份额单位为份，上述计算结果均按四舍五入方法，保留到小数点后 2 位，由此产生的收益或损失由基金财产承担。 ",
+          "artifact_text": null
+        }
+      ],
+      "absent_locator_targets": []
+    },
+    {
+      "obligation_id": "G09:B1:O1",
+      "operation_id": "G09:0",
+      "applicability": "TRUE",
+      "guide_op": "replace",
+      "review_state": "UNVERIFIED",
+      "review_reason": "No actual artifact generated",
+      "projection_state": "UNRESOLVED",
+      "claim_state": null,
+      "claim_artifact_status": null,
+      "planned_final_edit_count": 1,
+      "business_sites": [
+        {
+          "location": "p227",
+          "source_text": "赎回金额的计算及处理方式：本基金赎回金额的计算详见《招募说明书》。本基金的赎回费率由基金管理人决定，并在招募说明书中列示。赎回金额为按实际确认的有效赎回份额乘以当日该类基金份额净值并扣除相应的费用，赎回金额单位为元。上述计算结果均按四舍五入方法，保留到小数点后 2 位，由此产生的收益或损失由基金财产承担。 ",
+          "artifact_text": null
+        }
+      ],
+      "absent_locator_targets": []
+    },
+    {
+      "obligation_id": "G11:B1:O1",
+      "operation_id": "G11:0",
+      "applicability": "TRUE",
+      "guide_op": "replace",
+      "review_state": "UNVERIFIED",
+      "review_reason": "No actual artifact generated",
+      "projection_state": "UNRESOLVED",
+      "claim_state": null,
+      "claim_artifact_status": null,
+      "planned_final_edit_count": 1,
+      "business_sites": [
+        {
+          "location": "p228",
+          "source_text": "本基金 A 类基金份额及 D 类基金份额的申购费用由该类基金份额的投资人承担，不列入基金财产。本基金 C 类基金份额不收取申购费。 ",
+          "artifact_text": null
+        }
+      ],
+      "absent_locator_targets": []
+    },
+    {
+      "obligation_id": "G11:B1:O2",
+      "operation_id": "G11:1",
+      "applicability": "TRUE",
+      "guide_op": "replace",
+      "review_state": "UNVERIFIED",
+      "review_reason": "No actual artifact generated",
+      "projection_state": "UNRESOLVED",
+      "claim_state": null,
+      "claim_artifact_status": null,
+      "planned_final_edit_count": 0,
+      "business_sites": [],
+      "absent_locator_targets": []
+    },
+    {
+      "obligation_id": "G12:B1:O1",
+      "operation_id": "G12:0",
+      "applicability": "TRUE",
+      "guide_op": "replace",
+      "review_state": "UNVERIFIED",
+      "review_reason": "No actual artifact generated",
+      "projection_state": "UNRESOLVED",
+      "claim_state": null,
+      "claim_artifact_status": null,
+      "planned_final_edit_count": 0,
+      "business_sites": [
+        {
+          "location": "p227",
+          "source_text": "赎回金额的计算及处理方式：本基金赎回金额的计算详见《招募说明书》。本基金的赎回费率由基金管理人决定，并在招募说明书中列示。赎回金额为按实际确认的有效赎回份额乘以当日该类基金份额净值并扣除相应的费用，赎回金额单位为元。上述计算结果均按四舍五入方法，保留到小数点后 2 位，由此产生的收益或损失由基金财产承担。 ",
+          "artifact_text": null
+        },
+        {
+          "location": "p229",
+          "source_text": "赎回费用由赎回基金份额的基金份额持有人承担，在基金份额持有人赎回基金份额时收取。赎回费用归入基金财产的比例依照相关法律法规设定，具体见招募说明书的规定。未归入基金财产的部分用于支付登记费和其他必要的手续费。 ",
+          "artifact_text": null
+        }
+      ],
+      "absent_locator_targets": []
+    },
+    {
+      "obligation_id": "G12:B1:O2",
+      "operation_id": "G12:1",
+      "applicability": "TRUE",
+      "guide_op": "replace",
+      "review_state": "UNVERIFIED",
+      "review_reason": "No actual artifact generated",
+      "projection_state": "UNRESOLVED",
+      "claim_state": null,
+      "claim_artifact_status": null,
+      "planned_final_edit_count": 1,
+      "business_sites": [],
+      "absent_locator_targets": []
+    },
+    {
+      "obligation_id": "G13:B1:O1",
+      "operation_id": "G13:0",
+      "applicability": "TRUE",
+      "guide_op": "delete",
+      "review_state": "UNVERIFIED",
+      "review_reason": "No actual artifact generated",
+      "projection_state": "UNRESOLVED",
+      "claim_state": null,
+      "claim_artifact_status": null,
+      "planned_final_edit_count": 1,
+      "business_sites": [
+        {
+          "location": "p230",
+          "source_text": "本基金 A 类基金份额和 D 类基金份额收取申购费用，C 类份额不收取申购费用，但从该类别基金资产中计提销售服务费。本基金的申购费率、申购份额具体的计算方法、赎回费率、赎回金额具体的计算方法和收费方式由基金管理人根据基金合同的规定确定，并在招募说明书中列示。基金管理人可以在基金合同约定的范围内调整费率或收费方式，并最迟应于新的费率或收费方式实施日前依照《信息披露办法》的有关规定在规定媒介上公告。本基金对持续持有期少于 7 日的投资者收取 1.50%的赎回费，并将上述赎回费全额计入基金财产。 ",
+          "artifact_text": null
+        }
+      ],
+      "absent_locator_targets": []
+    },
+    {
+      "obligation_id": "G14:B2:O1",
+      "operation_id": "G14:3",
+      "applicability": "TRUE",
+      "guide_op": "replace",
+      "review_state": "UNVERIFIED",
+      "review_reason": "No actual artifact generated",
+      "projection_state": "UNRESOLVED",
+      "claim_state": null,
+      "claim_artifact_status": null,
+      "planned_final_edit_count": 1,
+      "business_sites": [
+        {
+          "location": "p231",
+          "source_text": "基金管理人可以在不违反法律法规规定及基金合同约定并对基金份额持有人利益无实质性不利影响的情形下根据市场情况制定基金促销计划。针对基金投资者定期和不定期地开展基金促销活动。在基金促销活动期间，按相关监管部门要求履行必要手续后，基金管理人可以适当调低基金销售服务费率、基金申购费率和基金赎回费率。 ",
+          "artifact_text": null
+        }
+      ],
+      "absent_locator_targets": []
+    },
+    {
+      "obligation_id": "G14:B2:O2",
+      "operation_id": "G14:4",
+      "applicability": "TRUE",
+      "guide_op": "replace",
+      "review_state": "UNVERIFIED",
+      "review_reason": "No actual artifact generated",
+      "projection_state": "UNRESOLVED",
+      "claim_state": null,
+      "claim_artifact_status": null,
+      "planned_final_edit_count": 0,
+      "business_sites": [],
+      "absent_locator_targets": []
+    },
+    {
+      "obligation_id": "G14:B2:O3",
+      "operation_id": "G14:5",
+      "applicability": "TRUE",
+      "guide_op": "replace",
+      "review_state": "UNVERIFIED",
+      "review_reason": "No actual artifact generated",
+      "projection_state": "UNRESOLVED",
+      "claim_state": null,
+      "claim_artifact_status": null,
+      "planned_final_edit_count": 0,
+      "business_sites": [],
+      "absent_locator_targets": []
+    },
+    {
+      "obligation_id": "G15:B1:O1",
+      "operation_id": "G15:0",
+      "applicability": "TRUE",
+      "guide_op": "delete",
+      "review_state": "UNVERIFIED",
+      "review_reason": "No actual artifact generated",
+      "projection_state": "UNRESOLVED",
+      "claim_state": null,
+      "claim_artifact_status": null,
+      "planned_final_edit_count": 2,
+      "business_sites": [
+        {
+          "location": "p1221",
+          "source_text": "基金销售服务费每日计提，逐日累计至每月月末，按月支付，经基金管理人与基金托管人核对一致后，由基金托管人于次月前 5 个工作日内从基金财产中一次性划出，由基金管理人代收，基金管理人收到后按相关合同规定支付给基金销售机构等。若遇法定节假日、公休假或不可抗力等，支付日期顺延。 ",
+          "artifact_text": null
+        }
+      ],
+      "absent_locator_targets": [
+        {
+          "target_id": "S03_S04_S07_S16_S17_S20_S26#1:T017",
+          "location": "p758",
+          "quote": "基金销售服务费每日计提，逐日累计至每月月末，按月支付，经基金管理人与基金托管人核对一致后，由基金托管人于次月前 5 个工作日内从基金财产中一次性划出，由基金管理人代收，基金管理人收到后按相关合同规定支付给基金销售机构等。若遇法定节假日、公休假或不可抗力等，支付日期顺延。",
+          "state": "absent",
+          "status": "planned"
+        }
+      ]
+    },
+    {
+      "obligation_id": "G16:B1:O1",
+      "operation_id": "G16:0",
+      "applicability": "TRUE",
+      "guide_op": "append",
+      "review_state": "UNVERIFIED",
+      "review_reason": "No actual artifact generated",
+      "projection_state": "UNRESOLVED",
+      "claim_state": null,
+      "claim_artifact_status": null,
+      "planned_final_edit_count": 0,
+      "business_sites": [
+        {
+          "location": "p1223",
+          "source_text": "销售服务费使用范围不包括基金募集期间的上述费用。 ",
+          "artifact_text": null
+        },
+        {
+          "location": "p760",
+          "source_text": "销售服务费使用范围不包括基金募集期间的上述费用。 ",
+          "artifact_text": null
+        }
+      ],
+      "absent_locator_targets": []
+    },
+    {
+      "obligation_id": "G17:B1:O1",
+      "operation_id": "G17:0",
+      "applicability": "TRUE",
+      "guide_op": "delete",
+      "review_state": "UNVERIFIED",
+      "review_reason": "No actual artifact generated",
+      "projection_state": "UNRESOLVED",
+      "claim_state": null,
+      "claim_artifact_status": null,
+      "planned_final_edit_count": 4,
+      "business_sites": [
+        {
+          "location": "p1222",
+          "source_text": "销售服务费主要用于支付销售机构佣金、以及基金管理人的基金行销广告费、促销活动费、基金份额持有人服务费等。 ",
+          "artifact_text": null
+        },
+        {
+          "location": "p759",
+          "source_text": "销售服务费主要用于支付销售机构佣金、以及基金管理人的基金行销广告费、促销活动费、基金份额持有人服务费等。 ",
+          "artifact_text": null
+        },
+        {
+          "location": "p760",
+          "source_text": "销售服务费使用范围不包括基金募集期间的上述费用。 ",
+          "artifact_text": null
+        }
+      ],
+      "absent_locator_targets": []
+    },
+    {
+      "obligation_id": "G18:B1:O1",
+      "operation_id": "G18:0",
+      "applicability": "TRUE",
+      "guide_op": "replace",
+      "review_state": "UNVERIFIED",
+      "review_reason": "No actual artifact generated",
+      "projection_state": "UNRESOLVED",
+      "claim_state": null,
+      "claim_artifact_status": null,
+      "planned_final_edit_count": 2,
+      "business_sites": [
+        {
+          "location": "p1191",
+          "source_text": "由于本基金 A 类基金份额和 D 类基金份额不收取销售服务费，而 C 类基金份额收取销售服务费，各基金份额类别对应的可分配收益将有所不同。本基金同一类别的每一基金份额享有同等分配权； ",
+          "artifact_text": null
+        },
+        {
+          "location": "p785",
+          "source_text": "由于本基金 A 类基金份额和 D 类基金份额不收取销售服务费，而 C 类基金份额收取销售服务费，各基金份额类别对应的可分配收益将有所不同。本基金同一类别的每一基金份额享有同等分配权； ",
+          "artifact_text": null
+        }
+      ],
+      "absent_locator_targets": []
+    },
+    {
+      "obligation_id": "G22:B1:O1",
+      "operation_id": "G22:0",
+      "applicability": "TRUE",
+      "guide_op": "replace",
+      "review_state": "UNVERIFIED",
+      "review_reason": "No actual artifact generated",
+      "projection_state": "UNRESOLVED",
+      "claim_state": null,
+      "claim_artifact_status": null,
+      "planned_final_edit_count": 2,
+      "business_sites": [
+        {
+          "location": "p1299",
+          "source_text": "依据基金财产清算的分配方案，将基金财产清算后的全部剩余资产扣除基金财产清算费用、交纳所欠税款并清偿基金债务后，按基金份额持有人持有的各类基金份额比例进行分配。 ",
+          "artifact_text": null
+        },
+        {
+          "location": "p934",
+          "source_text": "依据基金财产清算的分配方案，将基金财产清算后的全部剩余资产扣除基金财产清算费用、交纳所欠税款并清偿基金债务后，按基金份额持有人持有的各类基金份额比例进行分配。 ",
+          "artifact_text": null
+        }
+      ],
+      "absent_locator_targets": []
+    }
+  ]
+}

@@ -1,0 +1,134 @@
+{
+  "body": {
+    "schema_version": "fundlex-model-cassette-v1",
+    "request": {
+      "task_type": "recall_audit",
+      "prompt_version": "recall_audit_v1",
+      "configured_model": "deepseek-v4.1-flash",
+      "context_sha256": "fb0151874dced30b3d08ce6686fdfacf7278626af632096cb44a74dd1b7ad5c0",
+      "request": {
+        "bounded_context": "[BEFORE]\n[p800] 由于本基金 A 类基金份额和 D 类基金份额不收取销售服务费，而 C 类基金份额收取销售服务费，各基金份额类别对应的可分配收益将有所不同。本基金同一类别的每一基金份额享有同等分配权； \n[p1207] 由于本基金 A 类基金份额和 D 类基金份额不收取销售服务费，而 C 类基金份额收取销售服务费，各基金份额类别对应的可分配收益将有所不同。本基金同一类别的每一基金份额享有同等分配权； 5、法律法规或监管机关另有规定的，从其规定。 \n\n[AFTER]\n[p800] 由于本基金A类、D类基金份额和C类基金份额费用收取不同，各基金份额类别对应的可分配收益将有所不同。本基金同一类别的每一基金份额享有同等分配权； \n[p1207] 由于本基金A类、D类基金份额和C类基金份额费用收取不同，各基金份额类别对应的可分配收益将有所不同。本基金同一类别的每一基金份额享有同等分配权； 5、法律法规或监管机关另有规定的，从其规定。 \n\n[REQUIREMENTS]\nGUIDE_RULES\n[G18] 基金合同-基金的收益与分配 | section_hint=基金的收益与分配\n  requirement: 将“由于本基金A类基金份额不收取销售服务费，而C类基金份额收取销售服务费”变更为“由于本基金A类基金份额和C类基金份额费用收取不同”。\n  [G18:0] replace: 由于本基金A类基金份额不收取销售服务费，而C类基金份额收取销售服务费 -> 由于本基金A类基金份额和C类基金份额费用收取不同\n\n[TARGET_LEDGER]\n[\n {\n  \"target_id\": \"S03_S04_S07_S16_S17_S20#1:T019\",\n  \"rule_id\": \"G18\",\n  \"location\": \"p800\",\n  \"state\": \"needs_edit\",\n  \"quote\": \"由于本基金 A 类基金份额和 D 类基金份额不收取销售服务费，而 C 类基金份额收取销售服务费，各基金份额类别对应的可分配收益将有所不同。\",\n  \"reason\": \"应将“由于本基金A类基金份额不收取销售服务费，而C类基金份额收取销售服务费”变更为“由于本基金A类基金份额和C类基金份额费用收取不同”，现文本仍按A类、D类与C类分别表述。\",\n  \"plan_status\": \"planned\",\n  \"operation\": \"replace\",\n  \"replacement\": \"由于本基金A类、D类基金份额和C类基金份额费用收取不同，各基金份额类别对应的可分配收益将有所不同。\"\n },\n {\n  \"target_id\": \"S25_S26#1:T004\",\n  \"rule_id\": \"G18\",\n  \"location\": \"p1207\",\n  \"state\": \"needs_edit\",\n  \"quote\": \"由于本基金 A 类基金份额和 D 类基金份额不收取销售服务费，而 C 类基金份额收取销售服务费\",\n  \"reason\": \"收益分配原则中关于份额类别费用差异的表述，G18要求变更为费用收取不同的表述。\",\n  \"plan_status\": \"planned\",\n  \"operation\": \"replace\",\n  \"replacement\": \"由于本基金A类、D类基金份额和C类基金份额费用收取不同\"\n }\n]\n\n[OTHER_AUTHORIZED_EDITS]\n[]",
+        "instruction": "Read [BEFORE] (the original contract region), [AFTER] (the actual rewritten region taken from the produced file), [REQUIREMENTS] (the guide rules with their fixed policy text and the target ledger) and [OTHER_AUTHORIZED_EDITS] (changes other guide rules legitimately made in the same locations). Independently judge each target in the ledger: completed when the AFTER text satisfies the requirement with no lost content, incomplete when part of the requirement is missing, wrong when the AFTER text contradicts the requirement, drops required content, or adds policy the guide does not state. A rule whose slot classes are placeholders means the AFTER text must name the product's actual share classes that fall in that group: adding a real class the contract defines (for example including a D类 class in the group the guide wrote as A类) is correct instantiation, not an unauthorized addition, as long as [FACTS] lists that class in the group. Never report an OTHER_AUTHORIZED_EDITS change as an unauthorized addition. For every non-completed target also classify the root cause (failure_class) and, when known, the affected_fact or affected_obligation, so recovery can return to the correct business layer. A region shown as （该位置内容已删除） means the content was removed: for a deletion requirement that is completed, and for a replacement requirement judge it against the requirement and the ledger, not against the absence itself. Cite an exact contiguous evidence_quote from AFTER (or BEFORE when judging a loss) for every verdict. Also report missed_targets when you find a clause in AFTER that still needs editing but is absent from the ledger. Never trust the ledger over the actual text; never mark completed without reading AFTER.",
+        "response_schema": {
+          "type": "object",
+          "required": [
+            "results"
+          ],
+          "properties": {
+            "results": {
+              "type": "array",
+              "maxItems": 60,
+              "items": {
+                "type": "object",
+                "required": [
+                  "target_id",
+                  "verdict",
+                  "reason"
+                ],
+                "properties": {
+                  "target_id": {
+                    "type": "string"
+                  },
+                  "verdict": {
+                    "enum": [
+                      "completed",
+                      "incomplete",
+                      "wrong"
+                    ]
+                  },
+                  "reason": {
+                    "type": "string"
+                  },
+                  "evidence_quote": {
+                    "type": "string"
+                  },
+                  "failure_class": {
+                    "enum": [
+                      "FACT",
+                      "APPLICABILITY",
+                      "TARGET",
+                      "GENERATION",
+                      "EXECUTION",
+                      "VERIFICATION"
+                    ]
+                  },
+                  "affected_fact": {
+                    "type": "string"
+                  },
+                  "affected_obligation": {
+                    "type": "string"
+                  }
+                }
+              }
+            },
+            "missed_targets": {
+              "type": "array",
+              "maxItems": 20,
+              "items": {
+                "type": "object",
+                "required": [
+                  "rule_id",
+                  "location",
+                  "quote",
+                  "reason"
+                ],
+                "properties": {
+                  "rule_id": {
+                    "type": "string"
+                  },
+                  "location": {
+                    "type": "string"
+                  },
+                  "quote": {
+                    "type": "string"
+                  },
+                  "reason": {
+                    "type": "string"
+                  }
+                }
+              }
+            },
+            "notes": {
+              "type": "string"
+            }
+          }
+        },
+        "request_options": {
+          "thinking": {
+            "type": "disabled"
+          }
+        },
+        "max_completion_tokens": 8000
+      }
+    },
+    "response": {
+      "results": [
+        {
+          "target_id": "S03_S04_S07_S16_S17_S20#1:T019",
+          "verdict": "completed",
+          "reason": "AFTER p800 replaces the sales-service-fee distinction with the required '费用收取不同' wording, and the plan's instantiation naming A类、D类 and C类 matches the classes defined in the contract; no content lost.",
+          "evidence_quote": "由于本基金A类、D类基金份额和C类基金份额费用收取不同，各基金份额类别对应的可分配收益将有所不同。"
+        },
+        {
+          "target_id": "S25_S26#1:T004",
+          "verdict": "completed",
+          "reason": "AFTER p1207 applies the same required '费用收取不同' wording to the share-class fee difference clause, preserving the following distribution-rights sentence and item 5.",
+          "evidence_quote": "由于本基金A类、D类基金份额和C类基金份额费用收取不同，各基金份额类别对应的可分配收益将有所不同。"
+        }
+      ],
+      "missed_targets": [],
+      "notes": "Both ledger targets are satisfied; the A类、D类、C类 enumeration is a correct instantiation of the guide's placeholder classes per the contract's defined share classes."
+    },
+    "event": {
+      "task_type": "recall_audit",
+      "prompt_version": "recall_audit_v1",
+      "context_sha256": "fb0151874dced30b3d08ce6686fdfacf7278626af632096cb44a74dd1b7ad5c0",
+      "configured_model": "deepseek-v4.1-flash",
+      "actual_model": "deepseek-v4.1-flash",
+      "http_status": 200,
+      "finish_reason": "stop",
+      "error_code": null
+    }
+  },
+  "sha256": "24e1e562e835f9284408fd9fc192d89e4eefb4fa6e5162665bb349458a799aea"
+}

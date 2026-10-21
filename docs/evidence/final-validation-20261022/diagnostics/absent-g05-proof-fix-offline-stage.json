@@ -1,0 +1,916 @@
+{
+  "base_head": "682e68a5b3ef2a58feb77460af70afabdb314379",
+  "working_tree_runtime_hashes": {
+    "fundlex/generation/effects.py": "3ff595e54e050f8200ac17f9c70070eee8ccee25406f5117e226226d43d9a845",
+    "fundlex/generation/claim_replay.py": "d0f450661605d44cacafa9f1ecc020e6d709c19730294bad1b8c5c24e972afa8"
+  },
+  "network_model_calls": 0,
+  "g05_business_site_checks": [
+    {
+      "case_id": "D02",
+      "location": "p138",
+      "source_quote": "有关基金份额类别的具体设置、费率水平等由基金管理人确定，并在招募说明书中公告。根据基金销售情况，在符合法律法规且不损害已有基金份额持有人权益的情况下，基金管理人在履行适当程序后可以增加新的基金份额类别、或者在法律法规和基金合同规定的范围内变更现有基金份额类别的申购费率、调低赎回费率或变更收费方式，或者停止现有基金份额类别的销售等。调整前，基金管理人需履行适当程序并及时公告。 ",
+      "operations": {
+        "G05:0": true,
+        "G05:1": true,
+        "G05:2": true
+      }
+    },
+    {
+      "case_id": "D02",
+      "location": "p429",
+      "source_quote": "在法律法规和《基金合同》规定的范围内调整本基金全部或者部分份额类别的申购费率、调低全部或者部分份额类别的赎回费率、调低销售服务费率或变更收费方式； ",
+      "operations": {
+        "G05:0": false,
+        "G05:1": false,
+        "G05:2": false
+      }
+    },
+    {
+      "case_id": "D02",
+      "location": "p1162",
+      "source_quote": "在法律法规和《基金合同》规定的范围内调整本基金全部或者部分份额类别的申购费率、调低全部或者部分份额类别的赎回费率、调低销售服务费率或变更收费方式； ",
+      "operations": {
+        "G05:0": false,
+        "G05:1": false,
+        "G05:2": false
+      }
+    },
+    {
+      "case_id": "D16",
+      "location": "p133",
+      "source_quote": "有关基金份额类别的具体设置等由基金管理人确定，并在招募说明书中公告。根据基金销售情况，在符合法律法规且不损害已有基金份额持有人权益的情况下，基金管理人在履行适当程序后可以增加新的基金份额类别、或者在法律法规和基金合同规定的范围内变更现有基金份额类别的申购费率、调低赎回费率或变更收费方式、或者停止现有基金份额类别的销售等，调整前基金管理人需及时公告并报中国证监会备案。 ",
+      "operations": {
+        "G05:0": true,
+        "G05:1": true,
+        "G05:2": true
+      }
+    },
+    {
+      "case_id": "D16",
+      "location": "p427",
+      "source_quote": "在法律法规和《基金合同》规定的范围内调整本基金的申购费率、调低赎回费率、调低销售服务费率或变更收费方式； ",
+      "operations": {
+        "G05:0": false,
+        "G05:1": false,
+        "G05:2": false
+      }
+    },
+    {
+      "case_id": "D16",
+      "location": "p1165",
+      "source_quote": "在法律法规和《基金合同》规定的范围内调整本基金的申购费率、调低赎回费率、调低销售服务费率或变更收费方式； ",
+      "operations": {
+        "G05:0": false,
+        "G05:1": false,
+        "G05:2": false
+      }
+    }
+  ],
+  "claim_stage_regression": {
+    "D02": {
+      "verified": false,
+      "model_calls": 0,
+      "obligations": {
+        "G01:B1:O1": {
+          "operation_id": "G01:0",
+          "state": "FAIL",
+          "artifact_status": "MISSING_EFFECT",
+          "sites": [
+            "p93"
+          ],
+          "failure_code": "CLAIM_OPERATION_NOT_PLANNED"
+        },
+        "G02:B1:O1": {
+          "operation_id": "G02:0",
+          "state": "PASS",
+          "artifact_status": "ALREADY_SATISFIED",
+          "sites": [
+            "p93"
+          ],
+          "failure_code": ""
+        },
+        "G02:B1:O2": {
+          "operation_id": "G02:1",
+          "state": "PASS",
+          "artifact_status": "ALREADY_SATISFIED",
+          "sites": [
+            "p93"
+          ],
+          "failure_code": ""
+        },
+        "G03:B1:O1": {
+          "operation_id": "G03:0",
+          "state": "PASS",
+          "artifact_status": "EXPECTED_EFFECT_PRESENT",
+          "sites": [
+            "p138"
+          ],
+          "failure_code": ""
+        },
+        "G04:B1:O1": {
+          "operation_id": "G04:0",
+          "state": "PASS",
+          "artifact_status": "ALREADY_SATISFIED",
+          "sites": [
+            "p135"
+          ],
+          "failure_code": ""
+        },
+        "G04:B1:O2": {
+          "operation_id": "G04:1",
+          "state": "PASS",
+          "artifact_status": "ALREADY_SATISFIED",
+          "sites": [
+            "p135"
+          ],
+          "failure_code": ""
+        },
+        "G05:B1:O1": {
+          "operation_id": "G05:0",
+          "state": "PASS",
+          "artifact_status": "EXPECTED_EFFECT_PRESENT",
+          "sites": [
+            "p138"
+          ],
+          "failure_code": ""
+        },
+        "G05:B3:O1": {
+          "operation_id": "G05:2",
+          "state": "OPEN",
+          "artifact_status": "UNPROVEN",
+          "sites": [],
+          "failure_code": "CLAIM_OPERATION_UNPROVEN"
+        },
+        "G06:B1:O1": {
+          "operation_id": "G06:0",
+          "state": "OPEN",
+          "artifact_status": "UNPROVEN",
+          "sites": [],
+          "failure_code": "CLAIM_OPERATION_UNPROVEN"
+        },
+        "G08:B1:O1": {
+          "operation_id": "G08:0",
+          "state": "PASS",
+          "artifact_status": "EXPECTED_EFFECT_PRESENT",
+          "sites": [
+            "p226"
+          ],
+          "failure_code": ""
+        },
+        "G09:B1:O1": {
+          "operation_id": "G09:0",
+          "state": "PASS",
+          "artifact_status": "EXPECTED_EFFECT_PRESENT",
+          "sites": [
+            "p227"
+          ],
+          "failure_code": ""
+        },
+        "G11:B1:O1": {
+          "operation_id": "G11:0",
+          "state": "PASS",
+          "artifact_status": "EXPECTED_EFFECT_PRESENT",
+          "sites": [
+            "p228"
+          ],
+          "failure_code": ""
+        },
+        "G11:B1:O2": {
+          "operation_id": "G11:1",
+          "state": "PASS",
+          "artifact_status": "ALREADY_SATISFIED",
+          "sites": [
+            "p228"
+          ],
+          "failure_code": ""
+        },
+        "G12:B1:O1": {
+          "operation_id": "G12:0",
+          "state": "PASS",
+          "artifact_status": "ALREADY_SATISFIED",
+          "sites": [
+            "p229"
+          ],
+          "failure_code": ""
+        },
+        "G12:B1:O2": {
+          "operation_id": "G12:1",
+          "state": "PASS",
+          "artifact_status": "EXPECTED_EFFECT_PRESENT",
+          "sites": [
+            "p229"
+          ],
+          "failure_code": ""
+        },
+        "G13:B1:O1": {
+          "operation_id": "G13:0",
+          "state": "PASS",
+          "artifact_status": "VERIFIED_ABSENT",
+          "sites": [
+            "p229"
+          ],
+          "failure_code": ""
+        },
+        "G14:B2:O1": {
+          "operation_id": "G14:3",
+          "state": "PASS",
+          "artifact_status": "ALREADY_SATISFIED",
+          "sites": [
+            "p232"
+          ],
+          "failure_code": ""
+        },
+        "G14:B2:O2": {
+          "operation_id": "G14:4",
+          "state": "PASS",
+          "artifact_status": "ALREADY_SATISFIED",
+          "sites": [
+            "p232"
+          ],
+          "failure_code": ""
+        },
+        "G14:B2:O3": {
+          "operation_id": "G14:5",
+          "state": "PASS",
+          "artifact_status": "EXPECTED_EFFECT_PRESENT",
+          "sites": [
+            "p232"
+          ],
+          "failure_code": ""
+        },
+        "G15:B1:O1": {
+          "operation_id": "G15:0",
+          "state": "PASS",
+          "artifact_status": "VERIFIED_ABSENT",
+          "sites": [
+            "p1287",
+            "p821"
+          ],
+          "failure_code": ""
+        },
+        "G16:B1:O1": {
+          "operation_id": "G16:0",
+          "state": "OPEN",
+          "artifact_status": "UNPROVEN",
+          "sites": [],
+          "failure_code": "CLAIM_OPERATION_UNPROVEN"
+        },
+        "G17:B1:O1": {
+          "operation_id": "G17:0",
+          "state": "PASS",
+          "artifact_status": "VERIFIED_ABSENT",
+          "sites": [
+            "p1288",
+            "p1289",
+            "p822",
+            "p823"
+          ],
+          "failure_code": ""
+        },
+        "G18:B1:O1": {
+          "operation_id": "G18:0",
+          "state": "PASS",
+          "artifact_status": "EXPECTED_EFFECT_PRESENT",
+          "sites": [
+            "p1257",
+            "p848"
+          ],
+          "failure_code": ""
+        },
+        "G22:B1:O1": {
+          "operation_id": "G22:0",
+          "state": "PASS",
+          "artifact_status": "EXPECTED_EFFECT_PRESENT",
+          "sites": [
+            "p1001",
+            "p1371"
+          ],
+          "failure_code": ""
+        }
+      },
+      "failures": [
+        {
+          "rule_id": "G01",
+          "operation_id": "G01:0",
+          "obligation_id": "G01:B1:O1",
+          "location": "p93",
+          "code": "CLAIM_OPERATION_NOT_PLANNED",
+          "reason": "operation effect is not proven at every verified site"
+        },
+        {
+          "rule_id": "G05",
+          "operation_id": "G05:2",
+          "obligation_id": "G05:B3:O1",
+          "location": "",
+          "code": "CLAIM_OPERATION_UNPROVEN",
+          "reason": "verified site missing"
+        },
+        {
+          "rule_id": "G06",
+          "operation_id": "G06:0",
+          "obligation_id": "G06:B1:O1",
+          "location": "",
+          "code": "CLAIM_OPERATION_UNPROVEN",
+          "reason": "verified site missing"
+        },
+        {
+          "rule_id": "G16",
+          "operation_id": "G16:0",
+          "obligation_id": "G16:B1:O1",
+          "location": "",
+          "code": "CLAIM_OPERATION_UNPROVEN",
+          "reason": "verified site missing"
+        }
+      ]
+    },
+    "D11": {
+      "verified": false,
+      "model_calls": 0,
+      "obligations": {
+        "G01:B1:O1": {
+          "operation_id": "G01:0",
+          "state": "FAIL",
+          "artifact_status": "MISSING_EFFECT",
+          "sites": [
+            "p91"
+          ],
+          "failure_code": "CLAIM_OPERATION_NOT_PLANNED"
+        },
+        "G02:B1:O1": {
+          "operation_id": "G02:0",
+          "state": "FAIL",
+          "artifact_status": "MISSING_EFFECT",
+          "sites": [
+            "p91"
+          ],
+          "failure_code": "CLAIM_OPERATION_NOT_PLANNED"
+        },
+        "G02:B1:O2": {
+          "operation_id": "G02:1",
+          "state": "PASS",
+          "artifact_status": "ALREADY_SATISFIED",
+          "sites": [
+            "p91"
+          ],
+          "failure_code": ""
+        },
+        "G03:B1:O1": {
+          "operation_id": "G03:0",
+          "state": "PASS",
+          "artifact_status": "EXPECTED_EFFECT_PRESENT",
+          "sites": [
+            "p126"
+          ],
+          "failure_code": ""
+        },
+        "G04:B1:O1": {
+          "operation_id": "G04:0",
+          "state": "PASS",
+          "artifact_status": "ALREADY_SATISFIED",
+          "sites": [
+            "p126"
+          ],
+          "failure_code": ""
+        },
+        "G04:B1:O2": {
+          "operation_id": "G04:1",
+          "state": "PASS",
+          "artifact_status": "ALREADY_SATISFIED",
+          "sites": [
+            "p126"
+          ],
+          "failure_code": ""
+        },
+        "G05:B1:O1": {
+          "operation_id": "G05:0",
+          "state": "PASS",
+          "artifact_status": "EXPECTED_EFFECT_PRESENT",
+          "sites": [
+            "p129"
+          ],
+          "failure_code": ""
+        },
+        "G05:B3:O1": {
+          "operation_id": "G05:2",
+          "state": "OPEN",
+          "artifact_status": "UNPROVEN",
+          "sites": [],
+          "failure_code": "CLAIM_OPERATION_UNPROVEN"
+        },
+        "G06:B1:O1": {
+          "operation_id": "G06:0",
+          "state": "OPEN",
+          "artifact_status": "UNPROVEN",
+          "sites": [],
+          "failure_code": "CLAIM_OPERATION_UNPROVEN"
+        },
+        "G08:B1:O1": {
+          "operation_id": "G08:0",
+          "state": "PASS",
+          "artifact_status": "EXPECTED_EFFECT_PRESENT",
+          "sites": [
+            "p208"
+          ],
+          "failure_code": ""
+        },
+        "G09:B1:O1": {
+          "operation_id": "G09:0",
+          "state": "PASS",
+          "artifact_status": "EXPECTED_EFFECT_PRESENT",
+          "sites": [
+            "p209"
+          ],
+          "failure_code": ""
+        },
+        "G11:B1:O1": {
+          "operation_id": "G11:0",
+          "state": "PASS",
+          "artifact_status": "ALREADY_SATISFIED",
+          "sites": [
+            "p209"
+          ],
+          "failure_code": ""
+        },
+        "G11:B1:O2": {
+          "operation_id": "G11:1",
+          "state": "PASS",
+          "artifact_status": "EXPECTED_EFFECT_PRESENT",
+          "sites": [
+            "p209"
+          ],
+          "failure_code": ""
+        },
+        "G12:B1:O1": {
+          "operation_id": "G12:0",
+          "state": "PASS",
+          "artifact_status": "EXPECTED_EFFECT_PRESENT",
+          "sites": [
+            "p210"
+          ],
+          "failure_code": ""
+        },
+        "G12:B1:O2": {
+          "operation_id": "G12:1",
+          "state": "PASS",
+          "artifact_status": "ALREADY_SATISFIED",
+          "sites": [
+            "p210"
+          ],
+          "failure_code": ""
+        },
+        "G13:B1:O1": {
+          "operation_id": "G13:0",
+          "state": "PASS",
+          "artifact_status": "VERIFIED_ABSENT",
+          "sites": [
+            "p210"
+          ],
+          "failure_code": ""
+        },
+        "G14:B2:O1": {
+          "operation_id": "G14:3",
+          "state": "PASS",
+          "artifact_status": "EXPECTED_EFFECT_PRESENT",
+          "sites": [
+            "p213"
+          ],
+          "failure_code": ""
+        },
+        "G14:B2:O2": {
+          "operation_id": "G14:4",
+          "state": "PASS",
+          "artifact_status": "ALREADY_SATISFIED",
+          "sites": [
+            "p213"
+          ],
+          "failure_code": ""
+        },
+        "G14:B2:O3": {
+          "operation_id": "G14:5",
+          "state": "PASS",
+          "artifact_status": "ALREADY_SATISFIED",
+          "sites": [
+            "p213"
+          ],
+          "failure_code": ""
+        },
+        "G15:B1:O1": {
+          "operation_id": "G15:0",
+          "state": "PASS",
+          "artifact_status": "VERIFIED_ABSENT",
+          "sites": [
+            "p1247",
+            "p772"
+          ],
+          "failure_code": ""
+        },
+        "G16:B1:O1": {
+          "operation_id": "G16:0",
+          "state": "OPEN",
+          "artifact_status": "UNPROVEN",
+          "sites": [],
+          "failure_code": "CLAIM_OPERATION_UNPROVEN"
+        },
+        "G17:B1:O1": {
+          "operation_id": "G17:0",
+          "state": "PASS",
+          "artifact_status": "VERIFIED_ABSENT",
+          "sites": [
+            "p1248",
+            "p773"
+          ],
+          "failure_code": ""
+        },
+        "G18:B1:O1": {
+          "operation_id": "G18:0",
+          "state": "PASS",
+          "artifact_status": "EXPECTED_EFFECT_PRESENT",
+          "sites": [
+            "p1207",
+            "p800"
+          ],
+          "failure_code": ""
+        },
+        "G22:B1:O1": {
+          "operation_id": "G22:0",
+          "state": "PASS",
+          "artifact_status": "EXPECTED_EFFECT_PRESENT",
+          "sites": [
+            "p1344",
+            "p951"
+          ],
+          "failure_code": ""
+        }
+      },
+      "failures": [
+        {
+          "rule_id": "G01",
+          "operation_id": "G01:0",
+          "obligation_id": "G01:B1:O1",
+          "location": "p91",
+          "code": "CLAIM_OPERATION_NOT_PLANNED",
+          "reason": "operation effect is not proven at every verified site"
+        },
+        {
+          "rule_id": "G02",
+          "operation_id": "G02:0",
+          "obligation_id": "G02:B1:O1",
+          "location": "p91",
+          "code": "CLAIM_OPERATION_NOT_PLANNED",
+          "reason": "operation effect is not proven at every verified site"
+        },
+        {
+          "rule_id": "G05",
+          "operation_id": "G05:2",
+          "obligation_id": "G05:B3:O1",
+          "location": "",
+          "code": "CLAIM_OPERATION_UNPROVEN",
+          "reason": "verified site missing"
+        },
+        {
+          "rule_id": "G06",
+          "operation_id": "G06:0",
+          "obligation_id": "G06:B1:O1",
+          "location": "",
+          "code": "CLAIM_OPERATION_UNPROVEN",
+          "reason": "verified site missing"
+        },
+        {
+          "rule_id": "G16",
+          "operation_id": "G16:0",
+          "obligation_id": "G16:B1:O1",
+          "location": "",
+          "code": "CLAIM_OPERATION_UNPROVEN",
+          "reason": "verified site missing"
+        }
+      ]
+    },
+    "D16": {
+      "verified": false,
+      "model_calls": 0,
+      "obligations": {
+        "G01:B1:O1": {
+          "operation_id": "G01:0",
+          "state": "FAIL",
+          "artifact_status": "MISSING_EFFECT",
+          "sites": [
+            "p91"
+          ],
+          "failure_code": "CLAIM_OPERATION_NOT_PLANNED"
+        },
+        "G02:B1:O1": {
+          "operation_id": "G02:0",
+          "state": "PASS",
+          "artifact_status": "ALREADY_SATISFIED",
+          "sites": [
+            "p91#occurrence:0"
+          ],
+          "failure_code": ""
+        },
+        "G02:B1:O2": {
+          "operation_id": "G02:1",
+          "state": "PASS",
+          "artifact_status": "ALREADY_SATISFIED",
+          "sites": [
+            "p91#occurrence:0"
+          ],
+          "failure_code": ""
+        },
+        "G03:B1:O1": {
+          "operation_id": "G03:0",
+          "state": "PASS",
+          "artifact_status": "EXPECTED_EFFECT_PRESENT",
+          "sites": [
+            "p133"
+          ],
+          "failure_code": ""
+        },
+        "G04:B1:O1": {
+          "operation_id": "G04:0",
+          "state": "PASS",
+          "artifact_status": "ALREADY_SATISFIED",
+          "sites": [
+            "p129#occurrence:0"
+          ],
+          "failure_code": ""
+        },
+        "G04:B1:O2": {
+          "operation_id": "G04:1",
+          "state": "PASS",
+          "artifact_status": "ALREADY_SATISFIED",
+          "sites": [
+            "p129#occurrence:0"
+          ],
+          "failure_code": ""
+        },
+        "G05:B1:O1": {
+          "operation_id": "G05:0",
+          "state": "PASS",
+          "artifact_status": "EXPECTED_EFFECT_PRESENT",
+          "sites": [
+            "p133"
+          ],
+          "failure_code": ""
+        },
+        "G05:B3:O1": {
+          "operation_id": "G05:2",
+          "state": "PASS",
+          "artifact_status": "VERIFIED_ABSENT",
+          "sites": [
+            "p133"
+          ],
+          "failure_code": ""
+        },
+        "G06:B1:O1": {
+          "operation_id": "G06:0",
+          "state": "OPEN",
+          "artifact_status": "UNPROVEN",
+          "sites": [],
+          "failure_code": "CLAIM_OPERATION_UNPROVEN"
+        },
+        "G08:B1:O1": {
+          "operation_id": "G08:0",
+          "state": "PASS",
+          "artifact_status": "EXPECTED_EFFECT_PRESENT",
+          "sites": [
+            "p217"
+          ],
+          "failure_code": ""
+        },
+        "G09:B1:O1": {
+          "operation_id": "G09:0",
+          "state": "PASS",
+          "artifact_status": "EXPECTED_EFFECT_PRESENT",
+          "sites": [
+            "p219"
+          ],
+          "failure_code": ""
+        },
+        "G11:B1:O1": {
+          "operation_id": "G11:0",
+          "state": "PASS",
+          "artifact_status": "ALREADY_SATISFIED",
+          "sites": [
+            "p220"
+          ],
+          "failure_code": ""
+        },
+        "G11:B1:O2": {
+          "operation_id": "G11:1",
+          "state": "PASS",
+          "artifact_status": "EXPECTED_EFFECT_PRESENT",
+          "sites": [
+            "p220"
+          ],
+          "failure_code": ""
+        },
+        "G12:B1:O1": {
+          "operation_id": "G12:0",
+          "state": "FAIL",
+          "artifact_status": "MISSING_EFFECT",
+          "sites": [
+            "p221",
+            "p222"
+          ],
+          "failure_code": "CLAIM_OPERATION_NOT_PLANNED"
+        },
+        "G12:B1:O2": {
+          "operation_id": "G12:1",
+          "state": "OPEN",
+          "artifact_status": "UNPROVEN",
+          "sites": [],
+          "failure_code": "CLAIM_OPERATION_UNPROVEN"
+        },
+        "G13:B1:O1": {
+          "operation_id": "G13:0",
+          "state": "FAIL",
+          "artifact_status": "RESIDUAL_OLD_TEXT",
+          "sites": [
+            "p221",
+            "p222"
+          ],
+          "failure_code": "CLAIM_OPERATION_NOT_PLANNED"
+        },
+        "G14:B2:O1": {
+          "operation_id": "G14:3",
+          "state": "PASS",
+          "artifact_status": "EXPECTED_EFFECT_PRESENT",
+          "sites": [
+            "p224"
+          ],
+          "failure_code": ""
+        },
+        "G14:B2:O2": {
+          "operation_id": "G14:4",
+          "state": "PASS",
+          "artifact_status": "ALREADY_SATISFIED",
+          "sites": [
+            "p224"
+          ],
+          "failure_code": ""
+        },
+        "G14:B2:O3": {
+          "operation_id": "G14:5",
+          "state": "PASS",
+          "artifact_status": "ALREADY_SATISFIED",
+          "sites": [
+            "p224"
+          ],
+          "failure_code": ""
+        },
+        "G15:B1:O1": {
+          "operation_id": "G15:0",
+          "state": "PASS",
+          "artifact_status": "VERIFIED_ABSENT",
+          "sites": [
+            "p1306",
+            "p822"
+          ],
+          "failure_code": ""
+        },
+        "G16:B1:O1": {
+          "operation_id": "G16:0",
+          "state": "OPEN",
+          "artifact_status": "UNPROVEN",
+          "sites": [],
+          "failure_code": "CLAIM_OPERATION_UNPROVEN"
+        },
+        "G17:B1:O1": {
+          "operation_id": "G17:0",
+          "state": "FAIL",
+          "artifact_status": "RESIDUAL_OLD_TEXT",
+          "sites": [
+            "p1307",
+            "p1308",
+            "p823",
+            "p824"
+          ],
+          "failure_code": "CLAIM_OPERATION_NOT_PLANNED"
+        },
+        "G18:B1:O1": {
+          "operation_id": "G18:0",
+          "state": "PASS",
+          "artifact_status": "EXPECTED_EFFECT_PRESENT",
+          "sites": [
+            "p1261",
+            "p845"
+          ],
+          "failure_code": ""
+        },
+        "G22:B1:O1": {
+          "operation_id": "G22:0",
+          "state": "PASS",
+          "artifact_status": "EXPECTED_EFFECT_PRESENT",
+          "sites": [
+            "p1000",
+            "p1399"
+          ],
+          "failure_code": ""
+        }
+      },
+      "failures": [
+        {
+          "rule_id": "G01",
+          "operation_id": "G01:0",
+          "obligation_id": "G01:B1:O1",
+          "location": "p91",
+          "code": "CLAIM_OPERATION_NOT_PLANNED",
+          "reason": "operation effect is not proven at every verified site"
+        },
+        {
+          "rule_id": "G06",
+          "operation_id": "G06:0",
+          "obligation_id": "G06:B1:O1",
+          "location": "",
+          "code": "CLAIM_OPERATION_UNPROVEN",
+          "reason": "verified site missing"
+        },
+        {
+          "rule_id": "G12",
+          "operation_id": "G12:0",
+          "obligation_id": "G12:B1:O1",
+          "location": "p221",
+          "code": "CLAIM_OPERATION_NOT_PLANNED",
+          "reason": "operation effect is not proven at every verified site"
+        },
+        {
+          "rule_id": "G12",
+          "operation_id": "G12:1",
+          "obligation_id": "G12:B1:O2",
+          "location": "",
+          "code": "CLAIM_OPERATION_UNPROVEN",
+          "reason": "verified site missing"
+        },
+        {
+          "rule_id": "G13",
+          "operation_id": "G13:0",
+          "obligation_id": "G13:B1:O1",
+          "location": "p221",
+          "code": "CLAIM_OPERATION_NOT_PLANNED",
+          "reason": "operation effect is not proven at every verified site"
+        },
+        {
+          "rule_id": "G16",
+          "operation_id": "G16:0",
+          "obligation_id": "G16:B1:O1",
+          "location": "",
+          "code": "CLAIM_OPERATION_UNPROVEN",
+          "reason": "verified site missing"
+        },
+        {
+          "rule_id": "G17",
+          "operation_id": "G17:0",
+          "obligation_id": "G17:B1:O1",
+          "location": "p823",
+          "code": "CLAIM_OPERATION_NOT_PLANNED",
+          "reason": "operation effect is not proven at every verified site"
+        },
+        {
+          "rule_id": "G17",
+          "operation_id": "G17:0",
+          "obligation_id": "G17:B1:O1",
+          "location": "p823",
+          "code": "RESIDUAL_OLD_TEXT",
+          "proof_kind": "RESIDUAL_CONFIRMED",
+          "scan": "known_site",
+          "reason": "exact old effect survives at this operation's business site",
+          "quote": "销售服务费主要用于支付销售机构佣金、以及基金管理人的基金行销广告费、促销活动费、基金份额持有人服务费等。"
+        },
+        {
+          "rule_id": "G17",
+          "operation_id": "G17:0",
+          "obligation_id": "G17:B1:O1",
+          "location": "p824",
+          "code": "RESIDUAL_OLD_TEXT",
+          "proof_kind": "RESIDUAL_CONFIRMED",
+          "scan": "known_site",
+          "reason": "exact old effect survives at this operation's business site",
+          "quote": "销售服务费使用范围不包括基金募集期间的上述费用。"
+        },
+        {
+          "rule_id": "G17",
+          "operation_id": "G17:0",
+          "obligation_id": "G17:B1:O1",
+          "location": "p1307",
+          "code": "RESIDUAL_OLD_TEXT",
+          "proof_kind": "RESIDUAL_CONFIRMED",
+          "scan": "known_site",
+          "reason": "exact old effect survives at this operation's business site",
+          "quote": "销售服务费主要用于支付销售机构佣金、以及基金管理人的基金行销广告费、促销活动费、基金份额持有人服务费等。"
+        },
+        {
+          "rule_id": "G17",
+          "operation_id": "G17:0",
+          "obligation_id": "G17:B1:O1",
+          "location": "p1308",
+          "code": "RESIDUAL_OLD_TEXT",
+          "proof_kind": "RESIDUAL_CONFIRMED",
+          "scan": "known_site",
+          "reason": "exact old effect survives at this operation's business site",
+          "quote": "销售服务费使用范围不包括基金募集期间的上述费用。"
+        }
+      ]
+    }
+  }
+}

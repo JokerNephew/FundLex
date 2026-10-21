@@ -1,0 +1,156 @@
+{
+  "reviewed_head": "682e68a5b3ef2a58feb77460af70afabdb314379",
+  "case": "D02",
+  "created_at": "2026-10-21T17:19:04.314379+00:00",
+  "network_ban": [
+    "httpx.Client.send",
+    "httpx.AsyncClient.send",
+    "ModelGateway.from_env"
+  ],
+  "stages": [
+    {
+      "stage": "facts",
+      "revision": 0,
+      "state": "PASS",
+      "same_head": true,
+      "model_calls": 0,
+      "cassette_replays": 0,
+      "repeat_semantics_equal": true,
+      "value_sha256": "bf33a28a71f30f65d8f8a930bd6005873947442019a4d97e4a86f05a8067a80a",
+      "seconds": 1.203
+    },
+    {
+      "stage": "applicability",
+      "revision": 0,
+      "state": "PASS",
+      "same_head": true,
+      "model_calls": 0,
+      "cassette_replays": 0,
+      "repeat_semantics_equal": true,
+      "value_sha256": "2843614439184fd764e1bd1c17e6323a08aced6a637b35052bc9c7da99ee67e4",
+      "seconds": 1.173
+    },
+    {
+      "stage": "targets",
+      "revision": 0,
+      "state": "PASS",
+      "same_head": true,
+      "model_calls": 0,
+      "cassette_replays": 0,
+      "repeat_semantics_equal": true,
+      "value_sha256": "eebe4fc13b16d9ed0ca6a9474fa1f4b2572a7679b33caaf575ed0cb091efa766",
+      "seconds": 1.127
+    },
+    {
+      "stage": "obligations",
+      "revision": 0,
+      "state": "PASS",
+      "same_head": true,
+      "model_calls": 0,
+      "cassette_replays": 0,
+      "repeat_semantics_equal": true,
+      "value_sha256": "2801397c4975814a90cee895e8801c501c73e6286f15bcd6110dd7c50a253655",
+      "seconds": 1.243
+    },
+    {
+      "stage": "plan",
+      "revision": 0,
+      "state": "PASS",
+      "same_head": true,
+      "model_calls": 0,
+      "cassette_replays": 4,
+      "repeat_semantics_equal": true,
+      "value_sha256": "631eddc15d0de3035fe09daa072b92bb4ee99b9c91e5d22e0dbbd7c1b2278ef3",
+      "seconds": 1.25
+    },
+    {
+      "stage": "claim_replay",
+      "revision": 0,
+      "state": "PASS",
+      "same_head": true,
+      "model_calls": 0,
+      "cassette_replays": 0,
+      "repeat_semantics_equal": true,
+      "value_sha256": "0e0513157bdd402a2b1799a3dbae5e563921a94b16c450a41f771cea1b612a85",
+      "seconds": 2.821,
+      "verified": false,
+      "failure_count": 12
+    },
+    {
+      "stage": "plan",
+      "revision": 1,
+      "state": "PASS",
+      "same_head": true,
+      "model_calls": 0,
+      "cassette_replays": 0,
+      "repeat_semantics_equal": true,
+      "value_sha256": "5f79d7730dd7fc24d5b172a2716e554d3977400875bdb84ee8593d21d9170beb",
+      "seconds": 1.205
+    },
+    {
+      "stage": "plan",
+      "revision": 2,
+      "state": "PASS",
+      "same_head": true,
+      "model_calls": 0,
+      "cassette_replays": 0,
+      "repeat_semantics_equal": true,
+      "value_sha256": "5f79d7730dd7fc24d5b172a2716e554d3977400875bdb84ee8593d21d9170beb",
+      "seconds": 1.227
+    },
+    {
+      "stage": "claim_replay",
+      "revision": 1,
+      "state": "PASS",
+      "same_head": true,
+      "model_calls": 0,
+      "cassette_replays": 0,
+      "repeat_semantics_equal": true,
+      "value_sha256": "0e0513157bdd402a2b1799a3dbae5e563921a94b16c450a41f771cea1b612a85",
+      "seconds": 2.891,
+      "verified": false,
+      "failure_count": 12
+    }
+  ],
+  "frozen_integrity": "PASS",
+  "missing_revision": {
+    "state": "PASS",
+    "error": "FROZEN_STAGE_INPUT_MISSING:plan-99.json"
+  },
+  "real_cassette_hit": {
+    "state": "PASS",
+    "client_is_none": true,
+    "attempts": 0,
+    "task_type": "recall_audit"
+  },
+  "cassette_miss": {
+    "state": "PASS",
+    "error": "MODEL_REPLAY_MISS",
+    "http_attempts": 0,
+    "client_is_none": true
+  },
+  "record_reference_comparison": {
+    "facts": {
+      "entire_value_equal": true
+    },
+    "applicability": {
+      "entire_value_equal": true
+    },
+    "targets": {
+      "entire_value_equal": false
+    },
+    "obligations": {
+      "entire_value_equal": true
+    },
+    "plan": {
+      "entire_value_equal": false
+    },
+    "claim_replay": {
+      "verified": true,
+      "failures": true,
+      "obligations": true
+    }
+  },
+  "network_attempts": 0,
+  "elapsed_seconds": 14.208
+}

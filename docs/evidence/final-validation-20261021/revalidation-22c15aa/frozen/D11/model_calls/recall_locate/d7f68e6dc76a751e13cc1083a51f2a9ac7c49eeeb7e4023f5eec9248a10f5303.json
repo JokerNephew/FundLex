@@ -1,0 +1,61 @@
+{
+  "body": {
+    "schema_version": "fundlex-model-cassette-v1",
+    "request": {
+      "task_type": "recall_locate",
+      "prompt_version": "recall_locate_v1",
+      "configured_model": "deepseek-v4.1-flash",
+      "context_sha256": "6eb3ab0e06d5ebde5a33faa34d5ec0a726ff2b9664b6f247e0b30d5d6fcf431f",
+      "request": {
+        "bounded_context": "CANDIDATE_PARAGRAPHS\n[p1102] 对基金合同当事人权利和义务产生重大影响的其他事项； \n[p1103] 法律法规、《基金合同》或中国证监会规定的其他应当召开基金份额\n[p1104] 持有人大会的事项。 \n[p1105] 2、在不违反有关法律法规和《基金合同》约定，并对基金份额持有人利益\n[p1106] 无实质性不利影响的前提下，以下情况可由基金管理人和基金托管人协商后修改，不需召开基金份额持有人大会： \n[p1107] 法律法规要求增加的基金费用的收取； \n[p1108] 在法律法规和《基金合同》规定的范围内调整本基金的申购费率、调\n[p1109] 低赎回费率或变更收费方式，调低基金的销售服务费率或调整基金份额类别设置； \n[p1110] 因相应的法律法规发生变动而应当对《基金合同》进行修改； \n[p1111] 对《基金合同》的修改对基金份额持有人利益无实质性不利影响或修改不涉及《基金合同》当事人权利义务关系发生变化； \n[p1112] 《基金合同》明确约定无需召开基金份额持有人大会的情况； \n[p1113] 基金管理人、登记机构、基金销售机构在法律法规规定或中国证监会许可的范围内调整有关认购、申购、赎回、转换、基金交易、非交易过户、转托管等业务规则； \n[p1114] 基金推出新业务或服务； \n\nGUIDE_OPERATION\nGUIDE_RULES\n[G05] 基金的基本情况-份额类别设置： | section_hint=基金的基本情况\n  requirement: 对原条款进行调整：如果有收取销售服务费的份额类别，则将其中的“调低赎回费率”改为“调低销售服务费率”，否则直接删除“、调低赎回费率”；并删除“并报中国证监会备案”。\n  [G05:0] replace: 调低赎回费率 -> 调低销售服务费率\n  [G05:1] delete: 、调低赎回费率\n  [G05:2] delete: 并报中国证监会备案\n\nFACTS\n{\"fund_type\": \"open_regular\", \"fund_type_quote\": \"基金的运作方式契约型开放式\", \"fund_type_basis\": \"债券型证券投资基金，契约型开放式运作，非ETF、非联接基金、非货币市场、非QDII、非REITs。\", \"class_count\": 3, \"classes\": [{\"name\": \"A类\", \"subscription_fee\": true, \"service_fee\": false, \"current\": true, \"rate\": null, \"quote\": \"在投资者申购 A 类及 D 类基金份额时收取申购费用，不计提销售服务费\"}, {\"name\": \"C类\", \"subscription_fee\": false, \"service_fee\": true, \"current\": true, \"rate\": null, \"quote\": \"在投资者申购 C 类基金份额时不收取申购费用，而从本类别基金资产中计提销售服务费\"}, {\"name\": \"D类\", \"subscription_fee\": true, \"service_fee\": false, \"current\": true, \"rate\": null, \"quote\": \"在投资者申购 A 类及 D 类基金份额时收取申购费用，不计提销售服务费\"}], \"subscription_group\": [\"A类\", \"D类\"], \"service_group\": [\"C类\"], \"share_class_structure\": \"MULTIPLE\", \"direct_sales_exempt_group\": [], \"other_sales_charged_group\": [], \"fact_status\": {\"fund_type\": \"VERIFIED\", \"share_class_structure\": \"VERIFIED\", \"subscription_fee_group\": \"VERIFIED\", \"service_fee_group\": \"VERIFIED\", \"direct_sales_exempt_group\": \"UNKNOWN\", \"other_sales_charged_group\": \"UNKNOWN\"}, \"condition_overrides\": {}, \"has_service_fee\": true, \"is_floating_fee\": false, \"floating_quote\": \"本基金的管理费按前一日基金资产净值的 0.25%年费率计提。\", \"floating_basis\": \"固定年费率管理费，未与持有期限或业绩挂钩。\", \"notes\": \"C类销售服务费年费率0.05%；A类、D类不收销售服务费。合同未就直销与其他销售渠道的申购费差异作出规定。\", \"quotes_verified\": {\"fund_type\": true, \"class:A类\": true, \"class:C类\": true, \"class:D类\": true, \"floating\": true, \"class_set\": true}, \"class_set_quote\": \"本基金将基金份额分为 A 类、C 类和 D 类三种不同的类别。在投资者申购 A 类及 D 类基金份额时收取申购费用，不计提销售服务费；在投资者申购 C 类基金份额时不收取申购费用，而从本类别基金资产中计提销售服务费。\", \"class_set_evidence\": {\"quote_verified\": true, \"set_complete_verified\": true, \"parsed_classes\": [\"A\", \"C\", \"D\"], \"reason\": \"CLASS_SET_VERIFIED\"}, \"value_verified\": true, \"set_complete_verified\": true, \"fund_type_certification\": {}, \"channel_evidence\": {\"direct_sales_exempt\": \"\", \"other_sales_charged\": \"\"}, \"problems\": []}\n\nFAILED_QUOTE\n在法律法规和《基金合同》规定的范围内调整本基金的申购费率、调低赎回费率或变更收费方式，调低基金的销售服务费率或调整基金份额类别设置；",
+        "instruction": "The deterministic resolver could not bind this obligation to the contract. Read the candidate paragraphs and return the ONE paragraph location plus an exact contiguous quote from that paragraph that carries the obligation. Do not paraphrase, do not merge two paragraphs, and do not return offsets. If no paragraph carries it, return an empty quote and explain why. semantic_role states what the clause does (for example class_definition, subscription_fee, payment_mechanism).",
+        "response_schema": {
+          "type": "object",
+          "required": [
+            "location",
+            "quote",
+            "semantic_role",
+            "reason"
+          ],
+          "properties": {
+            "location": {
+              "type": "string"
+            },
+            "quote": {
+              "type": "string"
+            },
+            "semantic_role": {
+              "type": "string"
+            },
+            "reason": {
+              "type": "string"
+            }
+          }
+        },
+        "request_options": {
+          "thinking": {
+            "type": "disabled"
+          }
+        },
+        "max_completion_tokens": 8000
+      }
+    },
+    "response": {
+      "location": "p1108-p1109",
+      "quote": "在法律法规和《基金合同》规定的范围内调整本基金的申购费率、调\n低赎回费率或变更收费方式，调低基金的销售服务费率或调整基金份额类别设置；",
+      "semantic_role": "shareholder_meeting_exemption",
+      "reason": "该段落列举了无需召开基金份额持有人大会即可由管理人和托管人协商修改的事项，其中包含调整申购费率、调低赎回费率或变更收费方式等收费相关事项，承载了该义务/规则。"
+    },
+    "event": {
+      "task_type": "recall_locate",
+      "prompt_version": "recall_locate_v1",
+      "context_sha256": "6eb3ab0e06d5ebde5a33faa34d5ec0a726ff2b9664b6f247e0b30d5d6fcf431f",
+      "configured_model": "deepseek-v4.1-flash",
+      "actual_model": "deepseek-v4.1-flash",
+      "http_status": 200,
+      "finish_reason": "stop",
+      "error_code": null
+    }
+  },
+  "sha256": "22cc36ec63336323b9ec1813d881582d172d91f928a7a0732f1ad13cd438ab9e"
+}

@@ -1,0 +1,1536 @@
+{
+  "rounds": [
+    {
+      "rules": [
+        "G01",
+        "G03",
+        "G05",
+        "G08",
+        "G09",
+        "G11",
+        "G12",
+        "G13",
+        "G14",
+        "G15",
+        "G16",
+        "G17",
+        "G18",
+        "G22"
+      ],
+      "results": [
+        {
+          "target_id": "S03_S04_S07_S16_S17_S20#1:T010",
+          "rule_id": "G01",
+          "verdict": "incomplete",
+          "reason": "The AFTER text at p93 is identical to BEFORE; the required new clause on direct-sales fee waivers (A类 no subscription fee via 直销机构, C类 no sales service fee via 直销机构, and C类 held over one year via other distributors no longer charged) was not appended.",
+          "evidence_quote": "在投资者认购、申购基金份额时不收取认购、申购费用，而是从本类别基金资产中计提销售服务费的，称为 C 类基金份额",
+          "evidence_verified": true,
+          "deletion_evidence": false,
+          "deterministic": false,
+          "failure_class": "GENERATION",
+          "affected_fact": "",
+          "affected_obligation": "G01:0 append 直销机构申购A类不收取认购/申购费用、直销机构C类不收取销售服务费、其他销售机构C类持有超一年不再收取销售服务费的新条款",
+          "site_signature": "b6ce54467174d7aea94c7d99292873afd4b05ba09719dd94cfa87a2a781584e4"
+        },
+        {
+          "target_id": "S03_S04_S07_S16_S17_S20#1:T008",
+          "rule_id": "G03",
+          "verdict": "completed",
+          "reason": "AFTER 在份额类别设置条款之后追加了 G03 要求的新条款，内容与要求文本一致：直销机构申购 A 类不收取认购/申购费用、直销机构申购 C 类不收取销售服务费、其他销售机构申购 C 类持续持有超过一年不再收取销售服务费。",
+          "evidence_quote": "投资者通过直销机构（含基金管理人及其销售子公司，下同）申购本基金A类基金份额时，不收取认购/申购费用；通过直销机构申购的C类基金份额，不收取销售服务费。对于投资者通过直销机构之外的其他销售机构申购的C类基金份额且持续持有期限超过一年的，不再继续收取销售服务费。",
+          "evidence_verified": true,
+          "deletion_evidence": false,
+          "deterministic": false,
+          "failure_class": "",
+          "affected_fact": "",
+          "affected_obligation": "",
+          "site_signature": "6ab1e35fb2dea0eb229f6586084bd9d7bc6786e57de4b178f774089d1805153f"
+        },
+        {
+          "target_id": "S03_S04_S07_S16_S17_S20#1:T001",
+          "rule_id": "G05",
+          "verdict": "completed",
+          "reason": "AFTER 将“调低赎回费率”替换为“调低销售服务费率”，符合 G05 的替换要求，且未丢失内容。",
+          "evidence_quote": "调低销售服务费率或变更收费方式",
+          "evidence_verified": true,
+          "deletion_evidence": false,
+          "deterministic": false,
+          "failure_class": "",
+          "affected_fact": "",
+          "affected_obligation": "",
+          "site_signature": "24b7c11a5a890ecee315564093b75f99c46fa53e4a8f0717257b812d0bc8e601"
+        },
+        {
+          "target_id": "S03_S04_S07_S16_S17_S20#1:T014",
+          "rule_id": "G08",
+          "verdict": "completed",
+          "reason": "AFTER replaces the original sentence with the required text: A类 charges purchase fee, C类 does not, direct-sales channel A类 exempt, other sales agencies rate decided by manager and disclosed in prospectus. All required content present, no lost content.",
+          "evidence_quote": "本基金A类基金份额在申购时收取申购费用，C类基金份额不收取申购费用。通过直销机构申购本基金A类基金份额不收取申购费。通过直销机构以外的其他销售机构申购本基金的申购费率由基金管理人决定，并在招募说明书中列示。",
+          "evidence_verified": true,
+          "deletion_evidence": false,
+          "deterministic": false,
+          "failure_class": "",
+          "affected_fact": "",
+          "affected_obligation": "",
+          "site_signature": "5b647c189eb5e09c1ef127010bf92b62be91cef7dba23893f4cdd5e3eed3f63b"
+        },
+        {
+          "target_id": "S03_S04_S07_S16_S17_S20#1:T019",
+          "rule_id": "G09",
+          "verdict": "completed",
+          "reason": "AFTER 将“扣除相应的费用”改为“扣除或加上相应的费用”，与 G09 要求的替换文本完全一致，且未丢失其他内容。",
+          "evidence_quote": "赎回金额为按实际确认的有效赎回份额乘以当日该类基金份额的基金份额净值并扣除或加上相应的费用，赎回金额单位为元。",
+          "evidence_verified": true,
+          "deletion_evidence": false,
+          "deterministic": false,
+          "failure_class": "",
+          "affected_fact": "",
+          "affected_obligation": "",
+          "site_signature": "6aaf6b60f36c095e5f6312ed9a0d5d69cf3ca1c759245ed1c67747d337bd6326"
+        },
+        {
+          "target_id": "S03_S04_S07_S16_S17_S20#1:T006",
+          "rule_id": "G11",
+          "verdict": "wrong",
+          "reason": "The replacement text is duplicated and garbled: the phrase '通过直销机构申购本基金A类基金份额不收取申购费，通过其他销售机构申购本基金A类基金份额的' appears twice, and '本基金C类基金份额不收取申购费用。' is repeated. The required single clean sentence is not produced, so the clause is corrupted rather than correctly replaced.",
+          "evidence_quote": "通过直销机构申购本基金A类基金份额不收取申购费，通过其他销售机构申购本基金A类基金份额的通过直销机构申购本基金A类基金份额不收取申购费，通过其他销售机构申购本基金A类基金份额的申购费用由投资人承担，不列入基金财产。",
+          "evidence_verified": true,
+          "deletion_evidence": false,
+          "deterministic": false,
+          "failure_class": "GENERATION",
+          "affected_fact": "",
+          "affected_obligation": "G11:0 replace with single clean 直销机构免申购费 clause",
+          "site_signature": "dbc918fa4b6e3de73dae70e3789882e9c54bee6a224374eb2d85e5b134241902"
+        },
+        {
+          "target_id": "S03_S04_S07_S16_S17_S20#1:T007",
+          "rule_id": "G11",
+          "verdict": "wrong",
+          "reason": "Same duplicated/garbled replacement; the required text is repeated and the C类 sentence is duplicated, so the replacement is not the clean required clause.",
+          "evidence_quote": "本基金C类基金份额不收取申购费用。本基金C类基金份额不收取申购费用。",
+          "evidence_verified": true,
+          "deletion_evidence": false,
+          "deterministic": false,
+          "failure_class": "GENERATION",
+          "affected_fact": "",
+          "affected_obligation": "G11:1 replace with single clean 直销机构免申购费 clause",
+          "site_signature": "dbc918fa4b6e3de73dae70e3789882e9c54bee6a224374eb2d85e5b134241902"
+        },
+        {
+          "target_id": "S03_S04_S07_S16_S17_S20#1:T020",
+          "rule_id": "G12",
+          "verdict": "completed",
+          "reason": "AFTER 与 G12 要求的替换文本完全一致：保留了持有人承担及收取时点的表述，并将归入比例、登记费等表述替换为“赎回费用全额计入基金财产”。",
+          "evidence_quote": "赎回费用由赎回基金份额的基金份额持有人承担，在基金份额持有人赎回基金份额时收取。赎回费用全额计入基金财产。",
+          "evidence_verified": true,
+          "deletion_evidence": false,
+          "deterministic": false,
+          "failure_class": "",
+          "affected_fact": "",
+          "affected_obligation": "",
+          "site_signature": "122888b172fe49a537f9bf293681cda2ecbcea4d6fcfa2e7502466e28c4f48a8"
+        },
+        {
+          "target_id": "S03_S04_S07_S16_S17_S20#1:T022",
+          "rule_id": "G13",
+          "verdict": "completed",
+          "reason": "The required sentence about charging investors with holding periods under 7 days a redemption fee of at least 1.5% and including it fully in fund assets has been removed; the AFTER text no longer contains that clause.",
+          "evidence_quote": "赎回费用全额计入基金财产。",
+          "evidence_verified": true,
+          "deletion_evidence": false,
+          "deterministic": false,
+          "failure_class": "",
+          "affected_fact": "",
+          "affected_obligation": "",
+          "site_signature": "df859a37d7fd893f4363d1036d407ce21f6f796af0ff3cecb8850de0a4997330"
+        },
+        {
+          "target_id": "S03_S04_S07_S16_S17_S20#1:T026",
+          "rule_id": "G14",
+          "verdict": "completed",
+          "reason": "AFTER 将原句替换为“基金管理人可以适当调低基金申购费率和销售服务费率。”，与多份额类别规则 G14:5 的目标文本一致，且未丢失其他内容。",
+          "evidence_quote": "基金管理人可以适当调低基金申购费率和销售服务费率。",
+          "evidence_verified": true,
+          "deletion_evidence": false,
+          "deterministic": false,
+          "failure_class": "",
+          "affected_fact": "",
+          "affected_obligation": "",
+          "site_signature": "e81c205445e2c26f1627813c7efd8597e4ea6f340e7ea150fe45d6db30ffd70a"
+        },
+        {
+          "target_id": "S25_S26#1:T008",
+          "rule_id": "G15",
+          "verdict": "completed",
+          "reason": "The old payment clause in p1287 was replaced; the AFTER text no longer contains the old '每日计算，逐日累计至每月月末' payment arrangement, and the replacement text is the G16-authorized new sales service fee clause. The deletion/replacement requirement is satisfied with no residual old wording.",
+          "evidence_quote": "销售服务费每日计提。（1）直销机构：对于投资者通过直销机构持有的C类基金份额计提的销售服务费，在投资者赎回C类基金份额或基金合同终止时，随赎回款（或清算款）一并返还给投资者。",
+          "evidence_verified": true,
+          "deletion_evidence": false,
+          "deterministic": false,
+          "failure_class": "",
+          "affected_fact": "",
+          "affected_obligation": "",
+          "site_signature": "107b364d788450d68c64a0ab121411893a2777e69aff5bb84464a658992efe5c"
+        },
+        {
+          "target_id": "Y004",
+          "rule_id": "G15",
+          "verdict": "completed",
+          "reason": "The old payment clause in p821 was replaced; the AFTER text no longer contains the old '每日计算，逐日累计至每月月末' arrangement, and the replacement is the G16-authorized new clause. No residual old wording remains.",
+          "evidence_quote": "销售服务费每日计提。（1）直销机构：对于投资者通过直销机构持有的C类基金份额计提的销售服务费，在投资者赎回C类基金份额或基金合同终止时，随赎回款（或清算款）一并返还给投资者。",
+          "evidence_verified": true,
+          "deletion_evidence": false,
+          "deterministic": false,
+          "failure_class": "",
+          "affected_fact": "",
+          "affected_obligation": "",
+          "site_signature": "107b364d788450d68c64a0ab121411893a2777e69aff5bb84464a658992efe5c"
+        },
+        {
+          "target_id": "S25_S26#1:T019",
+          "rule_id": "G16",
+          "verdict": "completed",
+          "reason": "AFTER at p1287 contains the full G16 appended text: daily accrual, direct-sales C-class refund, subsidiary rule, other-agency monthly payment with 5 working days and deferral, and refund after one year. The original payment clause was replaced by the authorized G15 deletion, and the G16 insertion is present verbatim.",
+          "evidence_quote": "销售服务费每日计提。（1）直销机构：对于投资者通过直销机构持有的C类基金份额计提的销售服务费，在投资者赎回C类基金份额或基金合同终止时，随赎回款（或清算款）一并返还给投资者。",
+          "evidence_verified": true,
+          "deletion_evidence": false,
+          "deterministic": false,
+          "failure_class": "",
+          "affected_fact": "",
+          "affected_obligation": "",
+          "site_signature": "f7c651622fda611e0ed756a8a8d6f83ed9ad516dce60718e57081df9cb5ef529"
+        },
+        {
+          "target_id": "S25_S26#1:T019-D2",
+          "rule_id": "G16",
+          "verdict": "completed",
+          "reason": "AFTER at p821 contains the same full G16 appended text, matching the required wording including the other-agency monthly payment and over-one-year refund provisions.",
+          "evidence_quote": "（2）直销机构以外的其他销售机构：对于投资者持续持有期限未超过一年（即365天，下同）的基金份额收取的销售服务费，按月支付，基金托管人按照与基金管理人协商一致的方式于次月首日起5个工作日内按照指定的账户路径进行支付。",
+          "evidence_verified": true,
+          "deletion_evidence": false,
+          "deterministic": false,
+          "failure_class": "",
+          "affected_fact": "",
+          "affected_obligation": "",
+          "site_signature": "f7c651622fda611e0ed756a8a8d6f83ed9ad516dce60718e57081df9cb5ef529"
+        },
+        {
+          "target_id": "S25_S26#1:T011",
+          "rule_id": "G17",
+          "verdict": "wrong",
+          "reason": "G17 requires deletion of the sales service fee clause; the AFTER text at p1288 still contains the full clause unchanged, so the deletion was not performed.",
+          "evidence_quote": "销售服务费主要用于支付销售机构佣金，及基金管理人的基金行销广告费、促销活动费、基金份额持有人服务费等。",
+          "evidence_verified": true,
+          "deletion_evidence": false,
+          "deterministic": false,
+          "failure_class": "EXECUTION",
+          "affected_fact": "",
+          "affected_obligation": "删除销售服务费用途条款",
+          "site_signature": "5d63fdb1b319345026cfa746c18e6e1eea7c127504491a3172ea9256a56365ef"
+        },
+        {
+          "target_id": "Y006",
+          "rule_id": "G17",
+          "verdict": "wrong",
+          "reason": "G17 requires deletion of the sales service fee clause; the AFTER text at p822 still contains the clause unchanged.",
+          "evidence_quote": "销售服务费主要用于支付销售机构佣金，及基金管理人的基金行销广告费、促销活动费、基金份额持有人服务费等。",
+          "evidence_verified": true,
+          "deletion_evidence": false,
+          "deterministic": false,
+          "failure_class": "EXECUTION",
+          "affected_fact": "",
+          "affected_obligation": "删除销售服务费用途条款",
+          "site_signature": "5d63fdb1b319345026cfa746c18e6e1eea7c127504491a3172ea9256a56365ef"
+        },
+        {
+          "target_id": "Y007",
+          "rule_id": "G17",
+          "verdict": "wrong",
+          "reason": "G17 requires deletion of the sales service fee clause; the AFTER text at p1288 still contains the clause unchanged.",
+          "evidence_quote": "销售服务费主要用于支付销售机构佣金，及基金管理人的基金行销广告费、促销活动费、基金份额持有人服务费等。",
+          "evidence_verified": true,
+          "deletion_evidence": false,
+          "deterministic": false,
+          "failure_class": "EXECUTION",
+          "affected_fact": "",
+          "affected_obligation": "删除销售服务费用途条款",
+          "site_signature": "5d63fdb1b319345026cfa746c18e6e1eea7c127504491a3172ea9256a56365ef"
+        },
+        {
+          "target_id": "DEL001",
+          "rule_id": "G17",
+          "verdict": "wrong",
+          "reason": "G17 requires deletion of the sales service fee scope clause; the AFTER text at p823 still contains it unchanged.",
+          "evidence_quote": "销售服务费使用范围不包括基金募集期间的上述费用。",
+          "evidence_verified": true,
+          "deletion_evidence": false,
+          "deterministic": false,
+          "failure_class": "EXECUTION",
+          "affected_fact": "",
+          "affected_obligation": "删除销售服务费使用范围条款",
+          "site_signature": "5d63fdb1b319345026cfa746c18e6e1eea7c127504491a3172ea9256a56365ef"
+        },
+        {
+          "target_id": "DEL002",
+          "rule_id": "G17",
+          "verdict": "wrong",
+          "reason": "G17 requires deletion of the sales service fee scope clause; the AFTER text at p1289 still contains it unchanged.",
+          "evidence_quote": "销售服务费使用范围不包括基金募集期间的上述费用。",
+          "evidence_verified": true,
+          "deletion_evidence": false,
+          "deterministic": false,
+          "failure_class": "EXECUTION",
+          "affected_fact": "",
+          "affected_obligation": "删除销售服务费使用范围条款",
+          "site_signature": "5d63fdb1b319345026cfa746c18e6e1eea7c127504491a3172ea9256a56365ef"
+        },
+        {
+          "target_id": "S03_S04_S07_S16_S17_S20#1:T015",
+          "rule_id": "G18",
+          "verdict": "completed",
+          "reason": "AFTER at p848 replaces the sales-service-fee wording with the required fee-difference wording, matching G18:0 exactly.",
+          "evidence_quote": "由于本基金A类基金份额和C类基金份额费用收取不同",
+          "evidence_verified": true,
+          "deletion_evidence": false,
+          "deterministic": false,
+          "failure_class": "",
+          "affected_fact": "",
+          "affected_obligation": "",
+          "site_signature": "6100f476552f8ead6ee73d3048e84637dea63f40e310022df830737c6dfaf3ae"
+        },
+        {
+          "target_id": "S25_S26#1:T013",
+          "rule_id": "G18",
+          "verdict": "completed",
+          "reason": "AFTER at p1257 contains the full clause with the required replacement wording, preserving the surrounding distribution-rights text.",
+          "evidence_quote": "本基金同一类别的每一基金份额享有同等分配权。由于本基金A类基金份额和C类基金份额费用收取不同，各基金份额类别对应的可分配收益将有所不同；",
+          "evidence_verified": true,
+          "deletion_evidence": false,
+          "deterministic": false,
+          "failure_class": "",
+          "affected_fact": "",
+          "affected_obligation": "",
+          "site_signature": "6100f476552f8ead6ee73d3048e84637dea63f40e310022df830737c6dfaf3ae"
+        },
+        {
+          "target_id": "S03_S04_S07_S16_S17_S20#1:T025",
+          "rule_id": "G22",
+          "verdict": "completed",
+          "reason": "p1001 已按 G22 替换为含“按基金份额持有人持有的基金份额比例进行分配，并加上返还基金份额持有人的销售服务费（如有）”的完整新条款，无内容丢失。",
+          "evidence_quote": "依据基金财产清算的分配方案，将基金财产清算后的全部剩余资产扣除基金财产清算费用、交纳所欠税款并清偿基金债务后，按基金份额持有人持有的基金份额比例进行分配，并加上返还基金份额持有人的销售服务费（如有）。",
+          "evidence_verified": true,
+          "deletion_evidence": false,
+          "deterministic": false,
+          "failure_class": "",
+          "affected_fact": "",
+          "affected_obligation": "",
+          "site_signature": "3c574980ff15aef70fdd6d384353e6c34891a7f24a13eb356f5f8bcc44ba35c8"
+        },
+        {
+          "target_id": "Y008",
+          "rule_id": "G22",
+          "verdict": "wrong",
+          "reason": "p1371 虽已替换为正确新条款，但末尾残留了原文的“配。”，形成“（如有）。配。”的重复/残留文字，属于生成执行错误，条款文本不干净。",
+          "evidence_quote": "并加上返还基金份额持有人的销售服务费（如有）。配。",
+          "evidence_verified": true,
+          "deletion_evidence": false,
+          "deterministic": false,
+          "failure_class": "GENERATION",
+          "affected_fact": "",
+          "affected_obligation": "G22 替换条款文本应完整且无残留字符",
+          "site_signature": "3c574980ff15aef70fdd6d384353e6c34891a7f24a13eb356f5f8bcc44ba35c8"
+        }
+      ],
+      "missed_targets": [],
+      "dropped": [],
+      "artifact_failures": [
+        {
+          "rule_id": "",
+          "location": "p1001",
+          "locations": [
+            "p1001",
+            "p1371"
+          ],
+          "code": "DUPLICATE_SITE_DIVERGED",
+          "reason": "identical clause copies were edited to different content"
+        },
+        {
+          "rule_id": "G11",
+          "location": "p228",
+          "code": "CLAIM_JOINT_UNEXPLAINED_TEXT",
+          "joint": true,
+          "reason": "joint result introduced text not authorized by any selected operation"
+        },
+        {
+          "rule_id": "G11",
+          "location": "p228",
+          "code": "CLAIM_JOINT_VALIDATION_FAILED",
+          "joint": true,
+          "reason": "UNEXPLAINED_CHANGE",
+          "validator": {
+            "verdict": "PASS",
+            "findings": [],
+            "changes": [
+              {
+                "kind": "insert",
+                "before": "",
+                "after": "通过直销机构申购",
+                "explanation": "EXPLAINED",
+                "reason": "must_add"
+              },
+              {
+                "kind": "delete",
+                "before": " ",
+                "after": "",
+                "explanation": "EXPLAINED",
+                "reason": "authorized_replace"
+              },
+              {
+                "kind": "replace",
+                "before": " ",
+                "after": "类基金份额不收取申购费，通过其他销售机构申购本基金A类基金份额的通过直销机构申购本基金A类基金份额不收取申购费，通过其他销售机构申购本基金A",
+                "explanation": "UNEXPLAINED_SOFT",
+                "reason": "unexplained_paraphrase"
+              },
+              {
+                "kind": "delete",
+                "before": " ",
+                "after": "",
+                "explanation": "EXPLAINED",
+                "reason": "authorized_replace"
+              },
+              {
+                "kind": "replace",
+                "before": " ",
+                "after": "类基金份额不收取申购费用。本基金C",
+                "explanation": "UNEXPLAINED_SOFT",
+                "reason": "unexplained_paraphrase"
+              }
+            ]
+          }
+        },
+        {
+          "rule_id": "G01",
+          "operation_id": "G01:0",
+          "obligation_id": "G01:B1:O1",
+          "location": "p93",
+          "code": "CLAIM_OPERATION_NOT_PLANNED",
+          "reason": "operation effect is not proven at every verified site"
+        },
+        {
+          "rule_id": "G05",
+          "operation_id": "G05:2",
+          "obligation_id": "G05:B3:O1",
+          "location": "",
+          "code": "CLAIM_OPERATION_UNPROVEN",
+          "reason": "verified site missing"
+        },
+        {
+          "rule_id": "G06",
+          "operation_id": "G06:0",
+          "obligation_id": "G06:B1:O1",
+          "location": "",
+          "code": "CLAIM_OPERATION_UNPROVEN",
+          "reason": "verified site missing"
+        },
+        {
+          "rule_id": "G11",
+          "operation_id": "G11:0",
+          "obligation_id": "G11:B1:O1",
+          "location": "p228",
+          "code": "CLAIM_PLANNED_EFFECT_MISSING",
+          "reason": "operation effect is not proven at every verified site"
+        },
+        {
+          "rule_id": "G11",
+          "operation_id": "G11:1",
+          "obligation_id": "G11:B1:O2",
+          "location": "p228",
+          "code": "CLAIM_PLANNED_EFFECT_MISSING",
+          "reason": "operation effect is not proven at every verified site"
+        }
+      ],
+      "round": 0,
+      "scope": "full",
+      "issues": [
+        {
+          "code": "AUDIT_NOT_COMPLETED",
+          "rule_id": "G11",
+          "target_id": "S03_S04_S07_S16_S17_S20#1:T006",
+          "location": "p228",
+          "verdict": "wrong",
+          "reason": "The replacement text is duplicated and garbled: the phrase '通过直销机构申购本基金A类基金份额不收取申购费，通过其他销售机构申购本基金A类基金份额的' appears twice, and '本基金C类基金份额不收取申购费用。' is repeated. The required single clean sentence is not produced, so the clause is corrupted rather than correctly replaced.",
+          "evidence_verified": true,
+          "failure_class": "GENERATION",
+          "affected_fact": "",
+          "affected_obligation": "G11:0 replace with single clean 直销机构免申购费 clause"
+        },
+        {
+          "code": "AUDIT_NOT_COMPLETED",
+          "rule_id": "G11",
+          "target_id": "S03_S04_S07_S16_S17_S20#1:T007",
+          "location": "p228",
+          "verdict": "wrong",
+          "reason": "Same duplicated/garbled replacement; the required text is repeated and the C类 sentence is duplicated, so the replacement is not the clean required clause.",
+          "evidence_verified": true,
+          "failure_class": "GENERATION",
+          "affected_fact": "",
+          "affected_obligation": "G11:1 replace with single clean 直销机构免申购费 clause"
+        },
+        {
+          "code": "AUDIT_NOT_COMPLETED",
+          "rule_id": "G01",
+          "target_id": "S03_S04_S07_S16_S17_S20#1:T010",
+          "location": "p93",
+          "verdict": "incomplete",
+          "reason": "The AFTER text at p93 is identical to BEFORE; the required new clause on direct-sales fee waivers (A类 no subscription fee via 直销机构, C类 no sales service fee via 直销机构, and C类 held over one year via other distributors no longer charged) was not appended.",
+          "evidence_verified": true,
+          "failure_class": "GENERATION",
+          "affected_fact": "",
+          "affected_obligation": "G01:0 append 直销机构申购A类不收取认购/申购费用、直销机构C类不收取销售服务费、其他销售机构C类持有超一年不再收取销售服务费的新条款"
+        },
+        {
+          "code": "AUDIT_NOT_COMPLETED",
+          "rule_id": "G17",
+          "target_id": "S25_S26#1:T011",
+          "location": "p1288",
+          "verdict": "wrong",
+          "reason": "G17 requires deletion of the sales service fee clause; the AFTER text at p1288 still contains the full clause unchanged, so the deletion was not performed.",
+          "evidence_verified": true,
+          "failure_class": "EXECUTION",
+          "affected_fact": "",
+          "affected_obligation": "删除销售服务费用途条款"
+        },
+        {
+          "code": "AUDIT_NOT_COMPLETED",
+          "rule_id": "G17",
+          "target_id": "Y006",
+          "location": "p822",
+          "verdict": "wrong",
+          "reason": "G17 requires deletion of the sales service fee clause; the AFTER text at p822 still contains the clause unchanged.",
+          "evidence_verified": true,
+          "failure_class": "EXECUTION",
+          "affected_fact": "",
+          "affected_obligation": "删除销售服务费用途条款"
+        },
+        {
+          "code": "AUDIT_NOT_COMPLETED",
+          "rule_id": "G17",
+          "target_id": "Y007",
+          "location": "p1288",
+          "verdict": "wrong",
+          "reason": "G17 requires deletion of the sales service fee clause; the AFTER text at p1288 still contains the clause unchanged.",
+          "evidence_verified": true,
+          "failure_class": "EXECUTION",
+          "affected_fact": "",
+          "affected_obligation": "删除销售服务费用途条款"
+        },
+        {
+          "code": "AUDIT_NOT_COMPLETED",
+          "rule_id": "G22",
+          "target_id": "Y008",
+          "location": "p1371",
+          "verdict": "wrong",
+          "reason": "p1371 虽已替换为正确新条款，但末尾残留了原文的“配。”，形成“（如有）。配。”的重复/残留文字，属于生成执行错误，条款文本不干净。",
+          "evidence_verified": true,
+          "failure_class": "GENERATION",
+          "affected_fact": "",
+          "affected_obligation": "G22 替换条款文本应完整且无残留字符"
+        },
+        {
+          "code": "AUDIT_NOT_COMPLETED",
+          "rule_id": "G17",
+          "target_id": "DEL001",
+          "location": "p823",
+          "verdict": "wrong",
+          "reason": "G17 requires deletion of the sales service fee scope clause; the AFTER text at p823 still contains it unchanged.",
+          "evidence_verified": true,
+          "failure_class": "EXECUTION",
+          "affected_fact": "",
+          "affected_obligation": "删除销售服务费使用范围条款"
+        },
+        {
+          "code": "AUDIT_NOT_COMPLETED",
+          "rule_id": "G17",
+          "target_id": "DEL002",
+          "location": "p1289",
+          "verdict": "wrong",
+          "reason": "G17 requires deletion of the sales service fee scope clause; the AFTER text at p1289 still contains it unchanged.",
+          "evidence_verified": true,
+          "failure_class": "EXECUTION",
+          "affected_fact": "",
+          "affected_obligation": "删除销售服务费使用范围条款"
+        }
+      ],
+      "recovery_state_hashes": {
+        "targets_hash": "2e7a8faf02fe247c8f94c5232588e4a100e19d452c14eb17583428e7fd8b3601",
+        "plan_hash": "5bf788cc376fcfab0d7c755c96da1b80ecc4fa634cf5320a240c397639cf25ac",
+        "artifact_hash": "6deaf36f9320edca7e6949512438537576b746d208450450278849a96e67cfde",
+        "failures_hash": "ddd905473337329716cc49d95d2a4c23b1bfec150b95ae8c490523a7e5af257f",
+        "facts_hash": "3ea65742e50eaedc169e90fea87354cccdf42bc768c45627f4a6ea12674b6e70",
+        "applicability_hash": "6c99444f9f0c82bc5cb81ff5395717ee53fe6addb3bdfbde903d5cfb501b0623",
+        "scope_hash": "12d1df15d05c6a84a78c2b64f7d6bbdf63ef6eaaf7b62720d3d596b7a8d45c11",
+        "operation_coverage_hash": "7cf1492b661b84336a0ab0938c9c5fbbcbe1f459ba7ea4e2506641f622c97c96",
+        "final_edit_hash": "08e2cc61644df24dc24e23daa83a676b959f50179e96bf2c04695749ad3fb238"
+      }
+    },
+    {
+      "rules": [
+        "G01",
+        "G11",
+        "G17",
+        "G22"
+      ],
+      "results": [
+        {
+          "target_id": "S03_S04_S07_S16_S17_S20#1:T010",
+          "rule_id": "G01",
+          "verdict": "incomplete",
+          "reason": "The AFTER text at p93 is identical to BEFORE; the required new clause on direct-sales fee waivers (A类 no subscription fee via 直销机构, C类 no sales service fee via 直销机构, and C类 held over one year via other distributors no longer charged) was not appended.",
+          "evidence_quote": "在投资者认购、申购基金份额时不收取认购、申购费用，而是从本类别基金资产中计提销售服务费的，称为 C 类基金份额",
+          "evidence_verified": true,
+          "deletion_evidence": false,
+          "deterministic": false,
+          "failure_class": "GENERATION",
+          "affected_fact": "",
+          "affected_obligation": "G01:0 append 直销机构申购A类不收取认购/申购费用、直销机构C类不收取销售服务费、其他销售机构C类持有超一年不再收取销售服务费的新条款",
+          "site_signature": "b6ce54467174d7aea94c7d99292873afd4b05ba09719dd94cfa87a2a781584e4"
+        },
+        {
+          "target_id": "S03_S04_S07_S16_S17_S20#1:T006",
+          "rule_id": "G11",
+          "verdict": "wrong",
+          "reason": "The replacement text is duplicated and garbled: the phrase '通过直销机构申购本基金A类基金份额不收取申购费，通过其他销售机构申购本基金A类基金份额的' appears twice, and '本基金C类基金份额不收取申购费用。' is repeated. The required single clean sentence is not produced, so the clause is corrupted rather than correctly replaced.",
+          "evidence_quote": "通过直销机构申购本基金A类基金份额不收取申购费，通过其他销售机构申购本基金A类基金份额的通过直销机构申购本基金A类基金份额不收取申购费，通过其他销售机构申购本基金A类基金份额的申购费用由投资人承担，不列入基金财产。",
+          "evidence_verified": true,
+          "deletion_evidence": false,
+          "deterministic": false,
+          "failure_class": "GENERATION",
+          "affected_fact": "",
+          "affected_obligation": "G11:0 replace with single clean 直销机构免申购费 clause",
+          "site_signature": "dbc918fa4b6e3de73dae70e3789882e9c54bee6a224374eb2d85e5b134241902"
+        },
+        {
+          "target_id": "S03_S04_S07_S16_S17_S20#1:T007",
+          "rule_id": "G11",
+          "verdict": "wrong",
+          "reason": "Same duplicated/garbled replacement; the required text is repeated and the C类 sentence is duplicated, so the replacement is not the clean required clause.",
+          "evidence_quote": "本基金C类基金份额不收取申购费用。本基金C类基金份额不收取申购费用。",
+          "evidence_verified": true,
+          "deletion_evidence": false,
+          "deterministic": false,
+          "failure_class": "GENERATION",
+          "affected_fact": "",
+          "affected_obligation": "G11:1 replace with single clean 直销机构免申购费 clause",
+          "site_signature": "dbc918fa4b6e3de73dae70e3789882e9c54bee6a224374eb2d85e5b134241902"
+        },
+        {
+          "target_id": "S25_S26#1:T011",
+          "rule_id": "G17",
+          "verdict": "wrong",
+          "reason": "G17 requires deletion of the sales service fee clause; the AFTER text at p1288 still contains the full clause unchanged, so the deletion was not performed.",
+          "evidence_quote": "销售服务费主要用于支付销售机构佣金，及基金管理人的基金行销广告费、促销活动费、基金份额持有人服务费等。",
+          "evidence_verified": true,
+          "deletion_evidence": false,
+          "deterministic": false,
+          "failure_class": "EXECUTION",
+          "affected_fact": "",
+          "affected_obligation": "删除销售服务费用途条款",
+          "site_signature": "5d63fdb1b319345026cfa746c18e6e1eea7c127504491a3172ea9256a56365ef"
+        },
+        {
+          "target_id": "Y006",
+          "rule_id": "G17",
+          "verdict": "wrong",
+          "reason": "G17 requires deletion of the sales service fee clause; the AFTER text at p822 still contains the clause unchanged.",
+          "evidence_quote": "销售服务费主要用于支付销售机构佣金，及基金管理人的基金行销广告费、促销活动费、基金份额持有人服务费等。",
+          "evidence_verified": true,
+          "deletion_evidence": false,
+          "deterministic": false,
+          "failure_class": "EXECUTION",
+          "affected_fact": "",
+          "affected_obligation": "删除销售服务费用途条款",
+          "site_signature": "5d63fdb1b319345026cfa746c18e6e1eea7c127504491a3172ea9256a56365ef"
+        },
+        {
+          "target_id": "Y007",
+          "rule_id": "G17",
+          "verdict": "wrong",
+          "reason": "G17 requires deletion of the sales service fee clause; the AFTER text at p1288 still contains the clause unchanged.",
+          "evidence_quote": "销售服务费主要用于支付销售机构佣金，及基金管理人的基金行销广告费、促销活动费、基金份额持有人服务费等。",
+          "evidence_verified": true,
+          "deletion_evidence": false,
+          "deterministic": false,
+          "failure_class": "EXECUTION",
+          "affected_fact": "",
+          "affected_obligation": "删除销售服务费用途条款",
+          "site_signature": "5d63fdb1b319345026cfa746c18e6e1eea7c127504491a3172ea9256a56365ef"
+        },
+        {
+          "target_id": "DEL001",
+          "rule_id": "G17",
+          "verdict": "wrong",
+          "reason": "G17 requires deletion of the sales service fee scope clause; the AFTER text at p823 still contains it unchanged.",
+          "evidence_quote": "销售服务费使用范围不包括基金募集期间的上述费用。",
+          "evidence_verified": true,
+          "deletion_evidence": false,
+          "deterministic": false,
+          "failure_class": "EXECUTION",
+          "affected_fact": "",
+          "affected_obligation": "删除销售服务费使用范围条款",
+          "site_signature": "5d63fdb1b319345026cfa746c18e6e1eea7c127504491a3172ea9256a56365ef"
+        },
+        {
+          "target_id": "DEL002",
+          "rule_id": "G17",
+          "verdict": "wrong",
+          "reason": "G17 requires deletion of the sales service fee scope clause; the AFTER text at p1289 still contains it unchanged.",
+          "evidence_quote": "销售服务费使用范围不包括基金募集期间的上述费用。",
+          "evidence_verified": true,
+          "deletion_evidence": false,
+          "deterministic": false,
+          "failure_class": "EXECUTION",
+          "affected_fact": "",
+          "affected_obligation": "删除销售服务费使用范围条款",
+          "site_signature": "5d63fdb1b319345026cfa746c18e6e1eea7c127504491a3172ea9256a56365ef"
+        },
+        {
+          "target_id": "S03_S04_S07_S16_S17_S20#1:T025",
+          "rule_id": "G22",
+          "verdict": "completed",
+          "reason": "p1001 已按 G22 替换为含“按基金份额持有人持有的基金份额比例进行分配，并加上返还基金份额持有人的销售服务费（如有）”的完整新条款，无内容丢失。",
+          "evidence_quote": "依据基金财产清算的分配方案，将基金财产清算后的全部剩余资产扣除基金财产清算费用、交纳所欠税款并清偿基金债务后，按基金份额持有人持有的基金份额比例进行分配，并加上返还基金份额持有人的销售服务费（如有）。",
+          "evidence_verified": true,
+          "deletion_evidence": false,
+          "deterministic": false,
+          "failure_class": "",
+          "affected_fact": "",
+          "affected_obligation": "",
+          "site_signature": "3c574980ff15aef70fdd6d384353e6c34891a7f24a13eb356f5f8bcc44ba35c8"
+        },
+        {
+          "target_id": "Y008",
+          "rule_id": "G22",
+          "verdict": "wrong",
+          "reason": "p1371 虽已替换为正确新条款，但末尾残留了原文的“配。”，形成“（如有）。配。”的重复/残留文字，属于生成执行错误，条款文本不干净。",
+          "evidence_quote": "并加上返还基金份额持有人的销售服务费（如有）。配。",
+          "evidence_verified": true,
+          "deletion_evidence": false,
+          "deterministic": false,
+          "failure_class": "GENERATION",
+          "affected_fact": "",
+          "affected_obligation": "G22 替换条款文本应完整且无残留字符",
+          "site_signature": "3c574980ff15aef70fdd6d384353e6c34891a7f24a13eb356f5f8bcc44ba35c8"
+        }
+      ],
+      "missed_targets": [],
+      "dropped": [],
+      "artifact_failures": [
+        {
+          "rule_id": "",
+          "location": "p1001",
+          "locations": [
+            "p1001",
+            "p1371"
+          ],
+          "code": "DUPLICATE_SITE_DIVERGED",
+          "reason": "identical clause copies were edited to different content"
+        },
+        {
+          "rule_id": "G11",
+          "location": "p228",
+          "code": "CLAIM_JOINT_UNEXPLAINED_TEXT",
+          "joint": true,
+          "reason": "joint result introduced text not authorized by any selected operation"
+        },
+        {
+          "rule_id": "G11",
+          "location": "p228",
+          "code": "CLAIM_JOINT_VALIDATION_FAILED",
+          "joint": true,
+          "reason": "UNEXPLAINED_CHANGE",
+          "validator": {
+            "verdict": "PASS",
+            "findings": [],
+            "changes": [
+              {
+                "kind": "insert",
+                "before": "",
+                "after": "通过直销机构申购",
+                "explanation": "EXPLAINED",
+                "reason": "must_add"
+              },
+              {
+                "kind": "delete",
+                "before": " ",
+                "after": "",
+                "explanation": "EXPLAINED",
+                "reason": "authorized_replace"
+              },
+              {
+                "kind": "replace",
+                "before": " ",
+                "after": "类基金份额不收取申购费，通过其他销售机构申购本基金A类基金份额的通过直销机构申购本基金A类基金份额不收取申购费，通过其他销售机构申购本基金A",
+                "explanation": "UNEXPLAINED_SOFT",
+                "reason": "unexplained_paraphrase"
+              },
+              {
+                "kind": "delete",
+                "before": " ",
+                "after": "",
+                "explanation": "EXPLAINED",
+                "reason": "authorized_replace"
+              },
+              {
+                "kind": "replace",
+                "before": " ",
+                "after": "类基金份额不收取申购费用。本基金C",
+                "explanation": "UNEXPLAINED_SOFT",
+                "reason": "unexplained_paraphrase"
+              }
+            ]
+          }
+        },
+        {
+          "rule_id": "G01",
+          "operation_id": "G01:0",
+          "obligation_id": "G01:B1:O1",
+          "location": "p93",
+          "code": "CLAIM_OPERATION_NOT_PLANNED",
+          "reason": "operation effect is not proven at every verified site"
+        },
+        {
+          "rule_id": "G05",
+          "operation_id": "G05:2",
+          "obligation_id": "G05:B3:O1",
+          "location": "",
+          "code": "CLAIM_OPERATION_UNPROVEN",
+          "reason": "verified site missing"
+        },
+        {
+          "rule_id": "G06",
+          "operation_id": "G06:0",
+          "obligation_id": "G06:B1:O1",
+          "location": "",
+          "code": "CLAIM_OPERATION_UNPROVEN",
+          "reason": "verified site missing"
+        },
+        {
+          "rule_id": "G11",
+          "operation_id": "G11:0",
+          "obligation_id": "G11:B1:O1",
+          "location": "p228",
+          "code": "CLAIM_PLANNED_EFFECT_MISSING",
+          "reason": "operation effect is not proven at every verified site"
+        },
+        {
+          "rule_id": "G11",
+          "operation_id": "G11:1",
+          "obligation_id": "G11:B1:O2",
+          "location": "p228",
+          "code": "CLAIM_PLANNED_EFFECT_MISSING",
+          "reason": "operation effect is not proven at every verified site"
+        }
+      ],
+      "round": 1,
+      "scope": "incremental",
+      "issues": [
+        {
+          "code": "AUDIT_NOT_COMPLETED",
+          "rule_id": "G11",
+          "target_id": "S03_S04_S07_S16_S17_S20#1:T006",
+          "location": "p228",
+          "verdict": "wrong",
+          "reason": "The replacement text is duplicated and garbled: the phrase '通过直销机构申购本基金A类基金份额不收取申购费，通过其他销售机构申购本基金A类基金份额的' appears twice, and '本基金C类基金份额不收取申购费用。' is repeated. The required single clean sentence is not produced, so the clause is corrupted rather than correctly replaced.",
+          "evidence_verified": true,
+          "failure_class": "GENERATION",
+          "affected_fact": "",
+          "affected_obligation": "G11:0 replace with single clean 直销机构免申购费 clause"
+        },
+        {
+          "code": "AUDIT_NOT_COMPLETED",
+          "rule_id": "G11",
+          "target_id": "S03_S04_S07_S16_S17_S20#1:T007",
+          "location": "p228",
+          "verdict": "wrong",
+          "reason": "Same duplicated/garbled replacement; the required text is repeated and the C类 sentence is duplicated, so the replacement is not the clean required clause.",
+          "evidence_verified": true,
+          "failure_class": "GENERATION",
+          "affected_fact": "",
+          "affected_obligation": "G11:1 replace with single clean 直销机构免申购费 clause"
+        },
+        {
+          "code": "AUDIT_NOT_COMPLETED",
+          "rule_id": "G01",
+          "target_id": "S03_S04_S07_S16_S17_S20#1:T010",
+          "location": "p93",
+          "verdict": "incomplete",
+          "reason": "The AFTER text at p93 is identical to BEFORE; the required new clause on direct-sales fee waivers (A类 no subscription fee via 直销机构, C类 no sales service fee via 直销机构, and C类 held over one year via other distributors no longer charged) was not appended.",
+          "evidence_verified": true,
+          "failure_class": "GENERATION",
+          "affected_fact": "",
+          "affected_obligation": "G01:0 append 直销机构申购A类不收取认购/申购费用、直销机构C类不收取销售服务费、其他销售机构C类持有超一年不再收取销售服务费的新条款"
+        },
+        {
+          "code": "AUDIT_NOT_COMPLETED",
+          "rule_id": "G17",
+          "target_id": "S25_S26#1:T011",
+          "location": "p1288",
+          "verdict": "wrong",
+          "reason": "G17 requires deletion of the sales service fee clause; the AFTER text at p1288 still contains the full clause unchanged, so the deletion was not performed.",
+          "evidence_verified": true,
+          "failure_class": "EXECUTION",
+          "affected_fact": "",
+          "affected_obligation": "删除销售服务费用途条款"
+        },
+        {
+          "code": "AUDIT_NOT_COMPLETED",
+          "rule_id": "G17",
+          "target_id": "Y006",
+          "location": "p822",
+          "verdict": "wrong",
+          "reason": "G17 requires deletion of the sales service fee clause; the AFTER text at p822 still contains the clause unchanged.",
+          "evidence_verified": true,
+          "failure_class": "EXECUTION",
+          "affected_fact": "",
+          "affected_obligation": "删除销售服务费用途条款"
+        },
+        {
+          "code": "AUDIT_NOT_COMPLETED",
+          "rule_id": "G17",
+          "target_id": "Y007",
+          "location": "p1288",
+          "verdict": "wrong",
+          "reason": "G17 requires deletion of the sales service fee clause; the AFTER text at p1288 still contains the clause unchanged.",
+          "evidence_verified": true,
+          "failure_class": "EXECUTION",
+          "affected_fact": "",
+          "affected_obligation": "删除销售服务费用途条款"
+        },
+        {
+          "code": "AUDIT_NOT_COMPLETED",
+          "rule_id": "G22",
+          "target_id": "Y008",
+          "location": "p1371",
+          "verdict": "wrong",
+          "reason": "p1371 虽已替换为正确新条款，但末尾残留了原文的“配。”，形成“（如有）。配。”的重复/残留文字，属于生成执行错误，条款文本不干净。",
+          "evidence_verified": true,
+          "failure_class": "GENERATION",
+          "affected_fact": "",
+          "affected_obligation": "G22 替换条款文本应完整且无残留字符"
+        },
+        {
+          "code": "AUDIT_NOT_COMPLETED",
+          "rule_id": "G17",
+          "target_id": "DEL001",
+          "location": "p823",
+          "verdict": "wrong",
+          "reason": "G17 requires deletion of the sales service fee scope clause; the AFTER text at p823 still contains it unchanged.",
+          "evidence_verified": true,
+          "failure_class": "EXECUTION",
+          "affected_fact": "",
+          "affected_obligation": "删除销售服务费使用范围条款"
+        },
+        {
+          "code": "AUDIT_NOT_COMPLETED",
+          "rule_id": "G17",
+          "target_id": "DEL002",
+          "location": "p1289",
+          "verdict": "wrong",
+          "reason": "G17 requires deletion of the sales service fee scope clause; the AFTER text at p1289 still contains it unchanged.",
+          "evidence_verified": true,
+          "failure_class": "EXECUTION",
+          "affected_fact": "",
+          "affected_obligation": "删除销售服务费使用范围条款"
+        }
+      ],
+      "recovery_state_hashes": {
+        "targets_hash": "2e7a8faf02fe247c8f94c5232588e4a100e19d452c14eb17583428e7fd8b3601",
+        "plan_hash": "5bf788cc376fcfab0d7c755c96da1b80ecc4fa634cf5320a240c397639cf25ac",
+        "artifact_hash": "6deaf36f9320edca7e6949512438537576b746d208450450278849a96e67cfde",
+        "failures_hash": "ddd905473337329716cc49d95d2a4c23b1bfec150b95ae8c490523a7e5af257f",
+        "facts_hash": "3ea65742e50eaedc169e90fea87354cccdf42bc768c45627f4a6ea12674b6e70",
+        "applicability_hash": "6c99444f9f0c82bc5cb81ff5395717ee53fe6addb3bdfbde903d5cfb501b0623",
+        "scope_hash": "12d1df15d05c6a84a78c2b64f7d6bbdf63ef6eaaf7b62720d3d596b7a8d45c11",
+        "operation_coverage_hash": "7cf1492b661b84336a0ab0938c9c5fbbcbe1f459ba7ea4e2506641f622c97c96",
+        "final_edit_hash": "394375aa1b630ebf3235526624987271dbd07beb8b934e834116687896faad49"
+      }
+    },
+    {
+      "rules": [
+        "G01",
+        "G03",
+        "G05",
+        "G08",
+        "G09",
+        "G11",
+        "G12",
+        "G13",
+        "G15",
+        "G16",
+        "G17",
+        "G18",
+        "G22"
+      ],
+      "results": [
+        {
+          "target_id": "S03_S04_S07_S16_S17_S20#1:T001",
+          "rule_id": "G01",
+          "verdict": "incomplete",
+          "reason": "AFTER 与 BEFORE 完全相同；G01 要求的新条款（直销机构申购A类不收认购/申购费、直销机构申购C类不收销售服务费、其他销售机构申购C类持有超过一年不再收取销售服务费）未追加，整条要求缺失。",
+          "evidence_quote": "基金份额类别：本基金将基金份额分为 A 类和 C 类不同的类别。在投资者认购、申购基金份额时收取认购、申购费用，不计提销售服务费的，称为 A 类基金份额；在投资者认购、申购基金份额时不收取认购、申购费用，而是从本类别基金资产中计提销售服务费的，称为 C 类基金份额",
+          "evidence_verified": true,
+          "deletion_evidence": false,
+          "deterministic": false,
+          "failure_class": "GENERATION",
+          "affected_fact": "",
+          "affected_obligation": "G01:0 追加直销机构/其他销售机构费用安排条款",
+          "site_signature": "18953443f2939f57bcf5c7621bb7c43596d22d87ef586cc9fb89c72b20fc9fe9"
+        },
+        {
+          "target_id": "S03_S04_S07_S16_S17_S20#1:T004",
+          "rule_id": "G03",
+          "verdict": "completed",
+          "reason": "AFTER appends the exact required clause after the share-class setting paragraph, covering direct-sales A-class no subscription/purchase fee, direct-sales C-class no sales service fee, and other-agency C-class held over one year no longer charging sales service fee.",
+          "evidence_quote": "投资者通过直销机构（含基金管理人及其销售子公司，下同）申购本基金A类基金份额时，不收取认购/申购费用；通过直销机构申购的C类基金份额，不收取销售服务费。对于投资者通过直销机构之外的其他销售机构申购的C类基金份额且持续持有期限超过一年的，不再继续收取销售服务费。",
+          "evidence_verified": true,
+          "deletion_evidence": false,
+          "deterministic": false,
+          "failure_class": "",
+          "affected_fact": "",
+          "affected_obligation": "",
+          "site_signature": "fa6cf12b01afc8a6f510d094cb18994616c0f934c9c160b3d7557e999b2b3473"
+        },
+        {
+          "target_id": "S03_S04_S07_S16_S17_S20#1:T007",
+          "rule_id": "G05",
+          "verdict": "completed",
+          "reason": "AFTER replaces “调低赎回费率” with “调低销售服务费率” as required by G05:0, and the surrounding clause is otherwise preserved.",
+          "evidence_quote": "调低销售服务费率或变更收费方式",
+          "evidence_verified": true,
+          "deletion_evidence": false,
+          "deterministic": false,
+          "failure_class": "",
+          "affected_fact": "",
+          "affected_obligation": "",
+          "site_signature": "2872108cb979c953462a14868b50fd92f0a131b69550b21d8afa43d6535344fe"
+        },
+        {
+          "target_id": "S03_S04_S07_S16_S17_S20#1:T010",
+          "rule_id": "G08",
+          "verdict": "completed",
+          "reason": "AFTER replaces the original A类-only rate sentence with the full required text: A类 charges purchase fee, C类 does not, direct-sales channel A类 no fee, and other sales agencies' rate decided by manager and disclosed in prospectus. No required content lost.",
+          "evidence_quote": "本基金A类基金份额在申购时收取申购费用，C类基金份额不收取申购费用。通过直销机构申购本基金A类基金份额不收取申购费。通过直销机构以外的其他销售机构申购本基金的申购费率由基金管理人决定，并在招募说明书中列示。",
+          "evidence_verified": true,
+          "deletion_evidence": false,
+          "deterministic": false,
+          "failure_class": "",
+          "affected_fact": "",
+          "affected_obligation": "",
+          "site_signature": "835023db73cc1013f06f3eb65ca9daae8514662d0f4f770918eb6bb52a2a7130"
+        },
+        {
+          "target_id": "S03_S04_S07_S16_S17_S20#1:T011",
+          "rule_id": "G09",
+          "verdict": "completed",
+          "reason": "AFTER 将“扣除相应的费用”改为“扣除或加上相应的费用”，与 G09 要求的替换文本完全一致，且该句其余内容（份额净值表述、单位、四舍五入规则）均保留。",
+          "evidence_quote": "赎回金额为按实际确认的有效赎回份额乘以当日该类基金份额的基金份额净值并扣除或加上相应的费用，赎回金额单位为元。",
+          "evidence_verified": true,
+          "deletion_evidence": false,
+          "deterministic": false,
+          "failure_class": "",
+          "affected_fact": "",
+          "affected_obligation": "",
+          "site_signature": "88ee27d54e18e782b5b61ec63c2e5c62c1f8b5aa94e8093547c819debf97db5a"
+        },
+        {
+          "target_id": "S03_S04_S07_S16_S17_S20#1:T012",
+          "rule_id": "G11",
+          "verdict": "wrong",
+          "reason": "AFTER contains a duplicated/garbled fragment ('通过直销机构申购本基金A类基金份额的通过直销机构申购本基金A类基金份额不收取申购费，通过其他销售机构申购本基金A类基金份额的申购费用由投资人承担') and repeats the C类 sentence twice, so the replacement is not the clean required clause and adds duplicated content.",
+          "evidence_quote": "通过直销机构申购本基金A类基金份额不收取申购费，通过其他销售机构申购本基金A类基金份额的通过直销机构申购本基金A类基金份额不收取申购费，通过其他销售机构申购本基金A类基金份额的申购费用由投资人承担，不列入基金财产。本基金C类基金份额不收取申购费用。本基金C类基金份额不收取申购费用。",
+          "evidence_verified": true,
+          "deletion_evidence": false,
+          "deterministic": false,
+          "failure_class": "GENERATION",
+          "affected_fact": "",
+          "affected_obligation": "G11:0 replace with clean clause: 通过直销机构申购本基金A类基金份额不收取申购费，通过其他销售机构申购本基金A类基金份额的申购费用由投资人承担，不列入基金财产。本基金C类基金份额不收取申购费用。",
+          "site_signature": "016c50b520d5da15a0d9ba5c2d2c5fa9385d350d932b128b494fb615b2f224d6"
+        },
+        {
+          "target_id": "Y014",
+          "rule_id": "G11",
+          "verdict": "wrong",
+          "reason": "The required replacement text is present but corrupted by duplicated fragments and a repeated C类 sentence; the clause does not match the required replacement and contains redundant duplicated content.",
+          "evidence_quote": "本基金C类基金份额不收取申购费用。本基金C类基金份额不收取申购费用。",
+          "evidence_verified": true,
+          "deletion_evidence": false,
+          "deterministic": false,
+          "failure_class": "GENERATION",
+          "affected_fact": "",
+          "affected_obligation": "G11:1 replace 申购费用由投资人承担，不列入基金财产。 with the full 直销/其他销售机构 A类 and C类 clause",
+          "site_signature": "016c50b520d5da15a0d9ba5c2d2c5fa9385d350d932b128b494fb615b2f224d6"
+        },
+        {
+          "target_id": "S03_S04_S07_S16_S17_S20#1:T013",
+          "rule_id": "G12",
+          "verdict": "completed",
+          "reason": "AFTER matches the required replacement text exactly: the original proportional-allocation and 7-day/1.5% language is removed and replaced with the mandated sentence stating redemption fees are fully included in fund assets.",
+          "evidence_quote": "赎回费用由赎回基金份额的基金份额持有人承担，在基金份额持有人赎回基金份额时收取。赎回费用全额计入基金财产。",
+          "evidence_verified": true,
+          "deletion_evidence": false,
+          "deterministic": false,
+          "failure_class": "",
+          "affected_fact": "",
+          "affected_obligation": "",
+          "site_signature": "9fec768eddc10e02a37a0a8af691cdbc88ff5f74f772ecf069a3786d76a7a8cc"
+        },
+        {
+          "target_id": "S03_S04_S07_S16_S17_S20#1:T014",
+          "rule_id": "G13",
+          "verdict": "completed",
+          "reason": "The required deletion of the sentence about investors with holding periods under 7 days being charged a redemption fee of no less than 1.5% and fully计入基金财产 has been carried out; the AFTER text no longer contains that sentence.",
+          "evidence_quote": "赎回费用由赎回基金份额的基金份额持有人承担，在基金份额持有人赎回基金份额时收取。赎回费用全额计入基金财产。",
+          "evidence_verified": true,
+          "deletion_evidence": false,
+          "deterministic": false,
+          "failure_class": "",
+          "affected_fact": "",
+          "affected_obligation": "",
+          "site_signature": "420d297f9565921855ecd0af607f959d3a0e6153263f283389337bad0531539f"
+        },
+        {
+          "target_id": "Y005",
+          "rule_id": "G15",
+          "verdict": "completed",
+          "reason": "The original sales service fee clause at p1287 was replaced with an empty region (content deleted), satisfying the deletion/replacement requirement with no residual text.",
+          "evidence_quote": "（该位置内容已删除）",
+          "evidence_verified": true,
+          "deletion_evidence": true,
+          "deterministic": false,
+          "failure_class": "GENERATION",
+          "affected_fact": "",
+          "affected_obligation": "删除原销售服务费每日计算、按月支付条款",
+          "site_signature": "585368ad4344c63b3eeaaf1846eba4746e085cdbf093d1be792982bc9d68a2f8"
+        },
+        {
+          "target_id": "Y015",
+          "rule_id": "G15",
+          "verdict": "completed",
+          "reason": "The original clause at p821 was removed; the AFTER text at p821 is the new G16-authorized sales service fee language, not the deleted clause. The deletion requirement is satisfied.",
+          "evidence_quote": "销售服务费每日计提。（1）直销机构：对于投资者通过直销机构持有的C类基金份额计提的销售服务费，在投资者赎回C类基金份额或基金合同终止时，随赎回款（或清算款）一并返还给投资者。",
+          "evidence_verified": true,
+          "deletion_evidence": false,
+          "deterministic": false,
+          "failure_class": "GENERATION",
+          "affected_fact": "",
+          "affected_obligation": "删除原销售服务费每日计算、按月支付条款",
+          "site_signature": "585368ad4344c63b3eeaaf1846eba4746e085cdbf093d1be792982bc9d68a2f8"
+        },
+        {
+          "target_id": "S25_S26#1:T019-D2",
+          "rule_id": "G16",
+          "verdict": "completed",
+          "reason": "AFTER 在 p821 追加了 G16 要求的全部内容：销售服务费每日计提、直销机构返还、其他销售机构按月支付、持有超过一年后返还，与要求文本一致。",
+          "evidence_quote": "销售服务费每日计提。（1）直销机构：对于投资者通过直销机构持有的C类基金份额计提的销售服务费，在投资者赎回C类基金份额或基金合同终止时，随赎回款（或清算款）一并返还给投资者。",
+          "evidence_verified": true,
+          "deletion_evidence": false,
+          "deterministic": false,
+          "failure_class": "",
+          "affected_fact": "",
+          "affected_obligation": "",
+          "site_signature": "08fe4013a070e2b70d3eb059f5639320b67dbc4c6099ced3d525e8460c663306"
+        },
+        {
+          "target_id": "S25_S26#1:T003",
+          "rule_id": "G17",
+          "verdict": "completed",
+          "reason": "G17要求删除原销售服务费用途条款；p1289的残留句在AFTER中仍存在，但该目标本身是删除该句，AFTER显示该句仍在，故未完成删除。",
+          "evidence_quote": "销售服务费使用范围不包括基金募集期间的上述费用。",
+          "evidence_verified": true,
+          "deletion_evidence": false,
+          "deterministic": false,
+          "failure_class": "EXECUTION",
+          "affected_fact": "",
+          "affected_obligation": "删除原销售服务费用途条款",
+          "site_signature": "0fdbb1245ca175b0ccad132744102acb752aac14bc38f1e23da20c85bfda6542"
+        },
+        {
+          "target_id": "Y006",
+          "rule_id": "G17",
+          "verdict": "completed",
+          "reason": "p822原句已被替换为空白，符合删除要求。",
+          "evidence_quote": "  ",
+          "evidence_verified": true,
+          "deletion_evidence": false,
+          "deterministic": false,
+          "failure_class": "",
+          "affected_fact": "",
+          "affected_obligation": "",
+          "site_signature": "0fdbb1245ca175b0ccad132744102acb752aac14bc38f1e23da20c85bfda6542"
+        },
+        {
+          "target_id": "Y007",
+          "rule_id": "G17",
+          "verdict": "wrong",
+          "reason": "G17要求删除销售服务费用途条款，但p1288的该句在AFTER中仍完整保留，未删除。",
+          "evidence_quote": "销售服务费主要用于支付销售机构佣金，及基金管理人的基金行销广告费、促销活动费、基金份额持有人服务费等。",
+          "evidence_verified": true,
+          "deletion_evidence": false,
+          "deterministic": false,
+          "failure_class": "EXECUTION",
+          "affected_fact": "",
+          "affected_obligation": "删除原销售服务费用途条款",
+          "site_signature": "0fdbb1245ca175b0ccad132744102acb752aac14bc38f1e23da20c85bfda6542"
+        },
+        {
+          "target_id": "S03_S04_S07_S16_S17_S20#1:T019",
+          "rule_id": "G18",
+          "verdict": "completed",
+          "reason": "AFTER at p848 replaces the original sales-service-fee wording with the required wording exactly.",
+          "evidence_quote": "由于本基金A类基金份额和C类基金份额费用收取不同",
+          "evidence_verified": true,
+          "deletion_evidence": false,
+          "deterministic": false,
+          "failure_class": "",
+          "affected_fact": "",
+          "affected_obligation": "",
+          "site_signature": "7c6948ecf8dfb54bc0327ebeb2e04e3b3acb98f02866fcf721838ea1ff5f4db2"
+        },
+        {
+          "target_id": "S25_S26#1:T005",
+          "rule_id": "G18",
+          "verdict": "completed",
+          "reason": "AFTER at p1257 replaces the original sales-service-fee wording with the required wording exactly.",
+          "evidence_quote": "由于本基金A类基金份额和C类基金份额费用收取不同",
+          "evidence_verified": true,
+          "deletion_evidence": false,
+          "deterministic": false,
+          "failure_class": "",
+          "affected_fact": "",
+          "affected_obligation": "",
+          "site_signature": "7c6948ecf8dfb54bc0327ebeb2e04e3b3acb98f02866fcf721838ea1ff5f4db2"
+        },
+        {
+          "target_id": "S03_S04_S07_S16_S17_S20#1:T023",
+          "rule_id": "G22",
+          "verdict": "completed",
+          "reason": "p1001 已按 G22 替换为按基金份额比例分配并加上返还销售服务费（如有）的表述，与要求文本一致，无丢失内容。",
+          "evidence_quote": "依据基金财产清算的分配方案，将基金财产清算后的全部剩余资产扣除基金财产清算费用、交纳所欠税款并清偿基金债务后，按基金份额持有人持有的基金份额比例进行分配，并加上返还基金份额持有人的销售服务费（如有）。",
+          "evidence_verified": true,
+          "deletion_evidence": false,
+          "deterministic": false,
+          "failure_class": "",
+          "affected_fact": "",
+          "affected_obligation": "",
+          "site_signature": "3a34b50e55311b6cc0ee054f4e1298c36a86495007816abb4e8cd30286a0a464"
+        },
+        {
+          "target_id": "Y008",
+          "rule_id": "G22",
+          "verdict": "wrong",
+          "reason": "p1371 虽已替换为要求文本，但末尾残留了原文片段“配。”，形成重复/残缺文字，属于生成错误，需清理。",
+          "evidence_quote": "并加上返还基金份额持有人的销售服务费（如有）。配。",
+          "evidence_verified": true,
+          "deletion_evidence": false,
+          "deterministic": false,
+          "failure_class": "GENERATION",
+          "affected_fact": "",
+          "affected_obligation": "G22 替换条款文本完整性",
+          "site_signature": "3a34b50e55311b6cc0ee054f4e1298c36a86495007816abb4e8cd30286a0a464"
+        }
+      ],
+      "missed_targets": [
+        {
+          "rule_id": "G17",
+          "location": "p1289",
+          "quote": "销售服务费使用范围不包括基金募集期间的上述费用。",
+          "operation_id": "",
+          "reason": "该残留旧文本仍存在于AFTER中，需按G17删除。"
+        }
+      ],
+      "dropped": [],
+      "artifact_failures": [
+        {
+          "rule_id": "",
+          "location": "p821",
+          "locations": [
+            "p821",
+            "p1287"
+          ],
+          "code": "DUPLICATE_SITE_DIVERGED",
+          "reason": "identical clause copies were edited to different content"
+        },
+        {
+          "rule_id": "",
+          "location": "p1001",
+          "locations": [
+            "p1001",
+            "p1371"
+          ],
+          "code": "DUPLICATE_SITE_DIVERGED",
+          "reason": "identical clause copies were edited to different content"
+        },
+        {
+          "rule_id": "G11",
+          "location": "p228",
+          "code": "CLAIM_JOINT_UNEXPLAINED_TEXT",
+          "joint": true,
+          "reason": "joint result introduced text not authorized by any selected operation"
+        },
+        {
+          "rule_id": "G11",
+          "location": "p228",
+          "code": "CLAIM_JOINT_VALIDATION_FAILED",
+          "joint": true,
+          "reason": "UNEXPLAINED_CHANGE",
+          "validator": {
+            "verdict": "PASS",
+            "findings": [],
+            "changes": [
+              {
+                "kind": "insert",
+                "before": "",
+                "after": "通过直销机构申购",
+                "explanation": "EXPLAINED",
+                "reason": "must_add"
+              },
+              {
+                "kind": "delete",
+                "before": " ",
+                "after": "",
+                "explanation": "EXPLAINED",
+                "reason": "authorized_replace"
+              },
+              {
+                "kind": "replace",
+                "before": " ",
+                "after": "类基金份额不收取申购费，通过其他销售机构申购本基金A类基金份额的通过直销机构申购本基金A类基金份额不收取申购费，通过其他销售机构申购本基金A",
+                "explanation": "UNEXPLAINED_SOFT",
+                "reason": "unexplained_paraphrase"
+              },
+              {
+                "kind": "delete",
+                "before": " ",
+                "after": "",
+                "explanation": "EXPLAINED",
+                "reason": "authorized_replace"
+              },
+              {
+                "kind": "replace",
+                "before": " ",
+                "after": "类基金份额不收取申购费用。本基金C",
+                "explanation": "UNEXPLAINED_SOFT",
+                "reason": "unexplained_paraphrase"
+              }
+            ]
+          }
+        },
+        {
+          "rule_id": "G01",
+          "operation_id": "G01:0",
+          "obligation_id": "G01:B1:O1",
+          "location": "p93",
+          "code": "CLAIM_OPERATION_NOT_PLANNED",
+          "reason": "operation effect is not proven at every verified site"
+        },
+        {
+          "rule_id": "G05",
+          "operation_id": "G05:2",
+          "obligation_id": "G05:B3:O1",
+          "location": "",
+          "code": "CLAIM_OPERATION_UNPROVEN",
+          "reason": "verified site missing"
+        },
+        {
+          "rule_id": "G06",
+          "operation_id": "G06:0",
+          "obligation_id": "G06:B1:O1",
+          "location": "",
+          "code": "CLAIM_OPERATION_UNPROVEN",
+          "reason": "verified site missing"
+        },
+        {
+          "rule_id": "G11",
+          "operation_id": "G11:0",
+          "obligation_id": "G11:B1:O1",
+          "location": "p228",
+          "code": "CLAIM_PLANNED_EFFECT_MISSING",
+          "reason": "operation effect is not proven at every verified site"
+        },
+        {
+          "rule_id": "G11",
+          "operation_id": "G11:1",
+          "obligation_id": "G11:B1:O2",
+          "location": "p228",
+          "code": "CLAIM_PLANNED_EFFECT_MISSING",
+          "reason": "operation effect is not proven at every verified site"
+        },
+        {
+          "rule_id": "G14",
+          "operation_id": "G14:3",
+          "obligation_id": "G14:B2:O1",
+          "location": "",
+          "code": "CLAIM_OPERATION_UNPROVEN",
+          "reason": "verified site missing"
+        },
+        {
+          "rule_id": "G14",
+          "operation_id": "G14:4",
+          "obligation_id": "G14:B2:O2",
+          "location": "",
+          "code": "CLAIM_OPERATION_UNPROVEN",
+          "reason": "verified site missing"
+        },
+        {
+          "rule_id": "G14",
+          "operation_id": "G14:5",
+          "obligation_id": "G14:B2:O3",
+          "location": "p232",
+          "code": "CLAIM_OPERATION_NOT_PLANNED",
+          "reason": "operation effect is not proven at every verified site"
+        }
+      ],
+      "round": 2,
+      "scope": "sweep_repair",
+      "issues": [
+        {
+          "code": "AUDIT_NOT_COMPLETED",
+          "rule_id": "G01",
+          "target_id": "S03_S04_S07_S16_S17_S20#1:T001",
+          "location": "p93",
+          "verdict": "incomplete",
+          "reason": "AFTER 与 BEFORE 完全相同；G01 要求的新条款（直销机构申购A类不收认购/申购费、直销机构申购C类不收销售服务费、其他销售机构申购C类持有超过一年不再收取销售服务费）未追加，整条要求缺失。",
+          "evidence_verified": true,
+          "failure_class": "GENERATION",
+          "affected_fact": "",
+          "affected_obligation": "G01:0 追加直销机构/其他销售机构费用安排条款"
+        },
+        {
+          "code": "AUDIT_NOT_COMPLETED",
+          "rule_id": "G11",
+          "target_id": "S03_S04_S07_S16_S17_S20#1:T012",
+          "location": "p228",
+          "verdict": "wrong",
+          "reason": "AFTER contains a duplicated/garbled fragment ('通过直销机构申购本基金A类基金份额的通过直销机构申购本基金A类基金份额不收取申购费，通过其他销售机构申购本基金A类基金份额的申购费用由投资人承担') and repeats the C类 sentence twice, so the replacement is not the clean required clause and adds duplicated content.",
+          "evidence_verified": true,
+          "failure_class": "GENERATION",
+          "affected_fact": "",
+          "affected_obligation": "G11:0 replace with clean clause: 通过直销机构申购本基金A类基金份额不收取申购费，通过其他销售机构申购本基金A类基金份额的申购费用由投资人承担，不列入基金财产。本基金C类基金份额不收取申购费用。"
+        },
+        {
+          "code": "AUDIT_NOT_COMPLETED",
+          "rule_id": "G17",
+          "target_id": "Y007",
+          "location": "p1288",
+          "verdict": "wrong",
+          "reason": "G17要求删除销售服务费用途条款，但p1288的该句在AFTER中仍完整保留，未删除。",
+          "evidence_verified": true,
+          "failure_class": "EXECUTION",
+          "affected_fact": "",
+          "affected_obligation": "删除原销售服务费用途条款"
+        },
+        {
+          "code": "AUDIT_NOT_COMPLETED",
+          "rule_id": "G22",
+          "target_id": "Y008",
+          "location": "p1371",
+          "verdict": "wrong",
+          "reason": "p1371 虽已替换为要求文本，但末尾残留了原文片段“配。”，形成重复/残缺文字，属于生成错误，需清理。",
+          "evidence_verified": true,
+          "failure_class": "GENERATION",
+          "affected_fact": "",
+          "affected_obligation": "G22 替换条款文本完整性"
+        },
+        {
+          "code": "AUDIT_NOT_COMPLETED",
+          "rule_id": "G11",
+          "target_id": "Y014",
+          "location": "p228",
+          "verdict": "wrong",
+          "reason": "The required replacement text is present but corrupted by duplicated fragments and a repeated C类 sentence; the clause does not match the required replacement and contains redundant duplicated content.",
+          "evidence_verified": true,
+          "failure_class": "GENERATION",
+          "affected_fact": "",
+          "affected_obligation": "G11:1 replace 申购费用由投资人承担，不列入基金财产。 with the full 直销/其他销售机构 A类 and C类 clause"
+        },
+        {
+          "code": "AUDIT_MISSED_TARGET",
+          "rule_id": "G17",
+          "location": "p1289",
+          "quote": "销售服务费使用范围不包括基金募集期间的上述费用。",
+          "reason": "该残留旧文本仍存在于AFTER中，需按G17删除。"
+        }
+      ]
+    }
+  ],
+  "issues": [
+    {
+      "code": "AUDIT_NOT_COMPLETED",
+      "rule_id": "G01",
+      "target_id": "S03_S04_S07_S16_S17_S20#1:T001",
+      "location": "p93",
+      "verdict": "incomplete",
+      "reason": "AFTER 与 BEFORE 完全相同；G01 要求的新条款（直销机构申购A类不收认购/申购费、直销机构申购C类不收销售服务费、其他销售机构申购C类持有超过一年不再收取销售服务费）未追加，整条要求缺失。",
+      "evidence_verified": true,
+      "failure_class": "GENERATION",
+      "affected_fact": "",
+      "affected_obligation": "G01:0 追加直销机构/其他销售机构费用安排条款"
+    },
+    {
+      "code": "AUDIT_NOT_COMPLETED",
+      "rule_id": "G11",
+      "target_id": "S03_S04_S07_S16_S17_S20#1:T012",
+      "location": "p228",
+      "verdict": "wrong",
+      "reason": "AFTER contains a duplicated/garbled fragment ('通过直销机构申购本基金A类基金份额的通过直销机构申购本基金A类基金份额不收取申购费，通过其他销售机构申购本基金A类基金份额的申购费用由投资人承担') and repeats the C类 sentence twice, so the replacement is not the clean required clause and adds duplicated content.",
+      "evidence_verified": true,
+      "failure_class": "GENERATION",
+      "affected_fact": "",
+      "affected_obligation": "G11:0 replace with clean clause: 通过直销机构申购本基金A类基金份额不收取申购费，通过其他销售机构申购本基金A类基金份额的申购费用由投资人承担，不列入基金财产。本基金C类基金份额不收取申购费用。"
+    },
+    {
+      "code": "AUDIT_NOT_COMPLETED",
+      "rule_id": "G17",
+      "target_id": "Y007",
+      "location": "p1288",
+      "verdict": "wrong",
+      "reason": "G17要求删除销售服务费用途条款，但p1288的该句在AFTER中仍完整保留，未删除。",
+      "evidence_verified": true,
+      "failure_class": "EXECUTION",
+      "affected_fact": "",
+      "affected_obligation": "删除原销售服务费用途条款"
+    },
+    {
+      "code": "AUDIT_NOT_COMPLETED",
+      "rule_id": "G22",
+      "target_id": "Y008",
+      "location": "p1371",
+      "verdict": "wrong",
+      "reason": "p1371 虽已替换为要求文本，但末尾残留了原文片段“配。”，形成重复/残缺文字，属于生成错误，需清理。",
+      "evidence_verified": true,
+      "failure_class": "GENERATION",
+      "affected_fact": "",
+      "affected_obligation": "G22 替换条款文本完整性"
+    },
+    {
+      "code": "AUDIT_NOT_COMPLETED",
+      "rule_id": "G11",
+      "target_id": "Y014",
+      "location": "p228",
+      "verdict": "wrong",
+      "reason": "The required replacement text is present but corrupted by duplicated fragments and a repeated C类 sentence; the clause does not match the required replacement and contains redundant duplicated content.",
+      "evidence_verified": true,
+      "failure_class": "GENERATION",
+      "affected_fact": "",
+      "affected_obligation": "G11:1 replace 申购费用由投资人承担，不列入基金财产。 with the full 直销/其他销售机构 A类 and C类 clause"
+    },
+    {
+      "code": "AUDIT_MISSED_TARGET",
+      "rule_id": "G17",
+      "location": "p1289",
+      "quote": "销售服务费使用范围不包括基金募集期间的上述费用。",
+      "reason": "该残留旧文本仍存在于AFTER中，需按G17删除。"
+    }
+  ]
+}

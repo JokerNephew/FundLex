@@ -1,0 +1,81 @@
+{
+  "schema_version": "fundlex-stage-v1",
+  "stage": "facts",
+  "inputs": {
+    "facts": {
+      "fund_type": "open_regular",
+      "fund_type_quote": "契约型开放式",
+      "fund_type_basis": "基金类别为混合型证券投资基金，运作方式为契约型开放式；非ETF、非ETF联接基金、非QDII、非REITs。",
+      "class_count": 2,
+      "classes": [
+        {
+          "name": "A 类",
+          "subscription_fee": true,
+          "service_fee": false,
+          "current": true,
+          "rate": null,
+          "quote": "在投资者认购、申购基金份额时收取认购、申购费用而不计提销售服务费的，称为 A 类基金份额"
+        },
+        {
+          "name": "C 类",
+          "subscription_fee": false,
+          "service_fee": true,
+          "current": true,
+          "rate": null,
+          "quote": "在投资者认购、申购基金份额时不收取认购、申购费用而是从本类别基金资产中计提销售服务费的，称为 C 类基金份额"
+        }
+      ],
+      "subscription_group": [
+        "A 类"
+      ],
+      "service_group": [
+        "C 类"
+      ],
+      "share_class_structure": "MULTIPLE",
+      "direct_sales_exempt_group": [],
+      "other_sales_charged_group": [],
+      "fact_status": {
+        "fund_type": "VERIFIED",
+        "share_class_structure": "UNKNOWN",
+        "subscription_fee_group": "UNKNOWN",
+        "service_fee_group": "UNKNOWN",
+        "direct_sales_exempt_group": "UNKNOWN",
+        "other_sales_charged_group": "UNKNOWN"
+      },
+      "condition_overrides": {},
+      "has_service_fee": true,
+      "is_floating_fee": false,
+      "floating_quote": "本基金的管理费按前一日基金资产净值的 1.20%年费率计提。",
+      "floating_basis": "管理费为按前一日基金资产净值固定年费率计提，未与投资者持有期或业绩挂钩。",
+      "notes": "A类收取认购/申购费且不计提销售服务费；C类不收取认购/申购费且从C类资产计提销售服务费（0.40%年费率）。具体申购费率按招募说明书。",
+      "quotes_verified": {
+        "fund_type": true,
+        "class:A 类": true,
+        "class:C 类": true,
+        "floating": true,
+        "class_set": true
+      },
+      "class_set_quote": "本基金将基金份额分为 A 类和 C 类不同的类别。",
+      "class_set_evidence": {
+        "quote_verified": true,
+        "set_complete_verified": false,
+        "parsed_classes": [
+          "A",
+          "C"
+        ],
+        "reason": "CLASS_SET_MISMATCH"
+      },
+      "value_verified": true,
+      "set_complete_verified": false,
+      "fund_type_certification": {},
+      "channel_evidence": {
+        "direct_sales_exempt": "",
+        "other_sales_charged": ""
+      },
+      "problems": [
+        "CLASS_SET_MISMATCH"
+      ]
+    }
+  },
+  "inputs_sha256": "ab67b30fb811542fee7487637ee51b80924ddc9b9869f30c964e948cefd97a79"
+}

@@ -1,0 +1,60 @@
+{
+  "body": {
+    "schema_version": "fundlex-model-cassette-v1",
+    "request": {
+      "task_type": "recall_joint_compose",
+      "prompt_version": "recall_joint_compose_v1",
+      "configured_model": "deepseek-v4.1-flash",
+      "context_sha256": "71bdf5c377c1f97fdf7007260df25ec614997390e04aac19c553e2ce510c885c",
+      "request": {
+        "bounded_context": "CONTRACT_PARAGRAPH\n7 日的投资者收取不低于 1.5%的赎回费，并全额计入基金财产。 \n\nAUTHORIZED_SPAN\nstart=0\nend=32\ntext=7 日的投资者收取不低于 1.5%的赎回费，并全额计入基金财产。\n\nOBLIGATIONS\n[\n {\n  \"rule_id\": \"G13\",\n  \"requirement\": \"删除“本基金对持续持有期少于7日的投资者收取不低于1.50%的赎回费，并将上述赎回费全额计入基金财产。”。\",\n  \"operations\": [\n   {\n    \"op\": \"delete\",\n    \"old_text\": \"本基金对持续持有期少于7日的投资者收取不低于1.50%的赎回费，并将上述赎回费全额计入基金财产。\",\n    \"condition\": {\n     \"kind\": \"none\",\n     \"value\": null\n    },\n    \"operation_id\": \"G13:0\",\n    \"group_kind\": \"INDEPENDENT\",\n    \"one_of_group\": \"\"\n   }\n  ]\n }\n]\n\nGUIDE_FIXED_TEXTS\n[]\n\nFACTS\n{\"fund_type\": \"open_regular\", \"fund_type_quote\": \"基金的运作方式\\n契约型开放式\", \"fund_type_basis\": \"契约型开放式混合型证券投资基金，非ETF、非QDII、非货币、非REITs。\", \"class_count\": 2, \"classes\": [{\"name\": \"A\", \"subscription_fee\": true, \"service_fee\": false, \"current\": true, \"rate\": null, \"quote\": \"在投资者认申购基金份额时收取认申购费用，而不计提销售服务费的，称为 A 类基金份额\"}, {\"name\": \"C\", \"subscription_fee\": false, \"service_fee\": true, \"current\": true, \"rate\": null, \"quote\": \"在投资者认申购基金份额时不收取认申购费用，而是从本类别基金资产中计提销售服务费的，称为 C 类基金份额\"}], \"subscription_group\": [\"A\"], \"service_group\": [\"C\"], \"share_class_structure\": \"MULTIPLE\", \"direct_sales_exempt_group\": [], \"other_sales_charged_group\": [], \"fact_status\": {\"fund_type\": \"VERIFIED\", \"share_class_structure\": \"VERIFIED\", \"subscription_fee_group\": \"VERIFIED\", \"service_fee_group\": \"VERIFIED\", \"direct_sales_exempt_group\": \"UNKNOWN\", \"other_sales_charged_group\": \"UNKNOWN\"}, \"condition_overrides\": {}, \"has_service_fee\": true, \"is_floating_fee\": false, \"floating_quote\": \"本基金的管理费按前一日基金资产净值的 1.20%年费率计提。\", \"floating_basis\": \"固定年费率管理费，未与持有期限或业绩挂钩。\", \"notes\": \"A类收取认申购费且不计提销售服务费；C类不收认申购费但从资产计提0.40%销售服务费。管理费1.20%、托管费0.20%均为固定费率。\", \"quotes_verified\": {\"fund_type\": true, \"class:A\": true, \"class:C\": true, \"floating\": true, \"class_set\": true}, \"class_set_quote\": \"本基金将基金份额分为 A 类和 C 类不同的类别。\", \"class_set_evidence\": {\"quote_verified\": true, \"set_complete_verified\": true, \"parsed_classes\": [\"A\", \"C\"], \"reason\": \"CLASS_SET_VERIFIED\"}, \"value_verified\": true, \"set_complete_verified\": true, \"fund_type_certification\": {}, \"channel_evidence\": {\"direct_sales_exempt\": \"\", \"other_sales_charged\": \"\"}, \"problems\": []}",
+        "instruction": "Rewrite ONLY [AUTHORIZED_SPAN] of the contract paragraph so that EVERY listed obligation is carried out at the same time. Keep all text outside the authorized span byte-identical. Preserve fee rates, percentages, amounts, dates, subjects, formulas, accounts, share classes and every fee topic unless an obligation explicitly removes it. Do not introduce a number that is not in the source, the guide text or the verified facts. Return the complete replacement for the span, not a diff. List the source literals you preserved.",
+        "response_schema": {
+          "type": "object",
+          "required": [
+            "replacement",
+            "preserved",
+            "basis"
+          ],
+          "properties": {
+            "replacement": {
+              "type": "string"
+            },
+            "preserved": {
+              "type": "array",
+              "maxItems": 20,
+              "items": {
+                "type": "string"
+              }
+            },
+            "basis": {
+              "type": "string"
+            }
+          }
+        },
+        "request_options": {
+          "thinking": {
+            "type": "disabled"
+          }
+        },
+        "max_completion_tokens": 8000
+      }
+    },
+    "response": {
+      "replacement": "",
+      "preserved": [],
+      "basis": "G13 requires deleting the sentence about charging a redemption fee of no less than 1.50% for investors holding fewer than 7 days and including it fully in fund assets. The authorized span contains only that sentence, so the replacement is empty and no source literals remain."
+    },
+    "event": {
+      "task_type": "recall_joint_compose",
+      "prompt_version": "recall_joint_compose_v1",
+      "context_sha256": "71bdf5c377c1f97fdf7007260df25ec614997390e04aac19c553e2ce510c885c",
+      "configured_model": "deepseek-v4.1-flash",
+      "actual_model": "deepseek-v4.1-flash",
+      "http_status": 200,
+      "finish_reason": "stop",
+      "error_code": null
+    }
+  },
+  "sha256": "d0041f010fd88cee549eb3474c32a7cd3a0197e0f0a2d8c47715c99c7fdc59ca"
+}

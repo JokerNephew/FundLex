@@ -1,0 +1,85 @@
+{
+  "head": "682e68a5b3ef2a58feb77460af70afabdb314379",
+  "scope": "Independent original Guide/source/final DOCX review; no live models; no runtime changes",
+  "gate": "FAIL",
+  "recommendation": "DO_NOT_ENTER_20_CASE",
+  "false_complete": "0 observed at delivery level; D01 artifact UNVERIFIED; operation proof defects confirmed in D02/D11",
+  "unauthorized_edit": "0 observed in available artifacts; D01 UNVERIFIED",
+  "cross_site_proof": "Absent placeholder sites incorrectly certify deletes in D02/D11; BLOCKER",
+  "planned_but_not_final": "Available D02/D11/D16 final DOCX matches Final Edit Set; D01 no artifact",
+  "false_block": "D02 placeholder sites; D11 G02 fee-group wording; D16 G02/G04 unsupported B-class Audit + G05 meeting-exemption misclassification",
+  "findings": [
+    {
+      "id": "BUS-FINAL-001",
+      "severity": "BLOCKER",
+      "root_cause": "absent locator placeholders become verified business sites and produce unsupported VERIFIED_ABSENT",
+      "cases": [
+        "D02",
+        "D11"
+      ]
+    },
+    {
+      "id": "BUS-FINAL-002",
+      "severity": "HIGH",
+      "root_cause": "already-correct A/D class set fails effect proof because wording uses 及 rather than canonical delimiter",
+      "cases": [
+        "D11"
+      ]
+    },
+    {
+      "id": "BUS-FINAL-003",
+      "severity": "HIGH",
+      "root_cause": "Audit unsupported fee-group template/B class opinion survives against exact Facts/effect proof",
+      "cases": [
+        "D16"
+      ]
+    },
+    {
+      "id": "BUS-FINAL-004",
+      "severity": "HIGH",
+      "root_cause": "G05 matching token in independent meeting-convening procedure treated as class-setting residual",
+      "cases": [
+        "D16"
+      ]
+    },
+    {
+      "id": "BUS-FINAL-005",
+      "severity": "BLOCKER",
+      "root_cause": "No D01 actual artifact due EDIT_OVERLAP_OR_ADJACENT",
+      "cases": [
+        "D01"
+      ]
+    }
+  ],
+  "expected_fail_closed": [
+    "G01 absent new policy at definitions",
+    "G16 missing four-component policy",
+    "D16 actual G12/G13/G17 residuals; genuine incomplete correctly blocked"
+  ],
+  "cases": {
+    "D01": {
+      "verdict": "UNVERIFIED",
+      "gate": "BLOCK",
+      "true_obligations_reviewed": 24,
+      "file": "D01-business-final-review.json"
+    },
+    "D02": {
+      "verdict": "INCOMPLETE_WITH_PROOF_DEFECTS",
+      "gate": "BLOCK",
+      "true_obligations_reviewed": 24,
+      "file": "D02-business-final-review.json"
+    },
+    "D11": {
+      "verdict": "INCOMPLETE_WITH_PROOF_DEFECTS",
+      "gate": "BLOCK",
+      "true_obligations_reviewed": 24,
+      "file": "D11-business-final-review.json"
+    },
+    "D16": {
+      "verdict": "INCOMPLETE_WITH_REAL_RESIDUALS",
+      "gate": "BLOCK",
+      "true_obligations_reviewed": 24,
+      "file": "D16-business-final-review.json"
+    }
+  }
+}

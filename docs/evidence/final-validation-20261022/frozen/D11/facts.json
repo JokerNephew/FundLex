@@ -1,0 +1,83 @@
+{
+  "fund_type": "open_regular",
+  "fund_type_quote": "基金的运作方式契约型开放式",
+  "fund_type_basis": "债券型证券投资基金，契约型开放式，非ETF、非QDII、非货币、非REITs。",
+  "class_count": 3,
+  "classes": [
+    {
+      "name": "A",
+      "subscription_fee": true,
+      "service_fee": false,
+      "current": true,
+      "rate": null,
+      "quote": "在投资者申购 A 类及 D 类基金份额时收取申购费用，不计提销售服务费"
+    },
+    {
+      "name": "C",
+      "subscription_fee": false,
+      "service_fee": true,
+      "current": true,
+      "rate": null,
+      "quote": "在投资者申购 C 类基金份额时不收取申购费用，而从本类别基金资产中计提销售服务费"
+    },
+    {
+      "name": "D",
+      "subscription_fee": true,
+      "service_fee": false,
+      "current": true,
+      "rate": null,
+      "quote": "在投资者申购 A 类及 D 类基金份额时收取申购费用，不计提销售服务费"
+    }
+  ],
+  "subscription_group": [
+    "A",
+    "D"
+  ],
+  "service_group": [
+    "C"
+  ],
+  "share_class_structure": "MULTIPLE",
+  "direct_sales_exempt_group": [],
+  "other_sales_charged_group": [],
+  "fact_status": {
+    "fund_type": "VERIFIED",
+    "share_class_structure": "VERIFIED",
+    "subscription_fee_group": "VERIFIED",
+    "service_fee_group": "VERIFIED",
+    "direct_sales_exempt_group": "UNKNOWN",
+    "other_sales_charged_group": "UNKNOWN"
+  },
+  "condition_overrides": {},
+  "has_service_fee": true,
+  "is_floating_fee": false,
+  "floating_quote": "本基金的管理费按前一日基金资产净值的 0.25%年费率计提。",
+  "floating_basis": "固定年费率管理费，未与持有期限或业绩挂钩。",
+  "notes": "C类销售服务费年费率0.05%；A类、D类不收取销售服务费。",
+  "quotes_verified": {
+    "fund_type": true,
+    "class:A": true,
+    "class:C": true,
+    "class:D": true,
+    "floating": true,
+    "class_set": true
+  },
+  "class_set_quote": "本基金将基金份额分为 A 类、C 类和 D 类三种不同的类别。在投资者申购 A 类及 D 类基金份额时收取申购费用，不计提销售服务费；在投资者申购 C 类基金份额时不收取申购费用，而从本类别基金资产中计提销售服务费。",
+  "class_set_evidence": {
+    "quote_verified": true,
+    "set_complete_verified": true,
+    "parsed_classes": [
+      "A",
+      "C",
+      "D"
+    ],
+    "reason": "CLASS_SET_VERIFIED"
+  },
+  "value_verified": true,
+  "set_complete_verified": true,
+  "fund_type_certification": {},
+  "channel_evidence": {
+    "direct_sales_exempt": "",
+    "other_sales_charged": ""
+  },
+  "problems": []
+}

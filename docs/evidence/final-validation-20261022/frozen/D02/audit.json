@@ -1,0 +1,592 @@
+{
+  "rounds": [
+    {
+      "rules": [
+        "G01",
+        "G03",
+        "G05",
+        "G08",
+        "G09",
+        "G11",
+        "G12",
+        "G13",
+        "G14",
+        "G15",
+        "G17",
+        "G18",
+        "G22"
+      ],
+      "results": [
+        {
+          "target_id": "S03_S04_S07_S16_S17_S20#1:T001",
+          "rule_id": "G01",
+          "verdict": "incomplete",
+          "reason": "AFTER is identical to BEFORE; the required appended clause about direct-sales A-class fee waiver, direct-sales C-class sales-service-fee waiver, and other-agency C-class one-year waiver was not added.",
+          "evidence_quote": "基金份额类别：本基金将基金份额分为 A 类和 C 类不同的类别。在投资者认购、申购基金份额时收取认购、申购费用，不计提销售服务费的，称为 A 类基金份额；在投资者认购、申购基金份额时不收取认购、申购费用，而是从本类别基金资产中计提销售服务费的，称为 C 类基金份额",
+          "evidence_verified": true,
+          "deletion_evidence": false,
+          "deterministic": false,
+          "failure_class": "GENERATION",
+          "affected_fact": "",
+          "affected_obligation": "G01:0 append 直销机构申购A类不收认购/申购费、直销机构申购C类不收销售服务费、其他销售机构申购C类持有超一年不再收取销售服务费",
+          "site_signature": "f42fe05e97db5f2b3237782ea3808e0b8ea21c4065b411e224c8047d54c1d1a0"
+        },
+        {
+          "target_id": "S03_S04_S07_S16_S17_S20#1:T004",
+          "rule_id": "G03",
+          "verdict": "completed",
+          "reason": "AFTER appends the required new clause after the share-class setting paragraph, stating direct-sales A-class purchases incur no subscription fee, direct-sales C-class purchases incur no sales service fee, and other-agency C-class purchases held over one year stop incurring sales service fees. The '调低销售服务费率' change is an authorized G05 edit, not an unauthorized addition.",
+          "evidence_quote": "投资者通过直销机构（含基金管理人及其销售子公司，下同）申购本基金A类基金份额时，不收取认购/申购费用；通过直销机构申购的C类基金份额，不收取销售服务费。对于投资者通过直销机构之外的其他销售机构申购的C类基金份额且持续持有期限超过一年的，不再继续收取销售服务费。",
+          "evidence_verified": true,
+          "deletion_evidence": false,
+          "deterministic": false,
+          "failure_class": "",
+          "affected_fact": "",
+          "affected_obligation": "",
+          "site_signature": "60908938d622839ed8ec78b1a02e422ab7ade75e15c144dedb09549dd128d9dc"
+        },
+        {
+          "target_id": "S03_S04_S07_S16_S17_S20#1:T007",
+          "rule_id": "G05",
+          "verdict": "completed",
+          "reason": "AFTER 将“调低赎回费率”替换为“调低销售服务费率”，符合 G05 的替换要求，且未丢失内容。",
+          "evidence_quote": "调低销售服务费率或变更收费方式",
+          "evidence_verified": true,
+          "deletion_evidence": false,
+          "deterministic": false,
+          "failure_class": "",
+          "affected_fact": "",
+          "affected_obligation": "",
+          "site_signature": "6fc7be9bf2711cb6b3f337ab0dceb40b9f9de7dce43529a6ea38439c267973e5"
+        },
+        {
+          "target_id": "S03_S04_S07_S16_S17_S20#1:T012",
+          "rule_id": "G08",
+          "verdict": "completed",
+          "reason": "AFTER replaces the original fee clause with the required text: A类 charges purchase fee, C类 does not, direct-sales A类 no fee, and other sales agencies' rate decided by manager and disclosed. No lost content.",
+          "evidence_quote": "本基金A类基金份额在申购时收取申购费用，C类基金份额不收取申购费用。通过直销机构申购本基金A类基金份额不收取申购费。通过直销机构以外的其他销售机构申购本基金的申购费率由基金管理人决定，并在招募说明书中列示。",
+          "evidence_verified": true,
+          "deletion_evidence": false,
+          "deterministic": false,
+          "failure_class": "",
+          "affected_fact": "",
+          "affected_obligation": "",
+          "site_signature": "3f5326de486e59cf1ab6e56517a92b64655e571b9e976c5e79f66c0c2d155ad3"
+        },
+        {
+          "target_id": "S03_S04_S07_S16_S17_S20#1:T013",
+          "rule_id": "G09",
+          "verdict": "completed",
+          "reason": "AFTER 将“扣除相应的费用”改为“扣除或加上相应的费用”，与 G09 要求的替换文本完全一致，且未丢失其他内容。",
+          "evidence_quote": "赎回金额为按实际确认的有效赎回份额乘以当日该类基金份额的基金份额净值并扣除或加上相应的费用，赎回金额单位为元。",
+          "evidence_verified": true,
+          "deletion_evidence": false,
+          "deterministic": false,
+          "failure_class": "",
+          "affected_fact": "",
+          "affected_obligation": "",
+          "site_signature": "9231a31f65073f295aa76a45f66afdf126bda6cb57d9d508c859b1714564d2c4"
+        },
+        {
+          "target_id": "S03_S04_S07_S16_S17_S20#1:T015",
+          "rule_id": "G11",
+          "verdict": "completed",
+          "reason": "AFTER replaces the original clause with the exact required wording: direct-sales A-class subscription free of charge, other sales agencies' A-class fee borne by investors and not included in fund assets, and C-class free of subscription fee. No required content lost.",
+          "evidence_quote": "通过直销机构申购本基金A类基金份额不收取申购费，通过其他销售机构申购本基金A类基金份额的申购费用由投资人承担，不列入基金财产。本基金C类基金份额不收取申购费用。",
+          "evidence_verified": true,
+          "deletion_evidence": false,
+          "deterministic": false,
+          "failure_class": "",
+          "affected_fact": "",
+          "affected_obligation": "",
+          "site_signature": "19c90b2f8e4d46bb5401826718a42770b6333310ad47f3f4ea1622a408a66d38"
+        },
+        {
+          "target_id": "Y004",
+          "rule_id": "G11",
+          "verdict": "completed",
+          "reason": "The original sentence '申购费用由投资人承担，不列入基金财产。' has been replaced by the full required wording, which retains the investor-borne, non-asset treatment for other sales agencies' A-class subscriptions while adding the direct-sales exemption and C-class statement.",
+          "evidence_quote": "通过其他销售机构申购本基金A类基金份额的申购费用由投资人承担，不列入基金财产。",
+          "evidence_verified": true,
+          "deletion_evidence": false,
+          "deterministic": false,
+          "failure_class": "",
+          "affected_fact": "",
+          "affected_obligation": "",
+          "site_signature": "19c90b2f8e4d46bb5401826718a42770b6333310ad47f3f4ea1622a408a66d38"
+        },
+        {
+          "target_id": "S03_S04_S07_S16_S17_S20#1:T016",
+          "rule_id": "G12",
+          "verdict": "completed",
+          "reason": "AFTER 将整段替换为要求的表述，删除了按比例归入基金财产、登记费/手续费以及 7 日 1.5% 赎回费等内容，与 G12 的目标文本完全一致，未丢失要求内容。",
+          "evidence_quote": "赎回费用由赎回基金份额的基金份额持有人承担，在基金份额持有人赎回基金份额时收取。赎回费用全额计入基金财产。",
+          "evidence_verified": true,
+          "deletion_evidence": false,
+          "deterministic": false,
+          "failure_class": "",
+          "affected_fact": "",
+          "affected_obligation": "",
+          "site_signature": "f9e3635e3093013c4a55e6190778ba445194d868111d5e07ff98f40ae65c618e"
+        },
+        {
+          "target_id": "S03_S04_S07_S16_S17_S20#1:T017",
+          "rule_id": "G13",
+          "verdict": "completed",
+          "reason": "The required sentence about investors with holding periods under 7 days being charged at least 1.5% and fully计入基金财产 has been removed; the AFTER text no longer contains that clause.",
+          "evidence_quote": "赎回费用全额计入基金财产。",
+          "evidence_verified": true,
+          "deletion_evidence": false,
+          "deterministic": false,
+          "failure_class": "",
+          "affected_fact": "",
+          "affected_obligation": "",
+          "site_signature": "e7c43c820f74a8655728c758d77ad8a4e71af8b79fe9711bac01251f74877e4d"
+        },
+        {
+          "target_id": "S03_S04_S07_S16_S17_S20#1:T018",
+          "rule_id": "G14",
+          "verdict": "completed",
+          "reason": "AFTER 将促销调低费率表述改为仅调低基金申购费率和销售服务费率，符合多份额类别规则 G14:5，且未丢失其他内容。",
+          "evidence_quote": "基金管理人可以适当调低基金申购费率和销售服务费率。",
+          "evidence_verified": true,
+          "deletion_evidence": false,
+          "deterministic": false,
+          "failure_class": "",
+          "affected_fact": "",
+          "affected_obligation": "",
+          "site_signature": "f0452abfee1f19a64dac67dc2716647d66eb48637c144df44e93da30b048bb1a"
+        },
+        {
+          "target_id": "S25_S26#1:T016",
+          "rule_id": "G15",
+          "verdict": "completed",
+          "reason": "The ledger planned a replace with an empty replacement, and the AFTER region for p1287 is empty (content deleted), so the target clause was removed as planned.",
+          "evidence_quote": "（该位置内容已删除）",
+          "evidence_verified": true,
+          "deletion_evidence": true,
+          "deterministic": false,
+          "failure_class": "",
+          "affected_fact": "",
+          "affected_obligation": "",
+          "site_signature": "7814daad0ee0865b2a714e27c6eaac1b30e555f04c3a0b65fc00a76867a92e48"
+        },
+        {
+          "target_id": "Y005",
+          "rule_id": "G15",
+          "verdict": "completed",
+          "reason": "The ledger planned a replace with an empty replacement, and the AFTER region for p821 is empty (content deleted), so the target clause was removed as planned.",
+          "evidence_quote": "（该位置内容已删除）",
+          "evidence_verified": true,
+          "deletion_evidence": true,
+          "deterministic": false,
+          "failure_class": "",
+          "affected_fact": "",
+          "affected_obligation": "",
+          "site_signature": "7814daad0ee0865b2a714e27c6eaac1b30e555f04c3a0b65fc00a76867a92e48"
+        },
+        {
+          "target_id": "S03_S04_S07_S16_S17_S20#1:T021",
+          "rule_id": "G17",
+          "verdict": "completed",
+          "reason": "The sales service fee usage clause at p822 was deleted as required by G17; the region is now empty.",
+          "evidence_quote": "（该位置内容已删除）",
+          "evidence_verified": true,
+          "deletion_evidence": true,
+          "deterministic": false,
+          "failure_class": "",
+          "affected_fact": "",
+          "affected_obligation": "",
+          "site_signature": "979c1768ea7205ef93bb6adc6187250dd81391bd45c15610f7b74c5db4fc0ba7"
+        },
+        {
+          "target_id": "S03_S04_S07_S16_S17_S20#1:T022",
+          "rule_id": "G17",
+          "verdict": "completed",
+          "reason": "The clause excluding offering-period expenses from the sales service fee scope at p823 was deleted as required by G17.",
+          "evidence_quote": "（该位置内容已删除）",
+          "evidence_verified": true,
+          "deletion_evidence": true,
+          "deterministic": false,
+          "failure_class": "",
+          "affected_fact": "",
+          "affected_obligation": "",
+          "site_signature": "979c1768ea7205ef93bb6adc6187250dd81391bd45c15610f7b74c5db4fc0ba7"
+        },
+        {
+          "target_id": "S25_S26#1:T018",
+          "rule_id": "G17",
+          "verdict": "completed",
+          "reason": "The sales service fee usage clause at p1288 was deleted as required by G17.",
+          "evidence_quote": "（该位置内容已删除）",
+          "evidence_verified": true,
+          "deletion_evidence": true,
+          "deterministic": false,
+          "failure_class": "",
+          "affected_fact": "",
+          "affected_obligation": "",
+          "site_signature": "979c1768ea7205ef93bb6adc6187250dd81391bd45c15610f7b74c5db4fc0ba7"
+        },
+        {
+          "target_id": "S25_S26#1:T019",
+          "rule_id": "G17",
+          "verdict": "completed",
+          "reason": "The clause excluding offering-period expenses from the sales service fee scope at p1289 was deleted as required by G17.",
+          "evidence_quote": "（该位置内容已删除）",
+          "evidence_verified": true,
+          "deletion_evidence": true,
+          "deterministic": false,
+          "failure_class": "",
+          "affected_fact": "",
+          "affected_obligation": "",
+          "site_signature": "979c1768ea7205ef93bb6adc6187250dd81391bd45c15610f7b74c5db4fc0ba7"
+        },
+        {
+          "target_id": "S03_S04_S07_S16_S17_S20#1:T023",
+          "rule_id": "G18",
+          "verdict": "completed",
+          "reason": "AFTER p848 replaces the sales-service-fee wording with the required '费用收取不同' phrasing, matching G18:0 exactly.",
+          "evidence_quote": "由于本基金A类基金份额和C类基金份额费用收取不同",
+          "evidence_verified": true,
+          "deletion_evidence": false,
+          "deterministic": false,
+          "failure_class": "",
+          "affected_fact": "",
+          "affected_obligation": "",
+          "site_signature": "34f7181ce96c40563b04fc708db802618cd9808d56401a76284517696f7ebc27"
+        },
+        {
+          "target_id": "S25_S26#1:T020",
+          "rule_id": "G18",
+          "verdict": "completed",
+          "reason": "AFTER p1257 contains the full required replacement sentence with the new '费用收取不同' wording and retains the surrounding distribution-rights text.",
+          "evidence_quote": "本基金同一类别的每一基金份额享有同等分配权。由于本基金A类基金份额和C类基金份额费用收取不同，各基金份额类别对应的可分配收益将有所不同；",
+          "evidence_verified": true,
+          "deletion_evidence": false,
+          "deterministic": false,
+          "failure_class": "",
+          "affected_fact": "",
+          "affected_obligation": "",
+          "site_signature": "34f7181ce96c40563b04fc708db802618cd9808d56401a76284517696f7ebc27"
+        },
+        {
+          "target_id": "S03_S04_S07_S16_S17_S20#1:T024",
+          "rule_id": "G22",
+          "verdict": "completed",
+          "reason": "AFTER at p1001 matches the required replacement text exactly, including the added sales-service-fee return clause.",
+          "evidence_quote": "依据基金财产清算的分配方案，将基金财产清算后的全部剩余资产扣除基金财产清算费用、交纳所欠税款并清偿基金债务后，按基金份额持有人持有的基金份额比例进行分配，并加上返还基金份额持有人的销售服务费（如有）。",
+          "evidence_verified": true,
+          "deletion_evidence": false,
+          "deterministic": false,
+          "failure_class": "",
+          "affected_fact": "",
+          "affected_obligation": "",
+          "site_signature": "c2116a23f59d764d13d0851f0b220a3b2716710c5327897a8834bb3a296d3bd6"
+        },
+        {
+          "target_id": "S25_S26#2:T001",
+          "rule_id": "G22",
+          "verdict": "completed",
+          "reason": "AFTER at p1371 matches the required replacement text exactly, including the added sales-service-fee return clause.",
+          "evidence_quote": "依据基金财产清算的分配方案，将基金财产清算后的全部剩余资产扣除基金财产清算费用、交纳所欠税款并清偿基金债务后，按基金份额持有人持有的基金份额比例进行分配，并加上返还基金份额持有人的销售服务费（如有）。",
+          "evidence_verified": true,
+          "deletion_evidence": false,
+          "deterministic": false,
+          "failure_class": "",
+          "affected_fact": "",
+          "affected_obligation": "",
+          "site_signature": "c2116a23f59d764d13d0851f0b220a3b2716710c5327897a8834bb3a296d3bd6"
+        }
+      ],
+      "missed_targets": [],
+      "dropped": [],
+      "artifact_failures": [
+        {
+          "rule_id": "G01",
+          "operation_id": "G01:0",
+          "obligation_id": "G01:B1:O1",
+          "location": "p93",
+          "code": "CLAIM_OPERATION_NOT_PLANNED",
+          "reason": "operation effect is not proven at every verified site"
+        },
+        {
+          "rule_id": "G02",
+          "operation_id": "G02:0",
+          "obligation_id": "G02:B1:O1",
+          "location": "p1036",
+          "code": "CLAIM_OPERATION_NOT_PLANNED",
+          "reason": "operation effect is not proven at every verified site"
+        },
+        {
+          "rule_id": "G03",
+          "operation_id": "G03:0",
+          "obligation_id": "G03:B1:O1",
+          "location": "p1036",
+          "code": "CLAIM_OPERATION_NOT_PLANNED",
+          "reason": "operation effect is not proven at every verified site"
+        },
+        {
+          "rule_id": "G04",
+          "operation_id": "G04:0",
+          "obligation_id": "G04:B1:O1",
+          "location": "p1036",
+          "code": "CLAIM_OPERATION_NOT_PLANNED",
+          "reason": "operation effect is not proven at every verified site"
+        },
+        {
+          "rule_id": "G08",
+          "operation_id": "G08:0",
+          "obligation_id": "G08:B1:O1",
+          "location": "p1036",
+          "code": "CLAIM_OPERATION_NOT_PLANNED",
+          "reason": "operation effect is not proven at every verified site"
+        },
+        {
+          "rule_id": "G09",
+          "operation_id": "G09:0",
+          "obligation_id": "G09:B1:O1",
+          "location": "p1036",
+          "code": "CLAIM_OPERATION_NOT_PLANNED",
+          "reason": "operation effect is not proven at every verified site"
+        },
+        {
+          "rule_id": "G11",
+          "operation_id": "G11:0",
+          "obligation_id": "G11:B1:O1",
+          "location": "p1036",
+          "code": "CLAIM_OPERATION_NOT_PLANNED",
+          "reason": "operation effect is not proven at every verified site"
+        },
+        {
+          "rule_id": "G12",
+          "operation_id": "G12:0",
+          "obligation_id": "G12:B1:O1",
+          "location": "p1036",
+          "code": "CLAIM_OPERATION_NOT_PLANNED",
+          "reason": "operation effect is not proven at every verified site"
+        },
+        {
+          "rule_id": "G14",
+          "operation_id": "G14:3",
+          "obligation_id": "G14:B2:O1",
+          "location": "p1036",
+          "code": "CLAIM_OPERATION_NOT_PLANNED",
+          "reason": "operation effect is not proven at every verified site"
+        },
+        {
+          "rule_id": "G14",
+          "operation_id": "G14:4",
+          "obligation_id": "G14:B2:O2",
+          "location": "",
+          "code": "CLAIM_OPERATION_UNPROVEN",
+          "reason": "verified site missing"
+        },
+        {
+          "rule_id": "G16",
+          "operation_id": "G16:0",
+          "obligation_id": "G16:B1:O1",
+          "location": "",
+          "code": "CLAIM_OPERATION_UNPROVEN",
+          "reason": "verified site missing"
+        },
+        {
+          "rule_id": "G22",
+          "operation_id": "G22:0",
+          "obligation_id": "G22:B1:O1",
+          "location": "p1036",
+          "code": "CLAIM_OPERATION_NOT_PLANNED",
+          "reason": "operation effect is not proven at every verified site"
+        }
+      ],
+      "round": 0,
+      "scope": "full",
+      "issues": [
+        {
+          "code": "AUDIT_NOT_COMPLETED",
+          "rule_id": "G01",
+          "target_id": "S03_S04_S07_S16_S17_S20#1:T001",
+          "location": "p93",
+          "verdict": "incomplete",
+          "reason": "AFTER is identical to BEFORE; the required appended clause about direct-sales A-class fee waiver, direct-sales C-class sales-service-fee waiver, and other-agency C-class one-year waiver was not added.",
+          "evidence_verified": true,
+          "failure_class": "GENERATION",
+          "affected_fact": "",
+          "affected_obligation": "G01:0 append 直销机构申购A类不收认购/申购费、直销机构申购C类不收销售服务费、其他销售机构申购C类持有超一年不再收取销售服务费"
+        }
+      ],
+      "recovery_state_hashes": {
+        "targets_hash": "e5de800df3d08f24d4e5f73b13225bae984eb09b7363294fb079cb15a976193a",
+        "plan_hash": "3c3fc8b03b06006c422794ba44ba4088650b62c9bfade987248b9e253f36676c",
+        "artifact_hash": "7a989dd24ffdf5da55d1a3dd91ebc81c20a3858c2e384263d4c169695c29df29",
+        "failures_hash": "ab9ec0c215c93de60911c8106b476dbb3c9740d18cc207dc46ce322e243d44ae",
+        "facts_hash": "bf33a28a71f30f65d8f8a930bd6005873947442019a4d97e4a86f05a8067a80a",
+        "applicability_hash": "6c99444f9f0c82bc5cb81ff5395717ee53fe6addb3bdfbde903d5cfb501b0623",
+        "scope_hash": "12d1df15d05c6a84a78c2b64f7d6bbdf63ef6eaaf7b62720d3d596b7a8d45c11",
+        "operation_coverage_hash": "09aa18c8cfea881c8aa07a34f74ef78ac24c8f115fca5d16ad646850fbb2eec9",
+        "final_edit_hash": "e3d57b407cc973d0b01a4cd74a3fbf08e1fd11726fa699776718683261073842"
+      }
+    },
+    {
+      "rules": [
+        "G01"
+      ],
+      "results": [
+        {
+          "target_id": "S03_S04_S07_S16_S17_S20#1:T001",
+          "rule_id": "G01",
+          "verdict": "incomplete",
+          "reason": "AFTER is identical to BEFORE; the required appended clause about direct-sales A-class fee waiver, direct-sales C-class sales-service-fee waiver, and other-agency C-class one-year waiver was not added.",
+          "evidence_quote": "基金份额类别：本基金将基金份额分为 A 类和 C 类不同的类别。在投资者认购、申购基金份额时收取认购、申购费用，不计提销售服务费的，称为 A 类基金份额；在投资者认购、申购基金份额时不收取认购、申购费用，而是从本类别基金资产中计提销售服务费的，称为 C 类基金份额",
+          "evidence_verified": true,
+          "deletion_evidence": false,
+          "deterministic": false,
+          "failure_class": "GENERATION",
+          "affected_fact": "",
+          "affected_obligation": "G01:0 append 直销机构申购A类不收认购/申购费、直销机构申购C类不收销售服务费、其他销售机构申购C类持有超一年不再收取销售服务费",
+          "site_signature": "f42fe05e97db5f2b3237782ea3808e0b8ea21c4065b411e224c8047d54c1d1a0"
+        }
+      ],
+      "missed_targets": [],
+      "dropped": [],
+      "artifact_failures": [
+        {
+          "rule_id": "G01",
+          "operation_id": "G01:0",
+          "obligation_id": "G01:B1:O1",
+          "location": "p93",
+          "code": "CLAIM_OPERATION_NOT_PLANNED",
+          "reason": "operation effect is not proven at every verified site"
+        },
+        {
+          "rule_id": "G02",
+          "operation_id": "G02:0",
+          "obligation_id": "G02:B1:O1",
+          "location": "p1036",
+          "code": "CLAIM_OPERATION_NOT_PLANNED",
+          "reason": "operation effect is not proven at every verified site"
+        },
+        {
+          "rule_id": "G03",
+          "operation_id": "G03:0",
+          "obligation_id": "G03:B1:O1",
+          "location": "p1036",
+          "code": "CLAIM_OPERATION_NOT_PLANNED",
+          "reason": "operation effect is not proven at every verified site"
+        },
+        {
+          "rule_id": "G04",
+          "operation_id": "G04:0",
+          "obligation_id": "G04:B1:O1",
+          "location": "p1036",
+          "code": "CLAIM_OPERATION_NOT_PLANNED",
+          "reason": "operation effect is not proven at every verified site"
+        },
+        {
+          "rule_id": "G08",
+          "operation_id": "G08:0",
+          "obligation_id": "G08:B1:O1",
+          "location": "p1036",
+          "code": "CLAIM_OPERATION_NOT_PLANNED",
+          "reason": "operation effect is not proven at every verified site"
+        },
+        {
+          "rule_id": "G09",
+          "operation_id": "G09:0",
+          "obligation_id": "G09:B1:O1",
+          "location": "p1036",
+          "code": "CLAIM_OPERATION_NOT_PLANNED",
+          "reason": "operation effect is not proven at every verified site"
+        },
+        {
+          "rule_id": "G11",
+          "operation_id": "G11:0",
+          "obligation_id": "G11:B1:O1",
+          "location": "p1036",
+          "code": "CLAIM_OPERATION_NOT_PLANNED",
+          "reason": "operation effect is not proven at every verified site"
+        },
+        {
+          "rule_id": "G12",
+          "operation_id": "G12:0",
+          "obligation_id": "G12:B1:O1",
+          "location": "p1036",
+          "code": "CLAIM_OPERATION_NOT_PLANNED",
+          "reason": "operation effect is not proven at every verified site"
+        },
+        {
+          "rule_id": "G14",
+          "operation_id": "G14:3",
+          "obligation_id": "G14:B2:O1",
+          "location": "p1036",
+          "code": "CLAIM_OPERATION_NOT_PLANNED",
+          "reason": "operation effect is not proven at every verified site"
+        },
+        {
+          "rule_id": "G14",
+          "operation_id": "G14:4",
+          "obligation_id": "G14:B2:O2",
+          "location": "",
+          "code": "CLAIM_OPERATION_UNPROVEN",
+          "reason": "verified site missing"
+        },
+        {
+          "rule_id": "G16",
+          "operation_id": "G16:0",
+          "obligation_id": "G16:B1:O1",
+          "location": "",
+          "code": "CLAIM_OPERATION_UNPROVEN",
+          "reason": "verified site missing"
+        },
+        {
+          "rule_id": "G22",
+          "operation_id": "G22:0",
+          "obligation_id": "G22:B1:O1",
+          "location": "p1036",
+          "code": "CLAIM_OPERATION_NOT_PLANNED",
+          "reason": "operation effect is not proven at every verified site"
+        }
+      ],
+      "round": 1,
+      "scope": "incremental",
+      "issues": [
+        {
+          "code": "AUDIT_NOT_COMPLETED",
+          "rule_id": "G01",
+          "target_id": "S03_S04_S07_S16_S17_S20#1:T001",
+          "location": "p93",
+          "verdict": "incomplete",
+          "reason": "AFTER is identical to BEFORE; the required appended clause about direct-sales A-class fee waiver, direct-sales C-class sales-service-fee waiver, and other-agency C-class one-year waiver was not added.",
+          "evidence_verified": true,
+          "failure_class": "GENERATION",
+          "affected_fact": "",
+          "affected_obligation": "G01:0 append 直销机构申购A类不收认购/申购费、直销机构申购C类不收销售服务费、其他销售机构申购C类持有超一年不再收取销售服务费"
+        }
+      ],
+      "recovery_state_hashes": {
+        "targets_hash": "e5de800df3d08f24d4e5f73b13225bae984eb09b7363294fb079cb15a976193a",
+        "plan_hash": "3c3fc8b03b06006c422794ba44ba4088650b62c9bfade987248b9e253f36676c",
+        "artifact_hash": "7a989dd24ffdf5da55d1a3dd91ebc81c20a3858c2e384263d4c169695c29df29",
+        "failures_hash": "ab9ec0c215c93de60911c8106b476dbb3c9740d18cc207dc46ce322e243d44ae",
+        "facts_hash": "bf33a28a71f30f65d8f8a930bd6005873947442019a4d97e4a86f05a8067a80a",
+        "applicability_hash": "6c99444f9f0c82bc5cb81ff5395717ee53fe6addb3bdfbde903d5cfb501b0623",
+        "scope_hash": "12d1df15d05c6a84a78c2b64f7d6bbdf63ef6eaaf7b62720d3d596b7a8d45c11",
+        "operation_coverage_hash": "09aa18c8cfea881c8aa07a34f74ef78ac24c8f115fca5d16ad646850fbb2eec9",
+        "final_edit_hash": "e3d57b407cc973d0b01a4cd74a3fbf08e1fd11726fa699776718683261073842"
+      }
+    }
+  ],
+  "issues": [
+    {
+      "code": "AUDIT_NOT_COMPLETED",
+      "rule_id": "G01",
+      "target_id": "S03_S04_S07_S16_S17_S20#1:T001",
+      "location": "p93",
+      "verdict": "incomplete",
+      "reason": "AFTER is identical to BEFORE; the required appended clause about direct-sales A-class fee waiver, direct-sales C-class sales-service-fee waiver, and other-agency C-class one-year waiver was not added.",
+      "evidence_verified": true,
+      "failure_class": "GENERATION",
+      "affected_fact": "",
+      "affected_obligation": "G01:0 append 直销机构申购A类不收认购/申购费、直销机构申购C类不收销售服务费、其他销售机构申购C类持有超一年不再收取销售服务费"
+    }
+  ]
+}

@@ -1,0 +1,70 @@
+{
+  "validation_head": "22c15aa4d8d736f2a2fc46a29bc3ed8611475f2f",
+  "branch": "refactor/recovery-architecture",
+  "started_at": "2026-10-21T14:13:21.947066+00:00",
+  "offline": {
+    "passed": 992,
+    "failed": 0,
+    "skipped": 6,
+    "warnings": 2,
+    "pytest_seconds": 196.14,
+    "compileall": "PASS",
+    "diff_check": "PASS",
+    "command": ".venv/bin/python -m pytest tests -q",
+    "log": "logs/pytest-22c15aa.txt"
+  },
+  "guide": {
+    "state": "CERTIFIED",
+    "source_sha256": "b77be53c3439d785a9ffad0f09d8d03ba74f7722397576b999ae6f5dd6eef895",
+    "guide_document_sha256": "45dd77460f2ef93d29001c0833c220f89de99dafb19d32a8b73653b55f92c8d7",
+    "rule_count": 22,
+    "operation_count": 34
+  },
+  "cases": [
+    "D01",
+    "D02",
+    "D11",
+    "D16"
+  ],
+  "model_run_limits": {
+    "max_http_attempts_per_case": 192,
+    "max_cost_usd_per_case": 0.6,
+    "max_total_http_attempts": 768,
+    "max_total_cost_usd": 2.4,
+    "concurrency_per_case": 1,
+    "case_execution": "sequential",
+    "business_rounds": 3,
+    "sweep_chunks": 40,
+    "retries": "inherit unchanged from current configuration"
+  },
+  "runtime_ledger_root": "/tmp/opencode/final-validation-20261021/revalidation-22c15aa",
+  "production_budget_modified": false,
+  "gate": "PENDING",
+  "remaining_case_limits": {
+    "D01": {
+      "max_http_attempts": 116,
+      "max_cost_usd": 0.5555124,
+      "previous_calls": 76,
+      "previous_cost_usd": 0.04448759999999999
+    },
+    "D02": {
+      "max_http_attempts": 189,
+      "max_cost_usd": 0.586962,
+      "previous_calls": 3,
+      "previous_cost_usd": 0.013038
+    },
+    "D11": {
+      "max_http_attempts": 189,
+      "max_cost_usd": 0.58786485,
+      "previous_calls": 3,
+      "previous_cost_usd": 0.01213515
+    },
+    "D16": {
+      "max_http_attempts": 187,
+      "max_cost_usd": 0.5796882,
+      "previous_calls": 5,
+      "previous_cost_usd": 0.020311799999999998
+    }
+  },
+  "previous_attempt": "../"
+}

@@ -1,0 +1,61 @@
+{
+  "body": {
+    "schema_version": "fundlex-model-cassette-v1",
+    "request": {
+      "task_type": "recall_locate",
+      "prompt_version": "recall_locate_v1",
+      "configured_model": "deepseek-v4.1-flash",
+      "context_sha256": "68ba31e17953c638be0d66bb8521955a99642967e606a9323cf3150d5c4beea7",
+      "request": {
+        "bounded_context": "CANDIDATE_PARAGRAPHS\n[p132] 法律法规对投资比例的要求。目标 ETF 作为一种特殊的基金品种，可将全部或接近全部的基金资产投资于标的指数成份股及备选成份股；而本基金作为普通的开放式基金，每个交易日日终在扣除股指期货、股票期权、国债期货合约需缴纳的交易保证金后，仍需保留不低于基金资产净值 5%的现金或者到期日在一年以内的政府债券。 \n[p133] 申购赎回的影响。目标 ETF 采取按照最小申购、赎回单位和申购、赎回清单要求进行申赎的方式，申购赎回对基金净值影响较小；而本基金采取按照未知价法进行申赎的方式，大额申赎可能会对基金净值产生一定冲击。 \n[p134] 十、基金的份额类别设置     \n[p135] 本基金根据认购、申购费用收取方式的不同，将基金份额分为不同的类别。在投资者认购、申购基金份额时收取认购、申购费用，而不计提销售服务费的，称为 A 类基金份额；在投资者认购、申购基金份额时不收取认购、申购费用，而是从本类别基金资产中计提销售服务费的，称为 C 类基金份额。 \n[p136] 本基金 A 类、C 类基金份额分别设置代码。由于基金费用的不同，本基金 A 类基金份额和 C 类基金份额将分别计算基金份额净值。计算公式为： \n[p137] 计算日某类基金份额净值＝计算日该类基金份额的基金资产净值/计算日该类基金份额余额总数投资者在认购、申购基金份额时可自行选择基金份额类别。 \n[p138] 有关基金份额类别的具体设置、费率水平等由基金管理人确定，并在招募说明书中公告。根据基金销售情况，在符合法律法规且不损害已有基金份额持有人权益的情况下，基金管理人在履行适当程序后可以增加新的基金份额类别、或者在法律法规和基金合同规定的范围内变更现有基金份额类别的申购费率、调低赎回费率或变更收费方式，或者停止现有基金份额类别的销售等。调整前，基金管理人需履行适当程序并及时公告。 \n[p140] 第四部分  基金份额的发售 \n[p142] 一、基金份额的发售时间、发售方式、发售对象 \n[p143] 发售时间 \n[p144] 自基金份额发售之日起最长不得超过 3 个月，具体发售时间见基金份额发售公告。 \n\nGUIDE_OPERATION\nGUIDE_RULES\n[G05] 基金的基本情况-份额类别设置： | section_hint=基金的基本情况\n  requirement: 对原条款进行调整：如果有收取销售服务费的份额类别，则将其中的“调低赎回费率”改为“调低销售服务费率”，否则直接删除“、调低赎回费率”；并删除“并报中国证监会备案”。\n  [G05:0] replace: 调低赎回费率 -> 调低销售服务费率\n  [G05:1] delete: 、调低赎回费率\n  [G05:2] delete: 并报中国证监会备案\n\nFACTS\n{\"fund_type\": \"open_regular\", \"fund_type_quote\": \"ETF 联接基金\", \"fund_type_basis\": \"本基金为广发上证50ETF的联接基金，采用契约型开放式运作，属于普通开放式基金，而非ETF本身。\", \"class_count\": 2, \"classes\": [{\"name\": \"A类\", \"subscription_fee\": true, \"service_fee\": false, \"current\": true, \"rate\": null, \"quote\": \"在投资者认购、申购基金份额时收取认购、申购费用，而不计提销售服务费的，称为 A 类基金份额\"}, {\"name\": \"C类\", \"subscription_fee\": false, \"service_fee\": true, \"current\": true, \"rate\": null, \"quote\": \"在投资者认购、申购基金份额时不收取认购、申购费用，而是从本类别基金资产中计提销售服务费的，称为 C 类基金份额\"}], \"subscription_group\": [\"A类\"], \"service_group\": [\"C类\"], \"share_class_structure\": \"MULTIPLE\", \"direct_sales_exempt_group\": [], \"other_sales_charged_group\": [], \"fact_status\": {\"fund_type\": \"VERIFIED\", \"share_class_structure\": \"VERIFIED\", \"subscription_fee_group\": \"VERIFIED\", \"service_fee_group\": \"VERIFIED\", \"direct_sales_exempt_group\": \"UNKNOWN\", \"other_sales_charged_group\": \"UNKNOWN\"}, \"condition_overrides\": {}, \"has_service_fee\": true, \"is_floating_fee\": false, \"floating_quote\": \"本基金管理费按前一日基金资产净值扣除所持有目标 ETF 基金份额部分的基金资产净值后的余额（若为负数，则取 0）的 0.15%年费率计提。\", \"floating_basis\": \"管理费按固定年费率0.15%计提，未与持有期限或业绩挂钩。\", \"notes\": \"A类收取申购费、不计提销售服务费；C类不收申购费、按0.20%年费率计提销售服务费。\", \"quotes_verified\": {\"fund_type\": true, \"class:A类\": true, \"class:C类\": true, \"floating\": true, \"class_set\": true}, \"class_set_quote\": \"本基金将基金份额分为 A 类和 C 类不同的类别。\", \"class_set_evidence\": {\"quote_verified\": true, \"set_complete_verified\": true, \"parsed_classes\": [\"A\", \"C\"], \"reason\": \"CLASS_SET_VERIFIED\"}, \"value_verified\": true, \"set_complete_verified\": true, \"fund_type_certification\": {}, \"channel_evidence\": {\"direct_sales_exempt\": \"\", \"other_sales_charged\": \"\"}, \"problems\": []}\n\nFAILED_QUOTE\n并报中国证监会备案",
+        "instruction": "The deterministic resolver could not bind this obligation to the contract. Read the candidate paragraphs and return the ONE paragraph location plus an exact contiguous quote from that paragraph that carries the obligation. Do not paraphrase, do not merge two paragraphs, and do not return offsets. If no paragraph carries it, return an empty quote and explain why. semantic_role states what the clause does (for example class_definition, subscription_fee, payment_mechanism).",
+        "response_schema": {
+          "type": "object",
+          "required": [
+            "location",
+            "quote",
+            "semantic_role",
+            "reason"
+          ],
+          "properties": {
+            "location": {
+              "type": "string"
+            },
+            "quote": {
+              "type": "string"
+            },
+            "semantic_role": {
+              "type": "string"
+            },
+            "reason": {
+              "type": "string"
+            }
+          }
+        },
+        "request_options": {
+          "thinking": {
+            "type": "disabled"
+          }
+        },
+        "max_completion_tokens": 8000
+      }
+    },
+    "response": {
+      "location": "p138",
+      "quote": "调整前，基金管理人需履行适当程序并及时公告。",
+      "semantic_role": "share_class_adjustment_procedure",
+      "reason": "The obligation concerns adjusting share class settings and requires the manager to follow proper procedures and announce promptly. The failed quote '并报中国证监会备案' does not appear in any candidate paragraph; p138 is the only paragraph addressing share class adjustment procedures, and its exact text carries the procedural obligation without the CSRC filing language."
+    },
+    "event": {
+      "task_type": "recall_locate",
+      "prompt_version": "recall_locate_v1",
+      "context_sha256": "68ba31e17953c638be0d66bb8521955a99642967e606a9323cf3150d5c4beea7",
+      "configured_model": "deepseek-v4.1-flash",
+      "actual_model": "deepseek-v4.1-flash",
+      "http_status": 200,
+      "finish_reason": "stop",
+      "error_code": null
+    }
+  },
+  "sha256": "b2a8aef6bbcff29e66c4bad47cf4c63db0e0247ae483092f709a34039e0e22aa"
+}

@@ -1,0 +1,467 @@
+{
+  "initial_dirty_locations": [
+    "p130",
+    "p228",
+    "p229",
+    "p91"
+  ],
+  "retention_trace": [
+    {
+      "index": 0,
+      "operation_keys": [
+        "G05:0"
+      ],
+      "old_target": "S03_S04_S07_S16_S17_S20_S26#1:T003",
+      "location": "p135",
+      "action": "REPLAN",
+      "direct_dirty_site": false,
+      "dirty_id_overlap": [
+        "S03_S04_S07_S16_S17_S20_S26#1:T003"
+      ],
+      "new_dirty_ids": [],
+      "current_target_at_old_id": {
+        "S03_S04_S07_S16_S17_S20_S26#1:T003": {
+          "rule_id": "G03",
+          "location": "p130",
+          "operations": [
+            "G03:0"
+          ]
+        }
+      }
+    },
+    {
+      "index": 1,
+      "operation_keys": [
+        "G08:0"
+      ],
+      "old_target": "S03_S04_S07_S16_S17_S20_S26#1:T007",
+      "location": "p226",
+      "action": "RETAIN",
+      "direct_dirty_site": false,
+      "dirty_id_overlap": [],
+      "new_dirty_ids": [],
+      "current_target_at_old_id": {
+        "S03_S04_S07_S16_S17_S20_S26#1:T007": {
+          "rule_id": "G05",
+          "location": "p135",
+          "operations": [
+            "G05:2"
+          ]
+        }
+      }
+    },
+    {
+      "index": 2,
+      "operation_keys": [
+        "G09:0"
+      ],
+      "old_target": "S03_S04_S07_S16_S17_S20_S26#1:T008",
+      "location": "p227",
+      "action": "RETAIN",
+      "direct_dirty_site": false,
+      "dirty_id_overlap": [],
+      "new_dirty_ids": [],
+      "current_target_at_old_id": {
+        "S03_S04_S07_S16_S17_S20_S26#1:T008": {
+          "rule_id": "G06",
+          "location": "p135",
+          "operations": [
+            "G06:0"
+          ]
+        }
+      }
+    },
+    {
+      "index": 3,
+      "operation_keys": [
+        "G11:0"
+      ],
+      "old_target": "S03_S04_S07_S16_S17_S20_S26#1:T009",
+      "location": "p228",
+      "action": "REPLAN",
+      "direct_dirty_site": true,
+      "dirty_id_overlap": [],
+      "new_dirty_ids": [
+        "S03_S04_S07_S16_S17_S20_S26#1:T009"
+      ],
+      "current_target_at_old_id": {
+        "S03_S04_S07_S16_S17_S20_S26#1:T009": {
+          "rule_id": "G07",
+          "location": "p226",
+          "operations": [
+            "G07:0"
+          ]
+        }
+      }
+    },
+    {
+      "index": 4,
+      "operation_keys": [
+        "G12:1"
+      ],
+      "old_target": "S03_S04_S07_S16_S17_S20_S26#1:T010",
+      "location": "p229",
+      "action": "REPLAN",
+      "direct_dirty_site": true,
+      "dirty_id_overlap": [],
+      "new_dirty_ids": [
+        "S03_S04_S07_S16_S17_S20_S26#1:T010"
+      ],
+      "current_target_at_old_id": {
+        "S03_S04_S07_S16_S17_S20_S26#1:T010": {
+          "rule_id": "G08",
+          "location": "p226",
+          "operations": [
+            "G08:0"
+          ]
+        }
+      }
+    },
+    {
+      "index": 5,
+      "operation_keys": [
+        "G13:0"
+      ],
+      "old_target": "S03_S04_S07_S16_S17_S20_S26#1:T011",
+      "location": "p230",
+      "action": "RETAIN",
+      "direct_dirty_site": false,
+      "dirty_id_overlap": [],
+      "new_dirty_ids": [],
+      "current_target_at_old_id": {
+        "S03_S04_S07_S16_S17_S20_S26#1:T011": {
+          "rule_id": "G09",
+          "location": "p227",
+          "operations": [
+            "G09:0"
+          ]
+        }
+      }
+    },
+    {
+      "index": 6,
+      "operation_keys": [
+        "G14:3"
+      ],
+      "old_target": "S03_S04_S07_S16_S17_S20_S26#1:T012",
+      "location": "p231",
+      "action": "REPLAN",
+      "direct_dirty_site": false,
+      "dirty_id_overlap": [
+        "S03_S04_S07_S16_S17_S20_S26#1:T012"
+      ],
+      "new_dirty_ids": [],
+      "current_target_at_old_id": {
+        "S03_S04_S07_S16_S17_S20_S26#1:T012": {
+          "rule_id": "G10",
+          "location": "p228",
+          "operations": [
+            "G10:0"
+          ]
+        }
+      }
+    },
+    {
+      "index": 7,
+      "operation_keys": [
+        "G18:0"
+      ],
+      "old_target": "S03_S04_S07_S16_S17_S20_S26#1:T015",
+      "location": "p785",
+      "action": "REPLAN",
+      "direct_dirty_site": false,
+      "dirty_id_overlap": [
+        "S03_S04_S07_S16_S17_S20_S26#1:T015"
+      ],
+      "new_dirty_ids": [],
+      "current_target_at_old_id": {
+        "S03_S04_S07_S16_S17_S20_S26#1:T015": {
+          "rule_id": "G12",
+          "location": "p229",
+          "operations": [
+            "G12:1"
+          ]
+        }
+      }
+    },
+    {
+      "index": 8,
+      "operation_keys": [
+        "G22:0"
+      ],
+      "old_target": "S03_S04_S07_S16_S17_S20_S26#1:T016",
+      "location": "p934",
+      "action": "RETAIN",
+      "direct_dirty_site": false,
+      "dirty_id_overlap": [],
+      "new_dirty_ids": [],
+      "current_target_at_old_id": {
+        "S03_S04_S07_S16_S17_S20_S26#1:T016": {
+          "rule_id": "G13",
+          "location": "p230",
+          "operations": [
+            "G13:0"
+          ]
+        }
+      }
+    },
+    {
+      "index": 9,
+      "operation_keys": [
+        "G22:0"
+      ],
+      "old_target": "S03_S04_S07_S16_S17_S20_S26#1:T017",
+      "location": "p1299",
+      "action": "RETAIN",
+      "direct_dirty_site": false,
+      "dirty_id_overlap": [],
+      "new_dirty_ids": [],
+      "current_target_at_old_id": {
+        "S03_S04_S07_S16_S17_S20_S26#1:T017": {
+          "rule_id": "G14",
+          "location": "p231",
+          "operations": [
+            "G14:3"
+          ]
+        }
+      }
+    },
+    {
+      "index": 10,
+      "operation_keys": [
+        "G15:0"
+      ],
+      "old_target": "Y005",
+      "location": "p1221",
+      "action": "RETAIN",
+      "direct_dirty_site": false,
+      "dirty_id_overlap": [],
+      "new_dirty_ids": [],
+      "current_target_at_old_id": {
+        "Y005": {
+          "rule_id": "G15",
+          "location": "p1221",
+          "operations": [
+            "G15:0"
+          ]
+        }
+      }
+    },
+    {
+      "index": 11,
+      "operation_keys": [
+        "G18:0"
+      ],
+      "old_target": "S03_S04_S07_S16_S17_S20_S26#1:T015-D2",
+      "location": "p1191",
+      "action": "RETAIN",
+      "direct_dirty_site": false,
+      "dirty_id_overlap": [],
+      "new_dirty_ids": [],
+      "current_target_at_old_id": {
+        "S03_S04_S07_S16_S17_S20_S26#1:T015-D2": {
+          "rule_id": "G18",
+          "location": "p1191",
+          "operations": [
+            "G18:0"
+          ]
+        }
+      }
+    },
+    {
+      "index": 12,
+      "operation_keys": [
+        "G15:0"
+      ],
+      "old_target": "Y005-D3",
+      "location": "p758",
+      "action": "RETAIN",
+      "direct_dirty_site": false,
+      "dirty_id_overlap": [],
+      "new_dirty_ids": [],
+      "current_target_at_old_id": {}
+    },
+    {
+      "index": 13,
+      "operation_keys": [
+        "G17:0"
+      ],
+      "old_target": "S03_S04_S07_S16_S17_S20_S26#1:T019",
+      "location": "p759",
+      "action": "RETAIN",
+      "direct_dirty_site": false,
+      "dirty_id_overlap": [],
+      "new_dirty_ids": [],
+      "current_target_at_old_id": {
+        "S03_S04_S07_S16_S17_S20_S26#1:T019": {
+          "rule_id": "G16",
+          "location": "p760",
+          "operations": [
+            "G16:0"
+          ]
+        }
+      }
+    },
+    {
+      "index": 14,
+      "operation_keys": [
+        "G17:0"
+      ],
+      "old_target": "S03_S04_S07_S16_S17_S20_S26#1:T020",
+      "location": "p760",
+      "action": "RETAIN",
+      "direct_dirty_site": false,
+      "dirty_id_overlap": [],
+      "new_dirty_ids": [],
+      "current_target_at_old_id": {
+        "S03_S04_S07_S16_S17_S20_S26#1:T020": {
+          "rule_id": "G17",
+          "location": "p759",
+          "operations": [
+            "G17:0"
+          ]
+        }
+      }
+    },
+    {
+      "index": 15,
+      "operation_keys": [
+        "G17:0"
+      ],
+      "old_target": "Y007",
+      "location": "p1222",
+      "action": "RETAIN",
+      "direct_dirty_site": false,
+      "dirty_id_overlap": [],
+      "new_dirty_ids": [],
+      "current_target_at_old_id": {
+        "Y007": {
+          "rule_id": "G17",
+          "location": "p1222",
+          "operations": [
+            "G17:0"
+          ]
+        }
+      }
+    },
+    {
+      "index": 16,
+      "operation_keys": [
+        "G17:0"
+      ],
+      "old_target": "Y007",
+      "location": "p1223",
+      "action": "RETAIN",
+      "direct_dirty_site": false,
+      "dirty_id_overlap": [],
+      "new_dirty_ids": [],
+      "current_target_at_old_id": {
+        "Y007": {
+          "rule_id": "G17",
+          "location": "p1222",
+          "operations": [
+            "G17:0"
+          ]
+        }
+      }
+    }
+  ],
+  "expanded_current_targets": [
+    {
+      "target_id": "S03_S04_S07_S16_S17_S20_S26#1:T001",
+      "rule_id": "G01",
+      "location": "p91",
+      "operations": [
+        "G01:0"
+      ]
+    },
+    {
+      "target_id": "S03_S04_S07_S16_S17_S20_S26#1:T003",
+      "rule_id": "G03",
+      "location": "p130",
+      "operations": [
+        "G03:0"
+      ]
+    },
+    {
+      "target_id": "S03_S04_S07_S16_S17_S20_S26#1:T004",
+      "rule_id": "G04",
+      "location": "p130",
+      "operations": [
+        "G04:0"
+      ]
+    },
+    {
+      "target_id": "S03_S04_S07_S16_S17_S20_S26#1:T009",
+      "rule_id": "G07",
+      "location": "p226",
+      "operations": [
+        "G07:0"
+      ]
+    },
+    {
+      "target_id": "S03_S04_S07_S16_S17_S20_S26#1:T010",
+      "rule_id": "G08",
+      "location": "p226",
+      "operations": [
+        "G08:0"
+      ]
+    },
+    {
+      "target_id": "S03_S04_S07_S16_S17_S20_S26#1:T012",
+      "rule_id": "G10",
+      "location": "p228",
+      "operations": [
+        "G10:0"
+      ]
+    },
+    {
+      "target_id": "S03_S04_S07_S16_S17_S20_S26#1:T013",
+      "rule_id": "G11",
+      "location": "p228",
+      "operations": [
+        "G11:0"
+      ]
+    },
+    {
+      "target_id": "S03_S04_S07_S16_S17_S20_S26#1:T014",
+      "rule_id": "G11",
+      "location": "p228",
+      "operations": [
+        "G11:1"
+      ]
+    },
+    {
+      "target_id": "S03_S04_S07_S16_S17_S20_S26#1:T015",
+      "rule_id": "G12",
+      "location": "p229",
+      "operations": [
+        "G12:1"
+      ]
+    },
+    {
+      "target_id": "T3001",
+      "rule_id": "G02",
+      "location": "p91",
+      "operations": [
+        "G02:0"
+      ]
+    },
+    {
+      "target_id": "T3002",
+      "rule_id": "G02",
+      "location": "p91",
+      "operations": [
+        "G02:1"
+      ]
+    },
+    {
+      "target_id": "T3003",
+      "rule_id": "G04",
+      "location": "p130",
+      "operations": [
+        "G04:1"
+      ]
+    }
+  ]
+}

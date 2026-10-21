@@ -1,0 +1,54 @@
+{
+  "body": {
+    "schema_version": "fundlex-model-cassette-v1",
+    "request": {
+      "task_type": "recall_verify",
+      "prompt_version": "recall_verify_v1",
+      "configured_model": "deepseek-v4.1-flash",
+      "context_sha256": "3ad11ed42fc09ec28b916855a8edd111c67539fc7b6c70f15e104db9aa12f512",
+      "request": {
+        "bounded_context": "BEFORE\n由于本基金 A 类基金份额和 D 类基金份额不收取销售服务费，而 C 类基金份额收取销售服务费\n\nAFTER\n由于本基金A类、D类基金份额和C类基金份额费用收取不同\n\nGUIDE_OPERATION\n{\"rule_id\": \"G18\", \"requirement\": \"将“由于本基金A类基金份额不收取销售服务费，而C类基金份额收取销售服务费”变更为“由于本基金A类基金份额和C类基金份额费用收取不同”。\", \"fixed_policy_text\": \"由于本基金A类、D类基金份额和C类基金份额费用收取不同\"}\n\nFACTS\n{\"fund_type\": \"open_regular\", \"fund_type_quote\": \"契约型开放式\", \"fund_type_basis\": \"基金运作方式为契约型开放式，属于普通开放式基金；虽提及未来可能转换为ETF联接基金，但当前并非ETF或联接基金。\", \"class_count\": 3, \"classes\": [{\"name\": \"A类\", \"subscription_fee\": true, \"service_fee\": false, \"current\": true, \"rate\": null, \"quote\": \"在投资者申购 A 类及 D 类基金份额时收取申购费用，不计提销售服务费\"}, {\"name\": \"C类\", \"subscription_fee\": false, \"service_fee\": true, \"current\": true, \"rate\": null, \"quote\": \"在投资者申购 C 类基金份额时不收取申购费用，而从本类别基金资产中计提销售服务费\"}, {\"name\": \"D类\", \"subscription_fee\": true, \"service_fee\": false, \"current\": true, \"rate\": null, \"quote\": \"在投资者申购 A 类及 D 类基金份额时收取申购费用，不计提销售服务费\"}], \"subscription_group\": [\"A类\", \"D类\"], \"service_group\": [\"C类\"], \"share_class_structure\": \"MULTIPLE\", \"direct_sales_exempt_group\": [], \"other_sales_charged_group\": [], \"fact_status\": {\"fund_type\": \"VERIFIED\", \"share_class_structure\": \"VERIFIED\", \"subscription_fee_group\": \"VERIFIED\", \"service_fee_grou",
+        "instruction": "Read [BEFORE] (the contract text that was rewritten), [AFTER] (the proposed replacement), [GUIDE_OPERATION] and [FACTS]. Answer only what cannot be proven mechanically: (1) does AFTER carry out the guide requirement in business meaning — paraphrasing is allowed, exact wording is not required; (2) does it keep the parts of BEFORE the guide does not authorize changing; (3) does it avoid obligations, promises or content the guide does not state. Do NOT re-check numbers, share-class letters or the text outside the span — those are verified separately. Reply verdict=pass only when all three hold; otherwise verdict=fail with one short reason.",
+        "response_schema": {
+          "type": "object",
+          "required": [
+            "verdict",
+            "reason"
+          ],
+          "properties": {
+            "verdict": {
+              "enum": [
+                "pass",
+                "fail"
+              ]
+            },
+            "reason": {
+              "type": "string"
+            }
+          }
+        },
+        "request_options": {
+          "thinking": {
+            "type": "disabled"
+          }
+        },
+        "max_completion_tokens": 8000
+      }
+    },
+    "response": {
+      "verdict": "pass",
+      "reason": "改写后的文本在业务含义上落实了指南要求（将销售服务费差异概括为费用收取不同），保留了A类与C类份额的区分，并加入了指南明确规定的D类，未引入任何额外义务或承诺。"
+    },
+    "event": {
+      "task_type": "recall_verify",
+      "prompt_version": "recall_verify_v1",
+      "context_sha256": "3ad11ed42fc09ec28b916855a8edd111c67539fc7b6c70f15e104db9aa12f512",
+      "configured_model": "deepseek-v4.1-flash",
+      "actual_model": "deepseek-v4.1-flash",
+      "http_status": 200,
+      "finish_reason": "stop",
+      "error_code": null
+    }
+  },
+  "sha256": "2368665f80663b2d4d56e447a2ea32511065930da9ca7aa530b3e5b886f9f149"
+}

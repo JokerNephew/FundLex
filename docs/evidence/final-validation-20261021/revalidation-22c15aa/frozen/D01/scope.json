@@ -1,0 +1,728 @@
+{
+  "sections": [
+    {
+      "id": "S01",
+      "title": "前言",
+      "zone": "body",
+      "chars": 161,
+      "locations": [
+        "p0",
+        "p19"
+      ]
+    },
+    {
+      "id": "S02",
+      "title": "第一部分前言",
+      "zone": "body",
+      "chars": 1136,
+      "locations": [
+        "p21",
+        "p34"
+      ]
+    },
+    {
+      "id": "S03",
+      "title": "第二部分释义",
+      "zone": "body",
+      "chars": 3828,
+      "locations": [
+        "p35",
+        "p100"
+      ]
+    },
+    {
+      "id": "S04",
+      "title": "第三部分基金的基本情况",
+      "zone": "body",
+      "chars": 1302,
+      "locations": [
+        "p101",
+        "p140"
+      ]
+    },
+    {
+      "id": "S05",
+      "title": "第四部分基金份额的发售",
+      "zone": "body",
+      "chars": 872,
+      "locations": [
+        "p141",
+        "p169"
+      ]
+    },
+    {
+      "id": "S06",
+      "title": "第五部分基金备案",
+      "zone": "body",
+      "chars": 706,
+      "locations": [
+        "p170",
+        "p185"
+      ]
+    },
+    {
+      "id": "S07",
+      "title": "第六部分基金份额的申购与赎回",
+      "zone": "body",
+      "chars": 6898,
+      "locations": [
+        "p186",
+        "p289"
+      ]
+    },
+    {
+      "id": "S08",
+      "title": "第七部分基金合同当事人及权利义务",
+      "zone": "body",
+      "chars": 4589,
+      "locations": [
+        "p290",
+        "p412"
+      ]
+    },
+    {
+      "id": "S09",
+      "title": "第八部分基金份额持有人大会",
+      "zone": "body",
+      "chars": 6385,
+      "locations": [
+        "p413",
+        "p520"
+      ]
+    },
+    {
+      "id": "S10",
+      "title": "第九部分基金管理人、基金托管人的更换条件和程序",
+      "zone": "body",
+      "chars": 1712,
+      "locations": [
+        "p521",
+        "p561"
+      ]
+    },
+    {
+      "id": "S11",
+      "title": "第十部分基金的托管",
+      "zone": "body",
+      "chars": 157,
+      "locations": [
+        "p562",
+        "p565"
+      ]
+    },
+    {
+      "id": "S12",
+      "title": "第十一部分基金份额的登记",
+      "zone": "body",
+      "chars": 819,
+      "locations": [
+        "p566",
+        "p588"
+      ]
+    },
+    {
+      "id": "S13",
+      "title": "第十二部分基金的投资",
+      "zone": "body",
+      "chars": 3180,
+      "locations": [
+        "p589",
+        "p647"
+      ]
+    },
+    {
+      "id": "S14",
+      "title": "第十三部分基金的财产",
+      "zone": "body",
+      "chars": 529,
+      "locations": [
+        "p648",
+        "p658"
+      ]
+    },
+    {
+      "id": "S15",
+      "title": "第十四部分基金资产估值",
+      "zone": "body",
+      "chars": 3976,
+      "locations": [
+        "p659",
+        "p725"
+      ]
+    },
+    {
+      "id": "S16",
+      "title": "第十五部分基金费用与税收",
+      "zone": "body",
+      "chars": 1616,
+      "locations": [
+        "p726",
+        "p774"
+      ]
+    },
+    {
+      "id": "S17",
+      "title": "第十六部分基金的收益与分配",
+      "zone": "body",
+      "chars": 965,
+      "locations": [
+        "p775",
+        "p795"
+      ]
+    },
+    {
+      "id": "S18",
+      "title": "第十七部分基金的会计与审计",
+      "zone": "body",
+      "chars": 448,
+      "locations": [
+        "p796",
+        "p810"
+      ]
+    },
+    {
+      "id": "S19",
+      "title": "第十八部分基金的信息披露",
+      "zone": "body",
+      "chars": 4604,
+      "locations": [
+        "p811",
+        "p904"
+      ]
+    },
+    {
+      "id": "S20",
+      "title": "第十九部分基金合同的变更、终止与基金财产的清算",
+      "zone": "body",
+      "chars": 1282,
+      "locations": [
+        "p905",
+        "p939"
+      ]
+    },
+    {
+      "id": "S21",
+      "title": "第二十部分违约责任",
+      "zone": "body",
+      "chars": 578,
+      "locations": [
+        "p940",
+        "p953"
+      ]
+    },
+    {
+      "id": "S22",
+      "title": "第二十一部分争议的处理和适用的法律",
+      "zone": "body",
+      "chars": 228,
+      "locations": [
+        "p954",
+        "p959"
+      ]
+    },
+    {
+      "id": "S23",
+      "title": "第二十二部分基金合同的效力",
+      "zone": "body",
+      "chars": 366,
+      "locations": [
+        "p960",
+        "p967"
+      ]
+    },
+    {
+      "id": "S24",
+      "title": "第二十三部分其他事项",
+      "zone": "body",
+      "chars": 59,
+      "locations": [
+        "p968",
+        "p972"
+      ]
+    },
+    {
+      "id": "S25",
+      "title": "第二十四部分基金合同内容摘要",
+      "zone": "summary",
+      "chars": 14487,
+      "locations": [
+        "p973",
+        "p1271"
+      ]
+    },
+    {
+      "id": "S26",
+      "title": "七、基金合同的变更、终止与基金财产的清算",
+      "zone": "summary",
+      "chars": 1760,
+      "locations": [
+        "p1272",
+        "p1337"
+      ]
+    }
+  ],
+  "mappings": {
+    "G17": [
+      "S16"
+    ],
+    "G01": [
+      "S03"
+    ],
+    "G15": [
+      "S16"
+    ],
+    "G04": [
+      "S04"
+    ],
+    "G11": [
+      "S07"
+    ],
+    "G21": [
+      "S20",
+      "S26"
+    ],
+    "G18": [
+      "S17"
+    ],
+    "G19": [
+      "S20",
+      "S26"
+    ],
+    "G05": [
+      "S04"
+    ],
+    "G22": [
+      "S20",
+      "S26"
+    ],
+    "G06": [
+      "S04"
+    ],
+    "G12": [
+      "S07"
+    ],
+    "G16": [
+      "S16"
+    ],
+    "G03": [
+      "S04"
+    ],
+    "G13": [
+      "S07"
+    ],
+    "G14": [
+      "S07"
+    ],
+    "G10": [
+      "S07"
+    ],
+    "G07": [
+      "S07"
+    ],
+    "G08": [
+      "S07"
+    ],
+    "G09": [
+      "S07"
+    ],
+    "G02": [
+      "S03"
+    ],
+    "G20": [
+      "S20",
+      "S26"
+    ]
+  },
+  "coverage": [
+    {
+      "rule_id": "G01",
+      "sections": [
+        "S03"
+      ],
+      "mapped": true,
+      "coverage": "targets_found",
+      "counts": {
+        "targets": 1,
+        "needs_edit": 1,
+        "satisfied": 0,
+        "absent": 0,
+        "unresolved_quotes": 0
+      },
+      "windows": [
+        "S03_S04_S07_S16_S17_S20_S26#1"
+      ]
+    },
+    {
+      "rule_id": "G02",
+      "sections": [
+        "S03"
+      ],
+      "mapped": true,
+      "coverage": "targets_found",
+      "counts": {
+        "targets": 1,
+        "needs_edit": 0,
+        "satisfied": 1,
+        "absent": 0,
+        "unresolved_quotes": 0
+      },
+      "windows": [
+        "S03_S04_S07_S16_S17_S20_S26#1"
+      ]
+    },
+    {
+      "rule_id": "G03",
+      "sections": [
+        "S04"
+      ],
+      "mapped": true,
+      "coverage": "targets_found",
+      "counts": {
+        "targets": 1,
+        "needs_edit": 1,
+        "satisfied": 0,
+        "absent": 0,
+        "unresolved_quotes": 0
+      },
+      "windows": [
+        "S03_S04_S07_S16_S17_S20_S26#1"
+      ]
+    },
+    {
+      "rule_id": "G04",
+      "sections": [
+        "S04"
+      ],
+      "mapped": true,
+      "coverage": "targets_found",
+      "counts": {
+        "targets": 1,
+        "needs_edit": 0,
+        "satisfied": 1,
+        "absent": 0,
+        "unresolved_quotes": 0
+      },
+      "windows": [
+        "S03_S04_S07_S16_S17_S20_S26#1"
+      ]
+    },
+    {
+      "rule_id": "G05",
+      "sections": [
+        "S04"
+      ],
+      "mapped": true,
+      "coverage": "targets_found",
+      "counts": {
+        "targets": 1,
+        "needs_edit": 1,
+        "satisfied": 0,
+        "absent": 0,
+        "unresolved_quotes": 0
+      },
+      "windows": [
+        "S03_S04_S07_S16_S17_S20_S26#1"
+      ]
+    },
+    {
+      "rule_id": "G06",
+      "sections": [
+        "S04"
+      ],
+      "mapped": true,
+      "coverage": "no_target_found",
+      "counts": {
+        "targets": 0,
+        "needs_edit": 0,
+        "satisfied": 0,
+        "absent": 0,
+        "unresolved_quotes": 0
+      }
+    },
+    {
+      "rule_id": "G07",
+      "sections": [
+        "S07"
+      ],
+      "mapped": true,
+      "coverage": "no_target_found",
+      "counts": {
+        "targets": 0,
+        "needs_edit": 0,
+        "satisfied": 0,
+        "absent": 0,
+        "unresolved_quotes": 0
+      }
+    },
+    {
+      "rule_id": "G08",
+      "sections": [
+        "S07"
+      ],
+      "mapped": true,
+      "coverage": "targets_found",
+      "counts": {
+        "targets": 1,
+        "needs_edit": 1,
+        "satisfied": 0,
+        "absent": 0,
+        "unresolved_quotes": 0
+      },
+      "windows": [
+        "S03_S04_S07_S16_S17_S20_S26#1"
+      ]
+    },
+    {
+      "rule_id": "G09",
+      "sections": [
+        "S07"
+      ],
+      "mapped": true,
+      "coverage": "targets_found",
+      "counts": {
+        "targets": 1,
+        "needs_edit": 1,
+        "satisfied": 0,
+        "absent": 0,
+        "unresolved_quotes": 0
+      },
+      "windows": [
+        "S03_S04_S07_S16_S17_S20_S26#1"
+      ]
+    },
+    {
+      "rule_id": "G10",
+      "sections": [
+        "S07"
+      ],
+      "mapped": true,
+      "coverage": "no_target_found",
+      "counts": {
+        "targets": 0,
+        "needs_edit": 0,
+        "satisfied": 0,
+        "absent": 0,
+        "unresolved_quotes": 0
+      }
+    },
+    {
+      "rule_id": "G11",
+      "sections": [
+        "S07"
+      ],
+      "mapped": true,
+      "coverage": "targets_found",
+      "counts": {
+        "targets": 1,
+        "needs_edit": 1,
+        "satisfied": 0,
+        "absent": 0,
+        "unresolved_quotes": 0
+      },
+      "windows": [
+        "S03_S04_S07_S16_S17_S20_S26#1"
+      ]
+    },
+    {
+      "rule_id": "G12",
+      "sections": [
+        "S07"
+      ],
+      "mapped": true,
+      "coverage": "targets_found",
+      "counts": {
+        "targets": 1,
+        "needs_edit": 1,
+        "satisfied": 0,
+        "absent": 0,
+        "unresolved_quotes": 0
+      },
+      "windows": [
+        "S03_S04_S07_S16_S17_S20_S26#1"
+      ]
+    },
+    {
+      "rule_id": "G13",
+      "sections": [
+        "S07"
+      ],
+      "mapped": true,
+      "coverage": "targets_found",
+      "counts": {
+        "targets": 1,
+        "needs_edit": 1,
+        "satisfied": 0,
+        "absent": 0,
+        "unresolved_quotes": 0
+      },
+      "windows": [
+        "S03_S04_S07_S16_S17_S20_S26#1"
+      ]
+    },
+    {
+      "rule_id": "G14",
+      "sections": [
+        "S07"
+      ],
+      "mapped": true,
+      "coverage": "targets_found",
+      "counts": {
+        "targets": 1,
+        "needs_edit": 1,
+        "satisfied": 0,
+        "absent": 0,
+        "unresolved_quotes": 0
+      },
+      "windows": [
+        "S03_S04_S07_S16_S17_S20_S26#1"
+      ]
+    },
+    {
+      "rule_id": "G15",
+      "sections": [
+        "S16"
+      ],
+      "mapped": true,
+      "coverage": "targets_found",
+      "counts": {
+        "targets": 1,
+        "needs_edit": 1,
+        "satisfied": 0,
+        "absent": 0,
+        "unresolved_quotes": 0
+      },
+      "windows": [
+        "S03_S04_S07_S16_S17_S20_S26#1"
+      ]
+    },
+    {
+      "rule_id": "G16",
+      "sections": [
+        "S16"
+      ],
+      "mapped": true,
+      "coverage": "targets_found",
+      "counts": {
+        "targets": 1,
+        "needs_edit": 1,
+        "satisfied": 0,
+        "absent": 0,
+        "unresolved_quotes": 0
+      },
+      "windows": [
+        "S03_S04_S07_S16_S17_S20_S26#1"
+      ]
+    },
+    {
+      "rule_id": "G17",
+      "sections": [
+        "S16"
+      ],
+      "mapped": true,
+      "coverage": "targets_found",
+      "counts": {
+        "targets": 2,
+        "needs_edit": 2,
+        "satisfied": 0,
+        "absent": 0,
+        "unresolved_quotes": 0
+      },
+      "windows": [
+        "S03_S04_S07_S16_S17_S20_S26#1"
+      ]
+    },
+    {
+      "rule_id": "G18",
+      "sections": [
+        "S17"
+      ],
+      "mapped": true,
+      "coverage": "targets_found",
+      "counts": {
+        "targets": 1,
+        "needs_edit": 1,
+        "satisfied": 0,
+        "absent": 0,
+        "unresolved_quotes": 0
+      },
+      "windows": [
+        "S03_S04_S07_S16_S17_S20_S26#1"
+      ]
+    },
+    {
+      "rule_id": "G19",
+      "sections": [
+        "S20",
+        "S26"
+      ],
+      "mapped": true,
+      "coverage": "no_target_found",
+      "counts": {
+        "targets": 0,
+        "needs_edit": 0,
+        "satisfied": 0,
+        "absent": 0,
+        "unresolved_quotes": 0
+      }
+    },
+    {
+      "rule_id": "G20",
+      "sections": [
+        "S20",
+        "S26"
+      ],
+      "mapped": true,
+      "coverage": "no_target_found",
+      "counts": {
+        "targets": 0,
+        "needs_edit": 0,
+        "satisfied": 0,
+        "absent": 0,
+        "unresolved_quotes": 0
+      }
+    },
+    {
+      "rule_id": "G21",
+      "sections": [
+        "S20",
+        "S26"
+      ],
+      "mapped": true,
+      "coverage": "no_target_found",
+      "counts": {
+        "targets": 0,
+        "needs_edit": 0,
+        "satisfied": 0,
+        "absent": 0,
+        "unresolved_quotes": 0
+      }
+    },
+    {
+      "rule_id": "G22",
+      "sections": [
+        "S20",
+        "S26"
+      ],
+      "mapped": true,
+      "coverage": "targets_found",
+      "counts": {
+        "targets": 2,
+        "needs_edit": 2,
+        "satisfied": 0,
+        "absent": 0,
+        "unresolved_quotes": 0
+      },
+      "windows": [
+        "S03_S04_S07_S16_S17_S20_S26#1"
+      ]
+    }
+  ],
+  "no_target_rules": [
+    "G06",
+    "G07",
+    "G10",
+    "G19",
+    "G20",
+    "G21"
+  ]
+}
