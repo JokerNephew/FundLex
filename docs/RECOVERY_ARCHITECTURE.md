@@ -308,6 +308,6 @@ Applicable Operation
 4. Final plan ledger 从最终 edit set（含 component target ids）反推；`ledger=planned` 必须意味着该 operation 存在于 final edit set。
 5. Claim Replay 检查全部 `applicability=TRUE` obligation，而不是只检查 `edited_rules`；replace/append/delete 分别要求 artifact 新效果、旧效果消失、`VERIFIED_ABSENT`；ONE_OF 只要求 source-present alternative 被处理。
 6. Delivery 的 artifact proof 反过来可以关闭“未看到删除确认”的 sweep finding；但 exact residual 仍必须 block。
-7. Recovery 增加 missing-operation target、no-progress snapshot、duplicate-copy repair；audit 只重审 dirty rules，并发受模型预算并发上限约束。
+7. Recovery 增加 missing-operation target、no-progress snapshot、duplicate-copy repair；audit 只重审 dirty rules，并发受模型预算并发上限约束。duplicate-copy 克隆必须在初次 inventory、open-obligation recovery 和 missing-operation recovery 三个时点都执行；晚加入的 append target 若未复制到 body/summary 另一副本，最终仍会 `DUPLICATE_SITE_DIVERGED`。
 
 当前真实子集仍是 **incomplete**：D01f 仅剩 G17 p760 残句；D02b 为 G16/P823；D11 为 G05:2/G16 + G22 audit；D16 为 p822/p1306 duplicate 与 G06 composite。上述结果之后的修复尚未全部重跑；详见 FL-D138。未发布生产，未跑 514。

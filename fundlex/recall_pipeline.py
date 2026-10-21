@@ -2572,6 +2572,23 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
             origins[target.target_id] = "T3_open_rule"
         report["target_attribution"].extend(assign_target_operations(
             open_targets, rules_by_id, inspection, facts, obligation_ledger))
+        # Open-obligation recovery can add an append target after the initial duplicate
+        # pass (for example G16 on the body payment clause).  Clone those late targets
+        # too, otherwise only the body copy receives the required new clause and the
+        # identical summary copy diverges at final replay.
+        open_copies = duplicate_copy_targets(targets, rules_by_id, inspection)
+        for copy in open_copies:
+            for old in targets:
+                if old is not copy and old.rule_id == copy.rule_id \
+                        and old.location == copy.location \
+                        and set(old.operations) == set(copy.operations):
+                    old.out_of_scope = True
+                    old.reason = f"{old.reason}|SUPERSEDED_BY_DUPLICATE_COPY"
+            targets.append(copy)
+            synthetic.append(copy)
+            origins[copy.target_id] = "duplicate_copy"
+            report["target_attribution"].extend(assign_target_operations(
+                [copy], rules_by_id, inspection, facts, obligation_ledger))
         rebinds = _rebind_unresolved_targets(targets, origins, inspection,
                                              rules_by_id=rules_by_id, facts=facts,
                                              extend_resolved=True)
