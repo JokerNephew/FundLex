@@ -1,0 +1,645 @@
+{
+ "case": "D16",
+ "input": "001-广发瑞福精选混合型证券投资基金基金合同_20260626",
+ "delivery_status": "incomplete",
+ "source_sha256": "8beacaba3446f7e7e6db1d8cdd3036f0eb086139d6e89a9d27e3552ec658e45d",
+ "plan_count": 19,
+ "target_count": 42,
+ "claim_replay": {
+  "verified": false,
+  "checked": 17,
+  "units_checked": 19,
+  "failures": [
+   {
+    "rule_id": "",
+    "location": "p822",
+    "locations": [
+     "p822",
+     "p1306"
+    ],
+    "code": "DUPLICATE_SITE_DIVERGED",
+    "reason": "identical clause copies were edited to different content"
+   },
+   {
+    "rule_id": "G05",
+    "operation_id": "G05:2",
+    "obligation_id": "G05:B3:O1",
+    "code": "CLAIM_OPERATION_NOT_PLANNED",
+    "reason": "an applicable delete operation survives in the artifact"
+   }
+  ],
+  "obligations": {
+   "G22:B1:O1": {
+    "units": 2,
+    "failed": 0,
+    "operations": [
+     "G22:0",
+     "G22:0"
+    ],
+    "state": "PASS"
+   },
+   "G16:B1:O1": {
+    "units": 1,
+    "failed": 0,
+    "operations": [
+     "G16:0"
+    ],
+    "state": "PASS"
+   },
+   "G17:B1:O1": {
+    "units": 4,
+    "failed": 0,
+    "operations": [
+     "G17:0",
+     "G17:0",
+     "G17:0",
+     "G17:0"
+    ],
+    "state": "PASS"
+   },
+   "G14:B2:O1": {
+    "units": 1,
+    "failed": 0,
+    "operations": [
+     "G14:3"
+    ],
+    "state": "PASS"
+   },
+   "G09:B1:O1": {
+    "units": 1,
+    "failed": 0,
+    "operations": [
+     "G09:0"
+    ],
+    "state": "PASS"
+   },
+   "G12:B1:O2": {
+    "units": 1,
+    "failed": 0,
+    "operations": [
+     "G12:1"
+    ],
+    "state": "PASS"
+   },
+   "G11:B1:O2": {
+    "units": 1,
+    "failed": 0,
+    "operations": [
+     "G11:1"
+    ],
+    "state": "PASS"
+   },
+   "G08:B1:O1": {
+    "units": 1,
+    "failed": 0,
+    "operations": [
+     "G08:0"
+    ],
+    "state": "PASS"
+   },
+   "G05:B1:O1": {
+    "units": 1,
+    "failed": 0,
+    "operations": [
+     "G05:0"
+    ],
+    "state": "PASS"
+   },
+   "G05:B3:O1": {
+    "units": 1,
+    "failed": 0,
+    "operations": [
+     "G05:2"
+    ],
+    "state": "PASS"
+   },
+   "G03:B1:O1": {
+    "units": 1,
+    "failed": 0,
+    "operations": [
+     "G03:0"
+    ],
+    "state": "PASS"
+   },
+   "G18:B1:O1": {
+    "units": 2,
+    "failed": 0,
+    "operations": [
+     "G18:0",
+     "G18:0"
+    ],
+    "state": "PASS"
+   },
+   "G01:B1:O1": {
+    "units": 1,
+    "failed": 0,
+    "operations": [
+     "G01:0"
+    ],
+    "state": "PASS"
+   },
+   "G15:B1:O1": {
+    "units": 1,
+    "failed": 0,
+    "operations": [
+     "G15:0"
+    ],
+    "state": "PASS"
+   }
+  }
+ },
+ "recovery": {
+  "final": "unresolved",
+  "last_outcome": "unresolved",
+  "attempts": 13,
+  "actions": [
+   "RETRY_DETERMINISTIC",
+   "RETRY_DETERMINISTIC",
+   "RETRY_DETERMINISTIC",
+   "RETRY_DETERMINISTIC",
+   "REBUILD_PLAN",
+   "RETRY_DETERMINISTIC",
+   "RETRY_DETERMINISTIC",
+   "REBUILD_PLAN",
+   "REBUILD_PLAN",
+   "REBUILD_PLAN",
+   "MARK_UNRESOLVED",
+   "MARK_UNRESOLVED",
+   "MARK_UNRESOLVED"
+  ],
+  "history": [
+   {
+    "action": "RETRY_DETERMINISTIC",
+    "stage": "audit",
+    "failure_class": "GENERATION",
+    "error_code": "AUDIT_NOT_COMPLETED",
+    "reason": "AFTER at p845 replaces the original sales-service-fee wording with the required '由于本基金A类基金份额和C类基金份额费用收取不同', and the remaining sentence is preserved.",
+    "outcome": "succeeded",
+    "detail": "issue_resolved;issues=7",
+    "rule_id": "G18",
+    "operation_id": "",
+    "obligation_id": "",
+    "target_id": "S03_S04_S07_S16_S17_S20#1:T008",
+    "site_id": "p845",
+    "attempt": 1,
+    "budget_key": "generation_deterministic_retry"
+   },
+   {
+    "action": "RETRY_DETERMINISTIC",
+    "stage": "audit",
+    "failure_class": "TARGET",
+    "error_code": "AUDIT_NOT_COMPLETED",
+    "reason": "G06 requires deleting the clause '除非基金管理人在未来条件成熟后另行公告开通相关业务，本基金不同基金份额类别之间不得互相转换。' at this location, but AFTER still contains the original text and the required clause is not removed; the ledger's quote is unrelated to the deletion requirement.",
+    "outcome": "succeeded",
+    "detail": "issue_resolved;issues=7",
+    "rule_id": "G06",
+    "operation_id": "",
+    "obligation_id": "删除“除非基金管理人在未来条件成熟后另行公告开通相关业务，本基金不同基金份额类别之间不得互相转换。”",
+    "target_id": "Y005",
+    "site_id": "p431",
+    "attempt": 1,
+    "budget_key": "target_deterministic_retry"
+   },
+   {
+    "action": "RETRY_DETERMINISTIC",
+    "stage": "audit",
+    "failure_class": "TARGET",
+    "error_code": "AUDIT_NOT_COMPLETED",
+    "reason": "G06 requires deleting the clause '除非基金管理人在未来条件成熟后另行公告开通相关业务，本基金不同基金份额类别之间不得互相转换。' at this location, but AFTER still contains the original text and the required clause is not removed; the ledger's quote is unrelated to the deletion requirement.",
+    "outcome": "succeeded",
+    "detail": "issue_resolved;issues=7",
+    "rule_id": "G06",
+    "operation_id": "",
+    "obligation_id": "删除“除非基金管理人在未来条件成熟后另行公告开通相关业务，本基金不同基金份额类别之间不得互相转换。”",
+    "target_id": "Y006",
+    "site_id": "p1169",
+    "attempt": 1,
+    "budget_key": "target_deterministic_retry"
+   },
+   {
+    "action": "RETRY_DETERMINISTIC",
+    "stage": "audit",
+    "failure_class": "GENERATION",
+    "error_code": "AUDIT_NOT_COMPLETED",
+    "reason": "AFTER at p1261 contains the exact required replacement text and retains the rest of the clause.",
+    "outcome": "succeeded",
+    "detail": "issue_resolved;issues=7",
+    "rule_id": "G18",
+    "operation_id": "",
+    "obligation_id": "",
+    "target_id": "Y012",
+    "site_id": "p1261",
+    "attempt": 1,
+    "budget_key": "generation_deterministic_retry"
+   },
+   {
+    "action": "REBUILD_PLAN",
+    "stage": "audit",
+    "failure_class": "EXECUTION",
+    "error_code": "AUDIT_NOT_COMPLETED",
+    "reason": "The AFTER text is unchanged from BEFORE and still contains the old wording about proportional inclusion and fees for registration/other procedures, rather than the required replacement '赎回费用全额计入基金财产。' The required replacement was not applied.",
+    "outcome": "succeeded",
+    "detail": "issue_resolved;issues=6",
+    "rule_id": "G12",
+    "operation_id": "",
+    "obligation_id": "Replace the redemption fee clause with '赎回费用由赎回基金份额的基金份额持有人承担，在基金份额持有人赎回基金份额时收取。赎回费用全额计入基金财产。'",
+    "target_id": "S03_S04_S07_S16_S17_S20#1:T015",
+    "site_id": "p221",
+    "attempt": 1,
+    "budget_key": "execution_rebuild"
+   },
+   {
+    "action": "RETRY_DETERMINISTIC",
+    "stage": "audit",
+    "failure_class": "TARGET",
+    "error_code": "AUDIT_NOT_COMPLETED",
+    "reason": "Duplicate ledger entry for p431; the AFTER text still contains the business-rule adjustment clause and the G06 deletion of the share-class conversion restriction was not made.",
+    "outcome": "failed",
+    "detail": "issue_remains;issues=6",
+    "rule_id": "G06",
+    "operation_id": "",
+    "obligation_id": "G06:0 delete 除非基金管理人在未来条件成熟后另行公告开通相关业务，本基金不同基金份额类别之间不得互相转换。",
+    "target_id": "Y005",
+    "site_id": "p431",
+    "attempt": 1,
+    "budget_key": "target_deterministic_retry"
+   },
+   {
+    "action": "RETRY_DETERMINISTIC",
+    "stage": "audit",
+    "failure_class": "TARGET",
+    "error_code": "AUDIT_NOT_COMPLETED",
+    "reason": "Duplicate ledger entry for p1169; the AFTER text still contains the business-rule adjustment clause and the G06 deletion of the share-class conversion restriction was not made.",
+    "outcome": "failed",
+    "detail": "issue_remains;issues=6",
+    "rule_id": "G06",
+    "operation_id": "",
+    "obligation_id": "G06:0 delete 除非基金管理人在未来条件成熟后另行公告开通相关业务，本基金不同基金份额类别之间不得互相转换。",
+    "target_id": "Y006",
+    "site_id": "p1169",
+    "attempt": 1,
+    "budget_key": "target_deterministic_retry"
+   },
+   {
+    "action": "REBUILD_PLAN",
+    "stage": "audit",
+    "failure_class": "EXECUTION",
+    "error_code": "AUDIT_NOT_COMPLETED",
+    "reason": "Same deletion requirement; AFTER still shows the retained fragment '其中，对持续持有期少于' indicating the sentence was not removed.",
+    "outcome": "succeeded",
+    "detail": "issue_resolved;issues=6",
+    "rule_id": "G13",
+    "operation_id": "",
+    "obligation_id": "删除“本基金对持续持有期少于7日的投资者收取不低于1.50%的赎回费，并将上述赎回费全额计入基金财产。”",
+    "target_id": "Y007",
+    "site_id": "p221",
+    "attempt": 1,
+    "budget_key": "execution_rebuild"
+   },
+   {
+    "action": "REBUILD_PLAN",
+    "stage": "audit",
+    "failure_class": "EXECUTION",
+    "error_code": "AUDIT_NOT_COMPLETED",
+    "reason": "G06 requires deleting the clause '除非基金管理人在未来条件成熟后另行公告开通相关业务，本基金不同基金份额类别之间不得互相转换。' The AFTER text at p431 is unchanged and still contains the original business-rule adjustment clause; the required deletion was not performed.",
+    "outcome": "succeeded",
+    "detail": "issue_resolved;issues=8",
+    "rule_id": "G06",
+    "operation_id": "",
+    "obligation_id": "G06:0 delete 除非基金管理人在未来条件成熟后另行公告开通相关业务，本基金不同基金份额类别之间不得互相转换。",
+    "target_id": "Y005",
+    "site_id": "p431",
+    "attempt": 1,
+    "budget_key": "execution_rebuild"
+   },
+   {
+    "action": "REBUILD_PLAN",
+    "stage": "audit",
+    "failure_class": "EXECUTION",
+    "error_code": "AUDIT_NOT_COMPLETED",
+    "reason": "G06 requires deleting the clause '除非基金管理人在未来条件成熟后另行公告开通相关业务，本基金不同基金份额类别之间不得互相转换。' The AFTER text at p1169 is unchanged and still contains the original business-rule adjustment clause; the required deletion was not performed.",
+    "outcome": "succeeded",
+    "detail": "issue_resolved;issues=8",
+    "rule_id": "G06",
+    "operation_id": "",
+    "obligation_id": "G06:0 delete 除非基金管理人在未来条件成熟后另行公告开通相关业务，本基金不同基金份额类别之间不得互相转换。",
+    "target_id": "Y006",
+    "site_id": "p1169",
+    "attempt": 1,
+    "budget_key": "execution_rebuild"
+   },
+   {
+    "action": "MARK_UNRESOLVED",
+    "stage": "audit",
+    "failure_class": "EXECUTION",
+    "error_code": "AUDIT_NOT_COMPLETED",
+    "reason": "Duplicate ledger target at p431; the required G06 deletion is not reflected in AFTER.",
+    "outcome": "unresolved",
+    "detail": "global_business_rounds",
+    "rule_id": "G06",
+    "operation_id": "",
+    "obligation_id": "删除不同基金份额类别之间不得互相转换的条款",
+    "target_id": "Y005",
+    "site_id": "p431",
+    "attempt": 1,
+    "budget_key": ""
+   },
+   {
+    "action": "MARK_UNRESOLVED",
+    "stage": "audit",
+    "failure_class": "EXECUTION",
+    "error_code": "AUDIT_NOT_COMPLETED",
+    "reason": "Duplicate ledger target at p1169; the required G06 deletion is not reflected in AFTER.",
+    "outcome": "unresolved",
+    "detail": "global_business_rounds",
+    "rule_id": "G06",
+    "operation_id": "",
+    "obligation_id": "删除不同基金份额类别之间不得互相转换的条款",
+    "target_id": "Y006",
+    "site_id": "p1169",
+    "attempt": 1,
+    "budget_key": ""
+   },
+   {
+    "action": "MARK_UNRESOLVED",
+    "stage": "deliver",
+    "failure_class": "VERIFICATION",
+    "error_code": "DUPLICATE_SITE_DIVERGED",
+    "reason": "identical clause copies were edited to different content",
+    "outcome": "unresolved",
+    "detail": "recovery budget exhausted",
+    "rule_id": "",
+    "operation_id": "",
+    "obligation_id": "",
+    "target_id": "",
+    "site_id": "p822",
+    "attempt": 1,
+    "budget_key": ""
+   }
+  ]
+ },
+ "audit_issues": [
+  {
+   "code": "AUDIT_NOT_COMPLETED",
+   "rule_id": "G06",
+   "target_id": "Y005",
+   "location": "p431",
+   "verdict": "wrong",
+   "reason": "Duplicate ledger target at p431; the required G06 deletion is not reflected in AFTER.",
+   "evidence_verified": true,
+   "failure_class": "EXECUTION",
+   "affected_fact": "",
+   "affected_obligation": "删除不同基金份额类别之间不得互相转换的条款"
+  },
+  {
+   "code": "AUDIT_NOT_COMPLETED",
+   "rule_id": "G06",
+   "target_id": "Y006",
+   "location": "p1169",
+   "verdict": "wrong",
+   "reason": "Duplicate ledger target at p1169; the required G06 deletion is not reflected in AFTER.",
+   "evidence_verified": true,
+   "failure_class": "EXECUTION",
+   "affected_fact": "",
+   "affected_obligation": "删除不同基金份额类别之间不得互相转换的条款"
+  },
+  {
+   "code": "AUDIT_NOT_COMPLETED",
+   "rule_id": "G06",
+   "target_id": "Y016",
+   "location": "p431",
+   "verdict": "wrong",
+   "reason": "Duplicate ledger target at p431; the required G06 deletion is not reflected in AFTER.",
+   "evidence_verified": true,
+   "failure_class": "EXECUTION",
+   "affected_fact": "",
+   "affected_obligation": "删除不同基金份额类别之间不得互相转换的条款"
+  },
+  {
+   "code": "AUDIT_NOT_COMPLETED",
+   "rule_id": "G06",
+   "target_id": "Y017",
+   "location": "p1169",
+   "verdict": "wrong",
+   "reason": "Duplicate ledger target at p1169; the required G06 deletion is not reflected in AFTER.",
+   "evidence_verified": true,
+   "failure_class": "EXECUTION",
+   "affected_fact": "",
+   "affected_obligation": "删除不同基金份额类别之间不得互相转换的条款"
+  },
+  {
+   "code": "AUDIT_NOT_COMPLETED",
+   "rule_id": "G06",
+   "target_id": "Y023",
+   "location": "p431",
+   "verdict": "wrong",
+   "reason": "Duplicate ledger target at p431; the required G06 deletion is not reflected in AFTER.",
+   "evidence_verified": true,
+   "failure_class": "EXECUTION",
+   "affected_fact": "",
+   "affected_obligation": "删除不同基金份额类别之间不得互相转换的条款"
+  },
+  {
+   "code": "AUDIT_NOT_COMPLETED",
+   "rule_id": "G06",
+   "target_id": "Y024",
+   "location": "p1169",
+   "verdict": "wrong",
+   "reason": "Duplicate ledger target at p1169; the required G06 deletion is not reflected in AFTER.",
+   "evidence_verified": true,
+   "failure_class": "EXECUTION",
+   "affected_fact": "",
+   "affected_obligation": "删除不同基金份额类别之间不得互相转换的条款"
+  },
+  {
+   "code": "AUDIT_NOT_COMPLETED",
+   "rule_id": "G06",
+   "target_id": "Y030",
+   "location": "p431",
+   "verdict": "wrong",
+   "reason": "Duplicate ledger target at p431; the required G06 deletion is not reflected in AFTER.",
+   "evidence_verified": true,
+   "failure_class": "EXECUTION",
+   "affected_fact": "",
+   "affected_obligation": "删除不同基金份额类别之间不得互相转换的条款"
+  },
+  {
+   "code": "AUDIT_NOT_COMPLETED",
+   "rule_id": "G06",
+   "target_id": "Y031",
+   "location": "p1169",
+   "verdict": "wrong",
+   "reason": "Duplicate ledger target at p1169; the required G06 deletion is not reflected in AFTER.",
+   "evidence_verified": true,
+   "failure_class": "EXECUTION",
+   "affected_fact": "",
+   "affected_obligation": "删除不同基金份额类别之间不得互相转换的条款"
+  }
+ ],
+ "unresolved": [
+  {
+   "kind": "target",
+   "rule_id": "G06",
+   "target_id": "Y005",
+   "location": "p431",
+   "reason": "RECALL_TARGET_COMPOSITE_UNRESOLVED",
+   "quote": "基金管理人、登记机构、基金销售机构在法律法规规定或中国证监会许可的范围内调整有关认购、申购、赎回、转换、非交易过户、转托管等业务规则；",
+   "failure_class": "TARGET"
+  },
+  {
+   "kind": "target",
+   "rule_id": "G06",
+   "target_id": "Y006",
+   "location": "p1169",
+   "reason": "RECALL_TARGET_COMPOSITE_UNRESOLVED",
+   "quote": "基金管理人、登记机构、基金销售机构在法律法规规定或中国证监会许可的范围内调整有关认购、申购、赎回、转换、非交易过户、转托管等业务规则；",
+   "failure_class": "TARGET"
+  },
+  {
+   "kind": "audit",
+   "code": "AUDIT_NOT_COMPLETED",
+   "rule_id": "G06",
+   "target_id": "Y005",
+   "location": "p431",
+   "verdict": "wrong",
+   "reason": "Duplicate ledger target at p431; the required G06 deletion is not reflected in AFTER.",
+   "evidence_verified": true,
+   "failure_class": "EXECUTION",
+   "affected_fact": "",
+   "affected_obligation": "删除不同基金份额类别之间不得互相转换的条款"
+  },
+  {
+   "kind": "audit",
+   "code": "AUDIT_NOT_COMPLETED",
+   "rule_id": "G06",
+   "target_id": "Y006",
+   "location": "p1169",
+   "verdict": "wrong",
+   "reason": "Duplicate ledger target at p1169; the required G06 deletion is not reflected in AFTER.",
+   "evidence_verified": true,
+   "failure_class": "EXECUTION",
+   "affected_fact": "",
+   "affected_obligation": "删除不同基金份额类别之间不得互相转换的条款"
+  },
+  {
+   "kind": "sweep",
+   "finding_id": "SW001",
+   "rule_id": "G06",
+   "location": "p133",
+   "issue": "residual_old_text",
+   "status": "pending",
+   "reason": "G06 requires deleting the old clause “除非基金管理人在未来条件成熟后另行公告开通相关业务，本基金不同基金份额类别之间不得互相转换。”. The share-class clause still retains the old conversion prohibition language, which should have been removed.",
+   "failure_class": "TARGET"
+  },
+  {
+   "kind": "sweep",
+   "finding_id": "SW002",
+   "rule_id": "G13",
+   "location": "p222",
+   "issue": "residual_old_text",
+   "status": "pending",
+   "reason": "G13 requires deleting “本基金对持续持有期少于7日的投资者收取不低于1.50%的赎回费，并将上述赎回费全额计入基金财产。”. The residual fragment “7 日的投资者收取不低于 1.5%的赎回费，并全额计入基金财产。” survives and should have been deleted.",
+   "failure_class": "TARGET"
+  },
+  {
+   "kind": "sweep",
+   "finding_id": "SW003",
+   "rule_id": "G14",
+   "location": "p224",
+   "issue": "wrong_text",
+   "status": "pending",
+   "reason": "G14 requires, for a multi-class product, changing “基金管理人可以适当调低基金申购费率和赎回费率。” to “基金管理人可以适当调低基金申购费率和销售服务费率。”. The clause still says “基金管理人可以适当调低基金申购费率和销售服务费率。” but the old “赎回费率” wording survives in the same sentence, so the required replacement was not fully applied.",
+   "failure_class": "TARGET"
+  },
+  {
+   "kind": "sweep",
+   "finding_id": "SW004",
+   "rule_id": "G15",
+   "location": "p822",
+   "issue": "residual_old_text",
+   "status": "pending",
+   "reason": "G15 requires deleting the old C-class sales-service-fee payment clause (daily accrual, monthly payment, manager sends payment instruction, custodian pays within 10 working days from the first day of the next month to the registrar). The old payment mechanics survive here and were not deleted; only the new G16 text was appended after it.",
+   "failure_class": ""
+  },
+  {
+   "kind": "sweep",
+   "finding_id": "SW005",
+   "rule_id": "G17",
+   "location": "p822",
+   "issue": "residual_old_text",
+   "status": "pending",
+   "reason": "G17 requires deleting the old clause describing the scope/use of C-class sales service fees (sales agency commissions, marketing/advertising, promotion, holder services, excluding募集期间). The old payment/use text remains in the sales-service-fee section and was not removed.",
+   "failure_class": ""
+  },
+  {
+   "kind": "claim_replay",
+   "code": "DUPLICATE_SITE_DIVERGED",
+   "claim_code": "DUPLICATE_SITE_DIVERGED",
+   "claim_replay_failed": true,
+   "rule_id": "",
+   "location": "p822",
+   "locations": [
+    "p822",
+    "p1306"
+   ],
+   "reason": "identical clause copies were edited to different content",
+   "failure_class": "VERIFICATION"
+  },
+  {
+   "kind": "claim_replay",
+   "code": "CLAIM_OPERATION_NOT_PLANNED",
+   "claim_code": "CLAIM_OPERATION_NOT_PLANNED",
+   "claim_replay_failed": true,
+   "rule_id": "G05",
+   "operation_id": "G05:2",
+   "obligation_id": "G05:B3:O1",
+   "reason": "an applicable delete operation survives in the artifact",
+   "failure_class": "VERIFICATION"
+  },
+  {
+   "kind": "obligation",
+   "code": "OPEN_OBLIGATION",
+   "rule_id": "G16",
+   "obligation_id": "G16:B1:O1",
+   "operation_id": "G16:0",
+   "branch_id": "B1",
+   "applicability": "TRUE",
+   "failure_class": "TARGET",
+   "reason": "CLAIM_REPLAY_FAILED",
+   "expected_site": "基金费用与税收"
+  },
+  {
+   "kind": "obligation",
+   "code": "OPEN_OBLIGATION",
+   "rule_id": "G18",
+   "obligation_id": "G18:B1:O1",
+   "operation_id": "G18:0",
+   "branch_id": "B1",
+   "applicability": "TRUE",
+   "failure_class": "TARGET",
+   "reason": "plan:RECALL_TARGET_COMPOSITE_UNRESOLVED",
+   "expected_site": "基金的收益与分配"
+  }
+ ],
+ "business_notices": [
+  {
+   "rule_id": "G15",
+   "location": "p1306",
+   "code": "CONTRACT_POSSIBLY_ERRONEOUS",
+   "severity": "warning",
+   "affects_completion": false,
+   "message": "原合同可能有误：支付时限与指引参照不同（合同 5个工作日；指引 10个工作日）；支付路径/方式出现“自动支付/扣划”（指引参照未涉及）；支付路径/方式出现“指定账户路径”（指引参照未涉及）；支付路径/方式出现“无需出具指令”（指引参照未涉及）",
+   "reasons": [
+    "支付时限与指引参照不同（合同 5个工作日；指引 10个工作日）",
+    "支付路径/方式出现“自动支付/扣划”（指引参照未涉及）",
+    "支付路径/方式出现“指定账户路径”（指引参照未涉及）",
+    "支付路径/方式出现“无需出具指令”（指引参照未涉及）"
+   ]
+  }
+ ],
+ "limits": {
+  "max_business_rounds": 3,
+  "max_sweep_chunks": 40,
+  "business_rounds_used": 3
+ }
+}

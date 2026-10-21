@@ -1,0 +1,428 @@
+{
+ "case": "D11",
+ "input": "001-广发景和中短债债券型证券投资基金基金合同_20240122",
+ "delivery_status": "incomplete",
+ "source_sha256": "74920e09c398f086091ca2b522c5d3bb0ed574d8ccd8c6e00ecf416b508ba93a",
+ "plan_count": 15,
+ "target_count": 27,
+ "claim_replay": {
+  "verified": false,
+  "checked": 14,
+  "units_checked": 17,
+  "failures": [
+   {
+    "rule_id": "G05",
+    "operation_id": "G05:2",
+    "obligation_id": "G05:B3:O1",
+    "code": "CLAIM_OPERATION_NOT_PLANNED",
+    "reason": "an applicable delete operation survives in the artifact"
+   }
+  ],
+  "obligations": {
+   "G05:B1:O1": {
+    "units": 1,
+    "failed": 0,
+    "operations": [
+     "G05:0"
+    ],
+    "state": "PASS"
+   },
+   "G03:B1:O1": {
+    "units": 1,
+    "failed": 0,
+    "operations": [
+     "G03:0"
+    ],
+    "state": "PASS"
+   },
+   "G01:B1:O1": {
+    "units": 1,
+    "failed": 0,
+    "operations": [
+     "G01:0"
+    ],
+    "state": "PASS"
+   },
+   "G08:B1:O1": {
+    "units": 1,
+    "failed": 0,
+    "operations": [
+     "G08:0"
+    ],
+    "state": "PASS"
+   },
+   "G09:B1:O1": {
+    "units": 1,
+    "failed": 0,
+    "operations": [
+     "G09:0"
+    ],
+    "state": "PASS"
+   },
+   "G11:B1:O2": {
+    "units": 1,
+    "failed": 0,
+    "operations": [
+     "G11:1"
+    ],
+    "state": "PASS"
+   },
+   "G12:B1:O1": {
+    "units": 1,
+    "failed": 0,
+    "operations": [
+     "G12:0"
+    ],
+    "state": "PASS"
+   },
+   "G13:B1:O1": {
+    "units": 1,
+    "failed": 0,
+    "operations": [
+     "G13:0"
+    ],
+    "state": "PASS"
+   },
+   "G14:B2:O1": {
+    "units": 1,
+    "failed": 0,
+    "operations": [
+     "G14:3"
+    ],
+    "state": "PASS"
+   },
+   "G15:B1:O1": {
+    "units": 2,
+    "failed": 0,
+    "operations": [
+     "G15:0",
+     "G15:0"
+    ],
+    "state": "PASS"
+   },
+   "G17:B1:O1": {
+    "units": 2,
+    "failed": 0,
+    "operations": [
+     "G17:0",
+     "G17:0"
+    ],
+    "state": "PASS"
+   },
+   "G18:B1:O1": {
+    "units": 2,
+    "failed": 0,
+    "operations": [
+     "G18:0",
+     "G18:0"
+    ],
+    "state": "PASS"
+   },
+   "G22:B1:O1": {
+    "units": 2,
+    "failed": 0,
+    "operations": [
+     "G22:0",
+     "G22:0"
+    ],
+    "state": "PASS"
+   }
+  }
+ },
+ "recovery": {
+  "final": "unresolved",
+  "last_outcome": "unresolved",
+  "attempts": 10,
+  "actions": [
+   "REBUILD_PLAN",
+   "FOCUSED_FACT_RESOLVE",
+   "FOCUSED_FACT_RESOLVE",
+   "REBUILD_PLAN",
+   "REBUILD_PLAN",
+   "REBUILD_PLAN",
+   "MARK_UNRESOLVED",
+   "REGENERATE_ARTIFACT",
+   "REBUILD_PLAN",
+   "MARK_UNRESOLVED"
+  ],
+  "history": [
+   {
+    "action": "REBUILD_PLAN",
+    "stage": "audit",
+    "failure_class": "EXECUTION",
+    "error_code": "AUDIT_NOT_COMPLETED",
+    "reason": "p1109 仍保留“调低赎回费率”，未按 G05:0 改为“调低销售服务费率”，该目标未执行。",
+    "outcome": "failed",
+    "detail": "issue_remains;issues=2",
+    "rule_id": "G05",
+    "operation_id": "",
+    "obligation_id": "G05:0 将“调低赎回费率”替换为“调低销售服务费率”",
+    "target_id": "S25_S26#1:T020",
+    "site_id": "p1109",
+    "attempt": 1,
+    "budget_key": "execution_rebuild"
+   },
+   {
+    "action": "FOCUSED_FACT_RESOLVE",
+    "stage": "audit",
+    "failure_class": "FACT",
+    "error_code": "AUDIT_NOT_COMPLETED",
+    "reason": "The guide requires grouping by actual fee rules: classes that charge subscription/purchase fees and no sales service fee should be named together, and classes that charge no subscription/purchase fee but accrue sales service fee should be named together. AFTER keeps the original fee-rule description unchanged (A and D charge purchase fee/no service fee; C charges no purchase fee but accrues service fee), which contradicts the required grouping where A类、B类 are the fee-charging group and C类、D类 are the no-fee/service-fee group. The required replacement of the class groups was not performed.",
+    "outcome": "succeeded",
+    "detail": "issue_resolved;issues=2",
+    "rule_id": "G02",
+    "operation_id": "",
+    "obligation_id": "G02 释义-基金份额类别定义分组替换",
+    "target_id": "T3001",
+    "site_id": "p91",
+    "attempt": 1,
+    "budget_key": "fact_primary_retry"
+   },
+   {
+    "action": "FOCUSED_FACT_RESOLVE",
+    "stage": "audit",
+    "failure_class": "FACT",
+    "error_code": "AUDIT_NOT_COMPLETED",
+    "reason": "The guide requires grouping by fee rule: classes that charge subscription fees and no sales service fee should be replaced with all such actual classes (A类、B类), and classes with no subscription fee but sales service fee should be replaced with all such actual classes (C类、D类). The AFTER text still describes D类 as charging subscription fees and not accruing sales service fee, and C类 as the only no-subscription-fee/sales-service-fee class, contradicting the required grouping.",
+    "outcome": "succeeded",
+    "detail": "issue_resolved;issues=2",
+    "rule_id": "G04",
+    "operation_id": "",
+    "obligation_id": "G04 按实际收费规则对份额类别进行分组替换",
+    "target_id": "T3002",
+    "site_id": "p126",
+    "attempt": 1,
+    "budget_key": "fact_primary_retry"
+   },
+   {
+    "action": "REBUILD_PLAN",
+    "stage": "audit",
+    "failure_class": "EXECUTION",
+    "error_code": "AUDIT_NOT_COMPLETED",
+    "reason": "p1109 仍保留“调低赎回费率”，未按 G05:0 改为“调低销售服务费率”。",
+    "outcome": "succeeded",
+    "detail": "issue_resolved;issues=2",
+    "rule_id": "G05",
+    "operation_id": "",
+    "obligation_id": "G05:0 将“调低赎回费率”替换为“调低销售服务费率”",
+    "target_id": "S25_S26#1:T001",
+    "site_id": "p1109",
+    "attempt": 1,
+    "budget_key": "execution_rebuild"
+   },
+   {
+    "action": "REBUILD_PLAN",
+    "stage": "audit",
+    "failure_class": "EXECUTION",
+    "error_code": "AUDIT_NOT_COMPLETED",
+    "reason": "p1109 仍保留“调低赎回费率”，未按 G05:0 改为“调低销售服务费率”。",
+    "outcome": "failed",
+    "detail": "issue_remains;issues=1",
+    "rule_id": "G05",
+    "operation_id": "",
+    "obligation_id": "G05:0 replace 调低赎回费率 -> 调低销售服务费率",
+    "target_id": "S25_S26#1:T001",
+    "site_id": "p1109",
+    "attempt": 1,
+    "budget_key": "execution_rebuild"
+   },
+   {
+    "action": "REBUILD_PLAN",
+    "stage": "audit",
+    "failure_class": "EXECUTION",
+    "error_code": "AUDIT_NOT_COMPLETED",
+    "reason": "p1109 still contains “调低赎回费率” unchanged; the ledger required it to be changed to “调低销售服务费率” per G14:3, and no such change appears in AFTER.",
+    "outcome": "succeeded",
+    "detail": "issue_resolved;issues=1",
+    "rule_id": "G14",
+    "operation_id": "",
+    "obligation_id": "G14:3 replace 调低赎回费率 -> 调低销售服务费率",
+    "target_id": "S25_S26#1:T003",
+    "site_id": "p1109",
+    "attempt": 1,
+    "budget_key": "execution_rebuild"
+   },
+   {
+    "action": "MARK_UNRESOLVED",
+    "stage": "audit",
+    "failure_class": "EXECUTION",
+    "error_code": "AUDIT_NOT_COMPLETED",
+    "reason": "p1109 仍为“调低赎回费率”，未按 G05:0 改为“调低销售服务费率”。",
+    "outcome": "unresolved",
+    "detail": "global_business_rounds",
+    "rule_id": "G05",
+    "operation_id": "",
+    "obligation_id": "G05:0 replace 调低赎回费率 -> 调低销售服务费率",
+    "target_id": "S25_S26#1:T001",
+    "site_id": "p1109",
+    "attempt": 1,
+    "budget_key": ""
+   },
+   {
+    "action": "REGENERATE_ARTIFACT",
+    "stage": "deliver",
+    "failure_class": "VERIFICATION",
+    "error_code": "CLAIM_OPERATION_NOT_PLANNED",
+    "reason": "an applicable delete operation survives in the artifact",
+    "outcome": "failed",
+    "detail": "checked=14",
+    "rule_id": "G05",
+    "operation_id": "G05:2",
+    "obligation_id": "G05:B3:O1",
+    "target_id": "",
+    "site_id": "",
+    "attempt": 1,
+    "budget_key": "artifact_recovery"
+   },
+   {
+    "action": "REBUILD_PLAN",
+    "stage": "deliver",
+    "failure_class": "VERIFICATION",
+    "error_code": "CLAIM_OPERATION_NOT_PLANNED",
+    "reason": "an applicable delete operation survives in the artifact",
+    "outcome": "failed",
+    "detail": "checked=14",
+    "rule_id": "G05",
+    "operation_id": "G05:2",
+    "obligation_id": "G05:B3:O1",
+    "target_id": "",
+    "site_id": "",
+    "attempt": 1,
+    "budget_key": "execution_rebuild"
+   },
+   {
+    "action": "MARK_UNRESOLVED",
+    "stage": "deliver",
+    "failure_class": "VERIFICATION",
+    "error_code": "CLAIM_OPERATION_NOT_PLANNED",
+    "reason": "an applicable delete operation survives in the artifact",
+    "outcome": "unresolved",
+    "detail": "artifact recovery circuit breaker",
+    "rule_id": "G05",
+    "operation_id": "G05:2",
+    "obligation_id": "G05:B3:O1",
+    "target_id": "",
+    "site_id": "",
+    "attempt": 1,
+    "budget_key": ""
+   }
+  ]
+ },
+ "audit_issues": [
+  {
+   "code": "AUDIT_NOT_COMPLETED",
+   "rule_id": "G05",
+   "target_id": "S25_S26#1:T001",
+   "location": "p1109",
+   "verdict": "incomplete",
+   "reason": "p1109 仍为“调低赎回费率”，未按 G05:0 改为“调低销售服务费率”。",
+   "evidence_verified": true,
+   "failure_class": "EXECUTION",
+   "affected_fact": "",
+   "affected_obligation": "G05:0 将“调低赎回费率”改为“调低销售服务费率”"
+  }
+ ],
+ "unresolved": [
+  {
+   "kind": "target",
+   "rule_id": "G05",
+   "target_id": "S25_S26#1:T001",
+   "location": "p1109",
+   "reason": "RECALL_TARGET_UNRESOLVED",
+   "quote": "调低赎回费率",
+   "failure_class": "TARGET"
+  },
+  {
+   "kind": "target",
+   "rule_id": "G14",
+   "target_id": "S25_S26#1:T003",
+   "location": "p1109",
+   "reason": "RECALL_TARGET_UNRESOLVED",
+   "quote": "基金管理人可以适当调低基金申购费率和赎回费率。",
+   "failure_class": "TARGET"
+  },
+  {
+   "kind": "audit",
+   "code": "AUDIT_NOT_COMPLETED",
+   "rule_id": "G05",
+   "target_id": "S25_S26#1:T001",
+   "location": "p1109",
+   "verdict": "incomplete",
+   "reason": "p1109 仍为“调低赎回费率”，未按 G05:0 改为“调低销售服务费率”。",
+   "evidence_verified": true,
+   "failure_class": "EXECUTION",
+   "affected_fact": "",
+   "affected_obligation": "G05:0 将“调低赎回费率”改为“调低销售服务费率”"
+  },
+  {
+   "kind": "sweep",
+   "finding_id": "SW006",
+   "rule_id": "G17",
+   "location": "p774",
+   "issue": "unaddressed_requirement",
+   "status": "pending",
+   "reason": "G17 requires deleting the old clause stating the C-class service fee is mainly used to pay sales-institution commissions, fund marketing/advertising, promotion, and holder services, and that its scope excludes募集期间费用. That old usage-scope clause is not present in this chunk and no replacement/removal confirmation appears; the requirement remains unaddressed in the service-fee section.",
+   "failure_class": ""
+  },
+  {
+   "kind": "sweep",
+   "finding_id": "SW007",
+   "rule_id": "G16",
+   "location": "p1246",
+   "issue": "missing_new_text",
+   "status": "pending",
+   "reason": "G16要求在销售服务费条款最后增加“销售服务费每日计提。（1）直销机构：……（2）直销机构以外的其他销售机构：……”等内容，但[p1246]之后没有任何新增的计提与返还安排条款。",
+   "failure_class": "GENERATION"
+  },
+  {
+   "kind": "sweep",
+   "finding_id": "SW008",
+   "rule_id": "G17",
+   "location": "p1242",
+   "issue": "unaddressed_requirement",
+   "status": "pending",
+   "reason": "G17要求删除“C类基金份额的销售服务费主要用于支付销售机构佣金、以及基金管理人的基金行销广告费、促销活动费、基金份额持有人服务费等……”条款；该使用范围条款在本段中已不见，但销售服务费条款整体被压缩，需确认删除后是否保留了G16要求的新增内容，当前段落缺少G16新增内容。",
+   "failure_class": "GENERATION"
+  },
+  {
+   "kind": "claim_replay",
+   "code": "CLAIM_OPERATION_NOT_PLANNED",
+   "claim_code": "CLAIM_OPERATION_NOT_PLANNED",
+   "claim_replay_failed": true,
+   "rule_id": "G05",
+   "operation_id": "G05:2",
+   "obligation_id": "G05:B3:O1",
+   "reason": "an applicable delete operation survives in the artifact",
+   "failure_class": "VERIFICATION"
+  }
+ ],
+ "business_notices": [
+  {
+   "rule_id": "G15",
+   "location": "p772",
+   "code": "CONTRACT_POSSIBLY_ERRONEOUS",
+   "severity": "warning",
+   "affects_completion": false,
+   "message": "原合同可能有误：支付时限与指引参照不同（合同 5个工作日；指引 10个工作日）",
+   "reasons": [
+    "支付时限与指引参照不同（合同 5个工作日；指引 10个工作日）"
+   ]
+  },
+  {
+   "rule_id": "G15",
+   "location": "p1247",
+   "code": "CONTRACT_POSSIBLY_ERRONEOUS",
+   "severity": "warning",
+   "affects_completion": false,
+   "message": "原合同可能有误：支付时限与指引参照不同（合同 5个工作日；指引 10个工作日）",
+   "reasons": [
+    "支付时限与指引参照不同（合同 5个工作日；指引 10个工作日）"
+   ]
+  }
+ ],
+ "limits": {
+  "max_business_rounds": 3,
+  "max_sweep_chunks": 40,
+  "business_rounds_used": 3
+ }
+}

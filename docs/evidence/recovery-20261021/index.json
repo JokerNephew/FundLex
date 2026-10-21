@@ -1,0 +1,38 @@
+[
+ {
+  "case": "D01",
+  "delivery": "incomplete",
+  "edits": 16,
+  "calls": 79,
+  "cost_usd": 0.0591,
+  "claim_verified": true,
+  "unresolved": 10
+ },
+ {
+  "case": "D02",
+  "delivery": "incomplete",
+  "edits": 18,
+  "calls": 135,
+  "cost_usd": 0.0889,
+  "claim_verified": false,
+  "unresolved": 3
+ },
+ {
+  "case": "D11",
+  "delivery": "incomplete",
+  "edits": 15,
+  "calls": 149,
+  "cost_usd": 0.0946,
+  "claim_verified": false,
+  "unresolved": 7
+ },
+ {
+  "case": "D16",
+  "delivery": "incomplete",
+  "edits": 19,
+  "calls": 85,
+  "cost_usd": 0.0483,
+  "claim_verified": false,
+  "unresolved": 13
+ }
+]

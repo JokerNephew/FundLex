@@ -1,0 +1,338 @@
+{
+ "case": "D02",
+ "input": "001-广发上证50交易型开放式指数证券投资基金发起式联接基金基金合同_20241113",
+ "delivery_status": "incomplete",
+ "source_sha256": "c02ae5a04ffbb1a8c63a7408fb3c69fab4f54cd60ff44575f42031ab00e1289b",
+ "plan_count": 18,
+ "target_count": 50,
+ "claim_replay": {
+  "verified": false,
+  "checked": 17,
+  "units_checked": 18,
+  "failures": [
+   {
+    "rule_id": "G05",
+    "operation_id": "G05:2",
+    "obligation_id": "G05:B3:O1",
+    "code": "CLAIM_OPERATION_NOT_PLANNED",
+    "reason": "an applicable delete operation survives in the artifact"
+   }
+  ],
+  "obligations": {
+   "G01:B1:O1": {
+    "units": 1,
+    "failed": 0,
+    "operations": [
+     "G01:0"
+    ],
+    "state": "PASS"
+   },
+   "G05:B1:O1": {
+    "units": 1,
+    "failed": 0,
+    "operations": [
+     "G05:0"
+    ],
+    "state": "PASS"
+   },
+   "G03:B1:O1": {
+    "units": 1,
+    "failed": 0,
+    "operations": [
+     "G03:0"
+    ],
+    "state": "PASS"
+   },
+   "G11:B1:O1": {
+    "units": 1,
+    "failed": 0,
+    "operations": [
+     "G11:0"
+    ],
+    "state": "PASS"
+   },
+   "G12:B1:O2": {
+    "units": 1,
+    "failed": 0,
+    "operations": [
+     "G12:1"
+    ],
+    "state": "PASS"
+   },
+   "G09:B1:O1": {
+    "units": 1,
+    "failed": 0,
+    "operations": [
+     "G09:0"
+    ],
+    "state": "PASS"
+   },
+   "G08:B1:O1": {
+    "units": 1,
+    "failed": 0,
+    "operations": [
+     "G08:0"
+    ],
+    "state": "PASS"
+   },
+   "G14:B2:O3": {
+    "units": 1,
+    "failed": 0,
+    "operations": [
+     "G14:5"
+    ],
+    "state": "PASS"
+   },
+   "G17:B1:O1": {
+    "units": 4,
+    "failed": 0,
+    "operations": [
+     "G17:0",
+     "G17:0",
+     "G17:0",
+     "G17:0"
+    ],
+    "state": "PASS"
+   },
+   "G18:B1:O1": {
+    "units": 2,
+    "failed": 0,
+    "operations": [
+     "G18:0",
+     "G18:0"
+    ],
+    "state": "PASS"
+   },
+   "G22:B1:O1": {
+    "units": 2,
+    "failed": 0,
+    "operations": [
+     "G22:0",
+     "G22:0"
+    ],
+    "state": "PASS"
+   },
+   "G15:B1:O1": {
+    "units": 2,
+    "failed": 0,
+    "operations": [
+     "G15:0",
+     "G15:0"
+    ],
+    "state": "PASS"
+   }
+  }
+ },
+ "recovery": {
+  "final": "unresolved",
+  "last_outcome": "unresolved",
+  "attempts": 7,
+  "actions": [
+   "REBUILD_PLAN",
+   "REBUILD_PLAN",
+   "REBUILD_PLAN",
+   "MARK_UNRESOLVED",
+   "REGENERATE_ARTIFACT",
+   "REBUILD_PLAN",
+   "MARK_UNRESOLVED"
+  ],
+  "history": [
+   {
+    "action": "REBUILD_PLAN",
+    "stage": "audit",
+    "failure_class": "EXECUTION",
+    "error_code": "AUDIT_NOT_COMPLETED",
+    "reason": "p1162 在 AFTER 中与 BEFORE 完全相同，仍保留“调低全部或者部分份额类别的赎回费率”，未按 G05 改为“调低销售服务费率”，也未删除“调低赎回费率”。",
+    "outcome": "succeeded",
+    "detail": "issue_resolved;issues=1",
+    "rule_id": "G05",
+    "operation_id": "",
+    "obligation_id": "G05: 将含“调低赎回费率”的条款改为“调低销售服务费率”（p1162 未执行）",
+    "target_id": "S25_S26#1:T001",
+    "site_id": "p1162",
+    "attempt": 1,
+    "budget_key": "execution_rebuild"
+   },
+   {
+    "action": "REBUILD_PLAN",
+    "stage": "audit",
+    "failure_class": "EXECUTION",
+    "error_code": "AUDIT_NOT_COMPLETED",
+    "reason": "p1162 仍保留“调低全部或者部分份额类别的赎回费率”，未按 G05 将“调低赎回费率”改为“调低销售服务费率”，该目标未执行。",
+    "outcome": "succeeded",
+    "detail": "issue_resolved;issues=1",
+    "rule_id": "G05",
+    "operation_id": "",
+    "obligation_id": "G05:0 将“调低赎回费率”替换为“调低销售服务费率”",
+    "target_id": "S25_S26#1:T001",
+    "site_id": "p1162",
+    "attempt": 1,
+    "budget_key": "execution_rebuild"
+   },
+   {
+    "action": "REBUILD_PLAN",
+    "stage": "audit",
+    "failure_class": "EXECUTION",
+    "error_code": "AUDIT_NOT_COMPLETED",
+    "reason": "p1162 仍保留“调低全部或者部分份额类别的赎回费率”，未按 G05:0 改为“调低销售服务费率”。",
+    "outcome": "succeeded",
+    "detail": "issue_resolved;issues=1",
+    "rule_id": "G05",
+    "operation_id": "",
+    "obligation_id": "G05:0 将“调低赎回费率”改为“调低销售服务费率”",
+    "target_id": "S25_S26#1:T001",
+    "site_id": "p1162",
+    "attempt": 1,
+    "budget_key": "execution_rebuild"
+   },
+   {
+    "action": "MARK_UNRESOLVED",
+    "stage": "audit",
+    "failure_class": "EXECUTION",
+    "error_code": "AUDIT_NOT_COMPLETED",
+    "reason": "p1162 still reads “调低全部或者部分份额类别的赎回费率” and was not changed to “调低销售服务费率” as required by G05:0 for the C类 share class.",
+    "outcome": "unresolved",
+    "detail": "global_business_rounds",
+    "rule_id": "G05",
+    "operation_id": "",
+    "obligation_id": "G05:0 replace 调低赎回费率 -> 调低销售服务费率 at p1162",
+    "target_id": "S25_S26#1:T001",
+    "site_id": "p1162",
+    "attempt": 1,
+    "budget_key": ""
+   },
+   {
+    "action": "REGENERATE_ARTIFACT",
+    "stage": "deliver",
+    "failure_class": "VERIFICATION",
+    "error_code": "CLAIM_OPERATION_NOT_PLANNED",
+    "reason": "an applicable delete operation survives in the artifact",
+    "outcome": "failed",
+    "detail": "checked=17",
+    "rule_id": "G05",
+    "operation_id": "G05:2",
+    "obligation_id": "G05:B3:O1",
+    "target_id": "",
+    "site_id": "",
+    "attempt": 1,
+    "budget_key": "artifact_recovery"
+   },
+   {
+    "action": "REBUILD_PLAN",
+    "stage": "deliver",
+    "failure_class": "VERIFICATION",
+    "error_code": "CLAIM_OPERATION_NOT_PLANNED",
+    "reason": "an applicable delete operation survives in the artifact",
+    "outcome": "failed",
+    "detail": "checked=17",
+    "rule_id": "G05",
+    "operation_id": "G05:2",
+    "obligation_id": "G05:B3:O1",
+    "target_id": "",
+    "site_id": "",
+    "attempt": 1,
+    "budget_key": "execution_rebuild"
+   },
+   {
+    "action": "MARK_UNRESOLVED",
+    "stage": "deliver",
+    "failure_class": "VERIFICATION",
+    "error_code": "CLAIM_OPERATION_NOT_PLANNED",
+    "reason": "an applicable delete operation survives in the artifact",
+    "outcome": "unresolved",
+    "detail": "artifact recovery circuit breaker",
+    "rule_id": "G05",
+    "operation_id": "G05:2",
+    "obligation_id": "G05:B3:O1",
+    "target_id": "",
+    "site_id": "",
+    "attempt": 1,
+    "budget_key": ""
+   }
+  ]
+ },
+ "audit_issues": [
+  {
+   "code": "AUDIT_NOT_COMPLETED",
+   "rule_id": "G05",
+   "target_id": "S25_S26#1:T001",
+   "location": "p1162",
+   "verdict": "incomplete",
+   "reason": "p1162 仍保留“调低全部或者部分份额类别的赎回费率”，未按 G05:0 改为“调低销售服务费率”，该目标未执行。",
+   "evidence_verified": true,
+   "failure_class": "EXECUTION",
+   "affected_fact": "",
+   "affected_obligation": "G05:0 将“调低赎回费率”改为“调低销售服务费率”"
+  }
+ ],
+ "unresolved": [
+  {
+   "kind": "target",
+   "rule_id": "G05",
+   "target_id": "S25_S26#1:T001",
+   "location": "p1162",
+   "reason": "RECALL_COMPOSE_FIXED_TEXT_MISSING",
+   "quote": "在法律法规和《基金合同》规定的范围内调整本基金全部或者部分份额类别的申购费率、调低全部或者部分份额类别的赎回费率、调低销售服务费率或变更收费方式；",
+   "failure_class": "GENERATION"
+  },
+  {
+   "kind": "audit",
+   "code": "AUDIT_NOT_COMPLETED",
+   "rule_id": "G05",
+   "target_id": "S25_S26#1:T001",
+   "location": "p1162",
+   "verdict": "incomplete",
+   "reason": "p1162 仍保留“调低全部或者部分份额类别的赎回费率”，未按 G05:0 改为“调低销售服务费率”，该目标未执行。",
+   "evidence_verified": true,
+   "failure_class": "EXECUTION",
+   "affected_fact": "",
+   "affected_obligation": "G05:0 将“调低赎回费率”改为“调低销售服务费率”"
+  },
+  {
+   "kind": "claim_replay",
+   "code": "CLAIM_OPERATION_NOT_PLANNED",
+   "claim_code": "CLAIM_OPERATION_NOT_PLANNED",
+   "claim_replay_failed": true,
+   "rule_id": "G05",
+   "operation_id": "G05:2",
+   "obligation_id": "G05:B3:O1",
+   "reason": "an applicable delete operation survives in the artifact",
+   "failure_class": "VERIFICATION"
+  }
+ ],
+ "business_notices": [
+  {
+   "rule_id": "G15",
+   "location": "p1287",
+   "code": "CONTRACT_POSSIBLY_ERRONEOUS",
+   "severity": "warning",
+   "affects_completion": false,
+   "message": "原合同可能有误：支付时限与指引参照不同（合同 5个工作日；指引 10个工作日）；支付路径/方式出现“自动支付/扣划”（指引参照未涉及）；支付路径/方式出现“指定账户路径”（指引参照未涉及）；支付路径/方式出现“无需出具指令”（指引参照未涉及）",
+   "reasons": [
+    "支付时限与指引参照不同（合同 5个工作日；指引 10个工作日）",
+    "支付路径/方式出现“自动支付/扣划”（指引参照未涉及）",
+    "支付路径/方式出现“指定账户路径”（指引参照未涉及）",
+    "支付路径/方式出现“无需出具指令”（指引参照未涉及）"
+   ]
+  },
+  {
+   "rule_id": "G15",
+   "location": "p821",
+   "code": "CONTRACT_POSSIBLY_ERRONEOUS",
+   "severity": "warning",
+   "affects_completion": false,
+   "message": "原合同可能有误：支付时限与指引参照不同（合同 5个工作日；指引 10个工作日）；支付路径/方式出现“自动支付/扣划”（指引参照未涉及）；支付路径/方式出现“指定账户路径”（指引参照未涉及）；支付路径/方式出现“无需出具指令”（指引参照未涉及）",
+   "reasons": [
+    "支付时限与指引参照不同（合同 5个工作日；指引 10个工作日）",
+    "支付路径/方式出现“自动支付/扣划”（指引参照未涉及）",
+    "支付路径/方式出现“指定账户路径”（指引参照未涉及）",
+    "支付路径/方式出现“无需出具指令”（指引参照未涉及）"
+   ]
+  }
+ ],
+ "limits": {
+  "max_business_rounds": 3,
+  "max_sweep_chunks": 40,
+  "business_rounds_used": 3
+ }
+}

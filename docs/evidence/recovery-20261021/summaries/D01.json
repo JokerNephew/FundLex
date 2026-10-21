@@ -1,0 +1,351 @@
+{
+ "case": "D01",
+ "input": "001-广发上海清算所0-4年央企80债券指数证券投资基金基金合同_20250319",
+ "delivery_status": "incomplete",
+ "source_sha256": "2f2f7a36000af8135feb625c0c7d6f9f3e8b291d1628f0879993d6987e2d278d",
+ "plan_count": 16,
+ "target_count": 25,
+ "claim_replay": {
+  "verified": true,
+  "checked": 16,
+  "units_checked": 16,
+  "failures": [],
+  "obligations": {
+   "G01:B1:O1": {
+    "units": 1,
+    "failed": 0,
+    "operations": [
+     "G01:0"
+    ],
+    "state": "PASS"
+   },
+   "G08:B1:O1": {
+    "units": 1,
+    "failed": 0,
+    "operations": [
+     "G08:0"
+    ],
+    "state": "PASS"
+   },
+   "G11:B1:O1": {
+    "units": 1,
+    "failed": 0,
+    "operations": [
+     "G11:0"
+    ],
+    "state": "PASS"
+   },
+   "G09:B1:O1": {
+    "units": 1,
+    "failed": 0,
+    "operations": [
+     "G09:0"
+    ],
+    "state": "PASS"
+   },
+   "G13:B1:O1": {
+    "units": 1,
+    "failed": 0,
+    "operations": [
+     "G13:0"
+    ],
+    "state": "PASS"
+   },
+   "G14:B2:O1": {
+    "units": 1,
+    "failed": 0,
+    "operations": [
+     "G14:3"
+    ],
+    "state": "PASS"
+   },
+   "G12:B1:O2": {
+    "units": 1,
+    "failed": 0,
+    "operations": [
+     "G12:1"
+    ],
+    "state": "PASS"
+   },
+   "G15:B1:O1": {
+    "units": 2,
+    "failed": 0,
+    "operations": [
+     "G15:0",
+     "G15:0"
+    ],
+    "state": "PASS"
+   },
+   "G17:B1:O1": {
+    "units": 4,
+    "failed": 0,
+    "operations": [
+     "G17:0",
+     "G17:0",
+     "G17:0",
+     "G17:0"
+    ],
+    "state": "PASS"
+   },
+   "G18:B1:O1": {
+    "units": 1,
+    "failed": 0,
+    "operations": [
+     "G18:0"
+    ],
+    "state": "PASS"
+   },
+   "G22:B1:O1": {
+    "units": 2,
+    "failed": 0,
+    "operations": [
+     "G22:0",
+     "G22:0"
+    ],
+    "state": "PASS"
+   }
+  }
+ },
+ "recovery": {
+  "final": "unresolved",
+  "last_outcome": "succeeded",
+  "attempts": 3,
+  "actions": [
+   "RETRY_DETERMINISTIC",
+   "FOCUSED_FACT_RESOLVE",
+   "FOCUSED_FACT_RESOLVE"
+  ],
+  "history": [
+   {
+    "action": "RETRY_DETERMINISTIC",
+    "stage": "audit",
+    "failure_class": "GENERATION",
+    "error_code": "AUDIT_NOT_COMPLETED",
+    "reason": "AFTER 在“调低销售服务费率”后使用了句号“。”再接“或变更收费方式”，破坏了原并列结构，且未按 G05 删除“并报中国证监会备案”（该句在 BEFORE 中本就不完整，但 AFTER 仍保留了不完整的“调整前基金管理人需及时”）。替换文本引入了标点错误，属于生成错误。",
+    "outcome": "succeeded",
+    "detail": "issue_resolved;issues=0",
+    "rule_id": "G05",
+    "operation_id": "",
+    "obligation_id": "G05:2 删除“并报中国证监会备案”及保持条款并列结构完整",
+    "target_id": "S03_S04_S07_S16_S17_S20_S26#1:T008",
+    "site_id": "p135",
+    "attempt": 1,
+    "budget_key": "generation_deterministic_retry"
+   },
+   {
+    "action": "FOCUSED_FACT_RESOLVE",
+    "stage": "audit",
+    "failure_class": "FACT",
+    "error_code": "AUDIT_NOT_COMPLETED",
+    "reason": "G02 requires replacing the class groups: 'A类基金份额' must become all classes actually charging subscription fees with no sales service fee (per the rule's slot: A类、B类基金份额), and 'C类基金份额' must become all classes charging no subscription fee but accruing sales service fee (per the rule's slot: C类、D类基金份额). AFTER keeps the original grouping 'A 类及 D 类' and 'C 类', i.e. it did not perform the required regrouping; D类 is placed in the fee-charging group and B类 is absent, contradicting the requirement.",
+    "outcome": "succeeded",
+    "detail": "issue_resolved;issues=0",
+    "rule_id": "G02",
+    "operation_id": "",
+    "obligation_id": "G02 释义-基金份额类别定义分组替换",
+    "target_id": "T3001",
+    "site_id": "p92",
+    "attempt": 1,
+    "budget_key": "fact_primary_retry"
+   },
+   {
+    "action": "FOCUSED_FACT_RESOLVE",
+    "stage": "audit",
+    "failure_class": "FACT",
+    "error_code": "AUDIT_NOT_COMPLETED",
+    "reason": "G04 requires replacing the class groups with the product's actual classes: the group that charges subscription fees and does not accrue sales service fees must be replaced by all classes applying that rule (A类、B类), and the group that charges no subscription fee and accrues sales service fees must be replaced by all classes applying that rule (C类、D类). The AFTER text keeps the original grouping (A类及D类 charge fees; C类 accrues sales service fee), which contradicts the required grouping and drops the required B类 class.",
+    "outcome": "succeeded",
+    "detail": "issue_resolved;issues=0",
+    "rule_id": "G04",
+    "operation_id": "",
+    "obligation_id": "G04 份额类别分组替换",
+    "target_id": "T3002",
+    "site_id": "p130",
+    "attempt": 1,
+    "budget_key": "fact_primary_retry"
+   }
+  ]
+ },
+ "audit_issues": [
+  {
+   "code": "AUDIT_NOT_COMPLETED",
+   "rule_id": "G05",
+   "target_id": "S03_S04_S07_S16_S17_S20_S26#1:T001",
+   "location": "p135",
+   "verdict": "wrong",
+   "reason": "AFTER 仍保留“调低赎回费率”，未按 G05 在有收取销售服务费的份额类别时将其改为“调低销售服务费率”。",
+   "evidence_verified": true,
+   "failure_class": "EXECUTION",
+   "affected_fact": "C类份额收取销售服务费，应表述为调低销售服务费率",
+   "affected_obligation": "G05:0 将“调低赎回费率”替换为“调低销售服务费率”"
+  },
+  {
+   "code": "AUDIT_NOT_COMPLETED",
+   "rule_id": "G05",
+   "target_id": "S03_S04_S07_S16_S17_S20_S26#1:T002",
+   "location": "p135",
+   "verdict": "incomplete",
+   "reason": "AFTER 与 BEFORE 完全相同，未删除“并报中国证监会备案”（该句在 p135 后续文本中仍存在），删除要求未执行。",
+   "evidence_verified": true,
+   "failure_class": "EXECUTION",
+   "affected_fact": "",
+   "affected_obligation": "G05:2 删除“并报中国证监会备案”"
+  },
+  {
+   "code": "AUDIT_NOT_COMPLETED",
+   "rule_id": "G03",
+   "target_id": "S03_S04_S07_S16_S17_S20_S26#1:T005",
+   "location": "p135",
+   "verdict": "incomplete",
+   "reason": "G03要求在原份额类别设置条款后新增条款，明确直销机构申购A类不收取认购/申购费、直销机构申购C类不收取销售服务费、其他销售机构申购C类持有超一年不再收取销售服务费。AFTER与BEFORE完全相同，未插入任何新条款，要求全部缺失。",
+   "evidence_verified": true,
+   "failure_class": "GENERATION",
+   "affected_fact": "",
+   "affected_obligation": "在基金的基本情况份额类别设置原条款后增加直销机构A类免认购/申购费、直销机构C类免销售服务费、其他销售机构C类持有超一年免销售服务费的新条款"
+  },
+  {
+   "code": "AUDIT_MISSED_TARGET",
+   "rule_id": "G05",
+   "location": "p135",
+   "quote": "调低赎回费率",
+   "reason": "该处仍为“调低赎回费率”，需按 G05 改为“调低销售服务费率”（与 T001 同位置，但 AFTER 未做任何改动，需重新执行）。"
+  }
+ ],
+ "unresolved": [
+  {
+   "kind": "target",
+   "rule_id": "G05",
+   "target_id": "S03_S04_S07_S16_S17_S20_S26#1:T001",
+   "location": "p135",
+   "reason": "RECALL_EDIT_OVERLAP",
+   "quote": "调低赎回费率",
+   "failure_class": "GENERATION"
+  },
+  {
+   "kind": "audit",
+   "code": "AUDIT_NOT_COMPLETED",
+   "rule_id": "G05",
+   "target_id": "S03_S04_S07_S16_S17_S20_S26#1:T001",
+   "location": "p135",
+   "verdict": "wrong",
+   "reason": "AFTER 仍保留“调低赎回费率”，未按 G05 在有收取销售服务费的份额类别时将其改为“调低销售服务费率”。",
+   "evidence_verified": true,
+   "failure_class": "EXECUTION",
+   "affected_fact": "C类份额收取销售服务费，应表述为调低销售服务费率",
+   "affected_obligation": "G05:0 将“调低赎回费率”替换为“调低销售服务费率”"
+  },
+  {
+   "kind": "audit",
+   "code": "AUDIT_NOT_COMPLETED",
+   "rule_id": "G03",
+   "target_id": "S03_S04_S07_S16_S17_S20_S26#1:T005",
+   "location": "p135",
+   "verdict": "incomplete",
+   "reason": "G03要求在原份额类别设置条款后新增条款，明确直销机构申购A类不收取认购/申购费、直销机构申购C类不收取销售服务费、其他销售机构申购C类持有超一年不再收取销售服务费。AFTER与BEFORE完全相同，未插入任何新条款，要求全部缺失。",
+   "evidence_verified": true,
+   "failure_class": "GENERATION",
+   "affected_fact": "",
+   "affected_obligation": "在基金的基本情况份额类别设置原条款后增加直销机构A类免认购/申购费、直销机构C类免销售服务费、其他销售机构C类持有超一年免销售服务费的新条款"
+  },
+  {
+   "kind": "audit",
+   "code": "AUDIT_MISSED_TARGET",
+   "rule_id": "G05",
+   "location": "p135",
+   "quote": "调低赎回费率",
+   "reason": "该处仍为“调低赎回费率”，需按 G05 改为“调低销售服务费率”（与 T001 同位置，但 AFTER 未做任何改动，需重新执行）。",
+   "failure_class": "VERIFICATION"
+  },
+  {
+   "kind": "sweep",
+   "finding_id": "SW001",
+   "rule_id": "G06",
+   "location": "p135",
+   "issue": "unaddressed_requirement",
+   "status": "unresolved",
+   "reason": "G06 requires outright deletion of the old clause “除非基金管理人在未来条件成熟后另行公告开通相关业务，本基金不同基金份额类别之间不得互相转换。”. The share-class section here still contains the old conversion-restriction clause text and it was not deleted.",
+   "failure_class": "TARGET"
+  },
+  {
+   "kind": "sweep",
+   "finding_id": "SW002",
+   "rule_id": "G05",
+   "location": "p135",
+   "issue": "residual_old_text",
+   "status": "unresolved",
+   "reason": "原条款要求删除“并报中国证监会备案”，但该句残留为“调整前基金管理人需及时。”，且“调低赎回费率”未按有销售服务费类别改为“调低销售服务费率”。",
+   "failure_class": "TARGET"
+  },
+  {
+   "kind": "sweep",
+   "finding_id": "SW003",
+   "rule_id": "G06",
+   "location": "p135",
+   "issue": "residual_old_text",
+   "status": "unresolved",
+   "reason": "G06要求删除“除非基金管理人在未来条件成熟后另行公告开通相关业务，本基金不同基金份额类别之间不得互相转换。”，该旧条款在本段中未见删除痕迹，且G05要求的“调低赎回费率”改为“调低销售服务费率”也未落实。",
+   "failure_class": "TARGET"
+  },
+  {
+   "kind": "sweep",
+   "finding_id": "SW004",
+   "rule_id": "G05",
+   "location": "p135",
+   "issue": "residual_old_text",
+   "status": "pending",
+   "reason": "产品存在收取销售服务费的C类份额，按G05应将“调低赎回费率”改为“调低销售服务费率”，但原文仍保留“调低赎回费率”，未做替换。",
+   "failure_class": "TARGET"
+  },
+  {
+   "kind": "sweep",
+   "finding_id": "SW005",
+   "rule_id": "G06",
+   "location": "p135",
+   "issue": "unaddressed_requirement",
+   "status": "pending",
+   "reason": "G06要求删除“除非基金管理人在未来条件成熟后另行公告开通相关业务，本基金不同基金份额类别之间不得互相转换。”，但该条款在本段中未见删除，仍属未处理。",
+   "failure_class": "TARGET"
+  },
+  {
+   "kind": "obligation",
+   "code": "OPEN_OBLIGATION",
+   "rule_id": "G01",
+   "obligation_id": "G01:B1:O1",
+   "operation_id": "G01:0",
+   "branch_id": "B1",
+   "applicability": "TRUE",
+   "failure_class": "TARGET",
+   "reason": "audit_wrong",
+   "expected_site": "释义"
+  }
+ ],
+ "business_notices": [
+  {
+   "rule_id": "G15",
+   "location": "p758",
+   "code": "CONTRACT_POSSIBLY_ERRONEOUS",
+   "severity": "warning",
+   "affects_completion": false,
+   "message": "原合同可能有误：支付时限与指引参照不同（合同 5个工作日；指引 10个工作日）",
+   "reasons": [
+    "支付时限与指引参照不同（合同 5个工作日；指引 10个工作日）"
+   ]
+  },
+  {
+   "rule_id": "G15",
+   "location": "p1221",
+   "code": "CONTRACT_POSSIBLY_ERRONEOUS",
+   "severity": "warning",
+   "affects_completion": false,
+   "message": "原合同可能有误：支付时限与指引参照不同（合同 5个工作日；指引 10个工作日）",
+   "reasons": [
+    "支付时限与指引参照不同（合同 5个工作日；指引 10个工作日）"
+   ]
+  }
+ ],
+ "limits": {
+  "max_business_rounds": 3,
+  "max_sweep_chunks": 40,
+  "business_rounds_used": 3
+ }
+}
