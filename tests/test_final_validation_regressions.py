@@ -1322,3 +1322,22 @@ def test_planning_clamps_trailing_whitespace_to_a_text_segment(tmp_path):
                             AssertionError("append should stay deterministic"))))
     edit = result["edits"][0]
     assert edit["end"] <= max(s.end for s in span.segments)
+
+
+def test_user_facing_target_counts_are_terminal_and_reconcile():
+    from fundlex.api import _recall_target_counts
+    from fundlex.recall_pipeline import _target_disposition_counts
+
+    targets = [
+        {"target_id": "T1", "status": "planned", "state": "needs_edit"},
+        {"target_id": "T2", "status": "satisfied", "state": "satisfied"},
+        {"target_id": "T3", "status": "not_applicable", "state": "needs_edit",
+         "out_of_scope": True},
+        {"target_id": "T4", "status": "unresolved", "state": "needs_edit",
+         "out_of_scope": True},
+    ]
+    counts = _target_disposition_counts(targets)
+    assert counts == {"targets": 4, "needs_edit": 1, "satisfied": 1, "absent": 2}
+    report = {"targets": targets, "unresolved": []}
+    api = _recall_target_counts(report)
+    assert api == {"total": 4, "completed": 4, "unresolved": 0}

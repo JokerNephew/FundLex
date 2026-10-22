@@ -2859,6 +2859,28 @@ def _finalize_failure(report: dict[str, Any], published: Sequence[Path]) -> None
         report["delivery_status"] = "not_generated"
 
 
+def _target_disposition_counts(targets: Sequence[dict[str, Any]]) -> dict[str, int]:
+    """Final, mutually exclusive user-facing target buckets."""
+    needs = 0
+    satisfied = 0
+    absent = 0
+    for target in targets:
+        status = str(target.get("status") or "")
+        state = str(target.get("state") or "")
+        out_of_scope = bool(target.get("out_of_scope"))
+        if out_of_scope or status == "not_applicable" or state == "absent":
+            absent += 1
+        elif status in {"planned", "unresolved", "not_planned"}:
+            needs += 1
+        elif status == "satisfied" or state == "satisfied":
+            satisfied += 1
+        else:
+            # Unknown/no-plan is work still requiring a disposition, never success.
+            needs += 1
+    return {"targets": len(targets), "needs_edit": needs,
+            "satisfied": satisfied, "absent": absent}
+
+
 def _write_report_markdown(path: Path, report: dict[str, Any]) -> None:
     plan = report.get("plan") or {}
     audit = report.get("audit") or {}
@@ -2886,9 +2908,10 @@ def _write_report_markdown(path: Path, report: dict[str, Any]) -> None:
         lines.append(f"- 事实：份额类别 {facts.get('class_count')}（{classes or '无'}）；"
                      f"销售服务费类别：{'、'.join(facts.get('service_group') or []) or '无'}；"
                      f"浮动管理费：{'是' if facts.get('is_floating_fee') else '否'}")
-    lines.append(f"- 目标计数：应改 {sum(1 for t in targets if t.get('state') == 'needs_edit')}，"
-                 f"已符合 {sum(1 for t in targets if t.get('state') == 'satisfied')}，"
-                 f"不适用 {sum(1 for t in targets if t.get('state') == 'absent')}；"
+    disposition = _target_disposition_counts(targets)
+    lines.append(f"- 目标计数：应改 {disposition['needs_edit']}，"
+                 f"已符合 {disposition['satisfied']}，"
+                 f"不适用 {disposition['absent']}；"
                  f"计划修改 {plan.get('count', 0)}")
     lines.append(f"- 审计轮次：{len(audit.get('rounds') or [])}；未决问题 {len(audit.get('issues') or [])}")
     lines.append(f"- 查漏：块 {sweep.get('chunks', 0)}，发现 {len(sweep.get('findings') or [])}，"
@@ -2915,17 +2938,10 @@ def _write_report_markdown(path: Path, report: dict[str, Any]) -> None:
         for item in coverage:
             rule_id = str(item.get("rule_id"))
             final_targets = final_by_rule.get(rule_id, [])
-            needs = sum(1 for target in final_targets
-                        if target.get("status") not in {"planned", "satisfied", "not_applicable"}
-                        and not target.get("out_of_scope"))
-            satisfied = sum(1 for target in final_targets
-                            if target.get("status") == "satisfied" or target.get("state") == "satisfied")
-            absent = sum(1 for target in final_targets
-                         if target.get("out_of_scope") or target.get("state") == "absent")
-            counts = {"targets": len(final_targets), "needs_edit": needs,
-                      "satisfied": satisfied, "absent": absent}
+            counts = _target_disposition_counts(final_targets)
+            coverage_label = "targets_found" if final_targets else item.get("coverage")
             audit_counts = audit_by_rule.get(rule_id, {"completed": 0, "total": 0})
-            lines.append(f"- {rule_id}：覆盖 {item.get('coverage')}；"
+            lines.append(f"- {rule_id}：覆盖 {coverage_label}；"
                          f"目标 {counts['targets']}（应改 {counts['needs_edit']} / "
                          f"已符合 {counts['satisfied']} / 不适用 {counts['absent']}）；"
                          f"审计完成 {audit_counts['completed']}/{audit_counts['total']}；"
