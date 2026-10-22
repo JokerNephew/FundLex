@@ -1237,3 +1237,30 @@ def test_expected_class_group_quote_accepts_and_separator():
     assert not _quote_is_expected_effect(
         "在投资者申购 A 类及 B 类基金份额时收取申购费用", record, None,
         location="p0", actual_text="在投资者申购 A 类及 B 类基金份额时收取申购费用")
+
+
+def test_expected_effect_accepts_class_substituted_final_edit():
+    from fundlex.recall_pipeline import _quote_is_expected_effect
+
+    quote = "由于本基金A类、D类基金份额和C类基金份额费用收取不同，各基金份额类别对应的可分配收益将有所不同。"
+    record = SimpleNamespace(
+        obligation_id="G18:B1:O1",
+        spec=SimpleNamespace(rule_id="G18", op="replace", operation_id="G18:0",
+                             old_text="由于本基金A类基金份额不收取销售服务费，而C类基金份额收取销售服务费",
+                             new_text="由于本基金A类基金份额和C类基金份额费用收取不同",
+                             alternatives=()))
+    proof = {"state": "PASS", "operation_id": "G18:0", "obligation_id": "G18:B1:O1",
+             "artifact_status": "EXPECTED_EFFECT_PRESENT", "sites": ["p0"],
+             "failure_code": "",
+             "evidence": [{"site_id": "p0", "location": "p0",
+                           "operation_id": "G18:0", "obligation_id": "G18:B1:O1",
+                           "proof_kind": "site_final_plan_reconstruction"}],
+             "site_effects": [{"site_id": "p0", "location": "p0",
+                               "operation_id": "G18:0", "obligation_id": "G18:B1:O1",
+                               "state": "PASS"}]}
+    edit = {"location": "p0", "replacement": quote, "operation_keys": ["G18:0"],
+            "components": [{"location": "p0", "replacement": quote,
+                            "operation_keys": ["G18:0"]}]}
+    assert _quote_is_expected_effect(quote, record, None, edits=[edit], location="p0",
+                                     actual_text=quote, obligations=SimpleNamespace(),
+                                     proofs={"G18:B1:O1": proof})

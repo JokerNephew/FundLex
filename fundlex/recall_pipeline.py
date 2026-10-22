@@ -1331,6 +1331,23 @@ def _quote_is_expected_effect(quote: str, record: Any, facts: Facts | None, *,
         from .generation.effects import _class_group_equivalent
         if _class_group_equivalent(expected, compact):
             return True
+    if (getattr(record.spec, "rule_id", "") in {"G02", "G04", "G08", "G11", "G18"}
+            and actual_text and proofs and obligations is not None):
+        local = _local_operation_proofs(proofs.get(record.obligation_id),
+                                        record.spec.operation_id,
+                                        record.obligation_id, location)
+        if local and all(effect_proof_passed(proof) for proof in local):
+            # Class-substitution rules (G18) may add a real D class to the guide's
+            # A/C template.  The final authorized edit, not the literal template, is
+            # the effect at this site.  Claim proof already rules out unapproved
+            # residual text, so an exact final replacement is safe evidence.
+            for parent, component in operation_units(edits, record.spec.operation_id):
+                if str(component.get("location") or parent.get("location") or "") != location:
+                    continue
+                replacement = _compact(str(component.get("replacement")
+                                           or parent.get("replacement") or ""))
+                if replacement and (compact in replacement or replacement in compact):
+                    return True
     references = [str(record.spec.old_text or ""), *record.spec.alternatives]
     old_parts = [_compact(sentence) for reference in references
                  for sentence in re.split(r"(?<=[。；;])", reference)

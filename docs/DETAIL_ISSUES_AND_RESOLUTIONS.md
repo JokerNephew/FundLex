@@ -2252,3 +2252,9 @@
 
 - 新代码（未提交时）对 `80623e1` D01 frozen cassette 零网络重放：`delivery=complete`、errors=[]；p758 与 p1221 均生成相同的 `G15+G16 merged_delete_append`，G15 的 p758 副本通过 late duplicate-copy closure 被纳入。说明上一轮 D01 的 p758/p1221 分歧和 G04/G08/G11/G12/G13 sweep 误报已关闭。
 - 仍不能替代 exact-code live：旧 cassette 的 audit/sweep 上下文来自旧代码；必须在新 SHA 重新 record。
+
+### FL-D145 追加 5（D01 第四次 exact-code 尝试）
+
+- `7bb9905` D01 live：32 calls/$0.0282417，24 TRUE 全部 terminal，Claim PASS，仅剩 1 条 sweep：G18 p1191 的最终类替换文本被误报 wrong_text；实际文本为 `A类、D类…和C类…费用收取不同`，是 G18 按 certified facts 加入 D 类后的正确结果。
+- 处理：`_quote_is_expected_effect` 对 G18/G02/G04/G08/G11 增加“最终授权 edit replacement 的精确/包含匹配”，且仍要求本地 operation proof PASS；通用 G99 反例继续失败，避免把 compose contradiction 自我授权。新增 G18 D 类最终替换回归。
+- 状态：待提交后再次 D01 live；若通过，再同 SHA 跑 D02/D11/D16。
