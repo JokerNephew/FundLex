@@ -318,7 +318,11 @@ def _recall_target_counts(report: dict) -> dict[str, int]:
     targets = report.get("targets")
     targets = [item for item in targets if isinstance(item, dict)] if isinstance(targets, list) else []
     completed = sum(1 for item in targets if item.get("status") in _RECALL_TARGET_DONE)
-    unresolved = sum(1 for item in targets if item.get("status") in _RECALL_TARGET_UNRESOLVED)
+    # A candidate target superseded after obligation proof is not user-visible work.
+    # The delivery gate already excluded it; the API counter must not resurrect it as
+    # "未完成 1" on a complete contract (D16 T3001).
+    unresolved = sum(1 for item in targets if item.get("status") in _RECALL_TARGET_UNRESOLVED
+                     and not item.get("out_of_scope"))
     entries = report.get("unresolved")
     if isinstance(entries, list):
         # The delivery gate records target blockers here even when the per-target

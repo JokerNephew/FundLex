@@ -989,6 +989,36 @@ def replay_claims(edits: Sequence[Mapping[str, Any]], before_inspection: Any,
             continue
         if value:
             new_texts[record.spec.operation_id] = value
+    # An operation's fixed policy may occur at most once per paragraph unless it
+    # already occurred there in the source.  Without this, a second full-clause
+    # insertion can pass the span reconstruction (D16 p221 R+R repro).
+    duplicate_seen: set[tuple[str, str]] = set()
+    for location in by_location:
+        try:
+            before_text = str(before_inspection.by_location(location).text)
+            after_text = str(after_inspection.by_location(location).text)
+        except (KeyError, ValueError, IndexError, AttributeError):
+            continue
+        before_compact = _compact(before_text)
+        after_compact = _compact(after_text)
+        for record in records:
+            value = new_texts.get(record.spec.operation_id)
+            needle = _compact(value or "")
+            if len(needle) < 20:
+                continue
+            key = (location, needle)
+            if key in duplicate_seen:
+                continue
+            duplicate_seen.add(key)
+            if after_compact.count(needle) > max(1, before_compact.count(needle)):
+                failures.append({
+                    "rule_id": record.spec.rule_id,
+                    "operation_id": record.spec.operation_id,
+                    "obligation_id": record.obligation_id,
+                    "location": location,
+                    "code": "CLAIM_DUPLICATE_EFFECT",
+                    "reason": "an authorized final clause appears more than once in the same paragraph",
+                })
     authorized_new_texts: dict[str, list[str]] = {}
     for unit in operation_records:
         if unit.get("verdict") != "PASS":
@@ -1058,6 +1088,35 @@ def replay_claims(edits: Sequence[Mapping[str, Any]], before_inspection: Any,
                               "occurrence_index": target.get("occurrence_index", -1),
                               **identity})
             sites.extend({**part, **identity} for part in parts)
+        superseded_site = any(
+            target.get("out_of_scope") and (
+                operation_id in (target.get("operations") or ())
+                or str(target.get("rule_id") or "") == str(record.spec.rule_id))
+            for target in targets)
+        if not sites and superseded_site:
+            # A composite/merged edit can carry a delete operation whose target was
+            # later marked out of scope (D16 G13 p221/p222).  The edit's own
+            # operation key and expected source slice are still artifact evidence;
+            # use them instead of falling back to a zero-site document scan.
+            for edit in effect_edits:
+                for component in edit.get("components") or [edit]:
+                    location = str(component.get("location") or edit.get("location") or "")
+                    if not location:
+                        continue
+                    try:
+                        before_text = str(before_inspection.by_location(location).text)
+                    except (KeyError, ValueError, IndexError, AttributeError):
+                        continue
+                    quote = before_text
+                    if not operation_site_bound(record.spec, quote, before_inspection,
+                                                location, facts):
+                        continue
+                    sites.append({"location": location, "quote": quote,
+                                  "state": "needs_edit", "operation_id": operation_id,
+                                  "obligation_id": record.obligation_id,
+                                  "target_id": str(component.get("target_id") or "")})
+                if sites:
+                    break
         # A model may locate the body copy but miss the contract-summary copy.
         # For replace/delete operations, a paragraph sharing the verified site's
         # normalized opening and passing the same operation site guard is a
@@ -1149,7 +1208,11 @@ def replay_claims(edits: Sequence[Mapping[str, Any]], before_inspection: Any,
                                  "obligation_id": record.obligation_id,
                                  "proof_kind": "alternative_wording_absent",
                                  "site_id": shared_sites[0]["location"],
-                                 "location": shared_sites[0]["location"]}]
+                                 "location": shared_sites[0]["location"],
+                                 "searched_literals": [str(record.spec.old_text or "")],
+                                 "match_count": 0,
+                                 "document_sha256": str(getattr(
+                                     before_inspection, "source_sha256", ""))}]
                     obligation_state[record.obligation_id] = {
                         "state": "PASS", "artifact_status": "NOT_REQUIRED",
                         "rule_id": record.spec.rule_id,

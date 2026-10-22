@@ -19,7 +19,12 @@ def compare(root: Path, case: str) -> dict:
     # DOCX zip metadata and revision timestamps may differ. Compare actual paragraph
     # text, never file hashes, to establish semantic reproducibility of the artifact.
     from fundlex.docx import inspect_docx
-    paths = [root / mode / case / 'working_final.docx' for mode in ('artifacts', 'replay')]
+    def artifact_path(mode: str) -> Path:
+        report = recorded if mode == 'artifacts' else replayed
+        names = report.get('artifacts') or {}
+        name = names.get('final') or names.get('working_final') or 'working_final.docx'
+        return root / mode / case / name
+    paths = [artifact_path('artifacts'), artifact_path('replay')]
     checks['artifact_text'] = all(path.is_file() for path in paths) and (
         [(p.location, p.text) for p in inspect_docx(paths[0], full=True).paragraphs] ==
         [(p.location, p.text) for p in inspect_docx(paths[1], full=True).paragraphs])

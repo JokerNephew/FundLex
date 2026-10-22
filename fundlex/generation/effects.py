@@ -90,7 +90,18 @@ def effect_proof_passed(proof: Mapping[str, Any] | None, *, operation_id: str = 
     if obligation_id and proof.get("obligation_id") != obligation_id:
         return False
     if proof.get("artifact_status") == "NOT_REQUIRED":
-        return bool(proof.get("evidence"))
+        evidence = proof.get("evidence") or ()
+        for item in evidence:
+            if not isinstance(item, Mapping):
+                continue
+            kind = item.get("proof_kind")
+            if kind == "certified_noop_branch":
+                return True
+            if kind == "alternative_wording_absent":
+                return (int(item.get("match_count", -1)) == 0
+                        and bool(item.get("searched_literals"))
+                        and bool(item.get("document_sha256")))
+        return False
     evidence = proof.get("evidence") or ()
     if proof.get("artifact_status") == "VERIFIED_ABSENT" and any(
             isinstance(item, Mapping) and item.get("proof_kind") == "document_literal_absent"

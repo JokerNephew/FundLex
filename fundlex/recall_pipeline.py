@@ -1358,7 +1358,7 @@ def _quote_is_expected_effect(quote: str, record: Any, facts: Facts | None, *,
                     continue
                 replacement = _compact(str(component.get("replacement")
                                            or parent.get("replacement") or ""))
-                if replacement and (compact in replacement or replacement in compact):
+                if replacement and compact in replacement:
                     return True
     references = [str(record.spec.old_text or ""), *record.spec.alternatives]
     old_parts = [_compact(sentence) for reference in references
@@ -2750,16 +2750,6 @@ def _apply_artifact_proof_to_findings(findings: list[dict[str, Any]], replay: di
         except Exception:  # noqa: BLE001
             body = ""
         residual = bool(quote and quote in body)
-        if quote and _sibling_expected_effect(
-                str(finding.get("quote") or ""), location, obligations, states,
-                facts=facts, edits=edits, original=original, actual=actual):
-            # The finding quotes a sibling operation's authorized final text at the
-            # same site; it is not evidence that this rule's old effect survived.
-            finding["status"] = "resolved"
-            finding["resolution"] = "artifact_proof"
-            finding["proof_kind"] = "REVIEW_UNPROVEN"
-            finding["resolution_evidence"] = "sibling_authorized_effect"
-            continue
         rule = rules_by_id.get(rule_id) or {}
         old_sentences = []
         for operation in rule.get("operations") or []:
@@ -2779,6 +2769,16 @@ def _apply_artifact_proof_to_findings(findings: list[dict[str, Any]], replay: di
             proofs=states) for record in related_records)
         if residual and quote_matches_old and not expected_quote:
             finding["proof_kind"] = "RESIDUAL_CONFIRMED"
+            continue
+        if quote and not (residual and quote_matches_old) and _sibling_expected_effect(
+                str(finding.get("quote") or ""), location, obligations, states,
+                facts=facts, edits=edits, original=original, actual=actual):
+            # The finding quotes a sibling operation's authorized final text at the
+            # same site; it is not evidence that this rule's old effect survived.
+            finding["status"] = "resolved"
+            finding["resolution"] = "artifact_proof"
+            finding["proof_kind"] = "REVIEW_UNPROVEN"
+            finding["resolution_evidence"] = "sibling_authorized_effect"
             continue
         if not related or not all(effect_proof_passed(state) for state in related):
             finding["proof_kind"] = "SEMANTIC_UNCERTAIN"
@@ -2901,21 +2901,33 @@ def _write_report_markdown(path: Path, report: dict[str, Any]) -> None:
     coverage = ((report.get("scope_mapping") or {}).get("coverage") or [])
     if coverage:
         audit_by_rule: dict[str, dict[str, int]] = {}
+        final_by_rule: dict[str, list[dict[str, Any]]] = {}
         for target in targets:
+            rule_id = str(target.get("rule_id"))
+            final_by_rule.setdefault(rule_id, []).append(target)
             result = target.get("audit") or {}
-            bucket = audit_by_rule.setdefault(str(target.get("rule_id")), {"completed": 0, "total": 0})
-            if target.get("state") == "needs_edit":
+            bucket = audit_by_rule.setdefault(rule_id, {"completed": 0, "total": 0})
+            if target.get("state") == "needs_edit" and not target.get("out_of_scope"):
                 bucket["total"] += 1
                 if result.get("verdict") == "completed" and result.get("evidence_verified"):
                     bucket["completed"] += 1
         lines.extend(["", "## 每规则处置", ""])
         for item in coverage:
-            counts = item.get("counts") or {}
             rule_id = str(item.get("rule_id"))
+            final_targets = final_by_rule.get(rule_id, [])
+            needs = sum(1 for target in final_targets
+                        if target.get("status") not in {"planned", "satisfied", "not_applicable"}
+                        and not target.get("out_of_scope"))
+            satisfied = sum(1 for target in final_targets
+                            if target.get("status") == "satisfied" or target.get("state") == "satisfied")
+            absent = sum(1 for target in final_targets
+                         if target.get("out_of_scope") or target.get("state") == "absent")
+            counts = {"targets": len(final_targets), "needs_edit": needs,
+                      "satisfied": satisfied, "absent": absent}
             audit_counts = audit_by_rule.get(rule_id, {"completed": 0, "total": 0})
             lines.append(f"- {rule_id}：覆盖 {item.get('coverage')}；"
-                         f"目标 {counts.get('targets', 0)}（应改 {counts.get('needs_edit', 0)} / "
-                         f"已符合 {counts.get('satisfied', 0)} / 不适用 {counts.get('absent', 0)}）；"
+                         f"目标 {counts['targets']}（应改 {counts['needs_edit']} / "
+                         f"已符合 {counts['satisfied']} / 不适用 {counts['absent']}）；"
                          f"审计完成 {audit_counts['completed']}/{audit_counts['total']}；"
                          f"章节 {item.get('sections') or '（未映射）'}")
     if audit.get("rounds"):

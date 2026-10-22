@@ -2288,3 +2288,14 @@
 - `14bff5a` D11 p129 的 G03+G05 atomic 段因 target end 177 越过 TextSegment 176 被 content check 拒绝；同时 D01 G05 `g05_splice` 的 fragment replay 多插入句号，G15 p758 因晚到 survey target 未复制。
 - 处理：G05 splice replay 不插句号；planning 前再做最终 exact-copy closure；尾随空白夹到 segment，并允许 atomic content check 忽略同段尾随空白；D16 composite tail/ONE_OF 修复保留。
 - 当前离线：D11 stage plan 14 edits content check 全通过；D16 frozen replay complete p222 空；D01 plan p135 与 p758/p1221 均正确。需新 SHA 四例 live 复验。
+
+### FL-D145 追加 10（Independent Reviewer 第一轮：BLOCKER/HIGH 修复）
+
+- Reviewer 拒绝 `621d2c1` 的四项问题已处理：
+  - D16 G13 `ALREADY_SATISFIED` 原为无站点 `document_literal_absent`；现在当目标已被 proof 后淘汰时，从实际 plan edit/site 重新绑定 G13 到 p221，Claim 记录 `sites:["p221"]` 和站点前后引文，不再只扫描原文。
+  - Sweep `_sibling_expected_effect` 不再在 `residual_old_text` 分类之前放行，也不再接受“quote 包含 replacement 的超集”；旧文+新文引文保持 `RESIDUAL_CONFIRMED`。
+  - `NOT_REQUIRED` ONE_OF 证据增加 `searched_literals/match_count/document_sha256`，`effect_proof_passed` 只接受可复核的 `alternative_wording_absent` 或 `certified_noop_branch`。
+  - Claim 新增同段重复完整 new_text 检测 `CLAIM_DUPLICATE_EFFECT`，拒绝 p221 这类 R+R 双重插入。
+  - API 完成计数排除 `out_of_scope` 的陈旧 target，不再在 complete 合同上显示“未完成 1”；report.md 每规则计数改读最终 target ledger，不再用 discovery coverage 冒充最终状态。
+  - `tools/compare_frozen_replay.py` 按 report artifacts 映射选择 final/working_final，修复 complete 合同 `artifact_text:false` 的工具假阴性；四例旧 root 比较已 14/14 通过。
+- 尚未提交/重跑四例；Gate 仍不能宣称通过。
