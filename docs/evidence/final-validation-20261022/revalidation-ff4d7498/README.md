@@ -4,7 +4,7 @@
 
 - Runtime code HEAD: `ff4d7498b6c1aee72ba48686074d021fc7f84791`
 - Evidence base HEAD: `387e334869fdb77954b8b97270e393c044105e3d` (docs/evidence archive commit; not a runtime revision)
-- Evidence HEAD: pending packaging commit; the runtime tree is byte-identical to `ff4d7498` (`runtime_tree_sha256=7ad22dc0dfe38bf7d8431ee437e7c5f6575a4f3a8155164d24559028d14e27a2`)
+- Evidence HEAD: `2bc40c1` (validation bundle commit; a docs-only packaging commit follows); the runtime tree is byte-identical to `ff4d7498` (`runtime_tree_sha256=7ad22dc0dfe38bf7d8431ee437e7c5f6575a4f3a8155164d24559028d14e27a2`)
 - Baseline evidence, not overwritten: `docs/evidence/final-validation-20261022/` bound to `682e68a`
 - Guide internal source SHA-256: `b77be53c3439d785a9ffad0f09d8d03ba74f7722397576b999ae6f5dd6eef895`
 - Guide document SHA-256: `45dd77460f2ef93d29001c0833c220f89de99dafb19d32a8b73653b55f92c8d7`
