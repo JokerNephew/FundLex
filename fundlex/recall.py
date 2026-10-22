@@ -1906,6 +1906,120 @@ def assign_target_operations(targets: Sequence[Target], rules_by_id: dict[str, d
     return errors
 
 
+def resolve_absent_site_targets(targets: Sequence[Target], rules_by_id: dict[str, dict],
+                                inspection: DocumentInspection) -> list[dict[str, Any]]:
+    """Turn an out-of-scope G05 delete locator into an already-absent site proof.
+
+    The inventory sometimes finds the class-setup paragraph but reports the
+    independent ``并报中国证监会备案`` literal as TARGET_SOURCE_MISMATCH because
+    that literal is not in this paragraph.  The paragraph is nevertheless the
+    rule's real business site; keep it as a satisfied, site-bound negative proof
+    instead of leaving a false OPEN obligation.
+    """
+    records: list[dict[str, Any]] = []
+    for target in targets:
+        if target.rule_id != "G05" or target.state not in {"needs_edit", "absent"}:
+            continue
+        if target.operations:
+            continue
+        rule = rules_by_id.get("G05") or {}
+        try:
+            span = inspection.by_location(target.location)
+        except (KeyError, DocxError):
+            continue
+        if not target_site_ok("G05", span, inspection):
+            continue
+        body = _compact(span.text)
+        for index, operation in enumerate(rule.get("operations") or []):
+            if operation.get("op") != "delete":
+                continue
+            old = _compact(str(operation.get("old_text") or ""))
+            if len(old) < 8 or old in body:
+                continue
+            target.operations = (operation_key("G05", index),)
+            target.state = "satisfied"
+            target.out_of_scope = False
+            target.quote = span.text
+            target.start, target.end = 0, len(span.text)
+            target.resolution = "resolved"
+            target.segment_ok = True
+            target.reason = f"{target.reason}|ALREADY_ABSENT_AT_CLASS_SETUP"
+            records.append({"target_id": target.target_id, "rule_id": "G05",
+                            "operation_id": target.operations[0],
+                            "location": target.location})
+            break
+    return records
+
+
+def rebind_split_class_definition_targets(targets: Sequence[Target],
+                                        inspection: DocumentInspection) -> list[dict[str, Any]]:
+    """Move a G02/G04 heading-fragment target onto its continuation paragraph.
+
+    Word commonly splits ``…三种不同的`` | ``类别。在投资者申购…``.  The model
+    locator then points at the heading, where no fee-group sentence exists.  When
+    the next paragraph is the direct continuation and carries the class/fee
+    wording, bind the target to that complete paragraph instead of asking the
+    class-substitution planner to narrow an impossible heading.
+    """
+    spans = list(inspection.paragraphs)
+    locations = [span.location for span in spans]
+    records: list[dict[str, Any]] = []
+    for target in targets:
+        if target.rule_id not in {"G02", "G04"} or target.state != "needs_edit":
+            continue
+        if target.location not in locations:
+            continue
+        index = locations.index(target.location)
+        if index >= len(spans) - 1:
+            continue
+        current, _ = display_text(spans[index].text)
+        follower, _ = display_text(spans[index + 1].text)
+        if current.rstrip().endswith(("。", "；", ";", "！", "？", "!", "?")):
+            continue
+        if not follower.lstrip().startswith(("类别", "份额类别", "基金份额类别")):
+            continue
+        if not any(token in follower for token in ("申购费", "认购费", "销售服务费")):
+            continue
+        if not any(token in follower for token in ("A类", "A 类", "C类", "C 类", "D类", "D 类")):
+            continue
+        target.location = spans[index + 1].location
+        target.quote = spans[index + 1].text
+        target.start, target.end = 0, len(spans[index + 1].text)
+        target.resolution = "resolved"
+        target.segment_ok = True
+        target.reason = f"{target.reason}|SPLIT_CLASS_DEFINITION_CONTINUATION"
+        records.append({"target_id": target.target_id, "rule_id": target.rule_id,
+                        "from": current[:40], "to": target.location})
+    return records
+
+
+def ensure_unique_target_ids(targets: Sequence[Target], origins: dict[str, str] | None = None) -> dict[str, str]:
+    """Make every discovery id unique before it becomes a plan/audit key.
+
+    Inventory windows, survey counters, recovery rounds and duplicate-copy helpers
+    each mint ids locally.  Two rounds can otherwise reuse ``Y012`` for unrelated
+    targets.  Preserve the first id and deterministically suffix later collisions;
+    return the rename map for report/evidence bookkeeping.
+    """
+    used: set[str] = set()
+    renamed: dict[str, str] = {}
+    for target in targets:
+        base = str(target.target_id or "T")
+        candidate = base
+        ordinal = 2
+        while candidate in used:
+            candidate = f"{base}-U{ordinal}"
+            ordinal += 1
+        used.add(candidate)
+        if candidate != target.target_id:
+            old = target.target_id
+            target.target_id = candidate
+            renamed[old] = candidate
+            if origins is not None and old in origins:
+                origins[candidate] = origins.pop(old)
+    return renamed
+
+
 def dedupe_operation_targets(targets: Sequence[Target], rules_by_id: dict[str, dict],
                              inspection: DocumentInspection) -> tuple[list[Target], list[str]]:
     """Drop duplicate bindings to the same occurrence, retaining disjoint sites.
@@ -2345,24 +2459,52 @@ def append_applicability_targets(inspection: DocumentInspection, rules: Sequence
                        and not _looks_like_heading(span.text)
                        and append_site_ok(rule_id, span, inspection)]
             prefer = (hinted or {}).get(rule_id)
-            anchor = next((span for span in members if span.location == prefer), None)
-            if anchor is None:
-                if len(members) != 1:
+            preferred = next((span for span in members if span.location == prefer), None)
+            # G16 has one payment mechanism per body/summary copy, so every member
+            # is a real append site.  G01/G03 must keep their single class-definition
+            # anchor; when Word splits that sentence, bind the continuation paragraph
+            # (D01 p91|p92) instead of refusing or appending twice.
+            if preferred is not None:
+                anchors = [preferred]
+            elif rule_id == "G16":
+                anchors = members
+            elif len(members) == 1:
+                anchors = members
+            else:
+                locations = [item.location for item in inspection.paragraphs]
+                continuations = []
+                for member in members:
+                    try:
+                        index = locations.index(member.location)
+                    except ValueError:
+                        continue
+                    if index <= 0:
+                        continue
+                    previous = inspection.paragraphs[index - 1]
+                    previous_text, _ = display_text(previous.text)
+                    current_text, _ = display_text(member.text)
+                    if (not previous_text.rstrip().endswith(("。", "；", ";", "！", "？", "!", "?"))
+                            and any(anchor in previous_text for anchor in
+                                    _TARGET_ANCHORS[rule_id][0])
+                            and current_text.lstrip().startswith(
+                                ("类别", "份额类别", "基金份额类别"))):
+                        continuations.append(member)
+                anchors = continuations[:1]
+            for anchor in anchors:
+                if (rule_id, anchor.location) in existing:
                     continue
-                anchor = members[0]
-            if (rule_id, anchor.location) in existing:
-                continue
-            for index, operation in append_ops:
-                template = str(operation.get("new_text") or "")
-                instantiated, issues = instantiate_slots(template, facts)
-                required = template if issues else instantiated
-                if not required or _append_obligation_present(rule_id, required, _compact(anchor.text)):
-                    continue
-                hits.append(SurveyHit(rule_id=rule_id, operation="append",
-                    locations=(anchor.location,), quote=anchor.text.strip(),
-                    start=0, end=0, ratio=1.0, index=len(hits) + 1,
-                    operation_keys=(operation_key(rule_id, index),))
-                    .with_parts([(anchor.location, 0, len(_compact(anchor.text)))]))
+                for index, operation in append_ops:
+                    template = str(operation.get("new_text") or "")
+                    instantiated, issues = instantiate_slots(template, facts)
+                    required = template if issues else instantiated
+                    if not required or _append_obligation_present(
+                            rule_id, required, _compact(anchor.text)):
+                        continue
+                    hits.append(SurveyHit(rule_id=rule_id, operation="append",
+                        locations=(anchor.location,), quote=anchor.text.strip(),
+                        start=0, end=0, ratio=1.0, index=len(hits) + 1,
+                        operation_keys=(operation_key(rule_id, index),))
+                        .with_parts([(anchor.location, 0, len(_compact(anchor.text)))]))
     return hits
 
 
@@ -4081,6 +4223,14 @@ def compose_variant(span: ParagraphSpan, target: Target, rule: dict, actual: str
     raise last_error or RecallError("RECALL_COMPOSE_EMPTY", {"target": target.target_id})
 
 
+def span_slice(inspection: DocumentInspection, location: str, start: int, end: int) -> str:
+    try:
+        span = inspection.by_location(location)
+    except Exception:  # noqa: BLE001
+        return ""
+    return str(span.text)[int(start):int(end)]
+
+
 def _component(edit: PlannedEdit, inspection: DocumentInspection) -> dict[str, Any]:
     span = inspection.by_location(edit.location)
     return {
@@ -4268,6 +4418,45 @@ def merge_edits(edits: Sequence[PlannedEdit], inspection: DocumentInspection,
                         obligation_ids=_edit_obligation_ids(current, item),
                     )
                     continue
+            # A validated replacement can deterministically carry a contained
+            # deletion when the replacement text no longer contains the deleted
+            # source slice (D16 G12/G13: the G12 replacement already omits the
+            # 7-day/1.5% sentence).  This is not a conflict needing another model
+            # composition; combine the operation identities on the replacement.
+            if (current.replacement.strip() and not item.replacement.strip()
+                    and current.operation_keys and item.operation_keys
+                    and set(current.operation_keys) != set(item.operation_keys)
+                    and item.start >= current.start and item.end <= current.end):
+                deleted_slice = span_slice(inspection, location, item.start, item.end)
+                if deleted_slice and _compact(deleted_slice) not in _compact(current.replacement):
+                    current_components = current_components + [item_component]
+                    current = PlannedEdit(
+                        target_id=current.target_id + "+" + item.target_id,
+                        rule_id=current.rule_id + "+" + item.rule_id,
+                        location=location, start=current.start, end=current.end,
+                        replacement=current.replacement, operation="replace",
+                        content_source="replace_covers_delete",
+                        evidence={"merged": [current.evidence, item.evidence],
+                                  "covered_delete": True},
+                        operation_keys=_edit_operation_keys(current, item),
+                        obligation_ids=_edit_obligation_ids(current, item),
+                    )
+                    covered.append(item.target_id)
+                    continue
+            # Same operation, same effect: a composite target and a residual
+            # target can describe the same deletion twice (D01/D16 G17).  This is
+            # not a business conflict.  Keep the maximal span and mark the subset
+            # covered; it carries no independent authorization.
+            if current.operation_keys and set(current.operation_keys) == set(item.operation_keys) \
+                    and _compact(current.replacement) == _compact(item.replacement):
+                if item.start >= current.start and item.end <= current.end:
+                    covered.append(item.target_id)
+                    continue
+                if current.start >= item.start and current.end <= item.end:
+                    covered.append(current.target_id)
+                    current = item
+                    current_components = [item_component]
+                    continue
             alternative = _operations_are_alternatives(current, item, obligations)
             if item.start >= current.start and item.end <= current.end:
                 # A contained edit may only be absorbed by a declared ONE_OF sibling
@@ -4398,22 +4587,30 @@ def _resolve_overlaps_with_joint_compose(
     """Try Joint Compose for real overlaps; unprovable overlaps stay conflicts."""
     from .generation.joint import plan_joint_compose
 
-    by_target = {edit.target_id: edit for edit in planned}
+    by_target: dict[str, list[PlannedEdit]] = {}
+    for edit in planned:
+        by_target.setdefault(edit.target_id, []).append(edit)
     resolved: list[PlannedEdit] = []
     remaining: list[dict[str, Any]] = []
-    consumed: set[str] = set()
+    # A composite target produces one edit per paragraph with the same target id.
+    # Consume the specific conflicting edit, not every sibling part (D16 G13 p221/p222).
+    consumed: set[int] = set()
     for conflict in conflicts:
         target_ids = [str(value) for value in conflict.get("targets") or []]
+        location = str(conflict.get("location") or "")
         edits: list[PlannedEdit] = []
         for target_id in target_ids:
             for part in target_id.split("+"):
-                edit = by_target.get(part)
+                candidates = by_target.get(part, [])
+                edit = next((candidate for candidate in candidates
+                             if candidate.location == location), None)
+                if edit is None and candidates:
+                    edit = candidates[0]
                 if edit is not None and edit not in edits:
                     edits.append(edit)
-        if len(edits) < 2 or any(edit.target_id in consumed for edit in edits):
+        if len(edits) < 2 or any(id(edit) in consumed for edit in edits):
             remaining.append(conflict)
             continue
-        location = conflict.get("location") or edits[0].location
         if any(edit.location != location for edit in edits):
             remaining.append(conflict)
             continue
@@ -4460,7 +4657,7 @@ def _resolve_overlaps_with_joint_compose(
         if result is None:
             remaining.append(conflict)
             continue
-        consumed.update(edit.target_id for edit in edits)
+        consumed.update(id(edit) for edit in edits)
         resolved.append(PlannedEdit(
             target_id="+".join(edit.target_id for edit in edits),
             rule_id="+".join(rule_ids), location=location, start=start, end=end,
@@ -4475,7 +4672,7 @@ def _resolve_overlaps_with_joint_compose(
                 key for edit in edits for key in (edit.operation_keys or ()))),
             obligation_ids=tuple(dict.fromkeys(
                 value for edit in edits for value in (edit.obligation_ids or ())))))
-    kept = [edit for edit in planned if edit.target_id not in consumed]
+    kept = [edit for edit in planned if id(edit) not in consumed]
     return kept + resolved, remaining
 
 
@@ -4839,10 +5036,55 @@ def replan_sites(existing: dict[str, Any], dirty_locations: set[str], rules_by_i
                  for component_index, unit in enumerate(edit.get("components") or [edit])]
     bound_units: dict[tuple[int, int], Target] = {}
     dropped_units: dict[tuple[int, int], dict[str, Any]] = {}
+    def bind_joint(edit: dict[str, Any]) -> list[Target] | None:
+        """Bind a validated joint edit component-by-component.
+
+        Joint Compose deliberately produces one edit whose components carry both
+        operation keys (for example G12:1 + G13:0).  No single target owns both
+        keys, so requiring one target made replan drop the validated p229 edit.
+        Every key only needs its own current target at the same source location,
+        while the joint expected_old_text still matches the unchanged source.
+        """
+        keys = sorted(operation_keys(edit))
+        if len(keys) < 2 or edit.get("content_source") != "joint_compose":
+            return None
+        location = str(edit.get("location") or "")
+        try:
+            span = inspection.by_location(location)
+            start, end = int(edit["start"]), int(edit["end"])
+        except (KeyError, TypeError, ValueError, DocxError):
+            return None
+        expected = edit.get("expected_old_text")
+        if isinstance(expected, str) and expected != span.text[start:end]:
+            return None
+        bound: list[Target] = []
+        for key in keys:
+            target = next((candidate for candidate in targets
+                           if key in candidate.operations
+                           and candidate.location == location
+                           and not candidate.out_of_scope
+                           and not candidate.attribution_error), None)
+            if target is None:
+                return None
+            if target not in bound:
+                bound.append(target)
+        return bound
+
     for edit_index, edit in enumerate(existing.get("edits") or []):
         components = edit.get("components") or [edit]
         if (str(edit.get("location") or "") in dirty_locations
                 or edit_sites(edit) & dirty_keys):
+            continue
+        joint_targets = bind_joint(edit)
+        if joint_targets is not None:
+            retained = deepcopy(edit)
+            joined_id = "+".join(dict.fromkeys(target.target_id for target in joint_targets))
+            retained["target_id"] = joined_id
+            if retained.get("components"):
+                for component in retained["components"]:
+                    component["target_id"] = joined_id
+            bound_units[(edit_index, 0)] = joint_targets[0]
+            retained_edits.append(retained)
             continue
         bindings = [bind_reference(unit) for unit in components]
         if any(target is None for target in bindings):
@@ -5219,8 +5461,17 @@ def target_site_ok(rule_id: str, span: Any, inspection: DocumentInspection) -> b
         return "销售服务费" in paragraph and "支付" in paragraph
     if rule_id == "G16":
         paragraph, _ = display_text(span.text)
-        return "销售服务费" in paragraph and any(
-            token in paragraph for token in ("计提", "每日计算", "按月支付", "支付日期"))
+        compact = _compact(paragraph)
+        # A G16 append belongs after the payment mechanism, not after every
+        # paragraph that mentions the sales-service fee. Fee rates, formulas and
+        # usage lists also contain the domain term; requiring both an accrual
+        # phrase and a monthly-payment phrase isolates the one real anchor.
+        accrual = any(token in compact for token in (
+            "每日计提", "日计提", "每日计算", "逐日累计", "计提"))
+        monthly = ("按月支付" in compact or
+                   ("按月" in compact and "支付" in compact) or
+                   "逐月支付" in compact)
+        return "销售服务费" in compact and accrual and monthly
     if rule_id == "G17":
         paragraph, _ = display_text(span.text)
         return "销售服务费" in paragraph and (
@@ -5271,6 +5522,21 @@ def ensure_delete_targets(targets: Sequence[Target], rules_by_id: dict[str, dict
         for location in locations:
             covered.setdefault(target.rule_id, []).append(
                 (location, _compact(target.quote)))
+        # A composite target's quote often names only its first sentence.  The
+        # later parts are still covered by that same operation; otherwise the
+        # residual pass recreates a second target for the tail and merge_edits
+        # reports a false same-operation overlap (D01/D16 G17).
+        for part in target.composite:
+            try:
+                part_location, start_text, end_text = part.rsplit(":", 2)
+                start_clean, end_clean = int(start_text), int(end_text)
+                span = inspection.by_location(part_location)
+                compact_body, _compact_map = compact_offsets(span.text)
+                if 0 <= start_clean < end_clean <= len(compact_body):
+                    covered.setdefault(target.rule_id, []).append(
+                        (part_location, compact_body[start_clean:end_clean]))
+            except (ValueError, KeyError, DocxError):
+                continue
     created: list[Target] = []
     for rule_id, anchors in _DELETE_SENTENCE_ANCHORS.items():
         rule = rules_by_id.get(rule_id)

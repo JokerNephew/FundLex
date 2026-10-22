@@ -1045,6 +1045,35 @@ def replay_claims(edits: Sequence[Mapping[str, Any]], before_inspection: Any,
                               "occurrence_index": target.get("occurrence_index", -1),
                               **identity})
             sites.extend({**part, **identity} for part in parts)
+        # A model may locate the body copy but miss the contract-summary copy.
+        # For replace/delete operations, a paragraph sharing the verified site's
+        # normalized opening and passing the same operation site guard is a
+        # required duplicate copy; it cannot be hidden by a PASS on the body copy.
+        # The prefix requirement prevents unrelated fee-rate/formula paragraphs
+        # from becoming required sites merely because they mention the same domain.
+        if sites and str(getattr(record.spec, "op", "")) in {"replace", "delete"}:
+            from ..recall import _looks_like_heading
+            seed = next((str(site.get("quote") or "") for site in sites
+                         if str(site.get("quote") or "")), "")
+            prefix = _compact(seed)[:16]
+            seen_locations = {str(site.get("location") or "") for site in sites}
+            if len(prefix) >= 10:
+                for span in getattr(before_inspection, "paragraphs", ()):
+                    location = str(getattr(span, "location", ""))
+                    text = str(getattr(span, "text", ""))
+                    if not location or location in seen_locations or _looks_like_heading(text):
+                        continue
+                    if prefix not in _compact(text):
+                        continue
+                    if not operation_site_bound(record.spec, text, before_inspection,
+                                                location, facts, occurrence_index=-1):
+                        continue
+                    sites.append({"location": location, "quote": text,
+                                  "state": "satisfied",
+                                  "operation_id": operation_id,
+                                  "obligation_id": record.obligation_id,
+                                  "target_id": f"duplicate-site:{location}"})
+                    seen_locations.add(location)
         own_records = []
         for unit in operation_records:
             keys = {key.strip() for key in str(unit.get("operation_id") or "").split(",")}

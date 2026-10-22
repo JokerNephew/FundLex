@@ -818,10 +818,12 @@ def test_absent_inventory_placeholder_never_becomes_verified_operation_site(
                        "state": "absent", "operation_id": operation_id}
         proof = evaluate_operation_effect(target_record, before, before,
                                           [absent_site], [], Facts())
-        assert proof.state == "OPEN"
-        assert proof.artifact_status == "UNPROVEN"
-        assert proof.failure_code == "CLAIM_OPERATION_UNPROVEN"
+        # The heading is never a verified site.  The operation can still close
+        # only through the independent document-wide literal-absence proof.
         assert not proof.sites
+        assert proof.state == "PASS"
+        assert proof.artifact_status == "VERIFIED_ABSENT"
+        assert proof.evidence[0]["proof_kind"] == "document_literal_absent"
 
     result = replay_claims(
         [], before, before, rules_by_id={rule_id: guide["groups"][0]}, facts=Facts(),
@@ -830,13 +832,11 @@ def test_absent_inventory_placeholder_never_becomes_verified_operation_site(
             "state": state, "operations": [operation_id]}},
         obligations=ledger,
     )
-    assert result["verified"] is False
     item = result["obligations"][target_record.obligation_id]
-    assert item["state"] == "OPEN"
-    assert item["artifact_status"] == "UNPROVEN"
     assert item["sites"] == []
-    assert not any(failure.get("code") == "RESIDUAL_OLD_TEXT"
-                   and failure.get("location") == "p0" for failure in result["failures"])
+    assert item["state"] == "PASS"
+    assert item["artifact_status"] == "VERIFIED_ABSENT"
+    assert item["evidence"][0]["proof_kind"] == "document_literal_absent"
 
 
 def test_satisfied_operation_site_can_close_as_already_satisfied():
@@ -916,10 +916,13 @@ def test_g06_generic_business_adjustment_clause_is_not_a_delete_site():
         facts=Facts(), obligations=ledger, targets_by_id={"bad": {
             "target_id": "bad", "rule_id": "G06", "location": "p0", "quote": text,
             "state": "needs_edit", "operations": ["G06:0"]}})
-    assert replay["verified"] is False
+    # The generic paragraph is not a G06 site, but the authorized literal is
+    # absent from the whole ORIGINAL document: that independent proof is PASS.
     proof = replay["obligations"][ledger.records[0].obligation_id]
-    assert proof["state"] == "OPEN"
+    assert proof["state"] == "PASS"
+    assert proof["artifact_status"] == "VERIFIED_ABSENT"
     assert proof["sites"] == []
+    assert proof["evidence"][0]["proof_kind"] == "document_literal_absent"
 
 
 @pytest.mark.parametrize("old_text,new_text", [
@@ -961,8 +964,13 @@ def test_g05_effect_proof_binds_class_setting_not_meeting_exemption(source, vali
                 "target_id": "unrelated", "rule_id": "G05", "location": "p0",
                 "quote": source, "state": "needs_edit", "operations": ["G05:0"]}})
         proof = replay["obligations"][ledger.records[0].obligation_id]
-        assert proof["state"] == "OPEN"
         assert proof["sites"] == []
+        if new_text or old_text in source:
+            assert proof["state"] == "OPEN"
+        else:
+            assert proof["state"] == "PASS"
+            assert proof["artifact_status"] == "VERIFIED_ABSENT"
+            assert proof["evidence"][0]["proof_kind"] == "document_literal_absent"
 
 
 def test_atomic_replan_unbound_components_are_recorded_once(tmp_path):

@@ -1024,7 +1024,8 @@ def _plan_and_generate(model: Any, rules_by_id: dict[str, dict], targets: Sequen
                        frozen_run: Any = None
                        ) -> tuple[dict[str, Any], list[dict[str, Any]], Any, Any, DocumentInspection]:
     """Plan from the ORIGINAL inspection, validate, generate and re-read the final."""
-    from .recall import target_site_ok
+    from .recall import ensure_unique_target_ids, target_site_ok
+    ensure_unique_target_ids(targets)
     for target in targets:
         if (target.state == "needs_edit" and not target.out_of_scope
                 and target.resolution in {"resolved", "composite"}):
@@ -1537,8 +1538,8 @@ def _run_audit(model: Any, rules_by_id: dict[str, dict], targets: Sequence[Targe
                         target_id=node.target_id, obligations=obligations,
                         proofs=artifact_proofs)
                     for record in owned))
-                certified_fact_quote = (verified and str(item.get("failure_class") or "").upper()
-                                        == "FACT" and _quote_confirms_class_facts(evidence, facts))
+                certified_fact_quote = (verified and _quote_confirms_class_facts(
+                    evidence, facts))
                 if not verified or expected_quote or certified_fact_quote:
                     result["review_status"] = "REVIEW_UNPROVEN"
                     result["artifact_proven"] = proven and not contradicted
@@ -2956,6 +2957,14 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
         # pass (for example G16 on the body payment clause).  Clone those late targets
         # too, otherwise only the body copy receives the required new clause and the
         # identical summary copy diverges at final replay.
+        from .recall import rebind_split_class_definition_targets
+        split_rebinds = rebind_split_class_definition_targets(targets, inspection)
+        if split_rebinds:
+            report["split_class_definition_rebinds"] = split_rebinds
+        from .recall import resolve_absent_site_targets
+        absent_sites = resolve_absent_site_targets(targets, rules_by_id, inspection)
+        if absent_sites:
+            report["absent_site_targets"] = absent_sites
         open_copies = duplicate_copy_targets(targets, rules_by_id, inspection)
         for copy in open_copies:
             for old in targets:
@@ -2969,6 +2978,8 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
             origins[copy.target_id] = "duplicate_copy"
             report["target_attribution"].extend(assign_target_operations(
                 [copy], rules_by_id, inspection, facts, obligation_ledger))
+        from .recall import ensure_unique_target_ids
+        ensure_unique_target_ids(targets, origins)
         rebinds = _rebind_unresolved_targets(targets, origins, inspection,
                                              rules_by_id=rules_by_id, facts=facts,
                                              extend_resolved=True)
@@ -3370,16 +3381,32 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
                 no_progress_rounds = 0
                 previous_snapshot = _recovery_snapshot(targets, planned, actual, replay,
                     facts=facts, obligations=obligation_ledger, scope=mapping)
-                while replay.get("failures") and \
-                        recovery_attempts < recovery.policy.limit("artifact_recovery"):
+
+                def _failure_key(item: dict[str, Any]) -> tuple[str, ...]:
+                    return (str(item.get("code") or ""), str(item.get("rule_id") or ""),
+                            str(item.get("operation_id") or ""),
+                            str(item.get("obligation_id") or ""),
+                            str(item.get("location") or ""))
+
+                terminal_failures: set[tuple[str, ...]] = set()
+                # A single unrepairable obligation must not starve the rest of the
+                # claim failures.  The global cap is a safety circuit breaker; the
+                # per-failure key below prevents re-attempting the same terminal item.
+                recovery_budget = max(recovery.policy.limit("artifact_recovery"),
+                                       min(8, len(replay.get("failures") or [])))
+                while replay.get("failures") and recovery_attempts < recovery_budget:
                     # Duplicate-copy divergence is repaired by generating the missing
                     # copy, not by rebuilding the same plan; process an actionable
                     # operation/residual failure first when both exist.
+                    actionable = [item for item in replay["failures"]
+                                  if _failure_key(item) not in terminal_failures]
+                    if not actionable:
+                        break
                     failure = next(
-                        (item for item in replay["failures"]
+                        (item for item in actionable
                          if str(item.get("code") or "") not in {
                              "DUPLICATE_SITE_DIVERGED", "DUPLICATE_SITE_UNEDITED"}),
-                        replay["failures"][0])
+                        actionable[0])
                     code = str(failure.get("code") or "CLAIM_REPLAY_FAILED")
                     context = _claim_failure_context(failure, targets, planned.get("edits") or [])
                     context.validator_findings = tuple(replay.get("failures") or ())
@@ -3534,8 +3561,9 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
                                                  "no_operation_target", "", recovery_attempts + 1),
                                 outcome="failed",
                                 detail="CLAIM_OPERATION_NOT_PLANNED:no_code_proven_site")
+                            terminal_failures.add(_failure_key(failure))
                             recovery_attempts += 1
-                            break
+                            continue
                     executable = {RecoveryAction.REGENERATE_ARTIFACT,
                                   RecoveryAction.REBUILD_PLAN,
                                   RecoveryAction.RETRY_DETERMINISTIC}
@@ -3552,8 +3580,9 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
                         recovery.record(recovery_history, context, decision,
                                         outcome="unresolved",
                                         detail="recovery budget exhausted")
-                        terminal_recorded = True
-                        break
+                        terminal_failures.add(_failure_key(failure))
+                        recovery_attempts += 1
+                        continue
                     try:
                         dirty_locations = ({context.site_id} if context.site_id else {
                             target.location for target in targets
@@ -3583,8 +3612,9 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
                                                  recovery_attempts + 1),
                                 outcome="unresolved",
                                 detail="targets/plan/artifact/unresolved are unchanged")
-                            terminal_recorded = True
-                            break
+                            terminal_failures.add(_failure_key(failure))
+                            recovery_attempts += 1
+                            continue
                         previous_snapshot = current_snapshot
                         no_progress_rounds = 0
                         # Reuse a review only when all of its relevant artifact sites

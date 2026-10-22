@@ -331,6 +331,24 @@ def evaluate_operation_effect(obligation: Any, original: Any, artifact: Any,
             "proof_kind": "certified_noop_branch", "operation_id": operation_id,
             "obligation_id": obligation_id},))
     sites = _verified_site_closure(sites, original, spec)
+    if not sites and spec.op == "delete":
+        # A delete whose every authorized literal is absent from the whole
+        # ORIGINAL document has no material to remove.  This is stronger than a
+        # model's "not found" opinion and is intentionally limited to delete.
+        references = [str(getattr(spec, "old_text", "") or ""),
+                      *[str(value) for value in getattr(spec, "alternatives", ())]]
+        references = list(dict.fromkeys(value for value in references
+                                        if len(_compact(value)) >= 8))
+        document = _compact("".join(str(getattr(span, "text", ""))
+                                    for span in getattr(original, "paragraphs", ())))
+        if references and all(_compact(reference) not in document for reference in references):
+            return OperationEffect(
+                "PASS", "VERIFIED_ABSENT", **base, evidence=({
+                    "proof_kind": "document_literal_absent",
+                    "searched_literals": references,
+                    "match_count": 0,
+                    "document_sha256": getattr(original, "source_sha256", ""),
+                },))
     if not sites:
         return OperationEffect("OPEN", "UNPROVEN", **base,
                                failure_code="CLAIM_OPERATION_UNPROVEN", reason="verified site missing")
