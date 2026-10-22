@@ -2282,3 +2282,9 @@
   3. D11 p129 等合并编辑仅在尾随空白超出 TextSegment 时夹到 segment end；D16 p222 composite tail 不要求重复 new_text，全部空 overlap 合并为 `joint_delete`。
   4. ONE_OF 历史替代项 old_text 全文确实不存在且另一项 PASS 时标 `NOT_REQUIRED`，不伪造站点。
 - 旧 cassette 行为：D01 plan 已同时含 p135 G05、p758/p1221 两份 G15+G16；D16 frozen replay complete 且 p222 空；D11 stage plan 13 edits 无 barrier。需新 SHA 四例 live 复验。
+
+### FL-D145 追加 9（D11 p129 content check 与 D01 G05/G15）
+
+- `14bff5a` D11 p129 的 G03+G05 atomic 段因 target end 177 越过 TextSegment 176 被 content check 拒绝；同时 D01 G05 `g05_splice` 的 fragment replay 多插入句号，G15 p758 因晚到 survey target 未复制。
+- 处理：G05 splice replay 不插句号；planning 前再做最终 exact-copy closure；尾随空白夹到 segment，并允许 atomic content check 忽略同段尾随空白；D16 composite tail/ONE_OF 修复保留。
+- 当前离线：D11 stage plan 14 edits content check 全通过；D16 frozen replay complete p222 空；D01 plan p135 与 p758/p1221 均正确。需新 SHA 四例 live 复验。

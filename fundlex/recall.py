@@ -5325,6 +5325,13 @@ def _clamp_edit_boundary(edit: dict[str, Any], inspection: DocumentInspection) -
                        if segment.start <= start < segment.end), None)
     if containing is not None and not span.text[containing.end:end].strip():
         edit["end"] = containing.end
+        # The planner may have preserved the same trailing paragraph whitespace in
+        # the replacement.  It is not editable text; remove it with the clamped span
+        # so atomic content verification sees the same final string.
+        tail = span.text[containing.end:end]
+        replacement = str(edit.get("replacement") or "")
+        if tail and replacement.endswith(tail):
+            edit["replacement"] = replacement[:-len(tail)].rstrip(" \t\r\n")
 
 
 def build_docx_edits(planned: Sequence[Any], inspection: DocumentInspection) -> list[dict[str, Any]]:
@@ -5556,10 +5563,13 @@ def content_check_factory(planned: Sequence[dict], inspection: DocumentInspectio
         components = item.get("components") or []
         if item.get("content_source") == "atomic_paragraph":
             from .generation.atomic import compose_paragraph
-            return (start == 0 and end == len(span.text)
+            trailing_ok = (start == 0 and
+                           (end == len(span.text) or not span.text[end:].strip()))
+            return (trailing_ok
                     and components == (item.get("evidence") or {}).get("atomic_components")
                     and all(_component_ok(component, inspection) for component in components)
-                    and compose_paragraph(span.text, components) == str(item["replacement"]))
+                    and compose_paragraph(span.text, components).rstrip(" \t\r\n")
+                    == str(item["replacement"]).rstrip(" \t\r\n"))
         if components:
             if "".join(str(component.get("replacement") or "") for component in components) != str(item["replacement"]):
                 return False
