@@ -2234,3 +2234,10 @@
 - 根因：G02/G04 的 split definition 第一段是“基金份额类别…”标题，第二段才是 A/D、C 的收费分组。`target_site_ok` 只接受标题词，导致真实 p92 目标被标 `TARGET_SOURCE_MISMATCH`，recovery 反而去 p91 标题并报 ambiguous；Audit 的 B 类说法与 certified facts 冲突。
 - 处理：`target_site_ok` 对 G02/G04 接受“至少两个类别标签 + 申购/认购费 + 销售服务费”的 split 费用段；仍拒绝无两类费用概念的普通费用句。新增回归 `test_g02_split_fee_group_paragraph_is_a_real_site`。certified facts 与 Audit 冲突的仲裁沿用现有 `_quote_confirms_class_facts`，待 D01 重跑确认。
 - 状态：代码在本地继续修复，尚未提交/重跑；D01 仍未通过 Gate。
+
+### FL-D145 追加 2（D01 第二次 exact-code 尝试）
+
+- `b18a5c9` D01 live：36 calls/$0.0307719，incomplete；G02 已关闭，但 G04:1 因 satisfied 目标只带 G04:0 而缺 target；G15/G16 p758 与 p1221 相同副本在一次 recovery replan 后变成 `RECALL_PLAN_REFERENCE_UNBOUND`，只剩 p1221 联合编辑；G18 sweep 又把标题 p781 当业务站点。
+- 处理：① `assign_target_operations` 对 satisfied 的 G02/G04 split 目标也按真实费用组扩展 operation keys；② `_plan_and_generate` 在 replan 出现 unbound 且当前仍有 live target 时回退到从全部 targets 重新 plan，避免丢失 p758 副本；③ `_TARGET_ANCHORS` 增加 G18 业务锚点，标题 p781 不再进入 sweep；④ 新增 G18 标题反例回归。
+- 旧 cassette 重放（b18a5c9 cassette，新代码）已生成 p758 与 p1221 两份 G15+G16 联合编辑，T002 p130 operations 为 G04:0/G04:1；随后 Audit 上下文变化导致 `MODEL_REPLAY_MISS`，符合预期，需新 live record。
+- 状态：尚未提交/重跑；D01 未通过。

@@ -1850,6 +1850,22 @@ def assign_target_operations(targets: Sequence[Target], rules_by_id: dict[str, d
     from .generation.effects import _class_group_equivalent
     for target in targets:
         if target.state != "needs_edit":
+            # An inventory/survey target can already be marked satisfied while still
+            # carrying only one half of a split A/C class-substitution clause.  The
+            # sentence itself proves both groups, so expand its operation coverage
+            # just as for a needs_edit target; otherwise the sibling obligation remains
+            # falsely unproven even though the text is already correct.
+            if target.state == "satisfied" and target.rule_id in {"G02", "G04"}:
+                rule = rules_by_id.get(target.rule_id)
+                if rule is not None and rule.get("class_substitution"):
+                    try:
+                        indices = _selected_operation_indices(
+                            rule, target, inspection, facts, obligations)
+                    except RecallError:
+                        indices = []
+                    if indices:
+                        target.operations = tuple(operation_key(target.rule_id, index)
+                                                  for index in indices)
             continue
         # A previous planning pass may have marked a valid, already-satisfied
         # G02/G04 target as TARGET_SOURCE_MISMATCH when the canonical guide letters
@@ -5491,6 +5507,9 @@ _TARGET_ANCHORS: dict[str, tuple[tuple[str, ...], str]] = {
     # Append rules must land in the share-class definition, not another definition.
     "G01": (("基金份额类别", "将基金份额分为", "份额类别："), "any"),
     "G03": (("基金份额类别", "将基金份额分为", "份额类别："), "any"),
+    # G18 acts only on the distribution section's fee-difference sentence, never on
+    # the bare section heading "基金收益分配原则".
+    "G18": (("由于本基金", "费用收取不同"), "any"),
 }
 
 

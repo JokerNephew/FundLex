@@ -1106,6 +1106,23 @@ def _plan_and_generate(model: Any, rules_by_id: dict[str, dict], targets: Sequen
             from .recall import replan_sites
             planned = replan_sites(existing_plan, dirty_locations, rules_by_id, targets, inspection,
                 facts, model, max_compose_calls=max_compose_calls, obligations=obligations)
+            # A recovery replan can leave a retained edit unbound after target
+            # aliases/state were reconciled.  If a live target still owns that
+            # operation, falling back to a full plan is safer than silently dropping
+            # a real body/summary occurrence (D01 p758 G15/G16).
+            unbound = [entry for entry in planned.get("ledger") or []
+                       if entry.get("reason") == "RECALL_PLAN_REFERENCE_UNBOUND"]
+            if unbound:
+                live_target = any(
+                    not target.out_of_scope and target.state in {"needs_edit", "satisfied"}
+                    and (target.location == str(entry.get("location") or "")
+                         or set(target.operations) & set(entry.get("operation_keys") or ()))
+                    for entry in unbound for target in targets)
+                if live_target:
+                    planned = plan_edits(
+                        rules_by_id, targets, inspection, facts, model,
+                        max_compose_calls=max_compose_calls, obligations=obligations,
+                        reuse_edits=existing_plan.get("edits") or ())
         else:
             planned = plan_edits(rules_by_id, targets, inspection, facts, model,
                                  max_compose_calls=max_compose_calls, obligations=obligations)
@@ -3648,31 +3665,42 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
                             record = obligation_ledger.record(
                                 str(failure.get("operation_id")))
                         if record is not None:
-                            # Claim Replay has already verified this exact duplicate site.
-                            # An active target at another copy (body vs summary) must not
-                            # suppress the required occurrence repair.
-                            repair_target = target_for_claim_site(
-                                record, str(failure.get("location") or ""), targets,
-                                rules_by_id, facts, inspection,
-                                target_id=f"R{len(targets) + 1:03d}")
-                            if repair_target is not None:
-                                for old_target in targets:
-                                    if old_target is not repair_target \
-                                            and old_target.rule_id == repair_target.rule_id \
-                                            and old_target.location == repair_target.location \
-                                            and set(old_target.operations) & set(
-                                                repair_target.operations):
-                                        old_target.out_of_scope = True
-                                        old_target.reason = (f"{old_target.reason}|"
-                                                             "SUPERSEDED_BY_CLAIM_SITE_REPAIR")
-                                targets.append(repair_target)
-                                synthetic.append(repair_target)
-                                origins[repair_target.target_id] = "claim_site_repair"
-                                report.setdefault("target_attribution", []).extend(
-                                    assign_target_operations(
-                                        [repair_target], rules_by_id, inspection, facts,
-                                        obligation_ledger))
+                            site = str(failure.get("location") or "")
+                            site_active = bool(site) and any(
+                                target.location == site and not target.out_of_scope
+                                and target.state == "needs_edit"
+                                and record.spec.operation_id in target.operations
+                                for target in targets)
+                            if site_active:
+                                # The target already exists at the proved site but its
+                                # plan entry is missing (late survey/duplicate target).
+                                # Replan this site instead of declaring a new target.
                                 operation_added = True
+                            else:
+                                # Claim Replay has already verified this exact duplicate
+                                # site. An active target at another copy must not
+                                # suppress the required occurrence repair.
+                                repair_target = target_for_claim_site(
+                                    record, site, targets, rules_by_id, facts, inspection,
+                                    target_id=f"R{len(targets) + 1:03d}")
+                                if repair_target is not None:
+                                    for old_target in targets:
+                                        if old_target is not repair_target \
+                                                and old_target.rule_id == repair_target.rule_id \
+                                                and old_target.location == repair_target.location \
+                                                and set(old_target.operations) & set(
+                                                    repair_target.operations):
+                                            old_target.out_of_scope = True
+                                            old_target.reason = (f"{old_target.reason}|"
+                                                                 "SUPERSEDED_BY_CLAIM_SITE_REPAIR")
+                                    targets.append(repair_target)
+                                    synthetic.append(repair_target)
+                                    origins[repair_target.target_id] = "claim_site_repair"
+                                    report.setdefault("target_attribution", []).extend(
+                                        assign_target_operations(
+                                            [repair_target], rules_by_id, inspection, facts,
+                                            obligation_ledger))
+                                    operation_added = True
                         if record is not None and not operation_added:
                             repair_target = target_for_missing_operation(
                                 record, targets, rules_by_id, facts, inspection,

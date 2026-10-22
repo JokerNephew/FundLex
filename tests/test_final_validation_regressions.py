@@ -1208,3 +1208,18 @@ def test_g02_split_fee_group_paragraph_is_a_real_site(tmp_path):
     inspection = inspect_docx(path, full=True)
     assert target_site_ok("G02", inspection.by_location("p1"), inspection)
     assert target_site_ok("G04", inspection.by_location("p1"), inspection)
+
+
+def test_g18_heading_is_not_a_business_site(tmp_path):
+    from docx import Document
+    from fundlex.docx import inspect_docx
+    from fundlex.recall import target_site_ok
+
+    path = tmp_path / "g18.docx"
+    doc = Document()
+    doc.add_paragraph("基金收益分配原则")
+    doc.add_paragraph("由于本基金A类、D类基金份额和C类基金份额费用收取不同，各基金份额类别对应的可分配收益将有所不同。")
+    doc.save(path)
+    inspection = inspect_docx(path, full=True)
+    assert not target_site_ok("G18", inspection.by_location("p0"), inspection)
+    assert target_site_ok("G18", inspection.by_location("p1"), inspection)
