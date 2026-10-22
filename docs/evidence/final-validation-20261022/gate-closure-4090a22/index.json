@@ -344,7 +344,7 @@
   "all_attempt_total_cost_usd": 0.38591745,
   "runtime_code_head": "4090a22462607852ca0862d64ddc2b1120bd3f03",
   "evidence_base_head": "0b5e5c3036456389c2198daaecfc0925ea5bfbbe",
-  "evidence_head": "PENDING_PACKAGING_COMMIT",
+  "evidence_head": "abba446",
   "baseline_validation_head": "d5703de9cd98500102a286dd5207e42ccc182e34",
   "notes": "Exact runtime 4090a22. D01 live budget exhausted; D02/D11/D16 carry remaining budgets, including the a5ed315 D02 attempt.",
   "runtime_tree_sha256": "b327ca18df639a7df0d29f559fb1624397d754b5f45565540138501ca51b5b72",
@@ -33276,5 +33276,6 @@
       ],
       "budget_note": "4090a22 attempt allocated D01=0, D02=57, D11=80, D16=79 attempts; D02/D11/D16 consumed 25/27/33. D11 and D16 each have room for one re-run; D01 does not."
     }
-  }
+  },
+  "evidence_bundle_commit": "abba446"
 }

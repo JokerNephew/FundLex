@@ -3,7 +3,7 @@
 ## Identity
 
 - Runtime code HEAD: `4090a22462607852ca0862d64ddc2b1120bd3f03`
-- Evidence HEAD: pending packaging commit
+- Evidence HEAD: `abba446` (validation bundle commit; docs-only pin commit follows)
 - Runtime tree SHA-256: `b327ca18df639a7df0d29f559fb1624397d754b5f45565540138501ca51b5b72`
 - Guide source SHA-256: `b77be53c3439d785a9ffad0f09d8d03ba74f7722397576b999ae6f5dd6eef895`
 - Guide document SHA-256: `45dd77460f2ef93d29001c0833c220f89de99dafb19d32a8b73653b55f92c8d7`
