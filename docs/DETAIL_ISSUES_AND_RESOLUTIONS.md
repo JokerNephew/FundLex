@@ -2299,3 +2299,9 @@
   - API 完成计数排除 `out_of_scope` 的陈旧 target，不再在 complete 合同上显示“未完成 1”；report.md 每规则计数改读最终 target ledger，不再用 discovery coverage 冒充最终状态。
   - `tools/compare_frozen_replay.py` 按 report artifacts 映射选择 final/working_final，修复 complete 合同 `artifact_text:false` 的工具假阴性；四例旧 root 比较已 14/14 通过。
 - 尚未提交/重跑四例；Gate 仍不能宣称通过。
+
+### FL-D145 追加 11（66d9dc4 D16 live overlap 回归）
+
+- `66d9dc4` D16 live 因 G13 p222 单段 target 与 Y007 复合 target 同时存在，planner 报 `RECALL_EDIT_OVERLAP`，尽管同版本 isolated plan 可干净合并。
+- 处理：`dedupe_operation_targets` 在规划前把“同一 rule/operation、仅覆盖复合 target 某一段”的非复合 target 标为 `SUBSET_OF_COMPOSITE_TARGET`，不再与完整复合 target 竞争。D16 stage plan 复算为 p221 `G12:0+G13:0 replace_covers_delete`、p222 `joint_delete ""`、conflicts 0。
+- 状态：待提交后再次四例 live。

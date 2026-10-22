@@ -2046,6 +2046,26 @@ def dedupe_operation_targets(targets: Sequence[Target], rules_by_id: dict[str, d
     then the narrower span.  Different locations (body vs contract summary) are real
     duplicate copies and are both kept.
     """
+    # A non-composite target can be a single paragraph of a composite target for the
+    # same rule/operation (D16 G13 p222 inside Y007 p221/p222).  Keeping both creates
+    # an artificial overlap and can starve the composite merge.
+    composites = [target for target in targets
+                  if target.state == "needs_edit" and not target.out_of_scope
+                  and target.composite and target.operations]
+    for target in targets:
+        if target.state != "needs_edit" or target.out_of_scope or target.composite \
+                or not target.operations:
+            continue
+        for composite in composites:
+            if composite.rule_id != target.rule_id:
+                continue
+            if not set(composite.operations) & set(target.operations):
+                continue
+            if any(str(part).rsplit(":", 2)[0] == target.location
+                   for part in composite.composite):
+                target.out_of_scope = True
+                target.reason = f"{target.reason}|SUBSET_OF_COMPOSITE_TARGET:{composite.target_id}"
+                break
     groups: dict[tuple[str, str, tuple[str, ...]], list[Target]] = {}
     for target in targets:
         if target.state != "needs_edit" or target.out_of_scope:
