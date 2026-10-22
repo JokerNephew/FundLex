@@ -167,6 +167,11 @@ class TaskStore:
                 "rejected": sum(d["upload_status"] == "rejected" for d in docs),
                 "queued": sum(d["job_status"] in {"queued", "retry_wait"} for d in docs),
                 "processing": processing, "completed": completed, "failed": sum(d["job_status"] == "failed" for d in docs),
+                "successful": sum(d["job_status"] == "succeeded" and d["delivery_status"] in
+                                  {"complete", "complete_with_exceptions"} for d in docs),
+                "exceptions": sum(d["upload_status"] == "rejected" or d["job_status"] == "failed" or
+                                  (d["job_status"] == "succeeded" and d["eligibility"] != "excluded_by_fund_type"
+                                   and d["delivery_status"] in {"incomplete", "not_generated"}) for d in docs),
                 "qualification_counts": dict(Counter(d["eligibility"] or "pending" for d in docs)),
                 "delivery_counts": dict(Counter(d["delivery_status"] for d in docs)),
                 "created_at": datetime.fromtimestamp(row["created_at"], timezone.utc).isoformat(),
@@ -256,7 +261,7 @@ class TaskStore:
         start_ts, end_ts, prev_ts = start.timestamp(), end.timestamp(), prev_start.timestamp()
         with self.store._connect() as db:
             rows = db.execute("""SELECT tf.task_id,tf.upload_status,
-                d.id AS document_id,d.status,d.delivery_status,
+                d.id AS document_id,d.status,d.delivery_status,d.qualification_status,
                 d.created_at AS doc_created_at,d.updated_at AS doc_updated_at,
                 d.started_at,d.finished_at
                 FROM task_files tf JOIN tasks t ON t.id=tf.task_id
@@ -276,14 +281,16 @@ class TaskStore:
             if terminal and finished is not None:
                 if start_ts <= float(finished) < end_ts:
                     processed += 1
-                    if status == "succeeded" and (row["delivery_status"] or "") not in {"incomplete", "not_generated"}:
+                    if status == "succeeded" and row["delivery_status"] in {"complete", "complete_with_exceptions"}:
                         completed += 1
                     if started is not None and float(finished) >= float(started):
                         durations.append(float(finished) - float(started))
                 elif prev_ts <= float(finished) < start_ts:
                     previous += 1
             rejected = (row["upload_status"] or "") == "rejected"
-            bad_delivery = terminal and (status == "failed" or (row["delivery_status"] or "") in {"incomplete", "not_generated"})
+            bad_delivery = terminal and (status == "failed" or
+                (row["qualification_status"] != "excluded_by_fund_type" and
+                 (row["delivery_status"] or "") in {"incomplete", "not_generated"}))
             if rejected or bad_delivery:
                 exceptions += 1
             if (row["document_id"] is None and (row["upload_status"] or "pending") == "pending") \
@@ -310,8 +317,13 @@ class TaskStore:
                 docs = self._files(db, task_id)
         q = filters.get("q", "").casefold()
         reasons = Counter(code for d in docs for code in d["reason_codes"])
-        docs = [d for d in docs if q in d["name"].casefold() and all(not filters.get(k) or
-                filters[k] == (d[k] or "pending") for k in ("eligibility", "job_status", "delivery_status", "upload_status"))
+        def matches(d, key):
+            value = filters.get(key)
+            if key == "job_status" and value == "running":
+                return d[key] in {"leased", "running"}
+            return not value or value == (d[key] or "pending")
+        docs = [d for d in docs if q in d["name"].casefold() and all(matches(d, k)
+                for k in ("eligibility", "job_status", "delivery_status", "upload_status"))
                 and (not filters.get("error_code") or filters["error_code"] in d["reason_codes"])]
         result = self._page(docs, **{k: v for k, v in filters.items() if k in {"sort", "page", "page_size"}})
         result["reason_options"] = [{"code": code, "count": count} for code, count in sorted(reasons.items())]

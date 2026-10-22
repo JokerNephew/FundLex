@@ -234,3 +234,6 @@ button.footer-link:hover{color:var(--accent-dark);text-decoration:underline}
 .batch-overview-hero .hero-side small{font-size:11px;line-height:1.55;color:#754a35}
 .task-guide-name{max-width:min(520px,42vw);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#7b858f}
 @media(max-width:760px){.batch-overview-hero .hero-copy p{max-width:none}.task-guide-name{max-width:240px}}
+
+.progress-line .p-excluded{background:#94a3b8}
+.progress-line .p-evaluation{background:#8b7ba8}

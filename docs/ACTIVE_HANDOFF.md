@@ -1,5 +1,17 @@
 # FundLex 当前断点（ACTIVE_HANDOFF）
 
+## 当前前后端审查断点（2026-10-22，FL-D143）
+
+- 最新用户要求：检查前后端交互与前端设计，暂不检查查找修改点及写 DOCX 引擎。当前不做真实模型调用或生产部署。
+- 分支 refactor/recovery-architecture；收尾读到 HEAD `943830a33d41dccd7250bdcc36eae43da6d63c7a`（现场有其他会话推进证据提交，继续前重查）；本轮没有提交/推送，不覆盖他人引擎与证据内容。
+- 本轮未提交文件：frontend/app.js/index.html/app.css、fundlex/api.py/tasks.py/guide_store.py、tests/test_tasks_api.py/test_guide_api.py、新增 tests/browser/test_workbench.py，以及本文和集中问题记录。详见 FL-D143。
+- 已实施并隔离验证：未执行条款误标已修改；revision 字符串 ID 配对/checkbox/旧 review 响应；upload 草稿被旧请求污染；成功/异常去重统计、running/leased 筛选；单一支持模式、重复单位、总览轮询；failed 指引显式重试/去重；过期提示/身份展示残留。收尾增加排除/历史评测进度、含例外交付不可直接使用、业务问题摘要、无结果下载禁用、不可用指引说明、生成后恢复导航禁用状态。
+- 验证：主改动后全量 `.venv/bin/python -m pytest -q` **1075 passed / 24 skipped / 2 warnings / 211.95s**；最后前端补充后相关 API/认证/指引/修订回归 **94 passed / 30.48s**，中文字体环境下 Chromium **29 passed / 38.03s**；Node syntax、compileall、diff-check PASS。前后端流程与报告/修订审查在 1440/768/390 无横向溢出、无 pageerror，中文截图人工复核。
+- 复现浏览器：`FONTCONFIG_FILE=/tmp/fundlex-ui-fontconfig/fonts.conf FUNDLEX_BROWSER_TESTS=1 .venv/bin/python -m pytest tests/browser/test_workbench.py -q --basetemp=/tmp/fundlex-ui-browser-zh-verified`；字体在 `/tmp/fundlex-ui-fonts/`，截图在 `/tmp/fundlex-ui-browser-zh-verified/`。这些仅是 UI fixture/临时 SQLite API 测试，不启动 Worker/真实模型。
+- 预算/进程：本轮真实模型 0 calls/$0，不消耗前序引擎账本；无子 agent，无遗留测试服务。工作区修复已验证，生产未部署，查找目标和 DOCX 写入引擎未修改。保留他人 `docs/evidence/final-validation-20261022/` 的未跟踪材料。
+- 下一步：如发布本轮改动，先核对并行引擎变更的冻结/发布状态，再按正常部署流程复核生产资源和真实登录路径。本轮不宣称项目最终真实合同验收完成。
+
+
 
 ## ff4d749 exact-code Gate 断点（2026-10-22，优先）
 

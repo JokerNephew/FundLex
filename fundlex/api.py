@@ -714,12 +714,14 @@ def create_app(data_dir: str | Path | None = None, *, auth_db=None) -> FastAPI:
         version = visible_guide(user, version_id)
         if version["built_in"]:
             raise HTTPException(403, "built-in guide is already parsed and released")
-        if version["status"] not in {"uploaded", "parse_failed", "parsed"}:
+        if version["status"] not in guide_store.PARSEABLE_STATUSES:
             raise HTTPException(409, "GUIDE_NOT_PARSEABLE")
         try:
             guide_store.enqueue_parse(store, version_id)
         except KeyError as exc:
             raise HTTPException(404, "guide version not found") from exc
+        except ValueError as exc:
+            raise HTTPException(409, str(exc)) from exc
         refreshed = visible_guide(user, version_id)
         current = guide_store.current_guide(store, user)
         return {"version": _guide_public(refreshed, current=refreshed["id"] == current["id"])}

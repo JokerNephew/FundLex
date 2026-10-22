@@ -29,6 +29,7 @@ BUILTIN_GUIDE_ID = "builtin-v1"
 BUILTIN_GUIDE_PATH = Path(__file__).resolve().parent.parent / "guides" / "builtin_guide_v1.json"
 GUIDE_SOURCE_DIR = "guides"
 ENABLEABLE_STATUSES = frozenset({"released", "parsed"})
+PARSEABLE_STATUSES = frozenset({"uploaded", "parse_failed", "parsed", "failed"})
 MAX_GUIDE_JOB_ATTEMPTS = 3
 
 _SCHEMA = """
@@ -300,9 +301,21 @@ def enqueue_parse(store: RunStore, version_id: str) -> str:
     _ensure_tables(store)
     with store._connect() as db:
         db.execute("BEGIN IMMEDIATE")
-        row = db.execute("SELECT id,owner FROM guide_versions WHERE id=?", (version_id,)).fetchone()
+        row = db.execute("SELECT id,owner,status FROM guide_versions WHERE id=?", (version_id,)).fetchone()
         if row is None:
             raise KeyError("guide version not found")
+        if row["status"] not in PARSEABLE_STATUSES:
+            raise ValueError("GUIDE_NOT_PARSEABLE")
+        # Repeated clicks must share the current job, including its retry budget.
+        active = db.execute("SELECT id,status FROM guide_jobs WHERE guide_version_id=? "
+                            "AND status IN ('queued','leased','parse_failed') ORDER BY created_at DESC",
+                            (version_id,)).fetchone()
+        if active is not None:
+            db.execute("UPDATE guide_versions SET status=?,updated_at=? WHERE id=?",
+                       ("parsing" if active["status"] == "leased" else "uploaded", time.time(), version_id))
+            return active["id"]
+        db.execute("UPDATE guide_versions SET status='uploaded',updated_at=? WHERE id=?",
+                   (time.time(), version_id))
         return _insert_parse_job(db, version_id, row["owner"])
 
 

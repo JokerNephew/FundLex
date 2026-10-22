@@ -2190,3 +2190,15 @@
 - Safety：false delivery complete=0；obligation-level false completion=D11 G18；D02 audit false completion；unauthorized paragraph edit=0；cross-site/duplicate proof=D11 G18；unsupported VERIFIED_ABSENT=0；false Review block=D01 G02。
 - 独立 Business/Architecture/Recovery/Test reviewer 均要求先修代码；Business BLOCK，Architecture 4 BLOCKER/6 HIGH，Recovery 4 BLOCKER/5 HIGH/8 MEDIUM，Test conditional（index/stage identity 已在证据中修正）。**Gate=DO_NOT_ENTER_20_CASE**。
 - 本轮未改 runtime、未重录旧 SHA、未部署、未跑 20/514。下一步按 Architecture/Recovery 报告的最小通用修复顺序处理 G16/G17/G12-G13/G06/G01-G02，新增 regression、完整 pytest、新 code SHA 后重新四例 live + replay + 四 Reviewer 复审；不得把本 bundle 当验收通过。
+
+
+## FL-D143 前后端交互与展示审查（2026-10-22）
+
+- 发现日期：2026-10-22。范围为账号/任务/上传/筛选/指引/报告与修订审查界面；用户明确暂不检查目标发现与 DOCX 修改引擎。
+- 问题与影响（已代码定位）：① 未进入 plan 的 needs_edit 目标也显示“已修改”，无产物的计划也可能当执行结果；组合编辑只显示首 component。② 修订节点配对使用字符串 `escaped+1`（1→11）导致插入正文不随拒绝状态变化，A/R 不更新复选框，点击插入节点不能对应清单，关闭面板后 review 仍存活；旧异步响应能覆盖新报告。③ 上传中的新建草稿可能被旧 POST/回执/seal 重新设置 recover、锁定任务名或错误跳转。④ 成功数使用 completed-failed，把 incomplete/正常排除计成成功；异常重复相加可能超过合同总数；统计把正常排除的 not_generated 当异常。⑤ “处理中”筛选发送 running，而 Worker 状态为 leased，结果漏项。⑥ 导入页提供评测/只读模式但实际始终提交 recall_first；平均秒数重复单位；总览只有选中任务运行时轮询，其他任务变化不更新。⑦ failed 指引不能显式重试；重复 parse 可产生多个任务且版本状态不立即更新，页面无法轮询。⑧ 登录过期消息被 showLogin 清空，身份切换后管理页/密码字段残留，hash 入口缺角色展示保护。
+- 处理方法：已实施 UI 状态/请求隔离、真实交付口径与去重聚合、running→leased 兼容、单一真实模式、总览刷新、修订节点和控件同步、未交付文件如实标工作文件；failed 支持显式重试，活动解析任务复用原预算且新排队状态可见。改动只在工作区，不发布生产，不变更目标识别与写文件逻辑。
+- 当前状态：**已修复并完成隔离验证；未部署生产**。
+- 处理细节：`frontend/app.js` 增加请求 epoch/session 隔离，修订 ID 按 revision_ids 成对同步正文/复选框/键盘操作；未生成产物的计划显示“已规划/待修改”，工作文件显示为未完成；上传、报告、下载和账号操作忽略旧身份/旧草稿响应。`fundlex/tasks.py` 统一成功/异常去重口径并兼容 `leased` 筛选；`guide_store.py`/`api.py` 支持 failed 指引显式重试并复用活动解析任务；导入页只保留实际支持的合同修订模式。
+- 验证/证据：主改动完成时离线全量 **1075 passed / 24 skipped / 2 warnings / 211.95s**；最后补充的前端修改之后，接口/认证/指引/修订 API 相关回归 **94 passed / 1 dependency deprecation warning / 30.48s**，中文字体环境下 Chromium 隔离 UI **29 passed / 38.03s**。覆盖 1440/768/390 宽度、统计和筛选、未执行条款展示、修订接受/拒绝和插入定位、旧异步响应、上传新草稿、失败指引重试、CSV/报告下载、登录过期和角色保护；`node --check frontend/app.js`、`compileall`、`git diff --check` 均通过。最新浏览器截图位于 `/tmp/fundlex-ui-browser-zh-verified/`，包含四个主页面以及报告/修订审查三种宽度，已经人工查看中文与布局；中文字体仅临时配置，不入库、不修改系统或产品字体。未调用真实模型、不作为项目最终端到端交付验收；生产行为未宣称修复。
+- 2026-10-22 收尾补充（已实施并由上述 29 项浏览器回归验证）：正常排除的合同不再标红，进度条补齐排除分段；历史评测结果使用独立分段，不冒称正式交付完成；无终态结果时禁用整包下载；含例外交付保留下载但不显示“可直接使用”；展示服务端 `user_summary.issues`；评测合同隐藏不支持的正式修订审查；指引不可用时绑定提示/模式说明/提交禁用一致。生成选择版合同期间禁用控件，结束时恢复各自原有状态，避免误启用首份/末份导航。未修改目标发现与 DOCX 写入引擎。
+- 下一步：发布前需按正常部署流程做一次生产静态资源与真实登录复验；本轮未部署、未修改查找目标和 DOCX 写入引擎。

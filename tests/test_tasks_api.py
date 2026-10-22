@@ -460,6 +460,46 @@ def test_overview_stats_monthly_counts_and_average(client):
     assert client.get("/api/tasks/stats?month=2026-10", headers=BOB).json()["processed_contracts"] == 0
 
 
+def test_summary_counts_delivery_success_and_unique_exceptions(client):
+    data = package()
+    files = manifest(5, data)
+    task = create(client, files).json()["id"]
+    upload(client, task, files, data)
+    docs = client.get(f"/api/tasks/{task}/documents", headers=ALICE).json()["items"]
+    store = client.app.state.store
+    finished = datetime.now(timezone.utc).timestamp()
+    cases = [("succeeded", "eligible", "complete"),
+             ("succeeded", "eligible", "incomplete"),
+             ("failed", "failed", "incomplete"),
+             ("succeeded", "excluded_by_fund_type", "not_generated"),
+             ("succeeded", "eligible", "not_generated")]
+    with store._connect() as db:
+        for doc, (status, qualification, delivery) in zip(docs, cases):
+            db.execute("UPDATE documents SET status=?,qualification_status=?,delivery_status=?,"
+                       "started_at=?,finished_at=? WHERE id=?",
+                       (status, qualification, delivery, finished-60, finished, doc["document_id"]))
+    summary = client.get(f"/api/tasks/{task}", headers=ALICE).json()
+    assert summary["completed"] == 5
+    assert summary["successful"] == 1
+    assert summary["exceptions"] == 3  # failed+incomplete is one contract; excluded is expected.
+    stats = client.get("/api/tasks/stats", headers=ALICE).json()
+    assert stats["completed_contracts"] == 1
+    assert stats["exception_contracts"] == 3
+
+
+def test_running_document_filter_includes_worker_leases(client):
+    data = package()
+    files = manifest(2, data)
+    task = create(client, files).json()["id"]
+    upload(client, task, files, data)
+    lease = client.app.state.store.claim()
+    response = client.get(f"/api/tasks/{task}/documents?job_status=running", headers=ALICE)
+    assert response.status_code == 200
+    assert response.json()["total"] == 1
+    assert response.json()["items"][0]["document_id"] == lease["id"]
+    assert response.json()["items"][0]["job_status"] == "leased"
+
+
 def test_processing_timestamps_are_recorded_on_claim_and_terminal_retry(client):
     data, files = package(), manifest(1, package())
     task = create(client, files).json()["id"]
