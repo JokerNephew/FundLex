@@ -1,0 +1,65 @@
+[
+  {
+    "case_id": "D02",
+    "passed": true,
+    "checks": {
+      "facts": true,
+      "scope_mapping": true,
+      "targets": true,
+      "target_attribution": true,
+      "obligations": true,
+      "plan": true,
+      "artifact_claim_replay": true,
+      "delivery_status": true,
+      "unresolved": true,
+      "recovery": true,
+      "audit_recovery": true,
+      "zero_http_attempts": true,
+      "no_replay_error": true,
+      "artifact_text": true
+    },
+    "http_attempts": 0
+  },
+  {
+    "case_id": "D11",
+    "passed": true,
+    "checks": {
+      "facts": true,
+      "scope_mapping": true,
+      "targets": true,
+      "target_attribution": true,
+      "obligations": true,
+      "plan": true,
+      "artifact_claim_replay": true,
+      "delivery_status": true,
+      "unresolved": true,
+      "recovery": true,
+      "audit_recovery": true,
+      "zero_http_attempts": true,
+      "no_replay_error": true,
+      "artifact_text": true
+    },
+    "http_attempts": 0
+  },
+  {
+    "case_id": "D16",
+    "passed": true,
+    "checks": {
+      "facts": true,
+      "scope_mapping": true,
+      "targets": true,
+      "target_attribution": true,
+      "obligations": true,
+      "plan": true,
+      "artifact_claim_replay": true,
+      "delivery_status": true,
+      "unresolved": true,
+      "recovery": true,
+      "audit_recovery": true,
+      "zero_http_attempts": true,
+      "no_replay_error": true,
+      "artifact_text": true
+    },
+    "http_attempts": 0
+  }
+]

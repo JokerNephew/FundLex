@@ -1,0 +1,134 @@
+{
+  "body": {
+    "schema_version": "fundlex-model-cassette-v1",
+    "request": {
+      "task_type": "recall_audit",
+      "prompt_version": "recall_audit_v1",
+      "configured_model": "deepseek-v4.1-flash",
+      "context_sha256": "e3f6f1f11633fc2d28dba5b7a3233a690fd0a3a5499cfd434570a6c266696b2f",
+      "request": {
+        "bounded_context": "[BEFORE]\n[p1001] 依据基金财产清算的分配方案，将基金财产清算后的全部剩余资产扣除基金财产清算费用、交纳所欠税款并清偿基金债务后，按基金份额持有人持有的各类基金份额比例进行分配。 \n[p1371] 依据基金财产清算的分配方案，将基金财产清算后的全部剩余资产扣除基金财产清算费用、交纳所欠税款并清偿基金债务后，按基金份额持有人持有的各类基金份额比例进行分配。 \n\n[AFTER]\n[p1001] 依据基金财产清算的分配方案，将基金财产清算后的全部剩余资产扣除基金财产清算费用、交纳所欠税款并清偿基金债务后，按基金份额持有人持有的基金份额比例进行分配，并加上返还基金份额持有人的销售服务费（如有）。 \n[p1371] 依据基金财产清算的分配方案，将基金财产清算后的全部剩余资产扣除基金财产清算费用、交纳所欠税款并清偿基金债务后，按基金份额持有人持有的基金份额比例进行分配，并加上返还基金份额持有人的销售服务费（如有）。 \n\n[REQUIREMENTS]\nGUIDE_RULES\n[G22] 基金合同的变更、终止与基金财产的清算-五、基金财产清算剩余资产的分配 | section_hint=基金财产的清算\n  requirement: 如果不是浮动管理费产品且收取销售服务费，将原条款替换为“依据基金财产清算的分配方案，将基金财产清算后的全部剩余资产扣除基金财产清算费用、交纳所欠税款并清偿基金债务后，按基金份额持有人持有的基金份额比例进行分配，并加上返还基金份额持有人的销售服务费（如有）。”。\n  [G22:0] replace: 依据基金财产清算的分配方案，将基金财产清算后的全部剩余资产扣除基金财产清算费用、交纳所欠税款并清偿基金债务后，按基金份额持有人持有的基金份额比例进行分配。 -> 依据基金财产清算的分配方案，将基金财产清算后的全部剩余资产扣除基金财产清算费用、交纳所欠税款并清偿基金债务后，按基金份额持有人持有的基金份额比例进行分配，并加上返还基金份额持有人的销售服务费（如有）。\n\n[TARGET_LEDGER]\n[\n {\n  \"target_id\": \"S03_S04_S07_S16_S17_S20#1:T023\",\n  \"rule_id\": \"G22\",\n  \"location\": \"p1001\",\n  \"state\": \"needs_edit\",\n  \"quote\": \"依据基金财产清算的分配方案，将基金财产清算后的全部剩余资产扣除基金财产清算费用、交纳所欠税款并清偿基金债务后，按基金份额持有人持有的各类基金份额比例进行分配。\",\n  \"reason\": \"本基金非浮动管理费产品且收取销售服务费，应在清算剩余资产分配条款后加上返还基金份额持有人的销售服务费（如有）的表述。\",\n  \"plan_status\": \"planned\",\n  \"operation\": \"replace\",\n  \"replacement\": \"依据基金财产清算的分配方案，将基金财产清算后的全部剩余资产扣除基金财产清算费用、交纳所欠税款并清偿基金债务后，按基金份额持有人持有的基金份额比例进行分配，并加上返还基金份额持有人的销售服务费（如有）。\"\n },\n {\n  \"target_id\": \"S25_S26#2:T004\",\n  \"rule_id\": \"G22\",\n  \"location\": \"p1371\",\n  \"state\": \"needs_edit\",\n  \"quote\": \"依据基金财产清算的分配方案，将基金财产清算后的全部剩余资产扣除基金财产清算费用、交纳所欠税款并清偿基金债务后，按基金份额持有人持有的各类基金份额比例进行分配。\",\n  \"reason\": \"本基金为非浮动管理费产品且收取销售服务费（C类），按G22应将原条款替换为增加“并加上返还基金份额持有人的销售服务费（如有）”的表述；当前条款未包含该返还销售服务费内容。\",\n  \"plan_status\": \"planned\",\n  \"operation\": \"replace\",\n  \"replacement\": \"依据基金财产清算的分配方案，将基金财产清算后的全部剩余资产扣除基金财产清算费用、交纳所欠税款并清偿基金债务后，按基金份额持有人持有的基金份额比例进行分配，并加上返还基金份额持有人的销售服务费（如有）。\"\n }\n]\n\n[OTHER_AUTHORIZED_EDITS]\n[]",
+        "instruction": "Read [BEFORE] (the original contract region), [AFTER] (the actual rewritten region taken from the produced file), [REQUIREMENTS] (the guide rules with their fixed policy text and the target ledger) and [OTHER_AUTHORIZED_EDITS] (changes other guide rules legitimately made in the same locations). Independently judge each target in the ledger: completed when the AFTER text satisfies the requirement with no lost content, incomplete when part of the requirement is missing, wrong when the AFTER text contradicts the requirement, drops required content, or adds policy the guide does not state. A rule whose slot classes are placeholders means the AFTER text must name the product's actual share classes that fall in that group: adding a real class the contract defines (for example including a D类 class in the group the guide wrote as A类) is correct instantiation, not an unauthorized addition, as long as [FACTS] lists that class in the group. Never report an OTHER_AUTHORIZED_EDITS change as an unauthorized addition. For every non-completed target also classify the root cause (failure_class) and, when known, the affected_fact or affected_obligation, so recovery can return to the correct business layer. A region shown as （该位置内容已删除） means the content was removed: for a deletion requirement that is completed, and for a replacement requirement judge it against the requirement and the ledger, not against the absence itself. Cite an exact contiguous evidence_quote from AFTER (or BEFORE when judging a loss) for every verdict. Also report missed_targets when you find a clause in AFTER that still needs editing but is absent from the ledger. Never trust the ledger over the actual text; never mark completed without reading AFTER.",
+        "response_schema": {
+          "type": "object",
+          "required": [
+            "results"
+          ],
+          "properties": {
+            "results": {
+              "type": "array",
+              "maxItems": 60,
+              "items": {
+                "type": "object",
+                "required": [
+                  "target_id",
+                  "verdict",
+                  "reason"
+                ],
+                "properties": {
+                  "target_id": {
+                    "type": "string"
+                  },
+                  "verdict": {
+                    "enum": [
+                      "completed",
+                      "incomplete",
+                      "wrong"
+                    ]
+                  },
+                  "reason": {
+                    "type": "string"
+                  },
+                  "evidence_quote": {
+                    "type": "string"
+                  },
+                  "failure_class": {
+                    "enum": [
+                      "FACT",
+                      "APPLICABILITY",
+                      "TARGET",
+                      "GENERATION",
+                      "EXECUTION",
+                      "VERIFICATION"
+                    ]
+                  },
+                  "affected_fact": {
+                    "type": "string"
+                  },
+                  "affected_obligation": {
+                    "type": "string"
+                  }
+                }
+              }
+            },
+            "missed_targets": {
+              "type": "array",
+              "maxItems": 20,
+              "items": {
+                "type": "object",
+                "required": [
+                  "rule_id",
+                  "location",
+                  "quote",
+                  "reason"
+                ],
+                "properties": {
+                  "rule_id": {
+                    "type": "string"
+                  },
+                  "location": {
+                    "type": "string"
+                  },
+                  "quote": {
+                    "type": "string"
+                  },
+                  "reason": {
+                    "type": "string"
+                  }
+                }
+              }
+            },
+            "notes": {
+              "type": "string"
+            }
+          }
+        },
+        "request_options": {
+          "thinking": {
+            "type": "disabled"
+          }
+        },
+        "max_completion_tokens": 8000
+      }
+    },
+    "response": {
+      "results": [
+        {
+          "target_id": "S03_S04_S07_S16_S17_S20#1:T023",
+          "verdict": "completed",
+          "reason": "AFTER at p1001 matches the G22 replacement text exactly, including the added sales-service-fee refund clause.",
+          "evidence_quote": "依据基金财产清算的分配方案，将基金财产清算后的全部剩余资产扣除基金财产清算费用、交纳所欠税款并清偿基金债务后，按基金份额持有人持有的基金份额比例进行分配，并加上返还基金份额持有人的销售服务费（如有）。"
+        },
+        {
+          "target_id": "S25_S26#2:T004",
+          "verdict": "completed",
+          "reason": "AFTER at p1371 matches the G22 replacement text exactly, including the added sales-service-fee refund clause.",
+          "evidence_quote": "依据基金财产清算的分配方案，将基金财产清算后的全部剩余资产扣除基金财产清算费用、交纳所欠税款并清偿基金债务后，按基金份额持有人持有的基金份额比例进行分配，并加上返还基金份额持有人的销售服务费（如有）。"
+        }
+      ],
+      "missed_targets": [],
+      "notes": "Both ledger targets are satisfied; no other G22-relevant clauses remain unedited in AFTER."
+    },
+    "event": {
+      "task_type": "recall_audit",
+      "prompt_version": "recall_audit_v1",
+      "context_sha256": "e3f6f1f11633fc2d28dba5b7a3233a690fd0a3a5499cfd434570a6c266696b2f",
+      "configured_model": "deepseek-v4.1-flash",
+      "actual_model": "deepseek-v4.1-flash",
+      "http_status": 200,
+      "finish_reason": "stop",
+      "error_code": null
+    }
+  },
+  "sha256": "33b4a69f09ad733875b80e393b12a77145e1300d1e325a6c4439f57ae09c0bd9"
+}

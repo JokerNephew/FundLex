@@ -1,0 +1,144 @@
+{
+  "body": {
+    "schema_version": "fundlex-model-cassette-v1",
+    "request": {
+      "task_type": "recall_audit",
+      "prompt_version": "recall_audit_v1",
+      "configured_model": "deepseek-v4.1-flash",
+      "context_sha256": "dca9d6f2d7060b73d5f2310a45195b3b5c285348f9fe735f5a6c1108ec8417e5",
+      "request": {
+        "bounded_context": "[BEFORE]\n[p221] 赎回费用由赎回基金份额的基金份额持有人承担，在基金份额持有人赎回基金份额时收取。赎回费用应根据法律法规规定的比例归入基金财产，未计入基金财产的部分用于支付登记费和其他必要的手续费。其中，对持续持有期少于\n[p222] 7 日的投资者收取不低于 1.5%的赎回费，并全额计入基金财产。 \n\n[AFTER]\n[p221] 赎回费用由赎回基金份额的基金份额持有人承担，在基金份额持有人赎回基金份额时收取。赎回费用全额计入基金财产。\n[p222]   \n\n[REQUIREMENTS]\nGUIDE_RULES\n[G13] 基金份额的申购与赎回-六、申购和赎回的价格、费用及其用途： | section_hint=基金份额的申购与赎回\n  requirement: 删除“本基金对持续持有期少于7日的投资者收取不低于1.50%的赎回费，并将上述赎回费全额计入基金财产。”。\n  [G13:0] delete: 本基金对持续持有期少于7日的投资者收取不低于1.50%的赎回费，并将上述赎回费全额计入基金财产。\n\n[TARGET_LEDGER]\n[\n {\n  \"target_id\": \"Y007\",\n  \"rule_id\": \"G13\",\n  \"location\": \"p221\",\n  \"state\": \"needs_edit\",\n  \"quote\": \"赎回费用由赎回基金份额的基金份额持有人承担，在基金份额持有人赎回基金份额时收取。赎回费用应根据法律法规规定的比例归入基金财产，未计入基金财产的部分用于支付登记费和其他必要的手续费。其中，对持续持有期少于\",\n  \"reason\": \"survey_reference:1.00|rebind:clause_continuation\",\n  \"plan_status\": \"planned\",\n  \"operation\": \"replace\",\n  \"replacement\": \" \"\n }\n]\n\n[OTHER_AUTHORIZED_EDITS]\n[\n {\n  \"rule_id\": \"G12\",\n  \"location\": \"p221\",\n  \"operation\": \"replace\",\n  \"replacement\": \"赎回费用由赎回基金份额的基金份额持有人承担，在基金份额持有人赎回基金份额时收取。赎回费用全额计入基金财产。\"\n }\n]",
+        "instruction": "Read [BEFORE] (the original contract region), [AFTER] (the actual rewritten region taken from the produced file), [REQUIREMENTS] (the guide rules with their fixed policy text and the target ledger) and [OTHER_AUTHORIZED_EDITS] (changes other guide rules legitimately made in the same locations). Independently judge each target in the ledger: completed when the AFTER text satisfies the requirement with no lost content, incomplete when part of the requirement is missing, wrong when the AFTER text contradicts the requirement, drops required content, or adds policy the guide does not state. A rule whose slot classes are placeholders means the AFTER text must name the product's actual share classes that fall in that group: adding a real class the contract defines (for example including a D类 class in the group the guide wrote as A类) is correct instantiation, not an unauthorized addition, as long as [FACTS] lists that class in the group. Never report an OTHER_AUTHORIZED_EDITS change as an unauthorized addition. For every non-completed target also classify the root cause (failure_class) and, when known, the affected_fact or affected_obligation, so recovery can return to the correct business layer. A region shown as （该位置内容已删除） means the content was removed: for a deletion requirement that is completed, and for a replacement requirement judge it against the requirement and the ledger, not against the absence itself. Cite an exact contiguous evidence_quote from AFTER (or BEFORE when judging a loss) for every verdict. Also report missed_targets when you find a clause in AFTER that still needs editing but is absent from the ledger. Never trust the ledger over the actual text; never mark completed without reading AFTER.",
+        "response_schema": {
+          "type": "object",
+          "required": [
+            "results"
+          ],
+          "properties": {
+            "results": {
+              "type": "array",
+              "maxItems": 60,
+              "items": {
+                "type": "object",
+                "required": [
+                  "target_id",
+                  "verdict",
+                  "reason"
+                ],
+                "properties": {
+                  "target_id": {
+                    "type": "string"
+                  },
+                  "verdict": {
+                    "enum": [
+                      "completed",
+                      "incomplete",
+                      "wrong"
+                    ]
+                  },
+                  "reason": {
+                    "type": "string"
+                  },
+                  "evidence_quote": {
+                    "type": "string"
+                  },
+                  "failure_class": {
+                    "enum": [
+                      "FACT",
+                      "APPLICABILITY",
+                      "TARGET",
+                      "GENERATION",
+                      "EXECUTION",
+                      "VERIFICATION"
+                    ]
+                  },
+                  "affected_fact": {
+                    "type": "string"
+                  },
+                  "affected_obligation": {
+                    "type": "string"
+                  }
+                }
+              }
+            },
+            "missed_targets": {
+              "type": "array",
+              "maxItems": 20,
+              "items": {
+                "type": "object",
+                "required": [
+                  "rule_id",
+                  "location",
+                  "quote",
+                  "reason"
+                ],
+                "properties": {
+                  "rule_id": {
+                    "type": "string"
+                  },
+                  "location": {
+                    "type": "string"
+                  },
+                  "quote": {
+                    "type": "string"
+                  },
+                  "reason": {
+                    "type": "string"
+                  }
+                }
+              }
+            },
+            "notes": {
+              "type": "string"
+            }
+          }
+        },
+        "request_options": {
+          "thinking": {
+            "type": "disabled"
+          }
+        },
+        "max_completion_tokens": 8000
+      }
+    },
+    "response": {
+      "results": [
+        {
+          "target_id": "Y007",
+          "verdict": "wrong",
+          "reason": "G13 requires deleting only the sentence about charging ≥1.50% redemption fee for holders under 7 days and including it fully in fund assets. The AFTER text instead rewrote the entire fee-allocation sentence, deleting the required content that redemption fees be allocated to fund assets per law and that the remainder pays registration and other necessary fees. This drops content the guide did not authorize removing.",
+          "evidence_quote": "赎回费用由赎回基金份额的基金份额持有人承担，在基金份额持有人赎回基金份额时收取。赎回费用全额计入基金财产。",
+          "failure_class": "GENERATION",
+          "affected_obligation": "G13:0 delete only the 7-day short-holding redemption fee sentence, preserving the statutory allocation and registration-fee provisions"
+        },
+        {
+          "target_id": "Y007",
+          "verdict": "wrong",
+          "reason": "The 7-day sentence was removed, but the replacement also eliminated the pre-existing allocation rule ('赎回费用应根据法律法规规定的比例归入基金财产，未计入基金财产的部分用于支付登记费和其他必要的手续费'), which G13 did not require deleting.",
+          "evidence_quote": "赎回费用全额计入基金财产。",
+          "failure_class": "GENERATION",
+          "affected_obligation": "G13:0 delete the 7-day redemption fee clause without removing unrelated fee-allocation content"
+        }
+      ],
+      "missed_targets": [
+        {
+          "rule_id": "G13",
+          "location": "p221",
+          "quote": "赎回费用全额计入基金财产。",
+          "reason": "This new sentence imposes full inclusion of all redemption fees into fund assets, which the guide does not state and which contradicts the retained statutory proportional allocation requirement; it needs correction."
+        }
+      ]
+    },
+    "event": {
+      "task_type": "recall_audit",
+      "prompt_version": "recall_audit_v1",
+      "context_sha256": "dca9d6f2d7060b73d5f2310a45195b3b5c285348f9fe735f5a6c1108ec8417e5",
+      "configured_model": "deepseek-v4.1-flash",
+      "actual_model": "deepseek-v4.1-flash",
+      "http_status": 200,
+      "finish_reason": "stop",
+      "error_code": null
+    }
+  },
+  "sha256": "af6a9df5baeb0b5f0c6bdf6d4635d357188335f01d50cd46d6e11dc9e442d6d2"
+}

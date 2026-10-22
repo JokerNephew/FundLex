@@ -1,0 +1,136 @@
+{
+  "body": {
+    "schema_version": "fundlex-model-cassette-v1",
+    "request": {
+      "task_type": "recall_audit",
+      "prompt_version": "recall_audit_v1",
+      "configured_model": "deepseek-v4.1-flash",
+      "context_sha256": "d77d149ba7df1e2ec4afde7880b9edd8a49fe62fd9280c70908df8889683ec93",
+      "request": {
+        "bounded_context": "[BEFORE]\n[p772] C 类基金份额的销售服务费每日计提，逐日累计至每个月月末，按月支付。经基金管理人与基金托管人核对一致后，由基金托管人在次月初五个工作日内从基金财产中一次性支付，由注册登记机构代收，注册登记机构收到后按相关合同规定支付给基金销售机构等。 \n[p1247] C类基金份额的销售服务费每日计提，逐日累计至每个月月末，按月支付。经基金管理人与基金托管人核对一致后，由基金托管人在次月初五个工作日内从基金财产中一次性支付，由注册登记机构代收，注册登记机构收到后按相关合同规定支付给基金销售机构等。 \n\n[AFTER]\n[p772] 销售服务费每日计提。（1）直销机构：对于投资者通过直销机构持有的C类基金份额计提的销售服务费，在投资者赎回C类基金份额或基金合同终止时，随赎回款（或清算款）一并返还给投资者。基金管理人基金销售子公司销售母公司所管理基金的，按照本条要求执行。（2）直销机构以外的其他销售机构：对于投资者持续持有期限未超过一年（即365天，下同）的基金份额收取的销售服务费，按月支付，基金托管人按照与基金管理人协商一致的方式于次月首日起5个工作日内按照指定的账户路径进行支付。若遇法定节假日、公休日或不可抗力等，支付日期顺延。对于持续持有期限超过一年的基金份额，持有超过一年后继续计提的销售服务费，在投资者赎回基金份额或基金合同终止时，随赎回款（或清算款）一并返还给投资者。 \n[p1247] 销售服务费每日计提。（1）直销机构：对于投资者通过直销机构持有的C类基金份额计提的销售服务费，在投资者赎回C类基金份额或基金合同终止时，随赎回款（或清算款）一并返还给投资者。基金管理人基金销售子公司销售母公司所管理基金的，按照本条要求执行。（2）直销机构以外的其他销售机构：对于投资者持续持有期限未超过一年（即365天，下同）的基金份额收取的销售服务费，按月支付，基金托管人按照与基金管理人协商一致的方式于次月首日起5个工作日内按照指定的账户路径进行支付。若遇法定节假日、公休日或不可抗力等，支付日期顺延。对于持续持有期限超过一年的基金份额，持有超过一年后继续计提的销售服务费，在投资者赎回基金份额或基金合同终止时，随赎回款（或清算款）一并返还给投资者。\n\n[REQUIREMENTS]\nGUIDE_RULES\n[G16] 基金费用与税收-3、基金销售服务费（有多个份额类别时适用） | section_hint=基金费用与税收\n  requirement: 在原条款最后增加销售服务费每日计提、直销机构返还、其他销售机构按月支付及持有超过一年后返还等内容。\n  [G16:0] append: 销售服务费每日计提。（1）直销机构：对于投资者通过直销机构持有的C类基金份额计提的销售服务费，在投资者赎回C类基金份额或基金合同终止时，随赎回款（或清算款）一并返还给投资者。基金管理人基金销售子公司销售母公司所管理基金的，按照本条要求执行。（2）直销机构以外的其他销售机构：对于投资者持续持有期限未超过一年（即365天，下同）的基金份额收取的销售服务费，按月支付，基金托管人按照与基金管理人协商一致的方式于次月首日起5个工作日内按照指定的账户路径进行支付。若遇法定节假日、公休日或不可抗力等，支付日期顺延。对于持续持有期限超过一年的基金份额，持有超过一年后继续计提的销售服务费，在投资者赎回基金份额或基金合同终止时，随赎回款（或清算款）一并返还给投资者。\n\n[TARGET_LEDGER]\n[\n {\n  \"target_id\": \"S03_S04_S07_S16_S17_S20_S26#1:T017\",\n  \"rule_id\": \"G16\",\n  \"location\": \"p772\",\n  \"state\": \"needs_edit\",\n  \"quote\": \"C 类基金份额的销售服务费每日计提，逐日累计至每个月月末，按月支付。经基金管理人与基金托管人核对一致后，由基金托管人在次月初五个工作日内从基金财产中一次性支付，由注册登记机构代收，注册登记机构收到后按相关合同规定支付给基金销售机构等。\",\n  \"reason\": \"应在原条款最后增加销售服务费每日计提、直销机构返还、其他销售机构按月支付及持有超过一年后返还等内容。\",\n  \"plan_status\": \"planned\",\n  \"operation\": \"insert\",\n  \"replacement\": \"销售服务费每日计提。（1）直销机构：对于投资者通过直销机构持有的C类基金份额计提的销售服务费，在投资者赎回C类基金份额或基金合同终止时，随赎回款（或清算款）一并返还给投资者。基金管理人基金销售子公司销售母公司所管理基金的，按照本条要求执行。（2）直销机构以外的其他销售机构：对于投资者持续持有期限未超过一年（即365天，下同）的基金份额收取的销售服务费，按月支付，基金托管人按照与基金管理人协商一致的方式于次月首日起5个工作日内按照指定的账户路径进行支付。若遇法定节假日、公休日或不可抗力等，支付日期顺延。对于持续持有期限超过一年的基金份额，持有超过一年后继续计提的销售服务费，在投资者赎回基金份额或…\"\n },\n {\n  \"target_id\": \"S03_S04_S07_S16_S17_S20_S26#1:T017-D1\",\n  \"rule_id\": \"G16\",\n  \"location\": \"p1247\",\n  \"state\": \"needs_edit\",\n  \"quote\": \"C 类基金份额的销售服务费每日计提，逐日累计至每个月月末，按月支付。经基金管理人与基金托管人核对一致后，由基金托管人在次月初五个工作日内从基金财产中一次性支付，由注册登记机构代收，注册登记机构收到后按相关合同规定支付给基金销售机构等。\",\n  \"reason\": \"duplicate_copy:应在原条款最后增加销售服务费每日计提、直销机构返还、其他销售机构按月支付及持有超过一年后返还等内容。\",\n  \"plan_status\": \"planned\",\n  \"operation\": \"insert\",\n  \"replacement\": \"销售服务费每日计提。（1）直销机构：对于投资者通过直销机构持有的C类基金份额计提的销售服务费，在投资者赎回C类基金份额或基金合同终止时，随赎回款（或清算款）一并返还给投资者。基金管理人基金销售子公司销售母公司所管理基金的，按照本条要求执行。（2）直销机构以外的其他销售机构：对于投资者持续持有期限未超过一年（即365天，下同）的基金份额收取的销售服务费，按月支付，基金托管人按照与基金管理人协商一致的方式于次月首日起5个工作日内按照指定的账户路径进行支付。若遇法定节假日、公休日或不可抗力等，支付日期顺延。对于持续持有期限超过一年的基金份额，持有超过一年后继续计提的销售服务费，在投资者赎回基金份额或…\"\n }\n]\n\n[OTHER_AUTHORIZED_EDITS]\n[\n {\n  \"rule_id\": \"G15\",\n  \"location\": \"p772\",\n  \"operation\": \"replace\",\n  \"replacement\": \"\"\n },\n {\n  \"rule_id\": \"G15\",\n  \"location\": \"p1247\",\n  \"operation\": \"replace\",\n  \"replacement\": \"\"\n }\n]",
+        "instruction": "Read [BEFORE] (the original contract region), [AFTER] (the actual rewritten region taken from the produced file), [REQUIREMENTS] (the guide rules with their fixed policy text and the target ledger) and [OTHER_AUTHORIZED_EDITS] (changes other guide rules legitimately made in the same locations). Independently judge each target in the ledger: completed when the AFTER text satisfies the requirement with no lost content, incomplete when part of the requirement is missing, wrong when the AFTER text contradicts the requirement, drops required content, or adds policy the guide does not state. A rule whose slot classes are placeholders means the AFTER text must name the product's actual share classes that fall in that group: adding a real class the contract defines (for example including a D类 class in the group the guide wrote as A类) is correct instantiation, not an unauthorized addition, as long as [FACTS] lists that class in the group. Never report an OTHER_AUTHORIZED_EDITS change as an unauthorized addition. For every non-completed target also classify the root cause (failure_class) and, when known, the affected_fact or affected_obligation, so recovery can return to the correct business layer. A region shown as （该位置内容已删除） means the content was removed: for a deletion requirement that is completed, and for a replacement requirement judge it against the requirement and the ledger, not against the absence itself. Cite an exact contiguous evidence_quote from AFTER (or BEFORE when judging a loss) for every verdict. Also report missed_targets when you find a clause in AFTER that still needs editing but is absent from the ledger. Never trust the ledger over the actual text; never mark completed without reading AFTER.",
+        "response_schema": {
+          "type": "object",
+          "required": [
+            "results"
+          ],
+          "properties": {
+            "results": {
+              "type": "array",
+              "maxItems": 60,
+              "items": {
+                "type": "object",
+                "required": [
+                  "target_id",
+                  "verdict",
+                  "reason"
+                ],
+                "properties": {
+                  "target_id": {
+                    "type": "string"
+                  },
+                  "verdict": {
+                    "enum": [
+                      "completed",
+                      "incomplete",
+                      "wrong"
+                    ]
+                  },
+                  "reason": {
+                    "type": "string"
+                  },
+                  "evidence_quote": {
+                    "type": "string"
+                  },
+                  "failure_class": {
+                    "enum": [
+                      "FACT",
+                      "APPLICABILITY",
+                      "TARGET",
+                      "GENERATION",
+                      "EXECUTION",
+                      "VERIFICATION"
+                    ]
+                  },
+                  "affected_fact": {
+                    "type": "string"
+                  },
+                  "affected_obligation": {
+                    "type": "string"
+                  }
+                }
+              }
+            },
+            "missed_targets": {
+              "type": "array",
+              "maxItems": 20,
+              "items": {
+                "type": "object",
+                "required": [
+                  "rule_id",
+                  "location",
+                  "quote",
+                  "reason"
+                ],
+                "properties": {
+                  "rule_id": {
+                    "type": "string"
+                  },
+                  "location": {
+                    "type": "string"
+                  },
+                  "quote": {
+                    "type": "string"
+                  },
+                  "reason": {
+                    "type": "string"
+                  }
+                }
+              }
+            },
+            "notes": {
+              "type": "string"
+            }
+          }
+        },
+        "request_options": {
+          "thinking": {
+            "type": "disabled"
+          }
+        },
+        "max_completion_tokens": 8000
+      }
+    },
+    "response": {
+      "results": [
+        {
+          "target_id": "S03_S04_S07_S16_S17_S20_S26#1:T017",
+          "rule_id": "G16",
+          "verdict": "completed",
+          "reason": "AFTER at p772 contains the full appended text required by G16:0, including daily accrual, direct-sales refund, other-sales monthly payment, and refund after one year. The original clause was replaced by the required insertion text, matching the replacement verbatim.",
+          "evidence_quote": "销售服务费每日计提。（1）直销机构：对于投资者通过直销机构持有的C类基金份额计提的销售服务费，在投资者赎回C类基金份额或基金合同终止时，随赎回款（或清算款）一并返还给投资者。"
+        },
+        {
+          "target_id": "S03_S04_S07_S16_S17_S20_S26#1:T017-D1",
+          "rule_id": "G16",
+          "verdict": "completed",
+          "reason": "AFTER at p1247 contains the same full appended text required by G16:0, satisfying the duplicate-copy target.",
+          "evidence_quote": "销售服务费每日计提。（1）直销机构：对于投资者通过直销机构持有的C类基金份额计提的销售服务费，在投资者赎回C类基金份额或基金合同终止时，随赎回款（或清算款）一并返还给投资者。"
+        }
+      ],
+      "missed_targets": [],
+      "notes": "Both targets completed; the original '逐日累计至每个月月末' wording was replaced by the guide's prescribed text, which is the intended replacement per G16:0."
+    },
+    "event": {
+      "task_type": "recall_audit",
+      "prompt_version": "recall_audit_v1",
+      "context_sha256": "d77d149ba7df1e2ec4afde7880b9edd8a49fe62fd9280c70908df8889683ec93",
+      "configured_model": "deepseek-v4.1-flash",
+      "actual_model": "deepseek-v4.1-flash",
+      "http_status": 200,
+      "finish_reason": "stop",
+      "error_code": null
+    }
+  },
+  "sha256": "69940d006bdb0519717370e627547e634f4fa066291c01af02c22ac09faa3eef"
+}

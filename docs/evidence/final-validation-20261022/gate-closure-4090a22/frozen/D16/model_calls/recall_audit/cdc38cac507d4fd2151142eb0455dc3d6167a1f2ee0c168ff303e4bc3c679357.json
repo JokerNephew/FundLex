@@ -1,0 +1,138 @@
+{
+  "body": {
+    "schema_version": "fundlex-model-cassette-v1",
+    "request": {
+      "task_type": "recall_audit",
+      "prompt_version": "recall_audit_v1",
+      "configured_model": "deepseek-v4.1-flash",
+      "context_sha256": "9530eccbfbfa4c38730f8e64cf35b7ee91611517b335b179e96c00f2a1583498",
+      "request": {
+        "bounded_context": "[BEFORE]\n[p222] 7 日的投资者收取不低于 1.5%的赎回费，并全额计入基金财产。 \n[p221] 赎回费用由赎回基金份额的基金份额持有人承担，在基金份额持有人赎回基金份额时收取。赎回费用应根据法律法规规定的比例归入基金财产，未计入基金财产的部分用于支付登记费和其他必要的手续费。其中，对持续持有期少于\n\n[AFTER]\n[p222] 7 日的投资者收取不低于 1.5%的赎回费，并全额计入基金财产。 \n[p221] 赎回费用由赎回基金份额的基金份额持有人承担，在基金份额持有人赎回基金份额时收取。赎回费用应根据法律法规规定的比例归入基金财产，未计入基金财产的部分用于支付登记费和其他必要的手续费。其中，对持续持有期少于\n\n[REQUIREMENTS]\nGUIDE_RULES\n[G13] 基金份额的申购与赎回-六、申购和赎回的价格、费用及其用途： | section_hint=基金份额的申购与赎回\n  requirement: 删除“本基金对持续持有期少于7日的投资者收取不低于1.50%的赎回费，并将上述赎回费全额计入基金财产。”。\n  [G13:0] delete: 本基金对持续持有期少于7日的投资者收取不低于1.50%的赎回费，并将上述赎回费全额计入基金财产。\n\n[TARGET_LEDGER]\n[\n {\n  \"target_id\": \"S03_S04_S07_S16_S17_S20#1:T014\",\n  \"rule_id\": \"G13\",\n  \"location\": \"p222\",\n  \"state\": \"needs_edit\",\n  \"quote\": \"7 日的投资者收取不低于 1.5%的赎回费，并全额计入基金财产。\",\n  \"reason\": \"应删除对持续持有期少于7日投资者收取不低于1.5%赎回费并全额计入基金财产的表述。\",\n  \"plan_status\": \"unresolved\",\n  \"operation\": \"replace\",\n  \"replacement\": \"\"\n },\n {\n  \"target_id\": \"Y007\",\n  \"rule_id\": \"G13\",\n  \"location\": \"p221\",\n  \"state\": \"needs_edit\",\n  \"quote\": \"赎回费用由赎回基金份额的基金份额持有人承担，在基金份额持有人赎回基金份额时收取。赎回费用应根据法律法规规定的比例归入基金财产，未计入基金财产的部分用于支付登记费和其他必要的手续费。其中，对持续持有期少于\",\n  \"reason\": \"survey_reference:1.00|rebind:clause_continuation\",\n  \"plan_status\": \"unresolved\",\n  \"operation\": \"replace\",\n  \"replacement\": \"\"\n }\n]\n\n[OTHER_AUTHORIZED_EDITS]\n[]",
+        "instruction": "Read [BEFORE] (the original contract region), [AFTER] (the actual rewritten region taken from the produced file), [REQUIREMENTS] (the guide rules with their fixed policy text and the target ledger) and [OTHER_AUTHORIZED_EDITS] (changes other guide rules legitimately made in the same locations). Independently judge each target in the ledger: completed when the AFTER text satisfies the requirement with no lost content, incomplete when part of the requirement is missing, wrong when the AFTER text contradicts the requirement, drops required content, or adds policy the guide does not state. A rule whose slot classes are placeholders means the AFTER text must name the product's actual share classes that fall in that group: adding a real class the contract defines (for example including a D类 class in the group the guide wrote as A类) is correct instantiation, not an unauthorized addition, as long as [FACTS] lists that class in the group. Never report an OTHER_AUTHORIZED_EDITS change as an unauthorized addition. For every non-completed target also classify the root cause (failure_class) and, when known, the affected_fact or affected_obligation, so recovery can return to the correct business layer. A region shown as （该位置内容已删除） means the content was removed: for a deletion requirement that is completed, and for a replacement requirement judge it against the requirement and the ledger, not against the absence itself. Cite an exact contiguous evidence_quote from AFTER (or BEFORE when judging a loss) for every verdict. Also report missed_targets when you find a clause in AFTER that still needs editing but is absent from the ledger. Never trust the ledger over the actual text; never mark completed without reading AFTER.",
+        "response_schema": {
+          "type": "object",
+          "required": [
+            "results"
+          ],
+          "properties": {
+            "results": {
+              "type": "array",
+              "maxItems": 60,
+              "items": {
+                "type": "object",
+                "required": [
+                  "target_id",
+                  "verdict",
+                  "reason"
+                ],
+                "properties": {
+                  "target_id": {
+                    "type": "string"
+                  },
+                  "verdict": {
+                    "enum": [
+                      "completed",
+                      "incomplete",
+                      "wrong"
+                    ]
+                  },
+                  "reason": {
+                    "type": "string"
+                  },
+                  "evidence_quote": {
+                    "type": "string"
+                  },
+                  "failure_class": {
+                    "enum": [
+                      "FACT",
+                      "APPLICABILITY",
+                      "TARGET",
+                      "GENERATION",
+                      "EXECUTION",
+                      "VERIFICATION"
+                    ]
+                  },
+                  "affected_fact": {
+                    "type": "string"
+                  },
+                  "affected_obligation": {
+                    "type": "string"
+                  }
+                }
+              }
+            },
+            "missed_targets": {
+              "type": "array",
+              "maxItems": 20,
+              "items": {
+                "type": "object",
+                "required": [
+                  "rule_id",
+                  "location",
+                  "quote",
+                  "reason"
+                ],
+                "properties": {
+                  "rule_id": {
+                    "type": "string"
+                  },
+                  "location": {
+                    "type": "string"
+                  },
+                  "quote": {
+                    "type": "string"
+                  },
+                  "reason": {
+                    "type": "string"
+                  }
+                }
+              }
+            },
+            "notes": {
+              "type": "string"
+            }
+          }
+        },
+        "request_options": {
+          "thinking": {
+            "type": "disabled"
+          }
+        },
+        "max_completion_tokens": 8000
+      }
+    },
+    "response": {
+      "results": [
+        {
+          "target_id": "S03_S04_S07_S16_S17_S20#1:T014",
+          "verdict": "wrong",
+          "reason": "G13 requires deleting the sentence about charging ≥1.5% redemption fee for holders with holding period under 7 days and including it fully in fund assets. The AFTER text at p222 still contains this content unchanged, so the deletion was not performed.",
+          "evidence_quote": "7 日的投资者收取不低于 1.5%的赎回费，并全额计入基金财产。",
+          "failure_class": "EXECUTION",
+          "affected_obligation": "删除对持续持有期少于7日投资者收取不低于1.50%赎回费并全额计入基金财产的表述"
+        },
+        {
+          "target_id": "Y007",
+          "verdict": "wrong",
+          "reason": "The ledger marks p221 as needing replacement, but the AFTER text is identical to BEFORE and still contains the full redemption-fee allocation clause including the trailing '其中，对持续持有期少于' fragment. No edit was applied.",
+          "evidence_quote": "赎回费用由赎回基金份额的基金份额持有人承担，在基金份额持有人赎回基金份额时收取。赎回费用应根据法律法规规定的比例归入基金财产，未计入基金财产的部分用于支付登记费和其他必要的手续费。其中，对持续持有期少于",
+          "failure_class": "EXECUTION",
+          "affected_obligation": "删除/改写赎回费用条款中与7日赎回费相关的表述"
+        }
+      ],
+      "missed_targets": [],
+      "notes": "Both ledger targets remain unedited; AFTER is byte-identical to BEFORE in the shown regions."
+    },
+    "event": {
+      "task_type": "recall_audit",
+      "prompt_version": "recall_audit_v1",
+      "context_sha256": "9530eccbfbfa4c38730f8e64cf35b7ee91611517b335b179e96c00f2a1583498",
+      "configured_model": "deepseek-v4.1-flash",
+      "actual_model": "deepseek-v4.1-flash",
+      "http_status": 200,
+      "finish_reason": "stop",
+      "error_code": null
+    }
+  },
+  "sha256": "32c71905c4e74ab5df727feb63f166c527d541604d12b2a1b7894b21305e5717"
+}
