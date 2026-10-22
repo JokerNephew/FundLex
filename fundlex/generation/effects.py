@@ -91,8 +91,16 @@ def effect_proof_passed(proof: Mapping[str, Any] | None, *, operation_id: str = 
         return False
     if proof.get("artifact_status") == "NOT_REQUIRED":
         return bool(proof.get("evidence"))
-    sites = set(proof.get("sites") or ())
     evidence = proof.get("evidence") or ()
+    if proof.get("artifact_status") == "VERIFIED_ABSENT" and any(
+            isinstance(item, Mapping) and item.get("proof_kind") == "document_literal_absent"
+            and item.get("operation_id") == proof.get("operation_id")
+            and item.get("obligation_id") == proof.get("obligation_id")
+            for item in evidence):
+        # A code-scanned document-wide delete proof has no site by construction;
+        # its own evidence binds operation, obligation and zero matches.
+        return not proof.get("failure_code") and not (proof.get("site_effects") or ())
+    sites = set(proof.get("sites") or ())
     proven_sites = {item.get("site_id") for item in evidence if isinstance(item, Mapping)
                     and item.get("proof_kind") and item.get("operation_id") == proof.get("operation_id")
                     and item.get("obligation_id") == proof.get("obligation_id")}
@@ -345,6 +353,8 @@ def evaluate_operation_effect(obligation: Any, original: Any, artifact: Any,
             return OperationEffect(
                 "PASS", "VERIFIED_ABSENT", **base, evidence=({
                     "proof_kind": "document_literal_absent",
+                    "operation_id": operation_id,
+                    "obligation_id": obligation_id,
                     "searched_literals": references,
                     "match_count": 0,
                     "document_sha256": getattr(original, "source_sha256", ""),
