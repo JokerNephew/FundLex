@@ -198,7 +198,9 @@ def test_report_does_not_mark_unexecuted_targets_applied(ui):
 def test_report_shows_incomplete_business_issues(ui):
     presentation(ui, summary=True)
     page = ui[0]
-    assert "仍需处理的问题 · 1 项" in page.inner_text("#detail-body")
+    assert "仍需人工核对 · 1 项" in page.inner_text("#detail-body")
+    assert "未执行条款" in page.inner_text("#detail-body")
+    assert "未改原文" in page.inner_text("#detail-body")
     assert "未找到可安全修改的正文位置" in page.inner_text("#detail-body")
 
 

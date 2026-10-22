@@ -23,6 +23,13 @@ def test_complete_with_business_notice_is_still_a_success():
 def test_partial_delivery_lists_rule_location_and_business_reason():
     summary = build_user_summary({
         "delivery_status": "incomplete",
+        "guide": {"groups": [
+            {"rule_id": "G16", "title": "销售服务费支付机制", "section_hint": "基金费用与税收",
+             "requirement": "补充销售服务费计提与返还机制"},
+            {"rule_id": "G08", "title": "申购费用列示", "section_hint": "基金份额的申购与赎回",
+             "requirement": "按实际类别列示申购费用"}]},
+        "targets": [{"rule_id": "G16", "location": "p809", "quote": "销售服务费每日计提，按月支付。"},
+                    {"rule_id": "G08", "location": "p227", "quote": "本基金申购费率由基金管理人决定。"}],
         "unresolved": [
             {"kind": "obligation", "code": "OPEN_OBLIGATION", "rule_id": "G16",
              "obligation_id": "G16:B1:O1", "location": "p809",
@@ -36,6 +43,11 @@ def test_partial_delivery_lists_rule_location_and_business_reason():
         ("G16", "p809"), ("G08", "p227")]
     assert "未能在合同中定位" in summary["issues"][0]["business_reason"]
     assert "未能在最终文档中" in summary["issues"][1]["business_reason"]
+    assert summary["issues"][0]["title"] == "销售服务费支付机制"
+    assert summary["issues"][0]["section"] == "基金费用与税收"
+    assert summary["issues"][0]["quote"] == "销售服务费每日计提，按月支付。"
+    assert summary["issues"][0]["quote_exact_site"] is True
+    assert "修订痕迹中不会出现" in summary["issues"][0]["review_note"]
 
 
 def test_partial_delivery_never_hides_an_issue_behind_another():
