@@ -5531,8 +5531,17 @@ def target_site_ok(rule_id: str, span: Any, inspection: DocumentInspection) -> b
     """Whether this target paragraph carries the rule's own clause (site guard)."""
     if rule_id in {"G02", "G04"}:
         paragraph, _ = display_text(span.text)
-        return any(token in paragraph for token in
-                   ("基金份额类别", "份额类别", "将基金份额分为", "分类"))
+        if any(token in paragraph for token in
+               ("基金份额类别", "份额类别", "将基金份额分为", "分类")):
+            return True
+        # Split definitions: the heading is one paragraph and the actual fee-group
+        # wording is the next one.  That second paragraph carries the real site; a
+        # generic fee sentence must still supply both fee concepts and at least two
+        # share-class labels.
+        compact = _compact(paragraph)
+        labels = set(re.findall(r"([A-Z])类", compact))
+        return (len(labels) >= 2 and "销售服务费" in compact
+                and any(token in compact for token in ("申购费用", "申购费", "认购费用", "认购费")))
     if rule_id == "G15":
         paragraph, _ = display_text(span.text)
         return "销售服务费" in paragraph and "支付" in paragraph

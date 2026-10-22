@@ -2227,3 +2227,10 @@
   - 新增回归：`test_claim_site_repair_binds_a_non_exact_summary_copy`、`test_claim_site_reuse_plan_avoids_recomposing_the_summary_copy`、`test_delete_audit_opinion_must_quote_its_own_residual`、`test_post_proof_target_reconciliation_removes_stale_candidate`。
 - 状态：代码已实施并通过离线/旧 cassette 行为验证；尚未提交、未部署、未用新 SHA 跑 D01/D02/D11/D16 live，也未做 Review DOCX 批注/高亮层。Gate 仍为 `DO_NOT_ENTER_20_CASE`。
 - 下一步：提交新 runtime SHA → 建立新的、明确隔离的 validation budget（记录 calls/cost）→ 依次 live record D01/D02/D11/D16 → 四例零网络 replay/artifact review/独立复审 → 再评估 Gate。
+
+### FL-D145 追加（D01 exact-code live 发现，2026-10-22）
+
+- D01 在 `ebfe1de` live record：32 calls/$0.02791035，24 TRUE，14 artifact verified/8 already/2 unresolved，incomplete；G02 `R050` p91 报 occurrence ambiguous，Audit 又按虚构的 `A/B/C/D` 分组要求补 B 类，实际 certified facts 和合同 p91/p92 都是 A/C/D（A、D 收取申购费，C 收取销售服务费）。
+- 根因：G02/G04 的 split definition 第一段是“基金份额类别…”标题，第二段才是 A/D、C 的收费分组。`target_site_ok` 只接受标题词，导致真实 p92 目标被标 `TARGET_SOURCE_MISMATCH`，recovery 反而去 p91 标题并报 ambiguous；Audit 的 B 类说法与 certified facts 冲突。
+- 处理：`target_site_ok` 对 G02/G04 接受“至少两个类别标签 + 申购/认购费 + 销售服务费”的 split 费用段；仍拒绝无两类费用概念的普通费用句。新增回归 `test_g02_split_fee_group_paragraph_is_a_real_site`。certified facts 与 Audit 冲突的仲裁沿用现有 `_quote_confirms_class_facts`，待 D01 重跑确认。
+- 状态：代码在本地继续修复，尚未提交/重跑；D01 仍未通过 Gate。

@@ -1192,3 +1192,19 @@ def test_claim_site_reuse_plan_avoids_recomposing_the_summary_copy(tmp_path):
     assert result["edits"][0]["location"] == "p0"
     assert result["edits"][0]["content_source"] == "claim_site_reuse"
     assert result["edits"][0]["replacement"] == reuse["replacement"]
+
+
+def test_g02_split_fee_group_paragraph_is_a_real_site(tmp_path):
+    from docx import Document
+    from fundlex.docx import inspect_docx
+    from fundlex.recall import target_site_ok
+
+    path = tmp_path / "split.docx"
+    doc = Document()
+    doc.add_paragraph("基金份额类别：本基金将基金份额分为 A 类、C 类和 D 类三种不同的")
+    doc.add_paragraph("类别。在投资者申购 A 类及 D 类基金份额时收取申购费用，不计提销售服务费；"
+                      "在投资者申购 C 类基金份额时不收取申购费用，而从本类别基金资产中计提销售服务费")
+    doc.save(path)
+    inspection = inspect_docx(path, full=True)
+    assert target_site_ok("G02", inspection.by_location("p1"), inspection)
+    assert target_site_ok("G04", inspection.by_location("p1"), inspection)
