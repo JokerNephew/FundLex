@@ -1297,3 +1297,28 @@ def test_overlapping_composite_deletes_merge_as_joint_delete(tmp_path):
     assert resolved[0].content_source == "joint_delete"
     assert resolved[0].replacement == ""
     assert set(resolved[0].operation_keys) == {"G12:1", "G13:0"}
+
+
+def test_planning_clamps_trailing_whitespace_to_a_text_segment(tmp_path):
+    from docx import Document
+    from fundlex.docx import inspect_docx
+    from fundlex.recall import Target, plan_edits
+
+    path = tmp_path / "segment.docx"
+    doc = Document()
+    doc.add_paragraph("有关基金份额类别的具体设置等由基金管理人确定。")
+    doc.save(path)
+    inspection = inspect_docx(path, full=True)
+    span = inspection.by_location("p0")
+    quote = span.text
+    rule = {"rule_id": "G03", "title": "份额类别设置", "operations": [{
+        "op": "append", "new_text": "新增条款。", "condition": {"kind": "none"}}]}
+    target = Target("T1", "G03", "p0", quote, "needs_edit", "append site",
+                    start=0, end=len(quote) + 1, resolution="resolved",
+                    operations=("G03:0",))
+    from test_recall_core import _facts
+    result = plan_edits({"G03": rule}, [target], inspection, _facts(),
+                        SimpleNamespace(call=lambda **kwargs: (_ for _ in ()).throw(
+                            AssertionError("append should stay deterministic"))))
+    edit = result["edits"][0]
+    assert edit["end"] <= max(s.end for s in span.segments)

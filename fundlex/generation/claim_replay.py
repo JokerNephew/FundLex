@@ -322,6 +322,11 @@ def _own_effect_errors(rule: Mapping[str, Any], indices: Sequence[int],
                                       for value in record.spec.alternatives if str(value))
     before_compact = _compact(before_unit)
     replacement_compact = _compact(replacement)
+    # A composite replace has one anchor part carrying the new policy and later
+    # parts that only delete the remainder of the old sentence.  The tail must not be
+    # required to contain the new_text again (D16 p222).
+    composite_tail = bool(evidence.get("composite_tail") or (
+        evidence.get("composite") and int(evidence.get("part_index") or 0) > 0))
 
     # 1. Own required wording.  Composed edits are validated by the same validator
     #    with components/required terms, so they may re-word the sentence; deterministic
@@ -330,6 +335,10 @@ def _own_effect_errors(rule: Mapping[str, Any], indices: Sequence[int],
     if not composed:
         from ..recall import instantiate_slots
         for operation in selected:
+            if composite_tail:
+                # The new policy is anchored in part 0; this part only carries the
+                # authorized removal.  Its old-text check still runs below.
+                break
             if operation.get("op") not in {"replace", "append"}:
                 continue
             raw_new = str(operation.get("new_text") or "")
@@ -430,6 +439,10 @@ def _joint_operation_effects(unit: Mapping[str, Any],
     """
     rule = rules_by_id.get(str(unit.get("rule_id") or ""))
     indices = list(unit.get("indices") or ())
+    evidence = unit.get("evidence") or {}
+    if evidence.get("composite_tail") or (
+            evidence.get("composite") and int(evidence.get("part_index") or 0) > 0):
+        return []
     if rule is None or not indices or len(rule.get("operations") or []) < 2:
         return []
     operations = list(rule.get("operations") or [])
@@ -1106,8 +1119,12 @@ def replay_claims(edits: Sequence[Mapping[str, Any]], before_inspection: Any,
             for location in obligation_state[record.obligation_id].get("sites") or []))
         for record in group:
             item = obligation_state[record.obligation_id]
-            if item.get("state") == "PASS" or item.get("sites") or not group_sites:
+            if item.get("state") == "PASS" or not group_sites:
                 continue
+            # An alternative may have a target site but not use it successfully.
+            # For a ONE_OF historical wording group the shared certified business
+            # site is still the right place to prove this alternative; the evaluator
+            # rejects it if its own old wording survives there.
             shared_sites = [{"location": location,
                              "quote": str(before_inspection.by_location(location).text)}
                             for location in group_sites]
@@ -1117,6 +1134,31 @@ def replay_claims(edits: Sequence[Mapping[str, Any]], before_inspection: Any,
                                               shared_sites, effect_edits, facts)
             if proof.state == "PASS":
                 obligation_state[record.obligation_id] = proof.as_dict()
+            else:
+                # A historical ONE_OF wording that is genuinely absent from the
+                # whole source is not a missing edit; the passing alternative has
+                # already replaced the clause.  Keep the alternative's own wording
+                # check: if it survives anywhere, it must still fail.
+                old_wording = _compact(str(record.spec.old_text or ""))
+                source_body = _compact("\n".join(
+                    str(getattr(span, "text", ""))
+                    for span in getattr(before_inspection, "paragraphs", ())))
+                if old_wording and old_wording not in source_body:
+                    evidence = [{"rule_id": record.spec.rule_id,
+                                 "operation_id": record.spec.operation_id,
+                                 "obligation_id": record.obligation_id,
+                                 "proof_kind": "alternative_wording_absent",
+                                 "site_id": shared_sites[0]["location"],
+                                 "location": shared_sites[0]["location"]}]
+                    obligation_state[record.obligation_id] = {
+                        "state": "PASS", "artifact_status": "NOT_REQUIRED",
+                        "rule_id": record.spec.rule_id,
+                        "operation_id": record.spec.operation_id,
+                        "obligation_id": record.obligation_id,
+                        "sites": [site["location"] for site in shared_sites],
+                        "edit_ids": [], "failure_code": "",
+                        "reason": "one_of_alternative_absent",
+                        "evidence": evidence, "site_effects": []}
 
     for record in records:
         item = obligation_state.get(record.obligation_id)

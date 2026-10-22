@@ -2266,3 +2266,9 @@
 - 处理：overlap resolver 先检测所有冲突 edit 的 replacement 均为空，合并为单个 `joint_delete`（replacement=""），不再调用模型；新增回归 `test_overlapping_composite_deletes_merge_as_joint_delete`。
 - 旧 cassette 行为：D16 plan 现在为 p221 `replace_covers_delete` + p222 `joint_delete ""`；需新 live 验证 p222 实际为空。
 - 状态：关键修复，尚未提交；此前四例 complete 不能作为最终验收。
+
+### FL-D145 追加 7（D16 p222 claim 与 D11 barrier）
+
+- 修复 p222 joint_delete 后，Claim 又要求 G12:1 在 p222 出现完整 new_text，导致 `CLAIM_OPERATION_EFFECT_MISSING`；同时 D11 p129 G03+G05 合并编辑 end=177 超出唯一 TextSegment 0..176，写文件报 `EDIT_CROSSES_BARRIER`。
+- 处理：① `_own_effect_errors`/`_joint_operation_effects` 对 composite tail（`composite_tail` 或 `part_index>0`）只要求删除旧文，不要求重复插入 new_text；② final merge 和 build 前把“仅尾随空白”超出的 end 夹到当前 TextSegment；③ ONE_OF 历史措辞替代项若其 old_text 在全文确实不存在且另一替代项已 PASS，标 `NOT_REQUIRED/one_of_alternative_absent`，不伪造站点。
+- 旧 cassette D16 重放：delivery complete、Claim failures 0、unresolved 0，final p221 为正确新条款、p222 为空白；D11 plan 13 edits 无 barrier。需新 SHA live 四例复验。

@@ -3724,6 +3724,18 @@ def _plan_target_inner(rule: dict, target: Target, inspection: DocumentInspectio
         # to the contract text is a genuine unresolved failure.
         raise RecallError("RECALL_TARGET_UNRESOLVED", {"target": target.target_id})
     span = inspection.by_location(target.location)
+    # A target quote/offset may include the paragraph's trailing space while the
+    # DOCX text segment ends just before it.  That whitespace is not editable business
+    # content; clamp it to the containing run instead of producing an edit that crosses
+    # a read-only barrier (D11 p129).
+    if target.start is not None and target.end is not None:
+        segment = next((s for s in span.segments
+                        if s.start <= target.start and target.end <= s.end), None)
+        if segment is None:
+            containing = next((s for s in span.segments
+                               if s.start <= target.start < s.end), None)
+            if containing is not None and not span.text[containing.end:target.end].strip():
+                target.end = containing.end
     if not containing_segment(span, target.start, target.end) and not (target.start == target.end):
         raise RecallError("RECALL_TARGET_STRUCTURE", {"target": target.target_id})
     rule_id = str(rule.get("rule_id") or "")
@@ -4646,7 +4658,7 @@ def _resolve_overlaps_with_joint_compose(
                     for rule_id in str(edit.rule_id).split("+") if rule_id.strip())),
                 location=location, start=start, end=end, replacement="",
                 operation="replace", content_source="joint_delete",
-                evidence={"joint_delete": True,
+                evidence={"joint_delete": True, "composite_tail": True,
                           "operation_keys": [key for edit in edits
                                              for key in (edit.operation_keys or ())]},
                 operation_keys=tuple(dict.fromkeys(
@@ -4996,6 +5008,8 @@ def plan_edits(rules_by_id: dict[str, dict], targets: Sequence[Target], inspecti
         owned_components = (edit.evidence or {}).get("atomic_components")
         records.append({**edit.as_dict(), "components": owned_components or components})
     _reconcile_final_plan_ledger(ledger, records, conflicts, covered, baseline)
+    for record in records:
+        _clamp_edit_boundary(record, inspection)
     return {"edits": records, "ledger": ledger, "conflicts": conflicts,
             "covered": sorted(covered)}
 
@@ -5277,7 +5291,26 @@ def replan_sites(existing: dict[str, Any], dirty_locations: set[str], rules_by_i
     conflicts += fresh["conflicts"]
     covered = sorted(covered)
     _reconcile_final_plan_ledger(ledger, records, conflicts, covered, [])
+    for record in records:
+        _clamp_edit_boundary(record, inspection)
     return {"edits": records, "ledger": ledger, "conflicts": conflicts, "covered": covered}
+
+
+def _clamp_edit_boundary(edit: dict[str, Any], inspection: DocumentInspection) -> None:
+    """Clamp a trailing-whitespace span to its containing DOCX text segment."""
+    try:
+        span = inspection.by_location(str(edit.get("location") or ""))
+        start, end = int(edit["start"]), int(edit["end"])
+    except (KeyError, TypeError, ValueError, DocxError):
+        return
+    if start < 0 or end < start or end > len(span.text):
+        return
+    if any(segment.start <= start and end <= segment.end for segment in span.segments):
+        return
+    containing = next((segment for segment in span.segments
+                       if segment.start <= start < segment.end), None)
+    if containing is not None and not span.text[containing.end:end].strip():
+        edit["end"] = containing.end
 
 
 def build_docx_edits(planned: Sequence[Any], inspection: DocumentInspection) -> list[dict[str, Any]]:
@@ -5291,6 +5324,8 @@ def build_docx_edits(planned: Sequence[Any], inspection: DocumentInspection) -> 
     for item in planned:
         if not isinstance(item, dict):
             item = item.as_dict()
+        item = dict(item)
+        _clamp_edit_boundary(item, inspection)
         span = inspection.by_location(item["location"])
         start, end = int(item["start"]), int(item["end"])
         replacement = str(item["replacement"])
