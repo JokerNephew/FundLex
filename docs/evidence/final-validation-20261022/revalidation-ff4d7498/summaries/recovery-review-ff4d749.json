@@ -1,0 +1,793 @@
+{
+  "review_id": "recovery-review-ff4d749",
+  "reviewer_role": "independent recovery reviewer (read-only)",
+  "date": "2026-10-22",
+  "runtime_head": "ff4d7498b6c1aee72ba48686074d021fc7f84791",
+  "runtime_tree_sha256": "7ad22dc0dfe38bf7d8431ee437e7c5f6575a4f3a8155164d24559028d14e27a2",
+  "evidence_root": "docs/evidence/final-validation-20261022/revalidation-ff4d7498",
+  "cases": [
+    "D01",
+    "D02",
+    "D11",
+    "D16"
+  ],
+  "mode": {
+    "source_edits": false,
+    "test_edits": false,
+    "git_edits": false,
+    "evidence_edits": "only this summary pair",
+    "live_model_calls": 0,
+    "http_attempts": 0,
+    "method": "static code read at ff4d749 + record/replay reports + frozen stage outputs + programmatic verification against original/working DOCX"
+  },
+  "verdict": {
+    "recovery_safety": "PASS: no obligation was closed without a site-bound proof, no unsupported/absent/heading site was accepted, and no final.docx was published while obligations remained open.",
+    "record_replay_parity": "EXACT: recovery history, unresolved list, claim-replay hashes, audit round hashes and artifact text are byte-identical between record and replay; 0 replay HTTP calls.",
+    "delivery_gate": "FAIL (all four cases incomplete; 20 open obligations, 52 unresolved entries).",
+    "requires_code_change_before_20_case": true,
+    "headline": "The hard gate held, but recovery cannot deliver three core rule families (G17 delete duplicates, G12/G13 split clauses, G16 append) and turns two already-satisfied rules (G06, D11 G05:2) into permanent blockers. Four code defects must be fixed before the 20-case run, otherwise the acceptance will measure planner gaps as contract difficulty."
+  },
+  "counts": {
+    "BLOCKER": 4,
+    "HIGH": 5,
+    "MEDIUM": 8,
+    "total": 17
+  },
+  "totals": {
+    "true_obligations_per_case": 24,
+    "ledger_records_per_case": 34,
+    "open_obligations": 20,
+    "unresolved_entries": 52,
+    "recovery_attempts": 43,
+    "verified_site_evidence_records_checked": 91,
+    "unsupported_site_proofs": 0,
+    "completion_without_evidence": 0,
+    "final_artifacts_published": 0
+  },
+  "record_replay": {
+    "recovery_history_equal": true,
+    "unresolved_equal": true,
+    "claim_replay_recovery_state_hashes_equal": true,
+    "audit_round_recovery_state_hashes_equal": true,
+    "artifact_text_equal": true,
+    "replay_http_attempts": 0,
+    "stage_replay": "D16 stages applicability/facts/obligations/targets/plan/claim_replay all same_head=true, replayed=true, 0 model calls (plan used 2 cassettes)",
+    "conclusion": "All reported defects are reproducible at ff4d749 and are not recording/replay artifacts."
+  },
+  "per_case": {
+    "D01": {
+      "delivery": "incomplete",
+      "completion_counts": {
+        "SATISFIED": 0,
+        "ARTIFACT_VERIFIED": 11,
+        "ALREADY_SATISFIED": 7,
+        "NOT_APPLICABLE": 10,
+        "UNRESOLVED": 6
+      },
+      "open_obligations": [
+        "G01:B1:O1",
+        "G02:B1:O1",
+        "G02:B1:O2",
+        "G06:B1:O1",
+        "G16:B1:O1",
+        "G17:B1:O1"
+      ],
+      "unresolved_entries": 20,
+      "recovery_attempts": 14,
+      "claim_replay_obligations_attempted": [
+        "G01:B1:O1"
+      ],
+      "open_obligations_not_attempted": [
+        "G02:B1:O1",
+        "G02:B1:O2",
+        "G06:B1:O1",
+        "G16:B1:O1",
+        "G17:B1:O1"
+      ],
+      "key_defects": [
+        "same-operation composite vs residual duplicate targets (G17 p760/p1223)",
+        "G02 occurrence ambiguity for a target already bound to p91",
+        "G16 append no site",
+        "G06 absent literal never closes",
+        "dedupe drops G02:B1:O2 from unresolved and user_summary",
+        "stale T3004 target blocks although G12:B1:O1 is ALREADY_SATISFIED"
+      ]
+    },
+    "D02": {
+      "delivery": "incomplete",
+      "completion_counts": {
+        "SATISFIED": 0,
+        "ARTIFACT_VERIFIED": 11,
+        "ALREADY_SATISFIED": 8,
+        "NOT_APPLICABLE": 10,
+        "UNRESOLVED": 5
+      },
+      "open_obligations": [
+        "G06:B1:O1",
+        "G12:B1:O1",
+        "G12:B1:O2",
+        "G13:B1:O1",
+        "G16:B1:O1"
+      ],
+      "unresolved_entries": 10,
+      "recovery_attempts": 6,
+      "claim_replay_obligations_attempted": [
+        "G06:B1:O1"
+      ],
+      "open_obligations_not_attempted": [
+        "G12:B1:O1",
+        "G12:B1:O2",
+        "G13:B1:O1",
+        "G16:B1:O1"
+      ],
+      "key_defects": [
+        "G12/G13 p229 contained cross-rule edits dropped with RECALL_PLAN_COMPONENT_DROPPED and no conflict",
+        "G05:2 now correctly VERIFIED_ABSENT at the real class-setup site p138",
+        "G06 absent literal never closes",
+        "G16 append no site",
+        "duplicate target ids Y011/Y012 cause a stale G15 target (Y012) to block a verified G15"
+      ]
+    },
+    "D11": {
+      "delivery": "incomplete",
+      "completion_counts": {
+        "SATISFIED": 0,
+        "ARTIFACT_VERIFIED": 13,
+        "ALREADY_SATISFIED": 8,
+        "NOT_APPLICABLE": 10,
+        "UNRESOLVED": 3
+      },
+      "open_obligations": [
+        "G05:B3:O1",
+        "G06:B1:O1",
+        "G16:B1:O1"
+      ],
+      "unresolved_entries": 3,
+      "recovery_attempts": 2,
+      "claim_replay_obligations_attempted": [
+        "G05:B3:O1"
+      ],
+      "open_obligations_not_attempted": [
+        "G06:B1:O1",
+        "G16:B1:O1"
+      ],
+      "key_defects": [
+        "G05:2 open although its literal is absent at the real class-setup site p129 (same semantics as D01/D02/D16 which pass)",
+        "G06 absent literal never closes",
+        "G16 append no site"
+      ]
+    },
+    "D16": {
+      "delivery": "incomplete",
+      "completion_counts": {
+        "SATISFIED": 0,
+        "ARTIFACT_VERIFIED": 11,
+        "ALREADY_SATISFIED": 7,
+        "NOT_APPLICABLE": 10,
+        "UNRESOLVED": 6
+      },
+      "open_obligations": [
+        "G06:B1:O1",
+        "G12:B1:O1",
+        "G12:B1:O2",
+        "G13:B1:O1",
+        "G16:B1:O1",
+        "G17:B1:O1"
+      ],
+      "unresolved_entries": 19,
+      "recovery_attempts": 21,
+      "claim_replay_obligations_attempted": [
+        "G06:B1:O1"
+      ],
+      "open_obligations_not_attempted": [
+        "G12:B1:O1",
+        "G12:B1:O2",
+        "G13:B1:O1",
+        "G16:B1:O1",
+        "G17:B1:O1"
+      ],
+      "key_defects": [
+        "G17 p823 inventory target vs survey composite of the same operation conflict; only the summary copy p1307/p1308 is edited, body copy p823/p824 retained",
+        "G12/G13 p221 identical over-extended spans conflict; joint compose failed; both edits lost",
+        "G06/G16 no site",
+        "DUPLICATE_SITE_UNEDITED repair is unreachable because the failure has no locations list",
+        "G01 audit verdict missing remains blocking although G01:B1:O1 is ARTIFACT_VERIFIED",
+        "final MARK_UNRESOLVED is unattributed (rule_id empty)"
+      ],
+      "terminal_record": "MARK_UNRESOLVED built from replay.failures[0] = DUPLICATE_SITE_UNEDITED p823 (rule/obligation empty), not from the attempted G06 context"
+    }
+  },
+  "findings": [
+    {
+      "id": "RR-01",
+      "severity": "BLOCKER",
+      "title": "Same-operation duplicate/subset targets become competing edits and make G17 unplannable",
+      "cases": [
+        "D01",
+        "D16"
+      ],
+      "evidence": [
+        "D01 reports/D01.json: targets Y006/Y007 (composite p759+p760, p1222+p1223) and DEL001/DEL002 (residual p760/p1223), all operations [G17:0]; plan.conflicts two RECALL_EDIT_OVERLAP at p760 and p1223 spans [0,24]/[0,24]; 0 G17 edits; G17:B1:O1 UNRESOLVED.",
+        "D16 reports/D16.json: T019 (p823, 0..52) vs Y010 (composite p823:0:52+p824:0:24), both [G17:0]; conflict at p823 [0,52]/[0,52]; only Y011 (p1307/p1308) planned; DUPLICATE_SITE_UNEDITED p823; RESIDUAL_OLD_TEXT p823/p824."
+      ],
+      "mechanism": "The composite target already covers the residual sentence, but ensure_delete_targets computes coverage from target.quote (first sentence) instead of the composite part spans, so it creates a duplicate residual target. merge_edits has no same-operation absorption rule, so identical/subset spans of the same operation are reported as a conflict instead of being deduplicated or covered.",
+      "root_cause": {
+        "file": "fundlex/recall.py",
+        "line_refs": [
+          "5265-5273 (coverage map uses target.quote per composite location)",
+          "5300-5306 (already check cannot see the composite part quote)",
+          "4271-4293 (contained/identical absorption only for declared ONE_OF; same operation falls through to conflict)"
+        ]
+      },
+      "code_change_required": true,
+      "recommended_fix": "Cover composite parts by their own part text/span; absorb an identical or contained target of the same operation (keep the maximal composite, mark the subset covered); never route identical same-operation deletes to Joint Compose. Preserve the already planned site edit when a dirty-site replan re-encounters the duplicate.",
+      "gate_impact": "G17 is a true delete obligation with real text at p759/p760 and p1222/p1223 (D01) and p823/p824 (D16); it is deterministically deliverable but is reported unresolved."
+    },
+    {
+      "id": "RR-02",
+      "severity": "BLOCKER",
+      "title": "Over-extended target quotes create artificial cross-rule overlap and silent plan-component drops (G12/G13)",
+      "cases": [
+        "D02",
+        "D16"
+      ],
+      "evidence": [
+        "D02 reports/D02.json: G12:1 T016 p229 0..147 and G13:0 T017 p229 103..147 (contained); no plan edit at p229; both targets ledger status unresolved reason RECALL_PLAN_COMPONENT_DROPPED; plan.conflicts empty; sweep RESIDUAL_CONFIRMED p229; G12:B1:O2 and G13:B1:O1 UNRESOLVED.",
+        "D16 reports/D16.json: G12:1 T014 p221 0..101 and G13:0 Y007 p221 0..101 (identical), plus p222:0:30; conflict [0,101]/[0,101]; D16 made three Joint Compose calls overall, none produced an accepted edit at p221; no edit at p221; audit and sweep both report the old text surviving."
+      ],
+      "mechanism": "Inventory/survey target quotes are longer than the operation's own old_text (D16 T014 quote ends mid-G13 sentence at '其中，对持续持有期少于'; D16 Y007 part starts at 0 instead of the G13 sentence offset ~90). The planner uses target.start/end as the edit span, so a replace authorization covers a sibling sentence and an independent delete is contained inside it. Composition cannot prove the pair, the joint composer is asked with the same context and its result is rejected, and D02 then drops both components without recording a conflict.",
+      "root_cause": {
+        "file": "fundlex/recall.py",
+        "line_refs": [
+          "3591-3635 (G02/G04 narrowing only; no generic trim to the operation's own old_text)",
+          "4097-4133 (_atomic_paragraph_edits)",
+          "4547-4559 (RECALL_PLAN_COMPONENT_DROPPED assigned without a conflict/root cause)",
+          "4393-4479 (Joint Compose is the only cross-rule overlap path)"
+        ]
+      },
+      "code_change_required": true,
+      "recommended_fix": "Bind each operation's edit span to resolve_occurrence(operation.old_text/alternatives) inside the target location and use the target quote only as a site/provenance anchor. Then G12 (0..90) and G13 (90..101 + p222) are adjacent and plannable. If a genuine overlap remains, record a conflict and attempt one Joint Compose with a materially different context; never emit RECALL_PLAN_COMPONENT_DROPPED without a reason and without an unresolved conflict entry.",
+      "gate_impact": "G12/G13 are core fee clauses; both cases lose both edits even though the required final text is deterministically derivable."
+    },
+    {
+      "id": "RR-03",
+      "severity": "BLOCKER",
+      "title": "G16 append never receives a site: deterministic append pass requires exactly one member and auto discovery skips appends",
+      "cases": [
+        "D01",
+        "D02",
+        "D11",
+        "D16"
+      ],
+      "evidence": [
+        "All four reports: G16:B1:O1 UNRESOLVED, artifact_evidence empty, claim state OPEN reason 'verified site missing'.",
+        "The G16 new text prefix '销售服务费每日计提。（1）直销机构' is absent from every working_final.docx (programmatic check).",
+        "D01 targets: G16 inventory targets at p760/p1223 (the G17 residual sentence) are out_of_scope with TARGET_SOURCE_MISMATCH; no G16 target at p758 (the G15 payment clause, which carries 销售服务费 + 每日计提/按月支付).",
+        "D16 audit recovery history contains DEL001 p824/DEL002 p1308 G17 audit resolutions, but no G16 site is ever created."
+      ],
+      "mechanism": "append_applicability_targets collects paragraphs that pass append_site_ok; the contract has the clause twice (body + summary), so len(members) == 2 and the function skips the rule entirely. targets_for_open_rules('auto') then refuses the append operation because its 'strong' test requires an old_text of at least 4 chars, which an append does not have. The model's wrong G16 target is correctly demoted to out_of_scope, leaving G16 with no target and no discovery path.",
+      "root_cause": {
+        "file": "fundlex/recall.py; fundlex/targeting.py",
+        "line_refs": [
+          "recall.py:2344-2352 (if len(members) != 1: continue)",
+          "recall.py:2321-2366 (append_applicability_targets)",
+          "targeting.py:640-647 (auto strong gate requires old_text >= 4)"
+        ]
+      },
+      "code_change_required": true,
+      "recommended_fix": "Create one append target per qualifying member (or one per duplicate group and let duplicate-copy cloning handle the second copy), and prefer the sibling delete target site (G15/G17 payment clause) as the anchor. In open-target discovery, allow append operations that pass append_site_ok without requiring old_text. Add a regression with a body+summary copy and with the payment clause reworded (D02's 每日计算).",
+      "gate_impact": "A certified rule is unmodified in all four cases; even a perfect G17/G12/G13 fix cannot produce a complete case while G16 has no site."
+    },
+    {
+      "id": "RR-04",
+      "severity": "BLOCKER",
+      "title": "Absent-literal delete closure is hardcoded to G05 '备案' and cannot close G06 (or D11 G05:2)",
+      "cases": [
+        "D01",
+        "D02",
+        "D11",
+        "D16"
+      ],
+      "evidence": [
+        "G06 old literal has 0 hits in all four frozen originals; no semantic equivalent clause ('互相转换' / 不得+转换+份额类别) exists.",
+        "G06 target states: D01/D02/D11 state=absent with operations [G06:0]; D16 only misattributed out_of_scope survey targets. All four end OPEN reason 'verified site missing'.",
+        "D01/D02/D16 G05:2 PASS VERIFIED_ABSENT at p135/p138/p133. D11 G05:2 is OPEN although p129 is the same class-setup clause ('份额类别的具体设置' present, '并报中国证监会备案' absent); D11 target T006 is quoted '调整前基金管理人需及时公告' with operations [].",
+        "effects.py only allows a site-based absent delete proof for spec.rule_id == 'G05' and all references containing '备案'; _verified_site_closure drops state=absent sites outright."
+      ],
+      "mechanism": "The obligation evaluator returns OPEN 'verified site missing' whenever no site survives binding, and operation_site_bound requires the site text to carry the operation's own literal (or the G05 filing special case). A delete whose literal is absent from the whole document therefore has no legal proof, even though the target discovery layer already treats it as closed (targeting.operation_closed returns True when old_text not in body). D11 G05:2 misses even the G05 special case because its target never got the operation key.",
+      "root_cause": {
+        "file": "fundlex/generation/effects.py; fundlex/targeting.py; fundlex/generation/claim_replay.py",
+        "line_refs": [
+          "effects.py:206-213 (G05-only, 备案-keyword-only absent proof)",
+          "effects.py:252-253 (_verified_site_closure drops absent sites)",
+          "effects.py:333-336 (no sites -> OPEN)",
+          "claim_replay.py:1015-1020 (absent branch only admits a real paragraph as site quote)",
+          "targeting.py:601-602 (target discovery already treats absent literal deletes as closed)"
+        ]
+      },
+      "code_change_required": true,
+      "recommended_fix": "Add a first-class proof kind for delete operations whose old_text and alternatives are absent from the whole original document: PASS / VERIFIED_ABSENT with the rule's business site (class setup / fee clause) as evidence and proof_kind document_absence_at_site. Keep rejecting headings and absent placeholders as site proof, and keep the attribute-based rule/site guard. Apply uniformly to G06/G05:2/G13/G15/G17 and reconcile with targeting.operation_closed so the two layers cannot disagree.",
+      "gate_impact": "G06 is a false blocker in every case; D11 G05:2 is a false blocker that D01/D02/D16 already close. Without this, no case with an absent certified delete can ever complete."
+    },
+    {
+      "id": "RR-05",
+      "severity": "HIGH",
+      "title": "Duplicate-copy repair is unreachable for DUPLICATE_SITE_UNEDITED and the loop prefers an unrelated failure",
+      "cases": [
+        "D16"
+      ],
+      "evidence": [
+        "reports/D16.json unresolved: claim_replay rule_id '' location p823 code DUPLICATE_SITE_UNEDITED; G17 body copy p823/p824 retained while summary copy p1307/p1308 was deleted.",
+        "replay_claims creates DUPLICATE_SITE_UNEDITED with only 'location' (no 'locations'), while the repair branch requires failure.get('locations').",
+        "The recovery loop's 'failure' selection explicitly prefers non-duplicate codes, so G06 was attempted and the duplicate was never repaired."
+      ],
+      "mechanism": "The unedited-copy failure payload lacks the list the repair branch keys on; even if it were present, the loop would choose a different failure first. The duplicate copy is therefore left divergent.",
+      "root_cause": {
+        "file": "fundlex/generation/claim_replay.py; fundlex/recall_pipeline.py",
+        "line_refs": [
+          "claim_replay.py:669-673 (DUPLICATE_SITE_UNEDITED payload)",
+          "recall_pipeline.py:3373-3382 (failure selection prefers non-duplicate)",
+          "recall_pipeline.py:3387-3389 (repair requires failure.get('locations'))"
+        ]
+      },
+      "code_change_required": true,
+      "recommended_fix": "Populate 'locations' for DUPLICATE_SITE_UNEDITED (edited copy + missing copy) or key the repair on the single location; handle actionable duplicate failures before unrelated no-site failures, and bound the repair per operation/site.",
+      "gate_impact": "D16 G17 duplicate divergence is a real, repairable defect; the gate catches it but recovery could not."
+    },
+    {
+      "id": "RR-06",
+      "severity": "HIGH",
+      "title": "Claim-replay recovery is a global 2-attempt loop and stops on the first unrepairable obligation, starving the rest",
+      "cases": [
+        "D01",
+        "D02",
+        "D11",
+        "D16"
+      ],
+      "evidence": [
+        "D01 claim history: REBUILD_PLAN for G01:0 then MARK_UNRESOLVED; the other five open obligations have no claim recovery attempt.",
+        "D11 claim history: REBUILD_PLAN for G05:2 then MARK_UNRESOLVED; G06/G16 never attempted.",
+        "D16 claim history: REBUILD_PLAN for G06:0 then MARK_UNRESOLVED; G12/G13/G16/G17 never attempted (the terminal entry is instead the unattributed p823 duplicate).",
+        "Loop: while replay.failures and recovery_attempts < policy.limit('artifact_recovery') (2); on no repair target it records a failure, increments and breaks."
+      ],
+      "mechanism": "The artifact-recovery budget is global per case and the loop processes one obligation at a time. A single no-site obligation consumes the iteration and terminates the loop, so remaining obligations are reported as 'artifact recovery circuit breaker' without any action or per-obligation history.",
+      "root_cause": {
+        "file": "fundlex/recall_pipeline.py",
+        "line_refs": [
+          "3373-3382 (one failure per iteration)",
+          "3484-3538 (no repair target -> record failed REBUILD, break)",
+          "3617-3634 (generic circuit-breaker terminal for all remaining failures)"
+        ]
+      },
+      "code_change_required": true,
+      "recommended_fix": "Make the artifact-recovery budget per obligation/site identity (and keep a separate global cap), continue to the next failure when one is unrepairable, and record a terminal MARK_UNRESOLVED for every failing obligation with its own context. Do not let a no-site obligation consume another obligation's recovery.",
+      "gate_impact": "No false completion, but the recovery report is not a per-obligation account; it under-states attempts and hides repairable failures behind one circuit breaker."
+    },
+    {
+      "id": "RR-07",
+      "severity": "HIGH",
+      "title": "Unresolved dedupe by rule/location/code drops a distinct open obligation from the report and user summary",
+      "cases": [
+        "D01"
+      ],
+      "evidence": [
+        "D01 open_obligations includes G02:B1:O2 (operation G02:1); artifact_claim_replay failures include CLAIM_OPERATION_UNPROVEN G02:1; reports/D01.json unresolved has only one G02 claim entry (G02:0) and user_summary has no G02:B1:O2 entry.",
+        "Dedupe key is (kind, rule_id, location, code); both G02 obligations have location '' and code CLAIM_OPERATION_UNPROVEN. The safety net uses represented_rules (rule ids) and therefore considers G02 represented."
+      ],
+      "mechanism": "Distinct obligations of the same rule that fail on the same code and an empty location collapse to one unresolved entry. The final open-obligation safety net is rule-scoped, so it does not re-add the lost obligation.",
+      "root_cause": {
+        "file": "fundlex/recall_pipeline.py",
+        "line_refs": [
+          "3947-3961 (dedupe key)",
+          "3990-3993 (represented_rules fallback)"
+        ]
+      },
+      "code_change_required": true,
+      "recommended_fix": "Include obligation_id/operation_id in the dedupe key; when an open obligation has no unresolved entry, add it keyed by obligation_id (not by rule_id) so the gate and the human report agree.",
+      "gate_impact": "The delivery gate still blocks (open_obligations 6), but the user-facing report silently omits an open obligation."
+    },
+    {
+      "id": "RR-08",
+      "severity": "HIGH",
+      "title": "Target ids are not unique and target-level unresolved entries are not reconciled with the obligation ledger",
+      "cases": [
+        "D01",
+        "D02",
+        "D16"
+      ],
+      "evidence": [
+        "D02 targets contain duplicate ids Y011 (rules G18/G11) and Y012 (rules G15/G18); plan ledger has two entries for T019; _plan_by_target is a dict keyed by target_id.",
+        "D02 unresolved: target G15 Y012 p821 RECALL_TARGET_UNRESOLVED while G15:B1:O1 is ARTIFACT_VERIFIED at p821 and p1287.",
+        "D01 unresolved: target G12 T3004 p227 RECALL_TARGET_UNRESOLVED while G12:B1:O1 is ALREADY_SATISFIED at p229.",
+        "D16 unresolved: target G12 p219 and audit G01 p91 remain even though G01:B1:O1 is ARTIFACT_VERIFIED at p91 (the audit one is a verification gap; the target ones show the reconciliation gap)."
+      ],
+      "mechanism": "Survey/satisfied target ids are generated from independent counters, so ids collide across rules and rounds. plan_by_target and unresolved reporting address targets by id, so a colliding id returns the wrong ledger entry or none. The unresolved rebuild also never checks whether the target's operation is already satisfied by another target, so a leftover target blocks delivery.",
+      "root_cause": {
+        "file": "fundlex/recall_pipeline.py",
+        "line_refs": [
+          "676 (Y counter per round)",
+          "817 (satisfied Y id from len(synthetic)+len(hits)+1)",
+          "824 (start_index=len(synthetic) per round)",
+          "523-526 (plan_by_target keyed by target_id)",
+          "3924-3933 (target unresolved rebuild without obligation reconciliation)"
+        ]
+      },
+      "code_change_required": true,
+      "recommended_fix": "Use one run-scoped monotonically increasing target-id counter (and assert uniqueness). Before emitting a target unresolved entry, check the obligation ledger: if every operation on that target is already proven/covered, mark the target satisfied/superseded instead of unresolved. Keep a non-blocking diagnostic for rejected/stale targets.",
+      "gate_impact": "False blockers (D01/D02) and misleading 'clause not located' user messages for satisfied rules."
+    },
+    {
+      "id": "RR-09",
+      "severity": "HIGH",
+      "title": "Plan components can be dropped silently with RECALL_PLAN_COMPONENT_DROPPED and no conflict or root cause",
+      "cases": [
+        "D02"
+      ],
+      "evidence": [
+        "D02 plan ledger: G12:1 T016 p229 0..147 and G13:0 T017 p229 103..147 both status unresolved reason RECALL_PLAN_COMPONENT_DROPPED; no edit at p229; plan.conflicts empty.",
+        "The same paragraph then has a sweep RESIDUAL_CONFIRMED at p229 and claim NOT_PLANNED for both obligations."
+      ],
+      "mechanism": "The ledger marks a target unresolved whenever its operation effects are not all planned, but the branch does not record why the edit disappeared, and no conflict was created earlier. Downstream recovery only sees NOT_PLANNED and re-plans the same dropped components.",
+      "root_cause": {
+        "file": "fundlex/recall.py",
+        "line_refs": [
+          "4547-4559 (component-dropped branch)",
+          "4271-4293 (merge_edits)",
+          "4097-4133 (atomic paragraph composition)"
+        ]
+      },
+      "code_change_required": true,
+      "recommended_fix": "Treat a planned-component disappearance as a conflict-class event with an explicit reason and recovery route; require every applicable target to end planned/covered/satisfied/conflict, never a bare 'dropped'.",
+      "gate_impact": "Hides the root cause of D02's G12/G13 loss and sends recovery into a no-progress loop."
+    },
+    {
+      "id": "RR-10",
+      "severity": "MEDIUM",
+      "title": "Recovery history identity: audit contexts store operation id as obligation id and the terminal subject can differ from the attempted subject",
+      "cases": [
+        "D01",
+        "D02",
+        "D16"
+      ],
+      "evidence": [
+        "D01/D02 audit history entries have obligation_id 'G17:0', 'G03:0', etc. (operation ids), while claim entries use 'G17:B1:O1'.",
+        "D16 final claim MARK_UNRESOLVED has rule_id '', operation_id '', obligation_id '' and site p823 (the duplicate failure), while the attempted failure was G06:0."
+      ],
+      "mechanism": "Audit recovery contexts set obligation_id=operation_id, and the circuit-breaker terminal is built from replay.failures[0] rather than the context actually attempted.",
+      "root_cause": {
+        "file": "fundlex/recall_pipeline.py",
+        "line_refs": [
+          "1684-1690 (obligation_id=operation_id)",
+          "3617-3634 (terminal uses replay.failures[0])",
+          "1639-1642 (context key omits obligation_id)"
+        ]
+      },
+      "code_change_required": true,
+      "recommended_fix": "Populate obligation_id from the ledger record in audit contexts; build the terminal entry from the attempted context; include obligation_id in the audit context identity.",
+      "gate_impact": "The report cannot always answer 'why did THIS obligation end unresolved', and one unresolved entry has no rule/obligation."
+    },
+    {
+      "id": "RR-11",
+      "severity": "MEDIUM",
+      "title": "Executed REBUILD is not recorded before a no-progress terminal; manual decisions bypass the policy budget key",
+      "cases": [
+        "D02"
+      ],
+      "evidence": [
+        "D02 recovery history has exactly one attempt: MARK_UNRESOLVED detail 'targets/plan/artifact/unresolved are unchanged', although the loop must have executed _plan_and_generate to compare snapshots.",
+        "D01/D11/D16 no-site records construct RecoveryDecision(REBUILD_PLAN, 'no_operation_target', '', ...) with an empty budget_key."
+      ],
+      "mechanism": "The loop records the executed decision only after the post-replan audit; when the snapshot is unchanged it jumps straight to the terminal record. Manually constructed decisions use '' so history.count cannot attribute them to artifact_recovery.",
+      "root_cause": {
+        "file": "fundlex/recall_pipeline.py",
+        "line_refs": [
+          "3530-3538 (manual decision, budget_key '')",
+          "3561-3587 (execute then no-progress terminal without recording the executed action)",
+          "3613-3615 (record after audit only)"
+        ]
+      },
+      "code_change_required": true,
+      "recommended_fix": "Record the executed decision (with its real budget key) before comparing snapshots; never fabricate an empty budget key for a policy-governed action.",
+      "gate_impact": "Audit trail under-states executed work; budget accounting cannot be reconstructed from history."
+    },
+    {
+      "id": "RR-12",
+      "severity": "MEDIUM",
+      "title": "Audit 'succeeded' can mean the target/plan moved, not that the artifact improved; Joint Compose is retried with identical context",
+      "cases": [
+        "D16",
+        "D01"
+      ],
+      "evidence": [
+        "D16 audit round 1 reports 3 issues (all four G17 sites resolved); round 2 reintroduces AUDIT_VERDICT_MISSING G17 p823; round 3 reports G17 p823 wrong again. Recovery history records G17 p823 attempts as succeeded then later unresolved.",
+        "D01 Joint Compose used the same context_sha256 four times, three of them checkpoint reuses, for the same G17 conflict."
+      ],
+      "mechanism": "Success is keyed to the disappearance of (code, rule, site, operation, span) from the next audit issue set; if a replan removes/replaces the target, the issue disappears without the artifact being correct. Joint Compose is not governed by the recovery history, so an identical request is replayed from the checkpoint.",
+      "root_cause": {
+        "file": "fundlex/recall_pipeline.py; fundlex/recall.py",
+        "line_refs": [
+          "3046-3056 (succeeded = key not in current_keys)",
+          "1639-1642 (key without target/obligation)",
+          "recall.py:4393-4479 (Joint Compose outside the recovery history)"
+        ]
+      },
+      "code_change_required": true,
+      "recommended_fix": "Require an artifact/effect proof (or at least a changed artifact hash at the site) for 'succeeded', not only issue-key disappearance. Route Joint Compose through the orchestrator and forbid an identical retry (new context or terminal).",
+      "gate_impact": "Progress reporting is optimistic; it can mask a regression that only the final claim replay catches."
+    },
+    {
+      "id": "RR-13",
+      "severity": "MEDIUM",
+      "title": "Failure classes are stage-symptom labels; the same root cause spans GENERATION/TARGET/EXECUTION and sweep residuals are labelled TARGET",
+      "cases": [
+        "D01",
+        "D02",
+        "D11",
+        "D16"
+      ],
+      "evidence": [
+        "D01 G17: target RECALL_EDIT_OVERLAP -> GENERATION; audit NOT_COMPLETED -> EXECUTION; claim NOT_PLANNED -> TARGET; claim RESIDUAL_OLD_TEXT -> GENERATION.",
+        "D02 sweep G12/G13 residual_old_text -> TARGET (model-declared), while D01/D16 claim RESIDUAL_OLD_TEXT -> GENERATION.",
+        "D01 user_summary says 'contract clause not located' for G12 p227 although G12 is ALREADY_SATISFIED at p229, and for G02 p91 which is an occurrence-ambiguity rejection, not a missing clause."
+      ],
+      "mechanism": "classify() maps codes to classes per producer; no root-cause normalization. user_summary maps entry kinds to canned business reasons without checking the actual code.",
+      "root_cause": {
+        "file": "fundlex/recovery/types.py; fundlex/recall_pipeline.py",
+        "line_refs": [
+          "types.py:37-124 (code map)",
+          "recall_pipeline.py:3947-3961 (classify reason text)",
+          "recall_pipeline.py:4001-4005 (counts)"
+        ]
+      },
+      "code_change_required": false,
+      "recommended_fix": "Add a root_cause_class alongside failure_class (e.g. PLAN_DUPLICATE_TARGET, SPAN_OVERREACH, ABSENT_DELETE_UNPROVEN, SITE_DISCOVERY_MISSING) and drive user_summary reasons from it; do not accept a model-declared TARGET for a residual at a known site.",
+      "gate_impact": "Classes are individually defensible but not comparable across cases; acceptance analysis cannot attribute blockers to root causes."
+    },
+    {
+      "id": "RR-14",
+      "severity": "MEDIUM",
+      "title": "Report count and summary consistency: blocking_unresolved, open_obligations, operation coverage and user_summary disagree",
+      "cases": [
+        "D01",
+        "D02",
+        "D11",
+        "D16"
+      ],
+      "evidence": [
+        "D01 delivery_gate blocking_unresolved 20 vs open_obligations 6; operation_coverage UNRESOLVED 26; user_summary repeats G12 p221 four times in D16 and G17 p823 four times.",
+        "artifact-review 'true_obligations' 24 vs ledger records 34 (ONE_OF alternatives counted separately)."
+      ],
+      "mechanism": "blocking_unresolved counts entries, open_obligations counts ledger records, operation coverage counts a third projection, and user_summary does not deduplicate by rule/site/obligation.",
+      "root_cause": {
+        "file": "fundlex/recall_pipeline.py",
+        "line_refs": [
+          "3995-4005 (delivery gate counts)",
+          "3975-3977 (operation_coverage)",
+          "user_summary construction (near 4040+)"
+        ]
+      },
+      "code_change_required": false,
+      "recommended_fix": "Publish one primary count (open obligations) with the unresolved entry count as a secondary field, label the true-obligation vs ledger-record basis explicitly, and deduplicate user_summary by (rule, location, obligation).",
+      "gate_impact": "A reviewer cannot tell whether '20' or '6' is the blocking number, and the user sees the same problem up to four times."
+    },
+    {
+      "id": "RR-15",
+      "severity": "MEDIUM",
+      "title": "Unattributed duplicate-copy failure and a verification gap left by the global audit-round cap",
+      "cases": [
+        "D16"
+      ],
+      "evidence": [
+        "D16 unresolved claim_replay has rule_id '' and location p823 (DUPLICATE_SITE_UNEDITED); user_summary shows a blank rule for it.",
+        "D16 audit G01 AUDIT_VERDICT_MISSING p91 is terminal with detail global_business_rounds, while G01:B1:O1 is ARTIFACT_VERIFIED at p91."
+      ],
+      "mechanism": "replay_claims hardcodes rule_id '' for duplicate failures; the audit loop gives the missing verdict one re-audit but the global round cap (3) is consumed by the G12/G13/G17 churn.",
+      "root_cause": {
+        "file": "fundlex/generation/claim_replay.py; fundlex/recall_pipeline.py",
+        "line_refs": [
+          "claim_replay.py:670-690 (rule_id '')",
+          "recall_pipeline.py:3148-3157 (global round cap)",
+          "recall_pipeline.py:1659-1674 (audit context class)"
+        ]
+      },
+      "code_change_required": true,
+      "recommended_fix": "Attribute duplicate failures to the owning rule(s) from duplicate_rule_ids; give the audit re-audit a per-obligation budget or reserve one round for unresolved verdicts. The class VERIFICATION is defensible, but the budget starvation is not.",
+      "gate_impact": "One unattributed blocker and one verification gap caused by recovery churn rather than a real artifact defect."
+    },
+    {
+      "id": "RR-16",
+      "severity": "MEDIUM",
+      "title": "G02 occurrence ambiguity remains for a target already bound to p91, and the audit expectation is not facts-instantiated",
+      "cases": [
+        "D01"
+      ],
+      "evidence": [
+        "D01 plan ledger: T3001 and T3002 both unresolved RECALL_TARGET_OCCURRENCE_AMBIGUOUS at p91; both targets point at the class-definition paragraph; G02:B1:O1/O2 UNRESOLVED.",
+        "D01 audit G02 reason says the expected replacement is 'A类、B类基金份额', but the verified facts have classes A/C/D with subscription group A/D and service group C (no B)."
+      ],
+      "mechanism": "The target quote is truncated at the split paragraph ('...三种不同的'), and resolve_occurrence(old_text 'A类基金份额', anchor=target.quote) cannot bind because the old_text is not in the quoted span. The audit reason hardcodes the guide example letters instead of the instantiated class set.",
+      "root_cause": {
+        "file": "fundlex/recall.py; fundlex/recall_pipeline.py",
+        "line_refs": [
+          "recall.py:3591-3635 (narrowing/occurrence)",
+          "recall.py:5211-5242 (class-definition site guard)",
+          "audit prompt/expectation assembly (facts instantiation not applied to the reason)"
+        ]
+      },
+      "code_change_required": true,
+      "recommended_fix": "When a G02/G04 target is bound to a unique class-definition paragraph, derive the occurrence from the paragraph context (the class label after '分为') instead of requiring the operation old_text to appear in the truncated quote; instantiate the expected class set from facts before the audit prompt/verdict. If the class definition genuinely lists all classes (A/C/D), consider a no-op/satisfied branch rather than an edit.",
+      "gate_impact": "D01 loses two G02 obligations to a split-paragraph/bookkeeping issue, and the audit reason is not trustworthy for this rule."
+    },
+    {
+      "id": "RR-17",
+      "severity": "MEDIUM",
+      "title": "Bundle index.json is stale and contradicts the ff4d749 reports",
+      "cases": [
+        "D01",
+        "D02",
+        "D11",
+        "D16"
+      ],
+      "evidence": [
+        "index.json validation_head/runtime_code_head ff4d749, but replay_results head 682e68a and tree c9b7a2..., record_results {}, gate reasons from the baseline ('D01 artifact not generated due to stable-identity replan bug').",
+        "This bundle's reports show D01 delivered working_redline/working_final (incomplete), 14 edits, and a 20-entry unresolved list."
+      ],
+      "mechanism": "The index was not regenerated after the exact-HEAD revalidation; only the summaries/reports were replaced.",
+      "root_cause": {
+        "file": "docs/evidence/final-validation-20261022/revalidation-ff4d7498/index.json",
+        "line_refs": [
+          "77-196 (replay_results at 682e68a)",
+          "198-202 (baseline gate reasons)",
+          "207-210 (head notes)"
+        ]
+      },
+      "code_change_required": false,
+      "recommended_fix": "Regenerate index.json from the ff4d749 record/replay summaries before handoff; do not use it as the gate summary until then.",
+      "gate_impact": "An independent reviewer reading the bundle entry point would conclude D01 produced no artifact, which is false for this run."
+    }
+  ],
+  "audit_questions": {
+    "recovery_actions_and_history": "Bounded and policy-respecting (14/6/2/21 attempts; no over-limit group; no identical deterministic repeat; business rounds <=3), but incomplete: one claim failure per case starves the rest (RR-06), an executed REBUILD is unrecorded (RR-11), and audit obligation identity is wrong (RR-10).",
+    "budget_retry_identity": "Stable identity is rule+site+operation/obligation and no longer depends on target ids (history._same_subject), which is the right direction. Remaining defects: manual REBUILD decisions use an empty budget_key; per-site budgets can multiply one operation across copies; Joint Compose bypasses the history and repeats an identical context (SAME context_sha256, checkpoint reuse).",
+    "dirty_site_routing": "A failure with site_id dirties only that one location. Composite targets and duplicate copies need all part locations (D16 G17 p823 needs p824; p823 needs p1307/p1308). The single-location routing contributes to dropping the body copy while keeping the summary copy (RR-01, RR-06).",
+    "duplicate_copy_recovery": "G15 duplicate copies now work: D01/D02/D11/D16 each have two verified G15 sites and no divergence. G17 duplicate recovery fails because same-operation targets conflict (RR-01) and the DUPLICATE_SITE_UNEDITED repair path is unreachable (RR-05). D16 ends with the summary copy deleted and the body copy retained.",
+    "open_target_discovery": "G16 append is never discovered: the deterministic pass requires exactly one qualifying member (the contracts have body+summary copies), and auto discovery rejects appends because they have no old_text (RR-03). G06's absent target cannot become a site (RR-04). The HEAD fix correctly rejects absent/attributed placeholders as sites and demotes misattributed targets to out_of_scope, so no unsupported site proof was found.",
+    "unresolved_classification": "Every unresolved entry has a class from FAILURE_CODE_MAP (no missing/None classes). The classes are stage-symptom labels, not root causes: one G17 obligation spans GENERATION/TARGET/EXECUTION; sweep residuals carry a model-declared TARGET while claim residuals are GENERATION; user_summary derives canned reasons that mislabel satisfied/ambiguous sites (RR-13). G06/G16/G05:2's TARGET label is defensible as 'site not proven' but misdiagnoses 'already absent' vs 'site exists but was not discovered'."
+  },
+  "obligation_safety": {
+    "silent_loss_at_gate": false,
+    "silent_loss_in_human_report": true,
+    "silent_loss_details": "D01 G02:B1:O2 is in open_obligations but absent from unresolved and user_summary because of rule/location/code dedupe (RR-07). D16's duplicate failure is unattributed (RR-15). No obligation disappears from the delivery gate.",
+    "unsupported_site_proof": false,
+    "unsupported_site_proof_check": "All 91 evidence records for ARTIFACT_VERIFIED/ALREADY_SATISFIED were checked: every before_quote is an exact substring of the original paragraph at the recorded site_id, every non-empty after_quote is an exact substring of the final paragraph at that site (0 violations).",
+    "false_completion": false,
+    "final_artifact_published": false,
+    "artifact_state": "All four cases published working_final.docx / working_redline.docx only; delivery_status incomplete; claim_verified false."
+  },
+  "recovery_progress": {
+    "bounded": true,
+    "unbounded_loops": 0,
+    "policy_limit_violations": 0,
+    "false_progress_signals": [
+      "Audit success is inferred from issue-key disappearance; a target/plan replan can remove the key without fixing the artifact (D16 G17 p823 succeeded then unresolved).",
+      "Joint Compose is retried with an identical context and checkpoint reuse, so a failed result is replayed rather than changed (D01 G17).",
+      "A single unrepairable obligation stops the claim-recovery loop; the remaining obligations get a generic circuit-breaker record instead of an attempt."
+    ]
+  },
+  "20_case_recommendation": {
+    "proceed": false,
+    "must_fix_before_20_case": [
+      "RR-01",
+      "RR-02",
+      "RR-03",
+      "RR-04",
+      "RR-05",
+      "RR-06",
+      "RR-07",
+      "RR-08"
+    ],
+    "should_fix_before_20_case": [
+      "RR-09",
+      "RR-10",
+      "RR-11",
+      "RR-12",
+      "RR-15",
+      "RR-17"
+    ],
+    "rationale": "With RR-01..RR-04 open, every case will contain at least one false unresolved (G06) and at least one undelivered core obligation (G16), and G17/G12/G13 will be lost whenever the contract repeats the clause or splits it across paragraphs. The 20-case metrics would measure planner defects as contract difficulty and cannot establish the required completion rate. Fix the deterministic planner/site/proof defects, add regressions using D01/D02/D11/D16 frozen targets, re-record all four cases, then run the 20-case set.",
+    "safe_to_run_diagnostics": true,
+    "note": "The hard gate is safe: no final artifact was published and no unsupported proof was accepted. A diagnostic 20-case run would not corrupt data, but it would not be an acceptance run."
+  },
+  "proposed_issue_log_entries": [
+    {
+      "id": "FL-D142-RR-01",
+      "maps_to": "RR-01",
+      "summary": "same-operation duplicate/subset delete targets conflict (G17)"
+    },
+    {
+      "id": "FL-D142-RR-02",
+      "maps_to": "RR-02",
+      "summary": "over-extended target spans cause cross-rule overlap and silent component drops (G12/G13)"
+    },
+    {
+      "id": "FL-D142-RR-03",
+      "maps_to": "RR-03",
+      "summary": "G16 append has no site when the clause has body+summary copies"
+    },
+    {
+      "id": "FL-D142-RR-04",
+      "maps_to": "RR-04",
+      "summary": "absent-literal delete closure is hardcoded to G05 and cannot close G06/D11 G05:2"
+    },
+    {
+      "id": "FL-D142-RR-05",
+      "maps_to": "RR-05",
+      "summary": "DUPLICATE_SITE_UNEDITED repair unreachable; duplicate body copy not repaired"
+    },
+    {
+      "id": "FL-D142-RR-06",
+      "maps_to": "RR-06",
+      "summary": "claim recovery global cap starves remaining obligations"
+    },
+    {
+      "id": "FL-D142-RR-07",
+      "maps_to": "RR-07",
+      "summary": "unresolved dedupe drops G02:B1:O2 from report/user summary"
+    },
+    {
+      "id": "FL-D142-RR-08",
+      "maps_to": "RR-08",
+      "summary": "duplicate target ids and unreconciled stale target entries"
+    },
+    {
+      "id": "FL-D142-RR-09",
+      "maps_to": "RR-09",
+      "summary": "silent RECALL_PLAN_COMPONENT_DROPPED without conflict/root cause"
+    },
+    {
+      "id": "FL-D142-RR-10",
+      "maps_to": "RR-10",
+      "summary": "recovery history obligation identity and terminal subject mismatch"
+    },
+    {
+      "id": "FL-D142-RR-11",
+      "maps_to": "RR-11",
+      "summary": "executed REBUILD unrecorded; empty budget key on manual decisions"
+    },
+    {
+      "id": "FL-D142-RR-12",
+      "maps_to": "RR-12",
+      "summary": "audit success via issue-key disappearance; identical Joint Compose retry"
+    },
+    {
+      "id": "FL-D142-RR-13",
+      "maps_to": "RR-13",
+      "summary": "stage-symptom failure classes and mislabelled user reasons"
+    },
+    {
+      "id": "FL-D142-RR-14",
+      "maps_to": "RR-14",
+      "summary": "blocking_unresolved/open_obligations/coverage/user_summary count disagreement"
+    },
+    {
+      "id": "FL-D142-RR-15",
+      "maps_to": "RR-15",
+      "summary": "unattributed duplicate failure and audit verdict gap at the round cap"
+    },
+    {
+      "id": "FL-D142-RR-16",
+      "maps_to": "RR-16",
+      "summary": "G02 occurrence ambiguity at a bound split paragraph; audit expectation not facts-instantiated"
+    },
+    {
+      "id": "FL-D142-RR-17",
+      "maps_to": "RR-17",
+      "summary": "stale bundle index.json contradicts ff4d749 reports"
+    }
+  ],
+  "limitations": [
+    "No live model calls were made; all conclusions are from the recorded run, frozen stages and static code.",
+    "The G02 root-cause analysis is limited to the recorded plan targets; the guide's semantic intent for the class definition may need product adjudication.",
+    "The report does not re-score business correctness beyond site proof; independent business review is a separate workstream."
+  ]
+}

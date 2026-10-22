@@ -1,0 +1,149 @@
+{
+  "body": {
+    "schema_version": "fundlex-model-cassette-v1",
+    "request": {
+      "task_type": "recall_audit",
+      "prompt_version": "recall_audit_v1",
+      "configured_model": "deepseek-v4.1-flash",
+      "context_sha256": "56f617021a6d953d753c0ff0f825cfa0a10e6169fcea4377668acb971c1959c1",
+      "request": {
+        "bounded_context": "[BEFORE]\n[p822] 销售服务费主要用于支付销售机构佣金，及基金管理人的基金行销广告费、促销活动费、基金份额持有人服务费等。 \n[p823] 销售服务费使用范围不包括基金募集期间的上述费用。 \n[p1288] 销售服务费主要用于支付销售机构佣金，及基金管理人的基金行销广告费、促销活动费、基金份额持有人服务费等。 \n[p1289] 销售服务费使用范围不包括基金募集期间的上述费用。 \n\n[AFTER]\n[p822]  \n[p823]  \n[p1288] 销售服务费主要用于支付销售机构佣金，及基金管理人的基金行销广告费、促销活动费、基金份额持有人服务费等。 \n[p1289] 销售服务费使用范围不包括基金募集期间的上述费用。 \n\n[REQUIREMENTS]\nGUIDE_RULES\n[G17] 基金费用与税收-3、基金销售服务费（有多个份额类别时适用） | section_hint=基金费用与税收\n  requirement: 删除原条款“C类基金份额的销售服务费主要用于支付销售机构佣金、以及基金管理人的基金行销广告费、促销活动费、基金份额持有人服务费等。C类基金份额的销售服务费使用范围不包括基金募集期间的上述费用。”。\n  [G17:0] delete: C类基金份额的销售服务费主要用于支付销售机构佣金、以及基金管理人的基金行销广告费、促销活动费、基金份额持有人服务费等。C类基金份额的销售服务费使用范围不包括基金募集期间的上述费用。\n\n[TARGET_LEDGER]\n[\n {\n  \"target_id\": \"S03_S04_S07_S16_S17_S20#1:T023\",\n  \"rule_id\": \"G17\",\n  \"location\": \"p822\",\n  \"state\": \"needs_edit\",\n  \"quote\": \"销售服务费主要用于支付销售机构佣金，及基金管理人的基金行销广告费、促销活动费、基金份额持有人服务费等。\",\n  \"reason\": \"应删除销售服务费主要用于支付销售机构佣金及基金管理人广告费、促销活动费、持有人服务费等表述。\",\n  \"plan_status\": \"planned\",\n  \"operation\": \"replace\",\n  \"replacement\": \"\"\n },\n {\n  \"target_id\": \"S03_S04_S07_S16_S17_S20#1:T024\",\n  \"rule_id\": \"G17\",\n  \"location\": \"p823\",\n  \"state\": \"needs_edit\",\n  \"quote\": \"销售服务费使用范围不包括基金募集期间的上述费用。\",\n  \"reason\": \"应删除销售服务费使用范围不包括基金募集期间上述费用的表述。\",\n  \"plan_status\": \"planned\",\n  \"operation\": \"replace\",\n  \"replacement\": \"\"\n },\n {\n  \"target_id\": \"Y008\",\n  \"rule_id\": \"G17\",\n  \"location\": \"p1288\",\n  \"state\": \"needs_edit\",\n  \"quote\": \"销售服务费主要用于支付销售机构佣金，及基金管理人的基金行销广告费、促销活动费、基金份额持有人服务费等。 \",\n  \"reason\": \"survey_reference:1.00\",\n  \"plan_status\": \"unresolved\",\n  \"operation\": \"replace\",\n  \"replacement\": \"\"\n },\n {\n  \"target_id\": \"DEL001\",\n  \"rule_id\": \"G17\",\n  \"location\": \"p1289\",\n  \"state\": \"needs_edit\",\n  \"quote\": \"销售服务费使用范围不包括基金募集期间的上述费用。\",\n  \"reason\": \"delete_residual_copy\",\n  \"plan_status\": \"unresolved\",\n  \"operation\": \"replace\",\n  \"replacement\": \"\"\n }\n]\n\n[OTHER_AUTHORIZED_EDITS]\n[]",
+        "instruction": "Read [BEFORE] (the original contract region), [AFTER] (the actual rewritten region taken from the produced file), [REQUIREMENTS] (the guide rules with their fixed policy text and the target ledger) and [OTHER_AUTHORIZED_EDITS] (changes other guide rules legitimately made in the same locations). Independently judge each target in the ledger: completed when the AFTER text satisfies the requirement with no lost content, incomplete when part of the requirement is missing, wrong when the AFTER text contradicts the requirement, drops required content, or adds policy the guide does not state. A rule whose slot classes are placeholders means the AFTER text must name the product's actual share classes that fall in that group: adding a real class the contract defines (for example including a D类 class in the group the guide wrote as A类) is correct instantiation, not an unauthorized addition, as long as [FACTS] lists that class in the group. Never report an OTHER_AUTHORIZED_EDITS change as an unauthorized addition. For every non-completed target also classify the root cause (failure_class) and, when known, the affected_fact or affected_obligation, so recovery can return to the correct business layer. A region shown as （该位置内容已删除） means the content was removed: for a deletion requirement that is completed, and for a replacement requirement judge it against the requirement and the ledger, not against the absence itself. Cite an exact contiguous evidence_quote from AFTER (or BEFORE when judging a loss) for every verdict. Also report missed_targets when you find a clause in AFTER that still needs editing but is absent from the ledger. Never trust the ledger over the actual text; never mark completed without reading AFTER.",
+        "response_schema": {
+          "type": "object",
+          "required": [
+            "results"
+          ],
+          "properties": {
+            "results": {
+              "type": "array",
+              "maxItems": 60,
+              "items": {
+                "type": "object",
+                "required": [
+                  "target_id",
+                  "verdict",
+                  "reason"
+                ],
+                "properties": {
+                  "target_id": {
+                    "type": "string"
+                  },
+                  "verdict": {
+                    "enum": [
+                      "completed",
+                      "incomplete",
+                      "wrong"
+                    ]
+                  },
+                  "reason": {
+                    "type": "string"
+                  },
+                  "evidence_quote": {
+                    "type": "string"
+                  },
+                  "failure_class": {
+                    "enum": [
+                      "FACT",
+                      "APPLICABILITY",
+                      "TARGET",
+                      "GENERATION",
+                      "EXECUTION",
+                      "VERIFICATION"
+                    ]
+                  },
+                  "affected_fact": {
+                    "type": "string"
+                  },
+                  "affected_obligation": {
+                    "type": "string"
+                  }
+                }
+              }
+            },
+            "missed_targets": {
+              "type": "array",
+              "maxItems": 20,
+              "items": {
+                "type": "object",
+                "required": [
+                  "rule_id",
+                  "location",
+                  "quote",
+                  "reason"
+                ],
+                "properties": {
+                  "rule_id": {
+                    "type": "string"
+                  },
+                  "location": {
+                    "type": "string"
+                  },
+                  "quote": {
+                    "type": "string"
+                  },
+                  "reason": {
+                    "type": "string"
+                  }
+                }
+              }
+            },
+            "notes": {
+              "type": "string"
+            }
+          }
+        },
+        "request_options": {
+          "thinking": {
+            "type": "disabled"
+          }
+        },
+        "max_completion_tokens": 8000
+      }
+    },
+    "response": {
+      "results": [
+        {
+          "target_id": "S03_S04_S07_S16_S17_S20#1:T023",
+          "verdict": "completed",
+          "reason": "The p822 sentence was removed (region now empty), satisfying the G17 deletion requirement.",
+          "evidence_quote": "（该位置内容已删除）"
+        },
+        {
+          "target_id": "S03_S04_S07_S16_S17_S20#1:T024",
+          "verdict": "completed",
+          "reason": "The p823 sentence was removed (region now empty), satisfying the G17 deletion requirement.",
+          "evidence_quote": "（该位置内容已删除）"
+        },
+        {
+          "target_id": "Y008",
+          "verdict": "wrong",
+          "reason": "The p1288 sales service fee sentence remains unchanged in AFTER; the G17 deletion was not applied to this duplicate location.",
+          "evidence_quote": "销售服务费主要用于支付销售机构佣金，及基金管理人的基金行销广告费、促销活动费、基金份额持有人服务费等。",
+          "failure_class": "EXECUTION",
+          "affected_obligation": "G17:0 delete sales service fee usage clause"
+        },
+        {
+          "target_id": "DEL001",
+          "verdict": "wrong",
+          "reason": "The p1289 sentence about the sales service fee scope excluding offering-period expenses remains in AFTER; the residual copy was not deleted.",
+          "evidence_quote": "销售服务费使用范围不包括基金募集期间的上述费用。",
+          "failure_class": "EXECUTION",
+          "affected_obligation": "G17:0 delete sales service fee usage clause"
+        }
+      ],
+      "missed_targets": []
+    },
+    "event": {
+      "task_type": "recall_audit",
+      "prompt_version": "recall_audit_v1",
+      "context_sha256": "56f617021a6d953d753c0ff0f825cfa0a10e6169fcea4377668acb971c1959c1",
+      "configured_model": "deepseek-v4.1-flash",
+      "actual_model": "deepseek-v4.1-flash",
+      "http_status": 200,
+      "finish_reason": "stop",
+      "error_code": null
+    }
+  },
+  "sha256": "906ecbfc7c6bb1689fd7de717b16a98b15ce9f7ba97a0c885600ca59c264173f"
+}

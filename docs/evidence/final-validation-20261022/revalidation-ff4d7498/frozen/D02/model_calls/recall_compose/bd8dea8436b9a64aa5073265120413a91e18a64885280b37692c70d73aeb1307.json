@@ -1,0 +1,62 @@
+{
+  "body": {
+    "schema_version": "fundlex-model-cassette-v1",
+    "request": {
+      "task_type": "recall_compose",
+      "prompt_version": "recall_compose_v1",
+      "configured_model": "deepseek-v4.1-flash",
+      "context_sha256": "2cd64b81f35b4c2622cd044fcf40086a0244c7e0e897bcd916891dce45188f1b",
+      "request": {
+        "bounded_context": "CONTRACT_TARGET\n[p228] C 类基金份额不收取申购费用。\n\nCONTRACT_SURROUNDING\nBEFORE: 本基金 A 类基金份额的申购费用由投资人承担，不列入基金财产。本基金 \nAFTER:  \n\nGUIDE_OPERATION\n{\n \"rule_id\": \"G11\",\n \"title\": \"基金份额的申购与赎回-六、申购和赎回的价格、费用及其用途：\",\n \"requirement\": \"产品有多个份额类别时，将原条款直接替换为“通过直销机构申购本基金A类基金份额不收取申购费，通过其他销售机构申购本基金A类基金份额的申购费用由投资人承担，不列入基金财产。本基金C类基金份额不收取申购费用。”。\",\n \"reference_old_texts\": [\n  \"本基金A类基金份额的申购费用由投资人承担，不列入基金财产；C类基金份额不收取申购费用。\",\n  \"申购费用由投资人承担，不列入基金财产。\",\n  \"本基金A类基金份额的申购费用由投资人承担，不列入基金财产；C类基金份额不收取申购费用。\"\n ],\n \"fixed_policy_text\": \"通过直销机构申购本基金A类基金份额不收取申购费，通过其他销售机构申购本基金A类基金份额的申购费用由投资人承担，不列入基金财产。本基金C类基金份额不收取申购费用。\",\n \"slots\": [\n  \"A类基金份额\",\n  \"C类基金份额\"\n ]\n}\n\nFACTS\n{\n \"fund_type\": \"open_regular\",\n \"fund_type_quote\": \"ETF 联接基金\",\n \"fund_type_basis\": \"基金合同明确本基金为ETF联接基金（将绝大多数基金财产投资于目标ETF的开放式运作基金），故按普通开放式基金处理。\",\n \"class_count\": 2,\n \"classes\": [\n  {\n   \"name\": \"A\",\n   \"subscription_fee\": true,\n   \"service_fee\": false,\n   \"current\": true,\n   \"rate\": \"申购费率由基金管理人决定并在招募说明书中列示\",\n   \"quote\": \"在投资者认购、申购基金份额时收取认购、申购费用，而不计提销售服务费的，称为 A 类基金份额\"\n  },\n  {\n   \"name\": \"C\",\n   \"subscription_fee\": false,\n   \"service_fee\": true,\n   \"current\": true,\n   \"rate\": \"销售服务费0.20%年费率\",\n   \"quote\": \"在投资者认购、申购基金份额时不收取认购、申购费用，而是从本类别基金资产中计提销售服务费的，称为 C 类基金份额\"\n  }\n ],\n \"subscription_group\": [\n  \"A\"\n ],\n \"service_group\": [\n  \"C\"\n ],\n \"share_class_structure\": \"MULTIPLE\",\n \"direct_sales_exempt_group\": [],\n \"other_sales_charged_group\": [],\n \"fact_status\": {\n  \"fund_type\": \"VERIFIED\",\n  \"share_class_structure\": \"VERIFIED\",\n  \"subscription_fee_group\": \"VERIFIED\",\n  \"service_fee_group\": \"VERIFIED\",\n  \"direct_sales_exempt_group\": \"UNKNOWN\",\n  \"other_sales_charged_group\": \"UNKNOWN\"\n },\n \"condition_overrides\": {},\n \"has_service_fee\": true,\n \"is_floating_fee\": false,\n \"floating_quote\": \"本基金管理费按前一日基金资产净值扣除所持有目标 ETF 基金份额部分的基金资产净值后的余额（若为负数，则取 0）的 0.15%年费率计提。\",\n \"floating_basis\": \"管理费为固定年费率0.15%，未与持有期限或业绩挂钩。\",\n \"notes\": \"A类申购费由投资人承担且不列入基金财产；C类不收取申购费，销售服务费按前一日C类资产净值0.20%年费率计提；A类不计提销售服务费。\",\n \"quotes_verified\": {\n  \"fund_type\": true,\n  \"class:A\": true,\n  \"class:C\": true,\n  \"floating\": true,\n  \"class_set\": true\n },\n \"class_set_quote\": \"本基金将基金份额分为 A 类和 C 类不同的类别。\",\n \"class_set_evidence\": {\n  \"quote_verified\": true,\n  \"set_complete_verified\": true,\n  \"parsed_classes\": [\n   \"A\",\n   \"C\"\n  ],\n  \"reason\": \"CLASS_SET_VERIFIED\"\n },\n \"value_verified\": true,\n \"set_complete_verified\": true,\n \"fund_type_certification\": {},\n \"channel_evidence\": {\n  \"direct_sales_exempt\": \"\",\n  \"other_sales_charged\": \"\"\n },\n \"problems\": []\n}",
+        "instruction": "Read [CONTRACT_TARGET] (the actual contract text to be rewritten), [GUIDE_OPERATION] (the guide's requirement, the reference old text and the fixed policy text) and [FACTS]. Produce the replacement text for exactly this target span. The fixed policy text given in [GUIDE_OPERATION] must appear in the replacement verbatim (with share-class slots already instantiated as instructed in the context). Keep every other element of the target span that the guide does not require changing, especially fee formulas, calculation rules, rates and conditions; list those kept elements in preserved. Never add policy, numbers or promises the guide does not state. Write plain Chinese contract text only, no markdown, no quotes around the whole answer.",
+        "response_schema": {
+          "type": "object",
+          "required": [
+            "replacement",
+            "preserved",
+            "basis"
+          ],
+          "properties": {
+            "replacement": {
+              "type": "string"
+            },
+            "preserved": {
+              "type": "array",
+              "maxItems": 12,
+              "items": {
+                "type": "string"
+              }
+            },
+            "basis": {
+              "type": "string"
+            }
+          }
+        },
+        "request_options": {
+          "thinking": {
+            "type": "disabled"
+          }
+        },
+        "max_completion_tokens": 8000
+      }
+    },
+    "response": {
+      "replacement": "通过直销机构申购本基金A类基金份额不收取申购费，通过其他销售机构申购本基金A类基金份额的申购费用由投资人承担，不列入基金财产。本基金C类基金份额不收取申购费用。",
+      "preserved": [
+        "C类基金份额不收取申购费用"
+      ],
+      "basis": "依据 GUIDE_OPERATION G11 要求，将目标条款替换为固定政策文本（份额类别槽位已按 A类基金份额、C类基金份额 实例化）；FACTS 显示本基金为多份额类别（A、C），A类收取申购费且不列入基金财产，C类不收取申购费，与替换文本一致。"
+    },
+    "event": {
+      "task_type": "recall_compose",
+      "prompt_version": "recall_compose_v1",
+      "context_sha256": "2cd64b81f35b4c2622cd044fcf40086a0244c7e0e897bcd916891dce45188f1b",
+      "configured_model": "deepseek-v4.1-flash",
+      "actual_model": "deepseek-v4.1-flash",
+      "http_status": 200,
+      "finish_reason": "stop",
+      "error_code": null
+    }
+  },
+  "sha256": "80f5a46200e233f0d52f9791001277eb1b1a0446590897e5ba2d85eca6849b3e"
+}

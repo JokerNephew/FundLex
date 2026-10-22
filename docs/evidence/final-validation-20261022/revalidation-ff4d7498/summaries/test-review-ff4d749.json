@@ -1,0 +1,157 @@
+{
+  "reviewer": "independent-test-reviewer",
+  "reviewed_at": "2026-10-22",
+  "code_head": "ff4d7498b6c1aee72ba48686074d021fc7f84791",
+  "branch": "refactor/recovery-architecture",
+  "runtime_tree_sha256": "7ad22dc0dfe38bf7d8431ee437e7c5f6575a4f3a8155164d24559028d14e27a2",
+  "evidence_root": "docs/evidence/final-validation-20261022/revalidation-ff4d7498",
+  "mode": "read-only offline (no live model/HTTP)",
+  "overall": "CONDITIONAL_PASS",
+  "overall_reason": "All listed test behaviours, replay equivalence and artifact projections validate at ff4d749; the evidence bundle is not yet self-consistent/complete (stale index, D16 plan-stage mislabel) and the four cases remain incomplete.",
+  "areas": {
+    "offline_pytest": {
+      "status": "PASS",
+      "detail": "logs/pytest-ff4d749.txt records 1061 passed, 6 skipped, 2 warnings in 207.10s; no failed/error lines. HEAD collects 1067 tests (=1061+6). +37 cases vs the 682e68a suite, matching the ff4d749 test additions.",
+      "evidence": ["logs/pytest-ff4d749.txt"],
+      "caveat": "The log has no git SHA or command header; provenance is inferred from filename, mtime, collection count and identical code in the main repo."
+    },
+    "compileall_diff_check": {
+      "status": "PARTIAL",
+      "detail": "Independent checks PASS: git diff --check exit 0; in-memory compile of 135 fundlex/ and tests/ Python files with no syntax errors. No persisted ff4d749 compileall/diff-check log exists; index.json still cites the 682e68a run.",
+      "evidence": ["index.json (stale, baseline only)"],
+      "caveat": "Primary evidence for this exact SHA is missing."
+    },
+    "full_record_replay_counts": {
+      "status": "PASS",
+      "detail": "All four summaries are bound to ff4d749 and runtime_tree_sha256 7ad22dc0. Record/replay completion counts are identical per case. Record HTTP attempts 32/35/29/34; replay HTTP attempts 0/0/0/0; replay logical calls 39/35/29/45; cassette replays equal logical calls.",
+      "evidence": [
+        "summaries/D01-record.json", "summaries/D01-replay.json",
+        "summaries/D02-record.json", "summaries/D02-replay.json",
+        "summaries/D11-record.json", "summaries/D11-replay.json",
+        "summaries/D16-record.json", "summaries/D16-replay.json",
+        "reports/*.json", "replay/*/report.json"
+      ]
+    },
+    "compare_frozen_replay": {
+      "status": "PASS",
+      "detail": "Re-ran tools/compare_frozen_replay.compare() offline for D01/D02/D11/D16: every case passed all 14 checks with http_attempts=0. Matches summaries/full-replay-comparison.json and logs/full-replay-comparison.log.",
+      "evidence": ["summaries/full-replay-comparison.json", "logs/full-replay-comparison.log"]
+    },
+    "d16_six_stage_replay": {
+      "status": "PARTIAL",
+      "detail": "All six stage summaries (facts, applicability, targets, obligations, plan, claim_replay) show recorded_head=replay_head=ff4d749, same_head=true, model_calls=0, replayed=true. A rerun with httpx.Client.send, httpx.AsyncClient.send and socket connect forced to raise reproduced five stages exactly; the plan stage equalled plan revision 3, not the base plan boundary.",
+      "evidence": ["summaries/D16-stage-*.json", "logs/D16-stage-*.err (all empty)"],
+      "stage_identity_defect": {
+        "summary_file": "summaries/D16-stage-plan.json",
+        "saved_value": {"edits": 14, "ledger": 40, "conflicts": 2, "cassette_replays": 2},
+        "base_plan_replay": {"revision": 0, "edits": 12, "ledger": 42, "conflicts": 4, "cassette_replays": 3},
+        "matching_replay": {"revision": 3, "edits": 14, "ledger": 40, "conflicts": 2, "cassette_replays": 2, "value_digest_equal": true},
+        "input_boundary": "stages/plan.json has existing_plan=null and dirty_locations=[]"
+      }
+    },
+    "artifact_review": {
+      "status": "PASS",
+      "detail": "All four artifact-review JSONs report PROGRAMMATIC_REVIEW with plan_artifact_mismatches=[], redline accepted_matches_final=true and rejected_matches_original=true. Independent DOCX projection and plan-edit re-application confirmed the claims.",
+      "cases": {
+        "D01": {"artifact_sha256_matches": true, "paragraphs": 1363, "edits": 14, "plan_artifact_mismatches": 0, "accepted_matches_final": true, "rejected_matches_original": true, "independent_plan_edit_mismatches": 0},
+        "D02": {"artifact_sha256_matches": true, "paragraphs": 1430, "edits": 16, "plan_artifact_mismatches": 0, "accepted_matches_final": true, "rejected_matches_original": true, "independent_plan_edit_mismatches": 0},
+        "D11": {"artifact_sha256_matches": true, "paragraphs": 1405, "edits": 14, "plan_artifact_mismatches": 0, "accepted_matches_final": true, "rejected_matches_original": true, "independent_plan_edit_mismatches": 0},
+        "D16": {"artifact_sha256_matches": true, "paragraphs": 1452, "edits": 14, "plan_artifact_mismatches": 0, "accepted_matches_final": true, "rejected_matches_original": true, "independent_plan_edit_mismatches": 0}
+      },
+      "evidence": ["summaries/D01-artifact-review.json", "summaries/D02-artifact-review.json", "summaries/D11-artifact-review.json", "summaries/D16-artifact-review.json"]
+    },
+    "g02_negative_cases": {
+      "status": "PASS_WITH_COVERAGE_GAP",
+      "detail": "Direct replay at HEAD: expected A类、D类 vs source A类及D类 -> PASS / ALREADY_SATISFIED; vs A类及C类 -> FAIL / MISSING_EFFECT; vs A类、C类和D类 -> FAIL / MISSING_EFFECT. No committed regression test asserts the two negative cases.",
+      "test_gap": "Add A/D-vs-A/C and A/D-vs-A/C/D rejection cases."
+    },
+    "g05_heading_and_real_setup": {
+      "status": "PASS",
+      "detail": "operation_site_bound for G05:2 rejects a generic heading, summary heading and meeting-exemption clause; accepts the real class-setup clause and already-absent real setup. Parameterized absent-placeholder test and real-class-setup test pass."
+    },
+    "g06_g16_g17_site_guards": {
+      "status": "PASS_WITH_COVERAGE_GAP",
+      "detail": "G06 real conversion clause accepted, generic business-rule clause rejected (explicit tests). G17 usage clause accepted, payment-only clause rejected (explicit sweep test). G16 accrual/payment paragraph accepted; heading/generic fee text/payment-only text rejected by direct check, but no committed direct G16 guard test.",
+      "test_gap": "Add a direct target_site_ok('G16') negative/positive regression test."
+    },
+    "duplicate_semantic_guard": {
+      "status": "PASS",
+      "detail": "test_delete_scan_keeps_duplicate_sites_and_rejects_unrelated_filing keeps both real class-setup copies and excludes the unrelated filing paragraph. test_operation_proof_requires_each_exact_source_duplicate still requires every genuine duplicate site."
+    }
+  },
+  "findings": [
+    {
+      "id": "TR-01",
+      "severity": "HIGH",
+      "status": "OPEN",
+      "area": "evidence_index",
+      "summary": "revalidation-ff4d7498/index.json is stale and contradicts current summaries.",
+      "evidence": "index.json records offline.passed=1024, log=logs/pytest-682e68a.txt (absent), replay_results bound to 682e68a, D01 not_generated and gate FAIL for old reasons; current summaries are ff4d749, 1061 tests, D01 has an artifact.",
+      "impact": "The authoritative index cannot be used to certify this bundle.",
+      "action": "Regenerate index.json from the ff4d749 summaries, with correct offline/replay/gate fields."
+    },
+    {
+      "id": "TR-02",
+      "severity": "HIGH",
+      "status": "OPEN",
+      "area": "d16_stage_replay",
+      "summary": "D16-stage-plan.json is plan revision 3 but is labeled as the base plan stage without a revision field.",
+      "evidence": "Saved value 14 edits/40 ledger/2 conflicts/2 cassette replays equals replay_stage(D16, 'plan', revision=3); base stages/plan.json replays to 12 edits/42 ledger/4 conflicts/3 cassette replays.",
+      "impact": "The base plan boundary is not covered by the saved six-stage evidence; the stage identity is ambiguous.",
+      "action": "Record revision=3 or rename to plan-3, and record the base/other plan revisions explicitly."
+    },
+    {
+      "id": "TR-03",
+      "severity": "MEDIUM",
+      "status": "OPEN",
+      "area": "offline_evidence",
+      "summary": "No persisted compileall/diff-check evidence for ff4d749.",
+      "evidence": "Only the stale index.json mentions compileall/diff-check and it refers to the 682e68a/1024-test run.",
+      "impact": "Independent checks pass, but the bundle does not contain primary exact-SHA evidence.",
+      "action": "Persist the compileall and git diff --check commands/results for ff4d749."
+    },
+    {
+      "id": "TR-04",
+      "severity": "MEDIUM",
+      "status": "OPEN",
+      "area": "test_coverage",
+      "summary": "G02 negative class-set cases are not committed as regression tests.",
+      "evidence": "Tests cover A/D acceptance and A/C/E partial-set rejection, but not A/D expected vs A/C or vs A/C/D.",
+      "impact": "A future regression could accept the wrong class set silently.",
+      "action": "Add the two negative replay/class-group tests."
+    },
+    {
+      "id": "TR-05",
+      "severity": "LOW",
+      "status": "OPEN",
+      "area": "test_coverage",
+      "summary": "No direct G16 target_site_ok regression test.",
+      "evidence": "G06 and G17 have explicit guard tests; G16 guard was only verified by direct offline check.",
+      "impact": "The G16 site boundary can regress without a failing test.",
+      "action": "Add a direct G16 guard test (accrual paragraph accepted; heading/payment-only/generic rejected)."
+    },
+    {
+      "id": "TR-06",
+      "severity": "LOW",
+      "status": "OPEN",
+      "area": "provenance",
+      "summary": "pytest log lacks SHA/command/environment provenance.",
+      "evidence": "logs/pytest-ff4d749.txt contains only pytest output; no git rev-parse or command header.",
+      "impact": "Counts are consistent with HEAD, but the log is not directly bound to the SHA.",
+      "action": "Prefix the log with git rev-parse HEAD, command and environment provenance."
+    }
+  ],
+  "blockers": ["TR-01", "TR-02"],
+  "missing_coverage": ["TR-04", "TR-05"],
+  "commands_run": [
+    "git rev-parse HEAD; git status --porcelain; git log --oneline -3",
+    "pytest tests --collect-only -q -p no:cacheprovider (1067 collected)",
+    "pytest tests/test_final_validation_regressions.py tests/test_recovery_final_invariants.py tests/test_g02_g04_occurrence.py tests/test_frozen_replay.py tests/test_missing_group_components.py tests/test_claim_replay_boundary.py -q (132 passed)",
+    "selected 34 G02/G05/G06/G16/G17/duplicate-guard tests -q (34 passed)",
+    "tools/compare_frozen_replay.compare() for D01/D02/D11/D16 (all passed, http_attempts=0)",
+    "replay_stage(frozen/D16, stage) for all six stages with httpx/socket forced to fail (5 exact, plan equals revision 3)",
+    "independent DOCX redline projection accepted/rejected and plan-edit re-application for all four cases",
+    "git diff --check; in-memory compile of 135 Python files"
+  ],
+  "business_gate_note": "Test/evidence review does not change the business gate: all four cases remain incomplete (unresolved 20/10/3/19; 24 TRUE obligations each). No deploy, no 20/514 run and no perfect-contract claim is supported by this review."
+}

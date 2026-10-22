@@ -1,0 +1,1132 @@
+{
+  "rounds": [
+    {
+      "rules": [
+        "G01",
+        "G03",
+        "G05",
+        "G08",
+        "G09",
+        "G11",
+        "G12",
+        "G13",
+        "G14",
+        "G15",
+        "G17",
+        "G18",
+        "G22"
+      ],
+      "results": [
+        {
+          "target_id": "S03_S04_S07_S16_S17_S20#1:T001",
+          "rule_id": "G01",
+          "verdict": "completed",
+          "reason": "AFTER appends the required new clause after the fund share class definition, covering all three points: direct-sales A-class no subscription/purchase fee, direct-sales C-class no sales service fee, and other-agency C-class held over one year no longer charged sales service fee. The original definition text is preserved.",
+          "evidence_quote": "投资者通过直销机构（含基金管理人及其销售子公司，下同）申购本基金A类基金份额时，不收取认购/申购费用；通过直销机构申购的C类基金份额，不收取销售服务费。对于投资者通过直销机构之外的其他销售机构申购的C类基金份额且持续持有期限超过一年的，不再继续收取销售服务费。",
+          "evidence_verified": true,
+          "deletion_evidence": false,
+          "deterministic": false,
+          "failure_class": "",
+          "affected_fact": "",
+          "affected_obligation": "",
+          "site_signature": "e096628f58903b9d8d5dd32e6e23c9049d30a54a4ca1fa73cfc17a8c947e0047"
+        },
+        {
+          "target_id": "S03_S04_S07_S16_S17_S20#1:T004",
+          "rule_id": "G03",
+          "verdict": "completed",
+          "reason": "AFTER appends the required new clause after the share-class setting paragraph, covering direct-sales A-class no subscription fee, direct-sales C-class no sales service fee, and other-agency C-class held over one year no longer charged sales service fee. The G05 edits (调低销售服务费率 and removal of 并报中国证监会备案) are authorized other edits and not counted against this target.",
+          "evidence_quote": "投资者通过直销机构（含基金管理人及其销售子公司，下同）申购本基金A类基金份额时，不收取认购/申购费用；通过直销机构申购的C类基金份额，不收取销售服务费。对于投资者通过直销机构之外的其他销售机构申购的C类基金份额且持续持有期限超过一年的，不再继续收取销售服务费。",
+          "evidence_verified": true,
+          "deletion_evidence": false,
+          "deterministic": false,
+          "failure_class": "",
+          "affected_fact": "",
+          "affected_obligation": "",
+          "site_signature": "50621f12b947063860fb7d39c3b91f34218f273bcc0c06879d23de4f330e4521"
+        },
+        {
+          "target_id": "S03_S04_S07_S16_S17_S20#1:T007",
+          "rule_id": "G05",
+          "verdict": "completed",
+          "reason": "AFTER 将“调低赎回费率”改为“调低销售服务费率”，符合 G05 的替换要求。",
+          "evidence_quote": "调低销售服务费率",
+          "evidence_verified": true,
+          "deletion_evidence": false,
+          "deterministic": false,
+          "failure_class": "",
+          "affected_fact": "",
+          "affected_obligation": "",
+          "site_signature": "73a2f773294bd6a07c5c2db3638b5ab28dde4b853d7361b1dbf4bfc7edaee235"
+        },
+        {
+          "target_id": "S03_S04_S07_S16_S17_S20#1:T008",
+          "rule_id": "G05",
+          "verdict": "completed",
+          "reason": "AFTER 已删除“并报中国证监会备案”，句末仅保留“调整前基金管理人需及时公告。”，符合删除要求。",
+          "evidence_quote": "调整前基金管理人需及时公告。",
+          "evidence_verified": true,
+          "deletion_evidence": false,
+          "deterministic": false,
+          "failure_class": "",
+          "affected_fact": "",
+          "affected_obligation": "",
+          "site_signature": "73a2f773294bd6a07c5c2db3638b5ab28dde4b853d7361b1dbf4bfc7edaee235"
+        },
+        {
+          "target_id": "S03_S04_S07_S16_S17_S20#1:T011",
+          "rule_id": "G08",
+          "verdict": "completed",
+          "reason": "AFTER replaces the original sentence with the required text naming A类 and C类 share classes, direct-sales exemption for A类, and the fee-rate sentence for other sales agencies. No required content lost.",
+          "evidence_quote": "本基金A类基金份额在申购时收取申购费用，C类基金份额不收取申购费用。通过直销机构申购本基金A类基金份额不收取申购费。通过直销机构以外的其他销售机构申购本基金的申购费率由基金管理人决定，并在招募说明书中列示。",
+          "evidence_verified": true,
+          "deletion_evidence": false,
+          "deterministic": false,
+          "failure_class": "",
+          "affected_fact": "",
+          "affected_obligation": "",
+          "site_signature": "3572b6257d0fbdf9814150d8175415e171d61f2598c57da6c4bc546dc65cbbc0"
+        },
+        {
+          "target_id": "S03_S04_S07_S16_S17_S20#1:T012",
+          "rule_id": "G09",
+          "verdict": "completed",
+          "reason": "AFTER 将“当日基金份额净值”改为“当日该类基金份额的基金份额净值”，并将“扣除相应的费用”改为“扣除或加上相应的费用”，与 G09 要求的替换文本完全一致，且未丢失原有内容。",
+          "evidence_quote": "赎回金额为按实际确认的有效赎回份额乘以当日该类基金份额的基金份额净值并扣除或加上相应的费用，赎回金额单位为元。",
+          "evidence_verified": true,
+          "deletion_evidence": false,
+          "deterministic": false,
+          "failure_class": "",
+          "affected_fact": "",
+          "affected_obligation": "",
+          "site_signature": "3c885dbc5d52c12c7b997cbe11826c0599905d974dbfacf77f71bf665c350750"
+        },
+        {
+          "target_id": "S03_S04_S07_S16_S17_S20#1:T014",
+          "rule_id": "G11",
+          "verdict": "completed",
+          "reason": "AFTER 将原句替换为要求的三段表述：直销机构申购A类不收取申购费、其他销售机构申购A类费用由投资人承担且不列入基金财产、C类不收取申购费用，与 G11 要求完全一致，无内容丢失。",
+          "evidence_quote": "通过直销机构申购本基金A类基金份额不收取申购费，通过其他销售机构申购本基金A类基金份额的申购费用由投资人承担，不列入基金财产。本基金C类基金份额不收取申购费用。",
+          "evidence_verified": true,
+          "deletion_evidence": false,
+          "deterministic": false,
+          "failure_class": "",
+          "affected_fact": "",
+          "affected_obligation": "",
+          "site_signature": "3194d1f5dd76bdb0588a82dc06b0dd1d922057b2944518e2dd4ca31f18e4a056"
+        },
+        {
+          "target_id": "S03_S04_S07_S16_S17_S20#1:T015",
+          "rule_id": "G12",
+          "verdict": "wrong",
+          "reason": "The requirement replaces the redemption-fee clause with the fixed sentence '赎回费用全额计入基金财产。' The AFTER text still keeps the old proportional-allocation wording and the 7-day/1.5% provision, so the required replacement was not made and the mandated content is absent.",
+          "evidence_quote": "赎回费用应根据法律法规规定的比例归入基金财产，未计入基金财产的部分用于支付登记费和其他必要的手续费。其中，对持续持有期少于",
+          "evidence_verified": true,
+          "deletion_evidence": false,
+          "deterministic": false,
+          "failure_class": "GENERATION",
+          "affected_fact": "",
+          "affected_obligation": "G12:1 replace redemption fee clause with '赎回费用全额计入基金财产。'",
+          "site_signature": "70aa67e886c3c663a3ed99a97f3570597925abe2e4ec89012a9b475dc998e01a"
+        },
+        {
+          "target_id": "T3001",
+          "rule_id": "G12",
+          "verdict": "wrong",
+          "reason": "The ledger target at p219 is unresolved and the AFTER text only reflects the G09-authorized change ('扣除或加上相应的费用'); no G12 redemption-fee replacement ('赎回费用全额计入基金财产。') appears at this location, so the G12 requirement is not satisfied here.",
+          "evidence_quote": "赎回金额为按实际确认的有效赎回份额乘以当日该类基金份额的基金份额净值并扣除或加上相应的费用，赎回金额单位为元。",
+          "evidence_verified": true,
+          "deletion_evidence": false,
+          "deterministic": false,
+          "failure_class": "TARGET",
+          "affected_fact": "",
+          "affected_obligation": "G12:1 replace redemption fee clause with '赎回费用全额计入基金财产。'",
+          "site_signature": "70aa67e886c3c663a3ed99a97f3570597925abe2e4ec89012a9b475dc998e01a"
+        },
+        {
+          "target_id": "Y007",
+          "rule_id": "G13",
+          "verdict": "wrong",
+          "reason": "G13 requires deleting the sentence about charging a redemption fee of no less than 1.50% for holders with a continuous holding period of less than 7 days and including it fully in fund assets. The AFTER text still contains this clause verbatim (split across p221/p222), so the deletion was not performed.",
+          "evidence_quote": "其中，对持续持有期少于",
+          "evidence_verified": true,
+          "deletion_evidence": false,
+          "deterministic": false,
+          "failure_class": "EXECUTION",
+          "affected_fact": "",
+          "affected_obligation": "删除“本基金对持续持有期少于7日的投资者收取不低于1.50%的赎回费，并将上述赎回费全额计入基金财产。”",
+          "site_signature": "82b0ed7ed5038b591bd633edd634cc4211f200f255653332cedfbd39397afd96"
+        },
+        {
+          "target_id": "S03_S04_S07_S16_S17_S20#1:T017",
+          "rule_id": "G14",
+          "verdict": "completed",
+          "reason": "AFTER 将“基金申购费率和基金赎回费率”改为“基金申购费率和销售服务费率”，符合多份额类别产品的 G14 要求，且未丢失其他内容。",
+          "evidence_quote": "基金管理人可以适当调低基金申购费率和销售服务费率。",
+          "evidence_verified": true,
+          "deletion_evidence": false,
+          "deterministic": false,
+          "failure_class": "",
+          "affected_fact": "",
+          "affected_obligation": "",
+          "site_signature": "76c2c2e00b82a1e19987708a9d41b5e3525e4152ffa106c03dad35bc65672b5f"
+        },
+        {
+          "target_id": "Y009",
+          "rule_id": "G15",
+          "verdict": "completed",
+          "reason": "The p1306 sales-service-fee payment clause was removed (region now empty), satisfying the G15 deletion requirement with no lost content.",
+          "evidence_quote": "（该位置内容已删除）",
+          "evidence_verified": true,
+          "deletion_evidence": true,
+          "deterministic": false,
+          "failure_class": "",
+          "affected_fact": "",
+          "affected_obligation": "",
+          "site_signature": "4c8bdfb47c58ced3b32ac03fd8f9439a3b0e8f8ba51c77b5d9be1de1f6bd6017"
+        },
+        {
+          "target_id": "Y009-D2",
+          "rule_id": "G15",
+          "verdict": "completed",
+          "reason": "The duplicate p822 sales-service-fee payment clause was likewise removed, satisfying the G15 deletion requirement.",
+          "evidence_quote": "（该位置内容已删除）",
+          "evidence_verified": true,
+          "deletion_evidence": true,
+          "deterministic": false,
+          "failure_class": "",
+          "affected_fact": "",
+          "affected_obligation": "",
+          "site_signature": "4c8bdfb47c58ced3b32ac03fd8f9439a3b0e8f8ba51c77b5d9be1de1f6bd6017"
+        },
+        {
+          "target_id": "Y010",
+          "rule_id": "G17",
+          "verdict": "wrong",
+          "reason": "G17 requires deleting the sales service fee clause; p823 still contains the full clause unchanged, so the deletion was not performed.",
+          "evidence_quote": "销售服务费主要用于支付销售机构佣金、以及基金管理人的基金行销广告费、促销活动费、基金份额持有人服务费等。",
+          "evidence_verified": true,
+          "deletion_evidence": false,
+          "deterministic": false,
+          "failure_class": "EXECUTION",
+          "affected_fact": "",
+          "affected_obligation": "G17:0 delete the sales service fee usage clause",
+          "site_signature": "d2afe2c74db35d96ebd2cc6a9823ba279efdeb8903962b1b7d8ccdc9f25d9d7d"
+        },
+        {
+          "target_id": "Y011",
+          "rule_id": "G17",
+          "verdict": "wrong",
+          "reason": "G17 requires deleting the sales service fee clause; p1307 still contains the full clause unchanged, so the deletion was not performed.",
+          "evidence_quote": "销售服务费主要用于支付销售机构佣金、以及基金管理人的基金行销广告费、促销活动费、基金份额持有人服务费等。",
+          "evidence_verified": true,
+          "deletion_evidence": false,
+          "deterministic": false,
+          "failure_class": "EXECUTION",
+          "affected_fact": "",
+          "affected_obligation": "G17:0 delete the sales service fee usage clause",
+          "site_signature": "d2afe2c74db35d96ebd2cc6a9823ba279efdeb8903962b1b7d8ccdc9f25d9d7d"
+        },
+        {
+          "target_id": "DEL001",
+          "rule_id": "G17",
+          "verdict": "wrong",
+          "reason": "G17 requires deleting the residual sentence about the fee not covering the fundraising period; p824 still contains it unchanged.",
+          "evidence_quote": "销售服务费使用范围不包括基金募集期间的上述费用。",
+          "evidence_verified": true,
+          "deletion_evidence": false,
+          "deterministic": false,
+          "failure_class": "EXECUTION",
+          "affected_fact": "",
+          "affected_obligation": "G17:0 delete the sales service fee usage clause",
+          "site_signature": "d2afe2c74db35d96ebd2cc6a9823ba279efdeb8903962b1b7d8ccdc9f25d9d7d"
+        },
+        {
+          "target_id": "DEL002",
+          "rule_id": "G17",
+          "verdict": "wrong",
+          "reason": "G17 requires deleting the residual sentence about the fee not covering the fundraising period; p1308 still contains it unchanged.",
+          "evidence_quote": "销售服务费使用范围不包括基金募集期间的上述费用。",
+          "evidence_verified": true,
+          "deletion_evidence": false,
+          "deterministic": false,
+          "failure_class": "EXECUTION",
+          "affected_fact": "",
+          "affected_obligation": "G17:0 delete the sales service fee usage clause",
+          "site_signature": "d2afe2c74db35d96ebd2cc6a9823ba279efdeb8903962b1b7d8ccdc9f25d9d7d"
+        },
+        {
+          "target_id": "S03_S04_S07_S16_S17_S20#1:T021",
+          "rule_id": "G18",
+          "verdict": "completed",
+          "reason": "p845 的 AFTER 文本与 G18 要求的替换内容完全一致，且保留了后续句子。",
+          "evidence_quote": "由于本基金A类基金份额和C类基金份额费用收取不同，各基金份额类别对应的可分配收益将有所不同。",
+          "evidence_verified": true,
+          "deletion_evidence": false,
+          "deterministic": false,
+          "failure_class": "",
+          "affected_fact": "",
+          "affected_obligation": "",
+          "site_signature": "dfd9a2b0e9eed3f77ccba6f2fdd550faf4755bf1c88d4944a536dabe887fe31e"
+        },
+        {
+          "target_id": "Y012",
+          "rule_id": "G18",
+          "verdict": "completed",
+          "reason": "p1261 的 AFTER 文本与 G18 要求的替换内容完全一致，且保留了后续句子。",
+          "evidence_quote": "由于本基金A类基金份额和C类基金份额费用收取不同，各基金份额类别对应的可分配收益将有所不同。",
+          "evidence_verified": true,
+          "deletion_evidence": false,
+          "deterministic": false,
+          "failure_class": "",
+          "affected_fact": "",
+          "affected_obligation": "",
+          "site_signature": "dfd9a2b0e9eed3f77ccba6f2fdd550faf4755bf1c88d4944a536dabe887fe31e"
+        },
+        {
+          "target_id": "S03_S04_S07_S16_S17_S20#1:T025",
+          "rule_id": "G22",
+          "verdict": "completed",
+          "reason": "AFTER at p1000 matches the required replacement exactly, appending the sales-service-fee return clause.",
+          "evidence_quote": "依据基金财产清算的分配方案，将基金财产清算后的全部剩余资产扣除基金财产清算费用、交纳所欠税款并清偿基金债务后，按基金份额持有人持有的基金份额比例进行分配，并加上返还基金份额持有人的销售服务费（如有）。",
+          "evidence_verified": true,
+          "deletion_evidence": false,
+          "deterministic": false,
+          "failure_class": "",
+          "affected_fact": "",
+          "affected_obligation": "",
+          "site_signature": "9fe238498f306b9a3e806310c380bdaa79c10c116dae49b2afa65f76a6d6a277"
+        },
+        {
+          "target_id": "Y013",
+          "rule_id": "G22",
+          "verdict": "completed",
+          "reason": "AFTER at p1399 matches the required replacement exactly, appending the sales-service-fee return clause.",
+          "evidence_quote": "依据基金财产清算的分配方案，将基金财产清算后的全部剩余资产扣除基金财产清算费用、交纳所欠税款并清偿基金债务后，按基金份额持有人持有的基金份额比例进行分配，并加上返还基金份额持有人的销售服务费（如有）。",
+          "evidence_verified": true,
+          "deletion_evidence": false,
+          "deterministic": false,
+          "failure_class": "",
+          "affected_fact": "",
+          "affected_obligation": "",
+          "site_signature": "9fe238498f306b9a3e806310c380bdaa79c10c116dae49b2afa65f76a6d6a277"
+        }
+      ],
+      "missed_targets": [],
+      "dropped": [
+        {
+          "code": "AUDIT_MISSED_INVALID",
+          "rule_id": "G12",
+          "location": "p221-p222",
+          "quote": "赎回费用应根据法律法规规定的比例归入基金财产，未计入基金财产的部分用于支付登记费和其他必要的手续费。其中，对持续持有期少于7 日的投资者收取不低于 1.5%的赎…"
+        },
+        {
+          "code": "AUDIT_MISSED_INVALID",
+          "rule_id": "G13",
+          "location": "p222",
+          "quote": "7 日的投资者收取不低于 1.5%的赎回费，并全额计入基金财产。"
+        }
+      ],
+      "artifact_failures": [
+        {
+          "rule_id": "G06",
+          "operation_id": "G06:0",
+          "obligation_id": "G06:B1:O1",
+          "location": "",
+          "code": "CLAIM_OPERATION_UNPROVEN",
+          "reason": "verified site missing"
+        },
+        {
+          "rule_id": "G12",
+          "operation_id": "G12:0",
+          "obligation_id": "G12:B1:O1",
+          "location": "p221",
+          "code": "CLAIM_OPERATION_NOT_PLANNED",
+          "reason": "operation effect is not proven at every verified site"
+        },
+        {
+          "rule_id": "G12",
+          "operation_id": "G12:1",
+          "obligation_id": "G12:B1:O2",
+          "location": "",
+          "code": "CLAIM_OPERATION_UNPROVEN",
+          "reason": "verified site missing"
+        },
+        {
+          "rule_id": "G13",
+          "operation_id": "G13:0",
+          "obligation_id": "G13:B1:O1",
+          "location": "p221",
+          "code": "CLAIM_OPERATION_NOT_PLANNED",
+          "reason": "operation effect is not proven at every verified site"
+        },
+        {
+          "rule_id": "G16",
+          "operation_id": "G16:0",
+          "obligation_id": "G16:B1:O1",
+          "location": "",
+          "code": "CLAIM_OPERATION_UNPROVEN",
+          "reason": "verified site missing"
+        },
+        {
+          "rule_id": "G17",
+          "operation_id": "G17:0",
+          "obligation_id": "G17:B1:O1",
+          "location": "p823",
+          "code": "CLAIM_OPERATION_NOT_PLANNED",
+          "reason": "operation effect is not proven at every verified site"
+        }
+      ],
+      "round": 0,
+      "scope": "full",
+      "issues": [
+        {
+          "code": "AUDIT_NOT_COMPLETED",
+          "rule_id": "G12",
+          "target_id": "S03_S04_S07_S16_S17_S20#1:T015",
+          "location": "p221",
+          "verdict": "wrong",
+          "reason": "The requirement replaces the redemption-fee clause with the fixed sentence '赎回费用全额计入基金财产。' The AFTER text still keeps the old proportional-allocation wording and the 7-day/1.5% provision, so the required replacement was not made and the mandated content is absent.",
+          "evidence_verified": true,
+          "failure_class": "GENERATION",
+          "affected_fact": "",
+          "affected_obligation": "G12:1 replace redemption fee clause with '赎回费用全额计入基金财产。'"
+        },
+        {
+          "code": "AUDIT_NOT_COMPLETED",
+          "rule_id": "G13",
+          "target_id": "Y007",
+          "location": "p221",
+          "verdict": "wrong",
+          "reason": "G13 requires deleting the sentence about charging a redemption fee of no less than 1.50% for holders with a continuous holding period of less than 7 days and including it fully in fund assets. The AFTER text still contains this clause verbatim (split across p221/p222), so the deletion was not performed.",
+          "evidence_verified": true,
+          "failure_class": "EXECUTION",
+          "affected_fact": "",
+          "affected_obligation": "删除“本基金对持续持有期少于7日的投资者收取不低于1.50%的赎回费，并将上述赎回费全额计入基金财产。”"
+        },
+        {
+          "code": "AUDIT_NOT_COMPLETED",
+          "rule_id": "G17",
+          "target_id": "Y010",
+          "location": "p823",
+          "verdict": "wrong",
+          "reason": "G17 requires deleting the sales service fee clause; p823 still contains the full clause unchanged, so the deletion was not performed.",
+          "evidence_verified": true,
+          "failure_class": "EXECUTION",
+          "affected_fact": "",
+          "affected_obligation": "G17:0 delete the sales service fee usage clause"
+        },
+        {
+          "code": "AUDIT_NOT_COMPLETED",
+          "rule_id": "G17",
+          "target_id": "Y011",
+          "location": "p1307",
+          "verdict": "wrong",
+          "reason": "G17 requires deleting the sales service fee clause; p1307 still contains the full clause unchanged, so the deletion was not performed.",
+          "evidence_verified": true,
+          "failure_class": "EXECUTION",
+          "affected_fact": "",
+          "affected_obligation": "G17:0 delete the sales service fee usage clause"
+        },
+        {
+          "code": "AUDIT_NOT_COMPLETED",
+          "rule_id": "G17",
+          "target_id": "DEL001",
+          "location": "p824",
+          "verdict": "wrong",
+          "reason": "G17 requires deleting the residual sentence about the fee not covering the fundraising period; p824 still contains it unchanged.",
+          "evidence_verified": true,
+          "failure_class": "EXECUTION",
+          "affected_fact": "",
+          "affected_obligation": "G17:0 delete the sales service fee usage clause"
+        },
+        {
+          "code": "AUDIT_NOT_COMPLETED",
+          "rule_id": "G17",
+          "target_id": "DEL002",
+          "location": "p1308",
+          "verdict": "wrong",
+          "reason": "G17 requires deleting the residual sentence about the fee not covering the fundraising period; p1308 still contains it unchanged.",
+          "evidence_verified": true,
+          "failure_class": "EXECUTION",
+          "affected_fact": "",
+          "affected_obligation": "G17:0 delete the sales service fee usage clause"
+        },
+        {
+          "code": "AUDIT_NOT_COMPLETED",
+          "rule_id": "G12",
+          "target_id": "T3001",
+          "location": "p219",
+          "verdict": "wrong",
+          "reason": "The ledger target at p219 is unresolved and the AFTER text only reflects the G09-authorized change ('扣除或加上相应的费用'); no G12 redemption-fee replacement ('赎回费用全额计入基金财产。') appears at this location, so the G12 requirement is not satisfied here.",
+          "evidence_verified": true,
+          "failure_class": "TARGET",
+          "affected_fact": "",
+          "affected_obligation": "G12:1 replace redemption fee clause with '赎回费用全额计入基金财产。'"
+        }
+      ],
+      "recovery_state_hashes": {
+        "targets_hash": "b9c0628dd1fad5fa62e1ddd0121e0973e682cb7bb49910cc11375148d4586cf8",
+        "plan_hash": "b00ac0394fe35d06ea80c0c0fea752c1622ee75c2fa613f252c804e3ac7fc4f7",
+        "artifact_hash": "bd3afc2fc2c70109b4b92f7c8e860432ca33521ec709a969ffebba64c4638767",
+        "failures_hash": "e854702409aead8e97579034c4946d3c9390bc6ccc0f5aef7ea943c167c5bc73",
+        "facts_hash": "4fbec88d295dd1eb1b1e82605b7ab78aaa158b67ec6b74f7d6bb723cdb20cd1c",
+        "applicability_hash": "6c99444f9f0c82bc5cb81ff5395717ee53fe6addb3bdfbde903d5cfb501b0623",
+        "scope_hash": "65e353bfa375016193d48812f37f235eb4b429639108c36bad9ee917dc4531ae",
+        "operation_coverage_hash": "cfa2879579819d680f35a92a395070f08a4d43b64b46d4020dc684b4d4404cc5",
+        "final_edit_hash": "fa94a7d24085273be2fdbee0a9d72fae7ed92d36d6173c20f1b2c6666f89a117"
+      }
+    },
+    {
+      "rules": [
+        "G12",
+        "G13",
+        "G17"
+      ],
+      "results": [
+        {
+          "target_id": "S03_S04_S07_S16_S17_S20#1:T015",
+          "rule_id": "G12",
+          "verdict": "wrong",
+          "reason": "The p221 text is unchanged; it still contains the proportional allocation and registration fee language instead of the required replacement '赎回费用全额计入基金财产。'",
+          "evidence_quote": "赎回费用应根据法律法规规定的比例归入基金财产，未计入基金财产的部分用于支付登记费和其他必要的手续费。",
+          "evidence_verified": true,
+          "deletion_evidence": false,
+          "deterministic": false,
+          "failure_class": "EXECUTION",
+          "affected_fact": "",
+          "affected_obligation": "Replace redemption fee clause with full inclusion in fund property",
+          "site_signature": "e0c2b0787e36aa4b5d5b8a034d4faec4448095e8135be1a831f084567611e2de"
+        },
+        {
+          "target_id": "T3001",
+          "rule_id": "G12",
+          "verdict": "wrong",
+          "reason": "The p219 change ('扣除或加上相应的费用' and '该类基金份额的基金份额净值') is an authorized G09 edit, not the G12 redemption-fee replacement; the G12 requirement to state '赎回费用全额计入基金财产' is not satisfied at p219.",
+          "evidence_quote": "赎回金额为按实际确认的有效赎回份额乘以当日该类基金份额的基金份额净值并扣除或加上相应的费用，赎回金额单位为元。",
+          "evidence_verified": true,
+          "deletion_evidence": false,
+          "deterministic": false,
+          "failure_class": "TARGET",
+          "affected_fact": "",
+          "affected_obligation": "Apply G12 redemption fee replacement at p219",
+          "site_signature": "e0c2b0787e36aa4b5d5b8a034d4faec4448095e8135be1a831f084567611e2de"
+        },
+        {
+          "target_id": "Y007",
+          "rule_id": "G13",
+          "verdict": "wrong",
+          "reason": "G13 requires deleting the sentence about charging a redemption fee of no less than 1.50% for holders with a continuous holding period of less than 7 days and including it fully in fund assets. The AFTER text still contains this clause verbatim (split across p221/p222), so the deletion was not performed.",
+          "evidence_quote": "其中，对持续持有期少于",
+          "evidence_verified": true,
+          "deletion_evidence": false,
+          "deterministic": false,
+          "failure_class": "EXECUTION",
+          "affected_fact": "",
+          "affected_obligation": "删除“本基金对持续持有期少于7日的投资者收取不低于1.50%的赎回费，并将上述赎回费全额计入基金财产。”",
+          "site_signature": "75d0fc96ee21e9c9bfe58b364459afeb90fc4725232ca73162148cba3b394236"
+        },
+        {
+          "target_id": "S03_S04_S07_S16_S17_S20#1:T020",
+          "rule_id": "G17",
+          "verdict": "completed",
+          "reason": "The sales service fee clause at p823 has been deleted; the location is now empty, satisfying the G17 deletion requirement.",
+          "evidence_quote": "（该位置内容已删除）",
+          "evidence_verified": true,
+          "deletion_evidence": true,
+          "deterministic": false,
+          "failure_class": "",
+          "affected_fact": "",
+          "affected_obligation": "",
+          "site_signature": "659db0a6c60ce0717aa4b19ccbd38250fb0863569a014629491a11c5620d338c"
+        },
+        {
+          "target_id": "S03_S04_S07_S16_S17_S20#1:T021",
+          "rule_id": "G17",
+          "verdict": "completed",
+          "reason": "The clause stating the sales service fee scope excludes offering-period expenses at p824 has been deleted, satisfying G17.",
+          "evidence_quote": "（该位置内容已删除）",
+          "evidence_verified": true,
+          "deletion_evidence": true,
+          "deterministic": false,
+          "failure_class": "",
+          "affected_fact": "",
+          "affected_obligation": "",
+          "site_signature": "659db0a6c60ce0717aa4b19ccbd38250fb0863569a014629491a11c5620d338c"
+        },
+        {
+          "target_id": "Y011",
+          "rule_id": "G17",
+          "verdict": "completed",
+          "reason": "The sales service fee clause at p1307 has been deleted, satisfying the G17 deletion requirement.",
+          "evidence_quote": "（该位置内容已删除）",
+          "evidence_verified": true,
+          "deletion_evidence": true,
+          "deterministic": false,
+          "failure_class": "",
+          "affected_fact": "",
+          "affected_obligation": "",
+          "site_signature": "659db0a6c60ce0717aa4b19ccbd38250fb0863569a014629491a11c5620d338c"
+        }
+      ],
+      "missed_targets": [],
+      "dropped": [
+        {
+          "code": "AUDIT_MISSED_INVALID",
+          "rule_id": "G13",
+          "location": "p222",
+          "quote": "7 日的投资者收取不低于 1.5%的赎回费，并全额计入基金财产。"
+        }
+      ],
+      "artifact_failures": [
+        {
+          "rule_id": "G06",
+          "operation_id": "G06:0",
+          "obligation_id": "G06:B1:O1",
+          "location": "",
+          "code": "CLAIM_OPERATION_UNPROVEN",
+          "reason": "verified site missing"
+        },
+        {
+          "rule_id": "G12",
+          "operation_id": "G12:0",
+          "obligation_id": "G12:B1:O1",
+          "location": "",
+          "code": "CLAIM_OPERATION_UNPROVEN",
+          "reason": "verified site missing"
+        },
+        {
+          "rule_id": "G12",
+          "operation_id": "G12:1",
+          "obligation_id": "G12:B1:O2",
+          "location": "p221",
+          "code": "CLAIM_OPERATION_NOT_PLANNED",
+          "reason": "operation effect is not proven at every verified site"
+        },
+        {
+          "rule_id": "G13",
+          "operation_id": "G13:0",
+          "obligation_id": "G13:B1:O1",
+          "location": "p221",
+          "code": "CLAIM_OPERATION_NOT_PLANNED",
+          "reason": "operation effect is not proven at every verified site"
+        },
+        {
+          "rule_id": "G16",
+          "operation_id": "G16:0",
+          "obligation_id": "G16:B1:O1",
+          "location": "",
+          "code": "CLAIM_OPERATION_UNPROVEN",
+          "reason": "verified site missing"
+        }
+      ],
+      "round": 1,
+      "scope": "incremental",
+      "issues": [
+        {
+          "code": "AUDIT_NOT_COMPLETED",
+          "rule_id": "G12",
+          "target_id": "S03_S04_S07_S16_S17_S20#1:T015",
+          "location": "p221",
+          "verdict": "wrong",
+          "reason": "The p221 text is unchanged; it still contains the proportional allocation and registration fee language instead of the required replacement '赎回费用全额计入基金财产。'",
+          "evidence_verified": true,
+          "failure_class": "EXECUTION",
+          "affected_fact": "",
+          "affected_obligation": "Replace redemption fee clause with full inclusion in fund property"
+        },
+        {
+          "code": "AUDIT_NOT_COMPLETED",
+          "rule_id": "G13",
+          "target_id": "Y007",
+          "location": "p221",
+          "verdict": "wrong",
+          "reason": "G13 requires deleting the sentence about charging a redemption fee of no less than 1.50% for holders with a continuous holding period of less than 7 days and including it fully in fund assets. The AFTER text still contains this clause verbatim (split across p221/p222), so the deletion was not performed.",
+          "evidence_verified": true,
+          "failure_class": "EXECUTION",
+          "affected_fact": "",
+          "affected_obligation": "删除“本基金对持续持有期少于7日的投资者收取不低于1.50%的赎回费，并将上述赎回费全额计入基金财产。”"
+        },
+        {
+          "code": "AUDIT_NOT_COMPLETED",
+          "rule_id": "G12",
+          "target_id": "T3001",
+          "location": "p219",
+          "verdict": "wrong",
+          "reason": "The p219 change ('扣除或加上相应的费用' and '该类基金份额的基金份额净值') is an authorized G09 edit, not the G12 redemption-fee replacement; the G12 requirement to state '赎回费用全额计入基金财产' is not satisfied at p219.",
+          "evidence_verified": true,
+          "failure_class": "TARGET",
+          "affected_fact": "",
+          "affected_obligation": "Apply G12 redemption fee replacement at p219"
+        }
+      ],
+      "recovery_state_hashes": {
+        "targets_hash": "d5d7c4d03a3c351f36ca004296fddff50047b687a4bc76f6213d448df86285e0",
+        "plan_hash": "7a5e9081792b56be8eeae8457be5804a6211fc1d4f3ee27d9faeebb344cdf957",
+        "artifact_hash": "b2781a41d3de38f8609ed1ed4814b766e3e0582cb58d943ebc42f31795c77a22",
+        "failures_hash": "8d821becc4a556bd23285114691d3af9ca9306adb1fbece992b95f72784442d6",
+        "facts_hash": "4fbec88d295dd1eb1b1e82605b7ab78aaa158b67ec6b74f7d6bb723cdb20cd1c",
+        "applicability_hash": "6c99444f9f0c82bc5cb81ff5395717ee53fe6addb3bdfbde903d5cfb501b0623",
+        "scope_hash": "65e353bfa375016193d48812f37f235eb4b429639108c36bad9ee917dc4531ae",
+        "operation_coverage_hash": "bb2623787000b082b295e7946bf5ba7e55a39f29aaa1d41df484d84d0b832f8b",
+        "final_edit_hash": "82096192124e3b482cbc63b07ae3a838e30d0d246a26be01de834e79bdb9f537"
+      }
+    },
+    {
+      "rules": [
+        "G12",
+        "G13"
+      ],
+      "results": [
+        {
+          "target_id": "S03_S04_S07_S16_S17_S20#1:T014",
+          "rule_id": "G12",
+          "verdict": "wrong",
+          "reason": "The p221 clause still retains the old proportional-allocation and registration-fee language instead of being replaced with the required '赎回费用全额计入基金财产' wording. The AFTER text is identical to BEFORE and contradicts the requirement.",
+          "evidence_quote": "赎回费用应根据法律法规规定的比例归入基金财产，未计入基金财产的部分用于支付登记费和其他必要的手续费。",
+          "evidence_verified": true,
+          "deletion_evidence": false,
+          "deterministic": false,
+          "failure_class": "EXECUTION",
+          "affected_fact": "",
+          "affected_obligation": "Replace redemption fee clause with full inclusion in fund property",
+          "site_signature": "c4ce3c6a75ef182318421de2085408973cf4110585685f66668f4ca569eb9509"
+        },
+        {
+          "target_id": "T3001",
+          "rule_id": "G12",
+          "verdict": "wrong",
+          "reason": "The p219 change only alters the net-value reference and fee deduction wording (an authorized G09 edit); it does not implement any G12 redemption-fee replacement. No G12-required text appears, and the old fee language remains unaddressed.",
+          "evidence_quote": "赎回金额为按实际确认的有效赎回份额乘以当日该类基金份额的基金份额净值并扣除或加上相应的费用，赎回金额单位为元。",
+          "evidence_verified": true,
+          "deletion_evidence": false,
+          "deterministic": false,
+          "failure_class": "TARGET",
+          "affected_fact": "",
+          "affected_obligation": "Apply G12 redemption fee replacement at p219",
+          "site_signature": "c4ce3c6a75ef182318421de2085408973cf4110585685f66668f4ca569eb9509"
+        },
+        {
+          "target_id": "Y007",
+          "rule_id": "G13",
+          "verdict": "wrong",
+          "reason": "G13 requires deleting the sentence about charging a redemption fee of no less than 1.50% for holders with a continuous holding period of less than 7 days and including it fully in fund assets. The AFTER text still contains this clause verbatim (split across p221/p222), so the deletion was not performed.",
+          "evidence_quote": "其中，对持续持有期少于",
+          "evidence_verified": true,
+          "deletion_evidence": false,
+          "deterministic": false,
+          "failure_class": "EXECUTION",
+          "affected_fact": "",
+          "affected_obligation": "删除“本基金对持续持有期少于7日的投资者收取不低于1.50%的赎回费，并将上述赎回费全额计入基金财产。”",
+          "site_signature": "6012bf07b9a18cce8c4856ce23cf03a1640005df9f80197ab0c93263e10e0cba"
+        }
+      ],
+      "missed_targets": [
+        {
+          "rule_id": "G12",
+          "location": "p221",
+          "quote": "其中，对持续持有期少于",
+          "operation_id": "",
+          "reason": "The trailing clause about holding period (持续持有期少于7日) remains and is part of the old G12:1 text that should have been removed/replaced under the G12 replacement."
+        }
+      ],
+      "dropped": [
+        {
+          "code": "AUDIT_MISSED_INVALID",
+          "rule_id": "G13",
+          "location": "p222",
+          "quote": "7 日的投资者收取不低于 1.5%的赎回费，并全额计入基金财产。"
+        }
+      ],
+      "artifact_failures": [
+        {
+          "rule_id": "G06",
+          "operation_id": "G06:0",
+          "obligation_id": "G06:B1:O1",
+          "location": "",
+          "code": "CLAIM_OPERATION_UNPROVEN",
+          "reason": "verified site missing"
+        },
+        {
+          "rule_id": "G12",
+          "operation_id": "G12:0",
+          "obligation_id": "G12:B1:O1",
+          "location": "",
+          "code": "CLAIM_OPERATION_UNPROVEN",
+          "reason": "verified site missing"
+        },
+        {
+          "rule_id": "G12",
+          "operation_id": "G12:1",
+          "obligation_id": "G12:B1:O2",
+          "location": "p221",
+          "code": "CLAIM_OPERATION_NOT_PLANNED",
+          "reason": "operation effect is not proven at every verified site"
+        },
+        {
+          "rule_id": "G13",
+          "operation_id": "G13:0",
+          "obligation_id": "G13:B1:O1",
+          "location": "p221",
+          "code": "CLAIM_OPERATION_NOT_PLANNED",
+          "reason": "operation effect is not proven at every verified site"
+        },
+        {
+          "rule_id": "G16",
+          "operation_id": "G16:0",
+          "obligation_id": "G16:B1:O1",
+          "location": "",
+          "code": "CLAIM_OPERATION_UNPROVEN",
+          "reason": "verified site missing"
+        }
+      ],
+      "round": 2,
+      "scope": "incremental",
+      "issues": [
+        {
+          "code": "AUDIT_NOT_COMPLETED",
+          "rule_id": "G12",
+          "target_id": "S03_S04_S07_S16_S17_S20#1:T014",
+          "location": "p221",
+          "verdict": "wrong",
+          "reason": "The p221 clause still retains the old proportional-allocation and registration-fee language instead of being replaced with the required '赎回费用全额计入基金财产' wording. The AFTER text is identical to BEFORE and contradicts the requirement.",
+          "evidence_verified": true,
+          "failure_class": "EXECUTION",
+          "affected_fact": "",
+          "affected_obligation": "Replace redemption fee clause with full inclusion in fund property"
+        },
+        {
+          "code": "AUDIT_NOT_COMPLETED",
+          "rule_id": "G13",
+          "target_id": "Y007",
+          "location": "p221",
+          "verdict": "wrong",
+          "reason": "G13 requires deleting the sentence about charging a redemption fee of no less than 1.50% for holders with a continuous holding period of less than 7 days and including it fully in fund assets. The AFTER text still contains this clause verbatim (split across p221/p222), so the deletion was not performed.",
+          "evidence_verified": true,
+          "failure_class": "EXECUTION",
+          "affected_fact": "",
+          "affected_obligation": "删除“本基金对持续持有期少于7日的投资者收取不低于1.50%的赎回费，并将上述赎回费全额计入基金财产。”"
+        },
+        {
+          "code": "AUDIT_VERDICT_MISSING",
+          "rule_id": "G17",
+          "target_id": "Y010",
+          "location": "p823"
+        },
+        {
+          "code": "AUDIT_NOT_COMPLETED",
+          "rule_id": "G12",
+          "target_id": "T3001",
+          "location": "p219",
+          "verdict": "wrong",
+          "reason": "The p219 change only alters the net-value reference and fee deduction wording (an authorized G09 edit); it does not implement any G12 redemption-fee replacement. No G12-required text appears, and the old fee language remains unaddressed.",
+          "evidence_verified": true,
+          "failure_class": "TARGET",
+          "affected_fact": "",
+          "affected_obligation": "Apply G12 redemption fee replacement at p219"
+        },
+        {
+          "code": "AUDIT_MISSED_TARGET",
+          "rule_id": "G12",
+          "location": "p221",
+          "quote": "其中，对持续持有期少于",
+          "reason": "The trailing clause about holding period (持续持有期少于7日) remains and is part of the old G12:1 text that should have been removed/replaced under the G12 replacement."
+        }
+      ],
+      "recovery_state_hashes": {
+        "targets_hash": "b8a92493fa207ce5e9b7d738250dac02b91734e2701d678d998fab5060343bda",
+        "plan_hash": "7a5e9081792b56be8eeae8457be5804a6211fc1d4f3ee27d9faeebb344cdf957",
+        "artifact_hash": "b2781a41d3de38f8609ed1ed4814b766e3e0582cb58d943ebc42f31795c77a22",
+        "failures_hash": "d94a44efcd3e2b7a27ffa38c2cf8f7028f0022926594ad147f7e016ed50f4967",
+        "facts_hash": "4fbec88d295dd1eb1b1e82605b7ab78aaa158b67ec6b74f7d6bb723cdb20cd1c",
+        "applicability_hash": "6c99444f9f0c82bc5cb81ff5395717ee53fe6addb3bdfbde903d5cfb501b0623",
+        "scope_hash": "65e353bfa375016193d48812f37f235eb4b429639108c36bad9ee917dc4531ae",
+        "operation_coverage_hash": "b120a076004ce8473a0e19ab977c5eb36eed63d01c29560358f5f0188d5b7471",
+        "final_edit_hash": "415d4301b0f8e0bccb24da8a63e82362864790bf3c20634230148c37d0fa26fb"
+      }
+    },
+    {
+      "rules": [
+        "G12",
+        "G13",
+        "G17"
+      ],
+      "results": [
+        {
+          "target_id": "S03_S04_S07_S16_S17_S20#1:T014",
+          "rule_id": "G12",
+          "verdict": "wrong",
+          "reason": "The p221 clause was not replaced; the old proportional-allocation and registration-fee wording remains, contradicting the requirement to replace it with '赎回费用全额计入基金财产'.",
+          "evidence_quote": "赎回费用应根据法律法规规定的比例归入基金财产，未计入基金财产的部分用于支付登记费和其他必要的手续费。",
+          "evidence_verified": true,
+          "deletion_evidence": false,
+          "deterministic": false,
+          "failure_class": "EXECUTION",
+          "affected_fact": "",
+          "affected_obligation": "G12: replace redemption fee clause with full inclusion in fund property",
+          "site_signature": "c8aa71e69fb4092a714fdb4e61e2b80e157f8aa85264f95a8c40a0c0f9a971e6"
+        },
+        {
+          "target_id": "T3001",
+          "rule_id": "G12",
+          "verdict": "completed",
+          "reason": "The p219 change to '当日该类基金份额的基金份额净值' and '扣除或加上相应的费用' is the authorized G09 edit, not a G12 requirement; the G12 target at p219 has no applicable text to change, so no G12 violation remains there.",
+          "evidence_quote": "赎回金额为按实际确认的有效赎回份额乘以当日该类基金份额的基金份额净值并扣除或加上相应的费用，赎回金额单位为元。",
+          "evidence_verified": true,
+          "deletion_evidence": false,
+          "deterministic": false,
+          "failure_class": "TARGET",
+          "affected_fact": "",
+          "affected_obligation": "G12 redemption fee clause",
+          "site_signature": "c8aa71e69fb4092a714fdb4e61e2b80e157f8aa85264f95a8c40a0c0f9a971e6"
+        },
+        {
+          "target_id": "Y007",
+          "rule_id": "G13",
+          "verdict": "wrong",
+          "reason": "G13 requires deleting the sentence about charging a redemption fee of no less than 1.50% for holders with a continuous holding period of less than 7 days and including it fully in fund assets. The AFTER text still contains this clause verbatim (split across p221/p222), so the deletion was not performed.",
+          "evidence_quote": "其中，对持续持有期少于",
+          "evidence_verified": true,
+          "deletion_evidence": false,
+          "deterministic": false,
+          "failure_class": "EXECUTION",
+          "affected_fact": "",
+          "affected_obligation": "删除“本基金对持续持有期少于7日的投资者收取不低于1.50%的赎回费，并将上述赎回费全额计入基金财产。”",
+          "site_signature": "7f35e6c884cd274b3ca7580210e50dadb6e375cf7ce2b29c5145d2a3b3623713"
+        },
+        {
+          "target_id": "S03_S04_S07_S16_S17_S20#1:T019",
+          "rule_id": "G17",
+          "verdict": "wrong",
+          "reason": "G17 requires deleting the sales service fee usage clause at p823-p824, but AFTER still contains the full clause unchanged.",
+          "evidence_quote": "销售服务费主要用于支付销售机构佣金、以及基金管理人的基金行销广告费、促销活动费、基金份额持有人服务费等。",
+          "evidence_verified": true,
+          "deletion_evidence": false,
+          "deterministic": false,
+          "failure_class": "EXECUTION",
+          "affected_fact": "",
+          "affected_obligation": "G17:0 delete sales service fee usage clause",
+          "site_signature": "40b82d1fea91f0c2ae087567479cb2544e828a2fec2e94aebb276e1854425563"
+        },
+        {
+          "target_id": "Y010",
+          "rule_id": "G17",
+          "verdict": "wrong",
+          "reason": "The p823 clause should be deleted per G17, but AFTER retains it verbatim.",
+          "evidence_quote": "销售服务费主要用于支付销售机构佣金、以及基金管理人的基金行销广告费、促销活动费、基金份额持有人服务费等。",
+          "evidence_verified": true,
+          "deletion_evidence": false,
+          "deterministic": false,
+          "failure_class": "EXECUTION",
+          "affected_fact": "",
+          "affected_obligation": "G17:0 delete sales service fee usage clause",
+          "site_signature": "40b82d1fea91f0c2ae087567479cb2544e828a2fec2e94aebb276e1854425563"
+        },
+        {
+          "target_id": "Y011",
+          "rule_id": "G17",
+          "verdict": "completed",
+          "reason": "The p1307 clause was removed; the location now shows the deletion marker, satisfying the delete requirement.",
+          "evidence_quote": "（该位置内容已删除）",
+          "evidence_verified": true,
+          "deletion_evidence": true,
+          "deterministic": false,
+          "failure_class": "EXECUTION",
+          "affected_fact": "",
+          "affected_obligation": "G17:0 delete sales service fee usage clause",
+          "site_signature": "40b82d1fea91f0c2ae087567479cb2544e828a2fec2e94aebb276e1854425563"
+        }
+      ],
+      "missed_targets": [],
+      "dropped": [
+        {
+          "code": "AUDIT_MISSED_INVALID",
+          "rule_id": "G13",
+          "location": "p222",
+          "quote": "7 日的投资者收取不低于 1.5%的赎回费，并全额计入基金财产。"
+        },
+        {
+          "code": "AUDIT_MISSED_INVALID",
+          "rule_id": "G17",
+          "location": "p824",
+          "quote": "销售服务费使用范围不包括基金募集期间的上述费用。"
+        }
+      ],
+      "artifact_failures": [
+        {
+          "rule_id": "G06",
+          "operation_id": "G06:0",
+          "obligation_id": "G06:B1:O1",
+          "location": "",
+          "code": "CLAIM_OPERATION_UNPROVEN",
+          "reason": "verified site missing"
+        },
+        {
+          "rule_id": "G12",
+          "operation_id": "G12:0",
+          "obligation_id": "G12:B1:O1",
+          "location": "",
+          "code": "CLAIM_OPERATION_UNPROVEN",
+          "reason": "verified site missing"
+        },
+        {
+          "rule_id": "G12",
+          "operation_id": "G12:1",
+          "obligation_id": "G12:B1:O2",
+          "location": "p221",
+          "code": "CLAIM_OPERATION_NOT_PLANNED",
+          "reason": "operation effect is not proven at every verified site"
+        },
+        {
+          "rule_id": "G13",
+          "operation_id": "G13:0",
+          "obligation_id": "G13:B1:O1",
+          "location": "p221",
+          "code": "CLAIM_OPERATION_NOT_PLANNED",
+          "reason": "operation effect is not proven at every verified site"
+        },
+        {
+          "rule_id": "G16",
+          "operation_id": "G16:0",
+          "obligation_id": "G16:B1:O1",
+          "location": "",
+          "code": "CLAIM_OPERATION_UNPROVEN",
+          "reason": "verified site missing"
+        },
+        {
+          "rule_id": "G17",
+          "operation_id": "G17:0",
+          "obligation_id": "G17:B1:O1",
+          "location": "p823",
+          "code": "CLAIM_OPERATION_NOT_PLANNED",
+          "reason": "operation effect is not proven at every verified site"
+        }
+      ],
+      "round": 3,
+      "scope": "incremental",
+      "issues": [
+        {
+          "code": "AUDIT_VERDICT_MISSING",
+          "rule_id": "G01",
+          "target_id": "S03_S04_S07_S16_S17_S20#1:T001",
+          "location": "p91"
+        },
+        {
+          "code": "AUDIT_NOT_COMPLETED",
+          "rule_id": "G12",
+          "target_id": "S03_S04_S07_S16_S17_S20#1:T014",
+          "location": "p221",
+          "verdict": "wrong",
+          "reason": "The p221 clause was not replaced; the old proportional-allocation and registration-fee wording remains, contradicting the requirement to replace it with '赎回费用全额计入基金财产'.",
+          "evidence_verified": true,
+          "failure_class": "EXECUTION",
+          "affected_fact": "",
+          "affected_obligation": "G12: replace redemption fee clause with full inclusion in fund property"
+        },
+        {
+          "code": "AUDIT_NOT_COMPLETED",
+          "rule_id": "G17",
+          "target_id": "S03_S04_S07_S16_S17_S20#1:T019",
+          "location": "p823",
+          "verdict": "wrong",
+          "reason": "G17 requires deleting the sales service fee usage clause at p823-p824, but AFTER still contains the full clause unchanged.",
+          "evidence_verified": true,
+          "failure_class": "EXECUTION",
+          "affected_fact": "",
+          "affected_obligation": "G17:0 delete sales service fee usage clause"
+        },
+        {
+          "code": "AUDIT_NOT_COMPLETED",
+          "rule_id": "G13",
+          "target_id": "Y007",
+          "location": "p221",
+          "verdict": "wrong",
+          "reason": "G13 requires deleting the sentence about charging a redemption fee of no less than 1.50% for holders with a continuous holding period of less than 7 days and including it fully in fund assets. The AFTER text still contains this clause verbatim (split across p221/p222), so the deletion was not performed.",
+          "evidence_verified": true,
+          "failure_class": "EXECUTION",
+          "affected_fact": "",
+          "affected_obligation": "删除“本基金对持续持有期少于7日的投资者收取不低于1.50%的赎回费，并将上述赎回费全额计入基金财产。”"
+        },
+        {
+          "code": "AUDIT_NOT_COMPLETED",
+          "rule_id": "G17",
+          "target_id": "Y010",
+          "location": "p823",
+          "verdict": "wrong",
+          "reason": "The p823 clause should be deleted per G17, but AFTER retains it verbatim.",
+          "evidence_verified": true,
+          "failure_class": "EXECUTION",
+          "affected_fact": "",
+          "affected_obligation": "G17:0 delete sales service fee usage clause"
+        }
+      ],
+      "recovery_state_hashes": {
+        "targets_hash": "28c01dc24acd3d3fc41217b0f3b94a56d605e1159f8947fbdcc02379f0a94441",
+        "plan_hash": "272c84e9ed2ad1ef035457995c239a7dabd375aebc99bddc38e7b0d1215a3125",
+        "artifact_hash": "0f0ca78470b4f9b5c0a2a7d5fff340576821981620faf4dfa4e8578c494f8bf0",
+        "failures_hash": "643c66fc651c11b7492578cc251703ec33b3967864e9133cd999771ff3781809",
+        "facts_hash": "4fbec88d295dd1eb1b1e82605b7ab78aaa158b67ec6b74f7d6bb723cdb20cd1c",
+        "applicability_hash": "6c99444f9f0c82bc5cb81ff5395717ee53fe6addb3bdfbde903d5cfb501b0623",
+        "scope_hash": "65e353bfa375016193d48812f37f235eb4b429639108c36bad9ee917dc4531ae",
+        "operation_coverage_hash": "3f35b9f4d1ad66442b0d186092c1e3474de7e005b57d255b1fc0c30f04fd6813",
+        "final_edit_hash": "9675904a4729d547f34dd4eecb49070eb6b5c76480ef0756c94e7078738a09d6"
+      }
+    }
+  ],
+  "issues": [
+    {
+      "code": "AUDIT_VERDICT_MISSING",
+      "rule_id": "G01",
+      "target_id": "S03_S04_S07_S16_S17_S20#1:T001",
+      "location": "p91"
+    },
+    {
+      "code": "AUDIT_NOT_COMPLETED",
+      "rule_id": "G12",
+      "target_id": "S03_S04_S07_S16_S17_S20#1:T014",
+      "location": "p221",
+      "verdict": "wrong",
+      "reason": "The p221 clause was not replaced; the old proportional-allocation and registration-fee wording remains, contradicting the requirement to replace it with '赎回费用全额计入基金财产'.",
+      "evidence_verified": true,
+      "failure_class": "EXECUTION",
+      "affected_fact": "",
+      "affected_obligation": "G12: replace redemption fee clause with full inclusion in fund property"
+    },
+    {
+      "code": "AUDIT_NOT_COMPLETED",
+      "rule_id": "G17",
+      "target_id": "S03_S04_S07_S16_S17_S20#1:T019",
+      "location": "p823",
+      "verdict": "wrong",
+      "reason": "G17 requires deleting the sales service fee usage clause at p823-p824, but AFTER still contains the full clause unchanged.",
+      "evidence_verified": true,
+      "failure_class": "EXECUTION",
+      "affected_fact": "",
+      "affected_obligation": "G17:0 delete sales service fee usage clause"
+    },
+    {
+      "code": "AUDIT_NOT_COMPLETED",
+      "rule_id": "G13",
+      "target_id": "Y007",
+      "location": "p221",
+      "verdict": "wrong",
+      "reason": "G13 requires deleting the sentence about charging a redemption fee of no less than 1.50% for holders with a continuous holding period of less than 7 days and including it fully in fund assets. The AFTER text still contains this clause verbatim (split across p221/p222), so the deletion was not performed.",
+      "evidence_verified": true,
+      "failure_class": "EXECUTION",
+      "affected_fact": "",
+      "affected_obligation": "删除“本基金对持续持有期少于7日的投资者收取不低于1.50%的赎回费，并将上述赎回费全额计入基金财产。”"
+    },
+    {
+      "code": "AUDIT_NOT_COMPLETED",
+      "rule_id": "G17",
+      "target_id": "Y010",
+      "location": "p823",
+      "verdict": "wrong",
+      "reason": "The p823 clause should be deleted per G17, but AFTER retains it verbatim.",
+      "evidence_verified": true,
+      "failure_class": "EXECUTION",
+      "affected_fact": "",
+      "affected_obligation": "G17:0 delete sales service fee usage clause"
+    }
+  ]
+}

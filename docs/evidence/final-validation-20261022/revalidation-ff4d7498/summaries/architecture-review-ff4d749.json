@@ -1,0 +1,466 @@
+{
+  "review": "architecture-review-ff4d749",
+  "head": "ff4d7498b6c1aee72ba48686074d021fc7f84791",
+  "baseline_head": "682e68a5b3ef2a58feb77460af70afabdb314379",
+  "branch": "refactor/recovery-architecture",
+  "date": "2026-10-22",
+  "mode": "read-only exact-code review; no source/test/git/evidence data edits, no live model/HTTP",
+  "runtime_code_root": "/home/opencode/fundlex-ff4d749",
+  "evidence_root": "/home/opencode/fundlex/docs/evidence/final-validation-20261022/revalidation-ff4d7498",
+  "baseline_evidence_root": "/home/opencode/fundlex/docs/evidence/final-validation-20261022",
+  "verdict": {
+    "false_complete_proven": false,
+    "cases_delivered_complete": "0/4",
+    "cases_incomplete": "4/4",
+    "gate_current": "FAIL",
+    "gate_can_enter_20_case": false,
+    "gate_recommendation": "Hold. Fix F1-F4 and F5/F6 first, re-record the four cases at the new SHA, require 4/4 complete or all remaining items classified as model/target ambiguity with no engine bug, update index.json, then enter 20 cases with a pre-registered budget. A 20-case batch now would measure known engine bugs, not model quality.",
+    "false_complete_note": "All four exact-HEAD runs are delivery:incomplete, artifact_claim_replay.verified:false, with blocked paragraphs byte-identical to source. Working DOCX files are partial and must not be presented as final contracts.",
+    "replay_note": "full-replay-comparison.json is true for all four (facts, scope, targets, attribution, obligations, plan, artifact claim replay, delivery, unresolved, recovery, audit recovery, zero HTTP, no replay error, artifact text). This proves record/replay reproducibility, not delivery."
+  },
+  "case_snapshot": {
+    "D01": {
+      "mode": "record",
+      "calls": 32,
+      "cost_usd": 0.0235434,
+      "completion_counts": {"SATISFIED": 0, "ARTIFACT_VERIFIED": 11, "ALREADY_SATISFIED": 7, "NOT_APPLICABLE": 10, "UNRESOLVED": 6},
+      "delivery": "incomplete",
+      "claim_verified": false,
+      "unresolved_items": 20,
+      "open_obligations": ["G01:0", "G02:0", "G02:1", "G06:0", "G16:0", "G17:0"]
+    },
+    "D02": {
+      "mode": "record",
+      "calls": 35,
+      "cost_usd": 0.03701985,
+      "completion_counts": {"SATISFIED": 0, "ARTIFACT_VERIFIED": 11, "ALREADY_SATISFIED": 8, "NOT_APPLICABLE": 10, "UNRESOLVED": 5},
+      "delivery": "incomplete",
+      "claim_verified": false,
+      "unresolved_items": 10,
+      "open_obligations": ["G06:0", "G12:0", "G12:1", "G13:0", "G16:0"],
+      "note": "G12:0 is a ONE_OF history sibling of G12:1; it closes when G12:1 passes."
+    },
+    "D11": {
+      "mode": "record",
+      "calls": 29,
+      "cost_usd": 0.02172765,
+      "completion_counts": {"SATISFIED": 0, "ARTIFACT_VERIFIED": 13, "ALREADY_SATISFIED": 8, "NOT_APPLICABLE": 10, "UNRESOLVED": 3},
+      "delivery": "incomplete",
+      "claim_verified": false,
+      "unresolved_items": 3,
+      "open_obligations": ["G05:2", "G06:0", "G16:0"]
+    },
+    "D16": {
+      "mode": "record",
+      "calls": 34,
+      "cost_usd": 0.03513165,
+      "completion_counts": {"SATISFIED": 0, "ARTIFACT_VERIFIED": 11, "ALREADY_SATISFIED": 7, "NOT_APPLICABLE": 10, "UNRESOLVED": 6},
+      "delivery": "incomplete",
+      "claim_verified": false,
+      "unresolved_items": 19,
+      "open_obligations": ["G06:0", "G12:0", "G12:1", "G13:0", "G16:0", "G17:0"],
+      "note": "G12:0 is a ONE_OF history sibling of G12:1; it closes when G12:1 passes."
+    }
+  },
+  "totals": {
+    "calls": 130,
+    "cost_usd": 0.11742255,
+    "true_obligations_per_case": 24,
+    "cases": 4
+  },
+  "classification_key": {
+    "REAL_ENGINE_BUG": "Deterministic engine logic produces a false conflict, loses a valid edit, cannot find a valid site, or books the wrong status.",
+    "EXPECTED_FAIL_CLOSED_TARGET": "The engine correctly refuses to write because the target/operation is not provable.",
+    "EXPECTED_FAIL_CLOSED_GENERATION": "Generation cannot produce a safe edit; the engine fails closed.",
+    "BUSINESS_AMBIGUITY": "Two genuinely different business operations need a user/rule decision. None of the current blockers is of this class.",
+    "MODEL_FAILURE": "The model supplied a wrong/out-of-scope target; the engine correctly fails closed.",
+    "RECOVERY_FAILURE": "Recovery did not repair a model target; the engine correctly fails closed.",
+    "EVIDENCE_BOOKKEEPING": "The evidence index/ledger is stale or internally inconsistent; not a runtime defect.",
+    "REPORTING_SEMANTICS": "A supported proof is labelled with misleading provenance; no delivery impact.",
+    "COVERAGE_GAP": "The four cases do not exercise a path that a larger evaluation needs; no code change."
+  },
+  "findings": [
+    {
+      "id": "F1",
+      "severity": "BLOCKER",
+      "classification": "REAL_ENGINE_BUG",
+      "regression": true,
+      "cases": ["D02"],
+      "rules": ["G12", "G13"],
+      "title": "D02 G12/G13 joint compose is present at baseline and lost by replan_sites",
+      "observed": "Baseline frozen/D02/plan.json contains T016+T017 joint_compose at p229. Exact-HEAD frozen/D02/plan.json has no p229 edit; reports/D02.json marks G12:1/G13:0 UNRESOLVED; artifacts/D02/working_final.docx p229 is byte-identical to source. The ledger has UNBOUND:772a... with operation_keys [G12:1,G13:0] reason RECALL_PLAN_REFERENCE_UNBOUND, and T016/T017 reason RECALL_PLAN_COMPONENT_DROPPED.",
+      "reproduction": "replay_stage(frozen/D02,'plan') fresh: 17 edits including p229 joint. replay_stage(...,'plan',revision=1/2/3) with dirty p1288,p1289,p228: p229 joint absent in every replan. Artifact p229 unchanged.",
+      "root_cause": "replan_sites.bind_reference treats one joint-compose edit as one unit and requires keys <= set(target.operations) on a single target (fundlex/recall.py:4723-4735). A joint edit has G12:1+G13:0, no single target carries both, so it returns None; the parent edit is dropped as atomic (fundlex/recall.py:4843-4855) and booked UNBOUND (fundlex/recall.py:4805-4812). The joint edit is self-contained (expected_old_text, span, replacement, validation PASS) and its paragraph is not dirty.",
+      "smallest_fix": "In replan_sites, bind a multi-key/joint edit by its components (each operation+location), or when content_source == 'joint_compose' and expected_old_text matches the current source span, retain it unchanged. Do not drop a validated joint edit because no single target owns both keys.",
+      "evidence": [
+        "/home/opencode/fundlex/docs/evidence/final-validation-20261022/frozen/D02/plan.json",
+        "/home/opencode/fundlex/docs/evidence/final-validation-20261022/revalidation-ff4d7498/frozen/D02/plan.json",
+        "/home/opencode/fundlex/docs/evidence/final-validation-20261022/revalidation-ff4d7498/reports/D02.json",
+        "/home/opencode/fundlex/docs/evidence/final-validation-20261022/revalidation-ff4d7498/artifacts/D02/working_final.docx"
+      ],
+      "code": ["/home/opencode/fundlex-ff4d749/fundlex/recall.py:4723-4735", "/home/opencode/fundlex-ff4d749/fundlex/recall.py:4805-4812", "/home/opencode/fundlex-ff4d749/fundlex/recall.py:4843-4855"],
+      "blocker": true
+    },
+    {
+      "id": "F2",
+      "severity": "BLOCKER",
+      "classification": "REAL_ENGINE_BUG",
+      "regression": false,
+      "cases": ["D01", "D02", "D11", "D16"],
+      "rules": ["G06"],
+      "title": "Delete of a document-wide absent sentence cannot be proven; G06 stays UNRESOLVED",
+      "observed": "G06:0 is UNRESOLVED / CLAIM_OPERATION_UNPROVEN with 'verified site missing' in all four cases (reports/D0*.json; summaries/D16-stage-claim_replay.json failure G06 G06:0 CLAIM_OPERATION_UNPROVEN). The G06 sentence is absent document-wide in all four originals (0 occurrences).",
+      "root_cause": "replay_claims drops state:absent targets unless a real site is bound (fundlex/generation/claim_replay.py:996-1045); evaluate_operation_effect returns OPEN when no site exists (fundlex/generation/effects.py:334). There is no document-wide absence proof for a delete.",
+      "smallest_fix": "For spec.op == 'delete' with no verified site, if every reference (old_text plus alternatives) is absent from the entire original document (compact match, minimum length >= 8), return PASS/VERIFIED_ABSENT with proof_kind 'document_literal_absent'. Do not generalize to replace/append.",
+      "evidence": [
+        "/home/opencode/fundlex/docs/evidence/final-validation-20261022/revalidation-ff4d7498/reports/D01.json",
+        "/home/opencode/fundlex/docs/evidence/final-validation-20261022/revalidation-ff4d7498/reports/D02.json",
+        "/home/opencode/fundlex/docs/evidence/final-validation-20261022/revalidation-ff4d7498/reports/D11.json",
+        "/home/opencode/fundlex/docs/evidence/final-validation-20261022/revalidation-ff4d7498/reports/D16.json",
+        "/home/opencode/fundlex/docs/evidence/final-validation-20261022/revalidation-ff4d7498/summaries/D16-stage-claim_replay.json"
+      ],
+      "code": ["/home/opencode/fundlex-ff4d749/fundlex/generation/claim_replay.py:996-1045", "/home/opencode/fundlex-ff4d749/fundlex/generation/effects.py:334", "/home/opencode/fundlex-ff4d749/fundlex/generation/effects.py:465"],
+      "blocker": true
+    },
+    {
+      "id": "F3",
+      "severity": "BLOCKER",
+      "classification": "REAL_ENGINE_BUG",
+      "regression": false,
+      "cases": ["D01", "D02", "D11", "D16"],
+      "rules": ["G15", "G16"],
+      "title": "G16 append is never sited; G15 deletes the payment clause and nothing replaces it",
+      "observed": "G16:0 is UNRESOLVED / verified site missing in all four cases. The plan contains no G16 edit in D01/D11/D16 and only an unbound/out-of-scope G16 target in D02. G15 deleted the payment clauses: D01 p758/p1221, D02 p821/p1287, D11 p772/p1247, D16 p822/p1306 are blank in working_final.docx; the G16 new mechanism is absent. The partial artifact removes the old payment mechanism without installing the new one.",
+      "root_cause": "target_site_ok('G16') accepts any paragraph with 销售服务费 plus one of 计提/每日计算/按月支付/支付日期 (fundlex/recall.py:5220-5223). In every case this matches four fee paragraphs, so append_applicability_targets refuses because it requires exactly one member (fundlex/recall.py:2350). The model's G16 targets are on the usage clause (p760/p823/p773/p824), fail the guard, and are TARGET_SOURCE_MISMATCH. The true site is the payment clause G15 deletes (p758/p821/p772/p822).",
+      "fix_proof": "Tightening the guard to 销售服务费 + (每日计提 or 逐日累计) + 按月支付 yields exactly one anchor per case: D01 p758, D02 p821, D11 p772, D16 p822. duplicate_copy_targets then clones to the summary copies p1221/p1287/p1247/p1306; the existing G15-delete+G16-append merge installs the new mechanism.",
+      "smallest_fix": "Tighten target_site_ok G16 to the payment-clause shape. Do not add a new append architecture; the G15/G16 composition path already exists.",
+      "evidence": [
+        "/home/opencode/fundlex/docs/evidence/final-validation-20261022/revalidation-ff4d7498/reports/D01.json",
+        "/home/opencode/fundlex/docs/evidence/final-validation-20261022/revalidation-ff4d7498/reports/D02.json",
+        "/home/opencode/fundlex/docs/evidence/final-validation-20261022/revalidation-ff4d7498/reports/D11.json",
+        "/home/opencode/fundlex/docs/evidence/final-validation-20261022/revalidation-ff4d7498/reports/D16.json",
+        "/home/opencode/fundlex/docs/evidence/final-validation-20261022/revalidation-ff4d7498/artifacts/D16/working_final.docx"
+      ],
+      "code": ["/home/opencode/fundlex-ff4d749/fundlex/recall.py:5220-5223", "/home/opencode/fundlex-ff4d749/fundlex/recall.py:2350", "/home/opencode/fundlex-ff4d749/fundlex/recall.py:1985-2045", "/home/opencode/fundlex-ff4d749/fundlex/recall.py:4243-4275"],
+      "blocker": true
+    },
+    {
+      "id": "F4",
+      "severity": "BLOCKER",
+      "classification": "REAL_ENGINE_BUG",
+      "regression": false,
+      "cases": ["D01", "D16", "D02"],
+      "rules": ["G17", "G15"],
+      "title": "Same-operation duplicate targets create false RECALL_EDIT_OVERLAP conflicts and duplicate-ID false blocks",
+      "observed": "D01: Y006 (G17:0 composite p759+p760) vs DEL001 (G17:0 p760) conflict at p760; Y007 vs DEL002 at p1223. D16: T019 (G17:0 p823) vs Y010 (G17:0 composite p823+p824) conflict at p823. D02: Y012 exists twice (G18 p223 satisfied; G15 p821 needs_edit) and the G15 Y012 duplicates T019 at the same p821 span/operation, listed as RECALL_TARGET_UNRESOLVED although G15 is ARTIFACT_VERIFIED.",
+      "root_cause": "dedupe_operation_targets groups by (rule, location, operations) and, when either target is composite, requires identical composite and quote (fundlex/recall.py:1957-1958); a composite and its first-paragraph single alias are not deduped, and composite/single at different locations are not in one group. merge_edits only absorbs contained edits for ONE_OF alternatives (fundlex/recall.py:4271-4287); identical same-operation edits fall through to RECALL_EDIT_OVERLAP (fundlex/recall.py:4288). Survey IDs can reuse Y012 (fundlex/recall_pipeline.py:676, :824), and dedupe skips absent targets (fundlex/recall.py:1920-1926).",
+      "smallest_fix": "(a) Extend dedupe_operation_targets to compare a composite part with a single target at the same part location, and to treat an absent/needs_edit alias of the same operation/span as one occurrence; prefer the composite/planned target. (b) In merge_edits, when overlapping edits have the same operation_keys and identical/empty replacement at the same location, absorb the contained edit as covered. (c) Allocate Y IDs from a global used set and dedupe survey hits by (rule, operation, location, span); mark the redundant alias covered/satisfied.",
+      "evidence": [
+        "/home/opencode/fundlex/docs/evidence/final-validation-20261022/revalidation-ff4d7498/reports/D01.json",
+        "/home/opencode/fundlex/docs/evidence/final-validation-20261022/revalidation-ff4d7498/reports/D16.json",
+        "/home/opencode/fundlex/docs/evidence/final-validation-20261022/revalidation-ff4d7498/reports/D02.json",
+        "/home/opencode/fundlex/docs/evidence/final-validation-20261022/revalidation-ff4d7498/frozen/D16/plan.json",
+        "/home/opencode/fundlex/docs/evidence/final-validation-20261022/revalidation-ff4d7498/summaries/D16-stage-plan.json"
+      ],
+      "code": ["/home/opencode/fundlex-ff4d749/fundlex/recall.py:1909-1982", "/home/opencode/fundlex-ff4d749/fundlex/recall.py:4197-4300", "/home/opencode/fundlex-ff4d749/fundlex/recall_pipeline.py:676", "/home/opencode/fundlex-ff4d749/fundlex/recall_pipeline.py:824"],
+      "blocker": true
+    },
+    {
+      "id": "F5",
+      "severity": "HIGH",
+      "classification": "REAL_ENGINE_BUG",
+      "regression": false,
+      "cases": ["D01"],
+      "rules": ["G01", "G03"],
+      "title": "D01 G01 split definition is skipped because both the head and continuation are append members",
+      "observed": "D01 p91 is the split head '基金份额类别：本基金将基金份额分为 A 类、C 类和 D 类三种不同的'; p92 is the continuation '类别。在投资者申购 A 类及 D 类基金份额时收取申购费用…'. D01 has no G01 target (obligation G01:B1:O1 targets=[]), no G01 edit, and the artifact p92 is unchanged. G03 (same policy in 基金的基本情况) succeeds at p130.",
+      "root_cause": "append_site_ok's new split-continuation branch accepts p92 (fundlex/recall.py:5180-5208), but the ordinary anchor test also accepts p91; append_applicability_targets requires exactly one member (fundlex/recall.py:2350), so no hit is produced.",
+      "smallest_fix": "When a G01/G03 head paragraph ends without a sentence terminator and its direct successor is an accepted continuation, exclude the head from members (or emit the hit on the continuation only).",
+      "evidence": [
+        "/home/opencode/fundlex/docs/evidence/final-validation-20261022/revalidation-ff4d7498/reports/D01.json",
+        "/home/opencode/fundlex/docs/evidence/final-validation-20261022/revalidation-ff4d7498/frozen/D01/targets.json",
+        "/home/opencode/fundlex/docs/evidence/final-validation-20261022/revalidation-ff4d7498/frozen/D01/plan.json"
+      ],
+      "code": ["/home/opencode/fundlex-ff4d749/fundlex/recall.py:5178-5208", "/home/opencode/fundlex-ff4d749/fundlex/recall.py:2321-2366"],
+      "blocker": false
+    },
+    {
+      "id": "F6",
+      "severity": "HIGH",
+      "classification": "REAL_ENGINE_BUG",
+      "regression": false,
+      "cases": ["D01"],
+      "rules": ["G02", "G04"],
+      "title": "D01 G02 recovery locates the split head; audit then compares the un-instantiated B类 guide text",
+      "observed": "D01 G02 T3001/T3002 are at p91 span 0..35, quote the truncated heading. Planning fails RECALL_TARGET_OCCURRENCE_AMBIGUOUS; reports/D01.json audits them incomplete with the literal reason 'does not add B类' even though actual classes are A/C/D and the source already has 'A 类及 D 类'. The real fee-group clause is p92.",
+      "root_cause": "The class_definition locator (fundlex/v2.py:506-585) returns the p91 sentence and does not follow the p92 continuation where the fee-group wording lives. _plan_target_inner's class-set equivalence (fundlex/recall.py:3569-3590) requires fee wording in the quote, which the heading lacks. The audit reasons on the raw guide placeholder A类、B类 rather than the instantiated A类、D类.",
+      "smallest_fix": "In _locate_class_definition, when the matched sentence ends without a terminator and the next paragraph is a 类别… continuation containing fee wording, bind to the continuation (or the union), mirroring append_site_ok. Pass the instantiated group to the audit context so the B类 placeholder cannot drive a false incomplete.",
+      "evidence": [
+        "/home/opencode/fundlex/docs/evidence/final-validation-20261022/revalidation-ff4d7498/reports/D01.json",
+        "/home/opencode/fundlex/docs/evidence/final-validation-20261022/revalidation-ff4d7498/frozen/D01/targets.json",
+        "/home/opencode/fundlex/docs/evidence/final-validation-20261022/revalidation-ff4d7498/frozen/D01/audit.json"
+      ],
+      "code": ["/home/opencode/fundlex-ff4d749/fundlex/v2.py:506-585", "/home/opencode/fundlex-ff4d749/fundlex/recall.py:3569-3590"],
+      "blocker": false
+    },
+    {
+      "id": "F7",
+      "severity": "HIGH",
+      "classification": "REAL_ENGINE_BUG",
+      "regression": false,
+      "observed_behavior": "EXPECTED_FAIL_CLOSED_TARGET (the overlap guard correctly prevented the over-delete)",
+      "cases": ["D16"],
+      "rules": ["G12", "G13"],
+      "title": "D16 p221 G13 target is over-broad; conflict is a correct fail-closed reaction to engine target construction",
+      "observed": "Y007 is G13:0 with quote = whole p221 and composite p221:0:101,p222:0:30. The G13 old text is only the sentence starting at '其中，' (p221:90..101 + p222:0..30, as sweep SW003 records). Y007 overlaps T014 (G12:1 p221:0..101) on the whole paragraph. Plan reports RECALL_EDIT_OVERLAP; artifact p221 unchanged; no over-delete.",
+      "root_cause": "survey_targets fuzzy-matches the long G13 reference to the whole p221 window (fundlex/recall.py:2127-2290); _extend_to_clause_start cannot trim a match already at 0 (fundlex/recall.py:2447-2472). _clause_continuation_binding promotes the whole-paragraph target to a composite (fundlex/recall_pipeline.py:957-995), preserving p221:0..101 instead of 90..101. Joint compose only covers the conflicting p221 span, not the composite p222 part (fundlex/recall.py:4393-4475).",
+      "smallest_fix": "Bound a delete survey hit to the operation's sentence(s) (use the SW003 exact artifact span / the rule's delete anchors); when rebinding a split delete, keep the original mid-paragraph start and extend only the end into the follower. Do not relax the overlap guard.",
+      "evidence": [
+        "/home/opencode/fundlex/docs/evidence/final-validation-20261022/revalidation-ff4d7498/reports/D16.json",
+        "/home/opencode/fundlex/docs/evidence/final-validation-20261022/revalidation-ff4d7498/frozen/D16/targets.json",
+        "/home/opencode/fundlex/docs/evidence/final-validation-20261022/revalidation-ff4d7498/frozen/D16/sweep.json",
+        "/home/opencode/fundlex/docs/evidence/final-validation-20261022/revalidation-ff4d7498/artifacts/D16/working_final.docx"
+      ],
+      "code": ["/home/opencode/fundlex-ff4d749/fundlex/recall.py:2127-2290", "/home/opencode/fundlex-ff4d749/fundlex/recall.py:2447-2472", "/home/opencode/fundlex-ff4d749/fundlex/recall_pipeline.py:957-995", "/home/opencode/fundlex-ff4d749/fundlex/recall.py:4393-4475"],
+      "blocker": false
+    },
+    {
+      "id": "F8",
+      "severity": "HIGH",
+      "classification": "REAL_ENGINE_BUG",
+      "regression": true,
+      "cases": ["D16"],
+      "rules": ["G01"],
+      "title": "D16 G01 completed audit verdict is orphaned by the target quote narrowing",
+      "observed": "frozen/D16/audit.json has a completed G01 verdict for T001 with evidence_verified true. reports/D16.json still reports AUDIT_VERDICT_MISSING for the same T001; user_summary says G01 '独立复核认为修改尚未完成'. G01 is ARTIFACT_VERIFIED and the appended text is present at p91. Baseline T001 quote/span 0..131; exact-HEAD 77..131.",
+      "root_cause": "_target_identity hashes start/end/compact(quote)/composite/operations/occurrence (fundlex/recall_pipeline.py:547-561). _merge_audit_state stores the verdict under that identity (:1610-1626); _audit_issues looks it up with the final identity (:1715-1728). Narrowing the append target quote changes the key, so a valid completed audit becomes missing.",
+      "smallest_fix": "Key audit results by stable business identity: rule_id, paragraph location, source paragraph body hash, sorted operations, occurrence; include the instantiated new-text hash for append/replace so a changed policy still re-opens the audit. Ignore pure target quote/span churn.",
+      "evidence": [
+        "/home/opencode/fundlex/docs/evidence/final-validation-20261022/revalidation-ff4d7498/frozen/D16/audit.json",
+        "/home/opencode/fundlex/docs/evidence/final-validation-20261022/revalidation-ff4d7498/reports/D16.json",
+        "/home/opencode/fundlex/docs/evidence/final-validation-20261022/revalidation-ff4d7498/frozen/D16/targets.json",
+        "/home/opencode/fundlex/docs/evidence/final-validation-20261022/frozen/D16/targets.json"
+      ],
+      "code": ["/home/opencode/fundlex-ff4d749/fundlex/recall_pipeline.py:547-561", "/home/opencode/fundlex-ff4d749/fundlex/recall_pipeline.py:1610-1626", "/home/opencode/fundlex-ff4d749/fundlex/recall_pipeline.py:1715-1728"],
+      "blocker": false
+    },
+    {
+      "id": "F9",
+      "severity": "HIGH",
+      "classification": "REAL_ENGINE_BUG",
+      "regression": false,
+      "cases": ["D02"],
+      "rules": ["G15"],
+      "title": "D02 Y012 duplicate ID / redundant target blocks delivery after G15 passed",
+      "observed": "frozen/D02/targets.json has two targets with target_id Y012: G18 p223 (satisfied) and G15 p821 (needs_edit, same span/operation as T019). reports/D02.json lists Y012 (G15 p821) as RECALL_TARGET_UNRESOLVED while G15:B1:O1 is ARTIFACT_VERIFIED and the artifact p821/p1287 are deleted.",
+      "root_cause": "Survey ID allocation can reuse Y012 across rounds (fundlex/recall_pipeline.py:676, :824); dedupe_operation_targets skips absent targets (fundlex/recall.py:1920-1926), so the needs_edit Y012 alias of absent T019 is not suppressed. Ledger/audit keyed by target_id conflate the two.",
+      "smallest_fix": "Allocate survey IDs from a document-wide used set; include resolved absent targets in the same-operation/span dedupe; mark the redundant alias covered/satisfied instead of unresolved.",
+      "evidence": [
+        "/home/opencode/fundlex/docs/evidence/final-validation-20261022/revalidation-ff4d7498/frozen/D02/targets.json",
+        "/home/opencode/fundlex/docs/evidence/final-validation-20261022/revalidation-ff4d7498/reports/D02.json"
+      ],
+      "code": ["/home/opencode/fundlex-ff4d749/fundlex/recall_pipeline.py:676", "/home/opencode/fundlex-ff4d749/fundlex/recall_pipeline.py:824", "/home/opencode/fundlex-ff4d749/fundlex/recall.py:1909-1982"],
+      "blocker": false
+    },
+    {
+      "id": "F10",
+      "severity": "HIGH",
+      "classification": "REAL_ENGINE_BUG",
+      "regression": false,
+      "cases": [],
+      "rules": ["G13", "G05", "delete rules"],
+      "title": "Latent unsupported VERIFIED_ABSENT for delete rules without a site guard and split-clause heads",
+      "observed": "No unsupported VERIFIED_ABSENT was found in the four cases. D01/D02 G05:2 absence is at the real class-setup paragraph; D16 G05:2 is an actual edit; G15/G17/G13 verified-absent entries all have real edits; G06 is unproven (not falsely passed).",
+      "latent_risk": "target_site_ok returns True for any rule not in its explicit guards (G13 and future delete rules; fundlex/recall.py:5228-5229). evaluate_operation_effect marks any delete with no residual at a 'verified site' as VERIFIED_ABSENT (fundlex/generation/effects.py:465). A model target on a heading/summary paragraph that passes the quote-in-body test can prove a delete no-op at the wrong site. D01 G05:2 is site-scoped to p135 although the clause continues to p136 ('公告。'); if the literal were in the continuation, the proof would be unsupported.",
+      "smallest_fix": "For VERIFIED_ABSENT require either (a) the exact literal was present in the original site and is absent in the artifact, or (b) the literal is absent document-wide (F2), or (c) a rule-specific site guard exists and the site is a complete business clause (follow the direct continuation when unfinished). Do not accept a bare heading/placeholder quote.",
+      "evidence": [
+        "/home/opencode/fundlex/docs/evidence/final-validation-20261022/revalidation-ff4d7498/reports/D01.json",
+        "/home/opencode/fundlex/docs/evidence/final-validation-20261022/revalidation-ff4d7498/reports/D02.json",
+        "/home/opencode/fundlex/docs/evidence/final-validation-20261022/revalidation-ff4d7498/reports/D16.json"
+      ],
+      "code": ["/home/opencode/fundlex-ff4d749/fundlex/recall.py:5211-5229", "/home/opencode/fundlex-ff4d749/fundlex/generation/effects.py:465"],
+      "blocker": false
+    },
+    {
+      "id": "F11",
+      "severity": "MEDIUM",
+      "classification": "MODEL_FAILURE / RECOVERY_FAILURE",
+      "regression": false,
+      "cases": ["D11"],
+      "rules": ["G05"],
+      "title": "D11 G05:2 model target is out-of-scope; engine has no site-scoped absence normalization",
+      "observed": "D11 T006 (G05 p129, quote '调整前基金管理人需及时公告', claimed_operations [G05:2], operations [], out_of_scope true, TARGET_SOURCE_MISMATCH) yields no G05:2 site. G05:B3:O1 UNRESOLVED; recovery REBUILD_PLAN -> MARK_UNRESOLVED (detail: CLAIM_OPERATION_NOT_PLANNED:no_code_proven_site). The literal '并报中国证监会备案' is absent at p129 (only unrelated p726/p927/p1320 contain it).",
+      "root_cause": "The model emitted needs_edit at the end of the class-setup clause; the operation literal is not there. The engine marks the target TARGET_SOURCE_MISMATCH and has no site-scoped absence normalization for a delete target whose quote resolves, whose site guard passes, and whose old text is absent at the site. D01/D02/D16 close the same situation because the model emitted state: absent.",
+      "smallest_fix": "When a delete target's quote resolves within its location, the rule's site guard passes, and the operation's exact old text is absent from that paragraph (including the direct continuation if unfinished), mark the target absent/satisfied for that operation. This is the same site-scoped proof used by D01/D02, applied consistently.",
+      "evidence": [
+        "/home/opencode/fundlex/docs/evidence/final-validation-20261022/revalidation-ff4d7498/reports/D11.json",
+        "/home/opencode/fundlex/docs/evidence/final-validation-20261022/revalidation-ff4d7498/frozen/D11/targets.json"
+      ],
+      "code": ["/home/opencode/fundlex-ff4d749/fundlex/generation/claim_replay.py:1005-1045", "/home/opencode/fundlex-ff4d749/fundlex/generation/effects.py:127-230"],
+      "blocker": false
+    },
+    {
+      "id": "F12",
+      "severity": "MEDIUM",
+      "classification": "EVIDENCE_BOOKKEEPING",
+      "regression": false,
+      "cases": ["D01", "D02", "D11", "D16"],
+      "title": "index.json is stale and inconsistent with the exact-HEAD runs",
+      "observed": "index.json validation_head is ff4d749, but record_results is {}, replay_results.*.head is 682e68a, gate_reason still says 'D01 artifact not generated due to stable-identity replan bug' and 'Absent inventory placeholders accepted as proof sites' (both no longer true at ff4d749), and current_record_total_calls is 122/$0.1146 while the four exact-HEAD records total 130/~$0.1174. gate: FAIL is still the correct outcome, but the recorded reasons/figures are not exact-HEAD evidence.",
+      "smallest_fix": "Update index.json with the four record_results, the exact-HEAD replay heads, the new totals, and a gate reason citing F1-F9. Keep baseline and exact-HEAD roots separate.",
+      "evidence": ["/home/opencode/fundlex/docs/evidence/final-validation-20261022/revalidation-ff4d7498/index.json"],
+      "code": [],
+      "blocker": false
+    },
+    {
+      "id": "F13",
+      "severity": "LOW",
+      "classification": "REPORTING_SEMANTICS",
+      "regression": false,
+      "cases": ["D01", "D16"],
+      "rules": ["G11", "G12", "G02", "G04"],
+      "title": "ALREADY_SATISFIED used for ONE_OF sibling effects and class-set equivalence is supported but misleading",
+      "observed": "D01 G12:B1:O1 and D16 G11:B1:O1 are ALREADY_SATISFIED with no own edit; the effect is present because the sibling operation (G12:1 / G11:1) wrote it and the ONE_OF group shares the verified site. D02/D11/D16 G02/G04 ALREADY_SATISFIED are the instantiated class set (A类、D类 vs A 类及 D 类). These are supported, not false completes, but the label reads as 'the source already complied'.",
+      "smallest_fix": "Reporting only: use EXPECTED_EFFECT_PRESENT_VIA_WORDING_GROUP / CLASS_GROUP_ALREADY_PRESENT for these cases, or add a provenance field. No delivery impact.",
+      "evidence": [
+        "/home/opencode/fundlex/docs/evidence/final-validation-20261022/revalidation-ff4d7498/reports/D01.json",
+        "/home/opencode/fundlex/docs/evidence/final-validation-20261022/revalidation-ff4d7498/reports/D16.json"
+      ],
+      "code": ["/home/opencode/fundlex-ff4d749/fundlex/generation/claim_replay.py:1065-1095", "/home/opencode/fundlex-ff4d749/fundlex/generation/effects.py:23-39"],
+      "blocker": false
+    },
+    {
+      "id": "F14",
+      "severity": "MEDIUM",
+      "classification": "COVERAGE_GAP",
+      "regression": false,
+      "cases": ["D01", "D02", "D11", "D16"],
+      "rules": ["G02", "G04", "G05"],
+      "title": "Coverage gap: the four cases do not exercise the actual G02/G04 replacement path or a multi-paragraph G05 splice",
+      "observed": "All four cases already have the correct class group (A / A,D / A,C), so G02/G04 only exercise the already-correct path. G05:0 is a six-character literal replace; the only G05:2 delete with the literal present is D16 p133 (single paragraph). The G02/G04 occurrence-index replacement and the multi-paragraph G05 splice are not live-validated.",
+      "smallest_fix": "For the 20-case set, include a contract with a missing/extra class group and a multi-paragraph class-setup clause. No code change.",
+      "evidence": [
+        "/home/opencode/fundlex/docs/evidence/final-validation-20261022/revalidation-ff4d7498/reports/D01.json",
+        "/home/opencode/fundlex/docs/evidence/final-validation-20261022/revalidation-ff4d7498/reports/D02.json",
+        "/home/opencode/fundlex/docs/evidence/final-validation-20261022/revalidation-ff4d7498/reports/D11.json",
+        "/home/opencode/fundlex/docs/evidence/final-validation-20261022/revalidation-ff4d7498/reports/D16.json"
+      ],
+      "code": [],
+      "blocker": false
+    }
+  ],
+  "cross_cutting": {
+    "false_complete": {
+      "verdict": "NOT_PROVEN",
+      "detail": "All four delivery:incomplete, claim_verified:false, blocked paragraphs byte-identical to source. Working DOCX partial and marked partial. No obligation was found claiming an effect absent from the artifact; ALREADY_SATISFIED cases are supported by ONE_OF/class-set/instantiation evidence. The false negative is D16 G01 (F8), not a false complete."
+    },
+    "cross_site_proof": {
+      "verdict": "PASS_FOR_EXERCISED_CASES_WITH_LATENT_RISK",
+      "detail": "D16 G17 keeps p823/p824 as required sites and fails although p1307/p1308 were deleted; G15 requires both body/summary copies; G05:2 is site-guarded. Latent delete-without-guard risk (F10)."
+    },
+    "unsupported_verified_absent": {
+      "verdict": "CLOSED_FOR_THESE_FOUR_CASES_LATENT_FOR_OTHERS",
+      "detail": "The ff4d749 filter (drop claimed_operations, drop attribution_error, drop absent sites, heading/site guard) closes the 682e68a hole in these four. D01/D02 G05:2 absence is at a real class-setup paragraph. Residual risk: rules without site guards (G13) and split-clause heads (F10)."
+    },
+    "planned_but_not_artifact": {
+      "verdict": "FALSE_CLAIM_PREVENTED_BUT_VALID_EDIT_LOST",
+      "detail": "The final ledger reconciliation works: no ledger says planned for an edit absent from records; conflicts are unresolved. But D02's validated joint edit is silently dropped in replan (F1) - a lost edit, not a false artifact claim. plan_matches_actual is true in the artifact reviews."
+    },
+    "duplicate_body_summary_proof": {
+      "verdict": "GUARD_WORKS",
+      "detail": "D16-stage-claim_replay has DUPLICATE_SITE_UNEDITED at p823. _verified_site_closure adds exact-body duplicates. The G16 summary copy is not yet a site because G16 has no target (F3); after the guard fix duplicate_copy_targets handles it."
+    },
+    "same_operation_duplicate": {
+      "verdict": "PROVEN_FALSE_CONFLICTS",
+      "detail": "D01 G17 composite vs DEL001/DEL002; D16 G17 T019 vs Y010; D02 G15 Y012 vs T019. See F4/F9."
+    },
+    "target_renumbering_history": {
+      "verdict": "PARTIAL",
+      "detail": "Stable-key rebind fixes single-target replans but not joint edits (F1), audit identity (F8), or duplicate IDs (F9). D16 targets stage T019 G16 p824 / T020 G17 p823 -> final T018 G16 / T019 G17. D02 joint old T017+T019 -> current T016/T017. Do not use target_id as a business identity."
+    },
+    "g01_g03_split_append": {
+      "verdict": "FAIL_D01",
+      "detail": "D01 G01 has no target because p91 and p92 are both members; G03 at p130 succeeds. F5."
+    },
+    "g02_g04_occurrence_class_set": {
+      "verdict": "PASS_ALREADY_CORRECT_PATH_FAIL_D01_SPLIT",
+      "detail": "D02/D11/D16 G02/G04 ALREADY_SATISFIED via instantiated class set and A类及D类 == A类、D类. D01 fails at the split heading (F6). The actual replacement path (source missing a group) is not exercised (F14)."
+    },
+    "g05_bounded_splice_site_guard": {
+      "verdict": "PASS_EXERCISED_LATENT_SPLIT_RISK",
+      "detail": "D16 p133 G05:0 replace + G05:2 delete composed atomically and verified; D01/D02 G05:2 absent at the real class-setup site; D11 G05:2 is a model target error / fail-closed (F11). The guard is strong; the split-head absence edge is latent (F10)."
+    },
+    "g16_duplicate_sites": {
+      "verdict": "FAIL_4_OF_4",
+      "detail": "The G16 site guard accepts four fee paragraphs and the append pass requires exactly one. Tightened guard yields one payment-clause anchor per case; duplicate_copy_targets then clones the summary copy. F3."
+    }
+  },
+  "gate": {
+    "current": "FAIL",
+    "can_enter_20_case": false,
+    "reasons": [
+      "4/4 exact-HEAD cases are still incomplete; the common blockers are engine defects F1-F4, not model/target ambiguity.",
+      "D02 G12/G13 joint compose is a regression: present at baseline, lost at ff4d749 by replan_sites.",
+      "D16 G01 is a false audit negative; D02 Y012 is a duplicate-target false block. The bookkeeping/evidence layer is not yet trustworthy for a larger batch.",
+      "The positive result (no false complete, zero HTTP in replay, identical artifact text, working site/duplicate guards) is a foundation, not a delivery pass."
+    ],
+    "conditions_to_enter": [
+      "Fix F1-F4 (joint replan, G06 document-wide absence, G16 payment-clause guard, same-operation duplicate/dedupe) and F5/F6 (D01 split append/locator). Fix F7/F8/F9 before the batch if D02/D16 are included; F8 is a regression and should be fixed regardless.",
+      "Re-record the four cases at the new SHA (the fixes change planning/model calls; replay alone is not enough). Require 4/4 delivery:complete, or every remaining open item classified MODEL_FAILURE/TARGET_AMBIGUITY with no engine bug and no false complete.",
+      "Update index.json to the new exact-HEAD record/replay values and a gate reason citing the actual remaining blockers (F12).",
+      "Pre-register the 20-case budget and seed set; include a contract with a missing class group and a multi-paragraph class-setup clause (F14). Current 4-case cost is ~$0.117/130 calls; the index total limits (768 calls/$2.4) were not exhausted, but a 20-case run needs its own pre-registration."
+    ],
+    "if_run_anyway": "Label it diagnostic, not final; do not publish delivery metrics as model quality until F1-F4 are fixed."
+  },
+  "smallest_fix_order": [
+    "F1 retain joint-compose edits in replan_sites (D02 G12/G13 regression).",
+    "F3 tighten G16 site guard to the payment clause (4/4; restores the G15->G16 mechanism).",
+    "F2 document-wide absent-literal proof for delete obligations (4/4 G06).",
+    "F4/F9 same-operation duplicate dedupe + unique Y IDs (D01/D16 G17, D02 Y012).",
+    "F5 exclude the split head from G01/G03 append members (D01 G01).",
+    "F6 extend the class-definition locator over the split continuation + instantiate audit class groups (D01 G02).",
+    "F7 trim survey delete hits to the operation sentence / joint compose across composite parts (D16 G12/G13).",
+    "F8 stable audit identity (D16 G01).",
+    "F10 harden VERIFIED_ABSENT for delete rules without a site guard and split heads.",
+    "F11 site-scoped absent normalization for D11 G05:2 (model/recovery consistency).",
+    "F12 update the evidence index; F13/F14 reporting/coverage only."
+  ],
+  "evidence": {
+    "reports": [
+      "/home/opencode/fundlex/docs/evidence/final-validation-20261022/revalidation-ff4d7498/reports/D01.json",
+      "/home/opencode/fundlex/docs/evidence/final-validation-20261022/revalidation-ff4d7498/reports/D02.json",
+      "/home/opencode/fundlex/docs/evidence/final-validation-20261022/revalidation-ff4d7498/reports/D11.json",
+      "/home/opencode/fundlex/docs/evidence/final-validation-20261022/revalidation-ff4d7498/reports/D16.json"
+    ],
+    "stage_replays": [
+      "/home/opencode/fundlex/docs/evidence/final-validation-20261022/revalidation-ff4d7498/summaries/D16-stage-facts.json",
+      "/home/opencode/fundlex/docs/evidence/final-validation-20261022/revalidation-ff4d7498/summaries/D16-stage-applicability.json",
+      "/home/opencode/fundlex/docs/evidence/final-validation-20261022/revalidation-ff4d7498/summaries/D16-stage-targets.json",
+      "/home/opencode/fundlex/docs/evidence/final-validation-20261022/revalidation-ff4d7498/summaries/D16-stage-obligations.json",
+      "/home/opencode/fundlex/docs/evidence/final-validation-20261022/revalidation-ff4d7498/summaries/D16-stage-plan.json",
+      "/home/opencode/fundlex/docs/evidence/final-validation-20261022/revalidation-ff4d7498/summaries/D16-stage-claim_replay.json",
+      "/home/opencode/fundlex/docs/evidence/final-validation-20261022/revalidation-ff4d7498/summaries/full-replay-comparison.json"
+    ],
+    "frozen": [
+      "/home/opencode/fundlex/docs/evidence/final-validation-20261022/revalidation-ff4d7498/frozen/D01",
+      "/home/opencode/fundlex/docs/evidence/final-validation-20261022/revalidation-ff4d7498/frozen/D02",
+      "/home/opencode/fundlex/docs/evidence/final-validation-20261022/revalidation-ff4d7498/frozen/D11",
+      "/home/opencode/fundlex/docs/evidence/final-validation-20261022/revalidation-ff4d7498/frozen/D16"
+    ],
+    "baseline": [
+      "/home/opencode/fundlex/docs/evidence/final-validation-20261022/frozen/D02/plan.json",
+      "/home/opencode/fundlex/docs/evidence/final-validation-20261022/frozen/D16/targets.json",
+      "/home/opencode/fundlex/docs/evidence/final-validation-20261022/reports/D02.json",
+      "/home/opencode/fundlex/docs/evidence/final-validation-20261022/reports/D11.json",
+      "/home/opencode/fundlex/docs/evidence/final-validation-20261022/reports/D16.json"
+    ],
+    "code": [
+      "/home/opencode/fundlex-ff4d749/fundlex/recall.py",
+      "/home/opencode/fundlex-ff4d749/fundlex/generation/claim_replay.py",
+      "/home/opencode/fundlex-ff4d749/fundlex/generation/effects.py",
+      "/home/opencode/fundlex-ff4d749/fundlex/recall_pipeline.py",
+      "/home/opencode/fundlex-ff4d749/fundlex/v2.py"
+    ],
+    "index": "/home/opencode/fundlex/docs/evidence/final-validation-20261022/revalidation-ff4d7498/index.json"
+  }
+}

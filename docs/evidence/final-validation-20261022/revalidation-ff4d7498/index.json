@@ -1,0 +1,742 @@
+{
+  "schema_version": 1,
+  "validation_head": "ff4d7498b6c1aee72ba48686074d021fc7f84791",
+  "runtime_code_head": "ff4d7498b6c1aee72ba48686074d021fc7f84791",
+  "evidence_base_head": "387e334869fdb77954b8b97270e393c044105e3d",
+  "evidence_head": "PENDING_PACKAGING_COMMIT",
+  "baseline_validation_head": "682e68a5b3ef2a58feb77460af70afabdb314379",
+  "branch": "refactor/recovery-architecture",
+  "runtime_tree_sha256": "7ad22dc0dfe38bf7d8431ee437e7c5f6575a4f3a8155164d24559028d14e27a2",
+  "guide": {
+    "source_sha256": "b77be53c3439d785a9ffad0f09d8d03ba74f7722397576b999ae6f5dd6eef895",
+    "document_sha256": "45dd77460f2ef93d29001c0833c220f89de99dafb19d32a8b73653b55f92c8d7",
+    "json_file_sha256": "2dfe00e3506d8aea1363574103d9efb9c49d7c4ac28fdb2375c6b85481f6db17",
+    "rule_count": 22,
+    "operation_count": 34
+  },
+  "offline": {
+    "command": ".venv/bin/python -m pytest tests -q",
+    "passed": 1061,
+    "failed": 0,
+    "skipped": 6,
+    "warnings": 2,
+    "elapsed_seconds": 207.1,
+    "compileall": "PASS",
+    "diff_check": "PASS",
+    "log": "logs/pytest-ff4d749.txt"
+  },
+  "record_results": {
+    "D01": {
+      "case_id": "D01",
+      "elapsed_seconds": 171.02,
+      "delivery": "incomplete",
+      "calls": 32,
+      "tokens": 129785,
+      "cost_usd": 0.023543399999999996,
+      "true_obligations": 24,
+      "completion_counts": {
+        "SATISFIED": 0,
+        "ARTIFACT_VERIFIED": 11,
+        "ALREADY_SATISFIED": 7,
+        "NOT_APPLICABLE": 10,
+        "UNRESOLVED": 6
+      },
+      "true_not_applicable": 0,
+      "claim_verified": false,
+      "unresolved_count": 20,
+      "errors": [],
+      "stop": null,
+      "plan_edits": 14,
+      "plan_conflicts": [
+        {
+          "code": "RECALL_EDIT_OVERLAP",
+          "location": "p760",
+          "targets": [
+            "Y006",
+            "DEL001"
+          ]
+        },
+        {
+          "code": "RECALL_EDIT_OVERLAP",
+          "location": "p1223",
+          "targets": [
+            "Y007",
+            "DEL002"
+          ]
+        }
+      ],
+      "claim_failures": [
+        {
+          "rule_id": "G01",
+          "code": "CLAIM_OPERATION_UNPROVEN",
+          "location": ""
+        },
+        {
+          "rule_id": "G02",
+          "code": "CLAIM_OPERATION_UNPROVEN",
+          "location": ""
+        },
+        {
+          "rule_id": "G02",
+          "code": "CLAIM_OPERATION_UNPROVEN",
+          "location": ""
+        },
+        {
+          "rule_id": "G06",
+          "code": "CLAIM_OPERATION_UNPROVEN",
+          "location": ""
+        },
+        {
+          "rule_id": "G16",
+          "code": "CLAIM_OPERATION_UNPROVEN",
+          "location": ""
+        },
+        {
+          "rule_id": "G17",
+          "code": "CLAIM_OPERATION_NOT_PLANNED",
+          "location": "p759"
+        },
+        {
+          "rule_id": "G17",
+          "code": "RESIDUAL_OLD_TEXT",
+          "location": "p759"
+        },
+        {
+          "rule_id": "G17",
+          "code": "RESIDUAL_OLD_TEXT",
+          "location": "p760"
+        },
+        {
+          "rule_id": "G17",
+          "code": "RESIDUAL_OLD_TEXT",
+          "location": "p1222"
+        },
+        {
+          "rule_id": "G17",
+          "code": "RESIDUAL_OLD_TEXT",
+          "location": "p1223"
+        }
+      ],
+      "artifact": {
+        "artifact_file": "working_final.docx",
+        "artifact_sha256": "80a87bd8ab44d36f08e399c864ce677c82887fd83505142126c283b0673bc6a9",
+        "changed_paragraph_count": 14,
+        "plan_artifact_mismatches": [],
+        "final_revision_elements": 0,
+        "redline_revision_elements": {
+          "ins": 14,
+          "delete": 14,
+          "accepted_matches_final": true,
+          "rejected_matches_original": true,
+          "accepted_paragraph_count": 1363,
+          "rejected_paragraph_count": 1363
+        }
+      }
+    },
+    "D02": {
+      "case_id": "D02",
+      "elapsed_seconds": 336.86,
+      "delivery": "incomplete",
+      "calls": 35,
+      "tokens": 202288,
+      "cost_usd": 0.03701984999999999,
+      "true_obligations": 24,
+      "completion_counts": {
+        "SATISFIED": 0,
+        "ARTIFACT_VERIFIED": 11,
+        "ALREADY_SATISFIED": 8,
+        "NOT_APPLICABLE": 10,
+        "UNRESOLVED": 5
+      },
+      "true_not_applicable": 0,
+      "claim_verified": false,
+      "unresolved_count": 10,
+      "errors": [],
+      "stop": null,
+      "plan_edits": 16,
+      "plan_conflicts": [],
+      "claim_failures": [
+        {
+          "rule_id": "G06",
+          "code": "CLAIM_OPERATION_UNPROVEN",
+          "location": ""
+        },
+        {
+          "rule_id": "G12",
+          "code": "CLAIM_OPERATION_UNPROVEN",
+          "location": ""
+        },
+        {
+          "rule_id": "G12",
+          "code": "CLAIM_OPERATION_NOT_PLANNED",
+          "location": "p229"
+        },
+        {
+          "rule_id": "G13",
+          "code": "CLAIM_OPERATION_NOT_PLANNED",
+          "location": "p229"
+        },
+        {
+          "rule_id": "G16",
+          "code": "CLAIM_OPERATION_UNPROVEN",
+          "location": ""
+        }
+      ],
+      "artifact": {
+        "artifact_file": "working_final.docx",
+        "artifact_sha256": "4ad99c978765b3ed71d9d5d42a4d97fe6be144b6b251ad340e0e9cd228907140",
+        "changed_paragraph_count": 16,
+        "plan_artifact_mismatches": [],
+        "final_revision_elements": 0,
+        "redline_revision_elements": {
+          "ins": 16,
+          "delete": 16,
+          "accepted_matches_final": true,
+          "rejected_matches_original": true,
+          "accepted_paragraph_count": 1430,
+          "rejected_paragraph_count": 1430
+        }
+      }
+    },
+    "D11": {
+      "case_id": "D11",
+      "elapsed_seconds": 167.89,
+      "delivery": "incomplete",
+      "calls": 29,
+      "tokens": 120716,
+      "cost_usd": 0.021727649999999994,
+      "true_obligations": 24,
+      "completion_counts": {
+        "SATISFIED": 0,
+        "ARTIFACT_VERIFIED": 13,
+        "ALREADY_SATISFIED": 8,
+        "NOT_APPLICABLE": 10,
+        "UNRESOLVED": 3
+      },
+      "true_not_applicable": 0,
+      "claim_verified": false,
+      "unresolved_count": 3,
+      "errors": [],
+      "stop": null,
+      "plan_edits": 14,
+      "plan_conflicts": [],
+      "claim_failures": [
+        {
+          "rule_id": "G05",
+          "code": "CLAIM_OPERATION_UNPROVEN",
+          "location": ""
+        },
+        {
+          "rule_id": "G06",
+          "code": "CLAIM_OPERATION_UNPROVEN",
+          "location": ""
+        },
+        {
+          "rule_id": "G16",
+          "code": "CLAIM_OPERATION_UNPROVEN",
+          "location": ""
+        }
+      ],
+      "artifact": {
+        "artifact_file": "working_final.docx",
+        "artifact_sha256": "744001972051ecaa49f152831359ca3948a89d7b973f38641733255ed542b23b",
+        "changed_paragraph_count": 14,
+        "plan_artifact_mismatches": [],
+        "final_revision_elements": 0,
+        "redline_revision_elements": {
+          "ins": 14,
+          "delete": 14,
+          "accepted_matches_final": true,
+          "rejected_matches_original": true,
+          "accepted_paragraph_count": 1405,
+          "rejected_paragraph_count": 1405
+        }
+      }
+    },
+    "D16": {
+      "case_id": "D16",
+      "elapsed_seconds": 420.5,
+      "delivery": "incomplete",
+      "calls": 34,
+      "tokens": 185719,
+      "cost_usd": 0.03513165,
+      "true_obligations": 24,
+      "completion_counts": {
+        "SATISFIED": 0,
+        "ARTIFACT_VERIFIED": 11,
+        "ALREADY_SATISFIED": 7,
+        "NOT_APPLICABLE": 10,
+        "UNRESOLVED": 6
+      },
+      "true_not_applicable": 0,
+      "claim_verified": false,
+      "unresolved_count": 19,
+      "errors": [],
+      "stop": null,
+      "plan_edits": 14,
+      "plan_conflicts": [
+        {
+          "code": "RECALL_EDIT_OVERLAP",
+          "location": "p221",
+          "targets": [
+            "S03_S04_S07_S16_S17_S20#1:T014",
+            "Y007"
+          ]
+        },
+        {
+          "code": "RECALL_EDIT_OVERLAP",
+          "location": "p823",
+          "targets": [
+            "S03_S04_S07_S16_S17_S20#1:T019",
+            "Y010"
+          ]
+        }
+      ],
+      "claim_failures": [
+        {
+          "rule_id": "",
+          "code": "DUPLICATE_SITE_UNEDITED",
+          "location": "p823"
+        },
+        {
+          "rule_id": "G06",
+          "code": "CLAIM_OPERATION_UNPROVEN",
+          "location": ""
+        },
+        {
+          "rule_id": "G12",
+          "code": "CLAIM_OPERATION_UNPROVEN",
+          "location": ""
+        },
+        {
+          "rule_id": "G12",
+          "code": "CLAIM_OPERATION_NOT_PLANNED",
+          "location": "p221"
+        },
+        {
+          "rule_id": "G13",
+          "code": "CLAIM_OPERATION_NOT_PLANNED",
+          "location": "p221"
+        },
+        {
+          "rule_id": "G16",
+          "code": "CLAIM_OPERATION_UNPROVEN",
+          "location": ""
+        },
+        {
+          "rule_id": "G17",
+          "code": "CLAIM_OPERATION_NOT_PLANNED",
+          "location": "p823"
+        },
+        {
+          "rule_id": "G17",
+          "code": "RESIDUAL_OLD_TEXT",
+          "location": "p823"
+        },
+        {
+          "rule_id": "G17",
+          "code": "RESIDUAL_OLD_TEXT",
+          "location": "p824"
+        }
+      ],
+      "artifact": {
+        "artifact_file": "working_final.docx",
+        "artifact_sha256": "bbd5a43734e3bc254c20b885e2529da40659ac88260ea23a18443ceb994ff102",
+        "changed_paragraph_count": 14,
+        "plan_artifact_mismatches": [],
+        "final_revision_elements": 0,
+        "redline_revision_elements": {
+          "ins": 14,
+          "delete": 14,
+          "accepted_matches_final": true,
+          "rejected_matches_original": true,
+          "accepted_paragraph_count": 1452,
+          "rejected_paragraph_count": 1452
+        }
+      }
+    }
+  },
+  "replay_results": {
+    "D01": {
+      "elapsed_seconds": 26.31,
+      "delivery": "incomplete",
+      "calls": 0,
+      "tokens": 0,
+      "cost_usd": 0,
+      "true_obligations": 24,
+      "completion_counts": {
+        "SATISFIED": 0,
+        "ARTIFACT_VERIFIED": 11,
+        "ALREADY_SATISFIED": 7,
+        "NOT_APPLICABLE": 10,
+        "UNRESOLVED": 6
+      },
+      "claim_verified": false,
+      "unresolved_count": 20,
+      "errors": [],
+      "stop": null
+    },
+    "D02": {
+      "elapsed_seconds": 59.47,
+      "delivery": "incomplete",
+      "calls": 0,
+      "tokens": 0,
+      "cost_usd": 0,
+      "true_obligations": 24,
+      "completion_counts": {
+        "SATISFIED": 0,
+        "ARTIFACT_VERIFIED": 11,
+        "ALREADY_SATISFIED": 8,
+        "NOT_APPLICABLE": 10,
+        "UNRESOLVED": 5
+      },
+      "claim_verified": false,
+      "unresolved_count": 10,
+      "errors": [],
+      "stop": null
+    },
+    "D11": {
+      "elapsed_seconds": 15.71,
+      "delivery": "incomplete",
+      "calls": 0,
+      "tokens": 0,
+      "cost_usd": 0,
+      "true_obligations": 24,
+      "completion_counts": {
+        "SATISFIED": 0,
+        "ARTIFACT_VERIFIED": 13,
+        "ALREADY_SATISFIED": 8,
+        "NOT_APPLICABLE": 10,
+        "UNRESOLVED": 3
+      },
+      "claim_verified": false,
+      "unresolved_count": 3,
+      "errors": [],
+      "stop": null
+    },
+    "D16": {
+      "elapsed_seconds": 60.24,
+      "delivery": "incomplete",
+      "calls": 0,
+      "tokens": 0,
+      "cost_usd": 0,
+      "true_obligations": 24,
+      "completion_counts": {
+        "SATISFIED": 0,
+        "ARTIFACT_VERIFIED": 11,
+        "ALREADY_SATISFIED": 7,
+        "NOT_APPLICABLE": 10,
+        "UNRESOLVED": 6
+      },
+      "claim_verified": false,
+      "unresolved_count": 19,
+      "errors": [],
+      "stop": null
+    },
+    "comparison": {
+      "D01": {
+        "case_id": "D01",
+        "passed": true,
+        "checks": {
+          "facts": true,
+          "scope_mapping": true,
+          "targets": true,
+          "target_attribution": true,
+          "obligations": true,
+          "plan": true,
+          "artifact_claim_replay": true,
+          "delivery_status": true,
+          "unresolved": true,
+          "recovery": true,
+          "audit_recovery": true,
+          "zero_http_attempts": true,
+          "no_replay_error": true,
+          "artifact_text": true
+        },
+        "http_attempts": 0
+      },
+      "D02": {
+        "case_id": "D02",
+        "passed": true,
+        "checks": {
+          "facts": true,
+          "scope_mapping": true,
+          "targets": true,
+          "target_attribution": true,
+          "obligations": true,
+          "plan": true,
+          "artifact_claim_replay": true,
+          "delivery_status": true,
+          "unresolved": true,
+          "recovery": true,
+          "audit_recovery": true,
+          "zero_http_attempts": true,
+          "no_replay_error": true,
+          "artifact_text": true
+        },
+        "http_attempts": 0
+      },
+      "D11": {
+        "case_id": "D11",
+        "passed": true,
+        "checks": {
+          "facts": true,
+          "scope_mapping": true,
+          "targets": true,
+          "target_attribution": true,
+          "obligations": true,
+          "plan": true,
+          "artifact_claim_replay": true,
+          "delivery_status": true,
+          "unresolved": true,
+          "recovery": true,
+          "audit_recovery": true,
+          "zero_http_attempts": true,
+          "no_replay_error": true,
+          "artifact_text": true
+        },
+        "http_attempts": 0
+      },
+      "D16": {
+        "case_id": "D16",
+        "passed": true,
+        "checks": {
+          "facts": true,
+          "scope_mapping": true,
+          "targets": true,
+          "target_attribution": true,
+          "obligations": true,
+          "plan": true,
+          "artifact_claim_replay": true,
+          "delivery_status": true,
+          "unresolved": true,
+          "recovery": true,
+          "audit_recovery": true,
+          "zero_http_attempts": true,
+          "no_replay_error": true,
+          "artifact_text": true
+        },
+        "http_attempts": 0
+      }
+    }
+  },
+  "stage_replay_D16": {
+    "facts": {
+      "same_head": true,
+      "model_calls": 0,
+      "replayed": true
+    },
+    "applicability": {
+      "same_head": true,
+      "model_calls": 0,
+      "replayed": true
+    },
+    "targets": {
+      "same_head": true,
+      "model_calls": 0,
+      "replayed": true
+    },
+    "obligations": {
+      "same_head": true,
+      "model_calls": 0,
+      "replayed": true
+    },
+    "claim_replay": {
+      "same_head": true,
+      "model_calls": 0,
+      "replayed": true
+    },
+    "plan_base": {
+      "same_head": true,
+      "model_calls": 0,
+      "edits": 12,
+      "conflicts": 4
+    },
+    "plan_rev3": {
+      "same_head": true,
+      "model_calls": 0,
+      "edits": 14,
+      "conflicts": 2
+    }
+  },
+  "reviewers": {
+    "business": {
+      "report": "summaries/business-review-ff4d749.md",
+      "verdict": {
+        "gate": "BLOCK",
+        "existing_index_gate": "FAIL",
+        "case_delivery_claims_truthful": true,
+        "case_level_false_complete": false,
+        "obligation_level_false_complete": true,
+        "audit_false_complete": true,
+        "do_not_deliver": [
+          "D01",
+          "D02",
+          "D11",
+          "D16"
+        ],
+        "summary": "All four reports truthfully say delivery=incomplete, and all four have at least one real gap (G16 is absent in every artifact). However the artifacts are unsafe: G15 deletions gutted the sales-service-fee payment clause without the required G16 replacement; D11 G18 summary p1207 is a hidden obligation-level false complete; D02 audit falsely marks G12/G13 completed; D16 G17 is only half-applied (summary deleted, body retained); D01 G01 is missing and G17 was dropped by a false overlap. Several incompletes (G06 all; D01 G02; D11 G05:2) are false blocks, not real defects. Gate must remain FAIL/BLOCK until the real gaps and the proof model are fixed."
+      },
+      "finding_count": 16
+    },
+    "architecture": {
+      "report": "summaries/architecture-review-ff4d749.md",
+      "verdict": {
+        "false_complete_proven": false,
+        "cases_delivered_complete": "0/4",
+        "cases_incomplete": "4/4",
+        "gate_current": "FAIL",
+        "gate_can_enter_20_case": false,
+        "gate_recommendation": "Hold. Fix F1-F4 and F5/F6 first, re-record the four cases at the new SHA, require 4/4 complete or all remaining items classified as model/target ambiguity with no engine bug, update index.json, then enter 20 cases with a pre-registered budget. A 20-case batch now would measure known engine bugs, not model quality.",
+        "false_complete_note": "All four exact-HEAD runs are delivery:incomplete, artifact_claim_replay.verified:false, with blocked paragraphs byte-identical to source. Working DOCX files are partial and must not be presented as final contracts.",
+        "replay_note": "full-replay-comparison.json is true for all four (facts, scope, targets, attribution, obligations, plan, artifact claim replay, delivery, unresolved, recovery, audit recovery, zero HTTP, no replay error, artifact text). This proves record/replay reproducibility, not delivery."
+      },
+      "totals": {
+        "calls": 130,
+        "cost_usd": 0.11742255,
+        "true_obligations_per_case": 24,
+        "cases": 4
+      }
+    },
+    "recovery": {
+      "report": "summaries/recovery-review-ff4d749.md",
+      "verdict": {
+        "recovery_safety": "PASS: no obligation was closed without a site-bound proof, no unsupported/absent/heading site was accepted, and no final.docx was published while obligations remained open.",
+        "record_replay_parity": "EXACT: recovery history, unresolved list, claim-replay hashes, audit round hashes and artifact text are byte-identical between record and replay; 0 replay HTTP calls.",
+        "delivery_gate": "FAIL (all four cases incomplete; 20 open obligations, 52 unresolved entries).",
+        "requires_code_change_before_20_case": true,
+        "headline": "The hard gate held, but recovery cannot deliver three core rule families (G17 delete duplicates, G12/G13 split clauses, G16 append) and turns two already-satisfied rules (G06, D11 G05:2) into permanent blockers. Four code defects must be fixed before the 20-case run, otherwise the acceptance will measure planner gaps as contract difficulty."
+      },
+      "counts": {
+        "BLOCKER": 4,
+        "HIGH": 5,
+        "MEDIUM": 8,
+        "total": 17
+      }
+    },
+    "test": {
+      "report": "summaries/test-review-ff4d749.md",
+      "overall": "CONDITIONAL_PASS",
+      "blockers": [
+        "TR-01",
+        "TR-02"
+      ],
+      "findings": [
+        {
+          "id": "TR-01",
+          "severity": "HIGH",
+          "status": "OPEN",
+          "area": "evidence_index",
+          "summary": "revalidation-ff4d7498/index.json is stale and contradicts current summaries.",
+          "evidence": "index.json records offline.passed=1024, log=logs/pytest-682e68a.txt (absent), replay_results bound to 682e68a, D01 not_generated and gate FAIL for old reasons; current summaries are ff4d749, 1061 tests, D01 has an artifact.",
+          "impact": "The authoritative index cannot be used to certify this bundle.",
+          "action": "Regenerate index.json from the ff4d749 summaries, with correct offline/replay/gate fields."
+        },
+        {
+          "id": "TR-02",
+          "severity": "HIGH",
+          "status": "OPEN",
+          "area": "d16_stage_replay",
+          "summary": "D16-stage-plan.json is plan revision 3 but is labeled as the base plan stage without a revision field.",
+          "evidence": "Saved value 14 edits/40 ledger/2 conflicts/2 cassette replays equals replay_stage(D16, 'plan', revision=3); base stages/plan.json replays to 12 edits/42 ledger/4 conflicts/3 cassette replays.",
+          "impact": "The base plan boundary is not covered by the saved six-stage evidence; the stage identity is ambiguous.",
+          "action": "Record revision=3 or rename to plan-3, and record the base/other plan revisions explicitly."
+        },
+        {
+          "id": "TR-03",
+          "severity": "MEDIUM",
+          "status": "OPEN",
+          "area": "offline_evidence",
+          "summary": "No persisted compileall/diff-check evidence for ff4d749.",
+          "evidence": "Only the stale index.json mentions compileall/diff-check and it refers to the 682e68a/1024-test run.",
+          "impact": "Independent checks pass, but the bundle does not contain primary exact-SHA evidence.",
+          "action": "Persist the compileall and git diff --check commands/results for ff4d749."
+        },
+        {
+          "id": "TR-04",
+          "severity": "MEDIUM",
+          "status": "OPEN",
+          "area": "test_coverage",
+          "summary": "G02 negative class-set cases are not committed as regression tests.",
+          "evidence": "Tests cover A/D acceptance and A/C/E partial-set rejection, but not A/D expected vs A/C or vs A/C/D.",
+          "impact": "A future regression could accept the wrong class set silently.",
+          "action": "Add the two negative replay/class-group tests."
+        },
+        {
+          "id": "TR-05",
+          "severity": "LOW",
+          "status": "OPEN",
+          "area": "test_coverage",
+          "summary": "No direct G16 target_site_ok regression test.",
+          "evidence": "G06 and G17 have explicit guard tests; G16 guard was only verified by direct offline check.",
+          "impact": "The G16 site boundary can regress without a failing test.",
+          "action": "Add a direct G16 guard test (accrual paragraph accepted; heading/payment-only/generic rejected)."
+        },
+        {
+          "id": "TR-06",
+          "severity": "LOW",
+          "status": "OPEN",
+          "area": "provenance",
+          "summary": "pytest log lacks SHA/command/environment provenance.",
+          "evidence": "logs/pytest-ff4d749.txt contains only pytest output; no git rev-parse or command header.",
+          "impact": "Counts are consistent with HEAD, but the log is not directly bound to the SHA.",
+          "action": "Prefix the log with git rev-parse HEAD, command and environment provenance."
+        }
+      ]
+    }
+  },
+  "finding_closure": [
+    {
+      "finding": "D01 overlap / missing working_final",
+      "old_head": "682e68a",
+      "result": "PARTIAL/OPEN",
+      "evidence": "working_final.docx exists and has no EDIT_OVERLAP error; but G17 Y006/DEL001 and Y007/DEL002 conflict, 0 G17 edits, p759/p760/p1222/p1223 old text survives."
+    },
+    {
+      "finding": "D02 absent placeholder heading used as verified site",
+      "old_head": "682e68a",
+      "result": "CLOSED",
+      "evidence": "G05:2 proof at real class-setup p138; G06 remains OPEN, not VERIFIED_ABSENT; p1036 heading absent target rejected."
+    },
+    {
+      "finding": "D11 G02 A/D delimiter false missing",
+      "old_head": "682e68a",
+      "result": "CLOSED",
+      "evidence": "G02/G04 ALREADY_SATISFIED at p91/p126; guard checks A/D vs A/C and A/D vs A/C/D are false."
+    },
+    {
+      "finding": "D16 G05 wrong site p427/p1165",
+      "old_head": "682e68a",
+      "result": "CLOSED",
+      "evidence": "G05 proof sites are p133 only; p427/p1165 are inert survey_satisfied rows and not evidence."
+    },
+    {
+      "finding": "D16 Audit B-class contradiction",
+      "old_head": "682e68a",
+      "result": "CLOSED in D16",
+      "evidence": "D16 certified facts A/C and no B-class audit contradiction; D01 G02 has a separate B-class false audit (new HIGH)."
+    }
+  ],
+  "safety": {
+    "false_delivery_complete": 0,
+    "obligation_level_false_complete": [
+      "D11 G18 (p800 proof, p1207 duplicate old)"
+    ],
+    "audit_false_complete": [
+      "D02 G12/G13 target audits completed while p229 unchanged"
+    ],
+    "unauthorized_edit": 0,
+    "cross_site_or_duplicate_proof": 1,
+    "unsupported_verified_absent": 0,
+    "planned_but_not_artifact_false_pass": 0,
+    "false_review_block": [
+      "D01 G02 B-class audit"
+    ]
+  },
+  "gate": {
+    "decision": "DO_NOT_ENTER_20_CASE",
+    "reason": "4/4 exact-code cases are incomplete; G16 is missing in all four artifacts; D01/D16 G17 duplicate/same-operation conflicts leave old clauses; D02 G12/G13 joint edit regressed; D11 G18 summary copy is falsely proven; D16 G12/G13 residual; G06 is unprovable in all four.",
+    "reproducibility": "record/replay exact for all four, 0 HTTP, 0 tokens, 0 cost; D16 six-stage same_head=true, model_calls=0."
+  },
+  "baseline_preserved": "docs/evidence/final-validation-20261022/index.json and frozen/replay/artifacts from 682e68a were not modified."
+}

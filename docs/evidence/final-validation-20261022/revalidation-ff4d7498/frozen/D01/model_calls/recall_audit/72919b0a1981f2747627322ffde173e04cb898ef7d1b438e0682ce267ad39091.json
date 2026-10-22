@@ -1,0 +1,127 @@
+{
+  "body": {
+    "schema_version": "fundlex-model-cassette-v1",
+    "request": {
+      "task_type": "recall_audit",
+      "prompt_version": "recall_audit_v1",
+      "configured_model": "deepseek-v4.1-flash",
+      "context_sha256": "05f6e509fbb3279f7473b36cee7c34750a8b19a7424e9c8c2e0bb8048e611efe",
+      "request": {
+        "bounded_context": "[BEFORE]\n[p231] 基金管理人可以在不违反法律法规规定及基金合同约定并对基金份额持有人利益无实质性不利影响的情形下根据市场情况制定基金促销计划。针对基金投资者定期和不定期地开展基金促销活动。在基金促销活动期间，按相关监管部门要求履行必要手续后，基金管理人可以适当调低基金销售服务费率、基金申购费率和基金赎回费率。 \n\n[AFTER]\n[p231] 基金管理人可以在不违反法律法规规定及基金合同约定并对基金份额持有人利益无实质性不利影响的情形下根据市场情况制定基金促销计划。针对基金投资者定期和不定期地开展基金促销活动。在基金促销活动期间，按相关监管部门要求履行必要手续后，基金管理人可以适当调低基金申购费率和销售服务费率。 \n\n[REQUIREMENTS]\nGUIDE_RULES\n[G14] 基金份额的申购与赎回-六、申购和赎回的价格、费用及其用途： | section_hint=基金份额的申购与赎回\n  requirement: 产品仅有一个份额类别时，将“基金管理人可以适当调低基金申购费率和赎回费率。”变更为“基金管理人可以适当调低基金申购费率。”；产品有多个份额类别时，将“基金管理人可以适当调低基金申购费率和赎回费率。”变更为“基金管理人可以适当调低基金申购费率和销售服务费率。”。\n  [G14:0] replace: 基金管理人可以适当调低基金申购费率和赎回费率。 -> 基金管理人可以适当调低基金申购费率。\n  [G14:1] replace: 基金管理人可以适当调低基金申购费率、赎回费率和转换费率。 -> 基金管理人可以适当调低基金申购费率。\n  [G14:2] replace: 基金管理人可以适当调低基金申购费率、赎回费率、转换费率和销售服务费率。 -> 基金管理人可以适当调低基金申购费率。\n  [G14:3] replace: 基金管理人可以适当调低基金申购费率和赎回费率。 -> 基金管理人可以适当调低基金申购费率和销售服务费率。\n  [G14:4] replace: 基金管理人可以适当调低基金申购费率、赎回费率和转换费率。 -> 基金管理人可以适当调低基金申购费率和销售服务费率。\n  [G14:5] replace: 基金管理人可以适当调低基金申购费率、赎回费率、转换费率和销售服务费率。 -> 基金管理人可以适当调低基金申购费率和销售服务费率。\n\n[TARGET_LEDGER]\n[\n {\n  \"target_id\": \"S03_S04_S07_S16_S17_S20_S26#1:T012\",\n  \"rule_id\": \"G14\",\n  \"location\": \"p231\",\n  \"state\": \"needs_edit\",\n  \"quote\": \"基金管理人可以适当调低基金销售服务费率、基金申购费率和基金赎回费率。\",\n  \"reason\": \"产品有多个份额类别，需将“基金申购费率和基金赎回费率”改为“基金申购费率和销售服务费率”。\",\n  \"plan_status\": \"planned\",\n  \"operation\": \"replace\",\n  \"replacement\": \"基金管理人可以适当调低基金申购费率和销售服务费率。\"\n }\n]\n\n[OTHER_AUTHORIZED_EDITS]\n[]",
+        "instruction": "Read [BEFORE] (the original contract region), [AFTER] (the actual rewritten region taken from the produced file), [REQUIREMENTS] (the guide rules with their fixed policy text and the target ledger) and [OTHER_AUTHORIZED_EDITS] (changes other guide rules legitimately made in the same locations). Independently judge each target in the ledger: completed when the AFTER text satisfies the requirement with no lost content, incomplete when part of the requirement is missing, wrong when the AFTER text contradicts the requirement, drops required content, or adds policy the guide does not state. A rule whose slot classes are placeholders means the AFTER text must name the product's actual share classes that fall in that group: adding a real class the contract defines (for example including a D类 class in the group the guide wrote as A类) is correct instantiation, not an unauthorized addition, as long as [FACTS] lists that class in the group. Never report an OTHER_AUTHORIZED_EDITS change as an unauthorized addition. For every non-completed target also classify the root cause (failure_class) and, when known, the affected_fact or affected_obligation, so recovery can return to the correct business layer. A region shown as （该位置内容已删除） means the content was removed: for a deletion requirement that is completed, and for a replacement requirement judge it against the requirement and the ledger, not against the absence itself. Cite an exact contiguous evidence_quote from AFTER (or BEFORE when judging a loss) for every verdict. Also report missed_targets when you find a clause in AFTER that still needs editing but is absent from the ledger. Never trust the ledger over the actual text; never mark completed without reading AFTER.",
+        "response_schema": {
+          "type": "object",
+          "required": [
+            "results"
+          ],
+          "properties": {
+            "results": {
+              "type": "array",
+              "maxItems": 60,
+              "items": {
+                "type": "object",
+                "required": [
+                  "target_id",
+                  "verdict",
+                  "reason"
+                ],
+                "properties": {
+                  "target_id": {
+                    "type": "string"
+                  },
+                  "verdict": {
+                    "enum": [
+                      "completed",
+                      "incomplete",
+                      "wrong"
+                    ]
+                  },
+                  "reason": {
+                    "type": "string"
+                  },
+                  "evidence_quote": {
+                    "type": "string"
+                  },
+                  "failure_class": {
+                    "enum": [
+                      "FACT",
+                      "APPLICABILITY",
+                      "TARGET",
+                      "GENERATION",
+                      "EXECUTION",
+                      "VERIFICATION"
+                    ]
+                  },
+                  "affected_fact": {
+                    "type": "string"
+                  },
+                  "affected_obligation": {
+                    "type": "string"
+                  }
+                }
+              }
+            },
+            "missed_targets": {
+              "type": "array",
+              "maxItems": 20,
+              "items": {
+                "type": "object",
+                "required": [
+                  "rule_id",
+                  "location",
+                  "quote",
+                  "reason"
+                ],
+                "properties": {
+                  "rule_id": {
+                    "type": "string"
+                  },
+                  "location": {
+                    "type": "string"
+                  },
+                  "quote": {
+                    "type": "string"
+                  },
+                  "reason": {
+                    "type": "string"
+                  }
+                }
+              }
+            },
+            "notes": {
+              "type": "string"
+            }
+          }
+        },
+        "request_options": {
+          "thinking": {
+            "type": "disabled"
+          }
+        },
+        "max_completion_tokens": 8000
+      }
+    },
+    "response": {
+      "results": [
+        {
+          "target_id": "S03_S04_S07_S16_S17_S20_S26#1:T012",
+          "verdict": "completed",
+          "reason": "AFTER 将原句改为“基金管理人可以适当调低基金申购费率和销售服务费率。”，符合多份额类别下 G14 的要求，且未丢失其他内容。",
+          "evidence_quote": "基金管理人可以适当调低基金申购费率和销售服务费率。"
+        }
+      ],
+      "missed_targets": []
+    },
+    "event": {
+      "task_type": "recall_audit",
+      "prompt_version": "recall_audit_v1",
+      "context_sha256": "05f6e509fbb3279f7473b36cee7c34750a8b19a7424e9c8c2e0bb8048e611efe",
+      "configured_model": "deepseek-v4.1-flash",
+      "actual_model": "deepseek-v4.1-flash",
+      "http_status": 200,
+      "finish_reason": "stop",
+      "error_code": null
+    }
+  },
+  "sha256": "5b60135c91d352d413e7d89e34848d88aee2c322c2608f2d4029b6421c29bf5b"
+}

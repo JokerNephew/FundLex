@@ -1,0 +1,61 @@
+{
+  "body": {
+    "schema_version": "fundlex-model-cassette-v1",
+    "request": {
+      "task_type": "recall_locate",
+      "prompt_version": "recall_locate_v1",
+      "configured_model": "deepseek-v4.1-flash",
+      "context_sha256": "74f27d1c50187dfcca6e36d3ba313fde8fcdcc74d0f530367e3a8ac5c91530b6",
+      "request": {
+        "bounded_context": "CANDIDATE_PARAGRAPHS\n[p215] 本基金份额净值的计算，保留到小数点后 4 位，小数点后第 5 位四舍五入，\n[p216] 由此产生的收益或损失由基金财产承担。T 日的基金份额净值在当天收市后计算，并在 T+1 日内披露。遇特殊情况，经履行适当程序，可以适当延迟计算或披露。 \n[p217] 申购份额的计算及余额的处理方式：本基金申购份额的计算详见《招募说明书》。本基金的申购费率由基金管理人决定，并在招募说明书中列示。申购的有效份额为净申购金额除以当日的基金份额净值，有效份额单位为份，上述计算结果均按四舍五入方法，保留到小数点后 2 位，由此产生的收益或损失由基金财产承担。 \n[p218] 赎回金额的计算及处理方式：本基金赎回金额的计算详见《招募说明书》，\n[p219] 赎回金额单位为元。本基金的赎回费率由基金管理人决定，并在招募说明书中列示。赎回金额为按实际确认的有效赎回份额乘以当日基金份额净值并扣除相应的费用，赎回金额单位为元。上述计算结果均按四舍五入方法，保留到小数点后 2 位，由此产生的收益或损失由基金财产承担。 \n[p220] 申购费用由投资人承担，不列入基金财产。 \n[p221] 赎回费用由赎回基金份额的基金份额持有人承担，在基金份额持有人赎回基金份额时收取。赎回费用应根据法律法规规定的比例归入基金财产，未计入基金财产的部分用于支付登记费和其他必要的手续费。其中，对持续持有期少于\n[p222] 7 日的投资者收取不低于 1.5%的赎回费，并全额计入基金财产。 \n[p223] 本基金的申购费率、申购份额具体的计算方法、赎回费率、赎回金额具体的计算方法和收费方式由基金管理人根据基金合同的规定确定，并在招募说明书中列示。基金管理人可以在基金合同约定的范围内调整费率或收费方式，并最迟应于新的费率或收费方式实施日前依照《信息披露办法》的有关规定在规定媒介上公告。 \n[p224] 在对现有基金份额持有人利益无实质性不利影响的前提下，基金管理人可以在不违反法律法规规定及基金合同约定的情形下根据市场情况制定基金促销计划。针对基金投资者定期和不定期地开展基金促销活动。在基金促销活动期间，按相关监管部门要求履行必要手续后，基金管理人可以适当调低基金申购费率和基金赎回费率。 \n[p225] 当本基金发生大额申购或赎回情形时，基金管理人可以采用摆动定价机制以确保基金估值的公平性。具体处理原则与操作规范遵循相关法律法规以及监管部门、自律规则的规定。 \n[p226] 拒绝或暂停申购的情形 \n[p227] 发生下列情况时，基金管理人可拒绝或暂停接受投资人的申购申请： \n\nGUIDE_OPERATION\nGUIDE_RULES\n[G13] 基金份额的申购与赎回-六、申购和赎回的价格、费用及其用途： | section_hint=基金份额的申购与赎回\n  requirement: 删除“本基金对持续持有期少于7日的投资者收取不低于1.50%的赎回费，并将上述赎回费全额计入基金财产。”。\n  [G13:0] delete: 本基金对持续持有期少于7日的投资者收取不低于1.50%的赎回费，并将上述赎回费全额计入基金财产。\n\nFACTS\n{\"fund_type\": \"open_regular\", \"fund_type_quote\": \"基金的运作方式\\n契约型开放式\", \"fund_type_basis\": \"契约型开放式，混合型证券投资基金，非ETF/联接/QDII/REITs等。\", \"class_count\": 2, \"classes\": [{\"name\": \"A类\", \"subscription_fee\": true, \"service_fee\": false, \"current\": true, \"rate\": \"认购/申购费率按招募说明书规定执行\", \"quote\": \"在投资者认申购基金份额时收取认申购费用，而不计提销售服务费的，称为 A 类基金份额\"}, {\"name\": \"C类\", \"subscription_fee\": false, \"service_fee\": true, \"current\": true, \"rate\": \"销售服务费0.40%年费率\", \"quote\": \"在投资者认申购基金份额时不收取认申购费用，而是从本类别基金资产中计提销售服务费的，称为 C 类基金份额\"}], \"subscription_group\": [\"A类\"], \"service_group\": [\"C类\"], \"share_class_structure\": \"MULTIPLE\", \"direct_sales_exempt_group\": [], \"other_sales_charged_group\": [], \"fact_status\": {\"fund_type\": \"VERIFIED\", \"share_class_structure\": \"VERIFIED\", \"subscription_fee_group\": \"VERIFIED\", \"service_fee_group\": \"VERIFIED\", \"direct_sales_exempt_group\": \"UNKNOWN\", \"other_sales_charged_group\": \"UNKNOWN\"}, \"condition_overrides\": {}, \"has_service_fee\": true, \"is_floating_fee\": false, \"floating_quote\": \"本基金的管理费按前一日基金资产净值的 1.20%年费率计提。\", \"floating_basis\": \"固定年费率管理费，未与持有期或业绩挂钩。\", \"notes\": \"A类收取认申购费且不计提销售服务费；C类不收认申购费但计提0.40%销售服务费。管理费1.20%、托管费0.20%固定。\", \"quotes_verified\": {\"fund_type\": true, \"class:A类\": true, \"class:C类\": true, \"floating\": true, \"class_set\": true}, \"class_set_quote\": \"本基金将基金份额分为 A 类和 C 类不同的类别。\", \"class_set_evidence\": {\"quote_verified\": true, \"set_complete_verified\": true, \"parsed_classes\": [\"A\", \"C\"], \"reason\": \"CLASS_SET_VERIFIED\"}, \"value_verified\": true, \"set_complete_verified\": true, \"fund_type_certification\": {}, \"channel_evidence\": {\"direct_sales_exempt\": \"\", \"other_sales_charged\": \"\"}, \"problems\": []}\n\nFAILED_QUOTE\n7 日的投资者收取不低于 1.5%的赎回费，并全额计入基金财产。",
+        "instruction": "The deterministic resolver could not bind this obligation to the contract. Read the candidate paragraphs and return the ONE paragraph location plus an exact contiguous quote from that paragraph that carries the obligation. Do not paraphrase, do not merge two paragraphs, and do not return offsets. If no paragraph carries it, return an empty quote and explain why. semantic_role states what the clause does (for example class_definition, subscription_fee, payment_mechanism).",
+        "response_schema": {
+          "type": "object",
+          "required": [
+            "location",
+            "quote",
+            "semantic_role",
+            "reason"
+          ],
+          "properties": {
+            "location": {
+              "type": "string"
+            },
+            "quote": {
+              "type": "string"
+            },
+            "semantic_role": {
+              "type": "string"
+            },
+            "reason": {
+              "type": "string"
+            }
+          }
+        },
+        "request_options": {
+          "thinking": {
+            "type": "disabled"
+          }
+        },
+        "max_completion_tokens": 8000
+      }
+    },
+    "response": {
+      "location": "p222",
+      "quote": "7 日的投资者收取不低于 1.5%的赎回费，并全额计入基金财产。",
+      "semantic_role": "redemption_fee_short_holding",
+      "reason": "The obligation to charge a redemption fee of no less than 1.5% for investors holding less than 7 days and to include it fully in fund assets is carried by the sentence spanning p221-p222; the contiguous quote within p222 contains the operative fee requirement."
+    },
+    "event": {
+      "task_type": "recall_locate",
+      "prompt_version": "recall_locate_v1",
+      "context_sha256": "74f27d1c50187dfcca6e36d3ba313fde8fcdcc74d0f530367e3a8ac5c91530b6",
+      "configured_model": "deepseek-v4.1-flash",
+      "actual_model": "deepseek-v4.1-flash",
+      "http_status": 200,
+      "finish_reason": "stop",
+      "error_code": null
+    }
+  },
+  "sha256": "ab0891bc96e048239ff4520eda5871934a9c6e6f1628b40a147db04cb44cbdd1"
+}

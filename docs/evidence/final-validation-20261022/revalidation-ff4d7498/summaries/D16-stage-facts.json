@@ -1,0 +1,82 @@
+{
+  "stage": "facts",
+  "run_dir": "/home/opencode/fundlex/docs/evidence/final-validation-20261022/revalidation-ff4d7498/frozen/D16",
+  "value": {
+    "fund_type": "open_regular",
+    "fund_type_quote": "基金的运作方式\n契约型开放式",
+    "fund_type_basis": "契约型开放式，混合型证券投资基金，非ETF/联接/QDII/REITs等。",
+    "class_count": 2,
+    "classes": [
+      {
+        "name": "A类",
+        "subscription_fee": true,
+        "service_fee": false,
+        "current": true,
+        "rate": "认购/申购费率按招募说明书规定执行",
+        "quote": "在投资者认申购基金份额时收取认申购费用，而不计提销售服务费的，称为 A 类基金份额"
+      },
+      {
+        "name": "C类",
+        "subscription_fee": false,
+        "service_fee": true,
+        "current": true,
+        "rate": "销售服务费0.40%年费率",
+        "quote": "在投资者认申购基金份额时不收取认申购费用，而是从本类别基金资产中计提销售服务费的，称为 C 类基金份额"
+      }
+    ],
+    "subscription_group": [
+      "A类"
+    ],
+    "service_group": [
+      "C类"
+    ],
+    "share_class_structure": "MULTIPLE",
+    "direct_sales_exempt_group": [],
+    "other_sales_charged_group": [],
+    "fact_status": {
+      "fund_type": "VERIFIED",
+      "share_class_structure": "VERIFIED",
+      "subscription_fee_group": "VERIFIED",
+      "service_fee_group": "VERIFIED",
+      "direct_sales_exempt_group": "UNKNOWN",
+      "other_sales_charged_group": "UNKNOWN"
+    },
+    "condition_overrides": {},
+    "has_service_fee": true,
+    "is_floating_fee": false,
+    "floating_quote": "本基金的管理费按前一日基金资产净值的 1.20%年费率计提。",
+    "floating_basis": "固定年费率管理费，未与持有期或业绩挂钩。",
+    "notes": "A类收取认申购费且不计提销售服务费；C类不收认申购费但计提0.40%销售服务费。管理费1.20%、托管费0.20%固定。",
+    "quotes_verified": {
+      "fund_type": true,
+      "class:A类": true,
+      "class:C类": true,
+      "floating": true,
+      "class_set": true
+    },
+    "class_set_quote": "本基金将基金份额分为 A 类和 C 类不同的类别。",
+    "class_set_evidence": {
+      "quote_verified": true,
+      "set_complete_verified": true,
+      "parsed_classes": [
+        "A",
+        "C"
+      ],
+      "reason": "CLASS_SET_VERIFIED"
+    },
+    "value_verified": true,
+    "set_complete_verified": true,
+    "fund_type_certification": {},
+    "channel_evidence": {
+      "direct_sales_exempt": "",
+      "other_sales_charged": ""
+    },
+    "problems": []
+  },
+  "recorded_head": "ff4d7498b6c1aee72ba48686074d021fc7f84791",
+  "replay_head": "ff4d7498b6c1aee72ba48686074d021fc7f84791",
+  "same_head": true,
+  "model_calls": 0,
+  "cassette_replays": 0,
+  "replayed": true
+}

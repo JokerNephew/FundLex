@@ -1,0 +1,669 @@
+{
+  "schema_version": "1.0",
+  "review_id": "business-review-ff4d749",
+  "reviewer": "independent-business-reviewer",
+  "read_only": true,
+  "generated_at": "2026-10-22T00:00:00Z",
+  "runtime": {
+    "head": "ff4d7498b6c1aee72ba48686074d021fc7f84791",
+    "branch": "refactor/recovery-architecture",
+    "evidence_root": "/home/opencode/fundlex/docs/evidence/final-validation-20261022/revalidation-ff4d7498",
+    "baseline_root": "/home/opencode/fundlex/docs/evidence/final-validation-20261022",
+    "baseline_head": "682e68a5b3ef2a58feb77460af70afabdb314379",
+    "guide": "/home/opencode/fundlex/guides/builtin_guide_v1.json",
+    "guide_document_sha256": "45dd77460f2ef93d29001c0833c220f89de99dafb19d32a8b73653b55f92c8d7",
+    "guide_source_sha256": "b77be53c3439d785a9ffad0f09d8d03ba74f7722397576b999ae6f5dd6eef895",
+    "policy": "read-only; no source/test/git/evidence edits; no live model or HTTP calls"
+  },
+  "verdict": {
+    "gate": "BLOCK",
+    "existing_index_gate": "FAIL",
+    "case_delivery_claims_truthful": true,
+    "case_level_false_complete": false,
+    "obligation_level_false_complete": true,
+    "audit_false_complete": true,
+    "do_not_deliver": ["D01", "D02", "D11", "D16"],
+    "summary": "All four reports truthfully say delivery=incomplete, and all four have at least one real gap (G16 is absent in every artifact). However the artifacts are unsafe: G15 deletions gutted the sales-service-fee payment clause without the required G16 replacement; D11 G18 summary p1207 is a hidden obligation-level false complete; D02 audit falsely marks G12/G13 completed; D16 G17 is only half-applied (summary deleted, body retained); D01 G01 is missing and G17 was dropped by a false overlap. Several incompletes (G06 all; D01 G02; D11 G05:2) are false blocks, not real defects. Gate must remain FAIL/BLOCK until the real gaps and the proof model are fixed."
+  },
+  "finding_summary": {
+    "blocker": 3,
+    "high": 7,
+    "medium": 4,
+    "low": 2,
+    "total": 16
+  },
+  "findings": [
+    {
+      "id": "BR-FF-001",
+      "severity": "BLOCKER",
+      "category": "REAL_GAP / CONTENT_LOSS",
+      "cases": ["D01", "D02", "D11", "D16"],
+      "rules": ["G15", "G16"],
+      "locations": ["D01 p758/p759/p760/p1221/p1222/p1223", "D02 p821/p822/p823/p1287/p1288/p1289", "D11 p772/p773/p1247/p1248", "D16 p822/p823/p824/p1306/p1307/p1308"],
+      "claim": "G15 deletion applied; G16 append unresolved.",
+      "actual": "The old sales-service-fee payment clause is blanked in every case, but the required four-component G16 policy is absent everywhere. D02 and D11 also blank the purpose/scope sentences. D01 leaves purpose/scope intact but deletes payment mechanics. D16 is body/summary inconsistent.",
+      "evidence": [
+        "reports/D01.json obligations.records[G16:B1:O1] = UNRESOLVED / CLAIM_REPLAY_FAILED",
+        "reports/D02.json plan.edits p821/p1287 G15; no G16 edit",
+        "reports/D11.json plan.edits p772/p1247 G15; no G16 edit",
+        "reports/D16.json plan.edits p822/p1306 G15; p1307/p1308 G17; no G16 edit",
+        "working_final.docx D02 p821-p823 blank; D11 p772-p773 blank; D16 p822 blank with p823/p824 old"
+      ],
+      "business_impact": "The contract no longer states the sales-service-fee payment/return policy. This is a real content loss and the primary reason no artifact is deliverable.",
+      "recommendation": "Implement G16 in body and summary copies for all four, including daily accrual, direct-sales return on redemption/termination, other-agency monthly payment, and >1-year return. Do not apply G15 without G16.",
+      "related_old_findings": ["BR-D02-002", "BR-D11-003", "BR-D16-004"]
+    },
+    {
+      "id": "BR-FF-002",
+      "severity": "BLOCKER",
+      "category": "FALSE_COMPLETE",
+      "cases": ["D11"],
+      "rules": ["G18"],
+      "locations": ["D11 p800", "D11 p1207"],
+      "claim": "G18:B1:O1 = ARTIFACT_VERIFIED / EXPECTED_EFFECT_PRESENT; claim sites = [p800]; audit completed; sweep findings empty.",
+      "actual": "Body p800 was correctly changed to '由于本基金A类、D类基金份额和C类基金份额费用收取不同…'. Summary p1207 still contains the old '由于本基金 A 类基金份额和 D 类基金份额不收取销售服务费，而 C 类基金份额收取销售服务费…' wording. The report never lists p1207 as unresolved.",
+      "evidence": [
+        "reports/D11.json artifact_claim_replay.obligations['G18:B1:O1'].sites == ['p800']",
+        "reports/D11.json user_summary.issues lists only G05:2/G06/G16; G18 p1207 absent",
+        "reports/D11.json scope_mapping.coverage[G18].sections == ['S17'] (S25 omitted)",
+        "reports/D11.json windows[0].sections == ['S03','S04','S07','S16','S17','S20','S26'] (S25 omitted)",
+        "artifacts/D11/working_final.docx p1207 unchanged",
+        "baseline artifacts/D11/working_final.docx p1207 was changed (682e68a)",
+        "baseline artifacts/D11/edits.json plan lists G18 p800 and G18 p1207; ff4d749 plan lists only G18 p800"
+      ],
+      "business_impact": "False complete at obligation level. D11's delivery_gate has only 3 open obligations (G05:2, G06, G16); if those were fixed/waived, D11 would pass with p1207 still wrong. This is the most dangerous verification defect in the set.",
+      "recommendation": "Map G18 to S25, add p1207, re-run claim replay/audit/sweep, and do not mark G18 complete until both copies are verified.",
+      "related_old_findings": ["BR-D11-004"]
+    },
+    {
+      "id": "BR-FF-003",
+      "severity": "BLOCKER",
+      "category": "REAL_GAP / AUDIT_FALSE_COMPLETE",
+      "cases": ["D02"],
+      "rules": ["G12", "G13"],
+      "locations": ["D02 p229"],
+      "claim": "Target audits T016/T017 = completed, evidence_verified=true; report.md '审计完成 1/1', '未决问题 0'.",
+      "actual": "p229 is textually identical to the original (same paragraph text): '赎回费用…比例依照相关法律法规设定…未归入基金财产的部分用于支付登记费和其他必要的手续费。其中，对持续持有期少于 7 日的投资者收取不低于 1.5%的赎回费，并全额计入基金财产。' The claim replay says NOT_PLANNED; the sweep says pending/RESIDUAL_CONFIRMED.",
+      "evidence": [
+        "reports/D02.json targets[T016/T017].audit.verdict == 'completed'",
+        "reports/D02.json artifact_claim_replay.obligations G12:B1:O2 = FAIL; G13:B1:O1 = FAIL",
+        "reports/D02.json sweep.findings SW002/SW003 status = pending",
+        "artifacts/D02/working_final.docx p229 equals frozen/D02/original.docx p229"
+      ],
+      "business_impact": "A real required edit is missing and the audit says it is complete. The ledger still blocks, but the audit cannot be trusted as evidence.",
+      "recommendation": "Merge G12+G13 at p229 using the D11 p210 combined-edit pattern; re-audit against the actual DOCX paragraph, not the plan.",
+      "related_old_findings": ["BR-D02-005"]
+    },
+    {
+      "id": "BR-FF-004",
+      "severity": "HIGH",
+      "category": "REAL_GAP",
+      "cases": ["D01"],
+      "rules": ["G01"],
+      "locations": ["D01 p92"],
+      "claim": "G01:B1:O1 unresolved, no target.",
+      "actual": "The 释义 class definition is split across p91/p92. The direct-sales/C-fee clause was appended only at the G03 site p130; p92 has no append. The final contains '投资者通过直销机构' once (p130), not twice.",
+      "evidence": [
+        "artifacts/D01/working_final.docx p92 ends '…而从本类别基金资产中计提销售服务费'; no appended clause",
+        "reports/D01.json has no G01 target",
+        "p130 contains the G03 append"
+      ],
+      "business_impact": "The 释义 definition lacks the mandatory fee policy; true fail-closed.",
+      "recommendation": "Locate p92 as the G01 append site (handle the split paragraph) and append after the definition sentence.",
+      "related_old_findings": ["BR-D01-002"]
+    },
+    {
+      "id": "BR-FF-005",
+      "severity": "HIGH",
+      "category": "REAL_GAP / FALSE_OVERLAP",
+      "cases": ["D01"],
+      "rules": ["G15", "G17"],
+      "locations": ["D01 p758", "D01 p759", "D01 p760", "D01 p1221", "D01 p1222", "D01 p1223"],
+      "claim": "G17 targets dropped with plan_reason=RECALL_EDIT_OVERLAP ('同一段落的多项修改无法安全合并').",
+      "actual": "G15 is p758 0-135; G17 is p759 0-52 and p760 0-24. They are adjacent/disjoint, not overlapping. p758/p1221 were blanked; p759/p760 and p1222/p1223 still contain the old purpose/scope sentences.",
+      "evidence": [
+        "reports/D01.json plan.edits G15 p758 0-135/p1221 0-136",
+        "reports/D01.json targets Y006/Y007/DEL001/DEL002 plan_reason RECALL_EDIT_OVERLAP",
+        "reports/D01.json artifact_claim_replay failures RESIDUAL_OLD_TEXT p759/p760/p1222/p1223",
+        "artifacts/D01/working_final.docx p758/p1221 blank; p759/p760/p1222/p1223 old"
+      ],
+      "business_impact": "Real missed deletion plus a content inconsistency: payment mechanics removed, purpose/scope retained. The old BR-D01-001 overlap defect is still live in substance.",
+      "recommendation": "Remove the false adjacency/overlap rejection; plan p759/p760 and p1222/p1223 deletes independently of p758.",
+      "related_old_findings": ["BR-D01-001"]
+    },
+    {
+      "id": "BR-FF-006",
+      "severity": "HIGH",
+      "category": "REAL_GAP / BODY_SUMMARY_INCONSISTENCY",
+      "cases": ["D16"],
+      "rules": ["G17"],
+      "locations": ["D16 p823", "D16 p824", "D16 p1307", "D16 p1308"],
+      "claim": "G17:B1:O1 = FAIL / RESIDUAL_OLD_TEXT; claim sites p1307, p1308, p823, p824; DUPLICATE_SITE_UNEDITED at p823.",
+      "actual": "Summary p1307/p1308 are blanked; body p823/p824 still contain the full purpose/scope sentences. The artifact is body/summary inconsistent.",
+      "evidence": [
+        "reports/D16.json artifact_claim_replay.failures includes DUPLICATE_SITE_UNEDITED p823",
+        "reports/D16.json targets Y011 p1307 audit completed; T019 p823 audit wrong",
+        "artifacts/D16/working_final.docx p823/p824 unchanged; p1307/p1308 blank"
+      ],
+      "business_impact": "True fail-closed, but the draft is not coherent: the summary and body say different things about the sales-service fee. Do not deliver.",
+      "recommendation": "Delete G17 in both body p823/p824 and summary p1307/p1308; re-claim all four sites.",
+      "related_old_findings": ["BR-D16-002"]
+    },
+    {
+      "id": "BR-FF-007",
+      "severity": "HIGH",
+      "category": "REAL_GAP / MERGE_FAILURE",
+      "cases": ["D16"],
+      "rules": ["G12", "G13"],
+      "locations": ["D16 p221", "D16 p222"],
+      "claim": "G12/G13 targets dropped with RECALL_EDIT_OVERLAP; G13 locator bound to p222 but attribution operation_span_mismatch.",
+      "actual": "p221-p222 are unchanged: '赎回费用…应根据法律法规规定的比例归入基金财产…其中，对持续持有期少于 7 日的投资者收取不低于 1.5%的赎回费，并全额计入基金财产。' This is a third historical variant.",
+      "evidence": [
+        "reports/D16.json targets T014 p221 audit wrong; Y007 p221 audit wrong",
+        "reports/D16.json target_locator G13 bound p222; target_attribution operation_span_mismatch",
+        "reports/D16.json sweep.findings SW002/SW003 pending",
+        "artifacts/D16/working_final.docx p221/p222 unchanged"
+      ],
+      "business_impact": "True fail-closed; the required full-inclusion wording and 7-day deletion are both missing.",
+      "recommendation": "Merge p221-p222 into one replacement with '赎回费用全额计入基金财产。' and re-claim G12/G13.",
+      "related_old_findings": ["BR-D16-001"]
+    },
+    {
+      "id": "BR-FF-008",
+      "severity": "HIGH",
+      "category": "AUDIT_FALSE_BLOCK / CLASS_SUBSTITUTION",
+      "cases": ["D01"],
+      "rules": ["G02"],
+      "locations": ["D01 p91", "D01 p92"],
+      "claim": "G02:0 audit: replace 'A类基金份额' with 'A类、B类基金份额'; AFTER does not add B类; affected_fact says A/B are the no-service-fee group.",
+      "actual": "D01 facts are A/C/D (subscription_group A/D, service_group C); p92 already says 'A 类及 D 类基金份额' and 'C 类基金份额'. The instantiated groups are A/D and C, not A/B or C/D. The target is the truncated p91 quote ending at '三种不同的', so the audit cannot see p92. G02:0 demands B类; G02:1 demands C类、D类 (which would wrongly put D into the service-fee group).",
+      "evidence": [
+        "reports/D01.json facts.classes == ['A类','C类','D类']; subscription_group ['A类','D类']; service_group ['C类']",
+        "reports/D01.json targets[T3001/T3002].quote ends at '三种不同的'",
+        "reports/D01.json obligations.records[G02:B1:O1].new_text == 'A类、B类基金份额' (uninstantiated template)",
+        "reports/D01.json audit.issues[4] demands B类; audit.issues[5] demands C类、D类",
+        "artifacts/D01/working_final.docx p92 already groups A/D and C"
+      ],
+      "business_impact": "False block with a factually wrong affected_fact in the user-facing unresolved list. This is the old BR-D16-006 defect migrated to D01.",
+      "recommendation": "Instantiate class groups from facts for obligations/audits; segment the p91-p92 definition as one logical site; mark G02 ALREADY_SATISFIED with p92 proof.",
+      "related_old_findings": ["BR-D16-006"]
+    },
+    {
+      "id": "BR-FF-009",
+      "severity": "HIGH",
+      "category": "FALSE_BLOCK / ABSENCE_PROOF",
+      "cases": ["D01", "D02", "D11", "D16"],
+      "rules": ["G06", "G05"],
+      "locations": ["D01 p135/p136", "D02 p138", "D11 p129", "D16 p133"],
+      "claim": "G06:B1:O1 = UNRESOLVED / CLAIM_REPLAY_FAILED in all four; D11 G05:B3:O1 = target MISSING / UNRESOLVED.",
+      "actual": "G06 old text is absent in all four (zero whitespace-normalized hits for '不同基金份额类别之间不得互相转换'). D11's p129 has no '并报中国证监会备案' (unrelated 备案 at p726/p927/p1320). D01/D02 treat the same G05:2 absence as ALREADY_SATISFIED, so D11 is inconsistent.",
+      "evidence": [
+        "normalized search of frozen/D01..D16/original.docx: zero G06 hits",
+        "reports/D02.json targets[T009] state=absent, resolution=quote_not_found, but obligation G05:B3 = ALREADY_SATISFIED",
+        "reports/D11.json G05:B3 targets=[] / target=MISSING",
+        "reports/D01.json G06 target T006 state=absent / obligation target=FOUND / UNRESOLVED"
+      ],
+      "business_impact": "No residual business defect, but the gate stays red and the user-facing unresolved list overstates missing work. These false blocks must be fixed for a legitimate pass.",
+      "recommendation": "Model delete-with-absent-text as VERIFIED_ABSENT/ALREADY_SATISFIED when the clause window is verified, consistently across G05:2/G06 and all cases.",
+      "related_old_findings": ["BR-D11-001", "BR-D11-003"]
+    },
+    {
+      "id": "BR-FF-010",
+      "severity": "MEDIUM",
+      "category": "PLACEMENT",
+      "cases": ["D11"],
+      "rules": ["G03"],
+      "locations": ["D11 p126"],
+      "claim": "G03 append after the class-setting clause.",
+      "actual": "The clause is inserted between '本基金 A 类、C 类和 D 类基金份额分别设置基金代码。' and '各类基金份额将分别计算基金份额净值。', because the target quote over-extends through the code sentence (span 0-137).",
+      "evidence": [
+        "reports/D11.json plan.edits G03 p126 span 137",
+        "artifacts/D11/working_final.docx p126",
+        "baseline artifacts/D11/working_final.docx p126 inserted after the definition sentence"
+      ],
+      "business_impact": "Authorized text in an awkward place; it interrupts the code/NAV explanation. Not a legal content loss, but lower quality than the baseline.",
+      "recommendation": "End the G03 target at '…计提销售服务费。' and append there, not after the code sentence.",
+      "related_old_findings": ["BR-D11-004"]
+    },
+    {
+      "id": "BR-FF-011",
+      "severity": "MEDIUM",
+      "category": "COMPLETION_ACCOUNTING",
+      "cases": ["D01", "D02", "D11", "D16"],
+      "rules": ["G11", "G12", "G14"],
+      "locations": ["obligations.records"],
+      "claim": "ALREADY_SATISFIED counts include non-selected ONE_OF alternatives.",
+      "actual": "Examples: D01 G11:B1:O2 (O1 applied), G12:B1:O1 (O2 applied), G14:B2:O2/O3 (O1 applied); similar in D02/D11/D16. One business ONE_OF requirement is counted as multiple completed obligations.",
+      "evidence": [
+        "reports/D01.json obligations.records group_kind ONE_OF and completion ALREADY_SATISFIED",
+        "reports/D02.json G14:B2:O1/O2 ALREADY while O3 ARTIFACT_VERIFIED",
+        "reports/D11.json G12:O2 ALREADY while O1 ARTIFACT_VERIFIED"
+      ],
+      "business_impact": "completion_counts and true_obligations overstate business completion. It does not claim delivery complete, but the gate metrics look better than the truth.",
+      "recommendation": "Collapse ONE_OF groups to one business obligation for completion counts; report alternatives separately.",
+      "related_old_findings": ["BR-D02-003"]
+    },
+    {
+      "id": "BR-FF-012",
+      "severity": "HIGH",
+      "category": "EVIDENCE_INTEGRITY",
+      "cases": ["D01", "D02", "D11", "D16"],
+      "rules": [],
+      "locations": ["index.json"],
+      "claim": "index.json replay_results.D01: head 682e68a, delivery not_generated, errors [EDIT_OVERLAP_OR_ADJACENT]; record_results {}",
+      "actual": "summaries/D01-replay.json and replay/D01/report.json say head ff4d749, delivery incomplete, errors []; replay/D01/working_final.docx exists. The index gate reason 'D01 artifact not generated' is false for this root.",
+      "evidence": [
+        "revalidation-ff4d7498/index.json",
+        "revalidation-ff4d7498/summaries/D01-replay.json",
+        "revalidation-ff4d7498/replay/D01/report.json",
+        "revalidation-ff4d7498/replay/D01/working_final.docx"
+      ],
+      "business_impact": "Evidence integrity: the index contradicts the per-case evidence and carries baseline 682e68a results. The gate FAIL may still be right, but its published reasons are stale.",
+      "recommendation": "Regenerate index.json from the ff4d749 record/replay summaries; remove 682e68a replay results and the false D01 not_generated reason.",
+      "related_old_findings": ["BR-D01-001"]
+    },
+    {
+      "id": "BR-FF-013",
+      "severity": "MEDIUM",
+      "category": "REPORT_CLASSIFICATION",
+      "cases": ["D01", "D02", "D11", "D16"],
+      "rules": ["G01", "G02", "G12", "G13", "G17", "G18"],
+      "locations": ["reports/Dxx/report.md rule tables", "audit issues vs sweep"],
+      "claim": "Rule-level tables say G13/G17 '不适用' in D16, G12/G13 '审计完成 1/1' in D02, G18 '审计完成 1/1' in D11, G01/G02 'no_target_found' in D01.",
+      "actual": "These classifications contradict the artifact and the unresolved lists: D16 G13/G17 are mandatory and residual; D02 G12/G13 sweep pending; D11 G18 p1207 old; D01 G02 has targets and audit issues.",
+      "evidence": [
+        "reports/D16/report.md rule table",
+        "reports/D02/report.md audit/checklist",
+        "reports/D11/report.md rule table",
+        "reports/D01/report.md rule table"
+      ],
+      "business_impact": "A human reader can be misled about which rules still need work; the report contradicts itself.",
+      "recommendation": "Derive rule-level status from the obligation ledger and artifact proof, not from target state; make audit/sweep/claim contradictions explicit.",
+      "related_old_findings": []
+    },
+    {
+      "id": "BR-FF-014",
+      "severity": "LOW",
+      "category": "AUTHORIZATION_SCOPE",
+      "cases": ["D01", "D02", "D11", "D16"],
+      "rules": ["G15"],
+      "locations": ["D01 p758/p1221", "D02 p821/p1287", "D11 p772/p1247", "D16 p822/p1306"],
+      "claim": "G15 delete the certified old payment clause.",
+      "actual": "The deleted paragraphs are contract-specific variants (5 working days, auto-debit, 划出/代收, 注册登记机构代收), not the literal G15 old_text (10 working days, instruction-based). The deletion matches G15's intent but not its exact old_text; with G16 missing it is a net content loss.",
+      "evidence": [
+        "guides/builtin_guide_v1.json G15 old_text",
+        "working_final.docx p758/p821/p772/p822 blank",
+        "business_notices CONTRACT_POSSIBLY_ERRONEOUS for 5-vs-10 working days"
+      ],
+      "business_impact": "Authorization scope is broader than the literal rule; the deletion is only defensible as part of a G15+G16 replacement. Currently G16 is missing.",
+      "recommendation": "Treat these as G15 variants only when the paired G16 append is applied; otherwise flag for manual review instead of deleting.",
+      "related_old_findings": []
+    },
+    {
+      "id": "BR-FF-015",
+      "severity": "MEDIUM",
+      "category": "CLASS_SUBSTITUTION / LATENT",
+      "cases": ["D01", "D02", "D11", "D16"],
+      "rules": ["G02", "G04"],
+      "locations": ["obligations.records G02/G04"],
+      "claim": "G02/G04 obligation new_text uses the guide template.",
+      "actual": "All four reports keep G02 new_text 'A类、B类基金份额' / 'C类、D类基金份额' even when facts are A/C or A/C/D. D01's audit read it literally; D02/D11/D16 escaped only because G02 was already satisfied and not audited.",
+      "evidence": [
+        "reports/D01..D16.json obligations.records G02:B1:O1/O2 new_text",
+        "reports/D01.json audit.issues[4]",
+        "reports/D16.json targets G02/G04 reasons correctly say no B类"
+      ],
+      "business_impact": "Latent false-block risk for any multi-class fund where G02 is audited.",
+      "recommendation": "Apply class substitution to obligation new_text and audit prompts; never audit against template placeholder classes.",
+      "related_old_findings": ["BR-D16-006"]
+    },
+    {
+      "id": "BR-FF-016",
+      "severity": "LOW",
+      "category": "AUDIT_COVERAGE",
+      "cases": ["D16"],
+      "rules": ["G01"],
+      "locations": ["D16 p91"],
+      "claim": "AUDIT_VERDICT_MISSING for G01.",
+      "actual": "The artifact has the G01 append and claim replay PASS at p91, but the audit did not produce a verdict.",
+      "evidence": [
+        "reports/D16.json audit.issues[0] AUDIT_VERDICT_MISSING G01 p91",
+        "reports/D16.json artifact_claim_replay.obligations['G01:B1:O1'] PASS"
+      ],
+      "business_impact": "Audit coverage gap, not a business defect.",
+      "recommendation": "Require an audit verdict for every planned target; treat missing verdict as unproven, not complete.",
+      "related_old_findings": ["BR-D16-004"]
+    }
+  ],
+  "closure_table": [
+    {
+      "old_id": "BR-D01-001",
+      "old_claim": "No working_final.docx; EDIT_OVERLAP_OR_ADJACENT stopped audit.",
+      "disposition": "PARTIAL",
+      "closed_part": "working_final exists and is hash-bound; replay completes with no error.",
+      "open_part": "G17 still dropped by RECALL_EDIT_OVERLAP; p759/p760/p1222/p1223 residual.",
+      "evidence": [
+        "artifacts/D01/working_final.docx sha256 80a87bd8ab44d36f08e399c864ce677c82887fd83505142126c283b0673bc6a9",
+        "replay/D01/working_final.docx text identical",
+        "reports/D01.json plan.edits G15 p758 0-135, p1221 0-136",
+        "reports/D01.json targets Y006/Y007/DEL001/DEL002 plan_reason RECALL_EDIT_OVERLAP",
+        "index.json replay_results.D01 still says not_generated (stale)"
+      ],
+      "note": "CLOSED as to 'no artifact'; OPEN as to overlap root cause."
+    },
+    {
+      "old_id": "BR-D02-001",
+      "old_claim": "Placeholder absent targets at p1036 (summary heading) used as verified sites; G05:2/G06:0 PASS VERIFIED_ABSENT.",
+      "disposition": "CLOSED",
+      "evidence": [
+        "reports/D02.json p1036 only in scope/window locations, not targets/claim sites",
+        "G05:2 absent proof at p138 (real class-setting clause), ALREADY_SATISFIED",
+        "G06 is OPEN, not PASS VERIFIED_ABSENT"
+      ]
+    },
+    {
+      "old_id": "BR-D02-004",
+      "old_claim": "G05:2/G06:0 cannot be ALREADY_SATISFIED from unrelated p1036; source has no G05 filing phrase / no G06 prohibition.",
+      "disposition": "CLOSED",
+      "evidence": [
+        "frozen/D02/original.docx p138 has no '并报中国证监会备案' (unrelated only p766/p767)",
+        "zero G06 '互相转换' hits",
+        "G05:2 ALREADY_SATISFIED at p138; G06 OPEN"
+      ]
+    },
+    {
+      "old_id": "BR-D11-002",
+      "old_claim": "G02:0 already satisfied by A/D wording at p91 but claim reports FAIL.",
+      "disposition": "CLOSED",
+      "evidence": [
+        "reports/D11.json G02:B1:O1/O2 ALREADY_SATISFIED, claim PASS, site p91",
+        "working_final.docx p91 'A 类及 D 类基金份额 … C 类基金份额'"
+      ]
+    },
+    {
+      "old_id": "BR-D11-001",
+      "old_claim": "G06:0 PASS VERIFIED_ABSENT at unrelated p129 heading.",
+      "disposition": "CLOSED",
+      "evidence": [
+        "G06 is no longer PASS; it is UNRESOLVED with no site",
+        "zero G06 '互相转换' hits"
+      ],
+      "note": "Old false PASS closed; new false OPEN is BR-FF-009."
+    },
+    {
+      "old_id": "BR-D16-003",
+      "old_claim": "G05 claim treats p427/p1165 meeting-exemption lists as class-setting sites; real splice p133 correct.",
+      "disposition": "CLOSED",
+      "evidence": [
+        "reports/D16.json G05:B1:O1 claim sites == ['p133']",
+        "working_final.docx p133 correctly spliced; p427/p1165 unchanged",
+        "p427/p1165 only survey_satisfied, status=not_planned, not in verified site set"
+      ],
+      "note": "Residual hygiene: inert false-positive survey rows remain."
+    },
+    {
+      "old_id": "BR-D16-006",
+      "old_claim": "Audit G02/G04 reports missing B class while Facts are A/C.",
+      "disposition": "CLOSED",
+      "evidence": [
+        "reports/D16.json audit.issues has no G02/G04 B-class conclusion",
+        "target reasons say '无需替换为B类'",
+        "G02/G04 ALREADY_SATISFIED at p91/p129"
+      ],
+      "note": "Defect migrated to D01 (BR-FF-008), facts A/C/D."
+    },
+    {
+      "old_id": "BR-D16-001",
+      "old_claim": "G12/G13 overlapping same-site edits failed at p221-p222; exact old text remains.",
+      "disposition": "OPEN",
+      "evidence": [
+        "working_final.docx p221/p222 unchanged",
+        "reports/D16.json audit wrong; sweep pending; claim RESIDUAL_OLD_TEXT"
+      ]
+    },
+    {
+      "old_id": "BR-D16-002",
+      "old_claim": "G17 usage text remains at p823/p824 and p1307/p1308.",
+      "disposition": "PARTIAL",
+      "evidence": [
+        "p1307/p1308 now blank",
+        "p823/p824 still old",
+        "claim DUPLICATE_SITE_UNEDITED p823"
+      ],
+      "note": "True fail-closed, but artifact is body/summary inconsistent."
+    },
+    {
+      "old_id": "BR-D16-004",
+      "old_claim": "G01 append missing at p91; G16 OPEN.",
+      "disposition": "PARTIAL",
+      "evidence": [
+        "G01 now applied p91; claim PASS",
+        "G16 still missing all four"
+      ]
+    },
+    {
+      "old_id": "BR-D16-005",
+      "old_claim": "G03/G08/G09/G11/G14/G15/G18/G22 effects authorized; G05:2 p133 valid; G06 correctly OPEN.",
+      "disposition": "CLOSED",
+      "evidence": [
+        "applied edits textually correct at p133/p217/p219/p220/p224/p822/p845/p1000/p1261/p1306/p1399",
+        "G05:2 before-present/after-absent at p133"
+      ],
+      "note": "G06 is no longer 'correctly OPEN'; it is a false OPEN (BR-FF-009)."
+    },
+    {
+      "old_id": "BR-D02-002",
+      "old_claim": "G16 four-component payment policy absent; OPEN is correct fail-closed.",
+      "disposition": "CONFIRMED",
+      "evidence": [
+        "no G16 text in p821-p823 or p1287-p1289"
+      ]
+    },
+    {
+      "old_id": "BR-D02-003",
+      "old_claim": "G01 p93 append genuinely missing; G14 alternatives are one business ONE_OF.",
+      "disposition": "CLOSED",
+      "evidence": [
+        "G01 now applied p93",
+        "G14 final policy correct p232"
+      ],
+      "note": "G14 ALREADY alternatives still double-counted (BR-FF-011)."
+    },
+    {
+      "old_id": "BR-D02-005",
+      "old_claim": "G05/G08/G09/G11/G12/G13/G14/G15/G17/G18/G22 changed text authorized and correct; no unauthorized edit.",
+      "disposition": "PARTIAL",
+      "evidence": [
+        "applied edits correct",
+        "G12/G13 no longer applied at p229 (BR-FF-003)"
+      ],
+      "note": "No paragraph-level unauthorized edit remains true."
+    },
+    {
+      "old_id": "BR-D11-003",
+      "old_claim": "G05:2 OPEN/UNPROVEN appropriate fail-closed; G16 OPEN.",
+      "disposition": "PARTIAL",
+      "evidence": [
+        "G16 still true OPEN",
+        "G05:2 absent at p129; D01/D02 same absence is ALREADY_SATISFIED"
+      ],
+      "note": "G05:2 should be ALREADY_SATISFIED, not UNPROVEN."
+    },
+    {
+      "old_id": "BR-D11-004",
+      "old_claim": "G03/G05/G08/G09/G11/G12/G13/G14/G15/G17/G18/G22 actual changes authorized; no plan-artifact mismatch.",
+      "disposition": "PARTIAL",
+      "evidence": [
+        "applied changes correct",
+        "G18 summary p1207 missed (BR-FF-002)",
+        "G03 mid-paragraph p126 (BR-FF-010)"
+      ]
+    }
+  ],
+  "cases": {
+    "D01": {
+      "artifact_sha256": "80a87bd8ab44d36f08e399c864ce677c82887fd83505142126c283b0673bc6a9",
+      "report_final_sha256_match": true,
+      "replay_text_matches_record": true,
+      "plan_edits": 14,
+      "changed_paragraphs": 14,
+      "reconstructed_mismatches": 0,
+      "unplanned_changed_paragraphs": [],
+      "delivery": "incomplete",
+      "delivery_claim_truthful": true,
+      "true_gaps": ["G01", "G16", "G17"],
+      "false_blocks": ["G02", "G06"],
+      "false_completes": [],
+      "audit_false_blocks": ["G02_B_CLASS"],
+      "audit_false_completes": [],
+      "partial": [],
+      "residual_sites": {
+        "G01": ["p92"],
+        "G16": ["p758", "p1221"],
+        "G17": ["p759", "p760", "p1222", "p1223"]
+      },
+      "notes": "working_final exists and is hash-bound. G01 missing in 释义. G17 dropped by false RECALL_EDIT_OVERLAP. G02 already satisfied at p92 but blocked by truncated p91 target and B-class audit. G16 absent."
+    },
+    "D02": {
+      "artifact_sha256": "4ad99c978765b3ed71d9d5d42a4d97fe6be144b6b251ad340e0e9cd228907140",
+      "report_final_sha256_match": true,
+      "replay_text_matches_record": true,
+      "plan_edits": 16,
+      "changed_paragraphs": 16,
+      "reconstructed_mismatches": 0,
+      "unplanned_changed_paragraphs": [],
+      "delivery": "incomplete",
+      "delivery_claim_truthful": true,
+      "true_gaps": ["G12", "G13", "G16"],
+      "false_blocks": ["G06"],
+      "false_completes": [],
+      "audit_false_blocks": [],
+      "audit_false_completes": ["G12", "G13"],
+      "partial": [],
+      "residual_sites": {
+        "G12": ["p229"],
+        "G13": ["p229"],
+        "G16": ["p821-p823", "p1287-p1289"]
+      },
+      "notes": "p229 unchanged despite audit 'completed'. G12/G13 overlap merge failed. G16 absent; p821-p823 and p1287-p1289 blank. G06 false OPEN (text absent)."
+    },
+    "D11": {
+      "artifact_sha256": "744001972051ecaa49f152831359ca3948a89d7b973f38641733255ed542b23b",
+      "report_final_sha256_match": true,
+      "replay_text_matches_record": true,
+      "plan_edits": 14,
+      "changed_paragraphs": 14,
+      "reconstructed_mismatches": 0,
+      "unplanned_changed_paragraphs": [],
+      "delivery": "incomplete",
+      "delivery_claim_truthful": true,
+      "true_gaps": ["G16"],
+      "false_blocks": ["G05:2", "G06"],
+      "false_completes": ["G18:p1207"],
+      "audit_false_blocks": [],
+      "audit_false_completes": [],
+      "audit_coverage_gaps": ["G18:p1207"],
+      "partial": [],
+      "residual_sites": {
+        "G18": ["p1207"],
+        "G16": ["p772-p773", "p1247-p1248"]
+      },
+      "notes": "G18 body p800 changed, summary p1207 old, but G18 marked ARTIFACT_VERIFIED. scope_mapping G18 S17 only; window omits S25. G16 absent. G05:2/G06 false OPEN. G03 mid-paragraph p126. Baseline p1207 was changed; this is a duplicate-copy regression."
+    },
+    "D16": {
+      "artifact_sha256": "bbd5a43734e3bc254c20b885e2529da40659ac88260ea23a18443ceb994ff102",
+      "report_final_sha256_match": true,
+      "replay_text_matches_record": true,
+      "plan_edits": 14,
+      "changed_paragraphs": 14,
+      "reconstructed_mismatches": 0,
+      "unplanned_changed_paragraphs": [],
+      "delivery": "incomplete",
+      "delivery_claim_truthful": true,
+      "true_gaps": ["G12", "G13", "G16", "G17:body"],
+      "false_blocks": ["G06"],
+      "false_completes": [],
+      "audit_false_blocks": [],
+      "audit_false_completes": [],
+      "partial": ["G17"],
+      "residual_sites": {
+        "G12": ["p221"],
+        "G13": ["p221", "p222"],
+        "G16": ["p822", "p1306"],
+        "G17": ["p823", "p824"]
+      },
+      "notes": "G05 p133 fixed; p427/p1165 inert. G12/G13 residual p221-p222. G17 summary p1307/p1308 deleted, body p823/p824 old; DUPLICATE_SITE_UNEDITED. G16 absent. G06 false OPEN. G01 applied p91. D16 B-class audit issue closed."
+    }
+  },
+  "rule_matrix": {
+    "G01": {"D01": "MISSING:p92", "D02": "DONE:p93", "D11": "DONE:p91", "D16": "DONE:p91"},
+    "G02": {"D01": "FALSE_BLOCK:already_satisfied:p92", "D02": "ALREADY:p93", "D11": "ALREADY:p91", "D16": "ALREADY:p91"},
+    "G03": {"D01": "DONE:p130", "D02": "DONE:p138", "D11": "DONE;p126_mid_paragraph", "D16": "DONE:p133"},
+    "G04": {"D01": "ALREADY:p130", "D02": "ALREADY:p135", "D11": "ALREADY:p126", "D16": "ALREADY:p129"},
+    "G05:0": {"D01": "DONE:p135", "D02": "DONE:p138", "D11": "DONE:p129", "D16": "DONE:p133"},
+    "G05:2": {"D01": "ALREADY:absent", "D02": "ALREADY:absent", "D11": "FALSE_BLOCK:absent", "D16": "DONE:p133"},
+    "G06": {"D01": "FALSE_BLOCK:absent", "D02": "FALSE_BLOCK:absent", "D11": "FALSE_BLOCK:absent", "D16": "FALSE_BLOCK:absent"},
+    "G08": {"D01": "DONE:p226", "D02": "DONE:p226", "D11": "DONE:p208", "D16": "DONE:p217"},
+    "G09": {"D01": "DONE:p227", "D02": "DONE:p227", "D11": "DONE:p209", "D16": "DONE:p219"},
+    "G11": {"D01": "DONE:p228", "D02": "DONE:p228", "D11": "DONE:p209", "D16": "DONE:p220"},
+    "G12": {"D01": "DONE:p229", "D02": "MISSING:p229", "D11": "DONE:p210", "D16": "MISSING:p221"},
+    "G13": {"D01": "DONE:p230", "D02": "MISSING:p229", "D11": "DONE:p210", "D16": "MISSING:p221-p222"},
+    "G14": {"D01": "DONE:p231", "D02": "DONE:p232", "D11": "DONE:p213", "D16": "DONE:p224"},
+    "G15": {"D01": "DONE:p758/p1221", "D02": "DONE:p821/p1287", "D11": "DONE:p772/p1247", "D16": "DONE:p822/p1306"},
+    "G16": {"D01": "MISSING", "D02": "MISSING", "D11": "MISSING", "D16": "MISSING"},
+    "G17": {"D01": "MISSING:p759/p760/p1222/p1223", "D02": "DONE:p822/p823/p1288/p1289", "D11": "DONE:p773/p1248", "D16": "PARTIAL:summary_deleted_body_residual"},
+    "G18": {"D01": "DONE:p785/p1191", "D02": "DONE:p848/p1257", "D11": "FALSE_COMPLETE:p800_done_p1207_old", "D16": "DONE:p845/p1261"},
+    "G22": {"D01": "DONE:p934/p1299", "D02": "DONE:p1001/p1371", "D11": "DONE:p951/p1344", "D16": "DONE:p1000/p1399"}
+  },
+  "integrity": {
+    "guide_document_sha256_match": true,
+    "source_sha256_match_all": true,
+    "final_sha256_match_all": true,
+    "replay_text_matches_record_all": true,
+    "plan_artifact_reconstruction_exact_all": true,
+    "unplanned_changed_paragraphs_all": 0,
+    "record_ledgers": {
+      "D01": {"rows": 32, "completed": 32, "http_200": 32, "charged_cost_usd": 0.0235434},
+      "D02": {"rows": 35, "completed": 35, "http_200": 35, "charged_cost_usd": 0.03702},
+      "D11": {"rows": 29, "completed": 29, "http_200": 29, "charged_cost_usd": 0.021728},
+      "D16": {"rows": 34, "completed": 34, "http_200": 34, "charged_cost_usd": 0.03513165}
+    },
+    "replay_calls": 0,
+    "index_stale": true,
+    "index_issue": "index.json replay_results.D01 says 682e68a/not_generated/EDIT_OVERLAP_OR_ADJACENT; per-case replay says ff4d749/incomplete/errors=[] with working_final."
+  },
+  "positive_checks": [
+    "All four working_final SHA-256 values match report output_validation.final_sha256.",
+    "All four original.docx SHA-256 values match report source_sha256.",
+    "Certified guide document SHA-256 matches reports and frozen guide.json.",
+    "Replay text is identical to record text for all four; replay uses 0 model calls.",
+    "Plan-to-artifact reconstruction is exact (14/14, 16/16, 14/14, 14/14); no unplanned changed paragraph.",
+    "Most applied edits are textually correct at their real sites: G05:0, G08, G09, G11, G14, G22 all; G12/G13 D01/D11; G01/G03 D02/D11/D16; G05:2 D16; G18 D01/D02/D16.",
+    "D02 p1036 placeholder issue is fixed; G05:2/G06 are scoped to the real clause p138.",
+    "D11 G02 A/D delimiter issue is fixed (ALREADY_SATISFIED p91).",
+    "D16 G05 real site is fixed (p133; p427/p1165 inert).",
+    "D16 B-class audit issue is fixed (no G02/G04 B-class conclusion).",
+    "Record ledgers are clean: 130 calls, all HTTP 200/completed, no error codes, total cost about $0.1174; replay 0 calls."
+  ],
+  "gate_recommendation": {
+    "decision": "BLOCK",
+    "do_not_deliver": ["D01", "D02", "D11", "D16"],
+    "reasons": [
+      "G16 is absent in all four artifacts; G15 deletions gutted the sales-service-fee payment clause. Real content loss.",
+      "D11 G18 summary p1207 is a hidden obligation-level false complete; the D11 gate has only 3 open obligations and could pass with p1207 still old.",
+      "D02 G12/G13 are unapplied at p229 while the audit says completed; the audit cannot be trusted.",
+      "D16 G17 is half-applied (summary deleted, body p823/p824 old), leaving a body/summary contradiction.",
+      "D01 G01 is missing and G17 was dropped by a false RECALL_EDIT_OVERLAP (adjacent, not overlapping).",
+      "False blocks (G06 all; D01 G02; D11 G05:2) will keep the gate red after the real edits are fixed and distort the unresolved list."
+    ],
+    "clearing_conditions": [
+      "Implement G16 in body and summary copies for all four.",
+      "D02: merge G12+G13 at p229 (D11 p210 pattern) and verify the artifact.",
+      "D16: merge G12+G13 across p221-p222; delete G17 in body p823/p824 and summary p1307/p1308.",
+      "D01: append G01 at p92; delete G17 at p759/p760 and p1222/p1223; remove the false overlap rejection.",
+      "D11: add G18 p1207; map G18 to S25; remove false G05:2/G06 blocks.",
+      "Fix class substitution in obligations/audit (D01 G02) and absence proof (G06; D11 G05:2).",
+      "Regenerate index.json from the ff4d749 per-case record/replay summaries."
+    ]
+  }
+}

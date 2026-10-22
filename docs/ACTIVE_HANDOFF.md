@@ -1,6 +1,15 @@
 # FundLex 当前断点（ACTIVE_HANDOFF）
 
 
+## ff4d749 exact-code Gate 断点（2026-10-22，优先）
+
+- **code_head=`ff4d7498b6c1aee72ba48686074d021fc7f84791`；evidence base=`387e334`（docs-only）。** 新证据根 `docs/evidence/final-validation-20261022/revalidation-ff4d7498/`；旧 682e68a bundle 未覆盖。
+- 离线 1061 passed/0 failed/6 skipped/207.10s，compileall/diff-check PASS。四例 live record exact code：calls 32/35/29/34（合计130），cost $0.11742255；全部 incomplete，TRUE 24/例，TRUE→NOT_APPLICABLE=0；四例 working_final/redline 均生成，plan→artifact 0 mismatch；四例 replay 0 HTTP/0 tokens/0 cost 且 14/14 语义检查 PASS。D16 六 stage same_head=true、model_calls=0。
+- 旧 finding：D02 absent、D11 G02、D16 G05、D16 Audit B 关闭；D01 overlap 仅 PARTIAL（artifact 已生成，但 G17 same-operation conflict 仍在）。
+- **Gate=DO_NOT_ENTER_20_CASE**。剩余 root cause：G16 四例未 append；D01/D16 G17 duplicate/subset conflict；D02 G12/G13 joint edit 被 replan 丢失（回归）；D11 G18 summary p1207 false proof；D16 G12/G13 residual；G06 四例 absent literal 无 site proof；D01 G01/G02 split+B false audit；D11 G05:2 false block。
+- 独立 Reviewer：Business BLOCK；Architecture 4 BLOCKER/6 HIGH；Recovery 4 BLOCKER/5 HIGH/8 MEDIUM；Test conditional（index/stage identity 已在证据修正）。本轮未改 runtime、未部署、未跑 20/514。
+- 下一动作：按 `summaries/architecture-review-ff4d749.md`/`recovery-review-ff4d749.md` 的最小通用修复顺序修 G16/G17/G12-G13/G06/G01-G02；每项 regression；完整 pytest；新 code SHA 后重新四例 live+replay+四 Reviewer；不得用本 bundle 冒充验收通过。
+
 ## 接续断点（2026-10-22 07:00，前序 agent 断开后）
 
 - **当前版本**：HEAD `682e68a5b3ef2a58feb77460af70afabdb314379`，分支 `refactor/recovery-architecture`，ahead 2（`22c15aa`、`682e68a`），未 push。工作区有未提交修复，涉及 `fundlex/recall.py`、`recall_pipeline.py`、`generation/claim_replay.py`、`generation/effects.py`、两个验证测试文件及未跟踪的 `docs/evidence/final-validation-20261022/`。

@@ -1,0 +1,10 @@
+{
+  "case_id": "D11",
+  "head": "ff4d7498b6c1aee72ba48686074d021fc7f84791",
+  "branch": "refactor/recovery-architecture",
+  "runtime_tree_sha256": "7ad22dc0dfe38bf7d8431ee437e7c5f6575a4f3a8155164d24559028d14e27a2",
+  "document_sha256": "74920e09c398f086091ca2b522c5d3bb0ed574d8ccd8c6e00ecf416b508ba93a",
+  "guide_source_sha256": "b77be53c3439d785a9ffad0f09d8d03ba74f7722397576b999ae6f5dd6eef895",
+  "guide_document_sha256": "45dd77460f2ef93d29001c0833c220f89de99dafb19d32a8b73653b55f92c8d7",
+  "mode": "record"
+}

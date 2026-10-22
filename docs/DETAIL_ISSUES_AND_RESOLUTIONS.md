@@ -2179,3 +2179,14 @@
   - D16 claim replay：G05 会务条款 false failure 消失；剩 G01、G06、G12/G13、G16、G17 residual。
 - 当前状态：**全量离线 1061 passed / 6 skipped / 2 warnings（219.40s）**；修复已提交到本地分支（未 push），Gate 仍 FAIL。D01 冻结 stage 的 target 旧状态导致 stage claim 仍报 G01/G02，live 等价模拟已验证关闭；BUS-FINAL-003（Audit 无证据负面意见）尚未处理。G06/G16 在四例中仍缺有效 site/target。未部署、未跑 20/514。
 - 下一步：① 提交当前代码/测试/记录（未经用户要求不 push）；② 逐条处理 G06/G16 的 site/target 发现与 D16 G12/G13/G17 residual；③ 新 SHA 重新四例 record/replay 与独立业务复核；④ 之后再推进 ≥5 份真实合同，不降低 Gate。
+
+### FL-D142 `ff4d749` exact-code revalidation（2026-10-22，未通过 20-case Gate）
+
+- 验证代码：`ff4d7498b6c1aee72ba48686074d021fc7f84791`（纯证据 commit `387e334` 不计为 runtime）；证据根：`docs/evidence/final-validation-20261022/revalidation-ff4d7498/`，旧 `682e68a` bundle 保留未覆盖。runtime tree `7ad22dc0...`，Guide source/document SHA 与 index 一致。
+- 离线：**1061 passed / 0 failed / 6 skipped / 2 warnings / 207.10s**；compileall、diff-check PASS。四例 live record 均为 exact code，artifact 均生成；calls 32/35/29/34，合计 130，cost $0.11742255，全部 incomplete，TRUE=24/例，TRUE→NOT_APPLICABLE=0。
+- 四例零网络 full replay：0 HTTP/0 tokens/0 cost；`compare_frozen_replay` 14/14 项全 PASS，artifact 文本一致。D16 六 stage replay same_head=true、model_calls=0；base plan 与 revision 3 分别保存。
+- 旧 finding：D02 absent 占位、D11 G02 分隔符、D16 G05 会务 site、D16 Audit B 类均关闭；D01 原 no-artifact/G08 overlap 已消失但 G17 same-operation duplicate 仍冲突，故 D01 overlap 只能标 PARTIAL/OPEN。
+- 新/残留 BLOCKER：G16 四例全部未 append（G15 删除付款条款后留下空白）；D01/D16 G17 duplicate/subset target conflict；D02 G12/G13 joint edit 被 `replan_sites.bind_reference` 丢失（基线存在，属回归）；D11 G18 summary p1207 仍为旧文但 obligation 被 body p800 证明；D16 G12/G13 p221 仍 residual；G06 四例 absent literal 无 site proof；D01 G01/G02 split locator 与 B 类 false audit；D11 G05:2 false block。
+- Safety：false delivery complete=0；obligation-level false completion=D11 G18；D02 audit false completion；unauthorized paragraph edit=0；cross-site/duplicate proof=D11 G18；unsupported VERIFIED_ABSENT=0；false Review block=D01 G02。
+- 独立 Business/Architecture/Recovery/Test reviewer 均要求先修代码；Business BLOCK，Architecture 4 BLOCKER/6 HIGH，Recovery 4 BLOCKER/5 HIGH/8 MEDIUM，Test conditional（index/stage identity 已在证据中修正）。**Gate=DO_NOT_ENTER_20_CASE**。
+- 本轮未改 runtime、未重录旧 SHA、未部署、未跑 20/514。下一步按 Architecture/Recovery 报告的最小通用修复顺序处理 G16/G17/G12-G13/G06/G01-G02，新增 regression、完整 pytest、新 code SHA 后重新四例 live + replay + 四 Reviewer 复审；不得把本 bundle 当验收通过。
