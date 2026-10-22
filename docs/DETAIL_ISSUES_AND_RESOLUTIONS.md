@@ -2272,3 +2272,13 @@
 - 修复 p222 joint_delete 后，Claim 又要求 G12:1 在 p222 出现完整 new_text，导致 `CLAIM_OPERATION_EFFECT_MISSING`；同时 D11 p129 G03+G05 合并编辑 end=177 超出唯一 TextSegment 0..176，写文件报 `EDIT_CROSSES_BARRIER`。
 - 处理：① `_own_effect_errors`/`_joint_operation_effects` 对 composite tail（`composite_tail` 或 `part_index>0`）只要求删除旧文，不要求重复插入 new_text；② final merge 和 build 前把“仅尾随空白”超出的 end 夹到当前 TextSegment；③ ONE_OF 历史措辞替代项若其 old_text 在全文确实不存在且另一替代项已 PASS，标 `NOT_REQUIRED/one_of_alternative_absent`，不伪造站点。
 - 旧 cassette D16 重放：delivery complete、Claim failures 0、unresolved 0，final p221 为正确新条款、p222 为空白；D11 plan 13 edits 无 barrier。需新 SHA live 四例复验。
+
+### FL-D145 追加 8（D01 第四次 exact-code 后回退，已定位三处）
+
+- `6fec3fc` D01 又出现 G05 p135 `RECALL_EDIT_CONTENT_UNVERIFIED`、G15 p758/p1221 diverge；D11 p129 barrier；D16 p222 已空但 G12:0/ONE_OF 未闭合。
+- 处理：
+  1. `_replay_fragments` 对 `g05_splice` 做句内终端词替换，不插入句号，修复 G05 content check。
+  2. 在 `_plan_and_generate` 规划前再做一次最终 exact-copy closure，捕获 survey/rebind 晚到源 target（D01 p758）。
+  3. D11 p129 等合并编辑仅在尾随空白超出 TextSegment 时夹到 segment end；D16 p222 composite tail 不要求重复 new_text，全部空 overlap 合并为 `joint_delete`。
+  4. ONE_OF 历史替代项 old_text 全文确实不存在且另一项 PASS 时标 `NOT_REQUIRED`，不伪造站点。
+- 旧 cassette 行为：D01 plan 已同时含 p135 G05、p758/p1221 两份 G15+G16；D16 frozen replay complete 且 p222 空；D11 stage plan 13 edits 无 barrier。需新 SHA 四例 live 复验。

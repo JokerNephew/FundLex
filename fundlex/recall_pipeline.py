@@ -1067,7 +1067,19 @@ def _plan_and_generate(model: Any, rules_by_id: dict[str, dict], targets: Sequen
                        frozen_run: Any = None
                        ) -> tuple[dict[str, Any], list[dict[str, Any]], Any, Any, DocumentInspection]:
     """Plan from the ORIGINAL inspection, validate, generate and re-read the final."""
-    from .recall import ensure_unique_target_ids, target_site_ok
+    from .recall import (duplicate_copy_targets, ensure_unique_target_ids,
+                         target_site_ok)
+    # Final exact-copy closure immediately before planning.  Survey/rebind can add a
+    # source target after the earlier passes; an uneditable body/summary copy must not
+    # survive merely because of that ordering (D01 p758/p1221 G15).
+    for copy in duplicate_copy_targets(targets, rules_by_id, inspection):
+        for old in targets:
+            if old is not copy and old.rule_id == copy.rule_id \
+                    and old.location == copy.location \
+                    and set(old.operations) == set(copy.operations):
+                old.out_of_scope = True
+                old.reason = f"{old.reason}|SUPERSEDED_BY_FINAL_COPY"
+        targets.append(copy)
     ensure_unique_target_ids(targets)
     for target in targets:
         if (target.state == "needs_edit" and not target.out_of_scope

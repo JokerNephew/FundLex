@@ -2156,9 +2156,15 @@ def duplicate_copy_targets(targets: Sequence[Target], rules_by_id: dict[str, dic
                 span = inspection.by_location(location)
             except DocxError:
                 continue
+            source_span = inspection.by_location(target.location)
             if target.start is None or target.end is None:
-                continue
-            start, end = target.start, target.end
+                source_located = resolve_quote(source_span, target.quote)
+                if source_located is None:
+                    continue
+                source_start, source_end = source_located
+            else:
+                source_start, source_end = target.start, target.end
+            start, end = source_start, source_end
             if _compact(target.quote):
                 located = resolve_quote(span, target.quote)
                 if located is None:
@@ -3329,6 +3335,14 @@ def _replay_fragments(actual: str, fragments: Sequence[dict[str, Any]]) -> str |
     for item in fragments:
         old_text = str(item.get("old_text") or "")
         new_text = str(item.get("new_text") or "")
+        if item.get("mode") == "g05_splice":
+            # G05 is a terminal-word substitution inside one sentence; inserting
+            # sentence separators around it would change the approved replacement
+            # and make its own content check fail (D01 p135).
+            if current.count(old_text) != 1:
+                return None
+            current = current.replace(old_text, new_text, 1)
+            continue
         if _same_compact(old_text, current):
             current = new_text
             continue
