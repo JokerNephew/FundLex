@@ -1321,20 +1321,22 @@ def _quote_is_expected_effect(quote: str, record: Any, facts: Facts | None, *,
             expected = ""
     elif "{" in expected:
         expected = ""
+    if expected and compact in _compact(expected):
+        # An exact authorized final policy is conclusive even when that policy
+        # preserves the source's first sentence (G12 keeps the fee-bearer sentence).
+        return True
+    if getattr(record.spec, "rule_id", "") in {"G02", "G04", "G08", "G11"} and expected:
+        # The real contract may write "A类及D类" while the instantiated guide
+        # group is "A类、D类".  Same certified class set, not an invented class.
+        from .generation.effects import _class_group_equivalent
+        if _class_group_equivalent(expected, compact):
+            return True
     references = [str(record.spec.old_text or ""), *record.spec.alternatives]
     old_parts = [_compact(sentence) for reference in references
                  for sentence in re.split(r"(?<=[。；;])", reference)
                  if len(_compact(sentence)) >= 8]
     if any(part in compact or compact in part for part in old_parts):
         return False
-    if expected and compact in _compact(expected):
-        return True
-    if getattr(record.spec, "rule_id", "") in {"G02", "G04"} and expected:
-        # The real contract may write "A类及D类" while the instantiated guide
-        # group is "A类、D类".  Same certified class set, not an invented class.
-        from .generation.effects import _class_group_equivalent
-        if _class_group_equivalent(expected, compact):
-            return True
     if getattr(record.spec, "rule_id", "") in {"G02", "G04"} and expected and re.fullmatch(
             r"称为" + re.escape(_compact(expected)) + r"[。；;]?", compact):
         # A definition's grammatical label prefix is preserved source wording.
@@ -1504,6 +1506,35 @@ def _site_record_quotes_expected_effect(
                                                  obligation_id=record.obligation_id)
                             for proof in local):
                 return True
+    return False
+
+
+def _sibling_expected_effect(quote: str, location: str, obligations: Any,
+                             states: Mapping[str, Any], *, facts: Facts | None,
+                             edits: Sequence[dict[str, Any]], original: DocumentInspection,
+                             actual: DocumentInspection) -> bool:
+    """True when a finding quotes an authorized final effect at this site."""
+    if obligations is None:
+        return False
+    from .generation.effects import effect_proof_passed
+    try:
+        before_text = str(original.by_location(location).text)
+        actual_text = str(actual.by_location(location).text)
+    except (KeyError, ValueError, AttributeError):
+        return False
+    for obligation_id, state in states.items():
+        record = obligations.record(obligation_id)
+        if record is None or record.applicability.status != "TRUE":
+            continue
+        local = _local_operation_proofs(state, record.spec.operation_id,
+                                        record.obligation_id, location)
+        if not local or not all(effect_proof_passed(proof) for proof in local):
+            continue
+        if _quote_is_expected_effect(
+                quote, record, facts, edits=edits, location=location,
+                before_text=before_text, actual_text=actual_text,
+                obligations=obligations, proofs=states):
+            return True
     return False
 
 
@@ -2690,6 +2721,16 @@ def _apply_artifact_proof_to_findings(findings: list[dict[str, Any]], replay: di
         except Exception:  # noqa: BLE001
             body = ""
         residual = bool(quote and quote in body)
+        if quote and _sibling_expected_effect(
+                str(finding.get("quote") or ""), location, obligations, states,
+                facts=facts, edits=edits, original=original, actual=actual):
+            # The finding quotes a sibling operation's authorized final text at the
+            # same site; it is not evidence that this rule's old effect survived.
+            finding["status"] = "resolved"
+            finding["resolution"] = "artifact_proof"
+            finding["proof_kind"] = "REVIEW_UNPROVEN"
+            finding["resolution_evidence"] = "sibling_authorized_effect"
+            continue
         rule = rules_by_id.get(rule_id) or {}
         old_sentences = []
         for operation in rule.get("operations") or []:
@@ -3135,6 +3176,24 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
                                              extend_resolved=True)
         report["target_attribution"].extend(assign_target_operations(
             targets, rules_by_id, inspection, facts, obligation_ledger))
+        # Rebinding fills offsets on survey targets after the first duplicate-copy
+        # pass.  Re-run exact-copy closure now that every source target is geometric;
+        # otherwise a body/summary pair (D01 p758/p1221 G15) is planned only once.
+        late_copies = duplicate_copy_targets(targets, rules_by_id, inspection)
+        for copy in late_copies:
+            for old in targets:
+                if old is not copy and old.rule_id == copy.rule_id \
+                        and old.location == copy.location \
+                        and set(old.operations) == set(copy.operations):
+                    old.out_of_scope = True
+                    old.reason = f"{old.reason}|SUPERSEDED_BY_DUPLICATE_COPY"
+            targets.append(copy)
+            synthetic.append(copy)
+            origins[copy.target_id] = "duplicate_copy_late"
+            report["target_attribution"].extend(assign_target_operations(
+                [copy], rules_by_id, inspection, facts, obligation_ledger))
+        if late_copies:
+            ensure_unique_target_ids(targets, origins)
         locator_records = locate_unresolved_targets(targets, inspection, rules_by_id,
                                                     facts, model)
         for target in targets:

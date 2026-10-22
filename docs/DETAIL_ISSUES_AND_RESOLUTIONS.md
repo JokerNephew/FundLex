@@ -2247,3 +2247,8 @@
 - `b6abf98` D01 live：29 calls/$0.02299395，24 TRUE 全部 terminal（14 VERIFIED/10 ALREADY/0 OPEN），Claim PASS，仅剩 1 条 sweep：G04 p130 被误报 wrong_text。实际 p130 已是 A/D 收费组 + C 服务费组；sweep 引文与 instantiated `A类、D类` 仅差“及/、”分隔符。
 - 处理：`_quote_is_expected_effect` 对 G02/G04 使用 certified class-group 等价比对（`_class_group_equivalent`），不再把 `A类及D类` 误判为残留；新增正/反例回归，反例仍拒绝虚构 B 类。
 - 状态：代码已修复，待提交后第四次 D01 live 确认。
+
+### FL-D145 追加 4（D01 第三次证据的旧 cassette 行为重放）
+
+- 新代码（未提交时）对 `80623e1` D01 frozen cassette 零网络重放：`delivery=complete`、errors=[]；p758 与 p1221 均生成相同的 `G15+G16 merged_delete_append`，G15 的 p758 副本通过 late duplicate-copy closure 被纳入。说明上一轮 D01 的 p758/p1221 分歧和 G04/G08/G11/G12/G13 sweep 误报已关闭。
+- 仍不能替代 exact-code live：旧 cassette 的 audit/sweep 上下文来自旧代码；必须在新 SHA 重新 record。
