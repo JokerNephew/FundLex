@@ -1329,6 +1329,12 @@ def _quote_is_expected_effect(quote: str, record: Any, facts: Facts | None, *,
         return False
     if expected and compact in _compact(expected):
         return True
+    if getattr(record.spec, "rule_id", "") in {"G02", "G04"} and expected:
+        # The real contract may write "A类及D类" while the instantiated guide
+        # group is "A类、D类".  Same certified class set, not an invented class.
+        from .generation.effects import _class_group_equivalent
+        if _class_group_equivalent(expected, compact):
+            return True
     if getattr(record.spec, "rule_id", "") in {"G02", "G04"} and expected and re.fullmatch(
             r"称为" + re.escape(_compact(expected)) + r"[。；;]?", compact):
         # A definition's grammatical label prefix is preserved source wording.

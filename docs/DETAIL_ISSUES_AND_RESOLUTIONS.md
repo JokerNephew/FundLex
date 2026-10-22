@@ -2241,3 +2241,9 @@
 - 处理：① `assign_target_operations` 对 satisfied 的 G02/G04 split 目标也按真实费用组扩展 operation keys；② `_plan_and_generate` 在 replan 出现 unbound 且当前仍有 live target 时回退到从全部 targets 重新 plan，避免丢失 p758 副本；③ `_TARGET_ANCHORS` 增加 G18 业务锚点，标题 p781 不再进入 sweep；④ 新增 G18 标题反例回归。
 - 旧 cassette 重放（b18a5c9 cassette，新代码）已生成 p758 与 p1221 两份 G15+G16 联合编辑，T002 p130 operations 为 G04:0/G04:1；随后 Audit 上下文变化导致 `MODEL_REPLAY_MISS`，符合预期，需新 live record。
 - 状态：尚未提交/重跑；D01 未通过。
+
+### FL-D145 追加 3（D01 第三次 exact-code 尝试）
+
+- `b6abf98` D01 live：29 calls/$0.02299395，24 TRUE 全部 terminal（14 VERIFIED/10 ALREADY/0 OPEN），Claim PASS，仅剩 1 条 sweep：G04 p130 被误报 wrong_text。实际 p130 已是 A/D 收费组 + C 服务费组；sweep 引文与 instantiated `A类、D类` 仅差“及/、”分隔符。
+- 处理：`_quote_is_expected_effect` 对 G02/G04 使用 certified class-group 等价比对（`_class_group_equivalent`），不再把 `A类及D类` 误判为残留；新增正/反例回归，反例仍拒绝虚构 B 类。
+- 状态：代码已修复，待提交后第四次 D01 live 确认。

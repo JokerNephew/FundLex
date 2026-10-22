@@ -1223,3 +1223,17 @@ def test_g18_heading_is_not_a_business_site(tmp_path):
     inspection = inspect_docx(path, full=True)
     assert not target_site_ok("G18", inspection.by_location("p0"), inspection)
     assert target_site_ok("G18", inspection.by_location("p1"), inspection)
+
+
+def test_expected_class_group_quote_accepts_and_separator():
+    from types import SimpleNamespace
+    from fundlex.recall_pipeline import _quote_is_expected_effect
+
+    record = SimpleNamespace(spec=SimpleNamespace(
+        op="replace", old_text="A类基金份额", new_text="A类、D类基金份额",
+        alternatives=(), operation_id="G04:0", rule_id="G04"))
+    quote = "在投资者申购 A 类及 D 类基金份额时收取申购费用，不计提销售服务费"
+    assert _quote_is_expected_effect(quote, record, None, location="p0", actual_text=quote)
+    assert not _quote_is_expected_effect(
+        "在投资者申购 A 类及 B 类基金份额时收取申购费用", record, None,
+        location="p0", actual_text="在投资者申购 A 类及 B 类基金份额时收取申购费用")
