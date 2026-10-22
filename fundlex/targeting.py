@@ -487,6 +487,62 @@ def locate_unresolved_targets(targets: Sequence[Any], inspection: Any,
     return records
 
 
+def target_for_claim_site(record: Any, location: str, targets: Sequence[Any],
+                          rules_by_id: dict[str, dict], facts: Any, inspection: Any,
+                          *, target_id: str = "") -> Any | None:
+    """Create the repair target for a Claim-discovered required occurrence.
+
+    Claim Replay can prove that a duplicate body/summary site must carry the
+    operation even when an active target already exists elsewhere.  That evidence
+    is stronger than the old "one active target covers the operation" shortcut;
+    it authorizes a site-specific repair target, not a global fuzzy clone.
+    """
+    from .recall import Target, resolve_quote
+    from .generation.effects import operation_site_bound
+
+    rule_id = str(getattr(record.spec, "rule_id", "") or "")
+    operation_id = str(getattr(record.spec, "operation_id", "") or "")
+    if not rule_id or not operation_id or not location:
+        return None
+    rule = rules_by_id.get(rule_id)
+    if rule is None:
+        return None
+    active = [target for target in targets
+              if operation_id in (getattr(target, "operations", ()) or ())
+              and getattr(target, "state", "") == "needs_edit"
+              and not getattr(target, "out_of_scope", False)]
+    if any(getattr(target, "location", "") == location for target in active):
+        return None
+    if not active:
+        return None
+    source = active[0]
+    try:
+        span = inspection.by_location(location)
+    except Exception:  # noqa: BLE001 - vanished location is not a repair site
+        return None
+    quote = str(getattr(source, "quote", "") or "")
+    located = resolve_quote(span, quote) if quote else None
+    if located is None:
+        for reference in [str(getattr(record.spec, "old_text", "") or ""),
+                          *tuple(getattr(record.spec, "alternatives", ()) or ())]:
+            if not reference:
+                continue
+            candidate = resolve_quote(span, reference)
+            if candidate is not None:
+                quote, located = reference, candidate
+                break
+    if located is None:
+        return None
+    if not operation_site_bound(record.spec, quote, inspection, location, facts):
+        return None
+    start, end = located
+    return Target(
+        target_id=target_id or f"R{len(targets) + 1:03d}", rule_id=rule_id,
+        location=location, quote=quote, state="needs_edit",
+        reason=f"claim_required_site:{operation_id}", start=start, end=end,
+        resolution="resolved", segment_ok=True, operations=(operation_id,))
+
+
 def target_for_missing_operation(
         record: Any, targets: Sequence[Any], rules_by_id: dict[str, dict], facts: Any,
         inspection: Any, mapping: dict[str, list[str]], sections: Sequence[Any],

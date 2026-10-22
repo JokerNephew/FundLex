@@ -2210,3 +2210,20 @@
 - 处理：用户摘要增加 `title/section/requirement/quote/quote_exact_site/review_note`；前端“仍需人工核对”按“条款标题 + 章节 + 指引要求 + 原合同引文”展示，并明确说明未写入修订版的规则不会出现在修订痕迹中；技术编号/位置收进“技术信息（支持人员）”。对旧报告，前端从 `guide.groups`/`targets` 兼容推导标题和参考原文。
 - 验证：`tests/test_delivery_summary.py`、`tests/test_tasks_api.py`、`tests/test_guide_api.py` 合计 41 passed；全量 **1075 passed / 35 skipped / 2 warnings / 207.89s**。浏览器测试需 `FUNDLEX_BROWSER_TESTS=1`，本机未运行；`node` 不在当前 PATH，未执行前端语法检查。
 - 状态：代码已修复，待提交/部署后在生产任务上复验。未修改目标发现与 DOCX 写入引擎。
+
+## FL-D145 D11 摘要副本漏改、D16 删除审计假阻断与陈旧 T3001（2026-10-22）
+
+- 发现日期：2026-10-22，接续 `4090a22` 真实四例证据。D11 `G18` 正文 p800 已改、摘要 p1207 仍旧文，Claim 正确报 `CLAIM_OPERATION_NOT_PLANNED`；D16 G12/G13 的 24/24 obligation 已 PASS，但 G13 Audit 要求保留被 G12 授权替换掉的旧分配句，且 T3001 p219 仍以 `RECALL_TARGET_UNRESOLVED` 阻塞。
+- 原因：① Claim 已证明 p1207 是必需出现点，但 recovery 只在“该 operation 没有任何 active target”时建 target，p800 的 active target 把它挡掉。② Audit 的负面意见只按字面 evidence 判断，没有把“同一业务站点已由另一 operation 授权并证明的新文本”与“本 delete operation 的真实残留”分开。③ Delivery 的 target 投影只排除 plan 状态，未在 obligation terminal PASS 后回收陈旧 candidate target。
+- 处理（代码，未声称已 live 验证）：
+  - `targeting.target_for_claim_site()`：对 Claim 已绑定的 occurrence 建 site-specific RepairTarget，要求真实 `operation_site_bound`，不扩大全文模糊 duplicate。
+  - `recall.plan_edits(..., reuse_edits=...)`：同一 rule/operation/quote 的已验证替换可复用到 Claim 发现的副本；仅对非 append 生效，避免 append 复用产生 Claim 不可证明的 edit；`replan_sites` 从现有 plan 播种复用证据。
+  - `recall_pipeline._delete_opinion_scope_unproven()` 与 `_site_record_quotes_expected_effect()`：delete 类 Audit 只有在本 operation 的 old_text 仍存在/被引用时才可阻塞；同站点 sibling 的授权新文不能当成本 operation 的漏删。仅在本 operation 有完整本地 effect proof 且无 artifact contradiction 时标 `REVIEW_UNPROVEN/OPERATION_SCOPED_DELETE_PROOF`。
+  - missed-target 同样只有在引文属于同站点已证明的授权新效果时标 `EXPECTED_EFFECT_QUOTED_AS_MISSED`，否则继续阻塞。
+  - `_reconcile_candidate_targets()`：target 的所有 operation 已有 terminal PASS 且不在 plan 中时标 `POST_PROOF_SUPERSEDED`/nonblocking；不再让 candidate target 高于已证明 obligation。
+- 离线验证：
+  - 全量 `pytest tests -q`：**1079 passed / 35 skipped / 2 warnings / 208.11s**；compileall、diff-check PASS。
+  - 旧 cassette 零网络重放：D02 `complete`、D16 `complete`，均 0 HTTP/0 cost、Claim PASS、unresolved 0；D11 旧 cassette 已生成 p1207 `claim_site_reuse` edit 且 Claim PASS，但后续 sweep 上下文因新增站点变化，旧 cassette `MODEL_REPLAY_MISS`，只能作为引擎行为证据，不能当 exact-code 验收；必须新 live record。
+  - 新增回归：`test_claim_site_repair_binds_a_non_exact_summary_copy`、`test_claim_site_reuse_plan_avoids_recomposing_the_summary_copy`、`test_delete_audit_opinion_must_quote_its_own_residual`、`test_post_proof_target_reconciliation_removes_stale_candidate`。
+- 状态：代码已实施并通过离线/旧 cassette 行为验证；尚未提交、未部署、未用新 SHA 跑 D01/D02/D11/D16 live，也未做 Review DOCX 批注/高亮层。Gate 仍为 `DO_NOT_ENTER_20_CASE`。
+- 下一步：提交新 runtime SHA → 建立新的、明确隔离的 validation budget（记录 calls/cost）→ 依次 live record D01/D02/D11/D16 → 四例零网络 replay/artifact review/独立复审 → 再评估 Gate。

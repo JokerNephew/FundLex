@@ -1073,3 +1073,122 @@ def test_replan_conflict_cannot_refer_to_reassigned_target_id():
     assert repaired["ledger"][0]["target_id"] == "New"
     assert repaired["conflicts"][0]["targets"] == ["New"]
     assert repaired["ledger"][0]["reason"] == "RECALL_EDIT_OVERLAP"
+
+
+def test_claim_site_repair_binds_a_non_exact_summary_copy(tmp_path):
+    """D11 G18: Claim proved p1207; an active p800 target must not suppress repair."""
+    from docx import Document
+    from fundlex.docx import inspect_docx
+    from fundlex.targeting import target_for_claim_site
+
+    body = ("由于本基金 A 类基金份额和 D 类基金份额不收取销售服务费，"
+            "而 C 类基金份额收取销售服务费，各基金份额类别对应的可分配收益将有所不同。"
+            "本基金同一类别的每一基金份额享有同等分配权； ")
+    summary = body + "5、法律法规或监管机关另有规定的，从其规定。"
+    path = tmp_path / "summary.docx"
+    doc = Document()
+    doc.add_paragraph(body)
+    doc.add_paragraph(summary)
+    doc.save(path)
+    inspection = inspect_docx(path, full=True)
+    target = Target("T019", "G18", "p0",
+                    "由于本基金 A 类基金份额和 D 类基金份额不收取销售服务费，"
+                    "而 C 类基金份额收取销售服务费",
+                    "needs_edit", "verified body site", start=0, end=47,
+                    resolution="resolved", operations=("G18:0",))
+    record = SimpleNamespace(spec=SimpleNamespace(
+        rule_id="G18", operation_id="G18:0", op="replace",
+        old_text="由于本基金A类基金份额不收取销售服务费，而C类基金份额收取销售服务费",
+        new_text="由于本基金A类基金份额和C类基金份额费用收取不同",
+        alternatives=()))
+    repair = target_for_claim_site(
+        record, "p1", [target],
+        {"G18": {"rule_id": "G18", "operations": []}}, SimpleNamespace(
+            as_ledger=lambda: {}), inspection)
+    assert repair is not None
+    assert repair.location == "p1" and repair.operations == ("G18:0",)
+    assert repair.reason.startswith("claim_required_site:")
+    span = inspection.by_location("p1")
+    assert span.text[repair.start:repair.end].startswith("由于本基金 A 类")
+
+
+def test_delete_audit_opinion_must_quote_its_own_residual(tmp_path):
+    """G13 cannot be blocked because a sibling G12 replacement removed old wording."""
+    from docx import Document
+    from fundlex.docx import inspect_docx
+    from fundlex.recall_pipeline import _delete_opinion_scope_unproven
+
+    path = tmp_path / "after.docx"
+    doc = Document()
+    doc.add_paragraph("赎回费用全额计入基金财产。")
+    doc.save(path)
+    actual = inspect_docx(path, full=True)
+    record = SimpleNamespace(spec=SimpleNamespace(
+        op="delete", old_text="对持续持有期少于7日的投资者收取不低于1.5%的赎回费，并全额计入基金财产"))
+    assert _delete_opinion_scope_unproven(
+        "赎回费用全额计入基金财产。", [record], actual, "p0")
+    assert not _delete_opinion_scope_unproven(
+        "对持续持有期少于7日的投资者收取不低于1.5%的赎回费，并全额计入基金财产",
+        [record], actual, "p0")
+
+
+def test_post_proof_target_reconciliation_removes_stale_candidate():
+    from fundlex.recall_pipeline import _reconcile_candidate_targets
+    rule = {"rule_id": "G12", "title": "赎回费用", "operations": [
+        {"op": "replace", "old_text": "旧费用条款", "new_text": "新费用条款",
+         "condition": {"kind": "none"}, "operation_id": "G12:0",
+         "group_kind": "INDEPENDENT"}]}
+    ledger = compile_obligations({"groups": [rule]})
+    target = Target("T3001", "G12", "p219", "旧费用条款", "needs_edit",
+                    "T3_open_operation:G12:0", start=0, end=5,
+                    operations=("G12:0",))
+    proof = {"state": "PASS", "operation_id": "G12:0",
+             "obligation_id": "G12:B1:O1", "artifact_status": "ALREADY_SATISFIED",
+             "sites": ["p221"], "failure_code": "",
+             "evidence": [{"site_id": "p221", "proof_kind": "site_literal_effect",
+                           "operation_id": "G12:0", "obligation_id": "G12:B1:O1"}],
+             "site_effects": [{"state": "PASS", "site_id": "p221"}]}
+    changed = _reconcile_candidate_targets(
+        [target], {"ledger": [{"target_id": "T3001", "status": "not_planned"}]},
+        {"obligations": {"G12:B1:O1": proof}}, ledger)
+    assert changed == 1 and target.out_of_scope
+    assert "POST_PROOF_SUPERSEDED" in target.reason
+
+
+def test_claim_site_reuse_plan_avoids_recomposing_the_summary_copy(tmp_path):
+    from docx import Document
+    from fundlex.docx import inspect_docx
+    from fundlex.recall import plan_edits
+
+    text = ("由于本基金 A 类基金份额和 D 类基金份额不收取销售服务费，"
+            "而 C 类基金份额收取销售服务费，各基金份额类别对应的可分配收益将有所不同。")
+    path = tmp_path / "copy.docx"
+    doc = Document()
+    doc.add_paragraph(text)
+    doc.save(path)
+    inspection = inspect_docx(path, full=True)
+    rule = {"rule_id": "G18", "title": "收益分配", "operations": [{
+        "op": "replace",
+        "old_text": "由于本基金A类基金份额不收取销售服务费，而C类基金份额收取销售服务费",
+        "new_text": "由于本基金A类基金份额和C类基金份额费用收取不同",
+        "condition": {"kind": "none"}}]}
+    quote = ("由于本基金 A 类基金份额和 D 类基金份额不收取销售服务费，"
+             "而 C 类基金份额收取销售服务费")
+    target = Target("R027", "G18", "p0", quote, "needs_edit",
+                    "claim_required_site:G18:0", start=0, end=len(quote),
+                    resolution="resolved", operations=("G18:0",))
+    reuse = {"target_id": "T019", "rule_id": "G18", "location": "p800",
+             "start": 0, "end": len(quote),
+             "replacement": "由于本基金A类、D类基金份额和C类基金份额费用收取不同",
+             "operation": "replace", "content_source": "composed",
+             "operation_keys": ["G18:0"], "expected_old_text": quote}
+
+    class Gateway:
+        def call(self, **kwargs):
+            raise AssertionError("composer must not be called for a verified copy")
+
+    result = plan_edits({"G18": rule}, [target], inspection, SimpleNamespace(),
+                        Gateway(), reuse_edits=[reuse])
+    assert result["edits"][0]["location"] == "p0"
+    assert result["edits"][0]["content_source"] == "claim_site_reuse"
+    assert result["edits"][0]["replacement"] == reuse["replacement"]

@@ -10,7 +10,7 @@ from __future__ import annotations
 import json
 import re
 from dataclasses import dataclass, field
-from typing import Any, Iterable, Sequence
+from typing import Any, Iterable, Mapping, Sequence
 
 from .docx import BARRIER, DocumentInspection, ParagraphSpan, TextSegment
 from .generation.flags import strategy_mode
@@ -4758,11 +4758,52 @@ def _reconcile_final_plan_ledger(
 
 def plan_edits(rules_by_id: dict[str, dict], targets: Sequence[Target], inspection: DocumentInspection,
                facts: Facts, gateway: Any, *, max_compose_calls: int = 6,
-               obligations: Any = None) -> dict[str, Any]:
+               obligations: Any = None,
+               reuse_edits: Sequence[Mapping[str, Any]] = ()) -> dict[str, Any]:
     """Build the edit list, isolating per-target failures into the ledger."""
     planned: list[PlannedEdit] = []
     ledger: list[dict[str, Any]] = []
     compose_budget = [max_compose_calls]
+    # A Claim-discovered body/summary copy has the same business site wording and
+    # operation as its source target.  Reuse the already verified replacement instead
+    # of asking the model to compose it again; this is the duplicate-site closure the
+    # operation-first pipeline needs, not a fuzzy global duplicate rule.
+    reusable: dict[tuple[str, tuple[str, ...], str], PlannedEdit] = {}
+    for source in reuse_edits:
+        if not isinstance(source, Mapping):
+            continue
+        keys = tuple(sorted(str(key) for key in
+                            (source.get("operation_keys")
+                             or (source.get("evidence") or {}).get("operation_keys") or ())))
+        location = str(source.get("location") or "")
+        if not keys or not location:
+            continue
+        quote = str(source.get("expected_old_text") or "")
+        if not quote:
+            try:
+                span = inspection.by_location(location)
+                quote = span.text[int(source.get("start", 0)):int(source.get("end", 0))]
+            except Exception:  # noqa: BLE001
+                quote = ""
+        evidence = source.get("evidence") if isinstance(source.get("evidence"), Mapping) else {}
+        fields = {key: source.get(key) for key in (
+            "target_id", "rule_id", "location", "start", "end", "replacement",
+            "operation", "content_source", "anchor_sha256")}
+        try:
+            prior = PlannedEdit(
+                target_id=str(fields["target_id"] or ""), rule_id=str(fields["rule_id"] or ""),
+                location=location, start=int(fields["start"] or 0), end=int(fields["end"] or 0),
+                replacement=str(fields["replacement"] or ""),
+                operation=str(fields["operation"] or ""),
+                content_source=str(fields["content_source"] or ""),
+                evidence=dict(evidence),
+                anchor_sha256=str(fields["anchor_sha256"] or ""),
+                operation_keys=keys,
+                obligation_ids=tuple(str(key) for key in (source.get("obligation_ids") or ())))
+        except (KeyError, TypeError, ValueError):
+            continue
+        if quote:
+            reusable[(prior.rule_id, keys, _compact(quote))] = prior
     for target in targets:
         if target.attribution_error:
             ledger.append({"target_id": target.target_id, "rule_id": target.rule_id,
@@ -4819,8 +4860,40 @@ def plan_edits(rules_by_id: dict[str, dict], targets: Sequence[Target], inspecti
                                "operation_keys": list(target.operations),
                                "parts": [edit.location for edit in composite_edits]})
                 continue
-            edit = plan_target(rule, target, inspection, facts, gateway,
-                               compose_budget=compose_budget, obligations=obligations)
+            edit = None
+            reason_text = str(target.reason or "")
+            target_operations = [operation for index, operation
+                                 in enumerate(rule.get("operations") or [])
+                                 if f"{target.rule_id}:{index}" in target.operations]
+            append_site = any(operation.get("op") == "append"
+                              for operation in target_operations)
+            if not append_site and ("claim_required_site:" in reason_text
+                    or "duplicate_copy:" in reason_text):
+                reuse_key = (target.rule_id, tuple(sorted(target.operations)),
+                             _compact(str(target.quote or "")))
+                source_edit = reusable.get(reuse_key)
+                if source_edit is not None and target.start is not None \
+                        and target.end is not None:
+                    from copy import deepcopy
+                    edit = deepcopy(source_edit)
+                    edit.target_id = target.target_id
+                    edit.location = target.location
+                    edit.start = target.start
+                    edit.end = target.end
+                    edit.content_source = "claim_site_reuse"
+                    edit.evidence = {
+                        **(edit.evidence or {}),
+                        "reused_from": source_edit.target_id,
+                        "claim_site_reuse": True,
+                    }
+                    for component in edit.evidence.get("components") or ():
+                        component["target_id"] = target.target_id
+                        component["location"] = target.location
+                        component["start"] = target.start
+                        component["end"] = target.end
+            if edit is None:
+                edit = plan_target(rule, target, inspection, facts, gateway,
+                                   compose_budget=compose_budget, obligations=obligations)
         except RecallError as exc:
             status = "not_applicable" if exc.code == "RECALL_RULE_NOT_APPLICABLE" else "unresolved"
             if status == "not_applicable":
@@ -4852,6 +4925,9 @@ def plan_edits(rules_by_id: dict[str, dict], targets: Sequence[Target], inspecti
                        "status": "planned", "operation": edit.operation,
                        "operation_keys": list(edit.operation_keys),
                        "obligation_ids": list(edit.obligation_ids)})
+        if target.quote and edit.replacement is not None:
+            reusable[(target.rule_id, tuple(sorted(target.operations)),
+                      _compact(str(target.quote or "")))] = edit
     target_by_id = {target.target_id: target for target in targets}
     for entry in ledger:
         target = target_by_id.get(str(entry.get("target_id") or ""))
@@ -5107,7 +5183,8 @@ def replan_sites(existing: dict[str, Any], dirty_locations: set[str], rules_by_i
     dirty_targets = [target for target in targets
                      if target.location in dirty_locations or target_sites(target) & dirty_keys]
     fresh = plan_edits(rules_by_id, dirty_targets, inspection, facts, gateway,
-                       max_compose_calls=max_compose_calls, obligations=obligations)
+                       max_compose_calls=max_compose_calls, obligations=obligations,
+                       reuse_edits=existing.get("edits") or ())
     records = retained_edits + fresh["edits"]
     ledger = []
     covered = set(fresh["covered"])

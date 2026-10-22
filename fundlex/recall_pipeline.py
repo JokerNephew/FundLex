@@ -24,7 +24,7 @@ import tempfile
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Sequence
+from typing import Any, Mapping, Sequence
 
 from .docx import (DocxError, DocumentInspection, generate_artifacts,
                    generate_unchanged_artifacts, inspect_docx, validate_edit_plan)
@@ -559,6 +559,49 @@ def _target_identity(target: Target) -> tuple[str, str, str]:
     ))
     return (target.rule_id, target.location,
             hashlib.sha256(material.encode("utf-8")).hexdigest())
+
+
+def _operation_terminal_proof(target: Target, replay: Mapping[str, Any],
+                              obligations: Any) -> bool:
+    """True when every operation claimed by a candidate target is already proven.
+
+    A candidate target may be discovered early and remain in the ledger after another
+    target/artifact proof has made it redundant.  Obligation proof is authoritative;
+    a stale candidate must not block delivery merely because it has no plan entry.
+    """
+    if obligations is None or not target.operations:
+        return False
+    from .generation.effects import effect_proof_passed
+    states = replay.get("obligations") or {}
+    for operation_id in target.operations:
+        record = obligations.record(operation_id)
+        if record is None or record.applicability.status != "TRUE":
+            return False
+        proof = states.get(record.obligation_id)
+        if not isinstance(proof, Mapping) or not effect_proof_passed(
+                proof, operation_id=record.spec.operation_id,
+                obligation_id=record.obligation_id):
+            return False
+    return True
+
+
+def _reconcile_candidate_targets(targets: Sequence[Target], planned: dict[str, Any],
+                                 replay: Mapping[str, Any], obligations: Any) -> int:
+    """Mark post-proof redundant candidate targets nonblocking (D16 T3001)."""
+    by_target = _plan_by_target(planned)
+    reconciled = 0
+    for target in targets:
+        if target.state != "needs_edit" or target.out_of_scope:
+            continue
+        status = (by_target.get(target.target_id) or {}).get("status")
+        if status in {"planned", "satisfied", "not_applicable"}:
+            continue
+        if not _operation_terminal_proof(target, replay, obligations):
+            continue
+        target.out_of_scope = True
+        target.reason = f"{target.reason}|POST_PROOF_SUPERSEDED"
+        reconciled += 1
+    return reconciled
 
 
 def _target_ledger(targets: Sequence[Target], planned: dict[str, Any],
@@ -1376,6 +1419,71 @@ def _quote_confirms_class_facts(quote: str, facts: Facts | None) -> bool:
     return True
 
 
+def _delete_opinion_scope_unproven(evidence: str, owned: Sequence[Any],
+                                 actual: DocumentInspection, location: str) -> bool:
+    """An audit may not turn a sibling replacement into a delete obligation.
+
+    For a delete operation the only business question is whether its own old text
+    remains.  If every owned operation is a delete, its old text is absent from the
+    actual site, and the review quotes neither that old text nor a residual, the
+    negative opinion is outside the operation scope.  The caller still requires a
+    complete local effect proof; this helper never manufactures PASS by itself.
+    """
+    if not owned or not location:
+        return False
+    compact_evidence = _compact(evidence)
+    try:
+        actual_text = _compact(str(actual.by_location(location).text))
+    except (KeyError, ValueError, AttributeError):
+        return False
+    for record in owned:
+        if getattr(record.spec, "op", "") != "delete":
+            return False
+        old = _compact(str(getattr(record.spec, "old_text", "") or ""))
+        if not old or old in compact_evidence or old in actual_text:
+            return False
+    return True
+
+
+def _site_record_quotes_expected_effect(
+        quote: str, location: str, targets: Sequence[Target], rules_by_id: dict[str, dict],
+        planned: dict[str, Any], original: DocumentInspection, actual: DocumentInspection,
+        facts: Facts | None, obligations: Any, artifact_proofs: Mapping[str, Any]) -> bool:
+    """Is this quote an authorized new effect at the same business site?
+
+    The audit may quote a sibling rule's final wording (G12 replacing the paragraph
+    that G13 deletes from).  That is not evidence that G13's deletion was missed.
+    Only a local, effect-proven operation may authorize the quote.
+    """
+    if obligations is None:
+        return False
+    for target in targets:
+        if target.location != location or target.out_of_scope:
+            continue
+        for operation_id in target.operations:
+            record = obligations.record(operation_id)
+            if record is None or record.applicability.status != "TRUE":
+                continue
+            if not _quote_is_expected_effect(
+                    quote, record, facts, edits=planned.get("edits") or [],
+                    location=location,
+                    before_text=str(getattr(original.by_location(location), "text", "")),
+                    actual_text=str(getattr(actual.by_location(location), "text", "")),
+                    target_id=target.target_id, obligations=obligations,
+                    proofs=artifact_proofs):
+                continue
+            from .generation.effects import effect_proof_passed
+            local = _local_operation_proofs(artifact_proofs.get(record.obligation_id),
+                                            record.spec.operation_id,
+                                            record.obligation_id, location)
+            if local and all(effect_proof_passed(proof,
+                                                 operation_id=record.spec.operation_id,
+                                                 obligation_id=record.obligation_id)
+                            for proof in local):
+                return True
+    return False
+
+
 def _run_audit(model: Any, rules_by_id: dict[str, dict], targets: Sequence[Target],
                planned: dict[str, Any], original: DocumentInspection, actual: DocumentInspection,
                *, only_rules: set[str] | None = None, facts: Facts | None = None,
@@ -1540,13 +1648,21 @@ def _run_audit(model: Any, rules_by_id: dict[str, dict], targets: Sequence[Targe
                     for record in owned))
                 certified_fact_quote = (verified and _quote_confirms_class_facts(
                     evidence, facts))
-                if not verified or expected_quote or certified_fact_quote:
+                delete_scope_unproven = bool(
+                    proven and not contradicted and verified and node is not None and
+                    _delete_opinion_scope_unproven(evidence, owned, actual, node.location) and
+                    _site_record_quotes_expected_effect(
+                        evidence, node.location, targets, rules_by_id, planned,
+                        original, actual, facts, obligations, artifact_proofs))
+                if not verified or expected_quote or certified_fact_quote or delete_scope_unproven:
                     result["review_status"] = "REVIEW_UNPROVEN"
                     result["artifact_proven"] = proven and not contradicted
                     if expected_quote:
                         result["review_evidence_status"] = "EXPECTED_EFFECT_QUOTED_AS_ERROR"
                     elif certified_fact_quote:
                         result["review_evidence_status"] = "CERTIFIED_FACT_QUOTED_AS_ERROR"
+                    elif delete_scope_unproven:
+                        result["review_evidence_status"] = "OPERATION_SCOPED_DELETE_PROOF"
         for item in value.get("missed_targets") or []:
             if not isinstance(item, dict):
                 dropped.append({"code": "AUDIT_MISSED_ITEM_INVALID", "rule_id": rule_id})
@@ -1565,9 +1681,17 @@ def _run_audit(model: Any, rules_by_id: dict[str, dict], targets: Sequence[Targe
                 dropped.append({"code": "AUDIT_MISSED_INVALID", "rule_id": missed_rule,
                                 "location": location, "quote": _clip(quote, 80)})
                 continue
-            missed.append({"rule_id": missed_rule, "location": location, "quote": quote,
+            missed_item = {"rule_id": missed_rule, "location": location, "quote": quote,
                            "operation_id": str(item.get("operation_id") or ""),
-                           "reason": str(item.get("reason") or "")})
+                           "reason": str(item.get("reason") or "")}
+            if verified and obligations is not None and \
+                    _site_record_quotes_expected_effect(
+                        quote, location, targets, rules_by_id, planned,
+                        original, actual, facts, obligations, artifact_proofs):
+                missed_item["review_status"] = "REVIEW_UNPROVEN"
+                missed_item["review_evidence_status"] = "EXPECTED_EFFECT_QUOTED_AS_MISSED"
+                missed_item["artifact_proven"] = True
+            missed.append(missed_item)
     return {"rules": rule_ids, "results": results, "missed_targets": missed, "dropped": dropped,
             "artifact_failures": artifact_failures}
 
@@ -1736,6 +1860,9 @@ def _audit_issues(state: dict[str, Any], targets: Sequence[Target]) -> list[dict
                            "affected_obligation": result.get("affected_obligation") or ""})
     for rule_id in sorted(state.get("missed") or {}):
         for item in state["missed"][rule_id]:
+            if item.get("artifact_proven") or \
+                    item.get("review_status") == "REVIEW_UNPROVEN":
+                continue
             issues.append({"code": "AUDIT_MISSED_TARGET", "rule_id": rule_id,
                            "location": item["location"], "quote": item["quote"],
                            "reason": item["reason"]})
@@ -3279,6 +3406,7 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
             if notices:
                 report["business_notices"] = notices
             unresolved_targets = [target for target in targets if target.state == "needs_edit"
+                                  and not target.out_of_scope
                                   and plan_by_target.get(target.target_id, {}).get("status")
                                   not in {"planned", "satisfied", "not_applicable"}]
             audit_issues = _audit_issues(audit_state, targets)
@@ -3510,7 +3638,8 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
                         operation_added = True
                     if code in {"CLAIM_OPERATION_NOT_PLANNED", "CLAIM_OPERATION_UNPROVEN"} \
                             and context.resolved_class is FailureClass.TARGET:
-                        from .targeting import target_for_missing_operation
+                        from .targeting import (target_for_claim_site,
+                                                target_for_missing_operation)
                         record = None
                         if failure.get("obligation_id"):
                             record = obligation_ledger.record(
@@ -3519,6 +3648,32 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
                             record = obligation_ledger.record(
                                 str(failure.get("operation_id")))
                         if record is not None:
+                            # Claim Replay has already verified this exact duplicate site.
+                            # An active target at another copy (body vs summary) must not
+                            # suppress the required occurrence repair.
+                            repair_target = target_for_claim_site(
+                                record, str(failure.get("location") or ""), targets,
+                                rules_by_id, facts, inspection,
+                                target_id=f"R{len(targets) + 1:03d}")
+                            if repair_target is not None:
+                                for old_target in targets:
+                                    if old_target is not repair_target \
+                                            and old_target.rule_id == repair_target.rule_id \
+                                            and old_target.location == repair_target.location \
+                                            and set(old_target.operations) & set(
+                                                repair_target.operations):
+                                        old_target.out_of_scope = True
+                                        old_target.reason = (f"{old_target.reason}|"
+                                                             "SUPERSEDED_BY_CLAIM_SITE_REPAIR")
+                                targets.append(repair_target)
+                                synthetic.append(repair_target)
+                                origins[repair_target.target_id] = "claim_site_repair"
+                                report.setdefault("target_attribution", []).extend(
+                                    assign_target_operations(
+                                        [repair_target], rules_by_id, inspection, facts,
+                                        obligation_ledger))
+                                operation_added = True
+                        if record is not None and not operation_added:
                             repair_target = target_for_missing_operation(
                                 record, targets, rules_by_id, facts, inspection,
                                 mapping, sections,
@@ -3690,8 +3845,10 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
                 # audit and sweep verdict is recomputed from the CURRENT plan so the
                 # report cannot present a pre-recovery verdict as final.
                 plan_by_target = _plan_by_target(planned)
+                _reconcile_candidate_targets(targets, planned, replay, obligation_ledger)
                 unresolved_targets = [
                     target for target in targets if target.state == "needs_edit"
+                    and not target.out_of_scope
                     and plan_by_target.get(target.target_id, {}).get("status")
                     not in {"planned", "satisfied", "not_applicable"}]
                 audit_issues = _audit_issues(audit_state, targets)
