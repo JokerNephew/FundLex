@@ -2258,3 +2258,11 @@
 - `7bb9905` D01 live：32 calls/$0.0282417，24 TRUE 全部 terminal，Claim PASS，仅剩 1 条 sweep：G18 p1191 的最终类替换文本被误报 wrong_text；实际文本为 `A类、D类…和C类…费用收取不同`，是 G18 按 certified facts 加入 D 类后的正确结果。
 - 处理：`_quote_is_expected_effect` 对 G18/G02/G04/G08/G11 增加“最终授权 edit replacement 的精确/包含匹配”，且仍要求本地 operation proof PASS；通用 G99 反例继续失败，避免把 compose contradiction 自我授权。新增 G18 D 类最终替换回归。
 - 状态：待提交后再次 D01 live；若通过，再同 SHA 跑 D02/D11/D16。
+
+### FL-D145 追加 6（D16 p222 重复整段，关键）
+
+- `cf00116` 四例 live 均报 complete，D11 p1207 已改；但实际打开 D16 `final.docx` 发现 p222 被写成与 p221 相同的完整新条款，而不是删除 p222 的 7 日条款残片。Claim 却把 p222 判为 `VERIFIED_ABSENT`，属于 false PASS。
+- 根因：G12/G13 两段复合目标在 p221 已合并为 `replace_covers_delete`，p222 只剩两个空 replacement 的删除；overlap resolver 又调用 Joint Compose，按 G12 政策文本重写了 p222，导致整段重复。
+- 处理：overlap resolver 先检测所有冲突 edit 的 replacement 均为空，合并为单个 `joint_delete`（replacement=""），不再调用模型；新增回归 `test_overlapping_composite_deletes_merge_as_joint_delete`。
+- 旧 cassette 行为：D16 plan 现在为 p221 `replace_covers_delete` + p222 `joint_delete ""`；需新 live 验证 p222 实际为空。
+- 状态：关键修复，尚未提交；此前四例 complete 不能作为最终验收。

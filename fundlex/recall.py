@@ -4633,6 +4633,27 @@ def _resolve_overlaps_with_joint_compose(
         span = inspection.by_location(location)
         start = min(int(edit.start) for edit in edits)
         end = max(int(edit.end) for edit in edits)
+        # Two composite operations can both reduce the same tail paragraph to an
+        # empty slice (D16 G12/G13 p222).  A joint *delete* is the correct merge;
+        # asking Joint Compose to regenerate the clause would insert the G12 policy
+        # a second time because the replace was already applied to p221.
+        if all(not str(edit.replacement or "").strip() for edit in edits):
+            consumed.update(id(edit) for edit in edits)
+            resolved.append(PlannedEdit(
+                target_id="+".join(dict.fromkeys(edit.target_id for edit in edits)),
+                rule_id="+".join(dict.fromkeys(
+                    rule_id.strip() for edit in edits
+                    for rule_id in str(edit.rule_id).split("+") if rule_id.strip())),
+                location=location, start=start, end=end, replacement="",
+                operation="replace", content_source="joint_delete",
+                evidence={"joint_delete": True,
+                          "operation_keys": [key for edit in edits
+                                             for key in (edit.operation_keys or ())]},
+                operation_keys=tuple(dict.fromkeys(
+                    key for edit in edits for key in (edit.operation_keys or ()))),
+                obligation_ids=tuple(dict.fromkeys(
+                    value for edit in edits for value in (edit.obligation_ids or ())))))
+            continue
         rule_ids: list[str] = []
         joint_obligations: list[dict[str, Any]] = []
         fixed_texts: list[str] = []

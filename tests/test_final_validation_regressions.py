@@ -1264,3 +1264,36 @@ def test_expected_effect_accepts_class_substituted_final_edit():
     assert _quote_is_expected_effect(quote, record, None, edits=[edit], location="p0",
                                      actual_text=quote, obligations=SimpleNamespace(),
                                      proofs={"G18:B1:O1": proof})
+
+
+def test_overlapping_composite_deletes_merge_as_joint_delete(tmp_path):
+    from docx import Document
+    from fundlex.docx import inspect_docx
+    from fundlex.recall import PlannedEdit, _resolve_overlaps_with_joint_compose
+
+    path = tmp_path / "tail.docx"
+    doc = Document()
+    doc.add_paragraph("7 日的投资者收取不低于 1.5%的赎回费，并全额计入基金财产。")
+    doc.save(path)
+    inspection = inspect_docx(path, full=True)
+    length = len(inspection.by_location("p0").text)
+    edits = [
+        PlannedEdit("T12", "G12", "p0", 0, length, "", "replace",
+                    "composite_delete", {}, operation_keys=("G12:1",)),
+        PlannedEdit("T13", "G13", "p0", 0, length, "", "replace",
+                    "composite_delete", {}, operation_keys=("G13:0",)),
+    ]
+
+    class Gateway:
+        def call(self, **kwargs):
+            raise AssertionError("two deletes must not call Joint Compose")
+
+    resolved, remaining = _resolve_overlaps_with_joint_compose(
+        [{"targets": ["T12", "T13"], "location": "p0"}], edits, inspection,
+        {"G12": {"rule_id": "G12", "operations": []},
+         "G13": {"rule_id": "G13", "operations": []}}, None, Gateway())
+    assert remaining == []
+    assert len(resolved) == 1
+    assert resolved[0].content_source == "joint_delete"
+    assert resolved[0].replacement == ""
+    assert set(resolved[0].operation_keys) == {"G12:1", "G13:0"}
