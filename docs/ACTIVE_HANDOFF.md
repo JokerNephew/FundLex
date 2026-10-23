@@ -7,9 +7,10 @@
 - **工作台真实路径（本地临时 API+Worker，非生产域名）**：登录 → 建任务 → 上传 → seal → 真实模型 30 calls/$0.02243 → complete → 下载 final/redline/report；final 哈希与报告一致，redline 19/19。脚本 `/tmp/opencode/engine-live-20261023/workbench_e2e.py`。
 - 全量测试：**1203 passed / 40 skipped / 0 failed / 222.50s**；compileall/diff check 通过。
 - 临时模型账本合计 **1129 calls / ≈$0.7999**，全部在 `/tmp/opencode/engine-live-*`，未用生产账本；未打印凭据。
-- **当前生产状态**：compare agent 已推送 `eba2b3a` 并执行过一次 `publish_workspace.sh`，三项服务 active；但该快照中的引擎文件哈希与当前工作区不同（`recall.py` 部署 `7c01f577…` vs 工作区 `aff32acb…`，pipeline/effects/claim_replay 同样不同），因此**生产尚未包含本轮最终修复**。
-- **未提交/未推送**：本轮引擎与测试/文档改动仍在工作区（6 个文件 + 文档）；浏览器 UI 的登录/上传/下载按钮尚未单独跑 Playwright。
-- 下一步：① 只提交引擎/测试/文档（compare/前端已由他人提交）；② 重新 `publish_workspace.sh` 并核对部署哈希；③ 生产域名真实登录→上传→下载；④ Playwright 浏览器验收；⑤ ≥5 份生产合同复验。
+- **生产发布已完成**：引擎提交 `11c3ae8` 已本地提交并通过 `publish_workspace.sh` 发布；部署 `recall.py`/`recall_pipeline.py`/`effects.py`/`claim_replay.py` 哈希与工作区一致，api/recall-worker/compare-worker 均 active。
+- **生产域名 E2E 已通过**（https://fundlex.club，admin）：任务 `19a5c76e…`，上传广发品质回报 → Worker 真实模型 **30 calls / $0.02247 / 115s** → complete、unresolved 0；final SHA `e48e0f78…` 与报告一致，redline `aceb9289…` 与报告一致且 19/19；关键段落已核对。Chromium 登录/任务页/3 个下载入口正常，无 pageerror（仅登录前 401 探测）。
+- **未做**：生产仅 1 份合同；尚未跑 ≥5 份生产合同；生产验收任务未清理；浏览器截图在 `/tmp/opencode/engine-live-20261023/production-browser/task-page.png`。
+- 下一步：① 生产再跑 ≥5 份不同合同（优先 FOF/债券/联接/ESG）；② 观察三服务与生产账本；③ 清理验收任务或登记；④ 更新最终交付文档。
 
 ## 合同比较已推送并部署（2026-10-23）
 

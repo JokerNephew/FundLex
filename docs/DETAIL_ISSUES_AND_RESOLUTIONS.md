@@ -2641,5 +2641,8 @@
 
 - 额外：港股通央企红利 ETF 正确识别为 `excluded`（12s / 39 calls）；央企股东回报联接一次 `MODEL_SCHEMA_INVALID` 停止后已重跑成功，属模型输出偶发。
 - **工作台真实路径（本地临时 API + Worker，非生产）**：`e2euser` 登录 → 创建任务 → 上传广发品质回报 DOCX → seal → Worker 真实模型处理 30 calls / $0.02243 / 101s → `delivery_status=complete` → 下载 `final`/`redline`/`report_json`/`report_md`；final SHA `0c1a5db56573…` 与报告一致，redline 19 ins / 19 del；G01/G03 政策各一次、G15/G16/G17 正确。
-- **未做/边界**：本地工作台不是生产域名；生产 `/opt/fundlex-recall-first` 仍是旧版本，未部署；浏览器 UI 只做了 API 路径（页面登录/上传/下载按钮未单独跑 Playwright）。累计临时账本 **1129 calls / ≈$0.7999**，未使用生产账本。
-- 下一步：干净发布（只含引擎提交，不带 compare/前端未提交文件）→ 生产工作台真实登录/上传/下载 → 生产服务健康检查；之后再跑浏览器 Playwright 与 ≥5 份生产合同。
+- **生产发布与真实用户路径（2026-10-23 晚）**：引擎提交 `11c3ae8` 已通过 `tools/deploy/publish_workspace.sh` 发布；部署 `recall.py`/`recall_pipeline.py`/`effects.py`/`claim_replay.py` 哈希与工作区逐项一致，`fundlex-recall-api`/`worker`/`compare-worker` 均 active。
+- **生产域名 E2E（https://fundlex.club，admin 登录）**：创建任务 `19a5c76ec45d487caf11491f6294569e` → 上传广发品质回报 DOCX → seal → Worker 真实模型 **30 calls / $0.02247 / 115s** → `delivery_status=complete`、unresolved 0 → 下载 final/redline/report。final SHA `e48e0f781cd0…` 与报告一致；redline `aceb92896564…` 与报告一致、19 ins / 19 del；G01/G03 政策各一次，G15 p806/p807/p1262/p1263 删除，G16 p809/p1265 插入，G17 删除，G08 p223 正确、p156 未动，G18 p139 保持已满足。
+- **浏览器 UI**：Chromium 登录成功（Bootstrap Administrator），任务页显示该生产任务，存在 3 个下载入口与“完整/最终/修订”文本；无 pageerror；仅有一条登录前 401 探测 console 记录，不影响流程。截图 `/tmp/opencode/engine-live-20261023/production-browser/task-page.png`。
+- **未做/边界**：尚未在生产跑 ≥5 份不同合同；未清理生产验收任务（无 DELETE 接口）；本轮生产模型调用记入生产账本。累计临时账本 **1129 calls / ≈$0.7999**，生产单例另计 **30 calls / $0.02247**。
+- 下一步：生产再跑 ≥5 份不同合同；观察 compare/recall 三服务；必要时清理验收任务。
