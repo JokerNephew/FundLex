@@ -9,8 +9,9 @@
 - 临时模型账本合计 **1129 calls / ≈$0.7999**，全部在 `/tmp/opencode/engine-live-*`，未用生产账本；未打印凭据。
 - **生产发布已完成**：引擎提交 `11c3ae8` 已本地提交并通过 `publish_workspace.sh` 发布；部署 `recall.py`/`recall_pipeline.py`/`effects.py`/`claim_replay.py` 哈希与工作区一致，api/recall-worker/compare-worker 均 active。
 - **生产域名 E2E 已通过**（https://fundlex.club，admin）：任务 `19a5c76e…`，上传广发品质回报 → Worker 真实模型 **30 calls / $0.02247 / 115s** → complete、unresolved 0；final SHA `e48e0f78…` 与报告一致，redline `aceb9289…` 与报告一致且 19/19；关键段落已核对。Chromium 登录/任务页/3 个下载入口正常，无 pageerror（仅登录前 401 探测）。
-- **未做**：生产仅 1 份合同；尚未跑 ≥5 份生产合同；生产验收任务未清理；浏览器截图在 `/tmp/opencode/engine-live-20261023/production-browser/task-page.png`。
-- 下一步：① 生产再跑 ≥5 份不同合同（优先 FOF/债券/联接/ESG）；② 观察三服务与生产账本；③ 清理验收任务或登记；④ 更新最终交付文档。
+- **生产批量已通过（5 份不同合同 complete）**：广发品质回报 + FOF/上海清算所债券/ESG/央企创新驱动 ETF 联接；4 份批量任务均 unresolved 0、final/redline 哈希与报告一致、redline 17~19 处修订、G15/G17 旧条款 0 处、G16 新政策存在。明细见 FL-D175。生产 5 份合计 156 calls / ≈$0.1254。
+- **未做**：生产验收任务未清理（无 DELETE 接口）；浏览器截图 `/tmp/opencode/engine-live-20261023/production-browser/task-page.png`；最终交付说明尚未汇总。
+- 下一步：① 观察三服务与生产账本；② 清理/登记验收任务；③ 更新最终交付说明与 README；④ 如需回滚，使用 `11c3ae8` 前的部署快照（如有）。
 
 ## 合同比较已推送并部署（2026-10-23）
 

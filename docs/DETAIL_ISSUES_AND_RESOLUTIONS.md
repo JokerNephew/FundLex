@@ -2644,5 +2644,15 @@
 - **生产发布与真实用户路径（2026-10-23 晚）**：引擎提交 `11c3ae8` 已通过 `tools/deploy/publish_workspace.sh` 发布；部署 `recall.py`/`recall_pipeline.py`/`effects.py`/`claim_replay.py` 哈希与工作区逐项一致，`fundlex-recall-api`/`worker`/`compare-worker` 均 active。
 - **生产域名 E2E（https://fundlex.club，admin 登录）**：创建任务 `19a5c76ec45d487caf11491f6294569e` → 上传广发品质回报 DOCX → seal → Worker 真实模型 **30 calls / $0.02247 / 115s** → `delivery_status=complete`、unresolved 0 → 下载 final/redline/report。final SHA `e48e0f781cd0…` 与报告一致；redline `aceb92896564…` 与报告一致、19 ins / 19 del；G01/G03 政策各一次，G15 p806/p807/p1262/p1263 删除，G16 p809/p1265 插入，G17 删除，G08 p223 正确、p156 未动，G18 p139 保持已满足。
 - **浏览器 UI**：Chromium 登录成功（Bootstrap Administrator），任务页显示该生产任务，存在 3 个下载入口与“完整/最终/修订”文本；无 pageerror；仅有一条登录前 401 探测 console 记录，不影响流程。截图 `/tmp/opencode/engine-live-20261023/production-browser/task-page.png`。
-- **未做/边界**：尚未在生产跑 ≥5 份不同合同；未清理生产验收任务（无 DELETE 接口）；本轮生产模型调用记入生产账本。累计临时账本 **1129 calls / ≈$0.7999**，生产单例另计 **30 calls / $0.02247**。
-- 下一步：生产再跑 ≥5 份不同合同；观察 compare/recall 三服务；必要时清理验收任务。
+- **生产批量 ≥5 份合同（2026-10-23 晚）**：在 https://fundlex.club 连续创建并处理 4 份合同，全部 `delivery_status=complete`、unresolved 0，final/redline 哈希与报告一致：
+
+| 合同 | task | calls | cost USD | final SHA 前缀 | ins/del |
+| --- | --- | --- | --- | --- | --- |
+| 核心优选 FOF | `11ea3ca6…` | 32 | 0.0240 | df7cc5ec38d9 | 19/19 |
+| 上海清算所债券 | `945d7fd4…` | 32 | 0.0249 | 892c709762e5 | 19/19 |
+| ESG 混合 | `e37fceff…` | 29 | 0.0288 | e0ca96b68c16 | 17/17 |
+| 央企创新驱动 ETF 联接 | `7c410185…` | 33 | 0.0252 | 8eb082c10aa9 | 18/18 |
+
+- 加上此前的广发品质回报（`19a5c76e…`，30 calls / $0.02247），**生产共 5 份不同合同 complete**；G15/G17 旧条款均为 0 处，G16 新政策存在，未发现重复政策文本。
+- **未做/边界**：生产验收任务未清理（无 DELETE 接口）；本轮生产模型调用记入生产账本。累计临时账本 **1129 calls / ≈$0.7999**，生产 5 份合计 **156 calls / ≈$0.1254**。
+- 下一步：观察 compare/recall 三服务与生产账本；必要时由管理员清理验收任务。
