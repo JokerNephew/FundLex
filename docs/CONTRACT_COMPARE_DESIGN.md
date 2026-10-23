@@ -29,7 +29,7 @@ GET  /api/compare/pairs/{pair_id}/view
 
 `CompareWorker` 独立于 Recall Worker，可用 `.venv/bin/python -m fundlex.compare.worker` 启动，或用 `--once` 处理一个 pair。普通处理异常只关闭当前 pair；结果覆盖不完整时状态为 `incomplete`，不会伪装成完整对比。
 
-部署模板位于 `tools/deploy/fundlex-compare-worker.service.template`。启用时应让它与 compare API 共用同一个 `FUNDLEX_DATA_DIR`、数据库连接和对象存储；本轮只提供模板和启动说明，不安装、启用或重启生产服务。Worker 对对象读取和数据库临时故障使用有限重试，租约由 fencing token 保护，过期 Worker 不能提交结果；解析、输入完整性和结果结构错误使用固定错误码并按 pair 隔离。
+部署模板位于 `tools/deploy/fundlex-compare-worker.service.template`。生产发布时安装为 `fundlex-compare-worker.service`，与 compare API 共用同一个 `FUNDLEX_DATA_DIR`、数据库连接和对象存储；发布后与 API、Recall Worker 一起检查状态。Worker 对对象读取和数据库临时故障使用有限重试，租约由 fencing token 保护，过期 Worker 不能提交结果；解析、输入完整性和结果结构错误使用固定错误码并按 pair 隔离。
 
 ## HTML 与前端
 

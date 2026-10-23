@@ -1,5 +1,12 @@
 # FundLex 当前断点（ACTIVE_HANDOFF）
 
+## 合同比较已推送并部署（2026-10-23）
+
+- Compare 发布提交为 `eba2b3a`，已推送到 `origin/feat/contract-compare`。工作区其他任务的未提交改动仍保留，未整仓库提交。
+- 已执行 `tools/deploy/publish_workspace.sh`；API 与 Recall Worker active。随后安装、enable 并启动 `fundlex-compare-worker.service`，三项服务均 active，重启计数均为 0。
+- 生产真实用户链路已通过：工作台注册/登录 → 合同对比 → 上传两份公开 DOCX → 封存 → 独立 Worker → 结果页 → 双栏导航 → 报告下载。结果为 2772 处差异，coverage 明确标记暂不支持的页眉/页脚/绘图结构；浏览器 page error 为 0。证据见 `/tmp/opencode/compare-production-e2e/` 和 `/tmp/opencode/compare-production-browser-e2e/`。
+- 本轮 compare 模型调用 0、费用 `$0`；未修改 nginx 或生产数据库结构。后续若修改 compare 代码或 Worker 模板，需重新发布并重复生产链路验收。
+
 ## 核心引擎层审查与修复断点（2026-10-23 18:00，优先）
 
 - 用户问题：检查核心引擎层修改情况；前一个负责 agent 已失联。**本轮已完成审查、修复、回归与 1 份真实模型单例验证；未 commit、未部署、未跑 ≥5 份合同、未做工作台 E2E。**

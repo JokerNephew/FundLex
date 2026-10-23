@@ -2570,3 +2570,19 @@
 
 - 临时账本（均在仓库外）：`/tmp/opencode/engine-live-20261023/ledger.sqlite`（263 calls / ≈$0.1439）、`ledger-final.sqlite`（74 / $0.03485）、`ledger-debug.sqlite`（85 / $0.04212）、`ledger-final2.sqlite`（43 / $0.02638）。合计 **465 calls / ≈$0.2473**。
 - 未使用生产账本 `/var/lib/fundlex/model_budget.sqlite`；未打印或入库任何凭据；未部署、未跑 514 份。
+
+## FL-D168 合同比较发布前缺少独立生产 Worker（2026-10-23，已解决）
+
+- 发现与影响：compare API 和持久化代码已接入，但独立 `CompareWorker` 只存在于代码和 systemd 模板；若只发布工作区并重启原有 Recall Worker，用户可以创建和封存对比任务，却没有生产进程领取 pair，任务会长期停留在队列。
+- 证据：发布前 `fundlex-recall-api.service` 与 `fundlex-recall-worker.service` active，`fundlex-compare-worker.service` 不存在；模板路径为 `tools/deploy/fundlex-compare-worker.service.template`。
+- 处理方法：发布 compare 代码后，将模板安装为 `/etc/systemd/system/fundlex-compare-worker.service`，与 API 共用 `/etc/fundlex-recall.env`、`FUNDLEX_DATA_DIR` 和数据库，执行 daemon-reload、enable、start，并把三项服务纳入发布后的健康检查。
+- 状态与验证：已解决。发布后以真实登录身份上传公开 DOCX、封存任务，由独立 compare Worker 实际处理；API 与浏览器结果页均成功，报告下载文件已核对。适用于 2026-10-23 发布版本。
+- 下一步：未来 compare Worker 的代码、环境或 systemd 模板变化须重新执行同一生产用户路径验收。
+
+## FL-D169 工作区快照发布会包含未提交文件（2026-10-23，需后续改进）
+
+- 发现与影响：`tools/deploy/publish_workspace.sh` 按工作区目录打包同步 `fundlex`、`frontend`、`tools`、`docs`、`tests`，不按 Git 已提交文件筛选。因此本次发布虽然 compare 提交已单独创建并推送，发布快照也包含当时工作区中其他任务的未提交源码改动。
+- 证据：发布前工作区存在 `fundlex/recall.py`、`fundlex/generation/*` 等未提交修改；发布脚本随后按目录复制并重启服务。生产服务已 active，compare 生产链路验收通过。
+- 处理方法：本次保留已发布快照，不在生产上回滚其他任务，避免破坏用户要求的整体发布和当前运行任务。后续发布前应明确确认工作区快照范围，或改造发布脚本为接收明确的提交/文件清单，并在发布前输出源文件与目标文件哈希清单。
+- 状态与验证：已发现，当前发布可用；发布脚本的范围控制仍待改进。compare 相关生产结果已实际验证，其他引擎改动的独立生产验收不属于本次 compare 验收。
+- 下一步：下次发布前先检查工作区 dirty 文件，确认是否允许随快照发布；必要时建立干净发布 worktree。

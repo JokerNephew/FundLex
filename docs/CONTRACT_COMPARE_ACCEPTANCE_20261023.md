@@ -2,13 +2,13 @@
 
 日期：2026-10-23
 
-当前分支：`feat/contract-compare`；HEAD：`a36acd23d810aef2d8338e06698ed76c3e6b3c59`。Compare 相关实现仍在工作区未提交，工作区同时保留其他任务的未提交改动，不能使用整仓库 `git add` 或覆盖工作区。
+当前分支：`feat/contract-compare`；Compare 发布提交：`eba2b3a`，已推送到 `origin/feat/contract-compare`。工作区仍保留其他任务的未提交改动，不能使用整仓库 `git add` 或覆盖工作区。
 
 ## 交付内容
 
 合同对比实现位于 `fundlex/compare/`，由 DOCX OOXML 解析、保留 offset 的文本差异、结构对齐、HTML/SVG 渲染、独立持久化、API 和 Worker 组成。它只比较正文、标题和普通表格文字，与 recall、revision、model、guide 和 delivery pipeline 分开。已有 Word 修订痕迹的输入会拒绝；暂不支持的可见结构会将结果标为 `coverage=incomplete` 并给出警告。
 
-任务模型使用独立的 compare 表、对象存储、owner 隔离和 Idempotency-Key。上传会完整校验 DOCX 包，源文件和结果都绑定大小、SHA-256 与对象 key。Worker 使用 lease/fencing token、心跳、有限 transient retry、固定错误码和 pair 级失败隔离；MySQL 的过期租约清理不会覆盖并发 finish 或 heartbeat。未来 Worker 单元模板在 [fundlex-compare-worker.service.template](../tools/deploy/fundlex-compare-worker.service.template)，本轮没有安装或启用。
+任务模型使用独立的 compare 表、对象存储、owner 隔离和 Idempotency-Key。上传会完整校验 DOCX 包，源文件和结果都绑定大小、SHA-256 与对象 key。Worker 使用 lease/fencing token、心跳、有限 transient retry、固定错误码和 pair 级失败隔离；MySQL 的过期租约清理不会覆盖并发 finish 或 heartbeat。独立服务模板在 [fundlex-compare-worker.service.template](../tools/deploy/fundlex-compare-worker.service.template)，已安装为生产 `fundlex-compare-worker.service`。
 
 工作台入口使用 [compare.js](../frontend/compare.js) 和 [compare.css](../frontend/compare.css)：支持单组和批量 pair、独立双栏滚动、点击/上一处/下一处、虚拟锚点、文件夹相对路径配对、未配对文件手工补齐、失败状态和 coverage 提示。HTML 文本由后端转义，差异连线按浏览器实际几何位置重算。
 
@@ -39,4 +39,13 @@
 
 FL-D149–FL-D153、FL-D160–FL-D162 的处理与验证已写入 [集中问题记录](DETAIL_ISSUES_AND_RESOLUTIONS.md)。FL-D152 的结构分类限制仍是已知范围，不阻塞字符级高召回硬门。
 
-本轮没有调用真实模型，模型费用为 `$0`。没有生产发布、代码推送、服务重启、nginx 修改或生产数据库迁移；明确的生产部署状态为：**Production deployment: NOT PERFORMED**。浏览器验收使用本地临时 API、实际 compare Worker 和公开合同，证明开发环境用户路径，但不替代生产工作台登录、生产配置和生产服务验收。
+本轮 compare 不调用大模型，模型费用为 `$0`。生产发布通过既有 `tools/deploy/publish_workspace.sh` 完成，随后安装并启用 `fundlex-compare-worker.service`；API、Recall Worker 和 Compare Worker 均为 active，三项服务重启计数为 0。没有修改 nginx 或生产数据库结构。
+
+## 生产用户链路验收
+
+- 生产入口：`https://fundlex.club`，password 登录模式；通过工作台注册/登录实际账号后进入「合同对比」。
+- 输入：两份已授权使用的公开 DOCX 合同，分别为消费品精选和品质回报合同；未调用修订模型。
+- 实际路径：创建任务 → 上传左右文件 → 封存 → `fundlex-compare-worker.service` 领取并处理 → 结果页查看 → 双栏渲染 → 下一处差异导航 → 下载差异报告。
+- 结果：生产 pair 状态为 `incomplete`，共 **2772** 处差异（修改 451、新增 1238、删除 1083）；页眉、页脚、AlternateContent、drawing、pict 等暂不支持可见结构被明确列入 coverage warning，没有伪装为完整覆盖。
+- API 证据：`/tmp/opencode/compare-production-e2e/report.json`；浏览器证据：`/tmp/opencode/compare-production-browser-e2e/report.json`，报告下载文件 SHA-256 为 `076bd85be8cdebbad8798bad3b22f377dd1b21c9b3f1a0d1eb54d88ca42911ea`，浏览器 page error 为 0。
+- 生产发布状态：**Production deployment: PERFORMED**。
