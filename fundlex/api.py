@@ -37,6 +37,8 @@ from .selective import (accept_all as selective_accept_all, generate_selected_ar
 from .store import Conflict, NotFound, RunStore, StoreError
 from .config import auth_db_target, local_data_dir
 from .tasks import TaskStore
+from .compare.store import CompareStore
+from .compare.api import register_compare_routes
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
@@ -439,6 +441,8 @@ def create_app(data_dir: str | Path | None = None, *, auth_db=None) -> FastAPI:
     application.state.store = store
     tasks = TaskStore(store)
     application.state.tasks = tasks
+    compare_store = CompareStore(store)
+    application.state.compare_store = compare_store
 
     # Accounts and sessions share the fundlex.db adapter. Initialization fails
     # closed: password mode refuses to start when the store is unavailable, and
@@ -1096,6 +1100,14 @@ def create_app(data_dir: str | Path | None = None, *, auth_db=None) -> FastAPI:
             lines.append(f"| {doc['id']} | {safe_name} | {doc['qualification_status'] or '-'} | {doc['delivery_status']} | {doc['status']} | {doc['error_code'] or '-'} |")
         return PlainTextResponse("\n".join(lines) + "\n", media_type="text/markdown; charset=utf-8")
 
+    # Contract comparison has its own task/store/worker surface and is mounted
+    # independently from the revision task routes above.
+    register_compare_routes(application, compare_store, _user, _validate_upload,
+                            max_upload_bytes=MAX_UPLOAD_BYTES,
+                            max_batch_bytes=MAX_BATCH_BYTES,
+                            max_request_files=MAX_BATCH_DOCUMENTS,
+                            max_pairs=1000)
+
     frontend = Path(__file__).resolve().parent.parent / "frontend"
     if frontend.is_dir():
         application.mount("/static", StaticFiles(directory=frontend), name="static")
@@ -1115,9 +1127,11 @@ def create_app(data_dir: str | Path | None = None, *, auth_db=None) -> FastAPI:
         @application.get("/", include_in_schema=False)
         def home():
             html = (frontend / "index.html").read_text(encoding="utf-8")
-            version = _asset_version("app.css", "app.js")
+            version = _asset_version("app.css", "app.js", "compare.css", "compare.js")
             html = html.replace('/static/app.css"', f'/static/app.css?v={version}"')
             html = html.replace('/static/app.js"', f'/static/app.js?v={version}"')
+            html = html.replace('/static/compare.css"', f'/static/compare.css?v={version}"')
+            html = html.replace('/static/compare.js"', f'/static/compare.js?v={version}"')
             return HTMLResponse(
                 html,
                 headers={"Cache-Control": "no-store, must-revalidate"},

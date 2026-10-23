@@ -1,0 +1,19 @@
+[Unit]
+Description=FundLex contract compare worker
+After=network.target mysqld.service
+Wants=mysqld.service
+
+[Service]
+User=fundlex
+Group=fundlex
+WorkingDirectory=/opt/fundlex-recall-first
+EnvironmentFile=/etc/fundlex-recall.env
+# Install this unit only when the compare API is enabled.  It shares the API's
+# FUNDLEX_DATA_DIR/FUNDLEX_DATABASE_URL and object store, but has an independent
+# process so a compare failure cannot stop the revision worker.
+ExecStart=/opt/fundlex-recall-first/.venv/bin/python -X utf8 -m fundlex.compare.worker
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
