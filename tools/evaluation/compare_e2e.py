@@ -291,6 +291,47 @@ def run(output: Path, screenshots: Path, corpus_base: Path | None = None) -> dic
                 batch.update(counters=counters, summaries=summaries, screenshot=snapshot(page, "batch-three-pairs"))
                 scenarios.append(batch)
 
+                # The result reader must state the comparison direction and
+                # keep the selected pair when a polling response refreshes the
+                # task.  A temporarily-running response makes the existing
+                # completed task exercise the same polling branch.
+                check("comparison_direction_is_explicit", "原版" in page.locator("#compare-detail").inner_text() and "对比版" in page.locator("#compare-detail").inner_text() and "原版" in page.locator(".compare-columns-head").inner_text(), page.locator("#compare-detail").inner_text())
+                selected_before_poll = page.locator("#compare-pair-counter").inner_text()
+                task_route_calls = {"count": 0}
+                def temporary_running(route) -> None:
+                    response = route.fetch()
+                    payload = response.json()
+                    if "/api/compare/tasks/" in route.request.url and "/pairs" not in route.request.url and task_route_calls["count"] == 0:
+                        payload["status"] = "running"
+                    task_route_calls["count"] += 1
+                    route.fulfill(response=response, json=payload)
+                page.route("**/api/compare/tasks/*", temporary_running)
+                page.locator('[data-compare-pair="2"]').click()
+                wait_until(page, "document.querySelector('#compare-pair-counter').textContent.trim() === '3 / 3'")
+                page.locator("tr", has_text="E2E 三组批量").first.locator("[data-compare-task]").click()
+                page.wait_for_timeout(2800)
+                check("polling_keeps_selected_pair", page.locator("#compare-pair-counter").inner_text() == "3 / 3", {"before": selected_before_poll, "after": page.locator("#compare-pair-counter").inner_text(), "route_calls": task_route_calls["count"]})
+                page.unroute("**/api/compare/tasks/*", temporary_running)
+
+                all_diff_count = page.locator(".compare-diff-item").count()
+                page.locator("#compare-diff-filter").select_option("modify")
+                filtered_count = page.locator(".compare-diff-item").count()
+                filtered_types = page.locator(".compare-diff-item strong").all_inner_texts()
+                check("diff_type_filter", filtered_count <= all_diff_count and all(value == "修改" for value in filtered_types), {"all": all_diff_count, "filtered": filtered_count, "types": filtered_types})
+                page.locator("#compare-diff-filter").select_option("")
+                page.locator("#compare-left-pane [data-diff-id]").first.focus()
+                page.keyboard.press("Enter")
+                check("diff_mark_is_keyboard_actionable", page.locator("#compare-left-pane [data-diff-id]").first.get_attribute("role") == "button" and page.locator("#compare-diff-counter").inner_text().startswith("1 /"), page.locator("#compare-diff-counter").inner_text())
+
+                page.set_viewport_size({"width": 390, "height": 844})
+                page.wait_for_timeout(150)
+                check("mobile_reader_switch_visible", page.locator(".compare-mobile-switch").is_visible(), page.locator(".compare-mobile-switch").inner_text())
+                page.locator('[data-compare-side="right"]').click()
+                mobile_right = page.evaluate("""() => ({side: document.querySelector('#compare-viewer')?.dataset.mobileSide, left: getComputedStyle(document.querySelector('#compare-left-pane')).display, right: getComputedStyle(document.querySelector('#compare-right-pane')).display})""")
+                check("mobile_reader_can_switch_side", mobile_right == {"side": "right", "left": "none", "right": "block"}, mobile_right)
+                page.locator('[data-compare-side="left"]').click()
+                page.set_viewport_size({"width": 1440, "height": 960})
+
                 page.locator('[data-compare-pair="0"]').click()
                 wait_until(page, "document.querySelector('#compare-pair-counter').textContent.trim() === '1 / 3'", timeout=20)
                 page.locator("#compare-next-pair").click()

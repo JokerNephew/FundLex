@@ -1,5 +1,12 @@
 # FundLex 当前断点（ACTIVE_HANDOFF）
 
+## 合同比较页面改版断点（2026-10-23，待提交/待生产回归）
+
+- 本轮依据产品、UI、前端三类只读评审修改 `frontend/index.html`、`frontend/compare.js`、`frontend/compare.css`，并扩展 `tools/evaluation/compare_e2e.py`。其他引擎、evidence、`tools/ops/` 等未提交改动仍保留，不能整仓库 add/reset。
+- 已实施：原版→对比版方向语义、覆盖不完整人工复核提示、批量上传中断后继续上传、轮询保持选中 pair、差异类型筛选/章节显示、移动端单栏侧切换、正文差异标记键盘定位与焦点可达。
+- 验证：compare 专项 **70 passed / 5 skipped**；浏览器验收 `/tmp/opencode/compare-e2e-ui-revision-v3.json` 为 **9 个场景全部通过**，无 page error。尚未提交、推送或重新发布本轮 UI 改动。
+- 下一动作：只提交四个 compare 相关源码/验收文件和集中记录，发布后执行生产浏览器回归，核对方向说明、覆盖 warning、移动端切换、筛选、下载及轮询保持当前 pair。
+
 ## 引擎真实合同与工作台验收断点（2026-10-23 21:00，优先）
 
 - 本轮完成 FL-D157~FL-D175：多通道召回、append/G16 锚点、复合目标 content-check、G06 语义探针、跨段事实引文、G17 尾句、G08 认购/申购 flip、G18 等价句、G20 FALSE 分支审计、delete+append 联合校验、重复 append 目标去重均已修复并有回归。
