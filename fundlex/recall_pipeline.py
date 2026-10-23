@@ -1370,6 +1370,16 @@ def _quote_is_expected_effect(quote: str, record: Any, facts: Facts | None, *,
         # An exact authorized final policy is conclusive even when that policy
         # preserves the source's first sentence (G12 keeps the fee-bearer sentence).
         return True
+    if expected and actual_text:
+        from .recall import _policy_phrase_equivalent
+        references = [_compact(str(value)) for value in
+                      [getattr(record.spec, "old_text", ""),
+                       *getattr(record.spec, "alternatives", ())] if _compact(str(value))]
+        if _policy_phrase_equivalent(_compact(expected), _compact(actual_text), references):
+            # The policy is already present with reordered subjects ("由于基金费用的
+            # 不同，A/C类…" vs "A/C类…费用收取不同").  The model quoting that real
+            # sentence as an error is not contradictory evidence (G18 p139).
+            return True
     if getattr(record.spec, "rule_id", "") in {"G02", "G04", "G08", "G11"} and expected:
         # The real contract may write "A类及D类" while the instantiated guide
         # group is "A类、D类".  Same certified class set, not an invented class.

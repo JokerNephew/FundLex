@@ -1290,6 +1290,21 @@ def test_expected_class_group_quote_accepts_and_separator():
         location="p0", actual_text="在投资者申购 A 类及 B 类基金份额时收取申购费用")
 
 
+def test_expected_effect_accepts_reworded_fee_difference_quote():
+    from types import SimpleNamespace
+    from fundlex.recall_pipeline import _quote_is_expected_effect
+
+    record = SimpleNamespace(spec=SimpleNamespace(
+        rule_id="G18", operation_id="G18:0", op="replace",
+        old_text="由于本基金A类基金份额不收取销售服务费，而C类基金份额收取销售服务费",
+        new_text="由于本基金A类基金份额和C类基金份额费用收取不同",
+        alternatives=()))
+    paragraph = ("本基金A类、C类基金份额分别设置代码。由于基金费用的不同，本基金A类基金份额和"
+                 "C类基金份额将分别计算基金份额净值。")
+    assert _quote_is_expected_effect(paragraph, record, None, location="p0",
+                                     actual_text=paragraph)
+
+
 def test_expected_effect_accepts_class_substituted_final_edit():
     from fundlex.recall_pipeline import _quote_is_expected_effect
 
@@ -1373,6 +1388,115 @@ def test_planning_clamps_trailing_whitespace_to_a_text_segment(tmp_path):
                             AssertionError("append should stay deterministic"))))
     edit = result["edits"][0]
     assert edit["end"] <= max(s.end for s in span.segments)
+
+
+def test_satisfied_target_with_false_branch_is_not_auditable(tmp_path):
+    """G20 on a fixed-fee product must not be audited as an unchanged target.
+
+    A sibling G22 edit legitimately changes the same liquidation paragraph; the audit
+    otherwise treats that as a contradictory G20 change (live G20 p1321).
+    """
+    from dataclasses import replace
+    from docx import Document
+    from fundlex.docx import inspect_docx
+    from fundlex.recall import Target, assign_target_operations
+    from test_recall_core import _facts
+
+    path = tmp_path / "g20.docx"
+    document = Document()
+    document.add_paragraph("依据基金财产清算的分配方案，按基金份额持有人持有的基金份额比例进行分配。")
+    document.save(path)
+    inspection = inspect_docx(path, full=True)
+    rule = {"rule_id": "G20", "operations": [{
+        "operation_id": "G20:0", "op": "replace", "old_text": "分配。",
+        "new_text": "分配，并加上返还基金份额持有人的销售服务费（如有）。",
+        "condition": {"kind": "is_floating_fee", "value": True}}]}
+    target = Target("T1", "G20", "p0", "分配。", "satisfied", "not applicable",
+                    operations=("G20:0",))
+    facts = replace(_facts(), quotes_verified={"floating": True},
+                    floating_management_fee=False)
+    assign_target_operations([target], {"G20": rule}, inspection, facts)
+    assert target.out_of_scope is True
+    assert "TARGET_OPERATION_NOT_APPLICABLE" in target.reason
+
+
+def test_g18_reworded_fee_difference_proves_already_satisfied(tmp_path):
+    """A satisfied G18 site proves ALREADY_SATISFIED without the exact new text."""
+    from types import SimpleNamespace
+    from fundlex.generation.effects import (evaluate_operation_effect,
+                                            operation_site_bound)
+    from fundlex.obligations import compile_obligations
+    from test_operation_execution_closure import Facts
+
+    text = ("本基金A类、C类基金份额分别设置代码。由于基金费用的不同，本基金A类基金份额和"
+            "C类基金份额将分别计算基金份额净值。")
+    rule = {"rule_id": "G18", "title": "基金合同-基金的收益与分配",
+            "requirement": "将费用差异表述改为费用收取不同。",
+            "operations": [{"operation_id": "G18:0", "op": "replace",
+                            "old_text": "由于本基金A类基金份额不收取销售服务费，而C类基金份额收取销售服务费",
+                            "new_text": "由于本基金A类基金份额和C类基金份额费用收取不同",
+                            "condition": {"kind": "none"}, "group_kind": "INDEPENDENT"}]}
+    record = compile_obligations({"groups": [rule]}).records[0]
+    record.applicability = SimpleNamespace(status="TRUE")
+    before = after = Inspection(text)
+    site = {"location": "p0", "quote": text}
+    assert operation_site_bound(record.spec, text, before, "p0", Facts()) is True
+    proof = evaluate_operation_effect(record, before, after, [site], [], Facts())
+    assert proof.state == "PASS"
+    assert proof.artifact_status == "ALREADY_SATISFIED"
+
+
+def test_satisfied_g18_carries_its_operation_identity(tmp_path):
+    """A reordered fee-difference sentence is ALREADY_SATISFIED, not site-less.
+
+    The contract writes "由于基金费用的不同，本基金A/C类基金份额将分别计算…" while
+    the guide writes "…A/C类基金份额费用收取不同".  The rule-level signal already found
+    the policy, but ``satisfied_operation_keys`` required the exact new text, leaving
+    G18 without an operation/site (live G18 CLAIM_OPERATION_UNPROVEN).
+    """
+    import json
+    from pathlib import Path
+    from fundlex.recall import Facts, satisfied_operation_keys
+    from test_recall_core import _facts
+
+    guide = json.loads((Path(__file__).resolve().parents[1]
+                        / "guides/builtin_guide_v1.json").read_text(encoding="utf-8"))
+    rule = next(item for item in guide["groups"] if item["rule_id"] == "G18")
+    body = ("由于基金费用的不同，本基金A类基金份额和C类基金份额将分别计算基金份额净值。"
+            "计算公式为：计算日某类基金份额净值＝计算日该类基金份额的基金资产净值/"
+            "计算日该类基金份额余额总数。")
+    assert satisfied_operation_keys(rule, _facts(), body) == {"G18:0"}
+
+
+def test_g08_subscription_fee_target_cannot_bind_the_purchase_fee_operation(tmp_path):
+    """A 认购费率 quote must not execute G08's 申购费率 replacement (live p156)."""
+    import json
+    import pytest
+    from pathlib import Path
+    from docx import Document
+    from fundlex.docx import inspect_docx
+    from fundlex.recall import Target, _selected_operation_indices
+    from test_recall_core import _facts
+
+    path = tmp_path / "g08-flip.docx"
+    document = Document()
+    document.add_paragraph("本基金的认购费率由基金管理人决定，并在招募说明书中列示，基金认购费用不列入基金财产。")
+    document.save(path)
+    inspection = inspect_docx(path, full=True)
+    guide = json.loads((Path(__file__).resolve().parents[1]
+                        / "guides/builtin_guide_v1.json").read_text(encoding="utf-8"))
+    rule = next(item for item in guide["groups"] if item["rule_id"] == "G08")
+    from dataclasses import replace
+
+    facts = replace(_facts(), fact_status={"share_class_structure": "VERIFIED"})
+    quote = "本基金的认购费率由基金管理人决定，并在招募说明书中列示"
+    target = Target("T1", "G08", "p0", quote, "needs_edit", "test",
+                    start=0, end=len(quote), resolution="resolved",
+                    operations=("G08:0",))
+    with pytest.raises(Exception) as excinfo:
+        _selected_operation_indices(rule, target, inspection, facts)
+    assert getattr(excinfo.value, "code", "") == "RECALL_TARGET_OPERATION_UNATTRIBUTED"
+    assert excinfo.value.detail.get("reason") == "operation_topic_flip"
 
 
 def test_user_facing_target_counts_are_terminal_and_reconcile():

@@ -1,5 +1,16 @@
 # FundLex 当前断点（ACTIVE_HANDOFF）
 
+## 引擎真实合同与工作台验收断点（2026-10-23 21:00，优先）
+
+- 本轮完成 FL-D157~FL-D175：多通道召回、append/G16 锚点、复合目标 content-check、G06 语义探针、跨段事实引文、G17 尾句、G08 认购/申购 flip、G18 等价句、G20 FALSE 分支审计、delete+append 联合校验、重复 append 目标去重均已修复并有回归。
+- **真实合同：6 份不同合同 delivery_status=complete、unresolved 0、final/redline 哈希与报告一致**（广发品质回报、核心优选 FOF、上海清算所债券、ESG 混合、央企股东回报 ETF 联接、央企创新驱动 ETF 联接）；港股通红利 ETF 正确 excluded。明细/哈希/费用见集中问题 FL-D175。
+- **工作台真实路径（本地临时 API+Worker，非生产域名）**：登录 → 建任务 → 上传 → seal → 真实模型 30 calls/$0.02243 → complete → 下载 final/redline/report；final 哈希与报告一致，redline 19/19。脚本 `/tmp/opencode/engine-live-20261023/workbench_e2e.py`。
+- 全量测试：**1203 passed / 40 skipped / 0 failed / 222.50s**；compileall/diff check 通过。
+- 临时模型账本合计 **1129 calls / ≈$0.7999**，全部在 `/tmp/opencode/engine-live-*`，未用生产账本；未打印凭据。
+- **当前生产状态**：compare agent 已推送 `eba2b3a` 并执行过一次 `publish_workspace.sh`，三项服务 active；但该快照中的引擎文件哈希与当前工作区不同（`recall.py` 部署 `7c01f577…` vs 工作区 `aff32acb…`，pipeline/effects/claim_replay 同样不同），因此**生产尚未包含本轮最终修复**。
+- **未提交/未推送**：本轮引擎与测试/文档改动仍在工作区（6 个文件 + 文档）；浏览器 UI 的登录/上传/下载按钮尚未单独跑 Playwright。
+- 下一步：① 只提交引擎/测试/文档（compare/前端已由他人提交）；② 重新 `publish_workspace.sh` 并核对部署哈希；③ 生产域名真实登录→上传→下载；④ Playwright 浏览器验收；⑤ ≥5 份生产合同复验。
+
 ## 合同比较已推送并部署（2026-10-23）
 
 - Compare 发布提交为 `eba2b3a`，已推送到 `origin/feat/contract-compare`。工作区其他任务的未提交改动仍保留，未整仓库提交。
@@ -7,7 +18,7 @@
 - 生产真实用户链路已通过：工作台注册/登录 → 合同对比 → 上传两份公开 DOCX → 封存 → 独立 Worker → 结果页 → 双栏导航 → 报告下载。结果为 2772 处差异，coverage 明确标记暂不支持的页眉/页脚/绘图结构；浏览器 page error 为 0。证据见 `/tmp/opencode/compare-production-e2e/` 和 `/tmp/opencode/compare-production-browser-e2e/`。
 - 本轮 compare 模型调用 0、费用 `$0`；未修改 nginx 或生产数据库结构。后续若修改 compare 代码或 Worker 模板，需重新发布并重复生产链路验收。
 
-## 核心引擎层审查与修复断点（2026-10-23 18:00，优先）
+## 核心引擎层审查与修复断点（2026-10-23 18:00，历史；最新见上）
 
 - 用户问题：检查核心引擎层修改情况；前一个负责 agent 已失联。**本轮已完成审查、修复、回归与 1 份真实模型单例验证；未 commit、未部署、未跑 ≥5 份合同、未做工作台 E2E。**
 - 现场：branch `feat/contract-compare`，HEAD `a36acd2`（与 `origin/refactor/recovery-architecture` 同 SHA）。引擎改动仍未提交：`fundlex/recall.py`、`recall_pipeline.py`、`generation/{coverage,effects,router,__init__}.py`、`recovery/{history,orchestrator,policies,types}.py` + 测试。compare/前端未提交工作保留，未整仓库 add。

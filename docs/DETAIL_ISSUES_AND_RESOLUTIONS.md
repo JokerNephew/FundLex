@@ -2563,8 +2563,12 @@
   - G08 p156 `RECALL_COMPOSE_FIXED_TEXT_MISSING` + `CLAIM_OPERATION_NOT_PLANNED`；
   - G18 无 verified site（`CLAIM_OPERATION_UNPROVEN`）。
 - 证据：`/tmp/opencode/engine-live-20261023/final1/report.json`；最终 DOCX 的 G15/G16/G17/G01/G03 已按预期修改，G08/G18 未完成。
-- 状态：**未修复**。这两项是 FL-D146 之前已存在的生成/适用性问题，不是 FL-D157/158 的回归；当前修复轮不应伪称合同完整。
-- 下一步：分别定位 G08 compose fixed-text 缺失（模型输出/模板重试）与 G18 applicability/site（是否 already-satisfied 但无站点证据）；修复后重跑本单例与 ≥5 份真实合同。
+- **追加：已修复（2026-10-23 晚）**：
+  - G08：`_selected_operation_indices` 增加 `_semantic_flip_only`/`_numeric_flip_only` 拒绝（认购费率 vs 申购费率），错误 p156 目标不再进入 compose；G08 只在 p223 申购费率条款执行。
+  - G18：`satisfied_operation_keys` 对重排/改写后的费用差异句回退到单操作等价判定；`target_site_ok` 接受“由于基金费用的不同…分别计算基金份额净值”的等价站点；`operation_site_bound`/`evaluate_operation_effect`/`_quote_is_expected_effect` 接受政策等价文本，Claim 与 Audit 均判 ALREADY_SATISFIED。
+  - 真实单例 final4：**27 calls / $0.02169 / 97s，delivery_status=complete、unresolved 0**；final/redline 哈希与报告一致，redline 19 ins / 19 del。
+- 状态：**已解决（单例 + 5 份真实合同批次）**。这两项是 FL-D146 之前已存在的生成/适用性问题，不是 FL-D157/158 的回归。
+- 下一步：保留 G08 认购/申购 flip 与 G18 等价句回归；继续 ≥5 份合同与工作台路径（见 FL-D174）。
 
 ### 本轮真实模型预算记录（2026-10-23）
 
@@ -2586,3 +2590,56 @@
 - 处理方法：本次保留已发布快照，不在生产上回滚其他任务，避免破坏用户要求的整体发布和当前运行任务。后续发布前应明确确认工作区快照范围，或改造发布脚本为接收明确的提交/文件清单，并在发布前输出源文件与目标文件哈希清单。
 - 状态与验证：已发现，当前发布可用；发布脚本的范围控制仍待改进。compare 相关生产结果已实际验证，其他引擎改动的独立生产验收不属于本次 compare 验收。
 - 下一步：下次发布前先检查工作区 dirty 文件，确认是否允许随快照发布；必要时建立干净发布 worktree。
+
+## FL-D170 G06 语义探针把全文档尾部当成一个句子（2026-10-23，已修复）
+
+- 发现与影响：`_semantic_delete_hits`/`_semantic_delete_sentences` 在按句切分后还把整段/整份文档作为 `tail` 再匹配一次。ETF 合同中前文的“基金份额类别”与后文的“不得…转换”相距数千字，仍被当成一个 G06 变体，导致 `semantic_delete_variant_present` 永久 OPEN（上海清算所 G06）。
+- 处理：删除整段/整文档 tail 复扫；只保留按句切分结果（未终止的最后一节本身仍是一个 chunk）。
+- 验证：新增 `test_semantic_delete_probe_does_not_join_distant_sentences`；上海清算所批次由 incomplete 转为 **complete**（35 calls / $0.0305）。
+- 状态：已修复。
+
+## FL-D171 跨三个段落的事实引文未通过核验（2026-10-23，已修复）
+
+- 发现与影响：`_quote_present` 只拼接相邻两段；ETF 释义引文跨 p67/p68/p69 三段，`FUND_TYPE_QUOTE_UNVERIFIED` 使已可判定的 ETF 仍被当 eligible 处理，跑完整链路后 `not_generated`（91 calls）。
+- 处理：按 2/3/4 段连续窗口拼接，并要求引文确实跨过至少一个段边界。
+- 验证：新增三段引文回归；同一 ETF 合同现在识别为 `excluded`，12s / 39 calls 即停止，不再生成错误任务。
+- 状态：已修复。
+
+## FL-D172 模型目标只覆盖 G17 首句时漏掉第二段尾句（2026-10-23，已修复）
+
+- 发现与影响：ESG 合同把 G17 的两句拆到 p813/p814。模型目标只绑 p813，`existing` 覆盖使 survey 跳过该规则；p814 的“销售服务费的使用范围不包括…”保留，sweep 正确报 residual，合同 incomplete。
+- 处理：`_reference_tail_match` 识别 delete 参考文中的尾句（按句剥离类群前缀），survey 对未被覆盖的尾句段落生成独立目标；模型目标只覆盖首句时不再掩盖尾段。
+- 验证：新增 `test_uncovered_delete_tail_sentence_gets_its_own_target`；ESG 由 incomplete 转为 **complete**（38 calls / $0.0261）。
+- 状态：已修复。
+
+## FL-D173 G17 delete + G16 append 联合校验误报（2026-10-23，已修复）
+
+- 发现与影响：G16 政策插入 G17 删除的段落，合并 edit 的联合校验把实例化后的 G16 文本（C/F 类）判为 `CLAIM_JOINT_UNEXPLAINED_TEXT`，G16 也因 unit validator 只看到自身 replacement 而 `CLAIM_PLANNED_EFFECT_MISSING`；最终 DOCX 实际正确。
+- 处理：联合校验的 `allowed_additions` 加入合并组件自身的 `replacement`/`evidence.fixed_text`（实例化文本），不再只依赖 guide 原始 new_text；`evaluate_operation_effect` 新增 append 分支：`planned_matches + expected_present + own` 判 PASS/EXPECTED_EFFECT_PRESENT。
+- 验证：央企股东回报联接批次由 incomplete 转为 **complete**（72 calls / $0.0742）；G16/G17 联合站点通过。
+- 状态：已修复。
+
+## FL-D174 条件为 FALSE 的 satisfied 目标仍被审计为“应保持原文”（2026-10-23，已修复）
+
+- 发现与影响：G20 仅适用于浮动管理费多类别产品；固定费率产品的 G20 satisfied 目标仍进入 Audit。相邻 G22 合法修改同一清算段后，审计把 G22 的“销售服务费（如有）”误判为 G20 的部分实现，合同 incomplete。
+- 处理：`assign_target_operations` 对显式操作全部为 `condition_status=FALSE` 的目标标 `out_of_scope`（`TARGET_OPERATION_NOT_APPLICABLE`），Audit/覆盖率不再把它当作应保持原文的义务。
+- 验证：新增 FALSE-branch 回归；央企创新驱动联接批次 **complete**（102 calls / $0.0892），G20 段落未被错误插入，G22 正常生效。
+- 状态：已修复。
+
+## FL-D175 真实合同批次与工作台路径验收（2026-10-23，阶段完成）
+
+- **6 份不同真实合同 delivery_status=complete、unresolved 0、final/redline 均生成且哈希与报告一致**（临时账本）：
+
+| 合同 | calls | cost USD | final SHA-256 前缀 | redline ins/del |
+| --- | --- | --- | --- | --- |
+| 广发品质回报混合 | 27 | 0.0217 | 785db513805f | 19/19 |
+| 广发核心优选 FOF | 47 | 0.0305 | ade7f4ed4ffd | 19/19 |
+| 广发上海清算所 0-4 年央企 80 债券 | 35 | 0.0305 | 33659eeaf416 | 21/21 |
+| 广发 ESG 责任投资混合 | 38 | 0.0261 | 573bc64f74b0 | 16/16 |
+| 广发中证国新央企股东回报 ETF 联接 | 72 | 0.0742 | ba90130db760 | — |
+| 广发中证央企创新驱动 ETF 联接 | 102 | 0.0892 | 19ad7dad0838 | 18/18 |
+
+- 额外：港股通央企红利 ETF 正确识别为 `excluded`（12s / 39 calls）；央企股东回报联接一次 `MODEL_SCHEMA_INVALID` 停止后已重跑成功，属模型输出偶发。
+- **工作台真实路径（本地临时 API + Worker，非生产）**：`e2euser` 登录 → 创建任务 → 上传广发品质回报 DOCX → seal → Worker 真实模型处理 30 calls / $0.02243 / 101s → `delivery_status=complete` → 下载 `final`/`redline`/`report_json`/`report_md`；final SHA `0c1a5db56573…` 与报告一致，redline 19 ins / 19 del；G01/G03 政策各一次、G15/G16/G17 正确。
+- **未做/边界**：本地工作台不是生产域名；生产 `/opt/fundlex-recall-first` 仍是旧版本，未部署；浏览器 UI 只做了 API 路径（页面登录/上传/下载按钮未单独跑 Playwright）。累计临时账本 **1129 calls / ≈$0.7999**，未使用生产账本。
+- 下一步：干净发布（只含引擎提交，不带 compare/前端未提交文件）→ 生产工作台真实登录/上传/下载 → 生产服务健康检查；之后再跑浏览器 Playwright 与 ≥5 份生产合同。

@@ -60,9 +60,10 @@ def _semantic_delete_hits(rule_id: str, document: str) -> list[str]:
         sentence = sentence.strip()
         if len(_compact(sentence)) >= 12 and pattern.search(sentence):
             hits.append(sentence)
-    tail = (document or "").strip()
-    if len(_compact(tail)) >= 12 and pattern.search(tail) and tail not in hits:
-        hits.append(tail)
+    # Do not probe the whole document as one "tail": the lookaheads would match a
+    # class-labelling sentence and an unrelated "…不得…转换" sentence thousands of
+    # characters apart (ETF contract false semantic-delete variant).  The sentence
+    # split already keeps an unterminated final sentence as its own chunk.
     return hits
 
 
@@ -183,7 +184,8 @@ def operation_site_bound(spec: Any, quote: str, original: Any, location: str,
     """
     from types import SimpleNamespace
     from ..recall import (append_site_ok, instantiate_slots, reference_fragments,
-                          target_site_ok, _looks_like_heading, _sequence_ratio)
+                          target_site_ok, _looks_like_heading, _policy_phrase_equivalent,
+                          _sequence_ratio)
     try:
         span = original.by_location(location)
     except (KeyError, ValueError, IndexError, AttributeError):
@@ -265,6 +267,13 @@ def operation_site_bound(spec: Any, quote: str, original: Any, location: str,
     except (AttributeError, TypeError):
         pass
     if expected and _compact(expected) in _compact(body):
+        return True
+    if spec.op in {"replace", "append"} and expected and _policy_phrase_equivalent(
+            _compact(expected), _compact(body),
+            [_compact(reference) for reference in references if _compact(reference)]):
+        # The paragraph already states this policy with reordered subjects
+        # ("由于基金费用的不同，A/C类…" vs "A/C类…费用收取不同"): a real, verified
+        # satisfied site, not a missing operation (G18 p139).
         return True
     # The existing attribution layer accepts bounded wording variants at this
     # threshold. Keep its operation semantics while adding the site guard above.
@@ -490,6 +499,11 @@ def evaluate_operation_effect(obligation: Any, original: Any, artifact: Any,
                         break
                 expected_present = bounded and _compact(after[left + shift:right + shift]) == _compact(expected)
         old_wordings = [str(spec.old_text or ""), *getattr(spec, "alternatives", ())]
+        if not expected_present and spec.op in {"replace", "append"} and expected:
+            from ..recall import _policy_phrase_equivalent
+            expected_present = _policy_phrase_equivalent(
+                _compact(expected), _compact(after),
+                [_compact(value) for value in old_wordings if _compact(value)])
         allowed_new = [str(value) for value in (authorized_new_texts or {}).get(location, ())
                        if _compact(str(value)) in _compact(after)]
         def retained_as_authorized_new(value: str) -> bool:
@@ -529,6 +543,12 @@ def evaluate_operation_effect(obligation: Any, original: Any, artifact: Any,
                 # deleted wording is gone, so the delete itself is proven; the
                 # per-edit unit validator sees only its own replacement and fails.
                 item.update(state="PASS", artifact_status="VERIFIED_ABSENT", failure_code="")
+            elif spec.op == "append" and planned_matches and expected_present and own:
+                # G16 appends into a paragraph G17 deletes; the merged paragraph no
+                # longer equals the append unit's isolated replacement, but the
+                # combined plan matches the artifact and the new policy is present.
+                item.update(state="PASS", artifact_status="EXPECTED_EFFECT_PRESENT",
+                            failure_code="")
             elif not planned_matches:
                 item.update(state="FAIL", artifact_status="WRONG_EFFECT",
                             failure_code="CLAIM_EXECUTION_EFFECT_MISSING")

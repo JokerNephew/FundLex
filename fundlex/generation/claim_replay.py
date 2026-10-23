@@ -782,6 +782,18 @@ def replay_claims(edits: Sequence[Mapping[str, Any]], before_inspection: Any,
                 # Any text introduced by the joint result must be one of the selected
                 # operations' own new wording; UNEXPLAINED_SOFT is not enough here.
                 allowed_additions: list[str] = []
+                # The merged edit's own components carry the instantiated replacement
+                # (including class-slot substitution).  The raw guide new_text is not
+                # enough for a C/F multi-class product and left a real G16 segment
+                # unexplained in a G17 delete + G16 append merge.
+                for edit in group:
+                    for component in edit.get("components") or [edit]:
+                        value = _compact(str(component.get("replacement") or ""))
+                        if len(value) >= 2:
+                            allowed_additions.append(value)
+                        fixed = _compact(str((component.get("evidence") or {}).get("fixed_text") or ""))
+                        if len(fixed) >= 2:
+                            allowed_additions.append(fixed)
                 for unit in units:
                     if unit.get("error"):
                         continue
@@ -1056,10 +1068,13 @@ def replay_claims(edits: Sequence[Mapping[str, Any]], before_inspection: Any,
             except (KeyError, ValueError, IndexError, AttributeError):
                 continue
             state = str(target.get("state") or "")
-            if state == "absent":
+            if state in {"absent", "satisfied"}:
                 from ..recall import _looks_like_heading
                 if _looks_like_heading(before_text):
                     continue
+                # A satisfied target's quote is the matched new-policy excerpt, not
+                # a source binding.  Use the whole business paragraph so the proof
+                # can verify the reworded policy and class tokens (G18 p139).
                 quote = before_text
             else:
                 quote = str(target.get("quote") or "")

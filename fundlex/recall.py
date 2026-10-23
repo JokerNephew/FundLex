@@ -625,14 +625,21 @@ def _quote_present(inspection: DocumentInspection, fragment: str) -> bool:
         texts.append(compact_text)
     # Facts are often quoted with a heading/paragraph boundary inside the quote
     # (D14: "基金的运作方式\n契约型开放式"). Only accept a cross-boundary match if
-    # the fragment actually straddles the boundary, not merely appears in both.
-    for left, right in zip(texts, texts[1:]):
-        if not left or not right:
-            continue
-        joined = left + right
-        index = joined.find(cleaned)
-        if index != -1 and index < len(left) < index + len(cleaned):
-            return True
+    # the fragment actually straddles a boundary, not merely appears in both.  A
+    # definition can span three paragraphs ("…基金\n业务实施细则》…Exchange\nTraded
+    # Fund）"), so check bounded consecutive windows rather than only pairs.
+    for size in (2, 3, 4):
+        for start in range(0, len(texts) - size + 1):
+            window = texts[start:start + size]
+            if any(not item for item in window):
+                continue
+            joined = "".join(window)
+            index = joined.find(cleaned)
+            if index == -1:
+                continue
+            prefix_len = sum(len(item) for item in window[:-1])
+            if index < prefix_len < index + len(cleaned):
+                return True
     return False
 
 
@@ -1534,7 +1541,11 @@ _CONFUSABLE_SWAPS: tuple[tuple[str, str], ...] = (
 
 def _semantic_flip_only(target: str, window: str) -> bool:
     """True when ``window`` equals ``target`` with only a confusable word swapped."""
-    target_clean, window_clean = _compact(target), _compact(window)
+    # A differing trailing punctuation mark does not make it a different clause; the
+    # flip is still a topic change (G08 认购 vs 申购 p156).
+    trim = "。；;！？!?，, "
+    target_clean = _compact(target).rstrip(trim)
+    window_clean = _compact(window).rstrip(trim)
     if not target_clean or not window_clean or target_clean == window_clean:
         return False
     for left, right in _CONFUSABLE_SWAPS:
@@ -1546,7 +1557,9 @@ def _semantic_flip_only(target: str, window: str) -> bool:
 
 def _numeric_flip_only(target: str, window: str) -> bool:
     """True when ``window`` equals ``target`` with only numeric tokens swapped."""
-    target_clean, window_clean = _compact(target), _compact(window)
+    trim = "。；;！？!?，, "
+    target_clean = _compact(target).rstrip(trim)
+    window_clean = _compact(window).rstrip(trim)
     number = re.compile(r"\d+(?:\.\d+)?%?")
     target_numbers = number.findall(target_clean)
     window_numbers = number.findall(window_clean)
@@ -1748,6 +1761,19 @@ def satisfied_operation_keys(rule: dict, facts: Facts, compact_body: str) -> set
         compact = _compact(instantiated)
         if compact and compact in compact_body:
             keys.add(operation_key(rule_id, index))
+            continue
+        # The paragraph may express the same operation with reordered subjects or a
+        # connector ("…A/C类基金份额费用收取不同" vs "由于基金费用的不同，本基金A/C类
+        # 基金份额将分别计算…").  Reuse the rule-level equivalence for this one
+        # operation so a satisfied target can still carry its operation identity.
+        single = {
+            "rule_id": rule_id,
+            "title": rule.get("title") or "",
+            "requirement": rule.get("requirement") or "",
+            "operations": [operation],
+        }
+        if satisfied_by_new_text(single, facts, compact_body):
+            keys.add(operation_key(rule_id, index))
     return keys
 
 
@@ -1875,7 +1901,8 @@ def _selected_operation_indices(rule: dict, target: Target,
         variants = [_compact(str(value)) for value in (rule.get("old_text_variants") or [])]
         for index in selected:
             operation = operations[index]
-            old_text = _compact(str(operation.get("old_text") or ""))
+            raw_old = str(operation.get("old_text") or "")
+            old_text = _compact(raw_old)
             if operation.get("op") not in {"replace", "delete"} or not old_text:
                 continue
             if rule_id in {"G02", "G04"} and bool(rule.get("class_substitution")):
@@ -1889,6 +1916,14 @@ def _selected_operation_indices(rule: dict, target: Target,
             if any(_compact(fragment) in span_body
                    for value in variants for fragment in reference_fragments(value)):
                 continue
+            # A one-word topic flip is a different clause, not a paraphrase.  A model
+            # target quoting the 认购费率 sentence must not be accepted for G08's
+            # 申购费率 operation (live p156 false target).
+            if _semantic_flip_only(raw_old, span_body) or _numeric_flip_only(raw_old, span_body):
+                raise RecallError("RECALL_TARGET_OPERATION_UNATTRIBUTED",
+                                  {"target": target.target_id, "rule": rule_id,
+                                   "operation": operation_key(rule_id, index),
+                                   "reason": "operation_topic_flip"})
             # Real contracts paraphrase or prefix-strip the reference ("C类基金份额的
             # 销售服务费每日计提…" vs "基金销售服务费每日计提…").  Accept a bounded
             # similarity, never a completely different sentence.
@@ -1928,6 +1963,21 @@ def assign_target_operations(targets: Sequence[Target], rules_by_id: dict[str, d
     errors: list[dict[str, Any]] = []
     from .generation.effects import _class_group_equivalent
     for target in targets:
+        if target.operations and not target.out_of_scope:
+            rule = rules_by_id.get(target.rule_id)
+            if rule is not None:
+                indices = _normalise_operation_ids(rule, target.operations, obligations)
+                statuses = [condition_status(
+                    (rule.get("operations") or [])[index].get("condition"), facts)
+                    for index in indices if 0 <= index < len(rule.get("operations") or [])]
+                if statuses and all(status == "FALSE" for status in statuses):
+                    # The target's own branch does not apply (for example G20 on a
+                    # fixed-management-fee product).  It must not be audited as a
+                    # satisfied obligation whose original text should stay unchanged;
+                    # a sibling rule (G22) may legitimately edit the same paragraph.
+                    target.out_of_scope = True
+                    target.reason = f"{target.reason}|TARGET_OPERATION_NOT_APPLICABLE"
+                    continue
         if target.state != "needs_edit":
             # An inventory/survey target can already be marked satisfied while still
             # carrying only one half of a split A/C class-substitution clause.  The
@@ -2183,6 +2233,20 @@ def dedupe_operation_targets(targets: Sequence[Target], rules_by_id: dict[str, d
         kept: list[Target] = []
         for item in sorted(items, key=score, reverse=True):
             def same_occurrence(other: Target) -> bool:
+                # Two targets for the same append operation at the same location both
+                # insert the same policy; there is no old_text/occurrence to compare
+                # (live G03 T004+Y011 duplicated the paragraph text).
+                kinds: set[str] = set()
+                for key in set(item.operations) | set(other.operations):
+                    try:
+                        index = int(str(key).split(":", 1)[1])
+                    except (IndexError, ValueError):
+                        continue
+                    operations = rule.get("operations") or []
+                    if 0 <= index < len(operations):
+                        kinds.add(str(operations[index].get("op") or ""))
+                if kinds == {"append"}:
+                    return True
                 if item.composite or other.composite:
                     return item.composite == other.composite and item.quote == other.quote
                 if any(value is None for value in (item.start, item.end, other.start, other.end)):
@@ -2494,6 +2558,11 @@ def survey_targets(inspection: DocumentInspection, rules: Sequence[dict], facts:
         # exact operation site must not suppress a second operation or a wording variant
         # at a different site.  The per-location ``existing`` gate below keeps exact
         # hits from being duplicated, while operation coverage remains explicit.
+        delete_keys = tuple(
+            f"{rule_id}:{index}"
+            for index, operation in enumerate(rule.get("operations") or [])
+            if operation.get("op") == "delete"
+            and condition_matches(operation.get("condition"), facts))
         bag = _delete_keyword_bag(rule, facts)
         if bag:
             bag_operation_keys = tuple(
@@ -2540,6 +2609,16 @@ def survey_targets(inspection: DocumentInspection, rules: Sequence[dict], facts:
                     and (rule_id, follower_location) not in existing
                     and (not in_self or body.rstrip().endswith(("，", ",", "、", "：", ":")))
                     and _keyword_bag_in_clause(body + follower, bag))
+                tail_pair = (
+                    in_self and follower_location is not None
+                    and not follower_new_topic
+                    and not _keyword_bag_in_clause(follower, bag)
+                    and (rule_id, follower_location) not in existing
+                    and _reference_tail_match(rule, follower))
+                if tail_pair:
+                    # The first sentence is self-contained, but the next paragraph
+                    # repeats the rule's own tail sentence; both are one delete scope.
+                    in_pair = True
                 if not (in_self or in_pair):
                     continue
                 # G06's generic ``份额类别`` + ``转换`` signature is too broad for
@@ -2579,6 +2658,33 @@ def survey_targets(inspection: DocumentInspection, rules: Sequence[dict], facts:
                         _add_operation_coverage(existing, rule_id, item, bag_operation_keys)
                     else:
                         existing[(rule_id, item)] = None
+        # A model target may bind only the first sentence of a two-sentence delete
+        # clause and mark that location covered.  The tail sentence can live in the
+        # next paragraph and then survives untouched (ESG G17 p814).  Add a
+        # deterministic target for any uncovered paragraph that repeats the rule's
+        # own tail sentence.
+        if delete_keys:
+            needed = set(delete_keys)
+            for location, body in compact_text.items():
+                state = existing.get((rule_id, location), _MISSING)
+                if state is _LOCATION_WILDCARD:
+                    continue
+                if state is not _MISSING and state is not None and needed.issubset(state):
+                    continue
+                if state is None:
+                    continue
+                span = by_location.get(location)
+                if span is None or _looks_like_heading(span.text):
+                    continue
+                if not _reference_tail_match(rule, span.text):
+                    continue
+                counter += 1
+                hits.append(SurveyHit(
+                    rule_id=rule_id, operation="survey", locations=(location,),
+                    quote=span.text.strip(), start=0, end=0, ratio=1.0,
+                    index=counter, operation_keys=delete_keys).with_parts(
+                        [(location, 0, len(body))]))
+                _add_operation_coverage(existing, rule_id, location, delete_keys)
     return hits
 
 
@@ -2716,6 +2822,32 @@ def _append_member(rule_id: str, span: Any,
     if not append_site_ok(rule_id, span, inspection):
         return False
     return _append_definition_anchor(rule_id, span, inspection)
+
+
+def _reference_tail_match(rule: dict, follower: str) -> bool:
+    """Whether the next paragraph repeats a tail sentence of a delete reference.
+
+    Contracts split ``销售服务费主要用于…。销售服务费使用范围不包括…`` into two
+    paragraphs and may add a ``的``.  A keyword hit on the first sentence must extend
+    to that tail, otherwise the second sentence survives (ESG G17 p814).
+    """
+    body = _compact(follower)
+    if len(body) < 12:
+        return False
+    for operation in rule.get("operations") or []:
+        if operation.get("op") != "delete":
+            continue
+        raw = str(operation.get("old_text") or "")
+        texts = [raw, _strip_class_lead(raw)]
+        for text in texts:
+            for sentence in re.split(r"(?<=[。；;！？!?])", text or ""):
+                stripped = _strip_class_lead(sentence)
+                candidate = _compact(stripped or sentence)
+                if len(candidate) < 12 or candidate[:4] != body[:4]:
+                    continue
+                if candidate in body or _sequence_ratio(candidate, body) >= 0.75:
+                    return True
+    return False
 
 
 def append_applicability_targets(inspection: DocumentInspection, rules: Sequence[dict],
@@ -6019,6 +6151,18 @@ def target_site_ok(rule_id: str, span: Any, inspection: DocumentInspection) -> b
         return ("份额" in compact and "转换" in compact and
                 any(token in compact for token in
                     ("不得", "不允许", "暂不允许", "不能", "不可")))
+    if rule_id == "G18":
+        paragraph, _ = display_text(span.text)
+        compact = _compact(paragraph)
+        if any(anchor in compact for anchor in _TARGET_ANCHORS["G18"][0]):
+            return True
+        # The guide writes "…费用收取不同"; contracts also write "由于基金费用的不同，
+        # …将分别计算基金份额净值".  Both carry the class labels and the fee-difference
+        # statement, so both are valid G18 sites (live p139 satisfied target).
+        labels = set(re.findall(r"([A-Z])类", compact))
+        return (len(labels) >= 2 and "费用" in compact and "不同" in compact
+                and any(token in compact for token in
+                        ("份额净值", "可分配收益", "分别计算")))
     if rule_id not in _TARGET_ANCHORS:
         return True
     paragraph, _ = display_text(span.text)
@@ -6092,9 +6236,8 @@ def _semantic_delete_sentences(rule_id: str, text: str) -> list[str]:
         if candidate not in sentences:
             sentences.append(candidate)
     # Contracts occasionally omit terminal punctuation at paragraph boundaries.
-    tail = (text or "").strip()
-    if len(_compact(tail)) >= 12 and pattern.search(tail) and tail not in sentences:
-        sentences.append(tail)
+    # The split already includes an unterminated final sentence; do not re-probe the
+    # whole paragraph (it could pair a class label with a distant conversion ban).
     return sentences
 
 

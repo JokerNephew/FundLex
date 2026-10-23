@@ -1091,6 +1091,54 @@ def test_invalid_model_target_does_not_suppress_deterministic_survey(tmp_path: P
     assert [hit.locations for hit in hits] == [("p0", "p1")]
 
 
+def test_duplicate_append_targets_at_same_location_are_deduped(tmp_path: Path):
+    """A model append target and a survey append target must not insert twice."""
+    from fundlex.recall import Target, dedupe_operation_targets
+
+    document = Document()
+    document.add_paragraph("基金份额类别：本基金将基金份额分为A类、C类。")
+    path = tmp_path / "append-dup.docx"
+    document.save(path)
+    inspection = inspect_docx(path, full=True)
+    rule = {"rule_id": "G03", "operations": [{
+        "op": "append", "condition": {"kind": "none"},
+        "new_text": "投资者通过直销机构申购A类基金份额不收取申购费。"}]}
+    quote = inspection.by_location("p0").text
+    targets = [
+        Target("T1", "G03", "p0", quote, "needs_edit", "model",
+               start=0, end=len(quote), resolution="resolved", operations=("G03:0",)),
+        Target("Y1", "G03", "p0", quote, "needs_edit", "survey",
+               start=0, end=len(quote) - 1, resolution="resolved", operations=("G03:0",)),
+    ]
+    kept, removed = dedupe_operation_targets(targets, {"G03": rule}, inspection)
+    assert len(removed) == 1
+    assert sum(1 for target in kept if not target.out_of_scope) == 1
+
+
+def test_uncovered_delete_tail_sentence_gets_its_own_target(tmp_path: Path):
+    """A model target on the first sentence must not hide the tail paragraph.
+
+    Contracts write G17's two sentences in separate paragraphs.  The inventory bound
+    only the first; the tail at p1 still carries "使用范围不包括…" (ESG p814).
+    """
+    from fundlex.recall import survey_targets
+
+    document = Document()
+    document.add_paragraph("基金销售服务费主要用于支付销售机构佣金、以及广告费。")
+    document.add_paragraph("销售服务费的使用范围不包括基金募集期间的上述费用。")
+    path = tmp_path / "g17-tail.docx"
+    document.save(path)
+    inspection = inspect_docx(path, full=True)
+    rule = {"rule_id": "G17", "title": "基金费用-销售服务费", "section_hint": "基金费用",
+            "operations": [{"op": "delete", "condition": {"kind": "none", "value": None},
+                            "old_text": "C类基金份额的销售服务费主要用于支付销售机构佣金、"
+                                        "以及广告费。C类基金份额的销售服务费使用范围不包括"
+                                        "基金募集期间的上述费用。"}]}
+    hits = survey_targets(inspection, [rule], _facts(), known=[("G17", "p0")])
+    assert [hit.locations for hit in hits] == [("p1",)]
+    assert hits[0].operation_keys == ("G17:0",)
+
+
 def test_whole_paragraph_delete_when_wording_differs(tmp_path: Path):
     """A whole-paragraph delete survives a composer that cannot match the wording.
 
@@ -1250,6 +1298,27 @@ def test_verify_quote_accepts_ellipsis_and_paragraph_boundary(tmp_path: Path):
     assert _verify_quote(inspection, "销售服务费每日计提……按月支付")
     assert _verify_quote(inspection, "基金的运作方式\n契约型开放式")
     assert not _verify_quote(inspection, "本基金销售服务费按年支付")
+
+    document.add_paragraph("交易型开放式指数基金：指《上海证券交易所交易型开放式指数基金")
+    document.add_paragraph("业务实施细则》定义的“交易型开放式指数基金”，简称“ETF（Exchange")
+    document.add_paragraph("Traded Fund）”")
+    document.save(path)
+    inspection = inspect_docx(path, full=True)
+    assert _verify_quote(inspection,
+                         "交易型开放式指数基金：指《上海证券交易所交易型开放式指数基金\n"
+                         "业务实施细则》定义的“交易型开放式指数基金”，简称“ETF（Exchange\n"
+                         "Traded Fund）”")
+
+
+def test_semantic_delete_probe_does_not_join_distant_sentences():
+    """A class label and a distant conversion ban are not one G06 clause."""
+    from fundlex.generation.effects import _semantic_delete_hits
+
+    document = ("本基金A类、C类基金份额分别设置代码。" * 20
+                + "基金管理人不得在基金合同约定之外的日期办理申购、赎回或者转换。")
+    assert _semantic_delete_hits("G06", document) == []
+    assert _semantic_delete_hits(
+        "G06", "本基金不同基金份额类别之间不得互相转换。")
 
 
 def test_composite_part_verification_uses_compact_offsets(tmp_path: Path):
