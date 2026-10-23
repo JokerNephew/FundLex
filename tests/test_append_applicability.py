@@ -34,11 +34,18 @@ APPEND_RULE = {
 }
 
 
+class _FakeSegment:
+    def __init__(self, start, end):
+        self.start = start
+        self.end = end
+
+
 class _FakeParagraph:
     def __init__(self, location, text):
         self.location = location
         self.text = text
         self.raw = text
+        self.segments = (_FakeSegment(0, len(text)),)
 
 
 class _FakeInspection:
@@ -58,8 +65,8 @@ def _facts(classes=()):
                  floating_basis="", notes="", quotes_verified={}, problems=())
 
 
-def _section(id_, title, locations):
-    return Section(id=id_, title=title, zone="body", locations=tuple(locations),
+def _section(id_, title, locations, *, zone="body"):
+    return Section(id=id_, title=title, zone=zone, locations=tuple(locations),
                    chars=0, preview="")
 
 
@@ -248,6 +255,133 @@ def test_existing_policy_in_definition_does_not_cover_summary_copy():
                                         known=[('G01', 'p1')])
     assert [hit.locations for hit in hits] == [('p3',)]
     assert hits[0].operation_keys == ('G01:0',)
+
+
+def test_g16_summary_business_anchor_is_considered_under_generic_heading():
+    """A summary copy can live under a generic heading, but still needs its own site."""
+    rule = {
+        "rule_id": "G16", "title": "基金费用与税收-销售服务费",
+        "section_hint": "基金费用与税收",
+        "operations": [{
+            "op": "append", "condition": {"kind": "none", "value": None},
+            "new_text": "销售服务费每日计提。直销机构持有的基金份额在赎回时返还。",
+        }],
+    }
+    inspection = _FakeInspection([
+        ("p1", "基金销售服务费每日计提，逐日累计至每月月末，按月支付。"),
+    ])
+    sections = [_section("S1", "第二十四部分基金合同内容摘要", ["p1"], zone="summary")]
+    hits = append_applicability_targets(inspection, [rule], _facts(), sections)
+    assert [hit.locations for hit in hits] == [("p1",)]
+    assert hits[0].operation_keys == ("G16:0",)
+
+
+def test_g16_split_policy_in_nearby_paragraphs_is_already_satisfied():
+    """Presence checks cover the complete body/summary site, not only the anchor row."""
+    rule = {
+        "rule_id": "G16", "title": "基金费用与税收-销售服务费",
+        "section_hint": "基金费用与税收",
+        "operations": [{
+            "op": "append", "condition": {"kind": "none", "value": None},
+            "new_text": (
+                "销售服务费每日计提。（1）直销机构：对于投资者通过直销机构持有的C类基金份额"
+                "计提的销售服务费，在投资者赎回C类基金份额或基金合同终止时，随赎回款一并返还给投资者。"
+                "对于持续持有期限超过一年的基金份额，持有超过一年后继续计提的销售服务费，"
+                "在投资者赎回基金份额或基金合同终止时，随赎回款一并返还给投资者。"
+            ),
+        }],
+    }
+    inspection = _FakeInspection([
+        ("p1", "基金销售服务费每日计提，逐日累计至每月月末，按月支付。"),
+        ("p2", "直销机构持有的C类基金份额计提的销售服务费，在投资者赎回时随赎回款一并返还给投资者。"),
+        ("p3", "对于持续持有期限超过一年的基金份额，持有超过一年后继续计提的销售服务费，在投资者赎回时随赎回款一并返还给投资者。"),
+    ])
+    sections = [_section("S1", "第二十四部分基金合同内容摘要", ["p1", "p2", "p3"], zone="summary")]
+    assert append_applicability_targets(inspection, [rule], _facts(), sections) == []
+
+
+def test_summary_amendment_trigger_is_not_a_share_class_definition_site():
+    """A contract-change trigger containing "基金份额类别" is not a definition (FL-D158).
+
+    Summary sections repeat the change-event list ("…调整基金份额类别设置；").  Treating
+    that sentence as the G01/G03 definition anchor inserted the new policy into the
+    contract-change list, sometimes without any error.
+    """
+    inspection = _FakeInspection([
+        ("p1", "第二部分  释义"),
+        ("p2", "基金份额类别：本基金将基金份额分为A类、C类两类。"),
+        ("p3", "第二十四部分  基金合同内容摘要"),
+        ("p4", "基金推出新业务或服务，或调整基金份额类别设置；"),
+        ("p5", "基金份额类别：本基金将基金份额分为A类、C类两类。"),
+    ])
+    sections = [
+        _section("S1", "第二部分 释义", ["p1", "p2"]),
+        _section("S2", "基金合同内容摘要", ["p3", "p4", "p5"], zone="summary"),
+    ]
+    hits = append_applicability_targets(inspection, [APPEND_RULE], _facts(), sections,
+                                        known=[("G01", "p2")])
+    assert [(hit.rule_id, hit.locations) for hit in hits] == [("G01", ("p5",))]
+
+    from fundlex.recall import append_site_ok
+
+    assert append_site_ok("G01", inspection.by_location("p5"), inspection) is True
+    assert append_site_ok("G01", inspection.by_location("p4"), inspection) is False
+
+
+def test_summary_with_only_a_change_trigger_has_no_append_site():
+    inspection = _FakeInspection([
+        ("p1", "第二部分  释义"),
+        ("p2", "基金份额类别：本基金将基金份额分为A类、C类两类。"),
+        ("p3", "第二十四部分  基金合同内容摘要"),
+        ("p4", "调整基金份额类别设置及对基金份额分类办法、规则进行调整；"),
+    ])
+    sections = [
+        _section("S1", "第二部分 释义", ["p1", "p2"]),
+        _section("S2", "基金合同内容摘要", ["p3", "p4"], zone="summary"),
+    ]
+    assert append_applicability_targets(inspection, [APPEND_RULE], _facts(), sections,
+                                        known=[("G01", "p2")]) == []
+
+
+def test_g16_append_anchor_moves_to_the_end_of_the_fee_clause():
+    """G16 must be appended after the complete clause, not mid-sentence (FL-D159)."""
+    from fundlex.recall import append_site_ok, target_site_ok
+
+    rule = {
+        "rule_id": "G16", "title": "基金费用与税收-销售服务费",
+        "section_hint": "基金费用与税收",
+        "operations": [{
+            "op": "append", "condition": {"kind": "none", "value": None},
+            "new_text": "销售服务费每日计提。直销机构持有的基金份额在赎回时返还。",
+        }],
+    }
+    inspection = _FakeInspection([
+        ("p1", "C类基金份额的基金销售服务费每日计算，逐日累计至每月月末，按月支付，"),
+        ("p2", "由基金管理人与基金托管人核对一致后，于次月首日起5个工作日内从基金财产中一次性支付。"),
+        ("p3", "销售服务费主要用于支付销售机构佣金、广告费和促销活动费。"),
+        ("p4", "销售服务费使用范围不包括基金募集期间的上述费用。"),
+        ("p5", "基金的管理费按前一日基金资产净值的1.2%年费率计提。"),
+    ])
+    sections = [_section("S1", "基金费用与税收", ["p1", "p2", "p3", "p4", "p5"])]
+    hits = append_applicability_targets(inspection, [rule], _facts(), sections)
+
+    assert [hit.locations for hit in hits] == [("p4",)]
+    # The planner may execute the clause-end site, while the target-site guard still
+    # rejects a usage-only paragraph as a G16 target.
+    assert append_site_ok("G16", inspection.by_location("p4"), inspection) is True
+    assert target_site_ok("G16", inspection.by_location("p4"), inspection) is False
+
+    from fundlex.recall import Target, _plan_target_inner
+
+    span = inspection.by_location("p4")
+    target = Target(target_id="T1", rule_id="G16", location="p4", quote=span.text,
+                    state="needs_edit", reason="test", resolution="resolved",
+                    segment_ok=True)
+    target.start, target.end = 0, len(span.text)
+    edit = _plan_target_inner(rule, target, inspection, _facts(), None,
+                              compose_budget=[0])
+    assert edit.operation == "insert"
+    assert (edit.location, edit.start, edit.end) == ("p4", len(span.text), len(span.text))
 
 
 def test_no_business_anchor_leaves_append_open():

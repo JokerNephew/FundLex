@@ -39,6 +39,33 @@ def _class_group_equivalent(expected: str, source_quote: str) -> bool:
                for clause in re.split(r"[；;。！？!?]", source_quote or ""))
 
 
+_SEMANTIC_DELETE_PROBES: dict[str, re.Pattern[str]] = {
+    # G06's guide sentence has several live contract forms, including
+    # "A类和C类基金份额之间暂不允许进行相互转换".  A canonical-literal absence
+    # proof must not close the operation while one of these business equivalents
+    # remains in the artifact.
+    "G06": re.compile(
+        r"(?=.*(?:份额(?:类别|之间)|[A-ZＡ-Ｚ]类基金份额))"
+        r"(?=.*(?:不得|不允许|暂不允许|不能|不可)[^。；;！？!?]{0,40}转换)"
+    ),
+}
+
+
+def _semantic_delete_hits(rule_id: str, document: str) -> list[str]:
+    pattern = _SEMANTIC_DELETE_PROBES.get(rule_id)
+    if pattern is None:
+        return []
+    hits: list[str] = []
+    for sentence in re.split(r"(?<=[。；;！？!?])", document or ""):
+        sentence = sentence.strip()
+        if len(_compact(sentence)) >= 12 and pattern.search(sentence):
+            hits.append(sentence)
+    tail = (document or "").strip()
+    if len(_compact(tail)) >= 12 and pattern.search(tail) and tail not in hits:
+        hits.append(tail)
+    return hits
+
+
 @dataclass(frozen=True)
 class OperationEffect:
     state: str
@@ -360,6 +387,17 @@ def evaluate_operation_effect(obligation: Any, original: Any, artifact: Any,
                                         if len(_compact(value)) >= 8))
         document = _compact("".join(str(getattr(span, "text", ""))
                                     for span in getattr(original, "paragraphs", ())))
+        semantic_hits = _semantic_delete_hits(rule_id, document)
+        if semantic_hits:
+            return OperationEffect(
+                "OPEN", "UNPROVEN", **base,
+                failure_code="CLAIM_OPERATION_UNPROVEN",
+                reason="semantic_delete_variant_present",
+                evidence=({"proof_kind": "semantic_delete_variant_present",
+                           "operation_id": operation_id,
+                           "obligation_id": obligation_id,
+                           "probe_hits": semantic_hits[:20],
+                           "match_count": len(semantic_hits)},))
         if references and all(_compact(reference) not in document for reference in references):
             return OperationEffect(
                 "PASS", "VERIFIED_ABSENT", **base, evidence=({
@@ -483,6 +521,13 @@ def evaluate_operation_effect(obligation: Any, original: Any, artifact: Any,
                 # An independently proven deletion stays proven when another
                 # component has an execution failure. Paragraph integrity still
                 # blocks the document separately in Claim Replay.
+                item.update(state="PASS", artifact_status="VERIFIED_ABSENT", failure_code="")
+            elif spec.op == "delete" and not residual and planned_matches and own:
+                # Another rule may legitimately insert its authorized policy into the
+                # same paragraph this delete empties (G16 appends into G15's payment
+                # paragraph).  The artifact exactly matches the combined plan and the
+                # deleted wording is gone, so the delete itself is proven; the
+                # per-edit unit validator sees only its own replacement and fails.
                 item.update(state="PASS", artifact_status="VERIFIED_ABSENT", failure_code="")
             elif not planned_matches:
                 item.update(state="FAIL", artifact_status="WRONG_EFFECT",

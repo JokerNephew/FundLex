@@ -699,6 +699,43 @@ def test_find_old_text_all_keeps_each_occurrence(tmp_path: Path):
     assert [parts[0][0] for parts in occurrences] == ["p0", "p2"]
 
 
+def test_find_old_text_all_keeps_exact_and_wording_variant_copies(tmp_path: Path):
+    """An exact copy must not suppress a second bounded wording variant.
+
+    Real contracts repeat policy clauses in the summary and body, and the copies can
+    differ by a short connector (for example ``及时公告`` vs ``事先公告``).  The
+    recall pass must return both sites so operation-level coverage can close each copy.
+    """
+    from fundlex.recall import find_old_text_all
+
+    path = tmp_path / "exact-and-variant.docx"
+    document = Document()
+    reference = "基金管理人应当在调整前及时公告并报中国证监会备案"
+    document.add_paragraph(reference + "。")
+    document.add_paragraph("其他条款。")
+    document.add_paragraph("基金管理人应当在调整前事先公告并报中国证监会备案。")
+    document.add_paragraph("基金管理人应当在调整前及时予以公告并报中国证监会备案。")
+    document.save(path)
+    inspection = inspect_docx(path, full=True)
+
+    occurrences = find_old_text_all(list(inspection.paragraphs), reference,
+                                    threshold=0.9)
+    assert [parts[0][0] for parts in occurrences] == ["p0", "p2", "p3"]
+
+    # Parts use compact offsets and must cover the complete variant (not the guide
+    # length, which would truncate the final ``备案`` when wording lengths differ).
+    variant_part = occurrences[1][0]
+    variant_span = inspection.by_location(variant_part[0])
+    compact_variant = "".join(variant_span.text.split())
+    assert compact_variant[variant_part[1]:variant_part[2]].endswith("备案")
+    assert variant_part[2] - variant_part[1] == len(compact_variant.rstrip("。"))
+    long_variant_part = occurrences[2][0]
+    long_span = inspection.by_location(long_variant_part[0])
+    compact_long = "".join(long_span.text.split())
+    assert compact_long[long_variant_part[1]:long_variant_part[2]].endswith("备案")
+    assert long_variant_part[2] - long_variant_part[1] == len(compact_long.rstrip("。"))
+
+
 def test_survey_quote_offsets_survive_interspersed_spaces(tmp_path: Path):
     """find_old_text_all offsets are compact; the survey quote must be the real text.
 
@@ -949,6 +986,109 @@ def test_delete_keyword_bag_finds_paraphrased_payment_clause(tmp_path: Path):
         "基金托管费每日计算，逐日累计至每月月末，按月支付，经基金管理人与基金托管人双方核对无误后，"
         "基金托管人按照与基金管理人协商一致的方式于次月前5个工作日内从基金财产中一次性支付给基金托管人。"
         "若遇法定节假日、公休日等，支付日期顺延。（三）销售服务费", bag)
+
+
+def test_keyword_delete_pair_stops_at_sentence_boundary(tmp_path: Path):
+    """A payment clause must not absorb the next paragraph's usage clause (FL-D157).
+
+    Contracts split G15 at ``…按月支付，`` and continue with ``由基金管理人…``.  The
+    following paragraph starts G17's usage sentence, which contains the fee term again.
+    The keyword fallback used to pair the sentence-final payment tail with that G17
+    paragraph and produced a single G15 target covering both operations.
+    """
+    from fundlex.recall import survey_targets
+
+    document = Document()
+    document.add_paragraph("C类基金份额的基金销售服务费每日计算，逐日累计至每月月末，按月支付，")
+    document.add_paragraph(
+        "由基金管理人与基金托管人核对一致后，基金托管人按照与基金管理人协商一致的方式"
+        "于次月首日起 5 个工作日内从基金财产中一次性支付给基金管理人。"
+        "若遇法定节假日、公休假等，支付日期顺延。")
+    document.add_paragraph(
+        "销售服务费主要用于支付销售机构佣金、以及基金管理人的基金行销广告费、"
+        "促销活动费、基金份额持有人服务费等。")
+    document.add_paragraph("销售服务费使用范围不包括基金募集期间的上述费用。")
+    document.add_paragraph("基金的管理费按前一日基金资产净值的1.2%年费率计提。")
+    path = tmp_path / "g15-split-boundary.docx"
+    document.save(path)
+    inspection = inspect_docx(path, full=True)
+
+    g15 = {"rule_id": "G15", "title": "基金费用与税收-3、基金销售服务费（有多个份额类别时适用）",
+           "section_hint": "基金费用与税收",
+           "operations": [{"op": "delete", "condition": {"kind": "none", "value": None},
+                           "old_text": "C类基金份额的销售服务费每日计提，按月支付。"
+                                       "由基金管理人向基金托管人发送基金销售服务费划付指令，"
+                                       "经基金托管人复核后于次月首日起10个工作日内从基金财产中"
+                                       "一次性支付给登记机构，由登记机构代付给销售机构。"
+                                       "若遇法定节假日、公休日等，支付日期顺延。"}]}
+    g17 = {"rule_id": "G17", "title": "基金费用与税收-3、基金销售服务费（有多个份额类别时适用）",
+           "section_hint": "基金费用与税收",
+           "operations": [{"op": "delete", "condition": {"kind": "none", "value": None},
+                           "old_text": "C类基金份额的销售服务费主要用于支付销售机构佣金、"
+                                       "以及基金管理人的基金行销广告费、促销活动费、"
+                                       "基金份额持有人服务费等。"
+                                       "C类基金份额的销售服务费使用范围不包括基金募集期间的上述费用。"}]}
+    hits = survey_targets(inspection, [g15, g17], _facts(), known=[])
+
+    g15_hits = [hit for hit in hits if hit.rule_id == "G15"]
+    assert len(g15_hits) == 1
+    assert g15_hits[0].locations == ("p0", "p1")
+    assert "p2" not in g15_hits[0].locations
+    g17_hits = [hit for hit in hits if hit.rule_id == "G17"]
+    assert [hit.locations for hit in g17_hits] == [("p2", "p3")]
+
+    # The composite parts must be compact offsets; raw lengths include spaces and
+    # make plan_composite_target raise RECALL_TARGET_COMPOSITE_UNRESOLVED.
+    from fundlex.recall import (Target, _component, _component_ok,
+                                plan_composite_target)
+
+    hit = g15_hits[0]
+    target = Target(target_id="T1", rule_id="G15", location=hit.parts[0][0],
+                    quote=hit.quote, state="needs_edit", reason="test")
+    target.start, target.end = hit.parts[0][1], hit.parts[0][2]
+    target.composite = tuple(f"{loc}:{start}:{end}"
+                             for loc, start, end in hit.parts)
+    edits = plan_composite_target(g15, target, inspection, _facts(), new_text="")
+    assert [edit.location for edit in edits] == ["p0", "p1"]
+    assert all(edit.operation == "replace" for edit in edits)
+    assert [edit.replacement for edit in edits] == ["", ""]
+    # The content check must accept every composite part, including the follower
+    # whose whole-paragraph slice also removes trailing spaces.
+    assert all(_component_ok(_component(edit, inspection), inspection)
+               for edit in edits)
+
+
+def test_invalid_model_target_does_not_suppress_deterministic_survey(tmp_path: Path):
+    """An out-of-scope/attribution-failed model target must not claim a survey site.
+
+    Live G15 p806: the model's composite target was marked out_of_scope after site
+    attribution failed, but it still covered (G15, p806) in ``known`` and suppressed
+    the valid deterministic split target, leaving the body clause undeleted.
+    """
+    from fundlex.recall import (Target, known_operations_from_targets,
+                                survey_targets)
+
+    document = Document()
+    document.add_paragraph("C类基金份额的基金销售服务费每日计算，逐日累计至每月月末，按月支付，")
+    document.add_paragraph("由基金管理人与基金托管人核对一致后，于次月首日起5个工作日内从基金财产中一次性支付。")
+    path = tmp_path / "invalid-model-target.docx"
+    document.save(path)
+    inspection = inspect_docx(path, full=True)
+    rule = {"rule_id": "G15", "title": "基金费用与税收-销售服务费",
+            "section_hint": "基金费用与税收",
+            "operations": [{"op": "delete", "condition": {"kind": "none", "value": None},
+                            "old_text": "C类基金份额的销售服务费每日计提，按月支付。"
+                                        "由基金管理人向基金托管人发送基金销售服务费划付指令，"
+                                        "经基金托管人复核后于次月首日起10个工作日内从基金财产中"
+                                        "一次性支付给登记机构，由登记机构代付给销售机构。"}]}
+    invalid = Target(target_id="T1", rule_id="G15", location="p0",
+                     quote="C类基金份额的基金销售服务费每日计算，逐日累计至每月月末，按月支付，",
+                     state="needs_edit", reason="TARGET_SOURCE_MISMATCH",
+                     operations=("G15:0",), out_of_scope=True)
+    known = known_operations_from_targets([invalid], {"G15": rule}, inspection)
+    assert ("G15", "p0") not in known
+    hits = survey_targets(inspection, [rule], _facts(), known=known)
+    assert [hit.locations for hit in hits] == [("p0", "p1")]
 
 
 def test_whole_paragraph_delete_when_wording_differs(tmp_path: Path):
@@ -1220,6 +1360,45 @@ def test_survey_operation_coverage_does_not_hide_other_operations(tmp_path: Path
     assert any("备案" in hit.quote for hit in hits)
 
 
+def test_keyword_fallback_survives_other_operation_at_same_location(tmp_path: Path):
+    """A known replace target must not hide a paraphrased delete sibling."""
+    from fundlex.recall import survey_targets
+
+    path = tmp_path / "mixed-operation-keyword.docx"
+    document = Document()
+    document.add_paragraph("基金管理人可以适当调低赎回费率。基金销售服务费每日计算，次月支付。")
+    document.save(path)
+    inspection = inspect_docx(path, full=True)
+    rule = {"rule_id": "GX", "title": "费用调整与销售服务费",
+            "requirement": "替换费率并删除销售服务费支付机制。",
+            "operations": [
+                {"op": "replace", "old_text": "调低赎回费率",
+                 "new_text": "调低销售服务费率", "condition": {"kind": "none", "value": None}},
+                {"op": "delete", "old_text": "基金销售服务费每日计提，按月支付",
+                 "condition": {"kind": "none", "value": None}},
+            ]}
+    hits = survey_targets(inspection, [rule], _facts(),
+                          known={("GX", "p0"): {"GX:0"}})
+    fallback = [hit for hit in hits if hit.operation == "survey" and hit.operation_keys]
+    assert fallback and "GX:1" in fallback[0].operation_keys
+
+
+def test_g06_keyword_pair_does_not_target_unrelated_business_adjustments(tmp_path: Path):
+    """Real meeting clauses place class setup beside generic conversion-business lists."""
+    from fundlex.recall import survey_targets
+
+    path = tmp_path / "g06-unrelated-neighbors.docx"
+    document = Document()
+    document.add_paragraph("基金推出新业务或服务，或调整基金份额类别设置；")
+    document.add_paragraph("基金管理人在法律法规允许的范围内调整有关申购、赎回、转换等业务规则；")
+    document.save(path)
+    inspection = inspect_docx(path, full=True)
+    rule = {"rule_id": "G06", "title": "类别转换", "requirement": "删除类别转换限制",
+            "operations": [{"op": "delete", "old_text": CONVERSION_CLAUSE,
+                            "condition": {"kind": "none"}}]}
+    assert survey_targets(inspection, [rule], _facts()) == []
+
+
 def test_unknown_operation_state_fails_open_for_specific_hit():
     """An unknown operation identity must not suppress a specific operation hit (FL-D118)."""
     from fundlex.recall import operations_cover_hit
@@ -1286,6 +1465,46 @@ def test_delete_residual_copy_gets_a_deterministic_target(tmp_path: Path):
     assert created[0].location == "p0"
     assert created[0].resolution == "resolved"
     assert "使用范围不包括" in created[0].quote
+
+
+def test_g06_semantic_conversion_variant_gets_target_instead_of_absence(tmp_path: Path):
+    """Canonical G06 wording must not suppress a real semantic variant."""
+    from fundlex.docx import inspect_docx
+    from fundlex.recall import ensure_delete_targets
+
+    path = tmp_path / "g06-variant.docx"
+    document = Document()
+    document.add_paragraph("本基金 A 类基金份额和 C 类基金份额之间暂不允许进行相互转换。")
+    document.save(path)
+    inspection = inspect_docx(path, full=True)
+    rule = {"rule_id": "G06", "title": "类别转换", "requirement": "删除类别转换限制",
+            "operations": [{"op": "delete",
+                            "old_text": CONVERSION_CLAUSE,
+                            "condition": {"kind": "none"}}]}
+    created = ensure_delete_targets([], {"G06": rule}, inspection)
+    assert len(created) == 1
+    assert created[0].reason == "delete_semantic_variant"
+    assert "暂不允许" in created[0].quote
+
+
+def test_g06_one_way_class_conversion_variant_stays_for_review(tmp_path: Path):
+    """One-way Y-class restrictions remain review candidates, not auto-deletes."""
+    from fundlex.docx import inspect_docx
+    from fundlex.recall import ensure_delete_targets, semantic_delete_review_candidates
+
+    path = tmp_path / "g06-one-way-variant.docx"
+    document = Document()
+    document.add_paragraph("在符合条件时A类基金份额可以转换为Y类基金份额，但Y类基金份额不能转换为A类基金份额。")
+    document.save(path)
+    inspection = inspect_docx(path, full=True)
+    rule = {"rule_id": "G06", "title": "类别转换", "requirement": "删除类别转换限制",
+            "operations": [{"op": "delete", "old_text": CONVERSION_CLAUSE,
+                            "condition": {"kind": "none"}}]}
+    created = ensure_delete_targets([], {"G06": rule}, inspection)
+    assert created == []
+    candidates = semantic_delete_review_candidates("G06", inspection.paragraphs[0].text)
+    assert len(candidates) == 1
+    assert "Y类基金份额不能转换" in candidates[0]
 
 
 def test_g01_accepts_a_class_definition_without_the_word_fenzlei(tmp_path: Path):

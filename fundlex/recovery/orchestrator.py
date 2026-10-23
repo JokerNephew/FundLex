@@ -18,6 +18,18 @@ from .types import FailureClass, RecoveryAction, RecoveryAttempt, RecoveryContex
 
 _A = RecoveryAction
 
+_STRATEGY_ACTIONS = {
+    "delete": (_A.RETRY_DELETE, "generation_delete"),
+    "exact_replace": (_A.RETRY_EXACT, "generation_exact"),
+    "normalized_rebind": (_A.RETRY_NORMALIZED, "generation_normalized"),
+    "fuzzy_span_rebind": (_A.RETRY_FUZZY, "generation_fuzzy"),
+    "template": (_A.RETRY_TEMPLATE, "generation_template"),
+    "splice": (_A.RETRY_SPLICE, "generation_splice"),
+    "compose": (_A.LLM_COMPOSE, "generation_compose"),
+    "compose_repair": (_A.REPAIR_COMPOSE, "generation_repair_compose"),
+    "artifact_rebind": (_A.REBIND_ARTIFACT, "artifact_rebind"),
+}
+
 
 class RecoveryOrchestrator:
     def __init__(self, policy: RecoveryPolicy | None = None):
@@ -30,6 +42,12 @@ class RecoveryOrchestrator:
         failure_class = context.resolved_class
         stage = context.stage or failure_class.value.lower()
         candidates = self._candidates(failure_class, context)
+        if context.metadata.get("strategy_escalation"):
+            decision = self._strategy_decision(context, history)
+            if decision is not None:
+                return decision
+            return RecoveryDecision(_A.MARK_UNRESOLVED,
+                                    f"{failure_class.value}:strategy_recovery_exhausted")
         for action, budget_key in candidates:
             limit = self.policy.limit(budget_key)
             if history.count(action, context=context) >= limit:
@@ -46,6 +64,40 @@ class RecoveryOrchestrator:
                                     budget_key, history.count(action, context=context) + 1)
         return RecoveryDecision(_A.MARK_UNRESOLVED,
                                 f"{failure_class.value}:recovery_budget_exhausted")
+
+    def _strategy_decision(self, context: RecoveryContext,
+                           history: RecoveryHistory) -> RecoveryDecision | None:
+        """Resolve one method-specific generation retry.
+
+        The router is consulted only for opted-in contexts.  Every returned
+        action has its own budget and is recorded with the concrete strategy,
+        so a failed exact/normalized/fuzzy attempt cannot be counted as the same
+        deterministic retry.
+        """
+        from ..generation.router import strategy_for_failure
+
+        previous = history.last_strategy(context)
+        decision = strategy_for_failure(
+            context.error_code,
+            current_tier=previous or context.metadata.get("current_strategy"),
+            content_source=context.metadata.get("content_source"),
+            attempt=history.count(_A.RETRY_DETERMINISTIC, context=context),
+            mode=str(context.metadata.get("mode") or "replace"),
+        )
+        if decision.strategy is None:
+            return None
+        action_budget = _STRATEGY_ACTIONS.get(decision.strategy.value)
+        if action_budget is None:
+            return None
+        action, budget_key = action_budget
+        limit = self.policy.limit(budget_key)
+        if history.count(action, context=context) >= limit:
+            return None
+        return RecoveryDecision(
+            action, f"{decision.taxonomy.value}:{budget_key}", budget_key,
+            history.count(action, context=context) + 1,
+            strategy=decision.strategy.value,
+        )
 
     def _candidates(self, failure_class: FailureClass,
                     context: RecoveryContext) -> list[tuple[RecoveryAction, str]]:
@@ -101,7 +153,8 @@ class RecoveryOrchestrator:
             obligation_id=context.obligation_id, target_id=context.target_id,
             site_id=context.site_id, source_span=str(context.metadata.get("source_span") or ""),
             attempt=decision.attempt,
-            budget_key=decision.budget_key)
+            budget_key=decision.budget_key,
+            strategy=decision.strategy)
         history.append(attempt)
         return attempt
 

@@ -82,6 +82,23 @@ def test_delete_document_literal_absent_passes_and_present_does_not():
     assert effect2.state == "OPEN"
 
 
+def test_g06_semantic_variant_blocks_literal_absence_proof():
+    from fundlex.generation.effects import evaluate_operation_effect
+    guide = {"groups": [{"rule_id": "G06", "operations": [{
+        "op": "delete", "old_text": "本基金不同基金份额类别之间不得互相转换。",
+        "condition": {"kind": "none"}}]}]}
+    ledger = compile_obligations(guide)
+    record = ledger.records[0]
+    record.applicability = SimpleNamespace(status="TRUE")
+    facts = Facts()
+    variant = Inspection(["本基金 A 类基金份额和 C 类基金份额之间暂不允许进行相互转换。"])
+    effect = evaluate_operation_effect(record, variant, variant, [], [], facts)
+    assert effect.state == "OPEN"
+    assert effect.artifact_status == "UNPROVEN"
+    assert effect.reason == "semantic_delete_variant_present"
+    assert effect.evidence[0]["match_count"] == 1
+
+
 def test_joint_edit_survives_replan_sites():
     from fundlex.recall import replan_sites
     text = "赎回费用由赎回基金份额的基金份额持有人承担，赎回费用全额计入基金财产。"

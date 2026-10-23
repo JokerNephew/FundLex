@@ -23,6 +23,18 @@ DEFAULT_RECOVERY_POLICY: dict[str, int] = {
     "global_business_rounds": 3,
     "context_split": 2,
     "infrastructure_pause_resume": 1,
+    # Per-strategy budgets are intentionally separate: counting every method as
+    # RETRY_DETERMINISTIC would prevent normalized/fuzzy escalation after an
+    # exact replacement failed.
+    "generation_delete": 1,
+    "generation_exact": 1,
+    "generation_normalized": 1,
+    "generation_fuzzy": 1,
+    "generation_template": 1,
+    "generation_splice": 1,
+    "generation_compose": 1,
+    "generation_repair_compose": 1,
+    "artifact_rebind": 1,
 }
 
 

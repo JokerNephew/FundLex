@@ -166,6 +166,42 @@ def test_delete_verified_wording_variant_is_not_proven_absent():
     assert proof.artifact_status == 'RESIDUAL_OLD_TEXT'
 
 
+def test_delete_passes_when_another_operation_fills_the_empty_paragraph():
+    """A delete is proven when the plan and artifact match, despite an authorized insert.
+
+    G16 appends its direct-sales policy into the paragraph G15 deletes.  The G15
+    per-edit unit validator sees only its own empty replacement and fails, but the
+    combined plan exactly produces the artifact and the old wording is gone (live
+    G15/G16 p807 interaction, CLAIM_PLANNED_EFFECT_MISSING).
+    """
+    from fundlex.generation.effects import evaluate_operation_effect
+    from fundlex.obligations import compile_obligations
+    from test_operation_execution_closure import Facts
+
+    old = ('C类基金份额的销售服务费每日计提，按月支付。由基金管理人向基金托管人发送'
+           '基金销售服务费划付指令，经基金托管人复核后于次月首日起10个工作日内支付。')
+    new_policy = '销售服务费每日计提。直销机构持有的基金份额在赎回时返还。'
+    rule = {'rule_id': 'G15', 'operations': [{
+        'operation_id': 'G15:0', 'op': 'delete', 'old_text': old,
+        'condition': {'kind': 'none'}, 'group_kind': 'INDEPENDENT'}]}
+    record = compile_obligations({'groups': [rule]}).records[0]
+    record.applicability = SimpleNamespace(status='TRUE')
+    before, after = Inspection(old), Inspection(new_policy)
+    edits = [
+        {'rule_id': 'G15', 'target_id': 'T15', 'location': 'p0', 'start': 0,
+         'end': len(old), 'replacement': '', 'operation_keys': ['G15:0']},
+        {'rule_id': 'G16', 'target_id': 'T16', 'location': 'p0', 'start': len(old),
+         'end': len(old), 'replacement': new_policy, 'operation_keys': ['G16:0']},
+    ]
+    units = [{'location': 'p0', 'target_id': 'T15', 'operation_id': 'G15:0',
+              'verdict': 'FAIL'}]
+    proof = evaluate_operation_effect(record, before, after,
+        [{'location': 'p0', 'quote': old}], edits, Facts(),
+        validated_units=units)
+    assert proof.state == 'PASS'
+    assert proof.artifact_status == 'VERIFIED_ABSENT'
+
+
 def test_operation_proof_requires_each_exact_source_duplicate():
     from fundlex.generation.effects import evaluate_operation_effect
     from test_operation_execution_closure import Facts
@@ -650,6 +686,21 @@ def test_negative_audit_true_residual_keeps_blocking(tmp_path):
     assert all(item["evidence_verified"] and not item.get("artifact_proven")
                for item in result["results"])
     assert len(_audit_issues(state, targets)) == 2
+
+
+def test_audit_reviews_satisfied_target_to_catch_false_closure(tmp_path):
+    from fundlex.recall_pipeline import _run_audit, _merge_audit_state, _audit_issues
+    gateway, rules, targets, planned, original, actual, facts, ledger = _negative_review_fixture(tmp_path)
+    targets[0].state = "satisfied"
+    planned["edits"] = []
+    actual = original
+    result = _run_audit(gateway, rules, targets, planned, original, actual,
+                        facts=facts, obligations=ledger)
+    assert {item["target_id"] for item in result["results"]} == {"T0", "T1"}
+    state = {"results": {}, "missed": {}}
+    _merge_audit_state(state, result, targets)
+    issues = _audit_issues(state, targets)
+    assert any(item["target_id"] == "T0" for item in issues)
 
 
 def test_sweep_wrong_text_requires_authorized_new_wording_and_own_site(tmp_path):
@@ -1306,7 +1357,7 @@ def test_planning_clamps_trailing_whitespace_to_a_text_segment(tmp_path):
 
     path = tmp_path / "segment.docx"
     doc = Document()
-    doc.add_paragraph("有关基金份额类别的具体设置等由基金管理人确定。")
+    doc.add_paragraph("基金份额类别：本基金将基金份额分为A类、C类。有关具体设置等由基金管理人确定。")
     doc.save(path)
     inspection = inspect_docx(path, full=True)
     span = inspection.by_location("p0")
@@ -1341,3 +1392,36 @@ def test_user_facing_target_counts_are_terminal_and_reconcile():
     report = {"targets": targets, "unresolved": []}
     api = _recall_target_counts(report)
     assert api == {"total": 4, "completed": 4, "unresolved": 0}
+
+
+def test_final_omission_review_is_operation_scoped_and_fail_closed(tmp_path):
+    from types import SimpleNamespace
+    from fundlex.docx import inspect_docx
+    from fundlex.recall_pipeline import _final_omission_review
+
+    path = tmp_path / "omission.docx"
+    from docx import Document
+    document = Document()
+    document.add_paragraph("原始收费条款。")
+    document.save(path)
+    original = inspect_docx(path, full=True)
+    actual = original
+    record = SimpleNamespace(
+        obligation_id="G01:B1:O1",
+        applicability=SimpleNamespace(status="TRUE"),
+        completion="UNRESOLVED",
+        spec=SimpleNamespace(rule_id="G01", operation_id="G01:0", op="replace"),
+    )
+    replay = {"obligations": {"G01:B1:O1": {
+        "state": "FAIL", "operation_id": "G01:0", "obligation_id": "G01:B1:O1",
+        "sites": ["p0"], "failure_code": "CLAIM_NO_CHANGE_APPLIED",
+    }}}
+    obligations = SimpleNamespace(records=[record])
+    result = _final_omission_review(
+        rules_by_id={"G01": {"rule_id": "G01", "operations": []}},
+        rules=[], original=original, actual=actual, planned={"edits": []},
+        targets=[], facts=SimpleNamespace(), obligations=obligations,
+        replay=replay, findings=[])
+    assert result["status"] == "FAIL"
+    assert result["checked_operation_count"] == 1
+    assert any(item["code"] == "FINAL_OPERATION_UNPROVEN" for item in result["issues"])

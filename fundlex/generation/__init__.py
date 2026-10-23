@@ -12,7 +12,14 @@ by the pipeline, so behavior (and evaluation output) is unchanged (plan §22).
 from .coverage import CoverageEntry, CoverageLedgerView, build_coverage_view
 from .flags import STRATEGY_MODES, strategy_mode
 from .registry import STRATEGY_REGISTRY, registry_coverage_gaps, strategy_for
-from .router import route_operation
+from .router import (
+    EscalationDecision,
+    FailureTaxonomy,
+    RecoveryStrategy,
+    classify_failure,
+    route_operation,
+    strategy_for_failure,
+)
 from .types import (
     FACT_STATUSES,
     GenerationTier,
@@ -32,6 +39,11 @@ __all__ = [
     "build_coverage_view",
     "registry_coverage_gaps",
     "route_operation",
+    "EscalationDecision",
+    "FailureTaxonomy",
+    "RecoveryStrategy",
+    "classify_failure",
+    "strategy_for_failure",
     "strategy_for",
     "strategy_mode",
 ]

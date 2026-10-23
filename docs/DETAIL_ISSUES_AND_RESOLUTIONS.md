@@ -2305,3 +2305,268 @@
 - `66d9dc4` D16 live 因 G13 p222 单段 target 与 Y007 复合 target 同时存在，planner 报 `RECALL_EDIT_OVERLAP`，尽管同版本 isolated plan 可干净合并。
 - 处理：`dedupe_operation_targets` 在规划前把“同一 rule/operation、仅覆盖复合 target 某一段”的非复合 target 标为 `SUBSET_OF_COMPOSITE_TARGET`，不再与完整复合 target 竞争。D16 stage plan 复算为 p221 `G12:0+G13:0 replace_covers_delete`、p222 `joint_delete ""`、conflicts 0。
 - 状态：待提交后再次四例 live。
+
+### FL-D146 多通道召回、操作级覆盖与语义删除变体（2026-10-23，本轮）
+
+- 发现与影响：真实 `funds_word` 合同中同一规则会在正文/摘要重复出现、跨段出现或采用措辞变体。旧 `find_old_text_all` 在首次 exact/split 命中后提前返回，且 fuzzy 仅在无 exact 命中时运行；这会漏掉第二处副本或同义写法。独立扫描还发现 514 份合同中至少 74 份存在 G06 的“暂不允许进行相互转换”等语义变体，canonical old_text 不出现时旧 absence proof 会误报 `VERIFIED_ABSENT`，形成 false completion。
+- 证据：Recall Agent 对真实“广发品质回报”合同（1410 段）复现 G15 支付条款正文/摘要四处命中（含跨段 `p806`、`p807|p808`、`p1262`、`p1263|p1264`），G17 两处跨段副本与 G22 两处副本；Red Team 在“广发核心优选六个月持有期混合型基金中基金（FOF）”真实 DOCX 的 `p262` 复现 G06 变体。确定性补扫生成两个 G06 目标（`p130` canonical 变体、`p262` “暂不允许”变体）。
+- 处理：`find_old_text_all` 现在保留 exact、split 与不重叠 fuzzy 命中，按当前段落计算 n-gram，并把 raw fuzzy span 正确映射到 compact offsets；`survey_targets` 对 mixed rule 的适用 delete operation 独立运行 keyword-bag fallback，并加入计提/计算、按月/次月、支付/划付等窄业务变体；`target_site_ok`/`ensure_delete_targets` 增加 G06 语义探针，保留真实位置和 operation identity。`evaluate_operation_effect` 在无 verified site 时先检查语义删除探针，命中则保持 OPEN/UNPROVEN，不产生 document-wide absence proof。新增 exact+variant、跨段、G06 语义变体和 keyword fallback 回归。
+- 操作级覆盖：`CoverageEntry` obligation 路径现在保留 artifact evidence/site 与 operation key，artifact/site 同址去重，targetless unresolved finding 不再重复计数；报告 `operation_coverage` 输出完整 entries 与 counts。新增覆盖回归，验证同一 site 的 artifact+target 只计一次、open operation 不重复。
+- 独立复核：`_run_audit`/`_audit_issues` 现在也审查 `satisfied` target，避免 inventory 误判 satisfied 后没有独立模型入口；新增 false-closure 回归。当前仍未建立独立 all-applicable-operation × 全文 omission-review 产物，作为后续 HIGH 保留。
+- 修改失败策略：`generation.router` 增加失败分类与差异化 escalation helper（source/range/protected/requirement/duplicate/template/splice/compose/writeback/artifact），保证后续调用可按 DELETE→EXACT→NORMALIZED→FUZZY→TEMPLATE→SPLICE→COMPOSE 选择不同策略；当前 helper 尚未完全接入主 recovery 调用链，不能宣称 retry 闭环已完成。
+- 验证：本轮 targeted 回归通过（召回、pipeline、coverage、generation、artifact regression 合计 145+ 项；后续全量回归待完成）。真实 DOCX 已实际生成 `/tmp/fundlex-real-e2e/g06-variant.final.docx` 与 `.redline.docx`，重新读取 `p262` 确认变体句已删除，段落数保持 1447，`unzip -t` 通过；该文件为确定性写入验收，不含真实模型调用。
+- 当前状态：代码在工作区未提交、未部署线上；真实模型配置因本机 `/usr/bin/sudo` setuid/owner 异常无法安全读取，故本轮未新增 live model record，不能把离线及确定性 DOCX 验证冒称完整用户 E2E。下一步为修复/恢复安全配置读取后，用新 SHA 运行真实模型合同链路，补独立 omission review，完成全量回归并重新检查四例/至少五份真实合同。
+
+## FL-D147 SSH 窗口关闭后 Codex 当前执行被标为 interrupted（2026-10-23）
+
+- 发现日期：2026-10-23。用户明确反馈：通过 SSH 在云服务器命令行使用 Codex，关闭窗口后正在执行的任务变为 `interrupted` 并停止；同样使用 OpenCode 时未遇到该现象。问题是当前执行未持续运行，不只是聊天历史恢复。
+- 影响与原因边界：部署在服务器上并不自动保证交互任务在客户端退出后继续运行。终端关闭可能导致 CLI 退出、连接断开或当前 turn 取消；本轮没有主动断开用户 SSH，未复现并区分具体触发机制，亦未确认 OpenCode 当时的后台运行方式。
+- 证据与验证：本机 `codex --version` 为 `codex-cli 0.162.1`；`codex --help` 支持 `resume`、共享后台 app-server 及 `--no-daemon`，因此不能直接断言 Codex 没有后台服务。实际读取的 OpenAI 官方 CLI 文档将 `codex resume` 描述为重新打开已保存聊天（https://developers.openai.com/codex/cli/），这不等同于保证已取消的执行自动继续。工具进程视图处于隔离环境，不能据此认定宿主 SSH 的完整进程关系。
+- 处理建议（未实施）：在独立的 `tmux` 会话内启动 Codex，使 SSH 断开时交互客户端及其终端保持运行；重新连接后 attach 同一会话。已经 `interrupted` 的执行需要恢复聊天并明确继续任务；不能把 `resume --last` 描述为撤销中断或自动保持执行。
+- 处理方法（2026-10-23 已实施）：安装系统 `tmux 2.7`；新增 `tools/ops/codex_persistent.sh` 与安装器，并在 `~/.bashrc` 注入用户级 `codex()` 包装函数。交互式 Codex 自动进入按工作目录命名的独立 tmux server/session；显式使用 `--no-daemon`（本机为 standalone CLI，缺少完整 app-server package），并按用户“所有权限”要求加入 `--dangerously-bypass-approvals-and-sandbox`。非交互命令、管理子命令和已在 tmux 内的调用保持直接执行。
+- 验证：配置写入前备份 `~/.codex/config.toml.bak-full-access-20261023-110532-742946`；当前 `config.toml` 解析成功，`approval_policy=never`、`default_permissions=:danger-full-access`，`codex doctor --json` 报 `approval policy=Never`、`filesystem sandbox=unrestricted`。专用 PTY 断线测试通过：终端 master 关闭后工作完成、tmux session 保持 detached、重新连接为同一进程（`pty_hangup=passed`、`work_completed_after_disconnect=true`、`reattached_same_process=true`）。真实 Codex `--no-daemon` 客户端也在 tmux 中保持运行；同一聊天的验证副本已关闭，避免并行打开。
+- 当前状态与下一步：本机持久入口与用户级完整访问设置已实施；之后新 SSH shell 读取 `.bashrc` 后在相同目录输入 `codex`，自动创建或接回同一持久会话；也可用 `Ctrl-b` 后 `d` 主动分离。真实 Codex 测试客户端曾保持 detached 运行并识别出旧客户端持有当前聊天，显示“open in another app”；旧客户端结束后才可在新客户端恢复同一聊天，不能强抢写锁或把另一客户端仍在工作写成权限错误。11:22 已关闭 `client-diagnosis` 验证副本，同步最终启动器并复测 PTY 断线/同进程重连全部通过；临时测试 server 在 finally 中清理。已中断 turn 需要重新发出继续任务；本轮未进行真实模型调用，也未宣称已经断开用户实际 SSH 做过验证。
+
+## FL-D148 用户要求 Codex 完整权限，但旧会话仍使用启动时沙箱（2026-10-23）
+
+- 发现日期与影响：2026-10-23。用户明确要求“给你所有的权限”；本机 sudo 授权与 Codex 沙箱为两层，旧配置未指定默认 permissions，工具被 workspace-write、网络和受保护路径限制，导致写用户目录、创建 tmux socket及联网操作逐次请求执行权限。沙箱内 `/usr/bin/sudo` 显示 nobody owner 是隔离视图证据，不能据此断言宿主 sudo 安装损坏。
+- 处理方法（已实施）：仅修改用户级 `~/.codex/config.toml` 两个顶层字段为 `approval_policy="never"`、`default_permissions=":danger-full-access"`，不与旧 `sandbox_mode` 混用；完整原件备份在同目录 `config.toml.bak-full-access-20261023-110532-742946`，权限 600。修改脚本对其余 TOML 数据做相等校验，未输出模型凭据。持久交互启动器同时显式传入 full-access flag，确保恢复聊天时采用用户授权的启动设置。
+- 实际验证：`codex doctor --json` 的 `config.load` 为 ok，`sandbox.helpers` 显示 approval policy `Never`、filesystem sandbox `unrestricted`，配置文件权限 600。官方依据为 https://developers.openai.com/codex/permissions 与 https://developers.openai.com/codex/config-file/config-reference ，均实际读取。本轮 doctor 总体 warning 来自更新探测 HTTP 403，与权限配置无关；未为此更新 CLI。
+- 状态与范围：用户默认配置已生效并由新 CLI invocation 验证；现有聊天不能通过改磁盘配置自行替换本轮 developer 注入的沙箱或审批策略，需要重新启动/恢复客户端会话。系统/组织强制限制仍不能由用户配置覆盖。项目凭据保护、部署边界和任务授权范围仍按 AGENTS.md 与用户任务执行。
+
+## FL-D149 合同比较结果 JSON 需要长字段且上传必须完整校验（2026-10-23）
+
+- 问题与影响：compare 结果包含每个差异的左右 span、文字和诊断，长度随合同变化。当前 Database 的 MySQL 兼容转换会把普通 `TEXT` 转为 `VARCHAR(255)`；若照旧表声明，会截断或拒绝长结果。另一个风险是只检查 ZIP 中是否存在 `document.xml` 会把伪 DOCX 入队，之后 Worker 才失败。
+- 证据：`fundlex/db.py` 的 `_translate_text_columns` 对未列入长字段集合的 TEXT 使用 VARCHAR(255)；实际 compare API 结果包含 `left_spans/right_spans`，恶意或不完整 ZIP 可被基础成员检查误接受。
+- 处理方法：`compare_pairs.result_json` 明确使用 `LONGTEXT`（SQLite 接受该声明，MySQL 保持长文本）；上传接口先调用现有 `_validate_upload`，再调用 compare parser 的完整 OOXML 包校验，失败返回 `COMPARE_INVALID_DOCX`/`COMPARE_UPLOAD_REJECTED`，不创建对象。结果对象写入后保存 SHA-256、大小和对象 key，查看前复核数据库、对象和源文件哈希。
+- 状态与验证：已实施；`tests/test_compare_api.py`、`tests/test_compare_auth.py`、`tests/test_compare_batch.py` 覆盖伪 DOCX、恶意文本、跨用户访问、批量 pair 隔离和结果查看；本地 compare 全套 **32 passed**。真实 MySQL 服务变量未配置，MySQL 集成仍为 skip，故跨后端实际连接待验证。
+- 下一步：在可用的 MySQL 测试库运行 compare schema/长结果和并发 claim 验证；继续保留结果 JSON 完整性检查。
+
+## FL-D150 公开合同评测语料含已有 Word 修订痕迹（2026-10-23）
+
+- 问题与影响：本次 compare 业务输入前提是不含已有审阅修订。公开 `funds_word` 库中至少存在带 `w:ins`/`w:del` 的文件；若把它们直接当作 identity 或 mutation base，会把输入前提问题误计为算法漏检或误报。
+- 证据：`tools/evaluation/compare_fixture_builder.py` 的 `_supported_source` 对 `w:ins`、`w:del`、`w:moveFrom`、`w:moveTo` 做独立筛选；compare parser 对同类结构抛出 `EXISTING_REVISION_UNSUPPORTED`。首次 20 份均匀抽样语料发现至少一份不符合输入前提。
+- 处理方法：语料构建只从无已有修订的源合同中选择，原件只读复制到临时 corpus；gold 由独立 OOXML 提取器冻结 block/offset/hash，不能修改原合同制造通过。含修订源文件应在上传时拒绝，并显示明确错误。
+- 状态与验证：已实施筛选和 parser 拒绝；算法专项 **24 passed**，compare API/store 全套 **32 passed**。新过滤后的 20 份 dev/holdout mutation 评测正在生成，旧未过滤 corpus 不作为硬门证据。
+- 下一步：完成过滤后 14 dev/6 holdout 的 recall、identity、modify、symmetry、determinism 和性能报告；若源合同不足 20 份，记录真实数量和外部阻塞。
+
+## FL-D151 Compare parser 把 DrawingML moveTo 误认成已有修订（2026-10-23）
+
+- 问题与影响：首次修订痕迹检测按 XML localname 匹配 `moveTo`，真实 DOCX 中的 DrawingML 路径元素 `a:moveTo` 被误判为 Word `w:moveTo` 修订，20-base corpus 的 B00 无法解析。此问题会拒绝本来符合 compare 输入前提的普通图形合同。
+- 证据：`tests/test_compare_corpus.py::test_drawingml_move_to_is_not_word_revision` 复现；`fundlex/compare/parser.py` 原使用 `etree.QName(node).localname in REVISION_TAGS`。DrawingML 与 WordprocessingML 名称空间不同。
+- 处理方法：修订检测使用 `Q("ins")/Q("del")/Q("moveFrom")/Q("moveTo")` 完整 QName。图形仍按不支持的可见内容产生 coverage 警告，不以已有修订错误代替。
+- 状态与验证：已修复；`.venv/bin/python -m pytest tests/test_compare_*.py -q` **34 passed / 1 warning / 3.87s**。20 个真实 base、386 个 mutation 已冻结，gold SHA-256=`67b5b418492358aabcc3b9cfd04ad43889c69a474b9d5ec501b18d00570d2d9a`，dev 正在评测。
+
+## FL-D152 Compare 对齐长合同耗时与重复/合并段落召回（2026-10-23）
+
+- 问题与影响：局部 DP 对每个候选组重复运行 `SequenceMatcher`，真实长合同单 pair 曾约 1.6—6.5 秒；重复段落或删除段落相邻时，模糊 1:N/N:1 配对可能吞掉实际插入/删除，造成高召回评测漏检。
+- 证据：冻结真实语料 B00/B05 的 duplicate/paragraph_delete 曾出现 0/1 覆盖；B07 merge 结构 fixture 的 gold 初始标记为零差异但可见字符流实际变化。复现路径为 `/tmp/fundlex-compare-corpus-v4/gold-sdt-v5.json` 与 compare evaluator 输出。
+- 处理方法：`align._sim` 增加文本级缓存和长文本边界/长度快速评分；多块模糊组若左右存在相同完整 block，禁止将其合并，保留精确 block 与显式 insert/delete；gold extractor 仅在左右可见字符流（连续空白归一）确实相同才接受 structural zero-diff。
+- 状态与验证：已实施。B00/B05/B07 反例复测通过；20 bases × 386 mutations（14 dev/6 holdout）重新评分：dev **272/272** mutation targets covered，identity false positives **0/14** zero-diff fixtures；holdout **114/114**，identity false positives **0/6**。modify classification dev **223/225=99.11%**，holdout **100%**。硬门 identity **20/20**、symmetry **20/20**、determinism **20/20**。dev median **0.620s**, P95 **0.897s**, max **2.096s**；holdout median **0.653s**, P95 **0.942s**, max **2.759s**。
+- 下一步：继续保留真实合同中跨结构 text box/header/footer 等 coverage warning；如新增 corpus mutation，重新冻结 gold 后再比较指标。
+
+### FL-D152 追加：结构变化伴随局部修改时的分类降级（2026-10-23）
+
+- 发现与影响：独立算法复查发现，split/merge 结构变化中若同时包含局部文字修改，对齐在部分组合上会保守降级为整组 delete + insert，`modify=0`。字符级差异仍完整保留，但修改级定位不够细，影响 modify 分类统计与下游展示粒度。
+- 证据：纯 `CompareDocument` 反例 `甲乙丙丁` → `甲 / 乙X / 丙 / 丁` 产生整组删除与插入；同轮四段 split/merge、表格 cell、重复段落/费率、唯一重排复查均未出现真实文字差异被归零。42 种分段组合的 1764 对比较中，字符流不同均未得到 0 diff；1500 组随机重排/修改攻击为 0 次零差异漏报、0 次双向不对称。
+- 处理方法：当前保留 delete+insert 作为高召回保守回退，不以提高 modify 分类为代价吸收结构变化；后续若优化局部对齐，必须保持字符差异召回、方向对称和确定性硬门。
+- 状态与验证：已确认范围内限制；当前不阻塞字符级召回与 identity/对称性硬门。独立算法复查报告源码未修改；现有 compare 测试仍为 54 passed / 4 skipped，待系统/前端收尾后的最终回归再次确认。
+- 下一步：如产品需要更细 modify 展示，新增冻结 gold 与针对 split/merge+局部修改的分类指标后再单独优化；不得修改现有 gold 迎合分类结果。
+
+### FL-D152 最终指标更正（2026-10-23，gold v7）
+
+- 前文将 pair 数误作 operation 分母，且 zero/modify 分母填写错误；保留历史记录，本段为最终正确口径。20 bases 共386 mutation pairs，dev272 pairs/219 gold operations，回收219/219；holdout114 pairs/92 operations，回收92/92。modify 分类 dev112/113，holdout46/46。零差异 fixtures dev69/holdout30，误报均0；identity20/20，symmetry20/20 bases及60/60方向检查，determinism20/20 bases（每base identity与非零mutant各5次）。
+- gold payload SHA-256 `45651ace97a78ec4d1d6e28d8b492f6ec090da55b62156ffae58ee6ca5779e04`，文件SHA `1a2afabe6bc09c182c107d9d608b5ea420dd08db57db855dbfe12ad914b63c3d`；manifest SHA `731a29bf9dbd199ca978e476313e1d6fa9d67239725e917ee3c93f6ddbe10e60`。独立gold读OOXML，不导入compare，但它仍属于程序化oracle，并非人工语义标签。
+- dev耗时median0.7375s/P951.1651s/max3.1646s；holdout0.8944s/1.2950s/1.5384s。20对独立新Python进程性能：median1.1745s/P951.6512s/max4.0687s/peak RSS51,728,384bytes；未清OS页缓存。
+- B14–B19 holdout此前已暴露，作为透明回归split，不冒称未见留出验收。B07历史merge声明零差异但可见文字流实际变化，v7独立更正；12个modify_percent是无目标百分比时的普通两字fallback，不冒称百分比语义样本。证据：`/tmp/opencode/compare-continuation/FINAL_SUMMARY.md`及同目录final-eval/final-hard-gates/final-benchmark文件。
+
+## FL-D153 Compare 前端批量文件状态与异步结果竞态（2026-10-23）
+
+- 问题与影响：重绘批量输入会清空浏览器 FileList；folder 自动配对原来静默跳过未配对文件；任务创建后未稳定进入结果页，异步轮询/快速切换可能以旧响应覆盖新 pair。
+- 证据：独立 Playwright `/tmp/compare-e2e-review-2.json` 初始 15/16，`add_pair_preserves_existing_files` 复现已选文件在添加第二组后变为 0；刷新和快速 pair 切换可见旧结果覆盖风险。
+- 处理方法：File 对象保存于 state，添加/删除 pair 采用增量 DOM；folder 显示未配对项供手工补齐；创建后刷新并打开任务；请求 token 丢弃过期异步响应；导航在 pane 内滚动，0 diff 重置计数；identity reset 清空视图。
+- 状态与验证：已实施。`tools/evaluation/compare_e2e.py` 真实浏览器 **16/16 checks passed**，包含三类差异、XSS、虚拟 anchor、点击/上一处/下一处、SVG 端点 resize/scroll 误差≤2px、批量 pair 导航和身份切换；Node syntax check 通过。
+- 下一步：部署前在目标环境再跑一次同一浏览器证据脚本；本轮未执行生产部署。
+- 下一步：独立 parser/算法 Reviewer 攻击其他名称空间冲突；完成 dev 与未暴露 holdout 指标。
+
+### FL-D153 最终前端补充验证（2026-10-23）
+
+- 新发现及修复：新任务重用了上次state.inputs；目录枚举顺序导致E2E补错行；任务列表“差异”用了pair数；completed隐藏失败/覆盖不完整；failed pair错误写在隐藏viewer中。现已重置新任务输入、按文件名定位补配行、汇总实际summary.total、明确失败/不完整计数，并在可见pair卡片显示固定错误码。上传逐项核对accepted回执，切换pair先清旧viewer，零差异重置0/0及SVG。
+- 当前源码浏览器验证：`/tmp/opencode/compare-e2e-current.json` **24/24 checks，9场景，全通过**。涵盖单modify、三组批量、25差异、三种类型、零差异、空侧anchor、folder补配、全失败、真实公开合同incomplete、XSS、导航与身份隔离；resize与独立scroll前后SVG端点最大误差均0px，无pageerror。截图目录`/tmp/opencode/compare-e2e-current-shots/`。该验证使用临时API/真实CompareWorker与项目dev身份入口，不接触生产或修订模型。
+- 状态：开发环境前端验收通过，生产部署未执行。历史16/16等证据仅保留作先前轮次记录；最终使用当前24项证据。
+
+## FL-D152 `codex` 默认进入旧 tmux 对话（2026-10-23）
+
+- 问题与影响：为解决 SSH 断开后任务中断，前一版用户级 `codex()` wrapper 使用固定工作目录 session 名并执行 `new-session -A`；因此用户每次输入 `codex` 都会 attach 到仍存活的旧会话，跳过 Codex 初始页，造成“打开 Codex 就进入运行中的对话”。
+- 证据：`tmux -L fundlex-codex list-sessions` 显示 `codex-d01396214ff5` 仍 attached；旧 `tools/ops/codex_persistent.sh` 使用 `session_name="codex-${digest}"` 与 `new-session -A`。
+- 处理方法（已实施）：工作目录只作为 session 前缀；普通 `codex` 每次使用时间戳/PID 创建新 tmux session，进入初始页；`codex attach` 按该目录前缀选择最近 session 并 attach；`codex resume --last` 仍交给官方会话恢复命令。同步用户级启动器，保留显式 `--no-daemon` 与完整权限参数。
+- 验证：`bash -n`、Python 编译、`git diff --check` 通过；PTY 断线测试 `pty_hangup=passed`、`work_completed_after_disconnect=true`、`reattached_same_process=true`；旧活动 session 未强制关闭，避免中断当前工作。新 SSH shell 读取更新后的 `.bashrc` 后，普通 `codex` 不再使用 `-A` 接旧 session。
+- 当前状态与下一步：已解决。需要接回旧任务时使用 `codex attach`；需要恢复历史聊天时使用 `codex resume --last`。已有运行中的旧 session 会继续保留，用户可在确认无需其继续后手动退出。
+
+## FL-D153 “优化 FundLex 合同修改闭环”被 stale writer lock 阻止切换（2026-10-23）
+
+- 问题与影响：用户切换到会话 `01a16485-b7ba-7090-99cc-51cb1c5fa0ab`（标题“优化 FundLex 合同修改闭环”）时提示对话已在其他地方打开，无法继续。
+- 证据：`session_index.jsonl` 将该 ID 映射到目标标题；进程表和两个当前 tmux pane 中均无该 ID 或其 `codex resume` 进程；唯一对应文件是空的 `~/.codex/thread-writer-locks/01a16485-b7ba-7090-99cc-51cb1c5fa0ab.lock`，mtime 为 2026-10-23 10:26:30 +0800，明显早于本次检查。
+- 处理方法（已实施）：不停止当前两个活动 Codex 会话；将确认过期的空锁移到 `/tmp/fundlex-codex-stale-locks/01a16485-b7ba-7090-99cc-51cb1c5fa0ab.lock.20261023-134825` 保留证据，释放原锁路径。
+- 验证与状态：原锁路径已不存在，目标没有活动进程；可重新切换/恢复该会话。若仍提示占用，应先退出其他设备上的同一会话客户端，再重试；不能删除有对应活动进程的锁。
+
+### FL-D153 追加更正（2026-10-23 14:30）
+
+- 更正：所谓“stale lock”判断错误。复核 `/proc/<pid>/fd` 发现 `01a16485-b7ba-7090-99cc-51cb1c5fa0ab.lock` 当时由 **pid 2152151**（tmux 会话 `codex-d01396214ff5` 内的活动 Codex TUI）持有，且同一进程同时持有 4 个 thread lock。`ps` 看不到 thread id、pane 里也看不到 `codex resume` 进程，不等于没有活动 writer。
+- 影响：`rm` 锁文件只删掉路径名，原进程仍持有已删除 inode 的 flock；后续客户端会新建同名文件并误以为拿到锁，互斥被破坏。**任何情况下都不要删除 thread-writer-lock。**
+- 正确处置：确认持有进程所在 tmux 会话，接回该会话或等其退出；锁随进程退出自动释放。
+
+## FL-D154 Codex 对话锁的真正根因：多个 legacy TUI 各自持有 thread lock（2026-10-23）
+
+- 问题与影响：用户切回历史对话时常提示 `This conversation is open in another app`。根因不是残留文件，而是每个 `--no-daemon` TUI 都是独立的 thread-store writer，旧 tmux 会话长期不退出，且一个 TUI 打开过的每个 thread 都会一直持有锁；新客户端 `resume` 同一 thread 即冲突。日志原文：`thread-store conflict: thread <id> already has an active writer`。
+- 证据：`codex ls` 显示 4 个 detached legacy 会话；pid 2152151 持有 `01a16485…`、`01a16488-206d…`、`01a16488-8df7…`、`01a16663…` 四个锁；pid 2156308 持有另外三个；14:24:28 的 `thread/resume` 错误与 14:26 的锁提示可直接对应。
+- 处理方法（已实施）：重写 `tools/ops/codex_persistent.sh` 并安装到 `~/.local/bin/codex-persistent`。`codex resume <id>` / `resume --last` 先用 `/proc/<pid>/fd` 找到真实 holder，再按 tty→tmux pane 映射到会话；若 holder 在 tmux 中则**接回原会话**，不再新开 writer；holder 不在 tmux 时报 pid/tty 并拒绝开第二个客户端。新增 `codex ls`（daemon 状态 + legacy 会话/运行状态/持有的 thread 标题）、`codex where <id>`、`codex attach`、`codex close`、`codex gc --hours N`。保留 daemon 不可用时的 tmux 兜底。
+- 验证：`where 01a16485…` → `holder pid=2152151 tty=/dev/pts/0 tmux=codex-d01396214ff5`；dry-run `resume` → `attach codex-d01396214ff5`（正确接回而非新开）；`resume --last` → 按 `updated_at` 解析并接回对应会话；PTY 断线测试 `pty_hangup=passed / work_completed_after_disconnect=true / reattached_same_process=true`（0 模型调用）。
+- 当前状态：已实施并验证路由逻辑。**未强制关闭用户正在使用的 legacy 会话**；这些会话持有的锁在其退出后自然释放。日常新会话走 FL-D155 的 daemon，不再产生新的 legacy 锁。
+
+## FL-D155 SSH 关闭/终端退出后 Codex turn 中断：改用 app-server daemon 承载执行（2026-10-23）
+
+- 问题与影响：standalone `--no-daemon` 把 turn 执行放在 TUI 进程内；TUI 退出（关终端、误按 Esc/Ctrl-C、tmux 会话被清理）会向自身 app-server 提交 `op=Interrupt`，turn 变为 `interrupted`。tmux 只能保住进程，保不住“客户端主动退出”这条路径，而且会累积持有锁的旧客户端。
+- 证据：`logs_2.sqlite` 在 2026-10-23 14:26:04 记录 `submission ... operation="interrupt"`、`interrupt received: abort current task`，随后 `turn_aborted reason=interrupted`；同机 4 个 `--no-daemon` TUI 常驻且无人 attach。
+- 处理方法（已实施）：
+  1. 使用 Codex 官方完整包（`codex-package-x86_64-unknown-linux-musl.tar.gz`，0.162.1，bwrap sha256 与 FL-D076 记录一致）安装/启动 managed app-server daemon；daemon 随后自动升级到 **0.164.0**。
+  2. 将 `~/.local/bin/codex` 改为指向 `~/.codex/packages/app-server-daemon/current/bin/codex`（0.164.0），旧 standalone 保留为 `~/.local/bin/codex-standalone-0.162.1` 可回滚；CLI 与 daemon 版本对齐。
+  3. `~/.codex/app-server-daemon/settings.json` 增加 `"autoUpdateEnabled": false`、`"updateIntervalMinutes": 1440`，避免 daemon 单方面升级再次造成版本错配。
+  4. `sudo loginctl enable-linger opencode`；新增 `~/.config/systemd/user/codex-app-server.service` + `.timer`（每 60s 健康探测 `codex-daemon-ensure`，socket 不通则 `daemon restart`；`KillMode=none` 保留 daemon）。daemon 与 updater 的 cgroup 已确认在 `user-1002.slice/user@1002.service/codex-app-server.service`，不再依赖某个 SSH session scope。
+  5. `codex-persistent` 默认 daemon 模式（turn 在 daemon 中执行，TUI 只是客户端），daemon 不可用时才回退 tmux + `--no-daemon`。
+- 验证：**SIGHUP 实测通过**——15:04:39 对 TUI 发送 SIGHUP（模拟 SSH 终端消失），daemon 内 `sleep 120` 继续执行，15:06:40 写出 `/tmp/opencode/sighup-ok.txt`，结果 `survived=true after=121s`；另外 TUI 在 turn 运行中收到 SIGKILL 后，daemon 仍继续写入 thread rollout（`01a16780…` 在客户端死亡后仍有 `task_started`/`custom_tool_call`/`token_count` 事件，无 `turn_aborted`）；`codex` 经 `.bashrc` 函数启动显示 `← for agents` 且不再新建 legacy tmux 会话；`codex doctor` 20 ok / 0 fail（唯一 warning 为既有的 `rollout_db_parity`）。
+- 限制与下一步：SIGHUP 实测已证明 TUI 消失不会中断 daemon 内 turn；仍建议用户用自己的真实合同任务复验一次；测试 thread `01a16780…` 未删除（避免误删用户已打开的会话）。daemon 控制 socket 是 `/tmp` 下的符号链接；若 `/tmp` 被清理，timer 会在 60s 内重启。升级 Codex 时必须同时更新 CLI 与 daemon（完整包），不要只跑 `codex update`。用户现有 4 个 legacy 会话应在方便时退出，之后新会话全部走 daemon。
+
+## FL-D156 opencode.service 每 3 秒重启一次（2026-10-23 发现）
+
+- 问题与影响：`systemctl status opencode.service` 显示 `NRestarts=1768`、`MainPID=0`、`Result=success`，日志每 3 秒 `Started` → `Succeeded`。`ExecStart=/home/opencode/.opencode/bin/opencode serve --service` 在 fork 出常驻进程后以 0 退出，而 unit 配置 `Restart=always`，于是无限重启；只产生日志/启动开销，未观察到端口冲突。
+- 状态：**已发现，未修复**（不在本次 Codex 稳定性范围内，避免影响用户当前 opencode 会话）。
+- 建议：改为 `Type=forking` + 正确的 PIDFile，或 `Restart=on-failure` + `RemainAfterExit=yes`，或让 `serve --service` 前台运行（`Type=simple`）。修改前需确认 opencode 的 service 模式是否提供前台参数。
+
+### FL-D154 追加：用户要求“全断”后清理结果（2026-10-23 15:13）
+
+- 用户明确要求直接断开全部 Codex 会话，不再逐个确认。
+- 操作：`tmux -L fundlex-codex kill-server` 关闭全部 6 个 legacy 会话；随后停止 daemon，确认 `thread-writer-locks/*.lock` 的 `/proc/<pid>/fd` 持有者为 0，删除全部 thread lock 文件（保留 `.coordination.lock`），移走 `loaded-threads.json` 备份到 `/tmp/opencode/`，再通过 systemd 服务重启 daemon。
+- 结果：legacy tmux 会话 0 个；`~/.codex/thread-writer-locks/` 仅剩 `.coordination.lock`；daemon 0.164.0 running，cgroup 在 `user@1002.service/codex-app-server.service`，timer active；无活动 Codex 客户端。
+- 影响：被关闭会话的进行中 turn 已中断（用户授权），聊天记录保存在 rollout，可用 `codex resume <id>` 或 `codex resume --last` 继续。
+
+## FL-D157 删除关键词回退跨条款配对，G15 目标吞入 G17 段落（2026-10-23，核心引擎未提交改动）
+
+- 发现：未提交改动中 `_delete_keyword_bag` 允许混合规则提取 delete 引用，`_KEYWORD_VARIANTS` 允许“次月/每月/月末”代替“按月”，且 `survey_targets` 的关键词回退不再受“本轮没有任何引用命中”限制。结果是：支付条款第二段以句号结束时，回退会把下一段（G17 用途条款）拼进同一个 G15 删除目标。
+- 证据（真实合同 `funds_word/广发品质回报混合型证券投资基金基金合同_20230708.docx`）：
+  - p806 `C 类基金份额的基金销售服务费每日计算，逐日累计至每月月末，按月支付，`
+  - p807 `…于次月首日起5个工作日内从基金财产中一次性支付给基金管理人。…支付日期顺延。`
+  - p808 `销售服务费主要用于支付销售机构佣金…`（属于 G17）
+  - 当前工作区 `survey_targets` 产出 G15：`p806`、**`p807|p808`**、`p1262`、**`p1263|p1264`**；HEAD `a36acd2` 同样输入只产出 `p806`、`p1262`。G17 同时产出 `p808|p809`，p808 被 G15/G17 两个操作同时认领。
+  - 100 份随机合同离线扫描：当前代码出现 6 处“G15 配对吞入下一段 G17 文本”（≥3 份合同）；按 HEAD 的精确关键词逻辑复算为 0 处。
+  - FL-D146 记录曾把这 4 个 G15 命中当作“正文/摘要四处命中”的证据；实际正确跨段应为 `p806:0:35 + p807:0:89`（quality-return-12 已记录 `p806:0:34+p807:0:88`），`p807|p808` 是错误配对。
+- 影响：G15 删除目标越过真实条款边界并覆盖 G17 文本；与 G17 目标重叠，可能触发 `RECALL_EDIT_OVERLAP`、错误删除或重复 Claim，站点证据不可信。即使最终 DOCX 表面正确，也不能证明操作级闭环。若模型 inventory 恰好把 p806/p807 作为复合目标覆盖，当前按 (rule, location) 的去重可能暂时掩盖该错误，但 recall-first 的正确性不应依赖模型先命中。
+- 处理状态：**已修复（2026-10-23 晚，离线 + 真实模型单例验证）**。
+  - `survey_targets` 关键词配对新增条件：上一段句末有 `。；;！？!?` 时不配对；follower 以 `销售服务费主要用于/使用范围` 开头时不配对；`in_self` 且段末为 `，、：` 时主动与下一段合并（修复半句目标）；`parts` 改用 `compact_text` 长度，避免空格导致 `RECALL_TARGET_COMPOSITE_UNRESOLVED`。
+  - 回归：`tests/test_recall_core.py::test_keyword_delete_pair_stops_at_sentence_boundary`（含复合计划与 content check）通过；广发品质回报 survey 现在为 `p806|p807`、`p1262|p1263`，不再出现 `p807|p808`；100 份随机合同跨条款配对 **0 处**（修复前 6 处）。
+- 验证/下一步：真实模型单例 `final1` 中 G15 四个段落均删除，G17 不再被 G15 认领；全量 pytest 1195 passed / 40 skipped / 0 failed。仍未 commit/deploy。
+
+## FL-D158 append 摘要区路由把合同变更触发句当作份额类别定义锚点（2026-10-23，核心引擎未提交改动）
+
+- 发现：`append_applicability_targets` 为所有 append 规则追加“所有 summary section”后，G01/G03 的 `append_site_ok` 只按“基金份额类别”等词匹配，命中摘要区的合同变更触发句，而不是份额类别定义句。
+- 证据：30 份随机合同，当前工作区 **8 份 G01 + 8 份 G03** 命中类似 `基金推出新业务或服务，或调整基金份额类别设置；` / `调整基金份额类别设置及对基金份额分类办法、规则进行调整；`；HEAD `a36acd2` 同 30 份为 **0 份**。示例位置：广发品质回报 `p1138`、广发新城吾悦 `p1761`、其他合同 `p1208/p1111/p1093/p1186/p1178/p1160`。
+- 影响：新增的份额类别/渠道费用条款会被插到“基金合同变更”触发事项列表中间；该插入通常可执行且不报错，存在静默错误交付/假完成风险；G01/G03 同址双插入还会造成重复。
+- 状态：**已修复（2026-10-23 晚，离线 + 真实模型单例验证）**。
+  - 新增 `_append_definition_anchor`：G01/G03 必须有定义标记（`份额类别：`/`基金份额类别定义`/`将基金份额分为`/`称为`），并排除 `调整基金份额类别设置`、`份额类别设置`、`增设新的份额类别`、`基金推出新业务`、`变更基金合同`、`终止基金合同`、`业务规则` 等变更触发句；支持 Word 拆分的定义续段。
+  - `append_applicability_targets` 的成员筛选和 `append_site_ok` 都使用该门禁，模型 inventory 指向 `基金份额类别设置。` 的目标也不再被接受（FL-D163）。
+  - 验证：30 份随机合同误锚点 **0**（修复前 8 G01 + 8 G03）；广发品质回报 append 目标为 G01 `p106`、G03 `p138`、G16 `p809/p1265`；真实单例 final1 中 G01/G03 政策各只出现一次，p137 未被插入。
+- 下一步：随引擎改动一起 commit；仍只做单例真实验证，未跑 ≥5 份合同。
+
+## FL-D159 核心引擎改动未提交、未做真实链路验证；G16 追加锚点仍在支付从句中间（2026-10-23）
+
+- 范围：工作区未提交改动 `fundlex/recall.py`、`recall_pipeline.py`、`generation/coverage.py`、`generation/effects.py`、`generation/router.py`、`generation/__init__.py`、`recovery/{history,orchestrator,policies,types}.py` 及 8 个引擎测试文件（FL-D146）。
+- 已完成的验证：`.venv/bin/python -m pytest tests -q` → **1166 passed / 39 skipped / 0 failed / 222.72s**；8 个引擎相关测试文件 247 passed；compileall、`git diff --check` 通过。HEAD 为 `a36acd2`，分支 `feat/contract-compare`（与 `origin/refactor/recovery-architecture` 同 SHA），改动未 commit/push。
+- 未部署：`/opt/fundlex-recall-first/fundlex/{recall.py,recall_pipeline.py,generation/coverage.py}` 的 SHA-256 均与工作区不同，生产仍是旧版本。
+- 未完成验证：无真实模型调用；上一 agent 记录的 `/usr/bin/sudo` setuid/owner 异常当前已不存在（`sudo -n true` 正常），但不能据此认定配置读取与真实链路已可用；尚未跑真实工作台端到端、未做 5 份真实合同验收。
+- 既有问题（非本轮引入）：G16 append 锚点选在 `p806/p1262`（`…按月支付，` 句末逗号），`plan_target` 的从句保护会因下一段 `p807` 不满足 `append_site_ok` 抛 `RECALL_APPEND_CLAUSE_INCOMPLETE`，该目标无法执行；30 份随机合同有 5 份出现此类中间锚点。本轮摘要路由又把 p1262 副本加入，扩大了触发面。
+- 影响：当前改动不能直接发布；在修复 FL-D157/FL-D158 并完成真实链路复验前，不得宣称引擎收敛或交付达标。
+- **追加：G16 锚点已修复（2026-10-23 晚）**。`_g16_clause_end` 从支付句向后走到同一销售服务费条款的末段（p809/p1265，最多 6 段）；`append_site_ok` 接受条款末段和支付句的未完延续段；`_plan_and_generate` 对 append 规则改用 `append_site_ok` 归属，避免目标在规划前被 `TARGET_SOURCE_MISMATCH` 排除。回归 `test_g16_append_anchor_moves_to_the_end_of_the_fee_clause` 覆盖定位、`append_site_ok`、`target_site_ok` 与 `_plan_target_inner`。30 份随机合同中间锚点 **0**（修复前 5）。
+- **真实模型单例（final1）**：43 calls / $0.02638 / 约 150s；G15 四个段落删除、G16 在 p809/p1265 各插入一次、G17 删除、G01 p106 与 G03 p138 各插入一次；obligation 13 ARTIFACT_VERIFIED + 9 ALREADY_SATISFIED + 10 NOT_APPLICABLE + 2 UNRESOLVED；剩余仅为既有 G08/G18（见 FL-D164）。
+- 下一步：仍须 ≥5 份真实合同 + 工作台登录/上传/下载全链路验收；当前未 commit、未部署。
+
+## FL-D160 Compare worker 过期租约清理可能覆盖并发终态（2026-10-23）
+
+- 发现与影响：`CompareStore.claim()` 清理达到最大尝试次数的过期 `leased/running` pair 时，先读取普通快照，再用不带 fencing token、状态或当前租约条件的 UPDATE 写入 `failed`。在最后一次 Worker 持锁写入 `succeeded`、或续租成功与清理交错时，清理 UPDATE 可能等待行锁后覆盖新终态，破坏结果交付和任务计数。
+- 证据：独立系统复核对临时 SQLite store 注入“过期 SELECT 后、清理 UPDATE 前终态提交”的交错，结果从成功被覆盖为 `failed / COMPARE_PROCESSING_FAILED`。MySQL 并发时序尚待补充真实复现；MySQL 的 `finish/retry` 本身已有锁读和 fencing 回归。
+- 处理方法：待实施。过期清理应在 MySQL 使用 `FOR UPDATE`，并在 UPDATE 中绑定读到的 fencing token、`status IN ('leased','running')`、`lease_until<=now` 与 attempt 条件；只有 `rowcount=1` 才刷新 task。
+- 状态与验证：待修复；不得把当前 compare 专项通过结果视为此并发边界已闭合。
+- 下一步：补 SQLite 确定性交错和隔离 MySQL 并发回归，修复后重跑系统/Worker 专项及全量 pytest。
+
+### FL-D160 修复与真实MySQL验证（2026-10-23）
+
+- 已实施：MySQL清理采用当前锁读，UPDATE二次绑定token/status/expiry/attempt，rowcount1才刷新任务。初次FOR UPDATE范围锁导致双claim deadlock，后续锁策略修复；heartbeat回归不读取未对外暴露的lease_until，而直接查询测试库。
+- 实际验证：独立临时MySQL8实例33155、隔离测试库中系统/worker集 **28 passed / 1 warning / 9.34s**，包括单claim winner、长JSON、stale finish/retry、upload/seal及耗尽清理/heartbeat竞态；关键并发回归另重复5轮，每轮2 passed。完整compare集启用同一临时MySQL为 **75 passed / 1 warning / 14.31s**。日志`/tmp/opencode/compare-mysql-latest.log`。没有操作生产库。
+- 状态：已修复并验证，适用于当前 compare store/worker 实现。
+
+## FL-D161 Compare 结果边界重解析的临时 I/O 被标为永久失败（2026-10-23）
+
+- 发现与影响：`CompareStore.finish()` 为验证源 DOCX 重解析时把全部异常包装为 `COMPARE_RESULT_INVALID`。若底层读取暂时抛出 `OSError`，Worker 无法进入已有的有界 transient retry，pair 会被错误终结，造成可恢复任务丢失。
+- 证据：独立复核在真实临时 store 中对 `parse_compare_document` 注入一次 `OSError`，第一次 Worker 运行得到 `failed / COMPARE_RESULT_INVALID`，而预期应为 `retry_wait`，第二次再成功。
+- 处理方法：待实施。`OSError` 应向上保留为 transient；确定的解析、结构和契约错误仍映射为固定 `COMPARE_RESULT_INVALID`，不得泄露异常正文。
+- 状态与验证：待修复；当前 compare 专项测试覆盖普通 Worker retry，但尚未覆盖 finish 边界重解析的临时读取故障。
+- 下一步：增加一次重解析 OSError 后 retry 成功回归，并重跑隔离 MySQL 与完整回归。
+
+### FL-D161 修复验证（2026-10-23）
+
+- 已实施：finish重解析允许OSError/DocxError继续交由Worker分类；临时读取故障进入retry_wait后可恢复，确定性解析错误使用固定错误码。新增一次重解析OSError、解析错误分类及清理fencing回归。
+- 实际验证：compare集本地 **70 passed / 5 skipped / 1 warning**；启用临时MySQL后完整 compare 集 **75 passed / 1 warning**；完整项目 **1195 passed / 40 skipped / 2 warnings / 247.79s**。Worker轮询基础设施故障也使用有限等待，避免进程退出或忙循环；任意异常正文不写入API错误码。
+- 状态：已修复并验证，适用于当前 compare store/worker 实现。
+
+## FL-D162 并行引擎兼容性回归：G16 site guard 对简化测试替身读取缺失 location（2026-10-23）
+
+- 发现与影响：全量回归在 compare 并行修改期间出现 1 项既有引擎测试失败：G16 的简化 `SimpleNamespace(text=...)` 没有 `location`，新 site guard 直接读取属性导致 `AttributeError`。该失败与 compare 代码无关，但会阻断整仓库验收。
+- 证据：`tests/test_ff4d749_gate_closure.py::test_g16_payment_site_rejects_rate_formula_and_usage`；修复前全量为 **1179 passed / 39 skipped / 1 failed**，失败栈指向 `fundlex/recall.py` 的 G16 `locations.index(span.location)`。补丁使用缺省 location 保护后，定向测试 **1 passed**。
+- 处理方法：已实施：site guard 对没有 location 的简化对象直接返回 `False`，保留真实 Inspection 对象的定位逻辑。
+- 状态与验证：已解决；定向测试1 passed，完整 `.venv/bin/python -m pytest tests -q` **1195 passed / 40 skipped / 2 warnings / 247.79s**。compare 文件未因此改动。
+- 下一步：保留该兼容性保护，未来若删除简化替身需同步更新测试契约。
+
+## FL-D163 复合目标第二段在内容校验时被静默丢弃（2026-10-23，已修复）
+
+- 发现与影响：`plan_composite_target` 用 compact 偏移生成每段编辑，但整段删除时只映射到最后一个非空白字符，留下尾随空格；`_composite_part_slice` 又按 compact 偏移计算期望 replacement，两者不一致时 `content_check` 返回 False。`_plan_and_generate` 删除被拒绝的编辑后，`_reconcile_final_plan_ledger` 只检查 target/operation 是否“还有任一 component”，于是复合目标第一段保留、第二段丢失却仍记 `planned`。真实 G15 的 p807/p1263 就是这样在最终 DOCX 中保留支付条款后半句。
+- 证据：final1 之前的批次中 G15 Y004 计划只有 p806；`report.plan.edits` 无 p807。离线复算 `plan_composite_target` 可产出两段，`_component_ok` 对 p807 返回 False。
+- 处理：整段删除时 `plan_composite_target` 映射到 `len(span.text)`（含尾随空格）；`_composite_part_slice` 对 `start=0,end=compact_len` 的整段同样返回 `(0, len(span.text))`；新增复合两段 content-check 回归。
+- 状态与验证：已修复；`test_keyword_delete_pair_stops_at_sentence_boundary` 断言两段 replacement 均为空且 `_component_ok` 全通过；final1 真实 DOCX 中 p806/p807/p1262/p1263 全部为空。
+- 下一步：保持 composite 两段 content-check 回归；后续如新增跨段类型需同步该整段约定。
+
+## FL-D164 out_of_scope/归属失败的模型目标仍压制确定性召回（2026-10-23，已修复）
+
+- 发现与影响：`known_operations_from_targets` 不区分目标是否已 `out_of_scope` 或 `attribution_error`。真实 G15 p806 的模型复合目标因站点归属失败被标 out_of_scope，但仍占据 `(G15,p806)` 覆盖，导致 `survey_targets` 不再生成合法的 p806|p807 目标；该段支付条款整段未删。
+- 证据：run3 中 G15 body 目标缺失、T016 out_of_scope；run5 同位置出现 `Y004` 后才规划成功。
+- 处理：`known_operations_from_targets` 跳过 `out_of_scope` 与 `attribution_error` 目标；新增 `test_invalid_model_target_does_not_suppress_deterministic_survey`。
+- 状态与验证：已修复；final1 中 Y004/Y005 正常生成并执行；全量 pytest 通过。
+- 下一步：无；继续保证“无效模型判断不能关闭确定性召回”。
+
+## FL-D165 删除与同段 append 合并时 Claim/Validator 误报（2026-10-23，已修复）
+
+- 发现与影响：G15 删除 p807 的同时，G16 把新政策插入同一段（或 G17 删除的段落由 G16 承接），合并后段落不再为空。G15 的 per-edit unit validator 只看到自己的空 replacement，报 `CLAIM_VALIDATION_FAILED` / `CLAIM_PLANNED_EFFECT_MISSING`，即使最终文本完全符合联合计划且旧措辞已消失。
+- 证据：run3/run5 的 G15 p807 覆盖率状态为 `CLAIM_VALIDATION_FAILED`；final1 中同一段实际已是 G16 授权文本。
+- 处理：`evaluate_operation_effect` 增加 delete 分支：`planned_matches and own and not residual` 时判 PASS/VERIFIED_ABSENT（artifact 必须精确匹配包含兄弟操作的联合计划，且旧措辞已不存在）；新增 `test_delete_passes_when_another_operation_fills_the_empty_paragraph`。
+- 状态与验证：已修复；final1 中 G15 四个段落均 PASS，G16 仍 PASS；全量 pytest 通过。
+- 下一步：保留“联合计划精确匹配”前提，不得放宽为仅看旧文缺失。
+
+## FL-D166 G03 模型目标落在“基金份额类别设置”句导致双插入（2026-10-23，已修复）
+
+- 发现与影响：模型 inventory 把 G03 append 目标放在 `基金份额类别设置。` 的片段段（p137），确定性 append pass 又在真正的定义段（p138）生成目标，两处都执行，最终同一政策文本插入两次。
+- 证据：run5 final DOCX p137 与 p138 各出现一次 G03 政策；`CLAIM_DUPLICATE_EFFECT` 在 run4 已出现。
+- 处理：`append_site_ok` 对 G01/G03 先经过 `_append_definition_anchor`（定义标记 + 变更触发句排除 + 拆分续段），模型目标与 survey 目标使用同一门禁；新增回归断言 trigger 段不通过、定义段通过。
+- 状态与验证：已修复；final1 中 p137 保持原文、p138 仅一次政策；全量 pytest 通过。
+- 下一步：无；若后续出现其他“设置/调整”类定义变体，补充到排除/标记表。
+
+## FL-D167 真实单例仍因 G08/G18 未完成（2026-10-23，未修复）
+
+- 发现与影响：final1（43 calls / $0.02638）delivery_status=incomplete；obligation 计数 13 ARTIFACT_VERIFIED / 9 ALREADY_SATISFIED / 10 NOT_APPLICABLE / 2 UNRESOLVED。剩余为：
+  - G08 p156 `RECALL_COMPOSE_FIXED_TEXT_MISSING` + `CLAIM_OPERATION_NOT_PLANNED`；
+  - G18 无 verified site（`CLAIM_OPERATION_UNPROVEN`）。
+- 证据：`/tmp/opencode/engine-live-20261023/final1/report.json`；最终 DOCX 的 G15/G16/G17/G01/G03 已按预期修改，G08/G18 未完成。
+- 状态：**未修复**。这两项是 FL-D146 之前已存在的生成/适用性问题，不是 FL-D157/158 的回归；当前修复轮不应伪称合同完整。
+- 下一步：分别定位 G08 compose fixed-text 缺失（模型输出/模板重试）与 G18 applicability/site（是否 already-satisfied 但无站点证据）；修复后重跑本单例与 ≥5 份真实合同。
+
+### 本轮真实模型预算记录（2026-10-23）
+
+- 临时账本（均在仓库外）：`/tmp/opencode/engine-live-20261023/ledger.sqlite`（263 calls / ≈$0.1439）、`ledger-final.sqlite`（74 / $0.03485）、`ledger-debug.sqlite`（85 / $0.04212）、`ledger-final2.sqlite`（43 / $0.02638）。合计 **465 calls / ≈$0.2473**。
+- 未使用生产账本 `/var/lib/fundlex/model_budget.sqlite`；未打印或入库任何凭据；未部署、未跑 514 份。

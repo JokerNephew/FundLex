@@ -145,7 +145,8 @@ def _character_ngrams(value: str, size: int) -> set[str]:
     return {value[index:index + size] for index in range(len(value) - size + 1)}
 
 
-def find_fuzzy(cleaned: str, needle: str, *, threshold: float = FUZZY_MATCH_THRESHOLD
+def find_fuzzy(cleaned: str, needle: str, *, threshold: float = FUZZY_MATCH_THRESHOLD,
+               variable_length: bool = False
                ) -> tuple[int, int, float] | None:
     """Locate ``needle`` in whitespace-free ``cleaned`` text despite small wording edits.
 
@@ -177,23 +178,45 @@ def find_fuzzy(cleaned: str, needle: str, *, threshold: float = FUZZY_MATCH_THRE
         return None
     best: tuple[int, int, float] | None = None
     for start in sorted(candidates):
-        window = cleaned[start:start + size]
-        if len(window) < size:
-            window = cleaned[start:]
-        ratio = SequenceMatcher(None, target, window).ratio()
-        if ratio < threshold or len(window) < 0.8 * size:
+        # Wording variants can insert or omit a short connector.  The public matcher
+        # keeps its historical fixed-size span; deterministic recall opts into the
+        # bounded variable-length mode so its occurrence parts cover the real clause.
+        if variable_length:
+            lower = max(8, int(size * 0.75))
+            upper = min(len(cleaned) - start, int(size * 1.35) + 1)
+            local: tuple[int, float] | None = None
+            for length in range(lower, upper + 1):
+                window = cleaned[start:start + length]
+                ratio = SequenceMatcher(None, target, window).ratio()
+                if local is None or ratio > local[1] + 1e-9 \
+                        or (abs(ratio - local[1]) <= 1e-9
+                            and abs(length - size) < abs(local[0] - size)):
+                    local = (length, ratio)
+        else:
+            window = cleaned[start:start + size]
+            if len(window) < size:
+                window = cleaned[start:]
+            local = (len(window), SequenceMatcher(None, target, window).ratio())
+        if local is None:
             continue
-        end = min(len(cleaned), start + size)
-        if best is None or ratio > best[2]:
+        length, ratio = local
+        if ratio < threshold or length < 0.8 * size:
+            continue
+        end = min(len(cleaned), start + length)
+        if best is None or ratio > best[2] \
+                or (abs(ratio - best[2]) <= 1e-9
+                    and abs(length - size) < abs((best[1] - best[0]) - size)):
             best = (start, end, ratio)
     return best
 
 
 def fuzzy_span(span_text: str, needle: str, *,
-               threshold: float = FUZZY_MATCH_THRESHOLD) -> tuple[int, int, float] | None:
+               threshold: float = FUZZY_MATCH_THRESHOLD,
+               variable_length: bool = False) -> tuple[int, int, float] | None:
     """Fuzzy-locate ``needle`` in one paragraph, returning raw offsets and a ratio."""
     cleaned, index_map = display_text(span_text)
-    located = find_fuzzy(cleaned, needle, threshold=threshold)
+    located = find_fuzzy(cleaned, needle, threshold=threshold,
+                         variable_length=variable_length)
     if located is None:
         return None
     start_clean, end_clean, ratio = located
@@ -201,7 +224,8 @@ def fuzzy_span(span_text: str, needle: str, *,
 
 
 def fuzzy_span_clause(span_text: str, needle: str, *,
-                      threshold: float = FUZZY_MATCH_THRESHOLD) -> tuple[int, int, float] | None:
+                      threshold: float = FUZZY_MATCH_THRESHOLD,
+                      variable_length: bool = False) -> tuple[int, int, float] | None:
     """``fuzzy_span`` snapped to a sentence boundary.
 
     ``find_fuzzy`` matches the best character window, so a reference ending in "。" can
@@ -211,7 +235,8 @@ def fuzzy_span_clause(span_text: str, needle: str, *,
     returned span is extended to (or trimmed back to) the paragraph's matching stop so the
     kept suffix starts a fresh sentence.
     """
-    span = fuzzy_span(span_text, needle, threshold=threshold)
+    span = fuzzy_span(span_text, needle, threshold=threshold,
+                      variable_length=variable_length)
     if span is None:
         return None
     start_raw, end_raw, ratio = span
@@ -1272,6 +1297,23 @@ _BOUNDARY_MARKS = frozenset("。，；：！？）＝"
                              ";；！？!?…）)\"】》、")
 _PARAGRAPH_GRAMS_CACHE: dict[str, set[str]] = {}
 
+# Stable business-word variants used by the deterministic delete fallback.  The guide
+# wording is often ``每日计提、按月支付`` while contracts write ``每日计算、次月支付``;
+# treating those as unrelated leaves a whole payment clause invisible to recall.  These
+# aliases are deliberately narrow and remain inside the same fee/payment topic.
+_KEYWORD_VARIANTS: dict[str, tuple[str, ...]] = {
+    "计提": ("计提", "计算"),
+    "计算": ("计算", "计提"),
+    "按月": ("按月", "每月", "次月", "月末"),
+    "每月": ("每月", "按月", "次月", "月末"),
+    "次月": ("次月", "按月", "每月", "月末"),
+    "逐日": ("逐日", "每日"),
+    "每日": ("每日", "逐日"),
+    "支付": ("支付", "划付", "划款"),
+    "划付": ("划付", "支付", "划款"),
+    "划款": ("划款", "支付", "划付"),
+}
+
 
 _NEGATION_PREFIXES = ("不", "无须", "无需", "免于", "取消")
 
@@ -1559,8 +1601,6 @@ def find_old_text_all(paragraphs: Sequence[Any], old_text: str, *,
                     if lead is None or _lead_nearby(body, position, lead):
                         record(((span.location, position, position + len(needle)),))
                 position = body.find(needle, position + 1)
-    if found:
-        return found
     # A split occurrence: this paragraph holds the head of the reference and the
     # next paragraph continues with its remainder.
     for span in paragraphs:
@@ -1587,20 +1627,33 @@ def find_old_text_all(paragraphs: Sequence[Any], old_text: str, *,
             record(((span.location, position, len(body)),
                     (follower.location, 0, len(remaining))))
             break
-        if found:
-            return found
-    if found:
-        return found
+        # Keep scanning.  A contract may contain several copies of the same clause,
+        # including copies split at different paragraph boundaries.  Returning after
+        # the first split occurrence used to suppress later sites (recall-first rule).
     # Short reference texts only ever match exactly: a fuzzy ratio over a short
     # string is too easy to satisfy for a different sentence (FL-D047).
     if len(target) < 24 or threshold < 0.9:
-        return []
+        return found
     needle_grams = _character_ngrams(target, 2)
     best: dict[str, tuple[tuple[str, int, int], ...]] = {}
     for span in paragraphs:
-        if not (_PARAGRAPH_GRAMS_CACHE.get(span.location, set()) & needle_grams):
+        # ``find_old_text_all`` is a public deterministic resolver and is also called
+        # outside ``survey_targets`` (for example during artifact replay).  Do not rely
+        # on the survey's process-local n-gram cache being warmed; an empty cache used
+        # to suppress every fuzzy candidate on direct calls.
+        # Location ids restart at ``p0`` for every DOCX, so a process-global cache can
+        # carry grams from a previous contract.  Compute this tiny per-paragraph filter
+        # from the current text; survey_targets may still warm its cache for diagnostics,
+        # but correctness must never depend on it.
+        span_grams = _character_ngrams(texts[span.location], 2)
+        if not (span_grams & needle_grams):
             continue
-        variant = fuzzy_span(span.text, old_text, threshold=threshold)
+        # References ending in sentence punctuation must bind the complete source
+        # sentence.  A raw fuzzy window can stop a few characters early (leaving
+        # "配。" or swallowing the next clause); clause snapping preserves the true
+        # operation range while still allowing wording variants.
+        variant = fuzzy_span_clause(span.text, old_text, threshold=threshold,
+                                    variable_length=True)
         if variant is None:
             continue
         matched_window = span.text[variant[0]:variant[1]]
@@ -1610,11 +1663,37 @@ def find_old_text_all(paragraphs: Sequence[Any], old_text: str, *,
                 or _numeric_flip_only(old_text, matched_window):
             continue
         start_raw, end_raw, _ratio = variant
-        cleaned, _index_map = display_text(span.text)
-        located = find_normalized(cleaned, span.text[start_raw:end_raw])
-        compact_start = located[0] if located else 0
-        best[span.location] = ((span.location, compact_start, compact_start + len(target)),)
-    return list(best.values())
+        # ``fuzzy_span`` returns offsets in the raw paragraph (including spaces and
+        # barrier markers), while occurrence parts are offsets in the whitespace-free
+        # text.  Mapping through ``compact_offsets`` keeps rebind/replay ranges stable
+        # when the variant has a different length from the guide reference.
+        _compact_text, compact_map = compact_offsets(span.text)
+        compact_start = _raw_to_compact(compact_map, start_raw)
+        compact_end = _raw_to_compact(compact_map, end_raw)
+        if compact_end <= compact_start:
+            continue
+        best[span.location] = ((span.location, compact_start, compact_end),)
+    # Exact/split occurrences and bounded wording variants are both valid recall
+    # candidates.  Keep every fuzzy site, de-duplicating against the exact start
+    # offsets already recorded.  Previously fuzzy search ran only when *no* exact
+    # occurrence existed, so a second paraphrased copy of a clause was silently
+    # dropped whenever one exact copy was present.
+    for occurrence in best.values():
+        location, start, end = occurrence[0]
+        # Exact text is stronger evidence than fuzzy text.  If the candidate overlaps
+        # an already recorded exact/split occurrence in the same paragraph, retain the
+        # exact binding and avoid producing two edits for one clause.  Disjoint
+        # occurrences (including an exact body copy and a paraphrased summary copy)
+        # remain independent recall hits.
+        if any(existing_location == location and max(existing_start, start) < min(existing_end, end)
+               for existing_location, existing_start, existing_end in
+               ((part[0], part[1], part[2]) for item in found for part in item)):
+            continue
+        key = (location, start)
+        if key not in seen:
+            found.append(occurrence)
+            seen.add(key)
+    return found
 
 
 def resolve_old_text(paragraphs: Sequence[Any], old_text: str, *,
@@ -2210,6 +2289,12 @@ def known_operations_from_targets(targets: Sequence[Target], rules_by_id: dict[s
                                   ) -> dict[tuple[str, str], set[str] | None]:
     known: dict[tuple[str, str], set[str] | None] = {}
     for target in targets:
+        # A target that failed site/operation attribution, or was ruled out of scope,
+        # must not claim coverage.  Otherwise one bad model target at a real clause
+        # location suppresses the deterministic survey hit for that same clause and
+        # the operation is left unplanned (live G15 p806 regression).
+        if getattr(target, "out_of_scope", False) or getattr(target, "attribution_error", ""):
+            continue
         keys = target_operation_keys(target, rules_by_id.get(target.rule_id), inspection)
         for location in _target_paragraphs(target):
             pair = (target.rule_id, location)
@@ -2336,9 +2421,11 @@ def survey_targets(inspection: DocumentInspection, rules: Sequence[dict], facts:
                 existing[(rule_id, location)] = None
         tail_keys = set(bare_tail_keys(rule, facts))
         anchors = rule_context_anchors(rule, facts)
-        delete_only_rule = _delete_keyword_bag(rule, facts) != () or all(
-            op.get("op") == "delete" for op in (rule.get("operations") or []) if op.get("op") != "noop")
-        rule_hits_before = len(hits)
+        # Clause-boundary extension is safe only for a genuinely delete-only rule.
+        # The keyword-bag fallback below may still use delete references from a mixed
+        # rule (for example G05 replace + delete), but must not widen the exact replace
+        # span into the surrounding sentence.
+        delete_only_rule = is_delete_only_rule(rule, facts)
         for operation_key_value, key in operation_search_key_pairs(rule, facts):
             hit_keys = () if operation_key_value == "*" else (operation_key_value,)
             occurrences = find_old_text_all(paragraphs, key, threshold=SURVEY_FUZZY_THRESHOLD)
@@ -2402,49 +2489,95 @@ def survey_targets(inspection: DocumentInspection, rules: Sequence[dict], facts:
                 else:
                     for location in locations:
                         existing[(rule_id, location)] = None
-        if len(hits) == rule_hits_before:
-            # No reference anchor matched. A pure deletion may still be present under a
-            # paraphrase (FL-D062); fall back to the rule's own keyword signature, and only
-            # where that signature is fully present in a single paragraph.
-            bag = _delete_keyword_bag(rule, facts)
-            if bag:
-                ordered = list(compact_text.items())
-                for index, (location, body) in enumerate(ordered):
-                    if (rule_id, location) in existing:
+        # A pure deletion may still be present under a paraphrase (FL-D062).  Run the
+        # keyword signature even when another operation/reference already matched: one
+        # exact operation site must not suppress a second operation or a wording variant
+        # at a different site.  The per-location ``existing`` gate below keeps exact
+        # hits from being duplicated, while operation coverage remains explicit.
+        bag = _delete_keyword_bag(rule, facts)
+        if bag:
+            bag_operation_keys = tuple(
+                f"{rule_id}:{index}"
+                for index, operation in enumerate(rule.get("operations") or [])
+                if operation.get("op") == "delete"
+                and condition_matches(operation.get("condition"), facts)
+            )
+            ordered = list(compact_text.items())
+            for index, (location, body) in enumerate(ordered):
+                state = existing.get((rule_id, location), _MISSING)
+                # A keyword-bag hit is a fallback for the delete operations only.  A
+                # model target for another operation at this location must not suppress
+                # it; skip only when every applicable delete operation is already
+                # covered, or when a legacy wildcard target explicitly owns the site.
+                if state is _LOCATION_WILDCARD or (
+                        state is not _MISSING and state is not None
+                        and bag_operation_keys
+                        and set(bag_operation_keys).issubset(state)):
+                    continue
+                in_self = _keyword_bag_in_clause(body, bag)
+                follower_location = (ordered[index + 1][0]
+                                     if index + 1 < len(ordered) else None)
+                follower = (ordered[index + 1][1]
+                            if index + 1 < len(ordered) else "")
+                # A split clause can only continue into the next paragraph while the
+                # current one is still open.  Pairing after a full stop used to merge
+                # G15's payment clause with G17's usage clause (FL-D157), deleting the
+                # wrong paragraph and overlapping a sibling operation's target.
+                body_closed = body.rstrip().endswith(("。", "；", ";", "！", "？", "!", "?"))
+                follower_new_topic = follower.lstrip().startswith(
+                    ("销售服务费主要用于", "销售服务费使用范围"))
+                # A pair is only the owner when the signature is genuinely split: the
+                # follower alone must not already satisfy it, otherwise the follower is
+                # the single paragraph to bind and pairing would drag in the preceding
+                # line (a fee-formula row) as well.  A head that already satisfies the
+                # bag but ends mid-clause (for example "…按月支付，") is extended to its
+                # continuation instead of becoming a half-clause target.
+                in_pair = (
+                    follower_location is not None
+                    and not body_closed
+                    and not follower_new_topic
+                    and not _keyword_bag_in_clause(follower, bag)
+                    and (rule_id, follower_location) not in existing
+                    and (not in_self or body.rstrip().endswith(("，", ",", "、", "：", ":")))
+                    and _keyword_bag_in_clause(body + follower, bag))
+                if not (in_self or in_pair):
+                    continue
+                # G06's generic ``份额类别`` + ``转换`` signature is too broad for
+                # adjacent amendment/meeting paragraphs.  Require the bounded
+                # semantic prohibition before pairing them; otherwise an unrelated
+                # ``调整…转换`` sequence becomes a false deletion target.
+                if rule_id == "G06":
+                    candidate_body = body + follower if in_pair else body
+                    if not _semantic_delete_sentences(rule_id, candidate_body):
                         continue
-                    in_self = _keyword_bag_in_clause(body, bag)
-                    follower_location = (ordered[index + 1][0]
-                                         if index + 1 < len(ordered) else None)
-                    follower = (ordered[index + 1][1]
-                                if index + 1 < len(ordered) else "")
-                    # A pair is only the owner when the signature is genuinely split: the
-                    # follower alone must not already satisfy it, otherwise the follower is
-                    # the single paragraph to bind and pairing would drag in the preceding
-                    # line (a fee-formula row) as well.
-                    in_pair = (not in_self and follower_location is not None
-                               and not _keyword_bag_in_clause(follower, bag)
-                               and (rule_id, follower_location) not in existing
-                               and _keyword_bag_in_clause(body + follower, bag))
-                    if not (in_self or in_pair):
+                span = by_location.get(location)
+                if span is None:
+                    continue
+                counter += 1
+                if in_pair:
+                    follower_span = by_location.get(follower_location)
+                    if follower_span is None:
                         continue
-                    span = by_location.get(location)
-                    if span is None:
-                        continue
-                    counter += 1
-                    if in_pair:
-                        follower_span = by_location.get(follower_location)
-                        if follower_span is None:
-                            continue
-                        locations = (location, follower_location)
-                        parts = [(location, 0, len(span.text)),
-                                 (follower_location, 0, len(follower_span.text))]
+                    locations = (location, follower_location)
+                    # Composite offsets are measured in each paragraph's
+                    # whitespace-free text (plan_composite_target maps them back
+                    # through compact_offsets).  Raw lengths include spaces and
+                    # made the plan fail with RECALL_TARGET_COMPOSITE_UNRESOLVED
+                    # whenever the paragraph contained any spacing.
+                    parts = [(location, 0, len(compact_text[location])),
+                             (follower_location, 0, len(compact_text[follower_location]))]
+                else:
+                    locations = (location,)
+                    parts = [(location, 0, len(compact_text[location]))]
+                hits.append(SurveyHit(rule_id=rule_id, operation="survey",
+                                      locations=locations, quote=span.text.strip(),
+                                      start=0, end=0, ratio=1.0,
+                                      index=counter,
+                                      operation_keys=bag_operation_keys).with_parts(parts))
+                for item in locations:
+                    if bag_operation_keys:
+                        _add_operation_coverage(existing, rule_id, item, bag_operation_keys)
                     else:
-                        locations = (location,)
-                        parts = [(location, 0, len(span.text))]
-                    hits.append(SurveyHit(rule_id=rule_id, operation="survey",
-                                          locations=locations, quote=span.text.strip(),
-                                          start=0, end=0, ratio=1.0, index=counter).with_parts(parts))
-                    for item in locations:
                         existing[(rule_id, item)] = None
     return hits
 
@@ -2474,6 +2607,117 @@ def _append_obligation_present(rule_id: str, required: str, document_compact: st
     return True
 
 
+# G01/G03 append the new policy after the share-class *definition*, not after every
+# paragraph that happens to contain "基金份额类别".  Contract summaries repeat the
+# amendment trigger "调整基金份额类别设置" in the contract-change list; matching that
+# sentence put the new clause inside the change-events list (FL-D158).
+_APPEND_DEFINITION_MARKERS = (
+    "份额类别：", "份额类别:", "基金份额类别定义", "份额类别定义",
+    "将基金份额分为", "称为",
+)
+_APPEND_DEFINITION_EXCLUDES = (
+    "调整基金份额类别设置", "调整基金份额的分类", "份额类别设置",
+    "增设新的份额类别", "减少基金份额类别", "基金推出新业务",
+    "变更基金合同", "修改《基金合同》", "终止基金合同",
+    "调整有关认购", "业务规则",
+)
+
+
+def _append_definition_anchor(rule_id: str, span: Any,
+                              inspection: DocumentInspection) -> bool:
+    """Whether an append anchor is a real share-class definition clause.
+
+    A definition can be split by Word into ``…三种不同的`` | ``类别。…``; the
+    continuation is accepted only when the previous paragraph carries the marker and
+    is still an open sentence, the same rule ``append_site_ok`` uses.
+    """
+    if rule_id not in {"G01", "G03"}:
+        return True
+    paragraph, _ = display_text(span.text)
+    compact = _compact(paragraph)
+    if any(token in compact for token in _APPEND_DEFINITION_EXCLUDES):
+        return False
+    if any(token in compact for token in _APPEND_DEFINITION_MARKERS):
+        return True
+    locations = [item.location for item in inspection.paragraphs]
+    try:
+        index = locations.index(span.location)
+    except ValueError:
+        return False
+    if index <= 0:
+        return False
+    previous = inspection.paragraphs[index - 1]
+    previous_text, _ = display_text(previous.text)
+    if previous_text.rstrip().endswith(("。", "；", ";", "！", "？", "!", "?")):
+        return False
+    if not any(token in _compact(previous_text) for token in _APPEND_DEFINITION_MARKERS):
+        return False
+    return paragraph.lstrip().startswith(("类别", "份额类别", "基金份额类别"))
+
+
+def _g16_payment_anchor(text: str) -> bool:
+    """The sales-service-fee accrual + payment sentence (G16 append head)."""
+    compact = _compact(display_text(text)[0])
+    accrual = any(token in compact for token in (
+        "每日计提", "日计提", "每日计算", "逐日累计", "计提"))
+    monthly = ("按月支付" in compact or
+               ("按月" in compact and "支付" in compact) or
+               "逐月支付" in compact)
+    return "销售服务费" in compact and accrual and monthly
+
+
+def _g16_clause_end(anchor: Any, section: Section,
+                    inspection: DocumentInspection) -> Any:
+    """Last paragraph of the sales-service-fee clause that starts at ``anchor``.
+
+    G16 must be appended after the whole fee clause (payment + usage scope), not
+    between ``…按月支付，`` and its continuation (FL-D159).  Walk only through the
+    clause's own continuation and sales-service-fee usage sentences, bounded to six
+    paragraphs and the anchor's section.
+    """
+    by_location = {item.location: item for item in inspection.paragraphs}
+    locations = list(section.locations)
+    try:
+        index = locations.index(anchor.location)
+    except ValueError:
+        return anchor
+    end = anchor
+    for location in locations[index + 1:index + 7]:
+        span = by_location.get(location)
+        if span is None:
+            break
+        text, _ = display_text(span.text)
+        compact = _compact(text)
+        if not compact or _looks_like_heading(text):
+            break
+        current, _ = display_text(end.text)
+        current_closed = current.rstrip().endswith(("。", "；", ";", "！", "？", "!", "?"))
+        if not current_closed:
+            end = span
+            continue
+        if compact.startswith("销售服务费") and any(
+                token in compact for token in ("主要用于", "使用范围")):
+            end = span
+            continue
+        break
+    return end
+
+
+def _append_member(rule_id: str, span: Any,
+                   inspection: DocumentInspection) -> bool:
+    """Rule-specific membership for an append anchor.
+
+    G16 membership stays on the payment sentence; its clause end is resolved after
+    membership so a single clause does not become several append targets.  G01/G03
+    additionally require a real class-definition clause (FL-D158).
+    """
+    if rule_id == "G16":
+        return _g16_payment_anchor(span.text)
+    if not append_site_ok(rule_id, span, inspection):
+        return False
+    return _append_definition_anchor(rule_id, span, inspection)
+
+
 def append_applicability_targets(inspection: DocumentInspection, rules: Sequence[dict],
                                  facts: Facts, sections: Sequence[Section], *,
                                  known: Sequence[tuple[str, str]] = (),
@@ -2496,10 +2740,17 @@ def append_applicability_targets(inspection: DocumentInspection, rules: Sequence
             continue
         hint = _compact(str(rule.get("section_hint") or ""))
         routed = [section for section in sections if hint and hint in _compact(section.title)]
+        # Contract summaries are often indexed under a generic heading instead of
+        # the body section's ``section_hint``.  Append obligations apply to each
+        # independently repeated business clause, so include summary sections as
+        # candidates and let ``append_site_ok`` prove the local anchor.
+        for section in sections:
+            if section.zone == "summary" and section not in routed:
+                routed.append(section)
         for section in routed:
             members = [span for span in paragraphs if span.location in set(section.locations)
                        and not _looks_like_heading(span.text)
-                       and append_site_ok(rule_id, span, inspection)]
+                       and _append_member(rule_id, span, inspection)]
             prefer = (hinted or {}).get(rule_id)
             preferred = next((span for span in members if span.location == prefer), None)
             # G16 has one payment mechanism per body/summary copy, so every member
@@ -2535,12 +2786,38 @@ def append_applicability_targets(inspection: DocumentInspection, rules: Sequence
             for anchor in anchors:
                 if (rule_id, anchor.location) in existing:
                     continue
+                if rule_id == "G16":
+                    # Append after the complete fee clause, never between its
+                    # payment head and the continuation paragraph (FL-D159).
+                    anchor = _g16_clause_end(anchor, section, inspection)
+                    if (rule_id, anchor.location) in existing:
+                        continue
                 for index, operation in append_ops:
                     template = str(operation.get("new_text") or "")
                     instantiated, issues = instantiate_slots(template, facts)
                     required = template if issues else instantiated
+                    # G16's policy is often split into several adjacent paragraphs:
+                    # daily accrual, direct-sales refund, and the over-one-year
+                    # treatment may each have their own paragraph.  Checking only the
+                    # payment anchor would then propose a duplicate append even when
+                    # the complete mechanism is already present in this body/summary
+                    # copy (产业优选 p852–p858 / p1324–p1330).  Use a bounded local
+                    # section window for this multi-component rule; other append rules
+                    # remain anchored to their own paragraph.
+                    presence_text = _compact(anchor.text)
+                    if rule_id == "G16":
+                        try:
+                            anchor_index = section.locations.index(anchor.location)
+                        except ValueError:
+                            anchor_index = -1
+                        if anchor_index >= 0:
+                            nearby = section.locations[max(0, anchor_index - 6):
+                                                       anchor_index + 7]
+                            presence_text = "".join(
+                                _compact(inspection.by_location(location).text)
+                                for location in nearby)
                     if not required or _append_obligation_present(
-                            rule_id, required, _compact(anchor.text)):
+                            rule_id, required, presence_text):
                         continue
                     hits.append(SurveyHit(rule_id=rule_id, operation="append",
                         locations=(anchor.location,), quote=anchor.text.strip(),
@@ -2718,7 +2995,12 @@ def _keyword_bag_in_clause(body: str, bag: tuple[str, ...], window: int = 60) ->
     """
     if not bag:
         return False
-    positions = [body.find(token) for token in bag]
+    positions: list[int] = []
+    for token in bag:
+        variants = _KEYWORD_VARIANTS.get(token, (token,))
+        position = min((body.find(variant) for variant in variants
+                        if body.find(variant) >= 0), default=-1)
+        positions.append(position)
     if any(position < 0 for position in positions):
         return False
     for start in positions:
@@ -2728,7 +3010,7 @@ def _keyword_bag_in_clause(body: str, bag: tuple[str, ...], window: int = 60) ->
 
 
 def _delete_keyword_bag(rule: dict, facts: Facts | None) -> tuple[str, ...]:
-    """Closed-class keyword requirements derived from a delete-only rule's references.
+    """Closed-class keyword requirements derived from applicable delete references.
 
     A pure deletion frequently survives in contracts in several paraphrases ("每日计提"
     against "每日计算", "按月支付" against "次月支付"), so no single string anchor covers
@@ -2748,15 +3030,12 @@ def _delete_keyword_bag(rule: dict, facts: Facts | None) -> tuple[str, ...]:
     period = ("按月", "次月", "每月", "逐日", "每季", "持有期", "少于7日", "7日", "七日")
     purpose = ("佣金", "广告", "促销", "持有人服务", "使用范围")
     references = []
-    delete_only = True
     for operation in rule.get("operations") or []:
         if facts is not None and not condition_matches(operation.get("condition"), facts):
             continue
-        if operation.get("op") != "delete":
-            delete_only = False
-            break
-        references.append(_compact(str(operation.get("old_text") or "")))
-    if not delete_only or not references:
+        if operation.get("op") == "delete":
+            references.append(_compact(str(operation.get("old_text") or "")))
+    if not references:
         return ()
     body = "".join(references)
     bag: list[str] = []
@@ -3486,8 +3765,14 @@ def plan_composite_target(rule: dict, target: Target, inspection: DocumentInspec
         compact_body, compact_map = compact_offsets(span.text)
         if start_clean < 0 or end_clean > len(compact_body) or start_clean >= end_clean:
             raise RecallError("RECALL_TARGET_COMPOSITE_UNRESOLVED", {"target": target.target_id})
-        start_raw = compact_map[start_clean]
-        end_raw = compact_map[end_clean - 1] + 1
+        if start_clean == 0 and end_clean == len(compact_body):
+            # The operation covers the whole paragraph: remove its trailing spaces
+            # too.  Mapping only the compact characters left one or two spaces behind,
+            # which the artifact validator then reported as an unexplained change.
+            start_raw, end_raw = 0, len(span.text)
+        else:
+            start_raw = compact_map[start_clean]
+            end_raw = compact_map[end_clean - 1] + 1
         # A deletion keeps everything outside this part's slice of the reference; a
         # replacement inserts the new text at the anchor and keeps the rest verbatim.
         if new_text and index == 0:
@@ -3838,9 +4123,17 @@ def _plan_target_inner(rule: dict, target: Target, inspection: DocumentInspectio
                     span.text, old_text, narrowed[0])
                 target.occurrence_anchor = target.quote
     actual = span.text[target.start:target.end]
-    if not target_site_ok(rule_id, span, inspection) or (
-            any(operation.get("op") == "append" for operation in operations)
-            and not append_site_ok(rule_id, span, inspection)):
+    has_append = any(operation.get("op") == "append" for operation in operations)
+    if has_append:
+        # For an append, the append-site guard is authoritative: it accepts the
+        # clause-end anchor G16 resolves to (FL-D159).  Other append rules still
+        # keep the ordinary target-site guard as an additional check.
+        site_ok = append_site_ok(rule_id, span, inspection)
+        if site_ok and rule_id != "G16":
+            site_ok = target_site_ok(rule_id, span, inspection)
+    else:
+        site_ok = target_site_ok(rule_id, span, inspection)
+    if not site_ok:
         raise RecallError("TARGET_SOURCE_MISMATCH",
                           {"rule": rule_id, "target": target.target_id,
                            "location": target.location})
@@ -5431,6 +5724,11 @@ def _composite_part_slice(component: dict[str, Any], span: ParagraphSpan
     _cleaned, index_map = compact_offsets(span.text)
     if start_clean < 0 or end_clean > len(index_map) or start_clean >= end_clean:
         return None
+    if start_clean == 0 and end_clean == len(index_map):
+        # Whole-paragraph parts delete the trailing spaces too, matching
+        # plan_composite_target; otherwise the content check expects them back and
+        # rejects the edit, silently dropping the second composite component.
+        return 0, len(span.text)
     return index_map[start_clean], index_map[end_clean - 1] + 1
 
 
@@ -5616,6 +5914,12 @@ _TARGET_ANCHORS: dict[str, tuple[tuple[str, ...], str]] = {
 def append_site_ok(rule_id: str, span: Any, inspection: DocumentInspection) -> bool:
     """An append anchor must carry its own clause, never a neighbour's anchor."""
     if rule_id in {"G01", "G03"}:
+        # A model inventory target can point at the amendment trigger
+        # "基金份额类别设置" or a split fragment.  Require a real definition clause
+        # before accepting the site; otherwise the policy is appended twice (once to
+        # the fragment by the model and once to the definition by the survey).
+        if not _append_definition_anchor(rule_id, span, inspection):
+            return False
         paragraph, _ = display_text(span.text)
         if any(anchor in paragraph for anchor in _TARGET_ANCHORS[rule_id][0]):
             return True
@@ -5624,9 +5928,12 @@ def append_site_ok(rule_id: str, span: Any, inspection: DocumentInspection) -> b
         # append belongs after the continuation paragraph, but the anchor remains
         # in the previous paragraph.  Only accept a direct, unfinished-heading
         # continuation, never an unrelated preceding paragraph.
+        location = getattr(span, "location", None)
+        if location is None:
+            return False
         locations = [item.location for item in inspection.paragraphs]
         try:
-            index = locations.index(span.location)
+            index = locations.index(location)
         except ValueError:
             return False
         if index <= 0:
@@ -5643,6 +5950,28 @@ def append_site_ok(rule_id: str, span: Any, inspection: DocumentInspection) -> b
                     ("类别", "份额类别", "基金份额类别"))
                 and any(token in current_text for token in
                         ("基金份额", "申购费", "认购费", "销售服务费")))
+    if rule_id == "G16":
+        paragraph, _ = display_text(span.text)
+        compact = _compact(paragraph)
+        if _g16_payment_anchor(paragraph):
+            return True
+        # The resolved append site is the end of the complete fee clause: the
+        # usage-scope sentence or the direct continuation of the payment head
+        # (FL-D159).  Membership still selects only the payment head; this branch
+        # exists so the planner can execute the resolved clause-end target.
+        if compact.startswith("销售服务费") and any(
+                token in compact for token in ("主要用于", "使用范围")):
+            return True
+        locations = [item.location for item in inspection.paragraphs]
+        try:
+            index = locations.index(getattr(span, "location", ""))
+        except ValueError:
+            return False
+        if index <= 0:
+            return False
+        previous_text, _ = display_text(inspection.paragraphs[index - 1].text)
+        return (not previous_text.rstrip().endswith(("。", "；", ";", "！", "？", "!", "?"))
+                and _g16_payment_anchor(previous_text))
     return target_site_ok(rule_id, span, inspection)
 
 
@@ -5681,6 +6010,15 @@ def target_site_ok(rule_id: str, span: Any, inspection: DocumentInspection) -> b
         paragraph, _ = display_text(span.text)
         return "销售服务费" in paragraph and (
             "主要用于" in paragraph or "使用范围" in paragraph)
+    if rule_id == "G06":
+        paragraph, _ = display_text(span.text)
+        compact = _compact(paragraph)
+        # Historical contracts use both the guide's "不得互相转换" wording and
+        # variants such as "暂不允许进行相互转换".  Preserve the domain guard while
+        # accepting those semantic equivalents for deterministic delete recall.
+        return ("份额" in compact and "转换" in compact and
+                any(token in compact for token in
+                    ("不得", "不允许", "暂不允许", "不能", "不可")))
     if rule_id not in _TARGET_ANCHORS:
         return True
     paragraph, _ = display_text(span.text)
@@ -5704,6 +6042,60 @@ _DELETE_SENTENCE_ANCHORS = {
     "G15": ("销售服务费",),
     "G17": ("销售服务费",),
 }
+
+# Canonical guide wording is only one historical form.  These bounded semantic
+# probes are used by the deterministic delete sweep after exact/variant matching;
+# they are deliberately domain-specific so a generic "转换" sentence cannot become
+# a G06 target.  The model may still refine the target, but it must not be allowed
+# to suppress this code-discoverable occurrence.
+_DELETE_SEMANTIC_PROBES = {
+    "G06": re.compile(
+        r"(?=.*份额(?:类别|之间))(?=.*(?:不得|不允许|暂不允许|不能|不可)[^。；;！？!?]{0,32}转换)"
+    ),
+}
+
+# One-way养老/Y-class restrictions may reflect a distinct regulatory boundary,
+# while G06's reference authorizes deletion of the mutual class-conversion ban.
+# Surface these to the final omission review, but do not turn them into automatic
+# delete targets without an applicability decision.  Absence cannot be proven by
+# the canonical literal alone when such a candidate is still present.
+_DELETE_REVIEW_PROBES = {
+    "G06": re.compile(
+        r"(?=(?:.*份额(?:类别|之间)|.*[A-ZＡ-Ｚ]类基金份额))"
+        r"(?=.*(?:不得|不允许|暂不允许|不能|不可)[^。；;！？!?]{0,32}转换)"
+    ),
+}
+
+
+def semantic_delete_review_candidates(rule_id: str, text: str) -> list[str]:
+    """Potential delete equivalents needing review, including uncertain branches."""
+    pattern = _DELETE_REVIEW_PROBES.get(rule_id)
+    if pattern is None:
+        return []
+    candidates: list[str] = []
+    for sentence in re.split(r"(?<=[。；;！？!?])", text or ""):
+        candidate = sentence.strip()
+        if len(_compact(candidate)) >= 12 and pattern.search(candidate):
+            candidates.append(candidate)
+    return candidates
+
+
+def _semantic_delete_sentences(rule_id: str, text: str) -> list[str]:
+    pattern = _DELETE_SEMANTIC_PROBES.get(rule_id)
+    if pattern is None:
+        return []
+    sentences: list[str] = []
+    for sentence in re.split(r"(?<=[。；;！？!?])", text or ""):
+        candidate = sentence.strip()
+        if len(_compact(candidate)) < 12 or not pattern.search(candidate):
+            continue
+        if candidate not in sentences:
+            sentences.append(candidate)
+    # Contracts occasionally omit terminal punctuation at paragraph boundaries.
+    tail = (text or "").strip()
+    if len(_compact(tail)) >= 12 and pattern.search(tail) and tail not in sentences:
+        sentences.append(tail)
+    return sentences
 
 
 def ensure_delete_targets(targets: Sequence[Target], rules_by_id: dict[str, dict],
@@ -5799,4 +6191,28 @@ def ensure_delete_targets(targets: Sequence[Target], rules_by_id: dict[str, dict
                     covered.setdefault(rule_id, []).append((location, _compact(probe)))
                     if len(created) >= limit:
                         return created
+        # Semantic fallback: scan every paragraph for an authorised business
+        # signature even when all canonical/variant literals are absent.  This is
+        # recall-first and produces a real source span; it never marks absence.
+        for span in paragraphs:
+            for candidate in _semantic_delete_sentences(rule_id, str(span.text)):
+                location = str(span.location)
+                if any(item[0] == location and
+                       (_compact(candidate) in item[1] or item[1] in _compact(candidate))
+                       for item in covered.get(rule_id, [])):
+                    continue
+                located = resolve_quote(span, candidate)
+                if located is None:
+                    continue
+                start, end = located
+                created.append(Target(
+                    target_id=f"DEL{len(created) + 1:03d}", rule_id=rule_id,
+                    location=location, quote=candidate, state="needs_edit",
+                    reason="delete_semantic_variant", start=start, end=end,
+                    resolution="resolved",
+                    segment_ok=containing_segment(span, start, end) is not None,
+                    operations=(operation_key(rule_id, 0),)))
+                covered.setdefault(rule_id, []).append((location, _compact(candidate)))
+                if len(created) >= limit:
+                    return created
     return created

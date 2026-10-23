@@ -29,6 +29,16 @@ class RecoveryAction(str, Enum):
     REGENERATE_ARTIFACT = "REGENERATE_ARTIFACT"
     SPLIT_CONTEXT = "SPLIT_CONTEXT"
     PAUSE_RESUME = "PAUSE_RESUME"
+    # Generation-router actions.  These are only selected when the caller opts
+    # into ``strategy_escalation``; legacy contexts keep the actions above.
+    RETRY_DELETE = "RETRY_DELETE"
+    RETRY_EXACT = "RETRY_EXACT"
+    RETRY_NORMALIZED = "RETRY_NORMALIZED"
+    RETRY_FUZZY = "RETRY_FUZZY"
+    RETRY_TEMPLATE = "RETRY_TEMPLATE"
+    RETRY_SPLICE = "RETRY_SPLICE"
+    REPAIR_COMPOSE = "REPAIR_COMPOSE"
+    REBIND_ARTIFACT = "REBIND_ARTIFACT"
     MARK_UNRESOLVED = "MARK_UNRESOLVED"
 
 
@@ -170,6 +180,10 @@ class RecoveryAttempt:
     source_span: str = ""
     attempt: int = 0
     budget_key: str = ""
+    #: Concrete generation router method used by this attempt.  Keeping this
+    #: alongside the legacy action makes retries auditable and gives recovery a
+    #: stable cursor even when target ids are regenerated.
+    strategy: str = ""
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -188,6 +202,7 @@ class RecoveryAttempt:
             "source_span": self.source_span,
             "attempt": self.attempt,
             "budget_key": self.budget_key,
+            "strategy": self.strategy,
         }
 
 
@@ -238,6 +253,7 @@ class RecoveryDecision:
     reason: str
     budget_key: str = ""
     attempt: int = 1
+    strategy: str = ""
 
     @property
     def terminal(self) -> bool:
@@ -245,4 +261,5 @@ class RecoveryDecision:
 
     def as_dict(self) -> dict[str, Any]:
         return {"action": self.action.value, "reason": self.reason,
-                "budget_key": self.budget_key, "attempt": self.attempt}
+                "budget_key": self.budget_key, "attempt": self.attempt,
+                "strategy": self.strategy}

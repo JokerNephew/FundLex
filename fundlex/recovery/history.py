@@ -95,6 +95,16 @@ class RecoveryHistory:
                 return item
         return None
 
+    def last_strategy(self, context: RecoveryContext | None = None) -> str:
+        """Return the most recent router strategy for this recovery subject."""
+        for item in reversed(self.attempts):
+            if not item.strategy:
+                continue
+            if context is not None and not self._same_subject(item, context):
+                continue
+            return item.strategy
+        return ""
+
     @property
     def terminal(self) -> bool:
         return bool(self.attempts) and \

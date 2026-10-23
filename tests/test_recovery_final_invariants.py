@@ -65,6 +65,15 @@ def test_effect_proof_is_site_scoped():
     assert proof.site_effects[0]["failure_code"] == "CLAIM_OPERATION_NOT_PLANNED"
 
 
+def test_g06_semantic_absence_probe_keeps_one_way_class_limit_open():
+    from fundlex.generation.effects import _semantic_delete_hits
+
+    assert _semantic_delete_hits(
+        "G06", "但Y类基金份额不能转换为A类、C类、F类基金份额。"
+    )
+    assert not _semantic_delete_hits("G06", "本基金可以投资可转换债券。")
+
+
 def test_cassette_is_immutable_and_replayable(tmp_path):
     cassette = ModelCassette(tmp_path)
     request = {"task_type": "recall_facts", "prompt_version": "v1", "configured_model": "m",

@@ -6,6 +6,7 @@ import pytest
 from fundlex.recovery import (DEFAULT_RECOVERY_POLICY, FailureClass, RecoveryAction,
                               RecoveryContext, RecoveryHistory, RecoveryOrchestrator,
                               RecoveryPolicy, RecoveryPolicyError, classify, load_policy)
+from fundlex.generation import RecoveryStrategy
 
 
 def test_failure_class_mapping_covers_the_plan_examples():
@@ -284,3 +285,113 @@ def test_audit_contexts_keep_target_identity_and_classify_missing_verdicts():
     assert applicability.resolved_class is FailureClass.APPLICABILITY
     missing = [context for context in contexts if context.rule_id == "G06"][0]
     assert missing.resolved_class is FailureClass.VERIFICATION
+
+
+def test_strategy_escalation_changes_method_after_each_source_failure():
+    """Opt-in generation recovery must not spend the same method repeatedly."""
+    orchestrator = RecoveryOrchestrator()
+    history = RecoveryHistory()
+    context = RecoveryContext(
+        stage="claim_replay", rule_id="G05", operation_id="G05:0",
+        obligation_id="G05:0", site_id="p1", target_id="T1",
+        error_code="RECALL_TARGET_REBIND_FAILED", reason="quote drifted",
+        metadata={"strategy_escalation": True, "mode": "delete"},
+    )
+    expected = [
+        (RecoveryAction.RETRY_DELETE, RecoveryStrategy.DELETE),
+        (RecoveryAction.RETRY_EXACT, RecoveryStrategy.EXACT),
+        (RecoveryAction.RETRY_NORMALIZED, RecoveryStrategy.NORMALIZED),
+        (RecoveryAction.RETRY_FUZZY, RecoveryStrategy.FUZZY),
+        (RecoveryAction.RETRY_TEMPLATE, RecoveryStrategy.TEMPLATE),
+        (RecoveryAction.RETRY_SPLICE, RecoveryStrategy.SPLICE),
+        (RecoveryAction.LLM_COMPOSE, RecoveryStrategy.COMPOSE),
+    ]
+    observed = []
+    for action, strategy in expected:
+        decision = orchestrator.decide(context, history)
+        assert (decision.action, decision.strategy) == (action, strategy.value)
+        observed.append(decision.strategy)
+        orchestrator.record(history, context, decision, outcome="failed")
+    assert observed == [strategy.value for _, strategy in expected]
+    assert orchestrator.decide(context, history).terminal
+    assert len({item.strategy for item in history.attempts}) == len(expected)
+
+
+def test_strategy_escalation_routes_template_and_compose_failures():
+    orchestrator = RecoveryOrchestrator()
+    history = RecoveryHistory()
+    template_context = RecoveryContext(
+        stage="plan", rule_id="G09", operation_id="G09:1", site_id="p7",
+        error_code="RECALL_SLOT_UNRESOLVED", reason="missing slot",
+        metadata={"strategy_escalation": True},
+    )
+    first = orchestrator.decide(template_context, history)
+    assert (first.action, first.strategy) == (RecoveryAction.RETRY_SPLICE, "splice")
+    orchestrator.record(history, template_context, first, outcome="failed")
+    second = orchestrator.decide(template_context, history)
+    assert (second.action, second.strategy) == (RecoveryAction.LLM_COMPOSE, "compose")
+
+    compose_context = RecoveryContext(
+        stage="plan", rule_id="G09", operation_id="G09:1", site_id="p7",
+        error_code="RECALL_COMPOSE_UNVERIFIED", reason="required term missing",
+        metadata={"strategy_escalation": True},
+    )
+    repair = orchestrator.decide(compose_context, RecoveryHistory())
+    assert (repair.action, repair.strategy) == (RecoveryAction.REPAIR_COMPOSE, "compose_repair")
+
+
+def test_strategy_budget_survives_target_renumbering_for_same_operation_site():
+    orchestrator = RecoveryOrchestrator()
+    history = RecoveryHistory()
+    first_context = RecoveryContext(
+        stage="plan", rule_id="G18", operation_id="G18:0", site_id="summary:p3",
+        target_id="T005", error_code="RECALL_TARGET_REBIND_FAILED", reason="quote drifted",
+        metadata={"strategy_escalation": True},
+    )
+    first = orchestrator.decide(first_context, history)
+    assert (first.action, first.strategy) == (RecoveryAction.RETRY_EXACT, "exact_replace")
+    orchestrator.record(history, first_context, first, outcome="failed")
+
+    # Discovery may assign a different target id after a rebind. Operation/site is
+    # the stable identity, so the exact strategy budget remains spent.
+    renumbered = RecoveryContext(
+        stage="plan", rule_id="G18", operation_id="G18:0", site_id="summary:p3",
+        target_id="T001", error_code="RECALL_TARGET_REBIND_FAILED", reason="quote drifted",
+        metadata={"strategy_escalation": True},
+    )
+    next_decision = orchestrator.decide(renumbered, history)
+    assert (next_decision.action, next_decision.strategy) == (
+        RecoveryAction.RETRY_NORMALIZED, "normalized_rebind")
+
+
+def test_strategy_escalation_rebinds_artifact_once_then_stops():
+    orchestrator = RecoveryOrchestrator()
+    context = RecoveryContext(
+        stage="deliver", rule_id="G18", operation_id="G18:0", site_id="summary:p3",
+        error_code="CLAIM_NO_CHANGE_APPLIED", reason="artifact retained source text",
+        metadata={"strategy_escalation": True},
+    )
+    history = RecoveryHistory()
+    decision = orchestrator.decide(context, history)
+    assert (decision.action, decision.strategy) == (
+        RecoveryAction.REBIND_ARTIFACT, "artifact_rebind")
+    orchestrator.record(history, context, decision, outcome="failed")
+    assert orchestrator.decide(context, history).terminal
+
+
+def test_claim_failure_context_exposes_strategy_hook_without_enabling_it_by_default():
+    from fundlex.recall import Target
+    from fundlex.recall_pipeline import _claim_failure_context
+
+    target = Target("T", "G05", "p1", "旧句", "needs_edit", "",
+                    operations=("G05:0",))
+    failure = {"code": "CLAIM_NO_CHANGE_APPLIED", "rule_id": "G05",
+               "operation_id": "G05:0", "location": "p1", "target_id": "T"}
+    legacy = _claim_failure_context(failure, [target], [])
+    assert not legacy.metadata.get("strategy_escalation")
+    opted = _claim_failure_context({**failure, "strategy_escalation": True,
+                                    "content_source": "exact_replace", "mode": "replace"},
+                                   [target], [])
+    assert opted.metadata["strategy_escalation"] is True
+    assert opted.metadata["content_source"] == "exact_replace"
+    assert opted.metadata["mode"] == "replace"

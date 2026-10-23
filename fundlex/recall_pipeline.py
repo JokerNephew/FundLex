@@ -489,8 +489,17 @@ def _sweep_recovery_contexts(pending: Sequence[dict[str, Any]], targets: Sequenc
     return contexts
 
 
-def _claim_failure_context(failure: dict, targets: Sequence[Target], edits: Sequence[dict]) -> Any:
-    """Route the missing layer, retaining the dirty operation and business site."""
+def _claim_failure_context(failure: dict, targets: Sequence[Target], edits: Sequence[dict], *,
+                           strategy_escalation: bool | None = None,
+                           content_source: str | None = None,
+                           mode: str | None = None) -> Any:
+    """Route the missing layer, retaining the dirty operation and business site.
+
+    ``strategy_escalation`` is an explicit opt-in hook for callers that can execute
+    generation-router methods.  Keeping it off by default preserves the legacy
+    claim-replay recovery path while allowing a failure producer to carry the
+    concrete strategy cursor through to :class:`RecoveryOrchestrator`.
+    """
     from .generation.effects import operation_units
     from .recovery import RecoveryContext, FailureClass, classify
     operation_id = str(failure.get("operation_id") or "")
@@ -512,12 +521,26 @@ def _claim_failure_context(failure: dict, targets: Sequence[Target], edits: Sequ
     elif code in {"CLAIM_EXECUTION_EFFECT_MISSING", "CLAIM_OUTSIDE_SPAN_CHANGED",
                   "CLAIM_NO_CHANGE_APPLIED", "CLAIM_REPLACEMENT_MISSING"} and own_plan:
         failure_class, layer = FailureClass.EXECUTION, "ARTIFACT_EFFECT_WRONG"
+    metadata = {"root_cause": layer, "target_exists": bool(own_targets),
+                "plan_exists": bool(own_plan)}
+    if strategy_escalation is None:
+        strategy_escalation = bool(failure.get("strategy_escalation"))
+    if strategy_escalation:
+        metadata["strategy_escalation"] = True
+        if content_source is None:
+            content_source = failure.get("content_source")
+        if mode is None:
+            mode = failure.get("mode")
+        if content_source:
+            metadata["content_source"] = str(content_source)
+        if mode:
+            metadata["mode"] = str(mode)
     return RecoveryContext(stage="claim_replay", failure_class=failure_class,
         error_code=code, reason=str(failure.get("reason") or ""),
         rule_id=str(failure.get("rule_id") or ""), operation_id=operation_id,
         obligation_id=str(failure.get("obligation_id") or ""), site_id=location,
         target_id=str(failure.get("target_id") or (own_targets[0].target_id if own_targets else "")),
-        metadata={"root_cause": layer, "target_exists": bool(own_targets), "plan_exists": bool(own_plan)})
+        metadata=metadata)
 
 
 def _plan_by_target(planned: dict[str, Any]) -> dict[str, dict[str, Any]]:
@@ -1067,8 +1090,8 @@ def _plan_and_generate(model: Any, rules_by_id: dict[str, dict], targets: Sequen
                        frozen_run: Any = None
                        ) -> tuple[dict[str, Any], list[dict[str, Any]], Any, Any, DocumentInspection]:
     """Plan from the ORIGINAL inspection, validate, generate and re-read the final."""
-    from .recall import (duplicate_copy_targets, ensure_unique_target_ids,
-                         target_site_ok)
+    from .recall import (append_site_ok, duplicate_copy_targets,
+                         ensure_unique_target_ids, target_site_ok)
     # Final exact-copy closure immediately before planning.  Survey/rebind can add a
     # source target after the earlier passes; an uneditable body/summary copy must not
     # survive merely because of that ordering (D01 p758/p1221 G15).
@@ -1105,7 +1128,17 @@ def _plan_and_generate(model: Any, rules_by_id: dict[str, dict], targets: Sequen
                 except (ValueError, DocxError):
                     continue  # The planner retains its structural failure diagnosis.
                 span = SimpleNamespace(location=target.location, text="".join(pieces))
-            if not target_site_ok(target.rule_id, span, inspection):
+            rule = rules_by_id.get(target.rule_id) or {}
+            append_rule = any(operation.get("op") == "append"
+                              for operation in rule.get("operations") or ())
+            # Append rules resolve their anchor through append_site_ok (which also
+            # understands a G16 clause-end site and split definitions); the plain
+            # target-site guard would mark the resolved target out of scope before
+            # the planner can use it.
+            site_ok = (append_site_ok(target.rule_id, span, inspection)
+                       if append_rule
+                       else target_site_ok(target.rule_id, span, inspection))
+            if not site_ok:
                 target.out_of_scope = True
                 target.reason = f"{target.reason}|TARGET_SOURCE_MISMATCH"
     if existing_plan is None or dirty_locations:
@@ -1577,8 +1610,15 @@ def _run_audit(model: Any, rules_by_id: dict[str, dict], targets: Sequence[Targe
     # carry) must not be re-demanded by the audit; auditing it would report a gap the
     # engine deliberately did not fill (FL-D056).
     out_of_scope = {target.target_id for target in targets if target.out_of_scope}
+    # Independently review already-satisfied targets as well as open edits.  A model
+    # inventory can misclassify a real obligation as ``satisfied``; restricting the
+    # audit input to ``needs_edit`` made that false closure invisible to every later
+    # gate.  ``absent`` remains a qualification decision and is handled by the
+    # deterministic semantic sweep/obligation proof instead of being silently turned
+    # into a business edit candidate here.
     auditable = [target for target in targets
-                 if target.state == "needs_edit" and target.target_id not in out_of_scope
+                 if target.state in {"needs_edit", "satisfied"}
+                 and target.target_id not in out_of_scope
                  and not target.attribution_error]
     rule_ids = sorted({target.rule_id for target in auditable})
     if only_rules is not None:
@@ -1925,7 +1965,7 @@ def _audit_issues(state: dict[str, Any], targets: Sequence[Target]) -> list[dict
     issues: list[dict[str, Any]] = []
     results = state.get("results") or {}
     for target in targets:
-        if target.state != "needs_edit" or target.out_of_scope:
+        if target.state not in {"needs_edit", "satisfied"} or target.out_of_scope:
             continue
         result = results.get(_target_identity(target))
         if result is None:
@@ -1972,7 +2012,8 @@ def _stale_rules(audit_state: dict[str, Any], targets: Sequence[Target],
     """Rules whose auditable target set changed since their last verdict."""
     current: dict[str, set[tuple[str, str, str]]] = {}
     for target in targets:
-        if target.state == "needs_edit" and not target.out_of_scope:
+        if target.state in {"needs_edit", "satisfied"} and not target.out_of_scope \
+                and not target.attribution_error:
             current.setdefault(target.rule_id, set()).add(_target_identity(target))
     audited: dict[str, set[tuple[str, str, str]]] = {}
     for identity, result in (audit_state.get("results") or {}).items():
@@ -2705,6 +2746,97 @@ def _delivery_complete(unresolved: Sequence[dict[str, Any]]) -> bool:
     and the gate consistent.
     """
     return not unresolved
+
+
+def _final_omission_review(*, rules_by_id: Mapping[str, dict], rules: Sequence[dict],
+                           original: DocumentInspection, actual: DocumentInspection,
+                           planned: Mapping[str, Any], targets: Sequence[Target],
+                           facts: Facts, obligations: Any, replay: Mapping[str, Any],
+                           findings: Sequence[Mapping[str, Any]],
+                           coverage_view: Any | None = None) -> dict[str, Any]:
+    """Run the last independent, operation-scoped omission review.
+
+    The model sweep deliberately reads the final artifact without the target ledger;
+    this deterministic pass is its fail-closed companion.  It checks every applicable
+    operation, each artifact proof, and every business-site delete residual.  A rule
+    level ``G16 processed`` flag can therefore never hide an unproven ``G16:2`` at a
+    second site.
+    """
+    from .generation.effects import effect_proof_passed
+    from .generation.claim_replay import check_delete_residuals
+
+    issues: list[dict[str, Any]] = []
+    checked: list[dict[str, Any]] = []
+    proofs = replay.get("obligations") or {}
+    for record in getattr(obligations, "records", ()):
+        if getattr(record.applicability, "status", "") != "TRUE":
+            continue
+        operation_id = str(record.spec.operation_id)
+        proof = proofs.get(record.obligation_id)
+        sites = tuple(str(site) for site in (proof or {}).get("sites") or ())
+        checked.append({"rule_id": record.spec.rule_id,
+                        "operation_id": operation_id,
+                        "obligation_id": record.obligation_id,
+                        "sites": list(sites),
+                        "completion": getattr(record, "completion", "UNRESOLVED")})
+        if not effect_proof_passed(proof, operation_id=operation_id,
+                                   obligation_id=record.obligation_id):
+            issues.append({"code": "FINAL_OPERATION_UNPROVEN",
+                           "rule_id": record.spec.rule_id,
+                           "operation_id": operation_id,
+                           "obligation_id": record.obligation_id,
+                           "locations": list(sites),
+                           "reason": str((proof or {}).get("reason") or
+                                           (proof or {}).get("failure_code") or
+                                           "operation effect is not proven at every site")})
+
+    residuals = check_delete_residuals(
+        rules_by_id, actual, edits=planned.get("edits") or (), original=original,
+        targets=[target.as_dict() for target in targets], facts=facts,
+        obligations=obligations)
+    for residual in residuals:
+        issues.append({"code": "FINAL_RESIDUAL_OLD_TEXT", **dict(residual)})
+
+    # Findings from the independent review model remain visible even when a later
+    # artifact proof can explain one of them.  _apply_artifact_proof_to_findings has
+    # already marked expected effects as resolved; only pending/unresolved findings
+    # are omissions that can block delivery.
+    for finding in findings:
+        if str(finding.get("status") or "") in {"pending", "unresolved"}:
+            issues.append({"code": "FINAL_MODEL_SWEEP_FINDING",
+                           "rule_id": str(finding.get("rule_id") or ""),
+                           "operation_id": str(finding.get("operation_id") or ""),
+                           "location": str(finding.get("location") or ""),
+                           "finding_id": str(finding.get("finding_id") or ""),
+                           "issue": str(finding.get("issue") or ""),
+                           "reason": str(finding.get("reason") or "")})
+
+    if coverage_view is not None:
+        for entry in getattr(coverage_view, "unresolved", ()):
+            issues.append({"code": "FINAL_COVERAGE_UNRESOLVED",
+                           "rule_id": entry.rule_id,
+                           "operation_id": (entry.operation_keys[0]
+                                             if entry.operation_keys else ""),
+                           "location": entry.location,
+                           "reason": entry.basis})
+
+    unique: list[dict[str, Any]] = []
+    seen: set[tuple[str, str, str, str]] = set()
+    for issue in issues:
+        key = (str(issue.get("code") or ""), str(issue.get("rule_id") or ""),
+               str(issue.get("operation_id") or ""), str(issue.get("location") or
+                                                          issue.get("obligation_id") or ""))
+        if key in seen:
+            continue
+        seen.add(key)
+        unique.append(issue)
+    return {"status": "PASS" if not unique else "FAIL",
+            "basis": "independent_model_sweep+deterministic_operation_replay",
+            "checked_operations": checked,
+            "checked_operation_count": len(checked),
+            "model_sweep_findings": sum(
+                str(item.get("code") or "") == "FINAL_MODEL_SWEEP_FINDING" for item in unique),
+            "issues": unique}
 
 
 def _apply_artifact_proof_to_findings(findings: list[dict[str, Any]], replay: dict[str, Any],
@@ -4260,6 +4392,11 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
             report["artifact_claim_replay"] = replay
             unresolved[:] = [item for item in unresolved if item.get("kind") not in {
                 "target", "audit", "sweep", "claim_replay", "coverage"}]
+            # A late sweep/claim repair can prove an operation after the earlier
+            # reconciliation pass. Reconcile candidate targets again against the
+            # final artifact so a stale T3/open-rule placeholder (for example a G12
+            # candidate in a neighbouring G09 paragraph) cannot block delivery.
+            _reconcile_candidate_targets(targets, planned, replay, obligation_ledger)
             plan_by_target = _plan_by_target(planned)
             for target in targets:
                 entry = plan_by_target.get(target.target_id) or {}
@@ -4311,7 +4448,11 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
             report["obligations"] = obligation_ledger.as_dict()
             from .generation.coverage import build_coverage_view
             coverage_view = build_coverage_view(report)
-            report["operation_coverage"] = {"counts": dict(coverage_view.counts)}
+            # Preserve the full site × operation projection in the report.  Counts
+            # alone cannot prove that two occurrences of one operation were both
+            # verified, and made the UI/diagnostics unable to distinguish partial
+            # completion from a rule-level aggregate.
+            report["operation_coverage"] = coverage_view.as_dict()
             if coverage_view.unresolved and _delivery_complete(unresolved):
                 unresolved.append({"kind": "coverage_view", "code": "COVERAGE_MISMATCH",
                                    "reason": "operation coverage view reports unresolved entries"})
@@ -4324,10 +4465,42 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
                     rules_by_id=rules_by_id,
                     artifact_text=_document_compact(actual))
             report["obligations"] = obligation_ledger.as_dict()
+            # The second projection may close or reopen an obligation after late
+            # target reconciliation.  Rebuild the coverage view from that final
+            # ledger before omission review; otherwise the report could expose a
+            # stale operation/site state and either miss a blocker or retain a
+            # blocker that the final artifact has already proven.
+            coverage_view = build_coverage_view(report)
+            report["operation_coverage"] = coverage_view.as_dict()
             represented_rules = {str(item.get("rule_id") or "") for item in unresolved}
             open_items = [item for item in open_obligations(obligation_ledger)
                           if str(item.get("rule_id") or "") not in represented_rules]
             unresolved.extend(open_items)
+            # Final independent omission review is operation/site scoped and runs
+            # after the final DOCX has been reread.  Its result is part of the
+            # delivery gate; a successful rule aggregate or audit opinion cannot
+            # suppress a missing physical occurrence.
+            final_omission_review = _final_omission_review(
+                rules_by_id=rules_by_id, rules=rules, original=inspection, actual=actual,
+                planned=planned, targets=targets, facts=facts,
+                obligations=obligation_ledger, replay=replay, findings=findings,
+                coverage_view=coverage_view)
+            report["final_omission_review"] = final_omission_review
+            for issue in final_omission_review.get("issues") or []:
+                unresolved.append({"kind": "final_omission", **issue})
+            # Keep one deterministic report entry per omission identity, since the
+            # same operation may be reported by claim replay, sweep and coverage.
+            final_unique: list[dict[str, Any]] = []
+            final_seen: set[tuple[str, str, str, str]] = set()
+            for item in unresolved:
+                key = (str(item.get("kind") or ""), str(item.get("rule_id") or ""),
+                       str(item.get("operation_id") or item.get("obligation_id") or ""),
+                       str(item.get("location") or ""))
+                if key in final_seen:
+                    continue
+                final_seen.add(key)
+                final_unique.append(item)
+            unresolved[:] = final_unique
             report["unresolved"] = unresolved
             report["delivery_gate"] = {
                 "basis": "obligation_ledger",
