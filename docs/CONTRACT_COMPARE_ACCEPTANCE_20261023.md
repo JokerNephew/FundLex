@@ -49,3 +49,11 @@ FL-D149–FL-D153、FL-D160–FL-D162 的处理与验证已写入 [集中问题�
 - 结果：生产 pair 状态为 `incomplete`，共 **2772** 处差异（修改 451、新增 1238、删除 1083）；页眉、页脚、AlternateContent、drawing、pict 等暂不支持可见结构被明确列入 coverage warning，没有伪装为完整覆盖。
 - API 证据：`/tmp/opencode/compare-production-e2e/report.json`；浏览器证据：`/tmp/opencode/compare-production-browser-e2e/report.json`，报告下载文件 SHA-256 为 `076bd85be8cdebbad8798bad3b22f377dd1b21c9b3f1a0d1eb54d88ca42911ea`，浏览器 page error 为 0。
 - 生产发布状态：**Production deployment: PERFORMED**。
+
+## UI 改版发布回归（2026-10-24）
+
+- UI 提交 `5d04271` 已推送并通过 `tools/deploy/publish_workspace.sh` 发布到 `/opt/fundlex-recall-first`；API、Recall Worker、Compare Worker 均 active，重启计数为 0。
+- 生产浏览器路径：注册/登录 → 合同对比 → 上传两份公开 DOCX → 独立 Worker 处理 → 结果页 → 原版/对比版方向说明 → 覆盖 warning → 差异筛选 → 键盘定位 → 移动端侧栏切换 → 下载报告。
+- 结果：2772 处差异（修改 451、新增 1238、删除 1083）；报告下载 3189696 bytes，SHA-256 为 `d1607d77f3b0fe8487c8c1a8b4c2c287599e5283eb7d207b447ce0ca719716e3`；page error 为 0。
+- 证据：[生产 UI 回归报告](/tmp/opencode/compare-production-ui-e2e/report.json)，截图位于 `/tmp/opencode/compare-production-ui-e2e/viewer.png`。
+- 本次 compare 不调用模型，模型费用为 `$0`。

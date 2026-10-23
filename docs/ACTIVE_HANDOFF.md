@@ -1,11 +1,12 @@
 # FundLex 当前断点（ACTIVE_HANDOFF）
 
-## 合同比较页面改版断点（2026-10-23，待提交/待生产回归）
+## 合同比较页面改版已发布（2026-10-24）
 
 - 本轮依据产品、UI、前端三类只读评审修改 `frontend/index.html`、`frontend/compare.js`、`frontend/compare.css`，并扩展 `tools/evaluation/compare_e2e.py`。其他引擎、evidence、`tools/ops/` 等未提交改动仍保留，不能整仓库 add/reset。
 - 已实施：原版→对比版方向语义、覆盖不完整人工复核提示、批量上传中断后继续上传、轮询保持选中 pair、差异类型筛选/章节显示、移动端单栏侧切换、正文差异标记键盘定位与焦点可达。
-- 验证：compare 专项 **70 passed / 5 skipped**；浏览器验收 `/tmp/opencode/compare-e2e-ui-revision-v3.json` 为 **9 个场景全部通过**，无 page error。尚未提交、推送或重新发布本轮 UI 改动。
-- 下一动作：只提交四个 compare 相关源码/验收文件和集中记录，发布后执行生产浏览器回归，核对方向说明、覆盖 warning、移动端切换、筛选、下载及轮询保持当前 pair。
+- 验证：compare 专项 **70 passed / 5 skipped**；本地浏览器验收 `/tmp/opencode/compare-e2e-ui-revision-v3.json` 为 **9 个场景全部通过**；生产浏览器验收 `/tmp/opencode/compare-production-ui-e2e/report.json` 通过，覆盖方向说明、incomplete warning、移动端单栏切换、修改筛选、键盘定位和报告下载，无 page error。
+- 发布：UI 提交 `5d04271` 已推送并通过 `tools/deploy/publish_workspace.sh` 发布；三个服务均 active、重启计数 0。生产结果为 2772 处差异，报告下载 SHA-256 `d1607d77f3b0fe8487c8c1a8b4c2c287599e5283eb7d207b447ce0ca719716e3`。compare 不调用模型，费用 `$0`。
+- 下一动作：后续 UI 或 Worker 改动必须重复生产浏览器回归；其他引擎、evidence、`tools/ops/` 等未提交改动仍保留，不能整仓库 add/reset。
 
 ## 引擎真实合同与工作台验收断点（2026-10-23 21:00，优先）
 

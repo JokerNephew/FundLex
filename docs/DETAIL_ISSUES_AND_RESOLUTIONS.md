@@ -2662,5 +2662,6 @@
 - 发现与影响：原页面只写“左侧/右侧合同”，用户需要自行推断新增/删除方向；覆盖不完整时的空结果文案可能被理解为全文无差异；批量上传中断后不能从已完成位置继续；任务轮询会把当前查看的 pair 重置到第一组；移动端双栏过窄，差异类型筛选和正文标记键盘操作不足。
 - 证据：三类只读评审分别定位到 `frontend/index.html` 的 compare DOM、`frontend/compare.js` 的 `openTask()`/上传流程和 `frontend/compare.css` 的移动端双栏规则；旧浏览器验收可复现轮询从第 2/3 组跳回第 1/3 组。
 - 处理方法：创建与结果页统一使用“原版（基准）→ 对比版（修订）”语义；覆盖不完整时明确提示人工复核并改用“已覆盖范围内没有发现”；批量上传按组显示进度并保留可继续上传状态；轮询按 `selectedPairId` 保持当前 pair；差异列表增加类型筛选和章节信息；移动端切换为原版/对比版单栏阅读；正文差异标记增加焦点、Enter/Space 定位和可见状态。
-- 状态与验证：已修复。`.venv/bin/python -m pytest tests/test_compare_*.py -q` → **70 passed / 5 skipped**；`tools/evaluation/compare_e2e.py` → **9 个场景、全部检查通过**，新增方向语义、轮询保持当前组、差异筛选、键盘标记和移动端切换检查；证据 `/tmp/opencode/compare-e2e-ui-revision-v3.json`。
-- 下一步：若发布本次 UI 改动，需完成生产浏览器回归；覆盖完整性仍由 compare parser 支持范围决定，页面提示不能替代未支持结构的人工复核。
+- 状态与验证：已修复并发布。`.venv/bin/python -m pytest tests/test_compare_*.py -q` → **70 passed / 5 skipped**；`tools/evaluation/compare_e2e.py` → **9 个场景、全部检查通过**，新增方向语义、轮询保持当前组、差异筛选、键盘标记和移动端切换检查；证据 `/tmp/opencode/compare-e2e-ui-revision-v3.json`。生产浏览器回归 `/tmp/opencode/compare-production-ui-e2e/report.json` 通过：2772 处差异、修改 451、新增 1238、删除 1083，移动端左右切换成功，键盘计数 `1 / 2772`，报告下载 3189696 bytes，page error 为 0。
+- 发布信息：UI 提交 `5d04271` 已推送到 `origin/feat/contract-compare`，通过 `tools/deploy/publish_workspace.sh` 同步生产；API、Recall Worker、Compare Worker 均 active，重启计数为 0。生产任务使用公开合同且 compare 不调用模型，费用为 `$0`。
+- 下一步：覆盖完整性仍由 compare parser 支持范围决定，页面提示不能替代未支持结构的人工复核；后续 UI 或 Worker 改动须重复生产浏览器回归。
