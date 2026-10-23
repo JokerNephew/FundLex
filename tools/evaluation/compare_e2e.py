@@ -471,7 +471,7 @@ def run(output: Path, screenshots: Path, corpus_base: Path | None = None) -> dic
                 check("identity_switch_isolation", "E2E 单处修改" not in other_tasks and "E2E 单处修改" in page.locator("#compare-task-list").inner_text(), {"other_user_tasks": other_tasks})
 
                 # Use the long document to measure line endpoints before and
-                # after a viewport resize and independent left/right scrolling.
+                # after a viewport resize and synchronized left/right scrolling.
                 page.goto(base + "/#compare")
                 wait_until(page, "document.querySelector('#compare-task-list') !== null")
                 page.locator("tr", has_text="E2E 二十处以上差异").first.locator("[data-compare-task]").click()
@@ -481,13 +481,28 @@ def run(output: Path, screenshots: Path, corpus_base: Path | None = None) -> dic
                 page.set_viewport_size({"width": 1100, "height": 800})
                 page.wait_for_timeout(250)
                 resize_error, resize_geometry = geometry(page)
-                page.locator("#compare-left-pane").evaluate("node => node.scrollTop = node.scrollHeight")
-                page.locator("#compare-right-pane").evaluate("node => node.scrollTop = node.scrollHeight")
+                sync_result = page.locator("#compare-left-pane").evaluate("node => { const other=document.querySelector('#compare-right-pane'); const max=Math.max(0,node.scrollHeight-node.clientHeight); node.scrollTop=max*.47; return {leftTop:node.scrollTop,leftMax:max,rightTop:other.scrollTop,rightMax:Math.max(0,other.scrollHeight-other.clientHeight)}; }")
                 page.wait_for_timeout(180)
+                sync_result = page.evaluate("""() => {
+                    const left=document.querySelector('#compare-left-pane'), right=document.querySelector('#compare-right-pane');
+                    const max=(node)=>Math.max(0,node.scrollHeight-node.clientHeight);
+                    return {leftTop:left.scrollTop,leftMax:max(left),rightTop:right.scrollTop,rightMax:max(right)};
+                }""")
+                sync_error = abs((sync_result["leftTop"] / sync_result["leftMax"] if sync_result["leftMax"] else 0) - (sync_result["rightTop"] / sync_result["rightMax"] if sync_result["rightMax"] else 0))
+                reverse_sync = page.locator("#compare-right-pane").evaluate("node => { const other=document.querySelector('#compare-left-pane'); const max=Math.max(0,node.scrollHeight-node.clientHeight); node.scrollTop=max*.73; return true; }")
+                page.wait_for_timeout(180)
+                reverse_result = page.evaluate("""() => {
+                    const left=document.querySelector('#compare-left-pane'), right=document.querySelector('#compare-right-pane');
+                    const max=(node)=>Math.max(0,node.scrollHeight-node.clientHeight);
+                    return {leftTop:left.scrollTop,leftMax:max(left),rightTop:right.scrollTop,rightMax:max(right)};
+                }""")
+                reverse_error = abs((reverse_result["leftTop"] / reverse_result["leftMax"] if reverse_result["leftMax"] else 0) - (reverse_result["rightTop"] / reverse_result["rightMax"] if reverse_result["rightMax"] else 0))
                 scroll_error, scroll_geometry = geometry(page)
                 check("svg_geometry_before_resize", before_error is not None and before_error <= 2, {"error_px": before_error, "geometry": before_geometry})
                 check("svg_geometry_after_resize", resize_error is not None and resize_error <= 2, {"error_px": resize_error, "geometry": resize_geometry})
-                check("svg_geometry_after_independent_scroll", scroll_error is not None and scroll_error <= 2, {"error_px": scroll_error, "geometry": scroll_geometry})
+                check("two_panes_scroll_in_sync", sync_error <= 0.02, {"ratio_error": sync_error, "scroll": sync_result})
+                check("reverse_scroll_stays_in_sync", reverse_error <= 0.02, {"ratio_error": reverse_error, "scroll": reverse_result})
+                check("svg_geometry_after_synchronized_scroll", scroll_error is not None and scroll_error <= 2, {"error_px": scroll_error, "geometry": scroll_geometry})
                 snapshot(page, "geometry-after-scroll")
                 check("no_browser_page_errors", not page_errors, page_errors)
                 browser.close()

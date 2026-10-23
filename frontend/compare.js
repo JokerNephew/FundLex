@@ -3,7 +3,7 @@
   const api = window.FundLexWorkbench || {};
   const $ = id => document.getElementById(id);
   const esc = api.esc || (v => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])));
-  const state = { tasks: [], task: null, pairs: [], pairIndex: 0, selectedPairId: null, view: null, diffIndex: 0, poll: null, requestToken: 0, lineFrame: null, identityToken: 0, listToken: 0, inputs: [{}], uploadDraft: null };
+  const state = { tasks: [], task: null, pairs: [], pairIndex: 0, selectedPairId: null, view: null, diffIndex: 0, poll: null, requestToken: 0, lineFrame: null, scrollFrame: null, scrollSource: null, identityToken: 0, listToken: 0, inputs: [{}], uploadDraft: null };
   const json = (path, options) => api.json ? api.json(path, options) : fetch(path, options).then(async r => { if (!r.ok) throw Error(await r.text()); return r.json(); });
   const text = id => ($(id) || {}).textContent || '';
   const fileName = file => String(file?.name || '').replace(/\\/g, '/').split('/').pop();
@@ -97,6 +97,20 @@
       svg.append(fragment);
     });
   }
+  function syncPaneScroll(source) {
+    if (window.matchMedia('(max-width: 760px)').matches) { drawLines(); return; }
+    if (state.scrollSource && state.scrollSource !== source) { drawLines(); return; }
+    const panes = [$('compare-left-pane'), $('compare-right-pane')].filter(Boolean), target = panes.find(p => p !== source);
+    if (!target) return;
+    state.scrollSource = source;
+    cancelAnimationFrame(state.scrollFrame);
+    state.scrollFrame = requestAnimationFrame(() => {
+      const sourceMax = Math.max(0, source.scrollHeight - source.clientHeight), targetMax = Math.max(0, target.scrollHeight - target.clientHeight);
+      target.scrollTop = (sourceMax ? source.scrollTop / sourceMax : 0) * targetMax;
+      drawLines();
+      state.scrollFrame = requestAnimationFrame(() => { state.scrollSource = null; state.scrollFrame = null; drawLines(); });
+    });
+  }
   function visibleDiffs() { const all=state.view?.diffs||[], filter=$('compare-diff-filter')?.value||''; return filter?all.filter(x=>x.type===filter):all; }
   function focusDiff(index) { const ds=visibleDiffs(); if(!ds.length){ $('compare-diff-counter').textContent='0 / 0'; return; } state.diffIndex=(index+ds.length)%ds.length; const id=ds[state.diffIndex].id; document.querySelectorAll('.compare-diff.is-active,.compare-diff-item.is-active').forEach(n=>n.classList.remove('is-active')); document.querySelectorAll(`[data-diff-id="${CSS.escape(id)}"]`).forEach(n=>n.classList.add('is-active')); document.querySelector(`[data-compare-diff="${CSS.escape(id)}"]`)?.classList.add('is-active'); $('compare-diff-counter').textContent=`${state.diffIndex+1} / ${ds.length}`; for(const side of ['left','right']) { const pane=$(`compare-${side}-pane`), target=pane?.querySelector(`[data-diff-id="${CSS.escape(id)}"]`); if(pane&&target){const pr=pane.getBoundingClientRect(),tr=target.getBoundingClientRect(); pane.scrollTo({top:pane.scrollTop+(tr.top+tr.height/2)-(pr.top+pr.height/2),behavior:'smooth'});}} requestAnimationFrame(drawLines); }
   function renderDiffList() { const d=visibleDiffs(); $('compare-diff-list').innerHTML=d.length?d.map((x,i)=>`<button type="button" class="compare-diff-item" data-compare-diff="${esc(x.id)}"><span>${i+1}</span><strong>${esc(x.type==='modify'?'修改':x.type==='insert'?'新增':'删除')}</strong><span>${esc(x.section||'正文')} · ${esc(x.left?.text||'')} ${x.right?.text?'→ '+esc(x.right.text):''}</span></button>`).join(''):'<p class="empty">当前筛选条件下没有差异。</p>'; }
@@ -110,7 +124,7 @@
      document.addEventListener('click',e=>{ const task=e.target.closest('[data-compare-task]');if(task){openTask(task.dataset.compareTask);return;}const pair=e.target.closest('[data-compare-pair]');if(pair){openPair(Number(pair.dataset.comparePair));return;}const diff=e.target.closest('[data-compare-diff]');if(diff){focusDiff(visibleDiffs().findIndex(x=>x.id===diff.dataset.compareDiff));return;}const mark=e.target.closest('#compare-left-pane [data-diff-id],#compare-right-pane [data-diff-id]');if(mark){focusDiff(visibleDiffs().findIndex(x=>x.id===mark.dataset.diffId));return;}const remove=e.target.closest('[data-compare-remove]');if(remove){const index=Number(remove.dataset.compareRemove),row=remove.closest('.compare-pair-input');state.inputs.splice(index,1);row?.remove();if(!state.inputs.length){state.inputs=[{}];renderInputs();}else syncInputIndexes();return;} });
      document.addEventListener('keydown',e=>{if((e.key==='Enter'||e.key===' ')&&e.target.matches('#compare-left-pane [data-diff-id],#compare-right-pane [data-diff-id]')){e.preventDefault();focusDiff(visibleDiffs().findIndex(x=>x.id===e.target.dataset.diffId));}});
     document.addEventListener('change',e=>{const row=e.target.closest('.compare-pair-input');if(row&&e.target.matches('input[type=file]')){const i=Number(row.dataset.pairIndex),entry=state.inputs[i]||(state.inputs[i]={});entry[e.target.matches('[data-compare-left]')?'_left':'_right']=e.target.files?.[0]||null;row.querySelector('.compare-file-label').textContent=[entry._left?.name,entry._right?.name].filter(Boolean).join(' / ')||'尚未选择文件';return;}if(e.target.id==='compare-left-folder'||e.target.id==='compare-right-folder'){const side=e.target.id.includes('left')?'left':'right';state[`folder${side[0].toUpperCase()+side.slice(1)}`]=[...e.target.files].filter(f=>fileName(f).toLowerCase().endsWith('.docx')).sort((a,b)=>relativePath(a).localeCompare(relativePath(b)));const other=side==='left'?state.folderRight:state.folderLeft;if(!other?.length)return;const left=state.folderLeft||[],right=state.folderRight||[],map=new Map(right.map(f=>[relativePath(f),f])),used=new Set(),entries=left.map(f=>{const r=map.get(relativePath(f));if(r)used.add(r);return {_left:f,_right:r||null};});for(const f of right)if(!used.has(f))entries.push({_left:null,_right:f});state.inputs=entries;renderInputs();$('compare-upload-message').textContent=`已按相对路径配对 ${entries.filter(x=>x._left&&x._right).length} 组；${entries.filter(x=>!x._left||!x._right).length} 个文件未配对，可手工补齐。`;}});
-    const cols=$('compare-columns'); if(cols){ for(const pane of [$('compare-left-pane'),$('compare-right-pane')])pane?.addEventListener('scroll',drawLines,{passive:true}); window.addEventListener('resize',drawLines); if(window.ResizeObserver)new ResizeObserver(drawLines).observe(cols); }
+     const cols=$('compare-columns'); if(cols){ for(const pane of [$('compare-left-pane'),$('compare-right-pane')])pane?.addEventListener('scroll',()=>syncPaneScroll(pane),{passive:true}); window.addEventListener('resize',drawLines); if(window.ResizeObserver)new ResizeObserver(drawLines).observe(cols); }
      document.addEventListener('fundlex:view',e=>{if(e.detail==='compare'){loadTasks();drawLines();}}); document.addEventListener('fundlex:identity-reset',()=>{clearTimeout(state.poll);state.identityToken++;state.listToken++;state.tasks=[];state.task=null;state.pairs=[];state.selectedPairId=null;state.view=null;state.uploadDraft=null;state.inputs=[{}];state.requestToken++;resetFolders();$('compare-create').hidden=true;$('compare-submit').disabled=false;$('compare-retry').hidden=true;$('compare-upload-message').textContent='';$('compare-name').value='';$('compare-detail').hidden=true;$('compare-viewer').hidden=true;$('compare-left-pane').innerHTML='';$('compare-right-pane').innerHTML='';$('compare-diff-list').innerHTML='';$('compare-lines').replaceChildren();$('compare-diff-counter').textContent='0 / 0';renderInputs();renderTasks();}); state.inputs=[{}];renderInputs(); loadTasks();
   }
   if (document.readyState==='loading') document.addEventListener('DOMContentLoaded',bind); else bind();
