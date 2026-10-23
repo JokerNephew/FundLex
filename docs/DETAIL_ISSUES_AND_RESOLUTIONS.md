@@ -2657,12 +2657,12 @@
 - **未做/边界**：生产验收任务未清理（无 DELETE 接口）；本轮生产模型调用记入生产账本。累计临时账本 **1129 calls / ≈$0.7999**，生产 5 份合计 **156 calls / ≈$0.1254**。
 - 下一步：观察 compare/recall 三服务与生产账本；必要时由管理员清理验收任务。
 
-## FL-D177 合同比较阅读器两栏不联动且视觉层级不足（2026-10-24，处理中）
+## FL-D177 合同比较阅读器两栏不联动且视觉层级不足（2026-10-24，已修复）
 
 - 发现与影响：生产版合同对比阅读器让原版和对比版分别滚动，用户无法保持两侧阅读位置；结果摘要、覆盖边界、正文标题和差异导航挤在同一层级，长合同核对时难以判断当前上下文。现有滚动监听只触发 `drawLines()`，不能实现阅读同步。
 - 证据：`frontend/compare.js` 原先分别给两个 `.compare-pane` 绑定 `scroll` 事件且回调只有 `drawLines`；`frontend/compare.css` 原先两个 pane 都是独立 `overflow:auto`；生产截图 `/tmp/opencode/compare-production-ui-e2e/viewer.png` 可见正文区缺少明确的阅读器分区和同步提示。
 - 处理方法：处理中。改为按两侧可滚动高度比例同步 `scrollTop`，用滚动来源锁避免递归回调；重新组织结果头、覆盖提示、双栏基准/修订标题、同步状态和差异导航层级，保留现有 API、连线、差异筛选、键盘定位和移动端单栏切换。
-- 状态与验证：代码已修改，尚未完成本轮浏览器联动滚动回归、视觉截图复核和生产发布。下一步补充快速滚轮、拖动滚动条、两侧不同内容高度、移动端切换及现有 compare E2E 检查。
+- 状态与验证：已修复并发布。`.venv/bin/python -m pytest tests/test_compare_*.py -q` → **70 passed / 5 skipped / 1 warning**；本地浏览器验收 `/tmp/opencode/compare-e2e-ui-v5.json` → **9 个场景全部通过**，包含正向/反向滚动比例和 SVG 连线检查；生产真实浏览器验收 `/tmp/opencode/compare-production-ui-e2e/report.json` → 注册/登录、公开 DOCX 上传、独立 Compare Worker、结果页、双向联动、移动端切换、键盘定位、报告下载全部通过，page error 为 0。生产联动比例误差分别为 `5.3e-6` 与 `2.6e-7`，结果 2772 处差异，报告 3189696 bytes。发布提交 `0f51d07` 已推送并通过 `tools/deploy/publish_workspace.sh` 发布，API、Recall Worker、Compare Worker 均 active。生产截图 `/tmp/opencode/compare-production-ui-e2e/viewer.png` 可见新的任务结果、方向提示、同步状态、基准/修订标题和差异导航层级。
 
 ## FL-D176 合同比较页面方向语义、恢复能力与长文阅读不足（2026-10-23，已修复）
 

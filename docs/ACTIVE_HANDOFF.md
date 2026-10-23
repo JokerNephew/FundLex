@@ -1,5 +1,13 @@
 # FundLex 当前断点（ACTIVE_HANDOFF）
 
+## 合同比较阅读器联动滚动与视觉重构已发布（2026-10-24）
+
+- 本轮完成 `frontend/index.html`、`frontend/compare.js`、`frontend/compare.css` 和 `tools/evaluation/compare_e2e.py`；集中问题记录新增并关闭 FL-D177。其他引擎、evidence、`tools/ops/` 等未提交改动仍保留，不能整仓库 add/reset。
+- 已实施：双 pane 按可滚动高度比例联动，滚轮/连续事件使用 `requestAnimationFrame` 合并且有来源锁防递归；结果摘要、覆盖边界、方向提示、基准/修订标题、同步状态、差异导航和移动端结构重新分层；保留连线、筛选、键盘定位、pair 轮询和移动端切换。
+- 验证：`.venv/bin/python -m pytest tests/test_compare_*.py -q` → **70 passed / 5 skipped / 1 warning**；本地 `/tmp/opencode/compare-e2e-ui-v5.json` → **9 场景全部通过**，正向/反向同步比例与 SVG 几何均通过；生产 `/tmp/opencode/compare-production-ui-e2e/report.json` → 真实注册/登录、上传公开合同、Compare Worker、结果查看、双向联动、移动切换、键盘定位、报告下载通过，page error 0，联动比例误差 `5.3e-6` / `2.6e-7`，报告 3189696 bytes。
+- 发布：提交 `0f51d07` 已推送到 `origin/feat/contract-compare`，通过 `tools/deploy/publish_workspace.sh` 发布；`fundlex-recall-api`、`fundlex-recall-worker`、`fundlex-compare-worker` 均 active。生产截图 `/tmp/opencode/compare-production-ui-e2e/viewer.png`。
+- 下一步：如继续调整 compare 视觉或滚动行为，必须重新运行 compare 专项、浏览器验收和生产真实用户路径；不要将当前截图中的 headless 环境中文字体缺失现象误判为合同文本内容问题，正式浏览器应按客户端字体渲染复核。
+
 ## 合同比较页面改版已发布（2026-10-24）
 
 - 本轮依据产品、UI、前端三类只读评审修改 `frontend/index.html`、`frontend/compare.js`、`frontend/compare.css`，并扩展 `tools/evaluation/compare_e2e.py`。其他引擎、evidence、`tools/ops/` 等未提交改动仍保留，不能整仓库 add/reset。
