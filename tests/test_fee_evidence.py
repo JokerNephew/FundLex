@@ -76,6 +76,18 @@ def test_repeated_subject_rates_keep_property_and_scope(quote, name, expected):
     assert fee_value(quote, "sales_service_fee", name) is expected
 
 
+def test_repeated_class_subject_and_rate_with_de_shows_positive_service_fee():
+    quote = ("本基金 A 类基金份额不收取销售服务费，C 类基金份额的销售服务费按前一日 "
+             "C 类基金份额资产净值的 0.40%的年费率计提。")
+    assert fee_value(quote, "sales_service_fee", "A") is False
+    assert fee_value(quote, "sales_service_fee", "C") is True
+
+
+def test_investor_bears_subscription_fee_is_positive_evidence():
+    quote = "A类基金份额的申购费用由投资人承担，不列入基金财产。"
+    assert fee_value(quote, "subscription_fee", "A") is True
+
+
 @pytest.mark.parametrize("name,expected", [("H", False), ("J", True), ("K", True)])
 def test_respective_same_fee_does_not_hide_previous_class(name, expected):
     quote = "本基金H类基金份额不收取销售服务费，J类基金份额和K类基金份额分别从本类别份额基金资产中计提销售服务费。"

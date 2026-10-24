@@ -20,11 +20,37 @@ from .db import Connection, Database
 
 SCHEMA_VERSION = "fundlex-result-v1"
 
+
+# The worker's build identity must cover every input that can change a
+# recall-first result.  Hashing only the files next to this module allowed a
+# change in ``generation/``, the guide compiler, prompts, or the built-in guide
+# to reuse an old queued job/checkpoint.  Keep this manifest explicit and
+# deterministic; operational/UI code is intentionally excluded.
+_ENGINE_BUILD_ROOT = Path(__file__).resolve().parent.parent
+_ENGINE_BUILD_PATHS = (
+    ("fundlex", "**/*.py"),
+    ("rules", "*.py"),
+    ("rules", "*.json"),
+    ("guides", "*.json"),
+)
+
+
+def _engine_build_files() -> tuple[Path, ...]:
+    files: set[Path] = set()
+    for relative_root, pattern in _ENGINE_BUILD_PATHS:
+        root = _ENGINE_BUILD_ROOT / relative_root
+        files.update(path for path in root.glob(pattern) if path.is_file())
+    return tuple(sorted(files, key=lambda path: path.relative_to(_ENGINE_BUILD_ROOT).as_posix()))
+
+
 def engine_build() -> str:
     digest = hashlib.sha256()
-    for path in sorted(Path(__file__).parent.glob("*.py")):
-        digest.update(path.name.encode())
+    for path in _engine_build_files():
+        relative = path.relative_to(_ENGINE_BUILD_ROOT).as_posix()
+        digest.update(relative.encode("utf-8"))
+        digest.update(b"\0")
         digest.update(path.read_bytes())
+        digest.update(b"\0")
     return digest.hexdigest()
 
 

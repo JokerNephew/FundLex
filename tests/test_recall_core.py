@@ -644,7 +644,9 @@ def test_composite_delete_spans_two_paragraphs(tmp_path: Path):
     merged = {edit.location: edit for edit in edits}
     # The anchor keeps its own lead-in; the follower paragraph is emptied because the
     # reference sentence is all it holds.
-    assert merged["p0"].replacement == "3、销售服务费。"
+    edit = merged["p0"]
+    paragraph = inspection.by_location("p0").text
+    assert paragraph[:edit.start] + edit.replacement + paragraph[edit.end:] == "3、销售服务费。"
     assert merged["p1"].replacement == ""
 
 
@@ -680,7 +682,8 @@ def test_composite_replace_separates_unpunctuated_clause(tmp_path: Path):
     edit = edits[0]
     # The kept prefix ("…类别。") ends in punctuation, so no separator is added before the
     # new text and the sentence boundary is already correct.
-    assert edit.replacement.startswith(lead + new_text)
+    paragraph = inspection.by_location("p0").text
+    assert (paragraph[:edit.start] + edit.replacement + paragraph[edit.end:]).startswith(lead + new_text)
     assert "。。" not in edit.replacement
 
 
@@ -1215,7 +1218,9 @@ def test_composite_plan_offsets_after_spaces(tmp_path: Path):
                     state="needs_edit", reason="cross-paragraph")
     target.composite = tuple(f"{location}:{start}:{end}" for location, start, end in parts[0])
     edits = plan_composite_target(rule, target, inspection, _facts(), new_text="")
-    merged = {edit.location: edit.replacement for edit in edits}
+    merged = {edit.location: inspection.by_location(edit.location).text[:edit.start]
+              + edit.replacement + inspection.by_location(edit.location).text[edit.end:]
+              for edit in edits}
     # The anchor paragraph is emptied (whitespace may remain); the follower keeps its tail.
     assert merged["p0"].strip() == ""
     assert merged["p1"] == "其余文字应保留。"
@@ -1338,14 +1343,14 @@ def test_composite_part_verification_uses_compact_offsets(tmp_path: Path):
         "rule_id": "G15", "target_id": "T1", "location": "p0",
         "start": start_raw, "end": end_raw,
         "expected_old_text": span.text[start_raw:end_raw],
-        "replacement": span.text[:start_raw] + span.text[end_raw:],
+        "replacement": "",
         "content_source": "composite_delete",
         "evidence": {"parts": [f"p0:{start_clean}:{end_clean}"],
                      "part_index": 0, "unit": "G15"},
     }
     assert _component_ok(component, inspection) is True
     tampered = dict(component)
-    tampered["replacement"] = component["replacement"][:-2]
+    tampered["replacement"] = span.text[:start_raw] + span.text[end_raw:]
     assert _component_ok(tampered, inspection) is False
 
 

@@ -15,6 +15,21 @@ def _compact(value: str) -> str:
     return re.sub(r"\s+", "", value)
 
 
+def _replaced_clause_residuals(before: str, after: str, references: Sequence[str],
+                              expected: str) -> list[str]:
+    """Find source-proven old policy clauses that the replacement supersedes.
+
+    Replacing a shared first sentence destroys a whole-reference literal match.
+    Each substantial old clause still has to disappear unless the operation's
+    own new text retains it. Terminal punctuation is not policy evidence.
+    """
+    source, actual, new = _compact(before), _compact(after), _compact(expected)
+    clauses = dict.fromkeys(_compact(part) for reference in references
+                            for part in re.split(r"[。；;！？!?]", reference))
+    return [clause for clause in clauses if len(clause) >= 8
+            and clause in source and clause in actual and clause not in new]
+
+
 def _class_labels(value: str) -> set[str]:
     """Share-class labels in a G02/G04 phrase (``A类及D类`` -> {A, D})."""
     return set(re.findall(r"([A-Z])类", _compact(value)))
@@ -35,8 +50,39 @@ def _class_group_equivalent(expected: str, source_quote: str) -> bool:
     # A fee-group quote often contains both clauses in one paragraph
     # ("A/D类…；C类…"). Compare within each clause so the expected A/D group is
     # not rejected merely because the C-class sibling is also present.
-    return any(_class_labels(clause) == labels
-               for clause in re.split(r"[；;。！？!?]", source_quote or ""))
+    # The introductory class enumeration and an unrelated pension restriction
+    # must not add labels to the fee group's set (D06 p231). Compare the bounded
+    # fee statement, including each class list but excluding the next sentence.
+    for clause in re.split(r"[；;。！？!?]", _compact(source_quote)):
+        if not any(token in clause for token in ("申购费", "认购费", "销售服务费")):
+            continue
+        groups = re.finditer(
+            r"[A-Z]类(?:基金份额)?(?:[、及和与][A-Z]类(?:基金份额)?)*"
+            r"[^A-Z，,。；;]{0,12}?(?:不收取|收取|不计提|计提)"
+            r"[^A-Z，,。；;]{0,8}?(?:申购费|认购费|销售服务费)", clause)
+        if any(_class_labels(match.group()) == labels for match in groups):
+            return True
+    return False
+
+
+def _class_group_member_residual_authorized(spec: Any, expected: str,
+                                            old: str, after: str) -> bool:
+    """Treat a source class label as retained when its certified group is present.
+
+    G02/G04 replace a single illustrative class label with the product's complete
+    fee group. The old label therefore remains as a member of the new group (for
+    example ``C类基金份额、E类基金份额和F类基金份额``); a literal residual check
+    must not reject that semantically correct wording. This is deliberately limited
+    to a single class-label replacement and still requires the complete expected
+    group to be present in a fee clause in the final paragraph.
+    """
+    if (getattr(spec, "rule_id", "") not in {"G02", "G04"}
+            or getattr(spec, "op", "") != "replace"):
+        return False
+    compact_old = _compact(old)
+    if not re.fullmatch(r"[A-Z]类基金份额", compact_old):
+        return False
+    return _class_group_equivalent(expected, after)
 
 
 _SEMANTIC_DELETE_PROBES: dict[str, re.Pattern[str]] = {
@@ -111,13 +157,17 @@ def operation_units(edits: Sequence[Mapping[str, Any]], operation_id: str
 def effect_proof_passed(proof: Mapping[str, Any] | None, *, operation_id: str = "",
                         obligation_id: str = "") -> bool:
     """Shared consumer gate for replay, projection, sweep and delivery."""
-    if not isinstance(proof, Mapping) or proof.get("state") != "PASS":
+    if not isinstance(proof, Mapping) or str(proof.get("state") or "").upper() != "PASS":
         return False
     if operation_id and proof.get("operation_id") != operation_id:
         return False
     if obligation_id and proof.get("obligation_id") != obligation_id:
         return False
-    if proof.get("artifact_status") == "NOT_REQUIRED":
+    artifact_status = str(proof.get("artifact_status") or "").upper()
+    if artifact_status in {"UNKNOWN", "CONFLICT", "UNPROVEN", "WRONG_EFFECT",
+                           "MISSING_EFFECT", "RESIDUAL_OLD_TEXT"}:
+        return False
+    if artifact_status == "NOT_REQUIRED":
         evidence = proof.get("evidence") or ()
         for item in evidence:
             if not isinstance(item, Mapping):
@@ -131,7 +181,7 @@ def effect_proof_passed(proof: Mapping[str, Any] | None, *, operation_id: str = 
                         and bool(item.get("document_sha256")))
         return False
     evidence = proof.get("evidence") or ()
-    if proof.get("artifact_status") == "VERIFIED_ABSENT" and any(
+    if artifact_status == "VERIFIED_ABSENT" and any(
             isinstance(item, Mapping) and item.get("proof_kind") == "document_literal_absent"
             and item.get("operation_id") == proof.get("operation_id")
             and item.get("obligation_id") == proof.get("obligation_id")
@@ -144,8 +194,11 @@ def effect_proof_passed(proof: Mapping[str, Any] | None, *, operation_id: str = 
                     and item.get("proof_kind") and item.get("operation_id") == proof.get("operation_id")
                     and item.get("obligation_id") == proof.get("obligation_id")}
     effects = proof.get("site_effects") or ()
-    return bool(sites) and sites <= proven_sites and not proof.get("failure_code") and all(
-        item.get("state") == "PASS" for item in effects)
+    return bool(sites) and sites <= proven_sites and not proof.get("failure_code") and bool(effects) and all(
+        str(item.get("state") or "").upper() == "PASS" and
+        str(item.get("artifact_status") or "").upper() not in {"UNKNOWN", "CONFLICT"}
+        for item in effects if isinstance(item, Mapping)) and all(
+            isinstance(item, Mapping) for item in effects)
 
 
 def _delete_quote_belongs(quote: str, references: Sequence[str]) -> bool:
@@ -155,10 +208,13 @@ def _delete_quote_belongs(quote: str, references: Sequence[str]) -> bool:
     satisfied business site. Require the operation's literal or bounded semantic
     signature before treating its unchanged source wording as a residual.
     """
-    from ..recall import _delete_keyword_bag, _keyword_bag_in_clause
+    from ..recall import (_delete_keyword_bag, _keyword_bag_in_clause,
+                          _g17_usage_exclusion_matches)
     body = _compact(quote)
     if len(body) < 8:
         return False
+    if _g17_usage_exclusion_matches(quote, references):
+        return True
     for reference in references:
         old = _compact(reference)
         if not old:
@@ -197,6 +253,29 @@ def operation_site_bound(spec: Any, quote: str, original: Any, location: str,
         body = str(span.text)
     if not quote or _compact(quote) not in _compact(body) or _looks_like_heading(body):
         return False
+    if spec.rule_id in {"G08", "G11", "G12"}:
+        # Shared words such as 申购费用/赎回费 are not a business-site proof.
+        # Require this operation's own policy clause before fuzzy attribution.
+        compact_body = _compact(body)
+        if spec.rule_id == "G08" and not (
+                "申购费率" in compact_body and "招募说明书" in compact_body):
+            return False
+        if spec.rule_id == "G11" and not (
+                "申购费用由" in compact_body and "承担" in compact_body):
+            return False
+        if spec.rule_id == "G12" and not (
+                "赎回费用由" in compact_body and "基金财产" in compact_body):
+            return False
+    if spec.rule_id == "G13" and not (
+            "少于7日" in _compact(body) and "赎回费" in _compact(body)
+            and ("1.5%" in _compact(body) or "1.50%" in _compact(body))):
+        return False
+    if spec.rule_id == "G15" and spec.op == "delete":
+        from ..recall import _g15_delay_continuation
+        bound = _g15_delay_continuation(original, location,
+            {"op": spec.op, "old_text": spec.old_text})
+        if bound is not None and _compact(quote) == _compact(body[bound[0]:bound[1]]):
+            return True
     site_ok = (append_site_ok(spec.rule_id, span, original) if spec.op == "append"
                else target_site_ok(spec.rule_id, span, original))
     if not site_ok and spec.rule_id in {"G02", "G04"} and occurrence_index >= 0:
@@ -233,7 +312,7 @@ def operation_site_bound(spec: Any, quote: str, original: Any, location: str,
         # evidence that G05's independent filing deletion is already satisfied.
         class_setup = _compact(body)
         if not ("份额类别的具体设置" in class_setup or re.search(
-                r"(?:增加|增设|新增|变更|停止)[^。；;]{0,12}(?:基金)?份额类别",
+                r"(?:增加|增设|新增|变更|停止)[^。；;]{0,12}(?:基金)?份额类别|调整(?:基金)?份额类别",
                 class_setup)):
             return False
     if spec.op == "append" and spec.rule_id in {"G01", "G03", "G16"}:
@@ -290,7 +369,7 @@ def _verified_site_closure(sites: Sequence[Mapping[str, Any]], original: Any,
     A continuation must follow an unterminated bound quote and independently
     match that operation's reference; proximity alone never creates a site.
     """
-    from ..recall import resolve_quote
+    from ..recall import resolve_quote, _g17_usage_exclusion_matches, _g15_delay_continuation
     spans = list(getattr(original, "paragraphs", ()))
     index = {str(span.location): position for position, span in enumerate(spans)}
     references = [str(getattr(spec, "old_text", "") or ""),
@@ -316,7 +395,31 @@ def _verified_site_closure(sites: Sequence[Mapping[str, Any]], original: Any,
         if bound is None:
             closed.append(site)
             continue
+        actual_quote = str(span.text)[bound[0]:bound[1]]
+        if (_compact(quote).rstrip("。；;") ==
+                _compact(actual_quote).rstrip("。；;")):
+            site["quote"] = actual_quote
         belongs = spec.op == "delete" and _delete_quote_belongs(quote, references)
+        if belongs and spec.rule_id == "G15" and index[location] + 1 < len(spans):
+            follower = spans[index[location] + 1]
+            delay = _g15_delay_continuation(original, str(follower.location),
+                {"op": spec.op, "old_text": spec.old_text})
+            if delay is not None:
+                closed.append({"location": str(follower.location),
+                               "quote": str(follower.text)[delay[0]:delay[1]],
+                               "source_binding": "operation_reference_continuation"})
+        if (belongs and spec.op == "delete" and spec.rule_id == "G17"
+                and "销售服务费主要用于" in _compact(quote)):
+            # G17's second complete sentence can be a separate DOCX paragraph
+            # after a terminated first sentence. Match its own reference rather
+            # than requiring an unfinished quote or borrowing a nearby fee topic.
+            follower = next((part for part in spans[index[location] + 1:]
+                             if str(part.text).strip()), None)
+            if follower is not None and _g17_usage_exclusion_matches(
+                    str(follower.text), references):
+                closed.append({"location": str(follower.location),
+                               "quote": str(follower.text),
+                               "source_binding": "operation_reference_continuation"})
         continuation = None
         if spec.op == "delete" and bound and quote.rstrip()[-1:] not in "。；;！？!?":
             # Survey may bind only the first physical paragraph of a clause. Use
@@ -420,11 +523,12 @@ def evaluate_operation_effect(obligation: Any, original: Any, artifact: Any,
     if not sites:
         return OperationEffect("OPEN", "UNPROVEN", **base,
                                failure_code="CLAIM_OPERATION_UNPROVEN", reason="verified site missing")
-    from ..recall import instantiate_slots
+    from ..recall import instantiate_policy_text
     from .claim_replay import _expected_after
     expected = str(spec.new_text or "")
     try:
-        instantiated, issues = instantiate_slots(expected, facts)
+        instantiated, issues = instantiate_policy_text(
+            rule_id, {"op": spec.op, "new_text": expected}, facts)
         if not issues and instantiated:
             expected = instantiated
     except (AttributeError, TypeError):
@@ -439,7 +543,9 @@ def evaluate_operation_effect(obligation: Any, original: Any, artifact: Any,
     bound_quotes: dict[str, list[str]] = {}
     for site in sites:
         location = str(site.get("location") or site.get("site_id") or "")
-        bound_quotes.setdefault(location, []).append(str(site.get("quote") or ""))
+        occurrence = int(site.get("occurrence_index", -1))
+        site_id = f"{location}#occurrence:{occurrence}" if occurrence >= 0 else location
+        bound_quotes.setdefault(site_id, []).append(str(site.get("quote") or ""))
     for site in sites:
         location = str(site.get("location") or site.get("site_id") or "")
         occurrence = int(site.get("occurrence_index", -1))
@@ -456,7 +562,7 @@ def evaluate_operation_effect(obligation: Any, original: Any, artifact: Any,
         except (KeyError, ValueError, AttributeError, IndexError):
             results.append(item)
             continue
-        quotes = [candidate for candidate in bound_quotes.get(location, ())
+        quotes = [candidate for candidate in bound_quotes.get(site_id, ())
                   if candidate and _compact(candidate) in _compact(before)]
         quote = max(quotes, key=lambda value: len(_compact(value)), default="")
         if not quote:
@@ -511,7 +617,17 @@ def evaluate_operation_effect(obligation: Any, original: Any, artifact: Any,
         # Residual is evaluated in this verified site. Source offsets never slice AFTER.
         residual = any(_compact(old) and _compact(old) in _compact(after)
                        and _compact(old) not in _compact(expected)
-                       and not retained_as_authorized_new(str(old)) for old in old_wordings)
+                       and not retained_as_authorized_new(str(old))
+                       and not _class_group_member_residual_authorized(
+                           spec, expected, str(old), after)
+                       for old in old_wordings)
+        if spec.op == "replace":
+            clause_residuals = _replaced_clause_residuals(
+                before, after, old_wordings, expected)
+            clause_residuals = [clause for clause in clause_residuals
+                                if not _class_group_member_residual_authorized(
+                                    spec, expected, clause, after)]
+            residual = residual or bool(clause_residuals)
         if spec.op == "delete":
             # The actual source wording is proof too. Canonical absence cannot
             # certify an unchanged variant or a composite paragraph component.
@@ -536,23 +652,13 @@ def evaluate_operation_effect(obligation: Any, original: Any, artifact: Any,
                 # component has an execution failure. Paragraph integrity still
                 # blocks the document separately in Claim Replay.
                 item.update(state="PASS", artifact_status="VERIFIED_ABSENT", failure_code="")
-            elif spec.op == "delete" and not residual and planned_matches and own:
-                # Another rule may legitimately insert its authorized policy into the
-                # same paragraph this delete empties (G16 appends into G15's payment
-                # paragraph).  The artifact exactly matches the combined plan and the
-                # deleted wording is gone, so the delete itself is proven; the
-                # per-edit unit validator sees only its own replacement and fails.
-                item.update(state="PASS", artifact_status="VERIFIED_ABSENT", failure_code="")
-            elif spec.op == "append" and planned_matches and expected_present and own:
-                # G16 appends into a paragraph G17 deletes; the merged paragraph no
-                # longer equals the append unit's isolated replacement, but the
-                # combined plan matches the artifact and the new policy is present.
-                item.update(state="PASS", artifact_status="EXPECTED_EFFECT_PRESENT",
-                            failure_code="")
             elif not planned_matches:
                 item.update(state="FAIL", artifact_status="WRONG_EFFECT",
                             failure_code="CLAIM_EXECUTION_EFFECT_MISSING")
             elif not validated:
+                # A reconstructed merged paragraph proves execution, not authority.
+                # Each original component must pass its own operation validation;
+                # a sibling's insertion cannot cure an unauthorized deletion.
                 item.update(state="FAIL", artifact_status="WRONG_EFFECT",
                             failure_code="CLAIM_PLANNED_EFFECT_MISSING")
             elif spec.op == "delete" and residual:

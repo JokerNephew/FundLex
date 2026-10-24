@@ -1,0 +1,150 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1040" viewBox="0 0 1600 1040">
+  <defs>
+    <linearGradient id="title" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0" stop-color="#163B67"/>
+      <stop offset="1" stop-color="#245A8D"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="150%">
+      <feDropShadow dx="0" dy="4" stdDeviation="6" flood-color="#10253d" flood-opacity="0.14"/>
+    </filter>
+    <marker id="arrow" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto">
+      <path d="M0,0 L12,6 L0,12 z" fill="#59738d"/>
+    </marker>
+    <marker id="arrowBlue" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto">
+      <path d="M0,0 L12,6 L0,12 z" fill="#2468a5"/>
+    </marker>
+    <style>
+      .title { font: 700 34px 'Noto Sans CJK SC','Microsoft YaHei',sans-serif; fill: #fff; }
+      .subtitle { font: 400 17px 'Noto Sans CJK SC','Microsoft YaHei',sans-serif; fill: #dbeaf8; }
+      .lane-title { font: 700 23px 'Noto Sans CJK SC','Microsoft YaHei',sans-serif; fill: #163b67; }
+      .box-title { font: 700 20px 'Noto Sans CJK SC','Microsoft YaHei',sans-serif; fill: #13283d; }
+      .box-text { font: 400 16px 'Noto Sans CJK SC','Microsoft YaHei',sans-serif; fill: #294257; }
+      .small { font: 400 14px 'Noto Sans CJK SC','Microsoft YaHei',sans-serif; fill: #476277; }
+      .legend { font: 600 16px 'Noto Sans CJK SC','Microsoft YaHei',sans-serif; fill: #294257; }
+      .pill { font: 700 13px 'Noto Sans CJK SC','Microsoft YaHei',sans-serif; }
+      .footer { font: 400 15px 'Noto Sans CJK SC','Microsoft YaHei',sans-serif; fill: #294257; }
+    </style>
+  </defs>
+
+  <rect width="1600" height="1040" fill="#f5f8fb"/>
+  <rect x="32" y="28" width="1536" height="118" rx="18" fill="url(#title)"/>
+  <text x="72" y="78" class="title">FundLex：合同定位与修改逻辑</text>
+  <text x="72" y="114" class="subtitle">产品经理视角：模型负责理解业务，代码负责锁定证据、执行修改和把关交付</text>
+
+  <g filter="url(#shadow)">
+    <rect x="32" y="174" width="1536" height="344" rx="18" fill="#eef5fb" stroke="#c7dced" stroke-width="2"/>
+    <rect x="32" y="544" width="1536" height="410" rx="18" fill="#f1f8f4" stroke="#c9e3d2" stroke-width="2"/>
+  </g>
+  <text x="70" y="218" class="lane-title">一、定位：找出“哪些地方应该改”</text>
+  <text x="70" y="588" class="lane-title">二、修改：把“应该改的地方”安全交付出来</text>
+
+  <!-- Identification lane -->
+  <g filter="url(#shadow)">
+    <rect x="70" y="250" width="190" height="116" rx="14" fill="#fff" stroke="#8ba9c3" stroke-width="2"/>
+    <rect x="287" y="250" width="218" height="116" rx="14" fill="#dcf0e3" stroke="#58a878" stroke-width="2"/>
+    <rect x="532" y="250" width="218" height="116" rx="14" fill="#dcecff" stroke="#5790c2" stroke-width="2"/>
+    <rect x="777" y="250" width="218" height="116" rx="14" fill="#dcecff" stroke="#5790c2" stroke-width="2"/>
+    <rect x="1022" y="250" width="218" height="116" rx="14" fill="#dcf0e3" stroke="#58a878" stroke-width="2"/>
+    <rect x="1267" y="250" width="225" height="116" rx="14" fill="#dcf0e3" stroke="#58a878" stroke-width="2"/>
+  </g>
+  <text x="165" y="287" text-anchor="middle" class="box-title">上传合同</text>
+  <text x="165" y="317" text-anchor="middle" class="box-text">进入任务并绑定当前指引</text>
+  <text x="165" y="344" text-anchor="middle" class="small">输入：DOCX + 指引</text>
+
+  <rect x="302" y="267" width="76" height="25" rx="12" fill="#2e9b61"/>
+  <text x="340" y="285" text-anchor="middle" class="pill" fill="#fff">纯代码</text>
+  <text x="396" y="314" text-anchor="middle" class="box-title">读取文档结构</text>
+  <text x="396" y="342" text-anchor="middle" class="box-text">段落、表格、章节、位置</text>
+
+  <rect x="547" y="267" width="90" height="25" rx="12" fill="#2468a5"/>
+  <text x="592" y="285" text-anchor="middle" class="pill" fill="#fff">模型判断</text>
+  <text x="641" y="314" text-anchor="middle" class="box-title">识别合同事实</text>
+  <text x="641" y="340" text-anchor="middle" class="box-text">基金类型、份额、费用关系</text>
+  <text x="641" y="361" text-anchor="middle" class="small">代码核对原文证据</text>
+
+  <rect x="792" y="267" width="90" height="25" rx="12" fill="#2468a5"/>
+  <text x="837" y="285" text-anchor="middle" class="pill" fill="#fff">模型判断</text>
+  <text x="886" y="314" text-anchor="middle" class="box-title">理解业务范围</text>
+  <text x="886" y="340" text-anchor="middle" class="box-text">规则对应哪些业务章节</text>
+  <text x="886" y="361" text-anchor="middle" class="small">章节只是导航</text>
+
+  <rect x="1037" y="267" width="76" height="25" rx="12" fill="#2e9b61"/>
+  <text x="1075" y="285" text-anchor="middle" class="pill" fill="#fff">纯代码</text>
+  <text x="1131" y="314" text-anchor="middle" class="box-title">全文补扫</text>
+  <text x="1131" y="340" text-anchor="middle" class="box-text">查找变体、重复和跨段条款</text>
+  <text x="1131" y="361" text-anchor="middle" class="small">防止模型漏报</text>
+
+  <rect x="1282" y="267" width="76" height="25" rx="12" fill="#2e9b61"/>
+  <text x="1320" y="285" text-anchor="middle" class="pill" fill="#fff">纯代码</text>
+  <text x="1379" y="314" text-anchor="middle" class="box-title">锁定修改目标</text>
+  <text x="1379" y="340" text-anchor="middle" class="box-text">原文位置 + 引文 + 规则</text>
+  <text x="1379" y="361" text-anchor="middle" class="small">无法证明归属就不修改</text>
+
+  <line x1="260" y1="308" x2="287" y2="308" stroke="#59738d" stroke-width="3" marker-end="url(#arrow)"/>
+  <line x1="505" y1="308" x2="532" y2="308" stroke="#59738d" stroke-width="3" marker-end="url(#arrow)"/>
+  <line x1="750" y1="308" x2="777" y2="308" stroke="#59738d" stroke-width="3" marker-end="url(#arrow)"/>
+  <line x1="995" y1="308" x2="1022" y2="308" stroke="#59738d" stroke-width="3" marker-end="url(#arrow)"/>
+  <line x1="1240" y1="308" x2="1267" y2="308" stroke="#59738d" stroke-width="3" marker-end="url(#arrow)"/>
+
+  <rect x="70" y="408" width="1422" height="72" rx="13" fill="#fff" stroke="#b5c7d6" stroke-width="1.5"/>
+  <text x="100" y="438" class="box-title">定位结果</text>
+  <text x="100" y="465" class="box-text">每个目标都必须有：原文地址、原文引文、对应规则、是否需要修改、是否已满足</text>
+
+  <!-- Modification lane -->
+  <g filter="url(#shadow)">
+    <rect x="70" y="620" width="200" height="118" rx="14" fill="#dcf0e3" stroke="#58a878" stroke-width="2"/>
+    <rect x="300" y="620" width="220" height="118" rx="14" fill="#dcf0e3" stroke="#58a878" stroke-width="2"/>
+    <rect x="550" y="620" width="250" height="118" rx="14" fill="#fff4d8" stroke="#d49b2c" stroke-width="2"/>
+    <rect x="830" y="620" width="235" height="118" rx="14" fill="#dcecff" stroke="#5790c2" stroke-width="2"/>
+    <rect x="1095" y="620" width="235" height="118" rx="14" fill="#dcf0e3" stroke="#58a878" stroke-width="2"/>
+    <rect x="1360" y="620" width="132" height="118" rx="14" fill="#fff" stroke="#8ba9c3" stroke-width="2"/>
+  </g>
+
+  <rect x="85" y="638" width="76" height="25" rx="12" fill="#2e9b61"/>
+  <text x="123" y="656" text-anchor="middle" class="pill" fill="#fff">纯代码</text>
+  <text x="170" y="684" text-anchor="middle" class="box-title">适用性检查</text>
+  <text x="170" y="711" text-anchor="middle" class="box-text">事实不确定就暂停</text>
+
+  <rect x="315" y="638" width="76" height="25" rx="12" fill="#2e9b61"/>
+  <text x="353" y="656" text-anchor="middle" class="pill" fill="#fff">纯代码</text>
+  <text x="410" y="684" text-anchor="middle" class="box-title">选择修改方式</text>
+  <text x="410" y="711" text-anchor="middle" class="box-text">模板、最小替换或联合改写</text>
+
+  <rect x="565" y="638" width="90" height="25" rx="12" fill="#c78516"/>
+  <text x="610" y="656" text-anchor="middle" class="pill" fill="#fff">代码 + 模型</text>
+  <text x="675" y="684" text-anchor="middle" class="box-title">生成修改内容</text>
+  <text x="675" y="710" text-anchor="middle" class="box-text">固定内容：代码生成</text>
+  <text x="675" y="730" text-anchor="middle" class="small">复杂语义：模型改写</text>
+
+  <rect x="845" y="638" width="90" height="25" rx="12" fill="#2468a5"/>
+  <text x="890" y="656" text-anchor="middle" class="pill" fill="#fff">模型复核</text>
+  <text x="947" y="684" text-anchor="middle" class="box-title">审计修改结果</text>
+  <text x="947" y="710" text-anchor="middle" class="box-text">是否满足业务要求</text>
+
+  <rect x="1110" y="638" width="76" height="25" rx="12" fill="#2e9b61"/>
+  <text x="1148" y="656" text-anchor="middle" class="pill" fill="#fff">纯代码</text>
+  <text x="1212" y="684" text-anchor="middle" class="box-title">写入并验证 DOCX</text>
+  <text x="1212" y="710" text-anchor="middle" class="box-text">修订版 + 最终版</text>
+
+  <text x="1426" y="675" text-anchor="middle" class="box-title">交付</text>
+  <text x="1426" y="703" text-anchor="middle" class="box-text">完整 / 工作文件</text>
+
+  <line x1="270" y1="679" x2="300" y2="679" stroke="#59738d" stroke-width="3" marker-end="url(#arrow)"/>
+  <line x1="520" y1="679" x2="550" y2="679" stroke="#59738d" stroke-width="3" marker-end="url(#arrow)"/>
+  <line x1="800" y1="679" x2="830" y2="679" stroke="#59738d" stroke-width="3" marker-end="url(#arrow)"/>
+  <line x1="1065" y1="679" x2="1095" y2="679" stroke="#59738d" stroke-width="3" marker-end="url(#arrow)"/>
+  <line x1="1330" y1="679" x2="1360" y2="679" stroke="#59738d" stroke-width="3" marker-end="url(#arrow)"/>
+
+  <rect x="70" y="785" width="1422" height="126" rx="13" fill="#fff" stroke="#b5c7d6" stroke-width="1.5"/>
+  <text x="100" y="818" class="box-title">交付前的最后一道门</text>
+  <text x="100" y="849" class="box-text">代码逐条回放：修改是否真的落在目标位置？旧文是否残留？修订版和最终版是否一致？</text>
+  <text x="100" y="877" class="box-text">有未解决问题 → 只交付工作文件并明确标记；全部通过 → 才开放最终版下载。</text>
+
+  <!-- legend -->
+  <rect x="70" y="975" width="22" height="22" rx="5" fill="#dcecff" stroke="#5790c2"/>
+  <text x="102" y="993" class="legend">模型判断：理解业务语义、识别范围、复杂文案复核</text>
+  <rect x="510" y="975" width="22" height="22" rx="5" fill="#dcf0e3" stroke="#58a878"/>
+  <text x="542" y="993" class="legend">纯代码：定位地址、校验事实、执行写入、产物门禁</text>
+  <rect x="1030" y="975" width="22" height="22" rx="5" fill="#fff4d8" stroke="#d49b2c"/>
+  <text x="1062" y="993" class="legend">代码 + 模型：固定规则由代码做，复杂语义由模型补位</text>
+</svg>

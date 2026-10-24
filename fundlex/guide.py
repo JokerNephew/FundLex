@@ -874,7 +874,9 @@ def validate_runtime_guide(doc: dict, *, approved_source_sha256: str | None = No
                 failures.append("operation_invalid")
                 continue
             operation_id = operation.get("operation_id")
-            if operation_id != f"{rule_id}:{index}" or operation_id in seen_operations:
+            if not isinstance(operation_id, str) or not operation_id.strip() \
+                    or operation_id.split(":", 1)[0].strip() != rule_id \
+                    or operation_id in seen_operations:
                 failures.append("operation_id_invalid_or_duplicate")
             seen_operations.add(str(operation_id))
             if operation.get("op") not in OPERATIONS or _condition_error(operation.get("condition")):
@@ -918,7 +920,7 @@ def bind_operation_identities(doc: dict) -> None:
     """Assign stable indices; never infer ONE_OF from text similarity."""
     for rule in doc.get("groups") or []:
         for index, operation in enumerate(rule.get("operations") or []):
-            operation["operation_id"] = f"{rule['rule_id']}:{index}"
+            operation.setdefault("operation_id", f"{rule['rule_id']}:{index}")
 
 
 def certify_guide_document(doc: dict, *, source_sha256: str,

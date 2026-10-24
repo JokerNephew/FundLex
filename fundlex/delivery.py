@@ -34,6 +34,57 @@ _REASON_ORDER = ("OPEN_OBLIGATION", "APPLICABILITY", "RECALL_FACT", "FUND_TYPE",
                  "CLAIM_REPLAY", "CLAIM_OPERATION", "VALIDATION", "OVERLAP", "COMPOSE",
                  "AUDIT", "SWEEP", "COVERAGE", "TARGET")
 
+_COVERAGE_SUCCESS_STATES = {
+    "SATISFIED", "ARTIFACT_VERIFIED", "ALREADY_SATISFIED", "NOT_APPLICABLE",
+}
+
+
+def _completion_blockers(report: Mapping[str, Any]) -> list[str]:
+    """Return proof inconsistencies that must keep a delivery partial.
+
+    The worker normally writes ``unresolved`` from the same ledger.  The summary is
+    also consumed for old reports and API payloads, so it must not trust a lone
+    ``delivery_status=complete`` when a later projection or replay says otherwise.
+    UNKNOWN and CONFLICT are deliberately treated as open states.
+    """
+    blockers: list[str] = []
+    if report.get("unresolved"):
+        blockers.append("unresolved")
+
+    coverage = report.get("operation_coverage")
+    if isinstance(coverage, Mapping):
+        entries = coverage.get("entries") or ()
+        if any(str(item.get("state") or "").upper() not in _COVERAGE_SUCCESS_STATES
+               for item in entries if isinstance(item, Mapping)):
+            blockers.append("coverage_unresolved")
+
+    obligations = report.get("obligations")
+    records = obligations.get("records") if isinstance(obligations, Mapping) else ()
+    if any(str(item.get("completion") or "").upper() not in _COVERAGE_SUCCESS_STATES
+           for item in records if isinstance(item, Mapping)):
+        blockers.append("obligation_unresolved")
+
+    replay = report.get("artifact_claim_replay") or report.get("claim_replay")
+    if isinstance(replay, Mapping):
+        if replay.get("verified") is False:
+            blockers.append("claim_replay_failed")
+        replay_records = replay.get("obligations") or {}
+        if isinstance(replay_records, Mapping) and any(
+                str(item.get("state") or "").upper() != "PASS"
+                or str(item.get("artifact_status") or "").upper()
+                in {"UNKNOWN", "CONFLICT", "UNPROVEN", "WRONG_EFFECT",
+                    "MISSING_EFFECT", "RESIDUAL_OLD_TEXT"}
+                or any(str(site.get("state") or "").upper()
+                       != "PASS"
+                       or str(site.get("artifact_status") or "").upper()
+                       in {"UNKNOWN", "CONFLICT", "UNPROVEN", "WRONG_EFFECT",
+                           "MISSING_EFFECT", "RESIDUAL_OLD_TEXT"}
+                       for site in item.get("site_effects") or ()
+                       if isinstance(site, Mapping))
+                for item in replay_records.values() if isinstance(item, Mapping)):
+            blockers.append("claim_operation_unresolved")
+    return blockers
+
 
 def business_reason(item: Mapping[str, Any]) -> str:
     text = " ".join(str(item.get(key) or "") for key in
@@ -123,12 +174,19 @@ def build_user_summary(report: Mapping[str, Any]) -> dict[str, Any]:
         return {"status": EXCLUDED, "headline": "该产品类型不在本次修改范围内",
                 "issues": [], "notices": notices}
     issues = _issues(report)
-    if status == "complete" and not issues:
+    blockers = _completion_blockers(report)
+    if status == "complete" and not issues and not blockers:
         if notices:
             return {"status": COMPLETE_WITH_NOTICES,
                     "headline": "修改完成，但有业务提示",
                     "issues": [], "notices": notices}
         return {"status": COMPLETE, "headline": "修改完成", "issues": [], "notices": []}
+    if status == "complete" and blockers and not issues:
+        issues = [{"rule_id": "", "title": "交付证明未收敛", "section": "",
+                   "location": "", "obligation_id": "",
+                   "business_reason": "交付证明仍包含未解决的操作或站点",
+                   "requirement": "", "quote": "", "quote_exact_site": False,
+                   "review_note": "请重新复核操作、站点和最终文档证明。"}]
     return {
         "status": PARTIAL,
         "headline": "部分修改无法可靠完成",

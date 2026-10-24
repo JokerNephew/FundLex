@@ -3,8 +3,11 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
+import pytest
+
 from fundlex.obligations import (GroupKind, apply_facts, compile_obligations,
-                                 open_obligations, project)
+                                 open_obligations, project,
+                                 validate_completion_invariants)
 
 
 class FakeFacts:
@@ -272,7 +275,7 @@ def test_one_completed_target_cannot_hide_another_wrong_occurrence():
                {"target_id": "T2", "verdict": "wrong"}],
     ))
     assert ledger.records[0].completion == "UNRESOLVED"
-    assert ledger.records[0].completion_evidence == "OPEN_OBLIGATION:applicable_without_site_proof"
+    assert ledger.records[0].completion_evidence == "OPERATION_SITE_DUPLICATE"
 
 
 def test_one_of_variant_closure_requires_the_other_variant_to_be_gone():
@@ -397,3 +400,95 @@ def test_survey_satisfied_delete_cannot_hide_a_residual_sentence():
     record = ledger.record("G05:B2:O1")
     assert record.completion == "UNRESOLVED"
     assert record.completion_evidence == "OPEN_OBLIGATION:applicable_without_site_proof"
+
+
+def test_missing_operation_attribution_or_site_stays_unresolved_and_unprojected():
+    ledger = compile_obligations(guide(rule(rule_id="G30", operations=[
+        {"op": "delete", "old_text": "待删除条款", "condition": {"kind": "none"}}
+    ])))
+    apply_facts(ledger, FakeFacts())
+
+    project(ledger, report_with(targets=[target("G30", operations=())]))
+    record = ledger.records[0]
+    assert record.completion == "UNRESOLVED"
+    assert record.targets == () and record.sites == ()
+    assert ledger.operation_site_ledger() == ()
+
+    project(ledger, report_with(targets=[target("G30", operations=["G30:0"],
+                                          location="")]))
+    assert record.completion == "UNRESOLVED"
+    assert record.targets == () and record.sites == ()
+    assert ledger.as_dict()["operation_sites"] == []
+
+
+def test_operation_site_ledger_is_complete_and_stable():
+    ledger = compile_obligations(guide(rule(rule_id="G31", operations=[
+        {"op": "delete", "old_text": "重复出现的旧句", "condition": {"kind": "none"}}
+    ])))
+    apply_facts(ledger, FakeFacts())
+    project(ledger, report_with(targets=[
+        target("G31", target_id="T2", operations=["G31:0"], location="p2"),
+        target("G31", target_id="T1", operations=["G31:0"], location="p1"),
+    ]))
+
+    assert ledger.operation_site_ledger() == (
+        {"obligation_id": "G31:B1:O1", "rule_id": "G31", "operation_id": "G31:0",
+         "target_id": "T1", "site_id": "p1", "completion": "UNRESOLVED"},
+        {"obligation_id": "G31:B1:O1", "rule_id": "G31", "operation_id": "G31:0",
+         "target_id": "T2", "site_id": "p2", "completion": "UNRESOLVED"},
+    )
+    assert ledger.as_dict()["operation_sites"] == list(ledger.operation_site_ledger())
+
+
+def test_duplicate_target_id_fails_closed():
+    ledger = compile_obligations(guide(rule(rule_id="G32", operations=[
+        {"op": "delete", "old_text": "重复站点旧句", "condition": {"kind": "none"}}
+    ])))
+    apply_facts(ledger, FakeFacts())
+    with pytest.raises(ValueError, match="OPERATION_SITE_DUPLICATE:G32:B1:O1"):
+        project(ledger, report_with(targets=[
+            target("G32", target_id="T1", operations=["G32:0"], location="p1"),
+            target("G32", target_id="T1", operations=["G32:0"], location="p2"),
+        ]))
+
+
+def test_duplicate_site_occurrences_are_retained_but_cannot_close():
+    ledger = compile_obligations(guide(rule(rule_id="G32", operations=[
+        {"op": "delete", "old_text": "重复站点旧句", "condition": {"kind": "none"}}
+    ])))
+    apply_facts(ledger, FakeFacts())
+    project(ledger, report_with(targets=[
+        target("G32", target_id="T1", operations=["G32:0"], location="p1"),
+        target("G32", target_id="T2", operations=["G32:0"], location="p1"),
+    ]))
+    assert ledger.records[0].targets == ("T1", "T2")
+    assert ledger.records[0].sites == ("p1", "p1")
+    assert ledger.records[0].completion == "UNRESOLVED"
+    assert ledger.records[0].completion_evidence == "OPERATION_SITE_DUPLICATE"
+
+
+def test_operation_site_ledger_rejects_partial_projection():
+    ledger = compile_obligations(guide(rule(rule_id="G33", operations=[
+        {"op": "delete", "old_text": "旧句", "condition": {"kind": "none"}}
+    ])))
+    record = ledger.records[0]
+    record.targets = ("T1",)
+    record.sites = ()
+    with pytest.raises(ValueError, match="OPERATION_SITE_INVARIANT:G33:B1:O1"):
+        validate_completion_invariants(ledger)
+    with pytest.raises(ValueError, match="OPERATION_SITE_INVARIANT:G33:B1:O1"):
+        ledger.operation_site_ledger()
+
+
+def test_projection_clears_stale_target_site_rows():
+    ledger = compile_obligations(guide(rule(rule_id="G34", operations=[
+        {"op": "delete", "old_text": "旧句", "condition": {"kind": "none"}}
+    ])))
+    apply_facts(ledger, FakeFacts())
+    project(ledger, report_with(targets=[target("G34", operations=["G34:0"])]))
+    assert ledger.operation_site_ledger()
+
+    project(ledger, report_with())
+    assert ledger.records[0].targets == ()
+    assert ledger.records[0].sites == ()
+    assert ledger.operation_site_ledger() == ()

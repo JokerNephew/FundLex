@@ -5,12 +5,12 @@ faithful answer fails. Quotes are validated by the engine module, not here.
 """
 from __future__ import annotations
 
-FACTS_PROMPT_VERSION = "recall_facts_v4"
+FACTS_PROMPT_VERSION = "recall_facts_v5"
 SCOPE_PROMPT_VERSION = "recall_scope_v1"
 INVENTORY_PROMPT_VERSION = "recall_inventory_v2"
 COMPOSE_PROMPT_VERSION = "recall_compose_v1"
 VERIFY_PROMPT_VERSION = "recall_verify_v1"
-AUDIT_PROMPT_VERSION = "recall_audit_v1"
+AUDIT_PROMPT_VERSION = "recall_audit_v3"
 SWEEP_PROMPT_VERSION = "recall_sweep_v2"
 
 PROMPT_VERSIONS = {
@@ -50,6 +50,8 @@ FACTS_SCHEMA = {
                     "rate": {"type": "string"},
                     "current": {"type": "boolean"},
                     "quote": {"type": "string"},
+                    "subscription_quote": {"type": "string"},
+                    "service_quote": {"type": "string"},
                 },
             },
         },
@@ -98,7 +100,10 @@ FACTS_INSTRUCTION = (
     "enumeration sentence (for example 本基金将基金份额分为A类、C类和E类不同的类别). "
     "It must prove the entire set, not just some members. Do not truncate or use ellipses; "
     "return an empty quote when the complete set cannot be proven. Every quote must be an exact contiguous copy from "
-    "[CONTRACT_SOURCE] and must directly support the value it is attached to. Never infer a class letter "
+    "[CONTRACT_SOURCE] and must directly support the value it is attached to. When subscription and "
+    "service fee evidence is in different paragraphs, provide subscription_quote and service_quote "
+    "separately for that class; each must directly prove its own boolean. An absent fee mention is not "
+    "proof of false. A management-fee quote proves neither subscription nor service fee. Never infer a class letter "
     "from habit: read the actual fee clauses. floating_management_fee is true only when the contract ties "
     "management fee to investor holding period or performance (contingent management fee returned to "
     "investors or excess management fee deducted); an ordinary fixed management fee is false. "
@@ -289,7 +294,15 @@ AUDIT_INSTRUCTION = (
     "does not state. A rule whose slot classes are placeholders means the AFTER text must name the "
     "product's actual share classes that fall in that group: adding a real class the contract defines "
     "(for example including a D类 class in the group the guide wrote as A类) is correct instantiation, "
-    "not an unauthorized addition, as long as [FACTS] lists that class in the group. Never report an "
+    "not an unauthorized addition, as long as [FACTS] lists that class in the group. "
+    "[APPLICABLE_POLICIES] supplies each operation's condition status and instantiated new text. "
+    "When policy_status is READY, review that applicable text against AFTER while retaining all "
+    "other source-preservation requirements. If verified facts prove there is no service-fee class, "
+    "the guide's C-class service-fee component is inapplicable; never require a nonexistent class "
+    "or the omitted component. UNRESOLVED policies or UNKNOWN/CONFLICT fee facts are not certified "
+    "absence and cannot justify omitting a component; report a FACT or APPLICABILITY failure when "
+    "they prevent a verdict. These entries authorize policy only: read AFTER independently and "
+    "do not treat READY as proof that the policy was applied. Never report an "
     "OTHER_AUTHORIZED_EDITS change as an unauthorized addition. For every non-completed "
     "target also classify the root cause (failure_class) and, when known, the affected_fact "
     "or affected_obligation, so recovery can return to the correct business layer. A region "

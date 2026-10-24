@@ -45,6 +45,10 @@ class _FakeParagraph:
         self.location = location
         self.text = text
         self.raw = text
+        self.safe_text = text
+        self.zone = "body"
+        self.logical_zone = "body"
+        self.section_path = "基金费用与税收"
         self.segments = (_FakeSegment(0, len(text)),)
 
 

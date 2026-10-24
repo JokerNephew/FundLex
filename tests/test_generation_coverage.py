@@ -369,3 +369,125 @@ def test_real_d02_report_excludes_absent_heading_from_artifact_coverage():
     assert sum(view.counts.values()) == len(report["obligations"]["records"])
     assert sum(view.site_counts.values()) > sum(
         view.counts[state] for state in ("ARTIFACT_VERIFIED", "ALREADY_SATISFIED"))
+
+
+def test_unknown_and_conflict_site_effects_are_unresolved_even_after_pass():
+    report = {
+        "obligations": {"records": [{
+            "obligation_id": "G08:B1:O1", "rule_id": "G08", "operation_id": "G08:0",
+            "completion": "ARTIFACT_VERIFIED", "targets": ["T1"],
+        }]},
+        "targets": [{"target_id": "T1", "rule_id": "G08", "location": "p20",
+                      "state": "needs_edit", "operations": ["G08:0"]}],
+        "artifact_claim_replay": {"obligations": {
+            "G08:B1:O1": {"state": "PASS", "site_effects": [
+                {"site_id": "p20", "location": "p20", "operation_id": "G08:0",
+                 "state": "PASS", "artifact_status": "EXPECTED_EFFECT_PRESENT",
+                 "proof_kind": "site_final_plan_reconstruction"},
+                {"site_id": "p20", "location": "p20", "operation_id": "G08:0",
+                 "state": "UNKNOWN", "artifact_status": "UNKNOWN",
+                 "failure_code": "VALIDATION_UNKNOWN",
+                 "proof_kind": "site_final_plan_reconstruction"},
+            ]},
+        }},
+    }
+    view = build_coverage_view(report)
+    assert view.state_of_operation("G08", "p20", "G08:0") == "UNRESOLVED"
+    assert view.site_counts["UNRESOLVED"] == 1
+
+
+def test_operation_query_does_not_use_a_sibling_operation_row():
+    report = {
+        "obligations": {"records": [{
+            "obligation_id": "G05:B1:O1", "rule_id": "G05", "operation_id": "G05:0",
+            "completion": "ARTIFACT_VERIFIED", "targets": [],
+            "artifact_evidence": [{"location": "p9", "proof_kind": "site"}],
+        }, {
+            "obligation_id": "G05:B1:O2", "rule_id": "G05", "operation_id": "G05:1",
+            "completion": "UNRESOLVED", "targets": [],
+        }]},
+    }
+    view = build_coverage_view(report)
+    assert view.state_of_operation("G05", "p9", "G05:0") == "ARTIFACT_VERIFIED"
+    assert view.state_of_operation("G05", "p9", "G05:1") is None
+
+
+def test_duplicate_operation_sites_keep_stable_target_identity():
+    report = {
+        "obligations": {"records": [{
+            "obligation_id": "G05:B1:O1", "rule_id": "G05", "operation_id": "G05:0",
+            "completion": "UNRESOLVED", "targets": ["T0", "T1"],
+        }]},
+        "targets": [
+            {"target_id": "T0", "rule_id": "G05", "location": "p7",
+             "occurrence_index": 0, "operations": ["G05:0"]},
+            {"target_id": "T1", "rule_id": "G05", "location": "p7",
+             "occurrence_index": 1, "operations": ["G05:0"]},
+        ],
+        "artifact_claim_replay": {"obligations": {
+            "G05:B1:O1": {"site_effects": [
+                {"site_id": "p7#occurrence:0", "location": "p7", "operation_id": "G05:0",
+                 "state": "PASS", "artifact_status": "EXPECTED_EFFECT_PRESENT",
+                 "proof_kind": "site_final_plan_reconstruction"},
+                {"site_id": "p7#occurrence:1", "location": "p7", "operation_id": "G05:0",
+                 "state": "FAIL", "artifact_status": "MISSING_EFFECT",
+                 "failure_code": "CLAIM_OPERATION_NOT_PLANNED",
+                 "proof_kind": "site_literal_effect"},
+            ]},
+        }},
+    }
+    view = build_coverage_view(report)
+    assert [(entry.site_id, entry.target_id, entry.state) for entry in view.entries] == [
+        ("p7#occurrence:0", "T0", "ARTIFACT_VERIFIED"),
+        ("p7#occurrence:1", "T1", "UNRESOLVED"),
+    ]
+
+
+def test_failed_legacy_evidence_row_is_not_hidden_by_successful_evidence():
+    report = {
+        "obligations": {"records": [{
+            "obligation_id": "G08:B1:O1", "rule_id": "G08", "operation_id": "G08:0",
+            "completion": "ARTIFACT_VERIFIED", "targets": ["T1"],
+            "artifact_evidence": [
+                {"site_id": "p20", "location": "p20", "proof_kind": "site",
+                 "state": "PASS"},
+                {"site_id": "p20", "location": "p20", "proof_kind": "site",
+                 "state": "UNKNOWN", "artifact_status": "UNKNOWN"},
+            ],
+        }]},
+        "targets": [{"target_id": "T1", "rule_id": "G08", "location": "p20",
+                      "state": "needs_edit", "operations": ["G08:0"]}],
+    }
+    view = build_coverage_view(report)
+    assert view.state_of_operation("G08", "p20", "G08:0") == "UNRESOLVED"
+
+
+def test_unrecognized_obligation_state_is_normalized_to_unresolved():
+    report = {"obligations": {"records": [{
+        "obligation_id": "G08:B1:O1", "rule_id": "G08", "operation_id": "G08:0",
+        "completion": "future_terminal_state", "targets": [],
+    }]}}
+    view = build_coverage_view(report)
+    assert view.entries[0].state == "UNRESOLVED"
+    assert view.counts["UNRESOLVED"] == 1
+
+
+def test_missing_occurrence_proof_is_not_hidden_by_same_location_pass():
+    report = {
+        "obligations": {"records": [{
+            "obligation_id": "G05:B1:O1", "rule_id": "G05", "operation_id": "G05:0",
+            "completion": "UNRESOLVED", "targets": ["T0", "T1"],
+        }]},
+        "targets": [dict(target_id=f"T{i}", rule_id="G05", location="p7",
+                         state="needs_edit", occurrence_index=i, operations=["G05:0"])
+                    for i in (0, 1)],
+        "artifact_claim_replay": {"obligations": {"G05:B1:O1": {"site_effects": [{
+            "site_id": "p7#occurrence:0", "location": "p7", "operation_id": "G05:0",
+            "state": "PASS", "artifact_status": "EXPECTED_EFFECT_PRESENT",
+            "proof_kind": "site_final_plan_reconstruction",
+        }]}}},
+    }
+    view = build_coverage_view(report)
+    assert [(e.site_id, e.target_id, e.state) for e in view.entries] == [
+        ("p7#occurrence:0", "T0", "ARTIFACT_VERIFIED"),
+        ("p7#occurrence:1", "T1", "UNRESOLVED")]

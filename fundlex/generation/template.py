@@ -12,6 +12,9 @@ lives at the call site, not here).
 import re
 from dataclasses import dataclass
 from difflib import SequenceMatcher
+from typing import Any, Mapping
+
+from .types import PolicyComponents
 
 #: Fee items a G14 list can enumerate ("申购费率", "销售服务费率", …).
 _FEE_ITEM = re.compile(r"(申购|赎回|认购|转换|销售服务|管理|托管)费率")
@@ -23,6 +26,63 @@ class TemplateResult:
     replacement: str
     content_source: str
     evidence: dict
+    #: The typed policy boundary used for this result, when the caller supplied
+    #: one.  The first three fields remain unchanged for old callers.
+    policy_components: PolicyComponents | None = None
+
+    def as_dict(self) -> dict[str, Any]:
+        value = {"replacement": self.replacement,
+                 "content_source": self.content_source,
+                 "evidence": dict(self.evidence)}
+        if self.policy_components is not None:
+            value["policy_components"] = self.policy_components.as_dict()
+        return value
+
+
+def apply_policy_template(*, before: str, instantiated: str,
+                          operation_key: str, components: PolicyComponents,
+                          rule_id: str | None = None) -> TemplateResult | None:
+    """Apply a deterministic replacement under an explicit policy boundary.
+
+    This is the generic entry point for operation-aware callers.  It only
+    emits text supplied by the guide/slot instantiator and requires the policy
+    object's operation identity to match the requested operation.
+    """
+    if components.operation_key != operation_key:
+        raise ValueError("POLICY_OPERATION_MISMATCH")
+    replacement = (instantiated or "").strip()
+    if not before or not replacement or _compact(before) == _compact(replacement):
+        return None
+    return TemplateResult(
+        replacement=replacement,
+        content_source="tier1_template",
+        evidence={"mode": "policy_template", "operation_key": operation_key,
+                  "rule": rule_id or operation_key.split(":", 1)[0]},
+        policy_components=components,
+    )
+
+
+def apply_policy_splice(*, before: str, pairs: list[tuple[str, str]],
+                        operation_key: str,
+                        components: PolicyComponents) -> TemplateResult | None:
+    """Operation-aware bounded splice with policy evidence attached."""
+    if components.operation_key != operation_key:
+        raise ValueError("POLICY_OPERATION_MISMATCH")
+    result = plan_splice(before, pairs)
+    if result is None:
+        return None
+    return TemplateResult(
+        result.replacement, result.content_source,
+        {**result.evidence, "operation_key": operation_key}, components)
+
+
+def clause_number_prefix(text: str) -> str:
+    """Return only a literal leading clause number, never neighbouring prose."""
+    match = re.match(
+        r"\s*(?:[0-9０-９一二三四五六七八九十百]{1,6}[、．]|"
+        r"[0-9０-９]{1,6}\.(?![0-9０-９])|"
+        r"[（(][0-9０-９一二三四五六七八九十百]{1,6}[）)])\s*", text)
+    return match.group(0) if match else ""
 
 
 def plan_policy_replacement(before: str, instantiated: str, rule_id: str) -> TemplateResult | None:
@@ -46,7 +106,7 @@ def plan_policy_replacement(before: str, instantiated: str, rule_id: str) -> Tem
         return None
     if not anchor_ok or any(word in compact for word in forbidden):
         return None
-    replacement = instantiated.strip()
+    replacement = clause_number_prefix(before) + instantiated.strip()
     if _compact(replacement) == compact:
         return None
     return TemplateResult(replacement=replacement, content_source="tier1_template",
@@ -167,6 +227,7 @@ def _converge(before: str, first_start: int, canonical_tail: str) -> str:
 #: spell out literally (multi-class wording adds the class reference).
 _G09_VARIANTS: tuple[tuple[str, str], ...] = (
     ("并扣除相应的费用", "并扣除或加上相应的费用"),
+    ("并扣除其他相应的费用", "并扣除或加上相应的费用"),
     ("当日基金份额净值", "当日该类基金份额的基金份额净值"),
     ("当日该类基金份额净值", "当日该类基金份额的基金份额净值"),
     ("当日对应份额类别的基金份额净值", "当日该类基金份额的基金份额净值"),
@@ -186,8 +247,20 @@ def plan_g09_splice(before: str, pairs: list[tuple[str, str]]) -> TemplateResult
             applied.append([old_ctx, new_ctx])
     if not applied:
         return None
+    # A partial splice is not a G09 result.  In particular, a contract may use
+    # an unlisted fee phrase such as ``扣除其他相应的费用``; changing only the
+    # NAV noun would otherwise produce a plausible-looking but incomplete edit
+    # and the replay proof would certify the same partial effect.
+    compact = _compact(replacement)
+    if ("扣除或加上相应的费用" not in compact
+            or "当日该类基金份额的基金份额净值" not in compact):
+        return None
     return TemplateResult(replacement=replacement, content_source="tier1_splice",
-                          evidence={"mode": "g09_bounded_splice", "applied": applied})
+                          evidence={"mode": "g09_bounded_splice", "applied": applied,
+                                    # The guide reference has known contract variants;
+                                    # this is the deterministic, bounded output that
+                                    # the operation actually authorized.
+                                    "fixed_text": replacement})
 
 
 def splice_pairs(old_text: str, new_text: str, *, window: int = 6

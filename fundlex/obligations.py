@@ -85,6 +85,7 @@ class ObligationRecord:
     spec: ObligationSpec
     applicability: ApplicabilityDecision
     targets: tuple[str, ...] = ()
+    sites: tuple[str, ...] = ()
     statuses: dict[str, str] = field(default_factory=dict)
     completion: str = "UNRESOLVED"
     completion_evidence: str = ""
@@ -108,6 +109,7 @@ class ObligationRecord:
             **self.spec.as_dict(),
             "applicability": self.applicability.as_dict(),
             "targets": list(self.targets),
+            "sites": list(self.sites),
             "statuses": dict(self.statuses),
             "completion": self.completion,
             "completion_evidence": self.completion_evidence,
@@ -141,6 +143,37 @@ class ObligationLedger:
     groups: dict[str, RuleObligationGroup]
     aliases: dict[str, str] = field(default_factory=dict)
 
+    def operation_site_ledger(self) -> tuple[dict[str, Any], ...]:
+        """Return the canonical operation/site view used by delivery gates.
+
+        An obligation is the business unit; a target is an occurrence/site.  A
+        rule-level or quote-only record cannot close an obligation, so this
+        projection deliberately contains only explicitly attributed operations
+        and their concrete target locations.  It is useful for reports and for
+        invariant checks without making the target inventory a second ledger.
+        """
+        rows: list[dict[str, Any]] = []
+        for record in self.records:
+            if len(record.targets) != len(record.sites):
+                raise ValueError("OPERATION_SITE_INVARIANT:" + record.obligation_id)
+            if any(not str(target).strip() or not str(site).strip()
+                   for target, site in zip(record.targets, record.sites)):
+                raise ValueError("OPERATION_SITE_INVARIANT:" + record.obligation_id)
+            if len(record.targets) != len(set(record.targets)):
+                raise ValueError("OPERATION_SITE_DUPLICATE:" + record.obligation_id)
+            for target_id, site_id in zip(record.targets, record.sites):
+                rows.append({
+                    "obligation_id": record.obligation_id,
+                    "rule_id": record.spec.rule_id,
+                    "operation_id": record.spec.operation_id,
+                    "target_id": str(target_id),
+                    "site_id": str(site_id),
+                    "completion": record.completion,
+                })
+        return tuple(sorted(rows, key=lambda row: (
+            row["operation_id"], row["site_id"], row["target_id"],
+            row["obligation_id"])))
+
     def record(self, obligation_id: str) -> ObligationRecord | None:
         for item in self.records:
             if item.obligation_id == obligation_id:
@@ -164,10 +197,12 @@ class ObligationLedger:
         return counts
 
     def as_dict(self) -> dict[str, Any]:
+        operation_sites = self.operation_site_ledger()
         return {
             "records": [item.as_dict() for item in self.records],
             "groups": [group.as_dict() for group in self.groups.values()],
             "aliases": dict(self.aliases),
+            "operation_sites": list(operation_sites),
             "counts": self.counts,
             "open_obligations": [
                 {"obligation_id": item.obligation_id,
@@ -250,8 +285,8 @@ def compile_obligations(guide_document: Mapping[str, Any]) -> ObligationLedger:
                     one_of_by_index[index] = group_id
             for position, (index, operation) in enumerate(entries, start=1):
                 obligation_id = f"{rule_id}:{branch_id}:O{position}"
-                alias = str(operation.get("operation_id") or f"{rule_id}:{index}")
-                if alias != f"{rule_id}:{index}" or alias in aliases:
+                alias = str(operation.get("operation_id") or f"{rule_id}:{index}").strip()
+                if not alias or alias.split(":", 1)[0].strip() != rule_id or alias in aliases:
                     raise ValueError("GUIDE_OPERATION_ID_INVALID")
                 condition = operation.get("condition") or {"kind": "none"}
                 variant_group = one_of_by_index.get(index, "")
@@ -427,6 +462,8 @@ def project(ledger: ObligationLedger, report: Mapping[str, Any], *,
     for item in ledger.records:
         item.edit_ids = ()
         item.artifact_evidence = []
+        item.targets = ()
+        item.sites = ()
         if item.applicability.status == "FALSE":
             item.completion = "NOT_APPLICABLE"
             item.completion_evidence = "applicability_false:" + item.applicability.reason
@@ -438,8 +475,12 @@ def project(ledger: ObligationLedger, report: Mapping[str, Any], *,
             item.statuses.update(artifact="UNPROVEN", validation="BLOCKED")
             continue
         relevant = [target for target in targets if not target.get("out_of_scope")
+                    and (target.get("site_id") or target.get("location"))
                     and _target_covers_operation(target, item)]
         item.targets = tuple(str(target.get("target_id") or "") for target in relevant)
+        item.sites = tuple(str(target.get("site_id") or target.get("location") or "")
+                           for target in relevant)
+        ambiguous_site = len(item.sites) != len(set(item.sites))
         item.statuses["target"] = "FOUND" if relevant else "MISSING"
         proof = proofs.get(item.obligation_id)
         locations = {str(target.get("location") or "") for target in relevant}
@@ -452,7 +493,7 @@ def project(ledger: ObligationLedger, report: Mapping[str, Any], *,
         if conflicting:
             item.completion_evidence = "CLAIM_REPLAY_FAILED"
             item.statuses.update(artifact="FAIL", validation="FAIL")
-        elif effect_proof_passed(proof, operation_id=item.spec.operation_id,
+        elif not ambiguous_site and effect_proof_passed(proof, operation_id=item.spec.operation_id,
                                  obligation_id=item.obligation_id):
             item.completion = ("ARTIFACT_VERIFIED" if proof.get("edit_ids") or
                 proof.get("artifact_status") == "EXPECTED_EFFECT_PRESENT" else "ALREADY_SATISFIED")
@@ -465,6 +506,8 @@ def project(ledger: ObligationLedger, report: Mapping[str, Any], *,
                                if target_id in plans and plans[target_id].get("status") == "unresolved"), None)
             if failed_plan:
                 item.completion_evidence = "plan:" + str(failed_plan.get("reason") or "unresolved")
+            elif ambiguous_site:
+                item.completion_evidence = "OPERATION_SITE_DUPLICATE"
             elif isinstance(proof, Mapping):
                 item.completion_evidence = str(proof.get("failure_code") or "CLAIM_REPLAY_UNPROVEN")
             elif scope_gaps and item.spec.rule_id in scope_gaps:
@@ -478,7 +521,26 @@ def project(ledger: ObligationLedger, report: Mapping[str, Any], *,
 
 
 def validate_completion_invariants(ledger: ObligationLedger) -> None:
+    seen_aliases: set[str] = set()
+    seen_obligations: set[str] = set()
     for item in ledger.records:
+        obligation_id = item.obligation_id
+        operation_id = item.spec.operation_id
+        if not obligation_id or obligation_id in seen_obligations:
+            raise ValueError("OBLIGATION_ID_INVARIANT:" + (obligation_id or "MISSING"))
+        seen_obligations.add(obligation_id)
+        if not operation_id or operation_id in seen_aliases:
+            raise ValueError("OPERATION_ID_INVARIANT:" + (operation_id or "MISSING"))
+        seen_aliases.add(operation_id)
+        if item.spec.rule_id != operation_id.split(":", 1)[0]:
+            raise ValueError("OPERATION_RULE_INVARIANT:" + operation_id)
+        if any(not str(target).strip() for target in item.targets):
+            raise ValueError("OPERATION_SITE_INVARIANT:" + obligation_id)
+        if len(item.targets) != len(set(item.targets)):
+            raise ValueError("OPERATION_SITE_DUPLICATE:" + obligation_id)
+        if len(item.targets) != len(item.sites) \
+                or any(not str(site).strip() for site in item.sites):
+            raise ValueError("OPERATION_SITE_INVARIANT:" + obligation_id)
         allowed = ({"NOT_APPLICABLE"} if item.applicability.status == "FALSE" else
                    {"UNRESOLVED"} if item.applicability.status == "UNKNOWN" else
                    {"ARTIFACT_VERIFIED", "ALREADY_SATISFIED", "UNRESOLVED"})

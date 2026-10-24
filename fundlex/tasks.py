@@ -115,14 +115,17 @@ class TaskStore:
             doc = None
             if row["document_id"] and details:
                 doc = self.store._document_dict(db, db.execute("SELECT * FROM documents WHERE id=?", (row["document_id"],)).fetchone())
-            result.append({"batch_id": row["batch_id"], "document_id": row["document_id"],
+            result.append({"task_id": task_id, "batch_id": row["batch_id"], "document_id": row["document_id"],
                            "client_id": row["client_id"], "name": row["name"], "size": row["size"],
                            "job_status": row["status"] or "not_started", "upload_status": row["upload_status"],
                            "eligibility": row["qualification_status"], "delivery_status": row["delivery_status"] or "not_generated",
                            "execution_mode": (doc or {}).get("execution_mode", "") if doc else "",
                            "error_code": row["document_error"] or row["error_code"],
-                           "report_url": doc["report_url"] if doc and row["report_json"] else None,
-                           "downloads": doc["download_urls"] if doc else {}, "source_sha256": row["source_sha256"],
+                            "report_url": (f"/api/tasks/{task_id}/documents/{row['document_id']}/report"
+                                           if doc and row["report_json"] else None),
+                            "downloads": ({kind: f"/api/tasks/{task_id}/documents/{row['document_id']}/download/{kind}"
+                                           for kind in (doc or {}).get("artifacts", [])} if doc else {}),
+                            "source_sha256": row["source_sha256"],
                            "reason_codes": self._reasons(row["report_json"], row["document_error"] or row["error_code"]) if details else [],
                            "ordinal": row["ordinal"]})
         return result
@@ -328,6 +331,28 @@ class TaskStore:
         result = self._page(docs, **{k: v for k, v in filters.items() if k in {"sort", "page", "page_size"}})
         result["reason_options"] = [{"code": code, "count": count} for code, count in sorted(reasons.items())]
         return result
+
+    def document(self, owner: str, task_id: str, document_id: str) -> dict:
+        """Return one task document without the list endpoint's page limit."""
+        if task_id.startswith("legacy-"):
+            docs = self._legacy(owner, task_id)[1]
+            for item in docs:
+                if item.get("document_id") == document_id:
+                    return item
+            raise NotFound("document not found")
+        with self.store._connect() as db:
+            self._owned(db, owner, task_id)
+            row = db.execute(
+                "SELECT document_id FROM task_files WHERE task_id=? AND document_id=?",
+                (task_id, document_id),
+            ).fetchone()
+            if row is None or not row["document_id"]:
+                raise NotFound("document not found")
+            items = self._files(db, task_id)
+        for item in items:
+            if item.get("document_id") == document_id:
+                return {key: value for key, value in item.items() if key != "ordinal"}
+        raise NotFound("document not found")
 
     def uploads(self, owner, task_id, uploads):
         """Upload items contain client_id, name, data and validated error_code.

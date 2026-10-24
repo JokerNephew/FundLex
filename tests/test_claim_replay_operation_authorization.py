@@ -129,6 +129,24 @@ def test_missing_operation_attribution_fails_closed():
     assert ("G99:?", "CLAIM_OPERATION_UNATTRIBUTED") in failures
 
 
+def test_claim_replay_uses_declared_operation_id_without_rule_index_alias():
+    rule = {"rule_id": "G99", "operations": [
+        {"operation_id": "G99:CUSTOM_DELETE", "op": "delete", "old_text": "旧句甲。", "new_text": ""},
+        {"operation_id": "G99:CUSTOM_APPEND", "op": "append", "old_text": "", "new_text": "新增乙。"},
+    ], "old_text_variants": []}
+    targets = {"T0": {"target_id": "T0", "operations": ["G99:CUSTOM_DELETE"]},
+               "T1": {"target_id": "T1", "operations": ["G99:CUSTOM_APPEND"]}}
+    result = replay_claims(
+        [{**_edit("T0", 0, 4, ""), "operation_keys": ["G99:0"]}],
+        Inspection(["旧句甲。保留句。"]), Inspection(["保留句。"]),
+        rules_by_id={"G99": rule}, targets_by_id=targets)
+    assert result["verified"] is False
+    assert any(item.get("code") in {"CLAIM_OPERATION_KEYS_INVALID",
+                                     "CLAIM_OPERATION_NOT_AUTHORIZED",
+                                     "CLAIM_OPERATION_UNATTRIBUTED"}
+               for item in result["failures"])
+
+
 def test_overlapping_operations_use_explicit_joint_verification():
     rule = {"rule_id": "G98",
             "operations": [{"op": "replace", "old_text": "甲乙丙",
@@ -404,6 +422,118 @@ def test_composed_rewording_is_not_rejected_by_exact_guide_wording():
         Inspection([before]), Inspection([after]),
         rules_by_id={"G94": rule}, targets_by_id=targets)
     assert result["verified"] is True, result["failures"]
+
+
+def test_unknown_validator_is_not_a_claim_pass(monkeypatch):
+    """Validator uncertainty must remain open at the artifact boundary."""
+    from fundlex.generation import validators
+
+    class Unknown:
+        verdict = "UNKNOWN"
+        findings = ()
+        changes = ()
+
+        def as_dict(self):
+            return {"verdict": "UNKNOWN", "findings": [], "changes": []}
+
+    monkeypatch.setattr(validators, "validate_edit", lambda *args, **kwargs: Unknown())
+    result = _replay([_edit("T1", 8, 8, "新增乙。")],
+                     "旧句甲。保留句。", "旧句甲。保留句。新增乙。")
+    assert result["verified"] is False
+    assert any(item["code"] == "CLAIM_VALIDATION_UNKNOWN"
+               for item in result["failures"])
+
+
+def test_duplicate_unidentified_sites_fail_closed():
+    """Two same-operation targets at one location need occurrence identity."""
+    targets = {
+        "T0": {"target_id": "T0", "operations": ["G99:1"], "quote": "保留句。"},
+        "T1": {"target_id": "T1", "operations": ["G99:1"], "quote": "保留句。"},
+    }
+    result = _replay(
+        [{"rule_id": "G99", "target_id": "T0", "location": "p0",
+          "start": 8, "end": 8, "replacement": "新增乙。", "components": []}],
+        "旧句甲。保留句。", "旧句甲。保留句。新增乙。", targets=targets)
+    assert result["verified"] is False
+    assert any(item["code"] == "CLAIM_SITE_OCCURRENCE_UNRESOLVED"
+               for item in result["failures"])
+
+
+def test_duplicate_occurrence_identity_fails_closed():
+    targets = {
+        "T0": {"target_id": "T0", "operations": ["G99:1"],
+               "occurrence_index": 0},
+        "T1": {"target_id": "T1", "operations": ["G99:1"],
+               "occurrence_index": 0},
+    }
+    result = _replay(
+        [{"rule_id": "G99", "target_id": "T0", "location": "p0",
+          "start": 8, "end": 8, "replacement": "新增乙。", "components": []}],
+        "旧句甲。保留句。", "旧句甲。保留句。新增乙。", targets=targets)
+    assert result["verified"] is False
+    assert any(item["code"] == "CLAIM_SITE_OCCURRENCE_UNRESOLVED"
+               for item in result["failures"])
+
+
+def test_same_operation_at_distinct_locations_does_not_need_occurrence_identity():
+    rule = {"rule_id": "G95", "operations": [
+        {"op": "append", "old_text": "", "new_text": "新增乙。"},
+    ], "old_text_variants": []}
+    targets = {
+        "T0": {"target_id": "T0", "location": "p0", "operations": ["G95:0"]},
+        "T1": {"target_id": "T1", "location": "p1", "operations": ["G95:0"]},
+    }
+    edits = [
+        {"rule_id": "G95", "target_id": "T0", "location": "p0",
+         "start": 4, "end": 4, "replacement": "新增乙。", "components": []},
+        {"rule_id": "G95", "target_id": "T1", "location": "p1",
+         "start": 4, "end": 4, "replacement": "新增乙。", "components": []},
+    ]
+    result = replay_claims(
+        edits, Inspection(["保留句。", "保留句。"]),
+        Inspection(["保留句。新增乙。", "保留句。新增乙。"]),
+        rules_by_id={"G95": rule}, targets_by_id=targets)
+    assert result["verified"] is True, result["failures"]
+
+
+def test_one_of_alternative_branch_can_close_when_sibling_was_applied():
+    rule = {"rule_id": "G95", "operations": [
+        {"op": "replace", "old_text": "旧说法甲。", "new_text": "新说法。"},
+        {"op": "replace", "old_text": "旧说法乙。", "new_text": "新说法。"},
+    ], "old_text_variants": []}
+    first = Record("G95:0", "G95:B1:O1", 0)
+    second = Record("G95:1", "G95:B1:O2", 1)
+    first.spec.one_of_group = second.spec.one_of_group = "G95:history"
+    ledger = Ledger({"G95:0": first, "G95:1": second})
+    result = replay_claims(
+        [{"rule_id": "G95", "target_id": "T0", "location": "p0",
+          "start": 0, "end": len("旧说法甲。"), "replacement": "新说法。",
+          "components": []}],
+        Inspection(["旧说法甲。"]), Inspection(["新说法。"]),
+        rules_by_id={"G95": rule},
+        targets_by_id={"T0": {"target_id": "T0", "operations": ["G95:0"]}},
+        obligations=ledger)
+    assert result["verified"] is True, result["failures"]
+    assert result["obligations"]["G95:B1:O2"]["state"] == "PASS"
+    assert result["obligations"]["G95:B1:O2"]["artifact_status"] in {
+        "ALREADY_SATISFIED", "NOT_REQUIRED"}
+
+
+def test_protected_literal_tampering_does_not_pass_operation_claim():
+    rule = {"rule_id": "G93", "operations": [
+        {"op": "replace", "old_text": "按月支付0.40%销售服务费。",
+         "new_text": "按月支付0.50%销售服务费。"}]}
+    targets = {"T0": {"target_id": "T0", "operations": ["G93:0"]}}
+    before = "按月支付0.40%销售服务费。"
+    after = "按月支付0.60%销售服务费。"
+    result = replay_claims(
+        [{"rule_id": "G93", "target_id": "T0", "location": "p0",
+          "start": 0, "end": len(before), "replacement": after, "components": []}],
+        Inspection([before]), Inspection([after]), rules_by_id={"G93": rule},
+        targets_by_id=targets)
+    assert result["verified"] is False
+    assert any(item["code"] == "CLAIM_VALIDATION_FAILED"
+               for item in result["failures"])
 
 
 def test_single_operation_replace_cannot_delete_a_sibling_sentence():

@@ -23,6 +23,7 @@ from fastapi.responses import (
     FileResponse,
     HTMLResponse,
     PlainTextResponse,
+    Response,
     StreamingResponse,
 )
 from starlette.background import BackgroundTask
@@ -843,6 +844,50 @@ def create_app(data_dir: str | Path | None = None, *, auth_db=None) -> FastAPI:
             item.update(metrics.get(item["document_id"], {}))
         return result
 
+    def task_document_context(user: str, task_id: str, document_id: str) -> tuple[str, dict]:
+        document = task_call(tasks.document, user, task_id, document_id)
+        batch_id = document.get("batch_id")
+        if not batch_id:
+            raise HTTPException(409, "document has no processing batch")
+        return batch_id, document
+
+    @application.get("/api/tasks/{task_id}/documents/{document_id}")
+    def get_task_document(task_id: str, document_id: str, user: str = Depends(_user)):
+        try:
+            tasks.get(user, task_id)
+        except NotFound as exc:
+            raise HTTPException(404, "task not found") from exc
+        try:
+            return tasks.document(user, task_id, document_id)
+        except NotFound as exc:
+            raise HTTPException(404, "document not found") from exc
+
+    @application.get("/api/tasks/{task_id}/documents/{document_id}/report")
+    def task_document_report(task_id: str, document_id: str, user: str = Depends(_user)):
+        batch_id, _ = task_document_context(user, task_id, document_id)
+        return document_report(batch_id, document_id, user)
+
+    @application.get("/api/tasks/{task_id}/documents/{document_id}/revisions")
+    def task_document_revisions(task_id: str, document_id: str, user: str = Depends(_user)):
+        batch_id, _ = task_document_context(user, task_id, document_id)
+        return document_revisions(batch_id, document_id, user)
+
+    @application.post("/api/tasks/{task_id}/documents/{document_id}/decisions")
+    def task_document_decisions(task_id: str, document_id: str, payload: DecisionRequest,
+                                user: str = Depends(_user)):
+        batch_id, _ = task_document_context(user, task_id, document_id)
+        return document_decisions(batch_id, document_id, payload, user)
+
+    @application.post("/api/tasks/{task_id}/documents/{document_id}/accept-all")
+    def task_document_accept_all(task_id: str, document_id: str, user: str = Depends(_user)):
+        batch_id, _ = task_document_context(user, task_id, document_id)
+        return document_accept_all(batch_id, document_id, user)
+
+    @application.get("/api/tasks/{task_id}/documents/{document_id}/download/{kind}")
+    def task_document_download(task_id: str, document_id: str, kind: str, user: str = Depends(_user)):
+        batch_id, _ = task_document_context(user, task_id, document_id)
+        return download(batch_id, document_id, kind, user)
+
     @application.post("/api/tasks/{task_id}/uploads")
     async def upload_task(task_id: str, files: list[UploadFile] = File(...), client_ids: str = Form(...),
                           user: str = Depends(_user)):
@@ -1109,11 +1154,18 @@ def create_app(data_dir: str | Path | None = None, *, auth_db=None) -> FastAPI:
                             max_pairs=1000)
 
     frontend = Path(__file__).resolve().parent.parent / "frontend"
+    dist = frontend / "dist"
+    # Vite owns the React application bundle. The source tree remains the
+    # fallback for local development before the first frontend build; legacy
+    # compare assets stay under /static so that compare keeps its independent
+    # worker and viewer contract during the migration.
     if frontend.is_dir():
         application.mount("/static", StaticFiles(directory=frontend), name="static")
+        if (dist / "assets").is_dir():
+            application.mount("/assets", StaticFiles(directory=dist / "assets"), name="vite-assets")
 
         def _asset_version(*names: str) -> str:
-            """内容哈希做缓存标识：任一静态资源变化即生成新 URL，避免浏览器沿用旧缓存。"""
+            """内容哈希做缓存标识：任一静态资源变化即生成新 URL。"""
             digest = hashlib.sha256()
             for name in names:
                 path = frontend / name
@@ -1126,22 +1178,61 @@ def create_app(data_dir: str | Path | None = None, *, auth_db=None) -> FastAPI:
 
         @application.get("/", include_in_schema=False)
         def home():
-            html = (frontend / "index.html").read_text(encoding="utf-8")
-            version = _asset_version("app.css", "app.js", "compare.css", "compare.js")
-            html = html.replace('/static/app.css"', f'/static/app.css?v={version}"')
-            html = html.replace('/static/app.js"', f'/static/app.js?v={version}"')
-            html = html.replace('/static/compare.css"', f'/static/compare.css?v={version}"')
-            html = html.replace('/static/compare.js"', f'/static/compare.js?v={version}"')
+            entry = dist / "index.html" if (dist / "index.html").is_file() else frontend / "index.html"
+            html = entry.read_text(encoding="utf-8")
+            version = _asset_version("dist/index.html", "app.css", "app.js", "compare.css", "compare.js")
+            html = html.replace('src="/src/main.tsx"', f'src="/src/main.tsx?v={version}"')
+            html = html.replace('href="/assets/', f'href="/assets/')
             return HTMLResponse(
                 html,
                 headers={"Cache-Control": "no-store, must-revalidate"},
             )
 
+        @application.get("/index.html", include_in_schema=False)
+        def index_html():
+            return home()
+
+        @application.get("/favicon.ico", include_in_schema=False)
+        def favicon():
+            # Keep the conventional browser request valid even though the
+            # React entry also carries an inline fallback favicon.
+            return Response(
+                content=(
+                    "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 64 64\">"
+                    "<rect width=\"64\" height=\"64\" rx=\"14\" fill=\"#B5471E\"/>"
+                    "<path d=\"M17 17h30v8H25v7h18v8H25v7h22v8H17z\" fill=\"white\"/>"
+                    "</svg>"
+                ),
+                media_type="image/svg+xml",
+                headers={"Cache-Control": "public, max-age=31536000, immutable"},
+            )
+
+        @application.get("/compare", include_in_schema=False)
+        def compare_home():
+            return HTMLResponse(
+                (frontend / "compare.html").read_text(encoding="utf-8"),
+                headers={"Cache-Control": "no-store, must-revalidate"},
+            )
+
+        @application.get("/{full_path:path}", include_in_schema=False)
+        def frontend_fallback(full_path: str):
+            # Browser refreshes on React routes must resolve to the Vite entry.
+            # API and static mounts are registered before this catch-all.
+            if full_path == "api" or full_path.startswith("api/"):
+                raise HTTPException(404, "not found")
+            # A source asset is a Vite-dev-server concern; returning HTML for
+            # /src/main.tsx makes a missing production build look successful
+            # while the browser fails later with a misleading module error.
+            if Path(full_path).suffix:
+                raise HTTPException(404, "frontend asset is not built")
+            entry = dist / "index.html" if (dist / "index.html").is_file() else frontend / "index.html"
+            return HTMLResponse(entry.read_text(encoding="utf-8"), headers={"Cache-Control": "no-store, must-revalidate"})
+
         @application.middleware("http")
         async def static_cache_control(request, call_next):
             response = await call_next(request)
             path = request.url.path
-            if path.startswith("/static/"):
+            if path.startswith("/static/") or path.startswith("/assets/"):
                 # 静态资源 URL 带内容哈希，可长期缓存；入口 HTML 必须每次校验。
                 response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
             elif path in ("/", "/index.html"):

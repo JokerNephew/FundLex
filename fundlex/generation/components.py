@@ -8,7 +8,10 @@ mechanism the guide requires, not a paraphrase.  The registry's
 """
 from __future__ import annotations
 
-from typing import Iterable, Mapping
+from typing import Any, Iterable, Mapping
+
+from .types import (ComponentRequirement, PolicyComponents,
+                    PreserveRequirement)
 
 COMPONENT_TERMS: dict[str, tuple[str, ...]] = {
     # G15/G16/G17 sales-service-fee mechanism.
@@ -23,6 +26,19 @@ COMPONENT_TERMS: dict[str, tuple[str, ...]] = {
     "service_fee_group": ("销售服务费",),
 }
 
+# These are intentionally policy-level names.  The contract's concrete class
+# letters are parameters supplied by verified facts and must not be invented
+# by this module.
+COMPONENT_KINDS: dict[str, str] = {
+    "daily_accrual": "fee_policy",
+    "direct_refund": "fee_policy",
+    "non_direct_sales_policy": "fee_policy",
+    "over_one_year_refund": "fee_policy",
+    "direct_sales_fee_exemption": "fee_policy",
+    "subscription_fee_group": "fee_group",
+    "service_fee_group": "fee_group",
+}
+
 
 class ComponentConfigError(ValueError):
     pass
@@ -34,8 +50,51 @@ def component_specs(component_ids: Iterable[str]) -> list[dict[str, object]]:
         terms = COMPONENT_TERMS.get(str(component_id))
         if not terms:
             raise ComponentConfigError(f"unknown required component: {component_id!r}")
-        specs.append({"id": str(component_id), "terms": tuple(terms)})
+        specs.append({"id": str(component_id), "kind": COMPONENT_KINDS.get(
+            str(component_id), "policy"), "terms": tuple(terms)})
     return specs
+
+
+def component_requirements(component_ids: Iterable[str]) -> tuple[ComponentRequirement, ...]:
+    """Return typed requirements while retaining ``component_specs`` as a dict API."""
+    return tuple(
+        ComponentRequirement(
+            id=str(item["id"]), kind=str(item.get("kind") or "policy"),
+            terms=tuple(str(term) for term in item.get("terms", ())),
+        )
+        for item in component_specs(component_ids)
+    )
+
+
+def policy_components_for_operation(operation_key: str, *,
+                                    must_add: Iterable[str] = (),
+                                    must_remove: Iterable[str] = (),
+                                    must_preserve: Iterable[str] = (),
+                                    parameters: Mapping[str, Any] | None = None,
+                                    fact_dependencies: Iterable[str] = (),
+                                    rewrite_scope: str = "minimal",
+                                    preserve_original_qualifiers: bool = True
+                                    ) -> PolicyComponents:
+    """Build the operation's policy boundary from registry declarations.
+
+    Callers may use this for custom guides as well; unknown component ids fail
+    closed through :func:`component_requirements`.
+    """
+    preserves = tuple(
+        item if isinstance(item, PreserveRequirement)
+        else PreserveRequirement(id=str(item))
+        for item in must_preserve
+    )
+    return PolicyComponents(
+        operation_key=str(operation_key),
+        must_add=component_requirements(must_add),
+        must_remove=component_requirements(must_remove),
+        must_preserve=preserves,
+        parameters=dict(parameters or {}),
+        rewrite_scope=rewrite_scope,
+        preserve_original_qualifiers=preserve_original_qualifiers,
+        fact_dependencies=tuple(str(item) for item in fact_dependencies),
+    )
 
 
 def components_for_rules(rule_ids: Iterable[str]) -> list[dict[str, object]]:

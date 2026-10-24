@@ -13,6 +13,7 @@ Usage::
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import secrets
 import string
@@ -45,6 +46,7 @@ def main() -> int:
     parser.add_argument("--group", default="dev", choices=("dev", "holdout", "all"))
     parser.add_argument("--timeout", type=float, default=900)
     parser.add_argument("--case", action="append", default=None)
+    parser.add_argument("--base-url", default=BASE)
     args = parser.parse_args()
 
     selection = json.loads(Path(args.selection).read_text(encoding="utf-8"))
@@ -55,16 +57,27 @@ def main() -> int:
         cases = [case for case in cases if case["case_id"] in wanted]
     words_root = Path(args.data_root) / "funds_word"
     run_dir = Path(args.output_root) / args.run_id
-    run_dir.mkdir(parents=True, exist_ok=True)
+    run_dir.mkdir(parents=True, exist_ok=False)
+    if not cases:
+        raise ValueError("selection contains no requested cases")
 
     suffix = "".join(secrets.choice(string.ascii_lowercase + string.digits) for _ in range(8))
     username = f"cloud-eval-{suffix}"
     password = secrets.token_urlsafe(18)
     results: list[dict] = []
     batch = {"run_id": args.run_id, "group": args.group, "username": username,
-             "cases": [case["case_id"] for case in cases], "started": time.time()}
+              "cases": [case["case_id"] for case in cases], "started": time.time()}
+    batch["selection_sha256"] = hashlib.sha256(Path(args.selection).read_bytes()).hexdigest()
+    batch["base_url"] = args.base_url
+    batch["results"] = results
 
-    with httpx.Client(base_url=BASE, timeout=180) as client:
+    def save_batch():
+        (run_dir / "batch.json").write_text(json.dumps(batch, ensure_ascii=False, indent=1),
+                                             encoding="utf-8")
+
+    save_batch()
+
+    with httpx.Client(base_url=args.base_url, timeout=180) as client:
         register = client.post("/api/auth/register", json={
             "username": username, "password": password, "display_name": "P6 评测账号"})
         if register.status_code >= 400:
@@ -82,6 +95,8 @@ def main() -> int:
         for case in cases:
             contract = words_root / case["file"]
             payload = contract.read_bytes()
+            if hashlib.sha256(payload).hexdigest() != case["sha256"]:
+                raise ValueError(f"SOURCE_HASH_MISMATCH:{case['case_id']}")
             case_dir = run_dir / case["case_id"]
             case_dir.mkdir(parents=True, exist_ok=True)
             entry: dict = {"case_id": case["case_id"], "file": case["file"],
@@ -95,6 +110,8 @@ def main() -> int:
             if create.status_code >= 400:
                 entry["create_body"] = create.text[:300]
                 results.append(entry)
+                (case_dir / "result.json").write_text(json.dumps(entry, ensure_ascii=False, indent=1), encoding="utf-8")
+                save_batch()
                 continue
             task_id = create.json()["id"]
             entry["task_id"] = task_id
@@ -112,7 +129,7 @@ def main() -> int:
             while time.time() - started < args.timeout:
                 snapshot = client.get(f"/api/tasks/{task_id}", headers=headers).json()
                 status = snapshot.get("status")
-                if status in ("completed", "failed"):
+                if status in ("completed", "failed", "paused"):
                     break
                 time.sleep(8)
             entry["task_status"] = status
@@ -156,19 +173,31 @@ def main() -> int:
                 for kind, url in (items[0].get("downloads") or {}).items():
                     response = client.get(url, headers=headers)
                     if response.status_code == 200:
-                        target = case_dir / (kind + Path(url).suffix)
+                        extension = {"final": ".docx", "redline": ".docx",
+                                     "working_final": ".docx", "working_redline": ".docx",
+                                     "report_json": ".json", "report_md": ".md"}.get(kind, Path(url).suffix)
+                        target = case_dir / (kind + extension)
                         target.write_bytes(response.content)
-                        downloads[kind] = {"path": str(target), "bytes": len(response.content)}
+                        downloads[kind] = {"path": str(target), "bytes": len(response.content),
+                                           "sha256": hashlib.sha256(response.content).hexdigest()}
+                    else:
+                        downloads[kind] = {"http_status": response.status_code}
                 entry["downloads"] = downloads
             results.append(entry)
             (case_dir / "result.json").write_text(
                 json.dumps(entry, ensure_ascii=False, indent=1), encoding="utf-8")
+            save_batch()
             print("CASE", case["case_id"], entry.get("task_status"),
                   entry.get("report_delivery_status"),
                   "targets=", len(entry.get("targets") or []),
                   "unresolved=", len(entry.get("unresolved") or []),
                   "cost=", (entry.get("model") or {}).get("estimated_cost_usd"),
-                  flush=True)
+                   flush=True)
+            if status not in ("completed", "failed"):
+                batch["aborted"] = "TASK_PAUSED" if status == "paused" else "TASK_TIMEOUT"
+                batch["aborted_at"] = case["case_id"]
+                save_batch()
+                break
             if entry.get("error_code") == "ENGINE_SCHEMA_MISMATCH":
                 # A republish changed engine_build() while the batch was queued. The
                 # remaining cases would run under a different engine revision, so the run

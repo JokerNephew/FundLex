@@ -106,7 +106,7 @@ def test_location_target_without_operation_does_not_cover_the_rule():
 
 
 def test_planner_only_executes_the_target_operation():
-    inspection = Inspection(["调低赎回费率并报中国证监会备案。"])
+    inspection = Inspection(["调低赎回费率并报中国证监会备案。基金管理人可调整基金份额类别。"])
     target_obj = target(operations=("G05:0",), quote="调低赎回费率", start=0, end=6)
     edit = plan_target(rule(), target_obj, inspection, Facts(), gateway=None,
                        compose_budget=[0])

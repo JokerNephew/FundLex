@@ -43,9 +43,10 @@ from .recall import (BOUNDARY_POLICY, ENGINE_ID, ENGINE_VERSION, SCHEMA_VERSION,
                      structure_index, survey_targets, compact_offsets,
                      append_applicability_targets, is_delete_only_rule, Section,
                      known_operations_from_targets, operations_cover_hit,
-                     target_operation_keys, _add_operation_coverage,
-                     assign_target_operations, duplicate_copy_targets,
-                     dedupe_operation_targets)
+                      target_operation_keys, _add_operation_coverage,
+                      assign_target_operations, duplicate_copy_targets,
+                      _declared_operation_key,
+                      dedupe_operation_targets)
 from .recall_prompts import (AUDIT_INSTRUCTION, AUDIT_PROMPT_VERSION, AUDIT_SCHEMA,
                              PROMPT_VERSIONS, SWEEP_INSTRUCTION, SWEEP_PROMPT_VERSION,
                              SWEEP_SCHEMA)
@@ -425,7 +426,8 @@ def _sweep_recovery_contexts(pending: Sequence[dict[str, Any]], targets: Sequenc
             if not operation_id and rules_by_id:
                 quote = _compact(str(finding.get("quote") or ""))
                 rule = rules_by_id.get(rule_id) or {}
-                matches = [f"{rule_id}:{index}" for index, operation in
+                matches = [_declared_operation_key(rule_id, index, operation)
+                           for index, operation in
                            enumerate(rule.get("operations") or [])
                            if _compact(str(operation.get("old_text") or ""))
                            and (_compact(str(operation.get("old_text") or "")) in quote
@@ -1091,7 +1093,10 @@ def _plan_and_generate(model: Any, rules_by_id: dict[str, dict], targets: Sequen
                        ) -> tuple[dict[str, Any], list[dict[str, Any]], Any, Any, DocumentInspection]:
     """Plan from the ORIGINAL inspection, validate, generate and re-read the final."""
     from .recall import (append_site_ok, duplicate_copy_targets,
-                         ensure_unique_target_ids, target_site_ok)
+                         ensure_unique_target_ids, target_site_ok,
+                         rebind_g16_clause_targets, rebind_split_append_targets,
+                         guard_g17_deletes_against_g16,
+                         g15_delay_continuation_targets)
     # Final exact-copy closure immediately before planning.  Survey/rebind can add a
     # source target after the earlier passes; an uneditable body/summary copy must not
     # survive merely because of that ordering (D01 p758/p1221 G15).
@@ -1103,7 +1108,10 @@ def _plan_and_generate(model: Any, rules_by_id: dict[str, dict], targets: Sequen
                 old.out_of_scope = True
                 old.reason = f"{old.reason}|SUPERSEDED_BY_FINAL_COPY"
         targets.append(copy)
+    targets.extend(g15_delay_continuation_targets(targets, rules_by_id, inspection))
     ensure_unique_target_ids(targets)
+    rebind_g16_clause_targets(targets, inspection)
+    rebind_split_append_targets(targets, inspection)
     for target in targets:
         if (target.state == "needs_edit" and not target.out_of_scope
                 and target.resolution in {"resolved", "composite"}):
@@ -1141,6 +1149,9 @@ def _plan_and_generate(model: Any, rules_by_id: dict[str, dict], targets: Sequen
             if not site_ok:
                 target.out_of_scope = True
                 target.reason = f"{target.reason}|TARGET_SOURCE_MISMATCH"
+    # Locators and split-definition recovery run after the early dedupe passes.
+    # Reconcile their final source bindings before they become plan/replay claims.
+    dedupe_operation_targets(targets, rules_by_id, inspection)
     if existing_plan is None or dirty_locations:
         if frozen_run is not None:
             frozen_run.boundary("plan", {"targets": [target.as_dict() for target in targets],
@@ -1174,6 +1185,9 @@ def _plan_and_generate(model: Any, rules_by_id: dict[str, dict], targets: Sequen
     else:
         from copy import deepcopy
         planned = deepcopy(existing_plan)
+    g17_blocks = guard_g17_deletes_against_g16(planned, targets, inspection)
+    if g17_blocks:
+        planned.setdefault("business_notices", []).extend(g17_blocks)
     edits = build_docx_edits(planned["edits"], inspection)
     content_check = content_check_factory(planned["edits"], inspection)
     # A generated edit whose content record does not bind the source must not be
@@ -1262,8 +1276,9 @@ def _targets_by_rule(targets: Sequence[Target]) -> dict[str, list[Target]]:
 
 
 def _audit_context(rule: dict, rule_targets: Sequence[Target], plan_by_target: dict[str, dict],
-                   original: DocumentInspection, actual: DocumentInspection, *, limit: int,
-                   other_edits: Sequence[dict[str, Any]] = ()) -> tuple[str, str, str]:
+                    original: DocumentInspection, actual: DocumentInspection, *, limit: int,
+                    other_edits: Sequence[dict[str, Any]] = (),
+                    facts: Facts | None = None) -> tuple[str, str, str]:
     locations: list[str] = []
     for target in rule_targets:
         for location in _target_locations(target):
@@ -1279,7 +1294,35 @@ def _audit_context(rule: dict, rule_targets: Sequence[Target], plan_by_target: d
             "replacement": _clip(str(plan_entry.get("replacement") or ""), 300),
         })
     requirements = rule_context([rule], full=True)
+    applicable_policies = []
+    if facts is not None:
+        from .recall import instantiate_policy_text
+        for index, operation in enumerate(rule.get("operations") or []):
+            if not operation.get("new_text"):
+                continue
+            status = condition_status(operation.get("condition"), facts)
+            policy, issues = instantiate_policy_text(str(rule.get("rule_id") or ""),
+                                                      operation, facts)
+            # A usable slot value is not itself proof of its fee group. Supply
+            # unresolved facts explicitly instead of an apparently final policy.
+            for token, fact_name in (("A类基金份额", "subscription_fee_group"),
+                                     ("C类基金份额", "service_fee_group")):
+                if token in str(operation["new_text"]):
+                    for required in ("share_class_structure", fact_name):
+                        if facts.status_of(required) != "VERIFIED":
+                            issues.append(f"FACT_UNVERIFIED:{required}")
+            applicable_policies.append({
+                "operation_id": _declared_operation_key(str(rule.get("rule_id") or ""),
+                                                         index, operation),
+                "condition_status": status,
+                "policy_status": ("NOT_APPLICABLE" if status == "FALSE" else
+                                  "READY" if status == "TRUE" and not issues else "UNRESOLVED"),
+                "applicable_new_text": policy if status == "TRUE" and not issues else "",
+                "issues": sorted(set(issues)),
+            })
     ledger_text = json.dumps(ledger, ensure_ascii=False, indent=1)
+    facts_context = (["[FACTS]\n" + json.dumps(facts.as_ledger(), ensure_ascii=False, indent=1)]
+                     if facts is not None else [])
     context = ""
     for clip in (1200, 800, 500, 300, 150):
         before_text = "\n".join(f"[{location}] {_region_text(original, location, rule_targets, clip)}"
@@ -1292,9 +1335,11 @@ def _audit_context(rule: dict, rule_targets: Sequence[Target], plan_by_target: d
         after_display = "\n".join(
             f"[{location}] {_region_text(actual, location, rule_targets, clip) or '（该位置内容已删除）'}"
             for location in locations)
-        context = "\n\n".join([f"[BEFORE]\n{before_display}", f"[AFTER]\n{after_display}",
-                               f"[REQUIREMENTS]\n{requirements}", f"[TARGET_LEDGER]\n{ledger_text}",
-                               "[OTHER_AUTHORIZED_EDITS]\n" + json.dumps(list(other_edits),
+        context = "\n\n".join(facts_context + [f"[BEFORE]\n{before_display}", f"[AFTER]\n{after_display}",
+                                f"[REQUIREMENTS]\n{requirements}", f"[TARGET_LEDGER]\n{ledger_text}",
+                                "[APPLICABLE_POLICIES]\n" + json.dumps(applicable_policies,
+                                                                       ensure_ascii=False, indent=1),
+                                "[OTHER_AUTHORIZED_EDITS]\n" + json.dumps(list(other_edits),
                                                                            ensure_ascii=False, indent=1)])
         if len(context) <= limit:
             return context, before_text, after_text
@@ -1385,6 +1430,18 @@ def _quote_is_expected_effect(quote: str, record: Any, facts: Facts | None, *,
         # group is "A类、D类".  Same certified class set, not an invented class.
         from .generation.effects import _class_group_equivalent
         if _class_group_equivalent(expected, compact):
+            return True
+        if (getattr(record.spec, "rule_id", "") in {"G02", "G04"}
+                and actual_text
+                and not any(token in compact for token in
+                            ("申购费", "认购费", "销售服务费"))
+                and any(token in compact for token in ("基金份额类别", "份额类别", "分为"))
+                and _class_group_equivalent(expected, actual_text)):
+            # A sweep may quote the introductory class enumeration instead of the
+            # fee-group sentence that follows it in the same paragraph. The
+            # enumeration is not an independently editable G02/G04 site; an exact
+            # local operation proof for the full paragraph already proves the
+            # authorized group. Do not let that stale scope quote block delivery.
             return True
     if (getattr(record.spec, "rule_id", "") in {"G02", "G04", "G08", "G11", "G18"}
             and actual_text and proofs and obligations is not None):
@@ -1610,6 +1667,43 @@ def _sibling_expected_effect(quote: str, location: str, obligations: Any,
     return False
 
 
+def _quote_is_authorized_removal(quote: str, location: str, before_text: str,
+                                 edits: Sequence[dict[str, Any]], obligations: Any,
+                                 proofs: Mapping[str, Any], failures: Sequence[dict[str, Any]]) -> bool:
+    """Prove a BEFORE-only citation belongs wholly to certified removed spans.
+
+    A sibling may own the deletion (G17 at G16's append site). Its own operation
+    proof is mandatory; a matched plan or a proven append grants no removal rights.
+    """
+    from .generation.effects import effect_proof_passed, operation_units
+    compact = _compact(quote)
+    if not compact or obligations is None or any(
+            failure.get("location") == location for failure in failures):
+        return False
+    intervals = []
+    for record in obligations.records:
+        if record.applicability.status != "TRUE" or record.spec.op not in {"delete", "replace"}:
+            continue
+        local = _local_operation_proofs(proofs.get(record.obligation_id),
+            record.spec.operation_id, record.obligation_id, location)
+        if not local or not all(effect_proof_passed(proof) for proof in local):
+            continue
+        for parent, unit in operation_units(edits, record.spec.operation_id):
+            if str(unit.get("location") or parent.get("location") or "") != location:
+                continue
+            try:
+                start, end = int(unit["start"]), int(unit["end"])
+            except (KeyError, TypeError, ValueError):
+                continue
+            if 0 <= start < end <= len(before_text):
+                intervals.append((len(_compact(before_text[:start])), len(_compact(before_text[:end]))))
+    source = _compact(before_text)
+    positions = [match.start() for match in re.finditer(re.escape(compact), source)]
+    # Ambiguous repeated quotes remain reviewable unless every occurrence is owned.
+    return bool(positions) and all(all(any(start <= index < end for start, end in intervals)
+        for index in range(position, position + len(compact))) for position in positions)
+
+
 def _run_audit(model: Any, rules_by_id: dict[str, dict], targets: Sequence[Target],
                planned: dict[str, Any], original: DocumentInspection, actual: DocumentInspection,
                *, only_rules: set[str] | None = None, facts: Facts | None = None,
@@ -1674,7 +1768,7 @@ def _run_audit(model: Any, rules_by_id: dict[str, dict], targets: Sequence[Targe
                 })
         context, before_text, after_text = _audit_context(
             rule, rule_targets, plan_by_target, original, actual,
-            limit=model.max_context_chars, other_edits=other_edits)
+            limit=model.max_context_chars, other_edits=other_edits, facts=facts)
         prepared.append({"rule_id": rule_id, "rule": rule, "rule_targets": rule_targets,
                          "ledger_ids": ledger_ids, "supplied": supplied,
                          "other_edits": other_edits, "context": context,
@@ -1724,10 +1818,12 @@ def _run_audit(model: Any, rules_by_id: dict[str, dict], targets: Sequence[Targe
                     evidence_after = str(actual.by_location(node.location).text)
                 except (KeyError, ValueError, AttributeError):
                     pass
-            verified = bool(evidence) and (
-                _compact(evidence) in _compact(evidence_after) or
-                (verdict == "completed" or str(item.get("failure_class") or "").upper()
-                 in {"FACT", "APPLICABILITY"}) and _compact(evidence) in _compact(evidence_before))
+            quote_in_before = bool(_compact(evidence)) and _compact(evidence) in _compact(evidence_before)
+            quote_in_after = bool(_compact(evidence)) and _compact(evidence) in _compact(evidence_after)
+            # A loss must be quoted from BEFORE: requiring AFTER silently discarded
+            # the very evidence of unauthorized removal (FL-D224). Presence proves
+            # the citation, not that the model's interpretation is correct.
+            verified = quote_in_before or quote_in_after
             deletion_evidence = False
             if not verified and verdict == "completed":
                 # A deletion leaves no AFTER text to quote: the target's own source
@@ -1748,7 +1844,9 @@ def _run_audit(model: Any, rules_by_id: dict[str, dict], targets: Sequence[Targe
                                 "target_id": target_id, "evidence_quote": _clip(evidence, 80)})
             results.append({"target_id": target_id, "rule_id": rule_id, "verdict": verdict,
                             "reason": str(item.get("reason") or ""),
-                            "evidence_quote": evidence, "evidence_verified": verified,
+                             "evidence_quote": evidence, "evidence_verified": verified,
+                             "evidence_in_before": quote_in_before,
+                             "evidence_in_after": quote_in_after,
                             "deletion_evidence": deletion_evidence,
                             "deterministic": deterministic,
                             "failure_class": str(item.get("failure_class") or ""),
@@ -1772,22 +1870,27 @@ def _run_audit(model: Any, rules_by_id: dict[str, dict], targets: Sequence[Targe
                     str(failure.get("location") or "") == (node.location if node else "")
                     and failure.get("operation_id") in {record.spec.operation_id for record in owned}
                     for failure in artifact_failures)
-                expected_quote = bool(verified and node is not None and any(
+                expected_quote = bool(quote_in_after and node is not None and any(
                     _quote_is_expected_effect(evidence, record, facts,
                         edits=planned.get("edits") or [], location=node.location,
                         before_text=evidence_before, actual_text=evidence_after,
                         target_id=node.target_id, obligations=obligations,
                         proofs=artifact_proofs)
                     for record in owned))
-                certified_fact_quote = (verified and _quote_confirms_class_facts(
+                certified_fact_quote = ((quote_in_after or str(item.get("failure_class") or "").upper()
+                    in {"FACT", "APPLICABILITY"}) and verified and _quote_confirms_class_facts(
                     evidence, facts))
                 delete_scope_unproven = bool(
-                    proven and not contradicted and verified and node is not None and
+                    proven and not contradicted and quote_in_after and node is not None and
                     _delete_opinion_scope_unproven(evidence, owned, actual, node.location) and
                     _site_record_quotes_expected_effect(
                         evidence, node.location, targets, rules_by_id, planned,
                         original, actual, facts, obligations, artifact_proofs))
-                if not verified or expected_quote or certified_fact_quote or delete_scope_unproven:
+                authorized_removal = bool(
+                    quote_in_before and not quote_in_after and node is not None and
+                    _quote_is_authorized_removal(evidence, node.location, evidence_before,
+                        planned.get("edits") or [], obligations, artifact_proofs, artifact_failures))
+                if not verified or expected_quote or certified_fact_quote or delete_scope_unproven or authorized_removal:
                     result["review_status"] = "REVIEW_UNPROVEN"
                     result["artifact_proven"] = proven and not contradicted
                     if expected_quote:
@@ -1796,6 +1899,8 @@ def _run_audit(model: Any, rules_by_id: dict[str, dict], targets: Sequence[Targe
                         result["review_evidence_status"] = "CERTIFIED_FACT_QUOTED_AS_ERROR"
                     elif delete_scope_unproven:
                         result["review_evidence_status"] = "OPERATION_SCOPED_DELETE_PROOF"
+                    elif authorized_removal:
+                        result["review_evidence_status"] = "AUTHORIZED_REMOVAL_QUOTED_AS_ERROR"
         for item in value.get("missed_targets") or []:
             if not isinstance(item, dict):
                 dropped.append({"code": "AUDIT_MISSED_ITEM_INVALID", "rule_id": rule_id})
@@ -2156,8 +2261,28 @@ def _absorb_sweep_findings(pending: Sequence[dict[str, Any]], targets: Sequence[
         for index, operation in enumerate(rule.get("operations") or []):
             old_text = _compact(str(operation.get("old_text") or ""))
             if old_text and (old_text in blob or blob in old_text):
-                return f"{rule.get('rule_id')}:{index}"
+                return _declared_operation_key(
+                    str(rule.get("rule_id") or ""), index, operation)
         return ""
+
+    def unique_applicable_operation(rule: dict) -> str:
+        """Return the only executable text operation when a variant has no exact key.
+
+        Sweep findings are source-bound evidence, but a contract variant may contain
+        neither the guide's ``old_text`` nor its declared variants.  In that case the
+        finding cannot be mapped by literal overlap.  A single applicable delete or
+        replace operation is still an unambiguous operation identity; multiple such
+        operations remain fail-closed and must go through ordinary target discovery.
+        """
+        candidates = []
+        for index, operation in enumerate(rule.get("operations") or []):
+            if operation.get("op") not in {"delete", "replace"}:
+                continue
+            if not condition_matches(operation.get("condition"), facts):
+                continue
+            candidates.append(_declared_operation_key(
+                str(rule.get("rule_id") or ""), index, operation))
+        return candidates[0] if len(candidates) == 1 else ""
 
     def identity(rule_id: str, operation_id: str, location: str) -> tuple[str, str, str]:
         return (rule_id, operation_id, location)
@@ -2207,18 +2332,38 @@ def _absorb_sweep_findings(pending: Sequence[dict[str, Any]], targets: Sequence[
         if rule is None:
             continue
         operation_id = finding_operation(rule, quote)
+        if not operation_id:
+            operation_id = unique_applicable_operation(rule)
         key = identity(rule_id, operation_id, finding["location"])
         matched = next((target for target in targets
                         if target.rule_id == rule_id
                         and target.location == finding["location"]
+                        and not target.out_of_scope
                         and (not operation_id or not target.operations
                              or operation_id in target.operations)),
-                       None)
+                        None)
         if matched is not None:
             if operation_id and not matched.operations:
                 matched.operations = (operation_id,)
-            if rebind(matched, rule, quote):
+            if matched.state == "needs_edit" and rebind(matched, rule, quote):
                 added += 1
+                continue
+            # An inventory target may have been marked absent/not_applicable because
+            # its quote differs from the guide wording.  The sweep has now supplied a
+            # verified source quote at this exact site.  Preserve the old ledger row
+            # for traceability, but create an executable operation-specific target.
+            if operation_id and matched.state == "absent":
+                repair = _make_synthetic_target(
+                    f"A{len(synthetic) + 1:03d}", rule_id, finding["location"], quote,
+                    f"sweep_variant:{finding['issue']}", inspection)
+                if repair is not None:
+                    repair.operations = (operation_id,)
+                    matched.out_of_scope = True
+                    matched.reason = f"{matched.reason}|SUPERSEDED_BY_SWEEP_VARIANT"
+                    synthetic.append(repair)
+                    origins[repair.target_id] = "sweep_variant"
+                    existing.add(identity(rule_id, operation_id, finding["location"]))
+                    added += 1
             continue
         if key in existing:
             continue
@@ -3137,6 +3282,18 @@ def _write_edits(path: Path, report: dict[str, Any]) -> None:
 # Entry point
 # ---------------------------------------------------------------------------
 
+def _residual_delete_indices(rule_id: str, rule: Mapping[str, Any], facts: Facts,
+                             operation_id: str) -> list[int]:
+    """Select only the applicable delete operation identified by replay."""
+    candidates = [index for index, operation in enumerate(rule.get("operations") or [])
+                  if operation.get("op") == "delete"
+                  and condition_matches(operation.get("condition"), facts)
+                  and (not operation_id or operation_id == _declared_operation_key(
+                      rule_id, index, operation))]
+    # A legacy failure without an identity is actionable only when unambiguous.
+    return candidates if operation_id or len(candidates) == 1 else []
+
+
 def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
                          guide_document: dict, gateway: Any = None,
                          execution_mode: str = "delivery", checkpoint_dir: str | Path | None = None,
@@ -3868,17 +4025,15 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
                             located = None
                         rule_id = str(failure.get("rule_id") or "")
                         rule = rules_by_id.get(rule_id) or {}
-                        delete_indices = [index for index, operation in
-                                          enumerate(rule.get("operations") or [])
-                                          if operation.get("op") == "delete"
-                                          and condition_matches(operation.get("condition"), facts)]
                         operation_id = str(failure.get("operation_id") or "")
-                        if operation_id:
-                            delete_indices = [index for index in delete_indices
-                                              if operation_id == f"{rule_id}:{index}"]
-                        elif len(delete_indices) != 1:
-                            delete_indices = []
-                        selected_key = f"{rule_id}:{delete_indices[0]}" if delete_indices else ""
+                        delete_indices = _residual_delete_indices(
+                            rule_id, rule, facts, operation_id)
+                        selected_key = (
+                            _declared_operation_key(
+                                rule_id, delete_indices[0],
+                                (rule.get("operations") or [])[delete_indices[0]])
+                            if delete_indices else ""
+                        )
                         existing = {(target.rule_id, key, target.location)
                                     for target in targets if not target.out_of_scope
                                     for key in target.operations}
@@ -4602,6 +4757,13 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
     except (RecallError, DocxError, FrozenError, OSError) as exc:
         code = getattr(exc, "code", None) or "OUTPUT_IO_ERROR"
         report["errors"].append({"code": code, "stage": stage, "message": code})
+        _finalize_failure(report, published)
+        return report
+    except Exception as exc:  # noqa: BLE001 - preserve metering on unexpected failures
+        report["error_code"] = "PROCESSING_FAILED"
+        report["qualification_status"] = "failed"
+        report["errors"].append({"code": "PROCESSING_FAILED", "stage": stage,
+                                 "message": type(exc).__name__})
         _finalize_failure(report, published)
         return report
     finally:

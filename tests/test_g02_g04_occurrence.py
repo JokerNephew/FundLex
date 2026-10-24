@@ -137,3 +137,17 @@ def test_resolve_occurrence_handles_real_docx_spaces_between_class_and_cjk():
     assert resolved is not None
     assert resolved[0] > spaced.index("A 类基金份额")
     assert "A 类基金份额" in spaced[resolved[0]:resolved[1]]
+
+
+def test_unique_exact_quote_beats_a_nearby_occurrences_overlapping_context_window():
+    text = ("本基金根据销售所适用账户的不同，将基金份额分为 A 类基金份额和 Y 类基金份额。"
+            "A 类基金份额不得对个人养老金账户进行销售，Y 类基金份额仅面向个人养老金账户销售。")
+    anchor = "A 类基金份额不得对个人养老金账户进行销售，"
+    start = text.index(anchor)
+    assert resolve_occurrence(SimpleNamespace(text=text), "A类基金份额", anchor=anchor) == (
+        start, start + len("A 类基金份额"))
+
+
+def test_unique_quote_with_two_occurrences_still_requires_disambiguation():
+    text = "A类基金份额。A类基金份额。"
+    assert resolve_occurrence(SimpleNamespace(text=text), "A类基金份额", anchor=text) is None

@@ -215,8 +215,8 @@ def run(output: Path, screenshots: Path, corpus_base: Path | None = None) -> dic
                 page.on("response", record_response)
 
                 def go_compare() -> None:
-                    page.goto(base + "/#compare")
-                    wait_until(page, "document.querySelector('#compare-new') !== null")
+                    page.goto(base + "/compare#compare")
+                    wait_until(page, "document.querySelector('#compare-new') !== null && !document.querySelector('#compare-new').hidden")
 
                 def open_create(name: str) -> None:
                     go_compare()
@@ -458,21 +458,21 @@ def run(output: Path, screenshots: Path, corpus_base: Path | None = None) -> dic
                 real.update(summary=real_summary, diff_items=real_count, source=real_meta, screenshot=snapshot(page, "real-public-contract"))
                 scenarios.append(real)
 
-                page.goto(base + "/#settings")
+                page.goto(base + "/compare#settings")
                 wait_until(page, "document.querySelector('#dev-user') !== null && !document.querySelector('#dev-user').hidden", timeout=20)
                 page.locator("#dev-user").fill("compare-e2e-other-user")
-                page.goto(base + "/#compare")
+                page.goto(base + "/compare#compare")
                 wait_until(page, "document.querySelector('#compare-task-list') !== null && !document.querySelector('#compare-task-list').textContent.includes('E2E 单处修改')", timeout=20)
                 other_tasks = page.locator("#compare-task-list").inner_text()
                 page.evaluate("localStorage.setItem('fundlex-dev-user','compare-e2e-user')")
                 page.reload()
-                page.goto(base + "/#compare")
+                page.goto(base + "/compare#compare")
                 wait_until(page, "document.querySelector('#compare-task-list').textContent.includes('E2E 单处修改')", timeout=20)
                 check("identity_switch_isolation", "E2E 单处修改" not in other_tasks and "E2E 单处修改" in page.locator("#compare-task-list").inner_text(), {"other_user_tasks": other_tasks})
 
                 # Use the long document to measure line endpoints before and
                 # after a viewport resize and synchronized left/right scrolling.
-                page.goto(base + "/#compare")
+                page.goto(base + "/compare#compare")
                 wait_until(page, "document.querySelector('#compare-task-list') !== null")
                 page.locator("tr", has_text="E2E 二十处以上差异").first.locator("[data-compare-task]").click()
                 wait_until(page, "document.querySelector('#compare-summary').textContent.includes('共')", timeout=30)

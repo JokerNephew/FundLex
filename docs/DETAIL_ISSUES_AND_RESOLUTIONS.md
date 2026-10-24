@@ -2672,3 +2672,636 @@
 - 状态与验证：已修复并发布。`.venv/bin/python -m pytest tests/test_compare_*.py -q` → **70 passed / 5 skipped**；`tools/evaluation/compare_e2e.py` → **9 个场景、全部检查通过**，新增方向语义、轮询保持当前组、差异筛选、键盘标记和移动端切换检查；证据 `/tmp/opencode/compare-e2e-ui-revision-v3.json`。生产浏览器回归 `/tmp/opencode/compare-production-ui-e2e/report.json` 通过：2772 处差异、修改 451、新增 1238、删除 1083，移动端左右切换成功，键盘计数 `1 / 2772`，报告下载 3189696 bytes，page error 为 0。
 - 发布信息：UI 提交 `5d04271` 已推送到 `origin/feat/contract-compare`，通过 `tools/deploy/publish_workspace.sh` 同步生产；API、Recall Worker、Compare Worker 均 active，重启计数为 0。生产任务使用公开合同且 compare 不调用模型，费用为 `$0`。
 - 下一步：覆盖完整性仍由 compare parser 支持范围决定，页面提示不能替代未支持结构的人工复核；后续 UI 或 Worker 改动须重复生产浏览器回归。
+
+## FL-D178 Routed Policy Components 必须按当前 operation 验证（2026-10-24，已修复）
+
+- 发现与影响：Registry 的完整 policy family 不能直接作为每个 sibling operation 的固定输出要求。G08/G11 某些 operation 只授权订阅费组，若把兄弟 operation 或完整 family 的所有组件硬套到当前输出，会把合法局部替换误报为 `RECALL_POLICY_COMPONENTS_UNVERIFIED`；G14 的授权替换还需要允许指引明确移除旧费率词；G16 则必须继续保留完整 Compose 组件硬门禁。错误边界会造成误阻断或放行未经授权的新文。
+- 证据：`fundlex/recall.py::_validate_routed_policy` 现在从当前 operation 的 `new_text` 过滤 `must_add`，并用该 operation 自身 old/new 文本建立移除授权；`fundlex/generation/validators.py` 与 `tests/test_generation_validators.py` 覆盖 G08/G11 局部 fee group、G14 授权替换和 G16 完整组件语义。此前相关组合回归为 **142 passed**，更早闭环套件为 **217 passed**。
+- 处理方法：Router 先按 operation 的 fact dependencies fail-closed；policy validator 仅验证当前 operation 固定文案声明的组件和当前 operation 的授权边界。兄弟 operation 不提供借权，G16 不因局部文案过滤而失去完整组件要求。
+- 状态与验证：**已实施并定向验证**；当前工作区尚未以本条记录为依据宣称完整回归、冻结或生产发布。
+- 下一步：随当前 operation identity/Registry patch 完成全量 pytest、compileall、diff check；然后重新冻结版本并按真实评测与工作台交付要求验收。
+
+## FL-D179 Operation identity 必须贯穿 Registry、Planner 与 Claim Replay（2026-10-24，已修复）
+
+- 发现与影响：同一 rule 下的 sibling operation 可能拥有不同 executor、条件、policy 和物理站点。若在 planner、replan、residual、coverage、obligation 或 Claim Replay 中重新派生 `RULE:index`，显式自定义 `operation_id` 会被错误当成兄弟别名，导致借权、重复站点合并或错误关闭 obligation。
+- 证据：`fundlex/recall.py`、`fundlex/generation/claim_replay.py`、`fundlex/recall_pipeline.py`、`fundlex/targeting.py` 和 `fundlex/generation/registry.py` 统一优先读取 guide 声明的 `operation_id`；`tests/test_claim_replay_operation_authorization.py` 的自定义 identity 负向回归确认 `G99:CUSTOM_*` 不能借用 `G99:0`。同一 operation 的多个物理站点继续要求独立 occurrence identity，重复或缺失 occurrence fail-closed。
+- 处理方法：released/fully annotated guide 必须使用显式 operation identity；部分标注抛出 `RECALL_OPERATION_ID_MISSING`；显式 operation 缺少 concrete Registry entry 抛出 `RECALL_OPERATION_REGISTRY_MISSING`。没有显式 identity 的旧低层 fixture 仅保留 legacy 兼容路径，不进入 routed Registry 执行。
+- 状态与验证：**已实施并定向验证**。Registry、recall core 和 Claim Replay 组合当前 **104 passed**，其中新增 routed planner integration 回归直接验证缺失 Registry entry fail-closed；完整项目回归、真实合同重评测和生产验收尚待当前版本完成。
+- 下一步：补齐 occurrence、canonical/legacy coverage fallback、replan/residual、delivery 回归并运行全量 pytest；之后重新冻结 build identity、发布并完成真实用户端到端交付。
+
+## FL-D180 动态指引 operation 缺少 Registry entry 必须阻断发布执行（2026-10-24，已修复）
+
+- 发现与影响：仅由 `operation_registry_coverage_gaps()` 报告动态指引缺口而继续 planner 执行，会使 operation identity 只成为 telemetry，运行时可能静默借用 rule-level fallback 或 sibling executor。
+- 证据：对含 `operation_id=G99:CUSTOM_MISSING` 的 routed rule 直接调用 `plan_target()`，当前实现返回 `RECALL_OPERATION_REGISTRY_MISSING`，detail 同时保留 operation 和 rule；`tests/test_generation_registry.py::test_routed_planner_fails_closed_for_missing_custom_operation_registry_entry` 覆盖该路径。旧无显式 identity 的 low-level fixture 仍通过 legacy 分支。
+- 处理方法：`_route_target_operations()` 在任何 routed operation 进入 Router 前检查 concrete `OPERATION_REGISTRY`；缺失即 fail-closed。动态 guide 只有在受控 publisher 显式提供 `OperationSpec` 并完成注册后才可执行。
+- 状态与验证：**已实施并定向验证**；验证范围为本地测试，尚未证明动态指引发布流程或生产环境配置已完成。
+- 下一步：将该门禁与 guide release/certification 及真实任务入口连测，保留失败证据，并在冻结版本后重新执行真实合同和工作台验收。
+
+## FL-D181 Operation-aware targeting 回归破坏旧 fixture 的事实门顺序（2026-10-24，已修复）
+
+- 发现与影响：把显式 operation identity 接入 `targets_for_open_rules()` 后，恢复循环在根据 `rule_id` 查找 rule 前读取 `rule`，旧低层 targeting fixture 触发 `UnboundLocalError`；同时 registry 模式的无显式 identity fixture 若直接进入目标解析，会把 `RECALL_TARGET_UNRESOLVED` 提前于应有的 `RECALL_FACT_UNVERIFIED`，破坏 UNKNOWN/CONFLICT fail-closed 契约。
+- 证据：完整回归首次结果 **1241 passed / 8 failed / 42 skipped**；7 项失败栈定位到 `fundlex/targeting.py:682` 的局部变量，1 项失败为 `tests/test_condition_tri_state.py::test_route_blocked_facts_resolve_as_fact_unverified`。修复后 `tests/test_condition_tri_state.py tests/test_open_obligation_recovery.py tests/test_generation_registry.py` 为 **32 passed**。
+- 处理方法：targeting recovery 先解析 rule/operation，再计算 declared identity；`plan_target()` 对未显式标注的 legacy fixture 保留兼容 executor，但在 registry 模式且 operation 有 concrete Registry entry 时先执行 Router fact gate，阻断 UNKNOWN/CONFLICT 后再进入目标/结构解析。
+- 状态与验证：**已修复并验证**；定向回归 **32 passed**，随后完整 `.venv/bin/python -m pytest tests -q` 为 **1249 passed / 42 skipped / 2 warnings / 223.62s**，compileall 与 `git diff --check` 通过。真实合同与生产工作台仍未按当前工作区版本重验。
+- 下一步：完成全量 pytest、compileall、diff check；检查 legacy fallback 与 routed operation 的覆盖回归，随后重新冻结并执行真实评测和端到端交付。
+
+## FL-D182 React V2 smoke 将预期 API 404 与静态资源故障混为一类（2026-10-24，已修复）
+
+- 发现与影响：不存在任务的 Review 深链会按设计请求任务范围内的合同、报告或修订接口并收到 404。浏览器 smoke 原先把所有 404 都放入静态资源缺失列表，同时 Chromium 将这些 API 404记录为通用 console error，导致正确的 API 行为被误报为 React 构建或资源损坏。
+- 证据：修复前 `tests/browser/test_frontend_v2.py::test_react_routes_and_deep_links` 为 **1 passed / 1 failed**；失败中的 404 仅为 `/api/tasks/nonexistent/documents/doc/revisions`、`/api/tasks/nonexistent/documents?page=1&page_size=200` 和 `/api/tasks/nonexistent/documents/doc`，没有 JS、CSS 或 favicon 404。
+- 处理方法：浏览器回调按 `/api/` 与静态资源分别收集 404；API 404 保留在诊断信息中，静态资源 404 继续失败；仅忽略 Chromium 对这些已分类 API 404 的固定通用 console 文案，其他 console/page error 仍失败。
+- 状态与验证：**已修复并验证**。`FUNDLEX_BROWSER_TESTS=1 .venv/bin/python -m pytest tests/browser/test_frontend_v2.py -q` → **3 passed**，包含真实任务/真实 DOCX 上传后的合同详情与 Review 深链；无 page error、无静态资源 404。组合运行曾暴露根节点可见性断言的导航时序竞争，已改为等待 `#root` visible，`tests/test_tasks_api.py tests/browser/test_frontend_v2.py` 组合回归为 **30 passed / 1 warning**。
+- 下一步：发布 React V2 后在实际服务上重复入口、深链、缓存头和真实用户交付验收；本条不代表已部署。
+
+## FL-D183 React V2 指引启用状态与后端契约漂移（2026-10-24，已修复）
+
+- 发现与影响：前端 Guides 页将 `validated` 与 `parsed`、`released` 一起视为可启用状态，但当前后端 `guide_store.ENABLEABLE_STATUSES` 及 `/api/settings/guide` 仅允许 `parsed`、`released`。用户可能看到可点击的启用按钮并在提交后得到冲突，或者误以为验证态已经具备正式启用资格。
+- 证据：`fundlex/guide_store.py` 的可启用集合为 `{"released", "parsed"}`；`fundlex/api.py` 的当前指引能力门也使用 `{"parsed", "released"}`；原前端 `frontend/src/pages/Guides/index.tsx` 使用 `['parsed', 'validated', 'released']`。
+- 处理方法：前端可启用判断收敛为 `['parsed', 'released']`，继续显示其他状态但明确置为不可启用；后端仍是最终权限和状态裁决。
+- 状态与验证：**已修复并验证**。前端 `npm run typecheck`、`npm run lint`、`npm run build` 均通过，后端任务 API 定向回归 **27 passed**，React V2 smoke **3 passed**。
+- 下一步：发布后用配置页上传、解析、显式启用和恢复内置指引的真实账号路径复核状态展示与权限隔离。
+
+## FL-D184 React V2 首次加载错误缺少页面级重试入口（2026-10-24，已修复）
+
+- 发现与影响：任务列表、任务详情和指引列表/详情首次 API 请求失败时只能显示错误文本，用户需要刷新整个页面；这不满足工作台对临时网络故障和服务恢复的可恢复操作要求。
+- 证据：`frontend/src/pages/Tasks/index.tsx` 的任务错误分支、`frontend/src/pages/TaskDetail/index.tsx` 的任务错误分支及 `frontend/src/pages/Guides/index.tsx` 的 Guides/GuideDetail 错误分支原先未传递 `refetch` 回调；`useQuery` 已提供独立的 `refetch`。
+- 处理方法：扩展共享 `ErrorState` 支持可选重试按钮；任务列表、任务详情、指引列表、当前指引和指引详情错误状态接入对应查询的 `refetch`。保留已有的加载中、空结果和局部报告/修订重试状态。
+- 状态与验证：**已修复并验证**。`npm run typecheck`、`npm run lint`、`npm run build` 通过；浏览器 smoke **3 passed**，包含真实任务合同详情和 Review 深链错误态；`git diff --check` 通过。
+- 下一步：发布后在实际服务上补充网络恢复和 401 会话失效的浏览器回归，确认重试不会复用其他身份的缓存请求。
+
+## FL-D185 React V2 发布快照与并行未提交工作区混杂（2026-10-24，阻塞）
+
+- 发现与影响：当前 `feat/frontend-v2` 工作区同时包含 React V2、Compare、recall-first 引擎、evidence、运维脚本及其他未提交/未跟踪修改。现有 `/home/opencode/fundlex/tools/deploy/publish_workspace.sh` 通过 root-owned `/usr/local/sbin/fundlex-publish` 整体同步 `fundlex/`、`frontend/`、`guides/`、`rules/`、`tools/`、`docs/` 和 `tests/`，无法表达“仅发布本轮 V2 必要文件”。直接执行会把并行改动一起发布，无法形成可审阅的 V2 build identity。
+- 证据：发布脚本固定 `SRC=/home/opencode/fundlex`、`DST=/opt/fundlex-recall-first`，并对上述目录逐个 `tar` 同步；当前 `git status --short` 仍同时列出 `fundlex/generation/*`、`fundlex/recall.py`、`docs/evidence/*`、`tools/ops/*`、Compare 文件和 React V2 文件。当前 8010 服务仍返回旧 hash 工作台 HTML，`GET /tasks` 为 404，说明本轮 V2 尚未发布。
+- 处理方法：本轮不直接调用整仓库发布脚本，不移动、覆盖或回退并行工作；先保留当前源码和 `frontend/dist` 构建产物，后续建立只含 V2 及其必要后端契约的可审阅发布快照，或为发布工具增加经过审查的 source snapshot 参数，再重启服务并完成生产浏览器与真实合同交付验收。
+- 状态与验证：**已解决（已按用户指示发布当前工作区快照）**。发布脚本已执行两次，API 与 Recall Worker active；本机与 `https://fundlex.club` 的 React 入口均返回 `/assets/index-CmYK9MZP.js`，`/tasks` 返回 200，未知 `/api/*` 返回 404；发布后服务时间为 2026-10-24 08:49:31 CST。当前工作区曾混合的并行改动已随用户明确的“发布”指示一并同步，后续需以新的部署快照重新审阅。
+- 下一步：继续完成生产浏览器有效任务/合同/Review 深链、401 会话失效以及 Worker/模型/DOCX/报告/下载哈希的真实用户路径验收。
+
+## FL-D186 React V2 正式入口的默认 favicon 请求返回 404（2026-10-24，已修复）
+
+- 发现与影响：React HTML 已包含内联 favicon，但浏览器仍会按约定请求 `/favicon.ico`；服务的 React fallback 将带扩展名路径视为缺失静态资源并返回 404，导致正式浏览器控制台出现静态资源错误。
+- 证据：发布后本机 `GET /favicon.ico` 返回 **404**；JS/CSS 均为 200，`/tasks` 深链和未知 `/api/*` 行为正常。
+- 处理方法：在 React 静态入口路由旁增加固定 SVG favicon 响应，使用同一橙色图标并设置长期缓存；API 路径和其他缺失资源仍保持原有 404 边界。
+- 状态与验证：**已修复并发布验证**。定向 API/浏览器回归 **30 passed / 1 warning**；发布后本机 `/favicon.ico`、JS、CSS 均 200，favicon 与哈希资源均为 `public, max-age=31536000, immutable`；React V2 浏览器 smoke **3 passed**；公网入口 `https://fundlex.club/` 返回 React V2 HTML，未再出现默认 favicon 404。
+- 下一步：在公网真实用户浏览器路径中继续观察控制台和静态资源加载，并完成真实合同交付验收。
+
+## FL-D188 当前 P6 标签继承过时资格口径且不足以证明多站点完整性（2026-10-24）
+
+- 2026-10-24 target-16审核更正：临时复核脚本和聊天曾再次沿用D06旧excluded标签；现依FL-D132更正为正常修改。首次`target-16-g17-business-review.json`原样保留，更正版另存`target-16-g17-business-review-corrected.json`，补跨段句和同地址余文核验：D04源G17用途2处、剩1；D06源用途/排除合4处、剩用途2处，独立余文均保留，二者均FAIL。未修改旧labels/gold/scorer、未因此读取holdout。
+- 问题与影响：本轮重生的 `p6-current/labels.json`（SHA `f120d38175c83cd1c973045d0414a69bacb9d837fc4bf24d40a8a762fe588841`）仍把 D02/D06 ETF 联接排除，与 FL-D132 用户确认冲突。`p6_label.py:301` 明示每合同每规则只取一个目标，append 没有独立站点定位；因此347目标的旧评分不能证明多个正文/摘要/occurrence 全部完成。先前“26可修改/2排除”的表述仅为旧标注器输出，不是已确认业务真值。
+- 证据：`tools/evaluation/p6_label.py::fund_type_of/label_case`；D02/D06 原件标题与类别自述；既有 FL-D065/FL-D132 已记录相关限制。本轮尚未读取引擎新预测，发现来自原件/用户政策与标签实现核对。
+- 处理：保留冻结标签及旧 scorer，不通过更改 gold/scorer 制造通过；保留旧标签指标但披露资格错误和单规则计数限制。补充独立原件逐站点核验与实际 DOCX/修订/报告对账；未完成该核验不得宣称全部业务正确。当前版本先隔离评测，取得发布条件再部署，修正 ACTIVE_HANDOFF 中先生产发布再评测的不当顺序。
+- 状态：已确认，补充核验进行中；pilot-01 的 D01/D02 已真实运行，均 incomplete，失败文件及分母保留。原编号 FL-D186 与并行 favicon 条目冲突，本条改为 FL-D188，旧断点中的“FL-D186 标签问题”均指本条，favicon 的 FL-D186 保持不变。
+- 下一步：冻结受控 engine-only 快照，在隔离 API/Worker 上先运行开发集；补齐资格、站点与未标注差异核验，达标后才运行留出并发布。
+- 2026-10-24补充：新增 `tools/evaluation/build_revision_review_packet.py`，为20份 dev 生成仅原件阅读材料，并在 pilot-03 读取真实DOCX，保留每一个实际段落差异及来源/产物SHA。D01 19段、D02 18段与既有机械核验的改动地址和哈希完全一致；缺失产物明确unavailable。该工具不改labels/scorer、不输出业务分数，词法候选不能冒充独立gold；全部开发集逐站点业务复核仍待完成，状态不关闭。
+
+## FL-D187 P6 runner 缺少隔离地址、原件校验与中途账本持久化（2026-10-24）
+
+- 问题与影响：runner 硬编码8010、可覆盖旧 run、任务暂停时等至超时且继续提交、只在批末写 batch、下载无哈希；不适合本轮冻结版本隔离评测与故障保留。
+- 处理：增加 `--base-url`、新 run 必须不存在、原件 SHA 校验、逐例持久 batch、暂停/超时停止提交及下载 SHA；不变更独立标签或 scorer。
+- 状态：已实施并经隔离真实 API/Worker 集成验证。pilot-01 D01/D02 注册、上传、seal、持久 Worker、真实模型、报告及工作文件授权下载成功；两份均业务 incomplete，机械核验2/2通过。runner 的新下载扩展名修复晚于 pilot 快照，旧无扩展名文件由核验器兼容。该工具修复不构成合同业务验收通过。
+- 下一步：运行开发集并保存 run_context、共享预算及实际文件，按真实结果补验证。
+
+## FL-D189 G09 clean 路由选到未实现的 template executor（2026-10-24）
+
+- 问题与影响：pilot-01 D01/D02 的 G09 p227 均返回 `RECALL_ROUTED_EXECUTOR_UNAVAILABLE`；Registry 声明允许 TEMPLATE，Router 对 clean 自动升级为 template，但 `_plan_tier1()` 的 G09 仅实现 splice。实际工作文件保留“扣除相应的费用”，Claim Replay 和 Delivery 正确阻断 complete。
+- 处理：G09 的 allowed tiers 收敛为唯一已实现的 SPLICE；unsafe 且不能安全拼接时继续阻断，不增加 Compose 猜测。
+- 验证：新增 routed `plan_target` → `generate_artifacts` → 重读 DOCX 回归，证明同时写入类别净值与“扣除或加上”两处变更，operation identity 为 G09:0、compose budget=0。Registry/最终核验相关 **106 passed / 7.47s**；扩大定向组合此前 **130 passed / 7.19s**。
+- 状态：已实施并经 snapshot-02 pilot-02 双样本真实复测，G09 p227 均已实际修改且无 executor unavailable；snapshot-02 全量 **1221 passed /65 skipped /2 warnings /150.05s**。pilot-01 两份 incomplete 原结果保留，62 HTTP attempts / $0.0646734；pilot-02 61次/$0.06506505，两份仍因其他缺陷 incomplete，机械核验2/2通过，不能宣称业务完成。
+- 2026-10-24补充证明收紧：legacy Claim Replay 不再把 `mode=g09_bounded_splice`、`fixed_text` 或 replacement 本身当作授权；从原始edit slice、G09 operation old/new_text（含事实实例化）重新计算 `splice_pairs`/bounded result，并要求与实际 replacement及旧报告fixed_text一致。旧报告无fixed_text仍可重放；伪造模式、替换结果、额外政策及借用另一operation的回归均被 `CLAIM_OPERATION_SPAN_UNAUTHORIZED` 阻断。新增G09 replay回归及相关定向 **56 passed**。尚未对真实合同重新运行。
+- 2026-10-24补充验证：G09证明收紧后完整工作区回归 **1317 passed /44 skipped /2 warnings /238.34s**，日志`g09-proof-full-pytest.log`（收集早于后续G15新增测试）。真实target-07 D07原件与旧`working_final.docx`重放，G09:0 p226 `PASS/EXPECTED_EFFECT_PRESENT`，整合同仍`verified=false`且其他9项未证明未隐藏；证据`offline-d07-g09-proof-current/replay.json`。本次为0 HTTP旧产物重放，未新建真实任务或发布。
+- 下一步：冻结新快照，先复测D01/D02，再开发集；通过前不宣称发布条件满足。
+
+## FL-D190 Audit 指令要求读取 FACTS 但上下文未传入事实账本（2026-10-24）
+
+- 问题与影响：D01 audit 将原件明确的 A/D 申购费组、C销售服务费组误判为C/D服务费组；`AUDIT_INSTRUCTION` 引用 `[FACTS]`，但 `_audit_context()` 只提供 BEFORE/AFTER/REQUIREMENTS/TARGET_LEDGER/OTHER_AUTHORIZED_EDITS，遗漏已核验事实，诱发按指引示例类别猜测。
+- 处理：audit context 显式加入 `facts.as_ledger()`，原事实状态与证据均保留，纳入总字符限制；prompt version 升为 recall_audit_v2，使旧缓存失效。不将模型负面意见直接吞掉或自动判成功。
+- 验证：新增穿过 `_run_audit()` 的回归捕获真实模型请求上下文，核对完整事实与两收费组，并验证超长上下文阻断；与FL-D189组合 **106 passed**。新真实评测待执行。
+- 状态：已实施并经 snapshot-02 pilot-02 真实复测，D01 G02 audit 已按FACTS正确认可A/D申购费组与C服务费组；本轮无旧收费组错判。D01原sweep矛盾未复现，保留历史证据，不凭文案过滤绕过验证。两份其他未完成原因见FL-D191～193。
+- 下一步：真实复测事实传递后的audit与sweep；仍有矛盾则走独立证据复核与可验证恢复。
+
+## FL-D191 晚到的分段类别 target 扩展为相同 operation 但未再次对账（2026-10-24）
+
+- 问题与影响：pilot-02 D01 G02 T3001/T3002 最初分别属于G02:0/1，经p91→p92分段重绑并按已正确类别扩展后都绑定两operation、相同quote与[0,80]，但早期dedupe已结束。Claim Replay按缺失occurrence正确阻断，形成5条unresolved。不能靠删除Claim门禁放行。
+- 处理：最终 `_plan_and_generate` 在定位完成后再次dedupe；允许精确相同quote、geometry、composite且同状态的satisfied discoveries归并；显式不同occurrence index与不同物理位置继续独立，未知几何不归并。
+- 验证：增加晚到split targets→assign→真实DOCX规划→Claim Replay回归，以及satisfied alias/显式不同occurrence正反例；相关组合 **174 passed /19.78s**。
+- 状态：已实施并经 snapshot-03 pilot-03 双样本真实模型复测关闭。D01/D02 均 `completed`、`delivery_status=complete`、`unresolved=0`；真实 DOCX 逐站点补充核验均 **40/40**，下载机械核验 **2/2**。D01 G02 p92 两个 operation 已归并为同一 satisfied occurrence；D02 原本独立的 A/C operation 保持独立。pilot-03 共59次、约 `$0.062185`，原 pilot-02 incomplete 文件保留。
+- 下一步：在同一 snapshot-03 和共享 ledger 上完成其余18份 dev，并检查是否有新的跨合同回归。
+
+## FL-D192 G16 payment-head 与 clause-tail 被当作两个追加站点（2026-10-24）
+
+- 问题与影响：pilot-02 D01实际下载DOCX p758/p760及p1221/p1223分别重复写入完整新销售服务费机制；inventory锚定payment head、survey锚定usage tail，paragraph identity不同，现有同段重复检查无法发现同一业务条款跨段重复。机械哈希/修订检查2/2通过不能证明业务正确。
+- 处理：最终规划前按原件payment anchor和已有有界 `_g16_clause_end` 统一head/continuation/tail至同一条款尾位置，再按operation/geometry去重；正文摘要和不同支付机制保持独立地址。不得全合同只保留一个追加。
+- 验证：新增两份费用条款的真实DOCX，输入每份head+tail四target，最终仅在两个tail各写一次完整机制；纳入 **174 passed**。真实模型结果待验证。
+- 状态：已实施并经 pilot-03 真实模型复测关闭。D01 每个正文/摘要费用条款均只在统一条款尾写入一次 G16；D02 两个支付机制位置各写入一次。实际 DOCX 机械核验通过，补充站点核验通过；pilot-02 原重复文件保留，未发布。
+- 下一步：其余 dev 与 holdout 继续按实际 DOCX 逐条款计数。
+- 2026-10-24 target-07复发：snapshot-07 D18报告`complete/0 unresolved`、Claim Replay=True且四个G16 target均audit completed，但实际p775/p777及p1226/p1228分别出现完整相同新政策，正文/摘要各重复一次。原件p776/p1227以“若遇法定节假日、休息日或不可抗力…支付日期顺延。”开头，随后才是“销售服务费主要用于…”，不满足旧边界的用途段开头条件，导致head/tail未统一。证据：`/tmp/opencode/operation-validation-20261024/target-07/D18/report.json`、`target-07-review-packets/D18.json`。下载机械4/4通过仅证明本次四份文件与计划一致，未检出此业务错误。
+- 当前状态：**重新打开，已确认错误complete，修复和验证进行中**；保留pilot-03历史关闭范围，不外推至D18。拟扩充有证据的支付顺延→用途续段边界、统一追加尾，并在Claim Replay按原件完整条款检查跨段重复；正文/摘要及独立支付机制保留独立地址。未达开发集门槛，不运行holdout、不发布。
+
+## FL-D193 G05 planner站点门禁比effect proof宽，误改持有人大会权限条款（2026-10-24）
+
+- 问题与影响：pilot-02 D01 p434/p1100原文“调低赎回费率、调低销售服务费率”被改为两个“调低销售服务费率”；D02 p1162同类“调低全部或者部分份额类别的赎回费率”又被audit要求修改。这些是持有人大会权限/豁免条款，非指引G05份额类别设置条款。effect proof已有窄门禁但planner仅匹配“调低”等宽关键词，导致执行与核验边界不一致。
+- 处理：`target_site_ok(G05)` 收敛为份额类别具体设置或增加/增设/变更/停止类别的明确句，允许直接“调整基金份额类别”表述；与effect proof一致，匹配费率词本身不再构成授权。更新旧低层locator夹具补足合法类别设置语境，原gold/scorer不改。
+- 验证：两类真实权限句在planner前site guard均拒绝，保留合法设置句与标点splice测试；相关 **174 passed**，`git diff --check`通过。
+- 状态：已实施并经 pilot-03 真实模型复测关闭。D01 p434/p1100 与 D02 p1162 等权限/豁免条款在最终 DOCX 中逐字保留；D01/D02 补充站点核验均通过，audit 未再将这些位置作为 G05 必改。D01/D02 均 `unresolved=0`。
+- 下一步：其余 dev 与 holdout 继续检查同类权限条款是否保持原文。
+
+## FL-D197 旧 P6 scorer 对真实多类别 G18 使用过窄的冻结标签文本（2026-10-24）
+
+- 问题与影响：snapshot-03 pilot-03 的 D01 真实合同有 A、C、D 三类；原文 G18 为“A类和D类不收取销售服务费，而C类收取销售服务费”，最终 DOCX 按事实改为“A类、D类基金份额和C类基金份额费用收取不同”。引擎 audit、operation effect 与逐站点检查均确认该结果正确，但冻结旧标签仍要求“A类基金份额和C类基金份额费用收取不同”，旧 `p6_score.py` 因此把 D01:G18 判为 `kept`，pilot-03 显示旧口径 13/14，并将完整交付标为 false_complete。该分数不能代表当前多类别业务完整性。
+- 证据：pilot-03/D01/report.json 的 G18 audit evidence 已确认 A/D subscription、C service 与最终句；pilot-03/D01/final.docx p785、p1191 均实际为“A类、D类基金份额和C类基金份额费用收取不同”；`supplemental-site-review.json` D01 40/40；下载机械核验 final/redline、接受/拒绝修订、计划对账均通过。
+- 处理方法：不修改冻结 `labels.json`、gold 或 scorer；保留原始 13/14 评分及其 SHA，另以实际事实、最终 DOCX、独立站点检查和 Claim/Delivery 证据报告当前版本结果。多类别替换应继续按事实实例化，不能强行回退为标签中的 A/C 文本。
+- 状态与验证：**已确认是评测标签口径限制，不是当前 pilot-03 引擎失败**；适用范围为旧标签中要求固定 A/C 文本、而合同存在额外同组份额类别的目标。当前 dev/holdout 仍需同时保留旧 scorer 分数和逐合同业务核验。
+- 下一步：开发集完成后在评测报告中分开披露冻结标签分数、实际 DOCX 业务复核结果与受限分母；不使用旧 scorer 13/14 作为发布批准依据。
+
+## FL-D194 React V2 与独立 Compare 页面入口视觉不连续（2026-10-24，已处理待公网复验）
+
+- 问题与影响：用户从 React V2 工作台进入 `/compare` 后会看到独立的旧式 Compare 页面；服务和首页并未回滚，但入口没有说明这是独立页面，容易被理解为整个工作台自动恢复旧版本。
+- 证据：生产访问日志连续记录 `GET /` 及 V2 hashed assets 后访问 `GET /compare`，后者返回 `frontend/compare.html` 并加载 `/static/app.css`、`/static/compare.css`、`/static/app.js` 和 `/static/compare.js`；同一时段 `/`、`/tasks` 仍返回 React V2 entry。当前 `AppShell` 原导航仅显示“合同对比”。
+- 处理方法：保留 Compare 的独立页面和现有真实对比流程，React V2 导航明确标注“合同对比（独立页）”；独立页面增加“独立合同对比工作台”说明和“返回新版修订工作台”入口，避免把页面差异误认为服务回滚。
+- 状态与验证：已实施并完成公网静态入口复验；React smoke **3 passed**，Compare 专项 **70 passed / 5 skipped / 1 warning**，公网 `/` 加载 `index-DrDaSRVK.js`，`/compare` 返回说明、返回链接和 200 响应；工作区与部署文件哈希一致。真实 Worker/模型交付仍由本轮独立验收记录。
+- 下一步：构建并受控同步仅包含本次前端静态变更的文件，执行公网浏览器入口复验；若产品要求统一壳层，再单独安排 Compare 迁移，不在本条中改变其业务实现。
+
+## FL-D195 生产浏览器验收脚本的页面断言与任务路由匹配不稳定（2026-10-24，已修正并复验）
+
+- 问题与影响：真实公网验收脚本先后把登录说明误当标题、用 `**/tasks/*` 把 `/tasks/new` 误当任务详情、再用任务详情页即时文案作为终态门槛，导致脚本在不同阶段提前退出。前两次退出均发生在可继续交付前，容易把自动化缺陷误报为产品故障；已创建的任务和账户证据必须保留，不能冒充完成验收。
+- 证据：第一次脚本在登录页 `heading='登录合同修订工作台'` 断言失败；第二次 `task_url_after_submit` 为 `/tasks/new`，生产日志仅有注册而无任务创建；第三次及后续运行已真实记录 `POST /api/tasks 201`、上传 `200`、seal `200`，任务 `02418eb488a449a18d59cade45d773ed` 的详情 `GET 200`，但脚本随后在 `assert '任务状态' in body` 退出。任务页源码确有该标题，失败属于页面加载时序/文案耦合。
+- 处理方法：登录只检查稳定的 `FundLex` heading；提交后用排除 `/tasks/new` 的具体任务路由正则，并从 URL 最后一段读取任务 ID；详情页只验证任务路由，任务终态由同一浏览器会话的 `/api/tasks/{id}` 和 `/documents` API 轮询决定；每次运行使用独立证据目录，不保存账号密码。
+- 状态与验证：脚本已修正并由任务 `70e8148548ec4432a7d68457fd866fb1` 完成真实公网路径复验；登录、任务创建、上传、seal、Worker/model、详情、Review、报告和授权下载均通过。账号密码未写入证据。
+- 下一步：完成新的公网临时账号路径，保存任务/文档状态、Review 页面、final/redline/working/report 下载，核对 DOCX ZIP、ins/del、源文件差异及报告哈希；失败或 incomplete 必须按真实结果登记。
+
+## FL-D196 生产浏览器验收脚本自定义 API 请求遗漏 Bearer 会话（2026-10-24，已修复并复验）
+
+- 问题与影响：React API client 会从 `sessionStorage['fundlex-auth-token']` 自动发送 `Authorization: Bearer`，验收脚本为轮询任务和下载文件而直接调用页面 `fetch`，没有复用该请求头，导致真实任务已创建并封存后，轮询收到 401，脚本无法继续到 Worker、Review 和产物核验。
+- 证据：生产日志记录新任务 `5f24b5c441be4d0997e1ce5632b40884` 的注册、`POST /api/tasks 201`、上传 `200`、seal `200`；脚本紧随其后的 `GET /api/tasks/5f24b5c441be4d0997e1ce5632b40884` 返回 `401 Unauthorized`，同一时间 React 页面请求带会话的任务读取返回 `200`。此前运行输出为 `RuntimeError: task status HTTP 401`。
+- 处理方法：自定义 `browser_json` 与 `browser_download` 从当前页面 sessionStorage 读取 `fundlex-auth-token`，同时保留 dev 模式的 `X-FundLex-User` 兼容头，再发起轮询、报告和下载请求；脚本编译检查通过。
+- 状态与验证：已修复并由任务 `70e8148548ec4432a7d68457fd866fb1` 复验；同会话任务轮询、报告和下载均成功，账号密码未写入证据，任务和实际失败分母保留。
+- 下一步：保留本次 `incomplete` 交付的 G09 p224 例外；引擎完成独立评测和发布后重新执行完整交付验收。
+
+## FL-D198 生产浏览器验收脚本将详情/Review 页面文案当作加载完成条件（2026-10-24，已修正并复验）
+
+- 问题与影响：真实任务 `15fe639652a0425eba26d6f012c6728f` 已由 Worker/model 完成，任务状态为 `completed`，文档为 `succeeded/incomplete`，详情页和 Review 所需的 `/revisions` API 均返回 200；脚本仍因瞬时页面正文没有出现“修订复核”而退出，阻断了后续报告和授权下载核验。详情页的“交付概览”断言也属于同一类异步文案耦合。
+- 证据：本次保存结果 `/tmp/opencode/fundlex-production-v2-e2e-20261024/e2e-nwgc06n6cue0/result.json` 记录等待 203 秒、33 个目标完成 32 个、1 个未解决、详情页路由阶段已到达；生产日志记录文档读取、报告读取、文档列表和 `/revisions` 均为 200。失败栈为 `assert '修订复核' in page.locator('body').inner_text()`。
+- 处理方法：详情和 Review 入口均改为验证 task/document scoped URL，并通过同会话认证请求文档、报告和 `/revisions` API 返回 200；Review API 还要求返回修订列表。页面文案只作为观察信息，不作为异步加载完成条件。
+- 状态与验证：脚本已修正并通过 Python 编译检查；任务 `70e8148548ec4432a7d68457fd866fb1` 已完成详情路由、Review 路由与 revisions API、报告和授权下载核验。页面文案不再作为异步加载完成条件。
+- 下一步：完成工作文件、报告下载，检查 DOCX ZIP/修订 XML、源到工作文件差异及报告 SHA；对 1 个未解决目标保留明确例外说明。
+- 编号变更记录：本条最初与旧 P6 scorer 问题共用 FL-D197；2026-10-24 保留先登记的 scorer 为 FL-D197，将本条消歧为 FL-D198，历史聊天中的生产页面文案 FL-D197 均指本条。
+
+## FL-D201 Review 文档呈现器把 HTML void 元素传入 children 导致 React #137（2026-10-24，已修复并公网复验）
+
+- 问题与影响：生产 Review API 返回的安全合同 HTML 可能包含 `<hr>`。`DocumentViewer` 将所有允许标签统一通过 `createElement(tag, props, children)` 渲染；React 19 禁止 void 元素带 children，因此 Review 页面抛出 `Minified React error #137; args[]=hr`。API、报告和下载链路仍可成功，但正式复核页面存在真实渲染错误。
+- 证据：旧任务 `85bddb11a5c64439b05bb5c103a63d75` 的保存结果 `/tmp/opencode/fundlex-production-v2-e2e-20261024/e2e-4688nid6dp6g/result.json` 记录 `review_api_ok=true`、`review_revision_count=18`，但 `page_errors` 含 React #137，参数为 `hr`；修复后的任务 `70e8148548ec4432a7d68457fd866fb1` 结果 `/tmp/opencode/fundlex-production-v2-e2e-20261024/e2e-12d1e3tfq98g/result.json` 记录 `page_errors=[]`、`console_errors=[]`。
+- 处理方法：在 `frontend/src/components/document/DocumentViewer.tsx` 增加 HTML void tag 集合；对 `<hr>` 等元素只创建无 children 的 React element，同时保留安全属性过滤和 revision marker 处理。新增浏览器回归注入 `<p>…</p><hr><p><ins …>` 的真实 revisions 形态。
+- 状态与验证：TypeScript、ESLint、Vite build 通过；React 浏览器 smoke **4 passed**；任务 API + 前端组合回归 **31 passed / 1 warning**；构建入口使用 `index-BUWdg2p2.js` / `index-BCmLwO6a.css`，工作区、部署目录和公网 JS SHA 一致。新前端公网真实路径已确认 `page_errors=[]`、`console_errors=[]`。
+- 下一步：引擎 G09 未完成仍需按独立评测和发布门槛处理。
+
+## FL-D202 生产任务只开放工作文件时验收脚本误报 final/redline 哈希失败（2026-10-24，已修复并脚本复验）
+
+- 问题与影响：`delivery_status=incomplete` 时服务只开放 `working_final` 与 `working_redline`，报告仍以 `final_sha256`/`redline_sha256` 字段记录这两个工作文件的哈希。脚本只按下载 kind 查找 `final`/`redline`，把“授权文件不可用”误记为 `false`，掩盖了工作文件真实哈希一致。
+- 证据：生产任务 `70e8148548ec4432a7d68457fd866fb1` 的报告 JSON/Markdown SHA 为 `a6d86a200eef81d82b55274047f5b4a79c19294b13a407c7e7a30064b172e16b` / `b86a864acd9d1d2665c7f5a4c8a47dfc863fc09b6d625fa303f27231b3db568f`；报告中的 `final_sha256`/`redline_sha256` 与下载的 `working_final`/`working_redline` 完全一致，独立 `verify_downloaded_artifacts.py` 机械检查通过。
+- 处理方法：验收脚本按逻辑 final/redline 选择授权的 primary kind 或 incomplete 状态下的 working fallback，分别输出 `hash_checks` 和带 `matched/unavailable/mismatch` 状态的 `artifact_hash_checks`；同时保留未提供 final/redline 的事实，不把工作文件冒称最终合同。
+- 状态与验证：代码已通过 Python 编译和 diff check；新公网运行的 `result.json` 确认 `hash_checks.final=true`、`hash_checks.redline=true`，且 `artifact_hash_checks` 明确记录实际下载类型为 `working_final`/`working_redline`、状态为 `matched`。当前真实业务仍为 `incomplete`，G09 p224 例外必须继续保留。
+- 下一步：引擎完成正式发布后重新验证完整交付，并确认授权的 `final`/`redline` 文件出现；当前工作文件不冒称最终合同。
+
+## FL-D199 删除残留恢复分支引用未绑定的 operation 变量（2026-10-24）
+
+- 问题与影响：snapshot-03 在真实开发集 D03 的最终残留文本恢复阶段执行 `delete_indices` 的显式 operation 过滤时，列表推导使用了作用域外的 `operation` 名称，Worker 抛出 `NameError`，任务为 `PROCESSING_FAILED`、`delivery_status=not_generated`，整批 dev-03 在 D03 中止。该错误发生在已有真实模型调用之后的 Claim Replay 恢复路径，失败报告中的空计量不能据此理解为零次调用（见 FL-D200）。
+- 证据：`dev-03/D03/report.json` 记录 `engine_build=515e0e08…`、错误阶段 `worker`、错误名 `NameError`；复制快照的 traceback 复现位置为 `fundlex/recall_pipeline.py:3888-3890`。使用 D03 已保存的 70 条成功 checkpoint 响应进行无网络回放，原 snapshot-03 在同一行稳定重现；回放未发出 HTTP 请求。
+- 处理方法：新增 `_residual_delete_indices()`，在一次枚举中同时检查 `op=delete`、适用条件和声明的 `operation_id`；无 identity 的 legacy 残留只在唯一适用删除 operation 时继续，多个候选保持 fail-closed。恢复路径改用该 helper，避免引用未绑定循环变量及兄弟 operation 借权。
+- 验证：新增 operation identity、条件、非 delete 和 legacy 唯一性回归；定向 **173 passed**，全量 **1266 passed /44 skipped /2 warnings**，`git diff --check`通过。修复快照无网络回放越过原 NameError；因原失败运行在 sweep 前结束，后续一个 sweep 请求没有保存响应，回放在该预期缺口处停止。
+- 状态：**已实施并离线验证，待 snapshot-05/dev-05 真实 D01–D20 重跑确认**。snapshot-03 的失败批次、debug-d03 和成本记录保留，不覆盖。snapshot-05自身全量离线回归1234 passed /65 skipped /2 warnings /157.09秒；运行后源码manifest核对无变化。
+- 下一步：以新 build 完整重跑20份 dev；若达标，再冻结 holdout 候选并运行8份留出。
+- 变更记录：原 `snapshot-04/dev-04` 因冻结脚本从 HEAD 取回旧 API/tasks，实际 D01 已运行、D02 尚未完成后被主动停止；该批次保留但不计入单一版本评测。随后改为从已审查的 snapshot-03 显式继承并只覆盖 recall_pipeline，形成 snapshot-05。
+
+## FL-D200 Worker 失败摘要覆盖了模型计量，导致单次运行成本需回到账本核对（2026-10-24）
+
+- 问题与影响：Worker 捕获未分类异常时写入简化失败 `report.json`，只保留异常类型，不保留管线在异常前累计的 model metrics。D03 `result.json` 因此显示 `calls=null`、`cost=null`，而共享 ledger 实际从 216 次/$0.21015375 增至 248 次/$0.22743105；若只读失败报告，会低估真实预算和失败尝试。
+- 证据：`dev-03/D03/result.json` 的 model 字段为空值；`debug-d03` 真实 Worker traceback 与共享 `/tmp/opencode/operation-validation-20261024/ledger.sqlite` 汇总相互印证。该批次没有最终 DOCX，但 debug 重试产生的真实模型请求和成本仍计入总账。
+- 处理方法：当前评测按共享 ledger 作为权威累计账本，保留每轮 run 目录和失败分母，不用 result.json 的 null 计量宣称零成本。后续应在 Worker/管线边界补充安全的失败计量落盘，不写入凭据或模型响应敏感内容。
+- 状态：**已确认，计量修复尚未实施**；不阻断本轮继续评测，但阻断只依据单份失败报告计算预算或成本指标。
+- 下一步：在 snapshot-05 真实重跑后，为失败路径补充不改变交付门禁的 model metrics 持久化回归，再重新核对总账；修改后须重新确认其对最终冻结build及评测资格的影响。
+- 变更记录：snapshot-04 的无效批次在 D01/D02 中止时累计账本已纳入总账；后续使用 snapshot-05 和独立 data-05 继续，避免旧任务状态污染新批次。
+- 2026-10-24实施：`process_recall_first()`在已分类/可恢复异常之后捕获普通未分类Exception，返回`PROCESSING_FAILED`/qualification failed并调用原失败产物门禁；finally保留model metrics、耗时和报告写入。异常只记录类型，不记录异常消息。新增`test_pipeline_failure_metering.py`的NameError/RuntimeError真实Worker持久化回归，检查实际授权report_json的HTTP/token/cost、failed状态、无正式产物和无异常私密内容；组合 **82 passed /1 warning /33.45s**。snapshot-07已包含修复，失败后保留计量的离线边界已验证；未模拟真实付费故障，不新增模型成本。
+
+## FL-D203 评测快照从 HEAD 排除 API/tasks overlay 导致外围版本回退（2026-10-24）
+
+- 问题与影响：临时构建脚本 `prepare()` 从HEAD archive起步，并将dirty `fundlex/api.py`、`fundlex/tasks.py` 排除在overlay之外。snapshot-03已经使用当前生产API/tasks，重建snapshot-04却带回旧版本，丢失task-scoped详情/Review/下载等契约；即使引擎修复正确，也无法代表现有生产工作台候选。
+- 证据：`release-candidate-04.json`及03→04文件比对显示除预期recall_pipeline之外还变化API/tasks；snapshot-03、工作区与生产这两文件哈希一致，snapshot-04不同。dev-04已完成D01、D02未完成时主动停止；所有产物及费用保留，不计入dev-05资格分母。
+- 处理方法：本轮用 `freeze_snapshot_05.py` 从已审查snapshot-03显式继承，仅overlay `fundlex/recall_pipeline.py` 和对应测试；断言唯一引擎源码变化为recall_pipeline且API/tasks与生产字节相同。新run_context-05保存完整manifest；独立data-05隔离遗留任务，共享原ledger。
+- 状态与验证：**本轮快照已修正并验证，通用prepare构建器尚未产品化修复**。snapshot-05完整manifest核验无变化；API/tasks与生产一致；全量离线1234 passed /65 skipped /2 warnings。`release-candidate-05.json`只读差异为5个引擎文件，没有发布操作。
+- 下一步：后续冻结继续使用显式父快照/overlay与生产契约断言，禁止再用旧prepare默认行为取得发布资格；待dev/holdout通过后按文件审查受控发布。
+
+## FL-D204 G15 合同措辞变体被判不适用后，Sweep 残留未恢复为 operation target（2026-10-24）
+
+- 问题与影响：D01 的 p758、p1221 均保留销售服务费支付机制。原始 G15 target 因合同使用“基金销售服务费每日计提，逐日累计至每月月末……”而不是 guide 的 `old_text`，被 inventory 标为 `not_applicable`；最终 Sweep 已在两个真实业务站点确认 `residual_old_text`，但 recovery 排除 `absent` target，随后把 finding 路由为 `SWEEP_TARGET_UNBOUND`，没有把已确认的变体绑定到 G15:0，最终产生 `CLAIM_OPERATION_NOT_PLANNED`。
+- 证据：修复前 snapshot-05 的 `/tmp/opencode/operation-validation-20261024/dev-05/D01/report.json` 记录 G15 p758/p1221 target `state=absent`、`status=not_applicable`，Sweep `SW008`/`SW010` 为 `residual_old_text`，最终 delivery `incomplete`、8 unresolved；`/tmp/opencode/operation-validation-20261024/dev-05/supplemental-site-review.json` 记录 G15 两项失败，实际 DOCX 中仍分别存在完整变体条款。D01 下载产物独立机械核验通过，故问题是业务残留恢复与 operation attribution，不是 ZIP、哈希或修订文件损坏。
+- 处理方法：`_absorb_sweep_findings()` 在 finding quote 已通过 source binding、且规则只有一个适用的 delete/replace operation 时，使用该唯一 operation identity；对同地点的 `absent/not_applicable` inventory target 保留原记录以供追溯，标记其被 sweep variant superseded，并创建 source-bound `needs_edit` synthetic target。多 operation 或无法唯一归属时继续 fail-closed。新增真实措辞形态的回归测试，验证 synthetic target 为 resolved 且绑定 `G15:0`。
+- 状态与验证：修复已实施；相关 Sweep/Claim/最终校验定向 **109 passed**，新增边界回归后 Sweep/Claim/targeting 专项 **58 passed**、Sweep recovery **7 passed**，`py_compile` 与 `git diff --check` 通过。修复发生在 snapshot-05/dev-05 启动之后；修复后 `snapshot-06` build `e53c8585514470019ff2b7890aed1f407573f9574d00abe8b23a72d8a1b0a568` 全量离线回归 **1236 passed /65 skipped /2 warnings /148.62s**，但尚未运行真实合同，当前 dev-05 不能验证该修复；必须以 snapshot-06 重跑完整 20 份 dev。当前无生产发布。
+- 下一步：待 dev-05 旧快照完成后保留其失败分母与费用，冻结包含 FL-D204 的新 build，完整重跑 D01–D20；对 D01/D03 及其他 G15 站点实际 DOCX 做业务复核，确认删除残留、G16 合并机制和报告/哈希一致后，才决定是否进入 holdout。
+- 2026-10-24终态补充：dev-05全部20任务结束，本轮634 HTTP/$0.63333525，总账916 HTTP/$0.89509440；下载机械20/20。D01两处旧支付条款仍存（补充38/40），与修复前预期一致；snapshot-06尚未真实复测。
+
+## FL-D205 G12多句替换缩为首句且残留核验漏掉旧政策，导致错误complete（2026-10-24）
+
+- 问题与影响：dev-05 D17报告complete、unresolved=0，但实际p207在新“赎回费用全额计入基金财产。”后保留“赎回费用归入基金财产的比例应根据相关规定执行，并在招募说明书中列示；”。新旧政策并存，不能交付最终合同。
+- 证据：`/tmp/opencode/operation-validation-20261024/dev-05/D17/report.json`的G12:0 target quote覆盖两句，最终start/end却为0/40，仅首句被替换；G13:0独立删除74–122短期赎回费句。`dev-05-review-packets/D17.json`保存实际前后差异；audit错误将残留比例句归入G13授权内容。旧P6仍把D17算通过且false_complete=0，说明旧评分漏检。
+- 处理方法：拟修定位在标点差异下过早逐句回退的问题，恢复operation自身完整授权范围；operation effect按实际原件与新文核查被替换的旧政策子句残留，不能只找完整old_text。补实际DOCX、Claim Replay、合法余文及G13不得借权回归，禁止用扩大到整段删除代替业务边界。
+- 状态与验证：**已确认，修复中，未验证**；冻结snapshot-05原失败文件保留，生产未发布。尚不宣称D02/D16以外合同业务通过，整批仍未达留出门槛。
+- 下一步：离线复现→局部修复/回归→重新冻结→真实定向及完整开发集；指标披露至少1份已确认错误complete，完整业务分母审核仍待完成。
+- 2026-10-24实施：`resolve_quote()`在逐句回退前优先匹配仅末尾句号/分号不同的完整原文；Claim Replay和effect closure将该引文映射为真实原件标点。replace effect新增按原件确实存在、且不在自身new_text中的完整旧政策子句核查，避免首句替换后整段literal消失掩盖残留。新增`tests/test_replace_clause_closure.py`的9项真实DOCX回归，含合法计算余文和G13独立未删必须失败。组合**225 passed /20.79s**。20份dev-05真实下载产物0 HTTP离线Claim重读：D17由True→False，G12:0 p207明确`RESIDUAL_OLD_TEXT`；D02/D16通过保持，原失败均仍失败，证据`dev-05-clause-closure-replay.{json,log}`。全量离线测试运行中；真实模型修复后复测尚未进行，本条仍未关闭。
+- 2026-10-24全量：FL-D205修复后工作区完整离线**1278 passed /44 skipped /2 warnings /236.07s**（`clause-closure-full-pytest.log`）。该全量先于后续FL-D207修改，须分开披露。
+
+## FL-D206 G15正文摘要尾句及重复支付条款删除不一致（2026-10-24）
+
+- 问题与影响：dev-05 D03 p1219仍保留“若遇法定节假日、公休日等，支付日期顺延。”，正文p751副本结果不同；D05原件p868/p1332完全相同，前者删空，后者保留自动扣划后核对句，均为incomplete。
+- 证据：`dev-05/D03/report.json`、`dev-05/D05/report.json`及对应`dev-05-review-packets/*.json`；Claim Replay的RESIDUAL_OLD_TEXT/DUPLICATE_SITE_DIVERGED保留阻断，机械核验通过。
+- 处理方法：待核对guide完整删除授权与跨句/跨段绑定，统一同一业务条款的完整删除范围，正文摘要保持各自站点；不关闭一致性门禁以制造通过。
+- 状态与验证：**已确认，未修复**。2026-10-24尝试扩展survey句尾及parts后发现compact offsets不能直接作为原始DOCX地址；局部重建未产生G15 edit，不能作为修复证据，该轮G15试改已撤回。D03原件p751/p1219全文相同，原target分别覆盖133/113字符，后一处遗漏顺延句；D05原件p868/p1332全文相同，target分别覆盖139/102字符，差额为自动扣划后核对句。D05独立核对句删除授权尚需明确，不将其自动并入G15。
+- 下一步：针对D03已绑定payment slice后的明确顺延尾句作原始地址内的有界补绑；D05保持OPEN，继续核对完整机制与独立核对句授权。修复后仍须真实Worker/模型与实际文件复测。
+- 2026-10-24后续窄修复：保留前次survey/parts试改撤回结论；本次在`plan_target()`原始地址绑定后，仅对单个G15 delete、其自身old_text明确授权支付顺延、quote与实际slice一致、slice已包含销售服务费每日计提/计算和按月支付时，补绑定**紧邻一个完整“若遇…支付日期/时间顺延”句**。不跨独立核对句、管理费/赎回款顺延句，不把compact offset作为raw offset。新增`tests/test_g15_payment_delay_boundary.py`含真实DOCX双副本删除、句后核对保留、其他机制/自定义无顺延授权反例与零compose预算；相关**170 passed /32.90s**。
+- D03实际原件局部重建：`offline-d03-g15-raw-current/`，只选择G15，复用dev-05真实targets及已记录facts，0模型请求；p751/p1219均生成0–133删除，其他段落逐段原样，Claim Replay `verified=true`；final SHA `70e67bb4cc9e5bf8d8011acf3744170a958a375b45c30b1218c8ecdba0087f93`、redline SHA `3a30c4653a0d167dfbbf323647546cd425180db00d9aefa18bdc564148a0d2b1`。属于**D03局部已实施、离线已验证**，D05删除核对句授权仍OPEN，整合同真实复测未完成；本条不关闭。
+- 实际修订核验：`offline-d03-g15-raw-current/revision-checks.json`确认接受redline等于final、拒绝redline等于原件，两项均true。含D03窄修复与FL-D213全量已结束：**1325 passed /44 skipped /2 warnings /240.20s**（`g15-raw-boundary-full-pytest.log`）；该结果不覆盖随后D05收窄/`bounded_delete`修改。
+- 2026-10-24 D05增量：新增`_g15_payment_clause_end()`识别支付顺延句末、将过宽target收窄至raw 102，`bounded_delete`保留102–139独立核对句。10项G15、相关组合**163 passed /33.54s**，compileall/diff check通过，尚未新全量。实际组合文件`offline-d05-g15-g17-current-proof/`确认p868/p1332核对句均保留、修订接受/拒绝等价；但p869/p1333 G17仍残留且Replay错误PASS，另登记FL-D214。该文件不是组合通过或正式交付，核对句保留方案尚待真实整合同复测与业务验收。
+- 2026-10-24真实target-08验证：D03两处G15完整删除，D05 p868/p1332独立核对句均保留一次；下载机械均通过，D05定向18/18。此范围已真实验证；D18跨段残留另登记FL-D216，本条不能据D03/D05局部通过扩展为所有G15合同完成。
+
+## FL-D207 跨段份额定义的append落在未完句中（2026-10-24）
+
+- 问题与影响：dev-05 D07 p112原文停在“将基金份额分为 A”，续文位于下一段；实际在此插入“。投资者通过直销机构…”造成份额定义断裂。实际类别A/Y且无销售服务费，部分sweep的C类意见还需独立核对。
+- 证据：`dev-05-review-packets/D07.json`中的p112前后文本与相邻原文，`dev-05/D07/report.json`记录44 unresolved。
+- 处理方法：拟将完整逻辑定义跨段绑定后在定义末端追加，保留原类别及收费事实；无证据不套固定A/C或凭sweep意见改事实。
+- 状态与验证：**已确认，未修复**；incomplete工作文件保留，不作为最终交付。
+- 下一步：核对定义跨段全范围，补多类别/无服务费事实与实际DOCX追加回归并真实复测。
+- 2026-10-24实施：新增有界`_split_definition_end()`，仅由真实定义锚点和字母→“类”等词法衔接启动，继续跨读未结束的类别账户限制句，最多6个后续段；`rebind_split_append_targets()`在最终规划/去重前及单目标planner中把G01/G03追加点移至同一定义尾，site guard继承原锚点。裸字母且无可信续文时保持`RECALL_APPEND_CLAUSE_INCOMPLETE`。新增5项回归，实际生成/重读final与redline，核对p0/p1原文和账户限制完整、追加只落p2、无关p3保留；**5 passed /1.93s**，规划/管线/闭环组合**220 passed /约42s**。真实模型复测尚未进行，本条未关闭。
+
+## FL-D209 类别替换与固定措辞/语义变体核验仍存在业务范围或事实实例化缺口（2026-10-24）
+
+- 问题与影响：dev-05 D06的G02/G04额外定位到申购费/销售服务费支付条款，D19的G02与G18在p1186重叠阻断；D04/D12的G09分别在扩展币种/“扣除其他相应费用”变体中未落实“或加上”；D10/D14/D15出现G01/G03/G08/G11/G14/G16站点或effect证明缺口。可能同时包含真实漏改、错误定位、固定A/C实例化及模型误拒，不能将unresolved直接等同全部真实漏改。
+- 证据：`dev-05/D06/report.json`的G11:1 `LOST_PROTECTED_LITERAL`（E/F类别）、D19 p1186的`RECALL_EDIT_OVERLAP`；D04 p194/D12 p220 `CLAIM_OPERATION_EFFECT_MISSING`；相应原件和全部实际diff在`dev-05-review-packets/`。D10/D14 G16审计说只剩尾句，但该段未出现在actual_changes中，必须检查相邻段而不能直接采信该意见。
+- 2026-10-24 target-17 D04 G12补证：p198模型compose输出逐字等于G12固定新政策，但program_check以`LOST_PROTECTED_LITERAL`拒绝删除原比例25%（原件还含7日/1.5%）。缓存`7d5db532eeb1ef26cf80f48cafeddcb62eb7f1466ea9942b602aafa31ff241e0.json`保留原输出；p198实际仅G13删除短期收费句，旧25%/登记手续费分配仍在。应按原件与G12自身operation独立证明合法比例变体，而非取消数字保护或让provenance自授权。尚未修复，仍计入完整目标分母；不把模型正确输出当实际完成。
+- 处理方法：逐站点按guide、原件实际类别与完整条款重新审查，按operation自身授权校验；保持证据不足时fail-closed，不放宽门禁或修改gold制造通过。
+- 状态与验证：**已登记，细分原因与业务复核中，未修复**。不能以214/236旧评分代替本条业务验收。
+- 下一步：完成全20份原件候选/差异业务审查，分列真实误改漏改与误拒，再逐类修复和局部真实复测。
+- 2026-10-24 D07复核更正：target-07 G04 p140两个quote分别为“A类不得对个人养老金账户销售”“Y类仅面向个人养老金账户销售”，是账户销售限制，不是收费组。原件并无C类，该目标的G04:1归属不成立；不能通过消除occurrence歧义把养老金限制替换成A/Y组。现将G02/G04规划与assign的site guard统一为须有收费语境，直接planner也拒绝该段；错误目标out_of_scope不等于G04 obligation完成，未有合法站点证据仍保持OPEN。另修`resolve_occurrence()`：唯一逐字引文内只有一个token时采用其原始地址，避免相邻token的24字窗口跨入同一引文导致误判平分；重复引文/多个token仍拒绝猜测。
+- 同轮G05 p142：target只绑定“调低赎回费率”，遗漏自身operation授权的前导“、”，使确定性删除未匹配后落到compose，v3错误要求空AFTER保留段外余文。现在仅在G05合法类别设置站点、operation为delete、原始slice恰为去掉顿号的完整old_text时，绑定包含原slice的唯一完整literal；执行器保留段外文字，删除与独立备案operation分别归属。含真实DOCX及空格变体、会议条款保留的组合回归110 passed；全量运行中，尚无修复后真实模型复测。本轮渠道事实仍UNKNOWN，不据“可以豁免”推断收费现状。
+- 2026-10-24真实target-08 D07：incomplete/18 unresolved，46 HTTP/$0.04773180。机械通过，账户限制保留、G05两删除及G09费用正负修改实际生效。原补充检查将p140整段“不变”作为要求是检查器错误，G03合法追加应允许原文前缀完整保留，已修正该开发辅助断言；未改冻结gold/labels/scorer。G01/G03 audit仍要求不存在的C类服务费文案，需要核对适用组件输入，不能据此补造C类。另发现facts用管理费0.90%/0.45%引文认证A/Y的subscription_fee=true，仅逐字引文存在不足以证明申购收费，待证据认证修复；渠道仍UNKNOWN。其余operation未证实仍保持阻断，不关闭本条。
+- 2026-10-24审核输入修复已实施、待真实验证：`_audit_context()`保留完整原始REQUIREMENTS，同时按operation_id提供`APPLICABLE_POLICIES`（condition_status、policy_status、适用新文与issues）；仅认证了类别全集和收费组才可READY，UNKNOWN/CONFLICT不得把空组当不存在。audit提示升v3，明确按实际类别及已认证的组件省略审核，不能凭READY视为文件已执行。A/Y四规则、UNKNOWN/CONFLICT反例及相关组合162项通过，完整回归运行中。**管理费引文认证申购收费缺陷尚未修复**，不得仅凭本审核修复称D07完成；原件p225/p227/p229确有自身申购收费条款，但p229仅“可以豁免Y类”，不能认证当前渠道豁免。
+- 2026-10-24收费事实入口已加证据校验（待完整回归与真实验证）：`facts_from_value()`调用既有`fee_evidence.fee_value()`独立核对每类quote中的申购/销售服务费极性，记录`fee_polarities`和`FEE_QUOTE_UNPROVEN/CONFLICT`；类别全集认证与收费值认证分离，管理费quote可以证明类别存在但收费组保持UNKNOWN。原始布尔值与引用保留供恢复，不把缺失值改成false，不把UNKNOWN当空组；明确反向证据保持CONFLICT，恢复合并携带证据结果。17项事实/恢复定向通过，当前全量日志`fee-evidence-current-full-pytest.log`运行中；此前1396 passed/44 skipped/2 warnings/283.59s只覆盖G01边界＋audit输入修复。
+- 2026-10-24全20份旧回答重认证诊断（零模型、非真实交付）：`fee-facts-current-recertification.json`重读原件，D07/D10/D14/D16收费组从VERIFIED变UNKNOWN，其他原VERIFIED未降级；说明既有字面引文匹配曾过度认证。此文件不修改冻结标签、gold或scorer。**证据不足的错误认证入口已实施拦截，四份的正面补证恢复仍未完成**，不能把更严格拒绝当作召回和整合同完成。
+- 2026-10-24补证接口完善：`ClassFact`与FACTS/恢复schema增加可选`subscription_quote`、`service_quote`，分别逐字回查并验证自身收费极性；原`quote`兼容保留，不拼接不同段落伪造连续证据。facts提示v5、恢复提示v2；既有`fee_evidence`补“认申购”缩写。157项相关回归通过，后续另加费率决定不能证明收费的反例、30项事实/audit回归通过。`fee-separate-positive-offline.json`在真实D10/D14分别补其已有两条原件引文、D16保留原引文后恢复收费组VERIFIED；均零模型，不能冒称真实重提取或任务交付。D07仍缺无服务费的正面证据，保持UNKNOWN，尚未真实复测。
+- D07原件证据复核：p134“本基金具体认购费率按招募说明书的规定执行”、p142“变更现有基金份额类别的申购费率”只说明费率由外部文件/未来程序决定，不能证明当前A/Y收费布尔值；p140类别句只规定个人养老金销售限制，不能认证销售服务费不存在。该结论为原件业务证据边界，不是代码拒绝误报；待取得招募说明书或合同中的明确收费条款后再恢复，不凭空补证。
+- 2026-10-24 D04/D12 G09证据更正：逐字复核`dev-05-review-packets/D04.json` p194实际after，已包含“当日该类基金份额的基金份额净值并扣除或加上相应的费用”，人民币元单位及前后费率、四舍五入/精度/损益余文完整，故本条首段把D04与D12并列描述为未落实“或加上”不准确；D04属于旧Claim证明/币种变体误拒线索，不是该处实际漏改。D12 p220实际仍“并扣除其他相应的费用”，仅修净值名词，属于确认的真实不完整。应分别处理证明误拒与缺少“其他相应”变体，保留历史文件和未完成分母。
+- 2026-10-24完整旧产物Replay新增证据：`g09-d04-d12-readonly-full-replay.json`以完整plan重放，D04/D12整合同均false，但各自`G09:B1:O1`均PASS。D04实际正确；D12缺少“或加上”仍PASS，属于生成器部分splice与Replay共享不完整预期的缺口，另登记FL-D220。早期仅G09 edits对完整产物的诊断产生无关outside-span失败，不能作为本结论证据。
+
+## FL-D220 G09仅完成净值名词替换却被Replay认证完整（2026-10-24）
+
+- 问题与影响：D12 dev-05 p220原件“并扣除其他相应的费用”不匹配既有费用变体，`plan_g09_splice()`只改净值名词仍返回结果。Replay重算同一部分结果后认定EXPECTED_EFFECT_PRESENT，实际文件缺少政策要求的“或加上”。
+- 证据：`/tmp/opencode/operation-validation-20261024/g09-d04-d12-readonly-full-replay.json`；D12实际working_final.docx与完整报告plan，G09 obligation错误PASS，整合同false。D04人民币元变体实际正确，不能并列为漏改。
+- 处理方法：补原件费用变体，同时要求G09自身所有费用方向/净值效果完成后才返回确定性结果；Replay对旧部分输出必须拒绝，不能以可重现部分变更替代完整effect。
+- 状态：**已确认，修复与验证待完成**。不改gold/labels/scorer，不删除旧失败。
+- 下一步：真实旧文件反例、完整变体与余文保留回归→全量→新冻结真实复测。
+- 2026-10-24 target-13真实验证：snapshot-13 D03使用修复版真实Worker/模型完成，37 HTTP、$0.03161985，40 targets/52 unresolved，机械下载1/1通过。原件p210实际已完整变为“当日该类基金份额的基金份额净值并扣除或加上相应的费用”，Claim Replay PASS；因此FL-D220的G09部分splice缺陷在该真实样本验证解决。final SHA `5810c37e6d3922ad0779682938782653637b068a0ed06dd4a324d28d49b1a06c`，redline SHA `214ea725352452d9df99b393e3d841066229f62f9970c32d735ed2d33083b3ea`。整合同仍因其他事实/目标失败，不能将该单点验证扩大为D03或开发集通过。
+- 状态更新：**G09完整effect修复已真实验证，历史失败和整合同分母保留**。
+
+## FL-D221 新收费证据认证在D03真实复测中未恢复明确收费组（2026-10-24）
+
+- 问题与影响：snapshot-12 target-12 D03从旧complete退为incomplete/39 unresolved，52 HTTP/$0.05397930。A类subscription_quote未逐字匹配；C类service_quote的费率句也暴露了解析器对“的年费率”形式的缺口。
+- 证据：`target-12.log`、`target-12/D03/report.json` facts.fee_polarities/quotes_verified，源p118/p211/p747。A类历史引文省略了原文p211开头的“4、”，严格来源校验拒绝是正确行为；C类原文明确为0.40%计提但旧解析结果为UNKNOWN。共享账本1319 HTTP/$1.25193945，无reserved，旧失败产物保留。
+- 处理方法：保留逐字来源和缺失/相反证据UNKNOWN/CONFLICT门禁；补充“申购费用由投资人承担”正面极性和“销售服务费按…0.40%的年费率计提”解析，并加入重复类别主语/正反例回归。不把历史模型漏引文改成认证通过。
+- 状态：**解析修复已实施，局部156项回归通过，真实复测待完成**；G01位置已由target-12实际文件核验，target-12不是完整交付。
+- 下一步：全量回归、重新冻结和真实D03复测；新批次必须提供原件完整收费引文后才能判收费事实恢复。
+- 2026-10-24 target-13真实验证：模型仍返回省略p211原文前缀“4、”的A类`subscription_quote`，严格来源校验继续将`subscription_fee_group`和`service_fee_group`判为UNKNOWN，G08/G11/G16/G22未执行，D03为incomplete。该结果证明门禁没有放宽；target-13 facts中C类0.40%服务费句已被当前解析器识别为正面，但整体收费组仍因A类引文不完整而未认证。新增来源驱动编号引文修复及DOCX回归已实施，当前定向147 passed，尚未经过真实Worker/模型复测。
+- 状态更新：**旧解析缺口已修复并在target-13前的离线版本验证；编号引文恢复待完整回归及新真实批次验证**。
+
+## FL-D222 G17删除与同一费用条款G16追加发生实际交付冲突（2026-10-24）
+
+- 问题与影响：target-12 D03真实产物中，G17在p752/p753及摘要p1221删除原费用使用句，G16本应在同一费用条款追加销售服务费计提、直销返还、其他销售机构支付和持有期返还政策，却将p753/p1221整段删除。G16定向核验16处中14处通过，p751/p1219完整政策计数失败；报告仍为incomplete/39 unresolved。
+- 证据：`target-12/D03/report.json`中G17 T018/T019、G16 T017/Y015，`target-12/D03/compared-to-target11.json`的p752/p753/p1221变化，`supplemental-target-sites.json`显示p751/p1219 `G16_COMPLETE_ONCE`失败。target-11曾保留G16完整追加，说明此次是实际模型/执行路径回退，不能用旧批次结果覆盖。
+- 处理方法：保持G17删除自身授权范围，同时强制G16追加组件与G17删除组件在同一source clause闭合；删除不得吞掉应追加内容，Replay和实际DOCX审核都必须检查完整政策及原余文。
+- 状态：**已确认，未修复**。FL-D220/221局部修复未覆盖该冲突；未修改gold/labels/scorer，target-12失败产物保留。
+- 下一步：建立同site G16+G17组合反例和实际DOCX回归，修复组件排序/closure与Replay，完整回归后重新冻结并真实复测D03。
+- 2026-10-24方案边界更正：曾尝试将“本基金的申购费率由基金管理人决定”作为共同收费证据，测试证明该句不等于明确收费且不证明无服务费，该尝试已撤回；未进入冻结版本/真实任务。当前测试包含该反例。无按文件特判、无gold/scorer变动。
+- 2026-10-24 target-13真实验证：snapshot-13 D03中G17对p752/p753及p1220/p1221没有被单独删除；原用途/使用范围句保留，报告将G17标记为`CLAIM_OPERATION_NOT_PLANNED`/`G17_BLOCKED_G16_UNPLANNED`，G16仍因收费事实UNKNOWN而unresolved。机械下载1/1通过，未生成target-12式错误半成品；但同条款完整G16追加尚未交付，D03仍incomplete。
+- 状态更新：**同site阻断已通过真实Worker/DOCX验证有效；合法G16+G17闭合在收费事实认证后仍需新批次验证**。
+- 2026-10-24 target-14及原件复核：snapshot-14 D03收费组已VERIFIED，真实33 HTTP/$0.02573610，报告complete/34 targets/0 unresolved；机械1/1，G16正文/摘要均完整一次。原始模型审计仍报G15/G16 wrong。接续曾据此断言p751/p1219整段删除越界、p753/p1221必须保留原句；重新阅读指引原件第73/75–84/85–89段后，后一个判断已证伪：G17明确删除用途及使用范围排除句，G16追加本身不授予删除权，但允许与有独立授权的G17删除合并。G15支付变体删除及提示沿用既有用户裁定。不能为迎合错误审计恢复应删旧文；该审计冲突与Replay证据绕过另登记FL-D224。保留先前错误判断与更正，不以本次原件复核宣称全开发集或最终交付通过。
+- 2026-10-24 target-17 D04复发：两处G17用途已窄删且独立费用余文逐字保留，但G16未规划。G16绑定p847/p1327是`_g16_clause_locations()`独立确认的真实费用条款尾，却被`append_site_ok()`仅检查尾段自身锚点误判`TARGET_SOURCE_MISMATCH`；guard又忽略out_of_scope G16，因此失去配套阻断。机械通过，整体incomplete/48 targets/15 unresolved，不能把G17局部通过视作完整条款。证据`target-17/D04/target-17-business-review.json`、snapshot-16完整Claim false/5 failures；拟统一source clause尾成员校验并让无效目标不抹去真实条款G16义务，再补失效目标与合法合并反例。当前仅已定位，尚未修复；D226全量运行期间不混入源码。
+
+## FL-D210 G17删除后重复了前置支付顺延句（2026-10-24）
+
+- 问题与影响：dev-05 D18 p776/p1227实际DOCX在用途条款删除后重复两次“若遇法定节假日、休息日或不可抗力致使无法按时支付等，支付日期顺延。”；audit阻断，Claim Replay自身仍通过。
+- 证据：`dev-05-review-packets/D18.json`两处实际diff、`dev-05/D18/report.json`的G17 audit wrong；离线全20份重读仍显示D18 Claim=True，故不能把Claim通过理解为没有额外修改。
+- 处理方法：待追踪组合delete的余文保留与replacement边界，按实际source slice保留一次；补非新政策重复文字的执行/授权回归，不能仅匹配固定new_text重复。
+- 状态与验证：**已确认，未修复**；原incomplete文件和费用保留。
+- 下一步：定位G17 planner/atomic composite重复来源，补DOCX回归并真实复测。
+- 2026-10-24实施：`plan_composite_target()`原先以slice offsets执行，却把完整段外prefix/suffix放进replacement；改为delete返回空串，replace只返回该slice应插入的新文及必要分隔符，段外原文由执行器保留一次。`_component_ok()`验证相同切片/替换契约；Claim Replay增加delete replacement必须为自身source slice的子序列，阻断额外/重复文字。新增`test_composite_slice_delivery.py`实际final/redline生成及错误重复产物阻断回归；保留原测试但把断言改为检查执行后整段。完整离线 **1289 passed /44 skipped /2 warnings**。真实定向尚未完成，本条状态为**已实施、离线已验证、待真实复测**。
+- 2026-10-24真实target-08：D18 p776/p1227旧顺延句各仅保留一次，原composite余文重复已消除，下载机械通过。**本重复缺陷在该真实样本验证解决**；该句自身应由G15删除却漏改是独立FL-D216，D18仍不能视为业务完整通过。
+
+## FL-D211 份额定义段以跨段净值公式引导结尾导致追加被拒（2026-10-24）
+
+- 问题与影响：dev-05 D11 p126已含完整A/C/D定义、代码和净值计算说明，但段尾“计算公式为：”连接p127公式；G03返回`RECALL_APPEND_CLAUSE_INCOMPLETE`而未追加。与D07字母分段不同，不能仅跳到下一段或插在公式中间。
+- 证据：`dev-05-review-packets/D11.json` p126及next p127/p128，`dev-05/D11/report.json`中该错误和audit incomplete。
+- 处理方法：待按完整业务条款或定义自身完句定位追加，保持计算公式原貌；FL-D207修复只覆盖定义词法/账户限制续文，不把本条写成已解决。
+- 状态与验证：**已确认，未修复**。
+- 下一步：核对guide追加范围，补定义/公式相邻的真实DOCX回归后复测。
+- 2026-10-24实施：定义以“计算公式为：”结尾且紧邻段完整匹配净值等式时，`_split_definition_end()`将追加点绑定公式段末，原引导句及公式保持相邻、原样。不能认证的等式/无关后段继续阻断；G01/G03各有实际DOCX回归及两个反例，与FL-D207相关共9项通过。完整离线 **1289 passed /44 skipped /2 warnings**，真实定向尚未完成，本条状态为**已实施、离线已验证、待真实复测**。
+
+## FL-D208 单类别合同缺少枚举句时收费画像长期UNKNOWN（2026-10-24）
+
+- 问题与影响：dev-05 D09/D13实际单类别，facts class_count=1却无多类别枚举quote，share_class_structure/subscription_fee_group/service_fee_group均UNKNOWN，G07/G10/G14被RECALL_FACT_UNVERIFIED阻断，分别58/59 unresolved。
+- 证据：`dev-05/D09/report.json`、`dev-05/D13/report.json`事实及恢复记录，原文候选在`dev-source-review-05/`。仅class_count=1或没有类别关键词本身不能当VERIFIED证据。
+- 处理方法：待补单类别完整条款与收费正面证据的可追溯认证路径，保留UNKNOWN/CONFLICT fail-closed；不把默认值直接升级verified。
+- 状态与验证：**已确认，未修复**。
+- 下一步：独立核对两份原件费用/份额条款，设计有证据的单类别认证与反例回归，然后真实复测。
+- 2026-10-24原件只读复核：`d09-single-class-evidence-review.json`、`d13-single-class-evidence-review.json`保留原facts与source候选。两者旧quote只有p214/p226“申购费用由投资人/者承担”，class_set_quote空。D09 p128–133、D13 p125–130无明确“仅一种”枚举；D13 p130只是未来可以增设/变更，不证明当前类别全集。D09 p740–766和D13 p766–788为自身完整费用列举/计提段，均无自身销售服务费机制；D09 FOF投资标的基金销售费用（p765/p830等）必须与本基金份额收费分开。后续可研究多区域完整性证书证明未命名单类别和自身费用缺项，尚未实施或验证，不能以无关键词直接放行。当前snapshot-12真实D03运行期间未改引擎。
+
+## FL-D212 React V2 控件与原版工作台视觉体系不一致（2026-10-24）
+
+- 问题与影响：新版任务工作台原先使用深橙色顶栏、独立的棕色 token、简化侧栏和浏览器原生下拉框，复选框、筛选表单、上传区、按钮组和移动端导航与原版 `frontend/app.css` / `frontend/index.html` 的浅灰画布、白色工作区、橙色强调和紧凑工具栏差异明显。用户在任务筛选、批量上传和修订复核中会感到页面像两套产品，原版的信息层级也不容易迁移。
+- 证据：原版基线为 `--canvas:#f5f6f8`、`--paper:#fff`、`--accent:#b5471e`、252px 侧栏、64px 顶栏、分组导航、图标和多级筛选工具栏；V2 改造前为深橙顶栏、232px 侧栏和原生 `<select>`。差异已通过 Git 基线 `frontend/index.html` 与当前 V2 `frontend/src` 对照确认。
+- 处理方法：新增共享 `Select` 包装控件，保留原生 select 的键盘和表单语义并提供统一箭头、焦点和 hover 状态；统一输入框、文件选择器、复选框、按钮组、筛选栏、上传拖放区、表格 hover、状态徽章和复核决策按钮的视觉状态；将 V2 顶栏、252px 分组侧栏、图标导航、移动端横向导航和页间距收回原版视觉尺度；任务总览补齐按指引筛选；恢复消息入口、帮助中心、修改密码入口和页脚信息；保留 V2 的 React 路由、持久任务、真实上传、复核和独立 Compare 入口。
+- 状态与验证：**已实施，已发布并完成公网浏览器 smoke**。`npm run typecheck`、`npm run lint`、`npm run build` 和 `git diff --check` 均通过；前端浏览器定向回归通过；公网 smoke `/tmp/opencode/fundlex-public-v2-smoke-20261024/result.json` 已完成真实登录、`/tasks`、`/tasks/new`、`/guides`、`/settings`、消息、帮助和 1440px/390px 响应式检查，`page_errors=[]`、`console_errors=[]`、静态/API 404 均为0，页面 document/body 宽度无溢出，桌面侧栏计算宽度为252px。最终静态资源已按文件发布，备份为 `/tmp/opencode/fundlex-frontend-publish-20261024-131717-final-sidebar-fix/deployment-dist-before.tgz`。
+- 下一步：如继续调整 V2 视觉或路由，必须重新构建并重复本地与公网浏览器验收；如修改 recall-first 引擎，继续按独立冻结版本、开发集真实 DOCX 审核和 holdout 条件推进，不与前端静态发布混发。若后续发现原版功能缺失，追加到本条变更记录或新建稳定编号。
+- 变更记录：2026-10-24发布后公网 smoke 首次发现 390px `/tasks/new` 页面宽度 664px，根因是 `.shell-body` 在窄屏仍横向 flex，且横向导航内容未被侧栏容器承接；新增窄屏纵向 shell 和 `.sidebar { overflow-x: auto; }`，最终页面宽度收敛为 390px，公网 smoke 通过。前端-only 发布仅更新 `frontend/dist` 并重启 API，未发布引擎 dirty 改动。
+- 2026-10-24追加发现：补测 768px 时 `/tasks` 页面 document/body 宽度为 998px，超出视口；当前 V2 的中等屏响应式仍未通过，前述发布后的 smoke 仅覆盖 1440px/390px，不能作为完整多视口验收。原因待结合原版 1180px 断点和 React 页面控件宽度矩阵修复。
+- 2026-10-24用户再次明确验收原则：可以在原版基础上做细节优化，但**绝对不能丢失原版任何功能**。后续实现必须先建立原版功能/入口矩阵并逐项证明 React V2 等价可达；视觉优化、技术栈迁移和组件重构都不能删除、隐藏、改成绕路入口或降低原版能力。当前状态保持待修复，未重新发布。
+
+## FL-D213 确定性整段删除被compose预算提前阻断并误扣预算（2026-10-24）
+
+- 问题与影响：`recall.py::_plan_target_inner()`的`tier1_delete_pre_route`原在compose预算检查及递减之后；因此预算为0时根本无法执行，预算为正则未调用模型也扣一次compose名额。导致D03离线诊断`RECALL_COMPOSE_BUDGET_EXHAUSTED`，也可能让后续真实compose无可用名额。此处compose名额不是HTTP账本，不将其等同实际模型费用。
+- 证据与复现：`probe_g15_raw.py`在registry模式、已正确raw绑定的D03 p751/p1219上，预算0失败、预算1返回`tier1_delete`且无模型调用；前次G15诊断因此同时混入了模式/预算因素，失败目录保留。
+- 处理方法：把**原有**whole-paragraph quote/actual/source及keyword bag条件的确定性删除移到compose预算检查之前，并通过`finish()`保留operation身份与路由验证；没有扩大为任意部分段落删除。部分变体仍需要compose时保持预算0阻断。
+- 状态与验证：**已实施，离线全量已验证，待真实任务验证**。`tests/test_g15_payment_delay_boundary.py`验证预算0/1均不调用模型、不改变预算，部分段落继续失败；与规划/Registry/管线组合**170 passed**。包含该修复的全量日志`g15-raw-boundary-full-pytest.log`为**1325 passed /44 skipped /2 warnings /240.20s**，不覆盖后续D05修改；D03原件局部DOCX/修订等价验证见FL-D206。无新增HTTP请求、未发布。
+- 下一步：核对全量结果，冻结版本后真实复测；后续完整20份dev仍须审核，不以本条单点通过宣称整体完成。
+
+## FL-D214 G17使用范围独立续段被过滤导致Claim Replay错误PASS（2026-10-24）
+
+- 问题与影响：D05局部G15/G17组合中p869/p1333“销售服务费的使用范围不包括基金募集期间的上述费用。”未删除、plan ledger为unresolved，Replay却只要求p868/p1332并返回G17及整体PASS。不能以其他站点已完成掩盖同operation漏改。
+- 证据：`/tmp/opencode/operation-validation-20261024/offline-d05-g15-g17-current-proof/offline-report.json`保留错误PASS；final SHA `5a337eed5cf65addc91020b0926374e46b94bc279ab0c97426fb7e5ff9e71c3a`。G17自身old_text第二句为“C类基金份额的销售服务费使用范围不包括基金募集期间的上述费用。”；实际多一个“的”。`operation_site_bound()`的literal/keyword/相似度未识别该句，target被静默过滤；同一关键词袋取首句“支付/佣金”，不能覆盖独立第二句。
+- 处理方法：拟让planner与effect共用operation自身完整句的窄匹配（类别前缀与“销售服务费的使用范围”语法变体），保留明确主体、否定及募集期间语义；完整用途首句结束后，独立使用范围句仍须成为required site。无授权operation、不同费用/肯定句/其他时期不借权。
+- 状态与验证：**已确认，修复实施并完成离线验证，待真实任务验证**。旧文件和报告保留，未修改gold/labels/scorer，未真实模型复测、未发布；本次及修复验证均0 HTTP。
+- 下一步：实际DOCX反例先验证残留必须失败，修planner及site closure，再重建D05组合并核查全部四站点、修订等价和完整回归。
+- 2026-10-24实施：新增`_g17_usage_exclusion_matches()`，只接受G17自身完整“销售服务费使用范围不包括基金募集期间的上述费用”语义，允许类别前缀及一个“的”变体；planner的确定性delete、`operation_site_bound()`和`_verified_site_closure()`共用该边界。结束的用途首句之后，紧邻独立续段被加入required sites；肯定、其他费用/期间、额外句及自定义仅首句授权均拒绝。新增G17实际DOCX/Replay回归与D05重建：旧产物重放明确p869/p1333 FAIL，当前重建四个G17 sites全部`PASS`，p868/p1332核对句保留，接受/拒绝修订分别匹配final/原件；0 HTTP，证据`offline-d05-g17-site-closure/`，final SHA `6fdc241ed53d54ff3da313aea86856fa721b24fd56b39ad9f196bc94689d0051`、redline SHA `46017ecbcf0d6c962aa253a8d77cf4857f8387b5d87ec61250131c5ce691ba8a`。同时G15 `bounded_delete` Replay改为重算自身授权和完整raw范围，新增伪造边界反例。**本条仍待完整全量及真实Worker/模型复测，未发布。**
+- 2026-10-24全量验证：当前工作区完整回归 **1343 passed /44 skipped /2 warnings /245.29s**，日志`g17-closure-full-pytest.log`；包含G17续段站点闭环、D05实际重建回归及G15 `bounded_delete`授权重算。FL-D214的离线验证范围已完成，仍不能替代真实Worker/模型复测、20份dev业务审核或发布验收。
+- 2026-10-24真实复测预登记：用户明确要求真实测试并按结果持续优化；本条与FL-D192/206/209共同纳入`snapshot-08/target-08` D03/D05/D07/D18真实任务，build `a829181de8e965b8c6f64f7d37dcd2e1e7ff5134230a258a584ea2ee59c8652b`，起点1028 HTTP/$0.99678030，共享cap2000/$2。当前仅完成冻结，真实结果尚待运行及文件复核；不得预先关闭本条。
+- 2026-10-24真实target-08 D05结果：complete/0 unresolved，28 HTTP/$0.03210180，机械通过、定向18/18，G17四站点全部完成、G15核对句各一次、G16每条款完整一次。**本条G17独立使用范围续段缺陷在该真实样本已验证解决**；旧失败文件保留，不代表完整20份dev或生产验收。
+
+## FL-D215 G08/G11完整政策替换吞掉原条款编号（2026-10-24）
+
+- 问题与影响：真实`target-08` D03 p211原文以“4、A类基金份额的申购费用…”开头，G11 clean-clause template替换整个slice时仅返回新政策，导致“4、”编号丢失；报告complete、Claim PASS，政策文字正确但结构余文未保留。
+- 证据：`/tmp/opencode/operation-validation-20261024/target-08/D03/review-packet.json`及`artifact-review.json`；final SHA `bd09136ba43f3c64feb265ab4de2e450045d3c89e9792d8d807838f02b7dc494`。真实模型33 HTTP/$0.02439705，机械通过不等于结构正确。
+- 处理方法：clean-clause G08/G11从原slice提取有界、明确的条款编号前缀并逐字保留；Claim Replay独立从原slice核对编号，不依赖evidence自证。混合赎回/相邻正文仍拒绝整段模板，不将编号识别用作扩大授权。
+- 状态与验证：**已确认，修复实施中，尚未验证**。新增实际DOCX、相邻条款保留、完整政策但删除/伪造编号必须FAIL的回归；未改gold/labels/scorer，未发布。`target-08`继续使用冻结修复前版本，后续必须冻结新版本并另建真实run复测D03。
+- 下一步：必要回归→完整回归→新冻结版本真实任务→下载文件与全部差异复核，保留`target-08`失败文件。
+- 2026-10-24验证更新：55项定向及完整 **1351 passed /44 skipped /2 warnings /256.56s**；修复版`snapshot-09` build `997329195f5699afd246bdb6ff5cca4fa28f5beaee440433e864e77c4f03d861`真实`target-09` D03已complete/0 unresolved，33 HTTP/$0.02420940。授权下载机械1/1、实际DOCX定向16/16通过，p211保留“4、”，完整政策、G15/G17/G16及相邻定义保持；final SHA `d04285613f9095a8b882daa92982d80a978fc5db04b1015252170595479ea226`，redline SHA `a1ab2c0bf5d32526d811c8d21b6243a39c168062495828e680687bfc895207d8`。**本编号缺陷在该真实样本已验证解决**；旧target-08失败证据保留，不代表全dev或生产验收完成。
+
+## FL-D216 G15独立跨段支付顺延句漏删且Replay错误PASS（2026-10-24）
+
+- 问题与影响：真实`target-08` D18 p775/p1226旧支付head已删除，p776/p1227首句“若遇法定节假日、休息日或不可抗力致使无法按时支付等，支付日期顺延。”仍留存；G17用途已删除、G16各完整一次，报告却complete/0 unresolved。定向12/14，两项失败均为该残留。
+- 证据：`/tmp/opencode/operation-validation-20261024/target-08/D18/review-packet.json`及`supplemental-target-sites.json`；final SHA `126e63845e7baa27307618b49210b77dd20f2d1c174462343b4ff0ded1cf20a6`，redline SHA `49f63380eb8ee03fc11f984db6fd967d4a8c817ca6f1946073fcd1d8192be46c`。target-08四份机械4/4，140 HTTP/$0.12862980；机械通过不等于业务通过。
+- 处理方法：拟由G15自身完整payment+delay删除授权，绑定紧邻已证实销售服务费支付段的完整下一段首句；planner和effect closure共用原件raw边界，Replay独立重算相邻source与授权。保留同段G17用途及核对句、其他费用机制；无head/无授权/跨无关段/其他机制不得删除。
+- 状态：**已确认，修复中，未验证**。旧错误PASS产物保留；不改gold/labels/scorer，未发布。
+- 下一步：实际DOCX/遗漏target/错误授权反例→旧产物Replay必须失败→完整回归→冻结新版本真实D18复测。
+- 2026-10-24实施与离线验证：planner/effect共用`_g15_delay_continuation()`原件raw边界，新增自身operation的独立tail target；Replay从原件重算head/相邻句/授权，拒绝伪造evidence。相关82项通过，compileall/diff check通过。`offline-d18-cross-delay/offline-report.json`以真实target-08 D18旧产物重放从verified=true变false，p776/p1227明确FAIL；零模型局部重建两head删除及两tail各0–33删除，其他段落（含G17用途）逐段原样、接受/拒绝修订等价通过。首轮回归发现新增Replay参数未穿过`_operation_units`导致NameError，已补传并重跑通过；此错误未进入真实快照/生产。**状态为已实施、局部离线已验证，完整回归与真实D18复测待完成**。
+- 2026-10-24全量及真实复测预登记：完整 **1363 passed /44 skipped /2 warnings /261.77s**（`g15-cross-paragraph-full-pytest.log`）。冻结snapshot-10 build `c3f8c6442b2b2880c82746e8b94e38e84127602da94053d5866d1b040f4638e8`，manifest已重验；API/tasks与生产一致，生产未发布。target-10仅D18，隔离data-10与API8013，真实身份/上传/持久Worker/模型/授权下载；账本起点1201 HTTP/$1.14961950，剩余799/$0.85038050，总cap2000/$2/并发1、单合同192不变，预计约35 HTTP/$0.03。新run不覆盖旧失败，结束检查两tail、完整G16各一次、G17、全差异、修订及哈希。
+- 2026-10-24真实验证完成：snapshot-10 `target-10` D18 complete/0 unresolved，33 HTTP/$0.02434395；授权下载机械核验1/1，实际DOCX定向14/14。p776/p1227各删除原顺延首句，p775/p1226支付head已删，G16每条款完整一次，G17用途/独立其他机制保留；与target-08最终文件比较仅p776/p1227发生变化，未引入其他差异。final SHA `8ac72b7c83314f4b62230a2bfef4171f7a4f2d2d5def95c666472cb8fe34861`，redline SHA `788c9f1fba9c0fa02446b08b1735d65518cc958f1330f7b17f92092b83633e7b`，报告/实际变化已保存`target-10/D18/review-packet.json`、`compared-to-target08.json`。**FL-D216已在该真实样本验证解决**；不代表全20份dev或发布验收完成。
+
+## FL-D217 G08完整新政策前保留旧同义免申购费子句造成重复（2026-10-24）
+
+- 问题与影响：target-09 D03 p209在G08完整新政策之前仍保留“本基金C类基金份额不收取申购费，”，新政策紧接着又声明“C类基金份额不收取申购费用”。语义不冲突但重复，不能因编号缺陷修复或定向16/16而宣称完整业务文件无其他问题。
+- 证据：`/tmp/opencode/operation-validation-20261024/target-09/D03/compared-to-target08.json`；同原件与target-08相比，除p211编号外仅p209此保留差异。target-09 final SHA `d04285613f9095a8b882daa92982d80a978fc5db04b1015252170595479ea226`；target-08没有该重复。真实模型run差异，不把snapshot-10的G15修复当作本问题已修复。
+- 处理方法：待核对G08自身实际切片与完整source费率子句的边界和同义免申购费组件；仅在自身授权源句中收敛重复，保留计算公式与其他费用机制，不扩大到任意相邻段。
+- 状态：**已确认，未修复**，FL-D215编号局部验证仍成立，D03整合同业务无缺陷声明不成立。历史文件/费用保留，未改gold/labels/scorer。
+- 下一步：查看G08 target/compose/实际plan，补实际DOCX与未授权余文反例，修复后新真实D03复测。
+- 2026-10-24修复与冻结：planner在G08完整同句政策已确定覆盖的情况下，将同句且同义的旧C类免申购费前缀纳入自身raw slice；仅接受逗号连接、当前类别、政策自身包含的申购免收费组件，并拒绝句号、其他收费主题、独立机制或跨句前缀。Replay从原件重算该扩展边界，旧target-09实际产物现报`CLAIM_DUPLICATE_EFFECT`；零模型实际D03局部重建p209 raw36–86，计算公式及其他段落保留，接受/拒绝修订等价通过，相关75项定向回归通过。
+- 2026-10-24完整回归与真实复测：完整 **1370 passed /44 skipped /2 warnings /258.22s**；冻结`snapshot-11` build `92880a778ab4607b713cd26da56e8e061c9283e0d26021dfd121ad81298bdd5a`，manifest已重验，账本起点1234 HTTP/$1.17396345且无reserved。真实`target-11` D03已启动，尚未完成；FL-D217保持**修复已实施、离线已验证、真实验证进行中**，旧target-09重复产物及费用保留。
+- 2026-10-24真实结果：target-11 D03 complete/0，33 HTTP/$0.02399670，机械1/1、定向15/16；p209旧同句C类免申购费前缀已消除，计算余文完整、p211编号保留。final SHA `82fbe05b4ffc261d546cc64f9a3a108949d6de005c4f939a45252b49dd6e4f0a`，redline SHA `0f3258ef066af20e61fb77fef3654c8d4f2467c2c6954e059151531380a20ce1`。**本重复缺陷在该真实样本已验证解决**；失败项为新FL-D218定义追加位置，不能称D03整合同业务通过。相对target-09仅p209（预期修复）和p92（新缺陷）不同。
+
+## FL-D218 同段合并下一编号定义导致G01追加到错误条款之后（2026-10-24）
+
+- 问题与影响：target-11 D03 G01 p92 inventory quote同时包含“基金份额类别”与下一“55、发起式基金”定义，planner在raw209追加新条款而非自身类别定义末raw130。实际没有删除余文，但政策附在错误定义之后，辅助检查15/16且报告仍complete/0、Replay通过。
+- 证据：`/tmp/opencode/operation-validation-20261024/target-11/D03/report.json`、`compared-to-target09.json`、`supplemental-target-sites.json`；target-09同段quote只覆盖0–130且正确，target-11为0–209。不是FL-D217 G08回归，而是模型quote边界变化暴露已有G01边界验证缺口。
+- 处理方法：待在原件raw地址识别自身类别定义之后的明确编号定义边界，限制append点；Replay独立重算边界阻断错误位置，保留下一定义全文及编号，不按文件/样本特判。
+- 状态：**已确认，修复中，尚未验证**。旧target-11文件与真实33 HTTP/$0.02399670费用保留；累计账本1267 HTTP/$1.19796015、无reserved，余733/$0.80203985。
+- 下一步：真实原件局部重建与错误位置Replay反例→完整回归→新冻结真实D03复测；D07审核输入改动仍在工作区待单独测试，不混作snapshot-11已验证实现。
+- 2026-10-24实施与局部验证：`_definition_next_entry_start()`仅在完整类别定义结束后遇明确下一编号＋定义名＋冒号时给出raw边界；planner收窄append site，Replay从原件重算并拒绝错误位置。相关162项回归、compileall/diff check通过；`offline-d03-merged-definition/`对真实target-11旧产物Replay现false，G01 raw209被拒绝；零模型重建在raw130插入，下一编号定义和全部其他段落原样，接受/拒绝修订等价通过。**已实施、局部离线已验证、完整回归及真实复测待完成**。
+- 2026-10-24完整回归阶段结果：G01边界＋audit_v3版本 **1396 passed /44 skipped /2 warnings /283.59s**（`merged-definition-audit-full-pytest.log`），随后新增收费事实入口认证，因此该统计不能代表当前完整工作区。当前全量`fee-evidence-current-full-pytest.log`后台运行，通过后冻结snapshot-12并启动target-12 D03；脚本`freeze_snapshot_12.py`已改为强制读取当前全量最终通过统计。
+- 2026-10-24验证阶段更新：收费入口初版全量 **1400 passed /44 skipped /2 warnings /270.15s**，随后独立收费引文接口/认申购缩写追加，因此最终工作区全量另起`fee-separate-final-full-pytest.log`；启动前已保存完整fundlex/tests源码哈希与build `d441ec1706668bcdcafb0fcf7cfef9798d5879bb3a22871c1f9e84963c1fb16b`（`fee-separate-final-test-start.json`），冻结脚本强制与该源码一致，避免测试运行期间新代码混入冻结。`target-11/D03/business-diff-review.json`完整审核20处实际变化：19通过、p92失败；源级独立目标分母仍待审核。
+- 2026-10-24最终回归与冻结校验：最终 **1404 passed /44 skipped /2 warnings /286.21s**。首次冻结在复制前因`tests/browser/test_frontend_v2.py`变化停止；核验全部fundlex/tests Python集合与哈希，仅该浏览器文件变化、引擎build未变。补验发现新增Compare入口测试漏点侧栏导航（FL-D219），修正后显式Chromium **5 passed /10.90s**；保留原全量与失败日志，`freeze12-supplement-evidence.json`记录独立补验哈希。冻结脚本只允许该精确补验差异，其余源码/文件集合/build继续严格一致。真实D03复测尚待启动。
+
+## FL-D219 新增React清单浏览器测试误将Compare默认页当对比业务页（2026-10-24）
+
+- 问题与影响：最终回归后并行增加的清单搜索/筛选/分页测试点击`/compare`入口，直接等待`#compare-new`可见；独立Compare页面默认任务总览，按钮所在业务section尚未打开，导致1失败/4通过并阻塞snapshot-12冻结。不是登录失败，初步聊天判断已更正。
+- 证据：`frontend-freeze12-supplement.log`显示按钮存在但hidden；`frontend/app.js::go()`按hash切换section，`frontend/compare.html`默认`view-overview`。冻结前校验确认仅该浏览器Python文件变化，引擎build未变。
+- 处理：保留新增清单交互测试，按已有用户路径点击侧栏`[data-nav="compare"]`后断言新建按钮；未改前端运行代码、引擎、gold或scorer。
+- 状态与验证：**测试修正已验证**，初始补验 `FUNDLEX_BROWSER_TESTS=1 .venv/bin/python -m pytest tests/browser/test_frontend_v2.py -q --tb=short` 为**5 passed /10.90s**，随后加入替换失败边界后当前专项为 **6 passed**；完整1404回归与前端补验分开记录。冻结脚本记录精确原/补验文件哈希，不放宽其他检查；不代表Compare真实任务或引擎最终交付完成。
+- 下一步：冻结snapshot-12并继续FL-D218真实D03验证；前端后续变更继续按其功能基线验收。
+
+## FL-D223 React上传清单替换失败时旧文件可能继续显示为可提交（2026-10-24）
+
+- 问题与影响：React V2 新建任务页支持文件替换后，若替换文件不是 DOCX、为空、超过限制或与其他清单文件重名，旧文件仍可能留在 `files` 状态中，而异常只写入同名 `issues`；用户看到异常提示，但提交按钮仍可能按旧文件集合继续上传。另一个触发边界是点击“替换”后立即选择文件，异步 React 状态更新可能使回调读不到 `replaceName`。
+- 证据：`frontend/src/pages/NewTask/index.tsx` 的 `replaceFile`、`files`、`issues` 状态；新增浏览器场景 `test_new_task_invalid_replacement_removes_old_upload_row` 曾在修复前观察到旧 `原合同.docx` 行仍显示为“已接收”，而新 `替换说明.txt` 异常行同时存在。
+- 处理方法：替换目标同时保存到 `replaceTargetRef`；替换校验失败或新名称冲突时，从可提交 `files` 和 `clientIds` 删除旧行，仅保留异常文件行；成功替换清除旧异常并重置目标。追加文件保留同名保护，异常筛选按文件名合并展示。
+- 状态与验证：**已实施，已验证**。`FUNDLEX_BROWSER_TESTS=1 .venv/bin/python -m pytest tests/browser/test_frontend_v2.py -q` **6 passed**；TypeScript 类型检查、ESLint、Vite build 和 `git diff --check` 通过。验证范围为本机临时 FastAPI 服务和真实浏览器 DOCX/TXT 文件选择，不包含生产发布。
+- 下一步：若后续继续修改上传清单或发布本候选，需重复上传、恢复补传、替换/移除/清空及七视口回归；生产真实合同交付仍按完整项目验收门槛单独执行。
+
+## FL-D224 生产浏览器原地从桌面缩放到768px时主内容保留内容最小宽度（2026-10-24）
+
+- 问题与影响：前端候选首次发布后，公网 smoke 在同一 Chromium 页面先以 1440px 访问路由，再调整到 768px 时，`.main-content` 作为 flex 子项保留内容最小宽度，页面 `document/body` 宽度扩大到 976px，导致中等视口横向溢出。独立新 context 直接以 768px 打开时未复现，因此原有七视口冷启动检查不足以覆盖浏览器原地缩放路径。
+- 证据：发布后公网复现脚本 `/tmp/opencode/fundlex-public-v2-smoke-published.py` 在 medium 检查失败：`viewport=768, documentWidth=976, bodyWidth=976`；进一步检查显示 `.main-content` 从可用 550px 扩展到约 758px。首页、深链、API、JS/CSS 资源均正常，失败定位为布局尺寸。
+- 处理方法：在 `frontend/src/styles/app.css` 的 `.main-content` 增加 `min-width: 0`，允许 flex 子项按中等视口收缩；新增 `test_shell_shrinks_when_viewport_changes_from_desktop_to_medium` 覆盖 1440px→768px 原地调整。
+- 状态与验证：**已实施、已受控发布并已公网验证**。本机 `npm run typecheck`、`npm run lint`、`npm run build`、`git diff --check` 通过；React 浏览器专项 **7 passed**；公网 smoke `/tmp/opencode/fundlex-public-v2-smoke-published-fixed-20261024/result.json` 通过登录、消息/帮助、关键深链、1440/768/390 响应式及原地 1440→768 收缩，页面/控制台错误与静态/API 404均为0。最终资源哈希已登记在 `ACTIVE_HANDOFF.md`。
+- 下一步：前端问题已关闭；继续完成当前版本真实合同的 Worker/model、DOCX、Review、报告、授权下载、修订和哈希验收。
+
+## FL-D224 业务审核误读删除授权，且effect重建分支可绕过失败unit证明（2026-10-24）
+
+- 问题与影响：target-14模型审计与报告complete冲突后，人工接续未先回查指引便把G17已授权的使用范围句删除误判为G16吞原句。指引原件85–89段要求删除两句，不能按该误判改回合同。同时`generation/effects.py`对delete/append存在`planned_matches`直接PASS分支，即使传入的operation unit为FAIL也可通过，可能把真正未授权删除误认证，不能用机械重建替代操作授权。
+- 证据与复现：`/tmp/opencode/operation-validation-20261024/target-14/D03/report.json`、`report_md.md`及final/redline；p751/p1219为完整旧支付变体，p753/p1221为G17独立删除＋G16追加。指引`references/source/v4存量基金适用销售费用新规的基金合同修改指引_文案勘误版.docx`第73、75–89段（python-docx零基）；`tests/test_final_validation_regressions.py::test_delete_passes_when_another_operation_fills_the_empty_paragraph`明确给FAIL unit仍期望PASS，复现了effect绕过。
+- 处理方法：以指引及operation身份核对删除与追加授权；收紧effect的merged重建分支，已有失败unit不能靠plan/artifact一致升级PASS；增加合法合并及伪造边界反例。审计引用真实丢失的原文时应核验BEFORE/AFTER，保留有据的越界结论；不能仅因引用新政策就覆盖真实余文损失。
+- 状态：**原件授权误判已更正；代码缺口已定位，修复和验证待完成**。target-14历史报告、审计与费用全部保留；不改gold/labels/scorer、不运行holdout、不发布引擎。
+- 下一步：操作级失败proof回归、合法G16/G17实际DOCX回归及target-14完整只读重放；按新发现收窄修复→定向/完整回归→必要的新冻结真实复测。共享账本1389 HTTP/$1.30929540，无reserved，上限2000/$2不变。
+- 2026-10-24实施与定向验证：删除`effects.py`中delete/append凭`planned_matches`绕过失败unit的两个PASS分支；新增merged delete/append PASS/FAIL对照。G15 planner和Claim Replay均从自身operation重新计算支付范围，额外无关句不能通过伪造`expected_old_text`/`deleted_paragraph`自授权；最新定向**143 passed /16.14s**（包括四个新增G15反例）。target-14全计划/实际final只读重放`target-14-d224-source-scope-replay.json`为verified=true/0 failures，G15/G16/G17全部PASS，0 HTTP；此前strict-unit-replay也通过，但不含最新范围补丁，证据分开保留。
+- 同日审计修复：提示词明确允许BEFORE引文证明丢失，旧`_run_audit()`却通常只接受AFTER（FACT/APPLICABILITY例外），可将真实丢失降为REVIEW_UNPROVEN。现分别记录`evidence_in_before/evidence_in_after`；BEFORE-only损失保持有据阻断，只有完整本地operation proof证明引文完全位于授权删除/替换范围时才可判审核意见未证明，G16追加不得替G17授权。新增实际DOCX合法G16+G17合并/无关核对句丢失反例，相关**124 passed /16.35s**；旧target-14审核只读重放`target-14-d224-audit-replay.json`为29 results/0 issues/0 artifact failures，0 HTTP。这是既有审核重放，不是新的独立业务审核。
+- 当前状态：**代码已实施、定向及旧target-14只读重放通过；完整回归和修复后真实任务尚未完成**。完整回归后台`sh_16ce5d301001xtf0RCLtCjneLJ`，日志`/tmp/opencode/operation-validation-20261024/d224-full-pytest.log`，启动源码manifest`d224-full-test-start.json`，build `d7dc3484d26e637a37d44cec07e492b5c94872845a928f677698fea022bc9683`。通过且源码一致后方可冻结新版本、另建真实批次；不覆盖target-14。
+- 全量首轮结果保留：**1 failed /1417 passed /46 skipped /2 warnings /272.88s**，唯一失败为`test_whole_paragraph_delete_when_wording_differs`：自定义G15指引只删除单句计提支付说明，合同合法单句变体被新门禁过度拒绝。已增加单句限定的source-bound支持；该短operation不能删除第二句或未授权顺延（新增两个反例），完整operation的多句范围仍逐句核验。相关**233 passed /30.25s**。最终全量重跑后台`sh_16cec1cb6001SVz0DMNrQuXjPC`，日志`d224-final-full-pytest.log`、manifest`d224-final-full-test-start.json`，build `9ed657267458d3fdd18a700a682576f7e5ec359e7535059799905648e01d6813`；首轮失败不抹去。
+- target-14完整实际差异复核证据`target-14-d224-business-diff-review.json`：20个实际变化段均对照指引原件核对，其中G05原件21–22段、G08/G09/G11/G12/G14原件33/40/48/53/66段及G15–17原件73–89段；机械结果保持1/1。该复核发生在预测之后，不是独立冻结完整目标分母；全20份开发集门槛仍未通过。
+- 2026-10-24最终全量结果：**1420 passed /46 skipped /2 warnings /271.52s**，`d224-final-full-pytest.log`与启动manifest逐文件哈希一致，结果另存`d224-final-full-test-result.json`。该版本不含FL-D225修复；不得以本全量证据冻结后续修改。
+
+## FL-D225 G17整段删除可借伪造provenance吞掉独立余文（2026-10-24）
+
+- 问题与影响：FL-D224收紧G15后，零模型对称探测发现G17仍可把“使用范围不包括…”与无关句合并成整段删除，将整段同时填入`expected_old_text`和`deleted_paragraph`后Claim Replay错误verified=true。G16/G17合法合并审核不能仅依赖这种自授权证明，否则BEFORE丢失引文可能被错误降级。
+- 复现线索：使用builtin G17 operation，原文“销售服务费使用范围不包括基金募集期间的上述费用。投资者可以随时免责。”，`whole_paragraph_delete`、空replacement、operation_keys=G17:0、expected_old_text及evidence.deleted_paragraph均为完整原句，实际空段；直接`replay_claims`返回verified=true/0 failures（0 HTTP）。不涉及target-14真实原件；target-14尾段并无该无关句，不能将该对抗样例当作其实际缺陷。
+- 处理方法：待从G17自身operation独立重算完整用途/排除句或合法跨段parts删除范围，拒绝额外无关句和篡改provenance；与合法G16/G17实际DOCX合并、反向语义及跨段余文正反例共同验证，不放宽门禁。
+- 当前状态：**已确认、未修复**。FL-D224最终全量仍运行中，避免混入其源码版本；因此snapshot-15冻结及真实run应等待本缺口处理，不能照旧断点直接启动。
+- 下一步：保存首个最终全量证据后修复G17源授权，定向/全量回归→更新snapshot-15启动manifest与预算→真实开发集复测。费用账本仍1389 HTTP/$1.30929540，reserved0，生产未发布、无holdout。
+- 2026-10-24实施：`recall._g17_source_effect_owned()`按选定operation自己的完整句子、有限类别/基金前缀及“的使用范围”差异重读原件，独立映射完整句跨段覆盖范围；每个edit只能删除完整授权范围，切片内其余文字必须按原顺序保留。planner单段`_attach()`、composite planner和Claim Replay共同调用，不从`expected_old_text`、`deleted_paragraph`、`parts`或其他provenance取得删除权限。G17自定义replace操作沿用既有replace证明，本次修复针对delete。
+- 定向验证：新增伪造多种provenance＋无关句、反向极性/费用主体/期间、planner整段fallback、句中拆段及篡改parts实际DOCX正反例；与合法单段、G16+G17合并及其他授权回归共**229 passed /30.52s**。首次定向1 failed/209 passed因新测试夹具缺少PlannedEdit.evidence，补全夹具后通过，不改业务预期。target-14全部计划与实际final只读Replay仍verified=true/0 failures（`target-14-d225-source-scope-replay.json`），0 HTTP。
+- 当前状态：**已实施、定向与target-14只读Replay通过；完整回归和新真实任务待完成**。全量后台`sh_16cf55000001QvBoY3mtjs1yoV`，日志`d225-full-pytest.log`、启动manifest`d225-full-test-start.json`，build `27721a2f381b3fbcfbac37236f1058d1a3bcc004d6a613bfb95ca7181468742c`；启动后不混入源码。freeze_snapshot_15.py已绑定本轮日志/manifest，仍须待通过后再运行，保持D03预计40 HTTP/$0.04、最坏100/$0.12的已有预登记。
+- 历史20份dev-05只读Replay（`dev-05-d225-replay.{json,log}`，0 HTTP、不重认证旧facts）发现：D04 p847/p1327旧composite把独立“上述费用实际支出…”整句吞掉；D06 p809/p1288吞掉独立管理人降费/促销权限句，新门禁均阻断；D18重复prefix旧缺陷保持失败。也发现当前窄匹配过拒合法表述：D02“佣金，及…”、D11/D19“持有人服务费”及D11“销售服务费不包括…”省略“使用范围”。应在本轮全量结束后按自身完整句有限措辞差异补充，另验反向极性/主体/期间和额外句拒绝，再重跑；**暂不直接冻结本轮版本**。旧D02曾complete但当前整体false含其他门禁，不能由本次新增G17范围失败倒推其全部原文删除错误。
+- 首轮D225完整回归**1428 passed /46 skipped /2 warnings /271.62s**，源码manifest匹配，结果`d225-full-test-result.json`。随后补有限词汇/标点差异（“、以及/，及”“基金份额持有人/持有人”“使用范围”可省、句号/分号），保持主体/极性/期间及完整句边界；新增完整句通过＋独立降费句保留＋反向极性/主体拒绝反例，相关**226 passed /31.41s**。不按文件名/case_id分支，不改gold/labels/scorer。
+- 最新最终全量后台`sh_16cfb1c5b0017gAN9i7cM35Ay7`，日志`d225-final-full-pytest.log`、manifest`d225-final-full-test-start.json`、build `4bbe0bd82928f338d4cdc87b786ca4dd39ced54aeea8bcdc2d9639c35709de00`；freeze_snapshot_15.py已绑定最终日志/manifest，勿用首轮全量冻结增量。历史20dev最终只读重放另后台`sh_16cfb1c5c001Pj0A1KHfwDu9XN`，输出`dev-05-d225-final-replay.{json,log}`，保留原轮所有失败证据。仍0新增HTTP、无真实Worker/holdout/引擎发布。
+- 最终历史20dev重放已完成：D02/D11/D19的G17过拒消除，D04/D06独立余文损失及D18旧重复prefix仍失败。20份整体仍false（包含其他收费/目标/历史缺陷），不得将G17局部通过转为业务整合同通过。D04/D06真实原件G17完整句局部DOCX重建`offline-d225-real-source-slices-verified/result.json`：两份均proof=true，独立费用支出/降费权限余文逐字保留，只改四个目标段，接受/拒绝修订等价通过；0 HTTP，不是新正式任务。首次临时脚本未构造DOCX所需source/zone验证字段，执行器以SOURCE_HASH_MISMATCH拒绝且未产出文件；已使用正式build_docx_edits+content_check修正，失败目录保留。后续真实D04/D06应验证planner能恢复窄范围而非停在范围拒绝，不能用局部重建冒称召回问题已解决。
+- 最终增量target-14只读完整产物/旧审核重放`target-14-D03-d225-final-replay.json`：verified=true/0 failures，29 results/0 issues/0 artifact failures，0 HTTP。全量仍运行，源码manifest保持一致，API/tasks与生产一致，预算足够既有D03预登记；暂不宣称新真实任务或FL-D225最终闭环完成。
+- target-15 D03真实端到端已完成：snapshot-15 build `4bbe0bd82928f338d4cdc87b786ca4dd39ced54aeea8bcdc2d9639c35709de00`，真实登录、上传、seal、持久Worker/模型和授权下载均完成；`complete`，35 targets/0 unresolved，34 HTTP/$0.02907375。下载机械核验1/1：source/final/redline hash、接受修订=final、拒绝修订=原件、无残留修订、段落位置、plan/artifact全部通过；final SHA `66efdc0c6ceab948cd51a8745fc4236e275b7c7cb7a589cdadcd7afc401c8d2b`，redline SHA `302c9805930dbc3460e51a0c2670ad989899fad85db516879ae09559e5a1dc91`，修订20 ins/20 del。Claim Replay `verified=true/0 failures`；记录审计重放29 results/0 issues/0 artifact failures；实际变化20段与target-14已独立审核文本逐段相同，target-15业务复核20/20 PASS，证据`target-15/D03/{artifact-review.json,target-15-business-diff-review.json}`及`target-15-D03-d225-final-replay.json`。账本更新1423 HTTP/$1.33836915，reserved0。该结果仅是D03真实批次，不能替代20份dev完整独立目标分母、D04/D06真实复测或holdout。
+- 已登记 target-16 D04/D06 真实复测：固定 snapshot-15、开发集、两份原件，不读取holdout；预计最多80 HTTP/$0.06，最坏200 HTTP/$0.24。按当前账本起点1423 HTTP/$1.33836915，最坏后仍不超过2000/$2。验收重点是实际planner/Worker是否分别只删除G17完整用途句，并保留D04“费用实际支出”余文、D06“下调/打折优惠”权限余文；另核对完整报告、Claim Replay、审计、final/redline、接受/拒绝修订和哈希。该登记不等于任务已完成。
+- target-16实际终态：D04/D06均完成真实登录、上传、seal、持久Worker/模型及授权下载，但均`incomplete`（58 targets/33 unresolved、91 targets/37 unresolved）。机械核验2/2通过；D04 final SHA `96b3830e2d8afac21e0a874a03bfa2f25943f803ca323df4fde76b387b1c66c2`，17 ins/17 del；D06 final SHA `afbc9e41c5cacc4ca2880863714f35552e71e79c1e2e88e3a225e7dd97dce352`，13 ins/13 del。完整plan Claim重放分别false/8 failures、false/9 failures；脚本只重放最后artifact_recovery审计轮（0 results/27 issues、1/28），不能当作所有历史审核回答的重放。
+- target-16定位：D04 survey Y006/Y007、D06 Y051/Y052将跨段用途句的follower整段纳入composite，吞入独立费用支出/管理人降费句，故被范围门禁正确拒绝。D04 DEL001仅恢复首副本p846/p847的0–32、0–20，独立余文保留，但p1326/p1327仍漏删；D06 p808/p809、p1287/p1288用途句均残留，p810/p1289排除句已合法删除并与G16合并。待从自身operation完整句重算窄parts，修复重复站点被宽目标覆盖/抑制；不能放宽Replay或伪造provenance授权。G12/G16/G15及其他未决独立保留。
+- 费用更正：报告汇总50 HTTP/$0.05309895仅覆盖最终报告统计；共享账本由1423/$1.33836915增至1490/$1.40885745，真实增量67 requests/$0.07048830（65 completed/$0.06925320、2 failed/$0.00123510，reserved0）。17 requests/$0.01738935差额归因尚待对账，全部计入消耗，当前剩余510 requests/$0.59114255，cap2000/$2不变。未新增模型任务、未发布引擎、无holdout。
+- 账本对账补充（更正早期把124次checkpoint复用误写成HTTP的计数）：D04/D06最终报告174个逻辑事件中124个为checkpoint复用，50个为非复用HTTP；后者按task/prompt/context/attempt/error字段与账本全部匹配、unmatched_report_events=0。17条账本差异为最终报告未保留的请求，按任务为facts 1、scope 1、inventory 3、locate 2、compose 2、verify 2、audit 6（其中audit失败2），合计`$0.01738935`。只读data-16/runs.sqlite3确认D04 attempt1、D06 attempt3，结合2条schema失败，证据指向D06重试前轮调用；`target-16-metering-reconciliation.json`保留逐请求哈希和费用。总消耗完整计入，最终报告未跨attempt汇总这一报告范围限制保留。
+- FL-D225修复续：`_reference_continuation()`现在按G17 operation自身完整句、有限措辞/终止标点匹配 follower，只返回授权句的compact slice；`ensure_delete_targets()`对G17从源原件独立重算每个完整句的parts，宽composite与失败/过期target不能覆盖或抑制窄副本恢复。D04/D06真实原件零模型规划→DOCX结果各自Claim verified、独立余文逐字保留、接受/拒绝修订等价通过，D04 4 edits、D06 6 edits，0 HTTP，证据`offline-d225-planning-real/result.json`。定向相关130 passed（含新增真实D04/D06结构夹具），完整回归待当前后台结束；尚未冻结新snapshot或运行真实复测。
+- 完整回归已完成**1436 passed/46 skipped/2 warnings/278.05s**，177个源文件manifest相同；日志`d225-planning-full-pytest.log`、结果`d225-planning-full-test-result.json`。`snapshot-16`已冻结、build `2858706c841ff88b1a75e394e1d4f225d0d6c8bcfa2ebfcb0b68252af7922889`，`run_context-16.json`保留全部manifest，API/tasks字节与生产相同。预登记另建target-17 D04/D06真实复测（data-17）：预计80 HTTP/$0.08、最坏200/$0.24，起点1490/$1.40885745/reserved0，仍受总cap2000/$2限制。须核对全部用途副本、独立余文、G15/G16/G12及完整产物，不把G17局部成功当整合同完成；无holdout/引擎发布。
+- target-17已启动：后台shell `sh_16d2e31ec001l5FWpDOa8gSz01`，snapshot-16/data-17，D04/D06两份真实任务，结果待通知；不得重复提交。启动前manifest重验、独立target/data不存在及API端口空闲检查随启动运行。当前仅已实施/离线验证，不宣称新真实任务成功。
+- target-17实际终态：D04/D06均完成真实登录/上传/seal/持久Worker/模型/授权下载，均incomplete（48 targets/15 unresolved、92/29）。G17业务局部通过：D04源2处、D06源4处全部删除、独立费用支出/降费权限余文逐字保留；机械2/2通过，final SHA分别`eb4986a6b3ec5d90dd50d7606cda2b305713566986b3943f864605dff50f4dba`、`200f897234af7afdb44144bb13ebcb3fd9eb95b3561450b11b4fcb5c51f31aa7`，18/17 ins和del。snapshot-16完整Claim分别false/5 failures、false/8；最后audit轮重放2 results/22 issues、1/29，不能代表全部历史审核。D04 G12/G16/G03及G17旧target身份冲突、D06 G11保护文字/G15等仍未完成。证据`target-17/{D04,D06}/{artifact-review.json,target-17-business-review.json}`及`target-17-{D04,D06}-snapshot16-replay.json`，真实产物为工作文件，不作为正式合同交付。
+- target-17最终账本对账：新增62 HTTP/`$0.06612960`，与最终报告非checkpoint事件全部逐条匹配（missing0/unmatched0）；累计1552/`$1.47498705`/reserved0，剩448/`$0.52501295`，cap2000/$2不变。`target-17-metering-reconciliation.json`保存证据；无holdout/引擎发布。
+- 审核更正：临时`review_target16_g17.py`曾误用旧D06排除标签且仅单段查找HEAD，首次输出保留但作废；依FL-D132/188，ETF联接D06正常修改，不能要求零修改。须补跨段读取、同站点余文逐字核验及全部原件用途句分母，另存更正版，旧labels/scorer保持不变。该审核失误续FL-D188。
+
+## FL-D226 G15支付源范围检查过拒合法多类别前缀（2026-10-24）
+
+- 问题与影响：target-16 D06 p807/p1286为C/E/F类完整支付与顺延安排，`_g15_payment_clause_end()`仅支持单类前缀，导致自身operation源授权检查false，阻止正常删除。D06属于可修改ETF联接，不能按旧排除标签忽略。
+- 证据：原件`广发创业板交易型开放式指数证券投资基金发起式联接基金基金合同_20250319.docx`的上述两段，`_g15_payment_source_owned(text, builtin G15:0)`为false，仅去掉多类别前缀后为true；0 HTTP。target-17使用snapshot-16已启动，未混入本次修复。
+- 处理：仅扩展支付头的有限类别枚举语法，支持重复“X类基金份额”及“X类、Y类基金份额”两种形式；继续逐句核验支付与顺延，不允许夹带独立政策句或核对责任。
+- 状态：已实施，定向/真实原件及完整验证待完成。新增双副本实际DOCX与Claim验证、多类别前缀夹带政策及额外句反例。真实模型验证须待重新冻结，不以target-17或离线通过替代。
+- 下一步：定向回归→真实D06原件零模型源范围与实际文件核验→完整回归及新快照→受预算约束的新真实开发集复测；holdout和发布仍阻断。
+- 定向首轮2 failed/70 passed：源授权已修，但planner重复旧单类正则仍阻断合法双副本。删除该重复判断，统一依赖完整支付解析器后**72 passed/20.98s**。真实D06原件G15仅p807/p1286两处改动，均完整删除，其他段落原样，Claim verified、接受/拒绝修订等价通过，0 HTTP，证据`offline-d226-real/result.json`。完整回归后台`sh_16d32c3a3001uXM5zR7b6gvu5M`，启动manifest`d226-full-test-start.json`及`d226-full-pytest.log`；尚未冻结/真实复测此修复。
+- D226完整回归结束**1443 passed/46 skipped/2 warnings/293.62s**，源码manifest相同，build `5cada9ddd46fc0dfe61f06a243dffb0bede48f5de3d2b39f6f9baf34c471820c`；结果`d226-full-test-result.json`。该结果不包含随后FL-D222复发/G03修复，不能拿来冻结后续增量。
+
+## FL-D227 G03跨段“在投资｜者…”被误当作完整追加点（2026-10-24）
+
+- 问题与影响：target-17 D04实际p82原文以“本基金根据申购费用收取方式的不同，将基金份额分为不同的类别。在投资”结束，p83续“者申购基金份额时…”。当前G03政策插在p82“类别。”之后、“在投资”之前，割裂同一定义条款；应在完整类别定义后追加。
+- 证据：`target-17/D04/artifact-review.json`的p82实际变化，原件p83为完整A/C收费定义、p84为货币细分。现有词法延续识别只覆盖裸类字母等少量断点，未覆盖句中任意汉字拆分；机械plan一致不能证明追加点业务正确。
+- 状态：已确认，尚未修复。真实批次保持incomplete，独立完整分母未完成；未修改labels/gold/scorer。
+- 处理方向与下一步：按真实定义未闭合的句子与连续原文重算追加尾，不能从最后标点倒退到定义第一句后即当作完整条款；增加“在投资｜者…”实际DOCX与Claim反例及邻接独立条款边界，再做完整回归和新冻结真实复测。
+
+## FL-D228 G12显式比例变体被保护字面量误拒（2026-10-24）
+
+- 问题与影响：target-17 D04 p198的原件为“赎回费总额的25%应归基金财产，其余用于支付登记费和其他必要的手续费”，属于G12旧分配政策的明确比例变体；模型已生成指引固定新政策，但通用数字保护把25%及其分配句当作未授权删除，G12实际未修改，合同保持incomplete。G13相邻7日/1.5%句仍应由独立G13 operation处理，不能借G12授权删除。
+- 证据：缓存模型输出`/tmp/opencode/operation-validation-20261024/data-17/checkpoints/7d5db532eeb1ef26cf80f48cafeddcb62eb7f1466ea9942b602aafa31ff241e0.json`；原件`/home/opencode/data/funds_word/广发亚太中高收益债券型证券投资基金基金合同_20230223.docx` p198；旧target-17报告G12 unresolved及Claim失败证据保持不变。
+- 处理：增加窄范围`_g12_allocation_end()`，只识别G12自身replace operation的承接句、合法显式比例和登记/手续费尾；仅在G12源范围完整证明时使用确定性替换，并把该完整源片段加入同一operation的验证授权。未取消数字保护、未使用模型provenance自授权、未吞并独立后续句；补充实际比例变体零模型DOCX和Claim回归。
+- 状态：已实施，定向回归及真实D04比例边界零模型验证通过：G12新政策写入、G13的7日/1.5%句保留、Claim与接受/拒绝修订等价均通过。FL-D228全量启动后又收窄了G12边界并追加了回归测试，故D228即使通过也不能作为包含最终源码/测试集合的冻结证据。
+- D228中间全量随后结束为**1452 passed/46 skipped/2 warnings/284.20s**；但启动manifest与当前源码不一致，原因正是本条后续收窄G12边界并追加测试，故只作中间回归证据。最终manifest重跑尚未完成。
+- 下一步：以完整最终源码/测试manifest重跑全量→重新冻结→重新登记预算并真实复测D04/D06；target-17旧产物不覆盖本修复，holdout、引擎发布及最终普通工作台E2E继续阻断。
+- 最终回归已按最终manifest完成：**1453 passed/46 skipped/2 warnings/280.23s**，177个Python源文件manifest与启动时一致，build `e4ae767880625a3cf090fd500283facd28caab2f696e96c35551ab74b65dc172`；证据`final-full-test-start.json`、`final-full-pytest.log`、`final-full-test-result.json`。已冻结`/tmp/opencode/operation-validation-20261024/snapshot-17`，上下文`run_context-17.json`，生产API/tasks字节在冻结时一致。
+- post-D228真实批次已预登记为target-18：snapshot-17、公开开发合同D04/D06、真实登录→上传/seal→持久Worker/model→授权下载，预计80 HTTP/$0.08，最坏200/$0.24，账本起点1552/$1.47498705/reserved0；仅开发集，不运行holdout。当前工作区发布到生产并完成服务/build核验后才能启动；target-17历史结果不得复用。
+- 生产账本核对：`/var/lib/fundlex/model_budget.sqlite`当前为26919 requests/`$21.81123075`（completed26874、failed32、abandoned13），属于历史生产流量，不并入本轮隔离评测账本。target-18使用上述run_context登记的临时共享ledger，生产代码仅作为已发布快照一致性复核；两本账本均不重置。
+
+## FL-D229 target-18验证包装器参数顺序错误（2026-10-24）
+
+- 问题与影响：首次启动target-18时将包装器调用写成`run dev target-18 D04 D06`，而`fundlex-operation-validation.py`的实际接口是`dev <run-id> <case_id>...`（`run`仅是误传的group值）。`p6_run.py`在参数解析阶段以`--group run`退出，未启动合同任务、登录、上传、Worker或模型调用；不能计入真实评测结果，也不能消耗预算。
+- 证据：shell命令`sh_16d542a77001GWC6jvid0LtxXr`，退出码1，错误`argument --group: invalid choice: 'run'`；隔离ledger仍为1552 requests/`$1.47498705`/reserved0，`target-18`目录不存在。
+- 处理：保留本次零调用失败记录，按包装器实际接口重新执行`dev target-18 D04 D06`；不覆盖target-17，不修改selection、gold或历史结果。
+- 状态：参数错误已定位，正确的target-18真实批次待执行；holdout、引擎正式发布和最终普通工作台E2E仍阻断。
+
+## FL-D230 生产普通工作台验收脚本未跟随React V2表单契约（2026-10-24）
+
+- 问题与影响：当前生产真实用户验收脚本先在登录页使用 `get_by_role('heading', name='FundLex')`，随后又沿用旧版提交按钮文案 `创建、上传并提交`，并遗漏 React V2 新建任务表单必填的任务名称；React V2 登录页按品牌结构使用 `<strong>FundLex</strong>`，新建任务按钮实际为 `创建任务并上传`。脚本分别在注册前、提交按钮定位和表单校验后等待路由阶段失败，不能据此判断生产页面、认证、上传或模型链路失败。
+- 证据：`/tmp/opencode/fundlex-production-v2-e2e-20261024-rerun-d230/e2e-7db20hwbfitu/result.json` 显示已完成注册、登录、当前指引和新建任务页；数据库只读核对没有本次执行对应的新任务。源码 `frontend/src/pages/Auth/index.tsx` 明确显示登录页品牌为 `<strong>FundLex</strong>`；`frontend/src/pages/NewTask/index.tsx` 明确显示任务名称为必填、提交按钮为 `创建任务并上传`。本次没有发生模型调用。
+- 处理方法：验收脚本改为精确文本选择器 `get_by_text('FundLex', exact=True)`，填写“任务名称”，按当前产品文案定位提交按钮，并继续使用独立输出目录，避免历史结果污染；不修改产品页面或认证行为。
+- 状态与验证：**脚本问题已修正并验证**。d230c 已完成注册/登录、当前内置指引、公开 DOCX 上传、任务创建、seal、持久 Worker/model、任务详情、Review 页面/API、报告和授权下载；脚本断点已不再阻塞。合同交付结果另由 FL-D235 登记为 `incomplete`，不能把脚本修正等同合同交付通过。
+- 下一步：保留 d230c 产物作为当前生产版本失败证据；引擎修复、完整回归、新快照和新的真实复测完成后，再按同一用户路径重验。
+
+## FL-D235 d230c生产真实合同的G01/G15操作级证明失败导致交付不完整（2026-10-24）
+
+- 问题与影响：当前生产工作台真实任务 `7aefa94ca9b64c83b64cc06f35941fff` 使用公开合同“广发品质回报混合型证券投资基金基金合同_20230708.docx”和内置指引 `builtin-v1` 完成了模型处理及DOCX生成，但最终交付门禁仍为 `incomplete`。报告的12个未决项集中在G01 p106追加和G15正文/摘要支付句（p806/p807、p1262/p1263）：G01报 `CLAIM_OPERATION_NOT_PLANNED`，目标location=p106但quote为p107的“指定媒介”定义，resolution=quote_not_found、最终not_applicable，G01没有形成编辑；G15四个站点报 `CLAIM_OPERATION_SPAN_UNAUTHORIZED`/`CLAIM_PLANNED_EFFECT_MISSING`。因此产物只能作为工作文件和失败证据，不能授权为最终合同。
+- 证据：独立结果 `/tmp/opencode/fundlex-production-v2-e2e-20261024-rerun-d230c/e2e-gypkvi0ewhlz/result.json`；报告 JSON/Markdown `/tmp/opencode/fundlex-production-v2-e2e-20261024-rerun-d230c/e2e-gypkvi0ewhlz/report.json`、`report_md.md`；机械复核 `/tmp/opencode/fundlex-production-v2-e2e-20261024-rerun-d230c/e2e-gypkvi0ewhlz/artifact-review.json`。真实任务状态 `completed`，文档 `succeeded`、`eligibility=eligible`、`delivery_status=incomplete`，任务 `exceptions=1`；目标处理统计为31/31，但报告仍列12个最终未决项。模型报告记录29次 HTTP、147104 tokens、估算 `$0.025806`。Review 页面/API均返回成功并有18条修订记录；脚本未提交 Review 决策，因此不能声称用户已接受或拒绝全部修订。
+- 产物与实际差异：授权下载成功，`working_final.docx` SHA-256 `cbbe28e31fedc5a36e80aa2638da10cf1dc07953c74ec9ef0ab184a07e0d4f6d`，`working_redline.docx` SHA-256 `5865fc9344a88fb0acb1752ac66ce7f2a26a58751a45a26dc9d3ef37df488815`；报告期望哈希与下载哈希均匹配。机械复核通过 source/final/redline 哈希、接受/拒绝修订等价、无残留修订、段落位置、计划与实际文件一致；准确XML解析为修订版18处插入/18处删除，终稿无残留修订，18个实际改变段落。逐站点确认终稿p106与原件相同，G01没有形成追加；G15四个正文/摘要支付段已删除，但其自身授权范围没有通过Claim Replay证明。
+- 证据更正：初步全文检索发现直销政策，只能证明其他位置有新增政策，不能归因G01 p106；逐站点复核已推翻该归因。初步脚本使用`bytes.count(b'<w:ins')/b'<w:del'`统计得到28/46/57，会误计`w:instrText`、`w:insRsid`等标签/属性；按WordprocessingML命名空间准确解析得到终稿0/0、修订版18/18，以`artifact-review.json`为准，保留原始result.json不重写。
+- 处理方法：保留全部真实任务、报告、Review/API和下载证据，不修改该任务报告，不把 `completed`、DOCX可读、哈希匹配或单纯实际差异当作交付完整。修复G01追加站点边界及G15自身operation的跨段/双副本授权范围后，必须完整回归、冻结新快照并以新任务复测；不得修改gold/labels以消除失败。
+- 状态与验证：**已确认，当前版本未解决**。真实用户端到端链路已验证到授权下载，但合同完整交付失败，阻塞最终项目验收。证据显示问题属于引擎的目标/operation证明与交付门禁，非登录、上传、Worker、模型调用、DOCX打包或下载故障。
+- 下一步：先完成FL-D231/FL-D232/FL-D233/FL-D234相关引擎修复及定向/完整回归；重新冻结版本后，再按公开合同开发集协议执行真实复测并核对G01/G15全文、Claim Replay、Review决策、报告、修订、接受/拒绝版本和哈希。
+
+## FL-D236 生产任务目标统计与报告最终未决数口径不一致（2026-10-24）
+
+- 问题与影响：d230c任务详情/API显示文档 `target_counts.total=31, completed=31, unresolved=0`，而同一文档报告显示 `delivery_status=incomplete`、`unresolved_count=12`，任务摘要还显示 `exceptions=1`。如果前端只展示目标计数，用户可能误以为合同已经完整交付；最终状态应以报告交付门禁和最终未决项为准。
+- 证据：同一独立结果 `/tmp/opencode/fundlex-production-v2-e2e-20261024-rerun-d230c/e2e-gypkvi0ewhlz/result.json` 第15–39、53–206行，以及下载的 `report_md.md` 第7、51–66行。任务、文档、报告均来自同一个真实任务ID `7aefa94ca9b64c83b64cc06f35941fff`，不是跨任务拼接。
+- 处理方法：当前验收按 `delivery_status=incomplete`、`report.unresolved` 和 Claim Replay失败判定，不以 `target_counts.unresolved=0`覆盖最终门禁；后续应统一任务摘要、文档目标统计和报告最终未决投影，或在UI明确区分“目标已处理”和“交付门禁未通过”。
+- 状态与验证：**已确认，待产品/接口口径修复**。本条不改变d230c失败结论，也不修改历史报告或评测分母。
+- 下一步：检查任务详情API与React V2展示字段的映射，补充含Claim Replay失败、报告incomplete和exceptions的真实回归；修复后用新真实任务验证显示和下载状态一致。
+
+## FL-D231 target-18 D04 G12/G13 同段独立 operation 未形成原子变换（2026-10-24）
+
+- 问题与影响：D04 p198 同时包含 G12 的赎回费分配句和独立 G13 的少于 7 日/1.5% 句。target-18 将 G12 绑定为 `T013`、G13 绑定为 `T014`，两者源范围相交；规划阶段报 `RECALL_EDIT_OVERLAP`，两个 operation 都没有进入最终 edit set，导致比例旧文和短持有期旧文均保留，合同交付不完整。
+- 证据：`/tmp/opencode/operation-validation-20261024/target-18/D04/report.json` 中两个 target 的 `plan_reason` 均为 `RECALL_EDIT_OVERLAP`；原件 `/home/opencode/data/funds_word/广发亚太中高收益债券型证券投资基金基金合同_20230223.docx` p198 为“...25%应归基金财产...手续费。对于持续持有期少于 7 日...1.5%...”。
+- 处理方法：保持 G12 的比例识别和 G13 的独立授权，规划时将重叠的 replace/delete 组件合成为一次有 operation keys、obligation ids 和各自源切片的原子 paragraph 变换；G12 只替换比例分配前缀，G13 只删除短持有期句，并保留独立尾部。Claim Replay 必须逐 component 证明两个 operation。
+- 状态：**已确认，代码修复已实施，待完整回归及真实复测**。target-18 真实 Worker/model、DOCX 下载和机械校验已完成，但历史 Claim Replay 为 false，不能计入合同完成分母的通过项。当前源码已将 G12:1 与 G13:0 合并为一个带独立 operation keys、obligation ids 和源切片的原子 paragraph edit。
+- 证据更新：`/tmp/opencode/operation-validation-20261024/offline-d231-d234-real-current/D04/result.json` 从 D04 原件零模型重建验证 `proof_verified=true`、G12/G13 两个 component 独立存在、比例旧文和短持有期旧文均删除；接受/拒绝修订分别与终稿/原件等价，`http_attempts=0`。该证据不改变 target-18 历史失败，也不替代新的真实模型任务。
+- 下一步：完成最终源码全量回归和新快照后重新真实复测 D04，并核对完整合同业务门禁。
+
+## FL-D232 target-18 D04 G12 stale target 在 G09 位置无法确定性重绑定（2026-10-24）
+
+- 问题与影响：D04 报告产生 `T3001`，把 G12:0 错误候选绑定到 p194，同时 p194 的真实变更属于 G09。该 target 没有 quote、offset 或唯一候选，`RECALL_TARGET_UNRESOLVED` 使 G12:0 保持 OPEN，并污染 operation/site 覆盖判断。
+- 证据：`target-18/D04/report.json` 的 `T3001` 为 `location=p194`、`quote=''`、`site_candidates=["p194","p199"]`、`operations=["G12:0"]`；同报告 p194 的 edit 为 G09:0。D04 原件 p194 不含 G12 赎回费分配旧文，p198 才是 G12 site。
+- 处理方法：对 open operation 候选在 target 绑定前执行 operation 自身 source/reference 和业务 site 校验；候选不含该 operation 的旧文或唯一语义站点时拒绝重绑定并标记 stale/attribution error，不能把另一个 operation 的 edit 当作覆盖。若同 operation 已有确定的 p198 site，stale candidate 必须被 supersede，不产生新的可执行 target。
+- 状态：**已确认，代码修复已实施，待完整回归及真实复测**。现有报告保留为历史证据；不得修改 gold、target-18 分母或把 G09 结果计作 G12 完成。当前恢复候选已加入 operation 自身 source/reference 和业务 site 校验，D04 stale `T3001` 不能借用 p194 的 G09 edit。
+- 证据更新：新增 stale open-operation recovery 回归已通过；D04 当前离线重建未产生 G12:0 的错误 p194 绑定。证据目录为 `/tmp/opencode/operation-validation-20261024/offline-d231-d234-real-current/D04/`，`http_attempts=0`。该证据不改变 target-18 历史失败，也不替代新的真实模型任务。
+- 下一步：完成最终源码全量回归和新快照后重新真实复测 D04，核对 G12:0/G12:1 的真实 source site 与 operation coverage 独立闭合。
+
+## FL-D233 target-18 D06 G11 composite continuation 删除吞掉受保护 E/F 类文本（2026-10-24）
+
+- 问题与影响：D06 p228/p229 的 G11 旧句跨段：p228 以“承担，”结束，p229 以“ 不列入基金财产。”完成旧句，随后同段还有独立的 C/E/F 类申购费政策。target-18 的 composite tail 删除把 p229 整段写空，丢失 `E类基金份额`、`F类基金份额` 等受保护业务字面量，形成 `LOST_PROTECTED_LITERAL` 风险。
+- 证据：`target-18/D06/report.json` 与下载 DOCX 的独立复核显示 p229 源文为“ 不列入基金财产。本基金 C 类基金份额、E 类基金份额和 F 类基金份额不收取申购费。”，结果 p229 被替换为空；原件路径为 `/home/opencode/data/funds_word/广发创业板交易型开放式指数基金发起式联接基金基金合同_20250319.docx`（文件名以实际目录为准）。
+- 处理方法：composite continuation 按 operation 自身 authorized slice 计算每个 part 的删除范围；p229 仅删除“ 不列入基金财产。”及其授权标点/空白，保留后续 C/E/F 句。任何 protected literal 丢失都必须使 plan/Claim 失败，不能由 joint_delete 的空 replacement 证明覆盖。
+- 状态：**已确认，代码修复已实施，待完整回归及真实复测**。target-18 mechanical artifact verification 通过只证明文件可读和计划哈希一致，不证明受保护业务文本完整。当前 composite continuation 已按 G11 自身授权 slice 计算 p229 删除范围。
+- 证据更新：`/tmp/opencode/operation-validation-20261024/offline-d231-d234-real-current/D06/result.json` 从 D06 原件零模型重建验证 `proof_verified=true`；p229 仅删除 continuation，C/E/F 类申购费句逐字内容（按紧凑文本）保留；接受/拒绝修订分别与终稿/原件等价，`http_attempts=0`。该证据不改变 target-18 历史失败，也不替代新的真实模型任务。
+- 下一步：完成最终源码全量回归和新快照后重新真实复测 D06，核对完整合同业务门禁。
+
+## FL-D234 target-18 多站点 operation attribution 与 coverage 聚合丢失独立 site（2026-10-24）
+
+- 问题与影响：D06 Claim Replay 在 G02/G04/G08/G11 等多 site operation 上同时出现 PASS site 与 `CLAIM_OPERATION_NOT_PLANNED`/`CLAIM_OPERATION_UNPROVEN` site。当前部分聚合路径按 operation 或 location 汇总，导致已证明 site 被整体视为未计划，或失败 site 未能保持在 coverage/unresolved 中，无法准确表达“一个 operation 的每个业务 site 必须通过”。
+- 证据：`/tmp/opencode/operation-validation-20261024/target-18-D06-r1-replay.json` 的 failures 与 `proof.obligations` 保留了 operation/site 级失败；D06 report 的 `coverage`、`unresolved` 与下载 artifact 复核之间存在 site attribution 不一致。具体 operation/site 证据以该 replay JSON 为准。
+- 处理方法：以 `(operation_id, obligation_id, site_id/location[, occurrence])` 作为 coverage/effect 的最小身份；成功 site 单独保留，失败或缺证 site 单独保持 OPEN/FAIL。operation 只有在其全部 verified sites 通过且无缺失 site 时才可 PASS，不能用同 operation 的另一个 site 或 rule-level status 抵销。
+- 状态：**已确认，代码修复已实施，待完整回归及真实复测**。不能用机械 DOCX 成功、单 site PASS 或 report complete 字段替代整合同交付 gate。当前 coverage/effects/Claim Replay 已按 operation、obligation、site/location 和 occurrence 保留独立 site。
+- 证据更新：重复 site、部分 site 成功和缺失 occurrence proof 回归均已通过；D04/D06 当前离线重建的 operation-level Claim Replay 均通过，证据位于 `/tmp/opencode/operation-validation-20261024/offline-d231-d234-real-current/`，`http_attempts=0`。该离线证据不改变 target-18 历史失败，也不替代新的真实模型任务。
+- 下一步：完成最终源码全量回归和新快照后，用新的真实 D04/D06 任务核对 coverage view、delivery gate、Claim Replay 与 DOCX 实际差异使用同一 site ledger。
+
+## FL-D237 target-19 D06 G02/G04 已满足组成员被误判为 residual（2026-10-25）
+
+- 问题与影响：D06 target-19 的 p231 已逐字包含完整 A/Y 与 C/E/F 收费分组，但 G02:1/G04:1 的 operation effect 把其中必然保留的 `C类基金份额` 成员标签当成旧单类残留，Claim Replay 分别报 `RESIDUAL_OLD_TEXT`/`CLAIM_OPERATION_NOT_PLANNED`，并使真实任务交付为 `incomplete`。p98、p131 同一类已满足站点则通过，说明是 residual/effect 的局部判定不一致。
+- 证据：`/tmp/opencode/operation-validation-20261024/target-19/D06/report.json` 的 `artifact_claim_replay.obligations`；G02:B1:O2 和 G04:B1:O2 的 p231 site effect 失败，p98/p131 通过。p231 实际终稿文本由独立读取确认包含完整 C/E/F 组。旧任务产物和报告保持不变。
+- 处理方法：G02/G04 的 replace operation 仅在旧文是单一 `[A-Z]类基金份额`、且最终段落在收费语境中包含完整实例化新组时，授权该旧标签作为组成员保留；普通 replace 不改变该例外。同步把 `_replaced_clause_residuals` 的 clause residual 过滤到同一 operation proof，避免字面残留层再次拒绝语义正确的组。新增 G02/G04 满足站点回归。
+- 状态与验证：**代码已实施，待最终全量回归和新的真实 D06 任务验证**。新增定向回归此前为 161 passed；D04/D06 post-patch 零模型真实原件边界重建的关键检查全部通过，但不计真实模型分母。尚未证明新真实 Worker/model 产物已闭合。
+- 下一步：全量回归通过后冻结新快照，重新部署与核对字节一致，再用剩余预算重新执行 D06；逐站点复核 G02/G04、p98 sweep、G06 人工未决、Claim Replay、报告和实际 DOCX。若 G06 单向转换仍无授权决策，保持未完成。
+
+## FL-D238 target-19 D06 p98 G02 sweep scope quote 未被 operation proof 消解（2026-10-25）
+
+- 问题与影响：target-19 p98 的 G02 sweep finding `SW002` 只引用同段开头的类别枚举，实际收费分组句紧随其后且已完整满足 G02。当前 `_quote_is_expected_effect` 的新增分支要求调用方同时传入完整 `actual_text` 与 operation proof；历史 report 的 finding 仍为 pending，不能直接改写为修复后结论。
+- 证据：`target-19/D06/report.json` 的 `sweep.findings` 中 `SW002`；p98 target 已为 `satisfied`，quote 为“基金份额类别：本基金将基金份额分为…”，同段后续收费句含 A/Y、C/E/F 完整分组。旧 report 不能证明新分支已在真实管线中运行。
+- 处理方法：保留 scope quote 与真实可编辑收费 site 的边界；只有同段完整 operation proof 通过，且 scope quote 本身没有费用词、同段 actual text 含完整认证组时，才把该 sweep finding 标记为 artifact-proof resolved。不能通过报告层直接删除 finding，也不能让一个不相关段落提供证明。
+- 状态与验证：**代码已实施，待新真实 D06 任务验证**。本地 `_class_group_equivalent` 和 post-patch 零模型边界验证通过；target-19 历史 `SW002` 仍保持原始 pending 证据。新运行需确认 sweep finding 的最终状态和 delivery gate 一致。
+- 下一步：新快照部署后读取新的 D06 report，独立检查 p98 finding、operation/site ledger 与实际段落；若仍 pending，登记新的根因并继续修复，不能以局部回放关闭本条。
+
+## FL-D239 target-20 D06 独立业务复核脚本误报三项失败（2026-10-25）
+
+- 问题与影响：target-20 D06 的第一次独立业务复核文件将三个证据口径误判为失败：G02/G04 只匹配带空格的 `A 类、Y 类` 与固定完整句，未接受实际 DOCX 中语义等价的紧凑写法；G11 要求所有 site 必须为 `ARTIFACT_VERIFIED`，错误排除了独立 `ALREADY_SATISFIED`；复核映射遗漏了 G17 明确授权删除的 p808、p809，导致 19 个实际变化段中两段被标为 `REVIEW_REQUIRED`。这些误报没有改写 target-20 report、DOCX、Claim Replay 或交付门禁。
+- 证据：初始证据 `/tmp/opencode/operation-validation-20261024/target-20-D06-independent-business-review.json` 的 `failed_checks` 为 `g02_all_sites`、`g04_all_sites`、`g11_operation_coverage_protected`，并将 p808/p809 标为 `UNKNOWN/REVIEW_REQUIRED`；实际 p98/p131/p231 均包含完整 A/Y 与 C/E/F 收费组，operation coverage 中 G02/G04 三站点均为 `ALREADY_SATISFIED`，G11 p228 为 `ALREADY_SATISFIED`、p229 为 `ARTIFACT_VERIFIED`。
+- 处理方法：独立复核改为先折叠空白再比较类别组，按语义组核对 A/Y 与 C/E/F；G11 site 允许 `ALREADY_SATISFIED` 或 `ARTIFACT_VERIFIED`；补入 p808/p809 的 G17 业务映射。保留初始失败 JSON 作为审计历史，另写 corrected 证据，不修改真实 report 或历史产物。
+- 状态与验证：**已确认，复核证据已修正**。`/tmp/opencode/operation-validation-20261024/target-20-D06-independent-business-review-corrected.json` 显示 19/19 实际变化段通过、25/25 断言通过，结论为 `INCOMPLETE_G06_REVIEW_REQUIRED`。G06 的单向 Y 类转换语义变体仍被明确保留为人工业务未决，target-20 交付仍为 `incomplete`。
+- 下一步：将 corrected 证据作为 target-20 D06 的独立业务复核依据；继续保持 G06、target-20 report 的 Claim Replay 失败和开发集门禁未决，不以修正复核脚本关闭真实业务阻塞。
+
+## FL-D240 20份开发集闭环的当前快照证据与评测预算不足（2026-10-25）
+
+- 问题与影响：target-20 D06 已完成 snapshot-19 的真实登录、上传、seal、持久 Worker/model、结果页和授权下载，但 G06 未决，不能计为完整合同交付。当前共享评测 ledger 已消耗 1701 requests、`$1.64408310`，reserved=0，仅余 299 requests、`$0.35591690`。D04 的最近真实通过证据属于 snapshot-18，D06 的最近真实复测属于 snapshot-19；其余开发合同的主要真实产物来自更早快照。因此现有证据不能构成同一冻结版本下 20 份开发集完整业务 gate，也不能据此进入 holdout、正式引擎发布或最终普通工作台 E2E。
+- 证据：共享账本 `/tmp/opencode/operation-validation-20261024/ledger.sqlite`；target-19 D04 独立复核 `/tmp/opencode/operation-validation-20261024/target-19-D04-independent-business-review.json`；target-20 D06 report、artifact review、corrected 独立复核分别位于 `/tmp/opencode/operation-validation-20261024/target-20/D06/`、`/tmp/opencode/operation-validation-20261024/target-20/D06/artifact-review.json` 和 `/tmp/opencode/operation-validation-20261024/target-20-D06-independent-business-review-corrected.json`。账本按状态为 completed=1698、failed=2、abandoned=1、reserved=0。
+- 处理方法：固定 20 dev + 8 holdout selection、labels、gold、scorer 和 ledger，不删除或重置历史失败，不把旧快照产物冒充 snapshot-19 结果。已完成的 target-19/20 真实任务、下载 DOCX、报告、operation/site coverage、Claim Replay、独立逐段复核和哈希证据分别保存；预算不足时停止扩大真实调用，并把未取得当前冻结版本证据的合同保持为未完成/待复测。
+- 状态与验证：**外部预算阻塞，开发 gate 未通过**。target-20 D06 机械 artifact verification 为 1/1，19 个实际变化段独立复核 19/19 通过，但 Claim Replay 仍因 G06 为 false，delivery gate 的 `UNRESOLVED=1`、blocking_unresolved=2；不能用目标计数 `unresolved=0` 或机械通过覆盖交付门禁。
+- 下一步：若要完成同一冻结版本的 20 份开发集闭环，需要新增或明确授权评测预算后，重新登记批次并从剩余开发合同中按固定分母继续真实工作台运行；在此之前保持 holdout、正式发布和最终普通用户 E2E 阻断，并如实交付当前工作文件及未决清单。
+
+## FL-D241 D01-D20 固定分母对账显示当前 gate 为 0/20（2026-10-25）
+
+- 问题与影响：需要把 D01-D20 的最新保留证据按同一当前快照、机械产物、Claim Replay、delivery gate 和独立整合同业务复核分别对账，避免把 dev-05 的旧快照产物、目标计数或段落级检查误算为当前开发 gate。对账结果为当前 snapshot-19 gate eligible **0/20**：仅 D06 有 snapshot-19 证据且仍因 G06 不完整；D04 的独立整合同通过属于 snapshot-18；其余 18 份主要证据来自更早的 dev-05，业务复核 pending。
+- 证据：机器可读对账 `/home/opencode/fundlex/docs/evidence/development-gate-reconciliation-20261025/D01-D20-gate-reconciliation.json`，明细 `/home/opencode/fundlex/docs/evidence/development-gate-reconciliation-20261025/D01-D20-gate-reconciliation.md`。对账固定引用 selection SHA `95fe8121d5f0aceb4febf9cc76a79fde78cf44f711e9a6f029b08eb6ee5643f3`、snapshot-19 build `e2ac0f14429de4fdd71e631d10c18b27f1366c8337e797b4c834b5adf6611229`、历史 dev-05 产物、target-19 D04 和 target-20 D06 证据。
+- 处理方法：建立每份合同的证据来源、快照、delivery、机械核验、Claim Replay、delivery gate、独立业务复核和当前 gate eligibility 字段；保留历史文件，不改写 labels、gold、scorer、report 或 DOCX。按 dev-05 实际每合同模型消耗估算，保留当前 D06 并补跑其余 19 份需约 602 requests / `$0.60031875`；当前余量 299 requests / `$0.35591690`，最低基线缺口约 303 requests / `$0.24440185`，且不含重试和 G06 修复调用。
+- 状态与验证：**已登记，开发 gate 仍阻塞**。对账脚本生成 JSON/Markdown 后，校验了 20 个固定 case、账本 1701 requests / `$1.64408310` / reserved 0、当前 gate eligible=0、模型调用增量为 0；历史 complete delivery 为 4/20，但独立整合同业务通过只有 target-19 D04 的 1/20，不能作为 snapshot-19 gate。
+- 下一步：预算获得新增或明确授权后，冻结与 snapshot-19 一致的真实开发批次，补跑并独立复核 D01-D05、D07-D20，重新处理 D06 G06 决策；预算未到位前保持 holdout、正式发布和最终普通工作台 E2E 阻断。
+
+## FL-D242 dev-05 历史产物独立整合同业务复核分类与同段 G12/G13 复核边界（2026-10-25）
+
+- 问题与影响：固定分母对账初始把 dev-05 的所有合同都列为业务复核 pending。对可离线核验的 complete/replay 候选继续复核后，D02、D16、D17 的 snapshot-05 实际 DOCX 通过独立逐段、规则效果、operation coverage、Claim Replay 和 delivery gate 交叉核对；D18 明确因 G17 p776/p1227 重复/残留句、delivery gate 未完成而失败。若不更新分类，会低估已有历史证据；若将其视为当前通过，又会错误跨越 snapshot-19 固定 gate。
+- 证据：`/tmp/opencode/operation-validation-20261024/dev-05-independent-business-reviews/D02-independent-business-review.json`、`D16-independent-business-review.json`、`D17-independent-business-review.json` 为 `PASS_FOR_HISTORICAL_INDEPENDENT_BUSINESS_REVIEW`；`D18-independent-business-review.json` 为 `FAIL_OR_REVIEW_REQUIRED`。机器可读固定分母对账已更新为 D01-D20：历史独立业务通过 4/20（含 target-19 D04）、pending 15/20、历史失败/未完成 1/20；当前 snapshot-19 gate 仍为 0/20。
+- 处理方法：独立复核只把 D02/D16/D17 标为历史 snapshot-05 通过，并保留“当前 gate 不合格、必须 snapshot-19 重跑”的限制；D18 保持失败。D16 p221/p222 的 G12/G13 同段原子编辑按 operation/site 证据分别核对：G12 替换在 p221，p222 仅承担 G13 删除，不能因 p222 没有重复 G12 新句而误报。
+- 状态与验证：**已完成历史证据分类并验证**。四份复核 JSON 的源文件哈希、实际变化段数量、段落变化、规则效果、机械产物、Claim Replay、delivery gate 和 final omission review 均已复核；D02/D16/D17 全部断言通过，D18 的失败断言与原报告未决项一致。未新增模型调用，未改写历史 report/DOCX。
+- 下一步：当前 gate 仍需在 snapshot-19 重新运行 D01-D20；独立历史通过只作为审计证据，不能进入 holdout 或正式发布门禁。
+
+## FL-D243 生产 API 端口与历史隔离评测端口不同（2026-10-25）
+
+- 问题与影响：本机生产 `fundlex-recall-api.service` 监听 `127.0.0.1:8010`；历史真实评测使用过 `8013` 等隔离端口。若沿用旧评测端口做当前服务探测，会得到连接失败并误判 API 未运行，或把隔离评测入口当成正式服务入口。
+- 证据：`systemctl status fundlex-recall-api fundlex-recall-worker` 显示 API/Worker 均 active；systemd 单元 `/etc/systemd/system/fundlex-recall-api.service` 的 `ExecStart` 明确为 `--host 127.0.0.1 --port 8010`；`ss -ltnp` 显示 8010 正在监听、8013 未监听。只读验证 `GET http://127.0.0.1:8010/api/capabilities` 返回 200，未认证 `GET /api/health` 返回 401，符合当前身份门禁；本次没有修改服务或配置。
+- 处理方法：生产服务验证以 systemd 单元和 8010 为准；隔离评测脚本必须显式使用其批次登记的端口和数据目录，不能把 8013 的历史默认值写入生产健康结论。健康接口的未认证 401 要结合登录态验证，不能单独解释为服务失败。
+- 状态与验证：**已登记并验证，当前无生产故障证据**。API/Worker active、8010 监听和 capabilities 200 均已核对；8013 连接失败仅说明该历史隔离端口当前未启动。未新增模型调用，未改变部署文件。
+- 下一步：后续真实工作台验收先确认 systemd/API 实际端口，再走登录、上传、Worker/model 和授权下载链路；将端口、认证状态和验证时间写入验收证据。

@@ -22,6 +22,21 @@ TERMINAL_STATES = ("SATISFIED", "ARTIFACT_VERIFIED", "ALREADY_SATISFIED",
                    "NOT_APPLICABLE", "UNRESOLVED")
 
 
+def _canonical_state(value: Any) -> str:
+    """Map every external status onto the five coverage terminal states.
+
+    Coverage is a proof projection.  An UNKNOWN/CONFLICT (or an unrecognised
+    status from an older report) is therefore an open item, never a successful
+    terminal state and never something that can disappear from counts.
+    """
+    state = str(value or "").upper()
+    return state if state in TERMINAL_STATES else "UNRESOLVED"
+
+
+def _site_key(location: str, occurrence: int) -> str:
+    return (f"{location}#occurrence:{occurrence}" if occurrence >= 0 else location)
+
+
 @dataclass(frozen=True)
 class CoverageEntry:
     rule_id: str
@@ -38,6 +53,9 @@ class CoverageEntry:
     #: Replay's physical site identity (may include ``#occurrence:N``).  Keep
     #: ``location`` as the paragraph lookup key for backwards compatibility.
     site_id: str = ""
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "state", _canonical_state(self.state))
 
     def as_dict(self) -> dict[str, object]:
         return {
@@ -67,10 +85,15 @@ class CoverageLedgerView:
 
     def state_of_operation(self, rule_id: str, location: str,
                            operation_key: str) -> str | None:
-        """State of one operation; falls back to location-level entries when unkeyed."""
+        """State of one operation, requiring an explicit operation identity.
+
+        An unkeyed legacy row is intentionally invisible to this query.  Treating
+        it as proof for every operation would reintroduce cross-authorization at the
+        projection/delivery boundary.
+        """
         return _least_complete(entry.state for entry in self.entries
                                if entry.rule_id == rule_id and entry.location == location
-                               and (not entry.operation_keys or operation_key in entry.operation_keys))
+                               and operation_key in entry.operation_keys)
 
     @property
     def unresolved(self) -> tuple[CoverageEntry, ...]:
@@ -110,7 +133,7 @@ def _iter_audit_verdicts(node: Any, depth: int = 0) -> Iterable[tuple[str, str]]
 
 
 def _least_complete(states: Iterable[str]) -> str | None:
-    values = set(states)
+    values = {_canonical_state(state) for state in states}
     # A location query must not hide one failed occurrence/operation behind a
     # sibling PASS.  All consumers see the same conservative aggregation.
     return next((state for state in ("UNRESOLVED", "SATISFIED", "NOT_APPLICABLE",
@@ -167,9 +190,9 @@ def _site_projection(record: Mapping[str, Any], targets: Mapping[str, Mapping[st
     window assertion, not a business site (D11/D02 false completion regression).
     """
     operation_id = str(record.get("operation_id") or "")
-    global_state = str(record.get("completion") or "UNRESOLVED")
-    evidence_by_site: dict[str, dict[str, Any]] = {}
-    effects_by_site: dict[str, dict[str, Any]] = {}
+    global_state = _canonical_state(record.get("completion"))
+    evidence_by_site: dict[str, list[dict[str, Any]]] = {}
+    effects_by_site: dict[str, list[dict[str, Any]]] = {}
     for item in replay.get("site_effects") or ():
         if not isinstance(item, Mapping):
             continue
@@ -177,7 +200,7 @@ def _site_projection(record: Mapping[str, Any], targets: Mapping[str, Mapping[st
             continue
         site_id = str(item.get("site_id") or item.get("location") or "")
         if site_id:
-            effects_by_site[site_id] = dict(item)
+            effects_by_site.setdefault(site_id, []).append(dict(item))
     for item in replay.get("evidence") or ():
         if not isinstance(item, Mapping):
             continue
@@ -185,18 +208,20 @@ def _site_projection(record: Mapping[str, Any], targets: Mapping[str, Mapping[st
             continue
         site_id = str(item.get("site_id") or item.get("location") or "")
         if site_id:
-            evidence_by_site.setdefault(site_id, dict(item))
+            evidence_by_site.setdefault(site_id, []).append(dict(item))
     for item in record.get("artifact_evidence") or ():
         if not isinstance(item, Mapping):
             continue
         site_id = str(item.get("site_id") or item.get("location") or "")
         if site_id:
-            evidence_by_site.setdefault(site_id, dict(item))
+            evidence_by_site.setdefault(site_id, []).append(dict(item))
 
     site_ids = set(effects_by_site) | set(evidence_by_site)
     proof_locations = {str(item.get("location") or str(site_id).split("#occurrence:", 1)[0])
-                       for site_id, item in {**evidence_by_site, **effects_by_site}.items()}
+                       for site_id, values in (*evidence_by_site.items(), *effects_by_site.items())
+                       for item in values}
     target_for_location: dict[str, str] = {}
+    target_for_site: dict[str, str] = {}
     for target_id in record.get("targets") or ():
         target = targets.get(str(target_id))
         if not target or target.get("out_of_scope") or target.get("attribution_error"):
@@ -208,31 +233,58 @@ def _site_projection(record: Mapping[str, Any], targets: Mapping[str, Mapping[st
         location = str(target.get("location") or "")
         if location:
             target_for_location.setdefault(location, str(target_id))
+            try:
+                occurrence = int(target.get("occurrence_index", -1))
+            except (TypeError, ValueError):
+                occurrence = -1
+            target_for_site[_site_key(location, occurrence)] = str(target_id)
             target_state = str(target.get("state") or "")
             # A needs_edit target without a matching replay site is itself an
             # unresolved physical obligation, even when a sibling site passed.
             # Satisfied survey targets are only hints and must not manufacture a
             # failure site (D02 G05 Y010 regression). Absent/out-of-scope rows
             # were filtered above.
+            site_key = _site_key(location, occurrence)
+            missing_site = (site_key not in site_ids if occurrence >= 0
+                            else location not in proof_locations)
             if (target_state not in {"satisfied", "already_satisfied"}
-                    and location not in proof_locations
+                    and missing_site
                     and global_state != "NOT_APPLICABLE"):
-                site_ids.add(location)
-    for site_id, item in evidence_by_site.items():
+                site_ids.add(site_key)
+    for site_id, values in evidence_by_site.items():
+        item = values[0]
         location = str(item.get("location") or site_id.split("#occurrence:", 1)[0])
         target_id = str(item.get("target_id") or target_for_location.get(location) or "")
         target_for_location[location] = target_id
+        target_for_site.setdefault(site_id, target_id)
 
     projected: list[tuple[str, str, str, str, str]] = []
     for site_id in sorted(site_ids):
-        effect = effects_by_site.get(site_id)
-        evidence = evidence_by_site.get(site_id)
+        effect_items = effects_by_site.get(site_id, [])
+        evidence_items = evidence_by_site.get(site_id, [])
+        # Multiple proof rows for one operation/site are not last-write-wins.
+        # A single UNKNOWN/CONFLICT/failed row keeps the site unresolved; this
+        # prevents a later PASS from masking an earlier failed occurrence.
+        bad_effect = next((item for item in effect_items if
+                           str(item.get("state") or "").upper() != "PASS" or
+                           item.get("failure_code") or not item.get("proof_kind") or
+                           str(item.get("artifact_status") or "").upper()
+                           in {"UNKNOWN", "CONFLICT"}), None)
+        bad_evidence = next((item for item in evidence_items if
+                             ("state" in item and
+                              str(item.get("state") or "").upper() != "PASS") or
+                             item.get("failure_code") or
+                             str(item.get("artifact_status") or "").upper()
+                             in {"UNKNOWN", "CONFLICT"}), None)
+        bad_proof = bad_effect or bad_evidence
+        effect = bad_effect or (effect_items[0] if effect_items else None)
+        evidence = evidence_items[0] if evidence_items else None
         item = effect or evidence or {}
         location = str(item.get("location") or site_id.split("#occurrence:", 1)[0])
-        if effect is not None and (str(effect.get("state") or "") != "PASS"
-                                   or effect.get("failure_code") or not effect.get("proof_kind")):
+        if bad_proof is not None:
             state = "UNRESOLVED"
-            basis = "claim_replay:" + str(effect.get("failure_code") or "CLAIM_OPERATION_UNPROVEN")
+            basis = "claim_replay:" + str(bad_proof.get("failure_code") or
+                                           "CLAIM_OPERATION_UNPROVEN")
         elif effect is not None:
             # A PASS site is independently artifact-proven even when another
             # site keeps the obligation globally UNRESOLVED (D11 G18 p800/p1207).
@@ -247,12 +299,14 @@ def _site_projection(record: Mapping[str, Any], targets: Mapping[str, Mapping[st
             # artifact evidence row is a proof; inventory completion is not. Older
             # records only carried a location, so retain that explicit artifact
             # evidence as a site proof even without a proof_kind field.
-            state = global_state
+            state = _canonical_state(global_state)
             basis = "artifact_evidence:" + str(evidence.get("proof_kind") or "site")
         else:
             state = "UNRESOLVED"
             basis = "site_evidence_missing"
-        projected.append((location, site_id, target_for_location.get(location, ""), state, basis))
+        projected.append((location, site_id,
+                          target_for_site.get(site_id, target_for_location.get(location, "")),
+                          state, basis))
     return projected
 
 
@@ -272,7 +326,7 @@ def build_coverage_view(report: Mapping[str, Any]) -> CoverageLedgerView:
                 continue
             rule_id = str(record.get("rule_id") or "")
             operation_id = str(record.get("operation_id") or "")
-            state = str(record.get("completion") or "UNRESOLVED")
+            state = _canonical_state(record.get("completion"))
             basis = str(record.get("completion_evidence") or "operation_ledger")
             obligation_id = str(record.get("obligation_id") or "")
             obligation_key = obligation_id or f"{rule_id}:{operation_id}"

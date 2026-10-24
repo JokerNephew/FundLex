@@ -19,6 +19,45 @@ def _compact(value: str) -> str:
     return re.sub(r"[\s\u3000\u00a0\u200b]+", "", value or "")
 
 
+def _g16_duplicate_effects(original: Any, artifact: Any,
+                           rules_by_id: Mapping[str, dict], facts: Any,
+                           records: Sequence[Any]) -> list[dict[str, Any]]:
+    """Count written G16 policy across each complete SOURCE clause (FL-D192).
+
+    Payment/usage paragraphs may be deleted by G15/G17 in the artifact. Source
+    addresses therefore define the scope; artifact text cannot redefine its own
+    authorization. This also runs for replay callers without an obligation ledger.
+    """
+    from ..recall import _g16_clause_locations, instantiate_slots
+    rule = rules_by_id.get("G16") or {}
+    failures = []
+    for index, operation in enumerate(rule.get("operations") or ()):
+        if operation.get("op") != "append":
+            continue
+        operation_id = _operation_key(rule, index, operation)
+        expected, issues = instantiate_slots(str(operation.get("new_text") or ""), facts)
+        needle = _compact(expected)
+        if issues or len(needle) < 20:
+            continue  # Independent operation/fact checks retain their own failures.
+        record = next((item for item in records
+                       if item.spec.operation_id == operation_id), None)
+        for locations in _g16_clause_locations(original):
+            try:
+                before = _compact("".join(original.by_location(loc).text for loc in locations))
+                after = _compact("".join(artifact.by_location(loc).text for loc in locations))
+            except (KeyError, ValueError, IndexError, AttributeError):
+                continue  # Missing paragraphs are independently rejected by replay.
+            if after.count(needle) > max(1, before.count(needle)):
+                failures.append({
+                    "rule_id": "G16", "operation_id": operation_id,
+                    "obligation_id": record.obligation_id if record else "",
+                    "location": locations[-1], "locations": list(locations),
+                    "code": "CLAIM_DUPLICATE_EFFECT",
+                    "reason": "the final G16 policy appears more than once in one source fee clause",
+                })
+    return failures
+
+
 def _facts_numbers(facts: Any) -> tuple[str, ...]:
     """Numbers whose provenance is a VERIFIED fact (rates etc.)."""
     if facts is None or not hasattr(facts, "as_ledger"):
@@ -58,10 +97,51 @@ def _operation_keys(edit: Mapping[str, Any],
         return keys
     target = (targets_by_id or {}).get(str(edit.get("target_id") or ""))
     if isinstance(target, Mapping):
+        # A target carrying several operations is a shared planning container, not
+        # authorization for an unattributed component.  Let callers with an
+        # explicit operation key select the operation; otherwise fail closed rather
+        # than allowing a component to borrow its sibling's rights.
         keys = [str(key) for key in (target.get("operations") or []) if str(key).strip()]
-        if keys:
+        if len(keys) == 1:
             return keys
     return []
+
+
+def _operation_key(rule: Mapping[str, Any], index: int,
+                   operation: Mapping[str, Any] | None = None) -> str:
+    """Resolve the guide-declared identity, with legacy fixture compatibility."""
+    declared = str((operation or {}).get("operation_id") or "").strip()
+    rule_id = str(rule.get("rule_id") or "").strip()
+    return declared or f"{rule_id}:{index}"
+
+
+def _operation_record(rule: Mapping[str, Any], index: int, obligations: Any) -> Any:
+    if obligations is None:
+        return None
+    operations = list(rule.get("operations") or [])
+    operation = operations[index] if 0 <= index < len(operations) else None
+    return obligations.record(_operation_key(rule, index, operation))
+
+
+def _validation_status(validation: Any) -> str:
+    """Return a conservative validator status.
+
+    Validators historically returned PASS/FAIL.  Newer or injected validators may
+    return UNKNOWN/CONFLICT; neither is evidence of a successful artifact claim.
+    Keeping this normalization local also protects replay when an older validator
+    object is mixed with a newer report.
+    """
+    status = str(getattr(validation, "verdict", "UNKNOWN") or "UNKNOWN").upper()
+    return status if status in {"PASS", "FAIL", "UNKNOWN", "CONFLICT"} else "UNKNOWN"
+
+
+def _validation_failure_code(validation: Any) -> str:
+    status = _validation_status(validation)
+    if status == "UNKNOWN":
+        return "CLAIM_VALIDATION_UNKNOWN"
+    if status == "CONFLICT":
+        return "CLAIM_VALIDATION_CONFLICT"
+    return "CLAIM_VALIDATION_FAILED"
 
 
 def _operation_indices(rule: Mapping[str, Any], keys: Sequence[str],
@@ -79,10 +159,14 @@ def _operation_indices(rule: Mapping[str, Any], keys: Sequence[str],
             indices.add(int(record.spec.operation_index))
             continue
         rule_id = str(rule.get("rule_id") or "")
-        if str(key).startswith(rule_id + ":"):
-            tail = str(key).split(":", 1)[1]
-            if tail.isdigit():
-                indices.add(int(tail))
+        for index, operation in enumerate(operations):
+            # The declared guide identity is authoritative.  The helper itself
+            # retains RULE:index only for genuinely legacy operations; adding a
+            # second derived alias here would let a custom operation borrow a
+            # sibling's obligation.
+            if str(key) == _operation_key(rule, index, operation):
+                indices.add(index)
+                break
     valid = {index for index in indices if 0 <= index < len(operations)}
     return sorted(valid), "operations" if valid else "rule"
 
@@ -110,7 +194,7 @@ def _authorization_for_operation(rule: Mapping[str, Any], indices: Sequence[int]
     # ONE_OF historical wordings are alternatives of the same obligation.
     if obligations is not None:
         for index in indices:
-            record = obligations.record(f"{rule.get('rule_id')}:{index}")
+            record = _operation_record(rule, index, obligations)
             if record is not None:
                 removals.extend(str(value) for value in record.spec.alternatives if str(value))
     return Authorization(must_add=tuple(must_add), remove_patterns=tuple(removals),
@@ -192,11 +276,13 @@ def _units_for_edit(edit: Mapping[str, Any]) -> list[Mapping[str, Any]]:
 def _describe_operation(rule: Mapping[str, Any], indices: Sequence[int],
                         obligations: Any) -> tuple[str, str]:
     rule_id = str(rule.get("rule_id") or "")
-    operation_ids = [f"{rule_id}:{index}" for index in indices] or [f"{rule_id}:?"]
+    operations = list(rule.get("operations") or [])
+    operation_ids = [_operation_key(rule, index, operations[index] if index < len(operations) else None)
+                     for index in indices] or [f"{rule_id}:?"]
     obligation_ids: list[str] = []
     if obligations is not None:
         for index in indices:
-            record = obligations.record(f"{rule_id}:{index}")
+            record = _operation_record(rule, index, obligations)
             if record is not None:
                 obligation_ids.append(record.obligation_id)
     return ",".join(operation_ids), ",".join(sorted(set(obligation_ids)))
@@ -249,6 +335,14 @@ def _occurrence_positions(text: str, needle: str) -> list[tuple[int, int]]:
     return found
 
 
+def _occurrence_index(target: Mapping[str, Any]) -> int:
+    try:
+        value = int(target.get("occurrence_index", -1))
+    except (TypeError, ValueError):
+        return -1
+    return value if value >= 0 else -1
+
+
 def operations_for(rule: Mapping[str, Any], indices: Sequence[int]) -> list[Mapping[str, Any]]:
     operations = list(rule.get("operations") or [])
     return [operations[index] for index in indices
@@ -261,7 +355,8 @@ def _own_effect_errors(rule: Mapping[str, Any], indices: Sequence[int],
                        replacement: str, validation: Any,
                        content_source: str = "", facts: Any = None,
                        evidence: Mapping[str, Any] | None = None,
-                       expected_old_text: str = "") -> list[str]:
+                        expected_old_text: str = "", original: Any = None,
+                        location: str = "", start: int = 0, end: int = 0) -> list[str]:
     """Prove the operation used its own authorization, not a sibling's.
 
     For a multi-operation rule each selected operation must carry its own required
@@ -300,6 +395,109 @@ def _own_effect_errors(rule: Mapping[str, Any], indices: Sequence[int],
     if expected_old_text:
         owned_removals.append(_compact(expected_old_text))
     evidence = evidence or {}
+    if (str(rule.get("rule_id") or "") == "G11" and len(selected) == 1
+            and not replacement and (content_source == "composite_delete"
+                                      or evidence.get("composite_tail"))):
+        # Do not trust a composite's supplied parts or expected_old_text to grant
+        # permission over the next independent class policy. Re-read both source
+        # paragraphs and require precisely the bearer sentence's continuation.
+        from ..recall import _g11_bearer_end
+        paragraphs = list(getattr(original, "paragraphs", ()))
+        position = next((index for index, span in enumerate(paragraphs)
+                         if str(span.location) == location), -1)
+        if position <= 0:
+            return ["CLAIM_OPERATION_SPAN_UNAUTHORIZED"]
+        previous = str(paragraphs[position - 1].text)
+        current = str(paragraphs[position].text)
+        boundary = _g11_bearer_end(previous + current, selected[0])
+        if (boundary is None or boundary <= len(previous) or start != 0
+                or end != boundary - len(previous)):
+            return ["CLAIM_OPERATION_SPAN_UNAUTHORIZED"]
+    if str(rule.get("rule_id") or "") == "G12" and len(selected) == 1:
+        from ..recall import _g12_allocation_end, _g12_source_effect_owned
+        if _g12_allocation_end(before_unit, selected[0]) is not None:
+            return ([] if _g12_source_effect_owned(before_unit, replacement, selected[0])
+                    else ["CLAIM_OPERATION_SPAN_UNAUTHORIZED"])
+    if str(rule.get("rule_id") or "") == "G13" and len(selected) == 1:
+        from ..recall import _g13_short_holding_end
+        short_end = _g13_short_holding_end(before_unit, selected[0])
+        if short_end is not None:
+            return ([] if replacement == before_unit[short_end:]
+                    else ["CLAIM_OPERATION_SPAN_UNAUTHORIZED"])
+    if str(rule.get("rule_id") or "") == "G17" and own_kinds == {"delete"}:
+        from ..recall import _g17_source_effect_owned
+        if original is None or not _g17_source_effect_owned(
+                original, location, start, end, replacement, selected):
+            return ["CLAIM_OPERATION_SPAN_UNAUTHORIZED"]
+        # The independent source check has proved all removals and preservation.
+        # Do not let claimed provenance add any further deletion permission.
+        owned_removals = [_compact(before_unit)]
+    if (str(rule.get("rule_id") or "") == "G15" and own_kinds == {"delete"}
+            and explicit_span and not replacement.strip()):
+        from ..recall import _g15_payment_source_owned, _g15_delay_continuation
+        if (len(selected) != 1 or not (
+                _g15_payment_source_owned(before_unit, selected[0]) or
+                (original is not None and
+                 _g15_delay_continuation(original, location, selected[0]) == (start, end)))):
+            return ["CLAIM_OPERATION_SPAN_UNAUTHORIZED"]
+    if (str(rule.get("rule_id") or "") in {"G01", "G03"}
+            and own_kinds == {"append"} and explicit_span and original is not None):
+        from ..recall import _definition_next_entry_start, _split_definition_end
+        source_span = original.by_location(location)
+        split_end = _split_definition_end(source_span, original)
+        if split_end is not None and split_end.location != location:
+            return ["CLAIM_OPERATION_SPAN_UNAUTHORIZED"]
+        boundary = _definition_next_entry_start(str(source_span.text))
+        if boundary is not None and (start, end) != (boundary, boundary):
+            return ["CLAIM_OPERATION_SPAN_UNAUTHORIZED"]
+    if str(rule.get("rule_id") or "") == "G15" and (
+            _compact(before_unit).startswith("若遇") or content_source == "g15_delay_delete"):
+        from ..recall import _g15_delay_continuation
+        if (original is None or len(selected) != 1 or replacement != ""
+                or _g15_delay_continuation(original, location, selected[0]) != (start, end)):
+            return ["CLAIM_OPERATION_SPAN_UNAUTHORIZED"]
+        owned_removals.append(_compact(before_unit))
+    if content_source == "bounded_delete":
+        # Recompute this executor's source boundary and own authorization; a
+        # recorded slice or strategy string cannot grant deletion permission.
+        from ..recall import _g15_payment_clause_end, _g15_payment_delete_authorized
+        if (str(rule.get("rule_id") or "") != "G15" or len(selected) != 1
+                or not _g15_payment_delete_authorized(selected[0])
+                or replacement != ""
+                or _g15_payment_clause_end(before_unit, 0, len(before_unit)) != len(before_unit)):
+            return ["CLAIM_OPERATION_SPAN_UNAUTHORIZED"]
+    fixed_text = ""
+    if evidence.get("mode") == "g09_bounded_splice":
+        # A mode/fixed_text field is a claim, not authorization. Recreate the
+        # bounded splice from this unit's original slice and selected operation;
+        # this also supports old reports that did not record fixed_text.
+        from .template import plan_g09_splice, splice_pairs
+        from ..recall import instantiate_policy_text
+
+        pairs: list[tuple[str, str]] = []
+        if (rule.get("rule_id") == "G09" and len(selected) == 1
+                and selected[0].get("op") == "replace"):
+            operation = selected[0]
+            policy = str(operation.get("new_text") or "")
+            issues: list[str] = []
+            if facts is not None:
+                policy, issues = instantiate_policy_text("G09", operation, facts)
+            if not issues and policy:
+                pairs = splice_pairs(str(operation.get("old_text") or ""), policy)
+        result = plan_g09_splice(before_unit, pairs) if pairs else None
+        if (result is None or result.replacement != replacement
+                or (evidence.get("fixed_text") is not None
+                    and evidence["fixed_text"] != result.replacement)):
+            return ["CLAIM_OPERATION_SPAN_UNAUTHORIZED"]
+        # Replay must independently require the complete G09 effect.  A
+        # reproducible partial splice (for example, only adding 的 to the NAV
+        # phrase) is still an incomplete policy execution.
+        result_compact = _compact(result.replacement)
+        if ("扣除或加上相应的费用" not in result_compact
+                or "当日该类基金份额的基金份额净值" not in result_compact):
+            return ["CLAIM_OPERATION_EFFECT_MISSING"]
+        fixed_text = _compact(result.replacement)
+        own_texts.append(fixed_text)
     for key in ("matched_old_text", "deleted_quote", "deleted_paragraph",
                 "expected_old_text", "old_text", "deleted_fragment"):
         value = evidence.get(key)
@@ -316,12 +514,27 @@ def _own_effect_errors(rule: Mapping[str, Any], indices: Sequence[int],
                 owned_removals.append(_compact(str(value)))
     if obligations is not None:
         for index in indices:
-            record = obligations.record(f"{rule.get('rule_id')}:{index}")
+            record = _operation_record(rule, index, obligations)
             if record is not None:
                 owned_removals.extend(_compact(str(value))
                                       for value in record.spec.alternatives if str(value))
     before_compact = _compact(before_unit)
     replacement_compact = _compact(replacement)
+    if str(rule.get("rule_id") or "") in {"G08", "G11"} and "replace" in own_kinds:
+        # Clause numbers belong to source structure, not to the policy wording
+        # authorized for replacement. Re-read the original slice; do not trust
+        # a planner's preservation claim or a counterfeit replacement number.
+        from .template import clause_number_prefix
+        number = clause_number_prefix(before_unit)
+        if number and not replacement.startswith(number):
+            errors.add("CLAIM_OPERATION_SPAN_UNAUTHORIZED")
+    if own_kinds == {"delete"}:
+        # A deletion can retain source text, but cannot add or duplicate it.
+        # The source slice excludes any prefix/suffix preserved by the executor.
+        remaining = iter(before_compact)
+        if not all(any(char == source_char for source_char in remaining)
+                   for char in replacement_compact):
+            errors.add("CLAIM_OPERATION_SPAN_UNAUTHORIZED")
     # A composite replace has one anchor part carrying the new policy and later
     # parts that only delete the remainder of the old sentence.  The tail must not be
     # required to contain the new_text again (D16 p222).
@@ -333,7 +546,7 @@ def _own_effect_errors(rule: Mapping[str, Any], indices: Sequence[int],
     #    fragment/guide edits must carry every selected operation's own new wording.
     composed = "compose" in content_source.lower()
     if not composed:
-        from ..recall import instantiate_slots
+        from ..recall import instantiate_policy_text
         for operation in selected:
             if composite_tail:
                 # The new policy is anchored in part 0; this part only carries the
@@ -346,8 +559,11 @@ def _own_effect_errors(rule: Mapping[str, Any], indices: Sequence[int],
             if len(new_text) < 3:
                 continue
             expected = {new_text}
+            if evidence.get("mode") == "g09_bounded_splice" and fixed_text:
+                expected.add(fixed_text)
             try:
-                instantiated, issues = instantiate_slots(raw_new, facts)
+                instantiated, issues = instantiate_policy_text(
+                    str(rule.get("rule_id") or ""), operation, facts)
                 if not issues and instantiated:
                     expected.add(_compact(instantiated))
             except Exception:  # noqa: BLE001 - instantiation is an extra tolerance
@@ -453,8 +669,7 @@ def _joint_operation_effects(unit: Mapping[str, Any],
         if not (0 <= index < len(operations)):
             continue
         operation = operations[index]
-        record = (obligations.record(f"{rule.get('rule_id')}:{index}")
-                  if obligations is not None else None)
+        record = _operation_record(rule, index, obligations)
         if record is not None and record.spec.one_of_group:
             one_of = True
         if operation.get("op") in {"replace", "append"}:
@@ -493,6 +708,7 @@ def _operation_units(group: Sequence[Mapping[str, Any]],
                      components_by_rule: Mapping[str, Sequence[Mapping[str, Any]]] | None,
                      required_terms_by_rule: Mapping[str, Sequence[str]] | None,
                      facts_numbers: tuple[str, ...], facts: Any = None,
+                     original: Any = None, location: str = "",
                      ) -> list[dict[str, Any]]:
     """Build one authorization unit per operation-level edit/component."""
     from .validators import validate_edit
@@ -552,6 +768,14 @@ def _operation_units(group: Sequence[Mapping[str, Any]],
                     auth = _authorization_for_group(group, rules_by_id)
                 else:
                     auth = _authorization_for_operation(rule, indices, obligations, keys)
+                    if rule_id == "G12" and len(indices) == 1:
+                        from dataclasses import replace
+                        from ..recall import _g12_allocation_end, _g12_source_effect_owned
+                        operation = rule["operations"][indices[0]]
+                        if _g12_source_effect_owned(before_unit, after_unit, operation):
+                            allocation_end = _g12_allocation_end(before_unit, operation)
+                            auth = replace(auth, remove_patterns=(
+                                *auth.remove_patterns, before_unit[:allocation_end]))
                 components = tuple((components_by_rule or {}).get(rule_id) or ())
                 terms = tuple(dict.fromkeys((required_terms_by_rule or {}).get(rule_id) or ()))
                 # G02/G04 required class labels belong to the target paragraph, not to
@@ -572,13 +796,18 @@ def _operation_units(group: Sequence[Mapping[str, Any]],
                                       or edit.get("content_source") or ""),
                     facts=facts,
                     evidence=dict(unit.get("evidence") or edit.get("evidence") or {}),
-                    expected_old_text=str(unit.get("expected_old_text") or "")))
+                    expected_old_text=str(unit.get("expected_old_text") or ""),
+                    original=original, location=location, start=start, end=end))
+                if rule_id == "G08" and explicit_span and len(indices) == 1 and facts is not None:
+                    from ..recall import _g08_fee_clause_start
+                    expanded = _g08_fee_clause_start(before, start, end,
+                        rule["operations"][indices[0]], facts)
+                    if expanded < start and _compact(before[expanded:start]) in _compact(after):
+                        effect_errors.append("CLAIM_DUPLICATE_EFFECT")
                 target_id = str(unit.get("target_id") or edit.get("target_id") or "")
                 target = (targets_by_id or {}).get(target_id)
                 if isinstance(target, Mapping) and indices:
-                    raw_occurrence = target.get("occurrence_index")
-                    occurrence_index = (int(raw_occurrence)
-                                        if raw_occurrence is not None else -1)
+                    occurrence_index = _occurrence_index(target)
                     old_text = str(operations_for(rule, indices)[0].get("old_text") or "")
                     if occurrence_index >= 0 and old_text:
                         positions = _occurrence_positions(before, old_text)
@@ -612,8 +841,8 @@ def _operation_units(group: Sequence[Mapping[str, Any]],
                     "indices": list(indices),
                     "validation": validation,
                     "effect_errors": effect_errors,
-                    "verdict": ("FAIL" if effect_errors or validation.verdict == "FAIL"
-                                else "PASS"),
+                    "verdict": ("FAIL" if effect_errors or _validation_status(validation) != "PASS"
+                                 else "PASS"),
                     "components": components,
                     "required_terms": terms,
                     "evidence": dict(unit.get("evidence") or edit.get("evidence") or {}),
@@ -653,6 +882,56 @@ def replay_claims(edits: Sequence[Mapping[str, Any]], before_inspection: Any,
     units_checked = 0
     operation_records: list[dict[str, Any]] = []
     allowed_locations = set(by_location)
+    # Detect duplicate target claims before any edit is evaluated.  This check must
+    # also run for direct replay callers without an obligation ledger; otherwise a
+    # paragraph-level edit can accidentally stand in for two same-operation sites.
+    duplicate_target_failures: list[dict[str, Any]] = []
+    targets = list((targets_by_id or {}).values())
+    duplicate_target_groups: dict[str, list[Mapping[str, Any]]] = {}
+    for target in targets:
+        if not isinstance(target, Mapping) or target.get("out_of_scope"):
+            continue
+        # An inventory ``absent``/not-applicable alias at the same source site is
+        # a stale negative assertion, not a second editable occurrence.  It must
+        # not make the real survey target's occurrence ambiguous (G17 p846/p1326).
+        if str(target.get("state") or "") in {"absent", "not_applicable"}:
+            continue
+        for key in target.get("operations") or ():
+            duplicate_target_groups.setdefault(str(key), []).append(target)
+    for operation_id, group in sorted(duplicate_target_groups.items()):
+        if len(group) < 2:
+            continue
+        locations = {str(item.get("location") or "") for item in group}
+        # A missing location is itself ambiguous when an operation has more than
+        # one target.  Multiple targets at one known location are equally unsafe
+        # unless occurrence_index distinguishes them.
+        location_counts: dict[str, int] = {}
+        for item in group:
+            location = str(item.get("location") or "")
+            location_counts[location] = location_counts.get(location, 0) + 1
+        ambiguous_locations = sorted(location for location, count in location_counts.items()
+                                     if count > 1 or not location)
+        if not ambiguous_locations:
+            continue
+        occurrence_unresolved = False
+        for location in ambiguous_locations:
+            candidates = [item for item in group
+                          if str(item.get("location") or "") == location]
+            occurrences = [_occurrence_index(item) for item in candidates]
+            if (any(value < 0 for value in occurrences)
+                    or len(set(occurrences)) != len(occurrences)):
+                occurrence_unresolved = True
+                break
+        if occurrence_unresolved:
+            duplicate_target_failures.append({
+                "rule_id": operation_id.split(":", 1)[0],
+                "operation_id": operation_id,
+                "location": next((location for location in ambiguous_locations if location),
+                                 next(iter(locations), "")),
+                "code": "CLAIM_SITE_OCCURRENCE_UNRESOLVED",
+                "reason": "multiple targets for one operation/site lack occurrence identity",
+            })
+    failures.extend(duplicate_target_failures)
     # Duplicate clause copies (body and contract summary) must not diverge: if an
     # identical source paragraph exists elsewhere and is left untouched, the same
     # clause now has two different dispositions (D01 G15 p758 vs p1221).
@@ -745,7 +1024,7 @@ def replay_claims(edits: Sequence[Mapping[str, Any]], before_inspection: Any,
         # Operation-level authorization units (never a per-location union).
         units = _operation_units(group, rules_by_id, targets_by_id, obligations, before,
                                  after, components_by_rule, required_terms_by_rule,
-                                 facts_numbers, facts)
+                                 facts_numbers, facts, original=before_inspection, location=location)
         overlap = False
         spans = sorted((unit.get("start"), unit.get("end")) for unit in units
                        if unit.get("error") is None)
@@ -777,7 +1056,8 @@ def replay_claims(edits: Sequence[Mapping[str, Any]], before_inspection: Any,
                                        components=tuple(joint_components),
                                        required_terms=tuple(dict.fromkeys(required_terms)),
                                        authorized_numbers=facts_numbers)
-            joint_ok = validation.verdict != "FAIL"
+            # UNKNOWN and CONFLICT are not successful artifact proofs.
+            joint_ok = _validation_status(validation) == "PASS"
             if joint_ok:
                 # Any text introduced by the joint result must be one of the selected
                 # operations' own new wording; UNEXPLAINED_SOFT is not enough here.
@@ -857,7 +1137,7 @@ def replay_claims(edits: Sequence[Mapping[str, Any]], before_inspection: Any,
                     unit["verdict"] = "FAIL"
                 validation = unit.get("validation")
                 effect_errors = list(unit.get("effect_errors") or ())
-                if validation is not None and validation.verdict == "FAIL":
+                if validation is not None and _validation_status(validation) != "PASS":
                     codes = sorted({finding.code for finding in validation.findings}
                                    | set(effect_errors))
                     failures.append({
@@ -867,7 +1147,7 @@ def replay_claims(edits: Sequence[Mapping[str, Any]], before_inspection: Any,
                         "obligation_id": unit.get("obligation_id", ""),
                         "authorized_span": [unit["start"], unit["end"]],
                         "joint": True,
-                        "code": "CLAIM_VALIDATION_FAILED",
+                        "code": _validation_failure_code(validation),
                         "reason": ",".join(codes or ["UNEXPLAINED_CHANGE"])})
                     joint_ok = False
                     unit["verdict"] = "FAIL"
@@ -915,7 +1195,7 @@ def replay_claims(edits: Sequence[Mapping[str, Any]], before_inspection: Any,
                     unit["verdict"] = "FAIL"
                 validation = unit["validation"]
                 effect_errors = list(unit.get("effect_errors") or ())
-                if validation.verdict == "FAIL":
+                if _validation_status(validation) != "PASS":
                     codes = sorted({finding.code for finding in validation.findings}
                                    | set(effect_errors))
                     hard = [record.reason for record in validation.changes
@@ -927,7 +1207,7 @@ def replay_claims(edits: Sequence[Mapping[str, Any]], before_inspection: Any,
                         "obligation_id": unit.get("obligation_id", ""),
                         "authorized_span": [unit["start"], unit["end"]],
                         "scope": unit.get("scope", ""),
-                        "code": "CLAIM_VALIDATION_FAILED",
+                        "code": _validation_failure_code(validation),
                         "reason": ",".join(codes or hard or ["UNEXPLAINED_CHANGE"]),
                         "validator": validation.as_dict()})
                     unit["verdict"] = "FAIL"
@@ -983,17 +1263,21 @@ def replay_claims(edits: Sequence[Mapping[str, Any]], before_inspection: Any,
     records = getattr(obligations, "records", None)
     if records is None:
         records = list((getattr(obligations, "_records", {}) or {}).values())
+    clause_duplicates = _g16_duplicate_effects(
+        before_inspection, after_inspection, rules_by_id, facts, records)
+    failures.extend(clause_duplicates)
     # A deletion may legitimately remove a sentence that another certified
     # operation reintroduces in its NEW policy at this same site. Only a validated
     # final component and its complete guide text can provide that authorization.
-    from ..recall import instantiate_slots
+    from ..recall import instantiate_policy_text
     new_texts = {}
     for record in records:
         if record.spec.op not in {"append", "replace"}:
             continue
         value = str(record.spec.new_text or "")
         try:
-            instantiated, issues = instantiate_slots(value, facts)
+            instantiated, issues = instantiate_policy_text(
+                record.spec.rule_id, {"op": record.spec.op, "new_text": value}, facts)
             if issues:
                 continue
             value = instantiated
@@ -1047,6 +1331,30 @@ def replay_claims(edits: Sequence[Mapping[str, Any]], before_inspection: Any,
             continue
         operation_id = str(record.spec.operation_id)
         sites: list[dict[str, Any]] = []
+        # Two targets for the same operation and paragraph must carry occurrence
+        # identity.  Collapsing them to ``pN`` makes a single successful edit look
+        # like proof for both targets and makes replay dependent on target order.
+        same_location_targets: dict[str, list[Mapping[str, Any]]] = {}
+        for candidate in targets:
+            candidate_keys = {str(key) for key in (candidate.get("operations") or ())}
+            if (operation_id in candidate_keys and not candidate.get("out_of_scope")
+                    and str(candidate.get("state") or "") not in {"absent", "not_applicable"}
+                    and str(candidate.get("location") or "")):
+                same_location_targets.setdefault(str(candidate.get("location")), []).append(candidate)
+        ambiguous_locations = set()
+        for location, candidates in same_location_targets.items():
+            occurrences = [_occurrence_index(candidate) for candidate in candidates]
+            if (len(candidates) > 1 and
+                    (any(value < 0 for value in occurrences)
+                     or len(set(occurrences)) != len(occurrences))):
+                ambiguous_locations.add(location)
+        for location in sorted(ambiguous_locations):
+            failures.append({"rule_id": record.spec.rule_id,
+                             "operation_id": operation_id,
+                             "obligation_id": record.obligation_id,
+                             "location": location,
+                             "code": "CLAIM_SITE_OCCURRENCE_UNRESOLVED",
+                             "reason": "multiple targets for one operation/site lack occurrence identity"})
         for target in targets:
             # Inventory ``absent`` is a window-level negative assertion, not a
             # verified business site.  A generic heading (for example a summary
@@ -1063,6 +1371,8 @@ def replay_claims(edits: Sequence[Mapping[str, Any]], before_inspection: Any,
             if operation_id not in keys or target.get("out_of_scope"):
                 continue
             location = str(target.get("location") or "")
+            if location in ambiguous_locations:
+                continue
             try:
                 before_text = str(before_inspection.by_location(location).text)
             except (KeyError, ValueError, IndexError, AttributeError):
@@ -1078,29 +1388,40 @@ def replay_claims(edits: Sequence[Mapping[str, Any]], before_inspection: Any,
                 quote = before_text
             else:
                 quote = str(target.get("quote") or "")
+                # Use the real source delimiter for a fully bound quote before
+                # testing literal site evidence. A terminal semicolon/full-stop
+                # difference must neither drop the site nor reduce it to a prefix.
+                from ..recall import resolve_quote
+                span = before_inspection.by_location(location)
+                bound = resolve_quote(span, quote) if quote else None
+                if bound is not None:
+                    actual_quote = before_text[bound[0]:bound[1]]
+                    if (_compact(quote).rstrip("。；;") ==
+                            _compact(actual_quote).rstrip("。；;")):
+                        quote = actual_quote
             parts = []
             for part in target.get("composite") or []:
-                from ..recall import display_text
+                from ..recall import compact_offsets
                 try:
                     part_location, start, end = str(part).rsplit(":", 2)
                     part_span = before_inspection.by_location(part_location)
-                    normalized, _ = display_text(part_span.text)
+                    normalized, _ = compact_offsets(part_span.text)
                     parts.append({"location": part_location,
                                   "quote": normalized[int(start):int(end)]})
                 except (KeyError, ValueError, IndexError, AttributeError):
                     continue
             if not operation_site_bound(record.spec, quote, before_inspection,
                                         location, facts, parts=parts,
-                                        occurrence_index=int(target.get("occurrence_index", -1))):
+                                        occurrence_index=_occurrence_index(target)):
                 continue
             identity = {"state": ("satisfied" if state == "absent"
-                                  else target.get("state")),
+                                   else target.get("state")),
                         "operation_id": operation_id,
                         "obligation_id": record.obligation_id,
                         "target_id": target.get("target_id")}
             if quote and _compact(quote) in _compact(before_text):
                 sites.append({"location": location, "quote": quote,
-                              "occurrence_index": target.get("occurrence_index", -1),
+                              "occurrence_index": _occurrence_index(target),
                               **identity})
             sites.extend({**part, **identity} for part in parts)
         superseded_site = any(
@@ -1177,6 +1498,20 @@ def replay_claims(edits: Sequence[Mapping[str, Any]], before_inspection: Any,
             sites, effect_edits, facts, validated_units=own_records,
             authorized_new_texts=authorized_new_texts)
         obligation_state[record.obligation_id] = result.as_dict()
+        duplicates = [item for item in clause_duplicates
+                      if item["operation_id"] == record.spec.operation_id]
+        if duplicates:
+            # Coverage/delivery must receive the same failure as document replay;
+            # do not leave individual operation/site effects marked PASS.
+            item = obligation_state[record.obligation_id]
+            item.update(state="FAIL", artifact_status="WRONG_EFFECT",
+                        failure_code="CLAIM_DUPLICATE_EFFECT",
+                        reason=duplicates[0]["reason"])
+            locations = {loc for duplicate in duplicates for loc in duplicate["locations"]}
+            for site in item.get("site_effects") or ():
+                if site.get("location") in locations:
+                    site.update(state="FAIL", artifact_status="WRONG_EFFECT",
+                                failure_code="CLAIM_DUPLICATE_EFFECT")
 
     # Explicit ONE_OF wording alternatives share only their verified BUSINESS SITE.
     # No global text absence, rule-level success or sibling independent operation closes it.
@@ -1304,7 +1639,7 @@ def check_delete_residuals(rules_by_id: Mapping[str, dict], after_inspection: An
                 continue
             if facts is not None and condition_status(operation.get("condition"), facts) != "TRUE":
                 continue
-            operation_id = str(operation.get("operation_id") or f"{rule_id}:{index}")
+            operation_id = _operation_key(rule, index, operation)
             record = obligations.record(operation_id) if obligations is not None else None
             if record is not None and record.applicability.status != "TRUE":
                 continue

@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Mapping
 
-from .registry import strategy_for
+from .registry import operation_for
 from .types import GenerationTier as T, RouteDecision, StrategySpec
 
 
@@ -267,25 +267,75 @@ def route_operation(operation_key: str, *,
     ``structure`` is ``"clean" | "mixed" | "unsafe" | None`` (text-structure
     analysis, performed by later phases).
     """
-    spec = spec or strategy_for(operation_key)
-    fact_status = fact_status or {}
+    # An explicitly supplied spec is supported for old callers and custom
+    # adapters.  Otherwise resolve the operation entry, never just its rule.
+    spec = spec or operation_for(operation_key)
+    raw_fact_status = fact_status or {}
+    normalized_facts = {
+        str(name): str(status).strip().upper()
+        for name, status in raw_fact_status.items()
+    }
 
-    missing = [name for name in spec.required_fact_status
-               if fact_status.get(name) != "VERIFIED"]
+    dependencies = tuple(dict.fromkeys(
+        (*spec.required_fact_status,
+         *(spec.policy_components.fact_dependencies
+           if spec.policy_components is not None else ()))
+    ))
+    missing = [name for name in dependencies
+               if normalized_facts.get(name) != "VERIFIED"]
     if missing:
-        return RouteDecision(operation_key, spec.default_tier, None,
-                             fallback_reason="FACT_NOT_VERIFIED:" + ",".join(sorted(missing)),
-                             blocked=True)
+        statuses = tuple(sorted((name, normalized_facts.get(name, "UNKNOWN"))
+                                for name in missing))
+        reason = "FACT_NOT_VERIFIED:" + ",".join(
+            f"{name}={status}" for name, status in statuses)
+        return RouteDecision(
+            operation_key, spec.default_tier, None, fallback_reason=reason,
+            blocked=True, selected_executor=None,
+            fact_blocking=tuple(name for name, _ in statuses),
+            fact_status=statuses,
+        )
 
     tier = spec.default_tier
     reason: str | None = None
-    if structure == "clean" and T.TEMPLATE in spec.allowed_tiers:
+    allowed = tuple(spec.allowed_tiers)
+    if structure == "clean" and T.TEMPLATE in allowed:
         if tier is not T.TEMPLATE:
             tier, reason = T.TEMPLATE, "clean_single_sentence"
-    elif structure == "mixed" and tier is T.TEMPLATE and T.SPLICE in spec.allowed_tiers:
-        tier, reason = T.SPLICE, "complex_mixed_clause"
-    elif structure == "unsafe" and T.COMPOSE in spec.allowed_tiers:
-        if tier is not T.COMPOSE:
-            tier, reason = T.COMPOSE, "structure_unsafe_for_splice"
+    elif structure == "mixed":
+        if tier is T.TEMPLATE and T.SPLICE in allowed:
+            tier, reason = T.SPLICE, "complex_mixed_clause"
+        elif tier is T.TEMPLATE and T.COMPOSE in allowed:
+            tier, reason = T.COMPOSE, "mixed_clause_requires_compose"
+    elif structure == "unsafe":
+        # Unsafe structure means that a safe splice boundary is unavailable;
+        # when compose is authorized it is the only valid fallback.  Do not
+        # route through Tier2 merely because it appears earlier in the list.
+        if tier in {T.DELETE, T.COMPOSE}:
+            candidate = tier
+        elif T.COMPOSE in allowed:
+            candidate = T.COMPOSE
+        elif T.SPLICE in allowed and tier is T.TEMPLATE:
+            candidate = T.SPLICE
+        else:
+            candidate = None
+        if candidate is None:
+            return RouteDecision(
+                operation_key, spec.default_tier, None,
+                fallback_reason="STRUCTURE_UNSUPPORTED:" + str(structure),
+                blocked=True, selected_executor=None,
+                fact_status=tuple(sorted(normalized_facts.items())),
+            )
+        if candidate is not tier:
+            tier, reason = candidate, "structure_unsafe_for_splice"
 
-    return RouteDecision(operation_key, spec.default_tier, tier, fallback_reason=reason)
+    executor = {
+        T.DELETE: "delete",
+        T.TEMPLATE: "template",
+        T.SPLICE: "splice",
+        T.COMPOSE: "compose",
+    }[tier]
+    return RouteDecision(
+        operation_key, spec.default_tier, tier, fallback_reason=reason,
+        blocked=False, selected_executor=executor,
+        fact_status=tuple(sorted(normalized_facts.items())),
+    )

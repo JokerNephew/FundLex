@@ -17,7 +17,7 @@ from typing import Any
 from .recovery import (RecoveryAction, RecoveryAttempt, RecoveryHistory, FailureClass)
 from .recall import Facts, facts_context, facts_from_value
 
-FACT_RECOVERY_PROMPT_VERSION = "recall_fact_recover_v1"
+FACT_RECOVERY_PROMPT_VERSION = "recall_fact_recover_v2"
 FACT_ARBITRATION_PROMPT_VERSION = "recall_fact_arbitrate_v1"
 
 _RECOVERED_CLASS = {
@@ -30,6 +30,8 @@ _RECOVERED_CLASS = {
         "rate": {"type": "string"},
         "current": {"type": "boolean"},
         "quote": {"type": "string"},
+        "subscription_quote": {"type": "string"},
+        "service_quote": {"type": "string"},
     },
 }
 
@@ -69,7 +71,10 @@ FACT_RECOVERY_INSTRUCTION = (
     "true only when a sales-service fee is accrued from that class's assets. A class "
     "carrying both flags is ambiguous: do not force it into either group. Every quote "
     "must be an exact contiguous copy from the contract text and must directly support "
-    "the entry. Do not infer a class letter from another contract. For an empty channel "
+    "the entry. If the two fee booleans are proven by different paragraphs, use subscription_quote "
+    "and service_quote separately, each an exact contiguous source quote proving its own value. "
+    "Missing fee text cannot prove false, and a management-fee quote proves neither fee. "
+    "Do not infer a class letter from another contract. For an empty channel "
     "rule return an empty list and empty quote; never guess. class_set_quote must be an "
     "exact contract sentence that enumerates the fund's current share classes (for "
     "example '本基金将基金份额分为A类、C类和D类不同的类别'); it proves that the list is "
@@ -154,6 +159,7 @@ def _merge_candidate(original: Facts, candidate: Facts) -> Facts:
                                    else original.other_sales_charged_group),
         fact_status=status,
         channel_evidence={**original.channel_evidence, **candidate.channel_evidence},
+        fee_polarities=candidate.fee_polarities,
         quotes_verified={**original.quotes_verified, **candidate.quotes_verified},
         problems=tuple(sorted(set(original.problems) | set(candidate.problems))),
         notes=(original.notes + " | " + candidate.notes).strip(" |"),

@@ -20,6 +20,8 @@ from dataclasses import dataclass
 from difflib import SequenceMatcher
 from typing import Any, Mapping, Sequence
 
+from .types import FACT_STATUSES, PolicyComponents
+
 #: Tokens whose unauthorized change is always a hard failure (V2-B HARD).
 _FEE_ITEM = re.compile(r"(申购|赎回|认购|转换|销售服务|管理|托管)费率")
 #: Fee topics. A topic may never disappear because a neighbouring fee clause was
@@ -48,7 +50,11 @@ HARD_CODES = frozenset({
     "COMPONENT_MISSING",
     "COMPONENT_OUTSIDE_SITE",
     "TOPIC_LOST",
+    "COMPONENT_PRESENT",
+    "PRESERVED_COMPONENT_MISSING",
 })
+
+FACT_BLOCKED_CODES = frozenset({"FACT_UNKNOWN", "FACT_CONFLICT", "FACT_NOT_VERIFIED"})
 
 _FAILURE_CLASSES = {
     "MISSING_REQUIRED_TERM": "GENERATION",
@@ -111,6 +117,8 @@ class ValidationReport:
 
     @property
     def verdict(self) -> str:
+        if any(finding.code in FACT_BLOCKED_CODES for finding in self.findings):
+            return "UNKNOWN"
         if any(record.explanation == "UNEXPLAINED_HARD" for record in self.changes):
             return "FAIL"
         if any(finding.code in HARD_CODES for finding in self.findings):
@@ -451,6 +459,72 @@ def validate_edit(before: str, after: str, *, auth: Authorization,
     return run_validation(before, after, auth=auth, required_terms=required_terms,
                           before_full=before_full, after_full=after_full,
                           components=components, authorized_numbers=authorized_numbers)
+
+
+def fact_blocking(fact_status: Mapping[str, str] | None,
+                  dependencies: Sequence[str]) -> tuple[Finding, ...]:
+    """Return fail-closed findings for facts that cannot authorize generation.
+
+    This helper is intentionally independent from the router so compose callers
+    can apply the same gate before making a model request.  Missing fields are
+    UNKNOWN; only VERIFIED is admitted.  ``VERIFIED([])`` is represented by a
+    VERIFIED status and therefore remains admissible.
+    """
+    statuses = {str(name): str(status).strip().upper()
+                for name, status in (fact_status or {}).items()}
+    findings: list[Finding] = []
+    for name in dependencies:
+        status = statuses.get(str(name), "UNKNOWN")
+        if status == "VERIFIED":
+            continue
+        code = "FACT_CONFLICT" if status == "CONFLICT" else "FACT_UNKNOWN"
+        findings.append(Finding(code, f"{name}={status}", failure_class="FACT"))
+    return tuple(findings)
+
+
+def validate_policy_components(*, components: PolicyComponents,
+                               fact_status: Mapping[str, str] | None = None,
+                               before: str = "", after: str = "",
+                               auth: Authorization | None = None,
+                               check_output: bool = True) -> ValidationReport:
+    """Validate a typed operation policy boundary before/after generation.
+
+    In particular this function must be called before Tier3 compose.  It
+    returns ``UNKNOWN`` for missing/conflicting facts and never treats that
+    state as a successful no-op.
+    """
+    findings = list(fact_blocking(fact_status, components.fact_dependencies))
+    if findings:
+        return ValidationReport(findings=tuple(findings), changes=())
+    if not check_output:
+        return ValidationReport(findings=(), changes=())
+    required_components = tuple(
+        {"id": item.id, "terms": item.terms}
+        for item in components.must_add
+    )
+    report = run_validation(
+        before, after, auth=auth or Authorization(),
+        components=required_components,
+    )
+    extra: list[Finding] = list(report.findings)
+    after_compact = _compact(after)
+    for item in components.must_remove:
+        if any(_compact(term) in after_compact for term in item.terms):
+            extra.append(Finding(
+                "COMPONENT_PRESENT",
+                f"{item.id}:{','.join(item.terms[:4])}",
+                failure_class="GENERATION",
+            ))
+    for item in components.must_preserve:
+        # Semantic preservation is reviewed by V3; deterministic V1 only
+        # checks a literal when the policy component supplied one explicitly.
+        token = str(item.properties.get("text") or "")
+        if token and _compact(token) not in after_compact:
+            extra.append(Finding(
+                "PRESERVED_COMPONENT_MISSING", item.id,
+                failure_class="GENERATION",
+            ))
+    return ValidationReport(findings=tuple(extra), changes=report.changes)
 
 
 def _token_context(text: str, token: str) -> str:

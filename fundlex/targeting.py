@@ -101,7 +101,8 @@ def _open_operation_candidates(
     """
     from .recall import (_RULE_TOPIC_TOKENS, _compact, _delete_keyword_bag,
                          _keyword_bag_in_clause, _looks_like_heading,
-                         condition_status, reference_fragments, target_operation_keys)
+                         condition_status, reference_fragments, target_operation_keys,
+                         _declared_operation_key)
 
     rule_id = str(rule.get("rule_id") or "")
     operation_index = int(getattr(record.spec, "operation_index", 0) or 0)
@@ -131,6 +132,17 @@ def _open_operation_candidates(
         if len(text) < 12:
             return 0
         if topic and not all(token in text for token in topic):
+            return 0
+        if rule_id == "G12" and not (
+                "赎回费用由" in text and "基金财产" in text):
+            return 0
+        if rule_id == "G11" and not ("申购费用由" in text and "承担" in text):
+            return 0
+        if rule_id == "G08" and not ("申购费率" in text and "招募说明书" in text):
+            return 0
+        if rule_id == "G13" and not (
+                "少于7日" in text and "赎回费" in text and
+                ("1.5%" in text or "1.50%" in text)):
             return 0
         if append_site:
             # G16 appends into the sales-service-fee accrual/payment clause, not the
@@ -184,7 +196,7 @@ def _open_operation_candidates(
         if not sibling_keys:
             sibling_keys = target_operation_keys(target, rule, inspection)
         current_id = str(getattr(record.spec, "operation_id", "") or
-                         f"{rule_id}:{operation_index}")
+                         _declared_operation_key(rule_id, operation_index, operation))
         if current_id in sibling_keys:
             continue
         for location in ([target.location] if not getattr(target, "composite", ())
@@ -555,15 +567,17 @@ def target_for_missing_operation(
     """
     if not _enabled():
         return None
-    from .recall import Target
+    from .recall import Target, _declared_operation_key
 
     rule_id = str(getattr(record.spec, "rule_id", "") or "")
     operation_index = int(getattr(record.spec, "operation_index", 0) or 0)
-    operation_id = str(getattr(record.spec, "operation_id", "") or
-                       f"{rule_id}:{operation_index}")
     rule = rules_by_id.get(rule_id)
     if rule is None:
         return None
+    operations = rule.get("operations") or []
+    operation = operations[operation_index] if 0 <= operation_index < len(operations) else {}
+    operation_id = str(getattr(record.spec, "operation_id", "") or
+                       _declared_operation_key(rule_id, operation_index, operation))
     for target in targets:
         keys = set(getattr(target, "operations", ()) or ())
         if operation_id in keys and getattr(target, "state", "") == "needs_edit" \
@@ -596,7 +610,8 @@ def targets_for_open_rules(obligations: Any, targets: Sequence[Any], rules_by_id
     """
     from .recall import (Target, _compact, _append_obligation_present,
                          class_substitution_noop, instantiate_slots,
-                         satisfied_operation_keys, target_operation_keys)
+                         satisfied_operation_keys, target_operation_keys,
+                         _declared_operation_key)
 
     if not _enabled():
         return []
@@ -642,7 +657,8 @@ def targets_for_open_rules(obligations: Any, targets: Sequence[Any], rules_by_id
                 old_text = _compact(str(operation.get("old_text") or ""))
                 if operation.get("op") in {"replace", "delete"} and old_text \
                         and old_text not in body:
-                    covered_operations.add(f"{rule_id}:{index}")
+                    covered_operations.add(_declared_operation_key(
+                        rule_id, index, operation))
 
     def operation_closed(rule: dict, record: Any) -> bool:
         operation_index = int(getattr(record.spec, "operation_index", 0) or 0)
@@ -671,9 +687,14 @@ def targets_for_open_rules(obligations: Any, targets: Sequence[Any], rules_by_id
     seen_operations: set[str] = set()
     for record in getattr(obligations, "records", ()):
         rule_id = str(getattr(record.spec, "rule_id", "") or "")
+        rule = rules_by_id.get(rule_id) or {}
         operation_index = int(getattr(record.spec, "operation_index", 0) or 0)
+        operations = rule.get("operations") or []
+        operation = (operations[operation_index]
+                      if 0 <= operation_index < len(operations) else None)
         operation_id = str(getattr(record.spec, "operation_id", "") or
-                           f"{rule_id}:{operation_index}")
+                           _declared_operation_key(
+                               rule_id, operation_index, operation))
         if operation_id in seen_operations or operation_id in covered_operations:
             continue
         if record.applicability.status != "TRUE":
@@ -684,7 +705,6 @@ def targets_for_open_rules(obligations: Any, targets: Sequence[Any], rules_by_id
         seen_operations.add(operation_id)
         if len(created) >= limit:
             break
-        rule = rules_by_id.get(rule_id)
         if rule is None or operation_closed(rule, record):
             continue
         if rule.get("class_substitution") and all(

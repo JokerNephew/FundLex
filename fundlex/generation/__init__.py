@@ -11,7 +11,21 @@ by the pipeline, so behavior (and evaluation output) is unchanged (plan §22).
 """
 from .coverage import CoverageEntry, CoverageLedgerView, build_coverage_view
 from .flags import STRATEGY_MODES, strategy_mode
-from .registry import STRATEGY_REGISTRY, registry_coverage_gaps, strategy_for
+from .components import (
+    COMPONENT_KINDS,
+    COMPONENT_TERMS,
+    component_requirements,
+    policy_components_for_operation,
+)
+from .registry import (
+    OPERATION_REGISTRY,
+    STRATEGY_REGISTRY,
+    operation_for,
+    operation_registry_coverage_gaps,
+    register_operation,
+    registry_coverage_gaps,
+    strategy_for,
+)
 from .router import (
     EscalationDecision,
     FailureTaxonomy,
@@ -22,22 +36,41 @@ from .router import (
 )
 from .types import (
     FACT_STATUSES,
+    ComponentRequirement,
     GenerationTier,
+    OperationSpec,
+    PolicyComponents,
+    PreserveRequirement,
     RouteDecision,
     StrategySpec,
 )
+from .validators import fact_blocking, validate_policy_components
 
 __all__ = [
     "CoverageEntry",
     "CoverageLedgerView",
     "FACT_STATUSES",
+    "COMPONENT_KINDS",
+    "COMPONENT_TERMS",
+    "ComponentRequirement",
     "GenerationTier",
+    "OperationSpec",
+    "PolicyComponents",
+    "PreserveRequirement",
     "RouteDecision",
     "STRATEGY_MODES",
     "STRATEGY_REGISTRY",
+    "OPERATION_REGISTRY",
     "StrategySpec",
     "build_coverage_view",
     "registry_coverage_gaps",
+    "operation_registry_coverage_gaps",
+    "operation_for",
+    "register_operation",
+    "component_requirements",
+    "policy_components_for_operation",
+    "fact_blocking",
+    "validate_policy_components",
     "route_operation",
     "EscalationDecision",
     "FailureTaxonomy",

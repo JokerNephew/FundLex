@@ -9,7 +9,9 @@ from fundlex.generation.validators import (
     check_boundary,
     protected_tokens,
     run_validation,
+    validate_policy_components,
 )
+from fundlex.generation import policy_components_for_operation
 
 G08_REFERENCE = "本基金的申购费率由基金管理人决定，并在招募说明书中列示。"
 G08_POLICY = (
@@ -118,3 +120,25 @@ def test_protected_tokens_cover_the_plan_categories():
     assert "10" in tokens or "10个工作日" in tokens
     assert "0.40%" in tokens
     assert "基金托管人" in tokens
+
+
+def test_unknown_or_conflicting_policy_facts_are_unknown_and_fail_closed():
+    components = policy_components_for_operation(
+        "G16:0", must_add=("daily_accrual",),
+        fact_dependencies=("service_fee_group",),
+    )
+    unknown = validate_policy_components(
+        components=components,
+        fact_status={"service_fee_group": "UNKNOWN"},
+        before="原文", after="模型猜的文案",
+    )
+    conflict = validate_policy_components(
+        components=components,
+        fact_status={"service_fee_group": "CONFLICT"},
+        before="原文", after="模型猜的文案",
+    )
+    assert unknown.verdict == "UNKNOWN"
+    assert conflict.verdict == "UNKNOWN"
+    assert {item.code for item in unknown.findings} == {"FACT_UNKNOWN"}
+    assert {item.code for item in conflict.findings} == {"FACT_CONFLICT"}
+    assert not unknown.changes

@@ -16,8 +16,11 @@ from pathlib import Path
 
 import pytest
 
-pytestmark = pytest.mark.skipif(os.getenv("FUNDLEX_BROWSER_TESTS") != "1",
-                                reason="opt-in Chromium interaction suite")
+# This file exercises the retired hash based workbench. Keep it available for
+# historical regression runs, but do not let it be mistaken for the React V2
+# contract. V2 coverage lives in test_frontend_v2.py.
+pytestmark = pytest.mark.skipif(os.getenv("FUNDLEX_LEGACY_BROWSER_TESTS") != "1",
+                                reason="opt-in legacy hash workbench suite")
 
 
 @pytest.fixture(scope="module")

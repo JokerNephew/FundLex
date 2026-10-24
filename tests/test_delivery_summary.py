@@ -67,3 +67,60 @@ def test_excluded_is_not_a_partial_failure():
                                   "qualification": {"fund_type": "etf"}})
     assert summary["status"] == EXCLUDED
     assert summary["headline"].startswith("该产品类型")
+
+
+def test_complete_status_cannot_hide_unresolved_operation_coverage():
+    summary = build_user_summary({
+        "delivery_status": "complete", "unresolved": [],
+        "operation_coverage": {"entries": [{
+            "rule_id": "G16", "operation_keys": ["G16:1"],
+            "location": "p809", "state": "UNRESOLVED",
+        }]},
+    })
+    assert summary["status"] == PARTIAL
+    assert summary["issues"]
+
+
+def test_unknown_obligation_blocks_success_summary():
+    summary = build_user_summary({
+        "delivery_status": "complete", "unresolved": [],
+        "obligations": {"records": [{
+            "rule_id": "G02", "operation_id": "G02:0", "completion": "UNKNOWN",
+        }]},
+    })
+    assert summary["status"] == PARTIAL
+
+
+def test_failed_claim_replay_blocks_success_even_when_status_is_stale():
+    summary = build_user_summary({
+        "delivery_status": "complete", "unresolved": [],
+        "artifact_claim_replay": {
+            "verified": True,
+            "obligations": {"G18:B1:O1": {
+                "state": "CONFLICT", "operation_id": "G18:0",
+            }},
+        },
+    })
+    assert summary["status"] == PARTIAL
+
+
+def test_claim_replay_alias_and_unknown_site_effect_block_success():
+    summary = build_user_summary({
+        "delivery_status": "complete", "unresolved": [],
+        "claim_replay": {"verified": True, "obligations": {
+            "G08:B1:O1": {"state": "PASS", "site_effects": [
+                {"state": "UNKNOWN", "artifact_status": "UNKNOWN"},
+            ]},
+        }},
+    })
+    assert summary["status"] == PARTIAL
+
+
+def test_unrecognized_coverage_state_blocks_success():
+    summary = build_user_summary({
+        "delivery_status": "complete", "unresolved": [],
+        "operation_coverage": {"entries": [{
+            "rule_id": "G08", "location": "p20", "state": "future_state",
+        }]},
+    })
+    assert summary["status"] == PARTIAL

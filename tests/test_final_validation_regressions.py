@@ -166,14 +166,9 @@ def test_delete_verified_wording_variant_is_not_proven_absent():
     assert proof.artifact_status == 'RESIDUAL_OLD_TEXT'
 
 
-def test_delete_passes_when_another_operation_fills_the_empty_paragraph():
-    """A delete is proven when the plan and artifact match, despite an authorized insert.
-
-    G16 appends its direct-sales policy into the paragraph G15 deletes.  The G15
-    per-edit unit validator sees only its own empty replacement and fails, but the
-    combined plan exactly produces the artifact and the old wording is gone (live
-    G15/G16 p807 interaction, CLAIM_PLANNED_EFFECT_MISSING).
-    """
+@pytest.mark.parametrize('unit_verdict', ['PASS', 'FAIL'])
+def test_merged_delete_requires_own_unit_proof_even_when_plan_matches(unit_verdict):
+    """A sibling insertion never upgrades a failed delete authorization (FL-D224)."""
     from fundlex.generation.effects import evaluate_operation_effect
     from fundlex.obligations import compile_obligations
     from test_operation_execution_closure import Facts
@@ -194,12 +189,36 @@ def test_delete_passes_when_another_operation_fills_the_empty_paragraph():
          'end': len(old), 'replacement': new_policy, 'operation_keys': ['G16:0']},
     ]
     units = [{'location': 'p0', 'target_id': 'T15', 'operation_id': 'G15:0',
-              'verdict': 'FAIL'}]
+              'verdict': unit_verdict}]
     proof = evaluate_operation_effect(record, before, after,
         [{'location': 'p0', 'quote': old}], edits, Facts(),
         validated_units=units)
-    assert proof.state == 'PASS'
-    assert proof.artifact_status == 'VERIFIED_ABSENT'
+    assert proof.state == unit_verdict
+    assert proof.artifact_status == ('VERIFIED_ABSENT' if unit_verdict == 'PASS'
+                                     else 'WRONG_EFFECT')
+    if unit_verdict == 'FAIL':
+        assert proof.failure_code == 'CLAIM_PLANNED_EFFECT_MISSING'
+
+
+@pytest.mark.parametrize('unit_verdict', ['PASS', 'FAIL'])
+def test_merged_append_requires_own_unit_proof_even_with_full_policy(unit_verdict):
+    from fundlex.generation.effects import evaluate_operation_effect
+    from test_operation_execution_closure import Facts
+    old, new = '销售服务费使用范围不包括基金募集期间的上述费用。', '销售服务费每日计提。直销机构返还投资者。'
+    rule = {'rule_id': 'G16', 'operations': [dict(op='append', new_text=new,
+        condition={'kind': 'none'}, operation_id='G16:0', group_kind='INDEPENDENT')]}
+    record = compile_obligations({'groups': [rule]}).records[0]
+    record.applicability = SimpleNamespace(status='TRUE')
+    edits = [dict(rule_id='G17', target_id='T17', location='p0', start=0,
+                  end=len(old), replacement='', operation_keys=['G17:0']),
+             dict(rule_id='G16', target_id='T16', location='p0', start=len(old),
+                  end=len(old), replacement=new, operation_keys=['G16:0'])]
+    proof = evaluate_operation_effect(record, Inspection(old), Inspection(new),
+        [dict(location='p0', quote=old)], edits, Facts(), validated_units=[
+            dict(location='p0', target_id='T16', operation_id='G16:0', verdict=unit_verdict)])
+    assert proof.state == unit_verdict
+    if unit_verdict == 'FAIL':
+        assert proof.failure_code == 'CLAIM_PLANNED_EFFECT_MISSING'
 
 
 def test_operation_proof_requires_each_exact_source_duplicate():
@@ -302,7 +321,7 @@ def test_audit_missed_second_occurrence_is_not_hidden_by_same_operation(tmp_path
 
 def test_g05_token_splice_keeps_coordination_punctuation():
     from test_operation_execution_closure import Facts, Inspection, rule
-    text = '基金管理人可调低赎回费率或变更收费方式。'
+    text = '基金管理人可调整基金份额类别，调低赎回费率或变更收费方式。'
     target = Target('T', 'G05', 'p0', text, 'needs_edit', '', start=0, end=len(text),
                     operations=('G05:0',), resolution='resolved')
     edit = plan_target(rule(), target, Inspection([text]), Facts(), None, compose_budget=[0])
@@ -686,6 +705,33 @@ def test_negative_audit_true_residual_keeps_blocking(tmp_path):
     assert all(item["evidence_verified"] and not item.get("artifact_proven")
                for item in result["results"])
     assert len(_audit_issues(state, targets)) == 2
+
+
+def test_audit_receives_verified_fee_groups_and_counts_them_in_context_limit(tmp_path):
+    from fundlex.recall import RecallError
+    from fundlex.recall_pipeline import _run_audit, _audit_context
+    import json
+    import pytest
+
+    gateway, rules, targets, planned, original, actual, facts, ledger = _negative_review_fixture(tmp_path)
+    received = []
+    original_call = gateway.call
+
+    def call(**kwargs):
+        received.append(kwargs["bounded_context"])
+        return original_call(**kwargs)
+
+    gateway.call = call
+    _run_audit(gateway, rules, targets, planned, original, actual,
+               facts=facts, obligations=ledger)
+    context = received[0]
+    supplied = json.loads(context.split("[FACTS]\n", 1)[1].split("\n\n[BEFORE]", 1)[0])
+    assert supplied == facts.as_ledger()
+    assert supplied["service_group"] == ["C类基金份额"]
+    assert supplied["subscription_group"] == ["A类基金份额"]
+    with pytest.raises(RecallError, match="RECALL_AUDIT_CONTEXT_LIMIT"):
+        _audit_context(rules["G99"], targets, {}, original, actual,
+                       limit=100, facts=facts)
 
 
 def test_audit_reviews_satisfied_target_to_catch_false_closure(tmp_path):
@@ -1108,6 +1154,120 @@ def test_g02_split_definition_reclassifies_out_of_scope_target_before_plan():
     assert [entry["status"] for entry in planned["ledger"]] == ["satisfied"]
 
 
+def test_duplicate_satisfied_class_discoveries_reconcile_without_collapsing_occurrences():
+    text = "A类基金份额收取申购费；C类基金份额计提销售服务费。"
+    rule = {"rule_id": "G02", "operations": [{"op": "replace", "old_text": "A类基金份额"}]}
+    targets = [Target(str(i), "G02", "p0", text, "satisfied", "discovery",
+                      start=0, end=len(text), operations=("G02:0",)) for i in range(2)]
+    _, removed = dedupe_operation_targets(targets, {"G02": rule}, Inspection(text))
+    assert removed == ["1"]
+    targets = [Target(str(i), "G02", "p0", text, "satisfied", "occurrence",
+                      start=0, end=len(text), operations=("G02:0",), occurrence_index=i)
+               for i in range(2)]
+    assert dedupe_operation_targets(targets, {"G02": rule}, Inspection(text))[1] == []
+
+
+def test_late_split_class_targets_pass_replay_after_planning(tmp_path):
+    import json
+    from pathlib import Path
+    from docx import Document
+    from fundlex.docx import inspect_docx
+    from fundlex.recall import assign_target_operations, rebind_split_class_definition_targets
+    from fundlex.recall_pipeline import _plan_and_generate
+    from test_recall_core import _facts
+    from dataclasses import replace
+    from fundlex.recall import ClassFact
+    guide = json.loads((Path(__file__).resolve().parents[1] / "guides/builtin_guide_v1.json").read_text())
+    rule = next(g for g in guide["groups"] if g["rule_id"] == "G02")
+    first = "基金份额类别：本基金将基金份额分为A类、C类和D类三种不同的"
+    second = "类别。在投资者申购A类及D类基金份额时收取申购费用，不计提销售服务费；在投资者申购C类基金份额时不收取申购费用，而从本类别基金资产中计提销售服务费。"
+    source = tmp_path / "source.docx"
+    document = Document(); document.add_paragraph(first); document.add_paragraph(second); document.save(source)
+    inspection = inspect_docx(source, full=True)
+    facts = _facts()
+    facts = replace(facts, classes=(*facts.classes, ClassFact("D类基金份额", True, False, True, None, "D类")))
+    targets = [Target(str(i), "G02", "p0", "", "needs_edit", "late discovery",
+                      operations=(f"G02:{i}",)) for i in range(2)]
+    rebind_split_class_definition_targets(targets, inspection)
+    assign_target_operations(targets, {"G02": rule}, inspection, facts)
+    planned, _, _, _, actual = _plan_and_generate(SimpleNamespace(max_context_chars=60000),
+        {"G02": rule}, targets, inspection, facts, source, tmp_path, max_compose_calls=0)
+    ledger = compile_obligations({"groups": [rule]})
+    for record in ledger.records:
+        record.applicability = SimpleNamespace(status="TRUE")
+    replay = replay_claims(planned["edits"], inspection, actual, rules_by_id={"G02": rule},
+        facts=facts, obligations=ledger, targets_by_id={t.target_id: t.as_dict() for t in targets})
+    assert replay["verified"], replay["failures"]
+    assert all(row["state"] == "PASS" for row in replay["obligations"].values())
+
+
+@pytest.mark.parametrize("delay", [
+    "",
+    "若遇法定节假日、休息日或不可抗力致使无法按时支付等，支付日期顺延。",
+    "如遇法定节假日、公休日，支付日期相应顺延。",
+])
+def test_g16_head_and_tail_discoveries_write_once_per_fee_clause(tmp_path, delay):
+    from pathlib import Path
+    from docx import Document
+    from fundlex.docx import inspect_docx
+    from fundlex.recall_pipeline import _plan_and_generate
+    from test_recall_core import _facts
+    import json
+    guide = json.loads((Path(__file__).resolve().parents[1] / "guides/builtin_guide_v1.json").read_text())
+    rule = next(g for g in guide["groups"] if g["rule_id"] == "G16")
+    source = tmp_path / "source.docx"
+    document = Document()
+    for title in ("十五、基金费用与税收", "二十、基金合同内容摘要"):
+        document.add_paragraph(title)
+        document.add_paragraph("销售服务费每日计提，按月支付。")
+        document.add_paragraph(delay + "销售服务费主要用于支付销售机构佣金。")
+        document.add_paragraph("销售服务费使用范围不包括基金募集期间的上述费用。")
+    document.save(source)
+    inspection = inspect_docx(source, full=True)
+    targets = [Target(str(i), "G16", loc, inspection.by_location(loc).text,
+                      "needs_edit", "discovery", start=0,
+                      end=len(inspection.by_location(loc).text), resolution="resolved",
+                      operations=("G16:0",)) for i, loc in enumerate(("p1", "p3", "p5", "p7"))]
+    planned, _, _, _, actual = _plan_and_generate(SimpleNamespace(max_context_chars=60000),
+        {"G16": rule}, targets, inspection, _facts(), source, tmp_path,
+        max_compose_calls=0)
+    assert len(planned["edits"]) == 2
+    assert {e["location"] for e in planned["edits"]} == {"p3", "p7"}
+    assert sum(p.text.count("（1）直销机构") for p in actual.paragraphs) == 2
+    ledger = compile_obligations({"groups": [rule]})
+    for record in ledger.records:
+        record.applicability = SimpleNamespace(status="TRUE")
+    replay = replay_claims(planned["edits"], inspection, actual,
+        rules_by_id={"G16": rule}, facts=_facts(), obligations=ledger,
+        targets_by_id={t.target_id: t.as_dict() for t in targets})
+    assert replay["verified"], replay["failures"]
+
+
+@pytest.mark.parametrize("text", [
+    "在法律法规和《基金合同》规定的范围内调整本基金的申购费率、调低赎回费率、调低销售服务费率或变更收费方式；",
+    "在法律法规和《基金合同》规定的范围内调整全部或者部分份额类别的申购费率、调低全部或者部分份额类别的赎回费率、调低销售服务费率；",
+])
+def test_g05_planner_rejects_meeting_exemption_before_any_edit(tmp_path, text):
+    from docx import Document
+    from fundlex.docx import inspect_docx
+    from fundlex.recall import RecallError, target_site_ok
+    from test_recall_core import _facts
+    source = tmp_path / "meeting.docx"
+    document = Document(); document.add_paragraph(text); document.save(source)
+    inspection = inspect_docx(source, full=True)
+    assert not target_site_ok("G05", inspection.by_location("p0"), inspection)
+    rule = {"rule_id": "G05", "operations": [{"op": "replace", "old_text": "调低赎回费率",
+            "new_text": "调低销售服务费率", "operation_id": "G05:0", "condition": {"kind": "none"}}]}
+    target = Target("T", "G05", "p0", text, "needs_edit", "literal match",
+                    start=0, end=len(text), resolution="resolved", operations=("G05:0",))
+    with pytest.raises(RecallError, match="TARGET_SOURCE_MISMATCH|RECALL_TARGET_OPERATION_UNATTRIBUTED"):
+        plan_target(rule, target, inspection, _facts(), None, compose_budget=[0])
+    from fundlex.recall import assign_target_operations
+    target.state = "satisfied"
+    assign_target_operations([target], {"G05": rule}, inspection, _facts())
+    assert target.out_of_scope
+
+
 def test_replan_conflict_cannot_refer_to_reassigned_target_id():
     from fundlex.recall import replan_sites
     from test_recall_core import _facts
@@ -1288,6 +1448,46 @@ def test_expected_class_group_quote_accepts_and_separator():
     assert not _quote_is_expected_effect(
         "在投资者申购 A 类及 B 类基金份额时收取申购费用", record, None,
         location="p0", actual_text="在投资者申购 A 类及 B 类基金份额时收取申购费用")
+
+
+def test_g02_g04_group_member_is_not_residual_at_satisfied_site():
+    """A complete C/E/F group necessarily still contains the old C-class label."""
+    from fundlex.generation.effects import evaluate_operation_effect
+    from test_operation_execution_closure import Facts, Inspection
+
+    text = ("本基金 A 类、Y 类基金份额收取申购费用，C 类基金份额、E 类基金份额和 "
+            "F 类基金份额不收取申购费用，但从该类别基金资产中计提销售服务费。")
+    source = Inspection([text])
+    facts = Facts()
+    for rule_id in ("G02", "G04"):
+        obligation = SimpleNamespace(
+            obligation_id=f"{rule_id}:B1:O2",
+            applicability=SimpleNamespace(status="TRUE"),
+            spec=SimpleNamespace(
+                rule_id=rule_id, operation_id=f"{rule_id}:1", op="replace",
+                old_text="C类基金份额", new_text="C类、E类和F类基金份额",
+                alternatives=()))
+        effect = evaluate_operation_effect(
+            obligation, source, source,
+            [{"location": "p0", "quote": text, "state": "satisfied"}], [], facts)
+        assert effect.state == "PASS", (rule_id, effect.as_dict())
+        assert effect.artifact_status == "ALREADY_SATISFIED"
+
+
+def test_g02_sweep_introductory_quote_uses_same_paragraph_fee_proof():
+    """A scope quote may name classes while the fee proof follows in the paragraph."""
+    from types import SimpleNamespace
+    from fundlex.recall_pipeline import _quote_is_expected_effect
+
+    record = SimpleNamespace(spec=SimpleNamespace(
+        rule_id="G02", operation_id="G02:0", op="replace",
+        old_text="A类基金份额", new_text="A类、Y类基金份额",
+        alternatives=()), obligation_id="G02:B1:O1")
+    quote = "基金份额类别：本基金将基金份额分为A类、C类、E类、F类和Y类五种不同的类别。"
+    paragraph = (quote + "在投资者申购A类、Y类基金份额时收取申购费用，不计提销售服务费；"
+                 "在投资者申购C类、E类和F类基金份额时不收取申购费用，而从该类别基金资产中计提销售服务费。")
+    assert _quote_is_expected_effect(quote, record, None, location="p98",
+                                     actual_text=paragraph)
 
 
 def test_expected_effect_accepts_reworded_fee_difference_quote():

@@ -29,17 +29,21 @@ def _shared_respective_fee(block: str, field: str) -> bool:
 
 
 def _polarities(text: str, field: str) -> set[bool]:
-    fee = r"(?:认购[、/和及])?申购(?:费用|费)" if field == "subscription_fee" else r"销售服务费(?:用)?"
+    fee = r"(?:认购[、/和及]|认)?申购(?:费用|费)" if field == "subscription_fee" else r"销售服务费(?:用)?"
     prefix = r"(?:不收取|不再收取|免收|不(?:从(?:本(?:类别|类)?(?:基金)?资产|基金资产)中)?计提)"
     negative = bool(re.search(prefix + fee, text))
     rest = re.sub(prefix + fee, "", text)
     positive = bool(re.search(r"(?:收取|计提)" + fee, rest))
+    if field == "subscription_fee":
+        # Fund contracts commonly establish a positive subscription fee by
+        # assigning it to the investor instead of using 收取 verbatim.
+        positive |= bool(re.search(fee + r"由[^，,。；;]+承担", rest))
     for match in re.finditer(fee + r"(?:年费率|率|年|按|的|为|是|：|:|以)*(\d+(?:\.\d+)?)[%％]", text):
         negative |= float(match.group(1)) == 0
         positive |= float(match.group(1)) > 0
     # A fee's own explicit NAV calculation is evidence. The narrow grammar
     # cannot absorb another fee name or an intervening negative predicate.
-    nav_rate = fee + r"按前一日(?:[A-ZＡ-Ｚ]类基金份额|本类别基金份额|本类别基金|基金)?资产净值的(\d+(?:\.\d+)?)[%％]年费率计提"
+    nav_rate = r"(?:的)?" + fee + r"按前一日(?:[A-ZＡ-Ｚ]类基金份额|本类别基金份额|本类别基金|基金)?资产净值的(\d+(?:\.\d+)?)[%％]的?年费率计提"
     for match in re.finditer(nav_rate, text):
         negative |= float(match.group(1)) == 0
         positive |= float(match.group(1)) > 0

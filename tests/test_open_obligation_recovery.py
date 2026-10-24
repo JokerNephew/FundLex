@@ -86,9 +86,29 @@ def test_no_deterministic_candidate_means_no_model_call(monkeypatch):
     assert gateway.calls == 0
 
 
+def test_g12_open_candidates_reject_nav_fee_and_rate_sibling(monkeypatch):
+    import json
+    from pathlib import Path
+    from fundlex.obligations import compile_obligations, apply_facts
+    from test_recall_core import _facts
+    monkeypatch.setenv("FUNDLEX_TARGET_LOCATOR_OPEN_RULES", "auto")
+    rule = next(r for r in json.loads((Path(__file__).resolve().parents[1] /
+        "guides/builtin_guide_v1.json").read_text())["groups"] if r["rule_id"] == "G12")
+    facts = _facts()
+    ledger = compile_obligations({"groups": [rule]})
+    apply_facts(ledger, facts)
+    source = Inspection([
+        "赎回金额为有效赎回份额乘以当日基金份额净值并扣除相应的费用。",
+        "本基金的赎回费率由基金管理人决定，具体见招募说明书的规定。",
+    ])
+    created = targets_for_open_rules(ledger, [], {"G12": rule}, facts, source,
+                                    {"G12": ["s1"]}, _sections("p0", "p1"))
+    assert created == []
+
+
 def test_valid_locator_quote_inside_code_candidates_creates_target(monkeypatch):
     monkeypatch.setenv("FUNDLEX_TARGET_LOCATOR_OPEN_RULES", "auto")
-    text = "基金管理人可以调低赎回费率。"
+    text = "基金管理人可以调整基金份额类别，调低赎回费率。"
     inspection = Inspection([text, "其他条款。"])
     gateway = Gateway("p0", text)
     created = targets_for_open_rules(_obligations(), [], {"G05": RULE}, Facts(), inspection,
@@ -103,7 +123,7 @@ def test_valid_locator_quote_inside_code_candidates_creates_target(monkeypatch):
 
 def test_locator_outside_candidate_region_is_rejected(monkeypatch):
     monkeypatch.setenv("FUNDLEX_TARGET_LOCATOR_OPEN_RULES", "auto")
-    text = "基金管理人可以调低赎回费率。"
+    text = "基金管理人可以调整基金份额类别，调低赎回费率。"
     inspection = Inspection([text, "另一个段落。"])
     gateway = Gateway("p1", "另一个段落。")
     targets = list(targets_for_open_rules(_obligations(), [], {"G05": RULE}, Facts(),
@@ -130,7 +150,7 @@ def test_locator_quote_without_anchor_evidence_is_rejected():
 
 def test_duplicate_summary_copy_is_created_for_identical_clause(monkeypatch):
     monkeypatch.setenv("FUNDLEX_TARGET_LOCATOR_OPEN_RULES", "auto")
-    text = "基金管理人可以调低赎回费率。"
+    text = "基金管理人可以调整基金份额类别，调低赎回费率。"
     inspection = Inspection([text, text, "其他条款。"])
     gateway = Gateway("p1", text)
     targets = list(targets_for_open_rules(_obligations(), [], {"G05": RULE}, Facts(),
@@ -147,7 +167,7 @@ def test_duplicate_summary_copy_is_created_for_identical_clause(monkeypatch):
 def test_default_mode_is_auto_and_anchored_rule_creates_target(monkeypatch):
     monkeypatch.delenv("FUNDLEX_TARGET_LOCATOR_OPEN_RULES", raising=False)
     monkeypatch.setenv("FUNDLEX_TARGET_LOCATOR", "1")
-    text = "基金管理人可以调低赎回费率。"
+    text = "基金管理人可以调整基金份额类别，调低赎回费率。"
     inspection = Inspection([text])
     created = targets_for_open_rules(_obligations(), [], {"G05": RULE}, Facts(), inspection,
                                      _mapping(), _sections("p0"))
@@ -157,7 +177,7 @@ def test_default_mode_is_auto_and_anchored_rule_creates_target(monkeypatch):
 
 def test_disabled_flag_creates_nothing(monkeypatch):
     monkeypatch.setenv("FUNDLEX_TARGET_LOCATOR_OPEN_RULES", "0")
-    text = "基金管理人可以调低赎回费率。"
+    text = "基金管理人可以调整基金份额类别，调低赎回费率。"
     inspection = Inspection([text])
     assert targets_for_open_rules(_obligations(), [], {"G05": RULE}, Facts(), inspection,
                                   _mapping(), _sections("p0")) == []
@@ -165,7 +185,7 @@ def test_disabled_flag_creates_nothing(monkeypatch):
 
 def test_locator_context_excludes_non_candidate_paragraphs(monkeypatch):
     monkeypatch.setenv("FUNDLEX_TARGET_LOCATOR_OPEN_RULES", "auto")
-    text = "基金管理人可以调低赎回费率。"
+    text = "基金管理人可以调整基金份额类别，调低赎回费率。"
     inspection = Inspection([text, "不应被模型看到的无关段落。"])
     gateway = Gateway("p0", text)
     targets = list(targets_for_open_rules(_obligations(), [], {"G05": RULE}, Facts(),
@@ -178,7 +198,7 @@ def test_locator_context_excludes_non_candidate_paragraphs(monkeypatch):
 
 def test_bare_topic_quote_inside_anchored_paragraph_is_rejected(monkeypatch):
     monkeypatch.setenv("FUNDLEX_TARGET_LOCATOR_OPEN_RULES", "auto")
-    text = "基金管理人可以调低赎回费率。"
+    text = "基金管理人可以调整基金份额类别，调低赎回费率。"
     inspection = Inspection([text])
     gateway = Gateway("p0", "基金管理人可以")
     targets = list(targets_for_open_rules(_obligations(), [], {"G05": RULE}, Facts(),

@@ -208,6 +208,21 @@ def test_identity_isolation_capabilities_and_historical_mapping(client, monkeypa
     assert client.get("/api/tasks", headers=ALICE).status_code == 503
 
 
+def test_task_scoped_document_contract_and_missing_document_errors(client):
+    data, files = package(), manifest(1, package())
+    task = create(client, files).json()["id"]
+    receipt = upload(client, task, files, data).json()["receipts"][0]
+    document_id = receipt["document_id"]
+    document = client.get(f"/api/tasks/{task}/documents/{document_id}", headers=ALICE)
+    assert document.status_code == 200
+    body = document.json()
+    assert body["task_id"] == task and body["document_id"] == document_id
+    assert body["batch_id"] == receipt["batch_id"]
+    assert body["report_url"] is None
+    assert client.get(f"/api/tasks/{task}/documents/missing", headers=ALICE).status_code == 404
+    assert client.get(f"/api/tasks/missing/documents/{document_id}", headers=ALICE).status_code == 404
+
+
 def test_all_api_responses_disable_owner_metadata_caching(client):
     data, files = package(), manifest(1, package())
     task = create(client, files).json()["id"]

@@ -229,6 +229,37 @@ def assert_no_temp_artifacts(directory: Path) -> None:
 
 # ---------------------------------------------------------------------------
 
+@pytest.mark.parametrize(("operation_id", "expected"), [
+    ("CUSTOM:DELETE-SECOND", [1]),
+    ("CUSTOM:DELETE-FIRST", [0]),
+    ("G06:1", []),
+    ("CUSTOM:REPLACE", []),
+    ("CUSTOM:INACTIVE", []),
+    ("UNKNOWN", []),
+    ("", []),
+])
+def test_residual_delete_recovery_uses_own_declared_operation(operation_id, expected):
+    """Replay recovery cannot borrow a sibling's identity or inactive branch."""
+    from fundlex.recall_pipeline import _residual_delete_indices
+
+    rule = {"operations": [
+        {"op": "delete", "operation_id": "CUSTOM:DELETE-FIRST"},
+        {"op": "delete", "operation_id": "CUSTOM:DELETE-SECOND"},
+        {"op": "replace", "operation_id": "CUSTOM:REPLACE"},
+        {"op": "delete", "operation_id": "CUSTOM:INACTIVE",
+         "condition": {"kind": "class_count", "value": 1}},
+    ]}
+    assert _residual_delete_indices("G06", rule, _core_facts(), operation_id) == expected
+
+
+def test_legacy_residual_delete_recovery_requires_one_applicable_operation():
+    from fundlex.recall_pipeline import _residual_delete_indices
+
+    rule = {"operations": [{"op": "replace"}, {"op": "delete"}]}
+    assert _residual_delete_indices("G06", rule, _core_facts(), "") == [1]
+    assert _residual_delete_indices("G06", rule, _core_facts(), "G06:1") == [1]
+
+
 def test_happy_path_complete_delivery(tmp_path: Path):
     source, output_dir, model, report = run(tmp_path)
     source_sha = hashlib.sha256(source.read_bytes()).hexdigest()
