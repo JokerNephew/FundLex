@@ -1,0 +1,964 @@
+{
+  "schema": "fundlex-development-gate-reconciliation-v1",
+  "created_at": "2026-10-25",
+  "purpose": "Fixed D01-D20 denominator reconciliation; does not rewrite historical reports, labels, gold, scorers, or artifacts.",
+  "selection": {
+    "path": "/home/opencode/fundlex/var/recall-first-evaluation/p6-current/selection.json",
+    "selection_sha256": "95fe8121d5f0aceb4febf9cc76a79fde78cf44f711e9a6f029b08eb6ee5643f3",
+    "dev_case_ids": [
+      "D01",
+      "D02",
+      "D03",
+      "D04",
+      "D05",
+      "D06",
+      "D07",
+      "D08",
+      "D09",
+      "D10",
+      "D11",
+      "D12",
+      "D13",
+      "D14",
+      "D15",
+      "D16",
+      "D17",
+      "D18",
+      "D19",
+      "D20"
+    ],
+    "holdout_case_count": 8,
+    "denominator_frozen": true
+  },
+  "current_candidate": {
+    "snapshot": "snapshot-19",
+    "engine_build": "e2ac0f14429de4fdd71e631d10c18b27f1366c8337e797b4c834b5adf6611229",
+    "path": "/tmp/opencode/operation-validation-20261024/snapshot-19"
+  },
+  "gate_policy": [
+    "Each D01-D20 must have real ordinary-workbench evidence on the current snapshot-19 candidate.",
+    "Downloaded final/redline artifact verification must pass.",
+    "Artifact Claim Replay and operation/obligation delivery gate must pass with no blocking unresolved items.",
+    "An independent whole-contract business review must pass; paragraph checks and mechanical checks alone do not qualify.",
+    "Historical or older-snapshot evidence remains audit evidence and cannot satisfy the current fixed gate."
+  ],
+  "summary": {
+    "fixed_denominator": {
+      "dev": 20,
+      "holdout": 8
+    },
+    "cases_in_reconciliation": 20,
+    "same_snapshot_19_evidence_cases": 1,
+    "same_snapshot_19_complete_delivery_cases": 0,
+    "mechanical_artifact_pass_cases": 20,
+    "claim_replay_verified_cases": 5,
+    "independent_whole_contract_business_pass_cases": 4,
+    "independent_whole_contract_business_pending_cases": 15,
+    "independent_whole_contract_incomplete_cases": 1,
+    "current_gate_eligible_cases": 0,
+    "historical_delivery_complete_cases": 4,
+    "historical_delivery_incomplete_cases": 16,
+    "independent_whole_contract_business_incomplete_cases": 1
+  },
+  "budget": {
+    "ledger_path": "/tmp/opencode/operation-validation-20261024/ledger.sqlite",
+    "cap_requests": 2000,
+    "cap_cost_usd": 2.0,
+    "ledger_requests": 1701,
+    "ledger_cost_usd": 1.6440831,
+    "ledger_reserved_requests": 0,
+    "by_status": {
+      "abandoned": {
+        "requests": 1,
+        "charged_cost_usd": 0.0062415
+      },
+      "completed": {
+        "requests": 1698,
+        "charged_cost_usd": 1.636606499999999
+      },
+      "failed": {
+        "requests": 2,
+        "charged_cost_usd": 0.0012351
+      }
+    },
+    "remaining_requests": 299,
+    "remaining_cost_usd": 0.3559169,
+    "minimum_current_snapshot_top_up_excluding_current_D06": {
+      "case_ids": [
+        "D01",
+        "D02",
+        "D03",
+        "D04",
+        "D05",
+        "D07",
+        "D08",
+        "D09",
+        "D10",
+        "D11",
+        "D12",
+        "D13",
+        "D14",
+        "D15",
+        "D16",
+        "D17",
+        "D18",
+        "D19",
+        "D20"
+      ],
+      "requests_baseline": 602,
+      "cost_usd_baseline": 0.60031875,
+      "request_shortfall_against_remaining": 303,
+      "cost_shortfall_usd_against_remaining": 0.24440185,
+      "basis": "Observed dev-05 per-case model attempts/cost; excludes retries and any G06 remediation calls."
+    },
+    "clean_full_20_case_rerun_baseline": {
+      "requests_baseline": 628,
+      "cost_usd_baseline": 0.6322203,
+      "request_shortfall_against_remaining": 329,
+      "cost_shortfall_usd_against_remaining": 0.2763034,
+      "basis": "Observed dev-05 per-case model attempts/cost; excludes retries and any G06 remediation calls."
+    }
+  },
+  "cases": [
+    {
+      "case_id": "D01",
+      "source_file": "广发上海清算所0-4年央企80债券指数证券投资基金基金合同_20250319.docx",
+      "source_sha256": "2f2f7a36000af8135feb625c0c7d6f9f3e8b291d1628f0879993d6987e2d278d",
+      "latest_preserved_evidence": {
+        "evidence_set": "dev-05",
+        "snapshot": "snapshot-05",
+        "engine_build": "5b04e5ea2ed2aadddca51ddca4ed66c1d65f33461f435445f394b5e34cd953c2",
+        "batch_path": "/tmp/opencode/operation-validation-20261024/dev-05/batch.json",
+        "result_path": "/tmp/opencode/operation-validation-20261024/dev-05/D01/result.json",
+        "report_path": "/tmp/opencode/operation-validation-20261024/dev-05/D01/report.json",
+        "artifact_review_path": "/tmp/opencode/operation-validation-20261024/dev-05/D01/artifact-review.json",
+        "review_packet_path": "/tmp/opencode/operation-validation-20261024/dev-05-review-packets/D01.json",
+        "business_review": "PENDING",
+        "business_review_evidence": "/tmp/opencode/operation-validation-20261024/dev-05-review-packets/index.json"
+      },
+      "engine_reported_delivery_status": "incomplete",
+      "engine_reported_target_count": 48,
+      "engine_reported_unresolved_count": 8,
+      "mechanical_artifact_pass": true,
+      "claim_replay_verified": false,
+      "claim_replay_checked": 17,
+      "delivery_gate": {
+        "open_obligations": 1,
+        "blocking_unresolved": 8,
+        "counts": {
+          "SATISFIED": 0,
+          "ARTIFACT_VERIFIED": 13,
+          "ALREADY_SATISFIED": 10,
+          "NOT_APPLICABLE": 10,
+          "UNRESOLVED": 1
+        }
+      },
+      "independent_whole_contract_business_review": "PENDING",
+      "model_http_attempts": 31,
+      "model_estimated_cost_usd": 0.0304512,
+      "actual_changes_in_review_packet": null,
+      "same_snapshot_19": false,
+      "eligible_for_current_20_case_gate": false,
+      "eligibility_reason": "Historical artifact exists, but delivery and/or Claim Replay is incomplete; whole-contract business review is pending."
+    },
+    {
+      "case_id": "D02",
+      "source_file": "广发上证50交易型开放式指数证券投资基金发起式联接基金基金合同_20241113.docx",
+      "source_sha256": "c02ae5a04ffbb1a8c63a7408fb3c69fab4f54cd60ff44575f42031ab00e1289b",
+      "latest_preserved_evidence": {
+        "evidence_set": "dev-05",
+        "snapshot": "pre-snapshot-18 historical run",
+        "engine_build": "5b04e5ea2ed2aadddca51ddca4ed66c1d65f33461f435445f394b5e34cd953c2",
+        "batch_path": "/tmp/opencode/operation-validation-20261024/dev-05/batch.json",
+        "result_path": "/tmp/opencode/operation-validation-20261024/dev-05/D02/result.json",
+        "report_path": "/tmp/opencode/operation-validation-20261024/dev-05/D02/report.json",
+        "artifact_review_path": "/tmp/opencode/operation-validation-20261024/dev-05/D02/artifact-review.json",
+        "review_packet_path": "/tmp/opencode/operation-validation-20261024/dev-05-review-packets/D02.json",
+        "business_review": "PASS_FOR_HISTORICAL_INDEPENDENT_BUSINESS_REVIEW",
+        "business_review_evidence": "/tmp/opencode/operation-validation-20261024/dev-05-independent-business-reviews/D02-independent-business-review.json"
+      },
+      "engine_reported_delivery_status": "complete",
+      "engine_reported_target_count": 59,
+      "engine_reported_unresolved_count": 0,
+      "mechanical_artifact_pass": true,
+      "claim_replay_verified": true,
+      "claim_replay_checked": 18,
+      "delivery_gate": {
+        "open_obligations": 0,
+        "blocking_unresolved": 0,
+        "counts": {
+          "SATISFIED": 0,
+          "ARTIFACT_VERIFIED": 15,
+          "ALREADY_SATISFIED": 9,
+          "NOT_APPLICABLE": 10,
+          "UNRESOLVED": 0
+        }
+      },
+      "independent_whole_contract_business_review": "PASS_FOR_HISTORICAL_INDEPENDENT_BUSINESS_REVIEW",
+      "model_http_attempts": 29,
+      "model_estimated_cost_usd": 0.031671149999999995,
+      "actual_changes_in_review_packet": null,
+      "same_snapshot_19": false,
+      "eligible_for_current_20_case_gate": false,
+      "eligibility_reason": "Historical independent whole-contract business review passes, but evidence is snapshot-05 and must be rerun on snapshot-19 for the current gate."
+    },
+    {
+      "case_id": "D03",
+      "source_file": "广发中证全指建筑材料指数型发起式证券投资基金基金合同_20250319.docx",
+      "source_sha256": "4f03e5a6d57045bf4d5bdf84d0fdf89093fdbc879bc77bde884a3cb8fb81e66a",
+      "latest_preserved_evidence": {
+        "evidence_set": "dev-05",
+        "snapshot": "pre-snapshot-18 historical run",
+        "engine_build": "5b04e5ea2ed2aadddca51ddca4ed66c1d65f33461f435445f394b5e34cd953c2",
+        "batch_path": "/tmp/opencode/operation-validation-20261024/dev-05/batch.json",
+        "result_path": "/tmp/opencode/operation-validation-20261024/dev-05/D03/result.json",
+        "report_path": "/tmp/opencode/operation-validation-20261024/dev-05/D03/report.json",
+        "artifact_review_path": "/tmp/opencode/operation-validation-20261024/dev-05/D03/artifact-review.json",
+        "review_packet_path": "/tmp/opencode/operation-validation-20261024/dev-05-review-packets/D03.json",
+        "business_review": "PENDING",
+        "business_review_evidence": "/tmp/opencode/operation-validation-20261024/dev-05-review-packets/index.json"
+      },
+      "engine_reported_delivery_status": "incomplete",
+      "engine_reported_target_count": 34,
+      "engine_reported_unresolved_count": 6,
+      "mechanical_artifact_pass": true,
+      "claim_replay_verified": false,
+      "claim_replay_checked": 20,
+      "delivery_gate": {
+        "open_obligations": 1,
+        "blocking_unresolved": 6,
+        "counts": {
+          "SATISFIED": 0,
+          "ARTIFACT_VERIFIED": 15,
+          "ALREADY_SATISFIED": 8,
+          "NOT_APPLICABLE": 10,
+          "UNRESOLVED": 1
+        }
+      },
+      "independent_whole_contract_business_review": "PENDING",
+      "model_http_attempts": 36,
+      "model_estimated_cost_usd": 0.025392900000000003,
+      "actual_changes_in_review_packet": null,
+      "same_snapshot_19": false,
+      "eligible_for_current_20_case_gate": false,
+      "eligibility_reason": "Historical artifact exists, but delivery and/or Claim Replay is incomplete; whole-contract business review is pending."
+    },
+    {
+      "case_id": "D04",
+      "source_file": "广发亚太中高收益债券型证券投资基金基金合同_20230223.docx",
+      "source_sha256": "dd17628370cc892dcaf4ce6cd9444e790f46d556fd07141aac11859f3432ffe2",
+      "latest_preserved_evidence": {
+        "evidence_set": "target-19",
+        "snapshot": "snapshot-18",
+        "engine_build": "e42254705a296954284d7fd3831543c38db1894ec1966bf3d7462cf85be3c39a",
+        "batch_path": "/tmp/opencode/operation-validation-20261024/target-19/batch.json",
+        "result_path": "/tmp/opencode/operation-validation-20261024/target-19/D04/result.json",
+        "report_path": "/tmp/opencode/operation-validation-20261024/target-19/D04/report.json",
+        "artifact_review_path": "/tmp/opencode/operation-validation-20261024/target-19/D04/artifact-review.json",
+        "business_review": "PASS_FOR_D04_INDEPENDENT_BUSINESS_REVIEW",
+        "business_review_evidence": "/tmp/opencode/operation-validation-20261024/target-19-D04-independent-business-review.json"
+      },
+      "engine_reported_delivery_status": "complete",
+      "engine_reported_target_count": 40,
+      "engine_reported_unresolved_count": 0,
+      "mechanical_artifact_pass": true,
+      "claim_replay_verified": true,
+      "claim_replay_checked": 19,
+      "delivery_gate": {
+        "open_obligations": 0,
+        "blocking_unresolved": 0,
+        "counts": {
+          "SATISFIED": 0,
+          "ARTIFACT_VERIFIED": 15,
+          "ALREADY_SATISFIED": 9,
+          "NOT_APPLICABLE": 10,
+          "UNRESOLVED": 0
+        }
+      },
+      "independent_whole_contract_business_review": "PASS_FOR_D04_INDEPENDENT_BUSINESS_REVIEW",
+      "model_http_attempts": 29,
+      "model_estimated_cost_usd": 0.03152624999999999,
+      "actual_changes_in_review_packet": null,
+      "same_snapshot_19": false,
+      "eligible_for_current_20_case_gate": false,
+      "eligibility_reason": "Latest preserved whole-contract pass is snapshot-18; must be rerun on snapshot-19 for the current gate."
+    },
+    {
+      "case_id": "D05",
+      "source_file": "广发优选配置混合型基金中基金（FOF-LOF）基金合同_20231031.docx",
+      "source_sha256": "605d4695debd6cd5446499627db96fd56361d64f73c82e476ea6260408046d87",
+      "latest_preserved_evidence": {
+        "evidence_set": "dev-05",
+        "snapshot": "pre-snapshot-18 historical run",
+        "engine_build": "5b04e5ea2ed2aadddca51ddca4ed66c1d65f33461f435445f394b5e34cd953c2",
+        "batch_path": "/tmp/opencode/operation-validation-20261024/dev-05/batch.json",
+        "result_path": "/tmp/opencode/operation-validation-20261024/dev-05/D05/result.json",
+        "report_path": "/tmp/opencode/operation-validation-20261024/dev-05/D05/report.json",
+        "artifact_review_path": "/tmp/opencode/operation-validation-20261024/dev-05/D05/artifact-review.json",
+        "review_packet_path": "/tmp/opencode/operation-validation-20261024/dev-05-review-packets/D05.json",
+        "business_review": "PENDING",
+        "business_review_evidence": "/tmp/opencode/operation-validation-20261024/dev-05-review-packets/index.json"
+      },
+      "engine_reported_delivery_status": "incomplete",
+      "engine_reported_target_count": 39,
+      "engine_reported_unresolved_count": 2,
+      "mechanical_artifact_pass": true,
+      "claim_replay_verified": false,
+      "claim_replay_checked": 15,
+      "delivery_gate": {
+        "open_obligations": 0,
+        "blocking_unresolved": 2,
+        "counts": {
+          "SATISFIED": 0,
+          "ARTIFACT_VERIFIED": 15,
+          "ALREADY_SATISFIED": 9,
+          "NOT_APPLICABLE": 10,
+          "UNRESOLVED": 0
+        }
+      },
+      "independent_whole_contract_business_review": "PENDING",
+      "model_http_attempts": 38,
+      "model_estimated_cost_usd": 0.029915850000000004,
+      "actual_changes_in_review_packet": null,
+      "same_snapshot_19": false,
+      "eligible_for_current_20_case_gate": false,
+      "eligibility_reason": "Historical artifact exists, but delivery and/or Claim Replay is incomplete; whole-contract business review is pending."
+    },
+    {
+      "case_id": "D06",
+      "source_file": "广发创业板交易型开放式指数证券投资基金发起式联接基金基金合同_20250319.docx",
+      "source_sha256": "09b6d065bfd0922ba41a4e3ce455a9a8ee3ba65b075743be01fe0863b16c48f3",
+      "latest_preserved_evidence": {
+        "evidence_set": "target-20",
+        "snapshot": "snapshot-19",
+        "engine_build": "e2ac0f14429de4fdd71e631d10c18b27f1366c8337e797b4c834b5adf6611229",
+        "batch_path": "/tmp/opencode/operation-validation-20261024/target-20/batch.json",
+        "result_path": "/tmp/opencode/operation-validation-20261024/target-20/D06/result.json",
+        "report_path": "/tmp/opencode/operation-validation-20261024/target-20/D06/report.json",
+        "artifact_review_path": "/tmp/opencode/operation-validation-20261024/target-20/D06/artifact-review.json",
+        "business_review": "INCOMPLETE_G06_REVIEW_REQUIRED",
+        "business_review_evidence": "/tmp/opencode/operation-validation-20261024/target-20-D06-independent-business-review-corrected.json"
+      },
+      "engine_reported_delivery_status": "incomplete",
+      "engine_reported_target_count": 82,
+      "engine_reported_unresolved_count": 2,
+      "mechanical_artifact_pass": true,
+      "claim_replay_verified": false,
+      "claim_replay_checked": 19,
+      "delivery_gate": {
+        "open_obligations": 1,
+        "blocking_unresolved": 2,
+        "counts": {
+          "SATISFIED": 0,
+          "ARTIFACT_VERIFIED": 13,
+          "ALREADY_SATISFIED": 10,
+          "NOT_APPLICABLE": 10,
+          "UNRESOLVED": 1
+        }
+      },
+      "independent_whole_contract_business_review": "INCOMPLETE_G06_REVIEW_REQUIRED",
+      "model_http_attempts": 26,
+      "model_estimated_cost_usd": 0.03190155,
+      "actual_changes_in_review_packet": null,
+      "same_snapshot_19": true,
+      "eligible_for_current_20_case_gate": false,
+      "eligibility_reason": "snapshot-19 evidence exists, but G06 remains unresolved; Claim Replay is false and delivery is incomplete."
+    },
+    {
+      "case_id": "D07",
+      "source_file": "广发均衡养老目标三年持有期混合型基金中基金（FOF）基金合同_20221116.docx",
+      "source_sha256": "e77956acf1a8118e52e1d32234e59b456fd4d6e735b7369d8c593e1b30fcce0e",
+      "latest_preserved_evidence": {
+        "evidence_set": "dev-05",
+        "snapshot": "pre-snapshot-18 historical run",
+        "engine_build": "5b04e5ea2ed2aadddca51ddca4ed66c1d65f33461f435445f394b5e34cd953c2",
+        "batch_path": "/tmp/opencode/operation-validation-20261024/dev-05/batch.json",
+        "result_path": "/tmp/opencode/operation-validation-20261024/dev-05/D07/result.json",
+        "report_path": "/tmp/opencode/operation-validation-20261024/dev-05/D07/report.json",
+        "artifact_review_path": "/tmp/opencode/operation-validation-20261024/dev-05/D07/artifact-review.json",
+        "review_packet_path": "/tmp/opencode/operation-validation-20261024/dev-05-review-packets/D07.json",
+        "business_review": "PENDING",
+        "business_review_evidence": "/tmp/opencode/operation-validation-20261024/dev-05-review-packets/index.json"
+      },
+      "engine_reported_delivery_status": "incomplete",
+      "engine_reported_target_count": 30,
+      "engine_reported_unresolved_count": 44,
+      "mechanical_artifact_pass": true,
+      "claim_replay_verified": false,
+      "claim_replay_checked": 8,
+      "delivery_gate": {
+        "open_obligations": 12,
+        "blocking_unresolved": 44,
+        "counts": {
+          "SATISFIED": 0,
+          "ARTIFACT_VERIFIED": 5,
+          "ALREADY_SATISFIED": 6,
+          "NOT_APPLICABLE": 11,
+          "UNRESOLVED": 12
+        }
+      },
+      "independent_whole_contract_business_review": "PENDING",
+      "model_http_attempts": 58,
+      "model_estimated_cost_usd": 0.06080789999999999,
+      "actual_changes_in_review_packet": null,
+      "same_snapshot_19": false,
+      "eligible_for_current_20_case_gate": false,
+      "eligibility_reason": "Historical artifact exists, but delivery and/or Claim Replay is incomplete; whole-contract business review is pending."
+    },
+    {
+      "case_id": "D08",
+      "source_file": "广发恒誉混合型证券投资基金基金合同_20201118.docx",
+      "source_sha256": "62bf57683f18a3a531750653fdd8e4d812abc7bc712198a4547dc67571f058d0",
+      "latest_preserved_evidence": {
+        "evidence_set": "dev-05",
+        "snapshot": "pre-snapshot-18 historical run",
+        "engine_build": "5b04e5ea2ed2aadddca51ddca4ed66c1d65f33461f435445f394b5e34cd953c2",
+        "batch_path": "/tmp/opencode/operation-validation-20261024/dev-05/batch.json",
+        "result_path": "/tmp/opencode/operation-validation-20261024/dev-05/D08/result.json",
+        "report_path": "/tmp/opencode/operation-validation-20261024/dev-05/D08/report.json",
+        "artifact_review_path": "/tmp/opencode/operation-validation-20261024/dev-05/D08/artifact-review.json",
+        "review_packet_path": "/tmp/opencode/operation-validation-20261024/dev-05-review-packets/D08.json",
+        "business_review": "PENDING",
+        "business_review_evidence": "/tmp/opencode/operation-validation-20261024/dev-05-review-packets/index.json"
+      },
+      "engine_reported_delivery_status": "incomplete",
+      "engine_reported_target_count": 36,
+      "engine_reported_unresolved_count": 5,
+      "mechanical_artifact_pass": true,
+      "claim_replay_verified": false,
+      "claim_replay_checked": 17,
+      "delivery_gate": {
+        "open_obligations": 1,
+        "blocking_unresolved": 5,
+        "counts": {
+          "SATISFIED": 0,
+          "ARTIFACT_VERIFIED": 14,
+          "ALREADY_SATISFIED": 9,
+          "NOT_APPLICABLE": 10,
+          "UNRESOLVED": 1
+        }
+      },
+      "independent_whole_contract_business_review": "PENDING",
+      "model_http_attempts": 33,
+      "model_estimated_cost_usd": 0.028010249999999997,
+      "actual_changes_in_review_packet": null,
+      "same_snapshot_19": false,
+      "eligible_for_current_20_case_gate": false,
+      "eligibility_reason": "Historical artifact exists, but delivery and/or Claim Replay is incomplete; whole-contract business review is pending."
+    },
+    {
+      "case_id": "D09",
+      "source_file": "广发悦享一年持有期混合型基金中基金（FOF）基金合同_20230708.docx",
+      "source_sha256": "48e4b5b874a05e26beb87382469b5b77dffac3bf5e746c5059379569435f898f",
+      "latest_preserved_evidence": {
+        "evidence_set": "dev-05",
+        "snapshot": "pre-snapshot-18 historical run",
+        "engine_build": "5b04e5ea2ed2aadddca51ddca4ed66c1d65f33461f435445f394b5e34cd953c2",
+        "batch_path": "/tmp/opencode/operation-validation-20261024/dev-05/batch.json",
+        "result_path": "/tmp/opencode/operation-validation-20261024/dev-05/D09/result.json",
+        "report_path": "/tmp/opencode/operation-validation-20261024/dev-05/D09/report.json",
+        "artifact_review_path": "/tmp/opencode/operation-validation-20261024/dev-05/D09/artifact-review.json",
+        "review_packet_path": "/tmp/opencode/operation-validation-20261024/dev-05-review-packets/D09.json",
+        "business_review": "PENDING",
+        "business_review_evidence": "/tmp/opencode/operation-validation-20261024/dev-05-review-packets/index.json"
+      },
+      "engine_reported_delivery_status": "incomplete",
+      "engine_reported_target_count": 28,
+      "engine_reported_unresolved_count": 58,
+      "mechanical_artifact_pass": true,
+      "claim_replay_verified": false,
+      "claim_replay_checked": 1,
+      "delivery_gate": {
+        "open_obligations": 28,
+        "blocking_unresolved": 58,
+        "counts": {
+          "SATISFIED": 0,
+          "ARTIFACT_VERIFIED": 1,
+          "ALREADY_SATISFIED": 5,
+          "NOT_APPLICABLE": 0,
+          "UNRESOLVED": 28
+        }
+      },
+      "independent_whole_contract_business_review": "PENDING",
+      "model_http_attempts": 17,
+      "model_estimated_cost_usd": 0.021663449999999994,
+      "actual_changes_in_review_packet": null,
+      "same_snapshot_19": false,
+      "eligible_for_current_20_case_gate": false,
+      "eligibility_reason": "Historical artifact exists, but delivery and/or Claim Replay is incomplete; whole-contract business review is pending."
+    },
+    {
+      "case_id": "D10",
+      "source_file": "广发招成债券型证券投资基金基金合同_20260625.docx",
+      "source_sha256": "75a81b23ab3b3e0820e8d8ed8aa603ad7affa42820c01aa88feae0c5ecba8b48",
+      "latest_preserved_evidence": {
+        "evidence_set": "dev-05",
+        "snapshot": "pre-snapshot-18 historical run",
+        "engine_build": "5b04e5ea2ed2aadddca51ddca4ed66c1d65f33461f435445f394b5e34cd953c2",
+        "batch_path": "/tmp/opencode/operation-validation-20261024/dev-05/batch.json",
+        "result_path": "/tmp/opencode/operation-validation-20261024/dev-05/D10/result.json",
+        "report_path": "/tmp/opencode/operation-validation-20261024/dev-05/D10/report.json",
+        "artifact_review_path": "/tmp/opencode/operation-validation-20261024/dev-05/D10/artifact-review.json",
+        "review_packet_path": "/tmp/opencode/operation-validation-20261024/dev-05-review-packets/D10.json",
+        "business_review": "PENDING",
+        "business_review_evidence": "/tmp/opencode/operation-validation-20261024/dev-05-review-packets/index.json"
+      },
+      "engine_reported_delivery_status": "incomplete",
+      "engine_reported_target_count": 38,
+      "engine_reported_unresolved_count": 27,
+      "mechanical_artifact_pass": true,
+      "claim_replay_verified": false,
+      "claim_replay_checked": 3,
+      "delivery_gate": {
+        "open_obligations": 10,
+        "blocking_unresolved": 27,
+        "counts": {
+          "SATISFIED": 0,
+          "ARTIFACT_VERIFIED": 2,
+          "ALREADY_SATISFIED": 12,
+          "NOT_APPLICABLE": 10,
+          "UNRESOLVED": 10
+        }
+      },
+      "independent_whole_contract_business_review": "PENDING",
+      "model_http_attempts": 24,
+      "model_estimated_cost_usd": 0.030376950000000003,
+      "actual_changes_in_review_packet": null,
+      "same_snapshot_19": false,
+      "eligible_for_current_20_case_gate": false,
+      "eligibility_reason": "Historical artifact exists, but delivery and/or Claim Replay is incomplete; whole-contract business review is pending."
+    },
+    {
+      "case_id": "D11",
+      "source_file": "广发景和中短债债券型证券投资基金基金合同_20240122.docx",
+      "source_sha256": "74920e09c398f086091ca2b522c5d3bb0ed574d8ccd8c6e00ecf416b508ba93a",
+      "latest_preserved_evidence": {
+        "evidence_set": "dev-05",
+        "snapshot": "pre-snapshot-18 historical run",
+        "engine_build": "5b04e5ea2ed2aadddca51ddca4ed66c1d65f33461f435445f394b5e34cd953c2",
+        "batch_path": "/tmp/opencode/operation-validation-20261024/dev-05/batch.json",
+        "result_path": "/tmp/opencode/operation-validation-20261024/dev-05/D11/result.json",
+        "report_path": "/tmp/opencode/operation-validation-20261024/dev-05/D11/report.json",
+        "artifact_review_path": "/tmp/opencode/operation-validation-20261024/dev-05/D11/artifact-review.json",
+        "review_packet_path": "/tmp/opencode/operation-validation-20261024/dev-05-review-packets/D11.json",
+        "business_review": "PENDING",
+        "business_review_evidence": "/tmp/opencode/operation-validation-20261024/dev-05-review-packets/index.json"
+      },
+      "engine_reported_delivery_status": "incomplete",
+      "engine_reported_target_count": 48,
+      "engine_reported_unresolved_count": 5,
+      "mechanical_artifact_pass": true,
+      "claim_replay_verified": false,
+      "claim_replay_checked": 14,
+      "delivery_gate": {
+        "open_obligations": 1,
+        "blocking_unresolved": 5,
+        "counts": {
+          "SATISFIED": 0,
+          "ARTIFACT_VERIFIED": 13,
+          "ALREADY_SATISFIED": 10,
+          "NOT_APPLICABLE": 10,
+          "UNRESOLVED": 1
+        }
+      },
+      "independent_whole_contract_business_review": "PENDING",
+      "model_http_attempts": 29,
+      "model_estimated_cost_usd": 0.02924175,
+      "actual_changes_in_review_packet": null,
+      "same_snapshot_19": false,
+      "eligible_for_current_20_case_gate": false,
+      "eligibility_reason": "Historical artifact exists, but delivery and/or Claim Replay is incomplete; whole-contract business review is pending."
+    },
+    {
+      "case_id": "D12",
+      "source_file": "广发智荟多元配置六个月持有期混合型基金中基金（FOF）基金合同_20260821.docx",
+      "source_sha256": "a72f3995ce17b2f99340906545a39abec6c53fa0c10d8e4b3441806a43507745",
+      "latest_preserved_evidence": {
+        "evidence_set": "dev-05",
+        "snapshot": "pre-snapshot-18 historical run",
+        "engine_build": "5b04e5ea2ed2aadddca51ddca4ed66c1d65f33461f435445f394b5e34cd953c2",
+        "batch_path": "/tmp/opencode/operation-validation-20261024/dev-05/batch.json",
+        "result_path": "/tmp/opencode/operation-validation-20261024/dev-05/D12/result.json",
+        "report_path": "/tmp/opencode/operation-validation-20261024/dev-05/D12/report.json",
+        "artifact_review_path": "/tmp/opencode/operation-validation-20261024/dev-05/D12/artifact-review.json",
+        "review_packet_path": "/tmp/opencode/operation-validation-20261024/dev-05-review-packets/D12.json",
+        "business_review": "PENDING",
+        "business_review_evidence": "/tmp/opencode/operation-validation-20261024/dev-05-review-packets/index.json"
+      },
+      "engine_reported_delivery_status": "incomplete",
+      "engine_reported_target_count": 34,
+      "engine_reported_unresolved_count": 27,
+      "mechanical_artifact_pass": true,
+      "claim_replay_verified": false,
+      "claim_replay_checked": 11,
+      "delivery_gate": {
+        "open_obligations": 7,
+        "blocking_unresolved": 27,
+        "counts": {
+          "SATISFIED": 0,
+          "ARTIFACT_VERIFIED": 8,
+          "ALREADY_SATISFIED": 9,
+          "NOT_APPLICABLE": 10,
+          "UNRESOLVED": 7
+        }
+      },
+      "independent_whole_contract_business_review": "PENDING",
+      "model_http_attempts": 35,
+      "model_estimated_cost_usd": 0.0381774,
+      "actual_changes_in_review_packet": null,
+      "same_snapshot_19": false,
+      "eligible_for_current_20_case_gate": false,
+      "eligibility_reason": "Historical artifact exists, but delivery and/or Claim Replay is incomplete; whole-contract business review is pending."
+    },
+    {
+      "case_id": "D13",
+      "source_file": "广发民丰一年定期开放债券型发起式证券投资基金基金合同_20221206.docx",
+      "source_sha256": "f6f07ccffe9257a9fe99e6bfcad34cc39b2fb971e02b1868183bdfc349985d83",
+      "latest_preserved_evidence": {
+        "evidence_set": "dev-05",
+        "snapshot": "pre-snapshot-18 historical run",
+        "engine_build": "5b04e5ea2ed2aadddca51ddca4ed66c1d65f33461f435445f394b5e34cd953c2",
+        "batch_path": "/tmp/opencode/operation-validation-20261024/dev-05/batch.json",
+        "result_path": "/tmp/opencode/operation-validation-20261024/dev-05/D13/result.json",
+        "report_path": "/tmp/opencode/operation-validation-20261024/dev-05/D13/report.json",
+        "artifact_review_path": "/tmp/opencode/operation-validation-20261024/dev-05/D13/artifact-review.json",
+        "review_packet_path": "/tmp/opencode/operation-validation-20261024/dev-05-review-packets/D13.json",
+        "business_review": "PENDING",
+        "business_review_evidence": "/tmp/opencode/operation-validation-20261024/dev-05-review-packets/index.json"
+      },
+      "engine_reported_delivery_status": "incomplete",
+      "engine_reported_target_count": 48,
+      "engine_reported_unresolved_count": 59,
+      "mechanical_artifact_pass": true,
+      "claim_replay_verified": false,
+      "claim_replay_checked": 3,
+      "delivery_gate": {
+        "open_obligations": 27,
+        "blocking_unresolved": 59,
+        "counts": {
+          "SATISFIED": 0,
+          "ARTIFACT_VERIFIED": 3,
+          "ALREADY_SATISFIED": 4,
+          "NOT_APPLICABLE": 0,
+          "UNRESOLVED": 27
+        }
+      },
+      "independent_whole_contract_business_review": "PENDING",
+      "model_http_attempts": 19,
+      "model_estimated_cost_usd": 0.026646299999999994,
+      "actual_changes_in_review_packet": null,
+      "same_snapshot_19": false,
+      "eligible_for_current_20_case_gate": false,
+      "eligibility_reason": "Historical artifact exists, but delivery and/or Claim Replay is incomplete; whole-contract business review is pending."
+    },
+    {
+      "case_id": "D14",
+      "source_file": "广发汇智量化选股混合型证券投资基金基金合同_20260425.docx",
+      "source_sha256": "4a408c95f421524158bf6a9ab400dab27aac9d68d503d32d0b6307e6ed3c1144",
+      "latest_preserved_evidence": {
+        "evidence_set": "dev-05",
+        "snapshot": "pre-snapshot-18 historical run",
+        "engine_build": "5b04e5ea2ed2aadddca51ddca4ed66c1d65f33461f435445f394b5e34cd953c2",
+        "batch_path": "/tmp/opencode/operation-validation-20261024/dev-05/batch.json",
+        "result_path": "/tmp/opencode/operation-validation-20261024/dev-05/D14/result.json",
+        "report_path": "/tmp/opencode/operation-validation-20261024/dev-05/D14/report.json",
+        "artifact_review_path": "/tmp/opencode/operation-validation-20261024/dev-05/D14/artifact-review.json",
+        "review_packet_path": "/tmp/opencode/operation-validation-20261024/dev-05-review-packets/D14.json",
+        "business_review": "PENDING",
+        "business_review_evidence": "/tmp/opencode/operation-validation-20261024/dev-05-review-packets/index.json"
+      },
+      "engine_reported_delivery_status": "incomplete",
+      "engine_reported_target_count": 36,
+      "engine_reported_unresolved_count": 25,
+      "mechanical_artifact_pass": true,
+      "claim_replay_verified": false,
+      "claim_replay_checked": 3,
+      "delivery_gate": {
+        "open_obligations": 9,
+        "blocking_unresolved": 25,
+        "counts": {
+          "SATISFIED": 0,
+          "ARTIFACT_VERIFIED": 2,
+          "ALREADY_SATISFIED": 13,
+          "NOT_APPLICABLE": 10,
+          "UNRESOLVED": 9
+        }
+      },
+      "independent_whole_contract_business_review": "PENDING",
+      "model_http_attempts": 23,
+      "model_estimated_cost_usd": 0.0276084,
+      "actual_changes_in_review_packet": null,
+      "same_snapshot_19": false,
+      "eligible_for_current_20_case_gate": false,
+      "eligibility_reason": "Historical artifact exists, but delivery and/or Claim Replay is incomplete; whole-contract business review is pending."
+    },
+    {
+      "case_id": "D15",
+      "source_file": "广发港股通医疗创新精选混合型证券投资基金基金合同_20260330.docx",
+      "source_sha256": "f158687b39764e089a0608cce2dde27a91dddfa7aa19ac45074d3e9fc9521578",
+      "latest_preserved_evidence": {
+        "evidence_set": "dev-05",
+        "snapshot": "pre-snapshot-18 historical run",
+        "engine_build": "5b04e5ea2ed2aadddca51ddca4ed66c1d65f33461f435445f394b5e34cd953c2",
+        "batch_path": "/tmp/opencode/operation-validation-20261024/dev-05/batch.json",
+        "result_path": "/tmp/opencode/operation-validation-20261024/dev-05/D15/result.json",
+        "report_path": "/tmp/opencode/operation-validation-20261024/dev-05/D15/report.json",
+        "artifact_review_path": "/tmp/opencode/operation-validation-20261024/dev-05/D15/artifact-review.json",
+        "review_packet_path": "/tmp/opencode/operation-validation-20261024/dev-05-review-packets/D15.json",
+        "business_review": "PENDING",
+        "business_review_evidence": "/tmp/opencode/operation-validation-20261024/dev-05-review-packets/index.json"
+      },
+      "engine_reported_delivery_status": "incomplete",
+      "engine_reported_target_count": 45,
+      "engine_reported_unresolved_count": 22,
+      "mechanical_artifact_pass": true,
+      "claim_replay_verified": false,
+      "claim_replay_checked": 4,
+      "delivery_gate": {
+        "open_obligations": 8,
+        "blocking_unresolved": 22,
+        "counts": {
+          "SATISFIED": 0,
+          "ARTIFACT_VERIFIED": 3,
+          "ALREADY_SATISFIED": 13,
+          "NOT_APPLICABLE": 10,
+          "UNRESOLVED": 8
+        }
+      },
+      "independent_whole_contract_business_review": "PENDING",
+      "model_http_attempts": 45,
+      "model_estimated_cost_usd": 0.04758120000000002,
+      "actual_changes_in_review_packet": null,
+      "same_snapshot_19": false,
+      "eligible_for_current_20_case_gate": false,
+      "eligibility_reason": "Historical artifact exists, but delivery and/or Claim Replay is incomplete; whole-contract business review is pending."
+    },
+    {
+      "case_id": "D16",
+      "source_file": "广发瑞福精选混合型证券投资基金基金合同_20260626.docx",
+      "source_sha256": "8beacaba3446f7e7e6db1d8cdd3036f0eb086139d6e89a9d27e3552ec658e45d",
+      "latest_preserved_evidence": {
+        "evidence_set": "dev-05",
+        "snapshot": "pre-snapshot-18 historical run",
+        "engine_build": "5b04e5ea2ed2aadddca51ddca4ed66c1d65f33461f435445f394b5e34cd953c2",
+        "batch_path": "/tmp/opencode/operation-validation-20261024/dev-05/batch.json",
+        "result_path": "/tmp/opencode/operation-validation-20261024/dev-05/D16/result.json",
+        "report_path": "/tmp/opencode/operation-validation-20261024/dev-05/D16/report.json",
+        "artifact_review_path": "/tmp/opencode/operation-validation-20261024/dev-05/D16/artifact-review.json",
+        "review_packet_path": "/tmp/opencode/operation-validation-20261024/dev-05-review-packets/D16.json",
+        "business_review": "PASS_FOR_HISTORICAL_INDEPENDENT_BUSINESS_REVIEW",
+        "business_review_evidence": "/tmp/opencode/operation-validation-20261024/dev-05-independent-business-reviews/D16-independent-business-review.json"
+      },
+      "engine_reported_delivery_status": "complete",
+      "engine_reported_target_count": 41,
+      "engine_reported_unresolved_count": 0,
+      "mechanical_artifact_pass": true,
+      "claim_replay_verified": true,
+      "claim_replay_checked": 19,
+      "delivery_gate": {
+        "open_obligations": 0,
+        "blocking_unresolved": 0,
+        "counts": {
+          "SATISFIED": 0,
+          "ARTIFACT_VERIFIED": 15,
+          "ALREADY_SATISFIED": 9,
+          "NOT_APPLICABLE": 10,
+          "UNRESOLVED": 0
+        }
+      },
+      "independent_whole_contract_business_review": "PASS_FOR_HISTORICAL_INDEPENDENT_BUSINESS_REVIEW",
+      "model_http_attempts": 26,
+      "model_estimated_cost_usd": 0.02347335,
+      "actual_changes_in_review_packet": null,
+      "same_snapshot_19": false,
+      "eligible_for_current_20_case_gate": false,
+      "eligibility_reason": "Historical independent whole-contract business review passes, but evidence is snapshot-05 and must be rerun on snapshot-19 for the current gate."
+    },
+    {
+      "case_id": "D17",
+      "source_file": "广发睿毅领先混合型证券投资基金基金合同_20260626.docx",
+      "source_sha256": "3b4a3615a877fe7983fe51560441c5dd455053e179fa42189b0275a2203e94f0",
+      "latest_preserved_evidence": {
+        "evidence_set": "dev-05",
+        "snapshot": "pre-snapshot-18 historical run",
+        "engine_build": "5b04e5ea2ed2aadddca51ddca4ed66c1d65f33461f435445f394b5e34cd953c2",
+        "batch_path": "/tmp/opencode/operation-validation-20261024/dev-05/batch.json",
+        "result_path": "/tmp/opencode/operation-validation-20261024/dev-05/D17/result.json",
+        "report_path": "/tmp/opencode/operation-validation-20261024/dev-05/D17/report.json",
+        "artifact_review_path": "/tmp/opencode/operation-validation-20261024/dev-05/D17/artifact-review.json",
+        "review_packet_path": "/tmp/opencode/operation-validation-20261024/dev-05-review-packets/D17.json",
+        "business_review": "PASS_FOR_HISTORICAL_INDEPENDENT_BUSINESS_REVIEW",
+        "business_review_evidence": "/tmp/opencode/operation-validation-20261024/dev-05-independent-business-reviews/D17-independent-business-review.json"
+      },
+      "engine_reported_delivery_status": "complete",
+      "engine_reported_target_count": 52,
+      "engine_reported_unresolved_count": 0,
+      "mechanical_artifact_pass": true,
+      "claim_replay_verified": true,
+      "claim_replay_checked": 16,
+      "delivery_gate": {
+        "open_obligations": 0,
+        "blocking_unresolved": 0,
+        "counts": {
+          "SATISFIED": 0,
+          "ARTIFACT_VERIFIED": 15,
+          "ALREADY_SATISFIED": 9,
+          "NOT_APPLICABLE": 10,
+          "UNRESOLVED": 0
+        }
+      },
+      "independent_whole_contract_business_review": "PASS_FOR_HISTORICAL_INDEPENDENT_BUSINESS_REVIEW",
+      "model_http_attempts": 31,
+      "model_estimated_cost_usd": 0.03732900000000001,
+      "actual_changes_in_review_packet": null,
+      "same_snapshot_19": false,
+      "eligible_for_current_20_case_gate": false,
+      "eligibility_reason": "Historical independent whole-contract business review passes, but evidence is snapshot-05 and must be rerun on snapshot-19 for the current gate."
+    },
+    {
+      "case_id": "D18",
+      "source_file": "广发稳健回报混合型证券投资基金基金合同_20230708.docx",
+      "source_sha256": "03c0642a5054322be9af1d6cef85d933ea04a00e4e1885643771048d90535dcb",
+      "latest_preserved_evidence": {
+        "evidence_set": "dev-05",
+        "snapshot": "pre-snapshot-18 historical run",
+        "engine_build": "5b04e5ea2ed2aadddca51ddca4ed66c1d65f33461f435445f394b5e34cd953c2",
+        "batch_path": "/tmp/opencode/operation-validation-20261024/dev-05/batch.json",
+        "result_path": "/tmp/opencode/operation-validation-20261024/dev-05/D18/result.json",
+        "report_path": "/tmp/opencode/operation-validation-20261024/dev-05/D18/report.json",
+        "artifact_review_path": "/tmp/opencode/operation-validation-20261024/dev-05/D18/artifact-review.json",
+        "review_packet_path": "/tmp/opencode/operation-validation-20261024/dev-05-review-packets/D18.json",
+        "business_review": "FAIL_OR_REVIEW_REQUIRED",
+        "business_review_evidence": "/tmp/opencode/operation-validation-20261024/dev-05-independent-business-reviews/D18-independent-business-review.json"
+      },
+      "engine_reported_delivery_status": "incomplete",
+      "engine_reported_target_count": 36,
+      "engine_reported_unresolved_count": 4,
+      "mechanical_artifact_pass": true,
+      "claim_replay_verified": true,
+      "claim_replay_checked": 19,
+      "delivery_gate": {
+        "open_obligations": 0,
+        "blocking_unresolved": 4,
+        "counts": {
+          "SATISFIED": 0,
+          "ARTIFACT_VERIFIED": 15,
+          "ALREADY_SATISFIED": 9,
+          "NOT_APPLICABLE": 10,
+          "UNRESOLVED": 0
+        }
+      },
+      "independent_whole_contract_business_review": "FAIL_OR_REVIEW_REQUIRED",
+      "model_http_attempts": 30,
+      "model_estimated_cost_usd": 0.02488095,
+      "actual_changes_in_review_packet": null,
+      "same_snapshot_19": false,
+      "eligible_for_current_20_case_gate": false,
+      "eligibility_reason": "Historical snapshot-05 evidence has G17 residual/duplicate text and an incomplete delivery gate; current-snapshot rerun and correction are required."
+    },
+    {
+      "case_id": "D19",
+      "source_file": "广发聚源债券型证券投资基金（LOF）基金合同_20240920.docx",
+      "source_sha256": "24965ab2114ea9ab823e6e5547efcf4daf0c6869d4172eb4ad0807ec86ba5595",
+      "latest_preserved_evidence": {
+        "evidence_set": "dev-05",
+        "snapshot": "pre-snapshot-18 historical run",
+        "engine_build": "5b04e5ea2ed2aadddca51ddca4ed66c1d65f33461f435445f394b5e34cd953c2",
+        "batch_path": "/tmp/opencode/operation-validation-20261024/dev-05/batch.json",
+        "result_path": "/tmp/opencode/operation-validation-20261024/dev-05/D19/result.json",
+        "report_path": "/tmp/opencode/operation-validation-20261024/dev-05/D19/report.json",
+        "artifact_review_path": "/tmp/opencode/operation-validation-20261024/dev-05/D19/artifact-review.json",
+        "review_packet_path": "/tmp/opencode/operation-validation-20261024/dev-05-review-packets/D19.json",
+        "business_review": "PENDING",
+        "business_review_evidence": "/tmp/opencode/operation-validation-20261024/dev-05-review-packets/index.json"
+      },
+      "engine_reported_delivery_status": "incomplete",
+      "engine_reported_target_count": 53,
+      "engine_reported_unresolved_count": 26,
+      "mechanical_artifact_pass": true,
+      "claim_replay_verified": false,
+      "claim_replay_checked": 13,
+      "delivery_gate": {
+        "open_obligations": 7,
+        "blocking_unresolved": 26,
+        "counts": {
+          "SATISFIED": 0,
+          "ARTIFACT_VERIFIED": 11,
+          "ALREADY_SATISFIED": 6,
+          "NOT_APPLICABLE": 10,
+          "UNRESOLVED": 7
+        }
+      },
+      "independent_whole_contract_business_review": "PENDING",
+      "model_http_attempts": 39,
+      "model_estimated_cost_usd": 0.03141015,
+      "actual_changes_in_review_packet": null,
+      "same_snapshot_19": false,
+      "eligible_for_current_20_case_gate": false,
+      "eligibility_reason": "Historical artifact exists, but delivery and/or Claim Replay is incomplete; whole-contract business review is pending."
+    },
+    {
+      "case_id": "D20",
+      "source_file": "广发远见智选混合型证券投资基金基金合同_20230708.docx",
+      "source_sha256": "a159837e26cc23673fe26013755c67a36f3dc60dcb67f0202568587ba860664b",
+      "latest_preserved_evidence": {
+        "evidence_set": "dev-05",
+        "snapshot": "pre-snapshot-18 historical run",
+        "engine_build": "5b04e5ea2ed2aadddca51ddca4ed66c1d65f33461f435445f394b5e34cd953c2",
+        "batch_path": "/tmp/opencode/operation-validation-20261024/dev-05/batch.json",
+        "result_path": "/tmp/opencode/operation-validation-20261024/dev-05/D20/result.json",
+        "report_path": "/tmp/opencode/operation-validation-20261024/dev-05/D20/report.json",
+        "artifact_review_path": "/tmp/opencode/operation-validation-20261024/dev-05/D20/artifact-review.json",
+        "review_packet_path": "/tmp/opencode/operation-validation-20261024/dev-05-review-packets/D20.json",
+        "business_review": "PENDING",
+        "business_review_evidence": "/tmp/opencode/operation-validation-20261024/dev-05-review-packets/index.json"
+      },
+      "engine_reported_delivery_status": "incomplete",
+      "engine_reported_target_count": 36,
+      "engine_reported_unresolved_count": 5,
+      "mechanical_artifact_pass": true,
+      "claim_replay_verified": false,
+      "claim_replay_checked": 16,
+      "delivery_gate": {
+        "open_obligations": 1,
+        "blocking_unresolved": 5,
+        "counts": {
+          "SATISFIED": 0,
+          "ARTIFACT_VERIFIED": 14,
+          "ALREADY_SATISFIED": 9,
+          "NOT_APPLICABLE": 10,
+          "UNRESOLVED": 1
+        }
+      },
+      "independent_whole_contract_business_review": "PENDING",
+      "model_http_attempts": 30,
+      "model_estimated_cost_usd": 0.024154349999999998,
+      "actual_changes_in_review_packet": null,
+      "same_snapshot_19": false,
+      "eligible_for_current_20_case_gate": false,
+      "eligibility_reason": "Historical artifact exists, but delivery and/or Claim Replay is incomplete; whole-contract business review is pending."
+    }
+  ],
+  "conclusion": {
+    "status": "BLOCKED_INCOMPLETE",
+    "statement": "No D01-D20 case is eligible for the current 20-case development gate.",
+    "blocking_reasons": [
+      "Only D06 has preserved snapshot-19 real-workbench evidence.",
+      "D04 latest independent whole-contract pass is snapshot-18 and requires snapshot-19 rerun.",
+      "D06 snapshot-19 delivery remains incomplete because G06 is unresolved and Claim Replay is false.",
+      "The remaining 18 cases have older evidence and pending independent whole-contract business review.",
+      "The remaining ledger budget cannot fund even the minimum 19-case current-snapshot top-up baseline."
+    ],
+    "downstream_gates_blocked": [
+      "holdout",
+      "formal_engine_release",
+      "final_ordinary_workbench_e2e"
+    ]
+  },
+  "evidence_scope": {
+    "historical_artifacts_preserved": true,
+    "historical_reports_rewritten": false,
+    "labels_gold_scorer_changed": false,
+    "model_calls_added_by_reconciliation": 0
+  }
+}
