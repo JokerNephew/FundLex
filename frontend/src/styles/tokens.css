@@ -1,0 +1,29 @@
+:root {
+  font-family: Inter, "Noto Sans SC", system-ui, sans-serif;
+  color: #20252b;
+  background: #f5f6f8;
+  font-synthesis: none;
+  --brand: #b5471e;
+  --brand-dark: #8e3213;
+  --brand-soft: #fff1e9;
+  --brand-soft-strong: #f8dfd1;
+  --ink: #20252b;
+  --muted: #68717c;
+  --surface: #fff;
+  --surface-subtle: #f7f9fa;
+  --border: #dfe3e8;
+  --border-strong: #cfd5db;
+  --success: #2f7653;
+  --success-soft: #e8f4ec;
+  --warning: #8a5b14;
+  --warning-soft: #fff5dc;
+  --danger: #a13b35;
+  --danger-soft: #fbeceb;
+  --focus: #b5471e;
+  --shadow: 0 4px 18px rgb(34 40 48 / 0.05);
+}
+* { box-sizing: border-box; }
+body { margin: 0; min-width: 320px; }
+button, input, select, textarea { font: inherit; }
+a { color: inherit; }
+:focus-visible { outline: 3px solid rgb(181 71 30 / 0.35); outline-offset: 2px; }

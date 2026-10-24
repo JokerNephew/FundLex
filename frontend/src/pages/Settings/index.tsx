@@ -1,0 +1,13 @@
+import { useState } from 'react'
+import { Link } from 'react-router-dom'
+import { api } from '../../api/endpoints'
+import { useCapabilities } from '../../api/hooks'
+import { Button, Card, Spinner } from '../../components/ui'
+import { useAuthStore } from '../../stores/auth'
+import { ErrorState } from '../Tasks'
+
+export function SettingsPage() {
+  const capabilities = useCapabilities(); const user = useAuthStore((state) => state.user); const [oldPassword, setOldPassword] = useState(''); const [newPassword, setNewPassword] = useState(''); const [message, setMessage] = useState(''); const [error, setError] = useState(''); const [busy, setBusy] = useState(false)
+  const changePassword = async (event: React.FormEvent) => { event.preventDefault(); setBusy(true); setMessage(''); setError(''); try { await api.changePassword(oldPassword, newPassword); setOldPassword(''); setNewPassword(''); setMessage('密码已修改，其他会话已失效。') } catch (nextError) { setError(nextError instanceof Error ? nextError.message : '密码修改未完成') } finally { setBusy(false) } }
+  return <><div className="page-heading"><div><h1>设置</h1><p>查看当前运行能力和账号安全设置。</p></div><div className="action-row"><Link to="/guides"><Button>指引配置</Button></Link>{user?.role === 'admin' && <Link to="/users"><Button>管理员</Button></Link>}</div></div><Card><h2>运行能力</h2>{capabilities.error ? <ErrorState error={capabilities.error} /> : capabilities.loading && !capabilities.data ? <Spinner /> : <dl><dt>认证模式</dt><dd>{capabilities.data?.auth_mode || '—'}</dd><dt>引擎</dt><dd>{capabilities.data?.engine?.id || '—'}</dd><dt>交付模式</dt><dd>{capabilities.data?.engine?.delivery_mode || '—'}</dd><dt>正式写入</dt><dd>{capabilities.data?.engine?.auto_write_enabled ? '已启用' : '当前不可用'}</dd><dt>单文件限制</dt><dd>{capabilities.data?.upload_limits?.max_file_bytes ? `${Math.round(capabilities.data.upload_limits.max_file_bytes / 1024 / 1024)} MB` : '—'}</dd><dt>请求文件数限制</dt><dd>{capabilities.data?.upload_limits?.max_request_files || '—'}</dd></dl>}</Card><Card><h2>修改密码</h2><form className="form-stack" onSubmit={changePassword}><label>当前密码<input type="password" value={oldPassword} onChange={(event) => setOldPassword(event.target.value)} autoComplete="current-password" minLength={8} required /></label><label>新密码<input type="password" value={newPassword} onChange={(event) => setNewPassword(event.target.value)} autoComplete="new-password" minLength={8} required /></label>{message && <p>{message}</p>}{error && <p className="form-error">{error}</p>}<Button variant="primary" type="submit" disabled={busy}>{busy ? '保存中…' : '修改密码'}</Button></form></Card>{user?.role === 'admin' && <Card><h2>管理员</h2><p>账号管理与业务指引配置分开控制。</p><Link to="/users"><Button>打开用户管理</Button></Link></Card>}</>
+}
