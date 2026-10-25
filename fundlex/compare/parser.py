@@ -7,6 +7,7 @@ never applies the revision-pipeline's editable-zone restrictions.
 from __future__ import annotations
 
 from hashlib import sha256
+from dataclasses import replace
 from pathlib import Path
 from typing import Any, Mapping
 import io
@@ -19,6 +20,7 @@ from lxml import etree
 from ..docx import DOCUMENT, Q, W, REVISION_TAGS, DocxError, ZipLimits, _read_parts, _validate_package, _xml
 from .models import CompareBlock, CompareDocument, Coverage
 from .normalize import normalize_diff, normalize_match
+from .presentation import Presentation
 
 MC = "http://schemas.openxmlformats.org/markup-compatibility/2006"
 
@@ -63,13 +65,24 @@ def _cell_key(table: int | None, row: int | None, cell: int | None) -> tuple[Any
 def _block(block_id: str, ordinal: int, location: str, kind: str, raw: str,
            section: str, *, container: str = "body", table: int | None = None,
            row: int | None = None, cell: int | None = None,
-           paragraph: int | None = None, style: str = "", warnings: tuple[str, ...] = ()) -> CompareBlock:
+           paragraph: int | None = None, style: str = "", warnings: tuple[str, ...] = (),
+           runs=(), paragraph_format=(), table_colspan: int = 1,
+           table_rowspan: int = 1, table_col_start: int = 0,
+           table_cell_continuation: bool = False,
+           table_origin_row: int | None = None,
+           table_origin_cell: int | None = None) -> CompareBlock:
     return CompareBlock(block_id=block_id, ordinal=ordinal, location=location, kind=kind,
                         section_path=section, raw_text=raw,
                         match_text=normalize_match(raw), diff_text=normalize_diff(raw),
                         container=container, table_index=table, row_index=row,
                         cell_index=cell, paragraph_index=paragraph, style=style,
-                        warnings=warnings)
+                        warnings=warnings, runs=tuple(runs),
+                        paragraph_format=tuple(paragraph_format),
+                        table_colspan=table_colspan, table_rowspan=table_rowspan,
+                        table_col_start=table_col_start,
+                        table_cell_continuation=table_cell_continuation,
+                        table_origin_row=table_origin_row,
+                        table_origin_cell=table_origin_cell)
 
 
 def _parse_parts(parts: Mapping[str, bytes], *, filename: str = "", side: str = "B",
@@ -91,6 +104,8 @@ def _parse_parts(parts: Mapping[str, bytes], *, filename: str = "", side: str = 
     current_section = ""
     body_para = 0
     table_index = 0
+    presentation = Presentation(parts, limits)
+    page_format = presentation.page(body)
 
     # The first compare scope is the main document body.  Story parts are
     # deliberately not compared, but visible text in them must not be
@@ -130,29 +145,80 @@ def _parse_parts(parts: Mapping[str, bytes], *, filename: str = "", side: str = 
             report_unsupported(child)
 
     def append_para(p: etree._Element, location: str, *, kind: str, table: int | None,
-                    row: int | None, cell: int | None, paragraph: int | None) -> None:
+                    row: int | None, cell: int | None, paragraph: int | None,
+                    table_meta: Mapping[str, Any] | None = None) -> None:
         nonlocal current_section
         walk_unsupported(p)
         raw = _text(p)
         style = _style(p)
+        paragraph_format, run_base = presentation.paragraph(p)
+        runs = presentation.runs(p, run_base)
         if _is_heading(style, raw) and normalize_match(raw):
             current_section = normalize_match(raw)
         blocks.append(_block(f"{side}{len(blocks):06d}", len(blocks), location, kind, raw,
                              current_section, container="table" if table is not None else "body",
-                             table=table, row=row, cell=cell, paragraph=paragraph, style=style))
+                             table=table, row=row, cell=cell, paragraph=paragraph, style=style,
+                             runs=runs, paragraph_format=paragraph_format,
+                             table_colspan=int((table_meta or {}).get("colspan", 1)),
+                             table_rowspan=int((table_meta or {}).get("rowspan", 1)),
+                             table_col_start=int((table_meta or {}).get("col_start", 0)),
+                             table_cell_continuation=bool((table_meta or {}).get("continuation", False)),
+                             table_origin_row=(table_meta or {}).get("origin_row"),
+                             table_origin_cell=(table_meta or {}).get("origin_cell")))
 
     def append_table(tbl: etree._Element, ti: int) -> None:
         nonlocal current_section
+        active: dict[int, dict[str, Any]] = {}
+        origins: dict[tuple[int, int], dict[str, Any]] = {}
+        table_start = len(blocks)
         for ri, tr in enumerate(tbl.findall(Q("tr"))):
+            col_cursor = 0
             for ci, tc in enumerate(tr.findall(Q("tc"))):
+                tcpr = tc.find(Q("tcPr"))
+                grid_span = tcpr.find(Q("gridSpan")) if tcpr is not None else None
+                try:
+                    colspan = max(1, min(1000, int(grid_span.get(Q("val"), "1")))) if grid_span is not None else 1
+                except ValueError:
+                    colspan = 1
+                vmerge = tcpr.find(Q("vMerge")) if tcpr is not None else None
+                is_continuation = vmerge is not None and vmerge.get(Q("val"), "continue") != "restart"
+                origin = active.get(col_cursor) if is_continuation else None
+                if origin is None:
+                    # A normal cell at an active column terminates a vertical
+                    # merge. It occupies that same grid column; it must not be
+                    # pushed to the right merely because the previous row had
+                    # a rowspan there.
+                    for col in range(col_cursor, col_cursor + colspan):
+                        active.pop(col, None)
+                    origin_key = (ri, ci)
+                    origin = {"row": ri, "cell": ci, "col_start": col_cursor,
+                              "colspan": colspan, "rowspan": 1}
+                    origins[origin_key] = origin
+                else:
+                    origin["rowspan"] = max(origin["rowspan"], ri - origin["row"] + 1)
+                    colspan = origin["colspan"]
+                for col in range(col_cursor, col_cursor + colspan):
+                    if is_continuation and origin is not None:
+                        origin["end_row"] = ri
+                        active[col] = origin
+                    elif vmerge is not None and vmerge.get(Q("val"), "restart") == "restart":
+                        origin["end_row"] = ri
+                        active[col] = origin
+                    else:
+                        active.pop(col, None)
+                table_meta = {"colspan": origin["colspan"], "rowspan": origin["rowspan"],
+                              "col_start": origin["col_start"], "continuation": is_continuation,
+                              "origin_row": origin["row"], "origin_cell": origin["cell"]}
                 pi = 0
                 for node in tc:
                     if node.tag == Q("p"):
                         append_para(node, f"tbl{ti}/r{ri}/c{ci}/p{pi}", kind="table_paragraph",
-                                    table=ti, row=ri, cell=ci, paragraph=pi)
+                                    table=ti, row=ri, cell=ci, paragraph=pi,
+                                    table_meta=table_meta)
                         pi += 1
                     elif node.tag == Q("sdt"):
-                        append_sdt(node, table=ti, row=ri, cell=ci, paragraph_start=pi)
+                        append_sdt(node, table=ti, row=ri, cell=ci, paragraph_start=pi,
+                                   table_meta=table_meta)
                         pi += 1
                     elif node.tag == Q("tbl"):
                         warning = "UNSUPPORTED_NESTED_TABLE"
@@ -166,10 +232,25 @@ def _parse_parts(parts: Mapping[str, bytes], *, filename: str = "", side: str = 
                         warning = f"UNSUPPORTED_VISIBLE_CONTENT:table-wrapper:{local}"
                         if warning not in warnings:
                             warnings.append(warning)
+                col_cursor += colspan
+        # A restart cell is emitted before later continuation rows are seen.
+        # Backfill the final rowspan into every paragraph belonging to that
+        # logical cell so the renderer can produce valid merged-cell markup.
+        span_by_origin = {
+            key: int(origin["rowspan"])
+            for key, origin in origins.items()
+        }
+        for index in range(table_start, len(blocks)):
+            block = blocks[index]
+            if block.table_origin_row is None or block.table_origin_cell is None:
+                continue
+            key = (block.table_origin_row, block.table_origin_cell)
+            blocks[index] = replace(block, table_rowspan=span_by_origin.get(key, block.table_rowspan))
 
     def append_sdt(sdt: etree._Element, *, table: int | None = None,
                    row: int | None = None, cell: int | None = None,
-                   paragraph_start: int = 0) -> None:
+                   paragraph_start: int = 0,
+                   table_meta: Mapping[str, Any] | None = None) -> None:
         """Treat content controls as transparent, including nested controls."""
         nonlocal body_para, table_index
         content = sdt.find(Q("sdtContent"))
@@ -189,12 +270,13 @@ def _parse_parts(parts: Mapping[str, bytes], *, filename: str = "", side: str = 
                     paragraph_no += 1
                     kind = "table_paragraph"
                 append_para(node, location, kind=kind, table=table, row=row, cell=cell,
-                            paragraph=paragraph)
+                            paragraph=paragraph, table_meta=table_meta)
             elif node.tag == Q("tbl"):
                 append_table(node, table_index)
                 table_index += 1
             elif node.tag == Q("sdt"):
-                append_sdt(node, table=table, row=row, cell=cell, paragraph_start=paragraph_no)
+                append_sdt(node, table=table, row=row, cell=cell, paragraph_start=paragraph_no,
+                           table_meta=table_meta)
             elif _text(node).strip():
                 walk_unsupported(node)
                 warning = "UNSUPPORTED_VISIBLE_CONTENT:sdt"
@@ -216,7 +298,8 @@ def _parse_parts(parts: Mapping[str, bytes], *, filename: str = "", side: str = 
             if warning not in warnings:
                 warnings.append(warning)
     coverage = Coverage("incomplete" if warnings else "complete", tuple(warnings))
-    return CompareDocument(tuple(blocks), source_sha256 or sha256(parts[DOCUMENT]).hexdigest(), filename, coverage)
+    return CompareDocument(tuple(blocks), source_sha256 or sha256(parts[DOCUMENT]).hexdigest(), filename, coverage,
+                            page_format=page_format)
 
 
 def parse_compare_document(source: str | Path | bytes | bytearray, *, filename: str = "",

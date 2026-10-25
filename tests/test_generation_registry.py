@@ -124,6 +124,29 @@ def test_custom_explicit_operation_requires_registered_registry_entry():
     assert register_guide_operations(guide) == ["G99:CUSTOM"]
 
 
+def test_enablement_blocks_unregistered_custom_operation(tmp_path):
+    from fundlex import guide_store
+    from fundlex.store import RunStore
+
+    store = RunStore(tmp_path / "state")
+    version = guide_store.create_custom_version(store, "alice", "custom.docx", b"source")
+    document = {
+        "schema_version": "guide-rules-v1",
+        "parser_version": "guide-parse-1",
+        "prompt_versions": {},
+        "source_sha256": "a" * 64,
+        "groups": [{"rule_id": "G99", "title": "custom", "operations": [{
+            "operation_id": "G99:CUSTOM", "op": "replace", "old_text": "旧文。",
+            "new_text": "新文。", "condition": {"kind": "none"},
+            "group_kind": "INDEPENDENT",
+        }]}],
+        "validation": {"errors": [], "warnings": [], "coverage_gaps": [], "clean": True},
+    }
+    guide_store.finish_guide_job(store, version["job_id"], document=document)
+    with pytest.raises(ValueError, match="GUIDE_OPERATION_REGISTRY_MISSING:G99:CUSTOM"):
+        guide_store.set_current_guide(store, "alice", version["id"])
+
+
 def test_routed_planner_fails_closed_for_missing_custom_operation_registry_entry(
         monkeypatch):
     """A routed planner must not silently borrow a rule-level or sibling executor."""

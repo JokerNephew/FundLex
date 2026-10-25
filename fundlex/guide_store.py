@@ -251,6 +251,12 @@ def set_current_guide(store: RunStore, owner: str, version_id: str) -> dict[str,
     version = get_version(store, owner, version_id)
     if version["status"] not in ENABLEABLE_STATUSES:
         raise ValueError("GUIDE_NOT_ENABLEABLE")
+    # A parsed guide is data, not executable policy.  Custom operations must
+    # have controlled registry entries before an owner can enable the guide.
+    from .generation.registry import operation_registry_coverage_gaps
+    gaps = operation_registry_coverage_gaps(guide_document(store, version_id))
+    if gaps:
+        raise ValueError("GUIDE_OPERATION_REGISTRY_MISSING:" + ",".join(gaps))
     with store._connect() as db:
         db.execute("INSERT OR REPLACE INTO guide_config(owner,guide_version_id,updated_at) VALUES(?,?,?)",
                    (owner, version_id, time.time()))

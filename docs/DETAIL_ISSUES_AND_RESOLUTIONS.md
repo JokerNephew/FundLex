@@ -11,6 +11,16 @@
 - 条目字段：发现日期、问题与影响、证据、处理方法、状态与验证、下一步、变更记录。
 - 同一问题更新原条目；重大结论变化注明日期和原因，不覆盖历史。
 
+## FL-D262 测试环境发布缺少专用发布器导致环境边界与验收证据容易混淆（2026-10-25）
+
+- 发现日期：2026-10-25。
+- 问题与影响：现有 `tools/deploy/publish_workspace.sh` 及其 root 发布器固定目标为生产目录 `/opt/fundlex-recall-first` 并重启生产服务；当前 Compare 候选需要发布到隔离测试目录 `/opt/fundlex-test`，若直接调用生产发布器会覆盖生产环境。测试 API 的健康端点也受密码认证保护，未登录请求返回 401，若将其当作服务健康失败会误判发布结果。
+- 证据：测试 systemd 单元 `/etc/systemd/system/fundlex-test-api.service`、`fundlex-test-worker.service`、`fundlex-test-compare-worker.service` 明确使用 `/opt/fundlex-test`，API 监听 `127.0.0.1:8110`；生产服务仍监听 `127.0.0.1:8010`。发布前备份为 `/tmp/opencode/fundlex-test-publish-20261025-150535/test-deployment-before.tgz`，发布目录与工作区哈希核对文件位于同目录。未登录测试 API `/api/capabilities` 为 200，而 `/api/health` 和 `/api/auth/me` 为预期 401。
+- 处理方法：本次使用 root 权限执行受控增量同步，只覆盖测试目录的 `fundlex/`、`frontend/`、`guides/`、`rules/`、`tools/`、`docs/`、`tests/` 和必要项目文件，保留测试环境数据与虚拟环境；随后只重启三项 `fundlex-test-*` 服务。通过首页引用的 JS/CSS 逐个 HTTP 200、Compare 模块导入、服务 active 状态和真实登录后的 `/compare` 浏览器 smoke 验收发布结果。临时验收账号在完成后删除，未创建任务、未新增模型调用。
+- 状态与验证：**已解决（测试环境发布已验证）**。三项测试服务均 active；工作区与 `/opt/fundlex-test` 的 Compare Python 文件和当前入口静态资源 SHA-256 一致；390px/1440px Compare 页面无横向溢出，页面错误、控制台错误、静态 404 和 API 404 均为 0。生产 API/Worker 仍 active，生产目录和 8010 未因本次发布改变。浏览器证据为 `/tmp/opencode/fundlex-test-publish-20261025-150535/browser-smoke.json`。
+- 下一步：如测试环境发布成为固定流程，应增加参数化测试发布器或受控 systemd 发布入口，明确目标目录、服务集合、认证健康检查和回滚备份，避免继续依赖手工命令。
+- 变更记录：2026-10-25 新增；本次仅发布到隔离测试环境，未发布生产，未执行真实 Compare 合同任务或模型调用。
+
 ## FL-D244 Frontend V2 统一会话失效与 Review/任务状态边界
 
 - 发现日期：2026-10-25。
@@ -3424,6 +3434,26 @@
 - 变更记录：2026-10-25 新增；来源为补充生产 DOM 计算样式核验。
 - 相关阅读器优化建议：本样本一次渲染 2,772 个差异按钮，桌面差异列表高约 148,616px 且 overflow=visible；大量连接线和非固定工具栏增加长文阅读负担。建议把差异列表放进有限高度/分页或虚拟滚动区，并提供固定导航和当前差异摘要。这是可用性/规模建议，未测得性能故障，不作响应时间不合格结论。
 
+## FL-D260 Compare 阅读器差异导航与文档阅读布局不符合长文复核路径（2026-10-26）
+
+- 发现日期：2026-10-26。
+- 问题与影响：多模态视觉复核确认 Compare 当前把可点击差异清单放在双栏文档之后，长文和 2,772 条差异会形成极长页面；用户无法同时看到文档与差异导航。当前点击差异使用两个 pane 的 `scrollIntoView()`，可能联动滚动外层页面；移动端隐藏一侧的差异目标无法可靠定位，筛选后内联差异与清单状态也可能不一致。视觉层级方面，正文当前为 13px/1.85，接近网页调试列表而非合同阅读；普通块和表格的 DOCX 样式信息不足，难以复刻 Word 页面。
+- 证据：独立多模态审查报告及证据路径 `/tmp/opencode/fundlex-visual-audit-20261025/31-compare-desktop-reader.png`、`/tmp/opencode/fundlex-visual-audit-20261025/43-compare-mobile-diff-list.png`、`/tmp/opencode/compare-production-react-v2-e2e-20261025/report.json`；当前实现 `frontend/src/pages/Compare/ComparePage.tsx:118-153,224` 和 `frontend/src/styles/app.css:182-228`。生产结果包含 2,772 处差异，列表和文档阅读区均采用普通页面流。
+- 处理方法：第一阶段将 Compare viewer 改为文档区加右侧独立差异 rail，rail 固定高度并独立滚动；以稳定 `data-diff-id` 建立目标定位，使用 pane 内相对坐标修改 `scrollTop`，移动端自动切换到包含目标的一侧，增加滚动同步锁和当前差异跟随。第二阶段再处理差异分组/空白噪声和虚拟滚动。Word 风格呈现需扩展 compare parser/renderer，保留段落、列表、表格、页边距和运行样式；不以 CSS 宣称已还原未输出的数据。
+- 状态与验证：**代码已实施，定向验证通过，尚未发布**。右侧独立差异 rail、pane 内相对坐标定位、移动端目标侧自动切换、滚动同步锁、正文 15px 阅读基线和 DOCX 段落/run/编号/页边距/基础合并表格投影已完成；`PYTHONPATH=. .venv/bin/pytest -q tests/test_compare*.py` 为 73 passed、5 skipped，另有 1 个既有 Starlette/httpx deprecation warning；前端 typecheck、lint、9 项 Vitest、build、浏览器 8 项回归和 diff check 通过。浏览器夹具额外确认目标进入 pane 可视区且外层 `window.scrollY` 不变。新代码尚未生产发布，未新增模型调用；当前生产 Compare `incomplete` 状态和 header/footer/drawing 等覆盖缺口保持不变。
+- 下一步：发布前仍需保留真实 renderer 的视觉截图并决定是否受控发布。后端完整 Word 还原仍需继续补齐复杂列宽/边框、header/footer、drawing/pict/AlternateContent 和真实分页等覆盖判断。
+- 变更记录：2026-10-26 新增；来源为用户反馈和独立多模态视觉审查。该条与 FL-D256 的差异颜色问题关联，但范围扩展到长文导航、定位、布局和 Word-like 呈现，不合并为颜色问题。
+
+## FL-D261 Compare 回归命令未显式设置仓库导入路径（2026-10-26）
+
+- 发现日期：2026-10-26。
+- 问题与影响：直接运行 `.venv/bin/pytest -q tests/test_compare*.py` 时，`tests/test_compare_corpus.py` 在收集阶段因 `from tools.evaluation...` 找不到仓库根目录下的 `tools` 命名空间而失败；这会造成全量 Compare 回归被误判为代码失败。项目已有测试脚本依赖从仓库根目录导入 `tools`，当前环境的 pytest 启动方式没有自动把根目录加入 `sys.path`。
+- 证据：直接命令报 `ModuleNotFoundError: No module named 'tools'`；同一工作区使用 `PYTHONPATH=. .venv/bin/pytest -q tests/test_compare_corpus.py` 为 8 passed，Compare 定向集合在显式 `PYTHONPATH=.` 下通过。未发现业务代码或生产服务错误。
+- 处理方法：本轮验证采用 `PYTHONPATH=. .venv/bin/pytest ...`，保留测试代码和历史命名空间不变；后续可在统一测试入口或项目配置中声明仓库根目录导入路径，避免开发者漏设环境变量。
+- 状态与验证：**已确认，当前通过显式环境变量规避**。该项属于测试运行环境细节，不影响 Compare 生产 API、Worker 或前端运行；尚未修改项目测试入口配置。
+- 下一步：若将 Compare 全量回归纳入标准 CI/交接命令，应把 `PYTHONPATH=.` 固化到测试入口并保留本条记录，避免只记录一次性命令。
+- 变更记录：2026-10-26 新增；来源为本轮全量 Compare 测试收集检查。
+
 ## FL-D250 React Compare 生产 Worker/DOCX 结果页与下载验收（2026-10-25）
 
 - 发现日期：2026-10-25。
@@ -3443,6 +3473,16 @@
 - 状态与验证：**待验证，补测未闭合**。普通合同真实登录、上传、持久 Worker/model、Review 展示已通过；首次任务的 working 产物和报告哈希已通过。补测在成功状态观察阶段超时，未形成 selected DOCX、selected hash 或 selected 下载授权的证据，因此不能宣称选择版生成成功或失败。
 - 下一步：保留两次真实任务及其失败时序证据；后续应捕获生成 mutation 的 HTTP 状态/错误正文，并在成功响应后轮询 `selected_final`，再核对 selected DOCX ZIP、实际修订、报告/来源哈希及授权下载。保持当前 G15 不完整状态，不扩大为 D01–D20 gate 通过。
 - 变更记录：2026-10-25 新增；首次验证的立即读取竞态已确认，第二次补测改为等待成功文案但在 60 秒内超时，仍未取得 selected artifact 证据。
+
+## FL-D263 operation Registry 门禁边界与 FALSE applicability edit 授权缺口（2026-10-25）
+
+- 发现日期：2026-10-25。
+- 问题与影响：本轮架构审计发现三类可跨规则复现的 fail-open 风险：Guide 的 operation registry 覆盖检查若只停留在低层 planner，parsed custom Guide 可在 enable 或 Worker 绑定时绕过；Claim Replay 若只投影 TRUE obligation，会让绑定到 FALSE/UNKNOWN operation 的 edit 在 artifact proof 中消失；审计 missed target 只保留 rule/location 会丢失 operation、obligation 和 target 归属。另发现 sibling 写入相同新文本时，普通 operation 可能被误判为 `ALREADY_SATISFIED`，但显式 `ONE_OF` 历史替代必须保留该语义。
+- 证据：初次实现直接在 `validate_runtime_guide()` 加 operation registry 检查，破坏了自定义 Guide 的“先解析、后受控启用”契约；定向回归出现 `test_one_of_alternative_branch_can_close_when_sibling_was_applied` 和自定义 Guide certification 失败。完整回归第一轮为 1478 passed/48 skipped/3 failed，第二轮为 1479 passed/48 skipped/2 failed；失败均用于收紧兼容边界，未修改 gold、scorer、验证标准或固定分母。
+- 处理方法：将 Registry coverage 门移到 `guide_store.set_current_guide()` 和 Worker `_bound_guide_document()`；显式 `operation_id` 的 custom/extension Guide 缺失 registry entry 时拒绝 enable/bind，未知 rule 即使没有显式 identity 也拒绝，已知内置 rule 的旧式无 identity fixture 保留兼容。Claim Replay 在 operation authorization 前拒绝 FALSE/UNKNOWN applicability edit；effects 仅在 operation 自身有 source policy 或通过自身 validated unit 时产生 `ALREADY_SATISFIED`，保留显式 `ONE_OF` alternative 的历史关闭语义；audit missed target 保留 operation/obligation/target 身份；Delivery Gate 在传入 Ledger 时检查 Ledger open obligations。
+- 状态与验证：**代码已实施并验证（当前 dirty 工作区）**。新增 FALSE applicability 和 custom operation enable 回归通过；受影响定向集合 61 passed，兼容性定向集合 24 passed，错误码归类修复后的 API/Worker/Registry/Replay 集合 74 passed；`.venv/bin/python -m compileall -q fundlex`、`git diff --check` 通过；最终完整 `PYTHONPATH=. .venv/bin/pytest -q` 为 **1481 passed / 48 skipped / 2 warnings / 288.79s**。本轮最终验证时间为 2026-10-25T18:48:54+08:00，当前 Git HEAD 仍为 `4bad293302e77c859bf6036237142fb382dac6e0`，当前 dirty engine build 为 `63401714832f88277194e2005bc6a21b5365d30b56e49ee59d91c8f78b028edc`；因工作区 dirty 不构成最终 candidate SHA 证据。
+- 下一步：先审核 Compare dirty 修改是否纳入同一候选，形成唯一 clean release candidate；按最终 candidate 重新生成源码 manifest/build/artifact hash，再运行 Frozen Replay、真实 Worker/model、D01-D20 固定分母和最终用户 E2E。G06 未授权语义、预算缺口及选定版 artifact 观察窗口继续按 FL-D240–FL-D243、FL-D251 阻断。
+- 变更记录：2026-10-25 新增；保留首轮兼容性失败、边界调整及最终 1481 项回归通过链路。
 
 ## FL-D257 G05 缺失替换分支被同站点删除分支错误覆盖（2026-10-25）
 

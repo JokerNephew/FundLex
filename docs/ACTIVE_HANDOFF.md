@@ -1,6 +1,32 @@
 # FundLex 当前断点（ACTIVE_HANDOFF）
 
+## FL-D263 后端安全边界修复与当前验证断点（2026-10-25）
+
+- 已实施后端通用修复：operation Registry 覆盖门移至 Guide enable 与 Worker binding；显式 custom operation 未登记时 fail-closed；Claim Replay 拒绝绑定 FALSE/UNKNOWN applicability 的 edit；普通 sibling 同文不再单独关闭 operation，显式 ONE_OF 历史替代保留；audit missed target 保留 operation/obligation/target 身份；Delivery Gate 接入传入 Obligation Ledger 的 open-record 检查。
+- 新增回归：FALSE applicability edit、未登记 custom operation enable；Registry legacy identity 兼容边界已修正。错误码归类修复后，完整当前 dirty 工作区回归：`PYTHONPATH=. .venv/bin/pytest -q` = **1481 passed / 48 skipped / 2 warnings / 288.79s**；`.venv/bin/python -m compileall -q fundlex` 与 `git diff --check` 通过。最终验证时间：2026-10-25T18:48:54+08:00。
+- 当前精确 Git HEAD 仍为 `4bad293302e77c859bf6036237142fb382dac6e0`，工作区 dirty。除既有 Compare/前端/文档修改外，本轮后端修改文件为 `fundlex/generation/claim_replay.py`、`fundlex/generation/effects.py`、`fundlex/generation/registry.py`、`fundlex/guide.py`、`fundlex/guide_store.py`、`fundlex/jobs.py`、`fundlex/recall_pipeline.py` 及两项测试文件；未部署生产引擎、未新增真实模型调用。
+- 本轮后端文件 SHA-256：`guide.py` `52213bf99cc3e6c394c69519b8caf9d6926793169ffb61d790b05a1dfd239a6c`；`guide_store.py` `019fc5c022ecbaf5813dc8ca5ce7da89914c5dbe34ea52bdd46f2a3d922b915a`；`jobs.py` `22fb4e7f690634c28b342ade09423c82ee1838cac922f1cdb0eb45a627c2bcaa`；`claim_replay.py` `44377f84622bdeb481ea3b80bc780c76b37ec86647573cf658560006ac8c32aa`；`effects.py` `f3343b0a4575f5de0c6029c3d6de3d0dcbba57dba36a1cde0d6f2563a6c93946`；`registry.py` `4563c001408915f8dd4b226a8886a69da5f7b65b3cb75872b3af3e1eba2f9004`；`recall_pipeline.py` `38f6ab8f904282a805c0d88afec9f23a74b9643887b15b514ca45b03723f3927`。当前 dirty engine build：`63401714832f88277194e2005bc6a21b5365d30b56e49ee59d91c8f78b028edc`。
+- 不能把本轮 dirty 回归计为最终发布证据。下一条依赖动作：审核 Compare dirty 修改边界并形成唯一 clean candidate；随后以最终 HEAD 重新冻结/生成 build 和 artifact hash，运行 Frozen Replay、真实 Worker/model、D01-D20 固定分母、holdout 及普通工作台最终 E2E。当前结论仍为 **NO-GO**：D01-D20 current gate 0/20、G06 业务授权未决、评测预算不足、selected artifact 仍无闭合证据。
+
+## FL-D262 Compare 候选已发布到隔离测试环境（2026-10-25）
+
+- 已将当前工作区候选发布到隔离测试目录 `/opt/fundlex-test`，覆盖 `fundlex/`、`frontend/`、`guides/`、`rules/`、`tools/`、`docs/`、`tests/` 和必要项目文件；未调用生产发布器，未写入 `/opt/fundlex-recall-first`，未修改生产配置或数据库。
+- 发布前备份：`/tmp/opencode/fundlex-test-publish-20261025-150535/test-deployment-before.tgz`。发布证据和哈希文件位于同目录，包括 `after-sha256.txt`、`source-deployed-hash-check.txt`、`browser-smoke.json`、`before-sha256.txt` 和 `before-size.txt`。
+- 已重启并核验 `fundlex-test-api.service`、`fundlex-test-worker.service`、`fundlex-test-compare-worker.service`，三项均为 `active`；测试 API 监听 `127.0.0.1:8110`。测试 API `/api/capabilities` 未登录返回 200；密码模式下 `/api/health` 与 `/api/auth/me` 未登录返回预期 401，不能把未认证健康接口 401 误判为服务故障。
+ - 工作区与测试部署的 Compare Python 文件及当前入口静态资源 SHA-256 一致：`models.py` `13b36e48669eabd303ee2ef192f886692c81c5757f74fe120ace64be9be5370c`、`parser.py` `e49be4a2aa5d42777336752290db3cee74693927232d9159ce1666b1bd20429b`、`presentation.py` `3ced9d82bf6bfdd0e2e6597dc853aaa7a2b92341a9722749da9cb8d155f9c6fa`、`render.py` `f69d553587e08aedbc7d63f7e6982e2be354694e6aa4fbf96f37c32a9d1a9614`、`index.html` `131e6c718b3732b77431cb53b3ea6357a5657f1dafb8baac1d3a8ed53864f932`、JS `597d4cee45f13670e3f888d0ba2bdc609709b8870665b6704570f34dd48cf1d8`、CSS `3891a1846348a419486ffeb581476bad8c8c273f7b75eb21f3e7e896ae9c4cae`。
+- 资源与页面验收通过：`/`、当前 HTML 引用的 JS/CSS 均 HTTP 200；真实测试账号登录后访问 `/compare`，390px 和 1440px 视口均无横向溢出，标题和“新建对比任务”入口可见，页面错误、控制台错误、静态 404、API 404 均为 0。证据：`/tmp/opencode/fundlex-test-publish-20261025-150535/browser-smoke.json`。
+- 浏览器验收使用的临时 `compare-test-*` 账号及其会话已删除，数据库复核残留数为 0。未创建 Compare 任务，未新增模型调用。测试目录保留旧 Vite 哈希静态文件是增量同步的结果，首页只引用当前构建的 `index-GU2uu_zT.js` 和 `index-BSExzTi5.css`。
+- 生产隔离复核通过：生产 API/Worker 仍 active，生产 8010 仍监听；生产 Compare renderer 文件时间和 PID 未因本次测试发布变化。本条只证明隔离测试环境发布与页面入口验收，不替代真实测试合同的 Worker/model/DOCX 交付验收。
+
 ## Frontend visual remediation checkpoint (2026-10-25, published and publicly verified)
+
+## FL-D260 Compare reader implementation checkpoint (2026-10-26, local only)
+
+- 已实施未发布：`frontend/src/pages/Compare/ComparePage.tsx` 将文档区与差异导航拆为桌面右侧独立 rail；rail 自身滚动，正文左右 pane 保持独立滚动。差异点击通过 `data-diff-id` 和目标相对 pane 坐标更新 `scrollTop`，不再使用 `scrollIntoView()`；移动端在目标仅存在另一侧时自动切换，双栏滚动加入锁避免递归联动。
+- 已实施未发布：`frontend/src/styles/app.css` 调整 Compare 正文字号至 15px，增加中文合同字体、段落段后距、标题层级、列表、表格、页边距和 1440/768/390 布局；`fundlex/compare/presentation.py`、`fundlex/compare/parser.py`、`fundlex/compare/models.py`、`fundlex/compare/render.py` 现在解析并投影 DOCX 段落缩进/对齐/间距/页边距、编号、run 粗体/斜体/下划线/删除线/字号/颜色/字体/上下标，并保持差异坐标不变。当前能力仍是 Word-like 连续阅读投影，不代表完整 Word 分页还原。
+- 验证：前端 `npm run typecheck`、`npm run lint`、`npm run test -- --run`（4 files / 9 passed）、`npm run build` 和 `git diff --check` 通过；`PYTHONPATH=. .venv/bin/pytest -q tests/test_compare*.py` 为 73 passed、5 skipped、1 个现有 Starlette/httpx deprecation warning；`FUNDLEX_BROWSER_TESTS=1 .venv/bin/pytest -q tests/browser/test_frontend_v2.py` 为 8 passed，包含长文 pane 内定位、目标进入可视区、外层 `window.scrollY` 保持不变和移动端单侧差异自动切换夹具。
+- 当前工作区：未提交文件为 `docs/DETAIL_ISSUES_AND_RESOLUTIONS.md`、`docs/ACTIVE_HANDOFF.md`、`frontend/src/pages/Compare/ComparePage.tsx`、`frontend/src/styles/app.css`、`fundlex/compare/models.py`、`fundlex/compare/parser.py`、`fundlex/compare/presentation.py`、`fundlex/compare/render.py`、`tests/browser/test_frontend_v2.py` 和 `tests/test_compare_render.py`；生产静态资源仍为上一轮 `b78dc4a`/`4bad293` 发布版本，未发布本轮改动。
+- 下一动作：保留本轮本地证据，继续补充真实 renderer 视觉截图和复杂表格/页眉页脚覆盖判断后，再进行受控发布决定；真实公网 Compare 新任务尚未创建，未新增模型调用。
 
 - 本轮针对 FL-D252–FL-D256 的源码修复已提交为 `b78dc4a59e0b8be4c5c3c7b4979484e7a6a50a5a`，推送到 `origin/refactor/backend-engine-finalization`，并已完成前端静态资源受控发布。涉及文件：`frontend/src/components/layout/AppShell.tsx`、`frontend/src/pages/Compare/ComparePage.tsx`、`frontend/src/pages/DocumentDetail/DocumentDetailPage.tsx`、`frontend/src/pages/Guides/index.tsx`、`frontend/src/pages/Settings/index.tsx`、`frontend/src/styles/app.css` 和 `frontend/tests/components.test.tsx`；既有其他工作区改动未回退。
 - 已实施：浅色顶栏消息/退出按钮可见性、统计卡相邻 margin 隔离、Compare 三种后端差异 class 解析、差异类型颜色、覆盖警告逐项列表和长标识断行、Compare 任务表移动端宽度隔离、帮助弹窗 Tab/Shift+Tab 焦点循环、Escape 关闭与焦点恢复、背景 `inert`、合同例外稳定短 ID/规则/位置/诊断来源/证据展示、设置能力值中文映射和指引上传中文文件控件。

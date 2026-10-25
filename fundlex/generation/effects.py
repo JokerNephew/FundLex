@@ -585,6 +585,16 @@ def evaluate_operation_effect(obligation: Any, original: Any, artifact: Any,
             _compact(expected) in _compact(after)
             or (spec.rule_id in {"G02", "G04"} and spec.op == "replace"
                 and _class_group_equivalent(expected, quote)))
+        # ALREADY_SATISFIED is source evidence, not evidence that a sibling
+        # operation happened to write the same new phrase into this paragraph.
+        # Require the operation's own policy to be present in the source when
+        # there is no validated unit carrying it into the artifact.
+        if not own_units and expected and not getattr(spec, "one_of_group", ""):
+            source_has_expected = _compact(expected) in _compact(before)
+            if spec.rule_id in {"G02", "G04"} and spec.op == "replace":
+                source_has_expected = source_has_expected or _class_group_equivalent(
+                    expected, quote)
+            expected_present = expected_present and source_has_expected
         if occurrence >= 0 and spec.op == "replace":
             from .claim_replay import _occurrence_positions
             positions = _occurrence_positions(before, str(spec.old_text or ""))

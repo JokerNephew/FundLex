@@ -249,7 +249,7 @@ def test_compare_result_view_supports_pair_navigation_and_mobile_switching(brows
         ],
     }
     views = {
-        pair_one: {"pair": {"id": pair_one, "label": "第一组", "status": "succeeded"}, "left": {"name": "a-1.docx", "html": "<p>旧文 <span class='compare-diff-modify' data-diff-id='D1'>A</span></p>"}, "right": {"name": "b-1.docx", "html": "<p>新文 <span class='compare-diff-modify' data-diff-id='D1'>B</span></p>"}, "summary": {"total": 1, "modify": 1, "insert": 0, "delete": 0}, "coverage": {"status": "complete"}, "diffs": [{"id": "D1", "type": "modify", "section": "正文", "left": {"block_id": "p1", "start": 0, "end": 1, "text": "A"}, "right": {"block_id": "p1", "start": 0, "end": 1, "text": "B"}}]},
+        pair_one: {"pair": {"id": pair_one, "label": "第一组", "status": "succeeded"}, "left": {"name": "a-1.docx", "html": "<p>" + "</p><p>".join(f"合同段落 {index}" for index in range(80)) + "</p><p>旧文 <span class='compare-diff-modify' data-diff-id='D1'>A</span></p>"}, "right": {"name": "b-1.docx", "html": "<p>" + "</p><p>".join(f"合同段落 {index}" for index in range(80)) + "</p><p>新文 <span class='compare-diff-modify' data-diff-id='D1'>B</span> <span class='compare-diff-insert' data-diff-id='D3'>新增</span></p>"}, "summary": {"total": 2, "modify": 1, "insert": 1, "delete": 0}, "coverage": {"status": "complete"}, "diffs": [{"id": "D1", "type": "modify", "section": "正文", "left": {"block_id": "p1", "start": 0, "end": 1, "text": "A"}, "right": {"block_id": "p1", "start": 0, "end": 1, "text": "B"}}, {"id": "D3", "type": "insert", "section": "正文", "right": {"block_id": "p1", "start": 2, "end": 4, "text": "新增"}}]},
         pair_two: {"pair": {"id": pair_two, "label": "第二组", "status": "succeeded"}, "left": {"name": "a-2.docx", "html": "<p>原文 <span class='compare-diff-insert' data-diff-id='D2'>新增</span></p>"}, "right": {"name": "b-2.docx", "html": "<p>修订 <span class='compare-diff-insert' data-diff-id='D2'>新增</span></p>"}, "summary": {"total": 1, "modify": 0, "insert": 1, "delete": 0}, "coverage": {"status": "complete"}, "diffs": [{"id": "D2", "type": "insert", "section": "正文", "left": {"block_id": "p1", "start": 0, "end": 1, "text": ""}, "right": {"block_id": "p1", "start": 0, "end": 1, "text": "新增"}}]},
     }
     context = browser.new_context(viewport={"width": 390, "height": 844})
@@ -278,8 +278,18 @@ def test_compare_result_view_supports_pair_navigation_and_mobile_switching(brows
         response = page.goto(live_app + "/compare", wait_until="networkidle")
         assert response and response.ok
         page.get_by_role("heading", name="合同对比").first.wait_for(state="visible")
-        page.get_by_text("共 1 处差异 · 修改 1 · 新增 0 · 删除 0").wait_for(state="visible")
+        page.get_by_text("共 2 处差异 · 修改 1 · 新增 1 · 删除 0").wait_for(state="visible")
         assert page.locator('[data-diff-id="D1"]').count() == 2
+        assert page.locator('.compare-diff-rail').count() == 1
+        outer_scroll_before = page.evaluate("() => window.scrollY")
+        page.locator('.compare-diff-item').first.evaluate("node => node.click()")
+        page.wait_for_function("() => document.querySelector('.compare-pane-wrap')?.scrollTop > 0")
+        assert page.evaluate("() => window.scrollY") == outer_scroll_before
+        assert page.locator('.compare-pane-wrap').first.evaluate("pane => { const target = pane.querySelector('[data-diff-id=\\\"D1\\\"]'); const a = pane.getBoundingClientRect(); const b = target.getBoundingClientRect(); return b.top < a.bottom && b.bottom > a.top }")
+        assert page.locator('[data-diff-id="D3"]').count() == 1
+        page.locator('.compare-diff-item').nth(1).evaluate("node => node.click()")
+        page.locator('.compare-viewer[data-mobile-side="right"]').wait_for(state="attached")
+        page.wait_for_function("() => { const pane = document.querySelector('.compare-viewer[data-mobile-side=\"right\"] .compare-pane-wrap:last-of-type'); const target = pane?.querySelector('[data-diff-id=\"D3\"]'); if (!pane || !target) return false; const a = pane.getBoundingClientRect(); const b = target.getBoundingClientRect(); return b.top < a.bottom && b.bottom > a.top }")
         metrics = page.evaluate("""() => ({ viewport: innerWidth, documentWidth: document.documentElement.scrollWidth, bodyWidth: document.body.scrollWidth })""")
         assert metrics["documentWidth"] <= metrics["viewport"]
         assert metrics["bodyWidth"] <= metrics["viewport"]

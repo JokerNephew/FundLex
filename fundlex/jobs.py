@@ -246,11 +246,15 @@ class Worker:
                 if isinstance(exc, (OSError, sqlite3.OperationalError, DatabaseError)) or getattr(exc, "code", "") in RETRYABLE_MODEL_CODES:
                     self.store.retry(doc_id, token, error_code=getattr(exc, "code", "TEMPORARY_STORAGE_FAILURE"))
                     return True
-                code = str(exc) if str(exc) in {"INPUT_INTEGRITY_FAILED", "RULESET_HASH_MISMATCH", "RULESET_RETIRED",
-                                                  "INVALID_PIPELINE_REPORT", "ENGINE_SCHEMA_MISMATCH", "RESULT_SIZE_LIMIT",
-                                                  "MISSING_VERIFIED_ARTIFACTS", "ARTIFACT_VERIFICATION_MISMATCH",
-                                                  "GUIDE_VERSION_MISSING", "GUIDE_RULESET_HASH_MISMATCH",
-                                                  "GUIDE_NOT_CERTIFIED"} else "PROCESSING_FAILED"
+                raw_code = str(exc)
+                known_codes = {"INPUT_INTEGRITY_FAILED", "RULESET_HASH_MISMATCH", "RULESET_RETIRED",
+                               "INVALID_PIPELINE_REPORT", "ENGINE_SCHEMA_MISMATCH", "RESULT_SIZE_LIMIT",
+                               "MISSING_VERIFIED_ARTIFACTS", "ARTIFACT_VERIFICATION_MISMATCH",
+                               "GUIDE_VERSION_MISSING", "GUIDE_RULESET_HASH_MISMATCH",
+                               "GUIDE_NOT_CERTIFIED"}
+                code = ("GUIDE_OPERATION_REGISTRY_MISSING"
+                        if raw_code.startswith("GUIDE_OPERATION_REGISTRY_MISSING")
+                        else raw_code if raw_code in known_codes else "PROCESSING_FAILED")
                 report = {
                     "document_id": doc_id, "source_sha256": job["source_sha256"],
                     "ruleset_version": job["ruleset_version"], "ruleset_sha256": job.get("ruleset_sha256", ""),
@@ -325,6 +329,10 @@ class Worker:
         try:
             document = guide_store.guide_document(self.store, version_id)
             from .guide import validate_runtime_guide
+            from .generation.registry import operation_registry_coverage_gaps
+            gaps = operation_registry_coverage_gaps(document)
+            if gaps:
+                raise ValueError("GUIDE_OPERATION_REGISTRY_MISSING:" + ",".join(gaps))
             validate_runtime_guide(
                 document, approved_source_sha256=version["source_sha256"],
                 approved_document_sha256=job.get("guide_rules_sha256"))

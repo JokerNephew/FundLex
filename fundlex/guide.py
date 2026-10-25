@@ -920,7 +920,13 @@ def bind_operation_identities(doc: dict) -> None:
     """Assign stable indices; never infer ONE_OF from text similarity."""
     for rule in doc.get("groups") or []:
         for index, operation in enumerate(rule.get("operations") or []):
-            operation.setdefault("operation_id", f"{rule['rule_id']}:{index}")
+            if not operation.get("operation_id"):
+                operation["operation_id"] = f"{rule['rule_id']}:{index}"
+                # Keep compatibility with parsed legacy documents explicit.  A
+                # generated positional id is not a publisher-supplied Registry
+                # contract; routed execution still remains legacy-compatible for
+                # known built-in rules, while unknown rules fail closed.
+                operation["operation_id_generated"] = True
 
 
 def certify_guide_document(doc: dict, *, source_sha256: str,

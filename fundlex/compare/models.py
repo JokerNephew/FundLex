@@ -12,6 +12,33 @@ from typing import Any, Mapping
 
 
 @dataclass(frozen=True)
+class CompareRun:
+    """A visible run segment with the small style subset used by the viewer."""
+
+    text: str
+    start: int
+    end: int
+    bold: bool = False
+    italic: bool = False
+    underline: bool = False
+    strike: bool = False
+    color: str = ""
+    font_size: str = ""
+    font_family: str = ""
+    vertical_align: str = ""
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "text": self.text, "start": self.start, "end": self.end,
+            "bold": self.bold, "italic": self.italic,
+            "underline": self.underline, "strike": self.strike,
+            "color": self.color, "font_size": self.font_size,
+            "font_family": self.font_family,
+            "vertical_align": self.vertical_align,
+        }
+
+
+@dataclass(frozen=True)
 class CompareBlock:
     block_id: str
     ordinal: int
@@ -28,6 +55,14 @@ class CompareBlock:
     paragraph_index: int | None = None
     style: str = ""
     warnings: tuple[str, ...] = ()
+    runs: tuple[CompareRun, ...] = ()
+    paragraph_format: tuple[tuple[str, str], ...] = ()
+    table_colspan: int = 1
+    table_rowspan: int = 1
+    table_col_start: int = 0
+    table_cell_continuation: bool = False
+    table_origin_row: int | None = None
+    table_origin_cell: int | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -39,6 +74,14 @@ class CompareBlock:
             "row_index": self.row_index, "cell_index": self.cell_index,
             "paragraph_index": self.paragraph_index, "style": self.style,
             "warnings": list(self.warnings),
+            "runs": [run.to_dict() for run in self.runs],
+            "paragraph_format": dict(self.paragraph_format),
+            "table_colspan": self.table_colspan,
+            "table_rowspan": self.table_rowspan,
+            "table_col_start": self.table_col_start,
+            "table_cell_continuation": self.table_cell_continuation,
+            "table_origin_row": self.table_origin_row,
+            "table_origin_cell": self.table_origin_cell,
         }
 
 
@@ -57,6 +100,7 @@ class CompareDocument:
     source_sha256: str = ""
     filename: str = ""
     coverage: Coverage = field(default_factory=Coverage)
+    page_format: tuple[tuple[str, str], ...] = ()
 
     @property
     def block_count(self) -> int:
@@ -65,7 +109,8 @@ class CompareDocument:
     def to_dict(self) -> dict[str, Any]:
         return {"filename": self.filename, "sha256": self.source_sha256,
                 "blocks": [b.to_dict() for b in self.blocks],
-                "coverage": self.coverage.to_dict()}
+                "coverage": self.coverage.to_dict(),
+                "page_format": dict(self.page_format)}
 
 
 @dataclass(frozen=True)

@@ -519,6 +519,28 @@ def test_one_of_alternative_branch_can_close_when_sibling_was_applied():
         "ALREADY_SATISFIED", "NOT_REQUIRED"}
 
 
+def test_inapplicable_operation_cannot_claim_an_artifact_edit():
+    rule = {"rule_id": "G95", "operations": [
+        {"op": "append", "old_text": "", "new_text": "新增乙。"},
+    ], "old_text_variants": []}
+    record = Record("G95:0", "G95:B1:O1", 0)
+    record.spec.op = "append"
+    record.spec.old_text = ""
+    record.spec.new_text = "新增乙。"
+    record.applicability = SimpleNamespace(status="FALSE")
+    ledger = Ledger({"G95:0": record})
+    result = replay_claims(
+        [{"rule_id": "G95", "target_id": "T0", "location": "p0",
+          "start": 4, "end": 4, "replacement": "新增乙。", "components": []}],
+        Inspection(["保留句。"]), Inspection(["保留句。新增乙。"]),
+        rules_by_id={"G95": rule},
+        targets_by_id={"T0": {"target_id": "T0", "operations": ["G95:0"]}},
+        obligations=ledger)
+    assert result["verified"] is False
+    assert any(item["code"] == "CLAIM_OPERATION_NOT_APPLICABLE"
+               for item in result["failures"])
+
+
 def test_protected_literal_tampering_does_not_pass_operation_claim():
     rule = {"rule_id": "G93", "operations": [
         {"op": "replace", "old_text": "按月支付0.40%销售服务费。",

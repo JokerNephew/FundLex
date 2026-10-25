@@ -882,6 +882,47 @@ def replay_claims(edits: Sequence[Mapping[str, Any]], before_inspection: Any,
     units_checked = 0
     operation_records: list[dict[str, Any]] = []
     allowed_locations = set(by_location)
+    records = getattr(obligations, "records", None)
+    if records is None:
+        records = list((getattr(obligations, "_records", {}) or {}).values())
+    inapplicable_operations: set[str] = set()
+    if obligations is not None:
+        # An edit is an execution claim.  Check the named operation's
+        # applicability before paragraph authorization, otherwise a forged plan
+        # can bind an edit to a FALSE branch and disappear because FALSE
+        # obligations are correctly omitted from the proof projection.
+        for edit in edits:
+            keys = _operation_keys(edit, targets_by_id)
+            for component in edit.get("components") or ():
+                if isinstance(component, Mapping):
+                    keys.extend(_operation_keys(component, targets_by_id))
+            for operation_id in dict.fromkeys(keys):
+                record = obligations.record(operation_id) if hasattr(obligations, "record") else None
+                if record is None:
+                    continue
+                status = str(getattr(getattr(record, "applicability", None), "status", ""))
+                if status == "FALSE":
+                    inapplicable_operations.add(operation_id)
+                    failures.append({
+                        "rule_id": str(record.spec.rule_id),
+                        "operation_id": operation_id,
+                        "obligation_id": str(record.obligation_id),
+                        "target_id": str(edit.get("target_id") or ""),
+                        "location": str(edit.get("location") or ""),
+                        "code": "CLAIM_OPERATION_NOT_APPLICABLE",
+                        "reason": "an edit is bound to a FALSE applicability operation",
+                    })
+                elif status and status != "TRUE":
+                    inapplicable_operations.add(operation_id)
+                    failures.append({
+                        "rule_id": str(record.spec.rule_id),
+                        "operation_id": operation_id,
+                        "obligation_id": str(record.obligation_id),
+                        "target_id": str(edit.get("target_id") or ""),
+                        "location": str(edit.get("location") or ""),
+                        "code": "CLAIM_OPERATION_APPLICABILITY_UNPROVEN",
+                        "reason": "an edit is bound to an operation whose applicability is not TRUE",
+                    })
     # Detect duplicate target claims before any edit is evaluated.  This check must
     # also run for direct replay callers without an obligation ledger; otherwise a
     # paragraph-level edit can accidentally stand in for two same-operation sites.
@@ -1238,19 +1279,24 @@ def replay_claims(edits: Sequence[Mapping[str, Any]], before_inspection: Any,
                         "reason": "the operation did not use its own authorization"})
                     unit["verdict"] = "FAIL"
         for unit in units:
+            operation_id = str(unit.get("operation_id", ""))
+            operation_record_errors = list(unit.get("effect_errors") or
+                                           ([unit["error"]] if unit.get("error") else []))
+            if any(key.strip() in inapplicable_operations
+                   for key in operation_id.split(",") if key.strip()):
+                operation_record_errors.append("CLAIM_OPERATION_APPLICABILITY_UNPROVEN")
             operation_records.append({
                 "location": location,
                 "rule_id": unit["rule_id"],
                 "target_id": unit.get("target_id", ""),
-                "operation_id": unit.get("operation_id", ""),
+                "operation_id": operation_id,
                 "obligation_id": unit.get("obligation_id", ""),
                 "start": unit.get("start"), "end": unit.get("end"),
                 "before": unit.get("before", ""),
                 "replacement": unit.get("replacement", ""),
                 "scope": unit.get("scope", ""),
-                "effect_errors": list(unit.get("effect_errors") or
-                                      ([unit["error"]] if unit.get("error") else [])),
-                "verdict": unit.get("verdict", "FAIL"),
+                "effect_errors": operation_record_errors,
+                "verdict": ("FAIL" if operation_record_errors else unit.get("verdict", "FAIL")),
             })
         # Paragraph-level reconstruction (non-overlapping plans only): the plan applied
         # to the source must equal the artifact.  Overlapping plans are proven by the
@@ -1275,9 +1321,6 @@ def replay_claims(edits: Sequence[Mapping[str, Any]], before_inspection: Any,
             if isinstance(target, Mapping):
                 enriched["operation_keys"] = list(target.get("operations") or ())
         effect_edits.append(enriched)
-    records = getattr(obligations, "records", None)
-    if records is None:
-        records = list((getattr(obligations, "_records", {}) or {}).values())
     clause_duplicates = _g16_duplicate_effects(
         before_inspection, after_inspection, rules_by_id, facts, records)
     failures.extend(clause_duplicates)

@@ -289,7 +289,16 @@ def registry_coverage_gaps(guide_document: dict[str, Any]) -> list[str]:
 
 
 def operation_registry_coverage_gaps(guide_document: Mapping[str, Any]) -> list[str]:
-    """Return guide operation keys absent from the operation registry."""
+    """Return explicit guide operation keys absent from the operation registry.
+
+    A guide with explicit ``operation_id`` fields is the released Registry
+    contract.  Older parsed/custom documents for a known built-in rule may omit
+    those fields and are intentionally handled by the legacy compatibility path;
+    unknown rules still fail closed even when they omit identity.  This keeps
+    certification compatibility without allowing an unregistered extension to
+    execute.  ``register_guide_operations`` still derives positional keys when
+    a controlled publisher explicitly supplies specs.
+    """
     gaps: list[str] = []
     for group in guide_document.get("groups") or []:
         if not isinstance(group, Mapping):
@@ -297,7 +306,15 @@ def operation_registry_coverage_gaps(guide_document: Mapping[str, Any]) -> list[
         rule_id = str(group.get("rule_id") or "").strip().upper()
         for index, operation in enumerate(group.get("operations") or []):
             if isinstance(operation, Mapping):
-                key = str(operation.get("operation_id") or f"{rule_id}:{index}").strip().upper()
+                declared = operation.get("operation_id")
+                if not str(declared or "").strip():
+                    if rule_id not in STRATEGY_REGISTRY:
+                        gaps.append(f"{rule_id}:{index}")
+                    continue
+                if operation.get("operation_id_generated") is True \
+                        and rule_id in STRATEGY_REGISTRY:
+                    continue
+                key = str(declared).strip().upper()
                 if key not in OPERATION_REGISTRY:
                     gaps.append(key)
     return sorted(gaps)

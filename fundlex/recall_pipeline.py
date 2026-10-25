@@ -1975,6 +1975,8 @@ def _run_audit(model: Any, rules_by_id: dict[str, dict], targets: Sequence[Targe
                 continue
             missed_item = {"rule_id": missed_rule, "location": location, "quote": quote,
                            "operation_id": str(item.get("operation_id") or ""),
+                           "obligation_id": str(item.get("obligation_id") or ""),
+                           "target_id": str(item.get("target_id") or ""),
                            "reason": str(item.get("reason") or "")}
             if verified and obligations is not None and \
                     _site_record_quotes_expected_effect(
@@ -2156,6 +2158,9 @@ def _audit_issues(state: dict[str, Any], targets: Sequence[Target]) -> list[dict
                     item.get("review_status") == "REVIEW_UNPROVEN":
                 continue
             issues.append({"code": "AUDIT_MISSED_TARGET", "rule_id": rule_id,
+                           "operation_id": item.get("operation_id", ""),
+                           "obligation_id": item.get("obligation_id", ""),
+                           "target_id": item.get("target_id", ""),
                            "location": item["location"], "quote": item["quote"],
                            "reason": item["reason"]})
     return issues
@@ -2946,7 +2951,7 @@ def _sweep_batch(model: Any, rules_by_id: dict[str, dict], requirements: str,
     return ledger
 
 
-def _delivery_complete(unresolved: Sequence[dict[str, Any]]) -> bool:
+def _delivery_complete(unresolved: Sequence[dict[str, Any]], *, ledger: Any = None) -> bool:
     """Every reported unresolved item blocks final delivery (FL-D118).
 
     The old gate listed the blocking categories one by one and missed
@@ -2954,6 +2959,13 @@ def _delivery_complete(unresolved: Sequence[dict[str, Any]]) -> bool:
     ``complete``. Deriving the decision from the final unresolved list keeps the report
     and the gate consistent.
     """
+    if ledger is not None:
+        from .obligations import open_obligations
+        # The Ledger owns business completion.  The unresolved argument is only
+        # its diagnostic projection plus orphan/resource blockers, so it may
+        # never close an open record and it still blocks an unbound evidence row.
+        if open_obligations(ledger):
+            return False
     return not unresolved
 
 
@@ -4750,7 +4762,7 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
             report["failure_classes"] = class_counts
             checks = [*artifacts.checks, "actual_content_verification"]
             hashes = {"final_sha256": artifacts.final_sha256, "redline_sha256": artifacts.redline_sha256}
-            complete = _delivery_complete(unresolved)
+            complete = _delivery_complete(unresolved, ledger=obligation_ledger)
             if isinstance(report.get("recovery"), dict):
                 # ``final`` describes the run, not merely the last attempted action.
                 report["recovery"]["last_outcome"] = report["recovery"].get("final")
