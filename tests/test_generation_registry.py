@@ -206,6 +206,31 @@ def test_delete_rules_keep_their_deterministic_path():
     assert decision.actual_tier is GenerationTier.DELETE
 
 
+def test_delete_operation_has_no_unauthorized_compose_fallback():
+    decision = route_operation("G15:0", structure="unsafe")
+    assert decision.selected_executor == "delete"
+    assert "tier3_model_compose" not in [tier.value for tier in
+                                           operation_for("G15:0").allowed_tiers]
+
+
+def test_authorized_delete_compose_fallback_updates_operation_executor():
+    from fundlex.recall import _routing_for_compose
+
+    routing = {
+        "executor": "delete",
+        "allow_compose_fallback": True,
+        "decisions": [{
+            "operation": "CUSTOM:0", "actual": "deterministic_delete",
+            "selected_executor": "delete", "blocked": False,
+            "allowed_tiers": ["deterministic_delete", "tier3_model_compose"],
+        }],
+    }
+    escalated = _routing_for_compose(routing)
+    assert escalated["executor"] == "compose"
+    assert escalated["decisions"][0]["actual"] == "tier3_model_compose"
+    assert escalated["decisions"][0]["selected_executor"] == "compose"
+
+
 def test_g09_clean_clause_keeps_implemented_splice_executor():
     decision = route_operation("G09:0", structure="clean")
     assert decision.selected_executor == "splice"

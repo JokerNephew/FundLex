@@ -205,14 +205,47 @@ def _explained_by_rewrite(before_segment: str, after_segment: str,
 
 
 def check_boundary(before_full: str, after_full: str,
-                   before_span: str, after_span: str) -> Finding | None:
-    """V2-A: outside the edited span, the source text must be unchanged."""
-    if before_span and before_span in before_full:
-        expected = before_full.replace(before_span, after_span, 1)
+                   before_span: str, after_span: str, *,
+                   source_start: int | None = None,
+                   source_end: int | None = None) -> Finding | None:
+    """V2-A: outside the edited span, the source text must be unchanged.
+
+    ``before_span`` is evidence, not an address.  When a paragraph contains the
+    same text more than once, replacing the first occurrence can validate the
+    wrong site.  Callers that have a bound source span must therefore provide its
+    offsets; the old string-only form remains compatible for unique occurrences.
+    """
+    if source_start is not None or source_end is not None:
+        if source_start is None or source_end is None or source_start < 0 \
+                or source_end < source_start or source_end > len(before_full):
+            return Finding("OUTSIDE_SPAN_CHANGED", "source span is invalid")
+        if before_full[source_start:source_end] != before_span:
+            return Finding("OUTSIDE_SPAN_CHANGED",
+                           "bound source span does not match the authorized text")
+        expected = before_full[:source_start] + after_span + before_full[source_end:]
         if after_full != expected:
             return Finding("OUTSIDE_SPAN_CHANGED",
                            "text outside the authorized span differs from the source")
         return None
+    if before_span:
+        occurrences: list[int] = []
+        start = 0
+        while True:
+            found = before_full.find(before_span, start)
+            if found < 0:
+                break
+            occurrences.append(found)
+            start = found + 1
+        if len(occurrences) == 1:
+            found = occurrences[0]
+            expected = before_full[:found] + after_span + before_full[found + len(before_span):]
+            if after_full != expected:
+                return Finding("OUTSIDE_SPAN_CHANGED",
+                               "text outside the authorized span differs from the source")
+            return None
+        if len(occurrences) > 1:
+            return Finding("OUTSIDE_SPAN_CHANGED",
+                           "source span occurs more than once and has no bound address")
     if before_full == after_full:
         return None
     return Finding("OUTSIDE_SPAN_CHANGED", "span not locatable in the source")
@@ -351,6 +384,8 @@ def run_validation(before: str, after: str, *, auth: Authorization,
                    required_terms: tuple[str, ...] = (),
                    before_full: str | None = None,
                    after_full: str | None = None,
+                   source_start: int | None = None,
+                   source_end: int | None = None,
                    components: tuple[Mapping[str, Any], ...] | list[Mapping[str, Any]] = (),
                    authorized_numbers: tuple[str, ...] = ()) -> ValidationReport:
     """V1 + V2-B (and V2-A when full paragraphs are supplied).
@@ -410,7 +445,8 @@ def run_validation(before: str, after: str, *, auth: Authorization,
 
     # V2-A (only when the caller supplied whole paragraphs).
     if before_full is not None and after_full is not None:
-        boundary = check_boundary(before_full, after_full, before, after)
+        boundary = check_boundary(before_full, after_full, before, after,
+                                  source_start=source_start, source_end=source_end)
         if boundary is not None:
             findings.append(boundary)
 
@@ -454,11 +490,14 @@ def validate_edit(before: str, after: str, *, auth: Authorization,
                   components: "tuple[Mapping[str, Any], ...]" = (),
                   authorized_numbers: tuple[str, ...] = (),
                   before_full: str | None = None,
-                  after_full: str | None = None) -> ValidationReport:
+                  after_full: str | None = None,
+                  source_start: int | None = None,
+                  source_end: int | None = None) -> ValidationReport:
     """Single entry point used by every generation tier (deterministic or model)."""
     return run_validation(before, after, auth=auth, required_terms=required_terms,
-                          before_full=before_full, after_full=after_full,
-                          components=components, authorized_numbers=authorized_numbers)
+                           before_full=before_full, after_full=after_full,
+                           source_start=source_start, source_end=source_end,
+                           components=components, authorized_numbers=authorized_numbers)
 
 
 def fact_blocking(fact_status: Mapping[str, str] | None,

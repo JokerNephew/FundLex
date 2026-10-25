@@ -1,0 +1,60 @@
+{
+  "body": {
+    "schema_version": "fundlex-model-cassette-v1",
+    "request": {
+      "task_type": "recall_compose",
+      "prompt_version": "recall_compose_v1",
+      "configured_model": "deepseek-v4.1-flash",
+      "context_sha256": "1a2b7e20a82ec920a5e7547af167ef6c5232abe153b483a7da5fff74060b8415",
+      "request": {
+        "bounded_context": "CONTRACT_TARGET\n[p785] 由于本基金 A 类基金份额和 D 类基金份额不收取销售服务费，而 C 类基金份额收取销售服务费\n\nCONTRACT_SURROUNDING\nBEFORE: \nAFTER: ，各基金份额类别对应的可分配收益将有所不同。本基金同一类别的每一基金份额享有同等分配权； \n\nGUIDE_OPERATION\n{\n \"rule_id\": \"G18\",\n \"title\": \"基金合同-基金的收益与分配\",\n \"requirement\": \"将“由于本基金A类基金份额不收取销售服务费，而C类基金份额收取销售服务费”变更为“由于本基金A类基金份额和C类基金份额费用收取不同”。\",\n \"reference_old_texts\": [\n  \"由于本基金A类基金份额不收取销售服务费，而C类基金份额收取销售服务费\"\n ],\n \"fixed_policy_text\": \"由于本基金A类、D类基金份额和C类基金份额费用收取不同\",\n \"slots\": [\n  \"A类基金份额\",\n  \"C类基金份额\"\n ]\n}\n\nFACTS\n{\n \"fund_type\": \"open_regular\",\n \"fund_type_quote\": \"契约型开放式\",\n \"fund_type_basis\": \"基金运作方式为契约型开放式，属于普通开放式基金；虽提及未来可能转换为ETF联接基金，但当前并非ETF或联接基金。\",\n \"class_count\": 3,\n \"classes\": [\n  {\n   \"name\": \"A\",\n   \"subscription_fee\": true,\n   \"service_fee\": false,\n   \"current\": true,\n   \"rate\": null,\n   \"quote\": \"在投资者申购 A 类及 D 类基金份额时收取申购费用，不计提销售服务费\"\n  },\n  {\n   \"name\": \"C\",\n   \"subscription_fee\": false,\n   \"service_fee\": true,\n   \"current\": true,\n   \"rate\": null,\n   \"quote\": \"在投资者申购 C 类基金份额时不收取申购费用，而从本类别基金资产中计提销售服务费\"\n  },\n  {\n   \"name\": \"D\",\n   \"subscription_fee\": true,\n   \"service_fee\": false,\n   \"current\": true,\n   \"rate\": null,\n   \"quote\": \"在投资者申购 A 类及 D 类基金份额时收取申购费用，不计提销售服务费\"\n  }\n ],\n \"subscription_group\": [\n  \"A\",\n  \"D\"\n ],\n \"service_group\": [\n  \"C\"\n ],\n \"share_class_structure\": \"MULTIPLE\",\n \"direct_sales_exempt_group\": [],\n \"other_sales_charged_group\": [],\n \"fact_status\": {\n  \"fund_type\": \"VERIFIED\",\n  \"share_class_structure\": \"VERIFIED\",\n  \"subscription_fee_group\": \"VERIFIED\",\n  \"service_fee_group\": \"VERIFIED\",\n  \"direct_sales_exempt_group\": \"UNKNOWN\",\n  \"other_sales_charged_group\": \"UNKNOWN\"\n },\n \"condition_overrides\": {},\n \"has_service_fee\": true,\n \"is_floating_fee\": false,\n \"floating_quote\": \"本基金的管理费按前一日基金资产净值的 0.15%年费率计提。\",\n \"floating_basis\": \"管理费为固定年费率，未与持有期限或业绩挂钩。\",\n \"notes\": \"A类、D类收取申购费且不计提销售服务费；C类不收申购费但计提0.10%销售服务费。管理费0.15%、托管费0.05%均为固定费率。\",\n \"quotes_verified\": {\n  \"fund_type\": true,\n  \"class:A\": true,\n  \"class:C\": true,\n  \"class:D\": true,\n  \"floating\": true,\n  \"class_set\": true\n },\n \"class_set_quote\": \"本基金将基金份额分为 A 类、C 类和 D 类三种不同的类别。在投资者申购 A 类及 D 类基金份额时收取申购费用，不计提销售服务费；在投资者申购 C 类基金份额时不收取申购费用，而从本类别基金资产中计提销售服务费。\",\n \"class_set_evidence\": {\n  \"quote_verified\": true,\n  \"set_complete_verified\": true,\n  \"parsed_classes\": [\n   \"A\",\n   \"C\",\n   \"D\"\n  ],\n  \"reason\": \"CLASS_SET_VERIFIED\"\n },\n \"value_verified\": true,\n \"set_complete_verified\": true,\n \"fund_type_certification\": {},\n \"channel_evidence\": {\n  \"direct_sales_exempt\": \"\",\n  \"other_sales_charged\": \"\"\n },\n \"problems\": []\n}",
+        "instruction": "Read [CONTRACT_TARGET] (the actual contract text to be rewritten), [GUIDE_OPERATION] (the guide's requirement, the reference old text and the fixed policy text) and [FACTS]. Produce the replacement text for exactly this target span. The fixed policy text given in [GUIDE_OPERATION] must appear in the replacement verbatim (with share-class slots already instantiated as instructed in the context). Keep every other element of the target span that the guide does not require changing, especially fee formulas, calculation rules, rates and conditions; list those kept elements in preserved. Never add policy, numbers or promises the guide does not state. Write plain Chinese contract text only, no markdown, no quotes around the whole answer.",
+        "response_schema": {
+          "type": "object",
+          "required": [
+            "replacement",
+            "preserved",
+            "basis"
+          ],
+          "properties": {
+            "replacement": {
+              "type": "string"
+            },
+            "preserved": {
+              "type": "array",
+              "maxItems": 12,
+              "items": {
+                "type": "string"
+              }
+            },
+            "basis": {
+              "type": "string"
+            }
+          }
+        },
+        "request_options": {
+          "thinking": {
+            "type": "disabled"
+          }
+        },
+        "max_completion_tokens": 8000
+      }
+    },
+    "response": {
+      "replacement": "由于本基金A类、D类基金份额和C类基金份额费用收取不同",
+      "preserved": [],
+      "basis": "依据G18要求及固定政策文本，将原句替换为“由于本基金A类、D类基金份额和C类基金份额费用收取不同”；事实来源：class_set_quote“本基金将基金份额分为 A 类、C 类和 D 类三种不同的类别。在投资者申购 A 类及 D 类基金份额时收取申购费用，不计提销售服务费；在投资者申购 C 类基金份额时不收取申购费用，而从本类别基金资产中计提销售服务费。”"
+    },
+    "event": {
+      "task_type": "recall_compose",
+      "prompt_version": "recall_compose_v1",
+      "context_sha256": "1a2b7e20a82ec920a5e7547af167ef6c5232abe153b483a7da5fff74060b8415",
+      "configured_model": "deepseek-v4.1-flash",
+      "actual_model": "deepseek-v4.1-flash",
+      "http_status": 200,
+      "finish_reason": "stop",
+      "error_code": null
+    }
+  },
+  "sha256": "81d812b133eedfe52375f612c1500bae2781f870f69f15e3bc8a9b54e9fceacc"
+}

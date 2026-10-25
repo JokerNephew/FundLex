@@ -644,21 +644,54 @@ def targets_for_open_rules(obligations: Any, targets: Sequence[Any], rules_by_id
         if target.state == "needs_edit" and not target.out_of_scope:
             covered_operations.update(keys)
         elif target.state == "satisfied":
+            operations = list(rule.get("operations") or ())
+            statuses = [condition_status(operation.get("condition"), facts)
+                        for operation in operations]
+            applicable = [operation for operation, status in zip(operations, statuses)
+                          if status == "TRUE"]
+            # A satisfied applicable noop is a valid obligation proof, while its
+            # target is excluded from audit so a sibling (G22) may edit the same
+            # paragraph.  Preserve operation coverage here without making that target
+            # an editable/auditable site (G21/G22).
+            if target.out_of_scope and not (
+                    applicable and all(operation.get("op") == "noop"
+                                       for operation in applicable)):
+                continue
             if keys:
                 covered_operations.update(keys)
             else:
                 covered_operations.update(
                     satisfied_operation_keys(rule, facts, target_body(target)))
-        elif target.state == "absent":
-            # An "absent" verdict suppresses recovery only for the operation whose own
-            # old wording is genuinely absent.  A wrong absent verdict for one sibling
-            # must not close another still-present operation.
-            for index, operation in enumerate(rule.get("operations") or []):
+        elif target.state == "absent" and not target.out_of_scope:
+            # An "absent" verdict belongs only to the operation explicitly attributed
+            # to that target.  In particular, an absent G05:0 replace source does not
+            # prove the replacement exists, and must not also close G05:2 merely because
+            # that sibling's literal is absent from the same paragraph (D19 p130).
+            # Site-bound negative proofs for a delete are added later by
+            # resolve_absent_site_targets(); until then, an un-attributed absent target
+            # cannot close any operation.
+            for operation_key in keys:
+                try:
+                    index = int(str(operation_key).split(":", 1)[1])
+                except (IndexError, ValueError):
+                    continue
+                operations = rule.get("operations") or []
+                if not 0 <= index < len(operations):
+                    continue
+                operation = operations[index]
                 old_text = _compact(str(operation.get("old_text") or ""))
-                if operation.get("op") in {"replace", "delete"} and old_text \
-                        and old_text not in body:
-                    covered_operations.add(_declared_operation_key(
-                        rule_id, index, operation))
+                new_text = str(operation.get("new_text") or "")
+                if operation.get("op") == "replace":
+                    instantiated, issues = instantiate_slots(new_text, facts)
+                    required = _compact(instantiated if not issues else new_text)
+                    if required and required in body and (not old_text or old_text not in body):
+                        covered_operations.add(str(operation_key))
+                elif (operation.get("op") == "delete"
+                      and str(rule_id) != "G05"
+                      and old_text and old_text not in body):
+                    # G05's independent filing deletion requires the class-setup site
+                    # proof below; other rules retain the legacy absent-delete path.
+                    covered_operations.add(str(operation_key))
 
     def operation_closed(rule: dict, record: Any) -> bool:
         operation_index = int(getattr(record.spec, "operation_index", 0) or 0)
@@ -671,6 +704,12 @@ def targets_for_open_rules(obligations: Any, targets: Sequence[Any], rules_by_id
             return bool(required) and _append_obligation_present(
                 str(rule.get("rule_id") or ""), required, body)
         if operation.get("op") == "delete":
+            if str(rule.get("rule_id") or "") == "G05":
+                # G05:2 is an independent filing deletion.  Document-wide absence is
+                # insufficient because the same phrase may occur in an unrelated
+                # amendment clause; require the class-setup operation site to prove
+                # the negative (resolve_absent_site_targets).
+                return False
             return bool(old_text) and old_text not in body
         if operation.get("op") == "replace":
             instantiated, issues = instantiate_slots(new_text, facts)

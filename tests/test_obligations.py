@@ -6,7 +6,7 @@ from types import SimpleNamespace
 import pytest
 
 from fundlex.obligations import (GroupKind, apply_facts, compile_obligations,
-                                 open_obligations, project,
+                                 open_obligations, project, project_unresolved,
                                  validate_completion_invariants)
 
 
@@ -400,6 +400,46 @@ def test_survey_satisfied_delete_cannot_hide_a_residual_sentence():
     record = ledger.record("G05:B2:O1")
     assert record.completion == "UNRESOLVED"
     assert record.completion_evidence == "OPEN_OBLIGATION:applicable_without_site_proof"
+
+
+def test_project_unresolved_collapses_bound_evidence_to_the_open_ledger_row():
+    ledger = compile_obligations(guide(rule(rule_id="G35", operations=[
+        {"op": "delete", "old_text": "待删除条款", "condition": {"kind": "none"}}
+    ])))
+    apply_facts(ledger, FakeFacts())
+    project(ledger, report_with())
+    evidence = {
+        "kind": "claim_replay", "code": "CLAIM_OPERATION_UNPROVEN",
+        "rule_id": "G35", "operation_id": "G35:0", "location": "p1",
+    }
+    rows = project_unresolved(ledger, evidence=[evidence, dict(evidence)])
+    assert len(rows) == 1
+    assert rows[0]["kind"] == "obligation"
+    assert rows[0]["obligation_id"] == "G35:B1:O1"
+
+
+def test_project_unresolved_keeps_closed_or_composite_evidence_fail_closed():
+    ledger = compile_obligations(guide(rule(rule_id="G36", operations=[
+        {"op": "replace", "old_text": "旧句", "new_text": "新句",
+         "condition": {"kind": "none"}}
+    ])))
+    apply_facts(ledger, FakeFacts())
+    project(ledger, report_with(
+        targets=[target("G36", operations=["G36:0"], location="p1")],
+        plan_ledger=[{"target_id": "T1", "status": "planned"}],
+        replay={"verified": True, "failures": [], "obligations": {
+            "G36:B1:O1": site_proof(ledger, "G36:0", "旧句", "新句", planned=True)
+        }},
+    ))
+    assert not open_obligations(ledger)
+    rows = project_unresolved(ledger, evidence=[
+        {"kind": "claim_replay", "code": "STALE_FAILURE",
+         "rule_id": "G36+G99", "operation_id": "G36:0", "location": "p1"},
+        {"kind": "claim_replay", "code": "UNKNOWN_OPERATION",
+         "rule_id": "G99", "operation_id": "G99:0", "location": "p9"},
+    ])
+    assert [row["code"] for row in rows] == ["STALE_FAILURE", "UNKNOWN_OPERATION"]
+    assert all(row["kind"] == "orphan_evidence" for row in rows)
 
 
 def test_missing_operation_attribution_or_site_stays_unresolved_and_unprojected():

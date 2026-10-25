@@ -99,6 +99,8 @@ export interface TaskSummary {
   updated_at?: string
   pause_reason?: string | null
   summary_url?: string
+  phase?: string
+  downloadable_count?: number
 }
 
 export interface Paginated<T> {
@@ -191,6 +193,74 @@ export interface DecisionResult {
   rejected?: number[]
   sha256?: string
   download_url?: string
+}
+
+export interface CompareFileManifest {
+  client_id: string
+  name: string
+  size: number
+}
+
+export interface ComparePairManifest {
+  client_pair_id: string
+  label?: string
+  left: CompareFileManifest
+  right: CompareFileManifest
+}
+
+export interface CompareTask {
+  id: Id
+  name: string
+  status: string
+  total?: number
+  pairs?: ComparePair[]
+  counts?: Record<string, number>
+  created_at?: string
+  updated_at?: string
+}
+
+export interface ComparePair {
+  id: Id
+  label?: string
+  ordinal?: number
+  status: string
+  left: { name: string }
+  right: { name: string }
+  summary?: { total?: number; modify?: number; insert?: number; delete?: number }
+  error_code?: string | null
+}
+
+export interface CompareUploadResult {
+  receipts?: Array<{ client_id: string; status: string; error_code?: string | null }>
+}
+
+export interface CompareSpan {
+  block_id: string
+  start: number
+  end: number
+  text: string
+}
+
+export interface CompareDiff {
+  id: string
+  type: 'modify' | 'insert' | 'delete' | string
+  section?: string
+  left?: CompareSpan
+  right?: CompareSpan
+  left_spans?: CompareSpan[]
+  right_spans?: CompareSpan[]
+  left_anchor?: CompareSpan
+  right_anchor?: CompareSpan
+}
+
+export interface CompareView {
+  pair: { id: Id; label?: string; ordinal?: number; status: string }
+  left: { name: string; html: string }
+  right: { name: string; html: string }
+  summary?: { total?: number; modify?: number; insert?: number; delete?: number }
+  coverage?: { status?: string; warnings?: string[] }
+  diffs: CompareDiff[]
+  result_sha256?: string
 }
 
 export interface ApiErrorBody {

@@ -967,6 +967,21 @@ def replay_claims(edits: Sequence[Mapping[str, Any]], before_inspection: Any,
         edited_copies = [item for item in locations if item in allowed_locations]
         if len(edited_copies) < 2:
             continue
+        # Identical source paragraphs can have different authorized sibling
+        # operations after clause rebinding.  Their final text may therefore
+        # differ for a reason proved by the operation ledger (D20 p804/p1259:
+        # G15/G17 own the body copy while G16 also owns the summary copy).
+        # Keep the strict divergence check for ordinary copies and for direct
+        # callers without operation-scoped target evidence.
+        target_operation_sets = {
+            location: frozenset(str(key) for target in (targets_by_id or {}).values()
+                                 if str(target.get("location") or "") == location
+                                 for key in (target.get("operations") or ()))
+            for location in edited_copies
+        }
+        if all(target_operation_sets.get(location) for location in edited_copies) \
+                and len(set(target_operation_sets.values())) > 1:
+            continue
         after_values = set()
         for item in edited_copies:
             try:

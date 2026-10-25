@@ -1209,10 +1209,10 @@ def create_app(data_dir: str | Path | None = None, *, auth_db=None) -> FastAPI:
 
         @application.get("/compare", include_in_schema=False)
         def compare_home():
-            return HTMLResponse(
-                (frontend / "compare.html").read_text(encoding="utf-8"),
-                headers={"Cache-Control": "no-store, must-revalidate"},
-            )
+            # Compare is now a React Router page. Keep the explicit route so a
+            # browser refresh at /compare still receives the Vite entry rather
+            # than the retired legacy compare.html shell.
+            return home()
 
         @application.get("/{full_path:path}", include_in_schema=False)
         def frontend_fallback(full_path: str):

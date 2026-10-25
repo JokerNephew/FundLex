@@ -136,5 +136,12 @@ def test_g14_extended_clause_adds_missing_item():
     result = plan_fee_item_removal(before, _allowed_multi(), CANONICAL_MULTI,
                                    ["申购费率", "销售服务费率"])
     assert result is not None
-    assert result.replacement == ("基金管理人可以适当调低基金申购费率和基金销售服务费率，"
+    assert result.replacement == ("基金管理人可以适当调低基金申购费率和销售服务费率，"
                                   "并最迟应于新的费率实施日前公告。")
+
+
+def test_g14_missing_item_without_canonical_wording_is_unresolved():
+    before = "基金管理人可以适当调低基金申购费率和基金赎回费率，并公告。"
+    assert plan_fee_item_removal(before, _allowed_multi(), "", [
+        "申购费率", "销售服务费率"
+    ]) is None

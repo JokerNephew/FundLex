@@ -27,7 +27,21 @@ def verify_class_set(inspection: Any, classes: Sequence[Any], quote: str) -> dic
         return result
     from .recall import display_text
     paragraphs = [_normal(display_text(str(span.text))[0]) for span in inspection.paragraphs]
-    matches = [paragraph for paragraph in paragraphs if text in paragraph]
+    # A DOCX paragraph break is a source boundary, not whitespace that may be
+    # skipped.  The model may quote one continuous clause split over adjacent
+    # paragraphs, so search only contiguous paragraph windows.  This keeps a
+    # cross-paragraph quote source-bound while rejecting a quote assembled from
+    # unrelated sections (FL-D251).
+    matches: list[str] = []
+    for start in range(len(paragraphs)):
+        joined = ""
+        for end in range(start, len(paragraphs)):
+            joined += paragraphs[end]
+            if text in joined:
+                matches.append(joined)
+                break
+            if len(joined) >= len(text):
+                break
     if not matches:
         return result
     result["quote_verified"] = True

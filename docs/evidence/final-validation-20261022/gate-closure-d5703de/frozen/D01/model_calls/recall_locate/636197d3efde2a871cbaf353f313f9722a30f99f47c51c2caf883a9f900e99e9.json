@@ -1,0 +1,61 @@
+{
+  "body": {
+    "schema_version": "fundlex-model-cassette-v1",
+    "request": {
+      "task_type": "recall_locate",
+      "prompt_version": "recall_locate_v1",
+      "configured_model": "deepseek-v4.1-flash",
+      "context_sha256": "e718da68c0bb536c1ab9ba869d7ee946ba519825f714cd60010c91b9c0cd249e",
+      "request": {
+        "bounded_context": "CANDIDATE_PARAGRAPHS\n[p130] 本基金将基金份额分为 A 类、C 类和 D 类三种不同的类别。在投资者申购 A 类及 D 类基金份额时收取申购费用，不计提销售服务费；在投资者申购 C 类基金份额时不收取申购费用，而从本类别基金资产中计提销售服务费。 \n\nGUIDE_OPERATION\nGUIDE_RULES\n[G04] 基金的基本情况-份额类别设置： | section_hint=基金的基本情况\n  requirement: 根据产品实际设置的基金份额类别及各类别适用的收费规则，对原描述中的份额类别进行分组替换：将适用“收取认购、申购费用且不计提销售服务费”规则的“A类基金份额”替换为实际适用该规则的全部基金份额类别，将适用“不收取认购、申购费用且计提销售服务费”规则的“C类基金份额”替换为实际适用该规则的全部基金份额类别。\n  [G04:0] replace: A类基金份额 -> A类、B类基金份额\n  [G04:1] replace: C类基金份额 -> C类、D类基金份额\n\nFACTS\n{\"fund_type\": \"open_regular\", \"fund_type_quote\": \"契约型开放式\", \"fund_type_basis\": \"基金运作方式为契约型开放式，属于普通开放式基金；虽提及未来可能转换为ETF联接基金，但当前并非ETF或联接基金。\", \"class_count\": 3, \"classes\": [{\"name\": \"A\", \"subscription_fee\": true, \"service_fee\": false, \"current\": true, \"rate\": null, \"quote\": \"在投资者申购 A 类及 D 类基金份额时收取申购费用，不计提销售服务费\"}, {\"name\": \"C\", \"subscription_fee\": false, \"service_fee\": true, \"current\": true, \"rate\": null, \"quote\": \"在投资者申购 C 类基金份额时不收取申购费用，而从本类别基金资产中计提销售服务费\"}, {\"name\": \"D\", \"subscription_fee\": true, \"service_fee\": false, \"current\": true, \"rate\": null, \"quote\": \"在投资者申购 A 类及 D 类基金份额时收取申购费用，不计提销售服务费\"}], \"subscription_group\": [\"A\", \"D\"], \"service_group\": [\"C\"], \"share_class_structure\": \"MULTIPLE\", \"direct_sales_exempt_group\": [], \"other_sales_charged_group\": [], \"fact_status\": {\"fund_type\": \"VERIFIED\", \"share_class_structure\": \"VERIFIED\", \"subscription_fee_group\": \"VERIFIED\", \"service_fee_group\": \"VERIFIED\", \"direct_sales_exempt_group\": \"UNKNOWN\", \"other_sales_charged_group\": \"UNKNOWN\"}, \"condition_overrides\": {}, \"has_service_fee\": true, \"is_floating_fee\": false, \"floating_quote\": \"本基金的管理费按前一日基金资产净值的 0.15%年费率计提。\", \"floating_basis\": \"管理费为固定年费率，未与持有期限或业绩挂钩。\", \"notes\": \"A类、D类收取申购费且不计提销售服务费；C类不收申购费但计提0.10%销售服务费。管理费0.15%、托管费0.05%均为固定费率。\", \"quotes_verified\": {\"fund_type\": true, \"class:A\": true, \"class:C\": true, \"class:D\": true, \"floating\": true, \"class_set\": true}, \"class_set_quote\": \"本基金将基金份额分为 A 类、C 类和 D 类三种不同的类别。在投资者申购 A 类及 D 类基金份额时收取申购费用，不计提销售服务费；在投资者申购 C 类基金份额时不收取申购费用，而从本类别基金资产中计提销售服务费。\", \"class_set_evidence\": {\"quote_verified\": true, \"set_complete_verified\": true, \"parsed_classes\": [\"A\", \"C\", \"D\"], \"reason\": \"CLASS_SET_VERIFIED\"}, \"value_verified\": true, \"set_complete_verified\": true, \"fund_type_certification\": {}, \"channel_evidence\": {\"direct_sales_exempt\": \"\", \"other_sales_charged\": \"\"}, \"problems\": []}\n\nFAILED_QUOTE\n",
+        "instruction": "The deterministic resolver could not bind this obligation to the contract. Read the candidate paragraphs and return the ONE paragraph location plus an exact contiguous quote from that paragraph that carries the obligation. Do not paraphrase, do not merge two paragraphs, and do not return offsets. If no paragraph carries it, return an empty quote and explain why. semantic_role states what the clause does (for example class_definition, subscription_fee, payment_mechanism).",
+        "response_schema": {
+          "type": "object",
+          "required": [
+            "location",
+            "quote",
+            "semantic_role",
+            "reason"
+          ],
+          "properties": {
+            "location": {
+              "type": "string"
+            },
+            "quote": {
+              "type": "string"
+            },
+            "semantic_role": {
+              "type": "string"
+            },
+            "reason": {
+              "type": "string"
+            }
+          }
+        },
+        "request_options": {
+          "thinking": {
+            "type": "disabled"
+          }
+        },
+        "max_completion_tokens": 8000
+      }
+    },
+    "response": {
+      "location": "p130",
+      "quote": "本基金将基金份额分为 A 类、C 类和 D 类三种不同的类别。在投资者申购 A 类及 D 类基金份额时收取申购费用，不计提销售服务费；在投资者申购 C 类基金份额时不收取申购费用，而从本类别基金资产中计提销售服务费。",
+      "semantic_role": "class_definition",
+      "reason": "该段落完整定义了基金份额类别（A类、C类、D类）及各类别适用的收费规则，是承载份额类别设置义务的唯一段落。"
+    },
+    "event": {
+      "task_type": "recall_locate",
+      "prompt_version": "recall_locate_v1",
+      "context_sha256": "e718da68c0bb536c1ab9ba869d7ee946ba519825f714cd60010c91b9c0cd249e",
+      "configured_model": "deepseek-v4.1-flash",
+      "actual_model": "deepseek-v4.1-flash",
+      "http_status": 200,
+      "finish_reason": "stop",
+      "error_code": null
+    }
+  },
+  "sha256": "065776e84b652a5ab7eb2a51accd60d4272c332dc8ce9afc63cc23e6a61a23d5"
+}

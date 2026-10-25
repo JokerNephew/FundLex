@@ -2,7 +2,8 @@ import { download, jsonBody, request, requestText, upload, type UploadProgress }
 import type {
   AuthSession, Capabilities, CreateTaskInput, Decision, DecisionResult,
   GuideDetail, GuideSettings, GuideSummary, Paginated, Report, RevisionView, TaskDetail,
-  TaskDocument, TaskStats, TaskSummary, User, UploadResult,
+  TaskDocument, TaskStats, TaskSummary, User, UploadResult, CompareTask,
+  ComparePairManifest, CompareUploadResult, CompareView,
 } from '../types'
 
 // The API returns JSON objects from the running FastAPI service. Optional fields in
@@ -47,6 +48,13 @@ export const api = {
   decisions: (taskId: string, documentId: string, decisions: Decision[]) => request<DecisionResult>(`/api/tasks/${encodeURIComponent(taskId)}/documents/${encodeURIComponent(documentId)}/decisions`, { method: 'POST', body: jsonBody({ decisions }) }),
   acceptAll: (taskId: string, documentId: string) => request<DecisionResult>(`/api/tasks/${encodeURIComponent(taskId)}/documents/${encodeURIComponent(documentId)}/accept-all`, { method: 'POST' }),
   downloadDocument: (taskId: string, documentId: string, kind: string) => download(`/api/tasks/${encodeURIComponent(taskId)}/documents/${encodeURIComponent(documentId)}/download/${encodeURIComponent(kind)}`),
+
+  compareTasks: () => request<{ items: CompareTask[]; total: number }>('/api/compare/tasks'),
+  compareTask: (id: string) => request<CompareTask>(`/api/compare/tasks/${encodeURIComponent(id)}`),
+  createCompareTask: (name: string, pairs: ComparePairManifest[], idempotencyKey?: string) => request<CompareTask>('/api/compare/tasks', { method: 'POST', headers: idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : undefined, body: jsonBody({ name, pairs }) }),
+  uploadCompareTask: (id: string, files: File[], clientIds: string[]) => { const form = new FormData(); files.forEach((file) => form.append('files', file, file.name)); form.append('client_ids', JSON.stringify(clientIds)); return upload<CompareUploadResult>(`/api/compare/tasks/${encodeURIComponent(id)}/uploads`, form) },
+  sealCompareTask: (id: string) => request<CompareTask>(`/api/compare/tasks/${encodeURIComponent(id)}/seal`, { method: 'POST' }),
+  compareView: (pairId: string) => request<CompareView>(`/api/compare/pairs/${encodeURIComponent(pairId)}/view`),
 }
 
 export type Api = typeof api

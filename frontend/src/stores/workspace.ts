@@ -20,4 +20,15 @@ export const useWorkspaceStore = create<WorkspaceState>((set) => ({
   clearNotice: () => set({ notice: null }),
 }))
 
+if (typeof window !== 'undefined') {
+  const clearWorkspace = () => setWorkspaceState({ selectedTaskId: null, selectedDocumentId: null, notice: null })
+  window.addEventListener('fundlex:session-expired', clearWorkspace)
+  window.addEventListener('fundlex:auth-cleared', clearWorkspace)
+  window.addEventListener('fundlex:auth-changed', clearWorkspace)
+}
+
+function setWorkspaceState(next: Pick<WorkspaceState, 'selectedTaskId' | 'selectedDocumentId' | 'notice'>): void {
+  useWorkspaceStore.setState(next)
+}
+
 export const useWorkspace = useWorkspaceStore

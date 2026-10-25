@@ -71,4 +71,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 }))
 
+if (typeof window !== 'undefined') {
+  window.addEventListener('fundlex:session-expired', () => {
+    useAuthStore.getState().clearSession()
+  })
+}
+
 export const useAuth = useAuthStore

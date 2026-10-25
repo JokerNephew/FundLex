@@ -1,0 +1,28 @@
+{
+  "case_id": "D11",
+  "head": "d5703de9cd98500102a286dd5207e42ccc182e34",
+  "branch": "refactor/recovery-architecture",
+  "runtime_tree_sha256": "95b07212e10896ff6b3d2b78ec5f982e860dcc54aa3a987d42c7a14cc963d449",
+  "document_sha256": "74920e09c398f086091ca2b522c5d3bb0ed574d8ccd8c6e00ecf416b508ba93a",
+  "guide_source_sha256": "b77be53c3439d785a9ffad0f09d8d03ba74f7722397576b999ae6f5dd6eef895",
+  "guide_document_sha256": "45dd77460f2ef93d29001c0833c220f89de99dafb19d32a8b73653b55f92c8d7",
+  "mode": "record",
+  "elapsed_seconds": 235.07,
+  "delivery": "incomplete",
+  "calls": 29,
+  "tokens": 148113,
+  "cost_usd": 0.0258165,
+  "true_obligations": 24,
+  "completion_counts": {
+    "SATISFIED": 0,
+    "ARTIFACT_VERIFIED": 13,
+    "ALREADY_SATISFIED": 9,
+    "NOT_APPLICABLE": 10,
+    "UNRESOLVED": 2
+  },
+  "true_not_applicable": 0,
+  "claim_verified": false,
+  "unresolved_count": 3,
+  "errors": [],
+  "stop": null
+}

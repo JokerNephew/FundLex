@@ -610,6 +610,58 @@ def _operation_terminal_proof(target: Target, replay: Mapping[str, Any],
     return True
 
 
+def _target_matches_operation_proof(target: Target, replay: Mapping[str, Any],
+                                    obligations: Any) -> bool:
+    """Require terminal proof for this target's physical site.
+
+    Operation-level completion is insufficient for a sibling occurrence.  A
+    post-proof candidate may be retired only when every source location it owns
+    is represented by the operation's artifact proof, including occurrence ids.
+    """
+    if not _operation_terminal_proof(target, replay, obligations):
+        return False
+    sites: set[str] = set()
+    for operation_id in target.operations:
+        record = obligations.record(operation_id) if obligations is not None else None
+        if record is None:
+            return False
+        proof = (replay.get("obligations") or {}).get(record.obligation_id)
+        if not isinstance(proof, Mapping):
+            return False
+        sites.update(str(site) for site in proof.get("sites") or () if str(site).strip())
+        for evidence in proof.get("evidence") or ():
+            if isinstance(evidence, Mapping):
+                site = str(evidence.get("site_id") or evidence.get("location") or "")
+                if site:
+                    sites.add(site)
+        for effect in proof.get("site_effects") or ():
+            if isinstance(effect, Mapping):
+                site = str(effect.get("site_id") or effect.get("location") or "")
+                if site:
+                    sites.add(site)
+    required = list(target.composite) or [target.location]
+    for part in required:
+        raw_part = str(part)
+        location = raw_part
+        if target.composite:
+            # Composite parts are location:start:end.  Locations themselves may
+            # contain punctuation, so split from the right rather than at the
+            # first colon.
+            fields = raw_part.rsplit(":", 2)
+            if len(fields) == 3 and fields[1].isdigit() and fields[2].isdigit():
+                location = fields[0]
+        # Composite strings are location:start:end; occurrence proof may use the
+        # location only when no explicit occurrence was assigned to the target.
+        candidates = {site for site in sites if site == location or
+                      site.split("#occurrence:", 1)[0] == location}
+        if not candidates:
+            return False
+        if target.occurrence_index >= 0 and not any(
+                site.endswith(f"#occurrence:{target.occurrence_index}") for site in candidates):
+            return False
+    return True
+
+
 def _reconcile_candidate_targets(targets: Sequence[Target], planned: dict[str, Any],
                                  replay: Mapping[str, Any], obligations: Any) -> int:
     """Mark post-proof redundant candidate targets nonblocking (D16 T3001)."""
@@ -621,7 +673,7 @@ def _reconcile_candidate_targets(targets: Sequence[Target], planned: dict[str, A
         status = (by_target.get(target.target_id) or {}).get("status")
         if status in {"planned", "satisfied", "not_applicable"}:
             continue
-        if not _operation_terminal_proof(target, replay, obligations):
+        if not _target_matches_operation_proof(target, replay, obligations):
             continue
         target.out_of_scope = True
         target.reason = f"{target.reason}|POST_PROOF_SUPERSEDED"
@@ -1097,9 +1149,12 @@ def _plan_and_generate(model: Any, rules_by_id: dict[str, dict], targets: Sequen
                          rebind_g16_clause_targets, rebind_split_append_targets,
                          guard_g17_deletes_against_g16,
                          g15_delay_continuation_targets)
-    # Final exact-copy closure immediately before planning.  Survey/rebind can add a
+    # Final exact-copy closure immediately before planning. Survey/rebind can add a
     # source target after the earlier passes; an uneditable body/summary copy must not
-    # survive merely because of that ordering (D01 p758/p1221 G15).
+    # survive merely because of that ordering (D01 p758/p1221 G15). G16 must first be
+    # bound to its clause end, otherwise an identical payment head can borrow the
+    # operation from a different physical clause (D20 p804/p806 vs p1259).
+    rebind_g16_clause_targets(targets, inspection)
     for copy in duplicate_copy_targets(targets, rules_by_id, inspection):
         for old in targets:
             if old is not copy and old.rule_id == copy.rule_id \
@@ -1110,7 +1165,6 @@ def _plan_and_generate(model: Any, rules_by_id: dict[str, dict], targets: Sequen
         targets.append(copy)
     targets.extend(g15_delay_continuation_targets(targets, rules_by_id, inspection))
     ensure_unique_target_ids(targets)
-    rebind_g16_clause_targets(targets, inspection)
     rebind_split_append_targets(targets, inspection)
     for target in targets:
         if (target.state == "needs_edit" and not target.out_of_scope
@@ -3367,7 +3421,8 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
         if len(rules_by_id) != len(rules):
             raise RecallError("RECALL_GUIDE_DUPLICATE_RULE",
                               {"rules": len(rules), "unique": len(rules_by_id)})
-        from .obligations import apply_facts, compile_obligations, open_obligations, project
+        from .obligations import (apply_facts, compile_obligations, open_obligations,
+                                  project, project_unresolved)
         obligation_ledger = compile_obligations(guide_document)
         report["obligations"] = obligation_ledger.as_dict()
         model = gateway or _default_gateway()
@@ -3478,6 +3533,14 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
             targets, rules_by_id, inspection)
         if duplicate_targets:
             report["duplicate_targets"] = duplicate_targets
+        # G16 target identity is the physical clause end, not the payment head.
+        # Rebind before exact-copy closure so a body clause with a continuation (p804-
+        # p806) cannot be treated as an identical copy of a standalone summary clause
+        # (p1259) merely because their payment paragraphs have equal text.
+        from .recall import rebind_g16_clause_targets
+        g16_rebinds = rebind_g16_clause_targets(targets, inspection)
+        if g16_rebinds:
+            report["g16_clause_rebinds"] = g16_rebinds
         copy_targets = duplicate_copy_targets(targets, rules_by_id, inspection)
         for target in copy_targets:
             for old in targets:
@@ -3509,9 +3572,15 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
         if split_rebinds:
             report["split_class_definition_rebinds"] = split_rebinds
         from .recall import resolve_absent_site_targets
-        absent_sites = resolve_absent_site_targets(targets, rules_by_id, inspection)
+        absent_sites = resolve_absent_site_targets(targets, rules_by_id, inspection, facts)
         if absent_sites:
             report["absent_site_targets"] = absent_sites
+        # The absent-site pass can add an operation-specific G05:2 proof and the open
+        # pass can add a G16 target.  Rebind those late targets before cloning so every
+        # clone inherits its own physical clause identity.
+        g16_rebinds = rebind_g16_clause_targets(targets, inspection)
+        if g16_rebinds:
+            report.setdefault("g16_clause_rebinds", []).extend(g16_rebinds)
         open_copies = duplicate_copy_targets(targets, rules_by_id, inspection)
         for copy in open_copies:
             for old in targets:
@@ -3532,6 +3601,9 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
                                              extend_resolved=True)
         report["target_attribution"].extend(assign_target_operations(
             targets, rules_by_id, inspection, facts, obligation_ledger))
+        g16_rebinds = rebind_g16_clause_targets(targets, inspection)
+        if g16_rebinds:
+            report.setdefault("g16_clause_rebinds", []).extend(g16_rebinds)
         # Rebinding fills offsets on survey targets after the first duplicate-copy
         # pass.  Re-run exact-copy closure now that every source target is geometric;
         # otherwise a body/summary pair (D01 p758/p1221 G15) is planned only once.
@@ -4607,9 +4679,11 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
             if frozen_run is not None:
                 frozen_run.boundary("obligations", {"facts": facts.as_ledger(),
                     "report": report, "scope_gaps": sorted(str(item.get("rule_id")) for item in scope_gaps)})
+            blocking_evidence = list(unresolved)
             project(obligation_ledger, report,
                     scope_gaps={str(item.get("rule_id")) for item in scope_gaps},
-                    rules_by_id=rules_by_id, artifact_text=_document_compact(actual))
+                    rules_by_id=rules_by_id, artifact_text=_document_compact(actual),
+                    blocking_evidence=blocking_evidence)
             report["obligations"] = obligation_ledger.as_dict()
             from .generation.coverage import build_coverage_view
             coverage_view = build_coverage_view(report)
@@ -4618,29 +4692,13 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
             # verified, and made the UI/diagnostics unable to distinguish partial
             # completion from a rule-level aggregate.
             report["operation_coverage"] = coverage_view.as_dict()
-            if coverage_view.unresolved and _delivery_complete(unresolved):
-                unresolved.append({"kind": "coverage_view", "code": "COVERAGE_MISMATCH",
-                                   "reason": "operation coverage view reports unresolved entries"})
-            # Obligation-first delivery gate (plan §10, §32): every applicable
-            # obligation must have a closed terminal state. An open obligation that is
-            # not already represented by a more specific unresolved entry blocks
-            # completion instead of disappearing silently.
-            project(obligation_ledger, report,
-                    scope_gaps={str(item.get("rule_id")) for item in scope_gaps},
-                    rules_by_id=rules_by_id,
-                    artifact_text=_document_compact(actual))
-            report["obligations"] = obligation_ledger.as_dict()
-            # The second projection may close or reopen an obligation after late
-            # target reconciliation.  Rebuild the coverage view from that final
-            # ledger before omission review; otherwise the report could expose a
-            # stale operation/site state and either miss a blocker or retain a
-            # blocker that the final artifact has already proven.
-            coverage_view = build_coverage_view(report)
-            report["operation_coverage"] = coverage_view.as_dict()
-            represented_rules = {str(item.get("rule_id") or "") for item in unresolved}
-            open_items = [item for item in open_obligations(obligation_ledger)
-                          if str(item.get("rule_id") or "") not in represented_rules]
-            unresolved.extend(open_items)
+            # The first projection above is the canonical Ledger update.  Do not
+            # project the same stale evidence a second time: a second pass can only
+            # reapply the same blockers and makes the coverage projection look like
+            # an independent completion source.  Omission evidence is projected
+            # below after it has been added to the same evidence set.
+            unresolved[:] = project_unresolved(obligation_ledger,
+                                               evidence=blocking_evidence)
             # Final independent omission review is operation/site scoped and runs
             # after the final DOCX has been reread.  Its result is part of the
             # delivery gate; a successful rule aggregate or audit opinion cannot
@@ -4651,8 +4709,20 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
                 obligations=obligation_ledger, replay=replay, findings=findings,
                 coverage_view=coverage_view)
             report["final_omission_review"] = final_omission_review
-            for issue in final_omission_review.get("issues") or []:
-                unresolved.append({"kind": "final_omission", **issue})
+            final_omission_evidence = [
+                {"kind": "final_omission", **issue}
+                for issue in final_omission_review.get("issues") or []
+            ]
+            if final_omission_evidence:
+                blocking_evidence.extend(final_omission_evidence)
+                project(obligation_ledger, report,
+                        scope_gaps={str(item.get("rule_id")) for item in scope_gaps},
+                        rules_by_id=rules_by_id,
+                        artifact_text=_document_compact(actual),
+                        blocking_evidence=blocking_evidence)
+                report["obligations"] = obligation_ledger.as_dict()
+                unresolved[:] = project_unresolved(obligation_ledger,
+                                                   evidence=blocking_evidence)
             # Keep one deterministic report entry per omission identity, since the
             # same operation may be reported by claim replay, sweep and coverage.
             final_unique: list[dict[str, Any]] = []

@@ -1,0 +1,250 @@
+{
+  "body": {
+    "schema_version": "fundlex-model-cassette-v1",
+    "request": {
+      "task_type": "recall_scope",
+      "prompt_version": "recall_scope_v1",
+      "configured_model": "deepseek-v4.1-flash",
+      "context_sha256": "09fc2a4691573167497e7a84043c5a61b1d19b5d2d711caf118b4c385b6b2980",
+      "request": {
+        "bounded_context": "CONTRACT_STRUCTURE\n[S01] zone=body chars=104 title='前言' preview='广发基金管理有限公司' locations=p0..p19\n[S02] zone=body chars=958 title='第一部分前言' preview='一、订立本基金合同的目的、依据和原则' locations=p24..p37\n[S03] zone=body chars=3653 title='第二部分释义' preview='在本基金合同中，除非文意另有所指，下列词语或简称具有如下含义：' locations=p38..p100\n[S04] zone=body chars=655 title='第三部分基金的基本情况' preview='广发景和中短债债券型证券投资基金' locations=p101..p129\n[S05] zone=body chars=825 title='第四部分基金份额的发售' preview='一、基金份额的发售时间、发售方式、发售对象' locations=p130..p154\n[S06] zone=body chars=715 title='第五部分基金备案' preview='本基金自基金份额发售之日起 3 个月内，在基金募集份额总额不少于 2 亿' locations=p155..p169\n[S07] zone=body chars=6347 title='第六部分基金份额的申购与赎回' preview='本基金的申购与赎回将通过销售机构进行。具体的销售网点将由基金管理人在招募说明书或其他相关公告中列明。基金管理人可根据情况变更或增减销售机构，并在基金管理人网站公' locations=p170..p270\n[S08] zone=body chars=4540 title='第七部分基金合同当事人及权利义务' preview='（一） 基金管理人简况' locations=p271..p394\n[S09] zone=body chars=6361 title='第八部分基金份额持有人大会' preview='基金份额持有人大会由基金份额持有人组成，基金份额持有人的合法授权代表有权代表基金份额持有人出席会议并表决。基金份额持有人持有的每一基金份额拥有平等的投票权。' locations=p395..p503\n[S10] zone=body chars=1671 title='第九部分基金管理人、基金托管人的更换条件和程序' preview='一、基金管理人和基金托管人职责终止的情形' locations=p504..p546\n[S11] zone=body chars=158 title='第十部分基金的托管' preview='基金托管人和基金管理人按照《基金法》、《基金合同》及其他有关规定订立托管协议。' locations=p547..p550\n[S12] zone=body chars=818 title='第十一部分基金份额的登记' preview='基金的份额登记业务' locations=p551..p572\n[S13] zone=body chars=6251 title='第十二部分基金的投资' preview='在严格控制风险和保持资产流动性的基础上，力求获得超越业绩比较基准的' locations=p573..p664\n[S14] zone=body chars=503 title='第十三部分基金的财产' preview='基金资产总值是指购买的各类证券及票据价值、银行存款本息和基金应收的申购基金款以及其他投资所形成的价值总和。' locations=p665..p676\n[S15] zone=body chars=3596 title='第十四部分基金资产估值' preview='本基金的估值日为本基金相关的证券交易场所的交易日以及国家法律法规规定需要对外披露基金净值的非交易日。' locations=p677..p740\n[S16] zone=body chars=1504 title='第十五部分基金费用与税收' preview='一、基金费用的种类' locations=p741..p787\n[S17] zone=body chars=1007 title='第十六部分基金的收益与分配' preview='基金利润指基金利息收入、投资收益、公允价值变动收益和其他收入扣除相' locations=p788..p811\n[S18] zone=body chars=448 title='第十七部分基金的会计与审计' preview='一、基金会计政策' locations=p812..p826\n[S19] zone=body chars=4856 title='第十八部分基金的信息披露' preview='本基金的信息披露应符合《基金法》、《运作办法》、《信息披露办法》、《基金合同》及其他有关规定。相关法律对信息披露的方式、登载媒介、报备方式等规定发生变化时，本基' locations=p827..p924\n[S20] zone=body chars=1287 title='第十九部分基金合同的变更、终止与基金财产的清算' preview='一、《基金合同》的变更' locations=p925..p957\n[S21] zone=body chars=569 title='第二十部分违约责任' preview='一、基金管理人、基金托管人在履行各自职责的过程中，违反《基金法》等法律法规的规定或者《基金合同》约定，给基金财产或者基金份额持有人造成损害的，应当分别对各自的行' locations=p958..p968\n[S22] zone=body chars=237 title='第二十一部分争议的处理和适用的法律' preview='各方当事人同意，因《基金合同》而产生的或与《基金合同》有关的一切争议，如经友好协商未能解决的，任何一方均有权将争议提交中国国际经济贸易仲裁委员会，按照其届时有效' locations=p969..p972\n[S23] zone=body chars=353 title='第二十二部分基金合同的效力' preview='《基金合同》是约定基金当事人之间、基金与基金当事人之间权利义务关系的法律文件。' locations=p973..p980\n[S24] zone=body chars=62 title='第二十三部分其他事项' preview='《基金合同》如有未尽事宜，由《基金合同》当事人各方按有关法律法规协' locations=p981..p985\n[S25] zone=summary chars=16012 title='第二十四部分基金合同内容摘要' preview='一、基金合同当事人的权利与义务' locations=p986..p1317\n[S26] zone=summary chars=1697 title='七、基金合同的变更、终止与基金财产的清算' preview='七、基金合同的变更、终止与基金财产的清算' locations=p1318..p1379\n\nGUIDE_RULES\n[G01] 释义-基金份额类别定义： | section_hint=释义\n  requirement: 在释义的基金份额类别定义原条款后增加新条款，明确通过直销机构申购A类基金份额不收取认购/申购费用、通过直销机构申购的C类基金份额不收取销售服务费，以及通过其他销售机构申购的C类基金份额持续持有超过一年不再继续收取销售服务费。\n[G02] 释义-基金份额类别定义： | section_hint=释义\n  requirement: 根据产品实际设置的基金份额类别及各类别适用的收费规则，对原描述中的份额类别进行分组替换：将适用“收取认购、申购费用且不计提销售服务费”规则的“A类基金份额”替换为实际适用该规则的全部基金份额类别，将适用“不收取认购、申购费用且计提销售服务费”规则的“C类基金份额”替换为实际适用该规则的全部基金份额类别。\n[G03] 基金的基本情况-份额类别设置： | section_hint=基金的基本情况\n  requirement: 在基金的基本情况份额类别设置原条款后增加新条款，明确通过直销机构申购A类基金份额不收取认购/申购费用、通过直销机构申购的C类基金份额不收取销售服务费，以及通过其他销售机构申购的C类基金份额持续持有超过一年不再继续收取销售服务费。\n[G04] 基金的基本情况-份额类别设置： | section_hint=基金的基本情况\n  requirement: 根据产品实际设置的基金份额类别及各类别适用的收费规则，对原描述中的份额类别进行分组替换：将适用“收取认购、申购费用且不计提销售服务费”规则的“A类基金份额”替换为实际适用该规则的全部基金份额类别，将适用“不收取认购、申购费用且计提销售服务费”规则的“C类基金份额”替换为实际适用该规则的全部基金份额类别。\n[G05] 基金的基本情况-份额类别设置： | section_hint=基金的基本情况\n  requirement: 对原条款进行调整：如果有收取销售服务费的份额类别，则将其中的“调低赎回费率”改为“调低销售服务费率”，否则直接删除“、调低赎回费率”；并删除“并报中国证监会备案”。\n[G06] 基金的基本情况-份额类别设置： | section_hint=基金的基本情况\n  requirement: 直接删除原条款“除非基金管理人在未来条件成熟后另行公告开通相关业务，本基金不同基金份额类别之间不得互相转换。”。\n[G07] 基金份额的申购与赎回-六、申购和赎回的价格、费用及其用途： | section_hint=基金份额的申购与赎回\n  requirement: 产品仅有一个份额类别时，将“本基金的申购费率由基金管理人决定，并在招募说明书中列示。”变更为“通过直销机构申购本基金不收取申购费，通过直销机构以外的其他销售机构申购本基金的申购费率由基金管理人决定，并在招募说明书中列示。”。\n[G08] 基金份额的申购与赎回-六、申购和赎回的价格、费用及其用途： | section_hint=基金份额的申购与赎回\n  requirement: 产品有多个份额类别时，将“本基金的申购费率由基金管理人决定，并在招募说明书中列示。”变更为“本基金A类基金份额在申购时收取申购费用，C类基金份额不收取申购费用。通过直销机构申购本基金A类基金份额不收取申购费。通过直销机构以外的其他销售机构申购本基金的申购费率由基金管理人决定，并在招募说明书中列示。”。\n[G09] 基金份额的申购与赎回-六、申购和赎回的价格、费用及其用途： | section_hint=基金份额的申购与赎回\n  requirement: 产品有多个份额类别时，将“赎回金额为按实际确认的有效赎回份额乘以当日对应份额类别的基金份额净值并扣除相应的费用，赎回金额单位为元。”变更为“赎回金额为按实际确认的有效赎回份额乘以当日该类基金份额的基金份额净值并扣除或加上相应的费用，赎回金额单位为元。”。\n[G10] 基金份额的申购与赎回-六、申购和赎回的价格、费用及其用途： | section_hint=基金份额的申购与赎回\n  requirement: 产品仅有一个份额类别时，将“申购费用由投资人承担，不列入基金财产。”替换为“通过直销机构申购本基金不收取申购费，通过其他销售机构申购本基金的申购费用由投资人承担，不列入基金财产。”。\n[G11] 基金份额的申购与赎回-六、申购和赎回的价格、费用及其用途： | section_hint=基金份额的申购与赎回\n  requirement: 产品有多个份额类别时，将原条款直接替换为“通过直销机构申购本基金A类基金份额不收取申购费，通过其他销售机构申购本基金A类基金份额的申购费用由投资人承担，不列入基金财产。本基金C类基金份额不收取申购费用。”。\n[G12] 基金份额的申购与赎回-六、申购和赎回的价格、费用及其用途： | section_hint=基金份额的申购与赎回\n  requirement: 将原条款替换为“赎回费用由赎回基金份额的基金份额持有人承担，在基金份额持有人赎回基金份额时收取。赎回费用全额计入基金财产。”。\n[G13] 基金份额的申购与赎回-六、申购和赎回的价格、费用及其用途： | section_hint=基金份额的申购与赎回\n  requirement: 删除“本基金对持续持有期少于7日的投资者收取不低于1.50%的赎回费，并将上述赎回费全额计入基金财产。”。\n[G14] 基金份额的申购与赎回-六、申购和赎回的价格、费用及其用途： | section_hint=基金份额的申购与赎回\n  requirement: 产品仅有一个份额类别时，将“基金管理人可以适当调低基金申购费率和赎回费率。”变更为“基金管理人可以适当调低基金申购费率。”；产品有多个份额类别时，将“基金管理人可以适当调低基金申购费率和赎回费率。”变更为“基金管理人可以适当调低基金申购费率和销售服务费率。”。\n[G15] 基金费用与税收-3、基金销售服务费（有多个份额类别时适用） | section_hint=基金费用与税收\n  requirement: 删除原条款中“C类基金份额的销售服务费每日计提，按月支付。由基金管理人向基金托管人发送基金销售服务费划付指令，经基金托管人复核后于次月首日起10个工作日内从基金财产中一次性支付给登记机构，由登记机构代付给销售机构。若遇法定节假日、公休日等，支付日期顺延。”。\n[G16] 基金费用与税收-3、基金销售服务费（有多个份额类别时适用） | section_hint=基金费用与税收\n  requirement: 在原条款最后增加销售服务费每日计提、直销机构返还、其他销售机构按月支付及持有超过一年后返还等内容。\n[G17] 基金费用与税收-3、基金销售服务费（有多个份额类别时适用） | section_hint=基金费用与税收\n  requirement: 删除原条款“C类基金份额的销售服务费主要用于支付销售机构佣金、以及基金管理人的基金行销广告费、促销活动费、基金份额持有人服务费等。C类基金份额的销售服务费使用范围不包括基金募集期间的上述费用。”。\n[G18] 基金合同-基金的收益与分配 | section_hint=基金的收益与分配\n  requirement: 将“由于本基金A类基金份额不收取销售服务费，而C类基金份额收取销售服务费”变更为“由于本基金A类基金份额和C类基金份额费用收取不同”。\n[G19] 基金合同的变更、终止与基金财产的清算-五、基金财产清算剩余资产的分配 | section_hint=基金财产的清算\n  requirement: 如果是浮动管理费产品且仅有一个份额类别，将原条款替换为“依据基金财产清算的分配方案，将基金财产清算后的全部剩余资产扣除基金财产清算费用、交纳所欠税款并清偿基金债务后，按基金份额持有人持有的基金份额比例进行分配，并加上返还基金份额持有人的或有管理费（如有）或扣除相应的超额管理费（如有）。”。\n[G20] 基金合同的变更、终止与基金财产的清算-五、基金财产清算剩余资产的分配 | section_hint=基金财产的清算\n  requirement: 如果是浮动管理费产品且有多个份额类别，将原条款替换为“依据基金财产清算的分配方案，将基金财产清算后的全部剩余资产扣除基金财产清算费用、交纳所欠税款并清偿基金债务后，按基金份额持有人持有的基金份额比例进行分配，并加上返还基金份额持有人的或有管理费（如有）、销售服务费（如有）或扣除相应的超额管理费（如有）。”。\n[G21] 基金合同的变更、终止与基金财产的清算-五、基金财产清算剩余资产的分配 | section_hint=基金财产的清算\n  requirement: 如果不是浮动管理费产品且仅有一个份额类别，则不做替换。\n[G22] 基金合同的变更、终止与基金财产的清算-五、基金财产清算剩余资产的分配 | section_hint=基金财产的清算\n  requirement: 如果不是浮动管理费产品且收取销售服务费，将原条款替换为“依据基金财产清算的分配方案，将基金财产清算后的全部剩余资产扣除基金财产清算费用、交纳所欠税款并清偿基金债务后，按基金份额持有人持有的基金份额比例进行分配，并加上返还基金份额持有人的销售服务费（如有）。”。",
+        "instruction": "Read [GUIDE_RULES] and [CONTRACT_STRUCTURE]. For every rule decide which contract sections may contain its targets. Section ids come from [CONTRACT_STRUCTURE]; a section may be chosen for several rules and a rule may need several sections (for example both the definition chapter and the fund-basics chapter, or both a main clause and the contract summary). Chapters are navigation only: never drop a plausible section because the rule's hint names a different chapter. Choose every section that could contain the business clause, including the summary section when the rule has a summary counterpart. Return one mapping per rule with a short reason. An empty section_ids list is allowed only when no section could contain the rule.",
+        "response_schema": {
+          "type": "object",
+          "required": [
+            "mappings"
+          ],
+          "properties": {
+            "mappings": {
+              "type": "array",
+              "maxItems": 60,
+              "items": {
+                "type": "object",
+                "required": [
+                  "rule_id",
+                  "section_ids",
+                  "reason"
+                ],
+                "properties": {
+                  "rule_id": {
+                    "type": "string"
+                  },
+                  "section_ids": {
+                    "type": "array",
+                    "maxItems": 12,
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "reason": {
+                    "type": "string"
+                  }
+                }
+              }
+            },
+            "notes": {
+              "type": "string"
+            }
+          }
+        },
+        "request_options": {
+          "thinking": {
+            "type": "disabled"
+          }
+        },
+        "max_completion_tokens": 8000
+      }
+    },
+    "response": {
+      "mappings": [
+        {
+          "rule_id": "G01",
+          "section_ids": [
+            "S03",
+            "S25"
+          ],
+          "reason": "释义章节的基金份额类别定义条款及摘要中的对应释义内容可能包含该定义，需增加直销机构收费规则。"
+        },
+        {
+          "rule_id": "G02",
+          "section_ids": [
+            "S03",
+            "S25"
+          ],
+          "reason": "释义中基金份额类别定义需按实际类别分组替换A/C类描述，摘要对应部分也可能重复该定义。"
+        },
+        {
+          "rule_id": "G03",
+          "section_ids": [
+            "S04",
+            "S25"
+          ],
+          "reason": "基金基本情况中的份额类别设置条款及摘要对应部分需增加直销机构收费规则。"
+        },
+        {
+          "rule_id": "G04",
+          "section_ids": [
+            "S04",
+            "S25"
+          ],
+          "reason": "基金基本情况份额类别设置需按实际类别分组替换A/C类描述，摘要对应部分也可能重复。"
+        },
+        {
+          "rule_id": "G05",
+          "section_ids": [
+            "S04",
+            "S25"
+          ],
+          "reason": "基金基本情况份额类别设置中关于调低赎回费率及报备案的条款需调整，摘要对应部分可能重复。"
+        },
+        {
+          "rule_id": "G06",
+          "section_ids": [
+            "S04",
+            "S25"
+          ],
+          "reason": "基金基本情况份额类别设置中关于不同类别不得互相转换的条款需删除，摘要对应部分可能重复。"
+        },
+        {
+          "rule_id": "G07",
+          "section_ids": [
+            "S07",
+            "S25"
+          ],
+          "reason": "申购赎回章节六中申购费率由管理人决定的条款需按单一类别变更，摘要对应部分可能重复。"
+        },
+        {
+          "rule_id": "G08",
+          "section_ids": [
+            "S07",
+            "S25"
+          ],
+          "reason": "申购赎回章节六中申购费率条款需按多类别变更，摘要对应部分可能重复。"
+        },
+        {
+          "rule_id": "G09",
+          "section_ids": [
+            "S07",
+            "S25"
+          ],
+          "reason": "申购赎回章节六中赎回金额计算条款需变更，摘要对应部分可能重复。"
+        },
+        {
+          "rule_id": "G10",
+          "section_ids": [
+            "S07",
+            "S25"
+          ],
+          "reason": "申购赎回章节六中申购费用由投资人承担的条款需按单一类别替换，摘要对应部分可能重复。"
+        },
+        {
+          "rule_id": "G11",
+          "section_ids": [
+            "S07",
+            "S25"
+          ],
+          "reason": "申购赎回章节六中申购费用承担条款需按多类别替换，摘要对应部分可能重复。"
+        },
+        {
+          "rule_id": "G12",
+          "section_ids": [
+            "S07",
+            "S25"
+          ],
+          "reason": "申购赎回章节六中赎回费用承担及计入基金财产的条款需替换，摘要对应部分可能重复。"
+        },
+        {
+          "rule_id": "G13",
+          "section_ids": [
+            "S07",
+            "S25"
+          ],
+          "reason": "申购赎回章节六中关于持续持有期少于7日收取赎回费的条款需删除，摘要对应部分可能重复。"
+        },
+        {
+          "rule_id": "G14",
+          "section_ids": [
+            "S07",
+            "S25"
+          ],
+          "reason": "申购赎回章节六中管理人可调低申购费率和赎回费率的条款需按类别变更，摘要对应部分可能重复。"
+        },
+        {
+          "rule_id": "G15",
+          "section_ids": [
+            "S16",
+            "S25"
+          ],
+          "reason": "基金费用与税收中销售服务费支付条款需删除，摘要对应部分可能重复。"
+        },
+        {
+          "rule_id": "G16",
+          "section_ids": [
+            "S16",
+            "S25"
+          ],
+          "reason": "基金费用与税收中销售服务费条款末尾需增加计提、返还及支付内容，摘要对应部分可能重复。"
+        },
+        {
+          "rule_id": "G17",
+          "section_ids": [
+            "S16",
+            "S25"
+          ],
+          "reason": "基金费用与税收中销售服务费用途条款需删除，摘要对应部分可能重复。"
+        },
+        {
+          "rule_id": "G18",
+          "section_ids": [
+            "S17",
+            "S25"
+          ],
+          "reason": "收益与分配中关于A类不收销售服务费、C类收取的表述需变更，摘要对应部分可能重复。"
+        },
+        {
+          "rule_id": "G19",
+          "section_ids": [
+            "S20",
+            "S26"
+          ],
+          "reason": "基金合同变更终止与清算中清算剩余资产分配条款需按浮动管理费且单一类别替换，摘要对应部分可能重复。"
+        },
+        {
+          "rule_id": "G20",
+          "section_ids": [
+            "S20",
+            "S26"
+          ],
+          "reason": "基金合同变更终止与清算中清算剩余资产分配条款需按浮动管理费且多类别替换，摘要对应部分可能重复。"
+        },
+        {
+          "rule_id": "G21",
+          "section_ids": [
+            "S20",
+            "S26"
+          ],
+          "reason": "非浮动管理费且单一类别时清算剩余资产分配条款不做替换，需定位原条款以确认，摘要对应部分可能重复。"
+        },
+        {
+          "rule_id": "G22",
+          "section_ids": [
+            "S20",
+            "S26"
+          ],
+          "reason": "非浮动管理费且收取销售服务费时清算剩余资产分配条款需替换，摘要对应部分可能重复。"
+        }
+      ]
+    },
+    "event": {
+      "task_type": "recall_scope",
+      "prompt_version": "recall_scope_v1",
+      "context_sha256": "09fc2a4691573167497e7a84043c5a61b1d19b5d2d711caf118b4c385b6b2980",
+      "configured_model": "deepseek-v4.1-flash",
+      "actual_model": "deepseek-v4.1-flash",
+      "http_status": 200,
+      "finish_reason": "stop",
+      "error_code": null
+    }
+  },
+  "sha256": "61fb30099f799130df754421d83d9cd865dea8f43840e0529ac87bdd40d20c39"
+}

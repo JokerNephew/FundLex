@@ -115,6 +115,22 @@ def test_boundary_guard_detects_outside_changes():
     assert check_boundary(before_full, after_full_bad, "授权句。", "新授权句。") is not None
 
 
+def test_boundary_guard_requires_bound_address_for_duplicate_source_text():
+    before_full = "前文。授权句。中间。授权句。后文。"
+    after_second = "前文。授权句。中间。新授权句。后文。"
+    assert check_boundary(before_full, after_second, "授权句。", "新授权句。") is not None
+    second_start = before_full.rindex("授权句。")
+    assert check_boundary(before_full, after_second, "授权句。", "新授权句。",
+                         source_start=second_start,
+                         source_end=second_start + len("授权句。")) is None
+
+
+def test_boundary_guard_rejects_mismatched_bound_source_span():
+    before_full = "前文。授权句。后文。"
+    assert check_boundary(before_full, before_full, "授权句。", "新授权句。",
+                          source_start=0, source_end=3) is not None
+
+
 def test_protected_tokens_cover_the_plan_categories():
     tokens = protected_tokens("本基金于次月首日起10个工作日内由基金托管人按0.40%年费率支付。")
     assert "10" in tokens or "10个工作日" in tokens

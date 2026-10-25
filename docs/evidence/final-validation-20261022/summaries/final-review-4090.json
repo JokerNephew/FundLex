@@ -1,0 +1,450 @@
+{
+  "report_id": "final-review-4090",
+  "reviewed_head": "4090a22462607852ca0862d64ddc2b1120bd3f03",
+  "reviewed_at": "2026-10-22",
+  "reviewer_mode": "read-only local evidence review; no live model/HTTP calls; no code/test/git edits",
+  "evidence_root": "/home/opencode/fundlex/docs/evidence/final-validation-20261022/gate-closure-4090a22",
+  "baseline_root": "/home/opencode/fundlex/docs/evidence/final-validation-20261022/revalidation-ff4d7498",
+  "verdict": "GATE_HOLD",
+  "can_enter_20_case": false,
+  "counts": {
+    "BLOCKER": 1,
+    "HIGH": 4,
+    "MEDIUM": 4,
+    "LOW": 2,
+    "TOTAL": 11
+  },
+  "cases": {
+    "D01": {
+      "delivery": "not_generated",
+      "artifact": false,
+      "true_obligations": 24,
+      "completion": {
+        "SATISFIED": 0,
+        "ARTIFACT_VERIFIED": 0,
+        "ALREADY_SATISFIED": 0,
+        "NOT_APPLICABLE": 10,
+        "UNRESOLVED": 24
+      },
+      "claim_verified": false,
+      "blocking_unresolved": null,
+      "last_record_head": "d5703de9cd98500102a286dd5207e42ccc182e34",
+      "last_record_calls": 31,
+      "last_record_stop": "MODEL_GLOBAL_CALL_BUDGET_EXCEEDED",
+      "last_record_stage": "sweep",
+      "verdict": "NO_EXACT_CODE_ARTIFACT"
+    },
+    "D02": {
+      "delivery": "complete",
+      "true_obligations": 24,
+      "completion": {
+        "SATISFIED": 0,
+        "ARTIFACT_VERIFIED": 14,
+        "ALREADY_SATISFIED": 10,
+        "NOT_APPLICABLE": 10,
+        "UNRESOLVED": 0
+      },
+      "true_not_applicable": 0,
+      "claim_verified": true,
+      "artifact_claim_replay": {
+        "verified": true,
+        "checked": 17,
+        "units_checked": 21
+      },
+      "plan_edits": 17,
+      "changed_paragraphs": 17,
+      "plan_artifact_mismatches": 0,
+      "redline": {
+        "ins": 17,
+        "delete": 17,
+        "accepted_matches_final": true,
+        "rejected_matches_original": true
+      },
+      "blocking_unresolved": 0,
+      "audit_issues": 0,
+      "errors": 0,
+      "verdict": "PASS"
+    },
+    "D11": {
+      "delivery": "incomplete",
+      "true_obligations": 24,
+      "completion": {
+        "SATISFIED": 0,
+        "ARTIFACT_VERIFIED": 13,
+        "ALREADY_SATISFIED": 10,
+        "NOT_APPLICABLE": 10,
+        "UNRESOLVED": 1
+      },
+      "true_not_applicable": 0,
+      "claim_verified": false,
+      "artifact_claim_replay": {
+        "verified": false,
+        "checked": 14,
+        "units_checked": 18
+      },
+      "plan_edits": 14,
+      "changed_paragraphs": 14,
+      "plan_artifact_mismatches": 0,
+      "redline": {
+        "ins": 14,
+        "delete": 14,
+        "accepted_matches_final": true,
+        "rejected_matches_original": true
+      },
+      "blocking_unresolved": 1,
+      "audit_issues": 0,
+      "errors": 0,
+      "unresolved": {
+        "kind": "claim_replay",
+        "rule_id": "G18",
+        "obligation_id": "G18:B1:O1",
+        "location": "p1207",
+        "code": "CLAIM_OPERATION_NOT_PLANNED"
+      },
+      "verdict": "REAL_GAP_CORRECT_FAIL_CLOSED"
+    },
+    "D16": {
+      "delivery": "incomplete",
+      "true_obligations": 24,
+      "completion": {
+        "SATISFIED": 0,
+        "ARTIFACT_VERIFIED": 15,
+        "ALREADY_SATISFIED": 9,
+        "NOT_APPLICABLE": 10,
+        "UNRESOLVED": 0
+      },
+      "true_not_applicable": 0,
+      "claim_verified": true,
+      "artifact_claim_replay": {
+        "verified": true,
+        "checked": 18,
+        "units_checked": 23
+      },
+      "plan_edits": 18,
+      "changed_paragraphs": 18,
+      "plan_artifact_mismatches": 0,
+      "redline": {
+        "ins": 18,
+        "delete": 18,
+        "accepted_matches_final": true,
+        "rejected_matches_original": true
+      },
+      "blocking_unresolved": 3,
+      "unresolved_kinds": [
+        "target",
+        "audit",
+        "audit"
+      ],
+      "audit_issues": 2,
+      "errors": 0,
+      "verdict": "CONTENT_PASS_FALSE_BLOCK"
+    }
+  },
+  "record_replay": {
+    "D01": {
+      "artifact": false
+    },
+    "D02": {
+      "record_http_attempts": 25,
+      "record_logical_calls": 25,
+      "record_cassette_replays": 0,
+      "replay_http_attempts": 0,
+      "replay_logical_calls": 25,
+      "replay_cassette_replays": 25,
+      "replay_tokens": 0,
+      "replay_cost_usd": 0,
+      "semantic_counts_equal": true,
+      "artifact_text_equal": true,
+      "artifact_bytes_equal": false,
+      "byte_hash_note": "record 7d348226... vs replay 40168e69...; all ZIP parts/document.xml identical, only ZIP timestamps differ"
+    },
+    "D11": {
+      "record_http_attempts": 27,
+      "record_logical_calls": 27,
+      "record_cassette_replays": 0,
+      "replay_http_attempts": 0,
+      "replay_logical_calls": 27,
+      "replay_cassette_replays": 27,
+      "replay_tokens": 0,
+      "replay_cost_usd": 0,
+      "semantic_counts_equal": true,
+      "artifact_text_equal": true,
+      "artifact_bytes_equal": false,
+      "byte_hash_note": "record 86f134a9... vs replay f8526729...; all ZIP parts/document.xml identical, only ZIP timestamps differ"
+    },
+    "D16": {
+      "record_http_attempts": 33,
+      "record_logical_calls": 44,
+      "record_cassette_replays": 11,
+      "replay_http_attempts": 0,
+      "replay_logical_calls": 44,
+      "replay_cassette_replays": 44,
+      "replay_tokens": 0,
+      "replay_cost_usd": 0,
+      "semantic_counts_equal": true,
+      "artifact_text_equal": true,
+      "artifact_bytes_equal": false,
+      "byte_hash_note": "record 0eb39022... vs replay 913e9c44...; all ZIP parts/document.xml identical, only ZIP timestamps differ"
+    }
+  },
+  "closures": {
+    "G16": {
+      "D02": {
+        "sites": [
+          "p821",
+          "p1287"
+        ],
+        "status": "PASS"
+      },
+      "D11": {
+        "sites": [
+          "p772",
+          "p1247"
+        ],
+        "status": "PASS"
+      },
+      "D16": {
+        "sites": [
+          "p822",
+          "p1306"
+        ],
+        "status": "PASS"
+      }
+    },
+    "G17": {
+      "D02": {
+        "sites": [
+          "p822",
+          "p823",
+          "p1288",
+          "p1289"
+        ],
+        "status": "PASS"
+      },
+      "D11": {
+        "sites": [
+          "p773",
+          "p1248"
+        ],
+        "status": "PASS"
+      },
+      "D16": {
+        "sites": [
+          "p823",
+          "p824",
+          "p1307",
+          "p1308"
+        ],
+        "status": "PASS"
+      }
+    },
+    "G06": {
+      "D02": {
+        "proof": "document_literal_absent",
+        "match_count": 0,
+        "status": "PASS"
+      },
+      "D11": {
+        "proof": "document_literal_absent",
+        "match_count": 0,
+        "status": "PASS"
+      },
+      "D16": {
+        "proof": "document_literal_absent",
+        "match_count": 0,
+        "status": "PASS",
+        "note": "spurious survey targets Y005/Y006/Y033/Y034 remain needs_edit"
+      }
+    }
+  },
+  "findings": [
+    {
+      "id": "B1",
+      "severity": "BLOCKER",
+      "case": "D01",
+      "title": "No exact-code 4090a22 D01 artifact; D01 budget exhausted",
+      "status": "CONFIRMED_MISSING_EVIDENCE",
+      "evidence": [
+        "gate-closure-4090a22/index.json: remaining_case_limits.D01.max_http_attempts=0, previous_calls=192",
+        "gate-closure-4090a22: no artifacts/D01, replay/D01 or frozen/D01",
+        "/tmp/opencode/final-validation-4090a22 contains only D02, D11, D16",
+        "gate-closure-d5703de/summaries/D01-record.json: calls=31, delivery=not_generated, stop.code=MODEL_GLOBAL_CALL_BUDGET_EXCEEDED, stop.detail.stage=sweep",
+        "gate-closure-d5703de/artifacts/D01: binding.json/report.json/report.md/edits.json, no DOCX"
+      ],
+      "analysis": "The last live D01 run predates 4090a22 and ended on budget exhaustion before generating an artifact. No D01 record, replay or DOCX exists for the reviewed head, so D01's current-code behaviour (including the claimed replan/stable-identity closure) is unverified.",
+      "action": "Authorise/resume D01 budget and produce an exact-4090a22 record, artifact and replay; otherwise obtain an explicit user waiver and treat 4/4 closure as unproven."
+    },
+    {
+      "id": "H1",
+      "severity": "HIGH",
+      "case": "D16",
+      "title": "G13 audit content-loss finding is false; joint G12/G13 edit is guide-authorised",
+      "status": "CONFIRMED_FALSE_BLOCK",
+      "evidence": [
+        "frozen/D16/guide.json: G12:1 new_text = '赎回费用由赎回基金份额的基金份额持有人承担，在基金份额持有人赎回基金份额时收取。赎回费用全额计入基金财产。'",
+        "frozen/D16/guide.json: G12:1 old_text includes the proportional-allocation sentence and the 7-day/1.5% sentence",
+        "artifacts/D16/working_final.docx: report p221 equals the G12:1 new_text exactly; p222 is blank",
+        "frozen/D16/report.json audit.issues[0..1]: AUDIT_NOT_COMPLETED and AUDIT_MISSED_TARGET for G13 Y007, reasons claim the guide does not state the new sentence and that the allocation rule was removed",
+        "frozen/D02/report.json audit G12: '删除了按比例归入基金财产及 7 日/1.5% 的表述...未丢失要求内容'; audit G13: completed",
+        "frozen/D11/report.json audit G13: '剩余文字属于 G12 的授权改写'; audit G12: completed",
+        "frozen/D16/targets.json T015/T016 reasons uniquely require preserving the allocation rule; this is absent from the guide"
+      ],
+      "analysis": "The final DOCX matches the certified guide exactly. G12:1 replaces the whole clause and removes the allocation rule by design; G13 only deletes the 7-day sentence, and that deletion is present. The audit misattributes a G12-authorised replacement to G13 and enforces a model-authored target rationale not present in the guide. All 24 obligations pass and claim replay is verified, yet delivery is blocked.",
+      "action": "Fix joint-edit audit attribution: G13 must verify only its delete effect; a G12-authorised replacement must not be reported as G13 content loss. Do not promote target rationales to requirements unless consistent with the guide. Add the D16 p221 case as a regression and re-run/replay D16."
+    },
+    {
+      "id": "H2",
+      "severity": "HIGH",
+      "case": "D11",
+      "title": "G18 duplicate at p1207 was never targeted; delivery correctly fails closed",
+      "status": "CONFIRMED_REAL_GAP_CORRECT_FAIL_CLOSED",
+      "evidence": [
+        "artifacts/D11/working_final.docx: p800 edited to '由于本基金A类、D类基金份额和C类基金份额费用收取不同...'",
+        "artifacts/D11/working_final.docx: p1207 still contains '由于本基金 A 类基金份额和 D 类基金份额不收取销售服务费，而 C 类基金份额收取销售服务费...'",
+        "frozen/D11/targets.json: only the p800 G18 target exists",
+        "frozen/D11/report.json unresolved: claim_replay G18 p1207, CLAIM_OPERATION_NOT_PLANNED",
+        "frozen/D11/report.json audit G18: completed 1/1; sweep SW001 only p800",
+        "frozen/D02/report.json: equivalent G18 duplicate edited at both p848 and p1257"
+      ],
+      "analysis": "The summary copy of the G18 sentence remains unchanged. The target-generation and audit layers missed the duplicate; claim replay detected it and blocked delivery. This is the correct fail-closed behaviour, but the case is a real incomplete delivery rather than a false block.",
+      "action": "Add deterministic normalized-duplicate target creation (and audit coverage) for G18-style clauses; re-run/replay D11 to complete. Use D11 p1207 and D02 p1257 as regression cases."
+    },
+    {
+      "id": "H3",
+      "severity": "HIGH",
+      "case": "EVIDENCE",
+      "title": "4090a22 index and offline-test evidence are not finalised or correctly bound",
+      "status": "CONFIRMED_EVIDENCE_GAP",
+      "evidence": [
+        "gate-closure-4090a22/index.json: record_results={}, replay_results all head 682e68a, gate FAIL, gate_reason from earlier attempt, evidence_head=PENDING",
+        "gate-closure-4090a22/index.json: current_record_total_calls=122 / cost=$0.1146, whereas the 4090a22 summaries total 85 calls / $0.08065",
+        "gate-closure-4090a22/index.json: offline.log=logs/pytest-682e68a.txt, which does not exist in the bundle",
+        "/tmp/opencode/pytest-4090a22.log: 1072 passed, 6 skipped, 2 warnings in 200.89s (exact head), not archived in the bundle",
+        "docs/evidence/final-validation-20261022/index.json: still validation_head=682e68a and gate FAIL"
+      ],
+      "analysis": "The machine-readable index contradicts the per-case 4090a22 summaries and points at a missing log. The exact-code offline run exists only in /tmp, so the evidence bundle is not self-contained. A gate reviewer reading the index would conclude the replay evidence belongs to 682e68a.",
+      "action": "Rewrite the 4090a22 index with record_results/replay_results bound to 4090a22, correct totals/gate reason, and the archived exact-head pytest log; clearly label or remove stale 682e68a data from this bundle and update the outer index."
+    },
+    {
+      "id": "H4",
+      "severity": "HIGH",
+      "case": "D16",
+      "title": "T3001 audit-completed but still counted as a blocking unresolved target",
+      "status": "CONFIRMED_FALSE_BLOCK",
+      "evidence": [
+        "frozen/D16/targets.json T3001: resolution=unresolved, status=not_planned, candidates p219/p222/p223",
+        "frozen/D16/targets.json T3001.audit.verdict=completed: 'p219 ... is an authorized G09 edit, not a G12 obligation ... No G12 content is missing or contradicted at p219.'",
+        "frozen/D16/report.json unresolved includes target T3001 at p219, RECALL_TARGET_UNRESOLVED",
+        "frozen/D16/report.json delivery_gate.blocking_unresolved=3"
+      ],
+      "analysis": "T3001 is a duplicate open-operation candidate with no remaining G12 content; the audit completed it, but its resolution was not projected, so it independently blocks delivery. D16 would remain incomplete even after the G13 audit fix.",
+      "action": "Project audit completion into the target resolution (or discard duplicate candidates covered by a sibling target) and add a regression; re-run/replay D16."
+    },
+    {
+      "id": "M1",
+      "severity": "MEDIUM",
+      "case": "D16",
+      "title": "G06 survey targets left needs_edit after document-wide-absence satisfaction",
+      "status": "CONFIRMED_BOOKKEEPING",
+      "evidence": [
+        "frozen/D16/targets.json Y005/Y006 at p431/p1169 and duplicates Y033/Y034 remain needs_edit",
+        "frozen/D16/report.json G06:B1:O1 is ALREADY_SATISFIED with document_literal_absent, match_count=0",
+        "The quoted G06 literal is absent document-wide; the survey targets quote the unrelated business-rule adjustment clause"
+      ],
+      "analysis": "Non-blocking, but the target ledger contradicts the satisfied obligation and makes the report harder to reconcile.",
+      "action": "Mark spurious survey targets superseded/not_applicable when a document-wide-absence delete is satisfied."
+    },
+    {
+      "id": "M2",
+      "severity": "MEDIUM",
+      "case": "D16",
+      "title": "G16 duplicate targets are bound to G17 usage paragraphs",
+      "status": "CONFIRMED_BOOKKEEPING",
+      "evidence": [
+        "frozen/D16/targets.json T019 G16 p824 and T017-D1 G16 p1308",
+        "DOCX p824/p1308 are the G17 '使用范围' sentences, not G16 payment copies",
+        "Actual G16 copies p822/p1306 are correct and audited; G16 audit reports 2/4"
+      ],
+      "analysis": "Content is correct; the duplicate target binding is wrong, which explains the 2/4 audit denominator and leaves dirty targets.",
+      "action": "Rebind G16 duplicate targets to p822/p1306 and remove the p824/p1308 duplicates."
+    },
+    {
+      "id": "M3",
+      "severity": "MEDIUM",
+      "case": "EVIDENCE",
+      "title": "Record and replay DOCX byte hashes differ solely by ZIP timestamps",
+      "status": "CONFIRMED_BENIGN",
+      "evidence": [
+        "D02 record 7d348226... vs replay 40168e69...",
+        "D11 record 86f134a9... vs replay f8526729...",
+        "D16 record 0eb39022... vs replay 913e9c44...",
+        "All ZIP parts, including word/document.xml and docProps/core.xml, are byte-identical; paragraph text is identical"
+      ],
+      "analysis": "Content is identical; only ZIP entry timestamps differ. The manifest binds the record hash and the replay report publishes a different final_sha256, which is confusing for traceability.",
+      "action": "Normalize ZIP timestamps or publish a canonical text/document.xml hash alongside the package hash."
+    },
+    {
+      "id": "M4",
+      "severity": "MEDIUM",
+      "case": "EVIDENCE",
+      "title": "Summary 'calls' and report 'logical_calls' use different semantics",
+      "status": "CONFIRMED_REPORTING",
+      "evidence": [
+        "D16 summary calls=33, frozen/D16/report.json model.logical_calls=44, http_attempts=33, cassette_replays=11",
+        "D01 summary calls=31, stop.detail.metrics.logical_calls=33, http_attempts=31",
+        "D16 replay events: 44/44 replayed, tokens 0, cost 0"
+      ],
+      "analysis": "The record D16 had 11 in-run cassette replays, so summary 'calls' is HTTP attempts while report 'logical_calls' is total logical calls. This is not a live-HTTP violation, but budget/evidence metrics are ambiguous.",
+      "action": "Label summary fields as http_attempts/logical_calls and disclose in-run cassette replays."
+    },
+    {
+      "id": "L1",
+      "severity": "LOW",
+      "case": "D02/D16",
+      "title": "Duplicate business notices per body/summary site",
+      "status": "CONFIRMED_COSMETIC",
+      "evidence": [
+        "frozen/D02/report.json business_notices: two identical CONTRACT_POSSIBLY_ERRONEOUS entries",
+        "frozen/D16/report.json business_notices: two identical entries"
+      ],
+      "analysis": "The same warning is emitted once per site; cosmetic only.",
+      "action": "Deduplicate by rule/message or label the site."
+    },
+    {
+      "id": "L2",
+      "severity": "LOW",
+      "case": "EVIDENCE",
+      "title": "Paragraph labels are 0-based while Word numbering is 1-based",
+      "status": "CONFIRMED_DOCUMENTATION",
+      "evidence": [
+        "Report p221 = DOCX paragraph index 221 = visible paragraph 222",
+        "D16 audit text and report labels use p221/p222 for the G12/G13 edit"
+      ],
+      "analysis": "No delivery impact, but cross-referencing audit text to the DOCX is error-prone.",
+      "action": "State the indexing convention in reports or emit 1-based labels."
+    }
+  ],
+  "gate": {
+    "decision": "HOLD",
+    "can_enter_20_case": false,
+    "reasons": [
+      "D01 has no exact-code 4090a22 artifact and no remaining budget; 4/4 exact-code evidence is not established",
+      "D11 is a real incomplete delivery: G18 duplicate at p1207 was never targeted (correct fail-closed)",
+      "D16 content is correct but is falsely blocked by two G13 audit findings and the stale T3001 target",
+      "The 4090a22 evidence index and offline-test log are stale/missing, so the machine-readable gate input is not reliable"
+    ],
+    "required_actions": [
+      "D01: authorise/resume budget and produce exact-4090a22 record+artifact+replay, or explicit user waiver",
+      "D16: fix joint-edit audit attribution and T3001 resolution projection; re-run/replay to complete",
+      "D11: add deterministic duplicate G18 target generation/audit; re-run/replay to complete",
+      "Evidence: finalise 4090a22 index (record/replay/totals/gate reason), archive exact-HEAD pytest log, label/remove stale 682e68a data"
+    ],
+    "budget_note": "4090a22 attempt allocated D01=0, D02=57, D11=80, D16=79 attempts; D02/D11/D16 consumed 25/27/33. D11 and D16 each have room for one re-run; D01 does not."
+  },
+  "notes": [
+    "Paragraph labels are 0-based report indices; Word numbering is +1.",
+    "D16 record had 11 in-run cassette replays (44 logical calls / 33 HTTP); no foreign-run cassette was observed.",
+    "No live model or HTTP calls were made by this review; all checks were local and read-only.",
+    "D02 is the only case that can currently be described as complete on exact-4090a22 evidence."
+  ]
+}

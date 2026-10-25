@@ -25,6 +25,12 @@ export class SessionExpiredError extends ApiError {
   }
 }
 
+function notifySessionExpired(): void {
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('fundlex:session-expired'))
+  }
+}
+
 export type UploadProgress = (loaded: number, total: number) => void
 
 function authHeaders(): Headers {
@@ -46,7 +52,10 @@ function assertApiPath(path: string): string {
 async function parseError(response: Response): Promise<never> {
   let body: unknown
   try { body = await response.json() } catch { body = undefined }
-  if (response.status === 401) throw new SessionExpiredError()
+  if (response.status === 401) {
+    notifySessionExpired()
+    throw new SessionExpiredError()
+  }
   const detail = (body as ApiErrorBody | undefined)?.detail
   const message = typeof detail === 'string' ? detail : response.statusText || `请求失败（${response.status}）`
   throw new ApiError(message, response.status, body)
@@ -92,7 +101,10 @@ export function upload<T>(path: string, form: FormData, onProgress?: UploadProgr
       let body: unknown
       try { body = xhr.responseText ? JSON.parse(xhr.responseText) : undefined } catch { body = undefined }
       if (xhr.status >= 200 && xhr.status < 300) resolve(body as T)
-      else if (xhr.status === 401) reject(new SessionExpiredError())
+      else if (xhr.status === 401) {
+        notifySessionExpired()
+        reject(new SessionExpiredError())
+      }
       else reject(new ApiError(typeof (body as ApiErrorBody | undefined)?.detail === 'string' ? (body as ApiErrorBody).detail as string : '文件上传未完成。', xhr.status, body))
     }
     xhr.send(form)

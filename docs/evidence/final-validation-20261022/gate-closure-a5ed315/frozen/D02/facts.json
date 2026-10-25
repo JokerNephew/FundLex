@@ -1,0 +1,72 @@
+{
+  "fund_type": "open_regular",
+  "fund_type_quote": "ETF 联接基金",
+  "fund_type_basis": "基金合同明确本基金为ETF联接基金（将绝大多数基金财产投资于目标ETF的开放式运作基金），属于普通开放式基金，而非ETF本身。",
+  "class_count": 2,
+  "classes": [
+    {
+      "name": "A类",
+      "subscription_fee": true,
+      "service_fee": false,
+      "current": true,
+      "rate": null,
+      "quote": "在投资者认购、申购基金份额时收取认购、申购费用，而不计提销售服务费的，称为 A 类基金份额"
+    },
+    {
+      "name": "C类",
+      "subscription_fee": false,
+      "service_fee": true,
+      "current": true,
+      "rate": null,
+      "quote": "在投资者认购、申购基金份额时不收取认购、申购费用，而是从本类别基金资产中计提销售服务费的，称为 C 类基金份额"
+    }
+  ],
+  "subscription_group": [
+    "A类"
+  ],
+  "service_group": [
+    "C类"
+  ],
+  "share_class_structure": "MULTIPLE",
+  "direct_sales_exempt_group": [],
+  "other_sales_charged_group": [],
+  "fact_status": {
+    "fund_type": "VERIFIED",
+    "share_class_structure": "VERIFIED",
+    "subscription_fee_group": "VERIFIED",
+    "service_fee_group": "VERIFIED",
+    "direct_sales_exempt_group": "UNKNOWN",
+    "other_sales_charged_group": "UNKNOWN"
+  },
+  "condition_overrides": {},
+  "has_service_fee": true,
+  "is_floating_fee": false,
+  "floating_quote": "本基金管理费按前一日基金资产净值扣除所持有目标 ETF 基金份额部分的基金资产净值后的余额（若为负数，则取 0）的 0.15%年费率计提。",
+  "floating_basis": "管理费为固定年费率0.15%，未与持有期限或业绩挂钩，不属于浮动管理费。",
+  "notes": "A类收取申购费、不计提销售服务费；C类不收申购费、按0.20%年费率计提销售服务费。合同未就直销/其他销售渠道作差异化申购费规定。",
+  "quotes_verified": {
+    "fund_type": true,
+    "class:A类": true,
+    "class:C类": true,
+    "floating": true,
+    "class_set": true
+  },
+  "class_set_quote": "本基金将基金份额分为 A 类和 C 类不同的类别。",
+  "class_set_evidence": {
+    "quote_verified": true,
+    "set_complete_verified": true,
+    "parsed_classes": [
+      "A",
+      "C"
+    ],
+    "reason": "CLASS_SET_VERIFIED"
+  },
+  "value_verified": true,
+  "set_complete_verified": true,
+  "fund_type_certification": {},
+  "channel_evidence": {
+    "direct_sales_exempt": "",
+    "other_sales_charged": ""
+  },
+  "problems": []
+}

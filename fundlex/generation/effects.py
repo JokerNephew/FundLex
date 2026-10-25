@@ -312,7 +312,8 @@ def operation_site_bound(spec: Any, quote: str, original: Any, location: str,
         # evidence that G05's independent filing deletion is already satisfied.
         class_setup = _compact(body)
         if not ("份额类别的具体设置" in class_setup or re.search(
-                r"(?:增加|增设|新增|变更|停止)[^。；;]{0,12}(?:基金)?份额类别|调整(?:基金)?份额类别",
+                r"(?:增加|增设|新增|变更|停止)[^。；;]{0,12}(?:基金)?份额类别|"
+                r"调整(?:现有|本基金)?(?:基金)?份额类别(?:的[^。；;]{0,12})?",
                 class_setup)):
             return False
     if spec.op == "append" and spec.rule_id in {"G01", "G03", "G16"}:

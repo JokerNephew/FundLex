@@ -2278,6 +2278,24 @@ def assign_target_operations(targets: Sequence[Target], rules_by_id: dict[str, d
                     target.out_of_scope = True
                     target.reason = f"{target.reason}|TARGET_OPERATION_NOT_APPLICABLE"
                     continue
+        if target.state == "satisfied" and not target.out_of_scope:
+            # A satisfied inventory target for an applicable no-op branch is a
+            # qualification result, not an auditable unchanged obligation.  A
+            # sibling operation may legitimately edit the same source paragraph
+            # (G21/G22 at D20 p977).
+            rule = rules_by_id.get(target.rule_id)
+            if rule is not None:
+                operations = list(rule.get("operations") or ())
+                statuses = [condition_status(operation.get("condition"), facts)
+                            for operation in operations]
+                applicable = [operation for operation, status in zip(operations, statuses)
+                              if status == "TRUE"]
+                if (statuses and all(status == "FALSE" for status in statuses)) or (
+                        applicable and all(operation.get("op") == "noop"
+                                           for operation in applicable)):
+                    target.out_of_scope = True
+                    target.reason = f"{target.reason}|TARGET_OPERATION_NOT_APPLICABLE"
+                    continue
         if target.state != "needs_edit":
             # An inventory/survey target can already be marked satisfied while still
             # carrying only one half of a split A/C class-substitution clause.  The
@@ -2352,7 +2370,8 @@ def assign_target_operations(targets: Sequence[Target], rules_by_id: dict[str, d
 
 
 def resolve_absent_site_targets(targets: Sequence[Target], rules_by_id: dict[str, dict],
-                                inspection: DocumentInspection) -> list[dict[str, Any]]:
+                                inspection: DocumentInspection,
+                                facts: Facts | None = None) -> list[dict[str, Any]]:
     """Turn an out-of-scope G05 delete locator into an already-absent site proof.
 
     The inventory sometimes finds the class-setup paragraph but reports the
@@ -2362,10 +2381,8 @@ def resolve_absent_site_targets(targets: Sequence[Target], rules_by_id: dict[str
     instead of leaving a false OPEN obligation.
     """
     records: list[dict[str, Any]] = []
-    for target in targets:
+    for target in list(targets):
         if target.rule_id != "G05" or target.state not in {"needs_edit", "absent"}:
-            continue
-        if target.operations:
             continue
         rule = rules_by_id.get("G05") or {}
         try:
@@ -2378,10 +2395,42 @@ def resolve_absent_site_targets(targets: Sequence[Target], rules_by_id: dict[str
         for index, operation in enumerate(rule.get("operations") or []):
             if operation.get("op") != "delete":
                 continue
+            if facts is not None and condition_status(operation.get("condition"), facts) != "TRUE":
+                continue
             old = _compact(str(operation.get("old_text") or ""))
             if len(old) < 8 or old in body:
                 continue
-            target.operations = (_rule_operation_key(rule, index),)
+            operation_id = _rule_operation_key(rule, index)
+            # A target can already own a different G05 branch.  Keep that branch's
+            # unresolved state intact and add a separate, operation-specific
+            # already-absent proof for the filing deletion (D19 p130).
+            # Only a target whose complete operation identity is this delete can be
+            # converted in place.  A broad target carrying G05:0 plus G05:2 must be
+            # split; otherwise marking the target satisfied would close the still
+            # unproven replacement branch along with the absent delete proof.
+            if operation_id in target.operations and set(target.operations) == {operation_id}:
+                target.state = "satisfied"
+                target.out_of_scope = False
+                target.quote = span.text
+                target.start, target.end = 0, len(span.text)
+                target.resolution = "resolved"
+                target.segment_ok = True
+                target.reason = f"{target.reason}|ALREADY_ABSENT_AT_CLASS_SETUP"
+                records.append({"target_id": target.target_id, "rule_id": "G05",
+                                "operation_id": operation_id, "location": target.location})
+                continue
+            if target.operations:
+                clone = Target(
+                    target_id=f"{target.target_id}-ABSENT-{operation_id.replace(':', '-')}",
+                    rule_id="G05", location=target.location, quote=span.text,
+                    state="satisfied", reason=f"{target.reason}|ALREADY_ABSENT_AT_CLASS_SETUP",
+                    start=0, end=len(span.text), resolution="resolved",
+                    segment_ok=True, operations=(operation_id,))
+                targets.append(clone)
+                records.append({"target_id": clone.target_id, "rule_id": "G05",
+                                "operation_id": operation_id, "location": target.location})
+                continue
+            target.operations = (operation_id,)
             target.state = "satisfied"
             target.out_of_scope = False
             target.quote = span.text
@@ -2390,9 +2439,7 @@ def resolve_absent_site_targets(targets: Sequence[Target], rules_by_id: dict[str
             target.segment_ok = True
             target.reason = f"{target.reason}|ALREADY_ABSENT_AT_CLASS_SETUP"
             records.append({"target_id": target.target_id, "rule_id": "G05",
-                            "operation_id": target.operations[0],
-                            "location": target.location})
-            break
+                            "operation_id": operation_id, "location": target.location})
     return records
 
 
@@ -2649,6 +2696,27 @@ def duplicate_copy_targets(targets: Sequence[Target], rules_by_id: dict[str, dic
             except DocxError:
                 continue
             source_span = inspection.by_location(target.location)
+            if target.rule_id == "G16":
+                # G16's source identity is the end of its payment clause.  A payment
+                # paragraph that happens to be byte-identical to another clause head
+                # is not an exact duplicate when one clause continues through usage
+                # paragraphs (D20 p804-p806 vs p1259).
+                try:
+                    clauses = _g16_clause_locations(inspection)
+                except (AttributeError, KeyError, TypeError, ValueError):
+                    # Small unit-test inspections and legacy callers may expose only
+                    # paragraph text.  Preserve the previous exact-copy behaviour when
+                    # the structural index cannot be built; real DOCX inspections have
+                    # the fields required for the clause-specific guard.
+                    clauses = []
+                source_clause = next((clause for clause in clauses
+                                      if target.location in clause), ())
+                candidate_clause = next((clause for clause in clauses
+                                        if location in clause), ())
+                if (clauses and (not source_clause or not candidate_clause
+                                 or source_clause[-1] != target.location
+                                 or candidate_clause[-1] != location)):
+                    continue
             if target.start is None or target.end is None:
                 source_located = resolve_quote(source_span, target.quote)
                 if source_located is None:
@@ -3841,17 +3909,72 @@ def _g13_short_holding_end(text: str, operation: Mapping[str, Any]) -> int | Non
         return None
     compact, offsets = compact_offsets(text)
     match = re.match(
-        r"(?:其中[，,]?)?(?:对于|对)持续持有期少于7日的投资[者人]收取不低于1\.5(?:0)?%的赎回费"
-        r"[，,]并(?:将上述赎回费)?全额计入基金财产[。；;]", compact)
+        r"(?:其中[，,]?)?(?:本基金)?(?:对于|对)?持续持有期少于7日的投资[者人]"
+        r"收取(?:不低于)?1\.5(?:0)?%的赎回费[，,]"
+        r"(?:并(?:将上述赎回费)?|并将赎回费|并)?全额计入基金财产[。；;]", compact)
     return offsets[match.end() - 1] + 1 if match else None
+
+
+def _g13_short_holding_owned(inspection: Any, location: str, text: str,
+                             operation: Mapping[str, Any]) -> int | None:
+    """Return a locally editable end for a source-bound G13 sentence.
+
+    Inventory may bind only the continuation of a sentence split over two DOCX
+    paragraphs.  The operation still has to prove the complete source clause: the
+    preceding paragraph is context only and is never included in the edit.  This
+    helper accepts that shape only when the operation's own reference authorizes
+    the complete short-holding sentence and the match ends at this target's end.
+    """
+    local_end = _g13_short_holding_end(text, operation)
+    if local_end is not None:
+        return local_end
+    old = _compact(str(operation.get("old_text") or ""))
+    if operation.get("op") != "delete" or not old:
+        return None
+    spans = list(getattr(inspection, "paragraphs", ()) or ())
+    index = next((i for i, span in enumerate(spans)
+                  if str(getattr(span, "location", "")) == str(location)), -1)
+    if index <= 0 or str(text).lstrip() != str(text):
+        return None
+    context = str(spans[index - 1].text)
+    compact_context, _ = compact_offsets(context)
+    compact_text, _ = compact_offsets(text)
+    joined = compact_context + compact_text
+    # The full operation must authorize the same business clause.  Requiring the
+    # operation's distinctive markers prevents a naked "7 日..." tail from
+    # borrowing authorization from a neighbouring fee sentence.
+    old_markers = old.replace("1.50%", "1.5%")
+    if not all(token in old_markers for token in ("少于7日", "1.5%", "赎回费", "全额计入基金财产")):
+        return None
+    match = re.search(
+        r"(?:其中[，,]?)?(?:本基金)?(?:对于|对)?持续持有期少于7日的投资[者人]"
+        r"收取(?:不低于)?1\.5(?:0)?%的赎回费[，,]"
+        r"(?:并(?:将上述赎回费)?|并将赎回费|并)?全额计入基金财产[。；;]", joined)
+    if (match is None or match.end() != len(joined)
+            or match.start() >= len(compact_context)):
+        return None
+    return len(str(text).rstrip())
 
 
 def _g15_payment_clause_end(text: str, start: int, end: int, *, allow_head: bool = False) -> int | None:
     """Find the explicit delay terminator without crossing another business clause."""
     current = text[start:end]
-    if not re.match(r"(?:(?:[A-Z]类(?:基金份额)?[、，,和及与])*[A-Z]类基金份额的?)?"
-                    r"(?:基金)?销售服务费每日(?:计提|计算)",
-                    _compact(current)) or "按月支付" not in _compact(current):
+    compact_current = _compact(current)
+    if ("销售服务费" not in compact_current
+            or not any(token in compact_current for token in
+                       ("每日计提", "每日计算", "逐日累计", "日计提"))
+            or not any(token in compact_current for token in ("按月支付", "逐月支付"))):
+        return None
+    service_pos = compact_current.find("销售服务费")
+    lead = compact_current[:service_pos]
+    # The payment operation owns a normal class/product lead, but not an arbitrary
+    # policy sentence that happens to end in ``基金份额的``.  Keep the stricter
+    # boundary while accepting real contracts' multi-class and one-year variants.
+    lead_ok = bool(re.fullmatch(
+        r"(?:基金)?(?:(?:[A-ZＡ-Ｚ]类(?:基金份额)?[、，,和及与]?)+)?的?", lead))
+    lead_ok = lead_ok or bool(re.fullmatch(
+        r"对于投资者持续持有期限未超过一年(?:（即365天[，,]?下同）)?的基金份额收取的", lead))
+    if not lead_ok:
         return None
     parsed_end = 0
     for index, match in enumerate(re.finditer(r"[^。；;！？!?]+[。；;！？!?]", current)):
@@ -5084,12 +5207,9 @@ def _route_target_operations(rule: dict, operations: Sequence[dict], facts: Fact
         aggregate = "template" if all(item["actual"] == "tier1_template" for item in decisions) else "splice"
     else:
         aggregate = "compose"
-    delete_variant_fallback = bool(decisions) and all(
-        item["actual"] == "deterministic_delete" for item in decisions)
     return {"decisions": decisions, "executor": aggregate,
             "allow_compose_fallback": bool(decisions) and (
-                all("tier3_model_compose" in item["allowed_tiers"] for item in decisions)
-                or delete_variant_fallback)}
+                all("tier3_model_compose" in item["allowed_tiers"] for item in decisions))}
 
 
 def _routing_for_target(rule: dict, target: Target, inspection: DocumentInspection,
@@ -5124,7 +5244,7 @@ def _routing_for_compose(routing: dict[str, Any]) -> dict[str, Any]:
     """Record an explicit structural escalation before entering model compose."""
     result = {**routing, "decisions": [dict(item) for item in routing.get("decisions", ())]}
     for item in result["decisions"]:
-        if item.get("blocked") or item.get("actual") == "deterministic_delete":
+        if item.get("blocked"):
             continue
         if "tier3_model_compose" not in item.get("allowed_tiers", ()):
             continue
@@ -5358,13 +5478,14 @@ def _plan_target_inner(rule: dict, target: Target, inspection: DocumentInspectio
         evidence = dict(edit.evidence or {})
         evidence["operation_keys"] = list(edit.operation_keys)
         evidence["obligation_ids"] = list(edit.obligation_ids)
-        if routing is not None:
-            evidence["strategy"] = [dict(item) for item in routing.get("decisions", ())]
-            evidence["selected_executor"] = routing.get("executor")
+        active_routing = getattr(target, "_route_plan", None) or routing
+        if active_routing is not None:
+            evidence["strategy"] = [dict(item) for item in active_routing.get("decisions", ())]
+            evidence["selected_executor"] = active_routing.get("executor")
             evidence["allow_compose_fallback"] = bool(
-                routing.get("allow_compose_fallback"))
+                active_routing.get("allow_compose_fallback"))
         edit.evidence = evidence
-        if routing is not None and str(routing.get("executor")) != "legacy":
+        if active_routing is not None and str(active_routing.get("executor")) != "legacy":
             before_span = inspection.by_location(edit.location).text
             after_span = (before_span[:edit.start] + edit.replacement +
                           before_span[edit.end:])
@@ -5595,6 +5716,9 @@ def _plan_target_inner(rule: dict, target: Target, inspection: DocumentInspectio
                           "fixed_text": new_text}))
     if rule_id == "G13" and len(operations) == 1 and len(delete_ops) == 1:
         short_end = _g13_short_holding_end(actual, delete_ops[0])
+        if short_end is None:
+            short_end = _g13_short_holding_owned(
+                inspection, target.location, actual, delete_ops[0])
         if short_end is not None:
             return finish(PlannedEdit(
                 target_id=target.target_id, rule_id=rule_id, location=target.location,
@@ -5885,13 +6009,25 @@ def _plan_target_inner(rule: dict, target: Target, inspection: DocumentInspectio
             start=target.start, end=target.end, replacement="", operation="replace",
             content_source="g15_delay_delete",
             evidence={"strategy": "source_payment_delay_continuation"}))
+    if routing is not None and routed_executor not in {"compose", "legacy"}:
+        # Preserve the stable bounded-budget failure for a deterministic route that
+        # cannot safely execute when no compose request is available.  This is still
+        # fail-closed: the budget error must not be treated as authorization for
+        # compose, and a positive budget reaches the executor-availability check below.
+        if compose_budget[0] <= 0:
+            raise RecallError("RECALL_COMPOSE_BUDGET_EXHAUSTED", {"target": target.target_id})
+        if not route_plan.get("allow_compose_fallback"):
+            raise RecallError("RECALL_ROUTED_EXECUTOR_UNAVAILABLE", {
+                "target": target.target_id, "executor": routed_executor,
+                "required": "compose", "rule": rule_id})
+        # A deterministic executor was selected but could not produce a safe
+        # bounded edit.  Record the structural escalation before composing so the
+        # selected executor evidence describes the code path that actually ran.
+        route_plan = _routing_for_compose(route_plan)
+        target._route_plan = route_plan
+        routed_executor = "compose"
     if compose_budget[0] <= 0:
         raise RecallError("RECALL_COMPOSE_BUDGET_EXHAUSTED", {"target": target.target_id})
-    if routing is not None and routed_executor != "compose" \
-            and not route_plan.get("allow_compose_fallback"):
-        raise RecallError("RECALL_ROUTED_EXECUTOR_UNAVAILABLE", {
-            "target": target.target_id, "executor": routed_executor,
-            "required": "compose", "rule": rule_id})
     compose_budget[0] -= 1
     if replace_ops:
         # The contract's wording differs from the guide reference: compose text that
@@ -7532,7 +7668,8 @@ def target_site_ok(rule_id: str, span: Any, inspection: DocumentInspection) -> b
         # planning/audit. Meeting exemptions can contain identical fee words.
         compact = _compact(display_text(span.text)[0])
         return bool("份额类别的具体设置" in compact or re.search(
-            r"(?:增加|增设|新增|变更|停止)[^。；;]{0,12}(?:基金)?份额类别|调整(?:基金)?份额类别", compact))
+            r"(?:增加|增设|新增|变更|停止)[^。；;]{0,12}(?:基金)?份额类别|"
+            r"调整(?:现有|本基金)?(?:基金)?份额类别(?:的[^。；;]{0,12})?", compact))
     if rule_id in {"G02", "G04"}:
         paragraph, _ = display_text(span.text)
         # Account eligibility and class enumeration are not fee-group clauses.

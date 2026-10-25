@@ -1,0 +1,134 @@
+{
+  "body": {
+    "schema_version": "fundlex-model-cassette-v1",
+    "request": {
+      "task_type": "recall_audit",
+      "prompt_version": "recall_audit_v1",
+      "configured_model": "deepseek-v4.1-flash",
+      "context_sha256": "69744f480ebfa5654cc0793cebe9b0164f1b702c83759a67105ef6467b12a541",
+      "request": {
+        "bounded_context": "[BEFORE]\n[p228] 本基金 A 类基金份额的申购费用由投资人承担，不列入基金财产。本基金 C 类基金份额不收取申购费用。 \n\n[AFTER]\n[p228] 通过直销机构申购本基金A类基金份额不收取申购费，通过其他销售机构申购本基金A类基金份额的申购费用由投资人承担，不列入基金财产。本基金C类基金份额不收取申购费用。 \n\n[REQUIREMENTS]\nGUIDE_RULES\n[G11] 基金份额的申购与赎回-六、申购和赎回的价格、费用及其用途： | section_hint=基金份额的申购与赎回\n  requirement: 产品有多个份额类别时，将原条款直接替换为“通过直销机构申购本基金A类基金份额不收取申购费，通过其他销售机构申购本基金A类基金份额的申购费用由投资人承担，不列入基金财产。本基金C类基金份额不收取申购费用。”。\n  [G11:0] replace: 本基金A类基金份额的申购费用由投资人承担，不列入基金财产；C类基金份额不收取申购费用。 -> 通过直销机构申购本基金A类基金份额不收取申购费，通过其他销售机构申购本基金A类基金份额的申购费用由投资人承担，不列入基金财产。本基金C类基金份额不收取申购费用。\n  [G11:1] replace: 申购费用由投资人承担，不列入基金财产。 -> 通过直销机构申购本基金A类基金份额不收取申购费，通过其他销售机构申购本基金A类基金份额的申购费用由投资人承担，不列入基金财产。本基金C类基金份额不收取申购费用。\n\n[TARGET_LEDGER]\n[\n {\n  \"target_id\": \"S03_S04_S07_S16_S17_S20#1:T015\",\n  \"rule_id\": \"G11\",\n  \"location\": \"p228\",\n  \"state\": \"needs_edit\",\n  \"quote\": \"本基金 A 类基金份额的申购费用由投资人承担，不列入基金财产。本基金 C 类基金份额不收取申购费用。\",\n  \"reason\": \"多份额类别下应替换为包含直销机构申购A类免申购费、其他销售机构申购A类费用由投资人承担、C类不收取申购费的表述。\",\n  \"plan_status\": \"planned\",\n  \"operation\": \"replace\",\n  \"replacement\": \"通过直销机构申购本基金A类基金份额不收取申购费，通过其他销售机构申购本基金A类基金份额的申购费用由投资人承担，不列入基金财产。本基金C类基金份额不收取申购费用。\"\n },\n {\n  \"target_id\": \"Y004\",\n  \"rule_id\": \"G11\",\n  \"location\": \"p228\",\n  \"state\": \"needs_edit\",\n  \"quote\": \"申购费用由投资人承担，不列入基金财产。\",\n  \"reason\": \"survey_reference:1.00\",\n  \"plan_status\": \"satisfied\",\n  \"operation\": \"replace\",\n  \"replacement\": \"\"\n }\n]\n\n[OTHER_AUTHORIZED_EDITS]\n[]",
+        "instruction": "Read [BEFORE] (the original contract region), [AFTER] (the actual rewritten region taken from the produced file), [REQUIREMENTS] (the guide rules with their fixed policy text and the target ledger) and [OTHER_AUTHORIZED_EDITS] (changes other guide rules legitimately made in the same locations). Independently judge each target in the ledger: completed when the AFTER text satisfies the requirement with no lost content, incomplete when part of the requirement is missing, wrong when the AFTER text contradicts the requirement, drops required content, or adds policy the guide does not state. A rule whose slot classes are placeholders means the AFTER text must name the product's actual share classes that fall in that group: adding a real class the contract defines (for example including a D类 class in the group the guide wrote as A类) is correct instantiation, not an unauthorized addition, as long as [FACTS] lists that class in the group. Never report an OTHER_AUTHORIZED_EDITS change as an unauthorized addition. For every non-completed target also classify the root cause (failure_class) and, when known, the affected_fact or affected_obligation, so recovery can return to the correct business layer. A region shown as （该位置内容已删除） means the content was removed: for a deletion requirement that is completed, and for a replacement requirement judge it against the requirement and the ledger, not against the absence itself. Cite an exact contiguous evidence_quote from AFTER (or BEFORE when judging a loss) for every verdict. Also report missed_targets when you find a clause in AFTER that still needs editing but is absent from the ledger. Never trust the ledger over the actual text; never mark completed without reading AFTER.",
+        "response_schema": {
+          "type": "object",
+          "required": [
+            "results"
+          ],
+          "properties": {
+            "results": {
+              "type": "array",
+              "maxItems": 60,
+              "items": {
+                "type": "object",
+                "required": [
+                  "target_id",
+                  "verdict",
+                  "reason"
+                ],
+                "properties": {
+                  "target_id": {
+                    "type": "string"
+                  },
+                  "verdict": {
+                    "enum": [
+                      "completed",
+                      "incomplete",
+                      "wrong"
+                    ]
+                  },
+                  "reason": {
+                    "type": "string"
+                  },
+                  "evidence_quote": {
+                    "type": "string"
+                  },
+                  "failure_class": {
+                    "enum": [
+                      "FACT",
+                      "APPLICABILITY",
+                      "TARGET",
+                      "GENERATION",
+                      "EXECUTION",
+                      "VERIFICATION"
+                    ]
+                  },
+                  "affected_fact": {
+                    "type": "string"
+                  },
+                  "affected_obligation": {
+                    "type": "string"
+                  }
+                }
+              }
+            },
+            "missed_targets": {
+              "type": "array",
+              "maxItems": 20,
+              "items": {
+                "type": "object",
+                "required": [
+                  "rule_id",
+                  "location",
+                  "quote",
+                  "reason"
+                ],
+                "properties": {
+                  "rule_id": {
+                    "type": "string"
+                  },
+                  "location": {
+                    "type": "string"
+                  },
+                  "quote": {
+                    "type": "string"
+                  },
+                  "reason": {
+                    "type": "string"
+                  }
+                }
+              }
+            },
+            "notes": {
+              "type": "string"
+            }
+          }
+        },
+        "request_options": {
+          "thinking": {
+            "type": "disabled"
+          }
+        },
+        "max_completion_tokens": 8000
+      }
+    },
+    "response": {
+      "results": [
+        {
+          "target_id": "S03_S04_S07_S16_S17_S20#1:T015",
+          "verdict": "completed",
+          "reason": "AFTER exactly matches the required replacement text for the multi-class purchase fee clause, including direct-sales A-class exemption, other-agency A-class fee borne by investors, and C-class no fee.",
+          "evidence_quote": "通过直销机构申购本基金A类基金份额不收取申购费，通过其他销售机构申购本基金A类基金份额的申购费用由投资人承担，不列入基金财产。本基金C类基金份额不收取申购费用。"
+        },
+        {
+          "target_id": "Y004",
+          "verdict": "completed",
+          "reason": "The generic phrase '申购费用由投资人承担，不列入基金财产。' has been replaced by the full required multi-class wording; the replacement is present in AFTER.",
+          "evidence_quote": "通过直销机构申购本基金A类基金份额不收取申购费，通过其他销售机构申购本基金A类基金份额的申购费用由投资人承担，不列入基金财产。"
+        }
+      ],
+      "missed_targets": [],
+      "notes": "Both ledger targets map to the same p228 clause; AFTER fully instantiates the G11 required text with no lost content and no unauthorized additions."
+    },
+    "event": {
+      "task_type": "recall_audit",
+      "prompt_version": "recall_audit_v1",
+      "context_sha256": "69744f480ebfa5654cc0793cebe9b0164f1b702c83759a67105ef6467b12a541",
+      "configured_model": "deepseek-v4.1-flash",
+      "actual_model": "deepseek-v4.1-flash",
+      "http_status": 200,
+      "finish_reason": "stop",
+      "error_code": null
+    }
+  },
+  "sha256": "ba89c28f53b62044d10933c0a80d1c3a0e3b6986cf0c46fc69796e81f2219e77"
+}

@@ -3,8 +3,8 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import { DocumentNavigator, DocumentViewer, type DocumentViewerHandle, SplitPane, type MarkerDecision } from '../../components/document'
 import { RevisionPanel, type RevisionDecisions, type RevisionItem } from '../../components/review'
 import { Button, Card, Spinner, StatusBadge } from '../../components/ui'
-import { api } from '../../api/endpoints'
-import { invalidateQuery, useAllTaskDocuments, useRevisions, useTaskDocument } from '../../api/hooks'
+import { useAllTaskDocuments, useReviewMutation, useRevisions, useTaskDocument } from '../../api/hooks'
+import { useAuthStore } from '../../stores/auth'
 import type { TaskDocument } from '../../types'
 
 function ErrorState({ message, onRetry }: { message: string; onRetry?: () => void }) {
@@ -19,6 +19,16 @@ function documentWithId(items: TaskDocument[] | undefined, id: string | undefine
   return items?.find((item) => String(item.document_id || '') === String(id || ''))
 }
 
+function revisionFingerprint(items: RevisionItem[], html: string, meta: Record<string, unknown> | undefined): string {
+  const payload = JSON.stringify({ html, meta: meta || {}, revisions: items })
+  let hash = 2166136261
+  for (let index = 0; index < payload.length; index += 1) {
+    hash ^= payload.charCodeAt(index)
+    hash = Math.imul(hash, 16777619)
+  }
+  return (hash >>> 0).toString(16)
+}
+
 export function ReviewPage() {
   const { taskId, documentId } = useParams()
   const navigate = useNavigate()
@@ -26,13 +36,20 @@ export function ReviewPage() {
   const documentQuery = useTaskDocument(taskId, documentId)
   const document = documentQuery.data || documentWithId(documents.data, documentId)
   const revisions = useRevisions(taskId, document?.document_id || documentId)
+  const user = useAuthStore((state) => state.user)
   const viewerRef = useRef<DocumentViewerHandle>(null)
   const [decisionsByDocument, setDecisionsByDocument] = useState<Record<string, RevisionDecisions>>({})
   const [activeRevisionId, setActiveRevisionId] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
+  const [mobilePane, setMobilePane] = useState<'left' | 'right'>('left')
+  const reviewMutation = useReviewMutation()
+  const hydratedDraftKey = useRef<string | null>(null)
   const documentKey = `${taskId || ''}:${document?.document_id || documentId || ''}`
+  const items = useMemo(() => revisionItems(revisions.data?.revisions), [revisions.data?.revisions])
+  const draftFingerprint = useMemo(() => revisionFingerprint(items, revisions.data?.html || '', revisions.data?.meta), [items, revisions.data?.html, revisions.data?.meta])
+  const draftKey = `fundlex-review-draft:${user?.id || user?.username || 'anonymous'}:${documentKey}:${draftFingerprint}`
   const decisions = useMemo(() => decisionsByDocument[documentKey] || {}, [decisionsByDocument, documentKey])
   const updateDecisions = useCallback((next: RevisionDecisions | ((current: RevisionDecisions) => RevisionDecisions)) => {
     setDecisionsByDocument((current) => ({
@@ -41,7 +58,6 @@ export function ReviewPage() {
     }))
   }, [documentKey])
 
-  const items = useMemo(() => revisionItems(revisions.data?.revisions), [revisions.data?.revisions])
   const usableDocuments = useMemo(() => (documents.data || []).filter((item) => Boolean(item.document_id && (item.downloads?.working_redline || item.downloads?.redline))), [documents.data])
   const currentIndex = Math.max(0, usableDocuments.findIndex((item) => String(item.document_id) === String(document?.document_id)))
   const resolvedCount = items.filter((item) => decisions[String(item.del_id)] && decisions[String(item.del_id)] !== 'pending').length
@@ -63,6 +79,29 @@ export function ReviewPage() {
     updateDecisions((current) => Object.fromEntries(items.map((item) => [String(item.del_id), current[String(item.del_id)] || 'pending'])))
   }, [documentKey, items, updateDecisions])
 
+  useEffect(() => {
+    if (!items.length || revisions.loading) return
+    let stored: RevisionDecisions = {}
+    try {
+      const raw = localStorage.getItem(draftKey)
+      const parsed = raw ? JSON.parse(raw) as { decisions?: RevisionDecisions } : {}
+      if (parsed.decisions && typeof parsed.decisions === 'object') stored = parsed.decisions
+    } catch {
+      stored = {}
+    }
+    hydratedDraftKey.current = draftKey
+    updateDecisions(Object.fromEntries(items.map((item) => [String(item.del_id), stored[String(item.del_id)] || 'pending'])))
+  }, [draftKey, items, revisions.loading, updateDecisions])
+
+  useEffect(() => {
+    if (!items.length || revisions.loading || hydratedDraftKey.current !== draftKey) return
+    try {
+      localStorage.setItem(draftKey, JSON.stringify({ version: 1, taskId, documentId: document?.document_id || documentId, revisionFingerprint: draftFingerprint, decisions }))
+    } catch {
+      // Local draft persistence is best effort; the server remains authoritative.
+    }
+  }, [decisions, document?.document_id, documentId, draftFingerprint, draftKey, items.length, revisions.loading, taskId])
+
   const revisionKey = useCallback((revisionId: string) => {
     const item = items.find((candidate) => [candidate.del_id, candidate.ins_id, ...(candidate.revision_ids || [])].some((id) => String(id) === revisionId))
     return item ? String(item.del_id) : revisionId
@@ -72,6 +111,7 @@ export function ReviewPage() {
     const primaryId = revisionKey(revisionId)
     setActiveRevisionId(primaryId)
     updateDecisions((current) => ({ ...current, [primaryId]: decision }))
+    setMobilePane('right')
   }, [revisionKey, updateDecisions])
 
   const selectRevision = useCallback((revisionId: string) => {
@@ -103,16 +143,11 @@ export function ReviewPage() {
     setBusy(true); setError(''); setMessage('正在生成选择版合同…')
     try {
       const allAccepted = items.every((item) => decisions[String(item.del_id)] === 'accept')
-      const result = allAccepted
-        ? await api.acceptAll(taskId, document.document_id)
-        : await api.decisions(taskId, document.document_id, items.map((item) => ({
+      const result = await reviewMutation.mutateAsync({ taskId, documentId: document.document_id, allAccepted, decisions: items.map((item) => ({
           del_id: item.del_id,
           decision: decisions[String(item.del_id)] === 'reject' ? 'reject' : 'accept',
-        })))
+        })) })
       setMessage(`已生成选择版合同：接受 ${result.accepted?.length || 0} 条，拒绝 ${result.rejected?.length || 0} 条。`)
-      invalidateQuery(`document:${taskId}:${document.document_id}`)
-      invalidateQuery(`document-report:${taskId}:${document.document_id}`)
-      invalidateQuery(`documents-all:${taskId}`)
       await documents.refetch()
     } catch (nextError) {
       setError(nextError instanceof Error ? nextError.message : '生成选择版合同失败，请稍后重试。')
@@ -150,16 +185,18 @@ export function ReviewPage() {
     
     <header className="fundlex-review-header">
       <div><div className="fundlex-review-meta"><Link to={`/tasks/${taskId}/documents/${document.document_id}/report`}>← 返回合同详情</Link><StatusBadge value={document.delivery_status} /></div><h1>修订复核</h1><p className="muted">{document.name} · 已处理 {resolvedCount} / {items.length} 条</p></div>
-      <div className="fundlex-review-actions"><DocumentNavigator index={currentIndex} total={usableDocuments.length} disabled={busy} onPrevious={() => moveDocument(-1)} onNext={() => moveDocument(1)} /><Button variant="primary" type="button" disabled={busy || !items.length} onClick={() => void generate()}>生成选择版合同</Button></div>
+       <div className="fundlex-review-actions"><DocumentNavigator index={currentIndex} total={usableDocuments.length} disabled={busy} onPrevious={() => moveDocument(-1)} onNext={() => moveDocument(1)} /><Button variant="primary" type="button" disabled={busy || !items.length || pendingCount > 0} onClick={() => void generate()}>生成选择版合同</Button></div>
     </header>
     {(error || message) && <div className={`fundlex-message${error ? ' error' : ''}`} role={error ? 'alert' : 'status'}>{error || message}</div>}
     <div className="fundlex-review-toolbar"><span className="fundlex-review-toolbar__keys">快捷键：A 接受 · R 拒绝 · ↑ / ↓ 定位上一条或下一条</span><span className="fundlex-muted">进度：{resolvedCount} / {items.length} · 待处理 {pendingCount}</span></div>
     <SplitPane
-      left={<><div className="fundlex-review-toolbar"><strong>合同原文与修订</strong><span className="fundlex-muted">点击高亮内容可定位右侧修订</span></div><DocumentViewer ref={viewerRef} html={html} activeRevisionId={activeRevisionId} activeRevisionIds={activeRevisionIds} decisions={markerDecisions} onRevisionClick={selectRevision} /></>}
-       right={<RevisionPanel revisions={revisionData as RevisionItem[]} decisions={decisions} activeRevisionId={activeRevisionId} busy={busy} onFocus={selectRevision} onDecision={setRevisionDecision} onPrevious={() => moveRevision(-1)} onNext={() => moveRevision(1)} previousDisabled={activeRevisionIndex <= 0} nextDisabled={activeRevisionIndex < 0 || activeRevisionIndex >= items.length - 1} onBulkDecision={(decision) => updateDecisions(Object.fromEntries(items.map((item) => [String(item.del_id), decision])))} />}
-      leftLabel="合同呈现"
-      rightLabel="修订清单"
-    />
+       left={<><div className="fundlex-review-toolbar"><strong>合同原文与修订</strong><span className="fundlex-muted">点击高亮内容可定位右侧修订</span></div><DocumentViewer ref={viewerRef} html={html} activeRevisionId={activeRevisionId} activeRevisionIds={activeRevisionIds} decisions={markerDecisions} onRevisionClick={(id) => { setMobilePane('right'); selectRevision(id) }} /></>}
+        right={<RevisionPanel revisions={revisionData as RevisionItem[]} decisions={decisions} activeRevisionId={activeRevisionId} busy={busy} onFocus={(id) => { setMobilePane('left'); selectRevision(id) }} onDecision={setRevisionDecision} onPrevious={() => moveRevision(-1)} onNext={() => moveRevision(1)} previousDisabled={activeRevisionIndex <= 0} nextDisabled={activeRevisionIndex < 0 || activeRevisionIndex >= items.length - 1} onBulkDecision={(decision) => updateDecisions(Object.fromEntries(items.map((item) => [String(item.del_id), decision])))} />}
+       leftLabel="合同呈现"
+       rightLabel="修订清单"
+       mobilePane={mobilePane}
+       onMobilePaneChange={setMobilePane}
+     />
      <footer className="fundlex-review-actions"><Button type="button" disabled={busy || !items.length} onClick={() => updateDecisions(Object.fromEntries(items.map((item) => [String(item.del_id), 'accept'])))}>批量接受</Button><Button type="button" variant="danger" disabled={busy || !items.length} onClick={() => updateDecisions(Object.fromEntries(items.map((item) => [String(item.del_id), 'reject'])))}>批量拒绝</Button><span className="fundlex-muted">选择版会按每条修订的接受/拒绝结果生成；待处理项不会被默认为接受。</span></footer>
   </div>
 }

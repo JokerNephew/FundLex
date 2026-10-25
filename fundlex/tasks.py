@@ -108,13 +108,19 @@ class TaskStore:
 
     def _files(self, db, task_id, *, details=True):
         rows = db.execute("""SELECT f.*,d.batch_id,d.status,d.qualification_status,d.delivery_status,
-            d.error_code AS document_error,d.source_sha256,d.report_json FROM task_files f
+            d.error_code AS document_error,d.source_sha256,d.report_json,d.updated_at AS document_updated_at FROM task_files f
             LEFT JOIN documents d ON d.id=f.document_id WHERE f.task_id=? ORDER BY f.ordinal""", (task_id,)).fetchall()
         result = []
         for row in rows:
             doc = None
             if row["document_id"] and details:
                 doc = self.store._document_dict(db, db.execute("SELECT * FROM documents WHERE id=?", (row["document_id"],)).fetchone())
+            artifact_count = 0
+            if row["document_id"]:
+                artifact_count = db.execute(
+                    "SELECT COUNT(*) FROM artifacts WHERE document_id=?",
+                    (row["document_id"],),
+                ).fetchone()[0]
             result.append({"task_id": task_id, "batch_id": row["batch_id"], "document_id": row["document_id"],
                            "client_id": row["client_id"], "name": row["name"], "size": row["size"],
                            "job_status": row["status"] or "not_started", "upload_status": row["upload_status"],
@@ -126,6 +132,9 @@ class TaskStore:
                             "downloads": ({kind: f"/api/tasks/{task_id}/documents/{row['document_id']}/download/{kind}"
                                            for kind in (doc or {}).get("artifacts", [])} if doc else {}),
                             "source_sha256": row["source_sha256"],
+                            "phase": self._report_phase(row["report_json"]),
+                            "document_updated_at": row["document_updated_at"] or 0,
+                            "artifact_count": artifact_count,
                            "reason_codes": self._reasons(row["report_json"], row["document_error"] or row["error_code"]) if details else [],
                            "ordinal": row["ordinal"]})
         return result
@@ -149,6 +158,31 @@ class TaskStore:
         return sorted(reasons)
 
     @staticmethod
+    def _report_phase(raw) -> str:
+        """Read the latest persisted Worker phase for task aggregation."""
+        try:
+            report = json.loads(raw) if raw else {}
+        except (TypeError, ValueError):
+            return ""
+        windows = report.get("windows") if isinstance(report, dict) else None
+        if not isinstance(windows, list):
+            return ""
+        for window in reversed(windows):
+            if not isinstance(window, dict):
+                continue
+            rounds = window.get("rounds")
+            if not isinstance(rounds, list):
+                continue
+            for entry in reversed(rounds):
+                if not isinstance(entry, dict):
+                    continue
+                for key in ("stage", "phase"):
+                    value = entry.get(key)
+                    if isinstance(value, str) and value:
+                        return value
+        return ""
+
+    @staticmethod
     def _summary(row, docs, *, legacy=False):
         total = len(docs)
         uploaded = sum(d["upload_status"] == "accepted" for d in docs)
@@ -160,6 +194,11 @@ class TaskStore:
         # serves the guide-bound engine only, so anything else is read-only
         # history even when it still has a first-class task row.
         legacy = legacy or (row["engine_id"] or "") != RECALL_ENGINE_ID
+        phase = "交付" if status == "completed" else max(
+            (doc for doc in docs if doc.get("phase")),
+            key=lambda doc: doc.get("document_updated_at", 0),
+            default={},
+        ).get("phase", "")
         return {"id": row["id"], "name": row["name"], "legacy": legacy, "ruleset_version": row["ruleset_version"],
                 "ruleset_sha256": row["ruleset_sha256"], "status": status,
                 "engine_id": row["engine_id"],
@@ -177,6 +216,8 @@ class TaskStore:
                                    and d["delivery_status"] in {"incomplete", "not_generated"}) for d in docs),
                 "qualification_counts": dict(Counter(d["eligibility"] or "pending" for d in docs)),
                 "delivery_counts": dict(Counter(d["delivery_status"] for d in docs)),
+                "phase": phase,
+                "downloadable_count": sum(1 for doc in docs if doc.get("artifact_count", 0) > 0),
                 "created_at": datetime.fromtimestamp(row["created_at"], timezone.utc).isoformat(),
                 "updated_at": datetime.fromtimestamp(row["updated_at"], timezone.utc).isoformat(),
                 "pause_reason": row["pause_reason"], "summary_url": f"/api/tasks/{row['id']}/report"}

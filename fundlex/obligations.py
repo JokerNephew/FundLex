@@ -444,11 +444,38 @@ def _target_covers_operation(target: Mapping[str, Any], record: ObligationRecord
             or record.spec.obligation_id in operations)
 
 
+def _evidence_matches_record(item: Mapping[str, Any], record: ObligationRecord) -> bool:
+    """Whether one blocking evidence row belongs to an obligation record."""
+    obligation_id = str(item.get("obligation_id") or "")
+    operation_id = str(item.get("operation_id") or "")
+    target_id = str(item.get("target_id") or "")
+    rule_id = str(item.get("rule_id") or "")
+    location = str(item.get("location") or "")
+    if obligation_id and obligation_id not in {
+            record.obligation_id, record.spec.operation_id}:
+        return False
+    if operation_id and operation_id != record.spec.operation_id:
+        return False
+    rule_parts = {part.strip() for part in rule_id.split("+") if part.strip()}
+    if rule_parts and record.spec.rule_id not in rule_parts:
+        return False
+    if target_id and target_id not in record.targets:
+        return False
+    # Before target discovery an operation-level blocker is still evidence for
+    # this open obligation, even though the record has no site yet.  Once sites
+    # exist, a blocker claiming a different physical location must remain orphan
+    # evidence instead of borrowing the operation's open row.
+    if location and record.sites and location not in record.sites:
+        return False
+    return bool(obligation_id or operation_id or target_id or (rule_id and location))
+
+
 def project(ledger: ObligationLedger, report: Mapping[str, Any], *,
             rules_by_id: Mapping[str, Mapping[str, Any]] | None = None,
             scoped_rules: set[str] | None = None,
             scope_gaps: set[str] | None = None,
-            artifact_text: str | None = None) -> None:
+            artifact_text: str | None = None,
+            blocking_evidence: Iterable[Mapping[str, Any]] = ()) -> None:
     """Project only per-obligation artifact proof; scope/target absence never waives TRUE."""
     from .generation.effects import effect_proof_passed
     targets = _iter_targets(report)
@@ -456,6 +483,7 @@ def project(ledger: ObligationLedger, report: Mapping[str, Any], *,
     replay = report.get("artifact_claim_replay") or {}
     proofs = replay.get("obligations") or {}
     failures = replay.get("failures") or []
+    blocking = [item for item in blocking_evidence if isinstance(item, Mapping)]
     scope = report.get("scope_mapping") or {}
     if scoped_rules is None and isinstance(scope.get("mappings"), Mapping):
         scoped_rules = {str(key) for key, locations in scope["mappings"].items() if locations}
@@ -489,9 +517,15 @@ def project(ledger: ObligationLedger, report: Mapping[str, Any], *,
                        or (item.spec.rule_id in str(failure.get("rule_id") or "").split("+")
                            and str(failure.get("location") or "") in locations
                            and (not failure.get("operation_id") or
-                                failure.get("operation_id") == item.spec.operation_id))]
-        if conflicting:
+                                 failure.get("operation_id") == item.spec.operation_id))]
+        evidence_blockers = [evidence for evidence in blocking
+                             if _evidence_matches_record(evidence, item)]
+        if conflicting or evidence_blockers:
             item.completion_evidence = "CLAIM_REPLAY_FAILED"
+            if evidence_blockers and not conflicting:
+                first = evidence_blockers[0]
+                item.completion_evidence = str(
+                    first.get("code") or first.get("reason") or "BLOCKING_EVIDENCE")
             item.statuses.update(artifact="FAIL", validation="FAIL")
         elif not ambiguous_site and effect_proof_passed(proof, operation_id=item.spec.operation_id,
                                  obligation_id=item.obligation_id):
@@ -564,5 +598,89 @@ def open_obligations(ledger: ObligationLedger) -> list[dict[str, Any]]:
                               if record.applicability.status == "UNKNOWN" else "TARGET"),
             "reason": record.completion_evidence,
             "expected_site": record.spec.expected_site,
+            "target_ids": list(record.targets),
+            "sites": list(record.sites),
         })
     return items
+
+
+def project_unresolved(ledger: ObligationLedger,
+                       evidence: Iterable[Mapping[str, Any]] = ()) -> list[dict[str, Any]]:
+    """Return the final blocker projection from the Obligation Ledger.
+
+    The Ledger row is the completion source.  Claim Replay rows that are already
+    represented by an open obligation are collapsed into that canonical row, while
+    detailed target/audit/sweep/coverage diagnostics remain visible for operators.
+    Rows that cannot be bound to an obligation remain visible as orphan evidence and
+    block delivery; all returned evidence rows are diagnostic projections, never a
+    second completion ledger.
+    """
+    rows = open_obligations(ledger)
+    open_records = tuple(record for record in ledger.records if not record.closed)
+    represented: set[tuple[str, str, str, str]] = set()
+    for row in rows:
+        represented.add((str(row.get("obligation_id") or ""),
+                         str(row.get("operation_id") or ""),
+                         str(row.get("target_id") or ""),
+                         str(row.get("location") or "")))
+    for item in evidence:
+        if not isinstance(item, Mapping):
+            continue
+        if str(item.get("kind") or "") in {"business_notice", "notice"}:
+            continue
+        matching = [record for record in open_records
+                    if _evidence_matches_record(item, record)]
+        if matching:
+            # Claim Replay is the low-level proof behind the Ledger row and would
+            # otherwise duplicate that row for every failed check.  Higher-level
+            # diagnostics carry information users need to repair the run (for
+            # example an audit verdict, a coverage gap, or a rejected plan target),
+            # so preserve those projections even when their operation is bound.
+            if str(item.get("kind") or "") in {"claim_replay", "obligation"}:
+                continue
+            row = dict(item)
+            row.setdefault("failure_class", "VERIFICATION")
+            key = (str(row.get("kind") or ""), str(row.get("obligation_id") or ""),
+                   str(row.get("operation_id") or ""), str(row.get("target_id") or ""),
+                   str(row.get("location") or ""),
+                   str(row.get("code") or row.get("reason") or row.get("issue") or ""))
+            if key not in represented:
+                represented.add(key)
+                rows.append(row)
+            continue
+        # Resource and sweep coverage gaps can be run-level diagnostics without
+        # an operation/site identity.  They are not Ledger rows, but retaining
+        # their diagnostic kind is part of the report contract (for example,
+        # SWEEP_CHUNK_LIMIT must remain a visible coverage gap).  Only evidence
+        # carrying an identity that fails to bind is an orphan evidence row.
+        has_identity = any(str(item.get(field) or "").strip()
+                           for field in ("obligation_id", "operation_id", "target_id")) \
+            or bool(str(item.get("rule_id") or "").strip() and
+                    str(item.get("location") or "").strip())
+        if not has_identity and str(item.get("kind") or "") == "coverage":
+            row = dict(item)
+            row.setdefault("failure_class", "VERIFICATION")
+            key = (str(row.get("kind") or ""), str(row.get("obligation_id") or ""),
+                   str(row.get("operation_id") or ""), str(row.get("target_id") or ""),
+                   str(row.get("location") or ""),
+                   str(row.get("code") or row.get("reason") or row.get("issue") or ""))
+            if key not in represented:
+                represented.add(key)
+                rows.append(row)
+            continue
+        # An evidence row tied to a closed/nonexistent operation is still an
+        # orphan blocker.  The caller must investigate the disagreement instead
+        # of allowing a closed Ledger record to hide it.
+        row = dict(item)
+        row["kind"] = "orphan_evidence"
+        row.setdefault("code", "LEDGER_EVIDENCE_UNBOUND")
+        row.setdefault("failure_class", "VERIFICATION")
+        row.setdefault("reason", "blocking evidence is not bound to an open obligation")
+        key = (str(row.get("kind") or ""), str(row.get("obligation_id") or ""),
+               str(row.get("operation_id") or ""), str(row.get("target_id") or ""),
+               str(row.get("location") or ""),
+               str(row.get("code") or row.get("reason") or row.get("issue") or ""))
+        if key not in represented:
+            represented.add(key)
+            rows.append(row)
+    return rows

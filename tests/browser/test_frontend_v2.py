@@ -77,7 +77,7 @@ def test_react_routes_and_deep_links(browser, live_app):
 
     page.on("response", collect_404)
     try:
-        for path, heading in (("/tasks", "任务"), ("/tasks/new", "新建任务"), ("/guides", "指引配置"), ("/settings", "设置")):
+        for path, heading in (("/tasks", "任务"), ("/tasks/new", "新建任务"), ("/guides", "指引配置"), ("/settings", "设置"), ("/compare", "合同对比")):
             response = page.goto(live_app + path, wait_until="networkidle")
             assert response and response.ok
             page.locator("#root").wait_for(state="visible")
@@ -178,7 +178,7 @@ def test_review_renders_void_document_tags_without_page_error(browser, live_app)
     """A real revision payload may contain HTML void tags such as ``<hr>``."""
     task_id = "review-task"
     document_id = "review-document"
-    context = browser.new_context(viewport={"width": 1440, "height": 900})
+    context = browser.new_context(viewport={"width": 390, "height": 844})
     context.add_init_script("localStorage.setItem('fundlex-dev-user','review-browser-check');")
     page = context.new_page()
     page_errors: list[str] = []
@@ -216,9 +216,84 @@ def test_review_renders_void_document_tags_without_page_error(browser, live_app)
     try:
         response = page.goto(live_app + f"/tasks/{task_id}/documents/{document_id}/review", wait_until="networkidle")
         assert response and response.ok
-        page.get_by_role("heading", name="修订清单").wait_for(state="visible")
         assert "Review void tag.docx" in page.locator("body").inner_text()
+        metrics = page.evaluate("""() => ({ viewport: innerWidth, documentWidth: document.documentElement.scrollWidth, bodyWidth: document.body.scrollWidth })""")
+        assert metrics["documentWidth"] <= metrics["viewport"]
+        assert metrics["bodyWidth"] <= metrics["viewport"]
+        left_tab = page.get_by_role("tab", name="合同呈现")
+        right_tab = page.get_by_role("tab", name="修订清单")
+        assert left_tab.get_attribute("aria-selected") == "true"
+        right_tab.click()
+        page.get_by_role("heading", name="修订清单").wait_for(state="visible")
+        assert right_tab.get_attribute("aria-selected") == "true"
+        left_tab.click()
+        assert left_tab.get_attribute("aria-selected") == "true"
         assert not page_errors, page_errors
+    finally:
+        context.close()
+
+
+def test_compare_result_view_supports_pair_navigation_and_mobile_switching(browser, live_app):
+    """The React Compare route keeps result navigation usable at phone width."""
+    task_id = "compare-browser-task"
+    pair_one = "compare-browser-pair-1"
+    pair_two = "compare-browser-pair-2"
+    task = {
+        "id": task_id,
+        "name": "React Compare 结果测试",
+        "status": "completed",
+        "total": 2,
+        "pairs": [
+            {"id": pair_one, "label": "第一组", "ordinal": 0, "status": "succeeded", "left": {"name": "a-1.docx"}, "right": {"name": "b-1.docx"}, "summary": {"total": 1, "modify": 1, "insert": 0, "delete": 0}},
+            {"id": pair_two, "label": "第二组", "ordinal": 1, "status": "succeeded", "left": {"name": "a-2.docx"}, "right": {"name": "b-2.docx"}, "summary": {"total": 1, "modify": 0, "insert": 1, "delete": 0}},
+        ],
+    }
+    views = {
+        pair_one: {"pair": {"id": pair_one, "label": "第一组", "status": "succeeded"}, "left": {"name": "a-1.docx", "html": "<p>旧文 <span class='compare-diff-modify' data-diff-id='D1'>A</span></p>"}, "right": {"name": "b-1.docx", "html": "<p>新文 <span class='compare-diff-modify' data-diff-id='D1'>B</span></p>"}, "summary": {"total": 1, "modify": 1, "insert": 0, "delete": 0}, "coverage": {"status": "complete"}, "diffs": [{"id": "D1", "type": "modify", "section": "正文", "left": {"block_id": "p1", "start": 0, "end": 1, "text": "A"}, "right": {"block_id": "p1", "start": 0, "end": 1, "text": "B"}}]},
+        pair_two: {"pair": {"id": pair_two, "label": "第二组", "status": "succeeded"}, "left": {"name": "a-2.docx", "html": "<p>原文 <span class='compare-diff-insert' data-diff-id='D2'>新增</span></p>"}, "right": {"name": "b-2.docx", "html": "<p>修订 <span class='compare-diff-insert' data-diff-id='D2'>新增</span></p>"}, "summary": {"total": 1, "modify": 0, "insert": 1, "delete": 0}, "coverage": {"status": "complete"}, "diffs": [{"id": "D2", "type": "insert", "section": "正文", "left": {"block_id": "p1", "start": 0, "end": 1, "text": ""}, "right": {"block_id": "p1", "start": 0, "end": 1, "text": "新增"}}]},
+    }
+    context = browser.new_context(viewport={"width": 390, "height": 844})
+    context.add_init_script("localStorage.setItem('fundlex-dev-user','compare-browser-check');")
+    page = context.new_page()
+    page_errors: list[str] = []
+    console_errors: list[str] = []
+    page.on("pageerror", lambda error: page_errors.append(str(error)))
+    page.on("console", lambda message: console_errors.append(message.text) if message.type == "error" else None)
+
+    def json_route(route, body):
+        route.fulfill(status=200, content_type="application/json", body=json.dumps(body))
+
+    def handle(route):
+        path = route.request.url.split("/api", 1)[-1].split("?", 1)[0]
+        if path == "/compare/tasks":
+            return json_route(route, {"items": [task], "total": 1})
+        if path == f"/compare/tasks/{task_id}":
+            return json_route(route, task)
+        if path.startswith("/compare/pairs/") and path.endswith("/view"):
+            return json_route(route, views[path.split("/")[3]])
+        return route.continue_()
+
+    page.route("**/api/**", handle)
+    try:
+        response = page.goto(live_app + "/compare", wait_until="networkidle")
+        assert response and response.ok
+        page.get_by_role("heading", name="合同对比").first.wait_for(state="visible")
+        page.get_by_text("共 1 处差异 · 修改 1 · 新增 0 · 删除 0").wait_for(state="visible")
+        assert page.locator('[data-diff-id="D1"]').count() == 2
+        metrics = page.evaluate("""() => ({ viewport: innerWidth, documentWidth: document.documentElement.scrollWidth, bodyWidth: document.body.scrollWidth })""")
+        assert metrics["documentWidth"] <= metrics["viewport"]
+        assert metrics["bodyWidth"] <= metrics["viewport"]
+
+        page.get_by_role("button", name="查看对比版").click()
+        assert page.locator('.compare-viewer[data-mobile-side="right"]').count() == 1
+        next_pair = page.get_by_role("button", name="下一组", exact=True)
+        next_pair.wait_for(state="visible")
+        next_pair.click()
+        page.get_by_text("共 1 处差异 · 修改 0 · 新增 1 · 删除 0").wait_for(state="visible")
+        assert page.locator('[data-diff-id="D2"]').count() == 2
+        assert page.locator('.compare-viewer[data-mobile-side="left"]').count() == 1
+        assert not page_errors, page_errors
+        assert not console_errors, console_errors
     finally:
         context.close()
 
@@ -261,10 +336,9 @@ def test_new_task_manifest_search_filter_pagination_and_compare_entry(browser, l
         assert compare.is_visible()
         compare.click()
         page.wait_for_url(re.compile(r"/compare$"))
-        page.locator('[data-nav="compare"]').click()
-        page.locator("#compare-new").wait_for(state="visible")
-        assert "独立合同对比工作台" in page.locator("body").inner_text()
-        assert page.locator('a[href="/"]').is_visible()
+        page.get_by_role("heading", name="合同对比").first.wait_for()
+        page.get_by_role("button", name="＋ 新建对比任务").wait_for()
+        assert "原版 → 对比版" in page.locator("body").inner_text()
     finally:
         context.close()
 

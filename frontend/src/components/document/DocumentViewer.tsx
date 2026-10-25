@@ -72,7 +72,7 @@ function renderNode(
   // markup such as <hr>, and passing the recursively-built (even empty) array
   // as the third createElement argument makes React 19 throw error #137.
   if (voidTags.has(tag)) return createElement(tag, { key, ...safeAttributes(element) })
-  return <>{/* React fragments preserve the server document's safe inline structure. */}{requireTag(tag, key, safeAttributes(element), children)}</>
+  return requireTag(tag, key, safeAttributes(element), children)
 }
 
 function requireTag(tag: string, key: string, attributes: Record<string, string>, children: ReactNode[]): ReactNode {

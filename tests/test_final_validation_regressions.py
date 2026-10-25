@@ -166,6 +166,66 @@ def test_delete_verified_wording_variant_is_not_proven_absent():
     assert proof.artifact_status == 'RESIDUAL_OLD_TEXT'
 
 
+@pytest.mark.parametrize('text', [
+    '本基金对持续持有期少于 7 日的投资者收取 1.50%的赎回费，并将上述赎回费全额计入基金财产。',
+    '对于持续持有期少于 7 日的投资者收取不低于 1.5%的赎回费，并将上述赎回费全额计入基金财产。',
+])
+def test_g13_source_owned_wording_variant_is_deleted_without_compose(tmp_path, text):
+    """Spacing and the optional ``不低于`` wording do not require model compose."""
+    from docx import Document
+    from fundlex.docx import inspect_docx
+    from fundlex.recall import Target, plan_target
+    from test_recall_core import _facts
+
+    source = tmp_path / 'source.docx'
+    document = Document()
+    document.add_paragraph('前置条款。' + text)
+    document.save(source)
+    inspection = inspect_docx(source, full=True)
+    rule = {'rule_id': 'G13', 'operations': [{
+        'operation_id': 'G13:0', 'op': 'delete',
+        'old_text': ('本基金对持续持有期少于7日的投资者收取不低于1.50%的赎回费，'
+                     '并将上述赎回费全额计入基金财产。'),
+        'condition': {'kind': 'none'},
+    }]}
+    target = Target('T13', 'G13', 'p0', text, 'needs_edit', 'source',
+                    start=len('前置条款。'), end=len('前置条款。') + len(text),
+                    resolution='resolved', operations=('G13:0',))
+    edit = plan_target(rule, target, inspection, _facts(), None, compose_budget=[0])
+    assert edit is not None
+    assert edit.replacement == ''
+    assert edit.content_source == 'short_holding_delete'
+
+
+def test_g13_split_source_owned_tail_is_deleted_without_borrowing_prefix(tmp_path):
+    from docx import Document
+    from fundlex.docx import inspect_docx
+    from fundlex.recall import Target, plan_target
+    from test_recall_core import _facts
+
+    first = '赎回费用由持有人承担。其中，对持续持有期少于'
+    tail = '7 日的投资者收取不低于 1.5%的赎回费，并全额计入基金财产。 '
+    source = tmp_path / 'source.docx'
+    document = Document()
+    document.add_paragraph(first)
+    document.add_paragraph(tail)
+    document.save(source)
+    inspection = inspect_docx(source, full=True)
+    rule = {'rule_id': 'G13', 'operations': [{
+        'operation_id': 'G13:0', 'op': 'delete',
+        'old_text': ('本基金对持续持有期少于7日的投资者收取不低于1.50%的赎回费，'
+                     '并将上述赎回费全额计入基金财产。'),
+        'condition': {'kind': 'none'},
+    }]}
+    target = Target('T13', 'G13', 'p1', tail, 'needs_edit', 'source',
+                    start=0, end=len(tail), resolution='resolved',
+                    operations=('G13:0',))
+    edit = plan_target(rule, target, inspection, _facts(), None, compose_budget=[0])
+    assert edit is not None and edit.replacement == ''
+    assert edit.end == len(tail.rstrip())
+    assert inspection.by_location('p0').text == first
+
+
 @pytest.mark.parametrize('unit_verdict', ['PASS', 'FAIL'])
 def test_merged_delete_requires_own_unit_proof_even_when_plan_matches(unit_verdict):
     """A sibling insertion never upgrades a failed delete authorization (FL-D224)."""
@@ -293,6 +353,46 @@ def test_complete_class_set_accepts_equivalent_display_names(names):
     assert verify_class_set(Inspection(quote), classes, quote)['set_complete_verified']
     classes.append(SimpleNamespace(name='E类', current=True))
     assert not verify_class_set(Inspection(quote), classes, quote)['set_complete_verified']
+
+
+def test_class_set_quote_can_cross_adjacent_docx_paragraphs_but_not_skip_one():
+    from fundlex.fact_evidence import verify_class_set
+
+    first = '本基金根据申购费用、销售服务费收取方式的不同，将基金份额分为不同的类别。'
+    second = 'A 类份额：投资人申购时收取申购费用，但不从本类别基金资产中计提销售服务费。'
+    third = 'C 类份额：从本类别基金资产中计提销售服务费而不收取申购费用。'
+    classes = [SimpleNamespace(name='A类份额', current=True),
+               SimpleNamespace(name='C类份额', current=True)]
+    inspection = SimpleNamespace(paragraphs=[
+        SimpleNamespace(location='p0', text=first),
+        SimpleNamespace(location='p1', text=second),
+        SimpleNamespace(location='p2', text=third),
+    ])
+    quote = first + second + third
+    assert verify_class_set(inspection, classes, quote)['set_complete_verified']
+
+    skipped = first + third
+    result = verify_class_set(inspection, classes, skipped)
+    assert result['quote_verified'] is False
+    assert result['set_complete_verified'] is False
+
+
+def test_class_set_cross_paragraph_prefix_cannot_hide_extra_class():
+    from fundlex.fact_evidence import verify_class_set
+
+    first = '本基金将基金份额分为不同的类别。'
+    second = 'A 类份额：收取申购费用。C 类份额：计提销售服务费。D 类份额：收取申购费用。'
+    classes = [SimpleNamespace(name='A类份额', current=True),
+               SimpleNamespace(name='C类份额', current=True),
+               SimpleNamespace(name='D类份额', current=True)]
+    inspection = SimpleNamespace(paragraphs=[
+        SimpleNamespace(location='p0', text=first),
+        SimpleNamespace(location='p1', text=second),
+    ])
+    prefix = first + 'A 类份额：收取申购费用。C 类份额：计提销售服务费。'
+    result = verify_class_set(inspection, classes, prefix)
+    assert result['quote_verified'] is True
+    assert result['set_complete_verified'] is False
 
 
 def test_audit_missed_second_occurrence_is_not_hidden_by_same_operation(tmp_path):
@@ -1362,6 +1462,12 @@ def test_post_proof_target_reconciliation_removes_stale_candidate():
     changed = _reconcile_candidate_targets(
         [target], {"ledger": [{"target_id": "T3001", "status": "not_planned"}]},
         {"obligations": {"G12:B1:O1": proof}}, ledger)
+    assert changed == 0 and not target.out_of_scope
+
+    target.composite = ("p221:0:5",)
+    changed = _reconcile_candidate_targets(
+        [target], {"ledger": [{"target_id": "T3001", "status": "not_planned"}]},
+        {"obligations": {"G12:B1:O1": proof}}, ledger)
     assert changed == 1 and target.out_of_scope
     assert "POST_PROOF_SUPERSEDED" in target.reason
 
@@ -1618,6 +1724,46 @@ def test_satisfied_target_with_false_branch_is_not_auditable(tmp_path):
     assign_target_operations([target], {"G20": rule}, inspection, facts)
     assert target.out_of_scope is True
     assert "TARGET_OPERATION_NOT_APPLICABLE" in target.reason
+
+
+def test_g21_noop_target_leaves_sibling_g22_auditable(tmp_path):
+    """A fixed-fee multi-class G21 noop exits target audit without hiding G22."""
+    from dataclasses import replace
+    from docx import Document
+    from fundlex.docx import inspect_docx
+    from fundlex.recall import Target, assign_target_operations
+    from fundlex.recall_pipeline import _audit_issues, _target_identity
+    from test_recall_core import _facts
+
+    path = tmp_path / "g21-g22.docx"
+    text = "依据基金财产清算的分配方案，按基金份额持有人持有的基金份额比例进行分配。"
+    document = Document()
+    document.add_paragraph(text)
+    document.save(path)
+    inspection = inspect_docx(path, full=True)
+    g21 = {"rule_id": "G21", "operations": [{"operation_id": "G21:0", "op": "noop",
+        "text": text, "condition": {"kind": "compound", "value": [
+            {"kind": "is_floating_fee", "value": False},
+            {"kind": "class_count", "value": 1}]}}]}
+    g22 = {"rule_id": "G22", "operations": [{"operation_id": "G22:0", "op": "replace",
+        "old_text": "分配。", "new_text": "分配，并加上返还基金份额持有人的销售服务费（如有）。",
+        "condition": {"kind": "compound", "value": [
+            {"kind": "is_floating_fee", "value": False},
+            {"kind": "has_service_fee", "value": True},
+            {"kind": "class_count", "value": 2}]}}]}
+    facts = _facts()
+    noop = Target("noop", "G21", "p0", text, "satisfied", "certified noop",
+                  operations=("G21:0",))
+    sibling = Target("sibling", "G22", "p0", "分配。", "needs_edit", "sibling",
+                     start=text.index("分配"), end=len(text), resolution="resolved",
+                     operations=("G22:0",))
+    assign_target_operations([noop, sibling], {"G21": g21, "G22": g22}, inspection, facts)
+    assert noop.out_of_scope is True
+    assert "TARGET_OPERATION_NOT_APPLICABLE" in noop.reason
+    state = {"results": {_target_identity(sibling): {
+        "rule_id": "G22", "verdict": "completed", "artifact_proven": True,
+        "evidence_verified": True}}, "missed": {}}
+    assert _audit_issues(state, [noop, sibling]) == []
 
 
 def test_g18_reworded_fee_difference_proves_already_satisfied(tmp_path):

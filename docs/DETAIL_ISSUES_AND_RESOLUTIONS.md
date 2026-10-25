@@ -10,7 +10,34 @@
 - 状态：待分析、待确认、待实现、待验证、阻塞、已解决。是否获用户确认单独写明。
 - 条目字段：发现日期、问题与影响、证据、处理方法、状态与验证、下一步、变更记录。
 - 同一问题更新原条目；重大结论变化注明日期和原因，不覆盖历史。
+
+## FL-D244 Frontend V2 统一会话失效与 Review/任务状态边界
+
+- 发现日期：2026-10-25。
+- 问题与影响：共享请求已把 HTTP 401 转成错误，但上传 XHR、下载和 mutation 没有统一清理认证、请求缓存和 workspace 的事件；Review 决策刷新丢失，pending 时生成按钮仍可点击；移动端正文/修订面板定位不会双向切换；任务详情从当前分页合同猜测 Worker 阶段，ZIP 按任务 completed 状态禁用。
+- 证据：Frontend V2 Round 1 审计；`frontend/src/api/client.ts`、`frontend/src/pages/Review/ReviewPage.tsx`、`frontend/src/components/document/SplitPane.tsx`、`frontend/src/pages/TaskDetail/index.tsx`；本轮 `npm run typecheck`、`npm run lint`、`npm run build` 和 `tests/test_tasks_api.py` 通过。
+- 处理方法：401 在 request/text/download/upload 共享错误解析路径中发出 `fundlex:session-expired`，auth 清 session，已有 auth 事件清 query，workspace 清选中对象；Review draft 使用 user/task/document/revision fingerprint 绑定，pending 直接禁用生成并保留服务端 fail-closed gate；SplitPane 接受受控面板并由两侧定位回调切换；任务摘要提供跨全部合同聚合的 phase 和 downloadable artifact count，CSV 复用当前 tab/status 参数，ZIP 以可下载 artifact count 为门禁。
+- 状态与验证：待验证；代码已实施，当前静态检查和任务 API 回归通过，浏览器 401、Review 刷新/旧 payload 失效、移动端双向定位以及真实 Worker/DOCX 交付尚未验证。Full-Stack Test Environment 仍按现有记录阻塞。
+- 下一步：补充前端单元/组件/浏览器回归，执行 390px Review 流程；随后在真实测试环境验证 Worker/model/DOCX 交付。
+- 变更记录：2026-10-25 新增，保留 Round 1 发现和未验证边界。
+
+## FL-D245 React server state 自研缓存缺少统一失效语义
+
+- 发现日期：2026-10-25。
+- 问题与影响：React V2 原先使用自研 Map/in-flight cache，query key、轮询、清缓存和失效语义分散；Review、任务轮询和登录切换容易出现旧 server state。该问题与 FL-D244 的业务边界修复相互关联，但独立记录架构迁移。
+- 证据：迁移前 `frontend/src/api/hooks.ts` 的 Map cache；迁移后 `frontend/src/api/queryClient.ts`、`frontend/src/main.tsx`、`frontend/package.json`；`npm run typecheck`、`npm run lint`、`npm run build`、7 项 React 浏览器测试和 `tests/test_tasks_api.py` 通过。
+- 处理方法：安装 TanStack Query 5，使用共享 QueryClient、结构化 query keys、`refetchInterval` 轮询和关闭自动重试；auth-cleared、auth-changed、session-expired 清理 QueryClient；保留页面既有 query state 接口并映射现有 prefix invalidation 调用。
+- 状态与验证：待验证；自研 cache 已移除，mutation wrapper 已统一封装并接入主要写操作，静态/浏览器隔离测试通过；专门 mutation/401 组件证据、真实 Worker/model 任务和 Full-Stack Test Environment 尚未验证。
+- 下一步：补专门 mutation/401/Review payload 组件与浏览器回归，随后在真实测试环境验证普通任务与 Compare 交付链路。
+- 变更记录：2026-10-25 新增；不把 7 项壳层浏览器测试写成真实业务交付。
 - 原件段落编号 `p` 为本次阅读提取器从0开始的序号，非Word页码、非应用内部地址。
+
+### FL-D245 状态更新（2026-10-25）
+
+- 变化：TanStack Query mutation wrappers 已实现并接入任务上传/封存/暂停恢复、Review 选择版生成、指引启用/上传/解析和 Compare 创建/上传/封存；Compare 已迁移到 React `/compare` 路由，并由 FastAPI 深链入口返回 React 应用。
+- 验证：`npm run typecheck`、`npm run lint`、`npm run build` 通过；React 浏览器套件 7 passed；Compare/认证/任务/指引 API 回归 39 passed；`git diff --check` 通过。
+- 当前状态：待验证。仍缺 dedicated mutation/401/Review payload 组件证据、真实 Compare Worker 端到端证据，以及 Full-Stack Test Environment 的普通 Worker/model/DOCX 交付验收。上述测试不改变当前真实交付阻塞状态。
+- 下一步：补充前端组件/可访问性/390px 专项回归；随后在同一真实测试环境执行 Compare 和普通合同完整用户路径。
 
 ## FL-D001 长合同规模与页数元数据失真
 
@@ -3301,7 +3328,141 @@
 ## FL-D243 生产 API 端口与历史隔离评测端口不同（2026-10-25）
 
 - 问题与影响：本机生产 `fundlex-recall-api.service` 监听 `127.0.0.1:8010`；历史真实评测使用过 `8013` 等隔离端口。若沿用旧评测端口做当前服务探测，会得到连接失败并误判 API 未运行，或把隔离评测入口当成正式服务入口。
-- 证据：`systemctl status fundlex-recall-api fundlex-recall-worker` 显示 API/Worker 均 active；systemd 单元 `/etc/systemd/system/fundlex-recall-api.service` 的 `ExecStart` 明确为 `--host 127.0.0.1 --port 8010`；`ss -ltnp` 显示 8010 正在监听、8013 未监听。只读验证 `GET http://127.0.0.1:8010/api/capabilities` 返回 200，未认证 `GET /api/health` 返回 401，符合当前身份门禁；本次没有修改服务或配置。
-- 处理方法：生产服务验证以 systemd 单元和 8010 为准；隔离评测脚本必须显式使用其批次登记的端口和数据目录，不能把 8013 的历史默认值写入生产健康结论。健康接口的未认证 401 要结合登录态验证，不能单独解释为服务失败。
-- 状态与验证：**已登记并验证，当前无生产故障证据**。API/Worker active、8010 监听和 capabilities 200 均已核对；8013 连接失败仅说明该历史隔离端口当前未启动。未新增模型调用，未改变部署文件。
+- 证据：`systemctl status fundlex-recall-api fundlex-recall-worker` 显示生产 API/Worker 均 active；systemd 单元 `/etc/systemd/system/fundlex-recall-api.service` 的 `ExecStart` 明确为 `--host 127.0.0.1 --port 8010`；`ss -ltnp` 显示 8010 正在监听。当前只读核验中 8010 与 8013 的 `/api/capabilities` 均返回 200，但 8013 由独立 `fundlex-test-api.service`（工作目录 `/opt/fundlex-test`）提供，属于隔离测试服务，不是生产 API；本次没有修改服务或配置。
+- 处理方法：生产服务验证以 systemd 单元和 8010 为准；隔离评测脚本必须显式使用其批次登记的端口、服务和数据目录，不能把 8013 的隔离服务响应写入生产健康结论。健康接口的未认证 401 要结合登录态验证，不能单独解释为服务失败。
+- 状态与验证：**已登记并验证，当前无生产故障证据**。API/Worker active、8010 监听和 capabilities 200 均已核对；8013 当前是隔离测试服务，不能作为生产 API 证据。未新增模型调用，未改变部署文件。
 - 下一步：后续真实工作台验收先确认 systemd/API 实际端口，再走登录、上传、Worker/model 和授权下载链路；将端口、认证状态和验证时间写入验收证据。
+
+## FL-D246 `project_unresolved()` 诊断投影丢失全局 coverage 缺口类型（2026-10-25）
+
+- 问题与影响：Ledger 成为唯一完成来源后，绑定 Claim Replay/obligation 证据应折叠到 canonical obligation 行；但没有 operation/site 身份的运行级 coverage 缺口（例如 `SWEEP_CHUNK_LIMIT`）不能绑定到某个 obligation。此前统一按未绑定证据转换为 `orphan_evidence`，导致报告丢失 `kind="coverage"`，用户和运维无法区分资源覆盖缺口与归属异常。
+- 证据：`tests/test_recall_pipeline.py::test_sweep_chunk_limit_recorded_as_coverage_gap` 在修复前失败，报告只返回 `orphan_evidence`；同轮 `test_audit_failure_persists_incomplete_working_pair` 与 `test_tampered_plan_not_generated` 也用于确认绑定的高层 audit/plan 诊断仍需保留。修复后该三项为 **3 passed**，定向后端回归为 **286 passed**，完整 `tests` 为 **1467 passed / 47 skipped / 2 warnings / 289.47s**。
+- 处理方法：`project_unresolved()` 仅将带 operation、obligation、target 或 rule+location 身份但无法绑定的证据转换为 `orphan_evidence`；无身份且原本为 `coverage` 的运行级诊断保留其 kind，并继续作为阻塞证据。绑定 Claim Replay/obligation 仍折叠到 Ledger 行，高层 audit、target、sweep、coverage 诊断保留。
+- 状态与验证：**已解决，当前源码已实施并验证**。`compileall`、`git diff --check`、三项回归、286 项定向后端回归和完整测试均通过。完整测试的两个既有 warning 为 Starlette/httpx 弃用提示及测试构造的重复 DOCX ZIP 名称，不是本修复失败。
+- 下一步：以当前源码重新生成精确测试 manifest 和候选 snapshot；由于当前工作区 `fundlex/api.py`、`fundlex/tasks.py` 与生产部署目录字节不一致，候选快照不能写成已发布版本。20 份开发集、发布和最终普通工作台 E2E 仍按 FL-D240–FL-D243 保持阻断。
+- 变更记录：2026-10-25 新增；保留三项回归失败→修复→定向及完整回归通过链路。
+
+## FL-D247 前端依赖安装与测试并发会产生无效缺失模块结果（2026-10-25）
+
+- 问题与影响：前端 `npm ci` 会重建 `node_modules`。若与 Vitest、TypeScript 或 Vite 构建并发运行，测试进程可能在安装中途读取到不完整依赖树，报告 `debug/index.js` 或 TypeScript `lib.es2023.d.ts` 缺失。这会把环境操作竞态误报为代码回归，也会污染本轮验收证据。
+- 证据：本轮并行执行 `npm ci --ignore-scripts --no-audit --no-fund` 与 `npm test`/`npm run typecheck` 时，Vitest 报 `Cannot find package .../node_modules/debug/index.js`，TypeScript 报 `lib.es2023.d.ts` 不存在；随后安装完成后串行重跑，Vitest 4 文件/9 项、typecheck、lint、build 全部通过。
+- 处理方法：依赖安装完成后再开始测试、类型检查和构建；不采纳安装期间产生的失败作为代码证据。锁文件继续由 `npm ci` 校验。
+- 状态与验证：**已解决（验证范围：2026-10-25 当前工作区）**。串行 `npm ci --ignore-scripts --no-audit --no-fund` 成功；其后前端 4 个 Vitest 文件/9 项、typecheck、lint、build、浏览器 7 项和后端聚焦 39 项均通过。
+- 下一步：持续集成或交接脚本按串行安装→前端检查→浏览器/API 回归执行；若再次出现缺失模块，先核对安装进程和 `node_modules` 完整性，再判断代码失败。
+- 变更记录：2026-10-25 新增；并行执行失败保留为环境竞态证据，不覆盖后续串行通过结果。
+
+## FL-D248 React Compare 结果页缺少多组结果顺序导航与独立浏览器证据（2026-10-25）
+
+- 问题与影响：旧版合同对比结果工具栏支持上一组/下一组；React Compare 迁移初版只提供差异内导航，用户在多组任务中必须返回分组卡片切换，且缺少结果视图在 390px 下的浏览器级验证。该缺口影响 Compare 功能等价审查和移动端结果阅读证据，但不改变后端差异计算。
+- 证据：`frontend/src/pages/Compare/ComparePage.tsx` 初版结果工具栏只有“上一处/下一处”；`tests/browser/test_frontend_v2.py` 初版仅验证 `/compare` 空壳路由。Compare 旧实现 `frontend/compare.js` 的 `bind()` 同时注册 `compare-prev-pair` 和 `compare-next-pair`。
+- 处理方法：React 结果工具栏加入当前组计数、上一组/下一组按钮，首尾组分别禁用；切组时重置移动阅读侧栏到原版。同步收紧帮助对话框关闭路径，避免关闭处理器和 `useEffect` 清理重复恢复焦点。浏览器测试使用独立 API 响应夹具验证两组结果切换、差异标记呈现、390px 双侧切换、横向尺寸约束及 page/console 错误。
+- 状态与验证：**已解决（React/浏览器范围）**。`npm test -- --reporter=dot` 为 4 文件/9 项通过；`npm run typecheck`、`npm run lint`、`npm run build`、`git diff --check` 通过；`FUNDLEX_BROWSER_TESTS=1 .venv/bin/python -m pytest tests/browser/test_frontend_v2.py -q` 为 **8 passed**；`tests/test_compare_api.py`、`tests/test_compare_auth.py`、`tests/test_compare_worker.py` 为 **17 passed**。本条浏览器测试使用 API 夹具，不能证明真实 Compare Worker、真实模型或正式合同交付。
+- 下一步：取得测试环境和预算后，在同一真实用户路径执行 Compare 多组 DOCX 上传→seal→持久 Compare Worker→结果页→下载报告，并将实际产物和报告核验结果登记；普通合同 D01–D20 门禁仍按 FL-D240–FL-D243 保持阻塞。
+- 变更记录：2026-10-25 新增；初次浏览器测试出现一次结果工具栏异步渲染等待超时，改为等待“下一组”可见后重跑，完整 8 项通过。该一次性测试竞态不作为产品失败结论。
+
+## FL-D249 React V2 前端候选受控发布与生产静态资源核验（2026-10-25）
+
+- 发现日期：2026-10-25。
+- 问题与影响：React V2 候选在本地构建完成但未发布时，公网入口仍引用旧静态资源；若直接覆盖生产目录或重启整套服务，可能把未完成的引擎 dirty 改动混入发布，或丢失回滚依据。
+- 证据：本次构建生成 `frontend/dist/index.html`、`assets/index-DYLFV7Bw.js`、`assets/index-BdkF_0-u.css`；候选与生产 SHA-256 逐文件一致，证据为 `/tmp/opencode/fundlex-frontend-publish-20261025-074321/deployment-evidence.json`。生产备份为 `/tmp/opencode/fundlex-frontend-publish-20261025-074321/deployment-dist-before.tgz`。发布后 API、Recall Worker、Compare Worker 均 active，Recall Worker PID 保持 `3107909`，公网首页 HTTP 200。
+- 处理方法：只构建并同步 `frontend/dist`，发布前打包生产 `dist`，只重启 `fundlex-recall-api.service`；保留现有 Recall Worker 和引擎生产字节，不通过整仓发布器覆盖引擎候选。
+- 状态与验证：**已解决（前端发布范围）**。生产静态文件、候选文件和公网资产 HTTP 200/字节哈希已核对；API/Worker 服务状态已核对。该条不等于召回引擎通过 D01–D20 或普通合同完整交付。
+- 下一步：保留回滚备份；普通合同仍需沿真实登录、上传、Worker/model、Review、选择版和授权下载路径独立验收。
+- 变更记录：2026-10-25 新增并完成受控发布验证。
+
+## FL-D252 生产工作台视觉与响应式审查发现移动端信息密度问题（2026-10-25）
+
+- 发现日期：2026-10-25。
+- 问题与影响：本轮对生产 `https://fundlex.club` 以 1440×900、768×1024 和 390×844 截图审查后，桌面端主要页面层级、卡片、表单和橙色状态体系一致；但移动端仍有几处桌面信息结构被压缩的问题。桌面顶栏的“消息”和“退出登录”按钮实际存在但继承了白色文字，在白色顶栏上几乎不可见，用户无法可靠发现这两个入口。指引配置的“可用版本”表格把长文件名压成极窄列，文件名按两三个字频繁换行；Compare 任务表的任务名和“结果”也逐字换行，阅读和扫描成本高。设置页运行能力使用原始内部值（如 `password`、`recall_first`、`formal`），且移动端标签和值的纵向排版关系不清晰。指引上传控件还显示浏览器原生英文 `Choose File / No file chosen`，与中文界面不一致。
+- 证据：本次审查截图 `/tmp/opencode/fundlex-visual-audit-20261025/11-guides-mobile.png`、`13-settings-mobile.png`、`33-compare-mobile-overview.png`、`10-guides-desktop.png`；采集数据 `/tmp/opencode/fundlex-visual-audit-20261025/audit-data.json`。截图均在当前公网生产资产上重新生成，使用临时审查会话，审查结束已撤销会话；本轮未发起模型调用。
+- 处理方法：修正顶栏按钮在浅色主题下的文字颜色并补充可见状态；移动端将长文件/任务数据改为卡片或定义明确的主次字段，长文件名允许自然截断并提供完整值查看；Compare 任务移动端优先显示任务名、状态、结果和查看操作，隐藏或折叠低优先级列；设置页将能力值映射为用户可理解的中文文案，并使用稳定的标签—值两列/分组布局；文件选择控件统一为中文包装控件或补充中文选择状态。
+- 状态与验证：**待实现**。这是视觉和信息架构审查结论，尚未修改或发布代码；现有页面截图和交互采集未发现 page error 或 console error，但不代表已通过无障碍合规检查。
+- 下一步：优先修复移动端指引表格和 Compare 任务摘要，再调整设置页能力展示和指引上传控件；以 390px、768px、1440px 重拍并核对长文件名、状态、操作入口和横向溢出。
+- 变更记录：2026-10-25 新增；来源为生产页面多模态截图审查，不与此前移动导航宽度修复混为同一问题。
+- 补充验证（2026-10-25）：`followup-data.json` 确认消息/退出登录 computed color 和顶栏背景同为 `rgb(255,255,255)`（对比度 1:1）；`app.css:6` 的 `.topbar-actions .ui-button--quiet` 特异性高于后续通用 quiet 规则。统计卡首行第一张 y=179、其余 y=193，落差 14px，与 `.ui-card + .ui-card { margin-top:14px }` 作用于 grid 子项相符，应改为只作用于纵向卡片容器或重置 grid 子项 margin。390px 任务表起点 y≈1241，表格容器宽 324px、内容宽 667px；应把任务/异常待办提前到关键统计之后，并为必要的横向滚动提供提示。导航当前只有前五项可见，设置项在横向滚动区中，需要更明确的入口或滚动提示。以上均尚未修复。
+
+## FL-D253 帮助弹窗没有限制键盘焦点在对话框内（2026-10-25）
+
+- 发现日期：2026-10-25。
+- 问题与影响：帮助中心打开后，关闭按钮获得初始焦点，按 `Shift+Tab` 即可把焦点移到背景页面的“帮助中心”触发按钮；焦点可以离开 `role="dialog" aria-modal="true"` 的弹窗。键盘用户可能在弹窗尚未关闭时操作背景控件，且视觉上看不到焦点所在位置。
+- 证据：交互采集记录 `/tmp/opencode/fundlex-visual-audit-20261025/audit-data.json` 的 `help-dialog-shift-tab`：`insideDialog=false`，焦点落在 footer 的帮助中心按钮；`help-dialog-escape` 显示 Escape 可关闭且焦点恢复。相关截图为 `/tmp/opencode/fundlex-visual-audit-20261025/24-help-mobile.png`。实现位置为 `frontend/src/components/layout/AppShell.tsx:61-78,107`，当前 effect 只处理 Escape 和初始焦点，没有 Tab/Shift+Tab 循环。
+- 处理方法：弹窗打开时收集弹窗内可聚焦元素，在 Tab 到首/尾元素时循环焦点；保留 Escape 关闭和关闭后恢复打开前焦点；必要时将背景内容设置为 inert，避免读屏和键盘同时访问背景。
+- 状态与验证：**待实现**。Escape、关闭后的焦点恢复和截图已验证；焦点循环、读屏阅读顺序和背景 inert 尚未验证。不能据此宣称无障碍合规。
+- 下一步：补充 Shift+Tab、Tab、多次循环、关闭恢复和屏幕阅读器语义测试，覆盖桌面与 390px 弹窗。
+- 变更记录：2026-10-25 新增；由本轮生产键盘交互审查确认。
+
+## FL-D254 合同详情例外列表出现重复事项，削弱人工核对信任（2026-10-25）
+
+- 发现日期：2026-10-25。
+- 问题与影响：合同详情的“例外与人工核对 · 6 项”连续显示六条相同标题“基金费用与税收-3、基金销售服务费（有多个份额类别时适用）”。如果它们确实对应不同位置，界面没有展示位置、证据或编号来区分；如果是同一例外重复投影，则会夸大事项数量。用户难以判断需要核对几件独立问题和每件问题对应的原文位置。
+- 证据：生产截图 `/tmp/opencode/fundlex-visual-audit-20261025/18-document-exceptions-desktop.png`、`20-document-downloads-desktop.png`；实现 `frontend/src/pages/DocumentDetail/DocumentDetailPage.tsx:84-90` 当前直接拼接 `report.exceptions` 与 `report.user_summary.issues`，未显示稳定 ID、位置，也未对重复项做可解释的归并。
+- 处理方法：先确认报告中 `exceptions` 与 `user_summary.issues` 的数据契约，区分独立例外与摘要投影；前端显示规则/位置/证据摘要和稳定编号，只有确认语义完全相同的重复项才归并，并显示“涉及 N 个位置”。概览中的“仍需核对”与例外数量需要提供可解释的统计关系。
+- 状态与验证：**待分析**。截图确认了重复显示和缺少区分字段，但尚未读取该任务原始报告逐项确认是后端重复还是前端双来源合并造成；不能直接把 6 项判定为引擎重复。
+- 下一步：读取该文档报告 JSON 的 `exceptions`、`user_summary.issues` 和位置字段，建立逐项对账；确认数据原因后分别修复报告投影或前端呈现，并重拍详情页。
+- 变更记录：2026-10-25 新增；保留“视觉已确认、数据根因未确认”的边界。
+- 补充验证（2026-10-25）：已读取并保存当前生产报告 `/tmp/opencode/fundlex-visual-audit-20261025/document-report.json`；`exceptions` 缺省为空，`user_summary.issues` 与 `unresolved` 均为 6 条，排除本样本的双来源拼接原因。六条同属 G15，但有 obligation、orphan evidence、final omission 等不同诊断来源，部分带 p807/p1263/p1262/p806，另外两条无位置；当前前端折叠标题均相同且未展示位置或诊断来源，造成六行看起来重复。**状态更新：前端区分信息缺失已确认、待实现；诊断是否应进一步业务归并仍待分析**。同时概览“仍需核对 26”来自 target 状态，例外“6 项”来自 user summary，应明确区分目标盘点与最终交付核验口径，避免用户误认为数字冲突；不能简单将其中一数覆盖另一数。
+
+## FL-D255 Compare 移动端覆盖警告的长标识缺少断词处理（2026-10-25）
+
+- 发现日期：2026-10-25。
+- 问题与影响：Compare 结果页的覆盖警告直接展示多个 `UNSUPPORTED_VISIBLE_CONTENT:...` 标识。390px 截图中长标识在警告框内连续延伸并接近/超出可读区域，用户难以阅读完整警告，也不容易分辨不同未覆盖内容。
+- 证据：生产截图 `/tmp/opencode/fundlex-visual-audit-20261025/35-compare-mobile-right.png`、`40-compare-mobile-reader-controls.png`；补充数据 `/tmp/opencode/fundlex-visual-audit-20261025/followup-data.json` 记录警告容器宽度 330px、内容 scrollWidth 444px、`overflowWrap=normal`。样式 `frontend/src/styles/app.css:182` 的 `.compare-coverage.is-incomplete` 设置了 `line-height`，但没有 `overflow-wrap:anywhere` 或移动端警告分组规则；交互记录确认移动端左右面板切换成功，页面和控制台错误为 0。
+- 处理方法：将覆盖项按列表或标签分组显示，长标识使用 `overflow-wrap:anywhere`，必要时显示用户文案并把内部代码放到可展开详情；保证警告在 390px 内完整换行，保留“不可据此确认全文无差异”的主提示。
+- 状态与验证：**待实现**。当前仅确认移动端可读性风险，尚未修改 CSS 或重新验证长警告、滚动和读屏顺序。
+- 下一步：补充 390px 和 320px 截图，验证警告框不产生横向溢出，逐项内容仍可区分。
+- 变更记录：2026-10-25 新增；来源为生产 Compare 结果页截图审查。
+
+## FL-D256 Compare 差异类型视觉颜色在生产结果中未按类型区分（2026-10-25）
+
+- 发现日期：2026-10-25。
+- 问题与影响：Compare 阅读器中修改、新增、删除三类差异都呈亮黄色。用户无法仅凭颜色区分差异类型，必须同时阅读文字或差异清单；在 2,772 处差异的长文阅读中，视觉定位和快速扫描能力明显下降。
+- 证据：生产截图 `/tmp/opencode/fundlex-visual-audit-20261025/31-compare-desktop-reader.png`、`41-compare-mobile-reader-original.png`、`42-compare-mobile-reader-comparison.png`；补充数据 `/tmp/opencode/fundlex-visual-audit-20261025/followup-data.json` 中前 8 个 `mark[data-diff-id]` 的 computed background 均为 `rgb(255, 255, 0)`，class 实际只有 `compare-diff`（活动项另有 `is-active`），尽管 `frontend/src/styles/app.css:200-203` 为 `.compare-diff.modify`、`.compare-diff.insert`、`.compare-diff.delete` 定义了不同背景色。源码根因已找到：`frontend/src/pages/Compare/ComparePage.tsx:55` 只识别 `compare-diff-(modify|insert|delete)`，而真实后端 `fundlex/compare/render.py:111` 输出 `class="compare-diff modify/insert/delete"`；fixture 使用了带连字符的类，未覆盖实际后端格式。
+- 处理方法：先在当前生产构建中确认差异标记的最终 class、样式加载顺序和 computed style；确保修改/新增/删除具有足够对比且色彩盲用户也能区分的颜色或图标/文字标识，活动项保留独立焦点样式；移动端差异清单继续提供类型文字作为非颜色冗余信息。
+- 状态与验证：**待实现，根因已定位**。生产 DOM 和截图确认类型 class 丢失，源码确认前后端 class 格式不一致，最终回退为浏览器 `mark` 默认黄色；未修改或发布代码。应使用真实 renderer 输出验证，不能只沿用现有 fixture 格式。
+- 下一步：检查生产 CSS 资产中的 `.compare-diff` 规则和加载顺序，使用 modify/insert/delete 三个最小样例在桌面和 390px 重拍验证，并检查对比度与非颜色区分。
+- 变更记录：2026-10-25 新增；来源为补充生产 DOM 计算样式核验。
+- 相关阅读器优化建议：本样本一次渲染 2,772 个差异按钮，桌面差异列表高约 148,616px 且 overflow=visible；大量连接线和非固定工具栏增加长文阅读负担。建议把差异列表放进有限高度/分页或虚拟滚动区，并提供固定导航和当前差异摘要。这是可用性/规模建议，未测得性能故障，不作响应时间不合格结论。
+
+## FL-D250 React Compare 生产 Worker/DOCX 结果页与下载验收（2026-10-25）
+
+- 发现日期：2026-10-25。
+- 问题与影响：React Compare 的隔离 API 夹具和本地 Worker 测试不能证明生产登录、真实 DOCX 上传、持久 Compare Worker、结果阅读、移动端切换及授权报告下载已经闭环。
+- 证据：生产浏览器证据 `/tmp/opencode/compare-production-react-v2-e2e-20261025/report.json` 与下载文件 `/tmp/opencode/compare-production-react-v2-e2e-20261025/React Compare生产验收-20261025-差异报告.json`。真实公开合同为 `广发消费品精选混合型证券投资基金基金合同_20230708.docx` 与 `广发品质回报混合型证券投资基金基金合同_20230708.docx`；生产结果 2,772 处差异（modify 451、insert 1,238、delete 1,083），报告下载 3,189,696 bytes，SHA-256 `0f39d4d3655d773722dccaade57d9518fd2ed8f609d6ebf632f7433e85643bbc`。浏览器验证了差异导航、390px 左右面板切换和页面/控制台错误为 0。
+- 处理方法：沿 HTTPS 普通登录入口注册测试账号，进入 React `/compare`，上传左右公开 DOCX、封存，等待生产 Compare Worker，读取结果并下载报告；对覆盖不完整状态保留明确人工复核提示及 header/footer/drawing 等警告。
+- 状态与验证：**已验证（Compare 生产链路）；结果状态为 `incomplete`**。后端结果和前端下载内容均可读取，覆盖警告正确显示；`incomplete` 是当前结果的业务状态，不得解释为全文无差异或完整覆盖。
+- 下一步：继续保留普通合同 D01–D20 gate 阻断；如需 Compare 全文可交付，需先补齐或明确处理未支持结构，再另行验收。
+- 变更记录：2026-10-25 新增；当前 React V2 生产 Compare 证据已补齐。
+
+## FL-D251 普通合同 Review 选择版生成存在异步可观测窗口（2026-10-25）
+
+- 发现日期：2026-10-25。
+- 问题与影响：普通真实任务在 Review 页面批量接受 19 条修订并点击“生成选择版合同”后，界面可能先显示“正在生成选择版合同…”。验收脚本必须等待成功响应并轮询下载清单；在成功响应或明确错误出现前，不能证明 `selected_final` 已发布，也不能把生成请求受理当作选择版交付完成。
+- 证据：首次真实任务 `8e3767e727344ecbbebc76ee95ad2b20`、文档 `2acd8583cea340fca1da964914ab39aa` 的证据 `/tmp/opencode/fundlex-production-v2-e2e-20261025/e2e-pp7khckdz8q2/result.json` 显示 `selected_artifact_generation_attempted=true`、`selected_generation_status=正在生成选择版合同…`，随后 `artifact_count=4` 且 downloads 未出现 selected artifact。补测真实任务 `add3f5e6d5f049eeb305c1e4a1ce81d9`、文档 `186228a5c3d645f188083f87f2095e26` 已完成登录、当前指引、真实 Worker/model、Review 读取（19 条修订），但 `/tmp/opencode/fundlex-production-v2-e2e-selected-20261025/e2e-3lopn3fjl7yl/result.json` 只记录到 Review；点击生成后 60 秒内未观察到“已生成选择版合同”，脚本 fail-closed 退出，未下载 selected artifact。两次任务的 delivery 均不能据此变为 complete，普通合同仍有 G15 claim/coverage 未决。
+- 处理方法：保持服务端选择版生成的 fail-closed 行为；补充验收步骤，在生成响应后轮询文档/下载清单直到 `selected_final` 出现或明确返回错误，再核对 selected DOCX ZIP、实际修订、报告/来源哈希及授权下载。不能用按钮点击成功或短暂 status 文案代替产物存在。
+- 状态与验证：**待验证，补测未闭合**。普通合同真实登录、上传、持久 Worker/model、Review 展示已通过；首次任务的 working 产物和报告哈希已通过。补测在成功状态观察阶段超时，未形成 selected DOCX、selected hash 或 selected 下载授权的证据，因此不能宣称选择版生成成功或失败。
+- 下一步：保留两次真实任务及其失败时序证据；后续应捕获生成 mutation 的 HTTP 状态/错误正文，并在成功响应后轮询 `selected_final`，再核对 selected DOCX ZIP、实际修订、报告/来源哈希及授权下载。保持当前 G15 不完整状态，不扩大为 D01–D20 gate 通过。
+- 变更记录：2026-10-25 新增；首次验证的立即读取竞态已确认，第二次补测改为等待成功文案但在 60 秒内超时，仍未取得 selected artifact 证据。
+
+## FL-D257 G05 缺失替换分支被同站点删除分支错误覆盖（2026-10-25）
+
+- 问题与影响：G05 在有销售服务费时要求将“调低赎回费率”替换为“调低销售服务费率”（G05:0），同时独立删除“并报中国证监会备案”（G05:2）。当真实份额类别设置段落只包含前者的业务上下文、两项旧文字均不存在时，旧的 absent coverage 按段落把所有缺失旧文都视为已处理，导致 G05:0 被错误关闭；G05:0 没有源文本或新政策证明时不得执行替换，也不能借用 G05:2 的 absent 证明。
+- 证据：D19 原件 `/home/opencode/data/funds_word/广发聚源债券型证券投资基金（LOF）基金合同_20240920.docx` 的 p130 含份额类别设置和费率调整上下文，但不含“调低赎回费率”“调低销售服务费率”或“并报中国证监会备案”。历史真实报告和失败证据保留于 `/tmp/opencode/operation-validation-20261024/dev-21-full/D19/`；旧 `G05:0` target 为 `absent`，此前缺少可证明的替换站点。
+- 处理方法：`targets_for_open_rules()` 的 absent coverage 改为只读取 target 自身明确的 operation；replace 只有在同一 operation 的新文本已存在且旧文本不存在时才可关闭。G05 的删除 operation 不再使用文档级缺失直接关闭，`resolve_absent_site_targets()` 仅在同一份额类别设置业务站点形成 operation-specific 的 G05:2 absent clone，并保留 G05:0 原 target 的 OPEN/UNPROVEN 状态。
+- 状态与验证：**代码已实施并验证，尚未进行新真实 Worker/model 复测**。新增实际 DOCX 形态回归验证 G05:0 仍保持未证明、G05:2 生成独立 satisfied site；混合 operation target 拆分回归也通过，定向回归 141 passed，完整 `pytest tests` 为 **1476 passed / 48 skipped / 2 warnings**。snapshot-20 及历史 D19 报告不变。
+- 下一步：在预算和发布条件满足后，以含本修复的新冻结版本重新执行受影响 D19，逐 operation 核对 G05:0/G05:2 的 source site、Claim Replay、报告和实际 DOCX；G05:0 无授权源文本时保持未完成。
+
+## FL-D258 G16 支付段重复副本按字面复制导致不同 clause site 借权（2026-10-25）
+
+- 问题与影响：D20 p804 与 p1259 的支付段文字相同，但 p804 后接 p805/p806 的销售服务费用途条款，G16 的 append site 应落在 body clause end p806；p1259 是没有该 continuation 的独立 summary site。若先按支付段字面做 duplicate-copy，再做 clause-end 重绑定，会把 p804/p1259 机械视为同一 operation site，产生错误 clone、错误 append 位置或错误 site coverage。
+- 证据：D20 原件 `/home/opencode/data/funds_word/广发远见智选混合型证券投资基金基金合同_20230708.docx` 的 p804、p805、p806、p1259；p804 与 p1259 支付文本完全相同，实际 clause locations 为 `(p804,p805,p806)` 与 `(p1259,)`。历史 D20 真实报告、DOCX 和当前零 HTTP replay 保留于 `/tmp/opencode/operation-validation-20261024/dev-21-full/D20/` 及其对应 replay 文件。
+- 处理方法：在 pipeline 的每次 duplicate-copy closure 前先执行 `rebind_g16_clause_targets()`；`duplicate_copy_targets()` 对 G16 增加 clause-end identity guard，仅当源和候选都是各自物理 clause 的末端才允许复制。无法建立真实 DOCX 结构索引的轻量测试替身退回原 exact-copy 行为，避免改变既有调用契约。
+- 状态与验证：**代码已实施并验证，尚未进行新真实 Worker/model 复测**。实际 DOCX 回归确认 p804/p806 和 p1259 保持不同 operation site，不能互相机械克隆；定向回归 141 passed，完整 `pytest tests` 为 **1476 passed / 48 skipped / 2 warnings**。历史 D20 失败报告与产物没有被改写。
+- 下一步：预算和发布条件满足后，以新冻结版本重新执行 D20，逐站点核对 G15/G16/G17 operation attribution、G16 append 位置、Claim Replay、修订版和接受/拒绝等价；不能以相同支付段字面证明不同 clause site 等价。
+
+## FL-D259 G21 noop target 生命周期进入审计和 unresolved 投影（2026-10-25）
+
+- 问题与影响：G21 只在“非浮动管理费且仅一个份额类别”时要求不替换。对多类别固定管理费产品，G21 target 属于 no-op 资格证明；如果 satisfied target 继续作为普通 auditable target，G22 可以合法修改同一清算段落时，审计会把 G21 的 unchanged 状态误判为冲突，且 target 可能继续污染 Claim Replay/unresolved projection。
+- 证据：D20 相关清算段落同时存在 G21 noop 与 G22 同段替换边界；历史 D20 report 中 G21/G22 同段状态和旧 audit 误判保留在 `/tmp/opencode/operation-validation-20261024/dev-21-full/D20/`。此前仅归属阶段标记 no-op，后续审计仍可能重新接纳 satisfied target。
+- 处理方法：`assign_target_operations()` 对适用 noop 的 satisfied target 标记 `out_of_scope` 并保留 `TARGET_OPERATION_NOT_APPLICABLE` 原因；`targets_for_open_rules()` 保留其 operation coverage，但不把该 target 作为可编辑或可审计站点。G22 同段 target 继续独立规划、审计、Claim Replay 和 unresolved 投影。
+- 状态与验证：**代码已实施并验证，尚未进行新真实 Worker/model 复测**。新增同段 G21/G22 回归确认 G21 退出审计且 G22 不被隐藏；定向回归 141 passed，完整 `pytest tests` 为 **1476 passed / 48 skipped / 2 warnings**。未改写历史 report、labels、gold 或评测分母。
+- 下一步：新冻结版本真实复测 D20 时，独立核对 G21 no-op ledger proof、G22 实际修改、audit、Claim Replay 和最终 unresolved projection；G21 不适用时不能成为可编辑 obligation。

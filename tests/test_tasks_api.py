@@ -130,7 +130,7 @@ def test_results_four_dimensions_filtering_paging_and_summary(client):
                 ("failed", "not_generated", True, "QUALIFICATION_EVIDENCE_MISSING"), ("eligible", "incomplete", False, None)]
     for eligibility, delivery, failed, code in statuses:
         job = store.claim()
-        report = {"qualification_status": eligibility, "delivery_status": delivery, "actions": [
+        report = {"qualification_status": eligibility, "delivery_status": delivery, "windows": [{"rounds": [{"stage": "范围映射"}]}], "actions": [
             {"status": "failed", "failure_reason": "TARGET_SCOPE_UNRESOLVED", "candidates": [{"status": "failed", "reason": "RELEASE_GATE_CLOSED"}]}]}
         store.finish(job["id"], job["fencing_token"], report=report, artifacts={}, failed=failed, error_code=code)
     root = f"/api/tasks/{task}/documents"
@@ -146,6 +146,7 @@ def test_results_four_dimensions_filtering_paging_and_summary(client):
     state = client.get(f"/api/tasks/{task}", headers=ALICE).json()
     assert state["total"] == 5 and state["completed"] == 4 and state["failed"] == 1 and state["status"] == "uploading"
     assert state["delivery_counts"]["incomplete"] == 2
+    assert state["phase"] == "范围映射" and state["downloadable_count"] == 0
     report = client.get(f"/api/tasks/{task}/report", headers=ALICE).text
     assert "RELEASE_GATE_CLOSED" in report and "'failed': 4" in report
 

@@ -196,3 +196,64 @@ def test_g05_class_setup_without_filing_literal_becomes_absent_site():
     assert target.operations == ("G05:0",)
     assert target.out_of_scope is False
     assert target.quote == text
+
+
+def test_g05_absent_replace_does_not_borrow_g05_filing_proof():
+    """D19 p130 keeps G05:0 open while independently proving G05:2 absent."""
+    from fundlex.obligations import apply_facts, compile_obligations
+    from fundlex.recall import resolve_absent_site_targets
+    from test_operation_execution_closure import Facts
+
+    text = ("根据基金运作情况，基金管理人可在不损害已有基金份额持有人权益的情况下，"
+            "经与基金托管人协商，在履行适当程序后停止现有基金份额类别的销售、或者调整"
+            "现有基金份额类别的费率水平、或者增加新的基金份额类别等，调整前基金管理人"
+            "需及时公告。")
+    rule = {"rule_id": "G05", "operations": [
+        {"operation_id": "G05:0", "op": "replace", "old_text": "调低赎回费率",
+         "new_text": "调低销售服务费率",
+         "condition": {"kind": "has_service_fee", "value": True}},
+        {"operation_id": "G05:2", "op": "delete", "old_text": "并报中国证监会备案",
+         "condition": {"kind": "none"}},
+    ]}
+    target = Target("G05-source", "G05", "p0", text, "absent", "source absent",
+                    start=0, end=len(text), operations=("G05:0",), out_of_scope=True)
+    facts = Facts()
+    ledger = compile_obligations({"groups": [rule]})
+    apply_facts(ledger, facts)
+    targets = [target]
+    records = resolve_absent_site_targets(targets, {"G05": rule}, Inspection([text]), facts)
+
+    assert records == [{"target_id": "G05-source-ABSENT-G05-2", "rule_id": "G05",
+                        "operation_id": "G05:2", "location": "p0"}]
+    assert target.state == "absent"
+    assert target.operations == ("G05:0",)
+    clone = targets[1]
+    assert clone.state == "satisfied"
+    assert clone.operations == ("G05:2",)
+    assert "ALREADY_ABSENT_AT_CLASS_SETUP" in clone.reason
+    assert ledger.record("G05:0").applicability.status == "TRUE"
+
+
+def test_g05_mixed_target_is_split_before_absent_delete_proof():
+    """A broad G05 target cannot turn its replace sibling into satisfied."""
+    from fundlex.recall import resolve_absent_site_targets
+
+    text = ("基金管理人可以增加新的基金份额类别、调整现有基金份额类别的费率水平，"
+            "调整前基金管理人需及时公告。")
+    rule = {"rule_id": "G05", "operations": [
+        {"operation_id": "G05:0", "op": "replace", "old_text": "调低赎回费率",
+         "new_text": "调低销售服务费率", "condition": {"kind": "none"}},
+        {"operation_id": "G05:2", "op": "delete", "old_text": "并报中国证监会备案",
+         "condition": {"kind": "none"}},
+    ]}
+    target = Target("mixed", "G05", "p0", text, "absent", "broad inventory",
+                    start=0, end=len(text), operations=("G05:0", "G05:2"),
+                    out_of_scope=True)
+    targets = [target]
+    records = resolve_absent_site_targets(targets, {"G05": rule}, Inspection([text]))
+
+    assert records and target.state == "absent"
+    assert target.operations == ("G05:0", "G05:2")
+    assert len(targets) == 2
+    assert targets[1].operations == ("G05:2",)
+    assert targets[1].state == "satisfied"

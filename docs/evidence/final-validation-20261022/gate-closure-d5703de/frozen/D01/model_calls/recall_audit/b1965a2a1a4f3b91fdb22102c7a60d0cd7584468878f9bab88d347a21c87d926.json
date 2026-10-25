@@ -1,0 +1,131 @@
+{
+  "body": {
+    "schema_version": "fundlex-model-cassette-v1",
+    "request": {
+      "task_type": "recall_audit",
+      "prompt_version": "recall_audit_v1",
+      "configured_model": "deepseek-v4.1-flash",
+      "context_sha256": "7e9771db6fbcf2a9d931c1e370484724b2a98be3860f6bbee0d6b765ea67048f",
+      "request": {
+        "bounded_context": "[BEFORE]\n[p91] 基金份额类别：本基金将基金份额分为 A 类、C 类和 D 类三种不同的\n\n[AFTER]\n[p91] 基金份额类别：本基金将基金份额分为 A 类、C 类和 D 类三种不同的\n\n[REQUIREMENTS]\nGUIDE_RULES\n[G02] 释义-基金份额类别定义： | section_hint=释义\n  requirement: 根据产品实际设置的基金份额类别及各类别适用的收费规则，对原描述中的份额类别进行分组替换：将适用“收取认购、申购费用且不计提销售服务费”规则的“A类基金份额”替换为实际适用该规则的全部基金份额类别，将适用“不收取认购、申购费用且计提销售服务费”规则的“C类基金份额”替换为实际适用该规则的全部基金份额类别。\n  [G02:0] replace: A类基金份额 -> A类、B类基金份额\n  [G02:1] replace: C类基金份额 -> C类、D类基金份额\n\n[TARGET_LEDGER]\n[\n {\n  \"target_id\": \"R039\",\n  \"rule_id\": \"G02\",\n  \"location\": \"p91\",\n  \"state\": \"needs_edit\",\n  \"quote\": \"基金份额类别：本基金将基金份额分为 A 类、C 类和 D 类三种不同的\",\n  \"reason\": \"recovery_missing_operation:G02:0:candidates=1|locator:class_definition\",\n  \"plan_status\": \"unresolved\",\n  \"operation\": null,\n  \"replacement\": \"\"\n }\n]\n\n[OTHER_AUTHORIZED_EDITS]\n[]",
+        "instruction": "Read [BEFORE] (the original contract region), [AFTER] (the actual rewritten region taken from the produced file), [REQUIREMENTS] (the guide rules with their fixed policy text and the target ledger) and [OTHER_AUTHORIZED_EDITS] (changes other guide rules legitimately made in the same locations). Independently judge each target in the ledger: completed when the AFTER text satisfies the requirement with no lost content, incomplete when part of the requirement is missing, wrong when the AFTER text contradicts the requirement, drops required content, or adds policy the guide does not state. A rule whose slot classes are placeholders means the AFTER text must name the product's actual share classes that fall in that group: adding a real class the contract defines (for example including a D类 class in the group the guide wrote as A类) is correct instantiation, not an unauthorized addition, as long as [FACTS] lists that class in the group. Never report an OTHER_AUTHORIZED_EDITS change as an unauthorized addition. For every non-completed target also classify the root cause (failure_class) and, when known, the affected_fact or affected_obligation, so recovery can return to the correct business layer. A region shown as （该位置内容已删除） means the content was removed: for a deletion requirement that is completed, and for a replacement requirement judge it against the requirement and the ledger, not against the absence itself. Cite an exact contiguous evidence_quote from AFTER (or BEFORE when judging a loss) for every verdict. Also report missed_targets when you find a clause in AFTER that still needs editing but is absent from the ledger. Never trust the ledger over the actual text; never mark completed without reading AFTER.",
+        "response_schema": {
+          "type": "object",
+          "required": [
+            "results"
+          ],
+          "properties": {
+            "results": {
+              "type": "array",
+              "maxItems": 60,
+              "items": {
+                "type": "object",
+                "required": [
+                  "target_id",
+                  "verdict",
+                  "reason"
+                ],
+                "properties": {
+                  "target_id": {
+                    "type": "string"
+                  },
+                  "verdict": {
+                    "enum": [
+                      "completed",
+                      "incomplete",
+                      "wrong"
+                    ]
+                  },
+                  "reason": {
+                    "type": "string"
+                  },
+                  "evidence_quote": {
+                    "type": "string"
+                  },
+                  "failure_class": {
+                    "enum": [
+                      "FACT",
+                      "APPLICABILITY",
+                      "TARGET",
+                      "GENERATION",
+                      "EXECUTION",
+                      "VERIFICATION"
+                    ]
+                  },
+                  "affected_fact": {
+                    "type": "string"
+                  },
+                  "affected_obligation": {
+                    "type": "string"
+                  }
+                }
+              }
+            },
+            "missed_targets": {
+              "type": "array",
+              "maxItems": 20,
+              "items": {
+                "type": "object",
+                "required": [
+                  "rule_id",
+                  "location",
+                  "quote",
+                  "reason"
+                ],
+                "properties": {
+                  "rule_id": {
+                    "type": "string"
+                  },
+                  "location": {
+                    "type": "string"
+                  },
+                  "quote": {
+                    "type": "string"
+                  },
+                  "reason": {
+                    "type": "string"
+                  }
+                }
+              }
+            },
+            "notes": {
+              "type": "string"
+            }
+          }
+        },
+        "request_options": {
+          "thinking": {
+            "type": "disabled"
+          }
+        },
+        "max_completion_tokens": 8000
+      }
+    },
+    "response": {
+      "results": [
+        {
+          "target_id": "R039",
+          "verdict": "incomplete",
+          "reason": "The requirement G02:0 asks to replace 'A类基金份额' with the actual classes applying the front-end load/no service fee rule, which per the guide is 'A类、B类基金份额'. The AFTER text still lists only 'A 类、C 类和 D 类' and does not include B类, so the required grouping replacement was not performed.",
+          "evidence_quote": "基金份额类别：本基金将基金份额分为 A 类、C 类和 D 类三种不同的",
+          "failure_class": "GENERATION",
+          "affected_fact": "基金份额类别分组：A类、B类基金份额适用收取认购、申购费用且不计提销售服务费的规则",
+          "affected_obligation": "G02:0 将A类基金份额替换为实际适用该规则的全部份额类别（A类、B类基金份额）"
+        }
+      ],
+      "missed_targets": [],
+      "notes": "No [FACTS] section was supplied, so class grouping could not be independently confirmed; judged against the guide's stated replacement text."
+    },
+    "event": {
+      "task_type": "recall_audit",
+      "prompt_version": "recall_audit_v1",
+      "context_sha256": "7e9771db6fbcf2a9d931c1e370484724b2a98be3860f6bbee0d6b765ea67048f",
+      "configured_model": "deepseek-v4.1-flash",
+      "actual_model": "deepseek-v4.1-flash",
+      "http_status": 200,
+      "finish_reason": "stop",
+      "error_code": null
+    }
+  },
+  "sha256": "abcdd25cb1208aceeed8957deb75d481cc37d4a03199cc23701a57db284315f1"
+}

@@ -13,6 +13,7 @@ import { TaskDetailIndexPage } from '../pages/TaskDetail/TaskDetailIndexPage'
 import { ReviewPage } from '../pages/Review/ReviewPage'
 import { TasksPage } from '../pages/Tasks'
 import { UsersPage } from '../pages/Users'
+import { ComparePage } from '../pages/Compare/ComparePage'
 
 function AppRoutes() {
   const auth = useAuthStore()
@@ -33,7 +34,8 @@ function AppRoutes() {
     <Route path="/guides" element={<GuidesPage />} />
     <Route path="/guides/:guideId" element={<GuideDetailPage />} />
     <Route path="/settings" element={<SettingsPage />} />
-    <Route path="/users" element={<UsersPage />} />
+     <Route path="/users" element={<UsersPage />} />
+     <Route path="/compare" element={<ComparePage />} />
     <Route path="*" element={<Navigate to="/tasks" replace />} />
   </Route></Routes>
 }

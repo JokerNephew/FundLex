@@ -1,0 +1,61 @@
+{
+  "body": {
+    "schema_version": "fundlex-model-cassette-v1",
+    "request": {
+      "task_type": "recall_locate",
+      "prompt_version": "recall_locate_v1",
+      "configured_model": "deepseek-v4.1-flash",
+      "context_sha256": "dde3653b9e5a56902b3251bee8357951a9c4b92e5211845e13e82faf351de468",
+      "request": {
+        "bounded_context": "CANDIDATE_PARAGRAPHS\n[p219] 赎回金额单位为元。本基金的赎回费率由基金管理人决定，并在招募说明书中列示。赎回金额为按实际确认的有效赎回份额乘以当日基金份额净值并扣除相应的费用，赎回金额单位为元。上述计算结果均按四舍五入方法，保留到小数点后 2 位，由此产生的收益或损失由基金财产承担。 \n[p222] 7 日的投资者收取不低于 1.5%的赎回费，并全额计入基金财产。 \n[p223] 本基金的申购费率、申购份额具体的计算方法、赎回费率、赎回金额具体的计算方法和收费方式由基金管理人根据基金合同的规定确定，并在招募说明书中列示。基金管理人可以在基金合同约定的范围内调整费率或收费方式，并最迟应于新的费率或收费方式实施日前依照《信息披露办法》的有关规定在规定媒介上公告。 \n\nGUIDE_OPERATION\nGUIDE_RULES\n[G12] 基金份额的申购与赎回-六、申购和赎回的价格、费用及其用途： | section_hint=基金份额的申购与赎回\n  requirement: 将原条款替换为“赎回费用由赎回基金份额的基金份额持有人承担，在基金份额持有人赎回基金份额时收取。赎回费用全额计入基金财产。”。\n  [G12:0] replace: 赎回费用由赎回基金份额的基金份额持有人承担，在基金份额持有人赎回基金份额时收取。赎回费用归入基金财产的比例应根据相关规定执行，并在招募说明书中列示。 -> 赎回费用由赎回基金份额的基金份额持有人承担，在基金份额持有人赎回基金份额时收取。赎回费用全额计入基金财产。\n  [G12:1] replace: 赎回费用由赎回基金份额的基金份额持有人承担，在基金份额持有人赎回基金份额时收取。赎回费用归入基金财产的比例依照相关法律法规设定，具体见招募说明书的规定，未归入基金财产的部分用于支付登记费和其他必要的手续费。其中，对持续持有期少于7日的投资者收取不低于1.5%的赎回费，并全额计入基金财产。 -> 赎回费用由赎回基金份额的基金份额持有人承担，在基金份额持有人赎回基金份额时收取。赎回费用全额计入基金财产。\n\nFACTS\n{\"fund_type\": \"open_regular\", \"fund_type_quote\": \"契约型开放式\", \"fund_type_basis\": \"基金的运作方式为契约型开放式，属于普通开放式基金，非ETF、非QDII、非货币、非REITs。\", \"class_count\": 2, \"classes\": [{\"name\": \"A类\", \"subscription_fee\": true, \"service_fee\": false, \"current\": true, \"rate\": null, \"quote\": \"在投资者认申购基金份额时收取认申购费用，而不计提销售服务费的，称为 A 类基金份额\"}, {\"name\": \"C类\", \"subscription_fee\": false, \"service_fee\": true, \"current\": true, \"rate\": null, \"quote\": \"在投资者认申购基金份额时不收取认申购费用，而是从本类别基金资产中计提销售服务费的，称为 C 类基金份额\"}], \"subscription_group\": [\"A类\"], \"service_group\": [\"C类\"], \"share_class_structure\": \"MULTIPLE\", \"direct_sales_exempt_group\": [], \"other_sales_charged_group\": [], \"fact_status\": {\"fund_type\": \"VERIFIED\", \"share_class_structure\": \"VERIFIED\", \"subscription_fee_group\": \"VERIFIED\", \"service_fee_group\": \"VERIFIED\", \"direct_sales_exempt_group\": \"UNKNOWN\", \"other_sales_charged_group\": \"UNKNOWN\"}, \"condition_overrides\": {}, \"has_service_fee\": true, \"is_floating_fee\": false, \"floating_quote\": \"本基金的管理费按前一日基金资产净值的 1.20%年费率计提。\", \"floating_basis\": \"管理费为固定年费率1.20%，未与持有期限或业绩挂钩。\", \"notes\": \"A类收取认申购费且不计提销售服务费；C类不收认申购费但从资产计提0.40%销售服务费。合同未就直销/其他销售渠道作差异化费率规定。\", \"quotes_verified\": {\"fund_type\": true, \"class:A类\": true, \"class:C类\": true, \"floating\": true, \"class_set\": true}, \"class_set_quote\": \"本基金将基金份额分为 A 类和 C 类不同的类别。\", \"class_set_evidence\": {\"quote_verified\": true, \"set_complete_verified\": true, \"parsed_classes\": [\"A\", \"C\"], \"reason\": \"CLASS_SET_VERIFIED\"}, \"value_verified\": true, \"set_complete_verified\": true, \"fund_type_certification\": {}, \"channel_evidence\": {\"direct_sales_exempt\": \"\", \"other_sales_charged\": \"\"}, \"problems\": []}\n\nFAILED_QUOTE\n",
+        "instruction": "The deterministic resolver could not bind this obligation to the contract. Read the candidate paragraphs and return the ONE paragraph location plus an exact contiguous quote from that paragraph that carries the obligation. Do not paraphrase, do not merge two paragraphs, and do not return offsets. If no paragraph carries it, return an empty quote and explain why. semantic_role states what the clause does (for example class_definition, subscription_fee, payment_mechanism).",
+        "response_schema": {
+          "type": "object",
+          "required": [
+            "location",
+            "quote",
+            "semantic_role",
+            "reason"
+          ],
+          "properties": {
+            "location": {
+              "type": "string"
+            },
+            "quote": {
+              "type": "string"
+            },
+            "semantic_role": {
+              "type": "string"
+            },
+            "reason": {
+              "type": "string"
+            }
+          }
+        },
+        "request_options": {
+          "thinking": {
+            "type": "disabled"
+          }
+        },
+        "max_completion_tokens": 8000
+      }
+    },
+    "response": {
+      "location": "p223",
+      "quote": "本基金的申购费率、申购份额具体的计算方法、赎回费率、赎回金额具体的计算方法和收费方式由基金管理人根据基金合同的规定确定，并在招募说明书中列示。",
+      "semantic_role": "redemption_fee_mechanism",
+      "reason": "该段落规定了赎回费率及收费方式的确定与列示机制，是候选段落中唯一承载赎回费用相关义务的段落；p219仅涉及赎回金额计算，p222仅为费率下限的片段，均不完整承载该义务。"
+    },
+    "event": {
+      "task_type": "recall_locate",
+      "prompt_version": "recall_locate_v1",
+      "context_sha256": "dde3653b9e5a56902b3251bee8357951a9c4b92e5211845e13e82faf351de468",
+      "configured_model": "deepseek-v4.1-flash",
+      "actual_model": "deepseek-v4.1-flash",
+      "http_status": 200,
+      "finish_reason": "stop",
+      "error_code": null
+    }
+  },
+  "sha256": "7e1572f13bee452329ccf1a9ea377f18276376e6dfb5fd34621bd278e64da219"
+}

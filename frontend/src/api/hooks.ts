@@ -1,106 +1,129 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useMutation, useQuery as useTanStackQuery } from '@tanstack/react-query'
+import { useCallback } from 'react'
 import { api } from './endpoints'
-import { useAuthStore } from '../stores/auth'
-import type { Capabilities, GuideDetail, GuideSettings, GuideSummary, Paginated, Report, RevisionView, TaskDetail, TaskDocument, TaskStats, TaskSummary } from '../types'
+import { queryClient } from './queryClient'
+import type { Capabilities, CompareTask, CompareUploadResult, Decision, GuideDetail, GuideSettings, GuideSummary, Paginated, Report, RevisionView, TaskDetail, TaskDocument, TaskStats, TaskSummary, UploadResult } from '../types'
 
-type Loader<T> = () => Promise<T>
-type QueryState<T> = { data: T | undefined; error: unknown; loading: boolean; refreshing: boolean; refetch: () => Promise<T | undefined> }
-
-const cache = new Map<string, unknown>()
-const inflight = new Map<string, Promise<unknown>>()
-let authEpoch = 0
-
-function clearQueryState(): void {
-  authEpoch += 1
-  cache.clear()
-  inflight.clear()
+type QueryState<T> = {
+  data: T | undefined
+  error: unknown
+  loading: boolean
+  refreshing: boolean
+  refetch: () => Promise<T | undefined>
 }
 
-if (typeof window !== 'undefined') {
-  window.addEventListener('fundlex:auth-cleared', clearQueryState)
-  window.addEventListener('fundlex:auth-changed', clearQueryState)
+type QueryOptions = { enabled?: boolean; pollMs?: number }
+
+const queryKeys = {
+  capabilities: ['capabilities'] as const,
+  tasks: (params: Record<string, string | number | undefined>) => ['tasks', params] as const,
+  taskStats: (month?: string) => ['task-stats', month || 'current'] as const,
+  task: (id: string) => ['task', id] as const,
+  documents: (id: string, params: Record<string, string | number | undefined>) => ['documents', id, params] as const,
+  documentsAll: (id: string) => ['documents-all', id] as const,
+  document: (taskId: string, documentId: string) => ['document', taskId, documentId] as const,
+  guides: ['guides'] as const,
+  guideSettings: ['guide-settings'] as const,
+  guide: (id: string) => ['guide', id] as const,
+  taskReport: (id: string) => ['task-report', id] as const,
+  documentReport: (taskId: string, documentId: string) => ['document-report', taskId, documentId] as const,
+  revisions: (taskId: string, documentId: string) => ['revisions', taskId, documentId] as const,
+  compareTasks: ['compare-tasks'] as const,
+  compareTask: (id: string) => ['compare-task', id] as const,
+  compareView: (pairId: string) => ['compare-view', pairId] as const,
 }
 
-export function useQuery<T>(key: string, loader: Loader<T>, options: { enabled?: boolean; pollMs?: number } = {}): QueryState<T> {
-  const enabled = options.enabled ?? true
-  const [data, setData] = useState<T | undefined>(() => cache.get(key) as T | undefined)
-  const [error, setError] = useState<unknown>(null)
-  const [loading, setLoading] = useState(enabled && data === undefined)
-  const [refreshing, setRefreshing] = useState(false)
-  const loaderRef = useRef(loader)
-  const requestSequence = useRef(0)
-  loaderRef.current = loader
-  useEffect(() => {
-    requestSequence.current += 1
-    const cached = cache.get(key) as T | undefined
-    setData(cached)
-    setError(null)
-    setLoading(enabled && cached === undefined)
-    setRefreshing(false)
-  }, [key, enabled])
+function useServerQuery<T>(key: readonly unknown[], loader: () => Promise<T>, options: QueryOptions = {}): QueryState<T> {
+  const query = useTanStackQuery({
+    queryKey: key,
+    queryFn: loader,
+    enabled: options.enabled ?? true,
+    refetchInterval: options.pollMs,
+  })
   const refetch = useCallback(async () => {
-    if (!enabled) return undefined
-    setRefreshing(data !== undefined)
-    setLoading(data === undefined)
-    setError(null)
-    const requestEpoch = authEpoch
-    const requestId = ++requestSequence.current
-    let promise = inflight.get(key) as Promise<T> | undefined
-    if (!promise) {
-      promise = loaderRef.current()
-      inflight.set(key, promise)
-      promise.finally(() => { if (inflight.get(key) === promise) inflight.delete(key) }).catch(() => undefined)
-    }
-    try {
-      const next = await promise
-      if (requestEpoch !== authEpoch || requestId !== requestSequence.current) return undefined
-      cache.set(key, next)
-      setData(next)
-      return next
-    } catch (nextError) {
-      if (requestEpoch === authEpoch && requestId === requestSequence.current) {
-        setError(nextError)
-        useAuthStore.getState().handleError(nextError)
-      }
-      return undefined
-    } finally {
-      if (requestEpoch === authEpoch && requestId === requestSequence.current) {
-        setLoading(false)
-        setRefreshing(false)
-      }
-    }
-  }, [data, enabled, key])
-  useEffect(() => { void refetch() }, [key, enabled]) // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => {
-    const clear = () => { cache.clear(); setData(undefined); setError(null) }
-    window.addEventListener('fundlex:auth-cleared', clear)
-    window.addEventListener('fundlex:auth-changed', clear)
-    return () => {
-      window.removeEventListener('fundlex:auth-cleared', clear)
-      window.removeEventListener('fundlex:auth-changed', clear)
-    }
-  }, [])
-  useEffect(() => {
-    if (!enabled || !options.pollMs) return
-    const timer = window.setInterval(() => void refetch(), options.pollMs)
-    return () => window.clearInterval(timer)
-  }, [enabled, options.pollMs, refetch])
-  return { data, error, loading, refreshing, refetch }
+    const result = await query.refetch()
+    return result.data
+  }, [query])
+  return {
+    data: query.data,
+    error: query.error,
+    loading: query.isPending,
+    refreshing: query.isFetching && !query.isPending,
+    refetch,
+  }
+}
+
+export function useQuery<T>(key: string, loader: () => Promise<T>, options: QueryOptions = {}): QueryState<T> {
+  return useServerQuery([key], loader, options)
 }
 
 export function invalidateQuery(keyPrefix: string): void {
-  for (const key of cache.keys()) if (key.startsWith(keyPrefix)) cache.delete(key)
+  const normalized = keyPrefix.replace(/:$/, '')
+  void queryClient.invalidateQueries({
+    predicate: ({ queryKey }) => {
+      const key = String(queryKey[0] || '')
+      if (normalized === 'tasks') return key === 'tasks'
+      if (normalized === 'guides') return key === 'guides'
+      if (normalized === 'guide-settings') return key === 'guide-settings'
+      if (normalized === 'documents-all') return key === 'documents-all'
+      if (normalized.startsWith('task:')) return key === 'task' && queryKey[1] === normalized.slice(5)
+      if (normalized.startsWith('documents-all:')) return key === 'documents-all' && queryKey[1] === normalized.slice(14)
+      if (normalized.startsWith('document-report:')) {
+        const [, taskId, documentId] = normalized.split(':')
+        return key === 'document-report' && queryKey[1] === taskId && queryKey[2] === documentId
+      }
+      if (normalized.startsWith('task-report:')) return key === 'task-report' && queryKey[1] === normalized.slice(12)
+      if (normalized.startsWith('revisions:')) {
+        const [, taskId, documentId] = normalized.split(':')
+        return key === 'revisions' && queryKey[1] === taskId && queryKey[2] === documentId
+      }
+      if (normalized === 'compare-tasks') return key === 'compare-tasks'
+      if (normalized.startsWith('document:')) {
+        const [, taskId, documentId] = normalized.split(':')
+        return key === 'document' && queryKey[1] === taskId && queryKey[2] === documentId
+      }
+      return key === normalized
+    },
+  })
 }
 
-export function clearQueryCache(): void { clearQueryState() }
+export function clearQueryCache(): void { void queryClient.clear() }
 
-export function useCapabilities(): QueryState<Capabilities> { return useQuery('capabilities', api.capabilities) }
-export function useTasks(params: Record<string, string | number | undefined> = {}, options?: { pollMs?: number }) { const key = `tasks:${JSON.stringify(params)}`; return useQuery<Paginated<TaskSummary>>(key, () => api.tasks(params), options) }
-export function useTaskStats(month?: string) { return useQuery<TaskStats>(`task-stats:${month || 'current'}`, () => api.taskStats(month)) }
-export function useTask(id: string | undefined, options?: { pollMs?: number }) { return useQuery<TaskDetail>(`task:${id || ''}`, () => api.task(id as string), { ...options, enabled: Boolean(id) }) }
-export function useTaskDocuments(id: string | undefined, params: Record<string, string | number | undefined> = {}, options?: { pollMs?: number }) { return useQuery<Paginated<TaskDocument>>(`documents:${id || ''}:${JSON.stringify(params)}`, () => api.documents(id as string, params), { ...options, enabled: Boolean(id) }) }
+export function useApiMutation<TData, TVariables>(mutationFn: (variables: TVariables) => Promise<TData>, invalidate: string[] = []) {
+  return useMutation({
+    mutationFn,
+    onSuccess: () => invalidate.forEach((key) => invalidateQuery(key)),
+  })
+}
+
+export function useUploadTaskMutation() { return useApiMutation<UploadResult, { id: string; files: File[]; clientIds: string[]; onProgress?: (loaded: number, total: number) => void }>((value) => api.uploadTask(value.id, value.files, value.clientIds, value.onProgress), ['tasks']) }
+export function useSealTaskMutation() { return useApiMutation<TaskSummary, string>((id) => api.sealTask(id), ['tasks']) }
+export function useTaskControlMutation() { return useApiMutation<TaskSummary, { id: string; action: 'pause' | 'resume' }>((value) => value.action === 'pause' ? api.pauseTask(value.id) : api.resumeTask(value.id), ['tasks']) }
+export function useReviewMutation() {
+  return useMutation({
+    mutationFn: (value: { taskId: string; documentId: string; decisions?: Decision[]; allAccepted?: boolean }) => value.allAccepted ? api.acceptAll(value.taskId, value.documentId) : api.decisions(value.taskId, value.documentId, value.decisions || []),
+    onSuccess: (_result, value) => {
+      invalidateQuery(`document:${value.taskId}:${value.documentId}`)
+      invalidateQuery(`document-report:${value.taskId}:${value.documentId}`)
+      invalidateQuery(`documents-all:${value.taskId}`)
+      invalidateQuery(`revisions:${value.taskId}:${value.documentId}`)
+    },
+  })
+}
+export function useCompareTaskMutation() { return useApiMutation<CompareTask, { name: string; pairs: Parameters<typeof api.createCompareTask>[1]; key: string }>((value) => api.createCompareTask(value.name, value.pairs, value.key), ['compare-tasks']) }
+export function useCompareUploadMutation() { return useApiMutation<CompareUploadResult, { id: string; files: File[]; clientIds: string[] }>((value) => api.uploadCompareTask(value.id, value.files, value.clientIds), ['compare-tasks']) }
+export function useCompareSealMutation() { return useApiMutation<CompareTask, string>((id) => api.sealCompareTask(id), ['compare-tasks']) }
+export function useGuideMutation() { return useApiMutation<GuideSettings, string | null>((id) => api.setGuide(id), ['guides', 'guide-settings']) }
+export function useGuideUploadMutation() { return useApiMutation<{ version: GuideSummary }, File>((file) => api.uploadGuide(file), ['guides']) }
+export function useGuideParseMutation() { return useApiMutation<{ version: GuideSummary }, string>((id) => api.parseGuide(id), ['guides']) }
+
+export function useCapabilities(): QueryState<Capabilities> { return useServerQuery(queryKeys.capabilities, api.capabilities) }
+export function useTasks(params: Record<string, string | number | undefined> = {}, options?: QueryOptions) { return useServerQuery<Paginated<TaskSummary>>(queryKeys.tasks(params), () => api.tasks(params), options) }
+export function useTaskStats(month?: string) { return useServerQuery<TaskStats>(queryKeys.taskStats(month), () => api.taskStats(month)) }
+export function useTask(id: string | undefined, options?: QueryOptions) { return useServerQuery<TaskDetail>(queryKeys.task(id || ''), () => api.task(id as string), { ...options, enabled: Boolean(id) }) }
+export function useTaskDocuments(id: string | undefined, params: Record<string, string | number | undefined> = {}, options?: QueryOptions) { return useServerQuery<Paginated<TaskDocument>>(queryKeys.documents(id || '', params), () => api.documents(id as string, params), { ...options, enabled: Boolean(id) }) }
 export function useAllTaskDocuments(id: string | undefined) {
-  return useQuery<TaskDocument[]>(`documents-all:${id || ''}`, async () => {
+  return useServerQuery<TaskDocument[]>(queryKeys.documentsAll(id || ''), async () => {
     const items: TaskDocument[] = []
     let page = 1
     let total = Infinity
@@ -114,10 +137,13 @@ export function useAllTaskDocuments(id: string | undefined) {
     return items
   }, { enabled: Boolean(id) })
 }
-export function useTaskDocument(taskId: string | undefined, documentId: string | undefined) { return useQuery<TaskDocument>(`document:${taskId || ''}:${documentId || ''}`, () => api.document(taskId as string, documentId as string), { enabled: Boolean(taskId && documentId) }) }
-export function useGuides(options?: { pollMs?: number }) { return useQuery<{ items: GuideSummary[] }>('guides', api.guides, options) }
-export function useGuideSettings(options?: { pollMs?: number }) { return useQuery<GuideSettings>('guide-settings', api.guideSettings, options) }
-export function useGuide(id: string | undefined) { return useQuery<GuideDetail>(`guide:${id || ''}`, () => api.guide(id as string), { enabled: Boolean(id) }) }
-export function useTaskReport(id: string | undefined) { return useQuery<string>(`task-report:${id || ''}`, () => api.taskReport(id as string), { enabled: Boolean(id) }) }
-export function useDocumentReport(taskId: string | undefined, documentId: string | undefined) { return useQuery<Report>(`document-report:${taskId || ''}:${documentId || ''}`, () => api.documentReport(taskId as string, documentId as string), { enabled: Boolean(taskId && documentId) }) }
-export function useRevisions(taskId: string | undefined, documentId: string | undefined) { return useQuery<RevisionView>(`revisions:${taskId || ''}:${documentId || ''}`, () => api.revisions(taskId as string, documentId as string), { enabled: Boolean(taskId && documentId) }) }
+export function useTaskDocument(taskId: string | undefined, documentId: string | undefined) { return useServerQuery<TaskDocument>(queryKeys.document(taskId || '', documentId || ''), () => api.document(taskId as string, documentId as string), { enabled: Boolean(taskId && documentId) }) }
+export function useGuides(options?: QueryOptions) { return useServerQuery<{ items: GuideSummary[] }>(queryKeys.guides, api.guides, options) }
+export function useGuideSettings(options?: QueryOptions) { return useServerQuery<GuideSettings>(queryKeys.guideSettings, api.guideSettings, options) }
+export function useGuide(id: string | undefined) { return useServerQuery<GuideDetail>(queryKeys.guide(id || ''), () => api.guide(id as string), { enabled: Boolean(id) }) }
+export function useTaskReport(id: string | undefined) { return useServerQuery<string>(queryKeys.taskReport(id || ''), () => api.taskReport(id as string), { enabled: Boolean(id) }) }
+export function useDocumentReport(taskId: string | undefined, documentId: string | undefined) { return useServerQuery<Report>(queryKeys.documentReport(taskId || '', documentId || ''), () => api.documentReport(taskId as string, documentId as string), { enabled: Boolean(taskId && documentId) }) }
+export function useRevisions(taskId: string | undefined, documentId: string | undefined) { return useServerQuery<RevisionView>(queryKeys.revisions(taskId || '', documentId || ''), () => api.revisions(taskId as string, documentId as string), { enabled: Boolean(taskId && documentId) }) }
+export function useCompareTasks(options?: QueryOptions) { return useServerQuery<{ items: CompareTask[]; total: number }>(queryKeys.compareTasks, api.compareTasks, options) }
+export function useCompareTask(id: string | undefined, options?: QueryOptions) { return useServerQuery<CompareTask>(queryKeys.compareTask(id || ''), () => api.compareTask(id as string), { ...options, enabled: Boolean(id) }) }
+export function useCompareView(pairId: string | undefined, options?: QueryOptions) { return useServerQuery<import('../types').CompareView>(queryKeys.compareView(pairId || ''), () => api.compareView(pairId as string), { ...options, enabled: Boolean(pairId) }) }

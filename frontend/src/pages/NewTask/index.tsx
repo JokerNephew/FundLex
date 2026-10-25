@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { api } from '../../api/endpoints'
-import { invalidateQuery, useAllTaskDocuments, useCapabilities, useGuideSettings, useTask } from '../../api/hooks'
+import { invalidateQuery, useAllTaskDocuments, useCapabilities, useGuideSettings, useSealTaskMutation, useTask, useUploadTaskMutation } from '../../api/hooks'
 import { saveBlob } from '../../api/client'
 import { Button, Card, Select, Spinner, StatusBadge } from '../../components/ui'
 import type { TaskDocument, UploadReceipt } from '../../types'
@@ -45,6 +45,8 @@ export function NewTaskPage() {
   const guide = useGuideSettings()
   const recoveryTask = useTask(recoveryTaskId)
   const recoveryDocuments = useAllTaskDocuments(recoveryTaskId)
+  const uploadMutation = useUploadTaskMutation()
+  const sealMutation = useSealTaskMutation()
   const [name, setName] = useState('')
   const [files, setFiles] = useState<File[]>([])
   const [issues, setIssues] = useState<FileIssue[]>([])
@@ -121,7 +123,7 @@ export function NewTaskPage() {
       let uploadedBytes = 0
       const receipts: UploadReceipt[] = []
       for (const part of chunks) {
-        const uploaded = await api.uploadTask(created.id, part.files, part.ids, (loaded) => setProgress(totalBytes ? (uploadedBytes + loaded) / totalBytes * 100 : 0))
+        const uploaded = await uploadMutation.mutateAsync({ id: created.id, files: part.files, clientIds: part.ids, onProgress: (loaded, total) => setProgress(totalBytes ? (uploadedBytes + (total ? loaded / total * part.files.reduce((sum, file) => sum + file.size, 0) : loaded)) / totalBytes * 100 : 0) })
         receipts.push(...(uploaded.receipts || []))
         uploadedBytes += part.files.reduce((sum, file) => sum + file.size, 0)
         setProgress(totalBytes ? uploadedBytes / totalBytes * 100 : 100)
@@ -143,7 +145,7 @@ export function NewTaskPage() {
         setError(`${rejected.length} 个文件未接收。请修正后重新选择文件，再从此页补传。`)
         return
       }
-      if (!taskId) await api.sealTask(created.id)
+      if (!taskId) await sealMutation.mutateAsync(created.id)
       invalidateQuery('tasks:'); invalidateQuery(`task:${created.id}`)
       navigate(`/tasks/${created.id}`)
     } catch (nextError) { setError(nextError instanceof Error ? nextError.message : '任务创建或上传未完成。') }

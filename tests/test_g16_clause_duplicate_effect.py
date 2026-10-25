@@ -9,7 +9,8 @@ from docx import Document
 from fundlex.docx import inspect_docx
 from fundlex.generation.claim_replay import replay_claims
 from fundlex.obligations import compile_obligations
-from fundlex.recall import Target, _g16_clause_locations, rebind_g16_clause_targets
+from fundlex.recall import (Target, _g16_clause_locations,
+                            duplicate_copy_targets, rebind_g16_clause_targets)
 from test_recall_core import _facts
 
 
@@ -123,3 +124,32 @@ def test_split_usage_tail_appends_before_independent_expense_sentence(tmp_path, 
     proof = replay_claims(plan['edits'], original, actual, rules_by_id=rules, facts=facts,
         obligations=ledger, targets_by_id={t.target_id:t.as_dict() for t in targets})
     assert proof['verified'], proof['failures']
+
+
+def test_g16_rebind_prevents_payment_head_from_cloning_into_standalone_summary(tmp_path):
+    """D20 p804/p806 and p1259 are distinct operation sites despite equal payment text."""
+    source_path = tmp_path / "d20-shape.docx"
+    source = _write(source_path, [
+        "基金销售服务费每日计提，按月支付。由基金托管人根据与基金管理人核对一致的财务数据，"
+        "自动在次月初 5 个工作日内按照指定的账户路径进行支付，注册登记机构收到后按相关合同"
+        "规定支付给基金销售机构等。若遇法定节假日、公休假等，支付日期顺延。",
+        "销售服务费主要用于支付销售机构佣金、以及基金管理人的基金行销广告费、促销活动费、"
+        "基金份额持有人服务费等。",
+        "销售服务费的使用范围不包括基金募集期间的上述费用。",
+        "基金销售服务费每日计提，按月支付。由基金托管人根据与基金管理人核对一致的财务数据，"
+        "自动在次月初 5 个工作日内按照指定的账户路径进行支付，注册登记机构收到后按相关合同"
+        "规定支付给基金销售机构等。若遇法定节假日、公休假等，支付日期顺延。",
+    ])
+    rule = {"rule_id": "G16", "operations": [{"operation_id": "G16:0",
+        "op": "append", "new_text": "新增销售服务费返还机制。",
+        "condition": {"kind": "none"}}]}
+    targets = [
+        Target("body", "G16", "p0", source.by_location("p0").text, "needs_edit", "inventory",
+               start=0, end=len(source.by_location("p0").text), operations=("G16:0",)),
+        Target("summary", "G16", "p3", source.by_location("p3").text, "needs_edit", "inventory",
+               start=0, end=len(source.by_location("p3").text), operations=("G16:0",)),
+    ]
+    rebind_g16_clause_targets(targets, source)
+    assert targets[0].location == "p2"
+    assert targets[1].location == "p3"
+    assert duplicate_copy_targets(targets, {"G16": rule}, source) == []

@@ -168,7 +168,7 @@ def plan_fee_item_removal(before: str, allowed: set[str],
         replacement = _converge(before, first_start, canonical_tail)
     else:
         replacement = _rebuild(before, spans, allowed, first_start, last_end, tail,
-                               allowed_order)
+                               allowed_order, canonical_tail=canonical_tail)
     if replacement is None:
         return None
 
@@ -186,7 +186,8 @@ def plan_fee_item_removal(before: str, allowed: set[str],
 
 def _rebuild(before: str, spans: list[tuple[int, int, str]], allowed: set[str],
              first_start: int, last_end: int, tail: str,
-             allowed_order: list[str] | None = None) -> str | None:
+             allowed_order: list[str] | None = None,
+             *, canonical_tail: str = "") -> str | None:
     kept: list[tuple[str, str]] = []
     present: set[str] = set()
     for start, end, item in spans:
@@ -196,11 +197,18 @@ def _rebuild(before: str, spans: list[tuple[int, int, str]], allowed: set[str],
         kept.append((item, before[surface_start:end]))
         present.add(item)
     missing = [item for item in (allowed_order or []) if item not in present]
-    if missing and not allowed_order:
-        # The guide wording adds an item we cannot name safely; let compose handle it.
-        return None
-    for item in missing:
-        kept.append((item, "基金" + item))
+    if missing:
+        # Never manufacture wording from an item label (for example ``基金`` +
+        # ``销售服务费率``).  A missing item is safe only when the operation supplied
+        # the complete canonical wording from which its surface form can be copied.
+        canonical_surfaces = {
+            item: canonical_tail[start:end]
+            for start, end, item in _item_spans(canonical_tail)
+        }
+        if any(item not in canonical_surfaces for item in missing):
+            return None
+        for item in missing:
+            kept.append((item, canonical_surfaces[item]))
     if not kept:
         return None
     if allowed_order:
