@@ -57,6 +57,24 @@ function detailStatus(document: TaskDocument): string {
   return field(document.delivery_status, '未确认')
 }
 
+function exceptionSource(item: Record<string, unknown>): string {
+  if (item.obligation_id) return '规则义务核对'
+  if (item.quote_exact_site === true) return '覆盖检查'
+  if (item.review_note) return '人工复核提示'
+  return '交付核验'
+}
+
+function exceptionLocation(item: Record<string, unknown>): string {
+  return field(item.location || item.address || item.paragraph || item.block_id, '未定位')
+}
+
+function exceptionKey(item: Record<string, unknown>, index: number): string {
+  const source = JSON.stringify(Object.keys(item).sort().map((key) => [key, item[key]]))
+  let hash = 2166136261
+  for (let offset = 0; offset < source.length; offset += 1) hash = Math.imul(hash ^ source.charCodeAt(offset), 16777619)
+  return field(item.issue_id || item.exception_id, `EX-${(hash >>> 0).toString(16).slice(0, 8) || String(index + 1).padStart(2, '0')}`)
+}
+
 function Summary({ document, report }: { document: TaskDocument; report?: Record<string, unknown> }) {
   const targets = reportList(report, 'targets')
   const total = document.target_counts?.total ?? targets.length
@@ -86,7 +104,7 @@ function ExceptionSection({ report }: { report: Record<string, unknown> }) {
   const summary = (report.user_summary || {}) as Record<string, unknown>
   const summaryIssues = objectList(summary.issues)
   const all = [...issues, ...summaryIssues]
-  return <Card><h2>例外与人工核对 · {all.length} 项</h2>{all.length ? <div className="fundlex-exception-list">{all.map((item, index) => <details key={index} className="fundlex-exception"><summary>{field(item.title || item.rule_id || item.description, `例外 ${index + 1}`)}</summary><p>{field(item.business_reason || item.reason || item.review_note || item.description, '请结合原文与指引人工核对。')}</p><Evidence value={item.quote || item.evidence_quote} /></details>)}</div> : <p className="fundlex-muted">报告没有登记例外事项。</p>}</Card>
+  return <Card><h2>例外与人工核对 · {all.length} 项</h2><p className="fundlex-muted">此处展示报告的交付核验事项；“仍需核对”还包含目标盘点中的未决目标，两者统计口径不同。</p>{all.length ? <div className="fundlex-exception-list">{all.map((item, index) => <details key={`${exceptionKey(item, index)}-${index}`} className="fundlex-exception"><summary><span><strong>{exceptionKey(item, index)}</strong> · {field(item.title || item.rule_id || item.description, `例外 ${index + 1}`)}</span><small>{exceptionLocation(item)}</small></summary><dl className="fundlex-exception-meta"><dt>规则</dt><dd>{field(item.rule_id)}</dd><dt>位置</dt><dd>{exceptionLocation(item)}</dd><dt>诊断来源</dt><dd>{exceptionSource(item)}</dd></dl><p>{field(item.business_reason || item.reason || item.review_note || item.description, '请结合原文与指引人工核对。')}</p><Evidence value={item.quote || item.evidence_quote} /></details>)}</div> : <p className="fundlex-muted">报告没有登记例外事项。</p>}</Card>
 }
 
 function DownloadSection({ taskId, document }: { taskId: string; document: TaskDocument }) {

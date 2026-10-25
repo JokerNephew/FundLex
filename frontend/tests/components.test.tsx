@@ -47,12 +47,15 @@ describe('responsive and accessibility component regressions', () => {
     const onDiff = vi.fn()
     const { container } = render(<SafeCompareDocument
       side="left"
-      html={'<p>安全文本</p><script>window.bad=true</script><img src="/private" onerror="window.bad=true"><span class="compare-diff-insert" data-diff-id="D1">新增</span>'}
+      html={'<p>安全文本 <span class="compare-diff modify" data-diff-id="D1">修改</span> <span class="compare-diff diff-insert" data-diff-id="D2">新增</span> <span class="compare-diff-delete" data-diff-id="D3">删除</span></p><script>window.bad=true</script><img src="/private" onerror="window.bad=true">'}
       onDiff={onDiff}
     />)
-    const marker = screen.getByRole('button', { name: '定位此处差异' })
+    const marker = screen.getAllByRole('button', { name: '定位此处差异' })[0]
     fireEvent.keyDown(marker, { key: 'Enter' })
     expect(onDiff).toHaveBeenCalledWith('D1')
+    expect(container.querySelector('[data-diff-id="D1"]')).toHaveClass('modify')
+    expect(container.querySelector('[data-diff-id="D2"]')).toHaveClass('insert')
+    expect(container.querySelector('[data-diff-id="D3"]')).toHaveClass('delete')
     expect(container.querySelector('script')).toBeNull()
     expect(container.querySelector('img')).toBeNull()
     const results = await axe.run(container, { rules: { 'color-contrast': { enabled: false } } })
@@ -67,6 +70,12 @@ describe('responsive and accessibility component regressions', () => {
     const close = screen.getByRole('button', { name: '关闭帮助中心' })
     await waitFor(() => expect(document.activeElement).toBe(close))
     expect(dialog).toBeInTheDocument()
+    expect((document.querySelector('.shell-body') as HTMLElement).inert).toBe(true)
+
+    fireEvent.keyDown(document, { key: 'Tab', shiftKey: true })
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: '知道了' }))
+    fireEvent.keyDown(document, { key: 'Tab' })
+    expect(document.activeElement).toBe(close)
 
     fireEvent.keyDown(document, { key: 'Escape' })
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())

@@ -3376,10 +3376,11 @@
 - 问题与影响：本轮对生产 `https://fundlex.club` 以 1440×900、768×1024 和 390×844 截图审查后，桌面端主要页面层级、卡片、表单和橙色状态体系一致；但移动端仍有几处桌面信息结构被压缩的问题。桌面顶栏的“消息”和“退出登录”按钮实际存在但继承了白色文字，在白色顶栏上几乎不可见，用户无法可靠发现这两个入口。指引配置的“可用版本”表格把长文件名压成极窄列，文件名按两三个字频繁换行；Compare 任务表的任务名和“结果”也逐字换行，阅读和扫描成本高。设置页运行能力使用原始内部值（如 `password`、`recall_first`、`formal`），且移动端标签和值的纵向排版关系不清晰。指引上传控件还显示浏览器原生英文 `Choose File / No file chosen`，与中文界面不一致。
 - 证据：本次审查截图 `/tmp/opencode/fundlex-visual-audit-20261025/11-guides-mobile.png`、`13-settings-mobile.png`、`33-compare-mobile-overview.png`、`10-guides-desktop.png`；采集数据 `/tmp/opencode/fundlex-visual-audit-20261025/audit-data.json`。截图均在当前公网生产资产上重新生成，使用临时审查会话，审查结束已撤销会话；本轮未发起模型调用。
 - 处理方法：修正顶栏按钮在浅色主题下的文字颜色并补充可见状态；移动端将长文件/任务数据改为卡片或定义明确的主次字段，长文件名允许自然截断并提供完整值查看；Compare 任务移动端优先显示任务名、状态、结果和查看操作，隐藏或折叠低优先级列；设置页将能力值映射为用户可理解的中文文案，并使用稳定的标签—值两列/分组布局；文件选择控件统一为中文包装控件或补充中文选择状态。
-- 状态与验证：**待实现**。这是视觉和信息架构审查结论，尚未修改或发布代码；现有页面截图和交互采集未发现 page error 或 console error，但不代表已通过无障碍合规检查。
-- 下一步：优先修复移动端指引表格和 Compare 任务摘要，再调整设置页能力展示和指引上传控件；以 390px、768px、1440px 重拍并核对长文件名、状态、操作入口和横向溢出。
+- 状态与验证：**源码候选已部分解决，待生产发布**。本轮已修复浅色顶栏按钮可见性、统计卡间距、Compare 任务名/结果在移动端的最小宽度处理、设置页能力值中文映射和指引上传控件中文化；候选构建的 typecheck、lint、Vitest 9 项、build、浏览器回归 8 项和 diff check 均通过。指引可用版本表格仍保留表格滚动容器，尚未单独完成长文件名的公网截图复核；本条不等于整项视觉审查已在生产完成。
+- 下一步：发布本轮前端候选后，在公网以 390px、768px、1440px 重拍并核对长文件名、状态、操作入口和横向溢出；若指引表格仍出现逐字换行，再单独调整该表格的信息层级。
 - 变更记录：2026-10-25 新增；来源为生产页面多模态截图审查，不与此前移动导航宽度修复混为同一问题。
-- 补充验证（2026-10-25）：`followup-data.json` 确认消息/退出登录 computed color 和顶栏背景同为 `rgb(255,255,255)`（对比度 1:1）；`app.css:6` 的 `.topbar-actions .ui-button--quiet` 特异性高于后续通用 quiet 规则。统计卡首行第一张 y=179、其余 y=193，落差 14px，与 `.ui-card + .ui-card { margin-top:14px }` 作用于 grid 子项相符，应改为只作用于纵向卡片容器或重置 grid 子项 margin。390px 任务表起点 y≈1241，表格容器宽 324px、内容宽 667px；应把任务/异常待办提前到关键统计之后，并为必要的横向滚动提供提示。导航当前只有前五项可见，设置项在横向滚动区中，需要更明确的入口或滚动提示。以上均尚未修复。
+- 补充验证（2026-10-25，审查时点历史结论）：`followup-data.json` 确认消息/退出登录 computed color 和顶栏背景同为 `rgb(255,255,255)`（对比度 1:1）；`app.css:6` 的 `.topbar-actions .ui-button--quiet` 特异性高于后续通用 quiet 规则。统计卡首行第一张 y=179、其余 y=193，落差 14px，与 `.ui-card + .ui-card { margin-top:14px }` 作用于 grid 子项相符；390px 任务表起点 y≈1241，表格容器宽 324px、内容宽 667px；导航当时只有前五项可见。上述事实已在本轮源码处理中分别修正或保留为待公网复核项，详见本条后续“补充处理与验证”。
+- 补充处理与验证（2026-10-25）：本轮源码在 `.topbar-actions .ui-button--quiet` 增加浅色顶栏覆盖规则，在 `.stats-grid > .ui-card` 清除相邻卡片上边距；Compare 任务表保留内部横向滚动并限制卡片/主内容宽度，设置页将 `password`、`recall_first`、`formal` 等内部值映射为中文，指引上传改为中文按钮并显示文件名。最新候选构建为 `frontend/dist`，资产 SHA-256：`index.html`=`8a1cb7f50066dca6450d4a77c080ca71a99caddaafb8818891993bf9cacca0c9`、`index-DgSYi7V7.js`=`a64f599ba6e405767e680f829c37a9db4e2e567bcc9611846787f7945d580091`、`index-CbzfypI-.css`=`4673c786f89d28f968725458e839088edf1d7026011964d0342f157339f22353`。本地三视口证据为 `/tmp/opencode/fundlex-ui-fix-visual-20261025/visual-data.json` 及对应截图；1440、768、390px 的 document/body 宽度均等于 viewport，帮助与 Compare 检查页面/控制台错误为 0。生产仍未同步本候选。
 
 ## FL-D253 帮助弹窗没有限制键盘焦点在对话框内（2026-10-25）
 
@@ -3387,8 +3388,8 @@
 - 问题与影响：帮助中心打开后，关闭按钮获得初始焦点，按 `Shift+Tab` 即可把焦点移到背景页面的“帮助中心”触发按钮；焦点可以离开 `role="dialog" aria-modal="true"` 的弹窗。键盘用户可能在弹窗尚未关闭时操作背景控件，且视觉上看不到焦点所在位置。
 - 证据：交互采集记录 `/tmp/opencode/fundlex-visual-audit-20261025/audit-data.json` 的 `help-dialog-shift-tab`：`insideDialog=false`，焦点落在 footer 的帮助中心按钮；`help-dialog-escape` 显示 Escape 可关闭且焦点恢复。相关截图为 `/tmp/opencode/fundlex-visual-audit-20261025/24-help-mobile.png`。实现位置为 `frontend/src/components/layout/AppShell.tsx:61-78,107`，当前 effect 只处理 Escape 和初始焦点，没有 Tab/Shift+Tab 循环。
 - 处理方法：弹窗打开时收集弹窗内可聚焦元素，在 Tab 到首/尾元素时循环焦点；保留 Escape 关闭和关闭后恢复打开前焦点；必要时将背景内容设置为 inert，避免读屏和键盘同时访问背景。
-- 状态与验证：**待实现**。Escape、关闭后的焦点恢复和截图已验证；焦点循环、读屏阅读顺序和背景 inert 尚未验证。不能据此宣称无障碍合规。
-- 下一步：补充 Shift+Tab、Tab、多次循环、关闭恢复和屏幕阅读器语义测试，覆盖桌面与 390px 弹窗。
+- 状态与验证：**源码候选已解决，待生产发布**。AppShell 已增加 Tab/Shift+Tab 双向循环、Escape 关闭、关闭后恢复打开前焦点，并在弹窗打开期间将背景 shell 设置为 `inert`；Vitest 组件回归覆盖背景 inert、Shift+Tab、Tab 和 Escape 恢复，三视口浏览器采集也通过。该验证不等于完整屏幕阅读器或无障碍合规认证。
+- 下一步：发布后在公网桌面和 390px 弹窗重新执行键盘回归；继续保留屏幕阅读器语义审查作为独立验收项。
 - 变更记录：2026-10-25 新增；由本轮生产键盘交互审查确认。
 
 ## FL-D254 合同详情例外列表出现重复事项，削弱人工核对信任（2026-10-25）
@@ -3397,8 +3398,8 @@
 - 问题与影响：合同详情的“例外与人工核对 · 6 项”连续显示六条相同标题“基金费用与税收-3、基金销售服务费（有多个份额类别时适用）”。如果它们确实对应不同位置，界面没有展示位置、证据或编号来区分；如果是同一例外重复投影，则会夸大事项数量。用户难以判断需要核对几件独立问题和每件问题对应的原文位置。
 - 证据：生产截图 `/tmp/opencode/fundlex-visual-audit-20261025/18-document-exceptions-desktop.png`、`20-document-downloads-desktop.png`；实现 `frontend/src/pages/DocumentDetail/DocumentDetailPage.tsx:84-90` 当前直接拼接 `report.exceptions` 与 `report.user_summary.issues`，未显示稳定 ID、位置，也未对重复项做可解释的归并。
 - 处理方法：先确认报告中 `exceptions` 与 `user_summary.issues` 的数据契约，区分独立例外与摘要投影；前端显示规则/位置/证据摘要和稳定编号，只有确认语义完全相同的重复项才归并，并显示“涉及 N 个位置”。概览中的“仍需核对”与例外数量需要提供可解释的统计关系。
-- 状态与验证：**待分析**。截图确认了重复显示和缺少区分字段，但尚未读取该任务原始报告逐项确认是后端重复还是前端双来源合并造成；不能直接把 6 项判定为引擎重复。
-- 下一步：读取该文档报告 JSON 的 `exceptions`、`user_summary.issues` 和位置字段，建立逐项对账；确认数据原因后分别修复报告投影或前端呈现，并重拍详情页。
+- 状态与验证：**源码候选已解决展示缺陷，业务归并仍待决定，生产发布待完成**。已读取 `/tmp/opencode/fundlex-visual-audit-20261025/document-report.json`，确认 `exceptions` 为空而 `user_summary.issues` 与 `unresolved` 各为 6 条，问题来自报告摘要事项的同类标题投影；不同条目包含不同诊断来源、规则和部分位置证据，不能直接合并。详情页现显示基于条目内容的稳定短 ID、规则、位置、诊断来源和证据，并明确“例外与人工核对”与“仍需核对”的统计口径不同。
+- 下一步：发布后重拍详情页并核对所有条目的 ID、位置、规则、诊断来源和证据；如业务确认某些事项应归并，再以报告数据契约为依据另立变更，不在前端猜测合并。
 - 变更记录：2026-10-25 新增；保留“视觉已确认、数据根因未确认”的边界。
 - 补充验证（2026-10-25）：已读取并保存当前生产报告 `/tmp/opencode/fundlex-visual-audit-20261025/document-report.json`；`exceptions` 缺省为空，`user_summary.issues` 与 `unresolved` 均为 6 条，排除本样本的双来源拼接原因。六条同属 G15，但有 obligation、orphan evidence、final omission 等不同诊断来源，部分带 p807/p1263/p1262/p806，另外两条无位置；当前前端折叠标题均相同且未展示位置或诊断来源，造成六行看起来重复。**状态更新：前端区分信息缺失已确认、待实现；诊断是否应进一步业务归并仍待分析**。同时概览“仍需核对 26”来自 target 状态，例外“6 项”来自 user summary，应明确区分目标盘点与最终交付核验口径，避免用户误认为数字冲突；不能简单将其中一数覆盖另一数。
 
@@ -3408,8 +3409,8 @@
 - 问题与影响：Compare 结果页的覆盖警告直接展示多个 `UNSUPPORTED_VISIBLE_CONTENT:...` 标识。390px 截图中长标识在警告框内连续延伸并接近/超出可读区域，用户难以阅读完整警告，也不容易分辨不同未覆盖内容。
 - 证据：生产截图 `/tmp/opencode/fundlex-visual-audit-20261025/35-compare-mobile-right.png`、`40-compare-mobile-reader-controls.png`；补充数据 `/tmp/opencode/fundlex-visual-audit-20261025/followup-data.json` 记录警告容器宽度 330px、内容 scrollWidth 444px、`overflowWrap=normal`。样式 `frontend/src/styles/app.css:182` 的 `.compare-coverage.is-incomplete` 设置了 `line-height`，但没有 `overflow-wrap:anywhere` 或移动端警告分组规则；交互记录确认移动端左右面板切换成功，页面和控制台错误为 0。
 - 处理方法：将覆盖项按列表或标签分组显示，长标识使用 `overflow-wrap:anywhere`，必要时显示用户文案并把内部代码放到可展开详情；保证警告在 390px 内完整换行，保留“不可据此确认全文无差异”的主提示。
-- 状态与验证：**待实现**。当前仅确认移动端可读性风险，尚未修改 CSS 或重新验证长警告、滚动和读屏顺序。
-- 下一步：补充 390px 和 320px 截图，验证警告框不产生横向溢出，逐项内容仍可区分。
+- 状态与验证：**源码候选已解决，待生产发布**。覆盖警告已改为逐项列表，长内部标识使用 `overflow-wrap:anywhere`/断词规则；本地视觉数据 `/tmp/opencode/fundlex-ui-fix-visual-20261025/visual-data.json` 显示 390px 容器宽 320px、内容 `scrollWidth` 318px，768px 和 1440px 也无额外页面横向溢出，页面/控制台错误为 0。
+- 下一步：发布后在公网补做 390px（并视需要 320px）截图，核对警告框不产生页面横向溢出且逐项内容仍可区分。
 - 变更记录：2026-10-25 新增；来源为生产 Compare 结果页截图审查。
 
 ## FL-D256 Compare 差异类型视觉颜色在生产结果中未按类型区分（2026-10-25）
@@ -3418,8 +3419,8 @@
 - 问题与影响：Compare 阅读器中修改、新增、删除三类差异都呈亮黄色。用户无法仅凭颜色区分差异类型，必须同时阅读文字或差异清单；在 2,772 处差异的长文阅读中，视觉定位和快速扫描能力明显下降。
 - 证据：生产截图 `/tmp/opencode/fundlex-visual-audit-20261025/31-compare-desktop-reader.png`、`41-compare-mobile-reader-original.png`、`42-compare-mobile-reader-comparison.png`；补充数据 `/tmp/opencode/fundlex-visual-audit-20261025/followup-data.json` 中前 8 个 `mark[data-diff-id]` 的 computed background 均为 `rgb(255, 255, 0)`，class 实际只有 `compare-diff`（活动项另有 `is-active`），尽管 `frontend/src/styles/app.css:200-203` 为 `.compare-diff.modify`、`.compare-diff.insert`、`.compare-diff.delete` 定义了不同背景色。源码根因已找到：`frontend/src/pages/Compare/ComparePage.tsx:55` 只识别 `compare-diff-(modify|insert|delete)`，而真实后端 `fundlex/compare/render.py:111` 输出 `class="compare-diff modify/insert/delete"`；fixture 使用了带连字符的类，未覆盖实际后端格式。
 - 处理方法：先在当前生产构建中确认差异标记的最终 class、样式加载顺序和 computed style；确保修改/新增/删除具有足够对比且色彩盲用户也能区分的颜色或图标/文字标识，活动项保留独立焦点样式；移动端差异清单继续提供类型文字作为非颜色冗余信息。
-- 状态与验证：**待实现，根因已定位**。生产 DOM 和截图确认类型 class 丢失，源码确认前后端 class 格式不一致，最终回退为浏览器 `mark` 默认黄色；未修改或发布代码。应使用真实 renderer 输出验证，不能只沿用现有 fixture 格式。
-- 下一步：检查生产 CSS 资产中的 `.compare-diff` 规则和加载顺序，使用 modify/insert/delete 三个最小样例在桌面和 390px 重拍验证，并检查对比度与非颜色区分。
+- 状态与验证：**源码候选已解决，待生产发布**。差异 class 解析现同时兼容 `modify/insert/delete`、`diff-modify/diff-insert/diff-delete` 和 `compare-diff-*` 形式；本地真实 renderer 形态与三类最小样例在 1440、768、390px 下分别得到修改 `rgb(255,240,182)`、新增 `rgb(217,241,223)`、删除 `rgb(247,216,216)`，并保留差异清单中的类型文字。相关组件回归、浏览器回归和本地视觉数据均已通过；生产尚未同步本候选。
+- 下一步：发布后在真实 Compare 结果页重查三类 computed style、活动项焦点样式、移动端差异清单和页面/控制台错误；长列表性能建议另按 FL-D256 相关阅读器建议评估。
 - 变更记录：2026-10-25 新增；来源为补充生产 DOM 计算样式核验。
 - 相关阅读器优化建议：本样本一次渲染 2,772 个差异按钮，桌面差异列表高约 148,616px 且 overflow=visible；大量连接线和非固定工具栏增加长文阅读负担。建议把差异列表放进有限高度/分页或虚拟滚动区，并提供固定导航和当前差异摘要。这是可用性/规模建议，未测得性能故障，不作响应时间不合格结论。
 

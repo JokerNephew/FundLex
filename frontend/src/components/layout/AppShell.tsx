@@ -33,15 +33,14 @@ export function AppShell() {
   const [helpOpen, setHelpOpen] = useState(false)
   const helpTriggerRef = useRef<HTMLButtonElement>(null)
   const helpCloseRef = useRef<HTMLButtonElement>(null)
+  const helpDialogRef = useRef<HTMLElement>(null)
   const previousFocusRef = useRef<HTMLElement | null>(null)
   const openHelp = () => {
     previousFocusRef.current = document.activeElement instanceof HTMLElement && document.activeElement !== document.body ? document.activeElement : helpTriggerRef.current
     setHelpOpen(true)
   }
   const closeHelp = () => {
-    const target = previousFocusRef.current || helpTriggerRef.current
     setHelpOpen(false)
-    target?.focus()
   }
   const taskQuery = useTasks({ page: 1, page_size: 50, sort: 'newest' }, { pollMs: 10_000 })
   const previous = useRef<Record<string, string>>({})
@@ -68,12 +67,37 @@ export function AppShell() {
       if (event.key === 'Escape') {
         event.preventDefault()
         closeHelp()
+        return
+      }
+      if (event.key !== 'Tab') return
+      const dialog = helpDialogRef.current
+      if (!dialog) return
+      const focusable = Array.from(dialog.querySelectorAll<HTMLElement>('button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])')).filter((element) => element.getAttribute('aria-hidden') !== 'true')
+      if (!focusable.length) {
+        event.preventDefault()
+        dialog.focus()
+        return
+      }
+      const first = focusable[0]
+      const last = focusable[focusable.length - 1]
+      if (event.shiftKey && (document.activeElement === first || !dialog.contains(document.activeElement))) {
+        event.preventDefault()
+        last.focus()
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault()
+        first.focus()
       }
     }
+    const background = Array.from(document.querySelectorAll<HTMLElement>('.app-shell > :not(.help-backdrop)'))
+    const previousInert = background.map((element) => element.inert)
+    const restoreFocusTarget = previousFocusRef.current || helpTriggerRef.current
+    background.forEach((element) => { element.inert = true })
     document.addEventListener('keydown', onKeyDown)
     return () => {
       cancelAnimationFrame(frame)
       document.removeEventListener('keydown', onKeyDown)
+      background.forEach((element, index) => { element.inert = previousInert[index] })
+      restoreFocusTarget?.focus()
     }
   }, [helpOpen])
   return <div className="app-shell">
@@ -104,6 +128,6 @@ export function AppShell() {
       <main className="main-content"><Outlet /></main>
     </div>
      <footer className="app-footer"><span>© 2026 广发基金</span><span aria-hidden="true">·</span><span>FundLex {capabilities?.app_version || '—'}</span><span aria-hidden="true">·</span><button ref={helpTriggerRef} type="button" className="footer-link" onClick={openHelp}>帮助中心</button><span aria-hidden="true">·</span><span className="footer-link is-disabled">隐私政策</span><span aria-hidden="true">·</span><span className="footer-link is-disabled">服务条款</span></footer>
-      {helpOpen && <div className="help-backdrop" role="presentation" onClick={(event) => { if (event.target === event.currentTarget) closeHelp() }}><section className="help-dialog" role="dialog" aria-modal="true" aria-labelledby="help-title"><div className="help-dialog__head"><div><small>使用说明 · FundLex</small><h2 id="help-title">帮助中心</h2></div><Button ref={helpCloseRef} type="button" variant="quiet" aria-label="关闭帮助中心" onClick={closeHelp}>关闭</Button></div><ol className="help-steps"><li><strong>准备文件</strong><span>仅接收可编辑 DOCX，可多选文件或选择整个文件夹；原文件会按账号隔离保存。</span></li><li><strong>创建任务</strong><span>上传完成后逐合同处理，单份失败不会影响其它合同；中断的任务可从任务详情继续补传。</span></li><li><strong>查看结果</strong><span>在任务详情分别查看资格、处理和交付状态，打开合同报告并下载最终版、修订版和报告。</span></li><li><strong>状态说明</strong><span>“结果不完整”表示仍有人工核对事项；工作文件和评测文件不能直接视为最终合同。</span></li><li><strong>安全与权限</strong><span>只能访问当前账号的任务、合同、指引和授权下载文件；会话失效后需要重新登录。</span></li></ol><div className="help-dialog__actions"><Button type="button" variant="primary" onClick={closeHelp}>知道了</Button></div></section></div>}
+       {helpOpen && <div className="help-backdrop" role="presentation" onClick={(event) => { if (event.target === event.currentTarget) closeHelp() }}><section ref={helpDialogRef} className="help-dialog" role="dialog" aria-modal="true" aria-labelledby="help-title" tabIndex={-1}><div className="help-dialog__head"><div><small>使用说明 · FundLex</small><h2 id="help-title">帮助中心</h2></div><Button ref={helpCloseRef} type="button" variant="quiet" aria-label="关闭帮助中心" onClick={closeHelp}>关闭</Button></div><ol className="help-steps"><li><strong>准备文件</strong><span>仅接收可编辑 DOCX，可多选文件或选择整个文件夹；原文件会按账号隔离保存。</span></li><li><strong>创建任务</strong><span>上传完成后逐合同处理，单份失败不会影响其它合同；中断的任务可从任务详情继续补传。</span></li><li><strong>查看结果</strong><span>在任务详情分别查看资格、处理和交付状态，打开合同报告并下载最终版、修订版和报告。</span></li><li><strong>状态说明</strong><span>“结果不完整”表示仍有人工核对事项；工作文件和评测文件不能直接视为最终合同。</span></li><li><strong>安全与权限</strong><span>只能访问当前账号的任务、合同、指引和授权下载文件；会话失效后需要重新登录。</span></li></ol><div className="help-dialog__actions"><Button type="button" variant="primary" onClick={closeHelp}>知道了</Button></div></section></div>}
   </div>
 }
