@@ -1,14 +1,15 @@
 # FundLex 当前断点（ACTIVE_HANDOFF）
 
-## Frontend visual remediation checkpoint (2026-10-25, source candidate not published)
+## Frontend visual remediation checkpoint (2026-10-25, published and publicly verified)
 
-- 本轮针对 FL-D252–FL-D256 的源码修复已完成并保留在当前 dirty 工作区，未提交、未推送、未同步到生产。涉及文件：`frontend/src/components/layout/AppShell.tsx`、`frontend/src/pages/Compare/ComparePage.tsx`、`frontend/src/pages/DocumentDetail/DocumentDetailPage.tsx`、`frontend/src/pages/Guides/index.tsx`、`frontend/src/pages/Settings/index.tsx`、`frontend/src/styles/app.css` 和 `frontend/tests/components.test.tsx`；既有其他工作区改动未回退。
+- 本轮针对 FL-D252–FL-D256 的源码修复已提交为 `b78dc4a59e0b8be4c5c3c7b4979484e7a6a50a5a`，推送到 `origin/refactor/backend-engine-finalization`，并已完成前端静态资源受控发布。涉及文件：`frontend/src/components/layout/AppShell.tsx`、`frontend/src/pages/Compare/ComparePage.tsx`、`frontend/src/pages/DocumentDetail/DocumentDetailPage.tsx`、`frontend/src/pages/Guides/index.tsx`、`frontend/src/pages/Settings/index.tsx`、`frontend/src/styles/app.css` 和 `frontend/tests/components.test.tsx`；既有其他工作区改动未回退。
 - 已实施：浅色顶栏消息/退出按钮可见性、统计卡相邻 margin 隔离、Compare 三种后端差异 class 解析、差异类型颜色、覆盖警告逐项列表和长标识断行、Compare 任务表移动端宽度隔离、帮助弹窗 Tab/Shift+Tab 焦点循环、Escape 关闭与焦点恢复、背景 `inert`、合同例外稳定短 ID/规则/位置/诊断来源/证据展示、设置能力值中文映射和指引上传中文文件控件。
-- 候选构建已完成：`frontend/dist` 资产 SHA-256 为 `index.html`=`8a1cb7f50066dca6450d4a77c080ca71a99caddaafb8818891993bf9cacca0c9`、`assets/index-DgSYi7V7.js`=`a64f599ba6e405767e680f829c37a9db4e2e567bcc9611846787f7945d580091`、`assets/index-CbzfypI-.css`=`4673c786f89d28f968725458e839088edf1d7026011964d0342f157339f22353`。这组资产只代表当前源码候选，不能作为生产资产证据。
+- 候选构建已发布：`frontend/dist` 与 `/opt/fundlex-recall-first/frontend/dist` 的资产 SHA-256 一致：`index.html`=`8a1cb7f50066dca6450d4a77c080ca71a99caddaafb8818891993bf9cacca0c9`、`assets/index-DgSYi7V7.js`=`a64f599ba6e405767e680f829c37a9db4e2e567bcc9611846787f7945d580091`、`assets/index-CbzfypI-.css`=`4673c786f89d28f968725458e839088edf1d7026011964d0342f157339f22353`。生产备份为 `/tmp/opencode/fundlex-frontend-publish-20261025-121730/deployment-dist-before.tgz`，发布证据为 `/tmp/opencode/fundlex-frontend-publish-20261025-121730/deployment-evidence.json`。
 - 验证已完成：`npm test -- --reporter=dot` 为 4 个文件/9 项通过；`npm run typecheck`、`npm run lint`（零 warning）、`npm run build`、`git diff --check` 通过；`FUNDLEX_BROWSER_TESTS=1 .venv/bin/python -m pytest tests/browser/test_frontend_v2.py -q` 为 8 项通过。浏览器回归覆盖真实 renderer 的 `modify/insert/delete` 形态、三类差异颜色、Compare 覆盖警告、帮助弹窗焦点循环和背景 inert。
 - 三视口本地视觉证据在 `/tmp/opencode/fundlex-ui-fix-visual-20261025/`：`visual-data.json` 记录 1440、768、390px 的 document/body 宽度分别等于 viewport；覆盖警告在 390px 容器宽 320px、内容 `scrollWidth` 318px；差异 computed background 分别为修改 `rgb(255, 240, 182)`、新增 `rgb(217, 241, 223)`、删除 `rgb(247, 216, 216)`；帮助弹窗 Shift+Tab 到“知道了”、Tab 回到关闭按钮、Escape 后恢复“帮助中心”焦点。截图包括 `compare-{desktop,tablet,mobile}.png` 与 `help-{desktop,tablet,mobile}.png`。
-- 当前边界：D252 的指引可用版本长文件名尚未在公网候选发布后单独复核；D254 的事项是否应业务归并仍需产品/报告数据契约决定；屏幕阅读器合规和 Compare 超长差异清单性能建议尚未验收。普通合同 D01–D20、G15 和选择版产物问题继续按 FL-D240–FL-D243 阻断。
-- 下一条可执行动作：如获得本轮前端发布授权，先备份 `/opt/fundlex-recall-first/frontend/dist`，只同步本候选 `frontend/dist` 静态资产并按既有受控流程重启必要服务；随后在 `https://fundlex.club` 以 1440×900、768×1024、390×844 重拍 Compare/帮助/设置/指引/详情，核对资产哈希、页面/控制台错误、键盘焦点和页面横向溢出。发布前不得把本地证据写成公网修复完成。
+- 公网验证已完成：`/tmp/opencode/fundlex-public-v2-smoke-published-fixed-20261025/result.json` 通过真实登录、消息、帮助、`/tasks`、`/tasks/new`、`/guides`、`/settings`，1440/768/390 三视口无横向溢出，页面错误、控制台错误、静态/API 404 均为 0。针对性证据 `/tmp/opencode/fundlex-public-frontend-fix-20261025/result.json` 确认白色顶栏按钮为品牌深色，设置能力值和指引上传中文控件生效，帮助 Shift+Tab/Tab、背景 inert、Escape 后焦点恢复均通过。当前公网账号没有 Compare 任务，因此没有为本轮新建任务或新增模型调用。
+- 当前边界：D252 的指引可用版本长文件名尚未在公网已有数据上单独复核；D254 的事项是否应业务归并仍需产品/报告数据契约决定；屏幕阅读器合规和 Compare 超长差异清单性能建议尚未验收。普通合同 D01–D20、G15 和选择版产物问题继续按 FL-D240–FL-D243 阻断。
+- 下一条可执行动作：保留本次发布备份和公网证据；如需验证 Compare 本轮类型颜色，使用既有生产 Compare 真实链路证据或在获得明确测试预算后创建新任务，不在本轮追加模型调用。
 
 ## Frontend V2 continuation checkpoint (2026-10-25, post-publish real acceptance)
 
