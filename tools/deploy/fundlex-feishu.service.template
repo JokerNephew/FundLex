@@ -1,0 +1,20 @@
+[Unit]
+Description=FundLex Feishu private-chat integration
+After=network-online.target mysqld.service
+Wants=network-online.target
+
+[Service]
+User=fundlex
+Group=fundlex
+WorkingDirectory=/opt/fundlex-recall-first
+EnvironmentFile=/etc/fundlex-recall.env
+# The WebSocket client is intentionally isolated from FastAPI.  The process
+# also runs the Feishu status sync and outbox loop in a daemon thread.
+ExecStart=/opt/fundlex-recall-first/.venv/bin/python -X utf8 -m fundlex.integrations.feishu.service_main
+Restart=always
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

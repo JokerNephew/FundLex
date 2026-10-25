@@ -16,11 +16,10 @@ from pathlib import Path
 
 import pytest
 
-# This file exercises the retired hash based workbench. Keep it available for
-# historical regression runs, but do not let it be mistaken for the React V2
-# contract. V2 coverage lives in test_frontend_v2.py.
-pytestmark = pytest.mark.skipif(os.getenv("FUNDLEX_LEGACY_BROWSER_TESTS") != "1",
-                                reason="opt-in legacy hash workbench suite")
+# V1 is the default workbench; V2 retains its own explicit opt-in coverage.
+pytestmark = pytest.mark.skipif(
+    os.getenv("FUNDLEX_BROWSER_TESTS") != "1" and os.getenv("FUNDLEX_LEGACY_BROWSER_TESTS") != "1",
+    reason="opt-in V1 workbench suite")
 
 
 @pytest.fixture(scope="module")
@@ -36,6 +35,7 @@ def browser():
 def live_app(tmp_path, monkeypatch):
     import uvicorn
     monkeypatch.setenv("FUNDLEX_AUTH_MODE", "dev")
+    monkeypatch.setenv("FUNDLEX_FRONTEND_VERSION", "v1")
     monkeypatch.setenv("FUNDLEX_DATA_DIR", str(tmp_path / "module-default"))
     from fundlex.api import create_app
     app = create_app(tmp_path / "data", auth_db=str(tmp_path / "auth.sqlite3"))

@@ -2203,6 +2203,14 @@ def _selected_operation_indices(rule: dict, target: Target,
                     inspection, target.location, operation) == (target.start, target.end)
                     and _same_compact(target.quote, span_body)):
                 continue
+            # A payment clause may be split exactly at the paragraph boundary:
+            # this target owns the payment head and the next paragraph owns only
+            # the immediate delay sentence.  The joined source is validated by
+            # _g15_split_payment_head_owned; the head alone cannot match the
+            # guide's full reference text or its similarity threshold.
+            if rule_id == "G15" and _g15_split_payment_head_owned(
+                    inspection, target, operation):
+                continue
             if any(_compact(fragment) in span_body
                    for value in variants for fragment in reference_fragments(value)):
                 continue
@@ -3971,7 +3979,7 @@ def _g15_payment_clause_end(text: str, start: int, end: int, *, allow_head: bool
     # policy sentence that happens to end in ``基金份额的``.  Keep the stricter
     # boundary while accepting real contracts' multi-class and one-year variants.
     lead_ok = bool(re.fullmatch(
-        r"(?:基金)?(?:(?:[A-ZＡ-Ｚ]类(?:基金份额)?[、，,和及与]?)+)?的?", lead))
+        r"(?:基金)?(?:(?:[A-ZＡ-Ｚ]类(?:基金份额)?[、，,和及与]?)+)?的?(?:基金)?", lead))
     lead_ok = lead_ok or bool(re.fullmatch(
         r"对于投资者持续持有期限未超过一年(?:（即365天[，,]?下同）)?的基金份额收取的", lead))
     if not lead_ok:
@@ -4051,7 +4059,11 @@ def _g15_delay_continuation(inspection: Any, location: str,
         return None
     head = str(spans[index - 1].text).rstrip()
     body = str(spans[index].text)
-    match = re.match(r"\s*若遇[^。；;！？!?]+[。；;！？!?]", body)
+    # The next paragraph can start with the payment continuation and put the
+    # delay sentence second (the production contract's p806/p807 shape), or it
+    # can start directly with ``若遇``.  In both cases the whole prefix through
+    # the first delay sentence is one source-bound G15 tail.
+    match = re.search(r"若遇[^。；;！？!?]+[。；;！？!?]", body)
     if match is None:
         return None
     sentence = body[:match.end()]
@@ -4060,11 +4072,45 @@ def _g15_delay_continuation(inspection: Any, location: str,
     # reconciliation, other fees and unrelated policy. Proximity alone is no proof.
     if _g15_payment_clause_end(joined, 0, len(joined)) != len(joined):
         return None
-    return 0, match.end()
+    # Composite part slices cover the whole paragraph when the only source text
+    # after the delay sentence is formatting whitespace.  Keep that whitespace
+    # inside the source-bound edit so Claim Replay compares the same raw span as
+    # the writer (FL-D275); unrelated visible text still ends at the sentence.
+    return 0, len(body) if not body[match.end():].strip() else match.end()
+
+
+def _g15_split_payment_head_owned(inspection: Any, target: Target,
+                                  operation: Mapping[str, Any]) -> bool:
+    """Prove a G15 payment head whose delay sentence is in the next paragraph.
+
+    Real DOCX files commonly split the payment clause after ``按月支付，``.
+    The target on the first paragraph therefore cannot contain the guide's full
+    ``old_text``.  Attribution still has to bind the complete source clause: the
+    next paragraph must contribute only its first, operation-owned delay sentence
+    and the shared payment parser must accept the joined text.  This keeps the
+    operation-specific guard while avoiding a false ``operation_span_mismatch``.
+    """
+    if not _g15_payment_delete_authorized(operation) or target.composite:
+        return False
+    if target.start != 0 or target.end is None:
+        return False
+    try:
+        spans = list(inspection.paragraphs)
+        index = next(i for i, span in enumerate(spans)
+                     if str(span.location) == str(target.location))
+    except (StopIteration, AttributeError):
+        return False
+    head = spans[index]
+    if target.end != len(str(head.text)) or not _same_compact(target.quote, head.text):
+        return False
+    if index + 1 >= len(spans):
+        return False
+    follower = spans[index + 1]
+    return _g15_delay_continuation(inspection, str(follower.location), operation) is not None
 
 
 def g15_delay_continuation_targets(targets: Sequence[Target], rules: Mapping[str, dict],
-                                  inspection: DocumentInspection) -> list[Target]:
+                                   inspection: DocumentInspection) -> list[Target]:
     """Close an established G15 payment site's immediately adjacent delay tail."""
     rule = rules.get("G15")
     if rule is None:

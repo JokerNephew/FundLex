@@ -1,5 +1,49 @@
 # FundLex 当前断点（ACTIVE_HANDOFF）
 
+## FL-D276 生产真实验收结果（2026-10-26）
+
+- D275 候选全量回归为 **1497 passed / 48 skipped / 2 warnings / 324.62s**；发布前备份为 `/tmp/opencode/fundlex-production-d275-backup-20261026/pre-publish-opt-fundlex-recall-first.tgz`，SHA-256 `85723301d210de32ee95463cbd503ebe4f1cd0bf43417b32fae2b6083a30cdd1`。发布后 API/Worker active，`/api/capabilities` HTTP 200，四个关键运行时文件部署哈希与工作区一致。
+- 新真实 V1 普通路径证据 `/tmp/opencode/fundlex-production-v1-e2e-20261026/e2e-v1-o9rfdisxoj2o/`：任务 `6200b8ad71974c10b613622809fa52f5` / 文档 `2adeaefc840b4df68e8be0d060cea16f` 为 `completed/succeeded/complete`，31/31 targets completed、unresolved=0、19 edits、`artifact_claim_replay.verified=true`。final/redline 与报告哈希一致；Review HTTP 200，19 条中拒绝 1 条，`selected_final`/`selected_redline` 均成功生成、下载和 DOCX 校验通过。
+- 独立 Compare 任务 `191b14f48e264212abe98de5828bcd29` 已创建、完成、阅读器与 view API HTTP 200，1113 处差异；coverage 为 `incomplete`，警告为 header/footer/AlternateContent/drawing/pict 未支持，证据为同目录 `compare-view.json`。Compare 全文交付门禁失败。
+- 临时账号 `e2e-v1-o9rfdisxoj2o` 已精确清理：1 user、1 session、1 task、1 batch、1 document、1 compare task、1 compare pair，关联对象 10 个；数据库复核用户名行数为 0。
+- 当前结论：普通 V1 与 FL-D275 修复真实验收通过；整体生产结论继续 **NO-GO**，因为 Compare coverage incomplete，且 D01–D20 固定分母、G06 授权和其他项目级门禁尚未全部通过。
+
+## FL-D275 G15 composite Replay 与 Review manifest 修复（2026-10-26）
+
+- 真实生产报告 `/tmp/opencode/fundlex-production-v1-e2e-20261026/e2e-v1-jeo9hsg813hd/report.json` 已在工作区修复后离线重放通过：19 个计划 edit、`verified=true`、0 个 Claim Replay failure。修复前的两个 G15 composite 首段失败对应 `p806`/`p1262`，尾段 `p807`/`p1263` 的 source-bound 尾随空白边界也已纳入校验。
+- Review 的 `REVISION_TEXT_MISMATCH` 已用真实 `working_redline.docx` 重现；将 `validate_edit_plan()` 生成的父级 `expected_old_text`/`expected_old_hash` 写回 report plan 后，正式 selected artifact 生成器成功生成 `/tmp/opencode/selected-repro-after-d275.docx`。
+- `fundlex/generation/claim_replay.py` 已增加仅针对 G15 composite 首段的相邻物理段、完整 payment head、source 重算 delay boundary 校验；`fundlex/recall.py` 仅在顺延句后没有可见文本时保留尾随格式空白；`fundlex/recall_pipeline.py` 持久化已验证 parent manifest 原文。新增 composite Replay 和尾随空白回归。
+- 当前定向回归为 `97 passed`；`py_compile`、`node --check`、`git diff --check` 通过。完整回归正在执行，尚未计入本断点；本轮代码尚未发布。
+- 本轮工作区仍 dirty，HEAD 为 `7cb25d4e27c0cc62408cf92587956fd4150d4d79`，未提交、未 push。下一步：完整回归通过后创建生产备份，发布 `recall.py`、`recall_pipeline.py`、`generation/claim_replay.py` 及相关当前候选，核对部署 hash 和服务状态。
+- 发布后必须执行新的真实 V1 普通公开合同路径，完成 Claim Replay、working/final/redline、Review accept/reject、`selected_final`、`selected_redline`、报告/哈希/授权下载；随后独立完成 Compare、覆盖警告、报告下载、404/页面错误和 1440/768/390 三视口检查。任何 incomplete、selected artifact 缺口、D01–D20 或 G06 缺口继续保持 **NO-GO**。
+
+## FL-D270–FL-D274 G15 生产归因修复与 V1 验收脚本修正（2026-10-26）
+
+- 真实 V1 任务 `91ab2940c62844f7a5cd75ca021c7c54` / 文档 `2e8a8c9a2fd64c058d2bc6c4f2cd1401` 曾完成注册、登录、指引加载、任务创建、DOCX 上传、封存、持久 Worker 和 3 次真实模型调用，但因 G15 `p806` 支付头与 `p807` continuation/delay 跨段归因报 `operation_span_mismatch` 而失败；证据保留在 `/tmp/opencode/fundlex-production-v1-e2e-20261026/e2e-v1-yarwc0ihqd68/`。
+- `fundlex/recall.py` 已增加限定的 G15 跨段支付头归因：当前目标必须完整占据支付头段，下一段必须通过支付结构与顺延句校验；不放宽其他规则。新增回归覆盖生产 p806/p807 形态和 Claim Replay。G15 定向 `96 passed`，完整 `1493 passed / 48 skipped / 2 warnings`，`py_compile` 与 `git diff --check` 通过。
+- `tools/evaluation/production_v1_e2e_20261026.py` 已将原生 `<option>` 等待改为 `state="attached"`，避免结果页因隐藏 option 可见性超时；`/tmp/opencode/cleanup_fundlex_e2e_user.py` 已按 MySQL schema 增加 Feishu Draft 文件、outbox 和安全对象根目录检查。
+- 集中记录已新增 FL-D270–FL-D274。G15 修复已受控发布，备份与哈希证据在 `/tmp/opencode/fundlex-production-g15-20261026-022742/`，生产 API/Worker active，候选 `recall.py` 与部署文件 SHA 均为 `9c6fc3ae6705060d161c6bcf35be967c5c4e0132514b3962c42687ccace62b44`。`targeting.py` 的 NameError 修复也已发布，备份与哈希证据在 `/tmp/opencode/fundlex-production-nameerror-20261026-024021/`，API/Worker active。普通验收脚本已增加失败短路并在成功分支关闭详情弹窗，记录 FL-D274；第三次真实普通合同运行仍待终态。当前普通合同和 Compare 均未完成正式验收；后续必须完成报告、working/final/redline、Review、selected artifact、hash、授权下载、Compare reader/report 和三视口检查，再精确清理最新临时账号和全部关联对象。任何 incomplete 或 selected artifact 缺口都保持 NO-GO。
+- 当前工作区仍 dirty，HEAD 为 `7cb25d4e27c0cc62408cf92587956fd4150d4d79`；本次未提交、未 push。生产发布前须记录新备份路径、部署 build 和服务状态；发布后所有结论以新真实证据为准。
+
+## FL-D265–FL-D268 飞书接入专项测试与部署模板（2026-10-26）
+
+- 本轮继续完成飞书私聊接入：修正 `feishu_drafts` INSERT 占位符错误；卡片 action 按事件 ID/payload hash 去重并返回实际提交结果；任务提交中途失败时 Draft 保留为 `COLLECTING`，使用原 idempotency key 恢复；解绑后的身份可复用 revoked 行；MySQL outbox 领取增加 `FOR UPDATE` 和 rowcount 检查。
+- 新增 [`tests/test_feishu_integration.py`](../tests/test_feishu_integration.py)，覆盖一次性绑定码、解绑重绑、event payload conflict、重复附件、多个 DOCX、提交恢复、卡片重复 action、卡片发送失败后的 durable outbox、outbox fencing 和 chat/owner scope。专项结果：`PYTHONPATH=. .venv/bin/pytest -q tests/test_feishu_integration.py` = **8 passed**；`compileall` 和 `git diff --check` 通过。
+- 新增 [`docs/FEISHU_INTEGRATION.md`](FEISHU_INTEGRATION.md) 和 [`tools/deploy/fundlex-feishu.service.template`](../tools/deploy/fundlex-feishu.service.template)，`.env.example` 只增加凭据变量名和公开 base URL 空值。凭据值未写入仓库、文档、测试或日志。
+- 集中问题已登记 FL-D265–FL-D269。FL-D265–FL-D267 已在 SQLite/fake client 范围解决并验证；FL-D268 的 MySQL 8 实际并发锁行为、systemd 安装和真实飞书网络仍待验证。FL-D269 记录一次未复现的首次全量 G15 顺序失败。当前没有安装/启用 `fundlex-feishu.service`，没有发布生产，没有真实飞书任务或新增模型调用。
+- 当前工作区继续 dirty，包含本轮 Feishu 文件以及既有 Compare/V1/引擎/文档修改；未提交、未 push。下一条动作：运行 Feishu API/入口回归和完整 pytest，若发现新细节先更新集中记录，再按真实 MySQL 条件执行 store 验证；之后才评估服务安装和真实飞书端到端验收。
+- 本轮后续验证：Feishu 专项最终为 **8 passed**；API/入口/任务回归 **60 passed / 1 warning**；数据库回归 **2 passed / 6 skipped**（未配置 `FUNDLEX_MYSQL_TEST_URL`）；完整 `PYTHONPATH=. .venv/bin/pytest -q` 最终为 **1493 passed / 48 skipped / 2 warnings / 307.62s**；前端 typecheck、lint、Vitest **9 passed**、build、V1 `node --check` 和 diff check 通过。首次完整运行有一次未复现的 G15 顺序失败，已登记 FL-D269。
+- 运维静态检查：模板复制为 `/tmp/opencode/fundlex-feishu.service` 后 `systemd-analyze verify` 通过；`fundlex.integrations.feishu.service_main` 可导入；`lark-oapi` 为 `1.7.5`。本机 shell 和 `/etc/fundlex-recall.env` 均未发现 `FUNDLEX_FEISHU_APP_ID`、`FUNDLEX_FEISHU_APP_SECRET` 或 `FUNDLEX_PUBLIC_BASE_URL` 的有效值，`/etc/systemd/system/fundlex-feishu.service` 不存在，故真实飞书网络 E2E、MySQL 实连和服务安装仍保持未完成。
+
+## FL-D264 V1 默认工作台恢复与隔离测试发布（2026-10-26）
+
+- 用户最新要求为恢复 V1；已将 `fundlex/api.py` 默认前端入口切回 `frontend/compare.html`，保留 Vite/React V2，并通过 `FUNDLEX_FRONTEND_VERSION=v2` 显式启用。V1 `/compare`、`/tasks`、`/tasks/new`、`/guides`、`/settings`、`/users` 深链映射到原 hash 页面；`frontend/compare.html` 标题恢复为合同修订工作台并移除独立 Compare 横幅。
+- 为隔离测试路径增加 `FUNDLEX_FRONTEND_BASE_PATH`；测试服务 drop-in `/etc/systemd/system/fundlex-test-api.service.d/frontend-v1.conf` 当前设置 `FUNDLEX_FRONTEND_VERSION=v1`、`FUNDLEX_FRONTEND_BASE_PATH=/test`。V1 `frontend/app.js` 对 API fetch/XHR 使用该前缀，测试环境既有 `api.py` 的 `/test/static`、健康检查和运行隔离改动已保留。
+- 本地验证：入口/Compare/修订 API `13 passed / 1 warning`；V1+V2 浏览器回归 `37 passed`；`git diff --check`、`node --check frontend/app.js` 通过。公网证据 `/tmp/opencode/fundlex-v1-public-smoke-20261026/browser-smoke.json`：测试域名 `/test/` 登录、任务总览、新建任务、指引配置、Compare 均通过；1440/768/390px 无横向溢出，静态/API 404 和页面错误为 0。登录前 Compare 的 401 为预期未认证请求。
+- 已受控发布至 `/opt/fundlex-test` 并只重启 `fundlex-test-api`；测试 API、普通 Worker、Compare Worker 和生产 API/Worker 均 active。发布前备份为 `/tmp/opencode/fundlex-v1-restore-20261026/test-frontend-before.tgz`。未调用生产发布器、未修改 `/opt/fundlex-recall-first`、未创建合同任务或新增模型调用；临时 smoke 账号、会话和本地凭据文件已清理。
+- 当前工作区仍 dirty：`fundlex/api.py`、`frontend/app.js`、`frontend/compare.html`、`tests/browser/test_workbench.py`、`tests/browser/test_frontend_v2.py`、`tests/test_frontend_entry.py`，以及既有 Compare/后端/文档修改。当前 HEAD：`7cb25d4e27c0cc62408cf92587956fd4150d4d79`。尚未 commit/push。
+- 当前剩余动作：审核并提交本轮 V1 恢复文件；如需继续部署，先保留测试服务 drop-in 的 `/test` 前缀。普通合同真实 Worker/model/DOCX、D01–D20、G06、selected artifact 仍按 FL-D263、FL-D251 等记录保持未完成，不因 V1 页面验收改变状态。
+
 ## FL-D263 后端安全边界修复与当前验证断点（2026-10-25）
 
 - 已实施后端通用修复：operation Registry 覆盖门移至 Guide enable 与 Worker binding；显式 custom operation 未登记时 fail-closed；Claim Replay 拒绝绑定 FALSE/UNKNOWN applicability 的 edit；普通 sibling 同文不再单独关闭 operation，显式 ONE_OF 历史替代保留；audit missed target 保留 operation/obligation/target 身份；Delivery Gate 接入传入 Obligation Ledger 的 open-record 检查。

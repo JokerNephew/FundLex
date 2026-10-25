@@ -384,7 +384,7 @@ _TEXT_COLUMN = re.compile(r"\b([A-Za-z_][A-Za-z0-9_]*)\s+TEXT\b", re.IGNORECASE)
 _MEDIUMTEXT_DEFAULT = re.compile(
     r"MEDIUMTEXT(\s+NOT\s+NULL)?\s+DEFAULT\s+('(?:[^']|'')*')", re.IGNORECASE
 )
-_MEDIUMTEXT_COLUMNS = frozenset({"report_json", "metadata"})
+_MEDIUMTEXT_COLUMNS = frozenset({"report_json", "metadata", "payload_json"})
 # Human-facing names may exceed 255 characters (upload manifest allows longer);
 # MySQL's unique-key limit still applies because these columns are not keyed.
 _WIDE_VARCHAR_COLUMNS = frozenset({"filename", "name", "display_name"})

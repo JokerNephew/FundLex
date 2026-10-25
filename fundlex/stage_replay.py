@@ -75,7 +75,7 @@ def replay_stage(run_dir: str | Path, stage: str, *, revision: int = 0) -> dict[
     run.verify()
     from .docx import inspect_docx
     from .guide import validate_runtime_guide
-    from .recall import Target, assign_target_operations, plan_edits
+    from .recall import Target, assign_target_operations, build_docx_edits, plan_edits
     from .obligations import apply_facts, compile_obligations, project
     directory = Path(run_dir)
     boundary_path = directory / "stages" / (stage + (f"-{revision}" if revision else "") + ".json")
@@ -127,6 +127,28 @@ def replay_stage(run_dir: str | Path, stage: str, *, revision: int = 0) -> dict[
             else:
                 value = plan_edits(rules, targets, original, facts, gateway, obligations=obligations,
                                    max_compose_calls=int(inputs.get("max_compose_calls", 6)))
+            # Keep frozen plan replay identical to the persisted production plan:
+            # report generation projects the validated source slice back onto each
+            # business edit for Review manifest reconstruction.
+            projected = build_docx_edits(value.get("edits") or [], original)
+            by_key = {
+                (str(item.get("rule_id") or ""), str(item.get("target_id") or ""),
+                 str(item.get("location") or ""), int(item.get("start") or 0),
+                 int(item.get("end") or 0), str(item.get("replacement") or "")): item
+                for item in projected
+            }
+            edits = []
+            for item in value.get("edits") or []:
+                item = dict(item)
+                key = (str(item.get("rule_id") or ""), str(item.get("target_id") or ""),
+                       str(item.get("location") or ""), int(item.get("start") or 0),
+                       int(item.get("end") or 0), str(item.get("replacement") or ""))
+                source = by_key.get(key)
+                if source is not None:
+                    item["expected_old_text"] = source.get("expected_old_text", "")
+                    item["expected_old_hash"] = source.get("expected_old_hash", "")
+                edits.append(item)
+            value = {**value, "edits": edits}
         else:
             from .generation.claim_replay import replay_claims, check_delete_residuals
             from .generation.components import claim_components_for_rules

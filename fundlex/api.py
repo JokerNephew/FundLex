@@ -23,6 +23,7 @@ from fastapi.responses import (
     FileResponse,
     HTMLResponse,
     PlainTextResponse,
+    RedirectResponse,
     Response,
     StreamingResponse,
 )
@@ -38,6 +39,13 @@ from .selective import (accept_all as selective_accept_all, generate_selected_ar
 from .store import Conflict, NotFound, RunStore, StoreError
 from .config import auth_db_target, local_data_dir
 from .tasks import TaskStore
+from .application import TaskApplicationService
+from .upload_validation import (
+    MAX_BATCH_BYTES, MAX_BATCH_DOCUMENTS, MAX_COMPRESSION_RATIO,
+    MAX_PART_BYTES, MAX_UNCOMPRESSED_BYTES, MAX_UPLOAD_BYTES,
+    UploadValidationError, validate_batch_limits, validate_docx_upload,
+)
+from .integrations import IntegrationStore
 from .compare.store import CompareStore
 from .compare.api import register_compare_routes
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -122,6 +130,11 @@ class GuideSettingRequest(BaseModel):
     version_id: str | None = Field(default=None, max_length=128)
 
 
+class FeishuBindingCodeRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    ttl_seconds: int = Field(default=600, ge=60, le=3600)
+
+
 class RevisionDecision(BaseModel):
     """One user decision on a single engine revision pair."""
 
@@ -135,14 +148,6 @@ class DecisionRequest(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
     decisions: list[RevisionDecision] = Field(default_factory=list, max_length=1000)
-
-
-MAX_UPLOAD_BYTES = int(os.environ.get("FUNDLEX_MAX_UPLOAD_BYTES", str(25 * 1024 * 1024)))
-MAX_UNCOMPRESSED_BYTES = int(os.environ.get("FUNDLEX_MAX_UNCOMPRESSED_BYTES", str(200 * 1024 * 1024)))
-MAX_BATCH_DOCUMENTS = int(os.environ.get("FUNDLEX_MAX_BATCH_DOCUMENTS", "20"))
-MAX_BATCH_BYTES = int(os.environ.get("FUNDLEX_MAX_BATCH_BYTES", str(50 * 1024 * 1024)))
-MAX_PART_BYTES = int(os.environ.get("FUNDLEX_MAX_PART_BYTES", str(32 * 1024 * 1024)))
-MAX_COMPRESSION_RATIO = int(os.environ.get("FUNDLEX_MAX_COMPRESSION_RATIO", "100"))
 
 
 def _auth_mode() -> str:
@@ -240,30 +245,10 @@ def _public_user(record: dict) -> dict:
 
 
 def _validate_upload(name: str, data: bytes) -> str:
-    safe_name = Path(name.replace("\\", "/")).name
-    if not safe_name or not safe_name.lower().endswith(".docx"):
-        raise HTTPException(415, "only DOCX files are supported")
-    if not data or len(data) > MAX_UPLOAD_BYTES:
-        raise HTTPException(413, "DOCX upload size limit exceeded")
     try:
-        with zipfile.ZipFile(io.BytesIO(data)) as archive:
-            names = set(archive.namelist())
-            if "[Content_Types].xml" not in names or "word/document.xml" not in names:
-                raise HTTPException(415, "not an editable DOCX package")
-            if any(info.flag_bits & 0x1 for info in archive.infolist()):
-                raise HTTPException(415, "encrypted DOCX is unsupported")
-            members = archive.infolist()
-            if len({info.filename for info in members}) != len(members):
-                raise HTTPException(415, "duplicate DOCX member")
-            if any(info.file_size > MAX_PART_BYTES for info in members):
-                raise HTTPException(413, "DOCX part size limit exceeded")
-            if any(info.file_size > MAX_COMPRESSION_RATIO * max(info.compress_size, 1) for info in members):
-                raise HTTPException(413, "DOCX compression ratio limit exceeded")
-            if sum(info.file_size for info in members) > MAX_UNCOMPRESSED_BYTES:
-                raise HTTPException(413, "DOCX expanded size limit exceeded")
-    except (zipfile.BadZipFile, zipfile.LargeZipFile):
-        raise HTTPException(415, "invalid DOCX package") from None
-    return safe_name
+        return validate_docx_upload(name, data)
+    except UploadValidationError as exc:
+        raise HTTPException(exc.status_code, exc.message) from None
 
 
 RECALL_ENGINE_ID = "recall_first"
@@ -442,6 +427,10 @@ def create_app(data_dir: str | Path | None = None, *, auth_db=None) -> FastAPI:
     application.state.store = store
     tasks = TaskStore(store)
     application.state.tasks = tasks
+    task_service = TaskApplicationService(store, tasks)
+    application.state.task_service = task_service
+    integrations = IntegrationStore(store)
+    application.state.integrations = integrations
     compare_store = CompareStore(store)
     application.state.compare_store = compare_store
 
@@ -664,6 +653,31 @@ def create_app(data_dir: str | Path | None = None, *, auth_db=None) -> FastAPI:
         request.app.state.sessions.revoke_user_sessions(identity["id"], keep_token=_bearer_token(authorization))
         return {"ok": True}
 
+    @application.post("/api/integrations/feishu/binding-code")
+    def create_feishu_binding_code(payload: FeishuBindingCodeRequest, user: str = Depends(_user)):
+        result = integrations.create_binding_code("feishu", user, payload.ttl_seconds)
+        return {"provider": "feishu", "code": result["code"], "expires_at": result["expires_at"]}
+
+    @application.get("/api/integrations/feishu/binding")
+    def get_feishu_binding(user: str = Depends(_user)):
+        binding = integrations.binding_for_user("feishu", user)
+        if binding is None:
+            return {"provider": "feishu", "bound": False}
+        return {"provider": "feishu", "bound": True, "tenant_key": binding["tenant_key"],
+                "subject_id": binding["subject_id"], "created_at": binding["created_at"],
+                "updated_at": binding["updated_at"]}
+
+    @application.delete("/api/integrations/feishu/binding")
+    def revoke_feishu_binding(user: str = Depends(_user)):
+        integrations.revoke_user_binding("feishu", user)
+        return {"provider": "feishu", "bound": False}
+
+    @application.get("/api/admin/integrations/feishu/health")
+    def feishu_health(admin: dict = Depends(_admin)):
+        return {"provider": "feishu", "configured": bool(os.environ.get("FUNDLEX_FEISHU_APP_ID") and os.environ.get("FUNDLEX_FEISHU_APP_SECRET")),
+                "service_process_active": __import__("fundlex.integrations.feishu.service", fromlist=["active_service"]).active_service() is not None,
+                **integrations.health()}
+
     @application.get("/api/admin/users")
     def admin_list_users(request: Request, admin: dict = Depends(_admin)):
         return {"users": request.app.state.users.list_users()}
@@ -795,11 +809,17 @@ def create_app(data_dir: str | Path | None = None, *, auth_db=None) -> FastAPI:
             raise HTTPException(422, "ENGINE_REQUIRED")
         if engine != RECALL_ENGINE_ID:
             raise HTTPException(422, "ENGINE_UNSUPPORTED")
-        version = bound_guide_version(user, payload.guide_version_id)
-        return task_call(tasks.create, user, payload.name, version,
-                         [f.model_dump() for f in payload.files], idempotency_key,
-                         engine_id=RECALL_ENGINE_ID, guide_version_id=version["id"],
-                         guide_rules_sha256=version["rules_sha256"])
+        try:
+            return task_service.create_task(user, payload.name,
+                                            [f.model_dump() for f in payload.files],
+                                            guide_version_id=payload.guide_version_id,
+                                            idempotency_key=idempotency_key)
+        except ValueError as exc:
+            if str(exc) == "GUIDE_NOT_FOUND":
+                raise HTTPException(404, "guide version not found") from exc
+            raise HTTPException(409, str(exc)) from exc
+        except Conflict as exc:
+            raise HTTPException(409, str(exc)) from exc
 
     @application.get("/api/tasks")
     def list_tasks(q: str = "", status: str | None = None, sort: str = "newest",
@@ -912,9 +932,9 @@ def create_app(data_dir: str | Path | None = None, *, auth_db=None) -> FastAPI:
             name = Path((upload.filename or "").replace("\\", "/")).name
             error = None
             try:
-                _validate_upload(name, data)
-            except HTTPException as exc:
-                error = reasons.get(str(exc.detail), "UPLOAD_REJECTED")
+                validate_docx_upload(name, data)
+            except UploadValidationError as exc:
+                error = exc.code
             if total_bytes > MAX_BATCH_BYTES:
                 error = "UPLOAD_REQUEST_SIZE_LIMIT"
             uploads.append({"client_id": cid, "name": name, "data": data, "error_code": error})
@@ -1155,10 +1175,10 @@ def create_app(data_dir: str | Path | None = None, *, auth_db=None) -> FastAPI:
 
     frontend = Path(__file__).resolve().parent.parent / "frontend"
     dist = frontend / "dist"
-    # Vite owns the React application bundle. The source tree remains the
-    # fallback for local development before the first frontend build; legacy
-    # compare assets stay under /static so that compare keeps its independent
-    # worker and viewer contract during the migration.
+    # V1 is the default workbench again. Keep the Vite source/build available
+    # for explicit V2 regression runs without letting a build switch the UI.
+    frontend_v2 = os.environ.get("FUNDLEX_FRONTEND_VERSION", "v1") == "v2"
+    frontend_base = os.environ.get("FUNDLEX_FRONTEND_BASE_PATH", "").rstrip("/")
     if frontend.is_dir():
         application.mount("/static", StaticFiles(directory=frontend), name="static")
         if (dist / "assets").is_dir():
@@ -1178,9 +1198,15 @@ def create_app(data_dir: str | Path | None = None, *, auth_db=None) -> FastAPI:
 
         @application.get("/", include_in_schema=False)
         def home():
-            entry = dist / "index.html" if (dist / "index.html").is_file() else frontend / "index.html"
+            entry = ((dist / "index.html" if (dist / "index.html").is_file() else frontend / "index.html")
+                     if frontend_v2 else frontend / "compare.html")
             html = entry.read_text(encoding="utf-8")
             version = _asset_version("dist/index.html", "app.css", "app.js", "compare.css", "compare.js")
+            for name in ("app.css", "app.js", "compare.css", "compare.js"):
+                html = html.replace(f'/static/{name}"', f'/static/{name}?v={version}"')
+            if not frontend_v2 and frontend_base:
+                html = html.replace('="/static/', f'="{frontend_base}/static/')
+                html = html.replace('</head>', f'<meta name="fundlex-base-path" content="{frontend_base}"></head>')
             html = html.replace('src="/src/main.tsx"', f'src="/src/main.tsx?v={version}"')
             html = html.replace('href="/assets/', f'href="/assets/')
             return HTMLResponse(
@@ -1209,9 +1235,8 @@ def create_app(data_dir: str | Path | None = None, *, auth_db=None) -> FastAPI:
 
         @application.get("/compare", include_in_schema=False)
         def compare_home():
-            # Compare is now a React Router page. Keep the explicit route so a
-            # browser refresh at /compare still receives the Vite entry rather
-            # than the retired legacy compare.html shell.
+            if not frontend_v2:
+                return RedirectResponse(f"{frontend_base}/#compare", status_code=307)
             return home()
 
         @application.get("/{full_path:path}", include_in_schema=False)
@@ -1225,8 +1250,11 @@ def create_app(data_dir: str | Path | None = None, *, auth_db=None) -> FastAPI:
             # while the browser fails later with a misleading module error.
             if Path(full_path).suffix:
                 raise HTTPException(404, "frontend asset is not built")
-            entry = dist / "index.html" if (dist / "index.html").is_file() else frontend / "index.html"
-            return HTMLResponse(entry.read_text(encoding="utf-8"), headers={"Cache-Control": "no-store, must-revalidate"})
+            if not frontend_v2:
+                view = {"tasks": "overview", "tasks/new": "import", "guides": "guide",
+                        "settings": "settings", "users": "users"}.get(full_path, "overview")
+                return RedirectResponse(f"{frontend_base}/#{view}", status_code=307)
+            return home()
 
         @application.middleware("http")
         async def static_cache_control(request, call_next):

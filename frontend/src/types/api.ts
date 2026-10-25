@@ -30,6 +30,21 @@ export interface Capabilities {
   }
 }
 
+export interface FeishuBinding {
+  provider: 'feishu' | string
+  bound: boolean
+  tenant_key?: string
+  subject_id?: string
+  created_at?: number
+  updated_at?: number
+}
+
+export interface FeishuBindingCode {
+  provider: 'feishu' | string
+  code: string
+  expires_at: number
+}
+
 export type GuideStatus = 'uploaded' | 'parsing' | 'parsed' | 'validated' | 'released' | 'archived' | 'parse_failed' | string
 
 export interface GuideSummary {

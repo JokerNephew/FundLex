@@ -611,7 +611,7 @@ def targets_for_open_rules(obligations: Any, targets: Sequence[Any], rules_by_id
     from .recall import (Target, _compact, _append_obligation_present,
                          class_substitution_noop, instantiate_slots,
                          satisfied_operation_keys, target_operation_keys,
-                         _declared_operation_key)
+                         _declared_operation_key, condition_status)
 
     if not _enabled():
         return []
@@ -753,7 +753,7 @@ def targets_for_open_rules(obligations: Any, targets: Sequence[Any], rules_by_id
             continue
 
         if auto:
-            from .recall import _compact as _compact_rule, condition_status
+            from .recall import _compact as _compact_rule
             operation = (rule.get("operations") or [])[operation_index]
             strong = bool(rule.get("class_substitution")) or (
                 condition_status(operation.get("condition"), facts) == "TRUE"

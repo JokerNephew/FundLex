@@ -8,7 +8,8 @@ from docx import Document
 from fundlex.docx import inspect_docx
 from fundlex.generation.claim_replay import replay_claims
 from fundlex.obligations import apply_facts, compile_obligations
-from fundlex.recall import RecallError, Target, plan_target
+from fundlex.recall import (RecallError, Target, _selected_operation_indices,
+                            plan_target)
 from fundlex.recall_pipeline import _plan_and_generate
 from test_recall_core import _facts
 
@@ -64,6 +65,17 @@ def test_payment_delay_is_bound_in_raw_offsets_and_both_docx_copies_are_deleted(
     proof = replay_claims(planned["edits"], original, actual, rules_by_id={"G15": rule},
         facts=facts, obligations=ledger, targets_by_id={t.target_id: t.as_dict() for t in targets})
     assert proof["verified"], proof["failures"]
+
+
+def test_split_payment_head_is_attributed_before_delay_target_is_added(tmp_path):
+    """A paraphrased head split before its delay sentence remains G15-owned."""
+    source = _write(tmp_path / "source.docx", [
+        "C 类基金份额的基金销售服务费每日计算，逐日累计至每月月末，按月支付，",
+        "由基金管理人与基金托管人核对一致后，基金托管人按照与基金管理人协商一致的方式于次月首日起5个工作日内从基金财产中一次性支付给基金管理人。若遇法定节假日、公休假等，支付日期顺延。",
+    ])
+    rule = _rule()
+    target = _target("p0", source.by_location("p0").text)
+    assert _selected_operation_indices(rule, target, source, _facts()) == [0]
 
 
 @pytest.mark.parametrize("tail", [

@@ -86,6 +86,19 @@ def test_no_deterministic_candidate_means_no_model_call(monkeypatch):
     assert gateway.calls == 0
 
 
+def test_satisfied_target_condition_status_is_available_before_auto_branch(monkeypatch):
+    """A satisfied target must be audited without triggering local-import scoping."""
+    monkeypatch.setenv("FUNDLEX_TARGET_LOCATOR_OPEN_RULES", "auto")
+    satisfied = Target(
+        target_id="T-satisfied", rule_id="G05", location="p0", quote="",
+        state="satisfied", reason="inventory", out_of_scope=False,
+        operations=("G05:0",), resolution="resolved")
+    inspection = Inspection(["基金管理人可以调整基金份额类别，调低赎回费率。"])
+    assert targets_for_open_rules(
+        _obligations(), [satisfied], {"G05": RULE}, Facts(), inspection,
+        _mapping(), _sections("p0")) == []
+
+
 def test_g12_open_candidates_reject_nav_fee_and_rate_sibling(monkeypatch):
     import json
     from pathlib import Path

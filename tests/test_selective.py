@@ -74,6 +74,21 @@ def test_normalise_decisions_ignores_unknown_verdicts():
     assert _normalise_decisions({1: "maybe", 2: "reject"}) == {2: REJECT}
 
 
+def test_atomic_parent_manifest_uses_validated_source_text():
+    """Review manifest recovery must validate an atomic parent revision."""
+    from fundlex.recall_pipeline import _plan_ledger
+    from types import SimpleNamespace
+
+    planned = {"edits": [{"rule_id": "G05", "target_id": "T", "location": "p0",
+                          "start": 0, "end": 8, "replacement": "新句。",
+                          "components": []}], "conflicts": [], "ledger": []}
+    plan = SimpleNamespace(plan_sha256="plan", edits=({"rule_id": "G05", "target_id": "T",
+        "location": "p0", "start": 0, "end": 8, "replacement": "新句。",
+        "expected_old_text": "旧句甲。", "expected_old_hash": "hash"},))
+    report_plan = _plan_ledger(planned, plan)
+    assert report_plan["edits"][0]["expected_old_text"] == "旧句甲。"
+
+
 @requires_real
 def test_manifests_rebuilt_with_same_numbering_as_generation():
     manifests = _manifests_from_report(_report())

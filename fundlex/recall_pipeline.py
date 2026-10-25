@@ -564,8 +564,28 @@ def _plan_by_target(planned: dict[str, Any]) -> dict[str, dict[str, Any]]:
 
 
 def _plan_ledger(planned: dict[str, Any], plan: Any) -> dict[str, Any]:
-    return {"count": len(planned.get("edits") or []), "sha256": plan.plan_sha256,
-            "edits": planned.get("edits") or [], "conflicts": planned.get("conflicts") or [],
+    # The planner's parent edit is intentionally a business record, while
+    # ``validate_edit_plan`` owns the final source slice used by the DOCX writer.
+    # Persist that validated expected text as well: selective Review reconstructs
+    # revision manifests from this report, and an atomic paragraph edit otherwise
+    # has no parent-level expected_old_text (FL-D275).
+    planned_edits = [dict(item) for item in (planned.get("edits") or [])]
+    validated = {}
+    for edit in getattr(plan, "edits", ()):
+        key = (str(edit.get("rule_id") or ""), str(edit.get("target_id") or ""),
+               str(edit.get("location") or ""), int(edit.get("start") or 0),
+               int(edit.get("end") or 0), str(edit.get("replacement") or ""))
+        validated[key] = edit
+    for item in planned_edits:
+        key = (str(item.get("rule_id") or ""), str(item.get("target_id") or ""),
+               str(item.get("location") or ""), int(item.get("start") or 0),
+               int(item.get("end") or 0), str(item.get("replacement") or ""))
+        source = validated.get(key)
+        if source is not None:
+            item["expected_old_text"] = source.get("expected_old_text", "")
+            item["expected_old_hash"] = source.get("expected_old_hash", "")
+    return {"count": len(planned_edits), "sha256": plan.plan_sha256,
+            "edits": planned_edits, "conflicts": planned.get("conflicts") or [],
             "ledger": planned.get("ledger") or [], "boundary_policy": BOUNDARY_POLICY}
 
 

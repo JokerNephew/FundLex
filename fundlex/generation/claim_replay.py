@@ -435,10 +435,17 @@ def _own_effect_errors(rule: Mapping[str, Any], indices: Sequence[int],
     if (str(rule.get("rule_id") or "") == "G15" and own_kinds == {"delete"}
             and explicit_span and not replacement.strip()):
         from ..recall import _g15_payment_source_owned, _g15_delay_continuation
-        if (len(selected) != 1 or not (
-                _g15_payment_source_owned(before_unit, selected[0]) or
-                (original is not None and
-                 _g15_delay_continuation(original, location, selected[0]) == (start, end)))):
+        authorized = len(selected) == 1 and _g15_payment_source_owned(
+            before_unit, selected[0])
+        if (not authorized and original is not None and len(selected) == 1
+                and _g15_delay_continuation(original, location, selected[0]) == (start, end)):
+            authorized = True
+        if (not authorized and original is not None and len(selected) == 1
+                and content_source == "composite_delete"
+                and _g15_composite_payment_head_authorized(
+                    original, location, start, end, before_unit, selected[0], evidence)):
+            authorized = True
+        if not authorized:
             return ["CLAIM_OPERATION_SPAN_UNAUTHORIZED"]
     if (str(rule.get("rule_id") or "") in {"G01", "G03"}
             and own_kinds == {"append"} and explicit_span and original is not None):
@@ -699,6 +706,53 @@ def _joint_operation_effects(unit: Mapping[str, Any],
              "joint": True,
              "code": "CLAIM_JOINT_OPERATION_EFFECT_MISSING",
              "reason": "the joint result does not carry this operation's own effect"}]
+
+
+def _g15_composite_payment_head_authorized(original: Any, location: str,
+                                           start: int, end: int,
+                                           before_unit: str,
+                                           operation: Mapping[str, Any],
+                                           evidence: Mapping[str, Any]) -> bool:
+    """Reprove the first part of a split G15 payment deletion.
+
+    A composite parent is represented once per physical paragraph.  The first
+    paragraph is only a payment head and therefore cannot pass the ordinary
+    complete-clause parser by itself.  Its authorization comes from the adjacent
+    source paragraph's delay span, whose boundary is recomputed here.  The
+    planner's part strings identify the pair, but never grant the deletion.
+    """
+    if operation.get("op") != "delete" or not evidence.get("composite"):
+        return False
+    parts = evidence.get("parts") or ()
+    try:
+        current_location, current_start, current_end = str(parts[0]).rsplit(":", 2)
+        next_location, next_start, next_end = str(parts[1]).rsplit(":", 2)
+        current_start, current_end = int(current_start), int(current_end)
+        next_start, next_end = int(next_start), int(next_end)
+        paragraphs = list(getattr(original, "paragraphs", ()))
+        position = next(index for index, span in enumerate(paragraphs)
+                        if str(span.location) == str(location))
+        next_position = next(index for index, span in enumerate(paragraphs)
+                             if str(span.location) == next_location)
+        current = paragraphs[position]
+        follower = paragraphs[next_position]
+        from ..recall import _g15_delay_continuation, compact_offsets
+        compact_current, current_map = compact_offsets(str(current.text))
+        compact_follower, follower_map = compact_offsets(str(follower.text))
+        if (current_location != str(location) or next_position != position + 1
+                or current_start != 0 or current_end != len(compact_current)
+                or start != 0 or end != len(before_unit)
+                or next_start != 0 or next_end > len(compact_follower)):
+            return False
+        bound = _g15_delay_continuation(original, str(follower.location), operation)
+        if bound is None:
+            return False
+        _, raw_end = bound
+        expected_raw_end = (len(str(follower.text)) if next_end == len(compact_follower)
+                            else follower_map[next_end - 1] + 1)
+        return bound == (0, expected_raw_end)
+    except (StopIteration, IndexError, TypeError, ValueError):
+        return False
 
 
 def _operation_units(group: Sequence[Mapping[str, Any]],

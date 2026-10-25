@@ -21,6 +21,16 @@
 - 下一步：如测试环境发布成为固定流程，应增加参数化测试发布器或受控 systemd 发布入口，明确目标目录、服务集合、认证健康检查和回滚备份，避免继续依赖手工命令。
 - 变更记录：2026-10-25 新增；本次仅发布到隔离测试环境，未发布生产，未执行真实 Compare 合同任务或模型调用。
 
+## FL-D264 V1 默认入口恢复后的测试前缀资源与环境隔离（2026-10-26）
+
+- 发现日期：2026-10-26。
+- 问题与影响：V2 React 构建曾作为默认首页，导致用户熟悉的 V1 hash 工作台、任务入口、指引配置、Review 和 Compare 入口不再作为默认界面；测试环境通过 `https://fundlex.club/test/` 暴露时，V1 的绝对 `/static` 与 `/api` 路径还可能请求生产根路径。
+- 证据：本地 V1/V2 浏览器回归 `FUNDLEX_BROWSER_TESTS=1 PYTHONPATH=. .venv/bin/python -m pytest tests/browser/test_workbench.py tests/browser/test_frontend_v2.py -q --maxfail=3` 为 **37 passed**；定向 API/入口回归为 **13 passed / 1 既有 Starlette/httpx warning**。测试入口 `/test/` 由 Nginx 去掉前缀后转发到 `127.0.0.1:8110`，公网返回的 V1 HTML 引用 `/test/static/...`，`/test/api/capabilities` 返回 200。
+- 处理方法：`FUNDLEX_FRONTEND_VERSION` 默认设为 `v1`，显式设为 `v2` 才返回 Vite 入口；V1 `/compare`、`/tasks`、`/tasks/new`、`/guides` 等深链重定向到 hash 页面；`FUNDLEX_FRONTEND_BASE_PATH` 为测试入口注入资源前缀，V1 `app.js` 统一给 API fetch/XHR 加此前缀。保留测试 `api.py` 已有的健康检查、运行隔离和 `/test/static` 挂载改动，只重启 `fundlex-test-api`。
+- 状态与验证：**已解决（V1 测试页面已发布并验证）**。`https://fundlex.club/test/` 登录成功后，任务总览、新建任务、指引配置、合同对比四个入口均通过；1440/768/390px 的 `scrollWidth` 分别等于视口宽度，无横向溢出；静态 404、API 404、页面错误均为 0。登录前 Compare 自动探测产生 1 个预期 401，登录后接口返回 200。测试 API、普通 Worker、Compare Worker、生产 API、生产 Worker 均 active；临时 smoke 用户与会话已删除。公网验收证据：`/tmp/opencode/fundlex-v1-public-smoke-20261026/browser-smoke.json`；测试发布前备份：`/tmp/opencode/fundlex-v1-restore-20261026/test-frontend-before.tgz`。
+- 下一步：若继续使用 `/test/`，保留 `fundlex-test-api.service.d/frontend-v1.conf` 中的 `FUNDLEX_FRONTEND_VERSION=v1` 与 `FUNDLEX_FRONTEND_BASE_PATH=/test`；如迁移到独立测试域名，应同步清空前缀并重新做登录和静态资源验收。V1 页面验收不替代普通合同真实 Worker/model/DOCX 交付、D01–D20 gate、G06 和 selected artifact 的既有未决项。
+- 变更记录：2026-10-26 新增；本次仅发布隔离测试环境，未调用生产发布器，未创建合同任务，未新增模型调用。`test.fundlex.club` 的 TLS 握手当前失败，因此最终证据使用已可用的 `https://fundlex.club/test/`。
+
 ## FL-D244 Frontend V2 统一会话失效与 Review/任务状态边界
 
 - 发现日期：2026-10-25。
@@ -3507,3 +3517,117 @@
 - 处理方法：`assign_target_operations()` 对适用 noop 的 satisfied target 标记 `out_of_scope` 并保留 `TARGET_OPERATION_NOT_APPLICABLE` 原因；`targets_for_open_rules()` 保留其 operation coverage，但不把该 target 作为可编辑或可审计站点。G22 同段 target 继续独立规划、审计、Claim Replay 和 unresolved 投影。
 - 状态与验证：**代码已实施并验证，尚未进行新真实 Worker/model 复测**。新增同段 G21/G22 回归确认 G21 退出审计且 G22 不被隐藏；定向回归 141 passed，完整 `pytest tests` 为 **1476 passed / 48 skipped / 2 warnings**。未改写历史 report、labels、gold 或评测分母。
 - 下一步：新冻结版本真实复测 D20 时，独立核对 G21 no-op ledger proof、G22 实际修改、audit、Claim Replay 和最终 unresolved projection；G21 不适用时不能成为可编辑 obligation。
+
+## FL-D265 飞书 Draft 建表占位符数量错误导致附件事件进入 dead（2026-10-26）
+
+- 发现日期：2026-10-26。
+- 问题与影响：`feishu_drafts` 插入语句列和值均为 15 项，但 `VALUES` 曾写成 16 个占位符。任何首次接收 DOCX 的事件都会在创建 Draft 时抛出 SQLite `OperationalError`，消息处理器随后将事件标记为 `dead`，用户看不到可继续添加附件的草稿卡片。
+- 证据：新增 `tests/test_feishu_integration.py` 初次运行为 `4 failed`，日志记录 `OperationalError: 16 values for 15 columns`；修正后同一专项集合扩展并稳定为 `8 passed`。
+- 处理方法：将 `feishu_drafts` INSERT 的占位符改为 15 个；新增真实 SQLite 持久层和 fake client 覆盖 Draft 创建、附件接收、提交和卡片路径。
+- 状态与验证：**已解决（当前工作区已实施并验证）**。专项测试 `7 passed`；compileall 和 `git diff --check` 通过。尚未部署或进行真实飞书网络验收。
+- 下一步：发布前重新执行全量回归，并在真实飞书用户路径核对首个附件事件、多个附件和卡片确认。
+- 变更记录：2026-10-26 新增；保留初次失败证据和修复后专项验证结果。
+
+## FL-D266 飞书卡片确认反馈曾与实际提交结果不一致（2026-10-26）
+
+- 问题与影响：卡片 action 原先忽略 `submit_draft()` 的结果，任务中途失败时仍报告成功，无法指导重试。
+- 证据与处理方法：`submit_draft()` 现返回 `submitted`、`busy`、`failed` 或 `missing`；卡片 action 按结果提示，并写入 `integration_events` 按 provider、event ID 和 payload hash 去重，payload 冲突 fail closed；卡片发送失败但正式任务已落库时仍返回已创建提示，durable outbox 负责补发状态卡片。
+- 状态与验证：**已解决（当前工作区已实施并验证）**。上传失败、卡片失败、重复事件和 outbox 恢复专项断言通过；未进行真实 `message.patch` 网络验收。
+- 下一步：真实飞书回调中核对确认、重复点击、过期按钮和消息 patch 返回行为。
+- 变更记录：2026-10-26 新增。
+
+## FL-D267 飞书任务提交中断后 Draft 不应失去重试能力（2026-10-26）
+
+- 问题与影响：任务创建使用 Draft 幂等键，但上传、封存或发卡中断后原流程把 Draft 标为 `FAILED`，用户无法重试，可能留下未完成正式 Task。
+- 证据与处理方法：异常分支现恢复为 `COLLECTING` 并记录 `last_error_code`，保留 staging 文件和原 submit idempotency key；重试复用正式 Task，成功后清除错误码。
+- 状态与验证：**已解决（当前工作区已实施并验证）**。失败恢复、Task 幂等和最终 Draft 状态专项通过；真实 Worker/model 和飞书网络仍未验收。
+- 下一步：生产验收覆盖中断后的恢复，并核对最终任务只创建一次。
+- 变更记录：2026-10-26 新增。
+
+## FL-D268 飞书绑定解绑后的历史身份行阻塞重新绑定，MySQL outbox 领取缺少数据库行锁（2026-10-26）
+
+- 问题与影响：身份表保留 revoked 历史行；重新绑定可能被唯一键阻止。MySQL 下 outbox 领取原查询没有 `FOR UPDATE`，多个服务进程可能同时读取同一 pending 行。
+- 证据与处理方法：消费绑定码现复用/更新 revoked 行，active 行仍对跨账号抢绑 fail closed；MySQL outbox 查询追加 `FOR UPDATE`，并检查领取 UPDATE 的 `rowcount`；发送完成仍携带 fencing token。SQLite 专项同时覆盖 stale fencing 和状态卡片发送失败恢复。
+- 状态与验证：**代码已实施；SQLite 已验证，MySQL 待验证**。专项测试 `8 passed`；本轮无 `FUNDLEX_MYSQL_TEST_URL` 连接证据，也未部署飞书服务。
+
+## FL-D269 完整 pytest 首次运行出现一次不可复现的 G15 顺序失败（2026-10-26）
+
+- 问题与影响：本轮首次完整 `pytest` 在 G15 合法“支付头段与顺延句跨段”归属用例出现 1 次失败，可能造成把当前 dirty 工作区误判为回归；该用例单独运行和 G15 文件整体运行均通过。
+- 证据：首次完整运行结果为 `1492 passed / 48 skipped / 1 failed`，失败为 `tests/test_g15_payment_delay_boundary.py::test_split_payment_head_is_attributed_before_delay_target_is_added`；随后单用例通过，G15 文件 `29 passed`，再次完整运行通过 `1493 passed / 48 skipped / 2 warnings`，最终源码复跑仍为 `1493 passed / 48 skipped / 2 warnings`。未发现共享环境变量未恢复或稳定复现路径。
+- 处理方法：保留现有 G15 dirty 修改和测试，不以首次单次失败作为通过证据；串行重跑定向文件和完整套件确认结果。两次完整运行均使用 `PYTHONPATH=.`，未并行安装依赖。
+- 状态与验证：**待观察，当前未复现**。最终完整套件结果为 `1493 passed / 48 skipped / 2 warnings / 307.62s`；warning 为既有 Starlette/httpx 弃用提示和重复 DOCX ZIP 测试构造。该条不改变引擎最终 candidate、D01–D20 gate 或生产发布结论。
+- 下一步：若后续再次出现，按 pytest 收集顺序、随机种子、环境变量快照和最小失败集合继续定位；发布前至少保留当前完整回归证据。
+- 变更记录：2026-10-26 新增；记录首次失败、定向复测和完整重跑通过，不修改历史报告或 gold。
+
+## FL-D270 G15 跨段支付头在真实生产归因阶段被错误拒绝（2026-10-26）
+
+- 发现日期：2026-10-26。
+- 问题与影响：真实 V1 生产任务的上传、封存、Worker 启动及模型调用均成功，但 G15 目标的支付头位于 `p806`、支付主体和顺延句位于 `p807`。盘点目标只覆盖 `p806` 时，归因门禁只看当前段与指引 `old_text` 的相似度，因而报 `RECALL_TARGET_OPERATION_UNATTRIBUTED` / `operation_span_mismatch`，任务以 `PROCESSING_FAILED` 结束且没有交付产物。
+- 证据：任务 `91ab2940c62844f7a5cd75ca021c7c54`、文档 `2e8a8c9a2fd64c058d2bc6c4f2cd1401` 的脱敏报告 `/tmp/opencode/fundlex-production-v1-e2e-20261026/e2e-v1-yarwc0ihqd68/report.json`；报告记录 3 次真实模型调用、`target_attribution` 为 G15 `T018`、`G15:0`、`operation_span_mismatch`，原件结构为 `p806` 支付头和 `p807` continuation/delay。生产失败任务和产物未被改写。
+- 处理方法：`fundlex/recall.py` 增加 G15 限定归因路径：当前目标必须完整占据支付头段，下一物理段必须通过既有支付结构和顺延句解析；只允许 G15 完整支付删除 operation 使用该路径，不放宽其他规则或任意邻段借权。补充生产 p806/p807 形态回归及 Claim Replay 边界。
+- 状态与验证：**代码已实施，工作区验证通过，生产发布与复跑待验证**。G15 定向集合为 `96 passed`；完整回归为 `1493 passed / 48 skipped / 2 warnings`；`py_compile` 和 `git diff --check` 通过。此前失败任务仍保持失败状态，不能作为修复后交付证据。
+- 下一步：新备份后发布到生产 API/Worker；重新执行真实 V1 普通合同任务，核对报告、修订 DOCX、Review、selected artifact、哈希和授权下载；若仍有未完成目标，按报告保留 `incomplete`/`NO-GO`。
+- 变更记录：2026-10-26 新增；修复限定为 G15 跨物理段支付头归因，未修改历史失败报告、gold 或固定分母门禁。
+
+## FL-D271 V1 生产验收脚本把隐藏原生 select option 当作可见元素等待（2026-10-26）
+
+- 发现日期：2026-10-26。
+- 问题与影响：任务已进入终态并写入真实生产数据库后，验收脚本在 `#task-select` 的原生 `<option>` 上使用默认可见性等待。原生 option 在浏览器中通常不可见，导致脚本在结果页前超时，未继续执行报告、Review、selected artifact 和 Compare 验收。
+- 证据：最新脚本 `/home/opencode/fundlex/tools/evaluation/production_v1_e2e_20261026.py` 第 198 行原先对 `#task-select option[value=...]` 调用默认 `wait_for()`；失败结果 `/tmp/opencode/fundlex-production-v1-e2e-20261026/e2e-v1-yarwc0ihqd68/result.json` 记录任务已完成但结果页自动化未完成。该问题不改变服务端任务状态。
+- 处理方法：等待该 option `state="attached"`，确认选项已由 V1 页面填充后再调用 `select_option`；继续保留服务端轮询和产物门禁。
+- 状态与验证：**代码已实施，待下一次真实生产复跑验证**。脚本静态编译和完整项目回归待随本轮最终编辑复核；在新的普通合同链路成功完成前，不把脚本修复视为生产验收完成。
+- 下一步：发布 G15 修复后重新运行脚本；保留失败证据，完成后清理该次临时账号及所有精确关联数据和对象。
+- 变更记录：2026-10-26 新增；与 FL-D270 分开记录，分别表示引擎归因缺陷和浏览器验收等待缺陷。
+
+## FL-D272 V1 生产验收脚本使用 networkidle 与持续轮询页面不相容（2026-10-26）
+
+- 发现日期：2026-10-26。
+- 问题与影响：G15 修复发布后的新验收脚本在首页加载阶段等待 Playwright `networkidle`，V1 页面启动后存在持续请求/轮询，导致浏览器在 60 秒内没有进入后续注册和任务步骤。此次没有创建用户、任务、模型调用或对象。
+- 证据：运行结果 `/tmp/opencode/fundlex-production-v1-e2e-20261026/e2e-v1-8j8alpwpr2j8/result.json`，错误为 `Page.goto: Timeout 60000ms exceeded`；同一时间直接请求 `https://fundlex.club/` 返回 HTTP 200，响应耗时约 0.03 秒，标题为 `FundLex合同修订工作台`。清理命令确认该临时用户名不存在。
+- 处理方法：验收脚本导航统一改为 `wait_until="domcontentloaded"`，之后继续用具体控件、认证状态、API 轮询和结果元素作为业务就绪条件，不依赖网络空闲。
+- 状态与验证：**代码已实施，待真实复跑验证**。本次失败不构成生产服务或引擎失败，也不能作为普通合同验收通过证据。
+- 下一步：重新执行脚本；若成功完成真实普通合同和 Compare，再按报告和下载证据更新 FL-D270/FL-D271 状态；若业务路径仍失败，保留最新失败证据并继续 NO-GO。
+- 变更记录：2026-10-26 新增；临时账号在注册前未产生数据库残留。
+
+## FL-D273 `targets_for_open_rules` 局部导入遮蔽 `condition_status` 导致真实 Worker survey 阶段 NameError（2026-10-26）
+
+- 发现日期：2026-10-26。
+- 问题与影响：`fundlex/targeting.py` 的 `targets_for_open_rules()` 在遍历 `satisfied` target 时先读取 `condition_status`；同一函数后面的 `if auto` 分支又局部导入同名符号，Python 因此把它判定为整个函数的局部变量。真实普通合同在事实、scope、inventory 三次模型调用后进入 `survey`，调用 `targets_for_open_rules` 时抛 `NameError`，任务以 `PROCESSING_FAILED` 结束，未生成 DOCX 交付物。
+- 证据：任务 `c9e267272f7249e4a13d615cf0742dcd`、文档 `fdd5d355fdf1422dad0b2f60f4fdde22` 的报告 `/tmp/opencode/fundlex-production-v1-e2e-20261026/e2e-v1-0hq1fi2tugpm/report.json` 记录 `stage: "survey"`、`message: "NameError"`；本机以同一公开 DOCX 和生产配置复现，异常为 `cannot access free variable 'condition_status' where it is not associated with a value in enclosing scope`，定位 `/home/opencode/fundlex/fundlex/targeting.py:648`。
+- 处理方法：将 `condition_status` 与其他 recall helper 一起提升到 `targets_for_open_rules` 函数入口导入，删除后部同名局部导入，避免作用域遮蔽；增加 satisfied target 在 auto 分支前执行的回归，确保该状态读取可用。
+- 状态与验证：**代码已实施，本地验证通过，生产发布待验证**。`tests/test_open_obligation_recovery.py`、G15 定向集合及跨段测试合计 `52 passed`；`py_compile` 和 `git diff --check` 通过。生产失败任务已清理 1 个用户、1 个会话、1 个任务、1 个批次、1 个文档及 3 个对象；本条修复尚未作为生产交付证据。
+- 下一步：备份并发布 `fundlex/targeting.py`，核对 API/Worker active 后重新运行真实 V1 普通合同；继续核对 G15 attribution、完整报告、working/final/redline、Review、selected artifacts、哈希及授权下载，再执行独立 Compare。
+- 变更记录：2026-10-26 新增；本条由 FL-D270 的生产复跑失败中发现，G15 修复本身尚未因该 NameError 被真实验证。
+
+## FL-D274 V1 验收脚本在普通任务失败后继续点击 Compare，遮蔽主失败证据（2026-10-26）
+
+- 发现日期：2026-10-26。
+- 问题与影响：普通合同 Worker 已写入 `PROCESSING_FAILED` 或 `delivery_status=not_generated` 后，脚本仍继续执行详情页后续动作；详情弹窗保持打开时，点击后台 Compare 按钮又产生 pointer interception 错误，使一次真实业务失败被后续 UI 错误混淆，也可能让人误以为 Compare 已开始验收。
+- 证据：运行 `/tmp/opencode/fundlex-production-v1-e2e-20261026/e2e-v1-0hq1fi2tugpm/result.json` 既记录普通文档报告的 `PROCESSING_FAILED`/`stage=survey`，又记录随后 `#compare-new` 被 `#detail-overlay` 遮挡的自动化异常；该次 Compare 没有创建任务。前端 `frontend/app.js` 的详情弹窗在打开期间将工作台设置为 inert。
+- 处理方法：普通报告保存后，若任务失败、报告含错误码或交付状态为 `not_generated`/`incomplete`，验收脚本立即以明确的 ordinary failure 结束，不进入 Review/Compare；完整交付路径则在导航 Compare 前点击 `#close-detail` 并等待弹窗隐藏。
+- 状态与验证：**代码已实施，待下一次真实运行验证**。脚本 `py_compile`、`git diff --check` 和 `node --check` 通过；此前真实失败账号及其关联数据已清理。本条不能替代普通合同或 Compare 成功验收。
+- 下一步：以 FL-D273 修复后的新普通任务验证失败短路或完整交付分支；成功交付后独立核对 Compare 任务、阅读器、覆盖警告、报告下载和三视口证据。
+- 变更记录：2026-10-26 新增；从 FL-D273 生产复跑中发现，和引擎 NameError 分开记录。
+
+## FL-D275 G15 composite 首段 Claim Replay 未重算跨段支付授权、Review 父级 manifest 缺少原文（2026-10-26）
+
+- 发现日期：2026-10-26。
+- 问题与影响：FL-D270 的归因修复生成了 `p806`/`p807` 和 `p1262`/`p1263` 两段 composite 删除，但 Claim Replay 对每个物理段按单段删除校验；支付头段本身不包含完整 payment clause，因而报 `CLAIM_OPERATION_SPAN_UNAUTHORIZED`，并继续产生 `CLAIM_PLANNED_EFFECT_MISSING`、`FINAL_OPERATION_UNPROVEN` 和 `FINAL_COVERAGE_UNRESOLVED`。同一批旧报告的 `atomic_paragraph` 父 edit 未保存 `expected_old_text`，Review 重建 redline manifest 时将 `p142` 原文误认为短 fragment，POST `/decisions` 返回 `REVISION_TEXT_MISMATCH`。
+- 证据：原始真实报告 `/tmp/opencode/fundlex-production-v1-e2e-20261026/e2e-v1-jeo9hsg813hd/report.json`；生产 G15 edit 为 `p806 (0,35)`、`p807 (0,89)`、`p1262 (0,35)`、`p1263 (0,91)`。修复前直接重放产生两个首段授权失败；修复后同报告以原始 DOCX 和 `working_final.docx` 重放为 `verified=true`、19 edits、0 failures。原 Review 失败通过正式 selected artifact 生成器复现为 `DocxError: REVISION_TEXT_MISMATCH`；补入已验证 source slice 后生成 `/tmp/opencode/selected-repro-after-d275.docx` 成功。
+- 处理方法：`fundlex/recall.py` 仅在顺延句后没有可见文本时把尾随格式空白纳入 source-bound boundary；`fundlex/generation/claim_replay.py` 对 G15 composite 首段重新读取相邻 paragraph、验证完整 payment head、连续物理位置及 `_g15_delay_continuation()` 计算出的尾段边界，继续对尾段执行精确边界校验；`fundlex/recall_pipeline.py` 将 `validate_edit_plan()` 生成的父级 `expected_old_text`/`expected_old_hash` 写入 report plan，供 Review manifest 重建使用。新增 G15 composite Replay、尾随空白和 selected manifest 回归。
+- 状态与验证：**代码已实施，工作区定向验证通过，生产发布与新真实 V1 复跑待验证**。G15/Claim Replay/selective 定向集合 `96 passed`，相关最终验证集合 `194 passed`；真实旧报告 Claim Replay 已通过，selected artifact 生成已通过；`py_compile`、`node --check` 和 `git diff --check` 通过。既有生产报告、账号和对象未被改写。
+- 下一步：新备份后发布 `recall.py`、`recall_pipeline.py`、`generation/claim_replay.py` 及其依赖；核对部署 hash 和服务状态；运行新真实 V1 普通合同全交付与 Review selected artifact，再独立运行 Compare。所有 D01–D20、G06、普通合同完成和最终 GO 门禁继续按现状保持 NO-GO。
+- 变更记录：2026-10-26 新增；保留修复前失败证据与修复后离线重放证据，不修改历史 report、gold 或固定分母。
+- 下一步：使用一次性 MySQL 8 测试库运行 Feishu store/schema、并发绑定和 outbox 领取测试；真实验收前核对服务单元、共享数据目录和凭据变量存在性。
+- 变更记录：2026-10-26 新增；明确区分 SQLite 与 MySQL/网络未验证边界。
+
+## FL-D276 V1 真实普通交付通过、Compare 覆盖仍 incomplete（2026-10-26）
+
+- 发现日期：2026-10-26。
+- 问题与影响：D275 发布后的真实 V1 普通公开合同路径已完整交付，但独立 Compare 路径虽然任务、阅读器和 view API 成功，结果 coverage 仍为 `incomplete`；未支持结构不能作为全文完整比较交付。
+- 证据：普通任务 `6200b8ad71974c10b613622809fa52f5`、文档 `2adeaefc840b4df68e8be0d060cea16f`，证据目录 `/tmp/opencode/fundlex-production-v1-e2e-20261026/e2e-v1-o9rfdisxoj2o/`。任务 `completed/succeeded/complete`，31/31 targets completed、unresolved=0、`artifact_claim_replay.verified=true`、19 edits；Review HTTP 200，19 条修订拒绝 1 条，`selected_final` 和 `selected_redline` 均成功下载。Compare 任务 `191b14f48e264212abe98de5828bcd29` 完成并可查看，1113 处差异（modify 313、insert 442、delete 358），但警告为 `UNSUPPORTED_VISIBLE_CONTENT:header`、`footer`、`AlternateContent`、`drawing`、`pict`，证据为 `compare-view.json` 和 `result.json`。
+- 处理方法：普通交付证据按报告、Claim Replay、DOCX、哈希、Review 和授权下载逐项核验；Compare coverage 缺口保留为明确 `incomplete`，不提升为 complete，不修改结果或掩盖警告。
+- 状态与验证：**普通 V1/D275 已验证；Compare 全文交付未通过，整体生产结论保持 NO-GO**。全量回归为 `1497 passed / 48 skipped / 2 warnings`；发布后 API/Worker active，部署关键文件哈希与工作区一致。
+- 清理：临时账号 `e2e-v1-o9rfdisxoj2o` 已删除；清理脚本记录 1 user、1 session、1 task、1 batch、1 document、1 compare task、1 compare pair，删除关联对象 10 个；数据库复核用户名行数为 0。
+- 下一步：补齐或明确处理 Compare 的 header/footer、AlternateContent、drawing、pict 等可见内容覆盖，再独立复验；D01–D20 固定分母、G06 授权及其他项目级门禁仍需完成。
+- 变更记录：2026-10-26 新增；保留普通成功与 Compare incomplete 的同次真实用户路径证据。

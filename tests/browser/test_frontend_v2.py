@@ -39,6 +39,7 @@ def live_app(tmp_path, monkeypatch):
     from fundlex.api import create_app
 
     monkeypatch.setenv("FUNDLEX_AUTH_MODE", "dev")
+    monkeypatch.setenv("FUNDLEX_FRONTEND_VERSION", "v2")
     monkeypatch.setenv("FUNDLEX_DATA_DIR", str(tmp_path / "module-default"))
     app = create_app(tmp_path / "data", auth_db=str(tmp_path / "auth.sqlite3"))
     server = uvicorn.Server(uvicorn.Config(app, log_level="critical"))

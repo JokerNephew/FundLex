@@ -39,6 +39,50 @@ def test_actual_docx_tail_is_deleted_and_unplanned_tail_fails_replay(tmp_path, m
     assert all(any(s["location"] == loc and s["state"] == "FAIL" for s in sites) for loc in ("p1", "p4"))
 
 
+def test_delay_tail_authorization_includes_only_trailing_whitespace(tmp_path):
+    """A composite whole-paragraph slice may include source trailing whitespace."""
+    source = _write(tmp_path / "source.docx", [PAYMENT, REAL_DELAY + USAGE,
+                                                 PAYMENT, REAL_DELAY + "  "])
+    original = source
+    target = _target("p2", PAYMENT)
+    added = g15_delay_continuation_targets([target], {"G15": _rule()}, original)
+    assert len(added) == 1
+    assert added[0].location == "p3"
+    assert added[0].end == len(original.by_location("p3").text)
+
+
+def test_composite_payment_head_and_delay_replay_as_one_authorized_delete(tmp_path):
+    """Replay must reprove both parts of a split payment deletion from source."""
+    from fundlex.recall import compact_offsets
+
+    head = "C 类基金份额的基金销售服务费每日计算，逐日累计至每月月末，按月支付，"
+    tail = ("由基金管理人与基金托管人核对一致后，基金托管人按照与基金管理人协商一致的方式于"
+            "次月首日起5个工作日内从基金财产中一次性支付给基金管理人。若遇法定节假日、公休假等，"
+            "支付日期顺延。  ")
+    original = _write(tmp_path / "source.docx", [head, tail])
+    actual = _write(tmp_path / "actual.docx", ["", ""])
+    rule = _rule()
+    head_compact, _ = compact_offsets(head)
+    tail_compact, _ = compact_offsets(tail)
+    visible_tail = tail.rstrip()
+    visible_tail_compact, _ = compact_offsets(visible_tail)
+    parts = [f"p0:0:{len(head_compact)}", f"p1:0:{len(visible_tail_compact)}"]
+    edits = [
+        {"target_id": "Y", "rule_id": "G15", "location": "p0", "start": 0,
+         "end": len(head), "replacement": "", "operation": "replace",
+         "content_source": "composite_delete", "operation_keys": ["G15:0"],
+         "expected_old_text": head,
+         "evidence": {"composite": True, "parts": parts, "part_index": 0}},
+        {"target_id": "Y", "rule_id": "G15", "location": "p1", "start": 0,
+         "end": len(tail), "replacement": "", "operation": "replace",
+         "content_source": "composite_delete", "operation_keys": ["G15:0"],
+         "expected_old_text": tail,
+         "evidence": {"composite": True, "parts": parts, "part_index": 1}},
+    ]
+    proof = replay_claims(edits, original, actual, rules_by_id={"G15": rule})
+    assert proof["verified"], proof["failures"]
+
+
 @pytest.mark.parametrize("head,tail", [
     (PAYMENT + CHECK, DELAY + USAGE),
     (PAYMENT.replace("销售服务费", "管理费"), DELAY + USAGE),

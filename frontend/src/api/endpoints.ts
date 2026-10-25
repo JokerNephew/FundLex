@@ -4,6 +4,7 @@ import type {
   GuideDetail, GuideSettings, GuideSummary, Paginated, Report, RevisionView, TaskDetail,
   TaskDocument, TaskStats, TaskSummary, User, UploadResult, CompareTask,
   ComparePairManifest, CompareUploadResult, CompareView,
+  FeishuBinding, FeishuBindingCode,
 } from '../types'
 
 // The API returns JSON objects from the running FastAPI service. Optional fields in
@@ -15,6 +16,9 @@ export const api = {
   logout: () => request<{ ok: boolean }>('/api/auth/logout', { method: 'POST' }),
   me: () => request<User>('/api/auth/me'),
   changePassword: (old_password: string, new_password: string) => request<{ ok: boolean }>('/api/auth/password', { method: 'POST', body: jsonBody({ old_password, new_password }) }),
+  feishuBinding: () => request<FeishuBinding>('/api/integrations/feishu/binding'),
+  createFeishuBindingCode: (ttl_seconds = 600) => request<FeishuBindingCode>('/api/integrations/feishu/binding-code', { method: 'POST', body: jsonBody({ ttl_seconds }) }),
+  revokeFeishuBinding: () => request<FeishuBinding>('/api/integrations/feishu/binding', { method: 'DELETE' }),
 
   tasks: (params: Record<string, string | number | undefined> = {}) => request<Paginated<TaskSummary>>(`/api/tasks?${new URLSearchParams(Object.entries(params).filter(([, value]) => value !== undefined && value !== '').map(([key, value]) => [key, String(value)]))}`),
   taskStats: (month?: string) => request<TaskStats>(`/api/tasks/stats${month ? `?month=${encodeURIComponent(month)}` : ''}`),
