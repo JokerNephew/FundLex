@@ -5,6 +5,7 @@
 .topbar-actions { display: flex; gap: 14px; align-items: center; }
 .topbar-actions .ui-button--quiet { color: #fff; }
 .identity { color: #f8dfd1; font-size: 14px; }
+.environment-badge { padding: 4px 8px; border: 1px solid #f6c453; border-radius: 999px; color: #2b1b00; background: #ffd978; font-size: 11px; font-weight: 800; letter-spacing: .04em; white-space: nowrap; }
 .shell-body { display: flex; min-height: calc(100vh - 68px); }
 .sidebar { width: 232px; padding: 28px 16px; background: #fff; border-right: 1px solid var(--border); }
 .sidebar nav { display: grid; gap: 6px; }

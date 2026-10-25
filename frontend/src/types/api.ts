@@ -19,6 +19,8 @@ export interface Capabilities {
   registration_open?: boolean
   task_api?: boolean
   app_version?: string
+  environment?: string
+  commit?: string
   upload_limits?: { max_file_bytes?: number; max_request_files?: number; max_request_bytes?: number }
   engine?: {
     id?: string

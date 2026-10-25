@@ -3305,3 +3305,130 @@
 - 处理方法：生产服务验证以 systemd 单元和 8010 为准；隔离评测脚本必须显式使用其批次登记的端口和数据目录，不能把 8013 的历史默认值写入生产健康结论。健康接口的未认证 401 要结合登录态验证，不能单独解释为服务失败。
 - 状态与验证：**已登记并验证，当前无生产故障证据**。API/Worker active、8010 监听和 capabilities 200 均已核对；8013 连接失败仅说明该历史隔离端口当前未启动。未新增模型调用，未改变部署文件。
 - 下一步：后续真实工作台验收先确认 systemd/API 实际端口，再走登录、上传、Worker/model 和授权下载链路；将端口、认证状态和验证时间写入验收证据。
+
+## FL-D244 Test 部署身份与工作区脏状态必须单独记录（2026-10-25）
+
+- 问题与影响：Test 部署可以使用独立目录、服务、端口和数据根目录运行，但当前代码来自含未提交改动的工作区。如果只看到服务 active 或接口 200，可能误把基础设施可运行当成已冻结、可发布的版本，也可能无法复现部署时的源码身份。
+- 证据：Test 服务 `fundlex-test-api.service`、`fundlex-test-worker.service`、`fundlex-test-compare-worker.service` 均 active；API 监听 `127.0.0.1:8110`，Production 仍监听 `127.0.0.1:8010`。最近 Test manifest `/var/lib/fundlex-test/deployments/20261025T031956Z.json` 记录 commit `f59c4521d4a4c34e32feacf6999756e3fc783dc0`、Python 3.11.13、Test 数据根目录和 `dirty=true`。
+- 处理方法：部署脚本在写入前固定检查 Test 环境、数据/认证/账本/trace 路径、Production 路径、服务名和端口；manifest 持久记录 commit、脏状态、前端构建哈希、依赖指纹和服务入口。验收文档分开说明“服务与隔离已验证”和“干净版本发布资格”。
+- 状态与验证：**已实施并验证基础隔离；发布身份仍待解决**。三个 Test 服务、8110 接口、Test capabilities、独立数据对象和 Production 8010 只读状态均已核对；dirty 状态仍存在。
+- 下一步：整理并审阅本轮源码后，以干净提交或明确的不可发布开发快照重新部署，重核 manifest 与真实用户验收；在此之前不能宣称 Test 发布完成。
+- 变更记录：2026-10-25新增。
+
+## FL-D245 Test API 启动时认证数据库所有权可能阻塞全部服务（2026-10-25）
+
+- 问题与影响：Test password 模式在 API 创建认证连接时需要读取和写入 `/var/lib/fundlex-test/auth.sqlite3`。若 bootstrap 或历史重置先由 root 创建数据库，`fundlex` 服务用户无法写入，API 会在启动阶段失败，导致 Worker、Compare 和真实用户路径都无法验收。
+- 证据：本轮部署曾出现 root-owned Test `auth.sqlite3` 导致 API 启动失败；部署脚本随后在已有凭据路径对认证库执行 `chown fundlex:fundlex`，在首次 bootstrap 后再由 root 安装凭据文件，后续三个 Test 服务均 active，8110 监听正常。生产认证库和服务未被操作。
+- 处理方法：`deploy_test.sh` 将认证用户 bootstrap 放在 Test 代码/环境安装后、服务启动前；首次生成的凭据以 root `0600` 保存，已有 Test 凭据时只修正 Test 认证数据库所有权。`reset_test_environment.sh` 只清理固定 Test 数据根目录并按相同顺序重建。
+- 状态与验证：**已实施并通过后续 Test 服务启动验证**。后续部署三个 unit active，Test password login 和任务创建成功；尚未执行一次完整 reset 后的浏览器验收。
+- 下一步：执行 Test reset dry-run 与受控 apply，核对认证库、凭据权限、服务重启和登录；若发现新的启动顺序问题，在本条追加证据，不修改 Production。
+- 变更记录：2026-10-25新增；后续部署验证已关闭原启动故障，但保留历史原因。
+
+## FL-D246 Test 未配置独立模型时只能交付明确失败证据（2026-10-25）
+
+- 问题与影响：Test 已具备真实登录、上传、seal、持久 Worker 和报告落库，但没有 Test 专用 `LLM_BASE_URL`、`LLM_MODEL` 或可用 `LLM_API_KEY` 时，模型-backed DOCX 修改不会发生。若只依据 task completed、接口成功或报告生成，容易把 `not_generated` 误判为合同交付。
+- 证据：`/etc/fundlex-test.env` 的模型 endpoint/model 字段为空；已认证 Test 健康结果为 `degraded` 且 `model_config=missing`。真实任务 `438e1e3eed84469c85f34b905ee959ca`、文档 `2d9169deb1e64c1cb01faf208d23394e` 的 Worker 终态为 `MODEL_CONFIG_MISSING`，`delivery_status=not_generated`，源 SHA 为 `eda0f176b2e5b0913abe036817696b01c172e858b9dabf8cbd29174e7fe2b644`。
+- 处理方法：健康接口、Worker 报告和 Test smoke 均保留模型配置状态与错误码；smoke 在 seal 后轮询实际文档终态，并记录报告和 artifact links。模型配置必须来自独立授权的 Test endpoint/project/key，不读取或复制 Production secret。
+- 状态与验证：**已确认、外部配置阻塞**。缺模型的失败路径已由真实 Test Worker 验证；真实 DOCX 修改、final/redline、修订接受/拒绝和授权下载尚未验证。
+- 下一步：取得并安全安装 Test 专用模型配置后，重新部署并执行真实合同端到端路径，按模型账本、实际 DOCX 差异、修订 XML、报告和下载哈希验收。
+- 变更记录：2026-10-25新增。
+
+## FL-D247 Compare 对 header/footer/drawing 可见内容的支持边界必须显式进入结果（2026-10-25）
+
+- 问题与影响：真实 DOCX 的可见文字可能位于正文以外的 header、footer 或 drawing。若 Compare 只比较已支持的正文部件却返回成功，会漏报差异并误导用户认为合同比较完整。
+- 证据：Test 真实 Compare 任务 `be56e24776cb45659c246b0ff6300c6a`、结果 `cb9bc6c97fb74456b332b3222c08cd86` 经 Compare API、独立 Compare Worker、持久化和授权查看完成；结果 SHA 为 `409bdbae3813e5d3e9830efc17829259e273d0f9837587759793cc0ff22e40af`，状态为 `incomplete`，检测到一处 insertion，并报告 `UNSUPPORTED_VISIBLE_CONTENT:header`、`footer`、`drawing`。成员越权查看返回 404。
+- 处理方法：Compare 结果将无法读取或比较的可见部件作为明确 incomplete warning 输出，交付状态不因已发现正文差异而升级为 complete。支持的正文/表格内容另用覆盖边界清晰的合同运行完整成功例。
+- 状态与验证：**已实施并验证边界结果与权限隔离**。独立 Compare Worker、结果落库、授权查看和不完整状态均已通过；完整支持内容的成功例及浏览器 Test 入口仍待执行。
+- 下一步：准备不含当前不支持可见部件、但有明确正文差异的真实公开合同，运行 Compare 完整成功例，并核对结果哈希、结果页和下载权限。
+- 变更记录：2026-10-25新增。
+
+## FL-D248 Test smoke 凭据与 reset dry-run 需要受保护读取（2026-10-25）
+
+- 问题与影响：Test 凭据文件按部署约定为 root-owned `0600`，普通 `opencode` 进程直接运行 smoke 会在读取 `/etc/fundlex-test-credentials` 时得到 PermissionError；reset dry-run 若直接用普通权限枚举 `0750` 的 Test 数据根目录，也会在展示清单前失败。若忽略这两个权限边界，可能把运维脚本问题误判为认证或服务故障。
+- 证据：首次运行更新后的 smoke 返回 `PermissionError: [Errno 13] /etc/fundlex-test-credentials`，未发起登录、任务或模型调用；首次 `bash tools/deploy/reset_test_environment.sh` 已输出 dry-run 提示但因普通权限 `find` 退出码为1，未停止服务、未删除数据。Test 服务和数据均保持不变。
+- 处理方法：保留凭据 root-owned `0600`，文档改为使用受控 `sudo -n` 启动 smoke；reset dry-run 的只读清单使用 `sudo -n find`，`--apply` 的所有变更仍限定在固定 `/var/lib/fundlex-test`，并执行配置、路径和 Production 反向检查。
+- 状态与验证：**已实施并验证**。凭据权限未放宽；reset dry-run 已正常列出固定 Test 数据项；sudo smoke 已真实完成 login→upload→seal→持久 Worker 轮询，并记录 `MODEL_CONFIG_MISSING` 终态、报告 HTTP 200 和空 artifact links；最终部署后三个 Test 服务 active。
+- 下一步：获得独立 Test 模型配置后重新部署并运行成功 DOCX 交付验收；若执行 `--apply` reset，继续复核认证权限和登录。
+- 变更记录：2026-10-25新增。
+
+## FL-D249 Test 认证 SQLite 初始权限过宽（2026-10-25）
+
+- 问题与影响：Test 认证数据库在 bootstrap 时由 `fundlex` 创建，但默认 SQLite 文件权限曾为 `0644`。虽然 Test 数据根目录为专用目录，其他本机用户仍可能直接读取认证数据库文件；这不符合认证存储的最小可读权限要求。
+- 证据：部署后只读 `stat` 曾显示 `/var/lib/fundlex-test/auth.sqlite3` 为 `fundlex:fundlex 644`；`/etc/fundlex-test-credentials` 已为 `root:root 600`。该问题未涉及 Production 认证库。
+- 处理方法：Test deploy 和 reset 在 bootstrap 后显式执行 `chmod 0600 /var/lib/fundlex-test/auth.sqlite3`；已有认证库路径也在部署时修正 owner 和 mode。服务仍以 `fundlex` 用户运行，不需要扩大读取权限。
+- 状态与验证：**已实施并验证**。最终部署后 `stat` 显示认证 SQLite 为 `fundlex:fundlex 600`，凭据为 `root:root 600`；三个 Test 服务 active，capabilities 返回 `environment=test`，password login 和真实 smoke 均通过到 Worker 终态。
+- 下一步：执行 reset apply 前后继续保持同一权限核对；模型配置到位后再进行成功交付验收。
+- 变更记录：2026-10-25新增。
+
+## FL-D250 Test 需要复用 Production 模型配置但保持运行数据隔离（2026-10-25）
+
+- 问题与影响：Test 原先没有 `LLM_BASE_URL`、`LLM_MODEL` 和可用模型密钥，真实任务只能以 `MODEL_CONFIG_MISSING` 结束；用户要求 Test 使用与 Production 相同的模型配置。若直接复制整个环境文件，会把 Production 数据根目录、账本、trace、数据库或端口带入 Test，破坏隔离。
+- 证据：Production `/etc/fundlex-recall.env` 的模型配置为 provider `OpenCodeGo`、model `deepseek-v4.1-flash`，并包含模型请求预算、超时、请求选项和可观测性配置；Test 原配置模型字段为空。同步后 Test health 的 `model_config=ok`，三个 Test 服务 active，API 仍为 `127.0.0.1:8110`；Test 路径仍为 `/var/lib/fundlex-test`，Production 仍为 `127.0.0.1:8010`。同步前备份保存在 root-only `/etc/fundlex-test.env.bak-20261024T234530Z`，此前两次错误合并尝试均被隔离校验拦截且已恢复/未启动模型任务。
+- 处理方法：只从 Production 环境文件同步模型连接、模型名、模型密钥、模型预算/超时/请求选项及 Langfuse 配置；保留 Test 的 `FUNDLEX_ENV=test`、数据根目录、认证数据库、model ledger、trace 路径、注册策略、工作流并发和 8110 服务边界。同步前备份 Test 配置，写入后 fail-closed 检查 Production 路径、端口和 Test isolation-critical 变量。
+- 状态与验证：**已实施并完成真实模型验证，但合同交付仍不完整**。Test 真实任务 `cf68b45b5d6e4cb89bf4e19cf788ef4c`、文档 `eba63a9e1cc54c81ae81be04016df3d0` 完成 password login→上传→seal→持久 Worker→真实模型调用→报告和工作文件生成；health 为 `ok`，`job_status=succeeded`，`qualification_status=eligible`，`delivery_status=incomplete`，43 个 unresolved，生成 `working_final`、`working_redline`、`report_json`、`report_md`。运行耗时约 319.844 秒，trace 66 行，实际 trace 与账本均在 Test 数据根目录；没有改动 Production 服务或数据。
+- 下一步：按真实产物逐项核对 working final/redline、修订 XML、报告、源/产物哈希和下载权限；修复或登记合同业务未决后重新运行。不能把与 Production 模型配置相同或 Worker succeeded 解释为完整合同交付。
+- 变更记录：2026-10-25新增；前置 `MODEL_CONFIG_MISSING` 阻塞因用户授权复用 Production 模型配置而解除，业务交付未决保持独立。
+
+## FL-D251 Test 公网入口不能复用 Production 域名（2026-10-25）
+
+- 问题与影响：Test API 原本只监听 `127.0.0.1:8110`，外部浏览器无法直接打开；`https://fundlex.club` 必须继续进入 Production `127.0.0.1:8010`。如果把 Production 域名改指 Test，会造成环境、账号、任务和模型数据混用。
+- 证据：`fundlex.club` DNS 解析到 `8.155.130.168`，现有 Nginx Production HTTPS server block 的 `proxy_pass` 为 `http://127.0.0.1:8010`；Test API 监听 `127.0.0.1:8110`。服务器已新增独立 Nginx server block，`test.8-155-130-168.sslip.io` 解析到同一公网 IP，并反代到 `127.0.0.1:8110`。公网 `https://test.8-155-130-168.sslip.io/` 返回 HTTP 200；其 `/api/capabilities` 返回 password auth、`registration_open=false`，而 `fundlex.club` 返回 Production 的 `registration_open=true`。
+- 处理方法：采用 `https://test.8-155-130-168.sslip.io/` 作为立即可用的 Test 入口。HTTP 301 跳转 HTTPS；证书为该主机名单独签发的 Let's Encrypt 证书，有效期至 2027-01-23；Nginx 只代理到 8110。Production `fundlex.club` 的 DNS、证书、Nginx server block、8010 服务和数据均保持不变。
+- 状态与验证：**已实施并验证**。公网首页 HTTPS 200、证书校验通过、Test capabilities 通过；Test 管理员和成员均完成公网登录及已认证 health 200，health status=`ok`。Nginx 配置测试通过并 reload 成功。尝试申请 `test.fundlex.club` 证书时因该名称没有 A/AAAA 记录被 Let's Encrypt 拒绝，未修改 Production DNS。
+- 下一步：如需正式易记地址，在 DNS 服务商新增 `test.fundlex.club A 8.155.130.168`，生效后为该名称单独申请证书并加入同一 Test 反代；在此之前使用已验证的 sslip.io 入口。
+- 变更记录：2026-10-25新增；同日完成独立 Nginx、HTTPS 证书、公网登录和 Test/Production 路由区分验证。
+
+## FL-D252 Test 凭据探测输出后必须轮换旧会话（2026-10-25）
+
+- 问题与影响：一次公网登录探测命令的 shell 引号错误导致受保护 Test 凭据文件内容进入工具输出。该输出不应作为项目证据保存，也不应继续使用原密码。
+- 证据：探测未完成登录验证，随后只在服务器本机读取 `/etc/fundlex-test-credentials`；没有将凭据写入仓库、文档或测试报告。Test 认证数据库路径为 `/var/lib/fundlex-test/auth.sqlite3`，凭据文件权限保持 `root:root 0600`。
+- 处理方法：立即为 `test-admin` 和 `test-member` 生成新密码，更新 Test SQLite 中的 scrypt 哈希，撤销两用户的旧 session，并以 root `0600` 原子替换凭据文件。后续验证只输出 HTTP 状态、token 是否存在和 health 状态，不输出密码或 token。
+- 状态与验证：**已解决并验证**。新管理员和成员均通过公网 Test 登录 HTTP 200，持有 token 后 health HTTP 200、status=`ok`；旧会话已撤销。Production 凭据、认证库和服务未涉及。
+- 下一步：后续自动化探测必须使用结构化安全读取，禁止把凭据 JSON 或 bearer token 放入命令输出；继续保留 Test 与 Production 账号分离。
+- 变更记录：2026-10-25新增并当日完成轮换验证。
+
+## FL-D253 本机根路径需要与 `/test/` 前缀共存（2026-10-25）
+
+- 问题与影响：Test 既需要支持反向代理的 `/test/` 路径，也需要按用户要求直接从 `http://127.0.0.1:8110/` 访问。原构建把 `/test` 写入静态资源绝对 URL，直接本机访问时 JS/CSS 404，React 工作台无法登录。
+- 证据：修复前 Chromium 记录 `/test/assets/index-DyNsapAI.css` 和 `/test/assets/index-CjLc3BaH.js` HTTP 404；修复部署后根路径首页、`/assets/index-Va4fN-zr.js`、`/assets/index-DyNsapAI.css` 和 `/api/capabilities` 均 HTTP 200，`/tmp/opencode/fundlex-browser-evidence/local-e2e.json` 的本机 Compare 浏览器检查为登录、上传、持久 Worker、结果、1 处差异和 `覆盖完整` 通过，网络/控制台/页面错误均为空。
+- 初步处理方法使用相对 `./` 资源基址并已验证首页和 Compare，但分阶段 React 验收进一步发现深层路由 `/tasks/new` 会把相对资源解析为 `/tasks/assets`，因此不能作为完整修复。
+- 当前处理方法：恢复 Test 构建的 `/test/` 资源基址，同时在 Test FastAPI 增加 `/test/assets`、`/test/static` 别名。直接 localhost 访问可加载 `/test/...` 资源，`/test/` 反向代理剥离前缀后仍加载 `/assets`；运行时 Router/API 仍仅按浏览器地址判断 `/test` 前缀。
+- 状态与验证：**已实施并验证**。Test-only 部署后 `/tasks/new` HTTP 200，页面引用 `/test/assets/index-Va4fN-zr.js` 与 `/test/assets/index-DyNsapAI.css`，两项资源 HTTP 200；本机全新 Chromium 已完成登录、新任务、真实 DOCX 选择、提交/seal、Worker 结果页、Review、选择版生成和详情页返回，网络/控制台/页面错误均为 0。生产 8010 未重启。
+- 下一步：继续保留 `/test/assets`、`/test/static` 别名并在后续干净部署中复验；Test reset dry-run 已通过，实际清空后需重新做登录和任务 smoke。
+- 变更记录：2026-10-25新增；同日发现并修正相对资源基址对 `/tasks/new` 的深层路由缺陷。
+
+## FL-D254 全新本机 React 工作台脚本首次超时未形成验收证据（2026-10-25）
+
+- 问题与影响：全新浏览器会话的 React 登录→新任务→上传→seal→Worker→结果脚本在 120 秒工具窗口内超时，未写出最终 JSON，也未在 Test 任务列表中发现新任务。若只看到脚本启动，不能把普通工作台全路径视为已验收。
+- 证据：命令 `local_react_e2e_fresh.mjs` 返回工具超时；`/tmp/opencode/fundlex-browser-evidence/local-react-e2e-fresh.json` 不存在；随后成员任务列表仍只有既有任务，最近一项为 `cf68b45b5d6e4cb89bf4e19cf788ef4c`。分阶段重试脚本及实时证据路径为 `/tmp/opencode/fundlex-browser-evidence/local_react_e2e_checkpoint.mjs`、`local-react-e2e-checkpoint.jsonl` 和 `local-react-e2e-checkpoint.json`。
+- 处理方法：将浏览器验收拆为立即落盘的清除存储、登录、新任务页、文件选择、提交、任务路由和 Worker 状态阶段，并把脚本执行窗口延长；每阶段只输出 URL、状态和错误摘要，不输出凭据或 bearer token。
+- 状态与验证：**已解决并验证**。`/tmp/opencode/fundlex-browser-evidence/local-react-e2e-checkpoint.json`、`.jsonl` 和 `local-react-api-poll.json` 记录全新会话登录、新任务页、文件选择、任务创建/seal、真实 Worker/model、结果页和无浏览器错误；任务 `70d3e232826243348c56feef21613491` 为 `completed`，文档 `8397d9ffde534246b41e1eaa4db9e252` 为 `succeeded`/`eligible`/`incomplete`。`local-react-e2e-review-download.json` 记录详情页、Review、1 条修订、批量拒绝、选择版生成、详情页返回和无浏览器错误均通过；授权下载的 HTTP/哈希证据在 `authorized-downloads.json`。
+- 下一步：实际 Test reset 仍待单独授权；dry-run 已确认清理边界，实际清空后需重新做登录、上传、Worker 和下载 smoke。
+- 变更记录：2026-10-25新增。
+
+## FL-D257 浏览器 Blob 下载目录权限不应替代授权下载核验（2026-10-25）
+
+- 问题与影响：Review/详情页的下载按钮通过前端 `saveBlob()` 创建浏览器内存 Blob。自动化脚本将下载目录设为 root 创建的 `/tmp/opencode/fundlex-browser-evidence/fresh-downloads` 后，按钮点击无浏览器/网络错误，但目录没有落盘文件；若只看目录文件，会错误判断产品下载失败。
+- 证据：`/tmp/opencode/fundlex-browser-evidence/local-react-e2e-review-download.json` 记录 `document_detail=true`、`review_page=true`、`selected_generated=true`、`no_browser_errors=true`；同一文件记录 JSON、Markdown、选择版合同按钮均 `clicked=true`，但 `files=[]`。原因是自动化浏览器用户不能写 root-owned 下载目录，且 `saveBlob()` 使用 `URL.createObjectURL`。
+- 处理方法：保持产品下载实现不变；使用同一 Test 成员会话直接请求页面实际开放的 artifact URL，保存响应并记录 HTTP、content type、大小和 SHA-256。真实授权下载结果位于 `/tmp/opencode/fundlex-browser-evidence/authorized-downloads.json`。
+- 状态与验证：**已解决并验证**。报告 JSON/Markdown、选择版合同、选择版修订痕迹、工作文件和工作修订痕迹全部 HTTP 200；6 个响应均有非空字节和哈希，成员权限有效。浏览器按钮和页面路径也无错误。
+- 下一步：后续浏览器自动化使用浏览器用户可写目录，或继续将 UI 点击与同一会话的响应字节核验分开记录；不把空下载目录单独作为授权失败证据。
+- 变更记录：2026-10-25新增；同日完成 UI 与 API 授权下载交叉验证。
+
+## FL-D255 Test 真实产物的业务未决项必须与 DOCX 位置和门禁分开对账（2026-10-25）
+
+- 问题与影响：真实模型任务虽然生成了 `working_final`、`working_redline` 和选择版，但报告的 43 个 unresolved 同时包含实际段落内容问题和 operation/coverage/Claim Replay 门禁。若只数实际改变段落，或只看 `job_status=succeeded`，会漏掉未完成的业务目标并错误开放完整合同交付。
+- 证据：`/tmp/opencode/fundlex-browser-evidence/unresolved-reconciliation.json` 读取真实报告 JSON、源 DOCX 和 `working_final.docx` 后固定记录 43 项：G01 4、G02 4、G03 3、G04 4、G09 3、G11 5、G14 4、G15 8、G16 8；位置包括 p103、p139、p229、p230、p879、p884、p885、p1355，另有 16 项没有单一段落位置。报告原始哈希为 `890c4e0c45ca68081f939c962d4e8a4f8f081956365867bfc502a2fbcbe0777c`。
+- 处理方法：保留报告和 DOCX 原件不变，独立保存 source/working-final 段落对账；将具体文本差异与 `CLAIM_OPERATION_NOT_PLANNED`、`site_evidence_missing`、`AUDIT_NOT_COMPLETED` 等门禁分开记录，只有全部独立证据闭合后才允许将 delivery 升级为 complete。
+- 状态与验证：**已核对，业务交付仍不完整**。产物修订语义另由 `artifact-provenance.json` 和 `selection-semantics.json` 验证通过，但 43 个 unresolved 仍有效，未宣称完整合同交付。
+- 下一步：逐项结合指引、源文、working/redline 和 Claim Replay 做业务复核；必要时修复引擎后以新冻结版本重新运行真实任务，不修改历史报告或 gold。
+- 变更记录：2026-10-25新增。
+
+## FL-D256 Test venv 缺少 Langfuse 客户端但本地模型账本仍可用（2026-10-25）
+
+- 问题与影响：Test Recall Worker 处理真实合同时记录 `langfuse disabled: client initialisation failed` 和 `ModuleNotFoundError: No module named 'langfuse'`，因此该 Test 任务没有发送 Langfuse Cloud trace。若把外部 trace 当作唯一模型调用证据，会误判任务没有真实处理。
+- 证据：Test worker 日志 `sudo -n journalctl -u fundlex-test-worker.service --since '2026-10-25 17:44:00'`；新任务 `70d3e232826243348c56feef21613491` 的 API 终态为 task `completed`、document `succeeded`、`eligibility=eligible`、`delivery_status=incomplete`，报告、账本和本地 trace 仍由 Test 专属路径生成。
+- 处理方法：可观测性模块按既有设计将 Langfuse 导入/配置异常降级为不追踪，不阻断 Worker；真实模型调用继续以 Test 模型账本、任务报告、artifact 和本地 trace 交叉核对。若需要 Cloud trace，再在 Test 专属 venv 安装兼容客户端并进行单独验证，不复制凭据到仓库或日志。
+- 状态与验证：**已核对，外部观测阻塞；合同处理未阻塞**。本次真实 Worker/model 任务成功到达业务终态；Langfuse Cloud trace 未宣称完成。
+- 下一步：若 Test 需要外部 trace，安装并验证 Test venv 的客户端后重跑最小真实调用；保持 Production 服务和配置不变。
+- 变更记录：2026-10-25新增。

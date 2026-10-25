@@ -13,6 +13,7 @@ import { TaskDetailIndexPage } from '../pages/TaskDetail/TaskDetailIndexPage'
 import { ReviewPage } from '../pages/Review/ReviewPage'
 import { TasksPage } from '../pages/Tasks'
 import { UsersPage } from '../pages/Users'
+import { APP_BASE_PATH } from '../config'
 
 function AppRoutes() {
   const auth = useAuthStore()
@@ -41,5 +42,5 @@ function AppRoutes() {
 export function App() {
   const load = useAuthStore((state) => state.load)
   useEffect(() => { void load() }, [load])
-  return <BrowserRouter><AppRoutes /></BrowserRouter>
+  return <BrowserRouter basename={APP_BASE_PATH || undefined}><AppRoutes /></BrowserRouter>
 }

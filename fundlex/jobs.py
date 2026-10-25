@@ -17,7 +17,7 @@ from typing import Any, Callable, Iterator
 from .store import (Conflict, RunStore, sha256_file, engine_build, SCHEMA_VERSION,
                     validate_delivery, is_recall_report)
 from .db import DatabaseError
-from .config import local_data_dir
+from .config import local_data_dir, write_heartbeat
 
 
 RETRYABLE_MODEL_CODES = {"MODEL_NETWORK_ERROR", "MODEL_RETRY_EXHAUSTED", "MODEL_CIRCUIT_OPEN",
@@ -404,6 +404,7 @@ class Worker:
         # Keep one process owner; only its bounded execution slots bypass run_once's lock.
         from . import guide_store
         guide_store._ensure_tables(self.store)
+        write_heartbeat(self.store.root, component="worker")
         stopped = stop_event or threading.Event()
         def consume():
             while not stopped.is_set():
@@ -414,6 +415,7 @@ class Worker:
                 futures = [pool.submit(consume) for _ in range(concurrency)]
                 try:
                     while not stopped.wait(poll_seconds):
+                        write_heartbeat(self.store.root, component="worker")
                         for future in futures:
                             if future.done():
                                 future.result()

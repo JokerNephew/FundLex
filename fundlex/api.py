@@ -14,6 +14,7 @@ import tempfile
 import json
 import os
 import zipfile
+import time
 from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
@@ -36,7 +37,7 @@ from .html_view import project_docx
 from .selective import (accept_all as selective_accept_all, generate_selected_artifact,
                         generate_selected_redline)
 from .store import Conflict, NotFound, RunStore, StoreError
-from .config import auth_db_target, local_data_dir
+from .config import auth_db_target, local_data_dir, runtime_environment, assert_runtime_isolation
 from .tasks import TaskStore
 from .compare.store import CompareStore
 from .compare.api import register_compare_routes
@@ -427,6 +428,7 @@ def _public_batch(batch: dict, *, detail: bool, metrics: dict[str, dict] | None 
 
 
 def create_app(data_dir: str | Path | None = None, *, auth_db=None) -> FastAPI:
+    assert_runtime_isolation(data_dir=data_dir, auth_db=auth_db)
     application = FastAPI(title="FundLex", version="0.1.0")
 
     @application.middleware("http")
@@ -575,7 +577,9 @@ def create_app(data_dir: str | Path | None = None, *, auth_db=None) -> FastAPI:
         if mode == "password" and identity is None:
             # Minimal pre-login payload: no ruleset or identity metadata leaks.
             return {"auth_mode": mode, "login_required": True, "task_api": True,
-                    "app_version": __version__, "registration_open": _registration_open()}
+                    "app_version": __version__, "environment": runtime_environment(),
+                    "commit": os.environ.get("FUNDLEX_COMMIT", "unknown"),
+                    "registration_open": _registration_open()}
         # The runtime has a single rule source: the bound guide snapshot. The
         # legacy rulesets no longer participate, so capabilities must not load
         # or expose them (a broken legacy file must not break the engine).
@@ -597,7 +601,9 @@ def create_app(data_dir: str | Path | None = None, *, auth_db=None) -> FastAPI:
             "actions_total": int(guide.get("groups") or 0) if guide else 0,
         }
         return {"auth_mode": mode, "login_required": mode == "password", "task_api": True,
-                "app_version": __version__, "registration_open": _registration_open(),
+                "app_version": __version__, "environment": runtime_environment(),
+                "commit": os.environ.get("FUNDLEX_COMMIT", "unknown"),
+                "registration_open": _registration_open(),
                 "upload_limits": {"max_file_bytes": MAX_UPLOAD_BYTES, "max_request_files": MAX_BATCH_DOCUMENTS,
                                   "max_request_bytes": MAX_BATCH_BYTES},
                 "engine": engine}
@@ -1011,7 +1017,34 @@ def create_app(data_dir: str | Path | None = None, *, auth_db=None) -> FastAPI:
 
     @application.get("/api/health")
     def health(user: str = Depends(_user)):
-        return {"status": "ok", "profile": "local", "user": user}
+        root = Path(store.root).resolve()
+        components = {"task_store": "ok", "auth_store": "ok", "compare_store": "ok"}
+        for name, database in (("task_store", store.database),
+                               ("auth_store", getattr(application.state, "auth_db", None)),
+                               ("compare_store", compare_store.store.database)):
+            try:
+                if database is None:
+                    raise RuntimeError("database unavailable")
+                with database.connect() as db:
+                    db.execute("SELECT 1").fetchone()
+            except Exception as exc:  # noqa: BLE001 - health must report a component failure
+                components[name] = f"error:{type(exc).__name__}"
+        heartbeat = root / "worker-heartbeat.json"
+        compare_heartbeat = root / "compare-worker-heartbeat.json"
+        now = time.time()
+        for name, path in (("worker", heartbeat), ("compare", compare_heartbeat)):
+            if not path.is_file():
+                components[name] = "missing"
+            elif now - path.stat().st_mtime > float(os.environ.get("FUNDLEX_HEARTBEAT_MAX_AGE_S", "30")):
+                components[name] = "stale"
+            else:
+                components[name] = "ok"
+        model_configured = bool(os.environ.get("LLM_BASE_URL") and os.environ.get("LLM_MODEL"))
+        components["model_config"] = "ok" if model_configured else "missing"
+        return {"status": "ok" if all(value == "ok" for value in components.values()) else "degraded",
+                "environment": runtime_environment(), "commit": os.environ.get("FUNDLEX_COMMIT", "unknown"),
+                "profile": "test" if runtime_environment() == "test" else "local",
+                "user": user, "components": components}
 
     @application.get("/api/batches")
     def list_batches(user: str = Depends(_user)):
@@ -1161,8 +1194,15 @@ def create_app(data_dir: str | Path | None = None, *, auth_db=None) -> FastAPI:
     # worker and viewer contract during the migration.
     if frontend.is_dir():
         application.mount("/static", StaticFiles(directory=frontend), name="static")
+        # Test is also exposed through the production host's /test/ reverse
+        # proxy.  That proxy strips the prefix before reaching FastAPI, while
+        # a direct localhost browser may still request the built /test asset
+        # URLs.  Keep both mount points available so deep React routes work in
+        # either entry mode.
+        application.mount("/test/static", StaticFiles(directory=frontend), name="test-static")
         if (dist / "assets").is_dir():
             application.mount("/assets", StaticFiles(directory=dist / "assets"), name="vite-assets")
+            application.mount("/test/assets", StaticFiles(directory=dist / "assets"), name="test-vite-assets")
 
         def _asset_version(*names: str) -> str:
             """内容哈希做缓存标识：任一静态资源变化即生成新 URL。"""

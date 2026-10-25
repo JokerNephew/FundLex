@@ -1,5 +1,21 @@
 # FundLex 当前断点（ACTIVE_HANDOFF）
 
+## Test 环境文档与 smoke 改动断点（2026-10-25，最新）
+
+- 当前工作区为 `/home/opencode/.local/share/opencode/worktree/29a9a9/full-stack-test-environment`，分支 `feat/full-stack-test-environment`，HEAD `f59c452`；本轮 Test 环境文件仍未提交，已有 dirty/untracked 改动全部保留。
+- 已新增 [`docs/TEST_ENVIRONMENT.md`](TEST_ENVIRONMENT.md) 和 [`docs/TEST_ENVIRONMENT_STATUS.md`](TEST_ENVIRONMENT_STATUS.md)，并在集中问题记录新增 FL-D244–FL-D247：Test dirty deployment identity、认证库启动所有权、缺模型失败边界和 Compare unsupported visible content。
+- `tools/test_env_smoke.py` 现在在 seal 后轮询实际文档终态，记录 task/document 状态历史、error code、delivery status、report 和 artifact links；支持 `--timeout-seconds`、`--poll-seconds` 和 `--output`。
+- FL-D248：Test 凭据保持 root-owned `0600`，smoke 需通过 `sudo -n` 读取；reset dry-run 已改为用 sudo 枚举 Test 数据目录，首次普通权限尝试失败证据保留。
+- 当前 Test 三个服务 active，8110 监听；Production 8010 只读核对 active。Test 已按用户授权复用 Production 模型连接配置，但运行数据、账本、trace、认证、端口和服务保持隔离；健康为 `ok`，真实 Recall 修改仍可能因合同业务 gate 保持 `incomplete`。
+- Test 已按用户要求同步 Production 模型配置，但保留 Test 数据/账本/trace/认证/端口隔离；最终真实模型 smoke `/tmp/opencode/fundlex-test-smoke-production-model-final-20261025.json`，任务 `cf68b45b5d6e4cb89bf4e19cf788ef4c` 为 `succeeded`/`eligible`/`incomplete`，43 个 unresolved，生成 working artifacts。Test health 为 `ok`，trace 66 行，Test ledger 与 Production 分离。FL-D250已登记。
+- 部署后基础 evidence：最终 manifest `/var/lib/fundlex-test/deployments/20261025T034340Z.json`；前置缺模型 smoke `/tmp/opencode/fundlex-test-smoke-final-20261025.json`；FL-D249已验证认证 SQLite `fundlex:fundlex 0600`，凭据 `root:root 0600`。
+- Test 公网入口已完成：`https://test.8-155-130-168.sslip.io/` → 独立 Nginx HTTPS → `127.0.0.1:8110`；公网首页和 `/api/capabilities` HTTP 200，Test admin/member 登录与 health 200。`https://fundlex.club/` 仍为 Production → `127.0.0.1:8010`。FL-D251已登记；正式 `test.fundlex.club` 仍待 DNS A 记录。
+- FL-D252：一次错误探测曾输出旧 Test 凭据，已立即轮换两组密码并撤销旧 session；新账号公网登录验证通过，凭据值未写入文档或仓库。
+- 已补充本机入口说明：`http://127.0.0.1:8110/`、`/compare` 和 `/api/capabilities`；Test 构建使用 `/test/` 资源基址并提供 `/test/assets`、`/test/static` 别名，根路径和深层路由资源均 HTTP 200。支持正文 Compare 的真实 Chromium 证据为 `/tmp/opencode/fundlex-browser-evidence/local-e2e.json`，登录、上传、持久 Worker、结果、1 处修改和 `覆盖完整` 通过且无浏览器错误。
+- 既有真实任务产物语义证据为 `/tmp/opencode/fundlex-browser-evidence/artifact-provenance.json` 与 `selection-semantics.json`：源无修订，working redline 的 ID 1/2 均为 `FundLex`，接受全部和拒绝单条的独立验证符合预期；43 个 unresolved 仍保持未决。
+- 全新 React 浏览器分阶段证据已完成登录、深层新任务页、真实 DOCX 选择、创建/seal、真实 Worker/model、结果页、Review、批量拒绝、选择版生成、详情页返回和无浏览器错误；API 轮询证据 `/tmp/opencode/fundlex-browser-evidence/local-react-api-poll.json` 已确认 task `70d3e232826243348c56feef21613491` completed、document `8397d9ffde534246b41e1eaa4db9e252` succeeded/eligible/incomplete。Review 证据为 `/tmp/opencode/fundlex-browser-evidence/local-react-e2e-review-download.json`，授权下载 HTTP/哈希证据为 `/tmp/opencode/fundlex-browser-evidence/authorized-downloads.json`，DOCX 语义证据为 `fresh-artifact-semantics.json` 和 `fresh-selection-semantics.json`。
+- Test reset 已完成 dry-run，确认只清理 `/var/lib/fundlex-test` 子项；实际清空仍需单独授权，执行后必须重新做完整 smoke。Test manifest 仍 `dirty=true`，保持不宣称发布完成。
+
 ## 当前 target-20 对账断点（2026-10-25）
 
 - target-20 D06 已完成真实登录→上传→seal→持久 Worker/model→结果页→授权下载；snapshot-19 build `e2ac0f14429de4fdd71e631d10c18b27f1366c8337e797b4c834b5adf6611229`，82 targets 已处理，delivery 为 `incomplete`。机械下载核验 1/1 通过；final SHA `7503c5e61cf1602240b9c3843d5e7ebd7c9b29029d969b2e04485fcd97a5e7bd`，redline SHA `01de404f1fdc36c1a74e1a8fb0d3eb6b00613ffd4463b178e4f8e70bda2fedeb`。

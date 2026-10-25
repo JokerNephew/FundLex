@@ -1,4 +1,5 @@
 import type { ApiErrorBody } from '../types'
+import { appPath } from '../config'
 
 export const AUTH_TOKEN_KEY = 'fundlex-auth-token'
 export const DEV_USER_KEY = 'fundlex-dev-user'
@@ -40,7 +41,7 @@ function assertApiPath(path: string): string {
   if (!path.startsWith('/api/') || path.startsWith('//')) {
     throw new Error('服务端返回了不支持的路径。')
   }
-  return path
+  return appPath(path)
 }
 
 async function parseError(response: Response): Promise<never> {

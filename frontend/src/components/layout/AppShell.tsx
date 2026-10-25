@@ -3,6 +3,7 @@ import { Link, NavLink, Outlet } from 'react-router-dom'
 import { useAuthStore } from '../../stores/auth'
 import { useTasks } from '../../api/hooks'
 import { Button } from '../ui'
+import { appPath } from '../../config'
 
 const workspaceLinks = [
   ['/tasks', '任务总览', 'grid'],
@@ -47,10 +48,11 @@ export function AppShell() {
     previous.current = next
   }, [taskQuery.data])
   return <div className="app-shell">
-      <header className="topbar">
-       <NavLink className="brand" to="/workspace"><img src="/static/assets/gf-logo-mark.png" alt="广发基金" /><span>FundLex</span></NavLink>
-      <div className="topbar-actions">
-        <span className="identity">{user?.display_name || user?.username || (capabilities?.auth_mode === 'dev' ? '本地开发身份' : '')}</span>
+       <header className="topbar">
+        <NavLink className="brand" to="/workspace"><img src={appPath('/static/assets/gf-logo-mark.png')} alt="广发基金" /><span>FundLex</span></NavLink>
+       <div className="topbar-actions">
+         {capabilities?.environment === 'test' && <span className="environment-badge" title={`测试环境 · ${capabilities.commit || 'unknown'}`}>TEST ENVIRONMENT</span>}
+         <span className="identity">{user?.display_name || user?.username || (capabilities?.auth_mode === 'dev' ? '本地开发身份' : '')}</span>
         <div className="notification-center">
            <Button type="button" variant="quiet" aria-label="消息" aria-expanded={notificationsOpen} onClick={() => setNotificationsOpen((open) => !open)}>消息{notifications.length ? <span className="notification-count">{notifications.length}</span> : null}</Button>
            {notificationsOpen && <div className="notification-panel" role="status"><strong>消息</strong>{notifications.length ? <ul>{notifications.map((notice) => <li key={notice.id}><Link to={`/tasks/${notice.taskId}`} onClick={() => setNotificationsOpen(false)}><strong>{notice.title}</strong><span>{notice.detail}</span></Link></li>)}</ul> : <p className="muted">暂无任务状态消息</p>}</div>}
@@ -64,7 +66,7 @@ export function AppShell() {
         <nav>
           <div className="nav-group">工作区</div>
           {workspaceLinks.map(([to, label, icon]) => <NavLink end={to === '/tasks'} key={to} to={to} className={({ isActive }) => isActive ? 'nav-link is-active' : 'nav-link'}><NavIcon name={icon} /><span>{label}</span></NavLink>)}
-          <a className="nav-link" href="/compare"><NavIcon name="compare" /><span>合同对比（独立页）</span></a>
+           <a className="nav-link" href={appPath('/compare')}><NavIcon name="compare" /><span>合同对比（独立页）</span></a>
           <div className="nav-group">配置</div>
           {configLinks.map(([to, label, icon]) => <NavLink key={to} to={to} className={({ isActive }) => isActive ? 'nav-link is-active' : 'nav-link'}><NavIcon name={icon} /><span>{label}</span></NavLink>)}
           {user?.role === 'admin' && <NavLink to="/users" className={({ isActive }) => isActive ? 'nav-link is-active' : 'nav-link'}><NavIcon name="settings" /><span>用户管理</span></NavLink>}

@@ -1,0 +1,23 @@
+[Unit]
+Description=FundLex isolated Test recall worker
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=fundlex
+Group=fundlex
+WorkingDirectory=/opt/fundlex-test
+EnvironmentFile=/etc/fundlex-test.env
+ExecStart=/opt/fundlex-test/.venv/bin/python -X utf8 -m fundlex.jobs
+Restart=always
+RestartSec=3
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=full
+ReadWritePaths=/var/lib/fundlex-test /opt/fundlex-test/var
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

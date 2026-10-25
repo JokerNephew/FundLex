@@ -4,7 +4,7 @@
   const $ = id => document.getElementById(id);
   const esc = api.esc || (v => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])));
   const state = { tasks: [], task: null, pairs: [], pairIndex: 0, selectedPairId: null, view: null, diffIndex: 0, poll: null, requestToken: 0, lineFrame: null, scrollFrame: null, scrollSource: null, identityToken: 0, listToken: 0, inputs: [{}], uploadDraft: null };
-  const json = (path, options) => api.json ? api.json(path, options) : fetch(path, options).then(async r => { if (!r.ok) throw Error(await r.text()); return r.json(); });
+  const json = (path, options) => api.json ? api.json(path, options) : fetch(api.appPath ? api.appPath(path) : path, options).then(async r => { if (!r.ok) throw Error(await r.text()); return r.json(); });
   const text = id => ($(id) || {}).textContent || '';
   const fileName = file => String(file?.name || '').replace(/\\/g, '/').split('/').pop();
   const relativePath = file => {

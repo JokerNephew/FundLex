@@ -98,7 +98,10 @@ class CompareWorker:
                 thread.join(timeout=2)
         return True
 
-    def run_forever(self, *, poll_seconds: float = 1.0, stop_event=None) -> None:
+    def run_forever(self, *, poll_seconds: float = 1.0, stop_event=None,
+                    heartbeat=None) -> None:
+        if heartbeat is not None:
+            heartbeat()
         while stop_event is None or not stop_event.is_set():
             try:
                 processed = self.run_once()
@@ -113,6 +116,8 @@ class CompareWorker:
                 continue
             if not processed:
                 time.sleep(poll_seconds)
+            if heartbeat is not None:
+                heartbeat()
 
 
 def main(argv=None) -> int:
@@ -122,7 +127,7 @@ def main(argv=None) -> int:
     ``FUNDLEX_DATA_DIR``/``FUNDLEX_DATABASE_URL`` exactly as the API process.
     """
     import argparse
-    from ..config import local_data_dir
+    from ..config import local_data_dir, write_heartbeat
     from ..store import RunStore
     parser = argparse.ArgumentParser(description="FundLex contract compare worker")
     parser.add_argument("--once", action="store_true", help="process one pair and exit")
@@ -132,7 +137,9 @@ def main(argv=None) -> int:
     worker = CompareWorker(store)
     if args.once:
         return 0 if worker.run_once() else 1
-    worker.run_forever(poll_seconds=max(0.05, args.poll_seconds))
+    write_heartbeat(store.store.root, component="compare-worker")
+    worker.run_forever(poll_seconds=max(0.05, args.poll_seconds),
+                       heartbeat=lambda: write_heartbeat(store.store.root, component="compare-worker"))
     return 0
 
 
