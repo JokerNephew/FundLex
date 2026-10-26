@@ -1,0 +1,69 @@
+name: Delivery E2E
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: delivery-e2e-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  delivery-e2e:
+    name: Delivery path (replay, no model calls)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      # This job deliberately has no model credentials. Replay mode fails closed
+      # if a test accidentally tries to reach a live model or lacks a cassette.
+      FUNDLEX_MODEL_MODE: replay
+      FUNDLEX_MODEL_CASSETTE_DIR: ${{ runner.temp }}/empty-model-cassettes
+      FUNDLEX_AUTH_MODE: dev
+      PYTHONUNBUFFERED: '1'
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - name: Install Python dependencies
+        run: |
+          set -o pipefail
+          mkdir -p ci-results/delivery-e2e
+          python -m pip install --upgrade pip 2>&1 | tee ci-results/delivery-e2e/pip.log
+          python -m pip install -e '.[test]' 2>&1 | tee -a ci-results/delivery-e2e/pip.log
+
+      - name: Assert model-free delivery configuration
+        run: |
+          test "${FUNDLEX_MODEL_MODE}" = replay
+          test -z "${LLM_API_KEY:-}"
+          test -z "${OPENAI_API_KEY:-}"
+          printf '%s\n' 'Delivery E2E mode: replay; live model calls disabled.' \
+            | tee ci-results/delivery-e2e/mode.txt
+
+      - name: Run delivery integration path
+        run: |
+          set -o pipefail
+          PYTHONPATH=. python -m pytest -q --tb=short \
+            tests/test_recall_integration.py \
+            tests/test_v3_delivery_review_gate.py \
+            tests/test_downloaded_artifact_verification.py \
+            --junitxml=ci-results/delivery-e2e/pytest-delivery-e2e.xml \
+            2>&1 | tee ci-results/delivery-e2e/pytest-delivery-e2e.log
+
+      - name: Upload delivery logs and reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: delivery-e2e-results
+          path: ci-results/delivery-e2e
+          if-no-files-found: warn

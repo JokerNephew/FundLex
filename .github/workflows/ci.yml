@@ -1,0 +1,245 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  python:
+    name: Python compile and pytest
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - name: Install Python dependencies
+        run: |
+          set -o pipefail
+          mkdir -p ci-results/python
+          python -m pip install --upgrade pip 2>&1 | tee ci-results/python/pip.log
+          python -m pip install -e '.[test]' 2>&1 | tee -a ci-results/python/pip.log
+
+      - name: Compile Python sources
+        run: |
+          set -o pipefail
+          python -m compileall -q fundlex tests tools 2>&1 | tee ci-results/python/compile.log
+
+      - name: Run Python tests
+        run: |
+          set -o pipefail
+          python -m pytest -q --tb=short \
+            --junitxml=ci-results/python/pytest.xml 2>&1 | tee ci-results/python/pytest.log
+
+      - name: Upload Python logs and reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: python-test-results
+          path: ci-results/python
+          if-no-files-found: warn
+
+  frontend:
+    name: Frontend install, checks, tests and build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        run: |
+          set -o pipefail
+          mkdir -p ../ci-results/frontend
+          npm ci --no-audit --no-fund 2>&1 | tee ../ci-results/frontend/npm-install.log
+
+      - name: Typecheck
+        run: |
+          set -o pipefail
+          npm run typecheck 2>&1 | tee ../ci-results/frontend/typecheck.log
+
+      - name: Lint
+        run: |
+          set -o pipefail
+          npm run lint 2>&1 | tee ../ci-results/frontend/lint.log
+
+      - name: Run Vitest
+        run: |
+          set -o pipefail
+          npm run test -- --reporter=verbose --reporter=junit \
+            --outputFile=../ci-results/frontend/vitest.xml \
+            2>&1 | tee ../ci-results/frontend/vitest.log
+
+      - name: Build frontend
+        run: |
+          set -o pipefail
+          npm run build 2>&1 | tee ../ci-results/frontend/build.log
+
+      - name: Upload frontend logs and reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-test-results
+          path: ci-results/frontend
+          if-no-files-found: warn
+
+      - name: Upload frontend build
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-dist
+          path: frontend/dist
+          if-no-files-found: error
+
+  browser:
+    name: Chromium browser tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      # The suites start their isolated uvicorn service explicitly in pytest.
+      # These values make browser enablement and headless execution explicit.
+      FUNDLEX_BROWSER_TESTS: '1'
+      FUNDLEX_BROWSER_HEADLESS: '1'
+      FUNDLEX_AUTH_MODE: dev
+      PYTHONUNBUFFERED: '1'
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install application and browser dependencies
+        run: |
+          set -o pipefail
+          mkdir -p ci-results/browser
+          python -m pip install --upgrade pip 2>&1 | tee ci-results/browser/pip.log
+          python -m pip install -e '.[test]' playwright 2>&1 | tee -a ci-results/browser/pip.log
+          npm ci --prefix frontend --no-audit --no-fund 2>&1 | tee ci-results/browser/npm-install.log
+          npm run build --prefix frontend 2>&1 | tee ci-results/browser/frontend-build.log
+          python -m playwright install --with-deps chromium 2>&1 | tee ci-results/browser/playwright-install.log
+
+      - name: Run V1 browser suite against an explicit embedded service
+        env:
+          FUNDLEX_FRONTEND_VERSION: v1
+        run: |
+          set -o pipefail
+          PYTHONPATH=. python -m pytest -q --tb=short tests/browser/test_workbench.py \
+            --junitxml=ci-results/browser/pytest-v1.xml \
+            2>&1 | tee ci-results/browser/pytest-v1.log
+
+      - name: Run V2 browser suite against an explicit embedded service
+        env:
+          FUNDLEX_FRONTEND_VERSION: v2
+        run: |
+          set -o pipefail
+          PYTHONPATH=. python -m pytest -q --tb=short tests/browser/test_frontend_v2.py \
+            --junitxml=ci-results/browser/pytest-v2.xml \
+            2>&1 | tee ci-results/browser/pytest-v2.log
+
+      - name: Upload browser logs and reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: browser-test-results
+          path: ci-results/browser
+          if-no-files-found: warn
+
+  mysql:
+    name: Optional MySQL integration
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      # Configure this repository secret only with a disposable test database.
+      # Its value is never printed or written to an artifact.
+      FUNDLEX_MYSQL_TEST_URL: ${{ secrets.FUNDLEX_MYSQL_TEST_URL }}
+      FUNDLEX_COMPARE_MYSQL_TEST_URL: ${{ secrets.FUNDLEX_MYSQL_TEST_URL }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - name: Install Python dependencies
+        run: |
+          set -o pipefail
+          mkdir -p ci-results/mysql
+          python -m pip install --upgrade pip 2>&1 | tee ci-results/mysql/pip.log
+          python -m pip install -e '.[test]' 2>&1 | tee -a ci-results/mysql/pip.log
+
+      - name: Check MySQL configuration
+        id: mysql_probe
+        run: |
+          mkdir -p ci-results/mysql
+          if [[ -z "${FUNDLEX_MYSQL_TEST_URL:-}" ]]; then
+            echo 'available=false' >> "$GITHUB_OUTPUT"
+            printf '%s\n' 'MySQL integration: SKIPPED (FUNDLEX_MYSQL_TEST_URL is not configured).' \
+              | tee ci-results/mysql/status.txt
+          else
+            if python -c 'import os; from fundlex.db import Database; connection = Database(os.environ["FUNDLEX_MYSQL_TEST_URL"]).connect(); connection.execute("SELECT 1").fetchone(); connection.close()'
+            then
+              echo 'available=true' >> "$GITHUB_OUTPUT"
+              printf '%s\n' 'MySQL integration: AVAILABLE; running disposable-database tests.' \
+                | tee ci-results/mysql/status.txt
+            else
+              echo 'available=false' >> "$GITHUB_OUTPUT"
+              printf '%s\n' 'MySQL integration: UNAVAILABLE (connection probe failed; URL and credentials withheld).' \
+                | tee ci-results/mysql/status.txt
+            fi
+          fi
+
+      - name: Run MySQL tests when a connection is configured
+        if: steps.mysql_probe.outputs.available == 'true'
+        run: |
+          set -o pipefail
+          python -m pytest -q --tb=short \
+            tests/test_db_mysql.py tests/test_compare_system_review.py \
+            --junitxml=ci-results/mysql/pytest-mysql.xml \
+            2>&1 | tee ci-results/mysql/pytest-mysql.log
+
+      - name: Upload MySQL logs and reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mysql-test-results
+          path: ci-results/mysql
+          if-no-files-found: warn
