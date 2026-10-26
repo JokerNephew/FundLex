@@ -285,7 +285,11 @@ def test_upload_completion_preserves_new_draft(ui, hold):
     page.fill("#task-name", "旧上传任务")
     page.set_input_files("#file-picker", {"name": "旧合同.docx", "mimeType": "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "buffer": docx_bytes()})
     page.locator("#submit-task").click()
-    page.wait_for_timeout(150)
+    # Wait for the held network response, not a machine-speed-dependent 150ms.
+    for _ in range(100):
+        if pending:
+            break
+        page.wait_for_timeout(50)
     assert pending
     page.locator('.sidebar [data-nav="overview"]').click()
     page.locator('#view-overview [data-action="new-task"]').first.click()
