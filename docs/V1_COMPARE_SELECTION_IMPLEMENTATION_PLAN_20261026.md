@@ -41,7 +41,7 @@
 | 提交 | 内容 | 状态 |
 | --- | --- | --- |
 | `docs(compare): add selection implementation plan` | 本方案和设计交接 | 进行中 |
-| `feat(compare): add selection contract` | 选择状态、校验、哈希和纯逻辑 | 待开始 |
+| `feat(compare): add selection contract` | 选择状态、校验、哈希和纯逻辑 | 已完成，待提交 |
 | `feat(compare): generate selected docx` | OOXML 选择版/修订痕迹版生成与验证 | 待开始 |
 | `feat(compare): persist selection drafts` | 草稿、epoch、产物和下载 API | 待开始 |
 | `feat(v1): add compare selection reader` | V1 阅读器选择控件、保存、生成、下载 | 待开始 |
@@ -199,11 +199,11 @@
 
 | 阶段 | 状态 | 最近证据 | 下一动作 |
 | --- | --- | --- | --- |
-| 0 基线/分支/方案 | 进行中 | 本文已创建；工作区 dirty 快照已核对 | 创建功能分支，提交计划文档 |
-| 1 选择契约 | 未开始 | — | 新增 selection 纯逻辑和测试 |
+| 0 基线/分支/方案 | 已完成 | 分支 `codex/v1-compare-selection`；方案提交 `dd52a1d` | 开始阶段二 |
+| 1 选择契约 | 已完成，待提交 | `.venv/bin/pytest -q tests/test_compare_selection.py tests/test_compare_algorithm.py tests/test_compare_api.py`：34 passed；选择模块与原有 Compare 回归共同通过 | 提交 selection contract，再开始阶段二 |
 | 2 DOCX 生成器 | 未开始 | — | 在契约稳定后实现 OOXML writer |
 | 3 持久化/API | 未开始 | — | 增加迁移、草稿、artifact 和下载路由 |
 | 4 V1 阅读器 | 未开始 | — | 接入右侧选择 rail 和生成状态 |
 | 5 全链路/候选 | 未开始 | — | 分层回归、真实用户路径、候选冻结 |
 
-最后更新：2026-10-26，方案创建阶段。下一条可执行动作是创建功能分支并提交本方案，再开始阶段一。
+最后更新：2026-10-26，阶段一实现完成。下一条可执行动作是提交选择契约和定向测试，再开始阶段二的安全 OOXML 地址与写入器。
