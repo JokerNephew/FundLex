@@ -1,5 +1,17 @@
 # FundLex 当前断点（ACTIVE_HANDOFF）
 
+## 2026-10-27 三业务工作台实施中（最新授权与断点）
+
+- 用户已授权自主多阶段开发/测试/推送/部署/真实E2E，允许多agent；不再停留在下面“只提方案”历史断点。只改V1，不改V2。
+- 分支 `codex/v1-three-business-workspace`，HEAD `bf3f855`（此前 `9f21349` 方案、`87601d3` 生产API基线）。工作树未提交包含5个主V1文件、新workspace.js、guide_generation.js/css、后端guide_generation/regulatory/workspace、必要model/deps和测试/计划。不要覆盖其他工作树dirty内容，不整仓发布。
+- 进度文件 `docs/V1_THREE_BUSINESS_IMPLEMENTATION_PROGRESS_20261027.md`。P1/P2主线已实现并本地46浏览器通过；生成UI首轮15通过，后端44通过/旧API40通过9skip。未部署，不能称真实交付完成。
+- 代码路线：#workspace首页，#overview兼容修改任务列表，#import新建，#task?id=...任务，#document?id=...&document=...&tab=review 独立合同页；#compare?mode=list/new/detail&id=...&pair=...；#generation?mode=...由独立模块。共享navigate/json/download/route/ready和fundlex:route。保留旧#入口。
+- 活跃agent：后端 `ses_e86a2d974ffe3S3l2AzBY1XB3o` 补模型schema/真实ready/候选与列表分页；生成UI `ses_e86a26862ffepc56ZAWz9hM01b` 补分页/显式resume。两者只改各自文件，不commit/deploy/模型调用，等完成通知，主agent统一提交/记录。
+- 重要集成结论：生产api依赖生产selective/store/api_errors/OAuth/integrationstore，已复制原版并提交bf3f855；不要把这些误当新引擎改动部署。普通revision引擎未更改。
+- 真实运行尚未开始，无新增模型费用。既有共享ledger `/var/lib/fundlex/model_budget.sqlite` 为30266请求/$25.459664，授权上限40000/$50，并发1。真实运行前登记本轮独立限额（建议指引smoke≤150calls/$0.50，保留共享ledger）。当前服务fundlex用户无法穿越/home/opencode读取公开corpus；setfacl/getfacl可用，须备份ACL后仅放行必要目录遍历和公开corpus读取，勿开放home列表。
+- 单独生成Worker尚未部署，模板 tools/deploy/fundlex-guide-generation-worker.service.template。仅允许1个生成worker（中间写入尚未全面fencing）。公开法规样本 `/home/opencode/fundlex/references/source/附件1：公开募集证券投资基金销售费用管理规定.pdf`；corpus `/home/opencode/data/funds_word` 514份，不复制整树。前次生成smoke含未解决问题，不可冒称可正式启用。
+- 下一步：等agent完成→冻结候选→跑 V1+生成+聚合与全相关API回归/中文截图→白名单备份/部署→按真实登录分别修改、比对、生成/下载验证；模型不可用/预算阻塞要如实入册，不手改gate。磁盘约947MB可用。无本主agent后台进程。
+
 ## 2026-10-27 三业务前端整体规划（本轮只提方案）
 
 - 用户最新要求：先读后端，按合同修改/合同比对/指引生成三个并列业务重规划页面、子页、侧栏、任务总览；合同修改仍核心；**先告诉设计方案，不实施**。

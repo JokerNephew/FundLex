@@ -59,7 +59,7 @@ def main():
             page.locator('#login-password').fill(password)
             page.locator('#login-submit').click()
             expect(page.locator('#login-view')).to_be_hidden()
-            page.locator('[data-nav="compare"]').click()
+            page.locator('.sidebar [data-nav="compare"]').click()
             page.locator('#compare-new').click()
             page.locator('#compare-name').fill('V1体验改版真实公开合同验收')
             for side, path in [('left', args.left), ('right', args.right)]:

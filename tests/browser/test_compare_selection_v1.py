@@ -174,7 +174,6 @@ def test_v1_pending_choices_refresh_generation_download_and_mobile(browser, live
         expect(page.locator('#compare-selection-generate')).to_be_enabled()
         assert states['pair-one']['decisions'] == {"D1": "left", "D2": "right"}
         page.reload(wait_until="networkidle")
-        page.locator('[data-compare-task="selection-task"]').click()
         expect(page.locator('input[data-diff-id="D1"][value="left"]')).to_be_checked()
         expect(page.locator('input[data-diff-id="D2"][value="right"]')).to_be_checked()
         page.locator('#compare-selection-generate').click()
@@ -234,6 +233,7 @@ def test_v1_review_rail_geometry_independent_scroll_and_form(browser, live_app, 
             page.locator('#compare-next-diff').click()
         assert page.locator('#compare-diff-list').evaluate('(n)=>n.scrollTop') > 0
         assert page.locator('.main').evaluate('(n)=>n.scrollTop') == before
+        page.locator('.sidebar [data-nav="compare"]').click()
         page.locator('#compare-new').click()
         page.locator('#compare-name').fill('统一表单测试')
         assert page.locator('#compare-name').evaluate('(n)=>n.clientHeight') >= 40
@@ -310,7 +310,7 @@ def test_v1_feishu_page_states_expiry_confirmation_and_reset(browser, live_app, 
         expect(page.locator('#feishu-oauth-link')).to_be_hidden()
         page.locator('#feishu-oauth-btn').click()
         expect(page.locator('#feishu-oauth-qr img')).to_be_visible()
-        page.locator('[data-nav="compare"]').click()
+        page.locator('.sidebar [data-nav="compare"]').click()
         assert page.locator('#feishu-oauth-qr img').count() == 0
         page.locator('[data-nav="settings"]').click()
         expect(page.locator('#feishu-binding-badge')).to_have_text('未绑定')
@@ -379,7 +379,7 @@ def test_v1_feishu_errors_and_late_qr_cannot_survive_navigation(browser, live_ap
         expect(page.locator('#feishu-oauth-btn')).to_be_enabled()
         page.locator('#feishu-oauth-btn').click()
         expect(page.locator('#feishu-oauth-btn')).to_be_disabled()
-        page.locator('[data-nav="compare"]').click()
+        page.locator('.sidebar [data-nav="compare"]').click()
         assert controls['held']
         controls['held'].fulfill(json={'authorization_url': 'https://accounts.feishu.cn/authorize',
                                       'qr_png': 'data:image/png;base64,late', 'expires_at': time.time() + 600})
@@ -446,13 +446,12 @@ def test_v1_password_login_upload_worker_selection_and_verified_downloads(browse
             page.locator('#compare-submit').click()
         assert sealed.value.ok
         assert CompareWorker(app.state.compare_store).run_once()
-        page.locator('[data-compare-task]').click()
+        page.reload(wait_until="networkidle")
         page.wait_for_function("!!document.querySelector('[data-selection-choice]') && !document.querySelector('[data-selection-choice]').disabled")
         expect(page.locator('#compare-selection-generate')).to_be_disabled()
         page.locator('[data-selection-choice="right"]').check()
         expect(page.locator('#compare-selection-generate')).to_be_enabled()
         page.reload(wait_until="networkidle")
-        page.locator('[data-compare-task]').click()
         expect(page.locator('[data-selection-choice="right"]')).to_be_checked()
         page.locator('#compare-selection-generate').click()
         expect(page.locator('#compare-selection-status')).to_contain_text('已生成 v1')

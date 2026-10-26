@@ -132,7 +132,9 @@ def presentation(ui, count=1, execution_mode="", summary=False, delivery="incomp
     def documents(route):
         response = route.fetch()
         payload = response.json()
-        for doc in payload["items"]:
+        if 'items' not in payload and 'document_id' not in payload:
+            return route.fulfill(response=response)
+        for doc in payload.get("items", [payload]):
             doc["downloads"] = {"working_redline": "/api/ui-fixture/redline", "selected_final": "/api/ui-fixture/selected"}
             doc["review_url"] = "/api/ui-fixture/revisions/" + doc["document_id"]
             if execution_mode:
@@ -141,6 +143,7 @@ def presentation(ui, count=1, execution_mode="", summary=False, delivery="incomp
                 doc["downloads"] = {"redline": "/api/ui-fixture/redline", "final": "/api/ui-fixture/final"}
         route.fulfill(response=response, json=payload)
     context.route(f"**/api/tasks/{task}/documents?*", documents)
+    context.route(f"**/api/tasks/{task}/documents/*", documents)
     revisions = {"html": '<p><del class="rev rev-del" data-rev="1">原文</del><ins class="rev rev-ins" data-rev="2">改文</ins></p><p><ins class="rev rev-ins" data-rev="4">新增句</ins></p>',
                  "revisions": [{"index": 1, "del_id": 1, "ins_id": 2, "revision_ids": [1, 2], "before": "原文", "after": "改文", "operation": "replace"},
                                {"index": 2, "del_id": 4, "ins_id": 5, "revision_ids": [4], "before": "", "after": "新增句", "operation": "insert"}]}
@@ -159,7 +162,7 @@ def test_overview_units_filters_and_single_supported_mode(ui):
     page.fill("#task-search", "不存在的筛选")
     page.wait_for_function("document.querySelector('#task-rows').textContent.includes('没有任务')")
     assert page.locator("#first-run-guide").is_hidden()
-    page.locator('.sidebar [data-nav="import"]').click()
+    page.locator('#view-overview [data-action="new-task"]').first.click()
     assert page.locator("#import-mode option").count() == 1
     assert page.locator("#import-mode").is_disabled()
     assert page.locator("#import-mode").inner_text() == "合同修订"
@@ -213,7 +216,8 @@ def test_evaluation_result_hides_formal_review_entry(ui):
     assert not page.locator('[data-action="open-review"]').count()
     assert "评测文件不能作为正式合同" in page.inner_text("#detail-body")
     assert page.locator("#overall-progress .p-evaluation").evaluate("n=>n.style.width") == "100%"
-    assert page.locator("#progress-evaluation-legend").is_visible()
+    assert page.locator("#progress-evaluation-legend").get_attribute('hidden') is None
+    assert page.locator('#view-document').is_visible()
 
 
 def test_exception_delivery_remains_downloadable_without_direct_use_claim(ui):
@@ -361,7 +365,7 @@ def test_login_expiry_message_and_role_hash_guard(ui, monkeypatch):
     page.locator('.sidebar [data-nav="overview"]').click()
     token = page.evaluate("sessionStorage.getItem('fundlex-auth-token')")
     context.request.post(base + "/api/auth/logout", headers={"Authorization": "Bearer " + token})
-    page.locator('#view-overview [data-action="refresh"]').first.click()
+    page.locator('#view-overview .toolbar [data-action="refresh"]').click()
     page.wait_for_selector("#login-view", state="visible")
     assert page.locator("#login-error").is_visible()
     assert "登录状态已失效" in page.inner_text("#login-error")
@@ -374,7 +378,10 @@ def test_page_layouts_fit_viewport(ui, width, tmp_path):
     page.set_viewport_size({"width": width, "height": 900})
     open_page(ui)
     for view in ["overview", "import", "task", "guide"]:
-        page.locator(f'.sidebar [data-nav="{view}"]').click()
+        if view in {'import', 'task'}:
+            page.evaluate('(view)=>window.FundLexWorkbench.navigate(view)', view)
+        else:
+            page.locator(f'.sidebar [data-nav="{view}"]').click()
         assert page.locator(f"#view-{view}").is_visible()
         assert page.evaluate("document.documentElement.scrollWidth <= innerWidth+1")
         assert not page.locator(".app").evaluate("n=>n.inert")
@@ -404,6 +411,7 @@ def test_missing_artifact_shows_plan_instead_of_applied(ui):
     page, context, _, _ = ui
     page.locator("#close-detail").click()
     context.unroute(f"**/api/tasks/{task}/documents?*")
+    context.unroute(f"**/api/tasks/{task}/documents/*")
     page.locator('#view-task [data-action="refresh"]').click()
     page.wait_for_timeout(200)
     page.locator("#doc-rows [data-detail]").first.click()
