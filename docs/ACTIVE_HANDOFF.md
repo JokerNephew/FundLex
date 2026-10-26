@@ -2,12 +2,12 @@
 
 ## 当前工作区快照（2026-10-26，继续接续）
 
-- 当前分支为 `refactor/backend-engine-finalization`，HEAD `cdf0699`，相对 origin ahead 20；工作区仍 dirty，未 push。已提交代码块为 `0466712`（API 稳定错误码、报告边界、Review/下载响应）和 `cdf0699`（任务状态契约、V1/V2/Feishu UI、设置入口）。
-- 尚未提交文件集中在 Feishu OAuth/store 与测试、入口/浏览器回归、Compare/前缀相关文档和本轮审计文档；已检查其功能边界，下一步按 OAuth/store、测试、文档分块提交。未覆盖主工作区已有 Compare、Feishu、前端和文档改动。
-- 本轮验证：后端定向 **59 passed / 1 warning**；V1/V2 浏览器 **40 passed**；前端锁文件重建后 Vitest **4.1.12，14 passed**，typecheck、lint、build 通过；`.venv/bin/python -m compileall -q fundlex`、`node --check frontend/app.js`、`node --check frontend/compare.js`、`git diff --check` 通过。系统 `python3` 为 3.6，不能用于本项目编译结论。
+- 当前分支为 `refactor/backend-engine-finalization`，HEAD `75925d4dd704085e7f010e5d672022a759d3928d`，相对 origin ahead 22；工作区干净，尚未 push。已提交代码块为 `0466712`（API 稳定错误码、报告边界、Review/下载响应）、`cdf0699`（任务状态契约、V1/V2/Feishu UI、设置入口）、`03eb30d`（Feishu OAuth/store 与测试）和 `75925d4`（集中记录、断点、审计和接入文档）。
+- 本轮 OAuth/store、入口/浏览器回归和文档改动已按功能块提交；未覆盖或回退主工作区已有 Compare、前端和引擎改动。当前 clean 工作区尚未 push 或部署。
+- 本轮验证：完整 Python 回归 **1542 passed / 52 skipped / 3 warnings / 358.46s**；后端 OAuth/Feishu/API 定向 **60 passed / 1 warning**；V1/V2 浏览器 **40 passed**；前端锁文件重建后 Vitest **4.1.12，14 passed**，typecheck、lint、build 和 `npm audit`（0 vulnerabilities）通过；`.venv/bin/python -m compileall -q fundlex`、`node --check frontend/app.js`、`node --check frontend/compare.js`、`git diff --check` 通过。系统 `python3` 为 3.6，不能用于本项目编译结论。
 - OAuth 当前实现：state 仅保存 SHA-256、默认 10 分钟、成功/拒绝回调均一次性消费；成功回调的真实飞书扫码仍未验证。回归补充了拒绝后 state replay 失败；未调用生产真实模型、未部署本轮 dirty 工作区。
 - 集中记录：原 FL-D294 保留为 Feishu 详情深链；任务状态条目已更正为 FL-D299。集中记录仍存在更早历史标题重复，未在本轮擅自重排旧编号；新增编号必须先全文查重。
-- 项目结论继续为 **NO-GO**：D01–D20 固定评测 gate、holdout、G06 授权、Compare 复杂结构、真实 MySQL 8 并发、真实 OAuth 回调及完整用户端到端交付尚未闭合。下一步先提交剩余局部改动，再运行完整 pytest、前端检查和浏览器回归，随后继续 Compare/评测/真实验收。
+- 项目结论继续为 **NO-GO**：D01–D20 固定评测 gate、holdout、G06 授权、Compare 复杂结构、真实 MySQL 8 并发、真实 OAuth 回调及完整用户端到端交付尚未闭合。下一步是以当前 clean HEAD 重新核对候选快照和部署边界，再继续 Compare/评测/真实验收；未经授权不部署或调用生产真实模型。
 
 ## FL-D291 设置入口修复、飞书主链路与 OAuth 扫码（2026-10-26 11:30）
 

@@ -18,18 +18,18 @@
 | --- | --- | --- |
 | 后端定向 API/store/guide/auth/DB/recovery 回归 | 74 passed / 1 既有 warning | 本轮工具输出 |
 | 前端 TypeScript / ESLint | 通过 | `npm run typecheck`、`npm run lint` |
-| 前端 Vitest | 4 files / 9 passed | `npm test -- --run` |
-| npm 完整依赖审计 | 6 项：2 critical / 1 high / 3 moderate | `/tmp/opencode/fundlex-audit-20261026-npm.json` |
+| 前端 Vitest | 锁定 4.1.12，5 files / 14 passed | `npm ci --ignore-scripts` 后 `npm run test -- --run` |
+| npm 完整依赖审计 | 历史审查为 6 项；升级后当前为 0 vulnerabilities | `/tmp/opencode/fundlex-audit-20261026-npm.json`、`/tmp/opencode/fundlex-npm-audit-20261026-final.json` |
 | npm 生产依赖审计 | 无漏洞 | `/tmp/opencode/fundlex-audit-20261026-npm-production.json` |
 | README / AGENTS / docs 顶层本地文档链接 | 缺失目标 0 | 本轮链接扫描 |
-| 完整 Python 回归 | 1497 passed / 48 skipped / 2 warnings，332.46 秒 | `/tmp/opencode/fundlex-full-audit-20261026-pytest.log`；MySQL/Compare MySQL 真实连接测试因环境变量未配置而跳过 |
-| V1/V2 浏览器回归 | 36 passed / 1 failed | `/tmp/opencode/fundlex-audit-20261026-browser.log`；失败为 FL-D279 的 settings 权限断言漂移 |
+| 完整 Python 回归 | 当前 clean HEAD **1542 passed / 52 skipped / 3 warnings / 358.46 秒** | 本轮 `PYTHONPATH=. .venv/bin/pytest -q`；MySQL/Compare MySQL 真实连接测试因环境变量未配置而跳过 |
+| V1/V2 浏览器回归 | 当前 clean HEAD **40 passed** | 本轮 `FUNDLEX_BROWSER_TESTS=1 .venv/bin/pytest -q tests/browser/test_frontend_v2.py tests/browser/test_workbench.py` |
 
 完整回归已结束；各方向代码发现及集中记录编号见下文和 `docs/DETAIL_ISSUES_AND_RESOLUTIONS.md`。本报告不是完成开发或 GO 声明。
 
 ## 已确认的维护问题
 
-1. `frontend/package.json` 固定使用 Vitest 2.1.9，其依赖中含旧版嵌套 Vite/esbuild、tinypool、mocker 等审计告警。风险集中于测试/UI/开发服务器及相关前提；当前生产静态产物不据此认定存在同等漏洞。建议升级测试工具链、重新 typecheck/lint/test/浏览器回归后再冻结依赖；本轮不执行跨大版本自动修复。
+1. 历史审查时 `frontend/package.json` 固定使用 Vitest 2.1.9，其依赖中含旧版嵌套 Vite/esbuild、tinypool、mocker 等审计告警。随后已升级并用 `npm ci --ignore-scripts` 重建，当前 package/lock 声明和实际执行器均为 Vitest 4.1.12；typecheck、lint、5 个测试文件/14 项测试、build 和当前 `npm audit` 均通过。历史审计输出仍保留，不能把依赖升级扩大为项目级交付通过。
 2. README 仍主要描述 2026-10-14 的 v1/v2 固定 action 时代；实施计划 P1–P8 勾选未同步后续实现；ACTIVE_HANDOFF 顶部已记录最新普通交付，但后续历史段落仍有 dirty/旧 HEAD 等时态。建议保留历史并增加唯一当前状态索引，区分生产部署、候选版本、真实质量 gate。文档已归档不等于状态说明已收敛。
 3. 仓库没有 `.github` CI 配置；`recall.py` 8042 行、`recall_pipeline.py` 4904 行，`process_recall_first()` 1522 行，Claim Replay 主函数 800 行。以上是维护风险与自动回归入口缺口，不能单凭体积判定运行错误。建议后续按稳定契约拆分，并先保持现有安全门禁与真实业务回归。
 
@@ -47,7 +47,7 @@
 
 ### V1/V2 前端和用户流程
 
-- TypeScript、ESLint、Vitest 通过；V1/V2 浏览器回归 36 passed、1 failed。失败是 FL-D279 的设置页角色测试契约漂移，不能直接定性为越权。
+- TypeScript、ESLint、Vitest 4.1.12 通过；V1/V2 浏览器回归当前 clean HEAD 为 40 passed。历史 36/37 失败是 FL-D279 的设置页角色测试契约漂移，已由测试契约修正并回归验证，不能直接定性为越权。
 - FL-D293：Compare 首次上传封存成功后，`continueUpload()` 仍调用旧闭包的 `task.refetch()`，可能把成功操作误报为上传中断。
 - FL-D294：V2 提供 failed 筛选，但后端通常把含失败合同的全终态任务聚合为 completed，筛选和任务状态契约不一致。
 - FL-D295：V2 的 API 和静态资源根路径未覆盖 URL 前缀部署；当前 `/test/` 证据只验证 V1，V2 前缀链路仍未验收。
@@ -69,8 +69,8 @@
 ### 测试、评测和交付证据
 
 - 完整 Python 回归：1497 passed、48 skipped、2 warnings；跳过项包含未配置真实 MySQL/Compare MySQL 测试，因此不能替代 MySQL 并发、恢复和 outbox 验收。
-- 前端 typecheck/lint 通过，Vitest 4 files / 9 passed；浏览器套件 36/37 通过，剩余失败为 FL-D279。
-- npm 完整审计为 6 项开发依赖漏洞（2 critical、1 high、3 moderate），生产依赖审计为 0；已登记 FL-D277，未自动跨大版本升级。
+- 前端 typecheck/lint 通过，Vitest 4.1.12 为 5 files / 14 passed；浏览器套件当前为 40 passed。
+- npm 完整审计历史结果为 6 项开发依赖漏洞（2 critical、1 high、3 moderate），依赖升级后当前审计为 0 vulnerabilities；FL-D277 已更新为“升级已实施、仍需在最终候选复核”的状态。
 - 仓库无 `.github` CI 配置；大文件和关键流程的维护风险、测试入口与文档漂移已在 FL-D278 及既有条目中记录。
 - 集中问题记录的编号唯一性校验仍失败：FL-D088、FL-D089、FL-D118、FL-D152、FL-D153、FL-D224 各有两个不同含义的一级标题。FL-D077 原先记录的“已实施并验证”结论已在本轮降级为“历史修复不完整”，本轮没有擅自重排历史编号；该文档治理缺口继续阻止把集中记录当作无歧义的唯一索引。
 - 测试与交付审查补充：`tools/deploy/cloud_verify.py` 只覆盖临时账号、测试 DOCX、上传和 seal，未覆盖真实 Worker/model/DOCX 交付、Review、selected artifact、下载和哈希核验，已登记 FL-D296。`rules/rules_v2.json` 的 `unreleased`/`auto_write_enabled=false` 与 README 的“22 action 已发布、自动写入可用”直接冲突，已登记 FL-D297，并与 FL-D278 的文档漂移关联。
