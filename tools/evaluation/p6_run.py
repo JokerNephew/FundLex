@@ -8,7 +8,12 @@ cleanup limitation.
 
 Usage::
 
-    .venv/bin/python -m tools.evaluation.p6_run --group dev --run-id p6-dev-baseline-01
+    .venv/bin/python -m tools.evaluation.p6_run --group dev --run-id p6-dev-baseline-01 \
+      --preflight-protocol /absolute/run/protocol.json \
+      --preflight-protocol-sha256 <sha256> \
+      --preflight-manifest /absolute/run/preflight.json \
+      --labels /absolute/input/labels.json \
+      --requests-per-case 192 --cost-per-case-usd 0.2
 """
 from __future__ import annotations
 
@@ -22,6 +27,7 @@ import time
 from pathlib import Path
 
 import httpx
+from tools.evaluation.budget_preflight import PreflightError, StartupPlan, preflight
 
 BASE = "http://127.0.0.1:8010"
 
@@ -47,6 +53,13 @@ def main() -> int:
     parser.add_argument("--timeout", type=float, default=900)
     parser.add_argument("--case", action="append", default=None)
     parser.add_argument("--base-url", default=BASE)
+    parser.add_argument("--preflight-protocol", required=True,
+                        help="frozen budget protocol; admission is mandatory")
+    parser.add_argument("--preflight-protocol-sha256", required=True)
+    parser.add_argument("--preflight-manifest", required=True)
+    parser.add_argument("--labels", required=True)
+    parser.add_argument("--requests-per-case", type=int, required=True)
+    parser.add_argument("--cost-per-case-usd", required=True)
     args = parser.parse_args()
 
     selection = json.loads(Path(args.selection).read_text(encoding="utf-8"))
@@ -55,11 +68,30 @@ def main() -> int:
     if args.case:
         wanted = set(args.case)
         cases = [case for case in cases if case["case_id"] in wanted]
-    words_root = Path(args.data_root) / "funds_word"
-    run_dir = Path(args.output_root) / args.run_id
-    run_dir.mkdir(parents=True, exist_ok=False)
     if not cases:
         raise ValueError("selection contains no requested cases")
+
+    preflight_manifest = Path(args.preflight_manifest).resolve()
+    try:
+        admission = preflight(
+            Path(args.preflight_protocol),
+            protocol_sha256=args.preflight_protocol_sha256,
+            plan=StartupPlan(
+                args.run_id, Path(args.selection), Path(args.labels),
+                tuple(case["case_id"] for case in cases),
+                args.requests_per_case, args.cost_per_case_usd,
+            ),
+            manifest_path=preflight_manifest,
+        )
+    except PreflightError as exc:
+        print(f"PREFLIGHT_REJECTED:{exc}", flush=True)
+        return 2
+
+    words_root = Path(args.data_root) / "funds_word"
+    run_dir = Path(args.output_root) / args.run_id
+    if run_dir.exists():
+        raise FileExistsError(f"run directory already exists: {run_dir}")
+    run_dir.mkdir(parents=True, exist_ok=False)
 
     suffix = "".join(secrets.choice(string.ascii_lowercase + string.digits) for _ in range(8))
     username = f"cloud-eval-{suffix}"
@@ -69,6 +101,8 @@ def main() -> int:
               "cases": [case["case_id"] for case in cases], "started": time.time()}
     batch["selection_sha256"] = hashlib.sha256(Path(args.selection).read_bytes()).hexdigest()
     batch["base_url"] = args.base_url
+    batch["preflight_manifest"] = str(preflight_manifest)
+    batch["preflight_status"] = admission["status"]
     batch["results"] = results
 
     def save_batch():
