@@ -1675,11 +1675,12 @@ def test_overlapping_composite_deletes_merge_as_joint_delete(tmp_path):
     assert set(resolved[0].operation_keys) == {"G12:1", "G13:0"}
 
 
-def test_transitive_overlap_conflicts_are_composed_as_one_component(tmp_path):
+@pytest.mark.parametrize("reverse_conflicts", [False, True])
+def test_transitive_overlap_conflicts_are_composed_as_one_component(tmp_path, reverse_conflicts):
     """A-B and B-C conflicts must not consume B and leave C unresolved."""
     from docx import Document
     from fundlex.docx import inspect_docx
-    from fundlex.recall import PlannedEdit, _resolve_overlaps_with_joint_compose
+    from fundlex.recall import PlannedEdit, _resolve_overlaps_with_joint_compose, merge_edits
 
     path = tmp_path / "transitive-overlap.docx"
     document = Document()
@@ -1699,10 +1700,12 @@ def test_transitive_overlap_conflicts_are_composed_as_one_component(tmp_path):
         def call(self, **kwargs):
             raise AssertionError("connected deletes must not call Joint Compose")
 
+    _, conflicts, _ = merge_edits(edits, inspection)
+    assert len(conflicts) == 2
+    if reverse_conflicts:
+        conflicts.reverse()
     resolved, remaining = _resolve_overlaps_with_joint_compose(
-        [{"targets": ["A", "B"], "location": "p0"},
-         {"targets": ["B", "C"], "location": "p0"}],
-        edits, inspection,
+        conflicts, edits, inspection,
         {"G01": {"rule_id": "G01", "operations": []},
          "G02": {"rule_id": "G02", "operations": []},
          "G03": {"rule_id": "G03", "operations": []}},
@@ -1710,7 +1713,62 @@ def test_transitive_overlap_conflicts_are_composed_as_one_component(tmp_path):
     assert remaining == []
     assert len(resolved) == 1
     assert resolved[0].content_source == "joint_delete"
+    assert (resolved[0].start, resolved[0].end, resolved[0].replacement) == (0, 7, "")
     assert set(resolved[0].operation_keys) == {"G01:0", "G02:0", "G03:0"}
+
+
+@pytest.mark.parametrize("accepted", [False, True])
+def test_transitive_overlap_joint_compose_preserves_siblings_and_fail_closed(
+        tmp_path, monkeypatch, accepted):
+    from docx import Document
+    from fundlex.docx import inspect_docx
+    from fundlex.recall import PlannedEdit, _resolve_overlaps_with_joint_compose, merge_edits
+
+    path = tmp_path / "joint-chain.docx"
+    document = Document()
+    document.add_paragraph("甲乙丙丁戊己庚辛壬")
+    document.add_paragraph("复合目标的另一段。")
+    document.save(path)
+    inspection = inspect_docx(path, full=True)
+    edits = [PlannedEdit(target, rule, "p0", start, end, "新政策。", "replace",
+                         "composed", {}, operation_keys=(f"{rule}:0",),
+                         obligation_ids=(f"{rule}:obligation",))
+             for target, rule, start, end in [
+                 ("A", "G01", 0, 3), ("B", "G02", 2, 5),
+                 ("C", "G03", 4, 7), ("D", "G04", 6, 9)]]
+    sibling = PlannedEdit("A", "G01", "p1", 0, 4, "", "replace", "composite_delete", {},
+                          operation_keys=("G01:0",))
+    _, conflicts, _ = merge_edits(edits, inspection)
+    # The last edge bridges two previously separate groups: A-B, C-D, B-C.
+    conflicts = [conflicts[0], conflicts[2], conflicts[1]]
+    calls = []
+
+    def compose(**kwargs):
+        calls.append(kwargs)
+        return {"replacement": "合并后的新政策。"} if accepted else None
+
+    monkeypatch.setattr("fundlex.generation.joint.plan_joint_compose", compose)
+    rules = {rule: {"rule_id": rule, "operations": [{"op": "replace"}]}
+             for rule in ("G01", "G02", "G03", "G04")}
+    resolved, remaining = _resolve_overlaps_with_joint_compose(
+        conflicts, [*edits, sibling], inspection, rules, None, object())
+    assert len(calls) == 1
+    assert (calls[0]["start"], calls[0]["end"]) == (0, 9)
+    assert {item["rule_id"] for item in calls[0]["obligations"]} == set(rules)
+    assert any(edit is sibling for edit in resolved)
+    if accepted:
+        assert remaining == []
+        combined = next(edit for edit in resolved if edit.location == "p0")
+        assert len(resolved) == 2
+        assert set(combined.operation_keys) == {f"{rule}:0" for rule in rules}
+        assert set(combined.obligation_ids) == {f"{rule}:obligation" for rule in rules}
+        assert combined.replacement == "合并后的新政策。"
+    else:
+        assert {target for conflict in remaining for target in conflict["targets"]} == {
+            "A", "B", "C", "D"}
+        assert len(resolved) == 5
+        assert all(any(edit is original for edit in resolved) for original in edits)
+        assert not any(edit.content_source == "joint_compose" for edit in resolved)
 
 
 def test_planning_clamps_trailing_whitespace_to_a_text_segment(tmp_path):

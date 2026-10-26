@@ -6681,40 +6681,23 @@ def _coalesce_overlap_conflicts(conflicts: Sequence[dict[str, Any]],
             groups.append(dict(conflict))
             continue
         edit_ids = {id(edit) for edit in edits}
-        matching = [group for group in groups
+        # Existing groups are disjoint. A new edge can bridge several of them;
+        # combine all matches now so the invariant holds for the next edge.
+        matching = [index for index, group in enumerate(groups)
                     if group.get("location") == location
                     and edit_ids & set(group.get("_edit_ids") or ())]
-        if not matching:
-            groups.append({**conflict, "_edit_ids": edit_ids,
-                           "targets": list(conflict.get("targets") or ())})
-            continue
-        group = matching[0]
-        group["_edit_ids"].update(edit_ids)
-        group["targets"] = list(dict.fromkeys([
-            *[str(value) for value in group.get("targets") or ()],
-            *[str(value) for value in conflict.get("targets") or ()],
-        ]))
-    changed = True
-    while changed:
-        changed = False
-        for index, left in enumerate(groups):
-            left_ids = set(left.get("_edit_ids") or ())
-            for right in groups[index + 1:]:
-                if left.get("location") != right.get("location"):
-                    continue
-                right_ids = set(right.get("_edit_ids") or ())
-                if left_ids.isdisjoint(right_ids):
-                    continue
-                left["_edit_ids"].update(right_ids)
-                left["targets"] = list(dict.fromkeys([
-                    *[str(value) for value in left.get("targets") or ()],
-                    *[str(value) for value in right.get("targets") or ()],
-                ]))
-                groups.remove(right)
-                changed = True
-                break
-            if changed:
-                break
+        group = {**conflict, "_edit_ids": edit_ids,
+                 "targets": list(conflict.get("targets") or ()),
+                 "spans": list(conflict.get("spans") or ())}
+        for index in matching:
+            previous = groups[index]
+            group["_edit_ids"].update(previous["_edit_ids"])
+            group["targets"].extend(previous.get("targets") or ())
+            group["spans"].extend(previous.get("spans") or ())
+        group["targets"] = list(dict.fromkeys(group["targets"]))
+        for index in reversed(matching):
+            del groups[index]
+        groups.insert(matching[0] if matching else len(groups), group)
     for group in groups:
         group.pop("_edit_ids", None)
     return groups
