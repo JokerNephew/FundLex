@@ -14,7 +14,7 @@ from fundlex.api import create_app
 from fundlex.jobs import Worker
 from fundlex.model import ModelResult
 from fundlex.pipeline import process
-from fundlex.store import Conflict, RunStore
+from fundlex.store import Conflict, ReportJsonError, RunStore
 
 
 def docx_bytes(label: str = "x") -> bytes:
@@ -304,6 +304,19 @@ def test_corrupt_published_artifact_and_production_auth_fail_closed(tmp_path, mo
     monkeypatch.setenv("FUNDLEX_AUTH_MODE", "oidc")
     client = TestClient(create_app(tmp_path))
     assert client.get("/api/batches", headers={"X-FundLex-User": "alice"}).status_code == 503
+
+
+def test_sqlite_report_json_parser_returns_only_controlled_error(tmp_path):
+    store = RunStore(tmp_path)
+    batch = store.create_batch(owner="alice", ruleset_version="v1", uploads=[("a.docx", docx_bytes())])
+    document_id = batch["documents"][0]["id"]
+    with store._connect() as db:
+        db.execute("UPDATE documents SET report_json=? WHERE id=?", ("{internal: secret", document_id))
+
+    with pytest.raises(ReportJsonError) as error:
+        store.get_report("alice", batch["id"], document_id)
+    assert str(error.value) == "REPORT_JSON_INVALID"
+    assert "secret" not in str(error.value)
 
 
 @pytest.mark.parametrize("code", ["MODEL_CIRCUIT_OPEN", "MODEL_GLOBAL_CALL_BUDGET_EXCEEDED", "MODEL_COST_BUDGET_EXCEEDED"])

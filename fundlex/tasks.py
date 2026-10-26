@@ -15,7 +15,8 @@ from datetime import datetime, timedelta, timezone
 from .edit_summary import (DELIVERY_TEXT, edit_count,
                            summary_detail)
 from .recall import ENGINE_ID as RECALL_ENGINE_ID
-from .store import Conflict, NotFound, RunStore, SCHEMA_VERSION, engine_build
+from .store import (Conflict, NotFound, ReportJsonError, RunStore, SCHEMA_VERSION,
+                     engine_build, parse_report_json)
 
 
 def _source_field(source, name: str) -> str:
@@ -121,6 +122,7 @@ class TaskStore:
                     "SELECT COUNT(*) FROM artifacts WHERE document_id=?",
                     (row["document_id"],),
                 ).fetchone()[0]
+            report_error = self._report_error(row["report_json"])
             result.append({"task_id": task_id, "batch_id": row["batch_id"], "document_id": row["document_id"],
                            "client_id": row["client_id"], "name": row["name"], "size": row["size"],
                            "job_status": row["status"] or "not_started", "upload_status": row["upload_status"],
@@ -133,6 +135,7 @@ class TaskStore:
                                            for kind in (doc or {}).get("artifacts", [])} if doc else {}),
                             "source_sha256": row["source_sha256"],
                             "phase": self._report_phase(row["report_json"]),
+                            "report_error": report_error,
                             "document_updated_at": row["document_updated_at"] or 0,
                             "artifact_count": artifact_count,
                            "reason_codes": self._reasons(row["report_json"], row["document_error"] or row["error_code"]) if details else [],
@@ -142,7 +145,11 @@ class TaskStore:
     @staticmethod
     def _reasons(raw, error):
         reasons = {error} if error else set()
-        report = json.loads(raw) if raw else {}
+        try:
+            report = parse_report_json(raw) or {}
+        except ReportJsonError as exc:
+            reasons.add(exc.code)
+            return sorted(reasons)
         for action in report.get("actions", []):
             if not isinstance(action, dict):
                 continue
@@ -158,11 +165,19 @@ class TaskStore:
         return sorted(reasons)
 
     @staticmethod
+    def _report_error(raw):
+        try:
+            parse_report_json(raw)
+        except ReportJsonError as exc:
+            return exc.code
+        return None
+
+    @staticmethod
     def _report_phase(raw) -> str:
         """Read the latest persisted Worker phase for task aggregation."""
         try:
-            report = json.loads(raw) if raw else {}
-        except (TypeError, ValueError):
+            report = parse_report_json(raw) or {}
+        except ReportJsonError:
             return ""
         windows = report.get("windows") if isinstance(report, dict) else None
         if not isinstance(windows, list):
@@ -218,6 +233,7 @@ class TaskStore:
                 "delivery_counts": dict(Counter(d["delivery_status"] for d in docs)),
                 "phase": phase,
                 "downloadable_count": sum(1 for doc in docs if doc.get("artifact_count", 0) > 0),
+                "report_json_errors": sum(1 for doc in docs if doc.get("report_error")),
                 "created_at": datetime.fromtimestamp(row["created_at"], timezone.utc).isoformat(),
                 "updated_at": datetime.fromtimestamp(row["updated_at"], timezone.utc).isoformat(),
                 "pause_reason": row["pause_reason"], "summary_url": f"/api/tasks/{row['id']}/report"}
@@ -240,7 +256,8 @@ class TaskStore:
                              "upload_status": "accepted", "eligibility": row["qualification_status"],
                              "delivery_status": row["delivery_status"], "error_code": row["error_code"],
                              "report_url": d["report_url"] if row["report_json"] else None, "downloads": d["download_urls"],
-                             "source_sha256": row["source_sha256"], "ordinal": row["ordinal"]})
+                             "source_sha256": row["source_sha256"], "report_error": self._report_error(row["report_json"]),
+                             "ordinal": row["ordinal"]})
                 docs[-1]["reason_codes"] = self._reasons(row["report_json"], row["error_code"])
             task = dict(batch) | {"id": task_id, "name": "历史任务 · " + datetime.fromtimestamp(batch["created_at"], timezone.utc).strftime("%Y-%m-%d %H:%M"),
                                   "paused": batch["status"] == "paused", "sealed": True, "pause_reason": None}
@@ -306,17 +323,20 @@ class TaskStore:
         with self.store._connect() as db:
             rows = db.execute("""SELECT tf.task_id,tf.upload_status,
                 d.id AS document_id,d.status,d.delivery_status,d.qualification_status,
-                d.created_at AS doc_created_at,d.updated_at AS doc_updated_at,
+                d.created_at AS doc_created_at,d.updated_at AS doc_updated_at,d.report_json,
                 d.started_at,d.finished_at
                 FROM task_files tf JOIN tasks t ON t.id=tf.task_id
                 LEFT JOIN documents d ON d.id=tf.document_id
                 WHERE t.owner=?""", (owner,)).fetchall()
         processed = completed = previous = 0
+        report_json_errors = 0
         pending = exceptions = 0
         active_tasks: set[str] = set()
         durations: list[float] = []
         for row in rows:
             status = row["status"] or "not_started"
+            if row["report_json"] is not None and self._report_error(row["report_json"]):
+                report_json_errors += 1
             terminal = status in {"succeeded", "failed"}
             finished = row["finished_at"] if row["finished_at"] is not None else (
                 row["doc_updated_at"] if terminal else None)
@@ -349,7 +369,7 @@ class TaskStore:
                 "pending_contracts": pending, "active_tasks": len(active_tasks),
                 "average_seconds": average, "exception_contracts": exceptions,
                 "previous_processed_contracts": previous,
-                "month_over_month": change,
+                "month_over_month": change, "report_json_errors": report_json_errors,
                 "generated_at": datetime.now(timezone.utc).isoformat()}
 
     def documents(self, owner, task_id, **filters):
@@ -524,7 +544,7 @@ class TaskStore:
             if doc["document_id"]:
                 try:
                     report = self.store.get_report(owner, doc["batch_id"], doc["document_id"])
-                except NotFound:
+                except (NotFound, ReportJsonError):
                     report = {}
             count = edit_count(report)
             detail = summary_detail(report) if report else "—"
@@ -548,7 +568,7 @@ class TaskStore:
                 continue
             try:
                 report = self.store.get_report(owner, d["batch_id"], d["document_id"])
-            except NotFound:
+            except (NotFound, ReportJsonError):
                 continue
             for action in report.get("actions", []):
                 if isinstance(action, dict):

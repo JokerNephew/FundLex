@@ -151,6 +151,46 @@ def test_results_four_dimensions_filtering_paging_and_summary(client):
     assert "RELEASE_GATE_CLOSED" in report and "'failed': 4" in report
 
 
+def test_corrupt_report_json_is_a_stable_document_error_and_does_not_block_siblings(client):
+    data, files = package(), manifest(2, package())
+    task = create(client, files).json()["id"]
+    upload(client, task, files, data)
+    store = client.app.state.store
+    docs = client.get(f"/api/tasks/{task}/documents", headers=ALICE).json()["items"]
+    corrupt, healthy = docs
+    with store._connect() as db:
+        db.execute("UPDATE documents SET report_json=? WHERE id=?", ("{secret: malformed", corrupt["document_id"]))
+        db.execute("UPDATE documents SET report_json=? WHERE id=?", (json.dumps({"actions": [{"status": "done"}]}), healthy["document_id"]))
+
+    listed = client.get(f"/api/tasks/{task}/documents", headers=ALICE)
+    assert listed.status_code == 200
+    by_id = {item["document_id"]: item for item in listed.json()["items"]}
+    assert by_id[corrupt["document_id"]]["report_error"] == "REPORT_JSON_INVALID"
+    assert by_id[corrupt["document_id"]]["reason_codes"] == ["REPORT_JSON_INVALID"]
+    assert by_id[healthy["document_id"]]["report_error"] is None
+    assert client.get(f"/api/tasks/{task}", headers=ALICE).json()["report_json_errors"] == 1
+
+    detail = client.get(f"/api/tasks/{task}/documents/{corrupt['document_id']}", headers=ALICE)
+    assert detail.status_code == 200 and detail.json()["report_error"] == "REPORT_JSON_INVALID"
+    assert client.get(f"/api/tasks/{task}/documents/{healthy['document_id']}", headers=ALICE).status_code == 200
+
+    report = client.get(f"/api/tasks/{task}/documents/{corrupt['document_id']}/report", headers=ALICE)
+    assert report.status_code == 409 and report.json()["detail"] == "REPORT_JSON_INVALID"
+    assert "malformed" not in report.text and "secret" not in report.text
+    overview = client.get(f"/api/tasks/{task}/report", headers=ALICE)
+    assert overview.status_code == 200 and "REPORT_JSON_INVALID" in overview.text
+
+    batch = client.get(f"/api/batches/{corrupt['batch_id']}", headers=ALICE)
+    assert batch.status_code == 200
+    batch_docs = {item["document_id"]: item for item in batch.json()["documents"]}
+    assert batch_docs[corrupt["document_id"]]["report_error"] == "REPORT_JSON_INVALID"
+    batch_report = client.get(f"/api/batches/{corrupt['batch_id']}/report", headers=ALICE)
+    assert batch_report.status_code == 200 and "REPORT_JSON_INVALID" in batch_report.text
+
+    stats = client.get("/api/tasks/stats", headers=ALICE)
+    assert stats.status_code == 200 and stats.json()["report_json_errors"] == 1
+
+
 def test_retired_engine_task_row_is_flagged_legacy(client):
     # Production history keeps first-class task rows written by the retired
     # ruleset engine (engine_id=''). They must be flagged read-only, otherwise

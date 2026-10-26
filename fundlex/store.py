@@ -66,6 +66,41 @@ class Conflict(StoreError):
     pass
 
 
+REPORT_JSON_INVALID = "REPORT_JSON_INVALID"
+
+
+class ReportJsonError(Conflict):
+    """A persisted report cannot be decoded into the public report shape.
+
+    The exception deliberately carries only a stable business code.  In
+    particular, JSON decoder messages can contain snippets of persisted
+    report content and must never reach an API response.
+    """
+
+    code = REPORT_JSON_INVALID
+
+    def __init__(self):
+        super().__init__(self.code)
+
+
+def parse_report_json(raw: Any) -> dict[str, Any] | None:
+    """Decode one persisted ``report_json`` value through one safe boundary.
+
+    Missing reports are represented by ``None``.  Any malformed JSON or valid
+    JSON value with the wrong top-level shape is the same controlled business
+    error to callers.
+    """
+    if raw is None or raw == "":
+        return None
+    try:
+        report = json.loads(raw)
+    except (TypeError, ValueError, UnicodeError, RecursionError) as exc:
+        raise ReportJsonError() from exc
+    if not isinstance(report, dict):
+        raise ReportJsonError()
+    return report
+
+
 def sha256_file(path: Path) -> str:
     digest = hashlib.sha256()
     with path.open("rb") as stream:
@@ -441,12 +476,19 @@ class RunStore:
 
     def _document_dict(self, db: Connection, row) -> dict[str, Any]:
         artifacts = db.execute("SELECT kind FROM artifacts WHERE document_id=?", (row["id"],)).fetchall()
+        try:
+            parse_report_json(row["report_json"])
+        except ReportJsonError as exc:
+            report_error = exc.code
+        else:
+            report_error = None
         return {key: row[key] for key in ("id", "batch_id", "filename", "source_sha256", "status",
                                           "qualification_status", "delivery_status", "error_code", "attempt",
                                           "execution_mode")} | {
             "artifacts": [item["kind"] for item in artifacts],
             "report_url": f"/api/batches/{row['batch_id']}/documents/{row['id']}/report",
             "download_urls": {item["kind"]: f"/api/batches/{row['batch_id']}/documents/{row['id']}/download/{item['kind']}" for item in artifacts},
+            "report_error": report_error,
         }
 
     def get_document(self, owner: str, batch_id: str, document_id: str) -> dict[str, Any]:
@@ -463,7 +505,7 @@ class RunStore:
             row = db.execute("SELECT report_json FROM documents WHERE id=?", (document_id,)).fetchone()
         if not row or not row["report_json"]:
             raise NotFound("report not available")
-        return json.loads(row["report_json"])
+        return parse_report_json(row["report_json"]) or {}
 
     def save_selected_artifact(self, owner: str, batch_id: str, document_id: str,
                                kind: str, source: Path) -> tuple[str, int]:
@@ -535,9 +577,11 @@ class RunStore:
         if document is None or not document["report_json"]:
             raise Conflict("SELECTED_SOURCE_UNAVAILABLE")
         try:
-            report = json.loads(document["report_json"])
-        except (TypeError, ValueError) as exc:
-            raise Conflict("SELECTED_SOURCE_UNAVAILABLE") from exc
+            report = parse_report_json(document["report_json"])
+        except ReportJsonError as exc:
+            raise Conflict(exc.code) from exc
+        if report is None:
+            raise Conflict("SELECTED_SOURCE_UNAVAILABLE")
         candidates = ("redline", "working_redline", "evaluation_redline")
         source = next((item for name in candidates for item in rows if item["kind"] == name), None)
         if source is None:
@@ -564,6 +608,11 @@ class RunStore:
         path = self.object_path(row["object_key"])
         if not path.is_file() or path.stat().st_size != row["size"] or sha256_file(path) != row["sha256"]:
             raise Conflict("artifact integrity check failed")
+        if kind == "report_json":
+            try:
+                parse_report_json(path.read_text(encoding="utf-8"))
+            except (OSError, UnicodeError, ReportJsonError) as exc:
+                raise ReportJsonError() from exc
         if kind in SELECTED_KINDS:
             # User-selected artifacts are bound to the redline they were derived
             # from; re-check that the source revision artifact is still intact.
@@ -576,7 +625,7 @@ class RunStore:
                                       (document_id,)).fetchone()
                 pair_rows = db.execute("SELECT * FROM artifacts WHERE document_id=?", (document_id,)).fetchall()
             try:
-                report = json.loads(document["report_json"]) if document and document["report_json"] else {}
+                report = parse_report_json(document["report_json"]) if document and document["report_json"] else {}
                 if is_recall_report(report):
                     # A recall download is bound to the persisted delivery state and
                     # re-validated against the actual stored pair.
