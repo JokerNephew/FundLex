@@ -51,11 +51,11 @@
 
 | 页面 | 截图 |
 | --- | --- |
-| 240 份提交前清单 | [formal-import-desktop.jpg](screenshots/formal-import-desktop.jpg) |
-| 整任务进度 | [formal-progress-desktop.jpg](screenshots/formal-progress-desktop.jpg) |
-| 暂停后补传，队列保持暂停 | [formal-progress-paused.jpg](screenshots/formal-progress-paused.jpg) |
-| 整任务合同结果 | [formal-results-desktop.jpg](screenshots/formal-results-desktop.jpg) |
-| 长内容与不完整证据详情 | [formal-detail-desktop.jpg](screenshots/formal-detail-desktop.jpg) |
+| 240 份提交前清单 | [formal-import-desktop.jpg](../../screenshots/formal-import-desktop.jpg) |
+| 整任务进度 | [formal-progress-desktop.jpg](../../screenshots/formal-progress-desktop.jpg) |
+| 暂停后补传，队列保持暂停 | [formal-progress-paused.jpg](../../screenshots/formal-progress-paused.jpg) |
+| 整任务合同结果 | [formal-results-desktop.jpg](../../screenshots/formal-results-desktop.jpg) |
+| 长内容与不完整证据详情 | [formal-detail-desktop.jpg](../../screenshots/formal-detail-desktop.jpg) |
 
 ## 尚存限制与运行说明
 

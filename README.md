@@ -6,9 +6,9 @@
 
 FundLex 是 DOCX 基金合同处理的本地开发应用，包含 Fluent Office 工作台、持久批次队列、证据画像、通用规则、固定模板编辑器及报告交付。
 
-> **匹配升级（v3）进行中：** 当前仓库规则包是由新引擎重建的**未发布评测包**（正式写入保持关闭，运行自动进入评测模式）；发布需在最终引擎上重跑 5+16+8 证据并执行 `rules/release_v2 --evidence-run`，步骤与当前阻塞见 [实施计划（已归档）](docs/archive/design/IMPLEMENTATION_PLAN.md) 与 [接续断点（已归档）](docs/archive/v2-matching/HANDOFF_MATCHING_V3_20261014.md)。下方"当前状态"描述的是上一版已发布引擎的行为。
+> **匹配升级（v3）进行中：** 当前仓库规则包是由新引擎重建的**未发布评测包**（`rules/rules_v1.json` 与 `rules/rules_v2.json` 均为 `release_policy.status="unreleased"`；v2 的 `auto_write_enabled=false`，正式写入保持关闭）。发布需在最终引擎上重跑 5+16+8 证据并执行 `rules/release_v2 --evidence-run`，步骤与当前阻塞见 [实施计划（已归档）](docs/archive/design/IMPLEMENTATION_PLAN.md) 与 [接续断点（已归档）](docs/archive/v2-matching/HANDOFF_MATCHING_V3_20261014.md)。当前总状态和生产证据见[当前状态索引](docs/CURRENT_STATUS_INDEX_20261026.md)。
 >
-> **当前状态（2026-10-14）：全部 22 个 action 已实现并已按内部部署政策发布，正式交付（自动写入）可用。** v2 按规则语义契约、当前合同证据、精确范围和内容验证执行；16 个新增动作用"规则原文代码组装 + 类别槽位按实际类别实例化"（不让模型猜政策），模板/删除模式由代码逐字核验。发布包 `rules/rules_v2.json` 绑定引擎构建与模型传输指纹（`evaluation_context`），并携带逐动作预注册门槛与实测指标（确定性审计：22 正例 + 23 反例全部通过、0 错误写入）；引擎或模型配置漂移时运行期自动拒绝（`V2_RELEASE_CONTEXT_UNVERIFIED`），重新发布用 `rules/release_v2.py`。正式交付按"已校验修改 + 显式例外清单"分级（`complete` / `complete_with_exceptions` / `incomplete`，见 [交付状态政策](docs/DELIVERY_STATUS_POLICY.md)）。真实运行证据（夹具 5/5、回归 16/16、泛化 8/8、正式交付复验 2/2）见 [发布证据（已归档）](docs/archive/v2-matching/RELEASE_EVIDENCE.md) 与 [v2 结果（已归档）](docs/archive/v2-matching/AI_EDITING_V2_RESULTS.md)。
+> **当前状态（2026-10-26）：** v2 规则包仍是未发布评测包，正式自动写入不可用；历史候选的确定性审计和真实运行结果只作为归档证据。普通 V1 已完成一条真实生产交付链路，但 Compare coverage 为 `incomplete`，D01–D20 固定分母 gate 为 0/20，整体项目仍为 **NO-GO**。详见[当前状态索引](docs/CURRENT_STATUS_INDEX_20261026.md)。
 >
 > **生产化：** 用户登录（本地账号 + 会话持久化，`FUNDLEX_AUTH_MODE=password`）、MySQL 8 持久化（`FUNDLEX_DATABASE_URL`，本机 8.0 实库测试通过）、4C8G 单机部署（1 个 API 进程组 + 1 个 worker 进程）见 [部署指南](docs/DEPLOYMENT_GUIDE.md)。
 >
@@ -43,9 +43,9 @@ pwsh -NoProfile -File .\tools\local.ps1 -Mode worker -Model deepseek-v4.1-flash 
 任务工作台支持两种模式，导入页可选择：
 
 - **只读诊断**（v1）：资格、候选与失败原因评估，不修改合同。
-- **合同修订（现行）**（v2）：按 22 个语义契约动作自动定位、局部修改并独立验证；发布包为正式交付模式，产出 `final.docx`（接受修订后）与 `redline.docx`（修订痕迹），另附逐合同报告与例外清单。评测复跑（`evaluation=True`）产出 `evaluation_final/evaluation_redline`，不能作为正式合同。
+- **合同修订评测模式（v2，当前）**：按 22 个语义契约动作评测自动定位、局部修改并独立验证；当前规则包未发布，不能作为正式自动写入模式，产出评测文件与报告仅用于评估。未来满足发布门槛后，正式模式才产出 `final.docx`（接受修订后）与 `redline.docx`（修订痕迹），另附逐合同报告与例外清单。评测复跑（`evaluation=True`）产出 `evaluation_final/evaluation_redline`，不能作为正式合同。
 
-正式写入由规则包发布状态决定：未发布包一律评测模式；已发布包必须逐 action 携带评估报告、批准记录、预注册阈值与达标指标（代码强制校验，不能手改开关），并绑定引擎与模型传输指纹。当前 v2 包已按 [内部部署发布政策（已归档）](docs/archive/v2-matching/RELEASE_POLICY_V2_INTERNAL.md) 发布（产品负责人指示 + 确定性审计 + 真实运行证据，非外部业务批准）。
+正式写入由规则包发布状态决定：未发布包一律评测模式；已发布包必须逐 action 携带评估报告、批准记录、预注册阈值与达标指标（代码强制校验，不能手改开关），并绑定引擎与模型传输指纹。当前 v2 包仍为 `unreleased`，其归档发布候选证据不改变当前状态，也不构成正式自动写入批准。
 
 真实任务链路复验入口：`tools/evaluation/task_revision_run.py`（任务 API→上传→默认 worker→正式交付→授权下载并核对 SHA）。前端改动检查：`node --check frontend/app.js`。
 
@@ -70,7 +70,7 @@ ModelGateway 读取通用变量 `LLM_PROVIDER`、`LLM_BASE_URL`、`LLM_MODEL`、
 - `complete/incomplete/not_generated` 与资格/action/candidate 分开记录；不完整或诊断文件不能作为最终合同。目录不自动刷新。
 - 没有人工复核、审批或待办队列。离线规则发布批准属于规则包发布策略。
 
-本地运行支持事务任务表、单 worker OS 锁、租约心跳/fencing、有界故障退避、暂停/恢复、输入/规则/引擎/schema 哈希核验及显式提交幂等。只读评测的同一任务支持模型阶段检查点：按源文件、规则、引擎/schema、提示和模型传输配置绑定，复用时重新校验 JSON 和原文引述；费用不重复计入本次尝试。结构、证据位置、编辑计划及产物均重新计算，损坏检查点重新调用模型。已发布自动写入链路禁用该缓存，仍完整执行；尚未完成生产多 worker 验收。
+本地运行支持事务任务表、单 worker OS 锁、租约心跳/fencing、有界故障退避、暂停/恢复、输入/规则/引擎/schema 哈希核验及显式提交幂等。只读评测的同一任务支持模型阶段检查点：按源文件、规则、引擎/schema、提示和模型传输配置绑定，复用时重新校验 JSON 和原文引述；费用不重复计入本次尝试。结构、证据位置、编辑计划及产物均重新计算，损坏检查点重新调用模型。当前未发布规则包路径保持评测模式；未来正式发布后仍需按发布状态执行完整链路。
 
 ## 测试与资料
 
@@ -84,7 +84,7 @@ pwsh -NoProfile -File tools/evaluation/word_acceptance.ps1
 
 真实模型场景、小批和受控批次的入口是 `tools/evaluation/real_scenarios.py`、`tools/evaluation/controlled_regression.py`；v2 定位/生成/验证评测入口是 `tools/evaluation/v2_fixtures.py`、`tools/evaluation/v2_pilot.py` 与 `tools/evaluation/v2_compare.py`（评分器读取实际修改的 DOCX）。先按协议设置全局账本、调用/费用上限再运行。本轮新增：确定性动作审计 `tools/evaluation/action_fixture_audit.py`（每动作正/反例，发布证据）、发布打包 `rules/release_v2.py`（预注册门槛 + 指纹绑定）、发布证据汇总 `tools/evaluation/release_evidence.py`。MySQL 实库测试默认跳过，设置 `FUNDLEX_MYSQL_TEST_URL=mysql://user:pass@127.0.0.1:3306/fundlex_test` 后运行 `tests/test_db_mysql.py`。用户已将本轮模型回归范围调整为230份，剩余284份取消；514份结构审计仍是独立验证。报告记录实际结果，不把替身测试或缺少真值的覆盖统计表述为准确率。
 
-- [PRD v4.1](docs/archive/design/FundLex_PRD_v4.md)、[Agent 设计 v4.1](docs/archive/design/FundLex_Agent_设计方案_v4.md)、[技术详细设计 v1.1](docs/archive/design/FundLex_技术方案_详细设计_v1.md) 保留为原始产品/技术资料（已归档至 `docs/archive/design/`）。
+- PRD v4.1、Agent 设计 v4.1、技术详细设计 v1.1 的名称和引用关系保留在历史记录中；对应原始文件不在当前 checkout 的 `docs/archive/design/` 目录内。
 - `references/source/`、`references/evidence/` 是依据与离线评测材料；`funds_word/` 的 514 DOCX 是样本，不是运行时白名单。
 - `funds/`、`archive/`、`tools/research/` 保留历史资料；未运行历史 PDF 转换。
 - `frontend/` 是实际应用；`workbench/` 的 HTML 是标明虚构数据的历史视觉参考。
@@ -104,15 +104,15 @@ pwsh -NoProfile -File tools/evaluation/word_acceptance.ps1
 
 资格字段/纯章节、子节别名、七日句宿主、类别费用归属已修复；16份缺陷回归的13份普通基金份额完全匹配、68项明确费用均核验、三重点动作12处可编辑目标精确定位。另1处跨段拒绝；并行源码变动导致1份版本保护失败，隔离实际补验正确排除，原记录保留。代码和冻结基线集成277测试通过。数量、外部批准、其他动作及R10精确边界仍未满足，所有自动写入关闭；见[修复复验报告（已归档）](docs/archive/early-prototypes/ACTION_PILOT_FIX_RESULTS.md)。
 
-## v2 正式发布状态（2026-10-14）
+## v2 历史发布候选证据（2026-10-14，非当前发布状态）
 
-完整测试 357 项通过（含本机 MySQL 8 实库测试；`tests/test_db_mysql.py` 需 `FUNDLEX_MYSQL_TEST_URL`）。22 个 action 全部可用；发布包 `rules/rules_v2.json`（sha256 `09be5024…`）绑定引擎构建 `bfe20743…` 与模型传输指纹，逐动作携带预注册门槛与实测指标。
+完整测试 357 项通过（含本机 MySQL 8 实库测试；`tests/test_db_mysql.py` 需 `FUNDLEX_MYSQL_TEST_URL`）。22 个 action 在当时候选中可评测；候选规则包 `rules/rules_v2.json`（sha256 `09be5024…`）绑定引擎构建 `bfe20743…` 与模型传输指纹。该段只保留历史评测和发布候选证据，不能推导当前规则包已发布。
 
 真实运行证据（评估模式，共享账本上限 2000 次/USD 1.40，实际约 1840 次/USD 1.29）：
 
 - 确定性动作审计：22 正例 + 23 反例全部通过，0 错误写入（`tools/evaluation/action_fixture_audit.py`）。
 - 构造夹具 5/5；开发回归 16 份资格 16/16、应改目标 16/16、编辑精度 1.0、误改 0、13/13 普通基金份额全对；泛化 8 份资格 8/8、精度 1.0、6/6 全对（冻结独立标签，非外部业务批准）。
-- 正式交付复验（真实任务路径）：2/2 `complete_with_exceptions`，发布 `final/redline`，产物 SHA 核对一致；例外清单含 R17 浮动管理费画像证据不足与 R16 定位提示。
+- 候选交付复验（真实任务路径）：2/2 `complete_with_exceptions`，当时生成 `final/redline`，产物 SHA 核对一致；例外清单含 R17 浮动管理费画像证据不足与 R16 定位提示。该结果属于历史候选评测，不是当前正式发布证明。
 - 已知边界：R01/R02/R10 存在模型侧偶发拒绝（漏改不误改）；整句/整段与指引旧文不一致时失败关闭；R17 依赖浮动管理费画像证据；非利润表（金额/日期）细节不在本次范围。详见 [发布证据（已归档）](docs/archive/v2-matching/RELEASE_EVIDENCE.md)。
 
 完整历史评测记录见 [v2 实际修改与评测结果（已归档）](docs/archive/v2-matching/AI_EDITING_V2_RESULTS.md) 与 [实施计划（已归档）](docs/archive/design/IMPLEMENTATION_PLAN.md)。

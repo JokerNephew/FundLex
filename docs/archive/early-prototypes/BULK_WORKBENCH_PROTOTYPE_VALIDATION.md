@@ -35,12 +35,12 @@
 
 ## 截图
 
-- [任务总览（桌面）](../workbench/prototypes/screenshots/task-overview-desktop.jpg)
-- [任务总进度（笔记本）](../workbench/prototypes/screenshots/task-progress-laptop.jpg)
-- [任务结果（桌面）](../workbench/prototypes/screenshots/task-results-desktop.jpg)
-- [批量导入异常筛选（桌面）](../workbench/prototypes/screenshots/task-import-desktop.jpg)
-- [逐合同详情（桌面）](../workbench/prototypes/screenshots/contract-detail-desktop.jpg)
-- [任务结果（手机）](../workbench/prototypes/screenshots/task-results-mobile.jpg)
+- [任务总览（桌面）](../../../workbench/prototypes/screenshots/task-overview-desktop.jpg)
+- [任务总进度（笔记本）](../../../workbench/prototypes/screenshots/task-progress-laptop.jpg)
+- [任务结果（桌面）](../../../workbench/prototypes/screenshots/task-results-desktop.jpg)
+- [批量导入异常筛选（桌面）](../../../workbench/prototypes/screenshots/task-import-desktop.jpg)
+- [逐合同详情（桌面）](../../../workbench/prototypes/screenshots/contract-detail-desktop.jpg)
+- [任务结果（手机）](../../../workbench/prototypes/screenshots/task-results-mobile.jpg)
 
 ## 真实能力与剩余限制
 
