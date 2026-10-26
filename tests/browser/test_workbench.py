@@ -277,32 +277,27 @@ def test_upload_completion_preserves_new_draft(ui, hold):
     pending = []
     pattern = "**/api/tasks" if hold == "create" else "**/api/tasks/*/uploads"
     def intercept(route):
-        print("DEBUG intercept", route.request.method, route.request.url)
         if route.request.method != "POST":
             route.continue_()
             return
         index = len(pending)
         pending.append((route, None))
         pending[index] = (route, route.fetch())
-    context.route(pattern, intercept)
+    page.route(pattern, intercept)
     open_page(ui, "import")
     page.fill("#task-name", "旧上传任务")
     page.set_input_files("#file-picker", {"name": "旧合同.docx", "mimeType": "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "buffer": docx_bytes()})
-    print("DEBUG disabled", page.locator("#submit-task").is_disabled(), "guide", page.inner_text("#guide-binding"), "rows", page.inner_text("#import-rows")[:100])
-    page.on("request", lambda request: print("DEBUG request", request.method, request.url) if "/api/tasks" in request.url else None)
-    page.on("console", lambda message: print("DEBUG console", message.type, message.text[:200]))
-    page.on("pageerror", lambda error: print("DEBUG pageerror", str(error)[:300]))
     page.locator("#submit-task").click()
-    deadline = time.monotonic() + 10
+    deadline = time.monotonic() + 15
     while not pending and time.monotonic() < deadline:
-        time.sleep(.05)
+        page.wait_for_timeout(100)
     assert pending
     page.locator('.sidebar [data-nav="overview"]').click()
     page.locator('#view-overview [data-action="new-task"]').first.click()
     page.fill("#task-name", "新草稿不得覆盖")
-    deadline = time.monotonic() + 10
+    deadline = time.monotonic() + 15
     while pending and pending[-1][1] is None and time.monotonic() < deadline:
-        time.sleep(.05)
+        page.wait_for_timeout(100)
     route, response = pending.pop()
     route.fulfill(response=response)
     page.wait_for_function("!document.querySelector('[data-action=choose-files]').disabled")

@@ -811,6 +811,14 @@ def create_app(data_dir: str | Path | None = None, *, auth_db=None) -> FastAPI:
     def feishu_oauth_callback(code: str = "", state: str = "", error: str = ""):
         """Feishu OAuth callback; binds the authorized Feishu identity to `state`."""
         if error:
+            # A denied authorization is still a callback for a one-time state.
+            # Consume it when possible so the same URL cannot later be reused
+            # with a different authorization code.
+            if state and len(state) <= 512:
+                try:
+                    integrations.consume_oauth_state("feishu", state)
+                except IntegrationConflict:
+                    pass
             return _oauth_result_page("未完成绑定", "你在飞书授权页取消了授权，请重新生成二维码。", success=False)
         if not code or not state or len(state) > 512:
             return _oauth_result_page("绑定链接无效", "缺少授权码或绑定状态，请回到 FundLex 设置页重新生成二维码。", success=False)

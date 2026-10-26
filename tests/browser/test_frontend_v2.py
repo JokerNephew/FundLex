@@ -28,7 +28,8 @@ def browser():
     from playwright.sync_api import sync_playwright
 
     with sync_playwright() as playwright:
-        instance = playwright.chromium.launch()
+        instance = playwright.chromium.launch(
+            headless=os.getenv("FUNDLEX_BROWSER_HEADLESS", "1") != "0")
         yield instance
         instance.close()
 
@@ -359,6 +360,64 @@ def test_compare_result_view_supports_pair_navigation_and_mobile_switching(brows
         assert page.locator('.compare-viewer[data-mobile-side="left"]').count() == 1
         assert not page_errors, page_errors
         assert not console_errors, console_errors
+    finally:
+        context.close()
+
+
+def test_compare_first_upload_seals_and_refetches_explicit_task(browser, live_app, tmp_path):
+    """The first Compare upload never refetches an undefined task."""
+    from docx import Document
+
+    left_path = tmp_path / "原版.docx"
+    right_path = tmp_path / "修订版.docx"
+    for path, text in ((left_path, "原版合同"), (right_path, "修订版合同")):
+        document = Document()
+        document.add_paragraph(text)
+        document.save(path)
+
+    task_id = "compare-upload-browser-task"
+    task = {
+        "id": task_id, "name": "首次上传回归", "status": "sealed", "total": 1,
+        "pairs": [{"id": "compare-upload-browser-pair", "label": "合同 1", "status": "pending",
+                    "left": {"name": "原版.docx"}, "right": {"name": "修订版.docx"}}],
+    }
+    request_urls: list[str] = []
+    context = browser.new_context(viewport={"width": 1440, "height": 900})
+    context.add_init_script("localStorage.setItem('fundlex-dev-user','compare-first-upload-check');")
+    page = context.new_page()
+
+    def json_route(route, body, status=200):
+        route.fulfill(status=status, content_type="application/json", body=json.dumps(body))
+
+    def handle(route):
+        request_urls.append(route.request.url)
+        path = route.request.url.split("/api", 1)[-1].split("?", 1)[0]
+        if path == "/compare/tasks" and route.request.method == "GET":
+            return json_route(route, {"items": [task], "total": 1})
+        if path == "/compare/tasks" and route.request.method == "POST":
+            return json_route(route, task, status=201)
+        if path == f"/compare/tasks/{task_id}" and route.request.method == "GET":
+            return json_route(route, task)
+        if path == f"/compare/tasks/{task_id}/uploads":
+            return json_route(route, {"receipts": [{"client_id": "left", "status": "accepted"}, {"client_id": "right", "status": "accepted"}]})
+        if path == f"/compare/tasks/{task_id}/seal":
+            return json_route(route, task)
+        return route.continue_()
+
+    page.route("**/api/**", handle)
+    try:
+        response = page.goto(live_app + "/compare", wait_until="networkidle")
+        assert response and response.ok
+        page.get_by_role("heading", name="合同对比").first.wait_for(state="visible")
+        page.get_by_role("button", name="＋ 新建对比任务").click()
+        file_inputs = page.locator(".compare-side-inputs input[type=file]")
+        file_inputs.nth(0).set_input_files(str(left_path))
+        file_inputs.nth(1).set_input_files(str(right_path))
+        page.get_by_role("button", name="开始上传并对比").click()
+        page.get_by_text("已提交，对比任务正在处理。").wait_for(state="visible")
+        assert not any("/api/compare/tasks/undefined" in url for url in request_urls)
+        assert any(f"/api/compare/tasks/{task_id}" in url for url in request_urls)
+        assert "上传中断" not in page.locator("body").inner_text()
     finally:
         context.close()
 

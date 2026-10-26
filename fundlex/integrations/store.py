@@ -40,6 +40,10 @@ class IntegrationStore:
                     code_hash TEXT PRIMARY KEY, provider TEXT NOT NULL, user_id TEXT NOT NULL,
                     expires_at REAL NOT NULL, consumed_at REAL, created_at REAL NOT NULL
                 );
+                CREATE TABLE IF NOT EXISTS integration_oauth_states (
+                    state_hash TEXT PRIMARY KEY, provider TEXT NOT NULL, user_id TEXT NOT NULL,
+                    expires_at REAL NOT NULL, consumed_at REAL, created_at REAL NOT NULL
+                );
                 CREATE TABLE IF NOT EXISTS integration_events (
                     provider TEXT NOT NULL, event_id TEXT NOT NULL, event_type TEXT NOT NULL,
                     payload_sha256 TEXT NOT NULL, status TEXT NOT NULL, attempts INTEGER NOT NULL DEFAULT 0,
@@ -99,6 +103,42 @@ class IntegrationStore:
                        (self._hash(code), provider, user_id, now + ttl_seconds, now))
         return {"code": code, "expires_at": now + ttl_seconds}
 
+    def _bind_identity_locked(self, db, provider: str, tenant_key: str, subject_id: str,
+                              user_id: str) -> str:
+        """Bind within an existing transaction, preserving historical rows."""
+        now = time.time()
+        existing_subject = db.execute("SELECT * FROM external_identities WHERE provider=? AND tenant_key=? AND subject_id=?",
+                                      (provider, tenant_key, subject_id)).fetchone()
+        if existing_subject and existing_subject["revoked_at"] is None and existing_subject["user_id"] != user_id:
+            raise IntegrationConflict("FEISHU_IDENTITY_ALREADY_BOUND")
+        existing_user = db.execute("SELECT * FROM external_identities WHERE provider=? AND tenant_key=? AND user_id=?",
+                                   (provider, tenant_key, user_id)).fetchone()
+        if existing_user and existing_user["revoked_at"] is None and existing_user["subject_id"] != subject_id:
+            raise IntegrationConflict("FEISHU_USER_ALREADY_BOUND")
+        if (existing_subject is not None and existing_subject["revoked_at"] is not None
+                and existing_user is not None and existing_user["revoked_at"] is not None
+                and existing_subject["user_id"] != user_id
+                and existing_user["subject_id"] != subject_id):
+            # Both historical rows already occupy the composite unique keys.
+            # Do not delete audit history merely to permit a subject swap.
+            raise IntegrationConflict("FEISHU_REBIND_CONFLICT")
+        if existing_subject is not None and existing_subject["user_id"] == user_id:
+            db.execute("UPDATE external_identities SET revoked_at=NULL,updated_at=? WHERE provider=? AND tenant_key=? AND subject_id=?",
+                       (now, provider, tenant_key, subject_id))
+        elif existing_user is not None and existing_user["revoked_at"] is not None and existing_subject is None:
+            db.execute("UPDATE external_identities SET subject_id=?,revoked_at=NULL,updated_at=? WHERE provider=? AND tenant_key=? AND user_id=?",
+                       (subject_id, now, provider, tenant_key, user_id))
+        elif existing_subject is not None and existing_subject["revoked_at"] is not None:
+            db.execute("UPDATE external_identities SET user_id=?,revoked_at=NULL,updated_at=? WHERE provider=? AND tenant_key=? AND subject_id=?",
+                       (user_id, now, provider, tenant_key, subject_id))
+        elif existing_subject is None:
+            try:
+                db.execute("INSERT INTO external_identities(provider,tenant_key,subject_id,user_id,created_at,updated_at) VALUES(?,?,?,?,?,?)",
+                           (provider, tenant_key, subject_id, user_id, now, now))
+            except Exception as exc:
+                raise IntegrationConflict("FEISHU_IDENTITY_ALREADY_BOUND") from exc
+        return user_id
+
     def consume_binding_code(self, provider: str, tenant_key: str, subject_id: str, code: str) -> str:
         now = time.time()
         digest = self._hash(code.strip().upper())
@@ -111,39 +151,43 @@ class IntegrationStore:
                 raise IntegrationConflict("FEISHU_BINDING_CODE_CONSUMED")
             if float(row["expires_at"]) < now:
                 raise IntegrationConflict("FEISHU_BINDING_CODE_EXPIRED")
-            existing_subject = db.execute("SELECT * FROM external_identities WHERE provider=? AND tenant_key=? AND subject_id=?",
-                                          (provider, tenant_key, subject_id)).fetchone()
-            if existing_subject and existing_subject["revoked_at"] is None and existing_subject["user_id"] != row["user_id"]:
-                raise IntegrationConflict("FEISHU_IDENTITY_ALREADY_BOUND")
-            existing_user = db.execute("SELECT * FROM external_identities WHERE provider=? AND tenant_key=? AND user_id=?",
-                                       (provider, tenant_key, row["user_id"])).fetchone()
-            if existing_user and existing_user["revoked_at"] is None and existing_user["subject_id"] != subject_id:
-                raise IntegrationConflict("FEISHU_USER_ALREADY_BOUND")
-            if (existing_subject is not None and existing_subject["revoked_at"] is not None
-                    and existing_user is not None and existing_user["revoked_at"] is not None
-                    and existing_subject["user_id"] != row["user_id"]
-                    and existing_user["subject_id"] != subject_id):
-                # Both historical rows already occupy the composite unique
-                # keys. Do not delete audit history merely to permit a subject
-                # swap; ask the account owner to bind with a fresh subject.
-                raise IntegrationConflict("FEISHU_REBIND_CONFLICT")
+            user_id = self._bind_identity_locked(db, provider, tenant_key, subject_id, row["user_id"])
             db.execute("UPDATE integration_binding_codes SET consumed_at=? WHERE code_hash=? AND consumed_at IS NULL", (now, digest))
-            if existing_subject is not None and existing_subject["user_id"] == row["user_id"]:
-                db.execute("UPDATE external_identities SET revoked_at=NULL,updated_at=? WHERE provider=? AND tenant_key=? AND subject_id=?",
-                           (now, provider, tenant_key, subject_id))
-            elif existing_user is not None and existing_user["revoked_at"] is not None and existing_subject is None:
-                db.execute("UPDATE external_identities SET subject_id=?,revoked_at=NULL,updated_at=? WHERE provider=? AND tenant_key=? AND user_id=?",
-                           (subject_id, now, provider, tenant_key, row["user_id"]))
-            elif existing_subject is not None and existing_subject["revoked_at"] is not None:
-                db.execute("UPDATE external_identities SET user_id=?,revoked_at=NULL,updated_at=? WHERE provider=? AND tenant_key=? AND subject_id=?",
-                           (row["user_id"], now, provider, tenant_key, subject_id))
-            elif existing_subject is None:
-                try:
-                    db.execute("INSERT INTO external_identities(provider,tenant_key,subject_id,user_id,created_at,updated_at) VALUES(?,?,?,?,?,?)",
-                               (provider, tenant_key, subject_id, row["user_id"], now, now))
-                except Exception as exc:
-                    raise IntegrationConflict("FEISHU_IDENTITY_ALREADY_BOUND") from exc
+            return user_id
+
+    def create_oauth_state(self, provider: str, user_id: str, ttl_seconds: int = 600) -> dict[str, Any]:
+        state = secrets.token_urlsafe(32)
+        now = time.time()
+        with self.store._connect() as db:
+            db.execute("DELETE FROM integration_oauth_states WHERE user_id=? AND provider=? AND consumed_at IS NULL",
+                       (user_id, provider))
+            db.execute("INSERT INTO integration_oauth_states(state_hash,provider,user_id,expires_at,created_at) VALUES(?,?,?,?,?)",
+                       (self._hash(state), provider, user_id, now + ttl_seconds, now))
+        return {"state": state, "expires_at": now + ttl_seconds}
+
+    def consume_oauth_state(self, provider: str, state: str) -> str:
+        now = time.time()
+        digest = self._hash(state)
+        with self.store._connect() as db:
+            db.execute("BEGIN IMMEDIATE")
+            row = db.execute("SELECT * FROM integration_oauth_states WHERE state_hash=? AND provider=?",
+                             (digest, provider)).fetchone()
+            if row is None:
+                raise IntegrationConflict("FEISHU_OAUTH_STATE_INVALID")
+            if row["consumed_at"] is not None:
+                raise IntegrationConflict("FEISHU_OAUTH_STATE_CONSUMED")
+            if float(row["expires_at"]) < now:
+                raise IntegrationConflict("FEISHU_OAUTH_STATE_EXPIRED")
+            updated = db.execute("UPDATE integration_oauth_states SET consumed_at=? WHERE state_hash=? AND consumed_at IS NULL",
+                                 (now, digest))
+            if getattr(updated, "rowcount", 1) == 0:
+                raise IntegrationConflict("FEISHU_OAUTH_STATE_CONSUMED")
             return row["user_id"]
+
+    def bind_oauth_identity(self, provider: str, user_id: str, tenant_key: str, subject_id: str) -> str:
+        with self.store._connect() as db:
+            db.execute("BEGIN IMMEDIATE")
+            return self._bind_identity_locked(db, provider, tenant_key, subject_id, user_id)
 
     def identity(self, provider: str, tenant_key: str, subject_id: str) -> dict[str, Any] | None:
         with self.store._connect() as db:

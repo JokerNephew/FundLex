@@ -225,3 +225,20 @@ def test_owner_and_chat_scope_prevents_cross_chat_draft_access(tmp_path):
     assert integration.active_draft("tenant-a", "ou-a", "chat-b") is None
     assert integration.active_draft("tenant-a", "ou-b", "chat-a") is None
     assert integration.draft(draft["id"])["owner_user_id"] == "owner-a"
+
+
+def test_oauth_state_is_one_time_and_binds_identity(tmp_path):
+    store = RunStore(tmp_path / "oauth-state")
+    integration = IntegrationStore(store)
+    state = integration.create_oauth_state("feishu", "owner-a")
+    assert integration.consume_oauth_state("feishu", state["state"]) == "owner-a"
+    with pytest.raises(IntegrationConflict, match="FEISHU_OAUTH_STATE_CONSUMED"):
+        integration.consume_oauth_state("feishu", state["state"])
+
+    other = integration.create_oauth_state("feishu", "owner-b")
+    integration.bind_oauth_identity("feishu", "owner-b", "tenant-a", "ou-oauth")
+    assert integration.identity("feishu", "tenant-a", "ou-oauth")["user_id"] == "owner-b"
+    with pytest.raises(IntegrationConflict, match="FEISHU_IDENTITY_ALREADY_BOUND"):
+        integration.bind_oauth_identity("feishu", "owner-a", "tenant-a", "ou-oauth")
+    # A different account's unused state remains valid for that account only.
+    assert integration.consume_oauth_state("feishu", other["state"]) == "owner-b"
