@@ -69,6 +69,12 @@ def _identifier(value: object, field: str) -> str:
     return value
 
 
+def _safe_text(value: object, field: str) -> str:
+    _require(isinstance(value, str) and "\x00" not in value and "://" not in value,
+             f"INVALID:{field}")
+    return value
+
+
 def _path(value: object, field: str) -> Path:
     _require(isinstance(value, (str, Path)) and bool(str(value))
              and "://" not in str(value) and "\x00" not in str(value), f"INVALID:{field}")
@@ -87,6 +93,21 @@ def _file_hash(path: Path, field: str) -> str:
         return hashlib.sha256(path.read_bytes()).hexdigest()
     except OSError:
         raise PreflightError(f"UNREADABLE:{field}") from None
+
+
+def _role_snapshot(role) -> dict:
+    """Safe role identity; endpoint and credentials are represented only by hashes."""
+    return {"provider": _safe_text(role.provider, "role.provider"),
+            "model": _safe_text(role.model, "role.model"),
+            "endpoint_sha256": hashlib.sha256(role.base_url.encode()).hexdigest(),
+            "max_context_chars": _integer(role.max_context_chars, "role.max_context_chars"),
+            "max_tokens": _integer(role.max_tokens, "role.max_tokens"),
+            "retries": _integer(role.retries, "role.retries", minimum=0),
+            "max_calls": _integer(role.max_calls, "role.max_calls"),
+            "request_options_sha256": hashlib.sha256(_json_bytes(dict(role.request_options))).hexdigest(),
+            "extra_headers_sha256": hashlib.sha256(_json_bytes(dict(role.extra_headers))).hexdigest(),
+            "credential_configured": bool(role.api_key),
+            "user_agent": _safe_text(role.user_agent, "role.user_agent")}
 
 
 def _read_json(path: Path, field: str) -> tuple[dict, str]:
@@ -167,7 +188,8 @@ def _case_budget(value: object) -> dict:
 
 def _config(value: object) -> dict:
     data = _keys(value, {"run_id", "engine_id", "engine_build", "selection_sha256",
-                         "labels_sha256", "case_ids", "budget", "case_budget"}, "config")
+                         "labels_sha256", "case_ids", "budget", "case_budget",
+                         "model_mode", "roles"}, "config")
     budget = _keys(data["budget"], {"ledger_path", "max_requests", "max_cost_usd",
                                     "concurrency", "input_usd_per_million",
                                     "output_usd_per_million"}, "budget")
@@ -175,12 +197,18 @@ def _config(value: object) -> dict:
     _require(isinstance(case_ids, list) and bool(case_ids), "INVALID:case_ids")
     cases = [_identifier(case, "case_id") for case in case_ids]
     _require(len(set(cases)) == len(cases), "DUPLICATE_CASE_IDS")
+    mode = data["model_mode"]
+    _require(mode in {"live", "record"}, "INVALID:model_mode")
+    roles = _keys(data["roles"], {"primary", "review"}, "roles")
+    _require(all(isinstance(role, dict) for role in roles.values()), "SCHEMA:roles")
     return {"run_id": _identifier(data["run_id"], "run_id"),
             "engine_id": _identifier(data["engine_id"], "engine_id"),
             "engine_build": _hash(data["engine_build"], "engine_build"),
             "selection_sha256": _hash(data["selection_sha256"], "selection_sha256"),
             "labels_sha256": _hash(data["labels_sha256"], "labels_sha256"),
             "case_ids": cases, "case_budget": _case_budget(data["case_budget"]),
+            "model_mode": mode,
+            "roles": roles,
             "budget": {"ledger_path": str(_path(budget["ledger_path"], "ledger_path")),
                        "max_requests": _integer(budget["max_requests"], "max_requests"),
                        "concurrency": _integer(budget["concurrency"], "concurrency"),
@@ -239,7 +267,9 @@ def _startup(plan: StartupPlan) -> tuple[dict, dict[str, str]]:
     return _config({"run_id": plan.run_id, "engine_id": plan.engine_id,
                     "engine_build": engine_build(), "selection_sha256": selection_hash,
                     "labels_sha256": labels_hash, "case_ids": list(plan.case_ids),
-                    "budget": budget, "case_budget": case_budget}), env
+                    "budget": budget, "case_budget": case_budget,
+                    "model_mode": env.get("FUNDLEX_MODEL_MODE", "live"),
+                    "roles": {role: _role_snapshot(roles[role]) for role in ("primary", "review")}}), env
 
 
 def _check(protocol: dict, actual: dict) -> dict:

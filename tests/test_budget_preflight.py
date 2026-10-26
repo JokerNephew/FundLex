@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-import os
 import sqlite3
 from pathlib import Path
 
@@ -39,11 +38,12 @@ def _inputs(root: Path) -> tuple[Path, Path]:
 
 
 def _protocol(root: Path, ledger: Path, selection: Path, labels: Path,
+              monkeypatch: pytest.MonkeyPatch,
               *, max_requests: int = 16, max_cost: str = "1") -> tuple[Path, StartupPlan]:
     plan = StartupPlan("eval-01", selection, labels, ("D01",), 2, "0.2")
     # Resolve the same engine identity used by the actual startup snapshot.
     from tools.evaluation.budget_preflight import _startup
-    os.environ["FUNDLEX_MODEL_LEDGER"] = str(ledger)
+    monkeypatch.setenv("FUNDLEX_MODEL_LEDGER", str(ledger))
     actual, _ = _startup(plan)
     actual["budget"]["max_requests"] = max_requests
     actual["budget"]["max_cost_usd"] = max_cost
@@ -58,17 +58,19 @@ def _protocol(root: Path, ledger: Path, selection: Path, labels: Path,
 @pytest.fixture(autouse=True)
 def _clean_budget_env(monkeypatch):
     monkeypatch.setenv("FUNDLEX_MODEL_MODE", "live")
+    monkeypatch.delenv("FUNDLEX_MODEL_LEDGER", raising=False)
     monkeypatch.delenv("FUNDLEX_MODEL_MAX_REQUESTS", raising=False)
     monkeypatch.delenv("FUNDLEX_MODEL_MAX_COST_USD", raising=False)
     monkeypatch.delenv("FUNDLEX_MODEL_CONCURRENCY", raising=False)
 
 
 def _run(root: Path, *, ledger_rows: int = 0, ledger_cost: str = "0",
-         max_requests: int = 16, max_cost: str = "1") -> tuple[Path, StartupPlan, Path]:
+         max_requests: int = 16, max_cost: str = "1",
+         monkeypatch: pytest.MonkeyPatch) -> tuple[Path, StartupPlan, Path]:
     ledger = root / "ledger.sqlite"
     _ledger(ledger, ledger_rows, ledger_cost)
     selection, labels = _inputs(root)
-    protocol, plan = _protocol(root, ledger, selection, labels,
+    protocol, plan = _protocol(root, ledger, selection, labels, monkeypatch,
                                 max_requests=max_requests, max_cost=max_cost)
     manifest = root / "preflight.json"
     return protocol, plan, manifest
@@ -79,8 +81,8 @@ def _invoke(protocol: Path, plan: StartupPlan, manifest: Path):
     return preflight(protocol, protocol_sha256=digest, plan=plan, manifest_path=manifest)
 
 
-def test_valid_fixture_passes_and_manifest_is_safe(tmp_path: Path):
-    protocol, plan, manifest = _run(tmp_path)
+def test_valid_fixture_passes_and_manifest_is_safe(tmp_path: Path, monkeypatch):
+    protocol, plan, manifest = _run(tmp_path, monkeypatch=monkeypatch)
     result = _invoke(protocol, plan, manifest)
     text = manifest.read_text(encoding="utf-8")
     assert result["status"] == "PREFLIGHT_PASSED"
@@ -88,15 +90,15 @@ def test_valid_fixture_passes_and_manifest_is_safe(tmp_path: Path):
     assert result["evidence"]["required_requests"] == 2
 
 
-def test_existing_usage_over_cap_fails_closed(tmp_path: Path):
-    protocol, plan, manifest = _run(tmp_path, ledger_rows=17, ledger_cost="1.1")
+def test_existing_usage_over_cap_fails_closed(tmp_path: Path, monkeypatch):
+    protocol, plan, manifest = _run(tmp_path, ledger_rows=17, ledger_cost="1.1", monkeypatch=monkeypatch)
     with pytest.raises(PreflightError, match="LEDGER_ALREADY_OVER_CAP"):
         _invoke(protocol, plan, manifest)
     assert not manifest.exists()
 
 
 def test_different_ledger_cannot_bypass_history(tmp_path: Path, monkeypatch):
-    protocol, plan, manifest = _run(tmp_path, ledger_rows=1, ledger_cost="0.1")
+    protocol, plan, manifest = _run(tmp_path, ledger_rows=1, ledger_cost="0.1", monkeypatch=monkeypatch)
     other = tmp_path / "other.sqlite"
     _ledger(other)
     monkeypatch.setenv("FUNDLEX_MODEL_LEDGER", str(other))
@@ -105,22 +107,48 @@ def test_different_ledger_cannot_bypass_history(tmp_path: Path, monkeypatch):
 
 
 def test_runtime_cap_override_is_rejected(tmp_path: Path, monkeypatch):
-    protocol, plan, manifest = _run(tmp_path)
+    protocol, plan, manifest = _run(tmp_path, monkeypatch=monkeypatch)
     monkeypatch.setenv("FUNDLEX_MODEL_MAX_REQUESTS", "5000")
     with pytest.raises(PreflightError, match="CONFIG_MISMATCH:budget.max_requests"):
         _invoke(protocol, plan, manifest)
 
 
-def test_existing_manifest_is_never_overwritten(tmp_path: Path):
-    protocol, plan, manifest = _run(tmp_path)
+@pytest.mark.parametrize(("name", "value", "field"), [
+    ("FUNDLEX_MODEL_MAX_COST_USD", "5", "max_cost_usd"),
+    ("FUNDLEX_MODEL_CONCURRENCY", "2", "concurrency"),
+])
+def test_runtime_budget_overrides_are_rejected(tmp_path: Path, monkeypatch,
+                                               name: str, value: str, field: str):
+    protocol, plan, manifest = _run(tmp_path, monkeypatch=monkeypatch)
+    monkeypatch.setenv(name, value)
+    with pytest.raises(PreflightError, match=f"CONFIG_MISMATCH:budget.{field}"):
+        _invoke(protocol, plan, manifest)
+
+
+def test_runtime_role_cap_override_is_rejected(tmp_path: Path, monkeypatch):
+    protocol, plan, manifest = _run(tmp_path, monkeypatch=monkeypatch)
+    monkeypatch.setenv("FUNDLEX_PRIMARY_MAX_CALLS", "99")
+    with pytest.raises(PreflightError, match="CONFIG_MISMATCH:case_budget.max_calls"):
+        _invoke(protocol, plan, manifest)
+
+
+def test_case_allowance_must_fit_remaining_balance(tmp_path: Path, monkeypatch):
+    protocol, plan, manifest = _run(tmp_path, ledger_rows=15, ledger_cost="0.15",
+                                    monkeypatch=monkeypatch)
+    with pytest.raises(PreflightError, match="INSUFFICIENT_RUN_BALANCE"):
+        _invoke(protocol, plan, manifest)
+
+
+def test_existing_manifest_is_never_overwritten(tmp_path: Path, monkeypatch):
+    protocol, plan, manifest = _run(tmp_path, monkeypatch=monkeypatch)
     manifest.write_text("sentinel\n", encoding="utf-8")
     with pytest.raises(PreflightError, match="MANIFEST_ALREADY_EXISTS"):
         _invoke(protocol, plan, manifest)
     assert manifest.read_text(encoding="utf-8") == "sentinel\n"
 
 
-def test_missing_labels_hash_evidence_fails_before_callback(tmp_path: Path):
-    protocol, plan, manifest = _run(tmp_path)
+def test_missing_labels_hash_evidence_fails_before_callback(tmp_path: Path, monkeypatch):
+    protocol, plan, manifest = _run(tmp_path, monkeypatch=monkeypatch)
     plan = StartupPlan(plan.run_id, plan.selection, tmp_path / "missing-labels.json",
                        plan.case_ids, plan.requests_per_case, plan.cost_per_case_usd)
     called = []
@@ -131,8 +159,8 @@ def test_missing_labels_hash_evidence_fails_before_callback(tmp_path: Path):
     assert called == []
 
 
-def test_protocol_without_labels_hash_fails_closed(tmp_path: Path):
-    protocol, plan, manifest = _run(tmp_path)
+def test_protocol_without_labels_hash_fails_closed(tmp_path: Path, monkeypatch):
+    protocol, plan, manifest = _run(tmp_path, monkeypatch=monkeypatch)
     protocol_data = json.loads(protocol.read_text(encoding="utf-8"))
     del protocol_data["config"]["labels_sha256"]
     protocol.write_text(json.dumps(protocol_data), encoding="utf-8")
@@ -141,8 +169,8 @@ def test_protocol_without_labels_hash_fails_closed(tmp_path: Path):
     assert not manifest.exists()
 
 
-def test_missing_ledger_cannot_create_a_new_budget(tmp_path: Path):
-    protocol, plan, manifest = _run(tmp_path)
+def test_missing_ledger_cannot_create_a_new_budget(tmp_path: Path, monkeypatch):
+    protocol, plan, manifest = _run(tmp_path, monkeypatch=monkeypatch)
     missing = tmp_path / "new-ledger.sqlite"
     protocol_data = json.loads(protocol.read_text(encoding="utf-8"))
     protocol_data["config"]["budget"]["ledger_path"] = str(missing)

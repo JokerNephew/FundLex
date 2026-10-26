@@ -19,6 +19,25 @@ The protocol is a JSON file with schema `fundlex-evaluation-budget-v1`:
     "selection_sha256": "<sha256>",
     "labels_sha256": "<sha256>",
     "case_ids": ["D01"],
+    "model_mode": "live",
+    "roles": {
+      "primary": {
+        "provider": "provider-name", "model": "model-name",
+        "endpoint_sha256": "<sha256>", "max_context_chars": 12000,
+        "max_tokens": 1500, "retries": 1, "max_calls": 16,
+        "request_options_sha256": "<sha256>",
+        "extra_headers_sha256": "<sha256>", "credential_configured": true,
+        "user_agent": "fundlex/0.3.0"
+      },
+      "review": {
+        "provider": "provider-name", "model": "model-name",
+        "endpoint_sha256": "<sha256>", "max_context_chars": 12000,
+        "max_tokens": 1500, "retries": 1, "max_calls": 16,
+        "request_options_sha256": "<sha256>",
+        "extra_headers_sha256": "<sha256>", "credential_configured": true,
+        "user_agent": "fundlex/0.3.0"
+      }
+    },
     "budget": {
       "ledger_path": "/absolute/path/to/ledger.sqlite",
       "max_requests": 2000,
