@@ -181,6 +181,27 @@ def test_absent_target_without_site_proof_stays_open():
     assert open_obligations(ledger)
 
 
+@pytest.mark.parametrize("placeholder_state", ["absent", "not_applicable"])
+@pytest.mark.parametrize("proven", [False, True])
+def test_absent_placeholder_does_not_duplicate_a_real_operation_site(placeholder_state, proven):
+    """A negative inventory alias cannot make a proven site ambiguous."""
+    ledger = compile_obligations(guide(rule(rule_id="G99", operations=[
+        {"op": "replace", "old_text": "旧句", "new_text": "新句",
+         "condition": {"kind": "none"}, "operation_id": "G99:0"}])))
+    apply_facts(ledger, FakeFacts())
+    record = ledger.record("G99:0")
+    proof = site_proof(ledger, "G99:0", "旧句", "新句", planned=True)
+    project(ledger, report_with(
+        targets=[target("G99", target_id="absent", state=placeholder_state, operations=["G99:0"],
+                        location="p1"),
+                 target("G99", target_id="real", state="needs_edit", operations=["G99:0"],
+                        location="p1")],
+        replay={"verified": True, "obligations": {record.obligation_id: proof}} if proven else {}))
+    assert record.completion == ("ARTIFACT_VERIFIED" if proven else "UNRESOLVED")
+    assert record.targets == ("real",)
+    assert record.sites == ("p1",)
+
+
 def test_rule_wording_list_does_not_implicitly_create_one_of():
     ledger = compile_obligations(guide(rule(rule_id="G14", operations=[
         {"op": "replace", "old_text": "调低申购费率", "new_text": "调低销售服务费率",

@@ -640,7 +640,6 @@ def _target_matches_operation_proof(target: Target, replay: Mapping[str, Any],
     """
     if not _operation_terminal_proof(target, replay, obligations):
         return False
-    sites: set[str] = set()
     for operation_id in target.operations:
         record = obligations.record(operation_id) if obligations is not None else None
         if record is None:
@@ -648,6 +647,10 @@ def _target_matches_operation_proof(target: Target, replay: Mapping[str, Any],
         proof = (replay.get("obligations") or {}).get(record.obligation_id)
         if not isinstance(proof, Mapping):
             return False
+        # Each operation must prove the candidate's site itself. A union across
+        # siblings lets a proof at p0 retire another operation's unproven p0 target
+        # merely because that other operation completed at p1.
+        sites: set[str] = set()
         sites.update(str(site) for site in proof.get("sites") or () if str(site).strip())
         for evidence in proof.get("evidence") or ():
             if isinstance(evidence, Mapping):
@@ -659,26 +662,26 @@ def _target_matches_operation_proof(target: Target, replay: Mapping[str, Any],
                 site = str(effect.get("site_id") or effect.get("location") or "")
                 if site:
                     sites.add(site)
-    required = list(target.composite) or [target.location]
-    for part in required:
-        raw_part = str(part)
-        location = raw_part
-        if target.composite:
-            # Composite parts are location:start:end.  Locations themselves may
-            # contain punctuation, so split from the right rather than at the
-            # first colon.
-            fields = raw_part.rsplit(":", 2)
-            if len(fields) == 3 and fields[1].isdigit() and fields[2].isdigit():
-                location = fields[0]
-        # Composite strings are location:start:end; occurrence proof may use the
-        # location only when no explicit occurrence was assigned to the target.
-        candidates = {site for site in sites if site == location or
-                      site.split("#occurrence:", 1)[0] == location}
-        if not candidates:
-            return False
-        if target.occurrence_index >= 0 and not any(
-                site.endswith(f"#occurrence:{target.occurrence_index}") for site in candidates):
-            return False
+        required = list(target.composite) or [target.location]
+        for part in required:
+            raw_part = str(part)
+            location = raw_part
+            if target.composite:
+                # Composite parts are location:start:end.  Locations themselves may
+                # contain punctuation, so split from the right rather than at the
+                # first colon.
+                fields = raw_part.rsplit(":", 2)
+                if len(fields) == 3 and fields[1].isdigit() and fields[2].isdigit():
+                    location = fields[0]
+            # Composite strings are location:start:end; occurrence proof may use the
+            # location only when no explicit occurrence was assigned to the target.
+            candidates = {site for site in sites if site == location or
+                          site.split("#occurrence:", 1)[0] == location}
+            if not candidates:
+                return False
+            if target.occurrence_index >= 0 and not any(
+                    site.endswith(f"#occurrence:{target.occurrence_index}") for site in candidates):
+                return False
     return True
 
 

@@ -1223,6 +1223,53 @@ def test_g02_already_correct_class_group_accepts_ji_delimiter():
     assert proof["sites"] == ["p0"]
 
 
+@pytest.mark.parametrize("rule_id", ["G02", "G04"])
+@pytest.mark.parametrize("final_group,valid", [
+    ("A类及D类", True), ("A类和D类", True),
+    ("A类及E类", False), ("E类", False), ("A类及D类及E类", False),
+])
+def test_class_group_proof_reads_final_docx(tmp_path, rule_id, final_group, valid):
+    """Source equivalence cannot prove a missing/extra/wrong final class set."""
+    from docx import Document
+    from fundlex.docx import inspect_docx
+    from fundlex.obligations import project
+    from fundlex.recall_pipeline import _delivery_complete
+    from test_operation_execution_closure import Facts
+
+    operation_id = f"{rule_id}:0"
+    guide = {"groups": [{"rule_id": rule_id, "operations": [{
+        "op": "replace", "old_text": "A类基金份额", "new_text": "A类、D类基金份额",
+        "condition": {"kind": "none"}, "operation_id": operation_id}]}]}
+    source_path = tmp_path / "source.docx"
+    artifact_path = tmp_path / "incomplete.docx"
+    source_text = "在投资者申购A类及D类基金份额时收取申购费用，不计提销售服务费。"
+    incomplete_text = f"在投资者申购{final_group}基金份额时收取申购费用，不计提销售服务费。"
+    for path, text in ((source_path, source_text), (artifact_path, incomplete_text)):
+        document = Document()
+        document.add_paragraph(text)
+        document.save(path)
+
+    source = inspect_docx(source_path, full=True)
+    artifact = inspect_docx(artifact_path, full=True)
+    ledger = compile_obligations(guide)
+    ledger.records[0].applicability = SimpleNamespace(status="TRUE")
+    target = {"target_id": "satisfied", "rule_id": rule_id, "location": "p0",
+              "quote": source_text, "state": "satisfied", "operations": [operation_id]}
+
+    replay = replay_claims([], source, artifact, rules_by_id={rule_id: guide["groups"][0]},
+                           facts=Facts(), obligations=ledger,
+                           targets_by_id={"satisfied": target})
+    proof = replay["obligations"][ledger.records[0].obligation_id]
+    assert proof["state"] == ("PASS" if valid else "FAIL")
+    assert proof["artifact_status"] == ("ALREADY_SATISFIED" if valid else "MISSING_EFFECT")
+    if not valid:
+        assert replay["verified"] is False
+    project(ledger, {"targets": [target], "artifact_claim_replay": replay})
+    if not valid:
+        assert ledger.records[0].completion == "UNRESOLVED"
+        assert not _delivery_complete([], ledger=ledger)
+
+
 def test_g02_split_definition_reclassifies_out_of_scope_target_before_plan():
     """A valid split p91/p92 definition must not stay out_of_scope from an earlier pass."""
     from fundlex.recall import Target, assign_target_operations, plan_edits
@@ -1474,6 +1521,34 @@ def test_post_proof_target_reconciliation_removes_stale_candidate():
         {"obligations": {"G12:B1:O1": proof}}, ledger)
     assert changed == 1 and target.out_of_scope
     assert "POST_PROOF_SUPERSEDED" in target.reason
+
+
+@pytest.mark.parametrize("second_site,expected", [("p0", 1), ("p1", 0)])
+@pytest.mark.parametrize("composite", [False, True])
+def test_candidate_reconciliation_requires_each_operations_own_site(second_site, expected, composite):
+    from fundlex.recall_pipeline import _reconcile_candidate_targets
+    from test_operation_execution_closure import Facts
+    from fundlex.obligations import apply_facts
+
+    rule = {"rule_id": "G99", "operations": [
+        {"op": "append", "new_text": text, "condition": {"kind": "none"}}
+        for text in ("甲业务政策。", "乙业务政策。")]}
+    ledger = compile_obligations({"groups": [rule]})
+    apply_facts(ledger, Facts())
+    target = Target("candidate", "G99", "p0", "业务条款。", "needs_edit", "candidate",
+                    operations=("G99:0", "G99:1"),
+                    composite=("p0:0:5",) if composite else ())
+    proofs = {}
+    for record, site in zip(ledger.records, ("p0", second_site)):
+        identity = {"operation_id": record.spec.operation_id,
+                    "obligation_id": record.obligation_id}
+        effect = {**identity, "site_id": site, "location": site, "state": "PASS",
+                  "artifact_status": "ALREADY_SATISFIED", "proof_kind": "source_operation_policy"}
+        proofs[record.obligation_id] = {**effect, "sites": [site], "failure_code": "",
+                                       "evidence": [dict(effect)], "site_effects": [dict(effect)]}
+    changed = _reconcile_candidate_targets([target], {"ledger": []}, {"obligations": proofs}, ledger)
+    assert changed == expected
+    assert target.out_of_scope is bool(expected)
 
 
 def test_claim_site_reuse_plan_avoids_recomposing_the_summary_copy(tmp_path):

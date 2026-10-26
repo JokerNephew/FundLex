@@ -503,6 +503,7 @@ def project(ledger: ObligationLedger, report: Mapping[str, Any], *,
             item.statuses.update(artifact="UNPROVEN", validation="BLOCKED")
             continue
         relevant = [target for target in targets if not target.get("out_of_scope")
+                    and str(target.get("state") or "") not in {"absent", "not_applicable"}
                     and (target.get("site_id") or target.get("location"))
                     and _target_covers_operation(target, item)]
         item.targets = tuple(str(target.get("target_id") or "") for target in relevant)

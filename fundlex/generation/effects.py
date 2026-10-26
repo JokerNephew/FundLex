@@ -612,7 +612,7 @@ def evaluate_operation_effect(obligation: Any, original: Any, artifact: Any,
         after_has_expected = bool(expected) and (
             _compact(expected) in _compact(after)
             or (spec.rule_id in {"G02", "G04"} and spec.op == "replace"
-                and _class_group_equivalent(expected, quote)))
+                and _class_group_equivalent(expected, after)))
         expected_present = after_has_expected if one_of_group else (
             source_has_expected and after_has_expected)
         # ALREADY_SATISFIED is source evidence, not evidence that a sibling
