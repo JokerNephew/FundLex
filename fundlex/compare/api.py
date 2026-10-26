@@ -9,6 +9,7 @@ from fastapi import Depends, File, Form, Header, HTTPException, UploadFile
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from .store import CompareStore, Conflict, NotFound
+from ..api_errors import raise_api_error
 
 
 class CompareFileManifest(BaseModel):
@@ -65,11 +66,11 @@ def register_compare_routes(application, compare_store: CompareStore, user_depen
         try:
             return fn(*args, **kwargs)
         except NotFound as exc:
-            raise HTTPException(404, str(exc)) from exc
+            raise_api_error(404, exc, fallback="NOT_FOUND")
         except Conflict as exc:
-            raise HTTPException(409, str(exc)) from exc
+            raise_api_error(409, exc, fallback="CONFLICT")
         except ValueError as exc:
-            raise HTTPException(422, str(exc)) from exc
+            raise_api_error(422, exc, fallback="INVALID_REQUEST")
 
     @application.post("/api/compare/tasks", status_code=201)
     def create_compare_task(payload: CompareTaskSubmission,
@@ -161,7 +162,7 @@ def register_compare_routes(application, compare_store: CompareStore, user_depen
                     raise Conflict("COMPARE_INPUT_INTEGRITY_FAILED")
             left_html, right_html = _render_view(pair["result"], lp, rp)
         except (NotFound, Conflict) as exc:
-            raise HTTPException(409, str(exc)) from exc
+            raise_api_error(409, exc, fallback="CONFLICT")
         except (OSError, ValueError, KeyError) as exc:
             raise HTTPException(409, "COMPARE_RESULT_INVALID") from exc
         return {"pair": {k: pair[k] for k in ("id", "label", "ordinal", "status")},
