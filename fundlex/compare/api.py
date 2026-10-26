@@ -3,12 +3,28 @@ from __future__ import annotations
 import hashlib
 import json
 from pathlib import Path
-from typing import Any, Callable
+from tempfile import TemporaryDirectory
+from typing import Any, Callable, Literal
 
 from fastapi import Depends, File, Form, Header, HTTPException, UploadFile
+from fastapi.responses import FileResponse
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from .store import CompareStore, Conflict, NotFound
+from ..docx import DocxError
+from .selection_writer import generate_selection_artifacts
+
+
+class CompareSelectionBinding(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    expected_epoch: int = Field(ge=0, strict=True)
+    result_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    left_source_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    right_source_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+
+class CompareSelectionSave(CompareSelectionBinding):
+    decisions: dict[str, Literal["pending", "left", "right"]] = Field(max_length=100000)
 
 
 class CompareFileManifest(BaseModel):
@@ -140,6 +156,89 @@ def register_compare_routes(application, compare_store: CompareStore, user_depen
     @application.get("/api/compare/pairs/{pair_id}")
     def get_compare_pair(pair_id: str, user: str = Depends(user_dependency)):
         return call(compare_store.get_pair, user, pair_id)
+
+    @application.get("/api/compare/pairs/{pair_id}/selection")
+    def get_compare_selection(pair_id: str, user: str = Depends(user_dependency)):
+        return call(compare_store.get_selection, user, pair_id)
+
+    @application.put("/api/compare/pairs/{pair_id}/selection")
+    def save_compare_selection(pair_id: str, payload: CompareSelectionSave,
+                               user: str = Depends(user_dependency)):
+        return call(compare_store.save_selection, user, pair_id, **payload.model_dump())
+
+    @application.post("/api/compare/pairs/{pair_id}/selection/preview")
+    def preview_compare_selection(pair_id: str, payload: CompareSelectionBinding,
+                                  user: str = Depends(user_dependency)):
+        return call(compare_store.preview_selection, user, pair_id, **payload.model_dump())
+
+    @application.post("/api/compare/pairs/{pair_id}/selection/generate")
+    def generate_compare_selection(pair_id: str, payload: CompareSelectionBinding,
+                                   idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+                                   user: str = Depends(user_dependency)):
+        inputs = call(compare_store.selection_generation_inputs, user, pair_id, **payload.model_dump())
+        if idempotency_key is not None and (not idempotency_key.strip() or len(idempotency_key) > 128):
+            raise HTTPException(422, "INVALID_IDEMPOTENCY_KEY")
+        temp_parent = compare_store.store.object_path("compare/selection-work")
+        temp_parent.mkdir(parents=True, exist_ok=True)
+        with TemporaryDirectory(prefix="generate-", dir=temp_parent) as directory:
+            final_path, redline_path = Path(directory) / "selected_final.docx", Path(directory) / "selected_redline.docx"
+            try:
+                validation = generate_selection_artifacts(
+                    inputs["left_path"], inputs["right_path"], inputs["result"], inputs["decisions"],
+                    final_path, redline_path, selection_epoch=inputs["selection_epoch"],
+                    result_sha256=inputs["result_sha256"])
+            except DocxError as exc:
+                raise HTTPException(409, exc.code) from exc
+
+            def report_builder(version: int, final_hash: str, redline_hash: str) -> tuple[bytes, bytes]:
+                if final_hash != validation.final_sha256 or redline_hash != validation.redline_sha256:
+                    raise Conflict("SELECTION_ARTIFACT_INTEGRITY_FAILED")
+                report = {
+                    "schema_version": "compare-selection-report-v1", "kind": "human_compare_selection",
+                    "pair_id": pair_id, "generation_version": version,
+                    "selection_epoch": inputs["selection_epoch"], "result_sha256": inputs["result_sha256"],
+                    "left_source_sha256": inputs["left_source_sha256"],
+                    "right_source_sha256": inputs["right_source_sha256"], "decisions": inputs["decisions"],
+                    "counts": {choice: sum(value == choice for value in inputs["decisions"].values())
+                               for choice in ("pending", "left", "right")},
+                    "output_validation": validation.to_dict(),
+                    "outputs": {"selected_final": {"sha256": final_hash, "size": final_path.stat().st_size},
+                                "selected_redline": {"sha256": redline_hash, "size": redline_path.stat().st_size}},
+                }
+                lines = ["# FundLex 人工 Compare 选择报告", "", f"- 生成版本：{version}",
+                         f"- 草稿版本：{inputs['selection_epoch']}",
+                         f"- 比较结果 SHA-256：{inputs['result_sha256']}",
+                         f"- 左侧来源 SHA-256：{inputs['left_source_sha256']}",
+                         f"- 右侧来源 SHA-256：{inputs['right_source_sha256']}",
+                         f"- 选择版 SHA-256：{final_hash}", f"- 修订版 SHA-256：{redline_hash}",
+                         f"- 采用左侧：{report['counts']['left']}；采用右侧：{report['counts']['right']}",
+                         "", "人工选择版以原版（左侧）结构为基底，依据已保存的左右文本选择生成。", "",
+                         "## 逐条选择", ""]
+                for diff_id, choice in sorted(inputs["decisions"].items()):
+                    lines.append(f"- {diff_id}：{'采用左侧' if choice == 'left' else '采用右侧'}")
+                lines.extend(["", "## 实际改动", ""])
+                for item in validation.manifest:
+                    lines.extend([f"- {item['diff_id']} / {item['location']} / {item['start']}–{item['end']}",
+                                  f"  - 原文：{item['left_text']}", f"  - 选定文本：{item['selected_text']}"])
+                if not validation.manifest:
+                    lines.append("- 全部保留左侧，没有实际文字改动。")
+                lines.extend(["", "## 复核与例外", "", f"- 已通过：{', '.join(validation.checks)}"])
+                lines.extend(f"- {item}" for item in validation.limitations)
+                return (json.dumps(report, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8"),
+                        ("\n".join(lines) + "\n").encode("utf-8"))
+
+            return call(compare_store.publish_selection_generation, user, pair_id,
+                        **payload.model_dump(), idempotency_key=idempotency_key,
+                        final_path=final_path, redline_path=redline_path, report_builder=report_builder)
+
+    @application.get("/api/compare/pairs/{pair_id}/selection-artifacts/{version}/{kind}")
+    def download_compare_selection(pair_id: str, version: int, kind: str, user: str = Depends(user_dependency)):
+        metadata, path = call(compare_store.get_selection_artifact, user, pair_id, version, kind)
+        media_type = {"selected_final": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                      "selected_redline": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                      "selection_report_json": "application/json", "selection_report_markdown": "text/markdown"}[metadata["kind"]]
+        return FileResponse(path, media_type=media_type, filename=f"compare-v{version}-{path.name}",
+                            headers={"X-Content-SHA256": metadata["sha256"], "Cache-Control": "private, no-store"})
 
     @application.get("/api/compare/pairs/{pair_id}/view")
     def view_compare_pair(pair_id: str, user: str = Depends(user_dependency)):

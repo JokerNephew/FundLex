@@ -14,7 +14,7 @@ import os
 import time
 import uuid
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from ..docx import DocxError
 from ..store import Conflict, NotFound, RunStore, sha256_file
@@ -72,8 +72,41 @@ class CompareStore:
                     object_key TEXT NOT NULL, sha256 TEXT NOT NULL, size INTEGER NOT NULL,
                     PRIMARY KEY(pair_id, kind)
                 );
+                CREATE TABLE IF NOT EXISTS compare_selection_drafts (
+                    pair_id TEXT PRIMARY KEY REFERENCES compare_pairs(id),
+                    selection_epoch INTEGER NOT NULL,
+                    result_sha256 TEXT NOT NULL,
+                    left_source_sha256 TEXT NOT NULL,
+                    right_source_sha256 TEXT NOT NULL,
+                    decisions_json LONGTEXT NOT NULL,
+                    decision_hash TEXT NOT NULL,
+                    binding_hash TEXT NOT NULL,
+                    updated_at REAL NOT NULL,
+                    created_at REAL NOT NULL
+                );
+                CREATE TABLE IF NOT EXISTS compare_selection_artifacts (
+                    pair_id TEXT NOT NULL REFERENCES compare_pairs(id),
+                    version INTEGER NOT NULL,
+                    kind TEXT NOT NULL,
+                    object_key TEXT NOT NULL,
+                    sha256 TEXT NOT NULL,
+                    size INTEGER NOT NULL,
+                    selection_epoch INTEGER NOT NULL,
+                    result_sha256 TEXT NOT NULL,
+                    left_source_sha256 TEXT NOT NULL,
+                    right_source_sha256 TEXT NOT NULL,
+                    decision_hash TEXT NOT NULL,
+                    binding_hash TEXT NOT NULL,
+                    idempotency_key VARCHAR(128),
+                    status TEXT NOT NULL DEFAULT 'current',
+                    created_at REAL NOT NULL,
+                    PRIMARY KEY(pair_id, version, kind),
+                    UNIQUE(pair_id, idempotency_key, kind)
+                );
                 CREATE INDEX IF NOT EXISTS compare_pairs_work
                     ON compare_pairs(status, lease_until, updated_at);
+                CREATE INDEX IF NOT EXISTS compare_selection_artifacts_lookup
+                    ON compare_selection_artifacts(pair_id, version, status);
             """)
 
     def _connect(self):
@@ -332,6 +365,322 @@ class CompareStore:
             if row["result_json"]:
                 result["result"] = self._verify_result(db, row)
             return result
+
+    # --- human Compare selection drafts and generated artifacts ------------
+
+    @staticmethod
+    def _selection_result_ids(result: dict[str, Any]) -> tuple[str, ...]:
+        diffs = result.get("diffs")
+        if not isinstance(diffs, list):
+            raise Conflict("COMPARE_RESULT_INVALID")
+        return tuple(str(item.get("id", "")) for item in diffs if isinstance(item, dict))
+
+    def _selection_row(self, db, owner: str, pair_id: str, *, lock: bool = False):
+        sql = """SELECT p.*,t.owner FROM compare_pairs p JOIN compare_tasks t ON t.id=p.task_id
+            WHERE p.id=? AND t.owner=?"""
+        if lock and self.store.database.dialect == "mysql":
+            sql += " FOR UPDATE"
+        row = db.execute(sql, (pair_id, owner)).fetchone()
+        if row is None:
+            raise NotFound("compare pair not found")
+        if row["status"] not in {"succeeded", "incomplete"}:
+            raise Conflict("COMPARE_RESULT_NOT_READY")
+        return row
+
+    def _selection_files(self, db, pair_id: str) -> dict[str, dict[str, Any]]:
+        files = {item["side"]: dict(item) for item in db.execute(
+            "SELECT * FROM compare_pair_files WHERE pair_id=?", (pair_id,)).fetchall()}
+        if set(files) != {"left", "right"} or any(not item.get("object_key") for item in files.values()):
+            raise Conflict("COMPARE_INPUT_NOT_READY")
+        return files
+
+    def _selection_result_locked(self, db, row) -> tuple[dict[str, Any], dict[str, dict[str, Any]]]:
+        result = self._verify_result(db, row)
+        files = self._selection_files(db, row["id"])
+        for side, item in files.items():
+            path = self.store.object_path(item["object_key"])
+            if (not path.is_file() or path.stat().st_size != item["size"]
+                    or sha256_file(path) != item["source_sha256"]):
+                raise Conflict("COMPARE_INPUT_INTEGRITY_FAILED")
+            if result.get(side, {}).get("sha256") != item["source_sha256"]:
+                raise Conflict("COMPARE_RESULT_INVALID")
+        return result, files
+
+    @staticmethod
+    def _selection_draft_dict(row, assessment) -> dict[str, Any]:
+        return {
+            "selection_epoch": int(row["selection_epoch"]),
+            "result_sha256": row["result_sha256"],
+            "left_source_sha256": row["left_source_sha256"],
+            "right_source_sha256": row["right_source_sha256"],
+            "decisions": dict(assessment.decisions),
+            "decision_hash": row["decision_hash"],
+            "binding_hash": row["binding_hash"],
+            "updated_at": row["updated_at"],
+        }
+
+    @staticmethod
+    def _selection_assessment(row, result: dict[str, Any], draft):
+        """Read a draft only after verifying its canonical hashes.
+
+        The source/result binding is checked by ``_selection_result_locked``.
+        This second check protects the persisted decision map and its two
+        derived hashes from a damaged or manually altered database row.
+        """
+        from .selection import SelectionError, assess_selection, binding_hash, decision_hash
+        try:
+            decisions = json.loads(draft["decisions_json"])
+            assessment = assess_selection(result, decisions, result_sha256=row["result_sha256"])
+            decision_values = dict(decisions)
+            expected_decision_hash = decision_hash(assessment.decisions)
+            expected_binding_hash = binding_hash(
+                result_sha256=row["result_sha256"],
+                left_source_sha256=draft["left_source_sha256"],
+                right_source_sha256=draft["right_source_sha256"],
+                selection_epoch=int(draft["selection_epoch"]),
+                decisions=assessment.decisions,
+            )
+        except (TypeError, ValueError, KeyError, SelectionError):
+            raise Conflict("COMPARE_SELECTION_INVALID") from None
+        if (decision_values != assessment.decision_map
+                or draft["decision_hash"] != expected_decision_hash
+                or draft["binding_hash"] != expected_binding_hash):
+            raise Conflict("COMPARE_SELECTION_INVALID")
+        return assessment
+
+    def _selection_artifacts(self, db, pair_id: str) -> list[dict[str, Any]]:
+        rows = db.execute("""SELECT version,kind,sha256,size,selection_epoch,result_sha256,
+            left_source_sha256,right_source_sha256,decision_hash,binding_hash,status,created_at
+            FROM compare_selection_artifacts WHERE pair_id=? ORDER BY version DESC,kind""", (pair_id,)).fetchall()
+        return [{
+            "version": row["version"], "kind": row["kind"], "sha256": row["sha256"], "size": row["size"],
+            "selection_epoch": row["selection_epoch"], "result_sha256": row["result_sha256"],
+            "left_source_sha256": row["left_source_sha256"], "right_source_sha256": row["right_source_sha256"],
+            "decision_hash": row["decision_hash"], "binding_hash": row["binding_hash"],
+            "status": row["status"], "created_at": row["created_at"],
+            "download_url": f"/api/compare/pairs/{pair_id}/selection-artifacts/{row['version']}/{row['kind']}",
+        } for row in rows]
+
+    def _selection_view_locked(self, db, row, result: dict[str, Any], *, assessment) -> dict[str, Any]:
+        draft = db.execute("SELECT * FROM compare_selection_drafts WHERE pair_id=?", (row["id"],)).fetchone()
+        if draft is None:
+            raise Conflict("COMPARE_SELECTION_NOT_INITIALIZED")
+        return {
+            "pair": {"id": row["id"], "task_id": row["task_id"], "label": row["label"],
+                     "ordinal": row["ordinal"], "status": row["status"]},
+            "result_sha256": row["result_sha256"],
+            "left_source_sha256": draft["left_source_sha256"],
+            "right_source_sha256": draft["right_source_sha256"],
+            "diffs": result.get("diffs", []),
+            "selection": self._selection_draft_dict(draft, assessment),
+            "assessment": assessment.to_dict(),
+            "artifacts": self._selection_artifacts(db, row["id"]),
+        }
+
+    def _ensure_selection_draft_locked(self, db, row, result: dict[str, Any], files: dict[str, dict[str, Any]]):
+        from .selection import assess_selection, binding_hash, decision_hash
+        current = db.execute("SELECT * FROM compare_selection_drafts WHERE pair_id=?", (row["id"],)).fetchone()
+        left_hash, right_hash = files["left"]["source_sha256"], files["right"]["source_sha256"]
+        if current is not None:
+            if (current["result_sha256"] != row["result_sha256"] or current["left_source_sha256"] != left_hash
+                    or current["right_source_sha256"] != right_hash):
+                raise Conflict("COMPARE_SELECTION_BINDING_MISMATCH")
+            return current
+        decisions = {diff_id: "pending" for diff_id in self._selection_result_ids(result)}
+        assessment = assess_selection(result, decisions, result_sha256=row["result_sha256"])
+        now = _now()
+        epoch = 0
+        db.execute("""INSERT INTO compare_selection_drafts
+            (pair_id,selection_epoch,result_sha256,left_source_sha256,right_source_sha256,decisions_json,
+             decision_hash,binding_hash,updated_at,created_at) VALUES(?,?,?,?,?,?,?,?,?,?)""",
+                   (row["id"], epoch, row["result_sha256"], left_hash, right_hash, _json(dict(assessment.decisions)),
+                    decision_hash(assessment.decisions), binding_hash(result_sha256=row["result_sha256"],
+                    left_source_sha256=left_hash, right_source_sha256=right_hash,
+                    selection_epoch=epoch, decisions=assessment.decisions), now, now))
+        return db.execute("SELECT * FROM compare_selection_drafts WHERE pair_id=?", (row["id"],)).fetchone()
+
+    def get_selection(self, owner: str, pair_id: str) -> dict[str, Any]:
+        with self._connect() as db:
+            db.execute("BEGIN IMMEDIATE")
+            row = self._selection_row(db, owner, pair_id, lock=True)
+            result, files = self._selection_result_locked(db, row)
+            draft = self._ensure_selection_draft_locked(db, row, result, files)
+            assessment = self._selection_assessment(row, result, draft)
+            return self._selection_view_locked(db, row, result, assessment=assessment)
+
+    def save_selection(self, owner: str, pair_id: str, *, expected_epoch: int,
+                       result_sha256: str, left_source_sha256: str, right_source_sha256: str,
+                       decisions: dict[str, str]) -> dict[str, Any]:
+        from .selection import assess_selection, binding_hash, decision_hash, normalize_decisions
+        if type(expected_epoch) is not int or expected_epoch < 0:
+            raise ValueError("INVALID_SELECTION_EPOCH")
+        with self._connect() as db:
+            db.execute("BEGIN IMMEDIATE")
+            row = self._selection_row(db, owner, pair_id, lock=True)
+            result, files = self._selection_result_locked(db, row)
+            draft = self._ensure_selection_draft_locked(db, row, result, files)
+            if expected_epoch != draft["selection_epoch"]:
+                raise Conflict("SELECTION_EPOCH_CONFLICT")
+            if (result_sha256 != row["result_sha256"] or left_source_sha256 != files["left"]["source_sha256"]
+                    or right_source_sha256 != files["right"]["source_sha256"]):
+                raise Conflict("SELECTION_BINDING_MISMATCH")
+            full = normalize_decisions(result, decisions)
+            assessment = assess_selection(result, full, result_sha256=row["result_sha256"])
+            current = self._selection_assessment(row, result, draft)
+            if current.decision_map != full:
+                epoch = draft["selection_epoch"] + 1
+                now = _now()
+                db.execute("""UPDATE compare_selection_drafts SET selection_epoch=?,decisions_json=?,decision_hash=?,
+                    binding_hash=?,updated_at=? WHERE pair_id=?""",
+                           (epoch, _json(full), decision_hash(full), binding_hash(
+                               result_sha256=row["result_sha256"], left_source_sha256=files["left"]["source_sha256"],
+                               right_source_sha256=files["right"]["source_sha256"], selection_epoch=epoch,
+                               decisions=full), now, pair_id))
+                db.execute("UPDATE compare_selection_artifacts SET status='stale' WHERE pair_id=? AND status='current'",
+                           (pair_id,))
+                draft = db.execute("SELECT * FROM compare_selection_drafts WHERE pair_id=?", (pair_id,)).fetchone()
+            return self._selection_view_locked(db, row, result, assessment=assessment)
+
+    def preview_selection(self, owner: str, pair_id: str, *, expected_epoch: int,
+                          result_sha256: str, left_source_sha256: str, right_source_sha256: str) -> dict[str, Any]:
+        view = self.get_selection(owner, pair_id)
+        selection = view["selection"]
+        if expected_epoch != selection["selection_epoch"]:
+            raise Conflict("SELECTION_EPOCH_CONFLICT")
+        if (result_sha256 != view["result_sha256"] or left_source_sha256 != view["left_source_sha256"]
+                or right_source_sha256 != view["right_source_sha256"]):
+            raise Conflict("SELECTION_BINDING_MISMATCH")
+        return {"pair": view["pair"], "selection": selection, "assessment": view["assessment"],
+                "artifacts": view["artifacts"]}
+
+    def selection_generation_inputs(self, owner: str, pair_id: str, *, expected_epoch: int,
+                                    result_sha256: str, left_source_sha256: str,
+                                    right_source_sha256: str) -> dict[str, Any]:
+        view = self.get_selection(owner, pair_id)
+        selection = view["selection"]
+        if expected_epoch != selection["selection_epoch"]:
+            raise Conflict("SELECTION_EPOCH_CONFLICT")
+        if (result_sha256 != view["result_sha256"] or left_source_sha256 != view["left_source_sha256"]
+                or right_source_sha256 != view["right_source_sha256"]):
+            raise Conflict("SELECTION_BINDING_MISMATCH")
+        files = {item["side"]: item for item in self.pair_inputs(pair_id)}
+        return {"result": self.get_pair(owner, pair_id)["result"], "decisions": selection["decisions"],
+                "selection_epoch": selection["selection_epoch"], "result_sha256": view["result_sha256"],
+                "left_path": self.store.object_path(files["left"]["object_key"]),
+                "right_path": self.store.object_path(files["right"]["object_key"]),
+                "left_source_sha256": view["left_source_sha256"],
+                "right_source_sha256": view["right_source_sha256"]}
+
+    def publish_selection_generation(self, owner: str, pair_id: str, *, expected_epoch: int,
+                                     result_sha256: str, left_source_sha256: str,
+                                     right_source_sha256: str, idempotency_key: str | None,
+                                     final_path: Path, redline_path: Path,
+                                     report_builder: Callable[[int, str, str], tuple[bytes, bytes]]) -> dict[str, Any]:
+        if idempotency_key is not None and (not idempotency_key.strip() or len(idempotency_key) > 128):
+            raise ValueError("INVALID_IDEMPOTENCY_KEY")
+        staged: list[Path] = []
+        copied: list[Path] = []
+        try:
+            with self._connect() as db:
+                db.execute("BEGIN IMMEDIATE")
+                row = self._selection_row(db, owner, pair_id, lock=True)
+                result, files = self._selection_result_locked(db, row)
+                draft = self._ensure_selection_draft_locked(db, row, result, files)
+                if expected_epoch != draft["selection_epoch"]:
+                    raise Conflict("SELECTION_EPOCH_CONFLICT")
+                if (result_sha256 != row["result_sha256"] or left_source_sha256 != files["left"]["source_sha256"]
+                        or right_source_sha256 != files["right"]["source_sha256"]):
+                    raise Conflict("SELECTION_BINDING_MISMATCH")
+                if idempotency_key:
+                    existing = db.execute("""SELECT * FROM compare_selection_artifacts
+                        WHERE pair_id=? AND idempotency_key=? AND kind='selected_final'""", (pair_id, idempotency_key)).fetchone()
+                    if existing:
+                        if (existing["selection_epoch"] != draft["selection_epoch"]
+                                or existing["result_sha256"] != row["result_sha256"]
+                                or existing["left_source_sha256"] != files["left"]["source_sha256"]
+                                or existing["right_source_sha256"] != files["right"]["source_sha256"]
+                                or existing["decision_hash"] != draft["decision_hash"]
+                                or existing["binding_hash"] != draft["binding_hash"]):
+                            raise Conflict("IDEMPOTENCY_KEY_CONFLICT")
+                        return self._selection_generation_dict(db, pair_id, existing["version"])
+                assessment = self._selection_assessment(row, result, draft)
+                decisions = assessment.decision_map
+                if not assessment.can_generate:
+                    if assessment.pending_ids:
+                        raise Conflict("PENDING_SELECTIONS")
+                    raise Conflict("SELECTION_UNSUPPORTED")
+                version = (db.execute("""SELECT COALESCE(MAX(version),0)+1 AS version
+                    FROM compare_selection_artifacts WHERE pair_id=?""", (pair_id,)).fetchone()["version"])
+                final_hash, redline_hash = sha256_file(final_path), sha256_file(redline_path)
+                report_json, report_markdown = report_builder(version, final_hash, redline_hash)
+                artifacts = (("selected_final", final_path, final_hash, "docx"),
+                             ("selected_redline", redline_path, redline_hash, "docx"))
+                report_temp = self.store.object_path(f"compare/selection-temp/{uuid.uuid4().hex}.json")
+                report_temp.parent.mkdir(parents=True, exist_ok=True)
+                report_temp.write_bytes(report_json)
+                staged.append(report_temp)
+                md_temp = self.store.object_path(f"compare/selection-temp/{uuid.uuid4().hex}.md")
+                md_temp.write_bytes(report_markdown)
+                staged.append(md_temp)
+                artifacts += (("selection_report_json", report_temp, hashlib.sha256(report_json).hexdigest(), "json"),
+                              ("selection_report_markdown", md_temp, hashlib.sha256(report_markdown).hexdigest(), "md"))
+                now = _now()
+                db.execute("UPDATE compare_selection_artifacts SET status='stale' WHERE pair_id=? AND status='current'", (pair_id,))
+                for kind, source, digest, extension in artifacts:
+                    key = f"compare/selection/{pair_id}/{version}/{kind}.{extension}"
+                    target = self.store.object_path(key)
+                    target.parent.mkdir(parents=True, exist_ok=True)
+                    with source.open("rb") as incoming, target.open("xb") as output:
+                        for chunk in iter(lambda: incoming.read(1024 * 1024), b""):
+                            output.write(chunk)
+                        output.flush(); os.fsync(output.fileno())
+                    if sha256_file(target) != digest:
+                        raise Conflict("SELECTION_ARTIFACT_INTEGRITY_FAILED")
+                    copied.append(target)
+                    db.execute("""INSERT INTO compare_selection_artifacts
+                        (pair_id,version,kind,object_key,sha256,size,selection_epoch,result_sha256,
+                         left_source_sha256,right_source_sha256,decision_hash,binding_hash,idempotency_key,status,created_at)
+                        VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""", (pair_id, version, kind, key, digest, target.stat().st_size,
+                        draft["selection_epoch"], row["result_sha256"], files["left"]["source_sha256"], files["right"]["source_sha256"],
+                        draft["decision_hash"], draft["binding_hash"], idempotency_key, "current", now))
+                return self._selection_generation_dict(db, pair_id, version)
+        except Exception:
+            for path in copied + staged:
+                path.unlink(missing_ok=True)
+            raise
+        finally:
+            for path in staged:
+                path.unlink(missing_ok=True)
+
+    def _selection_generation_dict(self, db, pair_id: str, version: int) -> dict[str, Any]:
+        rows = db.execute("SELECT * FROM compare_selection_artifacts WHERE pair_id=? AND version=? ORDER BY kind",
+                          (pair_id, version)).fetchall()
+        if not rows:
+            raise NotFound("selection artifact not found")
+        first = rows[0]
+        return {"pair_id": pair_id, "version": version, "status": first["status"],
+                "selection_epoch": first["selection_epoch"], "result_sha256": first["result_sha256"],
+                "left_source_sha256": first["left_source_sha256"], "right_source_sha256": first["right_source_sha256"],
+                "decision_hash": first["decision_hash"], "binding_hash": first["binding_hash"],
+                "artifacts": self._selection_artifacts(db, pair_id)}
+
+    def get_selection_artifact(self, owner: str, pair_id: str, version: int, kind: str) -> tuple[dict[str, Any], Path]:
+        aliases = {"final": "selected_final", "redline": "selected_redline", "report": "selection_report_markdown",
+                   "report_json": "selection_report_json"}
+        kind = aliases.get(kind, kind)
+        if kind not in {"selected_final", "selected_redline", "selection_report_json", "selection_report_markdown"}:
+            raise NotFound("selection artifact not found")
+        with self._connect() as db:
+            row = self._selection_row(db, owner, pair_id)
+            artifact = db.execute("SELECT * FROM compare_selection_artifacts WHERE pair_id=? AND version=? AND kind=?",
+                                  (pair_id, version, kind)).fetchone()
+            if artifact is None:
+                raise NotFound("selection artifact not found")
+            path = self.store.object_path(artifact["object_key"])
+            if (not path.is_file() or path.stat().st_size != artifact["size"]
+                    or sha256_file(path) != artifact["sha256"]):
+                raise Conflict("SELECTION_ARTIFACT_INTEGRITY_FAILED")
+            return dict(artifact), path
 
     def source_integrity(self, pair_id: str) -> None:
         """Verify both pair objects before a worker or view consumes them."""

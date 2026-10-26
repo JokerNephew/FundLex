@@ -21,9 +21,9 @@
 
 ### 当前快照
 
-- 分支：`refactor/backend-engine-finalization`
-- HEAD：`18093fa`
-- 工作区：dirty，包含既有引擎、OAuth、V1/V2 前端、测试和集中记录修改。
+- 分支：`codex/v1-compare-selection`
+- 阶段三工作树基线：`99a5dad`；阶段三源码和测试在本次提交前保持 dirty。
+- 原工作区 `/home/opencode/fundlex` 继续保留既有引擎、OAuth、V1/V2 前端、测试和集中记录修改；未从本功能分支回写。
 - 当前项目结论：NO-GO；Compare 复杂结构和完整真实用户交付尚未闭合。
 - 生产、真实模型和正式部署：本功能实施期间保持不动。
 
@@ -43,7 +43,7 @@
 | `docs(compare): add selection implementation plan` | 本方案和设计交接 | 进行中 |
 | `feat(compare): add selection contract` | 选择状态、校验、哈希和纯逻辑 | 已完成，待提交 |
 | `feat(compare): generate selected docx` | OOXML 选择版/修订痕迹版生成与验证 | 已完成，待提交 |
-| `feat(compare): persist selection drafts` | 草稿、epoch、产物和下载 API | 待开始 |
+| `feat(compare): persist selection drafts` | 草稿、epoch、产物和下载 API | 实现完成，待提交 |
 | `feat(v1): add compare selection reader` | V1 阅读器选择控件、保存、生成、下载 | 待开始 |
 | `test(compare): close selection delivery gates` | API、DOCX、浏览器和真实路径验证材料 | 待开始 |
 
@@ -202,8 +202,8 @@
 | 0 基线/分支/方案 | 已完成 | 分支 `codex/v1-compare-selection`；方案提交 `dd52a1d` | 开始阶段二 |
 | 1 选择契约 | 已完成，待提交 | `.venv/bin/pytest -q tests/test_compare_selection.py tests/test_compare_algorithm.py tests/test_compare_api.py`：34 passed；选择模块与原有 Compare 回归共同通过 | 提交 selection contract，再开始阶段二 |
 | 2 DOCX 生成器 | 已完成，待提交 | `.venv/bin/pytest -q tests/test_compare_selection_writer.py`：6 passed；真实 DOCX 生成、修订版接受等价和结果复读通过；空侧结构差异 fail closed | 提交 writer，再开始阶段三持久化/API |
-| 3 持久化/API | 未开始 | — | 增加迁移、草稿、artifact 和下载路由 |
+| 3 持久化/API | 实现完成，待提交 | `PYTHONPATH=/tmp/opencode/fundlex-compare-selection /home/opencode/fundlex/.venv/bin/pytest -q tests/test_compare_selection_api.py`：1 passed / 1 warning；Compare Store/API/Worker/selection/writer 回归：34 passed / 1 warning；`py_compile`、`git diff --check` 通过。覆盖草稿初始化、绑定与 epoch 冲突、持久化恢复、生成幂等、idempotency 冲突、旧版本 stale、owner 下载隔离、DOCX/报告哈希和篡改草稿 fail closed。 | 提交阶段三文件；随后接入 V1 阅读器 |
 | 4 V1 阅读器 | 未开始 | — | 接入右侧选择 rail 和生成状态 |
 | 5 全链路/候选 | 未开始 | — | 分层回归、真实用户路径、候选冻结 |
 
-最后更新：2026-10-26，阶段二实现完成。下一条可执行动作是提交安全 OOXML writer 和定向测试，再开始阶段三的草稿、epoch、artifact 和下载 API。
+最后更新：2026-10-26，阶段三实现完成，尚未提交。隔离 API 测试依赖原工作区未跟踪的 `fundlex/guide_generation` 与 `fundlex/regulatory`，因此验证时使用 `PYTHONPATH` 和直接 Compare 路由 fixture；未配置真实 MySQL，MySQL 迁移/并发保持未验证。下一条可执行动作是提交阶段三，再接入 V1 阅读器选择控件和生成下载状态。
