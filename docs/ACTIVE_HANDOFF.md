@@ -1,5 +1,13 @@
 # FundLex 当前断点（ACTIVE_HANDOFF）
 
+## 飞书 OAuth 二维码放大显示修复（2026-10-26）
+
+- 用户上传设置页二维码截图反馈二维码像黑块。核对生产接口：授权链接 260 字符，qrencode 为 version 10（57×57 模块 + quiet zone，viewBox 65×65）；原 CSS 最大 351px，实际约 325px、约 5.7px/模块，缩放后模块粘连。
+- 修复分支：`codex/fix-feishu-qr-size`，提交 `cff5dc8`，已推送。前端优先使用 650×650 原生 PNG，设置 `img.width/height=650`；容器改为 `max-width:650px;width:100%`，桌面尽量 1:1，小屏自动收缩。只替换生产 `frontend/app.js`、`frontend/app.css`，未重启服务。
+- 生产哈希：`app.js` `8b70498820be68ed00f8563981810c2306573343b65986c81b0d86d2c24c46ba`；`app.css` `b4e34e84066b13a5b98d76418ade52ef8d5ff56bb149690a2d6a77589ba240f3`；首页 `app.css?v` 从 `7d627846…` 变为 `e33b00f1…`。发布前备份 `/tmp/opencode/fundlex-feishu-qr-size-backup-20261026-223532/`。
+- 浏览器验证：临时账号 1440px 下 PNG natural 650×650、显示 624×624；jsQR 解码成功，host `accounts.feishu.cn`、文本长度 260、版本 10；822px 下显示 498×498、无横向溢出；页面错误 0。证据 `/tmp/opencode/fundlex-qr-size-evidence-20261026/result.json`、`qr-1440.png`、`qr-822.png`。临时账号和 OAuth state 已清理，二次查询无残留。
+- 集中记录：FL-D281。用户需刷新页面并重新生成二维码；若仍扫不出，再实现本地短链接二维码（约 29×29 模块）。
+
 ## 外部任务深链 404 故障修复（2026-10-26）
 
 - 用户反馈：Compare selection 发布后“点什么都显示该任务或结果不存在，或当前身份无权访问”。定位为浏览器 `/?task=8da0ef68f2c8465986917a66e7835bf0` 指向另一个飞书测试账号的任务，当前账号访问 404 是权限隔离正常结果；但旧 `app.js` 失败后保留 `?task=`，刷新/重新登录会反复自动打开坏任务。当前账号自己的任务 `8294f938fd0e410ba9dec0b6f81eb398` 同时列表/详情均 200，确认不是会话或数据丢失，也与本次 Compare selection 文件部署无关。
