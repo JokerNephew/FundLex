@@ -8,6 +8,7 @@ from .selection import (SelectionAssessment, SelectionError, SelectionIssue,
                         SelectionSnapshot, assess_selection, binding_hash,
                         decision_hash, make_snapshot, normalize_decisions,
                         require_generation_ready)
+from .selection_writer import SelectionArtifactValidation, generate_selection_artifacts
 
 __all__ = [
     "AlignmentGroup", "CompareBlock", "CompareDocument", "CompareResult",
@@ -17,4 +18,5 @@ __all__ = [
     "SelectionAssessment", "SelectionError", "SelectionIssue", "SelectionSnapshot",
     "assess_selection", "binding_hash", "decision_hash", "make_snapshot",
     "normalize_decisions", "require_generation_ready",
+    "SelectionArtifactValidation", "generate_selection_artifacts",
 ]

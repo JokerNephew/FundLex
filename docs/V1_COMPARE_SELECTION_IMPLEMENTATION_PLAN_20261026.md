@@ -42,7 +42,7 @@
 | --- | --- | --- |
 | `docs(compare): add selection implementation plan` | 本方案和设计交接 | 进行中 |
 | `feat(compare): add selection contract` | 选择状态、校验、哈希和纯逻辑 | 已完成，待提交 |
-| `feat(compare): generate selected docx` | OOXML 选择版/修订痕迹版生成与验证 | 待开始 |
+| `feat(compare): generate selected docx` | OOXML 选择版/修订痕迹版生成与验证 | 已完成，待提交 |
 | `feat(compare): persist selection drafts` | 草稿、epoch、产物和下载 API | 待开始 |
 | `feat(v1): add compare selection reader` | V1 阅读器选择控件、保存、生成、下载 | 待开始 |
 | `test(compare): close selection delivery gates` | API、DOCX、浏览器和真实路径验证材料 | 待开始 |
@@ -91,13 +91,13 @@
 
 ### 首期支持范围
 
-- 支持：单段内 modify、单段内 insert/delete、普通表格单元格内单段差异、多个不重叠差异。
-- 阻塞并解释：跨段差异、整段结构插入/删除、合并单元格、嵌套表格、header/footer/drawing/field/content control 等未建立安全编辑地址的结构。
+- 支持：单段内 modify、普通表格单元格内单段 modify、多个不重叠 modify；输出人工选择版和选择修订痕迹版。
+- 阻塞并解释：当前 Compare 结果中的空侧 insert/delete、跨段差异、整段结构插入/删除、合并单元格、嵌套表格、header/footer/drawing/field/content control 等未建立安全编辑地址的结构。空侧锚点目前只用于导航，不能直接写成段落操作。
 - 覆盖状态为 incomplete 时，不自动拒绝所有结果，但任何落在未覆盖或不可写结构的选择必须阻止生成并列出位置；不能把不完整结果命名为完整最终合同。
 
 ### 验收门槛
 
-- 使用真实 `python-docx` 生成的 DOCX 和 XML 夹具覆盖修改、新增、删除、表格、相邻差异及混合选择。
+- 使用真实 `python-docx` 生成的 DOCX 和 XML 夹具覆盖段内修改、全左零操作、表格单元格修改、结构新增/删除阻断和混合选择；新增/删除的可写段落结构操作列入后续阶段，不以当前阻断冒充已支持。
 - 生成文件能被 `python-docx` 和项目 DOCX reader 重新打开。
 - 选择左侧的目标与左侧投影一致，选择右侧的目标与右侧投影一致；未改变位置保留左侧。
 - 篡改源文件、result JSON、span、选择 hash 或输出路径时 fail closed。
@@ -201,9 +201,9 @@
 | --- | --- | --- | --- |
 | 0 基线/分支/方案 | 已完成 | 分支 `codex/v1-compare-selection`；方案提交 `dd52a1d` | 开始阶段二 |
 | 1 选择契约 | 已完成，待提交 | `.venv/bin/pytest -q tests/test_compare_selection.py tests/test_compare_algorithm.py tests/test_compare_api.py`：34 passed；选择模块与原有 Compare 回归共同通过 | 提交 selection contract，再开始阶段二 |
-| 2 DOCX 生成器 | 未开始 | — | 在契约稳定后实现 OOXML writer |
+| 2 DOCX 生成器 | 已完成，待提交 | `.venv/bin/pytest -q tests/test_compare_selection_writer.py`：6 passed；真实 DOCX 生成、修订版接受等价和结果复读通过；空侧结构差异 fail closed | 提交 writer，再开始阶段三持久化/API |
 | 3 持久化/API | 未开始 | — | 增加迁移、草稿、artifact 和下载路由 |
 | 4 V1 阅读器 | 未开始 | — | 接入右侧选择 rail 和生成状态 |
 | 5 全链路/候选 | 未开始 | — | 分层回归、真实用户路径、候选冻结 |
 
-最后更新：2026-10-26，阶段一实现完成。下一条可执行动作是提交选择契约和定向测试，再开始阶段二的安全 OOXML 地址与写入器。
+最后更新：2026-10-26，阶段二实现完成。下一条可执行动作是提交安全 OOXML writer 和定向测试，再开始阶段三的草稿、epoch、artifact 和下载 API。
