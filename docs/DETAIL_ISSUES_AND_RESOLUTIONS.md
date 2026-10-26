@@ -27,6 +27,26 @@
 - 下一步：浏览器异步 route 测试统一使用 Playwright 等待 API，禁止在需要处理 route 事件的循环中使用 `time.sleep`。
 - 变更记录：2026-10-26 新增；与 FL-D297 的后端 flake 分开记录。
 
+## FL-D300 飞书 OAuth 绑定二维码在设置页显示模糊、难以扫描（2026-10-26）
+
+- 发现日期：2026-10-26，用户真实点击“生成扫码绑定二维码”反馈。
+- 问题与影响：二维码是 65×65 模块，但设置页把 SVG 限制在 240px 宽（约 3.69px/模块），`qrencode` 生成的 SVG 又使用 `preserveAspectRatio="none"` 且没有 `shape-rendering="crispEdges"`，浏览器缩放时模块边缘被抗锯齿成灰边；用户看到“糊”，手机无法稳定识别。
+- 证据：生产 OAuth start 的 SVG `viewBox="0 0 65 65"`、宽高 `6.88cm`、无 `shape-rendering`；旧 CSS `.feishu-oauth-qr{max-width:240px}`。真实页面旧渲染约 240px。
+- 处理方法：二维码改为 **325×325 CSS px**，65 个模块正好 5px/模块；OAuth SVG 注入 `shape-rendering="crispEdges"` 并把 `preserveAspectRatio` 改为 `xMidYMid meet`。后端额外生成 650×650 高分辨率 PNG 作为回退（约 1.5KB，`qr_png`），V1/V2 优先使用带 crispEdges 的 SVG，PNG 回退使用平滑缩放；容器最大宽度 351px（含 12px padding + 1px border，内容区 325px）。V2 设置页同步。
+- 状态与验证：**已解决（生产清晰度已验证）**。真实生产页面检查 `<svg>` 为 325×325、`shape-rendering="crispEdges"`、10 分钟提示正常、页面错误/控制台错误 0；PNG 回退 650×650、1,469 bytes。`tests/test_feishu_oauth_api.py` 等定向 **15 passed**，前端 typecheck/lint/build 通过。OAuth 真实扫码回调仍待用户扫码验证（FL-D295）。
+- 下一步：用户强制刷新页面（旧 app.js/CSS 可能缓存）后再生成二维码；若相机仍难识别，可直接点“在飞书中打开授权页”。不得把二维码截图再压缩后转发。
+- 变更记录：2026-10-26 新增；清晰度修复只改展示层与 QR PNG 回退，不改变 OAuth state/绑定权限模型。
+
+## FL-D299 选择性发布 api.py 带入未部署依赖导致生产 API 启动失败（2026-10-26）
+
+- 发现日期：2026-10-26 12:17，二维码清晰度修复的受控发布。
+- 问题与影响：工作区 `fundlex/api.py` 已包含另一项未发布的 `manifest_fingerprint` 导入，但生产 `fundlex/selective.py` 仍是旧版本。仅复制 `api.py` 后重启 API，两个 uvicorn worker 均因 `ImportError: cannot import name 'manifest_fingerprint' from 'fundlex.selective'` 启动失败，8010 端口无监听，公网 OAuth start 返回 502。Worker 和 Feishu 服务未受影响，未发现数据损坏。
+- 证据：`journalctl -u fundlex-recall-api.service` 在 12:17 记录 15 次 `ImportError`；发布前备份 `/tmp/opencode/fundlex-qr-sharp-20261026-121725/production-before.tgz`。恢复后 `/api/capabilities` 返回 200，API/Worker/Feishu 均 active。
+- 处理方法：立即从发布前备份恢复生产可用的 `api.py`，只对其 OAuth start 响应补 `qr_png` 字段；单独部署自包含的 `fundlex/integrations/feishu/oauth.py`。未部署工作区 `selective.py` 或其他并发改动。当前工作区 `api.py` SHA `81bb09efcd5d6efc8c356e7836872c91f784e769a1ab2836d8cb5db9e718fb1f`，生产 `api.py` SHA `8048c11d54a896a75d8edb70ac43e1dc220e8a2e1ae3ed392cd9a71f7daf1fbf`；工作区 `selective.py` 含 `manifest_fingerprint`，生产旧版不含，两者暂不一致。
+- 状态与验证：**已解决（服务已恢复，生产 API 未再使用不一致的 api.py）**。恢复后真实 OAuth start 返回 200、`qr_png` 650×650；生产页面二维码渲染 314px、自然尺寸 650、`image-rendering: pixelated`；页面错误 0。临时账号/state 已清理，当前 API/Worker/Feishu 均 active。
+- 下一步：先在工作区完成 `api.py` 与 `selective.py` 依赖对齐并跑全量回归，再整仓/一致性发布；选择性发布前必须做目标环境导入检查（至少 `python -c 'import fundlex.api'`），并在发布清单中列出新增导入/模块。不得再次只复制 api.py 而遗漏依赖。
+- 变更记录：2026-10-26 新增；这是一次发布边界事故，已恢复，不改变合同数据或报告；与 FL-D297/FL-D298 测试问题分开记录。
+
 ## FL-D296 飞书真实任务交付结果分化：D17 完整、D01/D02/D04 不完整（2026-10-26）
 
 - 发现日期：2026-10-26，真实飞书多 DOCX 任务验收。
@@ -141,6 +161,127 @@
 - 变更记录：2026-10-26 新增；同日修正测试并完成生产设置入口验证。
 
 本文件是项目细节问题与处理方法的唯一集中记录，依据根目录 `AGENTS.md` 持续维护。创建于 2026-10-14。
+
+## FL-D301 生产合同大量 incomplete 的主因是业务交付门禁未闭合（2026-10-26）
+
+- 发现日期：2026-10-26，用户询问创建的任务大部分为何为 `incomplete`；读取生产 MySQL 汇总并按每份合同的首要阻塞原因归类。
+- 问题与影响：生产库共有 666 份合同，其中 335 份 `delivery_status=incomplete`（50.3%）。这 335 份全部为 `status=succeeded`，说明主要问题不是任务排队、Worker 未运行或模型请求整体失败，而是文档已处理后仍未通过业务交付完整性门禁；因此系统只保留 `working_final`/`working_redline` 和报告，不开放 `final/redline`。
+- 证据：生产 MySQL 只读统计（2026-10-26）为 `succeeded/incomplete=335`、`succeeded/complete=246`、`failed/not_generated=52`、`succeeded/not_generated=18`；按任务汇总，595 个含合同任务中 318 个至少有一份 incomplete，307 个全部合同 incomplete。335 份 incomplete 的首要阻塞分类为：目标定位/规划/生成执行未闭合 212（63.3%）；独立业务复核未通过 86（25.7%）；Claim Replay 发现实际产物与授权操作不一致 25（7.5%）；最终查漏、覆盖和其他 12（3.6%）。分类按每份合同只计首要类别，诊断项之间可能重叠。
+- 细分线索：所有诊断项累计出现最多的原因码为 `RECALL_EDIT_OVERLAP`、`SURVEY_QUOTE_UNRESOLVED`、`RECALL_TARGET_UNRESOLVED`、`RECALL_COMPOSE_FIXED_TEXT_MISSING` 和 `RECALL_TARGET_COMPOSITE_UNRESOLVED`。这些分别对应同一物理范围有多个编辑冲突、模型引文无法绑定原文、目标无法安全定位、固定文案生成/校验失败及跨段/复合目标无法闭合。生产近期 Feishu 任务也符合这一模式：D01/D02/D04 均 Worker 成功但交付 incomplete；D17 在 Claim Replay 和 delivery gate 均闭合后为 complete。
+- 处理方法：本次不放宽交付门禁，也不把工作文件冒称最终合同。引擎应继续从原件重建并对每项适用义务完成目标、计划、实际 DOCX 和 Claim Replay 闭环；修复优先级为编辑重叠/复合目标与引文定位，其次是独立复核残留和生成错误，最后处理 Claim Replay 归因缺口。前端解释应明确区分“处理成功”与“交付完整”。
+- 状态与验证：**已确认，根因统计完成；引擎问题仍待修复和真实复测**。生产 API/Worker 在数据库凭据轮换后均 active，数据库连接计数查询正常；本次未修改业务源码、规则或历史报告。
+- 下一步：按当前 clean candidate 冻结版本，针对 `RECALL_EDIT_OVERLAP`、`SURVEY_QUOTE_UNRESOLVED`、`RECALL_TARGET_UNRESOLVED`、`RECALL_COMPOSE_FIXED_TEXT_MISSING` 和 Claim Replay 失败建立分母，修复后用真实合同重跑并比较 incomplete 比例；不以目标计数为零或 Worker `succeeded` 代替交付 gate。
+- 变更记录：2026-10-26 新增；统计来自生产数据库当前全量，不代表 D01–D20 固定分母或正式发布 gate 已通过。
+
+## FL-D302 生产数据库连接凭据在诊断命令输出中暴露并已轮换（2026-10-26）
+
+- 发现日期：2026-10-26，执行生产任务统计时读取 `/etc/fundlex-recall.env` 的数据库连接配置，诊断命令输出曾包含数据库连接串中的旧密码。
+- 问题与影响：该旧数据库密码按已泄露凭据处理；若不轮换，持有诊断输出者可能尝试连接生产 MySQL。凭据值不写入本记录、仓库、日志或聊天。
+- 证据：发现位置为本次 agent 的 shell 输出；生产数据库用户为 `fundlex`，配置文件为 `/etc/fundlex-recall.env`。仅记录变量名和路径，不记录密码值。
+- 处理方法：使用原连接验证后生成随机新密码，执行数据库用户密码轮换；修改前备份 `/etc/fundlex-recall.env.bak-20261026-db-rotation`，更新 `/etc/fundlex-recall.env`，重启 `fundlex-recall-api.service` 和 `fundlex-recall-worker.service`。后续诊断只使用直接环境注入和脱敏输出，不打印连接串。
+- 状态与验证：**已解决（本机范围）**。2026-10-26 12:18 API、12:26 Worker 均为 `active`；使用新配置连接生产 MySQL，`batches/documents/task_batches/tasks` 计数查询成功。未发现凭据值写入仓库、集中文档或项目日志；外部已产生的 shell 输出由本次会话保留，无法从聊天历史撤回。
+- 下一步：若该输出进入外部共享系统，应按同一泄露事件继续检查并轮换相关派生凭据；以后禁止用会展开连接串的命令读取环境文件。
+- 变更记录：2026-10-26 新增；轮换的是生产数据库账号密码，未修改代码或数据库业务数据。
+
+## FL-D303 根发布器与仓库规范发布脚本存在版本漂移（2026-10-26）
+
+- 发现日期：2026-10-26，P0 incomplete 修复发布边界核对。
+- 问题与影响：仓库 `tools/deploy/fundlex-publish.sh` 已同步 API、Recall Worker、Compare Worker，执行 `engine_build()` 哈希核对及部署目录检查；本机 root 发布器 `/usr/local/sbin/fundlex-publish` 仍为旧版，仅重启 API/Recall Worker、检查 capabilities。直接调用将遗漏 Compare 重启和运行构建验证。
+- 证据：本机只读比对两个脚本确认差异；基线证据目录 `/tmp/opencode/incomplete-remediation-20261026/`。生产当前 API/Recall Worker active，不代表发布器差异已解决。
+- 处理方法：下一次候选发布前备份 root 发布器，核对仓库规范脚本并安全安装；先做 shell 语法和整仓 Python 导入检查，发布后核对三个 unit、构建哈希、部署目录和 capabilities。
+- 状态与验证：**已处理，待候选发布验证**。已将仓库规范脚本安装到 `/usr/local/sbin/fundlex-publish`，安装前备份保存在 `/tmp/opencode/incomplete-remediation-20261026/`；两者 SHA-256 均为 `1ebe1b52...`，`bash -n` 通过。新增的源/部署 `fundlex.api` 导入预检使用临时数据目录并移除生产数据库环境变量，已实际通过；未重启服务或发布业务代码。
+- 下一步：候选发布时验证三个 unit、`engine_build()`、部署目录和 capabilities；依赖检查失败时保留已知可用部署版本。
+- 变更记录：2026-10-26 新增；FL-D299 记录此前事故恢复，本条记录持续存在的发布器漂移。
+
+### FL-D303 变更记录（2026-10-26 13:24）
+
+- 独立监督复现并确认：仅设置 `PYTHONPATH` 而不切换 cwd 时，发布预检可能从当前工作区导入同名 `fundlex`，不能证明部署目录可导入；已改为在被检查 root 内执行，断言 `fundlex`、`fundlex.api`、`fundlex.selective` 的 `__file__` 均位于该 root，并将临时数据目录放到 `/tmp/opencode`。
+- 监督还确认旧发布器失败后会留下已覆盖的部署树，且遗漏 `fundlex-feishu.service`；发布脚本已补充部署树/unit 备份、失败回滚尝试和 Feishu unit 同步/重启。此改动尚未以完整发布流程验证，P5 仍保持 NO-GO。
+
+## FL-D306 评测 runner 使用未登记 5000/$5 cap，导致隔离账本越过历史上限（2026-10-26）
+
+- 发现日期：2026-10-26，Evaluation agent 对 FL-D304 的账本增量和 dev-21 运行 provenance 只读追查。
+- 问题与影响：隔离账本 `/tmp/opencode/operation-validation-20261024/ledger.sqlite` 的 rowid 1702–2293 共 592 次请求来自 `dev-21-full`，实际费用 `$0.67976100`，覆盖 D01–D20。标准 runner 登记的是 2000 requests/$2，但 dev-21 专用 runner 使用了未登记的 5000 requests/$5 override；因此运行越过 row 2000 和 `$2`，历史账本当前为 2,293/$2.32384410，旧的 20 份预算记录与实际启动配置不一致。
+- 证据：`/tmp/opencode/operation-validation-20261024/dev-21-full/batch.json` 启动时间 2026-10-24 23:43:33 UTC；ledger 增量首末时间 23:43:35–00:49:15 UTC，连续 rowid 1702–2293，报告 metadata 与 592 行逐条唯一匹配。标准 runner `/tmp/opencode/fundlex-operation-validation.py` 写 2000/$2，dev-21 runner `/tmp/opencode/fundlex-operation-validation-dev21.py` 写 5000/$5；没有找到 cap 提升授权或 `run_context-21.json`。
+- 处理方法：保留 dev-21 所有原件、报告、ledger 行和旧分母，标记为“未登记 cap 的历史批次”，不重置、不删除、不把其结果冒称当前合法评测。修复 runner，使 cap、ledger、build、run id、启动时间写入同一不可变 manifest，并在下一轮启动前 fail-closed 校验；重新运行前必须重新登记总预算。
+- 状态与验证：**已确认，阻断下一轮新增真实模型调用**。本轮未写账本、未启动 `p6_run.py` 或 Langfuse；`reserved_cost` 累计 `$15.45037635` 是历史每次 reserve 的最坏估算总和，不代表当前未释放余额，当前 reserved 状态为 0。
+- 下一步：预算负责人决定是否承认 592 次历史消耗；D06 重新独立标注并冻结 labels amendment；新预算和候选 build 未冻结前不启动开发集/留出批次。
+- 变更记录：2026-10-26 新增；与 FL-D304 同一账本问题，FL-D304 记录汇总影响，本条记录未登记 cap 的具体 provenance 根因。
+
+## FL-D307 误执行截断发布器片段，把 dirty 工作区快照同步到生产（2026-10-26）
+
+- 发现日期：2026-10-26 13:23，监督检查发布预检时误用从 `fundlex-publish.sh` 截取的 shell 片段；片段执行了同步、unit 安装和三个服务重启，随后因截断语法错误退出。
+- 问题与影响：生产部署目录短暂同步了当时主工作区 dirty 快照，不能作为正式候选发布证据；API、Recall Worker、Compare Worker 和 Feishu 服务均被重启。服务当前 active，但 Compare Worker 在重启前后日志持续出现 `DatabaseError`，需单独核查其既有数据库连接问题；本次未执行真实模型或用户任务，未发现数据写入证据。
+- 证据：三个主服务启动时间约 2026-10-26 13:23:51–13:23:55；`/api/capabilities` 返回 200；工作区与部署 `engine_build()` 均为 `54b226ea...`；部署文件哈希与当时主工作区 dirty 文件相同。截断片段退出码为 shell syntax error；完整脚本未以正式候选方式运行。
+- 处理方法：保留生产发布前备份目录和本次状态输出，不把该版本写入正式候选；先完成 Engine/Replay/Delivery 合并、全量回归、完整候选冻结，再使用修复后的完整发布器执行发布。任何脚本验证只使用 `bash -n` 或完整命令，禁止执行截断片段。
+- 状态与验证：**已确认，事故影响已止住，正式候选仍未发布**。API/Recall/Compare/Feishu active，API capabilities 200；完整用户路径和 Compare 数据库错误尚未重新验收。
+- 下一步：检查部署前可用备份，必要时恢复到事故前已知版本；完成发布器完整流程的隔离演练和 rollback 反例，再进行受控候选发布。
+- 变更记录：2026-10-26 新增；这是运维验证失误，独立于引擎修复和 FL-D303 发布器本身的问题。
+
+### FL-D307 变更记录（2026-10-26 13:40）
+
+- 已完成事故后运行态核对：API、Recall Worker、Compare Worker、Feishu 均 active；API capabilities 返回 200；Compare Worker `NRestarts=1` 且 13:23:55 后无新错误。当前部署仍是事故期间同步的 dirty 快照，未作为候选验收。
+- 已将发布器改为 staging transaction：先在候选树做实际部署解释器导入和模块路径断言，生成全托管文件 manifest，再停服务、串行 schema 初始化和切换；失败保留 transaction 并恢复旧文件/unit。隔离故障演练 7/7 通过；root 发布器和部署目录脚本 SHA-256 为 `a873e4b4...`，未执行完整生产发布。
+
+## FL-D308 Compare Worker 并发 schema 迁移导致重启窗口启动失败（2026-10-26）
+
+- 发现日期：2026-10-26 13:23，FL-D307 截断发布器片段触发 API、Recall、Compare、Feishu 同时重启后的运行态核对。
+- 问题与影响：Compare Worker 启动时在共享 MySQL `documents` 表执行 `ALTER TABLE`，与 API/Recall 进程的同一迁移竞争，首个进程收到 `DATABASE_OPERATION_FAILED` 并退出；systemd 约 4 秒后重启成功。服务最终为 active，但发布重启窗口存在短暂 Compare 不可用，且单看 `systemctl active` 会漏掉重启计数和迁移错误。
+- 证据：`journalctl -u fundlex-compare-worker` 记录 13:23:51 在 `RunStore` 初始化、`store.py:377` 的 `ALTER TABLE documents ADD COLUMN selection_decision_hash` 路径失败，13:23:55 重启后 active；`NRestarts=1`，之后未见新错误。未发现本次模型调用或合同数据写入证据。
+- 处理方法：候选发布前先执行一次串行 schema 初始化/迁移，再按 API、Recall Worker、Compare Worker、Feishu 顺序重启；发布器健康检查同时检查四个 unit 的启动时间、重启计数和短窗口日志，不能只看 active。若迁移竞争仍可复现，必须在代码或运维层提供单一迁移锁并保持服务 fail-closed。
+- 状态与验证：**已确认，待修复/候选发布验证**。当前四个服务 active，Compare 13:23:55 后无新错误；本轮未修改 schema 逻辑，正式候选发布仍阻断。
+- 下一步：在隔离环境重现并验证串行迁移；发布前保留部署树和 unit 备份，失败自动回滚并重新核对四服务。
+- 变更记录：2026-10-26 新增；与 FL-D303 发布边界、FL-D307 运维误操作关联，但不把短暂重启失败误报为引擎修复成功。
+
+## FL-D304 隔离评测账本超过历史登记的调用与费用上限（2026-10-26）
+
+- 发现日期：2026-10-26，Evaluation agent 对固定 D01–D20 对账器和保存的隔离账本做只读复核。
+- 问题与影响：历史对账记录把 `/tmp/opencode/operation-validation-20261024/ledger.sqlite` 记为 1,701 requests、`$1.64408310`、cap 2,000/$2.00、剩余 299 requests/$0.35591690；当前同一路径只读结果为 2,293 terminal requests、`$2.32384410`，已超过登记 cap。带账本的对账器因此报告 8 项不一致，不能把该账本继续作为下一轮真实评测的预算依据。
+- 证据：Evaluation agent 定向回归 **29 passed**；对账器不带 ledger 时 valid=true、20 个 case、current gate 0/20；带 `/tmp/opencode/operation-validation-20261024/ledger.sqlite` 时发现 2,293 total（completed 2,290、failed 2、abandoned 1）。`reserved` 状态为 0，但 `reserved_cost` 累计约 `$15.45037635`，其历史语义尚未确认。
+- 处理方法：保留该账本及所有历史运行证据，不重置、不删除、不把超 cap 部分抹去；在重新运行前由评测负责人解释账本增长来源和 `reserved_cost` 语义，重新登记可执行的总预算与共享 ledger。生产应用账本 `/var/lib/fundlex/model_budget.sqlite` 与该隔离评测账本分开，不混算。
+- 状态与验证：**已确认，阻断下一轮真实评测**。本轮未写入该账本、未启动 `p6_run.py`、未调用真实模型或 Langfuse。
+- 下一步：新预算与账本方案确认后，重新生成 protocol/run manifest；每次运行前后保存请求数、费用、状态和余额，并让对账器验证 cap。
+- 变更记录：2026-10-26 新增；历史对账数值和原始账本均保留，不能用新数字覆盖旧报告。
+
+## FL-D305 冻结 D06 标签把 ETF 联接基金错误判为排除样本（2026-10-26）
+
+- 发现日期：2026-10-26，Evaluation agent 对冻结 labels、D06 实际 snapshot-19 报告和 `p6_score.py` 的输入分母做只读核对。
+- 问题与影响：当前冻结 labels 将 D06 标为 `fund_type=etf`、`excluded=true`、`target_count=0`；snapshot-19 实际报告为 `qualification_status=eligible`、`delivery_status=incomplete`、82 targets、2 unresolved、26 HTTP、约 `$0.03190155`。旧评分器因此对 D06 得到 0 个有效目标，这反映标签分母错误，不能证明合同没有修改目标，也不能用于 snapshot-19 的业务通过结论。
+- 证据：固定 selection 仍为 D01–D20/H01–H08，selection SHA `95fe8121d5f0aceb4febf9cc76a79fde78cf44f711e9a6f029b08eb6ee5643f3`；labels SHA `f120d38175c83cd1c973045d0414a69bacb9d837fc4bf24d40a8a762fe588841`。保存报告显示 D06 eligible/82/2；该问题与历史 FL-D188 的 ETF 联接基金资格结论一致。
+- 处理方法：保留旧 labels、旧 score 和 snapshot-19 结果作为历史证据，不覆盖或改写；在继续正式开发集评分前，由独立业务复核重新判断 D06 资格、目标数和适用性，并冻结新 labels/hash；已读取旧 D06 预测后，原 holdout/独立性边界按评测计划重新声明。
+- 状态与验证：**已确认，阻断当前 labels 作为完整 D01–D20 gate**。29 项评测工具回归通过；本轮未调用真实模型。
+- 下一步：修正并独立复核 D06 标签，检查其余 19 份标签与原件/指引对账，再决定是否保留本轮开发集和是否把旧 holdout 只能称为历史留出回归。
+- 变更记录：2026-10-26 新增；不因标签修正删除旧分母，修正后的分母必须生成新版本并保留 hash。
+
+## FL-D309 传递重叠编辑未按连通分量联合规划（2026-10-26）
+
+- 发现日期：2026-10-26，Engine agent 审查 `RECALL_EDIT_OVERLAP` 的规划和 Joint Compose 路径。
+- 问题与影响：同一物理段的 A↔B、B↔C 等传递重叠被拆开处理时，联合编辑可能不完整或取决于冲突输入顺序；复合目标的其他段落 sibling 亦有被误消费风险，导致 unresolved 或 operation 归因缺失。
+- 处理方法：按物理段建立冲突连通分量，再为整组联合规划；保留所有 operation keys、obligation IDs、原始 edit 和其他段落 sibling。联合生成失败仍 fail closed。
+- 证据与验证：Engine 原提交 `66f6330`、`8350513`，主线 `165dbdf`、`a872628`；定向引擎 **260 passed**，包含成功/失败关闭、输入顺序、复合 sibling；合并主线全量 **1564 passed / 52 skipped / 3 warnings / 370.31s**。
+- 状态：**已实施并通过代码回归，真实合同改善待验证**。未新增真实模型调用；零模型真实原件重放正在进行，不等于正式交付。
+- 下一步：对保存真实失败报告离线重放；预算与标签门解除后按同一冻结候选真实复测。
+- 变更记录：2026-10-26 新增，保留历史 overlap 失败分母。
+
+## FL-D310 Replay 使用原文判断产物、占位污染站点及 sibling 借站点（2026-10-26）
+
+- 发现日期：2026-10-26，Replay agent 审查 effects、Obligation Ledger 和 candidate retirement。
+- 问题与影响：G02/G04 的 `after_has_expected` 用 source quote 判断类别组等价，可能把实际产物缺类/增类错误判为已满足；`absent/not_applicable` 占位参与真实 site 投影会制造 `OPERATION_SITE_DUPLICATE`；候选退役先合并 sibling proof sites，可能把其他 operation 在不同站点的完成借给当前未完成目标。
+- 处理方法：类别组等价读取实际 artifact；占位不参与真实 site projection，缺证明仍 OPEN；每个 operation 分别证明 candidate 的全部 physical sites。
+- 证据与验证：Replay 原提交 `ddbec744`，主线 `4fa137d`；新增回归在原 `1131a8c` 复现 12 场失败，修复后新增最小集 **18 passed**、定向 **291 passed**、该线全量 **1532 passed / 80 skipped**；主线合并全量 **1564 passed / 52 skipped**。
+- 状态：**已实施并通过防错回归，真实合同复测未完成**。保持 fail closed；不得把该修复当作完整率提升证据。
+- 下一步：核对真实 D04 G03 报告及整合同 obligation，保持错误产物阻断；预算有效后真实复验。
+- 变更记录：2026-10-26 新增，三个同一 Replay 投影审查发现集中记录于本条。
+
+## FL-D311 incomplete 的 ZIP 与 V2 选择文件被呈现为最终文件（2026-10-26）
+
+- 发现日期：2026-10-26，Delivery agent 审查 ZIP、任务原因码、V2 结果页。
+- 问题与影响：`working_final` 与 incomplete 人工选择版原先可能归入 ZIP 最终版目录，V2 任务交付状态依赖调度状态推断，且未纳入顶层 Recall unresolved 原因，用户可能误把处理成功/选择版当完整合同。
+- 处理方法：工作文件/未完成选择版归入“工作文件（未完成）”；V2 展示未完成说明和工作文件下载，目标读取 status/state；任务使用后端 delivery_counts，加入顶层 unresolved code；单独展示 complete_with_exceptions。
+- 证据与验证：Delivery 原提交 `f727cd6`，主线 `18b4183`；后端 **65 passed**，前端 typecheck/lint/build、**14 tests passed**；合并主线全量 **1564 passed / 52 skipped**。
+- 状态：**已实施并通过回归，部署后真实 UI/下载复验待完成**。store 正式产物校验门未修改，incomplete 不提升状态。
+- 下一步：候选发布后验证登录、工作文件 ZIP、授权/跨账号下载、Review selected 与报告/哈希。
+- 变更记录：2026-10-26 新增，历史工作文件不回写为最终合同。
 
 本次补录来自原件阅读、用户讨论及三 agent 交叉审查。除明确说明外，下列处理方法属于设计结论或建议，尚未实施、评测或发布。记录不是问题已解决的证明，也不替代专题报告。
 

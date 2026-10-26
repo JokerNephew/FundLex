@@ -1,13 +1,22 @@
 # FundLex 当前断点（ACTIVE_HANDOFF）
 
-## 当前工作区快照（2026-10-26，继续接续）
+## 当前工作区快照（2026-10-26，incomplete 修复接续）
 
-- 当前分支为 `refactor/backend-engine-finalization`，HEAD `5135f5a`，相对 origin ahead 23；工作区干净，尚未 push。已提交代码块为 `0466712`（API 稳定错误码、报告边界、Review/下载响应）、`cdf0699`（任务状态契约、V1/V2/Feishu UI、设置入口）、`03eb30d`（Feishu OAuth/store 与测试）、`75925d4`（集中记录、断点、审计和接入文档）和 `5135f5a`（clean candidate 验证快照更新）。
-- 本轮 OAuth/store、入口/浏览器回归和文档改动已按功能块提交；未覆盖或回退主工作区已有 Compare、前端和引擎改动。当前 clean 工作区尚未 push 或部署。
+- 当前分支为 `refactor/backend-engine-finalization`，HEAD `1131a8cd74b9b228bef103fcb0dbd6668a907133`；工作区保留既有 dirty 修改和 `docs/INCOMPLETE_REMEDIATION_PLAN_20261026.md`，尚未 push。P0 基线快照保存在 `/tmp/opencode/incomplete-remediation-20261026/`，包含 dirty patch、部署哈希、服务状态和模型账本摘要。
+- 本轮只从该 HEAD 创建独立 worktree：Engine、Replay、Evaluation、Delivery 四条审查线并行工作；主工作区不回退既有修改，集中问题记录由主 agent 统一维护。当前尚未合并 agent 代码、部署本轮候选或新增真实模型调用。
 - 本轮验证：完整 Python 回归 **1542 passed / 52 skipped / 3 warnings / 358.46s**；后端 OAuth/Feishu/API 定向 **60 passed / 1 warning**；V1/V2 浏览器 **40 passed**；前端锁文件重建后 Vitest **4.1.12，14 passed**，typecheck、lint、build 和 `npm audit`（0 vulnerabilities）通过；`.venv/bin/python -m compileall -q fundlex`、`node --check frontend/app.js`、`node --check frontend/compare.js`、`git diff --check` 通过。系统 `python3` 为 3.6，不能用于本项目编译结论。
 - OAuth 当前实现：state 仅保存 SHA-256、默认 10 分钟、成功/拒绝回调均一次性消费；成功回调的真实飞书扫码仍未验证。回归补充了拒绝后 state replay 失败；未调用生产真实模型、未部署本轮 dirty 工作区。
 - 集中记录：原 FL-D294 保留为 Feishu 详情深链；任务状态条目已更正为 FL-D299。集中记录仍存在更早历史标题重复，未在本轮擅自重排旧编号；新增编号必须先全文查重。
 - 项目结论继续为 **NO-GO**：D01–D20 固定评测 gate、holdout、G06 授权、Compare 复杂结构、真实 MySQL 8 并发、真实 OAuth 回调及完整用户端到端交付尚未闭合。下一步是以当前 clean HEAD 重新核对候选快照和部署边界，再继续 Compare/评测/真实验收；未经授权不部署或调用生产真实模型。
+- `incomplete` 修复执行计划见 [`INCOMPLETE_REMEDIATION_PLAN_20261026.md`](INCOMPLETE_REMEDIATION_PLAN_20261026.md)。基线账本摘要为 27,327 requests、约 `$22.2562593`、reserved 0；后续真实调用必须继续使用共享生产账本并登记运行证据。
+- 已处理 FL-D303：仓库规范发布脚本已安装到 `/usr/local/sbin/fundlex-publish`，安装前备份位于 `/tmp/opencode/incomplete-remediation-20261026/`；root 发布器与仓库脚本 SHA-256 均为 `1ebe1b52...`，`bash -n` 通过；源/部署 `fundlex.api` 导入预检使用临时数据目录并移除生产数据库环境变量，已实际通过。未因该操作重启或发布业务代码，候选发布仍需执行三服务、构建哈希和 capabilities 验证。
+- incomplete 修复基线回归：operation 闭环、Claim Replay 授权边界、复合切片、交付摘要和 Review 门禁共 **97 passed / 1 warning**；这是离线防错证据，不能替代真实模型、实际合同、业务复核和授权下载。评测线另确认当前固定 D01–D20 gate 仍 0/20，账本超历史 cap（FL-D304），D06 冻结标签错误（FL-D305）。
+- 本轮已合入 Engine overlap（`165dbdf`、`a872628`）、Replay/ledger projection（`4fa137d`）和 Delivery incomplete 展示（`18b4183`）；各线均未调用真实模型。Replay 全量回归为 **1532 passed / 80 skipped / 3 warnings**，Delivery 定向后端 **65 passed**、前端 14 tests/build 通过；主线合并后的完整回归仍待执行。
+- 合并后主线完整 Python 回归：**1564 passed / 52 skipped / 3 warnings / 370.31s**；前端 typecheck、lint、Vitest **14 passed**、production build 通过；compileall、Node `--check`、shell `bash -n`、`git diff --check` 通过。该结果只证明代码回归，不替代真实模型合同评测或用户交付。
+- 合并候选浏览器回归：V1/V2 **40 passed / 81.21s**。该套件使用项目浏览器测试环境，证明页面/状态契约回归，不替代真实模型和正式云端交付。
+- 发布器 staging 事务与回滚隔离测试：**7 passed**；root 发布器与部署目录脚本 SHA-256 均为 `a873e4b4...`，四服务 active。发布器测试没有执行真实同步或重启。
+- 当前生产运行态：API、Recall Worker、Compare Worker、Feishu 均 active；Compare 曾在 13:23:51 因并发 schema migration 重启失败、13:23:55 恢复，登记 FL-D308。误执行截断发布器片段导致 dirty 快照短暂部署，登记 FL-D307；该部署不计正式候选证据。
+- 2026-10-26 生产库诊断：MySQL 中共有 666 份合同，335 份（50.3%）为 `succeeded/incomplete`；595 个含合同任务中 318 个至少含一份 incomplete、307 个全部 incomplete。每份合同首要阻塞原因：目标定位/规划/生成执行 212、独立业务复核 86、Claim Replay 25、其他 12。详见集中记录 FL-D301。诊断期间曾有生产数据库连接串旧密码出现在 shell 输出，已按 FL-D302 轮换；配置备份为 `/etc/fundlex-recall.env.bak-20261026-db-rotation`，API/Worker 重启后 active，未记录新密码。
 
 ## FL-D291 设置入口修复、飞书主链路与 OAuth 扫码（2026-10-26 11:30）
 
@@ -23,6 +32,8 @@
 - 第二个飞书任务 `8da0ef68f2c8465986917a66e7835bf0` 已终态：D17 **complete**，D04 **incomplete**。D17 final SHA `f320b61c3fc42cb41c3c0fc489f85850c04a6ba597c387179f505bc29caf2b87`、redline `e136a0da32bd94977e7869dc90a6371fa96b9a27e9be2b780aa578db91060e24`、report `2930610c96b786a09c463e26ff50c4fd9cd6933736aedc7696e9bf9be4b9a8c0`；16 edits、16 insertions/16 deletions，Claim Replay true，delivery gate unresolved 0；浏览器登录后深链打开任务并下载 final/redline/report，哈希与 API/报告一致。D04 因 G03 `CLAIM_REPLAY_FAILED` 为 incomplete，只有 working 文件。证据 `verification-task2.json`、`browser-verification.json`、`task2-detail.png`。
 - 飞书完成卡片已实测：任务 1 `incomplete:2`，任务 2 `incomplete:1 / complete:1`，均带深链。第一个任务 D01/D02 两份均 incomplete，不能当最终合同。整体结论仍为 **NO-GO**，飞书主链路通过不等于引擎全部合同通过。
 - 全量回归首次为 **1 failed / 1518 passed / 49 skipped / 3 warnings / 401.37s**，唯一失败 `test_app_rejects_oversized_content_length_before_multipart_parse` 单独运行通过（413），记录为 FL-D297；同源码第二次全量为 **1519 passed / 50 skipped / 3 warnings / 497.31s**，首次失败未复现，按顺序/环境 flake 记录。浏览器套件另修正一处 `time.sleep` 阻塞 route 事件的测试竞态（FL-D298），最终 V1+V2 为 **39 passed / 68.00s**。产品代码未因这两个测试问题改动。
+- 二维码“糊”已修复（FL-D300）：根因是 65×65 模块被 240px SVG + 抗锯齿缩放；现生产页面 SVG 为 **325×325**（5px/模块）、`shape-rendering="crispEdges"`，容器 351px；另有 650×650 PNG 回退（约 1.5KB）。真实生产页面检查页面错误/控制台错误 0；临时检查账号/state 已清理。旧页面需强制刷新以加载新 app.js/CSS。
+- **FL-D299 发布事故已恢复**：选择性部署工作区 `api.py` 时带入未发布的 `manifest_fingerprint` 导入，与生产旧 `selective.py` 不匹配，API 两个 worker 启动失败约数分钟；已从 `/tmp/opencode/fundlex-qr-sharp-20261026-121725/production-before.tgz` 恢复 API，只补 `qr_png`。当前生产 `api.py` SHA `8048c11d54a896a75d8edb70ac43e1dc220e8a2e1ae3ed392cd9a71f7daf1fbf`，工作区 `api.py` SHA `81bb09ef...`，生产/工作区 `selective.py` 也不一致。**下一次发布前必须先对齐 api.py/selective.py 依赖并整仓验证，禁止再只复制 api.py。** 当前 API/Worker/Feishu 均 active。
 - 工作区仍 dirty，HEAD 为 `7cb25d4e27c0cc62408cf92587956fd4150d4d79`；本轮新增修改为 `fundlex/api.py`、`fundlex/integrations/store.py`、`fundlex/integrations/feishu/oauth.py`、`frontend/app.js`、`frontend/app.css`、`frontend/compare.html`、V2 设置/类型/API、测试及文档。未 commit/push。飞书 OAuth 真实回调仍未验证；D17 完整交付已验证，但 D04/D01/D02 不完整，整体 FL-D290 仍不能标记为全量验收通过。
 
 ## FL-D290 飞书应用服务器准备断点（2026-10-26）
