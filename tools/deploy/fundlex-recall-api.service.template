@@ -1,0 +1,27 @@
+[Unit]
+Description=FundLex recall-first API
+After=network-online.target mysqld.service
+Wants=network-online.target mysqld.service
+
+[Service]
+User=fundlex
+Group=fundlex
+WorkingDirectory=/opt/fundlex-recall-first
+EnvironmentFile=/etc/fundlex-recall.env
+ExecStart=/opt/fundlex-recall-first/.venv/bin/uvicorn fundlex.api:app --host 127.0.0.1 --port 8010 --workers 2
+Restart=always
+RestartSec=3
+
+# The application tree is executable/read-only. Runtime state, SQLite WAL
+# files, uploaded objects, generated documents, checkpoints and traces live
+# below FUNDLEX_DATA_DIR and are the only persistent write boundary.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/fundlex
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

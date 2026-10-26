@@ -1,7 +1,7 @@
 [Unit]
 Description=FundLex contract compare worker
-After=network.target mysqld.service
-Wants=mysqld.service
+After=network-online.target mysqld.service
+Wants=network-online.target mysqld.service
 
 [Service]
 User=fundlex
@@ -14,6 +14,17 @@ EnvironmentFile=/etc/fundlex-recall.env
 ExecStart=/opt/fundlex-recall-first/.venv/bin/python -X utf8 -m fundlex.compare.worker
 Restart=always
 RestartSec=3
+
+# Compare shares the API's database and object store, but its process is
+# independently sandboxed. The deployment tree remains read-only; all
+# uploaded inputs and generated compare results are under /var/lib/fundlex.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/fundlex
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+UMask=0077
 
 [Install]
 WantedBy=multi-user.target

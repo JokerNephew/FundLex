@@ -1,0 +1,26 @@
+[Unit]
+Description=FundLex recall-first contract worker
+After=network-online.target mysqld.service
+Wants=network-online.target mysqld.service
+
+[Service]
+User=fundlex
+Group=fundlex
+WorkingDirectory=/opt/fundlex-recall-first
+EnvironmentFile=/etc/fundlex-recall.env
+ExecStart=/opt/fundlex-recall-first/.venv/bin/python -X utf8 -m fundlex.jobs
+Restart=always
+RestartSec=3
+
+# The worker writes only the shared application data root. Temporary model
+# and DOCX workspaces are private to this service through PrivateTmp.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/fundlex
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target
