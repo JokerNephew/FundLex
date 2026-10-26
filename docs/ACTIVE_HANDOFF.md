@@ -2,7 +2,7 @@
 
 ## 当前工作区快照（2026-10-26，继续接续）
 
-- 当前分支为 `refactor/backend-engine-finalization`，HEAD `75925d4dd704085e7f010e5d672022a759d3928d`，相对 origin ahead 22；工作区干净，尚未 push。已提交代码块为 `0466712`（API 稳定错误码、报告边界、Review/下载响应）、`cdf0699`（任务状态契约、V1/V2/Feishu UI、设置入口）、`03eb30d`（Feishu OAuth/store 与测试）和 `75925d4`（集中记录、断点、审计和接入文档）。
+- 当前分支为 `refactor/backend-engine-finalization`，HEAD `5135f5a`，相对 origin ahead 23；工作区干净，尚未 push。已提交代码块为 `0466712`（API 稳定错误码、报告边界、Review/下载响应）、`cdf0699`（任务状态契约、V1/V2/Feishu UI、设置入口）、`03eb30d`（Feishu OAuth/store 与测试）、`75925d4`（集中记录、断点、审计和接入文档）和 `5135f5a`（clean candidate 验证快照更新）。
 - 本轮 OAuth/store、入口/浏览器回归和文档改动已按功能块提交；未覆盖或回退主工作区已有 Compare、前端和引擎改动。当前 clean 工作区尚未 push 或部署。
 - 本轮验证：完整 Python 回归 **1542 passed / 52 skipped / 3 warnings / 358.46s**；后端 OAuth/Feishu/API 定向 **60 passed / 1 warning**；V1/V2 浏览器 **40 passed**；前端锁文件重建后 Vitest **4.1.12，14 passed**，typecheck、lint、build 和 `npm audit`（0 vulnerabilities）通过；`.venv/bin/python -m compileall -q fundlex`、`node --check frontend/app.js`、`node --check frontend/compare.js`、`git diff --check` 通过。系统 `python3` 为 3.6，不能用于本项目编译结论。
 - OAuth 当前实现：state 仅保存 SHA-256、默认 10 分钟、成功/拒绝回调均一次性消费；成功回调的真实飞书扫码仍未验证。回归补充了拒绝后 state replay 失败；未调用生产真实模型、未部署本轮 dirty 工作区。
