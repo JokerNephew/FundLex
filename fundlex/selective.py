@@ -27,6 +27,8 @@ corrupt the primary delivery artifacts.
 from __future__ import annotations
 
 from dataclasses import dataclass
+import hashlib
+import json
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 from typing import Any, Iterable, Mapping, Sequence
@@ -60,6 +62,122 @@ class SelectionResult:
     absent: tuple[int, ...]
     path: str
     sha256: str
+
+
+@dataclass(frozen=True)
+class SelectionVerdict:
+    """One canonical verdict for every edit pair in a redline manifest."""
+
+    manifest_hash: str
+    decision_hash: str
+    decisions: dict[int, str]
+    accepted: tuple[int, ...]
+    rejected: tuple[int, ...]
+
+
+def manifest_fingerprint(manifests: Sequence[Mapping[str, Any]]) -> str:
+    """Return the stable identity of the redline manifest presented to a user."""
+    canonical = [{key: item.get(key, "") for key in
+                  ("del_id", "ins_id", "location", "expected_old_text", "replacement")}
+                 for item in manifests]
+    payload = json.dumps(canonical, ensure_ascii=False, sort_keys=True,
+                         separators=(",", ":")).encode("utf-8")
+    return hashlib.sha256(payload).hexdigest()
+
+
+def _decision_items(decisions: Mapping[Any, Any] | Iterable[Any] | None) -> list[tuple[Any, Any]]:
+    """Turn all supported request shapes into ordered id/verdict pairs."""
+    if decisions is None:
+        return []
+    if isinstance(decisions, Mapping) and ("accept" in decisions or "reject" in decisions):
+        result = []
+        for verdict in (ACCEPT, REJECT):
+            ids = decisions.get(verdict, ())
+            if isinstance(ids, (str, bytes)) or not isinstance(ids, Iterable):
+                raise DocxError("SELECTION_INVALID_DECISION")
+            result.extend((raw, verdict) for raw in ids)
+        return result
+    if isinstance(decisions, Mapping):
+        return list(decisions.items())
+    if isinstance(decisions, (str, bytes)) or not isinstance(decisions, Iterable):
+        raise DocxError("SELECTION_INVALID_DECISION")
+    result = []
+    for item in decisions:
+        if not isinstance(item, Mapping) or "del_id" not in item or "decision" not in item:
+            raise DocxError("SELECTION_INVALID_DECISION")
+        result.append((item["del_id"], item["decision"]))
+    return result
+
+
+def resolve_selection(manifests: Sequence[Mapping[str, Any]],
+                      decisions: Mapping[Any, Any] | Iterable[Any] | None,
+                      *, client_ids: bool = False) -> SelectionVerdict:
+    """Validate and resolve one request against the current manifest.
+
+    The API accepts only odd ``del_id`` values.  Internally, a verdict is spread
+    to both members of its ``del_id``/``ins_id`` pair so final and selected
+    redline artifacts always use exactly the same decision.
+    """
+    by_id: dict[int, tuple[int, int]] = {}
+    pairs: list[tuple[int, int]] = []
+    for item in manifests:
+        try:
+            del_id, ins_id = int(item["del_id"]), int(item["ins_id"])
+        except (KeyError, TypeError, ValueError):
+            raise DocxError("REVISION_MANIFEST_INVALID") from None
+        if del_id % 2 != 1 or ins_id != del_id + 1:
+            raise DocxError("REVISION_MANIFEST_INVALID")
+        if del_id in by_id or ins_id in by_id:
+            raise DocxError("REVISION_MANIFEST_INVALID")
+        pair = (del_id, ins_id)
+        pairs.append(pair)
+        by_id[del_id] = pair
+        by_id[ins_id] = pair
+
+    named: dict[int, str] = {}
+    for raw_id, raw_verdict in _decision_items(decisions):
+        if isinstance(raw_id, bool):
+            raise DocxError("SELECTION_INVALID_REVISION_ID")
+        try:
+            revision_id = int(raw_id)
+        except (TypeError, ValueError):
+            raise DocxError("SELECTION_INVALID_REVISION_ID") from None
+        verdict = str(raw_verdict).strip().lower()
+        if verdict not in {ACCEPT, REJECT}:
+            raise DocxError("SELECTION_INVALID_VERDICT")
+        if revision_id not in by_id:
+            raise DocxError("SELECTION_UNKNOWN_REVISION")
+        if client_ids and revision_id % 2 == 0:
+            raise DocxError("SELECTION_INS_ID_NOT_ALLOWED")
+        previous = named.get(revision_id)
+        if previous is not None:
+            if previous == verdict:
+                raise DocxError("SELECTION_DUPLICATE_DECISION")
+            raise DocxError("SELECTION_CONFLICTING_DECISIONS")
+        named[revision_id] = verdict
+
+    resolved: dict[int, str] = {}
+    accepted: list[int] = []
+    rejected: list[int] = []
+    for del_id, ins_id in pairs:
+        verdicts = {named[rid] for rid in (del_id, ins_id) if rid in named}
+        if len(verdicts) > 1:
+            raise DocxError("SELECTION_CONFLICTING_DECISIONS")
+        verdict = next(iter(verdicts), ACCEPT)
+        resolved[del_id] = verdict
+        resolved[ins_id] = verdict
+        (accepted if verdict == ACCEPT else rejected).append(del_id)
+    accepted.sort()
+    rejected.sort()
+    manifest_hash = manifest_fingerprint(manifests)
+    decision_payload = [{"del_id": del_id, "ins_id": ins_id, "decision": resolved[del_id]}
+                        for del_id, ins_id in pairs]
+    decision_hash = hashlib.sha256(json.dumps(
+        {"manifest_hash": manifest_hash, "decisions": decision_payload},
+        ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
+    return SelectionVerdict(manifest_hash=manifest_hash, decision_hash=decision_hash,
+                            decisions=resolved, accepted=tuple(accepted),
+                            rejected=tuple(rejected))
 
 
 def _manifests_from_report(report: Mapping[str, Any]) -> list[dict[str, Any]]:
@@ -188,20 +306,17 @@ def _explicit_verdicts(manifests: Sequence[Mapping[str, Any]],
 
 def apply_decisions(root: etree._Element, manifests: Sequence[Mapping[str, Any]],
                     decisions: Mapping[Any, Any] | Iterable[Any]) -> tuple[int, ...]:
-    """Apply decisions in place and return the ids that were not found.
+    """Apply one validated decision set in place.
 
     "Accept all" is the default: ids the caller never mentions are accepted, and
     every verdict is spread across the whole edit pair (see
     :func:`_explicit_verdicts`) so a rejection addresses both halves.
     """
-    per_id: dict[str, str] = {}
-    for item in manifests:
-        for key in ("del_id", "ins_id"):
-            rid = _as_int(item.get(key))
-            if rid is not None:
-                per_id[str(rid)] = ACCEPT
-    per_id.update({str(rid): verdict
-                   for rid, verdict in _explicit_verdicts(manifests, decisions).items()})
+    # Validate against the current manifest before touching the XML.  Unknown
+    # ids used to be silently ignored here, which made a stale client appear to
+    # succeed while producing a different document than it requested.
+    verdict = resolve_selection(manifests, decisions)
+    per_id = {str(rid): value for rid, value in verdict.decisions.items()}
     seen: set[str] = set()
     for node in list(root.iter()):
         if node.tag not in {Q("ins"), Q("del")}:
@@ -285,13 +400,10 @@ def generate_selected_artifact(redline: str | Path, target: str | Path,
     root = _xml(parts[DOCUMENT], limits)
     # Fail closed if the artifact does not match the expected manifest exactly.
     _validate_revision_manifest(root, manifests)
-    absent = apply_decisions(root, manifests, decisions)
+    verdict = resolve_selection(manifests, decisions)
+    absent = apply_decisions(root, manifests, verdict.decisions)
     document_xml = etree.tostring(root, encoding="UTF-8", xml_declaration=True)
-    verdicts = _normalise_decisions(decisions)
-    accepted = tuple(sorted(2 * (i + 1) - 1 for i, _ in enumerate(manifests)
-                            if verdicts.get(2 * (i + 1) - 1, ACCEPT) == ACCEPT))
-    rejected = tuple(sorted(2 * (i + 1) - 1 for i, _ in enumerate(manifests)
-                            if verdicts.get(2 * (i + 1) - 1, ACCEPT) == REJECT))
+    accepted, rejected = verdict.accepted, verdict.rejected
     try:
         _write_package(target, parts, document_xml)
         if verify:
@@ -349,15 +461,16 @@ def generate_selected_redline(redline: str | Path, target: str | Path,
     _validate_package(parts, limits, full=False)
     root = _xml(parts[DOCUMENT], limits)
     _validate_revision_manifest(root, manifests)
-    kept = _keep_accepted_only(root, manifests, decisions)
+    verdict = resolve_selection(manifests, decisions)
+    kept = _keep_accepted_only(root, manifests, verdict.decisions)
     document_xml = etree.tostring(root, encoding="UTF-8", xml_declaration=True)
     try:
         _write_package(target, parts, document_xml)
         # Independent re-open: only the accepted revisions may remain.
         if _managed_ids(_xml(_read_redline_parts(target, limits)[DOCUMENT], limits)) != kept:
             raise DocxError("SELECTED_REDLINE_MISMATCH")
-        return SelectionResult(accepted=tuple(sorted(int(rid) for rid in kept)),
-                               rejected=(), absent=(),
+        return SelectionResult(accepted=verdict.accepted, rejected=verdict.rejected,
+                               absent=(),
                                path=str(target), sha256=_sha(target.read_bytes()))
     except Exception:
         target.unlink(missing_ok=True)
