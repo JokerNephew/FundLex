@@ -108,30 +108,34 @@ def register_compare_routes(application, compare_store: CompareStore, user_depen
                 or any(not isinstance(i, str) or not 1 <= len(i) <= 128 for i in ids) or len(set(ids)) != len(ids)):
             raise HTTPException(422, "invalid client_ids")
         uploads, total = [], 0
-        for cid, upload in zip(ids, files):
-            data = await upload.read(max_upload_bytes + 1)
-            if total + len(data) > max_batch_bytes:
-                # Reject as soon as the request budget is crossed; do not keep
-                # reading the remaining multipart parts into memory.
-                raise HTTPException(413, "COMPARE_UPLOAD_REJECTED")
-            total += len(data)
-            name = Path((upload.filename or "").replace("\\", "/")).name
-            error = None
-            try:
-                validate_upload(name, data)
-            except HTTPException as exc:
-                error = "COMPARE_INVALID_DOCX" if exc.status_code == 415 else "COMPARE_UPLOAD_REJECTED"
-            if error is None:
-                # Enforce the same safe OOXML reader used by the worker. A ZIP
-                # bearing a document.xml member alone is not a valid DOCX.
-                from .parser import parse_compare_document
-                from ..docx import DocxError
+        try:
+            for cid, upload in zip(ids, files):
+                data = await upload.read(max_upload_bytes + 1)
+                if total + len(data) > max_batch_bytes:
+                    # Reject as soon as the request budget is crossed; do not keep
+                    # reading the remaining multipart parts into memory.
+                    raise HTTPException(413, "COMPARE_UPLOAD_REJECTED")
+                total += len(data)
+                name = Path((upload.filename or "").replace("\\", "/")).name
+                error = None
                 try:
-                    parse_compare_document(data, filename=name)
-                except (DocxError, ValueError, OSError, KeyError):
-                    error = "COMPARE_INVALID_DOCX"
-            uploads.append({"client_id": cid, "name": name, "data": data, "error_code": error})
-        return call(compare_store.upload, user, task_id, uploads)
+                    validate_upload(name, data)
+                except HTTPException as exc:
+                    error = "COMPARE_INVALID_DOCX" if exc.status_code == 415 else "COMPARE_UPLOAD_REJECTED"
+                if error is None:
+                    # Enforce the same safe OOXML reader used by the worker. A ZIP
+                    # bearing a document.xml member alone is not a valid DOCX.
+                    from .parser import parse_compare_document
+                    from ..docx import DocxError
+                    try:
+                        parse_compare_document(data, filename=name)
+                    except (DocxError, ValueError, OSError, KeyError):
+                        error = "COMPARE_INVALID_DOCX"
+                uploads.append({"client_id": cid, "name": name, "data": data, "error_code": error})
+            return call(compare_store.upload, user, task_id, uploads)
+        finally:
+            for upload in files:
+                await upload.close()
 
     @application.post("/api/compare/tasks/{task_id}/seal")
     def seal_compare_task(task_id: str, user: str = Depends(user_dependency)):

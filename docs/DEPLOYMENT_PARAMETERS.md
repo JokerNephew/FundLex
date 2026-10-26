@@ -34,6 +34,26 @@ API 限制在导入 `fundlex.api` 时读取；变更环境后须重启 API 进�
 | `FUNDLEX_MAX_PART_BYTES` | 33554432（单 ZIP 部件 32 MiB） |
 | `FUNDLEX_MAX_COMPRESSION_RATIO` | 100 |
 
+请求级上传门禁由 `fundlex.upload_guard` 读取，默认值如下。普通任务、Compare 和指引上传均受门禁约束；`tools/deploy/nginx-upload-limits.conf.template` 提供反代侧的对应配置。修改应用环境变量后必须重启 API，并保持 Nginx 的请求上限不低于 multipart 开销且不高于应用请求预算。
+
+| 环境变量 | 默认值 |
+|---|---:|
+| `FUNDLEX_UPLOAD_REQUEST_BYTES` | 54525952（52 MiB） |
+| `FUNDLEX_GUIDE_REQUEST_BYTES` | 27262976（26 MiB） |
+| `FUNDLEX_UPLOAD_CONCURRENCY_PER_IP` | 2 |
+| `FUNDLEX_UPLOAD_CONCURRENCY_GLOBAL` | 8 |
+| `FUNDLEX_UPLOAD_REQUESTS_PER_MINUTE` | 12（另有 burst 4） |
+| `FUNDLEX_UPLOAD_BURST` | 4 |
+| `FUNDLEX_UPLOAD_RECEIVE_TIMEOUT_SECONDS` | 30 |
+| `FUNDLEX_UPLOAD_TIMEOUT_SECONDS` | 180 |
+| `FUNDLEX_UPLOAD_MIN_RATE_BYTES` | 1024 |
+| `FUNDLEX_UPLOAD_MIN_RATE_GRACE_SECONDS` | 5 |
+| `FUNDLEX_MULTIPART_MAX_PARTS` | 32（安装时至少为文件上限 + 字段上限） |
+| `FUNDLEX_MULTIPART_MAX_FIELDS` | 8 |
+| `FUNDLEX_MULTIPART_MAX_HEADERS` | 16 |
+| `FUNDLEX_MULTIPART_MAX_HEADER_BYTES` | 16384 |
+| `FUNDLEX_MULTIPART_MAX_FIELD_BYTES` | 65536 |
+
 只接收 DOCX，拒绝重复 ZIP 成员、缺少必要包部件、加密成员以及超限内容。解析器另有 `ZipLimits` 构造参数：文件 64 MiB、展开 256 MiB、部件 64 MiB、压缩比 200、3000 个成员、XML 深度 128、节点 200 万。直接调用解析器不会自动继承 API 的更严格环境限制。
 
 ## 模型、请求和预算

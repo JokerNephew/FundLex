@@ -1,0 +1,50 @@
+# FL-D288 upload guard template.
+#
+# Put the *_zone directives in the nginx http{} block.  Put the location
+# directives in the FundLex server{} block, before the generic /api/ proxy.
+# Values mirror the application defaults and must be changed together with
+# FUNDLEX_* variables in the service EnvironmentFile.
+
+# http{}:
+limit_req_zone $binary_remote_addr zone=fundlex_upload_rate:10m rate=12r/m;
+limit_conn_zone $binary_remote_addr zone=fundlex_upload_conn:10m;
+
+# server{}:
+location = /api/guides {
+    client_max_body_size 26m;
+    client_body_timeout 30s;
+    client_header_timeout 15s;
+    send_timeout 180s;
+
+    limit_req zone=fundlex_upload_rate burst=4 nodelay;
+    limit_conn fundlex_upload_conn 2;
+    limit_req_status 429;
+    limit_conn_status 429;
+
+    proxy_request_buffering on;
+    proxy_buffering off;
+    proxy_connect_timeout 10s;
+    proxy_send_timeout 30s;
+    proxy_read_timeout 180s;
+    proxy_pass http://127.0.0.1:8010;
+}
+
+location ~ ^/api/(tasks/[^/]+/uploads|compare/tasks/[^/]+/uploads)$ {
+    client_max_body_size 52m;
+    client_body_timeout 30s;
+    client_header_timeout 15s;
+    send_timeout 180s;
+
+    # Nginx rejects excess requests before proxy buffering or FastAPI parsing.
+    limit_req zone=fundlex_upload_rate burst=4 nodelay;
+    limit_conn fundlex_upload_conn 2;
+    limit_req_status 429;
+    limit_conn_status 429;
+
+    proxy_request_buffering on;
+    proxy_buffering off;
+    proxy_connect_timeout 10s;
+    proxy_send_timeout 30s;
+    proxy_read_timeout 180s;
+    proxy_pass http://127.0.0.1:8010;
+}
