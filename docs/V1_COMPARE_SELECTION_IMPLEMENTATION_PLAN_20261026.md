@@ -40,12 +40,12 @@
 
 | 提交 | 内容 | 状态 |
 | --- | --- | --- |
-| `docs(compare): add selection implementation plan` | 本方案和设计交接 | 进行中 |
-| `feat(compare): add selection contract` | 选择状态、校验、哈希和纯逻辑 | 已完成，待提交 |
-| `feat(compare): generate selected docx` | OOXML 选择版/修订痕迹版生成与验证 | 已完成，待提交 |
-| `feat(compare): persist selection drafts` | 草稿、epoch、产物和下载 API | 实现完成，待提交 |
-| `feat(v1): add compare selection reader` | V1 阅读器选择控件、保存、生成、下载 | 待开始 |
-| `test(compare): close selection delivery gates` | API、DOCX、浏览器和真实路径验证材料 | 待开始 |
+| `docs(compare): add selection implementation plan` | 本方案和设计交接 | 已完成（`686ce1b`） |
+| `feat(compare): add selection contract` | 选择状态、校验、哈希和纯逻辑 | 已完成（`2ce2608`） |
+| `feat(compare): generate selected docx` | OOXML 选择版/修订痕迹版生成与验证 | 已完成（`320717a`） |
+| `feat(compare): persist selection drafts` | 草稿、epoch、产物和下载 API | 已完成（原提交 `2dd7f3b`，发布分支合并为 `7252e2c`） |
+| `feat(compare): add V1 selection reader` | V1 阅读器选择控件、保存、生成、下载 | 已完成（原提交 `7207a30`，发布分支合并为 `c34b68e`） |
+| `docs(compare): close V1 selection handoff` | 验收记录、发布断点和集中问题 | 已完成（原提交 `f778818`，发布分支合并为 `8b3c387`） |
 
 ## 2. 阶段一：选择数据契约与可执行能力分析
 
@@ -199,11 +199,11 @@
 
 | 阶段 | 状态 | 最近证据 | 下一动作 |
 | --- | --- | --- | --- |
-| 0 基线/分支/方案 | 已完成 | 分支 `codex/v1-compare-selection`；方案提交 `dd52a1d` | 开始阶段二 |
-| 1 选择契约 | 已完成，待提交 | `.venv/bin/pytest -q tests/test_compare_selection.py tests/test_compare_algorithm.py tests/test_compare_api.py`：34 passed；选择模块与原有 Compare 回归共同通过 | 提交 selection contract，再开始阶段二 |
-| 2 DOCX 生成器 | 已完成，待提交 | `.venv/bin/pytest -q tests/test_compare_selection_writer.py`：6 passed；真实 DOCX 生成、修订版接受等价和结果复读通过；空侧结构差异 fail closed | 提交 writer，再开始阶段三持久化/API |
-| 3 持久化/API | 已完成 | 阶段三提交 `2dd7f3b`；定向及 Compare 回归通过，覆盖草稿初始化、绑定与 epoch 冲突、持久化恢复、生成幂等、idempotency 冲突、旧版本 stale、owner 下载隔离、DOCX/报告哈希和篡改草稿 fail closed。 | 在完整应用和 MySQL 环境补做相应验证 |
-| 4 V1 阅读器 | 已完成 | 阶段四提交 `7207a30`；`node --check frontend/compare.js`、`node --check frontend/app.js`、`git diff --check` 通过；V1 selection browser **6 passed**（390/768/1440 布局、待选择阻断、刷新恢复、冲突保留/重试、迟到生成响应隔离、insert/delete 阻断）；既有 V1 workbench **30 passed**；认证真实 DOCX/Worker/下载链路通过并独立复核最终版、修订版、报告与跨账号拒绝。V2 专项当前 **9 failed**，原因是本 worktree 没有 `frontend/dist/` 构建产物，见 FL-D314。 | 在完整 V2 build 环境恢复后重跑 V2/全量浏览器回归并整理最终证据 |
-| 5 全链路/候选 | 未开始 | — | 分层回归、真实用户路径、候选冻结 |
+| 0 基线/分支/方案 | 已完成 | 独立发布分支 `codex/v1-compare-selection-release`，基线 `c46d6e8`，HEAD `8b3c387`；方案提交 `686ce1b` | 已完成 |
+| 1 选择契约 | 已完成 | 提交 `2ce2608`；选择模块与原有 Compare 回归共同通过 | 已完成 |
+| 2 DOCX 生成器 | 已完成 | 提交 `320717a`；真实 DOCX 生成、修订版接受等价和结果复读通过；空侧结构差异 fail closed | 已完成 |
+| 3 持久化/API | 已完成 | 发布分支合并提交 `7252e2c`；覆盖草稿初始化、绑定与 epoch 冲突、持久化恢复、生成幂等、idempotency 冲突、旧版本 stale、owner 下载隔离、DOCX/报告哈希和篡改草稿 fail closed | 已完成；MySQL 8 实连/并发仍按 FL-D268 等保持未验证 |
+| 4 V1 阅读器 | 已完成 | 发布分支合并提交 `c34b68e`；Compare 选择/API/Writer/既有 Compare 回归 **64 passed / 1 warning**；V1 selection browser **6 passed**；`node --check`、`py_compile`、`git diff --check` 通过 | 已完成 |
+| 5 全链路/生产发布 | 已完成（受 FL-D279 限制） | 受控部署 8 个文件、备份和哈希见 `docs/ACTIVE_HANDOFF.md`；真实生产 E2E 完成注册、真实公开合同上传、Worker、选择、刷新恢复、生成、四项下载、哈希复核、跨账号 401/404 和三视口检查。普通合同因 header/footer 覆盖不完整被 fail closed，登记 FL-D279。 | 实现 header/footer/drawing 覆盖或确认仅正文交付口径；不得把单份完整 coverage 合同成功写成普通合同已交付 |
 
-最后更新：2026-10-26，阶段四已提交为 `7207a30`。完整应用导入和 V1 authenticated browser path 已实际通过；Compare 选择不调用模型，测试使用实际 Compare Worker 和真实 DOCX。V2 专项浏览器回归受缺失 `frontend/dist/` 构建产物阻塞（FL-D314）。未配置真实 MySQL，MySQL 迁移/并发保持未验证；完整项目的真实模型合同交付和 Compare 复杂结构覆盖仍不属于本阶段已验收范围。下一条可执行动作是在完整 V2 build 环境恢复后重跑组合浏览器回归。
+最后更新：2026-10-26，发布分支 HEAD `8b3c387` 已推送。受控生产发布只替换 8 个 Compare selection 白名单文件，保留生产 `raise_api_error`、上传文件关闭和设置/OAuth UI；备份、部署哈希、服务状态和真实生产 E2E 证据见 `docs/ACTIVE_HANDOFF.md` 顶部。生产成功路径使用 1 份 coverage complete 的公开真实合同和单处管理费率 `1.20%→1.00%` 受控修订，完成选择、生成、四项下载、哈希和独立 DOCX 复核。普通合同多数含 header/footer 等未支持可见内容，writer 按设计返回 `SELECTION_COVERAGE_INCOMPLETE`，登记为 FL-D279（阻塞/待产品决策）；因此不能宣称普通合同选择版已交付。Compare 选择不调用模型；V2 `frontend/dist/` 仍缺失，V2 回归未作为本阶段证据。MySQL 8 迁移/并发仍未验证。整体项目结论继续 **NO-GO**。

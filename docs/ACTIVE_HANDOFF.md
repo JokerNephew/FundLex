@@ -1,5 +1,20 @@
 # FundLex 当前断点（ACTIVE_HANDOFF）
 
+## V1 Compare selection 生产受控发布与真实验收（2026-10-26）
+
+- 发布分支：`codex/v1-compare-selection-release`，HEAD `8b3c387`，已推送 `origin`。该分支相对 `origin/refactor/backend-engine-finalization` 的 `c46d6e8` 只增加 Compare selection 相关 14 个文件；未推送原开发分支的其他提交。
+- 部署范围：只替换 `/opt/fundlex-recall-first` 的 `fundlex/compare/{__init__.py,api.py,store.py,selection.py,selection_writer.py}` 与 `frontend/compare.{html,js,css}` 共 8 个文件；未调用标准整仓发布器，未同步其他工作区改动。`selection.py` 和 `selection_writer.py` 为新增文件。
+- 生产专有修复保留：`api.py` 继续使用 `raise_api_error` 并在上传结束后 `await upload.close()`；`compare.html` 保留设置入口和 OAuth 二维码 UI，同时加入选择面板。候选经生产虚拟环境导入、字节编译、`node --check` 和真实 `create_app()` schema 初始化检查后，才以同目录临时文件加 `mv` 原子替换。
+- 备份：`/tmp/opencode/fundlex-compare-selection-production-backup-20261026-200031`，含部署前 6 个现有文件的副本、`production-before-sha256.txt` 和部署后 `production-after-sha256.txt`。部署后 8 个文件 SHA 与候选一致；关键值：`api.py f8b5ba27da5e810e000fc1315dcc3018201407351aa1fae459f9ebe9a8565fc1`、`store.py c8cf5f6ee6ecb7307c65f81b8faa898b52b31d859301af84452fb9d620f8712f`、`selection.py 4edb8fccc57538d8b5d25bcb6a823f53c848f9049f89084c675daf2f86cdbdc3`、`selection_writer.py 88b010ac0fc468d0e56c26a902bfe2949505a58622baf5f4187d00b640048f43`、`compare.html 5acc88e4e5b3cdc49b79108ce8d8e0dcce9735a774a87896e3bd018da686cc93`。
+- 服务：2026-10-26 20:01:55/56 只重启 `fundlex-compare-worker.service` 与 `fundlex-recall-api.service`；两者均 `active/running`、`NRestarts=0`，API 监听 127.0.0.1:8010。重启后日志除刻意未认证路由探测的预期 401 外无 error/traceback。
+- 线上入口：`GET /` 200 且包含 `compare-selection-generate`；`GET /static/compare.js` 200 且包含 11 处 `compare-selection`；未认证 `GET /api/compare/pairs/<id>/selection` 和 preview 均为 401；`/api/capabilities` 200。
+- 真实生产 E2E 证据：`/tmp/opencode/compare-selection-prod-e2e/production/e2e-compare-sel-5m0jgfw1n7zg/result.json` 和同目录下载文件。临时账号 `e2e-compare-sel-5m0jgfw1n7zg` 通过真实注册登录 → V1 Compare → 上传公开合同 `广发科技动力股票型证券投资基金基金合同_20230708.docx` 及单处管理费率 `1.20%→1.00%` 的受控修订版 → seal → 生产 Compare Worker → 1 条 modify / coverage complete → 人工选择右侧 → 刷新后选择仍保留 → 生成 v1 → 下载四项产物。
+- E2E 关键结果：任务 `f06b7dcb843240cfa85a944803b4a2e1`、pair `7072777f1c914cf4b97491168c817525`、`generate_http=200`、`generated_status=已生成 v1`。`selected_final` SHA `1bb79a3d2a0e3508fdeffebc8b4329ee02e1ed0186c7445f17c1c76ea51e59a0`、`selected_redline` SHA `5e76e71193fcf84504d1c3593d9a1d7804608e39949210173ae4dd506b71f672`，与报告 `outputs` 完全一致；报告 `checks` 7 项、`limitations=[]`。独立复核：最终版与左侧逐段仅第 763 段变化，采纳修订后的 redline 与最终版逐段一致，两个 DOCX ZIP 完整。
+- 安全与布局：未认证下载 401，第二个临时账号下载 404；1440/768/390 三视口 `documentScrollWidth` 等于视口、无横向溢出；页面错误 0、静态/API 404 为 0。唯一 console error 是刻意未认证下载探测产生的 401，不是页面脚本错误。
+- 清理：两个临时账号均已清理，主账号删除 1 user/1 session/1 compare task/1 pair/1 selection draft/4 selection artifacts 和 7 个对象；二次查询均返回 `username_present: false`。清理脚本已补 selection 表，详见 FL-D278。
+- **限制（重要）**：普通真实合同多数含 header/footer/drawing 等未支持内容，writer 按设计 fail closed，不能生成最终版；本次 514 份公开合同中仅 1 份 coverage complete，生产成功路径使用的是该份合同。该限制登记为 FL-D279，状态为阻塞/待产品决策。整体项目结论继续 **NO-GO**，本次只证明 V1 Compare selection 在完整 coverage 合同上的受控发布和真实交付链路通过，不代表普通合同或完整项目已交付。
+- 集中问题：新增 FL-D277（整树复制失败、白名单受控发布）、FL-D278（清理脚本缺少 selection 表）、FL-D279（真实合同 coverage 阻塞）。下一步：补参数化白名单发布器、把清理逻辑迁入仓库工具，并决定普通合同 header/footer 覆盖方案。
+
 ## FL-D276 生产真实验收结果（2026-10-26）
 
 - D275 候选全量回归为 **1497 passed / 48 skipped / 2 warnings / 324.62s**；发布前备份为 `/tmp/opencode/fundlex-production-d275-backup-20261026/pre-publish-opt-fundlex-recall-first.tgz`，SHA-256 `85723301d210de32ee95463cbd503ebe4f1cd0bf43417b32fae2b6083a30cdd1`。发布后 API/Worker active，`/api/capabilities` HTTP 200，四个关键运行时文件部署哈希与工作区一致。

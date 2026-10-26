@@ -11,6 +11,36 @@
 - 条目字段：发现日期、问题与影响、证据、处理方法、状态与验证、下一步、变更记录。
 - 同一问题更新原条目；重大结论变化注明日期和原因，不覆盖历史。
 
+## FL-D277 V1 Compare selection 受控发布无法整树复制且标准发布器会带入无关改动（2026-10-26）
+
+- 发现日期：2026-10-26，V1 Compare selection 生产受控发布。
+- 问题与影响：标准发布器读取 `/home/opencode/fundlex` 全量 dirty 工作区并同步整棵部署树，会把与 Compare selection 无关的引擎、评测和文档改动一起发布。尝试用 `cp -al /opt/fundlex-recall-first` 构造整树候选时，`.venv` 和 root 所有文件出现 `Operation not permitted`；当时磁盘仅约 1 GB 可用，不能复制完整部署树。
+- 证据：`cp -al` 失败输出指向 `/opt/fundlex-recall-first/.venv/.../__pycache__`；失败发生在 `/tmp/opencode/compare-selection-runtime-20261026-195712` 候选目录，生产目录未被修改、服务未重启。生产 `api.py` 和 `compare.html` 含不在发布基线中的生产修复（`raise_api_error`/`UploadFile.close()`、设置与 OAuth UI），不能直接用发布分支文件覆盖。
+- 处理方法：以 `c46d6e8` 为共同基线、生产文件为当前版本、发布分支为第三方版本，对 `api.py` 和 `compare.html` 做三方合并；只暂存 9 个 Compare selection 白名单文件到生产目录隐藏 staging，使用 root 环境加载 `/etc/fundlex-recall.env` 完成生产应用导入和 selection schema 初始化检查；再以同目录临时文件加 `mv` 逐文件原子替换，只重启 `fundlex-recall-api.service` 与 `fundlex-compare-worker.service`。
+- 状态与验证：**已解决（生产已部署并完成真实用户路径验收）**。备份 `/tmp/opencode/fundlex-compare-selection-production-backup-20261026-200031` 保存 6 个部署前文件及 SHA；部署后 8 个文件 SHA 与候选一致；9 个候选文件包括新增 `selection.py`/`selection_writer.py`；API 与 Compare Worker 均 active、`NRestarts=0`，重启后除刻意未认证探测的 401 外无错误。生产 E2E 使用公开合同和单处管理费率修订，完成上传、Worker、选择、刷新恢复、生成、四项下载和跨账号隔离。
+- 下一步：为该类部分发布增加参数化白名单发布器，固定“备份→staging 导入/迁移→原子替换→限定服务重启→真实入口验证”流程；不得再用整仓发布器发布局部候选。
+- 变更记录：2026-10-26 新增；失败候选树已删除，未将其计作发布证据。
+
+## FL-D278 E2E 清理脚本未覆盖 Compare selection 草稿、产物和对象文件（2026-10-26）
+
+- 发现日期：2026-10-26，准备 V1 Compare selection 生产真实验收时。
+- 问题与影响：`/tmp/opencode/cleanup_fundlex_e2e_user.py` 原实现只删除 `compare_artifacts`、`compare_pair_files`、`compare_pairs` 和 `compare_tasks`，未处理新增的 `compare_selection_drafts`、`compare_selection_artifacts` 及其对象文件。测试账号清理后会残留选择草稿、4 个生成产物和对象文件，污染后续账号/任务计数并留下文件。
+- 证据：生产 E2E 前检查脚本，删除路径没有 `compare_selection_%`；生产账号清理前该 pair 有 1 条草稿和 4 条 selection artifact。首次清理输出 `compare_selection_drafts: 1`、`compare_selection_artifacts: 4`，共删除 7 个对象（2 个来源、4 个选择产物、1 个比较结果）。
+- 处理方法：清理脚本增加 selection artifact `object_key` 收集、两个表计数，并在删除 compare pair 前先删除 selection 草稿和产物；仍限制对象路径必须位于 `FUNDLEX_DATA_DIR/objects` 下。清理后再次运行同一用户名返回 `{"username_present": false}`。
+- 状态与验证：**已解决（当前 `/tmp` 操作脚本已修正并验证）**。两个生产临时账号均清理，主账号 1 user/1 session/1 compare task/1 pair/1 draft/4 artifacts 全部删除，7 个对象删除；第二账号无任务；二次查询无残留。脚本本身尚未纳入仓库工具目录。
+- 下一步：把修正后的清理逻辑迁入 `tools/` 并增加针对 selection 表和对象路径的回归，避免后续 agent 继续使用旧脚本。
+- 变更记录：2026-10-26 新增；本条只涉及验收清理工具，不代表产品数据迁移。
+
+## FL-D279 实际公开合同普遍 coverage incomplete，V1 Compare selection 无法生成最终合同（2026-10-26）
+
+- 发现日期：2026-10-26，V1 Compare selection 生产真实验收。
+- 问题与影响：selection writer 对左右 DOCX 的 `coverage.status` 做 fail-closed 检查；含 header/footer/drawing/pict 等未支持可见内容的真实合同会被 `SELECTION_COVERAGE_INCOMPLETE` 阻止生成。真实合同通常带页眉页脚，因此用户可以完成差异阅读和选择保存，却无法得到最终版/修订版合同；不能把这种状态称为选择版功能已完整交付。
+- 证据：`/home/opencode/data/funds_word` 共 514 份公开合同，按 ZIP 部件和正文对象预筛仅 1 份无可见 header/footer/drawing/pict 等未支持内容，即 `广发科技动力股票型证券投资基金基金合同_20230708.docx`；该文件 parser 返回 `Coverage(status='complete', warnings=())`。对带页眉页脚的 `广发上海清算所0-4年央企80债券指数证券投资基金基金合同_20250319.docx` 制作单处费率修订后，Compare 结果为 1 条 modify、coverage 为 incomplete（header/footer），writer 实际抛出 `SELECTION_COVERAGE_INCOMPLETE`。生产 E2E 因此使用前一份完整 coverage 真实合同加单处 1.20%→1.00% 受控修订，生成和下载成功。
+- 处理方法：保持 fail closed，不生成可能遗漏页眉页脚内容的“最终合同”；生产成功路径只对 coverage complete 的合同执行，阻塞合同在界面和报告中明确显示覆盖警告。该限制在原设计中已列出，本次补充真实语料量化证据。
+- 状态与验证：**阻塞（待产品决策/后续覆盖实现）**。生产成功路径已验证 1 份完整 coverage 真实合同；普通合同生成能力未交付。当前项目整体结论继续 **NO-GO**，不能以该单份成功替代全部真实合同交付。
+- 下一步：实现 header/footer/drawing 等未支持内容的安全地址与写入，或由产品明确选择“仅正文最终版 + 显式例外报告”的交付口径；在此之前不得对普通合同宣称选择版生成成功。
+- 变更记录：2026-10-26 新增；与 FL-D262/FL-D277 的发布问题分开记录。
+
 ## FL-D262 测试环境发布缺少专用发布器导致环境边界与验收证据容易混淆（2026-10-25）
 
 - 发现日期：2026-10-25。
