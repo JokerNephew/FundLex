@@ -10,6 +10,7 @@ from pathlib import Path
 import shlex
 import subprocess
 import sys
+import threading
 
 import pytest
 
@@ -108,7 +109,8 @@ systemctl() {
         mkdir -p "$DST/fundlex/__pycache__"
         : > "$DST/fundlex/__pycache__/runtime.cpython-311.pyc"
       fi
-      if [ "$SCENARIO" = runtime-tree-output ] && [ "$2" = fundlex-recall-api.service ]; then
+      if [ "$SCENARIO" = runtime-tree-output ] && [ "$2" = fundlex-recall-api.service ] && [ ! -f "$STATE/runtime-used" ]; then
+        : > "$STATE/runtime-used"
         : > "$DST/fundlex/runtime-output.log"
       fi
       if [ "$SCENARIO" = post-start-failure ] && [ "$2" = fundlex-compare-worker.service ] && [ ! -f "$STATE/fault-used" ]; then
@@ -249,3 +251,61 @@ def test_sourcing_complete_publisher_has_no_side_effects(tmp_path):
     assert result.returncode == 0
     assert result.stdout == result.stderr == ""
     assert list(tmp_path.iterdir()) == []
+
+
+def test_real_entrypoint_imports_and_serial_migration_use_isolated_sqlite(tmp_path):
+    """Exercise actual project imports/migrations, never systemd or live config."""
+    root = PUBLISHER.parents[2]
+    temp = tmp_path / "imports"
+    temp.mkdir()
+    data = tmp_path / "migration-data"
+    script = f'''
+source {shlex.quote(str(PUBLISHER))}
+TEMP_ROOT={shlex.quote(str(temp))}
+import_check {shlex.quote(str(root))} {shlex.quote(sys.executable)}
+DST={shlex.quote(str(root))}
+systemd-run() {{
+  while [[ "$1" = --* ]]; do shift; done
+  env -i PATH=/usr/bin:/bin FUNDLEX_DATA_DIR={shlex.quote(str(data))} "$@"
+}}
+migrate_schema
+'''
+    result = subprocess.run(["bash", "-c", script], cwd=tmp_path,
+                            text=True, capture_output=True, timeout=60)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert list(temp.iterdir()) == []
+    import sqlite3
+    with sqlite3.connect(data / "runs.sqlite3") as db:
+        tables = {row[0] for row in db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+    assert {"batches", "documents", "tasks", "guide_versions", "external_identities", "compare_tasks"} <= tables
+    with sqlite3.connect(data / "auth.db") as db:
+        tables = {row[0] for row in db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+    assert {"users", "sessions"} <= tables
+
+
+def test_manifest_is_stable_while_python_cache_is_written(release):
+    cache = release["src"] / "fundlex/__pycache__"
+    cache.mkdir()
+    stop = threading.Event()
+    started = threading.Event()
+
+    def write_caches():
+        while not stop.is_set():
+            cache_file = cache / "changing.cpython-311.pyc"
+            cache_file.write_bytes(os.urandom(128))
+            cache_file.unlink()
+            started.set()
+
+    thread = threading.Thread(target=write_caches)
+    thread.start()
+    try:
+        assert started.wait(5)
+        script = f"source {shlex.quote(str(PUBLISHER))}\ntree_manifest {shlex.quote(str(release['src']))} {shlex.quote(sys.executable)}\n"
+        result = subprocess.run(["bash", "-c", script], text=True, capture_output=True, timeout=10)
+        assert result.returncode == 0, result.stderr
+    finally:
+        stop.set()
+        thread.join(timeout=5)
+    baseline = subprocess.run(["bash", "-c", script], text=True, capture_output=True, timeout=10)
+    assert baseline.returncode == 0, baseline.stderr
+    assert baseline.stdout == result.stdout
