@@ -350,7 +350,11 @@ def test_login_expiry_message_and_role_hash_guard(ui, monkeypatch):
     assert page.locator("#view-users").is_hidden()
     page.evaluate("location.hash='settings'")
     page.wait_for_timeout(100)
-    assert page.locator("#view-settings").is_hidden()
+    # V1 settings is now the member-facing Feishu page, not dev-only settings.
+    assert page.locator("#view-settings").is_visible()
+    assert page.locator('#topbar-title').inner_text() == '飞书绑定'
+    assert page.locator('#feishu-binding-code-btn').count() == 0
+    page.locator('.sidebar [data-nav="overview"]').click()
     token = page.evaluate("sessionStorage.getItem('fundlex-auth-token')")
     context.request.post(base + "/api/auth/logout", headers={"Authorization": "Bearer " + token})
     page.locator('#view-overview [data-action="refresh"]').first.click()

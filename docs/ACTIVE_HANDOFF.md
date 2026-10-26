@@ -1,5 +1,16 @@
 # FundLex 当前断点（ACTIVE_HANDOFF）
 
+## 2026-10-27 V1 体验改版进行中
+
+- 用户最新决定：今后永久只用 V1，不修改 V2；已写入本工作树 AGENTS.md。本次要求自主分阶段设计、实现、发布和验收，不停下来询问。
+- 目标：桌面差异列表放右侧、统一新建对比的任务名/文件选择、设置改“飞书绑定”专页并去掉非飞书内容与绑定码入口。
+- 分支 `codex/v1-compare-feishu-ux`，已提交生产前端保留基线 `7c19975`（基于 `99f71b2`）；未提交为 AGENTS、5 个 V1 文件、browser test、计划及本问题/交接文档。不触碰 frontend/src、dist 和后端。
+- 当前实现：右侧独立 rail/窄屏前置；输入框与文件卡片；飞书状态/扫码/倒计时/确认解除/离页和身份清理。`compare.html` 先做 HTML 换行格式化便于维护。保留 hidden dev-user 与旧 resetWorkspace 的 hidden capability-details 初始化目标，产品页不含开发/运行信息。
+- 验证：`FUNDLEX_BROWSER_TESTS=1 PYTHONPATH=. /home/opencode/fundlex/.venv/bin/python -m pytest tests/browser/test_compare_selection_v1.py -q` → 12 passed；Node 两文件和 diff check 通过。测试覆盖四视口位置/长列表滚动/表单及两视口绑定状态。未生产发布。
+- 问题记录：FL-D260（V2实现未落V1原因纠正）；FL-D282（表单/飞书页）。计划 `docs/V1_COMPARE_FEISHU_UX_PLAN_20261027.md`。
+- 下一步：补错误/迟到 OAuth 保护测试、检查截图，回归 Compare；完成阶段提交，使用 `7c19975` 的五个生产文件原始 SHA 作为并发变更检查，备份并白名单原子发布。公网真实合同流程可复用 `/tmp/opencode/compare-selection-prod-e2e/run_production_selection_e2e.py`，新增新布局/飞书截图指标。真实 OAuth 只到 start，不代替本人手机授权。
+- 环境：同一云服务器，主机与 metadata 已核对；磁盘约887MB可用，不复制整树。API 8010。真实 Compare 是确定性 Worker，无模型调用/新增模型预算。暂无后台进程/子agent。已有 cleanup 工具 `/tmp/opencode/cleanup_fundlex_e2e_user.py` 支持 selection 但缺 OAuth state，需要先删本临时账号 state 再清理，禁止动用户数据。
+
 ## 飞书 OAuth 二维码放大显示修复（2026-10-26）
 
 - 用户上传设置页二维码截图反馈二维码像黑块。核对生产接口：授权链接 260 字符，qrencode 为 version 10（57×57 模块 + quiet zone，viewBox 65×65）；原 CSS 最大 351px，实际约 325px、约 5.7px/模块，缩放后模块粘连。

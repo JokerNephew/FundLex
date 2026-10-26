@@ -8,6 +8,7 @@ import os
 import socket
 import threading
 import time
+from pathlib import Path
 from zipfile import ZipFile
 
 import pytest
@@ -76,18 +77,18 @@ def password_app(tmp_path, monkeypatch):
     sock.close()
 
 
-def mock_compare(page, *, structural=False):
+def mock_compare(page, *, structural=False, diff_count=2):
     pair = {"id": "pair-one", "label": "第一组", "ordinal": 0, "status": "succeeded",
             "left": {"name": "left.docx"}, "right": {"name": "right.docx"},
             "summary": {"total": 2, "modify": 2, "insert": 0, "delete": 0}}
     task = {"id": "selection-task", "name": "V1 人工选择", "status": "completed", "total": 2,
             "pairs": [pair, {**pair, "id": "pair-two", "label": "第二组", "ordinal": 1}]}
     diffs = [{"id": f"D{i}", "type": "modify", "section": "费率",
-              "left": {"text": "旧文"}, "right": {"text": "新文"}} for i in (1, 2)]
+              "left": {"text": "旧文"}, "right": {"text": "新文"}} for i in range(1, diff_count + 1)]
     if structural:
         diffs[0]["type"] = "insert"
         diffs[1]["type"] = "delete"
-    states = {p["id"]: {"selection_epoch": 0, "decisions": {"D1": "pending", "D2": "pending"}}
+    states = {p["id"]: {"selection_epoch": 0, "decisions": {d["id"]: "pending" for d in diffs}}
               for p in task["pairs"]}
     controls = {"conflict": False, "generations": [], "downloads": [], "held": None, "hold": False}
 
@@ -199,6 +200,126 @@ def test_v1_pending_choices_refresh_generation_download_and_mobile(browser, live
         context.close()
 
 
+@pytest.mark.parametrize('width', [390, 768, 1280, 1440])
+def test_v1_review_rail_geometry_independent_scroll_and_form(browser, live_app, width):
+    from playwright.sync_api import expect
+    _, base = live_app
+    context = browser.new_context(viewport={'width': width, 'height': 960})
+    page = context.new_page()
+    errors = []
+    page.on('pageerror', lambda error: errors.append(str(error)))
+    mock_compare(page, diff_count=60)
+    try:
+        open_compare(page, base)
+        geometry = page.evaluate('''() => {
+          const doc=document.querySelector('.compare-document-area').getBoundingClientRect();
+          const rail=document.querySelector('.compare-diff-rail').getBoundingClientRect();
+          const list=document.querySelector('#compare-diff-list');
+          return {doc:{x:doc.x,right:doc.right,top:doc.top},rail:{x:rail.x,bottom:rail.bottom,top:rail.top},
+                  scroll:list.scrollHeight>list.clientHeight,overflow:getComputedStyle(list).overflowY};
+        }''')
+        if width > 760:
+            assert geometry['rail']['x'] >= geometry['doc']['right']
+            assert abs(geometry['rail']['top'] - geometry['doc']['top']) < 2
+        else:
+            assert geometry['rail']['bottom'] <= geometry['doc']['top']
+        assert geometry['scroll'] and geometry['overflow'] == 'auto'
+        page.locator('#compare-next-diff').scroll_into_view_if_needed()
+        if os.getenv('FUNDLEX_UX_EVIDENCE'):
+            out = Path(os.environ['FUNDLEX_UX_EVIDENCE'])
+            out.mkdir(parents=True, exist_ok=True)
+            page.screenshot(path=str(out / f'local-reader-{width}.png'))
+        before = page.locator('.main').evaluate('(n)=>n.scrollTop')
+        for _ in range(8):
+            page.locator('#compare-next-diff').click()
+        assert page.locator('#compare-diff-list').evaluate('(n)=>n.scrollTop') > 0
+        assert page.locator('.main').evaluate('(n)=>n.scrollTop') == before
+        page.locator('#compare-new').click()
+        page.locator('#compare-name').fill('统一表单测试')
+        assert page.locator('#compare-name').evaluate('(n)=>n.clientHeight') >= 40
+        with page.expect_file_chooser() as chooser:
+            page.locator('[data-compare-choose="left"]').click()
+        chooser.value.set_files({'name': '左侧真实名称.docx', 'mimeType': 'application/octet-stream', 'buffer': b'docx'})
+        expect(page.locator('[data-file-side="left"] .compare-file-name')).to_have_text('左侧真实名称.docx')
+        expect(page.locator('[data-compare-choose="left"]')).to_have_text('更换文件')
+        if os.getenv('FUNDLEX_UX_EVIDENCE'):
+            page.screenshot(path=str(Path(os.environ['FUNDLEX_UX_EVIDENCE']) / f'local-form-{width}.png'))
+        page.locator('#compare-add-pair').click()
+        expect(page.locator('.compare-pair-input')).to_have_count(2)
+        page.locator('[data-compare-remove="1"]').click()
+        expect(page.locator('[data-file-side="left"] .compare-file-name')).to_have_text('左侧真实名称.docx')
+        assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+        assert not errors
+    finally:
+        context.close()
+
+
+@pytest.mark.parametrize('width', [390, 1440])
+def test_v1_feishu_page_states_expiry_confirmation_and_reset(browser, live_app, width):
+    from playwright.sync_api import expect
+    _, base = live_app
+    context = browser.new_context(viewport={'width': width, 'height': 960})
+    page = context.new_page()
+    errors = []
+    page.on('pageerror', lambda error: errors.append(str(error)))
+    state = {'bound': False, 'deletes': 0, 'starts': 0}
+    png = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII='
+
+    def binding(route):
+        if route.request.method == 'DELETE':
+            state['deletes'] += 1
+            state['bound'] = False
+        route.fulfill(json={'bound': state['bound']})
+
+    def start(route):
+        state['starts'] += 1
+        route.fulfill(json={'authorization_url': 'https://accounts.feishu.cn/authorize',
+                            'qr_png': png, 'expires_at': page.evaluate('Date.now()/1000+600')})
+
+    page.route('**/api/integrations/feishu/binding', binding)
+    page.route('**/api/integrations/feishu/oauth/start', start)
+    try:
+        page.goto(base + '/#settings', wait_until='networkidle')
+        expect(page.locator('#topbar-title')).to_have_text('飞书绑定')
+        expect(page.locator('#feishu-binding-badge')).to_have_text('未绑定')
+        assert not page.locator('#feishu-binding-code-btn').count()
+        assert '实际运行能力' not in page.locator('#view-settings').inner_text()
+        assert '本地开发身份' not in page.locator('#view-settings').inner_text()
+        page.locator('#feishu-oauth-btn').click()
+        expect(page.locator('#feishu-oauth-qr img')).to_be_visible()
+        expect(page.locator('#feishu-oauth-link')).to_have_attribute('href', 'https://accounts.feishu.cn/authorize')
+        state['bound'] = True
+        page.locator('#feishu-binding-refresh').click()
+        expect(page.locator('#feishu-binding-badge')).to_have_text('已绑定')
+        expect(page.locator('#feishu-oauth-panel')).to_be_hidden()
+        page.locator('#feishu-unbind-btn').click()
+        expect(page.locator('#feishu-unbind-confirm')).to_be_visible()
+        assert state['deletes'] == 0
+        page.locator('[data-action="feishu-unbind-cancel"]').click()
+        expect(page.locator('#feishu-unbind-confirm')).to_be_hidden()
+        page.locator('#feishu-unbind-btn').click()
+        page.locator('[data-action="feishu-unbind-confirm"]').click()
+        expect(page.locator('#feishu-binding-badge')).to_have_text('未绑定')
+        assert state['deletes'] == 1
+        page.clock.install()
+        page.locator('#feishu-oauth-btn').click()
+        expect(page.locator('#feishu-oauth-qr img')).to_be_visible()
+        page.clock.fast_forward(601_000)
+        expect(page.locator('#feishu-oauth-message')).to_contain_text('已过期')
+        assert page.locator('#feishu-oauth-qr img').count() == 0
+        expect(page.locator('#feishu-oauth-link')).to_be_hidden()
+        page.locator('#feishu-oauth-btn').click()
+        expect(page.locator('#feishu-oauth-qr img')).to_be_visible()
+        page.locator('[data-nav="compare"]').click()
+        assert page.locator('#feishu-oauth-qr img').count() == 0
+        page.locator('[data-nav="settings"]').click()
+        expect(page.locator('#feishu-binding-badge')).to_have_text('未绑定')
+        assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+        assert not errors
+    finally:
+        context.close()
+
+
 def test_v1_conflict_retains_choices_and_late_generation_cannot_cross_pairs(browser, live_app):
     from playwright.sync_api import expect
     _, base = live_app
@@ -226,6 +347,47 @@ def test_v1_conflict_retains_choices_and_late_generation_cannot_cross_pairs(brow
         expect(page.locator('#compare-selection-progress')).to_contain_text('待选择 2')
         assert page.locator('[data-selection-download]').count() == 0
         assert '已生成' not in page.locator('#compare-selection-status').inner_text()
+    finally:
+        context.close()
+
+
+def test_v1_feishu_errors_and_late_qr_cannot_survive_navigation(browser, live_app):
+    from playwright.sync_api import expect
+    _, base = live_app
+    context = browser.new_context()
+    page = context.new_page()
+    errors = []
+    page.on('pageerror', lambda error: errors.append(str(error)))
+    controls = {'fail': True, 'held': None}
+
+    def binding(route):
+        if controls['fail']:
+            return route.fulfill(status=503, json={'detail': 'temporarily unavailable'})
+        return route.fulfill(json={'bound': False})
+
+    def start(route):
+        controls['held'] = route
+
+    page.route('**/api/integrations/feishu/binding', binding)
+    page.route('**/api/integrations/feishu/oauth/start', start)
+    try:
+        page.goto(base + '/#settings', wait_until='networkidle')
+        expect(page.locator('#feishu-binding-badge')).to_have_text('读取失败')
+        expect(page.locator('#feishu-oauth-btn')).to_be_disabled()
+        controls['fail'] = False
+        page.locator('#feishu-binding-refresh').click()
+        expect(page.locator('#feishu-oauth-btn')).to_be_enabled()
+        page.locator('#feishu-oauth-btn').click()
+        expect(page.locator('#feishu-oauth-btn')).to_be_disabled()
+        page.locator('[data-nav="compare"]').click()
+        assert controls['held']
+        controls['held'].fulfill(json={'authorization_url': 'https://accounts.feishu.cn/authorize',
+                                      'qr_png': 'data:image/png;base64,late', 'expires_at': time.time() + 600})
+        page.locator('[data-nav="settings"]').click()
+        expect(page.locator('#feishu-binding-badge')).to_have_text('未绑定')
+        expect(page.locator('#feishu-oauth-panel')).to_be_hidden()
+        assert not page.locator('#feishu-oauth-qr img').count()
+        assert not errors
     finally:
         context.close()
 

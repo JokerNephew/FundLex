@@ -15,7 +15,11 @@
   };
   function pairRow(pair = {}, index) {
     const selected = [pair.left?.name || fileName(pair._left), pair.right?.name || fileName(pair._right)].filter(Boolean).join(' / ');
-    return `<div class="compare-pair-input" data-pair-index="${index}"><div class="compare-pair-head"><strong>第 ${index + 1} 组</strong><button type="button" class="btn-link" data-compare-remove="${index}" ${index ? '' : 'disabled'}>移除</button></div><div class="compare-side-inputs"><label><span>原版（基准）</span><input type="file" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" data-compare-left="${index}"></label><label><span>对比版（修订）</span><input type="file" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" data-compare-right="${index}"></label></div><p class="subnote compare-file-label" data-compare-label="${index}">${esc(selected||'尚未选择文件')}</p></div>`;
+    const sideCard=(side,title,badge)=>{
+      const name=pair[side]?.name||fileName(pair[`_${side}`]);
+      return `<div class="compare-file-card ${name?'has-file':''}" data-file-side="${side}"><div class="compare-file-card-title"><span class="compare-side-badge ${side==='right'?'is-revised':''}">${badge}</span><strong>${title}</strong><small>DOCX</small></div><div class="compare-file-name" title="${esc(name)}">${esc(name||'尚未选择合同')}</div><div class="compare-file-card-action"><button type="button" class="btn btn-sm" data-compare-choose="${side}" aria-label="选择${title}合同">${name?'更换文件':'选择文件'}</button><span>仅支持 .docx</span></div><input type="file" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" data-compare-${side}="${index}" aria-label="${title}合同" hidden></div>`;
+    };
+    return `<div class="compare-pair-input" data-pair-index="${index}"><div class="compare-pair-head"><strong>合同组 ${String(index+1).padStart(2,'0')}</strong><button type="button" class="btn-link" data-compare-remove="${index}" ${index?'':'disabled'}>移除本组</button></div><div class="compare-side-inputs">${sideCard('left','原版（基准）','A')}${sideCard('right','对比版（修订）','B')}</div><p class="sr-only compare-file-label" data-compare-label="${index}">${esc(selected||'尚未选择文件')}</p></div>`;
   }
   function renderInputs() { const box=$('compare-pair-inputs'); if (box) box.innerHTML = (state.inputs || [{}]).map(pairRow).join(''); }
   function syncInputIndexes() { document.querySelectorAll('#compare-pair-inputs .compare-pair-input').forEach((row,i)=>{ row.dataset.pairIndex=String(i); row.querySelector('[data-compare-left]')?.setAttribute('data-compare-left',String(i)); row.querySelector('[data-compare-right]')?.setAttribute('data-compare-right',String(i)); row.querySelector('[data-compare-remove]')?.setAttribute('data-compare-remove',String(i)); }); }
@@ -99,6 +103,7 @@
     });
   }
   function syncPaneScroll(source) {
+    if(state.focusScrolling){drawLines();return;}
     if (window.matchMedia('(max-width: 760px)').matches) { drawLines(); return; }
     if (state.scrollSource && state.scrollSource !== source) { drawLines(); return; }
     const panes = [$('compare-left-pane'), $('compare-right-pane')].filter(Boolean), target = panes.find(p => p !== source);
@@ -211,7 +216,29 @@
     } catch(e){if(selectionCurrent(context))selectionStatus(e.message,true);}
   }
   function visibleDiffs() { const all=state.view?.diffs||[], filter=$('compare-diff-filter')?.value||''; return filter?all.filter(x=>x.type===filter):all; }
-  function focusDiff(index) { const ds=visibleDiffs(); if(!ds.length){ $('compare-diff-counter').textContent='0 / 0'; return; } state.diffIndex=(index+ds.length)%ds.length; const id=ds[state.diffIndex].id; document.querySelectorAll('.compare-diff.is-active,.compare-diff-item.is-active').forEach(n=>n.classList.remove('is-active')); document.querySelectorAll(`[data-diff-id="${CSS.escape(id)}"]`).forEach(n=>n.classList.add('is-active')); document.querySelector(`[data-compare-diff="${CSS.escape(id)}"]`)?.classList.add('is-active'); $('compare-diff-counter').textContent=`${state.diffIndex+1} / ${ds.length}`; for(const side of ['left','right']) { const pane=$(`compare-${side}-pane`), target=pane?.querySelector(`[data-diff-id="${CSS.escape(id)}"]`); if(pane&&target){const pr=pane.getBoundingClientRect(),tr=target.getBoundingClientRect(); pane.scrollTo({top:pane.scrollTop+(tr.top+tr.height/2)-(pr.top+pr.height/2),behavior:'smooth'});}} requestAnimationFrame(drawLines); }
+  function focusDiff(index) {
+    const ds=visibleDiffs();
+    document.querySelectorAll('.compare-diff.is-active,.compare-diff-item.is-active').forEach(n=>n.classList.remove('is-active'));
+    if(!ds.length){$('compare-diff-counter').textContent='0 / 0';return;}
+    state.diffIndex=(index+ds.length)%ds.length;const id=ds[state.diffIndex].id;
+    const selector=`[data-diff-id="${CSS.escape(id)}"]`;
+    document.querySelectorAll(`#compare-left-pane ${selector},#compare-right-pane ${selector}`).forEach(n=>n.classList.add('is-active'));
+    const item=document.querySelector(`.compare-diff-item[data-compare-diff="${CSS.escape(id)}"]`),list=$('compare-diff-list');
+    item?.classList.add('is-active');
+    if(item){const ir=item.getBoundingClientRect(),lr=list.getBoundingClientRect();if(ir.top<lr.top||ir.bottom>lr.bottom)list.scrollTop+=ir.top-lr.top;}
+    $('compare-diff-counter').textContent=`${state.diffIndex+1} / ${ds.length}`;
+    if(matchMedia('(max-width:760px)').matches){
+      const current=$('compare-viewer').dataset.mobileSide||'left';
+      if(!$(`compare-${current}-pane`).querySelector(selector)){
+        const side=current==='left'?'right':'left';$('compare-viewer').dataset.mobileSide=side;
+        document.querySelectorAll('[data-compare-side]').forEach(n=>n.classList.toggle('is-active',n.dataset.compareSide===side));
+      }
+    }
+    cancelAnimationFrame(state.scrollFrame);state.scrollSource=null;state.focusScrolling=true;
+    for(const side of ['left','right']){const pane=$(`compare-${side}-pane`),target=pane?.querySelector(selector);if(pane&&target&&pane.clientHeight){const pr=pane.getBoundingClientRect(),tr=target.getBoundingClientRect();pane.scrollTop+=tr.top+tr.height/2-pr.top-pr.height/2;}}
+    requestAnimationFrame(()=>requestAnimationFrame(()=>{state.focusScrolling=false;}));
+    requestAnimationFrame(drawLines);
+  }
   function renderDiffList() { const d=visibleDiffs(), disabled=!state.selection||state.selectionSaving; $('compare-diff-list').innerHTML=d.length?d.map((x,i)=>{const choice=selectionDecision(x.id);return `<div class="compare-diff-item ${choice!=='pending'?'is-selected-choice':''}" data-compare-diff="${esc(x.id)}"><button type="button" class="compare-diff-jump" data-compare-diff="${esc(x.id)}"><span>${i+1}</span><strong>${esc(x.type==='modify'?'修改':x.type==='insert'?'新增':'删除')}</strong><span>${esc(x.section||'正文')} · ${esc(x.left?.text||'')} ${x.right?.text?'→ '+esc(x.right.text):''}</span></button><div class="compare-choice" role="group" aria-label="${esc(x.id)} 采用哪一侧"><label class="${choice==='left'?'is-checked':''}"><input type="radio" name="choice-${esc(x.id)}" value="left" data-selection-choice="left" data-diff-id="${esc(x.id)}" ${choice==='left'?'checked':''} ${disabled?'disabled':''}>采用左侧</label><label class="${choice==='right'?'is-checked':''}"><input type="radio" name="choice-${esc(x.id)}" value="right" data-selection-choice="right" data-diff-id="${esc(x.id)}" ${choice==='right'?'checked':''} ${disabled?'disabled':''}>采用右侧</label></div></div>`;}).join(''):'<p class="empty">当前筛选条件下没有差异。</p>'; }
   function renderViewer(payload) {
     state.view=payload; state.diffIndex=0; const d=payload.diffs||[]; $('compare-viewer').hidden=false; $('compare-pair-title').textContent=payload.pair?.label||'合同对比'; $('compare-left-name').textContent=payload.left?.name||'原版合同'; $('compare-right-name').textContent=payload.right?.name||'对比版合同'; const s=payload.summary||{}; $('compare-summary').textContent=`共 ${s.total||0} 处差异 · 修改 ${s.modify||0} · 新增 ${s.insert||0} · 删除 ${s.delete||0}`; const cov=payload.coverage||{}; const incomplete=cov.status!=='complete'; $('compare-coverage').hidden=!incomplete; $('compare-coverage').className=incomplete?'is-incomplete':''; $('compare-coverage').textContent=incomplete?`覆盖不完整：以下内容未纳入比较。请人工复核，不要据此确认全文无差异。${(cov.warnings||[]).length?' 未覆盖：'+cov.warnings.join('、'):''}`:'覆盖完整'; $('compare-left-pane').innerHTML=payload.left.html||''; $('compare-right-pane').innerHTML=payload.right.html||''; document.querySelectorAll('#compare-left-pane [data-diff-id],#compare-right-pane [data-diff-id]').forEach(mark=>{mark.tabIndex=0;mark.setAttribute('role','button');mark.setAttribute('aria-label','定位此处差异');}); $('compare-diff-counter').textContent='0 / 0'; renderDiffList(); if(!d.length)$('compare-diff-list').innerHTML=`<p class="empty">${incomplete?'已覆盖范围内没有发现文字差异，无法确认全文无差异。':'两份合同没有文字差异。'}</p>`; drawLines();if(d.length)focusDiff(0); }
@@ -227,6 +254,16 @@
   }
    async function openTask(id) { clearTimeout(state.poll); const token=++state.requestToken; try { const task=await json(`/api/compare/tasks/${encodeURIComponent(id)}`); if(token!==state.requestToken)return; const previousPairId=state.selectedPairId; renderTask(task); const kept=state.pairs.findIndex(p=>p.id===previousPairId); const idx=kept>=0?kept:state.pairs.findIndex(p=>['succeeded','incomplete'].includes(p.status)); if(idx>=0){ if(previousPairId===state.pairs[idx]?.id&&state.view) { $('compare-pair-counter').textContent=`${idx+1} / ${state.pairs.length}`; } else await openPair(idx); } else $('compare-viewer').hidden=true; if (['queued','running','uploading'].includes(state.task?.status)) { state.poll=setTimeout(()=>openTask(id),2500); } } catch(e) { if(token===state.requestToken)$('compare-task-status').textContent=`读取任务失败：${e.message}`; } }
   function bind() {
+    document.addEventListener('click',e=>{
+      const choose=e.target.closest('[data-compare-choose]');if(choose){choose.closest('.compare-file-card').querySelector('input[type=file]').click();return;}
+      const folder=e.target.closest('[data-compare-folder]');if(folder)$(`compare-${folder.dataset.compareFolder}-folder`).click();
+    });
+    document.addEventListener('change',e=>{
+      const card=e.target.closest('.compare-file-card');if(!card||!e.target.matches('input[type=file]'))return;
+      const name=e.target.files?.[0]?.name||'';card.classList.toggle('has-file',!!name);
+      const label=card.querySelector('.compare-file-name');label.textContent=name||'尚未选择合同';label.title=name;
+      card.querySelector('[data-compare-choose]').textContent=name?'更换文件':'选择文件';
+    });
     document.addEventListener('fundlex:identity-reset',resetSelection);
     window.addEventListener('beforeunload',event=>{if(state.selectionDirty){event.preventDefault();event.returnValue='';}});
     $('compare-new')?.addEventListener('click',()=>showCreate(true)); $('compare-add-pair')?.addEventListener('click',()=>{const index=state.inputs.length;state.inputs.push({});$('compare-pair-inputs')?.insertAdjacentHTML('beforeend',pairRow({},index));syncInputIndexes();}); $('compare-submit')?.addEventListener('click',createTask); $('compare-refresh')?.addEventListener('click',loadTasks);
