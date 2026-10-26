@@ -14,7 +14,7 @@ from docx import Document
 
 from fundlex import guide_store
 from fundlex.guide import GUIDE_SCHEMA_VERSION
-from fundlex.store import RunStore, StoreError
+from fundlex.store import Conflict, RunStore, StoreError
 
 
 def guide_docx(label: str = "指引正文示例") -> bytes:
@@ -90,7 +90,8 @@ def test_enable_rules_and_reset_to_builtin(tmp_path):
         guide_store.set_current_guide(store, "bob", version["id"])
     with pytest.raises(KeyError):
         guide_store.set_current_guide(store, "alice", "missing-version")
-    result = guide_store.finish_guide_job(store, version["job_id"], document=parsed_document())
+    job = guide_store.claim_guide_job(store)
+    result = guide_store.finish_guide_job(store, job["id"], job["fencing_token"], document=parsed_document())
     assert result["version"]["status"] == "parsed"
     guide_store.set_current_guide(store, "alice", version["id"])
     assert guide_store.current_guide(store, "alice")["id"] == version["id"]
@@ -109,9 +110,10 @@ def test_parse_job_claim_finish_retry_and_attempts_exhausted(tmp_path):
     job = guide_store.claim_guide_job(store)
     assert job["id"] == version["job_id"]
     assert job["status"] == "leased" and job["attempts"] == 1
+    assert job["fencing_token"] == 1
     assert guide_store.get_version(store, "alice", version["id"])["status"] == "parsing"
     assert guide_store.claim_guide_job(store) is None  # one job in flight per owner
-    released = guide_store.release_guide_job(store, job["id"])
+    released = guide_store.release_guide_job(store, job["id"], job["fencing_token"])
     assert released["status"] == "queued" and released["attempts"] == 1
     assert guide_store.get_version(store, "alice", version["id"])["status"] == "uploaded"
     assert guide_store.claim_guide_job(store) is None  # backoff instead of a hot loop
@@ -119,7 +121,7 @@ def test_parse_job_claim_finish_retry_and_attempts_exhausted(tmp_path):
         db.execute("UPDATE guide_jobs SET lease_until=NULL WHERE id=?", (job["id"],))
     second = guide_store.claim_guide_job(store)
     assert second["attempts"] == 2
-    failed = guide_store.finish_guide_job(store, second["id"], error_code="GUIDE_SOURCE_EMPTY")
+    failed = guide_store.finish_guide_job(store, second["id"], second["fencing_token"], error_code="GUIDE_SOURCE_EMPTY")
     assert failed["job"]["status"] == "parse_failed" and failed["job"]["error_code"] == "GUIDE_SOURCE_EMPTY"
     assert failed["version"]["status"] == "parse_failed"
     assert failed["version"]["issues"]["error_code"] == "GUIDE_SOURCE_EMPTY"
@@ -127,13 +129,54 @@ def test_parse_job_claim_finish_retry_and_attempts_exhausted(tmp_path):
         guide_store.set_current_guide(store, "alice", version["id"])
     third = guide_store.claim_guide_job(store)
     assert third["attempts"] == 3
-    terminal = guide_store.finish_guide_job(store, third["id"], error_code="GUIDE_SOURCE_EMPTY")
+    terminal = guide_store.finish_guide_job(store, third["id"], third["fencing_token"], error_code="GUIDE_SOURCE_EMPTY")
     assert terminal["job"]["status"] == "failed" and terminal["version"]["status"] == "failed"
     assert guide_store.claim_guide_job(store) is None
     with pytest.raises(KeyError):
-        guide_store.release_guide_job(store, "missing-job")
+        guide_store.release_guide_job(store, "missing-job", 1)
     with pytest.raises(KeyError):
-        guide_store.finish_guide_job(store, "missing-job", error_code="GUIDE_PARSE_FAILED")
+        guide_store.finish_guide_job(store, "missing-job", 1, error_code="GUIDE_PARSE_FAILED")
+
+
+def test_late_guide_worker_cannot_release_or_finish_new_attempt(tmp_path):
+    store = make_store(tmp_path)
+    version = guide_store.create_custom_version(store, "alice", "custom.docx", guide_docx())
+    first = guide_store.claim_guide_job(store, lease_seconds=60)
+    with store._connect() as db:
+        db.execute("UPDATE guide_jobs SET lease_until=0 WHERE id=?", (first["id"],))
+
+    second = guide_store.claim_guide_job(store, lease_seconds=60)
+    assert second["fencing_token"] == first["fencing_token"] + 1
+    with pytest.raises(Conflict, match="stale guide job lease"):
+        guide_store.release_guide_job(store, first["id"], first["fencing_token"])
+    with pytest.raises(Conflict, match="stale guide job lease"):
+        guide_store.finish_guide_job(store, first["id"], first["fencing_token"], document=parsed_document())
+    with pytest.raises(Conflict, match="stale guide job lease"):
+        guide_store.finish_guide_job(store, first["id"], first["fencing_token"],
+                                     error_code="OLD_WORKER_FAILURE")
+    with store._connect() as db:
+        row = db.execute("SELECT status,attempts,fencing_token,error_code FROM guide_jobs WHERE id=?",
+                         (version["job_id"],)).fetchone()
+    assert dict(row) == {"status": "leased", "attempts": 2,
+                         "fencing_token": second["fencing_token"], "error_code": None}
+    finished = guide_store.finish_guide_job(store, second["id"], second["fencing_token"],
+                                            error_code="CURRENT_WORKER_FAILURE")
+    assert finished["job"]["error_code"] == "CURRENT_WORKER_FAILURE"
+
+
+def test_existing_sqlite_guide_jobs_table_gets_fencing_token_migration(tmp_path):
+    store = RunStore(tmp_path / "state")
+    with store._connect() as db:
+        db.execute("""CREATE TABLE guide_jobs (
+            id TEXT PRIMARY KEY, guide_version_id TEXT NOT NULL, owner TEXT NOT NULL,
+            status TEXT NOT NULL, attempts INTEGER NOT NULL DEFAULT 0,
+            lease_until REAL, error_code TEXT, created_at REAL NOT NULL,
+            updated_at REAL NOT NULL)""")
+    guide_store._ensure_tables(store)
+    with store._connect() as db:
+        columns = {row["name"]: row for row in db.execute("PRAGMA table_info(guide_jobs)")}
+    assert columns["fencing_token"]["dflt_value"] == "0"
+    assert columns["fencing_token"]["notnull"] == 1
 
 
 def test_guide_source_path_rejects_unsafe_version_ids(tmp_path):
@@ -156,7 +199,8 @@ def test_guide_metrics_count_versions_and_jobs(tmp_path):
     assert metrics["versions"] == {"total": 1, "built_in": 1, "custom": 0, "by_status": {"released": 1}}
     assert metrics["jobs"]["total"] == 0
     version = guide_store.create_custom_version(store, "alice", "custom.docx", guide_docx())
-    guide_store.finish_guide_job(store, version["job_id"], document=parsed_document())
+    job = guide_store.claim_guide_job(store)
+    guide_store.finish_guide_job(store, job["id"], job["fencing_token"], document=parsed_document())
     guide_store.set_current_guide(store, "alice", version["id"])
     metrics = guide_store.guide_metrics(store)
     assert metrics["versions"]["custom"] == 1

@@ -52,7 +52,8 @@ def parsed_custom(client, *, label: str = "自定义指引", owner: str = "alice
     """Insert a parsed custom guide directly through the guide store."""
     store = client.app.state.store
     version = guide_store.create_custom_version(store, owner, "custom-guide.docx", docx_bytes(label))
-    finished = guide_store.finish_guide_job(store, version["job_id"], document=parsed_document())
+    job = guide_store.claim_guide_job(store)
+    finished = guide_store.finish_guide_job(store, job["id"], job["fencing_token"], document=parsed_document())
     assert finished["version"]["status"] == "parsed"
     return finished["version"]
 
@@ -114,7 +115,7 @@ def test_guide_upload_parse_switch_and_reset(client):
     store = client.app.state.store
     job = guide_store.claim_guide_job(store)
     assert job["guide_version_id"] == custom_id
-    finished = guide_store.finish_guide_job(store, job["id"], document=parsed_document())
+    finished = guide_store.finish_guide_job(store, job["id"], job["fencing_token"], document=parsed_document())
     assert finished["version"]["status"] == "parsed"
     detail = client.get(f"/api/guides/{custom_id}", headers=ALICE).json()
     assert detail["status"] == "parsed" and detail["current"] is False
@@ -163,7 +164,7 @@ def test_guide_source_and_rules_access(client):
     assert builtin_rules.json()["schema_version"] == GUIDE_SCHEMA_VERSION
     store = client.app.state.store
     job = guide_store.claim_guide_job(store)
-    guide_store.finish_guide_job(store, job["id"], document=parsed_document())
+    guide_store.finish_guide_job(store, job["id"], job["fencing_token"], document=parsed_document())
     parsed_rules = client.get(f"/api/guides/{version['id']}/rules", headers=ALICE)
     assert parsed_rules.status_code == 200 and parsed_rules.json()["groups"][0]["rule_id"] == "G01"
 
@@ -187,7 +188,7 @@ def test_guide_parse_endpoint_requeues_owner_versions_only(client):
     store = client.app.state.store
     # One failed attempt is retryable: the version is parse_failed, not failed.
     job = guide_store.claim_guide_job(store)
-    failed = guide_store.finish_guide_job(store, job["id"], error_code="GUIDE_SOURCE_EMPTY")
+    failed = guide_store.finish_guide_job(store, job["id"], job["fencing_token"], error_code="GUIDE_SOURCE_EMPTY")
     assert failed["version"]["status"] == "parse_failed"
     requeued = client.post(f"/api/guides/{version['id']}/parse", headers=ALICE)
     assert requeued.status_code == 202
@@ -197,8 +198,11 @@ def test_guide_parse_endpoint_requeues_owner_versions_only(client):
                             (version["id"],)).fetchone()[0]
     assert queued == 1
     # Claiming consumes the requeued job; a leased version cannot queue twice.
-    assert guide_store.claim_guide_job(store)["guide_version_id"] == version["id"]
+    active = guide_store.claim_guide_job(store)
+    assert active["guide_version_id"] == version["id"]
     assert client.post(f"/api/guides/{version['id']}/parse", headers=ALICE).status_code == 409
+    guide_store.finish_guide_job(store, active["id"], active["fencing_token"],
+                                 error_code="GUIDE_PARSE_FAILED")
     # A parsed version can be re-parsed on demand.
     parsed = parsed_custom(client)
     assert client.post(f"/api/guides/{parsed['id']}/parse", headers=ALICE).status_code == 202
@@ -213,7 +217,7 @@ def test_explicit_retry_of_exhausted_guide_is_visible_and_deduplicated(client):
     store = client.app.state.store
     for _ in range(guide_store.MAX_GUIDE_JOB_ATTEMPTS):
         job = guide_store.claim_guide_job(store)
-        guide_store.finish_guide_job(store, job["id"], error_code="GUIDE_PARSE_FAILED")
+        guide_store.finish_guide_job(store, job["id"], job["fencing_token"], error_code="GUIDE_PARSE_FAILED")
     assert guide_store.get_version(store, "alice", version["id"])["status"] == "failed"
     assert client.post(f"/api/guides/{version['id']}/parse", headers=BOB).status_code == 404
     for _ in range(2):

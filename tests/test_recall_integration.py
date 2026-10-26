@@ -226,7 +226,8 @@ def test_worker_runs_real_recall_pipeline_with_bound_guide(tmp_path, monkeypatch
     document["source_sha256"] = version["source_sha256"]
     document = certify_guide_document(document, source_sha256=version["source_sha256"])
     approved_sha = document["document_sha256"]
-    guide_store.finish_guide_job(store, version["job_id"], document=document)
+    job = guide_store.claim_guide_job(store)
+    guide_store.finish_guide_job(store, job["id"], job["fencing_token"], document=document)
     parsed = guide_store.get_version(store, OWNER, version["id"])
     assert parsed["rules_sha256"] == approved_sha
     tasks, task_id, batch_id, document_id = submit_task(

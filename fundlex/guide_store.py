@@ -23,7 +23,7 @@ import uuid
 from pathlib import Path
 from typing import Any
 
-from .store import RunStore, StoreError
+from .store import Conflict, RunStore, StoreError
 
 BUILTIN_GUIDE_ID = "builtin-v1"
 BUILTIN_GUIDE_PATH = Path(__file__).resolve().parent.parent / "guides" / "builtin_guide_v1.json"
@@ -49,6 +49,7 @@ CREATE TABLE IF NOT EXISTS guide_config (
 CREATE TABLE IF NOT EXISTS guide_jobs (
     id TEXT PRIMARY KEY, guide_version_id TEXT NOT NULL, owner TEXT NOT NULL, status TEXT NOT NULL,
     attempts INTEGER NOT NULL DEFAULT 0, lease_until REAL, error_code TEXT,
+    fencing_token INTEGER NOT NULL DEFAULT 0,
     created_at REAL NOT NULL, updated_at REAL NOT NULL
 );
 """
@@ -77,6 +78,7 @@ _JOB_COLUMNS = {
     "attempts": "INTEGER NOT NULL DEFAULT 0",
     "lease_until": "REAL",
     "error_code": "TEXT",
+    "fencing_token": "INTEGER NOT NULL DEFAULT 0",
     "created_at": "REAL NOT NULL DEFAULT 0",
     "updated_at": "REAL NOT NULL DEFAULT 0",
 }
@@ -141,7 +143,8 @@ def _version_dict(row) -> dict[str, Any]:
 def _job_dict(row) -> dict[str, Any]:
     return {"id": row["id"], "guide_version_id": row["guide_version_id"], "owner": row["owner"],
             "status": row["status"], "attempts": row["attempts"], "lease_until": row["lease_until"],
-            "error_code": row["error_code"], "created_at": row["created_at"],
+            "error_code": row["error_code"], "fencing_token": row["fencing_token"],
+            "created_at": row["created_at"],
             "updated_at": row["updated_at"]}
 
 
@@ -358,14 +361,21 @@ def claim_guide_job(store: RunStore, *, lease_seconds: int = 600) -> dict[str, A
             return None
         attempts = row["attempts"] + 1
         lease_until = now + lease_seconds
-        db.execute("UPDATE guide_jobs SET status='leased',attempts=?,lease_until=?,error_code=NULL,"
-                   "updated_at=? WHERE id=?", (attempts, lease_until, now, row["id"]))
+        fencing_token = row["fencing_token"] + 1
+        changed = db.execute("UPDATE guide_jobs SET status='leased',attempts=?,lease_until=?,"
+                             "error_code=NULL,fencing_token=?,updated_at=? WHERE id=? AND "
+                             "fencing_token=? AND (lease_until IS NULL OR lease_until<=?)",
+                             (attempts, lease_until, fencing_token, now, row["id"],
+                              row["fencing_token"], now)).rowcount
+        if changed != 1:
+            raise Conflict("guide job claim lost")
         db.execute("UPDATE guide_versions SET status='parsing',updated_at=? WHERE id=? "
                    "AND status IN ('uploaded','parse_failed')", (now, row["guide_version_id"]))
-    return dict(row) | {"status": "leased", "attempts": attempts, "lease_until": lease_until}
+    return dict(row) | {"status": "leased", "attempts": attempts, "lease_until": lease_until,
+                         "fencing_token": fencing_token}
 
 
-def release_guide_job(store: RunStore, job_id: str) -> dict[str, Any]:
+def release_guide_job(store: RunStore, job_id: str, fencing_token: int) -> dict[str, Any]:
     """Return a claimed job to the queue without consuming the attempt.
 
     ``lease_until`` doubles as the earliest re-claim time with the same
@@ -378,17 +388,22 @@ def release_guide_job(store: RunStore, job_id: str) -> dict[str, Any]:
         row = db.execute("SELECT * FROM guide_jobs WHERE id=?", (job_id,)).fetchone()
         if row is None:
             raise KeyError("guide job not found")
-        if row["status"] == "leased":
-            delay = min(2 * (2 ** max(row["attempts"] - 1, 0)) * random.uniform(0.8, 1.2), 300)
-            db.execute("UPDATE guide_jobs SET status='queued',lease_until=?,updated_at=? WHERE id=?",
-                       (now + delay, now, job_id))
-            db.execute("UPDATE guide_versions SET status='uploaded',updated_at=? WHERE id=? AND status='parsing'",
-                       (now, row["guide_version_id"]))
+        if (row["status"] != "leased" or row["fencing_token"] != fencing_token
+                or row["lease_until"] is None or row["lease_until"] <= now):
+            raise Conflict("stale guide job lease")
+        delay = min(2 * (2 ** max(row["attempts"] - 1, 0)) * random.uniform(0.8, 1.2), 300)
+        changed = db.execute("UPDATE guide_jobs SET status='queued',lease_until=?,updated_at=? "
+                             "WHERE id=? AND fencing_token=? AND status='leased' AND lease_until>?",
+                             (now + delay, now, job_id, fencing_token, now)).rowcount
+        if changed != 1:
+            raise Conflict("stale guide job lease")
+        db.execute("UPDATE guide_versions SET status='uploaded',updated_at=? WHERE id=? AND status='parsing'",
+                   (now, row["guide_version_id"]))
         refreshed = db.execute("SELECT * FROM guide_jobs WHERE id=?", (job_id,)).fetchone()
     return _job_dict(refreshed)
 
 
-def finish_guide_job(store: RunStore, job_id: str, *, document: dict[str, Any] | None = None,
+def finish_guide_job(store: RunStore, job_id: str, fencing_token: int, *, document: dict[str, Any] | None = None,
                      error_code: str | None = None) -> dict[str, Any]:
     """Close a claimed job; returns ``{"job": ..., "version": ...}`` records.
 
@@ -405,6 +420,9 @@ def finish_guide_job(store: RunStore, job_id: str, *, document: dict[str, Any] |
         job = db.execute("SELECT * FROM guide_jobs WHERE id=?", (job_id,)).fetchone()
         if job is None:
             raise KeyError("guide job not found")
+        if (job["status"] != "leased" or job["fencing_token"] != fencing_token
+                or job["lease_until"] is None or job["lease_until"] <= now):
+            raise Conflict("stale guide job lease")
         version_id = job["guide_version_id"]
         if document is not None and not error_code:
             document_sha = _document_sha(document)
@@ -416,16 +434,22 @@ def finish_guide_job(store: RunStore, job_id: str, *, document: dict[str, Any] |
                  str(document.get("parser_version") or ""), str(document.get("schema_version") or ""),
                  json.dumps(document.get("prompt_versions") or {}, ensure_ascii=False),
                  json.dumps(issues, ensure_ascii=False), now, version_id))
-            db.execute("UPDATE guide_jobs SET status='completed',error_code=NULL,lease_until=NULL,"
-                       "updated_at=? WHERE id=?", (now, job_id))
+            changed = db.execute("UPDATE guide_jobs SET status='completed',error_code=NULL,lease_until=NULL,"
+                                 "updated_at=? WHERE id=? AND fencing_token=? AND status='leased' "
+                                 "AND lease_until>?", (now, job_id, fencing_token, now)).rowcount
+            if changed != 1:
+                raise Conflict("stale guide job lease")
         else:
             code = error_code or "GUIDE_PARSE_FAILED"
             status = "failed" if job["attempts"] >= MAX_GUIDE_JOB_ATTEMPTS else "parse_failed"
             issues = {"error_code": code, "errors": [{"code": code}], "attempts": job["attempts"]}
             db.execute("UPDATE guide_versions SET status=?,issues_json=?,updated_at=? WHERE id=?",
                        (status, json.dumps(issues, ensure_ascii=False), now, version_id))
-            db.execute("UPDATE guide_jobs SET status=?,error_code=?,lease_until=NULL,updated_at=? WHERE id=?",
-                       (status, code, now, job_id))
+            changed = db.execute("UPDATE guide_jobs SET status=?,error_code=?,lease_until=NULL,updated_at=? "
+                                 "WHERE id=? AND fencing_token=? AND status='leased' AND lease_until>?",
+                                 (status, code, now, job_id, fencing_token, now)).rowcount
+            if changed != 1:
+                raise Conflict("stale guide job lease")
         refreshed_job = db.execute("SELECT * FROM guide_jobs WHERE id=?", (job_id,)).fetchone()
         version = db.execute("SELECT * FROM guide_versions WHERE id=?", (version_id,)).fetchone()
     return {"job": _job_dict(refreshed_job), "version": _version_dict(version)}

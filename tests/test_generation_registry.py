@@ -142,7 +142,8 @@ def test_enablement_blocks_unregistered_custom_operation(tmp_path):
         }]}],
         "validation": {"errors": [], "warnings": [], "coverage_gaps": [], "clean": True},
     }
-    guide_store.finish_guide_job(store, version["job_id"], document=document)
+    job = guide_store.claim_guide_job(store)
+    guide_store.finish_guide_job(store, job["id"], job["fencing_token"], document=document)
     with pytest.raises(ValueError, match="GUIDE_OPERATION_REGISTRY_MISSING:G99:CUSTOM"):
         guide_store.set_current_guide(store, "alice", version["id"])
 

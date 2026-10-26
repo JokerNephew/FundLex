@@ -301,12 +301,24 @@ class Worker:
             document = build_guide_document(source, ModelGateway.from_env())
         except Exception as exc:  # noqa: BLE001 - job errors must not kill the worker
             if self._is_guide_stop(exc):
-                guide_store.release_guide_job(self.store, job["id"])
+                try:
+                    guide_store.release_guide_job(self.store, job["id"], job["fencing_token"])
+                except Conflict as lease_exc:
+                    if str(lease_exc) != "stale guide job lease":
+                        raise
                 return True
             code = getattr(exc, "code", None) or "GUIDE_PARSE_FAILED"
-            guide_store.finish_guide_job(self.store, job["id"], error_code=str(code))
+            try:
+                guide_store.finish_guide_job(self.store, job["id"], job["fencing_token"], error_code=str(code))
+            except Conflict as lease_exc:
+                if str(lease_exc) != "stale guide job lease":
+                    raise
             return True
-        guide_store.finish_guide_job(self.store, job["id"], document=document)
+        try:
+            guide_store.finish_guide_job(self.store, job["id"], job["fencing_token"], document=document)
+        except Conflict as lease_exc:
+            if str(lease_exc) != "stale guide job lease":
+                raise
         return True
 
     def _bound_guide_document(self, job: dict[str, Any]) -> dict[str, Any] | None:
