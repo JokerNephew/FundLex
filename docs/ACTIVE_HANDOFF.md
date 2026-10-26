@@ -8,7 +8,7 @@
 - 最终版 SHA `a9d2bc183e771575ca6c245fa788cb54b2b2ef69645cc9209a3e09f4545f9f9a`，修订版 SHA `e76ed1c5a29997193d645a33fa197de24fd6e8000a65514db907e6d934836112`。证据 `/tmp/opencode/v1-ux-20261027/production/`，可复用工具 `tools/verification/verify_v1_compare_feishu_ux.py`。
 - 1440/1280/768右侧rail、390前置rail，无溢出/页面错误。飞书页仅绑定相关内容，绑定码入口和非绑定内容已移除；真OAuth start/650PNG解码/退出清码通过。本人手机授权未代做；受控测试已验证已绑定、确认解除、失效、失败及迟到响应。
 - 两临时账号已清理，1task/1pair/1draft/4artifacts/7objects/1OAuth state/3sessions 删除，二次检查均无残留。无模型调用或费用；暂无后台进程或agent。
-- 待办：仅需推送最终文档提交（若远端未更新），无本次UI实现待办。FL-D279 普通合同 coverage 生成阻塞不变，不能把本次UI交付写成项目整体GO。后续不得用旧发布分支的前端覆盖这次新页面。
+- 版本：`codex/v1-compare-feishu-ux` 已推送 origin，无本次UI实现待办。FL-D279 普通合同 coverage 生成阻塞不变，不能把本次UI交付写成项目整体GO。后续不得用旧发布分支的前端覆盖这次新页面。
 
 ### 实施过程（历史，已由上方验收结果覆盖）
 
