@@ -198,6 +198,12 @@
 - 独立监督复现并确认：仅设置 `PYTHONPATH` 而不切换 cwd 时，发布预检可能从当前工作区导入同名 `fundlex`，不能证明部署目录可导入；已改为在被检查 root 内执行，断言 `fundlex`、`fundlex.api`、`fundlex.selective` 的 `__file__` 均位于该 root，并将临时数据目录放到 `/tmp/opencode`。
 - 监督还确认旧发布器失败后会留下已覆盖的部署树，且遗漏 `fundlex-feishu.service`；发布脚本已补充部署树/unit 备份、失败回滚尝试和 Feishu unit 同步/重启。此改动尚未以完整发布流程验证，P5 仍保持 NO-GO。
 
+### FL-D303 变更记录（2026-10-26，staging 发布器与隔离回归完成）
+
+- 发布器已实现 staging transaction、候选 manifest、隔离导入及模块来源断言、停止四服务后串行 schema 初始化、API→Recall→Compare→Feishu 顺序启动，以及失败保留 transaction 并回滚部署树/unit；主线提交 `224c4e3`，隔离测试增强 `13a3380`。
+- 最新仓库脚本、root `/usr/local/sbin/fundlex-publish`、部署脚本三者 SHA-256 均为 `a873e4b4961207a6fabdb5caf01f8d809c500b6a430ce9c80af8dad114de0338`，替代上文历史 `1ebe1b52...`；`bash -n` 与隔离回归 **11 passed**。覆盖真实项目 schema 初始化、迁移顺序、候选 import 来源、启动/迁移失败回滚、运行时写入、`.pyc` 并发、软链接边界。
+- 当前状态：**实现及隔离验证完成，正式候选完整发布待验证**。最近四服务 active 不作为本候选发布成功依据；FL-D307 的生产 dirty 快照仍保留为事故证据。schema 为向前迁移，代码回滚不能撤销数据库迁移；正式发布仍需核对四服务重启计数、日志、build、manifest、capabilities 和真实交付。
+
 ## FL-D306 评测 runner 使用未登记 5000/$5 cap，导致隔离账本越过历史上限（2026-10-26）
 
 - 发现日期：2026-10-26，Evaluation agent 对 FL-D304 的账本增量和 dev-21 运行 provenance 只读追查。
@@ -207,6 +213,12 @@
 - 状态与验证：**已确认，阻断下一轮新增真实模型调用**。本轮未写账本、未启动 `p6_run.py` 或 Langfuse；`reserved_cost` 累计 `$15.45037635` 是历史每次 reserve 的最坏估算总和，不代表当前未释放余额，当前 reserved 状态为 0。
 - 下一步：预算负责人决定是否承认 592 次历史消耗；D06 重新独立标注并冻结 labels amendment；新预算和候选 build 未冻结前不启动开发集/留出批次。
 - 变更记录：2026-10-26 新增；与 FL-D304 同一账本问题，FL-D304 记录汇总影响，本条记录未登记 cap 的具体 provenance 根因。
+
+### FL-D306 变更记录（2026-10-26，预算 admission 接入）
+
+- 主线 `da0562c/690c352` 新增只读 ledger admission，校验 protocol hash、run/build、selection/labels、ledger inode/历史前缀、请求/费用/并发上限、model mode、primary/review role 与每合同 allowance；用 O_EXCL 写不可覆盖 manifest，不创建或重置账本。
+- `95a6836` 将 admission 强制接入 `p6_run.py`：参数缺失无法启动；拒绝返回 2，并在账号凭据、HTTP client、运行目录和上传之前停止。预算 guard **12 passed**，P6 拒绝顺序 **1 passed**；均为临时 fixture/替身测试，没有真实模型或历史账本写入。
+- 状态：**本地 launcher admission 已实施并通过定向回归；预算阻塞未解除**。该 runner 通过 HTTP 调用既有 API/Worker，本地环境检查尚不能证明外部服务实际使用相同 ledger/cap/model/build/guide/prompt；正式批次前必须补齐服务侧身份核对，不能只凭本地 manifest 启动批次。历史 592 次超 cap 未获新的授权，当前 2293/$2.32384410 不变；禁止新建 ledger 绕过。
 
 ## FL-D307 误执行截断发布器片段，把 dirty 工作区快照同步到生产（2026-10-26）
 
@@ -253,6 +265,13 @@
 - 下一步：修正并独立复核 D06 标签，检查其余 19 份标签与原件/指引对账，再决定是否保留本轮开发集和是否把旧 holdout 只能称为历史留出回归。
 - 变更记录：2026-10-26 新增；不因标签修正删除旧分母，修正后的分母必须生成新版本并保留 hash。
 
+### FL-D305 变更记录（2026-10-26，两次盲读与 provisional 对账）
+
+- 独立盲读证据分别在 `/tmp/opencode/incomplete-remediation-20261026/blind-d06-20261026T055551877754Z/`、`blind-d06-review2-20261026T061322Z/`；均未读取旧 labels/预测/评测结果或对方结果，未调用模型。
+- 两者一致确认 eligible、A/C/E/F/Y，申购费组 A/Y、销售服务费组 C/E/F、非浮动管理费；22 组规则为 13 needs_change、3 already_satisfied、6 not_applicable，G05/G06/G17 边界一致。第一份展开正文/摘要实际位置给出 17 个写入目标，第二份以规则组给出 13 个需改组和 16 个适用组；这些是不同粒度，尚未批准评分口径。
+- 对账路径 `d06-label-amendment-draft-20261026/review-reconciliation.json`，SHA-256 `18d8d7cc3a45b07449f18870e66bff66ac8ff6c3939b0f1acb47c96a5e92497e`。第一份 guide `45dd7746...` 是语义 document hash；第二份 `b77be53c...` 对应源 DOCX hash，第一份 evidence 也包含该源 hash；不得将两种定义混为不一致的同一字段。冻结前仍须实际重算并分别命名。
+- 状态：**两份独立标注及对账完成，业务口径批准、新 labels/hash、gold 冻结均未完成**。原 labels 和历史评分保持原样，不能用盲读一致直接冒称 gold 批准。
+
 ## FL-D309 传递重叠编辑未按连通分量联合规划（2026-10-26）
 
 - 发现日期：2026-10-26，Engine agent 审查 `RECALL_EDIT_OVERLAP` 的规划和 Joint Compose 路径。
@@ -262,6 +281,13 @@
 - 状态：**已实施并通过代码回归，真实合同改善待验证**。未新增真实模型调用；零模型真实原件重放正在进行，不等于正式交付。
 - 下一步：对保存真实失败报告离线重放；预算与标签门解除后按同一冻结候选真实复测。
 - 变更记录：2026-10-26 新增，保留历史 overlap 失败分母。
+
+### FL-D309 变更记录（2026-10-26，D01/D04 零模型重放）
+
+- 当前候选与历史模型 checkpoint 在真实原件上的离线产物保存于 `/tmp/opencode/incomplete-remediation-20261026/offline-engine-d01-production/current-replay/` 与 `offline-engine-d04-production/current-replay/`。执行模式明确为 `offline_checkpoint_replay`，未发生新的网络/模型请求。
+- D01 为 incomplete，5 个 open obligations、11 个 blocking unresolved；Claim Replay 本身 failures=[]，但 G08/G11/G12 的 sweep/final omission 继续阻塞。G08/G12 reason 包含“已匹配/No finding”而仍被结构化登记为 finding，G11 reason 指向残余 C 类免申购费重复句；需核对结构化 outcome、实际 DOCX 和同站点 effect，不能按 reason 关键词删除失败。
+- D04 为 incomplete，2 个 open obligations、6 个 blocking unresolved；G03@p52 与 G18@p182 为 `CLAIM_OPERATION_NOT_PLANNED`，只输出 working_final/working_redline。现有连通分量修复不足以证明这两份合同完整交付，需继续分析目标/site 的来源和范围；不能据此推断两个失败均由 overlap 导致。
+- 状态：**离线重放完成且仍有阻塞，真实复验未完成**。原报告、分母与产物保留；后续修复必须保持错误产物 fail closed，预算/labels 恢复后真实复验。
 
 ## FL-D310 Replay 使用原文判断产物、占位污染站点及 sibling 借站点（2026-10-26）
 

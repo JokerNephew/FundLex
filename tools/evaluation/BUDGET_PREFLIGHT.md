@@ -1,8 +1,10 @@
 # Evaluation budget preflight
 
 `budget_preflight.py` is a standalone, offline admission guard for a new
-evaluation run. It is deliberately separate from `p6_run.py`; existing runners
-keep their public arguments and behavior until a caller explicitly wraps them.
+evaluation run. `p6_run.py` now requires this admission explicitly and performs
+it before generating credentials, creating a run directory, constructing an HTTP
+client, registering an account, or uploading a contract. Other runners still
+need an equivalent explicit integration before they may start work.
 
 ## Frozen protocol
 
@@ -113,4 +115,6 @@ guarded_start(
 `start` is unreachable on rejection and receives a read-only copy of the
 unchanged process environment. The integration must pass the same run and case
 arguments to the existing runner and must not add cap overrides. The current
-`p6_run.py` is intentionally not modified by this module.
+`p6_run.py` passes its selected case IDs and the same per-case allowances to
+`preflight`; a rejected admission returns exit code 2 and leaves the
+runner-side account, run directory, and HTTP path untouched.

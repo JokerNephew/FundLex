@@ -1,6 +1,17 @@
 # FundLex 当前断点（ACTIVE_HANDOFF）
 
-## 当前工作区快照（2026-10-26，incomplete 修复接续）
+## 当前工作区快照（2026-10-26，预算门禁与离线重放接续）
+
+- 当前分支 `refactor/backend-engine-finalization`，HEAD `95a6836`（P6 强制预算 admission），相对 origin ahead 33。工作区保留既有用户 dirty 修改：`frontend/app.css`、`frontend/app.js`、`frontend/src/pages/Settings/index.tsx`、`frontend/src/types/api.ts`、`fundlex/api.py`、`fundlex/integrations/feishu/oauth.py`、`tests/test_feishu_oauth_api.py`；本轮源码和测试已提交，未回退这些修改。
+- 当前候选已包含 Engine `165dbdf/a872628`、Replay `4fa137d`、Delivery `18b4183`、发布器 `224c4e3`、发布器回归 `13a3380`、预算 guard `da0562c/690c352`、P6 接入 `95a6836`。仓库发布脚本、root publisher、部署脚本 SHA-256 均为 `a873e4b4961207a6fabdb5caf01f8d809c500b6a430ce9c80af8dad114de0338`；四个生产服务最近核对均 active。正式候选尚未执行完整 staging 发布或生产发布。
+- 本轮新增定向验证：预算 guard **12 passed**、P6 拒绝顺序 **1 passed**；P6 模拟 ledger 超限返回 2，未构造 HTTP client、账号凭据、运行目录或 manifest。`p6_run.py` 已把 protocol、selection、labels、build、ledger、model mode 和 role snapshot 的 admission 置于账号注册和上传之前。
+- 最近合并主线全量回归为 **1564 passed / 52 skipped / 3 warnings / 370.31s**；前端 typecheck/lint/build、Vitest **14 passed**，V1/V2 浏览器 **40 passed / 81.21s**。这些是新 P6 提交前的全量结论，不能写成本次 HEAD 的新全量通过。系统 Python 为 3.6，项目使用 `.venv/bin/python`。
+- D06 两次独立盲读均为 `eligible`、A/C/E/F/Y，A/Y 申购费组、C/E/F 服务费组，13 个规则组需改、3 个已满足、6 个不适用。对账证据 `/tmp/opencode/incomplete-remediation-20261026/d06-label-amendment-draft-20261026/review-reconciliation.json`，SHA `18d8d7cc3a45b07449f18870e66bff66ac8ff6c3939b0f1acb47c96a5e92497e`。17 个实际业务位置与 13 个需改规则组仍并列保存，待业务口径批准；gold 未冻结。
+- D01/D04 当前候选离线重放位于 `/tmp/opencode/incomplete-remediation-20261026/offline-engine-d01-production/current-replay/` 和 `offline-engine-d04-production/current-replay/`：均为 `offline_checkpoint_replay/incomplete`，只有 working 文件；D01 `open_obligations=5 / blocking_unresolved=11`，D04 `2 / 6`。离线重放不计真实 Worker/model 复测或正式交付。
+- 新增真实模型消费为 0。隔离 ledger `/tmp/opencode/operation-validation-20261024/ledger.sqlite` 仍为 2293 requests / `$2.32384410`，超过历史 2000/$2 cap；生产历史账本 27327 requests / 约 `$22.2562593` 只是消费快照，不是新授权。预算与 labels 门继续阻断 qualification/dev/holdout。
+- 项目继续 **NO-GO**：固定 D01–D20 gate 0/20、D06 gold、规则发布、正式候选发布、普通默认入口真实 E2E、真实 OAuth 回调、MySQL 并发和 Compare coverage 尚未闭合。以下旧时间线保留历史状态，不代表当前快照。
+
+## 历史快照（2026-10-26，incomplete 修复初始与合并过程）
 
 - 当前分支为 `refactor/backend-engine-finalization`，HEAD `1131a8cd74b9b228bef103fcb0dbd6668a907133`；工作区保留既有 dirty 修改和 `docs/INCOMPLETE_REMEDIATION_PLAN_20261026.md`，尚未 push。P0 基线快照保存在 `/tmp/opencode/incomplete-remediation-20261026/`，包含 dirty patch、部署哈希、服务状态和模型账本摘要。
 - 本轮只从该 HEAD 创建独立 worktree：Engine、Replay、Evaluation、Delivery 四条审查线并行工作；主工作区不回退既有修改，集中问题记录由主 agent 统一维护。当前尚未合并 agent 代码、部署本轮候选或新增真实模型调用。
