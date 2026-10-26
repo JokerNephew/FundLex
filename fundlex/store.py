@@ -607,22 +607,29 @@ class RunStore:
 
     def claim(self, *, lease_seconds: int = 300, max_attempts: int = 3) -> dict[str, Any] | None:
         now = time.time()
+        # The cleanup candidates are only a hint.  Read them before the write
+        # transaction so another worker can finish or reclaim one; every
+        # cleanup UPDATE below repeats the full fencing predicate.
+        exhausted_sql = """SELECT id,batch_id,source_sha256,fencing_token,attempt FROM documents
+            WHERE status IN ('leased','running') AND lease_until<=? AND attempt>=?"""
+        with self._connect() as db:
+            exhausted = db.execute(exhausted_sql, (now, max_attempts)).fetchall()
         with self._connect() as db:
             db.execute("BEGIN IMMEDIATE")
-            exhausted = db.execute("""SELECT id,batch_id,source_sha256 FROM documents
-                WHERE status IN ('leased','running') AND lease_until<=? AND attempt>=?""",
-                (now, max_attempts)).fetchall()
             for expired in exhausted:
                 report = {"document_id": expired["id"], "source_sha256": expired["source_sha256"],
                           "qualification_status": "failed", "delivery_status": "not_generated",
                           "error_code": "WORKER_ATTEMPTS_EXHAUSTED",
                           "errors": [{"code": "WORKER_ATTEMPTS_EXHAUSTED", "stage": "worker"}]}
-                db.execute("""UPDATE documents SET status='failed',qualification_status='failed',
+                changed = db.execute("""UPDATE documents SET status='failed',qualification_status='failed',
                     delivery_status='not_generated',error_code='WORKER_ATTEMPTS_EXHAUSTED',
                     report_json=?,lease_until=NULL,started_at=COALESCE(started_at,created_at),
-                    finished_at=?,updated_at=? WHERE id=?""",
-                    (json.dumps(report), now, now, expired["id"]))
-                self._refresh_batch(db, expired["batch_id"], now)
+                    finished_at=?,updated_at=? WHERE id=? AND fencing_token=?
+                    AND status IN ('leased','running') AND lease_until<=? AND attempt>=?""",
+                    (json.dumps(report), now, now, expired["id"], expired["fencing_token"],
+                     now, max_attempts)).rowcount
+                if changed == 1:
+                    self._refresh_batch(db, expired["batch_id"], now)
             active_scope = "active.batch_id=d.batch_id"
             if db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='task_batches'").fetchone():
                 active_scope = """COALESCE((SELECT task_id FROM task_batches WHERE batch_id=active.batch_id),active.batch_id)
@@ -645,9 +652,15 @@ class RunStore:
                 return None
             token = row["fencing_token"] + 1
             attempt = row["attempt"] + 1
-            db.execute("""UPDATE documents SET status='leased', attempt=?, fencing_token=?, lease_until=?,
-                next_attempt_at=NULL, started_at=COALESCE(started_at,?), updated_at=? WHERE id=?""",
-                (attempt, token, now + lease_seconds, now, now, row["id"]))
+            changed = db.execute("""UPDATE documents SET status='leased', attempt=?, fencing_token=?, lease_until=?,
+                next_attempt_at=NULL, started_at=COALESCE(started_at,?), updated_at=?
+                WHERE id=? AND fencing_token=? AND attempt=?
+                AND (status='queued' OR (status='retry_wait' AND next_attempt_at<=?)
+                     OR (status IN ('leased','running') AND lease_until<=?))""",
+                (attempt, token, now + lease_seconds, now, now, row["id"],
+                 row["fencing_token"], row["attempt"], now, now)).rowcount
+            if changed != 1:
+                raise Conflict("claim lost")
             db.execute("UPDATE batches SET status='running',updated_at=? WHERE id=?", (now, row["batch_id"]))
             return dict(row) | {"attempt": attempt, "fencing_token": token}
 
@@ -692,12 +705,16 @@ class RunStore:
                 raise StoreError("invalid artifact")
             verified[kind] = (sha256_file(path), path.stat().st_size)
         now = time.time()
-        with self._connect() as db:
-            db.execute("BEGIN IMMEDIATE")
-            row = db.execute("SELECT * FROM documents WHERE id=?", (document_id,)).fetchone()
+        published: list[Path] = []
+        artifact_keys: dict[str, str] = {}
+        try:
+            # This read is advisory.  A newer worker may take over after it;
+            # the final UPDATE is the fencing authority.
+            with self._connect() as db:
+                row = db.execute("SELECT * FROM documents WHERE id=?", (document_id,)).fetchone()
             if not row or row["fencing_token"] != token or row["status"] not in ("leased", "running"):
                 raise Conflict("stale worker lease")
-            if row["lease_until"] is not None and row["lease_until"] < now:
+            if row["lease_until"] is None or row["lease_until"] <= now:
                 raise Conflict("expired worker lease")
             if _requires_actual_review(report) and report.get("source_sha256") != row["source_sha256"]:
                 raise Conflict("ACTUAL_CONTENT_REVIEW_SOURCE_MISMATCH")
@@ -714,48 +731,78 @@ class RunStore:
                 digest, size = verified[kind]
                 if sha256_file(target) != digest:
                     raise Conflict("artifact copy verification failed")
-                db.execute("INSERT OR REPLACE INTO artifacts VALUES (?,?,?,?,?)",
-                           (document_id, kind, key, digest, size))
-            db.execute("""UPDATE documents SET status=?,qualification_status=?,delivery_status=?,error_code=?,
-                report_json=?,execution_mode=?,lease_until=NULL,finished_at=?,updated_at=? WHERE id=?""",
-                ("failed" if failed else "succeeded", report.get("qualification_status"), delivery,
-                 error_code, json.dumps(report, ensure_ascii=False), str(mode), now, now, document_id))
-            self._refresh_batch(db, row["batch_id"], now)
+                published.append(target)
+                artifact_keys[kind] = key
+            transition_now = time.time()
+            with self._connect() as db:
+                db.execute("BEGIN IMMEDIATE")
+                changed = db.execute("""UPDATE documents SET status=?,qualification_status=?,delivery_status=?,error_code=?,
+                    report_json=?,execution_mode=?,lease_until=NULL,finished_at=?,updated_at=?
+                    WHERE id=? AND fencing_token=? AND status IN ('leased','running')
+                    AND lease_until>? AND attempt=?""",
+                    ("failed" if failed else "succeeded", report.get("qualification_status"), delivery,
+                     error_code, json.dumps(report, ensure_ascii=False), str(mode), transition_now, transition_now,
+                     document_id, token, transition_now, row["attempt"])).rowcount
+                if changed != 1:
+                    raise Conflict("stale worker lease")
+                for kind, key in artifact_keys.items():
+                    digest, size = verified[kind]
+                    db.execute("INSERT OR REPLACE INTO artifacts VALUES (?,?,?,?,?)",
+                               (document_id, kind, key, digest, size))
+                self._refresh_batch(db, row["batch_id"], transition_now)
+        except Exception:
+            for target in published:
+                target.unlink(missing_ok=True)
+            raise
 
     def retry(self, document_id: str, token: int, *, error_code: str, max_attempts: int = 3,
               base_delay_seconds: int = 2) -> None:
         now = time.time()
+        # Validate outside the write transaction so a newer worker can commit
+        # a takeover between this read and the fenced UPDATE.
+        with self._connect() as db:
+            row = db.execute("SELECT * FROM documents WHERE id=?", (document_id,)).fetchone()
+        if not row or row["fencing_token"] != token or row["status"] not in ("leased", "running"):
+            raise Conflict("stale worker lease")
+        if row["lease_until"] is None or row["lease_until"] <= now:
+            raise Conflict("expired worker lease")
+        terminal = row["attempt"] >= max_attempts
+        pause_required = error_code in {"MODEL_CIRCUIT_OPEN", "MODEL_GLOBAL_CALL_BUDGET_EXCEEDED", "MODEL_COST_BUDGET_EXCEEDED", "MODEL_CALL_BUDGET_EXCEEDED", "MODEL_LEDGER_UNAVAILABLE"}
+        delay = min(base_delay_seconds * (2 ** max(row["attempt"] - 1, 0)) * random.uniform(0.8, 1.2), 300)
+        report_json = None
+        if terminal:
+            report = {"document_id": document_id, "source_sha256": row["source_sha256"],
+                      "qualification_status": "failed", "delivery_status": "not_generated",
+                      "error_code": error_code, "errors": [{"code": error_code, "stage": "worker"}]}
+            report_json = json.dumps(report)
+        transition_now = time.time()
         with self._connect() as db:
             db.execute("BEGIN IMMEDIATE")
-            row = db.execute("SELECT * FROM documents WHERE id=?", (document_id,)).fetchone()
-            if not row or row["fencing_token"] != token or row["status"] not in ("leased", "running"):
+            changed = db.execute("""UPDATE documents SET status=?,error_code=?,next_attempt_at=?,lease_until=NULL,
+                finished_at=CASE WHEN ? THEN ? ELSE finished_at END,
+                report_json=CASE WHEN ? THEN ? ELSE report_json END,
+                qualification_status=CASE WHEN ? THEN 'failed' ELSE qualification_status END,
+                delivery_status=CASE WHEN ? THEN 'not_generated' ELSE delivery_status END,
+                updated_at=? WHERE id=? AND fencing_token=? AND status IN ('leased','running')
+                AND lease_until>? AND attempt=?""",
+                            ("failed" if terminal else "retry_wait", error_code,
+                            None if terminal else transition_now + delay, 1 if terminal else 0, transition_now,
+                            1 if terminal else 0, report_json, 1 if terminal else 0,
+                            1 if terminal else 0, transition_now, document_id, token, transition_now,
+                            row["attempt"])).rowcount
+            if changed != 1:
                 raise Conflict("stale worker lease")
-            if row["lease_until"] is None or row["lease_until"] <= now:
-                raise Conflict("expired worker lease")
-            terminal = row["attempt"] >= max_attempts
-            pause_required = error_code in {"MODEL_CIRCUIT_OPEN", "MODEL_GLOBAL_CALL_BUDGET_EXCEEDED", "MODEL_COST_BUDGET_EXCEEDED", "MODEL_CALL_BUDGET_EXCEEDED", "MODEL_LEDGER_UNAVAILABLE"}
-            delay = min(base_delay_seconds * (2 ** max(row["attempt"] - 1, 0)) * random.uniform(0.8, 1.2), 300)
-            db.execute("""UPDATE documents SET status=?,error_code=?,next_attempt_at=?,lease_until=NULL,
-                finished_at=CASE WHEN ? THEN ? ELSE finished_at END,updated_at=? WHERE id=?""",
-                       ("failed" if terminal else "retry_wait", error_code,
-                        None if terminal else now + delay, 1 if terminal else 0, now, now, document_id))
-            if terminal:
-                report = {"document_id": document_id, "source_sha256": row["source_sha256"],
-                          "qualification_status": "failed", "delivery_status": "not_generated",
-                          "error_code": error_code, "errors": [{"code": error_code, "stage": "worker"}]}
-                db.execute("UPDATE documents SET report_json=?,qualification_status='failed',delivery_status='not_generated' WHERE id=?",
-                           (json.dumps(report), document_id))
-            self._refresh_batch(db, row["batch_id"], now)
+            self._refresh_batch(db, row["batch_id"], transition_now)
             if not terminal and (pause_required or (row["attempt"] >= 2 and error_code in {"MODEL_NETWORK_ERROR", "MODEL_RETRY_EXHAUSTED"})):
-                db.execute("UPDATE batches SET status='paused',updated_at=? WHERE id=?", (now, row["batch_id"]))
+                db.execute("UPDATE batches SET status='paused',updated_at=? WHERE id=?", (transition_now, row["batch_id"]))
             if pause_required or (not terminal and row["attempt"] >= 2 and error_code in {"MODEL_NETWORK_ERROR", "MODEL_RETRY_EXHAUSTED"}):
                 # The task layer is optional for legacy RunStore callers. A
                 # global budget stop pauses all associated execution segments.
                 if db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='task_batches'").fetchone():
                     task = db.execute("SELECT task_id FROM task_batches WHERE batch_id=?", (row["batch_id"],)).fetchone()
                     if task:
-                        db.execute("UPDATE tasks SET paused=1,pause_reason=?,updated_at=? WHERE id=?", (error_code, now, task["task_id"]))
-                        db.execute("UPDATE batches SET status='paused',updated_at=? WHERE id IN (SELECT batch_id FROM task_batches WHERE task_id=?) AND status!='completed'", (now, task["task_id"]))
+                        db.execute("UPDATE tasks SET paused=1,pause_reason=?,updated_at=? WHERE id=?", (error_code, transition_now, task["task_id"]))
+                        db.execute("UPDATE batches SET status='paused',updated_at=? WHERE id IN (SELECT batch_id FROM task_batches WHERE task_id=?) AND status!='completed'", (transition_now, task["task_id"]))
 
     def pause(self, owner: str, batch_id: str) -> dict[str, Any]:
         self.get_batch(owner, batch_id)
