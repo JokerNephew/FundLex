@@ -37,6 +37,36 @@ def test_sqlite_url_path_and_row_compatibility(tmp_path: Path, monkeypatch):
     assert Database.from_env(tmp_path / "plain.sqlite3").path == plain.path
 
 
+def test_database_repr_and_mysql_failure_never_expose_url_or_driver_text(monkeypatch):
+    import types
+    import fundlex.db as db_module
+
+    secret_url = "mysql://report_user:super-secret@db.internal:3306/fundlex?charset=utf8mb4&ssl=true"
+    database = Database(secret_url)
+    rendered = repr(database)
+    assert "super-secret" not in rendered
+    assert "report_user" not in rendered
+    assert secret_url not in rendered
+    assert "charset" not in rendered and "ssl" not in rendered
+
+    class MySQLError(Exception):
+        pass
+
+    def connect(**kwargs):
+        assert kwargs["password"] == "super-secret"
+        raise MySQLError("Access denied for user 'report_user' using password: YES; /srv/fundlex/auth.db")
+
+    fake_driver = types.SimpleNamespace(MySQLError=MySQLError, connect=connect)
+    monkeypatch.setattr(db_module, "pymysql", fake_driver)
+    with pytest.raises(db_module.DatabaseError) as error:
+        with database.connect():
+            pass
+    assert str(error.value) == "DATABASE_CONNECTION_FAILED"
+    assert "super-secret" not in str(error.value)
+    assert "report_user" not in str(error.value)
+    assert "/srv/fundlex" not in str(error.value)
+
+
 def test_run_store_accepts_sqlite_url(tmp_path: Path):
     from fundlex.store import RunStore
 

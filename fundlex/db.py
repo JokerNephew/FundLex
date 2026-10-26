@@ -23,6 +23,10 @@ pymysql = None  # Optional dependency, imported on the first mysql:// use.
 class DatabaseError(Exception):
     """Connection or execution failure callers may retry or report."""
 
+    def __init__(self, message: str = "DATABASE_ERROR", *, code: str | None = None):
+        self.code = code or (message if re.fullmatch(r"[A-Z][A-Z0-9_.-]{1,96}", message) else "DATABASE_ERROR")
+        super().__init__(self.code)
+
 
 class Row:
     """Minimal ``sqlite3.Row`` work-alike shared by both dialects.
@@ -132,7 +136,10 @@ class Connection:
             wrapped = self._database.wrap_error(exc)
             if wrapped is exc:
                 raise
-            raise wrapped from exc
+            # The driver exception may contain a connection URL, SQL or local
+            # path.  DatabaseError keeps only a stable code, so do not retain
+            # the unsafe driver exception as a public traceback cause.
+            raise wrapped from None
         return Cursor(raw_cursor)
 
     def execute(self, sql: str, params=()) -> Cursor:
@@ -251,7 +258,7 @@ class Database:
                     autocommit=False, connect_timeout=int(self.timeout),
                 )
             except module.MySQLError as exc:
-                raise DatabaseError(str(exc)) from exc
+                raise DatabaseError("DATABASE_CONNECTION_FAILED") from None
         return sqlite3.connect(self._sqlite_target or ":memory:", timeout=self.timeout)
 
     def wrap_error(self, exc: Exception) -> Exception:
@@ -259,7 +266,7 @@ class Database:
         if self.dialect == "mysql":
             module = _pymysql_module()
             if isinstance(exc, module.MySQLError):
-                return DatabaseError(f"{exc.__class__.__name__}: {exc}")
+                return DatabaseError("DATABASE_OPERATION_FAILED")
         return exc
 
     def prepare(self, sql: str) -> tuple[str, Any]:
@@ -292,7 +299,9 @@ class Database:
         return ("run", statement.replace("?", "%s"))
 
     def __repr__(self) -> str:
-        return f"Database({self.dialect!r}, {self.target!r})"
+        if self.dialect == "mysql":
+            return "Database(dialect='mysql', host='<redacted>', database='<redacted>')"
+        return "Database(dialect='sqlite', path='<redacted>')"
 
 
 def _pymysql_module():
@@ -301,20 +310,21 @@ def _pymysql_module():
         try:
             import pymysql as module
         except ImportError as exc:  # pragma: no cover - dependency is declared
-            raise DatabaseError(
-                "pymysql is required for mysql:// targets; install 'pymysql>=1.1'"
-            ) from exc
+            raise DatabaseError("DATABASE_DRIVER_MISSING") from exc
         pymysql = module
     return pymysql
 
 
 def _parse_mysql_url(target: str) -> dict[str, Any]:
-    parts = urlsplit(target)
+    try:
+        parts = urlsplit(target)
+    except ValueError:
+        raise DatabaseError("DATABASE_URL_INVALID") from None
     query = {key: values[-1] for key, values in parse_qs(parts.query).items()}
     try:
         port = parts.port or 3306
     except ValueError as exc:
-        raise DatabaseError(f"invalid mysql port in target: {exc}") from None
+        raise DatabaseError("DATABASE_URL_INVALID") from None
     return {
         "host": parts.hostname or "127.0.0.1",
         "port": port,
