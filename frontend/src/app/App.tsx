@@ -14,6 +14,7 @@ import { ReviewPage } from '../pages/Review/ReviewPage'
 import { TasksPage } from '../pages/Tasks'
 import { UsersPage } from '../pages/Users'
 import { ComparePage } from '../pages/Compare/ComparePage'
+import { getBasePath } from '../api/client'
 
 function AppRoutes() {
   const auth = useAuthStore()
@@ -43,5 +44,5 @@ function AppRoutes() {
 export function App() {
   const load = useAuthStore((state) => state.load)
   useEffect(() => { void load() }, [load])
-  return <BrowserRouter><AppRoutes /></BrowserRouter>
+  return <BrowserRouter basename={getBasePath() || undefined}><AppRoutes /></BrowserRouter>
 }

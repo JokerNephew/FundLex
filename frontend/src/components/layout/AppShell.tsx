@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Link, NavLink, Outlet } from 'react-router-dom'
 import { useAuthStore } from '../../stores/auth'
+import { assetPath } from '../../api/client'
 import { useTasks } from '../../api/hooks'
 import { Button } from '../ui'
 
@@ -101,8 +102,8 @@ export function AppShell() {
     }
   }, [helpOpen])
   return <div className="app-shell">
-      <header className="topbar">
-       <NavLink className="brand" to="/workspace"><img src="/static/assets/gf-logo-mark.png" alt="广发基金" /><span>FundLex</span></NavLink>
+       <header className="topbar">
+        <NavLink className="brand" to="/workspace"><img src={assetPath('/static/assets/gf-logo-mark.png')} alt="广发基金" /><span>FundLex</span></NavLink>
       <div className="topbar-actions">
         <span className="identity">{user?.display_name || user?.username || (capabilities?.auth_mode === 'dev' ? '本地开发身份' : '')}</span>
         <div className="notification-center">

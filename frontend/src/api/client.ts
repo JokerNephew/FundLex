@@ -42,11 +42,26 @@ function authHeaders(): Headers {
   return headers
 }
 
-function assertApiPath(path: string): string {
+export function getBasePath(): string {
+  if (typeof document === 'undefined') return ''
+  const configured = document.querySelector<HTMLMetaElement>('meta[name="fundlex-base-path"]')?.content
+  const base = (configured || '').trim()
+  if (!base || base === '/') return ''
+  return `/${base.replace(/^\/+|\/+$/g, '')}`
+}
+
+export function assetPath(path: string): string {
+  if (!path.startsWith('/') || path.startsWith('//')) {
+    throw new Error('页面返回了不支持的资源路径。')
+  }
+  return `${getBasePath()}${path}`
+}
+
+export function assertApiPath(path: string): string {
   if (!path.startsWith('/api/') || path.startsWith('//')) {
     throw new Error('服务端返回了不支持的路径。')
   }
-  return path
+  return `${getBasePath()}${path}`
 }
 
 async function parseError(response: Response): Promise<never> {

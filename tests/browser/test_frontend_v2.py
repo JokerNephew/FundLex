@@ -58,6 +58,33 @@ def live_app(tmp_path, monkeypatch):
     sock.close()
 
 
+@pytest.fixture
+def prefixed_live_app(tmp_path, monkeypatch):
+    """Run the React shell behind the same ``/test/`` prefix as isolation."""
+    import uvicorn
+    from fundlex.api import create_app
+
+    monkeypatch.setenv("FUNDLEX_AUTH_MODE", "dev")
+    monkeypatch.setenv("FUNDLEX_FRONTEND_VERSION", "v2")
+    monkeypatch.setenv("FUNDLEX_FRONTEND_BASE_PATH", "/test")
+    monkeypatch.setenv("FUNDLEX_DATA_DIR", str(tmp_path / "module-default"))
+    app = create_app(tmp_path / "data", auth_db=str(tmp_path / "auth.sqlite3"))
+    server = uvicorn.Server(uvicorn.Config(app, log_level="critical"))
+    sock = socket.socket()
+    sock.bind(("127.0.0.1", 0))
+    base = f"http://127.0.0.1:{sock.getsockname()[1]}/test"
+    thread = threading.Thread(target=server.run, kwargs={"sockets": [sock]}, daemon=True)
+    thread.start()
+    deadline = time.monotonic() + 10
+    while not server.started and thread.is_alive() and time.monotonic() < deadline:
+        time.sleep(0.02)
+    assert server.started
+    yield base
+    server.should_exit = True
+    thread.join(timeout=10)
+    sock.close()
+
+
 def test_react_routes_and_deep_links(browser, live_app):
     context = browser.new_context(viewport={"width": 1440, "height": 900})
     context.add_init_script("localStorage.setItem('fundlex-dev-user','v2-browser-check')")
@@ -111,6 +138,33 @@ def test_built_entry_and_assets_are_cacheable(browser, live_app):
             asset_response = context.request.get(live_app + asset)
             assert asset_response.ok
             assert "immutable" in asset_response.headers.get("cache-control", "")
+    finally:
+        context.close()
+
+
+def test_prefixed_entry_routes_assets_api_and_logo_same_origin(browser, prefixed_live_app):
+    context = browser.new_context(viewport={"width": 390, "height": 844})
+    context.add_init_script("localStorage.setItem('fundlex-dev-user','v2-prefix-browser-check');")
+    page = context.new_page()
+    page_errors: list[str] = []
+    console_errors: list[str] = []
+    failed_resources: list[str] = []
+    page.on("pageerror", lambda error: page_errors.append(str(error)))
+    page.on("console", lambda message: console_errors.append(message.text) if message.type == "error" else None)
+    page.on("requestfailed", lambda request: failed_resources.append(f"{request.url}: {request.failure}"))
+    try:
+        response = page.goto(prefixed_live_app + "/tasks/new", wait_until="networkidle")
+        assert response and response.ok
+        assert "新建任务" in page.locator("body").inner_text()
+        logo_src = page.locator("img[alt='广发基金']").get_attribute("src")
+        assert logo_src and logo_src.startswith("/test/static/")
+        assert all(url.startswith(prefixed_live_app + "/") for url in page.evaluate("performance.getEntriesByType('resource').map(entry => entry.name)"))
+        metrics = page.evaluate("""() => ({ viewport: innerWidth, documentWidth: document.documentElement.scrollWidth, bodyWidth: document.body.scrollWidth })""")
+        assert metrics["documentWidth"] <= metrics["viewport"]
+        assert metrics["bodyWidth"] <= metrics["viewport"]
+        assert not page_errors, page_errors
+        assert not console_errors, console_errors
+        assert not failed_resources, failed_resources
     finally:
         context.close()
 
