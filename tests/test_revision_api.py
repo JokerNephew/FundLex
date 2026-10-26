@@ -4,12 +4,16 @@ from __future__ import annotations
 
 import json
 import shutil
+import tempfile
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import pytest
+from lxml import etree
 from fastapi.testclient import TestClient
 
 from fundlex.api import create_app
+from fundlex.docx import DOCUMENT, Q, ZipLimits, _read_parts
 
 REAL = Path("var/recall-first-evaluation/p6-dev-round1-01/D01")
 
@@ -42,6 +46,19 @@ def seeded(tmp_path):
 
 def _headers() -> dict:
     return {"X-FundLex-User": "dev"}
+
+
+def _accepted_paragraph_text(path: Path) -> list[str]:
+    root = etree.fromstring(_read_parts(str(path), ZipLimits())[DOCUMENT])
+    texts = []
+    for paragraph in root.iter(Q("p")):
+        parts = []
+        for node in paragraph.iter():
+            if node.tag != Q("t") or any(parent.tag == Q("del") for parent in node.iterancestors()):
+                continue
+            parts.append(node.text or "")
+        texts.append("".join(parts))
+    return texts
 
 
 @requires_real
@@ -107,6 +124,16 @@ def test_decisions_publish_a_matching_redline(seeded):
     assert engine.status_code == 200, engine.text
     # The two revision files are distinct artifacts, and neither is the contract.
     assert redline.content not in (names.content, engine.content)
+    assert names.headers["etag"] == response.json()["sha256"]
+    assert redline.headers["etag"] == response.json()["selected_redline_sha256"]
+
+    # Downloaded bytes are the source of truth for the response/DOCX contract.
+    with tempfile.TemporaryDirectory() as directory:
+        final_path = Path(directory) / "selected-final.docx"
+        redline_path = Path(directory) / "selected-redline.docx"
+        final_path.write_bytes(names.content)
+        redline_path.write_bytes(redline.content)
+        assert _accepted_paragraph_text(redline_path) == _accepted_paragraph_text(final_path)
 
 
 @requires_real
@@ -118,8 +145,8 @@ def test_decisions_that_reject_nothing_ship_no_second_revision_file(seeded):
     assert total, "the fixture must offer at least one revision"
     response = client.post(f"/api/batches/{batch['id']}/documents/{doc}/decisions",
                            headers=_headers(),
-                           json={"decisions": [{"del_id": n, "decision": "accept"}
-                                               for n in range(1, 2 * total + 1)]})
+                           json={"decisions": [{"del_id": 2 * n - 1, "decision": "accept"}
+                                               for n in range(1, total + 1)]})
     assert response.status_code == 200, response.text
     assert response.json()["rejected"] == []
     selected = client.get(f"/api/batches/{batch['id']}/documents/{doc}/download/selected_redline",
@@ -149,6 +176,87 @@ def test_decisions_rejects_invalid_verdict(seeded):
                            headers=_headers(),
                            json={"decisions": [{"del_id": 1, "decision": "maybe"}]})
     assert response.status_code == 422
+
+
+@requires_real
+def test_decisions_rejects_unknown_even_duplicate_and_conflicting_ids(seeded):
+    client, batch, doc = seeded
+    url = f"/api/batches/{batch['id']}/documents/{doc}/decisions"
+    cases = [
+        ([{"del_id": 9999, "decision": "reject"}], "SELECTION_UNKNOWN_REVISION"),
+        ([{"del_id": 2, "decision": "reject"}], "SELECTION_INS_ID_NOT_ALLOWED"),
+        ([{"del_id": 9999, "decision": "reject"}, {"del_id": 2, "decision": "accept"}],
+         "SELECTION_UNKNOWN_REVISION"),
+        ([{"del_id": 1, "decision": "reject"}, {"del_id": 1, "decision": "reject"}],
+         "SELECTION_DUPLICATE_DECISION"),
+        ([{"del_id": 1, "decision": "reject"}, {"del_id": 1, "decision": "accept"}],
+         "SELECTION_CONFLICTING_DECISIONS"),
+    ]
+    for decisions, code in cases:
+        response = client.post(url, headers=_headers(), json={"decisions": decisions})
+        assert response.status_code == 422, response.text
+        assert response.json()["detail"] == code
+
+
+@requires_real
+def test_selection_epoch_rejects_stale_request_and_deletes_old_selected_redline(seeded):
+    client, batch, doc = seeded
+    view_url = f"/api/batches/{batch['id']}/documents/{doc}/revisions"
+    url = f"/api/batches/{batch['id']}/documents/{doc}/decisions"
+    view = client.get(view_url, headers=_headers()).json()
+    wrong_manifest = client.post(url, headers=_headers(), json={
+        "decisions": [{"del_id": 1, "decision": "reject"}],
+        "selection_epoch": view["selection_epoch"],
+        "manifest_hash": "0" * 64,
+    })
+    assert wrong_manifest.status_code == 409
+    assert wrong_manifest.json()["detail"] == "SELECTION_MANIFEST_CONFLICT"
+    first = client.post(url, headers=_headers(), json={
+        "decisions": [{"del_id": 1, "decision": "reject"}],
+        "selection_epoch": view["selection_epoch"],
+        "manifest_hash": view["manifest_hash"],
+    })
+    assert first.status_code == 200, first.text
+    body = first.json()
+    assert body["selection_epoch"] == 1
+    assert body["selected_redline_sha256"]
+    assert client.get(f"/api/batches/{batch['id']}/documents/{doc}/download/selected_redline",
+                      headers=_headers()).status_code == 200
+    stale = client.post(url, headers=_headers(), json={
+        "decisions": [{"del_id": 3, "decision": "accept"}],
+        "selection_epoch": 0,
+        "manifest_hash": view["manifest_hash"],
+    })
+    assert stale.status_code == 409
+    assert stale.json()["detail"] == "SELECTION_EPOCH_CONFLICT"
+    latest = client.get(view_url, headers=_headers()).json()
+    accepts = client.post(url, headers=_headers(), json={
+        "decisions": [{"del_id": item["del_id"], "decision": "accept"}
+                      for item in latest["revisions"]],
+        "selection_epoch": latest["selection_epoch"],
+        "manifest_hash": latest["manifest_hash"],
+    })
+    assert accepts.status_code == 200, accepts.text
+    assert accepts.json()["selected_redline_sha256"] is None
+    assert client.get(f"/api/batches/{batch['id']}/documents/{doc}/download/selected_redline",
+                      headers=_headers()).status_code == 404
+
+
+@requires_real
+def test_concurrent_selection_requests_only_one_epoch_wins(seeded):
+    client, batch, doc = seeded
+    view = client.get(f"/api/batches/{batch['id']}/documents/{doc}/revisions",
+                      headers=_headers()).json()
+    url = f"/api/batches/{batch['id']}/documents/{doc}/decisions"
+    payload = {"decisions": [{"del_id": 1, "decision": "reject"}],
+               "selection_epoch": view["selection_epoch"],
+               "manifest_hash": view["manifest_hash"]}
+    def submit():
+        return client.post(url, headers=_headers(), json=payload)
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        responses = list(pool.map(lambda _: submit(), range(2)))
+    assert sorted(response.status_code for response in responses) == [200, 409]
+    assert [response.json().get("detail") for response in responses if response.status_code == 409] == ["SELECTION_EPOCH_CONFLICT"]
 
 
 @requires_real

@@ -16,6 +16,7 @@ from fundlex.selective import (
     apply_decisions,
     generate_selected_artifact,
     generate_selected_redline,
+    resolve_selection,
 )
 
 REAL = Path("var/recall-first-evaluation/p6-dev-round1-01/D01")
@@ -72,6 +73,36 @@ def test_normalise_decisions_accepts_grouped_shape():
 
 def test_normalise_decisions_ignores_unknown_verdicts():
     assert _normalise_decisions({1: "maybe", 2: "reject"}) == {2: REJECT}
+
+
+def _small_manifest():
+    return [{"del_id": 1, "ins_id": 2, "location": "p0",
+             "expected_old_text": "旧", "replacement": "新"},
+            {"del_id": 3, "ins_id": 4, "location": "p1",
+             "expected_old_text": "甲", "replacement": "乙"}]
+
+
+def test_resolve_selection_rejects_unknown_even_duplicate_and_conflict_ids():
+    manifests = _small_manifest()
+    with pytest.raises(DocxError, match="SELECTION_UNKNOWN_REVISION"):
+        resolve_selection(manifests, [{"del_id": 99, "decision": REJECT}], client_ids=True)
+    with pytest.raises(DocxError, match="SELECTION_INS_ID_NOT_ALLOWED"):
+        resolve_selection(manifests, [{"del_id": 2, "decision": REJECT}], client_ids=True)
+    with pytest.raises(DocxError, match="SELECTION_DUPLICATE_DECISION"):
+        resolve_selection(manifests, [{"del_id": 1, "decision": REJECT},
+                                      {"del_id": 1, "decision": REJECT}], client_ids=True)
+    with pytest.raises(DocxError, match="SELECTION_CONFLICTING_DECISIONS"):
+        resolve_selection(manifests, [{"del_id": 1, "decision": REJECT},
+                                      {"del_id": 1, "decision": ACCEPT}], client_ids=True)
+
+
+def test_resolve_selection_keeps_del_ins_pair_and_one_canonical_hash():
+    verdict = resolve_selection(_small_manifest(), [{"del_id": 1, "decision": REJECT}],
+                                client_ids=True)
+    assert verdict.decisions == {1: REJECT, 2: REJECT, 3: ACCEPT, 4: ACCEPT}
+    assert verdict.accepted == (3,)
+    assert verdict.rejected == (1,)
+    assert len(verdict.manifest_hash) == len(verdict.decision_hash) == 64
 
 
 def test_atomic_parent_manifest_uses_validated_source_text():
@@ -297,11 +328,11 @@ def test_output_path_may_not_replace_the_redline(tmp_path):
 
 
 @requires_real
-def test_apply_decisions_is_idempotent_over_unknown_ids(tmp_path):
-    """Ids we did not generate must be reported, not silently rewritten."""
+def test_apply_decisions_rejects_unknown_ids(tmp_path):
+    """Ids we did not generate must fail closed, not be silently ignored."""
     report = _report()
     parts = _read_parts(str(_redline_copy(tmp_path)), ZipLimits())
     root = _xml(parts[DOCUMENT], ZipLimits())
     manifests = _manifests_from_report(report)
-    absent = apply_decisions(root, manifests, {9999: REJECT})
-    assert absent == ()
+    with pytest.raises(DocxError, match="SELECTION_UNKNOWN_REVISION"):
+        apply_decisions(root, manifests, {9999: REJECT})
