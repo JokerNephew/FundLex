@@ -3,8 +3,9 @@
   const api = window.FundLexWorkbench || {};
   const $ = id => document.getElementById(id);
   const esc = api.esc || (v => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])));
-  const state = { tasks: [], task: null, pairs: [], pairIndex: 0, selectedPairId: null, view: null, diffIndex: 0, poll: null, requestToken: 0, lineFrame: null, scrollFrame: null, scrollSource: null, identityToken: 0, listToken: 0, inputs: [{}], uploadDraft: null };
+  const state = { tasks: [], task: null, pairs: [], pairIndex: 0, selectedPairId: null, view: null, selection: null, selectionDraft: null, selectionDirty: false, selectionSaving: false, selectionToken: 0, selectionSaveToken: 0, poll: null, requestToken: 0, lineFrame: null, scrollFrame: null, scrollSource: null, identityToken: 0, listToken: 0, inputs: [{}], uploadDraft: null };
   const json = (path, options) => api.json ? api.json(path, options) : fetch(path, options).then(async r => { if (!r.ok) throw Error(await r.text()); return r.json(); });
+  Object.assign(state, { diffIndex: 0, selectionBusy: false, generationKey: null });
   const text = id => ($(id) || {}).textContent || '';
   const fileName = file => String(file?.name || '').replace(/\\/g, '/').split('/').pop();
   const relativePath = file => {
@@ -111,21 +112,130 @@
       state.scrollFrame = requestAnimationFrame(() => { state.scrollSource = null; state.scrollFrame = null; drawLines(); });
     });
   }
+  function selectionDecision(id) { return state.selectionDraft?.[id] || state.selection?.selection?.decisions?.[id] || 'pending'; }
+  function selectionBinding() { const s=state.selection; if(!s?.selection)return null; return {expected_epoch:s.selection.selection_epoch,result_sha256:s.result_sha256,left_source_sha256:s.left_source_sha256,right_source_sha256:s.right_source_sha256}; }
+  function selectionStatus(message, error=false) { const node=$('compare-selection-status'); if(node){node.textContent=message||'';node.classList.toggle('is-error',!!error);} }
+  function selectionCounts() { const ds=state.view?.diffs||[], counts={pending:0,left:0,right:0}; ds.forEach(d=>{const value=selectionDecision(d.id);if(counts[value]!==undefined)counts[value]++;}); return {counts,total:ds.length,pending:counts.pending}; }
+  function selectionIssues() {
+    const issues=[...(state.selection?.assessment?.issues||[])];
+    if((state.view?.diffs||[]).some(d=>d.type!=='modify'))issues.push({detail:'当前版本暂不支持新增或删除整段内容，请人工处理这些差异。',blocking:true});
+    return issues;
+  }
+  function selectionCanGenerate() { return !!state.selection&&!state.selectionDirty&&!state.selectionSaving&&!state.selectionBusy&&!selectionCounts().pending&&!selectionIssues().some(x=>x.blocking); }
+  function selectionContext() { return {pairId:state.selectedPairId,token:state.selectionToken,identity:state.identityToken}; }
+  function selectionCurrent(context) { return context.pairId===state.selectedPairId&&context.token===state.selectionToken&&context.identity===state.identityToken; }
+  function resetSelection() {
+    state.selectionToken++;state.selectionSaveToken++;state.selection=null;state.selectionDraft=null;
+    state.selectionDirty=false;state.selectionSaving=false;state.selectionBusy=false;state.generationKey=null;
+    selectionStatus('');$('compare-selection-downloads')?.replaceChildren();renderSelection();
+  }
+  function renderSelectionDownloads() {
+    const box=$('compare-selection-downloads'); if(!box)return;
+    const artifacts=state.selectionDirty?[]:(state.selection?.artifacts||[]).filter(x=>x.status==='current');
+    if(!artifacts.length){box.replaceChildren();return;}
+    const labels={selected_final:'下载选择版 DOCX',selected_redline:'下载选择修订版 DOCX',selection_report_markdown:'下载选择报告（Markdown）',selection_report_json:'下载选择报告（JSON）'};
+    box.innerHTML=artifacts.map(item=>`<div class="compare-artifact"><button class="btn btn-sm" type="button" data-selection-download="${esc(item.download_url)}" data-selection-filename="${esc(`compare-v${item.version}-${item.kind}`)}">${esc(labels[item.kind]||item.kind)} · v${item.version}</button><small>SHA-256：${esc(item.sha256)}</small></div>`).join('');
+  }
+  function renderSelection() {
+    const s=state.selection, node=$('compare-selection-progress'), buttons=document.querySelectorAll('#compare-selection-left-all,#compare-selection-right-all,#compare-selection-preview,#compare-selection-generate,#compare-selection-save,#compare-selection-pending');
+    if(!s){if(node)node.textContent='正在读取选择状态…';buttons.forEach(x=>{x.disabled=true;});return;}
+    const {counts,total,pending}=selectionCounts();
+    if(node)node.textContent=`已选择 ${total-pending} / ${total} 处 · 待选择 ${pending}`;
+    const ready=selectionCanGenerate();
+    const blocked=selectionIssues().some(x=>x.blocking), busy=state.selectionSaving||state.selectionBusy;
+    $('compare-selection-issues').textContent=selectionIssues().filter(x=>x.blocking).map(x=>x.detail||x.code).join(' ');
+    const preview=$('compare-selection-preview'), generate=$('compare-selection-generate');
+    if(preview)preview.disabled=busy||state.selectionDirty;
+    if(generate){generate.disabled=!ready;generate.title=pending?'所有差异都需要明确选择左侧或右侧':blocked?'当前结果包含暂不支持的结构':'生成选择版';}
+    buttons.forEach(x=>{if(x!==preview&&x!==generate)x.disabled=busy;});
+    $('compare-selection-save').disabled=busy||!state.selectionDirty;
+    $('compare-selection-pending').disabled=busy||!pending;
+    for(const side of ['left','right'])$(`compare-selection-${side}-all`).textContent=`全部采用${side==='left'?'左':'右'}侧（${total}处）`;
+    renderSelectionDownloads();
+  }
+  async function loadSelection(pairId) {
+    resetSelection();const token=state.selectionToken;
+    try { const payload=await json(`/api/compare/pairs/${encodeURIComponent(pairId)}/selection`); if(token!==state.selectionToken||pairId!==state.selectedPairId)return; state.selection=payload;state.selectionDraft={...(payload.selection?.decisions||{})};renderSelection();renderDiffList(); }
+    catch(e){if(token===state.selectionToken){selectionStatus(`读取选择状态失败：${e.message}`,true);renderSelection();}}
+  }
+  async function saveSelectionDraft() {
+    const binding=selectionBinding(); if(!binding||!state.selectionDraft)return;
+    if(state.selectionSaving||state.selectionBusy)return;
+    const context=selectionContext(), token=++state.selectionSaveToken, decisions={...state.selectionDraft};
+    state.selectionSaving=true;state.selectionDirty=true;selectionStatus('正在保存选择…');renderSelection();renderDiffList();
+    try {
+      const payload=await json(`/api/compare/pairs/${encodeURIComponent(context.pairId)}/selection`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({...binding,decisions})});
+      if(!selectionCurrent(context)||token!==state.selectionSaveToken)return;
+      state.selection=payload;state.selectionDraft={...payload.selection.decisions};state.selectionDirty=false;state.generationKey=null;selectionStatus('已保存');
+    } catch(e) {
+      if(!selectionCurrent(context)||token!==state.selectionSaveToken)return;
+      if(e.raw==='SELECTION_EPOCH_CONFLICT') {
+        try {
+          const latest=await json(`/api/compare/pairs/${encodeURIComponent(context.pairId)}/selection`);
+          if(!selectionCurrent(context)||token!==state.selectionSaveToken)return;
+          if(['result_sha256','left_source_sha256','right_source_sha256'].every(k=>latest[k]===state.selection[k]))state.selection=latest;
+        } catch { /* Keep the local map; a failed reload must not discard it. */ }
+      }
+      if(selectionCurrent(context)){state.selectionDirty=true;selectionStatus('保存未完成，本地选择已保留。请核对后点击“保存当前选择”重试。',true);}
+    } finally {if(selectionCurrent(context)&&token===state.selectionSaveToken){state.selectionSaving=false;renderSelection();renderDiffList();}}
+  }
+  function chooseSelection(id, choice) { if(!state.selection||state.selectionSaving||state.selectionBusy)return; state.selectionDraft={...(state.selectionDraft||{}),[id]:choice};state.selectionDirty=true;saveSelectionDraft(); }
+  function setAllSelections(choice) { if(!state.selection||state.selectionSaving||state.selectionBusy)return; const next={};(state.view?.diffs||[]).forEach(item=>{next[item.id]=choice;});state.selectionDraft=next;state.selectionDirty=true;saveSelectionDraft(); }
+  async function selectionAction(kind) {
+    const binding=selectionBinding();if(!binding||state.selectionSaving||state.selectionBusy||state.selectionDirty||(kind==='generate'&&!selectionCanGenerate()))return;
+    const context=selectionContext();state.selectionBusy=true;
+    selectionStatus(kind==='generate'?'正在生成选择版 DOCX，请稍候…':'正在检查生成条件…');renderSelection();renderDiffList();
+    const headers={'Content-Type':'application/json'};
+    if(kind==='generate'){state.generationKey ||= `compare-${crypto.randomUUID()}`;headers['Idempotency-Key']=state.generationKey;}
+    try {
+      const result=await json(`/api/compare/pairs/${encodeURIComponent(context.pairId)}/selection/${kind}`,{method:'POST',headers,body:JSON.stringify(binding)});
+      if(!selectionCurrent(context))return;
+      if(kind==='generate'){state.selection={...state.selection,artifacts:result.artifacts||[]};selectionStatus(`已生成 v${result.version}，可下载选择版、修订版和报告。`);}
+      else {state.selection.assessment=result.assessment;const pending=result.assessment.pending_ids.length,blocked=selectionIssues().some(x=>x.blocking);selectionStatus(pending?`仍有 ${pending} 处待选择，全部明确选择后才能生成。`:blocked?'当前结构暂不支持生成，请查看说明。':'当前选择可以提交生成；生成时还会校验 DOCX 结构。',!!(pending||blocked));}
+    } catch(e){if(selectionCurrent(context))selectionStatus(e.raw||e.message,true);}
+    finally {if(selectionCurrent(context)){state.selectionBusy=false;renderSelection();renderDiffList();}}
+  }
+  const previewSelection=()=>selectionAction('preview'), generateSelection=()=>selectionAction('generate');
+  async function downloadSelection(url, filename) {
+    const context=selectionContext();
+    try {
+      const headers={};const authToken=sessionStorage.getItem('fundlex-auth-token'),identity=$('dev-user')?.value?.trim();
+      if(authToken)headers.Authorization=`Bearer ${authToken}`;if(identity)headers['X-FundLex-User']=identity;
+      const response=await window.fetch((api.appPath?api.appPath(url):url),{headers,cache:'no-store'});
+      if(!response.ok)throw Error(`下载失败（${response.status}）`);
+      const blob=await response.blob();
+      if(!selectionCurrent(context))return;
+      const disposition=response.headers.get('Content-Disposition')||'',encoded=disposition.match(/filename\*=UTF-8''([^;]+)/i),plain=disposition.match(/filename="([^"]+)"/i);
+      if(encoded){try{filename=decodeURIComponent(encoded[1]);}catch{}}else if(plain)filename=plain[1];
+      const object=URL.createObjectURL(blob),a=document.createElement('a');a.href=object;a.download=filename;document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(object),1000);selectionStatus('下载已开始。');
+    } catch(e){if(selectionCurrent(context))selectionStatus(e.message,true);}
+  }
   function visibleDiffs() { const all=state.view?.diffs||[], filter=$('compare-diff-filter')?.value||''; return filter?all.filter(x=>x.type===filter):all; }
   function focusDiff(index) { const ds=visibleDiffs(); if(!ds.length){ $('compare-diff-counter').textContent='0 / 0'; return; } state.diffIndex=(index+ds.length)%ds.length; const id=ds[state.diffIndex].id; document.querySelectorAll('.compare-diff.is-active,.compare-diff-item.is-active').forEach(n=>n.classList.remove('is-active')); document.querySelectorAll(`[data-diff-id="${CSS.escape(id)}"]`).forEach(n=>n.classList.add('is-active')); document.querySelector(`[data-compare-diff="${CSS.escape(id)}"]`)?.classList.add('is-active'); $('compare-diff-counter').textContent=`${state.diffIndex+1} / ${ds.length}`; for(const side of ['left','right']) { const pane=$(`compare-${side}-pane`), target=pane?.querySelector(`[data-diff-id="${CSS.escape(id)}"]`); if(pane&&target){const pr=pane.getBoundingClientRect(),tr=target.getBoundingClientRect(); pane.scrollTo({top:pane.scrollTop+(tr.top+tr.height/2)-(pr.top+pr.height/2),behavior:'smooth'});}} requestAnimationFrame(drawLines); }
-  function renderDiffList() { const d=visibleDiffs(); $('compare-diff-list').innerHTML=d.length?d.map((x,i)=>`<button type="button" class="compare-diff-item" data-compare-diff="${esc(x.id)}"><span>${i+1}</span><strong>${esc(x.type==='modify'?'修改':x.type==='insert'?'新增':'删除')}</strong><span>${esc(x.section||'正文')} · ${esc(x.left?.text||'')} ${x.right?.text?'→ '+esc(x.right.text):''}</span></button>`).join(''):'<p class="empty">当前筛选条件下没有差异。</p>'; }
+  function renderDiffList() { const d=visibleDiffs(), disabled=!state.selection||state.selectionSaving; $('compare-diff-list').innerHTML=d.length?d.map((x,i)=>{const choice=selectionDecision(x.id);return `<div class="compare-diff-item ${choice!=='pending'?'is-selected-choice':''}" data-compare-diff="${esc(x.id)}"><button type="button" class="compare-diff-jump" data-compare-diff="${esc(x.id)}"><span>${i+1}</span><strong>${esc(x.type==='modify'?'修改':x.type==='insert'?'新增':'删除')}</strong><span>${esc(x.section||'正文')} · ${esc(x.left?.text||'')} ${x.right?.text?'→ '+esc(x.right.text):''}</span></button><div class="compare-choice" role="group" aria-label="${esc(x.id)} 采用哪一侧"><label class="${choice==='left'?'is-checked':''}"><input type="radio" name="choice-${esc(x.id)}" value="left" data-selection-choice="left" data-diff-id="${esc(x.id)}" ${choice==='left'?'checked':''} ${disabled?'disabled':''}>采用左侧</label><label class="${choice==='right'?'is-checked':''}"><input type="radio" name="choice-${esc(x.id)}" value="right" data-selection-choice="right" data-diff-id="${esc(x.id)}" ${choice==='right'?'checked':''} ${disabled?'disabled':''}>采用右侧</label></div></div>`;}).join(''):'<p class="empty">当前筛选条件下没有差异。</p>'; }
   function renderViewer(payload) {
     state.view=payload; state.diffIndex=0; const d=payload.diffs||[]; $('compare-viewer').hidden=false; $('compare-pair-title').textContent=payload.pair?.label||'合同对比'; $('compare-left-name').textContent=payload.left?.name||'原版合同'; $('compare-right-name').textContent=payload.right?.name||'对比版合同'; const s=payload.summary||{}; $('compare-summary').textContent=`共 ${s.total||0} 处差异 · 修改 ${s.modify||0} · 新增 ${s.insert||0} · 删除 ${s.delete||0}`; const cov=payload.coverage||{}; const incomplete=cov.status!=='complete'; $('compare-coverage').hidden=!incomplete; $('compare-coverage').className=incomplete?'is-incomplete':''; $('compare-coverage').textContent=incomplete?`覆盖不完整：以下内容未纳入比较。请人工复核，不要据此确认全文无差异。${(cov.warnings||[]).length?' 未覆盖：'+cov.warnings.join('、'):''}`:'覆盖完整'; $('compare-left-pane').innerHTML=payload.left.html||''; $('compare-right-pane').innerHTML=payload.right.html||''; document.querySelectorAll('#compare-left-pane [data-diff-id],#compare-right-pane [data-diff-id]').forEach(mark=>{mark.tabIndex=0;mark.setAttribute('role','button');mark.setAttribute('aria-label','定位此处差异');}); $('compare-diff-counter').textContent='0 / 0'; renderDiffList(); if(!d.length)$('compare-diff-list').innerHTML=`<p class="empty">${incomplete?'已覆盖范围内没有发现文字差异，无法确认全文无差异。':'两份合同没有文字差异。'}</p>`; drawLines();if(d.length)focusDiff(0); }
-    async function openPair(index) { const p=state.pairs[index]; if(!p)return; const token=++state.requestToken; state.pairIndex=index; state.selectedPairId=p.id; state.view=null; renderPairs(); $('compare-viewer').hidden=true; $('compare-lines').replaceChildren(); $('compare-pair-counter').textContent=`${index+1} / ${state.pairs.length}`; if(!['succeeded','incomplete'].includes(p.status))return; try { const payload=await json(`/api/compare/pairs/${encodeURIComponent(p.id)}/view`); if(token===state.requestToken){p.viewError='';renderPairs();renderViewer(payload);} } catch(e) { if(token===state.requestToken){p.viewError=`读取结果失败：${e.message}`;renderPairs();} } }
+  async function openPair(index) {
+    const p=state.pairs[index];if(!p)return;
+    if(state.selectionDirty){selectionStatus('请先保存当前选择，再切换合同组。',true);return;}
+    resetSelection();const token=++state.requestToken;
+    state.pairIndex=index;state.selectedPairId=p.id;state.view=null;renderPairs();
+    $('compare-viewer').hidden=true;$('compare-lines').replaceChildren();$('compare-pair-counter').textContent=`${index+1} / ${state.pairs.length}`;
+    if(!['succeeded','incomplete'].includes(p.status))return;
+    try {const payload=await json(`/api/compare/pairs/${encodeURIComponent(p.id)}/view`);if(token===state.requestToken){p.viewError='';renderPairs();renderViewer(payload);await loadSelection(p.id);}}
+    catch(e){if(token===state.requestToken){p.viewError=`读取结果失败：${e.message}`;renderPairs();}}
+  }
    async function openTask(id) { clearTimeout(state.poll); const token=++state.requestToken; try { const task=await json(`/api/compare/tasks/${encodeURIComponent(id)}`); if(token!==state.requestToken)return; const previousPairId=state.selectedPairId; renderTask(task); const kept=state.pairs.findIndex(p=>p.id===previousPairId); const idx=kept>=0?kept:state.pairs.findIndex(p=>['succeeded','incomplete'].includes(p.status)); if(idx>=0){ if(previousPairId===state.pairs[idx]?.id&&state.view) { $('compare-pair-counter').textContent=`${idx+1} / ${state.pairs.length}`; } else await openPair(idx); } else $('compare-viewer').hidden=true; if (['queued','running','uploading'].includes(state.task?.status)) { state.poll=setTimeout(()=>openTask(id),2500); } } catch(e) { if(token===state.requestToken)$('compare-task-status').textContent=`读取任务失败：${e.message}`; } }
   function bind() {
+    document.addEventListener('fundlex:identity-reset',resetSelection);
+    window.addEventListener('beforeunload',event=>{if(state.selectionDirty){event.preventDefault();event.returnValue='';}});
     $('compare-new')?.addEventListener('click',()=>showCreate(true)); $('compare-add-pair')?.addEventListener('click',()=>{const index=state.inputs.length;state.inputs.push({});$('compare-pair-inputs')?.insertAdjacentHTML('beforeend',pairRow({},index));syncInputIndexes();}); $('compare-submit')?.addEventListener('click',createTask); $('compare-refresh')?.addEventListener('click',loadTasks);
-    $('compare-prev-diff')?.addEventListener('click',()=>focusDiff(state.diffIndex-1)); $('compare-next-diff')?.addEventListener('click',()=>focusDiff(state.diffIndex+1)); $('compare-prev-pair')?.addEventListener('click',()=>openPair(Math.max(0,state.pairIndex-1))); $('compare-next-pair')?.addEventListener('click',()=>openPair(Math.min(state.pairs.length-1,state.pairIndex+1))); $('compare-report')?.addEventListener('click',()=>{if(!state.view)return;const blob=new Blob([JSON.stringify(state.view,null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=`${state.task?.name||'合同对比'}-差异报告.json`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}); $('compare-active-only')?.addEventListener('change',drawLines); $('compare-diff-filter')?.addEventListener('change',()=>{state.diffIndex=0;renderDiffList();focusDiff(0);}); $('compare-retry')?.addEventListener('click',continueUploads); document.querySelectorAll('[data-compare-side]').forEach(btn=>btn.addEventListener('click',()=>{document.querySelectorAll('[data-compare-side]').forEach(x=>x.classList.toggle('is-active',x===btn));$('compare-viewer').dataset.mobileSide=btn.dataset.compareSide;}));
-     document.addEventListener('click',e=>{ const task=e.target.closest('[data-compare-task]');if(task){openTask(task.dataset.compareTask);return;}const pair=e.target.closest('[data-compare-pair]');if(pair){openPair(Number(pair.dataset.comparePair));return;}const diff=e.target.closest('[data-compare-diff]');if(diff){focusDiff(visibleDiffs().findIndex(x=>x.id===diff.dataset.compareDiff));return;}const mark=e.target.closest('#compare-left-pane [data-diff-id],#compare-right-pane [data-diff-id]');if(mark){focusDiff(visibleDiffs().findIndex(x=>x.id===mark.dataset.diffId));return;}const remove=e.target.closest('[data-compare-remove]');if(remove){const index=Number(remove.dataset.compareRemove),row=remove.closest('.compare-pair-input');state.inputs.splice(index,1);row?.remove();if(!state.inputs.length){state.inputs=[{}];renderInputs();}else syncInputIndexes();return;} });
+    $('compare-prev-diff')?.addEventListener('click',()=>focusDiff(state.diffIndex-1)); $('compare-next-diff')?.addEventListener('click',()=>focusDiff(state.diffIndex+1)); $('compare-prev-pair')?.addEventListener('click',()=>openPair(Math.max(0,state.pairIndex-1))); $('compare-next-pair')?.addEventListener('click',()=>openPair(Math.min(state.pairs.length-1,state.pairIndex+1))); $('compare-report')?.addEventListener('click',()=>{if(!state.view)return;const blob=new Blob([JSON.stringify(state.view,null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=`${state.task?.name||'合同对比'}-差异报告.json`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}); $('compare-selection-left-all')?.addEventListener('click',()=>setAllSelections('left')); $('compare-selection-right-all')?.addEventListener('click',()=>setAllSelections('right')); $('compare-selection-pending')?.addEventListener('click',()=>{const index=visibleDiffs().findIndex(item=>selectionDecision(item.id)==='pending');if(index>=0)focusDiff(index);}); $('compare-selection-save')?.addEventListener('click',saveSelectionDraft); $('compare-selection-preview')?.addEventListener('click',previewSelection); $('compare-selection-generate')?.addEventListener('click',generateSelection); $('compare-active-only')?.addEventListener('change',drawLines); $('compare-diff-filter')?.addEventListener('change',()=>{state.diffIndex=0;renderDiffList();focusDiff(0);}); $('compare-retry')?.addEventListener('click',continueUploads); document.querySelectorAll('[data-compare-side]').forEach(btn=>btn.addEventListener('click',()=>{document.querySelectorAll('[data-compare-side]').forEach(x=>x.classList.toggle('is-active',x===btn));$('compare-viewer').dataset.mobileSide=btn.dataset.compareSide;}));
+      document.addEventListener('click',e=>{ const task=e.target.closest('[data-compare-task]');if(task){openTask(task.dataset.compareTask);return;}const pair=e.target.closest('[data-compare-pair]');if(pair){openPair(Number(pair.dataset.comparePair));return;}const download=e.target.closest('[data-selection-download]');if(download){downloadSelection(download.dataset.selectionDownload,download.dataset.selectionFilename);return;}const diff=e.target.closest('[data-compare-diff]');if(diff&&!e.target.closest('input')){focusDiff(visibleDiffs().findIndex(x=>x.id===diff.dataset.compareDiff));return;}const mark=e.target.closest('#compare-left-pane [data-diff-id],#compare-right-pane [data-diff-id]');if(mark){focusDiff(visibleDiffs().findIndex(x=>x.id===mark.dataset.diffId));return;}const remove=e.target.closest('[data-compare-remove]');if(remove){const index=Number(remove.dataset.compareRemove),row=remove.closest('.compare-pair-input');state.inputs.splice(index,1);row?.remove();if(!state.inputs.length){state.inputs=[{}];renderInputs();}else syncInputIndexes();return;} });
      document.addEventListener('keydown',e=>{if((e.key==='Enter'||e.key===' ')&&e.target.matches('#compare-left-pane [data-diff-id],#compare-right-pane [data-diff-id]')){e.preventDefault();focusDiff(visibleDiffs().findIndex(x=>x.id===e.target.dataset.diffId));}});
-    document.addEventListener('change',e=>{const row=e.target.closest('.compare-pair-input');if(row&&e.target.matches('input[type=file]')){const i=Number(row.dataset.pairIndex),entry=state.inputs[i]||(state.inputs[i]={});entry[e.target.matches('[data-compare-left]')?'_left':'_right']=e.target.files?.[0]||null;row.querySelector('.compare-file-label').textContent=[entry._left?.name,entry._right?.name].filter(Boolean).join(' / ')||'尚未选择文件';return;}if(e.target.id==='compare-left-folder'||e.target.id==='compare-right-folder'){const side=e.target.id.includes('left')?'left':'right';state[`folder${side[0].toUpperCase()+side.slice(1)}`]=[...e.target.files].filter(f=>fileName(f).toLowerCase().endsWith('.docx')).sort((a,b)=>relativePath(a).localeCompare(relativePath(b)));const other=side==='left'?state.folderRight:state.folderLeft;if(!other?.length)return;const left=state.folderLeft||[],right=state.folderRight||[],map=new Map(right.map(f=>[relativePath(f),f])),used=new Set(),entries=left.map(f=>{const r=map.get(relativePath(f));if(r)used.add(r);return {_left:f,_right:r||null};});for(const f of right)if(!used.has(f))entries.push({_left:null,_right:f});state.inputs=entries;renderInputs();$('compare-upload-message').textContent=`已按相对路径配对 ${entries.filter(x=>x._left&&x._right).length} 组；${entries.filter(x=>!x._left||!x._right).length} 个文件未配对，可手工补齐。`;}});
+      document.addEventListener('change',e=>{const choice=e.target.closest('[data-selection-choice]');if(choice){chooseSelection(choice.dataset.diffId,choice.value);return;}const row=e.target.closest('.compare-pair-input');if(row&&e.target.matches('input[type=file]')){const i=Number(row.dataset.pairIndex),entry=state.inputs[i]||(state.inputs[i]={});entry[e.target.matches('[data-compare-left]')?'_left':'_right']=e.target.files?.[0]||null;row.querySelector('.compare-file-label').textContent=[entry._left?.name,entry._right?.name].filter(Boolean).join(' / ')||'尚未选择文件';return;}if(e.target.id==='compare-left-folder'||e.target.id==='compare-right-folder'){const side=e.target.id.includes('left')?'left':'right';state[`folder${side[0].toUpperCase()+side.slice(1)}`]=[...e.target.files].filter(f=>fileName(f).toLowerCase().endsWith('.docx')).sort((a,b)=>relativePath(a).localeCompare(relativePath(b)));const other=side==='left'?state.folderRight:state.folderLeft;if(!other?.length)return;const left=state.folderLeft||[],right=state.folderRight||[],map=new Map(right.map(f=>[relativePath(f),f])),used=new Set(),entries=left.map(f=>{const r=map.get(relativePath(f));if(r)used.add(r);return {_left:f,_right:r||null};});for(const f of right)if(!used.has(f))entries.push({_left:null,_right:f});state.inputs=entries;renderInputs();$('compare-upload-message').textContent=`已按相对路径配对 ${entries.filter(x=>x._left&&x._right).length} 组；${entries.filter(x=>!x._left||!x._right).length} 个文件未配对，可手工补齐。`;}});
      const cols=$('compare-columns'); if(cols){ for(const pane of [$('compare-left-pane'),$('compare-right-pane')])pane?.addEventListener('scroll',()=>syncPaneScroll(pane),{passive:true}); window.addEventListener('resize',drawLines); if(window.ResizeObserver)new ResizeObserver(drawLines).observe(cols); }
-     document.addEventListener('fundlex:view',e=>{if(e.detail==='compare'){loadTasks();drawLines();}}); document.addEventListener('fundlex:identity-reset',()=>{clearTimeout(state.poll);state.identityToken++;state.listToken++;state.tasks=[];state.task=null;state.pairs=[];state.selectedPairId=null;state.view=null;state.uploadDraft=null;state.inputs=[{}];state.requestToken++;resetFolders();$('compare-create').hidden=true;$('compare-submit').disabled=false;$('compare-retry').hidden=true;$('compare-upload-message').textContent='';$('compare-name').value='';$('compare-detail').hidden=true;$('compare-viewer').hidden=true;$('compare-left-pane').innerHTML='';$('compare-right-pane').innerHTML='';$('compare-diff-list').innerHTML='';$('compare-lines').replaceChildren();$('compare-diff-counter').textContent='0 / 0';renderInputs();renderTasks();}); state.inputs=[{}];renderInputs(); loadTasks();
+      document.addEventListener('fundlex:view',e=>{if(e.detail==='compare'){loadTasks();drawLines();}}); document.addEventListener('fundlex:identity-reset',()=>{clearTimeout(state.poll);state.identityToken++;state.listToken++;state.tasks=[];state.task=null;state.pairs=[];state.selectedPairId=null;state.view=null;state.selection=null;state.selectionDraft=null;state.selectionDirty=false;state.uploadDraft=null;state.inputs=[{}];state.requestToken++;state.selectionToken++;resetFolders();$('compare-create').hidden=true;$('compare-submit').disabled=false;$('compare-retry').hidden=true;$('compare-upload-message').textContent='';$('compare-name').value='';$('compare-detail').hidden=true;$('compare-viewer').hidden=true;$('compare-left-pane').innerHTML='';$('compare-right-pane').innerHTML='';$('compare-diff-list').innerHTML='';$('compare-selection-downloads').replaceChildren();selectionStatus('');$('compare-lines').replaceChildren();$('compare-diff-counter').textContent='0 / 0';renderInputs();renderTasks();}); state.inputs=[{}];renderInputs(); loadTasks();
   }
   if (document.readyState==='loading') document.addEventListener('DOMContentLoaded',bind); else bind();
 })();

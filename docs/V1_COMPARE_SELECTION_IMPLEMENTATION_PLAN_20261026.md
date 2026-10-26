@@ -202,8 +202,8 @@
 | 0 基线/分支/方案 | 已完成 | 分支 `codex/v1-compare-selection`；方案提交 `dd52a1d` | 开始阶段二 |
 | 1 选择契约 | 已完成，待提交 | `.venv/bin/pytest -q tests/test_compare_selection.py tests/test_compare_algorithm.py tests/test_compare_api.py`：34 passed；选择模块与原有 Compare 回归共同通过 | 提交 selection contract，再开始阶段二 |
 | 2 DOCX 生成器 | 已完成，待提交 | `.venv/bin/pytest -q tests/test_compare_selection_writer.py`：6 passed；真实 DOCX 生成、修订版接受等价和结果复读通过；空侧结构差异 fail closed | 提交 writer，再开始阶段三持久化/API |
-| 3 持久化/API | 实现完成，待提交 | `PYTHONPATH=/tmp/opencode/fundlex-compare-selection /home/opencode/fundlex/.venv/bin/pytest -q tests/test_compare_selection_api.py`：1 passed / 1 warning；Compare Store/API/Worker/selection/writer 回归：34 passed / 1 warning；`py_compile`、`git diff --check` 通过。覆盖草稿初始化、绑定与 epoch 冲突、持久化恢复、生成幂等、idempotency 冲突、旧版本 stale、owner 下载隔离、DOCX/报告哈希和篡改草稿 fail closed。 | 提交阶段三文件；随后接入 V1 阅读器 |
-| 4 V1 阅读器 | 未开始 | — | 接入右侧选择 rail 和生成状态 |
+| 3 持久化/API | 已完成 | 阶段三提交 `2dd7f3b`；定向及 Compare 回归通过，覆盖草稿初始化、绑定与 epoch 冲突、持久化恢复、生成幂等、idempotency 冲突、旧版本 stale、owner 下载隔离、DOCX/报告哈希和篡改草稿 fail closed。 | 在完整应用和 MySQL 环境补做相应验证 |
+| 4 V1 阅读器 | 实现完成，待提交 | `node --check frontend/compare.js`、`node --check frontend/app.js`、`git diff --check` 通过；V1 selection browser **6 passed**（390/768/1440 布局、待选择阻断、刷新恢复、冲突保留/重试、迟到生成响应隔离、insert/delete 阻断）；既有 V1 workbench **30 passed**；认证真实 DOCX/Worker/下载链路通过并独立复核最终版、修订版、报告与跨账号拒绝。V2 专项当前 **9 failed**，原因是本 worktree 没有 `frontend/dist/` 构建产物，见 FL-D314。 | 提交阶段四文件；在完整 V2 build 环境恢复后重跑 V2/全量浏览器回归并整理最终证据 |
 | 5 全链路/候选 | 未开始 | — | 分层回归、真实用户路径、候选冻结 |
 
-最后更新：2026-10-26，阶段三实现完成，尚未提交。隔离 API 测试依赖原工作区未跟踪的 `fundlex/guide_generation` 与 `fundlex/regulatory`，因此验证时使用 `PYTHONPATH` 和直接 Compare 路由 fixture；未配置真实 MySQL，MySQL 迁移/并发保持未验证。下一条可执行动作是提交阶段三，再接入 V1 阅读器选择控件和生成下载状态。
+最后更新：2026-10-26，阶段四实现完成，尚未提交。完整应用导入和 V1 authenticated browser path 已实际通过；Compare 选择不调用模型，测试使用实际 Compare Worker 和真实 DOCX。V2 专项浏览器回归受缺失 `frontend/dist/` 构建产物阻塞（FL-D314）。未配置真实 MySQL，MySQL 迁移/并发保持未验证；完整项目的真实模型合同交付和 Compare 复杂结构覆盖仍不属于本阶段已验收范围。下一条可执行动作是提交阶段四，并在完整 V2 build 环境恢复后重跑组合浏览器回归。
