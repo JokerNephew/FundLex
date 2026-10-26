@@ -150,6 +150,11 @@ class TaskStore:
         except ReportJsonError as exc:
             reasons.add(exc.code)
             return sorted(reasons)
+        for entry in report.get("unresolved") or []:
+            if isinstance(entry, dict):
+                code = entry.get("code") or entry.get("reason")
+                if isinstance(code, str) and code:
+                    reasons.add(code)
         for action in report.get("actions", []):
             if not isinstance(action, dict):
                 continue

@@ -188,10 +188,11 @@ def operation_text(edit: dict) -> str:
 
 
 FINAL_ROOT = "最终版（接受修订后）"
+WORKING_ROOT = "工作文件（未完成）"
 NOTES_ROOT = "逐份修改说明"
 
 
-def archive_entry(kind: str, name: str, suffix: str) -> tuple[str, str]:
+def archive_entry(kind: str, name: str, suffix: str, *, delivery_status: str | None = None) -> tuple[str, str]:
     """Where one downloaded artifact goes inside the task ZIP.
 
     Returns ``(folder_root, arcname)`` so both the caller and its tests share one
@@ -210,7 +211,13 @@ def archive_entry(kind: str, name: str, suffix: str) -> tuple[str, str]:
     They are named ``（全量痕迹版）`` and ``（选择修订版）`` so a reader can tell which
     is which without opening them.
     """
-    if kind in {"final", "working_final", "selected_final"}:
+    if kind.startswith("working_") or (delivery_status == "incomplete" and
+                                       kind in {"selected_final", "selected_redline"}):
+        label = {"working_final": "工作文件", "working_redline": "工作文件修订痕迹",
+                 "selected_final": "工作文件（人工选择）",
+                 "selected_redline": "工作文件修订痕迹（人工选择）"}[kind]
+        return WORKING_ROOT, f"{WORKING_ROOT}/{name}/{name}（{label}）{suffix}"
+    if kind in {"final", "selected_final"}:
         return FINAL_ROOT, f"{FINAL_ROOT}/{name}{suffix}"
     if kind in {"redline", "working_redline"}:
         return NOTES_ROOT, f"{NOTES_ROOT}/{name}/{name}（全量痕迹版）{suffix}"
@@ -259,7 +266,7 @@ def rule_requirement(guide: dict, rule_id: str) -> str:
 
 __all__ = [
     "RULE_SHORT", "OP_TEXT", "DELIVERY_TEXT", "CLIP_LIMIT_BEFORE", "CLIP_LIMIT_AFTER",
-    "FINAL_ROOT", "NOTES_ROOT",
+    "FINAL_ROOT", "WORKING_ROOT", "NOTES_ROOT",
     "plan_edits", "rule_title", "rule_label", "audit_verdicts", "verdict_text",
     "edit_count", "edit_labels", "unresolved_entries", "delivery_text",
     "summary_detail", "edit_before_after", "operation_text", "archive_entry",

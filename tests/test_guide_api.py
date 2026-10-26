@@ -370,6 +370,7 @@ def test_recall_document_surface_and_working_downloads(client):
     documents = client.get(f"/api/tasks/{task_id}/documents", headers=ALICE).json()
     item = documents["items"][0]
     assert item["delivery_status"] == "incomplete"
+    assert "RECALL_TARGET_UNRESOLVED" in item["reason_codes"]
     assert item["phase"] == "inventory"
     assert item["target_counts"] == {"total": 3, "completed": 2, "unresolved": 1}
     assert item["guide_snapshot"] == {"version_id": guide_store.BUILTIN_GUIDE_ID,
@@ -383,6 +384,16 @@ def test_recall_document_surface_and_working_downloads(client):
     refused = client.get(f"/api/batches/{item['batch_id']}/documents/{item['document_id']}/download/final",
                          headers=ALICE)
     assert refused.status_code == 404
+    import io
+    import zipfile
+    archive_response = client.get(f"/api/tasks/{task_id}/download/all", headers=ALICE)
+    assert archive_response.status_code == 200
+    with zipfile.ZipFile(io.BytesIO(archive_response.content)) as archive:
+        docx_entries = [name for name in archive.namelist() if name.endswith(".docx")]
+        assert len(docx_entries) == 2
+        assert all(name.startswith("工作文件（未完成）/") for name in docx_entries)
+        assert all(not name.startswith("最终版") for name in archive.namelist())
+        assert all(archive.read(name) == data for name in docx_entries)
     # The batch surface exposes the same cheap counters, never the full report.
     batch = client.get(f"/api/batches/{item['batch_id']}", headers=ALICE).json()
     assert batch["documents"][0]["target_counts"] == {"total": 3, "completed": 2, "unresolved": 1}

@@ -1184,7 +1184,8 @@ def create_app(data_dir: str | Path | None = None, *, auth_db=None) -> FastAPI:
                         data = path.read_bytes()
                         if hashlib.sha256(data).hexdigest() != digest:
                             raise Conflict("ARTIFACT_VERIFICATION_MISMATCH")
-                        _, arcname = archive_entry(kind, name, path.suffix)
+                        _, arcname = archive_entry(kind, name, path.suffix,
+                                                  delivery_status=doc["delivery_status"])
                         archive.writestr(arcname, data)
                         included.append(kind)
                         count += 1

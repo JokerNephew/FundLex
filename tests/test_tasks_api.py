@@ -389,11 +389,11 @@ def test_task_archive_groups_final_and_notes_by_folder(client, tmp_path):
     final_root_name, final_path = archive_entry("final", "甲合同", ".docx")
     assert final_root_name == final_root and final_path == f"{final_root}/甲合同.docx"
     _, working_path = archive_entry("working_final", "甲合同", ".docx")
-    assert working_path == f"{final_root}/甲合同.docx"
+    assert working_path == "工作文件（未完成）/甲合同/甲合同（工作文件）.docx"
     _, redline_path = archive_entry("redline", "甲合同", ".docx")
     assert redline_path == "逐份修改说明/甲合同/甲合同（全量痕迹版）.docx"
     _, working_redline_path = archive_entry("working_redline", "甲合同", ".docx")
-    assert working_redline_path == redline_path
+    assert working_redline_path == "工作文件（未完成）/甲合同/甲合同（工作文件修订痕迹）.docx"
     # A reviewed contract ships a second revision file, named for what it holds.
     _, selected_redline_path = archive_entry("selected_redline", "甲合同", ".docx")
     assert selected_redline_path == "逐份修改说明/甲合同/甲合同（选择修订版）.docx"
@@ -410,6 +410,9 @@ def test_archive_entry_places_a_selected_final_in_the_final_folder():
         archive_entry("final", "甲合同", ".docx")
     assert archive_entry("selected_redline", "甲合同", ".docx") != \
         archive_entry("redline", "甲合同", ".docx")
+    for kind in ("selected_final", "selected_redline"):
+        root, path = archive_entry(kind, "甲合同", ".docx", delivery_status="incomplete")
+        assert root == "工作文件（未完成）" and "人工选择" in path
 
 
 def test_archive_kinds_ships_two_revision_files_only_after_a_choice():

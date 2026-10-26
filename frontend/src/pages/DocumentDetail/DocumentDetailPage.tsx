@@ -37,7 +37,9 @@ function Evidence({ value }: { value: unknown }) {
   return <div className="fundlex-evidence"><p>{field(quote, '未提供引文')}</p>{Boolean(location) && <small>位置：{field(location)}</small>}</div>
 }
 
-function downloadLabel(kind: string): string {
+function downloadLabel(kind: string, delivery?: string): string {
+  if (delivery === 'incomplete' && kind === 'selected_final') return '工作文件（人工选择，未完成）'
+  if (delivery === 'incomplete' && kind === 'selected_redline') return '工作文件修订痕迹（人工选择，未完成）'
   return ({
     report_md: 'Markdown 报告', report_json: 'JSON 报告', final: '最终版合同',
     redline: '修订版合同（全量痕迹）', selected_final: '选择版合同', selected_redline: '选择版修订痕迹',
@@ -78,8 +80,8 @@ function exceptionKey(item: Record<string, unknown>, index: number): string {
 function Summary({ document, report }: { document: TaskDocument; report?: Record<string, unknown> }) {
   const targets = reportList(report, 'targets')
   const total = document.target_counts?.total ?? targets.length
-  const completed = document.target_counts?.completed ?? targets.filter((target) => ['modified_verified', 'satisfied', 'not_applicable'].includes(text(target.state))).length
-  const unresolved = document.target_counts?.unresolved ?? targets.filter((target) => ['unresolved', 'unsupported', 'needs_edit'].includes(text(target.state))).length
+  const completed = document.target_counts?.completed ?? targets.filter((target) => ['modified_verified', 'planned', 'satisfied', 'not_applicable', 'superseded'].includes(text(target.status || target.state)) || target.out_of_scope).length
+  const unresolved = document.target_counts?.unresolved ?? targets.filter((target) => !target.out_of_scope && ['unresolved', 'unsupported', 'needs_edit'].includes(text(target.status || target.state))).length
   return <Card><h2>交付概览</h2><dl className="fundlex-detail-grid"><dt>资格</dt><dd><StatusBadge value={document.eligibility} /></dd><dt>处理状态</dt><dd><StatusBadge value={document.job_status} /></dd><dt>交付</dt><dd><StatusBadge value={document.delivery_status} /></dd><dt>交付说明</dt><dd>{detailStatus(document)}</dd><dt>目标完成</dt><dd>{total ? `${completed} / ${total}` : '—'}</dd><dt>仍需核对</dt><dd>{unresolved || '0'}</dd><dt>原件 SHA-256</dt><dd><code>{field(document.source_sha256)}</code></dd><dt>指引版本</dt><dd>{field(document.guide_snapshot?.version_id)}</dd></dl></Card>
 }
 
@@ -91,7 +93,7 @@ function EvidenceSection({ report }: { report: Record<string, unknown> }) {
 
 function TargetSection({ report }: { report: Record<string, unknown> }) {
   const targets = reportList(report, 'targets')
-  return <Card><h2>修改目标 · {targets.length} 项</h2>{targets.length ? <div className="fundlex-target-list">{targets.map((target, index) => <details key={String(target.target_id || index)} className="fundlex-target"><summary><strong>{field(target.title || target.rule_id, `目标 ${index + 1}`)}</strong><StatusBadge value={text(target.state)} /></summary><dl className="fundlex-detail-grid"><dt>规则</dt><dd>{field(target.rule_id)}</dd><dt>位置</dt><dd>{field(target.location)}</dd><dt>目标原文</dt><dd><Evidence value={target.quote || target.original_text} /></dd><dt>依据</dt><dd>{field(target.reason || target.requirement)}</dd></dl></details>)}</div> : <p className="fundlex-muted">报告没有返回目标清单。</p>}</Card>
+  return <Card><h2>修改目标 · {targets.length} 项</h2>{targets.length ? <div className="fundlex-target-list">{targets.map((target, index) => { const status = text(target.status || target.state); return <details key={String(target.target_id || index)} className="fundlex-target"><summary><strong>{field(target.title || target.rule_id, `目标 ${index + 1}`)}</strong><StatusBadge value={status} /></summary><dl className="fundlex-detail-grid"><dt>规则</dt><dd>{field(target.rule_id)}</dd><dt>位置</dt><dd>{field(target.location)}</dd><dt>目标原文</dt><dd><Evidence value={target.quote || target.original_text} /></dd><dt>依据</dt><dd>{field(target.reason || target.requirement)}</dd></dl></details> })}</div> : <p className="fundlex-muted">报告没有返回目标清单。</p>}</Card>
 }
 
 function CompareSection({ report }: { report: Record<string, unknown> }) {
@@ -100,7 +102,7 @@ function CompareSection({ report }: { report: Record<string, unknown> }) {
 }
 
 function ExceptionSection({ report }: { report: Record<string, unknown> }) {
-  const issues = reportList(report, 'exceptions')
+  const issues = [...reportList(report, 'exceptions'), ...reportList(report, 'unresolved')]
   const summary = (report.user_summary || {}) as Record<string, unknown>
   const summaryIssues = objectList(summary.issues)
   const all = [...issues, ...summaryIssues]
@@ -115,12 +117,12 @@ function DownloadSection({ taskId, document }: { taskId: string; document: TaskD
   const download = async (kind: string, url: string) => {
     if (busy) return
     setBusy(kind)
-    try { const blob = await api.downloadDocument(taskId, document.document_id || '', kind); saveBlob(blob, `${document.name.replace(/\.docx$/i, '')}_${downloadLabel(kind)}.${downloadExtension(kind)}`) }
+    try { const blob = await api.downloadDocument(taskId, document.document_id || '', kind); saveBlob(blob, `${document.name.replace(/\.docx$/i, '')}_${downloadLabel(kind, document.delivery_status)}.${downloadExtension(kind)}`) }
     catch (nextError) { setError(nextError instanceof Error ? nextError.message : '下载失败，请稍后重试。') }
     finally { setBusy(null) }
     void url
   }
-  return <Card><h2>报告与合同下载</h2>{error && <p className="fundlex-detail-warning" role="alert">{error}</p>}{kinds.length ? <div className="fundlex-download-list">{kinds.map(([kind, url]) => <Button key={kind} type="button" variant={kind === 'final' || kind === 'selected_final' ? 'primary' : 'secondary'} disabled={busy !== null} onClick={() => void download(kind, url)}>{busy === kind ? '下载中…' : `↓ ${downloadLabel(kind)}`}</Button>)}</div> : <div className="fundlex-download-empty"><p>当前没有可下载文件。</p><p className="fundlex-muted">文件会在 Worker 完成并通过实际复核后开放；不完整结果请先查看例外。</p></div>}{(document.delivery_status === 'incomplete' || document.delivery_status === 'not_generated') && <p className="fundlex-detail-warning">当前交付状态为“{detailStatus(document)}”，工作文件不能直接视为最终合同。</p>}</Card>
+  return <Card><h2>报告与合同下载</h2>{error && <p className="fundlex-detail-warning" role="alert">{error}</p>}{kinds.length ? <div className="fundlex-download-list">{kinds.map(([kind, url]) => <Button key={kind} type="button" variant={kind === 'final' || kind === 'selected_final' ? 'primary' : 'secondary'} disabled={busy !== null} onClick={() => void download(kind, url)}>{busy === kind ? '下载中…' : `↓ ${downloadLabel(kind, document.delivery_status)}`}</Button>)}</div> : <div className="fundlex-download-empty"><p>当前没有可下载文件。</p><p className="fundlex-muted">文件会在 Worker 完成并通过实际复核后开放；不完整结果请先查看例外。</p></div>}{(document.delivery_status === 'incomplete' || document.delivery_status === 'not_generated') && <p className="fundlex-detail-warning">当前交付状态为“{detailStatus(document)}”，工作文件不能直接视为最终合同。</p>}</Card>
 }
 
 export function DocumentDetailPage() {
