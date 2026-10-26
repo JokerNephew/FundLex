@@ -1675,6 +1675,44 @@ def test_overlapping_composite_deletes_merge_as_joint_delete(tmp_path):
     assert set(resolved[0].operation_keys) == {"G12:1", "G13:0"}
 
 
+def test_transitive_overlap_conflicts_are_composed_as_one_component(tmp_path):
+    """A-B and B-C conflicts must not consume B and leave C unresolved."""
+    from docx import Document
+    from fundlex.docx import inspect_docx
+    from fundlex.recall import PlannedEdit, _resolve_overlaps_with_joint_compose
+
+    path = tmp_path / "transitive-overlap.docx"
+    document = Document()
+    document.add_paragraph("甲乙丙丁戊己庚")
+    document.save(path)
+    inspection = inspect_docx(path, full=True)
+    edits = [
+        PlannedEdit("A", "G01", "p0", 0, 3, "", "replace", "composite_delete", {},
+                    operation_keys=("G01:0",)),
+        PlannedEdit("B", "G02", "p0", 2, 5, "", "replace", "composite_delete", {},
+                    operation_keys=("G02:0",)),
+        PlannedEdit("C", "G03", "p0", 4, 7, "", "replace", "composite_delete", {},
+                    operation_keys=("G03:0",)),
+    ]
+
+    class Gateway:
+        def call(self, **kwargs):
+            raise AssertionError("connected deletes must not call Joint Compose")
+
+    resolved, remaining = _resolve_overlaps_with_joint_compose(
+        [{"targets": ["A", "B"], "location": "p0"},
+         {"targets": ["B", "C"], "location": "p0"}],
+        edits, inspection,
+        {"G01": {"rule_id": "G01", "operations": []},
+         "G02": {"rule_id": "G02", "operations": []},
+         "G03": {"rule_id": "G03", "operations": []}},
+        None, Gateway())
+    assert remaining == []
+    assert len(resolved) == 1
+    assert resolved[0].content_source == "joint_delete"
+    assert set(resolved[0].operation_keys) == {"G01:0", "G02:0", "G03:0"}
+
+
 def test_planning_clamps_trailing_whitespace_to_a_text_segment(tmp_path):
     from docx import Document
     from fundlex.docx import inspect_docx

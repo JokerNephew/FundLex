@@ -6654,6 +6654,72 @@ def _g15_notice_for_edit(edit: "PlannedEdit", rule: dict,
     }]
 
 
+def _coalesce_overlap_conflicts(conflicts: Sequence[dict[str, Any]],
+                                planned: Sequence[PlannedEdit]) -> list[dict[str, Any]]:
+    """Coalesce pairwise overlap findings into connected edit components.
+
+    Pairwise conflict reporting can produce A-B and B-C for three edits whose
+    affected source is one connected interval.  Joint Compose must see A/B/C in
+    one call; resolving the pairs independently consumes B on the first pair and
+    leaves the second pair unresolved.
+    """
+    by_target: dict[str, list[PlannedEdit]] = {}
+    for edit in planned:
+        by_target.setdefault(edit.target_id, []).append(edit)
+    groups: list[dict[str, Any]] = []
+    for conflict in conflicts:
+        location = str(conflict.get("location") or "")
+        edits: list[PlannedEdit] = []
+        for raw_target in conflict.get("targets") or ():
+            for target_id in str(raw_target).split("+"):
+                candidates = by_target.get(target_id, [])
+                edit = next((candidate for candidate in candidates
+                             if candidate.location == location), None)
+                if edit is not None and edit not in edits:
+                    edits.append(edit)
+        if len(edits) < 2:
+            groups.append(dict(conflict))
+            continue
+        edit_ids = {id(edit) for edit in edits}
+        matching = [group for group in groups
+                    if group.get("location") == location
+                    and edit_ids & set(group.get("_edit_ids") or ())]
+        if not matching:
+            groups.append({**conflict, "_edit_ids": edit_ids,
+                           "targets": list(conflict.get("targets") or ())})
+            continue
+        group = matching[0]
+        group["_edit_ids"].update(edit_ids)
+        group["targets"] = list(dict.fromkeys([
+            *[str(value) for value in group.get("targets") or ()],
+            *[str(value) for value in conflict.get("targets") or ()],
+        ]))
+    changed = True
+    while changed:
+        changed = False
+        for index, left in enumerate(groups):
+            left_ids = set(left.get("_edit_ids") or ())
+            for right in groups[index + 1:]:
+                if left.get("location") != right.get("location"):
+                    continue
+                right_ids = set(right.get("_edit_ids") or ())
+                if left_ids.isdisjoint(right_ids):
+                    continue
+                left["_edit_ids"].update(right_ids)
+                left["targets"] = list(dict.fromkeys([
+                    *[str(value) for value in left.get("targets") or ()],
+                    *[str(value) for value in right.get("targets") or ()],
+                ]))
+                groups.remove(right)
+                changed = True
+                break
+            if changed:
+                break
+    for group in groups:
+        group.pop("_edit_ids", None)
+    return groups
+
+
 def _resolve_overlaps_with_joint_compose(
         conflicts: Sequence[dict[str, Any]], planned: Sequence[PlannedEdit],
         inspection: DocumentInspection, rules_by_id: dict[str, dict], facts: Facts,
@@ -6670,7 +6736,7 @@ def _resolve_overlaps_with_joint_compose(
     # A composite target produces one edit per paragraph with the same target id.
     # Consume the specific conflicting edit, not every sibling part (D16 G13 p221/p222).
     consumed: set[int] = set()
-    for conflict in conflicts:
+    for conflict in _coalesce_overlap_conflicts(conflicts, planned):
         target_ids = [str(value) for value in conflict.get("targets") or []]
         location = str(conflict.get("location") or "")
         edits: list[PlannedEdit] = []
