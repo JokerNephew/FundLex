@@ -22,10 +22,11 @@ def draft_card(name: str, files: list[dict[str, Any]], *, error: str | None = No
 
 
 def status_card(name: str, status: str, completed: int, total: int, failed: int, delivery: str, base_url: str = "", task_id: str = "") -> dict[str, Any]:
-    title = "任务已完成" if status == "completed" else "任务处理状态"
+    title = {"completed": "任务已完成", "completed_with_exceptions": "任务已完成（含异常）", "failed": "任务处理失败"}.get(status, "任务处理状态")
     link = f"\n[打开 FundLex 详情]({base_url.rstrip('/')}/tasks/{task_id})" if base_url and task_id else ""
     content = f"**{name}**\n状态：{status}\n合同：{completed}/{total} 已处理\n失败：{failed}\n交付：{delivery}{link}"
-    return {"schema": "2.0", "header": {"template": "green" if status == "completed" else "blue", "title": {"tag": "plain_text", "content": title}},
+    template = "green" if status == "completed" else "red" if status in {"completed_with_exceptions", "failed"} else "blue"
+    return {"schema": "2.0", "header": {"template": template, "title": {"tag": "plain_text", "content": title}},
             "body": {"elements": [{"tag": "markdown", "content": content}]}}
 
 

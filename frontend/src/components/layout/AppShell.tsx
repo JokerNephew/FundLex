@@ -51,8 +51,8 @@ export function AppShell() {
     if (Object.keys(previous.current).length) {
       const changes = (taskQuery.data?.items || []).flatMap((task) => {
         const old = previous.current[task.id]
-        if (!old || old === task.status || !['completed', 'paused', 'failed'].includes(task.status)) return []
-        return [{ id: `${task.id}:${task.status}`, taskId: task.id, title: task.status === 'completed' ? '任务处理完成' : task.status === 'paused' ? '任务已暂停' : '任务处理失败', detail: task.name }]
+        if (!old || old === task.status || !['completed', 'completed_with_exceptions', 'paused', 'failed'].includes(task.status)) return []
+        return [{ id: `${task.id}:${task.status}`, taskId: task.id, title: task.status === 'completed' ? '任务处理完成' : task.status === 'completed_with_exceptions' ? '任务处理完成（含异常）' : task.status === 'paused' ? '任务已暂停' : '任务处理失败', detail: task.name }]
       })
       if (changes.length) setNotifications((current) => [...changes, ...current].slice(0, 8))
     }

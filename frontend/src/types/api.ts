@@ -45,6 +45,13 @@ export interface FeishuBindingCode {
   expires_at: number
 }
 
+export interface FeishuOAuthStart {
+  provider: 'feishu' | string
+  authorization_url: string
+  expires_at: number
+  qr_svg?: string | null
+}
+
 export type GuideStatus = 'uploaded' | 'parsing' | 'parsed' | 'validated' | 'released' | 'archived' | 'parse_failed' | string
 
 export interface GuideSummary {
@@ -81,7 +88,7 @@ export interface GuideSettings {
   engine_id?: string
 }
 
-export type TaskStatus = 'uploading' | 'queued' | 'running' | 'paused' | 'completed' | string
+export type TaskStatus = 'uploading' | 'queued' | 'running' | 'paused' | 'completed' | 'completed_with_exceptions' | 'failed' | string
 
 export interface GuideSnapshot {
   version_id?: Id
@@ -157,6 +164,7 @@ export interface TaskStats {
   pending_contracts?: number
   average_seconds?: number
   exception_contracts?: number
+  failed_contracts?: number
   completion_rate?: number
   month_over_month?: number
   active_tasks?: number
