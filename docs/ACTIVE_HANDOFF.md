@@ -2,7 +2,7 @@
 
 ## 当前工作区快照（2026-10-26，预算门禁与离线重放接续）
 
-- 当前分支 `refactor/backend-engine-finalization`，HEAD `95a6836`（P6 强制预算 admission），相对 origin ahead 33。工作区保留既有用户 dirty 修改：`frontend/app.css`、`frontend/app.js`、`frontend/src/pages/Settings/index.tsx`、`frontend/src/types/api.ts`、`fundlex/api.py`、`fundlex/integrations/feishu/oauth.py`、`tests/test_feishu_oauth_api.py`；本轮源码和测试已提交，未回退这些修改。
+- 当前分支 `refactor/backend-engine-finalization`，HEAD `f914ca5`（预算门禁与离线重放交接记录），相对 origin ahead 34。工作区保留既有用户 dirty 修改：`frontend/app.css`、`frontend/app.js`、`frontend/src/pages/Settings/index.tsx`、`frontend/src/types/api.ts`、`fundlex/api.py`、`fundlex/integrations/feishu/oauth.py`、`tests/test_feishu_oauth_api.py`；本轮源码、测试和交接记录已提交，未回退这些修改。
 - 当前候选已包含 Engine `165dbdf/a872628`、Replay `4fa137d`、Delivery `18b4183`、发布器 `224c4e3`、发布器回归 `13a3380`、预算 guard `da0562c/690c352`、P6 接入 `95a6836`。仓库发布脚本、root publisher、部署脚本 SHA-256 均为 `a873e4b4961207a6fabdb5caf01f8d809c500b6a430ce9c80af8dad114de0338`；四个生产服务最近核对均 active。正式候选尚未执行完整 staging 发布或生产发布。
 - 本轮新增定向验证：预算 guard **12 passed**、P6 拒绝顺序 **1 passed**；P6 模拟 ledger 超限返回 2，未构造 HTTP client、账号凭据、运行目录或 manifest。`p6_run.py` 已把 protocol、selection、labels、build、ledger、model mode 和 role snapshot 的 admission 置于账号注册和上传之前。
 - 最近合并主线全量回归为 **1564 passed / 52 skipped / 3 warnings / 370.31s**；前端 typecheck/lint/build、Vitest **14 passed**，V1/V2 浏览器 **40 passed / 81.21s**。这些是新 P6 提交前的全量结论，不能写成本次 HEAD 的新全量通过。系统 Python 为 3.6，项目使用 `.venv/bin/python`。
