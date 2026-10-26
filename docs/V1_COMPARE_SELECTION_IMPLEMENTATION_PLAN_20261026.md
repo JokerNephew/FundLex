@@ -199,11 +199,11 @@
 
 | 阶段 | 状态 | 最近证据 | 下一动作 |
 | --- | --- | --- | --- |
-| 0 基线/分支/方案 | 已完成 | 独立发布分支 `codex/v1-compare-selection-release`，基线 `c46d6e8`，HEAD `8efca80`；方案提交 `686ce1b` | 已完成 |
+| 0 基线/分支/方案 | 已完成 | 独立发布分支 `codex/v1-compare-selection-release`，基线 `c46d6e8`，代码提交止于 `8b3c387`；后续文档提交不改变部署文件，远端 HEAD 以 `git rev-parse` 为准；方案提交 `686ce1b` | 已完成 |
 | 1 选择契约 | 已完成 | 提交 `2ce2608`；选择模块与原有 Compare 回归共同通过 | 已完成 |
 | 2 DOCX 生成器 | 已完成 | 提交 `320717a`；真实 DOCX 生成、修订版接受等价和结果复读通过；空侧结构差异 fail closed | 已完成 |
 | 3 持久化/API | 已完成 | 发布分支合并提交 `7252e2c`；覆盖草稿初始化、绑定与 epoch 冲突、持久化恢复、生成幂等、idempotency 冲突、旧版本 stale、owner 下载隔离、DOCX/报告哈希和篡改草稿 fail closed | 已完成；MySQL 8 实连/并发仍按 FL-D268 等保持未验证 |
 | 4 V1 阅读器 | 已完成 | 发布分支合并提交 `c34b68e`；Compare 选择/API/Writer/既有 Compare 回归 **64 passed / 1 warning**；V1 selection browser **6 passed**；`node --check`、`py_compile`、`git diff --check` 通过 | 已完成 |
 | 5 全链路/生产发布 | 已完成（受 FL-D279 限制） | 受控部署 8 个文件、备份和哈希见 `docs/ACTIVE_HANDOFF.md`；真实生产 E2E 完成注册、真实公开合同上传、Worker、选择、刷新恢复、生成、四项下载、哈希复核、跨账号 401/404 和三视口检查。普通合同因 header/footer 覆盖不完整被 fail closed，登记 FL-D279。 | 实现 header/footer/drawing 覆盖或确认仅正文交付口径；不得把单份完整 coverage 合同成功写成普通合同已交付 |
 
-最后更新：2026-10-26，发布分支 HEAD `8efca80` 已推送。受控生产发布只替换 8 个 Compare selection 白名单文件，保留生产 `raise_api_error`、上传文件关闭和设置/OAuth UI；备份、部署哈希、服务状态和真实生产 E2E 证据见 `docs/ACTIVE_HANDOFF.md` 顶部。生产成功路径使用 1 份 coverage complete 的公开真实合同和单处管理费率 `1.20%→1.00%` 受控修订，完成选择、生成、四项下载、哈希和独立 DOCX 复核。普通合同多数含 header/footer 等未支持可见内容，writer 按设计返回 `SELECTION_COVERAGE_INCOMPLETE`，登记为 FL-D279（阻塞/待产品决策）；因此不能宣称普通合同选择版已交付。Compare 选择不调用模型；V2 `frontend/dist/` 仍缺失，V2 回归未作为本阶段证据。MySQL 8 迁移/并发仍未验证。整体项目结论继续 **NO-GO**。
+最后更新：2026-10-26，发布分支代码提交止于 `8b3c387` 并已推送；后续仅有文档提交，不改变生产部署文件，远端 HEAD 以 `git rev-parse` 为准。受控生产发布只替换 8 个 Compare selection 白名单文件，保留生产 `raise_api_error`、上传文件关闭和设置/OAuth UI；备份、部署哈希、服务状态和真实生产 E2E 证据见 `docs/ACTIVE_HANDOFF.md` 顶部。生产成功路径使用 1 份 coverage complete 的公开真实合同和单处管理费率 `1.20%→1.00%` 受控修订，完成选择、生成、四项下载、哈希和独立 DOCX 复核。普通合同多数含 header/footer 等未支持可见内容，writer 按设计返回 `SELECTION_COVERAGE_INCOMPLETE`，登记为 FL-D279（阻塞/待产品决策）；因此不能宣称普通合同选择版已交付。Compare 选择不调用模型；V2 `frontend/dist/` 仍缺失，V2 回归未作为本阶段证据。MySQL 8 迁移/并发仍未验证。整体项目结论继续 **NO-GO**。

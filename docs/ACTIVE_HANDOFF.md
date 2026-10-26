@@ -2,7 +2,7 @@
 
 ## V1 Compare selection 生产受控发布与真实验收（2026-10-26）
 
-- 发布分支：`codex/v1-compare-selection-release`，HEAD `8efca80`，已推送 `origin`。该分支相对 `origin/refactor/backend-engine-finalization` 的 `c46d6e8` 只增加 Compare selection 相关 16 个文件（14 个实现/测试/专题文档，另 2 个为本发布断点和集中问题记录）；未推送原开发分支的其他提交。
+- 发布分支：`codex/v1-compare-selection-release`，已推送 `origin`。Compare selection 代码提交止于 `8b3c387`，之后仅有发布断点和集中问题文档提交；远端最新 HEAD 以 `git rev-parse origin/codex/v1-compare-selection-release` 为准。该分支相对 `origin/refactor/backend-engine-finalization` 的 `c46d6e8` 只增加 Compare selection 相关 16 个文件（14 个实现/测试/专题文档，另 2 个为本发布断点和集中问题记录）；未推送原开发分支的其他提交。
 - 部署范围：只替换 `/opt/fundlex-recall-first` 的 `fundlex/compare/{__init__.py,api.py,store.py,selection.py,selection_writer.py}` 与 `frontend/compare.{html,js,css}` 共 8 个文件；未调用标准整仓发布器，未同步其他工作区改动。`selection.py` 和 `selection_writer.py` 为新增文件。
 - 生产专有修复保留：`api.py` 继续使用 `raise_api_error` 并在上传结束后 `await upload.close()`；`compare.html` 保留设置入口和 OAuth 二维码 UI，同时加入选择面板。候选经生产虚拟环境导入、字节编译、`node --check` 和真实 `create_app()` schema 初始化检查后，才以同目录临时文件加 `mv` 原子替换。
 - 备份：`/tmp/opencode/fundlex-compare-selection-production-backup-20261026-200031`，含部署前 6 个现有文件的副本、`production-before-sha256.txt` 和部署后 `production-after-sha256.txt`。部署后 8 个文件 SHA 与候选一致；关键值：`api.py f8b5ba27da5e810e000fc1315dcc3018201407351aa1fae459f9ebe9a8565fc1`、`store.py c8cf5f6ee6ecb7307c65f81b8faa898b52b31d859301af84452fb9d620f8712f`、`selection.py 4edb8fccc57538d8b5d25bcb6a823f53c848f9049f89084c675daf2f86cdbdc3`、`selection_writer.py 88b010ac0fc468d0e56c26a902bfe2949505a58622baf5f4187d00b640048f43`、`compare.html 5acc88e4e5b3cdc49b79108ce8d8e0dcce9735a774a87896e3bd018da686cc93`。
