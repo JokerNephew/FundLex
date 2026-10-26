@@ -154,6 +154,58 @@ def test_coverage_view_serializes_entries_for_report_consumers():
     assert payload["counts"]["ALREADY_SATISFIED"] == 1
 
 
+def test_coverage_rejects_already_satisfied_replay_without_source_provenance():
+    report = {"obligations": {"records": [{
+        "rule_id": "G18", "operation_id": "G18:0",
+        "obligation_id": "G18:B1:O1", "completion": "ALREADY_SATISFIED",
+        "targets": ["T1"], "artifact_evidence": [],
+    }]}, "targets": [{"target_id": "T1", "rule_id": "G18", "location": "p0"}],
+        "artifact_claim_replay": {"obligations": {"G18:B1:O1": {
+            "state": "PASS", "artifact_status": "ALREADY_SATISFIED",
+            "operation_id": "G18:0", "obligation_id": "G18:B1:O1",
+            "sites": ["p0"], "evidence": [{"site_id": "p0",
+                "operation_id": "G18:0", "obligation_id": "G18:B1:O1",
+                "proof_kind": "site_literal_effect"}],
+            "site_effects": [{"site_id": "p0", "state": "PASS",
+                "artifact_status": "ALREADY_SATISFIED",
+                "proof_kind": "site_literal_effect"}]}}}}
+    view = build_coverage_view(report)
+    assert view.state_of("G18", "p0") == "UNRESOLVED"
+    assert view.counts["UNRESOLVED"] == 1
+
+
+def test_legacy_recall_report_keeps_stored_already_satisfied_counts():
+    report = {
+        "engine_id": "recall_first", "schema_version": "3", "engine_version": "0.1.0",
+        "obligations": {"counts": {"SATISFIED": 0, "ARTIFACT_VERIFIED": 0,
+                                     "ALREADY_SATISFIED": 1, "NOT_APPLICABLE": 0,
+                                     "UNRESOLVED": 0}, "records": [{
+            "rule_id": "G18", "operation_id": "G18:0",
+            "obligation_id": "G18:B1:O1", "completion": "ALREADY_SATISFIED",
+            "targets": ["T1"], "artifact_evidence": [],
+        }]},
+        "targets": [{"target_id": "T1", "rule_id": "G18", "location": "p0"}],
+        "artifact_claim_replay": {
+            "obligations": {
+                "G18:B1:O1": {
+                    "state": "PASS", "artifact_status": "ALREADY_SATISFIED",
+                    "operation_id": "G18:0", "obligation_id": "G18:B1:O1",
+                    "sites": ["p0"],
+                    "evidence": [{"site_id": "p0", "operation_id": "G18:0",
+                                  "obligation_id": "G18:B1:O1",
+                                  "proof_kind": "site_literal_effect"}],
+                    "site_effects": [{"site_id": "p0", "state": "PASS",
+                                       "artifact_status": "ALREADY_SATISFIED",
+                                       "proof_kind": "site_literal_effect"}],
+                },
+            },
+        },
+    }
+    view = build_coverage_view(report)
+    assert view.counts == report["obligations"]["counts"]
+    assert view.state_of_operation("G18", "p0", "G18:0") == "ALREADY_SATISFIED"
+
+
 def test_artifact_and_target_same_site_are_one_operation_entry():
     report = {
         "obligations": {"records": [{

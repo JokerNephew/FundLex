@@ -26,7 +26,7 @@ from .recall_prompts import (
 )
 
 ENGINE_ID = "recall_first"
-ENGINE_VERSION = "0.1.0"
+ENGINE_VERSION = "0.1.1"
 SCHEMA_VERSION = "3"
 BOUNDARY_POLICY = "sentence-span-preserve-v1"
 # Character-level similarity required before a reference text counts as a wording

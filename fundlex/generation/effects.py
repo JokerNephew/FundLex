@@ -167,6 +167,29 @@ def effect_proof_passed(proof: Mapping[str, Any] | None, *, operation_id: str = 
     if artifact_status in {"UNKNOWN", "CONFLICT", "UNPROVEN", "WRONG_EFFECT",
                            "MISSING_EFFECT", "RESIDUAL_OLD_TEXT"}:
         return False
+    def source_provenance(item: Mapping[str, Any]) -> bool:
+        if item.get("operation_id") != proof.get("operation_id") \
+                or item.get("obligation_id") != proof.get("obligation_id"):
+            return False
+        kind = item.get("proof_kind")
+        if kind in {"source_operation_policy", "source_operation_policy_equivalent",
+                    "alternative_wording_absent"}:
+            return True
+        return kind == "alternative_site_effect" and bool(item.get("one_of_group"))
+
+    if artifact_status == "ALREADY_SATISFIED":
+        # This state is a source-side claim.  A sibling that wrote the same text
+        # into the final paragraph cannot provide it with provenance after the
+        # fact.  Explicit ONE_OF alternatives use their separate proof kinds.
+        evidence = proof.get("evidence") or ()
+        if not any(isinstance(item, Mapping) and source_provenance(item)
+                   for item in evidence):
+            return False
+        if any(isinstance(item, Mapping)
+               and str(item.get("artifact_status") or "").upper() == "ALREADY_SATISFIED"
+               and not source_provenance(item)
+               for item in proof.get("site_effects") or ()):
+            return False
     if artifact_status == "NOT_REQUIRED":
         evidence = proof.get("evidence") or ()
         for item in evidence:
@@ -581,19 +604,22 @@ def evaluate_operation_effect(obligation: Any, original: Any, artifact: Any,
                        and operation_id in {value.strip() for value in
                                             str(unit.get("operation_id") or "").split(",")}]
         validated = bool(unit_proofs) and all(unit.get("verdict") == "PASS" for unit in unit_proofs)
-        expected_present = bool(expected) and (
+        source_has_expected = bool(expected) and (
+            _compact(expected) in _compact(before)
+            or (spec.rule_id in {"G02", "G04"} and spec.op == "replace"
+                and _class_group_equivalent(expected, quote)))
+        one_of_group = str(getattr(spec, "one_of_group", "") or "")
+        after_has_expected = bool(expected) and (
             _compact(expected) in _compact(after)
             or (spec.rule_id in {"G02", "G04"} and spec.op == "replace"
                 and _class_group_equivalent(expected, quote)))
+        expected_present = after_has_expected if one_of_group else (
+            source_has_expected and after_has_expected)
         # ALREADY_SATISFIED is source evidence, not evidence that a sibling
         # operation happened to write the same new phrase into this paragraph.
         # Require the operation's own policy to be present in the source when
         # there is no validated unit carrying it into the artifact.
-        if not own_units and expected and not getattr(spec, "one_of_group", ""):
-            source_has_expected = _compact(expected) in _compact(before)
-            if spec.rule_id in {"G02", "G04"} and spec.op == "replace":
-                source_has_expected = source_has_expected or _class_group_equivalent(
-                    expected, quote)
+        if not own_units and expected and not one_of_group:
             expected_present = expected_present and source_has_expected
         if occurrence >= 0 and spec.op == "replace":
             from .claim_replay import _occurrence_positions
@@ -616,11 +642,22 @@ def evaluate_operation_effect(obligation: Any, original: Any, artifact: Any,
                         break
                 expected_present = bounded and _compact(after[left + shift:right + shift]) == _compact(expected)
         old_wordings = [str(spec.old_text or ""), *getattr(spec, "alternatives", ())]
+        source_policy_equivalent = False
+        if (not source_has_expected and spec.op in {"replace", "append"}
+                and expected and not own_units and not one_of_group):
+            # Semantic equivalence is still operation-scoped, but it must be
+            # established in the ORIGINAL source.  Checking only ``after`` lets
+            # an unrelated sibling's identical insertion close this operation.
+            from ..recall import _policy_phrase_equivalent
+            source_policy_equivalent = _policy_phrase_equivalent(
+                _compact(expected), _compact(before),
+                [_compact(value) for value in old_wordings if _compact(value)])
         if not expected_present and spec.op in {"replace", "append"} and expected:
             from ..recall import _policy_phrase_equivalent
-            expected_present = _policy_phrase_equivalent(
-                _compact(expected), _compact(after),
-                [_compact(value) for value in old_wordings if _compact(value)])
+            if source_policy_equivalent or one_of_group:
+                expected_present = _policy_phrase_equivalent(
+                    _compact(expected), _compact(after),
+                    [_compact(value) for value in old_wordings if _compact(value)])
         allowed_new = [str(value) for value in (authorized_new_texts or {}).get(location, ())
                        if _compact(str(value)) in _compact(after)]
         def retained_as_authorized_new(value: str) -> bool:
@@ -690,10 +727,16 @@ def evaluate_operation_effect(obligation: Any, original: Any, artifact: Any,
         else:
             item.update(state="FAIL", artifact_status=("RESIDUAL_OLD_TEXT" if residual
                         else "MISSING_EFFECT"), failure_code="CLAIM_OPERATION_NOT_PLANNED")
-        item.update(before_quote=quote, after_quote=after,
-                    proof_kind="site_final_plan_reconstruction" if own else "site_literal_effect")
+        proof_kind = ("site_final_plan_reconstruction" if own else
+                      "source_operation_policy_equivalent" if source_policy_equivalent else
+                      "source_operation_policy" if source_has_expected else
+                      "alternative_site_effect" if one_of_group else
+                      "site_literal_effect")
+        item.update(before_quote=quote, after_quote=after, proof_kind=proof_kind,
+                    one_of_group=one_of_group)
         evidence.append({key: item[key] for key in ("rule_id", "operation_id", "obligation_id",
-            "site_id", "location", "before_quote", "after_quote", "proof_kind")})
+            "site_id", "location", "before_quote", "after_quote", "proof_kind",
+            "one_of_group")})
         results.append(item)
     if not results:
         return OperationEffect("OPEN", "UNPROVEN", **base,

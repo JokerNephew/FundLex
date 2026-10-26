@@ -519,6 +519,41 @@ def test_one_of_alternative_branch_can_close_when_sibling_was_applied():
         "ALREADY_SATISFIED", "NOT_REQUIRED"}
 
 
+def test_independent_operation_cannot_borrow_sibling_rewrite_for_already_satisfied():
+    """A sibling's identical rewrite is not source proof for an independent rule."""
+    from fundlex.obligations import apply_facts, compile_obligations
+
+    old = "由于本基金A类基金份额不收取销售服务费，而C类基金份额收取销售服务费"
+    new = "由于本基金A类基金份额和C类基金份额费用收取不同"
+    g18 = {"rule_id": "G18", "operations": [{
+        "operation_id": "G18:0", "op": "replace", "old_text": old,
+        "new_text": new, "condition": {"kind": "none"},
+        "group_kind": "INDEPENDENT"}]}
+    sibling = {"rule_id": "G100", "operations": [{
+        "operation_id": "G100:0", "op": "replace", "old_text": old,
+        "new_text": new, "condition": {"kind": "none"},
+        "group_kind": "INDEPENDENT"}]}
+    ledger = compile_obligations({"groups": [g18, sibling]})
+    from test_operation_execution_closure import Facts
+    apply_facts(ledger, Facts())
+    result = replay_claims(
+        [{"rule_id": "G100", "target_id": "T100", "location": "p0",
+          "start": 0, "end": len(old), "replacement": new,
+          "operation_keys": ["G100:0"], "components": []}],
+        Inspection([old]), Inspection([new]),
+        rules_by_id={"G18": g18, "G100": sibling}, facts=Facts(),
+        targets_by_id={
+            "T18": {"target_id": "T18", "rule_id": "G18", "location": "p0",
+                    "state": "satisfied", "operations": ["G18:0"]},
+            "T100": {"target_id": "T100", "rule_id": "G100", "location": "p0",
+                     "quote": old, "state": "needs_edit", "operations": ["G100:0"]}},
+        obligations=ledger)
+    assert result["verified"] is False
+    proof = result["obligations"]["G18:B1:O1"]
+    assert proof["state"] != "PASS"
+    assert proof["artifact_status"] in {"UNPROVEN", "MISSING_EFFECT", "WRONG_EFFECT"}
+
+
 def test_inapplicable_operation_cannot_claim_an_artifact_edit():
     rule = {"rule_id": "G95", "operations": [
         {"op": "append", "old_text": "", "new_text": "新增乙。"},

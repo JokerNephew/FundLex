@@ -871,7 +871,7 @@ def test_local_proof_keeps_occurrence_identity_and_rejects_unknown_site():
     from fundlex.generation.effects import effect_proof_passed
     effect = dict(operation_id="G04:1", obligation_id="G04:B1:O2", location="p0",
         site_id="p0#occurrence:0", state="PASS", artifact_status="ALREADY_SATISFIED",
-        failure_code="", proof_kind="site_literal_effect")
+        failure_code="", proof_kind="source_operation_policy")
     proof = {**effect, "sites": [effect["site_id"]], "evidence": [effect], "site_effects": [effect]}
     assert effect_proof_passed(_local_operation_proofs(proof, "G04:1", "G04:B1:O2", "p0")[0])
     assert _local_operation_proofs(proof, "G04:1", "G04:B1:O2", "p1") == []
@@ -1456,9 +1456,13 @@ def test_post_proof_target_reconciliation_removes_stale_candidate():
     proof = {"state": "PASS", "operation_id": "G12:0",
              "obligation_id": "G12:B1:O1", "artifact_status": "ALREADY_SATISFIED",
              "sites": ["p221"], "failure_code": "",
-             "evidence": [{"site_id": "p221", "proof_kind": "site_literal_effect",
-                           "operation_id": "G12:0", "obligation_id": "G12:B1:O1"}],
-             "site_effects": [{"state": "PASS", "site_id": "p221"}]}
+                 "evidence": [{"site_id": "p221", "proof_kind": "source_operation_policy",
+                               "operation_id": "G12:0", "obligation_id": "G12:B1:O1"}],
+                     "site_effects": [{"state": "PASS", "site_id": "p221",
+                                        "artifact_status": "ALREADY_SATISFIED",
+                                        "proof_kind": "source_operation_policy",
+                                        "operation_id": "G12:0",
+                                        "obligation_id": "G12:B1:O1"}]}
     changed = _reconcile_candidate_targets(
         [target], {"ledger": [{"target_id": "T3001", "status": "not_planned"}]},
         {"obligations": {"G12:B1:O1": proof}}, ledger)

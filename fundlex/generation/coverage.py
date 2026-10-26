@@ -180,6 +180,19 @@ def _replay_obligations(report: Mapping[str, Any]) -> Mapping[str, Any]:
     return value if isinstance(value, Mapping) else {}
 
 
+def _legacy_replay_provenance(report: Mapping[str, Any]) -> bool:
+    """Identify reports written before ALREADY_SATISFIED provenance existed.
+
+    The frozen recall-first reports at engine version 0.1.0 contain valid
+    historical coverage counts but cannot be upgraded in place with the new
+    source-side evidence.  Keep those stored counts stable while requiring
+    every unversioned or newer report to satisfy the current provenance gate.
+    """
+    return (report.get("engine_id") == "recall_first"
+            and report.get("schema_version") == "3"
+            and report.get("engine_version") == "0.1.0")
+
+
 def _site_projection(record: Mapping[str, Any], targets: Mapping[str, Mapping[str, Any]],
                      replay: Mapping[str, Any]) -> list[tuple[str, str, str, str, str]]:
     """Return ``(location, site_id, target_id, state, basis)`` from site proofs.
@@ -321,6 +334,7 @@ def build_coverage_view(report: Mapping[str, Any]) -> CoverageLedgerView:
         replay_obligations = _replay_obligations(report)
         canonical: list[CoverageEntry] = []
         obligation_states: dict[str, str] = {}
+        from .effects import effect_proof_passed
         for record in records:
             if not isinstance(record, Mapping):
                 continue
@@ -330,13 +344,22 @@ def build_coverage_view(report: Mapping[str, Any]) -> CoverageLedgerView:
             basis = str(record.get("completion_evidence") or "operation_ledger")
             obligation_id = str(record.get("obligation_id") or "")
             obligation_key = obligation_id or f"{rule_id}:{operation_id}"
+            replay = replay_obligations.get(obligation_id, {})
+            if not isinstance(replay, Mapping):
+                replay = {}
+            if (state == "ALREADY_SATISFIED" and replay
+                    and not _legacy_replay_provenance(report)
+                    and not effect_proof_passed(replay, operation_id=operation_id,
+                                                obligation_id=obligation_id)):
+                # A stale ledger row cannot preserve a successful coverage state when
+                # its replay proof lacks operation-owned source provenance.
+                state = "UNRESOLVED"
+                basis = "claim_replay:ALREADY_SATISFIED_PROVENANCE"
+                replay = {}
             previous_state = obligation_states.get(obligation_key)
             obligation_states[obligation_key] = (
                 _least_complete((previous_state, state)) or "UNRESOLVED"
                 if previous_state is not None else state)
-            replay = replay_obligations.get(obligation_id, {})
-            if not isinstance(replay, Mapping):
-                replay = {}
             site_rows = _site_projection(record, targets, replay)
             # If no site-level replay exists, retain one global row.  This keeps
             # legacy reports queryable without pretending that every inventory

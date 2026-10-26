@@ -104,6 +104,28 @@ def test_failed_claim_replay_blocks_success_even_when_status_is_stale():
     assert summary["status"] == PARTIAL
 
 
+def test_independent_already_satisfied_without_source_provenance_blocks_success():
+    summary = build_user_summary({
+        "delivery_status": "complete", "unresolved": [],
+        "artifact_claim_replay": {
+            "verified": True,
+            "obligations": {"G18:B1:O1": {
+                "state": "PASS", "artifact_status": "ALREADY_SATISFIED",
+                "operation_id": "G18:0", "obligation_id": "G18:B1:O1",
+                "sites": ["p0"],
+                "evidence": [{"site_id": "p0", "location": "p0",
+                              "operation_id": "G18:0",
+                              "obligation_id": "G18:B1:O1",
+                              "proof_kind": "site_literal_effect"}],
+                "site_effects": [{"site_id": "p0", "state": "PASS",
+                                   "artifact_status": "ALREADY_SATISFIED",
+                                   "proof_kind": "site_literal_effect"}],
+            }},
+        },
+    })
+    assert summary["status"] == PARTIAL
+
+
 def test_claim_replay_alias_and_unknown_site_effect_block_success():
     summary = build_user_summary({
         "delivery_status": "complete", "unresolved": [],

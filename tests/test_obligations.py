@@ -261,6 +261,31 @@ def test_rule_level_plan_satisfied_cannot_close_an_unattributed_sibling():
         "G02:0", "G02:1"}
 
 
+def test_ledger_rejects_already_satisfied_without_operation_source_provenance():
+    ledger = compile_obligations(guide(rule(rule_id="G18", operations=[{
+        "op": "replace", "old_text": "旧句", "new_text": "新句",
+        "condition": {"kind": "none", "value": None}}])))
+    apply_facts(ledger, FakeFacts())
+    proof = {
+        "state": "PASS", "artifact_status": "ALREADY_SATISFIED",
+        "operation_id": "G18:0", "obligation_id": "G18:B1:O1",
+        "sites": ["p0"], "failure_code": "",
+        "evidence": [{"site_id": "p0", "location": "p0",
+                      "operation_id": "G18:0",
+                      "obligation_id": "G18:B1:O1",
+                      "proof_kind": "site_literal_effect"}],
+        "site_effects": [{"site_id": "p0", "location": "p0",
+                           "state": "PASS",
+                           "artifact_status": "ALREADY_SATISFIED",
+                           "proof_kind": "site_literal_effect"}],
+    }
+    project(ledger, report_with(
+        targets=[target("G18", operations=["G18:0"], location="p0")],
+        replay={"verified": True, "obligations": {"G18:B1:O1": proof}}))
+    assert ledger.records[0].completion == "UNRESOLVED"
+    assert open_obligations(ledger)
+
+
 def test_one_completed_target_cannot_hide_another_wrong_occurrence():
     ledger = compile_obligations(guide(rule(rule_id="G18", operations=[
         {"op": "replace", "old_text": "旧句", "new_text": "新句",

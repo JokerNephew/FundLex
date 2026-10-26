@@ -66,11 +66,17 @@ def _completion_blockers(report: Mapping[str, Any]) -> list[str]:
 
     replay = report.get("artifact_claim_replay") or report.get("claim_replay")
     if isinstance(replay, Mapping):
+        from .generation.effects import effect_proof_passed
         if replay.get("verified") is False:
             blockers.append("claim_replay_failed")
         replay_records = replay.get("obligations") or {}
         if isinstance(replay_records, Mapping) and any(
-                str(item.get("state") or "").upper() != "PASS"
+                not effect_proof_passed(
+                    item,
+                    operation_id=str(item.get("operation_id") or ""),
+                    obligation_id=str(item.get("obligation_id") or obligation_id),
+                )
+                or str(item.get("state") or "").upper() != "PASS"
                 or str(item.get("artifact_status") or "").upper()
                 in {"UNKNOWN", "CONFLICT", "UNPROVEN", "WRONG_EFFECT",
                     "MISSING_EFFECT", "RESIDUAL_OLD_TEXT"}
@@ -81,7 +87,8 @@ def _completion_blockers(report: Mapping[str, Any]) -> list[str]:
                            "MISSING_EFFECT", "RESIDUAL_OLD_TEXT"}
                        for site in item.get("site_effects") or ()
                        if isinstance(site, Mapping))
-                for item in replay_records.values() if isinstance(item, Mapping)):
+                for obligation_id, item in replay_records.items()
+                if isinstance(item, Mapping)):
             blockers.append("claim_operation_unresolved")
     return blockers
 
