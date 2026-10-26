@@ -8,6 +8,7 @@ import {
   useCompareTasks,
   useCompareUploadMutation,
   useCompareView,
+  refetchCompareTask,
 } from '../../api/hooks'
 import type { CompareDiff, ComparePair, ComparePairManifest, CompareTask, CompareView } from '../../types'
 
@@ -320,8 +321,16 @@ export function ComparePage() {
         draft.next = index + 1; setUploadDraft({ ...draft })
       }
       await sealMutation.mutateAsync(draft.task.id)
-      setUploadDraft(undefined); setCreateOpen(false); setMessage('已提交，对比任务正在处理。'); setSelectedTaskId(draft.task.id); await tasks.refetch(); await task.refetch()
-    } catch (nextError) { setError(`上传中断：${messageOf(nextError, '文件上传未完成')}。已完成的文件已保留，可继续上传。`) }
+    } catch (nextError) {
+      setError(`上传中断：${messageOf(nextError, '文件上传未完成')}。已完成的文件已保留，可继续上传。`)
+      return
+    }
+    setUploadDraft(undefined); setCreateOpen(false); setMessage('已提交，对比任务正在处理。'); setSelectedTaskId(draft.task.id)
+    try {
+      await Promise.all([tasks.refetch(), refetchCompareTask(draft.task.id)])
+    } catch (nextError) {
+      setError(`任务已提交，但状态刷新失败：${messageOf(nextError, '服务暂时不可用')}。请稍后刷新。`)
+    }
   }
 
   const createTask = async () => {

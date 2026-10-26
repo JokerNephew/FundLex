@@ -2,7 +2,7 @@ import { useMutation, useQuery as useTanStackQuery } from '@tanstack/react-query
 import { useCallback } from 'react'
 import { api } from './endpoints'
 import { queryClient } from './queryClient'
-import type { Capabilities, CompareTask, CompareUploadResult, Decision, GuideDetail, GuideSettings, GuideSummary, Paginated, Report, RevisionView, TaskDetail, TaskDocument, TaskStats, TaskSummary, UploadResult } from '../types'
+import type { Capabilities, CompareTask, Decision, GuideDetail, GuideSettings, GuideSummary, Paginated, Report, RevisionView, TaskDetail, TaskDocument, TaskStats, TaskSummary, UploadResult } from '../types'
 
 type QueryState<T> = {
   data: T | undefined
@@ -78,6 +78,7 @@ export function invalidateQuery(keyPrefix: string): void {
         return key === 'revisions' && queryKey[1] === taskId && queryKey[2] === documentId
       }
       if (normalized === 'compare-tasks') return key === 'compare-tasks'
+      if (normalized.startsWith('compare-task:')) return key === 'compare-task' && queryKey[1] === normalized.slice(13)
       if (normalized.startsWith('document:')) {
         const [, taskId, documentId] = normalized.split(':')
         return key === 'document' && queryKey[1] === taskId && queryKey[2] === documentId
@@ -111,8 +112,24 @@ export function useReviewMutation() {
   })
 }
 export function useCompareTaskMutation() { return useApiMutation<CompareTask, { name: string; pairs: Parameters<typeof api.createCompareTask>[1]; key: string }>((value) => api.createCompareTask(value.name, value.pairs, value.key), ['compare-tasks']) }
-export function useCompareUploadMutation() { return useApiMutation<CompareUploadResult, { id: string; files: File[]; clientIds: string[] }>((value) => api.uploadCompareTask(value.id, value.files, value.clientIds), ['compare-tasks']) }
-export function useCompareSealMutation() { return useApiMutation<CompareTask, string>((id) => api.sealCompareTask(id), ['compare-tasks']) }
+export function useCompareUploadMutation() {
+  return useMutation({
+    mutationFn: (value: { id: string; files: File[]; clientIds: string[] }) => api.uploadCompareTask(value.id, value.files, value.clientIds),
+    onSuccess: (_result, value) => {
+      invalidateQuery('compare-tasks')
+      invalidateQuery(`compare-task:${value.id}`)
+    },
+  })
+}
+export function useCompareSealMutation() {
+  return useMutation({
+    mutationFn: (id: string) => api.sealCompareTask(id),
+    onSuccess: (_result, id) => {
+      invalidateQuery('compare-tasks')
+      invalidateQuery(`compare-task:${id}`)
+    },
+  })
+}
 export function useGuideMutation() { return useApiMutation<GuideSettings, string | null>((id) => api.setGuide(id), ['guides', 'guide-settings']) }
 export function useGuideUploadMutation() { return useApiMutation<{ version: GuideSummary }, File>((file) => api.uploadGuide(file), ['guides']) }
 export function useGuideParseMutation() { return useApiMutation<{ version: GuideSummary }, string>((id) => api.parseGuide(id), ['guides']) }
@@ -146,4 +163,8 @@ export function useDocumentReport(taskId: string | undefined, documentId: string
 export function useRevisions(taskId: string | undefined, documentId: string | undefined) { return useServerQuery<RevisionView>(queryKeys.revisions(taskId || '', documentId || ''), () => api.revisions(taskId as string, documentId as string), { enabled: Boolean(taskId && documentId) }) }
 export function useCompareTasks(options?: QueryOptions) { return useServerQuery<{ items: CompareTask[]; total: number }>(queryKeys.compareTasks, api.compareTasks, options) }
 export function useCompareTask(id: string | undefined, options?: QueryOptions) { return useServerQuery<CompareTask>(queryKeys.compareTask(id || ''), () => api.compareTask(id as string), { ...options, enabled: Boolean(id) }) }
+export function refetchCompareTask(id: string): Promise<CompareTask> {
+  if (!id) return Promise.reject(new Error('对比任务 ID 缺失'))
+  return queryClient.fetchQuery({ queryKey: queryKeys.compareTask(id), queryFn: () => api.compareTask(id) })
+}
 export function useCompareView(pairId: string | undefined, options?: QueryOptions) { return useServerQuery<import('../types').CompareView>(queryKeys.compareView(pairId || ''), () => api.compareView(pairId as string), { ...options, enabled: Boolean(pairId) }) }
