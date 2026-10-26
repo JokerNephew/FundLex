@@ -343,8 +343,11 @@ class RunStore:
                     error_code TEXT, report_json TEXT,
                     attempt INTEGER NOT NULL DEFAULT 0, fencing_token INTEGER NOT NULL DEFAULT 0,
                     lease_until REAL, next_attempt_at REAL,
-                    created_at REAL NOT NULL, updated_at REAL NOT NULL,
-                    UNIQUE(batch_id, ordinal)
+                     created_at REAL NOT NULL, updated_at REAL NOT NULL,
+                     selection_epoch INTEGER NOT NULL DEFAULT 0,
+                     selection_manifest_hash TEXT NOT NULL DEFAULT '',
+                     selection_decision_hash TEXT NOT NULL DEFAULT '',
+                     UNIQUE(batch_id, ordinal)
                 );
                 CREATE TABLE IF NOT EXISTS artifacts (
                     document_id TEXT NOT NULL REFERENCES documents(id), kind TEXT NOT NULL,
@@ -365,6 +368,14 @@ class RunStore:
             for name in ("started_at", "finished_at"):
                 if name not in document_columns:
                     db.execute(f"ALTER TABLE documents ADD COLUMN {name} REAL")
+            for name, definition in {
+                "selection_epoch": "INTEGER NOT NULL DEFAULT 0",
+                "selection_manifest_hash": "TEXT NOT NULL DEFAULT ''",
+                "selection_decision_hash": "TEXT NOT NULL DEFAULT ''",
+            }.items():
+                if name not in document_columns:
+                    db.execute(f"ALTER TABLE documents ADD COLUMN {name} {definition}")
+            document_columns = {row["name"] for row in db.execute("PRAGMA table_info(documents)")}
             # Historical rows predate the timing columns. Terminal rows get the
             # best available approximation; new rows are stamped by claim/finish.
             db.execute("""UPDATE documents SET started_at=COALESCE(started_at, created_at)
@@ -485,6 +496,9 @@ class RunStore:
         return {key: row[key] for key in ("id", "batch_id", "filename", "source_sha256", "status",
                                           "qualification_status", "delivery_status", "error_code", "attempt",
                                           "execution_mode")} | {
+            "selection_epoch": row["selection_epoch"] if "selection_epoch" in row.keys() else 0,
+            "selection_manifest_hash": row["selection_manifest_hash"] if "selection_manifest_hash" in row.keys() else "",
+            "selection_decision_hash": row["selection_decision_hash"] if "selection_decision_hash" in row.keys() else "",
             "artifacts": [item["kind"] for item in artifacts],
             "report_url": f"/api/batches/{row['batch_id']}/documents/{row['id']}/report",
             "download_urls": {item["kind"]: f"/api/batches/{row['batch_id']}/documents/{row['id']}/download/{item['kind']}" for item in artifacts},
@@ -561,6 +575,81 @@ class RunStore:
             db.execute("BEGIN IMMEDIATE")
             db.execute("DELETE FROM artifacts WHERE document_id=? AND kind=?", (document_id, kind))
         self.object_path(row["object_key"]).unlink(missing_ok=True)
+
+    def publish_selected_artifacts(self, owner: str, batch_id: str, document_id: str,
+                                   *, final: Path, redline: Path | None,
+                                   manifest_hash: str, decision_hash: str,
+                                   expected_epoch: int | None = None) -> dict[str, Any]:
+        """Publish one final/redline pair and advance the selection epoch atomically.
+
+        Files are copied before the database pointer changes.  The locked update
+        then replaces both pointers together, so a request can never expose a
+        new final with an old selected redline (or the reverse).
+        """
+        self.get_document(owner, batch_id, document_id)
+        paths = {"selected_final": Path(final)}
+        if redline is not None:
+            paths["selected_redline"] = Path(redline)
+        if any(not path.is_file() for path in paths.values()):
+            raise StoreError("invalid artifact")
+        copied: dict[str, tuple[str, str, int]] = {}
+        committed = False
+        try:
+            for kind, source in paths.items():
+                digest = sha256_file(source)
+                key = f"selected/{document_id}/{uuid.uuid4().hex}/{kind}{source.suffix}"
+                target = self.object_path(key)
+                target.parent.mkdir(parents=True, exist_ok=True)
+                with source.open("rb") as incoming, target.open("xb") as output:
+                    for chunk in iter(lambda: incoming.read(1024 * 1024), b""):
+                        output.write(chunk)
+                    output.flush()
+                    os.fsync(output.fileno())
+                if sha256_file(target) != digest:
+                    raise Conflict("artifact copy verification failed")
+                copied[kind] = (key, digest, source.stat().st_size)
+            now = time.time()
+            with self._connect() as db:
+                db.execute("BEGIN IMMEDIATE")
+                row = db.execute("SELECT * FROM documents WHERE id=? AND batch_id=?",
+                                 (document_id, batch_id)).fetchone()
+                if row is None:
+                    raise NotFound("document not found")
+                current_epoch = int(row["selection_epoch"] or 0)
+                if expected_epoch is not None and current_epoch != expected_epoch:
+                    raise Conflict("SELECTION_EPOCH_CONFLICT")
+                new_epoch = current_epoch + 1
+                old_rows = db.execute("SELECT kind,object_key FROM artifacts WHERE document_id=? AND kind IN ('selected_final','selected_redline')",
+                                      (document_id,)).fetchall()
+                for kind, (key, digest, size) in copied.items():
+                    db.execute("INSERT OR REPLACE INTO artifacts VALUES (?,?,?,?,?)",
+                               (document_id, kind, key, digest, size))
+                if "selected_redline" not in copied:
+                    db.execute("DELETE FROM artifacts WHERE document_id=? AND kind='selected_redline'",
+                               (document_id,))
+                changed = db.execute("""UPDATE documents SET selection_epoch=?,selection_manifest_hash=?,
+                    selection_decision_hash=?,updated_at=? WHERE id=? AND selection_epoch=?""",
+                           (new_epoch, manifest_hash, decision_hash, now, document_id, current_epoch)).rowcount
+                if changed != 1:
+                    raise Conflict("SELECTION_EPOCH_CONFLICT")
+            committed = True
+            for old in old_rows:
+                if old["kind"] not in copied or old["object_key"] != copied[old["kind"]][0]:
+                    try:
+                        self.object_path(old["object_key"]).unlink(missing_ok=True)
+                    except OSError:
+                        # The DB pointer is already the authoritative state. An
+                        # orphaned old object is safe to reap later and must not
+                        # turn a successful selection into a 500 response.
+                        pass
+            return {"epoch": new_epoch,
+                    "selected_final_sha256": copied["selected_final"][1],
+                    "selected_redline_sha256": copied.get("selected_redline", (None, None, None))[1]}
+        except Exception:
+            if not committed:
+                for key, _, _ in copied.values():
+                    self.object_path(key).unlink(missing_ok=True)
+            raise
 
     def _verify_selected_source(self, document_id: str, kind: str) -> None:
         """A selected artifact is valid only while its source redline is intact.
