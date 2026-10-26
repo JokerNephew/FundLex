@@ -6,6 +6,7 @@ Production identity integration is deliberately unconfigured and fails closed.
 
 from __future__ import annotations
 
+import html
 import io
 import csv
 import hashlib
@@ -17,17 +18,21 @@ import zipfile
 from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
+from urllib.parse import quote
 
 from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Request, UploadFile
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import (
     FileResponse,
     HTMLResponse,
+    JSONResponse,
     PlainTextResponse,
     RedirectResponse,
     Response,
     StreamingResponse,
 )
 from starlette.background import BackgroundTask
+from starlette.exceptions import HTTPException as StarletteHTTPException
 from fastapi.staticfiles import StaticFiles
 
 from . import __version__, guide_store
@@ -35,8 +40,10 @@ from .docx import DocxError
 from .edit_summary import archive_entry, archive_kinds
 from .html_view import project_docx
 from .selective import (accept_all as selective_accept_all, generate_selected_artifact,
-                        generate_selected_redline)
-from .store import Conflict, NotFound, RunStore, StoreError
+                        generate_selected_redline, manifest_fingerprint,
+                        _manifests_from_report, resolve_selection)
+from .store import (Conflict, NotFound, ReportJsonError, RunStore, StoreError,
+                    parse_report_json)
 from .config import auth_db_target, local_data_dir
 from .tasks import TaskStore
 from .application import TaskApplicationService
@@ -45,10 +52,38 @@ from .upload_validation import (
     MAX_PART_BYTES, MAX_UNCOMPRESSED_BYTES, MAX_UPLOAD_BYTES,
     UploadValidationError, validate_batch_limits, validate_docx_upload,
 )
+from .upload_guard import add_upload_guard
 from .integrations import IntegrationStore
+from .integrations.store import IntegrationConflict
+from .integrations.feishu.oauth import FeishuOAuthClient, FeishuOAuthError, oauth_available
 from .compare.store import CompareStore
 from .compare.api import register_compare_routes
+from .api_errors import (
+    CORRELATION_ID_HEADER, code_from_detail, correlation_id, error_code,
+    log_handled_error, message_for, new_correlation_id, raise_api_error,
+    reset_correlation_id, set_correlation_id,
+)
 from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+
+class FrontendBasePathMiddleware:
+    """Accept requests forwarded with an optional deployment path prefix."""
+
+    def __init__(self, app, base_path: str = ""):
+        self.app = app
+        self.base_path = base_path.rstrip("/") if base_path not in ("", "/") else ""
+
+    async def __call__(self, scope, receive, send):
+        if self.base_path and scope["type"] in {"http", "websocket"}:
+            path = scope.get("path", "")
+            if path == self.base_path or path.startswith(f"{self.base_path}/"):
+                scope = dict(scope)
+                scope["path"] = path[len(self.base_path):] or "/"
+                raw_path = scope.get("raw_path")
+                if raw_path is not None:
+                    prefix = self.base_path.encode("utf-8")
+                    scope["raw_path"] = raw_path[len(prefix):] or b"/"
+        await self.app(scope, receive, send)
 
 
 class ManifestFile(BaseModel):
@@ -148,6 +183,9 @@ class DecisionRequest(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
     decisions: list[RevisionDecision] = Field(default_factory=list, max_length=1000)
+    selection_epoch: int | None = Field(default=None, ge=0)
+    manifest_hash: str | None = Field(default=None, min_length=64, max_length=64,
+                                      pattern="^[0-9a-f]{64}$")
 
 
 def _auth_mode() -> str:
@@ -242,6 +280,26 @@ def _capabilities_identity(request: Request, x_fundlex_user: str | None = Header
 def _public_user(record: dict) -> dict:
     return {"id": record["id"], "username": record["username"],
             "display_name": record["display_name"], "role": record["role"]}
+
+
+def _oauth_result_page(title: str, message: str, *, success: bool) -> HTMLResponse:
+    """Minimal callback page; never reflects authorization codes or tokens."""
+    base = os.environ.get("FUNDLEX_PUBLIC_BASE_URL", "").rstrip("/")
+    settings = f"{base}/settings" if base else "/settings"
+    app_id = os.environ.get("FUNDLEX_FEISHU_APP_ID", "")
+    bot_link = f"https://applink.feishu.cn/client/bot/open?appId={html.escape(app_id)}" if app_id else ""
+    bot = f'<p><a href="{bot_link}">打开 FundLex 机器人私聊</a></p>' if bot_link else ""
+    color = "#1f7a4d" if success else "#b42318"
+    body = f"""<!doctype html><html lang="zh-CN"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{html.escape(title)} · FundLex</title></head>
+<body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;margin:0;background:#f6f3ee;color:#23302b">
+<main style="max-width:560px;margin:12vh auto;padding:32px;background:#fff;border-radius:16px;box-shadow:0 12px 40px rgba(35,48,43,.12)">
+<h1 style="font-size:22px;margin:0 0 14px;color:{color}">{html.escape(title)}</h1>
+<p style="line-height:1.7;margin:0 0 18px">{html.escape(message)}</p>
+<p><a href="{html.escape(settings)}">返回 FundLex 设置</a></p>{bot}
+</main></body></html>"""
+    return HTMLResponse(body, headers={"Cache-Control": "no-store"})
 
 
 def _validate_upload(name: str, data: bytes) -> str:
@@ -339,8 +397,8 @@ def _recall_metrics(store: RunStore, documents: list[dict], key: str) -> dict[st
     metrics: dict[str, dict] = {}
     for row in rows:
         try:
-            report = json.loads(row["report_json"]) if row["report_json"] else None
-        except (TypeError, ValueError):
+            report = parse_report_json(row["report_json"])
+        except ReportJsonError:
             report = None
         if not isinstance(report, dict) or report.get("engine_id") != RECALL_ENGINE_ID:
             continue
@@ -407,12 +465,55 @@ def _public_batch(batch: dict, *, detail: bool, metrics: dict[str, dict] | None 
             "execution_mode": d.get("execution_mode", ""),
             "error_code": d["error_code"], "report_url": d["report_url"],
             "downloads": d["download_urls"], "source_sha256": d["source_sha256"],
+            "report_error": d.get("report_error"),
         } | (metrics or {}).get(d["id"], {}) for d in docs]
     return base
 
 
 def create_app(data_dir: str | Path | None = None, *, auth_db=None) -> FastAPI:
     application = FastAPI(title="FundLex", version="0.1.0")
+    add_upload_guard(application, max_upload_bytes=MAX_UPLOAD_BYTES,
+                     max_batch_bytes=MAX_BATCH_BYTES,
+                     max_request_files=MAX_BATCH_DOCUMENTS)
+
+    def api_error_response(request: Request, status_code: int, code: str) -> JSONResponse:
+        cid = getattr(request.state, "correlation_id", None) or correlation_id()
+        return JSONResponse(
+            status_code=status_code,
+            content={"error_code": code, "message": message_for(status_code),
+                     "detail": code, "correlation_id": cid},
+            headers={CORRELATION_ID_HEADER: cid},
+        )
+
+    @application.exception_handler(StarletteHTTPException)
+    async def stable_http_error(request: Request, exc: StarletteHTTPException):
+        code = code_from_detail(exc.detail, exc.status_code)
+        log_handled_error(exc, code, request_id=getattr(request.state, "correlation_id", None))
+        return api_error_response(request, exc.status_code, code)
+
+    @application.exception_handler(RequestValidationError)
+    async def stable_validation_error(request: Request, exc: RequestValidationError):
+        code = "INVALID_REQUEST"
+        log_handled_error(exc, code, request_id=getattr(request.state, "correlation_id", None))
+        return api_error_response(request, 422, code)
+
+    @application.exception_handler(Exception)
+    async def stable_unexpected_error(request: Request, exc: Exception):
+        code = error_code(exc, "INTERNAL_ERROR")
+        log_handled_error(exc, code, request_id=getattr(request.state, "correlation_id", None))
+        return api_error_response(request, 500, code)
+
+    @application.middleware("http")
+    async def correlation_context(request: Request, call_next):
+        cid = new_correlation_id()
+        request.state.correlation_id = cid
+        token = set_correlation_id(cid)
+        try:
+            response = await call_next(request)
+        finally:
+            reset_correlation_id(token)
+        response.headers[CORRELATION_ID_HEADER] = cid
+        return response
 
     @application.middleware("http")
     async def private_api_responses(request, call_next):
@@ -464,7 +565,8 @@ def create_app(data_dir: str | Path | None = None, *, auth_db=None) -> FastAPI:
         except NotFound as exc:
             raise HTTPException(404, "task not found") from exc
         except Conflict as exc:
-            raise HTTPException(409, str(exc)) from exc
+            from .api_errors import raise_api_error
+            raise_api_error(409, exc, fallback="CONFLICT")
 
     # --- revision review (HTML presentation + per-revision selection) -------
 
@@ -484,42 +586,54 @@ def create_app(data_dir: str | Path | None = None, *, auth_db=None) -> FastAPI:
 
     def _revision_view(owner: str, batch_id: str, document_id: str) -> dict:
         path, report = _redline_for(owner, batch_id, document_id)
+        document = store.get_document(owner, batch_id, document_id)
+        manifests = _manifests_from_report(report)
         view = project_docx(str(path), report=report)
         return {
             "document_id": document_id,
             "html": view["html"],
             "revisions": view["revisions"],
             "meta": view["meta"],
+            "selection_epoch": document.get("selection_epoch", 0),
+            "manifest_hash": manifest_fingerprint(manifests),
+            "decision_hash": document.get("selection_decision_hash", ""),
             "download_url": f"/api/batches/{batch_id}/documents/{document_id}/download/selected_final",
         }
 
     def _apply_selection(owner: str, batch_id: str, document_id: str,
-                         decisions: dict[int, str] | None) -> dict:
+                         decisions: list[dict] | None, *, expected_epoch: int | None = None,
+                         expected_manifest_hash: str | None = None) -> dict:
         path, report = _redline_for(owner, batch_id, document_id)
+        manifests = _manifests_from_report(report)
         chosen = decisions if decisions is not None else selective_accept_all(str(path), report)
+        verdict = resolve_selection(manifests, chosen, client_ids=decisions is not None)
+        if expected_manifest_hash is not None and expected_manifest_hash != verdict.manifest_hash:
+            raise Conflict("SELECTION_MANIFEST_CONFLICT")
+        document = store.get_document(owner, batch_id, document_id)
+        current_epoch = int(document.get("selection_epoch", 0) or 0)
+        if expected_epoch is not None and expected_epoch != current_epoch:
+            raise Conflict("SELECTION_EPOCH_CONFLICT")
+        if expected_epoch is None and current_epoch:
+            raise Conflict("SELECTION_EPOCH_REQUIRED")
+        publish_epoch = current_epoch if expected_epoch is None else expected_epoch
         temp_dir = Path(tempfile.mkdtemp(prefix="fundlex-selected-"))
         target = temp_dir / "selected_final.docx"
         derived_redline = temp_dir / "selected_redline.docx"
         try:
-            result = generate_selected_artifact(path, target, report, chosen)
-            store.save_selected_artifact(owner, batch_id, document_id, "selected_final", target)
+            result = generate_selected_artifact(path, target, report, verdict.decisions)
             # The engine redline always stays available as the full record of what
             # the engine planned. A second revision file is only worth publishing
             # when the user actually departed from "accept everything": otherwise it
             # would duplicate the engine redline under a different name.
-            if _selection_overrides_default(report, chosen, result.rejected):
-                try:
-                    generate_selected_redline(path, derived_redline, report, chosen)
-                    store.save_selected_artifact(owner, batch_id, document_id,
-                                                 "selected_redline", derived_redline)
-                except (DocxError, Conflict, StoreError):
-                    # The selected contract is already published; a revision file
-                    # that cannot be derived must not fail the decision request.
-                    store.remove_selected_artifact(owner, batch_id, document_id,
-                                                   "selected_redline")
-            else:
-                store.remove_selected_artifact(owner, batch_id, document_id,
-                                               "selected_redline")
+            has_selected_redline = _selection_overrides_default(report, verdict.decisions,
+                                                                 result.rejected)
+            if has_selected_redline:
+                generate_selected_redline(path, derived_redline, report, verdict.decisions)
+            published = store.publish_selected_artifacts(
+                owner, batch_id, document_id, final=target,
+                redline=derived_redline if has_selected_redline else None,
+                manifest_hash=verdict.manifest_hash, decision_hash=verdict.decision_hash,
+                expected_epoch=publish_epoch)
         finally:
             shutil.rmtree(temp_dir, ignore_errors=True)
         return {
@@ -527,6 +641,10 @@ def create_app(data_dir: str | Path | None = None, *, auth_db=None) -> FastAPI:
             "accepted": list(result.accepted),
             "rejected": list(result.rejected),
             "sha256": result.sha256,
+            "selection_epoch": published["epoch"],
+            "manifest_hash": verdict.manifest_hash,
+            "decision_hash": verdict.decision_hash,
+            "selected_redline_sha256": published["selected_redline_sha256"],
             "download_url": f"/api/batches/{batch_id}/documents/{document_id}/download/selected_final",
         }
 
@@ -621,7 +739,8 @@ def create_app(data_dir: str | Path | None = None, *, auth_db=None) -> FastAPI:
         except UserExists as exc:
             raise HTTPException(409, "username already exists") from exc
         except (AuthValidationError, ValueError) as exc:
-            raise HTTPException(422, str(exc)) from exc
+            from .api_errors import raise_api_error
+            raise_api_error(422, exc, fallback="INVALID_REQUEST")
         return {"token": sessions.login(record["id"]), "user": _public_user(record)}
 
     @application.post("/api/auth/logout")
@@ -672,6 +791,62 @@ def create_app(data_dir: str | Path | None = None, *, auth_db=None) -> FastAPI:
         integrations.revoke_user_binding("feishu", user)
         return {"provider": "feishu", "bound": False}
 
+    @application.post("/api/integrations/feishu/oauth/start")
+    def start_feishu_oauth(user: str = Depends(_user)):
+        """Create a one-time personal QR/OAuth URL for the current account."""
+        if _auth_mode() != "password":
+            raise HTTPException(404, "not found")
+        if not oauth_available():
+            raise HTTPException(503, "FEISHU_OAUTH_NOT_CONFIGURED")
+        try:
+            client = FeishuOAuthClient.from_env()
+        except FeishuOAuthError as exc:
+            raise HTTPException(503, exc.code) from None
+        state = integrations.create_oauth_state("feishu", user, 600)
+        url = client.authorization_url(state["state"])
+        return {"provider": "feishu", "authorization_url": url,
+                "expires_at": state["expires_at"], "qr_svg": client.qr_svg(url),
+                "qr_png": client.qr_png(url)}
+
+    @application.get("/api/integrations/feishu/oauth/callback", include_in_schema=False)
+    def feishu_oauth_callback(code: str = "", state: str = "", error: str = ""):
+        """Feishu OAuth callback; binds the authorized Feishu identity to `state`."""
+        if error:
+            # A denied authorization is still a callback for a one-time state.
+            # Consume it when possible so the same URL cannot later be reused
+            # with a different authorization code.
+            if state and len(state) <= 512:
+                try:
+                    integrations.consume_oauth_state("feishu", state)
+                except IntegrationConflict:
+                    pass
+            return _oauth_result_page("未完成绑定", "你在飞书授权页取消了授权，请重新生成二维码。", success=False)
+        if not code or not state or len(state) > 512:
+            return _oauth_result_page("绑定链接无效", "缺少授权码或绑定状态，请回到 FundLex 设置页重新生成二维码。", success=False)
+        try:
+            user_id = integrations.consume_oauth_state("feishu", state)
+        except IntegrationConflict as exc:
+            messages = {
+                "FEISHU_OAUTH_STATE_EXPIRED": "二维码已过期，请回到 FundLex 设置页重新生成。",
+                "FEISHU_OAUTH_STATE_CONSUMED": "该二维码已使用，请重新生成。",
+                "FEISHU_OAUTH_STATE_INVALID": "绑定链接无效，请重新生成二维码。",
+            }
+            return _oauth_result_page("绑定链接无效", messages.get(error_code(exc, "FEISHU_OAUTH_STATE_INVALID"), "绑定链接已失效，请重新生成二维码。"), success=False)
+        try:
+            identity = FeishuOAuthClient.from_env().exchange_identity(code)
+        except FeishuOAuthError:
+            return _oauth_result_page("飞书授权未完成", "无法读取飞书身份，请重新生成二维码后重试；如持续失败请联系管理员。", success=False)
+        try:
+            integrations.bind_oauth_identity("feishu", user_id, identity.tenant_key, identity.open_id)
+        except IntegrationConflict as exc:
+            messages = {
+                "FEISHU_IDENTITY_ALREADY_BOUND": "该飞书账号已绑定其他 FundLex 账号，请先在原账号解除绑定。",
+                "FEISHU_USER_ALREADY_BOUND": "当前 FundLex 账号已绑定其他飞书账号，请先在设置页解除绑定。",
+                "FEISHU_REBIND_CONFLICT": "存在历史绑定记录，暂时无法自动换绑，请联系管理员处理。",
+            }
+            return _oauth_result_page("绑定失败", messages.get(error_code(exc, "FEISHU_BINDING_FAILED"), "绑定未完成，请稍后重试。"), success=False)
+        return _oauth_result_page("绑定成功", f"飞书账号 {identity.name or identity.open_id} 已绑定到当前 FundLex 账号。现在可以在飞书私聊发送 DOCX 合同。", success=True)
+
     @application.get("/api/admin/integrations/feishu/health")
     def feishu_health(admin: dict = Depends(_admin)):
         return {"provider": "feishu", "configured": bool(os.environ.get("FUNDLEX_FEISHU_APP_ID") and os.environ.get("FUNDLEX_FEISHU_APP_SECRET")),
@@ -691,7 +866,8 @@ def create_app(data_dir: str | Path | None = None, *, auth_db=None) -> FastAPI:
         except UserExists as exc:
             raise HTTPException(409, "username already exists") from exc
         except ValueError as exc:
-            raise HTTPException(422, str(exc)) from exc
+            from .api_errors import raise_api_error
+            raise_api_error(422, exc, fallback="INVALID_REQUEST")
         return _public_user(record)
 
     @application.post("/api/admin/users/{user_id}/disable")
@@ -713,12 +889,15 @@ def create_app(data_dir: str | Path | None = None, *, auth_db=None) -> FastAPI:
 
     @application.post("/api/guides", status_code=201)
     async def upload_guide(file: UploadFile = File(...), user: str = Depends(_user)):
-        data = await file.read(MAX_UPLOAD_BYTES + 1)
-        name = _validate_upload(file.filename or "", data)
         try:
+            data = await file.read(MAX_UPLOAD_BYTES + 1)
+            name = _validate_upload(file.filename or "", data)
             version = guide_store.create_custom_version(store, user, name, data)
         except ValueError as exc:
-            raise HTTPException(422, str(exc)) from exc
+            from .api_errors import raise_api_error
+            raise_api_error(422, exc, fallback="INVALID_REQUEST")
+        finally:
+            await file.close()
         return {"version": _guide_public(version, current=False)}
 
     @application.get("/api/guides/{version_id}")
@@ -745,7 +924,8 @@ def create_app(data_dir: str | Path | None = None, *, auth_db=None) -> FastAPI:
         except KeyError as exc:
             raise HTTPException(404, "guide version not found") from exc
         except ValueError as exc:
-            raise HTTPException(409, str(exc)) from exc
+            from .api_errors import raise_api_error
+            raise_api_error(409, exc, fallback="CONFLICT")
         refreshed = visible_guide(user, version_id)
         current = guide_store.current_guide(store, user)
         return {"version": _guide_public(refreshed, current=refreshed["id"] == current["id"])}
@@ -788,9 +968,9 @@ def create_app(data_dir: str | Path | None = None, *, auth_db=None) -> FastAPI:
         try:
             guide_store.set_current_guide(store, user, target)
         except KeyError as exc:
-            raise HTTPException(404, "guide version not found") from exc
+            raise_api_error(404, exc, fallback="GUIDE_NOT_FOUND")
         except ValueError as exc:
-            raise HTTPException(409, str(exc)) from exc
+            raise_api_error(409, exc, fallback="CONFLICT")
         return guide_settings(user)
 
     @application.post("/api/tasks", status_code=201)
@@ -815,11 +995,11 @@ def create_app(data_dir: str | Path | None = None, *, auth_db=None) -> FastAPI:
                                             guide_version_id=payload.guide_version_id,
                                             idempotency_key=idempotency_key)
         except ValueError as exc:
-            if str(exc) == "GUIDE_NOT_FOUND":
-                raise HTTPException(404, "guide version not found") from exc
-            raise HTTPException(409, str(exc)) from exc
+            if error_code(exc, "CONFLICT") == "GUIDE_NOT_FOUND":
+                raise_api_error(404, exc, fallback="GUIDE_NOT_FOUND")
+            raise_api_error(409, exc, fallback="CONFLICT")
         except Conflict as exc:
-            raise HTTPException(409, str(exc)) from exc
+            raise_api_error(409, exc, fallback="CONFLICT")
 
     @application.get("/api/tasks")
     def list_tasks(q: str = "", status: str | None = None, sort: str = "newest",
@@ -899,9 +1079,10 @@ def create_app(data_dir: str | Path | None = None, *, auth_db=None) -> FastAPI:
         return document_decisions(batch_id, document_id, payload, user)
 
     @application.post("/api/tasks/{task_id}/documents/{document_id}/accept-all")
-    def task_document_accept_all(task_id: str, document_id: str, user: str = Depends(_user)):
+    def task_document_accept_all(task_id: str, document_id: str, payload: DecisionRequest | None = None,
+                                 user: str = Depends(_user)):
         batch_id, _ = task_document_context(user, task_id, document_id)
-        return document_accept_all(batch_id, document_id, user)
+        return document_accept_all(batch_id, document_id, payload=payload, user=user)
 
     @application.get("/api/tasks/{task_id}/documents/{document_id}/download/{kind}")
     def task_document_download(task_id: str, document_id: str, kind: str, user: str = Depends(_user)):
@@ -926,19 +1107,23 @@ def create_app(data_dir: str | Path | None = None, *, auth_db=None) -> FastAPI:
                    "duplicate DOCX member": "DUPLICATE_DOCX_MEMBER", "DOCX part size limit exceeded": "DOCX_PART_SIZE_LIMIT",
                    "DOCX compression ratio limit exceeded": "DOCX_COMPRESSION_RATIO_LIMIT",
                    "DOCX expanded size limit exceeded": "DOCX_EXPANDED_SIZE_LIMIT", "invalid DOCX package": "INVALID_DOCX_PACKAGE"}
-        for cid, upload in zip(ids, files):
-            data = await upload.read(MAX_UPLOAD_BYTES + 1)
-            total_bytes += len(data)
-            name = Path((upload.filename or "").replace("\\", "/")).name
-            error = None
-            try:
-                validate_docx_upload(name, data)
-            except UploadValidationError as exc:
-                error = exc.code
-            if total_bytes > MAX_BATCH_BYTES:
-                error = "UPLOAD_REQUEST_SIZE_LIMIT"
-            uploads.append({"client_id": cid, "name": name, "data": data, "error_code": error})
-        return task_call(tasks.uploads, user, task_id, uploads)
+        try:
+            for cid, upload in zip(ids, files):
+                data = await upload.read(MAX_UPLOAD_BYTES + 1)
+                total_bytes += len(data)
+                name = Path((upload.filename or "").replace("\\", "/")).name
+                error = None
+                try:
+                    validate_docx_upload(name, data)
+                except UploadValidationError as exc:
+                    error = exc.code
+                if total_bytes > MAX_BATCH_BYTES:
+                    error = "UPLOAD_REQUEST_SIZE_LIMIT"
+                uploads.append({"client_id": cid, "name": name, "data": data, "error_code": error})
+            return task_call(tasks.uploads, user, task_id, uploads)
+        finally:
+            for upload in files:
+                await upload.close()
 
     @application.post("/api/tasks/{task_id}/seal")
     def seal_task(task_id: str, user: str = Depends(_user)):
@@ -1014,7 +1199,7 @@ def create_app(data_dir: str | Path | None = None, *, auth_db=None) -> FastAPI:
             output.seek(0)
         except (NotFound, Conflict) as exc:
             output.close()
-            raise HTTPException(409, str(exc)) from exc
+            raise_api_error(409, exc, fallback="CONFLICT")
         except BaseException:
             output.close()
             raise
@@ -1051,7 +1236,7 @@ def create_app(data_dir: str | Path | None = None, *, auth_db=None) -> FastAPI:
         try:
             batch = store.get_batch(user, batch_id)
         except NotFound as exc:
-            raise HTTPException(404, str(exc)) from exc
+            raise_api_error(404, exc, fallback="NOT_FOUND")
         return _public_batch(batch, detail=True, metrics=_recall_metrics(store, batch["documents"], "id"))
 
     @application.post("/api/batches/{batch_id}/pause")
@@ -1059,7 +1244,7 @@ def create_app(data_dir: str | Path | None = None, *, auth_db=None) -> FastAPI:
         try:
             batch = store.pause(user, batch_id)
         except NotFound as exc:
-            raise HTTPException(404, str(exc)) from exc
+            raise_api_error(404, exc, fallback="NOT_FOUND")
         return _public_batch(batch, detail=True, metrics=_recall_metrics(store, batch["documents"], "id"))
 
     @application.post("/api/batches/{batch_id}/resume")
@@ -1067,7 +1252,7 @@ def create_app(data_dir: str | Path | None = None, *, auth_db=None) -> FastAPI:
         try:
             batch = store.resume(user, batch_id)
         except NotFound as exc:
-            raise HTTPException(404, str(exc)) from exc
+            raise_api_error(404, exc, fallback="NOT_FOUND")
         return _public_batch(batch, detail=True, metrics=_recall_metrics(store, batch["documents"], "id"))
 
     @application.get("/api/batches/{batch_id}/documents/{document_id}/report")
@@ -1075,7 +1260,9 @@ def create_app(data_dir: str | Path | None = None, *, auth_db=None) -> FastAPI:
         try:
             return store.get_report(user, batch_id, document_id)
         except NotFound as exc:
-            raise HTTPException(404, str(exc)) from exc
+            raise_api_error(404, exc, fallback="NOT_FOUND")
+        except ReportJsonError as exc:
+            raise_api_error(409, exc, fallback="REPORT_JSON_INVALID")
 
     @application.get("/api/batches/{batch_id}/documents/{document_id}/revisions")
     def document_revisions(batch_id: str, document_id: str, user: str = Depends(_user)):
@@ -1083,35 +1270,41 @@ def create_app(data_dir: str | Path | None = None, *, auth_db=None) -> FastAPI:
         try:
             return task_call(_revision_view, user, batch_id, document_id)
         except NotFound as exc:
-            raise HTTPException(404, str(exc)) from exc
+            raise_api_error(404, exc, fallback="NOT_FOUND")
         except Conflict as exc:
-            raise HTTPException(409, str(exc)) from exc
+            raise_api_error(409, exc, fallback="CONFLICT")
 
     @application.post("/api/batches/{batch_id}/documents/{document_id}/decisions")
     def document_decisions(batch_id: str, document_id: str, payload: DecisionRequest,
                            user: str = Depends(_user)):
         """Apply per-revision decisions and publish ``selected_final``."""
-        decisions = {item.del_id: item.decision for item in payload.decisions}
+        decisions = [{"del_id": item.del_id, "decision": item.decision}
+                     for item in payload.decisions]
         try:
-            return task_call(_apply_selection, user, batch_id, document_id, decisions)
+            return task_call(_apply_selection, user, batch_id, document_id, decisions,
+                             expected_epoch=payload.selection_epoch,
+                             expected_manifest_hash=payload.manifest_hash)
         except NotFound as exc:
-            raise HTTPException(404, str(exc)) from exc
+            raise_api_error(404, exc, fallback="NOT_FOUND")
         except Conflict as exc:
-            raise HTTPException(409, str(exc)) from exc
+            raise_api_error(409, exc, fallback="CONFLICT")
         except DocxError as exc:
-            raise HTTPException(422, str(exc)) from exc
+            raise_api_error(422, exc, fallback="INVALID_DOCUMENT")
 
     @application.post("/api/batches/{batch_id}/documents/{document_id}/accept-all")
-    def document_accept_all(batch_id: str, document_id: str, user: str = Depends(_user)):
+    def document_accept_all(batch_id: str, document_id: str, payload: DecisionRequest | None = None,
+                            user: str = Depends(_user)):
         """Accept every revision and publish ``selected_final``."""
         try:
-            return task_call(_apply_selection, user, batch_id, document_id, None)
+            return task_call(_apply_selection, user, batch_id, document_id, None,
+                             expected_epoch=payload.selection_epoch if payload else None,
+                             expected_manifest_hash=payload.manifest_hash if payload else None)
         except NotFound as exc:
-            raise HTTPException(404, str(exc)) from exc
+            raise_api_error(404, exc, fallback="NOT_FOUND")
         except Conflict as exc:
-            raise HTTPException(409, str(exc)) from exc
+            raise_api_error(409, exc, fallback="CONFLICT")
         except DocxError as exc:
-            raise HTTPException(422, str(exc)) from exc
+            raise_api_error(422, exc, fallback="INVALID_DOCUMENT")
 
     @application.get("/api/batches/{batch_id}/documents/{document_id}/download/{kind}")
     def download(batch_id: str, document_id: str, kind: str, user: str = Depends(_user)):
@@ -1122,9 +1315,9 @@ def create_app(data_dir: str | Path | None = None, *, auth_db=None) -> FastAPI:
         try:
             path, digest = store.get_artifact(user, batch_id, document_id, kind)
         except NotFound as exc:
-            raise HTTPException(404, str(exc)) from exc
+            raise_api_error(404, exc, fallback="NOT_FOUND")
         except Conflict as exc:
-            raise HTTPException(409, str(exc)) from exc
+            raise_api_error(409, exc, fallback="CONFLICT")
         media = "application/vnd.openxmlformats-officedocument.wordprocessingml.document" if kind in docx_kinds else ("application/json" if kind == "report_json" else "text/markdown")
         return FileResponse(path, media_type=media, filename=f"{document_id}_{kind}{path.suffix}",
                             headers={"ETag": digest, "Cache-Control": "private, no-store"})
@@ -1134,17 +1327,21 @@ def create_app(data_dir: str | Path | None = None, *, auth_db=None) -> FastAPI:
         try:
             batch = store.get_batch(user, batch_id)
         except NotFound as exc:
-            raise HTTPException(404, str(exc)) from exc
+            raise_api_error(404, exc, fallback="NOT_FOUND")
         qualifications: Counter[str] = Counter()
         deliveries: Counter[str] = Counter()
         action_states: Counter[str] = Counter()
         candidate_states: Counter[str] = Counter()
+        report_errors: Counter[str] = Counter()
         for doc in batch["documents"]:
             qualifications[doc["qualification_status"] or "pending"] += 1
             deliveries[doc["delivery_status"]] += 1
             try:
                 report = store.get_report(user, batch_id, doc["id"])
             except NotFound:
+                continue
+            except ReportJsonError as exc:
+                report_errors[exc.code] += 1
                 continue
             for action in report.get("actions", []):
                 if not isinstance(action, dict):
@@ -1158,7 +1355,8 @@ def create_app(data_dir: str | Path | None = None, *, auth_db=None) -> FastAPI:
                  f"- 合同总数：{batch['counts']['total']}", f"- 任务失败：{batch['counts']['failed']}", "",
                  "## 分类汇总", "",
                  f"- 资格：{dict(qualifications)}", f"- 交付：{dict(deliveries)}",
-                 f"- action：{dict(action_states)}", f"- 候选位置：{dict(candidate_states)}", "",
+                 f"- action：{dict(action_states)}", f"- 候选位置：{dict(candidate_states)}",
+                 f"- 报告读取异常：{dict(report_errors)}", "",
                  "| 合同 ID | 文件 | 资格 | 交付 | 任务 | 错误 |", "|---|---|---|---|---|---|"]
         for doc in batch["documents"]:
             safe_name = doc["filename"].replace("|", "\\|").replace("\n", " ")
@@ -1179,6 +1377,12 @@ def create_app(data_dir: str | Path | None = None, *, auth_db=None) -> FastAPI:
     # for explicit V2 regression runs without letting a build switch the UI.
     frontend_v2 = os.environ.get("FUNDLEX_FRONTEND_VERSION", "v1") == "v2"
     frontend_base = os.environ.get("FUNDLEX_FRONTEND_BASE_PATH", "").rstrip("/")
+    if frontend_base and not frontend_base.startswith("/"):
+        frontend_base = f"/{frontend_base}"
+    if frontend_base == "/":
+        frontend_base = ""
+    if frontend_base:
+        application.add_middleware(FrontendBasePathMiddleware, base_path=frontend_base)
     if frontend.is_dir():
         application.mount("/static", StaticFiles(directory=frontend), name="static")
         if (dist / "assets").is_dir():
@@ -1204,8 +1408,10 @@ def create_app(data_dir: str | Path | None = None, *, auth_db=None) -> FastAPI:
             version = _asset_version("dist/index.html", "app.css", "app.js", "compare.css", "compare.js")
             for name in ("app.css", "app.js", "compare.css", "compare.js"):
                 html = html.replace(f'/static/{name}"', f'/static/{name}?v={version}"')
-            if not frontend_v2 and frontend_base:
+            if frontend_base:
                 html = html.replace('="/static/', f'="{frontend_base}/static/')
+                html = html.replace('="/assets/', f'="{frontend_base}/assets/')
+                html = html.replace("url(/static/", f"url({frontend_base}/static/")
                 html = html.replace('</head>', f'<meta name="fundlex-base-path" content="{frontend_base}"></head>')
             html = html.replace('src="/src/main.tsx"', f'src="/src/main.tsx?v={version}"')
             html = html.replace('href="/assets/', f'href="/assets/')
@@ -1251,6 +1457,11 @@ def create_app(data_dir: str | Path | None = None, *, auth_db=None) -> FastAPI:
             if Path(full_path).suffix:
                 raise HTTPException(404, "frontend asset is not built")
             if not frontend_v2:
+                if full_path.startswith("tasks/") and full_path != "tasks/new":
+                    task_id = full_path[len("tasks/"):]
+                    if task_id and "/" not in task_id:
+                        return RedirectResponse(
+                            f"{frontend_base}/?task={quote(task_id)}#task", status_code=307)
                 view = {"tasks": "overview", "tasks/new": "import", "guides": "guide",
                         "settings": "settings", "users": "users"}.get(full_path, "overview")
                 return RedirectResponse(f"{frontend_base}/#{view}", status_code=307)
