@@ -299,6 +299,27 @@ def test_admin_endpoints_permissions_and_disable(password_client):
     assert client.post("/api/admin/users/does-not-exist/disable", headers=bearer(admin)).status_code == 404
 
 
+def test_password_member_can_use_settings_but_not_admin_surface(password_client):
+    client = password_client
+    member = login(client, *BOB).json()["token"]
+    headers = bearer(member)
+
+    capabilities = client.get("/api/capabilities", headers=headers)
+    assert capabilities.status_code == 200
+    assert capabilities.json()["auth_mode"] == "password"
+    assert capabilities.json()["login_required"] is True
+    assert "upload_limits" in capabilities.json()
+
+    binding = client.get("/api/integrations/feishu/binding", headers=headers)
+    assert binding.status_code == 200
+    assert binding.json()["bound"] is False
+    assert client.post("/api/integrations/feishu/binding-code", headers=headers,
+                       json={"ttl_seconds": 600}).status_code == 200
+    assert client.get("/api/settings/guide", headers=headers).status_code == 200
+
+    assert client.get("/api/admin/users", headers=headers).status_code == 404
+
+
 def test_disable_invalidates_existing_session_even_without_revoke(password_client):
     client = password_client
     token = login(client, *BOB).json()["token"]

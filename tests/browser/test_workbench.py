@@ -26,7 +26,8 @@ pytestmark = pytest.mark.skipif(
 def browser():
     from playwright.sync_api import sync_playwright
     with sync_playwright() as playwright:
-        browser = playwright.chromium.launch()
+        browser = playwright.chromium.launch(
+            headless=os.getenv("FUNDLEX_BROWSER_HEADLESS", "1") != "0")
         yield browser
         browser.close()
 
@@ -276,20 +277,32 @@ def test_upload_completion_preserves_new_draft(ui, hold):
     pending = []
     pattern = "**/api/tasks" if hold == "create" else "**/api/tasks/*/uploads"
     def intercept(route):
+        print("DEBUG intercept", route.request.method, route.request.url)
         if route.request.method != "POST":
             route.continue_()
             return
-        pending.append((route, route.fetch()))
+        index = len(pending)
+        pending.append((route, None))
+        pending[index] = (route, route.fetch())
     context.route(pattern, intercept)
     open_page(ui, "import")
     page.fill("#task-name", "旧上传任务")
     page.set_input_files("#file-picker", {"name": "旧合同.docx", "mimeType": "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "buffer": docx_bytes()})
+    print("DEBUG disabled", page.locator("#submit-task").is_disabled(), "guide", page.inner_text("#guide-binding"), "rows", page.inner_text("#import-rows")[:100])
+    page.on("request", lambda request: print("DEBUG request", request.method, request.url) if "/api/tasks" in request.url else None)
+    page.on("console", lambda message: print("DEBUG console", message.type, message.text[:200]))
+    page.on("pageerror", lambda error: print("DEBUG pageerror", str(error)[:300]))
     page.locator("#submit-task").click()
-    page.wait_for_timeout(150)
+    deadline = time.monotonic() + 10
+    while not pending and time.monotonic() < deadline:
+        time.sleep(.05)
     assert pending
     page.locator('.sidebar [data-nav="overview"]').click()
     page.locator('#view-overview [data-action="new-task"]').first.click()
     page.fill("#task-name", "新草稿不得覆盖")
+    deadline = time.monotonic() + 10
+    while pending and pending[-1][1] is None and time.monotonic() < deadline:
+        time.sleep(.05)
     route, response = pending.pop()
     route.fulfill(response=response)
     page.wait_for_function("!document.querySelector('[data-action=choose-files]').disabled")
@@ -308,7 +321,7 @@ def test_failed_guide_can_be_retried_from_page(ui):
     version = guide_store.create_custom_version(app.state.store, "browser-check", "失败指引.docx", docx_bytes())
     for _ in range(guide_store.MAX_GUIDE_JOB_ATTEMPTS):
         job = guide_store.claim_guide_job(app.state.store)
-        guide_store.finish_guide_job(app.state.store, job["id"], error_code="GUIDE_PARSE_FAILED")
+        guide_store.finish_guide_job(app.state.store, job["id"], job["fencing_token"], error_code="GUIDE_PARSE_FAILED")
     open_page(ui, "guide")
     button = page.locator(f'[data-guide-parse="{version["id"]}"]')
     assert button.is_enabled()
@@ -328,6 +341,14 @@ def test_csv_download_contains_real_bom_and_rows(ui, tmp_path):
     text = content.decode("utf-8-sig")
     assert "\r\n" in text and "合同0.docx" in text
     assert "状态清单" in page.inner_text("#toast")
+
+
+def test_task_deep_link_selects_task(ui):
+    task, _ = seed(ui)
+    page, _, _, base = ui
+    page.goto(base + f"/?task={task}#task")
+    page.wait_for_function("document.querySelector('#selected-task-title').textContent.includes('交互测试任务')")
+    assert page.locator("#view-task").is_visible()
 
 
 def test_login_expiry_message_and_role_hash_guard(ui, monkeypatch):
@@ -350,8 +371,21 @@ def test_login_expiry_message_and_role_hash_guard(ui, monkeypatch):
     assert page.locator("#view-users").is_hidden()
     page.evaluate("location.hash='settings'")
     page.wait_for_timeout(100)
-    assert page.locator("#view-settings").is_hidden()
+    assert page.locator("#view-settings").is_visible()
+    assert page.locator("#dev-settings-panel").is_hidden()
+    assert page.locator("#feishu-binding-code-btn").is_visible()
+    assert page.locator("#capability-details").inner_text()
+    page.evaluate("location.hash='overview'")
+    page.wait_for_timeout(100)
     token = page.evaluate("sessionStorage.getItem('fundlex-auth-token')")
+    headers = {"Authorization": "Bearer " + token}
+    capabilities = context.request.get(base + "/api/capabilities", headers=headers)
+    assert capabilities.ok
+    assert capabilities.json()["auth_mode"] == "password"
+    assert "upload_limits" in capabilities.json()
+    assert context.request.get(base + "/api/integrations/feishu/binding", headers=headers).ok
+    assert context.request.get(base + "/api/settings/guide", headers=headers).ok
+    assert context.request.get(base + "/api/admin/users", headers=headers).status == 404
     context.request.post(base + "/api/auth/logout", headers={"Authorization": "Bearer " + token})
     page.locator('#view-overview [data-action="refresh"]').first.click()
     page.wait_for_selector("#login-view", state="visible")
