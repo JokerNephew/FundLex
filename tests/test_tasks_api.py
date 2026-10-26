@@ -543,6 +543,60 @@ def test_summary_counts_delivery_success_and_unique_exceptions(client):
     assert stats["exception_contracts"] == 3
 
 
+def test_task_status_contract_covers_mixed_failed_all_failed_retry_and_upload_states(client):
+    data = package()
+    store = client.app.state.store
+
+    mixed_files = manifest(2, data)
+    mixed = create(client, mixed_files, name="混合结果", key="mixed-status").json()["id"]
+    upload(client, mixed, mixed_files, data)
+    mixed_docs = client.get(f"/api/tasks/{mixed}/documents", headers=ALICE).json()["items"]
+    now = datetime.now(timezone.utc).timestamp()
+    with store._connect() as db:
+        db.execute("UPDATE documents SET status='failed',qualification_status='failed',delivery_status='not_generated',finished_at=?,updated_at=? WHERE id=?", (now, now, mixed_docs[0]["document_id"]))
+        db.execute("UPDATE documents SET status='succeeded',qualification_status='eligible',delivery_status='complete',finished_at=?,updated_at=? WHERE id=?", (now, now, mixed_docs[1]["document_id"]))
+    mixed_summary = client.get(f"/api/tasks/{mixed}", headers=ALICE).json()
+    assert mixed_summary["status"] == "completed_with_exceptions"
+    assert mixed_summary["phase"] == "交付"
+    assert mixed_summary["failed"] == 1 and mixed_summary["exceptions"] == 1
+    failed_tasks = client.get("/api/tasks", params={"status": "failed"}, headers=ALICE).json()
+    assert mixed in {item["id"] for item in failed_tasks["items"]}
+    exception_tasks = client.get("/api/tasks", params={"status": "completed_with_exceptions"}, headers=ALICE).json()
+    assert mixed in {item["id"] for item in exception_tasks["items"]}
+
+    failed_files = manifest(2, data)
+    failed_task = create(client, failed_files, name="全失败", key="all-failed-status").json()["id"]
+    upload(client, failed_task, failed_files, data)
+    failed_docs = client.get(f"/api/tasks/{failed_task}/documents", headers=ALICE).json()["items"]
+    with store._connect() as db:
+        for item in failed_docs:
+            db.execute("UPDATE documents SET status='failed',qualification_status='failed',delivery_status='not_generated',finished_at=?,updated_at=? WHERE id=?", (now, now, item["document_id"]))
+    failed_summary = client.get(f"/api/tasks/{failed_task}", headers=ALICE).json()
+    assert failed_summary["status"] == "failed" and failed_summary["phase"] == "交付"
+    assert failed_task in {item["id"] for item in client.get("/api/tasks", params={"status": "failed"}, headers=ALICE).json()["items"]}
+
+    retry_files = manifest(1, data)
+    retry_task = create(client, retry_files, name="重试成功", key="retry-success-status").json()["id"]
+    upload(client, retry_task, retry_files, data)
+    job = store.claim()
+    store.retry(job["id"], job["fencing_token"], error_code="MODEL_NETWORK_ERROR", max_attempts=3, base_delay_seconds=0)
+    retried = store.claim()
+    assert retried["id"] == job["id"]
+    store.finish(retried["id"], retried["fencing_token"], report={"qualification_status": "excluded_by_fund_type", "delivery_status": "not_generated"}, artifacts={})
+    assert client.get(f"/api/tasks/{retry_task}", headers=ALICE).json()["status"] == "completed"
+
+    paused_files = manifest(1, data)
+    paused_task = create(client, paused_files, name="暂停中", key="paused-status").json()["id"]
+    upload(client, paused_task, paused_files, data)
+    assert client.post(f"/api/tasks/{paused_task}/pause", headers=ALICE).json()["status"] == "paused"
+
+    pending_task = create(client, manifest(1, data), name="未上传", key="pending-status").json()["id"]
+    assert client.get(f"/api/tasks/{pending_task}", headers=ALICE).json()["status"] == "uploading"
+
+    stats = client.get("/api/tasks/stats", headers=ALICE).json()
+    assert stats["failed_contracts"] >= 3
+
+
 def test_running_document_filter_includes_worker_leases(client):
     data = package()
     files = manifest(2, data)

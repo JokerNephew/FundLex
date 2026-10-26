@@ -203,13 +203,25 @@ class TaskStore:
         uploaded = sum(d["upload_status"] == "accepted" for d in docs)
         completed = sum(d["job_status"] in {"succeeded", "failed"} for d in docs)
         processing = sum(d["job_status"] in {"leased", "running"} for d in docs)
-        status = "completed" if uploaded == total and completed == total else ("paused" if row["paused"] else
-                  "running" if processing else "queued" if uploaded > completed else "uploading")
+        failed = sum(d["job_status"] == "failed" for d in docs)
+        exceptions = sum(d["upload_status"] == "rejected" or d["job_status"] == "failed" or
+                         (d["job_status"] == "succeeded" and d["eligibility"] != "excluded_by_fund_type"
+                          and d["delivery_status"] in {"incomplete", "not_generated"}) for d in docs)
+        terminal = uploaded == total and completed == total
+        if terminal and failed == completed and completed:
+            status = "failed"
+        elif terminal and failed:
+            status = "completed_with_exceptions"
+        elif terminal:
+            status = "completed"
+        else:
+            status = ("paused" if row["paused"] else "running" if processing
+                      else "queued" if uploaded > completed else "uploading")
         # A task is legacy once it was produced by a retired engine. The runtime
         # serves the guide-bound engine only, so anything else is read-only
         # history even when it still has a first-class task row.
         legacy = legacy or (row["engine_id"] or "") != RECALL_ENGINE_ID
-        phase = "交付" if status == "completed" else max(
+        phase = "交付" if terminal else max(
             (doc for doc in docs if doc.get("phase")),
             key=lambda doc: doc.get("document_updated_at", 0),
             default={},
@@ -223,12 +235,10 @@ class TaskStore:
                 "total": total, "uploaded": uploaded, "pending_upload": sum(d["upload_status"] == "pending" for d in docs),
                 "rejected": sum(d["upload_status"] == "rejected" for d in docs),
                 "queued": sum(d["job_status"] in {"queued", "retry_wait"} for d in docs),
-                "processing": processing, "completed": completed, "failed": sum(d["job_status"] == "failed" for d in docs),
+                "processing": processing, "completed": completed, "failed": failed,
                 "successful": sum(d["job_status"] == "succeeded" and d["delivery_status"] in
                                   {"complete", "complete_with_exceptions"} for d in docs),
-                "exceptions": sum(d["upload_status"] == "rejected" or d["job_status"] == "failed" or
-                                  (d["job_status"] == "succeeded" and d["eligibility"] != "excluded_by_fund_type"
-                                   and d["delivery_status"] in {"incomplete", "not_generated"}) for d in docs),
+                "exceptions": exceptions,
                 "qualification_counts": dict(Counter(d["eligibility"] or "pending" for d in docs)),
                 "delivery_counts": dict(Counter(d["delivery_status"] for d in docs)),
                 "phase": phase,
@@ -277,7 +287,8 @@ class TaskStore:
         q, state = filters.get("q", "").casefold(), filters.get("status")
         guide = filters.get("guide_version_id")
         items = [d for d in items if q in d["name"].casefold()
-                 and (not state or state == d["status"])
+                 and (not state or state == d["status"] or
+                      (state == "failed" and d["status"] == "completed_with_exceptions"))
                  and (not guide or (d.get("guide_snapshot") or {}).get("version_id") == guide)]
         return self._page(items, **{k: v for k, v in filters.items() if k in {"sort", "page", "page_size"}})
 
@@ -328,7 +339,7 @@ class TaskStore:
                 FROM task_files tf JOIN tasks t ON t.id=tf.task_id
                 LEFT JOIN documents d ON d.id=tf.document_id
                 WHERE t.owner=?""", (owner,)).fetchall()
-        processed = completed = previous = 0
+        processed = completed = previous = failed_contracts = 0
         report_json_errors = 0
         pending = exceptions = 0
         active_tasks: set[str] = set()
@@ -345,6 +356,8 @@ class TaskStore:
             if terminal and finished is not None:
                 if start_ts <= float(finished) < end_ts:
                     processed += 1
+                    if status == "failed":
+                        failed_contracts += 1
                     if status == "succeeded" and row["delivery_status"] in {"complete", "complete_with_exceptions"}:
                         completed += 1
                     if started is not None and float(finished) >= float(started):
@@ -370,6 +383,7 @@ class TaskStore:
                 "average_seconds": average, "exception_contracts": exceptions,
                 "previous_processed_contracts": previous,
                 "month_over_month": change, "report_json_errors": report_json_errors,
+                "failed_contracts": failed_contracts,
                 "generated_at": datetime.now(timezone.utc).isoformat()}
 
     def documents(self, owner, task_id, **filters):
