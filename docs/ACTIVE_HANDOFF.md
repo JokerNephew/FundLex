@@ -1,5 +1,39 @@
 # FundLex 当前断点（ACTIVE_HANDOFF）
 
+## 当前工作区快照（2026-10-26，继续接续）
+
+- 当前分支为 `refactor/backend-engine-finalization`，HEAD `cdf0699`，相对 origin ahead 20；工作区仍 dirty，未 push。已提交代码块为 `0466712`（API 稳定错误码、报告边界、Review/下载响应）和 `cdf0699`（任务状态契约、V1/V2/Feishu UI、设置入口）。
+- 尚未提交文件集中在 Feishu OAuth/store 与测试、入口/浏览器回归、Compare/前缀相关文档和本轮审计文档；已检查其功能边界，下一步按 OAuth/store、测试、文档分块提交。未覆盖主工作区已有 Compare、Feishu、前端和文档改动。
+- 本轮验证：后端定向 **59 passed / 1 warning**；V1/V2 浏览器 **40 passed**；前端锁文件重建后 Vitest **4.1.12，14 passed**，typecheck、lint、build 通过；`.venv/bin/python -m compileall -q fundlex`、`node --check frontend/app.js`、`node --check frontend/compare.js`、`git diff --check` 通过。系统 `python3` 为 3.6，不能用于本项目编译结论。
+- OAuth 当前实现：state 仅保存 SHA-256、默认 10 分钟、成功/拒绝回调均一次性消费；成功回调的真实飞书扫码仍未验证。回归补充了拒绝后 state replay 失败；未调用生产真实模型、未部署本轮 dirty 工作区。
+- 集中记录：原 FL-D294 保留为 Feishu 详情深链；任务状态条目已更正为 FL-D299。集中记录仍存在更早历史标题重复，未在本轮擅自重排旧编号；新增编号必须先全文查重。
+- 项目结论继续为 **NO-GO**：D01–D20 固定评测 gate、holdout、G06 授权、Compare 复杂结构、真实 MySQL 8 并发、真实 OAuth 回调及完整用户端到端交付尚未闭合。下一步先提交剩余局部改动，再运行完整 pytest、前端检查和浏览器回归，随后继续 Compare/评测/真实验收。
+
+## FL-D291 设置入口修复、飞书主链路与 OAuth 扫码（2026-10-26 11:30）
+
+- 已修复生产 password 用户点击 V1“设置”被 `auth_mode==='dev'` 守卫拦截的问题：移除设置导航守卫，V1 侧栏/顶栏/面包屑统一改为“设置”，保留 `#dev-settings-panel` 密码模式隐藏、`#users` 管理员限制和 `/api/admin/*` 管理员权限。集中记录见 FL-D291，旧浏览器断言 FL-D279 已同步修正。
+- 验证：前端 typecheck、lint、Vitest 9 项、build、`node --check`、`git diff --check` 通过；V1+V2 浏览器回归 **37 passed**。真实生产 member 注册/登录后 `#view-settings` 可见、开发面板隐藏、飞书绑定按钮可见、UI 生成 12 位绑定码、binding-code API 200、`/api/admin/users` 404 fail-closed，页面错误 0。
+- 生产仅发布 `frontend/app.js` 与 `frontend/compare.html` 并重启 `fundlex-recall-api.service`；工作区与部署 SHA 分别为 `9a6ad9e43cfccce90431ce484d436c6b7085972207cfad903d78005dc7e5b134` 和 `42505246214d3be174c5ecb918fe41d0aae388df11023eee76ffaf9c8b6558a0`。备份：`/tmp/opencode/fundlex-settings-fix-20261026-095645/production-frontend-before.tgz`。证据：`/tmp/opencode/fundlex-prod-settings-e2e-20261026/ui-evidence.json` 与截图（绑定码未入图）。临时账号凭据和 60 分钟绑定码只在同目录 `credentials.json`（`0600`）。
+- 飞书应用已补发版本 `0.0.2`（增加 user token 的 `im:message.send_as_user`、`im:message`、`im:chat:readonly`）与 `0.0.3`（增加 tenant `im:message:readonly`，修复 DOCX 资源下载）。真实用户李嘉伟（`ou_f5c9422295f601e1d2826345609fd411`）已完成 CLI 设备授权；先由机器人发起私聊取得 `chat_id`，再由用户发送绑定消息，`/api/integrations/feishu/binding` 已返回 `bound=true`。详见 FL-D290、FL-D292、FL-D293。
+- 已发送两份公开 DOCX 原件 D01 141,078 bytes、D02 162,609 bytes，SHA-256 前缀分别为 `2f2f7a36000af813`、`c02ae5a04ffbb1a8`；两份均被飞书机器人接收为 `accepted`，用户发送“确认”后创建任务 `0a1122e359a94cbebf17d2782cfc0969`，文档 `06a49aa462074c98987fd16bdaee0054`、`c29054299d39474baa7d68e79c4a0959`。真实模型调用使用 `deepseek-v4.1-flash`，8 次调用（7 completed / 1 reserved）、约 `$0.02616`；任务已终态但两份均 `incomplete`。
+- 飞书卡片已实测发送 `uploading`、`running` 状态并带 FundLex 深链。发现 `/tasks/<id>` 原只回任务总览，已修复为 `/?task=<id>#task` 并让 V1 自动选中任务；生产深链验证通过。详见 FL-D294。发布备份 `/tmp/opencode/fundlex-deeplink-20261026-102313/production-before.tgz`，生产 API/Worker/Feishu 均 active。
+- 第一个飞书任务 `0a1122e359a94cbebf17d2782cfc0969` 已终态：2/2 succeeded，但两份 delivery 均为 `incomplete`，只有 `working_final`/`working_redline`/report，没有 final/redline；D01 未完成 G08/G11/G12，D02 也有未完成目标。已下载并保存产物到 `/tmp/opencode/feishu-e2e-20261026/artifacts/`，核验结果 `/tmp/opencode/feishu-e2e-20261026/verification.json`；未授权下载返回 401。**不能把这两份工作文件当最终合同。**
+- 由于 D01/D02 不满足完整交付，已用 D04（亚太中高收益债券，SHA `dd176283...`）和 D17（睿毅领先混合，SHA `3b4a3615...`）创建第二个飞书任务 `8da0ef68f2c8465986917a66e7835bf0`；D17 完整、D04 因 G03 Claim Replay 不完整。详见下方第二任务结果。
+- 已实现并生产发布个人 OAuth 扫码绑定（FL-D295）：V1/V2 设置页可生成个人二维码，回调绑定当前 FundLex 账号；应用版本 `0.0.6`，OAuth 重定向 URL 已写入，飞书可用范围已改为全员（`is_visible_to_all=1`）。首次二维码等待 10 分钟未扫码：OAuth state 未消费并已过期，API 日志无 callback 请求，真实回调仍未验证；测试账号已用绑定码恢复绑定。另用新的未绑定临时账号完成生产 V1 UI 检查：按钮可见、SVG 112,472 bytes、10 分钟提示和 Feishu 链接正常、页面错误 0；临时账号、会话和未消费 state 已精确删除，未留下可用链接。二维码和 state 只保存在 `/tmp/opencode/feishu-oauth-e2e-20261026/`（`0600`），不得写入仓库/文档。
+- 第二个飞书任务 `8da0ef68f2c8465986917a66e7835bf0` 已终态：D17 **complete**，D04 **incomplete**。D17 final SHA `f320b61c3fc42cb41c3c0fc489f85850c04a6ba597c387179f505bc29caf2b87`、redline `e136a0da32bd94977e7869dc90a6371fa96b9a27e9be2b780aa578db91060e24`、report `2930610c96b786a09c463e26ff50c4fd9cd6933736aedc7696e9bf9be4b9a8c0`；16 edits、16 insertions/16 deletions，Claim Replay true，delivery gate unresolved 0；浏览器登录后深链打开任务并下载 final/redline/report，哈希与 API/报告一致。D04 因 G03 `CLAIM_REPLAY_FAILED` 为 incomplete，只有 working 文件。证据 `verification-task2.json`、`browser-verification.json`、`task2-detail.png`。
+- 飞书完成卡片已实测：任务 1 `incomplete:2`，任务 2 `incomplete:1 / complete:1`，均带深链。第一个任务 D01/D02 两份均 incomplete，不能当最终合同。整体结论仍为 **NO-GO**，飞书主链路通过不等于引擎全部合同通过。
+- 全量回归首次为 **1 failed / 1518 passed / 49 skipped / 3 warnings / 401.37s**，唯一失败 `test_app_rejects_oversized_content_length_before_multipart_parse` 单独运行通过（413），记录为 FL-D297；同源码第二次全量为 **1519 passed / 50 skipped / 3 warnings / 497.31s**，首次失败未复现，按顺序/环境 flake 记录。浏览器套件另修正一处 `time.sleep` 阻塞 route 事件的测试竞态（FL-D298），最终 V1+V2 为 **39 passed / 68.00s**。产品代码未因这两个测试问题改动。
+- 工作区仍 dirty，HEAD 为 `7cb25d4e27c0cc62408cf92587956fd4150d4d79`；本轮新增修改为 `fundlex/api.py`、`fundlex/integrations/store.py`、`fundlex/integrations/feishu/oauth.py`、`frontend/app.js`、`frontend/app.css`、`frontend/compare.html`、V2 设置/类型/API、测试及文档。未 commit/push。飞书 OAuth 真实回调仍未验证；D17 完整交付已验证，但 D04/D01/D02 不完整，整体 FL-D290 仍不能标记为全量验收通过。
+
+## FL-D290 飞书应用服务器准备断点（2026-10-26）
+
+- 用户已创建飞书企业自建应用。旧 App Secret（曾在聊天中出现）按已暴露处理并废弃；用户已完成轮换，新 Secret 已注入服务器环境文件，未写入仓库/文档/日志。
+- 本机已完成服务器侧准备：`/etc/fundlex-recall.env` 已写入 App ID、新 App Secret 和 `FUNDLEX_PUBLIC_BASE_URL=https://fundlex.club`（`640 root:root`）；备份为 `/etc/fundlex-recall.env.bak-20261026-084101`（注入前另备份 `.bak-20261026-085808`）；API 与 Worker 已重启并验证环境变量生效，飞书 `tenant_access_token` 接口返回 `code=0`；`/etc/systemd/system/fundlex-feishu.service` 已安装并于 09:08 enable/active。
+- 生产虚拟环境此前缺少锁定的 `lark-oapi==1.7.5`，已安装并验证可导入；systemd 模板通过 `systemd-analyze verify`。该依赖安装是部署目录运维变更，后续发布流程需确保不会丢失。
+- 平台配置已通过官方 `lark-cli 1.0.98` 完成：机器人能力已开启；版本 `0.0.1` 已发布；已保留 `im.message.receive_v1`，加入 `im:message.p2p_msg:readonly`、`im:message:send_as_bot`，并写入 WebSocket 模式和新版 `card.action.trigger` 回调。
+- 官方 `lark-cli 1.0.98` 已通过 stdin 绑定当前 App ID/Secret，`lark-cli whoami` 显示 bot token ready；09:08 及重启后服务日志显示已连接 Feishu WebSocket；应用管理 scope 已验证有效。
+- 下一条动作：真实 FundLex 用户登录设置页生成一次性绑定码，在飞书私聊发送绑定消息；随后发送多个公开 DOCX、点击确认创建任务，完成真实 Worker/模型、产物、状态回传、详情和授权下载验收。真实闭环完成前继续保持未验收状态。
+
 ## FL-D276 生产真实验收结果（2026-10-26）
 
 - D275 候选全量回归为 **1497 passed / 48 skipped / 2 warnings / 324.62s**；发布前备份为 `/tmp/opencode/fundlex-production-d275-backup-20261026/pre-publish-opt-fundlex-recall-first.tgz`，SHA-256 `85723301d210de32ee95463cbd503ebe4f1cd0bf43417b32fae2b6083a30cdd1`。发布后 API/Worker active，`/api/capabilities` HTTP 200，四个关键运行时文件部署哈希与工作区一致。

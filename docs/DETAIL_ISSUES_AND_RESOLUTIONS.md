@@ -1,5 +1,145 @@
 # FundLex 细节问题与处理记录
 
+## 当前工作区验证补录（2026-10-26）
+
+- 当前分支：`refactor/backend-engine-finalization`，HEAD `cdf0699`，相对 `origin/refactor/backend-engine-finalization` ahead 20；工作区仍有 Feishu OAuth/store、浏览器/入口测试、Compare/前缀相关文档及审计报告改动，尚未形成 clean candidate，也未 push 或部署。
+- 本轮已提交的代码块：`0466712`（API 稳定错误码、损坏报告边界、Review/下载响应）和 `cdf0699`（V1/V2 任务状态、通知、暂停按钮、Feishu 状态卡片及设置入口）。
+- 最新定向后端回归：**59 passed / 1 warning**；V1/V2 浏览器回归：**40 passed**；前端在 `npm ci --ignore-scripts` 后使用锁定的 Vitest **4.1.12**，**14 passed**，typecheck、lint、build 通过；`.venv/bin/python -m compileall -q fundlex`、`node --check` 和 `git diff --check` 通过。
+- 项目级结论仍为 **NO-GO**：D01–D20 固定分母、holdout、G06 授权、Compare 完整结构、真实 MySQL 8 并发、真实 OAuth 回调和完整真实用户交付仍未闭合。下述局部通过不改变该结论。
+
+## FL-D297 全量回归出现 upload guard 顺序性 415 失败（2026-10-26）
+
+- 发现日期：2026-10-26，OAuth/设置页改动后的全量回归。
+- 问题与影响：`PYTHONPATH=. .venv/bin/pytest -q` 结果为 **1 failed / 1518 passed / 49 skipped / 3 warnings / 401.37s**。唯一失败为 `tests/test_upload_guard.py::test_app_rejects_oversized_content_length_before_multipart_parse`，预期 413 `UPLOAD_REQUEST_SIZE_LIMIT`，实际 415；该失败会降低“全量回归通过”的可信度，且可能掩盖上传守卫的顺序依赖。
+- 证据：失败测试单独运行 `pytest -q tests/test_upload_guard.py::test_app_rejects_oversized_content_length_before_multipart_parse -vv` 为 **1 passed**；中间件逻辑 `fundlex/upload_guard.py:250-266` 在 Content-Length 超限时返回 413，缺失/非 multipart 时才返回 415。本轮 OAuth 改动未触及 `upload_guard.py` 或该测试，失败原因尚未定位。
+- 处理方法：保留失败记录，不删除/跳过测试；同一源码再次全量回归以判断是否可重现；若复现，按测试顺序、全局 multipart 安装、TestClient/httpx 状态和上传守卫中间件逐项定位，不能用“单测通过”替代。
+- 状态与验证：**已解决（第二次全量通过，首次失败未复现）**。同一源码第二次全量为 **1519 passed / 50 skipped / 3 warnings / 497.31s**；失败用例单独运行通过。未修改产品代码或跳过测试；判定为顺序/环境相关 flake，保留首次失败记录和复跑证据。
+- 下一步：后续全量若再次出现该 415，按 FL-D297 记录复现条件；不把单次 flake 或单次通过写成稳定结论。
+- 变更记录：2026-10-26 新增；第二次全量通过后更新状态，首次失败未删除。
+
+## FL-D298 浏览器上传测试用 time.sleep 等待路由导致假失败（2026-10-26）
+
+- 发现日期：2026-10-26，OAuth 改动后的 V1/V2 浏览器回归。
+- 问题与影响：`tests/browser/test_workbench.py::test_upload_completion_preserves_new_draft[uploads]` 在等待 `pending` 时使用 Python `time.sleep` 轮询；Playwright sync API 的 route handler 需要测试线程继续泵事件，`time.sleep` 会让被拦截的 `POST /uploads` 一直停在路由队列，表现为“请求从未发生”，误判产品上传流程失败。`page.on("request")` 能看到 POST 创建和上传请求，route handler 却在测试失败后才执行。
+- 证据：失败时 `pending` 为空但 `page.on("request")` 记录 `POST /api/tasks/.../uploads`；调试脚本用同样 route 模式可拦截。改为 `page.wait_for_timeout(100)` 泵事件后，两个参数化用例立即通过；产品代码未改。
+- 处理方法：测试等待循环改用 `page.wait_for_timeout`；route handler 先登记请求再 `route.fetch()`，并等待响应；保留原有产品断言。没有降低断言或跳过用例。
+- 状态与验证：**已解决（测试竞态已修正）**。参数化用例 **2 passed**；V1+V2 浏览器套件 **39 passed / 68.00s**。
+- 下一步：浏览器异步 route 测试统一使用 Playwright 等待 API，禁止在需要处理 route 事件的循环中使用 `time.sleep`。
+- 变更记录：2026-10-26 新增；与 FL-D297 的后端 flake 分开记录。
+
+## FL-D296 飞书真实任务交付结果分化：D17 完整、D01/D02/D04 不完整（2026-10-26）
+
+- 发现日期：2026-10-26，真实飞书多 DOCX 任务验收。
+- 问题与影响：飞书绑定、草稿、附件接收、任务创建、状态卡片和详情深链均已真实跑通，但合同交付结果并不全部完整。第一个任务 `0a1122e359a94cbebf17d2782cfc0969` 的 D01/D02 均为 `incomplete`，只有 `working_final`/`working_redline` 和报告；第二个任务 `8da0ef68f2c8465986917a66e7835bf0` 的 D17 为 `complete`，D04 为 `incomplete`。因此不能把“飞书链路成功”写成“所有合同完整交付”。
+- 证据：
+  - D17（文档 `75c87caa35994695a87a0e90440d8fb9`）：final `f320b61c3fc42cb41c3c0fc489f85850c04a6ba597c387179f505bc29caf2b87`（141,191 bytes）、redline `e136a0da32bd94977e7869dc90a6371fa96b9a27e9be2b780aa578db91060e24`（142,517 bytes）、report_json `2930610c96b786a09c463e26ff50c4fd9cd6933736aedc7696e9bf9be4b9a8c0`；两份 DOCX 均可解析，实际变化 16 段，redline 16 insertions / 16 deletions，report 16 edits，14 个非空 replacement 全部出现在 final，`Claim Replay verified=true`，delivery gate `UNRESOLVED=0`/`blocking_unresolved=0`。浏览器登录后打开深链，final/redline/report 下载哈希与 API/报告 `output_validation` 完全一致。
+  - D04（文档 `189c814f0a9c43789322dae04db9368e`）：`incomplete`，`Claim Replay verified=false`，open obligations 1、blocking_unresolved 3，原因为 G03 `CLAIM_REPLAY_FAILED` / `CLAIM_OPERATION_NOT_PLANNED`；只有 working 文件。
+  - D01/D02：D01 未完成 G08/G11/G12；D02 也有未完成目标。两份均只有 working 文件，不能作为最终合同。
+  - 真实模型：第二个任务 53 次请求（51 completed、2 failed）约 `$0.07428`、312,780 tokens，模型 `deepseek-v4.1-flash`；第一个任务 8 次调用（7 completed/1 reserved）约 `$0.02616`。
+  - 飞书完成卡片已真实发送：第一个任务 `incomplete:2`；第二个任务 `incomplete:1, complete:1`，均带 `/tasks/<id>` 深链，深链登录后能自动打开对应任务。证据目录 `/tmp/opencode/feishu-e2e-20261026/`（`verification.json`、`verification-task2.json`、`browser-verification.json`、截图和下载件）。
+- 处理方法：本轮不修改引擎规则来“制造”完整结果；D17 作为完整交付正向证据，D04/D01/D02 保留失败报告和工作文件，按例外清单人工核对。D04 的 G03 Claim Replay 缺口继续按既有引擎问题处理，不能以飞书链路通过替代。
+- 状态与验证：**飞书集成主链路已验证；合同完整交付仅 D17 通过，整体仍为 NO-GO**。D17 的 final/redline/report 与浏览器授权下载已验证；D04/D01/D02 的 `incomplete` 明确保留。OAuth 扫码仍待真实回调验证（FL-D295）。
+- 下一步：修复 G03 Claim Replay/未规划操作缺口后复测 D04；继续用 D17 或其它完整合同做 Feishu 详情/下载回归；D01/D02 的失败分类不得从分母或报告中移除。
+- 变更记录：2026-10-26 新增；本条只记录真实 Feishu 路径结果，不改变 D01–D20 固定分母和 G06 既有门禁。
+
+## FL-D295 飞书绑定需要手输一次性绑定码，缺少扫码自动绑定（2026-10-26）
+
+- 发现日期：2026-10-26，用户提出给普通用户二维码、扫码后通过机器人连接 FundLex。
+- 问题与影响：现有流程要求用户先在 FundLex 设置页生成 12 位绑定码，再切到飞书私聊手动发送 `绑定 <绑定码>`。公共二维码只能打开机器人，不能安全地自动绑定；同一绑定码给多人会导致合同权限串号。
+- 处理方法：新增个人化飞书 OAuth 扫码绑定。登录用户在设置页生成一次性 `state` 二维码；飞书授权页回调用授权码换取用户身份，读取 `open_id/tenant_key`，只绑定到创建该 `state` 的 FundLex 用户。`state` 仅保存 SHA-256，10 分钟有效、一次性消费；绑定冲突仍按既有 `external_identities` 规则失败关闭。V1 设置页新增“生成扫码绑定二维码”并轮询绑定状态；V2 设置页同步增加。应用版本 `0.0.6`（`oav_d639cd9524601ba5d79ffd49944c3dd4`）增加 `contact:user.base:readonly`，并已通过应用配置 API 写入 OAuth 重定向 URL `https://fundlex.club/api/integrations/feishu/oauth/callback`；可用范围改为全员（`is_visible_to_all=1`）。
+- 状态与验证：**已实现并发布，真实扫码回调尚未完成（用户未在有效期内扫码）**。定向后端测试 **30 passed / 1 warning**（Feishu 专项、OAuth API、入口、认证），前端 Vitest 最终 **14 passed**、typecheck/lint/build 通过，`node --check`、`compileall`、`git diff --check` 通过。OAuth start 在生产真实账号返回 200、二维码 SVG 约 103 KB、10 分钟有效；首次真实二维码等待 10 分钟后状态仍为未绑定，`integration_oauth_states` 中该 state 未消费且已过期，API 日志没有 `/api/integrations/feishu/oauth/callback` 请求，说明是未扫码而非回调失败。旧测试账号已用绑定码恢复绑定。另用新的未绑定临时账号在生产 V1 设置页点击“生成扫码绑定二维码”：按钮可见、渲染 112,472 bytes SVG、10 分钟提示和 Feishu 授权链接均正常、页面错误 0；随后已精确删除临时账号及未消费 state，旧链接立即失效。发布备份 `/tmp/opencode/fundlex-oauth-qr-20261026-104616/production-before.tgz`；部署后 API active，关键文件 SHA 与工作区一致。
+- 下一步：重新生成个人二维码并让真实用户扫码，确认 `external_identities` 新增绑定、回调页提示成功、设置页轮询显示已绑定；OAuth 回调失败时必须重新生成二维码，不能复用已消费 state。随后用 D04/D17 做完整 delivery 验证。
+- 变更记录：2026-10-26 新增；OAuth 二维码是个人化、一次性链接，不得作为公共海报分发；公共二维码仍只用于打开机器人。`admin:app.visibility` 为修改全员范围临时发布，后续应评估是否回收。
+
+## FL-D294 飞书状态卡片的 FundLex 详情深链未打开具体任务（2026-10-26）
+
+- 发现日期：2026-10-26，真实飞书任务状态卡片验收。
+- 问题与影响：卡片生成 `https://fundlex.club/tasks/<task_id>`，但 V1 fallback 只识别 `/tasks`、`/tasks/new` 等固定路径，`/tasks/<id>` 被当作未知路径重定向到 `/#overview`。用户从飞书点击“打开 FundLex 详情”只会回到任务总览，不能直接看到对应任务，详情查看链路不完整。
+- 证据：`fundlex/integrations/feishu/cards.py` 生成 `/tasks/{task_id}`；`fundlex/api.py` 原 fallback 的映射不包含动态任务 ID；真实飞书卡片文本包含该链接（`/tmp/opencode/feishu-e2e-20261026/messages-2.json`）。修复前点击只会到任务总览。
+- 处理方法：V1 fallback 对 `/tasks/<id>` 返回 307 到 `/?task=<urlencoded-id>#task`，保留 `/tasks/new` 为新建任务；`frontend/app.js` 增加 `openDeepLinkedTask()`，在初始化刷新、登录成功和注册成功后读取 `task` 查询参数并调用 `selectTask()`。未登录时保持登录页，登录后自动继续打开目标任务。
+- 状态与验证：**已解决（生产深链已验证）**。`tests/test_frontend_entry.py` 为 **3 passed**，覆盖默认入口、测试前缀和 `/tasks/new` 非任务 ID；浏览器 `test_task_deep_link_selects_task` 通过；`node --check` 与 `git diff --check` 通过。生产 `/tasks/<id>` 返回 `307 location: /?task=<id>#task`，真实 member 登录后自动打开“飞书合同任务”，`#view-task` 可见，页面错误 0。发布仅覆盖 `fundlex/api.py` 与 `frontend/app.js`，工作区/部署 SHA 分别为 `d5c459586fe6c3bf68881351b7be76a7f7466e1e474a0e5498f7969f9e412f1c`、`59e998dca6b56fb3da32673f5487dd6c3d0aa3532ee2297a1dba3397d5678a61`；备份 `/tmp/opencode/fundlex-deeplink-20261026-102313/production-before.tgz`，证据 `/tmp/opencode/feishu-e2e-20261026/deeplink-task.png`。
+- 下一步：飞书完成摘要卡片继续使用该深链；后续若切换 React V2，需要为 `/tasks/:id` 增加等价的真实路由和任务选中行为。
+- 变更记录：2026-10-26 新增；本轮修复未改动 Worker 处理逻辑，API 重启未中断已启动的 Worker 任务。
+
+## FL-D292 飞书机器人缺少消息资源读取权限，DOCX 附件事件失败（2026-10-26）
+
+- 发现日期：2026-10-26，真实飞书绑定后的首份 DOCX 发送。
+- 问题与影响：真实用户发送 D01 后，`im.message.receive_v1` 文件事件到达并创建 `feishu_drafts`，但机器人下载附件时抛出 `RuntimeError`，事件状态变为 `dead`，草稿停在 `COLLECTING` 且没有 `feishu_draft_files` 记录，用户无法继续创建任务。
+- 证据：`fundlex-feishu.service` 仅记录 `Feishu event failed ... error=RuntimeError`；用同一 `message_id`/`file_key` 直接调用机器人资源下载返回 `code=99991672`，明确要求 `im:message.history:readonly`、`im:message:readonly` 或 `im:message` 应用身份权限。首份文件名与事件证据保存在 `/tmp/opencode/feishu-e2e-20261026/`，未记录凭据。
+- 处理方法：通过应用管理 API 增加 tenant scope `im:message:readonly`，发布飞书应用版本 `0.0.3`（`oav_a7195c49bfcb2ee5ec690c595dedecb7`，状态 `1`），切换 `online_version_id` 并重启 `fundlex-feishu.service`；同一资源下载调用随后返回 `code=0` 且 `has_file=true`。重新发送 D01 后附件变为 `accepted`，随后 D02 也 `accepted`，两份合同进入同一草稿。
+- 状态与验证：**已解决（权限与两份附件接收已验证）**。`feishu_draft_files` 记录 D01 141,078 bytes、D02 162,609 bytes，状态均为 `accepted`；草稿随后 `SUBMITTED` 并创建任务 `0a1122e359a94cbebf17d2782cfc0969`。最终 Worker/模型、DOCX 产物和授权下载仍待任务终态验证。
+- 下一步：在飞书应用发布检查中固定验证 `im:message:readonly`（或等价资源读取 scope），并把附件下载失败从笼统 `RuntimeError` 改为可诊断错误码；本轮未改代码。
+- 变更记录：2026-10-26 新增；首份失败事件保留在 `integration_events` 中作为真实失败证据，未删除历史记录。
+
+## FL-D293 用户身份不能直接向机器人 open_id 发送私聊消息（2026-10-26）
+
+- 发现日期：2026-10-26。
+- 问题与影响：使用真实用户 token 调用 `im +messages-send --user-id <bot_open_id>` 时，飞书返回 `code=230001`、`this operation to bots is currently not supported`，无法直接完成 `绑定 <绑定码>` 消息。
+- 证据：`/tmp/opencode/feishu-e2e-20261026/binding-send.err` 中脱敏错误；机器人信息接口返回 bot `open_id`，用户 token 正常。
+- 处理方法：改用飞书支持的正常私聊建立路径：先由机器人向真实用户 `open_id` 发送一条私聊消息，取得返回的 `chat_id`；再由用户 token 在同一 `chat_id` 发送 `绑定 <绑定码>`。绑定随后成功，`external_identities` 新增 1 条有效记录，`/api/integrations/feishu/binding` 返回 `bound=true`。
+- 状态与验证：**已解决（真实绑定已验证）**。绑定成功后飞书返回“绑定成功”卡片，绑定账号前缀为临时 FundLex 用户 ID；用户随后在同一私聊发送两份 DOCX 和“确认”，任务已创建。
+- 下一步：文档和接入说明应记录“机器人先发起私聊、用户再回复”的绑定/消息路径，避免继续尝试用户直发 bot open_id。
+- 变更记录：2026-10-26 新增；绑定码为一次性短期凭据，未写入文档或日志。
+
+## FL-D291 生产密码用户被 V1 开发设置守卫阻断，无法生成飞书绑定码（2026-10-26）
+
+- 发现日期：2026-10-26。
+- 问题与影响：生产 `auth_mode=password` 用户点击 V1 侧栏“设置”时，`frontend/app.js` 的点击监听器仍要求 `state.cap.auth_mode==='dev'`，直接提示“当前运行环境未开放开发设置”。这阻断了普通登录用户进入设置页生成飞书一次性绑定码，也使真实飞书 E2E 无法沿正式用户路径开始。`tests/browser/test_workbench.py` 旧断言还要求 member 的 `#view-settings` 隐藏，掩盖了合法入口。
+- 证据：修复前生产 `frontend/app.js` SHA-256 为 `da2535e2f478550a29f8e6a97fa43e1e58171ff0326e90d0828cb07b2ad6f057`；`/settings` 深链正确 307 到 `/#settings`，但页面点击被上述守卫拦截。V1/V2 浏览器回归旧结果为 36 passed / 1 failed，失败断言位于 `tests/browser/test_workbench.py:353`。
+- 处理方法：移除设置导航的 `auth_mode==='dev'` 守卫；V1 侧栏、顶栏和面包屑的“开发设置”改为“设置”；保留 `#dev-settings-panel` 在 password 模式隐藏、`#users` 仅管理员可见和 `/api/admin/*` 的管理员权限。浏览器契约改为断言 member 设置页可见、开发面板隐藏、飞书绑定按钮可见，并补管理员用户视图重定向检查。仅备份并发布 `frontend/app.js`、`frontend/compare.html`，重启 `fundlex-recall-api.service`。
+- 状态与验证：**已解决（生产设置入口已验证）**。
+  - 前端检查：`npm run typecheck`、`npm run lint`、`npm test -- --run`（4 files / 9 passed）、`npm run build`、`node --check frontend/app.js`、`git diff --check` 全部通过；V1+V2 浏览器回归 **37 passed**。
+  - 生产发布：工作区与 `/opt/fundlex-recall-first/frontend/app.js` SHA-256 均为 `9a6ad9e43cfccce90431ce484d436c6b7085972207cfad903d78005dc7e5b134`，`compare.html` 均为 `42505246214d3be174c5ecb918fe41d0aae388df11023eee76ffaf9c8b6558a0`；API/Worker/Feishu 服务均 active，公网 `app.js` 与工作区哈希一致，旧拦截文案计数为 0。发布备份：`/tmp/opencode/fundlex-settings-fix-20261026-095645/production-frontend-before.tgz`。
+  - 真实生产账号路径：注册并登录临时 member 后，`#view-settings` 可见，`#dev-settings-panel` 隐藏，`#feishu-binding-code-btn` 可见，顶栏和面包屑均为“设置”；点击后 UI 渲染 12 位绑定码和“10 分钟内有效”，`/api/integrations/feishu/binding-code` 返回 200；`#users` 重定向、`/api/admin/users` 返回 404（fail closed）；页面错误为 0。证据：`/tmp/opencode/fundlex-prod-settings-e2e-20261026/ui-evidence.json`、`settings.png`、`settings-code-generated.png`（绑定码已隐藏），账号凭据仅在 `credentials.json`（`0600`）。
+- 下一步：沿该真实账号继续生成绑定码、在飞书私聊完成绑定，并完成多个 DOCX、Worker/model、产物、状态卡片、详情和授权下载验收；真实闭环完成前不宣称飞书验收通过。
+- 变更记录：2026-10-26 新增；修复与生产发布完成。同日为设备授权补发飞书应用版本 `0.0.2`（`oav_a4befe0a6d1171c1075c7a10a6724d8d`），增加 user token 的 `im:message.send_as_user`、`im:message`、`im:chat:readonly`，应用 `online_version_id` 已切换；未记录任何 Secret 或用户 token。
+
+## FL-D290 飞书应用平台配置与真实 E2E 主链路（2026-10-26）
+
+- 发现日期：2026-10-26。
+- 问题与影响：用户已创建企业自建应用；此前尚未完成机器人、长连接、消息/卡片回调、消息权限和应用发布，导致真实用户、附件、Worker/模型、状态回传和授权下载闭环不能验收。
+- 证据：服务器 `/etc/fundlex-recall.env` 已安全写入 App ID、新 Secret 和 `FUNDLEX_PUBLIC_BASE_URL=https://fundlex.club`，Secret 未写入仓库、文档、日志或聊天；`fundlex-feishu.service` 已 enable/active，API 和 Worker 当前 active。用户曾在聊天中发送旧 Secret，该旧值视为已暴露并且不再使用。
+- 处理方法：用户完成 Secret 轮换并安全注入后，服务器安装并启用 `lark-oapi==1.7.5`、独立 systemd 服务和官方 `lark-cli==1.0.98`。2026-10-26 09:26–09:28 通过 CLI/API 写入 `im:message.p2p_msg:readonly`、`im:message:send_as_bot`、WebSocket 事件模式和新版 `card.action.trigger` 回调；09:29 提交发布版本 `0.0.1`。
+- 状态与验证：**平台配置、应用发布和真实用户 E2E 主链路已验证；合同完整交付仅 D17 通过，D01/D02/D04 为 incomplete；OAuth 扫码真实回调仍待验证**。整体仍为 NO-GO，见 FL-D296。
+  - 已实际验证（2026-10-26）：新 Secret 写入后 `fundlex-recall-api`、`fundlex-recall-worker` 已重启，`/proc/<MainPID>/environ` 中 `FUNDLEX_FEISHU_APP_SECRET` 各出现 1 次；两服务 `active`，uvicorn/worker 日志无启动错误；直接调用飞书 `auth/v3/tenant_access_token/internal` 返回 `code=0 msg=ok`，取到 tenant token（有效期 7199s），说明 App ID/Secret 组合有效且服务器可出网到 `open.feishu.cn`。
+  - 平台验证：线上版本 `oav_aa33e3f12b97a8bcd1a22dc88c8823fb`、版本号 `0.0.1`、状态 `1（已发布）`；版本详情包含机器人能力、`im.message.receive_v1`，权限包含 `im:message.p2p_msg:readonly` 和 `im:message:send_as_bot`。机器人信息接口返回正常；服务重启后保持 `active/enabled` 并建立 WebSocket 连接。
+  - 初始平台核验时尚无真实绑定/附件/产物证据；后续已完成真实绑定、4 份公开 DOCX 上传、两个正式任务、状态/完成卡片、D17 的 final/redline/report 和浏览器授权下载。应用版本详情不单独回显 callback 列表，但 `callback_type=websocket` 与新版 `card.action.trigger` 写入接口均返回成功；卡片确认按钮的点击回调仍建议单独回归（本轮以文字“确认”完成任务）。
+  - 2026-10-26 10:04 补发版本 `0.0.2`（版本 ID `oav_a4befe0a6d1171c1075c7a10a6724d8d`，状态 `1`），在保留既有 tenant 权限的基础上增加 user token 的 `im:message.send_as_user`、`im:message`、`im:chat:readonly`，应用 `online_version_id` 已切换。该变更用于官方 CLI 设备授权的真实用户消息发送；设备授权文件仅保存在 `/tmp/opencode/feishu-device-auth-20261026/`（目录 `0700`、文件 `0600`），未写入仓库或文档。
+  - 2026-10-26 真实 E2E：真实用户李嘉伟完成 CLI 设备授权；因飞书不允许用户直接向机器人 open_id 发消息，改为机器人先发起私聊取得 `chat_id` 后由用户发送绑定消息，`bound=true`。两份公开 DOCX 经飞书上传、草稿、确认后创建任务 `0a1122e359a94cbebf17d2782cfc0969`，状态卡片、完成卡片和 `/tasks/<id>` 深链均实测；该任务 D01/D02 均为 `incomplete`。第二个任务 `8da0ef68f2c8465986917a66e7835bf0` 的 D17 为 `complete`（final/redline/report、Claim Replay true、浏览器下载哈希一致），D04 为 `incomplete`。详见 FL-D292、FL-D293、FL-D294、FL-D296。
+  - 2026-10-26 飞书应用另补发 `0.0.3`（`im:message:readonly`，修复附件下载）、`0.0.4`（临时 `admin:app.visibility`）、`0.0.5`（OAuth 重定向 URL）、`0.0.6`（`contact:user.base:readonly`，OAuth 扫码）。可用范围已改为全员（`is_visible_to_all=1`）；OAuth 首次真实二维码无人扫码，state 未消费并过期，回调仍未验证。
+- 下一步：重新生成个人 OAuth 二维码并完成一次真实扫码回调；修复 D04 的 G03 Claim Replay/未规划操作缺口；如需验证卡片按钮而非文字确认，使用一张新草稿做真实点击回调。D17 已作为完整交付正向证据，D01/D02/D04 的失败不得从报告或分母移除。
+- 变更记录：2026-10-26 新增；服务器环境备份路径为 `/etc/fundlex-recall.env.bak-20261026-084101` 和 `/etc/fundlex-recall.env.bak-20261026-085808`。用户轮换后的 Secret 已注入并验证 token 接口返回 `code=0`；09:08 飞书服务启用并建立 WebSocket；09:23 应用管理 scope 验证通过；09:26–09:28 配置消息权限、WebSocket 回调和卡片回调；09:29 发布 `0.0.1`；10:04 发布 `0.0.2` 用户身份 scope。全程未记录任何凭据值。
+
+## FL-D277 前端测试工具链包含已知依赖漏洞（2026-10-26）
+
+- 发现日期：2026-10-26，多 agent 全项目检查。
+- 问题与影响：历史审查时 `frontend/package.json` 使用 Vitest `^2.1.9`，锁文件为 2.1.9，带入旧版嵌套工具链并触发审计告警。具体利用分别依赖 Vitest UI/开发服务器暴露、原型污染等条件，不能把包严重级别直接外推为当前生产网站可利用漏洞。
+- 证据：`frontend/package.json`、`frontend/package-lock.json`；审计原始输出 `/tmp/opencode/fundlex-audit-20261026-npm.json`，包含 GHSA-5gmw-xhrv-c9v3、GHSA-85c8-ppgw-ccpr、GHSA-82fw-gwwq-j7x9 等。`npm audit --omit=dev --json` 的 `/tmp/opencode/fundlex-audit-20261026-npm-production.json` 为零漏洞，所有上述版本在锁文件中均标为 dev。
+- 处理方法：建议升级 Vitest 及其嵌套工具链到修复版本，审查 Node 兼容性及配置迁移后执行 typecheck、lint、单元/组件与浏览器回归。审计建议 Vitest 4.1.12，属于跨大版本变更，本轮审查未自动修复依赖。
+- 状态与验证：**依赖升级已实施；审计边界仍需复核**。`package.json` 和 `package-lock.json` 现锁定 Vitest `^4.1.12`/`4.1.12`；执行 `npm ci --ignore-scripts` 后实际版本为 **4.1.12**，前端 Vitest **14 passed**，typecheck、lint、build 通过。尚未把新的 `npm audit` 输出作为生产安全结论，且未部署本轮前端改动。
+- 下一步：在最终 clean candidate 上重新运行完整 npm audit，确认新工具链的开发依赖告警及生产依赖零漏洞结论；保留浏览器回归和 Node 版本范围记录。
+- 变更记录：2026-10-26 新增；后续依赖重建和版本核对后更新为 Vitest 4.1.12，保留原始审计证据及历史风险范围。
+
+## FL-D278 项目主入口文档与当前实现/部署状态持续漂移（2026-10-26）
+
+- 发现日期：2026-10-26，多 agent 全项目检查。
+- 问题与影响：README 主体仍描述 2026-10-14 的 v1/v2、固定 22 action、两种提交模式与旧发布流程；`FULL_PROJECT_IMPLEMENTATION_PLAN.md` 的 P1–P8 多数仍未勾选，而最新代码、生产 V1 单例交付与 FL-D276 已证明部分能力实现。`ACTIVE_HANDOFF.md` 保留的后续历史段落仍写 dirty 和旧 HEAD。缺少清晰的当前状态总览时，接续者可能采用旧命令、误认为功能未实现，或将历史发布证据误用于当前完整质量门禁。
+- 证据：本轮起点 HEAD `c46d6e8`、分支 `refactor/backend-engine-finalization`、工作区干净；README 第 5–15、41–50、95 行以后；实施计划 P0–P8；ACTIVE_HANDOFF 顶部 FL-D276 与后续历史断点。主入口本地链接扫描缺失目标为 0，说明问题为内容/时态一致性，而非死链。相关历史文档归档已见 FL-D071，本条记录归档后持续状态漂移。
+- 处理方法：建议在 README 和实施计划顶部建立唯一当前快照索引，明确源码 HEAD、部署版本、实际通过范围、待验收项、运行命令和预算来源；历史状态保留并标日期，不自动把历史未勾选项全部改为完成。集中问题状态应在新证据出现时追加更新原编号。
+- 状态与验证：**已确认、待收敛**。本轮报告已分开记录源码/运行/真实证据范围，未重写历史业务结论或评测分母。
+- 下一步：结合本轮各方向审查形成可复查当前状态页，并按实证更新实施计划；20 dev/holdout、G06、Compare 覆盖和飞书/MySQL 缺口保持明确。
+- 变更记录：2026-10-26 新增；不将文档状态过期解释为功能不存在，也不将单例成功写成全项目完成。
+
+## FL-D279 V1 浏览器角色测试仍把普通用户设置页当作管理员页面（2026-10-26）
+
+- 发现日期：2026-10-26，多 agent 全项目检查中的串行浏览器回归。
+- 问题与影响：`FUNDLEX_BROWSER_TESTS=1 PYTHONPATH=. .venv/bin/python -m pytest tests/browser/test_workbench.py tests/browser/test_frontend_v2.py -q` 结果为 36 passed、1 failed。失败位于 `tests/browser/test_workbench.py:353`：普通 member 登录后切换 `#settings`，测试要求 `#view-settings` 隐藏。当前 V1 页面设置区包含普通用户可用的飞书绑定和运行能力；仅其中的本地开发身份面板在 password 模式隐藏。若继续使用旧断言，会把合法设置入口误判为角色越权；若未来设置页加入管理员操作，也可能因笼统测试无法区分权限边界。
+- 证据：失败日志 `/tmp/opencode/fundlex-audit-20261026-browser.log`；`frontend/app.js:60-62,156` 仅对 `users` 做 admin hash guard，`updateSettingsNav()` 明确保留 settings；`frontend/compare.html:33` 的设置区包含 Feishu 用户绑定和能力信息；后端 `/api/admin/*` 仍通过 `fundlex/api.py:_admin` 只允许 admin，普通用户的指引/绑定接口使用 `_user`。
+- 处理方法：更新 V1 浏览器测试契约，断言 member 可以访问 settings 的用户功能，同时断言开发身份控件隐藏、`#users` 重定向且普通用户无法访问 `/api/admin/users`；不要为通过旧断言而隐藏普通用户设置。补一项真实 password 模式 API/页面检查，确认 settings 中不出现管理员操作。
+- 状态与验证：**已解决（测试契约与生产入口均已修正）**。`tests/browser/test_workbench.py` 现断言 member 的 `#view-settings` 可见、`#dev-settings-panel` 隐藏、`#feishu-binding-code-btn` 可见，并验证 `#users` 重定向和 `/api/admin/users` 404 fail-closed；V1+V2 浏览器回归 **37 passed**。生产真实 member 登录路径同样通过，详见 FL-D291。
+- 下一步：保留“普通用户设置可用、管理员能力仍受限”的权限设计；若未来设置页加入管理员操作，需为这些操作单独增加角色断言，不能把整个设置页重新设为 admin-only。
+- 变更记录：2026-10-26 新增；同日修正测试并完成生产设置入口验证。
+
 本文件是项目细节问题与处理方法的唯一集中记录，依据根目录 `AGENTS.md` 持续维护。创建于 2026-10-14。
 
 本次补录来自原件阅读、用户讨论及三 agent 交叉审查。除明确说明外，下列处理方法属于设计结论或建议，尚未实施、评测或发布。记录不是问题已解决的证明，也不替代专题报告。
@@ -969,10 +1109,10 @@
 - 处理方法（已实施）：保留**首次出现**的编号不变（其含义已被 `docs/TASK_PLAN_UX_AND_APPEND_20261015.md`、`docs/archive/README.md`、`docs/ACTIVE_HANDOFF.md` 引用），把**后出现的重复项**改为未占用的新编号并加"编号更正"变更记录，不删除历史、不重建编号：
   - FL-D057 → **FL-D072**（sweep 误报 G02/G04）；② FL-D058 → **FL-D073**（无服务费结论）；③ FL-D068 → **FL-D074**（评分器短锚误判）；④ FL-D069 → **FL-D075**（G17 跨段删除）；⑤ FL-D066 → **FL-D076**（Codex bwrap）。
   同步修正唯一一处代码内引用：`tools/evaluation/p6_score.py`（评分器短锚说明）FL-D068 → FL-D074。
-- 状态与验证：**已实施并验证**。`grep -oP "^## FL-D\K[0-9]+" | sort | uniq -d` 输出为空（75 条编号全部唯一）；`grep -rn "FL-D068\|FL-D069"` 确认其余引用（TASK_PLAN/archive README/ACTIVE_HANDOFF）指向的正是保留原编号的那一层含义，故无需改动。**未 commit、未 push**。
+- 状态与验证：**历史修复不完整，当前仍有重复标题编号**。本轮 `grep -n '^## FL-D'` 和排序去重核对确认 FL-D088、FL-D089、FL-D118、FL-D152、FL-D153、FL-D224 各仍有两个不同含义的一级标题；原条目中“75 条编号全部唯一”的结论已过期。当前未原地重排历史编号，也未修改外部文档引用，以免把历史证据指向错误问题。
 - 复发（同日）：规范化提交轮次又新增一条占用 FL-D072 的条目（「工作区长期未提交、版本管理缺失」）→ 已按同一规则改号为 **FL-D078**，冲突清零。
 - 下一步：后续新增条目必须先在全文搜 `^## FL-D` 确认编号未被占用；编号更正一律"保留旧条目 + 新增一行变更记录"，禁止原地重排。
-- 变更记录：2026-10-15 新增。
+- 变更记录：2026-10-15 新增；2026-10-26 复核发现上述六组重复编号复发/遗留，原“唯一”验证结论撤回，待按历史引用关系建立稳定的新编号并同步交叉引用。
 
 ## FL-D079 变体模糊匹配的 span 停在句中，替换后残留半句碎片（D01 p934 出现“…（如有）。配。”）
 
@@ -3490,9 +3630,9 @@
 - 问题与影响：本轮架构审计发现三类可跨规则复现的 fail-open 风险：Guide 的 operation registry 覆盖检查若只停留在低层 planner，parsed custom Guide 可在 enable 或 Worker 绑定时绕过；Claim Replay 若只投影 TRUE obligation，会让绑定到 FALSE/UNKNOWN operation 的 edit 在 artifact proof 中消失；审计 missed target 只保留 rule/location 会丢失 operation、obligation 和 target 归属。另发现 sibling 写入相同新文本时，普通 operation 可能被误判为 `ALREADY_SATISFIED`，但显式 `ONE_OF` 历史替代必须保留该语义。
 - 证据：初次实现直接在 `validate_runtime_guide()` 加 operation registry 检查，破坏了自定义 Guide 的“先解析、后受控启用”契约；定向回归出现 `test_one_of_alternative_branch_can_close_when_sibling_was_applied` 和自定义 Guide certification 失败。完整回归第一轮为 1478 passed/48 skipped/3 failed，第二轮为 1479 passed/48 skipped/2 failed；失败均用于收紧兼容边界，未修改 gold、scorer、验证标准或固定分母。
 - 处理方法：将 Registry coverage 门移到 `guide_store.set_current_guide()` 和 Worker `_bound_guide_document()`；显式 `operation_id` 的 custom/extension Guide 缺失 registry entry 时拒绝 enable/bind，未知 rule 即使没有显式 identity 也拒绝，已知内置 rule 的旧式无 identity fixture 保留兼容。Claim Replay 在 operation authorization 前拒绝 FALSE/UNKNOWN applicability edit；effects 仅在 operation 自身有 source policy 或通过自身 validated unit 时产生 `ALREADY_SATISFIED`，保留显式 `ONE_OF` alternative 的历史关闭语义；audit missed target 保留 operation/obligation/target 身份；Delivery Gate 在传入 Ledger 时检查 Ledger open obligations。
-- 状态与验证：**代码已实施并验证（当前 dirty 工作区）**。新增 FALSE applicability 和 custom operation enable 回归通过；受影响定向集合 61 passed，兼容性定向集合 24 passed，错误码归类修复后的 API/Worker/Registry/Replay 集合 74 passed；`.venv/bin/python -m compileall -q fundlex`、`git diff --check` 通过；最终完整 `PYTHONPATH=. .venv/bin/pytest -q` 为 **1481 passed / 48 skipped / 2 warnings / 288.79s**。本轮最终验证时间为 2026-10-25T18:48:54+08:00，当前 Git HEAD 仍为 `4bad293302e77c859bf6036237142fb382dac6e0`，当前 dirty engine build 为 `63401714832f88277194e2005bc6a21b5365d30b56e49ee59d91c8f78b028edc`；因工作区 dirty 不构成最终 candidate SHA 证据。
-- 下一步：先审核 Compare dirty 修改是否纳入同一候选，形成唯一 clean release candidate；按最终 candidate 重新生成源码 manifest/build/artifact hash，再运行 Frozen Replay、真实 Worker/model、D01-D20 固定分母和最终用户 E2E。G06 未授权语义、预算缺口及选定版 artifact 观察窗口继续按 FL-D240–FL-D243、FL-D251 阻断。
-- 变更记录：2026-10-25 新增；保留首轮兼容性失败、边界调整及最终 1481 项回归通过链路。
+- 状态与验证：**修复不完整，当前仍可复现 sibling policy 错误关闭**。原有 FALSE applicability、custom operation enable、ONE_OF 兼容回归仍通过；但 2026-10-26 使用内置 G18 `INDEPENDENT` operation 和无关 synthetic `G100:0` sibling 的最小夹具重放时，`replay_claims()` 返回 `verified=true`，G18 被记为 `ALREADY_SATISFIED`、`edit_ids=[]`，Ledger `open_obligations=[]`，`_delivery_complete()` 最终返回 complete。根因是 `fundlex/generation/effects.py:584-623,688-689` 在当前 operation 没有自身 edit/source proof 时仍无条件使用 `_policy_phrase_equivalent()`，被 sibling 写入的最终文本关闭 G18。针对性回归为 4 passed，不能覆盖该 synthetic sibling 场景；未调用真实模型、未修改源码或真实生产产物。
+- 下一步：收紧 `ALREADY_SATISFIED` 的证明来源，使独立 operation 只能由自身 source policy 或自身 validated unit 关闭；仅保留明确 `ONE_OF` 授权的 sibling 替代语义。为 independent sibling、ONE_OF sibling 和自身 satisfied 三类补 deterministic replay/ledger/delivery 回归，再按最终 clean candidate 运行 Frozen Replay、真实 Worker/model、D01-D20 固定分母和最终用户 E2E。G06 未授权语义、预算缺口及 selected artifact 观察窗口继续按 FL-D240–FL-D243、FL-D251 阻断。
+- 变更记录：2026-10-25 新增并记录首轮兼容性边界；2026-10-26 修正状态：修订引擎离线最小夹具重新证明普通独立 sibling 仍可误关 obligation，原“已实施并验证”结论降级为“修复不完整”。
 
 ## FL-D257 G05 缺失替换分支被同站点删除分支错误覆盖（2026-10-25）
 
@@ -3631,3 +3771,163 @@
 - 清理：临时账号 `e2e-v1-o9rfdisxoj2o` 已删除；清理脚本记录 1 user、1 session、1 task、1 batch、1 document、1 compare task、1 compare pair，删除关联对象 10 个；数据库复核用户名行数为 0。
 - 下一步：补齐或明确处理 Compare 的 header/footer、AlternateContent、drawing、pict 等可见内容覆盖，再独立复验；D01–D20 固定分母、G06 授权及其他项目级门禁仍需完成。
 - 变更记录：2026-10-26 新增；保留普通成功与 Compare incomplete 的同次真实用户路径证据。
+
+## FL-D283 发布器文档仍宣称受限 sudo，但实际授权为全 root（2026-10-26）
+
+- 发现日期：2026-10-26。
+- 问题与影响：用户已在 FL-D084 明确授予 `opencode` 本机 `NOPASSWD: ALL`，因此本条不把该授权定性为未经授权；但实际 `/etc/sudoers.d/fundlex-opencode-publish` 第 5 行的全 root 规则与第 1-3 行及发布器注释所描述的“仅受限发布”边界相反。工作区用户因此能够读取或修改生产环境密钥、数据库、对象文件、systemd/Nginx 配置及其他系统资源。若团队以发布器注释、历史文档或第 4 行为依据进行威胁建模，会低估主机接管和凭据暴露范围。严重级别：**严重（Critical）**。
+- 证据：`/etc/sudoers.d/fundlex-opencode-publish:1-5` 的只读内容；第 4 行为受限发布规则，第 5 行为 `opencode ALL=(root) NOPASSWD: ALL`。`/home/opencode/fundlex/docs/DETAIL_ISSUES_AND_RESOLUTIONS.md:1072-1082` 的 FL-D084 已记录该用户授权背景；同次核验 `sudo -n true` 成功，未打印任何凭据值，也未利用该权限修改系统。
+- 处理方法：由产品/运维明确选择并记录真实权限模型：若不需要全 root，应在备份后删除第 5 行，仅保留固定绝对路径发布命令，并用 `visudo -cf`、`sudo -n -l` 和发布器正向回归验证；若确需保留用户授权的全 root，则必须同步修正发布器注释、AGENTS/交接文档和安全边界说明，并把该能力作为主机级高风险控制单独审计，不能继续称为“受限 sudo”。
+- 状态与验证：**待治理，未验证**。本轮只读取 sudoers 并确认授权范围，没有修改规则；FL-D084 的授权事实为已知历史事项，本条新增的是实际规则与“受限发布”安全声明不一致的治理风险。
+- 下一步：由授权人确认最小权限目标；无论选择收紧还是保留，都要完成语法检查、授权枚举、发布器验证和凭据/对象/服务访问边界复核。
+- 变更记录：2026-10-26 新增；与 FL-D084 合并关联，不把用户已授权的全 root 规则重复登记为未经授权漏洞。
+
+## FL-D284 生产 API、Recall Worker 和 Compare Worker 缺少 systemd 沙箱限制（2026-10-26）
+
+- 发现日期：2026-10-26。
+- 问题与影响：生产三个服务均以 `fundlex` 用户运行，但没有测试服务已有的 `NoNewPrivileges`、`PrivateTmp`、`ProtectHome`、`ProtectSystem`、`ReadWritePaths`、`RestrictAddressFamilies` 和严格 `UMask` 等约束。若 API、Worker、依赖库或处理 DOCX 的路径出现代码执行、路径写入或第三方组件缺陷，进程对主机文件系统、临时目录、用户 home、网络地址族和新权限获取的可达范围更大；生产服务之间也缺少明确的最小写入边界。严重级别：**高（High）**。
+- 证据：生产单元 [`fundlex-recall-api.service`](/etc/systemd/system/fundlex-recall-api.service:6)、[`fundlex-recall-worker.service`](/etc/systemd/system/fundlex-recall-worker.service:6) 及 `/etc/systemd/system/fundlex-compare-worker.service:6` 仅配置 `User`、`Group`、`WorkingDirectory`、`EnvironmentFile`、`ExecStart` 和重启策略；`systemctl show` 显示 `NoNewPrivileges=no`、`PrivateTmp=no`、`ProtectHome=no`、`ProtectSystem=no`、`UMask=0022`。`systemd-analyze security` 对三个生产单元均给出 `9.1 UNSAFE`。测试单元 `/etc/systemd/system/fundlex-test-*.service:14-20` 已有相应限制，说明当前差异是生产配置缺口而非平台不支持。
+- 处理方法：按服务实际需求迁移测试单元的基础沙箱设置，生产 API/Recall Worker/Compare Worker 至少加入 `NoNewPrivileges=true`、`PrivateTmp=true`、`ProtectHome=true`、`ProtectSystem=full`、明确的 `ReadWritePaths`、`RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6` 和 `UMask=0077`；再根据对象目录、MySQL、模型 endpoint 和 DOCX 工具链逐项验证写入与网络需求，必要时补充 capability、namespace 和 system call 限制。
+- 状态与验证：**待修复，未验证**。本轮只读比较了实际生产与测试单元并运行 `systemd-analyze security`，未修改或重启服务；不能把测试单元的安全属性当作生产已具备。
+- 下一步：为三个生产服务建立最小写入目录清单，先在隔离测试环境执行 `systemd-analyze verify`、健康检查、真实 Worker/Compare 处理和对象下载，再受控发布并复核生产服务状态与日志。
+- 变更记录：2026-10-26 新增；与 FL-D243 的端口/环境隔离记录关联，但本条专门记录生产服务沙箱缺失。
+
+## FL-D285 测试与生产复用相同 LLM API 密钥，削弱环境隔离（2026-10-26）
+
+- 发现日期：2026-10-26。
+- 问题与影响：生产和测试虽然使用不同数据目录、认证数据库和服务端口，但 `/etc/fundlex-recall.env` 与 `/etc/fundlex-test.env` 中的 `LLM_API_KEY` 配置值相同，`LLM_MODEL` 也相同。测试环境中的代码、日志、调试路径或第三方依赖一旦被利用，可能直接消耗生产同一模型凭据的额度、触发生产供应商配额/审计关联，轮换或吊销凭据时也无法独立切断测试环境。严重级别：**高（High）**。
+- 证据：生产服务使用 `/etc/systemd/system/fundlex-recall-api.service:10`、`fundlex-recall-worker.service:10` 和 Compare Worker 的 `EnvironmentFile=/etc/fundlex-recall.env`；测试服务使用 `/etc/systemd/system/fundlex-test-*.service:10` 的 `/etc/fundlex-test.env`。本轮仅比较变量行的脱敏 SHA-256，不读取或输出值：两文件 `LLM_API_KEY` 行哈希前缀均为 `7143fe7ed206`，`LLM_MODEL` 行哈希前缀均为 `1e089e630fd6`，并确认配置文件权限分别为 `root:root 640` 与 `root:fundlex 640`。密钥值未写入本记录。
+- 处理方法：为测试环境配置独立、低权限、可单独限额和轮换的模型凭据；若供应商支持，进一步使用独立项目/组织、IP 或模型配额及审计标签。生产密钥只允许生产服务读取，测试发布和验收脚本不得从生产 env 文件继承。
+- 状态与验证：**待修复，未验证**。本轮仅完成脱敏比较，没有轮换、吊销或真实供应商隔离验证；当前数据目录隔离不能抵消凭据级复用。
+- 下一步：登记并创建测试专用密钥，验证测试模型调用、预算账本和 Langfuse/供应商审计均落入测试范围，再吊销旧的复用密钥并核对生产服务仍能调用。
+- 变更记录：2026-10-26 新增；与 FL-D041 的额度/凭据可用性记录和 FL-D264 的测试发布隔离记录关联，但本条是实际密钥复用的新发现。
+
+## FL-D286 Database repr 和数据库异常可能泄露连接凭据或内部信息（2026-10-26）
+
+- 发现日期：2026-10-26。
+- 问题与影响：`Database.__repr__()` 原样插入 `self.target`，MySQL URL 通常包含用户名和密码；数据库连接错误也把底层异常正文包装进 `DatabaseError`。一旦对象进入调试日志、异常链、诊断输出或未预期的 repr 展示，连接密码可能被写入日志。另有多条 API 路径把 `str(exc)` 直接作为 HTTP 错误正文，数据库、文件系统、DOCX 和底层冲突信息可能暴露内部路径、表名、约束或实现细节。严重级别：**高（High，凭据泄露）；中（Medium，错误信息泄露）**。
+- 证据：[`fundlex/db.py`](/home/opencode/fundlex/fundlex/db.py:247) 将解析出的 password 用于连接，`:253-263` 将驱动异常正文放入 `DatabaseError`，`:294-295` 的 `__repr__` 返回 `Database(..., self.target)`；本轮用脱敏测试 URL 验证 repr 会呈现 `mysql://user:password@...` 形式，未使用生产凭据。错误响应证据包括 [`fundlex/api.py`](/home/opencode/fundlex/fundlex/api.py:461-467、1015-1020、1090-1102) 和 [`fundlex/compare/api.py`](/home/opencode/fundlex/fundlex/compare/api.py:64-72、158-162)，其中多处 `HTTPException(..., str(exc))` 未统一过滤。
+- 处理方法：`Database.__repr__()` 只显示 dialect、脱敏 host/database 或固定 `<redacted>`，永不显示 user/password/query；底层异常保留在受控服务端日志中时也应做凭据和路径脱敏。API 对外只返回稳定业务错误码/通用文案，使用异常类型到状态码的白名单映射；保留内部 correlation ID 供日志关联，禁止把 SQL、绝对路径、连接 URL 和驱动正文直接回传。
+- 状态与验证：**待修复，未验证**。已完成脱敏 URL 的本地行为验证和源码审查，未修改代码，也未对生产日志进行凭据内容扫描；现有认证和 owner 隔离不能消除该输出渠道风险。
+- 下一步：补充 repr/错误响应回归，覆盖 MySQL 认证失败、约束冲突、DOCX 解析失败、文件缺失和 Compare 结果损坏；对历史日志按变量名、URL 形态和密码模式做脱敏扫描，扫描结果不得记录秘密值。
+- 变更记录：2026-10-26 新增；与 FL-D160 中“Compare API 不写异常正文”的既有处理结论关联，但本条扩展到通用数据库 repr 和多处 API 映射。
+
+## FL-D287 标准发布器未重启 Compare Worker，可能造成 API/Worker 版本不一致（2026-10-26）
+
+- 发现日期：2026-10-26。
+- 问题与影响：标准发布器同步 `fundlex/`、前端和工具后只重启 `fundlex-recall-api.service` 与 `fundlex-recall-worker.service`，没有重启独立的 `fundlex-compare-worker.service`。Compare 代码、解析器、结果契约或数据库迁移发生变化时，API 与 Compare Worker 可能运行不同版本，导致任务排队、结果解析、覆盖门禁或下载契约不一致；当前 Compare Worker 正常 active 不能证明后续发布会更新它。严重级别：**中高（High）**。
+- 证据：[`tools/deploy/publish_workspace.sh`](/home/opencode/fundlex/tools/deploy/publish_workspace.sh:4-8) 只调用 root 发布器；[`/usr/local/sbin/fundlex-publish`](/usr/local/sbin/fundlex-publish:49-65) 的重启和健康检查集合只有 API/Recall Worker。生产实际存在并 active 的 `fundlex-compare-worker.service`，其单元使用相同部署目录和 env；该边界与 FL-D168 的 Compare Worker 生命周期问题、FL-D262 的测试发布边界相关。
+- 处理方法：将 Compare Worker 纳入标准发布的同步、重启、active 检查和健康验收；发布前固定 API/Recall/Compare 三个服务应运行的 build/hash，发布后逐项核对。若采用独立 Compare 发布节奏，应把版本兼容契约、迁移顺序和明确的停止/排空策略写入发布流程。
+- 状态与验证：**待修复，未验证**。本轮只读检查了脚本和服务状态，没有调用发布器，也没有重启服务；因此未声称当前生产版本已不一致，只确认发布流程存在覆盖缺口。
+- 下一步：在隔离测试环境先做 Compare API→上传→seal→Worker→结果→报告下载回归，再更新 root 发布器及健康检查并执行一次受控发布；保留发布前备份和三服务 hash/状态证据。
+- 变更记录：2026-10-26 新增；不覆盖 FL-D168 已解决的“Worker 是否安装/运行”历史结论，记录的是当前发布器未纳入该服务。
+
+## FL-D288 multipart 上传在应用读取前缺少独立请求级资源门禁（2026-10-26）
+
+- 发现日期：2026-10-26。
+- 问题与影响：应用层已对单 DOCX 25 MiB、批次 50 MiB/20 文件、ZIP 单 part/解压总量/压缩比做限制，Nginx 也设置了 60 MiB 的请求体上限；但 FastAPI 路由接收 `list[UploadFile]` 后，应用才逐个 `read(MAX_UPLOAD_BYTES + 1)`，并将已读取的文件数据暂存在列表中。未见独立的请求并发、速率、超时、Content-Length 预检或 multipart 字段/part 总数门禁。攻击者可通过并发接近上限的 multipart 请求消耗代理缓冲、临时文件、Python 内存和 DOCX 解析 CPU；这是资源可用性风险，当前证据不足以断言已被远程利用。严重级别：**中（Medium，DoS/资源耗尽风险）**。
+- 证据：[`/www/server/panel/vhost/nginx/fundlex.conf`](/www/server/panel/vhost/nginx/fundlex.conf:28) 设置 `client_max_body_size 60m`；[`fundlex/upload_validation.py`](/home/opencode/fundlex/fundlex/upload_validation.py:9-14、25-47) 的应用限制；普通上传 [`fundlex/api.py`](/home/opencode/fundlex/fundlex/api.py:911-941) 和 Compare 上传 [`fundlex/compare/api.py`](/home/opencode/fundlex/fundlex/compare/api.py:97-134) 在路由中读取并累计数据。已有大小和压缩限制是有效正向控制，不能替代请求级资源控制。
+- 处理方法：在 Nginx/ASGI 层增加与应用预算一致的请求体和 multipart 限制，优先拒绝超出 `Content-Length` 的请求；为上传路由设置并发、读取速率、请求超时和每 IP/账号限流，限制 multipart part/header 数量，并让应用在累计预算超限后尽早停止且清理临时对象。继续保留 DOCX ZIP 安全验证，不以关闭压缩检查替代资源控制。
+- 状态与验证：**待分析，未验证**。本轮完成源码与实际 Nginx 配置审查，未进行压力测试、并发实验或生产流量修改；现有 25/50 MiB 和 ZIP 限制应继续视为已实施控制。
+- 下一步：在隔离测试环境以认证用户执行受控并发/慢上传/畸形 multipart 评测，记录内存、临时目录、CPU、响应时间和拒绝行为，基于结果确定 Nginx/ASGI/应用的最小门禁参数。
+- 变更记录：2026-10-26 新增；区别于已有上传大小、DOCX 压缩炸弹和测试发布问题，本条只记录请求进入应用前及并发层面的剩余资源风险。
+
+## FL-D289 普通文档 Worker 的完成/重试写入缺少最终 fencing 条件（2026-10-26）
+
+- 发现日期：2026-10-26，多 agent 后端/API/Worker 只读审查。
+- 问题与影响：`RunStore.finish()` 和 `RunStore.retry()` 先读取并检查 `fencing_token`、状态和租约，但最终状态更新仅使用 `WHERE id=?`。在旧 Worker 读取租约后暂停、租约过期、新 Worker 取得新 token 并完成、旧 Worker 恢复提交的交错中，旧 Worker 可能覆盖新 Worker 的状态、报告或产物指针。`claim()` 对达到最大尝试次数的过期清理也按文档 ID 更新，未绑定读取时的 token、状态、租约和 attempt，可能把新 Worker 的终态覆盖为失败。严重级别：**高（High）**。
+- 证据：`fundlex/store.py:612-624` 的过期清理，`:697-722` 的 `finish()` 读取与最终更新，`:730-747` 的 `retry()` 读取与最终更新；`fundlex/db.py:287-290` 将 MySQL 的 `BEGIN IMMEDIATE` 转为普通事务。现有 `tests/test_api_store.py:98`、`tests/test_db_mysql.py:129,152` 只覆盖顺序旧 token 拒绝或双 Worker claim，不覆盖“旧 Worker 已读取后新 Worker 完成、旧 Worker 再提交”。
+- 处理方法：MySQL 读取时使用锁读，或将 `fencing_token`、状态、未过期租约及必要的 attempt 纳入最终条件更新；过期清理绑定原 token、`status IN ('leased','running')`、`lease_until<=now` 和 attempt；所有关键更新检查 `rowcount == 1`，失败转为 stale lease。增加 SQLite 确定性交错测试和配置 MySQL 8 的并发回归。
+- 状态与验证：**已确认代码时序风险，待修复、未实际并发复现**。本轮未运行真实 MySQL 并发测试，不能据此宣称已发生生产覆盖。
+- 下一步：先补确定性交错测试，再在隔离 MySQL 8 上验证旧 Worker 的 finish/retry/过期清理均不能覆盖新 token；验证通过后再评估迁移和部署影响。
+- 变更记录：2026-10-26 新增；与 FL-D160 的 Compare 过期清理问题同属 fencing 边界，但本条专门记录普通 `RunStore`。
+
+## FL-D290 指引解析 Worker 缺少 fencing token，旧解析结果可覆盖新尝试（2026-10-26）
+
+- 发现日期：2026-10-26，多 agent 后端/API/Worker/持久化只读审查。
+- 问题与影响：`guide_jobs` 只有 attempts、lease_until 和状态，没有独立 fencing token。旧解析 Worker 的 `release_guide_job()` 或 `finish_guide_job()` 只按 job id 写入：租约过期后新 Worker 已重新领取时，旧 Worker 仍可能将新任务改回 queued/uploaded，或把旧 rules JSON、hash、解析状态写入当前版本。结果可能造成页面状态与规则内容不一致，并使绑定该指引的任务出现 `GUIDE_RULESET_HASH_MISMATCH`。严重级别：**高（High）**。
+- 证据：`fundlex/guide_store.py:49-53` 的表结构，`:347-365` 的 claim，`:368-388` 的 release，`:391-431` 的 finish；`fundlex/jobs.py:303-309` 的 Worker 调用不携带租约校验。现有 `tests/test_guide_store.py:106` 覆盖顺序 claim/release/再次 claim/finish，未覆盖旧 Worker 与新 Worker 交错。
+- 处理方法：为 `guide_jobs` 增加独立 fencing token，并由 release/finish 带 token 更新；或至少把读取到的 attempts、lease_until 和 leased 状态作为条件，同时检查 `rowcount`，失败时明确返回 stale lease。补旧解析 Worker 晚到 release、成功、失败三类交错测试。
+- 状态与验证：**已确认代码时序风险，待修复、未实际并发复现**。本轮未运行真实模型或 MySQL 并发链路。
+- 下一步：设计迁移兼容方案，先用 SQLite 交错夹具固定租约语义，再用 MySQL 8 验证行锁、重试和版本发布的一致性。
+- 变更记录：2026-10-26 新增；不把普通文档 Worker 的 token 设计或顺序测试当作指引解析 job 已具备 fencing 的证明。
+
+## FL-D291 并发提交修订选择可能发布不成对的 selected 产物（2026-10-26）
+
+- 发现日期：2026-10-26，多 agent 后端/API/产物链只读审查。
+- 问题与影响：`_apply_selection()` 先保存 `selected_final`，再按选择保存或删除 `selected_redline`；数据库按 `(document_id, kind)` 分别替换指针，没有 selection epoch、决策摘要或源 redline hash。两个不同选择并发提交时，最终可能出现 `selected_final-B` 与 `selected_redline-A` 的混合，下载者无法证明两份文件属于同一次选择。重复提交还可能留下已失去数据库指针的旧对象文件。严重级别：**高（High）**。
+- 证据：`fundlex/api.py:496-524` 的分步发布逻辑；`fundlex/store.py:468-501` 的独立对象复制和 `INSERT OR REPLACE`；`:523-550` 的 selected 源完整性检查只验证源 redline 存在及自身完整性，不验证 final/redline 的选择版本一致。已有 `tests/test_selective.py:221`、`tests/test_revision_api.py:89` 覆盖顺序幂等和内容，不覆盖并发不同选择。
+- 处理方法：引入 selection epoch 或决策 hash，把 final/redline 放入同一选择版本记录并原子切换；旧请求提交时若 epoch 已变更则返回冲突并清理临时对象；为替换后的旧对象建立清理策略。下载和报告同时返回并校验选择版本。
+- 状态与验证：**已确认代码级并发风险，待修复、未实际并发复现**。本轮未修改业务代码，未启动真实任务。
+- 下一步：增加两个并发请求的确定性测试，覆盖默认接受、部分拒绝、selected_redline 删除和失败回滚，再验证对象回收与下载配对。
+- 变更记录：2026-10-26 新增；与 FL-D103 的选择产物交付设计关联，但 FL-D103 已有的顺序语义不能覆盖本条并发发布边界。
+
+## FL-D292 损坏的 report_json 可使报告和任务列表接口返回 500（2026-10-26）
+
+- 发现日期：2026-10-26，多 agent 后端/API/数据完整性只读审查。
+- 问题与影响：部分指标路径会容忍损坏 JSON，但核心报告路径直接 `json.loads()`。一条损坏的 `report_json` 可能让单文档报告接口、任务文档列表的 reason 提取或任务报告流程抛出未处理异常，用户无法查看其余合同。严重级别：**中（Medium）**。
+- 证据：`fundlex/store.py:460-466` 的 `get_report()` 直接解析，`fundlex/tasks.py:142-158` 的 `_reasons()` 直接解析；`fundlex/api.py:1073-1076` 的报告路由只捕获 `NotFound`。`tasks.py:161-166` 的 `_report_phase()` 已有局部容错，说明项目内处理口径不一致。
+- 处理方法：统一把损坏报告转换为稳定错误码和 409/422 响应，保留文档状态和原始报告 artifact 供诊断；任务列表对单条坏记录返回受控 reason，不阻断其余合同；补充损坏 JSON 的 API 回归。
+- 状态与验证：**已确认代码路径风险，待修复、未注入损坏数据验证**。本轮没有修改数据库或生产数据。
+- 下一步：用 SQLite 夹具分别覆盖报告、任务详情、任务列表和下载路径，确认错误响应不泄露底层 JSON/路径，且其他文档仍可访问。
+- 变更记录：2026-10-26 新增；与 FL-D286 的通用错误正文泄露问题相邻，但本条专门记录损坏报告导致的可用性和错误处理缺口。
+
+## FL-D293 Compare 上传完成后使用旧闭包 refetch，可能把成功封存误报为中断（2026-10-26）
+
+- 发现日期：2026-10-26，多 agent 前端只读审查。
+- 问题与影响：`continueUpload()` 在 `setSelectedTaskId(draft.task.id)` 后调用闭包中的 `task.refetch()`。该闭包可能仍对应上传前的旧 `selectedTaskId`（包括 `undefined`），因此在任务已成功封存后仍可能请求旧任务或 `/api/compare/tasks/undefined`，并进入 catch 把成功提交显示成“上传中断”。已完成上传虽然保留，但用户可能误以为需要继续上传或重复操作。严重级别：**中（Medium）**。
+- 证据：`frontend/src/pages/Compare/ComparePage.tsx:310-324`；`setSelectedTaskId` 是异步状态更新，随后立即使用的 `task` 来自旧 render。现有前端静态检查和壳层浏览器测试未覆盖首次创建后闭包更新与 refetch 错误路径。
+- 处理方法：使用 `draft.task.id` 对应的显式查询 refetch/invalidate，或在状态更新后由 effect 按当前 id 触发查询；不要让旧闭包的 refetch 决定成功提交结果。补首次创建、全部上传、seal 成功以及旧查询失败的浏览器回归。
+- 状态与验证：**已确认源码级竞态风险，待修复、未实际浏览器复现**。本轮未修改前端代码。
+- 下一步：先检查 `useCompareTask`/query key 的 enabled 语义，再用隔离测试服务复现首次 Compare 创建和封存流程。
+- 变更记录：2026-10-26 新增；与 FL-D153 的批量文件状态竞态、FL-D250 的 Compare 真实交付证据关联，但本条专门记录上传成功后的旧闭包查询。
+
+## FL-D299 V2 任务失败筛选与后端 completed 状态口径不一致（2026-10-26）
+
+- 发现日期：2026-10-26，多 agent 前后端交叉审查。
+- 问题与影响：React V2 任务页提供 `failed` 状态筛选，但后端 `TasksService._summary()` 将文档 `succeeded` 和 `failed` 都计入 completed，并在全部终态时返回任务状态 `completed`。含失败合同的任务通常因此不会出现在 `failed` 筛选中，用户只能从异常计数或详情页发现失败。严重级别：**中（Medium）**。
+- 证据：`frontend/src/pages/Tasks/index.tsx:49-52` 的 failed option；`fundlex/tasks.py:186-203` 的聚合状态；`fundlex/tasks.py` 同时单独返回 `exceptions`，说明失败事实存在但未映射到任务级筛选状态。后端审查确认这延续 FL-D123 的状态口径遗留，但前端 V2 的可见筛选使缺口重新暴露。
+- 处理方法：明确任务级 failed 语义并统一 API、统计、筛选和状态徽章：若任一合同失败则任务状态为 failed，或改为明确的 completed-with-exceptions 状态并同步筛选项、文案和排序。补成功/失败混合、全失败和重试后的 API 与浏览器回归。
+- 状态与验证：**已实施并完成本轮局部验证；项目级真实交付仍未闭合**。后端统一为全成功 `completed`、混合失败/异常 `completed_with_exceptions`、全失败 `failed`，并同步 API 筛选、统计 `failed_contracts`、V1/V2 状态徽章/通知/暂停按钮和 Feishu 状态卡片。定向后端回归包含任务状态、报告边界、Review、Feishu/OAuth 和 API 安全共 **59 passed / 1 warning**；浏览器 V1/V2 **40 passed**；尚未完成真实 MySQL 并发和完整用户交付验证。
+- 下一步：在真实 MySQL 8 并发条件下验证任务状态聚合、筛选和 Feishu outbox 的一致性；继续用真实合同核对混合/全失败任务的结果页、报告和授权下载。项目级固定评测、Compare、OAuth 真实扫码回调和 D01–D20 gate 仍按既有记录阻断。
+- 变更记录：2026-10-26 新增时误用已占用 FL-D294；本轮保留 FL-D294 的 Feishu 详情深链条目，将任务状态条目更正为 FL-D299。代码提交为 `59e9cf2`（后端契约）和 `cdf0699`（V1/V2/Feishu UI）；局部验证不代表项目 GO。
+
+## FL-D295 React V2 根路径资源和 API 构造未覆盖 URL 前缀部署（2026-10-26）
+
+- 发现日期：2026-10-26，多 agent 前端/部署交叉审查。
+- 问题与影响：React V2 的 API client、登录页 logo 和 AppShell logo 使用根路径 `/api`、`/static`。若 V2 部署在 `/test/` 或其他 URL 前缀下，页面可能请求生产根 API 或返回静态资源 404，造成登录、能力探测和页面资源失败。当前 `/test/` 公网验收只覆盖 V1，不能证明 V2 前缀部署可用。严重级别：**中（Medium）**。
+- 证据：`frontend/src/api/client.ts:45-70` 的 `assertApiPath()` 与 fetch，`frontend/src/pages/Auth/index.tsx:9` 和 `frontend/src/components/layout/AppShell.tsx:103-105` 的根路径静态资源；FL-D264 只验证了测试前缀下 V1 的 `/test/api` 和 `/test/static` 路径。
+- 处理方法：统一从运行时注入的 frontend base path 构造 API、静态资源和下载地址，或让 Vite `base` 与服务端前缀契约一致；补 V2 在 `/test/` 下的登录、路由、资源和 API 404 浏览器验收。
+- 状态与验证：**已确认源码级部署风险，待修复、未验证**。生产根路径 V2 的静态检查通过，不能外推到前缀部署。
+- 下一步：先明确 V2 的正式部署前缀契约，再在隔离测试入口发布候选构建并完成真实登录 smoke；不以当前 V1 前缀证据代替 V2。
+- 变更记录：2026-10-26 新增；与 FL-D264 的 V1 前缀资源修复关联，但本条保留 V2 独立路径构造问题。
+
+## FL-D296 部署 smoke 未完成真实合同交付验收（2026-10-26）
+
+- 发现日期：2026-10-26，多 agent 测试与交付证据只读审查。
+- 问题与影响：`tools/deploy/cloud_verify.py` 创建临时账号、生成测试 DOCX、上传并封存后读取任务和文档快照，但不等待 Worker 最终成功，不下载或校验 final/redline/report，不核对修订内容、Claim Replay、产物哈希、Review selected artifact 或授权下载边界。若把该脚本作为发布后的合同验收，可能把 API/认证/上传基本可用误报为真实合同交付完成。严重级别：**高（High）**。
+- 证据：`tools/deploy/cloud_verify.py:7-10` 的检查范围；完整生产 V1 交付所需的 Worker/model/DOCX、Review、selected artifact、下载和哈希证据已在 FL-D276 的 `/tmp/opencode/fundlex-production-v1-e2e-20261026/e2e-v1-o9rfdisxoj2o/` 中单独核对。两者证据层级不同，smoke 不能替代正式 E2E。
+- 处理方法：将部署验证拆为基础 smoke 和正式合同 E2E 两层；发布门禁使用默认工作台入口提交真实合同，等待实际 Worker/model 处理，核对 report、Claim Replay、final/redline、DOCX 内容与哈希，执行 Review accept/reject、selected artifact 和授权下载检查，并清理临时身份和对象。脚本输出应明确标记 smoke 或 delivery-e2e，不共享“成功”状态。
+- 状态与验证：**已确认验收范围不足，待补齐**。现有一份生产 V1 普通合同真实交付已经通过，但不代表 `cloud_verify.py` 本身具备完整交付能力；本轮没有运行新的模型任务或修改脚本。
+- 下一步：为正式发布建立可审计的 delivery E2E 命令和证据目录，保留 smoke 的快速健康检查用途；在预算、测试合同和清理策略明确后执行隔离环境及生产受控复验。
+- 变更记录：2026-10-26 新增；与 FL-D024/FL-D025 的真实交付边界和 FL-D276 的单份生产 V1 证据关联，不把已有真实成功证据倒推为 smoke 脚本已覆盖。
+
+## FL-D297 规则包发布状态与 README 自动写入描述直接冲突（2026-10-26）
+
+- 发现日期：2026-10-26，多 agent 测试与交付证据只读审查。
+- 问题与影响：当前 `rules/rules_v2.json` 明确为 `status: "unreleased"`、`auto_write_enabled: false`，而 `README.md:9-11` 仍保留“全部 22 个 action 已发布、正式交付自动写入可用”的历史描述。接续者或发布人员可能据 README 启用错误入口、误把未发布规则包当成正式能力，或把历史 v2 证据误用为当前 release gate。严重级别：**高（High）**。
+- 证据：`rules/rules_v2.json:10-13`、`README.md:9-11`、`rules/release_v2.py:67-109`；发布脚本要求证据与当前引擎、规则、模型传输和 prompt context 完全匹配，并满足唯一文档数及实际修改门槛。FL-D278 已记录总体文档时态漂移，本条专门记录规则状态与正式写入描述的直接矛盾。
+- 处理方法：建立唯一当前状态索引，明确当前源码、生产 recall-first 路径、未发布评测规则包、部署候选和历史 v2 证据；修正 README 的当前描述或将历史段落显式标日期与“已废止/不作为当前发布依据”标记。发布器、能力接口和文档应共享同一发布状态来源。
+- 状态与验证：**已确认、待收敛**。本轮只读核对规则、README 和发布脚本，未修改规则包或文档，也未启用自动写入。
+- 下一步：先确定当前正式产品入口和规则发布决策，再同步 README、实施计划、能力说明和发布证据；以当前候选重新运行 release gate，禁止用历史 v2 证据代替。
+- 变更记录：2026-10-26 新增；与 FL-D278 合并关联但不覆盖其具体规则状态冲突。
+
+## FL-D298 修订选择接口静默接受无效 ID，响应可能与实际 DOCX 不一致（2026-10-26）
+
+- 发现日期：2026-10-26，多 agent 修订引擎/DOCX 只读审查。
+- 问题与影响：选择接口将客户端决策直接交给生成器，没有根据当前 redline manifest 验证公开的修订 ID。未知 `del_id` 可能被静默忽略并返回 HTTP 200，用户提交的拒绝意图因此没有进入 `selected_final`；偶数 `ins_id` 也可能被接受，但响应的 `accepted`/`rejected` 按原始 verdict 计算，而实际文件按 `_explicit_verdicts()` 展开同一对 `del/ins`，导致 API 响应与下载 DOCX 的实际修改不一致。需要已认证用户提交无效或过期 ID，当前未发现越权影响。严重级别：**中（Medium）**。
+- 证据：`fundlex/api.py:496-531` 的 `_apply_selection()` 直接传入决策并返回结果；`fundlex/selective.py:111` 的 `_normalise_decisions()` 保留未知输入之外的空映射，`:163` 的 `_explicit_verdicts()` 展开配对决策，`:197` 的 `apply_decisions()` 只处理 manifest 中已知修订，`:288-293` 的结果计算未把无效 ID 或实际展开 verdict 反映给 API。离线使用仓库历史 `working_redline` 夹具复现：提交不存在的 `del_id=9999` 返回 200、没有 rejected/absent，生成文件与全量接受版本相同；提交偶数 `ins_id=2` 返回 accepted/rejected 与实际 selected DOCX 文本不一致。现有 `tests/test_selective.py:299-307` 将未知 ID 返回空 absent 固定为预期，未覆盖 API 输入契约。
+- 处理方法：API 层只接受当前 manifest 公开的有效 `del_id`，拒绝未知 ID、偶数 `ins_id`、重复或冲突决策及过期决策，返回稳定的 `REVISION_DECISION_ID_INVALID` 类 409/422 错误；选择生成器统一生成每个 revision pair 的最终 verdict，实际文件、accepted、rejected 和报告均使用同一结果。增加未知 ID、偶数 ID、混合有效/无效 ID、冲突提交和响应与 DOCX 文本一致性回归。
+- 状态与验证：**已确认代码级输入校验与响应一致性缺陷，待修复、未在真实用户任务中复现**。定向选择/Review/DOCX 回归为 29 passed、1 个既有 Starlette/httpx warning；DOCX 结构、Claim Replay、交付门禁和 recall 集成定向回归为 131 passed、2 warnings。本轮未修改源码、未运行真实模型或部署。
+- 下一步：先冻结有效 `del/ins` 公开 ID 和过期选择的 API 契约，再补输入拒绝及产物响应一致性测试；修复后核对 selected_final 下载内容、哈希和 Review 页面展示。该问题与 FL-D103 的有效配对语义、FL-D291 的并发产物混配风险相关，但分别属于输入校验/响应一致性和并发发布问题。
+- 变更记录：2026-10-26 新增；原拟用 FL-D296，但该编号已用于部署 smoke 验收范围不足，按集中记录编号规则改用 FL-D298。
