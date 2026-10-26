@@ -11,6 +11,16 @@
 - 条目字段：发现日期、问题与影响、证据、处理方法、状态与验证、下一步、变更记录。
 - 同一问题更新原条目；重大结论变化注明日期和原因，不覆盖历史。
 
+## FL-D280 外部任务深链指向其他账号导致反复 404，前端未清除坏参数（2026-10-26）
+
+- 发现日期：2026-10-26，V1 Compare selection 生产发布后用户反馈“点什么都显示该任务或结果不存在，或当前身份无权访问”。
+- 问题与影响：浏览器地址为 `/?task=8da0ef68f2c8465986917a66e7835bf0`，该任务属于另一个飞书测试账号（`feishu-e2e-…`），当前登录账号无权访问，`GET /api/tasks/8da0…` 返回 404 是正确隔离。但 `frontend/app.js` 的 `openDeepLinkedTask()` 只调用 `selectTask(id)`，失败后既不清理 `?task=`，也不回到任务总览；刷新、重新登录或再次打开链接会继续自动打开坏任务，使页面看起来所有入口都失败。该问题与本次 Compare selection 文件部署无关，发布前已存在的生产 `app.js` 即为此逻辑。
+- 证据：发布后生产日志显示当前账号任务 `8294f938fd0e410ba9dec0b6f81eb398` 的列表、详情和文档接口均为 200；同一时段 `GET /api/tasks/8da0ef68f2c8465986917a66e7835bf0` 多次 404。数据库只读核对确认 `8da0…` 属于 `feishu-e2e-5a6ecc9d`，`8294…` 属于当前账号；不是会话或任务数据丢失。
+- 处理方法：新增独立修复分支 `codex/fix-task-deeplink`，提交 `25f150c`。`openDeepLinkedTask()` 改为先做任务预检：404/403 时清除 `task` 查询参数、返回 `#overview`，并提示“链接中的任务不存在，或不属于当前登录账号”；成功打开任务后也清除 `task` 参数，避免刷新重复打开；401 保留参数等待重新登录，网络错误保留参数供重试。只替换生产 `frontend/app.js`，未重启服务。
+- 状态与验证：**已解决（生产浏览器已验证）**。生产 `app.js` SHA-256 为 `5bc4393014debddffb3856901ba5bd50c0bcfdb439ef1ae9ba1aff8479b943e1`，首页资源版本从 `app.js?v=27dcd02b293de0a8` 变为 `app.js?v=7d627846a6e8df04`。临时账号 Playwright 验证：坏深链最终 URL `https://fundlex.club/#overview`、查询参数清除、总览可见、提示文本可见、仅 1 次预期 404；正常任务深链最终 URL `https://fundlex.club/#task`、任务标题正确、查询参数清除、页面错误 0。临时账号 1 task/2 sessions 已清理，二次查询无残留。错误证据 `/tmp/opencode/fundlex-task-deeplink/verification/result.json`，发布前备份 `/tmp/opencode/fundlex-task-deeplink-backup-20261026-201736/app.js`。
+- 下一步：排查飞书任务卡片为何向无权限账号发送/展示了属于 `feishu-e2e-…` 的任务链接；卡片应只链接收件人可访问的任务，或在打开前做账号/任务绑定校验。前端修复只保证坏链接不再“粘住”页面。
+- 变更记录：2026-10-26 新增；本条不改变 Compare selection 的发布结论。
+
 ## FL-D277 V1 Compare selection 受控发布无法整树复制且标准发布器会带入无关改动（2026-10-26）
 
 - 发现日期：2026-10-26，V1 Compare selection 生产受控发布。

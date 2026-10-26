@@ -1,5 +1,13 @@
 # FundLex 当前断点（ACTIVE_HANDOFF）
 
+## 外部任务深链 404 故障修复（2026-10-26）
+
+- 用户反馈：Compare selection 发布后“点什么都显示该任务或结果不存在，或当前身份无权访问”。定位为浏览器 `/?task=8da0ef68f2c8465986917a66e7835bf0` 指向另一个飞书测试账号的任务，当前账号访问 404 是权限隔离正常结果；但旧 `app.js` 失败后保留 `?task=`，刷新/重新登录会反复自动打开坏任务。当前账号自己的任务 `8294f938fd0e410ba9dec0b6f81eb398` 同时列表/详情均 200，确认不是会话或数据丢失，也与本次 Compare selection 文件部署无关。
+- 修复分支：`codex/fix-task-deeplink`，提交 `25f150c`，已推送。`openDeepLinkedTask()` 先预检任务：404/403 清除 `task` 参数、回到 `#overview` 并提示；成功打开后也清除参数；401 保留参数等待登录；网络错误保留参数供重试。修复只替换生产 `frontend/app.js`，未重启服务。
+- 生产证据：`app.js` SHA-256 `5bc4393014debddffb3856901ba5bd50c0bcfdb439ef1ae9ba1aff8479b943e1`，首页资源版本从 `27dcd02b293de0a8` 变为 `7d627846a6e8df04`。发布前备份 `/tmp/opencode/fundlex-task-deeplink-backup-20261026-201736/app.js`。
+- 浏览器验证：临时账号坏深链最终为 `https://fundlex.club/#overview`，查询清除、总览可见、提示可见，仅 1 次预期 404；正常任务深链最终为 `https://fundlex.club/#task`，标题正确、查询清除、页面错误 0。证据 `/tmp/opencode/fundlex-task-deeplink/verification/result.json`。临时账号 1 task/2 sessions 已清理，二次查询无残留。
+- 集中记录：FL-D280。下一步排查飞书任务卡片为何向无权限账号发送/展示他人任务链接；前端修复只保证坏链接不再粘住页面。
+
 ## V1 Compare selection 生产受控发布与真实验收（2026-10-26）
 
 - 发布分支：`codex/v1-compare-selection-release`，已推送 `origin`。Compare selection 代码提交止于 `8b3c387`，之后仅有发布断点和集中问题文档提交；远端最新 HEAD 以 `git rev-parse origin/codex/v1-compare-selection-release` 为准。该分支相对 `origin/refactor/backend-engine-finalization` 的 `c46d6e8` 只增加 Compare selection 相关 16 个文件（14 个实现/测试/专题文档，另 2 个为本发布断点和集中问题记录）；未推送原开发分支的其他提交。
