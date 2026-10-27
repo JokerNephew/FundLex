@@ -534,6 +534,21 @@ def create_app(data_dir: str | Path | None = None, *, auth_db=None) -> FastAPI:
     application.state.integrations = integrations
     compare_store = CompareStore(store)
     application.state.compare_store = compare_store
+    # Generation is an independent optional business module. Missing packages
+    # must not prevent existing revision/compare deployments from starting;
+    # broken imports *inside* an installed package still fail visibly.
+    generation_store = None
+    try:
+        from .guide_generation.store import GuideGenerationStore
+        from .guide_generation.api import register_guide_generation_routes
+    except ModuleNotFoundError as exc:
+        if exc.name not in {"fundlex.guide_generation", "fundlex.guide_generation.store",
+                            "fundlex.guide_generation.api"}:
+            raise
+    else:
+        generation_store = GuideGenerationStore(store)
+        generation_store.ensure_schema()
+    application.state.guide_generation = generation_store
 
     # Accounts and sessions share the fundlex.db adapter. Initialization fails
     # closed: password mode refuses to start when the store is unavailable, and
@@ -1370,6 +1385,11 @@ def create_app(data_dir: str | Path | None = None, *, auth_db=None) -> FastAPI:
                             max_batch_bytes=MAX_BATCH_BYTES,
                             max_request_files=MAX_BATCH_DOCUMENTS,
                             max_pairs=1000)
+    if generation_store is not None:
+        register_guide_generation_routes(application, store, generation_store, _user)
+    from .workspace import register_workspace_routes
+    register_workspace_routes(application, store, _user,
+                              generation_available=generation_store is not None)
 
     frontend = Path(__file__).resolve().parent.parent / "frontend"
     dist = frontend / "dist"
@@ -1405,8 +1425,10 @@ def create_app(data_dir: str | Path | None = None, *, auth_db=None) -> FastAPI:
             entry = ((dist / "index.html" if (dist / "index.html").is_file() else frontend / "index.html")
                      if frontend_v2 else frontend / "compare.html")
             html = entry.read_text(encoding="utf-8")
-            version = _asset_version("dist/index.html", "app.css", "app.js", "compare.css", "compare.js")
-            for name in ("app.css", "app.js", "compare.css", "compare.js"):
+            v1_assets = ("app.css", "app.js", "compare.css", "compare.js",
+                         "workspace.js", "guide_generation.js", "guide_generation.css")
+            version = _asset_version("dist/index.html", "compare.html", *v1_assets)
+            for name in v1_assets:
                 html = html.replace(f'/static/{name}"', f'/static/{name}?v={version}"')
             if frontend_base:
                 html = html.replace('="/static/', f'="{frontend_base}/static/')
@@ -1444,6 +1466,10 @@ def create_app(data_dir: str | Path | None = None, *, auth_db=None) -> FastAPI:
             if not frontend_v2:
                 return RedirectResponse(f"{frontend_base}/#compare", status_code=307)
             return home()
+
+        @application.get("/guide-generation", include_in_schema=False)
+        def guide_generation_home():
+            return RedirectResponse(f"{frontend_base}/#generation", status_code=307)
 
         @application.get("/{full_path:path}", include_in_schema=False)
         def frontend_fallback(full_path: str):

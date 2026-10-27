@@ -1,0 +1,33 @@
+[Unit]
+Description=FundLex candidate guide generation worker (single instance)
+After=network.target mysqld.service
+Wants=mysqld.service
+
+[Service]
+Type=simple
+User=fundlex
+Group=fundlex
+WorkingDirectory=/opt/fundlex-recall-first
+EnvironmentFile=/etc/fundlex-recall.env
+# Public corpus remains outside release directories; do not copy 514 contracts.
+Environment=FUNDLEX_GUIDE_CORPUS_DIR=/home/opencode/data/funds_word
+# Also configure CORPUS_DIR in the API's common environment: uploads bind the
+# trusted server corpus path into run config. Default scope is one contract;
+# wider scope is an explicit corpus_limit and remains subject to worker caps.
+Environment=FUNDLEX_GUIDE_DEFAULT_CORPUS_LIMIT=1
+Environment=FUNDLEX_GUIDE_MAX_ATTEMPTS=3
+# Shares FUNDLEX_MODEL_LEDGER and its hard global budget with revision workers.
+# These are additional per-attempt soft caps, not new spending authorization.
+Environment=FUNDLEX_GUIDE_RUN_MAX_CALLS=400
+Environment=FUNDLEX_GUIDE_RUN_MAX_COST_USD=3
+ExecStart=/opt/fundlex-recall-first/.venv/bin/python -X utf8 -m fundlex.guide_generation.worker
+Restart=on-failure
+RestartSec=5
+KillMode=control-group
+TimeoutStopSec=30
+# Install ONE non-template service only; intermediate stage/object writes do
+# not yet provide multi-worker fencing. Candidate publish never activates the
+# runtime revision guide. Install/enable only after separately approved E2E.
+
+[Install]
+WantedBy=multi-user.target

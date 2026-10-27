@@ -262,7 +262,10 @@ def test_old_review_failure_cannot_overwrite_new_report(ui):
     pending = []
     context.route("**/api/ui-fixture/revisions/*", lambda route: pending.append(route))
     page.locator('[data-action="open-review"]').click()
-    page.wait_for_timeout(100)
+    for _ in range(100):
+        if pending:
+            break
+        page.wait_for_timeout(50)
     assert pending
     page.locator("#close-detail").click()
     page.locator("#doc-rows [data-detail]").nth(1).click()
