@@ -1,12 +1,18 @@
 # FundLex 当前断点（ACTIVE_HANDOFF）
 
-## 2026-10-27 合同结果/轮询闪烁/比对阅读与中性命名/指引哈希（本地完成，待发布）
+## 2026-10-27 合同结果/轮询闪烁/比对阅读与中性命名/指引哈希（已发布并完成线上 V1 验收）
 
 - 用户要求修复5项：结果页紧凑业务结论与精简小字；修改列表/执行中任务详情不闪白；比对正文稍小字号/窄边距/窄差异栏；输入仅合同A/B不称原版/修订版；修改指引不显示哈希。
-- 分支 `codex/v1-results-refresh-compare`，起点6b61424；V1-only，不改引擎/模型配置。集中问题FL-D356–359已登记；代码与本地回归完成，尚未发布。保持此前顶栏面包屑与所有实际交付门禁。
+- 分支 `codex/v1-results-refresh-compare`，提交 `94f1a21`；V1-only，不改引擎/模型配置。集中问题FL-D356–360已更新；保持此前顶栏面包屑与所有实际交付门禁。
 - 已完成：结果页四尺寸横向摘要、折叠详细证据和前置结果操作；修改列表/任务详情后台刷新不发白并保留焦点/旧结果；比对页面合同A/B中性命名、正文阅读区扩大、差异栏缩窄；修改指引及指引生成导出页不展示哈希。
-- 本地验证：`tests/browser/test_workbench.py` 48 passed；`tests/browser/test_compare_selection_v1.py` 13 passed；`tests/browser/test_v1_generation_workspace.py` 27 passed；Node 三文件语法检查和`git diff --check`通过。证据截图目录 `/tmp/opencode/v1-results-refresh-compare-20261027/local`（如存在）。未发起真实模型调用。
-- 下一步：提交并按V1白名单发布前端文件，核对公网静态资源SHA和四服务状态，执行线上四尺寸页面smoke及确定性比对回归；不重复真实模型修改/指引生成任务。线上发布后更新FL-D356–359状态和本段证据。
+- 本地验证：`tests/browser/test_workbench.py` 48 passed；`tests/browser/test_compare_selection_v1.py` 13 passed；`tests/browser/test_v1_generation_workspace.py` 27 passed；Node 三文件语法检查和`git diff --check`通过。未发起真实模型调用。
+- 发布尝试：提交 `94f1a21` 后执行 `bash tools/deploy/publish_workspace.sh`，入口固定读取 `/home/opencode/fundlex`，与本隔离工作树不同，事务 `/opt/.fundlex-publish-nQ9UPC` 候选未包含本轮文件；发布因 `fundlex-recall-worker.service` 启动重启计数失败，恢复阶段因发布前 inactive 的 compare/feishu 服务未恢复而标记 `recovery-failed`。API/修改Worker随后 active，compare/feishu 已手动恢复 active；四项当前均 active、NRestarts=0，API capabilities 200。日志保留 `guide_generation.store.ensure_schema` 的 `DATABASE_OPERATION_FAILED`，不能视为发布通过。
+- 发布：第一次事务因发布器读取错误工作树、后续事务因恢复服务状态、磁盘空间、日志时间格式和临时源权限等问题失败；均保留事务证据并更新 FL-D360。最终以生产部署树硬链接基线仅覆盖六个 V1 文件发布成功，事务 `/opt/.fundlex-publish-sWF9b2` 为 `committed`，构建指纹 `32f24e778c2883180b7d1878c9096c3a4af4e65f225bcb531a3ac895d357d683`。root 发布器时间修复已备份至 `/usr/local/sbin/fundlex-publish.bak-20261027`，原 `/home/opencode/fundlex` 已恢复。
+- 生产核对：`/opt/fundlex-recall-first` 六个文件 SHA 与 `94f1a21` 一致；公网首页 HTTP 200，版本 `a519295763d8f355`，六个本轮静态资源 HTTP 200 且 SHA 一致。发布完成核对时 API、修改 Worker、Compare Worker、飞书服务均 active/running，工作目录均为 `/opt/fundlex-recall-first`，当时 `NRestarts=0`；收尾复核时修改 Worker 因低磁盘及 `RunStore.claim` 的 `DATABASE_OPERATION_FAILED` 累计 `NRestarts=2`，当前仍 active，FL-D354 已更新，不能将其称为稳定或并发回归通过。
+- 线上 smoke：`/tmp/opencode/fundlex-v1-final-smoke-20261027/e2e-v1ws-40f2d5ecb55c64b6/result.json`，真实登录/重新登录后覆盖工作台、概览、导入、Compare 列表/新建、指引列表/新建、当前指引和设置四尺寸，`passed=true`、`page_error_count=0`、无横向溢出。
+- 线上 Compare：`/tmp/opencode/fundlex-v1-final-compare-20261027/e2e-v1ws-27d2a2e094a27b57/result.json`，公开 `left.docx/right.docx` 真实上传并由生产 Compare Worker 处理，任务 `b7aa4f59e3374a0a9497038f329a9867` 为 `completed`；四尺寸无溢出，桌面差异栏在右侧、手机端在正文前；实际 DOCX `actual_text_changed=true`、插入1/删除1，接受修订版与最终版一致、拒绝修订版与源文件一致，报告哈希一致，未登录下载 HTTP 401。
+- 清理：smoke 账号 `e2e-v1ws-40f2d5ecb55c64b6` 与 Compare 账号 `e2e-v1ws-27d2a2e094a27b57` 均由精确清理脚本执行并二次核验无残留；Compare 删除1 task、1 pair、7对象文件及选择产物，两个清理均 `protected_tables_modified=0`。证据和失败事务目录按审计要求保留。
+- 当前后续：非空修改指引生成和正式合同修改仍需模型预算重新登记后，沿正式工作台独立复验；历史 HTTP 402 失败记录保留。FL-D354 的 MySQL 并发根因仍未完成带载/并发回归，不能把本轮 V1 UI 发布验收写成完整项目交付。
 
 ## 2026-10-27 顶栏面包屑与页面标题精简已发布（最新最终状态）
 
