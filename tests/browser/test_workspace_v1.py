@@ -55,7 +55,7 @@ def test_sibling_business_navigation_dashboard_and_separate_create_pages(browser
     try:
         page.goto(live, wait_until='networkidle')
         expect(page.locator('#view-workspace')).to_be_visible()
-        expect(page.locator('#workspace-state')).to_contain_text('共 0 个匹配任务')
+        expect(page.locator('#workspace-state')).to_contain_text('已更新任务列表')
         assert page.locator('.sidebar [data-nav="import"]').count() == 0
         assert page.locator('.sidebar [data-nav="task"]').count() == 0
         assert [n.inner_text() for n in page.locator('.sidebar .nav-btn').all()][:4] == ['工作台', '合同修改', '合同比对', '指引生成']

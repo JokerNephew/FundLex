@@ -22,20 +22,20 @@
       if(current!==token||epoch!==api.epoch()||api.view()!=='workspace')return;
       const stats=data.stats||{};
       $('workspace-active').textContent=stats.active??'—';$('workspace-attention').textContent=stats.attention??'—';$('workspace-completed').textContent=stats.recent_completed??'—';
-      $('workspace-state').textContent=`共 ${data.total} 个匹配任务 · 统计卡片按本账号全部业务计算，数量之间可重叠`;
+      $('workspace-state').textContent='已更新任务列表 · 统计卡片按本账号全部业务计算，数量之间可重叠';
       $('workspace-task-rows').innerHTML=(data.items||[]).map(item=>{
         const notes=Array.isArray(item.attention)?item.attention:[];
         const attention=notes.map(n=>typeof n==='string'?n:n.label||n.code).filter(Boolean).join('；');
         const status=item.status_label||phases[item.status]||'查看任务状态';
         const phase=item.phase_label||phases[item.phase]||status;
         return `<tr><td><strong class="workspace-task-name">${esc(item.name)}</strong><small class="row-sub">创建于 ${esc(time(item.created_at))}</small></td><td><span class="business-type is-${esc(item.kind)}">${esc(kinds[item.kind]||item.kind)}</span></td><td>${esc(item.scale?.value??'—')} ${esc(item.scale?.unit||'')}</td><td><span>${esc(status)}</span>${phase!==status?`<small class="row-sub">${esc(phase)}</small>`:''}</td><td class="workspace-attention-cell">${attention?`<span class="workspace-attention-text">${esc(attention)}</span>`:'<span class="subnote">暂无额外待办，交付情况请查看详情</span>'}</td><td class="workspace-time">${esc(time(item.updated_at))}</td><td><button type="button" class="btn-link" data-workspace-open="${esc(item.kind)}" data-id="${esc(item.id)}">进入任务</button></td></tr>`;
-      }).join('')||'<tr><td colspan="7"><div class="empty"><strong>当前条件下没有任务</strong><p>选择上方业务入口开始，或调整搜索和筛选条件。</p></div></td></tr>';
+      }).join('')||`<tr><td colspan="7"><div class="empty"><strong>当前条件下没有任务</strong><p>${route.q||route.kind||route.status?'请清除筛选或换一个关键词。':'选择合同修改、合同比对或指引生成开始。'}</p></div></td></tr>`;
       const page=Number(data.page)||1,max=Math.max(1,Math.ceil(data.total/(data.page_size||20)));
       $('workspace-pagination').innerHTML=`<span>第 ${page} / ${max} 页 · ${data.total} 个任务</span><button type="button" class="btn btn-sm" data-workspace-page="${page-1}" ${page<=1?'disabled':''}>上一页</button><button type="button" class="btn btn-sm" data-workspace-page="${page+1}" ${page>=max?'disabled':''}>下一页</button>`;
     }catch(error){
       if(current!==token||epoch!==api.epoch()||error.name==='AbortError')return;
       $('workspace-state').textContent='任务暂时无法读取，请点击刷新重试。';
-      $('workspace-task-rows').innerHTML='<tr><td colspan="7"><div class="empty">无法读取任务；未将错误结果当作空任务。</div></td></tr>';
+      $('workspace-task-rows').innerHTML='<tr><td colspan="7"><div class="empty">请点击刷新重试。</div></td></tr>';
       $('workspace-pagination').replaceChildren();for(const id of ['active','attention','completed'])$(`workspace-${id}`).textContent='—';
     }finally{if(current===token){busy=false;$('workspace-task-rows').removeAttribute('aria-busy');}}
   }

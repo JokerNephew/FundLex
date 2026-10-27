@@ -142,7 +142,7 @@
     <button type="button" class="card workspace-metric" data-workspace-status="completed"><span>近期完成的任务</span><strong id="workspace-completed">—</strong><small>最近 7 天 · 不代表均已正式交付</small></button>
   </div>
   <div class="card card-pad workspace-task-card"><div class="section-title"><h2>我的任务</h2><button class="btn btn-sm" id="workspace-refresh" type="button">刷新</button></div>
-    <div class="business-tabs" role="group" aria-label="任务类型"><button type="button" class="is-active" data-workspace-kind="">全部</button><button type="button" data-workspace-kind="revision">合同修改</button><button type="button" data-workspace-kind="compare">合同比对</button><button type="button" data-workspace-kind="generation">指引生成</button></div>
+    <div class="business-tabs" role="group" aria-label="任务类型"><button type="button" class="is-active" data-workspace-kind="">全部</button><button type="button" data-workspace-kind="revision">修改</button><button type="button" data-workspace-kind="compare">比对</button><button type="button" data-workspace-kind="generation">生成</button></div>
     <div class="toolbar workspace-toolbar"><div class="searchbox"><input id="workspace-search" type="search" placeholder="搜索任务名称" aria-label="搜索全部业务任务"></div><select class="control-select" id="workspace-status" aria-label="任务情况"><option value="">全部任务</option><option value="active">进行中</option><option value="attention">需要处理</option><option value="completed">近期完成</option></select><label class="workspace-date">创建日期<input type="date" id="workspace-date-from" aria-label="创建起始日期"></label><label class="workspace-date">至<input type="date" id="workspace-date-to" aria-label="创建结束日期"></label><select class="control-select" id="workspace-sort" aria-label="任务排序"><option value="updated_desc">最近更新</option><option value="created_desc">最近创建</option><option value="name">任务名称</option></select></div>
     <div id="workspace-state" class="subnote" role="status" aria-live="polite"></div><div class="table-wrap"><table class="table workspace-table"><thead><tr><th>任务名称</th><th>业务</th><th>规模</th><th>当前进展</th><th>待办与结果提示</th><th>更新时间</th><th></th></tr></thead><tbody id="workspace-task-rows"></tbody></table></div><div class="pagination" id="workspace-pagination"></div>
   </div>
@@ -529,7 +529,7 @@
 </section>
     <section class="section" id="view-compare" aria-label="合同比对" data-mode="list">
       <div class="card card-pad compare-task-card">
-<div class="toolbar"><div class="searchbox"><input id="compare-search" type="search" placeholder="搜索比对任务" aria-label="搜索比对任务"></div><select id="compare-list-filter" class="control-select" aria-label="比对任务状态"><option value="">全部状态</option><option value="uploading">上传中</option><option value="queued">排队中</option><option value="running">处理中</option><option value="completed">处理结束</option></select><button class="btn" id="compare-refresh">刷新</button><button class="btn btn-primary page-primary" id="compare-new">＋ 新建比对任务</button></div>
+<div class="toolbar"><div class="searchbox"><input id="compare-search" type="search" placeholder="搜索比对任务" aria-label="搜索比对任务"></div><select id="compare-list-filter" class="control-select" aria-label="比对任务状态"><option value="">全部状态</option><option value="uploading">上传中</option><option value="queued">排队中</option><option value="running">处理中</option><option value="completed">已处理</option></select><button class="btn" id="compare-refresh">刷新</button><button class="btn btn-primary page-primary" id="compare-new">＋ 新建比对任务</button></div>
 <div id="compare-task-list" aria-live="polite">
 </div>
 <div class="pagination" id="compare-list-pagination"></div>
@@ -537,14 +537,12 @@
       <div class="card card-pad compare-create" id="compare-create" hidden>
 <div class="compare-create-intro">
 <div>
-<p class="subnote">选择合同A与合同B进行平等比较；“新增 / 删除”按合同A → 合同B的方向统计。</p>
+<p class="subnote">“新增 / 删除”按合同A → 合同B的方向统计。</p>
 </div>
-<span class="compare-step">1 / 2 · 准备文件</span>
 </div>
 <div class="compare-name-field">
 <label for="compare-name">任务名称 <small>选填</small></label>
-<input id="compare-name" maxlength="200" placeholder="例如：法务与产品部合同差异" aria-describedby="compare-name-hint">
-<small id="compare-name-hint">为本次对比起个名字，方便之后查找。</small>
+<input id="compare-name" maxlength="200" placeholder="例如：法务与产品部合同差异">
 </div>
 <div class="compare-folder-actions">
 <button class="btn btn-sm" type="button" data-compare-folder="left">选择合同A文件夹</button>
@@ -606,8 +604,8 @@
 <div class="compare-sync-note">
 <span class="compare-sync-dot" aria-hidden="true">
 </span>
-<span>双栏联动阅读</span>
-<small>滚动任一侧，另一侧按阅读进度同步</small>
+<span class="compare-sync-desktop">滚动任一侧同步阅读，点击差异可定位。</span>
+<span class="compare-sync-mobile">切换合同A/B，点击差异定位。</span>
 </div>
 </div>
 <p id="compare-coverage" role="status" hidden>
@@ -617,7 +615,7 @@
 <div class="compare-document-area">
 <div class="compare-reader-label">
 <span>合同正文</span>
-<small>差异连线仅展示当前可见区域</small>
+<small class="compare-lines-note">连线仅展示当前可见区域</small>
 </div>
 <div class="compare-columns-head">
 <span>
@@ -651,7 +649,7 @@
 </div>
 </div>
 <aside class="compare-diff-rail" aria-labelledby="compare-rail-title">
-<div class="compare-rail-heading"><div><h3 id="compare-rail-title">差异列表</h3></div><small>选择合同A或合同B</small></div>
+<div class="compare-rail-heading"><div><h3 id="compare-rail-title">差异列表</h3></div></div>
 <div class="compare-diff-toolbar">
 <div class="compare-diff-nav">
 <button class="btn btn-sm" id="compare-prev-diff">上一处</button>

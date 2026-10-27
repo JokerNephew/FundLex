@@ -289,13 +289,20 @@ def test_separate_list_new_detail_and_refresh(browser, width):
         page.locator("#gg-file").set_input_files({"name": "新监管规定.pdf", "mimeType": "application/pdf", "buffer": b"text-pdf-fixture"})
         expect(page.locator("#gg-task-name")).to_have_value("新监管规定")
         expect(page.locator("#gg-file-label")).to_contain_text("新监管规定.pdf")
-        expect(page.locator("#gg-corpus")).to_contain_text("snapshot-1")
+        expect(page.locator("#gg-corpus")).to_contain_text("本次任务实际使用范围和快照以任务详情为准")
+        assert "snapshot-1" not in page.locator("#gg-corpus").inner_text()
+        assert page.locator("#gg-list-results").count() == 0
         page.locator("#gg-cost-ack").check()
         expect(page.locator("#gg-submit")).to_be_enabled()
         page.locator("#gg-submit").click()
         expect(page).to_have_url(__import__("re").compile(r"id=new-run"))
         expect(page.locator(".gg-tab")).to_have_text(["总览", "候选指引", "法规依据", "待处理问题", "版本与导出"])
         expect(page.locator("#gg-panel")).to_contain_text("不估算完成百分比")
+        expect(page.locator("#gg-panel")).to_contain_text("生成结束后仍需完成候选核验")
+        expect(page.locator("#gg-detail-head")).to_contain_text("候选门禁")
+        expect(page.locator("#gg-detail-head")).to_contain_text("阶段")
+        assert "候选资格" not in page.locator("#gg-detail-head").inner_text()
+        assert "runtime_guide_import=not_requested" not in page.locator("#gg-panel").inner_text()
         assert len(mock.uploads) == 1
         assert '"path_b_latest_only":true' in mock.uploads[0]
         assert "run_engine_compatibility" not in mock.uploads[0]

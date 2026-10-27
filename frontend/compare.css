@@ -39,6 +39,10 @@
 @media(max-width:760px){.compare-selection-panel{display:block;padding:12px 15px}.compare-selection-summary{min-width:0;margin-bottom:9px}.compare-selection-actions{margin-left:0}.compare-selection-actions .btn{flex:1}.compare-selection-downloads{margin-top:10px}.compare-choice{padding-left:47px;flex-wrap:wrap}}
 .compare-selection-issues{display:block;width:100%;color:#a33324;line-height:1.5}.compare-artifact{display:flex;align-items:center;gap:6px;flex-wrap:wrap}.compare-artifact small{color:var(--muted);font-size:10px;word-break:break-all}
 
+/* Mobile uses a single document pane, so describe the controls users can see. */
+.compare-sync-mobile{display:none}
+@media(max-width:760px){.compare-sync-desktop,.compare-lines-note{display:none}.compare-sync-mobile{display:inline}}
+
 /* V1: documents and the independently scrollable review rail. */
 .compare-reader-layout{display:grid;grid-template-columns:minmax(0,1fr) clamp(240px,20vw,280px);gap:12px;padding:14px;align-items:stretch}
 .compare-document-area{min-width:0;display:flex;flex-direction:column;height:min(76vh,850px);min-height:540px}
@@ -83,7 +87,7 @@
 .compare-file-card{min-width:0;padding:18px;border:1px dashed #cbd2da;border-radius:8px;background:#fff;transition:border-color .15s}
 .compare-file-card:focus-within,.compare-file-card:hover{border-color:var(--accent)}
 .compare-file-card.has-file{border-style:solid;border-color:#c7d7cc;background:#fcfefd}
-.compare-file-card-title{display:flex;align-items:center;gap:8px;font-size:13px}.compare-file-card-title>small{margin-left:auto;color:#8b949e;font-size:10px;letter-spacing:.04em}
+.compare-file-card-title{display:flex;align-items:center;gap:8px;font-size:13px}
 .compare-file-name{margin:17px 0;min-height:38px;color:var(--muted);font-size:13px;line-height:1.5;overflow-wrap:anywhere}
 .has-file .compare-file-name{color:var(--ink)}
 .compare-file-card-action{display:flex;align-items:center;gap:12px}.compare-file-card-action>span{color:var(--muted);font-size:11px}

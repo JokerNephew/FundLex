@@ -46,7 +46,7 @@
 .gg-upload span{overflow-wrap:anywhere;min-width:0;flex:1 1 150px}
 .gg-advanced{border-top:1px solid var(--line-soft);margin-top:20px;padding-top:14px}
 .gg-advanced summary,.gg-requirement summary{cursor:pointer;font-size:13px}
-.gg-task-status{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:18px;font-size:12px}
+.gg-task-status{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:18px;font-size:12px}.gg-status-field{display:inline-flex;align-items:center;gap:5px}.gg-status-field>strong{color:var(--muted);font-size:11px;font-weight:600}
 .gg-retry{display:flex;align-items:center;flex-wrap:wrap;gap:8px 12px;border:1px solid var(--line);background:var(--paper);border-radius:7px;padding:12px;margin-bottom:16px;font-size:12px}
 .gg-retry p,.gg-retry #gg-resume-status{flex-basis:100%;margin:0;overflow-wrap:anywhere}
 .gg-tabs{display:flex;flex-wrap:wrap;gap:4px;border-bottom:1px solid var(--line);margin:0 0 18px}
