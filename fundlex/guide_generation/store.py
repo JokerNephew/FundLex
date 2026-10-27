@@ -206,7 +206,7 @@ CREATE TABLE IF NOT EXISTS gg_artifacts (
     size INTEGER NOT NULL, created_at REAL NOT NULL, PRIMARY KEY(run_id, kind)
 );
 CREATE TABLE IF NOT EXISTS gg_corpus_state (
-    key TEXT PRIMARY KEY, value MEDIUMTEXT NOT NULL DEFAULT '', updated_at REAL NOT NULL
+    `key` VARCHAR(255) PRIMARY KEY, value MEDIUMTEXT NOT NULL DEFAULT '', updated_at REAL NOT NULL
 );
 """
 
