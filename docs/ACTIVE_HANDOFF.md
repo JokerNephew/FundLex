@@ -3,7 +3,7 @@
 ## 2026-10-27 三业务V1已部署；完整真实交付因模型HTTP402阻塞（最终断点）
 
 - 用户授权：自主阶段开发/测试/版本控制/部署/E2E，可多agent；只用V1。三业务平级，修改为核心。UI/API开发和白名单部署已完成，**不能称全部真实交付通过**。
-- 分支 `codex/v1-three-business-workspace`。主要提交09228b6/82d7817/1b525b8/189e460/13fb31d，最新文档/清理工具提交以git HEAD为准。所有工作在当前worktree，未覆盖/home/opencode/fundlex的dirty内容，未改V2；源码推送在最终收尾核对。
+- 分支 `codex/v1-three-business-workspace` 已推送origin；收尾提交8778656已通过ls-remote核对，最终文档提交以git HEAD为准。主要源码提交09228b6/82d7817/1b525b8/189e460/13fb31d。所有工作在当前worktree，未覆盖/home/opencode/fundlex的dirty内容，未改V2。
 - 已上线：工作台聚合三业务（全量owner统计/搜索/分页）、侧栏重组、业务独立列表/创建/详情、单合同独立结果和审阅深链、右侧差异比对、生成5标签/候选版本/审批发布/显式重试、修改指引/飞书绑定支持页。候选发布绝不自动启用修改指引。
 - 回归：最终组合373passed/30skip/1deselected(V2)/1warning，236.71s；清理安全新增4passed。完整清单/命令见进度文档和shell记录。静态7资源HTTP200且SHA与当前工作树一致，公网资源版本3a279b194c8ef97d，四尺寸无横向溢出/页面错误。
 - 实际部署39文件白名单，预先用fundlex服务身份与生产MySQL初始化/schema验证。备份 `/tmp/opencode/v1-three-business-release-20261027-mysqlfix`（含root0600原env、文件SHA、包清单、最小ACL备份、后续补丁备份）。生产venv补PyMuPDF1.28.2；公开corpus514最小ACL可读；新单实例 `fundlex-guide-generation-worker` 已启用。
@@ -14,7 +14,7 @@
 - 服务注意：原修改Worker在集成期claim数据库错误自动重启3次，根因未确认；确认全库无有效revision lease后设置服务override `FUNDLEX_WORKFLOW_CONCURRENCY=1`，未改引擎代码。历史重启证据保留，不能以新NRestarts=0掩盖历史。其余API/Compare/新生成Worker正常。后续需并发专项复核（FL-D354）。
 - 10:14 CST最终复核：39个发布文件与13fb31d逐字节一致，清单 `...-mysqlfix/final-manifest.json` 记录基线/初始发布/最终SHA及补丁来源。公网7资源再次一致。四服务active/running；单consumer后约6分钟空闲观察无新增数据库错误，非带载验证。收尾定向7passed，无新增模型请求（仍30270）。
 - 集中问题 FL-D349–354；进度 `V1_THREE_BUSINESS_IMPLEMENTATION_PROGRESS_20261027.md`；预算 `V1_THREE_BUSINESS_E2E_BUDGET_20261027.md`。证据根 `/tmp/opencode/v1-three-business-20261027`。暂无运行中agent或付费进程；QA工具agent额度耗尽后由主agent接手，现各阶段runner均已结束。
-- 下一条动作：核对最终git/远端和生产SHA、服务稳定状态；向用户如实交代UI部署完成但模型修改/非空候选交付未完成。恢复现有模型服务额度/权限后再沿正式工作台补齐两条真实交付，不重复已经通过的模型任务、不修改gold或gate。FL-D279普通合同覆盖限制也未解决，整体仍NO-GO。
+- 当前收尾：分支已推送，39生产文件及7公网资源已核对；四服务运行，P7完成，P6仍部分阻塞。下一步须先恢复现有模型服务额度/权限，再沿正式工作台补齐合同实际修改和非空候选生成/报告/授权下载；不重复已通过任务，不修改gold或gate。FL-D279普通合同覆盖限制及FL-D354带载/并发根因也未解决，整体仍NO-GO。
 
 ## 2026-10-27 三业务工作台实施中（最新授权与断点）
 
