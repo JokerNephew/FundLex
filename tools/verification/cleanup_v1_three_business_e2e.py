@@ -41,6 +41,9 @@ def read_env(path: Path) -> dict[str, str]:
             continue
         key, value = line.split("=", 1)
         # Parse quoting without shell evaluation or environment expansion.
+        if value.lstrip().startswith(('{', '[')):
+            result[key.strip()] = value.strip()
+            continue
         parts = shlex.split(value, comments=True)
         if len(parts) > 1:
             raise UnsafeCleanup("ENV_VALUE_INVALID")

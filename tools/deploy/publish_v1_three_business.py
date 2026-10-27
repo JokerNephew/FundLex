@@ -30,8 +30,13 @@ def env_file():
         line = line.strip()
         if line and not line.startswith('#') and '=' in line:
             key, value = line.split('=', 1)
-            parsed = shlex.split(value, comments=True)
-            values[key] = parsed[0] if parsed else ''
+            # Unquoted JSON is a valid systemd EnvironmentFile value. Do not
+            # strip its inner quotation marks with shell tokenization.
+            if value.lstrip().startswith(('{', '[')):
+                values[key] = value.strip()
+            else:
+                parsed = shlex.split(value, comments=True)
+                values[key] = parsed[0] if parsed else ''
     values.update(FUNDLEX_GUIDE_CORPUS_DIR='/home/opencode/data/funds_word',
                   FUNDLEX_GUIDE_DEFAULT_CORPUS_LIMIT='1', FUNDLEX_FRONTEND_VERSION='v1')
     return {**os.environ, **values}

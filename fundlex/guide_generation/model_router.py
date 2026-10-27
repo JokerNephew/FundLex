@@ -185,6 +185,7 @@ class GuideModelRouter:
         self.records: list[ModelCallRecord] = []
         self._record_lock = threading.Lock()
         self._on_call = None
+        self._blocking_error: ModelError | None = None
         # Soft per-run cap on top of the shared ledger.  The shared ledger
         # remains the hard cost boundary; this prevents one low-frequency guide
         # run from consuming the whole remaining project budget silently.
@@ -295,15 +296,34 @@ class GuideModelRouter:
             if self._on_call:
                 self._on_call(record)
 
+    def raise_if_blocked(self) -> None:
+        """Infrastructure failure is a paused run, never an empty candidate."""
+        if self._blocking_error is not None:
+            raise self._blocking_error
+
+    def _block(self, error: ModelError) -> None:
+        code = error.code
+        if code in {
+            'MODEL_HTTP_ERROR', 'MODEL_NETWORK_ERROR', 'MODEL_RETRY_EXHAUSTED',
+            'MODEL_CIRCUIT_OPEN', 'MODEL_CONFIG_MISSING', 'MODEL_NOT_CONFIGURED',
+            'MODEL_CONCURRENCY_LIMIT', 'MODEL_LEDGER_UNAVAILABLE',
+        } or 'BUDGET_EXCEEDED' in code:
+            self._blocking_error = error
+
     def call(self, *, task_type: str, bounded_context: str, response_schema: dict,
-             instruction: str, prompt_version: str = "v1", role: str | None = None) -> ModelResult:
+              instruction: str, prompt_version: str = "v1", role: str | None = None) -> ModelResult:
+        self.raise_if_blocked()
         with self._record_lock:
             call_count = len(self.records)
             current_cost = sum(record.estimated_cost_usd or 0 for record in self.records)
         if call_count >= self.run_max_calls:
-            raise ModelError("GUIDE_RUN_CALL_BUDGET_EXCEEDED", self.metrics())
+            error = ModelError("GUIDE_RUN_CALL_BUDGET_EXCEEDED", self.metrics())
+            self._block(error)
+            raise error
         if current_cost >= self.run_max_cost:
-            raise ModelError("GUIDE_RUN_COST_BUDGET_EXCEEDED", self.metrics())
+            error = ModelError("GUIDE_RUN_COST_BUDGET_EXCEEDED", self.metrics())
+            self._block(error)
+            raise error
         selected, gateway = self._gateway_for(task_type, role)
         context_sha = hashlib.sha256(bounded_context.encode("utf-8")).hexdigest()
         instruction_sha = hashlib.sha256(instruction.encode("utf-8")).hexdigest()
@@ -331,6 +351,7 @@ class GuideModelRouter:
                 attempts=result.attempts, reused_checkpoint=reused,
             )
         except ModelError as exc:
+            self._block(exc)
             record = ModelCallRecord(
                 role=selected, task_type=task_type, prompt_version=prompt_version,
                 model=getattr(gateway, "model", ""), provider=getattr(gateway, "provider", "") or "",

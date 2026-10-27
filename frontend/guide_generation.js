@@ -67,6 +67,13 @@
   const runPath = (suffix = "") => `${API}/runs/${encodeURIComponent(state.route.id)}${suffix}`;
   const stage = (value) => STAGES[value] || ({ queued: "等待处理", QUEUED: "等待处理", failed: "处理失败", FAILED: "处理失败", PAUSED: "已暂停" }[value]) || "等待阶段更新";
   const date = (value) => value ? new Date(typeof value === "number" ? value * 1000 : value).toLocaleString("zh-CN") : "—";
+  const runProblem = (code) => {
+    if (!code) return "";
+    const message = code.includes("BUDGET") ? "本次调用或费用已达到上限，任务未完成。请核对预算后再继续，不要重复创建任务。"
+      : code.startsWith("MODEL_") ? "模型服务暂时无法完成请求，任务未完成。请核对服务可用性、权限或额度后再继续，已完成阶段会保留。"
+      : "任务未能完成。请保留任务编号并查看原因，不要把当前文件当作已核验指引。";
+    return note(message, "error") + `<details class="gg-technical"><summary>查看技术原因</summary><code>${esc(code)}</code></details>`;
+  };
   const button = (action, title, extra = "") => `<button type="button" class="btn ${extra}" data-gg-action="${action}">${title}</button>`;
   const badge = (value) => {
     const tone = ["failed", "error", "fail", "critical", "gap", "unresolved"].includes(value) ? "error"
@@ -256,7 +263,7 @@
     const run = state.detail;
     if (!$("gg-detail-head")) return;
     $("gg-detail-head").innerHTML = heading(run.title || run.filename || "生成任务", `${run.filename || ""} · 更新 ${date(run.updated_at || run.created_at)}`, button("list", "返回任务列表") + button("refresh", "刷新")) +
-      `<div class="gg-task-status">${badge(run.status)}${badge(run.qualification_status || "draft")}${run.candidate && run.candidate.status !== run.qualification_status ? badge(run.candidate.status) : ""}<span>当前阶段：${esc(stage(run.stage))}</span></div>${Number.isInteger(run.config?.corpus_limit) ? `<div id="gg-run-scope">${note(`本任务参考合同样本上限：${run.config.corpus_limit} 份。输出仅是所选样本范围下的候选指引，不代表全库覆盖；实际使用范围以任务快照为准。`, "warning")}</div>` : ""}${run.error_code ? note(`处理异常：${run.error_code}。请保留任务编号，不要重复创建同一任务。`, "error") : ""}${run.retry ? `<div class="gg-retry"><span>处理尝试 ${esc(run.retry.attempts ?? "—")} / ${esc(run.retry.max_attempts ?? "—")} 次</span>${run.retry.can_resume === true && ["failed", "paused"].includes(run.status) ? `${button("resume", "继续处理/重试")}<p class="gg-muted">继续处理将再次调用模型、消耗预算并可能产生费用；仍受服务端预算及尝试次数上限约束。不会自动执行付费重试。</p>` : ""}<span id="gg-resume-status" role="status" aria-live="polite"></span></div>` : ""}`;
+      `<div class="gg-task-status">${badge(run.status)}${badge(run.qualification_status || "draft")}${run.candidate && run.candidate.status !== run.qualification_status ? badge(run.candidate.status) : ""}<span>当前阶段：${esc(stage(run.stage))}</span></div>${Number.isInteger(run.config?.corpus_limit) ? `<div id="gg-run-scope">${note(`本任务参考合同样本上限：${run.config.corpus_limit} 份。输出仅是所选样本范围下的候选指引，不代表全库覆盖；实际使用范围以任务快照为准。`, "warning")}</div>` : ""}${runProblem(run.error_code)}${run.retry ? `<div class="gg-retry"><span>处理尝试 ${esc(run.retry.attempts ?? "—")} / ${esc(run.retry.max_attempts ?? "—")} 次</span>${run.retry.can_resume === true && ["failed", "paused"].includes(run.status) ? `${button("resume", "继续处理/重试")}<p class="gg-muted">继续处理将再次调用模型、消耗预算并可能产生费用；仍受服务端预算及尝试次数上限约束。不会自动执行付费重试。</p>` : ""}<span id="gg-resume-status" role="status" aria-live="polite"></span></div>` : ""}`;
   }
   async function resumeRun(trigger) {
     if (state.busy || state.detail?.retry?.can_resume !== true || !["failed", "paused"].includes(state.detail.status)) return;
