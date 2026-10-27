@@ -256,7 +256,11 @@
       renderDetailHead();
       await loadTab(ctx);
       schedulePoll(ctx);
-    } catch (error) { showError(root(), error, ctx); }
+    } catch (error) {
+      if (!alive(ctx)) return;
+      root().innerHTML = '<h1 class="object-title">任务暂不可用</h1><div id="gg-detail-error"></div>';
+      showError($("gg-detail-error"), error, ctx);
+    }
   }
   function renderDetailHead() {
     const run = state.detail;

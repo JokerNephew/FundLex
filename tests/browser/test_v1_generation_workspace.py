@@ -799,3 +799,21 @@ def test_real_v1_shell_deep_link_and_preserved_editor(browser, live_shell, width
         assert errors == []
     finally:
         context.close()
+
+
+def test_real_shell_detail_error_keeps_unique_heading_and_parent_navigation(browser, live_shell):
+    from playwright.sync_api import expect
+    context = browser.new_context()
+    page = context.new_page()
+    mock = MockGeneration(page, base=live_shell, api_only=True)
+    mock.fail.add('/runs/run-one')
+    try:
+        page.goto(live_shell + '/#generation?mode=detail&id=run-one')
+        expect(page.locator('#gg-detail-error [role="alert"]')).to_be_visible()
+        expect(page.locator('h1:visible')).to_have_count(1)
+        expect(page.locator('h1:visible')).to_have_text('任务暂不可用')
+        page.locator('#breadcrumb [data-crumb="generation"]').click()
+        expect(page.locator('#gg-filter')).to_be_visible()
+        expect(page.locator('h1:visible')).to_have_count(1)
+    finally:
+        context.close()
