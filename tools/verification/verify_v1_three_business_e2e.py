@@ -146,7 +146,7 @@ class Runner:
               const leaf=document.querySelector('#breadcrumb [aria-current=page]').getBoundingClientRect();
               return {visible:crumb.height>0 && crumb.width>0,
                 inside:crumb.top>=bar.top && crumb.bottom<=bar.bottom+1 && leaf.right<=crumb.right+1,
-                headings:[...document.querySelectorAll('h1')].filter(n=>n.getClientRects().length).length};
+                headings:[...document.querySelectorAll('h1.crumb-current,h1.object-title')].filter(n=>n.getClientRects().length).length};
             }""")
             require(location["visible"] and location["inside"], f"TOPBAR_LOCATION_NOT_VISIBLE_{width}")
             require(location["headings"] == 1, f"DUPLICATE_OR_MISSING_PAGE_HEADING_{width}")

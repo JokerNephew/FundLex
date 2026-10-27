@@ -110,7 +110,7 @@ def mock_compare(page, *, structural=False, diff_count=2):
             return route.continue_()
         pair_id = path.split("/")[3]
         if path.endswith("/view"):
-            html = "<p>" + "</p><p>".join(f"合同条款 {i}" for i in range(60)) + "</p>"
+            html = "<h1 class='compare-heading'>合同原件一级标题</h1><p>" + "</p><p>".join(f"合同条款 {i}" for i in range(60)) + "</p>"
             html += "<p><span data-diff-id='D1'>旧文</span><span data-diff-id='D2'>新文</span></p>"
             return route.fulfill(json={"pair": {"id": pair_id, "label": pair_id}, "left": {"html": html},
                                        "right": {"html": html}, "summary": pair["summary"],
@@ -164,7 +164,8 @@ def test_v1_pending_choices_refresh_generation_download_and_mobile(browser, live
     controls, states = mock_compare(page)
     try:
         open_compare(page, base)
-        expect(page.locator('h1:visible')).to_have_count(1)
+        expect(page.locator('h1.crumb-current:visible,h1.object-title:visible')).to_have_count(1)
+        expect(page.locator('#compare-left-pane h1.compare-heading')).to_have_text('合同原件一级标题')
         expect(page.locator('#compare-task-name')).to_have_text('V1 人工选择')
         expect(page.locator('#breadcrumb [aria-current="page"]')).to_have_text('任务详情')
         expect(page.locator('.topbar h1')).to_have_count(0)
