@@ -64,3 +64,15 @@ def test_environment_json_is_not_shell_tokenized(tmp_path):
     path = tmp_path / 'service.env'
     path.write_text('FUNDLEX_MODEL_REQUEST_OPTIONS_JSON={"enable_thinking": false}\n')
     assert module().read_env(path)['FUNDLEX_MODEL_REQUEST_OPTIONS_JSON'] == '{"enable_thinking": false}'
+
+
+def test_cleanup_paused_opt_in_never_allows_a_live_lease(tmp_path):
+    tool, db, objects, evidence = seed(tmp_path, status='retry_wait')
+    db.conn.execute('ALTER TABLE gg_jobs ADD COLUMN lease_until REAL')
+    db.conn.execute("UPDATE gg_runs SET status='paused' WHERE id='run1'")
+    db.conn.execute('UPDATE gg_jobs SET lease_until=9999999999');db.conn.commit()
+    with pytest.raises(tool.UnsafeCleanup, match='ACTIVE_JOBS'):
+        tool.cleanup(db, username=evidence['username'], evidence=evidence, objects=objects, execute=True, allow_paused=True)
+    db.conn.execute('UPDATE gg_jobs SET lease_until=NULL');db.conn.commit()
+    result = tool.cleanup(db, username=evidence['username'], evidence=evidence, objects=objects, execute=True, allow_paused=True)
+    assert result['executed']

@@ -124,7 +124,7 @@ def safe_object(root: Path, key: str) -> Path:
     return target
 
 
-def cleanup(db: Database, *, username: str, evidence: dict, objects: Path, execute=False) -> dict:
+def cleanup(db: Database, *, username: str, evidence: dict, objects: Path, execute=False, allow_paused=False) -> dict:
     if not NAME.fullmatch(username) or evidence.get("username") != username:
         raise UnsafeCleanup("EXACT_E2E_USERNAME_REQUIRED")
     if not objects.is_dir() or objects.is_symlink():
@@ -216,8 +216,17 @@ def cleanup(db: Database, *, username: str, evidence: dict, objects: Path, execu
         add("users", "id", [uid])
 
         for table in ("documents", "batches", "compare_tasks", "compare_pairs", "gg_runs", "gg_jobs", "gg_steps", "guide_jobs", "integration_outbox"):
-            if any(r.get("status") in ACTIVE for r in selected.get(table, [])):
-                raise UnsafeCleanup("ACTIVE_JOBS_REFUSE_CLEANUP")
+            for row in selected.get(table, []):
+                if row.get('status') not in ACTIVE:
+                    continue
+                paused_parent = False
+                if allow_paused and row.get('status') == 'retry_wait' and row.get('lease_until') is None:
+                    if table == 'gg_jobs':
+                        paused_parent = any(r['id'] == row.get('run_id') and r.get('status') == 'paused' for r in runs)
+                    if table == 'documents':
+                        paused_parent = any(r['id'] == row.get('batch_id') and r.get('status') == 'paused' for r in batches)
+                if not paused_parent:
+                    raise UnsafeCleanup("ACTIVE_JOBS_REFUSE_CLEANUP")
 
         keys = {f"guides/{gid}.docx" for gid in guide_ids}
         for rows in selected.values():
@@ -300,6 +309,7 @@ def main():
     parser.add_argument("--evidence", type=Path, required=True, help="Runner result.json (uid and exact task IDs required)")
     parser.add_argument("--env-file", type=Path, default=Path("/etc/fundlex-recall.env"))
     parser.add_argument("--execute", action="store_true")
+    parser.add_argument("--allow-paused", action="store_true", help="Only exact test-account retry_wait rows with a paused parent and no lease")
     args = parser.parse_args()
     db = None
     try:
@@ -309,7 +319,8 @@ def main():
         evidence = json.loads(args.evidence.read_text())
         db = connect(raw)
         print(json.dumps(cleanup(db, username=args.username, evidence=evidence,
-                                 objects=Path(raw["FUNDLEX_DATA_DIR"]) / "objects", execute=args.execute), sort_keys=True))
+                                  objects=Path(raw["FUNDLEX_DATA_DIR"]) / "objects", execute=args.execute,
+                                  allow_paused=args.allow_paused), sort_keys=True))
     except Exception as exc:
         # Database/URL exceptions can contain credentials. Never print them.
         code = str(exc) if isinstance(exc, UnsafeCleanup) else type(exc).__name__

@@ -11,12 +11,37 @@
 - 条目字段：发现日期、问题与影响、证据、处理方法、状态与验证、下一步、变更记录。
 - 同一问题更新原条目；重大结论变化注明日期和原因，不覆盖历史。
 
+## FL-D352 真实 MySQL 揭示指引生成建表与语料 upsert 不兼容（2026-10-27）
+
+- 问题与影响：SQLite专项通过不能证明生产MySQL可用。生产身份staging首次建 `gg_corpus_state` 报1064（未引用的保留字key），修复后真实生成走到语料快照报1093（REPLACE目标表同时在子查询读取）。
+- 证据：备份/staging `/tmp/opencode/v1-three-business-release-20261027-prepare`、`...-mysqlfix`；首条真实run `55c3434f160948e2a443011ac8b4a90f` 的 BUILD_CORPUS_SNAPSHOT failed，生产只输出稳定 DATABASE_OPERATION_FAILED，诊断仅脱敏记录驱动码和表名。
+- 处理：key显式引用且为VARCHAR(255)；upsert先在同一事务读取created_at/latest指针，再参数化REPLACE，避免自表子查询且保留原创建时间/最新版本指针。补 `tests/test_guide_generation_mysql_schema.py`。
+- 状态与验证：**兼容问题已解决（真实MySQL验证）**。staging服务身份导入/schema通过；修复后真实run `fd2c6b77a8094d089706936ef984e1ca` 已走过快照至导出。测试7通过；该run无有效候选是FL-D353外部模型问题，不算生成交付通过。
+- 部署与范围：39文件白名单；未整仓发布。备份 `/tmp/opencode/v1-three-business-release-20261027-mysqlfix` 包含原env0600/文件SHA/包清单/ACL；PyMuPDF1.28.2安装到生产venv；只给fundlex必要父目录遍历和公开corpus读取，不开放home列表。default参考范围1、页面可显式设置，不能冒称全库覆盖。
+
+## FL-D353 模型HTTP402被生成降级逻辑吞掉，出现空候选且全真实交付阻塞（2026-10-27）
+
+- 问题与影响：真实模型服务返回HTTP402（付费/额度限制）；两次生成分别因MySQL失败、随后以0条guide_items导出“含未解决问题”空候选。124条router记录不等于124次HTTP，熔断后调用被本地拒绝，不得误报真实调用数或有效生成。
+- 证据：生产E2E `/tmp/opencode/v1-three-business-20261027/production-generation*/.../result.json`、第二次下载evidence_json含29requirements/14possible impacts/0guide_items/124logical model records；共享ledger新增请求的http_status=402。正常合同修改任务 `1303cf1408474bfda29432946696d386` 进入paused/模型熔断，无正式产物。
+- 处理：GuideModelRouter遇到传输/配置/预算/熔断错误锁定该轮，不继续发模型调用；每个stage结束前校验阻塞状态，错误不可被fallback标成stage completed；Worker保留进度paused，需用户显式resume。语义schema问题仍作为业务发现处理，不能用替身或改gate掩盖服务错误。前端增加友好说明与折叠技术原因。
+- 状态与验证：**代码修复已发布；外部服务仍阻塞**。`13fb31d`，28相关测试/32组合测试通过；真实护栏run `b7489c718aba457fad31fd01f657cc12` 已验证paused/MODEL_HTTP_ERROR、不导出空候选。正常模型修改及非空候选真实交付尚未通过，项目整体仍NO-GO。
+- 预算：预登记 `V1_THREE_BUSINESS_E2E_BUDGET_20261027.md`，共享ledger30266→30270，只增加4次真实HTTP；charged保守增量$0.02739885（25.45966410→25.48706295），低于本轮$1上限。失败记录保留，不再尝试付费请求。临时绝对验收阈值已移除，单run400calls/$0.50和共享总预算继续有效。
+- 下一步：恢复已配置模型服务的可用额度/权限后，使用正常工作台重新验收修改DOCX/非空候选、报告与授权下载；不宣称当前全三业务真实交付完成，不静默换未核验模型。
+
+## FL-D354 集成期间原修改Worker领取队列出现数据库错误自动重启（2026-10-27）
+
+- 发现：最终服务检查发现原修改Worker的NRestarts从0升至3，日志定位 `RunStore.claim` 的MySQL candidate SELECT FOR UPDATE 抛 DATABASE_OPERATION_FAILED。此前该服务两consumer，期间有新schema/语料写入/受控清理；未确定底层驱动码，不把推测写成死锁已确认。
+- 处理：先确认全库有效revision执行lease为0，再新增本服务专用override `three-business-single-consumer.conf`，FUNDLEX_WORKFLOW_CONCURRENCY=1；不改修订引擎算法/业务gate。显式重启后继续观察，历史3次重启保留在日志及备份worker-stability-change.json，不抹去失败记录。
+- 状态：**已实施运行规避，长期根因/并发回归待后续验证**。仅一个DB队列consumer与既有模型并发1一致；不能以服务active认定MySQL并发问题全面解决。最终状态见ACTIVE_HANDOFF。
+- 2026-10-27 10:14 CST复核：四服务active/running，修改Worker自10:07:57显式重启至本次检查未新增DATABASE_OPERATION_FAILED，当前NRestarts=0；历史3次重启不变。证据 `final-service-check.json`；约6分钟无任务观察不等于带载或并发回归通过。
+
 ## FL-D350 三业务集成时生产API与旧分支的配套安全模块不一致（2026-10-27）
 
 - 问题与影响：保留生产 api.py 后，本分支旧 selective/store 缺少 manifest_fingerprint/resolve_selection/ReportJsonError，且缺 api_errors/OAuth，导致应用导入失败；直接用旧分支整仓部署还会回退生产已验证修复。
 - 证据：首轮浏览器setup报 ImportError manifest_fingerprint；生产API已有selection epoch/manifest绑定、统一错误与OAuth依赖，当前工作树基线不含。
 - 处理与状态：**已在候选源码修复，本地验证通过，未发布新候选**。`87601d3` 保存生产API基线，`bf3f855` 保存生产原版companion5文件；生产未因此改变，当前create_app导入及46浏览器通过。
 - 下一步：部署清单仅发布实际增量；配套原版不得回退。主agent统一最终SHA验证。
+- 2026-10-27更新：**已随三业务白名单部署完成兼容核对**；39个发布文件与13fb31d提交逐字节一致，另行保留生产companion，不整仓回退。真实登录、比对授权下载及最终API/浏览器组合回归通过；记录在 `...-mysqlfix/final-manifest.json`。上方“未发布”为初期状态。
 
 ## FL-D351 指引生成接入的配置、任务恢复和生产运行边界（2026-10-27）
 
@@ -25,11 +50,13 @@
 - 处理与状态：**候选已实施/本地通过，生产待验收**。API严格白名单/类型校验，不接受客户端路径/费用覆盖；上传关闭；失败/暂停显式owner-scoped resume，保留计数最多3次，不自动付费重试；最终run/job原子fencing，Worker限额不能被payload放宽；部署仅单Worker。前端显式候选、不自动启用修改指引。
 - 验证：生成/聚合后端首轮44通过，旧API40通过9skip；分页/模型task注册与候选状态后续审查中。尚无本轮真实模型调用，未修改生产环境/ACL/服务。
 - 下一步：补齐真实模型schema和分页→候选冻结→备份最小ACL/env→单worker受控部署，预算登记后跑真实任务。中间fencing缺口保留为单worker运行限制，不冒称全面解决。
+- 2026-10-27更新：**已部署单生成Worker、费用限制及最小ACL，配置/分页/显式恢复/候选门禁回归通过**；真实生成已验证到HTTP402正确暂停（FL-D353），非空候选交付未通过，中间fencing仍限单Worker。费用/证据见本轮预算与进度文档；上方无真实调用/待部署为历史状态。
 
 ## FL-D349 V1 导航未体现三个并列业务，全局任务口径与指引生命周期易混淆（2026-10-27）
 
 ### 实施授权与进度更新（2026-10-27）
 
+- 最终更新：V1三业务导航、独立子页和owner-scoped工作台聚合**已发布并验证**；最终组合373passed，真实比对交付通过；正式修改及非空候选生成因HTTP402仍阻塞，整体NO-GO。后续文字保留为方案/实施过程历史；不得把“待用户确认”误当当前授权状态。
 - 用户已授权自主多阶段开发/测试/推送/部署，允许多agent；方案进入实施。进度见 `V1_THREE_BUSINESS_IMPLEMENTATION_PROGRESS_20261027.md`。
 - 主线V1导航、独立子页、聚合工作台、合同独立结果/审阅与比对阅读器已实现，本地46浏览器通过；生成UI首轮15通过、后端44通过。尚未部署/真实三业务验收，不把源码和夹具通过写成正式交付。
 - 独立合同页开发发现后台refresh重复水合会替换生成选择版UI，已修正为仅首次就绪或缺少详情时加载；单合同深链访问需独立GET metadata，夹具同步覆盖此真实接口而非只mock列表。
