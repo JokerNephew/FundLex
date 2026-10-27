@@ -211,8 +211,11 @@ def test_delivery_counts_and_worker_filter_match_api(ui):
     row = page.locator(f'#task-rows tr:has([data-task="{task}"])')
     assert row.locator(".task-success").inner_text() == "1"
     assert row.locator(".task-error").inner_text() == "2"
+    assert "份合同" not in row.inner_text()
+    assert "成功 / 异常" not in row.inner_text()
     assert row.locator(".p-excluded").count() == 1
     row.locator("[data-task]").click()
+    assert page.locator("#task-ruleset").count() == 0
     page.select_option("#doc-completeness-filter", "not_generated")
     page.wait_for_function("document.querySelectorAll('#doc-rows [data-detail]').length===2")
     excluded = page.locator("#doc-rows tr", has_text="合同3.docx")
