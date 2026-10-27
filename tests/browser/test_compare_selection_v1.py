@@ -110,8 +110,14 @@ def mock_compare(page, *, structural=False, diff_count=2):
             return route.continue_()
         pair_id = path.split("/")[3]
         if path.endswith("/view"):
-            html = "<h1 class='compare-heading'>合同原件一级标题</h1><p>" + "</p><p>".join(f"合同条款 {i}" for i in range(60)) + "</p>"
-            html += "<p><span data-diff-id='D1'>旧文</span><span data-diff-id='D2'>新文</span></p>"
+            # Match the real Word projection: page padding plus absolute sizes on
+            # paragraphs AND runs must not defeat the responsive reader styles.
+            html = "<div class='compare-document' style='max-width:468pt;padding:72pt 90pt'>"
+            html += "<h1 class='compare-block compare-heading' style='font-size:18pt'>合同原件一级标题</h1>"
+            html += "<p class='compare-block word-format' style='font-size:12pt;line-height:18pt;margin:6pt 12pt;text-indent:24pt'><span class='compare-run' style='font-size:12pt'>正文实际字号</span><span class='relative-run' style='font-size:1.5em'>相对字号</span></p>"
+            html += "<table class='compare-table'><tbody><tr><td colspan='2'><p class='compare-block'>保留合并单元格</p></td></tr></tbody></table>"
+            html += "<p>" + "</p><p>".join(f"合同条款 {i}" for i in range(60)) + "</p>"
+            html += "<p><mark class='compare-diff' data-diff-id='D1'>旧文</mark><mark class='compare-diff' data-diff-id='D2'>新文</mark></p></div>"
             return route.fulfill(json={"pair": {"id": pair_id, "label": pair_id}, "left": {"html": html},
                                        "right": {"html": html}, "summary": pair["summary"],
                                        "coverage": {"status": "complete"}, "diffs": diffs})
@@ -152,6 +158,20 @@ def open_compare(page, base):
     page.wait_for_function("!document.querySelector('[data-selection-choice]').disabled")
 
 
+def assert_neutral_compare_labels(page):
+    # Contract content and user filenames are not UI vocabulary: never rewrite
+    # or hide source text just because it contains one of these terms.
+    labels = page.locator('#view-compare').evaluate('''node => {
+      const copy=node.cloneNode(true);
+      copy.querySelectorAll('.compare-pane').forEach(n=>n.remove());
+      return copy.textContent + [...copy.querySelectorAll('[aria-label],[title]')]
+        .map(n=>`${n.getAttribute('aria-label')||''} ${n.getAttribute('title')||''}`).join(' ');
+    }''')
+    for old in ('原版', '对比版', '基准', '修订版', '采用左侧', '采用右侧'):
+        assert old not in labels
+    assert '合同A' in labels and '合同B' in labels
+
+
 @pytest.mark.parametrize("width", [390, 768, 1440])
 def test_v1_pending_choices_refresh_generation_download_and_mobile(browser, live_app, width):
     from playwright.sync_api import expect
@@ -170,6 +190,11 @@ def test_v1_pending_choices_refresh_generation_download_and_mobile(browser, live
         expect(page.locator('#breadcrumb [aria-current="page"]')).to_have_text('任务详情')
         expect(page.locator('.topbar h1')).to_have_count(0)
         expect(page.locator('#compare-selection-generate')).to_be_disabled()
+        assert_neutral_compare_labels(page)
+        expect(page.locator('#compare-selection-left-all')).to_contain_text('合同A')
+        expect(page.locator('#compare-selection-right-all')).to_contain_text('合同B')
+        expect(page.locator('#compare-left-pane')).to_have_attribute('aria-label', '合同A正文')
+        expect(page.locator('#compare-right-pane')).to_have_attribute('aria-label', '合同B正文')
         expect(page.locator('#compare-selection-progress')).to_contain_text('待选择 2')
         page.locator('#compare-selection-preview').click()
         expect(page.locator('#compare-selection-status')).to_contain_text('仍有 2 处待选择')
@@ -183,6 +208,8 @@ def test_v1_pending_choices_refresh_generation_download_and_mobile(browser, live
         expect(page.locator('input[data-diff-id="D2"][value="right"]')).to_be_checked()
         page.locator('#compare-selection-generate').click()
         expect(page.locator('#compare-selection-status')).to_contain_text('已生成 v1')
+        expect(page.locator('[data-selection-download]')).to_contain_text('下载选择结果 DOCX')
+        assert_neutral_compare_labels(page)
         with page.expect_download() as pending_download:
             page.locator('[data-selection-download]').click()
         assert pending_download.value.suggested_filename == 'selected.docx'
@@ -196,6 +223,7 @@ def test_v1_pending_choices_refresh_generation_download_and_mobile(browser, live
         assert page.locator('[data-selection-download]').count() == 0
         assert states['pair-one']['decisions'] == {"D1": "left", "D2": "left"}
         if width == 390:
+            expect(page.locator('[data-compare-side="right"]')).to_have_text('查看合同B')
             page.locator('[data-compare-side="right"]').click()
             assert page.locator('#compare-viewer').get_attribute('data-mobile-side') == 'right'
         assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
@@ -219,20 +247,63 @@ def test_v1_review_rail_geometry_independent_scroll_and_form(browser, live_app, 
           const doc=document.querySelector('.compare-document-area').getBoundingClientRect();
           const rail=document.querySelector('.compare-diff-rail').getBoundingClientRect();
           const list=document.querySelector('#compare-diff-list');
-          return {doc:{x:doc.x,right:doc.right,top:doc.top},rail:{x:rail.x,bottom:rail.bottom,top:rail.top},
-                  scroll:list.scrollHeight>list.clientHeight,overflow:getComputedStyle(list).overflowY};
+          const pane=document.querySelector('#compare-left-pane'), paper=pane.querySelector('.compare-document');
+          const css=n=>getComputedStyle(n), paragraph=pane.querySelector('.word-format');
+          return {doc:{x:doc.x,right:doc.right,top:doc.top},rail:{x:rail.x,bottom:rail.bottom,top:rail.top,width:rail.width},
+                  paneWidth:pane.getBoundingClientRect().width,
+                  scroll:list.scrollHeight>list.clientHeight,overflow:css(list).overflowY,
+                  panePadding:parseFloat(css(pane).paddingLeft),paperPadding:parseFloat(css(paper).paddingLeft),
+                  font:parseFloat(css(paragraph.querySelector('.compare-run')).fontSize),
+                  headingFont:parseFloat(css(pane.querySelector('h1')).fontSize),
+                  relativeFont:parseFloat(css(paragraph.querySelector('.relative-run')).fontSize),
+                  indent:parseFloat(css(paragraph).textIndent),lineHeight:parseFloat(css(paragraph).lineHeight),
+                  margin:parseFloat(css(paragraph).marginLeft),paperOverflow:paper.scrollWidth>paper.clientWidth,
+                  railOverflow:list.scrollWidth>list.clientWidth};
         }''')
         if width > 760:
             assert geometry['rail']['x'] >= geometry['doc']['right']
             assert abs(geometry['rail']['top'] - geometry['doc']['top']) < 2
+            assert 240 <= geometry['rail']['width'] <= 280
         else:
             assert geometry['rail']['bottom'] <= geometry['doc']['top']
         assert geometry['scroll'] and geometry['overflow'] == 'auto'
+        assert geometry['panePadding'] <= 10
+        assert geometry['paperPadding'] == 0
+        assert geometry['font'] == pytest.approx(14.4, abs=.05)  # 12pt × .9
+        assert geometry['headingFont'] / geometry['font'] == pytest.approx(1.5, abs=.01)
+        assert geometry['relativeFont'] / geometry['font'] == pytest.approx(1.5, abs=.01)
+        assert geometry['indent'] == pytest.approx(28.8, abs=.05)
+        assert geometry['lineHeight'] == pytest.approx(21.6, abs=.05)
+        assert geometry['margin'] == pytest.approx(14.4, abs=.05)
+        assert not geometry['paperOverflow'] and not geometry['railOverflow']
+        expect(page.locator('#compare-left-pane td[colspan="2"]')).to_have_text('保留合并单元格')
+        assert_neutral_compare_labels(page)
+        if width > 760:
+            page.wait_for_function("!!document.querySelector('#compare-lines path[data-diff-id=\"D1\"]')")
+            endpoints = page.evaluate(r'''() => {
+              const root=document.querySelector('#compare-columns').getBoundingClientRect();
+              const left=document.querySelector('#compare-left-pane [data-diff-id="D1"]').getBoundingClientRect();
+              const right=document.querySelector('#compare-right-pane [data-diff-id="D1"]').getBoundingClientRect();
+              const values=document.querySelector('#compare-lines path[data-diff-id="D1"]').getAttribute('d').match(/-?[\d.]+/g).map(Number);
+              return {actual:[values[0],values[1],values[6],values[7]],
+                      expected:[left.right-root.left,left.top+left.height/2-root.top,right.left-root.left,right.top+right.height/2-root.top]};
+            }''')
+            assert endpoints['actual'] == pytest.approx(endpoints['expected'], abs=1)
+            page.evaluate('''async () => {
+              for(let i=0;i<3;i++) await new Promise(requestAnimationFrame);
+              const pane=document.querySelector('#compare-left-pane');
+              pane.scrollTop=(pane.scrollHeight-pane.clientHeight)*.4;
+            }''')
+            page.wait_for_function('''() => {
+              const ratio=id=>{const p=document.getElementById(id);return p.scrollTop/(p.scrollHeight-p.clientHeight);};
+              return Math.abs(ratio('compare-left-pane')-ratio('compare-right-pane'))<.01;
+            }''')
         page.locator('#compare-next-diff').scroll_into_view_if_needed()
         if os.getenv('FUNDLEX_UX_EVIDENCE'):
             out = Path(os.environ['FUNDLEX_UX_EVIDENCE'])
             out.mkdir(parents=True, exist_ok=True)
             page.screenshot(path=str(out / f'local-reader-{width}.png'))
+            (out / f'local-reader-{width}-geometry.json').write_text(json.dumps(geometry, ensure_ascii=False, indent=2))
         before = page.locator('.main').evaluate('(n)=>n.scrollTop')
         for _ in range(8):
             page.locator('#compare-next-diff').click()
@@ -241,6 +312,13 @@ def test_v1_review_rail_geometry_independent_scroll_and_form(browser, live_app, 
         page.locator('.sidebar [data-nav="compare"]').click()
         page.locator('#compare-new').click()
         page.locator('#compare-name').fill('统一表单测试')
+        assert_neutral_compare_labels(page)
+        expect(page.locator('[data-compare-left]')).to_have_attribute('aria-label', '合同A')
+        expect(page.locator('[data-compare-right]')).to_have_attribute('aria-label', '合同B')
+        expect(page.locator('[data-compare-choose="left"]')).to_have_attribute('aria-label', '选择合同A')
+        expect(page.locator('[data-compare-folder="right"]')).to_have_text('选择合同B文件夹')
+        page.locator('#compare-submit').click()
+        expect(page.locator('#compare-upload-message')).to_contain_text('合同A和合同B')
         assert page.locator('#compare-name').evaluate('(n)=>n.clientHeight') >= 40
         with page.expect_file_chooser() as chooser:
             page.locator('[data-compare-choose="left"]').click()
@@ -339,6 +417,16 @@ def test_v1_conflict_retains_choices_and_late_generation_cannot_cross_pairs(brow
         expect(page.locator('#compare-selection-status')).to_contain_text('本地选择已保留')
         expect(page.locator('input[data-diff-id="D1"][value="right"]')).to_be_checked()
         expect(page.locator('#compare-selection-generate')).to_be_disabled()
+        dialogs = []
+        def dismiss_leave(dialog):
+            dialogs.append(dialog.message)
+            dialog.dismiss()
+        page.on('dialog', dismiss_leave)
+        page.locator('#breadcrumb [data-crumb="compare"]').click()
+        expect(page.locator('#compare-viewer')).to_be_visible()
+        expect(page.locator('input[data-diff-id="D1"][value="right"]')).to_be_checked()
+        assert dialogs and '未保存' in dialogs[-1]
+        page.remove_listener('dialog', dismiss_leave)
         page.locator('#compare-selection-save').click()
         expect(page.locator('#compare-selection-status')).to_have_text('已保存')
         assert states['pair-one']['decisions'] == {"D1": "right", "D2": "right"}
@@ -418,6 +506,7 @@ def test_v1_insert_delete_choices_remain_explicit_but_generation_is_blocked(brow
 
 def test_v1_password_login_upload_worker_selection_and_verified_downloads(browser, password_app, tmp_path):
     from docx import Document
+    from docx.shared import Pt
     from lxml import etree
     from playwright.sync_api import expect
     from fundlex.compare.worker import CompareWorker
@@ -426,8 +515,13 @@ def test_v1_password_login_upload_worker_selection_and_verified_downloads(browse
     paths = []
     for side, rate in (("left", "0.40%"), ("right", "0.30%")):
         document = Document()
-        document.add_paragraph(f"基金管理费按前一日基金资产净值的{rate}年费率计提。")
-        document.add_paragraph("基金托管人与基金管理人应当履行各自职责。")
+        paragraph = document.add_paragraph(f"基金管理费按前一日基金资产净值的{rate}年费率计提。")
+        paragraph.runs[0].font.size = Pt(12)
+        paragraph.paragraph_format.first_line_indent = Pt(24)
+        paragraph.paragraph_format.line_spacing = Pt(18)
+        document.add_paragraph("基金托管人与基金管理人应当履行各自职责。").runs[0].font.size = Pt(18)
+        table = document.add_table(rows=1, cols=2)
+        table.cell(0, 0).merge(table.cell(0, 1)).text = '合同表格结构保持完整'
         path = tmp_path / f"{side}.docx"
         document.save(path)
         paths.append(path)
@@ -453,6 +547,18 @@ def test_v1_password_login_upload_worker_selection_and_verified_downloads(browse
         assert CompareWorker(app.state.compare_store).run_once()
         page.reload(wait_until="networkidle")
         page.wait_for_function("!!document.querySelector('[data-selection-choice]') && !document.querySelector('[data-selection-choice]').disabled")
+        assert_neutral_compare_labels(page)
+        sizes = page.locator('#compare-left-pane').evaluate('''pane => {
+          const doc=pane.querySelector('.compare-document'), blocks=doc.querySelectorAll(':scope > .compare-block');
+          return {first:parseFloat(getComputedStyle(blocks[0].querySelector('.compare-run')).fontSize),
+                  second:parseFloat(getComputedStyle(blocks[1].querySelector('.compare-run')).fontSize),
+                  indent:parseFloat(getComputedStyle(blocks[0]).textIndent),
+                  pagePadding:parseFloat(getComputedStyle(doc).paddingLeft)};
+        }''')
+        assert sizes == pytest.approx({'first': 14.4, 'second': 21.6, 'indent': 28.8, 'pagePadding': 0}, abs=.05)
+        expect(page.locator('#compare-left-pane td[colspan="2"]')).to_have_text('合同表格结构保持完整')
+        page.locator('#compare-detail details').evaluate('(node)=>node.open=true')
+        expect(page.locator('#compare-pair-list')).to_contain_text('合同A：left.docx / 合同B：right.docx')
         expect(page.locator('#compare-selection-generate')).to_be_disabled()
         page.locator('[data-selection-choice="right"]').check()
         expect(page.locator('#compare-selection-generate')).to_be_enabled()
@@ -460,6 +566,10 @@ def test_v1_password_login_upload_worker_selection_and_verified_downloads(browse
         expect(page.locator('[data-selection-choice="right"]')).to_be_checked()
         page.locator('#compare-selection-generate').click()
         expect(page.locator('#compare-selection-status')).to_contain_text('已生成 v1')
+        expect(page.locator('[data-selection-download$="/selected_redline"]')).to_contain_text('选择结果（带修订痕迹）')
+        assert_neutral_compare_labels(page)
+        if os.getenv('FUNDLEX_UX_EVIDENCE'):
+            page.screenshot(path=str(Path(os.environ['FUNDLEX_UX_EVIDENCE']) / 'local-word-reader-1440.png'))
         downloaded = {}
         for kind in ('selected_final', 'selected_redline', 'selection_report_json', 'selection_report_markdown'):
             button = page.locator(f'[data-selection-download$="/{kind}"]')
@@ -475,6 +585,7 @@ def test_v1_password_login_upload_worker_selection_and_verified_downloads(browse
         assert [hashlib.sha256(path.read_bytes()).hexdigest() for path in paths] == source_hashes
         assert source_hashes == [report['left_source_sha256'], report['right_source_sha256']]
         final = Document(io.BytesIO(downloaded['selected_final']))
+        assert final.tables[0].cell(0, 0).text == '合同表格结构保持完整'
         assert [p.text for p in final.paragraphs] == [
             '基金管理费按前一日基金资产净值的0.30%年费率计提。',
             '基金托管人与基金管理人应当履行各自职责。',

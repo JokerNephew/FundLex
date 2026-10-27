@@ -141,7 +141,7 @@ def presentation(ui, count=1, execution_mode="", summary=False, delivery="incomp
                 doc["execution_mode"] = execution_mode
             if delivery == "complete_with_exceptions":
                 doc["downloads"] = {"redline": "/api/ui-fixture/redline", "final": "/api/ui-fixture/final"}
-        route.fulfill(response=response, json=payload)
+        route.fulfill(status=response.status, json=payload)
     context.route(f"**/api/tasks/{task}/documents?*", documents)
     context.route(f"**/api/tasks/{task}/documents/*", documents)
     revisions = {"html": '<p><del class="rev rev-del" data-rev="1">原文</del><ins class="rev rev-ins" data-rev="2">改文</ins></p><p><ins class="rev rev-ins" data-rev="4">新增句</ins></p>',
@@ -150,7 +150,7 @@ def presentation(ui, count=1, execution_mode="", summary=False, delivery="incomp
     context.route("**/api/ui-fixture/revisions/*", lambda route: route.fulfill(json=revisions))
     open_task(ui, task)
     page.locator("#doc-rows [data-detail]").first.click()
-    page.wait_for_selector("#detail-body .detail-grid")
+    page.wait_for_selector("#detail-body .result-summary")
     return task, docs, revisions
 
 
@@ -257,11 +257,105 @@ def test_evaluation_result_hides_formal_review_entry(ui):
 def test_exception_delivery_remains_downloadable_without_direct_use_claim(ui):
     presentation(ui, delivery="complete_with_exceptions")
     page = ui[0]
-    conclusion = page.locator("#detail-body .detail-grid")
-    assert "不可认定" in conclusion.inner_text()
+    conclusion = page.locator("#detail-body .result-summary")
+    assert "需核对例外" in conclusion.inner_text()
     assert "已通过交付校验" not in conclusion.inner_text()
     assert page.locator('[data-download="final"]').is_visible()
     assert "按例外清单人工核对" in page.inner_text("#detail-body")
+
+
+@pytest.mark.parametrize('width', [390, 768, 1280, 1440])
+@pytest.mark.parametrize('delivery', ['incomplete', 'complete_with_exceptions', 'evaluation_modified'])
+def test_contract_result_compact_summary_actions_and_folded_evidence(ui, width, delivery):
+    from playwright.sync_api import expect
+    page = ui[0]
+    page.set_viewport_size({'width': width, 'height': 1000})
+    presentation(ui, delivery=delivery, execution_mode='evaluation' if delivery.startswith('evaluation') else '')
+    expect(page.locator('.result-summary')).to_be_visible()
+    expect(page.locator('.result-status-grid>div')).to_have_count(3)
+    expect(page.locator('.result-evidence')).not_to_have_attribute('open', '')
+    expect(page.locator('.result-evidence .detail-grid')).to_be_hidden()
+    assert page.locator('.result-summary').bounding_box()['height'] < (320 if width == 390 else 230)
+    boxes = [node.bounding_box() for node in page.locator('.result-status-grid>div').all()]
+    assert max(box['y'] for box in boxes) - min(box['y'] for box in boxes) < 2
+    if delivery == 'complete_with_exceptions':
+        expect(page.locator('[data-download="final"]')).to_be_visible()
+        expect(page.locator('.result-summary')).to_contain_text('需核对例外')
+    elif delivery.startswith('evaluation'):
+        expect(page.locator('.result-summary')).to_contain_text('评测文件不能作为正式合同')
+        expect(page.locator('[data-action="open-review"]')).to_have_count(0)
+    else:
+        expect(page.locator('.result-summary')).to_contain_text('结果不完整')
+        expect(page.locator('[data-action="open-review"]')).to_be_visible()
+    assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+    if os.getenv('FUNDLEX_UX_EVIDENCE'):
+        out=Path(os.environ['FUNDLEX_UX_EVIDENCE']);out.mkdir(parents=True,exist_ok=True)
+        page.screenshot(path=str(out / f'result-{delivery}-{width}.png'))
+    page.locator('.result-evidence>summary').click()
+    expect(page.locator('.result-evidence .detail-grid')).to_be_visible()
+
+
+@pytest.mark.parametrize('view', ['overview', 'task'])
+def test_repeated_slow_refresh_keeps_rows_focus_and_recovers_after_error(ui, view):
+    from playwright.sync_api import expect
+    page, context, _, _ = ui
+    task, _ = seed(ui)
+    open_task(ui, task) if view == 'task' else open_page(ui)
+    row_id = 'doc-rows' if view == 'task' else 'task-rows'
+    expect(page.locator(f'#{row_id} tr[data-row-key]')).to_have_count(1)
+    page.clock.install()
+    pending=[]
+    pattern=f'**/api/tasks/{task}/documents?*' if view == 'task' else '**/api/tasks?sort=newest&page=1&page_size=20'
+    context.route(pattern,lambda route:pending.append((route,route.fetch())))
+    page.evaluate('''id => {
+      window.stableRow=document.querySelector('#'+id+' tr');
+      window.stableAction=stableRow.querySelector('button');
+      window.stableProgress=document.querySelector('#overall-progress .p-done');
+      stableAction.focus();
+    }''',row_id)
+    for attempt in range(3):
+        page.clock.fast_forward(5100)
+        for _ in range(200):
+            if pending:break
+            page.wait_for_timeout(25)
+        assert pending,'expected the actual five-second background poll'
+        assert page.evaluate('id=>getComputedStyle(document.getElementById(id)).opacity',row_id) == '1'
+        assert page.evaluate('id=>stableRow===document.querySelector("#"+id+" tr") && stableAction.isConnected',row_id)
+        if attempt == 1:
+            requests=list(pending);pending.clear()
+            for route,response in requests:
+                route.fulfill(status=503,json={'detail':'temporary fixture failure'})
+            expect(page.locator('#'+('doc' if view == 'task' else 'task')+'-refresh-note')).to_be_visible()
+        else:
+            requests=list(pending);pending.clear()
+            for route,response in requests:
+                payload=response.json()
+                if attempt == 0:
+                    if view == 'task':payload['items'][0]['job_status']='running'
+                    else:payload['items'][0]['name']='后台静默更新任务'
+                route.fulfill(status=response.status, json=payload)
+            expect(page.locator(f'#{row_id}')).to_contain_text('正在处理' if view == 'task' and attempt == 0 else '后台静默更新任务' if attempt == 0 else '合同0.docx' if view == 'task' else '交互测试任务')
+            expect(page.locator('#'+('doc' if view == 'task' else 'task')+'-refresh-note')).to_be_hidden() if attempt == 2 else None
+        assert page.evaluate('stableAction.isConnected && document.activeElement===stableAction')
+        assert page.evaluate('stableProgress===document.querySelector("#overall-progress .p-done")')
+
+
+def test_guide_configuration_and_panels_do_not_expose_hashes(ui):
+    from playwright.sync_api import expect
+    page, context, _, base = ui
+    page=open_page(ui,'guide')
+    expect(page.locator('#guide-rows [data-guide-rules]')).not_to_have_count(0)
+    versions=context.request.get(base+'/api/guides',headers={'X-FundLex-User':'browser-check'}).json()['items']
+    hashes=[entry['rules_sha256'] for entry in versions if entry.get('rules_sha256')]
+    assert hashes,'use a real hash-bearing guide fixture'
+    for hash_value in hashes:assert hash_value not in page.locator('#view-guide').inner_html()
+    assert '规则哈希' not in page.locator('#view-guide').inner_text()
+    for action in ['rules','issues']:
+        page.locator(f'#guide-rows [data-guide-{action}]').first.click()
+        expect(page.locator('#guide-overlay-body h3').first).to_have_text('指引信息')
+        for hash_value in hashes:assert hash_value not in page.locator('#guide-overlay-body').inner_html()
+        assert '哈希' not in page.locator('#guide-overlay-body').inner_text()
+        page.locator('#guide-overlay-close').click()
 
 
 def test_revision_pair_checkbox_keyboard_and_insert_navigation(ui):

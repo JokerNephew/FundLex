@@ -17,9 +17,9 @@
     const selected = [pair.left?.name || fileName(pair._left), pair.right?.name || fileName(pair._right)].filter(Boolean).join(' / ');
     const sideCard=(side,title,badge)=>{
       const name=pair[side]?.name||fileName(pair[`_${side}`]);
-      return `<div class="compare-file-card ${name?'has-file':''}" data-file-side="${side}"><div class="compare-file-card-title"><span class="compare-side-badge ${side==='right'?'is-revised':''}">${badge}</span><strong>${title}</strong><small>DOCX</small></div><div class="compare-file-name" title="${esc(name)}">${esc(name||'尚未选择合同')}</div><div class="compare-file-card-action"><button type="button" class="btn btn-sm" data-compare-choose="${side}" aria-label="选择${title}合同">${name?'更换文件':'选择文件'}</button><span>仅支持 .docx</span></div><input type="file" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" data-compare-${side}="${index}" aria-label="${title}合同" hidden></div>`;
+      return `<div class="compare-file-card ${name?'has-file':''}" data-file-side="${side}"><div class="compare-file-card-title"><span class="compare-side-badge">${badge}</span><strong>${title}</strong><small>DOCX</small></div><div class="compare-file-name" title="${esc(name)}">${esc(name||'尚未选择合同')}</div><div class="compare-file-card-action"><button type="button" class="btn btn-sm" data-compare-choose="${side}" aria-label="选择${title}">${name?'更换文件':'选择文件'}</button><span>仅支持 .docx</span></div><input type="file" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" data-compare-${side}="${index}" aria-label="${title}" hidden></div>`;
     };
-    return `<div class="compare-pair-input" data-pair-index="${index}"><div class="compare-pair-head"><strong>合同组 ${String(index+1).padStart(2,'0')}</strong><button type="button" class="btn-link" data-compare-remove="${index}" ${index?'':'disabled'}>移除本组</button></div><div class="compare-side-inputs">${sideCard('left','原版（基准）','A')}${sideCard('right','对比版（修订）','B')}</div><p class="sr-only compare-file-label" data-compare-label="${index}">${esc(selected||'尚未选择文件')}</p></div>`;
+    return `<div class="compare-pair-input" data-pair-index="${index}"><div class="compare-pair-head"><strong>合同组 ${String(index+1).padStart(2,'0')}</strong><button type="button" class="btn-link" data-compare-remove="${index}" ${index?'':'disabled'}>移除本组</button></div><div class="compare-side-inputs">${sideCard('left','合同A','A')}${sideCard('right','合同B','B')}</div><p class="sr-only compare-file-label" data-compare-label="${index}">${esc(selected||'尚未选择文件')}</p></div>`;
   }
   function renderInputs() { const box=$('compare-pair-inputs'); if (box) box.innerHTML = (state.inputs || [{}]).map(pairRow).join(''); }
   function syncInputIndexes() { document.querySelectorAll('#compare-pair-inputs .compare-pair-input').forEach((row,i)=>{ row.dataset.pairIndex=String(i); row.querySelector('[data-compare-left]')?.setAttribute('data-compare-left',String(i)); row.querySelector('[data-compare-right]')?.setAttribute('data-compare-right',String(i)); row.querySelector('[data-compare-remove]')?.setAttribute('data-compare-remove',String(i)); }); }
@@ -53,7 +53,7 @@
     state.tasks=state.tasks.map(t=>t.id===task.id?task:t); renderTasks(); renderPairs();
   }
   function renderPairs() {
-    $('compare-pair-list').innerHTML=`<div class="compare-pair-statuses">${state.pairs.map((p,i)=>`<button type="button" class="compare-pair-status ${p.id===state.selectedPairId?'is-selected':''} ${['succeeded','incomplete'].includes(p.status)?'is-done':''} ${p.status==='incomplete'?'is-incomplete':''} ${p.status==='failed'||p.viewError?'is-failed':''}" data-compare-pair="${i}"><span class="compare-pair-number">${String(i+1).padStart(2,'0')}</span><span class="compare-pair-main"><strong>${esc(p.label||`第 ${i+1} 组`)}</strong><small>${esc(p.left?.name||'原版未命名')} → ${esc(p.right?.name||'对比版未命名')}</small></span><span class="compare-pair-state">${esc(statusLabel(p.status))}${p.summary?` · ${p.summary.total} 处`:''}</span>${p.error_code||p.viewError?`<span class="compare-pair-error" role="status">${esc(p.viewError||`处理失败：${p.error_code}`)}</span>`:''}</button>`).join('')}</div>`;
+    $('compare-pair-list').innerHTML=`<div class="compare-pair-statuses">${state.pairs.map((p,i)=>`<button type="button" class="compare-pair-status ${p.id===state.selectedPairId?'is-selected':''} ${['succeeded','incomplete'].includes(p.status)?'is-done':''} ${p.status==='incomplete'?'is-incomplete':''} ${p.status==='failed'||p.viewError?'is-failed':''}" data-compare-pair="${i}"><span class="compare-pair-number">${String(i+1).padStart(2,'0')}</span><span class="compare-pair-main"><strong>${esc(p.label||`第 ${i+1} 组`)}</strong><small>合同A：${esc(p.left?.name||'未命名')} / 合同B：${esc(p.right?.name||'未命名')}</small></span><span class="compare-pair-state">${esc(statusLabel(p.status))}${p.summary?` · ${p.summary.total} 处`:''}</span>${p.error_code||p.viewError?`<span class="compare-pair-error" role="status">${esc(p.viewError||`处理失败：${p.error_code}`)}</span>`:''}</button>`).join('')}</div>`;
   }
   function markFiles(form, files, pair) { const ids=[]; for (const side of ['left','right']) { form.append('files',files[side],pair[side].name); ids.push(pair[side].client_id); } form.append('client_ids', JSON.stringify(ids)); }
   async function continueUploads() {
@@ -74,7 +74,7 @@
   }
   async function createTask() {
     const files=selectedFiles(), message=$('compare-upload-message');
-    if (!files.length || files.some(x=>!x.left||!x.right)) { message.textContent='每组都需要同时选择原版和对比版 DOCX。'; return; }
+    if (!files.length || files.some(x=>!x.left||!x.right)) { message.textContent='每组都需要同时选择合同A和合同B的 DOCX 文件。'; return; }
     const identity=state.identityToken; const name=($('compare-name').value||'合同比对').trim(); const pairs=files.map((x,i)=>{const leftId=`L${i}-${crypto.randomUUID()}`,rightId=`R${i}-${crypto.randomUUID()}`;return {client_pair_id:`P${i+1}`,label:`合同 ${i+1}`,left:{client_id:leftId,name:fileName(x.left),size:x.left.size},right:{client_id:rightId,name:fileName(x.right),size:x.right.size}};});
     const key=`compare-${Date.now()}-${crypto.randomUUID()}`; message.textContent='正在创建对比任务…'; $('compare-submit').disabled=true;
     try { const task=await json('/api/compare/tasks',{method:'POST',headers:{'Content-Type':'application/json','Idempotency-Key':key},body:JSON.stringify({name,pairs})}); if(identity!==state.identityToken)return; state.uploadDraft={task,pairs,files,next:0}; await continueUploads(); }
@@ -141,7 +141,7 @@
     const box=$('compare-selection-downloads'); if(!box)return;
     const artifacts=state.selectionDirty?[]:(state.selection?.artifacts||[]).filter(x=>x.status==='current');
     if(!artifacts.length){box.replaceChildren();return;}
-    const labels={selected_final:'下载选择版 DOCX',selected_redline:'下载选择修订版 DOCX',selection_report_markdown:'下载选择报告（Markdown）',selection_report_json:'下载选择报告（JSON）'};
+    const labels={selected_final:'下载选择结果 DOCX',selected_redline:'下载选择结果（带修订痕迹）DOCX',selection_report_markdown:'下载选择报告（Markdown）',selection_report_json:'下载选择报告（JSON）'};
     box.innerHTML=artifacts.map(item=>`<div class="compare-artifact"><button class="btn btn-sm" type="button" data-selection-download="${esc(item.download_url)}" data-selection-filename="${esc(`compare-v${item.version}-${item.kind}`)}">${esc(labels[item.kind]||item.kind)} · v${item.version}</button><small>SHA-256：${esc(item.sha256)}</small></div>`).join('');
   }
   function renderSelection() {
@@ -154,11 +154,11 @@
     $('compare-selection-issues').textContent=selectionIssues().filter(x=>x.blocking).map(x=>x.detail||x.code).join(' ');
     const preview=$('compare-selection-preview'), generate=$('compare-selection-generate');
     if(preview)preview.disabled=busy||state.selectionDirty;
-    if(generate){generate.disabled=!ready;generate.title=pending?'所有差异都需要明确选择左侧或右侧':blocked?'当前结果包含暂不支持的结构':'生成选择版';}
+    if(generate){generate.disabled=!ready;generate.title=pending?'所有差异都需要明确选择合同A或合同B':blocked?'当前结果包含暂不支持的结构':'生成选择结果';}
     buttons.forEach(x=>{if(x!==preview&&x!==generate)x.disabled=busy;});
     $('compare-selection-save').disabled=busy||!state.selectionDirty;
     $('compare-selection-pending').disabled=busy||!pending;
-    for(const side of ['left','right'])$(`compare-selection-${side}-all`).textContent=`全部采用${side==='left'?'左':'右'}侧（${total}处）`;
+    for(const side of ['left','right'])$(`compare-selection-${side}-all`).textContent=`全部采用合同${side==='left'?'A':'B'}（${total}处）`;
     renderSelectionDownloads();
   }
   async function loadSelection(pairId) {
@@ -192,13 +192,13 @@
   async function selectionAction(kind) {
     const binding=selectionBinding();if(!binding||state.selectionSaving||state.selectionBusy||state.selectionDirty||(kind==='generate'&&!selectionCanGenerate()))return;
     const context=selectionContext();state.selectionBusy=true;
-    selectionStatus(kind==='generate'?'正在生成选择版 DOCX，请稍候…':'正在检查生成条件…');renderSelection();renderDiffList();
+    selectionStatus(kind==='generate'?'正在生成选择结果 DOCX，请稍候…':'正在检查生成条件…');renderSelection();renderDiffList();
     const headers={'Content-Type':'application/json'};
     if(kind==='generate'){state.generationKey ||= `compare-${crypto.randomUUID()}`;headers['Idempotency-Key']=state.generationKey;}
     try {
       const result=await json(`/api/compare/pairs/${encodeURIComponent(context.pairId)}/selection/${kind}`,{method:'POST',headers,body:JSON.stringify(binding)});
       if(!selectionCurrent(context))return;
-      if(kind==='generate'){state.selection={...state.selection,artifacts:result.artifacts||[]};selectionStatus(`已生成 v${result.version}，可下载选择版、修订版和报告。`);}
+      if(kind==='generate'){state.selection={...state.selection,artifacts:result.artifacts||[]};selectionStatus(`已生成 v${result.version}，可下载选择结果、带修订痕迹的选择结果和报告。`);}
       else {state.selection.assessment=result.assessment;const pending=result.assessment.pending_ids.length,blocked=selectionIssues().some(x=>x.blocking);selectionStatus(pending?`仍有 ${pending} 处待选择，全部明确选择后才能生成。`:blocked?'当前结构暂不支持生成，请查看说明。':'当前选择可以提交生成；生成时还会校验 DOCX 结构。',!!(pending||blocked));}
     } catch(e){if(selectionCurrent(context))selectionStatus(e.raw||e.message,true);}
     finally {if(selectionCurrent(context)){state.selectionBusy=false;renderSelection();renderDiffList();}}
@@ -242,9 +242,20 @@
     requestAnimationFrame(()=>requestAnimationFrame(()=>{state.focusScrolling=false;}));
     requestAnimationFrame(drawLines);
   }
-  function renderDiffList() { const d=visibleDiffs(), disabled=!state.selection||state.selectionSaving; $('compare-diff-list').innerHTML=d.length?d.map((x,i)=>{const choice=selectionDecision(x.id);return `<div class="compare-diff-item ${choice!=='pending'?'is-selected-choice':''}" data-compare-diff="${esc(x.id)}"><button type="button" class="compare-diff-jump" data-compare-diff="${esc(x.id)}"><span>${i+1}</span><strong>${esc(x.type==='modify'?'修改':x.type==='insert'?'新增':'删除')}</strong><span>${esc(x.section||'正文')} · ${esc(x.left?.text||'')} ${x.right?.text?'→ '+esc(x.right.text):''}</span></button><div class="compare-choice" role="group" aria-label="${esc(x.id)} 采用哪一侧"><label class="${choice==='left'?'is-checked':''}"><input type="radio" name="choice-${esc(x.id)}" value="left" data-selection-choice="left" data-diff-id="${esc(x.id)}" ${choice==='left'?'checked':''} ${disabled?'disabled':''}>采用左侧</label><label class="${choice==='right'?'is-checked':''}"><input type="radio" name="choice-${esc(x.id)}" value="right" data-selection-choice="right" data-diff-id="${esc(x.id)}" ${choice==='right'?'checked':''} ${disabled?'disabled':''}>采用右侧</label></div></div>`;}).join(''):'<p class="empty">当前筛选条件下没有差异。</p>'; }
+  function renderDiffList() { const d=visibleDiffs(), disabled=!state.selection||state.selectionSaving; $('compare-diff-list').innerHTML=d.length?d.map((x,i)=>{const choice=selectionDecision(x.id);return `<div class="compare-diff-item ${choice!=='pending'?'is-selected-choice':''}" data-compare-diff="${esc(x.id)}"><button type="button" class="compare-diff-jump" data-compare-diff="${esc(x.id)}"><span>${i+1}</span><strong>${esc(x.type==='modify'?'修改':x.type==='insert'?'新增':'删除')}</strong><span>${esc(x.section||'正文')} · ${esc(x.left?.text||'')} ${x.right?.text?'→ '+esc(x.right.text):''}</span></button><div class="compare-choice" role="group" aria-label="${esc(x.id)} 采用合同A或合同B"><label class="${choice==='left'?'is-checked':''}"><input type="radio" name="choice-${esc(x.id)}" value="left" data-selection-choice="left" data-diff-id="${esc(x.id)}" ${choice==='left'?'checked':''} ${disabled?'disabled':''}>采用合同A</label><label class="${choice==='right'?'is-checked':''}"><input type="radio" name="choice-${esc(x.id)}" value="right" data-selection-choice="right" data-diff-id="${esc(x.id)}" ${choice==='right'?'checked':''} ${disabled?'disabled':''}>采用合同B</label></div></div>`;}).join(''):'<p class="empty">当前筛选条件下没有差异。</p>'; }
+  function renderContract(pane, html) {
+    pane.innerHTML=html||'';
+    // Word projects absolute pt/px sizes on paragraphs AND runs. Shrink each
+    // absolute display dimension once; inherited/em/% sizes retain their ratios.
+    // Never change text, block IDs, table spans, or the downloaded source DOCX.
+    const dimensions=['font-size','line-height','margin-left','margin-right','margin-top','margin-bottom','text-indent','padding-left','padding-right','padding-top','padding-bottom'];
+    pane.querySelectorAll('[style]').forEach(node=>dimensions.forEach(property=>{
+      const value=node.style.getPropertyValue(property).trim(),match=value.match(/^(-?\d+(?:\.\d+)?)(pt|px)$/);
+      if(match)node.style.setProperty(property,`${Number((Number(match[1])*.9).toFixed(3))}${match[2]}`);
+    }));
+  }
   function renderViewer(payload) {
-    state.view=payload; state.diffIndex=0; const d=payload.diffs||[]; $('compare-viewer').hidden=false; $('compare-pair-title').textContent=payload.pair?.label||'合同比对'; $('compare-left-name').textContent=payload.left?.name||'原版合同'; $('compare-right-name').textContent=payload.right?.name||'对比版合同'; const s=payload.summary||{}; $('compare-summary').textContent=`共 ${s.total||0} 处差异 · 修改 ${s.modify||0} · 新增 ${s.insert||0} · 删除 ${s.delete||0}`; const cov=payload.coverage||{}; const incomplete=cov.status!=='complete'; $('compare-coverage').hidden=!incomplete; $('compare-coverage').className=incomplete?'is-incomplete':''; $('compare-coverage').textContent=incomplete?`覆盖不完整：以下内容未纳入比较。请人工复核，不要据此确认全文无差异。${(cov.warnings||[]).length?' 未覆盖：'+cov.warnings.join('、'):''}`:'覆盖完整'; $('compare-left-pane').innerHTML=payload.left.html||''; $('compare-right-pane').innerHTML=payload.right.html||''; document.querySelectorAll('#compare-left-pane [data-diff-id],#compare-right-pane [data-diff-id]').forEach(mark=>{mark.tabIndex=0;mark.setAttribute('role','button');mark.setAttribute('aria-label','定位此处差异');}); $('compare-diff-counter').textContent='0 / 0'; renderDiffList(); if(!d.length)$('compare-diff-list').innerHTML=`<p class="empty">${incomplete?'已覆盖范围内没有发现文字差异，无法确认全文无差异。':'两份合同没有文字差异。'}</p>`; drawLines();if(d.length)focusDiff(0); }
+    state.view=payload; state.diffIndex=0; const d=payload.diffs||[]; $('compare-viewer').hidden=false; $('compare-pair-title').textContent=payload.pair?.label||'合同比对'; $('compare-left-name').textContent=payload.left?.name||'合同A'; $('compare-right-name').textContent=payload.right?.name||'合同B'; const s=payload.summary||{}; $('compare-summary').textContent=`共 ${s.total||0} 处差异 · 修改 ${s.modify||0} · 新增 ${s.insert||0} · 删除 ${s.delete||0}`; const cov=payload.coverage||{}; const incomplete=cov.status!=='complete'; $('compare-coverage').hidden=!incomplete; $('compare-coverage').className=incomplete?'is-incomplete':''; $('compare-coverage').textContent=incomplete?`覆盖不完整：以下内容未纳入比较。请人工复核，不要据此确认全文无差异。${(cov.warnings||[]).length?' 未覆盖：'+cov.warnings.join('、'):''}`:'覆盖完整'; renderContract($('compare-left-pane'),payload.left.html); renderContract($('compare-right-pane'),payload.right.html); document.querySelectorAll('#compare-left-pane [data-diff-id],#compare-right-pane [data-diff-id]').forEach(mark=>{mark.tabIndex=0;mark.setAttribute('role','button');mark.setAttribute('aria-label','定位此处差异');}); $('compare-diff-counter').textContent='0 / 0'; renderDiffList(); if(!d.length)$('compare-diff-list').innerHTML=`<p class="empty">${incomplete?'已覆盖范围内没有发现文字差异，无法确认全文无差异。':'两份合同没有文字差异。'}</p>`; drawLines();if(d.length)focusDiff(0); }
   async function openPair(index,fromRoute=false) {
     const p=state.pairs[index];if(!p)return;
     if(!fromRoute&&state.view&&api.navigate&&api.route?.().pair!==p.id){api.navigate('compare',{mode:'detail',id:state.task.id,pair:p.id});return;}

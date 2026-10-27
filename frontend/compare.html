@@ -539,7 +539,7 @@
       <div class="card card-pad compare-create" id="compare-create" hidden>
 <div class="compare-create-intro">
 <div>
-<p class="subnote">先选择原版（基准文本），再选择对比版（修订文本）。差异中的“新增 / 删除”都以这个方向为准。</p>
+<p class="subnote">选择合同A与合同B进行平等比较；“新增 / 删除”按合同A → 合同B的方向统计。</p>
 </div>
 <span class="compare-step">1 / 2 · 准备文件</span>
 </div>
@@ -549,10 +549,10 @@
 <small id="compare-name-hint">为本次对比起个名字，方便之后查找。</small>
 </div>
 <div class="compare-folder-actions">
-<button class="btn btn-sm" type="button" data-compare-folder="left">选择原版文件夹</button>
-<input id="compare-left-folder" type="file" webkitdirectory directory multiple hidden>
-<button class="btn btn-sm" type="button" data-compare-folder="right">选择对比版文件夹</button>
-<input id="compare-right-folder" type="file" webkitdirectory directory multiple hidden>
+<button class="btn btn-sm" type="button" data-compare-folder="left">选择合同A文件夹</button>
+<input id="compare-left-folder" type="file" aria-label="合同A文件夹" webkitdirectory directory multiple hidden>
+<button class="btn btn-sm" type="button" data-compare-folder="right">选择合同B文件夹</button>
+<input id="compare-right-folder" type="file" aria-label="合同B文件夹" webkitdirectory directory multiple hidden>
 <span class="subnote">按相同相对路径配对；未配对文件会单独列出，可手工补齐。</span>
 </div>
 <div id="compare-pair-inputs">
@@ -576,8 +576,8 @@
 <div class="compare-direction-note">
 <span class="compare-direction-icon" aria-hidden="true">→</span>
 <div>
-<strong>阅读方向</strong>
-<span>原版（基准） → 对比版（修订）</span>
+<strong>差异统计方向</strong>
+<span>合同A → 合同B</span>
 </div>
 <small>新增 / 删除的含义均按此方向解释</small>
 </div>
@@ -624,36 +624,36 @@
 <div class="compare-columns-head">
 <span>
 <i class="compare-side-badge">A</i>
-<b>原版 · 基准</b>
+<b>合同A</b>
 <small id="compare-left-name">
 </small>
 </span>
 <span class="compare-columns-arrow" aria-hidden="true">→</span>
 <span>
-<i class="compare-side-badge is-revised">B</i>
-<b>对比版 · 修订</b>
+<i class="compare-side-badge">B</i>
+<b>合同B</b>
 <small id="compare-right-name">
 </small>
 </span>
 </div>
-<div class="compare-mobile-switch" role="group" aria-label="移动端阅读侧栏">
-<button type="button" class="btn btn-sm is-active" data-compare-side="left">查看原版</button>
-<button type="button" class="btn btn-sm" data-compare-side="right">查看对比版</button>
+<div class="compare-mobile-switch" role="group" aria-label="切换合同A或合同B">
+<button type="button" class="btn btn-sm is-active" data-compare-side="left">查看合同A</button>
+<button type="button" class="btn btn-sm" data-compare-side="right">查看合同B</button>
 </div>
 <div class="compare-columns" id="compare-columns">
-<article class="compare-pane" id="compare-left-pane" aria-label="原版合同" tabindex="0">
+<article class="compare-pane" id="compare-left-pane" aria-label="合同A正文" tabindex="0">
 </article>
 <div class="compare-gutter" aria-hidden="true">
 <span>同步</span>
 </div>
-<article class="compare-pane" id="compare-right-pane" aria-label="对比版合同" tabindex="0">
+<article class="compare-pane" id="compare-right-pane" aria-label="合同B正文" tabindex="0">
 </article>
 <svg id="compare-lines" aria-hidden="true">
 </svg>
 </div>
 </div>
 <aside class="compare-diff-rail" aria-labelledby="compare-rail-title">
-<div class="compare-rail-heading"><div><h3 id="compare-rail-title">差异列表</h3></div><small>逐处选择保留哪一版</small></div>
+<div class="compare-rail-heading"><div><h3 id="compare-rail-title">差异列表</h3></div><small>选择合同A或合同B</small></div>
 <div class="compare-diff-toolbar">
 <div class="compare-diff-nav">
 <button class="btn btn-sm" id="compare-prev-diff">上一处</button>
@@ -686,12 +686,12 @@
 </small>
 </div>
 <div class="compare-selection-actions">
-<button class="btn btn-sm" id="compare-selection-left-all" type="button">全部采用左侧</button>
-<button class="btn btn-sm" id="compare-selection-right-all" type="button">全部采用右侧</button>
+<button class="btn btn-sm" id="compare-selection-left-all" type="button">全部采用合同A</button>
+<button class="btn btn-sm" id="compare-selection-right-all" type="button">全部采用合同B</button>
 <button class="btn btn-sm" id="compare-selection-pending" type="button">定位待选择</button>
 <button class="btn btn-sm" id="compare-selection-save" type="button" disabled>保存当前选择</button>
 <button class="btn btn-sm" id="compare-selection-preview" type="button" disabled>预览可生成性</button>
-<button class="btn btn-primary btn-sm" id="compare-selection-generate" type="button" disabled>生成选择版</button>
+<button class="btn btn-primary btn-sm" id="compare-selection-generate" type="button" disabled>生成选择结果</button>
 </div>
 <div id="compare-selection-downloads" class="compare-selection-downloads">
 </div>
@@ -715,7 +715,7 @@
 </div>
 </div>
 <div id="guide-current-body" class="guide-current">正在读取当前指引…</div>
-<p class="subnote">新任务创建时绑定当前指引的版本与规则哈希；切换指引或恢复内置只影响之后创建的任务，已创建任务保持原绑定。</p>
+<p class="subnote">新任务创建时绑定当前指引版本；切换指引或恢复内置只影响之后创建的任务，已创建任务保持原绑定。</p>
 </div>
       <div class="card card-pad" style="margin-top:14px">
 <div class="section-title">
