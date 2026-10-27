@@ -154,6 +154,40 @@ def presentation(ui, count=1, execution_mode="", summary=False, delivery="incomp
     return task, docs, revisions
 
 
+@pytest.mark.parametrize('width', [390, 768, 1280, 1440])
+def test_object_heading_long_parent_and_deep_link_return(ui, width):
+    from playwright.sync_api import expect
+    page, _, _, base = ui
+    name = '标题与长任务名称验证' * 12
+    task, docs = seed(ui, name=name)
+    page.set_viewport_size({'width': width, 'height': 1000})
+    page.goto(base + f'/#task?id={task}', wait_until='networkidle')
+    expect(page.locator('#task-object-title')).to_have_text(name)
+    expect(page.locator('h1:visible')).to_have_count(1)
+    expect(page.locator('#breadcrumb [aria-current="page"]')).to_have_text('任务详情')
+    page.locator('#doc-rows [data-detail]').first.click()
+    expect(page.locator('#detail-title')).to_have_text(docs[0]['name'])
+    page.reload(wait_until='networkidle')
+    expect(page.locator('#detail-title')).to_have_text(docs[0]['name'])
+    expect(page.locator('h1:visible')).to_have_count(1)
+    parent = page.locator('#breadcrumb [data-crumb="task"]')
+    expect(parent).to_have_attribute('title', name)
+    assert name not in page.locator('#breadcrumb [aria-current="page"]').inner_text()
+    assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+    assert page.evaluate('''() => {
+      const leaf=document.querySelector('#breadcrumb [aria-current=page]').getBoundingClientRect();
+      const nav=document.querySelector('#breadcrumb').getBoundingClientRect();
+      return leaf.left>=nav.left && leaf.right<=nav.right+1;
+    }''')
+    if os.getenv('FUNDLEX_UX_EVIDENCE'):
+        out = Path(os.environ['FUNDLEX_UX_EVIDENCE']); out.mkdir(parents=True, exist_ok=True)
+        page.screenshot(path=str(out / f'headers-document-{width}.png'))
+    parent.click()
+    expect(page.locator('#view-task')).to_be_visible()
+    expect(page.locator('#task-object-title')).to_have_text(name)
+    assert page.url.endswith(f'#task?id={task}')
+
+
 def test_overview_units_filters_and_single_supported_mode(ui):
     task, _ = seed(ui, states=[("succeeded", "eligible", "complete")])
     page = open_page(ui)
@@ -251,7 +285,7 @@ def test_revision_pair_checkbox_keyboard_and_insert_navigation(ui):
     page.locator('[data-action="open-review"]').click()
     page.wait_for_selector("#review-doc")
     assert not page.locator('[data-rev-toggle="4"]').is_checked()
-    page.locator("#close-detail").click()
+    page.locator('#breadcrumb [data-crumb="task"]').click()
     page.keyboard.press("a")
     assert page.locator("#detail-overlay").is_hidden()
 
@@ -267,7 +301,7 @@ def test_old_review_failure_cannot_overwrite_new_report(ui):
             break
         page.wait_for_timeout(50)
     assert pending
-    page.locator("#close-detail").click()
+    page.locator('#breadcrumb [data-crumb="task"]').click()
     page.locator("#doc-rows [data-detail]").nth(1).click()
     page.wait_for_selector('[data-action="open-review"]')
     pending[0].fulfill(status=503, json={"detail": "fixture failure"})
@@ -363,7 +397,7 @@ def test_login_expiry_message_and_role_hash_guard(ui, monkeypatch):
     page.wait_for_timeout(100)
     # V1 settings is now the member-facing Feishu page, not dev-only settings.
     assert page.locator("#view-settings").is_visible()
-    assert page.locator('#topbar-title').inner_text() == '飞书绑定'
+    assert page.locator('#breadcrumb [aria-current="page"]').inner_text() == '飞书绑定'
     assert page.locator('#feishu-binding-code-btn').count() == 0
     page.locator('.sidebar [data-nav="overview"]').click()
     token = page.evaluate("sessionStorage.getItem('fundlex-auth-token')")
@@ -412,7 +446,7 @@ def test_report_and_review_fit_viewport(ui, width, tmp_path):
 def test_missing_artifact_shows_plan_instead_of_applied(ui):
     task, _, _ = presentation(ui)
     page, context, _, _ = ui
-    page.locator("#close-detail").click()
+    page.locator('#breadcrumb [data-crumb="task"]').click()
     context.unroute(f"**/api/tasks/{task}/documents?*")
     context.unroute(f"**/api/tasks/{task}/documents/*")
     page.locator('#view-task [data-action="refresh"]').click()
@@ -438,7 +472,7 @@ def test_generation_blocks_duplicate_requests_and_late_reply(ui):
     assert page.locator('[data-action="generate-selected"]').is_disabled()
     page.keyboard.press("r")
     assert page.locator('[data-rev-toggle="1"]').is_checked()
-    page.locator("#close-detail").click()
+    page.locator('#breadcrumb [data-crumb="task"]').click()
     page.locator("#doc-rows [data-detail]").nth(1).click()
     page.wait_for_selector('[data-action="open-review"]')
     pending[0].fulfill(json={"accepted": [1, 4], "rejected": [], "download_url": "/api/ui-fixture/selected"})

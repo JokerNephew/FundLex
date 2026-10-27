@@ -62,8 +62,7 @@
 <img src="/static/assets/gf-logo-mark.png" alt="广发基金">
 <span class="brand-name">FundLex</span>
 </a>
-<div class="topbar-title" id="topbar-title">
-</div>
+<nav class="crumb topbar-breadcrumb" id="breadcrumb" aria-label="当前位置"></nav>
 <div class="notification-center">
 <button class="btn btn-sm notification-toggle" type="button" id="notification-toggle" data-action="notifications" aria-label="消息" aria-expanded="false" aria-controls="notification-panel">
 <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true">
@@ -131,28 +130,24 @@
 </nav>
   <main class="main">
 <div class="frame">
-    <nav class="crumb" id="breadcrumb" aria-label="面包屑">
-</nav>
 <section class="section" id="view-workspace" aria-label="工作台">
-  <div class="business-page-heading"><div><span class="eyebrow">WORKSPACE</span><h1>工作台</h1><p>从法规到指引，从合同修改到版本核对，在这里继续你的工作。</p></div><button class="btn" id="workspace-refresh" type="button">刷新</button></div>
   <div class="workspace-launchers">
-    <article class="card workspace-launcher is-primary"><div class="workspace-launcher-icon"><svg><use href="#i-file"/></svg></div><span class="eyebrow">CONTRACT REVISION</span><h2>合同修改</h2><p>按当前修改指引批量修订合同，审阅修订并下载结果。</p><button class="btn btn-primary" data-action="new-task" type="button">＋ 新建合同修改</button></article>
-    <article class="card workspace-launcher"><div class="workspace-launcher-icon"><svg><use href="#i-list"/></svg></div><span class="eyebrow">CONTRACT COMPARE</span><h2>合同比对</h2><p>并排核对两个版本，逐处选择需要保留的内容。</p><button class="btn" type="button" data-workspace-new="compare">新建合同比对</button></article>
-    <article class="card workspace-launcher"><div class="workspace-launcher-icon"><svg><use href="#i-book"/></svg></div><span class="eyebrow">GUIDE GENERATION</span><h2>指引生成</h2><p>从监管法规起草候选修改指引，核对依据与版本。</p><button class="btn" type="button" data-workspace-new="generation">生成修改指引</button></article>
+    <article class="card workspace-launcher is-primary"><div class="workspace-launcher-icon"><svg><use href="#i-file"/></svg></div><h2>合同修改</h2><p>按当前修改指引批量修订合同，审阅修订并下载结果。</p><button class="btn btn-primary" data-action="new-task" type="button">＋ 新建修改任务</button></article>
+    <article class="card workspace-launcher"><div class="workspace-launcher-icon"><svg><use href="#i-list"/></svg></div><h2>合同比对</h2><p>并排核对两个版本，逐处选择需要保留的内容。</p><button class="btn" type="button" data-workspace-new="compare">新建比对任务</button></article>
+    <article class="card workspace-launcher"><div class="workspace-launcher-icon"><svg><use href="#i-book"/></svg></div><h2>指引生成</h2><p>从监管法规起草候选修改指引，核对依据与版本。</p><button class="btn" type="button" data-workspace-new="generation">新建生成任务</button></article>
   </div>
   <div class="workspace-metrics" aria-label="全部业务任务统计">
     <button type="button" class="card workspace-metric" data-workspace-status="active"><span>进行中的任务</span><strong id="workspace-active">—</strong><small>上传、排队或处理中</small></button>
     <button type="button" class="card workspace-metric" data-workspace-status="attention"><span>需要处理的任务</span><strong id="workspace-attention">—</strong><small>查看待办、异常或候选审阅</small></button>
     <button type="button" class="card workspace-metric" data-workspace-status="completed"><span>近期完成的任务</span><strong id="workspace-completed">—</strong><small>最近 7 天 · 不代表均已正式交付</small></button>
   </div>
-  <div class="card card-pad workspace-task-card"><div class="section-title"><h2>我的任务</h2><small>三个业务统一查找，结果状态分别保留</small></div>
+  <div class="card card-pad workspace-task-card"><div class="section-title"><h2>我的任务</h2><button class="btn btn-sm" id="workspace-refresh" type="button">刷新</button></div>
     <div class="business-tabs" role="group" aria-label="任务类型"><button type="button" class="is-active" data-workspace-kind="">全部</button><button type="button" data-workspace-kind="revision">合同修改</button><button type="button" data-workspace-kind="compare">合同比对</button><button type="button" data-workspace-kind="generation">指引生成</button></div>
     <div class="toolbar workspace-toolbar"><div class="searchbox"><input id="workspace-search" type="search" placeholder="搜索任务名称" aria-label="搜索全部业务任务"></div><select class="control-select" id="workspace-status" aria-label="任务情况"><option value="">全部任务</option><option value="active">进行中</option><option value="attention">需要处理</option><option value="completed">近期完成</option></select><label class="workspace-date">创建日期<input type="date" id="workspace-date-from" aria-label="创建起始日期"></label><label class="workspace-date">至<input type="date" id="workspace-date-to" aria-label="创建结束日期"></label><select class="control-select" id="workspace-sort" aria-label="任务排序"><option value="updated_desc">最近更新</option><option value="created_desc">最近创建</option><option value="name">任务名称</option></select></div>
     <div id="workspace-state" class="subnote" role="status" aria-live="polite"></div><div class="table-wrap"><table class="table workspace-table"><thead><tr><th>任务名称</th><th>业务</th><th>规模</th><th>当前进展</th><th>待办与结果提示</th><th>更新时间</th><th></th></tr></thead><tbody id="workspace-task-rows"></tbody></table></div><div class="pagination" id="workspace-pagination"></div>
   </div>
 </section>
     <section class="section" id="view-overview" aria-label="合同修改">
-<div class="business-page-heading"><div><span class="eyebrow">CONTRACT REVISION</span><h1>合同修改</h1><p>按修改指引批量处理合同，跟踪进度并审阅实际交付结果。</p></div><button class="btn btn-primary" type="button" data-action="new-task">＋ 新建合同修改</button></div>
 <div hidden aria-hidden="true">
       <div class="card hero batch-overview-hero">
 <div class="hero-copy">
@@ -161,10 +156,6 @@
 </div>
 <h2>批量合同修订任务总览</h2>
 <p id="overview-description">本月累计处理 <strong id="overview-processed">—</strong> 份合同，平均每份 <strong id="overview-average">—</strong> 秒。异常合同会自动保留待人工处理，支持批量导出结果。</p>
-<div class="hero-actions">
-<button class="btn btn-primary" data-action="new-task">＋ 新建批量任务</button>
-<button class="btn" data-action="refresh">刷新</button>
-</div>
 </div>
 <div class="hero-side">
 <strong id="overview-completion-rate">—</strong>
@@ -206,12 +197,6 @@
 </div>
 <div class="split task-overview">
 <div class="card card-pad">
-<div class="section-title">
-<h2>修改任务</h2>
-<div class="head-actions">
-<button class="btn btn-sm btn-primary" data-action="new-task">＋ 新建批量任务</button>
-</div>
-</div>
 <div class="toolbar">
 <div class="searchbox">
 <input id="task-search" type="search" placeholder="搜索任务名称" aria-label="搜索任务名称">
@@ -234,6 +219,7 @@
 <option value="name_desc">名称倒序</option>
 </select>
 <button class="btn btn-sm" data-action="refresh">刷新</button>
+<button class="btn btn-primary page-primary" data-action="new-task" type="button">＋ 新建修改任务</button>
 </div>
 <div class="filter-chips" id="task-filter-chips" hidden>
 </div>
@@ -281,7 +267,6 @@
 </div>
 </section>
     <section class="section" id="view-import" aria-label="新建任务">
-<div class="business-page-heading"><div><span class="eyebrow">NEW REVISION</span><h1>新建合同修改</h1><p>确认当前指引，上传合同后即可在后台处理。</p></div><button class="btn" type="button" data-nav="overview">返回修改任务</button></div>
       <div class="import-grid">
 <div>
 <div class="card card-pad task-name-card">
@@ -400,7 +385,7 @@
 <div class="card card-pad" style="margin-bottom:14px">
 <div class="section-title">
 <div class="batch-title">
-<h2>任务总览</h2>
+<h1 class="object-title" id="task-object-title">正在读取任务…</h1>
 <span id="task-status">
 </span>
 <span id="task-ruleset" class="chip" hidden>
@@ -545,20 +530,8 @@
 </div>
 </section>
     <section class="section" id="view-compare" aria-label="合同比对" data-mode="list">
-<div class="business-subnav" id="compare-back-bar" hidden><button class="btn btn-sm" type="button" data-nav="compare">← 返回比对任务</button><span id="compare-route-title">合同比对</span></div>
       <div class="card card-pad compare-task-card">
-<div class="section-title">
-<div>
-<span class="eyebrow">CONTRACT COMPARE</span>
-<h2>合同比对</h2>
-<p class="subnote">按“原版 → 对比版”阅读两份 DOCX 正文与普通表格中的文字差异。结果只代表已覆盖的内容。</p>
-</div>
-<div class="head-actions">
-<button class="btn" id="compare-refresh">刷新</button>
-<button class="btn btn-primary" id="compare-new">＋ 新建比对任务</button>
-</div>
-</div>
-<div class="toolbar"><div class="searchbox"><input id="compare-search" type="search" placeholder="搜索比对任务" aria-label="搜索比对任务"></div><select id="compare-list-filter" class="control-select" aria-label="比对任务状态"><option value="">全部状态</option><option value="uploading">上传中</option><option value="queued">排队中</option><option value="running">处理中</option><option value="completed">处理结束</option></select></div>
+<div class="toolbar"><div class="searchbox"><input id="compare-search" type="search" placeholder="搜索比对任务" aria-label="搜索比对任务"></div><select id="compare-list-filter" class="control-select" aria-label="比对任务状态"><option value="">全部状态</option><option value="uploading">上传中</option><option value="queued">排队中</option><option value="running">处理中</option><option value="completed">处理结束</option></select><button class="btn" id="compare-refresh">刷新</button><button class="btn btn-primary page-primary" id="compare-new">＋ 新建比对任务</button></div>
 <div id="compare-task-list" aria-live="polite">
 </div>
 <div class="pagination" id="compare-list-pagination"></div>
@@ -566,8 +539,6 @@
       <div class="card card-pad compare-create" id="compare-create" hidden>
 <div class="compare-create-intro">
 <div>
-<span class="eyebrow">COMPARE WORKFLOW</span>
-<h2>新建比对任务</h2>
 <p class="subnote">先选择原版（基准文本），再选择对比版（修订文本）。差异中的“新增 / 删除”都以这个方向为准。</p>
 </div>
 <span class="compare-step">1 / 2 · 准备文件</span>
@@ -597,9 +568,7 @@
       <div class="card card-pad compare-detail" id="compare-detail" hidden>
 <div class="section-title">
 <div>
-<span class="eyebrow">TASK RESULT</span>
-<h2 id="compare-task-name">
-</h2>
+<h1 class="object-title" id="compare-task-name">正在读取任务…</h1>
 </div>
 <p id="compare-task-status">
 </p>
@@ -618,7 +587,6 @@
 <div class="compare-viewer-toolbar">
 <div class="compare-viewer-title">
 <div>
-<span class="eyebrow">DIFF READER</span>
 <strong id="compare-pair-title">
 </strong>
 <p class="compare-reader-subtitle">逐处核对正文变化，点击标记或差异条目可定位到对应段落。</p>
@@ -685,7 +653,7 @@
 </div>
 </div>
 <aside class="compare-diff-rail" aria-labelledby="compare-rail-title">
-<div class="compare-rail-heading"><div><span class="eyebrow">REVIEW</span><h3 id="compare-rail-title">差异列表</h3></div><small>逐处选择保留哪一版</small></div>
+<div class="compare-rail-heading"><div><h3 id="compare-rail-title">差异列表</h3></div><small>逐处选择保留哪一版</small></div>
 <div class="compare-diff-toolbar">
 <div class="compare-diff-nav">
 <button class="btn btn-sm" id="compare-prev-diff">上一处</button>
@@ -733,7 +701,7 @@
 <section class="section" id="view-generation" aria-label="指引生成"><div id="gg-root"></div></section>
 <section class="section" id="view-document" aria-label="合同结果"><div id="document-host"></div></section>
     <section class="section" id="view-guide" aria-label="修改指引">
-<div class="business-page-heading"><div><span class="eyebrow">REVISION GUIDES</span><h1>修改指引</h1><p>管理合同修改实际使用的指引。生成的候选指引需经过导入与核验，不能自动替换当前版本。</p></div><button class="btn" type="button" data-nav="generation">前往指引生成</button></div>
+<div class="page-actions"><p class="subnote">生成的候选指引需经过导入与核验，不能自动替换当前版本。</p><button class="btn" type="button" data-nav="generation">前往指引生成</button></div>
       <div class="card card-pad">
 <div class="section-title">
 <div class="batch-title">
@@ -790,7 +758,6 @@
 </div>
     </section>
     <section class="section" id="view-settings" aria-label="飞书绑定">
-<div class="feishu-page-heading"><span class="eyebrow">FEISHU CONNECT</span><h1>飞书绑定</h1><p>连接飞书，在与 FundLex 机器人的私聊中发送合同、接收任务进度。</p></div>
 <div class="feishu-binding-layout">
 <div class="card feishu-connect-card" id="feishu-connect-card" data-state="loading">
 <div class="feishu-status-row"><span class="feishu-app-icon" aria-hidden="true">↗</span><div><h2>连接你的飞书账号</h2><p>绑定到当前 FundLex 账号 <strong id="feishu-current-user">—</strong></p></div><span class="feishu-status-badge" id="feishu-binding-badge">读取中</span></div>
@@ -879,11 +846,9 @@
 <div class="detail-panel" id="detail-panel" role="dialog" aria-modal="true" aria-labelledby="detail-title">
 <div class="detail-head">
 <div>
-<small>合同证据与报告 · 当前任务</small>
-<h2 id="detail-title">
-</h2>
+<h1 class="object-title" id="detail-title">正在读取合同…</h1>
 </div>
-<button class="btn btn-sm" id="close-detail" aria-label="关闭合同详情">✕</button>
+<button class="btn btn-sm" id="close-detail" aria-label="关闭合同详情" hidden>✕</button>
 </div>
 <div class="detail-body" id="detail-body">
 </div>

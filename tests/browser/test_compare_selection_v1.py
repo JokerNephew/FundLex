@@ -164,6 +164,10 @@ def test_v1_pending_choices_refresh_generation_download_and_mobile(browser, live
     controls, states = mock_compare(page)
     try:
         open_compare(page, base)
+        expect(page.locator('h1:visible')).to_have_count(1)
+        expect(page.locator('#compare-task-name')).to_have_text('V1 人工选择')
+        expect(page.locator('#breadcrumb [aria-current="page"]')).to_have_text('任务详情')
+        expect(page.locator('.topbar h1')).to_have_count(0)
         expect(page.locator('#compare-selection-generate')).to_be_disabled()
         expect(page.locator('#compare-selection-progress')).to_contain_text('待选择 2')
         page.locator('#compare-selection-preview').click()
@@ -280,7 +284,7 @@ def test_v1_feishu_page_states_expiry_confirmation_and_reset(browser, live_app, 
     page.route('**/api/integrations/feishu/oauth/start', start)
     try:
         page.goto(base + '/#settings', wait_until='networkidle')
-        expect(page.locator('#topbar-title')).to_have_text('飞书绑定')
+        expect(page.locator('#breadcrumb [aria-current="page"]')).to_have_text('飞书绑定')
         expect(page.locator('#feishu-binding-badge')).to_have_text('未绑定')
         assert not page.locator('#feishu-binding-code-btn').count()
         assert '实际运行能力' not in page.locator('#view-settings').inner_text()

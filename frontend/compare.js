@@ -49,7 +49,7 @@
   }
   async function loadTasks() { const token=++state.listToken,identity=state.identityToken; try { const p=await json('/api/compare/tasks'); if(token!==state.listToken||identity!==state.identityToken)return; state.tasks=p.items||[]; renderTasks(); } catch (e) { if(token===state.listToken&&identity===state.identityToken)$('compare-task-list').innerHTML=`<p class="field-error">读取对比任务失败：${esc(e.message)}</p>`; } }
   function renderTask(task) {
-    state.task=task; state.pairs=task.pairs||[]; $('compare-detail').hidden=false; $('compare-task-name').textContent=task.name||'合同比对'; $('compare-task-status').textContent=`${taskMetrics(task).status} · ${state.pairs.length} 组`;
+    state.task=task; state.pairs=task.pairs||[]; $('compare-detail').hidden=false; $('compare-task-name').textContent=task.name||'未命名任务';api.setObjectTitle?.('compare',task.name); $('compare-task-status').textContent=`${taskMetrics(task).status} · ${state.pairs.length} 组`;
     state.tasks=state.tasks.map(t=>t.id===task.id?task:t); renderTasks(); renderPairs();
   }
   function renderPairs() {
@@ -269,7 +269,7 @@
   function applyRoute(route){
     if(route.view!=='compare'){clearTimeout(state.poll);return;}
     const mode=['list','new','detail'].includes(route.mode)?route.mode:'list';$('view-compare').dataset.mode=mode;
-    $('compare-back-bar').hidden=mode==='list';$('compare-route-title').textContent=mode==='new'?'新建合同比对':'比对任务详情';
+    if(mode==='detail'&&state.task?.id!==route.id)$('compare-task-name').textContent='正在读取任务…';
     if(mode==='new'){if($('compare-create').hidden)showCreate(true);return;}
     $('compare-create').hidden=true;
     if(mode==='list'){$('compare-search').value=route.q||'';$('compare-list-filter').value=route.status||'';$('compare-detail').hidden=true;$('compare-viewer').hidden=true;clearTimeout(state.poll);if(api.ready?.())loadTasks();return;}

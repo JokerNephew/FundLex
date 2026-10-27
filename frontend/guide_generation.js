@@ -120,7 +120,7 @@
   }
   function routePage(value) { return /^\d+$/.test(String(value)) && Number.isSafeInteger(Number(value)) && Number(value) > 0 ? Number(value) : 1; }
   function heading(title, subtitle, actions = "") {
-    return `<header class="gg-heading"><div><h1>${esc(title)}</h1><p class="gg-muted">${esc(subtitle)}</p></div><div class="gg-actions">${actions}</div></header>`;
+    return `<header class="gg-heading"><div><h1 class="object-title">${esc(title)}</h1><p class="gg-muted">${esc(subtitle)}</p></div><div class="gg-actions">${actions}</div></header>`;
   }
 
   async function open(route = {}) {
@@ -161,8 +161,7 @@
   }
 
   async function loadList(ctx) {
-    root().innerHTML = heading("指引生成", "从法规生成候选修改指引，审阅后再决定是否导入修改资源。", button("new", "新建生成任务", "btn-primary")) +
-      `<section class="card gg-card"><form id="gg-filter" class="gg-toolbar"><label class="gg-search">搜索任务<input id="gg-query" type="search" placeholder="任务名或法规文件名" value="${esc(state.query)}"></label><label>任务状态<select id="gg-status"><option value="">全部状态</option>${["queued", "running", "paused", "failed", "complete", "complete_with_unresolved"].map((value) => `<option value="${value}" ${state.status === value ? "selected" : ""}>${esc(label(value))}</option>`).join("")}</select></label><button class="btn" type="submit">筛选</button>${button("refresh", "刷新")}</form><p class="gg-muted" id="gg-list-scope">正在读取任务…</p><div id="gg-list-results">${loading()}</div><div id="gg-list-pages" class="gg-pagination"></div></section>`;
+    root().innerHTML = `<section class="card gg-card"><form id="gg-filter" class="gg-toolbar"><label class="gg-search">搜索任务<input id="gg-query" type="search" placeholder="任务名或法规文件名" value="${esc(state.query)}"></label><label>任务状态<select id="gg-status"><option value="">全部状态</option>${["queued", "running", "paused", "failed", "complete", "complete_with_unresolved"].map((value) => `<option value="${value}" ${state.status === value ? "selected" : ""}>${esc(label(value))}</option>`).join("")}</select></label><button class="btn" type="submit">筛选</button>${button("refresh", "刷新")}${button("new", "＋ 新建生成任务", "btn-primary page-primary")}</form><p class="gg-muted" id="gg-list-scope">正在读取任务…</p><div id="gg-list-results">${loading()}</div><div id="gg-list-pages" class="gg-pagination"></div></section>`;
     try {
       const params = new URLSearchParams({ page: String(state.listPage), page_size: "20", q: state.query, status: state.status });
       let data = await request(`${API}/runs?${params}`, {}, ctx);
@@ -186,7 +185,7 @@
 
   async function renderNew(ctx) {
     const advancedOptions = `<details class="gg-advanced"><summary>高级选项</summary><label class="gg-field" for="gg-corpus-limit">参考合同样本上限（选填）<input id="gg-corpus-limit" type="number" min="1" max="${CORPUS_LIMIT_MAX}" step="1" inputmode="numeric" placeholder="留空使用服务端默认范围" aria-describedby="gg-corpus-limit-hint gg-corpus-limit-error"></label><p id="gg-corpus-limit-hint" class="gg-muted">填写 1—${CORPUS_LIMIT_MAX} 的整数。留空沿用服务端默认范围（可为全库）。设置上限后，输出仅是所选样本范围下的候选指引，不代表全库覆盖；该选项不是费用上限。</p><p id="gg-corpus-limit-error" class="gg-error" role="status" aria-live="polite"></p><label class="gg-check"><input id="gg-latest" type="checkbox" checked> 语义扫描仅参考已知最新合同；历史版本仍参与词法扫描</label><p class="gg-muted">仅提供公开接口允许的扫描选项；模型、预算上限、语料路径均由服务端管理。不额外请求引擎兼容模型核验。</p></details>`;
-    root().innerHTML = heading("新建生成任务", "上传法规，参考合同语料生成候选指引。", button("list", "返回任务列表")) +
+    root().innerHTML =
       `<form id="gg-create" class="gg-create-layout"><section class="card gg-card"><h2>法规文件</h2><p class="gg-muted">支持 DOCX、带文本层 PDF，最大 80 MB。扫描件不支持，不进行 OCR。</p><input id="gg-file" type="file" accept=".docx,.pdf" hidden><div class="gg-upload">${button("pick", "选择法规文件")}<span id="gg-file-label" class="gg-muted">尚未选择文件</span></div><label class="gg-field">任务名称<input id="gg-task-name" readonly value="" placeholder="由法规文件名自动生成"></label>${advancedOptions}<div id="gg-create-status" role="status" aria-live="polite"></div></section><aside class="card gg-card"><h2>生成前确认</h2><h3>参考合同语料（只读）</h3><div id="gg-corpus">${loading()}</div>${note("输出为 AI 候选修改指引，不是已启用的合同修改规则。需人工审阅；发布候选不会自动导入或启用修改引擎。") }<p class="gg-muted">提交后后台将调用真实模型并产生费用，按服务端预算限制执行。费用以实际调用为准；上传并不保证候选通过核验。</p><label class="gg-check"><input id="gg-cost-ack" type="checkbox" required> 我已确认输入范围及模型调用费用</label><button id="gg-submit" class="btn btn-primary" type="submit" disabled>上传并生成（调用模型）</button></aside></form>`;
     try {
       const data = await request(`${API}/corpus`, {}, ctx);
@@ -250,7 +249,7 @@
   }
 
   async function loadDetail(ctx) {
-    root().innerHTML = heading("生成任务详情", "正在读取当前任务…", button("list", "返回任务列表")) + loading();
+    root().innerHTML = `<h1 class="object-title">正在读取任务…</h1>` + loading();
     try {
       state.detail = await request(runPath(), {}, ctx);
       root().innerHTML = `<div id="gg-detail-head"></div><nav class="gg-tabs" aria-label="生成任务详情">${Object.entries(TABS).map(([key, title]) => `<button type="button" data-gg-tab="${key}" class="gg-tab ${key === state.route.tab ? "is-active" : ""}" aria-current="${key === state.route.tab ? "page" : "false"}">${title}</button>`).join("")}</nav><div id="gg-panel" aria-live="polite">${loading()}</div>`;
@@ -262,7 +261,9 @@
   function renderDetailHead() {
     const run = state.detail;
     if (!$("gg-detail-head")) return;
-    $("gg-detail-head").innerHTML = heading(run.title || run.filename || "生成任务", `${run.filename || ""} · 更新 ${date(run.updated_at || run.created_at)}`, button("list", "返回任务列表") + button("refresh", "刷新")) +
+    workbench().setObjectTitle?.("generation", run.title || run.filename);
+    const source = run.filename && run.filename !== run.title ? `${run.filename} · ` : "";
+    $("gg-detail-head").innerHTML = heading(run.title || run.filename || "未命名任务", `${source}更新 ${date(run.updated_at || run.created_at)}`, button("refresh", "刷新")) +
       `<div class="gg-task-status">${badge(run.status)}${badge(run.qualification_status || "draft")}${run.candidate && run.candidate.status !== run.qualification_status ? badge(run.candidate.status) : ""}<span>当前阶段：${esc(stage(run.stage))}</span></div>${Number.isInteger(run.config?.corpus_limit) ? `<div id="gg-run-scope">${note(`本任务参考合同样本上限：${run.config.corpus_limit} 份。输出仅是所选样本范围下的候选指引，不代表全库覆盖；实际使用范围以任务快照为准。`, "warning")}</div>` : ""}${runProblem(run.error_code)}${run.retry ? `<div class="gg-retry"><span>处理尝试 ${esc(run.retry.attempts ?? "—")} / ${esc(run.retry.max_attempts ?? "—")} 次</span>${run.retry.can_resume === true && ["failed", "paused"].includes(run.status) ? `${button("resume", "继续处理/重试")}<p class="gg-muted">继续处理将再次调用模型、消耗预算并可能产生费用；仍受服务端预算及尝试次数上限约束。不会自动执行付费重试。</p>` : ""}<span id="gg-resume-status" role="status" aria-live="polite"></span></div>` : ""}`;
   }
   async function resumeRun(trigger) {

@@ -140,6 +140,17 @@ class Runner:
               document:document.documentElement.scrollWidth,body:document.body.scrollWidth,
               overflow:Math.max(document.documentElement.scrollWidth,document.body.scrollWidth)>innerWidth+1})""")
             require(not data["overflow"], f"HORIZONTAL_OVERFLOW_{name}_{width}")
+            location = self.page.evaluate("""() => {
+              const bar=document.querySelector('.topbar').getBoundingClientRect();
+              const crumb=document.querySelector('.topbar #breadcrumb').getBoundingClientRect();
+              const leaf=document.querySelector('#breadcrumb [aria-current=page]').getBoundingClientRect();
+              return {visible:crumb.height>0 && crumb.width>0,
+                inside:crumb.top>=bar.top && crumb.bottom<=bar.bottom+1 && leaf.right<=crumb.right+1,
+                headings:[...document.querySelectorAll('h1')].filter(n=>n.getClientRects().length).length};
+            }""")
+            require(location["visible"] and location["inside"], f"TOPBAR_LOCATION_NOT_VISIBLE_{width}")
+            require(location["headings"] == 1, f"DUPLICATE_OR_MISSING_PAGE_HEADING_{width}")
+            data["location"] = location
             if compare:
                 rail = self.page.evaluate("""() => {
                   const d=document.querySelector('.compare-document-area').getBoundingClientRect();
@@ -191,14 +202,18 @@ class Runner:
         self.step = "smoke_routes"
         for fragment, selector, parent in (
             ("#workspace", "#view-workspace", None),
-            ("#overview", "#view-overview", "workspace"),
+            ("#overview", "#view-overview", None),
             ("#import", "#view-import", "overview"),
-            ("#compare?mode=list", "#compare-new", "workspace"),
+            ("#compare?mode=list", "#compare-new", None),
             ("#compare?mode=new", "#compare-submit", "compare"),
-            ("#generation?mode=list", "#gg-filter", "workspace"),
+            ("#generation?mode=list", "#gg-filter", None),
             ("#generation?mode=new", "#gg-create", "generation"),
+            ("#guide", "#guide-current-body", None),
+            ("#settings", "#feishu-connect-card", None),
         ):
             self.deep_reload(fragment, selector)
+            require(self.page.locator('.main #breadcrumb, .main h1:visible, .main .eyebrow:visible').count() == 0,
+                    "REPEATED_CONTENT_PAGE_HEADING")
             self.responsive(re.sub(r"[^a-z0-9]+", "-", fragment).strip("-"))
             if parent:
                 self.parent(parent, {"workspace": "#view-workspace", "overview": "#view-overview",

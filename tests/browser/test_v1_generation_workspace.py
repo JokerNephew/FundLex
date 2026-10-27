@@ -26,7 +26,7 @@ HTML = """<!doctype html><html lang="zh-CN"><head><meta charset="utf-8">
 <link rel="stylesheet" href="/static/app.css"><link rel="stylesheet" href="/static/guide_generation.css">
 <style>body{height:auto;overflow:auto}.fixture-main{padding:20px;max-width:1200px;margin:auto}</style>
 </head><body><main class="fixture-main"><section class="section" id="view-generation" aria-label="指引生成"><div id="gg-root"></div></section></main>
-<div id="fixture-toast" role="status"></div><script>
+<div id="fixture-toast" role="status"></div><button id="fixture-parent" onclick="FundLexWorkbench.navigate('generation',{mode:'list'})">指引生成</button><script>
 (() => {
   let epoch = 0, owner = 'owner-one', authenticated = true;
   window.fixtureDownloads = [];
@@ -520,7 +520,7 @@ def test_server_pagination_search_status_page2_refresh_and_return(browser):
         assert mock.list_queries[-1] == {"page": ["2"], "page_size": ["20"], "q": ["分页法规"], "status": ["paused"]}
         expect(page.locator("#gg-list-scope")).not_to_contain_text("200")
         page.locator('[data-gg-action="new"]').click()
-        page.locator('[data-gg-action="list"]').click()
+        page.locator('#fixture-parent').click()
         expect(page.locator("#gg-list-scope")).to_contain_text("第 2 页")
         assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
         assert errors == []
@@ -617,7 +617,7 @@ def test_explicit_resume_counts_budget_pending_and_owner(browser, run_status):
         assert mock.resumes[0]["authorization"] == "Bearer browser-fixture"
         assert page.evaluate("FundLexGuideGeneration.hasUnsavedChanges()")
         page.once("dialog", lambda dialog: dialog.dismiss())
-        page.locator('[data-gg-action="list"]').click()
+        page.locator('#fixture-parent').click()
         expect(page.locator("#gg-resume-status")).to_contain_text("请勿重复操作")
         held_route, payload = mock.held.pop()
         mock.hold = None
@@ -717,7 +717,7 @@ def test_partial_errors_empty_guide_and_invalid_file(browser):
         mock.items = []
         page.locator('[data-gg-tab="guide"]').click()
         expect(page.locator("#gg-panel")).to_contain_text("尚无候选指引")
-        page.locator('[data-gg-action="list"]').click()
+        page.locator('#fixture-parent').click()
         page.locator('[data-gg-action="new"]').click()
         page.locator("#gg-file").set_input_files({"name": "错误.txt", "mimeType": "text/plain", "buffer": b"invalid"})
         expect(page.locator("#gg-submit")).to_be_disabled()
@@ -768,8 +768,14 @@ def test_real_v1_shell_deep_link_and_preserved_editor(browser, live_shell, width
         page.goto(live_shell + "/#generation?mode=detail&id=run-one&tab=guide")
         expect(page.locator("#gg-editor")).to_be_visible()
         expect(page.locator('.nav-btn[data-nav="generation"]')).to_have_class(__import__("re").compile("active"))
+        expect(page.locator('h1:visible')).to_have_count(1)
+        expect(page.locator('#breadcrumb [aria-current="page"]')).to_have_text('任务详情')
+        expect(page.locator('.topbar h1')).to_have_count(0)
         editor = page.locator('[data-gg-field="new_text"]')
         editor.fill("真实 V1 壳中的未保存修订")
+        page.once("dialog", lambda dialog: dialog.dismiss())
+        page.locator('#breadcrumb [data-crumb="generation"]').click()
+        expect(editor).to_have_value("真实 V1 壳中的未保存修订")
         page.evaluate("document.dispatchEvent(new CustomEvent('fundlex:route',{detail:FundLexWorkbench.route()}))")
         expect(editor).to_have_value("真实 V1 壳中的未保存修订")
         page.once("dialog", lambda dialog: dialog.dismiss())

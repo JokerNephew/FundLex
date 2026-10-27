@@ -32,7 +32,7 @@
   function notify(message,error=false,taskId=null){if(!message)return;const recent=notifications.find(n=>n.message===message&&n.taskId===taskId&&Date.now()-n.time<60000);if(recent)return;notifications.unshift({message,error,taskId,time:Date.now(),read:false});notifications.splice(50);renderNotifications();}
   // 错误同时进入铃铛与全局提示；成功类操作只做全局轻提示。
   function notice(message,error=false){if(error)toast(message,true);}
-  const BASE_TITLE='FundLex合同修订工作台';
+  let BASE_TITLE='FundLex合同修订工作台';
   function showToast(message,kind='success'){
     const el=$('toast');if(!el||!message)return;
     const now=Date.now(),key=kind+'|'+String(message);
@@ -135,24 +135,39 @@
     renderFilterChips(scope);changed(scope);
   }
   const VIEW_TITLES={workspace:'工作台',overview:'合同修改',import:'新建合同修改',task:'修改任务详情',document:'合同结果与修订审阅',guide:'修改指引',settings:'飞书绑定',users:'用户管理',compare:'合同比对',generation:'指引生成'};
-  function renderTopbarTitle(view) {const el=$('topbar-title');el.textContent=view==='import'&&state.recover?'新建任务 · 补传':(VIEW_TITLES[view]||'');}
   function renderFooter(){const el=$('app-version');if(el)el.textContent=state.cap?.app_version?`v${state.cap.app_version}`:'—';}
+  // Identity reset uses the same location renderer; there is no second title.
+  function renderTopbarTitle(view){renderBreadcrumb(view);}
+  function businessListKey(view){return `fundlex-v1-list-route:${state.auth.user?.id||owner()}:${view}`;}
+  function saveBusinessList(){
+    if(!['compare','generation'].includes(state.view)||state.route?.mode!=='list')return;
+    const route={mode:'list'};for(const key of ['q','status','page'])if(state.route[key]!=null)route[key]=String(state.route[key]);
+    try{sessionStorage.setItem(businessListKey(state.view),JSON.stringify(route));}catch{}
+  }
+  function businessListRoute(view){
+    try{const saved=JSON.parse(sessionStorage.getItem(businessListKey(view))||'{}'),route={mode:'list'};for(const key of ['q','status','page'])if(typeof saved[key]==='string')route[key]=saved[key];return route;}catch{return {mode:'list'};}
+  }
   function renderBreadcrumb(view=state.view){
     const el=$('breadcrumb');if(!el)return;
-    const items=[{label:'工作台',nav:'workspace'}];
-    const add=(label,nav=null,current=false)=>items.push({label,nav,current});
-    if(view==='workspace')items[0].current=true;
-    else if(view==='overview')add('合同修改',null,true);
-    else if(view==='import'){add('合同修改','overview');add('新建修改任务',null,true);}
-    else if(view==='task'){add('合同修改','overview');add(state.task?.name||'任务详情',null,true);}
-    else if(view==='document'){add('合同修改','overview');add(state.task?.name||'修改任务','task');add(state.detail?.name||'合同结果',null,true);}
-    else if(view==='guide')add('修改指引',null,true);
-    else if(view==='compare'||view==='generation'){const name=VIEW_TITLES[view],mode=state.route?.mode||'list';add(name,mode==='list'?null:view,mode==='list');if(mode!=='list')add(mode==='new'?'新建任务':'任务详情',null,true);}
-    else if(view==='settings')add('飞书绑定',null,true);
-    else if(view==='users')add('用户管理',null,true);
-    else add('任务总览',null,true);
-    el.innerHTML=items.map((item,index)=>`${index?'<span class="crumb-sep" aria-hidden="true">›</span>':''}${item.current?`<span aria-current="page" title="${esc(item.label)}">${esc(item.label)}</span>`:`<button type="button" class="crumb-link" data-crumb="${esc(item.nav||'overview')}">${esc(item.label)}</button>`}`).join('');
+    const items=[],add=(label,nav=null,id=null)=>items.push({label,nav,id});
+    const task=state.task?.id===state.route?.id?state.task:null;
+    if(view==='import'){add('合同修改','overview');add(state.recover?'补传文件':'新建任务');}
+    else if(view==='task'){add('合同修改','overview');add('任务详情');}
+    else if(view==='document'){add('合同修改','overview');add(task?.name||'所属任务','task',state.route?.id);add(state.route?.tab==='review'?'合同审阅':'合同结果');}
+    else if(view==='compare'||view==='generation'){const mode=state.route?.mode||'list';add(VIEW_TITLES[view],mode==='list'?null:view);if(mode!=='list')add(mode==='new'?'新建任务':'任务详情');}
+    else add(VIEW_TITLES[view]||'工作台');
+    const objectPage=['task','document'].includes(view)||(['compare','generation'].includes(view)&&state.route?.mode==='detail');
+    const markup=items.map((item,index)=>{
+      const current=index===items.length-1,separator=index?'<span class="crumb-sep" aria-hidden="true">›</span>':'';
+      if(current)return separator+(objectPage?`<span class="crumb-current" aria-current="page">${esc(item.label)}</span>`:`<h1 class="crumb-current" aria-current="page">${esc(item.label)}</h1>`);
+      return separator+`<button type="button" class="crumb-link" data-crumb="${esc(item.nav)}" ${item.id?`data-crumb-id="${esc(item.id)}"`:''} title="${esc(item.label)}">${esc(item.label)}</button>`;
+    }).join('');
+    if(el.innerHTML!==markup)el.innerHTML=markup;
+    const objectName=view==='document'?state.detail?.name:view==='task'?task?.name:state.objectTitle;
+    state.pageTitle=`${objectPage&&objectName?objectName+' · ':''}${items.map(item=>item.label).join(' › ')} · FundLex`;
+    BASE_TITLE=state.pageTitle;document.title=BASE_TITLE;
   }
+  function setObjectTitle(view,title){if(state.view===view){state.objectTitle=String(title||'');renderBreadcrumb();}}
   function openHelp(){const view=$('help-overlay');if(!view)return;state.focusReturn=document.activeElement;view.hidden=false;document.querySelector('.app').inert=true;$('help-close').focus();}
   function closeHelp(){const view=$('help-overlay');if(!view||view.hidden)return;view.hidden=true;if($('login-view').hidden&&$('password-view').hidden)document.querySelector('.app').inert=false;if(state.focusReturn){state.focusReturn.focus();state.focusReturn=null;}}
   function routeFromHash(){const raw=location.hash.slice(1),cut=raw.indexOf('?'),view=(cut<0?raw:raw.slice(0,cut))||'workspace';return {view,...Object.fromEntries(new URLSearchParams(cut<0?'':raw.slice(cut+1)))};}
@@ -163,18 +178,20 @@
     if(view==='revision')view='overview';
     if(!Object.hasOwn(VIEW_TITLES,view))view='workspace';
     if(view==='users'&&!(state.auth.mode==='password'&&state.auth.user?.role==='admin'))view='workspace';
+    if(['compare','generation'].includes(view)&&!Object.keys(options).length)options=businessListRoute(view);
     const next={view,...options};if(['compare','generation'].includes(view)&&!next.mode)next.mode='list';
-    if(['task','document'].includes(view)&&!next.id&&state.selected)next.id=state.selected;
+    if(['task','document'].includes(view)&&!next.id)next.id=view==='task'&&state.view==='document'?state.route?.id:state.selected;
     const changed=state.route&&routeHash(state.route)!==routeHash(next);
     if(changed&&((state.view==='generation'&&window.FundLexGuideGeneration?.hasUnsavedChanges?.())||(state.view==='compare'&&window.FundLexCompare?.hasUnsavedChanges?.()))&&!confirm('当前有未保存的更改，确认离开此页？')){history.replaceState(null,'',routeHash(state.route));return;}
     if(state.view==='overview')saveRevisionFilters();
+    saveBusinessList();
     if(state.view==='document'&&view!=='document')closeDetail();
-    const prior=state.route;state.view=view;state.route=next;const hash=routeHash(next);state.routeHash=hash;
+    const prior=state.route;if(!prior||prior.view!==view||prior.id!==next.id||prior.mode!==next.mode)state.objectTitle='';state.view=view;state.route=next;const hash=routeHash(next);state.routeHash=hash;
     if(location.hash!==hash)location.hash=hash;
     document.querySelectorAll('.section').forEach(n=>n.classList.toggle('active',n.id===`view-${view}`));
     const parent=['import','task','document'].includes(view)?'overview':view;
     document.querySelectorAll('[data-nav].nav-btn').forEach(n=>{const active=n.dataset.nav===parent;n.classList.toggle('active',active);if(active)n.setAttribute('aria-current','page');else n.removeAttribute('aria-current');});
-    renderTopbarTitle(view);renderBreadcrumb(view);if(!prior||prior.view!==view||prior.mode!==next.mode||prior.id!==next.id||prior.document!==next.document)document.querySelector('.main').scrollTop=0;
+    renderBreadcrumb(view);if(!prior||prior.view!==view||prior.mode!==next.mode||prior.id!==next.id||prior.document!==next.document)document.querySelector('.main').scrollTop=0;
     document.dispatchEvent(new CustomEvent('fundlex:view',{detail:view}));dispatchRoute();
     if(!state.cap)return;
     if(view==='users')loadUsers();if(view==='guide')loadGuides();if(view==='settings')loadFeishuBinding();
@@ -228,7 +245,7 @@
   function progressHTML(t) {const total=t?.total || 1;return [['p-done',t?taskMetrics(t).success:0],['p-fail',t?taskMetrics(t).anomaly:0],['p-excluded',t?.qualification_counts?.excluded_by_fund_type||0],['p-evaluation',evaluationCount(t)],['p-work',t?.processing || 0],['p-queue',t?.queued || 0]].map(([c,n])=>`<span class="${c}" style="width:${Math.min(100,100*n/total)}%"></span>`).join('');}
   function renderTask() {
     const t=state.task,pct=t?.total?Math.round(100*(t.completed)/t.total):0;
-    $('task-status').innerHTML=t?badge(t.status):'';$('selected-task-title').textContent=t?.name || '尚未选择任务';
+    $('task-status').innerHTML=t?badge(t.status):'';$('task-object-title').textContent=t?.name || '尚未选择任务';$('selected-task-title').textContent='逐合同明细';
     $('selected-task-subtitle').textContent=t?`任务全部 ${t.total} 份 · 已上传 ${t.uploaded} 份 · 待上传 ${t.pending_upload} 份 · 接收失败 ${t.rejected} 份`:'从任务总览选择任务查看结果。';
     const qc=t?.qualification_counts||{},dc=t?.delivery_counts||{};
     $('progress-evaluation-legend').hidden=!evaluationCount(t);
@@ -802,6 +819,6 @@
   $('detail-overlay').classList.add('inline-contract-detail');
   $('detail-panel').removeAttribute('aria-modal');$('detail-panel').setAttribute('role','region');
   $('close-detail').textContent='返回任务';$('close-detail').setAttribute('aria-label','返回修改任务');
-  window.FundLexWorkbench={json,esc,toast,go,navigate:go,download,appPath,route:()=>({...state.route}),ready:()=>!!state.cap,epoch:()=>state.epoch,view:()=>state.view,authenticated:()=>state.auth.mode!=='password'||!!state.auth.token};
+  window.FundLexWorkbench={json,esc,toast,go,navigate:go,download,appPath,setObjectTitle,route:()=>({...state.route}),ready:()=>!!state.cap,epoch:()=>state.epoch,view:()=>state.view,authenticated:()=>state.auth.mode!=='password'||!!state.auth.token};
   window.addEventListener('hashchange',()=>{if(location.hash!==state.routeHash){const route=routeFromHash();go(route.view,Object.fromEntries(Object.entries(route).filter(([key])=>key!=='view')));}});document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&document.title!==BASE_TITLE)document.title=BASE_TITLE;});try{$('dev-user').value=localStorage.getItem('fundlex-dev-user') || 'local-user';}catch{$('dev-user').value='local-user';}state.auth.token=storedToken();state.auth.user=storedUser();$('login-form').addEventListener('submit',submitLogin);$('register-form').addEventListener('submit',submitRegister);$('register-link').addEventListener('click',()=>switchAuthMode('register'));$('register-back').addEventListener('click',()=>switchAuthMode('login'));$('logout-btn').addEventListener('click',logout);$('password-btn').addEventListener('click',openPasswordDialog);$('pwd-cancel').addEventListener('click',closePasswordDialog);$('password-form').addEventListener('submit',submitPasswordChange);$('password-view').addEventListener('click',e=>{if(e.target===$('password-view'))closePasswordDialog();});document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!$('password-view').hidden)closePasswordDialog();});renderAuthUI();renderTask();renderImport();go(location.hash.slice(1));refresh(true).then(()=>{monitorTasks();openDeepLinkedTask();});setInterval(()=>{if(state.cap&&!state.refreshBusy&&document.visibilityState==='visible'&&(state.view==='overview'||(state.task&&['uploading','queued','running','paused'].includes(state.task.status)))){state.refreshBusy=true;refresh(true).finally(()=>{state.refreshBusy=false;});}},5000);setInterval(()=>{if(document.visibilityState==='visible')monitorTasks();},5000);document.addEventListener('keydown',e=>{if(e.key==='Escape'){$('notification-panel').hidden=true;$('notification-toggle').setAttribute('aria-expanded','false');}});document.addEventListener('click',e=>{if(!e.target.closest('.notification-center')){$('notification-panel').hidden=true;$('notification-toggle').setAttribute('aria-expanded','false');}});
 })();
