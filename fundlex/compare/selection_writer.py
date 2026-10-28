@@ -671,6 +671,9 @@ def _apply_block_operations(root: etree._Element, left_doc, right_doc,
         if (parent.tag == Q("tc") and len(parent.findall(Q("p"))) <= len(left_elements)
                 and operation.kind == "delete"):
             raise DocxError("SELECTION_BLOCK_STRUCTURE_UNSUPPORTED", operation.diff_id)
+        if (parent.tag == Q("body") and len(parent.findall(Q("p"))) <= len(left_elements)
+                and operation.kind == "delete"):
+            raise DocxError("SELECTION_BLOCK_STRUCTURE_UNSUPPORTED", operation.diff_id)
         entries.setdefault(id(parent), []).append((parent, index, operation, left_elements))
     next_id = revision_start
     for group in entries.values():
