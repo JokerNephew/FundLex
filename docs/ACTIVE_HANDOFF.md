@@ -12,7 +12,8 @@
 - 范围漏改：`rule_scope.py` 支持同类多叶子；景宁G05现同时含p148/p155（均body），G04仍只取定义叶；费用章节标题接受“基金费用”等词族，销售服务费叶子不再要求固定前缀；copy_key按标题词族生成。
 - 证明方向：`effects.py` 无站点+guide字面缺失不再PASS，默认`EFFECT_SITE_UNPROVEN`，需显式覆盖证据；G13/G17同义旧义残留探针；`claim_replay` 重复效果按operation/授权站点收敛。
 - 容量/重试：`structure_index` 默认全量（85/85可达）；`compose_variant` delete重试每次attempt独立校验（二次正确不再被首次错误污染）。
-- 离线验证：全量 `1846 passed / 13 skipped`；真实原件探针 `docs/evidence/remediation-probe-20261028.json`（景宁p148+p155、弘利G17 0调用精确删除、G14绑定、85节索引、effect fail-closed），`model_calls=0`。均为离线证据，不是真实模型/生产/用户E2E验收。
+- 离线验证：全量 `1871 passed / 13 skipped`（commit `c5d5ab5`）；真实原件探针 `docs/evidence/remediation-probe-20261028.json`（景宁p148+p155、弘利G17 0调用精确删除、G14绑定、85节索引、effect fail-closed），`model_calls=0`。均为离线证据，不是真实模型/生产/用户E2E验收。
+- 本轮提交：`f2e318e`、`2953a87`、`102435a`、`af2acd7`、`e9ce4f6`、`d1f966e`、`84d9a73`、`474c608`、`c5d5ab5`、`d51dc34`。未提交的既有frontend/compare/feishu等dirty工作保持原状。
 - 第二批（commit `2953a87` 及后续未提交改动）：T3 locator 消费批准（窗口内真实quote+有效批准可越过词袋，越界/伪造/过期仍拒）；候选发现可分页；事实按申购费/销售服务费分别推导；replay/residual 到40返回 truncated/remaining/next_cursor；`ensure_delete_targets` 支持 cursor/page_info 且 pipeline 循环取页；`EFFECT_SITE_UNPROVEN` 等新码归为阻断；有有效批准才允许受控 compose fallback（无批准仍 fail-closed）。
 - 第四批（commit `e9ce4f6`、`d1f966e`）：截断的残留扫描计入未完成；`facts_context` 遇超长段落改为跳过并标记，不再屏蔽后续短证据。
 - 第三批（commit `102435a`）：确定性执行器无法表达变体时，有有效批准才允许受控 compose fallback（无批准仍fail-closed）；集合枚举接受“现有/设/包括”（仍要求标签集合精确一致）；收费证据识别“实行/适用…%年费率”。
@@ -1416,3 +1417,10 @@
 - 语法编译和 diff check 通过。旧全量测试在新硬不变量下为 883 passed / 59 failed / 6 skipped；失败混合旧测试预期（TRUE→NOT_APPLICABLE、隐式 ONE_OF、未认证 synthetic guide）和实际接线缺陷，不能作为最终验收。新增 invariant 测试尚未单独通过。
 - 已修复：`CLAIM_PLANNED_EFFECT_MISSING` 路由至 generation；Audit evidence 按目标 site 验证；append fallback 要求 rule-specific site anchor；ModelGateway 支持 `FUNDLEX_MODEL_MODE=live|record|replay`；frozen run manifest 与 stage replay 均 fail closed。
 - 待做：修复新增测试与事实解析边界；审查 all TRUE replay universe、delete residual site-first、scope correction、final sweep 次数与 no-progress hash；更新 Worker `GUIDE_NOT_CERTIFIED` 错误映射；运行针对性测试并记录结果；不进行 live E2E/部署。
+
+## 当前断点（2026-10-28，外围前后端整改计划）
+
+- 用户要求先停止改代码，先制定可多 agent 协作的分阶段计划。计划已保存：`docs/PERIPHERAL_REMEDIATION_PLAN_20261028.md`。
+- 已锁定的产品决定：以当前工作区 `codex/semantic-engine-remediation-20261028` 为基线，完成后再合并/推送默认分支；`incomplete` 人工审查后允许生成选择版但仍按工作文件标注；指引重新解析采用“新建 V2、V1 不可变”的方案 A；不再提供只读诊断入口；不关闭注册、不加登录限流。
+- 未完成 WIP：`fundlex/guide_store.py`、`fundlex/api.py`、`frontend/app.js`、`frontend/compare.html`、`tests/test_guide_store.py`、`tests/test_guide_api.py` 已有 P0-3 方向的部分改动；`tests/test_guide_api.py::test_guide_parse_endpoint_requeues_owner_versions_only` 仍有一条断言未更新，当前不是绿灯。补丁备份：`/tmp/opencode/fundlex-outer-remediation-wip-20261028.patch`（sha256 `90831114487dd5690e3d62e8a47f5cfa96ecb0b1751598303ccdaa2d885fd769`）。
+- 下一步：用户确认计划后，Phase 0 决定继续或丢弃 WIP，创建集成分支/worktree，再启动 Phase 1A/1B；未确认前不继续改代码、不发布。
