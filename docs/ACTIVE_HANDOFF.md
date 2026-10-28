@@ -1440,6 +1440,6 @@
 - 用户要求先停止改代码，先制定可多 agent 协作的分阶段计划。计划已保存：`docs/PERIPHERAL_REMEDIATION_PLAN_20261028.md`。
 - 已锁定的产品决定：以当前工作区 `codex/semantic-engine-remediation-20261028` 为基线，完成后再合并/推送默认分支；`incomplete` 人工审查后允许生成选择版但仍按工作文件标注；指引重新解析采用“新建 V2、V1 不可变”的方案 A；不再提供只读诊断入口；不关闭注册、不加登录限流。
 - 用户已批准继续，当前集成分支 `codex/outer-remediation-20261028`，已提交 P0-3 不可变指引、parse job release 预算、P0-1 工作文件标签、engine_build/service_build 拆分、部署双哈希、last-admin 保护、对象 GC、HTML 文案、CI 分支、前端轮询降频和 SQL 分页/N+1 移除。
-- 最终验证：干净 worktree `/home/opencode/.local/share/opencode/worktree/29a9a9/outer-integration` 全量 pytest **1764 passed / 84 skipped**（`/tmp/opencode/outer-full-pytest-final.log`）；V1 浏览器 **34 passed**（完整主工作区），V2 浏览器 **10 passed**；前端 typecheck/lint/Vitest/build 通过。
+- 最终验证：干净 worktree `/home/opencode/.local/share/opencode/worktree/29a9a9/outer-integration` 全量 pytest **1782 passed / 85 skipped**（`/tmp/opencode/outer-full-pytest-final2.log`）；V1 浏览器 **34 passed**，V2 浏览器 **10 passed**；前端 typecheck/lint/Vitest/build 通过。
 - 未做：未发布生产、未跑真实模型 E2E。`engine_build()` 一次性变更要求发布前清空/暂停队列；分页仍有 `reason_options` 全量报告解析、error_code 回退 Python、legacy 分页和 MySQL 未实跑等保留项。
 - 下一步：用户验收；发布前按计划完成迁移/队列/回滚演练并登记真实 E2E 预算，不能把自动化测试冒充真实合同交付验收。

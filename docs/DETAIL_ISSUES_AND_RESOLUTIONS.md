@@ -5652,6 +5652,6 @@
   - 其他确认：分页仍全量+Python 切片+N+1；V1/V2 仍有多条 5 秒轮询；`complete_with_exceptions` 汇总已修；Database repr 已脱敏；上传 500MB 已被 multipart/ASGI guard 缓解；last-admin 无保护；生产注册开放且登录无限流（产品已接受）；HTML 仍宣称 Word 保真；selected/attempt GC 仍不完整；默认分支无 CI，当前 CI push 只覆盖 main/master。
 - 已锁定产品决定：当前工作区为基线、完成后再合并默认分支；`incomplete` 人工审查后允许生成选择版但仍按工作文件标注；重新解析采用“新建 V2、V1 不可变”的方案 A；不再提供只读诊断入口；不关闭注册、不加登录限流。
 - 处理方法：按 `docs/PERIPHERAL_REMEDIATION_PLAN_20261028.md` 分 Phase 0–4 多 agent 实施。已实施并提交：P0-3 不可变版本（`3b4afee`）、P0-1 工作文件标签与测试（`cb21d0d`）、`engine_build`/`service_build` 拆分（`766c8fa`）、部署双哈希（`5ecf23f`）、last-admin 保护（`a5abdfa`）、前端指引/管理员提示（`0179081`）、对象 GC（`cb21d0d`）、HTML 文案、CI 分支、轮询降频（`59cc317`）、SQL 分页/N+1 移除（`2e5435c`）。
-- 状态与验证：**代码与自动化测试完成，未发布生产**。干净 worktree 最终全量 pytest **1764 passed / 84 skipped**（`/tmp/opencode/outer-full-pytest-final.log`）；V1 浏览器完整工作区 **34 passed**，V2 **10 passed**，前端 typecheck/lint/Vitest/build 通过。分页保留项：`reason_options` 仍解析该任务全部 report_json、`error_code` 精确过滤可能回退 Python、legacy 分页仍为 O(legacy batches+page depth)、MySQL 未实跑。当前未跑真实模型 E2E，未发布生产。
+- 状态与验证：**代码与自动化测试完成，未发布生产**。干净 worktree 最终全量 pytest **1782 passed / 85 skipped**（`/tmp/opencode/outer-full-pytest-final2.log`）；V1 浏览器 **34 passed**，V2 **10 passed**，前端 typecheck/lint/Vitest/build 通过。分页保留项：`reason_options` 仍解析该任务全部 report_json、`error_code` 精确过滤可能回退 Python、legacy 分页仍为 O(legacy batches+page depth)、MySQL 未实跑。当前未跑真实模型 E2E，未发布生产。
 - 下一步：合并 Agent D；全量/浏览器/迁移/发布演练；真实合同 E2E 需预登记预算；完成后更新本条目。
 - 变更记录：2026-10-28 新增；同日更新实施进度。
