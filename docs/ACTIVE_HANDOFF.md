@@ -1,11 +1,12 @@
 # FundLex 当前断点（ACTIVE_HANDOFF）
 
-## 当前执行任务（2026-10-28，用户授权全面整改及端到端交付）
+## 当前执行任务（2026-10-29，全面整改、分波扩样及端到端交付）
 
-- 最新用户要求：依据审查执行详细分阶段整改，允许多agent；自主管理版本/进度；开发疑问开工前向主agent澄清，开工后自主开发测试，不再问用户；按需真实模型不考虑预算，实现正式端到端交付。这条取代下文历史“只检查不修复”的范围。
-- 方案`docs/COMPREHENSIVE_REMEDIATION_EXECUTION_PLAN_20261028.md`，进度`docs/COMPREHENSIVE_REMEDIATION_PROGRESS_20261028.md`；S0–S7与A–G独立ownership已定义。S0开始：当前HEAD28cac2f，原审查/政策文档dirty保留并将提交基线；新证据`/tmp/opencode/comprehensive-remediation-20261028/`，prestart.patch已保存。
-- 无费用/calls审批，账本只观测；保留资源/权限/文件安全与无进展限制，不泄凭据。业务范围/既有修订/正文摘要要求按已确认规格，不再次当业务待定。
-- 下一动作：建立执行分支并提交审查/政策/计划基线→创建A–G独立worktrees→各agent预检澄清后开发；主agent统一合并、独立标签及真实模型/浏览器验证，禁止子agent自行发布混版。
+- 最新用户要求：依据审查执行详细分阶段整改，允许多agent；自主管理版本/进度；开发疑问开工前向主agent澄清，开工后自主开发测试，不再问用户；按需真实模型不考虑预算，实现正式端到端交付。2026-10-29再明确：**评测样本随实测改善分波扩大，最终覆盖 `funds_word/` 全部五百多份合同**；首批28份只是一个波次，不得删失败/受保护/不可解析样本，不得把历史运行冒充未见留出。这条取代下文历史“只检查不修复”和固定20–30份上限。
+- 方案`docs/COMPREHENSIVE_REMEDIATION_EXECUTION_PLAN_20261028.md`，进度`docs/COMPREHENSIVE_REMEDIATION_PROGRESS_20261028.md`，评测阶梯`docs/EVALUATION_AND_OPTIMIZATION_PLAN.md` §0；S0基线已完成，S1–S7与A–H独立ownership/worktrees并行。新证据`/tmp/opencode/comprehensive-remediation-20261028/`，prestart.patch已保存。
+- 当前范围核对：`funds_word`根目录514份DOCX，与第一批28份hash不重叠（unique约542）；第一批含5份旧`.doc`作为格式边界。最终“覆盖”不等于所有都能成功修改，解析/保护/排除/失败边界必须如实报告。
+- 无费用/calls审批，账本只观测；保留资源/权限/文件安全、上下文/输出容量和无进展限制，不泄凭据。业务范围/既有修订/正文摘要要求按已确认规格，不再次当业务待定。
+- 下一动作：接收A–H各agent提交→按ownership审阅/cherry-pick/冲突解决→全量回归与多波真实评测→冻结候选→受控部署→正式工作台真实模型/产物/授权下载E2E。子agent不得自行发布生产混版；扩样须以上一波质量门槛为前提。
 
 ## 最新断点（2026-10-28，8-agent全面检查完成，整改未执行）
 
