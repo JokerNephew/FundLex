@@ -710,7 +710,14 @@ def facts_context(inspection: DocumentInspection, *, limit: int = 16000) -> str:
         cleaned, _ = display_text(span.text)
         line = f"[{span.location}] {cleaned.strip()}"
         if total + len(line) > limit:
-            break
+            # One oversized paragraph must not hide every later short piece of
+            # evidence: skip it (with an explicit marker) and keep scanning.
+            if not any(item.startswith(f"[{span.location}]") for item in lines):
+                marker = f"[{span.location}] <omitted: exceeds facts context budget>"
+                if total + len(marker) <= limit:
+                    lines.append(marker)
+                    total += len(marker)
+            continue
         lines.append(line)
         total += len(line)
     return "\n".join(lines)
