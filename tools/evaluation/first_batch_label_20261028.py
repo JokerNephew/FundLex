@@ -1499,7 +1499,14 @@ def mandatory_checks(
     # G14
     base_g14 = re.compile(r"适当(?:调低|调整).*申购费率")
     for idx in candidate_paras("G14", lambda t: bool(base_g14.search(t))):
-        if not has_target("G14", [idx]):
+        text = doc.paragraphs[idx].text
+        already_minimal = (
+            "申购费率" in text
+            and "赎回费率" not in text
+            and "转换费率" not in text
+            and "销售服务费率" not in text
+        )
+        if not already_minimal and not has_target("G14", [idx]):
             issues.append(f"G14 missing target at p{idx}: promotion fee-change sentence must change")
     # G15
     for idx in candidate_paras("G15", lambda t: "销售服务费" in t and bool(re.search(r"工作日|划付指令|自动|按月支付|每日计提", t))):
