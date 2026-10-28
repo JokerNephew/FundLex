@@ -209,6 +209,9 @@ class GuidePipeline:
             prompt_hash=sha256_json({"stage": stage, "input_hash": input_hash}))
         try:
             payload = fn(*args, **kwargs) or {}
+            check = getattr(self.router, 'raise_if_blocked', None)
+            if check:
+                check()
             self.store.finish_step(self.run_id, stage, attempt, status="completed",
                                    output_hash=sha256_json(payload), payload=payload)
             self.payload.setdefault("stages", {})[stage] = {
