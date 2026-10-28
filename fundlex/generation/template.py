@@ -126,6 +126,15 @@ def fee_items(text: str) -> set[str]:
     return {match.group(0) for match in _FEE_ITEM.finditer(text or "")}
 
 
+def ordered_fee_items(text: str) -> list[str]:
+    """Fee items in their real sentence order (``fee_items`` is a set)."""
+    ordered: list[str] = []
+    for _, _, item in _item_spans(text):
+        if item not in ordered:
+            ordered.append(item)
+    return ordered
+
+
 def _item_spans(text: str) -> list[tuple[int, int, str]]:
     return [(match.start(), match.end(), match.group(0))
             for match in _FEE_ITEM.finditer(text or "")]

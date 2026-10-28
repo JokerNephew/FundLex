@@ -5975,8 +5975,8 @@ def _plan_tier1(rule: dict, operations: Sequence[dict], facts: Facts,
     Returns a ``TemplateResult`` or ``None``; when ``None`` the caller keeps the
     existing cascade (splice → variant → compose).
     """
-    from .generation.template import (fee_items, plan_fee_item_removal, plan_splice,
-                                      splice_pairs)
+    from .generation.template import (fee_items, ordered_fee_items,
+                                      plan_fee_item_removal, plan_splice, splice_pairs)
     rule_id = str(rule.get("rule_id") or "")
     replace_ops = [operation for operation in operations
                    if operation.get("op") == "replace"]
@@ -6011,7 +6011,7 @@ def _plan_tier1(rule: dict, operations: Sequence[dict], facts: Facts,
                 str(operation.get("new_text") or ""), facts)
             if issues or not instantiated:
                 continue
-            for item in fee_items(instantiated):
+            for item in ordered_fee_items(instantiated):
                 if item not in allowed_order:
                     allowed_order.append(item)
             allowed |= fee_items(instantiated)
@@ -7925,7 +7925,7 @@ def approval_book_for(rules_by_id: Mapping[str, dict], targets: Sequence[Target]
     guide_sha256 = guide_fingerprint([rules_by_id[key] for key in sorted(rules_by_id)])
     book = ApprovalBook()
     for target in targets:
-        if (target.state not in {"needs_edit", "satisfied"}
+        if (target.state not in {"needs_edit", "satisfied", "absent"}
                 or not target.operations or target.attribution_error):
             continue
         # A target marked out of scope by a rule-specific site word list is still
