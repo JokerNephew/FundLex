@@ -205,7 +205,7 @@ CREATE TABLE IF NOT EXISTS gg_artifacts (
     size INTEGER NOT NULL, created_at REAL NOT NULL, PRIMARY KEY(run_id, kind)
 );
 CREATE TABLE IF NOT EXISTS gg_corpus_state (
-    key TEXT PRIMARY KEY, value MEDIUMTEXT NOT NULL DEFAULT '', updated_at REAL NOT NULL
+    `key` VARCHAR(255) PRIMARY KEY, value MEDIUMTEXT NOT NULL DEFAULT (''), updated_at REAL NOT NULL
 );
 """
 
@@ -524,23 +524,29 @@ class GuideGenerationStore:
         self.ensure_schema()
         now = time.time()
         with self._connect() as db:
+            prior_version = db.execute("SELECT created_at FROM gg_contract_versions WHERE contract_version_id=?",
+                                       (version.contract_version_id,)).fetchone()
+            prior_contract = db.execute("SELECT created_at,latest_version_id FROM gg_contracts WHERE contract_id=?",
+                                        (version.contract_id,)).fetchone()
+            version_created = prior_version["created_at"] if prior_version else now
+            contract_created = prior_contract["created_at"] if prior_contract else now
+            latest_id = (version.contract_version_id if version.latest_known_version else
+                         prior_contract["latest_version_id"] if prior_contract else "")
             db.execute("""INSERT OR REPLACE INTO gg_contract_versions
                 (contract_version_id,contract_id,fund_identity,display_name,version_date,
                  previous_version_id,latest_known_version,version_relation,source_sha256,source_path,
                  source_size,parser_version,status,created_at,updated_at,payload_json)
-                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,COALESCE((SELECT created_at FROM gg_contract_versions
-                 WHERE contract_version_id=?),?),?,?)""",
+                 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                 (version.contract_version_id, version.contract_id, version.fund_identity,
                  version.display_name, version.version_date, version.previous_version_id,
                  int(version.latest_known_version), version.version_relation, version.source_sha256,
                  version.source_path, version.source_size, version.parser_version, version.status,
-                 version.contract_version_id, now, now, _dumps(version.to_dict())))
+                  version_created, now, _dumps(version.to_dict())))
             db.execute("""INSERT OR REPLACE INTO gg_contracts
                 (contract_id,fund_identity,display_name,latest_version_id,created_at,updated_at,payload_json)
-                VALUES (?,?,?,?,COALESCE((SELECT created_at FROM gg_contracts WHERE contract_id=?),?),?,?)""",
+                 VALUES (?,?,?,?,?,?,?)""",
                 (version.contract_id, version.fund_identity, version.display_name,
-                 version.contract_version_id if version.latest_known_version else "",
-                 version.contract_id, now, now, _dumps(version.to_dict())))
+                  latest_id, contract_created, now, _dumps(version.to_dict())))
 
     def get_contract_version(self, contract_version_id: str) -> ContractVersion | None:
         self.ensure_schema()
