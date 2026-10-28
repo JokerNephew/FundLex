@@ -118,46 +118,50 @@ def test_password_browser_candidate_upload_edit_publish_and_download(browser, pa
         page.locator("#login-submit").click()
         page.locator("#topbar-user").wait_for(state="visible")
 
-        page.goto(base + "/guide-generation")
-        page.locator("#gg-upload-form").wait_for()
+        page.goto(base + "/#generation?mode=new")
+        page.locator("#gg-file").wait_for(state="attached")
         page.locator("#gg-file").set_input_files({
             "name": "测试法规.docx",
             "mimeType": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
             "buffer": _regulation_bytes(),
         })
-        page.locator("#gg-upload-btn").click()
-        page.locator("#gg-run-list [data-run]").wait_for()
+        page.locator("#gg-cost-ack").check()
+        page.locator("#gg-submit").click()
+        import re
+        page.wait_for_url(re.compile(r".*#generation\?.*mode=detail.*id=[0-9a-f]+.*"), timeout=30000)
+        run_id = page.evaluate("() => new URLSearchParams(location.hash.split('?')[1]).get('id')")
+        assert run_id
 
         # Run the real persisted candidate job after the browser has enqueued it.
         worker = GuideGenerationWorker(app.state.store, router_factory=lambda: FakeGuideRouter())
         assert worker.run_once() is True
 
-        page.locator("#gg-reload-run").click()
-        page.locator("#gg-detail").wait_for(state="visible")
-        page.get_by_role("button", name="Guide Candidate / 人工编辑").click()
-        page.locator("#gg-panel-guide .gg-guide-item").first.locator("summary").click()
-        first_item = page.locator("#gg-panel-guide .gg-guide-item").first
-        first_item.locator('[data-field="title"]').fill("浏览器人工确认指引")
-        first_item.locator("[data-save-item]").click()
-        page.get_by_text("候选状态：human_draft", exact=False).wait_for()
+        page.locator('[data-gg-action="refresh"]').click()
+        page.locator('[data-gg-tab="guide"]').click()
+        page.locator("[data-gg-item]").first.wait_for()
+        page.locator("[data-gg-item]").first.click()
+        page.locator('[data-gg-field="title"]').fill("浏览器人工确认指引")
+        page.locator('[data-gg-action="save"]').click()
+        page.get_by_text("人工草稿 · 待审阅", exact=False).first.wait_for()
 
-        page.get_by_role("button", name="批准当前版本").click()
-        page.get_by_text("候选状态：approved", exact=False).wait_for()
-        page.get_by_role("button", name="发布候选版本").click()
-        page.get_by_text("候选状态：published", exact=False).wait_for()
-        assert page.get_by_role("button", name="批准当前版本").is_disabled()
-        assert page.get_by_role("button", name="发布候选版本").is_disabled()
+        page.once("dialog", lambda dialog: dialog.accept())
+        page.locator('[data-gg-tab="versions"]').click()
+        page.get_by_role("button", name="批准当前精确版本").click()
+        page.get_by_text("候选已批准", exact=False).first.wait_for()
+        page.once("dialog", lambda dialog: dialog.accept())
+        page.get_by_role("button", name="发布已批准版本").click()
+        page.get_by_text("候选已发布", exact=False).first.wait_for()
+        assert page.get_by_role("button", name="批准当前精确版本").is_disabled()
+        assert page.get_by_role("button", name="发布已批准版本").is_disabled()
 
         with page.expect_download() as download_info:
-            page.get_by_role("button", name="下载当前 DOCX").click()
+            page.get_by_role("button", name="当前候选 DOCX").click()
         download = download_info.value
         downloaded = Path(download.path())
         assert downloaded.read_bytes()[:2] == b"PK"
 
         # The browser's authenticated fetch path is required; an unauthenticated
         # request to the same owner-scoped artifact is rejected.
-        run_id = page.locator("#gg-run-list [data-run]").get_attribute("data-run")
-        assert run_id
         unauthenticated = context.request.get(
             f"{base}/api/guide-generation/runs/{run_id}/download/guide")
         assert unauthenticated.status == 401
