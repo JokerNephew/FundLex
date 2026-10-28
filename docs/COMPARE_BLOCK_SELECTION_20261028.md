@@ -42,7 +42,7 @@
 - 提交：`429f1bf`（块级支持）、`38861f4`（style 引用校验）
 - 生产 SHA-256：
   - `fundlex/compare/selection.py` `3a5a6d393a0ca30f2ffddd8a25d6cde1a8e70ac220142a2f49c8e6261da827e9`
-  - `fundlex/compare/selection_writer.py` `025c4362339862c511df3200598a81fe8bd9c56c9eb4f201215d4c685a4b0cbf`
+  - `fundlex/compare/selection_writer.py` `2898dcb83420b0bab93cb66057939815bb02afba7c777e16092e319f47642195`
 - 重启 `fundlex-recall-api`，active、capabilities 200
 - 备份：`/tmp/opencode/fundlex-compare-block-selection-20261028/`
 
