@@ -35,7 +35,7 @@ Compare 选择版在用户逐项采用 A/B 后生成新 DOCX。两份文档有�
 - 生产 SHA-256：`53c6cfd1339119989911917c202bbff13964ec0deab572a1eff8e5426c320e6c`
 - 重启：`fundlex-recall-api.service`（active，capabilities 200）
 
-## 未完成
+## 后续
 
-- 浏览器点击路径和真实合同选择路径尚未跑。
+- 浏览器点击路径和真实合同选择路径已于 2026-10-28 完成，见 [`COMPARE_SELECTION_REAL_CONTRACT_20261028.md`](COMPARE_SELECTION_REAL_CONTRACT_20261028.md)。
 - 空侧 `insert`/`delete`、跨段联合修改、合并单元格等结构差异仍按设计阻断。
