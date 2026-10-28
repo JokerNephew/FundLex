@@ -19,7 +19,7 @@ export interface Capabilities {
   registration_open?: boolean
   task_api?: boolean
   app_version?: string
-  upload_limits?: { max_file_bytes?: number; max_request_files?: number; max_request_bytes?: number }
+  upload_limits?: { max_file_bytes?: number; max_request_bytes?: number }
   engine?: {
     id?: string
     rule_source?: string
@@ -50,6 +50,7 @@ export interface FeishuOAuthStart {
   authorization_url: string
   expires_at: number
   qr_svg?: string | null
+  qr_png?: string | null
 }
 
 export type GuideStatus = 'uploaded' | 'parsing' | 'parsed' | 'validated' | 'released' | 'archived' | 'parse_failed' | string
@@ -57,6 +58,7 @@ export type GuideStatus = 'uploaded' | 'parsing' | 'parsed' | 'validated' | 'rel
 export interface GuideSummary {
   id: Id
   built_in: boolean
+  parent_version_id?: Id
   filename: string
   status: GuideStatus
   qualification_status?: string
