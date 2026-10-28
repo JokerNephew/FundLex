@@ -32,6 +32,7 @@ def test_engine_build_covers_generation_rules_and_guides_but_excludes_ui_and_evi
     baseline = store.engine_build()
     for relative in (
             "fundlex/generation/router.py",
+            "fundlex/recall.py",
             "rules/compile.py",
             "rules/rules.json",
             "guides/builtin.json"):
@@ -46,11 +47,107 @@ def test_engine_build_covers_generation_rules_and_guides_but_excludes_ui_and_evi
     assert store.engine_build() == unchanged
 
 
+def test_engine_build_ignores_operational_modules_while_service_build_covers_them(
+        tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    root = tmp_path / "workspace"
+    _write(root, "fundlex/recall_pipeline.py")
+    _write(root, "fundlex/generation/router.py")
+    _write(root, "fundlex/api.py")
+    _write(root, "fundlex/auth.py")
+    _write(root, "fundlex/tasks.py")
+    _write(root, "fundlex/application/task_service.py")
+    _write(root, "fundlex/integrations/feishu/service.py")
+    _write(root, "fundlex/compare/service.py")
+    _write(root, "rules/rules_v1.json")
+    _write(root, "guides/builtin_guide_v1.json")
+    monkeypatch.setattr(store, "_ENGINE_BUILD_ROOT", root)
+
+    engine = store.engine_build()
+    service = store.service_build()
+    for relative in (
+            "fundlex/api.py",
+            "fundlex/auth.py",
+            "fundlex/tasks.py",
+            "fundlex/application/task_service.py",
+            "fundlex/integrations/feishu/service.py",
+            "fundlex/compare/service.py"):
+        _write(root, relative, f"operational change: {relative}")
+        assert store.engine_build() == engine, relative
+        assert store.service_build() != service, relative
+        service = store.service_build()
+
+    _write(root, "fundlex/recall_pipeline.py", "core change")
+    assert store.engine_build() != engine
+    assert store.service_build() != service
+
+
+def test_engine_build_manifest_is_a_subset_of_service_sources():
+    root = store._ENGINE_BUILD_ROOT
+    engine = {path.relative_to(root).as_posix() for path in store._engine_build_files()}
+    service = {path.relative_to(root).as_posix() for path in store._service_build_files()}
+
+    assert engine <= service
+    for relative in (
+            "fundlex/recall_pipeline.py",
+            "fundlex/recall.py",
+            "fundlex/recall_prompts.py",
+            "fundlex/rules.py",
+            "fundlex/rules_v2.py",
+            "fundlex/rule_scope.py",
+            "fundlex/docx.py",
+            "fundlex/model.py",
+            "fundlex/model_budget.py",
+            "fundlex/pipeline.py",
+            "fundlex/v2_pipeline.py",
+            "fundlex/v2.py",
+            "fundlex/delivery.py",
+            "fundlex/obligations.py",
+            "fundlex/applicability.py",
+            "fundlex/targeting.py",
+            "fundlex/selective.py",
+            "fundlex/edit_summary.py",
+            "fundlex/checkpoints.py",
+            "fundlex/stage_replay.py",
+            "fundlex/frozen.py",
+            "fundlex/generation/router.py",
+            "fundlex/models/roles.py",
+            "fundlex/recovery/policies.py",
+            "rules/rules_v1.json",
+            "guides/builtin_guide_v1.json"):
+        assert relative in engine, relative
+
+    for relative in (
+            "fundlex/api.py",
+            "fundlex/auth.py",
+            "fundlex/db.py",
+            "fundlex/html_view.py",
+            "fundlex/observability.py",
+            "fundlex/tasks.py",
+            "fundlex/guide_store.py",
+            "fundlex/api_errors.py",
+            "fundlex/config.py",
+            "fundlex/upload_guard.py",
+            "fundlex/upload_validation.py",
+            "fundlex/jobs.py",
+            "fundlex/application/task_service.py",
+            "fundlex/integrations/feishu/service.py",
+            "fundlex/compare/service.py"):
+        assert relative not in engine, relative
+        assert relative in service, relative
+
+
+@pytest.mark.parametrize("relative", store._ENGINE_BUILD_MODULES)
+def test_engine_build_allowlist_entries_exist(relative: str):
+    # A typo or rename in the explicit allowlist must fail loudly instead of
+    # silently dropping a result-affecting module from the fingerprint.
+    assert (store._ENGINE_BUILD_ROOT / relative).is_file(), relative
+
+
 def test_engine_build_is_stable_for_manifest_order(tmp_path: Path,
                                                    monkeypatch: pytest.MonkeyPatch):
     root = tmp_path / "workspace"
-    _write(root, "fundlex/z.py")
-    _write(root, "fundlex/a.py")
+    _write(root, "fundlex/docx.py")
+    _write(root, "fundlex/recall.py")
     _write(root, "rules/z.json")
     _write(root, "guides/a.json")
     monkeypatch.setattr(store, "_ENGINE_BUILD_ROOT", root)

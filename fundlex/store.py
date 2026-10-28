@@ -21,13 +21,72 @@ from .db import Connection, Database
 SCHEMA_VERSION = "fundlex-result-v1"
 
 
-# The worker's build identity must cover every input that can change a
-# recall-first result.  Hashing only the files next to this module allowed a
-# change in ``generation/``, the guide compiler, prompts, or the built-in guide
-# to reuse an old queued job/checkpoint.  Keep this manifest explicit and
-# deterministic; operational/UI code is intentionally excluded.
+# Two different identities are published by this module:
+#
+# * ``engine_build()`` is pinned by queued jobs, batches and checkpoints.  It
+#   must change only when an input that can change a processed contract's
+#   result changes.  Operational code (HTTP API, auth, persistence, UI, upload
+#   guards, queues, notifications, compare/integrations) is deliberately
+#   excluded so that deploying an API/auth/UI-only fix does not fail in-flight
+#   jobs with ``ENGINE_SCHEMA_MISMATCH``.
+# * ``service_build()`` covers the complete shipped service source set and is
+#   for audit and deployment display only.  It changes on any backend/rules/
+#   guides edit, including operational ones.
+#
+# The engine rule is an explicit allowlist, not a blocklist: a new module is
+# inert until someone deliberately adds it here, and the fingerprint test
+# guards both directions (core changes must move the digest, operational ones
+# must not).  A new result-affecting module must be added to this manifest.
 _ENGINE_BUILD_ROOT = Path(__file__).resolve().parent.parent
-_ENGINE_BUILD_PATHS = (
+
+# Result-affecting backend modules, relative to ``_ENGINE_BUILD_ROOT``.
+_ENGINE_BUILD_MODULES = (
+    # Contract parsing, recall, evidence verification and decisions.
+    "fundlex/applicability.py",
+    "fundlex/artifact_review.py",
+    "fundlex/checkpoints.py",
+    "fundlex/delivery.py",
+    "fundlex/docx.py",
+    "fundlex/edit_summary.py",
+    "fundlex/fact_evidence.py",
+    "fundlex/facts_recovery.py",
+    "fundlex/fee_evidence.py",
+    "fundlex/frozen.py",
+    "fundlex/guide.py",
+    "fundlex/model.py",
+    "fundlex/model_budget.py",
+    "fundlex/obligations.py",
+    "fundlex/pipeline.py",
+    "fundlex/qualification.py",
+    "fundlex/qualification_evidence.py",
+    "fundlex/recall.py",
+    "fundlex/recall_pipeline.py",
+    "fundlex/recall_prompts.py",
+    "fundlex/rule_scope.py",
+    "fundlex/rules.py",
+    "fundlex/rules_v2.py",
+    "fundlex/selective.py",
+    "fundlex/semantic_evidence.py",
+    "fundlex/stage_replay.py",
+    "fundlex/targeting.py",
+    "fundlex/v2.py",
+    "fundlex/v2_pipeline.py",
+)
+# Result-affecting packages (all Python files, including subpackages).
+_ENGINE_BUILD_PACKAGES = (
+    "fundlex/generation",
+    "fundlex/models",
+    "fundlex/recovery",
+    "fundlex/regulatory",
+)
+# Rules and guides are behaviour: a changed rule/guide must invalidate a job.
+_ENGINE_BUILD_DATA_PATHS = (
+    ("rules", "*.py"),
+    ("rules", "*.json"),
+    ("guides", "*.json"),
+)
+# Every backend source file the service ships, for audit/deploy display.
+_SERVICE_BUILD_PATHS = (
     ("fundlex", "**/*.py"),
     ("rules", "*.py"),
     ("rules", "*.json"),
@@ -35,23 +94,51 @@ _ENGINE_BUILD_PATHS = (
 )
 
 
-def _engine_build_files() -> tuple[Path, ...]:
+def _matching_files(manifest: tuple[tuple[str, str], ...]) -> set[Path]:
     files: set[Path] = set()
-    for relative_root, pattern in _ENGINE_BUILD_PATHS:
+    for relative_root, pattern in manifest:
         root = _ENGINE_BUILD_ROOT / relative_root
         files.update(path for path in root.glob(pattern) if path.is_file())
+    return files
+
+
+def _sorted_build_files(files: set[Path]) -> tuple[Path, ...]:
     return tuple(sorted(files, key=lambda path: path.relative_to(_ENGINE_BUILD_ROOT).as_posix()))
 
 
-def engine_build() -> str:
+def _engine_build_files() -> tuple[Path, ...]:
+    files = {_ENGINE_BUILD_ROOT / relative for relative in _ENGINE_BUILD_MODULES}
+    files = {path for path in files if path.is_file()}
+    for relative in _ENGINE_BUILD_PACKAGES:
+        package = _ENGINE_BUILD_ROOT / relative
+        files.update(path for path in package.glob("**/*.py") if path.is_file())
+    files.update(_matching_files(_ENGINE_BUILD_DATA_PATHS))
+    return _sorted_build_files(files)
+
+
+def _service_build_files() -> tuple[Path, ...]:
+    return _sorted_build_files(_matching_files(_SERVICE_BUILD_PATHS))
+
+
+def _build_digest(files: tuple[Path, ...]) -> str:
     digest = hashlib.sha256()
-    for path in _engine_build_files():
+    for path in files:
         relative = path.relative_to(_ENGINE_BUILD_ROOT).as_posix()
         digest.update(relative.encode("utf-8"))
         digest.update(b"\0")
         digest.update(path.read_bytes())
         digest.update(b"\0")
     return digest.hexdigest()
+
+
+def engine_build() -> str:
+    """Compatibility identity for queued jobs, batches and checkpoints."""
+    return _build_digest(_engine_build_files())
+
+
+def service_build() -> str:
+    """Full shipped service source identity, for audit/deploy display only."""
+    return _build_digest(_service_build_files())
 
 
 class StoreError(Exception):
