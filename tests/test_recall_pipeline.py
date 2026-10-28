@@ -1189,6 +1189,14 @@ def test_review_assisted_delivers_unproven_but_blocks_facts():
     assert pending == [business]
     assert _delivery_complete([unproven, business], policy="review_assisted") is True
     assert _delivery_complete([unproven, residual], policy="review_assisted") is False
+    # FL-D437: a typed Claim failure cannot become a G14 business item just because
+    # of the rule number.
+    typed_claim = {"kind": "claim_replay", "code": "CLAIM_OPERATION_NOT_PLANNED",
+                   "rule_id": "G14"}
+    blockers, review, pending = _classify_delivery_items(
+        [unproven, residual, typed_claim])
+    assert typed_claim in blockers and pending == []
+    assert _delivery_complete([typed_claim], policy="review_assisted") is False
 
 
 def test_delivery_gate_blocks_claim_failure_open_obligations_only():

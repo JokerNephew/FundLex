@@ -252,23 +252,22 @@ def _obligation_sites(result):
             for location in item.get("sites") or ()}
 
 
-def test_d06_claim_replay_scope_excludes_summary_fee_copies(d06_fee_replay_case):
+def test_d06_claim_replay_scope_includes_real_summary_fee_copies(d06_fee_replay_case):
     case = d06_fee_replay_case
     for rule_id in ("G15", "G17"):
         scope = case.scopes[rule_id]
         assert scope.resolution == "resolved"
         assert {"p807", "p808", "p810"} <= scope.locations
-        assert not (scope.locations & SUMMARY_FEE_COPIES)
+        assert SUMMARY_FEE_COPIES <= scope.locations
 
     scoped = _replay(case, case.scopes)
-    legacy = _replay(case, None)
-
-    assert not (_obligation_sites(scoped) & SUMMARY_FEE_COPIES)
-    assert SUMMARY_FEE_COPIES <= _obligation_sites(legacy)
-    assert not ({str(item.get("location") or "")
-                 for item in scoped.get("failures") or ()} & SUMMARY_FEE_COPIES)
+    # FL-D384/434/443: the summary fee copy is a real required site.  The artifact
+    # only deleted the body copies, so replay must report the summary as unresolved
+    # instead of treating the reduced body-only scope as complete.
+    assert SUMMARY_FEE_COPIES & _obligation_sites(scoped)
+    assert SUMMARY_FEE_COPIES <= _obligation_sites(scoped)
     assert ({str(item.get("location") or "")
-             for item in legacy.get("failures") or ()} & SUMMARY_FEE_COPIES)
+             for item in scoped.get("failures") or ()} & SUMMARY_FEE_COPIES)
     # The body copies remain required sites in both modes.
     assert {"p807", "p808", "p810"} <= _obligation_sites(scoped)
 
@@ -292,11 +291,11 @@ def test_unresolved_scope_does_not_fall_back_to_document_scan(d06_fee_replay_cas
     assert any(item.get("code") == "RULE_SCOPE_UNRESOLVED"
                and item.get("rule_id") == "G15"
                for item in result.get("failures") or ())
-    assert not ({str(item.get("location") or "")
-                 for item in result.get("failures") or ()} & SUMMARY_FEE_COPIES)
+    assert not ({str(item.get("location") or "") for item in result.get("failures") or ()
+                 if str(item.get("rule_id") or "") == "G15"} & SUMMARY_FEE_COPIES)
 
 
-def test_delete_residuals_scope_excludes_summary_fee_copies(d06_fee_replay_case):
+def test_delete_residuals_scope_includes_real_summary_fee_copies(d06_fee_replay_case):
     from fundlex.generation.claim_replay import check_delete_residuals
 
     case = d06_fee_replay_case
@@ -312,6 +311,6 @@ def test_delete_residuals_scope_excludes_summary_fee_copies(d06_fee_replay_case)
     scoped_locations = {str(item.get("location") or "") for item in scoped}
     legacy_locations = {str(item.get("location") or "") for item in legacy}
 
-    assert not (scoped_locations & SUMMARY_FEE_COPIES)
+    assert {"p1286", "p1289"} <= scoped_locations
     assert "p1289" in legacy_locations
     assert "p1286" in legacy_locations

@@ -88,8 +88,9 @@ def _enabled() -> bool:
 def _candidate_context(inspection: Any, target: Any, rule: dict, facts: Any,
                        *, limit: int, radius: int = 6,
                        allowed_scope: set[str] | None = None,
-                       candidate_limit: int = DEFAULT_CANDIDATE_LIMIT
-                       ) -> tuple[str, set[str]]:
+                       candidate_limit: int = DEFAULT_CANDIDATE_LIMIT,
+                       candidate_cursor: int = 0
+                       ) -> tuple[str, set[str], dict[str, Any]]:
     from .recall import display_text, rule_context
 
     scope_filter = (lambda location: str(location) in allowed_scope) \
@@ -98,12 +99,27 @@ def _candidate_context(inspection: Any, target: Any, rule: dict, facts: Any,
                   if scope_filter(location)]
     locations: list[str] = []
     lines: list[str] = []
+    coverage: dict[str, Any] = {
+        "total": len(candidates), "shown": 0, "remaining": 0,
+        "cursor": int(candidate_cursor or 0), "next_cursor": None,
+        "has_more": False, "truncated": False,
+    }
     if candidates:
         # Open-obligation recovery: code already narrowed the region to anchored
-        # paragraphs; the model may not look anywhere else.  The page size is a
-        # parameter (default 12) so callers that generated more candidates can let
-        # the model see them instead of silently dropping the tail.
-        for location in candidates[:max(1, int(candidate_limit or DEFAULT_CANDIDATE_LIMIT))]:
+        # paragraphs; the model may not look anywhere else.  FL-D441: a page is
+        # explicit and resumable.  The historical code silently dropped candidates
+        # after the limit, so a legal 13th site could never be located.
+        page = _candidate_page(candidates, limit=candidate_limit,
+                               cursor=candidate_cursor)
+        coverage.update({
+            "cursor": int(page.cursor),
+            "next_cursor": page.next_cursor,
+            "has_more": bool(page.has_more),
+            "remaining": page.remaining,
+        })
+        budget = max(1000, limit - 4000)
+        used = 0
+        for location in page:
             try:
                 span = inspection.by_location(location)
             except Exception:  # noqa: BLE001 - a vanished candidate is not fatal
@@ -111,12 +127,24 @@ def _candidate_context(inspection: Any, target: Any, rule: dict, facts: Any,
             text, _ = display_text(span.text)
             if not text.strip():
                 continue
+            line = f"[{location}] {text}"
+            if locations and used + len(line) + 2 > budget:
+                # Honest truncation: the omitted tail stays reachable through the
+                # recorded cursor instead of disappearing from the prompt.
+                coverage["truncated"] = True
+                coverage["next_cursor"] = page.cursor + len(locations)
+                coverage["remaining"] = max(
+                    0, len(candidates) - (page.cursor + len(locations)))
+                coverage["has_more"] = True
+                break
             locations.append(location)
-            lines.append(f"[{location}] {text}")
+            lines.append(line)
+            used += len(line) + 2
+        coverage["shown"] = len(locations)
         if not locations:
             # Open targets must never fall back to a radius window: that would let the
             # model choose a paragraph code did not authorize.
-            return "", set()
+            return "", set(), coverage
     if not candidates:
         all_locations = [span.location for span in inspection.paragraphs
                          if scope_filter(span.location)]
@@ -132,14 +160,22 @@ def _candidate_context(inspection: Any, target: Any, rule: dict, facts: Any,
             if text.strip():
                 lines.append(f"[{location}] {text}")
                 locations.append(location)
+        coverage.update({"total": len(locations), "shown": len(locations),
+                         "remaining": 0, "has_more": False, "truncated": False,
+                         "cursor": 0, "next_cursor": None})
+    coverage_line = (
+        "CANDIDATE_COVERAGE total={total} shown={shown} remaining={remaining} "
+        "cursor={cursor} next_cursor={next_cursor} has_more={has_more}"
+    ).format(**coverage)
     context = "\n\n".join([
         "CANDIDATE_PARAGRAPHS\n" + "\n".join(lines)[:max(1000, limit - 4000)],
+        coverage_line,
         "GUIDE_OPERATION\n" + rule_context([rule], full=True),
         "FACTS\n" + json.dumps(facts.as_ledger() if hasattr(facts, "as_ledger") else {},
                               ensure_ascii=False),
         "FAILED_QUOTE\n" + str(getattr(target, "quote", "") or ""),
     ])
-    return context[:limit], set(locations)
+    return context[:limit], set(locations), coverage
 
 
 def _open_operation_candidates(
@@ -503,10 +539,24 @@ def locate_unresolved_targets(targets: Sequence[Any], inspection: Any,
                          if scope is not None else (set() if scopes is not None else None))
         if scopes is not None and not allowed_scope:
             continue
-        context, allowed_locations = _candidate_context(
+        cursor = int(getattr(target, "_candidate_cursor", 0) or 0)
+        context, allowed_locations, candidate_coverage = _candidate_context(
             inspection, target, rule, facts, limit=gateway.max_context_chars,
-            allowed_scope=allowed_scope, candidate_limit=candidate_limit)
-        record = {"target_id": target.target_id, "rule_id": target.rule_id}
+            allowed_scope=allowed_scope, candidate_limit=candidate_limit,
+            candidate_cursor=cursor)
+        record = {"target_id": target.target_id, "rule_id": target.rule_id,
+                  "candidate_coverage": candidate_coverage}
+
+        def reject(reason: str) -> None:
+            record["status"] = "rejected"
+            record["reject_reason"] = reason
+            if (candidate_coverage.get("has_more")
+                    and candidate_coverage.get("next_cursor") is not None):
+                # The locator only saw this explicit page.  Persist the next page so a
+                # later recovery round continues instead of re-reading page 1 forever.
+                target._candidate_cursor = int(candidate_coverage["next_cursor"])
+                record["resume_cursor"] = int(candidate_coverage["next_cursor"])
+            records.append(record)
         try:
             result = gateway.call(task_type="recall_locate", bounded_context=context,
                                   response_schema=LOCATE_SCHEMA,
@@ -530,41 +580,29 @@ def locate_unresolved_targets(targets: Sequence[Any], inspection: Any,
                       semantic_role=str(value.get("semantic_role") or ""),
                       reason=str(value.get("reason") or ""))
         if not location or not quote:
-            record["status"] = "rejected"
-            record["reject_reason"] = "empty_location_or_quote"
-            records.append(record)
+            reject("empty_location_or_quote")
             continue
         if location not in allowed_locations:
-            record["status"] = "rejected"
-            record["reject_reason"] = "location_outside_candidate_window"
-            records.append(record)
+            reject("location_outside_candidate_window")
             continue
         try:
             span = inspection.by_location(location)
         except DocxError:
-            record["status"] = "rejected"
-            record["reject_reason"] = "location_not_found"
-            records.append(record)
+            reject("location_not_found")
             continue
         located = resolve_quote(span, quote)
         if located is None:
-            record["status"] = "rejected"
-            record["reject_reason"] = "quote_not_found"
-            records.append(record)
+            reject("quote_not_found")
             continue
         start, end = located
         if not containing_segment(span, start, end) and start != end:
-            record["status"] = "rejected"
-            record["reject_reason"] = "segment_invalid"
-            records.append(record)
+            reject("segment_invalid")
             continue
         open_rule = bool(getattr(target, "site_candidates", ()))
         if open_rule:
             from .recall import _compact
             if _compact(span.text).count(_compact(quote)) != 1:
-                record["status"] = "rejected"
-                record["reject_reason"] = "ambiguous_occurrence"
-                records.append(record)
+                reject("ambiguous_occurrence")
                 continue
             anchor_ok, anchor_reason = _open_rule_quote_ok(
                 rule, facts, span.text, quote, span=span, inspection=inspection)
@@ -581,9 +619,7 @@ def locate_unresolved_targets(targets: Sequence[Any], inspection: Any,
                 if not approved:
                     if approvals is not None and getattr(target, "approval_id", ""):
                         record["approval_check"] = approval_reason
-                    record["status"] = "rejected"
-                    record["reject_reason"] = f"anchor_mismatch:{anchor_reason}"
-                    records.append(record)
+                    reject(f"anchor_mismatch:{anchor_reason}")
                     continue
                 record["anchor_bypassed"] = f"anchor_mismatch:{anchor_reason}"
                 record["approval_id"] = str(getattr(target, "approval_id", "") or "")
@@ -695,10 +731,240 @@ def target_for_claim_site(record: Any, location: str, targets: Sequence[Any],
         resolution="resolved", segment_ok=True, operations=(operation_id,))
 
 
+def _scan_scope_pages(
+        inspection: Any, rule: dict, record: Any, section_ids: Sequence[str],
+        section_by_id: dict[str, Any], facts: Any, *, existing_targets: Sequence[Any] = (),
+        scope: Any = None, limit: int = DEFAULT_CANDIDATE_LIMIT,
+        pass_name: str = "") -> tuple[CandidatePage, dict[str, Any]]:
+    """Consume candidate pages until a physically scoped page is found.
+
+    FL-D441: the historical consumer took the first 12 anchors and only then
+    applied the rule scope, so a legal 13th candidate stayed permanently starved.
+    The scan returns the first page containing at least one in-scope location and
+    records how many pages/locations were inspected, the persisted next cursor and
+    whether unscanned candidates remain.
+    """
+
+    cursor = 0
+    pages = 0
+    scanned: list[str] = []
+    scope_rejected: list[str] = []
+    first_total = 0
+    while True:
+        page = _open_operation_candidates(
+            inspection, rule, record, section_ids, section_by_id, facts,
+            existing_targets=existing_targets, limit=limit, cursor=cursor)
+        pages += 1
+        first_total = first_total or int(page.total)
+        scanned.extend(str(location) for location in page)
+        if scope is None:
+            accepted = list(page)
+        else:
+            usable = (getattr(scope, "resolution", "") != "unresolved"
+                      and bool(getattr(scope, "locations", ())))
+            accepted = [location for location in page
+                        if usable and scope.contains(str(location))]
+            scope_rejected.extend(str(location) for location in page
+                                  if str(location) not in set(accepted))
+        if accepted or not page.has_more:
+            # CandidatePage derives ``next_cursor`` from cursor + len(page).  The
+            # accepted subset can be smaller than the scanned page, so anchor the
+            # cursor at the end of the scanned page instead of the accepted tail.
+            base_cursor = (int(page.next_cursor) - len(accepted)) \
+                if page.has_more and page.next_cursor is not None else int(page.cursor)
+            result = CandidatePage(accepted, cursor=base_cursor, total=page.total,
+                                   has_more=bool(page.has_more))
+            coverage = {
+                "pass": pass_name,
+                "pages": pages,
+                "scanned": len(scanned),
+                "total": first_total,
+                "scope_rejected": len(scope_rejected),
+                "in_scope": len(accepted),
+                "cursor": result.cursor,
+                "next_cursor": result.next_cursor,
+                "has_more": result.has_more,
+                # An exhausted scan leaves no unread candidate, even when the first
+                # accepted page was a subset of the ordered anchor set.
+                "remaining": (max(0, first_total - len(scanned))
+                              if result.has_more else 0),
+                "complete": not result.has_more,
+            }
+            return result, coverage
+        cursor = int(page.next_cursor or 0)
+
+
+def _attach_candidate_coverage(target: Any, coverage: Mapping[str, Any]) -> Any:
+    """Persist one candidate scan on the created target without changing its schema."""
+    try:
+        setattr(target, "candidate_coverage", dict(coverage))
+    except Exception:  # noqa: BLE001 - a frozen/legacy target still keeps the reason
+        pass
+    return target
+
+
+def summary_copy_targets(targets: Sequence[Any], rules_by_id: Mapping[str, dict],
+                         inspection: Any, sections: Sequence[Any],
+                         scopes: Mapping[str, Any] | None = None) -> list[Any]:
+    """Create operation targets for real body->contract-summary clause copies.
+
+    FL-D384/434/443 generalised this beyond byte-identical paragraphs.  A summary
+    leaf is mapped to its selected body leaf through ``summary_of``/``copy_key``;
+    an operation target is created only when the rule's own candidate anchors find a
+    real paragraph inside that summary leaf.  A satisfied body target still maps, so
+    a summary copy that lags the body is repaired; no candidate means no target, and
+    a summary that merely mentions the topic is never polished or deduplicated.
+    """
+
+    from types import SimpleNamespace
+    from .recall import (Target, _compact, instantiate_slots, resolve_quote)
+    from .rule_scope import build_leaf_sections
+
+    leaves = build_leaf_sections(inspection, sections)
+    by_id = {leaf.id: leaf for leaf in leaves}
+    summary_by_body: dict[str, list[Any]] = {}
+    for leaf in leaves:
+        if leaf.zone != "summary" or not leaf.summary_of:
+            continue
+        body = by_id.get(leaf.summary_of)
+        if body is not None and body.zone == "body":
+            summary_by_body.setdefault(body.id, []).append(leaf)
+
+    def location_in_leaf(location: str, leaf: Any) -> bool:
+        return str(location) in {str(item) for item in leaf.locations}
+
+    operation_targets: list[Any] = [target for target in targets
+                                    if getattr(target, "state", "") in
+                                    {"needs_edit", "satisfied"}
+                                    and not getattr(target, "out_of_scope", False)
+                                    and not getattr(target, "attribution_error", "")
+                                    and getattr(target, "operations", ())]
+    active: list[Any] = [target for target in operation_targets
+                         if getattr(target, "state", "") == "needs_edit"]
+
+    facts_stub = _facts_stub()
+    created: list[Any] = []
+    for rule_id, rule in rules_by_id.items():
+        scope = scopes.get(rule_id) if scopes is not None else None
+        if scope is None:
+            continue
+        body_leaves = [leaf for leaf in leaves
+                       if leaf.zone == "body" and leaf.id in scope.leaf_ids]
+        for body_leaf in body_leaves:
+            operations: set[str] = set()
+            for target in operation_targets:
+                if str(getattr(target, "rule_id", "")) != rule_id:
+                    continue
+                keys = set(getattr(target, "operations", ()) or ())
+                locations = ([target.location] if not getattr(target, "composite", ())
+                             else [part.rsplit(":", 2)[0] for part in target.composite])
+                if keys and any(location_in_leaf(item, body_leaf)
+                                for item in locations):
+                    operations.update(keys)
+            if not operations:
+                continue
+            for summary_leaf in summary_by_body.get(body_leaf.id, ()):
+                if scope is not None and summary_leaf.id not in scope.leaf_ids:
+                    continue
+                if not summary_leaf.locations:
+                    continue
+                section = SimpleNamespace(id=summary_leaf.id, zone="summary",
+                                          title=summary_leaf.title,
+                                          locations=tuple(summary_leaf.locations))
+                section_by_id = {summary_leaf.id: section}
+                for operation_key in sorted(operations):
+                    try:
+                        index = int(str(operation_key).split(":", 1)[1])
+                    except (IndexError, ValueError):
+                        continue
+                    operation_list = rule.get("operations") or []
+                    if not 0 <= index < len(operation_list):
+                        continue
+                    operation = operation_list[index]
+                    if any(location_in_leaf(target.location, summary_leaf)
+                           and operation_key in (getattr(target, "operations", ()) or ())
+                           for target in operation_targets):
+                        continue
+                    record = SimpleNamespace(spec=SimpleNamespace(
+                        rule_id=rule_id, operation_index=index,
+                        operation_id=operation_key,
+                        old_text=str(operation.get("old_text") or ""),
+                        alternatives=()))
+                    page = _open_operation_candidates(
+                        inspection, rule, record, [summary_leaf.id],
+                        section_by_id, facts_stub, existing_targets=targets)
+                    candidates = [str(location) for location in page
+                                  if location_in_leaf(location, summary_leaf)]
+                    if not candidates:
+                        continue
+                    location = candidates[0]
+                    span = inspection.by_location(location)
+                    text = str(span.text)
+                    compact_text = _compact(text)
+                    required_new = ""
+                    for sibling in rule.get("operations") or ():
+                        if str(sibling.get("op") or "") not in {"append", "replace"}:
+                            continue
+                        instantiated, issues = instantiate_slots(
+                            str(sibling.get("new_text") or ""), facts_stub)
+                        raw = _compact(str(sibling.get("new_text") or ""))
+                        for required in (_compact(instantiated if not issues else ""), raw):
+                            if not required:
+                                continue
+                            if required in compact_text or (
+                                    len(required) >= 20
+                                    and required[:20] in compact_text):
+                                required_new = required
+                                break
+                        if required_new:
+                            break
+                    op_kind = str(operation.get("op") or "")
+                    old_text = str(operation.get("old_text") or "")
+                    old_present = bool(_compact(old_text)) and _compact(old_text) in compact_text
+                    if op_kind in {"append", "replace"} and required_new:
+                        continue
+                    if op_kind == "delete" and required_new and not old_present:
+                        # The same physical paragraph already carries the authorized
+                        # replacement mechanism; the old payment clause is gone.
+                        continue
+                    if op_kind == "replace":
+                        located = resolve_quote(span, old_text) if old_text else None
+                        if located is None:
+                            created.append(Target(
+                                target_id=f"SC{len(created) + 1:03d}",
+                                rule_id=rule_id, location=location, quote="",
+                                state="needs_edit",
+                                reason=f"summary_copy:{body_leaf.id}:{operation_key}",
+                                resolution="unresolved",
+                                operations=(operation_key,),
+                                site_candidates=(location,)))
+                            continue
+                        start, end = located
+                        quote = text[start:end]
+                    else:
+                        start, end = 0, len(text)
+                        quote = text
+                    created.append(Target(
+                        target_id=f"SC{len(created) + 1:03d}", rule_id=rule_id,
+                        location=location, quote=quote, state="needs_edit",
+                        reason=f"summary_copy:{body_leaf.id}:{operation_key}",
+                        start=start, end=end, resolution="resolved",
+                        segment_ok=True, operations=(operation_key,)))
+    return created
+
+
+def _facts_stub() -> Any:
+    """Facts are irrelevant for the structural candidate anchors used here."""
+    from .recall import Facts
+    return Facts("", "", "", (), False, "", "", "", {}, ())
+
+
+
 def target_for_missing_operation(
         record: Any, targets: Sequence[Any], rules_by_id: dict[str, dict], facts: Any,
         inspection: Any, mapping: dict[str, list[str]], sections: Sequence[Any],
-        *, target_id: str = "", scopes: Mapping[str, Any] | None = None) -> Any | None:
+        *, target_id: str = "", scopes: Mapping[str, Any] | None = None,
+        coverage: dict[str, Any] | None = None) -> Any | None:
     """Recovery target for one applicable operation Claim Replay proved missing.
 
     Candidate discovery is the same operation-first ladder as open-obligation recovery
@@ -725,30 +991,29 @@ def target_for_missing_operation(
             return None
     section_ids = mapping.get(rule_id) or []
     section_by_id = {section.id: section for section in sections}
-    candidates = _open_operation_candidates(
+    scope = scopes.get(rule_id) if scopes is not None else None
+    if scopes is not None and (scope is None
+                               or getattr(scope, "resolution", "") == "unresolved"
+                               or not getattr(scope, "locations", ())):
+        return None
+    candidates, scan = _scan_scope_pages(
         inspection, rule, record, section_ids, section_by_id, facts,
-        existing_targets=targets)
-    if scopes is not None:
-        # The section-level mapping may include a summary chapter.  Recovery must
-        # use the same physical leaf scope as inventory/plan, otherwise a class
-        # operation can be repaired at an income-distribution summary copy
-        # (景宁 G03 p1195) that the rule is not allowed to edit.
-        scope = scopes.get(rule_id)
-        if (scope is None or getattr(scope, "resolution", "") == "unresolved"
-                or not getattr(scope, "locations", ())):
-            return None
-        candidates = [location for location in candidates
-                      if scope.contains(location)]
+        existing_targets=targets, scope=scope,
+        pass_name=f"missing_operation:{operation_id}")
+    if coverage is not None:
+        coverage[operation_id] = scan
     if not candidates:
         return None
     if rule_id == "G11" and str(operation.get("op") or "") == "replace":
         parts = g11_composite_source_parts(inspection, operation, candidates[0])
         if parts:
-            return Target(
+            found = Target(
                 target_id=target_id or f"R{operation_index + 1:03d}",
                 rule_id=rule_id, location=candidates[0], quote="",
                 state="needs_edit", reason=f"recovery_missing_operation:{operation_id}",
                 resolution="composite", composite=parts, operations=(operation_id,))
+            _attach_candidate_coverage(found, scan)
+            return found
     if rule.get("class_substitution") and operation.get("op") == "replace":
         from .recall import Target as _Target, instantiate_slots, resolve_quote
         expected, issues = instantiate_slots(str(operation.get("new_text") or ""), facts)
@@ -765,26 +1030,32 @@ def target_for_missing_operation(
                     located = resolve_quote(span, needle)
                     if located is None:
                         continue
-                    return _Target(
+                    found = _Target(
                         target_id=target_id or f"R{operation_index + 1:03d}",
                         rule_id=rule_id, location=location,
                         quote=span.text[located[0]:located[1]], state=state,
                         reason=f"class_operation_binding:{operation_id}:{state}",
                         start=located[0], end=located[1], resolution="resolved",
                         segment_ok=True, operations=(operation_id,))
-    return Target(target_id=target_id or f"R{operation_index + 1:03d}",
-                  rule_id=rule_id, location=candidates[0], quote="",
-                  state="needs_edit",
-                  reason=f"recovery_missing_operation:{operation_id}:"
-                         f"candidates={len(candidates)}",
-                  resolution="unresolved", operations=(operation_id,),
-                  site_candidates=tuple(candidates))
+                    _attach_candidate_coverage(found, scan)
+                    return found
+    found = Target(target_id=target_id or f"R{operation_index + 1:03d}",
+                   rule_id=rule_id, location=candidates[0], quote="",
+                   state="needs_edit",
+                   reason=f"recovery_missing_operation:{operation_id}:"
+                          f"candidates={len(candidates)}:"
+                          f"pages={scan['pages']}:has_more={int(scan['has_more'])}",
+                   resolution="unresolved", operations=(operation_id,),
+                   site_candidates=tuple(candidates))
+    _attach_candidate_coverage(found, scan)
+    return found
 
 
 def targets_for_open_rules(obligations: Any, targets: Sequence[Any], rules_by_id: dict[str, dict],
                            facts: Any, inspection: Any, mapping: dict[str, list[str]],
                            sections: Sequence[Any], *, limit: int = 12,
-                           scopes: Mapping[str, Any] | None = None) -> list[Any]:
+                           scopes: Mapping[str, Any] | None = None,
+                           coverage: dict[str, Any] | None = None) -> list[Any]:
     """Create T3 locate candidates for applicable OPERATIONS with no target.
 
     Coverage is operation-first: ``G05:0`` having a target does not cover ``G05:2``.
@@ -958,11 +1229,16 @@ def targets_for_open_rules(obligations: Any, targets: Sequence[Any], rules_by_id
         if scopes is not None:
             # A T3 candidate outside the rule's physical scope belongs to another
             # clause; fail closed instead of handing the locator a sibling site.
+            # FL-D441: scan later anchor pages before declaring starvation.  The old
+            # code filtered only the first page and permanently skipped a legal
+            # candidate that sorted onto page 2.
             scope = scopes.get(rule_id)
-            candidates = [location for location in candidates
-                          if scope is not None
-                          and getattr(scope, "resolution", "") != "unresolved"
-                          and scope.contains(location)]
+            candidates, scan = _scan_scope_pages(
+                inspection, rule, record, section_ids, section_by_id, facts,
+                existing_targets=targets, scope=scope,
+                pass_name=f"open_operation:{operation_id}")
+            if coverage is not None:
+                coverage[operation_id] = scan
             if not candidates:
                 continue
         if not candidates:
@@ -971,18 +1247,26 @@ def targets_for_open_rules(obligations: Any, targets: Sequence[Any], rules_by_id
             from .recall import g11_composite_source_parts
             parts = g11_composite_source_parts(inspection, operation, candidates[0])
             if parts:
-                created.append(Target(
+                created_target = Target(
                     target_id=f"T3{len(created) + 1:03d}", rule_id=rule_id,
                     location=candidates[0], quote="", state="needs_edit",
                     reason=f"T3_open_operation:{operation_id}:composite",
                     resolution="composite", composite=parts,
-                    operations=(operation_id,)))
+                    operations=(operation_id,))
+                _attach_candidate_coverage(
+                    created_target,
+                    (coverage or {}).get(operation_id) or {})
+                created.append(created_target)
                 continue
-        created.append(Target(target_id=f"T3{len(created) + 1:03d}", rule_id=rule_id,
-                              location=candidates[0], quote="", state="needs_edit",
-                              reason=f"T3_open_operation:{operation_id}:"
-                                     f"candidates={len(candidates)}",
-                              resolution="unresolved",
-                              operations=(operation_id,),
-                              site_candidates=tuple(candidates)))
+        created_target = Target(
+            target_id=f"T3{len(created) + 1:03d}", rule_id=rule_id,
+            location=candidates[0], quote="", state="needs_edit",
+            reason=f"T3_open_operation:{operation_id}:"
+                   f"candidates={len(candidates)}",
+            resolution="unresolved",
+            operations=(operation_id,),
+            site_candidates=tuple(candidates))
+        _attach_candidate_coverage(created_target,
+                                   (coverage or {}).get(operation_id) or {})
+        created.append(created_target)
     return created

@@ -907,24 +907,29 @@ def _resolve_fee_tax(rule_id: str, sections: Sequence[Any], leaves: Sequence[Lea
         return _unresolved(rule_id, *evidence, "sales_service_fee_leaf_missing")
 
     selected: list[LeafSection] = list(body)
-    enabled = _summary_enabled(summary_overrides, rule_id, False)
+    enabled = _summary_enabled(summary_overrides, rule_id, True)
     explicit_keys = _copy_key_override(summary_keys, rule_id)
     summary_leaves: list[LeafSection] = []
-    if enabled and explicit_keys:
+    if enabled:
         summary_ids = [str(section.id) for section in base if str(section.zone) == "summary"]
         body_keys = {leaf.copy_key for leaf in body if leaf.copy_key}
+        body_leaf_ids = {leaf.id for leaf in body}
         summary_leaves = [
             leaf for leaf in _leaves_for(leaves, summary_ids, zone="summary")
-            if leaf.copy_key in body_keys and _copy_key_match(leaf, explicit_keys)
+            if leaf.copy_key in body_keys
+            and (not leaf.summary_of or leaf.summary_of in body_leaf_ids)
+            and (not explicit_keys or _copy_key_match(leaf, explicit_keys))
         ]
         selected.extend(summary_leaves)
         if summary_leaves:
-            evidence.append("summary_copy_keys=" + ",".join(sorted(explicit_keys)))
+            evidence.append(
+                "summary_copy_keys=" + ",".join(sorted(
+                    explicit_keys or {leaf.copy_key for leaf in summary_leaves})))
+            evidence.append("summary_copy=auto_body_copy_key")
         else:
             evidence.append("summary_copy=no_matching_copy_key")
     elif any(str(section.zone) == "summary" for section in base):
-        evidence.append("summary_copy=excluded_default" if not enabled
-                        else "summary_copy=excluded_no_explicit_copy_key")
+        evidence.append("summary_copy=excluded_default")
 
     evidence.extend(_leaf_label(leaf) for leaf in selected)
     return _scope(rule_id, selected, resolution="resolved",
@@ -1091,9 +1096,12 @@ def resolve_rule_scopes(
     outside its mapped sections.
 
     ``include_summary_copies`` / ``summary_copy_keys`` are opt-in overrides for
-    summary copies.  G18/G19-G22 include a copy only when its ``copy_key`` matches
-    the body clause; G15-G17 default to body only and require both an explicit
-    flag and an explicit copy key.
+    summary copies.  G15-G17 automatically include a summary leaf only when its
+    ``copy_key`` matches a real selected body fee leaf and ``summary_of`` points at
+    that body leaf; the old ``excluded_default`` left a real contract-summary fee
+    clause silently unedited (FL-D384/434/443).  G18/G19-G22 include a matching
+    copy by default.  An explicit False still disables the copy; an explicit copy
+    key narrows it further.
     """
 
     span_map = {str(getattr(span, "location", "")): span

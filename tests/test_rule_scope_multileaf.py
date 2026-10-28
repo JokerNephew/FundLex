@@ -165,8 +165,8 @@ def test_jingning_g15_explicit_service_fee_key_selects_only_the_real_copy(jingni
     rules = [_fee_rule("G15")]
 
     default = resolve_rule_scopes(rules, sections, inspection, mapping)["G15"]
-    assert default.include_summary_copies is False
-    assert "p1234" not in default.locations
+    assert default.include_summary_copies is True
+    assert {"p764", "p1234"} <= default.locations
 
     explicit = resolve_rule_scopes(
         rules, sections, inspection, mapping,
