@@ -1,5 +1,7 @@
 # 修订引擎整改执行进度
 
+> **2026-10-28调用政策更正（FL-D445、FL-D449）**：真实模型按需调用，无需费用/次数审批、不预登记cap、不因本地cap停；账本仅观测，历史数字保留。上下文token容量、API限流/并发、资源、有限技术重试/无进展保护、真实余额/鉴权故障、业务/发布边界不变。
+
 更新：2026-10-28（S0–S1 完成，S2/S3/S4/S5/S6 首批已实现并离线验证；S7–S11 未完成）。**本表不是真实模型、生产部署或用户端到端验收声明。**
 
 主方案：[SEMANTIC_ENGINE_REMEDIATION_EXECUTION_PLAN_20261028.md](SEMANTIC_ENGINE_REMEDIATION_EXECUTION_PLAN_20261028.md)。接续入口：[执行Prompt](NEXT_AGENT_SEMANTIC_ENGINE_EXECUTION_PROMPT_20261028.md)。
@@ -85,7 +87,7 @@ S1后S2/S4及部分测试可并行；S3依赖S2/契约，S5依赖批准/事实�
 
 - task_id/R编号/现有FL编号及标题；owner/分支/worktree；允许编辑的文件/接口版本；依赖；退出测试。
 - 期望行为来源、反例、实际test命令/数量/版本/证据路径；未验证项与下一动作。
-- 共享预算账本路径及授权cap、已用/预留/剩余；所有HTTP重试和子agent模型消耗计入。
+- 调用观测账本路径、累计调用/HTTP尝试/token/费用与运行证据；所有HTTP重试和子agent模型消耗统一汇总，不作为停止门禁。
 - 冻结source/guide/labels/engine/prompt/schema/model配置hash；候选与生产diff；发布/rollback记录。
 - 运行agent/进程、是否占用共享文件/预算；每阶段后清理ownership但保留证据。
 

@@ -1,5 +1,7 @@
 # 外围前后端整改分阶段计划（2026-10-28）
 
+> **2026-10-28调用政策更正（FL-D445、FL-D449）**：真实模型按需调用，无需费用/次数审批、不预登记费用/次数cap、不因本地cap停止；账本仅观测。上下文token容量、限流并发、资源、有限技术重试/无进展保护、真实余额/鉴权故障及业务/发布边界不变；文档更正不冒称运行时已解除旧cap。
+
 - 状态：**计划待确认，未继续开发**。
 - 目标：在不动核心识别/召回/修改算法的前提下，收口外围交付门、指引版本、任务状态机、查询模型、账号安全和前后端一致性，并完成可复现的自动化与真实端到端验收。
 - 基线：当前工作区分支 `codex/semantic-engine-remediation-20261028`（HEAD `f2e318e`）。GitHub 默认分支仍是 `codex/fundlex-recall-first`（`a2905ac`，2026-10-19）；当前分支领先 110 个提交且未推送。整改完成并验证后再合并/推送默认分支。
@@ -169,7 +171,7 @@ incomplete
 - 发布前：暂停/清空队列、备份数据库、确认 `engine_build`/`service_build`、部署单元与 nginx。
 - 发布后：capabilities、排队任务兼容性、管理入口、下载/ZIP。
 - 真实合同 E2E：登录 → 创建任务 → 上传 → Worker 实际处理 → 检查 DOCX 前后差异/修订痕迹 → 人工接受/拒绝 → 下载 selected/最终/报告 → 哈希一致。
-- 真实模型调用前按项目规定预登记预算/账本；不使用替身模型冒充验收。
+- 真实模型按需调用，统一记录观测账本，无需费用/次数审批或预登记cap；不使用替身模型冒充验收。
 - 回滚：保留上一版部署目录、数据库备份、queue 恢复步骤；失败时不宣称完成。
 
 ## 4. 测试矩阵
@@ -202,7 +204,7 @@ incomplete
 2. 指引版本迁移涉及生产 MySQL；必须先备份并用旧库快照演练。
 3. `engine_build` 拆分若 allowlist 漏掉核心模块，会让旧队列任务错误复用；需要“变/不变”双向测试。
 4. P0-1 的“人工审查”是否包括“一键接受全部”仍需产品确认；当前计划按“允许生成、仍标工作文件”执行。
-5. 真实 E2E 依赖模型预算和合同样本；预算未预登记前只做替身/回放测试，不冒充验收。
+5. 真实E2E依赖实际模型可用性和合同样本；无需费用/次数审批或预登记cap。真实供应商/环境故障如实记阻塞，替身/回放不冒充验收。
 6. 注册开放、无限流、Langfuse 原文上传均为产品已接受风险；若后续处理非公开合同，必须重新评估。
 
 ## 7. 执行进度（2026-10-28）
@@ -223,7 +225,7 @@ incomplete
 - 已验证：干净集成 worktree 最终全量 pytest **1782 passed / 85 skipped**（`/tmp/opencode/outer-full-pytest-final2.log`）；V1 浏览器在干净 worktree **34 passed**；V2 浏览器 **10 passed**；前端 typecheck/lint/Vitest/build 通过。
 - Agent D 已合并（`2e5435c`）：任务/合同列表改为 SQL 过滤/排序/分页，批量读取 report/artifact；`assert_owned` 避免列表前构建完整 summary。新增 6 类分页/过滤/owner/查询次数测试。保留项：`reason_options` 仍需每请求解析该任务全部 report_json；`error_code` 精确过滤仍可能回退到 Python；legacy 分页仍是 O(legacy batches + page depth)；MySQL 未实跑。
 - 为保持默认分支与当前工作区一致，已把工作区中已通过测试的 compare 选择版前后端补入（`f42180d`、`9809c73`）；干净 worktree 的 V1 浏览器 **34 passed**，V2 **10 passed**。这不是新增外围需求，而是避免默认分支保留半套 compare UI/后端。
-- 仍在进行：最终全量 pytest（`/tmp/opencode/outer-full-pytest-final.log`）、迁移/发布演练；真实模型 E2E 需预算登记。
+- 当时仍在进行：最终全量pytest（`/tmp/opencode/outer-full-pytest-final.log`）、迁移/发布演练；真实模型E2E仍需执行并记录实际调用/产物证据，无需预算登记。
 
 ## 8. 下一步
 
@@ -231,4 +233,4 @@ incomplete
 2. 在干净集成 worktree 跑全量 pytest、前端 typecheck/lint/Vitest/build、Playwright V1/V2。
 3. 用旧库快照演练 `parent_version_id` 迁移和 `queued+attempts=3` 清理。
 4. 发布演练：暂停/清空队列，确认 `engine_build`/`service_build`，再发布；不直接在生产跑真实模型批次。
-5. 真实合同 E2E 需按项目规定预登记预算；未登记前不冒充完成。
+5. 真实合同E2E按需真实调用、记录账本和实际产物；未完成真实验证前不冒称完成，不需费用/次数审批或预登记cap。

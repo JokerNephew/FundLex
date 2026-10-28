@@ -1,5 +1,23 @@
 # FundLex 当前断点（ACTIVE_HANDOFF）
 
+## 当前执行任务（2026-10-28，用户授权全面整改及端到端交付）
+
+- 最新用户要求：依据审查执行详细分阶段整改，允许多agent；自主管理版本/进度；开发疑问开工前向主agent澄清，开工后自主开发测试，不再问用户；按需真实模型不考虑预算，实现正式端到端交付。这条取代下文历史“只检查不修复”的范围。
+- 方案`docs/COMPREHENSIVE_REMEDIATION_EXECUTION_PLAN_20261028.md`，进度`docs/COMPREHENSIVE_REMEDIATION_PROGRESS_20261028.md`；S0–S7与A–G独立ownership已定义。S0开始：当前HEAD28cac2f，原审查/政策文档dirty保留并将提交基线；新证据`/tmp/opencode/comprehensive-remediation-20261028/`，prestart.patch已保存。
+- 无费用/calls审批，账本只观测；保留资源/权限/文件安全与无进展限制，不泄凭据。业务范围/既有修订/正文摘要要求按已确认规格，不再次当业务待定。
+- 下一动作：建立执行分支并提交审查/政策/计划基线→创建A–G独立worktrees→各agent预检澄清后开发；主agent统一合并、独立标签及真实模型/浏览器验证，禁止子agent自行发布混版。
+
+## 最新断点（2026-10-28，8-agent全面检查完成，整改未执行）
+
+- 当前任务已完成检查：报告[`COMPREHENSIVE_MULTI_AGENT_AUDIT_20261028.md`](COMPREHENSIVE_MULTI_AGENT_AUDIT_20261028.md)，核心JSON`docs/evidence/comprehensive-audit-20261028.json`。**整体NO-GO：真实生产合同漏改却complete，未做业务整改或部署**。用户再次明确从未限制付费调用；21份政策/执行/接续/部署说明已清理。按需真实调用，无费用/次数审批，账本仅观测，旧限制不归因用户；代码旧cap仍待单独整改（FL-D449）。
+- 环境：本机生产云服务器已核验；branch `codex/outer-remediation-20261028`，HEAD `5cf7a4500b49bcb17cda6189348046d78537da0d`。原有dirty `fundlex/generation/claim_replay.py`、`fundlex/recall.py`、`fundlex/recall_pipeline.py`及两个合同备份目录保留；本轮不改业务代码、不提交/推送/部署/重启。
+- 并行期间HEAD被其他会话推进至`28cac2f`（`c46f923`纳入原3个引擎dirty，`28cac2f`政策文档）；不是本轮主agent提交。448份源码SHA对照仅发现本轮预算说明文档变化，原引擎源码内容与检查起点一致；不撤销他人提交。
+- 8名agent全部完成，无本轮已知在运行的agent/测试任务。报告`policy.md/engine.md/api.md/docx.md/frontend.md/ops.md/integrations.md/business-review.md`均在证据根目录。集中记录仅主agent合并，新增FL-D449–478并更新相关原项；不将复现负例的测试通过当修复。
+- 证据根目录`/tmp/opencode/comprehensive-audit-20261028/`，源码SHA`baseline.json`；全量非浏览器 **1945 passed/13 skipped/3 warnings/736.94s**，浏览器 **45 passed**、前端单测 **14 passed**，typecheck/lint/独立dist build通过。定向套件与全量重叠不相加。独立MySQL测试未配置，未指向生产库；无口令root客户端1045拒绝后未猜密码。首轮浏览器脚本误用`#guides`未提交，保留为脚本错误，不记产品缺陷。
+- 生产真实任务`3860e8c301ab4343bb228d609cc968b2`/文档`ca8ef3e099344290b70aadd36abd7c57`：价值优选，正式浏览器→真实Worker/model→结果及下载成功；200.8秒、27逻辑/28HTTP、149372tokens、约$0.03656805、429恢复。build1621a30b...，15处修改/15ins+15del、10项机械校验全过、未登录下载401。**独立业务复核未通过**：摘要p1258/XML1282旧支付原样残留，正文p802新机制已改，报告却complete/PASS/open0；主agent再次读DOCX确认，证据`production-v2/business-counterexample.json`。更新FL-D384/434/443；不以链路通或15处变化冒称整合同正确。旧报告/文件保留，成功会话logout，两个临时注册账号/本轮任务保留，未改既有用户数据，无凭据落盘。
+- 重要范围：FL-D452向量凭据外发仅候选虚构哨兵拦截复现，生产无vector模块/调用链，不能宣称生产可利用。备份权限/TLS公告/发布器漂移已核实；Word/WPS、全28份独立评测、MySQL并发、飞书/法规全类型生产真实E2E、云备份策略未验，不因费用停，也不虚报通过。
+- 下一可执行动作：按综合报告§6先安全/候选发布资格及单一发布基线，再统一摘要scope/独立覆盖、批准/证明/门禁，修DOCX/Compare/下载/fencing/交互恢复；冻结后跑正式真实回归与用户路径。**本轮只检查，未授权自动修全部业务，不擅自发布/重启**。后续新增编号从479起；不覆盖原件/gold/他人提交。无手动压缩接口，已保存完整持久断点，必要时用平台压缩/接续后先读本节与报告，不虚构已压缩。
+
 > **用户测试语料指令（2026-10-27）**：后续新增测试/评测统一使用 `/home/opencode/fundlex/funds_word/基金合同第一批`。该目录 18 份含修订文件已拒绝全部修订并替换，原件备份在 `funds_word/基金合同第一批_修订原件备份_20261027/`，清理副本/清单在 `funds_word/基金合同第一批_拒绝修订_20261027/`；当前 27/28 `parse_ok`，唯一失败 `广发稳信` 仅受保护且无修订。固定 D01–D20/holdout manifest 不变。业务问题汇总见 [`BUSINESS_ISSUES_FROM_TESTS.md`](BUSINESS_ISSUES_FROM_TESTS.md)。
 >
 > **章节口径更正（2026-10-28）**：D06 p280 实际位于“第六部分基金份额的申购与赎回”，不在 G06 的“基金的基本情况—份额类别设置”；G06 只覆盖 p130–p137。p280 的 Y 类单向转换不是 G06 业务问题，BIZ-01 已从业务问题清单排除；如要处理应另立规则/业务决定。

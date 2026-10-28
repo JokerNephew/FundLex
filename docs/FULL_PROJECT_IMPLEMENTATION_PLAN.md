@@ -1,5 +1,7 @@
 # FundLex 完整项目实施计划（召回优先新链路）
 
+> **2026-10-28历史预算规定失效（FL-D445、FL-D449）**：下文预登记上限、同一本轮cap、触顶暂停和费用/次数审批不再是执行要求，也不代表用户施加过限制；原始数字保留为历史。现行整改使用 `SEMANTIC_ENGINE_REMEDIATION_EXECUTION_PLAN_20261028.md`：按需真实调用，无需费用/次数审批、不因本地cap停止，账本仅观测、不重置历史。保留版本/标签/hash冻结、上下文token容量、API限流/并发、物理资源、有限技术重试/无进展保护、真实余额/鉴权故障、业务权限及发布边界。
+
 创建：2026-10-14。接续自 `docs/FULL_PROJECT_DEVELOPMENT_HANDOFF.md`（整合规格）与 `AGENTS.md`（项目规定）。
 本文是**执行计划**：写待做/进行中/已完成/阻塞、代码位置与实际证据。不是完成声明，不复制整合文档作为勾选清单。
 问题与处理方法持续登记在 `docs/DETAIL_ISSUES_AND_RESOLUTIONS.md`；断点见 `docs/ACTIVE_HANDOFF.md`。

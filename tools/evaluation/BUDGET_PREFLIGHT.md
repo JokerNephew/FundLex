@@ -1,10 +1,25 @@
 # Evaluation budget preflight
 
+> **Policy correction — 2026-10-28 (FL-D445/FL-D449):** Real model calls are
+> made as needed, without cost/call-count approval, pre-registered spending or
+> call caps, or local-cap stop gates. Ledgers are observation/provenance only.
+> The approval/cap rules below are a **historical description of legacy code**,
+> not current execution instructions or limits imposed by the user. Retain
+> version/manifest/label/hash provenance, context/output token capacity, API
+> concurrency/rate limits, resource safety, bounded technical retries and
+> no-progress protection, actual provider balance/auth errors, and business/
+> release permissions. `budget_preflight.py` and `p6_run.py` still enforce the
+> obsolete admission rules and require runtime remediation; this documentation
+> change does not disable them. No supported disable-cap/observe-only switch
+> exists in the inspected runtime; setting caps to zero is not unlimited.
+> Examples and original numeric values below are preserved for traceability.
+
 `budget_preflight.py` is a standalone, offline admission guard for a new
-evaluation run. `p6_run.py` now requires this admission explicitly and performs
+evaluation run. The legacy `p6_run.py` requires this admission explicitly and performs
 it before generating credentials, creating a run directory, constructing an HTTP
-client, registering an account, or uploading a contract. Other runners still
-need an equivalent explicit integration before they may start work.
+client, registering an account, or uploading a contract. Do not propagate its
+obsolete spending/call approval requirement to other runners; retain only
+provenance and technical safety checks under the current policy.
 
 ## Frozen protocol
 

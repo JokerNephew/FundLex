@@ -4,7 +4,241 @@
 >
 > 测试中遇到的业务问题单独汇总在 [`BUSINESS_ISSUES_FROM_TESTS.md`](BUSINESS_ISSUES_FROM_TESTS.md)，与代码/定位缺陷分开维护。
 
+## FL-D449 现行预算审批规定与用户明确要求不符（2026-10-28）
+
+- 发现日期：2026-10-28，多agent全面检查期间用户再次明确：“我从来没有限制过付费模型的调用，如果有哪条规定是这么写的帮我改掉，然后你再正常按你的规划进行检查”。不将旧限制归因于用户。
+- 问题与影响：`AGENTS.md`末条、评测计划§7、完整接续文档、接续prompt及部署示例仍要求预登记费用/次数cap、缺额度停止，与FL-D445冲突，可能让后续agent反复停止真实验证。
+- 处理：清理现行执行文档；按任务需要调用真实模型，无需费用/次数审批，账本只作观测追溯，不因本地cap暂停。历史证据数字保留，历史限制明确失效。上下文与输出容量、限流/并发、物理资源、有限技术重试/无进展防循环、凭据与供应商实际余额故障、业务权限和发布安全不变。
+- 运行时证据：`fundlex/model_budget.py:20–25,55–57`仍强制正数费用/次数阈值并触顶报错；`fundlex/model.py:204–225`仍读取默认16次/$1和每实例调用上限。生产仅白名单读取确认`FUNDLEX_MODEL_MAX_CALLS=192`、`FUNDLEX_MODEL_MAX_REQUESTS=40000`、`FUNDLEX_MODEL_MAX_COST_USD=50`，未输出密钥或账本连接串。
+- 状态与验证：**21份政策/执行/接续/部署文档和示例说明已修订**，报告`/tmp/opencode/comprehensive-audit-20261028/policy.md`；`git diff --check`及6份核心入口政策断言通过，示例数值未篡改为不支持的0。**运行时旧cap已确认，尚未改代码/生产配置**。生产真实任务3860e8c3完成28次HTTP调用，未因费用停止。检查继续，不将cap当作用户限制。
+- 下一步：核验修订后的活跃指令无冲突；运行时统一改为仅观测需另做实现整改并回归，不以调高数值冒称已经移除硬上限。
+
+## FL-D450 P6评分器可把缺失义务、残留删除句及未知类别判为完成（2026-10-28）
+
+- 发现日期：2026-10-28，主agent对实际DOCX读回评分的反例检查。
+- 问题与影响（P1）：`tools/evaluation/p6_score.py`完成判定弱于完整义务，可能虚高正确完成率。①replace分支374–375行仅因旧字串消失判completed，不要求新义务存在；②append分支313行通过`appendix_present`（188–190行）只匹配首分句，后续必需条款可完全缺失；③delete分支345–351行定位失败直接算完成，未按注释核对全文残留；④G02/G04分支330–336行在类别为空时以no group算完成。
+- 证据：`/tmp/opencode/comprehensive-audit-20261028/scorer_probe.py`、`scorer-probe.json`、`scorer-docx/*/{source,final}.docx`。用生产评分器`paragraphs_of()`重读实际合成DOCX后，四个反例全部返回completed：新费率义务未写入；G16缺超过一年免收费义务（已有服务费类别）；G17旧句移至第46段仍保留；G02类别未知且源/终稿原样不变。未修改冻结标签、历史分数或真实合同。
+- 与既有记录关系：补充FL-D098/099及FL-D089的反向误放风险；原先正确个案修复证据保留，不据此断言所有历史分数均错。
+- 建议处理（未实施）：逐义务检查新效果、主体/类别/渠道/期限与旧义消除；定位失败保持unknown并补查；未知事实不得作无目标证明；补四种负例并将字串评分与独立语义复核分列。
+- 状态与验证：**四个离线实际DOCX反例已复现，评分代码未改；历史受影响分母待重算**。这是评测工具缺陷，不等同生产引擎已发生同种错误。
+- 下一步：修评分器后冻结评分版本，按原标签与分母回算，不改gold制造通过。
+
+## FL-D451 生产V1首页请求任务聚合接口404，部分发布破坏前后端契约（2026-10-28）
+
+- 发现日期：2026-10-28，真实注册登录后的生产首页检查（P1）。
+- 问题与影响：生产`frontend/workspace.js:21`调用`/api/workspace/tasks`，但生产`fundlex/api.py`未注册workspace路由；`fundlex/workspace.py:184`虽有注册函数却未接线。首页显示“任务暂时无法读取，请点击刷新重试”，统计卡无数据，不能从统一任务入口查看全部业务任务。当前工作区也没有workspace模块，不能整树覆盖生产。
+- 证据：`curl http://127.0.0.1:8010/api/workspace/tasks`为404；登录后截图`/tmp/opencode/comprehensive-audit-20261028/production/failure.png`显示相同失败。首轮脚本的`#guides`定位错误另行更正，不混为本缺陷；改用`#guide`后普通合同任务创建与详情直达可运行，说明不是全部API离线。
+- 关联：FL-D382“生产前端基线分叉”、FL-D448部分发布的具体回归，不重写历史部署结论。
+- 建议处理（未实施）：按生产V1契约恢复workspace模块和路由接线并补真实首页测试，重建包含全部业务的单一候选清单；禁止从缺模块的工作区直接整树发布。
+- 状态：**生产只读HTTP/真实登录页面已确认，未修复/重启**。下一步在统一候选中修复并从首页复验任务统计、分页及深链。
+
+## FL-D452 普通成员可配置向量凭据来源与外发地址（2026-10-28）
+
+- 发现日期：2026-10-28，API独立审查（P1，工作区候选安全缺陷；当前生产适用性待核对）。
+- 问题与影响：`guide_generation/api.py:103–129`将成员上传的任意config传给service；`pipeline.py:66–118`接受embedding/Qdrant地址、凭据环境变量名及索引路径；`vector.py:66–90,459–487`据此读取服务器环境凭据并发送至所选地址。公开合同可传出不等于凭据可传出；另有SSRF及任意SQLite索引路径风险。
+- 证据：`/tmp/opencode/comprehensive-audit-20261028/api.md` A1、`api/repro.py`、`api/evidence.json.untrusted_vector_config`。隔离普通用户提交返回201；实际持久config经过真实provider后，**虚构哨兵**出现在被拦截的Authorization中；仅临时索引文件写入。未读取真实凭据、未出网、未利用生产。现生产向量模块曾未部署（FL-D448），不得直接宣称生产已发生泄露。
+- 建议处理（未实施）：公开参数严格类型与allowlist，transport/环境变量名/地址/磁盘路径仅服务端决定；限制目录与出站目的地；补普通成员恶意config拒绝与哨兵负例。此项应在候选功能发布前修复。
+- 状态与验证：**候选数据流已实证，未修复；运维只读确认当前生产无vector.py及vector配置消费链，该特定sink未部署，不能称生产已可利用**（`ops.md`§A1）。完整模型流水线未为安全复现运行。下一步在引入vector的新候选发布前封闭配置边界并回归。
+
+## FL-D453 法规生成只在任务行fencing，旧Worker仍能覆盖新epoch运行结果（2026-10-28）
+
+- 发现日期：2026-10-28（P1）；扩展FL-D338验证范围，不等同已修复的普通RunStore/guide解析队列。
+- 问题与影响：`guide_generation/worker.py:55–79`先执行pipeline/update_run再检查finish_job token；`store.py:328–349`及阶段、产物写入不携带租约上下文，旧worker可覆盖新状态和产物。
+- 证据：`api.md` A2、`api/evidence.json.guide_old_worker_overwrite`。真实Worker生命周期配合确定性调度替身：token1过期→token2接管并complete→token1返回后先写run为complete_with_unresolved，才在finish_job被拒。最终job为token2 completed、run却是旧worker值。未跑真实模型；MySQL重复claim风险仅源码审查，未实测。
+- 建议处理（未实施）：每次写入带job/token/有效lease，或attempt独立不可变暂存+事务CAS发布；heartbeat/finish/claim完整状态与租约校验，补两worker交错与异常路径回归。
+- 状态与验证：**SQLite隔离交错复现，未修复**。下一步统一全流水线fencing，不只补finish_job测试。
+
+## FL-D454 飞书合同下载绕过HTTP成对产物与报告验证门禁（2026-10-28）
+
+- 发现日期：2026-10-28（P1），关联FL-D400多渠道交付。
+- 问题与影响：`tasks.py:817–840`的artifact只验请求文件自身；`integrations/feishu/service.py:1046–1077`经此发送，不走`RunStore.get_artifact`成对文件/报告/选择来源/模式验证。
+- 证据：`api.md` A3、`api/evidence.json.feishu_pair_gate_bypass`。隔离任务先保存合法文件对，仅损坏redline后，普通get_artifact(final)拒绝`ARTIFACT_VERIFICATION_MISMATCH`，实际飞书发送函数接本地fake sender仍发送final并提示成功。未给真实飞书发消息；owner校验和被请求文件自身hash仍有效，不误报跨用户IDOR。
+- 建议处理（未实施）：所有渠道通过唯一已核验accessor并校验实际发送字节；补配对损坏/报告无效/选择来源/模式不符负例。
+- 状态：**实际发送函数离线复现，未修复**。下一步统一访问入口后做飞书与网页同条件验证。
+
+## FL-D455 法规指引产物下载忽略已登记hash和大小（2026-10-28）
+
+- 发现日期：2026-10-28（P2），补充FL-D338完整性边界。
+- 问题与影响：`guide_generation/api.py:260–282`与`integrations/feishu/service.py:1029–1042`只检查文件存在；store虽登记hash/size，下载未消费，损坏/截断/过期文件仍可下载。
+- 证据：`api.md` A4、`api/evidence.json.guide_corrupt_download`。隔离登记正常产物后替换为损坏字节，owner下载200且返回损坏内容；未登录401、跨用户404。HTTP实证，飞书分支仅源码确认；不是已证明的远程文件覆盖或IDOR。
+- 建议处理（未实施）：共享验证accessor核对owner/root/hash/size，HTTP及飞书复用，优先不可变产物，错配稳定409。
+- 状态与验证：**隔离HTTP复现，未修复**。下一步完整性负例与正常下载回归。
+
+## FL-D456 未完成evaluation任务丢失模式，转成delivery工作文件（2026-10-28）
+
+- 发现日期：2026-10-28（P2），关联FL-D400诊断/评测身份隔离。
+- 问题与影响：`jobs.py:206–231`只在complete分支设置evaluation身份；普通recall默认delivery，`store.py:956–975,1013–1019`依report而非持久job.mode选择产物。incomplete评测被存成delivery，导出working_final/redline；未实证其变成正式complete文件。
+- 证据：`api.md` A5、`api/evidence.json.incomplete_evaluation_mode_loss`。隔离evaluation任务+真实Worker接合法不完整文件对，落库execution_mode=delivery且working_final可下载。完整evaluation分支正常，diagnosis剥离合同文件亦正常；缺口是未完成等终态未覆盖。
+- 建议处理（未实施）：任何终态前强制绑定权威job.mode，明确定义incomplete evaluation命名/下载策略；Store拒绝report/job模式错配，补incomplete/excluded/not_generated/failed回归。
+- 状态：**隔离真实Worker流程复现，未修复**。下一步修全终态并验证评测不会被当普通交付。
+
+## FL-D457 SemanticApproval可搬用到其他物理站点（2026-10-28）
+
+- 发现日期：2026-10-28（P1），FL-D444/S1批准契约新增反例。
+- 问题与影响：`semantic_evidence.py:325–358,386–401`核验批准的旧证据仍存在，却未比对消费target的rule/location/quote/start/end与批准EvidenceRef；空operations还可能跳过操作校验。恢复/重绑定记录沿用旧ID时，同文另一站点可使用并非本站点的批准；未证明HTTP可直接注入target，不报远程利用。
+- 证据：`/tmp/opencode/comprehensive-audit-20261028/engine.md` E01、`engine/probe.json.approval_rebinding`。p0批准搬给p1同文目标，实际planner生成p1 `approved_span_delete`；不相关管理费句仍被另一层operation归属挡住，不能笼统宣称任意文本可删。
+- 建议处理（未实施）：严格比较target全部物理span/rule/operation并强制当前guide/scope/condition版本，空operations拒绝；迁移站点新建批准。补同quote异location、同scope异span与过期guide负例。
+- 状态与验证：**实际planner离线复现，主agent复跑探针成功；未修复/部署**。下一步修批准不可转移性并回归恢复链。
+
+## FL-D458 语义审计只改外层PASS，站点仍FAIL导致合法已满足无法完成（2026-10-28）
+
+- 发现日期：2026-10-28（P1），FL-D444/S6及`c46f923`审计证明接入后的剩余缺口。
+- 问题与影响：`generation/claim_replay.py:2043–2086,2173–2186`写义务PASS/SEMANTIC_VERIFIED却未修正site_effects的FAIL；effects与最终查漏仍判未完成，出现failures=[]但verified=false，合法同义已满足无法闭环。
+- 证据：`engine.md` E02、`engine/probe.json.semantic_audit_consumption`。真实源句“申购基金份额的投资者支付申购费用，该项费用不计入基金财产。”有有效批准和completed/evidence_verified审计；返回外层PASS、站点`CLAIM_OPERATION_NOT_PLANNED`、effect_proof_passed=false。未为本探针调用真实模型。
+- 建议处理（未实施）：语义证明绑定artifact hash/operation/site/occurrence/精确引文，更新确实审核站点再聚合；保留其他站点与物理不一致阻断，不粗暴接受外层PASS。
+- 状态：**离线复现且主agent复跑成功，未修复**。下一步补语义站点证明正反例及真实任务回归。
+
+## FL-D459 批准段中删除混用绝对offset和切片坐标（2026-10-28）
+
+- 发现日期：2026-10-28（P1），FL-D444批准span删除新增回归。
+- 问题与影响：`recall.py:2208–2219,6667,6781–6790`先切`actual=span.text[start:end]`，又把绝对start/end用于片段完整性与删除判断。同一合法删除只因前面有保留句就误退回compose，额外调用或失败。
+- 证据：`engine.md` E03、`engine/probe.json.approved_delete_offsets`及微型DOCX。无前缀获approved_span_delete，加保留前缀后批准仍ok却退回compose。零compose参数只用于显现错误分支，不是用户费用限制；复现到兼容planner分支，不能推论所有内置删除均失败。
+- 建议处理（未实施）：全程使用完整span+绝对坐标，或统一一次转换为相对坐标；补非零start、前后保留句、多run/标点负例。
+- 状态：**实际DOCX/planner离线复现，主agent复跑成功；未修复**。下一步修坐标系并验证未授权邻句守恒。
+
+## FL-D460 Compare同段多处修改遇长度变化被期望文本校验错拒（2026-10-28）
+
+- 发现日期：2026-10-28（P1），不是Compare相邻多段FL-D441复发。
+- 问题与影响：`compare/selection_writer.py:719–730`按正序修改已经变长的expected文本，却继续使用后续原始offset；实际writer按原文切片正确写入，最终因错误oracle报`SELECTION_FINAL_TEXT_MISMATCH`，同段多费率/期限修改无法生成。
+- 证据：`/tmp/opencode/comprehensive-audit-20261028/docx.md` COMP-A01、`docx/results.json`及`docx/real-hongli/result.json`。合成0.40%→0.355%、后续0.10%→0.08%两处全right复现；第一批弘利p159临时副本两处长短替换亦复现，原件未改。writer生产文件SHA与工作区相同，但未做请求级生产复现。
+- 建议处理（未实施）：按location从同一原文拼接或offset降序生成expected；补混合长短、多处/部分选择回归，不能取消独立校验。
+- 状态：**合成+真实合同临时副本离线实证，未修复**；下一步修oracle后复验实际下载。
+
+## FL-D461 Compare靠文件名前缀识别story，合法非标准页眉URI可漏覆盖（2026-10-28）
+
+- 发现日期：2026-10-28（P2）。
+- 问题与影响：`compare/parser.py:114–125,131–134,300–302`按word/header等前缀识别部件，未按OPC关系/content type；合法重命名后的非空页眉被完全漏报，结果0差异且coverage complete。
+- 证据：`docx.md` COMP-A03、`docx/additional_results.json.standard_story/arbitrary_story`。两份同正文不同页眉常规URI会incomplete警告；把页眉改为word/otherstory.xml并正确更新relationship和Content Types，包校验通过，却complete/warnings=[]。不是无效orphan文件，也不是FL-D442有警告的正常选择写回。
+- 建议处理（未实施）：按relationship type/content type/root QName枚举所有story，未比较非空部件明确列incomplete/limitations。
+- 状态：**合成合法DOCX复现，未修复**。下一步补任意合法URI覆盖回归。
+
+## FL-D462 Compare格式/编号例外未披露，相同numId可静默绑定不同定义（2026-10-28）
+
+- 发现日期：2026-10-28（P2）。
+- 问题与影响：既有设计明确文本优先、左版式为基底，不承诺复制全部右格式；但`compare/models.py:215–221`、`store.py:930–936`、`selection_writer.py:944–974`报告没有formatting_not_compared/base_side提示。新增段克隆右pPr/numPr时（writer833–865行）仅验证numId在左侧存在，不比有效定义，可能静默改变法律条款显示编号。
+- 证据：`docx.md` COMP-A05、`docx/additional_results.json`、`docx/numbering_collision/`。纯粗体差异0diff/complete/无例外；右新增段numId9是lowerLetter/(%1)，左同ID是decimal/%1.，生成成功却绑定左数字定义，limitations=[]。未把“未复制全部右格式”本身冒充违反承诺。
+- 建议处理（未实施）：明确comparison_scope=text、格式/空白归一与基底提示；新增段编号按既定政策比较定义后重映射、提示采用左定义或阻断，交叉引用场景复核。
+- 状态：**合成格式及编号包验证，未修复**；下一步确定并落实新增段格式策略，补报告/编号碰撞回归。
+
+## FL-D463 生产SQL备份含认证资料却对本机其他用户可读（2026-10-28）
+
+- 发现日期：2026-10-28（P1，未证明已经被第三方窃取）。
+- 问题与影响：`/tmp/opencode/fundlex-compare-revisions-20261028/db-before.sql{,.gz}`为root:root/0644，父目录0755；普通非sudo读取1字节成功。只统计DDL/INSERT表名确认含users/sessions/绑定及OAuth表，未输出认证行值。`/var/backups/fundlex`旧备份亦0644。公开合同授权不覆盖密码哈希/身份资料；session摘要不能直接当Bearer重放。
+- 证据：`/tmp/opencode/comprehensive-audit-20261028/ops.md` O2；gzip SHA `6b6756793b8ede17b309601e6719cec5a59fba33ee5ae2d9f64aa1d355a8b0d1`，54表，未提取或写出凭据值。
+- 建议处理（未实施）：备份目录0700/文件0600、创建umask077，盘点历史副本及访问面；按证据决定轮换，不删除/改写证据。
+- 状态：**本机权限风险实证，未改权限/清理备份**。下一步受控修复并验证备份可用。
+
+## FL-D464 生产TLS依赖certifi命中受影响CA公告（2026-10-28）
+
+- 发现日期：2026-10-28（P1，未验证MITM）。
+- 问题与影响：生产及工作区安装/uv.lock锁定`certifi 2026.7.22`；模型client默认TLS配置，无SSL_CERT_FILE/SSL_CERT_DIR覆盖，受影响CA包与实际出站链相关。
+- 证据：`ops.md` O3；主agent交叉查询OSV `GHSA-6q48-6c7w-9gw2`与`PYSEC-2026-4320`均200且未withdrawn，主题emSign受损中间CA密钥；两公告fixed分别2026.10.18/2026.10.19，不只取较早值。
+- 建议处理（未实施）：核对上游后升级至少2026.10.19或更新版本，更新锁与两环境并做TLS/模型/集成回归；不把公告命中说成已有劫持。构建工具setuptools公告按具体平台/不可信包输入范围另核查，不夸大成本机Web RCE。
+- 构建依赖补充：生产setuptools84.0.0命中GHSA-xmj3-9gf7-h52w，但为Windows legacy wheel安装路径，本机Linux不据此报远程利用；工作区65.5.1命中CVE-2025-47273（78.1.1修复）/CVE-2024-6345（70.0.0修复），按不可信包输入/构建环境风险处理。未安装或执行不可信包来验证。
+- 状态：**实际版本与公开公告核验，未升级/重启**。下一步进入依赖修复候选。
+
+## FL-D465 数据库与对象一致性备份/恢复闭环缺少可核验证据（2026-10-28）
+
+- 发现日期：2026-10-28（P2，证据缺口，不断言无云备份）。
+- 问题与影响：本机定期目录只有旧备份，两个gzip无CREATE TABLE；最新完整54表备份在临时发布目录。未见FundLex timer/cron或数据库+对象一致性隔离恢复演练。发现hbrclient但未查云控制台，不能说没有云备份；代码回滚不等于DB恢复。
+- 证据：`ops.md` O6；根盘40GiB/余11GiB、inode约19%，并非磁盘已满。历史`/opt/.fundlex-publish-KQV09e/status=recovery-failed`不代表当前五个active服务故障。
+- 建议处理（未实施）：核实云策略/最近成功点、定义RPO/RTO、安全保留DB+对象/配置清单；隔离真实恢复并核对下载hash，按证据规划容量，不擅自清理账本/合同。
+- 状态：**本机可见恢复证据不足，云策略待确认，未做恢复演练**。下一步核对备份并隔离验证。
+
+## FL-D466 飞书解绑重绑后旧owner草稿由新账号提交（2026-10-28）
+
+- 发现日期：2026-10-28（P1）。`integrations/feishu/service.py:162–170,435–446,760–770`及store草稿查询只核tenant/open/chat/status，未核当前binding owner。
+- 证据/影响：`/tmp/opencode/comprehensive-audit-20261028/integrations.md` INT-03；真实持久层正常解绑A/重绑B后确认旧草稿，任务owner=B、文件来自A暂存、task_channels仍owner=A，造成账号隔离及回传断链。client/task调用为隔离替身，无生产写/飞书消息。
+- 处理建议（未实施）：每次操作校验草稿owner与active binding一致；解绑原子失效草稿/待发channel或绑定epoch，提交重新校验任务与channel owner，不把旧草稿改名迁给B。
+- 状态：**离线行为实证，未修复**；下一步补正常重绑和旧草稿拒绝回归。公开合同授权不取消账号隔离。
+
+## FL-D467 飞书失败事件与中断received被永久去重（2026-10-28）
+
+- 发现日期：2026-10-28（P2），关联FL-D266/267但根因是事件状态机。
+- 问题/证据：`feishu/service.py:90–124`、`integrations/store.py:254–284`对任意已存在event_id返回false，不区分processed/dead/received；`integrations.md` INT-04注入一次临时OSError后恢复，再投同事件仍只处理1次、dead/attempts=1。没有持久payload/重放消费者；进程中断received风险同理，后者仅源码推导。
+- 建议（未实施）：processed才直接幂等返回；失败/过期received有租约及有限重试，保存安全payload/恢复引用，副作用仍按草稿幂等。不要删除事件行绕过去重。
+- 状态：**临时失败重投实证，未修复**；下一步补故障恢复与不重复建任务测试。
+
+## FL-D468 法规引擎兼容性请求返回202但不执行，显式配置调用不存在方法（2026-10-28）
+
+- 发现日期：2026-10-28（P2）。`guide_generation/api.py:284–293`写engine_requested，worker只读config；`pipeline.py:1088–1120`只看run_engine_compatibility并调用不存在的run_record_engine_compatibility。
+- 证据/影响：`integrations.md` INT-05两个反例：真实HTTP/队列返回202消费后engine_status仍queued且gg_engine_runs为空；显式True则AttributeError。模型为隔离FakeGuideRouter，非真实质量验收；用户无法取得兼容性报告，不代表全部法规内容错误。
+- 建议（未实施）：更正方法名、独立兼容性子任务消费请求，绑定candidate hash/幂等与专属状态，不为兼容性改写已发布内容。
+- 状态：**两条路径离线实证，未修复**；下一步修入口与真实兼容性验证。
+
+## FL-D469 法规模型故障暂停后正常用户无同run恢复入口（2026-10-28）
+
+- 发现日期：2026-10-28（P2）。`guide_generation/worker.py:64–68/store.py:710–735`置job=retry_wait，但claim只领queued/过期leased；API无resume。
+- 证据/影响：`integrations.md` INT-06：故障抛MODEL_CONFIG_MISSING后run paused，恢复环境后仍领不到；POST resume=404，兼容性入口因RUN_NOT_COMPLETE=409，只有开发者store.enqueue能续跑。传输失败暂停而非导出空稿的原修复仍正确，不等于恢复链已完成。
+- 建议（未实施）：owner鉴权幂等resume，保留证据/账本并新epoch；限流等可退避自动重试，长期鉴权故障不无界循环。本地费用cap改观测，不作为恢复阻断。
+- 状态：**隔离Worker/API反例实证，未修复；生产guide_generation修复仍未全量部署（FL-D448）**。
+
+## FL-D470 飞书“发送全部交付”固定前100份且不提示余项（2026-10-28）
+
+- 发现日期：2026-10-28（P2）。`feishu/service.py:990–1000,1046–1079`只取page1/page_size100，单批20限制已取消，101份为合法输入。
+- 证据/影响：`integrations.md` INT-07：101份可下载任务仅发100份、提示已发送100个文件，无剩余/部分失败；实际分页语义+隔离fake sender，未发真实消息。单文件异常也被吞，不能把“全部”当全量。
+- 建议（未实施）：稳定游标/页号遍历，逐文件成功失败账本、部分失败/剩余提示及有限重试，消息节流分批持久投递而非静默截断。
+- 状态：**离线分页反例实证，未修复**。下一步补101份/中途失败恢复验收。
+
+## FL-D471 Compare选择版迟到回包使用户保存到旧合同分组（2026-10-28）
+
+- 发现日期：2026-10-28（P1）。`frontend/compare.js:230–287`的generate/preview/refresh缺identity/request/pair世代核验，openPair已有token不能覆盖这些新回调。
+- 证据/影响：`/tmp/opencode/comprehensive-audit-20261028/frontend.md` FE-01、`frontend-probes.json.compare_race`。真实controller/DOM+延迟API响应：P1生成中切到P2，释放旧回包后界面P2但selection=P1，再保存实际PUT到P1且带P1合法hash。确证隔离浏览器错误写请求，未写生产，不称跨租户越权。关联FL-D153新路径缺口。
+- 建议（未实施）：所有await后核验identityToken/requestToken/pair_id，过期回包不能改selection/busy/status；切组取消或隔离操作，补生成中换组再保存回归。
+- 状态：**隔离浏览器实证，未修复**；生产源码适用性需按分叉核对，不把本工作区全部当线上。
+
+## FL-D472 法规任务切换迟到响应造成A标题与B内容/下载混搭（2026-10-28）
+
+- 发现日期：2026-10-28（P1）。`frontend/guide_generation.js:120–138,230–234,288–305,537–547`缺run/epoch绑定。
+- 证据/影响：`frontend.md` FE-02及`frontend-probes.json.guide_race`；延迟A刷新、切B加载完成后释放A，header=A、selected_run=B、guide/download=B。用户意图与操作对象不一致，未证跨账号越权或服务端门禁绕过。
+- 建议（未实施）：run/tab/poll/保存/批准/下载统一runId+epoch及取消旧请求，切换清旧可编辑面板并禁操作，回包仅影响原对象。
+- 状态：**真实源码隔离浏览器复现，未修复**；关联FL-D338客户端版本绑定边界。
+
+## FL-D473 React旧账号迟到401清除新账号会话（2026-10-28）
+
+- 发现日期：2026-10-28（P2）。`src/api/client.ts:67–121/stores/auth.ts:74–77`全局session-expired不核发起token/世代，清QueryClient不足以取消独立请求。
+- 证据/影响：`frontend.md` FE-04、`frontend-probes.json.auth_race`，A飞书binding请求延迟→退出A登录B→释放旧401，B token被清并回登录页，未保存工作中断；无越权读取。fixture仅测试字符串，无真实凭据。
+- 建议（未实施）：请求捕获session epoch，仅当前身份仍一致才失效；切换取消/隔离fetch/XHR，补迟到401/成功/上传下载回归。
+- 状态：**新独立build浏览器复现，未修复**；关联FL-D244/245剩余时序缺口。
+
+## FL-D474 法规生成页首次初始化因缺失按钮中断（2026-10-28）
+
+- 发现日期：2026-10-28（P2）。`guide_generation.js:56–81`给不存在的gg-corpus-refresh加监听；HTML只有对应label，无该id按钮，API加载前即异常。
+- 证据/影响：`frontend.md` FE-05、`guide-real-server/evidence.json`；真实隔离create_app/Uvicorn/SQLite/Chromium无网络替身复现null addEventListener toast、任务列表读取中、无初始API请求。手动刷新/上传监听已在前面绑定可绕过，不夸大为全功能不可用；既有浏览器直接上传绕过故仍通过。
+- 建议（未实施）：提供真实button及可观测初始化/重试，补已有任务直接访问与深链、不上传用例。
+- 状态：**真实隔离服务及浏览器双重实证，未修复**。
+
+## FL-D475 法规证据JSON/HTML下载被统一命名为DOCX（2026-10-28）
+
+- 发现日期：2026-10-28（P2）。`guide_generation.js:384–402,480–484`fetch Blob后强制anchor.download=generated_guide.docx，服务端正确Content-Disposition未使用。
+- 证据/影响：`frontend.md` FE-06、`frontend-probes.json.guide_evidence_download`，Chromium expect_download实测evidence_json建议名仍docx；字节可能正确但用Word打开失败并与真正指引混名。
+- 建议（未实施）：按kind或安全解析响应名设置后缀，并包含run/version；核对MIME/filename/hash。
+- 状态：**隔离浏览器实证，未修复**；不是FL-D338认证头再次丢失。
+
+## FL-D476 法规未决/有发现状态被子串规则染成绿色通过（2026-10-28）
+
+- 发现日期：2026-10-28（P2）。`guide_generation.js:144–149`先匹配pass/complete等，导致complete_with_unresolved/pass_with_findings命中绿色pass，异常分支不可达。
+- 证据/影响：`frontend.md` FE-07及`frontend-probes.json.guide_badges`，computedStyle为绿色。原始英文状态仍显示，不能称服务端资格已绕过。
+- 建议（未实施）：显式枚举中文标签/严重性，异常优先，补含uncovered/not_ready等负例。
+- 状态：**隔离浏览器样式实证，未修复**；与FL-D426飞书颜色问题不同实现。
+
+## FL-D477 法规既有任务列表缺键盘选择入口（2026-10-28）
+
+- 发现日期：2026-10-28（P2）。`guide_generation.js:110–117`任务项DIV、无role、tabIndex=-1，只监听click。
+- 证据/影响：`frontend.md` FE-08及`frontend-probes.json.guide_race.run_entry_semantics`，键盘不能切到非首任务，进而无法读证据/编辑/下载；不与旧Compare文件夹或Splitter问题混计。
+- 建议（未实施）：原生button及active/selected语义，Tab+Enter/Space；若listbox实现完整roving tabindex。
+- 状态：**源码/浏览器DOM实证，未修复**；未做真实读屏/手机人工验收。
+
+## FL-D478 管理面板端口主机侧开放，外层来源限制尚未核实（2026-10-28）
+
+- 发现日期：2026-10-28（P2待核观察，不是已确认可利用漏洞）。
+- 证据与影响：`/tmp/opencode/comprehensive-audit-20261028/ops.md`附加控制核对；BT-Panel监听0.0.0.0:8888，active firewalld/public允许8888；另nginx监听888。未查云安全组/面板来源白名单，未从公网扫描，不能仅凭监听断言互联网可达或远程可利用。MySQL虽*:3306但主机防火墙未放行，亦不冒称已公网暴露。
+- 建议处理（未实施）：由运维核实管理面板云安全组与来源白名单、必要性及最新安全更新，按实际业务需求受控收敛；不在FundLex审查中擅改无关系统服务/防火墙。
+- 状态：**本机监听/主机防火墙已只读确认，外层控制及可利用性未验证，未改配置**。下一步运维核对来源限制，保留准确边界。
+
 ## FL-D447 Compare 选择版支持空侧段落 insert/delete 与跨段替换（2026-10-28）
+
+- **2026-10-28 全面检查补证（P2，能力边界仍未闭合）**：①末段删除writer自检通过，但实际redline经项目独立`prepare_compare_input`接受后比final多一个空段；`selection_writer.py:614–628,763–802`和`compare/revisions.py:90–124`两套段落标记接受语义不一致。证据`/tmp/opencode/comprehensive-audit-20261028/docx/results.json`及`docx/compare_delete_last/`，前段删除反例正常；未做Word/WPS实测。②`align.py:140–143/text_diff.py:67–74`拼接不保留块边界，纯split/merge/插空段三组均0diff/complete/warnings=[]，用户无法选择结构变化；证据`docx/additional_results.json.structure_*`。有文字变化的跨段写回原验收有效，不代表纯边界变化已覆盖。建议统一独立接受oracle并为结构差异生成block token或明确未比较警告；**本轮未修复**。
 
 - 发现日期：2026-10-28，用户确认支持空侧 insert/delete 和跨段联合修改。
 - 问题与影响：原 writer 直接拒绝 `insert`/`delete`，跨段 `modify` 因多 span 被 `SELECTION_MULTI_BLOCK_UNSUPPORTED` 阻断；真实合同版本中整段新增/删除、段落拆分/合并都无法生成选择版。
@@ -27,6 +261,8 @@
 
 ## FL-D446 带既有修订痕迹的DOCX需叠加并区分FundLex修订（2026-10-28，设计）
 
+- **2026-10-28 全面检查补证（3个未闭合子项）**：详`/tmp/opencode/comprehensive-audit-20261028/docx.md` DOCX-A01/A02/A03，离线确证，未修复。①P1：引擎已成功生成带外方修订redline，公开Review的`selective.py:398–404,460–465`仍以allow_existing_revisions=false核验，accept/reject选择版均`REVISION_ID_UNEXPECTED`；低层apply_decisions可用不等于公开生成器可用。②P1：`docx.py:838,1177–1200`写入与校验混用accepted/barrier坐标，同段既有ins在普通目标前面造成`FINAL_TEXT_MISMATCH`、既有del在前造成`EDIT_CROSSES_BARRIER`；第一批弘利p159临时副本复现，目标并非外方插入内部。③P2：属性pPrChange、真实header修订、删除段落标记可通过允许叠加的inspection/plan，直到final检查才报既有修订/LOCATION_NOT_FOUND；inventory/ID与接受仅覆盖主文档，不能宣称全包接受已完成。建议源修订清单进入选择契约、三坐标显式映射、按OPC全包枚举，未支持结构在入口明确提示。相关四文件与生产SHA一致，只证明版本适用，未做生产请求复现。17项既有测试通过不覆盖这些反例；简单异段叠加与外方子树保留正向等价已验证。
+
 - 发现日期：2026-10-28，用户新要求：上传件可能是其他部门改过、带Word修订痕迹的DOCX，需要在其上叠加修订，并与原有修订区分。
 - 现状：`fundlex/docx.py::inspect_docx` 默认 `allow_existing_revisions=False`，遇 `REVISION_TAGS` 直接 `EXISTING_REVISION_UNSUPPORTED`；`_project()` 把修订内容当屏障（`revision_content`，zone=revision，不可写），因此既有修订既看不到也不能改。`_apply_one()` 只处理普通run；`_accept_our_revisions()` 已支持只接受我们manifest的ID；`compare/revisions.py` 已有接受全部既有修订的成熟逻辑可作参照，但不能直接改写输入。
 - 设计：`docs/TRACKED_CHANGES_OVERLAY_DESIGN_20261028.md`。核心是双视图投影（接受视图供模型分析、原始视图供XML写回）、字符级修订上下文（normal/foreign_ins/our_ins/foreign_del/move）、作者与ID区分（可配置作者、扫描全包最大ID）、嵌套修订优先且不支持时明确阻断、三向等价校验（接受全部=final；只拒绝我方=对方接受稿；拒绝全部=原始基线）、既有修订清单与报告分离。
@@ -38,6 +274,8 @@
 - 下一步：嵌套`ins`内`del`的Word/WPS往返；段落标记/表格结构；前端提示与下载标签；三向等价在真实Word中复核；幂等与重复上传。
 
 ## FL-D445 用户取消模型预算限制并授权按需调用真实模型（2026-10-28）
+
+- **最新措辞澄清（2026-10-28）**：用户明确自己从未限制付费模型调用，并要求删除相反规定；本条历史标题中的“取消”不得理解为用户过去施加过限制。现行执行政策及修订证据见FL-D449；账本只作观测，不再设费用/次数审批。
 
 - 用户原话：“想调模型就调，不用管预算，以后都不要管这预算了”。
 - 处理：自本条起，FundLex 整改/评测/端到端验证的真实模型调用不再以费用或调用数cap作为阻塞条件；不因预算问题暂停、询问或判定NO-GO。仍须保留调用/费用记录、账本与运行证据用于分析和回归对比，但**账本只作观测，不再作为停止门禁**。不泄露密钥，不修改无关系统配置，不绕过业务/权限/文件安全边界。
@@ -67,6 +305,8 @@
 - 下一步：按已明确指引和裁定完成模型语义归属、scope覆盖及义务状态整改；仅将新出现、无法由现有授权解决的具体权利义务变化列为新业务问题，不再把错误码或程序未完成直接当待业务决定。
 
 ## FL-D441 章节/候选/删除/失败数上限存在局部静默截断，部分补扫仍被 scope 拦住（2026-10-28）
+
+- **2026-10-28 全面检查补证（P1，尚未修复消费者）**：已新增CandidatePage不等于端到端分页完成。`targeting.py:728–742,946–967`默认恢复先取12条再过滤scope，且丢弃has_more；13个强候选中前12越界、p12合法时，第二页可见p12，但`target_for_missing_operation()`返回None，重试仍第一页。定位上下文继续限制前12。证据`/tmp/opencode/comprehensive-audit-20261028/engine/probe.json.candidate_page_scope_starvation`，主agent复跑成功。应先物理scope过滤并遍历/持久化游标；其他召回可能补回，不直接宣称整合同已漏改。85节索引/删除等已修部分不撤回。
 
 - 发现日期：2026-10-28，用户要求核实严格限制，离线生成小型 DOCX 和脚本响应复现。
 - 问题与影响：`structure_index(max_sections=80)` 对85节返回80，尾部10段不进 inventory；section-aware sweep 原先能补出 unassigned 尾段，但 scope-aware sweep 又把无scope窗口跳过。`ensure_delete_targets(limit=20)` 在25处可删句时只补20处；定位候选/上下文最多12处，无通用分页。`replay_claims(max_failures=40)` 某些段落检查到40个失败即break、residual到40即return，45项案例提高上限才检查45。不能将这些数字一概说成“只截报告”，也不能断言局部上限必然导致最终漏改；其他召回/恢复路径可能补回。
@@ -161,6 +401,8 @@
 
 ## FL-D434 规则作用域仍是整章级，模型/召回可看到兄弟小节并产生错配（2026-10-28）
 
+- **2026-10-28 全面检查补证（P1，摘要剩余缺口）**：最新第一批景宁真实摘要叶`S26:L14`，p1239旧自动支付、p1240销售服务费用途均真实存在；mapped父章含摘要但G15–G17 scope默认`summary_copy=excluded_default`，p1240合法候选经`_apply_scope_gate()`被标out_of_scope。证据`/tmp/opencode/comprehensive-audit-20261028/engine/probe.json.real_summary_scope`，主agent复跑成功。这不是要求范围外去重或无目标新增；应按有证据的正文/摘要关联纳入scope，不能用漏选范围自证无遗漏。正文p148/p155多叶子当前已通过测试，不再报该旧缺陷；本次未生成景宁新产物，不称已复现整任务假complete。关联FL-D443业务归因更正。
+
 - **2026-10-28 业务清单重核补充**：此前“G15–G17摘要默认排除、同步仍待业务确认”只是技术策略，不能推翻完整交接151–165行既有实际正文/摘要目标分别盘点、关联语义一致的要求。D06原件p1256已进入“四、与基金财产管理、运作有关费用的提取、支付方式与比例”，p1269为“（三）销售服务费”；p1286 inspection.section_path停在“三、基金的收益与分配”是结构元数据不准，不是原件标题冲突。需要修结构/范围/副本语义识别，而非再要求用户决定是否修改已存在的同类目标；没有摘要目标且来源无新增义务仍不机械复制。与FL-D439的景宁正文p155漏改分开核验，代码尚未整改。
 
 - 发现日期：2026-10-28，复盘 D06 G06 p280、景宁 G04 p148、D06 G15–G17 摘要 p1286–p1289 等错配。根因不是某条规则的特判缺失，而是 `Section` 只到“第三部分基金的基本情况”这种大章节，inventory/survey/append/delete/sweep/audit/plan 共享窗口或全章映射，规则可以借到同章兄弟条款。
@@ -201,6 +443,8 @@
 - 下一步：检查其他 ONE_OF 组是否也存在相邻/非相邻双站点；若出现，按同一原则选择实际源措辞并证明，不得放宽 Claim Replay 重复检测。
 
 ## FL-D437 review_assisted 交付门禁忽略 Claim Replay 失败/open obligation，产生假 complete（2026-10-28）
+
+- **2026-10-28 全面检查补证（P2，完成契约仍不统一）**：`recall_pipeline.py:3523–3633,5738–5754`的真实worker门禁与`delivery.py:153–170,400–409`摘要分类不同。Replay通过时未知`NEW_ENGINE_PROOF_ERROR`被worker降review且_complete=true，摘要却partial；真实错误`RECALL_EDIT_OVERLAP`配G14也先按rule编号归business_pending并允许complete。证据`/tmp/opencode/comprehensive-audit-20261028/engine/probe.json.delivery_classifier_disagreement`；主agent复跑成功。上游Replay/查漏可能挡住整任务，**仅实证门禁分歧，未新增确认生产假complete**。需单一有类型交付裁决，工程/证明失败优先且未知码阻断，不仅测试summary。旧显式Replay失败阻断修复保留。
 
 - 发现日期：2026-10-28，D06 `/tmp/opencode/d06-rule-scope2-20261028` 报告 `delivery_status=complete`，但 `artifact_claim_replay.verified=false`、`delivery_gate.open_obligations=1`、`final_omission_review.status=FAIL`。`CLAIM_DUPLICATE_EFFECT`/`CLAIM_OPERATION_NOT_PLANNED` 被 `review_assisted` 归入人工复核，`_delivery_complete()` 只看 blockers，不看 Ledger 的 open obligation、Claim Replay 结果或最终遗漏中的证明失败。
 - 问题与影响：这是假 complete，会把未完成合同发布为 final/redline，直接违反“报告自身证明失败不得宣称完成”。同时不能简单把所有 open obligation/FAIL 都当阻断，否则审计未完成、sweep 上限、事实未核验等原本设计为人工复核的项会全部退回 incomplete。
@@ -275,6 +519,8 @@
 - 变更记录：2026-10-27 新增；生产 V1 定向发布，V2 仅工作区构建；不涉及真实合同任务或模型调用。
 
 ## FL-D384 第一批 smoke 的重复摘要副本与无操作站点证明未闭合（2026-10-27）
+
+- **2026-10-28 正式生产复发（P1，实证错误complete）**：浏览器注册→当前指引→上传第一批价值优选→真实Worker/model→结果页→授权下载完成，任务`3860e8c301ab4343bb228d609cc968b2`、build`1621a30b4f023efdaf86e58f808cf390f54430392587be7dc54043c385d8e57c`。15处修改、15ins+15del、接受/拒绝/哈希等10项机械校验全过；report complete/查漏PASS/open0。但先盘点原件指引再读产物的独立复核发现摘要p1258（XML p1282）旧全渠道自动月付登记机构条款原样残留，缺直销返还/365天/超一年机制，正文p802已更新。主agent读source/final再次确认；redline该段无修订。report的G15/G16 `summary_copy=excluded_default`仅核正文，**本份业务验收未通过，不能宣称完整交付**；不是范围外新增。证据`/tmp/opencode/comprehensive-audit-20261028/business-inventory.json`、`business-review.md`、`production-v2/{result,report,artifact-review,business-counterexample}.json`及下载DOCX；source SHA708bca5d.../final d8f1dc99.../redline602b4487...，27逻辑/28HTTP、149372tokens、约$0.03656805、429恢复。原报告不改，不以本份算批量准确率。另G03在p124/p128重复正确政策为P3观察，不授权范围外去重。**未修复/未发布**；下一步一般化摘要scope/独立覆盖后正式路径复验，关联FL-D434/435/443。
 
 - 发现日期：2026-10-27，修复 FL-D381 及 G04/G05 两项代码问题后重跑 3 份 smoke，目录 `/tmp/opencode/first-batch-smoke4-20261027`。三份仍均为 `incomplete`：价值优选 G15 p1258、QDII G05 p1331/p481、景宁 G04 p148 仍未闭合。
 - 问题与影响：`duplicate_copy_targets()` 只克隆 `needs_edit` 目标；摘要副本若是短片段或已满足副本，不会被绑定/计数。价值优选 p1258 的 `销售服务费每日计提，按月支付。` 片段目标被 `TARGET_SOURCE_MISMATCH` 排除，最终仍残留旧句；QDII p1331 已满足、p481 无目标，Claim Replay 报 `CLAIM_OPERATION_NOT_PLANNED`；景宁 G04 p148 被模型判 satisfied/no replacement，但 quote_not_found、无站点，最终 `verified site missing`。这不是单纯业务措辞，包含重复副本覆盖、短片段绑定和 no-op 站点证明的代码缺口。
@@ -666,6 +912,8 @@
 - 变更记录：2026-10-27 新增；本条与 FL-D374 配合，确保复核失败不会被最终门禁忽略。
 
 ## FL-D374 最终资格门禁未纳入 quality.run_status，存在 fail-open（2026-10-27）
+
+- **2026-10-28 新P1边界（未修复）**：`guide_generation/pipeline.py:894–958`即使run complete_with_unresolved/quality fail/coverage缺口/Residual未饱和仍无条件创建candidate_ready，真实HTTP approve/publish均200；仅发布候选不等于runtime已启用。另coverage在quality之后新增semantic_coverage critical，finalize漏该类别及coverage未决topic，旧quality pass导致错误candidate_ready；FINALIZE_GUIDE缓存hash又不含quality/findings，pass→fail仍命中旧资格。`/tmp/opencode/comprehensive-audit-20261028/integrations.md` INT-01/02，3项定向反例实证，模型替身、未生产写/部署。建议候选版本绑定冻结资格与所有open critical、缓存包含完整依赖、批准/发布事务重验，未知/缺失质量不通过；保留原run级修复的历史适用性。
 
 - 发现日期：2026-10-27，复核 `stage_quality()` 与 `stage_finalize()` 的门禁口径时确认。
 - 问题与影响：`stage_quality()` 把所有 critical findings（包括 `requirement_review`、`contract_coverage`、`semantic_coverage` 等）计入 `quality.run_status`，任一 critical 即为 `fail`。但 `stage_finalize()` 的 `critical_quality` 只统计 `regulation_fidelity`、`draft_text_fidelity`、`provenance` 三类，`complete` 条件也未检查 `quality.run_status`。因此要求复核失败、覆盖审计 critical 或 guide_conflict critical 存在时，只要覆盖计数和 Residual 恰好闭合，运行仍可能被标记 `candidate_ready`，与项目“质量门禁未通过不得宣称候选就绪”的要求冲突，属于 fail-open。
@@ -1085,6 +1333,8 @@
 
 ## FL-D338 法规候选版本未绑定不可变内容且人工下载缺少认证头（2026-10-26）
 
+- **2026-10-28 不可变性补证（仍待修复）**：`guide_generation/pipeline.py:901–958`AI对象固定generated_guide.docx/generated_guide_ai.docx，先重写/put_artifact再检查published；离线首次finalize→approve→publish→模拟晚到pipeline换items→再次finalize后，candidate id/status/登记sha不变，实际同key字节hash改变。`/tmp/opencode/comprehensive-audit-20261028/integrations.md`末节与`test_published_artifact_can_be_overwritten_by_pipeline_finalize`。内部晚到条件反例，不声称用户PATCH发布版可直接触发（human编辑published仍被拒）。需版本唯一不可覆盖对象、全写入fencing和事务发布、按版本hash下载；关联FL-D453/455。人工唯一对象名/认证fetch原修复仍有效。
+
 - 发现日期：2026-10-26，法规候选 API、Store 与前端工作流审查。
 - 问题与影响：流水线原先只写 `gg_guide_items` 和可替换的当前产物，候选版本表没有绑定实际指南内容；人工编辑可能覆盖当前 DOCX，审批/发布没有 HTTP 工作流；页面普通下载链接在密码模式下不会携带 Bearer token，用户不能可靠下载受保护产物。
 - 证据：`fundlex/guide_generation/pipeline.py` 原完成阶段未创建 `candidate_ready` 内容快照；`human.py` 原只更新当前 `guide` artifact；`api.py` 原无候选查询/审批/发布路由；`frontend/guide_generation.js` 原使用普通 `<a href>` 下载。
@@ -1153,6 +1403,8 @@
 - 变更记录：2026-10-26 新增；不改变 FL-D304 的历史预算 cap 或项目 NO-GO 结论。
 
 ## FL-D312 V1 Review 第二次生成未提交选择版本校验字段（2026-10-26）
+
+- **2026-10-28 适用范围更正/扩充（React V2 P1未修复）**：当前V1 app.js已传epoch/hash，不重复报旧V1缺口；React `src/api/endpoints.ts:53–54/ReviewPage.tsx:137–151/types/api.ts:202–220`仍不提交selection_epoch/manifest_hash且类型未声明，首次成功后再次生成会按真实后端`api.py:625–626`契约409 SELECTION_EPOCH_REQUIRED。证据`/tmp/opencode/comprehensive-audit-20261028/frontend.md` FE-03，新tmp build捕获两次accept-all body均空及decisions缺字段；浏览器409为当前契约fixture，另源码确认服务端条件，不冒称真实Worker测试。建议补类型、两端点与成功后版本更新，保留并发门禁并补第二次/重开页回归。
 
 - 发现日期：2026-10-26，V1 前后端契约审查及隔离 API/浏览器复现。
 - 问题与影响：V1 Review 的“生成选择版”和“一键接受全部”请求没有提交当前 `selection_epoch`、`manifest_hash`。首次生成通常成功；同一合同再次修改选择或再次生成时，后端会因已有选择版本返回 `SELECTION_EPOCH_REQUIRED`，用户无法从页面完成第二次选择版生成。
@@ -1483,6 +1735,8 @@
 
 ## FL-D277 前端测试工具链包含已知依赖漏洞（2026-10-26）
 
+- **2026-10-28 依赖复核**：工作区391个、生产329个npm包版本向官方bulk advisory查询均0命中（含dev），只代表当日快照，不承诺未来零漏洞。证据`/tmp/opencode/comprehensive-audit-20261028/ops.md` O3；Python certifi新公告另列FL-D464，不混称所有依赖风险已解决。
+
 - 发现日期：2026-10-26，多 agent 全项目检查。
 - 问题与影响：历史审查时 `frontend/package.json` 使用 Vitest `^2.1.9`，锁文件为 2.1.9，带入旧版嵌套工具链并触发审计告警。具体利用分别依赖 Vitest UI/开发服务器暴露、原型污染等条件，不能把包严重级别直接外推为当前生产网站可利用漏洞。
 - 证据：`frontend/package.json`、`frontend/package-lock.json`；审计原始输出 `/tmp/opencode/fundlex-audit-20261026-npm.json`，包含 GHSA-5gmw-xhrv-c9v3、GHSA-85c8-ppgw-ccpr、GHSA-82fw-gwwq-j7x9 等。`npm audit --omit=dev --json` 的 `/tmp/opencode/fundlex-audit-20261026-npm-production.json` 为零漏洞，所有上述版本在锁文件中均标为 dev。
@@ -1535,6 +1789,8 @@
 - 变更记录：2026-10-26 新增；轮换的是生产数据库账号密码，未修改代码或数据库业务数据。
 
 ## FL-D303 根发布器与仓库规范发布脚本存在版本漂移（2026-10-26）
+
+- **2026-10-28 运维复核（P1，再次漂移）**：root发布器SHA f8405dc5...、仓库c53fe169...、生产a873e4b4...不同；root缺service_hash/service-build核验，四服务停启仍漏active Guide Worker，迁移未覆盖GuideGenerationStore。生产Python共同文件91同/28异、源独有4/生产独有workspace.py；前端55同/22异、各独有1；venv fastapi0.143.0/0.143.1亦不同。历史三者相同仅限当时。证据`ops.md` O1。只读，未发布/重启、未证明正在混版损坏。需统一clean candidate，将五服务/schema/依赖锁/service hash纳管，禁止整树覆盖生产专有文件；关联FL-D382/448。
 
 - **2026-10-28 多阶段整改方案只读核验补充（新发布能力缺口未修复）**：`tools/deploy/publish_workspace.sh`仅转发root脚本，仓库/实际root发布器`SRC`固定`/home/opencode/fundlex`；root脚本第282行拒绝全部参数。换到release worktree运行wrapper不会改变发布源，当前没有`--source/--commit/--dry-run`可用参数。两脚本`UNITS`均只含API/Recall/Compare/Feishu，但`systemctl is-active`核对上述四服务和`fundlex-guide-worker`五者均active，**Guide Worker尚未纳入此发布停启清单**。新方案S10前须实现/隔离验证显式冻结候选发布或同等受控方案、纳入适用服务的版本与迁移核验；禁止覆盖原dirty树迁就固定SRC，禁止执行截断脚本片段。代码回滚不能撤销schema，正式E2E失败后的恢复须预先设计。当前仅规划及只读发现，未改脚本/配置、未重启、未部署；历史四服务发布测试结论不扩展为五服务新候选验收。
 
@@ -1609,6 +1865,8 @@
 - 变更记录：2026-10-26 新增；历史对账数值和原始账本均保留，不能用新数字覆盖旧报告。
 
 ## FL-D305 冻结 D06 标签把 ETF 联接基金错误判为排除样本（2026-10-26）
+
+- **2026-10-28 只读复核**：`var/recall-first-evaluation/p6/labels.json`（SHA230b5be4...）与`p6-current/labels.json`（SHAf120d381...）均28份/20dev/8holdout，D06仍target_count=0。本轮不改gold，不把旧标签套本次第一批烟测；需独立版本重新冻结资格/目标，不能仅宣称历史分母已正确。关联FL-D188及新评分器反例FL-D450。
 
 - 发现日期：2026-10-26，Evaluation agent 对冻结 labels、D06 实际 snapshot-19 报告和 `p6_score.py` 的输入分母做只读核对。
 - 问题与影响：当前冻结 labels 将 D06 标为 `fund_type=etf`、`excluded=true`、`target_count=0`；snapshot-19 实际报告为 `qualification_status=eligible`、`delivery_status=incomplete`、82 targets、2 unresolved、26 HTTP、约 `$0.03190155`。旧评分器因此对 D06 得到 0 个有效目标，这反映标签分母错误，不能证明合同没有修改目标，也不能用于 snapshot-19 的业务通过结论。
@@ -4476,6 +4734,8 @@
 
 ## FL-D188 当前 P6 标签继承过时资格口径且不足以证明多站点完整性（2026-10-24）
 
+- **2026-10-28 状态补充**：当前两套历史labels仍有D06零目标；本次生产价值优选的独立盘点是事后单份检查，不是新冻结gold或28份准确率。新发现评分器误放（FL-D450）与真实摘要漏改/错误complete（FL-D384“第一批摘要副本”）进一步说明不能用旧自动分数和自评报告证明现行整合同完整性。原标签/manifest/旧分数全部保留，本轮未重做20–30份正式评测。
+
 - 2026-10-24 target-16审核更正：临时复核脚本和聊天曾再次沿用D06旧excluded标签；现依FL-D132更正为正常修改。首次`target-16-g17-business-review.json`原样保留，更正版另存`target-16-g17-business-review-corrected.json`，补跨段句和同地址余文核验：D04源G17用途2处、剩1；D06源用途/排除合4处、剩用途2处，独立余文均保留，二者均FAIL。未修改旧labels/gold/scorer、未因此读取holdout。
 - 问题与影响：本轮重生的 `p6-current/labels.json`（SHA `f120d38175c83cd1c973045d0414a69bacb9d837fc4bf24d40a8a762fe588841`）仍把 D02/D06 ETF 联接排除，与 FL-D132 用户确认冲突。`p6_label.py:301` 明示每合同每规则只取一个目标，append 没有独立站点定位；因此347目标的旧评分不能证明多个正文/摘要/occurrence 全部完成。先前“26可修改/2排除”的表述仅为旧标注器输出，不是已确认业务真值。
 - 证据：`tools/evaluation/p6_label.py::fund_type_of/label_case`；D02/D06 原件标题与类别自述；既有 FL-D065/FL-D132 已记录相关限制。本轮尚未读取引擎新预测，发现来自原件/用户政策与标签实现核对。
@@ -5328,6 +5588,8 @@
 
 ## FL-D284 生产 API、Recall Worker 和 Compare Worker 缺少 systemd 沙箱限制（2026-10-26）
 
+- **2026-10-28 状态更正**：API/Recall/Compare/Guide四服务已有NoNewPrivileges/PrivateTmp/ProtectHome/ProtectSystem=strict/限定ReadWritePaths/UMask0077，不照抄全部缺失。残余P2为飞书：ProtectHome=no、ProtectSystem=no、ReadWritePaths空、UMask0022，模板与生产均缺边界。证据`ops.md` O5。未改配置/重启；建议按实际附件缓存需求加固并回归。属性核验不等于业务加固验收。
+
 - 发现日期：2026-10-26。
 - 问题与影响：生产三个服务均以 `fundlex` 用户运行，但没有测试服务已有的 `NoNewPrivileges`、`PrivateTmp`、`ProtectHome`、`ProtectSystem`、`ReadWritePaths`、`RestrictAddressFamilies` 和严格 `UMask` 等约束。若 API、Worker、依赖库或处理 DOCX 的路径出现代码执行、路径写入或第三方组件缺陷，进程对主机文件系统、临时目录、用户 home、网络地址族和新权限获取的可达范围更大；生产服务之间也缺少明确的最小写入边界。严重级别：**高（High）**。
 - 证据：生产单元 [`fundlex-recall-api.service`](/etc/systemd/system/fundlex-recall-api.service:6)、[`fundlex-recall-worker.service`](/etc/systemd/system/fundlex-recall-worker.service:6) 及 `/etc/systemd/system/fundlex-compare-worker.service:6` 仅配置 `User`、`Group`、`WorkingDirectory`、`EnvironmentFile`、`ExecStart` 和重启策略；`systemctl show` 显示 `NoNewPrivileges=no`、`PrivateTmp=no`、`ProtectHome=no`、`ProtectSystem=no`、`UMask=0022`。`systemd-analyze security` 对三个生产单元均给出 `9.1 UNSAFE`。测试单元 `/etc/systemd/system/fundlex-test-*.service:14-20` 已有相应限制，说明当前差异是生产配置缺口而非平台不支持。
@@ -5367,6 +5629,8 @@
 - 变更记录：2026-10-26 新增；不覆盖 FL-D168 已解决的“Worker 是否安装/运行”历史结论，记录的是当前发布器未纳入该服务。
 
 ## FL-D288 multipart 上传在应用读取前缺少独立请求级资源门禁（2026-10-26）
+
+- **2026-10-28 状态更正（残余P2）**：生产已有ASGI upload_guard及bounded multipart parser，含大小/并发/速率/时长，不称完全无限。入口仍漏guide-generation/runs和退休batches（解析File/Form后才410）；实际Nginx60m/600s，未启用限流模板或limit_req/limit_conn，应用不能保护代理预缓冲。证据`ops.md` O4，静态配置核验，无生产大包/并发测试。建议全入口覆盖、解析前拒绝退休路由、隔离验证后应用代理限制；未实施。
 
 - 发现日期：2026-10-26。
 - 问题与影响：应用层已对单 DOCX 25 MiB、批次 50 MiB/20 文件、ZIP 单 part/解压总量/压缩比做限制，Nginx 也设置了 60 MiB 的请求体上限；但 FastAPI 路由接收 `list[UploadFile]` 后，应用才逐个 `read(MAX_UPLOAD_BYTES + 1)`，并将已读取的文件数据暂存在列表中。未见独立的请求并发、速率、超时、Content-Length 预检或 multipart 字段/part 总数门禁。攻击者可通过并发接近上限的 multipart 请求消耗代理缓冲、临时文件、Python 内存和 DOCX 解析 CPU；这是资源可用性风险，当前证据不足以断言已被远程利用。严重级别：**中（Medium，DoS/资源耗尽风险）**。

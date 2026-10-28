@@ -48,9 +48,9 @@
 | R12 / FL-D140、399 | 确认无站点时范本字面缺失可误判VERIFIED_ABSENT | 区分无替换目标、已满足、已删除、未发现、未验证；语义残留复核和独立覆盖证据 | G13/G17同义旧义未改不能PASS；QDII G18真无目标不强制新增 |
 | R13 / 原清单重复/审计项 | CLAIM_DUPLICATE_EFFECT范围、audit引文失败、分类器新错误码：具体误杀范围待复核 | 重复按operation＋授权站点＋对象/组件判断；统一artifact重取引文；有类型失败分类，不按未知字符串猜成功 | 同政策不同类别/正文摘要合法；同站点重复追加阻断；unknown错误不能默认complete |
 | R14 / FL-D441 | 确认80节索引、12候选、20删除、40失败存在处理截断 | 全量索引＋可续跑分页；触顶含remaining/cursor/coverage，报告展示截断与真实未完成 | 85+章节、25+候选/删除、45+失败，尾部可到达；重启无重做/遗漏 |
-| R15 / 原清单预算/恢复项 | 预算可配置、已有split/retry；sweep40/round3、短于8字、0.84/0.8限制需逐路径核查 | 区分资源上限/展示上限/候选阈值；段内offset分窗、输出分页、耗尽显式暂停；短quote歧义由地址补证 | 超长段及预算边界、末页、短删除句、低字面相似合法句；无静默漏内容 |
+| R15 / 原清单容量/恢复项 | 上下文容量可配置、已有split/retry；sweep40/round3、短于8字、0.84/0.8限制需逐路径核查 | 区分上下文/资源上限、展示上限、候选阈值与失效的费用/次数cap；段内offset分窗、输出分页；真实资源故障显式暂停 | 超长段及上下文边界、末页、短删除句、低字面相似合法句；无静默漏内容，本地费用/次数cap不阻断 |
 | R16 / 结构项 | 普通表格已读写；特殊结构可见性/可写性不同；full非全文开关 | 建立全包结构能力与读取缺口清单；最小安全增量支持有真实目标的结构；不无证解包 | 普通表格不回退；SDT/域/文本框/页眉页脚/合并嵌套表格各有明确状态与证据 |
-| R17 / FL-D437及交付项 | 严格证明、最终查漏、失败分类须一致；不能靠降级抹未完成 | 完成状态由物理＋语义＋覆盖＋授权全部证据决定；前后端/持久任务一致 | 有遗漏、未遍历、过期证明、预算暂停不能complete；正常用例默认入口真实交付 |
+| R17 / FL-D437及交付项 | 严格证明、最终查漏、失败分类须一致；不能靠降级抹未完成 | 完成状态由物理＋语义＋覆盖＋授权全部证据决定；前后端/持久任务一致 | 有遗漏、未遍历、过期证明或真实故障暂停不能complete；正常用例默认入口真实交付，费用/次数cap不作停止门禁 |
 
 ### 2.1 不照抄原建议的部分
 
@@ -78,7 +78,7 @@
 | `FactEvidence` | 字段/对象/值、精确来源、quote存在状态、语义支持状态、UNKNOWN/CONFLICT、适用条件和依赖版本；不把未找到当FALSE |
 | `ArtifactProof` | source/plan/artifact hash、operation/approval/site身份、实际artifact精确quote、技术验证、语义复核、覆盖状态与未解决项 |
 | `CoverageLedger` | 文档block/窗口总量与已读、rule/scope/operation/site覆盖、分页cursor、未读/不可写/触顶/未复核原因、剩余量 |
-| `Failure/RecoveryRecord` | 类型、可重试性、影响完成与否、已试动作、新证据、剩余预算/cursor；未知故障显式未分类并阻止虚假完成 |
+| `Failure/RecoveryRecord` | 类型、可重试性、影响完成与否、已试动作、新证据、上下文/资源状态、观测用量/cursor；未知故障显式未分类并阻止虚假完成 |
 
 源文、指引、事实、scope或计划版本变化，失效相关批准/证明/缓存，按依赖重新验证。不能拿旧批准配新span，不能把语义批准的任意ID伪装成代码执行授权。
 
@@ -97,7 +97,7 @@
 
 inventory、survey、append、rebind、缺失操作恢复、事实补证、audit/artifact review均调用同一能力；源文和产物分别带版本，不能混用。
 
-- 输入：document_version、规则来源/已批准业务范围、候选location/cursor、语义目标、上次失败、预算。
+- 输入：document_version、规则来源/已批准业务范围、候选location/cursor、语义目标、上次失败、上下文容量/资源状态与观测用量。
 - 模型只能从提供的真实候选复制，返回location/quote/parts或not_found/need_more_context，不返回杜撰原文。
 - 代码验证quote在相应part/段落中真实存在并计算offset；归一化匹配须保留到真实字符的可逆映射，不能用compact offset写入。
 - 多处同文靠地址和对象消歧，不按quote文本去重。短引文允许结合地址/邻文核验，不全文盲删。
@@ -107,13 +107,13 @@ inventory、survey、append、rebind、缺失操作恢复、事实补证、audit
 
 ### 4.1 角色和文件所有权
 
-主agent负责架构契约、计划、共享集中记录、预算、合并、候选冻结和发布；最多同时安排3–4名子agent，模型调用并发依据实际配额，不能等同agent数量。
+主agent负责架构契约、计划、共享集中记录、调用观测、合并、候选冻结和发布；最多同时安排3–4名子agent，模型调用并发依据实际API配额，不能等同agent数量。
 
 | 角色 | 主要工作 / 推荐文件归属 | 不能自行做 |
 |---|---|---|
 | A 范围与绑定 | scope/structure/re-quote类型和测试；`rule_scope.py`及新增绑定模块 | 改别人的pipeline核心段、单独扩大规则范围 |
 | B 规划与证明 | operation/registry/template/effects/claim_replay契约及测试 | 信任失败claim、跳过Replay、范围外去重 |
-| C 事实与容量 | fact_evidence/fee_evidence/facts_recovery、分页/预算覆盖 | 修改冻结标签/分母、独立开新付费账本绕cap |
+| C 事实与容量 | fact_evidence/fee_evidence/facts_recovery、分页/上下文容量覆盖 | 修改冻结标签/分母、删除或重置调用历史 |
 | D 独立测试与交付 | 盲标签/实际DOCX评分、故障/负例、前端API、E2E与发布核验 | 让被测输出决定gold，编造通过证据 |
 | 主agent/集成agent | `recall.py`、`recall_pipeline.py`、targeting共享接入，API/store/schema及前端状态，集中记录 | 覆盖他人dirty工作、未审阅整树发布 |
 
@@ -125,7 +125,7 @@ inventory、survey、append、rebind、缺失操作恢复、事实补证、audit
 
 - 常规选型、接口、调试、提交、重试、回归与受控发布由主agent自行决定，不问“是否继续/是否用多agent”。根据本方案验收门槛推进，不以固定耗时保证完成。
 - 新语义疑点先读完整指引/原件/已有裁定、独立复核；范围外保持不改。仍无法解决的个别合同如实未完成，继续其他可推进任务，不发明授权。
-- 无有效凭据、余额/授权cap、外部服务故障、无法安全发布等：记录具体阻塞、已尝试办法和恢复动作，继续离线/其他独立工作；确实无路时保存断点并给非提问式阻塞报告，状态NO-GO。**不询问不等于无限费用、绕过权限或伪造成功。**
+- 无有效凭据、供应商真实余额不足、外部服务故障、无法安全发布等：记录具体阻塞、已尝试办法和恢复动作，继续离线/其他独立工作；确实无路时保存断点并给非提问式阻塞报告，状态NO-GO。**费用/次数无需审批，本地cap不是停止理由；不得绕过业务权限或伪造成功。**
 - 依AGENTS在可观测约50%上下文时开始整理、60%前完成接续。不可观测时按阶段保守落盘。更新进度表、ACTIVE_HANDOFF、集中记录及运行账本，写清运行agent/进程，不虚构压缩指令。
 
 ## 5. 分阶段实施步骤与门槛
@@ -185,7 +185,7 @@ inventory、survey、append、rebind、缺失操作恢复、事实补证、audit
 
 ### S5：执行器升级、联合规划和重试（B＋主agent）
 
-1. 模板/拼接是低成本执行策略，不是限制业务可处理范围的白名单。确定性失败须暴露原因，进入有界重定位/范围重判/compose或联合重规划，受批准与预算约束。
+1. 模板/拼接是低成本执行策略，不是限制业务可处理范围的白名单。确定性失败须暴露原因，进入有界重定位/范围重判/compose或联合重规划，受业务批准及无进展保护约束，不受费用/调用次数cap约束。
 2. DELETE优先模型确认应删span、代码执行；需要重写混合条款时明确批准保留/删除组件，不能生成任意replacement或整段兜底吞邻文。
 3. G11完整原条款绑定、G08组件、G12/G13互斥旧表达和相邻操作统一联合计划，避免重复整句与错误去重；范围外独立句不处理。
 4. 每次compose retry清空候选局部错误，保留attempt历史；有效候选必须进入当前独立校验。无新证据同样报错则停止该循环进入明确失败/其他恢复。
@@ -213,10 +213,10 @@ inventory、survey、append、rebind、缺失操作恢复、事实补证、audit
 2. 模型输出schema目标数/映射数、sweep窗口、恢复轮次、事实context均记录输入/输出是否完整，`has_more/remaining/next_cursor`可续跑。无exact remaining时给unknown和遍历边界，不伪造计数。
 3. 长单段按原始地址/字符映射拆成重叠证据窗，业务条款跨窗待合并完成，不把半段当完整目标；源引用映射仍精确。
 4. 核对真实完整请求token/输出预算，沿用已有scope/inventory/sweep拆分、网络/schema retry，补缺失路径而非重造传输。token统计与字符限制分别记录。
-5. 资源/费用上限耗尽明确`LIMIT_REACHED`/`TRUNCATED`/`paused`与未完成证据，写入DB/checkpoint/UI；共享预算不因新分页、新agent、重启或换目录归零。
+5. 真实资源/上下文容量不足明确`LIMIT_REACHED`/`TRUNCATED`/`paused`与未完成证据，写入DB/checkpoint/UI，并按分页或资源恢复继续；费用/调用次数cap不作停止门禁。观测账本不因新分页、新agent、重启或换目录清零，独立账本统一汇总。
 6. 检验源/guide/事实/scope变更后cursor和缓存失效，恢复无重复执行/费用重复记账；有进展才安排下一轮，无新证据不能无限业务轮转。
 
-**退出门槛**：85+节、25+候选/删除、45+失败及多页输出全部可遍历；末尾应改目标到达；强制中断/重启能续跑；cap耗尽诚实未完成。建议commit：`fix(runtime): paginate coverage and persist bounded recovery`。
+**退出门槛**：85+节、25+候选/删除、45+失败及多页输出全部可遍历；末尾应改目标到达；强制中断/重启能续跑；真实资源故障诚实未完成，本地费用/次数cap不阻断。建议commit：`fix(runtime): paginate coverage and persist bounded recovery`。
 
 ### S8：文档结构能力及前后端集成（A/D＋主agent）
 
@@ -232,10 +232,10 @@ inventory、survey、append、rebind、缺失操作恢复、事实补证、audit
 ### S9：独立标签、真实修改与优化回归（D，主agent控制付费）
 
 1. 先做离线全量回归和模块交叉审查，再开展真实模型；具体测试命令由当前pyproject/脚本`--help`核实，禁止虚构参数。
-2. 按§6冻结样本映射、独立标签、评分口径、版本及预算。首轮用开发集代表合同打通，不将小样本烟测当全量验收。
+2. 按§6冻结样本映射、独立标签、评分口径与版本，调用费用仅观测。首轮用开发集代表合同打通，不将小样本烟测当全量验收。
 3. 至少覆盖景宁、弘利、全球稳健QDII、价值优选、恒裕及第一批对应多收费类别/跨段/正文摘要合同，真实修改并重读下载DOCX评分。D06历史位置用于理解，新增真实运行只用第一批实际文件并记录新hash/location。
 4. 按错误类别修复，不按合同名/编号/固定段号特判；先失败局部复测，再冻结新版本做完整开发集回归，所有尝试计费计时，旧产物保留。
-5. 在既有授权cap内执行计划内优化，达到门槛再冻结候选、跑holdout。任何留出反馈用于调优后即记污染，按评测计划如实报告历史留出回归，不另偷换样本。
+5. 按缺陷与验证结果持续优化，真实模型按需调用，不受费用/次数审批或cap限制，保留无进展保护；达到门槛再冻结候选、跑holdout。任何留出反馈用于调优后即记污染，按评测计划如实报告历史留出回归，不另偷换样本。
 6. candidate的代码、guide、prompts、模型配置、依赖和schema全部版本绑定；评分数据属于最终候选，不能用早期好结果拼成“最终全通过”。
 
 **退出门槛**：满足§6全部质量门槛，未通过不进入正式发布。独立评审签字式记录R01–R17状态与证据，不以“本地测试全绿”替代。建议commit：`test(engine): qualify frozen candidate on actual contract artifacts`。
@@ -246,7 +246,7 @@ inventory、survey、append、rebind、缺失操作恢复、事实补证、audit
 2. 按§7制作可回滚的干净release目录/清单；执行只影响FundLex的部署，配置/DB迁移前备份。默认不重启无关服务，不用开发开关绕过guide资格验证。
 3. 先满足真实资格验证及指引发布条件，再从默认任务入口执行真实用户流程。不要手改released/auto_write等标志来制造交付。
 4. 浏览器登录或项目支持的真实身份入口 → 配置页当前有效指引 → 普通合同上传提交 → 实际队列/Worker/真实模型 → 结果页查看 → 授权下载final/redline/报告；检查实际文件差异与证据，非脚本直调替代。
-5. 正常应改用例必须有真实改动；至少复验景宁双正文目标、弘利变体、QDII无G18新增，并覆盖长合同、已满足、排除、不可完成/保护输入、预算暂停/重启续跑、身份隔离、指引切换。
+5. 正常应改用例必须有真实改动；至少复验景宁双正文目标、弘利变体、QDII无G18新增，并覆盖长合同、已满足、排除、不可完成/保护输入、真实服务故障暂停/重启续跑、身份隔离、指引切换，以及本地费用/次数cap不再阻断调用。
 6. 逐一核对final不含未接受修订、redline含真实Word修订、接受redline语义/结构等价final、拒绝redline恢复source；产物hash与API/报告/下载一致、范围外内容守恒。ZIP字节可能因合法元数据不同而不同，等价规则明确；交付文件本身sha必须精确一致。
 7. 浏览器/网络证据留存脱敏，验证401/403未授权不可下载；临时账号/测试任务按受控清单清理，不删用户任务。
 
@@ -279,12 +279,12 @@ inventory、survey、append、rebind、缺失操作恢复、事实补证、audit
 - 实际DOCX评分，不只读plan、report.applied或模型自评。逐个未标注diff核对是否有规则依据，范围外即不能算合理优化。
 - 单测、性质测试、集成、API/数据库、浏览器、真实模型、真实DOCX、生产入口分别留证据。Mock仅用于开发回归，不能算真实交付。
 
-### 6.3 预算纪律：不询问，但不扩权
+### 6.3 真实模型按需调用，账本仅观测（2026-10-28，FL-D445、FL-D449）
 
-1. 真实调用前查现有授权范围、账本、价格/模型配置和可用cap，仅记录变量名/额度和安全路径，不输出凭据。旧smoke的240 calls/$1是历史上限，不是这次新额度。
-2. 主agent在一个共享账本预登记：原件/标签/批量/复核/E2E各阶段calls、HTTP尝试、token、费用估计、最坏重试预留、全批cap、并发。标签模型和审查模型同样计入，不能子agent各开新账本。
-3. 批量先估计单份成本再预留开发回归、留出和生产复验；并发预约/扣账要原子、失败/重试仍记账。不得将用户“自主执行”解释为自动补充资金。
-4. 没有可核实付费授权或余额时暂停付费阶段，推进离线与可做事项，记录budget_blocked及恢复条件；不以问句中断常规工作，不隐瞒阻塞、不重置计数或降低审计冒充完成。
+1. 按任务需要真实调用模型，无需费用或调用次数审批，不预登记费用/次数上限，不因本地cap暂停、询问或判定NO-GO。旧240 calls/$1等数字仅保留为历史，不代表用户施加过限制。
+2. 主agent统一汇总原件/标签/批量/复核/E2E各阶段calls、HTTP尝试、token、费用、并发和时延账本；标签模型、审查模型及全部重试同样计入。账本只作观测与追溯，不作停止门禁，独立运行账本可按run_id汇总，不删除或重置历史消费。
+3. 保留上下文/输出token容量、API限流与并发、物理资源和文件安全限制；分页/拆块用于完整覆盖，有限技术重试及无进展保护防止死循环。费用观测不能替代质量核验，不能为省调用跳审计。
+4. 供应商真实余额不足、鉴权故障或服务不可用时记录实际错误、断点及恢复条件，继续可做事项；不虚构成功，不把本地cap包装成真实余额不足。业务权限、样本范围、候选资格与发布边界不变。旧预算preflight/运行时cap须整改，不伪称仅文档更正已完成代码修复。
 
 ### 6.4 现有工具的真实边界（执行前重新核对`--help`与源码）
 
@@ -293,15 +293,15 @@ inventory、survey、append、rebind、缺失操作恢复、事实补证、audit
 | `tools/evaluation/strictness_audit_20261028.py --output <新路径>` | 零网络现状探针，源码/样本指纹与局部行为 | 不证明修复、业务全完成或E2E |
 | `tools/evaluation/controlled_regression.py` | 旧v1只读诊断，要求写门关闭，断言无修改文件 | **不能作真实DOCX修改runner** |
 | `tools/evaluation/recall_run.py --input … --output … --guide … --ledger … --max-calls … --max-cost-usd …` | 库级真实评测；上下文/输出/轮次/窗口可配置 | 非浏览器/登录/持久Worker E2E；resume仅跳已有report，必须额外核对freeze，防混版本 |
-| `tools/evaluation/real_contract_e2e_20261023.py --output … --ledger … FILE…` | 库级真实smoke，内部直接调处理流程 | 名字含E2E也不是生产用户路径；默认600 requests/$2不构成本轮预算授权 |
-| `tools/evaluation/budget_preflight.py`、`BUDGET_PREFLIGHT.md`、`p6_run.py` | 复用既有付费准入；p6_run要求protocol及hash、manifest、labels、requests/cost-per-case，支持selection/group/run-id/base-url等 | 本地预检不代表真实服务已采用同一build/model/ledger/cap，服务侧须核验；其他runner需同等准入 |
+| `tools/evaluation/real_contract_e2e_20261023.py --output … --ledger … FILE…` | 库级真实smoke，内部直接调处理流程 | 名字含E2E也不是生产用户路径；默认600 requests/$2是待整改旧cap，不是用户要求 |
+| `tools/evaluation/budget_preflight.py`、`tools/evaluation/BUDGET_PREFLIGHT.md`、`p6_run.py` | 旧代码仍要求protocol及hash、manifest、labels、requests/cost-per-case，支持selection/group/run-id/base-url等 | 冻结与版本可追溯性继续保留；费用/次数审批和cap准入失效且代码待整改。本地预检不证明服务侧build/model/ledger一致 |
 | `tools/evaluation/p6_score.py --labels … --run … --output …` | 读取实际DOCX的机械评分基础 | 字面/fuzzy/类别归一化不能替代独立语义、范围外diff、摘要关系核对 |
 | `tools/evaluation/verify_downloaded_artifacts.py RUN --selection … --data-root …` | 文件hash、接受/拒绝修订、真实改动等机械证据 | 明确不评业务完整，不能据此判合同complete |
 | `tools/evaluation/delivery_e2e.py --source … --evidence-dir … --model-mode real --allow-real-model` | 显式real参数可跑真实模型/Worker隔离链路；默认fixture，dry-run零模型 | TestClient隔离链路不是生产浏览器E2E；禁止默认fixture计作真实调用 |
 | `tests/browser/test_workbench.py` / `test_frontend_v2.py` / `test_guide_generation.py` | 前端/隔离状态与交互回归，需相应browser测试开关 | 现有dev身份/fixture套件不等于实际Worker和模型交付 |
 | `frontend/package.json` 的typecheck/lint/test/build | 用npm ci与实际脚本验证候选前端构建 | V2构建通过不代表生产默认V1已更新 |
 
-省略号是待执行者填写的已冻结路径/额度，不是可直接复制的shell命令；未核对预算不得自动执行真实runner。模型配置需安全注入，Linux runner不会必然自动读取生产env，不打印整份环境或带密码DB URL。
+省略号是待执行者填写的已冻结路径/实际配置，不是可直接复制的shell命令；真实runner按需执行，无需费用/次数审批。旧cap与准入代码如仍阻断须整改，不靠新账本掩盖历史，也不擅设0等未实现语义。模型配置需安全注入，Linux runner不会必然自动读取生产env，不打印整份环境或带密码DB URL。
 
 ## 7. Git、整合、发布与回滚
 
@@ -332,5 +332,5 @@ inventory、survey、append、rebind、缺失操作恢复、事实补证、audit
 
 - 两名只读agent分别审查实际语义契约/模块接口，以及测试工具/预算/生产基线/发布路径；主agent统一整合，无并行修改共享文档。
 - 主agent只读复核了root/仓库发布器固定SRC、拒绝参数和UNITS列表，以及五个服务active事实；没有调用真实模型、改配置、重启服务或部署。
-- 本方案已覆盖R01–R17及用户原清单的待核实项，刻意保留正确的物理/预算/授权边界，并纠正“信claimed_operations”“普通表格全只读”“strict只认字面”等不准确建议。
+- 本方案已覆盖R01–R17及用户原清单的待核实项，保留物理/上下文容量、有限技术重试/无进展保护与业务授权边界，费用/调用次数仅观测不作停止门禁；并纠正“信claimed_operations”“普通表格全只读”“strict只认字面”等不准确建议。
 - 文件校验及链接核对只证明方案可接续；真实工程状态仍是未执行。接续模型必须从S0重新核对版本/资源，不用本节取代开发测试。

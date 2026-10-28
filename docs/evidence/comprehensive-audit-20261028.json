@@ -1,0 +1,52 @@
+{
+  "date": "2026-10-28",
+  "scope": "eight-agent comprehensive audit, not remediation or full qualification",
+  "decision": "NO-GO",
+  "audit_start_head": "5cf7a4500b49bcb17cda6189348046d78537da0d",
+  "observed_later_head": "28cac2f3e0259f23c9755b34045d64f7d1617c7f",
+  "business_code_changed_by_this_audit": false,
+  "deployed_or_restarted_by_this_audit": false,
+  "model_policy": "real calls as needed, no cost or call-count approvals; ledger observability only; runtime legacy caps still unresolved",
+  "tests": {
+    "python_non_browser": {"passed": 1945, "skipped": 13, "warnings": 3, "seconds": 736.94},
+    "browser_existing": {"passed": 45, "seconds": 169.67},
+    "frontend_unit": {"passed": 14, "files": 5},
+    "typecheck": "passed",
+    "lint": "passed",
+    "isolated_build": "passed",
+    "counts_must_not_be_added_for_overlapping_targeted_suites": true
+  },
+  "production_case": {
+    "task_id": "3860e8c301ab4343bb228d609cc968b2",
+    "document_id": "ca8ef3e099344290b70aadd36abd7c57",
+    "source": "funds_word/基金合同第一批/广发价值优选混合型证券投资基金基金合同.docx",
+    "source_sha256": "708bca5d2197d0688c59ebb7a0eaee1432b79162e2404a8545cd60d488fd67c7",
+    "engine_build": "1621a30b4f023efdaf86e58f808cf390f54430392587be7dc54043c385d8e57c",
+    "final_sha256": "d8f1dc99a7a138dc5b890e78bf5d17fe25c8f84797c6cacaab1e34e3a89709dc",
+    "redline_sha256": "602b4487751da5d3099d34123c7e5ad9913feeeb90f0613832d3ad8a64825cea",
+    "logical_calls": 27,
+    "http_attempts": 28,
+    "tokens": 149372,
+    "estimated_cost_usd": 0.03656805,
+    "elapsed_seconds": 200.8,
+    "changed_paragraphs": 15,
+    "insertions": 15,
+    "deletions": 15,
+    "mechanical_checks_passed": 10,
+    "unauthenticated_download_http": 401,
+    "reported_delivery_status": "complete",
+    "reported_final_omission": "PASS",
+    "independent_business_result": "FAILED",
+    "failure": "Summary p1258 (full-XML paragraph p1282) retains old all-channel monthly payment; body p802 has new channel and holding-period refund terms. Missing summary obligation despite complete/PASS.",
+    "issue": "FL-D384 (first-batch summary copies), FL-D434/435/443",
+    "not_a_formal_28_case_accuracy_measurement": true
+  },
+  "candidate_secret_config_issue": {
+    "issue": "FL-D452",
+    "verified_with_fake_sentinel_and_intercepted_network_only": true,
+    "specific_vector_sink_present_in_current_production": false
+  },
+  "raw_evidence_root": "/tmp/opencode/comprehensive-audit-20261028",
+  "new_issue_ids": "FL-D449–FL-D478 (includes policy correction and unverified exposure observation)",
+  "remaining_limits": ["no full 20–30-case frozen independent evaluation", "no Word/WPS roundtrip", "no disposable MySQL concurrency suite", "no full production Feishu and regulation-generation E2E", "cloud backup policy not inspected"]
+}

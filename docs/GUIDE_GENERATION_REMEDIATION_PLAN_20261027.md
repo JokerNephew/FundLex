@@ -1,5 +1,7 @@
 # 法规指引生成修复与验证计划（2026-10-27）
 
+> **2026-10-28调用政策更正（FL-D445、FL-D449）**：按需真实调用，无需费用/次数审批、不预登记费用/调用上限、不因本地cap停；账本仅作观测。下文旧smoke cap及实耗数字原样保留为历史，不是用户限制；运行时cap仍须整改，不冒称文档更正已关闭cap。上下文token容量、API限流/并发、物理资源、有限技术重试/无进展保护、真实余额/鉴权故障、业务权限和发布门禁仍保留。
+
 ## 目标
 
 让真实法规与合同输入在严格证据门禁下稳定产生可审查候选。`candidate_ready` 只能在要求、影响、质量、覆盖和 Residual 全部闭合，且独立模型复核身份合格后产生；离线 fake/replay 结果只用于开发验证。
@@ -67,7 +69,7 @@
 
 ### P4：全新账本真实复测
 
-- 磁盘、模型配置和预算满足后，使用新运行目录、新账本和冻结 manifest 重跑 smoke。
+- 磁盘、模型配置及供应商真实可用性满足后，使用新运行目录和冻结manifest按需重跑smoke；账本仅观测，独立账本统一汇总，不需费用/次数审批、不因本地cap停止。
 - 核对 schema failures、quality、coverage、Residual、模型身份和费用；只在全部门禁通过后进入 Blind Benchmark。
 
 当前状态：**smoke14 与 smoke17 均已完成，均未达资格**。smoke14（`390677df707040d68839708c4f9e38c2`）614 次逻辑调用 0 error，76 requirements/843 impacts/90 items/545 findings，gaps 0、unresolved 7、critical_quality 0，但 quality fail（31 semantic_coverage 等）、latest uncertain 88、Residual 24/19/5 未饱和，费用 $0.479236。smoke17（`fd1084ed48284cc5998ffd270a936ab5`，含 FL-D379/380）766 次逻辑调用 0 error、无中止；100 requirements/1094 impacts/100 items/679 findings，gaps 0、unresolved 10、latest uncertain 115、critical_quality 9、quality fail，critical 合计 106（semantic_coverage 78），Residual 56/29/22 未饱和，费用 $0.576609。smoke15/smoke16 为中止的非资格尝试（$0.0533/$0.2347），目录与账本保留。smoke9–13 与历史账本保持只读。独立模型复核仍为同一模型，即使其余门禁通过也不能宣称资格闭合。

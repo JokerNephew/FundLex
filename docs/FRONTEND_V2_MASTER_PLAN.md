@@ -115,4 +115,4 @@
 
 ## 12. Definition of Done
 
-在所有实现和证据完成前，不写 `FRONTEND_V2_STAGING_VERIFIED`。完成条件包括：P0/P1=0；typecheck/lint/build/unit/component/browser/compare 通过；Route/Task/CSV/Status/Reason/401 正确；Review pending-first、draft、security、keyboard、responsive 通过；Compare React parity 与安全 fallback 完成；Full-Stack Test Environment 的真实 DOCX、Worker、model、artifact hash、Review selected flow、Compare flow 和 independent acceptance 均有可追溯证据。真实模型预算或后端环境阻塞保持 `BLOCKED`，不以测试替代。
+在所有实现和证据完成前，不写 `FRONTEND_V2_STAGING_VERIFIED`。完成条件包括：P0/P1=0；typecheck/lint/build/unit/component/browser/compare 通过；Route/Task/CSV/Status/Reason/401 正确；Review pending-first、draft、security、keyboard、responsive 通过；Compare React parity 与安全 fallback 完成；Full-Stack Test Environment 的真实 DOCX、Worker、model、artifact hash、Review selected flow、Compare flow 和 independent acceptance 均有可追溯证据。真实供应商/后端环境故障保持 `BLOCKED`，不以测试替代。按FL-D445、FL-D449，真实模型按需调用、无需费用/次数审批、不因本地cap阻塞，账本仅观测；上下文容量、限流并发、资源、有限技术重试/无进展保护及业务/发布边界不变。
