@@ -93,34 +93,44 @@ class FeishuService:
             return
         payload = _plain(data)
         try:
-            if not self.integrations.record_event(self.provider, event.event_id, event.event_type, payload):
-                return
-            self._handle_message(event)
-            self.integrations.mark_event(self.provider, event.event_id, "processed")
+            token = self.integrations.begin_event(self.provider, event.event_id, event.event_type, payload)
         except IntegrationConflict as exc:
             log.warning("Feishu event conflict event_id=%s code=%s", event.event_id, str(exc))
+            return
+        if token is None:
+            return
+        try:
+            self._handle_message(event)
+            self.integrations.mark_event(self.provider, event.event_id, "processed", fencing_token=token)
+        except IntegrationConflict as exc:
+            log.warning("Feishu event conflict event_id=%s code=%s", event.event_id, str(exc))
+            self.integrations.mark_event(self.provider, event.event_id, "dead", str(exc), fencing_token=token)
         except Exception as exc:  # event callback must remain short and recoverable
             log.warning("Feishu event failed event_id=%s error=%s", event.event_id, type(exc).__name__)
-            self.integrations.mark_event(self.provider, event.event_id, "dead", type(exc).__name__)
+            self.integrations.mark_event(self.provider, event.event_id, "dead", type(exc).__name__,
+                                         fencing_token=token)
 
     def handle_card_action_event(self, data: Any) -> str:
         header = _get(data, "header", default={})
         event_id = str(_get(header, "event_id", "eventId", default="") or "")
+        token = None
         if event_id:
             try:
-                if not self.integrations.record_event(self.provider, event_id, "p2.card.action.trigger", _plain(data)):
-                    return "该按钮操作已处理。"
+                token = self.integrations.begin_event(self.provider, event_id, "p2.card.action.trigger", _plain(data))
             except IntegrationConflict as exc:
                 log.warning("Feishu card action conflict event_id=%s code=%s", event_id, str(exc))
                 return "按钮事件已失效，请重新发送附件。"
+            if token is None:
+                return "该按钮操作已处理。"
         try:
             result = self._handle_card_action_event(data)
             if event_id:
-                self.integrations.mark_event(self.provider, event_id, "processed")
+                self.integrations.mark_event(self.provider, event_id, "processed", fencing_token=token)
             return result
         except Exception as exc:
             if event_id:
-                self.integrations.mark_event(self.provider, event_id, "dead", type(exc).__name__)
+                self.integrations.mark_event(self.provider, event_id, "dead", type(exc).__name__,
+                                             fencing_token=token)
             log.warning("Feishu card action failed event_id=%s error=%s", event_id, type(exc).__name__)
             return "操作失败，请在 FundLex 工作台查看详情。"
 
@@ -159,7 +169,8 @@ class FeishuService:
             self._start_flow(event, binding["user_id"], _START[lowered])
             return
 
-        active = self.integrations.active_draft(event.tenant_key, event.open_id, event.chat_id)
+        active = self.integrations.active_draft(event.tenant_key, event.open_id, event.chat_id,
+                                                owner_user_id=binding["user_id"])
         if event.message_type == "file":
             if active is None:
                 active = self._create_draft(event, binding["user_id"], "revision",
@@ -184,6 +195,9 @@ class FeishuService:
         self._show_menu(event)
 
     def _handle_active_text(self, event: MessageEvent, owner: str, draft: dict[str, Any], text: str) -> None:
+        if str(draft.get("owner_user_id") or "") != owner:
+            self._send(event, text_card("草稿已失效", "账号绑定已变化，请重新发送文件开始任务。"))
+            return
         lowered = _key(text)
         if (draft.get("step") or "") == "name":
             # Legacy drafts created before the file-first rollout.
@@ -242,7 +256,8 @@ class FeishuService:
         if binding is None:
             return "请先绑定 FundLex 账号。"
         if not chat_id:
-            draft = self.integrations.active_draft(tenant_key, open_id, "")
+            draft = self.integrations.active_draft(tenant_key, open_id, "",
+                                                   owner_user_id=binding["user_id"])
             chat_id = (draft or {}).get("chat_id", "")
         if not chat_id:
             return "按钮已失效，请重新发送附件。"
@@ -293,7 +308,7 @@ class FeishuService:
                              message_id=target_message)
             return "已刷新任务列表。"
         if command == "continue_draft":
-            draft = self.integrations.active_draft(tenant_key, open_id, chat_id)
+            draft = self.integrations.active_draft(tenant_key, open_id, chat_id, owner_user_id=owner)
             if draft:
                 self._send_card_for_draft(event, draft, new_message=True)
                 return "已恢复当前草稿。"
@@ -303,7 +318,7 @@ class FeishuService:
             target = str(value.get("task_type") or "")
             if target not in _TASK_LABELS:
                 return "任务类型无效，请返回任务中心重新选择。"
-            draft = self.integrations.active_draft(tenant_key, open_id, chat_id)
+            draft = self.integrations.active_draft(tenant_key, open_id, chat_id, owner_user_id=owner)
             if draft and target:
                 self._cancel_draft(event, draft, notify=False)
                 self._start_flow(event, owner, target)
@@ -432,18 +447,29 @@ class FeishuService:
         if sent:
             self.integrations.update_draft(draft["id"], card_message_id=sent)
 
+    def _binding_owner(self, event: MessageEvent) -> str:
+        binding = self.integrations.identity(self.provider, event.tenant_key, event.open_id)
+        return str(binding["user_id"]) if binding else ""
+
+    def _active_draft(self, event: MessageEvent, *, task_type: str | None = None) -> dict[str, Any] | None:
+        owner = self._binding_owner(event)
+        if not owner:
+            return None
+        return self.integrations.active_draft(event.tenant_key, event.open_id, event.chat_id,
+                                              task_type=task_type, owner_user_id=owner)
+
     def _draft_for(self, event: MessageEvent, draft_id: str) -> dict[str, Any] | None:
+        owner = self._binding_owner(event)
+        if not owner:
+            return None
         if draft_id:
-            try:
-                draft = self.integrations.draft(draft_id)
-            except Exception:
-                return None
-            if (draft["tenant_key"], draft["open_id"], draft["chat_id"]) != (event.tenant_key, event.open_id, event.chat_id):
-                return None
-            if draft["status"] not in {"COLLECTING", "CONFIRMING"}:
+            draft = self.integrations.draft_for_owner(
+                draft_id, event.tenant_key, event.open_id, event.chat_id, owner)
+            if draft is None:
                 return None
             return draft
-        return self.integrations.active_draft(event.tenant_key, event.open_id, event.chat_id)
+        return self.integrations.active_draft(event.tenant_key, event.open_id, event.chat_id,
+                                              owner_user_id=owner)
 
     @staticmethod
     def _time_name(task_type: str) -> str:
@@ -516,6 +542,10 @@ class FeishuService:
 
     def _cancel_draft(self, event: MessageEvent, draft: dict[str, Any], *,
                       notify: bool = True) -> None:
+        owner = self._binding_owner(event)
+        if not owner or str(draft.get("owner_user_id") or "") != owner:
+            self._send(event, text_card("草稿已失效", "账号绑定已变化，请联系客服或重新发送文件。"))
+            return
         self.integrations.update_draft(draft["id"], status="CANCELLED", error_code="")
         self._refresh_pinned_menu(event, None)
         self._retire_card(draft.get("card_message_id") or "", "本次任务草稿已取消。")
@@ -538,7 +568,8 @@ class FeishuService:
         # place looks like a transient toast to users when the menu is far up
         # the chat, and makes it look as if no next step appeared.
         _ = message_id
-        active = self.integrations.active_draft(event.tenant_key, event.open_id, event.chat_id)
+        active = self.integrations.active_draft(event.tenant_key, event.open_id, event.chat_id,
+                                                owner_user_id=owner)
         if active is not None:
             if (active.get("task_type") or "revision") == task_type:
                 self._send_card_for_draft(event, active, new_message=True)
@@ -548,7 +579,7 @@ class FeishuService:
         self._create_draft(event, owner, task_type, self._time_name(task_type), send=True)
 
     def _show_menu(self, event: MessageEvent, *, message_id: str = "", note: str = "") -> None:
-        active = self.integrations.active_draft(event.tenant_key, event.open_id, event.chat_id)
+        active = self._active_draft(event)
         card = menu_card(active, note)
         if message_id:
             try:
@@ -564,6 +595,9 @@ class FeishuService:
     # Incoming files
     # ------------------------------------------------------------------
     def _receive_file(self, event: MessageEvent, owner: str, draft: dict[str, Any]) -> None:
+        if str(draft.get("owner_user_id") or "") != owner:
+            self._send(event, text_card("草稿已失效", "账号绑定已变化，请重新发送文件开始任务。"))
+            return
         task_type = draft.get("task_type") or "revision"
         if task_type == "compare":
             self._receive_compare_file(event, draft)
@@ -767,7 +801,7 @@ class FeishuService:
             self.task_service.upload_files(owner, task["id"], uploads)
             self.task_service.seal_task(owner, task["id"])
             channel_type = mode if mode in {"diagnosis", "evaluation"} else "revision"
-            self.integrations.link_task(task["id"], draft, None, task_type=channel_type)
+            self.integrations.link_task(task["id"], draft, None, task_type=channel_type, task_owner=owner)
             self._refresh_pinned_menu(event, None)
             linked_task_id = task["id"]
             dedupe = (f"task_status:{task['id']}:queued" if mode == "delivery"
@@ -834,7 +868,7 @@ class FeishuService:
                        for item in receipts.get("receipts") or []):
                     raise RuntimeError("COMPARE_UPLOAD_REJECTED")
                 self.compare.seal(owner, target_id)
-            self.integrations.link_task(target_id, draft, None, task_type="compare")
+            self.integrations.link_task(target_id, draft, None, task_type="compare", task_owner=owner)
             self._refresh_pinned_menu(event, None)
             self.integrations.add_outbox("task_status", target_id,
                                          {"task_id": target_id, "task_type": "compare"},
@@ -877,7 +911,7 @@ class FeishuService:
                 run = create_guide_run(self.store, self.guides, owner, item["name"], data)
                 target_id = run["id"]
                 self.integrations.update_draft(draft["id"], target_id=target_id, task_id=target_id)
-            self.integrations.link_task(target_id, draft, None, task_type="guide")
+            self.integrations.link_task(target_id, draft, None, task_type="guide", task_owner=owner)
             self._refresh_pinned_menu(event, None)
             self.integrations.add_outbox("task_status", target_id,
                                          {"task_id": target_id, "task_type": "guide"},
@@ -989,7 +1023,7 @@ class FeishuService:
 
     def _downloads_for_docs(self, owner: str, task_id: str) -> dict[str, str]:
         try:
-            docs = self.task_service.list_documents(owner, task_id, page=1, page_size=100).get("items") or []
+            docs, _ = self._all_task_documents(owner, task_id)
         except Exception:
             return {}
         downloads: dict[str, str] = {}
@@ -998,6 +1032,44 @@ class FeishuService:
                 if url and kind not in downloads:
                     downloads[kind] = url
         return downloads
+
+    def _all_task_documents(self, owner: str, task_id: str) -> tuple[list[dict[str, Any]], int]:
+        """Page every task document by ``total`` rather than taking page 1."""
+        docs: list[dict[str, Any]] = []
+        seen: set[str] = set()
+        total = 0
+        page = 1
+        while True:
+            result = self.task_service.list_documents(owner, task_id, page=page, page_size=200)
+            items = list(result.get("items") or [])
+            try:
+                total = max(total, int(result.get("total") or 0))
+            except (TypeError, ValueError):
+                total = max(total, len(docs) + len(items))
+            added = 0
+            for item in items:
+                key = str(item.get("document_id") or item.get("client_id") or "")
+                if key and key in seen:
+                    continue
+                if key:
+                    seen.add(key)
+                docs.append(item)
+                added += 1
+            if not items or not added or len(docs) >= total:
+                break
+            page += 1
+            if page > 10000:
+                break
+        return docs, total
+
+    def _send_gap(self) -> None:
+        """Optional per-file pacing for Feishu message limits."""
+        try:
+            interval = float(os.environ.get("FUNDLEX_FEISHU_FILE_SEND_INTERVAL_SECONDS", "0"))
+        except ValueError:
+            interval = 0.0
+        if interval > 0:
+            time.sleep(min(interval, 5.0))
 
     def _task_status_card(self, owner: str, task_id: str, mode: str = "delivery") -> dict[str, Any]:
         task = self.task_service.get_task(owner, task_id)
@@ -1012,20 +1084,26 @@ class FeishuService:
         if not task_id:
             return "任务 ID 缺失。"
         sent = 0
+        failures: list[tuple[str, str, str]] = []
+        remaining = 0
         try:
             if task_type == "compare" and self.compare is not None:
                 task = self.compare.get(owner, task_id)
                 for index, pair in enumerate(task.get("pairs") or [], 1):
                     if pair.get("status") not in {"succeeded", "incomplete"}:
                         continue
+                    name = f"合同对比-{index}"
                     try:
                         detail = self.compare.get_pair(owner, pair["id"])
                         payload = detail.get("result") or {}
                         data = json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8")
                         self.client.send_file(event.chat_id, f"合同对比-{index}-{pair['id'][:8]}.json", data)
                         sent += 1
-                    except Exception:
-                        continue
+                        self._send_gap()
+                    except Exception as exc:
+                        failures.append((name, "result", type(exc).__name__))
+                        log.warning("Feishu send result task=%s item=%s status=failed error=%s",
+                                    task_id, name, type(exc).__name__)
             elif task_type == "guide" and self.guides is not None:
                 self.guides.get_run_for_owner(owner, task_id)
                 wanted = (("guide", "generated_guide.docx"),
@@ -1033,20 +1111,32 @@ class FeishuService:
                 for artifact_kind, filename in wanted:
                     if kind not in {"all", artifact_kind}:
                         continue
-                    artifact = self.guides.get_artifact(task_id, artifact_kind)
-                    if not artifact:
-                        continue
-                    path = self.store.object_path(artifact["object_key"])
-                    if path.is_file():
+                    try:
+                        artifact = self.guides.get_artifact(task_id, artifact_kind)
+                        if not artifact:
+                            failures.append((filename, artifact_kind, "NOT_GENERATED"))
+                            continue
+                        path = self.store.object_path(artifact["object_key"])
+                        if not path.is_file():
+                            failures.append((filename, artifact_kind, "ARTIFACT_MISSING"))
+                            continue
                         self.client.send_file(event.chat_id, filename, path.read_bytes())
                         sent += 1
-                if not sent:
+                        self._send_gap()
+                    except Exception as exc:
+                        failures.append((filename, artifact_kind, type(exc).__name__))
+                        log.warning("Feishu send guide task=%s kind=%s status=failed error=%s",
+                                    task_id, artifact_kind, type(exc).__name__)
+                if not sent and not failures:
                     return "指引任务尚未生成可发送文件。"
             else:
-                docs = self.task_service.list_documents(owner, task_id, page=1, page_size=100).get("items") or []
+                docs, total = self._all_task_documents(owner, task_id)
+                remaining = max(0, int(total or 0) - len(docs))
                 for doc in docs:
                     document_id = doc.get("document_id")
+                    doc_name = str(doc.get("name") or document_id or "合同")[:80]
                     if not document_id:
+                        failures.append((doc_name, kind, "DOCUMENT_NOT_UPLOADED"))
                         continue
                     available = doc.get("downloads") or {}
                     if kind == "all":
@@ -1064,22 +1154,41 @@ class FeishuService:
                                 continue
                             if candidate in available:
                                 chosen.append(candidate)
+                        if not chosen:
+                            failures.append((doc_name, "all", "NO_DELIVERABLE"))
+                            continue
                     elif kind in available:
                         chosen = [kind]
                     elif kind == "report_md" and "report_json" in available:
                         chosen = ["report_json"]
                     else:
-                        chosen = []
+                        failures.append((doc_name, kind, "NOT_GENERATED"))
+                        continue
                     for download_kind in chosen:
                         try:
+                            # TaskStore.artifact is the task-scoped facade over the
+                            # one verified RunStore accessor used by HTTP.
                             data, filename = self.tasks.artifact(owner, task_id, document_id, download_kind)
                             self.client.send_file(event.chat_id, filename, data)
                             sent += 1
-                        except Exception:
-                            continue
+                            self._send_gap()
+                            log.info("Feishu send result task=%s document=%s kind=%s status=sent",
+                                     task_id, document_id, download_kind)
+                        except Exception as exc:
+                            failures.append((doc_name, download_kind, type(exc).__name__))
+                            log.warning("Feishu send result task=%s document=%s kind=%s status=failed error=%s",
+                                        task_id, document_id, download_kind, type(exc).__name__)
         except Exception as exc:
             log.warning("Feishu result send failed task=%s kind=%s error=%s", task_id, kind, type(exc).__name__)
             return "文件发送失败，请在 FundLex 工作台下载。"
+        if failures:
+            detail = "；".join(f"{name}（{item_kind}）：{reason}" for name, item_kind, reason in failures[:3])
+            if len(failures) > 3:
+                detail += " 等"
+            tail = f"剩余 {remaining} 份合同未发送" if remaining else "可稍后重试或在 FundLex 工作台下载"
+            return f"已发送 {sent} 个文件；{len(failures)} 个文件发送失败（{detail}）；{tail}。"
+        if remaining:
+            return f"已发送 {sent} 个文件；剩余 {remaining} 份合同未发送，请重试。"
         if not sent:
             return "该任务没有可发送的文件。"
         return f"已发送 {sent} 个文件。"
@@ -1087,9 +1196,16 @@ class FeishuService:
     # ------------------------------------------------------------------
     # Status sync and outbox
     # ------------------------------------------------------------------
+    def _channel_owner_active(self, channel: dict[str, Any]) -> bool:
+        binding = self.integrations.identity(self.provider, channel.get("tenant_key") or "",
+                                             channel.get("open_id") or "")
+        return bool(binding and binding.get("user_id") == channel.get("owner_user_id"))
+
     def sync_tasks(self) -> int:
         changed = 0
         for channel in self.integrations.channels():
+            if not self._channel_owner_active(channel):
+                continue
             task_type = channel.get("task_type") or "revision"
             try:
                 if task_type == "compare":
@@ -1149,6 +1265,10 @@ class FeishuService:
                 if channel is None:
                     self.integrations.finish_outbox(item["id"], error_code="FEISHU_CHANNEL_NOT_FOUND")
                     continue
+                if not self._channel_owner_active(channel):
+                    self.integrations.finish_outbox(item["id"], fencing_token=int(item["fencing_token"]),
+                                                    error_code="FEISHU_OWNER_BINDING_CHANGED")
+                    continue
                 if task_type == "compare" and self.compare is not None:
                     card = compare_status_card(self.compare.get(channel["owner_user_id"], task_id), self.base_url)
                 elif task_type == "guide" and self.guides is not None:
@@ -1170,9 +1290,35 @@ class FeishuService:
                                                 error_code=type(exc).__name__, retry=int(item.get("attempts", 1)) < 5)
         return sent
 
+    def retry_pending_events(self, limit: int = 20) -> int:
+        """Replay stored failed/dead/interrupted Feishu callbacks within bounds.
+
+        The event state machine only blocks ``processed`` duplicates, so each
+        replay is still claimed with a fresh fencing token and the underlying
+        side effects (draft submit idempotency key) stay idempotent.
+        """
+        replayed = 0
+        for row in self.integrations.retryable_events(limit=limit):
+            try:
+                payload = json.loads(row["payload_json"])
+            except (TypeError, ValueError):
+                continue
+            if not isinstance(payload, dict):
+                continue
+            try:
+                if row["event_type"] == "p2.card.action.trigger":
+                    self.handle_card_action_event(payload)
+                else:
+                    self.handle_message_event(payload)
+                replayed += 1
+            except Exception as exc:
+                log.warning("Feishu event replay failed event_id=%s error=%s", row["event_id"], type(exc).__name__)
+        return replayed
+
     def run_background(self, interval: float = 5.0) -> None:
         self.install()
         while not self._stop.wait(interval):
+            self.retry_pending_events()
             self.sync_tasks()
             self.send_outbox()
 
