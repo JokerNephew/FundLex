@@ -447,8 +447,14 @@ def generate_selection_artifacts(
     recomputed = compare_documents(left_doc, right_doc)
     if result.get("diffs") != recomputed.to_dict()["diffs"]:
         raise DocxError("SELECTION_RESULT_DIFF_MISMATCH")
-    if left_doc.coverage.status != "complete" or right_doc.coverage.status != "complete":
-        raise DocxError("SELECTION_COVERAGE_INCOMPLETE")
+    # Coverage warnings are retained as artifact limitations instead of
+    # blocking the whole selection.  The writer validates every selected
+    # operation against a real body paragraph/table paragraph and rejects
+    # drawings, fields, content controls, merged cells and other structures
+    # it cannot safely rewrite.  Warnings for headers/footers, comments or
+    # unsupported content outside the selected paragraphs therefore do not
+    # make an otherwise safe body edit unusable.  The report must still show
+    # the limitations and must not present the result as complete coverage.
     try:
         snapshot = make_snapshot(result, decisions, selection_epoch=selection_epoch, result_sha256=result_sha256)
     except SelectionError as exc:

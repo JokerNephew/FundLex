@@ -74,6 +74,22 @@ def test_consecutive_modify_paragraphs_are_written_independently(tmp_path):
     assert xml.count(b"<w:del ") == 1
 
 
+def test_header_coverage_warning_does_not_block_body_selection(tmp_path):
+    left, right = tmp_path / "left.docx", tmp_path / "right.docx"
+    for path, body in ((left, "费率为0.40%"), (right, "费率为0.30%")):
+        document = Document()
+        document.add_paragraph(body)
+        document.sections[0].header.paragraphs[0].text = "基金合同页眉"
+        document.save(path)
+    result, result_hash = _result(left, right)
+    decisions = {diff["id"]: "right" for diff in result["diffs"]}
+    validation = generate_selection_artifacts(
+        left, right, result, decisions, tmp_path / "final.docx", tmp_path / "redline.docx",
+        selection_epoch=1, result_sha256=result_hash)
+    assert Document(tmp_path / "final.docx").paragraphs[0].text == "费率为0.30%"
+    assert any("header" in warning for warning in validation.limitations)
+
+
 def test_multiple_selected_modifications_in_one_group_are_written(tmp_path):
     _, _, final, _, _, validation = _generate(
         tmp_path,
