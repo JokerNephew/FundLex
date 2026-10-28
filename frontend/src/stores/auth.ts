@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { api } from '../api/endpoints'
-import { AUTH_TOKEN_KEY, DEV_USER_KEY, SessionExpiredError } from '../api/client'
+import { AUTH_TOKEN_KEY, DEV_USER_KEY, SessionExpiredError, bumpAuthGeneration } from '../api/client'
 import type { Capabilities, User } from '../types'
 
 interface AuthState {
@@ -26,11 +26,13 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   ready: false,
   error: null,
   setSession: (token, user) => {
+    bumpAuthGeneration()
     sessionStorage.setItem(AUTH_TOKEN_KEY, token)
     set({ token, user, error: null })
     window.dispatchEvent(new CustomEvent('fundlex:auth-changed'))
   },
   clearSession: () => {
+    bumpAuthGeneration()
     sessionStorage.removeItem(AUTH_TOKEN_KEY)
     window.dispatchEvent(new CustomEvent('fundlex:auth-cleared'))
     set({ token: '', user: null })

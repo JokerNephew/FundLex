@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { assetPath, assertApiPath, download, request, SessionExpiredError, upload } from '../src/api/client'
+import { assetPath, assertApiPath, bumpAuthGeneration, download, request, SessionExpiredError, StaleRequestError, upload } from '../src/api/client'
 
 describe('API session expiry', () => {
   afterEach(() => {
@@ -56,6 +56,28 @@ describe('API session expiry', () => {
     await expect(request('/api/tasks')).rejects.toBeInstanceOf(SessionExpiredError)
     expect(onExpired).toHaveBeenCalledTimes(1)
     window.removeEventListener('fundlex:session-expired', onExpired)
+  })
+
+  it('does not let a late 401 from the previous session clear the new session', async () => {
+    const onExpired = vi.fn()
+    window.addEventListener('fundlex:session-expired', onExpired)
+    let release: (response: Response) => void = () => undefined
+    vi.spyOn(globalThis, 'fetch').mockImplementation(() => new Promise<Response>((resolve) => { release = resolve }))
+    const pending = request('/api/tasks')
+    bumpAuthGeneration()
+    release(new Response(JSON.stringify({ detail: 'expired' }), { status: 401, headers: { 'Content-Type': 'application/json' } }))
+    await expect(pending).rejects.toBeInstanceOf(StaleRequestError)
+    expect(onExpired).not.toHaveBeenCalled()
+    window.removeEventListener('fundlex:session-expired', onExpired)
+  })
+
+  it('does not let a late successful response from the previous session populate the new session', async () => {
+    let release: (response: Response) => void = () => undefined
+    vi.spyOn(globalThis, 'fetch').mockImplementation(() => new Promise<Response>((resolve) => { release = resolve }))
+    const pending = request<{ secret: string }>('/api/tasks')
+    bumpAuthGeneration()
+    release(new Response(JSON.stringify({ secret: 'old-account' }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
+    await expect(pending).rejects.toBeInstanceOf(StaleRequestError)
   })
 
   it('uses the same event for authenticated download and upload failures', async () => {

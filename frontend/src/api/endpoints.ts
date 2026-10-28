@@ -50,8 +50,8 @@ export const api = {
 
   documentReport: (taskId: string, documentId: string) => request<Report>(`/api/tasks/${encodeURIComponent(taskId)}/documents/${encodeURIComponent(documentId)}/report`),
   revisions: (taskId: string, documentId: string) => request<RevisionView>(`/api/tasks/${encodeURIComponent(taskId)}/documents/${encodeURIComponent(documentId)}/revisions`),
-  decisions: (taskId: string, documentId: string, decisions: Decision[]) => request<DecisionResult>(`/api/tasks/${encodeURIComponent(taskId)}/documents/${encodeURIComponent(documentId)}/decisions`, { method: 'POST', body: jsonBody({ decisions }) }),
-  acceptAll: (taskId: string, documentId: string) => request<DecisionResult>(`/api/tasks/${encodeURIComponent(taskId)}/documents/${encodeURIComponent(documentId)}/accept-all`, { method: 'POST' }),
+  decisions: (taskId: string, documentId: string, decisions: Decision[], selectionEpoch?: number, manifestHash?: string) => request<DecisionResult>(`/api/tasks/${encodeURIComponent(taskId)}/documents/${encodeURIComponent(documentId)}/decisions`, { method: 'POST', body: jsonBody({ decisions, ...(selectionEpoch === undefined ? {} : { selection_epoch: selectionEpoch }), ...(manifestHash ? { manifest_hash: manifestHash } : {}) }) }),
+  acceptAll: (taskId: string, documentId: string, selectionEpoch?: number, manifestHash?: string) => request<DecisionResult>(`/api/tasks/${encodeURIComponent(taskId)}/documents/${encodeURIComponent(documentId)}/accept-all`, { method: 'POST', body: jsonBody({ ...(selectionEpoch === undefined ? {} : { selection_epoch: selectionEpoch }), ...(manifestHash ? { manifest_hash: manifestHash } : {}) }) }),
   downloadDocument: (taskId: string, documentId: string, kind: string) => download(`/api/tasks/${encodeURIComponent(taskId)}/documents/${encodeURIComponent(documentId)}/download/${encodeURIComponent(kind)}`),
 
   compareTasks: () => request<{ items: CompareTask[]; total: number }>('/api/compare/tasks'),
