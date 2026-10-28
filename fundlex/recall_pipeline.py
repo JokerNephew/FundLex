@@ -3625,6 +3625,11 @@ def _final_omission_review(*, rules_by_id: Mapping[str, dict], rules: Sequence[d
         obligations=obligations, scopes=scopes)
     for residual in residuals:
         issues.append({"code": "FINAL_RESIDUAL_OLD_TEXT", **dict(residual)})
+    if getattr(residuals, "truncated", False):
+        # A capped residual scan is not proof that nothing is left (FL-D441).
+        issues.append({"code": "FINAL_RESIDUAL_SCAN_TRUNCATED",
+                       "remaining": getattr(residuals, "remaining", None),
+                       "next_cursor": getattr(residuals, "next_cursor", None)})
 
     # Findings from the independent review model remain visible even when a later
     # artifact proof can explain one of them.  _apply_artifact_proof_to_findings has
@@ -4824,6 +4829,11 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
                         obligations=obligation_ledger, scopes=scopes)
                     if residuals:
                         result["failures"].extend(residuals)
+                        result["verified"] = False
+                    if getattr(residuals, "truncated", False):
+                        result["truncated"] = True
+                        result["remaining"] = getattr(residuals, "remaining", None)
+                        result["next_cursor"] = getattr(residuals, "next_cursor", None)
                         result["verified"] = False
                     return result
 
