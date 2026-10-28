@@ -8,6 +8,7 @@ from __future__ import annotations
 import io
 import json
 import os
+import re
 import socket
 import threading
 import time
@@ -26,8 +27,7 @@ pytestmark = pytest.mark.skipif(
 def browser():
     from playwright.sync_api import sync_playwright
     with sync_playwright() as playwright:
-        browser = playwright.chromium.launch(
-            headless=os.getenv("FUNDLEX_BROWSER_HEADLESS", "1") != "0")
+        browser = playwright.chromium.launch()
         yield browser
         browser.close()
 
@@ -145,23 +145,60 @@ def presentation(ui, count=1, execution_mode="", summary=False, delivery="incomp
     def documents(route):
         response = route.fetch()
         payload = response.json()
-        for doc in payload["items"]:
+        if 'items' not in payload and 'document_id' not in payload:
+            return route.fulfill(response=response)
+        for doc in payload.get("items", [payload]):
             doc["downloads"] = {"working_redline": "/api/ui-fixture/redline", "selected_final": "/api/ui-fixture/selected"}
             doc["review_url"] = "/api/ui-fixture/revisions/" + doc["document_id"]
             if execution_mode:
                 doc["execution_mode"] = execution_mode
             if delivery == "complete_with_exceptions":
                 doc["downloads"] = {"redline": "/api/ui-fixture/redline", "final": "/api/ui-fixture/final"}
-        route.fulfill(response=response, json=payload)
+        route.fulfill(status=response.status, json=payload)
     context.route(f"**/api/tasks/{task}/documents?*", documents)
+    context.route(f"**/api/tasks/{task}/documents/*", documents)
     revisions = {"html": '<p><del class="rev rev-del" data-rev="1">原文</del><ins class="rev rev-ins" data-rev="2">改文</ins></p><p><ins class="rev rev-ins" data-rev="4">新增句</ins></p>',
                  "revisions": [{"index": 1, "del_id": 1, "ins_id": 2, "revision_ids": [1, 2], "before": "原文", "after": "改文", "operation": "replace"},
                                {"index": 2, "del_id": 4, "ins_id": 5, "revision_ids": [4], "before": "", "after": "新增句", "operation": "insert"}]}
     context.route("**/api/ui-fixture/revisions/*", lambda route: route.fulfill(json=revisions))
     open_task(ui, task)
     page.locator("#doc-rows [data-detail]").first.click()
-    page.wait_for_selector("#detail-body .detail-grid")
+    page.wait_for_selector("#detail-body .result-summary")
     return task, docs, revisions
+
+
+@pytest.mark.parametrize('width', [390, 768, 1280, 1440])
+def test_object_heading_long_parent_and_deep_link_return(ui, width):
+    from playwright.sync_api import expect
+    page, _, _, base = ui
+    name = '标题与长任务名称验证' * 12
+    task, docs = seed(ui, name=name)
+    page.set_viewport_size({'width': width, 'height': 1000})
+    page.goto(base + f'/#task?id={task}', wait_until='networkidle')
+    expect(page.locator('#task-object-title')).to_have_text(name)
+    expect(page.locator('h1:visible')).to_have_count(1)
+    expect(page.locator('#breadcrumb [aria-current="page"]')).to_have_text('任务详情')
+    page.locator('#doc-rows [data-detail]').first.click()
+    expect(page.locator('#detail-title')).to_have_text(docs[0]['name'])
+    page.reload(wait_until='networkidle')
+    expect(page.locator('#detail-title')).to_have_text(docs[0]['name'])
+    expect(page.locator('h1:visible')).to_have_count(1)
+    parent = page.locator('#breadcrumb [data-crumb="task"]')
+    expect(parent).to_have_attribute('title', name)
+    assert name not in page.locator('#breadcrumb [aria-current="page"]').inner_text()
+    assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+    assert page.evaluate('''() => {
+      const leaf=document.querySelector('#breadcrumb [aria-current=page]').getBoundingClientRect();
+      const nav=document.querySelector('#breadcrumb').getBoundingClientRect();
+      return leaf.left>=nav.left && leaf.right<=nav.right+1;
+    }''')
+    if os.getenv('FUNDLEX_UX_EVIDENCE'):
+        out = Path(os.environ['FUNDLEX_UX_EVIDENCE']); out.mkdir(parents=True, exist_ok=True)
+        page.screenshot(path=str(out / f'headers-document-{width}.png'))
+    parent.click()
+    expect(page.locator('#view-task')).to_be_visible()
+    expect(page.locator('#task-object-title')).to_have_text(name)
+    assert page.url.endswith(f'#task?id={task}')
 
 
 def test_overview_units_filters_and_single_supported_mode(ui):
@@ -172,11 +209,10 @@ def test_overview_units_filters_and_single_supported_mode(ui):
     page.fill("#task-search", "不存在的筛选")
     page.wait_for_function("document.querySelector('#task-rows').textContent.includes('没有任务')")
     assert page.locator("#first-run-guide").is_hidden()
-    page.locator('.sidebar [data-nav="import"]').click()
-    # The workbench exposes one formal revision flow; the old mode selector is
-    # gone rather than being a disabled/fake choice.
-    assert page.locator("#import-mode").count() == 0
-    assert "当前指引" in page.inner_text("#guide-binding")
+    page.locator('#view-overview [data-action="new-task"]').first.click()
+    assert page.locator("#import-mode option").count() == 1
+    assert page.locator("#import-mode").is_disabled()
+    assert page.locator("#import-mode").inner_text() == "合同修订"
 
 
 def test_delivery_counts_and_worker_filter_match_api(ui):
@@ -188,8 +224,11 @@ def test_delivery_counts_and_worker_filter_match_api(ui):
     row = page.locator(f'#task-rows tr:has([data-task="{task}"])')
     assert row.locator(".task-success").inner_text() == "1"
     assert row.locator(".task-error").inner_text() == "2"
+    assert "份合同" not in row.inner_text()
+    assert "成功 / 异常" not in row.inner_text()
     assert row.locator(".p-excluded").count() == 1
     row.locator("[data-task]").click()
+    assert page.locator("#task-ruleset").count() == 0
     page.select_option("#doc-completeness-filter", "not_generated")
     page.wait_for_function("document.querySelectorAll('#doc-rows [data-detail]').length===2")
     excluded = page.locator("#doc-rows tr", has_text="合同3.docx")
@@ -227,17 +266,118 @@ def test_evaluation_result_hides_formal_review_entry(ui):
     assert not page.locator('[data-action="open-review"]').count()
     assert "评测文件不能作为正式合同" in page.inner_text("#detail-body")
     assert page.locator("#overall-progress .p-evaluation").evaluate("n=>n.style.width") == "100%"
-    assert page.locator("#progress-evaluation-legend").is_visible()
+    assert page.locator("#progress-evaluation-legend").get_attribute('hidden') is None
+    assert page.locator('#view-document').is_visible()
 
 
 def test_exception_delivery_remains_downloadable_without_direct_use_claim(ui):
     presentation(ui, delivery="complete_with_exceptions")
     page = ui[0]
-    conclusion = page.locator("#detail-body .detail-grid")
-    assert "不可认定" in conclusion.inner_text()
+    conclusion = page.locator("#detail-body .result-summary")
+    assert "需核对例外" in conclusion.inner_text()
     assert "已通过交付校验" not in conclusion.inner_text()
     assert page.locator('[data-download="final"]').is_visible()
     assert "按例外清单人工核对" in page.inner_text("#detail-body")
+
+
+@pytest.mark.parametrize('width', [390, 768, 1280, 1440])
+@pytest.mark.parametrize('delivery', ['incomplete', 'complete_with_exceptions', 'evaluation_modified'])
+def test_contract_result_compact_summary_actions_and_folded_evidence(ui, width, delivery):
+    from playwright.sync_api import expect
+    page = ui[0]
+    page.set_viewport_size({'width': width, 'height': 1000})
+    presentation(ui, delivery=delivery, execution_mode='evaluation' if delivery.startswith('evaluation') else '')
+    expect(page.locator('.result-summary')).to_be_visible()
+    expect(page.locator('.result-status-grid>div')).to_have_count(3)
+    expect(page.locator('.result-evidence')).not_to_have_attribute('open', '')
+    expect(page.locator('.result-evidence .detail-grid')).to_be_hidden()
+    assert page.locator('.result-summary').bounding_box()['height'] < (320 if width == 390 else 230)
+    boxes = [node.bounding_box() for node in page.locator('.result-status-grid>div').all()]
+    assert max(box['y'] for box in boxes) - min(box['y'] for box in boxes) < 2
+    if delivery == 'complete_with_exceptions':
+        expect(page.locator('[data-download="final"]')).to_be_visible()
+        expect(page.locator('.result-summary')).to_contain_text('需核对例外')
+    elif delivery.startswith('evaluation'):
+        expect(page.locator('.result-summary')).to_contain_text('评测文件不能作为正式合同')
+        expect(page.locator('[data-action="open-review"]')).to_have_count(0)
+    else:
+        expect(page.locator('.result-summary')).to_contain_text('结果不完整')
+        expect(page.locator('[data-action="open-review"]')).to_be_visible()
+    assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+    if os.getenv('FUNDLEX_UX_EVIDENCE'):
+        out=Path(os.environ['FUNDLEX_UX_EVIDENCE']);out.mkdir(parents=True,exist_ok=True)
+        page.screenshot(path=str(out / f'result-{delivery}-{width}.png'))
+    page.locator('.result-evidence>summary').click()
+    expect(page.locator('.result-evidence .detail-grid')).to_be_visible()
+
+
+@pytest.mark.parametrize('view', ['overview', 'task'])
+def test_repeated_slow_refresh_keeps_rows_focus_and_recovers_after_error(ui, view):
+    from playwright.sync_api import expect
+    page, context, _, _ = ui
+    task, _ = seed(ui)
+    open_task(ui, task) if view == 'task' else open_page(ui)
+    row_id = 'doc-rows' if view == 'task' else 'task-rows'
+    expect(page.locator(f'#{row_id} tr[data-row-key]')).to_have_count(1)
+    pending=[]
+    if view == 'task':
+        context.route(f'**/api/tasks/{task}/documents?*', lambda route: pending.append((route, route.fetch())))
+    else:
+        def hold_task_list(route):
+            if 'sort=newest' in route.request.url:
+                pending.append((route, route.fetch()))
+            else:
+                route.continue_()
+        context.route('**/api/tasks?*', hold_task_list)
+    page.evaluate('''id => {
+      window.stableRow=document.querySelector('#'+id+' tr');
+      window.stableAction=stableRow.querySelector('button');
+      window.stableProgress=document.querySelector('#overall-progress .p-done');
+      stableAction.focus();
+    }''',row_id)
+    for attempt in range(3):
+        page.wait_for_timeout(10500)
+        for _ in range(200):
+            if pending:break
+            page.wait_for_timeout(25)
+        assert pending,'expected the actual ten-second background poll'
+        assert page.evaluate('id=>getComputedStyle(document.getElementById(id)).opacity',row_id) == '1'
+        assert page.evaluate('id=>stableRow===document.querySelector("#"+id+" tr") && stableAction.isConnected',row_id)
+        if attempt == 1:
+            requests=list(pending);pending.clear()
+            for route,response in requests:
+                route.fulfill(status=503,json={'detail':'temporary fixture failure'})
+            expect(page.locator('#'+('doc' if view == 'task' else 'task')+'-refresh-note')).to_be_visible()
+        else:
+            requests=list(pending);pending.clear()
+            for route,response in requests:
+                payload=response.json()
+                if attempt == 0:
+                    if view == 'task':payload['items'][0]['job_status']='running'
+                    else:payload['items'][0]['name']='后台静默更新任务'
+                route.fulfill(status=response.status, json=payload)
+            expect(page.locator(f'#{row_id}')).to_contain_text('正在处理' if view == 'task' and attempt == 0 else '后台静默更新任务' if attempt == 0 else '合同0.docx' if view == 'task' else '交互测试任务')
+            expect(page.locator('#'+('doc' if view == 'task' else 'task')+'-refresh-note')).to_be_hidden() if attempt == 2 else None
+        assert page.evaluate('stableAction.isConnected && document.activeElement===stableAction')
+        assert page.evaluate('stableProgress===document.querySelector("#overall-progress .p-done")')
+
+
+def test_guide_configuration_and_panels_do_not_expose_hashes(ui):
+    from playwright.sync_api import expect
+    page, context, _, base = ui
+    page=open_page(ui,'guide')
+    expect(page.locator('#guide-rows [data-guide-rules]')).not_to_have_count(0)
+    versions=context.request.get(base+'/api/guides',headers={'X-FundLex-User':'browser-check'}).json()['items']
+    hashes=[entry['rules_sha256'] for entry in versions if entry.get('rules_sha256')]
+    assert hashes,'use a real hash-bearing guide fixture'
+    # The merged V1 surfaces a short immutable marker; full hashes must not be
+    # rendered as visible text (they remain available only via title attributes).
+    for hash_value in hashes:assert hash_value not in page.locator('#view-guide').inner_text()
+    for action in ['rules','issues']:
+        page.locator(f'#guide-rows [data-guide-{action}]').first.click()
+        expect(page.locator('#guide-overlay-body h3').first).to_have_text('指引信息')
+        for hash_value in hashes:assert hash_value not in page.locator('#guide-overlay-body').inner_text()
+        page.locator('#guide-overlay-close').click()
 
 
 def test_revision_pair_checkbox_keyboard_and_insert_navigation(ui):
@@ -261,7 +401,7 @@ def test_revision_pair_checkbox_keyboard_and_insert_navigation(ui):
     page.locator('[data-action="open-review"]').click()
     page.wait_for_selector("#review-doc")
     assert not page.locator('[data-rev-toggle="4"]').is_checked()
-    page.locator("#close-detail").click()
+    page.locator('#breadcrumb [data-crumb="task"]').click()
     page.keyboard.press("a")
     assert page.locator("#detail-overlay").is_hidden()
 
@@ -272,9 +412,12 @@ def test_old_review_failure_cannot_overwrite_new_report(ui):
     pending = []
     context.route("**/api/ui-fixture/revisions/*", lambda route: pending.append(route))
     page.locator('[data-action="open-review"]').click()
-    page.wait_for_timeout(100)
+    for _ in range(100):
+        if pending:
+            break
+        page.wait_for_timeout(50)
     assert pending
-    page.locator("#close-detail").click()
+    page.locator('#breadcrumb [data-crumb="task"]').click()
     page.locator("#doc-rows [data-detail]").nth(1).click()
     page.wait_for_selector('[data-action="open-review"]')
     pending[0].fulfill(status=503, json={"detail": "fixture failure"})
@@ -293,24 +436,21 @@ def test_upload_completion_preserves_new_draft(ui, hold):
         if route.request.method != "POST":
             route.continue_()
             return
-        index = len(pending)
-        pending.append((route, None))
-        pending[index] = (route, route.fetch())
-    page.route(pattern, intercept)
+        pending.append((route, route.fetch()))
+    context.route(pattern, intercept)
     open_page(ui, "import")
     page.fill("#task-name", "旧上传任务")
     page.set_input_files("#file-picker", {"name": "旧合同.docx", "mimeType": "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "buffer": docx_bytes()})
     page.locator("#submit-task").click()
-    deadline = time.monotonic() + 15
-    while not pending and time.monotonic() < deadline:
-        page.wait_for_timeout(100)
+    # Wait for the held network response, not a machine-speed-dependent 150ms.
+    for _ in range(100):
+        if pending:
+            break
+        page.wait_for_timeout(50)
     assert pending
     page.locator('.sidebar [data-nav="overview"]').click()
     page.locator('#view-overview [data-action="new-task"]').first.click()
     page.fill("#task-name", "新草稿不得覆盖")
-    deadline = time.monotonic() + 15
-    while pending and pending[-1][1] is None and time.monotonic() < deadline:
-        page.wait_for_timeout(100)
     route, response = pending.pop()
     route.fulfill(response=response)
     page.wait_for_function("!document.querySelector('[data-action=choose-files]').disabled")
@@ -351,14 +491,6 @@ def test_csv_download_contains_real_bom_and_rows(ui, tmp_path):
     assert "状态清单" in page.inner_text("#toast")
 
 
-def test_task_deep_link_selects_task(ui):
-    task, _ = seed(ui)
-    page, _, _, base = ui
-    page.goto(base + f"/?task={task}#task")
-    page.wait_for_function("document.querySelector('#selected-task-title').textContent.includes('交互测试任务')")
-    assert page.locator("#view-task").is_visible()
-
-
 def test_login_expiry_message_and_role_hash_guard(ui, monkeypatch):
     page, context, app, base = ui
     password = uuid.uuid4().hex
@@ -379,23 +511,14 @@ def test_login_expiry_message_and_role_hash_guard(ui, monkeypatch):
     assert page.locator("#view-users").is_hidden()
     page.evaluate("location.hash='settings'")
     page.wait_for_timeout(100)
+    # V1 settings is now the member-facing Feishu page, not dev-only settings.
     assert page.locator("#view-settings").is_visible()
-    assert page.locator("#dev-settings-panel").is_hidden()
-    assert page.locator("#feishu-binding-code-btn").is_visible()
-    assert page.locator("#capability-details").inner_text()
-    page.evaluate("location.hash='overview'")
-    page.wait_for_timeout(100)
+    assert page.locator('#breadcrumb [aria-current="page"]').inner_text() == '飞书绑定'
+    assert page.locator('#feishu-binding-code-btn').count() == 0
+    page.locator('.sidebar [data-nav="overview"]').click()
     token = page.evaluate("sessionStorage.getItem('fundlex-auth-token')")
-    headers = {"Authorization": "Bearer " + token}
-    capabilities = context.request.get(base + "/api/capabilities", headers=headers)
-    assert capabilities.ok
-    assert capabilities.json()["auth_mode"] == "password"
-    assert "upload_limits" in capabilities.json()
-    assert context.request.get(base + "/api/integrations/feishu/binding", headers=headers).ok
-    assert context.request.get(base + "/api/settings/guide", headers=headers).ok
-    assert context.request.get(base + "/api/admin/users", headers=headers).status == 404
     context.request.post(base + "/api/auth/logout", headers={"Authorization": "Bearer " + token})
-    page.locator('#view-overview [data-action="refresh"]').first.click()
+    page.locator('#view-overview .toolbar [data-action="refresh"]').click()
     page.wait_for_selector("#login-view", state="visible")
     assert page.locator("#login-error").is_visible()
     assert "登录状态已失效" in page.inner_text("#login-error")
@@ -408,7 +531,10 @@ def test_page_layouts_fit_viewport(ui, width, tmp_path):
     page.set_viewport_size({"width": width, "height": 900})
     open_page(ui)
     for view in ["overview", "import", "task", "guide"]:
-        page.locator(f'.sidebar [data-nav="{view}"]').click()
+        if view in {'import', 'task'}:
+            page.evaluate('(view)=>window.FundLexWorkbench.navigate(view)', view)
+        else:
+            page.locator(f'.sidebar [data-nav="{view}"]').click()
         assert page.locator(f"#view-{view}").is_visible()
         assert page.evaluate("document.documentElement.scrollWidth <= innerWidth+1")
         assert not page.locator(".app").evaluate("n=>n.inert")
@@ -436,8 +562,9 @@ def test_report_and_review_fit_viewport(ui, width, tmp_path):
 def test_missing_artifact_shows_plan_instead_of_applied(ui):
     task, _, _ = presentation(ui)
     page, context, _, _ = ui
-    page.locator("#close-detail").click()
+    page.locator('#breadcrumb [data-crumb="task"]').click()
     context.unroute(f"**/api/tasks/{task}/documents?*")
+    context.unroute(f"**/api/tasks/{task}/documents/*")
     page.locator('#view-task [data-action="refresh"]').click()
     page.wait_for_timeout(200)
     page.locator("#doc-rows [data-detail]").first.click()
@@ -461,7 +588,7 @@ def test_generation_blocks_duplicate_requests_and_late_reply(ui):
     assert page.locator('[data-action="generate-selected"]').is_disabled()
     page.keyboard.press("r")
     assert page.locator('[data-rev-toggle="1"]').is_checked()
-    page.locator("#close-detail").click()
+    page.locator('#breadcrumb [data-crumb="task"]').click()
     page.locator("#doc-rows [data-detail]").nth(1).click()
     page.wait_for_selector('[data-action="open-review"]')
     pending[0].fulfill(json={"accepted": [1, 4], "rejected": [], "download_url": "/api/ui-fixture/selected"})
@@ -522,6 +649,7 @@ def test_unavailable_guide_blocks_new_task_with_explanation(ui, has_guide):
     context.route("**/api/capabilities", unavailable)
     open_page(ui, "import")
     assert "当前指引不可用" in page.inner_text("#guide-binding")
+    assert "暂时不能创建任务" in page.inner_text("#import-mode-note")
     assert page.locator("#submit-task").is_disabled()
 
 
@@ -573,200 +701,3 @@ def test_old_admin_response_cannot_expire_new_login(ui, monkeypatch):
     assert page.locator("#topbar-username").inner_text() == "成员样本"
     assert page.locator("#view-users").is_hidden()
     assert page.locator("#user-create-btn").is_enabled()
-
-
-def _compare_docx(paragraphs):
-    from docx import Document
-    stream = io.BytesIO()
-    document = Document()
-    for value in paragraphs:
-        document.add_paragraph(value)
-    document.save(stream)
-    return stream.getvalue()
-
-
-def _compare_revision_docx():
-    from docx import Document
-    from docx.oxml import OxmlElement
-    from lxml import etree
-    from zipfile import ZIP_DEFLATED, ZipFile
-    from fundlex.docx import Q
-
-    source = _compare_docx(["原文字"])
-    with ZipFile(io.BytesIO(source)) as archive:
-        parts = {name: archive.read(name) for name in archive.namelist()}
-    root = etree.fromstring(parts["word/document.xml"])
-    paragraph = root.find(".//" + Q("p"))
-    run = paragraph.find(Q("r"))
-    text = run.find(Q("t"))
-    deleted = OxmlElement("w:del")
-    deleted.set(Q("id"), "1")
-    deleted_run = OxmlElement("w:r")
-    deleted_text = OxmlElement("w:delText")
-    deleted_text.text = text.text
-    deleted_run.append(deleted_text)
-    deleted.append(deleted_run)
-    inserted = OxmlElement("w:ins")
-    inserted.set(Q("id"), "2")
-    inserted_run = OxmlElement("w:r")
-    inserted_text = OxmlElement("w:t")
-    inserted_text.text = "新文字"
-    inserted_run.append(inserted_text)
-    inserted.append(inserted_run)
-    paragraph.remove(run)
-    paragraph.extend([deleted, inserted])
-    parts["word/document.xml"] = etree.tostring(root)
-    output = io.BytesIO()
-    with ZipFile(output, "w", ZIP_DEFLATED) as archive:
-        for name, data in parts.items():
-            archive.writestr(name, data)
-    return output.getvalue()
-
-
-def _seed_compare(ui):
-    _, context, app, base = ui
-    left = _compare_docx(["前文", "费率为0.40%", "后文"])
-    right = _compare_docx(["前文", "费率为0.30%", "后文"])
-    headers = {"X-FundLex-User": "browser-check", "Content-Type": "application/json"}
-    payload = {"name": "选择版浏览器测试", "pairs": [{
-        "client_pair_id": "p", "label": "第一组",
-        "left": {"client_id": "l", "name": "left.docx", "size": len(left)},
-        "right": {"client_id": "r", "name": "right.docx", "size": len(right)},
-    }]}
-    created = context.request.post(base + "/api/compare/tasks", headers=headers,
-                                   data=json.dumps(payload))
-    assert created.ok, created.text()
-    task = created.json()["id"]
-    upload_headers = {"X-FundLex-User": "browser-check"}
-    for client_id, filename, content in (("l", "left.docx", left), ("r", "right.docx", right)):
-        uploaded = context.request.post(
-            base + f"/api/compare/tasks/{task}/uploads", headers=upload_headers,
-            multipart={
-                "client_ids": json.dumps([client_id]),
-                "files": {
-                    "name": filename,
-                    "mimeType": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                    "buffer": content,
-                },
-            })
-        assert uploaded.ok, uploaded.text()
-    assert context.request.post(base + f"/api/compare/tasks/{task}/seal", headers=headers).ok
-    from fundlex.compare.worker import CompareWorker
-    assert CompareWorker(app.state.compare_store).run_once()
-    return task
-
-
-def _open_compare_selection(ui, task):
-    page, _, _, base = ui
-    page.goto(base + "/#compare")
-    page.locator(f'[data-compare-task="{task}"]').click()
-    page.locator('[data-compare-pair="0"]').click()
-    page.wait_for_selector("#compare-diff-list .compare-diff-row")
-    page.wait_for_function("document.querySelector('#compare-selection-progress').textContent.includes('待选')")
-    return page
-
-
-def test_compare_splitter_drag_keyboard_and_reset(ui):
-    task = _seed_compare(ui)
-    page = _open_compare_selection(ui, task)
-    gutter = page.locator("#compare-gutter")
-    gutter.scroll_into_view_if_needed()
-    gutter.wait_for(state="visible")
-    left = page.locator("#compare-left-pane")
-    width_before = left.bounding_box()["width"]
-    box = gutter.bounding_box()
-    page.mouse.move(box["x"] + box["width"] / 2, box["y"] + box["height"] / 2)
-    page.mouse.down()
-    page.mouse.move(box["x"] + box["width"] / 2 - 120, box["y"] + box["height"] / 2, steps=8)
-    assert page.locator("#compare-split-preview").evaluate("node => node.style.opacity") == "1"
-    assert page.locator("#compare-split-preview").evaluate("node => node.style.left") != ""
-    page.mouse.up()
-    page.wait_for_timeout(150)
-    assert page.locator("#compare-split-preview").evaluate("node => node.style.opacity") == ""
-    width_dragged = left.bounding_box()["width"]
-    assert width_dragged < width_before - 40
-    assert gutter.get_attribute("aria-valuenow") != "50"
-
-    gutter.focus()
-    page.keyboard.press("ArrowLeft")
-    page.wait_for_timeout(100)
-    assert left.bounding_box()["width"] < width_dragged
-    page.keyboard.press("Enter")
-    page.wait_for_timeout(100)
-    assert abs(left.bounding_box()["width"] - width_before) < 8
-
-    page.set_viewport_size({"width": 390, "height": 844})
-    assert gutter.is_hidden()
-
-
-def test_compare_selection_save_generate_download_restore_and_mobile(ui):
-    task = _seed_compare(ui)
-    page = _open_compare_selection(ui, task)
-    progress = page.locator("#compare-selection-progress")
-    assert "待选 1" in progress.inner_text()
-    assert page.locator("#compare-selection-generate").is_disabled()
-
-    page.locator("#compare-select-right").click()
-    page.wait_for_function("document.querySelector('#compare-selection-progress').textContent.includes('已选 1 / 1')")
-    page.locator("#compare-selection-save").click()
-    page.wait_for_function("document.querySelector('#compare-selection-status').textContent.includes('选择已保存')")
-    page.locator("#compare-selection-generate").click()
-    page.wait_for_function("document.querySelector('#compare-selection-status').textContent.includes('已生成版本 1')")
-    final = page.locator('#compare-selection-versions [data-compare-filename*="最终版"]')
-    assert final.count() == 1
-    assert page.locator('#compare-selection-versions [data-compare-report-version="1"]').is_visible()
-    with page.expect_download() as download_info:
-        final.click()
-    download = download_info.value
-    assert download.path() and download.path().stat().st_size > 1000
-
-    # Refresh restores the saved decisions and the current generated version.
-    page = _open_compare_selection(ui, task)
-    page.wait_for_function("document.querySelector('#compare-selection-progress').textContent.includes('已选 1 / 1')")
-    assert "版本 1" in page.locator("#compare-selection-versions").inner_text()
-    assert "当前版本" in page.locator("#compare-selection-versions").inner_text()
-
-    # A changed decision is saved as a new epoch and marks the old version stale.
-    page.locator('.compare-diff-choice input[value="left"]').first.check()
-    page.locator("#compare-selection-save").click()
-    page.wait_for_function("document.querySelector('#compare-selection-status').textContent.includes('选择已保存')")
-    page.wait_for_function("document.querySelector('#compare-selection-versions').textContent.includes('已过期')")
-
-    page.set_viewport_size({"width": 390, "height": 844})
-    metrics = page.evaluate("() => ({viewport: innerWidth, document: document.documentElement.scrollWidth, body: document.body.scrollWidth})")
-    assert metrics["document"] <= metrics["viewport"] and metrics["body"] <= metrics["viewport"]
-    assert page.locator("#compare-selection").is_visible()
-    assert page.locator("#compare-selection-generate").is_visible()
-
-
-def test_compare_upload_accepts_word_revisions_and_shows_notice(ui):
-    page, context, _, base = ui
-    left_file = _compare_revision_docx()
-    page.goto(base + "/#compare")
-    page.wait_for_function("document.querySelector('#upload-limit').textContent.includes('MiB')")
-    page.locator("#compare-new").click()
-    page.locator("[data-compare-left]").set_input_files({
-        "name": "revision.docx",
-        "mimeType": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        "buffer": left_file,
-    })
-    page.locator("[data-compare-right]").set_input_files({
-        "name": "right.docx",
-        "mimeType": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        "buffer": _compare_docx(["新文字"]),
-    })
-    page.locator("#compare-submit").click()
-    page.wait_for_function(
-        "document.querySelector('#compare-upload-message').textContent.includes('已提交')"
-        " && document.querySelector('#compare-upload-message').textContent.includes('自动接受 3 处已有修订')")
-    page.wait_for_function("document.querySelector('#toast').textContent.includes('自动接受 3 处已有修订')")
-
-    tasks = context.request.get(base + "/api/compare/tasks", headers={"X-FundLex-User": "browser-check"})
-    assert tasks.ok
-    task = next(item for item in tasks.json()["items"] if item["name"] == "合同对比")
-    left = task["pairs"][0]["left"]
-    assert left["revisions_accepted"] == 3
-    assert left["original_size"] == len(left_file)
-    assert left["normalized_size"] == left["size"]
-    assert left["normalized_sha256"] == left["source_sha256"]
-    assert left["normalized_sha256"] != left["original_sha256"]

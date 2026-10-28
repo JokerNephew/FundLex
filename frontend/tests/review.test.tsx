@@ -7,14 +7,16 @@ let revisionView = {
   document_id: 'doc-1',
   html: '<p>合同原文</p>',
   revisions: [{ del_id: 1, ins_id: 2, index: 1, operation: 'replace', before: '旧文', after: '新文' }],
+  selection_epoch: 0,
+  manifest_hash: 'a'.repeat(64),
 }
 
 const mutateAsync = vi.fn().mockResolvedValue({ accepted: [1], rejected: [] })
 
 vi.mock('../src/api/hooks', () => ({
-  useAllTaskDocuments: () => ({ data: [{ task_id: 'task-1', document_id: 'doc-1', name: '测试合同.docx', delivery_status: 'incomplete', downloads: { redline: '/download' } }], error: null, loading: false, refetch: vi.fn() }),
+  useAllTaskDocuments: () => ({ data: [{ task_id: 'task-1', document_id: 'doc-1', name: '测试合同.docx', delivery_status: 'incomplete', downloads: { redline: '/download' } }], error: null, loading: false, refetch: vi.fn().mockResolvedValue(undefined) }),
   useTaskDocument: () => ({ data: { task_id: 'task-1', document_id: 'doc-1', name: '测试合同.docx', delivery_status: 'incomplete', downloads: { redline: '/download' } }, error: null, loading: false, refetch: vi.fn() }),
-  useRevisions: () => ({ data: revisionView, error: null, loading: false, refetch: vi.fn() }),
+  useRevisions: () => ({ data: revisionView, error: null, loading: false, refetch: vi.fn().mockResolvedValue(undefined) }),
   useReviewMutation: () => ({ mutateAsync, isPending: false }),
 }))
 
@@ -46,6 +48,8 @@ describe('Review pending and draft safety', () => {
       taskId: 'task-1',
       documentId: 'doc-1',
       allAccepted: true,
+      selectionEpoch: 0,
+      manifestHash: 'a'.repeat(64),
       decisions: [{ del_id: 1, decision: 'accept' }],
     }))
   })

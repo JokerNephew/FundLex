@@ -102,7 +102,7 @@ export function useSealTaskMutation() { return useApiMutation<TaskSummary, strin
 export function useTaskControlMutation() { return useApiMutation<TaskSummary, { id: string; action: 'pause' | 'resume' }>((value) => value.action === 'pause' ? api.pauseTask(value.id) : api.resumeTask(value.id), ['tasks']) }
 export function useReviewMutation() {
   return useMutation({
-    mutationFn: (value: { taskId: string; documentId: string; decisions?: Decision[]; allAccepted?: boolean }) => value.allAccepted ? api.acceptAll(value.taskId, value.documentId) : api.decisions(value.taskId, value.documentId, value.decisions || []),
+    mutationFn: (value: { taskId: string; documentId: string; decisions?: Decision[]; allAccepted?: boolean; selectionEpoch?: number; manifestHash?: string }) => value.allAccepted ? api.acceptAll(value.taskId, value.documentId, value.selectionEpoch, value.manifestHash) : api.decisions(value.taskId, value.documentId, value.decisions || [], value.selectionEpoch, value.manifestHash),
     onSuccess: (_result, value) => {
       invalidateQuery(`document:${value.taskId}:${value.documentId}`)
       invalidateQuery(`document-report:${value.taskId}:${value.documentId}`)

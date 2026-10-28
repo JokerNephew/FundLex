@@ -25,9 +25,31 @@ export class SessionExpiredError extends ApiError {
   }
 }
 
-function notifySessionExpired(): void {
+/** A response from an earlier login/session generation. It must never mutate
+ * the currently signed-in identity or surface a session-expired event. */
+export class StaleRequestError extends ApiError {
+  constructor() {
+    super('该请求属于之前的登录状态，已忽略。', 0)
+    this.name = 'StaleRequestError'
+  }
+}
+
+let authGeneration = 0
+
+/** Advance the generation whenever the signed-in identity changes. */
+export function bumpAuthGeneration(): number {
+  authGeneration += 1
+  return authGeneration
+}
+
+export function currentAuthGeneration(): number {
+  return authGeneration
+}
+
+function notifySessionExpired(epoch: number): void {
+  if (epoch !== authGeneration) return
   if (typeof window !== 'undefined') {
-    window.dispatchEvent(new CustomEvent('fundlex:session-expired'))
+    window.dispatchEvent(new CustomEvent('fundlex:session-expired', { detail: { epoch } }))
   }
 }
 
@@ -64,11 +86,12 @@ export function assertApiPath(path: string): string {
   return `${getBasePath()}${path}`
 }
 
-async function parseError(response: Response): Promise<never> {
+async function parseError(response: Response, epoch: number): Promise<never> {
   let body: unknown
   try { body = await response.json() } catch { body = undefined }
+  if (epoch !== authGeneration) throw new StaleRequestError()
   if (response.status === 401) {
-    notifySessionExpired()
+    notifySessionExpired(epoch)
     throw new SessionExpiredError()
   }
   const detail = (body as ApiErrorBody | undefined)?.detail
@@ -77,33 +100,46 @@ async function parseError(response: Response): Promise<never> {
 }
 
 export async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
+  const epoch = authGeneration
   const headers = authHeaders()
   new Headers(init.headers).forEach((value, key) => headers.set(key, value))
   if (init.body && !headers.has('Content-Type') && !(init.body instanceof FormData)) {
     headers.set('Content-Type', 'application/json')
   }
   const response = await fetch(assertApiPath(path), { ...init, headers, cache: 'no-store' })
-  if (!response.ok) return parseError(response)
+  if (epoch !== authGeneration) throw new StaleRequestError()
+  if (!response.ok) return parseError(response, epoch)
   if (response.status === 204) return undefined as T
-  return response.json() as Promise<T>
+  const payload = await response.json() as T
+  if (epoch !== authGeneration) throw new StaleRequestError()
+  return payload
 }
 
 export async function requestText(path: string, init: RequestInit = {}): Promise<string> {
+  const epoch = authGeneration
   const headers = authHeaders()
   new Headers(init.headers).forEach((value, key) => headers.set(key, value))
   const response = await fetch(assertApiPath(path), { ...init, headers, cache: 'no-store' })
-  if (!response.ok) return parseError(response)
-  return response.text()
+  if (epoch !== authGeneration) throw new StaleRequestError()
+  if (!response.ok) return parseError(response, epoch)
+  const payload = await response.text()
+  if (epoch !== authGeneration) throw new StaleRequestError()
+  return payload
 }
 
 export async function download(path: string): Promise<Blob> {
+  const epoch = authGeneration
   const response = await fetch(assertApiPath(path), { headers: authHeaders(), cache: 'no-store' })
-  if (!response.ok) return parseError(response)
-  return response.blob()
+  if (epoch !== authGeneration) throw new StaleRequestError()
+  if (!response.ok) return parseError(response, epoch)
+  const payload = await response.blob()
+  if (epoch !== authGeneration) throw new StaleRequestError()
+  return payload
 }
 
 export function upload<T>(path: string, form: FormData, onProgress?: UploadProgress): Promise<T> {
   return new Promise((resolve, reject) => {
+    const epoch = authGeneration
     const xhr = new XMLHttpRequest()
     xhr.open('POST', assertApiPath(path))
     authHeaders().forEach((value, key) => xhr.setRequestHeader(key, value))
@@ -115,9 +151,10 @@ export function upload<T>(path: string, form: FormData, onProgress?: UploadProgr
     xhr.onload = () => {
       let body: unknown
       try { body = xhr.responseText ? JSON.parse(xhr.responseText) : undefined } catch { body = undefined }
+      if (epoch !== authGeneration) { reject(new StaleRequestError()); return }
       if (xhr.status >= 200 && xhr.status < 300) resolve(body as T)
       else if (xhr.status === 401) {
-        notifySessionExpired()
+        notifySessionExpired(epoch)
         reject(new SessionExpiredError())
       }
       else reject(new ApiError(typeof (body as ApiErrorBody | undefined)?.detail === 'string' ? (body as ApiErrorBody).detail as string : '文件上传未完成。', xhr.status, body))

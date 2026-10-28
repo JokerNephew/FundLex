@@ -205,6 +205,9 @@ export interface RevisionView {
   revisions: Array<Record<string, unknown>>
   meta?: Record<string, unknown>
   download_url?: string
+  selection_epoch?: number
+  manifest_hash?: string
+  decision_hash?: string
 }
 
 export interface Decision {
@@ -218,6 +221,9 @@ export interface DecisionResult {
   rejected?: number[]
   sha256?: string
   download_url?: string
+  selection_epoch?: number
+  manifest_hash?: string
+  decision_hash?: string
 }
 
 export interface CompareFileManifest {

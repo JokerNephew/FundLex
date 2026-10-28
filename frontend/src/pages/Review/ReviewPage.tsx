@@ -140,17 +140,25 @@ export function ReviewPage() {
       setError(`还有 ${pendingCount} 条修订处于“待处理”，请逐条决定或使用批量接受/拒绝。`)
       return
     }
+    const selectionEpoch = Number.isInteger(revisions.data?.selection_epoch) ? revisions.data?.selection_epoch : 0
+    const manifestHash = typeof revisions.data?.manifest_hash === 'string' ? revisions.data.manifest_hash : ''
     setBusy(true); setError(''); setMessage('正在生成选择版合同…')
     try {
       const allAccepted = items.every((item) => decisions[String(item.del_id)] === 'accept')
-      const result = await reviewMutation.mutateAsync({ taskId, documentId: document.document_id, allAccepted, decisions: items.map((item) => ({
+      const result = await reviewMutation.mutateAsync({ taskId, documentId: document.document_id, allAccepted, selectionEpoch, manifestHash, decisions: items.map((item) => ({
           del_id: item.del_id,
           decision: decisions[String(item.del_id)] === 'reject' ? 'reject' : 'accept',
         })) })
       setMessage(`已生成选择版合同：接受 ${result.accepted?.length || 0} 条，拒绝 ${result.rejected?.length || 0} 条。`)
-      await documents.refetch()
+      await Promise.all([documents.refetch(), revisions.refetch()])
     } catch (nextError) {
-      setError(nextError instanceof Error ? nextError.message : '生成选择版合同失败，请稍后重试。')
+      const conflict = (nextError as { status?: number }).status === 409 || /SELECTION_(EPOCH|MANIFEST)/.test(String((nextError as { code?: string }).code || ''))
+      if (conflict) {
+        setError('选择版本已变化，已重新读取当前修订；请核对后再次生成。')
+        await revisions.refetch()
+      } else {
+        setError(nextError instanceof Error ? nextError.message : '生成选择版合同失败，请稍后重试。')
+      }
       setMessage('')
     } finally { setBusy(false) }
   }
