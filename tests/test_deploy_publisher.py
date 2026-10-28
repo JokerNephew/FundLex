@@ -65,6 +65,8 @@ import hashlib
 from pathlib import Path
 def engine_build():
     return hashlib.sha256((Path(__file__).parent / "api.py").read_bytes()).hexdigest()
+def service_build():
+    return hashlib.sha256((Path(__file__).parent / "api.py").read_bytes() + b"service").hexdigest()
 ''')
     for unit in UNITS:
         write(paths["src"] / f"tools/deploy/{unit}.template", f"candidate {unit}\n")

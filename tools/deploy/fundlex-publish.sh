@@ -22,6 +22,7 @@ UNITS=(fundlex-recall-api.service fundlex-recall-worker.service
 DIRS=(fundlex frontend guides rules tools docs tests)
 FILES=(pyproject.toml uv.lock README.md AGENTS.md)
 MARKER=.fundlex-engine-build
+SERVICE_MARKER=.fundlex-service-build
 
 fail() { echo "fundlex-publish: $*" >&2; return 1; }
 
@@ -70,6 +71,22 @@ import fundlex.store as store
 if not Path(store.__file__).resolve().is_relative_to(root):
     raise SystemExit("engine module escaped import root")
 print(store.engine_build())
+PY
+  )
+}
+
+service_hash() {
+  local root=$1 python_bin=$2
+  ( cd "$root"
+    env -i PATH=/usr/bin:/bin HOME="$TEMP_ROOT" "$python_bin" -I -B - "$root" <<'PY'
+import sys
+from pathlib import Path
+root = Path(sys.argv[1]).resolve()
+sys.path.insert(0, str(root))
+import fundlex.store as store
+if not Path(store.__file__).resolve().is_relative_to(root):
+    raise SystemExit("engine module escaped import root")
+print(store.service_build())
 PY
   )
 }
@@ -333,9 +350,12 @@ main() {
   import_check "$transaction/candidate" "$python_bin"
   [ "$manifest" = "$(tree_manifest "$transaction/candidate" "$python_bin")" ] || { fail "candidate bytes changed during imports"; return 1; }
   expected=$(engine_hash "$transaction/candidate" "$python_bin")
+  expected_service=$(service_hash "$transaction/candidate" "$python_bin")
   [[ "$expected" =~ ^[a-f0-9]{64}$ ]] || { fail "invalid candidate engine hash"; return 1; }
+  [[ "$expected_service" =~ ^[a-f0-9]{64}$ ]] || { fail "invalid candidate service hash"; return 1; }
   printf '%s\n' "$expected" > "$transaction/candidate/$MARKER"
-  chmod 0644 "$transaction/candidate/$MARKER"
+  printf '%s\n' "$expected_service" > "$transaction/candidate/$SERVICE_MARKER"
+  chmod 0644 "$transaction/candidate/$MARKER" "$transaction/candidate/$SERVICE_MARKER"
   printf '%s\n' "$manifest" > "$transaction/candidate.manifest"
   for unit in "${UNITS[@]}"; do
     install -o root -g root -m 0644 "$transaction/candidate/tools/deploy/$unit.template" "$transaction/units-new/$unit"
@@ -347,7 +367,7 @@ main() {
   capture_restart_baselines
   services_touched=1
   stop_services
-  for name in "${DIRS[@]}" "${FILES[@]}" "$MARKER"; do
+  for name in "${DIRS[@]}" "${FILES[@]}" "$MARKER" "$SERVICE_MARKER"; do
     touched_paths+=("$name")
     printf 'path %s\n' "$name" >> "$transaction/journal"
     if [ -e "$DST/$name" ] || [ -L "$DST/$name" ]; then
@@ -366,14 +386,16 @@ main() {
   [ "$manifest" = "$(tree_manifest "$DST" "$python_bin")" ] || { fail "deployed manifest mismatch"; return 1; }
   import_check "$DST" "$python_bin"
   actual=$(engine_hash "$DST" "$python_bin")
+  actual_service=$(service_hash "$DST" "$python_bin")
   [ "$expected" = "$actual" ] || { fail "deployed engine mismatch"; return 1; }
+  [ "$expected_service" = "$actual_service" ] || { fail "deployed service mismatch"; return 1; }
   migrate_schema
   started_at=$(date --iso-8601=seconds)
   start_services
   check_logs
   [ "$manifest" = "$(tree_manifest "$DST" "$python_bin")" ] || { fail "deployed bytes changed after startup"; return 1; }
   printf '%s\n' committed > "$transaction/status"
-  echo "fundlex-publish: done build=$actual"
+  echo "fundlex-publish: done engine=$actual service=$actual_service"
 }
 
 if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
