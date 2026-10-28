@@ -1129,11 +1129,103 @@ def _filter_scoped_targets(targets: Sequence[Mapping[str, Any]],
 
 
 def _approval_target(target: Mapping[str, Any]) -> Any:
-    """Adapt a serialized target for ``ApprovalBook.allows``."""
+    """Adapt a serialized target for ``ApprovalBook.allows``.
+
+    FL-D457: the adapter must carry the full physical binding, not only the
+    approval/operation/scope ids, otherwise a same-rule approval from another
+    paragraph would still be accepted here.
+    """
     from types import SimpleNamespace
-    return SimpleNamespace(approval_id=str(target.get("approval_id") or ""),
-                           operations=tuple(target.get("operations") or ()),
-                           scope_id=str(target.get("scope_id") or ""))
+    return SimpleNamespace(
+        approval_id=str(target.get("approval_id") or ""),
+        rule_id=str(target.get("rule_id") or ""),
+        location=str(target.get("location") or ""),
+        quote=str(target.get("quote") or ""),
+        start=target.get("start"), end=target.get("end"),
+        composite=tuple(target.get("composite") or ()),
+        occurrence_index=int(target.get("occurrence_index") or -1),
+        site_candidates=tuple(target.get("site_candidates") or ()),
+        operations=tuple(target.get("operations") or ()),
+        scope_id=str(target.get("scope_id") or ""))
+
+
+def _exact_site_quote(quote: str, text: str) -> str:
+    """Return the source-side slice identity for ``quote`` (or empty)."""
+    needle = _compact(quote)
+    if not needle:
+        return ""
+    return needle if needle in _compact(text) else ""
+
+
+def _semantic_audit_site_proof(proof: Mapping[str, Any], target: Mapping[str, Any],
+                               record: Any, before_inspection: Any,
+                               after_inspection: Any) -> dict[str, Any] | None:
+    """Bind one audit verdict to the exact artifact site it reviewed.
+
+    FL-D458: the old consumer promoted the outer obligation to PASS while leaving
+    ``site_effects`` at FAIL.  A semantic audit proof is only usable when it names
+    this operation, this paragraph/occurrence, a literal quote that exists at that
+    site and (when supplied) the current artifact hash.  The caller replaces only
+    that site's unproven result; every other site still has to prove itself.
+    """
+
+    if str(proof.get("verdict") or "") != "completed" or not proof.get("evidence_verified"):
+        return None
+    operation_id = str(getattr(record.spec, "operation_id", "") or "")
+    if str(proof.get("operation_id") or operation_id) != operation_id:
+        return None
+    target_operations = {str(key) for key in (target.get("operations") or ())}
+    if operation_id not in target_operations:
+        return None
+    location = str(target.get("location") or "")
+    if not location:
+        return None
+    if proof.get("location") and str(proof["location"]) != location:
+        return None
+    if str(proof.get("rule_id") or "") and str(proof["rule_id"]) != str(
+            target.get("rule_id") or ""):
+        return None
+    occurrence = int(target.get("occurrence_index") or -1)
+    proof_occurrence = proof.get("occurrence_index")
+    if proof_occurrence is not None and occurrence >= 0 \
+            and int(proof_occurrence) != occurrence:
+        return None
+    after_sha = str(getattr(after_inspection, "source_sha256", "") or "")
+    proof_sha = str(proof.get("document_sha256") or "")
+    if proof_sha and after_sha and proof_sha != after_sha:
+        return None
+    try:
+        before_text = str(before_inspection.by_location(location).text)
+        after_text = str(after_inspection.by_location(location).text)
+    except Exception:  # noqa: BLE001 - vanished site cannot be certified
+        return None
+    quote = str(proof.get("evidence_quote") or target.get("quote") or "")
+    if not _compact(quote):
+        return None
+    in_after = bool(_exact_site_quote(quote, after_text))
+    in_before = bool(_exact_site_quote(quote, before_text))
+    if not (in_after or in_before):
+        return None
+    target_quote = str(target.get("quote") or "")
+    if target_quote and not (_exact_site_quote(target_quote, after_text)
+                             or _exact_site_quote(target_quote, before_text)):
+        # The approved target no longer exists at this site in either document.
+        return None
+    site_id = f"{location}#occurrence:{occurrence}" if occurrence >= 0 else location
+    return {
+        "site_id": site_id,
+        "location": location,
+        "occurrence_index": occurrence,
+        "proof_kind": "semantic_audit_site",
+        "artifact_status": "SEMANTIC_VERIFIED",
+        "before_quote": before_text,
+        "after_quote": after_text,
+        "evidence_quote": quote,
+        "document_sha256": after_sha or proof_sha,
+        "target_id": str(target.get("target_id") or ""),
+        "audit_verdict": str(proof.get("verdict") or ""),
+    }
+
 
 
 def replay_claims(edits: Sequence[Mapping[str, Any]], before_inspection: Any,
@@ -2043,9 +2135,11 @@ def replay_claims(edits: Sequence[Mapping[str, Any]], before_inspection: Any,
     if audit_proofs:
         # The independent audit model verified the actual artifact for this target
         # (or that a satisfied clause needs no change).  That verdict is a semantic
-        # proof: the physical edit/site binding above still has to exist, but the
-        # effect check must not re-litigate an approved semantic equivalent with a
-        # literal new_text comparison.
+        # proof only for the site it actually reviewed: FL-D458 used to flip the
+        # outer obligation to PASS while leaving ``site_effects`` FAIL, so a real
+        # equivalent still could not be consumed and an unrelated failing site could
+        # be hidden.  Replace the proven site, then re-run the same consumer gate.
+        from .effects import effect_proof_passed
         edit_locations = {str(edit.get("location") or "") for edit in edits}
         for record in records:
             item = obligation_state.get(record.obligation_id)
@@ -2053,37 +2147,99 @@ def replay_claims(edits: Sequence[Mapping[str, Any]], before_inspection: Any,
                 continue
             bound = [target for target in (targets_by_id or {}).values()
                      if record.spec.operation_id in (target.get("operations") or ())]
-            proven = []
+            proven: list[tuple[Mapping[str, Any], dict[str, Any]]] = []
             for target in bound:
                 proof = audit_proofs.get(str(target.get("target_id") or "")) or {}
-                if str(proof.get("verdict") or "") != "completed" \
-                        or not proof.get("evidence_verified"):
-                    continue
                 if (str(target.get("state") or "") == "satisfied"
                         or str(target.get("location") or "") in edit_locations):
-                    proven.append(target)
+                    site_proof = _semantic_audit_site_proof(
+                        proof, target, record, before_inspection, after_inspection)
+                    if site_proof is not None:
+                        proven.append((target, site_proof))
             if not proven:
                 continue
-            target = proven[0]
-            obligation_state[record.obligation_id] = {
-                **item, "state": "PASS", "artifact_status": "SEMANTIC_VERIFIED",
-                "failure_code": "", "reason": "",
-                "evidence": list(item.get("evidence") or ()) + [{
-                    "proof_kind": "semantic_audit",
+            site_effects = [dict(site) for site in item.get("site_effects") or ()]
+            evidence = list(item.get("evidence") or ())
+            for target, site_proof in proven:
+                location = site_proof["location"]
+                site_id = site_proof["site_id"]
+                occurrence = int(site_proof["occurrence_index"])
+                matched = False
+                for index, site in enumerate(site_effects):
+                    same_location = str(site.get("location") or
+                                        str(site.get("site_id") or "").split("#", 1)[0]) \
+                        == location
+                    same_occurrence = occurrence < 0 or str(site.get("site_id") or "") in {
+                        location, site_id}
+                    if not (same_location and same_occurrence):
+                        continue
+                    matched = True
+                    site_effects[index] = {
+                        **site,
+                        "state": "PASS",
+                        "artifact_status": "SEMANTIC_VERIFIED",
+                        "failure_code": "", "reason": "",
+                        "proof_kind": "semantic_audit_site",
+                        "before_quote": site_proof["before_quote"],
+                        "after_quote": site_proof["after_quote"],
+                        "semantic_audit": {
+                            "target_id": site_proof["target_id"],
+                            "evidence_quote": site_proof["evidence_quote"],
+                            "document_sha256": site_proof["document_sha256"],
+                            "audit_verdict": site_proof["audit_verdict"],
+                        },
+                    }
+                if not matched and location in {str(site) for site in
+                                                item.get("sites") or ()}:
+                    site_effects.append({
+                        "rule_id": record.spec.rule_id,
+                        "operation_id": record.spec.operation_id,
+                        "obligation_id": record.obligation_id,
+                        **site_proof,
+                    })
+                evidence.append({
+                    "proof_kind": "semantic_audit_site",
                     "operation_id": record.spec.operation_id,
                     "obligation_id": record.obligation_id,
-                    "target_id": str(target.get("target_id") or ""),
-                    "location": str(target.get("location") or ""),
-                    "verdict": "completed",
-                    "document_sha256": str(getattr(after_inspection,
-                                                   "source_sha256", "")),
-                }]}
+                    "site_id": site_proof["site_id"],
+                    "location": location,
+                    "occurrence_index": occurrence,
+                    "before_quote": site_proof["before_quote"],
+                    "after_quote": site_proof["after_quote"],
+                    "evidence_quote": site_proof["evidence_quote"],
+                    "document_sha256": site_proof["document_sha256"],
+                    "target_id": site_proof["target_id"],
+                })
+            candidate = {
+                **item, "state": "PASS", "artifact_status": "SEMANTIC_VERIFIED",
+                "failure_code": "", "reason": "",
+                "site_effects": site_effects, "evidence": evidence,
+            }
+            if effect_proof_passed(candidate, operation_id=record.spec.operation_id,
+                                   obligation_id=record.obligation_id):
+                obligation_state[record.obligation_id] = candidate
+            else:
+                # Keep this site's real proof, but leave the obligation failing and
+                # never relax other sites/occurrences or physical inconsistencies.
+                failing = next((site for site in site_effects
+                                if str(site.get("state") or "").upper() != "PASS"), {})
+                obligation_state[record.obligation_id] = {
+                    **item, "state": "FAIL",
+                    "artifact_status": str(failing.get("artifact_status")
+                                           or item.get("artifact_status") or ""),
+                    "failure_code": str(failing.get("failure_code")
+                                        or item.get("failure_code") or
+                                        "CLAIM_OPERATION_UNPROVEN"),
+                    "reason": str(failing.get("reason") or item.get("reason") or ""),
+                    "site_effects": site_effects, "evidence": evidence,
+                }
         # A failure recorded before the audit proof arrived must not outlive the
         # obligation it describes.
         failures[:] = [failure for failure in failures
                        if str((obligation_state.get(
                            str(failure.get("obligation_id") or "")) or {}
                                ).get("state") or "") != "PASS"]
+
 
     # Explicit ONE_OF wording alternatives share only their verified BUSINESS SITE.
     # No global text absence, rule-level success or sibling independent operation closes it.
