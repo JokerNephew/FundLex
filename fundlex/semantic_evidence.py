@@ -253,6 +253,140 @@ class ApprovalCheck:
         return {"ok": self.ok, "code": self.code, "detail": dict(self.detail)}
 
 
+def _projected_quote(value: Any) -> str:
+    return _display_text(str(value or ""))[0]
+
+
+def _target_physical_parts(target: Any, inspection: Any) -> tuple[EvidencePart, ...] | None:
+    """Return the exact physical slices a target currently names.
+
+    ``None`` means the target is not yet source-bound (the locator only has a
+    candidate location); the approval may then constrain the candidate location
+    but cannot authorize a different physical span.
+    """
+
+    composite = tuple(getattr(target, "composite", ()) or ())
+    if composite:
+        built: list[EvidencePart] = []
+        for part in composite:
+            try:
+                location, start, end = str(part).rsplit(":", 2)
+                span = inspection.by_location(location)
+            except (KeyError, ValueError, AttributeError):
+                return ()
+            body, _ = _display_text(str(span.text))
+            left, right = int(start), int(end)
+            if left < 0 or right <= left or right > len(body):
+                return ()
+            built.append(EvidencePart(location, left, right, body[left:right]))
+        return tuple(built)
+    location = str(getattr(target, "location", "") or "")
+    start = getattr(target, "start", None)
+    end = getattr(target, "end", None)
+    quote = str(getattr(target, "quote", "") or "")
+    if not location:
+        return None
+    try:
+        span = inspection.by_location(location)
+    except Exception:
+        return ()
+    body, _ = _display_text(str(span.text))
+    if start is None or end is None:
+        if not quote:
+            return None
+        needle = _projected_quote(quote)
+        positions = [match.start() for match in re.finditer(re.escape(needle), body)]
+        occurrence = int(getattr(target, "occurrence_index", -1) or -1)
+        if occurrence < 0 or occurrence >= len(positions):
+            occurrence = 0
+        if not positions:
+            return ()
+        left = positions[occurrence]
+        return (EvidencePart(location, left, left + len(needle), needle),)
+    try:
+        left, right = int(start), int(end)
+    except (TypeError, ValueError):
+        return ()
+    if left < 0 or right <= left or right > len(body):
+        return ()
+    if quote and body[left:right] != _projected_quote(quote):
+        return ()
+    return (EvidencePart(location, left, right, body[left:right]),)
+
+
+def _approval_binds_target(approval: "SemanticApproval", target: Any,
+                           inspection: Any) -> ApprovalCheck:
+    """Prove the approval was issued for *this* physical site.
+
+    An approval records one exact source reference.  Consuming it for a different
+    paragraph, offset span, composite slice, occurrence or operation is the
+    FL-D457 rebinding defect; only the identical binding (or the still-unbound
+    locator candidate at the approved location) may consume it.
+    """
+
+    if not approval.evidence:
+        return ApprovalCheck(False, "APPROVAL_EVIDENCE_MISSING", {})
+    evidence = approval.evidence[0]
+    if len(approval.evidence) > 1:
+        return ApprovalCheck(False, "APPROVAL_EVIDENCE_AMBIGUOUS",
+                             {"approvals": [item.evidence_id for item in approval.evidence]})
+    target_parts = _target_physical_parts(target, inspection)
+    if target_parts == ():
+        return ApprovalCheck(False, "APPROVAL_TARGET_UNBOUND", {})
+    if target_parts is not None:
+        if len(target_parts) != len(evidence.parts):
+            return ApprovalCheck(False, "APPROVAL_SITE_MISMATCH",
+                                 {"expected": [part.as_dict() for part in evidence.parts],
+                                  "actual": [part.as_dict() for part in target_parts]})
+        for expected, actual in zip(evidence.parts, target_parts):
+            if (expected.location != actual.location
+                    or expected.start != actual.start or expected.end != actual.end
+                    or expected.exact_quote != actual.exact_quote):
+                return ApprovalCheck(False, "APPROVAL_SITE_MISMATCH",
+                                     {"expected": expected.as_dict(),
+                                      "actual": actual.as_dict()})
+    else:
+        # The target is still an unresolved locator candidate.  The approval may
+        # constrain which paragraph the locator is allowed to bind, never an
+        # arbitrary sibling with the same wording.
+        location = str(getattr(target, "location", "") or "")
+        candidates = tuple(str(item) for item in
+                           (getattr(target, "site_candidates", ()) or ()))
+        approved_locations = {part.location for part in evidence.parts}
+        if not location and not candidates:
+            return ApprovalCheck(False, "APPROVAL_TARGET_UNBOUND", {})
+        allowed = set(candidates) | ({location} if location else set())
+        if not allowed & approved_locations:
+            return ApprovalCheck(False, "APPROVAL_SITE_MISMATCH",
+                                 {"approved": sorted(approved_locations),
+                                  "candidates": sorted(allowed)})
+    occurrence = int(getattr(target, "occurrence_index", -1) or -1)
+    if occurrence >= 0 and int(evidence.occurrence_index) != occurrence:
+        return ApprovalCheck(False, "APPROVAL_OCCURRENCE_MISMATCH",
+                             {"expected": occurrence,
+                              "actual": int(evidence.occurrence_index)})
+    return ApprovalCheck(True)
+
+
+def condition_fingerprint(rule: Mapping[str, Any]) -> str:
+    """Version digest of the operation/condition set actually in force."""
+
+    payload = {
+        "rule_id": str(rule.get("rule_id") or ""),
+        "operations": [
+            {"op": str(operation.get("op") or ""),
+             "old_text": str(operation.get("old_text") or ""),
+             "new_text": str(operation.get("new_text") or ""),
+             "condition": operation.get("condition") or {}}
+            for operation in (rule.get("operations") or ())
+            if isinstance(operation, Mapping)
+        ],
+    }
+    return hashlib.sha256(json.dumps(payload, ensure_ascii=False, sort_keys=True,
+                                     separators=(",", ":"), default=str)
+                          .encode("utf-8")).hexdigest()
+
+
 @dataclass(frozen=True)
 class SemanticApproval:
     """What one operation may change, with the evidence that justifies it."""
@@ -324,9 +458,17 @@ class SemanticApproval:
     # -- consumption -------------------------------------------------------
     def check(self, inspection: Any, *, guide_id: str = "", guide_sha256: str = "",
               operation_keys: Iterable[str] | None = None, scope_id: str = "",
-              scope_revision: str = "") -> ApprovalCheck:
+              scope_revision: str = "", rule_id: str = "",
+              condition_digest: str = "", target: Any = None,
+              target_location: str = "", target_start: int | None = None,
+              target_end: int | None = None, target_quote: str = "",
+              target_composite: Iterable[str] = (),
+              target_occurrence: int = -1) -> ApprovalCheck:
         if self.state != "approved":
             return ApprovalCheck(False, "APPROVAL_NOT_APPROVED", {"state": self.state})
+        if rule_id and self.rule_id != rule_id:
+            return ApprovalCheck(False, "APPROVAL_RULE_MISMATCH",
+                                 {"expected": rule_id, "actual": self.rule_id})
         if guide_id and self.guide_id != guide_id:
             return ApprovalCheck(False, "APPROVAL_GUIDE_MISMATCH",
                                  {"expected": guide_id, "actual": self.guide_id})
@@ -335,18 +477,30 @@ class SemanticApproval:
                                  {"expected": guide_sha256, "actual": self.guide_sha256})
         if operation_keys is not None:
             allowed = {str(key) for key in operation_keys}
-            if allowed and self.operation_key not in allowed:
+            if not allowed:
+                return ApprovalCheck(False, "APPROVAL_OPERATION_MISSING", {})
+            if self.operation_key not in allowed:
                 return ApprovalCheck(False, "APPROVAL_OPERATION_MISMATCH",
                                      {"expected": sorted(allowed),
                                       "actual": self.operation_key})
-        if scope_id and self.scope_id and self.scope_id != scope_id:
-            return ApprovalCheck(False, "APPROVAL_SCOPE_MISMATCH",
-                                 {"expected": scope_id, "actual": self.scope_id})
-        if scope_revision and self.scope_revision \
+        if self.scope_id:
+            if scope_id and self.scope_id != scope_id:
+                return ApprovalCheck(False, "APPROVAL_SCOPE_MISMATCH",
+                                     {"expected": scope_id,
+                                      "actual": self.scope_id})
+        elif scope_id:
+            return ApprovalCheck(False, "APPROVAL_SCOPE_MISSING",
+                                 {"target_scope": scope_id})
+        if self.scope_revision and scope_revision \
                 and self.scope_revision != scope_revision:
             return ApprovalCheck(False, "APPROVAL_SCOPE_STALE",
                                  {"expected": scope_revision,
                                   "actual": self.scope_revision})
+        if condition_digest and self.condition_digest \
+                and self.condition_digest != condition_digest:
+            return ApprovalCheck(False, "APPROVAL_CONDITION_STALE",
+                                 {"expected": condition_digest,
+                                  "actual": self.condition_digest})
         if not self.evidence:
             return ApprovalCheck(False, "APPROVAL_EVIDENCE_MISSING", {})
         for item in self.evidence:
@@ -355,14 +509,45 @@ class SemanticApproval:
                 return ApprovalCheck(False, code,
                                      {"approval_id": self.approval_id,
                                       "evidence_id": item.evidence_id})
+        if target is not None:
+            binding = _approval_binds_target(self, target, inspection)
+            if not binding.ok:
+                return binding
+        elif any(value not in ("", None, ()) for value in
+                 (target_location, target_start, target_end, target_quote,
+                  tuple(target_composite) if target_composite else ())):
+            proxy = {
+                "location": target_location, "start": target_start,
+                "end": target_end, "quote": target_quote,
+                "composite": tuple(target_composite or ()),
+                "occurrence_index": target_occurrence,
+            }
+            binding = _approval_binds_target(self, _TargetProxy(proxy), inspection)
+            if not binding.ok:
+                return binding
         return ApprovalCheck(True)
+
+
+class _TargetProxy:
+    """Minimal attribute view used by :meth:`SemanticApproval.check`."""
+
+    def __init__(self, values: Mapping[str, Any]) -> None:
+        for key, value in values.items():
+            setattr(self, key, value)
+
 
 
 class ApprovalBook:
     """Approvals available to the current run, keyed by target/operation."""
 
-    def __init__(self, approvals: Iterable[SemanticApproval] = ()) -> None:
+    def __init__(self, approvals: Iterable[SemanticApproval] = (), *,
+                 guide_id: str = "", guide_sha256: str = "",
+                 condition_digests: Mapping[str, str] | None = None) -> None:
         self._by_id: dict[str, SemanticApproval] = {}
+        self.guide_id = str(guide_id or "")
+        self.guide_sha256 = str(guide_sha256 or "")
+        self.condition_digests = {str(key): str(value) for key, value in
+                                  (condition_digests or {}).items()}
         for approval in approvals:
             self.add(approval)
 
@@ -389,16 +574,35 @@ class ApprovalBook:
         approval_id = str(getattr(target, "approval_id", "") or "")
         if not approval_id:
             return ApprovalCheck(False, "APPROVAL_MISSING", {})
+        operations = tuple(str(key) for key in
+                           (getattr(target, "operations", ()) or ()))
+        if not operations:
+            # FL-D457: an empty operation set cannot consume any approval; the old
+            # code passed ``None`` and skipped the operation identity check.
+            return ApprovalCheck(False, "APPROVAL_OPERATION_MISSING", {})
         approval = self.get(approval_id)
         if approval is None:
             return ApprovalCheck(False, "APPROVAL_UNKNOWN", {"approval_id": approval_id})
-        operations = tuple(str(key) for key in
-                           (getattr(target, "operations", ()) or ()))
-        return approval.check(inspection, guide_id=guide_id,
-                              guide_sha256=guide_sha256,
-                              operation_keys=operations or None,
-                              scope_id=str(getattr(target, "scope_id", "") or ""),
-                              scope_revision=scope_revision)
+        rule_id = str(getattr(target, "rule_id", "") or "")
+        target_scope = str(getattr(target, "scope_id", "") or "")
+        if approval.scope_id and not target_scope:
+            # FL-D457: an approval issued inside a physical scope must not be
+            # consumed by an unscoped/rebound target.
+            return ApprovalCheck(False, "APPROVAL_SCOPE_MISMATCH",
+                                 {"expected": "(target scope missing)",
+                                  "actual": approval.scope_id})
+        return approval.check(
+            inspection,
+            guide_id=guide_id or self.guide_id,
+            guide_sha256=guide_sha256 or self.guide_sha256,
+            operation_keys=operations,
+            scope_id=str(getattr(target, "scope_id", "") or ""),
+            scope_revision=scope_revision,
+            rule_id=rule_id,
+            condition_digest=(self.condition_digests.get(rule_id, "")
+                              if rule_id else ""),
+            target=target)
+
 
     def as_dict(self) -> dict[str, Any]:
         return {"schema_version": SCHEMA_VERSION,
@@ -415,7 +619,8 @@ def approval_from_target(approval_id: str, target: Any, inspection: Any, *,
                          semantic_role: str = "",
                          assessment: AssessmentRef | None = None,
                          scope_revision: str = "",
-                         append_anchor: str = "") -> SemanticApproval:
+                         append_anchor: str = "",
+                         condition_digest: str = "") -> SemanticApproval:
     """Turn a code-verified target binding into an approved operation record.
 
     The inventory/locator claim alone is *not* trusted: the quote must exist at
@@ -446,20 +651,25 @@ def approval_from_target(approval_id: str, target: Any, inspection: Any, *,
         start = getattr(target, "start", None)
         end = getattr(target, "end", None)
         quote = str(getattr(target, "quote", "") or "")
+        occurrence = int(getattr(target, "occurrence_index", -1) or -1)
+        occurrence = max(0, occurrence)
         if start is None or end is None:
             evidence = evidence_from_span(f"{approval_id}:source", inspection,
-                                          str(target.location), quote=quote)
+                                          str(target.location), quote=quote,
+                                          occurrence_index=occurrence)
         else:
             # Pass the claimed quote as well: offsets alone would "verify" whatever
             # happens to sit at those offsets, silently blessing a stale quote.
             evidence = evidence_from_span(f"{approval_id}:source", inspection,
                                           str(target.location), quote=quote,
-                                          start=int(start), end=int(end))
+                                          start=int(start), end=int(end),
+                                          occurrence_index=occurrence)
     assessments = (assessment,) if assessment is not None else ()
     approval = SemanticApproval(
         approval_id=approval_id, guide_id=guide_id, guide_sha256=guide_sha256,
         rule_id=str(target.rule_id), operation_key=operations[0],
         evidence=(evidence,), scope_id=scope_id, scope_revision=scope_revision,
+        condition_digest=condition_digest,
         semantic_role=semantic_role or str(getattr(target, "state", "") or ""),
         append_anchor=append_anchor, assessments=assessments, state="approved")
     return approval

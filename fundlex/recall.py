@@ -6778,16 +6778,20 @@ def _plan_target_inner(rule: dict, target: Target, inspection: DocumentInspectio
         # literally.  When the model already selected this exact source sentence and
         # code verified the quote, operation identity and scope, the program deletes
         # that approved span instead of asking a model to rewrite the clause (R07).
+        # FL-D459: ``actual`` is a slice while target.start/end are absolute
+        # paragraph offsets.  Both the completeness test and the span extension
+        # must use the same full paragraph text, otherwise a retained prefix
+        # silently pushes the legal delete back to compose.
         check = approvals.allows(target, inspection)
-        if check.ok and _approved_span_is_complete_clause(actual, target):
-            start, end = _approved_delete_span(actual, int(target.start),
+        if check.ok and _approved_span_is_complete_clause(span.text, target):
+            start, end = _approved_delete_span(span.text, int(target.start),
                                                int(target.end))
             if end > start:
                 return finish(PlannedEdit(
                     target_id=target.target_id, rule_id=rule_id,
                     location=target.location, start=start, end=end, replacement="",
                     operation="replace", content_source="approved_span_delete",
-                    evidence={"deleted_quote": actual[start:end],
+                    evidence={"deleted_quote": span.text[start:end],
                               "approval_id": target.approval_id,
                               "deletion_authority": "semantic_approval"}))
     if routed_executor in {"template", "splice"}:
@@ -7988,9 +7992,13 @@ def approval_book_for(rules_by_id: Mapping[str, dict], targets: Sequence[Target]
     and guide fingerprint from the recorded targets.
     """
     from .semantic_evidence import (ApprovalBook, AssessmentRef, EvidenceError,
-                                    approval_from_target, guide_fingerprint)
+                                    approval_from_target, condition_fingerprint,
+                                    guide_fingerprint)
     guide_sha256 = guide_fingerprint([rules_by_id[key] for key in sorted(rules_by_id)])
-    book = ApprovalBook()
+    condition_digests = {rule_id: condition_fingerprint(rules_by_id[rule_id])
+                         for rule_id in rules_by_id}
+    book = ApprovalBook(guide_id="active_guide", guide_sha256=guide_sha256,
+                        condition_digests=condition_digests)
     for target in targets:
         if (target.state not in {"needs_edit", "satisfied", "absent"}
                 or not target.operations or target.attribution_error):
@@ -8006,6 +8014,7 @@ def approval_book_for(rules_by_id: Mapping[str, dict], targets: Sequence[Target]
                 approval_id, target, inspection, guide_id="active_guide",
                 guide_sha256=guide_sha256,
                 semantic_role=str(target.reason or "")[:200],
+                condition_digest=condition_digests.get(str(target.rule_id), ""),
                 assessment=AssessmentRef(
                     assessment_id=f"AS:{target.target_id}", task_type="inventory",
                     decision=str(target.state), model_role="primary"))
