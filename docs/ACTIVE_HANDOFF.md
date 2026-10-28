@@ -14,6 +14,7 @@
 - 容量/重试：`structure_index` 默认全量（85/85可达）；`compose_variant` delete重试每次attempt独立校验（二次正确不再被首次错误污染）。
 - 离线验证：全量 `1846 passed / 13 skipped`；真实原件探针 `docs/evidence/remediation-probe-20261028.json`（景宁p148+p155、弘利G17 0调用精确删除、G14绑定、85节索引、effect fail-closed），`model_calls=0`。均为离线证据，不是真实模型/生产/用户E2E验收。
 - 第二批（commit `2953a87` 及后续未提交改动）：T3 locator 消费批准（窗口内真实quote+有效批准可越过词袋，越界/伪造/过期仍拒）；候选发现可分页；事实按申购费/销售服务费分别推导；replay/residual 到40返回 truncated/remaining/next_cursor；`ensure_delete_targets` 支持 cursor/page_info 且 pipeline 循环取页；`EFFECT_SITE_UNPROVEN` 等新码归为阻断；有有效批准才允许受控 compose fallback（无批准仍 fail-closed）。
+- 第四批（commit `e9ce4f6`、`d1f966e`）：截断的残留扫描计入未完成；`facts_context` 遇超长段落改为跳过并标记，不再屏蔽后续短证据。
 - 第三批（commit `102435a`）：确定性执行器无法表达变体时，有有效批准才允许受控 compose fallback（无批准仍fail-closed）；集合枚举接受“现有/设/包括”（仍要求标签集合精确一致）；收费证据识别“实行/适用…%年费率”。
 - 未完成：S4独立语义复核/事实依赖进一步拆分；S6 `absent_coverage_by_operation` 接线与完整artifact语义复核；S8真实前端集成；S9独立标签/真实模型评测；S10发布/用户E2E。**真实模型预算阻塞**：FL-D306 记录新预算授权未解决，`p6_run.py` 需冻结protocol+authorization，当前无新cap，未开跑付费批次；不以新账本绕过。
 - 下一条动作：继续S4/S6离线实现与回归；真实模型阶段先解决预算授权；S10发布前必须完成S0基线分离与干净候选。
