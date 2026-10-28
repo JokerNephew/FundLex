@@ -1431,5 +1431,7 @@
 
 - 用户要求先停止改代码，先制定可多 agent 协作的分阶段计划。计划已保存：`docs/PERIPHERAL_REMEDIATION_PLAN_20261028.md`。
 - 已锁定的产品决定：以当前工作区 `codex/semantic-engine-remediation-20261028` 为基线，完成后再合并/推送默认分支；`incomplete` 人工审查后允许生成选择版但仍按工作文件标注；指引重新解析采用“新建 V2、V1 不可变”的方案 A；不再提供只读诊断入口；不关闭注册、不加登录限流。
-- 未完成 WIP：`fundlex/guide_store.py`、`fundlex/api.py`、`frontend/app.js`、`frontend/compare.html`、`tests/test_guide_store.py`、`tests/test_guide_api.py` 已有 P0-3 方向的部分改动；`tests/test_guide_api.py::test_guide_parse_endpoint_requeues_owner_versions_only` 仍有一条断言未更新，当前不是绿灯。补丁备份：`/tmp/opencode/fundlex-outer-remediation-wip-20261028.patch`（sha256 `90831114487dd5690e3d62e8a47f5cfa96ecb0b1751598303ccdaa2d885fd769`）。
-- 下一步：用户确认计划后，Phase 0 决定继续或丢弃 WIP，创建集成分支/worktree，再启动 Phase 1A/1B；未确认前不继续改代码、不发布。
+- 用户已批准继续，当前集成分支 `codex/outer-remediation-20261028`，已提交 P0-3 不可变指引、parse job release 预算、P0-1 工作文件标签、engine_build/service_build 拆分、部署双哈希、last-admin 保护、对象 GC、HTML 文案、CI 分支和前端轮询降频。
+- Agent C（engine build）和 Agent E（last-admin）已合并；Agent D（SQL 分页/N+1）仍在进行。当前全量测试正在干净 worktree `/home/opencode/.local/share/opencode/worktree/29a9a9/outer-integration` 运行，日志 `/tmp/opencode/outer-full-pytest.log`。
+- WIP 补丁备份仍保留：`/tmp/opencode/fundlex-outer-remediation-wip-20261028.patch`（sha256 `90831114487dd5690e3d62e8a47f5cfa96ecb0b1751598303ccdaa2d885fd769`）。
+- 下一步：合并 Agent D，解决 `tasks.py`/`api.py` 冲突；跑全量、浏览器、迁移、发布演练；未完成前不发布、不宣称交付完成。

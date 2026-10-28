@@ -5642,7 +5642,7 @@
   - `engine_build()` 当前哈希 `fundlex/**/*.py`（129 个文件，含 `api.py`）；修 API/auth 会使排队任务 `ENGINE_SCHEMA_MISMATCH`。当前修复本身也会触发该问题，必须先拆分。
   - 其他确认：分页仍全量+Python 切片+N+1；V1/V2 仍有多条 5 秒轮询；`complete_with_exceptions` 汇总已修；Database repr 已脱敏；上传 500MB 已被 multipart/ASGI guard 缓解；last-admin 无保护；生产注册开放且登录无限流（产品已接受）；HTML 仍宣称 Word 保真；selected/attempt GC 仍不完整；默认分支无 CI，当前 CI push 只覆盖 main/master。
 - 已锁定产品决定：当前工作区为基线、完成后再合并默认分支；`incomplete` 人工审查后允许生成选择版但仍按工作文件标注；重新解析采用“新建 V2、V1 不可变”的方案 A；不再提供只读诊断入口；不关闭注册、不加登录限流。
-- 处理方法（计划，未完成）：按 `docs/PERIPHERAL_REMEDIATION_PLAN_20261028.md` 分 Phase 0–4 多 agent 实施；Phase 1 先做交付状态机、指引版本/parse job、engine_build 拆分，Phase 2 做分页/轮询/last-admin/GC/文案，Phase 3 前端一致性，Phase 4 全量/迁移/发布/真实 E2E。
-- 状态与验证：**计划已保存，代码未完成、未发布**。当前存在 P0-3 未完成 WIP；`tests/test_guide_api.py::test_guide_parse_endpoint_requeues_owner_versions_only` 仍有一条断言未更新。WIP 补丁 `/tmp/opencode/fundlex-outer-remediation-wip-20261028.patch`（sha256 `90831114487dd5690e3d62e8a47f5cfa96ecb0b1751598303ccdaa2d885fd769`）。
-- 下一步：用户确认计划；Phase 0 决定 WIP 去留、创建 worktree、登记接口契约；未确认前不继续改代码、不发布。
-- 变更记录：2026-10-28 新增。
+- 处理方法：按 `docs/PERIPHERAL_REMEDIATION_PLAN_20261028.md` 分 Phase 0–4 多 agent 实施。已实施并提交：P0-3 不可变版本（`3b4afee`）、P0-1 工作文件标签与测试（`cb21d0d`）、`engine_build`/`service_build` 拆分（`766c8fa`）、部署双哈希（`5ecf23f`）、last-admin 保护（`a5abdfa`）、前端指引/管理员提示（`0179081`）、对象 GC（`cb21d0d`）、HTML 文案、CI 分支、轮询降频（`59cc317`）。Agent D 的 SQL 分页/N+1 仍在进行。
+- 状态与验证：**部分完成，未发布**。P0-3、P0-1、guidance release 预算、last-admin、engine build 拆分、GC、HTML 文案已有定向测试；全量 pytest 在干净 worktree 进行中，日志 `/tmp/opencode/outer-full-pytest.log`。当前未跑真实模型 E2E，未发布生产。
+- 下一步：合并 Agent D；全量/浏览器/迁移/发布演练；真实合同 E2E 需预登记预算；完成后更新本条目。
+- 变更记录：2026-10-28 新增；同日更新实施进度。

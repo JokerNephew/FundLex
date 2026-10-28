@@ -205,9 +205,27 @@ incomplete
 5. 真实 E2E 依赖模型预算和合同样本；预算未预登记前只做替身/回放测试，不冒充验收。
 6. 注册开放、无限流、Langfuse 原文上传均为产品已接受风险；若后续处理非公开合同，必须重新评估。
 
-## 7. 下一步
+## 7. 执行进度（2026-10-28）
 
-1. 用户确认本计划与 Phase 0 的 WIP 去留。
-2. Captain 创建集成分支/worktree，登记问题，冻结接口契约。
-3. 启动 Phase 1A（交付状态机）和 1B（指引版本）；1C/1D 紧随其后。
-4. 每个 phase 结束提交一次集成评审，不直接发布。
+当前集成分支：`codex/outer-remediation-20261028`（从当前工作区 HEAD 创建，未推送）。
+
+- Phase 0：已在隔离 worktree 继续 P0-3 WIP；WIP 补丁保留在 `/tmp/opencode/fundlex-outer-remediation-wip-20261028.patch`。
+- P0-3（方案 A）：已实现并提交 `3b4afee`。重新解析创建新版本，旧版本 id/hash 不变；旧任务快照测试通过；旧 parse job 会标记 `GUIDE_VERSION_SUPERSEDED`。
+- 指引 parse job：release 退回 attempt；连续 release 不耗尽；旧 `queued + attempts=3` 会被清理。相关测试通过。
+- P0-1：`selected_final` 人工生成保持允许；incomplete 的 ZIP/下载标签统一为工作文件；V1/V2 文案已对齐；回归测试通过。
+- 引擎兼容版本：已实现并提交 `766c8fa`；`engine_build()` 只覆盖结果相关模块，`service_build()` 覆盖全部后端；部署脚本增加 `.fundlex-service-build` 校验（`5ecf23f`）。
+- 最后一个管理员保护：已实现并提交 `a5abdfa`；API 返回 `LAST_ADMIN_REQUIRED`，V1/V2 前端有中文提示（`0179081`）。
+- 前端一致性：V2 指引详情支持配置后的新版本跳转；重新解析按钮覆盖 `parsed/released`；轮询频率下调（`59cc317`）。
+- 对象 GC：新增 `tools/maintenance/prune_orphan_objects.py`，默认 dry-run，测试 `tests/test_object_gc.py` 通过（`cb21d0d`）。
+- HTML 保真文案：已改为“结构化修订预览”，不再声称等同 Word。
+- CI：`ci.yml`/`delivery-e2e.yml` 的 push 分支加入默认分支和集成分支。
+- 已修复测试：`tests/test_tasks_api.py` 的上传限制断言、`tests/test_recall_integration.py` 的 release attempt 期望、`tests/test_feishu_oauth_api.py` 的 PNG fixture。
+- 仍在进行：Agent D 的 SQL 分页/N+1；完成后合并并跑全量、浏览器、迁移和发布演练。
+
+## 8. 下一步
+
+1. 合并 Agent D 的分页提交，解决 `fundlex/tasks.py`/`fundlex/api.py` 冲突。
+2. 在干净集成 worktree 跑全量 pytest、前端 typecheck/lint/Vitest/build、Playwright V1/V2。
+3. 用旧库快照演练 `parent_version_id` 迁移和 `queued+attempts=3` 清理。
+4. 发布演练：暂停/清空队列，确认 `engine_build`/`service_build`，再发布；不直接在生产跑真实模型批次。
+5. 真实合同 E2E 需按项目规定预登记预算；未登记前不冒充完成。
