@@ -163,6 +163,19 @@ def test_parse_job_claim_finish_retry_and_attempts_exhausted(tmp_path):
         guide_store.finish_guide_job(store, "missing-job", 1, error_code="GUIDE_PARSE_FAILED")
 
 
+def test_parsed_version_cannot_be_mutated_by_enqueue(tmp_path):
+    store = make_store(tmp_path)
+    version = guide_store.create_custom_version(store, "alice", "custom.docx", guide_docx())
+    job = guide_store.claim_guide_job(store)
+    guide_store.finish_guide_job(store, job["id"], job["fencing_token"], document=parsed_document())
+    before = guide_store.get_version(store, "alice", version["id"])
+    with pytest.raises(ValueError, match="GUIDE_REPARSE_REQUIRES_NEW_VERSION"):
+        guide_store.enqueue_parse(store, version["id"])
+    after = guide_store.get_version(store, "alice", version["id"])
+    assert after["status"] == before["status"] == "parsed"
+    assert after["rules_sha256"] == before["rules_sha256"]
+
+
 def test_recoverable_release_does_not_consume_attempt_budget(tmp_path):
     """Repeated model/network stops must not leave a queued job unclaimable."""
     store = make_store(tmp_path)
