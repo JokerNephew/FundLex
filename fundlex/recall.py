@@ -640,25 +640,28 @@ def derive_fact_statuses(*, fund_type_ok: bool, classes: Sequence[ClassFact],
     duplicate_names = len(current_names) != len(set(current_names))
     ambiguous = [item for item in classes
                  if item.current and item.subscription_fee and item.service_fee]
-    if current_ok and (ambiguous or duplicate_names):
-        # A class carrying both fee flags cannot be placed in either the subscription
-        # or the service group; the grouping facts are in conflict (P0-B).
-        fee_status = "CONFLICT"
-    elif current_ok and fee_polarities is not None and any(
-            fee_polarities.get(item.name, {}).get(key) is not None
-            and fee_polarities[item.name][key] is not getattr(item, key)
-            for item in classes if item.current for key in ("subscription_fee", "service_fee")):
-        fee_status = "CONFLICT"
-    elif current_ok and fee_polarities is not None and any(
-            fee_polarities.get(item.name, {}).get(key) is None
-            for item in classes if item.current for key in ("subscription_fee", "service_fee")):
-        fee_status = "UNKNOWN"
-    elif current_ok:
-        fee_status = "VERIFIED"
-    else:
-        fee_status = "UNKNOWN"
-    statuses["subscription_fee_group"] = fee_status
-    statuses["service_fee_group"] = fee_status
+
+    def fee_group_status(key: str) -> str:
+        """Per-fee-family status; an unknown service fee must not erase a proven
+        subscription group (FL-D440).  The two families share only the class-set
+        evidence, not each other's polarity."""
+        if not current_ok:
+            return "UNKNOWN"
+        if ambiguous or duplicate_names:
+            # A class carrying both fee flags cannot be placed in either group.
+            return "CONFLICT"
+        if fee_polarities is not None:
+            if any(fee_polarities.get(item.name, {}).get(key) is not None
+                   and fee_polarities[item.name][key] is not getattr(item, key)
+                   for item in classes if item.current):
+                return "CONFLICT"
+            if any(fee_polarities.get(item.name, {}).get(key) is None
+                   for item in classes if item.current):
+                return "UNKNOWN"
+        return "VERIFIED"
+
+    statuses["subscription_fee_group"] = fee_group_status("subscription_fee")
+    statuses["service_fee_group"] = fee_group_status("service_fee")
 
     def channel_status(names: Sequence[str], quote_ok: bool) -> str:
         if not quote_ok:
@@ -8989,7 +8992,34 @@ def _rule_scope_locations(scopes: Mapping[str, Any] | None,
 
 def ensure_delete_targets(targets: Sequence[Target], rules_by_id: dict[str, dict],
                            inspection: DocumentInspection, *, limit: int = 20,
-                           scopes: Mapping[str, Any] | None = None) -> list[Target]:
+                           scopes: Mapping[str, Any] | None = None,
+                           cursor: int = 0,
+                           page_info: dict[str, Any] | None = None) -> list[Target]:
+    """Page through residual delete candidates instead of silently stopping.
+
+    ``cursor``/``page_info`` let a caller continue past the per-call safety limit.
+    When the page is full, ``has_more``/``next_cursor`` are reported so a long
+    contract cannot lose its tail to a silent cap (FL-D441).
+    """
+    if cursor:
+        everything = _ensure_delete_targets_page(
+            targets, rules_by_id, inspection, limit=cursor + limit, scopes=scopes)
+        page = everything[cursor:]
+        has_more = len(everything) >= cursor + limit
+    else:
+        page = _ensure_delete_targets_page(
+            targets, rules_by_id, inspection, limit=limit, scopes=scopes)
+        has_more = len(page) >= limit
+    if page_info is not None:
+        page_info.update({"cursor": cursor, "returned": len(page),
+                          "has_more": has_more,
+                          "next_cursor": cursor + len(page) if has_more else None})
+    return page
+
+
+def _ensure_delete_targets_page(targets: Sequence[Target], rules_by_id: dict[str, dict],
+                                inspection: DocumentInspection, *, limit: int = 20,
+                                scopes: Mapping[str, Any] | None = None) -> list[Target]:
     """Create targets for delete-only sentences that no inventory/survey target covers.
 
     Inventory often binds only the head of a two-sentence clause; the tail then survives

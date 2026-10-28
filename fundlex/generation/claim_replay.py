@@ -1137,7 +1137,8 @@ def replay_claims(edits: Sequence[Mapping[str, Any]], before_inspection: Any,
                   targets_by_id: Mapping[str, Mapping[str, Any]] | None = None,
                   obligations: Any = None,
                   scopes: Mapping[str, Any] | None = None,
-                  absent_coverage_by_operation: Mapping[str, Mapping[str, Any]] | None = None
+                  absent_coverage_by_operation: Mapping[str, Mapping[str, Any]] | None = None,
+                  cursor: int = 0, page_size: int | None = None
                   ) -> dict:
     """Replay every edit's claim against the actual artifact paragraphs.
 
@@ -1160,8 +1161,29 @@ def replay_claims(edits: Sequence[Mapping[str, Any]], before_inspection: Any,
     ``absent_coverage_by_operation`` (``operation_id -> record``) is the caller's
     explicit site-scan coverage for a delete whose old literal is absent.  Without
     such a record a literal miss remains ``EFFECT_SITE_UNPROVEN`` rather than PASS.
+
+    ``max_failures`` is a safety batch limit for the paragraph/operation replay.
+    A capped page is never reported as verified: the result carries
+    ``truncated=True``, ``remaining``/``remaining_unknown`` and ``next_cursor``.
+    Pass ``cursor=next_cursor`` to continue, or raise ``max_failures`` for a full
+    single pass.  ``page_size`` optionally caps the number of paragraph locations
+    examined per call independently of the failure count.
     """
     from .validators import validate_edit
+    try:
+        failure_limit = max(1, int(max_failures))
+    except (TypeError, ValueError):
+        failure_limit = 40
+    try:
+        page_cursor = max(0, int(cursor or 0))
+    except (TypeError, ValueError):
+        page_cursor = 0
+    work_limit = None
+    if page_size is not None:
+        try:
+            work_limit = max(1, int(page_size))
+        except (TypeError, ValueError):
+            work_limit = None
     by_location: dict[str, list[Mapping[str, Any]]] = {}
     for edit in edits:
         by_location.setdefault(str(edit.get("location") or ""), []).append(edit)
@@ -1366,7 +1388,28 @@ def replay_claims(edits: Sequence[Mapping[str, Any]], before_inspection: Any,
             failures.append({"rule_id": "", "location": location,
                              "code": "CLAIM_UNEXPECTED_PARAGRAPH",
                              "reason": "a paragraph was added outside the authorized targets"})
-    for location, group in by_location.items():
+    location_items = sorted(by_location.items())
+    preamble_failures = list(failures)
+    failure_gate_start = len(failures)
+    if page_cursor > 0:
+        # Document-level checks were already reported by the page that started
+        # before this cursor.  Recompute them (they are cheap and deterministic)
+        # so this page still fails closed, but do not report the same findings
+        # twice or let them stall the continuation page.
+        failures = []
+        failure_gate_start = 0
+    processed_this_page = 0
+    stopped_for_failures = False
+    checked = min(page_cursor, len(location_items))
+    next_cursor = checked
+    for ordered_index, (location, group) in enumerate(location_items):
+        if ordered_index < page_cursor:
+            continue
+        if work_limit is not None and processed_this_page >= work_limit:
+            break
+        next_cursor = ordered_index + 1
+        checked = next_cursor
+        processed_this_page += 1
         rule_label = "+".join(_rule_ids(group[0])) or str(group[0].get("rule_id") or "")
         try:
             before_span = before_inspection.by_location(location)
@@ -1375,8 +1418,10 @@ def replay_claims(edits: Sequence[Mapping[str, Any]], before_inspection: Any,
             failures.append({"rule_id": rule_label, "location": location,
                              "code": "CLAIM_LOCATION_MISSING",
                              "reason": "location not found in the artifact"})
+            if len(failures) - failure_gate_start >= failure_limit:
+                stopped_for_failures = True
+                break
             continue
-        checked += 1
         before, after = before_span.text, after_span.text
         if _compact(before) == _compact(after):
             failures.append({"rule_id": rule_label, "location": location,
@@ -1614,8 +1659,25 @@ def replay_claims(edits: Sequence[Mapping[str, Any]], before_inspection: Any,
                                  "code": "CLAIM_OUTSIDE_SPAN_CHANGED",
                                  "reason": "the written paragraph differs outside "
                                            "the authorized span"})
-        if len(failures) >= max_failures:
+        if len(failures) - failure_gate_start >= failure_limit:
+            stopped_for_failures = True
             break
+    location_complete = next_cursor >= len(location_items)
+    if not location_complete:
+        return {
+            "verified": False,
+            "checked": checked,
+            "checked_this_page": processed_this_page,
+            "units_checked": units_checked,
+            "total_locations": len(location_items),
+            "operations": operation_records,
+            "obligations": {},
+            "failures": failures,
+            "truncated": True,
+            "remaining": len(location_items) - next_cursor,
+            "remaining_unknown": False,
+            "next_cursor": next_cursor,
+        }
     # Every TRUE obligation receives a site-scoped proof from the shared evaluator.
     # The integrity/authorization checks above remain mandatory and independent.
     from .effects import evaluate_operation_effect, operation_site_bound
@@ -2025,11 +2087,29 @@ def replay_claims(edits: Sequence[Mapping[str, Any]], before_inspection: Any,
                          "code": failure_code, "reason": item.get("reason") or
                          "operation effect is not proven at every verified site"})
     from .effects import effect_proof_passed
-    return {"verified": not failures and all(
-                effect_proof_passed(item) for item in obligation_state.values()),
-            "checked": checked, "units_checked": units_checked,
+    prior_failed = bool(preamble_failures) if page_cursor > 0 else False
+    truncated = bool(stopped_for_failures)
+    remaining: int | None = 0
+    remaining_unknown = False
+    if truncated:
+        # The failure batch closed at the limit.  All paragraph locations in this
+        # page were examined, but later document/obligation checks may still be
+        # unreported, so the exact remainder is not countable from this page.
+        remaining = None
+        remaining_unknown = True
+    return {"verified": (not failures and not prior_failed and not truncated
+                         and all(effect_proof_passed(item)
+                                 for item in obligation_state.values())),
+            "checked": checked,
+            "checked_this_page": processed_this_page,
+            "units_checked": units_checked,
+            "total_locations": len(location_items),
             "operations": operation_records, "obligations": obligation_state,
-            "failures": failures[:max_failures]}
+            "failures": failures,
+            "truncated": truncated,
+            "remaining": remaining,
+            "remaining_unknown": remaining_unknown,
+            "next_cursor": next_cursor if truncated else None}
 
 
 def _similar(left: str, right: str) -> bool:
@@ -2041,12 +2121,41 @@ def _similar(left: str, right: str) -> bool:
     return SequenceMatcher(None, left, right).ratio() >= 0.85
 
 
+class ResidualFindings(list):
+    """List-compatible residual findings with explicit scan metadata.
+
+    Existing callers keep using the return value as a plain list.  Pagination and
+    truncation are exposed as attributes so a capped scan can never be mistaken for
+    a clean document.
+    """
+
+    def __init__(self, items=(), *, checked: int = 0, truncated: bool = False,
+                 remaining: int | None = 0, remaining_unknown: bool = False,
+                 next_cursor: int | None = None, total_candidates: int = 0):
+        super().__init__(items)
+        self.checked = checked
+        self.truncated = truncated
+        self.remaining = remaining
+        self.remaining_unknown = remaining_unknown
+        self.next_cursor = next_cursor
+        self.total_candidates = total_candidates
+
+    def to_dict(self) -> dict[str, Any]:
+        return {"failures": list(self), "checked": self.checked,
+                "truncated": self.truncated, "remaining": self.remaining,
+                "remaining_unknown": self.remaining_unknown,
+                "next_cursor": self.next_cursor,
+                "total_candidates": self.total_candidates}
+
+
 def check_delete_residuals(rules_by_id: Mapping[str, dict], after_inspection: Any,
                            edits: Sequence[Mapping[str, Any]] | None = None,
                            max_failures: int = 40, *, original: Any = None,
                            targets: Sequence[Mapping[str, Any]] = (), facts: Any = None,
                            obligations: Any = None,
-                           scopes: Mapping[str, Any] | None = None) -> list[dict[str, Any]]:
+                           scopes: Mapping[str, Any] | None = None,
+                           cursor: int = 0,
+                           page_size: int | None = None) -> list[dict[str, Any]]:
     """Probe verified operation sites first, then classify full-document candidates.
 
     A literal match elsewhere is only a candidate. It becomes a blocking residual
@@ -2057,10 +2166,23 @@ def check_delete_residuals(rules_by_id: Mapping[str, dict], after_inspection: An
     copy outside the scope is never a residual, and an unresolved/empty scope skips
     the rule instead of falling back to the whole document.  ``None`` preserves the
     historical document-wide behaviour.
+
+    The whole deterministic scan still runs; ``max_failures``/``page_size`` only
+    bound how many residual findings are returned.  The list subclass carries
+    ``truncated``, ``remaining`` and ``next_cursor``; reaching the cap is never a
+    clean result.  Pass ``cursor=next_cursor`` to read the next batch.
     """
     from ..recall import target_site_ok, resolve_quote, condition_status
     from .effects import operation_site_bound
     from types import SimpleNamespace
+    try:
+        output_limit = max(1, int(page_size if page_size is not None else max_failures))
+    except (TypeError, ValueError):
+        output_limit = 40
+    try:
+        start_cursor = max(0, int(cursor or 0))
+    except (TypeError, ValueError):
+        start_cursor = 0
     spans = list(getattr(after_inspection, "paragraphs", ()))
     source = original or after_inspection
     source_spans = list(getattr(source, "paragraphs", ()))
@@ -2068,6 +2190,15 @@ def check_delete_residuals(rules_by_id: Mapping[str, dict], after_inspection: An
     failures: list[dict[str, Any]] = []
     seen: set[tuple[str, str, str]] = set()
     edits = list(edits or [])
+    matched = 0
+    scanned_operations = 0
+
+    def emit(finding: dict[str, Any]) -> None:
+        nonlocal matched
+        matched += 1
+        if start_cursor <= matched - 1 < start_cursor + output_limit:
+            failures.append(finding)
+
     for rule_id, rule in rules_by_id.items():
         scope = _scope_for_rule(scopes, rule_id)
         if scope is not None and not _scope_usable(scope):
@@ -2084,6 +2215,7 @@ def check_delete_residuals(rules_by_id: Mapping[str, dict], after_inspection: An
         for index, operation in enumerate(operations):
             if operation.get("op") != "delete":
                 continue
+            scanned_operations += 1
             if facts is not None and condition_status(operation.get("condition"), facts) != "TRUE":
                 continue
             operation_id = _operation_key(rule, index, operation)
@@ -2185,12 +2317,18 @@ def check_delete_residuals(rules_by_id: Mapping[str, dict], after_inspection: An
                     if authorized or identity in seen:
                         continue
                     seen.add(identity)
-                    failures.append({"rule_id": rule_id, "operation_id": operation_id,
+                    emit({"rule_id": rule_id, "operation_id": operation_id,
                         "obligation_id": record.obligation_id if record is not None else "",
                         "location": location, "code": "RESIDUAL_OLD_TEXT",
                         "proof_kind": "RESIDUAL_CONFIRMED", "scan": "known_site" if location in known else "semantic_site",
                         "reason": "exact old effect survives at this operation's business site",
                         "quote": str(span.text)[located[0]:located[1]]})
-                    if len(failures) >= max_failures:
-                        return failures
-    return failures
+    emitted = len(failures)
+    total_matched = matched
+    truncated = total_matched > start_cursor + emitted
+    remaining = max(0, total_matched - (start_cursor + emitted))
+    return ResidualFindings(
+        failures, checked=scanned_operations, truncated=truncated,
+        remaining=remaining, remaining_unknown=False,
+        next_cursor=(start_cursor + emitted) if truncated else None,
+        total_candidates=total_matched)

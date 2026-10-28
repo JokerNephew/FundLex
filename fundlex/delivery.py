@@ -7,7 +7,7 @@ obligation ledger, both fail-closed.
 """
 from __future__ import annotations
 
-from typing import Any, Mapping
+from typing import Any, Mapping, Sequence
 
 COMPLETE = "complete"
 COMPLETE_WITH_NOTICES = "complete_with_notices"
@@ -54,6 +54,9 @@ _FAILURE_REASONS = (
     ("RULESET_HASH_MISMATCH", "任务规则版本与当前规则不一致"),
     ("GUIDE_RULESET_HASH_MISMATCH", "指引与规则版本不一致"),
     ("RESIDUAL_OLD_TEXT", "修改后原条款仍然存在，未达到删除/替换效果"),
+    ("EFFECT_SITE_UNPROVEN", "未能证明修改在最终文档中落到对应条款位置，该条款未完成"),
+    ("CLAIM_EXECUTION_EFFECT_MISSING", "该条款的修改效果未在最终文档中体现"),
+    ("CLAIM_PLANNED_EFFECT_MISSING", "修改计划要求的效果未在最终文档中体现"),
     ("CLAIM_OPERATION_NOT_PLANNED", "该条款未进入修改计划"),
     ("CLAIM_OPERATION_UNPROVEN", "该条款的修改未能在最终文档中证明"),
     ("CLAIM_NO_CHANGE_APPLIED", "该条款的修改没有实际写入文档"),
@@ -92,6 +95,128 @@ _COVERAGE_SUCCESS_STATES = {
     "SATISFIED", "ARTIFACT_VERIFIED", "ALREADY_SATISFIED", "NOT_APPLICABLE",
 }
 
+# Codes that prove the artifact/delivery is incomplete even under review_assisted.
+# New engine codes must never fall through to "complete with review items" merely
+# because an older classifier did not know them.
+_ALWAYS_BLOCKING_CODES = frozenset({
+    "EFFECT_SITE_UNPROVEN",
+    "CLAIM_OPERATION_UNPROVEN",
+    "CLAIM_OPERATION_NOT_PLANNED",
+    "CLAIM_EXECUTION_EFFECT_MISSING",
+    "CLAIM_PLANNED_EFFECT_MISSING",
+    "CLAIM_NO_CHANGE_APPLIED",
+    "CLAIM_LOCATION_MISSING",
+    "CLAIM_REPLACEMENT_MISSING",
+    "CLAIM_VALIDATION_FAILED",
+    "CLAIM_VALIDATION_UNKNOWN",
+    "CLAIM_VALIDATION_CONFLICT",
+    "RESIDUAL_OLD_TEXT",
+    "FINAL_OPERATION_UNPROVEN",
+    "FINAL_RESIDUAL_OLD_TEXT",
+})
+_ALWAYS_BLOCKING_PREFIXES = (
+    "CLAIM_", "EFFECT_", "RESIDUAL_", "MODEL_", "DOCUMENT_", "OUTPUT_",
+    "REPORT_", "FROZEN_", "PROCESSING_", "INPUT_", "EXISTING_REVISION",
+    "RECALL_EDIT_OVERLAP", "FINAL_OPERATION", "FINAL_RESIDUAL", "GUIDE_",
+    "RULESET_", "GUIDE_RULESET",
+)
+_KNOWN_ITEM_PREFIXES = (
+    "OPEN_OBLIGATION", "APPLICABILITY", "RECALL_FACT", "FUND_TYPE",
+    "FACT_PREREQUISITE", "AUDIT_", "SWEEP_", "SURVEY_", "COVERAGE_", "TARGET_",
+    "COMPOSE", "OVERLAP", "VALIDATION", "LEDGER_EVIDENCE_UNBOUND",
+    "FINAL_MODEL_SWEEP_FINDING", "FINAL_COVERAGE_UNRESOLVED", "VERIFICATION_",
+    "QUALIFICATION_", "RECALL_QUOTE_UNRESOLVED", "RECALL_TARGET_",
+)
+
+
+def _item_code(item: Mapping[str, Any]) -> str:
+    return str(item.get("code") or "")
+
+
+def _is_always_blocking(code: str) -> bool:
+    value = str(code or "").upper()
+    if not value:
+        return False
+    return (value in _ALWAYS_BLOCKING_CODES
+            or value.startswith(_ALWAYS_BLOCKING_PREFIXES))
+
+
+def _is_known_item_code(code: str) -> bool:
+    value = str(code or "").upper()
+    if not value:
+        return True
+    if any(value.startswith(prefix) for prefix in _KNOWN_ITEM_PREFIXES):
+        return True
+    return bool(failure_reason(value))
+
+
+def _requires_blocker(item: Any) -> bool:
+    """Whether one reported item must keep the delivery incomplete.
+
+    A claim/effect/residual code is always blocking.  A code outside every known
+    taxonomy is also blocking: silently treating a future code as a review note is
+    the failure mode R13/R14 close here.  Generic kind-only rows keep the existing
+    pipeline bucket, except Claim Replay rows.
+    """
+    if not isinstance(item, Mapping):
+        return False
+    if str(item.get("kind") or "").strip().lower() == "claim_replay":
+        return True
+    code = _item_code(item)
+    if not code:
+        return False
+    if _is_always_blocking(code):
+        return True
+    return not _is_known_item_code(code)
+
+
+def _blocker_key(item: Mapping[str, Any]) -> tuple[str, str, str, str]:
+    return (str(item.get("rule_id") or ""), str(item.get("location") or ""),
+            _item_code(item), str(item.get("obligation_id") or ""))
+
+
+def _with_fail_closed_blockers(report: Mapping[str, Any],
+                               blockers: Sequence[Any],
+                               review_items: Sequence[Any],
+                               business_items: Sequence[Any]
+                               ) -> tuple[list[Any], list[Any], list[Any]]:
+    """Move proof failures/unknown codes out of review or business buckets."""
+    kept_blockers: list[Any] = []
+    kept_review: list[Any] = []
+    kept_business: list[Any] = []
+    seen: set[tuple[str, str, str, str]] = set()
+
+    def add_blocker(item: Any) -> None:
+        if not isinstance(item, Mapping):
+            return
+        key = _blocker_key(item)
+        if key in seen:
+            return
+        seen.add(key)
+        kept_blockers.append(item)
+
+    for item in blockers:
+        if isinstance(item, Mapping):
+            add_blocker(item)
+        else:
+            kept_blockers.append(item)
+    for item in review_items:
+        if _requires_blocker(item):
+            add_blocker(item)
+        else:
+            kept_review.append(item)
+    for item in business_items:
+        if _requires_blocker(item):
+            add_blocker(item)
+        else:
+            kept_business.append(item)
+    # Even when a report supplies pre-classified buckets, an explicit unresolved
+    # Claim/Effect failure must not stay hidden in a review list.
+    for item in report.get("unresolved") or []:
+        if _requires_blocker(item):
+            add_blocker(item)
+    return kept_blockers, kept_review, kept_business
+
 
 def _completion_blockers(report: Mapping[str, Any]) -> list[str]:
     """Return proof inconsistencies that must keep a delivery partial.
@@ -123,6 +248,19 @@ def _completion_blockers(report: Mapping[str, Any]) -> list[str]:
         from .generation.effects import effect_proof_passed
         if replay.get("verified") is False:
             blockers.append("claim_replay_failed")
+        if replay.get("truncated") is True:
+            # A capped batch is not a clean result even if every checked item passed.
+            blockers.append("claim_replay_truncated")
+        if replay.get("remaining_unknown") is True:
+            blockers.append("claim_replay_remaining_unknown")
+        replay_failures = replay.get("failures") or ()
+        if isinstance(replay_failures, (list, tuple)) and replay_failures:
+            # ``verified=False`` should already be present, but old/hand-written
+            # reports may disagree.  Any recorded failure keeps delivery incomplete.
+            blockers.append("claim_replay_failures")
+            if any(not isinstance(item, Mapping)
+                   or _requires_blocker(item) for item in replay_failures):
+                blockers.append("claim_replay_unclassified_failure")
         replay_records = replay.get("obligations") or {}
         if isinstance(replay_records, Mapping) and any(
                 not effect_proof_passed(
@@ -218,6 +356,7 @@ def _issues(report: Mapping[str, Any]) -> list[dict[str, Any]]:
                            f"请到“{section or title or '对应章节'}”按指引要求人工核对。")
         issues.append({
             "rule_id": rule_id,
+            "code": str(item.get("code") or item.get("kind") or ""),
             "title": title or "未能自动修改的条款",
             "section": section,
             "location": location,
@@ -260,10 +399,14 @@ def build_user_summary(report: Mapping[str, Any]) -> dict[str, Any]:
     policy = str(report.get("delivery_policy") or "strict")
     if policy == "review_assisted":
         # The report already split unresolved into blockers / review / business.
-        # Only the blocker bucket may keep a delivery partial.
+        # Only the blocker bucket may keep a delivery partial.  Re-apply the
+        # fail-closed gate here: an older report may put a Claim/Effect failure or
+        # an unknown future code in the review bucket.
         blockers = list(report.get("delivery_blockers") or [])
         review_items = list(report.get("review_items") or [])
         business_items = list(report.get("business_pending") or [])
+        blockers, review_items, business_items = _with_fail_closed_blockers(
+            report, blockers, review_items, business_items)
     else:
         blockers = _completion_blockers(report)
         review_items = []
@@ -289,9 +432,25 @@ def build_user_summary(report: Mapping[str, Any]) -> dict[str, Any]:
                     "issues": [], "notices": notices}
         return {"status": COMPLETE, "headline": "修改完成", "issues": [], "notices": []}
     if status == "complete" and blockers and not issues:
-        issues = [{"rule_id": "", "title": "交付证明未收敛", "section": "",
-                   "location": "", "obligation_id": "",
-                   "business_reason": "交付证明仍包含未解决的操作或站点",
+        first_blocker = next((item for item in blockers
+                              if isinstance(item, Mapping)), None)
+        if first_blocker is None:
+            replay = (report.get("artifact_claim_replay")
+                      or report.get("claim_replay"))
+            if isinstance(replay, Mapping):
+                first_blocker = next(
+                    (item for item in replay.get("failures") or ()
+                     if isinstance(item, Mapping) and _requires_blocker(item)),
+                    None)
+        first_blocker = first_blocker or {}
+        blocker_code = _item_code(first_blocker)
+        issues = [{"rule_id": str(first_blocker.get("rule_id") or ""),
+                   "code": blocker_code, "title": "交付证明未收敛", "section": "",
+                   "location": str(first_blocker.get("location") or ""),
+                   "obligation_id": str(first_blocker.get("obligation_id") or ""),
+                   "business_reason": (failure_reason(blocker_code)
+                                       or str(first_blocker.get("reason") or "")
+                                       or "交付证明仍包含未解决的操作或站点"),
                    "requirement": "", "quote": "", "quote_exact_site": False,
                    "review_note": "请重新复核操作、站点和最终文档证明。"}]
     if status == "not_generated":

@@ -11,6 +11,17 @@ def test_complete_without_notices():
     assert summary["headline"] == "修改完成"
 
 
+def test_checkpoint_gap_is_visible_as_verification_blocked():
+    summary = build_user_summary({
+        "delivery_status": "not_generated", "unresolved": [],
+        "verification_status": "verification_blocked",
+        "verification_blockers": [{"code": "MODEL_REPLAY_MISS", "stage": "audit"}],
+    })
+    assert summary["status"] == "verification_blocked"
+    assert summary["headline"] == "验证暂未完成，等待恢复处理"
+    assert summary["verification_blockers"][0]["stage"] == "audit"
+
+
 def test_complete_with_business_notice_is_still_a_success():
     summary = build_user_summary({
         "delivery_status": "complete", "unresolved": [],
@@ -146,3 +157,110 @@ def test_unrecognized_coverage_state_blocks_success():
         }]},
     })
     assert summary["status"] == PARTIAL
+
+
+def test_review_assisted_summary_is_complete_with_review_items():
+    """Review-assisted delivery reports success plus an explicit review list."""
+    summary = build_user_summary({
+        "delivery_status": "complete", "delivery_policy": "review_assisted",
+        "delivery_blockers": [],
+        "review_items": [{"rule_id": "G16", "code": "OPEN_OBLIGATION"}],
+        "business_pending": [],
+        "unresolved": [{"rule_id": "G16", "code": "OPEN_OBLIGATION"}],
+    })
+    assert summary["status"] == COMPLETE_WITH_NOTICES
+    assert "人工复核" in summary["headline"]
+
+
+def test_review_assisted_summary_still_partial_on_blocker():
+    summary = build_user_summary({
+        "delivery_status": "complete", "delivery_policy": "review_assisted",
+        "delivery_blockers": [{"rule_id": "G17", "code": "RESIDUAL_OLD_TEXT"}],
+        "review_items": [], "business_pending": [],
+        "unresolved": [{"rule_id": "G17", "code": "RESIDUAL_OLD_TEXT"}],
+    })
+    assert summary["status"] == PARTIAL
+
+
+def test_failure_reason_covers_engine_codes():
+    from fundlex.delivery import failure_reason
+
+    assert "修订" in failure_reason("EXISTING_REVISION_UNSUPPORTED")
+    assert "不可编辑" in failure_reason("RECALL_TARGET_STRUCTURE")
+    assert "重叠" in failure_reason("RECALL_EDIT_OVERLAP")
+    assert "模型" in failure_reason("MODEL_RETRY_EXHAUSTED")
+    assert "未完成" in failure_reason("EFFECT_SITE_UNPROVEN")
+    assert "未能" in failure_reason("CLAIM_OPERATION_UNPROVEN")
+    assert failure_reason("SOME_UNKNOWN_CODE") == ""
+
+
+def test_effect_site_unproven_in_claim_replay_blocks_complete():
+    summary = build_user_summary({
+        "delivery_status": "complete", "unresolved": [],
+        "artifact_claim_replay": {
+            "verified": True, "truncated": False,
+            "failures": [{"rule_id": "G16", "location": "p809",
+                          "code": "EFFECT_SITE_UNPROVEN"}],
+        },
+    })
+    assert summary["status"] == PARTIAL
+    assert summary["issues"][0]["code"] == "EFFECT_SITE_UNPROVEN"
+    assert "未完成" in summary["issues"][0]["business_reason"]
+
+
+def test_truncated_claim_replay_cannot_render_as_complete():
+    summary = build_user_summary({
+        "delivery_status": "complete", "unresolved": [],
+        "artifact_claim_replay": {"verified": True, "truncated": True,
+                                  "remaining": 5},
+    })
+    assert summary["status"] == PARTIAL
+
+
+def test_claim_operation_unproven_is_never_a_success():
+    summary = build_user_summary({
+        "delivery_status": "complete",
+        "unresolved": [{"kind": "claim_replay", "rule_id": "G08",
+                        "location": "p227", "code": "CLAIM_OPERATION_UNPROVEN"}],
+    })
+    assert summary["status"] == PARTIAL
+    assert summary["issues"][0]["code"] == "CLAIM_OPERATION_UNPROVEN"
+    assert "未能" in summary["issues"][0]["business_reason"]
+
+
+def test_review_assisted_effect_site_unproven_moves_to_blockers():
+    summary = build_user_summary({
+        "delivery_status": "complete", "delivery_policy": "review_assisted",
+        "delivery_blockers": [],
+        "review_items": [{"rule_id": "G16", "location": "p809",
+                          "code": "EFFECT_SITE_UNPROVEN"}],
+        "business_pending": [],
+        "unresolved": [{"rule_id": "G16", "location": "p809",
+                        "code": "EFFECT_SITE_UNPROVEN"}],
+    })
+    assert summary["status"] == PARTIAL
+    assert summary["issues"][0]["code"] == "EFFECT_SITE_UNPROVEN"
+
+
+def test_review_assisted_unknown_failure_code_is_fail_closed():
+    summary = build_user_summary({
+        "delivery_status": "complete", "delivery_policy": "review_assisted",
+        "delivery_blockers": [],
+        "review_items": [{"rule_id": "G99", "location": "p1",
+                          "code": "FUTURE_UNPROVEN_EFFECT"}],
+        "business_pending": [],
+        "unresolved": [{"rule_id": "G99", "location": "p1",
+                        "code": "FUTURE_UNPROVEN_EFFECT"}],
+    })
+    assert summary["status"] == PARTIAL
+    assert summary["issues"][0]["code"] == "FUTURE_UNPROVEN_EFFECT"
+
+
+
+def test_user_summary_not_generated_reports_revision_reason():
+    summary = build_user_summary({
+        "delivery_status": "not_generated",
+        "errors": [{"code": "EXISTING_REVISION_UNSUPPORTED"}],
+    })
+    assert summary["status"] == PARTIAL
+    assert "修订" in summary["headline"]

@@ -4301,11 +4301,25 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
         from .recall import assign_target_operations, ensure_delete_targets
         if os.environ.get("FUNDLEX_DELETE_RESIDUAL_TARGETS", "1").strip().lower() in {
                 "1", "true", "on", "yes"}:
-            for target in ensure_delete_targets(targets, rules_by_id, inspection,
-                                                scopes=scopes):
-                synthetic.append(target)
-                targets.append(target)
-                origins[target.target_id] = "delete_residual_copy"
+            # Page through residual delete candidates so a long contract cannot
+            # lose its tail to the per-call safety limit (FL-D441).
+            cursor = 0
+            for _page in range(10):
+                info: dict[str, Any] = {}
+                page = ensure_delete_targets(targets, rules_by_id, inspection,
+                                             scopes=scopes, cursor=cursor,
+                                             page_info=info)
+                for target in page:
+                    synthetic.append(target)
+                    targets.append(target)
+                    origins[target.target_id] = "delete_residual_copy"
+                if not info.get("has_more"):
+                    break
+                cursor = int(info.get("next_cursor") or 0)
+            else:
+                coverage_gaps.append({"pass": "delete_targets",
+                                      "limit_reached": "delete_targets_pages",
+                                      "cursor": cursor})
         if frozen_run is not None:
             frozen_run.boundary("targets", {"facts": facts.as_ledger(),
                 "targets": [target.as_dict() for target in targets]})
@@ -4419,8 +4433,10 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
                 [copy], rules_by_id, inspection, facts, obligation_ledger))
         if late_copies:
             ensure_unique_target_ids(targets, origins)
-        locator_records = locate_unresolved_targets(targets, inspection, rules_by_id,
-                                                    facts, model, scopes=scopes)
+        from .recall import approval_book_for
+        locator_records = locate_unresolved_targets(
+            targets, inspection, rules_by_id, facts, model, scopes=scopes,
+            approvals=approval_book_for(rules_by_id, targets, inspection))
         for target in targets:
             origins.setdefault(target.target_id, "T3_open_rule")
         if locator_records:
@@ -4656,9 +4672,13 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
                 if duplicates:
                     report.setdefault("duplicate_targets", []).extend(duplicates)
                 if needs_discovery:
+                    from .recall import approval_book_for
                     report.setdefault("target_locator", []).extend(
-                        locate_unresolved_targets(targets, inspection, rules_by_id, facts,
-                                                  model, scopes=scopes))
+                        locate_unresolved_targets(
+                            targets, inspection, rules_by_id, facts, model,
+                            scopes=scopes,
+                            approvals=approval_book_for(rules_by_id, targets,
+                                                        inspection)))
                 for target in targets:
                     origins.setdefault(target.target_id, "T3_open_rule")
                 planned, edits, plan, artifacts, actual = _plan_and_generate(
@@ -5041,10 +5061,13 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
                                             [copy], rules_by_id, inspection, facts,
                                             obligation_ledger))
                                 from .targeting import locate_unresolved_targets
+                                from .recall import approval_book_for
                                 report.setdefault("target_locator", []).extend(
                                     locate_unresolved_targets(
                                         [repair_target], inspection, rules_by_id, facts,
-                                        model, scopes=scopes))
+                                        model, scopes=scopes,
+                                        approvals=approval_book_for(
+                                            rules_by_id, [repair_target], inspection)))
                                 operation_added = True
                         if not operation_added:
                             recovery.record(
@@ -5356,10 +5379,15 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
                     targets, rules_by_id, inspection)
                 if duplicates:
                     report.setdefault("duplicate_targets", []).extend(duplicates)
+                from .recall import approval_book_for
+                locator_targets = [target for target in dirty_targets
+                                   if (target.rule_id, target.location) in target_sites]
                 report.setdefault("target_locator", []).extend(
-                    locate_unresolved_targets([target for target in dirty_targets
-                        if (target.rule_id, target.location) in target_sites],
-                        inspection, rules_by_id, facts, model, scopes=scopes))
+                    locate_unresolved_targets(
+                        locator_targets, inspection, rules_by_id, facts, model,
+                        scopes=scopes,
+                        approvals=approval_book_for(rules_by_id, locator_targets,
+                                                    inspection)))
                 for target in targets:
                     origins.setdefault(target.target_id, "T3_open_rule")
                 before_repair_signature = _artifact_text_signature(actual)

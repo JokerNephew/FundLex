@@ -10,7 +10,52 @@ from __future__ import annotations
 import json
 import os
 import re
-from typing import Any, Mapping, Sequence
+from typing import TYPE_CHECKING, Any, Mapping, Sequence
+
+if TYPE_CHECKING:  # pragma: no cover - typing only, avoids an import cycle at runtime
+    from .semantic_evidence import ApprovalBook
+
+#: Historical hard cap on one locator candidate page.  Callers may raise it, but the
+#: default stays small so a bounded model prompt cannot silently grow.
+DEFAULT_CANDIDATE_LIMIT = 12
+
+
+class CandidatePage(list):
+    """A list of candidate locations that also reports paging state.
+
+    ``list`` is subclassed on purpose: ``_open_rule_candidates`` and
+    ``_open_operation_candidates`` historically returned ``list[str]`` and several
+    callers/tests still slice, index and compare them.  The extra attributes describe
+    the *whole* candidate set before the requested page was cut, so a caller can raise
+    ``limit`` or continue with ``next_cursor`` without guessing whether work remains.
+    """
+
+    def __init__(self, locations: Sequence[str] = (), *, cursor: int = 0,
+                 total: int = 0, has_more: bool = False) -> None:
+        super().__init__(locations)
+        self.cursor = int(cursor)
+        self.total = int(total)
+        self.has_more = bool(has_more)
+
+    @property
+    def remaining(self) -> int:
+        """Candidates after this page, measured against the full candidate set."""
+        return max(0, self.total - self.cursor - len(self))
+
+    @property
+    def next_cursor(self) -> int | None:
+        return self.cursor + len(self) if self.has_more else None
+
+
+def _candidate_page(locations: Sequence[str], *, limit: int = DEFAULT_CANDIDATE_LIMIT,
+                    cursor: int = 0) -> CandidatePage:
+    """Cut one stable page from a fully ordered candidate list."""
+    start = max(0, int(cursor or 0))
+    size = max(1, int(limit or DEFAULT_CANDIDATE_LIMIT))
+    total = len(locations)
+    page = list(locations[start:start + size])
+    return CandidatePage(page, cursor=start, total=total,
+                         has_more=start + len(page) < total)
 
 LOCATE_SCHEMA = {
     "type": "object",
@@ -42,7 +87,9 @@ def _enabled() -> bool:
 
 def _candidate_context(inspection: Any, target: Any, rule: dict, facts: Any,
                        *, limit: int, radius: int = 6,
-                       allowed_scope: set[str] | None = None) -> tuple[str, set[str]]:
+                       allowed_scope: set[str] | None = None,
+                       candidate_limit: int = DEFAULT_CANDIDATE_LIMIT
+                       ) -> tuple[str, set[str]]:
     from .recall import display_text, rule_context
 
     scope_filter = (lambda location: str(location) in allowed_scope) \
@@ -53,8 +100,10 @@ def _candidate_context(inspection: Any, target: Any, rule: dict, facts: Any,
     lines: list[str] = []
     if candidates:
         # Open-obligation recovery: code already narrowed the region to anchored
-        # paragraphs; the model may not look anywhere else.
-        for location in candidates[:12]:
+        # paragraphs; the model may not look anywhere else.  The page size is a
+        # parameter (default 12) so callers that generated more candidates can let
+        # the model see them instead of silently dropping the tail.
+        for location in candidates[:max(1, int(candidate_limit or DEFAULT_CANDIDATE_LIMIT))]:
             try:
                 span = inspection.by_location(location)
             except Exception:  # noqa: BLE001 - a vanished candidate is not fatal
@@ -96,7 +145,9 @@ def _candidate_context(inspection: Any, target: Any, rule: dict, facts: Any,
 def _open_operation_candidates(
         inspection: Any, rule: dict, record: Any, section_ids: Sequence[str],
         section_by_id: dict[str, Any], facts: Any,
-        existing_targets: Sequence[Any] = ()) -> list[str]:
+        existing_targets: Sequence[Any] = (), *,
+        limit: int = DEFAULT_CANDIDATE_LIMIT,
+        cursor: int = 0) -> CandidatePage:
     """Operation-specific candidate discovery, strongest evidence first.
 
     P1 same-rule sibling site, P2 exact operation old_text, P3 variant/reference
@@ -257,12 +308,14 @@ def _open_operation_candidates(
     if append_site:
         strong = [location for location in ordered if scores.get(location, 0) >= 3]
         if strong:
-            return sorted(strong, key=sort_key)[:12]
-    return sorted(ordered, key=sort_key)[:12]
+            return _candidate_page(sorted(strong, key=sort_key), limit=limit, cursor=cursor)
+    return _candidate_page(sorted(ordered, key=sort_key), limit=limit, cursor=cursor)
 
 
 def _open_rule_candidates(inspection: Any, rule: dict, section_ids: Sequence[str],
-                          section_by_id: dict[str, Any], facts: Any) -> list[str]:
+                          section_by_id: dict[str, Any], facts: Any, *,
+                          limit: int = DEFAULT_CANDIDATE_LIMIT,
+                          cursor: int = 0) -> CandidatePage:
     """Deterministic source search for an applicable rule that has no target.
 
     The candidate region is code-produced from the scope-mapped sections plus the rule's
@@ -320,18 +373,21 @@ def _open_rule_candidates(inspection: Any, rule: dict, section_ids: Sequence[str
                 continue
             if location not in found:
                 found.append(location)
-            if len(found) >= 12:
-                return found
-    return found
+    return _candidate_page(found, limit=limit, cursor=cursor)
 
 
 def _open_rule_quote_ok(rule: dict, facts: Any, paragraph_text: str, quote: str,
                         span: Any = None, inspection: Any = None) -> tuple[bool, str]:
-    """Code verification of the locator's quote for an open obligation.
+    """Fast-path verification of the locator's quote for an open obligation.
 
     The quote itself must carry the rule's own wording (class token / delete keyword bag
     / reference fragment), not just appear somewhere in an anchored paragraph.  A bare
     topic token such as ``销售服务费`` is not a locatable edit site.
+
+    This is deliberately *not* the only final semantic judge (R03): when the target
+    carries a code-verified approval, :func:`locate_unresolved_targets` may accept an
+    exact quote inside the authorized candidate window even though this word-bag check
+    misses.  Without an approval the historical gate still applies unchanged.
     """
     from .recall import (_RULE_TOPIC_TOKENS, _compact, _delete_keyword_bag,
                          _keyword_bag_in_clause, condition_status, target_site_ok)
@@ -396,9 +452,36 @@ def _open_rule_quote_ok(rule: dict, facts: Any, paragraph_text: str, quote: str,
     return True, ""
 
 
+def _approval_allows_locator(target: Any, inspection: Any, approvals: Any,
+                             location: str) -> tuple[bool, str]:
+    """Whether a valid approval authorizes this exact candidate location.
+
+    This is the second, semantic acceptance path for R03.  The quote itself has
+    already been re-resolved against the real paragraph and the location has already
+    passed the code-generated candidate window; an approval may therefore replace the
+    locator's own word-bag/category fast path.  It never widens the window: an
+    approval is accepted only for a location the target itself lists as a candidate.
+    """
+    if approvals is None:
+        return False, "APPROVAL_MISSING"
+    if not str(getattr(target, "approval_id", "") or ""):
+        return False, "APPROVAL_MISSING"
+    candidates = tuple(str(item) for item in
+                       (getattr(target, "site_candidates", ()) or ()))
+    if candidates and str(location) not in candidates:
+        return False, "APPROVAL_LOCATION_OUTSIDE_CANDIDATES"
+    try:
+        check = approvals.allows(target, inspection)
+    except Exception as exc:  # noqa: BLE001 - a broken approval never authorizes an edit
+        return False, f"APPROVAL_CHECK_ERROR:{type(exc).__name__}"
+    return (True, "") if check.ok else (False, str(check.code or "APPROVAL_REJECTED"))
+
+
 def locate_unresolved_targets(targets: Sequence[Any], inspection: Any,
                               rules_by_id: dict[str, dict], facts: Any, gateway: Any,
-                              *, scopes: Mapping[str, Any] | None = None
+                              *, scopes: Mapping[str, Any] | None = None,
+                              approvals: "ApprovalBook | None" = None,
+                              candidate_limit: int = DEFAULT_CANDIDATE_LIMIT
                               ) -> list[dict[str, Any]]:
     """Try the model locator for every still-unresolved target; record every attempt."""
     if not _enabled():
@@ -422,7 +505,7 @@ def locate_unresolved_targets(targets: Sequence[Any], inspection: Any,
             continue
         context, allowed_locations = _candidate_context(
             inspection, target, rule, facts, limit=gateway.max_context_chars,
-            allowed_scope=allowed_scope)
+            allowed_scope=allowed_scope, candidate_limit=candidate_limit)
         record = {"target_id": target.target_id, "rule_id": target.rule_id}
         try:
             result = gateway.call(task_type="recall_locate", bounded_context=context,
@@ -486,10 +569,24 @@ def locate_unresolved_targets(targets: Sequence[Any], inspection: Any,
             anchor_ok, anchor_reason = _open_rule_quote_ok(
                 rule, facts, span.text, quote, span=span, inspection=inspection)
             if not anchor_ok:
-                record["status"] = "rejected"
-                record["reject_reason"] = f"anchor_mismatch:{anchor_reason}"
-                records.append(record)
-                continue
+                # R03: the word-bag/category check is a candidate fast path, not the
+                # only semantic judge.  A valid, code-verified approval for this
+                # target/operation may accept an exact quote that really exists in an
+                # authorized candidate paragraph.  The window, quote existence,
+                # uniqueness and approval state/hash checks above still fail closed.
+                approved, approval_reason = (False, "APPROVAL_MISSING")
+                if anchor_reason != "quote_too_short":
+                    approved, approval_reason = _approval_allows_locator(
+                        target, inspection, approvals, location)
+                if not approved:
+                    if approvals is not None and getattr(target, "approval_id", ""):
+                        record["approval_check"] = approval_reason
+                    record["status"] = "rejected"
+                    record["reject_reason"] = f"anchor_mismatch:{anchor_reason}"
+                    records.append(record)
+                    continue
+                record["anchor_bypassed"] = f"anchor_mismatch:{anchor_reason}"
+                record["approval_id"] = str(getattr(target, "approval_id", "") or "")
         target.location = location
         target.start, target.end = start, end
         target.quote = quote
