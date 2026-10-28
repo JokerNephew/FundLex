@@ -1127,8 +1127,9 @@ def create_app(data_dir: str | Path | None = None, *, auth_db=None) -> FastAPI:
                 error = None
                 try:
                     validate_docx_upload(name, data)
-                    if has_tracked_revisions(data):
-                        error = "EXISTING_REVISION_UNSUPPORTED"
+                    # Documents that already carry another department's tracked
+                    # changes are accepted: FundLex overlays its own revisions
+                    # (distinct author) instead of rejecting the upload.
                 except UploadValidationError as exc:
                     error = exc.code
                 if total_bytes > MAX_BATCH_BYTES:

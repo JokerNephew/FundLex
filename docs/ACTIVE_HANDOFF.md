@@ -9,8 +9,9 @@
 - 用户新要求：上传件可能带其他部门的Word修订痕迹，需在其上叠加FundLex修订并区分；本轮只要求先思考方案，**未实现、未改行为、未部署**。
 - 设计文档：`docs/TRACKED_CHANGES_OVERLAY_DESIGN_20261028.md`；集中记录FL-D446。核心：双视图投影（接受视图供模型、原始视图供写回）、字符级修订上下文、作者/ID区分、嵌套修订优先且不支持时阻断、三向等价校验（接受全部=final、只拒绝我方=对方接受稿、拒绝全部=原始基线）、既有修订清单与报告分离。
 - 现状：`inspect_docx` 仍拒绝 `EXISTING_REVISION_UNSUPPORTED`，`_project` 把修订当屏障；`compare/revisions.py` 的接受逻辑可复用为校验参照，但不能直接改写输入。
-- 待验证：嵌套ins/del的Word/WPS往返、段落标记修订、同名作者、ID冲突、表格/页眉页脚、已含FundLex修订的幂等。
-- 下一步：R1双视图投影+合成fixture，再验证嵌套修订与三向等价，之后接上传/前端与真实带修订合同E2E。预算已不阻塞（FL-D445）。
+- **已实现核心切片（作者=资金清算部）**：`inspect_docx(allow_existing_revisions=True)` 接受视图投影（对方ins可读不可写、del排除）；上传不再拒绝既有修订；`generate_artifacts(allow_existing_revisions=True)` 保留对方修订、我方ID接在既有最大ID后、final接受全部、redline校验既有清单不变；编辑落入对方插入或跨修订节点明确报错；报告新增`source_revisions`。新增`tests/test_tracked_changes_overlay.py`（3 passed），聚焦回归160 passed。
+- 待验证：全量回归；嵌套ins内del的Word/WPS往返；段落标记/移动修订/表格结构；同名作者；前端提示与下载标签；真实带修订合同三向等价E2E；已含资金清算部修订的幂等。
+- 下一步：全量回归后补嵌套修订与结构边界，再跑真实带修订合同上传→修改→下载→接受/拒绝三向等价。预算不阻塞（FL-D445）。
 
 ## 历史断点（2026-10-28，真实模型已开跑；用户取消预算限制）
 

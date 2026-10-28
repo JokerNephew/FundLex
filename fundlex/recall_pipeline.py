@@ -1711,10 +1711,12 @@ def _plan_and_generate(model: Any, rules_by_id: dict[str, dict], targets: Sequen
     from .recall import _reconcile_final_plan_ledger
     _reconcile_final_plan_ledger(planned["ledger"], planned["edits"],
                                  planned.get("conflicts") or [], [], [])
-    plan = validate_edit_plan(input_path, edits, {}, content_check=content_check)
+    plan = validate_edit_plan(input_path, edits, {}, content_check=content_check,
+                              allow_existing_revisions=True)
     redline, final = temp_dir / "redline.docx", temp_dir / "final.docx"
     if edits:
-        artifacts = generate_artifacts(input_path, plan, redline, final)
+        artifacts = generate_artifacts(input_path, plan, redline, final,
+                                       allow_existing_revisions=True)
     else:
         artifacts = generate_unchanged_artifacts(input_path, plan, redline, final)
     actual = inspect_docx(final, full=True)
@@ -4180,9 +4182,18 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
                 raise RecallError("FROZEN_RUN_CONFIG_MISSING", {})
             frozen_run = FrozenRun(Path(frozen_directory))
             frozen_run.start(input_path, guide_document)
-        inspection = inspect_docx(input_path, full=True)
+        inspection = inspect_docx(input_path, full=True,
+                                  allow_existing_revisions=True)
         output_dir.mkdir(parents=True, exist_ok=True)
         report["source_sha256"] = inspection.source_sha256
+        if inspection.revisions:
+            # Existing tracked changes from another department: keep them visible
+            # and separate from FundLex revisions in the report/UI.
+            report["source_revisions"] = {
+                "count": len(inspection.revisions),
+                "authors": sorted({item["author"] for item in inspection.revisions}),
+                "items": list(inspection.revisions),
+            }
         rules = _guide_rules(guide_document)
         if not rules:
             raise RecallError("RECALL_GUIDE_EMPTY", {})

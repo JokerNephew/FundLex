@@ -10,8 +10,9 @@
 - 现状：`fundlex/docx.py::inspect_docx` 默认 `allow_existing_revisions=False`，遇 `REVISION_TAGS` 直接 `EXISTING_REVISION_UNSUPPORTED`；`_project()` 把修订内容当屏障（`revision_content`，zone=revision，不可写），因此既有修订既看不到也不能改。`_apply_one()` 只处理普通run；`_accept_our_revisions()` 已支持只接受我们manifest的ID；`compare/revisions.py` 已有接受全部既有修订的成熟逻辑可作参照，但不能直接改写输入。
 - 设计：`docs/TRACKED_CHANGES_OVERLAY_DESIGN_20261028.md`。核心是双视图投影（接受视图供模型分析、原始视图供XML写回）、字符级修订上下文（normal/foreign_ins/our_ins/foreign_del/move）、作者与ID区分（可配置作者、扫描全包最大ID）、嵌套修订优先且不支持时明确阻断、三向等价校验（接受全部=final；只拒绝我方=对方接受稿；拒绝全部=原始基线）、既有修订清单与报告分离。
 - 待验证：`<w:ins>`内嵌`<w:del>`在Word/WPS的往返兼容；段落标记修订导致接受后段落边界变化；同名作者；既有ID冲突；表格/页眉页脚等结构能力；幂等（已含FundLex修订默认拒绝重跑）。
-- 状态：**设计草案已保存，未实现、未改上传/引擎行为、未部署**。默认业务口径（final接受全部、对方插入改写优先嵌套否则阻断、既有修订不重判业务对错）列在设计§7，需在实施前确认。
-- 下一步：先做R1双视图投影与合成fixture（既有ins/del、段落标记、表格、跨段），再验证嵌套修订，之后接上传/前端与真实带修订合同E2E。
+- **2026-10-28 实施进展（核心垂直切片）**：作者默认改为用户指定的“资金清算部”。`inspect_docx(..., allow_existing_revisions=True)` 现按接受视图投影（对方`w:ins`可读不可写、`w:del`排除、不再标`revision_content`）；上传不再以`EXISTING_REVISION_UNSUPPORTED`拒绝；`generate_artifacts(..., allow_existing_revisions=True)` 保留对方修订、我方ID从既有最大ID之后分配、final接受全部修订、redline校验既有修订清单不变；编辑落在对方插入内部或跨修订节点时明确报`FOREIGN_INSERTION_EDIT_UNSUPPORTED`/`FOREIGN_REVISION_INTERSECTION`，不静默改写。报告新增`source_revisions`（数量/作者/明细）。新增`tests/test_tracked_changes_overlay.py` 3 passed；聚焦回归160 passed。
+- 状态：**核心已实现并离线验证；嵌套修订、段落标记修订、前端提示、真实带修订合同E2E、全量回归未完成**。默认业务口径（final接受全部、对方插入改写优先嵌套否则阻断）列在设计§7。
+- 下一步：全量回归；段落标记/移动修订/表格结构；嵌套`ins`内`del`的Word/WPS往返；前端显示既有修订与作者区分；用真实带修订合同跑通上传→修改→下载→接受/拒绝三向等价。
 
 ## FL-D445 用户取消模型预算限制并授权按需调用真实模型（2026-10-28）
 
