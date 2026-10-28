@@ -18,6 +18,7 @@
   - G任务/飞书：FL-D454统一artifact bytes核验；FL-D456权威execution_mode；FL-D466 owner/binding失效；FL-D467事件租约恢复；FL-D470全量分页。隔离SQLite/fake Feishu通过，未发真实飞书，未验证MySQL并发。
   - H前端：FL-D451 workspace生产V1骨架；FL-D471/472/473/474/475/476/477及FL-D312 V2 epoch修复。typecheck/lint/Vitest16、browser 69 passed（Fake模型/隔离服务）；workspace真实后端集成与生产E2E待验。
 - **仍未完成/阻塞**：真实模型`deepseek/deepseek-v4-flash`首轮曾因reasoning占满`max_tokens`报`MODEL_OUTPUT_TRUNCATED`；已用`thinking=disabled`+提高输出上限重跑（结果待记录）；首批真实修改/实际DOCX评分、全量扩样、生产部署、Word/WPS、飞书真实回传、MySQL并发和云备份恢复仍未完成。项目继续NO-GO。
+- 旧生产价值优选下载件已用v2标签重新评分：B02 21目标 completed18/kept1（摘要G15）/not_executed2，`delivery.reported_complete=1`、`false_complete=1`；证据`docs/evidence/old-production-value-score-20261029.json`。这是评分器/坐标修复后的反证，不替代新引擎复跑。
 
 ## FL-D449 现行预算审批规定与用户明确要求不符（2026-10-28）
 
