@@ -340,6 +340,7 @@ def reparse_version(store: RunStore, owner: str, version_id: str) -> dict[str, A
     source = guide_source_path(store, version_id)
     if not source.is_file():
         raise KeyError("guide source not available")
+    data = source.read_bytes()
     # Retire the predecessor's retryable jobs before creating the new version.
     # Otherwise a worker could claim the old parse_failed job first and parse
     # the superseded version again.
@@ -349,7 +350,7 @@ def reparse_version(store: RunStore, owner: str, version_id: str) -> dict[str, A
             error_code='GUIDE_VERSION_SUPERSEDED',lease_until=NULL,updated_at=?
             WHERE guide_version_id=? AND status IN ('queued','parse_failed')""",
                    (time.time(), version_id))
-    return create_custom_version(store, owner, version["filename"], source.read_bytes(),
+    return create_custom_version(store, owner, version["filename"], data,
                                  parent_version_id=version_id)
 
 
