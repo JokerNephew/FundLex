@@ -367,10 +367,18 @@ def validate_delivery(report: dict[str, Any], artifacts: dict[str, Path]) -> Non
         return
     if is_recall_report(report):
         if report.get("execution_mode") == "evaluation":
+            status = report.get("delivery_status")
+            contract_kinds = {"final", "redline", "working_final", "working_redline",
+                              "evaluation_final", "evaluation_redline"}
+            if status in {"incomplete", "excluded", "not_generated"} and not contract_kinds & set(artifacts):
+                # A terminal evaluation that did not produce a validated pair is
+                # report-only. It must never be relabelled as a delivery working
+                # file or appear in manual revision selection.
+                return
             mapped = {"final": artifacts.get("evaluation_final"),
                       "redline": artifacts.get("evaluation_redline")}
-            if report.get("delivery_status") in {"evaluation_modified", "evaluation_modified_with_exceptions",
-                                                 "evaluation_unmodified"} and all(mapped.values()):
+            if status in {"evaluation_modified", "evaluation_modified_with_exceptions",
+                          "evaluation_unmodified"} and all(mapped.values()):
                 probe = dict(report)
                 probe["delivery_status"] = "complete"
                 probe["execution_mode"] = "delivery"
@@ -808,8 +816,9 @@ class RunStore:
         self.get_document(owner, batch_id, document_id)
         with self._connect() as db:
             row = db.execute("SELECT * FROM artifacts WHERE document_id=? AND kind=?", (document_id, kind)).fetchone()
+            document = db.execute("SELECT execution_mode,report_json,source_sha256 FROM documents WHERE id=?",
+                                  (document_id,)).fetchone()
             if kind in {"evaluation_final", "evaluation_redline"}:
-                document = db.execute("SELECT execution_mode FROM documents WHERE id=?", (document_id,)).fetchone()
                 # Evaluation downloads are bound to the persisted execution mode,
                 # not to a filename or UI label.
                 if row is None or document is None or document["execution_mode"] != "evaluation":
@@ -819,24 +828,38 @@ class RunStore:
         path = self.object_path(row["object_key"])
         if not path.is_file() or path.stat().st_size != row["size"] or sha256_file(path) != row["sha256"]:
             raise Conflict("artifact integrity check failed")
+        report: dict[str, Any] = {}
+        if document is not None and document["report_json"]:
+            try:
+                report = parse_report_json(document["report_json"]) or {}
+            except ReportJsonError as exc:
+                # A corrupt or missing report invalidates every artifact that
+                # relies on it, not only the report download itself.
+                raise ReportJsonError() from exc
+        persisted_mode = str((document or {})["execution_mode"] or "") if document is not None else ""
+        report_mode = str(report.get("execution_mode") or "delivery")
+        if persisted_mode and persisted_mode != report_mode:
+            raise Conflict("EXECUTION_MODE_MISMATCH")
         if kind == "report_json":
+            # Re-read and parse the actual object rather than trusting the row.
             try:
                 parse_report_json(path.read_text(encoding="utf-8"))
             except (OSError, UnicodeError, ReportJsonError) as exc:
                 raise ReportJsonError() from exc
         if kind in SELECTED_KINDS:
+            if persisted_mode == "evaluation":
+                raise Conflict("SELECTED_ARTIFACT_EVALUATION_UNSUPPORTED")
             # User-selected artifacts are bound to the redline they were derived
             # from; re-check that the source revision artifact is still intact.
             self._verify_selected_source(document_id, kind)
             return path, row["sha256"]
         if kind in {"final", "redline", "evaluation_final", "evaluation_redline",
                     "working_final", "working_redline"}:
+            if document is None or not document["report_json"]:
+                raise Conflict("ARTIFACT_VERIFICATION_MISMATCH")
             with self._connect() as db:
-                document = db.execute("SELECT execution_mode,report_json,source_sha256 FROM documents WHERE id=?",
-                                      (document_id,)).fetchone()
                 pair_rows = db.execute("SELECT * FROM artifacts WHERE document_id=?", (document_id,)).fetchall()
             try:
-                report = parse_report_json(document["report_json"]) if document and document["report_json"] else {}
                 if is_recall_report(report):
                     # A recall download is bound to the persisted delivery state and
                     # re-validated against the actual stored pair.
@@ -864,26 +887,64 @@ class RunStore:
                         pairs = {item["kind"]: self.object_path(item["object_key"]) for item in pair_rows
                                  if item["kind"] in expected}
                         validate_delivery(report, pairs)
-                elif _requires_actual_review(report):
-                    if report.get("source_sha256") != document["source_sha256"]:
-                        raise ValueError("ACTUAL_CONTENT_REVIEW_SOURCE_MISMATCH")
-                    if report.get("execution_mode") != document["execution_mode"]:
-                        raise ValueError("ACTUAL_CONTENT_REVIEW_BINDING_MISMATCH")
-                    if not kind.startswith("evaluation_") and report.get("delivery_status") not in {"complete", "complete_with_exceptions"}:
-                        raise ValueError("ACTUAL_CONTENT_REVIEW_BINDING_MISMATCH")
-                    expected = {"evaluation_final", "evaluation_redline"} if kind.startswith("evaluation_") else {"final", "redline"}
+                else:
+                    evaluation = report_mode == "evaluation"
+                    if kind.startswith("evaluation_") and not evaluation:
+                        raise ValueError("EXECUTION_MODE_MISMATCH")
+                    if kind.startswith("working_") and evaluation:
+                        raise ValueError("EXECUTION_MODE_MISMATCH")
+                    if evaluation:
+                        expected = {"evaluation_final", "evaluation_redline"}
+                        if report.get("delivery_status") not in {
+                                "evaluation_modified", "evaluation_modified_with_exceptions",
+                                "evaluation_unmodified"}:
+                            raise ValueError("EVALUATION_DELIVERY_NOT_COMPLETE")
+                    else:
+                        if report.get("delivery_status") not in {"complete", "complete_with_exceptions"}:
+                            raise ValueError("DELIVERY_NOT_COMPLETE")
+                        expected = {"final", "redline"}
                     pairs = {item["kind"]: self.object_path(item["object_key"]) for item in pair_rows
                              if item["kind"] in expected}
                     validate_delivery(report, pairs)
+                    if _requires_actual_review(report):
+                        if report.get("source_sha256") != document["source_sha256"]:
+                            raise ValueError("ACTUAL_CONTENT_REVIEW_SOURCE_MISMATCH")
+                        if report.get("execution_mode") != document["execution_mode"]:
+                            raise ValueError("ACTUAL_CONTENT_REVIEW_BINDING_MISMATCH")
             except (ValueError, TypeError) as exc:
                 raise Conflict(str(exc)) from exc
         return path, row["sha256"]
+
+    def read_artifact(self, owner: str, batch_id: str, document_id: str, kind: str) -> tuple[bytes, str]:
+        """Return bytes only after the full gate and an actual-byte re-check.
+
+        ``get_artifact`` validates ownership, mode, the paired artifacts and the
+        report before returning a path. Reading that path afterwards can still
+        race an external file replacement, so the bytes handed to an HTTP or
+        Feishu consumer are hashed again against the registered size/hash.
+        """
+        path, digest = self.get_artifact(owner, batch_id, document_id, kind)
+        with self._connect() as db:
+            row = db.execute("SELECT size,sha256 FROM artifacts WHERE document_id=? AND kind=?",
+                             (document_id, kind)).fetchone()
+        if row is None:
+            raise NotFound("artifact not available")
+        try:
+            data = path.read_bytes()
+        except OSError as exc:
+            raise Conflict("ARTIFACT_INTEGRITY_FAILED") from exc
+        if (len(data) != int(row["size"]) or hashlib.sha256(data).hexdigest() != row["sha256"]
+                or row["sha256"] != digest):
+            raise Conflict("ARTIFACT_INTEGRITY_FAILED")
+        return data, digest
 
     def claim(self, *, lease_seconds: int = 300, max_attempts: int = 3) -> dict[str, Any] | None:
         now = time.time()
         # The cleanup candidates are only a hint.  Read them before the write
         # transaction so another worker can finish or reclaim one; every
         # cleanup UPDATE below repeats the full fencing predicate.
+        with self._connect() as db:
+            has_tasks = bool(db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='task_batches'").fetchone())
         exhausted_sql = """SELECT id,batch_id,source_sha256,fencing_token,attempt FROM documents
             WHERE status IN ('leased','running') AND lease_until<=? AND attempt>=?"""
         with self._connect() as db:
@@ -895,13 +956,20 @@ class RunStore:
                           "qualification_status": "failed", "delivery_status": "not_generated",
                           "error_code": "WORKER_ATTEMPTS_EXHAUSTED",
                           "errors": [{"code": "WORKER_ATTEMPTS_EXHAUSTED", "stage": "worker"}]}
+                terminal_mode = None
+                if has_tasks:
+                    job_mode, task_id = self._batch_job_identity(expired["batch_id"])
+                    if task_id:
+                        terminal_mode = str(job_mode or "delivery")
+                        report["execution_mode"] = terminal_mode
                 changed = db.execute("""UPDATE documents SET status='failed',qualification_status='failed',
                     delivery_status='not_generated',error_code='WORKER_ATTEMPTS_EXHAUSTED',
                     report_json=?,lease_until=NULL,started_at=COALESCE(started_at,created_at),
-                    finished_at=?,updated_at=? WHERE id=? AND fencing_token=?
+                    finished_at=?,execution_mode=CASE WHEN ? THEN ? ELSE execution_mode END,updated_at=?
+                    WHERE id=? AND fencing_token=?
                     AND status IN ('leased','running') AND lease_until<=? AND attempt>=?""",
-                    (json.dumps(report), now, now, expired["id"], expired["fencing_token"],
-                     now, max_attempts)).rowcount
+                    (json.dumps(report), now, 1 if terminal_mode else 0, terminal_mode, now,
+                     expired["id"], expired["fencing_token"], now, max_attempts)).rowcount
                 if changed == 1:
                     self._refresh_batch(db, expired["batch_id"], now)
             active_scope = "active.batch_id=d.batch_id"
@@ -946,22 +1014,56 @@ class RunStore:
             if not changed:
                 raise Conflict("stale worker lease")
 
+    def document_task_id(self, document_id: str) -> str | None:
+        """Return the business task bound to a document, if any."""
+        with self._connect() as db:
+            if not db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='task_batches'").fetchone():
+                return None
+            row = db.execute("""SELECT tb.task_id FROM documents d
+                JOIN task_batches tb ON tb.batch_id=d.batch_id WHERE d.id=?""", (document_id,)).fetchone()
+        return str(row["task_id"]) if row else None
+
+    def _batch_job_identity(self, batch_id: str) -> tuple[str, str | None]:
+        """Return ``(job_mode, task_id)`` for a batch without touching task SQL on legacy stores."""
+        with self._connect() as db:
+            mode = db.execute("SELECT mode FROM batches WHERE id=?", (batch_id,)).fetchone()
+            job_mode = str((mode or {})["mode"] or "delivery") if mode is not None else "delivery"
+            if not db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='task_batches'").fetchone():
+                return job_mode, None
+            task = db.execute("SELECT task_id FROM task_batches WHERE batch_id=?", (batch_id,)).fetchone()
+        return job_mode, (str(task["task_id"]) if task else None)
+
     def finish(self, document_id: str, token: int, *, report: dict[str, Any],
                artifacts: dict[str, Path], failed: bool = False, error_code: str | None = None) -> None:
+        # The persisted job mode is authoritative for task-bound work. A report
+        # can never turn an evaluation into an ordinary delivery (or vice versa)
+        # simply by changing its own ``execution_mode`` field.
+        with self._connect() as db:
+            has_tasks = bool(db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='task_batches'").fetchone())
+            task_select = ("(SELECT task_id FROM task_batches WHERE batch_id=d.batch_id) AS task_id"
+                           if has_tasks else "NULL AS task_id")
+            job = db.execute(f"""SELECT d.status,d.fencing_token,d.lease_until,d.attempt,d.batch_id,b.mode AS job_mode,
+                {task_select}
+                FROM documents d JOIN batches b ON b.id=d.batch_id WHERE d.id=?""", (document_id,)).fetchone()
+        if job is None:
+            raise Conflict("stale worker lease")
+        job_mode = str(job["job_mode"] or "delivery")
+        report_mode = str(report.get("execution_mode") or "delivery")
+        if job["task_id"] and report_mode != job_mode:
+            raise Conflict("EXECUTION_MODE_MISMATCH")
         # Verify all outputs before publication. Only report files are allowed for incomplete results.
         try:
             validate_delivery(report, artifacts)
         except ValueError as exc:
             raise Conflict(str(exc)) from exc
         delivery = report.get("delivery_status", "not_generated")
-        mode = report.get("execution_mode", "delivery")
+        mode = report_mode
         allowed_kinds = {"final", "redline", "working_final", "working_redline", "report_json", "report_md"}
         if mode == "evaluation":
             allowed_kinds = {"evaluation_final", "evaluation_redline", "report_json", "report_md"}
             if delivery in {"complete", "complete_with_exceptions"} or {"final", "redline"} & set(artifacts):
                 raise Conflict("evaluation cannot publish final delivery")
-            if delivery in {"evaluation_modified", "evaluation_modified_with_exceptions",
-                            "evaluation_unmodified", "incomplete"} \
+            if delivery in {"evaluation_modified", "evaluation_modified_with_exceptions"} \
                     and not {"evaluation_redline", "evaluation_final"}.issubset(artifacts) \
                     and not _review_rejected_report_only(report, artifacts):
                 raise Conflict("evaluation result requires both evaluated contracts")
@@ -1044,12 +1146,17 @@ class RunStore:
         pause_required = error_code in {"MODEL_CIRCUIT_OPEN", "MODEL_GLOBAL_CALL_BUDGET_EXCEEDED", "MODEL_COST_BUDGET_EXCEEDED", "MODEL_CALL_BUDGET_EXCEEDED", "MODEL_LEDGER_UNAVAILABLE", "MODEL_CHECKPOINT_UNAVAILABLE", "MODEL_REPLAY_MISS", "MODEL_CASSETTE_UNAVAILABLE"}
         delay = min(base_delay_seconds * (2 ** max(row["attempt"] - 1, 0)) * random.uniform(0.8, 1.2), 300)
         report_json = json.dumps(report, ensure_ascii=False) if isinstance(report, dict) else None
+        terminal_mode = None
         if terminal:
+            job_mode, task_id = self._batch_job_identity(row["batch_id"])
             terminal_report = dict(report) if isinstance(report, dict) else {}
             terminal_report.update({"document_id": document_id, "source_sha256": row["source_sha256"],
                       "qualification_status": "failed", "delivery_status": "not_generated",
                       "error_code": error_code})
             terminal_report.setdefault("errors", []).append({"code": error_code, "stage": "worker"})
+            if task_id:
+                terminal_mode = str(job_mode or "delivery")
+                terminal_report["execution_mode"] = terminal_mode
             report_json = json.dumps(terminal_report, ensure_ascii=False)
         transition_now = time.time()
         with self._connect() as db:
@@ -1059,13 +1166,15 @@ class RunStore:
                 report_json=CASE WHEN ? OR ? THEN ? ELSE report_json END,
                 qualification_status=CASE WHEN ? THEN 'failed' ELSE qualification_status END,
                 delivery_status=CASE WHEN ? THEN 'not_generated' ELSE delivery_status END,
+                execution_mode=CASE WHEN ? THEN ? ELSE execution_mode END,
                 updated_at=? WHERE id=? AND fencing_token=? AND status IN ('leased','running')
                 AND lease_until>? AND attempt=?""",
                             ("failed" if terminal else "retry_wait", error_code,
                             None if terminal else transition_now + delay, 1 if terminal else 0, transition_now,
                             1 if terminal else 0, 1 if report_json is not None else 0, report_json,
                             1 if terminal else 0,
-                            1 if terminal else 0, transition_now, document_id, token, transition_now,
+                            1 if terminal else 0, 1 if terminal_mode else 0, terminal_mode,
+                            transition_now, document_id, token, transition_now,
                             row["attempt"])).rowcount
             if changed != 1:
                 raise Conflict("stale worker lease")

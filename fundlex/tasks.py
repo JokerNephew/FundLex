@@ -815,29 +815,29 @@ class TaskStore:
         return {key: value for key, value in item.items() if key != "ordinal"}
 
     def artifact(self, owner: str, task_id: str, document_id: str, kind: str):
-        """Return verified bytes and a filename for one published artifact."""
+        """Return verified bytes and a filename for one published artifact.
+
+        This is the task-scoped facade over ``RunStore.read_artifact``: it adds
+        the task/document linkage check, then reuses the same ownership, mode,
+        report and paired-artifact gate as HTTP downloads. Feishu must not read
+        object files directly.
+        """
         if task_id.startswith("legacy-"):
             raise NotFound("artifact not found")
         with self.store._connect() as db:
             self._owned(db, owner, task_id)
-            linked = db.execute("SELECT document_id FROM task_files WHERE task_id=? AND document_id=?",
-                                (task_id, document_id)).fetchone()
-            if linked is None or not linked["document_id"]:
-                raise NotFound("document not found")
-            row = db.execute("SELECT * FROM artifacts WHERE document_id=? AND kind=?",
-                             (document_id, kind)).fetchone()
-            if row is None:
-                raise NotFound("artifact not found")
-            name = db.execute("SELECT filename FROM documents WHERE id=?", (document_id,)).fetchone()
-        path = self.store.object_path(row["object_key"])
-        if not path.is_file() or path.stat().st_size != row["size"] or hashlib.sha256(path.read_bytes()).hexdigest() != row["sha256"]:
-            raise Conflict("ARTIFACT_INTEGRITY_FAILED")
-        filename = Path(name["filename"] if name else "contract.docx").name
+            linked = db.execute("""SELECT f.document_id,d.batch_id,d.filename FROM task_files f
+                JOIN documents d ON d.id=f.document_id
+                WHERE f.task_id=? AND f.document_id=?""", (task_id, document_id)).fetchone()
+        if linked is None or not linked["document_id"]:
+            raise NotFound("document not found")
+        data, _ = self.store.read_artifact(owner, linked["batch_id"], document_id, kind)
+        filename = Path(linked["filename"] or "contract.docx").name
         suffix = Path(filename).suffix or ".docx"
         if kind.startswith("report"):
             suffix = ".md" if kind == "report_md" else ".json"
         stem = Path(filename).stem
-        return path.read_bytes(), f"{stem}-{kind}{suffix}"
+        return data, f"{stem}-{kind}{suffix}"
 
     def uploads(self, owner, task_id, uploads):
         """Upload items contain client_id, name, data and validated error_code.
