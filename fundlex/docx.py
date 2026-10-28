@@ -197,7 +197,8 @@ def _relationship_source(rels: str) -> str:
     return posixpath.join(directory[:-6], name[:-5])
 
 
-def _validate_package(parts: Mapping[str, bytes], limits: ZipLimits, *, full: bool) -> None:
+def _validate_package(parts: Mapping[str, bytes], limits: ZipLimits, *, full: bool,
+                      allow_existing_revisions: bool = False) -> None:
     if "[Content_Types].xml" not in parts or "_rels/.rels" not in parts or DOCUMENT not in parts:
         raise DocxError("DOCX_REQUIRED_PART_MISSING")
     content = _xml(parts["[Content_Types].xml"], limits)
@@ -291,7 +292,9 @@ def _validate_package(parts: Mapping[str, bytes], limits: ZipLimits, *, full: bo
                     if not isinstance(element.tag, str):
                         continue
                     local = etree.QName(element).localname
-                    if element.tag.startswith("{" + W + "}") and local in REVISION_TAGS:
+                    if (not allow_existing_revisions
+                            and element.tag.startswith("{" + W + "}")
+                            and local in REVISION_TAGS):
                         raise DocxError("EXISTING_REVISION_UNSUPPORTED", name)
                     if element.tag == Q("documentProtection"):
                         raise DocxError("DOCUMENT_PROTECTED")
@@ -376,9 +379,14 @@ def _protected_text_nodes(root: etree._Element) -> set[etree._Element]:
     protected: set[etree._Element] = set()
     for node in root.iter():
         name = _local(node)
-        if name in {"bookmarkStart", "commentRangeStart", "permStart"} and node.tag == Q(name):
+        # Bookmarks are navigation anchors, not read-only ranges.  Real fund
+        # contracts commonly wrap whole sections in _Toc bookmarks; treating
+        # that text as protected makes every target uneditable.  Comments and
+        # permission ranges remain protected because edits could orphan their
+        # annotations or violate the declared permission boundary.
+        if name in {"commentRangeStart", "permStart"} and node.tag == Q(name):
             active.add((name.removesuffix("Start"), node.get(Q("id"), "")))
-        elif name in {"bookmarkEnd", "commentRangeEnd", "permEnd"} and node.tag == Q(name):
+        elif name in {"commentRangeEnd", "permEnd"} and node.tag == Q(name):
             active.discard((name.removesuffix("End"), node.get(Q("id"), "")))
         elif node.tag == Q("t") and active:
             protected.add(node)
@@ -427,6 +435,11 @@ def _project(paragraph: etree._Element, location: str, zone: str, section: str,
             chunks.append("\n")
             position += 1
             return
+        if name in {"bookmarkStart", "bookmarkEnd", "lastRenderedPageBreak", "proofErr"}:
+            # Navigation anchors and layout/proofing hints do not make the
+            # surrounding text read-only or split an editable source span.
+            # The writer keeps these markers in the package.
+            return
         if name in {"bookmarkStart", "bookmarkEnd", "commentRangeStart", "commentRangeEnd", "permStart", "permEnd"} and node.tag == Q(name):
             ending = name.endswith("End")
             category = name.removesuffix("End") if ending else name.removesuffix("Start")
@@ -460,7 +473,10 @@ def _project(paragraph: etree._Element, location: str, zone: str, section: str,
         if node.tag == Q("t"):
             run = node.getparent()
             ordinary = run is not None and run.tag == Q("r") and run.getparent() is paragraph
-            ordinary = ordinary and [child.tag for child in run if child.tag != Q("rPr")] == [Q("t")]
+            children = [child.tag for child in run if child.tag != Q("rPr")] if ordinary else []
+            ordinary = ordinary and bool(children) and all(
+                tag in {Q("t"), Q("lastRenderedPageBreak"), Q("proofErr")}
+                for tag in children)
             add_text(node, ordinary and node not in protected_nodes and not blocked and not field_active and not protected_ranges and zone in {"body", "summary"})
             return
         if node.tag.startswith("{" + W + "}") and name in BOUNDARY_TAGS:
@@ -774,13 +790,17 @@ def _apply_one(root: etree._Element, edit: Mapping[str, Any], del_id: int,
         selected = next(([item] for item in nodes if item[1] < start <= item[2]), [])
     if not selected:
         raise DocxError("XML_MAPPING_DRIFT")
+    benign = {Q("bookmarkStart"), Q("bookmarkEnd"),
+              Q("lastRenderedPageBreak"), Q("proofErr")}
     runs: list[etree._Element] = []
     deleted_runs: list[etree._Element] = []
     for node, lo, hi in selected:
         run = node.getparent()
         if run is None or run.tag != Q("r") or run.getparent() is not paragraph:
             raise DocxError("RUN_STRUCTURE_UNSUPPORTED")
-        if [child.tag for child in run if child.tag != Q("rPr")] != [Q("t")]:
+        content = [child.tag for child in run if child.tag != Q("rPr")]
+        if (content.count(Q("t")) != 1
+                or any(tag not in {Q("t")} | benign for tag in content)):
             raise DocxError("RUN_STRUCTURE_UNSUPPORTED")
         runs.append(run)
         left, right = max(start - lo, 0), min(end - lo, hi - lo)
@@ -790,8 +810,13 @@ def _apply_one(root: etree._Element, edit: Mapping[str, Any], del_id: int,
     last_run = runs[-1]
     if len({id(run) for run in runs}) != len(runs):
         raise DocxError("RUN_STRUCTURE_UNSUPPORTED")
-    indexes = [paragraph.index(run) for run in runs]
-    if indexes != list(range(indexes[0], indexes[-1] + 1)):
+    insert_at = paragraph.index(first_run)
+    last_at = paragraph.index(runs[-1])
+    between = list(paragraph)[insert_at:last_at + 1]
+    # Navigation anchors and layout/proofing hints may sit between the selected
+    # runs.  They are not text barriers; drop the ones inside the edited span so
+    # the replacement remains one contiguous business change.
+    if any(node not in runs and node.tag not in benign for node in between):
         raise DocxError("EDIT_CROSSES_BARRIER")
     prefix = (first[0].text or "")[:start - first[1]]
     suffix = (last[0].text or "")[end - last[1]:]
@@ -803,9 +828,8 @@ def _apply_one(root: etree._Element, edit: Mapping[str, Any], del_id: int,
                                  _inserted_runs(first_run, str(edit["replacement"])) ))
     if suffix:
         replacement.append(_make_text_run(last_run, suffix))
-    insert_at = indexes[0]
-    for run in runs:
-        paragraph.remove(run)
+    for node in between:
+        paragraph.remove(node)
     for offset, node in enumerate(replacement):
         paragraph.insert(insert_at + offset, node)
 
@@ -895,12 +919,21 @@ def _structure_snapshot(root: etree._Element, edited: set[str]) -> bytes:
         for node in list(paragraph):
             if node.tag in {Q("ins"), Q("del")}:
                 paragraph.remove(node)
-            elif node.tag == Q("r") and [c.tag for c in node if c.tag != Q("rPr")] == [Q("t")]:
+            elif node.tag in {Q("bookmarkStart"), Q("bookmarkEnd"),
+                              Q("lastRenderedPageBreak"), Q("proofErr")}:
+                # Navigation/layout/proofing hints inside an edited span may be
+                # dropped by the writer; they are not business structure.
                 paragraph.remove(node)
-            elif node.tag == Q("r") and len(node) == 1 and node[0].tag == Q("br") and not node.attrib and not node[0].attrib:
-                # Template newlines create plain break runs; their positions and
-                # count are checked by the full expected text projection.
-                paragraph.remove(node)
+            elif node.tag == Q("r"):
+                content = [c.tag for c in node if c.tag != Q("rPr")]
+                if content and all(tag in {Q("t"), Q("lastRenderedPageBreak"),
+                                           Q("proofErr")} for tag in content):
+                    paragraph.remove(node)
+                elif len(node) == 1 and node[0].tag == Q("br") \
+                        and not node.attrib and not node[0].attrib:
+                    # Template newlines create plain break runs; their positions and
+                    # count are checked by the full expected text projection.
+                    paragraph.remove(node)
     return etree.tostring(clone, method="c14n")
 
 

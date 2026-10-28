@@ -48,9 +48,10 @@ from .config import auth_db_target, local_data_dir
 from .tasks import TaskStore
 from .application import TaskApplicationService
 from .upload_validation import (
-    MAX_BATCH_BYTES, MAX_BATCH_DOCUMENTS, MAX_COMPRESSION_RATIO,
+    MAX_BATCH_BYTES, MAX_COMPRESSION_RATIO,
     MAX_PART_BYTES, MAX_UNCOMPRESSED_BYTES, MAX_UPLOAD_BYTES,
-    UploadValidationError, validate_batch_limits, validate_docx_upload,
+    UploadValidationError, has_tracked_revisions, validate_batch_limits,
+    validate_docx_upload,
 )
 from .upload_guard import add_upload_guard
 from .integrations import IntegrationStore
@@ -58,6 +59,8 @@ from .integrations.store import IntegrationConflict
 from .integrations.feishu.oauth import FeishuOAuthClient, FeishuOAuthError, oauth_available
 from .compare.store import CompareStore
 from .compare.api import register_compare_routes
+from .guide_generation.api import register_guide_generation_routes
+from .guide_generation.store import GuideGenerationStore
 from .api_errors import (
     CORRELATION_ID_HEADER, code_from_detail, correlation_id, error_code,
     log_handled_error, message_for, new_correlation_id, raise_api_error,
@@ -109,6 +112,7 @@ class TaskSubmission(BaseModel):
     ruleset_version: str | None = Field(default=None, min_length=1, max_length=128)
     engine_id: str | None = Field(default=None, min_length=1, max_length=64)
     guide_version_id: str | None = Field(default=None, min_length=1, max_length=128)
+    mode: str = Field(default="delivery", pattern="^(delivery|evaluation|diagnosis)$")
     files: list[ManifestFile] = Field(min_length=1, max_length=10000)
 
     @field_validator("name")
@@ -473,8 +477,7 @@ def _public_batch(batch: dict, *, detail: bool, metrics: dict[str, dict] | None 
 def create_app(data_dir: str | Path | None = None, *, auth_db=None) -> FastAPI:
     application = FastAPI(title="FundLex", version="0.1.0")
     add_upload_guard(application, max_upload_bytes=MAX_UPLOAD_BYTES,
-                     max_batch_bytes=MAX_BATCH_BYTES,
-                     max_request_files=MAX_BATCH_DOCUMENTS)
+                     max_batch_bytes=MAX_BATCH_BYTES)
 
     def api_error_response(request: Request, status_code: int, code: str) -> JSONResponse:
         cid = getattr(request.state, "correlation_id", None) or correlation_id()
@@ -534,6 +537,10 @@ def create_app(data_dir: str | Path | None = None, *, auth_db=None) -> FastAPI:
     application.state.integrations = integrations
     compare_store = CompareStore(store)
     application.state.compare_store = compare_store
+    guide_generation_store = GuideGenerationStore(store)
+    guide_generation_store.ensure_schema()
+    application.state.guide_generation_store = guide_generation_store
+    register_guide_generation_routes(application, store, guide_generation_store, _user)
 
     # Accounts and sessions share the fundlex.db adapter. Initialization fails
     # closed: password mode refuses to start when the store is unavailable, and
@@ -705,7 +712,7 @@ def create_app(data_dir: str | Path | None = None, *, auth_db=None) -> FastAPI:
         }
         return {"auth_mode": mode, "login_required": mode == "password", "task_api": True,
                 "app_version": __version__, "registration_open": _registration_open(),
-                "upload_limits": {"max_file_bytes": MAX_UPLOAD_BYTES, "max_request_files": MAX_BATCH_DOCUMENTS,
+                "upload_limits": {"max_file_bytes": MAX_UPLOAD_BYTES,
                                   "max_request_bytes": MAX_BATCH_BYTES},
                 "engine": engine}
 
@@ -805,7 +812,8 @@ def create_app(data_dir: str | Path | None = None, *, auth_db=None) -> FastAPI:
         state = integrations.create_oauth_state("feishu", user, 600)
         url = client.authorization_url(state["state"])
         return {"provider": "feishu", "authorization_url": url,
-                "expires_at": state["expires_at"], "qr_svg": client.qr_svg(url)}
+                "expires_at": state["expires_at"], "qr_svg": client.qr_svg(url),
+                "qr_png": client.qr_png(url)}
 
     @application.get("/api/integrations/feishu/oauth/callback", include_in_schema=False)
     def feishu_oauth_callback(code: str = "", state: str = "", error: str = ""):
@@ -992,7 +1000,8 @@ def create_app(data_dir: str | Path | None = None, *, auth_db=None) -> FastAPI:
             return task_service.create_task(user, payload.name,
                                             [f.model_dump() for f in payload.files],
                                             guide_version_id=payload.guide_version_id,
-                                            idempotency_key=idempotency_key)
+                                            idempotency_key=idempotency_key,
+                                            mode=payload.mode)
         except ValueError as exc:
             if error_code(exc, "CONFLICT") == "GUIDE_NOT_FOUND":
                 raise_api_error(404, exc, fallback="GUIDE_NOT_FOUND")
@@ -1098,8 +1107,6 @@ def create_app(data_dir: str | Path | None = None, *, auth_db=None) -> FastAPI:
             raise HTTPException(422, "invalid client_ids") from None
         if not isinstance(ids, list) or len(ids) != len(files) or any(not isinstance(i, str) or not 1 <= len(i) <= 128 for i in ids) or len(set(ids)) != len(ids):
             raise HTTPException(422, "invalid client_ids")
-        if len(files) > MAX_BATCH_DOCUMENTS:
-            raise HTTPException(413, "upload request document count limit exceeded")
         uploads, total_bytes = [], 0
         reasons = {"only DOCX files are supported": "UNSUPPORTED_FILE_FORMAT", "DOCX upload size limit exceeded": "UPLOAD_SIZE_LIMIT",
                    "not an editable DOCX package": "INVALID_DOCX_PACKAGE", "encrypted DOCX is unsupported": "ENCRYPTED_DOCX",
@@ -1114,6 +1121,8 @@ def create_app(data_dir: str | Path | None = None, *, auth_db=None) -> FastAPI:
                 error = None
                 try:
                     validate_docx_upload(name, data)
+                    if has_tracked_revisions(data):
+                        error = "EXISTING_REVISION_UNSUPPORTED"
                 except UploadValidationError as exc:
                     error = exc.code
                 if total_bytes > MAX_BATCH_BYTES:
@@ -1368,7 +1377,6 @@ def create_app(data_dir: str | Path | None = None, *, auth_db=None) -> FastAPI:
     register_compare_routes(application, compare_store, _user, _validate_upload,
                             max_upload_bytes=MAX_UPLOAD_BYTES,
                             max_batch_bytes=MAX_BATCH_BYTES,
-                            max_request_files=MAX_BATCH_DOCUMENTS,
                             max_pairs=1000)
 
     frontend = Path(__file__).resolve().parent.parent / "frontend"
@@ -1444,6 +1452,19 @@ def create_app(data_dir: str | Path | None = None, *, auth_db=None) -> FastAPI:
             if not frontend_v2:
                 return RedirectResponse(f"{frontend_base}/#compare", status_code=307)
             return home()
+
+        @application.get("/guide-generation", include_in_schema=False)
+        def guide_generation_home():
+            entry = frontend / "guide_generation.html"
+            if not entry.is_file():
+                raise HTTPException(404, "guide generation page is not installed")
+            html = entry.read_text(encoding="utf-8")
+            if frontend_base:
+                html = html.replace('="/static/', f'="{frontend_base}/static/')
+                html = html.replace('="/assets/', f'="{frontend_base}/assets/')
+                html = html.replace('</head>',
+                                    f'<meta name="fundlex-base-path" content="{frontend_base}"></head>')
+            return HTMLResponse(html, headers={"Cache-Control": "no-store, must-revalidate"})
 
         @application.get("/{full_path:path}", include_in_schema=False)
         def frontend_fallback(full_path: str):

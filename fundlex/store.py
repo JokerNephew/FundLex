@@ -269,7 +269,27 @@ def _validate_actual_review(report: dict[str, Any], validation: dict[str, Any]) 
 
 
 def validate_delivery(report: dict[str, Any], artifacts: dict[str, Path]) -> None:
+    if (report.get("verification_status") == "verification_blocked"
+            and (report.get("delivery_status") in {"complete", "complete_with_exceptions"}
+                 or {"final", "redline"} & set(artifacts))):
+        raise ValueError("MISSING_VERIFIED_ARTIFACTS")
+    if report.get("execution_mode") == "diagnosis":
+        if {"final", "redline", "working_final", "working_redline",
+            "evaluation_final", "evaluation_redline"} & set(artifacts):
+            raise ValueError("DIAGNOSIS_MUST_NOT_PUBLISH_CONTRACTS")
+        return
     if is_recall_report(report):
+        if report.get("execution_mode") == "evaluation":
+            mapped = {"final": artifacts.get("evaluation_final"),
+                      "redline": artifacts.get("evaluation_redline")}
+            if report.get("delivery_status") in {"evaluation_modified", "evaluation_modified_with_exceptions",
+                                                 "evaluation_unmodified"} and all(mapped.values()):
+                probe = dict(report)
+                probe["delivery_status"] = "complete"
+                probe["execution_mode"] = "delivery"
+                _validate_recall_delivery(probe, mapped)  # type: ignore[arg-type]
+                return
+            raise ValueError("MISSING_VERIFIED_ARTIFACTS")
         _validate_recall_delivery(report, artifacts)
         return
     if report.get("execution_mode") == "evaluation":
@@ -318,18 +338,31 @@ def validate_delivery(report: dict[str, Any], artifacts: dict[str, Path]) -> Non
 
 
 class RunStore:
-    def __init__(self, root: str | Path, database_url: str | Path | None = None):
+    def __init__(self, root: str | Path, database_url: str | Path | None = None,
+                 *, read_only: bool = False):
         self.root = Path(root).resolve()
-        self.root.mkdir(parents=True, exist_ok=True)
+        self.read_only = read_only
+        if not read_only:
+            self.root.mkdir(parents=True, exist_ok=True)
+        elif not self.root.is_dir():
+            raise StoreError("read-only store root does not exist")
         self.objects = self.root / "objects"
-        self.objects.mkdir(exist_ok=True)
+        if not read_only:
+            self.objects.mkdir(exist_ok=True)
+        elif not self.objects.is_dir():
+            raise StoreError("read-only store objects directory does not exist")
         self.db_path = self.root / "runs.sqlite3"
+        if read_only and not self.db_path.is_file() and not database_url:
+            raise StoreError("read-only store database does not exist")
         self.database = Database(database_url) if database_url else Database.from_env(self.db_path)
+        if read_only:
+            return
         with self._connect() as db:
             db.executescript("""
                 CREATE TABLE IF NOT EXISTS batches (
                     id TEXT PRIMARY KEY, owner TEXT NOT NULL, ruleset_version TEXT NOT NULL,
                     ruleset_sha256 TEXT NOT NULL DEFAULT '',
+                    mode VARCHAR(32) NOT NULL DEFAULT 'delivery',
                     status TEXT NOT NULL, idempotency_key TEXT, request_hash TEXT NOT NULL,
                     created_at REAL NOT NULL, updated_at REAL NOT NULL,
                     UNIQUE(owner, idempotency_key)
@@ -359,7 +392,8 @@ class RunStore:
             for name, definition in {"engine_build": "TEXT NOT NULL DEFAULT ''", "schema_version": "TEXT NOT NULL DEFAULT ''",
                                      "engine_id": "TEXT NOT NULL DEFAULT ''",
                                      "guide_version_id": "TEXT NOT NULL DEFAULT ''",
-                                     "guide_rules_sha256": "TEXT NOT NULL DEFAULT ''"}.items():
+                                     "guide_rules_sha256": "TEXT NOT NULL DEFAULT ''",
+                                     "mode": "VARCHAR(32) NOT NULL DEFAULT 'delivery'"}.items():
                 if name not in {row["name"] for row in db.execute("PRAGMA table_info(batches)")}:
                     db.execute(f"ALTER TABLE batches ADD COLUMN {name} {definition}")
             document_columns = {row["name"] for row in db.execute("PRAGMA table_info(documents)")}
@@ -391,7 +425,8 @@ class RunStore:
     def _connect(self):
         with self.database.connect() as db:
             db.execute("PRAGMA foreign_keys=ON")
-            db.execute("PRAGMA journal_mode=WAL")
+            if not self.read_only:
+                db.execute("PRAGMA journal_mode=WAL")
             yield db
 
     def object_path(self, key: str) -> Path:
@@ -719,15 +754,29 @@ class RunStore:
                     # A recall download is bound to the persisted delivery state and
                     # re-validated against the actual stored pair.
                     status = report.get("delivery_status")
-                    if kind in {"final", "redline"} and status != "complete":
-                        raise ValueError("RECALL_DELIVERY_NOT_COMPLETE")
-                    if kind in {"working_final", "working_redline"} and status != "incomplete":
-                        raise ValueError("RECALL_DELIVERY_NOT_INCOMPLETE")
-                    expected = ({"working_final", "working_redline"} if kind.startswith("working_")
-                                else {"final", "redline"})
-                    pairs = {item["kind"]: self.object_path(item["object_key"]) for item in pair_rows
-                             if item["kind"] in expected}
-                    validate_delivery(report, pairs)
+                    if kind.startswith("evaluation_"):
+                        # Evaluation bytes are the validated final/redline pair under
+                        # non-contract names. Validate the same hashes and pair
+                        # contract without ever treating them as formal delivery.
+                        probe = dict(report)
+                        probe["delivery_status"] = "complete"
+                        probe["execution_mode"] = "delivery"
+                        expected = {"final", "redline"}
+                        pairs = {item["kind"]: self.object_path(item["object_key"]) for item in pair_rows
+                                 if item["kind"] in {"evaluation_final", "evaluation_redline"}}
+                        pairs = {("final" if key.endswith("final") else "redline"): path
+                                 for key, path in pairs.items()}
+                        validate_delivery(probe, pairs)
+                    else:
+                        if kind in {"final", "redline"} and status != "complete":
+                            raise ValueError("RECALL_DELIVERY_NOT_COMPLETE")
+                        if kind in {"working_final", "working_redline"} and status != "incomplete":
+                            raise ValueError("RECALL_DELIVERY_NOT_INCOMPLETE")
+                        expected = ({"working_final", "working_redline"} if kind.startswith("working_")
+                                    else {"final", "redline"})
+                        pairs = {item["kind"]: self.object_path(item["object_key"]) for item in pair_rows
+                                 if item["kind"] in expected}
+                        validate_delivery(report, pairs)
                 elif _requires_actual_review(report):
                     if report.get("source_sha256") != document["source_sha256"]:
                         raise ValueError("ACTUAL_CONTENT_REVIEW_SOURCE_MISMATCH")
@@ -773,7 +822,7 @@ class RunStore:
                 active_scope = """COALESCE((SELECT task_id FROM task_batches WHERE batch_id=active.batch_id),active.batch_id)
                     = COALESCE((SELECT task_id FROM task_batches WHERE batch_id=d.batch_id),d.batch_id)"""
             candidate = f"""SELECT d.*, b.ruleset_version, b.ruleset_sha256, b.engine_build, b.schema_version,
-                b.engine_id, b.guide_version_id, b.guide_rules_sha256, b.owner
+                b.engine_id, b.guide_version_id, b.guide_rules_sha256, b.mode, b.owner
                 FROM documents d JOIN batches b ON b.id=d.batch_id
                 WHERE b.status IN ('queued','running') AND d.attempt < ? AND
                 (d.status='queued' OR (d.status='retry_wait' AND d.next_attempt_at<=?) OR
@@ -894,7 +943,7 @@ class RunStore:
             raise
 
     def retry(self, document_id: str, token: int, *, error_code: str, max_attempts: int = 3,
-              base_delay_seconds: int = 2) -> None:
+              base_delay_seconds: int = 2, report: dict[str, Any] | None = None) -> None:
         now = time.time()
         # Validate outside the write transaction so a newer worker can commit
         # a takeover between this read and the fenced UPDATE.
@@ -905,27 +954,30 @@ class RunStore:
         if row["lease_until"] is None or row["lease_until"] <= now:
             raise Conflict("expired worker lease")
         terminal = row["attempt"] >= max_attempts
-        pause_required = error_code in {"MODEL_CIRCUIT_OPEN", "MODEL_GLOBAL_CALL_BUDGET_EXCEEDED", "MODEL_COST_BUDGET_EXCEEDED", "MODEL_CALL_BUDGET_EXCEEDED", "MODEL_LEDGER_UNAVAILABLE"}
+        pause_required = error_code in {"MODEL_CIRCUIT_OPEN", "MODEL_GLOBAL_CALL_BUDGET_EXCEEDED", "MODEL_COST_BUDGET_EXCEEDED", "MODEL_CALL_BUDGET_EXCEEDED", "MODEL_LEDGER_UNAVAILABLE", "MODEL_CHECKPOINT_UNAVAILABLE", "MODEL_REPLAY_MISS", "MODEL_CASSETTE_UNAVAILABLE"}
         delay = min(base_delay_seconds * (2 ** max(row["attempt"] - 1, 0)) * random.uniform(0.8, 1.2), 300)
-        report_json = None
+        report_json = json.dumps(report, ensure_ascii=False) if isinstance(report, dict) else None
         if terminal:
-            report = {"document_id": document_id, "source_sha256": row["source_sha256"],
+            terminal_report = dict(report) if isinstance(report, dict) else {}
+            terminal_report.update({"document_id": document_id, "source_sha256": row["source_sha256"],
                       "qualification_status": "failed", "delivery_status": "not_generated",
-                      "error_code": error_code, "errors": [{"code": error_code, "stage": "worker"}]}
-            report_json = json.dumps(report)
+                      "error_code": error_code})
+            terminal_report.setdefault("errors", []).append({"code": error_code, "stage": "worker"})
+            report_json = json.dumps(terminal_report, ensure_ascii=False)
         transition_now = time.time()
         with self._connect() as db:
             db.execute("BEGIN IMMEDIATE")
             changed = db.execute("""UPDATE documents SET status=?,error_code=?,next_attempt_at=?,lease_until=NULL,
                 finished_at=CASE WHEN ? THEN ? ELSE finished_at END,
-                report_json=CASE WHEN ? THEN ? ELSE report_json END,
+                report_json=CASE WHEN ? OR ? THEN ? ELSE report_json END,
                 qualification_status=CASE WHEN ? THEN 'failed' ELSE qualification_status END,
                 delivery_status=CASE WHEN ? THEN 'not_generated' ELSE delivery_status END,
                 updated_at=? WHERE id=? AND fencing_token=? AND status IN ('leased','running')
                 AND lease_until>? AND attempt=?""",
                             ("failed" if terminal else "retry_wait", error_code,
                             None if terminal else transition_now + delay, 1 if terminal else 0, transition_now,
-                            1 if terminal else 0, report_json, 1 if terminal else 0,
+                            1 if terminal else 0, 1 if report_json is not None else 0, report_json,
+                            1 if terminal else 0,
                             1 if terminal else 0, transition_now, document_id, token, transition_now,
                             row["attempt"])).rowcount
             if changed != 1:

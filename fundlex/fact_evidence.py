@@ -72,6 +72,19 @@ def verify_class_set(inspection: Any, classes: Sequence[Any], quote: str) -> dic
         number = (int(count[1]) if count and count[1].isdigit()
                   else counts.get(count[1]) if count else None)
         complete = number == len(expected) and all(name in text for name in expected)
+        if not complete and number is None and all(name in text for name in expected):
+            # An exhaustive enumeration of every full display name is complete
+            # even without an explicit "四种" count.  The truncation check above
+            # already rejected a sentence that names an additional class.
+            complete = True
+        # Currency variants are sub-classes of the same fee group: a contract
+        # that enumerates "A类、C类和E类三种" is complete for A类人民币、
+        # A类美元现汇、C类、E类 (道琼斯).
+        base = {name[0] for name in expected
+                if re.fullmatch(r"[A-Z]类.*", name)}
+        if (not complete and number is not None and base
+                and labels == base and number == len(base)):
+            complete = True
     result.update(set_complete_verified=complete,
                   reason="CLASS_SET_VERIFIED" if complete else "CLASS_SET_MISMATCH")
     return result

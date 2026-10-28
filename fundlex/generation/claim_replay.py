@@ -19,6 +19,31 @@ def _compact(value: str) -> str:
     return re.sub(r"[\s\u3000\u00a0\u200b]+", "", value or "")
 
 
+def _own_rule_append_sites(rule_id: str, operation_id: str,
+                           sites: Sequence[Mapping[str, Any]],
+                           targets: Sequence[Mapping[str, Any]]
+                           ) -> list[Mapping[str, Any]]:
+    """Keep an append proof at this rule's own target sites.
+
+    G16 appends at the clause tail while G15 deletes the payment head.  Exact
+    source-duplicate propagation can clone the deleted head into G16's site set;
+    that sibling location is not G16's effect site.  Only locations carrying a
+    real G16 target/operation may prove the append.
+    """
+    if rule_id != "G16":
+        return list(sites)
+    locations = {
+        str(target.get("location") or "")
+        for target in targets
+        if str(target.get("rule_id") or "") == rule_id
+        and not target.get("out_of_scope")
+        and operation_id in {str(key) for key in (target.get("operations") or ())}
+        and str(target.get("location") or "")
+    }
+    return [site for site in sites
+            if str(site.get("location") or site.get("site_id") or "") in locations]
+
+
 def _g16_duplicate_effects(original: Any, artifact: Any,
                            rules_by_id: Mapping[str, dict], facts: Any,
                            records: Sequence[Any]) -> list[dict[str, Any]]:
@@ -55,6 +80,161 @@ def _g16_duplicate_effects(original: Any, artifact: Any,
                     "code": "CLAIM_DUPLICATE_EFFECT",
                     "reason": "the final G16 policy appears more than once in one source fee clause",
                 })
+    return failures
+
+
+def _authorized_site_count(operation_id: str, location: str,
+                           targets: Sequence[Mapping[str, Any]],
+                           units: Sequence[Mapping[str, Any]],
+                           location_edits: Sequence[Mapping[str, Any]]) -> int:
+    """Distinct authorized physical sites for one operation at this location.
+
+    Duplicate-effect detection must not use the paragraph as an implicit
+    authorization: two class-specific sites may legitimately write the same
+    policy once each in one paragraph, while two insertions at one site are a
+    duplicate.  Target/span identity is the unit of comparison; ambiguous
+    same-location targets without occurrence identity collapse to one site and
+    are independently rejected by the occurrence checks.
+    """
+    keys: set[str] = set()
+
+    def add(target_id: Any, occurrence: int = -1,
+            start: Any = None, end: Any = None) -> None:
+        target_id = str(target_id or "")
+        if target_id:
+            # A target id is the stable authorized site identity across its
+            # target record, edit unit and parent edit.  Occurrence suffixes add
+            # no second authorization; the same target cannot authorize two
+            # copies of one policy.
+            keys.add(f"target:{target_id}")
+        elif occurrence >= 0:
+            keys.add(f"occurrence:{occurrence}")
+        elif start is not None or end is not None:
+            keys.add(f"span:{start}:{end}")
+        else:
+            keys.add("location")
+
+    for target in targets:
+        if not isinstance(target, Mapping) or target.get("out_of_scope"):
+            continue
+        if str(target.get("state") or "") in {"absent", "not_applicable"}:
+            continue
+        if operation_id not in {str(key) for key in (target.get("operations") or ())}:
+            continue
+        if str(target.get("location") or "") != location:
+            continue
+        add(target.get("target_id"), _occurrence_index(target))
+    for unit in units:
+        keys_in_unit = {key.strip() for key in
+                        str(unit.get("operation_id") or "").split(",") if key.strip()}
+        if operation_id not in keys_in_unit:
+            continue
+        if str(unit.get("location") or "") != location:
+            continue
+        add(unit.get("target_id"), -1, unit.get("start"), unit.get("end"))
+    for edit in location_edits:
+        if operation_id not in set(_operation_keys(edit, None)):
+            continue
+        add(edit.get("target_id"), -1, edit.get("start"), edit.get("end"))
+    return len(keys)
+
+
+def _duplicate_effect_failures(by_location: Mapping[str, Sequence[Mapping[str, Any]]],
+                               before_inspection: Any, after_inspection: Any,
+                               records: Sequence[Any],
+                               targets: Sequence[Mapping[str, Any]],
+                               units: Sequence[Mapping[str, Any]],
+                               new_texts: Mapping[str, str]) -> list[dict[str, Any]]:
+    """Attribute repeated new policy to one operation and one authorized site.
+
+    Different operations, different physical locations (body/summary) and two
+    class/category sites under the same operation do not duplicate each other.
+    A one-of wording group is one logical site: two alternatives that both write
+    its new policy are a duplicate even though their operation ids differ.
+    """
+    records_by_operation = {str(record.spec.operation_id): record for record in records}
+    group_for_operation = {
+        operation_id: str(getattr(record.spec, "one_of_group", "") or "") or operation_id
+        for operation_id, record in records_by_operation.items()}
+    failures: list[dict[str, Any]] = []
+    seen: set[tuple[str, str, str]] = set()
+    for location, location_edits in by_location.items():
+        try:
+            before_compact = _compact(str(before_inspection.by_location(location).text))
+            after_compact = _compact(str(after_inspection.by_location(location).text))
+        except (KeyError, ValueError, IndexError, AttributeError):
+            continue
+        units_at_location = [unit for unit in units
+                             if str(unit.get("location") or "") == location]
+        groups_at_location: dict[str, set[str]] = {}
+        group_units: dict[str, list[Mapping[str, Any]]] = {}
+        for unit in units_at_location:
+            operation_ids = {key.strip() for key in
+                             str(unit.get("operation_id") or "").split(",") if key.strip()}
+            unit_groups = {group_for_operation[operation_id]
+                           for operation_id in operation_ids
+                           if operation_id in group_for_operation}
+            for group in unit_groups:
+                groups_at_location.setdefault(group, set()).update(
+                    operation_id for operation_id in operation_ids
+                    if group_for_operation.get(operation_id) == group)
+                group_units.setdefault(group, []).append(unit)
+        for operation_id in records_by_operation:
+            if not new_texts.get(operation_id):
+                continue
+            if _authorized_site_count(operation_id, location, targets,
+                                      units_at_location, location_edits) <= 0:
+                continue
+            groups_at_location.setdefault(group_for_operation[operation_id], set()).add(
+                operation_id)
+        one_of_groups = {
+            group: any(str(getattr(records_by_operation[operation_id].spec,
+                                   "one_of_group", "") or "")
+                       for operation_id in operation_ids)
+            for group, operation_ids in groups_at_location.items()}
+        allowed_by_group = {
+            group: (1 if one_of_groups[group] else max(
+                (_authorized_site_count(operation_id, location, targets,
+                                        units_at_location, location_edits)
+                 for operation_id in operation_ids), default=0))
+            for group, operation_ids in groups_at_location.items()}
+        needles_by_group = {
+            group: {_compact(new_texts.get(operation_id) or "")
+                    for operation_id in operation_ids}
+            for group, operation_ids in groups_at_location.items()}
+        for group, operation_ids in sorted(groups_at_location.items()):
+            for needle in sorted(needles_by_group[group]):
+                if len(needle) < 20:
+                    continue
+                # Every logical policy may appear once per authorized site; other
+                # operation groups writing a different policy do not enlarge this
+                # policy's allowance.  A one-of group is one logical site.
+                allowed_total = sum(
+                    allowed_by_group[other_group]
+                    for other_group, other_needles in needles_by_group.items()
+                    if needle in other_needles)
+                owned = sum(_compact(str(unit.get("replacement") or "")).count(needle)
+                            for unit in group_units.get(group, ()))
+                before_count = before_compact.count(needle)
+                after_count = after_compact.count(needle)
+                capacity = allowed_by_group.get(group, 0) - before_count
+                if (owned > max(0, capacity)
+                        and after_count > max(1, before_count, allowed_total)):
+                    for operation_id in sorted(operation_ids):
+                        record = records_by_operation[operation_id]
+                        identity = (operation_id, location, needle)
+                        if identity in seen:
+                            continue
+                        seen.add(identity)
+                        failures.append({
+                            "rule_id": record.spec.rule_id,
+                            "operation_id": operation_id,
+                            "obligation_id": record.obligation_id,
+                            "location": location,
+                            "code": "CLAIM_DUPLICATE_EFFECT",
+                            "reason": "an authorized final clause appears more than "
+                                      "once at the same operation site",
+                        })
     return failures
 
 
@@ -905,6 +1085,49 @@ def _operation_units(group: Sequence[Mapping[str, Any]],
     return units
 
 
+def _scope_for_rule(scopes: Mapping[str, Any] | None, rule_id: Any) -> Any:
+    """Return the resolved rule scope, or ``None`` when scopes are not supplied.
+
+    A missing entry keeps the legacy document-wide replay for frozen artifacts and
+    direct callers; an explicit scope (even unresolved) always wins.
+    """
+
+    if scopes is None:
+        return None
+    return scopes.get(str(rule_id or ""))
+
+
+def _scope_usable(scope: Any) -> bool:
+    """Whether a rule scope may contribute physical sites (fail-closed otherwise)."""
+
+    return (scope is not None
+            and str(getattr(scope, "resolution", "unresolved")) != "unresolved"
+            and bool(getattr(scope, "locations", ())))
+
+
+def _filter_scoped_targets(targets: Sequence[Mapping[str, Any]],
+                           scopes: Mapping[str, Any] | None
+                           ) -> list[Mapping[str, Any]]:
+    """Drop targets outside their rule's explicit physical scope.
+
+    ``scopes is None`` preserves the legacy caller; a scope entry that is
+    unresolved/empty also drops every target of that rule so replay cannot fall
+    back to a document-wide site.
+    """
+
+    if scopes is None:
+        return list(targets)
+    result: list[Mapping[str, Any]] = []
+    for target in targets:
+        if not isinstance(target, Mapping):
+            continue
+        scope = _scope_for_rule(scopes, target.get("rule_id"))
+        if scope is None or (_scope_usable(scope)
+                             and scope.contains(str(target.get("location") or ""))):
+            result.append(target)
+    return result
+
+
 def replay_claims(edits: Sequence[Mapping[str, Any]], before_inspection: Any,
                   after_inspection: Any, *, rules_by_id: Mapping[str, dict],
                   facts: Any = None, max_failures: int = 40,
@@ -912,7 +1135,10 @@ def replay_claims(edits: Sequence[Mapping[str, Any]], before_inspection: Any,
                   required_terms_by_rule: Mapping[str, Sequence[str]] | None = None,
                   target_rules: Mapping[str, Sequence[str]] | None = None,
                   targets_by_id: Mapping[str, Mapping[str, Any]] | None = None,
-                  obligations: Any = None) -> dict:
+                  obligations: Any = None,
+                  scopes: Mapping[str, Any] | None = None,
+                  absent_coverage_by_operation: Mapping[str, Mapping[str, Any]] | None = None
+                  ) -> dict:
     """Replay every edit's claim against the actual artifact paragraphs.
 
     Two proof layers (external review 2026-10-20, P0-1):
@@ -924,6 +1150,16 @@ def replay_claims(edits: Sequence[Mapping[str, Any]], before_inspection: Any,
       authorization of the operations it actually executes (operation keys from the
       target, else inferred from the edit's own wording), so sibling operations can
       never lend each other delete or add rights.
+
+    ``scopes`` (``rule_id -> RuleScope``) bounds every physical site to the rule's
+    own leaf subsection.  A summary copy outside the scope is never re-added as a
+    required site.  An unresolved/empty scope produces no document-wide fallback and
+    is reported as ``RULE_SCOPE_UNRESOLVED``.  ``None`` keeps the historical
+    document-wide behaviour for frozen replay and direct tests.
+
+    ``absent_coverage_by_operation`` (``operation_id -> record``) is the caller's
+    explicit site-scan coverage for a delete whose old literal is absent.  Without
+    such a record a literal miss remains ``EFFECT_SITE_UNPROVEN`` rather than PASS.
     """
     from .validators import validate_edit
     by_location: dict[str, list[Mapping[str, Any]]] = {}
@@ -981,7 +1217,16 @@ def replay_claims(edits: Sequence[Mapping[str, Any]], before_inspection: Any,
     # also run for direct replay callers without an obligation ledger; otherwise a
     # paragraph-level edit can accidentally stand in for two same-operation sites.
     duplicate_target_failures: list[dict[str, Any]] = []
-    targets = list((targets_by_id or {}).values())
+    targets = _filter_scoped_targets(list((targets_by_id or {}).values()), scopes)
+    scope_locations: set[str] | None = None
+    if scopes is not None:
+        # A target outside its rule's physical scope is not a site, even when the
+        # plan/report did not stamp ``out_of_scope``.  This also keeps an
+        # out-of-scope summary copy from creating a duplicate-target ambiguity.
+        scope_locations = {
+            str(location)
+            for scope in scopes.values() if _scope_usable(scope)
+            for location in getattr(scope, "locations", ())}
     duplicate_target_groups: dict[str, list[Mapping[str, Any]]] = {}
     for target in targets:
         if not isinstance(target, Mapping) or target.get("out_of_scope"):
@@ -1039,11 +1284,17 @@ def replay_claims(edits: Sequence[Mapping[str, Any]], before_inspection: Any,
     location_rules = {location: {rule_id for edit in group for rule_id in _rule_ids(edit)}
                       for location, group in by_location.items()}
     for location in allowed_locations:
+        if scope_locations is not None and location not in scope_locations:
+            continue
         span = before_inspection.by_location(location)
         text = _compact(str(getattr(span, "text", "")))
         duplicates = []
         for item in duplicate_groups.get(text, []):
             if item == location or item in allowed_locations:
+                continue
+            if scope_locations is not None and item not in scope_locations:
+                # A contract-summary copy outside every rule's leaf scope is not a
+                # second required business site.
                 continue
             duplicate_rule_ids = set((target_rules or {}).get(item) or ())
             # Only a copy that another rule target actually owns can be required here;
@@ -1059,7 +1310,8 @@ def replay_claims(edits: Sequence[Mapping[str, Any]], before_inspection: Any,
                 "code": "DUPLICATE_SITE_UNEDITED",
                 "reason": "an identical clause copy was left unedited"})
     for text_value, locations in duplicate_groups.items():
-        edited_copies = [item for item in locations if item in allowed_locations]
+        edited_copies = [item for item in locations if item in allowed_locations
+                         and (scope_locations is None or item in scope_locations)]
         if len(edited_copies) < 2:
             continue
         # Identical source paragraphs can have different authorized sibling
@@ -1397,36 +1649,16 @@ def replay_claims(edits: Sequence[Mapping[str, Any]], before_inspection: Any,
             continue
         if value:
             new_texts[record.spec.operation_id] = value
-    # An operation's fixed policy may occur at most once per paragraph unless it
-    # already occurred there in the source.  Without this, a second full-clause
-    # insertion can pass the span reconstruction (D16 p221 R+R repro).
-    duplicate_seen: set[tuple[str, str]] = set()
-    for location in by_location:
-        try:
-            before_text = str(before_inspection.by_location(location).text)
-            after_text = str(after_inspection.by_location(location).text)
-        except (KeyError, ValueError, IndexError, AttributeError):
-            continue
-        before_compact = _compact(before_text)
-        after_compact = _compact(after_text)
-        for record in records:
-            value = new_texts.get(record.spec.operation_id)
-            needle = _compact(value or "")
-            if len(needle) < 20:
-                continue
-            key = (location, needle)
-            if key in duplicate_seen:
-                continue
-            duplicate_seen.add(key)
-            if after_compact.count(needle) > max(1, before_compact.count(needle)):
-                failures.append({
-                    "rule_id": record.spec.rule_id,
-                    "operation_id": record.spec.operation_id,
-                    "obligation_id": record.obligation_id,
-                    "location": location,
-                    "code": "CLAIM_DUPLICATE_EFFECT",
-                    "reason": "an authorized final clause appears more than once in the same paragraph",
-                })
+    # An operation's fixed policy may occur at most once per authorized site
+    # unless that site count already authorizes several class/category copies.
+    # Without this, a second full-clause insertion can pass the span
+    # reconstruction (D16 p221 R+R repro).  The comparison is deliberately
+    # per-operation and per-site: body/summary copies at different physical
+    # locations and two class sites under one operation are not duplicates.
+    effect_duplicate_failures = _duplicate_effect_failures(
+        by_location, before_inspection, after_inspection, records, targets,
+        operation_records, new_texts)
+    failures.extend(effect_duplicate_failures)
     authorized_new_texts: dict[str, list[str]] = {}
     for unit in operation_records:
         if unit.get("verdict") != "PASS":
@@ -1435,13 +1667,27 @@ def replay_claims(edits: Sequence[Mapping[str, Any]], before_inspection: Any,
             value = new_texts.get(key.strip())
             if value and _compact(value) in _compact(str(unit.get("replacement") or "")):
                 authorized_new_texts.setdefault(str(unit.get("location") or ""), []).append(value)
-    targets = list((targets_by_id or {}).values())
+    targets = _filter_scoped_targets(list((targets_by_id or {}).values()), scopes)
     obligation_state: dict[str, dict[str, Any]] = {}
     for record in records:
         applicability = getattr(record, "applicability", None)
         if applicability is not None and applicability.status != "TRUE":
             continue
         operation_id = str(record.spec.operation_id)
+        scope = _scope_for_rule(scopes, record.spec.rule_id)
+        if scope is not None and not _scope_usable(scope):
+            # The rule has no physical scope (or resolution failed).  Scanning the
+            # whole document here is what re-added the D06 summary copy p1286-p1289;
+            # report an explicit unresolved proof instead of leaking a fallback site.
+            from .effects import OperationEffect
+            obligation_state[record.obligation_id] = OperationEffect(
+                "UNRESOLVED", "UNPROVEN",
+                rule_id=record.spec.rule_id, operation_id=operation_id,
+                obligation_id=record.obligation_id,
+                failure_code="RULE_SCOPE_UNRESOLVED",
+                reason=("rule scope is unresolved or empty; "
+                        "document-wide site recovery is disabled")).as_dict()
+            continue
         sites: list[dict[str, Any]] = []
         # Two targets for the same operation and paragraph must carry occurrence
         # identity.  Collapsing them to ``pN`` makes a single successful edit look
@@ -1456,6 +1702,14 @@ def replay_claims(edits: Sequence[Mapping[str, Any]], before_inspection: Any,
         ambiguous_locations = set()
         for location, candidates in same_location_targets.items():
             occurrences = [_occurrence_index(candidate) for candidate in candidates]
+            if len(candidates) > 1:
+                composites = [tuple(candidate.get("composite") or ())
+                              for candidate in candidates]
+                if (all(composites) and len(set(composites)) == 1):
+                    # Two targets can name the same multi-paragraph physical site
+                    # (open-rule plus survey).  Identical composite geometry is one
+                    # occurrence, not an ambiguous sibling.
+                    continue
             if (len(candidates) > 1 and
                     (any(value < 0 for value in occurrences)
                      or len(set(occurrences)) != len(occurrences))):
@@ -1485,11 +1739,30 @@ def replay_claims(edits: Sequence[Mapping[str, Any]], before_inspection: Any,
             location = str(target.get("location") or "")
             if location in ambiguous_locations:
                 continue
+            if scope is not None and not scope.contains(location):
+                continue
             try:
                 before_text = str(before_inspection.by_location(location).text)
             except (KeyError, ValueError, IndexError, AttributeError):
                 continue
             state = str(target.get("state") or "")
+            from ..recall import resolve_quote, resolve_source_quote
+            before_span = before_inspection.by_location(location)
+            target_quote = str(target.get("quote") or "")
+            source_bound = resolve_source_quote(before_span, target_quote)
+            if state == "satisfied" and source_bound is None and target_quote:
+                # A satisfied target often quotes only the class label
+                # ("称为 C 类基金份额") inside a definition paragraph without a
+                # sentence terminator (glossary entries may be concatenated with
+                # "55、…"). No edit is planned, so unique containment in the
+                # reported physical paragraph is sufficient to bind its evidence;
+                # the whole paragraph remains the site for the operation guard.
+                if _compact(before_span.text).count(_compact(target_quote)) == 1:
+                    bound = resolve_quote(before_span, target_quote)
+                    if bound is not None:
+                        source_bound = bound
+            if state == "satisfied" and source_bound is None:
+                continue
             if state in {"absent", "satisfied"}:
                 from ..recall import _looks_like_heading
                 if _looks_like_heading(before_text):
@@ -1503,14 +1776,11 @@ def replay_claims(edits: Sequence[Mapping[str, Any]], before_inspection: Any,
                 # Use the real source delimiter for a fully bound quote before
                 # testing literal site evidence. A terminal semicolon/full-stop
                 # difference must neither drop the site nor reduce it to a prefix.
-                from ..recall import resolve_quote
                 span = before_inspection.by_location(location)
-                bound = resolve_quote(span, quote) if quote else None
+                bound = resolve_source_quote(span, quote) if quote else None
                 if bound is not None:
                     actual_quote = before_text[bound[0]:bound[1]]
-                    if (_compact(quote).rstrip("。；;") ==
-                            _compact(actual_quote).rstrip("。；;")):
-                        quote = actual_quote
+                    quote = actual_quote
             parts = []
             for part in target.get("composite") or []:
                 from ..recall import compact_offsets
@@ -1530,7 +1800,8 @@ def replay_claims(edits: Sequence[Mapping[str, Any]], before_inspection: Any,
                                    else target.get("state")),
                         "operation_id": operation_id,
                         "obligation_id": record.obligation_id,
-                        "target_id": target.get("target_id")}
+                        "target_id": target.get("target_id"),
+                        "source_rule_id": str(target.get("rule_id") or "")}
             if quote and _compact(quote) in _compact(before_text):
                 sites.append({"location": location, "quote": quote,
                               "occurrence_index": _occurrence_index(target),
@@ -1547,7 +1818,24 @@ def replay_claims(edits: Sequence[Mapping[str, Any]], before_inspection: Any,
             # operation key and expected source slice are still artifact evidence;
             # use them instead of falling back to a zero-site document scan.
             for edit in effect_edits:
-                for component in edit.get("components") or [edit]:
+                # The parent edit may contain several sibling operation keys.  A
+                # superseded target can recover only from its own operation unit;
+                # otherwise an edit made for G01 at p52 can lend a physical site
+                # to G03 merely because both rules share an append shape (D04).
+                components = edit.get("components") or []
+                if components:
+                    own_components = [component for component in components
+                                      if operation_id in _operation_keys(component, None)]
+                else:
+                    # A parent carrying several operation keys has no physical
+                    # operation unit to recover from.  Treating that union as the
+                    # current operation would recreate sibling borrowing without
+                    # any component-level provenance.
+                    edit_keys = _operation_keys(edit, None)
+                    own_components = ([edit] if edit_keys == [operation_id] else [])
+                if not own_components:
+                    continue
+                for component in own_components:
                     location = str(component.get("location") or edit.get("location") or "")
                     if not location:
                         continue
@@ -1562,7 +1850,8 @@ def replay_claims(edits: Sequence[Mapping[str, Any]], before_inspection: Any,
                     sites.append({"location": location, "quote": quote,
                                   "state": "needs_edit", "operation_id": operation_id,
                                   "obligation_id": record.obligation_id,
-                                  "target_id": str(component.get("target_id") or "")})
+                                  "target_id": str(component.get("target_id") or ""),
+                                  "source_rule_id": str(record.spec.rule_id)})
                 if sites:
                     break
         # A model may locate the body copy but miss the contract-summary copy.
@@ -1583,6 +1872,11 @@ def replay_claims(edits: Sequence[Mapping[str, Any]], before_inspection: Any,
                     text = str(getattr(span, "text", ""))
                     if not location or location in seen_locations or _looks_like_heading(text):
                         continue
+                    if scope is not None and not scope.contains(location):
+                        # The D06 contract-summary copy (p1286-p1289) is not a
+                        # second business site when the rule scope names the body
+                        # clause only.
+                        continue
                     if prefix not in _compact(text):
                         continue
                     if not operation_site_bound(record.spec, text, before_inspection,
@@ -1592,7 +1886,8 @@ def replay_claims(edits: Sequence[Mapping[str, Any]], before_inspection: Any,
                                   "state": "satisfied",
                                   "operation_id": operation_id,
                                   "obligation_id": record.obligation_id,
-                                  "target_id": f"duplicate-site:{location}"})
+                                  "target_id": f"duplicate-site:{location}",
+                                  "source_rule_id": str(record.spec.rule_id)})
                     seen_locations.add(location)
         own_records = []
         for unit in operation_records:
@@ -1605,12 +1900,31 @@ def replay_claims(edits: Sequence[Mapping[str, Any]], before_inspection: Any,
                 before_text = str(before_inspection.by_location(location).text)
             except (KeyError, ValueError, IndexError, AttributeError):
                 continue
-            sites.append({"location": location, "quote": before_text})
+            sites.append({"location": location, "quote": before_text,
+                          "source_rule_id": str(unit.get("rule_id") or "")})
+        if scope is not None:
+            # Final boundary over every site source (targets, composite parts,
+            # superseded-target recovery, duplicate scan, edit units): an
+            # out-of-scope paragraph may never enter effect proof or evidence.
+            sites = [site for site in sites
+                     if scope.contains(str(site.get("location")
+                                           or site.get("site_id") or ""))]
+            own_records = [unit for unit in own_records
+                           if scope.contains(str(unit.get("location") or ""))]
+        allowed_locations = None
+        if record.spec.op == "append":
+            sites = _own_rule_append_sites(
+                str(record.spec.rule_id), operation_id, sites, targets)
+            allowed_locations = {str(site.get("location") or "")
+                                 for site in sites}
         result = evaluate_operation_effect(record, before_inspection, after_inspection,
             sites, effect_edits, facts, validated_units=own_records,
-            authorized_new_texts=authorized_new_texts)
+            authorized_new_texts=authorized_new_texts,
+            allowed_locations=allowed_locations,
+            boundary_locations=(set(scope.locations) if scope is not None else None),
+            absent_coverage=(absent_coverage_by_operation or {}).get(operation_id))
         obligation_state[record.obligation_id] = result.as_dict()
-        duplicates = [item for item in clause_duplicates
+        duplicates = [item for item in (*clause_duplicates, *effect_duplicate_failures)
                       if item["operation_id"] == record.spec.operation_id]
         if duplicates:
             # Coverage/delivery must receive the same failure as document replay;
@@ -1619,7 +1933,9 @@ def replay_claims(edits: Sequence[Mapping[str, Any]], before_inspection: Any,
             item.update(state="FAIL", artifact_status="WRONG_EFFECT",
                         failure_code="CLAIM_DUPLICATE_EFFECT",
                         reason=duplicates[0]["reason"])
-            locations = {loc for duplicate in duplicates for loc in duplicate["locations"]}
+            locations = {loc for duplicate in duplicates
+                         for loc in (duplicate.get("locations")
+                                     or [duplicate.get("location")]) if loc}
             for site in item.get("site_effects") or ():
                 if site.get("location") in locations:
                     site.update(state="FAIL", artifact_status="WRONG_EFFECT",
@@ -1636,12 +1952,15 @@ def replay_claims(edits: Sequence[Mapping[str, Any]], before_inspection: Any,
                   if obligation_state[record.obligation_id].get("state") == "PASS"]
         if not passed:
             continue
-        group_sites = list(dict.fromkeys(location for record in group
-            for location in obligation_state[record.obligation_id].get("sites") or []))
+        group_sites = list(dict.fromkeys(
+            str(location).split("#occurrence:", 1)[0]
+            for record in group
+            for location in obligation_state[record.obligation_id].get("sites") or ()))
         for record in group:
             item = obligation_state[record.obligation_id]
             if item.get("state") == "PASS" or not group_sites:
                 continue
+            group_scope = _scope_for_rule(scopes, record.spec.rule_id)
             # An alternative may have a target site but not use it successfully.
             # For a ONE_OF historical wording group the shared certified business
             # site is still the right place to prove this alternative; the evaluator
@@ -1652,7 +1971,13 @@ def replay_claims(edits: Sequence[Mapping[str, Any]], before_inspection: Any,
             # Historical alternatives can share their certified business sites, not
             # independent siblings. The same evaluator must prove this alternative.
             proof = evaluate_operation_effect(record, before_inspection, after_inspection,
-                                              shared_sites, effect_edits, facts)
+                                              shared_sites, effect_edits, facts,
+                                              boundary_locations=(
+                                                  set(group_scope.locations)
+                                                  if group_scope is not None else None),
+                                              absent_coverage=(
+                                                  absent_coverage_by_operation or {}
+                                              ).get(record.spec.operation_id))
             if proof.state == "PASS":
                 obligation_state[record.obligation_id] = proof.as_dict()
             else:
@@ -1720,12 +2045,18 @@ def check_delete_residuals(rules_by_id: Mapping[str, dict], after_inspection: An
                            edits: Sequence[Mapping[str, Any]] | None = None,
                            max_failures: int = 40, *, original: Any = None,
                            targets: Sequence[Mapping[str, Any]] = (), facts: Any = None,
-                           obligations: Any = None) -> list[dict[str, Any]]:
+                           obligations: Any = None,
+                           scopes: Mapping[str, Any] | None = None) -> list[dict[str, Any]]:
     """Probe verified operation sites first, then classify full-document candidates.
 
     A literal match elsewhere is only a candidate. It becomes a blocking residual
     after the rule's business-site classifier accepts it. A sibling's policy text
     can explain a retained sentence only at the site where that policy was applied.
+
+    ``scopes`` restricts the scan to each rule's physical leaf locations.  A summary
+    copy outside the scope is never a residual, and an unresolved/empty scope skips
+    the rule instead of falling back to the whole document.  ``None`` preserves the
+    historical document-wide behaviour.
     """
     from ..recall import target_site_ok, resolve_quote, condition_status
     from .effects import operation_site_bound
@@ -1738,6 +2069,10 @@ def check_delete_residuals(rules_by_id: Mapping[str, dict], after_inspection: An
     seen: set[tuple[str, str, str]] = set()
     edits = list(edits or [])
     for rule_id, rule in rules_by_id.items():
+        scope = _scope_for_rule(scopes, rule_id)
+        if scope is not None and not _scope_usable(scope):
+            continue
+        allowed_locations = scope.locations if scope is not None else None
         site_specs = {}
         if str(rule_id) == "G05":
             from ..obligations import compile_obligations
@@ -1776,6 +2111,9 @@ def check_delete_residuals(rules_by_id: Mapping[str, dict], after_inspection: An
                 str(getattr(pair[1], "location", "")) not in known, pair[0]))
             for span_index, span in ordered:
                 location = str(getattr(span, "location", ""))
+                if allowed_locations is not None and location not in allowed_locations:
+                    # Out-of-scope summary copies are not residual sites.
+                    continue
                 source_span = source_by_location.get(location)
                 if source_span is None:
                     continue
@@ -1795,12 +2133,20 @@ def check_delete_residuals(rules_by_id: Mapping[str, dict], after_inspection: An
                     continuation_text in _compact(text) for text in texts if text)
                 if not semantic and span_index > 0 and is_reference_continuation:
                     previous = source_spans[span_index - 1]
-                    continuation = SimpleNamespace(text=str(previous.text) + str(source_span.text),
-                                                   location=location)
-                    semantic = target_site_ok(str(rule_id), continuation, source)
-                    site_quote = continuation.text
-                    site_parts = ({"location": str(previous.location), "quote": str(previous.text)},
-                                  {"location": location, "quote": str(source_span.text)})
+                    if (allowed_locations is not None
+                            and str(previous.location) not in allowed_locations):
+                        previous = None
+                    continuation = (SimpleNamespace(
+                        text=str(previous.text) + str(source_span.text),
+                        location=location) if previous is not None else None)
+                    semantic = bool(continuation is not None and target_site_ok(
+                        str(rule_id), continuation, source))
+                    if semantic:
+                        site_quote = continuation.text
+                        site_parts = ({"location": str(previous.location),
+                                       "quote": str(previous.text)},
+                                      {"location": location,
+                                       "quote": str(source_span.text)})
                 if semantic and str(rule_id) == "G05":
                     # Bind WHERE to the original site: a sibling operation can
                     # legitimately change the artifact paragraph while leaving this

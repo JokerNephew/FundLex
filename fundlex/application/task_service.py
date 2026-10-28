@@ -25,11 +25,12 @@ class TaskApplicationService:
         return version
 
     def create_task(self, owner: str, name: str, files: list[dict[str, Any]], *,
-                    guide_version_id: str | None = None, idempotency_key: str | None = None) -> dict[str, Any]:
+                    guide_version_id: str | None = None, idempotency_key: str | None = None,
+                    mode: str = "delivery") -> dict[str, Any]:
         guide = self._guide_resolver(owner, guide_version_id)
         return self.tasks.create(owner, name, guide, files, idempotency_key,
                                  engine_id="recall_first", guide_version_id=guide["id"],
-                                 guide_rules_sha256=guide["rules_sha256"])
+                                 guide_rules_sha256=guide["rules_sha256"], mode=mode)
 
     def upload_files(self, owner: str, task_id: str, files: list[dict[str, Any]]) -> dict[str, Any]:
         return self.tasks.uploads(owner, task_id, files)

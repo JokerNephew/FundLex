@@ -38,12 +38,23 @@ def _polarities(text: str, field: str) -> set[bool]:
         # Fund contracts commonly establish a positive subscription fee by
         # assigning it to the investor instead of using 收取 verbatim.
         positive |= bool(re.search(fee + r"由[^，,。；;]+承担", rest))
+        # "申购费率由基金管理人决定" is the standard QDII phrasing for a
+        # class that charges a subscription fee.
+        positive |= bool(re.search(fee + r"(?:费率|率)?由[^，,。；;]+(?:决定|确定|设定)", rest))
+        # A capped subscription rate ("申购费率最高不超过…5％") still proves
+        # that the class charges a subscription fee.  This is deliberately
+        # subscription-only: a service-fee cap is not proof of charging.
+        positive |= bool(re.search(
+            fee + r"(?:费率|率)?(?:最高)?(?:不超过|不高于)[^。；;，,]{0,20}?"
+                  r"[1-9]\d*(?:\.\d+)?[%％]", rest))
     for match in re.finditer(fee + r"(?:年费率|率|年|按|的|为|是|：|:|以)*(\d+(?:\.\d+)?)[%％]", text):
         negative |= float(match.group(1)) == 0
         positive |= float(match.group(1)) > 0
     # A fee's own explicit NAV calculation is evidence. The narrow grammar
     # cannot absorb another fee name or an intervening negative predicate.
-    nav_rate = r"(?:的)?" + fee + r"按前一日(?:[A-ZＡ-Ｚ]类基金份额|本类别基金份额|本类别基金|基金)?资产净值的(\d+(?:\.\d+)?)[%％]的?年费率计提"
+    nav_rate = (r"(?:的)?" + fee +
+                r"按前一日(?:[A-ZＡ-Ｚ]类基金(?:份额)?|本类别基金(?:份额)?|基金)?"
+                r"资产净值(?:的)?[\[【]?(\d+(?:\.\d+)?)[%％][\]】]?的?年费率计提")
     for match in re.finditer(nav_rate, text):
         negative |= float(match.group(1)) == 0
         positive |= float(match.group(1)) > 0
@@ -60,13 +71,18 @@ def fee_value(quote: str, field: str, name: str, *, single_bound: bool = False) 
     if field not in {"subscription_fee", "sales_service_fee"} or not isinstance(quote, str):
         return None
     text = re.sub(r"[^\S\n]+", "", quote)
+    # Multi-currency classes ("A类人民币基金份额", "A类美元现汇基金份额") belong to
+    # the same fee group as their letter.  Normalize only for parsing; the
+    # evidence quote itself is never rewritten.
+    text = re.sub(r"([A-ZＡ-Ｚ])类(?:人民币|美元(?:现汇|现钞)?|港币|欧元|日元|英镑|澳元|加元)",
+                  r"\1类", text)
     values: set[bool] = set()
     for sentence in re.split(r"[。；;！!？?\n]", text):
         if not sentence:
             continue
         subjects = list(_CLASS_GROUP.finditer(sentence))
         if not subjects:
-            if single_bound and "本基金" in sentence:
+            if single_bound and (name == "__single__" or "本基金" in sentence):
                 blocks = [sentence]
             else:
                 continue

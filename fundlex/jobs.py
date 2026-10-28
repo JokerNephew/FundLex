@@ -23,6 +23,7 @@ from .config import local_data_dir
 RETRYABLE_MODEL_CODES = {"MODEL_NETWORK_ERROR", "MODEL_RETRY_EXHAUSTED", "MODEL_CIRCUIT_OPEN",
                          "MODEL_GLOBAL_CALL_BUDGET_EXCEEDED", "MODEL_COST_BUDGET_EXCEEDED", "MODEL_CALL_BUDGET_EXCEEDED",
                          "MODEL_LEDGER_UNAVAILABLE", "MODEL_CHECKPOINT_UNAVAILABLE",
+                         "MODEL_REPLAY_MISS", "MODEL_CASSETTE_UNAVAILABLE",
                          "MODEL_CONCURRENCY_LIMIT", "MODEL_RESERVATION_EXPIRED"}
 
 Processor = Callable[[Path, Path, str], dict[str, Any]]
@@ -61,7 +62,8 @@ def _document_trace(job: dict[str, Any], store: RunStore) -> Iterator[None]:
 
 def _default_processor(input_path: Path, output_dir: Path, ruleset_version: str, *, engine_id: str = "",
                        guide_version_id: str = "", guide_document: dict[str, Any] | None = None,
-                       checkpoint_dir: Path | None = None, gateway: Any = None) -> dict[str, Any]:
+                       checkpoint_dir: Path | None = None, gateway: Any = None,
+                       mode: str = "delivery") -> dict[str, Any]:
     # The runtime serves exactly one engine: the guide-bound recall-first
     # pipeline. The retired rulesets are no longer reachable from the worker, so
     # an unbound or legacy job fails closed instead of silently running the old
@@ -73,7 +75,7 @@ def _default_processor(input_path: Path, output_dir: Path, ruleset_version: str,
     # its own error report.
     from .recall_pipeline import process_recall_first
     return process_recall_first(input_path, output_dir, guide_document=guide_document, gateway=gateway,
-                                checkpoint_dir=checkpoint_dir)
+                                checkpoint_dir=checkpoint_dir, execution_mode="delivery")
 
 
 class Worker:
@@ -171,11 +173,13 @@ class Worker:
                         with _document_trace(job, self.store):
                             report = self.processor(source, output_dir, job["ruleset_version"],
                                 engine_id=job.get("engine_id", ""), guide_version_id=job.get("guide_version_id", ""),
-                                guide_document=guide_document, checkpoint_dir=self.store.root / "checkpoints" / doc_id)
+                                guide_document=guide_document, checkpoint_dir=self.store.root / "checkpoints" / doc_id,
+                                mode=job.get("mode", "delivery"))
                     else:
                         report = self.processor(source, output_dir, job["ruleset_version"])
                 if isinstance(report, dict) and report.get("error_code") in RETRYABLE_MODEL_CODES:
-                    self.store.retry(doc_id, token, error_code=report["error_code"])
+                    self.store.retry(doc_id, token, error_code=report["error_code"],
+                                    report=report)
                     return True
                 if not isinstance(report, dict):
                     raise ValueError("INVALID_PIPELINE_REPORT")
@@ -199,19 +203,43 @@ class Worker:
                 if sum(path.stat().st_size for path in paths.values()) > max_output_bytes:
                     raise ValueError("RESULT_SIZE_LIMIT")
                 validate_delivery(report, paths)
-                if report.get("execution_mode") == "evaluation":
-                    paths.pop("final", None)
-                    paths.pop("redline", None)
+                mode = str(job.get("mode") or "delivery")
+                if mode == "evaluation":
+                    # The recall pipeline always writes the validated pair under
+                    # final/redline; evaluation exposes the same bytes under
+                    # evaluation_* names and never as formal deliverables.
+                    status = str(report.get("delivery_status") or "")
+                    if status in {"complete", "complete_with_exceptions"}:
+                        plan = report.get("edit_plan") or {}
+                        validation = report.get("output_validation") or {}
+                        if status == "complete_with_exceptions":
+                            evaluation_status = "evaluation_modified_with_exceptions"
+                        elif validation.get("kind") == "recall_validated_unchanged" or plan.get("count") == 0:
+                            evaluation_status = "evaluation_unmodified"
+                        else:
+                            evaluation_status = "evaluation_modified"
+                        for old, new in (("final", "evaluation_final"), ("redline", "evaluation_redline")):
+                            source = paths.pop(old, None)
+                            if source is not None:
+                                target = output_dir / f"{new}.docx"
+                                source.replace(target)
+                                paths[new] = target
+                        report["execution_mode"] = "evaluation"
+                        report["delivery_status"] = evaluation_status
                     if isinstance(report.get("artifacts"), dict):
-                        report["artifacts"].pop("final", None)
-                        report["artifacts"].pop("redline", None)
-                    if report.get("delivery_status") not in {"evaluation_modified", "evaluation_modified_with_exceptions",
-                                                              "evaluation_unmodified", "incomplete"}:
-                        paths.pop("evaluation_final", None)
-                        paths.pop("evaluation_redline", None)
+                        for old in ("final", "redline"):
+                            report["artifacts"].pop(old, None)
+                elif mode == "diagnosis":
+                    # Diagnosis runs the full pipeline for evidence, but only the
+                    # report is published; never expose the modified contracts.
+                    for kind in ("final", "redline", "working_final", "working_redline",
+                                 "evaluation_final", "evaluation_redline"):
+                        paths.pop(kind, None)
                         if isinstance(report.get("artifacts"), dict):
-                            report["artifacts"].pop("evaluation_final", None)
-                            report["artifacts"].pop("evaluation_redline", None)
+                            report["artifacts"].pop(kind, None)
+                    report["diagnosis_status"] = report.get("delivery_status")
+                    report["execution_mode"] = "diagnosis"
+                    report["delivery_status"] = "diagnosed"
                 elif report["delivery_status"] not in {"complete", "complete_with_exceptions"}:
                     paths.pop("final", None)
                     paths.pop("redline", None)
@@ -225,9 +253,8 @@ class Worker:
                     md = output_dir / "report.md"
                     md.write_text(self._markdown(report), encoding="utf-8")
                     paths["report_md"] = md
-                else:
-                    md = paths["report_md"]
-                    md.write_text(md.read_text(encoding="utf-8") + "\n" + self._markdown(report), encoding="utf-8")
+                # A pipeline-written report.md already carries the per-change detail;
+                # appending the worker header would only duplicate the stub.
                 self.store.finish(doc_id, token, report=report, artifacts=paths,
                                   failed=bool(report.get("qualification_status") == "failed" or report.get("error_code")),
                                   error_code=report.get("error_code"))
@@ -241,7 +268,8 @@ class Worker:
                     # Recoverable model/transport stop: retry under the normal
                     # lease policy (budget/circuit stops also pause the task) and
                     # leave the model budget ledger to the next attempt.
-                    self.store.retry(doc_id, token, error_code=exc.code)
+                    self.store.retry(doc_id, token, error_code=exc.code,
+                                    report=getattr(exc, "report", None))
                     return True
                 if isinstance(exc, (OSError, sqlite3.OperationalError, DatabaseError)) or getattr(exc, "code", "") in RETRYABLE_MODEL_CODES:
                     self.store.retry(doc_id, token, error_code=getattr(exc, "code", "TEMPORARY_STORAGE_FAILURE"))
@@ -397,6 +425,11 @@ class Worker:
 
     @staticmethod
     def _markdown(report: dict[str, Any]) -> str:
+        if report.get("plan") or report.get("guide"):
+            # The pipeline report owns the user-facing per-change detail: rule,
+            # requirement, before text, after text and proof state.
+            from .recall_pipeline import _report_markdown
+            return _report_markdown(report)
         lines = ["# FundLex 合同处理报告", "", f"- 合同 ID：{report.get('document_id', '')}",
                  f"- 源文件 SHA-256：{report.get('source_sha256', '')}",
                  f"- 规则版本：{report.get('ruleset_version', '')}",

@@ -40,11 +40,9 @@ class UploadGuardSettings:
     request_timeout_seconds: float = 180.0
     min_rate_bytes_per_second: int = 1024
     min_rate_grace_seconds: float = 5.0
-    # A request with 20 files also carries client_ids and other form fields;
-    # the effective part ceiling is raised to file_limit + field_limit during
-    # installation so the route can preserve its existing 413 file-count
-    # response instead of multipart parsing returning a generic 400.
-    max_parts: int = 32
+    # The product no longer imposes a 20-file count limit. Keep a high
+    # multipart safety ceiling so hostile zero-byte part floods still terminate.
+    max_parts: int = 20000
     max_fields: int = 8
     max_headers_per_part: int = 16
     max_header_bytes: int = 16 * 1024
@@ -100,11 +98,7 @@ class BoundedMultiPartParser(MultiPartParser):
                  max_part_size=1024 * 1024):
         super().__init__(headers, stream, max_files=max_files, max_fields=max_fields,
                          max_part_size=max_part_size)
-        self.max_request_parts = max(
-            _positive_env("FUNDLEX_MULTIPART_MAX_PARTS", self.max_request_parts),
-            _positive_env("FUNDLEX_MAX_BATCH_DOCUMENTS", 20)
-            + _positive_env("FUNDLEX_MULTIPART_MAX_FIELDS", self.max_request_fields),
-        )
+        self.max_request_parts = _positive_env("FUNDLEX_MULTIPART_MAX_PARTS", self.max_request_parts)
         self.max_request_fields = _positive_env("FUNDLEX_MULTIPART_MAX_FIELDS", self.max_request_fields)
         self.max_file_bytes = _positive_env("FUNDLEX_MAX_UPLOAD_BYTES", self.max_file_bytes)
         self.max_total_file_bytes = _positive_env("FUNDLEX_MAX_BATCH_BYTES", self.max_total_file_bytes)
@@ -313,8 +307,7 @@ class UploadResourceMiddleware:
             await self._release(key)
 
 
-def add_upload_guard(application, *, max_upload_bytes: int, max_batch_bytes: int,
-                     max_request_files: int) -> UploadGuardSettings:
+def add_upload_guard(application, *, max_upload_bytes: int, max_batch_bytes: int) -> UploadGuardSettings:
     settings = UploadGuardSettings.from_env()
     install_multipart_limits()
     application.add_middleware(UploadResourceMiddleware, settings=settings)

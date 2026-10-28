@@ -11,6 +11,7 @@ import time
 import uuid
 from collections import Counter
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
 from .edit_summary import (DELIVERY_TEXT, edit_count,
                            summary_detail)
@@ -43,6 +44,7 @@ class TaskStore:
                     ruleset_version TEXT NOT NULL, ruleset_sha256 TEXT NOT NULL,
                     paused INTEGER NOT NULL DEFAULT 0, pause_reason TEXT,
                     sealed INTEGER NOT NULL DEFAULT 0, idempotency_key TEXT,
+                    mode VARCHAR(32) NOT NULL DEFAULT 'delivery',
                     request_hash TEXT NOT NULL, created_at REAL NOT NULL, updated_at REAL NOT NULL,
                     UNIQUE(owner,idempotency_key)
                 );
@@ -60,7 +62,8 @@ class TaskStore:
             """)
             for name, definition in {"engine_id": "TEXT NOT NULL DEFAULT ''",
                                      "guide_version_id": "TEXT NOT NULL DEFAULT ''",
-                                     "guide_rules_sha256": "TEXT NOT NULL DEFAULT ''"}.items():
+                                     "guide_rules_sha256": "TEXT NOT NULL DEFAULT ''",
+                                     "mode": "VARCHAR(32) NOT NULL DEFAULT 'delivery'"}.items():
                 if name not in {row["name"] for row in db.execute("PRAGMA table_info(tasks)")}:
                     db.execute(f"ALTER TABLE tasks ADD COLUMN {name} {definition}")
 
@@ -72,14 +75,18 @@ class TaskStore:
         return row
 
     def create(self, owner, name, source, files, idempotency_key=None,
-               engine_id="", guide_version_id="", guide_rules_sha256=""):
+               engine_id="", guide_version_id="", guide_rules_sha256="", mode="delivery"):
         """Create a task bound to a rule source.
 
         ``source`` is the bound guide version for the recall-first engine; the
         retired rulesets provide a ``version``/``sha256`` pair instead. Either
         way the binding is part of the request fingerprint.
         """
+        if mode not in {"delivery", "evaluation", "diagnosis"}:
+            raise ValueError("TASK_MODE_INVALID")
         binding = [engine_id, guide_version_id, guide_rules_sha256]
+        if mode != "delivery":
+            binding.append(mode)
         source_version = _source_field(source, "version")
         source_sha256 = _source_field(source, "sha256")
         payload = [name, source_version, source_sha256, files]
@@ -99,10 +106,10 @@ class TaskStore:
                     return self._snapshot(db, self._owned(db, owner, old["id"]))
             task_id, now = uuid.uuid4().hex, time.time()
             db.execute("""INSERT INTO tasks(id,owner,name,ruleset_version,ruleset_sha256,engine_id,
-                guide_version_id,guide_rules_sha256,idempotency_key,request_hash,created_at,updated_at)
-                VALUES(?,?,?,?,?,?,?,?,?,?,?,?)""",
+                guide_version_id,guide_rules_sha256,mode,idempotency_key,request_hash,created_at,updated_at)
+                VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                        (task_id, owner, name, source_version, source_sha256, engine_id,
-                        guide_version_id, guide_rules_sha256, idempotency_key, fingerprint, now, now))
+                        guide_version_id, guide_rules_sha256, mode, idempotency_key, fingerprint, now, now))
             db.executemany("INSERT INTO task_files(task_id,client_id,ordinal,name,size) VALUES(?,?,?,?,?)",
                            [(task_id, item["client_id"], i, item["name"], item["size"]) for i, item in enumerate(files)])
             return self._snapshot(db, self._owned(db, owner, task_id))
@@ -233,7 +240,7 @@ class TaskStore:
         ).get("phase", "")
         return {"id": row["id"], "name": row["name"], "legacy": legacy, "ruleset_version": row["ruleset_version"],
                 "ruleset_sha256": row["ruleset_sha256"], "status": status,
-                "engine_id": row["engine_id"],
+                "engine_id": row["engine_id"], "mode": row["mode"] or "delivery",
                 "guide_snapshot": {"version_id": row["guide_version_id"],
                                    "rules_sha256": row["guide_rules_sha256"]},
                 "upload_status": "complete" if uploaded == total else "sealed_incomplete" if row["sealed"] else "partial" if uploaded else "pending",
@@ -275,7 +282,8 @@ class TaskStore:
                              "ordinal": row["ordinal"]})
                 docs[-1]["reason_codes"] = self._reasons(row["report_json"], row["error_code"])
             task = dict(batch) | {"id": task_id, "name": "历史任务 · " + datetime.fromtimestamp(batch["created_at"], timezone.utc).strftime("%Y-%m-%d %H:%M"),
-                                  "paused": batch["status"] == "paused", "sealed": True, "pause_reason": None}
+                                  "paused": batch["status"] == "paused", "sealed": True, "pause_reason": None,
+                                  "mode": "delivery"}
             return self._summary(task, docs, legacy=True), docs
 
     def get(self, owner, task_id):
@@ -434,6 +442,31 @@ class TaskStore:
                 return {key: value for key, value in item.items() if key != "ordinal"}
         raise NotFound("document not found")
 
+    def artifact(self, owner: str, task_id: str, document_id: str, kind: str):
+        """Return verified bytes and a filename for one published artifact."""
+        if task_id.startswith("legacy-"):
+            raise NotFound("artifact not found")
+        with self.store._connect() as db:
+            self._owned(db, owner, task_id)
+            linked = db.execute("SELECT document_id FROM task_files WHERE task_id=? AND document_id=?",
+                                (task_id, document_id)).fetchone()
+            if linked is None or not linked["document_id"]:
+                raise NotFound("document not found")
+            row = db.execute("SELECT * FROM artifacts WHERE document_id=? AND kind=?",
+                             (document_id, kind)).fetchone()
+            if row is None:
+                raise NotFound("artifact not found")
+            name = db.execute("SELECT filename FROM documents WHERE id=?", (document_id,)).fetchone()
+        path = self.store.object_path(row["object_key"])
+        if not path.is_file() or path.stat().st_size != row["size"] or hashlib.sha256(path.read_bytes()).hexdigest() != row["sha256"]:
+            raise Conflict("ARTIFACT_INTEGRITY_FAILED")
+        filename = Path(name["filename"] if name else "contract.docx").name
+        suffix = Path(filename).suffix or ".docx"
+        if kind.startswith("report"):
+            suffix = ".md" if kind == "report_md" else ".json"
+        stem = Path(filename).stem
+        return path.read_bytes(), f"{stem}-{kind}{suffix}"
+
     def uploads(self, owner, task_id, uploads):
         """Upload items contain client_id, name, data and validated error_code.
 
@@ -484,10 +517,11 @@ class TaskStore:
                         receipts.append(receipt)
                         continue
                     if ordinal == 0:
-                        db.execute("""INSERT INTO batches(id,owner,ruleset_version,ruleset_sha256,status,request_hash,
+                        db.execute("""INSERT INTO batches(id,owner,ruleset_version,ruleset_sha256,mode,status,request_hash,
                             created_at,updated_at,engine_build,schema_version,engine_id,guide_version_id,
-                            guide_rules_sha256) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                            guide_rules_sha256) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                                    (batch_id, owner, task["ruleset_version"], task["ruleset_sha256"],
+                                    task["mode"] or "delivery",
                                     "paused" if task["paused"] else "queued",
                                     uuid.uuid4().hex, now, now, build, SCHEMA_VERSION, task["engine_id"],
                                     task["guide_version_id"], task["guide_rules_sha256"]))

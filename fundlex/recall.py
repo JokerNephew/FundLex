@@ -74,6 +74,24 @@ def _compact(value: str) -> str:
     return re.sub(r"\s+", "", value)
 
 
+# G14's fee-adjustment list appears in contracts both with and without the
+# repeated noun "基金" before each fee item:
+#   指引: 调低基金申购费率、赎回费率和转换费率
+#   合同: 调低基金申购费率、基金赎回费率和转换费率
+# The noun does not change the policy.  Normalisation is only used for operation
+# identity/site matching; the guide and the artifact keep their original text.
+_FEE_RATE_ITEM = r"(?:申购|赎回|转换|销售服务)费率"
+
+
+def _normalise_fee_rate_reference(value: str) -> str:
+    return re.sub(rf"、基金(?={_FEE_RATE_ITEM})", "、", _compact(value))
+
+
+def _expand_fee_rate_reference(value: str) -> str:
+    """Insert the optional repeated noun so an exact document search can find it."""
+    return re.sub(rf"、(?={_FEE_RATE_ITEM})", "、基金", _compact(value))
+
+
 def compact_offsets(span_text: str) -> tuple[str, list[int]]:
     """Whitespace-free text plus a map from compact offsets back to raw offsets.
 
@@ -261,18 +279,74 @@ def fuzzy_span_clause(span_text: str, needle: str, *,
     return start_raw, end_raw, ratio
 
 
+def resolve_source_quote(span: ParagraphSpan, quote: str) -> tuple[int, int] | None:
+    """Bind a complete quote uniquely in one writable source segment.
+
+    Ignore whitespace and Word's zero-width formatting characters. Only the final
+    full-stop/semicolon may differ or be absent at the paragraph end; never accept
+    a sentence fragment, a second occurrence or text across a protected barrier.
+    """
+    def compact(value: str) -> tuple[str, list[int]]:
+        positions = [i for i, char in enumerate(value)
+                     if not char.isspace() and char not in "\u200b\ufeff"]
+        return "".join(value[i] for i in positions), positions
+
+    body, positions = compact(span.text)
+    needle, _ = compact(quote)
+    if not needle or BARRIER in needle:
+        return None
+    stops = "。；;"
+    terminated = needle[-1] in stops
+    core = needle[:-1] if terminated else needle
+    if not core:
+        return None
+    candidates: set[tuple[int, int]] = set()
+    cursor = 0
+    while (start := body.find(core, cursor)) >= 0:
+        end = start + len(core)
+        if not terminated:
+            # A quote without its final delimiter is acceptable only when the
+            # source reaches a real sentence boundary (or the paragraph ends).
+            # Otherwise it is a prefix and cannot close a source obligation.
+            if end == len(body) or body[end] in stops:
+                if end < len(body):
+                    end += 1
+                candidates.add((positions[start], positions[end - 1] + 1))
+        elif end == len(body) or body[end] in stops:
+            if end < len(body):
+                end += 1
+            candidates.add((positions[start], positions[end - 1] + 1))
+        cursor = start + 1
+    if len(candidates) != 1:
+        return None
+    bound = next(iter(candidates))
+    if BARRIER in span.text[bound[0]:bound[1]]:
+        return None
+    segments = getattr(span, "segments", None)
+    if segments is None:
+        # Lightweight replay/effect fixtures predate physical segment metadata.
+        # Keep their ordinary source resolution usable; real DocumentInspection
+        # spans always expose ``segments`` and therefore take the strict branch.
+        return bound
+    return bound if containing_segment(span, *bound) is not None else None
+
+
 def resolve_quote(span: ParagraphSpan, quote: str) -> tuple[int, int] | None:
     """Resolve a model quote to raw offsets inside one paragraph span.
 
-    Long quotes that span read-only barriers or several sentences are retried
-    sentence by sentence, keeping the longest resolvable run, so a faithful but
-    imperfectly delimited quote still yields a usable span.
+    Long quotes that span read-only barriers or several sentences fail closed when
+    the complete source quote cannot be bound.  A sentence from a larger quote is
+    not enough evidence for an edit: it may belong to a sibling operation in the
+    same paragraph.
     """
     cleaned, index_map = display_text(span.text)
     located = find_normalized(cleaned, quote)
     if located is not None:
         start_clean, end_clean = located
         return index_map[start_clean], index_map[end_clean - 1] + 1
+    source_bound = resolve_source_quote(span, quote)
+    if source_bound is not None:
+        return source_bound
     # A locator may render the last clause's semicolon as a full stop (or vice
     # versa). Bind the complete otherwise-verbatim quote before trying individual
     # sentences; a prefix-only binding can omit the very policy being replaced.
@@ -288,29 +362,6 @@ def resolve_quote(span: ParagraphSpan, quote: str) -> tuple[int, int] | None:
                 terminal += 1
             if terminal < len(cleaned) and cleaned[terminal] in "。；;":
                 return index_map[start_clean], index_map[terminal] + 1
-    parts = [part for part in re.split(r"(?<=[。；;!?！？])", quote) if part.strip()]
-    if len(parts) > 1:
-        best: tuple[int, int] | None = None
-        for part in parts:
-            found = find_normalized(cleaned, part)
-            if found is None:
-                continue
-            start_clean, end_clean = found
-            candidate = (index_map[start_clean], index_map[end_clean - 1] + 1)
-            if best is None or (candidate[1] - candidate[0]) > (best[1] - best[0]):
-                best = candidate
-        if best is not None:
-            return best
-    # A faithful quote that merely re-wraps the reference wording (extra prefix or a
-    # list of classes) still resolves to the real span as long as one contiguous
-    # sentence of the quote matches exactly.
-    for sentence in sorted((part for part in re.split(r"(?<=[。；;!?！？])", quote)
-                            if len(_compact(part)) >= 6),
-                           key=lambda part: -len(_compact(part))):
-        found = find_normalized(cleaned, sentence)
-        if found is not None:
-            start_clean, end_clean = found
-            return index_map[start_clean], index_map[end_clean - 1] + 1
     return None
 
 
@@ -468,12 +519,16 @@ class Facts:
     #: Deterministic fee polarity recovered from each class quote. ``None`` means
     #: the quote establishes the class but not that fee fact (FL-D209/FL-D208).
     fee_polarities: dict[str, dict[str, bool | None]] = field(default_factory=dict)
+    #: A contract with no share-class labels/currency classes and no enumeration
+    #: is a single-class product. Keep this explicit: an empty class list alone is
+    #: UNKNOWN, never "single".
+    single_class_verified: bool = False
 
     @property
     def share_class_structure(self) -> str:
         """SINGLE | MULTIPLE | UNKNOWN — the plan's replacement for bare class_count."""
         current = len(self.current_classes)
-        if current == 1:
+        if current == 1 or (current == 0 and self.single_class_verified):
             return "SINGLE"
         if current > 1:
             return "MULTIPLE"
@@ -491,7 +546,10 @@ class Facts:
 
     @property
     def class_count(self) -> int:
-        return len(self.current_classes)
+        current = len(self.current_classes)
+        if current == 0 and self.single_class_verified:
+            return 1
+        return current
 
     @property
     def subscription_group(self) -> tuple[str, ...]:
@@ -551,6 +609,7 @@ class Facts:
             "fund_type_certification": dict(self.fund_type_certification),
             "channel_evidence": dict(self.channel_evidence),
             "fee_polarities": {name: dict(values) for name, values in self.fee_polarities.items()},
+            "single_class_verified": self.single_class_verified,
             "problems": list(self.problems),
         }
 
@@ -560,7 +619,8 @@ def derive_fact_statuses(*, fund_type_ok: bool, classes: Sequence[ClassFact],
                          direct_classes: Sequence[str], direct_ok: bool,
                          other_classes: Sequence[str], other_ok: bool,
                          set_complete_verified: bool = False,
-                         fee_polarities: dict[str, dict[str, bool | None]] | None = None) -> dict[str, str]:
+                         fee_polarities: dict[str, dict[str, bool | None]] | None = None,
+                         single_class_verified: bool = False) -> dict[str, str]:
     """Tri-state statuses for the phase-3 fact schema (plan v4 §24, §20).
 
     * ``VERIFIED`` — backed by a verified quote and internally consistent;
@@ -573,7 +633,9 @@ def derive_fact_statuses(*, fund_type_ok: bool, classes: Sequence[ClassFact],
     class_names = {item.name for item in classes}
     current_ok = bool([item for item in classes if item.current]) and set_complete_verified and all(
         class_quotes.get(item.name, False) for item in classes if item.current)
-    statuses["share_class_structure"] = "VERIFIED" if current_ok else "UNKNOWN"
+    statuses["share_class_structure"] = ("VERIFIED"
+                                         if current_ok or single_class_verified
+                                         else "UNKNOWN")
     current_names = [item.name for item in classes if item.current]
     duplicate_names = len(current_names) != len(set(current_names))
     ambiguous = [item for item in classes
@@ -785,6 +847,50 @@ def extract_facts(inspection: DocumentInspection, gateway: Any) -> Facts:
     return facts_from_value(inspection, value)
 
 
+def single_class_structure_verified(inspection: DocumentInspection) -> bool:
+    """A contract with no share-class labels/enumeration is a single-class product.
+
+    This is the missing hard fact behind D09/D13: empty ``classes`` alone is
+    UNKNOWN, but a contract that never names an A/B/C class and never enumerates
+    multiple share classes cannot support class-substitution branches. Currency
+    share classes are excluded from this shortcut because they are a real
+    multi-class structure without letter labels.
+    """
+    from .fact_evidence import class_labels
+    text = "".join(str(span.text) for span in inspection.paragraphs)
+    if class_labels(text):
+        return False
+    compact = _compact(text)
+    if re.search(r"(?:人民币|美元|港币|英镑|欧元|现汇|现钞)份额", compact):
+        return False
+    if re.search(r"(?:两|二|三|四|五|六|多)(?:种|类|个)?(?:不同)?(?:的)?(?:基金)?份额类别", compact):
+        return False
+    return True
+
+
+def single_class_fee_evidence(inspection: DocumentInspection) -> tuple[str, bool]:
+    """Return source-bound evidence for an unnamed single class.
+
+    Some contracts describe the only class through the ordinary fee clause rather
+    than naming it.  The relevant evidence is the paragraph that says investors
+    bear the subscription fee, together with a bounded neighbourhood around that
+    clause that contains no sales-service-fee clause.  References to fees charged
+    by underlying funds elsewhere in an FOF contract therefore do not change the
+    product's own class facts.
+    """
+    paragraphs = list(inspection.paragraphs)
+    for index, span in enumerate(paragraphs):
+        text = str(span.text or "")
+        if not re.search(r"申购费用?由[^。；;\n]{0,30}承担", _compact(text)):
+            continue
+        left = max(0, index - 12)
+        right = min(len(paragraphs), index + 13)
+        nearby = "".join(str(item.text or "") for item in paragraphs[left:right])
+        if "销售服务费" not in nearby:
+            return text, True
+    return "", False
+
+
 def facts_from_value(inspection: DocumentInspection, value: dict[str, Any]) -> Facts:
     """Parse one FACTS_SCHEMA answer and verify every quote against the source.
 
@@ -846,6 +952,53 @@ def facts_from_value(inspection: DocumentInspection, value: dict[str, Any]) -> F
             service_quote=service_quote,
         ))
 
+    # A model may use an invented label such as ``默认份额类别`` when the
+    # contract has one unnamed class.  It is evidence-free as a literal class
+    # name and must not leave the whole fact set UNKNOWN.  Rebuild it from the
+    # contract's own subscription clause and a bounded proof that the class has
+    # no sales-service fee.
+    single_structure = single_class_structure_verified(inspection)
+    class_set_evidence: dict[str, Any] = {}
+    single_class_no_service_verified = False
+    placeholder_names = {"default", "none", "unknown", "n/a", "na",
+                         "其他", "默认份额类别", "__single__"}
+    real_classes = [item for item in classes
+                    if item.current and re.sub(r"\s+", "", item.name).lower()
+                    not in placeholder_names]
+    if single_structure and not real_classes:
+        subscription_quote = ""
+        for item in classes:
+            candidate = item.subscription_quote or item.quote
+            if candidate and _verify_quote(inspection, candidate):
+                subscription_quote = candidate
+                break
+        if not subscription_quote:
+            subscription_quote, _ = single_class_fee_evidence(inspection)
+        from .fee_evidence import fee_value
+        subscription_proven = bool(subscription_quote and _verify_quote(
+            inspection, subscription_quote)
+            and fee_value(subscription_quote, "subscription_fee", "__single__",
+                          single_bound=True) is True)
+        detected_quote, no_service = single_class_fee_evidence(inspection)
+        if not subscription_proven and detected_quote:
+            subscription_quote = detected_quote
+            subscription_proven = fee_value(
+                detected_quote, "subscription_fee", "__single__",
+                single_bound=True) is True
+        if subscription_proven and no_service:
+            single_class_no_service_verified = True
+            classes = [ClassFact(
+                name="__single__", subscription_fee=True, service_fee=False,
+                current=True, rate=None, quote=subscription_quote,
+                subscription_quote=subscription_quote, service_quote="")]
+            class_set_evidence = {
+                "quote_verified": True, "set_complete_verified": True,
+                "parsed_classes": ["__single__"],
+                "reason": "SINGLE_CLASS_STRUCTURALLY_VERIFIED",
+            }
+        elif not real_classes:
+            classes = []
+
     floating = (value.get("floating_management_fee") or {}) if isinstance(value.get("floating_management_fee"), dict) else {}
     floating_value = bool(floating.get("value"))
     floating_quote = str(floating.get("quote") or "")
@@ -870,9 +1023,14 @@ def facts_from_value(inspection: DocumentInspection, value: dict[str, Any]) -> F
     other_names, other_ok = _channel("other_sales_charged")
     class_quotes = {name.split(":", 1)[1]: ok
                     for name, ok in quotes_verified.items() if name.startswith("class:")}
+    if any(item.name == "__single__" and item.current for item in classes):
+        class_quotes["__single__"] = True
+        quotes_verified["class:__single__"] = True
     from .fact_evidence import verify_class_set
     class_set_quote = str(value.get("class_set_quote") or "")
-    class_set_evidence = verify_class_set(inspection, classes, class_set_quote)
+    if not (classes and classes[0].name == "__single__"
+            and class_set_evidence.get("set_complete_verified")):
+        class_set_evidence = verify_class_set(inspection, classes, class_set_quote)
     set_complete = bool(class_set_evidence["set_complete_verified"])
     from .fee_evidence import fee_value
     fee_polarities: dict[str, dict[str, bool | None]] = {}
@@ -882,9 +1040,22 @@ def facts_from_value(inspection: DocumentInspection, value: dict[str, Any]) -> F
                 ("subscription_fee", "subscription_fee", item.subscription_quote),
                 ("service_fee", "sales_service_fee", item.service_quote)):
             quote = specific or item.quote
+            if (item.name == "__single__" and key == "service_fee"
+                    and single_class_no_service_verified):
+                # The absence proof is the bounded fee neighbourhood returned by
+                # single_class_fee_evidence(), not a fabricated quote. Keep this
+                # as a separate verified polarity so a missing service-fee clause
+                # is not confused with an extraction failure.
+                quote_ok = True
+                fee_polarities[item.name][key] = False
+                quotes_verified[f"{key}:{item.name}"] = True
+                continue
             quote_ok = _verify_quote(inspection, quote) if specific else class_quotes.get(item.name, False)
             quotes_verified[f"{key}:{item.name}"] = bool(quote_ok)
-            fee_polarities[item.name][key] = (fee_value(quote, field_name, item.name[0])
+            fee_polarities[item.name][key] = (fee_value(
+                                                        quote, field_name,
+                                                        "__single__" if item.name == "__single__" else item.name[0],
+                                                        single_bound=item.name == "__single__")
                                               if quote_ok else None)
         for field_name, expected in fee_polarities[item.name].items():
             if expected is None:
@@ -898,12 +1069,19 @@ def facts_from_value(inspection: DocumentInspection, value: dict[str, Any]) -> F
     quotes_verified["class_set"] = bool(class_set_evidence["quote_verified"])
     if not set_complete:
         problems.append(str(class_set_evidence["reason"]))
+    single_class_verified = (
+        (not [item for item in classes if item.current]
+         and single_structure)
+        or any(item.name == "__single__" and item.current for item in classes))
+    if single_class_verified:
+        quotes_verified["single_class"] = True
     fact_status = derive_fact_statuses(
         fund_type_ok=quotes_verified["fund_type"], classes=classes,
         class_quotes=class_quotes,
         direct_classes=direct_names, direct_ok=direct_ok,
         other_classes=other_names, other_ok=other_ok,
-        set_complete_verified=set_complete, fee_polarities=fee_polarities)
+        set_complete_verified=set_complete, fee_polarities=fee_polarities,
+        single_class_verified=single_class_verified)
 
     return Facts(
         fund_type=fund_type_value,
@@ -925,6 +1103,7 @@ def facts_from_value(inspection: DocumentInspection, value: dict[str, Any]) -> F
                           for key in ("direct_sales_exempt", "other_sales_charged")
                           if isinstance(value.get(key), dict)},
         fee_polarities=fee_polarities,
+        single_class_verified=single_class_verified,
     )
 
 
@@ -942,8 +1121,16 @@ class Section:
     preview: str
 
 
-def structure_index(inspection: DocumentInspection, *, max_sections: int = 80) -> tuple[Section, ...]:
-    """Group readable paragraphs into sections by their running heading."""
+def structure_index(inspection: DocumentInspection, *,
+                    max_sections: int | None = None) -> tuple[Section, ...]:
+    """Group readable paragraphs into sections by their running heading.
+
+    ``max_sections=None`` indexes the whole document.  A caller may still pass an
+    explicit limit, but that limit must then be reported as a coverage gap: the
+    previous default of 80 silently dropped every later section, so the tail of a
+    long contract never reached inventory while the run could still look complete
+    (FL-D441).
+    """
     groups: list[list[ParagraphSpan]] = []
     for span in inspection.paragraphs:
         zone = span.logical_zone or span.zone
@@ -955,7 +1142,8 @@ def structure_index(inspection: DocumentInspection, *, max_sections: int = 80) -
         else:
             groups.append([span])
     sections: list[Section] = []
-    for position, group in enumerate(groups[:max_sections]):
+    indexed = groups if max_sections is None else groups[:max_sections]
+    for position, group in enumerate(indexed):
         first = group[0]
         zone = first.logical_zone or first.zone
         title = first.section_path or ("内容摘要" if zone == "summary" else "前言")
@@ -967,6 +1155,115 @@ def structure_index(inspection: DocumentInspection, *, max_sections: int = 80) -
                                 locations=tuple(span.location for span in group),
                                 chars=chars, preview=preview))
     return tuple(sections)
+
+
+# G06 is authored against the ``基金的基本情况-份额类别设置`` subsection.  The
+# document inspector currently exposes only the running part/chapter path, so a
+# rule mapped to ``基金的基本情况`` would otherwise receive the whole chapter.
+# Keep this boundary deterministic and source based: subsection headings are the
+# numbered Chinese headings that occur inside the chapter, and the next heading
+# ends the physical site.  A missing heading is deliberately represented by an
+# empty scope; callers must fail closed instead of falling back to a document-wide
+# semantic sweep.
+_G06_SUBSECTION_RE = re.compile(
+    r"^(?:[一二三四五六七八九十百零〇]+、|\d+[、.])"
+    r"(?:基金)?(?:份额类别|份额的类别|基金份额类别)(?:设置)?$"
+)
+
+
+def g06_scope_locations(inspection: DocumentInspection) -> frozenset[str]:
+    """Return the physical ``份额类别设置`` subsection locations for G06.
+
+    The helper also accepts unnumbered headings used by compact fixtures.  It
+    never infers a scope from a body sentence containing ``份额类别设置``; that
+    phrase is common in amendment clauses outside the subsection.
+    """
+    paragraphs = tuple(inspection.paragraphs)
+    has_structure_metadata = any(hasattr(span, "section_path") for span in paragraphs)
+    if not has_structure_metadata:
+        # Legacy unit inspections predate section_path/zone metadata. Preserve
+        # their isolated-document semantics; real DOCX inspections always carry
+        # structure metadata and therefore remain fail-closed.
+        return frozenset(span.location for span in paragraphs)
+    for index, span in enumerate(paragraphs):
+        if (getattr(span, "logical_zone", None) or getattr(span, "zone", "body")) not in {"body", "summary"}:
+            continue
+        section_path = str(getattr(span, "section_path", ""))
+        if section_path and "基本情况" not in section_path:
+            continue
+        text = _compact(display_text(span.text)[0])
+        if not text:
+            continue
+        heading = bool(_G06_SUBSECTION_RE.fullmatch(text)) or text in {
+            "份额类别设置", "基金份额类别设置", "基金份额类别",
+        }
+        if not heading:
+            continue
+        end = len(paragraphs)
+        for candidate_index, candidate in enumerate(paragraphs[index + 1:], index + 1):
+            candidate_text = _compact(display_text(candidate.text)[0])
+            if getattr(candidate, "section_path", "") != section_path:
+                end = candidate_index
+                break
+            if (candidate_text and (
+                    _G06_SUBSECTION_RE.fullmatch(candidate_text)
+                    or bool(re.match(r"^[一二三四五六七八九十百零〇]+、", candidate_text))
+                    or bool(re.match(r"^\d+[、.]", candidate_text)))):
+                end = candidate_index
+                break
+        return frozenset(
+            item.location for item in paragraphs[index:end]
+            if (getattr(item, "logical_zone", None) or getattr(item, "zone", "body"))
+            in {"body", "summary"}
+            and str(getattr(item, "section_path", "")) == section_path
+        )
+    # Small unit fixtures often contain only the clause under test and no
+    # numbered headings at all.  Preserve their isolated behaviour, while a
+    # real structured contract with headings but no class subsection remains
+    # fail-closed.
+    has_numbered_heading = any(
+        re.match(r"^[一二三四五六七八九十百零〇]+、", _compact(display_text(span.text)[0]))
+        or re.match(r"^\d+[、.]", _compact(display_text(span.text)[0]))
+        for span in paragraphs
+    )
+    if not has_numbered_heading:
+        return frozenset(
+            span.location for span in paragraphs
+            if (getattr(span, "logical_zone", None) or getattr(span, "zone", "body"))
+            in {"body", "summary"}
+            and (not getattr(span, "section_path", "")
+                 or "基本情况" in str(span.section_path))
+        )
+    # Older contracts and compact fixtures may place the canonical prohibition
+    # directly in the basics chapter without a separate numbered subsection.
+    # Keep this fallback exact and paragraph-bound: it does not authorize a
+    # semantic sweep over the chapter and therefore cannot admit the D06 p280
+    # one-way Y-class sentence.
+    fallback = frozenset(
+        span.location for span in paragraphs
+        if "不同基金份额类别之间不得互相转换。" in _compact(str(span.text))
+        and ("基本情况" in str(getattr(span, "section_path", ""))
+             or not hasattr(span, "section_path"))
+    )
+    if fallback:
+        return fallback
+    return frozenset()
+
+
+def g06_scoped_text(inspection: DocumentInspection) -> str:
+    """Return only source text inside G06's physical subsection scope."""
+    locations = g06_scope_locations(inspection)
+    if not locations:
+        return ""
+    return "".join(
+        str(span.text) for span in inspection.paragraphs
+        if span.location in locations
+    )
+
+
+def g06_scope_present(inspection: DocumentInspection, location: str) -> bool:
+    """Whether a physical paragraph belongs to the G06 subsection scope."""
+    return location in g06_scope_locations(inspection)
 
 
 def structure_context(sections: Sequence[Section]) -> str:
@@ -1014,15 +1311,17 @@ def _window_from_sections(sections: Sequence[Section], inspection: DocumentInspe
     lines: list[str] = []
     total = 0
     current_locations: list[str] = []
+    current_section_ids: list[str] = []
     section_ids = tuple(section.id for section in sections)
     base_id = "_".join(section_ids)
 
     def emit() -> None:
-        nonlocal lines, total, current_locations
+        nonlocal lines, total, current_locations, current_section_ids
         if lines:
-            chunks.append(Window(id=f"{base_id}#{len(chunks) + 1}", section_ids=section_ids,
-                                 locations=tuple(current_locations), text="\n".join(lines)))
+            chunks.append(Window(id=f"{base_id}#{len(chunks) + 1}", section_ids=tuple(current_section_ids),
+                                  locations=tuple(current_locations), text="\n".join(lines)))
             lines, total, current_locations = [], 0, []
+            current_section_ids = []
 
     for section in sections:
         for location in section.locations:
@@ -1033,9 +1332,50 @@ def _window_from_sections(sections: Sequence[Section], inspection: DocumentInspe
                 emit()
             lines.append(line)
             current_locations.append(location)
+            if section.id not in current_section_ids:
+                current_section_ids.append(section.id)
             total += len(line)
     emit()
     return chunks
+
+
+def rule_locations_for_window(window: Window, sections: Sequence[Section],
+                              mapping: Mapping[str, Sequence[str]]) -> dict[str, frozenset[str]]:
+    """Return the physical locations each rule may inspect in one window.
+
+    A window can contain several mapped sections and may be split into multiple
+    character chunks. Its section membership is not the scope of every rule in
+    that batch. Keeping this distinction explicit prevents
+    a rule from borrowing a matching clause from a sibling section merely because
+    both sections share a model request.
+    """
+    by_id = {section.id: section for section in sections}
+    locations = set(window.locations)
+    result: dict[str, frozenset[str]] = {}
+    for rule_id, section_ids in mapping.items():
+        allowed = {
+            location
+            for section_id in section_ids
+            if (section := by_id.get(str(section_id))) is not None
+            for location in section.locations
+        }
+        result[str(rule_id)] = frozenset(allowed & locations)
+    return result
+
+
+def rule_scope_locations(sections: Sequence[Section],
+                         mapping: Mapping[str, Sequence[str]]) -> dict[str, frozenset[str]]:
+    """Return only physical locations in sections explicitly mapped to each rule.
+
+    A summary counterpart is eligible when the scope model maps its summary section
+    for that rule.  The helper deliberately does not add every summary paragraph to
+    every rule: summary is a zone, not a business subsection.
+    """
+    by_id = {section.id: section for section in sections}
+    return {str(rule_id): frozenset({
+        location for section_id in section_ids
+        if (section := by_id.get(str(section_id))) is not None
+        for location in section.locations}) for rule_id, section_ids in mapping.items()}
 
 
 # ---------------------------------------------------------------------------
@@ -1053,6 +1393,58 @@ def plan_windows(sections: Sequence[Section], inspection: DocumentInspection,
         rules = [rule_id for rule_id, ids in mapping.items() if window_sections & set(ids)]
         planned.append((window, rules))
     return planned
+
+
+def expand_class_definition_scope(mapping: dict[str, list[str]],
+                                  sections: Sequence[Section],
+                                  inspection: DocumentInspection) -> dict[str, list[str]]:
+    """Add the 释义 class-definition section to G04's mapped locations.
+
+    The guide hints G04 at 基金的基本情况, but real contracts often put the
+    complete A/C class definition in 释义 and only a fee-adjustment paragraph
+    under 份额类别设置.  Without the definition section the inventory can only
+    report an absent target at the fee paragraph.  This is a bounded anchor
+    expansion, not a document-wide semantic sweep.
+    """
+    current = mapping.get("G04")
+    if current is None:
+        return mapping
+
+    def _definition_anchor(text: str) -> bool:
+        return (("基金份额类别" in text or "将基金份额分为" in text)
+                and "称为" in text
+                and len(set(re.findall(r"[A-ZＡ-Ｚ]类", text))) >= 2
+                and any(token in text for token in ("申购费", "认购费", "销售服务费")))
+
+    # G04's own sections may already carry the complete definition (纳斯达克
+    # p169).  Expanding to 释义 in that case makes G04 and G02 edit the same
+    # paragraph and their class substitutions overlap; G02 owns the 释义 copy.
+    glossary_ids = {section.id for section in sections
+                    if "释义" in str(getattr(section, "title", ""))}
+    own_locations = {location for section in sections
+                     if section.id in current and section.id not in glossary_ids
+                     for location in section.locations}
+    if any(_definition_anchor(_compact(display_text(span.text)[0]))
+           for span in inspection.paragraphs
+           if str(span.location) in own_locations):
+        if any(section_id in glossary_ids for section_id in current):
+            mapping["G04"] = [section_id for section_id in current
+                              if section_id not in glossary_ids]
+        return mapping
+    by_location = {location: section.id for section in sections
+                   for location in section.locations}
+    for span in inspection.paragraphs:
+        zone = getattr(span, "logical_zone", None) or getattr(span, "zone", "body")
+        if zone not in {"body", "summary"}:
+            continue
+        text = _compact(display_text(span.text)[0])
+        if not _definition_anchor(text):
+            continue
+        section_id = by_location.get(str(span.location))
+        if section_id and section_id not in current:
+            current.append(section_id)
+        break
+    return mapping
 
 
 def rule_context(rules: Sequence[dict], *, full: bool) -> str:
@@ -1190,6 +1582,15 @@ class Target:
     # inventory quote that identifies it (G02/G04 same-paragraph occurrences).
     occurrence_index: int = -1
     occurrence_anchor: str = ""
+    # Physical rule-scope identity the target was admitted under (``G06:S04:L05``).
+    # Empty on legacy/frozen replays; the planning gate stamps it for new runs.
+    scope_id: str = ""
+    # Code-verified semantic approval for this target's operation (see
+    # ``semantic_evidence.SemanticApproval``).  When present and valid, later
+    # stages consume this one record instead of re-deciding the same semantic
+    # question with their own word list (R01-R03).  The raw inventory claim stays
+    # in ``claimed_operations`` and is never treated as an approval.
+    approval_id: str = ""
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -1204,11 +1605,15 @@ class Target:
             "occurrence_index": self.occurrence_index,
             "occurrence_anchor": self.occurrence_anchor,
             "out_of_scope": self.out_of_scope,
+            "scope_id": self.scope_id,
+            "approval_id": self.approval_id,
         }
 
 
 def inventory_window(window: Window, rules: Sequence[dict], facts: Facts, gateway: Any,
-                     inspection: DocumentInspection) -> tuple[list[Target], dict[str, Any]]:
+                     inspection: DocumentInspection, *,
+                     rule_locations: Mapping[str, Iterable[str]] | None = None
+                     ) -> tuple[list[Target], dict[str, Any]]:
     facts_text = json.dumps(facts.as_ledger(), ensure_ascii=False, indent=1)
     context = "\n\n".join([window.text, facts_text, rule_context(rules, full=True)])
     if len(context) > gateway.max_context_chars:
@@ -1233,6 +1638,9 @@ def inventory_window(window: Window, rules: Sequence[dict], facts: Facts, gatewa
         state = str(item.get("state") or "")
         if rule_id not in rule_ids or location not in window_locations or state not in {"needs_edit", "satisfied", "absent"}:
             dropped.append({"reason": "INVENTORY_ITEM_INVALID", "item": item})
+            continue
+        if rule_locations is not None and location not in set(rule_locations.get(rule_id, ())):
+            dropped.append({"reason": "INVENTORY_ITEM_OUT_OF_RULE_SCOPE", "item": item})
             continue
         key = (rule_id, location, _compact(quote))
         if key in seen:
@@ -1549,7 +1957,9 @@ def satisfied_by_new_text(rule: dict, facts: Facts, compact_body: str) -> str | 
 
 
 # "费用收取不同" family: the same policy expressed with different word order.
-_FEE_DIFFERENCE_MARKERS = ("费用收取不同", "费用的不同", "费用不同", "费率不同", "费用存在差异")
+_FEE_DIFFERENCE_MARKERS = (
+    "费用收取不同", "费用收取上不同", "费用的不同", "费用不同",
+    "费率不同", "费用存在差异")
 
 
 def _policy_phrase_equivalent(compact_new: str, compact_body: str,
@@ -1569,8 +1979,44 @@ def _policy_phrase_equivalent(compact_new: str, compact_body: str,
     body_markers = [marker for marker in _FEE_DIFFERENCE_MARKERS if marker in compact_body]
     if not new_markers or not body_markers:
         return False
-    class_tokens = re.findall(r"[A-ZＡ-Ｚ]类(?:基金份额)?", compact_new)
-    if class_tokens and not all(token in compact_body for token in class_tokens):
+    if ("费用收取不同" in compact_new
+            and "各基金份额类别在费用收取上不同" in compact_body
+            and any(token in compact_body for token in ("可分配收益", "分别计算"))):
+        return True
+    # A generic ``由于基金费用的不同`` sentence is insufficient for G18.  The
+    # instantiated policy names two fee groups, so the same physical sentence must
+    # carry those class groups in that order.  Checking the ordered labels also
+    # rejects D06 p132, where all five classes are listed as one undifferentiated
+    # set (FL-D06-G18).
+    expected_groups = re.findall(
+        r"((?:[A-ZＡ-Ｚ]类)(?:、[A-ZＡ-Ｚ]类)*)基金份额"
+        r"(?:和|及|与)((?:[A-ZＡ-Ｚ]类)(?:、[A-ZＡ-Ｚ]类)*)基金份额",
+        compact_new)
+    if expected_groups:
+        def group_is_contiguous(sentence: str, labels: Sequence[str], start: int = 0
+                                ) -> int | None:
+            cursor = start
+            for label in labels:
+                match = re.search(re.escape(label), sentence[cursor:])
+                if match is None:
+                    return None
+                between = sentence[cursor:cursor + match.start()]
+                if re.search(r"[A-ZＡ-Ｚ]类", between):
+                    return None
+                cursor += match.end()
+            return cursor
+
+        for sentence in re.split(r"[。；;！？!?]", compact_body):
+            # ``expected_groups`` already contains the literal ``A类`` tokens;
+            # no unrelated class label may fill a group slot.
+            first = re.findall(r"[A-ZＡ-Ｚ]类", expected_groups[0][0])
+            second = re.findall(r"[A-ZＡ-Ｚ]类", expected_groups[0][1])
+            first_end = group_is_contiguous(sentence, first)
+            if first_end is not None and group_is_contiguous(sentence, second, first_end) is not None:
+                return True
+        return False
+    expected_labels = re.findall(r"[A-ZＡ-Ｚ]类", compact_new)
+    if expected_labels and not all(label in compact_body for label in expected_labels):
         return False
     return True
 
@@ -1645,10 +2091,17 @@ def _g17_usage_exclusion_matches(quote: str, references: Sequence[str]) -> bool:
                if sentence)
 
 
-def _g17_source_sentence_parts(inspection: Any, operations: Sequence[Mapping[str, Any]]
+def _g17_source_sentence_parts(inspection: Any, operations: Sequence[Mapping[str, Any]],
+                               *, locations: Iterable[str] | None = None
                                ) -> list[tuple[tuple[str, int, int], ...]]:
-    """Find complete operation-owned sentences, in compact source coordinates."""
-    paragraphs = list(inspection.paragraphs)
+    """Find complete operation-owned sentences, in compact source coordinates.
+
+    ``locations`` restricts the scan to one rule's physical scope, so a G17
+    deletion can never be proven from a paragraph outside that scope.
+    """
+    allowed = {str(location) for location in locations} if locations is not None else None
+    paragraphs = [span for span in inspection.paragraphs
+                  if allowed is None or str(span.location) in allowed]
     body, coordinates, boundaries = "", [], {0}
     for span in paragraphs:
         compact, _ = compact_offsets(str(span.text))
@@ -1692,11 +2145,14 @@ def _g17_source_sentence_parts(inspection: Any, operations: Sequence[Mapping[str
 
 
 def _g17_source_effect_owned(inspection: Any, location: str, start: int, end: int,
-                             replacement: str, operations: Sequence[Mapping[str, Any]]) -> bool:
+                             replacement: str, operations: Sequence[Mapping[str, Any]],
+                             *, locations: Iterable[str] | None = None) -> bool:
     """Prove deletions from complete source sentences, never planner provenance."""
     if any(operation.get("op") != "delete" for operation in operations):
         return False
-    intervals = [(left, right) for occurrence in _g17_source_sentence_parts(inspection, operations)
+    intervals = [(left, right)
+                 for occurrence in _g17_source_sentence_parts(
+                     inspection, operations, locations=locations)
                  for loc, left, right in occurrence if loc == location]
     try:
         source = str(inspection.by_location(location).text)
@@ -1718,6 +2174,62 @@ def _g17_source_effect_owned(inspection: Any, location: str, start: int, end: in
         cursor = right
     kept.append(compact[cursor:compact_end])
     return _compact(replacement) == "".join(kept)
+
+
+_SENTENCE_TERMINATORS = "。！？；!?;"
+
+
+def _approved_span_is_complete_clause(text: str, target: Any) -> bool:
+    """Whether the approved span is a whole sentence (or the rest of a paragraph).
+
+    Deleting a mid-sentence slice would leave an unreadable fragment; the approved
+    delete path is therefore limited to complete clauses.  The quote itself was
+    already verified against the source when the approval was created.
+    """
+    start, end = getattr(target, "start", None), getattr(target, "end", None)
+    if start is None or end is None or not text:
+        return False
+    start, end = int(start), int(end)
+    if not 0 <= start < end <= len(text):
+        return False
+    quote = text[start:end]
+    if not quote.strip():
+        return False
+    if quote.rstrip().endswith(tuple(_SENTENCE_TERMINATORS)):
+        return True
+    return not text[end:].strip()
+
+
+def _approved_delete_span(text: str, start: int, end: int) -> tuple[int, int]:
+    """Extend an approved clause span over its terminator and adjacent spaces."""
+    if not 0 <= start < end <= len(text):
+        return start, end
+    while start > 0 and text[start - 1] in " \t\u3000":
+        start -= 1
+    if end < len(text) and text[end] in _SENTENCE_TERMINATORS:
+        end += 1
+    return start, end
+
+
+def _g17_target_is_owned_sentence(inspection: Any, target: Any,
+                                  operations: Sequence[Mapping[str, Any]]) -> bool:
+    """Whether the target span is exactly one complete operation-owned sentence."""
+    if getattr(target, "start", None) is None or getattr(target, "end", None) is None:
+        return False
+    try:
+        span = inspection.by_location(target.location)
+    except (KeyError, ValueError, AttributeError):
+        return False
+    body, _offsets = compact_offsets(span.text)
+    left = len(_compact(span.text[:int(target.start)]))
+    right = len(_compact(span.text[:int(target.end)]))
+    if left >= right or right > len(body):
+        return False
+    for parts in _g17_source_sentence_parts(inspection, operations):
+        if (len(parts) == 1 and parts[0][0] == target.location
+                and parts[0][1] == left and parts[0][2] == right):
+            return True
+    return False
 
 
 def reference_fragments(text_value: str) -> list[str]:
@@ -2064,28 +2576,81 @@ def _target_paragraphs(target: Target) -> list[str]:
     return [target.location]
 
 
+def source_parts_contiguous(inspection: DocumentInspection, locations: Sequence[str]) -> bool:
+    """Whether source parts stay in one physical section and readable zone.
+
+    Empty paragraphs may separate Word wraps; nonempty intervening paragraphs,
+    headings, reversed/repeated addresses and chapter/zone changes may not.
+    This proves geometry only; operation-specific policy checks remain required.
+    """
+    paragraphs = list(inspection.paragraphs)
+    positions = {span.location: index for index, span in enumerate(paragraphs)}
+    if not locations or len(set(locations)) != len(locations):
+        return False
+    if any(location not in positions for location in locations):
+        return False
+    spans = [paragraphs[positions[location]] for location in locations]
+    first = spans[0]
+    zone = getattr(first, "logical_zone", None) or getattr(first, "zone", "body")
+    section = str(getattr(first, "section_path", ""))
+    if zone not in SURVEY_ZONES:
+        return False
+    for index, span in enumerate(spans):
+        if ((getattr(span, "logical_zone", None) or getattr(span, "zone", "body")) != zone
+                or str(getattr(span, "section_path", "")) != section):
+            return False
+        if index:
+            left, right = positions[locations[index - 1]], positions[span.location]
+            if right <= left:
+                return False
+            if any(item.text.strip() for item in paragraphs[left + 1:right]):
+                return False
+            if _looks_like_heading(span.text):
+                return False
+    return True
+
+
+def _target_source_body(target: Target, inspection: DocumentInspection) -> str:
+    """Read only the source slices owned by a target, never their whole paragraphs."""
+    if target.composite:
+        locations = _target_paragraphs(target)
+        if not source_parts_contiguous(inspection, locations):
+            raise RecallError("RECALL_TARGET_COMPOSITE_BOUNDARY", {"target": target.target_id})
+        bodies: list[str] = []
+        for part in target.composite:
+            try:
+                location, left, right = part.rsplit(":", 2)
+                body, _ = compact_offsets(inspection.by_location(location).text)
+                start, end = int(left), int(right)
+                if not 0 <= start < end <= len(body):
+                    raise ValueError
+            except (ValueError, KeyError, DocxError):
+                raise RecallError("RECALL_TARGET_COMPOSITE_UNRESOLVED", {"target": target.target_id})
+            bodies.append(body[start:end])
+        return "".join(bodies)
+    span = inspection.by_location(target.location)
+    if target.start is not None and target.end is not None:
+        return _compact(span.text[int(target.start):int(target.end)])
+    return _compact(display_text(span.text)[0])
+
+
 def target_operation_keys(target: Target, rule: dict | None,
                           inspection: DocumentInspection | None) -> set[str]:
     """Operations this target actually contains (explicit keys first, then span text)."""
     keys = set(getattr(target, "operations", ()) or ())
     if keys or rule is None or inspection is None:
         return keys
-    bodies: list[str] = []
-    for location in _target_paragraphs(target):
-        try:
-            span = inspection.by_location(location)
-        except DocxError:
-            continue
-        if target.composite:
-            bodies.append(_compact(display_text(span.text)[0]))
-        elif target.start is not None and target.end is not None:
-            bodies.append(_compact(span.text[int(target.start):int(target.end)]))
-        else:
-            bodies.append(_compact(display_text(span.text)[0]))
-    body = "".join(bodies)
+    try:
+        body = _target_source_body(target, inspection)
+    except (RecallError, KeyError, DocxError):
+        return keys
     rule_id = str(rule.get("rule_id") or "")
+    if rule_id == "G14":
+        body = _normalise_fee_rate_reference(body)
     for index, operation in enumerate(rule.get("operations") or []):
-        old = _compact(str(operation.get("old_text") or ""))
+        old = str(operation.get("old_text") or "")
+        old = (_normalise_fee_rate_reference(old) if rule_id == "G14"
+               else _compact(old))
         if old and old in body:
             keys.add(_rule_operation_key(rule, index))
     return keys
@@ -2151,19 +2716,26 @@ def _selected_operation_indices(rule: dict, target: Target,
         # operation's reference wording (or a declared variant).  Otherwise a model
         # "absent" target with the wrong quote could make the planner delete an
         # unrelated sentence (D01 G05 p135).
-        span_bodies: list[str] = []
-        for location in _target_paragraphs(target):
-            try:
-                span = inspection.by_location(location)
-            except DocxError:
-                continue
-            if target.composite:
-                span_bodies.append(_compact(display_text(span.text)[0]))
-            elif target.start is not None and target.end is not None:
-                span_bodies.append(_compact(span.text[int(target.start):int(target.end)]))
-            else:
-                span_bodies.append(_compact(display_text(span.text)[0]))
-        span_body = "".join(span_bodies)
+        span_body = _target_source_body(target, inspection)
+        if rule_id == "G14":
+            span_body = _normalise_fee_rate_reference(span_body)
+        if (rule_id == "G12" and len(selected) == 1
+                and "赎回费总额的" in span_body and "7日" in span_body):
+            # G12 has two certified historical wordings for the same obligation.
+            # This source carries the explicit 25% allocation plus the 7-day
+            # sentence, which is G12:1's shape, not G12:0's generic wording.
+            # Selecting the variant by source shape is operation identity, not a
+            # file-specific patch: both alternatives share the same ONE_OF group
+            # and new policy text.
+            current_op = operations[selected[0]]
+            group = str(current_op.get("one_of_group") or "")
+            preferred = [index for index in true_indices
+                         if index != selected[0] and group
+                         and str(operations[index].get("one_of_group") or "") == group
+                         and "未归入基金财产的部分" in _compact(
+                             str(operations[index].get("old_text") or ""))]
+            if len(preferred) == 1:
+                selected = preferred
         if rule_id in {"G02", "G04"} and bool(rule.get("class_substitution")):
             # A full fee-group clause can prove both class substitutions even when
             # Inventory attached only one explicit operation id.  A heading that
@@ -2182,10 +2754,13 @@ def _selected_operation_indices(rule: dict, target: Target,
                         selected.append(index)
                 selected = sorted(set(selected))
         variants = [_compact(str(value)) for value in (rule.get("old_text_variants") or [])]
+        if rule_id == "G14":
+            variants = [_normalise_fee_rate_reference(value) for value in variants]
         for index in selected:
             operation = operations[index]
             raw_old = str(operation.get("old_text") or "")
-            old_text = _compact(raw_old)
+            old_text = (_normalise_fee_rate_reference(raw_old) if rule_id == "G14"
+                        else _compact(raw_old))
             if operation.get("op") not in {"replace", "delete"} or not old_text:
                 continue
             if rule_id in {"G02", "G04"} and bool(rule.get("class_substitution")):
@@ -2261,7 +2836,7 @@ def assign_target_operations(targets: Sequence[Target], rules_by_id: dict[str, d
     errors: list[dict[str, Any]] = []
     from .generation.effects import _class_group_equivalent
     for target in targets:
-        if target.rule_id in {"G02", "G04", "G05"} and not target.out_of_scope:
+        if target.rule_id in {"G02", "G04", "G05", "G06"} and not target.out_of_scope:
             try:
                 source_span = inspection.by_location(target.location)
             except (DocxError, KeyError, ValueError):
@@ -2304,6 +2879,18 @@ def assign_target_operations(targets: Sequence[Target], rules_by_id: dict[str, d
                     target.out_of_scope = True
                     target.reason = f"{target.reason}|TARGET_OPERATION_NOT_APPLICABLE"
                     continue
+        if target.rule_id == "G16" and target.state == "satisfied":
+            quote_body = _compact(target.quote)
+            expected_policy = _compact(str(
+                (rule.get("operations") or [{}])[0].get("new_text") or ""))
+            if (quote_body and quote_body in expected_policy
+                    and not all(token in quote_body for token in
+                                ("每日计提", "直销机构", "其他销售机构"))):
+                # The inventory may find only the final "持有超过一年返还" tail
+                # and mark the whole G16 clause satisfied. It is a partial source
+                # clause, not a complete policy: require the remaining components.
+                target.state = "needs_edit"
+                target.reason = f"{target.reason}|G16_PARTIAL_CLAUSE"
         if target.state != "needs_edit":
             # An inventory/survey target can already be marked satisfied while still
             # carrying only one half of a split A/C class-substitution clause.  The
@@ -2584,10 +3171,24 @@ def dedupe_operation_targets(targets: Sequence[Target], rules_by_id: dict[str, d
                     exact = max(exact, 1)
             width = ((int(target.end) - int(target.start))
                      if target.start is not None and target.end is not None else 10**9)
-            return (exact, -width)
+            # When the same physical site is reported once as actionable and once
+            # as already satisfied, keep the actionable target. A false positive
+            # still has to pass source/plan/audit checks; letting the satisfied
+            # duplicate win would silently suppress a required edit.
+            return (exact, 1 if target.state == "needs_edit" else 0, -width)
         kept: list[Target] = []
         for item in sorted(items, key=score, reverse=True):
             def same_occurrence(other: Target) -> bool:
+                if (item.state != other.state
+                        and {item.state, other.state} == {"needs_edit", "satisfied"}
+                        and item.composite and item.composite == other.composite
+                        and set(item.operations) == set(other.operations)):
+                    # The survey can re-discover the same composite delete site as
+                    # an already-satisfied target while the open-rule target still
+                    # needs the edit (D04 G17 p1326). One physical composite site
+                    # cannot be both; keep the actionable target so the duplicate
+                    # does not create a false occurrence ambiguity.
+                    return True
                 if item.state != other.state:
                     return False
                 if (item.occurrence_index >= 0 and other.occurrence_index >= 0
@@ -2642,13 +3243,18 @@ def dedupe_operation_targets(targets: Sequence[Target], rules_by_id: dict[str, d
 
 
 def duplicate_copy_targets(targets: Sequence[Target], rules_by_id: dict[str, dict],
-                           inspection: DocumentInspection) -> list[Target]:
+                           inspection: DocumentInspection,
+                           scopes: Mapping[str, Any] | None = None) -> list[Target]:
     """Clone an operation target onto byte-identical body/summary clause copies.
 
     The contract repeats the same clause in the body and in the contract summary.  Editing
     only one copy makes the two dispositions diverge (D01 p758/p1221, D16 p822/p1306).
     Only identical compact paragraph text is cloned; a paragraph merely sharing a phrase
     is not the same obligation site.
+
+    When ``scopes`` is supplied, a copy is cloned only inside the target rule's resolved
+    physical scope.  A duplicate paragraph outside that scope belongs to another site
+    (e.g. the 基本情况 copy of a 释义 definition) and must not be edited by this rule.
     """
     # Only an *active* target blocks a duplicate copy.  A stale target that was
     # already judged out of scope (for example G16 on the body copy before missing-
@@ -2696,6 +3302,10 @@ def duplicate_copy_targets(targets: Sequence[Target], rules_by_id: dict[str, dic
         for location in by_text.get(source_text, ()):
             if location == target.location:
                 continue
+            if scopes is not None:
+                scope = scopes.get(str(target.rule_id))
+                if scope is None or not scope.contains(location):
+                    continue
             key = (target.rule_id, location, tuple(sorted(target.operations)))
             if key in existing:
                 continue
@@ -2780,6 +3390,14 @@ def known_operations_from_targets(targets: Sequence[Target], rules_by_id: dict[s
         # the operation is left unplanned (live G15 p806 regression).
         if getattr(target, "out_of_scope", False) or getattr(target, "attribution_error", ""):
             continue
+        # An ``absent`` judgment asserts that the operation's source material is not
+        # at this site, so it cannot also claim that the operation is covered there.
+        # Letting it claim coverage suppressed the deterministic delete target the
+        # residual pass had just found (恒裕 G17 p888: the model quoted the whole
+        # two-sentence reference, reported "absent", and swallowed the first
+        # sentence's delete target; FL-D118 is the same failure for appends).
+        if str(getattr(target, "state", "")) == "absent":
+            continue
         keys = target_operation_keys(target, rules_by_id.get(target.rule_id), inspection)
         for location in _target_paragraphs(target):
             pair = (target.rule_id, location)
@@ -2850,10 +3468,92 @@ def operations_cover_hit(known: dict[tuple[str, str], set[str] | None], rule_id:
     return True
 
 
+def _class_definition_polarity_ok(clause: str, fact: Any) -> bool:
+    """Whether one definition clause already states this class's fee treatment."""
+    if not clause:
+        return False
+    subscription = bool(getattr(fact, "subscription_fee", False))
+    service = bool(getattr(fact, "service_fee", False))
+    subscription_mentioned = any(token in clause for token in ("申购费", "认购费"))
+    subscription_negated = bool(re.search(
+        r"(?:不收取|不收|免收|无需)[^。；;]{0,8}(?:申购费|认购费)", clause))
+    if subscription:
+        if not subscription_mentioned or subscription_negated:
+            return False
+        if not any(token in clause for token in ("收取", "交纳", "支付")):
+            return False
+    elif subscription_mentioned and not subscription_negated:
+        return False
+    service_mentioned = "销售服务费" in clause
+    service_negated = bool(re.search(
+        r"(?:不计提|不收取|不收|无需)[^。；;]{0,10}销售服务费", clause))
+    if service:
+        if not service_mentioned or service_negated or "计提" not in clause:
+            return False
+    elif service_mentioned and not service_negated:
+        return False
+    return True
+
+
+def class_definition_satisfied_hits(rule: dict, facts: Facts,
+                                    compact_text: Mapping[str, str],
+                                    scoped_locations: Iterable[str],
+                                    existing: Mapping[tuple[str, str], Any]
+                                    ) -> list[tuple[str, str, tuple[str, ...]]]:
+    """Already-correct class-definition sites for G02/G04 (location, quote, keys).
+
+    The definition style ``…的，称为A类基金份额`` writes the fee treatment *before*
+    the label, so the generic ``satisfied_by_new_text`` check (which needs the
+    concatenated replacement text) never fires and the obligation stayed open even
+    though the contract already lists every actual class with the right polarity
+    (景宁 p151).  Only paragraphs that really define classes are considered, and
+    every actual class must match its own fee treatment.
+    """
+    rule_id = str(rule.get("rule_id") or "")
+    if rule_id not in {"G02", "G04"} or not rule.get("class_substitution"):
+        return []
+    classes = [fact for fact in getattr(facts, "classes", ())
+               if bool(getattr(fact, "current", True))]
+    if len(classes) < 2:
+        return []
+    operations = list(rule.get("operations") or ())
+    results: list[tuple[str, str, tuple[str, ...]]] = []
+    for location in scoped_locations:
+        if (rule_id, location) in existing:
+            continue
+        body = compact_text.get(location, "")
+        if not body or ("称为" not in body and "将基金份额分为" not in body):
+            continue
+        clauses = [clause for clause in re.split(r"[；;。]", body) if clause]
+        keys: list[str] = []
+        for fact in classes:
+            name = str(getattr(fact, "name", "") or "").strip()
+            if not name:
+                keys = []
+                break
+            label = f"{name}基金份额"
+            matched = [clause for clause in clauses if label in clause or f"称为{name}" in clause]
+            if not matched or not any(_class_definition_polarity_ok(clause, fact)
+                                      for clause in matched):
+                keys = []
+                break
+            operation_keys = [ _rule_operation_key(rule, index)
+                               for index, operation in enumerate(operations)
+                               if str(operation.get("op") or "") == "replace"
+                               and name in str(operation.get("old_text") or "")]
+            keys.extend(operation_keys)
+        if not keys:
+            continue
+        results.append((location, body, tuple(sorted(set(keys)))))
+    return results
+
+
 def survey_targets(inspection: DocumentInspection, rules: Sequence[dict], facts: Facts, *,
                    known: Any = (),
                    threshold: float = FUZZY_MATCH_THRESHOLD,
-                   override_rules: frozenset[str] = frozenset()) -> list[SurveyHit]:
+                   override_rules: frozenset[str] = frozenset(),
+                   allowed_locations: Mapping[str, Iterable[str]] | None = None
+                   ) -> list[SurveyHit]:
     """Find rule targets the windowed inventory never reported (code-driven recall).
 
     ``known`` holds the (rule_id, location) pairs already covered by model inventory
@@ -2888,7 +3588,13 @@ def survey_targets(inspection: DocumentInspection, rules: Sequence[dict], facts:
         rule_id = str(rule.get("rule_id") or "")
         if not rule_id:
             continue
+        scoped_locations = (set(allowed_locations.get(rule_id, ()))
+                            if allowed_locations is not None else set(compact_text))
+        if not scoped_locations:
+            continue
         for location, body in compact_text.items():
+            if location not in scoped_locations:
+                continue
             if (rule_id, location) in existing:
                 continue
             matched = satisfied_by_new_text(rule, facts, body)
@@ -2904,6 +3610,21 @@ def survey_targets(inspection: DocumentInspection, rules: Sequence[dict], facts:
                 _add_operation_coverage(existing, rule_id, location, satisfied_keys)
             else:
                 existing[(rule_id, location)] = None
+        # Class definitions write the fee treatment before the label
+        # ("…的，称为A类基金份额"), which the replacement-text check above cannot
+        # recognise.  Emit a satisfied hit only when every actual class already
+        # matches its own subscription/service-fee polarity.
+        for location, _body, keys in class_definition_satisfied_hits(
+                rule, facts, compact_text, scoped_locations, existing):
+            span = by_location.get(location)
+            if span is None:
+                continue
+            counter += 1
+            hits.append(SurveyHit(rule_id=rule_id, operation="satisfied",
+                                  locations=(location,), quote=span.text,
+                                  start=0, end=0, ratio=1.0, index=counter,
+                                  operation_keys=keys))
+            _add_operation_coverage(existing, rule_id, location, keys)
         tail_keys = set(bare_tail_keys(rule, facts))
         anchors = rule_context_anchors(rule, facts)
         # Clause-boundary extension is safe only for a genuinely delete-only rule.
@@ -2916,6 +3637,8 @@ def survey_targets(inspection: DocumentInspection, rules: Sequence[dict], facts:
             occurrences = find_old_text_all(paragraphs, key, threshold=SURVEY_FUZZY_THRESHOLD)
             for parts in occurrences:
                 locations = tuple(item[0] for item in parts)
+                if any(location not in scoped_locations for location in locations):
+                    continue
                 if operations_cover_hit(existing, rule_id, locations, hit_keys):
                     continue
                 if key in tail_keys and not _anchor_present(parts, anchors, compact_text):
@@ -2993,6 +3716,8 @@ def survey_targets(inspection: DocumentInspection, rules: Sequence[dict], facts:
             )
             ordered = list(compact_text.items())
             for index, (location, body) in enumerate(ordered):
+                if location not in scoped_locations:
+                    continue
                 state = existing.get((rule_id, location), _MISSING)
                 # A keyword-bag hit is a fallback for the delete operations only.  A
                 # model target for another operation at this location must not suppress
@@ -3008,6 +3733,8 @@ def survey_targets(inspection: DocumentInspection, rules: Sequence[dict], facts:
                                      if index + 1 < len(ordered) else None)
                 follower = (ordered[index + 1][1]
                             if index + 1 < len(ordered) else "")
+                if follower_location not in scoped_locations:
+                    follower_location, follower = None, ""
                 # A split clause can only continue into the next paragraph while the
                 # current one is still open.  Pairing after a full stop used to merge
                 # G15's payment clause with G17's usage clause (FL-D157), deleting the
@@ -3086,6 +3813,8 @@ def survey_targets(inspection: DocumentInspection, rules: Sequence[dict], facts:
         if delete_keys:
             needed = set(delete_keys)
             for location, body in compact_text.items():
+                if location not in scoped_locations:
+                    continue
                 state = existing.get((rule_id, location), _MISSING)
                 if state is _LOCATION_WILDCARD:
                     continue
@@ -3105,6 +3834,9 @@ def survey_targets(inspection: DocumentInspection, rules: Sequence[dict], facts:
                     index=counter, operation_keys=delete_keys).with_parts(
                         [(location, 0, len(body))]))
                 _add_operation_coverage(existing, rule_id, location, delete_keys)
+    if allowed_locations is not None:
+        hits = [hit for hit in hits if all(
+            location in allowed_locations.get(hit.rule_id, ()) for location in hit.locations)]
     return hits
 
 
@@ -3507,7 +4239,9 @@ def _reference_tail_match(rule: dict, follower: str) -> bool:
 def append_applicability_targets(inspection: DocumentInspection, rules: Sequence[dict],
                                  facts: Facts, sections: Sequence[Section], *,
                                  known: Sequence[tuple[str, str]] = (),
-                                 hinted: dict[str, str] | None = None) -> list[SurveyHit]:
+                                 hinted: dict[str, str] | None = None,
+                                 allowed_locations: Mapping[str, Iterable[str]] | None = None
+                                 ) -> list[SurveyHit]:
     """Find missing append effects at rule-specific anchors in every routed section.
 
     Existing targets and policy text cover only their own business site. A policy in
@@ -3524,6 +4258,10 @@ def append_applicability_targets(inspection: DocumentInspection, rules: Sequence
                       and condition_matches(operation.get("condition"), facts)]
         if not rule_id or not append_ops:
             continue
+        scoped = (set(allowed_locations.get(rule_id, ()))
+                  if allowed_locations is not None else None)
+        if allowed_locations is not None and not scoped:
+            continue
         hint = _compact(str(rule.get("section_hint") or ""))
         routed = [section for section in sections if hint and hint in _compact(section.title)]
         # Contract summaries are often indexed under a generic heading instead of
@@ -3534,9 +4272,22 @@ def append_applicability_targets(inspection: DocumentInspection, rules: Sequence
             if section.zone == "summary" and section not in routed:
                 routed.append(section)
         for section in routed:
+            if scoped is not None and not (scoped & set(section.locations)):
+                continue
             members = [span for span in paragraphs if span.location in set(section.locations)
+                       and (scoped is None or span.location in scoped)
                        and not _looks_like_heading(span.text)
                        and _append_member(rule_id, span, inspection)]
+            if rule_id in {"G01", "G03"}:
+                # Word may split inside a word ("在投资|者申购").  Resolve
+                # the definition end before counting candidates so both fragments
+                # represent one append site rather than an ambiguous pair.
+                ends = {}
+                for member in members:
+                    end = _split_definition_end(member, inspection) or member
+                    if end.location in section.locations:
+                        ends[end.location] = end
+                members = list(ends.values())
             prefer = (hinted or {}).get(rule_id)
             preferred = next((span for span in members if span.location == prefer), None)
             # G16 has one payment mechanism per body/summary copy, so every member
@@ -3866,6 +4617,21 @@ def _extend_g15_payment_delay_target(text: str, start: int, end: int) -> int:
     return end
 
 
+def _g12_short_holding_end(compact: str, end: int, old: str) -> int:
+    """Extend to the short-holding sentence only when this operation owns it.
+
+    G12:1's reference includes ``其中，对持续持有期少于7日的投资者……``; G12:0's
+    reference ends before it.  The same paragraph therefore needs two different
+    bounds, decided by the operation's own old text, never by the sibling G13 rule.
+    """
+    if "对持续持有期少于7日的投资者收取" not in old:
+        return end
+    match = re.match(
+        r"其中[，,]?对持续持有期少于7日的投资者收取[^。；;！？!?]{0,60}[。；;]",
+        compact[end:])
+    return end + match.end() if match is not None else end
+
+
 def _g12_allocation_end(text: str, operation: Mapping[str, Any]) -> int | None:
     """Recognize only an operation-owned redemption-fee allocation prefix.
 
@@ -3889,16 +4655,31 @@ def _g12_allocation_end(text: str, operation: Mapping[str, Any]) -> int | None:
     ratio = re.match(
         r"不低于赎回费总额的(?P<ratio>\d{1,3}(?:\.\d+)?)%应归基金财产[，,]"
         r"其余用于支付登记费和其他必要的手续费[。；;]", compact[len(bearer):])
-    if ratio is None or not 0 < float(ratio.group("ratio")) <= 100:
+    if ratio is not None:
+        if not 0 < float(ratio.group("ratio")) <= 100:
+            return None
+        end = len(bearer) + ratio.end()
+        end = _g12_short_holding_end(compact, end, old)
+        return offsets[end - 1] + 1
+    # Historical contracts also express the same allocation policy without a
+    # percentage, for example ``比例应根据相关规定执行，具体见招募说明书的
+    # 规定，未计入基金财产的部分用于支付登记费和其他必要的手续费。``.
+    # Keep this bounded to the current sentence and require both the allocation
+    # subject and the unallocated-balance use.  The following short-holding
+    # sentence belongs to G13 and must remain outside this operation.
+    generic = re.match(
+        r"赎回费用归入基金财产的比例[^。；;！？!?]{0,180}"
+        r"(?:未(?:计入|归入)|其余)[^。；;！？!?]{0,80}"
+        r"用于支付登记费和其他必要的手续费[。；;]",
+        compact[len(bearer):])
+    # G12:0's canonical old text ends after the standard ``比例……招募说明书``
+    # wording, while the guide's declared historical variant may spell the same
+    # allocation boundary with ``具体见……未计入……``.  The operation still owns
+    # that complete G12 source variant; no sibling G13 text is borrowed.
+    if generic is None or "比例" not in old:
         return None
-    # An explicit percentage is authorized by the operation whose own source
-    # clause names either that percentage allocation or the equivalent
-    # unallocated-balance payment boundary. G12:0's shorter generic wording
-    # must not borrow G12:1's bounded source from the same paragraph.
-    if not ("赎回费总额的" in old or
-            "未归入基金财产的部分用于支付登记费和其他必要的手续费" in old):
-        return None
-    end = len(bearer) + ratio.end()
+    end = len(bearer) + generic.end()
+    end = _g12_short_holding_end(compact, end, old)
     return offsets[end - 1] + 1
 
 
@@ -3906,6 +4687,43 @@ def _g12_source_effect_owned(before: str, after: str, operation: Mapping[str, An
     end = _g12_allocation_end(before, operation)
     return end is not None and _same_compact(
         after, str(operation.get("new_text") or "") + before[end:])
+
+
+_G06_PROHIBITION = re.compile(
+    r"(?:(?:不同基金份额类别之间)|(?:[A-ZＡ-Ｚ]\s*类\s*基金\s*份额)"
+    r"(?:和|、|及|或)[A-ZＡ-Ｚ]\s*类\s*基金\s*份额之间)"
+    r".{0,32}(?:不得|不能|不允许|暂不允许|不可)"
+    r".{0,18}(?:互相|相互|进行)?转换|"
+    r"[A-ZＡ-Ｚ]\s*类\s*基金\s*份额.{0,32}"
+    r"(?:不得|不能|不允许|暂不允许|不可).{0,18}"
+    r"(?:互相|相互|进行)?转换")
+
+
+def _g06_prohibition_bounds(text: str, start: int | None, end: int | None
+                            ) -> tuple[int, int, str] | None:
+    """A source-bound class-conversion prohibition may be deleted as one sentence.
+
+    G06's guide reference includes the optional ``除非…另行公告…`` prefix, while a
+    contract often stores only the prohibition sentence, or splits the prefix and
+    sentence differently. The already source-bound target proves this operation
+    owns the sentence; expand only to its immediate sentence boundary and require
+    the conversion prohibition inside it.
+    """
+    if start is None or end is None or start < 0 or end <= start or end > len(text):
+        return None
+    left, right = start, end
+    while left > 0 and text[left - 1] not in "。；;！？":
+        left -= 1
+    if not text[:end].rstrip().endswith(tuple("。；;！？")):
+        while right < len(text) and text[right] not in "。；;！？":
+            right += 1
+        if right < len(text):
+            right += 1
+    sentence = text[left:right]
+    compact = _compact(sentence)
+    if len(compact) > 160 or not _G06_PROHIBITION.search(compact):
+        return None
+    return left, right, sentence
 
 
 def _g13_short_holding_end(text: str, operation: Mapping[str, Any]) -> int | None:
@@ -4978,6 +5796,42 @@ def _g11_bearer_end(text: str, operation: Mapping[str, Any]) -> int | None:
     return offsets[match.end() - 1] + 1
 
 
+def g11_composite_source_parts(inspection: Any, operation: Mapping[str, Any],
+                               location: str) -> tuple[str, ...] | None:
+    """Return bounded cross-paragraph slices for a split G11 bearer clause.
+
+    D06 stores ``申购费用由...承担，`` in p228 and ``不列入基金财产。`` in
+    p229, immediately followed by the independent C/E/F no-fee sentence.  The
+    target must own the two bearer fragments while leaving that following policy
+    untouched.
+    """
+    if operation.get("op") != "replace":
+        return None
+    spans = list(getattr(inspection, "paragraphs", ()) or ())
+    index = next((i for i, span in enumerate(spans)
+                  if str(getattr(span, "location", "")) == str(location)), None)
+    if index is None or index + 1 >= len(spans):
+        return None
+    current, following = spans[index], spans[index + 1]
+    current_compact, _ = compact_offsets(str(current.text))
+    following_compact, _ = compact_offsets(str(following.text))
+    if not current_compact or not following_compact:
+        return None
+    # The source may end in a comma because Word split the sentence at the
+    # paragraph boundary.  Avoid joining two independently terminated clauses.
+    if current_compact[-1:] not in {"，", ","}:
+        return None
+    joined = current_compact + following_compact
+    boundary = _g11_bearer_end(joined, operation)
+    if boundary is None or boundary <= len(current_compact):
+        return None
+    second_end = boundary - len(current_compact)
+    if second_end <= 0 or second_end > len(following_compact):
+        return None
+    return (f"{current.location}:0:{len(current_compact)}",
+            f"{following.location}:0:{second_end}")
+
+
 def plan_composite_target(rule: dict, target: Target, inspection: DocumentInspection, facts: Facts,
                           *, new_text: str) -> list[PlannedEdit]:
     """Turn a composite (multi-paragraph) reference into one edit per paragraph.
@@ -4988,6 +5842,7 @@ def plan_composite_target(rule: dict, target: Target, inspection: DocumentInspec
     """
     if not target.composite:
         raise RecallError("RECALL_TARGET_COMPOSITE_UNRESOLVED", {"target": target.target_id})
+    _target_source_body(target, inspection)
     parts: list[tuple[str, int, int]] = []
     for item in target.composite:
         try:
@@ -5105,12 +5960,12 @@ def _plan_tier1(rule: dict, operations: Sequence[dict], facts: Facts,
     rule_id = str(rule.get("rule_id") or "")
     replace_ops = [operation for operation in operations
                    if operation.get("op") == "replace"]
-    if not replace_ops or rule_id not in {"G14", "G09", "G08", "G11"}:
+    if not replace_ops or rule_id not in {"G14", "G09", "G08", "G10", "G11"}:
         return None
     executor = str((routing or {}).get("executor") or "template")
     if executor not in {"template", "splice"}:
         return None
-    if rule_id in {"G08", "G11"}:
+    if rule_id in {"G08", "G10", "G11"}:
         from .generation.template import plan_policy_replacement
         candidates: list[str] = []
         for operation in replace_ops:
@@ -5168,7 +6023,7 @@ def _route_structure(rule_id: str, actual: str, facts: Facts) -> str | None:
     """
     if rule_id in {"G14", "G09"}:
         return "clean"
-    if rule_id in {"G08", "G11"}:
+    if rule_id in {"G08", "G10", "G11"}:
         compact = _compact(actual)
         if rule_id == "G08":
             clean = ("申购费率由基金管理人决定" in compact
@@ -5370,7 +6225,7 @@ def _validate_routed_policy(rule: dict, operations: Sequence[dict], facts: Facts
 
 def plan_target(rule: dict, target: Target, inspection: DocumentInspection, facts: Facts,
                 gateway: Any, *, compose_budget: list[int],
-                obligations: Any = None) -> PlannedEdit | None:
+                obligations: Any = None, approvals: Any = None) -> PlannedEdit | None:
     """Plan one target; registry mode adds tri-state applicability and routing records.
 
     Tri-state (external review 2026-10-19): an operation whose condition cannot be
@@ -5378,7 +6233,14 @@ def plan_target(rule: dict, target: Target, inspection: DocumentInspection, fact
     target resolves as ``RECALL_FACT_UNVERIFIED`` instead of guessing a branch. The
     per-operation routing decision (requested/actual tier, fallback reason) is recorded
     on the edit evidence for telemetry.
+
+    ``approvals`` is an optional :class:`semantic_evidence.ApprovalBook`.  When the
+    target carries a valid, code-verified approval for this rule/operation/source,
+    the rule-specific site word list is a fast path only: it can no longer veto the
+    same semantic decision a second time (R01-R03).
     """
+    approval_check: dict[str, Any] | None = None
+
     def _attach(edit: PlannedEdit | None) -> PlannedEdit | None:
         if edit is None:
             return None
@@ -5386,18 +6248,25 @@ def plan_target(rule: dict, target: Target, inspection: DocumentInspection, fact
             indices = _selected_operation_indices(rule, target, inspection, facts, obligations)
             selected = [rule["operations"][index] for index in indices]
             source = inspection.by_location(edit.location).text[edit.start:edit.end]
-            if (len(selected) != 1 or not (
+            approved = (edit.content_source == "approved_span_delete"
+                        and approvals is not None
+                        and approvals.allows(target, inspection).ok)
+            if (not approved and (len(selected) != 1 or not (
                     _g15_payment_source_owned(source, selected[0]) or
                     _g15_delay_continuation(inspection, edit.location, selected[0]) ==
-                    (edit.start, edit.end))):
+                    (edit.start, edit.end)))):
                 raise RecallError("RECALL_DELETE_SCOPE_UNPROVEN", {
                     "rule": "G15", "target": target.target_id, "location": edit.location})
         if str(rule.get("rule_id") or "") == "G17":
             indices = _selected_operation_indices(rule, target, inspection, facts, obligations)
             selected = [rule["operations"][index] for index in indices]
             if selected and all(operation.get("op") == "delete" for operation in selected):
-                if not _g17_source_effect_owned(inspection, edit.location, edit.start,
-                        edit.end, edit.replacement, selected):
+                approved = (edit.content_source == "approved_span_delete"
+                            and approvals is not None
+                            and approvals.allows(target, inspection).ok)
+                if not approved and not _g17_source_effect_owned(
+                        inspection, edit.location, edit.start, edit.end,
+                        edit.replacement, selected):
                     raise RecallError("RECALL_DELETE_SCOPE_UNPROVEN", {
                         "rule": "G17", "target": target.target_id, "location": edit.location})
         if not edit.operation_keys:
@@ -5420,13 +6289,16 @@ def plan_target(rule: dict, target: Target, inspection: DocumentInspection, fact
         if obligations is not None:
             evidence["operation_refs"] = [record.spec.as_dict() for key in edit.operation_keys
                                           if (record := obligations.record(key)) is not None]
+        approval_check = getattr(target, "_approval_check", None)
+        if approval_check is not None:
+            evidence.setdefault("semantic_approval", approval_check)
         edit.evidence = evidence
         return edit
 
     if not _tier1_enabled():
         return _attach(_plan_target_inner(rule, target, inspection, facts, gateway,
                                           compose_budget=compose_budget,
-                                          obligations=obligations))
+                                          obligations=obligations, approvals=approvals))
     # Apply the Router's fact gate before source binding. This keeps an UNKNOWN or
     # CONFLICT prerequisite from being reported as a secondary quote/location error.
     operation_list = list(rule.get("operations") or [])
@@ -5486,7 +6358,7 @@ def plan_target(rule: dict, target: Target, inspection: DocumentInspection, fact
     setattr(target, "_route_plan", route_plan)
     edit = _plan_target_inner(rule, target, inspection, facts, gateway,
                               compose_budget=compose_budget, obligations=obligations,
-                              routing=route_plan)
+                              routing=route_plan, approvals=approvals)
     if edit is not None:
         evidence = dict(edit.evidence or {})
         if rule.get("class_substitution") and not facts.service_group:
@@ -5498,7 +6370,8 @@ def plan_target(rule: dict, target: Target, inspection: DocumentInspection, fact
 def _plan_target_inner(rule: dict, target: Target, inspection: DocumentInspection, facts: Facts,
                        gateway: Any, *, compose_budget: list[int],
                        obligations: Any = None,
-                       routing: dict[str, Any] | None = None) -> PlannedEdit | None:
+                       routing: dict[str, Any] | None = None,
+                       approvals: Any = None) -> PlannedEdit | None:
     """Turn one needs_edit target into a concrete edit, or raise RecallError.
 
     Only the operations attributed to THIS target are eligible.  Re-scanning every
@@ -5725,6 +6598,23 @@ def _plan_target_inner(rule: dict, target: Target, inspection: DocumentInspectio
                                 mode="delete" if all(operation.get("op") == "delete"
                                                      for operation in operations)
                                 else "replace", check_output=False)
+    if (rule_id == "G16" and target.state == "needs_edit"
+            and len(operations) == 1 and operations[0].get("op") == "append"
+            and target.start is not None and target.end is not None):
+        expected, issues = instantiate_slots(str(operations[0].get("new_text") or ""), facts)
+        target_body = _compact(str(target.quote) or "")
+        if (not issues and expected and target_body
+                and target_body in _compact(expected)):
+            # The target owns only the final sentence of the G16 policy. Replace
+            # that tail with the complete instantiated clause instead of appending
+            # after it (which would duplicate the tail) or deleting the paragraph.
+            return finish(PlannedEdit(
+                target_id=target.target_id, rule_id=rule_id, location=target.location,
+                start=target.start, end=target.end, replacement=expected,
+                operation="replace", content_source="g16_partial_clause_replace",
+                evidence={"fixed_text": expected,
+                          "replaced_tail": target.quote,
+                          "guide_paragraphs": rule.get("source_paragraphs") or []}))
     has_append = any(operation.get("op") == "append" for operation in operations)
     if has_append:
         if routed_executor == "delete" or routed_executor == "splice":
@@ -5739,6 +6629,16 @@ def _plan_target_inner(rule: dict, target: Target, inspection: DocumentInspectio
             site_ok = target_site_ok(rule_id, span, inspection)
     else:
         site_ok = target_site_ok(rule_id, span, inspection)
+    if not site_ok and approvals is not None:
+        # The source, operation identity, scope and guide identity were already
+        # verified when the approval was created.  A different word list must not
+        # reject the same target again (弘利 G17 "可用于", FL-D394/R01).
+        check = approvals.allows(target, inspection)
+        if check.ok:
+            site_ok = True
+            setattr(target, "_approval_check", {
+                "approval_id": str(getattr(target, "approval_id", "") or ""),
+                "ok": True, "code": ""})
     if not site_ok:
         raise RecallError("TARGET_SOURCE_MISMATCH",
                           {"rule": rule_id, "target": target.target_id,
@@ -5750,7 +6650,12 @@ def _plan_target_inner(rule: dict, target: Target, inspection: DocumentInspectio
     replace_ops = [operation for operation in operations if operation.get("op") == "replace"]
     noop_ops = [operation for operation in operations if operation.get("op") == "noop"]
     if rule_id == "G12" and len(operations) == 1 and len(replace_ops) == 1:
-        allocation_end = _g12_allocation_end(actual, replace_ops[0])
+        # Survey inventory may bind only G12's bearer sentence.  The complete
+        # authorized allocation sentence is still in this physical paragraph;
+        # inspect the source suffix so a bounded replacement can consume it
+        # without borrowing the following G13 short-holding sentence.
+        allocation_source = span.text[target.start:]
+        allocation_end = _g12_allocation_end(allocation_source, replace_ops[0])
         if allocation_end is not None:
             new_text = str(replace_ops[0].get("new_text") or "")
             return finish(PlannedEdit(
@@ -5760,6 +6665,15 @@ def _plan_target_inner(rule: dict, target: Target, inspection: DocumentInspectio
                 content_source="bounded_replace",
                 evidence={"strategy": "source_redemption_allocation",
                           "fixed_text": new_text}))
+    if rule_id == "G06" and len(operations) == 1 and len(delete_ops) == 1:
+        bounds = _g06_prohibition_bounds(span.text, target.start, target.end)
+        if bounds is not None:
+            left, right, sentence = bounds
+            return finish(PlannedEdit(
+                target_id=target.target_id, rule_id=rule_id, location=target.location,
+                start=left, end=right, replacement="", operation="replace",
+                content_source="g06_prohibition_delete",
+                evidence={"deleted_quote": sentence}))
     if rule_id == "G13" and len(operations) == 1 and len(delete_ops) == 1:
         short_end = _g13_short_holding_end(actual, delete_ops[0])
         if short_end is None:
@@ -5771,6 +6685,24 @@ def _plan_target_inner(rule: dict, target: Target, inspection: DocumentInspectio
                 start=target.start, end=target.start + short_end,
                 replacement="", operation="replace", content_source="short_holding_delete",
                 evidence={"deleted_quote": actual[:short_end]}))
+    if (len(operations) == 1 and len(delete_ops) == 1 and approvals is not None
+            and str(getattr(target, "approval_id", "") or "")):
+        # A delete whose wording differs from the guide example cannot be spliced
+        # literally.  When the model already selected this exact source sentence and
+        # code verified the quote, operation identity and scope, the program deletes
+        # that approved span instead of asking a model to rewrite the clause (R07).
+        check = approvals.allows(target, inspection)
+        if check.ok and _approved_span_is_complete_clause(actual, target):
+            start, end = _approved_delete_span(actual, int(target.start),
+                                               int(target.end))
+            if end > start:
+                return finish(PlannedEdit(
+                    target_id=target.target_id, rule_id=rule_id,
+                    location=target.location, start=start, end=end, replacement="",
+                    operation="replace", content_source="approved_span_delete",
+                    evidence={"deleted_quote": actual[start:end],
+                              "approval_id": target.approval_id,
+                              "deletion_authority": "semantic_approval"}))
     if routed_executor in {"template", "splice"}:
         tier1 = _plan_tier1(rule, operations, facts, actual, routing=route_plan)
         if tier1 is not None:
@@ -5943,6 +6875,22 @@ def _plan_target_inner(rule: dict, target: Target, inspection: DocumentInspectio
                 and quote_compact == _compact(actual)
                 and _g17_usage_exclusion_matches(actual,
                     [str(delete_ops[0].get("old_text") or "")])):
+            return finish(PlannedEdit(
+                target_id=target.target_id, rule_id=rule_id, location=target.location,
+                start=target.start, end=target.end, replacement="", operation="replace",
+                content_source="variant_delete",
+                evidence={"guide_paragraphs": rule.get("source_paragraphs") or [],
+                          "deleted_quote": target.quote}))
+        # The purpose sentence ("销售服务费主要用于支付销售机构佣金…服务费等。")
+        # is one complete operation-owned sentence of G17's two-sentence reference.
+        # The class lead ("C类基金份额的") is absent from the contract, so the
+        # substring test below rejects the span and the composer fails with
+        # DELETE_NOT_SHRINKING; the residual then survives (生物科技 p940, 美国房地产
+        # p721, 道琼斯 p902).  Delete only when the target span is exactly one
+        # complete source sentence owned by this operation.
+        if (rule_id == "G17" and len(delete_ops) == 1
+                and quote_compact == _compact(actual)
+                and _g17_target_is_owned_sentence(inspection, target, delete_ops)):
             return finish(PlannedEdit(
                 target_id=target.target_id, rule_id=rule_id, location=target.location,
                 start=target.start, end=target.end, replacement="", operation="replace",
@@ -6239,6 +7187,10 @@ def compose_variant(span: ParagraphSpan, target: Target, rule: dict, actual: str
         result = gateway.call(task_type="recall_compose", bounded_context=context,
                               response_schema=COMPOSE_SCHEMA, instruction=instruction,
                               prompt_version=COMPOSE_PROMPT_VERSION)
+        # Each attempt validates only the candidate it just produced.  The retry
+        # note above may quote the previous error, but carrying that error into
+        # this attempt's checks rejected a correct second answer (FL-D442).
+        last_error = None
         value = result.value if isinstance(result.value, dict) else {}
         replacement = str(value.get("replacement") or "").strip()
         preserved = [str(item) for item in (value.get("preserved") or []) if isinstance(item, str)]
@@ -6449,7 +7401,33 @@ def merge_edits(edits: Sequence[PlannedEdit], inspection: DocumentInspection,
                 current = item
                 current_components = [_component(item, inspection)]
                 continue
+            item_component = _component(item, inspection)
             if item.start == current.end:
+                # Adjacent declared alternatives are still ONE effect.  Concatenating
+                # both replacements would write the same policy sentence twice (D06
+                # G12 p230: G12:0 and G12:1 are historical wording alternatives).
+                # Keep the variant that carries the other's effect and mark the other
+                # covered; different non-empty policies fail closed instead of being
+                # silently applied twice.
+                if (_operations_are_alternatives(current, item, obligations)
+                        and current.replacement.strip() and item.replacement.strip()):
+                    if _compact(item.replacement) in _compact(current.replacement):
+                        covered.append(item.target_id)
+                        continue
+                    if _compact(current.replacement) in _compact(item.replacement):
+                        covered.append(current.target_id)
+                        current = item
+                        current_components = [item_component]
+                        continue
+                    conflicts.append({"code": "RECALL_EDIT_OVERLAP", "location": location,
+                                      "targets": [current.target_id, item.target_id],
+                                      "spans": [[current.start, current.end],
+                                                [item.start, item.end]],
+                                      "reason": "ONE_OF_ALTERNATIVES_DIFFER"})
+                    merged.append((current, current_components))
+                    current = item
+                    current_components = [item_component]
+                    continue
                 merged_start, merged_end = current.start, item.end
                 current_components = current_components + [_component(item, inspection)]
                 current = PlannedEdit(
@@ -6464,7 +7442,6 @@ def merge_edits(edits: Sequence[PlannedEdit], inspection: DocumentInspection,
                     obligation_ids=_edit_obligation_ids(current, item),
                 )
                 continue
-            item_component = _component(item, inspection)
             # An append point inside a sibling deletion is the common G15 (delete old
             # payment clause) + G16 (append new mechanism) case.  The append is not an
             # overlap: after the deletion it is exactly the content that remains.
@@ -6901,11 +7878,47 @@ def _reconcile_final_plan_ledger(
             entry["reason"] = "RECALL_PLAN_COMPONENT_DROPPED"
 
 
+def approval_book_for(rules_by_id: Mapping[str, dict], targets: Sequence[Target],
+                      inspection: DocumentInspection) -> Any:
+    """Deterministic approvals for every attributable target.
+
+    Building them here (rather than only in the pipeline) keeps production planning
+    and frozen stage replay identical: both derive the same approval ids, evidence
+    and guide fingerprint from the recorded targets.
+    """
+    from .semantic_evidence import (ApprovalBook, AssessmentRef, EvidenceError,
+                                    approval_from_target, guide_fingerprint)
+    guide_sha256 = guide_fingerprint([rules_by_id[key] for key in sorted(rules_by_id)])
+    book = ApprovalBook()
+    for target in targets:
+        if (target.state != "needs_edit" or target.out_of_scope
+                or not target.operations or target.attribution_error):
+            continue
+        approval_id = str(getattr(target, "approval_id", "") or "") \
+            or f"AP:{target.target_id}"
+        try:
+            approval = approval_from_target(
+                approval_id, target, inspection, guide_id="active_guide",
+                guide_sha256=guide_sha256,
+                semantic_role=str(target.reason or "")[:200],
+                assessment=AssessmentRef(
+                    assessment_id=f"AS:{target.target_id}", task_type="inventory",
+                    decision=str(target.state), model_role="primary"))
+        except EvidenceError:
+            continue
+        book.add(approval)
+        target.approval_id = approval.approval_id
+    return book
+
+
 def plan_edits(rules_by_id: dict[str, dict], targets: Sequence[Target], inspection: DocumentInspection,
                facts: Facts, gateway: Any, *, max_compose_calls: int = 6,
                obligations: Any = None,
-               reuse_edits: Sequence[Mapping[str, Any]] = ()) -> dict[str, Any]:
+               reuse_edits: Sequence[Mapping[str, Any]] = (),
+               approvals: Any = None) -> dict[str, Any]:
     """Build the edit list, isolating per-target failures into the ledger."""
+    if approvals is None:
+        approvals = approval_book_for(rules_by_id, targets, inspection)
     planned: list[PlannedEdit] = []
     ledger: list[dict[str, Any]] = []
     compose_budget = [max_compose_calls]
@@ -7038,7 +8051,8 @@ def plan_edits(rules_by_id: dict[str, dict], targets: Sequence[Target], inspecti
                         component["end"] = target.end
             if edit is None:
                 edit = plan_target(rule, target, inspection, facts, gateway,
-                                   compose_budget=compose_budget, obligations=obligations)
+                                   compose_budget=compose_budget, obligations=obligations,
+                                   approvals=approvals)
         except RecallError as exc:
             status = "not_applicable" if exc.code == "RECALL_RULE_NOT_APPLICABLE" else "unresolved"
             if status == "not_applicable":
@@ -7772,6 +8786,14 @@ def target_site_ok(rule_id: str, span: Any, inspection: DocumentInspection) -> b
         if not any(token in _compact(paragraph) for token in
                    ("申购费", "认购费", "销售服务费")):
             return False
+        compact = _compact(paragraph)
+        # The amendment trigger ("增加新的基金份额类别…变更现有基金份额类别的
+        # 申购费率") is G05's business site, not a class definition.  Accepting it
+        # let a "satisfied" G04 target with no class label bind there and left the
+        # real definition unproven (景宁 p148 vs p151).
+        if (re.search(r"(?:增加|增设|新增|变更|停止)[^。；;]{0,16}(?:基金)?份额类别", compact)
+                and "将基金份额分为" not in compact and "称为" not in compact):
+            return False
         if any(token in paragraph for token in
                ("基金份额类别", "份额类别", "将基金份额分为", "分类")):
             return True
@@ -7779,7 +8801,6 @@ def target_site_ok(rule_id: str, span: Any, inspection: DocumentInspection) -> b
         # wording is the next one.  That second paragraph carries the real site; a
         # generic fee sentence must still supply both fee concepts and at least two
         # share-class labels.
-        compact = _compact(paragraph)
         labels = set(re.findall(r"([A-Z])类", compact))
         return (len(labels) >= 2 and "销售服务费" in compact
                 and any(token in compact for token in ("申购费用", "申购费", "认购费用", "认购费")))
@@ -7805,6 +8826,8 @@ def target_site_ok(rule_id: str, span: Any, inspection: DocumentInspection) -> b
         return "销售服务费" in paragraph and (
             "主要用于" in paragraph or "使用范围" in paragraph)
     if rule_id == "G06":
+        if not g06_scope_present(inspection, span.location):
+            return False
         paragraph, _ = display_text(span.text)
         compact = _compact(paragraph)
         # Historical contracts use both the guide's "不得互相转换" wording and
@@ -7816,15 +8839,46 @@ def target_site_ok(rule_id: str, span: Any, inspection: DocumentInspection) -> b
     if rule_id == "G18":
         paragraph, _ = display_text(span.text)
         compact = _compact(paragraph)
-        if any(anchor in compact for anchor in _TARGET_ANCHORS["G18"][0]):
+        # The guide also authorizes the neutral summary used by D06. It preserves
+        # the fee-difference meaning without inventing a particular class split;
+        # the p132 undifferentiated class list remains outside this site predicate.
+        if ("各基金份额类别在费用收取上不同" in compact
+                and any(token in compact for token in ("可分配收益", "分别计算"))):
             return True
-        # The guide writes "…费用收取不同"; contracts also write "由于基金费用的不同，
-        # …将分别计算基金份额净值".  Both carry the class labels and the fee-difference
-        # statement, so both are valid G18 sites (live p139 satisfied target).
-        labels = set(re.findall(r"([A-Z])类", compact))
-        return (len(labels) >= 2 and "费用" in compact and "不同" in compact
-                and any(token in compact for token in
-                        ("份额净值", "可分配收益", "分别计算")))
+        if "费用收取不同" in compact and "由于本基金" in compact:
+            return True
+        # Historical contracts state the same two fee groups through explicit
+        # ``不收取销售服务费 / 收取销售服务费`` wording rather than the newer
+        # ``费用收取不同`` phrase.  This is a valid G18 business site when both
+        # polarities occur in one paragraph; it cannot match the D06 p132
+        # undifferentiated class list because that paragraph has no such fee facts.
+        if ("不收取销售服务费" in compact and "收取销售服务费" in compact
+                and len(set(re.findall(r"([A-ZＡ-Ｚ])类", compact))) >= 2):
+            return True
+        # The guide writes ``A/Y ... and C/E/F ... fees differ``.  A paragraph
+        # listing all classes as one undifferentiated set is not a G18 site: it
+        # does not prove the two fee groups that the replacement authorizes.
+        # Require two ordered groups separated by a fee-difference phrase.
+        labels = re.findall(r"([A-ZＡ-Ｚ])类", compact)
+        if len(labels) < 2 or "费用" not in compact or "不同" not in compact:
+            return False
+        if not any(token in compact for token in ("份额净值", "可分配收益", "分别计算")):
+            return False
+        # The two groups must be explicit in the same sentence.  Requiring the
+        # class labels to be listed before each ``基金份额`` phrase distinguishes
+        # ``A、C、E、F、Y类基金份额`` from the authorized ``A、Y类基金份额和
+        # C、E、F类基金份额`` form.  The former was the false D06 p132 site.
+        grouped = re.compile(
+            r"(?:[A-ZＡ-Ｚ]类(?:、[A-ZＡ-Ｚ]类)*基金份额)"
+            r"(?:和|及|与)(?:[A-ZＡ-Ｚ]类(?:、[A-ZＡ-Ｚ]类)*基金份额)")
+        for sentence in re.split(r"[。；;！？!?]", compact):
+            class_share_mentions = re.findall(
+                r"[A-ZＡ-Ｚ]类基金份额", sentence)
+            if any(marker in sentence for marker in _FEE_DIFFERENCE_MARKERS) \
+                    and len(class_share_mentions) == 2 \
+                    and grouped.search(sentence):
+                return True
+        return False
     if rule_id not in _TARGET_ANCHORS:
         return True
     paragraph, _ = display_text(span.text)
@@ -7856,7 +8910,8 @@ _DELETE_SENTENCE_ANCHORS = {
 # to suppress this code-discoverable occurrence.
 _DELETE_SEMANTIC_PROBES = {
     "G06": re.compile(
-        r"(?=.*份额(?:类别|之间))(?=.*(?:不得|不允许|暂不允许|不能|不可)[^。；;！？!?]{0,32}转换)"
+        r"(?=(?:.*份额(?:类别|之间)|.*[A-ZＡ-Ｚ]\s*类\s*基金\s*份额))"
+        r"(?=.*(?:不得|不允许|暂不允许|不能|不可)[^。；;！？!?]{0,32}转换)"
     ),
 }
 
@@ -7867,7 +8922,7 @@ _DELETE_SEMANTIC_PROBES = {
 # the canonical literal alone when such a candidate is still present.
 _DELETE_REVIEW_PROBES = {
     "G06": re.compile(
-        r"(?=(?:.*份额(?:类别|之间)|.*[A-ZＡ-Ｚ]类基金份额))"
+        r"(?=(?:.*份额(?:类别|之间)|.*[A-ZＡ-Ｚ]\s*类\s*基金\s*份额))"
         r"(?=.*(?:不得|不允许|暂不允许|不能|不可)[^。；;！？!?]{0,32}转换)"
     ),
 }
@@ -7886,6 +8941,17 @@ def semantic_delete_review_candidates(rule_id: str, text: str) -> list[str]:
     return candidates
 
 
+def _is_one_way_y_class_conversion(text: str) -> bool:
+    """Identify the separately governed one-way Y-class conversion path."""
+    compact = _compact(text)
+    if "Y类基金份额" not in compact or "转换" not in compact:
+        return False
+    return bool(re.search(
+        r"(?:Y类基金份额)[^。；;！？!?]{0,32}"
+        r"(?:不得|不允许|暂不允许|不能|不可)[^。；;！？!?]{0,32}转换",
+        compact))
+
+
 def _semantic_delete_sentences(rule_id: str, text: str) -> list[str]:
     pattern = _DELETE_SEMANTIC_PROBES.get(rule_id)
     if pattern is None:
@@ -7895,6 +8961,8 @@ def _semantic_delete_sentences(rule_id: str, text: str) -> list[str]:
         candidate = sentence.strip()
         if len(_compact(candidate)) < 12 or not pattern.search(candidate):
             continue
+        if rule_id == "G06" and _is_one_way_y_class_conversion(candidate):
+            continue
         if candidate not in sentences:
             sentences.append(candidate)
     # Contracts occasionally omit terminal punctuation at paragraph boundaries.
@@ -7903,18 +8971,40 @@ def _semantic_delete_sentences(rule_id: str, text: str) -> list[str]:
     return sentences
 
 
+def _rule_scope_locations(scopes: Mapping[str, Any] | None,
+                          rule_id: str) -> set[str] | None:
+    """Physical locations a rule may inspect for ``ensure_delete_targets``.
+
+    ``None`` means the caller supplied no scope information (legacy behaviour).
+    An empty set means fail closed: the rule has no resolved physical scope, so a
+    document-wide semantic scan is not allowed.
+    """
+    if scopes is None:
+        return None
+    scope = scopes.get(rule_id) if isinstance(scopes, Mapping) else None
+    if scope is None:
+        return set()
+    return set(getattr(scope, "locations", ()) or ())
+
+
 def ensure_delete_targets(targets: Sequence[Target], rules_by_id: dict[str, dict],
-                          inspection: DocumentInspection, *, limit: int = 20) -> list[Target]:
+                           inspection: DocumentInspection, *, limit: int = 20,
+                           scopes: Mapping[str, Any] | None = None) -> list[Target]:
     """Create targets for delete-only sentences that no inventory/survey target covers.
 
     Inventory often binds only the head of a two-sentence clause; the tail then survives
     while the audit marks the deletion complete (D01 G17 p760, D03 G15 p751). This
     document-wide pass creates a deterministic target for every remaining copy of a
     delete sentence that carries the rule's domain anchor, so the planner deletes it.
+
+    When ``scopes`` (``rule_id -> RuleScope``) is supplied, every candidate paragraph,
+    G17 sentence proof and semantic probe is restricted to that rule's physical scope;
+    a rule without a resolved scope gets no document-wide fallback.
     """
     if not targets and not rules_by_id:
         return []
     paragraphs = [span for span in inspection.paragraphs if span.text.strip()]
+    g06_locations = g06_scope_locations(inspection)
     covered: dict[str, list[tuple[str, str]]] = {}
     for target in targets:
         if str(target.rule_id) not in _DELETE_SENTENCE_ANCHORS:
@@ -7946,6 +9036,12 @@ def ensure_delete_targets(targets: Sequence[Target], rules_by_id: dict[str, dict
         rule = rules_by_id.get(rule_id)
         if rule is None:
             continue
+        allowed = _rule_scope_locations(scopes, rule_id)
+        if allowed is not None and not allowed:
+            # No resolved physical scope: fail closed instead of scanning the document.
+            continue
+        rule_paragraphs = ([span for span in paragraphs if str(span.location) in allowed]
+                           if allowed is not None else paragraphs)
         operations = [operation for operation in (rule.get("operations") or [])
                       if isinstance(operation, dict) and operation.get("op") == "delete"]
         if not operations:
@@ -7958,7 +9054,8 @@ def ensure_delete_targets(targets: Sequence[Target], rules_by_id: dict[str, dict
                 if operation.get("op") != "delete":
                     continue
                 key = _rule_operation_key(rule, operation_index)
-                for parts in _g17_source_sentence_parts(inspection, [operation]):
+                for parts in _g17_source_sentence_parts(inspection, [operation],
+                                                        locations=allowed):
                     valid_ranges: list[tuple[str, int, int]] = []
                     for target in targets:
                         if (target.rule_id != rule_id or target.out_of_scope
@@ -7981,7 +9078,7 @@ def ensure_delete_targets(targets: Sequence[Target], rules_by_id: dict[str, dict
                                 body, offsets = compact_offsets(span.text)
                                 if not 0 <= left < right <= len(body) or not _g17_source_effect_owned(
                                         inspection, loc, offsets[left], offsets[right - 1] + 1,
-                                        "", [operation]):
+                                        "", [operation], locations=allowed):
                                     owned = False
                                     break
                         except (ValueError, KeyError, DocxError):
@@ -8033,8 +9130,12 @@ def ensure_delete_targets(targets: Sequence[Target], rules_by_id: dict[str, dict
             if stripped and stripped != sentence:
                 probes.append(stripped)
             for probe in probes:
-                for parts in find_old_text_all(paragraphs, probe):
+                for parts in find_old_text_all(rule_paragraphs, probe):
                     location = parts[0][0]
+                    if rule_id == "G06":
+                        permitted = allowed if allowed is not None else g06_locations
+                        if not permitted or location not in permitted:
+                            continue
                     already = any(item[0] == location and
                                   (_compact(probe) in item[1] or not item[1])
                                   for item in covered.get(rule_id, []))
@@ -8067,7 +9168,11 @@ def ensure_delete_targets(targets: Sequence[Target], rules_by_id: dict[str, dict
         # Semantic fallback: scan every paragraph for an authorised business
         # signature even when all canonical/variant literals are absent.  This is
         # recall-first and produces a real source span; it never marks absence.
-        for span in paragraphs:
+        for span in rule_paragraphs:
+            if rule_id == "G06":
+                permitted = allowed if allowed is not None else g06_locations
+                if not permitted or span.location not in permitted:
+                    continue
             for candidate in _semantic_delete_sentences(rule_id, str(span.text)):
                 location = str(span.location)
                 if any(item[0] == location and

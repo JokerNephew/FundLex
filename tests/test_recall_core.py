@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from docx import Document
@@ -15,7 +16,7 @@ from fundlex.recall import (
     RecallError, build_docx_edits, build_windows, class_label, condition_matches,
     content_check_factory, display_text, extract_facts, find_normalized,
     instantiate_slots, inventory_window, plan_edits, plan_windows, resolve_quote, scope_map,
-    structure_index,
+    structure_index, rule_scope_locations, source_parts_contiguous, survey_targets,
 )
 
 CLASS_DEFINITION = (
@@ -492,6 +493,92 @@ def test_inventory_quote_not_found_is_flagged(contract: Path):
     found, ledger = inventory_window(windows[0], [guide_rules()[0]], facts, gateway, inspection)
     assert found and found[0].resolution == "quote_not_found"
     assert ledger["counts"]["unresolved"] == 1
+
+
+def test_resolve_quote_rejects_partial_multi_sentence_quote(tmp_path: Path):
+    """A missing sentence must not be shortened to the longest matching sentence."""
+    path = tmp_path / "partial-quote.docx"
+    document = Document()
+    document.add_paragraph("第一句仍然有效。第二句仍然有效。")
+    document.save(path)
+    inspection = inspect_docx(path, full=True)
+    span = inspection.by_location("p0")
+    assert resolve_quote(span, "第一句仍然有效。第二句并不存在。") is None
+    # The punctuation-only tolerance remains available for a complete quote.
+    assert resolve_quote(span, "第一句仍然有效；") == (0, len("第一句仍然有效。"))
+
+
+def test_window_section_ids_follow_actual_character_chunk():
+    """A character split must not advertise every source section to each chunk."""
+    spans = [SimpleNamespace(location="p0", text="甲", section_path="甲章",
+                             logical_zone="body", zone="body"),
+             SimpleNamespace(location="p1", text="乙", section_path="乙章",
+                             logical_zone="body", zone="body")]
+    inspection = SimpleNamespace(paragraphs=spans,
+                                 by_location=lambda location: next(
+                                     span for span in spans if span.location == location))
+    from fundlex.recall import Section
+    sections = (Section("S01", "甲章", "body", ("p0",), 1, "甲"),
+                Section("S02", "乙章", "body", ("p1",), 1, "乙"))
+    windows = build_windows(sections, inspection, ("S01", "S02"), max_chars=5)
+    assert [window.section_ids for window in windows] == [("S01",), ("S02",)]
+
+
+def test_g04_scope_adds_definition_section_when_basic_section_has_only_fee_adjustment():
+    from types import SimpleNamespace
+    from fundlex.recall import Section, expand_class_definition_scope
+
+    sections = [
+        Section("S04", "第二部分释义", "body", ("p0",), 200, ""),
+        Section("S05", "第三部分基金的基本情况", "body", ("p1",), 200, ""),
+    ]
+    inspection = SimpleNamespace(paragraphs=[
+        SimpleNamespace(location="p0", text=CLASS_DEFINITION, zone="body",
+                        logical_zone="body"),
+        SimpleNamespace(location="p1", text=FEE_ADJUSTMENT, zone="body",
+                        logical_zone="body"),
+    ])
+    mapping = {"G04": ["S05"]}
+    expanded = expand_class_definition_scope(mapping, sections, inspection)
+    assert expanded["G04"] == ["S05", "S04"]
+    assert expand_class_definition_scope({"G05": ["S05"]}, sections, inspection) == {
+        "G05": ["S05"]}
+
+
+def test_g04_scope_drops_glossary_definition_when_basic_section_has_one():
+    """G02 owns the 释义 copy; G04 must not edit the same paragraph twice."""
+    from types import SimpleNamespace
+    from fundlex.recall import Section, expand_class_definition_scope
+
+    sections = [
+        Section("S04", "第二部分释义", "body", ("p0",), 200, ""),
+        Section("S05", "第三部分基金的基本情况", "body", ("p1",), 200, ""),
+    ]
+    inspection = SimpleNamespace(paragraphs=[
+        SimpleNamespace(location="p0", text=CLASS_DEFINITION, zone="body",
+                        logical_zone="body"),
+        SimpleNamespace(location="p1", text=CLASS_DEFINITION, zone="body",
+                        logical_zone="body"),
+    ])
+    expanded = expand_class_definition_scope({"G04": ["S05", "S04"]}, sections, inspection)
+    assert expanded["G04"] == ["S05"]
+
+
+def test_survey_scope_excludes_matching_sibling_section(tmp_path: Path):
+    """Deterministic recovery must honor the mapped physical rule scope."""
+    path = tmp_path / "scoped-survey.docx"
+    document = Document()
+    document.add_paragraph("目标旧条款内容需要删除。")
+    document.add_paragraph("相邻章节")
+    document.add_paragraph("目标旧条款内容需要删除。")
+    document.save(path)
+    inspection = inspect_docx(path, full=True)
+    rule = {"rule_id": "GTEST", "title": "目标规则", "requirement": "删除目标旧条款内容需要删除。",
+            "operations": [{"op": "delete", "old_text": "目标旧条款内容需要删除。",
+                            "condition": {"kind": "none", "value": None}}]}
+    hits = survey_targets(inspection, [rule], _facts(), known=[],
+                          allowed_locations={"GTEST": {"p0"}})
+    assert [hit.locations for hit in hits] == [("p0",)]
 
 
 def test_compose_variant_requires_fixed_text(contract: Path, tmp_path: Path,
@@ -1541,6 +1628,47 @@ def test_delete_residual_copy_gets_a_deterministic_target(tmp_path: Path):
     assert "使用范围不包括" in created[0].quote
 
 
+def test_absent_inventory_target_does_not_suppress_delete_target(tmp_path: Path):
+    """An ``absent`` model judgment must not swallow a code-discovered delete.
+
+    恒裕 G17 p888: inventory quoted the whole two-sentence reference, reported
+    ``absent`` because only the first sentence is in that paragraph, and its
+    operation key then suppressed the residual delete target for the sentence
+    that really is there (FL-D118's failure mode for appends).
+    """
+    from types import SimpleNamespace
+
+    from docx import Document
+
+    from fundlex.docx import inspect_docx
+    from fundlex.recall import (Target, ensure_delete_targets,
+                                known_operations_from_targets)
+    from fundlex.recall_pipeline import _collect_targets
+
+    path = tmp_path / "absent-delete.docx"
+    document = Document()
+    document.add_paragraph("销售服务费主要用于支付销售机构佣金、以及基金管理人的基金行销广告费、促销活动费、基金份额持有人服务费等。")
+    document.add_paragraph("基金销售服务费的使用范围不包括基金募集期间的上述费用。")
+    document.save(path)
+    inspection = inspect_docx(path, full=True)
+    rule = {"rule_id": "G17", "title": "用途", "requirement": "删除用途条款",
+            "operations": [{"op": "delete",
+                            "old_text": ("C类基金份额的销售服务费主要用于支付销售机构佣金、以及基金管理人的"
+                                         "基金行销广告费、促销活动费、基金份额持有人服务费等。C类基金份额的"
+                                         "销售服务费使用范围不包括基金募集期间的上述费用。"),
+                            "condition": {"kind": "none"}}]}
+    rules = {"G17": rule}
+    span = inspection.by_location("p0")
+    absent = Target("T1", "G17", "p0", span.text, "absent", "model said absent",
+                    0, len(span.text), "resolved", segment_ok=True,
+                    operations=("G17:0",))
+    assert ("G17", "p0") not in known_operations_from_targets([absent], rules, inspection)
+    created = ensure_delete_targets([absent], rules, inspection)
+    assert {target.location for target in created} == {"p0", "p1"}
+    collected = _collect_targets([SimpleNamespace(targets=[absent])], created, rules, inspection)
+    assert {target.location for target in collected} == {"p0", "p1"}
+
+
 def test_g06_semantic_conversion_variant_gets_target_instead_of_absence(tmp_path: Path):
     """Canonical G06 wording must not suppress a real semantic variant."""
     from fundlex.docx import inspect_docx
@@ -1579,6 +1707,79 @@ def test_g06_one_way_class_conversion_variant_stays_for_review(tmp_path: Path):
     candidates = semantic_delete_review_candidates("G06", inspection.paragraphs[0].text)
     assert len(candidates) == 1
     assert "Y类基金份额不能转换" in candidates[0]
+
+
+def test_g06_one_way_conversion_is_not_a_semantic_delete_site(tmp_path: Path):
+    """The Y-class one-way path is review-only, including site probing."""
+    from fundlex.docx import inspect_docx
+    from fundlex.recall import _semantic_delete_sentences, target_site_ok
+
+    path = tmp_path / "g06-one-way-site.docx"
+    document = Document()
+    text = "在符合条件时A类基金份额可以转换为Y类基金份额，但Y类基金份额不能转换为A类基金份额。"
+    document.add_paragraph(text)
+    document.save(path)
+    inspection = inspect_docx(path, full=True)
+    span = inspection.paragraphs[0]
+    assert _semantic_delete_sentences("G06", text) == []
+    assert target_site_ok("G06", span, inspection) is True
+
+
+def test_g06_physical_scope_does_not_cross_into_fund_conversion(tmp_path: Path):
+    """G06's class subsection must not claim a later fund-conversion clause."""
+    from fundlex.recall import ensure_delete_targets, g06_scope_locations
+
+    path = tmp_path / "g06-subsection-boundary.docx"
+    document = Document()
+    document.add_paragraph("三、基金的基本情况")
+    document.add_paragraph("十一、基金份额类别")
+    document.add_paragraph(CONVERSION_CLAUSE)
+    document.add_paragraph("六、基金份额的申购与赎回")
+    document.add_paragraph(
+        "在符合相关法律法规且条件具备的情况下，本基金A类基金份额可以申请转换为Y类基金份额；"
+        "但Y类基金份额不能转换为A类基金份额。")
+    document.save(path)
+    inspection = inspect_docx(path, full=True)
+
+    scope = g06_scope_locations(inspection)
+    assert "p2" in scope
+    assert "p4" not in scope
+    rule = {"rule_id": "G06", "title": "类别转换", "requirement": "删除类别转换限制",
+            "operations": [{"op": "delete", "old_text": CONVERSION_CLAUSE,
+                            "condition": {"kind": "none"}}]}
+    created = ensure_delete_targets([], {"G06": rule}, inspection)
+    assert [target.location for target in created] == ["p2"]
+
+
+def test_g06_real_contract_p280_is_outside_share_class_subsection():
+    """Regression for the real D06 false match at p280 (FL-D361)."""
+    from fundlex.recall import ensure_delete_targets, g06_scope_locations
+
+    path = Path(__file__).parents[1] / "funds_word" / (
+        "广发创业板交易型开放式指数证券投资基金发起式联接基金基金合同_20250319.docx")
+    inspection = inspect_docx(path, full=True)
+    scope = g06_scope_locations(inspection)
+    assert "p131" in scope
+    assert "p280" not in scope
+    rule = {"rule_id": "G06", "title": "基金的基本情况-份额类别设置",
+            "section_hint": "基金的基本情况", "requirement": "删除类别转换限制",
+            "operations": [{"op": "delete", "old_text": CONVERSION_CLAUSE,
+                            "condition": {"kind": "none"}}]}
+    assert ensure_delete_targets([], {"G06": rule}, inspection) == []
+
+
+def test_g06_first_batch_contract_scope_stays_inside_numbered_subsection():
+    """The new default corpus still uses a physical G06 subsection boundary."""
+    from fundlex.recall import g06_scope_locations
+
+    path = Path(__file__).parents[1] / "funds_word" / "基金合同第一批" / (
+        "广发沪深300指数增强型发起式证券投资基金基金合同.docx")
+    inspection = inspect_docx(path, full=True)
+    scope = g06_scope_locations(inspection)
+    assert "p157" in scope
+    assert "p162" in scope
+    assert "p817" not in scope
+    assert "p903" not in scope
 
 
 def test_g01_accepts_a_class_definition_without_the_word_fenzlei(tmp_path: Path):

@@ -69,6 +69,7 @@ def test_role_replay_needs_models_but_no_credentials(tmp_path, monkeypatch):
 
 
 class Inspection:
+    source_sha256 = 'source'
     def __init__(self, text):
         self.paragraphs = [SimpleNamespace(location='p0', text=text)]
     def by_location(self, _):
@@ -195,6 +196,65 @@ def test_g13_source_owned_wording_variant_is_deleted_without_compose(tmp_path, t
     assert edit is not None
     assert edit.replacement == ''
     assert edit.content_source == 'short_holding_delete'
+
+
+def test_g17_single_purpose_sentence_is_deleted_without_class_lead(tmp_path):
+    """G17's purpose sentence alone is the material to delete when it stands alone."""
+    from docx import Document
+    from fundlex.docx import inspect_docx
+    from fundlex.recall import Target, plan_target
+    from test_recall_core import _facts
+
+    text = ('销售服务费主要用于支付销售机构佣金、以及基金管理人的基金行销广告费、'
+            '促销活动费、基金份额持有人服务费等。')
+    source = tmp_path / 'g17-purpose.docx'
+    document = Document()
+    document.add_paragraph(text)
+    document.save(source)
+    inspection = inspect_docx(source, full=True)
+    rule = {'rule_id': 'G17', 'operations': [{
+        'operation_id': 'G17:0', 'op': 'delete',
+        'old_text': ('C类基金份额的' + text +
+                     'C类基金份额的销售服务费使用范围不包括基金募集期间的上述费用。'),
+        'condition': {'kind': 'none'},
+    }]}
+    target = Target('T17', 'G17', 'p0', text, 'needs_edit', 'source',
+                    start=0, end=len(text), resolution='resolved',
+                    operations=('G17:0',))
+    edit = plan_target(rule, target, inspection, _facts(), None, compose_budget=[0])
+    assert edit is not None
+    assert edit.replacement == ''
+    assert edit.content_source == 'variant_delete'
+
+
+def test_g12_operation_that_owns_short_holding_sentence_replaces_it(tmp_path):
+    """G12:1 authorizes the short-holding sentence; G12:0 must leave it alone."""
+    from docx import Document
+    from fundlex.docx import inspect_docx
+    from fundlex.recall import Target, plan_target
+    from test_recall_core import _facts
+
+    text = ("赎回费用由赎回基金份额的基金份额持有人承担，在基金份额持有人赎回基金份额时收取。"
+            "赎回费用归入基金财产的比例依照相关法律法规设定，具体见招募说明书的规定，"
+            "未归入基金财产的部分用于支付登记费和其他必要的手续费。"
+            "其中，对持续持有期少于7日的投资者收取不低于1.5%的赎回费，并全额计入基金财产。")
+    new_text = ("赎回费用由赎回基金份额的基金份额持有人承担，在基金份额持有人赎回基金份额时收取。"
+                "赎回费用全额计入基金财产。")
+    source = tmp_path / "g12-short-holding.docx"
+    document = Document()
+    document.add_paragraph(text)
+    document.save(source)
+    inspection = inspect_docx(source, full=True)
+    rule = {"rule_id": "G12", "operations": [{
+        "operation_id": "G12:1", "op": "replace", "old_text": text,
+        "new_text": new_text, "condition": {"kind": "none"}}]}
+    target = Target("T12", "G12", "p0", text, "needs_edit", "source",
+                    start=0, end=len(text), resolution="resolved",
+                    operations=("G12:1",))
+    edit = plan_target(rule, target, inspection, _facts(), None, compose_budget=[0])
+    assert edit is not None
+    assert edit.replacement == new_text
+    assert edit.end == len(text)
 
 
 def test_g13_split_source_owned_tail_is_deleted_without_borrowing_prefix(tmp_path):
@@ -508,6 +568,27 @@ def test_audit_identity_keeps_sibling_operation_negative_verdict():
     assert len(state['results']) == 2
     issues = _audit_issues(state, targets)
     assert len(issues) == 1 and issues[0]['target_id'] == '0'
+
+
+def test_audit_removal_evidence_overrides_contradictory_incomplete_verdict():
+    from fundlex.recall_pipeline import _merge_audit_state, _audit_issues
+    target = Target("Y001", "G05", "p155", "并报中国证监会备案", "needs_edit", "",
+                    start=173, end=182, operations=("G05:2",), resolution="resolved")
+    result = dict(target_id="Y001", rule_id="G05", verdict="incomplete",
+                  evidence_verified=True, evidence_in_before=True,
+                  evidence_in_after=False,
+                  evidence_quote="调整前基金管理人需及时公告并报中国证监会备案。",
+                  reason="p155 仍保留并报中国证监会备案", failure_class="EXECUTION")
+    state = {"results": {}, "missed": {}}
+    _merge_audit_state(state, {"rules": ["G05"], "results": [result],
+                               "missed_targets": []}, [target])
+    assert _audit_issues(state, [target]) == []
+    result["evidence_in_after"] = True
+    state = {"results": {}, "missed": {}}
+    _merge_audit_state(state, {"rules": ["G05"], "results": [result],
+                               "missed_targets": []}, [target])
+    issues = _audit_issues(state, [target])
+    assert len(issues) == 1 and issues[0]["code"] == "AUDIT_NOT_COMPLETED"
 
 
 def test_recovery_snapshot_handles_bound_and_unbound_sites():
@@ -866,6 +947,36 @@ def test_sweep_wrong_text_requires_authorized_new_wording_and_own_site(tmp_path)
     assert findings[2]["status"] == "pending"
 
 
+@pytest.mark.parametrize("issue", ["unaddressed_requirement", "residual_old_text"])
+def test_sweep_retained_authorized_sentence_uses_own_site_proof(tmp_path, issue):
+    from fundlex.recall_pipeline import _apply_artifact_proof_to_findings
+    from test_operation_execution_closure import Facts, Inspection
+
+    retained = "赎回费用由基金份额持有人承担，在赎回基金份额时收取。"
+    old, new = retained + "旧比例条款。", retained + "赎回费用全额计入基金财产。"
+    rule = {"rule_id": "G99", "operations": [dict(op="replace", old_text=old,
+            new_text=new, condition={"kind": "none"})]}
+    ledger = compile_obligations({"groups": [rule]})
+    from fundlex.obligations import apply_facts
+    apply_facts(ledger, Facts())
+    original, actual = Inspection([old, old]), Inspection([new, old])
+    edit = dict(rule_id="G99", target_id="T0", location="p0", start=0, end=len(old),
+        replacement=new, operation="replace", content_source="guide_text",
+        operation_keys=["G99:0"], evidence={"fixed_text": new})
+    targets = {f"T{i}": Target(f"T{i}", "G99", f"p{i}", old, "needs_edit", "test",
+        start=0, end=len(old), resolution="resolved", operations=("G99:0",)).as_dict()
+        for i in range(2)}
+    replay = replay_claims([edit], original, actual, rules_by_id={"G99": rule},
+                           targets_by_id=targets, obligations=ledger, facts=Facts())
+    findings = [dict(rule_id="G99", operation_id="G99:0", location=f"p{i}",
+                     quote=retained, issue=issue, status="pending") for i in range(2)]
+    _apply_artifact_proof_to_findings(findings, replay, actual, ledger, {"G99": rule},
+                                    facts=Facts(), edits=[edit], original=original)
+    assert findings[0]["status"] == "resolved"
+    assert findings[0]["proof_kind"] == "REVIEW_UNPROVEN"
+    assert findings[1]["status"] == "pending"
+
+
 def test_local_proof_keeps_occurrence_identity_and_rejects_unknown_site():
     from fundlex.recall_pipeline import _local_operation_proofs
     from fundlex.generation.effects import effect_proof_passed
@@ -1010,17 +1121,24 @@ def test_absent_inventory_placeholder_never_becomes_verified_operation_site(
     else:  # pragma: no cover - protects the fixture if guide compilation changes
         raise AssertionError(operation_id)
     before = Inspection("一、基金份额持有人、基金管理人和基金托管人的权利与义务")
+    coverage = {"kind": "scoped_site_scan", "operation_id": target_record.spec.operation_id,
+                "obligation_id": target_record.obligation_id,
+                "scanned_locations": ["p0"], "document_sha256": before.source_sha256,
+                "reason": "test fixture: complete rule scope scan"}
     if state == "absent":
         absent_site = {"location": "p0", "quote": before.paragraphs[0].text,
                        "state": "absent", "operation_id": operation_id}
         proof = evaluate_operation_effect(target_record, before, before,
-                                          [absent_site], [], Facts())
+                                          [absent_site], [], Facts(),
+                                          absent_coverage=coverage)
         # The heading is never a verified site.  The operation can still close
-        # only through the independent document-wide literal-absence proof.
+        # through the independent document-wide literal-absence proof plus the
+        # caller's explicit site-scan coverage record.
         assert not proof.sites
         assert proof.state == "PASS"
         assert proof.artifact_status == "VERIFIED_ABSENT"
         assert proof.evidence[0]["proof_kind"] == "document_literal_absent"
+        assert proof.evidence[0]["coverage"]["kind"] == "scoped_site_scan"
 
     result = replay_claims(
         [], before, before, rules_by_id={rule_id: guide["groups"][0]}, facts=Facts(),
@@ -1028,6 +1146,7 @@ def test_absent_inventory_placeholder_never_becomes_verified_operation_site(
             "location": "p0", "quote": before.paragraphs[0].text,
             "state": state, "operations": [operation_id]}},
         obligations=ledger,
+        absent_coverage_by_operation={operation_id: coverage},
     )
     item = result["obligations"][target_record.obligation_id]
     assert item["sites"] == []
@@ -1109,17 +1228,30 @@ def test_g06_generic_business_adjustment_clause_is_not_a_delete_site():
     ledger.records[0].applicability = SimpleNamespace(status="TRUE")
     text = "基金管理人可调整有关申购、赎回、转换、非交易过户等业务规则，应及时公告。"
     source = Inspection(text)
+    coverage = {"kind": "scoped_site_scan", "operation_id": "G06:0",
+                "obligation_id": ledger.records[0].obligation_id,
+                "scanned_locations": ["p0"], "document_sha256": source.source_sha256,
+                "reason": "test fixture: complete rule scope scan"}
     replay = replay_claims([], source, source, rules_by_id={"G06": guide["groups"][0]},
         facts=Facts(), obligations=ledger, targets_by_id={"bad": {
             "target_id": "bad", "rule_id": "G06", "location": "p0", "quote": text,
-            "state": "needs_edit", "operations": ["G06:0"]}})
+            "state": "needs_edit", "operations": ["G06:0"]}},
+        absent_coverage_by_operation={"G06:0": coverage})
     # The generic paragraph is not a G06 site, but the authorized literal is
-    # absent from the whole ORIGINAL document: that independent proof is PASS.
+    # absent from the whole ORIGINAL document: the independent proof is PASS only
+    # with the caller's explicit coverage record.
     proof = replay["obligations"][ledger.records[0].obligation_id]
     assert proof["state"] == "PASS"
     assert proof["artifact_status"] == "VERIFIED_ABSENT"
     assert proof["sites"] == []
     assert proof["evidence"][0]["proof_kind"] == "document_literal_absent"
+    without = replay_claims([], source, source, rules_by_id={"G06": guide["groups"][0]},
+        facts=Facts(), obligations=ledger, targets_by_id={"bad": {
+            "target_id": "bad", "rule_id": "G06", "location": "p0", "quote": text,
+            "state": "needs_edit", "operations": ["G06:0"]}})
+    blocked = without["obligations"][ledger.records[0].obligation_id]
+    assert blocked["state"] == "OPEN"
+    assert blocked["failure_code"] == "EFFECT_SITE_UNPROVEN"
 
 
 @pytest.mark.parametrize("old_text,new_text", [
@@ -1156,10 +1288,18 @@ def test_g05_effect_proof_binds_class_setting_not_meeting_exemption(source, vali
     if not valid:
         ledger = compile_obligations({"groups": [rule]})
         ledger.records[0].applicability = SimpleNamespace(status="TRUE")
+        coverage = {"kind": "scoped_site_scan",
+                    "operation_id": ledger.records[0].spec.operation_id,
+                    "obligation_id": ledger.records[0].obligation_id,
+                    "scanned_locations": ["p0"],
+                    "document_sha256": inspection.source_sha256,
+                    "reason": "test fixture: complete rule scope scan"}
         replay = replay_claims([], inspection, inspection, facts=Facts(),
             rules_by_id={"G05": rule}, obligations=ledger, targets_by_id={"unrelated": {
                 "target_id": "unrelated", "rule_id": "G05", "location": "p0",
-                "quote": source, "state": "needs_edit", "operations": ["G05:0"]}})
+                "quote": source, "state": "needs_edit", "operations": ["G05:0"]}},
+            absent_coverage_by_operation={
+                ledger.records[0].spec.operation_id: coverage})
         proof = replay["obligations"][ledger.records[0].obligation_id]
         assert proof["sites"] == []
         if new_text or old_text in source:
@@ -1168,6 +1308,15 @@ def test_g05_effect_proof_binds_class_setting_not_meeting_exemption(source, vali
             assert proof["state"] == "PASS"
             assert proof["artifact_status"] == "VERIFIED_ABSENT"
             assert proof["evidence"][0]["proof_kind"] == "document_literal_absent"
+            without = replay_claims([], inspection, inspection, facts=Facts(),
+                rules_by_id={"G05": rule}, obligations=ledger,
+                targets_by_id={"unrelated": {
+                    "target_id": "unrelated", "rule_id": "G05", "location": "p0",
+                    "quote": source, "state": "needs_edit",
+                    "operations": ["G05:0"]}})
+            blocked = without["obligations"][ledger.records[0].obligation_id]
+            assert blocked["state"] == "OPEN"
+            assert blocked["failure_code"] == "EFFECT_SITE_UNPROVEN"
 
 
 def test_atomic_replan_unbound_components_are_recorded_once(tmp_path):
@@ -1267,7 +1416,7 @@ def test_class_group_proof_reads_final_docx(tmp_path, rule_id, final_group, vali
     project(ledger, {"targets": [target], "artifact_claim_replay": replay})
     if not valid:
         assert ledger.records[0].completion == "UNRESOLVED"
-        assert not _delivery_complete([], ledger=ledger)
+        assert not _delivery_complete([], ledger=ledger, policy="strict")
 
 
 def test_g02_split_definition_reclassifies_out_of_scope_target_before_plan():
@@ -1717,6 +1866,75 @@ def test_expected_effect_accepts_class_substituted_final_edit():
                                      proofs={"G18:B1:O1": proof})
 
 
+def test_g09_sweep_quote_with_source_prefix_is_expected_effect(tmp_path):
+    """A complete final sentence with a source prefix is not a residual finding."""
+    from docx import Document
+    from fundlex.docx import inspect_docx
+    from fundlex.obligations import apply_facts
+    from fundlex.recall_pipeline import (_apply_artifact_proof_to_findings,
+                                         _quote_is_expected_effect)
+    from test_recall_core import _facts
+
+    old = ("赎回金额为按实际确认的有效赎回份额乘以当日对应份额类别的基金份额净值并扣除"
+           "相应的费用，赎回金额单位为元。")
+    new = ("赎回金额为按实际确认的有效赎回份额乘以当日该类基金份额的基金份额净值并扣除"
+           "或加上相应的费用，赎回金额单位为元。")
+    prefix = "某类基金份额的"
+    rule = {"rule_id": "G09", "operations": [{
+        "op": "replace", "old_text": old, "new_text": new,
+        "condition": {"kind": "class_count", "value": "multiple"}}]}
+    source_path = tmp_path / "g09-source.docx"
+    document = Document()
+    document.add_paragraph(prefix + old)
+    document.save(source_path)
+    source = inspect_docx(source_path, full=True)
+    actual_path = tmp_path / "g09-actual.docx"
+    document = Document()
+    document.add_paragraph(prefix + new)
+    document.save(actual_path)
+    actual = inspect_docx(actual_path, full=True)
+    facts = _facts()
+    ledger = compile_obligations({"groups": [rule]})
+    apply_facts(ledger, facts)
+    start, end = len(prefix), len(prefix) + len(old)
+    edit = {
+        "rule_id": "G09", "target_id": "T1", "location": "p0",
+        "start": start, "end": end, "replacement": new, "operation": "replace",
+        "operation_keys": ["G09:0"], "content_source": "tier1_splice",
+        "components": [{
+            "rule_id": "G09", "target_id": "T1", "location": "p0",
+            "start": start, "end": end, "replacement": new,
+            "operation_keys": ["G09:0"], "expected_old_text": old}],
+    }
+    replay = replay_claims(
+        [edit], source, actual, rules_by_id={"G09": rule}, facts=facts,
+        obligations=ledger, targets_by_id={"T1": {
+            "target_id": "T1", "rule_id": "G09", "location": "p0", "quote": old,
+            "state": "needs_edit", "operations": ["G09:0"]}})
+    assert replay["verified"], replay["failures"]
+    quote = prefix + new
+    record = ledger.record("G09:0")
+    assert _quote_is_expected_effect(
+        quote, record, facts, edits=[edit], location="p0",
+        before_text=source.by_location("p0").text,
+        actual_text=actual.by_location("p0").text,
+        obligations=ledger, proofs=replay["obligations"])
+    assert not _quote_is_expected_effect(
+        quote + "未经授权新增。", record, facts, edits=[edit], location="p0",
+        before_text=source.by_location("p0").text,
+        actual_text=quote + "未经授权新增。",
+        obligations=ledger, proofs=replay["obligations"])
+    finding = {"status": "pending", "finding_id": "SW1", "rule_id": "G09",
+               "location": "p0", "quote": quote, "issue": "wrong_text",
+               "reason": "G09 已满足。"}
+    _apply_artifact_proof_to_findings(
+        [finding], replay, actual, ledger, {"G09": rule}, facts=facts,
+        edits=[edit], original=source)
+    assert finding["status"] == "resolved"
+    assert finding["resolution"] == "artifact_proof"
+    assert finding["proof_kind"] != "SEMANTIC_UNCERTAIN"
+
+
 def test_overlapping_composite_deletes_merge_as_joint_delete(tmp_path):
     from docx import Document
     from fundlex.docx import inspect_docx
@@ -1987,6 +2205,32 @@ def test_satisfied_g18_carries_its_operation_identity(tmp_path):
             "计算公式为：计算日某类基金份额净值＝计算日该类基金份额的基金资产净值/"
             "计算日该类基金份额余额总数。")
     assert satisfied_operation_keys(rule, _facts(), body) == {"G18:0"}
+
+
+def test_g18_generic_fee_difference_summary_is_its_own_site():
+    """The authorized neutral summary binds G18 while p132 does not."""
+    from fundlex.generation.effects import operation_site_bound
+    from fundlex.obligations import compile_obligations
+    from fundlex.recall import target_site_ok
+    from test_operation_execution_closure import Facts
+
+    guide = {"groups": [{"rule_id": "G18", "operations": [{
+        "operation_id": "G18:0", "op": "replace",
+        "old_text": "由于本基金A类基金份额不收取销售服务费，而C类基金份额收取销售服务费",
+        "new_text": "由于本基金A类基金份额和C类基金份额费用收取不同",
+        "condition": {"kind": "none"}}]}]}
+    record = compile_obligations(guide).records[0]
+    record.applicability = SimpleNamespace(status="TRUE")
+    summary = ("本基金各基金份额类别在费用收取上不同，各基金份额类别对应的"
+               "可分配收益将有所不同。本基金同一类别的每一基金份额享有同等分配权；")
+    generic = Inspection(summary)
+    assert target_site_ok("G18", generic.by_location("p0"), generic) is True
+    assert operation_site_bound(record.spec, summary, generic, "p0", Facts()) is True
+    undifferentiated = ("本基金A类、C类、E类、F类和Y类基金份额分别设置代码。"
+                        "由于基金费用的不同，本基金A类基金份额、C类基金份额、E类基金份额、"
+                        "F类基金份额和Y类基金份额将分别计算基金份额净值。")
+    rejected = Inspection(undifferentiated)
+    assert target_site_ok("G18", rejected.by_location("p0"), rejected) is False
 
 
 def test_g08_subscription_fee_target_cannot_bind_the_purchase_fee_operation(tmp_path):

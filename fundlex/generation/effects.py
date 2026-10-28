@@ -65,6 +65,52 @@ def _class_group_equivalent(expected: str, source_quote: str) -> bool:
     return False
 
 
+def _coordinated_verb_equivalent(expected: str, source: str) -> bool:
+    """``调低A和B`` already grants the effect of ``调低B``.
+
+    G05 replaces one item of an enumerated fee-setting clause.  A contract that
+    writes the verb over a coordinated list ("…调低赎回费率和销售服务费率…")
+    never contains the literal new item even though the clause already authorizes
+    it (QDII p1331).  Only a closed set of rate verbs, the same verb, the same
+    object, and a real coordination separator are accepted; a comma-separated
+    unrelated sentence is not.
+    """
+    compact_expected = _compact(expected)
+    compact_source = _compact(source)
+    for verb in ("调低", "降低", "调高", "提高", "调整"):
+        if not compact_expected.startswith(verb):
+            continue
+        obj = compact_expected[len(verb):]
+        if not obj or obj not in compact_source:
+            continue
+        pattern = (re.escape(verb) + r"[^。；;]{0,24}(?:、|和|与|及)"
+                   r"[^。；;]{0,12}" + re.escape(obj))
+        if re.search(pattern, compact_source):
+            return True
+    return False
+
+
+def _coordinated_member_residual_authorized(expected: str, old: str, after: str) -> bool:
+    """The old item belongs to the same coordinated list as the new one.
+
+    Only the same rate verb, both objects in one clause, and the old object still
+    present are accepted; a different verb or a different sentence never
+    authorizes a residual.
+    """
+    compact_expected, compact_old, compact_after = (
+        _compact(expected), _compact(old), _compact(after))
+    for verb in ("调低", "降低", "调高", "提高", "调整"):
+        if not (compact_expected.startswith(verb) and compact_old.startswith(verb)):
+            continue
+        new_obj, old_obj = compact_expected[len(verb):], compact_old[len(verb):]
+        if not new_obj or not old_obj or old_obj not in compact_after:
+            continue
+        for clause in re.split(r"[。；;]", compact_after):
+            if verb in clause and new_obj in clause and old_obj in clause:
+                return True
+    return False
+
+
 def _class_group_member_residual_authorized(spec: Any, expected: str,
                                             old: str, after: str) -> bool:
     """Treat a source class label as retained when its certified group is present.
@@ -94,7 +140,66 @@ _SEMANTIC_DELETE_PROBES: dict[str, re.Pattern[str]] = {
         r"(?=.*(?:份额(?:类别|之间)|[A-ZＡ-Ｚ]类基金份额))"
         r"(?=.*(?:不得|不允许|暂不允许|不能|不可)[^。；;！？!?]{0,40}转换)"
     ),
+    # G13's guide clause is deleted by meaning, not by its exact guide wording.
+    # A contract that still applies a 7-day holding restriction together with a
+    # redemption fee retains the old policy even when the guide sentence itself
+    # is absent (for example "持有不足7日" instead of "持续持有期少于7日").
+    "G13": re.compile(
+        r"(?=.*(?:持续持有|持有)(?:期|期限)?[^。；;]{0,8}"
+        r"(?:不足|少于|不满|未满)(?:7|七)日)"
+        r"(?=.*赎回费)"
+    ),
+    # G17 deletes the whole C-class sales-service-fee usage clause.  Its usage
+    # purpose ("主要用于/用于/用途") plus any listed expense object is the old
+    # semantic object; a canonical-literal miss alone cannot prove it gone.
+    "G17": re.compile(
+        r"(?=.*销售服务费)"
+        r"(?=.*(?:主要用于|用于|使用范围|用途))"
+        r"(?=.*(?:支付销售机构佣金|基金行销广告费|促销活动费|"
+        r"基金份额持有人服务费|募集期间的上述费用))"
+    ),
 }
+
+
+_ABSENT_COVERAGE_KINDS = frozenset({"scoped_site_scan", "rule_scope_scan",
+                                    "document_site_scan"})
+
+
+def _absent_coverage_evidence(value: Mapping[str, Any] | None, *, operation_id: str,
+                              obligation_id: str, original: Any) -> dict[str, Any] | None:
+    """Validate an explicit caller-supplied no-target coverage record.
+
+    A zero literal match in the guide's own sentence is not a site scan.  Closing
+    a delete as ``VERIFIED_ABSENT`` therefore requires an explicit record that
+    names this operation/obligation, the physically scanned locations and the
+    source document hash.  The record is evidence supplied by the caller; this
+    function only checks its identity and completeness, never invents it.
+    """
+    if not isinstance(value, Mapping):
+        return None
+    kind = str(value.get("kind") or "").strip()
+    if kind not in _ABSENT_COVERAGE_KINDS:
+        return None
+    if str(value.get("operation_id") or "") != operation_id:
+        return None
+    if str(value.get("obligation_id") or "") != obligation_id:
+        return None
+    scanned = [str(location) for location in value.get("scanned_locations") or ()
+               if str(location)]
+    if not scanned:
+        return None
+    document_locations = {str(getattr(span, "location", ""))
+                          for span in getattr(original, "paragraphs", ())}
+    if not document_locations or not set(scanned) <= document_locations:
+        return None
+    source_sha = str(getattr(original, "source_sha256", "") or "")
+    coverage_sha = str(value.get("document_sha256") or "")
+    if not source_sha or coverage_sha != source_sha:
+        return None
+    return {"kind": kind, "operation_id": operation_id,
+            "obligation_id": obligation_id, "scanned_locations": scanned,
+            "document_sha256": coverage_sha,
+            "reason": str(value.get("reason") or "")}
 
 
 def _semantic_delete_hits(rule_id: str, document: str) -> list[str]:
@@ -104,13 +209,23 @@ def _semantic_delete_hits(rule_id: str, document: str) -> list[str]:
     hits: list[str] = []
     for sentence in re.split(r"(?<=[。；;！？!?])", document or ""):
         sentence = sentence.strip()
-        if len(_compact(sentence)) >= 12 and pattern.search(sentence):
+        if len(_compact(sentence)) >= 12 and pattern.search(_compact(sentence)):
             hits.append(sentence)
     # Do not probe the whole document as one "tail": the lookaheads would match a
     # class-labelling sentence and an unrelated "…不得…转换" sentence thousands of
     # characters apart (ETF contract false semantic-delete variant).  The sentence
     # split already keeps an unterminated final sentence as its own chunk.
     return hits
+
+
+def _semantic_delete_review_hits(rule_id: str, document: str) -> list[str]:
+    """Return semantic delete variants that require a business decision first."""
+    if rule_id != "G06":
+        return []
+    from ..recall import _is_one_way_y_class_conversion
+    return [sentence.strip() for sentence in re.split(
+        r"(?<=[。；;！？!?])", document or "")
+             if sentence.strip() and _is_one_way_y_class_conversion(sentence)]
 
 
 @dataclass(frozen=True)
@@ -208,6 +323,13 @@ def effect_proof_passed(proof: Mapping[str, Any] | None, *, operation_id: str = 
             isinstance(item, Mapping) and item.get("proof_kind") == "document_literal_absent"
             and item.get("operation_id") == proof.get("operation_id")
             and item.get("obligation_id") == proof.get("obligation_id")
+            and item.get("match_count") == 0
+            and bool(item.get("searched_literals"))
+            and isinstance(item.get("coverage"), Mapping)
+            and str(item["coverage"].get("kind") or "") in _ABSENT_COVERAGE_KINDS
+            and item["coverage"].get("operation_id") == proof.get("operation_id")
+            and item["coverage"].get("obligation_id") == proof.get("obligation_id")
+            and bool(item["coverage"].get("scanned_locations"))
             for item in evidence):
         # A code-scanned document-wide delete proof has no site by construction;
         # its own evidence binds operation, obligation and zero matches.
@@ -246,6 +368,20 @@ def _delete_quote_belongs(quote: str, references: Sequence[str]) -> bool:
             return True
         bag = _delete_keyword_bag({"operations": [{"op": "delete", "old_text": old}]}, None)
         if bag and _keyword_bag_in_clause(body, bag):
+            return True
+    # G06's guide wording is a historical form.  A contract can describe the
+    # same class-conversion prohibition with a one-sentence semantic variant
+    # (for example ``Y类基金份额不能转换为 A/C/E/F 类基金份额``).  The
+    # semantic sweep already found that bounded business signature; let the
+    # operation-site proof bind it to G06 as well.  Keep this deliberately
+    # narrower than target_site_ok so a generic paragraph mentioning 转换 can
+    # never become a delete site.
+    if any("转换" in _compact(reference) for reference in references):
+        from ..recall import (_is_one_way_y_class_conversion,
+                              _semantic_delete_sentences)
+        if _is_one_way_y_class_conversion(quote):
+            return False
+        if body in {_compact(item) for item in _semantic_delete_sentences("G06", quote)}:
             return True
     return False
 
@@ -293,6 +429,14 @@ def operation_site_bound(spec: Any, quote: str, original: Any, location: str,
             "少于7日" in _compact(body) and "赎回费" in _compact(body)
             and ("1.5%" in _compact(body) or "1.50%" in _compact(body))):
         return False
+    if spec.rule_id == "G06" and spec.op == "delete":
+        # Semantic G06 variants do not contain the guide's literal old_text,
+        # but they are still operation-owned when the bounded prohibition
+        # signature and the class-conversion site guard both pass.
+        if target_site_ok("G06", span, original) and _delete_quote_belongs(
+                quote, [str(spec.old_text or ""),
+                        *getattr(spec, "alternatives", ())]):
+            return True
     if spec.rule_id == "G15" and spec.op == "delete":
         from ..recall import _g15_delay_continuation
         bound = _g15_delay_continuation(original, location,
@@ -386,16 +530,25 @@ def operation_site_bound(spec: Any, quote: str, original: Any, location: str,
 
 
 def _verified_site_closure(sites: Sequence[Mapping[str, Any]], original: Any,
-                           spec: Any) -> list[dict[str, Any]]:
+                           spec: Any, *,
+                           allowed_locations: set[str] | None = None
+                           ) -> list[dict[str, Any]]:
     """Keep source duplicates and split-clause tails in the required site set.
 
     Only exact source paragraph copies inherit an established operation binding.
     A continuation must follow an unterminated bound quote and independently
     match that operation's reference; proximity alone never creates a site.
+
+    ``allowed_locations`` bounds both the input sites and every inherited copy to
+    the caller's physical rule scope (the D06 summary copy is not a business site).
     """
     from ..recall import resolve_quote, _g17_usage_exclusion_matches, _g15_delay_continuation
     spans = list(getattr(original, "paragraphs", ()))
     index = {str(span.location): position for position, span in enumerate(spans)}
+
+    def _allowed(location: Any) -> bool:
+        return allowed_locations is None or str(location) in allowed_locations
+
     references = [str(getattr(spec, "old_text", "") or ""),
                   *[str(value) for value in getattr(spec, "alternatives", ())]]
     closed: list[dict[str, Any]] = []
@@ -410,6 +563,8 @@ def _verified_site_closure(sites: Sequence[Mapping[str, Any]], original: Any,
         if str(site.get("state") or "") == "absent":
             continue
         location = str(site.get("location") or site.get("site_id") or "")
+        if not _allowed(location):
+            continue
         if location not in index:
             closed.append(site)
             continue
@@ -428,7 +583,7 @@ def _verified_site_closure(sites: Sequence[Mapping[str, Any]], original: Any,
             follower = spans[index[location] + 1]
             delay = _g15_delay_continuation(original, str(follower.location),
                 {"op": spec.op, "old_text": spec.old_text})
-            if delay is not None:
+            if delay is not None and _allowed(follower.location):
                 closed.append({"location": str(follower.location),
                                "quote": str(follower.text)[delay[0]:delay[1]],
                                "source_binding": "operation_reference_continuation"})
@@ -439,8 +594,8 @@ def _verified_site_closure(sites: Sequence[Mapping[str, Any]], original: Any,
             # than requiring an unfinished quote or borrowing a nearby fee topic.
             follower = next((part for part in spans[index[location] + 1:]
                              if str(part.text).strip()), None)
-            if follower is not None and _g17_usage_exclusion_matches(
-                    str(follower.text), references):
+            if follower is not None and _allowed(follower.location) and \
+                    _g17_usage_exclusion_matches(str(follower.text), references):
                 closed.append({"location": str(follower.location),
                                "quote": str(follower.text),
                                "source_binding": "operation_reference_continuation"})
@@ -453,7 +608,7 @@ def _verified_site_closure(sites: Sequence[Mapping[str, Any]], original: Any,
             current = str(span.text)[start:]
             for follower in spans[index[location] + 1:]:
                 follower_text = str(follower.text)
-                if not follower_text.strip():
+                if not follower_text.strip() or not _allowed(follower.location):
                     continue
                 candidate = current + follower_text
                 follows_reference = any(
@@ -483,7 +638,8 @@ def _verified_site_closure(sites: Sequence[Mapping[str, Any]], original: Any,
         if len(body) < 20:
             continue
         for duplicate in spans:
-            if str(duplicate.location) != location and _compact(str(duplicate.text)) == body:
+            if str(duplicate.location) != location and _allowed(duplicate.location) \
+                    and _compact(str(duplicate.text)) == body:
                 match = resolve_quote(duplicate, str(site.get("quote") or ""))
                 if match is not None:
                     closed.append({"location": str(duplicate.location),
@@ -496,7 +652,10 @@ def evaluate_operation_effect(obligation: Any, original: Any, artifact: Any,
                               sites: Sequence[Mapping[str, Any]],
                               edits: Sequence[Mapping[str, Any]], facts: Any,
                               *, validated_units: Sequence[Mapping[str, Any]] = (),
-                              authorized_new_texts: Mapping[str, Sequence[str]] | None = None
+                              authorized_new_texts: Mapping[str, Sequence[str]] | None = None,
+                              allowed_locations: set[str] | None = None,
+                              boundary_locations: set[str] | None = None,
+                              absent_coverage: Mapping[str, Any] | None = None
                               ) -> OperationEffect:
     spec = obligation.spec
     rule_id, operation_id = spec.rule_id, spec.operation_id
@@ -512,22 +671,61 @@ def evaluate_operation_effect(obligation: Any, original: Any, artifact: Any,
         return OperationEffect("PASS", "NOT_REQUIRED", **base, evidence=({
             "proof_kind": "certified_noop_branch", "operation_id": operation_id,
             "obligation_id": obligation_id},))
-    sites = _verified_site_closure(sites, original, spec)
+    if rule_id == "G06":
+        from ..recall import g06_scope_locations
+        g06_locations = g06_scope_locations(original)
+        if not g06_locations:
+            return OperationEffect("OPEN", "UNPROVEN", **base,
+                                   failure_code="CLAIM_OPERATION_UNPROVEN",
+                                   reason="g06_subsection_scope_missing")
+        sites = [site for site in sites
+                 if str(site.get("location") or site.get("site_id") or "") in g06_locations]
+    sites = _verified_site_closure(sites, original, spec,
+                                   allowed_locations=boundary_locations)
+    if spec.op == "append":
+        # An append operation may only be proven at its own rule's sites.  A
+        # sibling delete (G15) can own the payment head of the same physical
+        # clause while G16 appends at the clause tail; borrowing the sibling's
+        # deleted site would make a correct append fail as MISSING_EFFECT.
+        sites = [site for site in sites
+                 if not site.get("source_rule_id")
+                 or str(site.get("source_rule_id")) == rule_id]
+    if allowed_locations is not None:
+        sites = [site for site in sites
+                 if str(site.get("location") or site.get("site_id") or "")
+                 in allowed_locations]
     if not sites and spec.op == "delete":
         # A delete whose every authorized literal is absent from the whole
-        # ORIGINAL document has no material to remove.  This is stronger than a
-        # model's "not found" opinion and is intentionally limited to delete.
+        # ORIGINAL document is *not* by itself evidence that the old policy
+        # object is gone: contracts routinely reword the guide sentence
+        # ("持有不足7日", "销售服务费用途…").  Evaluate bounded semantic probes
+        # first, then require the caller's explicit no-target coverage record.
         references = [str(getattr(spec, "old_text", "") or ""),
                       *[str(value) for value in getattr(spec, "alternatives", ())]]
         references = list(dict.fromkeys(value for value in references
                                         if len(_compact(value)) >= 8))
-        document = _compact("".join(str(getattr(span, "text", ""))
-                                    for span in getattr(original, "paragraphs", ())))
+        if rule_id == "G06":
+            from ..recall import g06_scoped_text
+            document = _compact(g06_scoped_text(original))
+        else:
+            document = _compact("".join(str(getattr(span, "text", ""))
+                                         for span in getattr(original, "paragraphs", ())))
+        review_hits = _semantic_delete_review_hits(rule_id, document)
+        if review_hits:
+            return OperationEffect(
+                "OPEN", "UNPROVEN", **base,
+                failure_code="EFFECT_SITE_UNPROVEN",
+                reason="semantic_delete_review_required",
+                evidence=({"proof_kind": "semantic_delete_review_required",
+                           "operation_id": operation_id,
+                           "obligation_id": obligation_id,
+                           "probe_hits": review_hits[:20],
+                           "match_count": len(review_hits)},))
         semantic_hits = _semantic_delete_hits(rule_id, document)
         if semantic_hits:
             return OperationEffect(
                 "OPEN", "UNPROVEN", **base,
-                failure_code="CLAIM_OPERATION_UNPROVEN",
+                failure_code="EFFECT_SITE_UNPROVEN",
                 reason="semantic_delete_variant_present",
                 evidence=({"proof_kind": "semantic_delete_variant_present",
                            "operation_id": operation_id,
@@ -535,15 +733,34 @@ def evaluate_operation_effect(obligation: Any, original: Any, artifact: Any,
                            "probe_hits": semantic_hits[:20],
                            "match_count": len(semantic_hits)},))
         if references and all(_compact(reference) not in document for reference in references):
+            coverage = _absent_coverage_evidence(
+                absent_coverage, operation_id=operation_id,
+                obligation_id=obligation_id, original=original)
+            if coverage is not None:
+                return OperationEffect(
+                    "PASS", "VERIFIED_ABSENT", **base, evidence=({
+                        "proof_kind": "document_literal_absent",
+                        "operation_id": operation_id,
+                        "obligation_id": obligation_id,
+                        "searched_literals": references,
+                        "match_count": 0,
+                        "document_sha256": getattr(original, "source_sha256", ""),
+                        "coverage": coverage,
+                    },))
+            # Fail closed: no verified site and no explicit coverage record means
+            # the operation's old semantic object is simply unproven.
             return OperationEffect(
-                "PASS", "VERIFIED_ABSENT", **base, evidence=({
-                    "proof_kind": "document_literal_absent",
-                    "operation_id": operation_id,
-                    "obligation_id": obligation_id,
-                    "searched_literals": references,
-                    "match_count": 0,
-                    "document_sha256": getattr(original, "source_sha256", ""),
-                },))
+                "OPEN", "UNPROVEN", **base,
+                failure_code="EFFECT_SITE_UNPROVEN",
+                reason="document_literal_absent_without_coverage",
+                evidence=({"proof_kind": "effect_site_unproven",
+                           "operation_id": operation_id,
+                           "obligation_id": obligation_id,
+                           "searched_literals": references,
+                           "match_count": 0,
+                           "document_sha256": getattr(original, "source_sha256", ""),
+                           "reason": "literal absence needs an explicit site-scan "
+                                     "coverage record"},))
     if not sites:
         return OperationEffect("OPEN", "UNPROVEN", **base,
                                failure_code="CLAIM_OPERATION_UNPROVEN", reason="verified site missing")
@@ -607,19 +824,26 @@ def evaluate_operation_effect(obligation: Any, original: Any, artifact: Any,
         source_has_expected = bool(expected) and (
             _compact(expected) in _compact(before)
             or (spec.rule_id in {"G02", "G04"} and spec.op == "replace"
-                and _class_group_equivalent(expected, quote)))
+                and _class_group_equivalent(expected, quote))
+            or (spec.op == "replace"
+                and _coordinated_verb_equivalent(expected, before)))
         one_of_group = str(getattr(spec, "one_of_group", "") or "")
         after_has_expected = bool(expected) and (
             _compact(expected) in _compact(after)
             or (spec.rule_id in {"G02", "G04"} and spec.op == "replace"
-                and _class_group_equivalent(expected, after)))
+                and _class_group_equivalent(expected, after))
+            or (spec.op == "replace"
+                and _coordinated_verb_equivalent(expected, after)))
         expected_present = after_has_expected if one_of_group else (
             source_has_expected and after_has_expected)
         # ALREADY_SATISFIED is source evidence, not evidence that a sibling
         # operation happened to write the same new phrase into this paragraph.
         # Require the operation's own policy to be present in the source when
         # there is no validated unit carrying it into the artifact.
-        if not own_units and expected and not one_of_group:
+        # ``own_units`` is document-wide for this operation.  Source-side
+        # satisfaction is physical-site scoped: an edit at p1 must not prevent
+        # p0 from proving that its equivalent policy was already present.
+        if not own and expected and not one_of_group:
             expected_present = expected_present and source_has_expected
         if occurrence >= 0 and spec.op == "replace":
             from .claim_replay import _occurrence_positions
@@ -644,7 +868,7 @@ def evaluate_operation_effect(obligation: Any, original: Any, artifact: Any,
         old_wordings = [str(spec.old_text or ""), *getattr(spec, "alternatives", ())]
         source_policy_equivalent = False
         if (not source_has_expected and spec.op in {"replace", "append"}
-                and expected and not own_units and not one_of_group):
+                and expected and not own and not one_of_group):
             # Semantic equivalence is still operation-scoped, but it must be
             # established in the ORIGINAL source.  Checking only ``after`` lets
             # an unrelated sibling's identical insertion close this operation.
@@ -668,6 +892,9 @@ def evaluate_operation_effect(obligation: Any, original: Any, artifact: Any,
                        and not retained_as_authorized_new(str(old))
                        and not _class_group_member_residual_authorized(
                            spec, expected, str(old), after)
+                       and not (spec.op == "replace"
+                                and _coordinated_member_residual_authorized(
+                                    expected, str(old), after))
                        for old in old_wordings)
         if spec.op == "replace":
             clause_residuals = _replaced_clause_residuals(
@@ -746,7 +973,7 @@ def evaluate_operation_effect(obligation: Any, original: Any, artifact: Any,
     worst = failure or unproven
     status = worst["artifact_status"] if worst else (
         "VERIFIED_ABSENT" if spec.op == "delete" else
-        "EXPECTED_EFFECT_PRESENT" if own_units else "ALREADY_SATISFIED")
+        "EXPECTED_EFFECT_PRESENT" if edit_ids else "ALREADY_SATISFIED")
     return OperationEffect(worst["state"] if worst else "PASS", status, **base,
         sites=tuple(sorted(seen)), edit_ids=tuple(dict.fromkeys(edit_ids)), evidence=tuple(evidence),
         failure_code=worst["failure_code"] if worst else "", site_effects=tuple(results))

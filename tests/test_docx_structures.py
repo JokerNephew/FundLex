@@ -68,7 +68,7 @@ def rejects(source, edit, code):
     assert source.read_bytes() == before
 
 
-@pytest.mark.parametrize("name", ["tab", "sym", "noBreakHyphen", "softHyphen", "lastRenderedPageBreak", "proofErr", "drawing", "object"])
+@pytest.mark.parametrize("name", ["tab", "sym", "noBreakHyphen", "softHyphen", "drawing", "object"])
 def test_special_nodes_never_join_search_segments(tmp_path, name):
     source = package(tmp_path, '<w:p>' + run("左文") + f'<w:r><w:{name}/></w:r>' + run("右文") + '</w:p>')
     paragraph = editor.inspect_docx(source, full=True).by_location("p0")
@@ -88,7 +88,7 @@ def test_wrapper_content_is_readonly_but_neighbor_is_editable(tmp_path, wrapper)
     rejects(source, plan_edit(source), "EDIT_CROSSES_BARRIER")
 
 
-@pytest.mark.parametrize("prefix", ["bookmark", "commentRange", "perm"])
+@pytest.mark.parametrize("prefix", ["commentRange", "perm"])
 def test_range_interior_and_cross_paragraph_range_are_readonly(tmp_path, prefix):
     source = package(tmp_path, f'<w:p><w:{prefix}Start w:id="9"/>{run("旧文")}</w:p>'
         f'<w:p>{run("续文")}<w:{prefix}End w:id="9"/>{run("安全")}</w:p>')
@@ -97,6 +97,46 @@ def test_range_interior_and_cross_paragraph_range_are_readonly(tmp_path, prefix)
     assert inspected.by_location("p1").safe_text == "安全"
     rejects(source, plan_edit(source), "REGION_NOT_EDITABLE")
     rejects(source, plan_edit(source, "p1", "续文"), "EDIT_CROSSES_BARRIER")
+
+
+def test_bookmark_range_is_editable_and_does_not_split_segments(tmp_path):
+    """TOC/navigation bookmarks must not make whole contract sections readonly."""
+    source = package(tmp_path, '<w:p><w:bookmarkStart w:id="9" w:name="_Toc1"/>'
+        + run("旧文") + '</w:p><w:p>' + run("续文")
+        + '<w:bookmarkEnd w:id="9"/>' + run("安全") + '</w:p>')
+    inspected = editor.inspect_docx(source, full=True)
+    assert inspected.by_location("p0").editable
+    assert inspected.by_location("p1").editable
+    assert inspected.by_location("p1").safe_text == "续文安全"
+    plan = editor.validate_edit_plan(source, [plan_edit(source)], {"fixed": "新文"})
+    assert plan.edits
+
+
+@pytest.mark.parametrize("name", ["lastRenderedPageBreak", "proofErr"])
+def test_layout_and_proofing_markers_do_not_split_editable_text(tmp_path, name):
+    source = package(tmp_path, '<w:p>' + run("左文")
+        + f'<w:r><w:{name}/><w:t>右文</w:t></w:r>' + '</w:p>')
+    paragraph = editor.inspect_docx(source, full=True).by_location("p0")
+    assert paragraph.editable
+    assert len(paragraph.segments) == 1
+    assert paragraph.text == "左文右文"
+    plan = editor.validate_edit_plan(
+        source, [plan_edit(source, old=paragraph.text)], {"fixed": "新文"})
+    editor.generate_artifacts(source, plan, tmp_path / "r.docx", tmp_path / "f.docx")
+    assert editor.inspect_docx(tmp_path / "f.docx").by_location("p0").text == "新文"
+
+
+def test_bookmark_between_runs_is_dropped_inside_edit(tmp_path):
+    source = package(tmp_path, '<w:p>' + run("左文")
+        + '<w:bookmarkStart w:id="9" w:name="_Toc1"/>' + run("右文")
+        + '<w:bookmarkEnd w:id="9"/></w:p>')
+    paragraph = editor.inspect_docx(source, full=True).by_location("p0")
+    assert paragraph.editable
+    assert paragraph.text == "左文右文"
+    plan = editor.validate_edit_plan(
+        source, [plan_edit(source, old=paragraph.text)], {"fixed": "新文"})
+    editor.generate_artifacts(source, plan, tmp_path / "r.docx", tmp_path / "f.docx")
+    assert editor.inspect_docx(tmp_path / "f.docx").by_location("p0").text == "新文"
 
 
 @pytest.mark.parametrize("marker", ["cellIns", "tblGridChange", "customXmlMoveFromRangeEnd", "moveTo", "rPrChange", "delText"])

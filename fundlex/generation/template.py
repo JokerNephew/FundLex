@@ -99,6 +99,10 @@ def plan_policy_replacement(before: str, instantiated: str, rule_id: str) -> Tem
     if rule_id == "G08":
         anchor_ok = "申购费率由基金管理人决定" in compact and "招募说明书" in compact
         forbidden = ("赎回", "转换", "计算方法", "公告", "收费方式", "认购")
+    elif rule_id == "G10":
+        anchor_ok = ("申购费用由" in compact
+                     and ("承担" in compact or "不列入基金财产" in compact))
+        forbidden = ("赎回", "认购", "转换", "公告", "计算方法")
     elif rule_id == "G11":
         anchor_ok = "申购费用由" in compact and ("承担" in compact or "不列入基金财产" in compact)
         forbidden = ("赎回", "认购", "转换", "公告", "计算方法")
@@ -239,6 +243,7 @@ _G09_VARIANTS: tuple[tuple[str, str], ...] = (
     ("当日基金份额净值", "当日该类基金份额的基金份额净值"),
     ("当日该类基金份额净值", "当日该类基金份额的基金份额净值"),
     ("当日对应份额类别的基金份额净值", "当日该类基金份额的基金份额净值"),
+    ("赎回金额单位为人民币元", "赎回金额单位为元"),
 )
 
 

@@ -63,8 +63,8 @@ def test_same_operation_identical_subset_is_absorbed_not_conflicted():
     assert covered == ["C2"]
 
 
-def test_delete_document_literal_absent_passes_and_present_does_not():
-    from fundlex.generation.effects import evaluate_operation_effect
+def test_delete_document_literal_absent_requires_explicit_coverage():
+    from fundlex.generation.effects import evaluate_operation_effect, effect_proof_passed
     guide = {"groups": [{"rule_id": "G06", "operations": [{
         "op": "delete", "old_text": "本基金不同基金份额类别之间不得互相转换。",
         "condition": {"kind": "none"}}]}]}
@@ -73,10 +73,22 @@ def test_delete_document_literal_absent_passes_and_present_does_not():
     record.applicability = SimpleNamespace(status="TRUE")
     facts = Facts()
     source = Inspection(["本基金A类、C类份额的费用不同。"])
-    effect = evaluate_operation_effect(record, source, source, [], [], facts)
+    blocked = evaluate_operation_effect(record, source, source, [], [], facts)
+    assert blocked.state == "OPEN"
+    assert blocked.artifact_status == "UNPROVEN"
+    assert blocked.failure_code == "EFFECT_SITE_UNPROVEN"
+    assert blocked.reason == "document_literal_absent_without_coverage"
+    coverage = {"kind": "scoped_site_scan", "operation_id": record.spec.operation_id,
+                "obligation_id": record.obligation_id,
+                "scanned_locations": ["p0"], "document_sha256": source.source_sha256,
+                "reason": "test fixture: complete rule scope scan"}
+    effect = evaluate_operation_effect(record, source, source, [], [], facts,
+                                       absent_coverage=coverage)
     assert effect.state == "PASS"
     assert effect.artifact_status == "VERIFIED_ABSENT"
     assert effect.evidence[0]["proof_kind"] == "document_literal_absent"
+    assert effect.evidence[0]["coverage"]["kind"] == "scoped_site_scan"
+    assert effect_proof_passed(effect.as_dict())
     present = Inspection(["本基金不同基金份额类别之间不得互相转换。"])
     effect2 = evaluate_operation_effect(record, present, present, [], [], facts)
     assert effect2.state == "OPEN"
@@ -257,3 +269,46 @@ def test_g05_mixed_target_is_split_before_absent_delete_proof():
     assert len(targets) == 2
     assert targets[1].operations == ("G05:2",)
     assert targets[1].state == "satisfied"
+
+
+def test_g05_absent_site_clone_survives_operation_collection():
+    """The operation-specific absent proof must remain a real final target."""
+    from fundlex.recall_pipeline import _collect_targets
+    from fundlex.recall import resolve_absent_site_targets
+
+    text = ("基金管理人可以增加新的基金份额类别、调整现有基金份额类别的费率水平，"
+            "调整前基金管理人需及时公告。")
+    rule = {"rule_id": "G05", "operations": [
+        {"operation_id": "G05:0", "op": "replace", "old_text": "调低赎回费率",
+         "new_text": "调低销售服务费率", "condition": {"kind": "none"}},
+        {"operation_id": "G05:2", "op": "delete", "old_text": "并报中国证监会备案",
+         "condition": {"kind": "none"}},
+    ]}
+    target = Target("source", "G05", "p0", text, "absent", "source absent",
+                    start=0, end=len(text), operations=("G05:0",), out_of_scope=True)
+    targets = [target]
+    synthetic = []
+    resolve_absent_site_targets(targets, {"G05": rule}, Inspection([text]))
+    synthetic.extend(targets[1:])
+    collected = _collect_targets([], synthetic, {"G05": rule}, Inspection([text]))
+    assert any(item.operations == ("G05:2",) and item.state == "satisfied"
+               for item in collected)
+
+
+def test_g06_one_way_y_class_prohibition_stays_review_only():
+    from fundlex.recall import _semantic_delete_sentences, _G06_PROHIBITION
+    text = "但 Y 类基金份额不能转换为 A 类、C 类、E 类或 F 类基金份额。"
+    assert _semantic_delete_sentences("G06", text) == []
+    assert _G06_PROHIBITION.search(text.replace(" ", ""))
+
+
+def test_g18_requires_two_fee_groups_at_one_physical_site():
+    from fundlex.recall import _policy_phrase_equivalent, _compact, target_site_ok
+
+    replacement = "由于本基金A类、Y类基金份额和C类、E类、F类基金份额费用收取不同"
+    undifferentiated = ("本基金 A 类、C 类、E 类、F 类和 Y 类基金份额分别设置代码。"
+                        "由于基金费用的不同，本基金 A 类基金份额、C 类基金份额、E 类基金份额、"
+                        "F 类基金份额和 Y 类基金份额将分别计算基金份额净值。")
+    grouped = "由于基金费用的不同，本基金 A 类、Y 类基金份额和 C 类、E 类、F 类基金份额将分别计算基金份额净值。"
+    assert not _policy_phrase_equivalent(_compact(replacement), _compact(undifferentiated), ["旧句"])
+    assert _policy_phrase_equivalent(_compact(replacement), _compact(grouped), ["旧句"])

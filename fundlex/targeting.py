@@ -10,7 +10,7 @@ from __future__ import annotations
 import json
 import os
 import re
-from typing import Any, Sequence
+from typing import Any, Mapping, Sequence
 
 LOCATE_SCHEMA = {
     "type": "object",
@@ -41,10 +41,14 @@ def _enabled() -> bool:
 
 
 def _candidate_context(inspection: Any, target: Any, rule: dict, facts: Any,
-                       *, limit: int, radius: int = 6) -> tuple[str, set[str]]:
+                       *, limit: int, radius: int = 6,
+                       allowed_scope: set[str] | None = None) -> tuple[str, set[str]]:
     from .recall import display_text, rule_context
 
-    candidates = [str(location) for location in (getattr(target, "site_candidates", ()) or ())]
+    scope_filter = (lambda location: str(location) in allowed_scope) \
+        if allowed_scope is not None else (lambda location: True)
+    candidates = [str(location) for location in (getattr(target, "site_candidates", ()) or ())
+                  if scope_filter(location)]
     locations: list[str] = []
     lines: list[str] = []
     if candidates:
@@ -65,7 +69,8 @@ def _candidate_context(inspection: Any, target: Any, rule: dict, facts: Any,
             # model choose a paragraph code did not authorize.
             return "", set()
     if not candidates:
-        all_locations = [span.location for span in inspection.paragraphs]
+        all_locations = [span.location for span in inspection.paragraphs
+                         if scope_filter(span.location)]
         try:
             index = all_locations.index(target.location)
         except ValueError:
@@ -132,7 +137,13 @@ def _open_operation_candidates(
         if len(text) < 12:
             return 0
         if topic and not all(token in text for token in topic):
-            return 0
+            # Class rules also accept the definition wording ``将基金份额分为``;
+            # the literal ``份额类别`` need not appear in the clause that names the
+            # classes (景宁 G03 p151).  The class/fact checks below still gate it.
+            if not (class_rule and any(
+                    token in text for token in
+                    ("将基金份额分为", "基金份额类别", "份额类别"))):
+                return 0
         if rule_id == "G12" and not (
                 "赎回费用由" in text and "基金财产" in text):
             return 0
@@ -206,6 +217,22 @@ def _open_operation_candidates(
     for location in sibling_locations:
         if classify(body_at(location)) == 2:
             add(location, 3)
+
+    # G11's bearer sentence is occasionally split exactly at the paragraph
+    # boundary: the first paragraph ends with ``申购费用由……承担，`` and the next
+    # begins with ``不列入基金财产。``.  The two fragments are one authorized
+    # source site; requiring both anchors in one paragraph would leave both G11
+    # operations OPEN (D06 p228/p229).
+    if rule_id == "G11" and str(operation.get("op") or "") == "replace":
+        for index, location in enumerate(getattr(inspection, "paragraphs", ())):
+            text = body_at(str(getattr(location, "location", "")))
+            if ("申购费用由" in text and "承担" in text
+                    and text.endswith(("，", ","))):
+                following = getattr(inspection, "paragraphs", ())[index + 1] \
+                    if index + 1 < len(getattr(inspection, "paragraphs", ())) else None
+                if following is not None and "不列入基金财产" in body_at(
+                        str(getattr(following, "location", ""))):
+                    add(str(getattr(location, "location", "")), 3)
 
     # P2/P3/P4: scan only the scope-mapped sections, strongest anchor first.
     for section_id in section_ids:
@@ -370,7 +397,8 @@ def _open_rule_quote_ok(rule: dict, facts: Any, paragraph_text: str, quote: str,
 
 
 def locate_unresolved_targets(targets: Sequence[Any], inspection: Any,
-                              rules_by_id: dict[str, dict], facts: Any, gateway: Any
+                              rules_by_id: dict[str, dict], facts: Any, gateway: Any,
+                              *, scopes: Mapping[str, Any] | None = None
                               ) -> list[dict[str, Any]]:
     """Try the model locator for every still-unresolved target; record every attempt."""
     if not _enabled():
@@ -382,11 +410,19 @@ def locate_unresolved_targets(targets: Sequence[Any], inspection: Any,
     for target in targets:
         if target.state != "needs_edit" or target.resolution in {"resolved", "composite"}:
             continue
+        if getattr(target, "out_of_scope", False):
+            continue
         rule = rules_by_id.get(target.rule_id)
         if rule is None:
             continue
+        scope = scopes.get(target.rule_id) if scopes is not None else None
+        allowed_scope = ({str(location) for location in getattr(scope, "locations", ())}
+                         if scope is not None else (set() if scopes is not None else None))
+        if scopes is not None and not allowed_scope:
+            continue
         context, allowed_locations = _candidate_context(
-            inspection, target, rule, facts, limit=gateway.max_context_chars)
+            inspection, target, rule, facts, limit=gateway.max_context_chars,
+            allowed_scope=allowed_scope)
         record = {"target_id": target.target_id, "rule_id": target.rule_id}
         try:
             result = gateway.call(task_type="recall_locate", bounded_context=context,
@@ -501,7 +537,8 @@ def locate_unresolved_targets(targets: Sequence[Any], inspection: Any,
 
 def target_for_claim_site(record: Any, location: str, targets: Sequence[Any],
                           rules_by_id: dict[str, dict], facts: Any, inspection: Any,
-                          *, target_id: str = "") -> Any | None:
+                          *, target_id: str = "",
+                          allowed_locations: set[str] | None = None) -> Any | None:
     """Create the repair target for a Claim-discovered required occurrence.
 
     Claim Replay can prove that a duplicate body/summary site must carry the
@@ -515,6 +552,12 @@ def target_for_claim_site(record: Any, location: str, targets: Sequence[Any],
     rule_id = str(getattr(record.spec, "rule_id", "") or "")
     operation_id = str(getattr(record.spec, "operation_id", "") or "")
     if not rule_id or not operation_id or not location:
+        return None
+    # Claim Replay propagates an exact duplicate site across the whole document.
+    # A duplicate outside the rule's mapped sections is a sibling rule's business
+    # site, not a repair site for this operation (纳斯达克 p169: G02's definition
+    # text also appears in 基金的基本情况, which belongs to G04).
+    if allowed_locations is not None and location not in allowed_locations:
         return None
     rule = rules_by_id.get(rule_id)
     if rule is None:
@@ -558,7 +601,7 @@ def target_for_claim_site(record: Any, location: str, targets: Sequence[Any],
 def target_for_missing_operation(
         record: Any, targets: Sequence[Any], rules_by_id: dict[str, dict], facts: Any,
         inspection: Any, mapping: dict[str, list[str]], sections: Sequence[Any],
-        *, target_id: str = "") -> Any | None:
+        *, target_id: str = "", scopes: Mapping[str, Any] | None = None) -> Any | None:
     """Recovery target for one applicable operation Claim Replay proved missing.
 
     Candidate discovery is the same operation-first ladder as open-obligation recovery
@@ -567,7 +610,7 @@ def target_for_missing_operation(
     """
     if not _enabled():
         return None
-    from .recall import Target, _declared_operation_key
+    from .recall import Target, _declared_operation_key, g11_composite_source_parts
 
     rule_id = str(getattr(record.spec, "rule_id", "") or "")
     operation_index = int(getattr(record.spec, "operation_index", 0) or 0)
@@ -588,8 +631,50 @@ def target_for_missing_operation(
     candidates = _open_operation_candidates(
         inspection, rule, record, section_ids, section_by_id, facts,
         existing_targets=targets)
+    if scopes is not None:
+        # The section-level mapping may include a summary chapter.  Recovery must
+        # use the same physical leaf scope as inventory/plan, otherwise a class
+        # operation can be repaired at an income-distribution summary copy
+        # (景宁 G03 p1195) that the rule is not allowed to edit.
+        scope = scopes.get(rule_id)
+        if (scope is None or getattr(scope, "resolution", "") == "unresolved"
+                or not getattr(scope, "locations", ())):
+            return None
+        candidates = [location for location in candidates
+                      if scope.contains(location)]
     if not candidates:
         return None
+    if rule_id == "G11" and str(operation.get("op") or "") == "replace":
+        parts = g11_composite_source_parts(inspection, operation, candidates[0])
+        if parts:
+            return Target(
+                target_id=target_id or f"R{operation_index + 1:03d}",
+                rule_id=rule_id, location=candidates[0], quote="",
+                state="needs_edit", reason=f"recovery_missing_operation:{operation_id}",
+                resolution="composite", composite=parts, operations=(operation_id,))
+    if rule.get("class_substitution") and operation.get("op") == "replace":
+        from .recall import Target as _Target, instantiate_slots, resolve_quote
+        expected, issues = instantiate_slots(str(operation.get("new_text") or ""), facts)
+        old_text = str(operation.get("old_text") or "")
+        if not issues and expected:
+            for location in candidates:
+                try:
+                    span = inspection.by_location(location)
+                except Exception:  # noqa: BLE001
+                    continue
+                for needle, state in ((expected, "satisfied"), (old_text, "needs_edit")):
+                    if not needle:
+                        continue
+                    located = resolve_quote(span, needle)
+                    if located is None:
+                        continue
+                    return _Target(
+                        target_id=target_id or f"R{operation_index + 1:03d}",
+                        rule_id=rule_id, location=location,
+                        quote=span.text[located[0]:located[1]], state=state,
+                        reason=f"class_operation_binding:{operation_id}:{state}",
+                        start=located[0], end=located[1], resolution="resolved",
+                        segment_ok=True, operations=(operation_id,))
     return Target(target_id=target_id or f"R{operation_index + 1:03d}",
                   rule_id=rule_id, location=candidates[0], quote="",
                   state="needs_edit",
@@ -601,7 +686,8 @@ def target_for_missing_operation(
 
 def targets_for_open_rules(obligations: Any, targets: Sequence[Any], rules_by_id: dict[str, dict],
                            facts: Any, inspection: Any, mapping: dict[str, list[str]],
-                           sections: Sequence[Any], *, limit: int = 12) -> list[Any]:
+                           sections: Sequence[Any], *, limit: int = 12,
+                           scopes: Mapping[str, Any] | None = None) -> list[Any]:
     """Create T3 locate candidates for applicable OPERATIONS with no target.
 
     Coverage is operation-first: ``G05:0`` having a target does not cover ``G05:2``.
@@ -772,8 +858,29 @@ def targets_for_open_rules(obligations: Any, targets: Sequence[Any], rules_by_id
                           for section_id in section_ids
                           if section_id in section_by_id
                           and getattr(section_by_id[section_id], "locations", ())][:1]
+        if scopes is not None:
+            # A T3 candidate outside the rule's physical scope belongs to another
+            # clause; fail closed instead of handing the locator a sibling site.
+            scope = scopes.get(rule_id)
+            candidates = [location for location in candidates
+                          if scope is not None
+                          and getattr(scope, "resolution", "") != "unresolved"
+                          and scope.contains(location)]
+            if not candidates:
+                continue
         if not candidates:
             continue
+        if rule_id == "G11" and str(operation.get("op") or "") == "replace":
+            from .recall import g11_composite_source_parts
+            parts = g11_composite_source_parts(inspection, operation, candidates[0])
+            if parts:
+                created.append(Target(
+                    target_id=f"T3{len(created) + 1:03d}", rule_id=rule_id,
+                    location=candidates[0], quote="", state="needs_edit",
+                    reason=f"T3_open_operation:{operation_id}:composite",
+                    resolution="composite", composite=parts,
+                    operations=(operation_id,)))
+                continue
         created.append(Target(target_id=f"T3{len(created) + 1:03d}", rule_id=rule_id,
                               location=candidates[0], quote="", state="needs_edit",
                               reason=f"T3_open_operation:{operation_id}:"

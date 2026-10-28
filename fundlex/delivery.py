@@ -13,6 +13,7 @@ COMPLETE = "complete"
 COMPLETE_WITH_NOTICES = "complete_with_notices"
 PARTIAL = "partial"
 EXCLUDED = "excluded"
+VERIFICATION_BLOCKED = "verification_blocked"
 
 _BUSINESS_REASONS = (
     ("OPEN_OBLIGATION", "该规则要求修改的条款未能在合同中定位，或修改未完成"),
@@ -30,9 +31,62 @@ _BUSINESS_REASONS = (
     ("AUDIT", "独立复核认为修改尚未完成"),
 )
 
+# Short, user-facing reasons for every failure class the engine can emit.  The
+# order is specific-first: a code such as RECALL_TARGET_STRUCTURE must win over
+# the generic TARGET marker.
+_FAILURE_REASONS = (
+    ("EXISTING_REVISION_UNSUPPORTED", "文件包含未接受的修订痕迹，请先接受所有修订或上传清理版"),
+    ("DOCUMENT_PROTECTED", "文件受文档保护，无法写入修改"),
+    ("INPUT_INTEGRITY_FAILED", "上传文件损坏或格式不受支持"),
+    ("RECALL_TARGET_STRUCTURE", "目标段落含不可编辑结构（域、文本框或内容控件），无法写入修订"),
+    ("RECALL_EDIT_OVERLAP", "同一段落的多项修改范围重叠，无法安全合并"),
+    ("RECALL_TARGET_OPERATION_UNATTRIBUTED", "目标条款无法归属到具体规则操作"),
+    ("RECALL_TARGET_OPERATION_NOT_APPLICABLE", "目标条款不适用于该规则分支"),
+    ("RECALL_FACT_UNVERIFIED", "合同中的费率或份额类别事实无法从原文可靠确认"),
+    ("RECALL_QUOTE_UNRESOLVED", "修改依据的原文引文未能在合同中定位"),
+    ("MODEL_RETRY_EXHAUSTED", "模型调用多次失败，已停止重试"),
+    ("MODEL_SCHEMA_INVALID", "模型返回格式不符合要求"),
+    ("MODEL_OUTPUT_TRUNCATED", "模型输出被截断，未能完整返回"),
+    ("MODEL_BUDGET_EXCEEDED", "模型调用预算已用尽"),
+    ("MODEL_CALL_LIMIT", "模型调用次数已达上限"),
+    ("MODEL_CONTEXT_LIMIT", "模型上下文不足，未能处理该条款"),
+    ("GUIDE_NOT_CERTIFIED", "指引版本未通过认证"),
+    ("RULESET_HASH_MISMATCH", "任务规则版本与当前规则不一致"),
+    ("GUIDE_RULESET_HASH_MISMATCH", "指引与规则版本不一致"),
+    ("RESIDUAL_OLD_TEXT", "修改后原条款仍然存在，未达到删除/替换效果"),
+    ("CLAIM_OPERATION_NOT_PLANNED", "该条款未进入修改计划"),
+    ("CLAIM_OPERATION_UNPROVEN", "该条款的修改未能在最终文档中证明"),
+    ("CLAIM_NO_CHANGE_APPLIED", "该条款的修改没有实际写入文档"),
+    ("LEDGER_EVIDENCE_UNBOUND", "存在无法归属到具体规则的证据"),
+    ("AUDIT_NOT_COMPLETED", "独立复核未完成"),
+    ("FINAL_MODEL_SWEEP_FINDING", "全文查漏仍发现未完成项"),
+    ("FINAL_COVERAGE_UNRESOLVED", "规则覆盖检查发现未处理项"),
+    ("FINAL_OPERATION_UNPROVEN", "规则操作未能在最终文档中证明"),
+    ("SURVEY_QUOTE_UNRESOLVED", "补漏时引用的原文未能在合同中定位"),
+    ("PROCESSING_FAILED", "处理过程异常，未能生成修改"),
+    ("OUTPUT_WRITE_FAILED", "生成修改文件失败"),
+    ("REPORT_WRITE_FAILED", "生成报告失败"),
+    ("FROZEN_RUN_WRITE_FAILED", "保存运行记录失败"),
+    ("VERIFICATION_BLOCKED", "验证暂未完成，等待恢复处理"),
+    ("QUALIFICATION_FAILED", "合同不符合本次处理条件"),
+    ("EXCLUDED", "产品类型不在本次修改范围内"),
+)
+
 _REASON_ORDER = ("OPEN_OBLIGATION", "APPLICABILITY", "RECALL_FACT", "FUND_TYPE",
                  "CLAIM_REPLAY", "CLAIM_OPERATION", "VALIDATION", "OVERLAP", "COMPOSE",
                  "AUDIT", "SWEEP", "COVERAGE", "TARGET")
+
+
+def failure_reason(value: Any) -> str:
+    """Concise Chinese explanation for an engine error code or reason string."""
+    text = str(value or "")
+    if not text:
+        return ""
+    for code, message in _FAILURE_REASONS:
+        if code in text:
+            return message
+    return ""
+
 
 _COVERAGE_SUCCESS_STATES = {
     "SATISFIED", "ARTIFACT_VERIFIED", "ALREADY_SATISFIED", "NOT_APPLICABLE",
@@ -96,6 +150,9 @@ def _completion_blockers(report: Mapping[str, Any]) -> list[str]:
 def business_reason(item: Mapping[str, Any]) -> str:
     text = " ".join(str(item.get(key) or "") for key in
                     ("code", "reason", "issue", "kind", "status"))
+    specific = failure_reason(text)
+    if specific:
+        return specific
     for marker in _REASON_ORDER:
         if marker in text:
             for prefix, message in _BUSINESS_REASONS:
@@ -181,8 +238,51 @@ def build_user_summary(report: Mapping[str, Any]) -> dict[str, Any]:
         return {"status": EXCLUDED, "headline": "该产品类型不在本次修改范围内",
                 "issues": [], "notices": notices}
     issues = _issues(report)
-    blockers = _completion_blockers(report)
-    if status == "complete" and not issues and not blockers:
+    errors = [item for item in (report.get("errors") or [])
+              if isinstance(item, Mapping)]
+    error_issues = [{
+        "rule_id": "", "title": "处理失败", "section": "", "location": "",
+        "obligation_id": "",
+        "business_reason": failure_reason(item.get("code")) or "处理未完成",
+        "requirement": "", "quote": "", "quote_exact_site": False,
+        "review_note": "",
+    } for item in errors]
+    if error_issues:
+        issues = error_issues + issues
+    if status == "not_generated" and not issues:
+        issues = [{
+            "rule_id": "", "title": "未生成修改文件", "section": "", "location": "",
+            "obligation_id": "",
+            "business_reason": "未匹配到可修改条款或处理未完成",
+            "requirement": "", "quote": "", "quote_exact_site": False,
+            "review_note": "",
+        }]
+    policy = str(report.get("delivery_policy") or "strict")
+    if policy == "review_assisted":
+        # The report already split unresolved into blockers / review / business.
+        # Only the blocker bucket may keep a delivery partial.
+        blockers = list(report.get("delivery_blockers") or [])
+        review_items = list(report.get("review_items") or [])
+        business_items = list(report.get("business_pending") or [])
+    else:
+        blockers = _completion_blockers(report)
+        review_items = []
+        business_items = []
+    if report.get("verification_status") == VERIFICATION_BLOCKED:
+        return {"status": VERIFICATION_BLOCKED, "headline": "验证暂未完成，等待恢复处理",
+                "issues": issues, "notices": notices,
+                "verification_blockers": list(report.get("verification_blockers") or [])}
+    if status == "complete" and not blockers:
+        if review_items or business_items:
+            parts = []
+            if review_items:
+                parts.append(f"{len(review_items)} 项人工复核")
+            if business_items:
+                parts.append(f"{len(business_items)} 项业务待定")
+            return {"status": COMPLETE_WITH_NOTICES,
+                    "headline": "修改完成，" + "、".join(parts),
+                    "issues": issues, "notices": notices,
+                    "review_items": review_items, "business_pending": business_items}
         if notices:
             return {"status": COMPLETE_WITH_NOTICES,
                     "headline": "修改完成，但有业务提示",
@@ -194,6 +294,15 @@ def build_user_summary(report: Mapping[str, Any]) -> dict[str, Any]:
                    "business_reason": "交付证明仍包含未解决的操作或站点",
                    "requirement": "", "quote": "", "quote_exact_site": False,
                    "review_note": "请重新复核操作、站点和最终文档证明。"}]
+    if status == "not_generated":
+        reason = str((issues[0].get("business_reason") if issues else "")
+                     or "未生成修改文件")
+        return {"status": PARTIAL, "headline": f"未生成修改文件：{reason}",
+                "issues": issues, "notices": notices}
+    if error_issues:
+        return {"status": PARTIAL,
+                "headline": "处理失败：" + str(error_issues[0].get("business_reason") or ""),
+                "issues": issues, "notices": notices}
     return {
         "status": PARTIAL,
         "headline": "部分修改无法可靠完成",

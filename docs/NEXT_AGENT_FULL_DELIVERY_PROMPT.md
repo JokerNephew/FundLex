@@ -1,5 +1,7 @@
 # 给新 agent 的完整项目交付 Prompt
 
+> **2026-10-28 本轮引擎整改请使用新入口**：[NEXT_AGENT_SEMANTIC_ENGINE_EXECUTION_PROMPT_20261028.md](NEXT_AGENT_SEMANTIC_ENGINE_EXECUTION_PROMPT_20261028.md) 与 [多阶段执行方案](SEMANTIC_ENGINE_REMEDIATION_EXECUTION_PLAN_20261028.md)。该入口覆盖用户指定的语义误拒/scope漏改/容量/结构/证明闭环，明确多agent自主开发测试、不反复询问和真实E2E。下方历史复制块含已停用Windows路径，不要原样执行；机器身份按AGENTS和最新交接。
+
 ## ⚠️ 机器身份（禁止凭内网地址判断机器）
 
 当前生产/部署机与工作机是**同一台云服务器**：主机名 `iZf8zemhifedxdow1zefr0Z`，公网出口 `8.155.130.168`，内网网卡 `172.28.217.241`（**同一台机器**），区域 `cn-heyuan`。工作区 `/home/opencode/fundlex`，应用部署 `/opt/fundlex-recall-first`（API `127.0.0.1:8010`）。文档中标为**“本机/笔记本”的指已停用的 Windows 开发机，不是当前工作机**。开工前先跑 `hostname` / `ip -4 addr` / `curl ifconfig.me` / `curl http://100.100.100.200/latest/meta-data/instance-id` 确认。详见 `docs/DETAIL_ISSUES_AND_RESOLUTIONS.md` 的 FL-D061。

@@ -1,0 +1,73 @@
+{
+  "date": "2026-10-28",
+  "model_calls": 0,
+  "not_business_acceptance": true,
+  "jingning_g05": {
+    "source": "funds_word/基金合同第一批/广发景宁纯债债券型证券投资基金基金合同.docx",
+    "source_sha256": "9150051732445ce306db0b17e37f38746f8827c1c8a327a3474a433633e2e4b4",
+    "resolution": "resolved",
+    "locations": [
+      "p147",
+      "p148",
+      "p149",
+      "p150",
+      "p151",
+      "p152",
+      "p153",
+      "p154",
+      "p155",
+      "p156"
+    ],
+    "p148_in_scope": true,
+    "p155_in_scope": true,
+    "p155_zone": "body",
+    "p155_old_rate": true,
+    "p155_filing": true
+  },
+  "hongli_g17": {
+    "source": "funds_word/基金合同第一批/广发弘利3个月滚动持有债券型证券投资基金基金合同.docx",
+    "source_sha256": "ac16b236ee55184e972519f1e01610d9b3b529c559db662d00ec8dc1514a02f7",
+    "quote": "销售服务费可用于本基金市场推广、销售以及基金份额持有人服务等各项费用。",
+    "in_scope": true,
+    "scope_resolution": "resolved",
+    "attribution_errors": [],
+    "operations": [
+      "G17:0"
+    ],
+    "approval_ok": true,
+    "plan_error": null,
+    "planned": {
+      "content_source": "approved_span_delete",
+      "start": 0,
+      "end": 35,
+      "replacement": "",
+      "deleted_quote": "销售服务费可用于本基金市场推广、销售以及基金份额持有人服务等各项费用。"
+    },
+    "model_calls": 0,
+    "site_guard_waived": true
+  },
+  "g14_binding": {
+    "source": "funds_word/基金合同第一批/广发全球稳健配置混合型证券投资基金（QDII）基金合同.docx",
+    "source_sha256": "c832eccecaa906ef20a82aac34ebef1c5121dd189ccd8d930f4f342aebbfe646",
+    "normalised_contains_expression_2": true
+  },
+  "structure_index": {
+    "section_count": 85,
+    "last_location_indexed": true,
+    "explicit_80_still_limits": 80
+  },
+  "effect_literal_absence": {
+    "state": "OPEN",
+    "artifact_status": "UNPROVEN",
+    "failure_code": "EFFECT_SITE_UNPROVEN"
+  },
+  "source_fingerprints": {
+    "fundlex/semantic_evidence.py": "0659f2bb804b3adc8c035f47c52f8824268e25902cd48926d41cf0d96e009f59",
+    "fundlex/recall.py": "4ae37a92436fc67fdbf588af177b4874bb0cd1ddd81bab764e48178177a407b9",
+    "fundlex/recall_pipeline.py": "f2158732941a8e711ce94f354e25b248e54d80e90436e55e63055e403440635c",
+    "fundlex/rule_scope.py": "b3b6ad8f07a9aadb4e850b78015e6f25c9b04d46cf5d2d75dbfd65a86d3023c9",
+    "fundlex/generation/effects.py": "5ff5d127a8d43bdadd125a3b4446f87bb66a7aa1c4a6b24a505c1799692ef717",
+    "fundlex/generation/claim_replay.py": "031c36d0c628b76cb3be4269bb08962b83219a763422cc247994c449ef7151ab",
+    "guides/builtin_guide_v1.json": "20bc6677f50677e911d14935b70709a40652b3b6d15af43f6cb87878da5fe85b"
+  }
+}

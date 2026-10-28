@@ -327,21 +327,23 @@ def test_audit_failure_repaired_then_complete(tmp_path: Path):
     assert docx_names(output_dir) == {"final.docx", "redline.docx"}
 
 
-def test_audit_failure_persists_incomplete_working_pair(tmp_path: Path):
+def test_audit_failure_persists_as_review_item(tmp_path: Path):
+    """Review-assisted delivery keeps the audit failure visible instead of silent."""
     _, output_dir, _, report = run(
         tmp_path, {"recall_audit": persistent_failing_audit("G05")})
 
-    assert report["delivery_status"] == "incomplete"
+    assert report["delivery_status"] == "complete"
+    assert report["review_required"] is True
     assert report["limits"]["business_rounds_used"] == 1
     assert len(report["audit"]["rounds"]) == 2
     assert any("RECOVERY_NO_PROGRESS" in (item.get("reason", "") + item.get("detail", ""))
                for item in report["recovery"]["business_rounds"])
     assert report["audit"]["issues"]
-    assert report["output_validation"]["kind"] == "recall_working_edits"
-    assert report["artifacts"] == {"working_final": "working_final.docx",
-                                   "working_redline": "working_redline.docx"}
-    assert docx_names(output_dir) == {"working_final.docx", "working_redline.docx"}
+    assert report["output_validation"]["kind"] == "recall_validated_edits"
+    assert report["artifacts"] == {"final": "final.docx", "redline": "redline.docx"}
+    assert docx_names(output_dir) == {"final.docx", "redline.docx"}
     assert any(item["kind"] == "audit" for item in report["unresolved"])
+    assert any(item["kind"] == "audit" for item in report["review_items"])
     attempts = report["recovery"]["business_rounds"]
     assert attempts and all(item["rule_id"] == "G05" for item in attempts)
     assert attempts[-1]["outcome"] in {"failed", "skipped", "unresolved"}
@@ -407,11 +409,12 @@ def test_sweep_filters_finding_when_rule_already_carried_out(tmp_path: Path):
     assert docx_names(output_dir) == {"final.docx", "redline.docx"}
 
 
-def test_incomplete_class_set_blocks_delivery_even_when_sweep_finding_looks_satisfied(tmp_path: Path):
+def test_incomplete_class_set_is_surfaced_as_business_pending(tmp_path: Path):
     """A partial class set cannot certify a class-substitution branch.
 
-    The source defines A/C/D while the primary only returns A/C. Authentic value
-    quotes cannot make the returned set complete or waive an operation.
+    The source defines A/C/D while the primary only returns A/C.  Review-assisted
+    delivery does not certify the branch: it publishes the pair with the unverified
+    class set in the business-pending list for the human reviewer.
     """
     substitution = {
         "rule_id": "G02", "title": "释义-基金份额类别定义", "section_hint": "释义",
@@ -445,13 +448,17 @@ def test_incomplete_class_set_blocks_delivery_even_when_sweep_finding_looks_sati
                                               "recall_scope": scope_with_g02},
                                    guide=guide_document([*rules_subset("G05", "G14"), substitution]))
 
-    assert report["delivery_status"] != "complete"
+    assert report["delivery_status"] == "complete"
     assert report["facts"]["fact_status"]["share_class_structure"] != "VERIFIED"
+    # The unverified class set is never silently accepted: it stays visible as a
+    # business-pending item for the human reviewer.
+    assert any(item.get("rule_id") == "G02"
+               for item in report.get("business_pending") or [])
     dropped = [item for round_ledger in report["sweep"]["rounds"]
                for item in round_ledger["dropped"]]
     assert not any(item["code"] == "SWEEP_ALREADY_SATISFIED" and item.get("rule_id") == "G02"
                for item in dropped)
-    assert docx_names(output_dir) in ({"working_final.docx", "working_redline.docx"}, set())
+    assert docx_names(output_dir) == {"final.docx", "redline.docx"}
 
 
 def test_sweep_filters_finding_outside_rule_section(tmp_path: Path):
@@ -478,7 +485,9 @@ def test_sweep_filters_finding_outside_rule_section(tmp_path: Path):
     assert report["delivery_status"] == "complete"
     dropped = [item for round_ledger in report["sweep"]["rounds"]
                for item in round_ledger["dropped"]]
-    assert any(item["code"] == "SWEEP_LOCATION_OUT_OF_SCOPE" for item in dropped)
+    assert any(item.get("code") == "OUT_OF_RULE_SCOPE"
+               or item.get("subcode") == "SWEEP_LOCATION_OUT_OF_SCOPE"
+               for item in dropped)
     assert report["sweep"]["findings"] == []
     assert docx_names(output_dir) == {"final.docx", "redline.docx"}
 
@@ -622,6 +631,8 @@ def test_stop_code_during_facts_raises(tmp_path: Path):
     with pytest.raises(RecallPipelineStop) as excinfo:
         process_recall_first(source, output_dir, guide_document=guide_document(), gateway=gateway)
     assert excinfo.value.code == "MODEL_CALL_BUDGET_EXCEEDED"
+    assert excinfo.value.report["verification_status"] == "verification_blocked"
+    assert excinfo.value.report["verification_blockers"][0]["stage"] == "facts"
     assert docx_names(output_dir) == set()
     assert_no_temp_artifacts(output_dir)
 
@@ -715,10 +726,13 @@ def test_sweep_chunk_limit_recorded_as_coverage_gap(tmp_path: Path):
     assert report["sweep"]["chunks"] == 0
     gaps = report["sweep"]["gaps"]
     assert len(gaps) == 1 and gaps[0]["code"] == "SWEEP_CHUNK_LIMIT"
-    assert report["delivery_status"] == "incomplete"
-    assert report["output_validation"]["kind"] == "recall_working_edits"
-    assert docx_names(output_dir) == {"working_final.docx", "working_redline.docx"}
+    # The gap is delivered as an explicit review item, never silently dropped.
+    assert report["delivery_status"] == "complete"
+    assert report["review_required"] is True
+    assert report["output_validation"]["kind"] == "recall_validated_edits"
+    assert docx_names(output_dir) == {"final.docx", "redline.docx"}
     assert any(item["kind"] == "coverage" for item in report["unresolved"])
+    assert any(item["kind"] == "coverage" for item in report["review_items"])
 
 
 def test_sweep_chunk_budget_subtracts_facts_block(tmp_path: Path):
@@ -1148,11 +1162,129 @@ def test_collect_targets_keeps_different_operations_at_one_location(tmp_path: Pa
 
 
 def test_delivery_complete_blocks_on_any_unresolved():
-    """A report that lists unresolved items must not publish complete (FL-D118)."""
+    """Strict policy: a report that lists unresolved items must not publish (FL-D118)."""
     from fundlex.recall_pipeline import _delivery_complete
-    assert _delivery_complete([]) is True
-    assert _delivery_complete([{"kind": "coverage", "code": "SURVEY_QUOTE_UNRESOLVED"}]) is False
-    assert _delivery_complete([{"kind": "qualification", "code": "FUND_TYPE_UNVERIFIED"}]) is False
+    assert _delivery_complete([], policy="strict") is True
+    assert _delivery_complete([{"kind": "coverage", "code": "SURVEY_QUOTE_UNRESOLVED"}],
+                              policy="strict") is False
+    assert _delivery_complete([{"kind": "qualification", "code": "FUND_TYPE_UNVERIFIED"}],
+                              policy="strict") is False
+
+
+def test_review_assisted_delivers_unproven_but_blocks_facts():
+    """Unproven sites are review items; residual text and missing changes still block."""
+    from fundlex.recall_pipeline import _classify_delivery_items, _delivery_complete
+
+    unproven = {"kind": "obligation", "code": "OPEN_OBLIGATION", "rule_id": "G16",
+                "reason": "CLAIM_REPLAY_FAILED", "sites": ["p849"]}
+    residual = {"kind": "claim_replay", "code": "RESIDUAL_OLD_TEXT", "rule_id": "G17",
+                "location": "p888", "reason": "exact old effect survives"}
+    business = {"kind": "obligation", "code": "OPEN_OBLIGATION", "rule_id": "G14",
+                "reason": "CLAIM_REPLAY_FAILED"}
+    blockers, review, pending = _classify_delivery_items([unproven, residual, business])
+    assert blockers == [residual]
+    assert review == [unproven]
+    assert pending == [business]
+    assert _delivery_complete([unproven, business], policy="review_assisted") is True
+    assert _delivery_complete([unproven, residual], policy="review_assisted") is False
+
+
+def test_delivery_gate_blocks_claim_failure_open_obligations_only():
+    """A Claim Replay failure blocks; an unfinished audit stays a review item."""
+    from types import SimpleNamespace
+    from fundlex.recall_pipeline import _delivery_complete
+
+    def ledger_with(reason):
+        class OpenLedger:
+            def unresolved(self):
+                return [SimpleNamespace(
+                    obligation_id="G12:B1:O1",
+                    spec=SimpleNamespace(rule_id="G12", operation_id="G12:0",
+                                         branch_id="B1", expected_site="申购赎回"),
+                    applicability=SimpleNamespace(status="TRUE"),
+                    completion_evidence=reason,
+                    targets=(), sites=())]
+        return OpenLedger()
+
+    assert _delivery_complete([], ledger=ledger_with("CLAIM_DUPLICATE_EFFECT"),
+                              policy="review_assisted") is False
+    assert _delivery_complete([], ledger=ledger_with("AUDIT_NOT_COMPLETED"),
+                              policy="review_assisted") is True
+    assert _delivery_complete([], ledger=ledger_with("AUDIT_NOT_COMPLETED"),
+                              policy="strict") is False
+
+
+def test_delivery_gate_blocks_failed_claim_replay_and_final_omission():
+    """Independent proof failures block even when review_assisted has no other item."""
+    from fundlex.recall_pipeline import _classify_delivery_items, _delivery_complete
+
+    replay_failure = {"kind": "claim_replay", "claim_replay_failed": True,
+                      "code": "CLAIM_DUPLICATE_EFFECT", "rule_id": "G12",
+                      "operation_id": "G12:0", "location": "p230"}
+    omission = {"kind": "final_omission", "code": "FINAL_OPERATION_UNPROVEN",
+                "rule_id": "G12", "operation_id": "G12:0", "location": "p230"}
+    review_only = {"kind": "final_omission", "code": "FINAL_COVERAGE_UNRESOLVED",
+                   "rule_id": "G05", "operation_id": "", "location": "p7",
+                   "reason": "unresolved:AUDIT_NOT_COMPLETED"}
+    blockers, review, pending = _classify_delivery_items(
+        [replay_failure, omission, review_only])
+    assert blockers == [replay_failure, omission]
+    assert review == [review_only] and pending == []
+    assert _delivery_complete([], policy="review_assisted",
+                              claim_replay_verified=False) is False
+    assert _delivery_complete([], policy="review_assisted",
+                              final_omission_blocking=True) is False
+    assert _delivery_complete([], policy="review_assisted",
+                              claim_replay_verified=True,
+                              final_omission_blocking=False) is True
+
+
+def test_report_markdown_lists_each_change_with_before_after_and_guide(tmp_path):
+    """The per-contract report must show what changed, from what to what, and why."""
+    from fundlex.recall_pipeline import _write_report_markdown
+
+    report = {
+        "engine_id": "recall_first", "engine_version": "0.1.1", "schema_version": "3",
+        "execution_mode": "delivery", "source_sha256": "abc",
+        "guide": {"document_sha256": "def", "groups": [{
+            "rule_id": "G05", "title": "份额类别设置",
+            "requirement": "把调低赎回费率改为调低销售服务费率"}]},
+        "delivery_status": "complete",
+        "plan": {"count": 1, "edits": [{
+            "rule_id": "G05", "location": "p159", "operation": "replace",
+            "expected_old_text": "调低赎回费率", "replacement": "调低销售服务费率",
+            "obligation_ids": ["G05:B1:O1"]}]},
+        "targets": [],
+        "artifact_claim_replay": {"obligations": {
+            "G05:B1:O1": {"state": "PASS", "artifact_status": "EXPECTED_EFFECT_PRESENT"}}},
+        "unresolved": [],
+    }
+    path = tmp_path / "report.md"
+    _write_report_markdown(path, report)
+    text = path.read_text(encoding="utf-8")
+    assert "## 一、逐处修改" in text
+    assert "G05 份额类别设置" in text
+    assert "指引要求：把调低赎回费率改为调低销售服务费率" in text
+    assert "修改前：「调低赎回费率」" in text
+    assert "修改后：「调低销售服务费率」" in text
+    assert "已证明（EXPECTED_EFFECT_PRESENT）" in text
+
+
+def test_worker_markdown_uses_pipeline_change_detail():
+    """The downloaded report_md must be the rich per-change report, not the stub."""
+    from fundlex.jobs import Worker
+
+    report = {
+        "plan": {"edits": [{"rule_id": "G05", "location": "p1", "operation": "replace",
+                            "expected_old_text": "旧句", "replacement": "新句"}]},
+        "guide": {"groups": [{"rule_id": "G05", "title": "测试规则",
+                              "requirement": "把旧句改成新句"}]},
+        "delivery_status": "complete",
+    }
+    text = Worker._markdown(report)
+    assert "## 一、逐处修改" in text
+    assert "修改前：「旧句」" in text
+    assert "修改后：「新句」" in text
 
 
 def test_collect_targets_keeps_append_after_absent_inventory(tmp_path: Path):
@@ -1237,8 +1369,8 @@ def test_report_carries_obligation_ledger_and_delivery_gate(tmp_path: Path):
     assert len(g05["branch_ids"]) == 3  # true / false / unconditional
 
 
-def test_scoped_obligation_without_target_blocks_complete(tmp_path: Path):
-    """Applicable + no target must be an OPEN_OBLIGATION, never a silent complete."""
+def test_scoped_obligation_without_target_is_a_review_item(tmp_path: Path):
+    """Applicable + no target must be visible in the review list, never a silent pass."""
     from fundlex.model import ModelResult
 
     custom_rule = {
@@ -1258,7 +1390,7 @@ def test_scoped_obligation_without_target_blocks_complete(tmp_path: Path):
     responses = base_responses(recall_scope=only_g99_scope)
     _, output_dir, _, report = run(tmp_path, responses,
                                    guide=guide_document([custom_rule]))
-    assert report["delivery_status"] in {"incomplete", "not_generated"}
+    assert report["delivery_status"] in {"complete", "not_generated"}
     assert report["delivery_gate"]["open_obligations"] >= 1
     open_items = [item for item in report["unresolved"]
                   if item.get("rule_id") == "G99"
@@ -1267,10 +1399,9 @@ def test_scoped_obligation_without_target_blocks_complete(tmp_path: Path):
                        or item.get("kind") in {"target", "claim_replay"})]
     assert open_items
     assert open_items[0]["rule_id"] == "G99"
-    # Open-rule T3 is opt-in; the target/plan failure is still explicit.
+    # The missing target is delivered as an explicit review item, not hidden.
+    assert any(item.get("rule_id") == "G99" for item in report.get("review_items") or [])
     assert report.get("unresolved")
-    # No final deliverable may be published for an open obligation.
-    assert "final.docx" not in docx_names(output_dir)
 
 
 def test_registry_mode_replays_claims_against_the_written_artifact(tmp_path: Path,
@@ -1283,3 +1414,31 @@ def test_registry_mode_replays_claims_against_the_written_artifact(tmp_path: Pat
     assert replay["checked"] >= 1
     assert report["delivery_status"] == "complete"
     assert report["delivery_gate"]["open_obligations"] == 0
+
+
+def test_claim_site_repair_respects_rule_scope():
+    """A duplicate outside the rule's mapped sections is not a repair site."""
+    from types import SimpleNamespace
+
+    from fundlex.targeting import target_for_claim_site
+
+    record = SimpleNamespace(spec=SimpleNamespace(rule_id="G02", operation_id="G02:0"))
+    assert target_for_claim_site(record, "p169", [], {}, None, None,
+                                 allowed_locations={"p120"}) is None
+
+
+def test_report_markdown_shows_failure_reason(tmp_path):
+    from fundlex.recall_pipeline import _write_report_markdown
+
+    report = {
+        "engine_id": "recall_first", "engine_version": "0.1.1", "schema_version": "3",
+        "execution_mode": "delivery", "source_sha256": "abc",
+        "guide": {"document_sha256": "def", "groups": []},
+        "delivery_status": "not_generated",
+        "errors": [{"code": "EXISTING_REVISION_UNSUPPORTED", "stage": "inspect"}],
+        "plan": {"edits": []}, "unresolved": [],
+    }
+    path = tmp_path / "report.md"
+    _write_report_markdown(path, report)
+    text = path.read_text(encoding="utf-8")
+    assert "失败原因：文件包含未接受的修订痕迹" in text

@@ -129,6 +129,16 @@ def test_g11_clean_clause_replaced_deterministically():
     assert result.replacement == policy
 
 
+def test_g10_single_class_clause_replaced_deterministically():
+    before = "申购费用由投资者承担，不列入基金财产。"
+    policy = ("通过直销机构申购本基金不收取申购费，通过其他销售机构申购本基金的"
+              "申购费用由投资人承担，不列入基金财产。")
+    result = plan_policy_replacement(before, policy, "G10")
+    assert result is not None
+    assert result.content_source == "tier1_template"
+    assert result.replacement == policy
+
+
 def test_g14_extended_clause_adds_missing_item():
     """Plan P1: an extended clause (list followed by more content) still gains the
     item the guide adds for multi-class products."""

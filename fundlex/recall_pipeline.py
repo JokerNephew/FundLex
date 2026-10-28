@@ -39,21 +39,34 @@ from .recall import (BOUNDARY_POLICY, ENGINE_ID, ENGINE_VERSION, SCHEMA_VERSION,
                      containing_segment, content_check_factory, display_text,
                      extract_facts, inventory_window, plan_edits, plan_windows,
                      condition_matches, condition_status, find_old_text_all, fuzzy_span, instantiate_slots,
-                     resolve_old_text, resolve_quote, rule_context, scope_map,
-                     structure_index, survey_targets, compact_offsets,
-                     append_applicability_targets, is_delete_only_rule, Section,
+                      resolve_old_text, resolve_quote, resolve_source_quote, rule_context, scope_map,
+                     expand_class_definition_scope, structure_index, survey_targets, compact_offsets,
+                      append_applicability_targets, is_delete_only_rule, Section,
+                      rule_scope_locations,
                      known_operations_from_targets, operations_cover_hit,
                       target_operation_keys, _add_operation_coverage,
                       assign_target_operations, duplicate_copy_targets,
                       _declared_operation_key,
-                      dedupe_operation_targets)
+                      _expand_fee_rate_reference,
+                      dedupe_operation_targets,
+                      source_parts_contiguous)
 from .recall_prompts import (AUDIT_INSTRUCTION, AUDIT_PROMPT_VERSION, AUDIT_SCHEMA,
                              PROMPT_VERSIONS, SWEEP_INSTRUCTION, SWEEP_PROMPT_VERSION,
                              SWEEP_SCHEMA)
+from .rule_scope import (RuleScope, build_leaf_sections, resolve_rule_scopes,
+                         scope_locations, scope_locations_for_window)
 
 STOP_CODES = {"MODEL_GLOBAL_CALL_BUDGET_EXCEEDED", "MODEL_COST_BUDGET_EXCEEDED",
               "MODEL_CALL_BUDGET_EXCEEDED", "MODEL_CIRCUIT_OPEN", "MODEL_LEDGER_UNAVAILABLE",
-              "MODEL_CONFIG_MISSING", "MODEL_HTTP_ERROR", "MODEL_RETRY_EXHAUSTED"}
+              "MODEL_CONFIG_MISSING", "MODEL_HTTP_ERROR", "MODEL_RETRY_EXHAUSTED",
+              "MODEL_CHECKPOINT_UNAVAILABLE", "MODEL_REPLAY_MISS", "MODEL_CASSETTE_UNAVAILABLE",
+              "MODEL_CONCURRENCY_LIMIT", "MODEL_RESERVATION_EXPIRED"}
+VERIFICATION_BLOCKED_CODES = {
+    "MODEL_GLOBAL_CALL_BUDGET_EXCEEDED", "MODEL_COST_BUDGET_EXCEEDED",
+    "MODEL_CALL_BUDGET_EXCEEDED", "MODEL_LEDGER_UNAVAILABLE",
+    "MODEL_CHECKPOINT_UNAVAILABLE", "MODEL_REPLAY_MISS",
+    "MODEL_CASSETTE_UNAVAILABLE",
+}
 
 # Global exclusions (product rulings 2026-10-19/20: ETF / money-market / interbank-CD /
 # REITs (including closed-end commercial real estate) stay out of the modification scope;
@@ -102,8 +115,9 @@ def _default_gateway() -> Any:
 class RecallPipelineStop(RuntimeError):
     """Recoverable model/transport stop: the worker pauses and resumes later."""
 
-    def __init__(self, code: str, detail: dict | None = None):
+    def __init__(self, code: str, detail: dict | None = None, *, report: dict | None = None):
         self.code, self.detail = code, detail or {}
+        self.report = report
         super().__init__(code)
 
 
@@ -182,7 +196,9 @@ class _WindowState:
 
 
 def _inventory(entry: _WindowState, note: str | None, facts: Facts, model: Any,
-               inspection: DocumentInspection, *, round_number: int) -> None:
+               inspection: DocumentInspection, *, round_number: int,
+               rule_locations: Mapping[str, Sequence[str]] | None = None,
+               scope_audit: dict[str, Any] | None = None) -> None:
     """Inventory one window, optionally carrying a repair note for the model."""
     window = entry.window
     if note:
@@ -200,7 +216,9 @@ def _inventory(entry: _WindowState, note: str | None, facts: Facts, model: Any,
 
     def _run(source: Window) -> tuple[list[Target], list[dict[str, Any]]]:
         try:
-            targets, ledger = inventory_window(source, entry.rules, facts, model, inspection)
+            targets, ledger = inventory_window(
+                source, entry.rules, facts, model, inspection,
+                rule_locations=rule_locations)
             return list(targets), [ledger]
         except ModelError as exc:
             # A provider can return a syntactically incomplete inventory even when the
@@ -243,6 +261,15 @@ def _inventory(entry: _WindowState, note: str | None, facts: Facts, model: Any,
     for ledger in ledgers:
         entry.ledgers.append({**ledger, "round": round_number,
                               "repair_context": _clip(note, MAX_REPAIR_NOTE_CHARS) if note else None})
+        if scope_audit is None:
+            continue
+        for dropped in ledger.get("dropped") or []:
+            if dropped.get("reason") != "INVENTORY_ITEM_OUT_OF_RULE_SCOPE":
+                continue
+            item = dropped.get("item") or {}
+            _record_scope_drop(scope_audit, stage="inventory",
+                               rule_id=str(item.get("rule_id") or ""),
+                               location=str(item.get("location") or ""))
 
 
 def _window_ledger(entry: _WindowState) -> dict[str, Any]:
@@ -312,26 +339,38 @@ def _scope_mapping_ledger(mapping: dict[str, list[str]], sections: Sequence[Any]
 
 def _rule_evidence(mapping: dict[str, list[str]], sections: Sequence[Section],
                    inspection: DocumentInspection, rule_ids: set[str],
-                   *, limit: int = 9000) -> dict[str, str]:
-    """Section text for applicability recovery, one bounded string per rule."""
+                   *, limit: int = 9000,
+                   scopes: Mapping[str, Any] | None = None) -> dict[str, str]:
+    """Section or rule-scope text for applicability recovery, one bounded string per rule."""
     if not rule_ids:
         return {}
     by_id = {section.id: section for section in sections}
+
+    def _order(location: str) -> tuple[str, int, str]:
+        match = re.match(r"^([A-Za-z]*)(\d+)$", str(location))
+        return (match.group(1), int(match.group(2)), "") if match else (str(location), -1, "")
+
     evidence: dict[str, str] = {}
     for rule_id in rule_ids:
         parts: list[str] = []
-        for section_id in mapping.get(rule_id) or []:
-            section = by_id.get(section_id)
-            if section is None:
+        if scopes is not None:
+            # A rule may only be judged from the physical paragraphs in its own scope;
+            # a sibling clause in the mapped chapter is not evidence for this rule.
+            scope = scopes.get(rule_id)
+            locations = sorted(getattr(scope, "locations", ()) or (), key=_order) \
+                if scope is not None else []
+        else:
+            locations = [location for section_id in mapping.get(rule_id) or []
+                         if (section := by_id.get(section_id)) is not None
+                         for location in section.locations]
+        for location in locations:
+            try:
+                span = inspection.by_location(location)
+            except DocxError:
                 continue
-            for location in section.locations:
-                try:
-                    span = inspection.by_location(location)
-                except DocxError:
-                    continue
-                text, _ = display_text(span.text)
-                if text.strip():
-                    parts.append(f"[{location}] {text}")
+            text, _ = display_text(span.text)
+            if text.strip():
+                parts.append(f"[{location}] {text}")
             if sum(len(part) for part in parts) >= limit:
                 break
         if parts:
@@ -862,6 +901,12 @@ def _operation_fingerprints(reference: str) -> list[str]:
     """
     compact = _compact(reference)
     candidates: list[str] = [compact]
+    # G14 contracts often repeat the noun before each fee item
+    # ("基金申购费率、基金赎回费率和转换费率").  The repeated noun does not change
+    # the policy, but an exact document search needs the expanded form.
+    expanded = _expand_fee_rate_reference(compact)
+    if expanded != compact and expanded not in candidates:
+        candidates.append(expanded)
     for separator in ("。", "；", "，", "、"):  # noqa: B007 - ordered by strength
         head, _, _tail = compact.partition(separator)
         if 4 <= len(head) < len(compact) and head not in candidates:
@@ -874,6 +919,131 @@ def _target_locations(target: Target) -> list[str]:
     if target.composite:
         return [part.rsplit(":", 2)[0] for part in target.composite]
     return [target.location]
+
+
+# ---------------------------------------------------------------------------
+# Rule scope gate (plan/audit)
+# ---------------------------------------------------------------------------
+
+SCOPE_DROP_CODE = "OUT_OF_RULE_SCOPE"
+# Rules whose guide policy names one fee clause. A compact contract may carry the
+# whole 基金费用与税收 chapter as one leaf with no numbered subheading; there the
+# mapped section's single leaf IS the physical site, and the widest accepted
+# fallback stays the mapped section (never the document). The leaf text must still
+# carry the rule's business anchor.
+_FEE_SCOPE_RULES = frozenset({"G15", "G16", "G17"})
+
+
+def _apply_single_leaf_fee_fallback(scopes: dict[str, Any], sections: Sequence[Any],
+                                    inspection: DocumentInspection,
+                                    mapping: Mapping[str, Sequence[str]]) -> dict[str, Any]:
+    """Give G15-G17 their mapped section's sole fee leaf when no subheading exists.
+
+    ``rule_scope._resolve_fee_tax`` resolves only a leaf whose title names
+    销售服务费.  A compact contract with no subsection headings would otherwise be
+    unresolved for every fee rule even though its single mapped leaf contains the
+    clause.  The widening stays bounded to that one leaf and requires the business
+    anchor in its own text, so sibling clauses of a structured chapter can never be
+    admitted.
+    """
+    pending = [rule_id for rule_id, scope in scopes.items()
+               if rule_id in _FEE_SCOPE_RULES
+               and getattr(scope, "resolution", "") == "unresolved"
+               and not getattr(scope, "locations", ())]
+    if not pending:
+        return scopes
+    leaves = build_leaf_sections(inspection, sections)
+    span_map = {str(getattr(span, "location", "")): span
+                for span in getattr(inspection, "paragraphs", ())}
+    for rule_id in pending:
+        mapped = {str(section_id) for section_id in (mapping.get(rule_id) or ())}
+        body_leaves = [leaf for leaf in leaves
+                       if leaf.parent_section_id in mapped and leaf.zone == "body"]
+        if len(body_leaves) != 1:
+            continue
+        leaf = body_leaves[0]
+        text = "".join(_compact(str(getattr(span_map[location], "text", "")))
+                       for location in leaf.locations if location in span_map)
+        if "销售服务费" not in text:
+            continue
+        scopes[rule_id] = RuleScope(
+            rule_id=rule_id, leaf_ids=frozenset({leaf.id}),
+            locations=frozenset(leaf.locations), zone="body",
+            include_summary_copies=False, copy_keys=frozenset({"销售服务费"}),
+            resolution="section_fallback",
+            evidence=(*scopes[rule_id].evidence, "fallback=single_leaf_mapped_fee_section",
+                      f"leaf={leaf.id}:{leaf.title[:36]}"))
+    return scopes
+
+
+def _scope_audit_ledger(scopes: Mapping[str, Any]) -> dict[str, Any]:
+    """Report projection of every resolved rule scope, for business review."""
+    resolved = {str(rule_id): scope for rule_id, scope in (scopes or {}).items()}
+    return {
+        "rules": [scope.as_dict() for scope in resolved.values()],
+        "unresolved_rules": sorted(rule_id for rule_id, scope in resolved.items()
+                                   if scope.resolution == "unresolved"
+                                   or not scope.locations),
+        "dropped": [],
+        "dropped_counts": {},
+    }
+
+
+def _record_scope_drop(audit: dict[str, Any] | None, *, stage: str, rule_id: str,
+                       location: str, reason: str = SCOPE_DROP_CODE) -> None:
+    """Record one out-of-scope candidate without letting the sample list grow unbounded."""
+    if audit is None:
+        return
+    counts = audit.setdefault("dropped_counts", {})
+    key = f"{stage}:{reason}:{rule_id}"
+    seen = int(counts.get(key, 0))
+    counts[key] = seen + 1
+    if seen < 50:
+        audit.setdefault("dropped", []).append(
+            {"stage": stage, "code": reason, "rule_id": rule_id, "location": location})
+
+
+def _scope_id_for(target: Target, scope: Any) -> str:
+    leaves = "+".join(sorted(getattr(scope, "leaf_ids", ()) or ()))
+    return f"{target.rule_id}:{leaves}" if leaves else f"{target.rule_id}@{target.location}"
+
+
+def _target_scope_ok(target: Target, scopes: Mapping[str, Any] | None
+                     ) -> tuple[bool, Any]:
+    """Whether every physical location of ``target`` is inside its rule's scope."""
+    if scopes is None:
+        return True, None
+    scope = scopes.get(str(target.rule_id))
+    if scope is None or getattr(scope, "resolution", "") == "unresolved":
+        return False, scope
+    locations = _target_locations(target)
+    if not locations or not getattr(scope, "locations", ()):
+        return False, scope
+    return all(scope.contains(location) for location in locations), scope
+
+
+def _apply_scope_gate(targets: Sequence[Target], scopes: Mapping[str, Any] | None,
+                      audit: dict[str, Any] | None = None, *, stage: str = "plan"
+                      ) -> list[Target]:
+    """Mark every target outside its rule's physical scope and stamp the scope id.
+
+    An out-of-scope target is never handed to the planner or the audit; it keeps its
+    ledger row (``out_of_scope`` + reason) so the drop is visible instead of silent.
+    """
+    if scopes is None:
+        return list(targets)
+    for target in targets:
+        ok, scope = _target_scope_ok(target, scopes)
+        if not ok:
+            if not target.out_of_scope:
+                target.out_of_scope = True
+                target.reason = f"{target.reason}|RECALL_TARGET_OUT_OF_SCOPE"
+                _record_scope_drop(audit, stage=stage, rule_id=str(target.rule_id),
+                                   location=target.location)
+            continue
+        if not target.scope_id:
+            target.scope_id = _scope_id_for(target, scope)
+    return list(targets)
 
 
 def _composite_parts_gone(target: Target, original: DocumentInspection,
@@ -916,8 +1086,16 @@ def _run_survey(model: Any, rules: Sequence[dict], rules_by_id: dict[str, dict],
                 inspection: DocumentInspection, targets: Sequence[Target],
                 synthetic: list[Target], origins: dict[str, str], ledger: list[dict[str, Any]],
                 gaps: list[dict[str, Any]],
-                sections: Sequence[Section] = ()) -> list[SurveyHit]:
+                sections: Sequence[Section] = (), *,
+                mapping: Mapping[str, Sequence[str]] | None = None,
+                scopes: Mapping[str, Any] | None = None) -> list[SurveyHit]:
     """Code-driven coverage pass: find rule targets the model inventory never reported."""
+    # RuleScope is the single source of truth for "where may this rule look".  The
+    # section-level projection remains only as a compatibility fallback for callers
+    # that do not have a resolved scope set yet.
+    allowed_locations = (scope_locations(scopes) if scopes is not None
+                         else (rule_scope_locations(sections, mapping)
+                               if mapping is not None else None))
     known = known_operations_from_targets([*targets, *synthetic], rules_by_id, inspection)
     # A delete rule the inventory judged "absent" or left unresolved is exactly the
     # not-applicable call this pass exists to correct: the model recorded a target at the
@@ -932,7 +1110,8 @@ def _run_survey(model: Any, rules: Sequence[dict], rules_by_id: dict[str, dict],
     # different copy of the same clause (D01 p758 vs p1221). Coverage is tracked per
     # (rule, location) by ``known``, so every delete rule may override here.
     override_rules = frozenset(delete_rules)
-    hits = survey_targets(inspection, rules, facts, known=known, override_rules=override_rules)
+    hits = survey_targets(inspection, rules, facts, known=known, override_rules=override_rules,
+                          allowed_locations=allowed_locations)
     # Append rules have no reference anchor, so the survey above cannot see them.
     # Add the deterministic append pass so a conditional append the model inventory
     # wrongly called not_applicable still gets an executable target (FL-D060/090).
@@ -952,14 +1131,72 @@ def _run_survey(model: Any, rules: Sequence[dict], rules_by_id: dict[str, dict],
             continue
         if target.location and target.rule_id not in hinted:
             hinted[target.rule_id] = target.location
-    append_hits = append_applicability_targets(inspection, rules, facts, sections,
-                                               known=editable_known, hinted=hinted)
+    append_hits = append_applicability_targets(
+        inspection, rules, facts, sections, known=editable_known, hinted=hinted,
+        allowed_locations=allowed_locations)
     hits.extend(append_hits)
     satisfied = [hit for hit in hits if hit.operation == "satisfied"]
     for hit in satisfied:
+        # ``SurveyHit.quote`` is a matched excerpt in compact/display text.  A
+        # satisfied target still needs the same source binding as an editable
+        # target: Claim Replay proves an unchanged policy at this physical site,
+        # never at an arbitrary paragraph carrying the operation key.  Keep the
+        # target out of coverage when the excerpt cannot be resolved.
+        hit_parts = hit.parts
+        location = hit_parts[0][0] if hit_parts else hit.locations[0]
+        try:
+            span = inspection.by_location(location)
+        except DocxError:
+            gaps.append({"code": "SURVEY_LOCATION_MISSING", "rule_id": hit.rule_id,
+                         "location": location, "quote": _clip(hit.quote, 80)})
+            continue
+        located = resolve_source_quote(span, hit.quote)
+        if located is None and hit.operation == "satisfied":
+            # The semantic survey may return a short policy excerpt (for example
+            # the first 12 characters around a fee marker), while source proof
+            # must use a complete physical sentence.  Expand that unique excerpt
+            # to its sentence boundaries here; resolve_source_quote itself stays
+            # strict and continues to reject sentence prefixes.
+            excerpt = resolve_quote(span, hit.quote)
+            if excerpt is not None:
+                normalize = lambda value: re.sub(r"[\s\u200b\ufeff]+", "", value)
+                needle = normalize(hit.quote)
+                body = normalize(str(span.text))
+                first = body.find(needle) if needle else -1
+                if (first < 0 or body.find(needle, first + 1) >= 0
+                        or normalize(str(span.text)[excerpt[0]:excerpt[1]]) != needle):
+                    excerpt = None
+            if excerpt is not None:
+                start, end = excerpt
+                text = str(span.text)
+                while start > 0 and text[start - 1] not in "。；;！？!?":
+                    start -= 1
+                terminal = re.search(r"[。；;！？!?]", text[end:])
+                end = end + terminal.end() if terminal else len(text)
+                candidate = text[start:end]
+                located = resolve_source_quote(span, candidate)
+        if located is None and hit.operation == "satisfied":
+            # Class-substitution survey proofs are often intentionally concise
+            # (for example ``F类基金份额``), while the same class label can occur
+            # several times in one paragraph.  The short proof is still useful
+            # because ``satisfied_by_new_text`` already established that the
+            # complete replacement policy is present.  Bind the whole physical
+            # paragraph as the smallest unambiguous source site instead of
+            # turning an already satisfied policy into a blocking orphan gap.
+            paragraph_quote = str(span.text or "")
+            if (hit.rule_id in {"G02", "G04"}
+                    and paragraph_quote.strip()
+                    and resolve_source_quote(span, paragraph_quote) is not None):
+                located = (0, len(paragraph_quote))
+        if located is None:
+            gaps.append({"code": "SURVEY_QUOTE_UNRESOLVED", "rule_id": hit.rule_id,
+                         "location": location, "quote": _clip(hit.quote, 80)})
+            continue
         target_id = f"Y{len(synthetic) + len(hits) + 1:03d}"
-        target = Target(target_id=target_id, rule_id=hit.rule_id, location=hit.locations[0],
-                        quote=hit.quote, state="satisfied", reason="survey_new_text_present",
+        target = Target(target_id=target_id, rule_id=hit.rule_id, location=location,
+                        quote=span.text[located[0]:located[1]], state="satisfied", reason="survey_new_text_present",
+                        start=located[0], end=located[1], resolution="resolved",
+                        segment_ok=containing_segment(span, *located) is not None,
                         operations=hit.operation_keys)
         synthetic.append(target)
         origins[target_id] = "survey_satisfied"
@@ -980,6 +1217,117 @@ def _run_survey(model: Any, rules: Sequence[dict], rules_by_id: dict[str, dict],
     return hits
 
 
+
+
+_SPLIT_CLAUSE_TERMINATORS = "。；！？!?;."
+
+
+def _adjacent_paragraphs(inspection: DocumentInspection, location: str):
+    paragraphs = inspection.paragraphs
+    for index, span in enumerate(paragraphs):
+        if span.location == location:
+            return (paragraphs[index - 1] if index > 0 else None,
+                    paragraphs[index + 1] if index + 1 < len(paragraphs) else None)
+    return (None, None)
+
+
+def _trim_split_quote_prefix(target: Target, current,
+                             inspection: DocumentInspection) -> dict[str, Any] | None:
+    """Trim the half of a quote that lives in the preceding split paragraph.
+
+    The inventory may reconstruct ``在投资`` + ``者申购…`` as one quote while
+    placing it on the second paragraph.  The strict resolver then fails because
+    the reconstructed prefix is not in that physical paragraph.  Keep only the
+    remainder that is actually at the start of the current paragraph, require it
+    to be unique and to resolve to a complete boundary there, and leave the
+    paragraph location unchanged.  The preceding paragraph must itself be an
+    unterminated split, same zone and section.
+    """
+    previous, _following = _adjacent_paragraphs(inspection, target.location)
+    if previous is None or previous.zone != current.zone:
+        return None
+    if previous.section_path != current.section_path:
+        return None
+    previous_text = str(previous.text)
+    if previous_text.rstrip().endswith(tuple(_SPLIT_CLAUSE_TERMINATORS)):
+        return None
+    quote = compact_offsets(target.quote)[0]
+    previous_compact = compact_offsets(previous_text)[0]
+    current_compact, current_positions = compact_offsets(str(current.text))
+    if not quote or not previous_compact or not current_compact:
+        return None
+    for cut in range(1, len(quote)):
+        prefix, remainder = quote[:cut], quote[cut:]
+        if len(remainder) < 8:
+            break
+        if not previous_compact.endswith(prefix):
+            continue
+        if not current_compact.startswith(remainder):
+            continue
+        if current_compact.count(remainder) != 1:
+            continue
+        start = current_positions[0]
+        end = current_positions[len(remainder) - 1] + 1
+        candidate = str(current.text)[start:end]
+        bound = resolve_source_quote(current, candidate)
+        if bound is None:
+            continue
+        target.quote = candidate
+        target.start, target.end = bound
+        target.segment_ok = containing_segment(current, *bound) is not None
+        target.resolution = "resolved"
+        target.reason = f"{target.reason}|rebind:split_quote_prefix"
+        return {"location": current.location, "start": bound[0], "end": bound[1]}
+    return None
+
+
+def _rebind_split_satisfied_target(target: Target, inspection: DocumentInspection
+                                   ) -> dict[str, Any] | None:
+    """Bind a satisfied quote that the inventory placed on the wrong side of a split.
+
+    D04 G04 reports ``A 类基金份额`` at the paragraph that ends mid-sentence
+    (``在投资``); the definition continues in the next paragraph. The target is
+    satisfied (no edit), but its audit evidence cannot be verified because the
+    quote is not in that physical paragraph. Rebind only when the current
+    paragraph is an unterminated split and the quote occurs exactly once in
+    exactly one adjacent paragraph of the same zone and section. Never search
+    further, never pick the first of several occurrences, and never alter a
+    needs_edit target's write site.
+    """
+    if (target.state != "satisfied" or target.resolution != "quote_not_found"
+            or not target.quote):
+        return None
+    try:
+        current = inspection.by_location(target.location)
+    except (KeyError, DocxError):
+        return None
+    text = str(current.text)
+    if not text.strip() or text.rstrip().endswith(tuple(_SPLIT_CLAUSE_TERMINATORS)):
+        return None
+    previous, following = _adjacent_paragraphs(inspection, target.location)
+    candidates = []
+    for span in (previous, following):
+        if span is None or span.zone != current.zone:
+            continue
+        if span.section_path != current.section_path:
+            continue
+        compact_text = compact_offsets(str(span.text))[0]
+        compact_quote = compact_offsets(target.quote)[0]
+        if not compact_quote or compact_text.count(compact_quote) != 1:
+            continue
+        located = resolve_quote(span, target.quote)
+        if located is None:
+            continue
+        candidates.append((span, located))
+    if len(candidates) != 1:
+        return None
+    span, (start, end) = candidates[0]
+    target.location = span.location
+    target.start, target.end = start, end
+    target.segment_ok = containing_segment(span, start, end) is not None
+    target.resolution = "resolved"
+    target.reason = f"{target.reason}|rebind:split_paragraph"
+    return {"location": span.location, "start": start, "end": end}
 
 
 def _rebind_unresolved_targets(targets: Sequence[Target], origins: dict[str, str],
@@ -1006,6 +1354,20 @@ def _rebind_unresolved_targets(targets: Sequence[Target], origins: dict[str, str
     paragraphs = [span for span in inspection.paragraphs if span.text.strip()]
     records: list[dict[str, Any]] = []
     for target in targets:
+        if target.state == "satisfied" and target.resolution == "quote_not_found":
+            split = _rebind_split_satisfied_target(target, inspection)
+            if split is None:
+                try:
+                    current = inspection.by_location(target.location)
+                except (KeyError, DocxError):
+                    current = None
+                if current is not None:
+                    split = _trim_split_quote_prefix(target, current, inspection)
+            if split is not None:
+                origins[target.target_id] = "rebind_split_paragraph"
+                records.append({"target_id": target.target_id, "rule_id": target.rule_id,
+                                "source": "split_paragraph", **split})
+            continue
         if target.state != "needs_edit":
             continue
         if target.resolution == "composite":
@@ -1130,6 +1492,8 @@ def _clause_continuation_binding(target: Target, rule: dict, inspection: Documen
     follower = paragraphs[index + 1]
     if not follower.text.strip():
         return None
+    if not source_parts_contiguous(inspection, [span.location, follower.location]):
+        return None
     follower_compact, _fmap = compact_offsets(follower.text)
     parts = [(span.location, 0, len(compact_body)),
              (follower.location, 0, len(follower_compact))]
@@ -1164,7 +1528,9 @@ def _plan_and_generate(model: Any, rules_by_id: dict[str, dict], targets: Sequen
                        temp_dir: Path, *, max_compose_calls: int,
                        obligations: Any = None, existing_plan: dict | None = None,
                        dirty_locations: set[str] | None = None,
-                       frozen_run: Any = None
+                       frozen_run: Any = None,
+                       scopes: Mapping[str, Any] | None = None,
+                       scope_audit: dict[str, Any] | None = None
                        ) -> tuple[dict[str, Any], list[dict[str, Any]], Any, Any, DocumentInspection]:
     """Plan from the ORIGINAL inspection, validate, generate and re-read the final."""
     from .recall import (append_site_ok, duplicate_copy_targets,
@@ -1172,13 +1538,17 @@ def _plan_and_generate(model: Any, rules_by_id: dict[str, dict], targets: Sequen
                          rebind_g16_clause_targets, rebind_split_append_targets,
                          guard_g17_deletes_against_g16,
                          g15_delay_continuation_targets)
+    # Final scope gate: no target outside its rule's physical scope may reach the
+    # planner.  Out-of-scope targets keep a ledger row but are never planned.
+    _apply_scope_gate(targets, scopes, scope_audit, stage="plan")
     # Final exact-copy closure immediately before planning. Survey/rebind can add a
     # source target after the earlier passes; an uneditable body/summary copy must not
     # survive merely because of that ordering (D01 p758/p1221 G15). G16 must first be
     # bound to its clause end, otherwise an identical payment head can borrow the
     # operation from a different physical clause (D20 p804/p806 vs p1259).
     rebind_g16_clause_targets(targets, inspection)
-    for copy in duplicate_copy_targets(targets, rules_by_id, inspection):
+    for copy in duplicate_copy_targets(targets, rules_by_id, inspection,
+                                       scopes=scopes):
         for old in targets:
             if old is not copy and old.rule_id == copy.rule_id \
                     and old.location == copy.location \
@@ -1189,6 +1559,16 @@ def _plan_and_generate(model: Any, rules_by_id: dict[str, dict], targets: Sequen
     targets.extend(g15_delay_continuation_targets(targets, rules_by_id, inspection))
     ensure_unique_target_ids(targets)
     rebind_split_append_targets(targets, inspection)
+    # Build one code-verified approval per attributable target.  Every later stage
+    # (site guard, planner, effect proof, Claim Replay) consumes this record, so a
+    # rule-specific word list cannot reject a target whose source, operation
+    # identity, guide version and physical scope were already verified.  A raw
+    # inventory claim never becomes an approval by itself (R01-R03).
+    from .recall import approval_book_for
+    approvals = approval_book_for(rules_by_id, targets, inspection)
+    if scope_audit is not None:
+        scope_audit["approvals"] = {"count": len(approvals),
+                                    "ids": [item.approval_id for item in approvals.values()]}
     for target in targets:
         if (target.state == "needs_edit" and not target.out_of_scope
                 and target.resolution in {"resolved", "composite"}):
@@ -1223,12 +1603,31 @@ def _plan_and_generate(model: Any, rules_by_id: dict[str, dict], targets: Sequen
             site_ok = (append_site_ok(target.rule_id, span, inspection)
                        if append_rule
                        else target_site_ok(target.rule_id, span, inspection))
+            if (not site_ok and target.rule_id == "G16"
+                    and target.state == "needs_edit"
+                    and "G16_PARTIAL_CLAUSE" in str(target.reason or "")):
+                # A partial G16 tail is intentionally not an append anchor; the
+                # planner replaces that tail with the complete instantiated clause.
+                # Keep it actionable instead of marking it target-source mismatch.
+                site_ok = True
+            if not site_ok:
+                check = approvals.allows(target, inspection)
+                if check.ok:
+                    # The model's site selection was already verified against the
+                    # real quote, the operation identity and the physical scope.
+                    # A different keyword bag is a recall fast path, not a second
+                    # semantic trial (弘利 G17 "可用于", FL-D394/R01).
+                    site_ok = True
+                    target.reason = f"{target.reason}|SITE_GUARD_WAIVED_BY_APPROVAL"
             if not site_ok:
                 target.out_of_scope = True
                 target.reason = f"{target.reason}|TARGET_SOURCE_MISMATCH"
     # Locators and split-definition recovery run after the early dedupe passes.
     # Reconcile their final source bindings before they become plan/replay claims.
     dedupe_operation_targets(targets, rules_by_id, inspection)
+    # Recovery passes above may append targets (delay continuations, copies); re-run
+    # the scope gate immediately before planning so none of them can widen the scope.
+    _apply_scope_gate(targets, scopes, scope_audit, stage="plan")
     if existing_plan is None or dirty_locations:
         if frozen_run is not None:
             frozen_run.boundary("plan", {"targets": [target.as_dict() for target in targets],
@@ -1255,10 +1654,12 @@ def _plan_and_generate(model: Any, rules_by_id: dict[str, dict], targets: Sequen
                     planned = plan_edits(
                         rules_by_id, targets, inspection, facts, model,
                         max_compose_calls=max_compose_calls, obligations=obligations,
-                        reuse_edits=existing_plan.get("edits") or ())
+                        reuse_edits=existing_plan.get("edits") or (),
+                        approvals=approvals)
         else:
             planned = plan_edits(rules_by_id, targets, inspection, facts, model,
-                                 max_compose_calls=max_compose_calls, obligations=obligations)
+                                 max_compose_calls=max_compose_calls,
+                                 obligations=obligations, approvals=approvals)
     else:
         from copy import deepcopy
         planned = deepcopy(existing_plan)
@@ -1491,6 +1892,17 @@ def _quote_is_expected_effect(quote: str, record: Any, facts: Facts | None, *,
     if expected and compact in _compact(expected):
         # An exact authorized final policy is conclusive even when that policy
         # preserves the source's first sentence (G12 keeps the fee-bearer sentence).
+        return True
+    expected_compact = _compact(expected)
+    if (expected_compact and actual_text and compact in _compact(actual_text)
+            and compact.rstrip("。；;！？!?")
+            .endswith(expected_compact.rstrip("。；;！？!?"))):
+        # A sweep can quote the complete final sentence with its preserved source
+        # prefix ("某类基金份额的…") instead of the bare policy component.  The
+        # quote is present in the artifact and ends with the operation's complete
+        # instantiated policy; the caller separately requires this operation/site's
+        # effect proof.  This is not evidence that the old effect survived, and a
+        # quote with extra unauthorized text after the policy does not qualify.
         return True
     if expected and actual_text:
         from .recall import _policy_phrase_equivalent
@@ -1784,8 +2196,13 @@ def _quote_is_authorized_removal(quote: str, location: str, before_text: str,
 def _run_audit(model: Any, rules_by_id: dict[str, dict], targets: Sequence[Target],
                planned: dict[str, Any], original: DocumentInspection, actual: DocumentInspection,
                *, only_rules: set[str] | None = None, facts: Facts | None = None,
-               obligations: Any = None) -> dict[str, Any]:
+               obligations: Any = None,
+               scopes: Mapping[str, Any] | None = None,
+               scope_audit: dict[str, Any] | None = None) -> dict[str, Any]:
     plan_by_target = _plan_by_target(planned)
+    # A target outside its rule's physical scope is not audit evidence either: drop it
+    # before it can become coverage or an unresolved business finding.
+    _apply_scope_gate(targets, scopes, scope_audit, stage="audit")
     # A target the planner already judged out of scope (its rule's condition does not
     # hold, or it needs a class group / sales-service-fee wording this product cannot
     # carry) must not be re-demanded by the audit; auditing it would report a gap the
@@ -1817,7 +2234,7 @@ def _run_audit(model: Any, rules_by_id: dict[str, dict], targets: Sequence[Targe
         replay = replay_claims(planned.get("edits") or [], original, actual,
                               rules_by_id=rules_by_id, facts=facts,
                               targets_by_id={target.target_id: target.as_dict() for target in targets},
-                              obligations=obligations)
+                              obligations=obligations, scopes=scopes)
         artifact_proofs = replay["obligations"]
         artifact_failures = replay["failures"]
     auditable_by_rule = _targets_by_rule(auditable)
@@ -2167,6 +2584,17 @@ def _audit_issues(state: dict[str, Any], targets: Sequence[Target]) -> list[dict
                            "target_id": target.target_id, "location": target.location})
         elif not result.get("artifact_proven") and (
                 result["verdict"] != "completed" or not result["evidence_verified"]):
+            # A model can quote the target's old text, correctly report that it is
+            # present in BEFORE and absent in AFTER, yet still write an
+            # "incomplete" verdict.  The evidence is the deterministic proof for
+            # a removal/replacement; do not let the contradictory prose reopen an
+            # obligation that the artifact already closed.
+            evidence_quote = _compact(str(result.get("evidence_quote") or ""))
+            target_quote = _compact(target.quote)
+            if (result.get("evidence_verified") and result.get("evidence_in_before")
+                    and not result.get("evidence_in_after")
+                    and target_quote and target_quote in evidence_quote):
+                continue
             issues.append({"code": "AUDIT_NOT_COMPLETED" if result["evidence_verified"]
                            else "REVIEW_UNPROVEN", "rule_id": target.rule_id,
                            "target_id": target.target_id, "location": target.location,
@@ -2767,7 +3195,8 @@ def _sweep_requirements_for(rules: Sequence[dict], rule_ids: set[str]) -> str:
 def _window_rule_scope(chunks: Sequence[_Chunk], *, mapping: dict[str, list[str]],
                        sections: Sequence[Any], rules: Sequence[dict],
                        mandatory: set[str],
-                       blind_windows: list[dict[str, Any]] | None = None
+                       blind_windows: list[dict[str, Any]] | None = None,
+                       scopes: Mapping[str, Any] | None = None
                        ) -> list[tuple[_Chunk, set[str]]]:
     """Pair each sweep window with the guide rules that can apply inside it (FL-D109).
 
@@ -2784,7 +3213,26 @@ def _window_rule_scope(chunks: Sequence[_Chunk], *, mapping: dict[str, list[str]
       the section mapping disagree (the mapping is model-produced and can be wrong);
     * a rule whose mapped sections no window touches is attached to **every** window, so
       a mapping miss degrades to the old behaviour instead of silently skipping the rule.
+
+    When ``scopes`` (``rule_id -> RuleScope``) is supplied, a rule is attached only to a
+    window that physically overlaps its resolved scope. The section-mapping fallbacks —
+    including blind and unreachable windows — are **not** applied: those windows are
+    recorded as skipped instead of receiving rules they cannot legally judge. This keeps
+    the sweep from turning a mapping error into an out-of-scope finding.
     """
+    if scopes is not None:
+        by_rule = {str(rule_id): scope for rule_id, scope in scopes.items()}
+        scoped: list[tuple[_Chunk, set[str]]] = []
+        for chunk in chunks:
+            chunk_locations = {str(location) for location in chunk.locations}
+            ids = {rule_id for rule_id, scope in by_rule.items()
+                   if set(getattr(scope, "locations", ()) or ()) & chunk_locations}
+            if not ids and blind_windows is not None:
+                blind_windows.append({"chunk": chunk.id, "locations": list(chunk.locations),
+                                      "skipped": "OUT_OF_RULE_SCOPE"})
+            scoped.append((chunk, ids))
+        return scoped
+
     by_section = {section.id: section for section in sections}
     location_to_section: dict[str, str] = {}
     for section in sections:
@@ -2827,6 +3275,29 @@ def _window_rule_scope(chunks: Sequence[_Chunk], *, mapping: dict[str, list[str]
     return scoped
 
 
+def _sweep_scope_plan(chunks: Sequence[_Chunk], *, scopes: Mapping[str, Any] | None,
+                      mapping: dict[str, list[str]], sections: Sequence[Any],
+                      rules: Sequence[dict], mandatory: set[str],
+                      blind_windows: list[dict[str, Any]] | None
+                      ) -> tuple[list[_Chunk], dict[str, str], dict[str, set[str]]]:
+    """Window plan for the scope-aware sweep.
+
+    With ``scopes`` supplied, windows no rule is scoped into are dropped from the batch
+    (recorded in ``blind_windows``) instead of being sent the whole guide.
+    """
+    scoped = _window_rule_scope(chunks, mapping=mapping, sections=sections, rules=rules,
+                                mandatory=mandatory, blind_windows=blind_windows,
+                                scopes=scopes)
+    if scopes is None:
+        return (list(chunks),
+                {chunk.id: _sweep_requirements_for(rules, ids) for chunk, ids in scoped},
+                {chunk.id: ids for chunk, ids in scoped})
+    live = [chunk for chunk, ids in scoped if ids]
+    return (live,
+            {chunk.id: _sweep_requirements_for(rules, ids) for chunk, ids in scoped if ids},
+            {chunk.id: ids for chunk, ids in scoped if ids})
+
+
 def _scope_correction_valid(rule: dict, span: Any, quote: str,
                             actual: DocumentInspection) -> bool:
     """Scope is routing only; prove an outside candidate against its business rule."""
@@ -2850,7 +3321,9 @@ def _sweep_batch(model: Any, rules_by_id: dict[str, dict], requirements: str,
                  round_number: int, counter: list[int], facts: Facts | None = None,
                  facts_text: str = "", rule_locations: dict[str, set[str]] | None = None,
                  requirements_by_chunk: dict[str, str] | None = None,
-                 scope_by_chunk: dict[str, set[str]] | None = None
+                 scope_by_chunk: dict[str, set[str]] | None = None,
+                 scopes: Mapping[str, Any] | None = None,
+                 scope_audit: dict[str, Any] | None = None
                  ) -> dict[str, Any]:
     """Sweep every window, splitting a window whose answer hits the output cap (FL-D108).
 
@@ -2930,8 +3403,24 @@ def _sweep_batch(model: Any, rules_by_id: dict[str, dict], requirements: str,
             seen.add(key)
             rule = rules_by_id.get(rule_id) or {}
             paragraph_text = span.text if span is not None else ""
-            allowed = (rule_locations or {}).get(rule_id)
-            scope_correction = outside_window or allowed is not None and location not in allowed
+            if scopes is not None:
+                # Fail closed: a finding outside the rule's resolved physical scope is
+                # discarded, never accepted through the section-mapping correction path.
+                scope = scopes.get(rule_id)
+                if scope is None or not scope.contains(location):
+                    chunk_ledger["dropped"].append({
+                        "code": "OUT_OF_RULE_SCOPE",
+                        "subcode": "SWEEP_LOCATION_OUT_OF_SCOPE",
+                        "chunk": chunk.id, "rule_id": rule_id,
+                        "location": location, "quote": _clip(quote, 80)})
+                    _record_scope_drop(scope_audit, stage="sweep", rule_id=rule_id,
+                                       location=location)
+                    continue
+                scope_correction = False
+            else:
+                allowed = (rule_locations or {}).get(rule_id)
+                scope_correction = outside_window or (
+                    allowed is not None and location not in allowed)
             # A mapped window is not proof that the quote carries this rule's
             # business clause. Keep unknown wording candidates when the semantic
             # site anchor fits; outside-scope candidates still need the stronger
@@ -2974,22 +3463,117 @@ def _sweep_batch(model: Any, rules_by_id: dict[str, dict], requirements: str,
     return ledger
 
 
-def _delivery_complete(unresolved: Sequence[dict[str, Any]], *, ledger: Any = None) -> bool:
-    """Every reported unresolved item blocks final delivery (FL-D118).
+_DELIVERY_BLOCKER_CODES = frozenset({
+    "RESIDUAL_OLD_TEXT", "CLAIM_NO_CHANGE_APPLIED", "CLAIM_LOCATION_MISSING",
+    "CLAIM_REPLACEMENT_MISSING", "CLAIM_VALIDATION_FAILED",
+    "MODEL_RETRY_EXHAUSTED", "MODEL_SCHEMA_INVALID", "MODEL_ERROR",
+    "DOCUMENT_PROTECTED", "OUTPUT_WRITE_FAILED", "REPORT_WRITE_FAILED",
+    "FINAL_HASH_MISMATCH", "RECALL_EDIT_OVERLAP", "EDIT_OVERLAP",
+})
+_DELIVERY_BLOCKER_REASON_MARKERS = (
+    "RESIDUAL_CONFIRMED", "CLASS_SET_INCOMPLETE",
+)
+_BUSINESS_PENDING_MARKERS = (
+    "FACT_PREREQUISITE_UNVERIFIED", "RECALL_FACT_UNVERIFIED", "FUND_TYPE_UNVERIFIED",
+)
+_BUSINESS_PENDING_RULES = frozenset({"G14", "G18"})
+#: Final omission issues that prove a missing/duplicated effect.  Coverage rows for
+#: an unfinished audit or a capped sweep stay review items under review_assisted.
+_FINAL_OMISSION_BLOCKER_CODES = frozenset({
+    "FINAL_OPERATION_UNPROVEN", "FINAL_RESIDUAL_OLD_TEXT",
+})
 
-    The old gate listed the blocking categories one by one and missed
-    ``coverage_gaps``: a report could list unresolved coverage gaps and still publish
-    ``complete``. Deriving the decision from the final unresolved list keeps the report
-    and the gate consistent.
+
+def _final_omission_issue_blocks(issue: Mapping[str, Any]) -> bool:
+    """Whether one final omission issue is a provable delivery failure."""
+    code = str(issue.get("code") or "")
+    reason = str(issue.get("reason") or "")
+    if code in _FINAL_OMISSION_BLOCKER_CODES:
+        return True
+    # A coverage row that says a Claim Replay failure left an operation unresolved is
+    # a proof failure, not an unfinished review.  Audit/sweep-cap rows stay reviewable.
+    return code == "FINAL_COVERAGE_UNRESOLVED" and "CLAIM_" in reason
+
+
+def _delivery_policy() -> str:
+    value = os.environ.get("FUNDLEX_DELIVERY_POLICY", "review_assisted")
+    return "strict" if value.strip().lower() == "strict" else "review_assisted"
+
+
+def _classify_delivery_items(unresolved: Sequence[dict[str, Any]]
+                             ) -> tuple[list[dict[str, Any]], list[dict[str, Any]],
+                                        list[dict[str, Any]]]:
+    """Split the unresolved projection into blockers, review items and business items.
+
+    ``review_assisted`` delivery publishes the pair when nothing is provably wrong:
+    unproven sites, audit gaps and orphan evidence become an explicit human-review
+    list instead of a refusal.  A residual old sentence at an edited site, a missing
+    change, or a failed model/write call still blocks.  Business-undecided rules are
+    kept in their own bucket and never auto-applied.
     """
+    blockers: list[dict[str, Any]] = []
+    review: list[dict[str, Any]] = []
+    business: list[dict[str, Any]] = []
+    for item in unresolved:
+        if not isinstance(item, dict):
+            continue
+        rule_id = str(item.get("rule_id") or "")
+        code = str(item.get("code") or item.get("kind") or "")
+        reason = str(item.get("reason") or "")
+        if (rule_id in _BUSINESS_PENDING_RULES
+                or any(marker in reason for marker in _BUSINESS_PENDING_MARKERS)):
+            business.append(item)
+        elif (bool(item.get("claim_replay_failed"))
+              or str(item.get("kind") or "") == "claim_replay"
+              or (str(item.get("kind") or "") == "final_omission"
+                  and _final_omission_issue_blocks(item))
+              or code in _DELIVERY_BLOCKER_CODES or reason in _DELIVERY_BLOCKER_CODES
+              or any(marker in reason for marker in _DELIVERY_BLOCKER_REASON_MARKERS)):
+            # A failed Claim Replay or a proven final omission is not a human-review
+            # opinion.  It must block delivery in every policy (D06 false-complete).
+            blockers.append(item)
+        else:
+            review.append(item)
+    return blockers, review, business
+
+
+def _delivery_complete(unresolved: Sequence[dict[str, Any]], *, ledger: Any = None,
+                       policy: str | None = None,
+                       claim_replay_verified: bool | None = None,
+                       final_omission_blocking: bool | None = None) -> bool:
+    """Whether the produced pair may be published.
+
+    ``strict`` keeps the historical rule: every unresolved item blocks.  The default
+    ``review_assisted`` policy only blocks items that are provably wrong (residual old
+    text at an edited site, missing change, failed model/write call); everything else
+    is delivered together with a human-review list.
+
+    Independent proof layers always block, whatever the policy: a failed Claim Replay,
+    a proven final omission, or an open obligation whose own evidence is a Claim
+    Replay failure.  An unfinished audit/sweep or an unverified fact stays a review
+    item under ``review_assisted``; it is still an open Ledger record and blocks
+    ``strict`` delivery.
+    """
+    mode = policy or _delivery_policy()
     if ledger is not None:
         from .obligations import open_obligations
         # The Ledger owns business completion.  The unresolved argument is only
         # its diagnostic projection plus orphan/resource blockers, so it may
         # never close an open record and it still blocks an unbound evidence row.
-        if open_obligations(ledger):
-            return False
-    return not unresolved
+        open_items = open_obligations(ledger)
+        if open_items:
+            if mode == "strict":
+                return False
+            if any("CLAIM_" in str(item.get("reason") or "") for item in open_items):
+                return False
+    if claim_replay_verified is False:
+        return False
+    if final_omission_blocking:
+        return False
+    if mode == "strict":
+        return not unresolved
+    blockers, _review, _business = _classify_delivery_items(unresolved)
+    return not blockers
 
 
 def _final_omission_review(*, rules_by_id: Mapping[str, dict], rules: Sequence[dict],
@@ -2997,7 +3581,8 @@ def _final_omission_review(*, rules_by_id: Mapping[str, dict], rules: Sequence[d
                            planned: Mapping[str, Any], targets: Sequence[Target],
                            facts: Facts, obligations: Any, replay: Mapping[str, Any],
                            findings: Sequence[Mapping[str, Any]],
-                           coverage_view: Any | None = None) -> dict[str, Any]:
+                           coverage_view: Any | None = None,
+                           scopes: Mapping[str, Any] | None = None) -> dict[str, Any]:
     """Run the last independent, operation-scoped omission review.
 
     The model sweep deliberately reads the final artifact without the target ledger;
@@ -3037,7 +3622,7 @@ def _final_omission_review(*, rules_by_id: Mapping[str, dict], rules: Sequence[d
     residuals = check_delete_residuals(
         rules_by_id, actual, edits=planned.get("edits") or (), original=original,
         targets=[target.as_dict() for target in targets], facts=facts,
-        obligations=obligations)
+        obligations=obligations, scopes=scopes)
     for residual in residuals:
         issues.append({"code": "FINAL_RESIDUAL_OLD_TEXT", **dict(residual)})
 
@@ -3139,14 +3724,15 @@ def _apply_artifact_proof_to_findings(findings: list[dict[str, Any]], replay: di
         quote_matches_old = any(
             sentence in quote or (len(quote) >= 8 and quote in sentence)
             for sentence in old_sentences)
-        expected_quote = finding.get("issue") == "wrong_text" and residual and any(_quote_is_expected_effect(
+        expected_quote = residual and any(_quote_is_expected_effect(
             str(finding.get("quote") or ""), record, facts, edits=edits,
             location=location, before_text=source_text, actual_text=artifact_text, obligations=obligations,
             proofs=states) for record in related_records)
         if residual and quote_matches_old and not expected_quote:
             finding["proof_kind"] = "RESIDUAL_CONFIRMED"
             continue
-        if quote and not (residual and quote_matches_old) and _sibling_expected_effect(
+        if related and all(effect_proof_passed(state) for state in related) \
+                and quote and not (residual and quote_matches_old) and _sibling_expected_effect(
                 str(finding.get("quote") or ""), location, obligations, states,
                 facts=facts, edits=edits, original=original, actual=actual):
             # The finding quotes a sibling operation's authorized final text at the
@@ -3156,7 +3742,48 @@ def _apply_artifact_proof_to_findings(findings: list[dict[str, Any]], replay: di
             finding["proof_kind"] = "REVIEW_UNPROVEN"
             finding["resolution_evidence"] = "sibling_authorized_effect"
             continue
-        if not related or not all(effect_proof_passed(state) for state in related):
+        if not related:
+            # A sweep can quote a complete policy written by a sibling operation at
+            # this physical site. G15 has no surviving source site after its old
+            # clause is replaced, while G16 owns and proves the new payment policy.
+            if rule_id == "G15" and _sibling_expected_effect(
+                    str(finding.get("quote") or ""), location, obligations, states,
+                    facts=facts, edits=edits, original=original, actual=actual):
+                finding["status"] = "resolved"
+                finding["resolution"] = "artifact_proof"
+                finding["proof_kind"] = "sibling_authorized_effect"
+                finding["resolution_evidence"] = "sibling_operation_site_proof"
+                continue
+            # An orphan finding can quote authorized new policy and then claim an
+            # old clause survived. Check its own quoted old clause against the
+            # artifact instead of trusting the prose: if every quoted old fragment
+            # is absent, the finding contradicts the file and is not residual
+            # evidence. Findings without a quoted old clause, or with any quoted
+            # fragment still present, remain blocking.
+            claimed = [match.strip() for pattern in (
+                r"“([^”]{8,})”", r"「([^」]{8,})」",
+                r"'([^']{8,})'", r'"([^"]{8,})"')
+                for match in re.findall(pattern, str(finding.get("reason") or ""))]
+            # The sweep is free to quote the old clause with any of the four quote
+            # styles; a finding that quoted it with ASCII quotes used to fall through
+            # to SEMANTIC_UNCERTAIN and become an orphan blocker (恒裕 G15 SW002).
+            # Contract text is Chinese, so only claims carrying real CJK characters
+            # can be residual evidence.
+            claimed = [value for value in claimed if len(_compact(value)) >= 12
+                       and len(re.findall(r"[\u4e00-\u9fff]", value)) >= 6]
+            # A false positive often quotes the old clause and then also quotes a
+            # surviving *new* policy phrase. The longest quoted segment is the
+            # claimed old effect; only that one is the residual evidence.
+            claimed.sort(key=lambda value: len(_compact(value)), reverse=True)
+            if claimed and _compact(claimed[0]) not in body:
+                finding["status"] = "resolved"
+                finding["resolution"] = "artifact_proof"
+                finding["proof_kind"] = "REMOVAL_UNCONFIRMED"
+                finding["resolution_evidence"] = "claimed_residual_absent"
+                continue
+            finding["proof_kind"] = "SEMANTIC_UNCERTAIN"
+            continue
+        if not all(effect_proof_passed(state) for state in related):
             finding["proof_kind"] = "SEMANTIC_UNCERTAIN"
             continue
         if finding.get("issue") == "wrong_text" and residual and not expected_quote:
@@ -3257,18 +3884,80 @@ def _target_disposition_counts(targets: Sequence[dict[str, Any]]) -> dict[str, i
             "satisfied": satisfied, "absent": absent}
 
 
-def _write_report_markdown(path: Path, report: dict[str, Any]) -> None:
+def _short_text(value: Any, limit: int = 600) -> str:
+    text_value = str(value or "").strip()
+    if len(text_value) <= limit:
+        return text_value
+    return text_value[:limit] + f"…（共 {len(text_value)} 字）"
+
+
+def _rule_meta(guide_groups: Mapping[str, Mapping[str, Any]], rule_id: str) -> tuple[str, str]:
+    titles: list[str] = []
+    requirements: list[str] = []
+    for part in str(rule_id or "").split("+"):
+        group = guide_groups.get(part) or {}
+        title = str(group.get("title") or "").strip()
+        requirement = str(group.get("requirement") or "").strip()
+        if title:
+            titles.append(title)
+        if requirement:
+            requirements.append(requirement)
+    return "；".join(titles) or str(rule_id or ""), " ".join(requirements)
+
+
+def _edit_proof_label(replay: Mapping[str, Any], edit: Mapping[str, Any]) -> str:
+    obligations = replay.get("obligations") or {}
+    states = [obligations[key] for key in (edit.get("obligation_ids") or ())
+              if isinstance(obligations.get(key), Mapping)]
+    if not states:
+        return "未绑定证明（列入人工复核）"
+    if all(state.get("state") == "PASS" for state in states):
+        status = "、".join(sorted({str(state.get("artifact_status") or "") for state in states}))
+        return f"已证明（{status or 'PASS'}）"
+    status = "、".join(sorted({str(state.get("artifact_status") or "UNPROVEN") for state in states}))
+    return f"未证明（{status}，列入人工复核）"
+
+
+def _readable_reason(value: Any) -> str:
+    text = str(value or "")
+    if text.startswith(("T3_open_operation", "survey_reference", "claim_residual",
+                        "duplicate_copy")) or "locator:" in text:
+        return "已满足，无需修改"
+    return _short_text(text, 160)
+
+
+def _readable_item(item: Mapping[str, Any]) -> str:
+    from .delivery import failure_reason
+    rule_id = str(item.get("rule_id") or "")
+    location = str(item.get("location") or "")
+    if not location:
+        sites = item.get("sites") or item.get("locations") or []
+        location = "、".join(str(site) for site in sites) or "（整条规则）"
+    code = str(item.get("code") or item.get("kind") or "")
+    operation = str(item.get("operation_id") or "")
+    reason = item.get("reason") or item.get("issue") or item.get("message") or ""
+    label = f"{rule_id} {operation}".strip() if operation else rule_id
+    concise = failure_reason(code) or failure_reason(reason) or code
+    return f"{label} {location}：{concise} — {_short_text(reason, 200)}"
+
+
+def _report_markdown(report: dict[str, Any]) -> str:
     plan = report.get("plan") or {}
+    edits = [dict(item) for item in (plan.get("edits") or []) if isinstance(item, Mapping)]
+    targets = [item for item in (report.get("targets") or []) if isinstance(item, Mapping)]
+    guide_groups = {str(group.get("rule_id")): group
+                    for group in ((report.get("guide") or {}).get("groups") or [])
+                    if isinstance(group, Mapping)}
+    replay = report.get("artifact_claim_replay") or {}
+    unresolved = [item for item in (report.get("unresolved") or []) if isinstance(item, Mapping)]
+    qualification = report.get("qualification") or {}
+    facts = report.get("facts") or {}
     audit = report.get("audit") or {}
     sweep = report.get("sweep") or {}
     model = report.get("model") or {}
-    targets = report.get("targets") or []
-    qualification = report.get("qualification") or {}
-    facts = report.get("facts") or {}
-    pending_findings = [item for item in sweep.get("findings") or []
-                        if item.get("status") in {"pending", "unresolved"}]
+
     lines = [
-        "# FundLex 召回优先处理报告", "",
+        "# FundLex 合同修改说明", "",
         f"- 引擎：{report.get('engine_id')} {report.get('engine_version')}"
         f"（schema {report.get('schema_version')}）",
         f"- 执行模式：{report.get('execution_mode')}",
@@ -3276,6 +3965,10 @@ def _write_report_markdown(path: Path, report: dict[str, Any]) -> None:
         f"- 指引文档 SHA-256：{(report.get('guide') or {}).get('document_sha256') or '（未提供）'}",
         f"- 交付状态：{report.get('delivery_status')}",
     ]
+    from .delivery import failure_reason
+    for error in (report.get("errors") or []):
+        if isinstance(error, Mapping):
+            lines.append(f"- 失败原因：{failure_reason(error.get('code')) or error.get('code')}")
     if qualification:
         lines.append(f"- 资格：{qualification.get('status')}（fund_type={qualification.get('fund_type')}；"
                      f"引文核验={qualification.get('fund_type_quote_verified')}）")
@@ -3285,75 +3978,113 @@ def _write_report_markdown(path: Path, report: dict[str, Any]) -> None:
                      f"销售服务费类别：{'、'.join(facts.get('service_group') or []) or '无'}；"
                      f"浮动管理费：{'是' if facts.get('is_floating_fee') else '否'}")
     disposition = _target_disposition_counts(targets)
-    lines.append(f"- 目标计数：应改 {disposition['needs_edit']}，"
-                 f"已符合 {disposition['satisfied']}，"
-                 f"不适用 {disposition['absent']}；"
-                 f"计划修改 {plan.get('count', 0)}")
-    lines.append(f"- 审计轮次：{len(audit.get('rounds') or [])}；未决问题 {len(audit.get('issues') or [])}")
-    lines.append(f"- 查漏：块 {sweep.get('chunks', 0)}，发现 {len(sweep.get('findings') or [])}，"
-                 f"未解决 {len(pending_findings)}，缺口 {len(sweep.get('gaps') or [])}")
+    lines.append(f"- 目标计数：应改 {disposition['needs_edit']}，已符合 {disposition['satisfied']}，"
+                 f"不适用 {disposition['absent']}；计划修改 {len(edits)}")
     lines.append(f"- 模型调用：{model.get('logical_calls', 0)}；"
                  f"估算费用：{model.get('estimated_cost_usd', 0)}")
+    policy = str(report.get("delivery_policy") or "review_assisted")
+    blockers = report.get("delivery_blockers")
+    review_items = report.get("review_items")
+    business_items = report.get("business_pending")
+    if blockers is None or review_items is None or business_items is None:
+        blockers, review_items, business_items = _classify_delivery_items(unresolved)
+    lines.append(f"- 交付策略：{policy}；阻断 {len(blockers)} 项；"
+                 f"人工复核 {len(review_items)} 项；业务待定 {len(business_items)} 项")
+
+    by_rule: dict[str, int] = {}
+    for edit in edits:
+        rule_id = str(edit.get("rule_id") or "")
+        by_rule[rule_id] = by_rule.get(rule_id, 0) + 1
+    if by_rule:
+        lines.append("- 修改分布：" + "；".join(
+            f"{rule_id} {count} 处" for rule_id, count in sorted(by_rule.items())))
+    if unresolved:
+        codes: dict[str, int] = {}
+        for item in unresolved:
+            code = str(item.get("code") or item.get("kind") or "UNKNOWN")
+            codes[code] = codes.get(code, 0) + 1
+        lines.append("- 未决项（阻断+复核+业务）：" + "；".join(
+            f"{code} {count}" for code, count in sorted(codes.items(), key=lambda kv: -kv[1])))
+
+    # 1. Every applied change, with the guide requirement and the real before/after.
+    lines.extend(["", "## 一、逐处修改", ""])
+    if not edits:
+        lines.append("- （本次没有生成任何修改）")
+    operation_labels = {"replace": "替换", "delete": "删除", "insert": "新增", "append": "追加"}
+    for index, edit in enumerate(edits, 1):
+        rule_id = str(edit.get("rule_id") or "")
+        title, requirement = _rule_meta(guide_groups, rule_id)
+        operation = operation_labels.get(str(edit.get("operation")), str(edit.get("operation") or ""))
+        before = str(edit.get("expected_old_text") or "")
+        after = str(edit.get("replacement") or "")
+        lines.append(f"### {index}. {rule_id} {title}")
+        lines.append("")
+        lines.append(f"- 位置：{edit.get('location')}")
+        lines.append(f"- 操作：{operation}")
+        if requirement:
+            lines.append(f"- 指引要求：{_short_text(requirement, 300)}")
+        lines.append(f"- 修改前：{('「' + _short_text(before) + '」') if before else '（无，新增内容）'}")
+        lines.append(f"- 修改后：{('「' + _short_text(after) + '」') if after else '（删除，无保留内容）'}")
+        lines.append(f"- 证明：{_edit_proof_label(replay, edit)}")
+        lines.append("")
+
+    # 2. Already-correct clauses: what the guide asked and why no change was needed.
+    satisfied = [target for target in targets
+                 if not target.get("out_of_scope")
+                 and (target.get("state") == "satisfied"
+                      or target.get("status") == "satisfied")]
+    lines.extend(["## 二、已符合、无需修改", ""])
+    if not satisfied:
+        lines.append("- （无）")
+    for target in satisfied:
+        rule_id = str(target.get("rule_id") or "")
+        title, _requirement = _rule_meta(guide_groups, rule_id)
+        lines.append(f"- {rule_id} {title} {target.get('location')}："
+                     f"「{_short_text(target.get('quote'), 160)}」— {_readable_reason(target.get('reason'))}")
+
+    # 3. Business items that need a product decision (never auto-applied).
+    notices = [item for item in (report.get("business_notices") or []) if isinstance(item, Mapping)]
+    business_unresolved = [item for item in business_items if item not in notices]
+    lines.extend(["", "## 三、业务待定（不自动修改）", ""])
+    if not notices and not business_unresolved:
+        lines.append("- （无）")
+    for notice in notices:
+        lines.append(f"- [{notice.get('code')}] {notice.get('rule_id')} {notice.get('location')}："
+                     f"{_short_text(notice.get('message'), 240)}")
+    seen_business: set[tuple[str, str, str]] = set()
+    for item in business_unresolved:
+        key = (str(item.get("rule_id") or ""), str(item.get("code") or ""),
+               str(item.get("operation_id") or item.get("obligation_id") or ""))
+        if key in seen_business:
+            continue
+        seen_business.add(key)
+        lines.append(f"- {_readable_item(item)}")
+
+    # 4. Blockers prevent delivery; review items are delivered but need a human check.
+    lines.extend(["", "## 四、阻断项（未交付原因）", ""])
+    if not blockers:
+        lines.append("- （无）")
+    for item in blockers:
+        lines.append(f"- {_readable_item(item)}")
+    lines.extend(["", "## 五、人工复核清单（已交付，需确认）", ""])
+    if not review_items:
+        lines.append("- （无）")
+    for item in review_items:
+        lines.append(f"- {_readable_item(item)}")
+
+    lines.extend(["", "## 六、处理概览", ""])
+    lines.append(f"- 审计轮次：{len(audit.get('rounds') or [])}；"
+                 f"未决问题 {len(audit.get('issues') or [])}")
+    lines.append(f"- 查漏：块 {sweep.get('chunks', 0)}，发现 {len(sweep.get('findings') or [])}，"
+                 f"缺口 {len(sweep.get('gaps') or [])}")
     if report.get("errors"):
         lines.append(f"- 错误：{'; '.join(str(item.get('code')) for item in report['errors'])}")
-
-    coverage = ((report.get("scope_mapping") or {}).get("coverage") or [])
-    if coverage:
-        audit_by_rule: dict[str, dict[str, int]] = {}
-        final_by_rule: dict[str, list[dict[str, Any]]] = {}
-        for target in targets:
-            rule_id = str(target.get("rule_id"))
-            final_by_rule.setdefault(rule_id, []).append(target)
-            result = target.get("audit") or {}
-            bucket = audit_by_rule.setdefault(rule_id, {"completed": 0, "total": 0})
-            if target.get("state") == "needs_edit" and not target.get("out_of_scope"):
-                bucket["total"] += 1
-                if result.get("verdict") == "completed" and result.get("evidence_verified"):
-                    bucket["completed"] += 1
-        lines.extend(["", "## 每规则处置", ""])
-        for item in coverage:
-            rule_id = str(item.get("rule_id"))
-            final_targets = final_by_rule.get(rule_id, [])
-            counts = _target_disposition_counts(final_targets)
-            coverage_label = "targets_found" if final_targets else item.get("coverage")
-            audit_counts = audit_by_rule.get(rule_id, {"completed": 0, "total": 0})
-            lines.append(f"- {rule_id}：覆盖 {coverage_label}；"
-                         f"目标 {counts['targets']}（应改 {counts['needs_edit']} / "
-                         f"已符合 {counts['satisfied']} / 不适用 {counts['absent']}）；"
-                         f"审计完成 {audit_counts['completed']}/{audit_counts['total']}；"
-                         f"章节 {item.get('sections') or '（未映射）'}")
-    if audit.get("rounds"):
-        lines.extend(["", "## 审计轮次", ""])
-        for round_ledger in audit["rounds"]:
-            issues = round_ledger.get("issues") or []
-            lines.append(f"- 第 {round_ledger.get('round')} 轮（{round_ledger.get('scope', 'full')}）："
-                         f"规则 {len(round_ledger.get('rules') or [])}，"
-                         f"结论 {len(round_ledger.get('results') or [])}，"
-                         f"另报 {len(round_ledger.get('missed_targets') or [])}，"
-                         f"丢弃 {len(round_ledger.get('dropped') or [])}，"
-                         f"问题 {len(issues)}")
-    if sweep.get("rounds"):
-        lines.extend(["", "## 查漏轮次", ""])
-        for round_ledger in sweep["rounds"]:
-            lines.append(f"- 第 {round_ledger.get('round')} 轮：块 {len(round_ledger.get('chunks') or [])}，"
-                         f"发现 {len(round_ledger.get('findings') or [])}，"
-                         f"丢弃 {len(round_ledger.get('dropped') or [])}")
-    for finding in sweep.get("findings") or []:
-        lines.append(f"  - {finding.get('finding_id')}：{finding.get('rule_id')} "
-                     f"{finding.get('location')} {finding.get('issue')} → {finding.get('status')}")
-    unresolved = report.get("unresolved") or []
-    if report.get("business_notices"):
-        lines.extend(["", "## 业务提示（不影响交付状态）", ""])
-        for notice in report["business_notices"]:
-            lines.append(f"- [{notice.get('code')}] {notice.get('rule_id')} {notice.get('location')}："
-                         f"{notice.get('message')}")
-    lines.extend(["", "## 未完成清单", ""])
-    if not unresolved:
-        lines.append("- （无）")
-    for item in unresolved:
-        lines.append(f"- [{item.get('kind')}] {json.dumps(item, ensure_ascii=False)}")
     lines.extend(["", f"**交付状态：{report.get('delivery_status')}**"])
-    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return "\n".join(lines) + "\n"
+
+
+def _write_report_markdown(path: Path, report: dict[str, Any]) -> None:
+    path.write_text(_report_markdown(report), encoding="utf-8")
 
 
 def _write_edits(path: Path, report: dict[str, Any]) -> None:
@@ -3509,8 +4240,23 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
         sections = structure_index(inspection)
         scope_gaps: list[dict[str, Any]] = []
         mapping = scope_map(rules, sections, model, gaps=scope_gaps)
+        mapping = expand_class_definition_scope(mapping, sections, inspection)
+        # RuleScope is the single physical boundary for every recall path below
+        # (inventory, survey, append, delete, sweep, audit, planning).  Default policy:
+        # the G15/G16/G17 summary fee copies are excluded; G18/G19-G22 include a copy
+        # only when its copy_key matches the body clause.
+        scopes = resolve_rule_scopes(rules, sections, inspection, mapping)
+        scopes = _apply_single_leaf_fee_fallback(scopes, sections, inspection, mapping)
+        scope_audit = _scope_audit_ledger(scopes)
+        report["scope_audit"] = scope_audit
         if scope_gaps:
             report["scope_gaps"] = scope_gaps
+        if frozen_run is not None:
+            frozen_run.boundary("scope", {
+                "mapping": {rule_id: list(ids) for rule_id, ids in mapping.items()},
+                "scope_audit": {key: scope_audit[key]
+                                for key in ("rules", "unresolved_rules")},
+            })
         # Applicability recovery (plan §9): only scoped rules with an UNKNOWN
         # condition are sent to the primary judge / review arbitration. UNKNOWN never
         # executes a branch either before or after this pass.
@@ -3518,7 +4264,7 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
         unknown_rules = {record.spec.rule_id for record in obligation_ledger.records
                          if record.applicability.status == "UNKNOWN"}
         evidence_by_rule = _rule_evidence(mapping, sections, inspection,
-                                          unknown_rules & set(mapping))
+                                          unknown_rules & set(mapping), scopes=scopes)
         if evidence_by_rule and _applicability_recovery_enabled():
             history = resolve_ledger(obligation_ledger.records, gateway=model,
                                      inspection=inspection, facts=facts,
@@ -3540,19 +4286,23 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
             entries.append(_WindowState(window=window, rules=window_rules))
         stage = "inventory"
         for entry in entries:
-            _inventory(entry, None, facts, model, inspection, round_number=0)
+            _inventory(entry, None, facts, model, inspection, round_number=0,
+                       rule_locations=scope_locations_for_window(scopes, entry.window),
+                       scope_audit=scope_audit)
         synthetic: list[Target] = []
         origins: dict[str, str] = {}
         stage = "survey"
         survey_ledger: list[dict[str, Any]] = []
         coverage_gaps: list[dict[str, Any]] = []
         _run_survey(model, rules, rules_by_id, facts, inspection, _collect_targets(entries, synthetic, rules_by_id, inspection),
-                    synthetic, origins, survey_ledger, coverage_gaps, sections)
+                    synthetic, origins, survey_ledger, coverage_gaps, sections, mapping=mapping,
+                    scopes=scopes)
         targets = _collect_targets(entries, synthetic, rules_by_id, inspection)
         from .recall import assign_target_operations, ensure_delete_targets
         if os.environ.get("FUNDLEX_DELETE_RESIDUAL_TARGETS", "1").strip().lower() in {
                 "1", "true", "on", "yes"}:
-            for target in ensure_delete_targets(targets, rules_by_id, inspection):
+            for target in ensure_delete_targets(targets, rules_by_id, inspection,
+                                                scopes=scopes):
                 synthetic.append(target)
                 targets.append(target)
                 origins[target.target_id] = "delete_residual_copy"
@@ -3576,7 +4326,8 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
         g16_rebinds = rebind_g16_clause_targets(targets, inspection)
         if g16_rebinds:
             report["g16_clause_rebinds"] = g16_rebinds
-        copy_targets = duplicate_copy_targets(targets, rules_by_id, inspection)
+        copy_targets = duplicate_copy_targets(targets, rules_by_id, inspection,
+                                              scopes=scopes)
         for target in copy_targets:
             for old in targets:
                 if old is not target and old.rule_id == target.rule_id \
@@ -3591,7 +4342,7 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
                 [target], rules_by_id, inspection, facts, obligation_ledger))
         from .targeting import locate_unresolved_targets, targets_for_open_rules
         open_targets = targets_for_open_rules(obligation_ledger, targets, rules_by_id, facts,
-                                              inspection, mapping, sections)
+                                              inspection, mapping, sections, scopes=scopes)
         for target in open_targets:
             targets.append(target)
             synthetic.append(target)
@@ -3607,16 +4358,26 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
         if split_rebinds:
             report["split_class_definition_rebinds"] = split_rebinds
         from .recall import resolve_absent_site_targets
+        absent_target_ids = {id(target) for target in targets}
         absent_sites = resolve_absent_site_targets(targets, rules_by_id, inspection, facts)
         if absent_sites:
             report["absent_site_targets"] = absent_sites
+            # resolve_absent_site_targets appends an operation-specific clone to
+            # ``targets``.  Keep that clone in the synthetic source list as well;
+            # the next operation-aware _collect_targets call rebuilds its result
+            # from window targets + synthetic targets (D06 G05:2).
+            for target in targets:
+                if id(target) not in absent_target_ids and target not in synthetic:
+                    synthetic.append(target)
+                    origins[target.target_id] = "absent_site_clone"
         # The absent-site pass can add an operation-specific G05:2 proof and the open
         # pass can add a G16 target.  Rebind those late targets before cloning so every
         # clone inherits its own physical clause identity.
         g16_rebinds = rebind_g16_clause_targets(targets, inspection)
         if g16_rebinds:
             report.setdefault("g16_clause_rebinds", []).extend(g16_rebinds)
-        open_copies = duplicate_copy_targets(targets, rules_by_id, inspection)
+        open_copies = duplicate_copy_targets(targets, rules_by_id, inspection,
+                                             scopes=scopes)
         for copy in open_copies:
             for old in targets:
                 if old is not copy and old.rule_id == copy.rule_id \
@@ -3642,7 +4403,8 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
         # Rebinding fills offsets on survey targets after the first duplicate-copy
         # pass.  Re-run exact-copy closure now that every source target is geometric;
         # otherwise a body/summary pair (D01 p758/p1221 G15) is planned only once.
-        late_copies = duplicate_copy_targets(targets, rules_by_id, inspection)
+        late_copies = duplicate_copy_targets(targets, rules_by_id, inspection,
+                                             scopes=scopes)
         for copy in late_copies:
             for old in targets:
                 if old is not copy and old.rule_id == copy.rule_id \
@@ -3658,7 +4420,7 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
         if late_copies:
             ensure_unique_target_ids(targets, origins)
         locator_records = locate_unresolved_targets(targets, inspection, rules_by_id,
-                                                    facts, model)
+                                                    facts, model, scopes=scopes)
         for target in targets:
             origins.setdefault(target.target_id, "T3_open_rule")
         if locator_records:
@@ -3676,7 +4438,7 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
             planned, edits, plan, artifacts, actual = _plan_and_generate(
                 model, rules_by_id, targets, inspection, facts, input_path, temp_dir,
                 max_compose_calls=compose_calls, obligations=obligation_ledger,
-                    frozen_run=frozen_run)
+                    frozen_run=frozen_run, scopes=scopes, scope_audit=scope_audit)
             report["plan"] = _plan_ledger(planned, plan)
             report["targets"] = _target_ledger(targets, planned, {}, origins)
             mark_stage("planning_generation")
@@ -3704,7 +4466,8 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
             while True:
                 round_ledger = _run_audit(model, rules_by_id, targets, planned, inspection,
                                           actual, facts=facts, only_rules=audit_dirty,
-                                          obligations=obligation_ledger)
+                                          obligations=obligation_ledger,
+                                          scopes=scopes, scope_audit=scope_audit)
                 scope = "incremental" if audit_dirty is not None else "full"
                 if audit_dirty is None:
                     full_audit_count += 1
@@ -3873,11 +4636,14 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
                 inventory_rerun_count += len(affected)
                 for entry in affected:
                     _inventory(entry, notes[entry.window.id], facts, model, inspection,
-                               round_number=round_number)
+                               round_number=round_number,
+                               rule_locations=scope_locations_for_window(scopes, entry.window),
+                               scope_audit=scope_audit)
                 if needs_discovery:
                     targets = _collect_targets(entries, synthetic, rules_by_id, inspection)
                     _run_survey(model, rules, rules_by_id, facts, inspection, targets,
-                                synthetic, origins, survey_ledger, coverage_gaps, sections)
+                                synthetic, origins, survey_ledger, coverage_gaps, sections,
+                                mapping=mapping, scopes=scopes)
                 if needs_discovery:
                     targets = _collect_targets(entries, synthetic, rules_by_id, inspection)
                 report["rebind"] = _rebind_unresolved_targets(
@@ -3891,13 +4657,15 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
                     report.setdefault("duplicate_targets", []).extend(duplicates)
                 if needs_discovery:
                     report.setdefault("target_locator", []).extend(
-                        locate_unresolved_targets(targets, inspection, rules_by_id, facts, model))
+                        locate_unresolved_targets(targets, inspection, rules_by_id, facts,
+                                                  model, scopes=scopes))
                 for target in targets:
                     origins.setdefault(target.target_id, "T3_open_rule")
                 planned, edits, plan, artifacts, actual = _plan_and_generate(
                     model, rules_by_id, targets, inspection, facts, input_path, temp_dir,
                     max_compose_calls=compose_calls, obligations=obligation_ledger,
                     frozen_run=frozen_run,
+                    scopes=scopes, scope_audit=scope_audit,
                     existing_plan=planned,
                     dirty_locations=({target.location for target in targets
                         if fact_changed or applicability_changed}
@@ -4028,11 +4796,12 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
                         target_rules=target_rules,
                         targets_by_id={target.target_id: target.as_dict()
                                        for target in targets},
-                        obligations=obligation_ledger)
+                        obligations=obligation_ledger,
+                        scopes=scopes)
                     residuals = check_delete_residuals(
                         rules_by_id, actual, edits=plan.get("edits") or [], original=inspection,
                         targets=[target.as_dict() for target in targets], facts=facts,
-                        obligations=obligation_ledger)
+                        obligations=obligation_ledger, scopes=scopes)
                     if residuals:
                         result["failures"].extend(residuals)
                         result["verified"] = False
@@ -4099,7 +4868,8 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
                                 if not source_target.operations:
                                     continue
                                 for clone in duplicate_copy_targets(
-                                        [source_target], rules_by_id, inspection):
+                                        [source_target], rules_by_id, inspection,
+                                        scopes=scopes):
                                     if clone.location != missing_location:
                                         continue
                                     for old_target in targets:
@@ -4206,9 +4976,21 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
                                 # Claim Replay has already verified this exact duplicate
                                 # site. An active target at another copy must not
                                 # suppress the required occurrence repair.
+                                rule_sections = set((mapping or {}).get(
+                                    record.spec.rule_id, ()))
+                                rule_scope = (scopes.get(record.spec.rule_id)
+                                              if scopes is not None else None)
+                                allowed = ({str(location) for location in
+                                            getattr(rule_scope, "locations", ()) or ()}
+                                           if rule_scope is not None else
+                                           {loc for section in sections
+                                            if section.id in rule_sections
+                                            for loc in section.locations})
                                 repair_target = target_for_claim_site(
                                     record, site, targets, rules_by_id, facts, inspection,
-                                    target_id=f"R{len(targets) + 1:03d}")
+                                    target_id=f"R{len(targets) + 1:03d}",
+                                    allowed_locations=(allowed if rule_scope is not None
+                                                       else (allowed or None)))
                                 if repair_target is not None:
                                     for old_target in targets:
                                         if old_target is not repair_target \
@@ -4231,7 +5013,8 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
                             repair_target = target_for_missing_operation(
                                 record, targets, rules_by_id, facts, inspection,
                                 mapping, sections,
-                                target_id=f"R{len(targets) + 1:03d}")
+                                target_id=f"R{len(targets) + 1:03d}",
+                                scopes=scopes)
                             if repair_target is not None:
                                 targets.append(repair_target)
                                 origins[repair_target.target_id] = "claim_operation_recovery"
@@ -4240,7 +5023,7 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
                                         [repair_target], rules_by_id, inspection, facts,
                                         obligation_ledger))
                                 recovery_copies = duplicate_copy_targets(
-                                    targets, rules_by_id, inspection)
+                                    targets, rules_by_id, inspection, scopes=scopes)
                                 for copy in recovery_copies:
                                     for old in targets:
                                         if old is not copy \
@@ -4261,7 +5044,7 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
                                 report.setdefault("target_locator", []).extend(
                                     locate_unresolved_targets(
                                         [repair_target], inspection, rules_by_id, facts,
-                                        model))
+                                        model, scopes=scopes))
                                 operation_added = True
                         if not operation_added:
                             recovery.record(
@@ -4304,7 +5087,7 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
                                 or dirty_locations else None,
                             dirty_locations=dirty_locations if context.resolved_class is not FailureClass.EXECUTION
                                 else None,
-                            frozen_run=frozen_run)
+                            frozen_run=frozen_run, scopes=scopes, scope_audit=scope_audit)
                         artifact_recovery_used = True
                         report["plan"] = _plan_ledger(planned, plan)
                         components_by_rule, required_terms_by_rule = _claim_maps(planned)
@@ -4331,7 +5114,8 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
                         recovery_audit = _run_audit(model, rules_by_id, targets, planned,
                                                     inspection, actual, facts=facts,
                                                     only_rules=_stale_rules(audit_state, targets, planned, actual),
-                                                    obligations=obligation_ledger)
+                                                    obligations=obligation_ledger,
+                                                    scopes=scopes, scope_audit=scope_audit)
                         recovery_audit.update(round=round_number + 1,
                                               scope="artifact_recovery")
                         incremental_audit_count += 1
@@ -4468,25 +5252,23 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
             # (~26 windows vs ~19), so the character chunker stays the default (FL-D109).
             # Set FUNDLEX_SWEEP_SECTION_WINDOWS=1 to switch it on and re-measure.
             chunks = _sweep_chunks(actual, sections, max_chars=chunk_chars)
-            rule_locations = {rule_id: _rule_mapped_locations(rule_id, mapping, sections)
-                              for rule_id in rules_by_id}
             # Rules with an obligation the run still has to carry out must be asked about
             # in every window their sections touch, whatever the mapping says (FL-D109).
             mandatory = {str(target.rule_id) for target in targets
                          if target.state == "needs_edit" and not target.out_of_scope}
             mandatory |= {str(target.rule_id) for target in synthetic}
-            scoped = _window_rule_scope(chunks, mapping=mapping, sections=sections,
-                                        rules=rules, mandatory=mandatory,
-                                        blind_windows=blind_windows)
-            requirements_by_chunk = {chunk.id: _sweep_requirements_for(rules, ids)
-                                     for chunk, ids in scoped}
-            scope_by_chunk = {chunk.id: ids for chunk, ids in scoped}
+            # With RuleScope the sweep accepts a finding only inside the rule's physical
+            # scope; windows no rule is scoped into are skipped and recorded.
+            chunks, requirements_by_chunk, scope_by_chunk = _sweep_scope_plan(
+                chunks, scopes=scopes, mapping=mapping, sections=sections, rules=rules,
+                mandatory=mandatory, blind_windows=blind_windows)
             batch = _take_batch(chunks, max_sweep_chunks - swept_calls, gaps, planned=len(chunks))
             batch_ledger = _sweep_batch(model, rules_by_id, requirements, batch, actual,
                                         round_number=0, counter=counter, facts=facts,
-                                        facts_text=facts_text, rule_locations=rule_locations,
+                                        facts_text=facts_text,
                                         requirements_by_chunk=requirements_by_chunk,
-                                        scope_by_chunk=scope_by_chunk)
+                                        scope_by_chunk=scope_by_chunk,
+                                        scopes=scopes, scope_audit=scope_audit)
             swept_calls += len(batch)
             full_sweep_count += 1
             swept_texts.update(chunk.text for chunk in batch)
@@ -4555,7 +5337,9 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
                 inventory_rerun_count += len(sweep_affected)
                 for entry in sweep_affected:
                     _inventory(entry, notes[entry.window.id], facts, model, inspection,
-                               round_number=round_number)
+                               round_number=round_number,
+                               rule_locations=scope_locations_for_window(scopes, entry.window),
+                               scope_audit=scope_audit)
                 if sweep_affected:
                     discovered = _collect_targets(entries, synthetic, rules_by_id, inspection)
                     targets = [target for target in targets
@@ -4575,7 +5359,7 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
                 report.setdefault("target_locator", []).extend(
                     locate_unresolved_targets([target for target in dirty_targets
                         if (target.rule_id, target.location) in target_sites],
-                        inspection, rules_by_id, facts, model))
+                        inspection, rules_by_id, facts, model, scopes=scopes))
                 for target in targets:
                     origins.setdefault(target.target_id, "T3_open_rule")
                 before_repair_signature = _artifact_text_signature(actual)
@@ -4583,6 +5367,7 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
                     model, rules_by_id, targets, inspection, facts, input_path, temp_dir,
                     max_compose_calls=compose_calls, obligations=obligation_ledger,
                     frozen_run=frozen_run, existing_plan=planned,
+                    scopes=scopes, scope_audit=scope_audit,
                     dirty_locations=dirty_locations if any(
                         context.resolved_class is not FailureClass.EXECUTION
                         for context, _ in decisions) else None)
@@ -4613,7 +5398,8 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
                 if reaudit:
                     round_ledger = _run_audit(model, rules_by_id, targets, planned, inspection,
                                               actual, only_rules=reaudit, facts=facts,
-                                              obligations=obligation_ledger)
+                                              obligations=obligation_ledger,
+                                              scopes=scopes, scope_audit=scope_audit)
                     round_ledger.update(round=round_number, scope="sweep_repair")
                     audit_rounds.append(round_ledger)
                     _merge_audit_state(audit_state, round_ledger, targets)
@@ -4621,22 +5407,21 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
                                               if issue.get("rule_id") in reaudit]
                 changed = [chunk for chunk in _sweep_chunks(actual, sections, max_chars=chunk_chars)
                            if chunk.text not in swept_texts]
-                batch = _take_batch(changed, max_sweep_chunks - swept_calls, gaps, planned=len(changed))
-                if not batch:
-                    break  # nothing re-swept: the findings stay pending and block complete
                 # Re-scope the changed windows exactly as the initial pass does, so a
                 # re-sweep is not asked a different question than the window it revisits
                 # (FL-D109): same chunker, same per-window rule subset, same enforcement.
-                rescoped = _window_rule_scope(batch, mapping=mapping, sections=sections,
-                                              rules=rules, mandatory=mandatory,
-                                              blind_windows=blind_windows)
+                changed, requirements_by_chunk, scope_by_chunk = _sweep_scope_plan(
+                    changed, scopes=scopes, mapping=mapping, sections=sections,
+                    rules=rules, mandatory=mandatory, blind_windows=blind_windows)
+                batch = _take_batch(changed, max_sweep_chunks - swept_calls, gaps, planned=len(changed))
+                if not batch:
+                    break  # nothing re-swept: the findings stay pending and block complete
                 batch_ledger = _sweep_batch(model, rules_by_id, requirements, batch, actual,
                                             round_number=round_number, counter=counter,
                                             facts=facts, facts_text=facts_text,
-                                            rule_locations=rule_locations,
-                                            requirements_by_chunk={chunk.id: _sweep_requirements_for(rules, ids)
-                                                                   for chunk, ids in rescoped},
-                                            scope_by_chunk={chunk.id: ids for chunk, ids in rescoped})
+                                            requirements_by_chunk=requirements_by_chunk,
+                                            scope_by_chunk=scope_by_chunk,
+                                            scopes=scopes, scope_audit=scope_audit)
                 swept_calls += len(batch)
                 full_sweep_count += 1
                 swept_texts.update(chunk.text for chunk in batch)
@@ -4742,7 +5527,7 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
                 rules_by_id=rules_by_id, rules=rules, original=inspection, actual=actual,
                 planned=planned, targets=targets, facts=facts,
                 obligations=obligation_ledger, replay=replay, findings=findings,
-                coverage_view=coverage_view)
+                coverage_view=coverage_view, scopes=scopes)
             report["final_omission_review"] = final_omission_review
             final_omission_evidence = [
                 {"kind": "final_omission", **issue}
@@ -4785,7 +5570,27 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
             report["failure_classes"] = class_counts
             checks = [*artifacts.checks, "actual_content_verification"]
             hashes = {"final_sha256": artifacts.final_sha256, "redline_sha256": artifacts.redline_sha256}
-            complete = _delivery_complete(unresolved, ledger=obligation_ledger)
+            policy = _delivery_policy()
+            blockers, review_items, business_items = _classify_delivery_items(unresolved)
+            report["delivery_policy"] = policy
+            report["delivery_blockers"] = blockers
+            report["review_items"] = review_items
+            report["business_pending"] = business_items
+            report["review_required"] = bool(review_items)
+            if isinstance(report.get("delivery_gate"), dict):
+                report["delivery_gate"].update({
+                    "policy": policy,
+                    "blocking_unresolved": len(blockers),
+                    "review_items": len(review_items),
+                    "business_pending": len(business_items),
+                })
+            final_omission_blocking = any(
+                _final_omission_issue_blocks(issue)
+                for issue in final_omission_review.get("issues") or [])
+            complete = _delivery_complete(
+                unresolved, ledger=obligation_ledger, policy=policy,
+                claim_replay_verified=replay.get("verified"),
+                final_omission_blocking=final_omission_blocking)
             if isinstance(report.get("recovery"), dict):
                 # ``final`` describes the run, not merely the last attempted action.
                 report["recovery"]["last_outcome"] = report["recovery"].get("final")
@@ -4855,7 +5660,16 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
         if exc.code in STOP_CODES or exc.code in SOFT_STOP_CODES:
             # A transport/budget stop and a malformed model answer both pause the run:
             # the worker keeps the source and the ledger and resumes the same stage.
-            raise RecallPipelineStop(exc.code, {"stage": stage, "metrics": exc.metrics}) from exc
+            _finalize_failure(report, published)
+            report["error_code"] = exc.code
+            report.setdefault("errors", []).append({"code": exc.code, "stage": stage,
+                                                      "message": exc.code})
+            if exc.code in VERIFICATION_BLOCKED_CODES:
+                report["verification_status"] = "verification_blocked"
+                report["verification_blockers"] = [{"code": exc.code, "stage": stage,
+                    **(getattr(exc, "detail", {}) or {})}]
+            raise RecallPipelineStop(exc.code, {"stage": stage, "metrics": exc.metrics},
+                                     report=report) from exc
         report["errors"].append({"code": exc.code, "stage": stage, "message": exc.code})
         _finalize_failure(report, published)
         return report
@@ -4897,6 +5711,11 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
             report["user_summary"] = build_user_summary(report)
         except Exception:  # noqa: BLE001 - the summary must never break the report
             pass
+        # Surface the first engine error as the document-level error code so the
+        # workbench can show a short reason even when the run stopped before the
+        # delivery gate (for example EXISTING_REVISION_UNSUPPORTED at inspect).
+        if not report.get("error_code") and report.get("errors"):
+            report["error_code"] = str(report["errors"][0].get("code") or "")
         try:
             _write_report_markdown(output_dir / "report.md", report)
             _write_edits(output_dir / "edits.json", report)
