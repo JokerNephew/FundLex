@@ -827,6 +827,41 @@ def _validate_outputs(source_parts: Mapping[str, bytes], final_path: Path, redli
     return _digest_bytes(final_path.read_bytes()), _digest_bytes(redline_path.read_bytes())
 
 
+def _validate_block_references(left_parts: Mapping[str, bytes], right_parts: Mapping[str, bytes],
+                               right_root: etree._Element, right_doc,
+                               block_operations: Sequence[_BlockOperation]) -> None:
+    """Ensure cloned paragraphs do not reference styles missing on the left."""
+    def ids(parts: Mapping[str, bytes], name: str, tag: str, attribute: str) -> set[str]:
+        data = parts.get(name)
+        if not data:
+            return set()
+        root = etree.fromstring(data, parser=etree.XMLParser(resolve_entities=False, no_network=True))
+        return {str(node.get(Q(attribute))) for node in root.iter(Q(tag)) if node.get(Q(attribute))}
+
+    styles = ids(left_parts, "word/styles.xml", "style", "styleId")
+    numbers = ids(left_parts, "word/numbering.xml", "num", "numId")
+    for operation in block_operations:
+        for block_id in operation.right_ids:
+            block = next((item for item in right_doc.blocks if item.block_id == block_id), None)
+            if block is None:
+                raise DocxError("SELECTION_BLOCK_STRUCTURE_UNSUPPORTED", block_id)
+            element = _paragraph_element(right_root, block.location)
+            ppr = element.find(Q("pPr"))
+            if ppr is not None:
+                style = ppr.find(Q("pStyle"))
+                if style is not None and style.get(Q("val")) not in styles:
+                    raise DocxError("SELECTION_BLOCK_STYLE_UNSUPPORTED", block_id)
+                numpr = ppr.find(Q("numPr"))
+                numid = numpr.find(Q("numId")) if numpr is not None else None
+                if numid is not None and numid.get(Q("val")) not in {None, "0"} and numid.get(Q("val")) not in numbers:
+                    raise DocxError("SELECTION_BLOCK_STYLE_UNSUPPORTED", block_id)
+            for run in element.findall(Q("r")):
+                rpr = run.find(Q("rPr"))
+                style = rpr.find(Q("rStyle")) if rpr is not None else None
+                if style is not None and style.get(Q("val")) not in styles:
+                    raise DocxError("SELECTION_BLOCK_STYLE_UNSUPPORTED", block_id)
+
+
 def generate_selection_artifacts(
     left_source: str | Path,
     right_source: str | Path,
@@ -883,14 +918,10 @@ def generate_selection_artifacts(
     source_parts = _read_parts(left_source, limits)
     right_parts = _read_parts(right_source, limits)
     _validate_package(source_parts, limits, full=True)
-    if block_operations:
-        # Cloned paragraphs keep their style and numbering references.  Only
-        # allow that when the two packages share those reference tables.
-        for name in ("word/styles.xml", "word/numbering.xml"):
-            if source_parts.get(name) != right_parts.get(name):
-                raise DocxError("SELECTION_BLOCK_STYLE_UNSUPPORTED", name)
     original = _xml(source_parts[DOCUMENT], limits)
     right_root = _xml(right_parts[DOCUMENT], limits)
+    if block_operations:
+        _validate_block_references(source_parts, right_parts, right_root, right_doc, block_operations)
     final_root, redline_root = deepcopy(original), deepcopy(original)
     when = datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
     try:
