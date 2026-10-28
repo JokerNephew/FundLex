@@ -374,7 +374,7 @@ PART_HEADING_RE = re.compile(r"^第[一二三四五六七八九十百]+部分")
 
 def _heading_like(text: str, style: str) -> bool:
     t = (text or "").strip()
-    if not t or len(t) > 70:
+    if not t or len(t) > 90:
         return False
     if style.lower().startswith("heading"):
         return True
@@ -382,7 +382,7 @@ def _heading_like(text: str, style: str) -> bool:
         return True
     if re.match(r"^[一二三四五六七八九十百]+、.*摘要", t):
         return True
-    if SUB_HEADING_RE.match(t) and "。" not in t and len(t) <= 45:
+    if SUB_HEADING_RE.match(t) and "。" not in t and len(t) <= 80:
         return True
     return False
 
@@ -632,6 +632,9 @@ def primary_prompt(doc: DocModel, guide_text: str, rule_ids: list[str] | None = 
     并列入 uncertain，不要猜。
 11. 若无法判断某规则是否适用，status=unknown 并写清缺口；不要把 unknown 直接写成
     not_applicable。已满足必须有原文证据；不适用必须写条件/缺失依据。
+11b. 若合同全文只出现一个份额类别（例如只有“基金份额类别”定义但没有 A/C 等分类，费用章也只有
+    一个销售服务费/申购费率水平），按单类别（class_count=1）事实处理并给出证据；不要因为找不到
+    “A类/C类”字样就把 share_classes 或 class_count 留空。反过来，只有确实存在多个类别时才按多类别。
 12. 不要引用或猜测任何引擎结果、历史标签、报告或文件名规则；只依据本合同和指引。
 """
 
@@ -997,8 +1000,9 @@ def normalize_targets(raw_targets: Any, doc: DocModel, rule_map: dict[str, Any])
             issues.append(f"target {nr} {rule_id}: scope=main but p{para_idx} is summary")
         if not section_scope_ok(rule_id, para):
             issues.append(
-                f"target {nr} {rule_id}: p{para_idx} outside expected section ({para.section_path})"
+                f"target {nr} {rule_id}: dropped p{para_idx} outside expected section ({para.section_path})"
             )
+            continue
         old_text = str(_first(raw, "old_text", "old", "source_text") or "")
         required_text = str(_first(raw, "required_text", "new_text", "replacement", "new") or "")
         source_quote = str(_first(raw, "source_quote", "quote", "evidence_quote") or "")
@@ -1497,14 +1501,14 @@ def mandatory_checks(
             issues.append(f"G06 missing target at p{idx}: class conversion restriction must be deleted")
     # G01/G03 append anchors
     for rule_id, section_word in (("G01", "释义"), ("G03", "基金的基本情况")):
-        for idx in [
+        anchors = [
             p.index for p in doc.nonempty()
             if section_word in p.section_path
             and ("称为" in p.text or "将基金份额分为" in p.text)
             and "基金份额类别" in p.text
-        ]:
-            if not has_target(rule_id, [idx]):
-                issues.append(f"{rule_id} missing append target at p{idx}: class definition direct-sale policy")
+        ]
+        if anchors and not has_target(rule_id):
+            issues.append(f"{rule_id} missing append target in {section_word}: class definition direct-sale policy")
     # G22
     if floating is False and has_service is True and multi:
         for idx in candidate_paras("G22", lambda t: "全部剩余资产" in t):
@@ -1562,6 +1566,7 @@ def build_case_result(
                 "evidence_quote": None,
             })
         satisfied, not_applicable, unknown, target_cov = derive_lists(coverage, targets)
+        issues = ["DOCUMENT_PROTECTED: no modification target by policy; denominator retained"]
     result = {
         "case_id": case["case_id"],
         "group": case["group"],
