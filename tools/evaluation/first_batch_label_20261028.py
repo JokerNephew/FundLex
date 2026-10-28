@@ -1688,24 +1688,27 @@ def run_case(
     # produced an invalid quote/location. This is not a truth search; it only
     # asks the same model to fix objective omissions against the same source.
     if issues:
-        feedback = (
-            "\n\n# 上一轮输出的客观问题\n"
-            + "\n".join(f"- {item}" for item in issues[:80])
-            + "\n请重新通读合同，输出完整 JSON，修正以上问题；不要减少已正确站点。\n"
-        )
-        raw2, _ = client.chat_json(
-            model=primary_model,
-            system=system_prompt(),
-            user=primary_prompt(doc, guide_text) + feedback,
-            max_tokens=24000,
-            phase="primary_repair",
-            case_id=case_id,
-            retries=6,
-            temperature=primary_temperature,
-        )
-        result2, issues2 = build_case_result(case=case, doc=doc, raw=raw2, rule_map=rule_map)
-        if len(issues2) <= len(issues):
-            result, issues = result2, issues2
+        try:
+            feedback = (
+                "\n\n# 上一轮输出的客观问题\n"
+                + "\n".join(f"- {item}" for item in issues[:80])
+                + "\n请重新通读合同，输出完整 JSON，修正以上问题；不要减少已正确站点。\n"
+            )
+            raw2, _ = client.chat_json(
+                model=primary_model,
+                system=system_prompt(),
+                user=primary_prompt(doc, guide_text) + feedback,
+                max_tokens=24000,
+                phase="primary_repair",
+                case_id=case_id,
+                retries=6,
+                temperature=primary_temperature,
+            )
+            result2, issues2 = build_case_result(case=case, doc=doc, raw=raw2, rule_map=rule_map)
+            if len(issues2) <= len(issues):
+                result, issues = result2, issues2
+        except RuntimeError as exc:
+            issues.append(f"primary_repair_failed: {str(exc)[:160]}")
     review_obj: dict[str, Any] = {
         "model": review_model if review else None,
         "status": "skipped",
@@ -1813,6 +1816,36 @@ def run_case(
     return result, client.usage, review_obj
 
 
+def build_error_case(case: dict[str, Any], error: Exception) -> dict[str, Any]:
+    return {
+        "case_id": case["case_id"],
+        "group": case["group"],
+        "file": case["file"],
+        "relative": case.get("relative"),
+        "sha256": case["sha256"],
+        "bytes": case.get("bytes"),
+        "stratum": case.get("stratum"),
+        "document": {"paragraph_count": None, "text_sha256": None, "summary_start": None,
+                     "summary_headings": [], "protection": {"protected": None}},
+        "fund": {},
+        "rule_coverage": [],
+        "targets": [],
+        "satisfied": [],
+        "not_applicable": [],
+        "unknown": [],
+        "uncertain": [],
+        "protected": None,
+        "excluded": None,
+        "label_quality": {
+            "issue_count": 1,
+            "issues": [f"case_failed: {type(error).__name__}: {str(error)[:240]}"],
+            "truncated_issues": 0,
+        },
+        "review": {"model": None, "status": "skipped", "findings": {}},
+        "usage": {"calls": 0, "prompt_tokens": 0, "completion_tokens": 0},
+    }
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--selection", default=str(DEFAULT_SELECTION))
@@ -1860,18 +1893,22 @@ def main(argv: list[str] | None = None) -> int:
     all_usage: list[dict[str, Any]] = []
     def _run(case: dict[str, Any]):
         print(f"[label] {case['case_id']} {case['file']}", flush=True)
-        result, _usage, _review = run_case(
-            case=case,
-            selection=selection,
-            client=client,
-            primary_model=args.primary_model,
-            review_model=args.review_model,
-            guide_text=guide_text,
-            rule_map=rule_map,
-            review=args.review,
-            primary_temperature=args.primary_temperature,
-            review_temperature=args.review_temperature,
-        )
+        try:
+            result, _usage, _review = run_case(
+                case=case,
+                selection=selection,
+                client=client,
+                primary_model=args.primary_model,
+                review_model=args.review_model,
+                guide_text=guide_text,
+                rule_map=rule_map,
+                review=args.review,
+                primary_temperature=args.primary_temperature,
+                review_temperature=args.review_temperature,
+            )
+        except Exception as exc:  # never abort the whole wave on one contract
+            result = build_error_case(case, exc)
+            print(f"[label] {case['case_id']} FAILED: {type(exc).__name__}: {str(exc)[:160]}", flush=True)
         print(
             f"[label] {case['case_id']} targets={len(result['targets'])} "
             f"issues={result['label_quality']['issue_count']} "
