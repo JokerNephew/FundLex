@@ -10,7 +10,7 @@
 - 规划时分支 `codex/regulation-guide-generation`，HEAD `99a5dad27aa68e73362851d136bd0955944707ea`；大量dirty/未跟踪依赖需在S0保护，不能只切旧HEAD。
 - 业务边界：规则对应范围外不改、不额外去重。范围按指引和完整条款语义，不按漏选scope定义。
 - 历史审计95 passed/全量1803 passed等只代表过去版本/适用范围，不能填写成本方案的新验收。
-- 当前工程总状态：**进行中 / NO-GO**。本轮真实模型调用0、费用0；未改合同/未部署。离线全量测试 **1846 passed / 13 skipped**（2026-10-28 本轮代码）。
+- 当前工程总状态：**进行中 / NO-GO**。本轮真实模型调用0、费用0；未改合同/未部署。离线全量测试 **1871 passed / 13 skipped**（commit `c5d5ab5`，2026-10-28）。
 - 执行分支 `codex/semantic-engine-remediation-20261028`（从 `99a5dad` 带 dirty 树创建）；可恢复基线 `/tmp/opencode/semantic-remediation-baseline-20261028-150805/`（tracked patch、index patch、untracked code tar、578份合同 sha256）；本批代码快照 `/tmp/opencode/semantic-remediation-slice-20261028-162300/`。
 - **未提交 Git commit 的原因**：`recall.py`/`recall_pipeline.py`/`effects.py`/`claim_replay.py` 在本任务前已有约 2873 行未提交改动，直接提交会混入无关工作。S0 的“逐文件/hunk 建立审阅基线”仍未完成，当前以补丁快照保证可恢复；下一执行者必须先完成基线分离再按阶段提交。
 - 方案已由两名只读agent分别审阅语义架构与测试/发布约束，均已完成，无本轮运行中的agent/任务。主agent已整合固定发布源/遗漏Guide Worker及第一批历史预测不构成新独立留出的风险；这些是规划证据，不是修复成果。
@@ -76,6 +76,8 @@ S1后S2/S4及部分测试可并行；S3依赖S2/契约，S5依赖批准/事实�
 | `102435a` | 有批准才允许受控compose升级；集合枚举/收费“实行”语法 |
 | `af2acd7` | 批准变体升级回归测试 |
 | `e9ce4f6` | 截断的残留扫描计入未完成 |
+| `d1f966e` | 超长事实段落不再屏蔽后续证据 |
+| `c5d5ab5` | 事实分族：仅字面冲突同时污染两组，未知不再抹掉已证组；全量 **1871 passed / 13 skipped** |
 
 未提交：既有frontend/compare/feishu等无关dirty工作保持原状，未混入以上提交。
 
