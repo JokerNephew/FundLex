@@ -25,6 +25,10 @@ class FakeOAuthClient:
     def qr_svg(value):
         return "<svg data-test='qr'></svg>"
 
+    @staticmethod
+    def qr_png(value):
+        return "data:image/png;base64,iVBORw0KGgo="
+
     def exchange_identity(self, code):
         if code != "valid-code":
             from fundlex.integrations.feishu.oauth import FeishuOAuthError
@@ -58,6 +62,7 @@ def test_oauth_start_and_callback_bind_current_account(tmp_path, monkeypatch):
     assert started.status_code == 200
     payload = started.json()
     assert payload["qr_svg"] == "<svg data-test='qr'></svg>"
+    assert payload["qr_png"].startswith("data:image/png;base64,")
     state = re.search(r"state=([^&]+)", payload["authorization_url"]).group(1)
 
     callback = client.get("/api/integrations/feishu/oauth/callback", params={"code": "valid-code", "state": state})
