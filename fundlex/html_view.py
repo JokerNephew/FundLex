@@ -1,8 +1,10 @@
 """Read-only DOCX → interactive HTML projection for the workbench.
 
-This module renders a contract (WITH revision marks intact) as HTML so the user
-can review the document and accept/reject each revision individually, exactly
-like operating on the Word document itself.
+This module renders a contract (WITH revision marks intact) as a structured
+HTML preview so the user can review the document and accept/reject each
+revision individually.  It preserves text, tables and revision anchors, but it
+is not a Word layout engine: pagination, floating objects and drawing fidelity
+are intentionally out of scope.
 
 Design rules
 ------------
@@ -16,8 +18,9 @@ Design rules
   containers (``w:sdt`` / ``w:sdtContent``) and tables are not silently
   dropped. The previous demo converter only looked at top-level ``w:p`` /
   ``w:tbl`` and lost the entire table of contents (see FL-D087).
-* Hyperlinks, fields, bookmarks, tabs and page breaks are all projected so the
-  rendered page matches what the user sees in Word.
+* Hyperlinks, fields, bookmarks, tabs and page breaks are projected so the
+  structured preview retains the document's reading order and revision anchors.
+  Word-specific layout and drawing fidelity are not claimed.
 """
 
 from __future__ import annotations

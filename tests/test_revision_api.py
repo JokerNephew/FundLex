@@ -87,6 +87,14 @@ def test_accept_all_publishes_downloadable_selected_final(seeded):
     assert download.status_code == 200
     assert download.content[:2] == b"PK"
     assert "selected_final" in download.headers["content-disposition"]
+    # A human selection is still a working file; it never upgrades the
+    # persisted delivery status or turns an incomplete contract into a final.
+    document = client.app.state.store.get_document("dev", batch["id"], doc)
+    assert document["delivery_status"] == "incomplete"
+    from fundlex.edit_summary import archive_entry
+    root, path = archive_entry("selected_final", "合同", ".docx",
+                               delivery_status=document["delivery_status"])
+    assert root == "工作文件（未完成）" and "人工选择" in path
 
 
 @requires_real

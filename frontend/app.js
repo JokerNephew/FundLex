@@ -383,7 +383,7 @@
     const hasRedline=Boolean(downloads.working_redline || downloads.redline);
     if(!hasRedline||doc.execution_mode==='evaluation') return '';
     return `<div class="detail-section" id="revision-section"><h3>逐条审查修订</h3>
-      <p class="subnote">在下方查看合同实际呈现，逐条选择接受或拒绝修订（与在 Word 中操作一致），再生成选择版合同。未完成交付的合同仍为工作文件，请结合报告核对。</p>
+      <p class="subnote">在下方查看结构化修订预览，逐条选择接受或拒绝修订，再生成选择版合同。预览保留正文、表格和修订锚点，但不代表 Word 的分页或图形呈现；未完成交付的合同仍为工作文件，请结合报告核对。</p>
       <div class="detail-actions"><button class="btn btn-sm btn-primary" data-action="open-review">打开修订审查</button><button class="btn btn-sm" data-action="accept-all">一键接受全部修订</button></div>
       <p class="subnote" id="review-status"></p></div>`;
   }

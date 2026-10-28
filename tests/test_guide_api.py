@@ -255,6 +255,31 @@ def test_explicit_retry_of_exhausted_guide_creates_a_new_version(client):
     assert active.json()["version"]["id"] == responses[1]["id"]
 
 
+def test_reparse_keeps_existing_task_snapshot_immutable(client):
+    guide = parsed_custom(client, label="旧指引")
+    store = client.app.state.store
+    switched = client.put("/api/settings/guide", headers=ALICE, json={"version_id": guide["id"]})
+    assert switched.status_code == 200
+    data = docx_bytes("合同正文示例")
+    created = client.post("/api/tasks", headers=ALICE | {"Idempotency-Key": "snapshot-1"},
+                          json={"name": "快照任务", "engine_id": "recall_first",
+                                "files": manifest(data)})
+    assert created.status_code == 201, created.text
+    task = created.json()
+    assert task["guide_snapshot"] == {"version_id": guide["id"],
+                                      "rules_sha256": guide["rules_sha256"]}
+    reparsed = client.post(f"/api/guides/{guide['id']}/parse", headers=ALICE)
+    assert reparsed.status_code == 202
+    new_version = reparsed.json()["version"]
+    assert new_version["id"] != guide["id"]
+    assert new_version["parent_version_id"] == guide["id"]
+    old = guide_store.get_version(store, "alice", guide["id"])
+    assert old["rules_sha256"] == guide["rules_sha256"]
+    detail = client.get(f"/api/tasks/{task['id']}", headers=ALICE).json()
+    assert detail["guide_snapshot"] == task["guide_snapshot"]
+    assert guide_store.current_guide(store, "alice")["id"] == guide["id"]
+
+
 def test_recall_task_creation_binds_guide_snapshot(client):
     data = docx_bytes("合同正文示例")
     files = manifest(data)

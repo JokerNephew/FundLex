@@ -2,7 +2,7 @@ name: Delivery E2E
 
 on:
   push:
-    branches: [main, master]
+    branches: [main, master, codex/fundlex-recall-first, codex/outer-remediation-20261028]
   pull_request:
   workflow_dispatch:
 
