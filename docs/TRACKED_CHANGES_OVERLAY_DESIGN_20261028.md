@@ -1,6 +1,6 @@
 # 带既有修订痕迹 DOCX 的叠加修订设计（2026-10-28）
 
-状态：**核心垂直切片已实现（投影/写入/最终接受/上传放行），嵌套修订与前端/真实E2E未完成**。作者默认值按用户 2026-10-28 指示改为“资金清算部”。
+状态：**核心垂直切片已实现并完成真实带修订合同运行（投影/写入/最终接受/上传放行/作者区分）；嵌套修订、段落标记、前端展示与Word/WPS双端往返未完成**。作者按用户 2026-10-28 指示为“资金清算部”。
 
 ## 1. 需求与不变量
 
@@ -152,3 +152,12 @@ ArtifactValidation.three_way_equivalence, foreign_revisions_preserved, author_se
 - 既有修订只作为“当前状态”，不重新判定其业务对错；我们的规则仍按指引判断，范围外不动。
 
 以上为设计，不含实现。下一步应先做 R1 投影与合成 fixture，验证双视图和段落标记，再决定嵌套修订是否可作为默认路径。
+
+
+## 8. 实施与真实运行证据（2026-10-28）
+
+- 代码：`fundlex/docx.py`（`inspect_docx/generate_artifacts/validate_edit_plan` 的 `allow_existing_revisions`，接受视图投影、作者/ID分配、既有修订清单校验）、`fundlex/api.py` 与 `fundlex/integrations/feishu/service.py`（上传不再拒绝）、`fundlex/recall_pipeline.py`（输入/规划/产物使用overlay，报告`source_revisions`）。
+- 测试：`tests/test_tracked_changes_overlay.py` 3 passed；全量离线 **1930 passed / 13 skipped**；飞书聚焦 31 passed。
+- 真实运行：把弘利合同 p159 首句包成 `w:ins`（作者“法律部”，id 9001），跑真实模型：28 targets / 9 edits / 42 calls / $0.0451。`working_redline.docx` 含 9 个我方 `del` + 9 个我方 `ins`（作者“资金清算部”）以及 1 个既有 `ins`（“法律部”）；`working_final.docx` 无任何修订；报告 `source_revisions` 记录 1 处、作者“法律部”。
+- 该运行仍为 `incomplete`，原因是既有引擎证明问题（G02/G04 satisfied未证明、G06/G13/G17无目标路径等），**不是叠加修订功能失败**。
+- 未完成：对方插入内部的嵌套修订（当前明确阻断）、段落标记/移动修订、同名作者自动区分、前端显示与下载标签、Word/WPS 双端打开核对、已含“资金清算部”修订的幂等。

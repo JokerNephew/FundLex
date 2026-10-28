@@ -11,8 +11,10 @@
 - 设计：`docs/TRACKED_CHANGES_OVERLAY_DESIGN_20261028.md`。核心是双视图投影（接受视图供模型分析、原始视图供XML写回）、字符级修订上下文（normal/foreign_ins/our_ins/foreign_del/move）、作者与ID区分（可配置作者、扫描全包最大ID）、嵌套修订优先且不支持时明确阻断、三向等价校验（接受全部=final；只拒绝我方=对方接受稿；拒绝全部=原始基线）、既有修订清单与报告分离。
 - 待验证：`<w:ins>`内嵌`<w:del>`在Word/WPS的往返兼容；段落标记修订导致接受后段落边界变化；同名作者；既有ID冲突；表格/页眉页脚等结构能力；幂等（已含FundLex修订默认拒绝重跑）。
 - **2026-10-28 实施进展（核心垂直切片）**：作者默认改为用户指定的“资金清算部”。`inspect_docx(..., allow_existing_revisions=True)` 现按接受视图投影（对方`w:ins`可读不可写、`w:del`排除、不再标`revision_content`）；上传不再以`EXISTING_REVISION_UNSUPPORTED`拒绝；`generate_artifacts(..., allow_existing_revisions=True)` 保留对方修订、我方ID从既有最大ID之后分配、final接受全部修订、redline校验既有修订清单不变；编辑落在对方插入内部或跨修订节点时明确报`FOREIGN_INSERTION_EDIT_UNSUPPORTED`/`FOREIGN_REVISION_INTERSECTION`，不静默改写。报告新增`source_revisions`（数量/作者/明细）。新增`tests/test_tracked_changes_overlay.py` 3 passed；聚焦回归160 passed。
-- 状态：**核心已实现并离线验证；嵌套修订、段落标记修订、前端提示、真实带修订合同E2E、全量回归未完成**。默认业务口径（final接受全部、对方插入改写优先嵌套否则阻断）列在设计§7。
-- 下一步：全量回归；段落标记/移动修订/表格结构；嵌套`ins`内`del`的Word/WPS往返；前端显示既有修订与作者区分；用真实带修订合同跑通上传→修改→下载→接受/拒绝三向等价。
+- **真实带修订合同运行（2026-10-28）**：将弘利 p159 首句注入 `w:ins`（作者“法律部”），真实模型 28 targets/9 edits/42 calls/$0.0451；redline 保留既有1处“法律部”插入，并含我方9 del+9 ins（作者“资金清算部”）；final 无任何修订；报告 `source_revisions` 记录既有修订。该任务仍 `incomplete`，原因是既有证明问题（G02/G04/G06/G13/G17），不是叠加功能失败。
+- 验证：`tests/test_tracked_changes_overlay.py` 3 passed；全量离线 **1930 passed / 13 skipped**；飞书聚焦31 passed。
+- 状态：**核心已实现、离线与真实合同运行验证；嵌套修订、段落标记/移动修订、同名作者、前端展示、Word/WPS双端往返、已含“资金清算部”修订的幂等未完成**。
+- 下一步：嵌套`ins`内`del`的Word/WPS往返；段落标记/表格结构；前端提示与下载标签；三向等价在真实Word中复核；幂等与重复上传。
 
 ## FL-D445 用户取消模型预算限制并授权按需调用真实模型（2026-10-28）
 
