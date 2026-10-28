@@ -4,6 +4,19 @@
 >
 > 测试中遇到的业务问题单独汇总在 [`BUSINESS_ISSUES_FROM_TESTS.md`](BUSINESS_ISSUES_FROM_TESTS.md)，与代码/定位缺陷分开维护。
 
+## FL-D447 Compare 选择版支持空侧段落 insert/delete 与跨段替换（2026-10-28）
+
+- 发现日期：2026-10-28，用户确认支持空侧 insert/delete 和跨段联合修改。
+- 问题与影响：原 writer 直接拒绝 `insert`/`delete`，跨段 `modify` 因多 span 被 `SELECTION_MULTI_BLOCK_UNSUPPORTED` 阻断；真实合同版本中整段新增/删除、段落拆分/合并都无法生成选择版。
+- 处理方法（已实施）：
+  - 新增 `_BlockOperation` 与块级计划：空侧整段插入/删除、跨段 `replace`；正文和表格单元格内的普通段落均在范围内。
+  - final 直接增删/替换段落；redline 生成段落标记 `w:ins`/`w:del` + run 级修订；接受全部修订后的校验必须等于 final。
+  - `_validate_block_references()` 只校验克隆段落引用的 style/rStyle/numId 在左侧包中存在，不再要求整个 `styles.xml` 字节相同。
+  - 同一锚点多个 insert 按文档顺序插入；跨段替换允许部分 span，但同一块有其它 diff 时 `SELECTION_BLOCK_OVERLAP` 失败关闭。
+  - 整表/整行、合并单元格、content control、域/drawing 仍按失败关闭。
+- 状态与验证：**已实施、测试并生产发布。** 分支 `codex/compare-selection-group-fix` 提交 `429f1bf` / `38861f4` 已推送；Compare 全套 **112 passed / 6 skipped**。生产 `selection.py` SHA `3a5a6d39...`、`selection_writer.py` SHA `2898dcb8...`，API active、capabilities 200。生产 API 小样本三组（整段插入、整段删除、跨段拆分）全部生成成功；真实 1,417 段合同插入整段后 final 1,418 段、p836 为新增文本、redline 2 处 `w:ins` + 0 `w:del`；生产浏览器完成跨段拆分选择、预览、生成、下载，final 为 `abcdX`/`Yefgh`，0 页面/控制台错误。证据 `/tmp/opencode/fundlex-compare-block-e2e-20261028/`、`/tmp/opencode/fundlex-compare-block-browser-20261028/`。临时账号/任务/对象已清理；发布备份 `/tmp/opencode/fundlex-compare-block-selection-20261028/`。
+- 下一步：整表/整行、合并单元格、content control、域/drawing 仍未开放；header/footer 比较仍是独立事项。
+
 ## FL-D446 带既有修订痕迹的DOCX需叠加并区分FundLex修订（2026-10-28，设计）
 
 - 发现日期：2026-10-28，用户新要求：上传件可能是其他部门改过、带Word修订痕迹的DOCX，需要在其上叠加修订，并与原有修订区分。
@@ -393,6 +406,34 @@
 - 状态与验证：**代码修复已实施，隔离真实浏览器 D06 路径已验证；生产部署与固定 D01–D20/holdout 仍未完成。** 聚焦套件 `tests/test_recall_core.py tests/test_append_applicability.py tests/test_ff4d749_gate_closure.py tests/test_operation_execution_closure.py tests/test_final_validation_regressions.py tests/test_replay_site_provenance.py tests/test_recovery_final_invariants.py` 为 **306 passed**；`py_compile`、`git diff --check` 通过。用失败运行的真实最终 DOCX、plan、Claim Replay 和 findings 离线复算，`SW004` 由 `pending/SEMANTIC_UNCERTAIN` 变为 `resolved/REVIEW_UNPROVEN`，最终遗漏复核由 `FAIL` 变为 `PASS`。随后浏览器重跑 `/tmp/opencode/d06-browser-real-20261027b`：任务 `completed`、文档 `succeeded/complete`、49 targets/0 unresolved、Claim Replay verified、最终遗漏 PASS、19 个段落变化、final SHA `0b25951e...`、redline SHA `d52faf32...`；结果页显示“可直接使用/已通过交付校验/最终版 DOCX/修订版 DOCX”，下载与报告哈希一致，未授权下载 401。重跑临时脚本在下载后的 `docx_check` 字段名上误取 `sha256`，故原始 `result.json` 为 failed；独立 `browser-verification.json` 对保留证据的 12 项检查全部通过，原始失败记录保留不覆盖。
 - 工具兼容：为运行隔离 API/Worker 路径，`tools/evaluation/delivery_e2e.py` 的 Claim Replay 断言同时接受当前 recall 报告的 `verified` 和旧 fixture 的 `passed`；`tests/test_delivery_e2e.py` **2 passed**，fixture 全用户路径仍通过。该修改只放宽报告字段别名，不放宽 Claim Replay 证据。
 - 下一步：将隔离工作台验证与生产部署/普通工作台 E2E 分开记录；继续固定 D01–D20、holdout、独立标签和 candidate freeze，不能用本次单合同通过替代整批评测或生产交付。
+
+## FL-D401 资金清算部指引范围：只需覆盖指引自身章节，不要求全合同（2026-10-28）
+
+- 发现日期：2026-10-28，用户明确业务范围。
+- 问题与影响：当前 coverage/quality/Residual 以整份合同和全部法规要求为分母；指引实际只服务资金清算相关章节（费用、申购赎回、发售、份额类别、合同摘要、信息披露、持有人大会、附则/过渡期等），因此大量“其他章节未覆盖”被误判为 gap / latest uncertain / critical，导致 smoke 无法达到 candidate_ready。
+- 处理方法（待实施）：引入显式 `guide_scope_sections`（默认由当前 GuideItem 的 section 归一化得到）；coverage 仅评估 scope 内的要求/影响/合同×要求组合；scope 外标为 `out_of_scope`，不产生 gap/uncertain/critical；Residual 只扫描 scope 内条款；质量复核不因 scope 外主题缺失而失败；最终门禁只统计 scope 内未闭合项。scope 写入 payload/guide 元数据。
+- 处理方法（已实施）：新增 `fundlex/guide_generation/scope.py`，从 `guides/builtin_guide_v1.json` 动态读取 `section_hint` 作为后续生成指引范围；当前为 **释义、基金的基本情况、基金份额的申购与赎回、基金费用与税收、基金的收益与分配、基金财产的清算**（6 个章节）。coverage 对范围外要求/影响标记 `out_of_scope`，不产生 gap/uncertain/critical；`latest_contract_uncertain` 只统计范围内；Residual 只扫描范围内条款；authoring 在生成前按 scope 过滤 Impact，不生成范围外章节的指引条目；scope 写入 payload/finalize。
+- 状态与验证：**已实施并通过离线回归**。新增“内置 scope 清单”“范围外 requirement 不产生 gap”用例；法规六套件 **91 passed**。smoke27 在实施前停止（范围变更，不作为资格证据）；全量回归运行中，smoke28 待 scope-aware 真实验证。
+- 下一步：全量回归通过后跑 smoke28；核对 latest uncertain、semantic_coverage、Residual 与质量是否按新范围闭合。
+- 变更记录：2026-10-28 新增；不得用 scope 过滤掩盖 scope 内的真实缺口。
+
+## FL-D400 smoke26 Residual 上下文超限与 circuit 误伤 quality/repair（2026-10-28）
+
+- 发现日期：2026-10-28，smoke26（8 轮 Residual）。
+- 问题与影响：smoke26 的 `critical_quality=0`、gaps=0、independent qualified，但 latest uncertain 3、unresolved 12、Residual 8 轮全部 blocked：`guide_residual_sweep` 出现 **296 次 `MODEL_CONTEXT_LIMIT`**（188 个 GuideItem 的全量索引 + 明细 + contract 超过 32000 字符）；quality/repair 分别有 36/32 次 `MODEL_CIRCUIT_OPEN`。结果 quality fail，费用 $1.004487、1502 requests。
+- 证据：run `b05bcf54262c4b5ca8d603e99b9e765a`；`MODEL_CONTEXT_LIMIT` 296、quality circuit 36、repair circuit 32；critical_quality 0、latest 3、unresolved 12。
+- 处理方法：(a) `_guide_index` 压缩为 id + 前 2 个 requirement + title 50，限 14000 字符；`_guide_details` 限 4000；contract 限 6000；context 硬上限 30000，且索引在前，截断只切合同文本；(b) `GuideModelRouter._invoke_gateway()` 遇 `MODEL_CIRCUIT_OPEN` 等待 125s 重试一次，quality/repair/coverage 不再整段 blocked。
+- 状态与验证：**已实施并通过离线回归**。新增 150 指引上下文 ≤30000 且全部 ID 可见用例、router circuit 等待重试用例；`tests/test_guide_generation.py` **33 passed**，法规其余套件 56 passed。smoke27 待验证。
+- 变更记录：2026-10-28 新增。
+
+## FL-D399 smoke25：latest uncertain 清零、Residual 真正执行并收敛，但仍差内容闭合（2026-10-28）
+
+- 发现日期：2026-10-28，按合同 coverage tail + circuit 重试后的 smoke25。
+- 结果：**latest_contract_uncertain = 0**、independent reviewer `qualified`、无 circuit 错误；Residual 五轮实际执行并新增 **21/15/11/8/3**（明显收敛但未饱和）；仍有 requirement gap **1**、critical_quality **1**、unresolved **4**，quality `fail`；impacts 2080、items 153、findings 1251，费用 $1.35985、1700 requests。
+- 证据：run `462f25deebf1452f87ca21fb7201047d`；coverage tail 使窗口覆盖所有要求；residual circuit 重试生效；`MODEL_CIRCUIT_OPEN` 为 0。
+- 处理方法：不改门禁；用 8 轮 Residual 做最后一次内容收敛（smoke26），观察是否达到连续两轮 clean；1 个 gap/critical 由补写/修复处理，否则如实保留。
+- 状态与验证：**覆盖 tail 与 circuit 修复已验证；Residual/内容仍未闭合**。smoke26 进行中。
+- 变更记录：2026-10-28 新增。
 
 ## FL-D398 Residual 在 `MODEL_CIRCUIT_OPEN` 时五轮全部 blocked（2026-10-28）
 

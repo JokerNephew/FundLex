@@ -200,10 +200,10 @@
 | 阶段 | 状态 | 最近证据 | 下一动作 |
 | --- | --- | --- | --- |
 | 0 基线/分支/方案 | 已完成 | 分支 `codex/v1-compare-selection`；方案提交 `dd52a1d` | 开始阶段二 |
-| 1 选择契约 | 已完成，待提交 | `.venv/bin/pytest -q tests/test_compare_selection.py tests/test_compare_algorithm.py tests/test_compare_api.py`：34 passed；选择模块与原有 Compare 回归共同通过 | 提交 selection contract，再开始阶段二 |
-| 2 DOCX 生成器 | 已完成，待提交 | `.venv/bin/pytest -q tests/test_compare_selection_writer.py`：6 passed；真实 DOCX 生成、修订版接受等价和结果复读通过；空侧结构差异 fail closed | 提交 writer，再开始阶段三持久化/API |
-| 3 持久化/API | 未开始 | — | 增加迁移、草稿、artifact 和下载路由 |
-| 4 V1 阅读器 | 未开始 | — | 接入右侧选择 rail 和生成状态 |
-| 5 全链路/候选 | 未开始 | — | 分层回归、真实用户路径、候选冻结 |
+| 1 选择契约 | 已完成 | 提交 `b8987e1`；选择契约与原有 Compare 回归通过 | 开始阶段二 |
+| 2 DOCX 生成器 | 已完成 | 提交 `99a5dad`；真实 DOCX 生成、修订版接受等价和结果复读通过；空侧结构差异 fail closed | 开始阶段三持久化/API |
+| 3 持久化/API | 已完成（离线/MySQL） | 新增草稿与选择产物表、GET/PUT selection、preview、generate、鉴权下载；epoch/result/source 冲突、增量保存合并、重复生成幂等、旧版本 stale；Compare + selection 定向 **91 passed / 5 skipped**；一次性 MySQL 8.0.46 套件 **27 passed** | 阶段四 V1 阅读器 |
+| 4 V1 阅读器 | 已完成（离线浏览器） | 逐差异左右 radio、进度、批量左右、清除、保存、预览、生成、版本/过期标记、选择报告与授权下载；完整浏览器 **43 passed**，含 390px 无横向溢出 | 阶段五候选验证 |
+| 5 全链路/候选 | 离线/浏览器/MySQL 已完成；生产真实用户路径待发布授权 | 真实 DOCX 上传→seal→Worker→view→save→generate→download 通过；生产未部署、未跑真实用户下载 | 获得发布与生产验证授权后完成真实路径 |
 
-最后更新：2026-10-26，阶段二实现完成。下一条可执行动作是提交安全 OOXML writer 和定向测试，再开始阶段三的草稿、epoch、artifact 和下载 API。
+最后更新：2026-10-26，阶段三/四实现完成，阶段五离线与真实 MySQL 回归通过。生产真实用户路径、部署哈希、候选冻结和授权下载尚未执行，不能标记为正式交付完成。结构新增/删除（空侧段落级操作）、跨段联合操作仍按设计 fail closed；旧版本下载保留但明确标记 stale。

@@ -241,13 +241,15 @@ def _validate_result(diffs: tuple[Any, ...]) -> tuple[tuple[str, ...], tuple[Sel
         }[kind]
         if (left_present, right_present) != expected:
             raise SelectionError("COMPARE_RESULT_INVALID", f"{kind} sides are malformed for {diff_id}")
-        # A multi-block span is still one decision, but the writer must later
-        # decide whether it has a safe OOXML operation for the whole unit.
+        # A multi-block span is still one decision.  The writer performs the
+        # real structural eligibility check; preview must not reject every
+        # paragraph split/merge before the writer has a chance to inspect it.
         for side, spans in spans_by_side.items():
             block_ids = {str(_span_value(span, "block_id")) for span in spans}
             if len(block_ids) > 1:
                 issues.append(SelectionIssue(
-                    "MULTI_BLOCK_DIFF", f"{side} 侧差异跨越多个文档块，当前写入器需要联合结构操作。", (diff_id,)))
+                    "MULTI_BLOCK_DIFF", f"{side} 侧差异跨越多个文档块，生成时将校验块级结构。",
+                    (diff_id,), blocking=False))
     # Detect overlap independently of the browser's display projection.  The
     # stored compare result should already reject this, but selection must stay
     # safe when called directly with an untrusted result payload.

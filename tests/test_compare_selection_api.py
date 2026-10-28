@@ -262,18 +262,32 @@ def test_mysql_selection_generation_and_stale_versions(mysql_compare_store):
     assert old["stale"] is True
 
 
-def test_structural_selection_and_tampered_artifact_fail_closed(tmp_path):
+def test_cross_paragraph_split_selection_generates(tmp_path):
+    client = TestClient(create_app(tmp_path))
+    pair_id, headers = _pair(client, ["abcdefgh"], ["abcdX", "Yefgh"])
+    state = client.get(f"/api/compare/pairs/{pair_id}/selection", headers=headers).json()
+    assert any(issue["code"] == "MULTI_BLOCK_DIFF" and not issue["blocking"]
+               for issue in state["assessment"]["issues"])
+    state = _save(client, pair_id, headers, state,
+                  {item["id"]: "right" for item in state["diffs"]})
+    artifact = _generate(client, pair_id, headers, state)
+    downloaded = client.get(artifact["files"]["final"]["download_url"], headers=headers)
+    assert downloaded.status_code == 200, downloaded.text
+    assert [paragraph.text for paragraph in Document(io.BytesIO(downloaded.content)).paragraphs] == [
+        "abcdX", "Yefgh"]
+
+
+def test_paragraph_insert_selection_generates_and_tampered_artifact_fail_closed(tmp_path):
     client = TestClient(create_app(tmp_path))
     pair_id, headers = _pair(client, ["前文", "尾部"], ["前文", "新增整段", "尾部"])
     state = client.get(f"/api/compare/pairs/{pair_id}/selection", headers=headers).json()
     decisions = {item["id"]: "right" for item in state["diffs"]}
     state = _save(client, pair_id, headers, state, decisions)
-    blocked = client.post(f"/api/compare/pairs/{pair_id}/selection/generate", headers=headers,
-                          json={"expected_epoch": state["selection_epoch"],
-                                "decision_hash": state["draft"]["decision_hash"],
-                                "result_sha256": state["result_sha256"]})
-    assert blocked.status_code == 422
-    assert blocked.json()["detail"] == "SELECTION_STRUCTURAL_DIFF_UNSUPPORTED"
+    artifact = _generate(client, pair_id, headers, state)
+    downloaded = client.get(artifact["files"]["final"]["download_url"], headers=headers)
+    assert downloaded.status_code == 200, downloaded.text
+    assert [paragraph.text for paragraph in Document(io.BytesIO(downloaded.content)).paragraphs] == [
+        "前文", "新增整段", "尾部"]
 
     # A tampered object is refused even though its database row still exists.
     pair_id, headers = _pair(client, ["费率为0.40%"], ["费率为0.30%"])
