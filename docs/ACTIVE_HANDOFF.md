@@ -4,7 +4,16 @@
 >
 > **章节口径更正（2026-10-28）**：D06 p280 实际位于“第六部分基金份额的申购与赎回”，不在 G06 的“基金的基本情况—份额类别设置”；G06 只覆盖 p130–p137。p280 的 Y 类单向转换不是 G06 业务问题，BIZ-01 已从业务问题清单排除；如要处理应另立规则/业务决定。
 
-## 最新断点（2026-10-28，整改已开工：S0–S1完成，S2/S3/S4/S5/S6/S7首批落地）
+## 最新断点（2026-10-28，真实模型已开跑；用户取消预算限制）
+
+- **用户授权（2026-10-28）**：“想调模型就调，不用管预算，以后都不要管这预算了”。后续真实模型调用不再受费用/calls cap 阻塞，账本仅作观测；不得再以预算为由暂停或NO-GO。详见FL-D445。仍不泄露密钥、不绕过业务/权限/文件安全。
+- 真实弘利运行（第一批原件，独立新账本 `/tmp/opencode/real-smoke-remediation-20261028/ledger.sqlite`）：最新 `hongli5` 为 29 targets / 10 edits / 24 calls / 约$0.0262，`incomplete`。`hongli3`（修复前）46 calls/$0.0466、25 targets/9 edits。两次均为真实模型+真实DOCX，有working_final/redline。
+- 真实运行确认并已修：G11:0/G11:1 同一段落两种历史措辞导致 `RECALL_EDIT_OVERLAP` 全部未执行 → 同规则包含式编辑现在吸收为covered（commit `abcf3f0`）。G14:4/G14:5 同段冲突仍在（single/multi类别操作选择问题）。
+- 真实运行仍阻断交付的失败（`hongli5`，17 claim failures / 39 unresolved）：G02/G04/G05 satisfied目标仍 `CLAIM_OPERATION_UNPROVEN`（G04目标被site guard标out_of_scope、G05:0无对应批准）；G06/G13/G17 `EFFECT_SITE_UNPROVEN`（旧句确实不存在，需要“无目标”证据路径）；G14 `EFFECT_MISSING/PLANNED_EFFECT_MISSING`、G15 `SPAN_UNAUTHORIZED`、G18 `NOT_PLANNED`。**这些都是真实待修工程项，不是业务待定。**
+- 下一步：实现“无目标/已满足”证据路径（用模型判定+scope覆盖证据，而非字面缺失直接PASS）；修G14 single/multi操作选择与G15 span授权；再跑弘利/景宁/QDII，直至真实complete；随后独立标签、全批、发布、用户E2E。预算不再阻塞。
+- 本轮提交：`f2e318e`、`2953a87`、`102435a`、`af2acd7`、`e9ce4f6`、`d1f966e`、`c5d5ab5`、`abcf3f0` 及文档提交。项目仍NO-GO，但已进入真实模型迭代。
+
+## 历史断点（2026-10-28，整改已开工：S0–S1完成，S2/S3/S4/S5/S6/S7首批落地）
 
 - 执行分支 `codex/semantic-engine-remediation-20261028`（从 `99a5dad` 带dirty树创建）。**代码未提交Git**：目标文件在本任务前已有约2873行未提交改动，直接提交会混入无关工作；S0基线分离仍待完成。可恢复快照：`/tmp/opencode/semantic-remediation-baseline-20261028-150805/`（tracked/index patch、untracked code tar、合同sha256）与本批代码 `/tmp/opencode/semantic-remediation-slice-20261028-162300/`。
 - 新增 `fundlex/semantic_evidence.py`：版本化 `EvidenceRef`（源hash+精确quote+offset+occurrence）、`SemanticApproval`（guide身份/operation/scope/状态机/assessment）、`ApprovalBook`、`CoverageRecord`、`guide_fingerprint`。`Target.approval_id`；`approval_book_for()` 从代码已核验的target确定性生成批准，production与frozen replay一致。

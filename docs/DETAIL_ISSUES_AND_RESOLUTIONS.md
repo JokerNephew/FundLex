@@ -4,6 +4,13 @@
 >
 > 测试中遇到的业务问题单独汇总在 [`BUSINESS_ISSUES_FROM_TESTS.md`](BUSINESS_ISSUES_FROM_TESTS.md)，与代码/定位缺陷分开维护。
 
+## FL-D445 用户取消模型预算限制并授权按需调用真实模型（2026-10-28）
+
+- 用户原话：“想调模型就调，不用管预算，以后都不要管这预算了”。
+- 处理：自本条起，FundLex 整改/评测/端到端验证的真实模型调用不再以费用或调用数cap作为阻塞条件；不因预算问题暂停、询问或判定NO-GO。仍须保留调用/费用记录、账本与运行证据用于分析和回归对比，但**账本只作观测，不再作为停止门禁**。不泄露密钥，不修改无关系统配置，不绕过业务/权限/文件安全边界。
+- 与历史记录的关系：FL-D306/FL-D304 等“未登记cap/超支”记录保留为历史事实，不再阻断新运行；`p6_run.py` 的冻结protocol/hash要求可继续用于可追溯性，但额度参数按本授权放宽。此前“真实模型预算阻塞”的NO-GO理由失效，剩余阻塞仅为工程/验收本身。
+- 状态：用户授权已记录；后续agent不得再以“预算未批”为由停下。真实调用结果与产物仍需如实登记，不能把调用成功当业务通过。
+
 ## FL-D444 语义批准/多叶子scope/证明闭环首批实现（2026-10-28）
 
 - 发现日期：2026-10-28，用户要求按方案开始开发。执行分支 `codex/semantic-engine-remediation-20261028`；本任务前工作树已有约2873行未提交改动，故**本批未提交Git**，以快照 `/tmp/opencode/semantic-remediation-slice-20261028-162300/` 与基线 `/tmp/opencode/semantic-remediation-baseline-20261028-150805/` 保证可恢复；S0基线分离仍待完成。
@@ -374,6 +381,22 @@
 - 状态与验证：**代码修复已实施，隔离真实浏览器 D06 路径已验证；生产部署与固定 D01–D20/holdout 仍未完成。** 聚焦套件 `tests/test_recall_core.py tests/test_append_applicability.py tests/test_ff4d749_gate_closure.py tests/test_operation_execution_closure.py tests/test_final_validation_regressions.py tests/test_replay_site_provenance.py tests/test_recovery_final_invariants.py` 为 **306 passed**；`py_compile`、`git diff --check` 通过。用失败运行的真实最终 DOCX、plan、Claim Replay 和 findings 离线复算，`SW004` 由 `pending/SEMANTIC_UNCERTAIN` 变为 `resolved/REVIEW_UNPROVEN`，最终遗漏复核由 `FAIL` 变为 `PASS`。随后浏览器重跑 `/tmp/opencode/d06-browser-real-20261027b`：任务 `completed`、文档 `succeeded/complete`、49 targets/0 unresolved、Claim Replay verified、最终遗漏 PASS、19 个段落变化、final SHA `0b25951e...`、redline SHA `d52faf32...`；结果页显示“可直接使用/已通过交付校验/最终版 DOCX/修订版 DOCX”，下载与报告哈希一致，未授权下载 401。重跑临时脚本在下载后的 `docx_check` 字段名上误取 `sha256`，故原始 `result.json` 为 failed；独立 `browser-verification.json` 对保留证据的 12 项检查全部通过，原始失败记录保留不覆盖。
 - 工具兼容：为运行隔离 API/Worker 路径，`tools/evaluation/delivery_e2e.py` 的 Claim Replay 断言同时接受当前 recall 报告的 `verified` 和旧 fixture 的 `passed`；`tests/test_delivery_e2e.py` **2 passed**，fixture 全用户路径仍通过。该修改只放宽报告字段别名，不放宽 Claim Replay 证据。
 - 下一步：将隔离工作台验证与生产部署/普通工作台 E2E 分开记录；继续固定 D01–D20、holdout、独立标签和 candidate freeze，不能用本次单合同通过替代整批评测或生产交付。
+
+## FL-D398 Residual 在 `MODEL_CIRCUIT_OPEN` 时五轮全部 blocked（2026-10-28）
+
+- 发现日期：2026-10-28，smoke24 Residual 五轮 0 次实际调用。
+- 问题与影响：`ModelBudget` 在最近 3 个请求均为服务错误时打开 circuit，冷却 120s；Residual 阶段紧接 quality/coverage，circuit 未冷却，五轮都直接失败并记 blocked，`saturated=false`，但这不是“未发现新影响”的证据。
+- 处理方法：`ResidualConfig.circuit_wait_s=130`；`run_residual_mining()` 遇到 `MODEL_CIRCUIT_OPEN` 时等待冷却并重试一次，重试仍失败才记 finding/blocked。不把 blocked 当 clean。
+- 状态与验证：**已实施并通过离线回归**。新增 circuit 首次失败、等待后成功的用例，断言 2 次调用且 `saturated=true`；`tests/test_guide_generation.py` **31 passed**。smoke25 待真实验证。
+- 变更记录：2026-10-28 新增。
+
+## FL-D397 扫描窗口全局轮转未按合同保证逐要求覆盖（2026-10-28）
+
+- 发现日期：2026-10-28，smoke24 的 42 个 latest uncertain 全部为“该要求未被语义扫描覆盖”。
+- 问题与影响：19 个窗口的 requirement_ids 并集覆盖 76/77 个要求，但窗口按两份合同混合分配；latest 合同仍有 42 个要求从未进入该合同窗口，逐要求覆盖无法区分 not_affected 与 never_scanned。
+- 处理方法：`path_b_contract_sweep()` 按合同统计已覆盖要求；对未覆盖要求分组，并对该合同的**所有条款批次**补扫（coverage tail），确保每个要求在每个合同至少出现一次。smoke25 将 `path_b_max_calls` 放宽到 150 以容纳 tail。
+- 状态与验证：**已实施并通过离线回归**。新增双合同/20 要求用例，断言每个合同的窗口覆盖全部要求；法规两套件 **31 + 52 passed**。smoke25 待验证。
+- 变更记录：2026-10-28 新增。
 
 ## FL-D396 smoke24：quality 与独立复核已通过，剩余为按合同窗口缺口和 circuit 阻断 Residual（2026-10-28）
 
@@ -5607,3 +5630,19 @@
 - 状态与验证：**已修复，工作区 Feishu 专项 31 passed**；时间命名用例覆盖修订/对比，明确断言文件名不会覆盖任务名、卡片无“命名”按钮。生产发布后需再用真实点击确认。
 - 下一步：生产发布并重启 Feishu；用户从任务中心新建任务，确认任务名是创建时间且卡片没有命名入口；`我的任务` 中按时间区分任务。
 - 变更记录：2026-10-28 新增；取代 FL-D417 中“首文件自动命名/可改名”的部分，FL-D417 的“文件优先”保留。
+
+## FL-D429 外围前后端审查复核与分阶段整改计划（2026-10-28）
+
+- 发现日期：2026-10-28，复核另一 agent 针对 GitHub 默认分支 `codex/fundlex-recall-first`（a2905ac，2026-10-19）的外围审查结论；当前工作区 `codex/semantic-engine-remediation-20261028`（f2e318e）领先 110 个提交且未推送。
+- 问题与影响：
+  - P0-1 **仍部分成立**：`incomplete` 合同的 `working_redline` 仍可进入修订审查并生成 `selected_final`；API/`publish_selected_artifacts` 没有交付门，`tests/test_revision_api.py` 用 `incomplete` fixture 固化 accept-all 成功。当前分支 ZIP 已把 working/incomplete selected 归入“工作文件（未完成）”，但 V1 下载文件名仍可能显示“最终版（按人工选择）”。
+  - P0-2 在默认分支成立（前端两模式、payload 无 mode、后端无 mode）；当前分支已修：`TaskSubmission.mode` 已持久化，前端只保留正式修订。
+  - P0-3 **仍成立**：`PARSEABLE_STATUSES` 含 `parsed`，`finish_guide_job` 原地更新同一 version；实测同 id、rules hash `bf77397b…` → `b0e6410c…`，排队任务会 `GUIDE_RULESET_HASH_MISMATCH`。
+  - 指引 parse job 连续 release 后 `queued + attempts=3` 不可 claim 也不被标 failed；已用隔离 store 复现。当前 `enqueue_parse` 已复用 active job，但未修 release 预算。
+  - `engine_build()` 当前哈希 `fundlex/**/*.py`（129 个文件，含 `api.py`）；修 API/auth 会使排队任务 `ENGINE_SCHEMA_MISMATCH`。当前修复本身也会触发该问题，必须先拆分。
+  - 其他确认：分页仍全量+Python 切片+N+1；V1/V2 仍有多条 5 秒轮询；`complete_with_exceptions` 汇总已修；Database repr 已脱敏；上传 500MB 已被 multipart/ASGI guard 缓解；last-admin 无保护；生产注册开放且登录无限流（产品已接受）；HTML 仍宣称 Word 保真；selected/attempt GC 仍不完整；默认分支无 CI，当前 CI push 只覆盖 main/master。
+- 已锁定产品决定：当前工作区为基线、完成后再合并默认分支；`incomplete` 人工审查后允许生成选择版但仍按工作文件标注；重新解析采用“新建 V2、V1 不可变”的方案 A；不再提供只读诊断入口；不关闭注册、不加登录限流。
+- 处理方法（计划，未完成）：按 `docs/PERIPHERAL_REMEDIATION_PLAN_20261028.md` 分 Phase 0–4 多 agent 实施；Phase 1 先做交付状态机、指引版本/parse job、engine_build 拆分，Phase 2 做分页/轮询/last-admin/GC/文案，Phase 3 前端一致性，Phase 4 全量/迁移/发布/真实 E2E。
+- 状态与验证：**计划已保存，代码未完成、未发布**。当前存在 P0-3 未完成 WIP；`tests/test_guide_api.py::test_guide_parse_endpoint_requeues_owner_versions_only` 仍有一条断言未更新。WIP 补丁 `/tmp/opencode/fundlex-outer-remediation-wip-20261028.patch`（sha256 `90831114487dd5690e3d62e8a47f5cfa96ecb0b1751598303ccdaa2d885fd769`）。
+- 下一步：用户确认计划；Phase 0 决定 WIP 去留、创建 worktree、登记接口契约；未确认前不继续改代码、不发布。
+- 变更记录：2026-10-28 新增。
