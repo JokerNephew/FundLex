@@ -641,23 +641,32 @@ def derive_fact_statuses(*, fund_type_ok: bool, classes: Sequence[ClassFact],
     ambiguous = [item for item in classes
                  if item.current and item.subscription_fee and item.service_fee]
 
-    def fee_group_status(key: str) -> str:
-        """Per-fee-family status; an unknown service fee must not erase a proven
-        subscription group (FL-D440).  The two families share only the class-set
-        evidence, not each other's polarity."""
+    def family_conflict(key: str) -> bool:
         if not current_ok:
-            return "UNKNOWN"
+            return False
         if ambiguous or duplicate_names:
             # A class carrying both fee flags cannot be placed in either group.
-            return "CONFLICT"
-        if fee_polarities is not None:
-            if any(fee_polarities.get(item.name, {}).get(key) is not None
+            return True
+        if fee_polarities is None:
+            return False
+        return any(fee_polarities.get(item.name, {}).get(key) is not None
                    and fee_polarities[item.name][key] is not getattr(item, key)
-                   for item in classes if item.current):
-                return "CONFLICT"
-            if any(fee_polarities.get(item.name, {}).get(key) is None
-                   for item in classes if item.current):
-                return "UNKNOWN"
+                   for item in classes if item.current)
+
+    # A literal contradiction is a class-set integrity failure and poisons both
+    # groups; a merely UNKNOWN family is independent and must not erase a proven
+    # sibling (FL-D440).
+    any_conflict = family_conflict("subscription_fee") or family_conflict("service_fee")
+
+    def fee_group_status(key: str) -> str:
+        if not current_ok:
+            return "UNKNOWN"
+        if any_conflict:
+            return "CONFLICT"
+        if fee_polarities is not None and any(
+                fee_polarities.get(item.name, {}).get(key) is None
+                for item in classes if item.current):
+            return "UNKNOWN"
         return "VERIFIED"
 
     statuses["subscription_fee_group"] = fee_group_status("subscription_fee")

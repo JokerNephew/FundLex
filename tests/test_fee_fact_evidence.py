@@ -77,7 +77,10 @@ def test_separate_fee_quotes_are_verified_independently(tmp_path, tamper):
         "class_set_quote": enum,
     })
     assert facts.status_of("share_class_structure") == "VERIFIED"
-    assert facts.status_of("subscription_fee_group") == ("UNKNOWN" if tamper else "VERIFIED")
+    # The tampered quote is the *service* one; the subscription family is proven
+    # independently and must stay VERIFIED (FL-D440).
+    assert facts.status_of("subscription_fee_group") == "VERIFIED"
+    assert facts.status_of("service_fee_group") == ("UNKNOWN" if tamper else "VERIFIED")
     assert facts.value_verified is (not tamper)
     assert facts.as_ledger()["classes"][0]["subscription_quote"] == subscription
 
