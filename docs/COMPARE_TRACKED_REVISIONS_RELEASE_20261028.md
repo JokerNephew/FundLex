@@ -15,12 +15,12 @@ Compare 上传链路现在接受带 Word 修订痕迹的 DOCX：在私有副本�
 - 修改：`fundlex/compare/api.py`（上传校验）、`fundlex/compare/store.py`（审计字段与迁移）、`fundlex/docx.py`（允许清理阶段读取既有修订）
 - 测试：`tests/test_compare_algorithm.py`、`tests/test_compare_api.py`
 
-说明：生产 `fundlex/compare/api.py` 还包含 2026-10-28 的 Feishu/Compare 变更，因此生产发布采用同内容的最小回移补丁，而不是整体覆盖该文件；其余四个文件按提交版本整文件替换。
+说明：生产 `fundlex/compare/api.py` 还包含 2026-10-28 的 Feishu/Compare 变更，因此生产发布采用同内容的最小回移补丁，而不是整体覆盖该文件。生产原有的 `fundlex/compare/ingest.py` 与提交版本哈希相同，未发生内容变化；`docx.py`、`compare/store.py` 按提交版本整文件替换，`revisions.py` 为新增。
 
 ## 生产发布
 
 - 目标：`/opt/fundlex-recall-first`
-- 重启：`fundlex-recall-api.service`、`fundlex-compare-worker.service`
+- 重启：`fundlex-recall-api.service`、`fundlex-compare-worker.service`、`fundlex-feishu.service`
 - 发布文件 SHA-256（见 `/tmp/opencode/fundlex-compare-revisions-20261028/deployed/sha256.txt`）：
   - `revisions.py` `995a4b37...`
   - `ingest.py` `25724d03...`
@@ -51,5 +51,5 @@ Compare 上传链路现在接受带 Word 修订痕迹的 DOCX：在私有副本�
 ## 未完成/后续
 
 - 生产 V1 `frontend/compare.js` 仍是生产基线版本，上传成功但不会显示“已自动接受 N 处已有修订”的友好提示；回执字段已可用，后续前端发布时接入。
-- Feishu Compare 上传链路未在本次回移；当前只覆盖 Web Compare。
+- 飞书 Compare 服务已引用同一 `ingest.prepare_compare_upload`，本次重启后加载 `revisions.py`，具备修订版输入能力；尚未做飞书端真实修订版上传 E2E。
 - 集中问题记录 FL-D371 已在主工作区更新；本分支只保留发布记录。
