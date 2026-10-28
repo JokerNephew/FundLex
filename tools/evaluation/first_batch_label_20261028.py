@@ -750,7 +750,7 @@ def section_scope_ok(rule_id: str, para: Para) -> bool:
     if rule_id == "G18":
         return "收益" in path and "分配" in path
     if rule_id in {"G19", "G20", "G21", "G22"}:
-        return "清算" in path and "剩余资产" in path
+        return ("清算" in path and "剩余资产" in path) or "全部剩余资产" in text
     return False
 
 
@@ -1022,7 +1022,15 @@ def normalize_targets(raw_targets: Any, doc: DocModel, rule_map: dict[str, Any])
             issues.append(f"target {nr} {rule_id}: scope=summary but p{para_idx} is main")
         if scope == "main" and para.is_summary:
             issues.append(f"target {nr} {rule_id}: scope=main but p{para_idx} is summary")
-        if not section_scope_ok(rule_id, para):
+        scope_ok = section_scope_ok(rule_id, para)
+        if not scope_ok and rule_id == "G16" and op == "append":
+            context = " ".join(
+                doc.paragraphs[j].text
+                for j in range(max(0, para_idx - 6), para_idx + 1)
+            )
+            if "销售服务费" in context:
+                scope_ok = True
+        if not scope_ok:
             issues.append(
                 f"target {nr} {rule_id}: dropped p{para_idx} outside expected section ({para.section_path})"
             )
