@@ -3,6 +3,11 @@
 # No work happens when sourced: tests source the COMPLETE file and replace only
 # the service boundary. Never validate by executing a truncated script.
 #
+# A release must name an explicit, auditable candidate source:
+#   fundlex-publish --source DIR [--commit SHA] [--dry-run]
+# --commit verifies the clean git HEAD and binds it in the retained transaction
+# record. --dry-run stops after candidate staging/import/hash checks.
+#
 # Managed paths are renamed, not overlaid or recursively deleted. Transactions
 # (including successful backups) remain beside DST for reviewed retention.
 # .venv, runtime data, environment files and unit drop-ins are never replaced.
@@ -10,7 +15,7 @@
 # migrations are supported; take a separate DB backup before schema releases.
 set -euo pipefail
 
-SRC=/home/opencode/fundlex
+SRC=
 DST=/opt/fundlex-recall-first
 UNIT_DIR=/etc/systemd/system
 ENV_FILE=/etc/fundlex-recall.env
@@ -18,13 +23,28 @@ LOCK_FILE=/run/lock/fundlex-publish.lock
 TEMP_ROOT=/tmp/opencode
 HEALTH_DELAY=4
 UNITS=(fundlex-recall-api.service fundlex-recall-worker.service
-  fundlex-compare-worker.service fundlex-feishu.service)
+  fundlex-compare-worker.service fundlex-guide-worker.service
+  fundlex-feishu.service)
 DIRS=(fundlex frontend guides rules tools docs tests)
 FILES=(pyproject.toml uv.lock README.md AGENTS.md)
 MARKER=.fundlex-engine-build
 SERVICE_MARKER=.fundlex-service-build
+SOURCE_COMMIT=
+DRY_RUN=0
+OLD_ENGINE=
+OLD_SERVICE=
+OLD_MANIFEST=
 
 fail() { echo "fundlex-publish: $*" >&2; return 1; }
+
+usage() {
+  cat >&2 <<'EOF'
+usage: fundlex-publish --source DIR [--commit SHA] [--dry-run]
+  --source DIR   reviewed release worktree (required; never an implicit tree)
+  --commit SHA   require clean tracked source at this commit (resolved by git)
+  --dry-run      stage, import and hash only; never stop/replace/start services
+EOF
+}
 
 # -I ignores caller PYTHONPATH, user site and cwd injection; explicitly prepend
 # the checked root. env -i also keeps production DB/model/telemetry credentials
@@ -46,7 +66,8 @@ sys.path.insert(0, str(root))
 with tempfile.TemporaryDirectory(prefix="fundlex-publish-import-", dir=sys.argv[2]) as data:
     os.environ.update(FUNDLEX_DATA_DIR=data, FUNDLEX_AUTH_MODE="dev")
     for name in ("fundlex", "fundlex.api", "fundlex.selective", "fundlex.jobs",
-                 "fundlex.compare.worker", "fundlex.integrations.feishu.service_main"):
+                 "fundlex.compare.worker", "fundlex.guide_generation.worker",
+                 "fundlex.integrations.feishu.service_main"):
         module = importlib.import_module(name)
         if not Path(module.__file__).resolve().is_relative_to(root):
             raise SystemExit("module escaped import root: " + name)
@@ -146,6 +167,7 @@ try:
     from fundlex.tasks import TaskStore
     from fundlex.integrations import IntegrationStore
     from fundlex.compare.store import CompareStore
+    from fundlex.guide_generation.store import GuideGenerationStore
     from fundlex import guide_store
     from fundlex.db import Database
     from fundlex.auth import UserStore, SessionStore
@@ -153,6 +175,7 @@ try:
     TaskStore(store)
     IntegrationStore(store)
     CompareStore(store)
+    GuideGenerationStore(store).ensure_schema()
     guide_store._ensure_tables(store)
     auth = Database(auth_db_target())
     UserStore(auth)
@@ -230,6 +253,71 @@ check_logs() {
   done
 }
 
+verify_source_commit() {
+  local head
+  [ -n "$SOURCE_COMMIT" ] || return 0
+  command -v git >/dev/null 2>&1 || { fail "--commit requires git"; return 1; }
+  head=$(git -C "$SRC" rev-parse --verify "${SOURCE_COMMIT}^{commit}" 2>/dev/null) || {
+    fail "unknown source commit"; return 1;
+  }
+  [ "$head" = "$(git -C "$SRC" rev-parse --verify HEAD 2>/dev/null)" ] || {
+    fail "source HEAD does not match --commit"; return 1;
+  }
+  [ -z "$(git -C "$SRC" status --porcelain 2>/dev/null)" ] || {
+    fail "source has uncommitted or untracked changes"; return 1;
+  }
+  SOURCE_COMMIT=$head
+}
+
+write_release_record() {
+  "$python_bin" -I -B - "$transaction/release-record.json" "$SRC" "${SOURCE_COMMIT:-unknown}" \
+    "$manifest" "$expected" "$expected_service" "$DRY_RUN" <<'PY'
+import json
+import os
+import sys
+
+path, source, commit, manifest, engine, service, dry_run = sys.argv[1:]
+with open(path, "w", encoding="utf-8") as handle:
+    json.dump({"source": source, "commit": commit, "manifest": manifest,
+               "engine": engine, "service": service, "dry_run": dry_run == "1"},
+              handle, ensure_ascii=False, sort_keys=True)
+    handle.write("\n")
+os.chmod(path, 0o600)
+PY
+}
+
+# A rollback is not complete until the restored tree and both build markers
+# match the pre-deploy state. Old deployments may predate the service marker.
+verify_rollback() {
+  local actual
+  [ -n "$OLD_MANIFEST" ] || { fail "missing pre-deploy manifest"; return 1; }
+  [ "$(tree_manifest "$DST" "$python_bin")" = "$OLD_MANIFEST" ] || {
+    fail "restored tree does not match pre-deploy manifest"; return 1;
+  }
+  if [ -n "$OLD_ENGINE" ]; then
+    [ "$(cat "$DST/$MARKER" 2>/dev/null)" = "$OLD_ENGINE" ] || {
+      fail "restored engine marker mismatch"; return 1;
+    }
+    if [[ "$OLD_ENGINE" =~ ^[a-f0-9]{64}$ ]]; then
+      actual=$(engine_hash "$DST" "$python_bin") || return 1
+      [ "$actual" = "$OLD_ENGINE" ] || { fail "restored engine hash mismatch"; return 1; }
+    fi
+  else
+    [ ! -e "$DST/$MARKER" ] || { fail "unexpected restored engine marker"; return 1; }
+  fi
+  if [ -n "$OLD_SERVICE" ]; then
+    [ "$(cat "$DST/$SERVICE_MARKER" 2>/dev/null)" = "$OLD_SERVICE" ] || {
+      fail "restored service marker mismatch"; return 1;
+    }
+    if [[ "$OLD_SERVICE" =~ ^[a-f0-9]{64}$ ]]; then
+      actual=$(service_hash "$DST" "$python_bin") || return 1
+      [ "$actual" = "$OLD_SERVICE" ] || { fail "restored service hash mismatch"; return 1; }
+    fi
+  else
+    [ ! -e "$DST/$SERVICE_MARKER" ] || { fail "unexpected restored service marker"; return 1; }
+  fi
+}
+
 restore_paths() {
   local name
   # Reverse recorded intents. A failed candidate is moved aside, never deleted.
@@ -282,8 +370,12 @@ publish_exit() {
       rollback_status=$?
     fi
     if [ "$rollback_status" = 0 ]; then
+      verify_rollback
+      rollback_status=$?
+    fi
+    if [ "$rollback_status" = 0 ]; then
       printf '%s\n' recovered > "$transaction/status"
-      echo "fundlex-publish: code/units restored and four services checked; DB changes retained" >&2
+      echo "fundlex-publish: code/units restored, five services and build markers verified; DB changes retained" >&2
     else
       printf '%s\n' recovery-failed > "$transaction/status"
       echo "fundlex-publish: RECOVERY FAILED; retain $transaction for manual recovery" >&2
@@ -296,17 +388,46 @@ publish_exit() {
 }
 
 main() {
-  [ "$#" = 0 ] || { fail "no arguments supported"; return 1; }
+  local source_arg="" name unit expected actual manifest
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --source)
+        [ "$#" -ge 2 ] && [ -n "$2" ] || { usage; return 1; }
+        source_arg=$2
+        shift 2
+        ;;
+      --commit)
+        [ "$#" -ge 2 ] && [ -n "$2" ] || { usage; return 1; }
+        SOURCE_COMMIT=$2
+        shift 2
+        ;;
+      --dry-run)
+        DRY_RUN=1
+        shift
+        ;;
+      --help|-h)
+        usage
+        return 0
+        ;;
+      *)
+        fail "unsupported argument: $1"
+        usage
+        return 1
+        ;;
+    esac
+  done
+  [ -n "$source_arg" ] || { fail "explicit --source is required"; usage; return 1; }
   [ "$(id -u)" = 0 ] || { fail "must run as root"; return 1; }
   # Resolve cwd-independent roots; refuse ambiguous tree and unit symlinks.
-  [ -d "$SRC" ] && [ -d "$DST" ] && [ ! -L "$DST" ] || { fail "invalid source/deployment root"; return 1; }
-  SRC=$(realpath -e "$SRC")
+  [ -d "$source_arg" ] && [ -d "$DST" ] && [ ! -L "$DST" ] || { fail "invalid source/deployment root"; return 1; }
+  SRC=$(realpath -e "$source_arg")
   DST=$(realpath -e "$DST")
   [[ "$SRC/" != "$DST/"* && "$DST/" != "$SRC/"* ]] || { fail "source/deployment overlap"; return 1; }
   [ -f "$ENV_FILE" ] && [ -d "$UNIT_DIR" ] || { fail "missing environment file/unit directory"; return 1; }
+  verify_source_commit
   exec 9>"$LOCK_FILE"
   flock -n 9 || { fail "another publisher holds the deployment lock"; return 1; }
-  local python_bin="$DST/.venv/bin/python" name unit expected actual manifest
+  python_bin="$DST/.venv/bin/python"
   [ -x "$python_bin" ] || { fail "missing deployment Python"; return 1; }
   for name in "${DIRS[@]}"; do
     [ -d "$SRC/$name" ] && [ ! -L "$SRC/$name" ] || { fail "missing/linked source directory $name"; return 1; }
@@ -361,7 +482,17 @@ main() {
     install -o root -g root -m 0644 "$transaction/candidate/tools/deploy/$unit.template" "$transaction/units-new/$unit"
     if [ -f "$UNIT_DIR/$unit" ]; then cp -p -- "$UNIT_DIR/$unit" "$transaction/units-old/$unit"; fi
   done
+  OLD_MANIFEST=$(tree_manifest "$DST" "$python_bin") || { fail "cannot snapshot deployed tree"; return 1; }
+  if [ -f "$DST/$MARKER" ]; then OLD_ENGINE=$(cat "$DST/$MARKER"); fi
+  if [ -f "$DST/$SERVICE_MARKER" ]; then OLD_SERVICE=$(cat "$DST/$SERVICE_MARKER"); fi
+  write_release_record
   printf '%s\n' prepared > "$transaction/status"
+  if [ "$DRY_RUN" = 1 ]; then
+    printf '%s\n' dry-run > "$transaction/status"
+    echo "fundlex-publish: dry-run complete engine=$expected service=$expected_service"
+    echo "fundlex-publish: candidate=$transaction/candidate record=$transaction/release-record.json"
+    return 0
+  fi
   # Only this point begins the deployment outage; imports above use the actual
   # deployment interpreter before modifying any production-tree bytes.
   capture_restart_baselines
@@ -384,6 +515,8 @@ main() {
   done
   systemctl daemon-reload
   [ "$manifest" = "$(tree_manifest "$DST" "$python_bin")" ] || { fail "deployed manifest mismatch"; return 1; }
+  [ "$(cat "$DST/$MARKER" 2>/dev/null)" = "$expected" ] || { fail "deployed engine marker mismatch"; return 1; }
+  [ "$(cat "$DST/$SERVICE_MARKER" 2>/dev/null)" = "$expected_service" ] || { fail "deployed service marker mismatch"; return 1; }
   import_check "$DST" "$python_bin"
   actual=$(engine_hash "$DST" "$python_bin")
   actual_service=$(service_hash "$DST" "$python_bin")

@@ -13,8 +13,19 @@ EnvironmentFile=/etc/fundlex-recall.env
 ExecStart=/opt/fundlex-recall-first/.venv/bin/python -X utf8 -m fundlex.integrations.feishu.service_main
 Restart=always
 RestartSec=5
+
+# The Feishu process reads/writes the shared FundLex data root through the
+# RunStore/object store (downloaded attachments are kept in memory and
+# persisted there; there is no separate attachment cache). Keep the deployment
+# tree read-only and make the data root the only writable persistent path.
+# If FUNDLEX_DATA_DIR changes, update ReadWritePaths with the same directory.
 NoNewPrivileges=true
 PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/fundlex
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+UMask=0077
 
 [Install]
 WantedBy=multi-user.target

@@ -29,6 +29,34 @@ location = /api/guides {
     proxy_pass http://127.0.0.1:8010;
 }
 
+# FL-D288: guide-generation/runs is also a multipart file upload. It used to
+# fall through to the generic /api/ proxy and only the application parser
+# bounded it; keep the same pre-buffer and rate limits here.
+location = /api/guide-generation/runs {
+    # The route accepts regulation files up to 80 MiB; keep this aligned with
+    # FUNDLEX_REGULATION_REQUEST_BYTES (default 82 MiB including envelope).
+    client_max_body_size 82m;
+    client_body_timeout 30s;
+    client_header_timeout 15s;
+    send_timeout 180s;
+
+    limit_req zone=fundlex_upload_rate burst=4 nodelay;
+    limit_conn fundlex_upload_conn 2;
+    limit_req_status 429;
+    limit_conn_status 429;
+
+    proxy_request_buffering on;
+    proxy_buffering off;
+    proxy_connect_timeout 10s;
+    proxy_send_timeout 30s;
+    proxy_read_timeout 180s;
+    proxy_pass http://127.0.0.1:8010;
+}
+
+# The retired POST /api/batches route is answered with 410 by the application's
+# ASGI upload guard before multipart parsing. It deliberately has no upload
+# allowance here; do not re-enable it by adding a location block.
+
 location ~ ^/api/(tasks/[^/]+/uploads|compare/tasks/[^/]+/uploads)$ {
     client_max_body_size 52m;
     client_body_timeout 30s;
