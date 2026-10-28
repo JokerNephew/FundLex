@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import time
 import uuid
 from collections import Counter
@@ -18,6 +19,30 @@ from .edit_summary import (DELIVERY_TEXT, edit_count,
 from .recall import ENGINE_ID as RECALL_ENGINE_ID
 from .store import (Conflict, NotFound, ReportJsonError, RunStore, SCHEMA_VERSION,
                      engine_build, parse_report_json)
+
+
+# One task document is a LEFT JOIN of its manifest row and its published
+# document.  The list endpoints select exactly these columns so the rows they
+# page over can be turned into the existing response shape without per-row
+# queries.
+_DOCUMENT_COLUMNS = """f.task_id,f.client_id,f.ordinal,f.name,f.size,f.upload_status,
+    f.error_code AS file_error,f.document_id,d.batch_id,d.status,
+    d.qualification_status,d.delivery_status,d.error_code AS document_error,
+    d.source_sha256,d.report_json,d.updated_at AS document_updated_at,d.execution_mode"""
+_DOCUMENT_FROM = "task_files f LEFT JOIN documents d ON d.id=f.document_id"
+_JOB_STATUS = "COALESCE(d.status,'not_started')"
+_ELIGIBILITY = "COALESCE(NULLIF(d.qualification_status,''),'pending')"
+_DELIVERY_STATUS = "COALESCE(NULLIF(d.delivery_status,''),'not_generated')"
+_UPLOAD_STATUS = "COALESCE(NULLIF(f.upload_status,''),'pending')"
+# Reason codes are stable ASCII identifiers.  Only such a code can be used as
+# a safe `instr(report_json, code)` prefilter; anything else falls back to
+# inspecting every row that passed the other filters.
+_PLAIN_REASON_CODE = re.compile(r"^[A-Za-z0-9_.:-]{1,96}$")
+
+
+def _casefold_value(value):
+    """SQLite helper so name filters/order match Python ``str.casefold``."""
+    return "" if value is None else str(value).casefold()
 
 
 def _source_field(source, name: str) -> str:
@@ -114,49 +139,23 @@ class TaskStore:
                            [(task_id, item["client_id"], i, item["name"], item["size"]) for i, item in enumerate(files)])
             return self._snapshot(db, self._owned(db, owner, task_id))
 
-    def _files(self, db, task_id, *, details=True):
-        rows = db.execute("""SELECT f.*,d.batch_id,d.status,d.qualification_status,d.delivery_status,
-            d.error_code AS document_error,d.source_sha256,d.report_json,d.updated_at AS document_updated_at FROM task_files f
-            LEFT JOIN documents d ON d.id=f.document_id WHERE f.task_id=? ORDER BY f.ordinal""", (task_id,)).fetchall()
-        result = []
-        for row in rows:
-            doc = None
-            if row["document_id"] and details:
-                doc = self.store._document_dict(db, db.execute("SELECT * FROM documents WHERE id=?", (row["document_id"],)).fetchone())
-            artifact_count = 0
-            if row["document_id"]:
-                artifact_count = db.execute(
-                    "SELECT COUNT(*) FROM artifacts WHERE document_id=?",
-                    (row["document_id"],),
-                ).fetchone()[0]
-            report_error = self._report_error(row["report_json"])
-            result.append({"task_id": task_id, "batch_id": row["batch_id"], "document_id": row["document_id"],
-                           "client_id": row["client_id"], "name": row["name"], "size": row["size"],
-                           "job_status": row["status"] or "not_started", "upload_status": row["upload_status"],
-                           "eligibility": row["qualification_status"], "delivery_status": row["delivery_status"] or "not_generated",
-                           "execution_mode": (doc or {}).get("execution_mode", "") if doc else "",
-                           "error_code": row["document_error"] or row["error_code"],
-                            "report_url": (f"/api/tasks/{task_id}/documents/{row['document_id']}/report"
-                                           if doc and row["report_json"] else None),
-                            "downloads": ({kind: f"/api/tasks/{task_id}/documents/{row['document_id']}/download/{kind}"
-                                           for kind in (doc or {}).get("artifacts", [])} if doc else {}),
-                            "source_sha256": row["source_sha256"],
-                            "phase": self._report_phase(row["report_json"]),
-                            "report_error": report_error,
-                            "document_updated_at": row["document_updated_at"] or 0,
-                            "artifact_count": artifact_count,
-                           "reason_codes": self._reasons(row["report_json"], row["document_error"] or row["error_code"]) if details else [],
-                           "ordinal": row["ordinal"]})
-        return result
+    @staticmethod
+    def _chunks(values, size=400):
+        """Bound IN (...) lists so SQLite's variable limit is never reached."""
+        for start in range(0, len(values), size):
+            yield values[start:start + size]
 
     @staticmethod
-    def _reasons(raw, error):
-        reasons = {error} if error else set()
+    def _decode_report(raw):
+        """Decode one persisted report once; ``(report, error_code)``."""
         try:
-            report = parse_report_json(raw) or {}
+            return parse_report_json(raw) or {}, None
         except ReportJsonError as exc:
-            reasons.add(exc.code)
-            return sorted(reasons)
+            return None, exc.code
+
+    @staticmethod
+    def _collect_reasons(report, error):
+        reasons = {error} if error else set()
         for entry in report.get("unresolved") or []:
             if isinstance(entry, dict):
                 code = entry.get("code") or entry.get("reason")
@@ -177,20 +176,7 @@ class TaskStore:
         return sorted(reasons)
 
     @staticmethod
-    def _report_error(raw):
-        try:
-            parse_report_json(raw)
-        except ReportJsonError as exc:
-            return exc.code
-        return None
-
-    @staticmethod
-    def _report_phase(raw) -> str:
-        """Read the latest persisted Worker phase for task aggregation."""
-        try:
-            report = parse_report_json(raw) or {}
-        except ReportJsonError:
-            return ""
+    def _phase(report) -> str:
         windows = report.get("windows") if isinstance(report, dict) else None
         if not isinstance(windows, list):
             return ""
@@ -209,6 +195,222 @@ class TaskStore:
                         return value
         return ""
 
+    @classmethod
+    def _reason_view(cls, raw, error):
+        """Return ``(reason_codes, phase, report_error)`` with a single parse.
+
+        Callers that page a task reuse this per-file view for both the page
+        rows and ``reason_options``, so a report is decoded at most once per
+        request.
+        """
+        report, failure = cls._decode_report(raw)
+        if report is None:
+            reasons = {error} if error else set()
+            reasons.add(failure)
+            return sorted(reasons), "", failure
+        return cls._collect_reasons(report, error), cls._phase(report), None
+
+    @classmethod
+    def _artifact_kinds(cls, db, document_ids):
+        """Batch artifact kinds for many documents in bounded chunks."""
+        result = {}
+        ids = [str(item) for item in dict.fromkeys(document_ids) if item]
+        for chunk in cls._chunks(ids):
+            marks = ",".join("?" for _ in chunk)
+            for row in db.execute(f"SELECT document_id,kind FROM artifacts WHERE document_id IN ({marks}) "
+                                  "ORDER BY document_id,kind", chunk):
+                result.setdefault(row["document_id"], []).append(row["kind"])
+        return result
+
+    def _summary_documents(self, db, task_ids):
+        """Summary inputs for a bounded task set with no per-document query."""
+        ids = [str(item) for item in dict.fromkeys(task_ids) if item]
+        result = {task_id: [] for task_id in ids}
+        if not ids:
+            return result
+        rows = []
+        for chunk in self._chunks(ids):
+            marks = ",".join("?" for _ in chunk)
+            rows.extend(db.execute(f"""SELECT f.task_id,f.upload_status,f.document_id,d.status,
+                d.qualification_status,d.delivery_status,d.report_json,
+                d.updated_at AS document_updated_at
+                FROM {_DOCUMENT_FROM} WHERE f.task_id IN ({marks})
+                ORDER BY f.task_id,f.ordinal""", chunk).fetchall())
+        artifacts = self._artifact_kinds(db, [row["document_id"] for row in rows if row["document_id"]])
+        for row in rows:
+            report, failure = self._decode_report(row["report_json"])
+            result[row["task_id"]].append({
+                "upload_status": row["upload_status"],
+                "job_status": row["status"] or "not_started",
+                "eligibility": row["qualification_status"],
+                "delivery_status": row["delivery_status"] or "not_generated",
+                "phase": self._phase(report) if report else "",
+                "report_error": failure,
+                "document_updated_at": row["document_updated_at"] or 0,
+                "artifact_count": len(artifacts.get(row["document_id"], ())),
+            })
+        return result
+
+    def _fold(self, db, column):
+        """Unicode casefold expression for name filters and ordering.
+
+        SQLite has no Unicode ``lower()``; registering the Python casefold keeps
+        the SQL filters byte-for-byte compatible with the previous in-memory
+        implementation.  MySQL uses its Unicode-aware ``LOWER``.
+        """
+        if self.store.database.dialect == "sqlite":
+            create = getattr(getattr(db, "_raw", None), "create_function", None)
+            if callable(create):
+                create("fundlex_casefold", 1, _casefold_value)
+                return f"fundlex_casefold({column})"
+        return f"LOWER({column})"
+
+    @staticmethod
+    def _document_filters(name_fold, filters):
+        """SQL predicates shared by the page, count and reason candidate query."""
+        clauses, params = [], []
+        q = filters.get("q") or ""
+        if q:
+            # ``instr`` matches the Python substring test literally; LIKE would
+            # treat ``%``/``_`` in the search box as wildcards.
+            clauses.append(f"instr({name_fold}, ?) > 0")
+            params.append(q.casefold())
+        for key, expression in (("eligibility", _ELIGIBILITY),
+                                ("delivery_status", _DELIVERY_STATUS),
+                                ("upload_status", _UPLOAD_STATUS)):
+            value = filters.get(key)
+            if value:
+                clauses.append(f"{expression} = ?")
+                params.append(value)
+        job = filters.get("job_status")
+        if job == "running":
+            clauses.append(f"{_JOB_STATUS} IN ('leased','running')")
+        elif job:
+            clauses.append(f"{_JOB_STATUS} = ?")
+            params.append(job)
+        return clauses, params
+
+    @staticmethod
+    def _document_order(name_fold, sort):
+        """Mirror ``_page`` document ordering in SQL, including ordinal ties."""
+        if sort == "exceptions":
+            return (f"CASE WHEN {_JOB_STATUS}='failed' THEN 0 "
+                    f"WHEN f.upload_status='rejected' THEN 1 "
+                    f"WHEN {_DELIVERY_STATUS}='incomplete' THEN 2 "
+                    f"WHEN {_DELIVERY_STATUS}='complete_with_exceptions' THEN 3 "
+                    "WHEN substr(COALESCE(d.qualification_status,''),1,8) = 'excluded' THEN 4 "
+                    "ELSE 5 END, f.ordinal")
+        if sort == "status":
+            return (f"CASE {_JOB_STATUS} WHEN 'not_started' THEN 0 WHEN 'queued' THEN 1 "
+                    "WHEN 'retry_wait' THEN 2 WHEN 'leased' THEN 3 WHEN 'running' THEN 3 "
+                    "WHEN 'failed' THEN 4 WHEN 'succeeded' THEN 5 ELSE 6 END, f.ordinal")
+        if sort == "name":
+            return f"{name_fold}, f.ordinal"
+        if sort == "name_desc":
+            return f"{name_fold} DESC, f.ordinal"
+        if sort == "newest":
+            return "f.ordinal DESC"
+        return "f.ordinal"
+
+    @staticmethod
+    def _error_code_filter(error_code):
+        """Safe SQL superset for a reason code that lives inside report JSON.
+
+        A reason can come from the document/task-file error code or from the
+        persisted report.  The report part is prefiltered with ``instr`` so the
+        exact (unchanged) Python check only inspects plausible rows.  When no
+        safe superset exists the caller keeps every row that passed the other
+        filters and filters exactly in Python.
+        """
+        if not error_code or not _PLAIN_REASON_CODE.match(error_code):
+            return None, []
+        clause = ("(instr(COALESCE(d.report_json,''), ?) > 0 "
+                  "OR COALESCE(d.error_code, f.error_code) = ?")
+        if error_code == "REPORT_JSON_INVALID":
+            # Corrupt JSON cannot contain its own stable error code.
+            clause += " OR (d.report_json IS NOT NULL AND d.report_json <> '')"
+        clause += ")"
+        return clause, [error_code, error_code]
+
+    @staticmethod
+    def _document_from_row(row, task_id, artifacts, view):
+        document_id = row["document_id"]
+        reasons, phase, report_error = view
+        kinds = artifacts.get(document_id, ()) if document_id else ()
+        return {
+            "task_id": task_id,
+            "batch_id": row["batch_id"],
+            "document_id": document_id,
+            "client_id": row["client_id"],
+            "name": row["name"],
+            "size": row["size"],
+            "job_status": row["status"] or "not_started",
+            "upload_status": row["upload_status"],
+            "eligibility": row["qualification_status"],
+            "delivery_status": row["delivery_status"] or "not_generated",
+            "execution_mode": (row["execution_mode"] or "") if document_id else "",
+            "error_code": row["document_error"] or row["file_error"],
+            "report_url": (f"/api/tasks/{task_id}/documents/{document_id}/report"
+                           if document_id and row["report_json"] else None),
+            "downloads": ({kind: f"/api/tasks/{task_id}/documents/{document_id}/download/{kind}"
+                           for kind in kinds} if document_id else {}),
+            "source_sha256": row["source_sha256"],
+            "phase": phase,
+            "report_error": report_error,
+            "document_updated_at": row["document_updated_at"] or 0,
+            "artifact_count": len(kinds),
+            "reason_codes": reasons,
+            "ordinal": row["ordinal"],
+        }
+
+    def _task_views(self, db, task_id):
+        """One pass over a task's files for reason codes, phases and options."""
+        rows = db.execute(f"""SELECT f.client_id,f.error_code AS file_error,
+            d.error_code AS document_error,d.report_json
+            FROM {_DOCUMENT_FROM} WHERE f.task_id=?""", (task_id,)).fetchall()
+        views, counts = {}, Counter()
+        for row in rows:
+            view = self._reason_view(row["report_json"], row["document_error"] or row["file_error"])
+            views[row["client_id"]] = view
+            counts.update(view[0])
+        return views, counts
+
+    @classmethod
+    def _reasons(cls, raw, error):
+        return cls._reason_view(raw, error)[0]
+
+    @classmethod
+    def _report_error(cls, raw):
+        return cls._decode_report(raw)[1]
+
+    @classmethod
+    def _report_phase(cls, raw) -> str:
+        """Read the latest persisted Worker phase for task aggregation."""
+        report, _ = cls._decode_report(raw)
+        return cls._phase(report) if report else ""
+
+    @staticmethod
+    def _task_status(total, uploaded, completed, processing, failed, paused):
+        """Derived task state; the SQL aggregate in ``_task_base_sql`` mirrors it."""
+        terminal = uploaded == total and completed == total
+        if terminal and failed == completed and completed:
+            return "failed"
+        if terminal and failed:
+            return "completed_with_exceptions"
+        if terminal:
+            return "completed"
+        if paused:
+            return "paused"
+        if processing:
+            return "running"
+        return "queued" if uploaded > completed else "uploading"
+
+    @classmethod
+    def _status_matches(cls, status, state):
+        """API status filter contract, including the historical failed alias."""
+        return (not state or state == status
+                or (state == "failed" and status == "completed_with_exceptions"))
+
     @staticmethod
     def _summary(row, docs, *, legacy=False):
         total = len(docs)
@@ -220,15 +422,7 @@ class TaskStore:
                          (d["job_status"] == "succeeded" and d["eligibility"] != "excluded_by_fund_type"
                           and d["delivery_status"] in {"incomplete", "not_generated"}) for d in docs)
         terminal = uploaded == total and completed == total
-        if terminal and failed == completed and completed:
-            status = "failed"
-        elif terminal and failed:
-            status = "completed_with_exceptions"
-        elif terminal:
-            status = "completed"
-        else:
-            status = ("paused" if row["paused"] else "running" if processing
-                      else "queued" if uploaded > completed else "uploading")
+        status = TaskStore._task_status(total, uploaded, completed, processing, failed, bool(row["paused"]))
         # A task is legacy once it was produced by a retired engine. The runtime
         # serves the guide-bound engine only, so anything else is read-only
         # history even when it still has a first-class task row.
@@ -261,30 +455,50 @@ class TaskStore:
                 "pause_reason": row["pause_reason"], "summary_url": f"/api/tasks/{row['id']}/report"}
 
     def _snapshot(self, db, row):
-        return self._summary(row, self._files(db, row["id"], details=False))
+        documents = self._summary_documents(db, [row["id"]]).get(row["id"], [])
+        return self._summary(row, documents)
+
+    @staticmethod
+    def _legacy_batch(db, owner, task_id):
+        batch_id = task_id.removeprefix("legacy-")
+        batch = db.execute("""SELECT * FROM batches WHERE id=? AND owner=?
+            AND NOT EXISTS(SELECT 1 FROM task_batches WHERE batch_id=batches.id)""",
+                           (batch_id, owner)).fetchone()
+        if batch is None:
+            raise NotFound("task not found")
+        return batch
+
+    def assert_owned(self, owner, task_id):
+        """Ownership check without building a summary for access-controlled routes."""
+        with self.store._connect() as db:
+            if task_id.startswith("legacy-"):
+                self._legacy_batch(db, owner, task_id)
+            else:
+                self._owned(db, owner, task_id)
 
     def _legacy(self, owner, task_id):
         batch_id = task_id.removeprefix("legacy-")
         with self.store._connect() as db:
-            batch = db.execute("""SELECT * FROM batches WHERE id=? AND owner=?
-                AND NOT EXISTS(SELECT 1 FROM task_batches WHERE batch_id=batches.id)""", (batch_id, owner)).fetchone()
-            if batch is None:
-                raise NotFound("task not found")
-            docs = []
-            for row in db.execute("SELECT * FROM documents WHERE batch_id=? ORDER BY ordinal", (batch_id,)):
-                d = self.store._document_dict(db, row)
-                docs.append({"batch_id": batch_id, "document_id": row["id"], "client_id": row["id"],
-                             "name": row["filename"], "size": row["source_size"], "job_status": row["status"],
-                             "upload_status": "accepted", "eligibility": row["qualification_status"],
-                             "delivery_status": row["delivery_status"], "error_code": row["error_code"],
-                             "report_url": d["report_url"] if row["report_json"] else None, "downloads": d["download_urls"],
-                             "source_sha256": row["source_sha256"], "report_error": self._report_error(row["report_json"]),
-                             "ordinal": row["ordinal"]})
-                docs[-1]["reason_codes"] = self._reasons(row["report_json"], row["error_code"])
-            task = dict(batch) | {"id": task_id, "name": "历史任务 · " + datetime.fromtimestamp(batch["created_at"], timezone.utc).strftime("%Y-%m-%d %H:%M"),
-                                  "paused": batch["status"] == "paused", "sealed": True, "pause_reason": None,
-                                  "mode": "delivery"}
-            return self._summary(task, docs, legacy=True), docs
+            batch = self._legacy_batch(db, owner, task_id)
+            rows = db.execute("SELECT * FROM documents WHERE batch_id=? ORDER BY ordinal", (batch_id,)).fetchall()
+            artifacts = self._artifact_kinds(db, [row["id"] for row in rows])
+        docs = []
+        for row in rows:
+            reasons, _, report_error = self._reason_view(row["report_json"], row["error_code"])
+            docs.append({"batch_id": batch_id, "document_id": row["id"], "client_id": row["id"],
+                         "name": row["filename"], "size": row["source_size"], "job_status": row["status"],
+                         "upload_status": "accepted", "eligibility": row["qualification_status"],
+                         "delivery_status": row["delivery_status"], "error_code": row["error_code"],
+                         "report_url": (f"/api/batches/{batch_id}/documents/{row['id']}/report"
+                                        if row["report_json"] else None),
+                         "downloads": {kind: f"/api/batches/{batch_id}/documents/{row['id']}/download/{kind}"
+                                       for kind in artifacts.get(row["id"], ())},
+                         "source_sha256": row["source_sha256"], "report_error": report_error,
+                         "ordinal": row["ordinal"], "reason_codes": reasons})
+        task = dict(batch) | {"id": task_id, "name": "历史任务 · " + datetime.fromtimestamp(batch["created_at"], timezone.utc).strftime("%Y-%m-%d %H:%M"),
+                              "paused": batch["status"] == "paused", "sealed": True, "pause_reason": None,
+                              "mode": "delivery"}
+        return self._summary(task, docs, legacy=True), docs
 
     def get(self, owner, task_id):
         if task_id.startswith("legacy-"):
@@ -292,18 +506,135 @@ class TaskStore:
         with self.store._connect() as db:
             return self._snapshot(db, self._owned(db, owner, task_id))
 
+    @staticmethod
+    def _task_base_sql():
+        """Owner tasks with SQL-computed file counters and derived state.
+
+        The aggregate subquery is scoped to the owner so a list request never
+        scans another owner's manifest rows.  ``task_status`` mirrors
+        ``_task_status`` exactly; it exists so the status filter and paging
+        happen before any summary is built.
+        """
+        return """
+            SELECT t.*, CASE
+                WHEN COALESCE(a.total,0) > 0
+                 AND COALESCE(a.uploaded,0) = COALESCE(a.total,0)
+                 AND COALESCE(a.completed,0) = COALESCE(a.total,0)
+                 AND COALESCE(a.failed,0) = COALESCE(a.completed,0) THEN 'failed'
+                WHEN COALESCE(a.uploaded,0) = COALESCE(a.total,0)
+                 AND COALESCE(a.completed,0) = COALESCE(a.total,0)
+                 AND COALESCE(a.failed,0) > 0 THEN 'completed_with_exceptions'
+                WHEN COALESCE(a.uploaded,0) = COALESCE(a.total,0)
+                 AND COALESCE(a.completed,0) = COALESCE(a.total,0) THEN 'completed'
+                WHEN COALESCE(t.paused,0) <> 0 THEN 'paused'
+                WHEN COALESCE(a.processing,0) > 0 THEN 'running'
+                WHEN COALESCE(a.uploaded,0) > COALESCE(a.completed,0) THEN 'queued'
+                ELSE 'uploading' END AS task_status
+            FROM tasks t
+            LEFT JOIN (
+                SELECT f.task_id AS task_id,
+                       COUNT(f.client_id) AS total,
+                       COUNT(CASE WHEN f.upload_status='accepted' THEN 1 END) AS uploaded,
+                       COUNT(CASE WHEN d.status IN ('succeeded','failed') THEN 1 END) AS completed,
+                       COUNT(CASE WHEN d.status IN ('leased','running') THEN 1 END) AS processing,
+                       COUNT(CASE WHEN d.status='failed' THEN 1 END) AS failed
+                FROM task_files f
+                JOIN tasks owner_task ON owner_task.id=f.task_id AND owner_task.owner=?
+                LEFT JOIN documents d ON d.id=f.document_id
+                GROUP BY f.task_id
+            ) a ON a.task_id = t.id
+            WHERE t.owner=?
+        """
+
+    @staticmethod
+    def _task_order(name_fold, sort):
+        if sort in {"name", "name_desc"}:
+            return name_fold + (" DESC" if sort == "name_desc" else "") + ", x.id"
+        if sort == "newest":
+            return "x.created_at DESC, x.id"
+        return "x.created_at, x.id"
+
+    def _legacy_descriptors(self, db, owner):
+        """Lightweight read-only history rows: one SQL aggregate per batch."""
+        rows = db.execute("""SELECT b.id AS batch_id,b.created_at,b.status AS batch_status,
+            COUNT(d.id) AS total,
+            COUNT(CASE WHEN d.status IN ('succeeded','failed') THEN 1 END) AS completed,
+            COUNT(CASE WHEN d.status IN ('leased','running') THEN 1 END) AS processing,
+            COUNT(CASE WHEN d.status='failed' THEN 1 END) AS failed
+            FROM batches b LEFT JOIN documents d ON d.batch_id=b.id
+            WHERE b.owner=? AND NOT EXISTS(SELECT 1 FROM task_batches tb WHERE tb.batch_id=b.id)
+            GROUP BY b.id,b.created_at,b.status""", (owner,)).fetchall()
+        return [{
+            "id": "legacy-" + row["batch_id"],
+            "name": "历史任务 · " + datetime.fromtimestamp(row["created_at"], timezone.utc).strftime("%Y-%m-%d %H:%M"),
+            "created_at": row["created_at"],
+            "task_status": self._task_status(int(row["total"]), int(row["total"]), int(row["completed"]),
+                                            int(row["processing"]), int(row["failed"]),
+                                            row["batch_status"] == "paused"),
+            "guide_version_id": "",
+            "_legacy": True,
+        } for row in rows]
+
     def list(self, owner, **filters):
-        with self.store._connect() as db:
-            items = [self._snapshot(db, row) for row in db.execute("SELECT * FROM tasks WHERE owner=?", (owner,))]
-            legacy_ids = [r["id"] for r in db.execute("SELECT id FROM batches WHERE owner=? AND NOT EXISTS(SELECT 1 FROM task_batches WHERE batch_id=batches.id)", (owner,))]
-        items.extend(self._legacy(owner, "legacy-" + bid)[0] for bid in legacy_ids)
-        q, state = filters.get("q", "").casefold(), filters.get("status")
+        """Page owner tasks in SQL, then build summaries for the page only.
+
+        First-class tasks are filtered, ordered and limited by SQL.  Retired
+        batches (``legacy-*``) have no task rows, so their lightweight
+        descriptors are merged at page-selection time; this only happens for
+        owners that still have historical batches and keeps ``total`` exact.
+        """
+        q = filters.get("q") or ""
+        state = filters.get("status")
         guide = filters.get("guide_version_id")
-        items = [d for d in items if q in d["name"].casefold()
-                 and (not state or state == d["status"] or
-                      (state == "failed" and d["status"] == "completed_with_exceptions"))
-                 and (not guide or (d.get("guide_snapshot") or {}).get("version_id") == guide)]
-        return self._page(items, **{k: v for k, v in filters.items() if k in {"sort", "page", "page_size"}})
+        sort = filters.get("sort") or "oldest"
+        page = int(filters.get("page") or 1)
+        page_size = int(filters.get("page_size") or 50)
+        offset = max(0, (page - 1) * page_size)
+        clauses, where_params = [], []
+        if guide:
+            clauses.append("x.guide_version_id = ?")
+            where_params.append(guide)
+        if state:
+            clauses.append("(x.task_status = ? OR (? = 'failed' AND x.task_status = 'completed_with_exceptions'))")
+            where_params += [state, state]
+        base = self._task_base_sql()
+        with self.store._connect() as db:
+            name_fold = self._fold(db, "x.name")
+            if q:
+                clauses.insert(0, f"instr({name_fold}, ?) > 0")
+                where_params.insert(0, q.casefold())
+            where = "".join(" AND " + clause for clause in clauses)
+            order = self._task_order(name_fold, sort)
+            legacy = [item for item in self._legacy_descriptors(db, owner)
+                      if (not q or q.casefold() in item["name"].casefold())
+                      and self._status_matches(item["task_status"], state)
+                      and (not guide or item["guide_version_id"] == guide)]
+            total = db.execute(f"SELECT COUNT(*) AS n FROM ({base}) x WHERE 1=1{where}",
+                               [owner, owner, *where_params]).fetchone()["n"]
+            if legacy:
+                # Historical rows interleave with task rows, so fetch the
+                # prefix that can contain the requested rank, merge, then slice.
+                rows = db.execute(f"SELECT * FROM ({base}) x WHERE 1=1{where} ORDER BY {order} LIMIT ?",
+                                  [owner, owner, *where_params, page * page_size]).fetchall()
+                total += len(legacy)
+                combined = [dict(row) for row in rows] + legacy
+                key = "name" if sort.startswith("name") else "created_at"
+                fold = (lambda value: str(value).casefold()) if key == "name" else (lambda value: value)
+                combined.sort(key=lambda item: (fold(item[key]), item["id"]))
+                if sort in {"newest", "name_desc"}:
+                    combined.sort(key=lambda item: fold(item[key]), reverse=True)
+                page_rows = combined[offset:offset + page_size]
+                documents = self._summary_documents(
+                    db, [item["id"] for item in page_rows if not item.get("_legacy")])
+                items = [self._legacy(owner, item["id"])[0] if item.get("_legacy")
+                         else self._summary(item, documents.get(item["id"], []))
+                         for item in page_rows]
+            else:
+                rows = db.execute(f"SELECT * FROM ({base}) x WHERE 1=1{where} ORDER BY {order} LIMIT ? OFFSET ?",
+                                  [owner, owner, *where_params, page_size, offset]).fetchall()
+                documents = self._summary_documents(db, [row["id"] for row in rows])
+                items = [self._summary(dict(row), documents.get(row["id"], [])) for row in rows]
+        return {"items": items, "total": total, "page": page, "page_size": page_size}
 
     @staticmethod
     def _page(items, sort="oldest", page=1, page_size=50):
@@ -400,24 +731,67 @@ class TaskStore:
                 "generated_at": datetime.now(timezone.utc).isoformat()}
 
     def documents(self, owner, task_id, **filters):
+        """Page one task's contracts with SQL filters, ordering and limits.
+
+        Filters, ordering, ``COUNT``, ``LIMIT``/``OFFSET`` and the artifact
+        lookup are one query each (two when the reason-code filter must inspect
+        report JSON).  ``reason_options`` intentionally stays task-wide: it is a
+        filter vocabulary for the whole contract list, not the current page.
+        """
+        page = int(filters.get("page") or 1)
+        page_size = int(filters.get("page_size") or 50)
+        sort = filters.get("sort") or "oldest"
+        error_code = filters.get("error_code")
         if task_id.startswith("legacy-"):
             docs = self._legacy(owner, task_id)[1]
+            reasons = Counter(code for d in docs for code in d["reason_codes"])
+            def matches(d, key):
+                value = filters.get(key)
+                if key == "job_status" and value == "running":
+                    return d[key] in {"leased", "running"}
+                return not value or value == (d[key] or "pending")
+            docs = [d for d in docs if (filters.get("q") or "").casefold() in d["name"].casefold()
+                    and all(matches(d, k) for k in ("eligibility", "job_status", "delivery_status", "upload_status"))
+                    and (not error_code or error_code in d["reason_codes"])]
+            result = self._page(docs, sort=sort, page=page, page_size=page_size)
+            reason_options = [{"code": code, "count": count} for code, count in sorted(reasons.items())]
         else:
             with self.store._connect() as db:
                 self._owned(db, owner, task_id)
-                docs = self._files(db, task_id)
-        q = filters.get("q", "").casefold()
-        reasons = Counter(code for d in docs for code in d["reason_codes"])
-        def matches(d, key):
-            value = filters.get(key)
-            if key == "job_status" and value == "running":
-                return d[key] in {"leased", "running"}
-            return not value or value == (d[key] or "pending")
-        docs = [d for d in docs if q in d["name"].casefold() and all(matches(d, k)
-                for k in ("eligibility", "job_status", "delivery_status", "upload_status"))
-                and (not filters.get("error_code") or filters["error_code"] in d["reason_codes"])]
-        result = self._page(docs, **{k: v for k, v in filters.items() if k in {"sort", "page", "page_size"}})
-        result["reason_options"] = [{"code": code, "count": count} for code, count in sorted(reasons.items())]
+                views, reason_counts = self._task_views(db, task_id)
+                name_fold = self._fold(db, "f.name")
+                clauses, params = self._document_filters(name_fold, filters)
+                where = "".join(" AND " + clause for clause in clauses)
+                if error_code:
+                    # Reason codes can live inside report JSON, so the SQL part
+                    # is only a safe superset; the exact membership test stays
+                    # the unchanged Python one.
+                    prefilter, pre_params = self._error_code_filter(error_code)
+                    sql = (f"SELECT {_DOCUMENT_COLUMNS} FROM {_DOCUMENT_FROM} "
+                           f"WHERE f.task_id=?{where}")
+                    args = [task_id, *params]
+                    if prefilter:
+                        sql += " AND " + prefilter
+                        args += pre_params
+                    rows = db.execute(sql + f" ORDER BY {self._document_order(name_fold, sort)}", args).fetchall()
+                    rows = [row for row in rows if error_code in views[row["client_id"]][0]]
+                    total = len(rows)
+                    offset = max(0, (page - 1) * page_size)
+                    rows = rows[offset:offset + page_size]
+                else:
+                    total = db.execute(f"SELECT COUNT(*) AS n FROM {_DOCUMENT_FROM} WHERE f.task_id=?{where}",
+                                       [task_id, *params]).fetchone()["n"]
+                    offset = max(0, (page - 1) * page_size)
+                    rows = db.execute(f"SELECT {_DOCUMENT_COLUMNS} FROM {_DOCUMENT_FROM} "
+                                      f"WHERE f.task_id=?{where} ORDER BY {self._document_order(name_fold, sort)} "
+                                      "LIMIT ? OFFSET ?", [task_id, *params, page_size, offset]).fetchall()
+                artifacts = self._artifact_kinds(db, [row["document_id"] for row in rows if row["document_id"]])
+            items = [{key: value for key, value in
+                      self._document_from_row(row, task_id, artifacts, views[row["client_id"]]).items()
+                      if key != "ordinal"} for row in rows]
+            result = {"items": items, "total": total, "page": page, "page_size": page_size}
+            reason_options = [{"code": code, "count": count} for code, count in sorted(reason_counts.items())]
+        result["reason_options"] = reason_options
         return result
 
     def document(self, owner: str, task_id: str, document_id: str) -> dict:
@@ -430,17 +804,15 @@ class TaskStore:
             raise NotFound("document not found")
         with self.store._connect() as db:
             self._owned(db, owner, task_id)
-            row = db.execute(
-                "SELECT document_id FROM task_files WHERE task_id=? AND document_id=?",
-                (task_id, document_id),
-            ).fetchone()
+            row = db.execute(f"SELECT {_DOCUMENT_COLUMNS} FROM {_DOCUMENT_FROM} "
+                             "WHERE f.task_id=? AND f.document_id=?",
+                             (task_id, document_id)).fetchone()
             if row is None or not row["document_id"]:
                 raise NotFound("document not found")
-            items = self._files(db, task_id)
-        for item in items:
-            if item.get("document_id") == document_id:
-                return {key: value for key, value in item.items() if key != "ordinal"}
-        raise NotFound("document not found")
+            view = self._reason_view(row["report_json"], row["document_error"] or row["file_error"])
+            artifacts = self._artifact_kinds(db, [document_id])
+        item = self._document_from_row(row, task_id, artifacts, view)
+        return {key: value for key, value in item.items() if key != "ordinal"}
 
     def artifact(self, owner: str, task_id: str, document_id: str, kind: str):
         """Return verified bytes and a filename for one published artifact."""

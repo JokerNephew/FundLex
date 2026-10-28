@@ -1048,7 +1048,7 @@ def create_app(data_dir: str | Path | None = None, *, auth_db=None) -> FastAPI:
                        error_code: str | None = None, upload_status: str | None = None,
                        sort: str = "oldest", page: int = 1, page_size: int = 50,
                        user: str = Depends(_user)):
-        task_call(tasks.get, user, task_id)
+        task_call(tasks.assert_owned, user, task_id)
         check_pagination(page, page_size, sort, documents=True)
         result = task_call(tasks.documents, user, task_id, q=q, eligibility=eligibility, job_status=job_status,
                            delivery_status=delivery_status, error_code=error_code, upload_status=upload_status,

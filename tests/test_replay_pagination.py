@@ -1,9 +1,42 @@
-"""R13/R14: claim replay and residual scans must expose truncated batches."""
+"""Pagination boundaries for replay scanning and the task/contract pages.
+
+The replay half covers R13/R14 truncated batches; the task half pins the SQL
+paging contract (page boundaries, ``total`` and task-wide ``reason_options``)
+that the workbench list endpoints rely on.
+"""
 from __future__ import annotations
 
+import io
+import json
+import zipfile
 from types import SimpleNamespace
 
 from fundlex.generation.claim_replay import check_delete_residuals, replay_claims
+
+
+def _docx(label: str = "fixture") -> bytes:
+    output = io.BytesIO()
+    with zipfile.ZipFile(output, "w") as archive:
+        archive.writestr("[Content_Types].xml", "<Types/>")
+        archive.writestr("word/document.xml", f"<document>{label}</document>")
+    return output.getvalue()
+
+
+def _task_store(tmp_path):
+    from fundlex.store import RunStore
+    from fundlex.tasks import TaskStore
+
+    store = RunStore(tmp_path / "pagination-store")
+    return store, TaskStore(store)
+
+
+def _task_with_files(tasks, data: bytes, count: int):
+    manifest = [{"client_id": f"file-{index}", "name": f"合同{index:03}.docx", "size": len(data)}
+                for index in range(count)]
+    task = tasks.create("alice", "分页任务", {"version": "g1", "sha256": "a" * 64},
+                        manifest, "pagination-key", engine_id="recall_first",
+                        guide_version_id="", guide_rules_sha256="")
+    return task, manifest
 
 
 class Inspection:
@@ -101,3 +134,59 @@ def test_delete_residual_raised_limit_checks_all_45():
     assert len(findings) == 45
     assert findings.truncated is False
     assert findings.remaining == 0
+
+
+def test_task_store_document_pages_keep_stable_boundaries(tmp_path):
+    data = _docx()
+    store, tasks = _task_store(tmp_path)
+    task, manifest = _task_with_files(tasks, data, 7)
+
+    for sort, expected in (("oldest", [item["name"] for item in manifest]),
+                           ("newest", [item["name"] for item in manifest][::-1]),
+                           ("name", sorted((item["name"] for item in manifest), key=str.casefold)),
+                           ("name_desc", sorted((item["name"] for item in manifest),
+                                                key=str.casefold, reverse=True))):
+        collected, page = [], 1
+        while True:
+            body = tasks.documents("alice", task["id"], sort=sort, page=page, page_size=2)
+            assert body["total"] == 7 and body["page"] == page and body["page_size"] == 2
+            collected.extend(item["name"] for item in body["items"])
+            if len(body["items"]) < 2:
+                break
+            page += 1
+        assert collected == expected
+    assert tasks.documents("alice", task["id"], page=5, page_size=2)["items"] == []
+    assert tasks.documents("alice", task["id"], page=5, page_size=2)["total"] == 7
+
+
+def test_task_store_reason_options_cover_every_contract_not_just_the_page(tmp_path):
+    data = _docx()
+    store, tasks = _task_store(tmp_path)
+    task, manifest = _task_with_files(tasks, data, 3)
+    tasks.uploads("alice", task["id"],
+                  [{"client_id": item["client_id"], "name": item["name"], "data": data,
+                    "error_code": None} for item in manifest])
+    reports = [
+        {"actions": [{"status": "failed", "failure_reason": "TARGET_SCOPE_UNRESOLVED"}]},
+        {"actions": [{"status": "failed", "failure_reason": "RELEASE_GATE_CLOSED"}]},
+        {"unresolved": [{"code": "QUALIFICATION_EVIDENCE_MISSING"}]},
+    ]
+    rows = tasks.documents("alice", task["id"])["items"]
+    with store._connect() as db:
+        for row, report in zip(rows, reports):
+            db.execute("UPDATE documents SET report_json=? WHERE id=?",
+                       (json.dumps(report), row["document_id"]))
+    page = tasks.documents("alice", task["id"], page=2, page_size=1)
+    assert page["total"] == 3 and len(page["items"]) == 1
+    assert page["items"][0]["reason_codes"] == ["RELEASE_GATE_CLOSED"]
+    assert {option["code"]: option["count"] for option in page["reason_options"]} == {
+        "TARGET_SCOPE_UNRESOLVED": 1,
+        "RELEASE_GATE_CLOSED": 1,
+        "QUALIFICATION_EVIDENCE_MISSING": 1,
+    }
+    import pytest
+
+    from fundlex.store import NotFound
+
+    with pytest.raises(NotFound):
+        tasks.documents("bob", task["id"])

@@ -676,3 +676,332 @@ def test_scheduler_prefers_different_task_across_upload_batches(client):
     receipt = upload(client, second, files[:1], data).json()["receipts"][0]
     next_job = store.claim()
     assert next_job["id"] == receipt["document_id"]
+
+
+def named_manifest(names, data):
+    return [{"client_id": f"file-{index}", "name": name, "size": len(data)}
+            for index, name in enumerate(names)]
+
+
+def document_pages(client, task, *, page_size=3, **params):
+    collected, page = [], 1
+    while True:
+        response = client.get(f"/api/tasks/{task}/documents",
+                              params={"page_size": page_size, "page": page, **params},
+                              headers=ALICE)
+        assert response.status_code == 200, response.text
+        body = response.json()
+        assert body["page"] == page and body["page_size"] == page_size
+        collected.extend(body["items"])
+        if len(body["items"]) < page_size:
+            return collected, body["total"]
+        page += 1
+
+
+def test_document_list_sql_filters_sorting_and_page_boundaries(client):
+    """Contract paging must stay exact while filters/order run in SQL."""
+    data = package()
+    names = ["合同 Gamma.docx", "合同 alpha.docx", "合同 BETA.docx", "合同 delta.docx",
+             "合同 Epsilon.docx", "合同 zeta.docx", "合同 Eta.docx"]
+    files = named_manifest(names, data)
+    task = create(client, files, key="documents-pages").json()["id"]
+    assert upload(client, task, files[:6], data).status_code == 200
+    listed = client.get(f"/api/tasks/{task}/documents", headers=ALICE).json()["items"]
+    store = client.app.state.store
+    statuses = ["succeeded", "failed", "queued", "retry_wait", "leased", "running", None]
+    with store._connect() as db:
+        for item, status in zip(listed, statuses):
+            if item["document_id"]:
+                db.execute("UPDATE documents SET status=? WHERE id=?", (status, item["document_id"]))
+    root = f"/api/tasks/{task}/documents"
+
+    # Ordinal paging: every row exactly once, stable total, empty page beyond.
+    for sort in ("oldest", "newest", "name", "name_desc", "exceptions", "status"):
+        items, total = document_pages(client, task, sort=sort)
+        assert total == 7 and len(items) == 7
+        assert len({item["document_id"] or item["client_id"] for item in items}) == 7
+        assert all(set(item) >= {"task_id", "batch_id", "document_id", "client_id", "name",
+                                 "size", "job_status", "upload_status", "eligibility",
+                                 "delivery_status", "execution_mode", "error_code",
+                                 "report_url", "downloads", "source_sha256", "phase",
+                                 "report_error", "document_updated_at", "artifact_count",
+                                 "reason_codes"} for item in items)
+        assert "ordinal" not in items[0]
+    assert [item["name"] for item in document_pages(client, task)[0]] == names
+    assert [item["name"] for item in document_pages(client, task, sort="newest")[0]] == names[::-1]
+    assert [item["name"] for item in document_pages(client, task, sort="name")[0]] == \
+        sorted(names, key=str.casefold)
+    assert [item["name"] for item in document_pages(client, task, sort="name_desc")[0]] == \
+        sorted(names, key=str.casefold, reverse=True)
+    assert document_pages(client, task, sort="exceptions")[0][0]["job_status"] == "failed"
+    assert [item["job_status"] for item in document_pages(client, task, sort="status")[0]] == \
+        ["not_started", "queued", "retry_wait", "leased", "running", "failed", "succeeded"]
+
+    # The whole result is reachable by deep pages and the total never moves.
+    whole = client.get(root, params={"page_size": 200}, headers=ALICE).json()
+    assert whole["total"] == 7 and len(whole["items"]) == 7
+    beyond = client.get(root, params={"page_size": 3, "page": 4}, headers=ALICE).json()
+    assert beyond["total"] == 7 and beyond["items"] == []
+
+    # Filters combine with sorting/paging; totals count matches, not pages.
+    filtered = client.get(root, params={"job_status": "running"}, headers=ALICE).json()
+    assert filtered["total"] == 2
+    assert {item["job_status"] for item in filtered["items"]} == {"leased", "running"}
+    assert client.get(root, params={"job_status": "leased"}, headers=ALICE).json()["total"] == 1
+    assert client.get(root, params={"job_status": "not_started"}, headers=ALICE).json()["total"] == 1
+    pending = client.get(root, params={"upload_status": "pending"}, headers=ALICE).json()
+    assert pending["total"] == 1 and pending["items"][0]["name"] == "合同 Eta.docx"
+    assert client.get(root, params={"q": "BETA"}, headers=ALICE).json()["total"] == 1
+    assert client.get(root, params={"q": "合同"}, headers=ALICE).json()["total"] == 7
+    assert client.get(root, params={"q": "beta", "sort": "name", "page_size": 1, "page": 2},
+                      headers=ALICE).json()["total"] == 1
+    combined = client.get(root, params={"job_status": "running", "sort": "name_desc",
+                                        "page_size": 1, "page": 2}, headers=ALICE).json()
+    assert combined["total"] == 2 and combined["items"][0]["name"] == "合同 Epsilon.docx"
+    assert client.get(root, headers=BOB).status_code == 404
+    assert client.get(root, params={"page": 0}, headers=BOB).status_code == 404
+
+
+def test_document_list_keeps_task_wide_reasons_and_batches_downloads(client):
+    data, files = package(), manifest(4, package())
+    task = create(client, files, key="documents-downloads").json()["id"]
+    assert upload(client, task, files, data).status_code == 200
+    store = client.app.state.store
+    docs = client.get(f"/api/tasks/{task}/documents", headers=ALICE).json()["items"]
+    reports = [
+        {"actions": [{"status": "failed", "failure_reason": "TARGET_SCOPE_UNRESOLVED"}]},
+        {"actions": [{"status": "failed", "failure_reason": "RELEASE_GATE_CLOSED"}]},
+        {"unresolved": [{"code": "QUALIFICATION_EVIDENCE_MISSING"}]},
+        {"windows": [{"rounds": [{"stage": "范围映射"}]}]},
+    ]
+    with store._connect() as db:
+        for item, report in zip(docs, reports):
+            db.execute("UPDATE documents SET status='succeeded',delivery_status='incomplete',"
+                       "report_json=? WHERE id=?", (json.dumps(report), item["document_id"]))
+        for kind in ("final", "redline"):
+            db.execute("INSERT INTO artifacts(document_id,kind,object_key,sha256,size) "
+                       "VALUES(?,?,?,?,?)", (docs[0]["document_id"], kind, "objects/fake", "0" * 64, 1))
+        db.execute("INSERT INTO artifacts(document_id,kind,object_key,sha256,size) VALUES(?,?,?,?,?)",
+                   (docs[2]["document_id"], "report_md", "objects/fake", "0" * 64, 1))
+
+    root = f"/api/tasks/{task}/documents"
+    page = client.get(root, params={"page_size": 1, "page": 2}, headers=ALICE).json()
+    assert page["total"] == 4 and len(page["items"]) == 1
+    assert page["items"][0]["name"] == files[1]["name"]
+    assert page["items"][0]["artifact_count"] == 0 and page["items"][0]["downloads"] == {}
+    assert {item["code"]: item["count"] for item in page["reason_options"]} == {
+        "TARGET_SCOPE_UNRESOLVED": 1,
+        "RELEASE_GATE_CLOSED": 1,
+        "QUALIFICATION_EVIDENCE_MISSING": 1,
+    }
+
+    first = client.get(root, params={"page_size": 1, "page": 1}, headers=ALICE).json()["items"][0]
+    assert first["artifact_count"] == 2
+    assert first["downloads"] == {
+        "final": f"/api/tasks/{task}/documents/{docs[0]['document_id']}/download/final",
+        "redline": f"/api/tasks/{task}/documents/{docs[0]['document_id']}/download/redline",
+    }
+    assert first["report_url"].endswith(f"/documents/{docs[0]['document_id']}/report")
+    third = client.get(root, params={"page_size": 1, "page": 3}, headers=ALICE).json()["items"][0]
+    assert third["artifact_count"] == 1 and list(third["downloads"]) == ["report_md"]
+    assert third["reason_codes"] == ["QUALIFICATION_EVIDENCE_MISSING"]
+    fourth = client.get(root, params={"page_size": 1, "page": 4}, headers=ALICE).json()["items"][0]
+    assert fourth["phase"] == "范围映射" and fourth["report_error"] is None
+
+    # The reason filter is exact even though SQL only sees a safe superset and
+    # reason_options stays a task-wide vocabulary rather than a page summary.
+    filtered = client.get(root, params={"error_code": "QUALIFICATION_EVIDENCE_MISSING",
+                                        "page_size": 1}, headers=ALICE).json()
+    assert filtered["total"] == 1 and filtered["items"][0]["name"] == files[2]["name"]
+    assert {item["code"] for item in filtered["reason_options"]} == {
+        "TARGET_SCOPE_UNRESOLVED", "RELEASE_GATE_CLOSED", "QUALIFICATION_EVIDENCE_MISSING"}
+    assert client.get(root, params={"error_code": "MISSING"}, headers=ALICE).json()["total"] == 0
+
+    with store._connect() as db:
+        db.execute("UPDATE documents SET report_json=? WHERE id=?", ("{secret: malformed", docs[3]["document_id"]))
+    corrupt = client.get(root, params={"error_code": "REPORT_JSON_INVALID"}, headers=ALICE).json()
+    assert corrupt["total"] == 1
+    assert corrupt["items"][0]["report_error"] == "REPORT_JSON_INVALID"
+    assert {item["code"]: item["count"] for item in corrupt["reason_options"]}["REPORT_JSON_INVALID"] == 1
+
+
+def test_task_list_sql_filters_sorting_and_page_boundaries(client):
+    data = package()
+    names = ["Alpha 任务", "beta 任务", "GAMMA 任务", "delta 任务", "Epsilon 任务", "zeta 任务"]
+    tasks = [create(client, manifest(2, data), name=name, key=f"task-list-{index}").json()["id"]
+             for index, name in enumerate(names)]
+    store = client.app.state.store
+    statuses = [
+        [],  # uploading: no uploads
+        ["queued", "queued"],
+        ["leased", "queued"],
+        ["succeeded", "succeeded"],
+        ["failed", "succeeded"],
+        ["failed", "failed"],
+    ]
+    deliveries = [
+        [],
+        ["not_generated", "not_generated"],
+        ["not_generated", "not_generated"],
+        ["complete", "complete"],
+        ["not_generated", "complete"],
+        ["not_generated", "not_generated"],
+    ]
+    for index, task_id in enumerate(tasks):
+        if index:
+            assert upload(client, task_id, manifest(2, data), data).status_code == 200
+    with store._connect() as db:
+        for index, task_id in enumerate(tasks):
+            db.execute("UPDATE tasks SET created_at=?,guide_version_id=? WHERE id=?",
+                       (100 + index, "guide-a" if index in {1, 2} else "guide-b", task_id))
+            if index == 0:
+                continue
+            documents = db.execute("SELECT id FROM documents WHERE batch_id IN "
+                                   "(SELECT batch_id FROM task_batches WHERE task_id=?) ORDER BY ordinal",
+                                   (task_id,)).fetchall()
+            for document, status, delivery in zip(documents, statuses[index], deliveries[index]):
+                db.execute("UPDATE documents SET status=?,qualification_status='eligible',"
+                           "delivery_status=? WHERE id=?", (status, delivery, document["id"]))
+    root = "/api/tasks"
+
+    for sort, expected in (
+            ("oldest", tasks),
+            ("newest", tasks[::-1]),
+            ("name", [task for _, task in sorted(zip([name.casefold() for name in names], tasks))]),
+            ("name_desc", [task for _, task in sorted(zip([name.casefold() for name in names], tasks), reverse=True)]),
+    ):
+        collected, page = [], 1
+        while True:
+            body = client.get(root, params={"sort": sort, "page_size": 2, "page": page},
+                              headers=ALICE).json()
+            assert body["page"] == page and body["page_size"] == 2 and body["total"] == 6
+            collected.extend(item["id"] for item in body["items"])
+            if len(body["items"]) < 2:
+                break
+            page += 1
+        assert collected == expected
+    assert client.get(root, params={"page_size": 2, "page": 4}, headers=ALICE).json()["items"] == []
+    whole = client.get(root, params={"page_size": 200}, headers=ALICE).json()
+    assert whole["total"] == 6 and len(whole["items"]) == 6
+    assert all(set(item) >= {"id", "name", "legacy", "status", "total", "uploaded", "completed",
+                             "failed", "exceptions", "qualification_counts", "delivery_counts",
+                             "guide_snapshot", "summary_url"} for item in whole["items"])
+
+    def ids(**params):
+        body = client.get(root, params={"page_size": 200, **params}, headers=ALICE).json()
+        return {item["id"] for item in body["items"]}, body["total"]
+
+    assert ids(status="uploading") == ({tasks[0]}, 1)
+    assert ids(status="queued") == ({tasks[1]}, 1)
+    assert ids(status="running") == ({tasks[2]}, 1)
+    assert ids(status="completed") == ({tasks[3]}, 1)
+    assert ids(status="completed_with_exceptions") == ({tasks[4]}, 1)
+    assert ids(status="failed") == ({tasks[4], tasks[5]}, 2)
+    assert ids(q="alpha") == ({tasks[0]}, 1)
+    assert ids(q="ALPHA") == ({tasks[0]}, 1)
+    assert ids(q="任务") == (set(tasks), 6)
+    assert ids(guide_version_id="guide-a") == ({tasks[1], tasks[2]}, 2)
+    assert ids(guide_version_id="missing") == (set(), 0)
+    paged = client.get(root, params={"q": "任务", "status": "failed", "sort": "name_desc",
+                                     "page_size": 1, "page": 1}, headers=ALICE).json()
+    assert paged["total"] == 2 and paged["items"][0]["id"] == tasks[5]
+    assert client.get(root, headers=BOB).json() == {"items": [], "total": 0, "page": 1, "page_size": 50}
+    assert client.get(root, params={"page": 0}, headers=ALICE).status_code == 422
+
+
+def test_task_list_merges_legacy_batches_into_sql_pages(client):
+    data = package()
+    first = create(client, manifest(1, data), name="甲任务", key="legacy-merge-a").json()["id"]
+    second = create(client, manifest(1, data), name="乙任务", key="legacy-merge-b").json()["id"]
+    store = client.app.state.store
+    seeded = store.create_batch(owner="alice", ruleset_version="v1", ruleset_sha256="0" * 64,
+                                uploads=[("legacy.docx", data)])
+    legacy = "legacy-" + seeded["id"]
+    with store._connect() as db:
+        db.execute("UPDATE tasks SET created_at=?,guide_version_id='guide-a' WHERE id=?", (300, first))
+        db.execute("UPDATE tasks SET created_at=?,guide_version_id='guide-a' WHERE id=?", (100, second))
+        db.execute("UPDATE batches SET created_at=? WHERE id=?", (200, seeded["id"]))
+        db.execute("UPDATE documents SET status='succeeded',qualification_status='eligible',"
+                   "delivery_status='complete' WHERE batch_id=?", (seeded["id"],))
+
+    for sort, expected in (("oldest", [second, legacy, first]),
+                           ("newest", [first, legacy, second])):
+        collected, page = [], 1
+        while True:
+            body = client.get("/api/tasks", params={"sort": sort, "page_size": 1, "page": page},
+                              headers=ALICE).json()
+            assert body["total"] == 3
+            collected.extend(item["id"] for item in body["items"])
+            if not body["items"]:
+                break
+            page += 1
+        assert collected == expected
+    legacy_item = client.get("/api/tasks", params={"q": "历史"}, headers=ALICE).json()
+    assert legacy_item["total"] == 1 and legacy_item["items"][0]["id"] == legacy
+    assert legacy_item["items"][0]["legacy"] is True
+    assert legacy_item["items"][0]["status"] == "completed"
+    assert legacy_item["items"][0]["name"].startswith("历史任务 · ")
+    assert client.get("/api/tasks", params={"guide_version_id": "guide-a"},
+                      headers=ALICE).json()["total"] == 2
+    completed = client.get("/api/tasks", params={"status": "completed", "page_size": 200},
+                           headers=ALICE).json()
+    assert completed["total"] == 1 and completed["items"][0]["id"] == legacy
+    legacy_documents = client.get(f"/api/tasks/{legacy}/documents", headers=ALICE).json()
+    assert legacy_documents["total"] == 1
+    assert legacy_documents["items"][0]["job_status"] == "succeeded"
+    assert legacy_documents["items"][0]["batch_id"] == seeded["id"]
+    assert client.get(f"/api/tasks/{legacy}/documents", headers=BOB).status_code == 404
+
+
+def test_task_and_document_pages_use_constant_query_counts(client, monkeypatch):
+    """A page request must not issue queries per document or per task."""
+    from fundlex.db import Connection
+
+    real_execute = Connection.execute
+    statements = []
+
+    def counting(self, sql, params=()):
+        statements.append(" ".join(str(sql).split()))
+        return real_execute(self, sql, params)
+
+    monkeypatch.setattr(Connection, "execute", counting)
+    data = package()
+    tasks = client.app.state.tasks
+
+    def make(count, name, key):
+        files = manifest(count, data)
+        task = create(client, files, name=name, key=key).json()["id"]
+        assert upload(client, task, files, data).status_code == 200
+        return task
+
+    small_task = make(2, "小任务", "query-count-small")
+    large_task = make(12, "大任务", "query-count-large")
+
+    statements.clear()
+    tasks.documents("alice", small_task, page_size=1)
+    small_document_queries = len(statements)
+    statements.clear()
+    tasks.documents("alice", large_task, page_size=1)
+    large_document_queries = len(statements)
+    assert large_document_queries == small_document_queries
+    assert large_document_queries <= 9
+
+    statements.clear()
+    tasks.documents("alice", small_task, page_size=1, error_code="MISSING")
+    small_reason_queries = len(statements)
+    statements.clear()
+    tasks.documents("alice", large_task, page_size=1, error_code="MISSING")
+    large_reason_queries = len(statements)
+    assert large_reason_queries == small_reason_queries
+    assert large_reason_queries <= 9
+
+    statements.clear()
+    tasks.list("alice", page_size=1)
+    before_list_queries = len(statements)
+    for index in range(6):
+        create(client, manifest(1, data), name=f"额外任务{index}", key=f"extra-{index}")
+    statements.clear()
+    tasks.list("alice", page_size=1)
+    after_list_queries = len(statements)
+    assert after_list_queries == before_list_queries
+    assert after_list_queries <= 9
