@@ -1136,7 +1136,10 @@ def generate_artifacts(source: str | Path, plan: ValidatedPlan, redline_path: st
                              "del_id": del_id, "ins_id": ins_id})
         redline_xml = etree.tostring(root, encoding="UTF-8", xml_declaration=True)
         final_root = deepcopy(root)
-        if allow_existing_revisions:
+        if allow_existing_revisions and foreign_inventory:
+            # Only an input that really carries another author's revisions needs
+            # the accept-all path.  A normal document keeps the original, narrower
+            # accept-ours path so its behavior is unchanged.
             _accept_all_revisions(final_root)
         else:
             _accept_our_revisions(final_root, manifest)
@@ -1156,7 +1159,7 @@ def generate_artifacts(source: str | Path, plan: ValidatedPlan, redline_path: st
         _validate_revision_manifest(red_reopen, manifest,
                                     allow_existing_revisions=allow_existing_revisions)
         accepted = deepcopy(red_reopen)
-        if allow_existing_revisions:
+        if allow_existing_revisions and foreign_inventory:
             _accept_all_revisions(accepted)
             # Foreign revisions must survive untouched in the redline.
             ours = tuple(("del", author, str(item["del_id"])) for item in manifest) \

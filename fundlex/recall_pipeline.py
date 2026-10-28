@@ -295,6 +295,56 @@ def _window_ledger(entry: _WindowState) -> dict[str, Any]:
     }
 
 
+def _normalise_guide_section(text: str) -> str:
+    value = re.sub(r"^第[一二三四五六七八九十百零〇\d]+(?:部分|章)", "", str(text or "").strip())
+    return re.sub(r"[\s\-—_:：、，,。；;（）()]+", "", value)
+
+
+def _guide_section_present(hint: str, section_titles: Sequence[str]) -> bool:
+    """Whether a guide rule's declared chapter exists in this contract.
+
+    The built-in guide is scoped to the chapters named by ``section_hint``.
+    A contract that lacks one of those chapters must mark the rule
+    NOT_APPLICABLE, not UNKNOWN/UNRESOLVED; chapters outside the guide are
+    never part of the coverage denominator.
+    """
+    main = str(hint or "").split("-")[0].strip()
+    if not main:
+        return True
+    target = _normalise_guide_section(main)
+    if not target:
+        return True
+    for title in section_titles:
+        candidate = _normalise_guide_section(title)
+        if target in candidate or candidate in target:
+            return True
+    return False
+
+
+def mark_absent_guide_sections(obligation_ledger: Any,
+                               section_titles: Sequence[str]) -> set[str]:
+    """Mark rules whose declared guide chapter is absent as NOT_APPLICABLE.
+
+    The built-in guide is scoped by each rule's ``section_hint``.  A contract
+    that does not contain that chapter must not turn the rule into an UNKNOWN
+    or an open coverage obligation.  Chapters outside the guide are never part
+    of the guide's coverage denominator.
+    """
+    from .applicability import ApplicabilityDecision
+
+    absent: set[str] = set()
+    for record in obligation_ledger.records:
+        hint = str(record.spec.expected_site or "").strip()
+        if not hint or _guide_section_present(hint, section_titles):
+            continue
+        record.applicability = ApplicabilityDecision(
+            status="FALSE", condition=None, rule_id=record.spec.rule_id,
+            operation_id=record.spec.operation_id, source="deterministic",
+            reason=f"GUIDE_SECTION_ABSENT:{hint}")
+        absent.add(record.spec.rule_id)
+    return absent
+
+
 def _scope_mapping_ledger(mapping: dict[str, list[str]], sections: Sequence[Any],
                           entries: Sequence[_WindowState], rules: Sequence[dict]) -> dict[str, Any]:
     coverage: list[dict[str, Any]] = []
@@ -4259,6 +4309,21 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
 
         stage = "scope"
         sections = structure_index(inspection)
+        section_titles = [section.title for section in sections]
+        absent_rule_ids = mark_absent_guide_sections(obligation_ledger, section_titles)
+        report["guide_scope"] = {
+            "declared": sorted({str(record.spec.expected_site or "").strip()
+                                for record in obligation_ledger.records
+                                if str(record.spec.expected_site or "").strip()}),
+            "present_sections": section_titles,
+            "absent_rules": sorted(absent_rule_ids),
+        }
+        if absent_rule_ids:
+            # The guide does not claim these chapters; do not map or audit them.
+            report["obligations"] = obligation_ledger.as_dict()
+            rules = [rule for rule in rules
+                     if str(rule.get("rule_id")) not in absent_rule_ids]
+            rules_by_id = {str(rule.get("rule_id")): rule for rule in rules}
         scope_gaps: list[dict[str, Any]] = []
         mapping = scope_map(rules, sections, model, gaps=scope_gaps)
         mapping = expand_class_definition_scope(mapping, sections, inspection)
@@ -4392,8 +4457,11 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
         split_rebinds = rebind_split_class_definition_targets(targets, inspection)
         if split_rebinds:
             report["split_class_definition_rebinds"] = split_rebinds
-        from .recall import resolve_absent_site_targets
+        from .recall import resolve_absent_operations, resolve_absent_site_targets
         absent_target_ids = {id(target) for target in targets}
+        for _clone in resolve_absent_operations(targets, rules_by_id, inspection,
+                                                facts, scopes):
+            targets.append(_clone)
         absent_sites = resolve_absent_site_targets(targets, rules_by_id, inspection, facts)
         if absent_sites:
             report["absent_site_targets"] = absent_sites
@@ -4831,6 +4899,17 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
                             "target_rules": target_rules})
                     from .recall import approval_book_for
                     approval_book = approval_book_for(rules_by_id, targets, inspection)
+                    audit_proofs: dict[str, dict[str, Any]] = {}
+                    for _target in targets:
+                        _result = (audit_state.get("results") or {}).get(
+                            _target_identity(_target))
+                        if _result:
+                            audit_proofs[_target.target_id] = {
+                                "verdict": _result.get("verdict"),
+                                "evidence_verified": _result.get("evidence_verified")}
+                    report["audit_proofs"] = {
+                        "count": len(audit_proofs),
+                        "targets": sorted(audit_proofs)[:50]}
                     result = replay_claims(
                         plan.get("edits") or [], inspection, actual,
                         rules_by_id=rules_by_id, facts=facts,
@@ -4841,7 +4920,8 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
                                        for target in targets},
                         obligations=obligation_ledger,
                         scopes=scopes,
-                        approvals=approval_book)
+                        approvals=approval_book,
+                        audit_proofs=audit_proofs)
                     residuals = check_delete_residuals(
                         rules_by_id, actual, edits=plan.get("edits") or [], original=inspection,
                         targets=[target.as_dict() for target in targets], facts=facts,

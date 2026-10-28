@@ -3058,6 +3058,67 @@ def resolve_absent_site_targets(targets: Sequence[Target], rules_by_id: dict[str
     return records
 
 
+def resolve_absent_operations(targets: Sequence[Target], rules_by_id: dict[str, dict],
+                              inspection: DocumentInspection,
+                              facts: Facts | None = None,
+                              scopes: Mapping[str, Any] | None = None) -> list[Target]:
+    """Create an auditable satisfied candidate for an operation whose old wording
+    is absent from the rule's whole physical scope.
+
+    This is not a literal-absence PASS: the clone only becomes proof when the
+    independent audit verifies that the scoped paragraph already expresses the
+    required policy.  It gives the audit a concrete site instead of leaving an
+    obligation with no target at all (G02/G05:0/G06).
+    """
+    created: list[Target] = []
+    covered = {(target.rule_id, key) for target in targets
+               for key in (target.operations or ()) if not target.out_of_scope}
+    for rule_id, rule in rules_by_id.items():
+        scope = (scopes or {}).get(rule_id)
+        locations = tuple(getattr(scope, "locations", ()) or ())
+        if not locations:
+            continue
+        paragraphs = []
+        for location in locations:
+            try:
+                span = inspection.by_location(location)
+            except (KeyError, DocxError):
+                continue
+            if span.text.strip():
+                paragraphs.append(span)
+        if not paragraphs:
+            continue
+        body = "\n".join(_compact(span.text) for span in paragraphs)
+        for index, operation in enumerate(rule.get("operations") or []):
+            if not isinstance(operation, dict):
+                continue
+            key = _rule_operation_key(rule, index)
+            if (rule_id, key) in covered:
+                continue
+            if str(operation.get("one_of_group") or ""):
+                # ONE_OF historical wordings are closed by the sibling that
+                # actually matches the source; do not synthesize a clone.
+                continue
+            if facts is not None and condition_status(
+                    operation.get("condition"), facts) != "TRUE":
+                continue
+            old = _compact(str(operation.get("old_text") or ""))
+            if not old or old in body:
+                continue
+            span = paragraphs[0]
+            created.append(Target(
+                target_id=f"ABSENT-{rule_id}-{index}", rule_id=rule_id,
+                location=span.location, quote=span.text, state="satisfied",
+                reason="OLD_WORDING_ABSENT_IN_RULE_SCOPE",
+                start=0, end=len(span.text), resolution="resolved", segment_ok=True,
+                operations=(key,),
+                scope_id=(f"{rule_id}:" + "+".join(
+                    sorted(getattr(scope, "leaf_ids", ()) or ())))
+                if getattr(scope, "leaf_ids", ()) else
+                f"{rule_id}@{span.location}"))
+    return created
+
+
 def rebind_split_class_definition_targets(targets: Sequence[Target],
                                         inspection: DocumentInspection) -> list[dict[str, Any]]:
     """Move a G02/G04 heading-fragment target onto its continuation paragraph.

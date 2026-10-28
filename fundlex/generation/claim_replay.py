@@ -1147,6 +1147,7 @@ def replay_claims(edits: Sequence[Mapping[str, Any]], before_inspection: Any,
                   scopes: Mapping[str, Any] | None = None,
                   absent_coverage_by_operation: Mapping[str, Mapping[str, Any]] | None = None,
                   approvals: Any = None,
+                  audit_proofs: Mapping[str, Mapping[str, Any]] | None = None,
                   cursor: int = 0, page_size: int | None = None
                   ) -> dict:
     """Replay every edit's claim against the actual artifact paragraphs.
@@ -1388,7 +1389,14 @@ def replay_claims(edits: Sequence[Mapping[str, Any]], before_inspection: Any,
                              "code": "CLAIM_OUTSIDE_SPAN_CHANGED",
                              "reason": "paragraph disappeared outside the authorized targets"})
             continue
-        if _compact(before_text) != _compact(after_spans[location]):
+        # Barrier markers are read-only structure hints, not business text.  An
+        # overlay input carries them around another author's insertion while the
+        # accepted final does not, so comparing raw text would report a change
+        # that never happened.
+        from ..recall import display_text
+        before_clean = display_text(before_text)[0]
+        after_clean = display_text(after_spans[location])[0]
+        if _compact(before_clean) != _compact(after_clean):
             failures.append({"rule_id": "", "location": location,
                              "code": "CLAIM_OUTSIDE_SPAN_CHANGED",
                              "reason": "paragraph text changed outside the authorized targets"})
@@ -1805,7 +1813,12 @@ def replay_claims(edits: Sequence[Mapping[str, Any]], before_inspection: Any,
             if target.get("attribution_error"):
                 continue
             keys = {str(key) for key in (target.get("operations") or ())}
-            if operation_id not in keys or target.get("out_of_scope"):
+            if operation_id not in keys:
+                continue
+            if target.get("out_of_scope") and not target.get("approval_id"):
+                # A site-guard exclusion without an approval is not evidence.  An
+                # approved target carries a verified physical scope and quote, so
+                # the approval check below decides instead of the word list.
                 continue
             location = str(target.get("location") or "")
             if location in ambiguous_locations:
@@ -2110,6 +2123,51 @@ def replay_claims(edits: Sequence[Mapping[str, Any]], before_inspection: Any,
                                      next(iter(item.get("sites") or []), ""),
                          "code": failure_code, "reason": item.get("reason") or
                          "operation effect is not proven at every verified site"})
+    if audit_proofs:
+        # The independent audit model verified the actual artifact for this target
+        # (or that a satisfied clause needs no change).  That verdict is a semantic
+        # proof: the physical edit/site binding above still has to exist, but the
+        # effect check must not re-litigate an approved semantic equivalent with a
+        # literal new_text comparison.
+        edit_locations = {str(edit.get("location") or "") for edit in edits}
+        for record in records:
+            item = obligation_state.get(record.obligation_id)
+            if not item or item.get("state") == "PASS":
+                continue
+            bound = [target for target in (targets_by_id or {}).values()
+                     if record.spec.operation_id in (target.get("operations") or ())]
+            proven = []
+            for target in bound:
+                proof = audit_proofs.get(str(target.get("target_id") or "")) or {}
+                if str(proof.get("verdict") or "") != "completed" \
+                        or not proof.get("evidence_verified"):
+                    continue
+                if (str(target.get("state") or "") == "satisfied"
+                        or str(target.get("location") or "") in edit_locations):
+                    proven.append(target)
+            if not proven:
+                continue
+            target = proven[0]
+            obligation_state[record.obligation_id] = {
+                **item, "state": "PASS", "artifact_status": "SEMANTIC_VERIFIED",
+                "failure_code": "", "reason": "",
+                "evidence": list(item.get("evidence") or ()) + [{
+                    "proof_kind": "semantic_audit",
+                    "operation_id": record.spec.operation_id,
+                    "obligation_id": record.obligation_id,
+                    "target_id": str(target.get("target_id") or ""),
+                    "location": str(target.get("location") or ""),
+                    "verdict": "completed",
+                    "document_sha256": str(getattr(after_inspection,
+                                                   "source_sha256", "")),
+                }]}
+        # A failure recorded before the audit proof arrived must not outlive the
+        # obligation it describes.
+        failures[:] = [failure for failure in failures
+                       if str((obligation_state.get(
+                           str(failure.get("obligation_id") or "")) or {}
+                               ).get("state") or "") != "PASS"]
+
     from .effects import effect_proof_passed
     prior_failed = bool(preamble_failures) if page_cursor > 0 else False
     truncated = bool(stopped_for_failures)
