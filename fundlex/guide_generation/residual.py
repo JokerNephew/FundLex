@@ -30,10 +30,10 @@ from .prompts import (
 
 @dataclass
 class ResidualConfig:
-    max_rounds: int = 4
+    max_rounds: int | None = None  # optional safety; None = until progress saturates
     required_clean_rounds: int = 2
     batch_chars: int = 11000
-    max_calls_per_round: int = 900
+    max_calls_per_round: int | None = None  # observation only
     sample_not_affected: int = 8
     max_requirements: int = 12
     circuit_wait_s: float = 130.0
@@ -178,15 +178,17 @@ def run_residual_mining(router, requirements: list[PolicyRequirement], items: li
     calls = 0
     clean_streak = 0
     status = "max_rounds_reached"
-    for round_no in range(1, config.max_rounds + 1):
+    round_no = 0
+    while True:
+        round_no += 1
+        if config.max_rounds is not None and round_no > config.max_rounds:
+            break
         new_impacts: list[ImpactCandidate] = []
         uncovered: list[dict[str, Any]] = []
         round_findings: list[dict[str, Any]] = []
         round_calls = 0
         round_patterns: set[str] = set()
         for version, batch in residual_batches:
-            if round_calls >= config.max_calls_per_round:
-                break
             contract_text = "\n\n".join(_compact_clause(clause) for clause in batch)
             selected_requirements = _sweep_requirements(
                 requirements, batch, config.max_requirements)

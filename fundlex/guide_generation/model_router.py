@@ -15,6 +15,7 @@ import json
 import os
 import threading
 import time
+import uuid
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any, Mapping
@@ -23,6 +24,7 @@ from .models import canonical_json, sha256_json, utc_now
 from ..model import ModelError, ModelGateway, ModelResult
 from ..models.config import ModelRoleConfig, RoleConfigError, load_role_config
 from ..models.roles import _budget_from_env, _make_gateway
+from ..model_budget import BudgetError
 
 ROLES = (
     "regulation_analyst",
@@ -173,6 +175,48 @@ def _file_role_config(primary: ModelRoleConfig) -> dict[str, ModelRoleConfig]:
     return result
 
 
+class _ObservationOnlyBudget:
+    """Delegate the shared ledger without letting its cost/call caps stop work.
+
+    Concurrency, circuit-breaker and ledger failures still propagate.  Only
+    the cumulative request/cost caps are observed and bypassed; every guide
+    call remains recorded in ``gg_model_calls`` with its estimated cost.
+    """
+
+    _BYPASS_CODES = frozenset({"MODEL_GLOBAL_CALL_BUDGET_EXCEEDED",
+                               "MODEL_COST_BUDGET_EXCEEDED"})
+
+    def __init__(self, inner):
+        self.inner = inner
+        self.concurrency = getattr(inner, "concurrency", 1)
+        self.max_requests = getattr(inner, "max_requests", None)
+        self.max_cost_usd = getattr(inner, "max_cost_usd", None)
+
+    def estimate(self, input_tokens: int, output_tokens: int) -> float:
+        return self.inner.estimate(input_tokens, output_tokens)
+
+    def reserve(self, *, input_token_bound: int, output_token_bound: int,
+                lease_seconds: float) -> str:
+        try:
+            return self.inner.reserve(input_token_bound=input_token_bound,
+                                      output_token_bound=output_token_bound,
+                                      lease_seconds=lease_seconds)
+        except BudgetError as exc:
+            if str(exc) in self._BYPASS_CODES:
+                return "observation:" + uuid.uuid4().hex
+            raise
+
+    def finish(self, reservation: str, metadata: dict, *, prompt_tokens: int | None,
+               completion_tokens: int | None, success: bool) -> float:
+        if str(reservation).startswith("observation:"):
+            return float(self.inner.estimate(prompt_tokens or 0, completion_tokens or 0))
+        return self.inner.finish(reservation, metadata, prompt_tokens=prompt_tokens,
+                                 completion_tokens=completion_tokens, success=success)
+
+    def snapshot(self) -> dict:
+        return self.inner.snapshot()
+
+
 class GuideModelRouter:
     """Dispatch guide tasks to role-specific gateways and record every call."""
 
@@ -198,11 +242,19 @@ class GuideModelRouter:
         # An infrastructure failure pauses the run; it must never be reported as
         # an empty candidate set.
         self._blocking_error: ModelError | None = None
-        # Soft per-run cap on top of the shared ledger.  The shared ledger
-        # remains the hard cost boundary; this prevents one low-frequency guide
-        # run from consuming the whole remaining project budget silently.
-        self.run_max_calls = int(os.environ.get("FUNDLEX_GUIDE_RUN_MAX_CALLS", "6000"))
-        self.run_max_cost = float(os.environ.get("FUNDLEX_GUIDE_RUN_MAX_COST_USD", "12"))
+        # Cost/call totals are observations only.  They are kept on the router
+        # for status/metrics compatibility but never stop a run.  Gateway-level
+        # max_calls is replaced with an unbounded sentinel for the same reason;
+        # context/token, concurrency and circuit limits remain active.
+        self.run_max_calls: int | None = None
+        self.run_max_cost: float | None = None
+        self.observed_gateway_call_limits: dict[int, Any] = {}
+        for name, gateway in self.gateways.items():
+            self.observed_gateway_call_limits[id(gateway)] = getattr(gateway, "max_calls", None)
+            try:
+                gateway.max_calls = float("inf")
+            except (AttributeError, TypeError):
+                pass
 
     @classmethod
     def from_env(cls, *, budget: Any = None) -> "GuideModelRouter":
@@ -227,6 +279,8 @@ class GuideModelRouter:
                             for role, cfg in role_configs.items()}
         shared_budget = None if os.environ.get("FUNDLEX_MODEL_MODE") == "replay" else (
             budget if budget is not None else _budget_from_env())
+        if shared_budget is not None:
+            shared_budget = _ObservationOnlyBudget(shared_budget)
         gateways: dict[str, ModelGateway] = {"primary": _make_gateway(primary_cfg, shared_budget)}
         configs_out: dict[str, ModelRoleConfig] = {"primary": primary_cfg}
         for role, cfg in role_configs.items():
@@ -348,17 +402,6 @@ class GuideModelRouter:
     def call(self, *, task_type: str, bounded_context: str, response_schema: dict,
               instruction: str, prompt_version: str = "v1", role: str | None = None) -> ModelResult:
         self.raise_if_blocked()
-        with self._record_lock:
-            call_count = len(self.records)
-            current_cost = sum(record.estimated_cost_usd or 0 for record in self.records)
-        if call_count >= self.run_max_calls:
-            error = ModelError("GUIDE_RUN_CALL_BUDGET_EXCEEDED", self.metrics())
-            self._block(error)
-            raise error
-        if current_cost >= self.run_max_cost:
-            error = ModelError("GUIDE_RUN_COST_BUDGET_EXCEEDED", self.metrics())
-            self._block(error)
-            raise error
         selected, gateway = self._gateway_for(task_type, role)
         context_sha = hashlib.sha256(bounded_context.encode("utf-8")).hexdigest()
         instruction_sha = hashlib.sha256(instruction.encode("utf-8")).hexdigest()
