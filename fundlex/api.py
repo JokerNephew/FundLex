@@ -1197,11 +1197,10 @@ def create_app(data_dir: str | Path | None = None, *, auth_db=None) -> FastAPI:
                     name = unique(name)
                     included = []
                     for kind in archive_kinds(doc.get("downloads")):
-                        path, digest = store.get_artifact(user, doc["batch_id"], doc["document_id"], kind)
-                        data = path.read_bytes()
-                        if hashlib.sha256(data).hexdigest() != digest:
-                            raise Conflict("ARTIFACT_VERIFICATION_MISMATCH")
-                        _, arcname = archive_entry(kind, name, path.suffix,
+                        data, digest = store.read_artifact(user, doc["batch_id"], doc["document_id"], kind)
+                        suffix = ".docx" if kind.endswith(("final", "redline")) else \
+                            ".json" if kind == "report_json" else ".md"
+                        _, arcname = archive_entry(kind, name, suffix,
                                                   delivery_status=doc["delivery_status"])
                         archive.writestr(arcname, data)
                         included.append(kind)
@@ -1330,14 +1329,18 @@ def create_app(data_dir: str | Path | None = None, *, auth_db=None) -> FastAPI:
         if kind not in docx_kinds | {"report_json", "report_md"}:
             raise HTTPException(404, "artifact not found")
         try:
-            path, digest = store.get_artifact(user, batch_id, document_id, kind)
+            data, digest = store.read_artifact(user, batch_id, document_id, kind)
         except NotFound as exc:
             raise_api_error(404, exc, fallback="NOT_FOUND")
         except Conflict as exc:
             raise_api_error(409, exc, fallback="CONFLICT")
         media = "application/vnd.openxmlformats-officedocument.wordprocessingml.document" if kind in docx_kinds else ("application/json" if kind == "report_json" else "text/markdown")
-        return FileResponse(path, media_type=media, filename=f"{document_id}_{kind}{path.suffix}",
-                            headers={"ETag": digest, "Cache-Control": "private, no-store"})
+        suffix = ".docx" if kind in docx_kinds else ".json" if kind == "report_json" else ".md"
+        # Serve the exact bytes that were re-verified after the gate, not a path
+        # that could be replaced between validation and streaming.
+        return Response(content=data, media_type=media,
+                        headers={"Content-Disposition": f'attachment; filename="{document_id}_{kind}{suffix}"',
+                                 "ETag": digest, "Cache-Control": "private, no-store"})
 
     @application.get("/api/batches/{batch_id}/report")
     def batch_report(batch_id: str, user: str = Depends(_user)):

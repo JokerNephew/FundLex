@@ -198,17 +198,24 @@ class Worker:
                 qualification = report.get("qualification_status")
                 if qualification is None and isinstance(report.get("qualification"), dict):
                     report["qualification_status"] = report["qualification"].get("status")
+                mode = str(job.get("mode") or "delivery")
+                task_bound = bool(self.store.document_task_id(doc_id))
+                if task_bound:
+                    # The pipeline always writes delivery-named outputs; the
+                    # persisted job mode is applied afterwards and cannot be
+                    # changed by the report itself.
+                    report["execution_mode"] = "delivery"
                 paths = self._artifact_paths(report, output_dir)
                 max_output_bytes = int(os.environ.get("FUNDLEX_MAX_RESULT_BYTES", str(100 * 1024 * 1024)))
                 if sum(path.stat().st_size for path in paths.values()) > max_output_bytes:
                     raise ValueError("RESULT_SIZE_LIMIT")
                 validate_delivery(report, paths)
-                mode = str(job.get("mode") or "delivery")
-                if mode == "evaluation":
+                if mode == "evaluation" and task_bound:
                     # The recall pipeline always writes the validated pair under
                     # final/redline; evaluation exposes the same bytes under
                     # evaluation_* names and never as formal deliverables.
                     status = str(report.get("delivery_status") or "")
+                    report["execution_mode"] = "evaluation"
                     if status in {"complete", "complete_with_exceptions"}:
                         plan = report.get("edit_plan") or {}
                         validation = report.get("output_validation") or {}
@@ -224,12 +231,40 @@ class Worker:
                                 target = output_dir / f"{new}.docx"
                                 source.replace(target)
                                 paths[new] = target
-                        report["execution_mode"] = "evaluation"
                         report["delivery_status"] = evaluation_status
+                    else:
+                        # Incomplete/failed/excluded evaluation keeps only its
+                        # report. Produced bytes must not become ordinary
+                        # working_final/working_redline delivery files or enter
+                        # manual revision selection.
+                        for kind in ("final", "redline", "working_final", "working_redline",
+                                     "evaluation_final", "evaluation_redline"):
+                            paths.pop(kind, None)
                     if isinstance(report.get("artifacts"), dict):
-                        for old in ("final", "redline"):
+                        for old in ("final", "redline", "working_final", "working_redline",
+                                    "evaluation_final", "evaluation_redline"):
                             report["artifacts"].pop(old, None)
-                elif mode == "diagnosis":
+                elif mode == "evaluation":
+                    # Legacy direct-batch runners keep their historical report
+                    # mode when they explicitly ask for evaluation.
+                    status = str(report.get("delivery_status") or "")
+                    if report.get("execution_mode") == "evaluation" and status in {"complete", "complete_with_exceptions"}:
+                        plan = report.get("edit_plan") or {}
+                        validation = report.get("output_validation") or {}
+                        if status == "complete_with_exceptions":
+                            evaluation_status = "evaluation_modified_with_exceptions"
+                        elif validation.get("kind") == "recall_validated_unchanged" or plan.get("count") == 0:
+                            evaluation_status = "evaluation_unmodified"
+                        else:
+                            evaluation_status = "evaluation_modified"
+                        for old, new in (("final", "evaluation_final"), ("redline", "evaluation_redline")):
+                            source = paths.pop(old, None)
+                            if source is not None:
+                                target = output_dir / f"{new}.docx"
+                                source.replace(target)
+                                paths[new] = target
+                        report["delivery_status"] = evaluation_status
+                elif mode == "diagnosis" and task_bound:
                     # Diagnosis runs the full pipeline for evidence, but only the
                     # report is published; never expose the modified contracts.
                     for kind in ("final", "redline", "working_final", "working_redline",
@@ -240,7 +275,16 @@ class Worker:
                     report["diagnosis_status"] = report.get("delivery_status")
                     report["execution_mode"] = "diagnosis"
                     report["delivery_status"] = "diagnosed"
-                elif report["delivery_status"] not in {"complete", "complete_with_exceptions"}:
+                elif task_bound and report["delivery_status"] not in {"complete", "complete_with_exceptions"}:
+                    paths.pop("final", None)
+                    paths.pop("redline", None)
+                    if isinstance(report.get("artifacts"), dict):
+                        report["artifacts"].pop("final", None)
+                        report["artifacts"].pop("redline", None)
+                elif not task_bound and mode == "diagnosis":
+                    # Historical direct batches never had a diagnosis mode.
+                    pass
+                elif not task_bound and report["delivery_status"] not in {"complete", "complete_with_exceptions"}:
                     paths.pop("final", None)
                     paths.pop("redline", None)
                     if isinstance(report.get("artifacts"), dict):
@@ -291,6 +335,10 @@ class Worker:
                     "delivery_status": "not_generated", "error_code": code,
                     "errors": [{"code": code, "stage": "worker", "message": type(exc).__name__}],
                 }
+                if self.store.document_task_id(doc_id):
+                    # Even a failed terminal attempt carries the persisted job
+                    # mode, never a fabricated delivery identity.
+                    report["execution_mode"] = str(job.get("mode") or "delivery")
                 md = output_dir / "report.md"
                 md.write_text(self._markdown(report), encoding="utf-8")
                 report_path = output_dir / "report.json"

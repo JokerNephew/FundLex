@@ -22,6 +22,11 @@ class IntegrationNotFound(Exception):
     pass
 
 
+EVENT_MAX_ATTEMPTS = 5
+EVENT_LEASE_SECONDS = 60
+EVENT_PAYLOAD_LIMIT = 1024 * 1024
+
+
 class IntegrationStore:
     def __init__(self, store):
         self.store = store
@@ -48,6 +53,7 @@ class IntegrationStore:
                     provider TEXT NOT NULL, event_id TEXT NOT NULL, event_type TEXT NOT NULL,
                     payload_sha256 TEXT NOT NULL, status TEXT NOT NULL, attempts INTEGER NOT NULL DEFAULT 0,
                     received_at REAL NOT NULL, processed_at REAL, error_code TEXT,
+                    payload_json MEDIUMTEXT, lease_until REAL, fencing_token INTEGER NOT NULL DEFAULT 0,
                     PRIMARY KEY(provider, event_id)
                 );
                 CREATE TABLE IF NOT EXISTS feishu_drafts (
@@ -124,6 +130,14 @@ class IntegrationStore:
                 self._add_column(db, "integration_outbox", "lease_until", "REAL")
             if "fencing_token" not in outbox_columns:
                 self._add_column(db, "integration_outbox", "fencing_token", "INTEGER NOT NULL DEFAULT 0")
+            event_columns = {row["name"] for row in db.execute("PRAGMA table_info(integration_events)")}
+            for name, definition in {
+                "payload_json": "MEDIUMTEXT",
+                "lease_until": "REAL",
+                "fencing_token": "INTEGER NOT NULL DEFAULT 0",
+            }.items():
+                if name not in event_columns:
+                    self._add_column(db, "integration_events", name, definition)
 
     @staticmethod
     def _hash(value: str) -> str:
@@ -247,44 +261,140 @@ class IntegrationStore:
         return dict(row) if row else None
 
     def revoke_user_binding(self, provider: str, user_id: str) -> None:
+        now = time.time()
+        staged: list[str] = []
         with self.store._connect() as db:
+            db.execute("BEGIN IMMEDIATE")
             db.execute("UPDATE external_identities SET revoked_at=?,updated_at=? WHERE provider=? AND user_id=? AND revoked_at IS NULL",
-                       (time.time(), time.time(), provider, user_id))
+                       (now, now, provider, user_id))
+            drafts = db.execute("""SELECT id FROM feishu_drafts WHERE owner_user_id=?
+                AND status IN ('COLLECTING','CONFIRMING')""", (user_id,)).fetchall()
+            for draft in drafts:
+                staged.extend(str(row["storage_key"]) for row in db.execute(
+                    "SELECT storage_key FROM feishu_draft_files WHERE draft_id=? AND storage_key<>''",
+                    (draft["id"],)).fetchall())
+                db.execute("DELETE FROM feishu_draft_files WHERE draft_id=?", (draft["id"],))
+                db.execute("""UPDATE feishu_drafts SET status='CANCELLED',last_error_code='BINDING_REVOKED',
+                    updated_at=?,version=version+1 WHERE id=?""", (now, draft["id"]))
+            # Pending status cards must not be delivered to a chat after the
+            # identity is rebound to another FundLex account.
+            channels = db.execute("SELECT task_id FROM task_channels WHERE provider=? AND owner_user_id=?",
+                                  (provider, user_id)).fetchall()
+            for channel in channels:
+                db.execute("""UPDATE integration_outbox SET status='dead',last_error_code='BINDING_REVOKED',
+                    lease_until=NULL WHERE provider=? AND aggregate_id=? AND status IN ('pending','retry_wait','sending')""",
+                           (provider, channel["task_id"]))
+                db.execute("""UPDATE task_channels SET last_external_status='binding_revoked'
+                    WHERE provider=? AND task_id=?""", (provider, channel["task_id"]))
+        for key in staged:
+            try:
+                self.store.object_path(key).unlink(missing_ok=True)
+            except OSError:
+                pass
 
-    def record_event(self, provider: str, event_id: str, event_type: str, payload: dict[str, Any]) -> bool:
+    def begin_event(self, provider: str, event_id: str, event_type: str, payload: dict[str, Any],
+                    *, lease_seconds: float = EVENT_LEASE_SECONDS,
+                    max_attempts: int = EVENT_MAX_ATTEMPTS) -> int | None:
+        """Claim one event delivery for processing.
+
+        ``processed`` is the only permanent duplicate. A failed/dead event, an
+        interrupted ``received`` row, or an expired processing lease may be
+        reclaimed within ``max_attempts``. The returned fencing token must be
+        passed to :meth:`mark_event` so a stale handler cannot finalise a newer
+        attempt.
+        """
         raw = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+        if len(raw.encode("utf-8")) > EVENT_PAYLOAD_LIMIT:
+            raise IntegrationConflict("INTEGRATION_EVENT_PAYLOAD_TOO_LARGE")
         digest = hashlib.sha256(raw.encode()).hexdigest()
         now = time.time()
         with self.store._connect() as db:
-            existing = db.execute("SELECT event_type,payload_sha256 FROM integration_events WHERE provider=? AND event_id=?",
+            db.execute("BEGIN IMMEDIATE")
+            existing = db.execute("SELECT * FROM integration_events WHERE provider=? AND event_id=?",
                                   (provider, event_id)).fetchone()
-            if existing is not None:
-                if existing["event_type"] != event_type or existing["payload_sha256"] != digest:
-                    raise IntegrationConflict("INTEGRATION_EVENT_PAYLOAD_CONFLICT")
-                return False
-            try:
-                db.execute("INSERT INTO integration_events(provider,event_id,event_type,payload_sha256,status,received_at) VALUES(?,?,?,?,?,?)",
-                           (provider, event_id, event_type, digest, "received", now))
-            except Exception:
-                # A concurrent insert is a normal duplicate delivery. Re-read it
-                # so an event-id collision with a different payload is never
-                # silently accepted.
-                existing = db.execute("SELECT event_type,payload_sha256 FROM integration_events WHERE provider=? AND event_id=?",
-                                      (provider, event_id)).fetchone()
-                if existing is not None and (existing["event_type"] != event_type or existing["payload_sha256"] != digest):
-                    raise IntegrationConflict("INTEGRATION_EVENT_PAYLOAD_CONFLICT")
-                if existing is not None:
-                    return False
-                raise
-        return True
+            if existing is not None and (existing["event_type"] != event_type
+                                         or existing["payload_sha256"] != digest):
+                raise IntegrationConflict("INTEGRATION_EVENT_PAYLOAD_CONFLICT")
+            if existing is None:
+                token = 1
+                try:
+                    db.execute("""INSERT INTO integration_events(provider,event_id,event_type,payload_sha256,
+                        status,attempts,received_at,payload_json,lease_until,fencing_token)
+                        VALUES(?,?,?,?,?,?,?,?,?,?)""",
+                               (provider, event_id, event_type, digest, "processing", 1, now, raw,
+                                now + lease_seconds, token))
+                    return token
+                except Exception:
+                    # Concurrency: another callback inserted the same event. The
+                    # payload identity was checked above; re-read and apply the
+                    # same claim rules instead of dropping this delivery.
+                    existing = db.execute("SELECT * FROM integration_events WHERE provider=? AND event_id=?",
+                                          (provider, event_id)).fetchone()
+                    if existing is None:
+                        raise
+                    if existing["event_type"] != event_type or existing["payload_sha256"] != digest:
+                        raise IntegrationConflict("INTEGRATION_EVENT_PAYLOAD_CONFLICT")
+            status = str(existing["status"] or "received")
+            attempts = int(existing["attempts"] or 0)
+            if status == "processed":
+                return None
+            lease_until = existing["lease_until"]
+            if status == "processing" and lease_until is not None and float(lease_until) > now:
+                # Another callback currently owns this event.
+                return None
+            if attempts >= max_attempts:
+                return None
+            token = int(existing["fencing_token"] or 0) + 1
+            changed = db.execute("""UPDATE integration_events SET status='processing',attempts=attempts+1,
+                payload_json=?,lease_until=?,fencing_token=?,processed_at=NULL,error_code=NULL
+                WHERE provider=? AND event_id=? AND fencing_token=? AND status=?
+                AND attempts=?""", (raw, now + lease_seconds, token, provider, event_id,
+                                   int(existing["fencing_token"] or 0), status, attempts)).rowcount
+            return token if changed == 1 else None
 
-    def mark_event(self, provider: str, event_id: str, status: str, error_code: str | None = None) -> None:
+    def record_event(self, provider: str, event_id: str, event_type: str, payload: dict[str, Any],
+                     *, lease_seconds: float = EVENT_LEASE_SECONDS,
+                     max_attempts: int = EVENT_MAX_ATTEMPTS) -> bool:
+        """Compatibility wrapper: True only when this delivery owns processing."""
+        return self.begin_event(provider, event_id, event_type, payload,
+                                lease_seconds=lease_seconds, max_attempts=max_attempts) is not None
+
+    def mark_event(self, provider: str, event_id: str, status: str, error_code: str | None = None,
+                   *, fencing_token: int | None = None,
+                   max_attempts: int = EVENT_MAX_ATTEMPTS) -> bool:
+        """Finish a claimed event; a stale fencing token is ignored.
+
+        ``dead``/failed handlers remain retryable (``retry_wait``) until the
+        bounded attempts are exhausted, so one transient storage/network error
+        does not permanently lose a user action.
+        """
+        now = time.time()
         with self.store._connect() as db:
-            db.execute("UPDATE integration_events SET status=?,processed_at=?,attempts=attempts+1,error_code=? WHERE provider=? AND event_id=?",
-                       (status, time.time(), error_code, provider, event_id))
+            row = db.execute("SELECT attempts,fencing_token FROM integration_events WHERE provider=? AND event_id=?",
+                             (provider, event_id)).fetchone()
+            if row is None:
+                return False
+            if fencing_token is not None and int(row["fencing_token"] or 0) != int(fencing_token):
+                return False
+            if status == "processed":
+                final_status = "processed"
+            elif int(row["attempts"] or 0) >= max_attempts:
+                final_status = "dead"
+            else:
+                final_status = "retry_wait"
+            where = "provider=? AND event_id=?"
+            values: list[Any] = [final_status, now if final_status == "processed" else None,
+                                 error_code or ("PROCESSING_FAILED" if final_status != "processed" else None),
+                                 provider, event_id]
+            if fencing_token is not None:
+                where += " AND fencing_token=?"
+                values.append(fencing_token)
+            changed = db.execute(f"""UPDATE integration_events SET status=?,processed_at=?,error_code=?,
+                lease_until=NULL WHERE {where}""", values).rowcount
+        return changed == 1
 
     def active_draft(self, tenant_key: str, open_id: str, chat_id: str,
-                     task_type: str | None = None) -> dict[str, Any] | None:
+                     task_type: str | None = None, owner_user_id: str | None = None) -> dict[str, Any] | None:
         now = time.time()
         with self.store._connect() as db:
             sql = ("SELECT * FROM feishu_drafts WHERE tenant_key=? AND open_id=? AND chat_id=? "
@@ -293,8 +403,20 @@ class IntegrationStore:
             if task_type:
                 sql += " AND task_type=?"
                 values.append(task_type)
+            if owner_user_id is not None:
+                sql += " AND owner_user_id=?"
+                values.append(owner_user_id)
             sql += " ORDER BY created_at DESC LIMIT 1"
             row = db.execute(sql, values).fetchone()
+        return dict(row) if row else None
+
+    def draft_for_owner(self, draft_id: str, tenant_key: str, open_id: str, chat_id: str,
+                        owner_user_id: str) -> dict[str, Any] | None:
+        """Read an active draft only when it belongs to the current binding."""
+        with self.store._connect() as db:
+            row = db.execute("""SELECT * FROM feishu_drafts WHERE id=? AND tenant_key=? AND open_id=?
+                AND chat_id=? AND owner_user_id=? AND status IN ('COLLECTING','CONFIRMING')""",
+                             (draft_id, tenant_key, open_id, chat_id, owner_user_id)).fetchone()
         return dict(row) if row else None
 
     def create_draft(self, tenant_key: str, open_id: str, chat_id: str, owner_user_id: str, name: str,
@@ -423,17 +545,29 @@ class IntegrationStore:
         return dict(row)
 
     def link_task(self, task_id: str, draft: dict[str, Any], card_message_id: str | None,
-                  *, task_type: str | None = None) -> None:
+                  *, task_type: str | None = None, task_owner: str | None = None) -> None:
         now = time.time()
         task_type = task_type or draft.get("task_type") or "revision"
+        owner = str(draft.get("owner_user_id") or "")
+        if task_owner is not None and str(task_owner) != owner:
+            raise IntegrationConflict("FEISHU_TASK_OWNER_MISMATCH")
         with self.store._connect() as db:
-            existing = db.execute("SELECT task_id FROM task_channels WHERE provider='feishu' AND task_id=?", (task_id,)).fetchone()
+            db.execute("BEGIN IMMEDIATE")
+            existing = db.execute("SELECT task_id,owner_user_id FROM task_channels WHERE provider='feishu' AND task_id=?",
+                                  (task_id,)).fetchone()
             if existing is None:
                 db.execute("INSERT INTO task_channels(provider,task_id,tenant_key,open_id,owner_user_id,chat_id,card_message_id,task_type,last_task_status,created_at) VALUES(?,?,?,?,?,?,?,?,?,?)",
-                           ("feishu", task_id, draft["tenant_key"], draft["open_id"], draft["owner_user_id"],
+                           ("feishu", task_id, draft["tenant_key"], draft["open_id"], owner,
                             draft["chat_id"], card_message_id, task_type, "queued", now))
-            db.execute("UPDATE feishu_drafts SET status='SUBMITTED',task_id=?,target_id=?,card_message_id=?,last_error_code=NULL,updated_at=?,version=version+1 WHERE id=?",
-                       (task_id, task_id, card_message_id, now, draft["id"]))
+            elif str(existing["owner_user_id"] or "") != owner:
+                raise IntegrationConflict("FEISHU_TASK_OWNER_MISMATCH")
+            changed = db.execute("""UPDATE feishu_drafts SET status='SUBMITTED',task_id=?,target_id=?,
+                card_message_id=?,last_error_code=NULL,updated_at=?,version=version+1
+                WHERE id=? AND owner_user_id=?
+                AND (status IN ('COLLECTING','CONFIRMING') OR (status='SUBMITTED' AND task_id=?))""",
+                (task_id, task_id, card_message_id, now, draft["id"], owner, task_id)).rowcount
+            if changed != 1:
+                raise IntegrationConflict("FEISHU_DRAFT_OWNER_MISMATCH")
 
     def channels(self, task_type: str | None = None) -> list[dict[str, Any]]:
         with self.store._connect() as db:
@@ -513,6 +647,19 @@ class IntegrationStore:
             db.execute("DELETE FROM integration_state WHERE provider=? AND state_key=?", (provider, key))
             db.execute("INSERT INTO integration_state(provider,state_key,state_value,updated_at) VALUES(?,?,?,?)",
                        (provider, key, value, time.time()))
+
+    def retryable_events(self, *, limit: int = 20,
+                         max_attempts: int = EVENT_MAX_ATTEMPTS) -> list[dict[str, Any]]:
+        """Events whose payload is stored and that may be replayed within bounds."""
+        now = time.time()
+        with self.store._connect() as db:
+            rows = db.execute("""SELECT * FROM integration_events WHERE provider='feishu'
+                AND payload_json IS NOT NULL AND payload_json <> '' AND attempts < ?
+                AND (status IN ('received','retry_wait','dead')
+                     OR (status='processing' AND (lease_until IS NULL OR lease_until<=?)))
+                ORDER BY received_at LIMIT ?""",
+                (max_attempts, now, max(1, min(limit, 100)))).fetchall()
+        return [dict(row) for row in rows]
 
     def health(self) -> dict[str, Any]:
         with self.store._connect() as db:
