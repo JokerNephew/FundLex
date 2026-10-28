@@ -114,27 +114,69 @@ def test_checkpoint_dependency_or_corruption_forces_fresh_response(tmp_path,chan
     assert len(calls)==2 and second.metrics()['http_attempts']==1
     assert second.metrics()['checkpoint_reuses']==0
 
-def test_request_budget_shared_between_gateway_instances(tmp_path: Path):
+def test_request_threshold_is_observed_not_enforced(tmp_path: Path):
+    """A configured request reference never rejects across gateway instances (FL-D449)."""
     path=tmp_path/'ledger.sqlite'
     first=gateway(lambda _:response({'quote':'混合型','fund_type':'ordinary'}),ModelBudget(path,max_requests=1))
     second=gateway(lambda _:response({'quote':'混合型','fund_type':'ordinary'}),ModelBudget(path,max_requests=1))
+    assert first.extract_fund_type('混合型证券投资基金').model=='actual-model'
+    assert second.extract_fund_type('混合型证券投资基金').model=='actual-model'
+    snapshot=second.budget.snapshot()
+    assert snapshot['http_attempts']==2
+    assert snapshot['max_http_attempts']==1
+    assert snapshot['request_cap_enforced'] is False
+    assert snapshot['request_cap_exceeded'] is True
+
+
+def test_legacy_hard_request_cap_requires_explicit_enforcement(tmp_path: Path):
+    path=tmp_path/'ledger.sqlite'
+    budget=ModelBudget(path,max_requests=1,max_cost_usd=1,enforce_limits=True)
+    first=gateway(lambda _:response({'quote':'混合型','fund_type':'ordinary'}),budget)
+    second=gateway(lambda _:response({'quote':'混合型','fund_type':'ordinary'}),budget)
     assert first.extract_fund_type('混合型证券投资基金').model=='actual-model'
     with pytest.raises(ModelError,match='MODEL_GLOBAL_CALL_BUDGET_EXCEEDED'):
         second.extract_fund_type('混合型证券投资基金')
     assert second.events==[]
 
-def test_budget_concurrency_cost_and_expired_reservation(tmp_path: Path):
+
+def test_budget_concurrency_observation_cost_and_expired_reservation(tmp_path: Path):
     budget=ModelBudget(tmp_path/'ledger.sqlite',max_cost_usd=.001,concurrency=1)
     first=budget.reserve(input_token_bound=100,output_token_bound=10,lease_seconds=30)
     with pytest.raises(BudgetError,match='MODEL_CONCURRENCY_LIMIT'):
         budget.reserve(input_token_bound=100,output_token_bound=10,lease_seconds=30)
     budget.finish(first,{},prompt_tokens=None,completion_tokens=None,success=False)
-    with pytest.raises(BudgetError,match='MODEL_COST_BUDGET_EXCEEDED'):
-        budget.reserve(input_token_bound=1000,output_token_bound=1000,lease_seconds=30)
+    # Exceeding the cost reference is recorded, not rejected (FL-D449).
+    second=budget.reserve(input_token_bound=1000,output_token_bound=1000,lease_seconds=30)
+    snapshot=budget.snapshot()
+    assert snapshot['cost_cap_enforced'] is False and snapshot['cost_cap_exceeded'] is True
+    budget.finish(second,{},prompt_tokens=None,completion_tokens=None,success=False)
     stale=budget.reserve(input_token_bound=1,output_token_bound=1,lease_seconds=0)
     budget.reserve(input_token_bound=1,output_token_bound=1,lease_seconds=30)
     with pytest.raises(BudgetError,match='MODEL_RESERVATION_EXPIRED'):
         budget.finish(stale,{},prompt_tokens=1,completion_tokens=1,success=True)
+
+
+def test_legacy_hard_cost_cap_requires_explicit_enforcement_and_rejects_zero(tmp_path: Path):
+    budget=ModelBudget(tmp_path/'ledger.sqlite',max_requests=10,max_cost_usd=.001,
+                       enforce_limits=True)
+    first=budget.reserve(input_token_bound=100,output_token_bound=10,lease_seconds=30)
+    budget.finish(first,{},prompt_tokens=None,completion_tokens=None,success=False)
+    with pytest.raises(BudgetError,match='MODEL_COST_BUDGET_EXCEEDED'):
+        budget.reserve(input_token_bound=1000,output_token_bound=1000,lease_seconds=30)
+    with pytest.raises(ValueError,match='enforce_limits requires positive'):
+        ModelBudget(tmp_path/'zero.sqlite',max_requests=0,max_cost_usd=0,
+                    enforce_limits=True)
+
+
+def test_zero_thresholds_never_trigger_observation_stops(tmp_path: Path):
+    budget=ModelBudget(tmp_path/'ledger.sqlite',max_requests=0,max_cost_usd=0)
+    for _ in range(3):
+        reservation=budget.reserve(input_token_bound=10,output_token_bound=10,lease_seconds=30)
+        budget.finish(reservation,{},prompt_tokens=10,completion_tokens=10,success=True)
+    snapshot=budget.snapshot()
+    assert snapshot['max_http_attempts'] is None and snapshot['max_cost_usd'] is None
+    assert snapshot['request_cap_exceeded'] is False
+    assert snapshot['cost_cap_exceeded'] is False
 
 def test_rate_limit_retry_each_attempt_is_charged(tmp_path: Path,monkeypatch):
     monkeypatch.setattr('fundlex.model.time.sleep',lambda _:None)

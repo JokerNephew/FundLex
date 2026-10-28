@@ -97,6 +97,8 @@ def _make_gateway(cfg: ModelRoleConfig, budget: ModelBudget | None) -> ModelGate
         cassette_dir=os.environ.get("FUNDLEX_MODEL_CASSETTE_DIR") or
                      (Path(os.environ["FUNDLEX_FROZEN_RUN_DIR"]) / "model_calls"
                       if os.environ.get("FUNDLEX_FROZEN_RUN_DIR") else None),
+        enforce_calls=os.environ.get("FUNDLEX_MODEL_ENFORCE_LIMITS", "").strip().lower()
+                     in {"1", "true", "yes", "on"},
     )
 
 
@@ -104,11 +106,13 @@ def _budget_from_env() -> ModelBudget:
     from ..config import local_data_dir
     return ModelBudget(
         os.environ.get("FUNDLEX_MODEL_LEDGER", str(local_data_dir() / "model_budget.sqlite")),
-        max_requests=int(os.environ.get("FUNDLEX_MODEL_MAX_REQUESTS", "16")),
-        max_cost_usd=float(os.environ.get("FUNDLEX_MODEL_MAX_COST_USD", "1")),
+        max_requests=int(os.environ.get("FUNDLEX_MODEL_MAX_REQUESTS", "0") or 0),
+        max_cost_usd=float(os.environ.get("FUNDLEX_MODEL_MAX_COST_USD", "0") or 0),
         concurrency=int(os.environ.get("FUNDLEX_MODEL_CONCURRENCY", "1")),
         input_usd_per_million=float(os.environ.get("FUNDLEX_MODEL_INPUT_USD_PER_M", "1")),
         output_usd_per_million=float(os.environ.get("FUNDLEX_MODEL_OUTPUT_USD_PER_M", "5")),
+        enforce_limits=os.environ.get("FUNDLEX_MODEL_ENFORCE_LIMITS", "").strip().lower()
+                      in {"1", "true", "yes", "on"},
     )
 
 
