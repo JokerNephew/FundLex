@@ -40,7 +40,7 @@ export function TasksPage() {
   const [sort, setSort] = useState('newest')
   const [page, setPage] = useState(1)
   const pageSize = 20
-  const tasks = useTasks({ q: search, status, guide_version_id: guideVersionId, sort, page, page_size: pageSize }, { pollMs: 15_000 })
+  const tasks = useTasks({ q: search, status, guide_version_id: guideVersionId, sort, page, page_size: pageSize }, { pollMs: 20_000 })
   const stats = useTaskStats()
   const guides = useGuideSettings()
   const items = tasks.data?.items ?? []

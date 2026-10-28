@@ -7,7 +7,7 @@ import { Button, Card, Spinner, StatusBadge } from '../../components/ui'
 import { ErrorState, LoadingCard } from '../Tasks'
 
 export function GuidesPage() {
-  const guides = useGuides({ pollMs: 5000 }); const settings = useGuideSettings({ pollMs: 5000 }); const [file, setFile] = useState<File>(); const [busy, setBusy] = useState(false); const [error, setError] = useState('')
+  const guides = useGuides({ pollMs: 10_000 }); const settings = useGuideSettings({ pollMs: 10_000 }); const [file, setFile] = useState<File>(); const [busy, setBusy] = useState(false); const [error, setError] = useState('')
   const guideMutation = useGuideMutation(); const guideUploadMutation = useGuideUploadMutation(); const guideParseMutation = useGuideParseMutation()
   const refresh = async () => { await Promise.all([guides.refetch(), settings.refetch()]) }
   const selectGuide = async (id: string | null) => { setBusy(true); setError(''); try { await guideMutation.mutateAsync(id); await refresh() } catch (nextError) { setError(nextError instanceof Error ? nextError.message : '指引启用未完成') } finally { setBusy(false) } }

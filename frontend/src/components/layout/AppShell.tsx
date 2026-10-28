@@ -43,7 +43,7 @@ export function AppShell() {
   const closeHelp = () => {
     setHelpOpen(false)
   }
-  const taskQuery = useTasks({ page: 1, page_size: 50, sort: 'newest' }, { pollMs: 10_000 })
+  const taskQuery = useTasks({ page: 1, page_size: 50, sort: 'newest' }, { pollMs: 20_000 })
   const previous = useRef<Record<string, string>>({})
   const [notifications, setNotifications] = useState<Array<{ id: string; taskId: string; title: string; detail: string }>>([])
   useEffect(() => {
