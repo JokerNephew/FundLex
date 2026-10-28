@@ -221,3 +221,71 @@ def test_app_rejects_malformed_multipart_without_creating_guide(tmp_path):
     )
     assert response.status_code == 400
     assert client.get("/api/guides", headers={"X-FundLex-User": "alice"}).json()["items"]
+
+
+def test_guide_generation_upload_uses_the_regulation_budget_before_the_route():
+    seen = False
+
+    async def app(scope, receive, send):
+        nonlocal seen
+        seen = True
+
+    settings = UploadGuardSettings(max_request_bytes=1000, guide_request_bytes=1000, regulation_request_bytes=10)
+    middleware = UploadResourceMiddleware(app, settings=settings)
+    messages = asyncio.run(_call_middleware(
+        middleware,
+        _scope("/api/guide-generation/runs",
+               headers=[("content-length", "11"),
+                        ("content-type", "multipart/form-data; boundary=x")]),
+        _request_receive(b"x" * 11),
+    ))
+    assert messages[0]["status"] == 413
+    assert json.loads(messages[1]["body"])["error"] == "UPLOAD_REQUEST_SIZE_LIMIT"
+    assert seen is False
+
+
+def test_retired_batch_route_is_rejected_before_multipart_parsing():
+    seen = False
+
+    async def app(scope, receive, send):
+        nonlocal seen
+        seen = True
+
+    middleware = UploadResourceMiddleware(app, settings=UploadGuardSettings())
+    messages = asyncio.run(_call_middleware(
+        middleware,
+        _scope("/api/batches", headers=[("content-length", "99999999"),
+                                        ("content-type", "multipart/form-data; boundary=x")]),
+        _request_receive(b"not parsed"),
+    ))
+    assert messages[0]["status"] == 410
+    assert json.loads(messages[1]["body"])["detail"] == "RULESET_RETIRED"
+    assert seen is False
+
+
+def test_app_rejects_retired_batch_and_guide_generation_oversize_before_routes(tmp_path, monkeypatch):
+    monkeypatch.setenv("FUNDLEX_REGULATION_REQUEST_BYTES", "100")
+    client = TestClient(create_app(tmp_path))
+    retired = client.post(
+        "/api/batches", headers={"X-FundLex-User": "alice",
+                                 "Content-Type": "multipart/form-data; boundary=broken"},
+        data=b"--broken\r\nnot-a-header\r\n",
+    )
+    assert retired.status_code == 410
+    assert retired.json()["detail"] == "RULESET_RETIRED"
+    oversized = client.post(
+        "/api/guide-generation/runs", headers={"X-FundLex-User": "alice"},
+        files={"file": ("regulation.docx", b"x" * 200)},
+    )
+    assert oversized.status_code == 413
+    assert oversized.json()["error"] == "UPLOAD_REQUEST_SIZE_LIMIT"
+
+
+def test_shared_multipart_parser_does_not_cap_legitimate_regulation_uploads():
+    async def stream():
+        yield b""
+
+    parser = BoundedMultiPartParser(
+        Headers({"content-type": "multipart/form-data; boundary=guard"}), stream())
+    assert parser.max_file_bytes >= 80 * 1024 * 1024
+    assert parser.max_total_file_bytes >= 82 * 1024 * 1024
