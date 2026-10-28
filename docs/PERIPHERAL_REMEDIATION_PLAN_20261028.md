@@ -219,8 +219,11 @@ incomplete
 - 对象 GC：新增 `tools/maintenance/prune_orphan_objects.py`，默认 dry-run，测试 `tests/test_object_gc.py` 通过（`cb21d0d`）。
 - HTML 保真文案：已改为“结构化修订预览”，不再声称等同 Word。
 - CI：`ci.yml`/`delivery-e2e.yml` 的 push 分支加入默认分支和集成分支。
-- 已修复测试：`tests/test_tasks_api.py` 的上传限制断言、`tests/test_recall_integration.py` 的 release attempt 期望、`tests/test_feishu_oauth_api.py` 的 PNG fixture。
-- 仍在进行：Agent D 的 SQL 分页/N+1；完成后合并并跑全量、浏览器、迁移和发布演练。
+- 已修复测试：`tests/test_tasks_api.py` 的上传限制断言、`tests/test_recall_integration.py` 的 release attempt 期望、`tests/test_feishu_oauth_api.py` 的 PNG fixture、浏览器测试的旧模式选择器断言。
+- 已验证：干净集成 worktree 最终全量 pytest **1764 passed / 84 skipped**（`/tmp/opencode/outer-full-pytest-final.log`）；V1 浏览器在完整工作区 **34 passed**；V2 浏览器 **10 passed**；前端 typecheck/lint/Vitest/build 通过。
+- Agent D 已合并（`2e5435c`）：任务/合同列表改为 SQL 过滤/排序/分页，批量读取 report/artifact；`assert_owned` 避免列表前构建完整 summary。新增 6 类分页/过滤/owner/查询次数测试。保留项：`reason_options` 仍需每请求解析该任务全部 report_json；`error_code` 精确过滤仍可能回退到 Python；legacy 分页仍是 O(legacy batches + page depth)；MySQL 未实跑。
+- 浏览器说明：干净 worktree 缺当前工作区未提交的 compare 前端改动，V1 compare 3 项在 clean worktree 失败；完整主工作区 V1 全绿（34 passed）。这不是本次外围改动引入的回归。
+- 仍在进行：最终全量 pytest（`/tmp/opencode/outer-full-pytest-final.log`）、迁移/发布演练；真实模型 E2E 需预算登记。
 
 ## 8. 下一步
 
