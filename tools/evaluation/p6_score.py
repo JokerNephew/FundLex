@@ -36,10 +36,171 @@ from lxml import etree
 W = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
 Q = lambda name: "{" + W + "}" + name
 COMPACT = re.compile(r"[\s\u3000]")
+SCORER_VERSION = "p6-score-2-site-complete-20261029"
+_SITE_INDEX_KEYS = ("paragraph_index", "paragraph", "para_index", "source_paragraph",
+                    "source_paragraph_index", "source_index")
+_SITE_LOCATION_KEYS = ("paragraph_index", "paragraph", "para_index", "index", "paragraph_id")
+_SITE_SCOPE_KEYS = ("site_scope", "scope", "zone", "section_scope")
 
 
 def compact(text: str) -> str:
     return COMPACT.sub("", text or "")
+
+
+def target_site(target: dict) -> dict:
+    """The physical site a frozen label declares, when the label provides one.
+
+    New independent labels distinguish the body and summary sites of the same rule
+    (or two identical paragraphs) with ``paragraph_index``/``location`` and
+    ``site_scope``.  Legacy labels have neither, so they keep the document-wide
+    compatibility path and the score reports that limitation instead of pretending
+    the site was proven.  Supported forms::
+
+        {"paragraph_index": 157, "site_scope": "body"}
+        {"location": {"paragraph_index": 157, "scope": "summary"}}
+        {"location": "p157", "site_scope": "body"}
+
+    ``compact_start`` is used as a fallback only when the label is already
+    site-scoped but has no explicit paragraph index.
+    """
+    index = None
+    for key in _SITE_INDEX_KEYS:
+        value = target.get(key)
+        if isinstance(value, int) and not isinstance(value, bool):
+            index = value
+            break
+    location = target.get("location")
+    if index is None and isinstance(location, int) and not isinstance(location, bool):
+        index = location
+    if index is None and isinstance(location, dict):
+        for key in _SITE_LOCATION_KEYS:
+            value = location.get(key)
+            if isinstance(value, int) and not isinstance(value, bool):
+                index = value
+                break
+    if index is None and isinstance(location, str):
+        match = re.fullmatch(r"\s*(?:p|para|paragraph|§)?\s*(\d+)\s*", location,
+                             flags=re.IGNORECASE)
+        if match:
+            index = int(match.group(1))
+    scope = ""
+    for key in _SITE_SCOPE_KEYS:
+        value = target.get(key)
+        if isinstance(value, str) and value.strip():
+            scope = value.strip()
+            break
+    if not scope and isinstance(location, dict):
+        for key in _SITE_SCOPE_KEYS:
+            value = location.get(key)
+            if isinstance(value, str) and value.strip():
+                scope = value.strip()
+                break
+    declared = index is not None or bool(scope) or location not in (None, "", {})
+    if index is None and declared and isinstance(target.get("compact_start"), int):
+        index = -1  # caller resolves the compact offset to a paragraph
+    return {"declared": declared, "paragraph_index": index, "site_scope": scope,
+            "location": location if isinstance(location, (str, int)) else None,
+            "from_compact_start": index == -1}
+
+
+def _site_text(paragraphs: list[str], index: int, *, after: int = 2) -> str:
+    """Target paragraph plus the neighbouring paragraphs an edit may create."""
+    if index < 0 or index >= len(paragraphs):
+        return ""
+    return "\n".join(paragraphs[max(0, index - 1):index + after + 1])
+
+
+def _required_clauses(required: str) -> list[str]:
+    """Sentence clauses without their boundary punctuation.
+
+    Contracts legitimately end a clause with "。" where the guide uses "；" (or
+    vice versa); the obligation is the wording, not the separator.  Keeping the
+    separator made a correct clause read as missing.
+    """
+    return [clause.strip().rstrip("。；")
+            for clause in re.split(r"(?<=[。；])", required or "") if clause.strip("。； \t\r\n")]
+
+
+def _has_service_fee(facts: dict) -> bool:
+    value = (facts or {}).get("has_service_fee")
+    if isinstance(value, bool):
+        return value
+    return any(isinstance(item, dict) and item.get("service_fee")
+               for item in ((facts or {}).get("classes") or []))
+
+
+def _applicable_append_clauses(required: str, facts: dict) -> list[str]:
+    """Clauses that require a subject in this product.
+
+    The policy templates bundle a subscription-class clause with service-fee
+    clauses.  A contract with no service-fee class cannot receive an invented C
+    class, so the service clauses have no subject; requiring them would turn the
+    engine's correct single-class append into a false miss (FL-D100/FL-D450).
+    """
+    clauses = _required_clauses(required)
+    if not clauses or _has_service_fee(facts):
+        return clauses
+    applicable = [clause for clause in clauses if "销售服务费" not in clause]
+    return applicable or clauses
+
+
+def _clause_present(clause: str, text: str, *, threshold: float = 0.9,
+                    min_fuzzy_chars: int = 24) -> bool:
+    """Normalised clause presence; short clauses may not pass on fuzzy overlap.
+
+    A short obligation such as "本基金C类基金份额不收取申购费用。" can share most
+    characters with a different fee clause.  Only exact (normalised) matching is
+    proof below ``min_fuzzy_chars``; long clauses may tolerate the small wording
+    variants contracts legitimately introduce (FL-D099), with a high threshold.
+    """
+    obligation = _normalise_policy(clause)
+    haystack = _normalise_policy(text)
+    if not obligation or not haystack:
+        return False
+    if len(obligation) < min_fuzzy_chars:
+        return obligation in haystack
+    return _obligation_in_region(obligation, haystack, threshold=threshold)
+
+
+def _replacement_present(required: str, text: str) -> bool:
+    """Every labelled obligation clause must be in the replacement site.
+
+    A long replacement can bundle a core rule and a conditional clause; matching
+    only its first 24 characters or only the lead sentence would accept a partial
+    edit (FL-D450).  Class enumerations are normalised because the product's own
+    class letters legitimately differ from the template.
+    """
+    clauses = _required_clauses(required)
+    if not clauses:
+        return False
+    return all(_clause_present(clause, text) for clause in clauses)
+
+
+def _old_signature(target: dict, required: str) -> str:
+    """Text whose survival proves the superseded obligation is still there.
+
+    ``old_text`` can be a shared lead that the corrected sentence legitimately
+    reuses, so a short substring of the required replacement is not evidence of a
+    missed edit.  In that case the label's quoted old clause is used when it is
+    itself superseded; otherwise the site/required-presence checks decide.
+    """
+    old = compact(target.get("old_text") or "")
+    replacement = compact(required)
+    if old and old not in replacement:
+        return old
+    quote = compact(_requirement_clause(target.get("requirement") or ""))
+    if quote and quote not in replacement and quote != old:
+        return quote
+    return ""
+
+
+def _changed_from_original(original_paragraphs: list[str], original_index: int,
+                           final_index: int, site_text: str) -> bool:
+    if final_index < 0:
+        return True
+    if original_index < 0 or original_index >= len(original_paragraphs):
+        return False
+    return compact(site_text) != compact(original_paragraphs[original_index])
 
 
 def paragraphs_of(path: Path) -> list[str]:
@@ -111,6 +272,38 @@ def locate_paragraph(final_paragraphs: list[str], original_paragraph: str,
     return best if best_score >= 0.6 else -1
 
 
+def _locate_declared_site(final_paragraphs: list[str], original_paragraph: str,
+                          declared_index: int) -> int:
+    """Resolve a label-declared paragraph without jumping to a duplicate elsewhere.
+
+    The body and summary of a contract can contain the same sentence.  A wide
+    document-wide search would match the unchanged duplicate and prove the wrong
+    site, so a declared site only searches its immediate neighbourhood.  If the
+    wording was fully replaced and no neighbour shares its lead, the declared
+    index is kept: the paragraph still occupies that position unless it was
+    deleted (delete handles that case separately).
+    """
+    if declared_index < 0 or declared_index >= len(final_paragraphs):
+        return -1
+    target = compact(original_paragraph)
+    best, best_score = -1, 0.0
+    low, high = max(0, declared_index - 2), min(len(final_paragraphs), declared_index + 3)
+    for index in range(low, high):
+        candidate = compact(final_paragraphs[index])
+        if candidate == target:
+            return index
+        head = min(len(target), len(candidate), 24)
+        common = 0
+        while common < head and target[common] == candidate[common]:
+            common += 1
+        score = common / max(1, head)
+        if score > best_score:
+            best, best_score = index, score
+    if best_score >= 0.6:
+        return best
+    return declared_index
+
+
 def _normalise_policy(value: str) -> str:
     """Canonicalise the wording variants contracts legitimately introduce.
 
@@ -124,6 +317,13 @@ def _normalise_policy(value: str) -> str:
     for variant, canonical in (("认购/申购", "申购"), ("认购、申购", "申购"),
                                ("的基金份额", "基金份额")):
         value = value.replace(variant, canonical)
+    # Contract explanations of the same period ("持续持有期限超过一年（即365天，
+    # 下同）") are not a different obligation.  Parentheticals are clarifications;
+    # removing them from both sides prevents a correct append from reading as a
+    # miss while still requiring the substantive clause (FL-D450).
+    value = re.sub(r"（即\s*365\s*天(?:，下同)?）", "", value)
+    value = value.replace("不再继续收取", "不再收取")
+    value = value.replace("持有超过一年", "持续持有期限超过一年")
     # "A类、D类基金份额" -> "类基金份额"; "A类" -> "类基金份额"-compatible form.
     value = re.sub(r"[A-ZＡ-Ｚ](?:类|份额)?(?:[、和及与][A-ZＡ-Ｚ](?:类|份额)?)*类?基金份额", "类基金份额", value)
     value = re.sub(r"[A-ZＡ-Ｚ]类基金份额", "类基金份额", value)
@@ -170,61 +370,44 @@ def _obligation_in_region(required: str, region: str, *, threshold: float = 0.9)
 
 
 def appendix_present(required: str, final_compact: str) -> bool:
-    """True when the appended policy sentence appears in the final document.
+    """True when the appended clause appears in the final document.
 
-    The appended wording is a full sentence that contracts reproduce with small
+    The appended wording is a full clause that contracts reproduce with small
     variations: an extra parenthetical, "申购" extended to "认购/申购", or a
     different set of fund share classes ("A类、D类" where the template says
-    "A类"). A fixed prefix test misfires on those. Normalise the frequent
-    variants, then require the obligation's leading clause to be present (the
-    leading clause is the distinctive part; the trailing clause also appears in
-    other sections).
+    "A类"). Normalise those variants, but do **not** accept the clause by its lead
+    sentence alone: a policy whose later required clause is missing must remain
+    incomplete (FL-D450). Short clauses require an exact normalised match so a
+    different fee obligation with shared characters cannot pass.
     """
     policy = _normalise_policy(required)
     haystack = _normalise_policy(final_compact)
-    if len(policy) < 12:
-        return policy in haystack
-    # The lead clause runs to the first full stop / semicolon in the policy.
-    lead = policy.split("；")[0].split("。")[0]
-    if lead and lead in haystack:
-        return True
-    # Fall back to a high-overlap fuzzy check for the leading segment. Step by
-    # one character: the distinctive content is dense, and a coarse stride can
-    # step over the single window that matches.
-    segment = policy[: min(len(policy), 120)]
-    window = len(segment)
-    if window == 0:
+    if not policy or not haystack:
         return False
-    for start in range(0, max(1, len(haystack) - window) + 1):
-        candidate = haystack[start:start + window]
-        common = sum(1 for a, b in zip(segment, candidate) if a == b)
-        if common / window >= 0.85:
-            return True
-    return False
+    if policy in haystack:
+        return True
+    if len(policy) < 24:
+        return False
+    return _obligation_in_region(policy, haystack, threshold=0.9)
 
 
 def appendix_present_applicable_clauses(required: str, final_compact: str,
                                         facts: dict) -> bool:
     """True when every clause that *can* apply to this contract is present.
 
-    An append policy bundles clauses for two class groups: the subscription class
+    The policy bundles clauses for two class groups: the subscription class
     ("A类基金份额不收取认购/申购费用") and the service-fee class ("C类基金份额不收取
-    销售服务费…持有超过一年不再收取"). A contract with a single class charges no
-    sales service fee, so the service clauses have no subject: the engine correctly
-    appends only the subscription clause and must not invent a C class. Score those
-    contracts on the clauses that apply, otherwise the engine's correct work reads
-    as a miss and the reported completion rate is too low.
+    销售服务费…持有超过一年不再收取").  A single-class contract charges no sales
+    service fee, so the service clauses have no subject: the engine correctly
+    appends only the subscription clause and must not invent a C class.  Score those
+    contracts on the clauses that apply, but require *every* applicable clause —
+    matching only the policy's first sentence would accept a partial append
+    (FL-D450).
     """
-    classes = facts.get("classes") or []
-    if any(item.get("service_fee") for item in classes if isinstance(item, dict)):
-        return False  # the contract does have a service-fee class: the full policy applies
-    policy = _normalise_policy(required)
-    # Keep only the clauses that do not name the absent service-fee class.
-    applicable = [clause for clause in re.split(r"(?<=[。；])", policy)
-                  if clause.strip() and "销售服务费" not in clause]
+    applicable = _applicable_append_clauses(required, facts)
     if not applicable:
         return False
-    return all(appendix_present(clause, final_compact) for clause in applicable if clause.strip())
+    return all(appendix_present(clause, final_compact) for clause in applicable)
 
 
 def _requirement_clause(requirement: str) -> str:
@@ -271,55 +454,97 @@ def _superseded_survives(target: dict, region: str, final_compact: str) -> bool:
     if fragments:
         # The clause survives when any distinctive fragment is still present.
         return any(frag in final_compact for frag in fragments)
-    # No quoted clause: fall back to the anchor, but require it inside the region.
-    return bool(anchor) and anchor in region
+    # No quoted clause: fall back to the anchor.  When the paragraph could not be
+    # located the whole document must be checked; treating an unlocatable paragraph
+    # as proof of deletion let a clause moved further down the file count as gone
+    # (FL-D450).
+    if not anchor:
+        return False
+    return anchor in region or (not region and anchor in final_compact)
 
 
 def score_target(target: dict, facts: dict, final_paragraphs: list[str],
                  original_paragraphs: list[str]) -> dict:
     """Judge one frozen label by comparing the original contract with the final DOCX.
 
-    The region is the original paragraph that carried the target (derived from the label's
-    compacted offset). The final document is searched for that paragraph by content, because
-    the engine inserts and removes paragraphs and shifts indices. A target counts as carried
-    out when the wording it supersedes no longer appears in that region of the final file and
-    (for replace/append) the required obligation now does. Working on the region, not the whole
-    document, avoids two failure modes: short anchors that also live in unrelated clauses, and
-    a replacement that reuses the old wording as a prefix.
+    The region is the original paragraph that carried the target.  A label may name
+    that physical site explicitly (``paragraph_index``/``location``/``site_scope``)
+    so the body and summary occurrences of the same rule are scored separately: an
+    append or replacement elsewhere in the file must not prove that this site was
+    changed (FL-D450 site addendum).  Legacy labels without site metadata keep the
+    document-wide compatibility path; the score reports a limitation instead of
+    claiming the site was proven.
+
+    Completion requires the full required obligation, not merely the disappearance
+    of the old string.  For replace, the superseded obligation must also be gone;
+    for append every applicable clause must be present; delete either removes the
+    paragraph or proves the quoted clause/old anchor is absent from its region and
+    the document.
     """
     rule_id = target["rule_id"]
     operation = target["op"]
     required = target.get("required_text") or ""
     old_text = target.get("old_text") or ""
     result = {"target_id": target.get("target_id"), "rule_id": rule_id, "op": operation}
+    site = target_site(target)
+    site_declared = bool(site.get("declared"))
+    result["site_scoped"] = site_declared
+    result["site"] = dict(site)
     final_compact = compact("\n".join(final_paragraphs))
     compact_offset = target.get("compact_start")
-    original_index = (paragraph_of_offset(original_paragraphs, compact_offset)
-                      if isinstance(compact_offset, int) else -1)
-    final_index = (locate_paragraph(final_paragraphs, original_paragraphs[original_index],
-                                    original_index) if original_index >= 0 else -1)
+    original_index = -1
+    if isinstance(site.get("paragraph_index"), int) and site["paragraph_index"] >= 0:
+        original_index = site["paragraph_index"]
+    elif isinstance(compact_offset, int):
+        original_index = paragraph_of_offset(original_paragraphs, compact_offset)
+    if site_declared and original_index < 0:
+        result.update(verdict="unknown",
+                      detail="declared site has no resolvable paragraph index")
+        return result
+    explicit_site = (site_declared and not site.get("from_compact_start")
+                     and isinstance(site.get("paragraph_index"), int)
+                     and site["paragraph_index"] >= 0)
+    if explicit_site:
+        final_index = _locate_declared_site(final_paragraphs,
+                                           original_paragraphs[original_index], original_index)
+    elif original_index >= 0:
+        final_index = locate_paragraph(final_paragraphs, original_paragraphs[original_index],
+                                       original_index)
+    else:
+        final_index = -1
     result["original_paragraph"] = original_index
     result["final_paragraph"] = final_index
+    result["site"]["resolved_final_paragraph"] = final_index
     region = compact(final_paragraphs[final_index]) if final_index >= 0 else ""
+    site_text = _site_text(final_paragraphs, final_index, after=2)
+    append_text = _site_text(final_paragraphs, final_index, after=2)
 
     if operation == "append":
         if not required:
             result.update(verdict="wrong", detail="append without required text")
             return result
-        # The appended policy is a whole sentence whose wording varies between contracts
-        # ("申购" against "认购/申购", an extra parenthetical). Match on the obligation's
-        # distinctive content rather than a fixed prefix, and accept it anywhere in the file
-        # because the engine may insert the paragraph at a different but equivalent anchor.
-        if appendix_present(required, final_compact):
-            result.update(verdict="completed", detail="appended policy text present")
-        elif appendix_present_applicable_clauses(required, final_compact, facts):
-            # The policy mixes clauses for two class groups. A contract with no
-            # service-fee class legitimately receives only the subscription clause (the
-            # engine must not invent a C class), so score the clauses that can apply.
-            result.update(verdict="completed",
-                          detail="appended policy text present (applicable clauses only)")
+        if site_declared and final_index < 0:
+            result.update(verdict="unknown",
+                          detail="declared append site paragraph not found in final document")
+            return result
+        # Every applicable clause has to be present.  The old scorer accepted the
+        # policy's lead clause alone, so a missing "超过一年不再收取" or
+        # "其他销售机构按月支付" clause still counted as completed (FL-D450).
+        applicable = _applicable_append_clauses(required, facts)
+        haystack = append_text if site_declared else final_compact
+        missing = [clause for clause in applicable if not appendix_present(clause, haystack)]
+        if not missing:
+            detail = ("appended policy text present at its declared site"
+                      if site_declared else "appended policy text present")
+            if not _has_service_fee(facts):
+                detail += " (applicable clauses only)"
+            result.update(verdict="completed", detail=detail)
+        elif site_declared:
+            result.update(verdict="not_executed",
+                          detail=f"appended policy absent from its declared site: {len(missing)} clause(s)")
         else:
-            result.update(verdict="not_executed", detail="appended policy text absent")
+            result.update(verdict="not_executed",
+                          detail=f"appended policy text absent: {len(missing)} clause(s)")
         return result
 
     if not old_text or not compact(old_text):
@@ -328,53 +553,115 @@ def score_target(target: dict, facts: dict, final_paragraphs: list[str],
     needle = compact(old_text)
 
     if rule_id in {"G02", "G04"}:
+        classes = (facts or {}).get("classes") if isinstance(facts, dict) else None
+        known_classes = [item for item in classes if isinstance(item, dict)] \
+            if isinstance(classes, list) else []
+        if not known_classes:
+            # An empty/unknown class list cannot prove that no substitution was
+            # needed; never turn "no group" into completed (FL-D450).
+            result.update(verdict="unknown",
+                          detail="class facts missing or empty; no group can be proven")
+            return result
         subscription = class_label_from_guide(required, facts, "subscription")
         service = class_label_from_guide(required, facts, "service")
         expected = [label for label in (subscription, service) if label]
         if not expected:
-            result.update(verdict="completed", detail="no group to substitute")
+            # Facts are known but this product has no class in either guided group.
+            # The old "no group to substitute" verdict hid an unchanged clause.
+            if site_declared and final_index < 0:
+                result.update(verdict="unknown",
+                              detail="declared class site paragraph not found")
+            elif needle in (region or final_compact):
+                result.update(verdict="kept",
+                              detail="no class group matched and the old wording remains")
+            elif _changed_from_original(original_paragraphs, original_index, final_index, region):
+                result.update(verdict="wrong",
+                              detail="file changed but no expected class group is derivable from facts")
+            else:
+                result.update(verdict="not_executed",
+                              detail="no class group matched; old clause not executed")
             return result
-        missing = [label for label in expected if compact(label) not in final_compact]
+        haystack = site_text if site_declared else final_compact
+        missing = [label for label in expected if compact(label) not in compact(haystack)]
         if missing:
             result.update(verdict="wrong", detail=f"group label(s) absent: {missing}")
         else:
-            result.update(verdict="completed", detail="group labels present")
+            result.update(verdict="completed",
+                          detail="group labels present" + (" at the declared site"
+                                                           if site_declared else ""))
         return result
 
     if operation == "delete":
         if final_index < 0:
-            # The paragraph that carried the clause no longer exists in the final file.
-            # For a deletion that is the expected outcome (the engine removed it), so the
-            # target is carried out — requiring a located paragraph scored a completed
-            # deletion as kept (FL-D098). The clause is confirmed absent from the whole
-            # document, so a surviving copy elsewhere would still be caught.
-            result.update(verdict="completed", detail="deleted clause gone with its paragraph")
+            # The paragraph disappeared, which is the expected outcome, but the old
+            # clause must still be verified against the whole document: locating
+            # failure alone is not proof (FL-D450).
+            if _superseded_survives(target, "", final_compact):
+                result.update(verdict="kept",
+                              detail="deleted clause still present elsewhere in the document")
+            else:
+                result.update(verdict="completed",
+                              detail="deleted clause gone with its paragraph")
         elif not _superseded_survives(target, region, final_compact):
             result.update(verdict="completed", detail="deleted clause gone from its region")
         else:
             result.update(verdict="kept", detail="deleted clause still in its region")
         return result
 
-    # replace: the region must now carry the required obligation. The new wording often
-    # keeps the old lead ("赎回费用由…收取" is a prefix of "…收取。赎回费用全额计入基金财产。"),
-    # so presence of the new text is the signal, not the mere absence of the old one.
-    replacement = compact(required)
-    if replacement and replacement[:24] and replacement[:24] in region:
-        result.update(verdict="completed", detail="required replacement present in its region")
-    elif replacement and replacement[:24] and replacement[:24] in final_compact:
-        result.update(verdict="completed", detail="required replacement present elsewhere")
-    elif replacement and _obligation_in_region(replacement, region):
-        # The region carries the obligation but not with the label's exact wording: an
-        # extra "基金" ("调低基金申购费率和基金销售服务费率" against the label's
-        # "…和销售服务费率") diverges inside the first 24 characters, so the prefix test
-        # above misses it. A correct replacement was scored kept because the label's
-        # old_text is a substring of the corrected sentence (FL-D099).
-        result.update(verdict="completed",
-                      detail="required replacement present in its region (wording variant)")
-    elif final_index >= 0 and needle not in region:
-        result.update(verdict="completed", detail="superseded wording gone")
-    else:
+    # replace: require the complete new obligation AND elimination of the old one.
+    # The old-obligation check is site/region based: the same wording can legitimately
+    # remain in another independent clause or at the other body/summary site, which is
+    # scored by its own target.  Only when the paragraph disappeared do we fall back to
+    # the whole document.
+    old_signature = _old_signature(target, required)
+    old_survives = bool(old_signature) and (
+        old_signature in region or (final_index < 0 and old_signature in final_compact))
+    if site_declared and final_index < 0:
+        result.update(verdict="unknown",
+                      detail="declared replacement site paragraph not found in final document")
+        return result
+    if site_declared:
+        if not _replacement_present(required, site_text):
+            if old_signature and old_signature in region:
+                result.update(verdict="kept", detail="old wording still in its declared site")
+            elif _changed_from_original(original_paragraphs, original_index, final_index, region):
+                result.update(verdict="wrong",
+                              detail="declared site changed but the complete required obligation is absent")
+            else:
+                result.update(verdict="not_executed",
+                              detail="required replacement absent from its declared site")
+            return result
+        if old_survives:
+            result.update(verdict="kept",
+                          detail="required replacement present but the old obligation survives")
+        else:
+            result.update(verdict="completed",
+                          detail="complete replacement present at its declared site")
+        return result
+
+    # Legacy labels have no declared site: keep the document-wide compatibility
+    # path, but still require the full obligation and old-obligation elimination.
+    if _replacement_present(required, site_text):
+        if old_survives:
+            result.update(verdict="kept",
+                          detail="required replacement present but the old obligation survives")
+        else:
+            result.update(verdict="completed",
+                          detail="required replacement present in its region")
+    elif _replacement_present(required, final_compact):
+        if old_survives:
+            result.update(verdict="kept",
+                          detail="required replacement elsewhere but the old obligation survives")
+        else:
+            result.update(verdict="completed",
+                          detail="required replacement present elsewhere (legacy document-wide label)")
+    elif old_signature and old_signature in region:
         result.update(verdict="kept", detail="old wording still in its region")
+    elif _changed_from_original(original_paragraphs, original_index, final_index, region):
+        result.update(verdict="wrong",
+                      detail="file changed but the complete required obligation is absent")
+    else:
+        result.update(verdict="not_executed", detail="required replacement absent")
     return result
 
 
@@ -435,6 +722,8 @@ def main() -> int:
     case_rows: list[dict] = []
     verdict_totals: dict[str, int] = {}
     rule_stats: dict[str, dict[str, int]] = {}
+    site_scoped_targets = 0
+    legacy_targets = 0
     delivery = {"reported_complete": 0, "actually_complete": 0, "false_complete": 0,
                 "editable_cases": 0}
 
@@ -495,6 +784,10 @@ def main() -> int:
         for verdict in entry["verdicts"]:
             counts[verdict["verdict"]] = counts.get(verdict["verdict"], 0) + 1
             verdict_totals[verdict["verdict"]] = verdict_totals.get(verdict["verdict"], 0) + 1
+            if verdict.get("site_scoped"):
+                site_scoped_targets += 1
+            else:
+                legacy_targets += 1
             key = verdict["rule_id"]
             stats = rule_stats.setdefault(key, {"completed": 0, "total": 0})
             stats["total"] += 1
@@ -517,9 +810,19 @@ def main() -> int:
 
     total = sum(verdict_totals.values()) or 1
     completed = verdict_totals.get("completed", 0)
+    site_scoped_targets = sum(1 for case in selected for target in case["targets"]
+                              if target_site(target).get("declared"))
+    legacy_targets = max(0, total - site_scoped_targets)
+    limitations: list[str] = []
+    if legacy_targets:
+        limitations.append(
+            f"{legacy_targets} of {total} target(s) have no location/paragraph_index/"
+            "site_scope; they were scored document-wide for backward compatibility, so a "
+            "same-text edit at another body/summary site can not be distinguished for them")
     conflicts_total = sum(len(case.get("applicability_conflicts") or []) for case in case_rows)
     payload = {
         "schema": "fundlex-p6-score-v1",
+        "scorer_version": SCORER_VERSION,
         "scored_at": datetime.now(timezone.utc).isoformat(),
         "run": str(run_dir),
         "labels_sha256": hashlib.sha256(Path(args.labels).read_bytes()).hexdigest(),
@@ -531,6 +834,12 @@ def main() -> int:
             "applicability_conflicts": conflicts_total,
         },
         "delivery": delivery,
+        "scoring": {
+            "site_scoped_targets": site_scoped_targets,
+            "legacy_document_wide_targets": legacy_targets,
+            "site_aware": True,
+        },
+        "limitations": limitations,
         "cases_scored": len(selected),
         "groups": groups,
         "rule_completion": {
