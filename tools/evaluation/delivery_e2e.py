@@ -34,7 +34,7 @@ from typing import Any, Iterator
 
 
 REPO = Path(__file__).resolve().parents[2]
-DEFAULT_SOURCE = REPO / "funds_word" / "广发品质回报混合型证券投资基金基金合同_20230708.docx"
+DEFAULT_SOURCE = REPO / "funds_word" / "基金合同第一批" / "广发沪深300指数增强型发起式证券投资基金基金合同.docx"
 DOCX_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 
 
@@ -239,7 +239,11 @@ class DeliveryE2EAssertions:
         report = report_response.json()
         assert report.get("engine_id") == "recall_first"
         replay = report.get("artifact_claim_replay") or report.get("claim_replay")
-        assert isinstance(replay, dict) and replay.get("passed") is True
+        # The production recall report records ``verified``; older fixture
+        # reports use ``passed``.  Both mean the independent artifact replay
+        # accepted the delivered pair, and neither may be inferred from a plan.
+        assert isinstance(replay, dict) and (
+            replay.get("verified") is True or replay.get("passed") is True)
         model = report.get("model") or {}
         if expected_model_calls is not None:
             assert model.get("calls") == expected_model_calls, model

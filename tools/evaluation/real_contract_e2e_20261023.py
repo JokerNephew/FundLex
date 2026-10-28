@@ -14,7 +14,7 @@ import subprocess
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
-SOURCE_ROOT = Path("/home/opencode/data/funds_word")
+SOURCE_ROOT = REPO / "funds_word" / "基金合同第一批"
 
 
 def load_model_env() -> None:

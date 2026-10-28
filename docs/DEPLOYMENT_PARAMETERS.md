@@ -28,7 +28,6 @@ API 限制在导入 `fundlex.api` 时读取；变更环境后须重启 API 进�
 | 环境变量 | 默认值 |
 | --- | --- |
 | `FUNDLEX_MAX_UPLOAD_BYTES` | 26214400（单文件 25 MiB） |
-| `FUNDLEX_MAX_BATCH_DOCUMENTS` | 20 |
 | `FUNDLEX_MAX_BATCH_BYTES` | 52428800（批次 50 MiB） |
 | `FUNDLEX_MAX_UNCOMPRESSED_BYTES` | 209715200（ZIP 展开总量 200 MiB） |
 | `FUNDLEX_MAX_PART_BYTES` | 33554432（单 ZIP 部件 32 MiB） |

@@ -42,8 +42,9 @@ class ReplayGateway:
         if self.allow_task_fallback and len(candidates) == 1:
             self.fallbacks.append(f"{task_type}:{digest[:10]}")
             return SimpleNamespace(value=candidates[0])
-        raise AssertionError(f"missing checkpoint for {task_type} sha={digest[:12]} "
-                             f"context_chars={len(bounded_context)}")
+        from fundlex.model import ModelError
+        raise ModelError("MODEL_REPLAY_MISS", {"task_type": task_type,
+                         "context_sha256": digest, "context_chars": len(bounded_context)})
 
 
 def load_checkpoints(directory: Path) -> dict[str, dict]:

@@ -18,6 +18,7 @@ dependencies = [
     "httpx>=0.28,<1",
     "pymysql>=1.1",
     "lark-oapi>=1.7,<2",
+    "PyMuPDF>=1.24,<2",
 ]
 
 [project.optional-dependencies]

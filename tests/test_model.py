@@ -147,6 +147,70 @@ def test_rate_limit_retry_each_attempt_is_charged(tmp_path: Path,monkeypatch):
     assert result.attempts==2 and model.metrics()['rate_limit_count']==1
     assert model.budget.snapshot()['http_attempts']==2
 
+def test_rate_limit_retry_honours_retry_after(tmp_path: Path, monkeypatch):
+    delays = []
+    monkeypatch.setattr('fundlex.model.time.sleep', lambda seconds: delays.append(seconds))
+    calls = []
+    def handler(_):
+        calls.append(1)
+        if len(calls) == 1:
+            return httpx.Response(429, headers={'Retry-After': '7'},
+                                  json={'error': 'rate limited'})
+        return response({'quote': '混合型', 'fund_type': 'ordinary'})
+    model = gateway(handler, ModelBudget(tmp_path / 'ledger.sqlite', max_requests=2), retries=1)
+    assert model.extract_fund_type('混合型证券投资基金').attempts == 2
+    assert delays == [7.0]
+
+
+def test_schema_invalid_response_retries_once(tmp_path: Path):
+    calls = []
+    def handler(_):
+        calls.append(1)
+        if len(calls) == 1:
+            return httpx.Response(200, json={'choices': [{'message': {'content': '{"quote":'}, 'finish_reason': 'stop'}]})
+        return response({'quote': '混合型', 'fund_type': 'ordinary'})
+    model = gateway(handler, ModelBudget(tmp_path / 'ledger.sqlite', max_requests=3), retries=1)
+    result = model.extract_fund_type('混合型证券投资基金')
+    assert result.attempts == 2 and len(calls) == 2
+
+
+def test_schema_failure_records_bounded_structural_diagnostics(tmp_path: Path):
+    model = gateway(lambda _: response({
+        'quote': '混合型', 'fund_type': 'ordinary', 'unexpected': 'must not persist',
+    }), ModelBudget(tmp_path / 'ledger.sqlite', max_requests=1), retries=0)
+    with pytest.raises(ModelError, match='MODEL_SCHEMA_INVALID'):
+        model.extract_fund_type('混合型证券投资基金')
+    row = sqlite3.connect(tmp_path / 'ledger.sqlite').execute(
+        'select metadata from requests').fetchone()
+    metadata = json.loads(row[0])
+    assert metadata['schema_failure'] == 'additionalProperties'
+    assert 'schema_error_path' in metadata
+    assert len(metadata['schema_error_message']) <= 240
+    assert 'must not persist' not in json.dumps(metadata, ensure_ascii=False)
+
+
+def test_output_length_is_recorded_as_truncation_without_schema_retry(tmp_path: Path):
+    calls = []
+
+    def handler(_):
+        calls.append(1)
+        return httpx.Response(200, json={
+            'model': 'actual-model',
+            'choices': [{'message': {'content': '{"quote":"混合型"'},
+                         'finish_reason': 'length'}],
+            'usage': {'prompt_tokens': 100, 'completion_tokens': 20, 'total_tokens': 120},
+        })
+
+    model = gateway(handler, ModelBudget(tmp_path / 'ledger.sqlite', max_requests=1), retries=1)
+    with pytest.raises(ModelError, match='MODEL_OUTPUT_TRUNCATED'):
+        model.extract_fund_type('混合型证券投资基金')
+    assert calls == [1]
+    metadata = json.loads(sqlite3.connect(tmp_path / 'ledger.sqlite').execute(
+        'select metadata from requests').fetchone()[0])
+    assert metadata['error_code'] == 'MODEL_OUTPUT_TRUNCATED'
+    assert metadata['finish_reason'] == 'length'
+
+
 def test_extra_keys_and_context_limit_fail_closed():
     model=gateway(lambda _:response({'quote':'混合型','fund_type':'ordinary','replacement':'danger'}))
     with pytest.raises(ModelError,match='MODEL_SCHEMA_INVALID'): model.extract_fund_type('混合型')
@@ -198,3 +262,18 @@ def test_model_capacity_waits_without_consuming_request_attempts(monkeypatch):
             raise BudgetError("MODEL_COST_BUDGET_EXCEEDED")
     with pytest.raises(BudgetError, match="MODEL_COST_BUDGET_EXCEEDED"):
         _budget_reserve_with_retry(ExhaustedBudget(), lease_seconds=10)
+
+
+def test_model_capacity_wait_is_bounded(monkeypatch):
+    from fundlex.model import _budget_reserve_with_retry
+    from fundlex.model_budget import BudgetError
+    class BusyBudget:
+        def reserve(self, **kwargs):
+            raise BudgetError("MODEL_CONCURRENCY_LIMIT")
+    clock = [0.0]
+    monkeypatch.setattr("fundlex.model.time.monotonic", lambda: clock[0])
+    monkeypatch.setattr("fundlex.model.time.sleep",
+                        lambda seconds: clock.__setitem__(0, clock[0] + seconds))
+    with pytest.raises(BudgetError, match="MODEL_CONCURRENCY_LIMIT"):
+        _budget_reserve_with_retry(BusyBudget(), lease_seconds=180)
+    assert clock[0] <= 31

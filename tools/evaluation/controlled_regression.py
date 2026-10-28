@@ -17,6 +17,7 @@ from fundlex.pipeline import process
 from fundlex.rules import load_ruleset
 from fundlex.store import engine_build
 from fundlex.config import local_data_dir
+from tools.evaluation.sample_corpus import DEFAULT_SAMPLE_ROOT
 
 OWNER='offline-evaluation'
 STOP_CODES={'MODEL_GLOBAL_CALL_BUDGET_EXCEEDED','MODEL_COST_BUDGET_EXCEEDED',
@@ -44,7 +45,7 @@ def write(path: Path,value):
 
 def main():
     parser=argparse.ArgumentParser()
-    parser.add_argument('--input',default='funds_word')
+    parser.add_argument('--input',default=str(DEFAULT_SAMPLE_ROOT))
     parser.add_argument('--output',required=True)
     parser.add_argument('--batch-size',type=int,default=10)
     parser.add_argument('--limit',type=int)

@@ -149,6 +149,33 @@ def test_g12_bounded_replacement_accepts_explicit_ratio(tmp_path):
     assert proof["verified"], proof["failures"]
 
 
+def test_g12_bounded_replacement_accepts_generic_allocation_variant(tmp_path):
+    """The non-percentage historical wording is still one G12 source sentence."""
+    rule = rules()["G12"]
+    source_text = (BEARER + "赎回费用归入基金财产的比例应根据相关规定执行，具体见招募说明书的规定，"
+                   "未计入基金财产的部分用于支付登记费和其他必要的手续费。"
+                   "其中，对持续持有期少于 7 日的投资者收取不低于 1.50%的赎回费，并将上述赎回费全额计入基金财产。")
+    source = inspect_text(tmp_path, "generic-source", source_text)
+    target = Target("T12-generic", "G12", "p0", BEARER, "needs_edit", "source",
+                    start=0, end=len(BEARER), resolution="resolved", segment_ok=True,
+                    operations=("G12:0",))
+
+    class NoModel:
+        max_context_chars = 60000
+        def call(self, **kwargs):
+            raise AssertionError("generic G12 replacement must not call a model")
+
+    edit = plan_target(rule, target, source, _facts(), NoModel(), compose_budget=[0])
+    assert edit.content_source == "bounded_replace"
+    assert edit.replacement == NEW
+    assert edit.end == len(BEARER + "赎回费用归入基金财产的比例应根据相关规定执行，具体见招募说明书的规定，"
+                            "未计入基金财产的部分用于支付登记费和其他必要的手续费。")
+    actual = inspect_text(tmp_path, "generic-actual", edit.replacement + source_text[edit.end:])
+    proof = replay_claims([edit.as_dict()], source, actual, rules_by_id={"G12": rule},
+                          facts=_facts(), targets_by_id={target.target_id: target.as_dict()})
+    assert proof["verified"], proof["failures"]
+
+
 def test_g12_g13_atomic_plan_uses_separate_bounded_components(tmp_path, monkeypatch):
     from fundlex.recall import plan_edits
     monkeypatch.setenv("FUNDLEX_STRATEGY_MODE", "registry")

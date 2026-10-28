@@ -109,7 +109,8 @@ def _needed_ids(chunk, location_to_section, mapping):
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--data-root", default="/home/opencode/data/funds_word")
+    from tools.evaluation.sample_corpus import DEFAULT_SAMPLE_ROOT
+    parser.add_argument("--data-root", default=str(DEFAULT_SAMPLE_ROOT))
     parser.add_argument("--limit", type=int, default=12)
     parser.add_argument("--chars", type=int, default=12000)
     parser.add_argument("--output", default="/tmp/opencode/sweep_scope_probe.json")

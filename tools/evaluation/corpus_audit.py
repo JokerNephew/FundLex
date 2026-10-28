@@ -6,9 +6,10 @@ import argparse, json, re, sys, zipfile, time
 from lxml import etree
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from fundlex.docx import inspect_docx, DocxError, NS, Q
+from tools.evaluation.sample_corpus import DEFAULT_SAMPLE_ROOT
 
 def main():
-    cli=argparse.ArgumentParser(); cli.add_argument('--source',default='funds_word'); cli.add_argument('--output',default='var/evaluation/structure_audit.json'); cli.add_argument('--census-only',action='store_true');cli.add_argument('--metadata-only',action='store_true'); args=cli.parse_args()
+    cli=argparse.ArgumentParser(); cli.add_argument('--source',default=str(DEFAULT_SAMPLE_ROOT)); cli.add_argument('--output',default='var/evaluation/structure_audit.json'); cli.add_argument('--census-only',action='store_true');cli.add_argument('--metadata-only',action='store_true'); args=cli.parse_args()
     if args.metadata_only:
         audit=json.loads(Path(args.output).read_text(encoding='utf-8'))
         static=[r for r in audit['rows'] if r['parser_has_toc'] and r['toc_fields']==0]

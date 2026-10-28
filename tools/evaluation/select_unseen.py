@@ -44,7 +44,8 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--pilot", required=True)
     parser.add_argument("--output", required=True)
-    parser.add_argument("--samples", default="funds_word")
+    from tools.evaluation.sample_corpus import DEFAULT_SAMPLE_ROOT
+    parser.add_argument("--samples", default=str(DEFAULT_SAMPLE_ROOT))
     parser.add_argument("--count", type=int, default=8)
     args = parser.parse_args()
     pilot = Path(args.pilot).resolve()

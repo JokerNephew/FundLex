@@ -120,6 +120,27 @@ def test_replace_only_rule_is_untouched():
     assert hits == []
 
 
+def test_split_fee_definition_is_one_append_candidate_at_its_end():
+    rule = {**APPEND_RULE, "rule_id": "G03", "section_hint": "基金的基本情况"}
+    head = "本基金根据申购费用收取方式的不同，将基金份额分为不同的类别。在投资"
+    tail = ("者申购基金份额时收取申购费用，而不计提销售服务费的，称为A类基金份额；"
+            "在投资者申购基金份额时不收取申购费用，而计提销售服务费的，称为C类基金份额。")
+    inspection = _FakeInspection([
+        ("p1", "基金份额类别：释义中的独立定义。"),
+        ("p2", head), ("p3", tail),
+        ("p4", "基金管理人可以增加新的基金份额类别、调低赎回费率。"),
+    ])
+    sections = [_section("S1", "释义", ["p1"]),
+                _section("S2", "基金的基本情况", ["p2", "p3", "p4"])]
+    hits = append_applicability_targets(inspection, [rule], _facts(), sections)
+    assert len(hits) == 1
+    assert hits[0].locations == ("p3",)
+    assert hits[0].quote == tail
+    assert hits[0].operation_keys == ("G03:0",)
+    assert append_applicability_targets(inspection, [rule], _facts(), sections,
+                                        known=[("G03", "p3")]) == []
+
+
 def test_service_group_empty_does_not_suppress_the_append():
     """A contract with no service-fee class still gets the unconditional append.
 

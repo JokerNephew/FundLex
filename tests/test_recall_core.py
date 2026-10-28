@@ -1402,6 +1402,49 @@ def test_verify_quote_accepts_ellipsis_and_paragraph_boundary(tmp_path: Path):
                          "Traded Fund）”")
 
 
+def test_guide_section_scope_only_requires_declared_chapters():
+    from fundlex.recall_pipeline import _guide_section_present
+
+    titles = ["第三部分  基金的基本情况",
+              "第十五部分  基金费用与税收",
+              "第六部分  基金份额的申购与赎回",
+              "第二十四部分  基金合同内容摘要"]
+    assert _guide_section_present("基金的基本情况-份额类别设置", titles)
+    assert _guide_section_present("基金费用与税收", titles)
+    assert _guide_section_present("基金份额的申购与赎回", titles)
+    assert _guide_section_present("基金合同内容摘要", titles)
+    # Chapters the guide does not declare in this contract must not become
+    # UNKNOWN coverage obligations.
+    assert not _guide_section_present("基金份额持有人大会", titles)
+    assert not _guide_section_present("基金的信息披露", titles)
+
+
+def test_absent_guide_chapters_are_not_applicable():
+    from fundlex.obligations import compile_obligations
+    from fundlex.recall_pipeline import mark_absent_guide_sections
+
+    guide = {"groups": [
+        {"rule_id": "G01", "section_hint": "基金费用与税收",
+         "operations": [{"op": "delete", "old_text": "费用句。",
+                         "condition": {"kind": "none", "value": None},
+                         "operation_id": "G01:0"}]},
+        {"rule_id": "G02", "section_hint": "基金份额持有人大会",
+         "operations": [{"op": "delete", "old_text": "大会句。",
+                         "condition": {"kind": "none", "value": None},
+                         "operation_id": "G02:0"}]},
+    ]}
+    ledger = compile_obligations(guide)
+    absent = mark_absent_guide_sections(ledger, ["第十五部分  基金费用与税收"])
+    assert absent == {"G02"}
+    statuses = {record.spec.rule_id: record.applicability.status
+                for record in ledger.records}
+    assert statuses["G01"] != "FALSE"
+    assert statuses["G02"] == "FALSE"
+    reason = next(record.applicability.reason for record in ledger.records
+                  if record.spec.rule_id == "G02")
+    assert reason == "GUIDE_SECTION_ABSENT:基金份额持有人大会"
+
+
 def test_semantic_delete_probe_does_not_join_distant_sentences():
     """A class label and a distant conversion ban are not one G06 clause."""
     from fundlex.generation.effects import _semantic_delete_hits

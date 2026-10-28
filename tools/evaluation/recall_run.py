@@ -17,6 +17,8 @@ import sys
 import time
 from pathlib import Path
 
+from tools.evaluation.sample_corpus import DEFAULT_SAMPLE_ROOT
+
 
 def _load_llm_environment() -> None:
     """Copy model settings from the Windows User scope into this process (no printing)."""
@@ -46,7 +48,8 @@ def _user_env(name: str) -> str:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Run the recall-first engine on real contracts")
-    parser.add_argument("--input", required=True, help="DOCX file or directory of DOCX files")
+    parser.add_argument("--input", default=str(DEFAULT_SAMPLE_ROOT),
+                        help="DOCX file or directory (default: 基金合同第一批)")
     parser.add_argument("--output", required=True, help="run directory")
     parser.add_argument("--guide", default="guides/builtin_guide_v1.json")
     parser.add_argument("--pattern", default="", help="only files whose name contains this text")
@@ -60,6 +63,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--business-rounds", type=int, default=3)
     parser.add_argument("--sweep-chunks", type=int, default=40)
     parser.add_argument("--resume", action="store_true", help="skip contracts with an existing report.json")
+    parser.add_argument("--checkpoint-dir", default="",
+                        help="persist model checkpoints (default: <output>/checkpoints)")
     args = parser.parse_args(argv)
 
     _load_llm_environment()
@@ -110,10 +115,13 @@ def main(argv: list[str] | None = None) -> int:
         gateway = ModelGateway.from_env()
         print(f"[{index}/{len(files)}] {path.name}: running")
         try:
-            report = process_recall_first(path, contract_dir, guide_document=guide, gateway=gateway,
-                                          execution_mode="evaluation",
-                                          max_business_rounds=args.business_rounds,
-                                          max_sweep_chunks=args.sweep_chunks)
+            report = process_recall_first(
+                path, contract_dir, guide_document=guide, gateway=gateway,
+                execution_mode="evaluation",
+                checkpoint_dir=Path(args.checkpoint_dir) if args.checkpoint_dir
+                else output / "checkpoints",
+                max_business_rounds=args.business_rounds,
+                max_sweep_chunks=args.sweep_chunks)
         except RecallPipelineStop as stop:
             report = {"engine_id": "recall_first", "delivery_status": "stopped",
                       "error_code": f"STOP:{stop.code}", "source_sha256": "", "targets": []}
@@ -142,10 +150,20 @@ def _summary_row(path: Path, report: dict) -> dict:
     plan = report.get("plan") or {}
     metrics = report.get("model") or {}
     targets = report.get("targets") or []
+    error_code = report.get("error_code") or ""
+    if not error_code:
+        # A pipeline can preserve a not_generated report while the actual
+        # blocking code is recorded on the model event (for example after
+        # retries are exhausted).  Keep the batch summary useful without
+        # changing the detailed report or inventing a terminal pipeline code.
+        for event in metrics.get("events") or []:
+            if event.get("error_code"):
+                error_code = str(event["error_code"])
+                break
     return {
         "file": path.name,
         "delivery_status": report.get("delivery_status"),
-        "error_code": report.get("error_code"),
+        "error_code": error_code or None,
         "targets": len(targets),
         "needs_edit": sum(1 for item in targets if item.get("state") == "needs_edit"),
         "edits": plan.get("count"),
