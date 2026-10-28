@@ -3075,10 +3075,10 @@ def resolve_absent_operations(targets: Sequence[Target], rules_by_id: dict[str, 
                for key in (target.operations or ())
                if not target.out_of_scope and target.state != "absent"}
     for rule_id, rule in rules_by_id.items():
-        if rule_id != "G05":
-            # Only the class-setup rule has a certified absent-site proof shape.
-            # Extending this to every rule created unaudited clones and regressed
-            # otherwise stable runs; other rules need their own audited path.
+        if rule_id not in {"G02", "G05"}:
+            # Only rules with a certified absent-site proof shape.  The clones are
+            # audited like satisfied targets, so a literal-absence candidate never
+            # becomes proof without the independent semantic verdict.
             continue
         scope = (scopes or {}).get(rule_id)
         locations = tuple(getattr(scope, "locations", ()) or ())

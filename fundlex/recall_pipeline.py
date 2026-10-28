@@ -2267,7 +2267,7 @@ def _run_audit(model: Any, rules_by_id: dict[str, dict], targets: Sequence[Targe
     # deterministic semantic sweep/obligation proof instead of being silently turned
     # into a business edit candidate here.
     auditable = [target for target in targets
-                 if target.state in {"needs_edit", "satisfied"}
+                 if target.state in {"needs_edit", "satisfied", "absent"}
                  and target.target_id not in out_of_scope
                  and not target.attribution_error]
     rule_ids = sorted({target.rule_id for target in auditable})
@@ -5656,6 +5656,15 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
             # below after it has been added to the same evidence set.
             unresolved[:] = project_unresolved(obligation_ledger,
                                                evidence=blocking_evidence)
+            # A stale ledger projection must not outlive the final replay proof.
+            _final_proofs = replay.get("obligations") or {}
+            unresolved[:] = [
+                item for item in unresolved
+                if not ("FINAL_OPERATION_UNPROVEN" in
+                        f"{item.get('code') or ''} {item.get('reason') or ''}"
+                        and str((_final_proofs.get(
+                            str(item.get("obligation_id") or "")) or {}
+                                 ).get("state") or "") == "PASS")]
             # Final independent omission review is operation/site scoped and runs
             # after the final DOCX has been reread.  Its result is part of the
             # delivery gate; a successful rule aggregate or audit opinion cannot
@@ -5663,7 +5672,9 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
             final_omission_review = _final_omission_review(
                 rules_by_id=rules_by_id, rules=rules, original=inspection, actual=actual,
                 planned=planned, targets=targets, facts=facts,
-                obligations=obligation_ledger, replay=replay, findings=findings,
+                obligations=obligation_ledger,
+                replay=report.get("artifact_claim_replay") or replay,
+                findings=findings,
                 coverage_view=coverage_view, scopes=scopes)
             report["final_omission_review"] = final_omission_review
             final_omission_evidence = [

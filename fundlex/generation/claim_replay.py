@@ -2040,6 +2040,51 @@ def replay_claims(edits: Sequence[Mapping[str, Any]], before_inspection: Any,
                     site.update(state="FAIL", artifact_status="WRONG_EFFECT",
                                 failure_code="CLAIM_DUPLICATE_EFFECT")
 
+    if audit_proofs:
+        # The independent audit model verified the actual artifact for this target
+        # (or that a satisfied clause needs no change).  That verdict is a semantic
+        # proof: the physical edit/site binding above still has to exist, but the
+        # effect check must not re-litigate an approved semantic equivalent with a
+        # literal new_text comparison.
+        edit_locations = {str(edit.get("location") or "") for edit in edits}
+        for record in records:
+            item = obligation_state.get(record.obligation_id)
+            if not item or item.get("state") == "PASS":
+                continue
+            bound = [target for target in (targets_by_id or {}).values()
+                     if record.spec.operation_id in (target.get("operations") or ())]
+            proven = []
+            for target in bound:
+                proof = audit_proofs.get(str(target.get("target_id") or "")) or {}
+                if str(proof.get("verdict") or "") != "completed" \
+                        or not proof.get("evidence_verified"):
+                    continue
+                if (str(target.get("state") or "") == "satisfied"
+                        or str(target.get("location") or "") in edit_locations):
+                    proven.append(target)
+            if not proven:
+                continue
+            target = proven[0]
+            obligation_state[record.obligation_id] = {
+                **item, "state": "PASS", "artifact_status": "SEMANTIC_VERIFIED",
+                "failure_code": "", "reason": "",
+                "evidence": list(item.get("evidence") or ()) + [{
+                    "proof_kind": "semantic_audit",
+                    "operation_id": record.spec.operation_id,
+                    "obligation_id": record.obligation_id,
+                    "target_id": str(target.get("target_id") or ""),
+                    "location": str(target.get("location") or ""),
+                    "verdict": "completed",
+                    "document_sha256": str(getattr(after_inspection,
+                                                   "source_sha256", "")),
+                }]}
+        # A failure recorded before the audit proof arrived must not outlive the
+        # obligation it describes.
+        failures[:] = [failure for failure in failures
+                       if str((obligation_state.get(
+                           str(failure.get("obligation_id") or "")) or {}
+                               ).get("state") or "") != "PASS"]
+
     # Explicit ONE_OF wording alternatives share only their verified BUSINESS SITE.
     # No global text absence, rule-level success or sibling independent operation closes it.
     groups: dict[str, list[Any]] = {}
@@ -2123,50 +2168,7 @@ def replay_claims(edits: Sequence[Mapping[str, Any]], before_inspection: Any,
                                      next(iter(item.get("sites") or []), ""),
                          "code": failure_code, "reason": item.get("reason") or
                          "operation effect is not proven at every verified site"})
-    if audit_proofs:
-        # The independent audit model verified the actual artifact for this target
-        # (or that a satisfied clause needs no change).  That verdict is a semantic
-        # proof: the physical edit/site binding above still has to exist, but the
-        # effect check must not re-litigate an approved semantic equivalent with a
-        # literal new_text comparison.
-        edit_locations = {str(edit.get("location") or "") for edit in edits}
-        for record in records:
-            item = obligation_state.get(record.obligation_id)
-            if not item or item.get("state") == "PASS":
-                continue
-            bound = [target for target in (targets_by_id or {}).values()
-                     if record.spec.operation_id in (target.get("operations") or ())]
-            proven = []
-            for target in bound:
-                proof = audit_proofs.get(str(target.get("target_id") or "")) or {}
-                if str(proof.get("verdict") or "") != "completed" \
-                        or not proof.get("evidence_verified"):
-                    continue
-                if (str(target.get("state") or "") == "satisfied"
-                        or str(target.get("location") or "") in edit_locations):
-                    proven.append(target)
-            if not proven:
-                continue
-            target = proven[0]
-            obligation_state[record.obligation_id] = {
-                **item, "state": "PASS", "artifact_status": "SEMANTIC_VERIFIED",
-                "failure_code": "", "reason": "",
-                "evidence": list(item.get("evidence") or ()) + [{
-                    "proof_kind": "semantic_audit",
-                    "operation_id": record.spec.operation_id,
-                    "obligation_id": record.obligation_id,
-                    "target_id": str(target.get("target_id") or ""),
-                    "location": str(target.get("location") or ""),
-                    "verdict": "completed",
-                    "document_sha256": str(getattr(after_inspection,
-                                                   "source_sha256", "")),
-                }]}
-        # A failure recorded before the audit proof arrived must not outlive the
-        # obligation it describes.
-        failures[:] = [failure for failure in failures
-                       if str((obligation_state.get(
-                           str(failure.get("obligation_id") or "")) or {}
-                               ).get("state") or "") != "PASS"]
+
 
     from .effects import effect_proof_passed
     prior_failed = bool(preamble_failures) if page_cursor > 0 else False

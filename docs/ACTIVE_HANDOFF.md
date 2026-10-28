@@ -23,7 +23,8 @@
 - tracked9 仍阻断的真实根因（均为工程项）：G02 无 satisfied 目标/批准；G05:0 absent 目标未获批准；G05:2/G06/G13 缺“无目标”覆盖证据路径（`EFFECT_SITE_UNPROVEN`）；G14/G15/G18 的“审计已确认语义等价”未被 Claim Replay 消费（仍按精确 new_text 判 effect）；p159 `CLAIM_OUTSIDE_SPAN_CHANGED` 疑为 barrier/接受视图偏移。
 - 已完成：审计 verdict 作为语义 effect 证明接入 replay（仅 completed+evidence_verified+物理编辑/站点）；absent 操作生成可审计 satisfied 候选（排除 ONE_OF）；p159 outside-span 比较忽略 barrier；G14 费用项顺序确定。
 - **普通DOCX不回退的隔离**：`generate_artifacts` 只有在源文件确实含他人修订（foreign_inventory非空）时才走 accept-all；普通文件仍走原 `_accept_our_revisions`。普通弘利真实运行：33 targets/11 edits/25 calls，redline仅11 del+11 ins（作者资金清算部），final无修订，claim仅剩1项G05，明显优于改造前。
-- 剩余：G02/G05/G06/G13/G14 的无目标/审计证明路径在不同真实运行间仍有波动（normal1 1项、normal3 6项 claim failures），不能按单次运行判断稳定；需逐规则固定证据路径后再跑整批。G05-only 的 absent 候选已加入（其他规则扩展会回归，已收回）。
+- 剩余：真实运行波动仍在。normal5 claim failures=0（但仍有旧投影的未决项）；normal6 同一合同为4（G02×2、G05×2），targets 28 vs 33。根因是 inventory 是否创建目标/审计覆盖随模型输出变化；代码侧已加审计证明、G02/G05 absent 候选、ONE_OF 后置收口、最终 omission 使用最终 replay，但仍缺“每个 applicable operation 必有 disposition”的确定性兜底。
+- 下一步（明确）：对每个无 target/无 edit/未 PASS 的 applicable operation 增加一次聚焦模型裁定（存在则返回精确 quote 并规划；不存在则记录 scope 覆盖证据），使结果不依赖 inventory 偶然性；然后再跑同一合同多次确认稳定。
 - 普通DOCX结构验证：多次真实运行 redline 仅含资金清算部修订、final 无修订；全量离线 **1942 passed / 13 skipped**，普通路径未因叠加功能回退。
 
 ## 历史断点（2026-10-28，真实模型已开跑；用户取消预算限制）
