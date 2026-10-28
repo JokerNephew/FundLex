@@ -30,11 +30,16 @@ BUILTIN_GUIDE_PATH = Path(__file__).resolve().parent.parent / "guides" / "builti
 GUIDE_SOURCE_DIR = "guides"
 ENABLEABLE_STATUSES = frozenset({"released", "parsed"})
 PARSEABLE_STATUSES = frozenset({"uploaded", "parse_failed", "parsed", "failed"})
+# User-initiated "reparse" is a new version whenever the version may already
+# have been observed by a task.  Only an unpublished, never-parsed version can
+# safely reuse its identity for a first attempt.
+REPARSEABLE_STATUSES = frozenset({"uploaded", "parse_failed", "parsed", "failed", "released"})
 MAX_GUIDE_JOB_ATTEMPTS = 3
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS guide_versions (
     id TEXT PRIMARY KEY, owner TEXT NOT NULL, built_in INTEGER NOT NULL DEFAULT 0,
+    parent_version_id TEXT NOT NULL DEFAULT '',
     filename TEXT NOT NULL, source_sha256 TEXT NOT NULL,
     document_sha256 TEXT NOT NULL DEFAULT '', parser_version TEXT NOT NULL DEFAULT '',
     schema_version TEXT NOT NULL DEFAULT '', prompt_versions TEXT NOT NULL DEFAULT '{}',
@@ -56,6 +61,7 @@ CREATE TABLE IF NOT EXISTS guide_jobs (
 
 _VERSION_COLUMNS = {
     "built_in": "INTEGER NOT NULL DEFAULT 0",
+    "parent_version_id": "TEXT NOT NULL DEFAULT ''",
     "filename": "TEXT NOT NULL DEFAULT ''",
     "source_sha256": "TEXT NOT NULL DEFAULT ''",
     "document_sha256": "TEXT NOT NULL DEFAULT ''",
@@ -128,6 +134,7 @@ def _version_dict(row) -> dict[str, Any]:
     groups = rules.get("groups") if isinstance(rules, dict) else None
     return {
         "id": row["id"], "owner": row["owner"], "built_in": bool(row["built_in"]),
+        "parent_version_id": row["parent_version_id"] or "",
         "filename": row["filename"], "source_sha256": row["source_sha256"],
         "document_sha256": row["document_sha256"], "rules_sha256": row["rules_sha256"],
         "parser_version": row["parser_version"], "schema_version": row["schema_version"],
@@ -266,8 +273,14 @@ def set_current_guide(store: RunStore, owner: str, version_id: str) -> dict[str,
     return version
 
 
-def create_custom_version(store: RunStore, owner: str, filename: str, source_bytes: bytes) -> dict[str, Any]:
-    """Stage a guide DOCX under ``objects/guides/<version_id>.docx`` and queue parsing."""
+def create_custom_version(store: RunStore, owner: str, filename: str, source_bytes: bytes,
+                          *, parent_version_id: str = "") -> dict[str, Any]:
+    """Stage a guide DOCX under ``objects/guides/<version_id>.docx`` and queue parsing.
+
+    ``parent_version_id`` records the immutable predecessor when the owner
+    re-parses an already-published guide.  The predecessor row and its rules
+    hash are never modified.
+    """
     _ensure_tables(store)
     if not isinstance(owner, str) or not owner:
         raise ValueError("GUIDE_OWNER_REQUIRED")
@@ -287,14 +300,57 @@ def create_custom_version(store: RunStore, owner: str, filename: str, source_byt
         with store._connect() as db:
             db.execute("BEGIN IMMEDIATE")
             db.execute("""INSERT INTO guide_versions
-                (id,owner,built_in,filename,source_sha256,status,created_at,updated_at)
-                VALUES(?,?,?,?,?,?,?,?)""",
-                (version_id, owner, 0, filename, hashlib.sha256(data).hexdigest(), "uploaded", now, now))
+                (id,owner,built_in,parent_version_id,filename,source_sha256,status,created_at,updated_at)
+                VALUES(?,?,?,?,?,?,?,?,?)""",
+                (version_id, owner, 0, parent_version_id or "", filename,
+                 hashlib.sha256(data).hexdigest(), "uploaded", now, now))
             job_id = _insert_parse_job(db, version_id, owner)
     except Exception:
         path.unlink(missing_ok=True)
         raise
     return {**get_version(store, owner, version_id), "job_id": job_id}
+
+
+def reparse_version(store: RunStore, owner: str, version_id: str) -> dict[str, Any]:
+    """Return the version a re-parse request should target.
+
+    A version that may already have been observed by a task is immutable, so
+    re-parsing it creates a new version with ``parent_version_id`` pointing at
+    the old row.  The old row, rules and hash remain untouched.  If an active
+    parse job already exists for the same source, that pending version is
+    returned instead of creating duplicate versions for repeated clicks.
+    """
+    _ensure_tables(store)
+    version = get_version(store, owner, version_id)
+    if version["built_in"]:
+        raise ValueError("GUIDE_BUILTIN_NOT_REPARSEABLE")
+    if version["status"] not in REPARSEABLE_STATUSES:
+        raise ValueError("GUIDE_NOT_PARSEABLE")
+    with store._connect() as db:
+        active = db.execute(
+            """SELECT j.id AS job_id,v.* FROM guide_jobs j
+               JOIN guide_versions v ON v.id=j.guide_version_id
+               WHERE v.owner=? AND v.source_sha256=?
+                 AND j.status IN ('queued','leased')
+               ORDER BY j.created_at DESC LIMIT 1""",
+            (owner, version["source_sha256"]),
+        ).fetchone()
+    if active is not None:
+        return {**_version_dict(active), "job_id": active["job_id"]}
+    source = guide_source_path(store, version_id)
+    if not source.is_file():
+        raise KeyError("guide source not available")
+    # Retire the predecessor's retryable jobs before creating the new version.
+    # Otherwise a worker could claim the old parse_failed job first and parse
+    # the superseded version again.
+    with store._connect() as db:
+        db.execute("BEGIN IMMEDIATE")
+        db.execute("""UPDATE guide_jobs SET status='failed',
+            error_code='GUIDE_VERSION_SUPERSEDED',lease_until=NULL,updated_at=?
+            WHERE guide_version_id=? AND status IN ('queued','parse_failed')""",
+                   (time.time(), version_id))
+    return create_custom_version(store, owner, version["filename"], source.read_bytes(),
+                                 parent_version_id=version_id)
 
 
 def _insert_parse_job(db, version_id: str, owner: str) -> str:
@@ -315,6 +371,10 @@ def enqueue_parse(store: RunStore, version_id: str) -> str:
             raise KeyError("guide version not found")
         if row["status"] not in PARSEABLE_STATUSES:
             raise ValueError("GUIDE_NOT_PARSEABLE")
+        if row["status"] in {"parsed", "released"}:
+            # A published snapshot is immutable; callers must create a new
+            # version instead of mutating rules bound to existing tasks.
+            raise ValueError("GUIDE_REPARSE_REQUIRES_NEW_VERSION")
         # Repeated clicks must share the current job, including its retry budget.
         active = db.execute("SELECT id,status FROM guide_jobs WHERE guide_version_id=? "
                             "AND status IN ('queued','leased','parse_failed') ORDER BY created_at DESC",
@@ -339,9 +399,13 @@ def claim_guide_job(store: RunStore, *, lease_seconds: int = 600) -> dict[str, A
     now = time.time()
     with store._connect() as db:
         db.execute("BEGIN IMMEDIATE")
-        exhausted = db.execute("SELECT id,guide_version_id FROM guide_jobs WHERE status='leased' "
-                               "AND lease_until<=? AND attempts>=?",
-                               (now, MAX_GUIDE_JOB_ATTEMPTS)).fetchall()
+        # A leased job past its expiry, or a queued job left at the attempt
+        # ceiling by an older release implementation, must not remain forever
+        # unclaimable.
+        exhausted = db.execute(
+            "SELECT id,guide_version_id FROM guide_jobs WHERE attempts>=? AND ("
+            "(status='leased' AND lease_until<=?) OR status IN ('queued','parse_failed'))",
+            (MAX_GUIDE_JOB_ATTEMPTS, now)).fetchall()
         for item in exhausted:
             db.execute("UPDATE guide_jobs SET status='failed',error_code='GUIDE_PARSE_ATTEMPTS_EXHAUSTED',"
                        "lease_until=NULL,updated_at=? WHERE id=?", (now, item["id"]))
@@ -392,9 +456,13 @@ def release_guide_job(store: RunStore, job_id: str, fencing_token: int) -> dict[
                 or row["lease_until"] is None or row["lease_until"] <= now):
             raise Conflict("stale guide job lease")
         delay = min(2 * (2 ** max(row["attempts"] - 1, 0)) * random.uniform(0.8, 1.2), 300)
-        changed = db.execute("UPDATE guide_jobs SET status='queued',lease_until=?,updated_at=? "
+        # A release is a recoverable stop, not a failed attempt.  Refund the
+        # claim so repeated model-budget/network stops cannot exhaust the retry
+        # budget while a real expiry/crash still does.
+        attempts = max(int(row["attempts"]) - 1, 0)
+        changed = db.execute("UPDATE guide_jobs SET status='queued',attempts=?,lease_until=?,updated_at=? "
                              "WHERE id=? AND fencing_token=? AND status='leased' AND lease_until>?",
-                             (now + delay, now, job_id, fencing_token, now)).rowcount
+                             (attempts, now + delay, now, job_id, fencing_token, now)).rowcount
         if changed != 1:
             raise Conflict("stale guide job lease")
         db.execute("UPDATE guide_versions SET status='uploaded',updated_at=? WHERE id=? AND status='parsing'",

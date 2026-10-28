@@ -422,7 +422,9 @@ def _guide_public(version: dict, *, current: bool) -> dict:
     if isinstance(issues, dict):
         issue_count = sum(len(issues[key]) for key in ("errors", "warnings", "coverage_gaps")
                           if isinstance(issues.get(key), list))
-    return {"id": version["id"], "built_in": bool(version["built_in"]), "filename": version["filename"],
+    return {"id": version["id"], "built_in": bool(version["built_in"]),
+            "parent_version_id": version.get("parent_version_id", ""),
+            "filename": version["filename"],
             "status": version["status"], "qualification_status": version["qualification_status"],
             "document_sha256": version["document_sha256"], "rules_sha256": version["rules_sha256"],
             "groups": int(version.get("rules_count") or 0), "issues": issue_count,
@@ -924,16 +926,15 @@ def create_app(data_dir: str | Path | None = None, *, auth_db=None) -> FastAPI:
         version = visible_guide(user, version_id)
         if version["built_in"]:
             raise HTTPException(403, "built-in guide is already parsed and released")
-        if version["status"] not in guide_store.PARSEABLE_STATUSES:
+        if version["status"] not in guide_store.REPARSEABLE_STATUSES:
             raise HTTPException(409, "GUIDE_NOT_PARSEABLE")
         try:
-            guide_store.enqueue_parse(store, version_id)
+            refreshed = guide_store.reparse_version(store, user, version_id)
         except KeyError as exc:
             raise HTTPException(404, "guide version not found") from exc
         except ValueError as exc:
             from .api_errors import raise_api_error
             raise_api_error(409, exc, fallback="CONFLICT")
-        refreshed = visible_guide(user, version_id)
         current = guide_store.current_guide(store, user)
         return {"version": _guide_public(refreshed, current=refreshed["id"] == current["id"])}
 

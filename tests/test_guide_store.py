@@ -114,13 +114,13 @@ def test_parse_job_claim_finish_retry_and_attempts_exhausted(tmp_path):
     assert guide_store.get_version(store, "alice", version["id"])["status"] == "parsing"
     assert guide_store.claim_guide_job(store) is None  # one job in flight per owner
     released = guide_store.release_guide_job(store, job["id"], job["fencing_token"])
-    assert released["status"] == "queued" and released["attempts"] == 1
+    assert released["status"] == "queued" and released["attempts"] == 0
     assert guide_store.get_version(store, "alice", version["id"])["status"] == "uploaded"
     assert guide_store.claim_guide_job(store) is None  # backoff instead of a hot loop
     with store._connect() as db:
         db.execute("UPDATE guide_jobs SET lease_until=NULL WHERE id=?", (job["id"],))
     second = guide_store.claim_guide_job(store)
-    assert second["attempts"] == 2
+    assert second["attempts"] == 1
     failed = guide_store.finish_guide_job(store, second["id"], second["fencing_token"], error_code="GUIDE_SOURCE_EMPTY")
     assert failed["job"]["status"] == "parse_failed" and failed["job"]["error_code"] == "GUIDE_SOURCE_EMPTY"
     assert failed["version"]["status"] == "parse_failed"
@@ -128,14 +128,38 @@ def test_parse_job_claim_finish_retry_and_attempts_exhausted(tmp_path):
     with pytest.raises(ValueError, match="GUIDE_NOT_ENABLEABLE"):
         guide_store.set_current_guide(store, "alice", version["id"])
     third = guide_store.claim_guide_job(store)
-    assert third["attempts"] == 3
-    terminal = guide_store.finish_guide_job(store, third["id"], third["fencing_token"], error_code="GUIDE_SOURCE_EMPTY")
+    assert third["attempts"] == 2
+    retryable = guide_store.finish_guide_job(store, third["id"], third["fencing_token"],
+                                             error_code="GUIDE_SOURCE_EMPTY")
+    assert retryable["job"]["status"] == "parse_failed"
+    fourth = guide_store.claim_guide_job(store)
+    assert fourth["attempts"] == 3
+    terminal = guide_store.finish_guide_job(store, fourth["id"], fourth["fencing_token"],
+                                            error_code="GUIDE_SOURCE_EMPTY")
     assert terminal["job"]["status"] == "failed" and terminal["version"]["status"] == "failed"
     assert guide_store.claim_guide_job(store) is None
     with pytest.raises(KeyError):
         guide_store.release_guide_job(store, "missing-job", 1)
     with pytest.raises(KeyError):
         guide_store.finish_guide_job(store, "missing-job", 1, error_code="GUIDE_PARSE_FAILED")
+
+
+def test_recoverable_release_does_not_consume_attempt_budget(tmp_path):
+    """Repeated model/network stops must not leave a queued job unclaimable."""
+    store = make_store(tmp_path)
+    version = guide_store.create_custom_version(store, "alice", "custom.docx", guide_docx())
+    for expected in (1, 1, 1):
+        job = guide_store.claim_guide_job(store)
+        assert job is not None and job["attempts"] == expected
+        released = guide_store.release_guide_job(store, job["id"], job["fencing_token"])
+        assert released["status"] == "queued" and released["attempts"] == 0
+        with store._connect() as db:
+            db.execute("UPDATE guide_jobs SET lease_until=NULL WHERE id=?", (job["id"],))
+    claimed = guide_store.claim_guide_job(store)
+    assert claimed is not None and claimed["guide_version_id"] == version["id"]
+    final = guide_store.finish_guide_job(store, claimed["id"], claimed["fencing_token"],
+                                         document=parsed_document())
+    assert final["job"]["status"] == "completed" and final["version"]["status"] == "parsed"
 
 
 def test_late_guide_worker_cannot_release_or_finish_new_attempt(tmp_path):

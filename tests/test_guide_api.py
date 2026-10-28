@@ -192,26 +192,37 @@ def test_guide_parse_endpoint_requeues_owner_versions_only(client):
     assert failed["version"]["status"] == "parse_failed"
     requeued = client.post(f"/api/guides/{version['id']}/parse", headers=ALICE)
     assert requeued.status_code == 202
-    assert requeued.json()["version"]["status"] == "uploaded"
+    retry_version = requeued.json()["version"]
+    assert retry_version["status"] == "uploaded"
+    assert retry_version["id"] != version["id"]
+    assert retry_version["parent_version_id"] == version["id"]
     with store._connect() as db:
         queued = db.execute("SELECT COUNT(*) FROM guide_jobs WHERE guide_version_id=? AND status IN ('queued','parse_failed')",
-                            (version["id"],)).fetchone()[0]
+                            (retry_version["id"],)).fetchone()[0]
     assert queued == 1
     # Claiming consumes the requeued job; a leased version cannot queue twice.
     active = guide_store.claim_guide_job(store)
-    assert active["guide_version_id"] == version["id"]
-    assert client.post(f"/api/guides/{version['id']}/parse", headers=ALICE).status_code == 409
+    assert active["guide_version_id"] == retry_version["id"]
+    duplicate = client.post(f"/api/guides/{version['id']}/parse", headers=ALICE)
+    assert duplicate.status_code == 202
+    assert duplicate.json()["version"]["id"] == retry_version["id"]
     guide_store.finish_guide_job(store, active["id"], active["fencing_token"],
                                  error_code="GUIDE_PARSE_FAILED")
-    # A parsed version can be re-parsed on demand.
+    # A parsed version can be re-parsed on demand, but the old version remains
+    # immutable and is never repointed at the new rules.
     parsed = parsed_custom(client)
-    assert client.post(f"/api/guides/{parsed['id']}/parse", headers=ALICE).status_code == 202
+    old_hash = parsed["rules_sha256"]
+    reparsed = client.post(f"/api/guides/{parsed['id']}/parse", headers=ALICE)
+    assert reparsed.status_code == 202
+    assert reparsed.json()["version"]["id"] != parsed["id"]
+    assert reparsed.json()["version"]["parent_version_id"] == parsed["id"]
+    assert guide_store.get_version(store, "alice", parsed["id"])["rules_sha256"] == old_hash
     # The built-in guide is released and never re-queued through this route.
     assert client.post(f"/api/guides/{guide_store.BUILTIN_GUIDE_ID}/parse", headers=ALICE).status_code == 403
     assert client.post("/api/guides/unknown-version/parse", headers=ALICE).status_code == 404
 
 
-def test_explicit_retry_of_exhausted_guide_is_visible_and_deduplicated(client):
+def test_explicit_retry_of_exhausted_guide_creates_a_new_version(client):
     version = client.post("/api/guides", headers=ALICE,
                           files={"file": ("retry.docx", docx_bytes("指引"))}).json()["version"]
     store = client.app.state.store
@@ -220,17 +231,28 @@ def test_explicit_retry_of_exhausted_guide_is_visible_and_deduplicated(client):
         guide_store.finish_guide_job(store, job["id"], job["fencing_token"], error_code="GUIDE_PARSE_FAILED")
     assert guide_store.get_version(store, "alice", version["id"])["status"] == "failed"
     assert client.post(f"/api/guides/{version['id']}/parse", headers=BOB).status_code == 404
+    responses = []
     for _ in range(2):
         response = client.post(f"/api/guides/{version['id']}/parse", headers=ALICE)
         assert response.status_code == 202
-        assert response.json()["version"]["status"] == "uploaded"
+        responses.append(response.json()["version"])
+    assert responses[0]["id"] == responses[1]["id"] != version["id"]
+    assert responses[1]["status"] == "uploaded"
+    assert responses[1]["parent_version_id"] == version["id"]
     with store._connect() as db:
-        jobs = db.execute("SELECT status,attempts FROM guide_jobs WHERE guide_version_id=?",
-                          (version["id"],)).fetchall()
-    assert sorted((row["status"], row["attempts"]) for row in jobs) == [("failed", 3), ("queued", 0)]
+        old_jobs = db.execute("SELECT status,attempts FROM guide_jobs WHERE guide_version_id=?",
+                              (version["id"],)).fetchall()
+        new_jobs = db.execute("SELECT status,attempts FROM guide_jobs WHERE guide_version_id=?",
+                              (responses[1]["id"],)).fetchall()
+    assert sorted((row["status"], row["attempts"]) for row in old_jobs) == [("failed", 3)]
+    assert sorted((row["status"], row["attempts"]) for row in new_jobs) == [("queued", 0)]
     retried = guide_store.claim_guide_job(store)
-    assert retried["attempts"] == 1
-    assert client.post(f"/api/guides/{version['id']}/parse", headers=ALICE).status_code == 409
+    assert retried["attempts"] == 1 and retried["guide_version_id"] == responses[1]["id"]
+    # A repeated click while the new version is leased returns that pending
+    # version instead of creating another duplicate.
+    active = client.post(f"/api/guides/{version['id']}/parse", headers=ALICE)
+    assert active.status_code == 202
+    assert active.json()["version"]["id"] == responses[1]["id"]
 
 
 def test_recall_task_creation_binds_guide_snapshot(client):
