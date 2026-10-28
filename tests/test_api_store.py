@@ -319,7 +319,7 @@ def test_sqlite_report_json_parser_returns_only_controlled_error(tmp_path):
     assert "secret" not in str(error.value)
 
 
-@pytest.mark.parametrize("code", ["MODEL_CIRCUIT_OPEN", "MODEL_GLOBAL_CALL_BUDGET_EXCEEDED", "MODEL_COST_BUDGET_EXCEEDED"])
+@pytest.mark.parametrize("code", ["MODEL_CIRCUIT_OPEN", "MODEL_LEDGER_UNAVAILABLE"])
 def test_global_model_stop_pauses_remaining_queue(tmp_path, code):
     store = RunStore(tmp_path)
     batch = store.create_batch(owner="alice", ruleset_version="v1", uploads=[("a.docx", docx_bytes()), ("b.docx", docx_bytes())])
@@ -329,6 +329,19 @@ def test_global_model_stop_pauses_remaining_queue(tmp_path, code):
     assert result["status"] == "paused"
     assert [d["status"] for d in result["documents"]] == ["retry_wait", "queued"]
     assert not worker.run_once()
+
+
+@pytest.mark.parametrize("code", ["MODEL_GLOBAL_CALL_BUDGET_EXCEEDED", "MODEL_COST_BUDGET_EXCEEDED",
+                                  "MODEL_CALL_BUDGET_EXCEEDED"])
+def test_legacy_budget_observation_codes_do_not_pause_the_queue(tmp_path, code):
+    """Cost/call thresholds are observations; a legacy code must not pause the batch."""
+    store = RunStore(tmp_path)
+    batch = store.create_batch(owner="alice", ruleset_version="v1", uploads=[("a.docx", docx_bytes()), ("b.docx", docx_bytes())])
+    worker = Worker(store, lambda *_: {"error_code": code})
+    assert worker.run_once()
+    result = store.get_batch("alice", batch["id"])
+    assert result["status"] != "paused"
+    assert result["documents"][0]["status"] == "retry_wait"
 
 
 @pytest.mark.parametrize("validation,error", [

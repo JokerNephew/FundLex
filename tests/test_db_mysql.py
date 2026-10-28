@@ -227,8 +227,13 @@ def test_model_budget_mysql_reserve_finish_and_snapshot():
     assert snapshot["http_attempts"] == 2
     assert snapshot["statuses"] == {"completed": 1, "failed": 1}
     assert snapshot["estimated_cost_usd"] == pytest.approx((1000 * 1 + 100 * 5 + 10 * 1 + 10 * 5) / 1_000_000)
+    # Cost/request references are observed only unless enforcement is requested.
+    budget.reserve(input_token_bound=10_000_000, output_token_bound=10_000_000, lease_seconds=30)
+    assert budget.snapshot()["cost_cap_enforced"] is False
     with pytest.raises(BudgetError, match="MODEL_COST_BUDGET_EXCEEDED"):
-        budget.reserve(input_token_bound=10_000_000, output_token_bound=10_000_000, lease_seconds=30)
+        ModelBudget(MYSQL_URL, max_requests=4, max_cost_usd=1.0, concurrency=1,
+                    enforce_limits=True).reserve(
+            input_token_bound=10_000_000, output_token_bound=10_000_000, lease_seconds=30)
 
 
 def test_model_gateway_from_env_accepts_mysql_ledger(monkeypatch):
