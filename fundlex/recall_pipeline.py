@@ -3571,24 +3571,28 @@ def _classify_delivery_items(unresolved: Sequence[dict[str, Any]]
     blockers: list[dict[str, Any]] = []
     review: list[dict[str, Any]] = []
     business: list[dict[str, Any]] = []
+    from .delivery import requires_blocker
     for item in unresolved:
         if not isinstance(item, dict):
             continue
         rule_id = str(item.get("rule_id") or "")
         code = str(item.get("code") or item.get("kind") or "")
         reason = str(item.get("reason") or "")
-        if (rule_id in _BUSINESS_PENDING_RULES
-                or any(marker in reason for marker in _BUSINESS_PENDING_MARKERS)):
-            business.append(item)
-        elif (bool(item.get("claim_replay_failed"))
-              or str(item.get("kind") or "") == "claim_replay"
-              or (str(item.get("kind") or "") == "final_omission"
-                  and _final_omission_issue_blocks(item))
-              or code in _DELIVERY_BLOCKER_CODES or reason in _DELIVERY_BLOCKER_CODES
-              or any(marker in reason for marker in _DELIVERY_BLOCKER_REASON_MARKERS)):
+        # FL-D437: typed proof/engineering failure wins over the rule-number bucket.
+        # A G14/G18 row is only "business pending" when nothing in the item itself is
+        # a Claim/effect/coverage/audit failure or an unknown code.
+        if (requires_blocker(item)
+                or code in _DELIVERY_BLOCKER_CODES
+                or reason in _DELIVERY_BLOCKER_CODES
+                or any(marker in reason for marker in _DELIVERY_BLOCKER_REASON_MARKERS)
+                or (str(item.get("kind") or "") == "final_omission"
+                    and _final_omission_issue_blocks(item))):
             # A failed Claim Replay or a proven final omission is not a human-review
             # opinion.  It must block delivery in every policy (D06 false-complete).
             blockers.append(item)
+        elif (rule_id in _BUSINESS_PENDING_RULES
+                or any(marker in reason for marker in _BUSINESS_PENDING_MARKERS)):
+            business.append(item)
         else:
             review.append(item)
     return blockers, review, business
@@ -4440,15 +4444,32 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
             origins[target.target_id] = "duplicate_copy"
             report["target_attribution"].extend(assign_target_operations(
                 [target], rules_by_id, inspection, facts, obligation_ledger))
-        from .targeting import locate_unresolved_targets, targets_for_open_rules
+        from .targeting import (locate_unresolved_targets, summary_copy_targets,
+                                targets_for_open_rules)
+        report["candidate_recovery_coverage"] = {}
         open_targets = targets_for_open_rules(obligation_ledger, targets, rules_by_id, facts,
-                                              inspection, mapping, sections, scopes=scopes)
+                                              inspection, mapping, sections, scopes=scopes,
+                                              coverage=report["candidate_recovery_coverage"])
         for target in open_targets:
             targets.append(target)
             synthetic.append(target)
             origins[target.target_id] = "T3_open_rule"
         report["target_attribution"].extend(assign_target_operations(
             open_targets, rules_by_id, inspection, facts, obligation_ledger))
+        # FL-D384/434/443: a real contract-summary copy of a fee clause is a physical
+        # business site.  Create its operation target from code-proven anchors even
+        # when the wording is not byte-identical to the body paragraph.
+        summary_targets = summary_copy_targets(targets, rules_by_id, inspection,
+                                               sections, scopes)
+        for target in summary_targets:
+            targets.append(target)
+            synthetic.append(target)
+            origins[target.target_id] = "summary_copy"
+        if summary_targets:
+            report["summary_copy_targets"] = [target.as_dict()
+                                              for target in summary_targets]
+            report["target_attribution"].extend(assign_target_operations(
+                summary_targets, rules_by_id, inspection, facts, obligation_ledger))
         # Open-obligation recovery can add an append target after the initial duplicate
         # pass (for example G16 on the body payment clause).  Clone those late targets
         # too, otherwise only the body copy receives the required new clause and the
@@ -4521,6 +4542,21 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
             report["target_attribution"].extend(assign_target_operations(
                 [copy], rules_by_id, inspection, facts, obligation_ledger))
         if late_copies:
+            ensure_unique_target_ids(targets, origins)
+        # Late recovery/rebind can add a body operation target; close its real
+        # summary copy before the locator/plan stages (idempotent: an existing
+        # active summary target suppresses a duplicate).
+        late_summary = summary_copy_targets(targets, rules_by_id, inspection,
+                                            sections, scopes)
+        for target in late_summary:
+            targets.append(target)
+            synthetic.append(target)
+            origins[target.target_id] = "summary_copy"
+        if late_summary:
+            report.setdefault("summary_copy_targets", []).extend(
+                target.as_dict() for target in late_summary)
+            report["target_attribution"].extend(assign_target_operations(
+                late_summary, rules_by_id, inspection, facts, obligation_ledger))
             ensure_unique_target_ids(targets, origins)
         from .recall import approval_book_for
         locator_records = locate_unresolved_targets(
@@ -4906,7 +4942,15 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
                         if _result:
                             audit_proofs[_target.target_id] = {
                                 "verdict": _result.get("verdict"),
-                                "evidence_verified": _result.get("evidence_verified")}
+                                "evidence_verified": _result.get("evidence_verified"),
+                                # FL-D458: bind the proof to the exact artifact,
+                                # operation/site/occurrence and audited quote.
+                                "evidence_quote": _result.get("evidence_quote"),
+                                "location": _target.location,
+                                "rule_id": _target.rule_id,
+                                "target_id": _target.target_id,
+                                "occurrence_index": _target.occurrence_index,
+                                "document_sha256": actual.source_sha256}
                     report["audit_proofs"] = {
                         "count": len(audit_proofs),
                         "targets": sorted(audit_proofs)[:50]}
@@ -5143,7 +5187,9 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
                                 record, targets, rules_by_id, facts, inspection,
                                 mapping, sections,
                                 target_id=f"R{len(targets) + 1:03d}",
-                                scopes=scopes)
+                                scopes=scopes,
+                                coverage=report.setdefault(
+                                    "candidate_recovery_coverage", {}))
                             if repair_target is not None:
                                 targets.append(repair_target)
                                 origins[repair_target.target_id] = "claim_operation_recovery"

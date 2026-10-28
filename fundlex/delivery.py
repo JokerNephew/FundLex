@@ -113,6 +113,29 @@ _ALWAYS_BLOCKING_CODES = frozenset({
     "RESIDUAL_OLD_TEXT",
     "FINAL_OPERATION_UNPROVEN",
     "FINAL_RESIDUAL_OLD_TEXT",
+    "FINAL_RESIDUAL_SCAN_TRUNCATED",
+    "FINAL_HASH_MISMATCH",
+    "FINAL_REVISION_MISMATCH",
+    "FINAL_TEXT_MISMATCH",
+    "FINAL_ROOT",
+    # Audit/sweep engineering failures are proof failures, not review opinions.
+    # Only an unfinished review (AUDIT_NOT_COMPLETED / SWEEP_CHUNK_LIMIT) stays in
+    # the review bucket under review_assisted.
+    "AUDIT_EVIDENCE_UNVERIFIED",
+    "AUDIT_ITEM_INVALID",
+    "AUDIT_MISSED_INVALID",
+    "AUDIT_MISSED_ITEM_INVALID",
+    "AUDIT_TARGET_UNKNOWN",
+    "AUDIT_VERDICT_MISSING",
+    "SWEEP_ITEM_INVALID",
+    "SWEEP_FINDING_INVALID",
+    "SWEEP_LOCATION_OUT_OF_SCOPE",
+    "SWEEP_OPERATION_UNBOUND",
+    "SWEEP_QUOTE_NOT_IN_WINDOW",
+    "SWEEP_QUOTE_NOT_RESOLVED",
+    "SWEEP_RECOVERY_UNVERIFIED",
+    "SWEEP_SEMANTIC_SITE_INVALID",
+    "SWEEP_TARGET_UNBOUND",
 })
 _ALWAYS_BLOCKING_PREFIXES = (
     "CLAIM_", "EFFECT_", "RESIDUAL_", "MODEL_", "DOCUMENT_", "OUTPUT_",
@@ -150,17 +173,19 @@ def _is_known_item_code(code: str) -> bool:
     return bool(failure_reason(value))
 
 
-def _requires_blocker(item: Any) -> bool:
+def requires_blocker(item: Any) -> bool:
     """Whether one reported item must keep the delivery incomplete.
 
     A claim/effect/residual code is always blocking.  A code outside every known
     taxonomy is also blocking: silently treating a future code as a review note is
     the failure mode R13/R14 close here.  Generic kind-only rows keep the existing
-    pipeline bucket, except Claim Replay rows.
+    pipeline bucket, except Claim Replay rows.  The worker gate and the user summary
+    call this one function so both cannot disagree on the same typed item.
     """
     if not isinstance(item, Mapping):
         return False
-    if str(item.get("kind") or "").strip().lower() == "claim_replay":
+    if str(item.get("kind") or "").strip().lower() == "claim_replay" \
+            or bool(item.get("claim_replay_failed")):
         return True
     code = _item_code(item)
     if not code:
@@ -168,6 +193,10 @@ def _requires_blocker(item: Any) -> bool:
     if _is_always_blocking(code):
         return True
     return not _is_known_item_code(code)
+
+
+# Backwards-compatible private name used inside this module.
+_requires_blocker = requires_blocker
 
 
 def _blocker_key(item: Mapping[str, Any]) -> tuple[str, str, str, str]:
