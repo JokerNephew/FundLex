@@ -34,7 +34,7 @@ pwsh -NoProfile -File .\tools\local.ps1 -Mode worker -Model deepseek-v4.1-flash 
 打开 [本地工作台](http://127.0.0.1:8000)。两种身份模式：
 
 - **dev（默认，仅本机开发）**：请求使用 `X-FundLex-User` 头，默认身份 `local-user`，不同身份的批次/下载隔离；账号端点不激活。
-- **password（生产）**：`FUNDLEX_AUTH_MODE=password` 时前端显示登录页，账号/会话持久化在同一数据库；首次启动可用 `FUNDLEX_BOOTSTRAP_ADMIN=用户:强密码` 创建管理员（仅用户表为空时生效，密钥不落盘不入日志）。设计见 [登录与账号设计](docs/AUTH_DESIGN.md)。
+- **password（生产）**：`FUNDLEX_AUTH_MODE=password` 时前端显示登录页，账号/会话持久化在同一数据库；首次启动可用 `FUNDLEX_BOOTSTRAP_ADMIN=用户:强密码` 创建管理员（仅用户表为空时生效；若已无启用管理员，仅当用户名、密码与该 admin 账号匹配时重新启用它；密钥不落盘不入日志）。禁用唯一启用管理员返回 `409 LAST_ADMIN_REQUIRED`。设计见 [登录与账号设计](docs/AUTH_DESIGN.md)。
 
 默认状态/文件目录为规范用户目录 `~/AppData/Local/FundLex/runtime`（Windows），可用 `FUNDLEX_DATA_DIR` 配置。活动 SQLite、预算账本、worker 锁和产物应放在非同步的短路径。此次重现外部文件句柄拒绝写共享可引发 SQLite 只读错误；同步程序归因尚未直接证实；MSIX 的 `LOCALAPPDATA` 重定向长路径还会触发 Windows 路径长度错误。默认位置已避开这些运行问题。原有样本保持不动。
 

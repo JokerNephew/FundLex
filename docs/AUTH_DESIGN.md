@@ -52,6 +52,8 @@ CREATE TABLE IF NOT EXISTS sessions (
 - 账号端点：`POST /api/auth/login`、`POST /api/auth/logout`、`GET /api/auth/me`、`POST /api/auth/password`。非 password 模式一律 404（账号面不激活）。
 - 管理员端点：`GET /api/admin/users`、`POST /api/admin/users`、`POST /api/admin/users/{user_id}/disable`。非管理员（含未登录、dev 模式）一律 404，不暴露端点与账号存在性；禁用可用 `{"disabled": false}` 恢复。
 - 首个管理员：`FUNDLEX_BOOTSTRAP_ADMIN=user:password`，仅在 users 表为空时创建 admin；密钥只读取一次，不打印、不落盘（仅 scrypt 哈希入库）。格式非法时启动失败而不是静默跳过。
+- 管理员保护：禁用操作在事务内检查，若目标为唯一启用中的管理员则返回 `409 LAST_ADMIN_REQUIRED`，不改状态也不撤销会话；重复禁用已禁用账号、禁用普通成员和重新启用均不受影响。
+- 锁定恢复：若 users 非空但已无启用管理员，启动时仅当 `FUNDLEX_BOOTSTRAP_ADMIN` 的用户名、密码与该管理员现有账号完全匹配（且其角色仍为 admin）时才重新启用该账号；不会启用其他任何账号，凭据不打印、不落盘。
 
 ## 生产 MySQL 部署注意
 

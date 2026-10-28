@@ -32,7 +32,7 @@ FUNDLEX_DATA_DIR=/var/lib/fundlex/data
 # 登录（password 模式；dev 模式仅供本机开发）
 FUNDLEX_AUTH_MODE=password
 FUNDLEX_SESSION_HOURS=12
-FUNDLEX_BOOTSTRAP_ADMIN=admin:<强密码>   # 仅首次启动且用户表为空时创建，创建后建议移除
+FUNDLEX_BOOTSTRAP_ADMIN=admin:<强密码>   # 首次启动空库时创建；锁定后重新注入同账号密码可恢复；创建后建议移除
 
 # 预算与并发（按业务审批设置硬上限）
 FUNDLEX_MODEL_LEDGER=mysql://fundlex:****@127.0.0.1:3306/fundlex?charset=utf8mb4

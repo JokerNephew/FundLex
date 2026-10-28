@@ -49,6 +49,16 @@ class AccountDisabled(AuthError):
     """The account exists but an administrator disabled it."""
 
 
+class LastAdminError(AuthError):
+    """Disabling the target would leave no enabled administrator.
+
+    ``code`` is the stable HTTP error code; the argument carries the target
+    account id for operator diagnostics and is never exposed by the API.
+    """
+
+    code = "LAST_ADMIN_REQUIRED"
+
+
 USERNAME_PATTERN = re.compile(r"^[A-Za-z0-9_.-]{3,64}$")
 PASSWORD_MIN_LENGTH = 8
 PASSWORD_MAX_LENGTH = 1024
@@ -260,16 +270,39 @@ class UserStore:
         return record
 
     def set_disabled(self, user_id: str, disabled: bool) -> dict:
-        if self._fetch("id", user_id) is None:
-            raise UserNotFound(user_id)
+        """Enable or disable an account, never leaving zero enabled admins.
+
+        Disabling the last enabled administrator raises :class:`LastAdminError`.
+        The account lookup, the administrator count and the update run in one
+        transaction: SQLite takes the write lock up front (``BEGIN IMMEDIATE``)
+        and MySQL locks the enabled administrator rows, so two concurrent
+        requests cannot each observe the other's administrator as available.
+        Re-enabling, disabling a non-administrator and disabling an account
+        that is already disabled are unaffected.
+        """
         now = float(self._clock())
         with self.db.connect() as conn:
+            if disabled and self.db.dialect != "mysql":
+                conn.execute("BEGIN IMMEDIATE")
+            row = conn.execute(
+                f"SELECT {_USER_COLUMNS} FROM users WHERE id=?", (user_id,)).fetchone()
+            if row is None:
+                raise UserNotFound(user_id)
+            if bool(row["disabled"]) == bool(disabled):
+                return _record(row)
+            if disabled and row["role"] == "admin":
+                admins = "SELECT id FROM users WHERE role='admin' AND disabled=0"
+                if self.db.dialect == "mysql":
+                    admins += " FOR UPDATE"
+                if len(conn.execute(admins).fetchall()) <= 1:
+                    raise LastAdminError(user_id)
             conn.execute("UPDATE users SET disabled=?, updated_at=? WHERE id=?",
                          (1 if disabled else 0, now, user_id))
-        record = self.get(user_id)
-        if record is None:  # pragma: no cover - the row exists in this call
+            updated = conn.execute(
+                f"SELECT {_USER_COLUMNS} FROM users WHERE id=?", (user_id,)).fetchone()
+        if updated is None:  # pragma: no cover - the row exists in this call
             raise UserNotFound(user_id)
-        return record
+        return _record(updated)
 
 
 def _token_hash(token: str) -> str:
@@ -338,23 +371,43 @@ class SessionStore:
 
 
 def bootstrap_admin(db: Database, users: UserStore | None = None) -> dict | None:
-    """Seed the first administrator from ``FUNDLEX_BOOTSTRAP_ADMIN`` when empty.
+    """Seed the first administrator from ``FUNDLEX_BOOTSTRAP_ADMIN``.
 
     The environment value has the form ``username:password``. It is read once,
     never logged and never persisted; only the scrypt hash reaches the database.
+
+    When accounts exist but every administrator is disabled, the configured
+    account recovers the installation only if all of the following hold: the
+    username is exactly the configured one, it is still an administrator, and
+    the configured password matches its stored hash. No other account is
+    touched, so a stale or unrelated secret cannot re-enable anyone.
     """
     raw = os.environ.get(BOOTSTRAP_ADMIN_ENV)
     if not raw:
         return None
     store = users if users is not None else UserStore(db)
     with db.connect() as conn:
-        row = conn.execute("SELECT COUNT(*) FROM users").fetchone()
-    if row is not None and row[0]:
+        total = conn.execute("SELECT COUNT(*) FROM users").fetchone()[0]
+        enabled_admins = conn.execute(
+            "SELECT COUNT(*) FROM users WHERE role='admin' AND disabled=0").fetchone()[0]
+    if total and enabled_admins:
         return None
     username, separator, password = raw.partition(":")
     if not separator:
         raise ValidationError(f"{BOOTSTRAP_ADMIN_ENV} must be formatted as 'username:password'")
+    if total:
+        return _recover_bootstrap_admin(store, username, password)
     try:
         return store.create_user(username, password, display_name="Bootstrap Administrator", role="admin")
     except UserExists:
         return None
+
+
+def _recover_bootstrap_admin(store: UserStore, username: str, password: str) -> dict | None:
+    """Re-enable the configured administrator after an out-of-band lockout."""
+    row = store._fetch("username", username)
+    if row is None or row["role"] != "admin" or not row["disabled"]:
+        return None
+    if not verify_password(password, row["password_hash"]):
+        return None
+    return store.set_disabled(row["id"], False)

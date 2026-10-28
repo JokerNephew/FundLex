@@ -882,12 +882,17 @@ def create_app(data_dir: str | Path | None = None, *, auth_db=None) -> FastAPI:
     @application.post("/api/admin/users/{user_id}/disable")
     def admin_disable_user(user_id: str, request: Request, payload: DisableUserRequest | None = None,
                            admin: dict = Depends(_admin)):
-        from .auth import UserNotFound
+        from .auth import LastAdminError, UserNotFound
         disabled = True if payload is None else payload.disabled
         try:
             record = request.app.state.users.set_disabled(user_id, disabled)
         except UserNotFound as exc:
             raise HTTPException(404, "user not found") from exc
+        except LastAdminError as exc:
+            # Refuse before revoking sessions: the request changes nothing, so
+            # the caller keeps working and can disable another account first.
+            from .api_errors import raise_api_error
+            raise_api_error(409, exc, fallback="LAST_ADMIN_REQUIRED")
         if disabled:
             request.app.state.sessions.revoke_user_sessions(user_id)
         return {**_public_user(record), "disabled": record["disabled"]}
