@@ -1766,7 +1766,8 @@ def _plan_and_generate(model: Any, rules_by_id: dict[str, dict], targets: Sequen
         artifacts = generate_artifacts(input_path, plan, redline, final,
                                        allow_existing_revisions=True)
     else:
-        artifacts = generate_unchanged_artifacts(input_path, plan, redline, final)
+        artifacts = generate_unchanged_artifacts(input_path, plan, redline, final,
+                                                  allow_existing_revisions=True)
     actual = inspect_docx(final, full=True)
     return planned, edits, plan, artifacts, actual
 
@@ -5762,6 +5763,12 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
             report["failure_classes"] = class_counts
             checks = [*artifacts.checks, "actual_content_verification"]
             hashes = {"final_sha256": artifacts.final_sha256, "redline_sha256": artifacts.redline_sha256}
+            # The selection endpoint must use the exact IDs and source revision
+            # identity from generation.  Rebuilding ids from plan order breaks as
+            # soon as foreign revisions already occupy low ids.
+            report["revision_manifest"] = [dict(item) for item in artifacts.manifest]
+            if artifacts.source_revisions:
+                report["source_revision_manifest"] = [dict(item) for item in artifacts.source_revisions]
             policy = _delivery_policy()
             blockers, review_items, business_items = _classify_delivery_items(unresolved)
             report["delivery_policy"] = policy

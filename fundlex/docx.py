@@ -147,6 +147,10 @@ class ArtifactValidation:
     checks: tuple[str, ...]
     has_toc_field: bool
     toc_update_status: str
+    #: Bound inventory of revisions that already existed in the source package.
+    #: Selection uses it as a whitelist for foreign revisions, so callers must
+    #: persist it with the report instead of recreating author/id guesses.
+    source_revisions: tuple[dict[str, str], ...] = ()
 
 
 def _sha(data: bytes) -> str:
@@ -311,6 +315,171 @@ def _validate_package(parts: Mapping[str, bytes], limits: ZipLimits, *, full: bo
                 required = element.get("{http://schemas.openxmlformats.org/markup-compatibility/2006}MustUnderstand")
                 if required:
                     raise DocxError("REQUIRED_EXTENSION_UNSUPPORTED")
+
+
+OVERLAY_PROPERTY_CHANGES = {
+    "trPrChange", "tcPrChange", "pPrChange", "rPrChange", "tblPrChange",
+    "sectPrChange", "numberingChange", "tblGridChange",
+}
+OVERLAY_STORY_ROOTS = {"document", "hdr", "ftr", "footnotes", "endnotes", "comments"}
+OVERLAY_REVISION_WRAPPERS = {"ins", "del", "moveFrom", "moveTo"}
+
+
+def _revision_markers(root: etree._Element):
+    """Yield revision markers, skipping snapshots stored by property changes.
+
+    ``pPrChange``/``rPrChange`` keep a historical copy of the properties that
+    can itself contain markers.  The whole snapshot is metadata of one change,
+    so it is inventoried as that change and never treated as a nested edit.
+    """
+    def walk(node: etree._Element):
+        for child in node:
+            if not isinstance(child.tag, str):
+                continue
+            local = etree.QName(child).localname
+            if child.tag.startswith("{" + W + "}") and local in OVERLAY_PROPERTY_CHANGES:
+                yield child
+                continue
+            if child.tag.startswith("{" + W + "}") and local in REVISION_TAGS:
+                yield child
+                if local in OVERLAY_REVISION_WRAPPERS:
+                    # A wrapper's children belong to the same change.
+                    continue
+            yield from walk(child)
+    yield from walk(root)
+
+
+def _has_word_revisions(root: etree._Element) -> bool:
+    return any(True for _ in _revision_markers(root))
+
+
+def _nested_revision_marker(marker: etree._Element) -> etree._Element | None:
+    """Return a nested revision inside an inline wrapper, if any.
+
+    Property-change snapshots inside the wrapper are metadata, not a second
+    edit, so their subtrees are not scanned.
+    """
+    stack = list(marker)
+    while stack:
+        node = stack.pop()
+        if not isinstance(node.tag, str):
+            continue
+        local = etree.QName(node).localname
+        if node.tag.startswith("{" + W + "}") and local in OVERLAY_PROPERTY_CHANGES:
+            continue
+        if node.tag in {Q("ins"), Q("del"), Q("moveFrom"), Q("moveTo")}:
+            return node
+        stack.extend(list(node))
+    return None
+
+
+def _revision_content_sha(element: etree._Element) -> str:
+    return sha256(etree.tostring(element, method="c14n")).hexdigest()
+
+
+def _validate_overlay_structure(parts: Mapping[str, bytes], limits: ZipLimits) -> None:
+    """Reject structures the overlay merger cannot preserve and accept honestly.
+
+    The public upload entry must not accept a document and only fail after the
+    model has produced a plan.  Inline insertions/deletions, formatting property
+    changes and revisions in ordinary story parts (header/footer/footnotes/
+    endnotes/comments) are supported.  Moves, cell/row markers and paragraph
+    mark revisions change document topology and remain unsupported.
+    """
+    for name, data in parts.items():
+        if not name.endswith(".xml"):
+            continue
+        root = _xml(data, limits)
+        markers = list(_revision_markers(root))
+        if not markers:
+            continue
+        local_root = etree.QName(root).localname if isinstance(root.tag, str) else ""
+        if local_root not in OVERLAY_STORY_ROOTS:
+            raise DocxError("EXISTING_REVISION_STRUCTURE_UNSUPPORTED",
+                            f"{name}:unsupported-part")
+        for marker in markers:
+            local = etree.QName(marker).localname
+            if local in OVERLAY_PROPERTY_CHANGES:
+                continue
+            if local in {"ins", "del"}:
+                parent = marker.getparent()
+                parent_local = etree.QName(parent).localname if parent is not None and isinstance(parent.tag, str) else ""
+                if parent_local in {"rPr", "trPr", "pPr"}:
+                    raise DocxError("EXISTING_REVISION_STRUCTURE_UNSUPPORTED",
+                                    f"{name}:paragraph-or-row-mark:{local}:{marker.get(Q('id'), '')}")
+                nested = _nested_revision_marker(marker)
+                if nested is not None:
+                    raise DocxError("EXISTING_REVISION_STRUCTURE_UNSUPPORTED",
+                                    f"{name}:nested-revision:{local}:{nested.get(Q('id'), '')}")
+                continue
+            # Moves, cell/row insert/delete/merge, range markers and deleted
+            # content markers cannot be carried through the supported writer.
+            raise DocxError("EXISTING_REVISION_STRUCTURE_UNSUPPORTED",
+                            f"{name}:{local}:{marker.get(Q('id'), '')}")
+
+
+def _paragraph_location(root: etree._Element, paragraph: etree._Element) -> str:
+    body = root.find(Q("body"))
+    if body is None:
+        return ""
+    direct = 0
+    table = 0
+    for element in body:
+        if element.tag == Q("p"):
+            if element is paragraph:
+                return f"p{direct}"
+            direct += 1
+        elif element.tag == Q("tbl"):
+            for ri, row in enumerate(element.findall(Q("tr"))):
+                for ci, cell in enumerate(row.findall(Q("tc"))):
+                    for pi, candidate in enumerate(cell.findall(Q("p"))):
+                        if candidate is paragraph:
+                            return f"tbl{table}/r{ri}/c{ci}/p{pi}"
+            table += 1
+    return ""
+
+
+def _overlay_revision_inventory(parts: Mapping[str, bytes],
+                                limits: ZipLimits) -> tuple[dict[str, str], ...]:
+    """Bound, stable inventory of every existing revision in the package."""
+    entries: list[dict[str, str]] = []
+    for name, data in parts.items():
+        if not name.endswith(".xml"):
+            continue
+        root = _xml(data, limits)
+        for marker in _revision_markers(root):
+            kind = etree.QName(marker).localname
+            location = ""
+            if name == DOCUMENT and kind in OVERLAY_REVISION_WRAPPERS:
+                ancestor = marker.getparent()
+                while ancestor is not None and ancestor.tag != Q("p"):
+                    ancestor = ancestor.getparent()
+                if ancestor is not None:
+                    location = _paragraph_location(root, ancestor)
+            entries.append({
+                "part": name,
+                "kind": kind,
+                "id": str(marker.get(Q("id"), "")),
+                "author": str(marker.get(Q("author"), "")),
+                "date": str(marker.get(Q("date"), "")),
+                "location": location,
+                "content_sha256": _revision_content_sha(marker),
+            })
+    entries.sort(key=lambda item: (item["part"], item["kind"], item["id"],
+                                   item["content_sha256"]))
+    return tuple(entries)
+
+
+def _max_revision_id_in_parts(parts: Mapping[str, bytes], limits: ZipLimits) -> int:
+    highest = 0
+    for name, data in parts.items():
+        if not name.endswith(".xml"):
+            continue
+        try:
+            highest = max(highest, _max_revision_id(_xml(data, limits)))
+        except DocxError:
+            continue
+    return highest
 
 
 def _read_parts(path: str | Path, limits: ZipLimits) -> dict[str, bytes]:
@@ -611,21 +780,27 @@ def inspect_docx(path: str | Path, *, full: bool = False, limits: ZipLimits | No
     source = Path(path).read_bytes()
     _validate_package(parts, limits, full=full,
                       allow_existing_revisions=allow_existing_revisions)
+    if allow_existing_revisions:
+        _validate_overlay_structure(parts, limits)
     root = _xml(parts[DOCUMENT], limits)
     if root.tag != Q("document"):
         raise DocxError("MAIN_DOCUMENT_INVALID")
     paragraphs, has_toc = _enumerate_paragraphs(
         root, limits, overlay=allow_existing_revisions)
     revisions: list[dict[str, str]] = []
-    for element in root.iter():
-        if not isinstance(element.tag, str):
-            continue
-        kind = etree.QName(element).localname
-        if kind in {"ins", "del", "moveFrom", "moveTo"}:
-            revisions.append({"kind": kind,
-                              "author": str(element.get(Q("author"), "")),
-                              "date": str(element.get(Q("date"), "")),
-                              "id": str(element.get(Q("id"), ""))})
+    if allow_existing_revisions:
+        revisions = [dict(item) for item in _overlay_revision_inventory(parts, limits)]
+    else:
+        for element in root.iter():
+            if not isinstance(element.tag, str):
+                continue
+            kind = etree.QName(element).localname
+            if kind in {"ins", "del", "moveFrom", "moveTo"}:
+                revisions.append({"kind": kind,
+                                  "author": str(element.get(Q("author"), "")),
+                                  "date": str(element.get(Q("date"), "")),
+                                  "id": str(element.get(Q("id"), "")),
+                                  "part": DOCUMENT})
     return DocumentInspection(_sha(source), paragraphs, has_toc, full, tuple(parts),
                               revisions=tuple(revisions))
 
@@ -833,9 +1008,15 @@ def _contains_revision(node: etree._Element) -> bool:
 
 
 def _apply_one(root: etree._Element, edit: Mapping[str, Any], del_id: int,
-               ins_id: int, author: str, when: str, limits: ZipLimits) -> None:
+               ins_id: int, author: str, when: str, limits: ZipLimits,
+               *, overlay: bool = False) -> None:
     paragraph = _paragraph_element(root, str(edit["location"]))
-    projection, _, _ = _project(paragraph, str(edit["location"]), str(edit["zone"]), "", 0, limits)
+    # Offsets were validated against the accepted view.  Applying them to the
+    # raw XML projection lets a foreign insertion/deletion earlier in the same
+    # paragraph shift the writable run and produce FINAL_TEXT_MISMATCH or
+    # EDIT_CROSSES_BARRIER.  Use exactly the same projection here.
+    projection, _, _ = _project(paragraph, str(edit["location"]), str(edit["zone"]), "", 0, limits,
+                               overlay=overlay)
     start, end = int(edit["start"]), int(edit["end"])
     segment = next((s for s in projection.segments if s.start <= start and end <= s.end), None)
     if segment is None:
@@ -939,13 +1120,18 @@ def _accept_our_revisions(root: etree._Element, manifests: Sequence[Mapping[str,
 
 
 def _write_package(path: Path, parts: Mapping[str, bytes], document_xml: bytes) -> None:
+    _write_package_replaced(path, parts, {DOCUMENT: document_xml})
+
+
+def _write_package_replaced(path: Path, parts: Mapping[str, bytes],
+                            replacements: Mapping[str, bytes]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with NamedTemporaryFile(prefix=".fundlex-", suffix=".docx", dir=path.parent, delete=False) as temp:
         temporary = Path(temp.name)
     try:
         with zipfile.ZipFile(temporary, "w", compression=zipfile.ZIP_DEFLATED) as output:
             for name, data in parts.items():
-                output.writestr(name, document_xml if name == DOCUMENT else data)
+                output.writestr(name, replacements.get(name, data))
         os.replace(temporary, path)
     finally:
         temporary.unlink(missing_ok=True)
@@ -1051,6 +1237,24 @@ def _validate_revision_manifest(root: etree._Element, manifests: Sequence[Mappin
         raise DocxError("REVISION_COUNT_MISMATCH")
 
 
+def _accepted_offsets(text: str, start: int, end: int) -> tuple[int, int]:
+    """Map barrier-view offsets to the plain accepted text.
+
+    The inspection projection keeps ``BARRIER`` characters around text that
+    belongs to another author.  Plans use those offsets; the accepted final has
+    no barriers, so validation must remove exactly the barriers before the
+    target.  The mapping is explicit rather than silently assuming both views
+    share an origin.
+    """
+    clean_length = len(text.replace(BARRIER, ""))
+
+    def one(value: int) -> int:
+        value = max(0, min(value, len(text)))
+        return max(0, min(value - text[:value].count(BARRIER), clean_length))
+
+    return one(start), one(end)
+
+
 def _text_formats(root: etree._Element, location: str, limits: ZipLimits) -> list[bytes | None]:
     spans, _ = _enumerate_paragraphs(root, limits)
     paragraph = next(p for p in spans if p.location == location)
@@ -1078,17 +1282,18 @@ def _accept_all_revisions(root: etree._Element) -> None:
     _accept_revisions(root)
 
 
-def _revision_inventory(root: etree._Element) -> tuple[tuple[str, str, str], ...]:
-    """Stable inventory of revision wrappers: (kind, author, id)."""
-    items = []
-    for element in root.iter():
-        if not isinstance(element.tag, str):
+def _accept_all_revision_parts(parts: Mapping[str, bytes], limits: ZipLimits) -> dict[str, bytes]:
+    """Return package replacements with every Word revision accepted."""
+    replacements: dict[str, bytes] = {}
+    for name, data in parts.items():
+        if not name.endswith(".xml"):
             continue
-        kind = etree.QName(element).localname
-        if kind in {"ins", "del", "moveFrom", "moveTo"}:
-            items.append((kind, str(element.get(Q("author"), "")),
-                          str(element.get(Q("id"), ""))))
-    return tuple(sorted(items))
+        root = _xml(data, limits)
+        if not _has_word_revisions(root):
+            continue
+        _accept_all_revisions(root)
+        replacements[name] = etree.tostring(root, encoding="UTF-8", xml_declaration=True)
+    return replacements
 
 
 def generate_artifacts(source: str | Path, plan: ValidatedPlan, redline_path: str | Path,
@@ -1119,40 +1324,55 @@ def generate_artifacts(source: str | Path, plan: ValidatedPlan, redline_path: st
     parts = _read_parts(source, limits)
     _validate_package(parts, limits, full=True,
                       allow_existing_revisions=allow_existing_revisions)
+    if allow_existing_revisions:
+        _validate_overlay_structure(parts, limits)
     original = _xml(parts[DOCUMENT], limits)
-    foreign_inventory = (_revision_inventory(original)
+    foreign_inventory = (_overlay_revision_inventory(parts, limits)
                          if allow_existing_revisions else ())
-    next_id = _max_revision_id(original)
+    next_id = (_max_revision_id_in_parts(parts, limits) if allow_existing_revisions
+               else _max_revision_id(original))
     root = deepcopy(original)
     now = datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
     manifest: list[dict[str, Any]] = []
     try:
         for number, edit in enumerate(sorted(plan.edits, key=lambda e: (e["location"], -e["start"])), start=1):
             del_id, ins_id = next_id + number * 2 - 1, next_id + number * 2
-            _apply_one(root, edit, del_id, ins_id, author, now, limits)
+            _apply_one(root, edit, del_id, ins_id, author, now, limits,
+                       overlay=allow_existing_revisions)
             manifest.append({"edit_id": edit.get("edit_id", f"edit-{number}"), "location": edit["location"],
                              "start": edit["start"], "end": edit["end"], "expected_old_text": edit["expected_old_text"],
                              "replacement": edit["replacement"], "template_id": edit.get("template_id", ""),
                              "del_id": del_id, "ins_id": ins_id})
         redline_xml = etree.tostring(root, encoding="UTF-8", xml_declaration=True)
         final_root = deepcopy(root)
+        final_replacements: dict[str, bytes] = {}
         if allow_existing_revisions and foreign_inventory:
             # Only an input that really carries another author's revisions needs
             # the accept-all path.  A normal document keeps the original, narrower
             # accept-ours path so its behavior is unchanged.
+            final_replacements = _accept_all_revision_parts(parts, limits)
+            final_replacements.pop(DOCUMENT, None)
+            final_root = deepcopy(root)
             _accept_all_revisions(final_root)
         else:
             _accept_our_revisions(final_root, manifest)
         final_xml = etree.tostring(final_root, encoding="UTF-8", xml_declaration=True)
+        final_replacements[DOCUMENT] = final_xml
         _write_package(redline_path, parts, redline_xml)
-        _write_package(final_path, parts, final_xml)
+        if set(final_replacements) == {DOCUMENT}:
+            _write_package(final_path, parts, final_xml)
+        else:
+            _write_package_replaced(final_path, parts, final_replacements)
         # Independent re-open is part of publication, not an optional test.
         red_parts, final_parts = _read_parts(redline_path, limits), _read_parts(final_path, limits)
         _validate_package(red_parts, limits, full=False)
         _validate_package(final_parts, limits, full=True)
         if set(red_parts) != set(parts) or set(final_parts) != set(parts):
             raise DocxError("PACKAGE_MEMBER_DRIFT")
-        if any(red_parts[name] != data or final_parts[name] != data for name, data in parts.items() if name != DOCUMENT):
+        if any(red_parts[name] != data for name, data in parts.items() if name != DOCUMENT):
+            raise DocxError("NON_DOCUMENT_PART_CHANGED")
+        if any(final_parts[name] != final_replacements.get(name, data)
+               for name, data in parts.items() if name != DOCUMENT):
             raise DocxError("NON_DOCUMENT_PART_CHANGED")
         red_reopen = _xml(red_parts[DOCUMENT], limits)
         final_reopen = _xml(final_parts[DOCUMENT], limits)
@@ -1161,11 +1381,24 @@ def generate_artifacts(source: str | Path, plan: ValidatedPlan, redline_path: st
         accepted = deepcopy(red_reopen)
         if allow_existing_revisions and foreign_inventory:
             _accept_all_revisions(accepted)
-            # Foreign revisions must survive untouched in the redline.
-            ours = tuple(("del", author, str(item["del_id"])) for item in manifest) \
-                + tuple(("ins", author, str(item["ins_id"])) for item in manifest)
-            if _revision_inventory(red_reopen) != tuple(sorted(foreign_inventory + ours)):
+            # Foreign revisions must survive untouched in the redline.  Compare
+            # the bound inventory (part/kind/id/author/date/content hash), not
+            # just author names: two departments may share an author label.
+            our_ids = {str(item[key]) for item in manifest for key in ("del_id", "ins_id")}
+            foreign_after = tuple(
+                item for item in _overlay_revision_inventory(red_parts, limits)
+                if not (item["part"] == DOCUMENT and item["kind"] in {"ins", "del"}
+                        and item["id"] in our_ids))
+            if foreign_after != foreign_inventory:
                 raise DocxError("FOREIGN_REVISION_CHANGED")
+            # The final package must be exactly the accepted view of every story
+            # part, not only of word/document.xml.
+            for name in parts:
+                if name == DOCUMENT or name not in final_replacements:
+                    continue
+                if etree.tostring(_xml(final_parts[name], limits), method="c14n") != \
+                        etree.tostring(_xml(final_replacements[name], limits), method="c14n"):
+                    raise DocxError("STORY_REVISION_MISMATCH", name)
         else:
             _accept_our_revisions(accepted, manifest)
         if etree.tostring(accepted, method="c14n") != etree.tostring(final_reopen, method="c14n"):
@@ -1186,23 +1419,31 @@ def generate_artifacts(source: str | Path, plan: ValidatedPlan, redline_path: st
         if source_snapshot != _non_target_snapshot(comparison, edited) or source_snapshot != _non_target_snapshot(final_reopen, edited):
             raise DocxError("NON_TARGET_CHANGED")
         source_texts, final_texts = _paragraph_texts(baseline, limits), _paragraph_texts(final_reopen, limits)
+        source_projection = {span.location: span.text for span in
+                             _enumerate_paragraphs(original, limits,
+                                                   overlay=allow_existing_revisions)[0]}
         for location, old_text in source_texts.items():
             expected = old_text
+            coordinates = source_projection.get(location, old_text)
             for edit in sorted((e for e in plan.edits if e["location"] == location), key=lambda e: -e["start"]):
-                expected = expected[:edit["start"]] + str(edit["replacement"]) + expected[edit["end"]:]
+                start, end = _accepted_offsets(coordinates, int(edit["start"]), int(edit["end"]))
+                expected = expected[:start] + str(edit["replacement"]) + expected[end:]
             if final_texts.get(location) != expected:
                 raise DocxError("FINAL_TEXT_MISMATCH", location)
         for location in edited:
             expected_formats = _text_formats(baseline, location, limits)
+            barrier_text = source_projection.get(location, "")
             for edit in sorted((e for e in plan.edits if e["location"] == location), key=lambda e: -e["start"]):
-                inherited = expected_formats[edit["start"] - 1 if edit["start"] == edit["end"] else edit["start"]]
-                expected_formats[edit["start"]:edit["end"]] = [None if char == "\n" else inherited for char in str(edit["replacement"])]
+                start, end = _accepted_offsets(barrier_text, int(edit["start"]), int(edit["end"]))
+                inherited = expected_formats[start - 1 if start == end else start]
+                expected_formats[start:end] = [None if char == "\n" else inherited for char in str(edit["replacement"])]
             if _text_formats(final_reopen, location, limits) != expected_formats:
                 raise DocxError("RUN_FORMAT_CHANGED", location)
         return ArtifactValidation(_sha(redline_path.read_bytes()), _sha(final_path.read_bytes()),
                                   tuple(manifest), ("package", "revisions", "final_equivalence", "non_target",
                                                     "template_text") + (("content_verification",) if plan.content_check is not None else ()),
-                                  plan.has_toc_field, "not_updated" if plan.has_toc_field else "not_present")
+                                  plan.has_toc_field, "not_updated" if plan.has_toc_field else "not_present",
+                                  tuple(foreign_inventory))
     except Exception:
         redline_path.unlink(missing_ok=True)
         final_path.unlink(missing_ok=True)
@@ -1211,16 +1452,49 @@ def generate_artifacts(source: str | Path, plan: ValidatedPlan, redline_path: st
 
 def _generate_identical_artifacts(source: str | Path, redline_path: str | Path,
                                        final_path: str | Path,
-                                       *, limits: ZipLimits | None = None) -> ArtifactValidation:
-    """Write and independently validate byte-identical supported DOCX copies."""
+                                       *, limits: ZipLimits | None = None,
+                                       allow_existing_revisions: bool = False) -> ArtifactValidation:
+    """Write and independently validate supported DOCX copies.
+
+    Without existing revisions both artifacts are byte-identical copies.  With
+    foreign revisions the redline keeps the original package and the final is
+    the fully accepted view, so an unchanged contract still delivers honestly.
+    """
     limits = limits or ZipLimits()
     source = Path(source)
     redline_path, final_path = Path(redline_path), Path(final_path)
     if redline_path.resolve() == final_path.resolve() or source.resolve() in {redline_path.resolve(), final_path.resolve()}:
         raise DocxError("OUTPUT_PATH_INVALID")
-    inspection = inspect_docx(source, full=True, limits=limits)
+    inspection = inspect_docx(source, full=True, limits=limits,
+                              allow_existing_revisions=allow_existing_revisions)
     original = source.read_bytes()
     try:
+        if allow_existing_revisions and inspection.revisions:
+            parts = _read_parts(source, limits)
+            _validate_package(parts, limits, full=True, allow_existing_revisions=True)
+            replacements = _accept_all_revision_parts(parts, limits)
+            replacements[DOCUMENT] = replacements.get(DOCUMENT, parts[DOCUMENT])
+            _validate_package({**parts, **replacements}, limits, full=True)
+            redline_path.parent.mkdir(parents=True, exist_ok=True)
+            final_path.parent.mkdir(parents=True, exist_ok=True)
+            redline_path.write_bytes(original)
+            _write_package_replaced(final_path, parts, replacements)
+            if redline_path.read_bytes() != original:
+                raise DocxError("EVALUATION_COPY_MISMATCH")
+            final_parts = _read_parts(final_path, limits)
+            _validate_package(final_parts, limits, full=True)
+            if set(final_parts) != set(parts):
+                raise DocxError("PACKAGE_MEMBER_DRIFT")
+            for name in parts:
+                if name == DOCUMENT or name in replacements:
+                    continue
+                if final_parts[name] != parts[name]:
+                    raise DocxError("NON_DOCUMENT_PART_CHANGED")
+            return ArtifactValidation(inspection.source_sha256, _sha(final_path.read_bytes()), (),
+                                      ("package", "zero_edit", "source_revision_acceptance"),
+                                      inspection.has_toc_field,
+                                      "not_updated" if inspection.has_toc_field else "not_present",
+                                      inspection.revisions)
         for target in (redline_path, final_path):
             target.parent.mkdir(parents=True, exist_ok=True)
             with NamedTemporaryFile(prefix=".fundlex-eval-", suffix=".docx", dir=target.parent, delete=False) as temp:
@@ -1250,14 +1524,17 @@ def generate_noop_evaluation_artifacts(source: str | Path, redline_path: str | P
 
 
 def generate_unchanged_artifacts(source: str | Path, plan: ValidatedPlan, redline_path: str | Path,
-                                 final_path: str | Path, *, limits: ZipLimits | None = None) -> ArtifactValidation:
+                                 final_path: str | Path, *, limits: ZipLimits | None = None,
+                                 allow_existing_revisions: bool = False) -> ArtifactValidation:
     """Deliver an unchanged contract from a validated empty released-rule plan.
 
     The caller verifies action publication and complete candidate decisions.
     """
     if not isinstance(plan, ValidatedPlan) or plan.edits:
         raise DocxError("PLAN_NOT_EMPTY_OR_UNVALIDATED")
-    checked = validate_edit_plan(source, (), plan.templates, limits=limits, content_check=plan.content_check)
+    checked = validate_edit_plan(source, (), plan.templates, limits=limits, content_check=plan.content_check,
+                                 allow_existing_revisions=allow_existing_revisions)
     if checked.source_sha256 != plan.source_sha256 or checked.plan_sha256 != plan.plan_sha256:
         raise DocxError("PLAN_DRIFT")
-    return _generate_identical_artifacts(source, redline_path, final_path, limits=limits)
+    return _generate_identical_artifacts(source, redline_path, final_path, limits=limits,
+                                         allow_existing_revisions=allow_existing_revisions)

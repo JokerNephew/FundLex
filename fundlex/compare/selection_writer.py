@@ -60,6 +60,7 @@ class SelectionArtifactValidation:
     manifest: tuple[Mapping[str, Any], ...]
     checks: tuple[str, ...]
     limitations: tuple[str, ...] = ()
+    comparison_scope: Mapping[str, Any] | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -71,6 +72,7 @@ class SelectionArtifactValidation:
             "manifest": [dict(item) for item in self.manifest],
             "checks": list(self.checks),
             "limitations": list(self.limitations),
+            "comparison_scope": dict(self.comparison_scope or {}),
         }
 
 
@@ -611,11 +613,13 @@ def _mark_inserted_paragraph(element: etree._Element, block, revision_start: int
     return next_id
 
 
-def _mark_deleted_paragraph(element: etree._Element, block, revision_start: int, when: str) -> int:
+def _mark_deleted_paragraph(element: etree._Element, block, revision_start: int, when: str,
+                            *, mark_paragraph: bool = True) -> int:
     _simple_paragraph_element(element, block)
     next_id = revision_start
-    _paragraph_mark(element, "del", next_id, when)
-    next_id += 1
+    if mark_paragraph:
+        _paragraph_mark(element, "del", next_id, when)
+        next_id += 1
     for child in list(element):
         if child.tag != Q("r"):
             continue
@@ -624,6 +628,75 @@ def _mark_deleted_paragraph(element: etree._Element, block, revision_start: int,
         index = element.index(child)
         wrapper = _revision("del", next_id, [child], when)
         element.insert(index, wrapper)
+        next_id += 1
+    return next_id
+
+
+def _block_for_element(root: etree._Element, left_by_id: Mapping[str, Any],
+                       element: etree._Element):
+    for block in left_by_id.values():
+        if _paragraph_element(root, block.location) is element:
+            return block
+    return None
+
+
+def _trailing_delete_chain(root: etree._Element, parent: etree._Element,
+                           left_elements: Sequence[etree._Element],
+                           left_by_id: Mapping[str, Any]):
+    """Return the paragraph whose mark deletion removes a trailing block.
+
+    A trailing paragraph mark cannot be deleted on its own: Word/OOXML joins a
+    deleted mark into the *following* paragraph, and the project's independent
+    accept implementation keeps the last paragraph when no follower exists.
+    Deleting a trailing paragraph therefore marks the preceding paragraph's
+    mark and each deleted paragraph except the last, cascading the kept text
+    into the final paragraph.
+    """
+    last_index = parent.index(left_elements[-1])
+    following = list(parent)[last_index + 1:]
+    if any(child.tag == Q("p") for child in following):
+        return None
+    if any(child.tag == Q("tbl") for child in following):
+        raise DocxError("SELECTION_BLOCK_STRUCTURE_UNSUPPORTED", "trailing-table")
+    first_index = parent.index(left_elements[0])
+    if first_index == 0:
+        raise DocxError("SELECTION_BLOCK_STRUCTURE_UNSUPPORTED", "trailing-no-predecessor")
+    predecessor = parent[first_index - 1]
+    if predecessor.tag != Q("p"):
+        raise DocxError("SELECTION_BLOCK_STRUCTURE_UNSUPPORTED", "trailing-no-paragraph")
+    block = _block_for_element(root, left_by_id, predecessor)
+    if block is None:
+        raise DocxError("SELECTION_BLOCK_STRUCTURE_UNSUPPORTED", "trailing-predecessor")
+    _simple_paragraph_element(predecessor, block)
+    return block
+
+
+def _trailing_delete_chain_for_replace(parent: etree._Element,
+                                       left_elements: Sequence[etree._Element]) -> bool:
+    """Whether a replace block reaches the last paragraph in its container."""
+    last_index = parent.index(left_elements[-1])
+    following = list(parent)[last_index + 1:]
+    if any(child.tag == Q("p") for child in following):
+        return False
+    if any(child.tag == Q("tbl") for child in following):
+        raise DocxError("SELECTION_BLOCK_STRUCTURE_UNSUPPORTED", "trailing-table")
+    return True
+
+
+def _insert_runs_into_anchor(anchor: etree._Element, right_element: etree._Element,
+                             revision_start: int, when: str) -> int:
+    """Insert a right paragraph's runs into the surviving left paragraph."""
+    _simple_paragraph_element(right_element, type("_B", (), {"block_id": "anchor"})())
+    next_id = revision_start
+    index = 1 if len(anchor) and anchor[0].tag == Q("pPr") else 0
+    for child in list(right_element):
+        if child.tag == Q("pPr"):
+            continue
+        if child.tag != Q("r"):
+            raise DocxError("SELECTION_BLOCK_STRUCTURE_UNSUPPORTED", "replace-anchor")
+        wrapper = _revision("ins", next_id, [deepcopy(child)], when)
+        anchor.insert(index, wrapper)
+        index += 1
         next_id += 1
     return next_id
 
@@ -692,20 +765,55 @@ def _apply_block_operations(root: etree._Element, left_doc, right_doc,
                 continue
             if operation.kind == "delete":
                 if redline:
-                    for element, block_id in zip(left_elements, operation.left_ids):
-                        next_id = _mark_deleted_paragraph(element, left_by_id[block_id], next_id, when)
+                    trailing = _trailing_delete_chain(root, parent, left_elements, left_by_id)
+                    if trailing is not None:
+                        chain = [parent[parent.index(left_elements[0]) - 1]] + list(left_elements[:-1])
+                        for element in chain:
+                            block = _block_for_element(root, left_by_id, element)
+                            if block is None:
+                                raise DocxError("SELECTION_BLOCK_STRUCTURE_UNSUPPORTED", operation.diff_id)
+                            _paragraph_mark(element, "del", next_id, when)
+                            next_id += 1
+                        for element, block_id in zip(left_elements, operation.left_ids):
+                            next_id = _mark_deleted_paragraph(element, left_by_id[block_id],
+                                                             next_id, when, mark_paragraph=False)
+                    else:
+                        for element, block_id in zip(left_elements, operation.left_ids):
+                            next_id = _mark_deleted_paragraph(element, left_by_id[block_id], next_id, when)
                 else:
                     for element in left_elements:
                         parent.remove(element)
                 continue
             if operation.kind == "replace":
                 if redline:
-                    for element, block_id in zip(left_elements, operation.left_ids):
-                        next_id = _mark_deleted_paragraph(element, left_by_id[block_id], next_id, when)
-                    insert_at = index + len(left_elements)
-                    for offset, (element, block_id) in enumerate(zip(right_elements, operation.right_ids)):
-                        next_id = _mark_inserted_paragraph(element, right_by_id[block_id], next_id, when)
-                        parent.insert(insert_at + offset, element)
+                    trailing = _trailing_delete_chain_for_replace(parent, left_elements)
+                    if trailing:
+                        # Keep the last left paragraph as the anchor, remove the
+                        # preceding left paragraphs by accepting their mark
+                        # deletions, delete all left runs and insert the first
+                        # right paragraph's runs into the anchor.  Additional
+                        # right paragraphs are inserted after it.
+                        for element, block_id in zip(left_elements[:-1], operation.left_ids[:-1]):
+                            _paragraph_mark(element, "del", next_id, when)
+                            next_id += 1
+                        for element, block_id in zip(left_elements, operation.left_ids):
+                            next_id = _mark_deleted_paragraph(element, left_by_id[block_id],
+                                                             next_id, when, mark_paragraph=False)
+                        anchor = left_elements[-1]
+                        if right_elements:
+                            next_id = _insert_runs_into_anchor(anchor, right_elements[0], next_id, when)
+                        insert_at = parent.index(anchor) + 1
+                        for offset, (element, block_id) in enumerate(
+                                zip(right_elements[1:], operation.right_ids[1:])):
+                            next_id = _mark_inserted_paragraph(element, right_by_id[block_id], next_id, when)
+                            parent.insert(insert_at + offset, element)
+                    else:
+                        for element, block_id in zip(left_elements, operation.left_ids):
+                            next_id = _mark_deleted_paragraph(element, left_by_id[block_id], next_id, when)
+                        insert_at = index + len(left_elements)
+                        for offset, (element, block_id) in enumerate(zip(right_elements, operation.right_ids)):
+                            next_id = _mark_inserted_paragraph(element, right_by_id[block_id], next_id, when)
+                            parent.insert(insert_at + offset, element)
                 else:
                     for element in left_elements:
                         parent.remove(element)
@@ -723,11 +831,27 @@ def _expected_sequence(left_doc, right_doc, inline: Sequence[_Operation],
              for block in left_doc.blocks]
     by_location = {block.location: block.block_id for block in left_doc.blocks}
     by_id = {item["id"]: item for item in items}
+    grouped: dict[str, list[_Operation]] = {}
     for operation in inline:
-        item = by_id.get(by_location.get(operation.location, ""))
-        if item is None:
+        if by_location.get(operation.location, "") not in by_id:
             raise DocxError("SELECTION_BLOCK_STRUCTURE_UNSUPPORTED", operation.diff_id)
-        item["text"] = item["text"][:operation.start] + operation.new_text + item["text"][operation.end:]
+        grouped.setdefault(operation.location, []).append(operation)
+    for location, operations in grouped.items():
+        item = by_id[by_location[location]]
+        # Rebuild from the same original text once; applying replacements in
+        # ascending order against a mutating string used stale offsets whenever
+        # an earlier replacement changed length.
+        text = item["text"]
+        cursor = 0
+        pieces: list[str] = []
+        for operation in sorted(operations, key=lambda op: (op.start, op.end, op.diff_id)):
+            if operation.start < cursor:
+                raise DocxError("SELECTION_OPERATION_OVERLAP", operation.diff_id)
+            pieces.append(text[cursor:operation.start])
+            pieces.append(operation.new_text)
+            cursor = operation.end
+        pieces.append(text[cursor:])
+        item["text"] = "".join(pieces)
     right_by_id = {block.block_id: block for block in right_doc.blocks}
     index_by_id = {item["id"]: index for index, item in enumerate(items)}
     def _operation_index(operation: _BlockOperation) -> int:
@@ -761,23 +885,61 @@ def _expected_sequence(left_doc, right_doc, inline: Sequence[_Operation],
 
 
 def _accept_revisions_copy(root: etree._Element) -> etree._Element:
-    """Accept all inserted/deleted revisions, including paragraph marks."""
+    """Accept all inserted/deleted revisions, including paragraph marks.
+
+    This is intentionally a separate implementation from the upload path's
+    ``compare.revisions._accept_revisions``.  It follows OOXML paragraph-mark
+    semantics: accepting a deleted mark moves the paragraph's content into the
+    following paragraph and removes it; a trailing paragraph has no follower,
+    so only the marker is cleared.  ``_validate_outputs`` also re-accepts the
+    written redline with the independent upload implementation and compares
+    the canonical trees.
+    """
     clone = deepcopy(root)
-    benign = {Q("pPr"), Q("bookmarkStart"), Q("bookmarkEnd"), Q("proofErr"),
-              Q("lastRenderedPageBreak")}
+    property_changes = {
+        Q("trPrChange"), Q("tcPrChange"), Q("pPrChange"), Q("rPrChange"),
+        Q("tblPrChange"), Q("sectPrChange"), Q("numberingChange"), Q("tblGridChange"),
+    }
+
+    def discard(parent: etree._Element) -> None:
+        for node in list(parent):
+            if node.tag in property_changes:
+                parent.remove(node)
+            elif node.tag in {Q("del"), Q("moveFrom")} and parent.tag not in {Q("rPr"), Q("trPr")}:
+                parent.remove(node)
+            else:
+                discard(node)
+
+    discard(clone)
     for paragraph in list(clone.iter(Q("p"))):
+        if paragraph.getparent() is None:
+            continue
         ppr = paragraph.find(Q("pPr"))
         rpr = ppr.find(Q("rPr")) if ppr is not None else None
         mark_deleted = rpr is not None and rpr.find(Q("del")) is not None
-        # Remove deleted content and unwrap inserted content.  The pPr/rPr
-        # markers are not content and are removed separately.
-        for node in list(paragraph.iter(Q("del"))):
+        if rpr is not None:
+            for marker in list(rpr):
+                if marker.tag in {Q("ins"), Q("del"), Q("moveFrom"), Q("moveTo")}:
+                    rpr.remove(marker)
+        if not mark_deleted:
+            continue
+        following = paragraph.getnext()
+        if following is None or (following.tag == Q("sectPr") and following.getnext() is None):
+            continue
+        if following.tag != Q("p") or (ppr is not None and ppr.find(Q("sectPr")) is not None):
+            raise DocxError("SELECTION_REDLINE_INVALID")
+        target_index = 1 if len(following) and following[0].tag == Q("pPr") else 0
+        for child in list(paragraph):
+            if child.tag == Q("pPr"):
+                continue
+            paragraph.remove(child)
+            following.insert(target_index, child)
+            target_index += 1
+        paragraph.getparent().remove(paragraph)
+    for node in list(clone.iter()):
+        if node.tag == Q("ins"):
             parent = node.getparent()
-            if parent is not None and parent is not rpr:
-                parent.remove(node)
-        for node in list(paragraph.iter(Q("ins"))):
-            parent = node.getparent()
-            if parent is None or parent is rpr:
+            if parent is None or parent.tag == Q("rPr"):
                 continue
             index = parent.index(node)
             for child in list(node):
@@ -785,20 +947,9 @@ def _accept_revisions_copy(root: etree._Element) -> etree._Element:
                 parent.insert(index, child)
                 index += 1
             parent.remove(node)
-        if rpr is not None:
-            for tag in (Q("ins"), Q("del")):
-                for marker in list(rpr.findall(tag)):
-                    rpr.remove(marker)
-            if len(rpr) == 0:
-                ppr.remove(rpr)
-        if ppr is not None and len(ppr) == 0:
-            paragraph.remove(ppr)
-        if mark_deleted:
-            if any(child.tag not in benign for child in list(paragraph)):
-                raise DocxError("SELECTION_REDLINE_INVALID")
-            parent = paragraph.getparent()
-            if parent is not None:
-                parent.remove(paragraph)
+        elif node.tag == Q("del") and node.getparent() is not None \
+                and node.getparent().tag not in {Q("rPr"), Q("trPr")}:
+            node.getparent().remove(node)
     return clone
 
 
@@ -825,15 +976,57 @@ def _validate_outputs(source_parts: Mapping[str, bytes], final_path: Path, redli
     accepted = _accept_revisions_copy(redline_root)
     if etree.tostring(accepted, method="c14n") != etree.tostring(final_root, method="c14n"):
         raise DocxError("SELECTION_REDLINE_FINAL_MISMATCH")
+    # Verify the same bytes with the upload path's independent accept
+    # implementation.  The writer's own accept above is not sufficient proof
+    # that another consumer of the redline (Compare upload, Word-like accept)
+    # reaches the delivered final.
+    from .revisions import prepare_compare_input
+    prepared = prepare_compare_input(redline_path.read_bytes(), limits=limits)
+    import io
+    import zipfile
+    prepared_root = etree.fromstring(
+        zipfile.ZipFile(io.BytesIO(prepared.data)).read(DOCUMENT))
+    if etree.tostring(prepared_root, method="c14n") != etree.tostring(final_root, method="c14n"):
+        raise DocxError("SELECTION_ACCEPT_ORACLE_MISMATCH")
     # An all-left selection is a valid zero-operation artifact and is
     # intentionally revision-free.
     return _digest_bytes(final_path.read_bytes()), _digest_bytes(redline_path.read_bytes())
 
 
+def _numbering_level(parts: Mapping[str, bytes], num_id: str, ilvl: str) -> tuple[str, str] | None:
+    """Return (abstractNumId, canonical level XML) for one numbering reference."""
+    data = parts.get("word/numbering.xml")
+    if not data:
+        return None
+    root = etree.fromstring(data, parser=etree.XMLParser(resolve_entities=False, no_network=True))
+    number = next((node for node in root.iter(Q("num"))
+                   if str(node.get(Q("numId"))) == num_id), None)
+    if number is None:
+        return None
+    abstract_ref = number.find(Q("abstractNumId"))
+    abstract_id = abstract_ref.get(Q("val"), "") if abstract_ref is not None else ""
+    abstract = next((node for node in root.iter(Q("abstractNum"))
+                     if str(node.get(Q("abstractNumId"))) == abstract_id), None)
+    if abstract is None:
+        return None
+    level = next((node for node in abstract.findall(Q("lvl"))
+                  if str(node.get(Q("ilvl"), "0")) == ilvl), None)
+    if level is None:
+        return abstract_id, ""
+    return abstract_id, etree.tostring(level, method="c14n").decode("utf-8")
+
+
 def _validate_block_references(left_parts: Mapping[str, bytes], right_parts: Mapping[str, bytes],
                                right_root: etree._Element, right_doc,
-                               block_operations: Sequence[_BlockOperation]) -> None:
-    """Ensure cloned paragraphs do not reference styles missing on the left."""
+                               block_operations: Sequence[_BlockOperation]) -> tuple[str, ...]:
+    """Ensure cloned paragraphs do not reference missing styles/numbering.
+
+    Text-first Compare uses the left DOCX as the formatting base.  If a right
+    paragraph reuses the same ``numId`` with a different definition, copying the
+    id would silently bind a different visible number.  The policy is explicit:
+    keep the left definition for the left base and report the adopted
+    difference instead of pretending the right numbering was preserved.
+    """
     def ids(parts: Mapping[str, bytes], name: str, tag: str, attribute: str) -> set[str]:
         data = parts.get(name)
         if not data:
@@ -843,6 +1036,7 @@ def _validate_block_references(left_parts: Mapping[str, bytes], right_parts: Map
 
     styles = ids(left_parts, "word/styles.xml", "style", "styleId")
     numbers = ids(left_parts, "word/numbering.xml", "num", "numId")
+    limitations: list[str] = []
     for operation in block_operations:
         for block_id in operation.right_ids:
             block = next((item for item in right_doc.blocks if item.block_id == block_id), None)
@@ -856,13 +1050,24 @@ def _validate_block_references(left_parts: Mapping[str, bytes], right_parts: Map
                     raise DocxError("SELECTION_BLOCK_STYLE_UNSUPPORTED", block_id)
                 numpr = ppr.find(Q("numPr"))
                 numid = numpr.find(Q("numId")) if numpr is not None else None
-                if numid is not None and numid.get(Q("val")) not in {None, "0"} and numid.get(Q("val")) not in numbers:
-                    raise DocxError("SELECTION_BLOCK_STYLE_UNSUPPORTED", block_id)
+                if numid is not None and numid.get(Q("val")) not in {None, "0"}:
+                    value = str(numid.get(Q("val")))
+                    if value not in numbers:
+                        raise DocxError("SELECTION_BLOCK_STYLE_UNSUPPORTED", block_id)
+                    ilvl_node = numpr.find(Q("ilvl"))
+                    ilvl = str(ilvl_node.get(Q("val"), "0")) if ilvl_node is not None else "0"
+                    left_level = _numbering_level(left_parts, value, ilvl)
+                    right_level = _numbering_level(right_parts, value, ilvl)
+                    if left_level is not None and right_level is not None and left_level != right_level:
+                        warning = f"NUMBERING_DEFINITION_ADOPTED_LEFT:numId={value}"
+                        if warning not in limitations:
+                            limitations.append(warning)
             for run in element.findall(Q("r")):
                 rpr = run.find(Q("rPr"))
                 style = rpr.find(Q("rStyle")) if rpr is not None else None
                 if style is not None and style.get(Q("val")) not in styles:
                     raise DocxError("SELECTION_BLOCK_STYLE_UNSUPPORTED", block_id)
+    return tuple(limitations)
 
 
 def generate_selection_artifacts(
@@ -923,18 +1128,24 @@ def generate_selection_artifacts(
     _validate_package(source_parts, limits, full=True)
     original = _xml(source_parts[DOCUMENT], limits)
     right_root = _xml(right_parts[DOCUMENT], limits)
+    numbering_limitations: tuple[str, ...] = ()
     if block_operations:
-        _validate_block_references(source_parts, right_parts, right_root, right_doc, block_operations)
+        numbering_limitations = _validate_block_references(
+            source_parts, right_parts, right_root, right_doc, block_operations)
     final_root, redline_root = deepcopy(original), deepcopy(original)
     when = datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
     try:
-        _apply_operations(final_root, inline_operations, redline=False, revision_start=1, when=when)
         next_revision = _apply_operations(redline_root, inline_operations, redline=True, revision_start=1, when=when)
         if block_operations:
-            _apply_block_operations(final_root, left_doc, right_doc, block_operations, right_root,
-                                    redline=False, revision_start=1, when=when)
             _apply_block_operations(redline_root, left_doc, right_doc, block_operations, right_root,
                                     redline=True, revision_start=next_revision, when=when)
+            # Final is the accepted state of the written redline.  Deriving it
+            # from the redline (instead of a second direct writer) keeps inline
+            # edits and paragraph-mark merges consistent; the independent upload
+            # accept path below still verifies the actual bytes.
+            final_root = _accept_revisions_copy(redline_root)
+        else:
+            _apply_operations(final_root, inline_operations, redline=False, revision_start=1, when=when)
         final_path.parent.mkdir(parents=True, exist_ok=True)
         redline_path.parent.mkdir(parents=True, exist_ok=True)
         _write_package(final_path, source_parts, etree.tostring(final_root, encoding="UTF-8", xml_declaration=True))
@@ -942,7 +1153,9 @@ def generate_selection_artifacts(
         final_hash, redline_hash = _validate_outputs(source_parts, final_path, redline_path,
                                                      left_doc, expected, limits=limits)
         limitations = tuple(dict.fromkeys(
-            list(left_doc.coverage.warnings) + list(right_doc.coverage.warnings)))
+            list(left_doc.coverage.warnings) + list(right_doc.coverage.warnings)
+            + list(numbering_limitations)
+            + ["FORMATTING_NOT_COMPARED:base_side=left"]))
         manifest_items = [{
             "diff_id": item.diff_id,
             "decision": item.decision,
@@ -968,10 +1181,11 @@ def generate_selection_artifacts(
         checks = ["package", "source_binding", "result_binding", "selection_binding"]
         if block_operations:
             checks.append("block_structure")
-        checks.extend(["final_docx_reopen", "redline_reopen", "selected_text"])
+        checks.extend(["final_docx_reopen", "redline_reopen", "accept_oracle", "selected_text"])
         return SelectionArtifactValidation(final_hash, redline_hash, snapshot.selection_epoch,
                                            snapshot.decision_hash, snapshot.binding_hash, manifest,
-                                           tuple(checks), limitations)
+                                           tuple(checks), limitations,
+                                           dict(result.get("comparison_scope") or {}))
     except Exception:
         final_path.unlink(missing_ok=True)
         redline_path.unlink(missing_ok=True)

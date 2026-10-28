@@ -27,6 +27,7 @@ corrupt the primary delivery artifacts.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from copy import deepcopy
 import hashlib
 import json
 from pathlib import Path
@@ -40,11 +41,14 @@ from .docx import (
     Q,
     DocxError,
     ZipLimits,
+    _accept_all_revision_parts,
+    _overlay_revision_inventory,
     _read_parts,
     _sha,
     _validate_package,
     _validate_revision_manifest,
     _write_package,
+    _write_package_replaced,
     _xml,
 )
 
@@ -180,6 +184,54 @@ def resolve_selection(manifests: Sequence[Mapping[str, Any]],
                             rejected=tuple(rejected))
 
 
+def _source_revisions_from_report(report: Mapping[str, Any]) -> list[dict[str, str]]:
+    """Recover the bound inventory of pre-existing revisions.
+
+    Selection must keep foreign revisions only when their part, kind, id,
+    author, date and content are the ones generation recorded.  An old report
+    without a bound inventory cannot authorize an unknown revision.
+    """
+    manifest = report.get("source_revision_manifest")
+    items: Any = manifest
+    if not items:
+        source = report.get("source_revisions")
+        if isinstance(source, Mapping):
+            items = source.get("items")
+    if not isinstance(items, list):
+        return []
+    result: list[dict[str, str]] = []
+    for item in items:
+        if not isinstance(item, Mapping):
+            continue
+        part = item.get("part")
+        content = item.get("content_sha256")
+        if not isinstance(part, str) or not part or not isinstance(content, str) or not content:
+            continue
+        result.append({str(key): str(item.get(key, "")) for key in
+                       ("part", "kind", "id", "author", "date", "location", "content_sha256")})
+    result.sort(key=lambda entry: (entry["part"], entry["kind"], entry["id"], entry["content_sha256"]))
+    return result
+
+
+def _foreign_revisions(parts: Mapping[str, bytes], our_ids: set[str],
+                       limits: ZipLimits) -> tuple[dict[str, str], ...]:
+    entries = _overlay_revision_inventory(parts, limits)
+    return tuple(entry for entry in entries
+                 if not (entry["part"] == DOCUMENT and entry["kind"] in {"ins", "del"}
+                         and entry["id"] in our_ids))
+
+
+def _validate_foreign_revisions(parts: Mapping[str, bytes], manifests: Sequence[Mapping[str, Any]],
+                                source: Sequence[Mapping[str, str]], limits: ZipLimits) -> None:
+    our_ids = {str(item[key]) for item in manifests for key in ("del_id", "ins_id")}
+    actual = _foreign_revisions(parts, our_ids, limits)
+    expected = [dict(entry) for entry in source]
+    if actual != tuple(expected):
+        if not source:
+            raise DocxError("SOURCE_REVISION_MANIFEST_UNAVAILABLE")
+        raise DocxError("SOURCE_REVISION_MISMATCH")
+
+
 def _manifests_from_report(report: Mapping[str, Any]) -> list[dict[str, Any]]:
     """Recover the generation manifest for a persisted report.
 
@@ -205,11 +257,17 @@ def _manifests_from_report(report: Mapping[str, Any]) -> list[dict[str, Any]]:
         if entries:
             return entries
     ordered = _ordered_edits(report)
-    return [{"del_id": 2 * n - 1, "ins_id": 2 * n,
-             "location": str(e.get("location", "")),
-             "expected_old_text": _expected_old(e),
-             "replacement": str(e.get("replacement", ""))}
-            for n, e in enumerate(ordered, start=1)]
+    if ordered:
+        return [{"del_id": 2 * n - 1, "ins_id": 2 * n,
+                 "location": str(e.get("location", "")),
+                 "expected_old_text": _expected_old(e),
+                 "replacement": str(e.get("replacement", ""))}
+                for n, e in enumerate(ordered, start=1)]
+    if report.get("source_revision_manifest") or report.get("source_revisions"):
+        # Recreating ids from plan order would silently address a foreign
+        # revision.  Only a report persisted with its exact manifest may be used.
+        raise DocxError("REVISION_MANIFEST_UNAVAILABLE")
+    return []
 
 
 def _ordered_edits(report: Mapping[str, Any]) -> list[Mapping[str, Any]]:
@@ -387,6 +445,11 @@ def generate_selected_artifact(redline: str | Path, target: str | Path,
     ``redline`` must be a revision artifact produced by the engine (it still
     contains the ``w:ins`` / ``w:del`` markup). The selected result is written
     to ``target`` and independently re-opened before it is published.
+
+    Foreign revisions already present in the uploaded contract are **accepted**
+    in ``selected_final``, exactly like the engine's final artifact.  They are
+    not treated as FundLex edits and never appear in decisions; the report's
+    bound ``source_revision_manifest`` is used as a strict whitelist.
     """
     limits = limits or ZipLimits()
     redline, target = Path(redline), Path(target)
@@ -395,19 +458,33 @@ def generate_selected_artifact(redline: str | Path, target: str | Path,
     manifests = _manifests_from_report(report)
     if not manifests:
         raise DocxError("REVISION_MANIFEST_UNAVAILABLE")
+    source = _source_revisions_from_report(report)
     parts = _read_redline_parts(redline, limits)
     _validate_package(parts, limits, full=False)
+    _validate_foreign_revisions(parts, manifests, source, limits)
     root = _xml(parts[DOCUMENT], limits)
     # Fail closed if the artifact does not match the expected manifest exactly.
-    _validate_revision_manifest(root, manifests)
+    # Foreign wrappers are already covered by _validate_foreign_revisions.
+    _validate_revision_manifest(root, manifests, allow_existing_revisions=True)
     verdict = resolve_selection(manifests, decisions)
+    reference = deepcopy(root)
+    apply_decisions(reference, manifests, verdict.decisions)
     absent = apply_decisions(root, manifests, verdict.decisions)
-    document_xml = etree.tostring(root, encoding="UTF-8", xml_declaration=True)
+    # selected_final is the accepted contract, so accept the remaining foreign
+    # revisions too.  The reference copy is the independently checked view.
+    from .compare.revisions import _accept_revisions
+    _accept_revisions(reference)
+    _accept_revisions(root)
+    replacements = _accept_all_revision_parts(parts, limits)
+    replacements[DOCUMENT] = etree.tostring(root, encoding="UTF-8", xml_declaration=True)
+    expected_document = etree.tostring(reference, method="c14n")
+    expected_stories = {name: etree.tostring(_xml(replacements[name], limits), method="c14n")
+                        for name in replacements if name != DOCUMENT}
     accepted, rejected = verdict.accepted, verdict.rejected
     try:
-        _write_package(target, parts, document_xml)
+        _write_package_replaced(target, parts, replacements)
         if verify:
-            _verify_selection(target, manifests, decisions, limits)
+            _verify_selection(target, expected_document, expected_stories, limits)
         return SelectionResult(accepted=accepted, rejected=rejected, absent=absent,
                                path=str(target), sha256=_sha(target.read_bytes()))
     except Exception:
@@ -415,19 +492,19 @@ def generate_selected_artifact(redline: str | Path, target: str | Path,
         raise
 
 
-def _verify_selection(path: Path, manifests: Sequence[Mapping[str, Any]],
-                      decisions: Mapping[Any, Any] | Iterable[Any],
+def _verify_selection(path: Path, expected_document: bytes,
+                      expected_stories: Mapping[str, bytes],
                       limits: ZipLimits) -> None:
-    """Independent re-open: no managed revision markup may survive, and the
-    package must still be a valid DOCX with an unchanged member set."""
+    """Independent re-open: accepted document and story parts, no markup left."""
     parts = _read_parts(path, limits)
-    _validate_package(parts, limits, full=False)
+    # full=True also rejects any surviving revision tag in any package part.
+    _validate_package(parts, limits, full=True)
     root = _xml(parts[DOCUMENT], limits)
-    managed = {str(item[key]) for item in manifests for key in ("del_id", "ins_id")}
-    leftover = {node.get(Q("id"), "") for node in root.iter()
-                if node.tag in {Q("ins"), Q("del")} and node.get(Q("id"), "") in managed}
-    if leftover:
-        raise DocxError("SELECTED_REVISION_LEFTOVER")
+    if etree.tostring(root, method="c14n") != expected_document:
+        raise DocxError("SELECTED_ACCEPTED_MISMATCH")
+    for name, expected in expected_stories.items():
+        if etree.tostring(_xml(parts[name], limits), method="c14n") != expected:
+            raise DocxError("SELECTED_STORY_MISMATCH", name)
 
 
 def generate_selected_redline(redline: str | Path, target: str | Path,
@@ -457,18 +534,23 @@ def generate_selected_redline(redline: str | Path, target: str | Path,
     manifests = _manifests_from_report(report)
     if not manifests:
         raise DocxError("REVISION_MANIFEST_UNAVAILABLE")
+    source = _source_revisions_from_report(report)
     parts = _read_redline_parts(redline, limits)
     _validate_package(parts, limits, full=False)
+    _validate_foreign_revisions(parts, manifests, source, limits)
     root = _xml(parts[DOCUMENT], limits)
-    _validate_revision_manifest(root, manifests)
+    _validate_revision_manifest(root, manifests, allow_existing_revisions=True)
     verdict = resolve_selection(manifests, decisions)
     kept = _keep_accepted_only(root, manifests, verdict.decisions)
     document_xml = etree.tostring(root, encoding="UTF-8", xml_declaration=True)
     try:
         _write_package(target, parts, document_xml)
-        # Independent re-open: only the accepted revisions may remain.
-        if _managed_ids(_xml(_read_redline_parts(target, limits)[DOCUMENT], limits)) != kept:
+        # Independent re-open: only the accepted revisions may remain, and every
+        # foreign revision must still be byte-for-byte bound to its source entry.
+        reopened = _read_redline_parts(target, limits)
+        if _managed_ids(_xml(reopened[DOCUMENT], limits)) != kept:
             raise DocxError("SELECTED_REDLINE_MISMATCH")
+        _validate_foreign_revisions(reopened, manifests, source, limits)
         return SelectionResult(accepted=verdict.accepted, rejected=verdict.rejected,
                                absent=(),
                                path=str(target), sha256=_sha(target.read_bytes()))

@@ -144,9 +144,24 @@ def compare_documents(left: CompareDocument, right: CompareDocument) -> CompareR
     diagnostics = dict(diagnostics)
     diagnostics["processing_version"] = "contract-compare-v1"
     diagnostics["coverage_warnings"] = len(left.coverage.warnings) + len(right.coverage.warnings)
-    status = "incomplete" if left.coverage.status != "complete" or right.coverage.status != "complete" else "complete"
+    # Block boundaries are not characters: split/merge/empty-paragraph changes
+    # can have identical concatenated text and therefore produce no diff item.
+    # They are not silently complete; the result explicitly records that the
+    # structural difference was not compared.
+    structural: list[str] = []
+    for group in groups:
+        left_values = tuple(block.raw_text for block in group.left)
+        right_values = tuple(block.raw_text for block in group.right)
+        if left_values != right_values and equivalent_text("".join(left_values), "".join(right_values)):
+            warning = f"STRUCTURAL_DIFFERENCE_NOT_COMPARED:{group.group_id}"
+            if warning not in structural:
+                structural.append(warning)
+    diagnostics["structural_not_compared"] = bool(structural)
+    status = "incomplete" if (left.coverage.status != "complete"
+                               or right.coverage.status != "complete" or structural) else "complete"
     from .models import Coverage
-    coverage = Coverage(status, tuple(dict.fromkeys(left.coverage.warnings + right.coverage.warnings)))
+    coverage = Coverage(status, tuple(dict.fromkeys(
+        list(left.coverage.warnings) + list(right.coverage.warnings) + structural)))
     return CompareResult("contract-compare-v1", left, right, groups, tuple(diffs), coverage, diagnostics)
 
 
