@@ -133,20 +133,31 @@ def register_compare_routes(application, compare_store: CompareStore, user_depen
             total += len(data)
             name = Path((upload.filename or "").replace("\\", "/")).name
             error = None
+            prepared = None
             try:
                 validate_upload(name, data)
             except HTTPException as exc:
                 error = "COMPARE_INVALID_DOCX" if exc.status_code == 415 else "COMPARE_UPLOAD_REJECTED"
             if error is None:
-                # Enforce the same safe OOXML reader used by the worker. A ZIP
-                # bearing a document.xml member alone is not a valid DOCX.
-                from .parser import parse_compare_document
-                from ..docx import DocxError
+                # Accept existing Word revisions on a private normalized copy;
+                # the original upload bytes are never modified in place. The
+                # same safe OOXML reader used by the worker validates the
+                # normalized package before it is stored.
+                from .ingest import prepare_compare_upload
                 try:
-                    parse_compare_document(data, filename=name)
-                except (DocxError, ValueError, OSError, KeyError):
+                    prepared = prepare_compare_upload(name, data)
+                except Exception:
                     error = "COMPARE_INVALID_DOCX"
-            uploads.append({"client_id": cid, "name": name, "data": data, "error_code": error})
+                    prepared = None
+            uploads.append({
+                "client_id": cid,
+                "name": name,
+                "data": prepared["data"] if error is None else data,
+                "original_sha256": prepared["original_sha256"] if prepared else hashlib.sha256(data).hexdigest(),
+                "original_size": prepared["original_size"] if prepared else len(data),
+                "revisions_accepted": prepared["revisions_accepted"] if prepared and error is None else 0,
+                "error_code": error,
+            })
         return call(compare_store.upload, user, task_id, uploads)
 
     @application.post("/api/compare/tasks/{task_id}/seal")

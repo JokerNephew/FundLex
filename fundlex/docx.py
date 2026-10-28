@@ -197,7 +197,8 @@ def _relationship_source(rels: str) -> str:
     return posixpath.join(directory[:-6], name[:-5])
 
 
-def _validate_package(parts: Mapping[str, bytes], limits: ZipLimits, *, full: bool) -> None:
+def _validate_package(parts: Mapping[str, bytes], limits: ZipLimits, *, full: bool,
+                      allow_existing_revisions: bool = False) -> None:
     if "[Content_Types].xml" not in parts or "_rels/.rels" not in parts or DOCUMENT not in parts:
         raise DocxError("DOCX_REQUIRED_PART_MISSING")
     content = _xml(parts["[Content_Types].xml"], limits)
@@ -291,7 +292,9 @@ def _validate_package(parts: Mapping[str, bytes], limits: ZipLimits, *, full: bo
                     if not isinstance(element.tag, str):
                         continue
                     local = etree.QName(element).localname
-                    if element.tag.startswith("{" + W + "}") and local in REVISION_TAGS:
+                    if (not allow_existing_revisions
+                            and element.tag.startswith("{" + W + "}")
+                            and local in REVISION_TAGS):
                         raise DocxError("EXISTING_REVISION_UNSUPPORTED", name)
                     if element.tag == Q("documentProtection"):
                         raise DocxError("DOCUMENT_PROTECTED")

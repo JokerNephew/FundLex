@@ -108,6 +108,15 @@ class CompareStore:
                 CREATE INDEX IF NOT EXISTS compare_selection_artifacts_lookup
                     ON compare_selection_artifacts(pair_id, version, status);
             """)
+            columns = {row["name"] for row in db.execute("PRAGMA table_info(compare_pair_files)")}
+            for name, definition in {
+                "original_sha256": "TEXT",
+                "original_size": "INTEGER",
+                "normalized_sha256": "TEXT",
+                "revisions_accepted": "INTEGER NOT NULL DEFAULT 0",
+            }.items():
+                if name not in columns:
+                    db.execute(f"ALTER TABLE compare_pair_files ADD COLUMN {name} {definition}")
 
     def _connect(self):
         return self.store._connect()
@@ -235,9 +244,16 @@ class CompareStore:
         files = db.execute("SELECT * FROM compare_pair_files WHERE pair_id=? ORDER BY side", (row["id"],)).fetchall()
         mapped = {}
         for file in files:
+            accepted = file["upload_status"] == "accepted"
             mapped[file["side"]] = {"client_id": file["client_id"], "name": file["filename"], "size": file["size"],
                                      "upload_status": file["upload_status"], "error_code": file["error_code"],
-                                     "source_sha256": file["source_sha256"]}
+                                     "source_sha256": file["source_sha256"],
+                                     "normalized_sha256": ((file["normalized_sha256"] or file["source_sha256"])
+                                                           if accepted else None),
+                                     "normalized_size": file["size"] if accepted else None,
+                                     "original_sha256": file["original_sha256"] or file["source_sha256"],
+                                     "original_size": file["original_size"] or file["size"],
+                                     "revisions_accepted": int(file["revisions_accepted"] or 0)}
         result = {"id": row["id"], "task_id": row["task_id"], "ordinal": row["ordinal"],
                   "client_pair_id": row["client_pair_id"], "label": row["label"], "status": row["status"],
                   "error_code": row["error_code"], "summary": None, "coverage": None,
@@ -284,12 +300,16 @@ class CompareStore:
         receipts = []
         try:
             for item in uploads:
+                item.setdefault("original_sha256", hashlib.sha256(item.get("data", b"")).hexdigest())
+                item.setdefault("original_size", len(item.get("data", b"")))
+                item.setdefault("revisions_accepted", 0)
                 if not item.get("error_code"):
                     key, digest, size = self.store.stage(item["data"])
-                    item.update(key=key, digest=digest, size=size)
+                    item.update(key=key, digest=digest, normalized_size=size)
                     staged.append(key)
                 else:
-                    item.update(digest=hashlib.sha256(item.get("data", b"")).hexdigest(), size=len(item.get("data", b"")))
+                    item.update(digest=hashlib.sha256(item.get("data", b"")).hexdigest(),
+                                normalized_size=len(item.get("data", b"")))
             now = _now()
             with self._connect() as db:
                 db.execute("BEGIN IMMEDIATE")
@@ -300,25 +320,45 @@ class CompareStore:
                     row = db.execute("""SELECT f.*,p.id pair_id,p.status pair_status,p.task_id
                         FROM compare_pair_files f JOIN compare_pairs p ON p.id=f.pair_id
                         WHERE p.task_id=? AND f.client_id=?""", (task_id, item.get("client_id"))).fetchone()
-                    receipt = {"client_id": item.get("client_id"), "status": "rejected", "pair_id": None, "error_code": None}
+                    receipt = {"client_id": item.get("client_id"), "status": "rejected", "pair_id": None,
+                               "error_code": None, "original_sha256": item["original_sha256"],
+                               "original_size": item["original_size"],
+                               "normalized_sha256": None if item.get("error_code") else item["digest"],
+                               "normalized_size": None if item.get("error_code") else item["normalized_size"],
+                               "revisions_accepted": int(item["revisions_accepted"] or 0)}
                     if row is None:
                         receipt["error_code"] = "MANIFEST_ENTRY_NOT_FOUND"
                     elif row["upload_status"] == "accepted":
-                        same = row["source_sha256"] == item["digest"] and row["size"] == item["size"] and row["filename"] == item.get("name")
-                        receipt.update(status="already_accepted" if same else "rejected", pair_id=row["pair_id"],
-                                       error_code=None if same else "UPLOAD_IDENTITY_CONFLICT")
+                        same = ((row["original_sha256"] or row["source_sha256"]) == item["original_sha256"]
+                                and (row["original_size"] or row["size"]) == item["original_size"]
+                                and row["filename"] == item.get("name"))
+                        if same:
+                            receipt.update(status="already_accepted", pair_id=row["pair_id"],
+                                           error_code=None,
+                                           original_sha256=row["original_sha256"] or row["source_sha256"],
+                                           original_size=row["original_size"] or row["size"],
+                                           normalized_sha256=row["normalized_sha256"] or row["source_sha256"],
+                                           normalized_size=row["size"],
+                                           revisions_accepted=int(row["revisions_accepted"] or 0))
+                        else:
+                            receipt.update(status="rejected", pair_id=row["pair_id"],
+                                           error_code="UPLOAD_IDENTITY_CONFLICT")
                     elif item.get("error_code"):
                         receipt.update(pair_id=row["pair_id"], error_code=item["error_code"])
                         db.execute("UPDATE compare_pair_files SET upload_status='rejected',error_code=?,updated_at=? WHERE pair_id=? AND side=?",
                                    (item["error_code"], now, row["pair_id"], row["side"]))
-                    elif row["filename"] != item.get("name") or row["size"] != item["size"]:
+                    elif row["filename"] != item.get("name") or row["size"] != item["original_size"]:
                         receipt.update(pair_id=row["pair_id"], error_code="MANIFEST_FILE_MISMATCH")
                         db.execute("UPDATE compare_pair_files SET upload_status='rejected',error_code=?,updated_at=? WHERE pair_id=? AND side=?",
                                    ("MANIFEST_FILE_MISMATCH", now, row["pair_id"], row["side"]))
                     else:
                         db.execute("""UPDATE compare_pair_files SET upload_status='accepted',error_code=NULL,
-                            source_sha256=?,object_key=?,updated_at=? WHERE pair_id=? AND side=?""",
-                                   (item["digest"], item["key"], now, row["pair_id"], row["side"]))
+                            source_sha256=?,object_key=?,size=?,original_sha256=?,original_size=?,
+                            normalized_sha256=?,revisions_accepted=?,updated_at=? WHERE pair_id=? AND side=?""",
+                                    (item["digest"], item["key"], item["normalized_size"],
+                                     item["original_sha256"], item["original_size"],
+                                     item["digest"], int(item["revisions_accepted"] or 0), now,
+                                     row["pair_id"], row["side"]))
                         receipt.update(status="accepted", pair_id=row["pair_id"])
                     receipts.append(receipt)
                 db.execute("UPDATE compare_tasks SET updated_at=? WHERE id=?", (now, task_id))
