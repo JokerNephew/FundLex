@@ -1,4 +1,5 @@
 import { createElement, useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type CSSProperties, type ReactNode, type RefObject } from 'react'
+import Splitter from 'antd/es/splitter'
 import { Button, Card, Spinner, StatusBadge } from '../../components/ui'
 import { saveBlob } from '../../api/client'
 import {
@@ -16,6 +17,24 @@ const DOCX = 'application/vnd.openxmlformats-officedocument.wordprocessingml.doc
 type DirectoryFile = File & { webkitRelativePath?: string }
 type PairDraft = { left?: File; right?: File }
 type UploadDraft = { task: CompareTask; manifests: ComparePairManifest[]; files: PairDraft[]; next: number }
+
+function useMediaQuery(query: string): boolean {
+  const read = () => typeof window !== 'undefined' && typeof window.matchMedia === 'function' ? window.matchMedia(query).matches : false
+  const [matches, setMatches] = useState(read)
+  useEffect(() => {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return
+    const media = window.matchMedia(query)
+    const update = () => setMatches(media.matches)
+    update()
+    if (media.addEventListener) {
+      media.addEventListener('change', update)
+      return () => media.removeEventListener('change', update)
+    }
+    media.addListener(update)
+    return () => media.removeListener(update)
+  }, [query])
+  return matches
+}
 
 function fileName(file?: File | null): string { return String(file?.name || '').replace(/\\/g, '/').split('/').pop() || '' }
 function relativePath(file: File): string {
@@ -126,9 +145,11 @@ type CompareReaderProps = {
   diffType: string
   activeOnly: boolean
   mobileSide: 'left' | 'right'
+  isMobile: boolean
   setDiffType: (value: string) => void
   setActiveOnly: (value: boolean | ((current: boolean) => boolean)) => void
   setMobileSide: (value: 'left' | 'right') => void
+  onSplitterResize: () => void
   focusDiff: (index: number) => void
   selectPairDiff: (id: string) => void
   downloadReport: () => void
@@ -140,16 +161,20 @@ type CompareReaderProps = {
   syncScroll: (source: HTMLElement) => void
 }
 
-function CompareReader({ view, selectedPair, viewQuery, activeDiff, visibleDiffs, diffIndex, diffType, activeOnly, mobileSide, setDiffType, setActiveOnly, setMobileSide, focusDiff, selectPairDiff, downloadReport, leftRef, rightRef, columnsRef, lines, lineSize, syncScroll }: CompareReaderProps) {
+function CompareReader({ view, selectedPair, viewQuery, activeDiff, visibleDiffs, diffIndex, diffType, activeOnly, mobileSide, isMobile, setDiffType, setActiveOnly, setMobileSide, onSplitterResize, focusDiff, selectPairDiff, downloadReport, leftRef, rightRef, columnsRef, lines, lineSize, syncScroll }: CompareReaderProps) {
   return <div className="compare-reader-layout">
     <section className="compare-reader-main" aria-label="合同并列阅读区">
       <div className="compare-reader-label"><span>合同正文</span><small>点击正文中的标记可定位同一处差异</small></div>
       <div className="compare-columns-head"><span><i className="compare-side-badge">A</i><b>原版 · 基准</b><small>{view?.left.name || selectedPair?.left.name || '原版'}</small></span><span className="compare-columns-arrow" aria-hidden="true">→</span><span><i className="compare-side-badge is-revised">B</i><b>对比版 · 修订</b><small>{view?.right.name || selectedPair?.right.name || '对比版'}</small></span></div>
       <div className="compare-mobile-switch" role="group" aria-label="移动端阅读侧栏"><Button type="button" aria-pressed={mobileSide === 'left'} onClick={() => setMobileSide('left')}>查看原版</Button><Button type="button" aria-pressed={mobileSide === 'right'} onClick={() => setMobileSide('right')}>查看对比版</Button></div>
       <div className="compare-columns" ref={columnsRef}>
-        <div ref={leftRef} className="compare-pane-wrap" onScroll={(event) => syncScroll(event.currentTarget)}><SafeCompareDocument html={view?.left.html || ''} side="left" activeDiffId={activeDiff?.id} onDiff={selectPairDiff} /></div>
-        <div className="compare-gutter" aria-hidden="true"><span>同步</span></div>
-        <div ref={rightRef} className="compare-pane-wrap" onScroll={(event) => syncScroll(event.currentTarget)}><SafeCompareDocument html={view?.right.html || ''} side="right" activeDiffId={activeDiff?.id} onDiff={selectPairDiff} /></div>
+        {isMobile ? <>
+          <div ref={leftRef} className="compare-pane-wrap" onScroll={(event) => syncScroll(event.currentTarget)}><SafeCompareDocument html={view?.left.html || ''} side="left" activeDiffId={activeDiff?.id} onDiff={selectPairDiff} /></div>
+          <div ref={rightRef} className="compare-pane-wrap" onScroll={(event) => syncScroll(event.currentTarget)}><SafeCompareDocument html={view?.right.html || ''} side="right" activeDiffId={activeDiff?.id} onDiff={selectPairDiff} /></div>
+        </> : <Splitter className="compare-splitter" onResize={onSplitterResize}>
+          <Splitter.Panel defaultSize="50%" min="20%" max="80%"><div ref={leftRef} className="compare-pane-wrap" onScroll={(event) => syncScroll(event.currentTarget)}><SafeCompareDocument html={view?.left.html || ''} side="left" activeDiffId={activeDiff?.id} onDiff={selectPairDiff} /></div></Splitter.Panel>
+          <Splitter.Panel defaultSize="50%" min="20%" max="80%"><div ref={rightRef} className="compare-pane-wrap" onScroll={(event) => syncScroll(event.currentTarget)}><SafeCompareDocument html={view?.right.html || ''} side="right" activeDiffId={activeDiff?.id} onDiff={selectPairDiff} /></div></Splitter.Panel>
+        </Splitter>}
         <svg className="compare-lines" aria-hidden="true" viewBox={`0 0 ${lineSize.width} ${lineSize.height}`} preserveAspectRatio="none">{lines.map((line) => <path key={line.id} d={`M ${line.x1} ${line.y1} C ${(line.x1 + line.x2) / 2} ${line.y1}, ${(line.x1 + line.x2) / 2} ${line.y2}, ${line.x2} ${line.y2}`} className={line.id === activeDiff?.id ? 'active' : ''} />)}</svg>
       </div>
     </section>
@@ -177,6 +202,7 @@ export function ComparePage() {
   const [activeOnly, setActiveOnly] = useState(false)
   const [mobileSide, setMobileSide] = useState<'left' | 'right'>('left')
   const [folderFiles, setFolderFiles] = useState<{ left: File[]; right: File[] }>({ left: [], right: [] })
+  const isMobile = useMediaQuery('(max-width: 760px)')
   const createMutation = useCompareTaskMutation()
   const uploadMutation = useCompareUploadMutation()
   const sealMutation = useCompareSealMutation()
@@ -188,6 +214,7 @@ export function ComparePage() {
   const rightRef = useRef<HTMLDivElement>(null)
   const columnsRef = useRef<HTMLDivElement>(null)
   const scrollLockRef = useRef(false)
+  const splitterFrameRef = useRef<number | null>(null)
   const [lines, setLines] = useState<Array<{ id: string; x1: number; y1: number; x2: number; y2: number }>>([])
   const [lineSize, setLineSize] = useState({ width: 100, height: 100 })
 
@@ -220,7 +247,7 @@ export function ComparePage() {
     setDiffIndex(nextIndex)
     const leftFound = Boolean(leftRef.current?.querySelector(`[data-diff-id="${CSS.escape(id)}"]`))
     const rightFound = Boolean(rightRef.current?.querySelector(`[data-diff-id="${CSS.escape(id)}"]`))
-    if (window.matchMedia('(max-width: 760px)').matches) {
+    if (isMobile) {
       const currentFound = mobileSide === 'left' ? leftFound : rightFound
       const otherFound = mobileSide === 'left' ? rightFound : leftFound
       const nextSide = currentFound ? mobileSide : otherFound ? (mobileSide === 'left' ? 'right' : 'left') : mobileSide
@@ -242,12 +269,11 @@ export function ComparePage() {
     scrollToDiff(leftRef.current, id)
     scrollToDiff(rightRef.current, id)
     requestAnimationFrame(() => { scrollLockRef.current = false })
-  }, [mobileSide, scrollToDiff, visibleDiffs])
+  }, [isMobile, mobileSide, scrollToDiff, visibleDiffs])
   useEffect(() => {
     const id = activeDiff?.id
     if (!id) return
     const frame = requestAnimationFrame(() => {
-      const isMobile = window.matchMedia('(max-width: 760px)').matches
       const panes = isMobile
         ? [mobileSide === 'left' ? leftRef.current : rightRef.current]
         : [leftRef.current, rightRef.current]
@@ -256,11 +282,11 @@ export function ComparePage() {
       requestAnimationFrame(() => { scrollLockRef.current = false })
     })
     return () => cancelAnimationFrame(frame)
-  }, [activeDiff?.id, mobileSide, scrollToDiff])
+  }, [activeDiff?.id, isMobile, mobileSide, scrollToDiff])
   useEffect(() => { setDiffIndex(0) }, [diffType, view?.pair.id])
 
   const drawLines = useCallback(() => {
-    if (!columnsRef.current || !leftRef.current || !rightRef.current || !view || window.matchMedia('(max-width: 760px)').matches) { setLines([]); return }
+    if (!columnsRef.current || !leftRef.current || !rightRef.current || !view || isMobile) { setLines([]); return }
     const root = columnsRef.current.getBoundingClientRect()
     setLineSize({ width: root.width || 100, height: root.height || 100 })
     const left = leftRef.current.getBoundingClientRect()
@@ -278,14 +304,25 @@ export function ComparePage() {
       return [{ id: diff.id, x1, y1: a.top + a.height / 2 - root.top, x2, y2: b.top + b.height / 2 - root.top }]
     })
     setLines(next)
-  }, [activeDiff?.id, activeOnly, view])
+  }, [activeDiff?.id, activeOnly, isMobile, view])
   useEffect(() => { const frame = requestAnimationFrame(drawLines); return () => cancelAnimationFrame(frame) }, [drawLines, view?.left.html, view?.right.html, diffIndex])
   useEffect(() => { const onResize = () => drawLines(); window.addEventListener('resize', onResize); return () => window.removeEventListener('resize', onResize) }, [drawLines])
+
+  const scheduleDrawLines = useCallback(() => {
+    if (splitterFrameRef.current !== null) return
+    splitterFrameRef.current = requestAnimationFrame(() => {
+      splitterFrameRef.current = null
+      drawLines()
+    })
+  }, [drawLines])
+  useEffect(() => () => {
+    if (splitterFrameRef.current !== null) cancelAnimationFrame(splitterFrameRef.current)
+  }, [])
 
   const syncScroll = (source: HTMLElement) => {
     if (scrollLockRef.current) return
     const target = source === leftRef.current ? rightRef.current : leftRef.current
-    if (!target || window.matchMedia('(max-width: 760px)').matches) { drawLines(); return }
+    if (!target || isMobile) { drawLines(); return }
     const sourceMax = Math.max(0, source.scrollHeight - source.clientHeight)
     const targetMax = Math.max(0, target.scrollHeight - target.clientHeight)
     scrollLockRef.current = true
@@ -369,7 +406,7 @@ export function ComparePage() {
         <div className="compare-summary-row"><div className="compare-summary-stat"><span>当前结果</span><strong>{view?.summary ? `共 ${view.summary.total || 0} 处差异 · 修改 ${view.summary.modify || 0} · 新增 ${view.summary.insert || 0} · 删除 ${view.summary.delete || 0}` : '结果尚未就绪'}</strong></div><div className="compare-sync-note">双栏联动阅读</div></div>
         {view?.coverage?.status !== 'complete' && view?.coverage && <div className="compare-coverage is-incomplete" role="status"><strong>覆盖不完整</strong><p>以下内容未纳入比较，请人工复核，不要据此确认全文无差异。</p>{view.coverage.warnings?.length ? <ul>{view.coverage.warnings.map((warning, index) => <li key={`${warning}-${index}`}>{warning}</li>)}</ul> : null}</div>}
       </div>
-      {viewQuery.error ? <div className="error-state">读取结果失败：{messageOf(viewQuery.error, '结果暂时不可用')}</div> : viewQuery.loading && !view ? <Spinner label="正在读取对比结果" /> : view && <CompareReader view={view} selectedPair={selectedPair} viewQuery={viewQuery} activeDiff={activeDiff} visibleDiffs={visibleDiffs} diffIndex={diffIndex} diffType={diffType} activeOnly={activeOnly} mobileSide={mobileSide} setDiffType={setDiffType} setActiveOnly={setActiveOnly} setMobileSide={setMobileSide} focusDiff={focusDiff} selectPairDiff={selectPairDiff} downloadReport={downloadReport} leftRef={leftRef} rightRef={rightRef} columnsRef={columnsRef} lines={lines} lineSize={lineSize} syncScroll={syncScroll} />}
+      {viewQuery.error ? <div className="error-state">读取结果失败：{messageOf(viewQuery.error, '结果暂时不可用')}</div> : viewQuery.loading && !view ? <Spinner label="正在读取对比结果" /> : view && <CompareReader view={view} selectedPair={selectedPair} viewQuery={viewQuery} activeDiff={activeDiff} visibleDiffs={visibleDiffs} diffIndex={diffIndex} diffType={diffType} activeOnly={activeOnly} mobileSide={mobileSide} isMobile={isMobile} setDiffType={setDiffType} setActiveOnly={setActiveOnly} setMobileSide={setMobileSide} onSplitterResize={scheduleDrawLines} focusDiff={focusDiff} selectPairDiff={selectPairDiff} downloadReport={downloadReport} leftRef={leftRef} rightRef={rightRef} columnsRef={columnsRef} lines={lines} lineSize={lineSize} syncScroll={syncScroll} />}
     </Card>}
 
   </div>

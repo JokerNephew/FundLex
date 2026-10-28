@@ -141,6 +141,29 @@ def _span_text(document, value: Mapping[str, Any] | None, *, required: bool = Tr
     return block, _text(value)
 
 
+def _modify_group_compatible(group, left_span: Mapping[str, Any],
+                             right_span: Mapping[str, Any]) -> bool:
+    """Return True when a modify stays within corresponding group blocks.
+
+    A paragraph-by-paragraph comparison commonly groups several consecutive
+    modified paragraphs into one alignment group (for example 2 left blocks
+    against 2 right blocks).  Such a group is safe when each diff is still a
+    single-block edit and its left block has the same ordinal as its right
+    block.  The previous ``(1, 1)`` shape check rejected these ordinary edits
+    even though no cross-paragraph structure was involved.
+    """
+    if group is None or not getattr(group, "left", ()) or not getattr(group, "right", ()):
+        return False
+    if len(group.left) != len(group.right):
+        return False
+    left_id, right_id = left_span.get("block_id"), right_span.get("block_id")
+    left_ids = [block.block_id for block in group.left]
+    right_ids = [block.block_id for block in group.right]
+    if left_id not in left_ids or right_id not in right_ids:
+        return False
+    return left_ids.index(left_id) == right_ids.index(right_id)
+
+
 def _build_operations(left_doc, right_doc, diffs: Sequence[Mapping[str, Any]], decisions: Mapping[str, str],
                       alignment) -> tuple[_Operation, ...]:
     operations: list[_Operation] = []
@@ -152,12 +175,11 @@ def _build_operations(left_doc, right_doc, diffs: Sequence[Mapping[str, Any]], d
         if kind in {"insert", "delete"}:
             raise DocxError("SELECTION_STRUCTURAL_DIFF_UNSUPPORTED")
         group = groups.get(diff.get("group_id"))
-        expected_group_shape = (1, 1) if kind == "modify" else None
-        if group is None or (len(group.left), len(group.right)) != expected_group_shape:
-            raise DocxError("SELECTION_STRUCTURAL_DIFF_UNSUPPORTED")
         left_span = _span(diff, "left", required=kind != "insert")
         right_span = _span(diff, "right", required=kind != "delete")
         if kind == "modify":
+            if not _modify_group_compatible(group, left_span, right_span):
+                raise DocxError("SELECTION_STRUCTURAL_DIFF_UNSUPPORTED")
             left_block, left_text = _span_text(left_doc, left_span)
             _, right_text = _span_text(right_doc, right_span)
             if choice == "right":
@@ -425,8 +447,14 @@ def generate_selection_artifacts(
     recomputed = compare_documents(left_doc, right_doc)
     if result.get("diffs") != recomputed.to_dict()["diffs"]:
         raise DocxError("SELECTION_RESULT_DIFF_MISMATCH")
-    if left_doc.coverage.status != "complete" or right_doc.coverage.status != "complete":
-        raise DocxError("SELECTION_COVERAGE_INCOMPLETE")
+    # Coverage warnings are retained as artifact limitations instead of
+    # blocking the whole selection.  The writer validates every selected
+    # operation against a real body paragraph/table paragraph and rejects
+    # drawings, fields, content controls, merged cells and other structures
+    # it cannot safely rewrite.  Warnings for headers/footers, comments or
+    # unsupported content outside the selected paragraphs therefore do not
+    # make an otherwise safe body edit unusable.  The report must still show
+    # the limitations and must not present the result as complete coverage.
     try:
         snapshot = make_snapshot(result, decisions, selection_epoch=selection_epoch, result_sha256=result_sha256)
     except SelectionError as exc:

@@ -1,5 +1,6 @@
 """Independent edge cases for the compare parser/alignment/diff contracts."""
 from hashlib import sha256
+import io
 from pathlib import Path
 from zipfile import ZipFile, ZIP_DEFLATED
 
@@ -9,6 +10,7 @@ from lxml import etree
 import pytest
 
 from fundlex.compare import compare_docx, compare_documents, parse_compare_document
+from fundlex.compare.revisions import prepare_compare_input
 from fundlex.compare.normalize import normalize_match, normalize_diff
 from fundlex.docx import DOCUMENT, Q, DocxError
 
@@ -126,6 +128,246 @@ def test_existing_revisions_rejected(tmp_path):
     def add(root): root.find('.//'+Q('p')).append(OxmlElement('w:ins'))
     bad=mutate_xml(path,tmp_path/'revision.docx',add)
     with pytest.raises(DocxError, match='EXISTING_REVISION_UNSUPPORTED'): parse_compare_document(bad)
+
+
+def test_compare_input_accepts_existing_revisions_without_overwriting_source(tmp_path):
+    path = doc(tmp_path, 'source.docx', ['原文字'])
+
+    def add(root):
+        paragraph = root.find('.//' + Q('p'))
+        run = paragraph.find(Q('r'))
+        text = run.find(Q('t'))
+        deleted = OxmlElement('w:del')
+        deleted.set(Q('id'), '1')
+        deleted_run = OxmlElement('w:r')
+        deleted_text = OxmlElement('w:delText')
+        deleted_text.text = text.text
+        deleted_run.append(deleted_text)
+        deleted.append(deleted_run)
+        inserted = OxmlElement('w:ins')
+        inserted.set(Q('id'), '2')
+        inserted_run = OxmlElement('w:r')
+        inserted_text = OxmlElement('w:t')
+        inserted_text.text = '新文字'
+        inserted_run.append(inserted_text)
+        inserted.append(inserted_run)
+        paragraph.remove(run)
+        paragraph.extend([deleted, inserted])
+
+    revised = mutate_xml(path, tmp_path / 'revised.docx', add)
+    original = revised.read_bytes()
+    prepared = prepare_compare_input(original)
+
+    assert prepared.revisions_accepted == 3
+    assert prepared.original_size == len(original)
+    assert prepared.original_sha256 == sha256(original).hexdigest()
+    assert revised.read_bytes() == original
+    assert b'<w:ins' not in prepared.data
+    assert b'<w:del' not in prepared.data
+    parsed = parse_compare_document(prepared.data, filename='revised.docx')
+    assert ''.join(block.raw_text for block in parsed.blocks) == '新文字'
+    repeated = prepare_compare_input(original)
+    assert repeated.data == prepared.data
+    assert repeated.revisions_accepted == prepared.revisions_accepted
+
+
+def test_compare_input_accepts_moved_runs_and_range_markers(tmp_path):
+    path = doc(tmp_path, 'source.docx', ['甲位移文字乙'])
+
+    def add(root):
+        paragraph = root.find('.//' + Q('p'))
+        run = paragraph.find(Q('r'))
+        text = run.find(Q('t')).text
+        paragraph.remove(run)
+        for tag in ('moveFromRangeStart', 'moveToRangeStart'):
+            marker = OxmlElement('w:' + tag)
+            marker.set(Q('id'), tag)
+            marker.set(Q('name'), tag)
+            paragraph.append(marker)
+        for tag, wrapper, text_tag in (
+                ('moveFromRangeEnd', 'moveFrom', 'delText'),
+                ('moveToRangeEnd', 'moveTo', 't')):
+            moved = OxmlElement('w:' + wrapper)
+            moved.set(Q('id'), wrapper)
+            moved_run = OxmlElement('w:r')
+            moved_text = OxmlElement('w:' + text_tag)
+            moved_text.text = text
+            moved_run.append(moved_text)
+            moved.append(moved_run)
+            paragraph.append(moved)
+            marker = OxmlElement('w:' + tag)
+            marker.set(Q('id'), tag)
+            paragraph.append(marker)
+
+    revised = mutate_xml(path, tmp_path / 'moved.docx', add)
+    prepared = prepare_compare_input(revised.read_bytes())
+    assert prepared.revisions_accepted == 7
+    assert all(tag not in prepared.data for tag in (
+        b'<w:moveFrom', b'<w:moveTo', b'<w:delText', b'<w:moveFromRangeStart'))
+    parsed = parse_compare_document(prepared.data, filename='moved.docx')
+    assert [block.raw_text for block in parsed.blocks] == ['甲位移文字乙']
+
+
+def test_compare_input_accepts_deleted_and_moved_paragraph_marks(tmp_path):
+    path = doc(tmp_path, 'source.docx', ['第一段', '第二段', '第三段'])
+
+    def add(root):
+        for index, tag in enumerate(('del', 'moveFrom')):
+            paragraph = root.findall('.//' + Q('p'))[index]
+            p_pr = paragraph.find(Q('pPr'))
+            if p_pr is None:
+                p_pr = OxmlElement('w:pPr')
+                paragraph.insert(0, p_pr)
+            r_pr = p_pr.find(Q('rPr'))
+            if r_pr is None:
+                r_pr = OxmlElement('w:rPr')
+                p_pr.append(r_pr)
+            marker = OxmlElement('w:' + tag)
+            marker.set(Q('id'), str(index + 10))
+            r_pr.append(marker)
+
+    revised = mutate_xml(path, tmp_path / 'paragraph-marks.docx', add)
+    prepared = prepare_compare_input(revised.read_bytes())
+    assert prepared.revisions_accepted == 2
+    parsed = parse_compare_document(prepared.data, filename='paragraph-marks.docx')
+    assert [block.raw_text for block in parsed.blocks] == ['第一段第二段第三段']
+
+
+def test_compare_input_accepts_deleted_rows_cells_and_cell_merges(tmp_path):
+    document = Document()
+    table = document.add_table(rows=2, cols=2)
+    for row_index, values in enumerate((('A', 'B'), ('C', 'D'))):
+        for column_index, value in enumerate(values):
+            table.cell(row_index, column_index).text = value
+    path = tmp_path / 'table.docx'
+    document.save(path)
+
+    def remove(root):
+        rows = root.findall('.//' + Q('tr'))
+        tr_pr = rows[1].find(Q('trPr'))
+        if tr_pr is None:
+            tr_pr = OxmlElement('w:trPr')
+            rows[1].insert(0, tr_pr)
+        deleted_row = OxmlElement('w:del')
+        deleted_row.set(Q('id'), 'row')
+        tr_pr.append(deleted_row)
+        cell = rows[0].findall(Q('tc'))[1]
+        tc_pr = cell.find(Q('tcPr'))
+        if tc_pr is None:
+            tc_pr = OxmlElement('w:tcPr')
+            cell.insert(0, tc_pr)
+        deleted_cell = OxmlElement('w:cellDel')
+        deleted_cell.set(Q('id'), 'cell')
+        tc_pr.append(deleted_cell)
+
+    revised = mutate_xml(path, tmp_path / 'table-deleted.docx', remove)
+    prepared = prepare_compare_input(revised.read_bytes())
+    assert prepared.revisions_accepted == 2
+    assert b'<w:cellDel' not in prepared.data and b'<w:del' not in prepared.data
+    parsed = parse_compare_document(prepared.data, filename='table-deleted.docx')
+    assert [block.raw_text for block in parsed.blocks] == ['A']
+
+    def merge(root):
+        cell = root.findall('.//' + Q('tc'))[0]
+        tc_pr = cell.find(Q('tcPr'))
+        if tc_pr is None:
+            tc_pr = OxmlElement('w:tcPr')
+            cell.insert(0, tc_pr)
+        change = OxmlElement('w:cellMerge')
+        change.set(Q('id'), 'merge')
+        change.set(Q('vMerge'), 'rest')
+        tc_pr.append(change)
+
+    merged = mutate_xml(path, tmp_path / 'table-merged.docx', merge)
+    prepared = prepare_compare_input(merged.read_bytes())
+    assert prepared.revisions_accepted == 1
+    with ZipFile(io.BytesIO(prepared.data)) as archive:
+        root = etree.fromstring(archive.read(DOCUMENT))
+    value = root.find('.//' + Q('vMerge'))
+    assert value is not None and value.get(Q('val')) == 'restart'
+    assert b'<w:cellMerge' not in prepared.data
+
+
+def test_compare_input_rejects_invalid_cell_merge(tmp_path):
+    path = doc(tmp_path, 'source.docx', ['表格'])
+
+    def add(root):
+        table = OxmlElement('w:tbl')
+        row = OxmlElement('w:tr')
+        cell = OxmlElement('w:tc')
+        tc_pr = OxmlElement('w:tcPr')
+        tc_pr.append(OxmlElement('w:cellMerge'))
+        cell.append(tc_pr)
+        row.append(cell)
+        table.append(row)
+        root.find(Q('body')).append(table)
+
+    revised = mutate_xml(path, tmp_path / 'invalid-merge.docx', add)
+    with pytest.raises(DocxError, match='REVISION_CELL_MERGE_UNSUPPORTED'):
+        prepare_compare_input(revised.read_bytes())
+
+
+def test_compare_input_counts_revisions_inside_property_snapshots(tmp_path):
+    path = doc(tmp_path, 'source.docx', ['属性修订'])
+    original = path.read_bytes()
+
+    def add(root):
+        paragraph = root.find('.//' + Q('p'))
+        p_pr = paragraph.find(Q('pPr'))
+        if p_pr is None:
+            p_pr = OxmlElement('w:pPr')
+            paragraph.insert(0, p_pr)
+        change = OxmlElement('w:pPrChange')
+        change.set(Q('id'), 'change')
+        old = OxmlElement('w:pPr')
+        old_r_pr = OxmlElement('w:rPr')
+        inserted = OxmlElement('w:ins')
+        inserted.set(Q('id'), 'old-insert')
+        old_r_pr.append(inserted)
+        old.append(old_r_pr)
+        change.append(old)
+        p_pr.append(change)
+
+    revised = mutate_xml(path, tmp_path / 'property-change.docx', add)
+    prepared = prepare_compare_input(revised.read_bytes())
+    assert prepared.original_sha256 == sha256(revised.read_bytes()).hexdigest()
+    assert prepared.revisions_accepted == 2
+    assert b'<w:pPrChange' not in prepared.data and b'<w:ins' not in prepared.data
+    assert prepared.data != original
+    parsed = parse_compare_document(prepared.data, filename='property-change.docx')
+    assert [block.raw_text for block in parsed.blocks] == ['属性修订']
+
+
+def test_compare_input_ignores_drawingml_move_to(tmp_path):
+    path = doc(tmp_path, 'source.docx', ['合同正文'])
+
+    def add(root):
+        run = etree.SubElement(root, Q('r'))
+        drawing = etree.SubElement(
+            run, '{http://schemas.openxmlformats.org/drawingml/2006/main}moveTo')
+        etree.SubElement(
+            drawing, '{http://schemas.openxmlformats.org/drawingml/2006/main}pt')
+
+    revised = mutate_xml(path, tmp_path / 'shape.docx', add)
+    original = revised.read_bytes()
+    prepared = prepare_compare_input(original)
+    assert prepared.revisions_accepted == 0
+    assert prepared.data == original
+    assert parse_compare_document(prepared.data, filename='shape.docx').blocks
+
+
+def test_compare_input_rejects_unsafe_original_even_when_revision_is_present(tmp_path):
+    path = doc(tmp_path, 'source.docx', ['原文字'])
+
+    def add(root):
+        paragraph = root.find('.//' + Q('p'))
+        paragraph.append(OxmlElement('w:ins'))
+        protection = OxmlElement('w:documentProtection')
+        root.insert(0, protection)
+
+    revised = mutate_xml(path, tmp_path / 'unsafe.docx', add)
+    with pytest.raises(DocxError, match='DOCUMENT_PROTECTED'):
+        prepare_compare_input(revised.read_bytes())
 
 
 def test_bytes_path_identity_and_source_hash(tmp_path):

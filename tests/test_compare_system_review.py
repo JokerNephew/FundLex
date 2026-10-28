@@ -198,7 +198,8 @@ def mysql_store(tmp_path):
     if not MYSQL_URL:
         pytest.skip("FUNDLEX_COMPARE_MYSQL_TEST_URL is not configured")
     with Database(MYSQL_URL).connect() as db:
-        for table in ("compare_artifacts", "compare_pair_files", "compare_pairs", "compare_tasks"):
+        for table in ("compare_selection_artifacts", "compare_selection_drafts",
+                      "compare_artifacts", "compare_pair_files", "compare_pairs", "compare_tasks"):
             db.execute(f"DROP TABLE IF EXISTS {table}")
     yield CompareStore(RunStore(tmp_path, database_url=MYSQL_URL))
 

@@ -11,13 +11,18 @@ import hashlib
 from html import escape as html_escape
 import json
 import os
+import shutil
+import tempfile
 import time
 import uuid
 from pathlib import Path
-from typing import Any
+from typing import Any, Mapping
 
 from ..docx import DocxError
 from ..store import Conflict, NotFound, RunStore, sha256_file
+from .selection import (SelectionError, assess_selection, decision_hash,
+                        normalize_decisions, require_generation_ready)
+from .selection_writer import generate_selection_artifacts
 
 
 PAIR_STATUSES = {"pending", "queued", "leased", "running", "succeeded", "incomplete", "failed", "retry_wait"}
@@ -72,9 +77,40 @@ class CompareStore:
                     object_key TEXT NOT NULL, sha256 TEXT NOT NULL, size INTEGER NOT NULL,
                     PRIMARY KEY(pair_id, kind)
                 );
+                CREATE TABLE IF NOT EXISTS compare_selection_drafts (
+                    pair_id TEXT PRIMARY KEY REFERENCES compare_pairs(id),
+                    selection_epoch INTEGER NOT NULL DEFAULT 0,
+                    result_sha256 TEXT NOT NULL,
+                    left_source_sha256 TEXT NOT NULL,
+                    right_source_sha256 TEXT NOT NULL,
+                    decisions_json LONGTEXT NOT NULL,
+                    decision_hash TEXT NOT NULL,
+                    updated_at REAL NOT NULL
+                );
+                CREATE TABLE IF NOT EXISTS compare_selection_artifacts (
+                    pair_id TEXT NOT NULL REFERENCES compare_pairs(id),
+                    version INTEGER NOT NULL, kind TEXT NOT NULL,
+                    object_key TEXT NOT NULL, sha256 TEXT NOT NULL, size INTEGER NOT NULL,
+                    selection_epoch INTEGER NOT NULL, decision_hash TEXT NOT NULL,
+                    result_sha256 TEXT NOT NULL, left_source_sha256 TEXT NOT NULL,
+                    right_source_sha256 TEXT NOT NULL, report_json LONGTEXT NOT NULL,
+                    stale INTEGER NOT NULL DEFAULT 0, created_at REAL NOT NULL,
+                    PRIMARY KEY(pair_id, version, kind)
+                );
+                CREATE INDEX IF NOT EXISTS compare_selection_artifacts_pair
+                    ON compare_selection_artifacts(pair_id, version);
                 CREATE INDEX IF NOT EXISTS compare_pairs_work
                     ON compare_pairs(status, lease_until, updated_at);
             """)
+            columns = {row["name"] for row in db.execute("PRAGMA table_info(compare_pair_files)")}
+            for name, definition in {
+                "original_sha256": "TEXT",
+                "original_size": "INTEGER",
+                "normalized_sha256": "TEXT",
+                "revisions_accepted": "INTEGER NOT NULL DEFAULT 0",
+            }.items():
+                if name not in columns:
+                    db.execute(f"ALTER TABLE compare_pair_files ADD COLUMN {name} {definition}")
 
     def _connect(self):
         return self.store._connect()
@@ -202,9 +238,16 @@ class CompareStore:
         files = db.execute("SELECT * FROM compare_pair_files WHERE pair_id=? ORDER BY side", (row["id"],)).fetchall()
         mapped = {}
         for file in files:
+            accepted = file["upload_status"] == "accepted"
             mapped[file["side"]] = {"client_id": file["client_id"], "name": file["filename"], "size": file["size"],
                                      "upload_status": file["upload_status"], "error_code": file["error_code"],
-                                     "source_sha256": file["source_sha256"]}
+                                     "source_sha256": file["source_sha256"],
+                                     "normalized_sha256": ((file["normalized_sha256"] or file["source_sha256"])
+                                                           if accepted else None),
+                                     "normalized_size": file["size"] if accepted else None,
+                                     "original_sha256": file["original_sha256"] or file["source_sha256"],
+                                     "original_size": file["original_size"] or file["size"],
+                                     "revisions_accepted": int(file["revisions_accepted"] or 0)}
         result = {"id": row["id"], "task_id": row["task_id"], "ordinal": row["ordinal"],
                   "client_pair_id": row["client_pair_id"], "label": row["label"], "status": row["status"],
                   "error_code": row["error_code"], "summary": None, "coverage": None,
@@ -251,12 +294,16 @@ class CompareStore:
         receipts = []
         try:
             for item in uploads:
+                item.setdefault("original_sha256", hashlib.sha256(item.get("data", b"")).hexdigest())
+                item.setdefault("original_size", len(item.get("data", b"")))
+                item.setdefault("revisions_accepted", 0)
                 if not item.get("error_code"):
                     key, digest, size = self.store.stage(item["data"])
-                    item.update(key=key, digest=digest, size=size)
+                    item.update(key=key, digest=digest, normalized_size=size)
                     staged.append(key)
                 else:
-                    item.update(digest=hashlib.sha256(item.get("data", b"")).hexdigest(), size=len(item.get("data", b"")))
+                    item.update(digest=hashlib.sha256(item.get("data", b"")).hexdigest(),
+                                normalized_size=len(item.get("data", b"")))
             now = _now()
             with self._connect() as db:
                 db.execute("BEGIN IMMEDIATE")
@@ -267,25 +314,45 @@ class CompareStore:
                     row = db.execute("""SELECT f.*,p.id pair_id,p.status pair_status,p.task_id
                         FROM compare_pair_files f JOIN compare_pairs p ON p.id=f.pair_id
                         WHERE p.task_id=? AND f.client_id=?""", (task_id, item.get("client_id"))).fetchone()
-                    receipt = {"client_id": item.get("client_id"), "status": "rejected", "pair_id": None, "error_code": None}
+                    receipt = {"client_id": item.get("client_id"), "status": "rejected", "pair_id": None,
+                               "error_code": None, "original_sha256": item["original_sha256"],
+                               "original_size": item["original_size"],
+                               "normalized_sha256": None if item.get("error_code") else item["digest"],
+                               "normalized_size": None if item.get("error_code") else item["normalized_size"],
+                               "revisions_accepted": int(item["revisions_accepted"] or 0)}
                     if row is None:
                         receipt["error_code"] = "MANIFEST_ENTRY_NOT_FOUND"
                     elif row["upload_status"] == "accepted":
-                        same = row["source_sha256"] == item["digest"] and row["size"] == item["size"] and row["filename"] == item.get("name")
-                        receipt.update(status="already_accepted" if same else "rejected", pair_id=row["pair_id"],
-                                       error_code=None if same else "UPLOAD_IDENTITY_CONFLICT")
+                        same = ((row["original_sha256"] or row["source_sha256"]) == item["original_sha256"]
+                                and (row["original_size"] or row["size"]) == item["original_size"]
+                                and row["filename"] == item.get("name"))
+                        if same:
+                            receipt.update(status="already_accepted", pair_id=row["pair_id"],
+                                           error_code=None,
+                                           original_sha256=row["original_sha256"] or row["source_sha256"],
+                                           original_size=row["original_size"] or row["size"],
+                                           normalized_sha256=row["normalized_sha256"] or row["source_sha256"],
+                                           normalized_size=row["size"],
+                                           revisions_accepted=int(row["revisions_accepted"] or 0))
+                        else:
+                            receipt.update(status="rejected", pair_id=row["pair_id"],
+                                           error_code="UPLOAD_IDENTITY_CONFLICT")
                     elif item.get("error_code"):
                         receipt.update(pair_id=row["pair_id"], error_code=item["error_code"])
                         db.execute("UPDATE compare_pair_files SET upload_status='rejected',error_code=?,updated_at=? WHERE pair_id=? AND side=?",
                                    (item["error_code"], now, row["pair_id"], row["side"]))
-                    elif row["filename"] != item.get("name") or row["size"] != item["size"]:
+                    elif row["filename"] != item.get("name") or row["size"] != item["original_size"]:
                         receipt.update(pair_id=row["pair_id"], error_code="MANIFEST_FILE_MISMATCH")
                         db.execute("UPDATE compare_pair_files SET upload_status='rejected',error_code=?,updated_at=? WHERE pair_id=? AND side=?",
                                    ("MANIFEST_FILE_MISMATCH", now, row["pair_id"], row["side"]))
                     else:
                         db.execute("""UPDATE compare_pair_files SET upload_status='accepted',error_code=NULL,
-                            source_sha256=?,object_key=?,updated_at=? WHERE pair_id=? AND side=?""",
-                                   (item["digest"], item["key"], now, row["pair_id"], row["side"]))
+                            source_sha256=?,object_key=?,size=?,original_sha256=?,original_size=?,
+                            normalized_sha256=?,revisions_accepted=?,updated_at=? WHERE pair_id=? AND side=?""",
+                                    (item["digest"], item["key"], item["normalized_size"],
+                                     item["original_sha256"], item["original_size"],
+                                     item["digest"], int(item["revisions_accepted"] or 0), now,
+                                     row["pair_id"], row["side"]))
                         receipt.update(status="accepted", pair_id=row["pair_id"])
                     receipts.append(receipt)
                 db.execute("UPDATE compare_tasks SET updated_at=? WHERE id=?", (now, task_id))
@@ -611,3 +678,343 @@ class CompareStore:
                                      (error_code, now + min(2 ** row["attempt"], 60), now, pair_id, token, now)).rowcount
                 if changed != 1:
                     raise Conflict("stale compare worker lease")
+
+    # --- selection drafts and generated artifacts ---------------------------
+
+    SELECTION_KINDS = frozenset({"final", "redline"})
+
+    def _selection_pair(self, owner: str, pair_id: str) -> dict[str, Any]:
+        pair = self.get_pair(owner, pair_id)
+        if pair.get("status") not in {"succeeded", "incomplete"} or not isinstance(pair.get("result"), dict):
+            raise Conflict("COMPARE_RESULT_NOT_READY")
+        return pair
+
+    @staticmethod
+    def _selection_diffs(result: Mapping[str, Any]) -> list[dict[str, Any]]:
+        """Small, text-only projection used by the selection rail."""
+        def spans(diff: Mapping[str, Any], side: str) -> list[Any]:
+            values = diff.get(f"{side}_spans")
+            if values is None:
+                value = diff.get(side)
+                values = [value] if value is not None else []
+            if not isinstance(values, list):
+                raise Conflict("COMPARE_RESULT_INVALID")
+            return values
+
+        items = []
+        for diff in result.get("diffs") or []:
+            if not isinstance(diff, Mapping):
+                raise Conflict("COMPARE_RESULT_INVALID")
+            items.append({
+                "id": str(diff.get("id") or ""),
+                "type": str(diff.get("type") or ""),
+                "section": str(diff.get("section") or ""),
+                "left_text": "".join(str((span or {}).get("text") or "")
+                                     for span in spans(diff, "left")),
+                "right_text": "".join(str((span or {}).get("text") or "")
+                                      for span in spans(diff, "right")),
+            })
+        return items
+
+    @staticmethod
+    def _draft_dict(row: Any) -> dict[str, Any] | None:
+        if row is None:
+            return None
+        try:
+            decisions = json.loads(row["decisions_json"])
+        except (TypeError, ValueError):
+            raise Conflict("COMPARE_SELECTION_INVALID") from None
+        return {"selection_epoch": int(row["selection_epoch"]),
+                "result_sha256": row["result_sha256"],
+                "left_source_sha256": row["left_source_sha256"],
+                "right_source_sha256": row["right_source_sha256"],
+                "decisions": decisions,
+                "decision_hash": row["decision_hash"],
+                "updated_at": row["updated_at"]}
+
+    @staticmethod
+    def _artifact_dict(row: Any) -> dict[str, Any]:
+        return {"kind": row["kind"], "sha256": row["sha256"], "size": int(row["size"]),
+                "selection_epoch": int(row["selection_epoch"]),
+                "decision_hash": row["decision_hash"],
+                "stale": bool(row["stale"]),
+                "download_url": (f"/api/compare/pairs/{row['pair_id']}/selection-artifacts/"
+                                 f"{int(row['version'])}/{row['kind']}")}
+
+    def _selection_artifacts(self, db, pair_id: str, version: int | None = None):
+        sql = "SELECT * FROM compare_selection_artifacts WHERE pair_id=?"
+        params: list[Any] = [pair_id]
+        if version is not None:
+            sql += " AND version=?"
+            params.append(version)
+        sql += " ORDER BY version DESC,kind"
+        return db.execute(sql, tuple(params)).fetchall()
+
+    def _selection_version(self, pair_id: str, version: int) -> dict[str, Any] | None:
+        with self._connect() as db:
+            rows = self._selection_artifacts(db, pair_id, version)
+        if not rows:
+            return None
+        return self._version_dict(rows)
+
+    def _version_dict(self, rows: list[Any]) -> dict[str, Any]:
+        first = rows[0]
+        try:
+            report = json.loads(first["report_json"])
+        except (TypeError, ValueError):
+            raise Conflict("COMPARE_SELECTION_INVALID") from None
+        return {"version": int(first["version"]),
+                "report": report,
+                "stale": any(bool(row["stale"]) for row in rows),
+                "selection_epoch": int(first["selection_epoch"]),
+                "decision_hash": first["decision_hash"],
+                "result_sha256": first["result_sha256"],
+                "created_at": first["created_at"],
+                "files": {row["kind"]: self._artifact_dict(row) for row in rows}}
+
+    def selection_state(self, owner: str, pair_id: str) -> dict[str, Any]:
+        """Return the persisted draft, assessment and generated versions."""
+        pair = self._selection_pair(owner, pair_id)
+        result = pair["result"]
+        result_sha256 = str(pair.get("result_sha256") or "")
+        with self._connect() as db:
+            draft = self._draft_dict(db.execute(
+                "SELECT * FROM compare_selection_drafts WHERE pair_id=?", (pair_id,)).fetchone())
+            rows = self._selection_artifacts(db, pair_id)
+        try:
+            assessment = assess_selection(result, draft["decisions"] if draft else {},
+                                          result_sha256=result_sha256)
+        except SelectionError as exc:
+            raise Conflict(exc.code) from None
+        versions = [self._version_dict(list(group)) for group in _group_versions(rows)]
+        current_epoch = draft["selection_epoch"] if draft else 0
+        for version in versions:
+            version["current"] = version["version"] == current_epoch and not version["stale"]
+        return {"pair_id": pair_id, "result_sha256": result_sha256,
+                "left_source_sha256": assessment.left_source_sha256,
+                "right_source_sha256": assessment.right_source_sha256,
+                "selection_epoch": current_epoch, "draft": draft,
+                "decisions": assessment.decision_map,
+                "assessment": assessment.to_dict(),
+                "diffs": self._selection_diffs(result),
+                "can_generate": bool(draft) and assessment.can_generate,
+                "artifacts": versions}
+
+    def save_selection(self, owner: str, pair_id: str, *, expected_epoch: int,
+                       result_sha256: str, left_source_sha256: str,
+                       right_source_sha256: str,
+                       decisions: Mapping[str, str] | None = None) -> dict[str, Any]:
+        """Atomically save a normalized draft and advance its version.
+
+        A repeated save of the same decisions is idempotent and does not advance
+        the epoch. A changed draft marks every older generated version stale.
+        """
+        pair = self._selection_pair(owner, pair_id)
+        result = pair["result"]
+        if type(expected_epoch) is not int or expected_epoch < 0:
+            raise ValueError("INVALID_SELECTION_EPOCH")
+        if str(result_sha256 or "") != str(pair.get("result_sha256") or ""):
+            raise Conflict("COMPARE_RESULT_CHANGED")
+        left_hash = str((result.get("left") or {}).get("sha256") or "")
+        right_hash = str((result.get("right") or {}).get("sha256") or "")
+        if str(left_source_sha256 or "") != left_hash or str(right_source_sha256 or "") != right_hash:
+            raise Conflict("COMPARE_SOURCE_CHANGED")
+        supplied = dict(decisions or {})
+        # Validate unknown ids and illegal values before taking the write lock.
+        normalize_decisions(result, supplied)
+        with self._connect() as db:
+            db.execute("BEGIN IMMEDIATE")
+            lock = " FOR UPDATE" if self.store.database.dialect == "mysql" else ""
+            db.execute("SELECT id FROM compare_pairs WHERE id=?" + lock, (pair_id,)).fetchone()
+            row = db.execute("SELECT * FROM compare_selection_drafts WHERE pair_id=?" + lock,
+                             (pair_id,)).fetchone()
+            draft = self._draft_dict(row)
+            current = draft["selection_epoch"] if draft else 0
+            if expected_epoch != current:
+                raise Conflict("SELECTION_EPOCH_CONFLICT")
+            base = dict(draft["decisions"]) if draft else {}
+            base.update(supplied)
+            normalized = normalize_decisions(result, base)
+            digest = decision_hash(normalized)
+            now = _now()
+            unchanged = (draft is not None and draft["decisions"] == normalized
+                         and draft["result_sha256"] == result_sha256)
+            if not unchanged:
+                new_epoch = current + 1
+                if draft is None:
+                    db.execute("""INSERT INTO compare_selection_drafts
+                        (pair_id,selection_epoch,result_sha256,left_source_sha256,
+                         right_source_sha256,decisions_json,decision_hash,updated_at)
+                        VALUES (?,?,?,?,?,?,?,?)""",
+                               (pair_id, new_epoch, result_sha256, left_hash, right_hash,
+                                _json(normalized), digest, now))
+                else:
+                    db.execute("""UPDATE compare_selection_drafts SET selection_epoch=?,
+                        result_sha256=?,left_source_sha256=?,right_source_sha256=?,
+                        decisions_json=?,decision_hash=?,updated_at=? WHERE pair_id=?""",
+                               (new_epoch, result_sha256, left_hash, right_hash,
+                                _json(normalized), digest, now, pair_id))
+                db.execute("UPDATE compare_selection_artifacts SET stale=1 WHERE pair_id=?",
+                           (pair_id,))
+                db.execute("UPDATE compare_pairs SET updated_at=? WHERE id=?", (now, pair_id))
+        return self.selection_state(owner, pair_id)
+
+    def preview_selection(self, owner: str, pair_id: str, *,
+                          decisions: Mapping[str, str] | None = None) -> dict[str, Any]:
+        """Assess a selection without persisting it or writing any file."""
+        pair = self._selection_pair(owner, pair_id)
+        with self._connect() as db:
+            draft = self._draft_dict(db.execute(
+                "SELECT * FROM compare_selection_drafts WHERE pair_id=?", (pair_id,)).fetchone())
+        if decisions is None:
+            chosen = draft["decisions"] if draft else {}
+        else:
+            supplied = dict(decisions)
+            normalize_decisions(pair["result"], supplied)
+            chosen = dict(draft["decisions"]) if draft else {}
+            chosen.update(supplied)
+        assessment = assess_selection(pair["result"], chosen,
+                                      result_sha256=str(pair.get("result_sha256") or ""))
+        return {"pair_id": pair_id, "result_sha256": str(pair.get("result_sha256") or ""),
+                "selection_epoch": draft["selection_epoch"] if draft else 0,
+                "assessment": assessment.to_dict(),
+                "diffs": self._selection_diffs(pair["result"]),
+                "can_generate": assessment.can_generate}
+
+    def generate_selection(self, owner: str, pair_id: str, *, expected_epoch: int,
+                           expected_decision_hash: str,
+                           result_sha256: str) -> dict[str, Any]:
+        """Generate the selected final/redline pair for the current draft.
+
+        The draft epoch is the generation version, so retrying the same epoch and
+        decision hash returns the already published files instead of creating a
+        duplicate pair. Any draft change advances the epoch and marks old
+        artifacts stale while keeping them traceable.
+        """
+        pair = self._selection_pair(owner, pair_id)
+        result = pair["result"]
+        if type(expected_epoch) is not int or expected_epoch < 1:
+            raise ValueError("INVALID_SELECTION_EPOCH")
+        if str(result_sha256 or "") != str(pair.get("result_sha256") or ""):
+            raise Conflict("COMPARE_RESULT_CHANGED")
+        with self._connect() as db:
+            draft = self._draft_dict(db.execute(
+                "SELECT * FROM compare_selection_drafts WHERE pair_id=?", (pair_id,)).fetchone())
+        if draft is None:
+            raise Conflict("SELECTION_DRAFT_REQUIRED")
+        if draft["selection_epoch"] != expected_epoch:
+            raise Conflict("SELECTION_EPOCH_CONFLICT")
+        if draft["decision_hash"] != str(expected_decision_hash or ""):
+            raise Conflict("SELECTION_DECISION_CONFLICT")
+        existing = self._selection_version(pair_id, expected_epoch)
+        if existing is not None and not existing["stale"]:
+            return existing
+        require_generation_ready(result, draft["decisions"], result_sha256=result_sha256)
+        files = {item["side"]: item for item in self.pair_inputs(pair_id)}
+        paths = {}
+        for side in ("left", "right"):
+            file = files[side]
+            path = self.store.object_path(file["object_key"] or "")
+            if (not path.is_file() or path.stat().st_size != file["size"]
+                    or sha256_file(path) != file["source_sha256"]):
+                raise Conflict("COMPARE_INPUT_INTEGRITY_FAILED")
+            paths[side] = path
+        temp_dir = Path(tempfile.mkdtemp(prefix="fundlex-compare-selection-"))
+        staged: dict[str, tuple[str, str, int]] = {}
+        try:
+            final, redline = temp_dir / "final.docx", temp_dir / "redline.docx"
+            validation = generate_selection_artifacts(
+                paths["left"], paths["right"], result, draft["decisions"],
+                final, redline, selection_epoch=expected_epoch,
+                result_sha256=result_sha256)
+            report = dict(validation.to_dict())
+            report.update(version=expected_epoch, decision_hash=draft["decision_hash"],
+                          result_sha256=result_sha256,
+                          left_source_sha256=draft["left_source_sha256"],
+                          right_source_sha256=draft["right_source_sha256"],
+                          counts=assess_selection(result, draft["decisions"]).counts,
+                          created_at=_now())
+            encoded_report = _json(report)
+            for kind, path in (("final", final), ("redline", redline)):
+                staged[kind] = self._stage_selection_object(pair_id, expected_epoch, kind, path)
+            with self._connect() as db:
+                db.execute("BEGIN IMMEDIATE")
+                lock = " FOR UPDATE" if self.store.database.dialect == "mysql" else ""
+                db.execute("SELECT id FROM compare_pairs WHERE id=?" + lock, (pair_id,)).fetchone()
+                row = db.execute("SELECT * FROM compare_selection_drafts WHERE pair_id=?" + lock,
+                                 (pair_id,)).fetchone()
+                current = self._draft_dict(row)
+                if (current is None or current["selection_epoch"] != expected_epoch
+                        or current["decision_hash"] != draft["decision_hash"]
+                        or current["result_sha256"] != result_sha256):
+                    raise Conflict("SELECTION_EPOCH_CONFLICT")
+                if self._selection_artifacts(db, pair_id, expected_epoch):
+                    raise Conflict("SELECTION_GENERATION_CONFLICT")
+                for kind, (key, digest, size) in staged.items():
+                    db.execute("""INSERT INTO compare_selection_artifacts
+                        (pair_id,version,kind,object_key,sha256,size,selection_epoch,
+                         decision_hash,result_sha256,left_source_sha256,right_source_sha256,
+                         report_json,stale,created_at)
+                        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,0,?)""",
+                               (pair_id, expected_epoch, kind, key, digest, size,
+                                expected_epoch, draft["decision_hash"], result_sha256,
+                                draft["left_source_sha256"], draft["right_source_sha256"],
+                                encoded_report, report["created_at"]))
+                db.execute("UPDATE compare_pairs SET updated_at=? WHERE id=?",
+                           (report["created_at"], pair_id))
+            staged = {}
+        except Exception:
+            for key, _, _ in staged.values():
+                try:
+                    self.store.object_path(key).unlink(missing_ok=True)
+                except OSError:
+                    pass
+            raise
+        finally:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+        version = self._selection_version(pair_id, expected_epoch)
+        if version is None:
+            raise Conflict("SELECTION_GENERATION_UNPUBLISHED")
+        version["current"] = True
+        return version
+
+    def _stage_selection_object(self, pair_id: str, version: int, kind: str,
+                                source: Path) -> tuple[str, str, int]:
+        digest = sha256_file(source)
+        key = f"compare/selections/{pair_id}/{version}/{uuid.uuid4().hex}.{kind}.docx"
+        target = self.store.object_path(key)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        with source.open("rb") as incoming, target.open("xb") as output:
+            for chunk in iter(lambda: incoming.read(1024 * 1024), b""):
+                output.write(chunk)
+            output.flush()
+            os.fsync(output.fileno())
+        if sha256_file(target) != digest:
+            target.unlink(missing_ok=True)
+            raise Conflict("artifact copy verification failed")
+        return key, digest, source.stat().st_size
+
+    def selection_artifact(self, owner: str, pair_id: str, version: int,
+                           kind: str) -> tuple[Path, dict[str, Any]]:
+        if kind not in self.SELECTION_KINDS:
+            raise NotFound("selection artifact not found")
+        with self._connect() as db:
+            row = db.execute("""SELECT a.* FROM compare_selection_artifacts a
+                JOIN compare_pairs p ON p.id=a.pair_id
+                JOIN compare_tasks t ON t.id=p.task_id
+                WHERE a.pair_id=? AND a.version=? AND a.kind=? AND t.owner=?""",
+                             (pair_id, version, kind, owner)).fetchone()
+        if row is None:
+            raise NotFound("selection artifact not found")
+        path = self.store.object_path(row["object_key"])
+        if (not path.is_file() or path.stat().st_size != row["size"]
+                or sha256_file(path) != row["sha256"]):
+            raise Conflict("COMPARE_SELECTION_ARTIFACT_INVALID")
+        return path, dict(row)
+
+
+def _group_versions(rows: list[Any]) -> list[list[Any]]:
+    grouped: dict[int, list[Any]] = {}
+    for row in rows:
+        grouped.setdefault(int(row["version"]), []).append(row)
+    return [grouped[version] for version in sorted(grouped, reverse=True)]

@@ -55,6 +55,53 @@ def test_modify_choice_right_writes_real_final_and_redline(tmp_path):
     assert validation.manifest[0]["selected_text"] == "0.30%"
 
 
+def test_consecutive_modify_paragraphs_are_written_independently(tmp_path):
+    left, right, final, redline, result, validation = _generate(
+        tmp_path,
+        ["第一段费率为0.40%", "第二段费率为0.10%"],
+        ["第一段费率为0.30%", "第二段费率为0.08%"],
+        {"D0001": "right", "D0002": "left"},
+    )
+    # The two adjacent modified paragraphs share one alignment group; each
+    # selected diff must still map to its own corresponding left paragraph.
+    assert [diff["group_id"] for diff in result["diffs"]] == ["G0001", "G0001"]
+    assert [paragraph.text for paragraph in Document(final).paragraphs] == [
+        "第一段费率为0.30%", "第二段费率为0.10%"]
+    assert len(validation.manifest) == 1
+    with ZipFile(redline) as archive:
+        xml = archive.read(DOCUMENT)
+    assert xml.count(b"<w:ins ") == 1
+    assert xml.count(b"<w:del ") == 1
+
+
+def test_header_coverage_warning_does_not_block_body_selection(tmp_path):
+    left, right = tmp_path / "left.docx", tmp_path / "right.docx"
+    for path, body in ((left, "费率为0.40%"), (right, "费率为0.30%")):
+        document = Document()
+        document.add_paragraph(body)
+        document.sections[0].header.paragraphs[0].text = "基金合同页眉"
+        document.save(path)
+    result, result_hash = _result(left, right)
+    decisions = {diff["id"]: "right" for diff in result["diffs"]}
+    validation = generate_selection_artifacts(
+        left, right, result, decisions, tmp_path / "final.docx", tmp_path / "redline.docx",
+        selection_epoch=1, result_sha256=result_hash)
+    assert Document(tmp_path / "final.docx").paragraphs[0].text == "费率为0.30%"
+    assert any("header" in warning for warning in validation.limitations)
+
+
+def test_multiple_selected_modifications_in_one_group_are_written(tmp_path):
+    _, _, final, _, _, validation = _generate(
+        tmp_path,
+        ["第一段费率为0.40%", "第二段费率为0.10%"],
+        ["第一段费率为0.30%", "第二段费率为0.08%"],
+        {"D0001": "right", "D0002": "right"},
+    )
+    assert [paragraph.text for paragraph in Document(final).paragraphs] == [
+        "第一段费率为0.30%", "第二段费率为0.08%"]
+    assert len(validation.manifest) == 2
+
+
 def test_modify_choice_left_keeps_left_and_has_no_redline_for_unmodified_selection(tmp_path):
     left, right, final, redline, result, validation = _generate(
         tmp_path, ["费率为0.40%"], ["费率为0.30%"], {"D0001": "left"})

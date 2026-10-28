@@ -55,6 +55,8 @@ function downloadExtension(kind: string): string {
 function detailStatus(document: TaskDocument): string {
   if (document.delivery_status === 'complete') return '交付完成'
   if (document.delivery_status === 'incomplete') return '结果不完整，需人工核对'
+  if (document.delivery_status === 'diagnosed') return '只读诊断完成，仅提供报告，未交付修改后的合同'
+  if (document.delivery_status?.startsWith('evaluation_')) return '评测结果，不能作为正式合同'
   if (document.delivery_status === 'not_generated') return '未生成可交付文件'
   return field(document.delivery_status, '未确认')
 }
@@ -139,6 +141,7 @@ export function DocumentDetailPage() {
   return <div className="fundlex-document-detail">
     <header className="page-heading"><div><p><Link to={`/tasks/${taskId}`}>← 返回任务</Link></p><h1>{document.name}</h1><p>合同详情、业务依据、实际修改和授权下载</p></div><div className="action-row"><Link to={`/tasks/${taskId}/documents/${document.document_id}/review`}><Button variant="primary" disabled={!document.downloads?.working_redline && !document.downloads?.redline}>打开修订复核</Button></Link><StatusBadge value={document.delivery_status} /></div></header>
     <Summary document={document} report={reportData} />
+    {reportData?.verification_status === 'verification_blocked' && <Card><div role="status"><h2>验证暂未完成，等待恢复处理</h2><p>处理所需的验证记录或模型额度暂不可用。恢复任务后将继续验证；当前文件尚未通过最终交付校验。</p></div></Card>}
     {reportData ? <><EvidenceSection report={reportData} /><TargetSection report={reportData} /><CompareSection report={reportData} /><ExceptionSection report={reportData} /></> : <Card><h2>报告</h2><p className="fundlex-muted">报告尚未生成。请等待任务完成后刷新。</p></Card>}
      <DownloadSection taskId={taskId || ''} document={document} />
   </div>

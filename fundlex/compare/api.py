@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from fastapi import Depends, File, Form, Header, HTTPException, UploadFile
+from fastapi.responses import FileResponse
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from .store import CompareStore, Conflict, NotFound
@@ -23,7 +24,7 @@ class CompareFileManifest(BaseModel):
     def filename(cls, value: str) -> str:
         path = Path(value.replace("\\", "/"))
         if path.name != value or not value.strip() or any(ord(c) < 32 for c in value) or not value.lower().endswith(".docx"):
-            raise ValueError("manifest requires a DOCX base filename")
+            raise ValueError("manifest requires a DOCX base filename; save legacy .doc as .docx first")
         return value
 
 
@@ -48,6 +49,27 @@ class CompareTaskSubmission(BaseModel):
         return value.strip()
 
 
+class CompareSelectionUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    expected_epoch: int = Field(ge=0)
+    result_sha256: str = Field(min_length=1, max_length=128)
+    left_source_sha256: str = Field(min_length=1, max_length=128)
+    right_source_sha256: str = Field(min_length=1, max_length=128)
+    decisions: dict[str, str] = Field(default_factory=dict)
+
+
+class CompareSelectionPreview(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    decisions: dict[str, str] | None = None
+
+
+class CompareSelectionGenerate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    expected_epoch: int = Field(ge=1)
+    decision_hash: str = Field(min_length=1, max_length=128)
+    result_sha256: str = Field(min_length=1, max_length=128)
+
+
 def _render_view(pair_result: dict[str, Any], left_path: Path, right_path: Path) -> tuple[str, str]:
     from . import parser
     from .render import render_compare_document
@@ -60,8 +82,7 @@ def _render_view(pair_result: dict[str, Any], left_path: Path, right_path: Path)
 
 def register_compare_routes(application, compare_store: CompareStore, user_dependency: Callable,
                             validate_upload: Callable[[str, bytes], str], *, max_upload_bytes: int,
-                            max_batch_bytes: int, max_pairs: int = 1000,
-                            max_request_files: int = 20) -> None:
+                            max_batch_bytes: int, max_pairs: int = 1000) -> None:
     def call(fn, *args, **kwargs):
         try:
             return fn(*args, **kwargs)
@@ -103,8 +124,6 @@ def register_compare_routes(application, compare_store: CompareStore, user_depen
             ids = json.loads(client_ids)
         except (ValueError, TypeError):
             raise HTTPException(422, "invalid client_ids") from None
-        if len(files) > max_request_files:
-            raise HTTPException(413, "COMPARE_UPLOAD_REJECTED")
         if (not isinstance(ids, list) or len(ids) != len(files)
                 or any(not isinstance(i, str) or not 1 <= len(i) <= 128 for i in ids) or len(set(ids)) != len(ids)):
             raise HTTPException(422, "invalid client_ids")
@@ -119,20 +138,32 @@ def register_compare_routes(application, compare_store: CompareStore, user_depen
                 total += len(data)
                 name = Path((upload.filename or "").replace("\\", "/")).name
                 error = None
+                prepared = None
                 try:
                     validate_upload(name, data)
                 except HTTPException as exc:
-                    error = "COMPARE_INVALID_DOCX" if exc.status_code == 415 else "COMPARE_UPLOAD_REJECTED"
+                    if exc.status_code == 415:
+                        error = ("LEGACY_DOC_UNSUPPORTED"
+                                 if "legacy word .doc" in str(exc.detail).lower()
+                                 else "COMPARE_INVALID_DOCX")
+                    else:
+                        error = "COMPARE_UPLOAD_REJECTED"
                 if error is None:
-                    # Enforce the same safe OOXML reader used by the worker. A ZIP
-                    # bearing a document.xml member alone is not a valid DOCX.
-                    from .parser import parse_compare_document
-                    from ..docx import DocxError
+                    from .ingest import prepare_compare_upload
                     try:
-                        parse_compare_document(data, filename=name)
-                    except (DocxError, ValueError, OSError, KeyError):
+                        prepared = prepare_compare_upload(name, data)
+                    except Exception:
                         error = "COMPARE_INVALID_DOCX"
-                uploads.append({"client_id": cid, "name": name, "data": data, "error_code": error})
+                        prepared = None
+                uploads.append({
+                    "client_id": cid,
+                    "name": name,
+                    "data": prepared["data"] if error is None else data,
+                    "original_sha256": prepared["original_sha256"] if prepared else hashlib.sha256(data).hexdigest(),
+                    "original_size": prepared["original_size"] if prepared else len(data),
+                    "revisions_accepted": prepared["revisions_accepted"] if prepared and error is None else 0,
+                    "error_code": error,
+                })
             return call(compare_store.upload, user, task_id, uploads)
         finally:
             for upload in files:
@@ -170,3 +201,45 @@ def register_compare_routes(application, compare_store: CompareStore, user_depen
                 "right": {"name": pair["right"]["name"], "html": right_html},
                 "summary": pair["result"].get("summary"), "coverage": pair["result"].get("coverage"),
                 "diffs": pair["result"].get("diffs", []), "result_sha256": pair.get("result_sha256")}
+
+    @application.get("/api/compare/pairs/{pair_id}/selection")
+    def get_compare_selection(pair_id: str, user: str = Depends(user_dependency)):
+        return call(compare_store.selection_state, user, pair_id)
+
+    @application.put("/api/compare/pairs/{pair_id}/selection")
+    def save_compare_selection(pair_id: str, payload: CompareSelectionUpdate,
+                               user: str = Depends(user_dependency)):
+        return call(compare_store.save_selection, user, pair_id,
+                    expected_epoch=payload.expected_epoch,
+                    result_sha256=payload.result_sha256,
+                    left_source_sha256=payload.left_source_sha256,
+                    right_source_sha256=payload.right_source_sha256,
+                    decisions=payload.decisions)
+
+    @application.post("/api/compare/pairs/{pair_id}/selection/preview")
+    def preview_compare_selection(pair_id: str, payload: CompareSelectionPreview | None = None,
+                                  user: str = Depends(user_dependency)):
+        return call(compare_store.preview_selection, user, pair_id,
+                    decisions=payload.decisions if payload else None)
+
+    @application.post("/api/compare/pairs/{pair_id}/selection/generate")
+    def generate_compare_selection(pair_id: str, payload: CompareSelectionGenerate,
+                                   user: str = Depends(user_dependency)):
+        return call(compare_store.generate_selection, user, pair_id,
+                    expected_epoch=payload.expected_epoch,
+                    expected_decision_hash=payload.decision_hash,
+                    result_sha256=payload.result_sha256)
+
+    @application.get("/api/compare/pairs/{pair_id}/selection-artifacts/{version}/{kind}")
+    def download_compare_selection(pair_id: str, version: int, kind: str,
+                                   user: str = Depends(user_dependency)):
+        try:
+            path, row = compare_store.selection_artifact(user, pair_id, version, kind)
+        except NotFound as exc:
+            raise_api_error(404, exc, fallback="NOT_FOUND")
+        except Conflict as exc:
+            raise_api_error(409, exc, fallback="CONFLICT")
+        return FileResponse(
+            path, media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            filename=f"fundlex-compare-{pair_id[:8]}-v{version}-{kind}.docx",
+            headers={"Cache-Control": "no-store", "X-Content-SHA256": row["sha256"]})
