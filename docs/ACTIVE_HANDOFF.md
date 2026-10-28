@@ -4,6 +4,13 @@
 >
 > **章节口径更正（2026-10-28）**：D06 p280 实际位于“第六部分基金份额的申购与赎回”，不在 G06 的“基金的基本情况—份额类别设置”；G06 只覆盖 p130–p137。p280 的 Y 类单向转换不是 G06 业务问题，BIZ-01 已从业务问题清单排除；如要处理应另立规则/业务决定。
 
+## 最新断点（2026-10-28，并行分支收口）
+
+- 已合入/移植：`codex/fix-task-deeplink`（merge `d8224ce`）；`codex/v1-three-business-workspace` 的两个后端修复——MySQL 语料 upsert 保留 created_at/latest（`a8d90c9`）、模型不可用/预算失败暂停而非导出空候选（`1b8230f`，新增 transport pause 回归）。
+- 已确认当前分支已包含、无需再合：Compare 块级选择（`1e01cfb`）、tracked revisions（`fundlex/compare/revisions.py`）、V1 选择保存/预览/生成与草稿表、飞书 QR 图片回退与样式、任务深链修复。
+- 有意不整分支合并：`compare-selection-group-fix`/`compare-tracked-revisions`（35/40 冲突，生产 Compare 独立线，合并会回退）、`v1-*` 生产 V1 发布线（按功能 cherry-pick，不整并）、`feat/full-stack-test-environment`（可选测试环境，冲突需人工处理）。
+- 验证：guide generation 相关 **53 passed**；此前全量 1942 passed / 13 skipped。当前分支领先 origin 21 个提交，工作区仅剩两个备份目录未跟踪。
+
 ## 最新断点（2026-10-28，新需求：带既有修订的DOCX叠加修订，设计已保存）
 
 - 用户新要求：上传件可能带其他部门的Word修订痕迹，需在其上叠加FundLex修订并区分；本轮只要求先思考方案，**未实现、未改行为、未部署**。
