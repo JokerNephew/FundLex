@@ -212,10 +212,33 @@ class CompareResult:
             counts[item.type] = counts.get(item.type, 0) + 1
         return CompareSummary(len(self.diffs), counts["modify"], counts["insert"], counts["delete"])
 
+    @property
+    def comparison_scope(self) -> dict[str, Any]:
+        """State exactly what this comparison covers and what it does not."""
+        return {
+            "text": "compared",
+            "base_side": "left",
+            "formatting_not_compared": True,
+            "structure_not_compared": bool(self.diagnostics.get("structural_not_compared")),
+            "normalizations": [
+                "unicode_nfc",
+                "crlf_to_lf",
+                "nbsp_to_space",
+                "tab_to_space",
+                "horizontal_whitespace_collapsed",
+                "outer_space_trimmed_for_alignment",
+            ],
+            "notes": (
+                "正文文本按左侧 DOCX 版式为基底比较；右侧文字复制，右侧字体/字号/"
+                "段落与编号定义不整体复制。未比较的格式或纯结构差异不会合并进最终稿。"
+            ),
+        }
+
     def to_dict(self) -> dict[str, Any]:
         return {"schema_version": self.schema_version,
                 "left": {"filename": self.left.filename, "sha256": self.left.source_sha256},
                 "right": {"filename": self.right.filename, "sha256": self.right.source_sha256},
                 "summary": self.summary.to_dict(), "coverage": self.coverage.to_dict(),
+                "comparison_scope": self.comparison_scope,
                 "diffs": [d.to_dict() for d in self.diffs],
                 "diagnostics": dict(self.diagnostics)}

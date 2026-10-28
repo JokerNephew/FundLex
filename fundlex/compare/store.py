@@ -259,6 +259,7 @@ class CompareStore:
                 payload = json.loads(row["result_json"])
                 result["summary"] = payload.get("summary")
                 result["coverage"] = payload.get("coverage")
+                result["comparison_scope"] = payload.get("comparison_scope")
             except (TypeError, ValueError):
                 pass
         return result

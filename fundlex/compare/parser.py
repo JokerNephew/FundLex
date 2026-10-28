@@ -12,12 +12,15 @@ from pathlib import Path
 from typing import Any, Mapping
 import io
 import os
+import posixpath
 import tempfile
 import zipfile
+from urllib.parse import unquote
 
 from lxml import etree
 
-from ..docx import DOCUMENT, Q, W, REVISION_TAGS, DocxError, ZipLimits, _read_parts, _validate_package, _xml
+from ..docx import (DOCUMENT, OFFICE_REL, Q, R, W, CT, REVISION_TAGS, DocxError, ZipLimits,
+                    _read_parts, _validate_package, _xml)
 from .models import CompareBlock, CompareDocument, Coverage
 from .normalize import normalize_diff, normalize_match
 from .presentation import Presentation
@@ -107,29 +110,58 @@ def _parse_parts(parts: Mapping[str, bytes], *, filename: str = "", side: str = 
     presentation = Presentation(parts, limits)
     page_format = presentation.page(body)
 
-    # The first compare scope is the main document body.  Story parts are
-    # deliberately not compared, but visible text in them must not be
-    # mistaken for a complete comparison.  Empty default headers/footers are
-    # common and do not create noise; non-empty supported Word story parts do.
-    for part_name, data in parts.items():
-        if part_name == DOCUMENT or not part_name.endswith(".xml"):
-            continue
-        story = None
-        for marker, label in (("word/header", "header"), ("word/footer", "footer"),
-                              ("word/footnotes", "footnote"), ("word/endnotes", "endnote"),
-                              ("word/comments", "comment")):
-            if marker in part_name:
-                story = label
-                break
-        if story is None:
+    # The compare scope is the main document body.  Story parts are deliberately
+    # not compared, but visible text in them must not be mistaken for complete
+    # comparison.  Identify them through OPC relationships (URI is arbitrary),
+    # confirm content type and root QName, and keep empty default headers quiet.
+    story_relations = {
+        OFFICE_REL + "/header": ("header", "hdr"),
+        OFFICE_REL + "/footer": ("footer", "ftr"),
+        OFFICE_REL + "/footnotes": ("footnote", "footnotes"),
+        OFFICE_REL + "/endnotes": ("endnote", "endnotes"),
+        OFFICE_REL + "/comments": ("comment", "comments"),
+    }
+    story_parts: dict[str, tuple[str, str]] = {}
+    rels_name = posixpath.join(posixpath.dirname(DOCUMENT), "_rels",
+                               posixpath.basename(DOCUMENT) + ".rels")
+    rels_data = parts.get(rels_name)
+    if rels_data:
+        for rel in _xml(rels_data, limits):
+            if rel.tag != f"{{{R}}}Relationship" or rel.get("TargetMode") == "External":
+                continue
+            mapped = story_relations.get(rel.get("Type", ""))
+            target = rel.get("Target", "")
+            if mapped is None or not target:
+                continue
+            resolved = posixpath.normpath(posixpath.join(posixpath.dirname(DOCUMENT),
+                                                        unquote(target)))
+            story_parts[resolved] = mapped
+    content = parts.get("[Content_Types].xml")
+    if content:
+        for item in _xml(content, limits):
+            if item.tag != f"{{{CT}}}Override":
+                continue
+            mime = item.get("ContentType", "")
+            part_name = unquote(item.get("PartName", "")).lstrip("/")
+            for suffix, mapped in (
+                    ("+header+xml", ("header", "hdr")),
+                    ("+footer+xml", ("footer", "ftr")),
+                    ("+footnotes+xml", ("footnote", "footnotes")),
+                    ("+endnotes+xml", ("endnote", "endnotes")),
+                    ("+comments+xml", ("comment", "comments"))):
+                if mime.endswith(suffix):
+                    story_parts.setdefault(part_name, mapped)
+    for part_name, (label, expected_root) in sorted(story_parts.items()):
+        if part_name == DOCUMENT or part_name not in parts:
             continue
         try:
-            story_root = _xml(data, limits)
+            story_root = _xml(parts[part_name], limits)
             story_text = _text(story_root)
         except Exception:
-            story_text = ""
-        if story_text.strip():
-            warning = f"UNSUPPORTED_VISIBLE_CONTENT:{story}"
+            story_root, story_text = None, ""
+        root_local = etree.QName(story_root).localname if story_root is not None and isinstance(story_root.tag, str) else ""
+        if story_text.strip() or (story_root is not None and root_local != expected_root):
+            warning = f"UNSUPPORTED_VISIBLE_CONTENT:{label}"
             if warning not in warnings:
                 warnings.append(warning)
 
