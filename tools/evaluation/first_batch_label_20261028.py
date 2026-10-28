@@ -408,7 +408,13 @@ def build_doc_model(path: Path) -> DocModel:
         heading = _heading_like(text, style)
         if heading:
             t = text.strip()
-            if PART_HEADING_RE.match(t) or ("摘要" in t and len(t) <= 60):
+            numbered_part = bool(
+                style.lower().startswith("heading")
+                and re.match(r"^[一二三四五六七八九十百]+、", t)
+                and "摘要" not in t
+                and "（" not in t[:2]
+            )
+            if PART_HEADING_RE.match(t) or numbered_part or ("摘要" in t and len(t) <= 60):
                 part = t
                 sub = ""
                 if is_summary:
@@ -715,6 +721,24 @@ def adjudication_prompt(doc: DocModel, guide_text: str, findings: dict[str, Any]
 
 def section_scope_ok(rule_id: str, para: Para) -> bool:
     path = para.section_path or ""
+    text = para.text or ""
+    if para.is_summary:
+        if rule_id in {"G15", "G16", "G17"}:
+            return "销售服务费" in text or "基金费用" in path or "费用" in path
+        if rule_id == "G18":
+            return (
+                "不收取销售服务费，而" in text
+                or "费用收取不同" in text
+                or "可分配收益将有所不同" in text
+                or "可供分配利润将有所不同" in text
+                or ("收益" in path and "分配" in path)
+            )
+        if rule_id in {"G19", "G20", "G21", "G22"}:
+            return "剩余资产" in text or "清算" in path
+        if rule_id in {f"G{i:02d}" for i in range(7, 15)}:
+            return ("申购" in text and "赎回" in text) or ("申购" in path and "赎回" in path)
+        if rule_id in {"G01", "G02", "G03", "G04"}:
+            return "基金份额类别" in text or "将基金份额分为" in text
     if rule_id in {"G01", "G02"}:
         return "释义" in path
     if rule_id in {"G03", "G04", "G05", "G06"}:
@@ -795,17 +819,17 @@ def required_scopes(doc: DocModel) -> dict[str, set[str]]:
     required = {"main": set(RULE_IDS)}
     if doc.summary_start is None:
         return required
-    heads = " ".join(doc.summary_headings)
+    summary_text = " ".join(p.text for p in doc.nonempty() if p.is_summary)
     summary: set[str] = set()
-    if "释义" in heads or "基金份额类别" in heads:
+    if "基金份额类别" in summary_text or "将基金份额分为" in summary_text:
         summary.update({"G01", "G02", "G03", "G04", "G05", "G06"})
-    if "申购" in heads and "赎回" in heads:
+    if "申购" in summary_text and "赎回" in summary_text:
         summary.update({f"G{i:02d}" for i in range(7, 15)})
-    if "费用" in heads or "销售服务费" in heads:
+    if "销售服务费" in summary_text or "基金费用" in summary_text:
         summary.update({"G15", "G16", "G17"})
-    if "收益" in heads:
+    if "收益分配" in summary_text or "不收取销售服务费，而" in summary_text:
         summary.add("G18")
-    if "清算" in heads:
+    if "剩余资产" in summary_text or "基金财产的清算" in summary_text:
         summary.update({"G19", "G20", "G21", "G22"})
     if summary:
         required["summary"] = summary
