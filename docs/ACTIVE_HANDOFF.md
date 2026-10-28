@@ -16,7 +16,8 @@
 - tracked9 仍阻断的真实根因（均为工程项）：G02 无 satisfied 目标/批准；G05:0 absent 目标未获批准；G05:2/G06/G13 缺“无目标”覆盖证据路径（`EFFECT_SITE_UNPROVEN`）；G14/G15/G18 的“审计已确认语义等价”未被 Claim Replay 消费（仍按精确 new_text 判 effect）；p159 `CLAIM_OUTSIDE_SPAN_CHANGED` 疑为 barrier/接受视图偏移。
 - 已完成：审计 verdict 作为语义 effect 证明接入 replay（仅 completed+evidence_verified+物理编辑/站点）；absent 操作生成可审计 satisfied 候选（排除 ONE_OF）；p159 outside-span 比较忽略 barrier；G14 费用项顺序确定。
 - **普通DOCX不回退的隔离**：`generate_artifacts` 只有在源文件确实含他人修订（foreign_inventory非空）时才走 accept-all；普通文件仍走原 `_accept_our_revisions`。普通弘利真实运行：33 targets/11 edits/25 calls，redline仅11 del+11 ins（作者资金清算部），final无修订，claim仅剩1项G05，明显优于改造前。
-- 剩余：G05（普通/带修订各1项）NOT_PLANNED/UNPROVEN；之后跑景宁、QDII与整批。
+- 剩余：G02/G05/G06/G13/G14 的无目标/审计证明路径在不同真实运行间仍有波动（normal1 1项、normal3 6项 claim failures），不能按单次运行判断稳定；需逐规则固定证据路径后再跑整批。G05-only 的 absent 候选已加入（其他规则扩展会回归，已收回）。
+- 普通DOCX结构验证：多次真实运行 redline 仅含资金清算部修订、final 无修订；全量离线 **1942 passed / 13 skipped**，普通路径未因叠加功能回退。
 
 ## 历史断点（2026-10-28，真实模型已开跑；用户取消预算限制）
 
