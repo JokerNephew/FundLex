@@ -1,0 +1,295 @@
+{
+  "schema": "fundlex-first-batch-selection-v1",
+  "frozen_at": "2026-10-28T15:51:08+00:00",
+  "source_root": "/home/opencode/fundlex/funds_word/基金合同第一批",
+  "source_manifest": "funds_word/基金合同第一批",
+  "guide": "references/source/v4存量基金适用销售费用新规的基金合同修改指引_文案勘误版.docx",
+  "guide_sha256": "b77be53c3439d785a9ffad0f09d8d03ba74f7722397576b999ae6f5dd6eef895",
+  "counts": {
+    "dev": 20,
+    "holdout": 8,
+    "total": 28
+  },
+  "excluded_from_modification_denominator": [
+    {
+      "file": "广发亚太中高收益债券型证券投资基金基金合同.doc",
+      "reason": "legacy .doc not supported; save as .docx before submission"
+    },
+    {
+      "file": "广发安颐一年持有期混合型证券投资基金基金合同.doc",
+      "reason": "legacy .doc not supported; save as .docx before submission"
+    },
+    {
+      "file": "广发瑞誉一年持有期混合型证券投资基金基金合同.doc",
+      "reason": "legacy .doc not supported; save as .docx before submission"
+    },
+    {
+      "file": "广发稳宏一年持有期混合型证券投资基金基金合同.doc",
+      "reason": "legacy .doc not supported; save as .docx before submission"
+    },
+    {
+      "file": "广发集利一年定期开放债券型证券投资基金基金合同.doc",
+      "reason": "legacy .doc not supported; save as .docx before submission"
+    }
+  ],
+  "notes": [
+    "All docx files in the user-designated first batch are included; no failure cherry-picking.",
+    "Bean protected sample is retained as a holdout boundary, not silently removed.",
+    "This selection was frozen before any run of the remediated engine; old P6 labels/manifest are separate and unchanged.",
+    "The first batch has historical engine runs, so this holdout is a historical regression set, not unseen-generalization evidence."
+  ],
+  "cases": [
+    {
+      "case_id": "BH01",
+      "group": "holdout",
+      "file": "广发ESG责任投资混合型证券投资基金基金合同.docx",
+      "relative": "funds_word/基金合同第一批/广发ESG责任投资混合型证券投资基金基金合同.docx",
+      "sha256": "736df8d4fa17cea3f81669c76a1b59df22e1c989dafa872ec2448c508bcdca58",
+      "bytes": 128805,
+      "stratum": "long+tracked-history+header-footer"
+    },
+    {
+      "case_id": "B01",
+      "group": "dev",
+      "file": "广发中证A50交易型开放式指数证券投资基金联接基金合同20261020.docx",
+      "relative": "funds_word/基金合同第一批/广发中证A50交易型开放式指数证券投资基金联接基金合同20261020.docx",
+      "sha256": "d6c4c0d68aa74a8c9f3571098492a203815e8586c310e76204d28d6328e0d487",
+      "bytes": 136735,
+      "stratum": "dev-representative"
+    },
+    {
+      "case_id": "B02",
+      "group": "dev",
+      "file": "广发价值优选混合型证券投资基金基金合同.docx",
+      "relative": "funds_word/基金合同第一批/广发价值优选混合型证券投资基金基金合同.docx",
+      "sha256": "708bca5d2197d0688c59ebb7a0eaee1432b79162e2404a8545cd60d488fd67c7",
+      "bytes": 101639,
+      "stratum": "dev-representative"
+    },
+    {
+      "case_id": "BH02",
+      "group": "holdout",
+      "file": "广发全球稳健配置混合型证券投资基金（QDII）基金合同.docx",
+      "relative": "funds_word/基金合同第一批/广发全球稳健配置混合型证券投资基金（QDII）基金合同.docx",
+      "sha256": "c832eccecaa906ef20a82aac34ebef1c5121dd189ccd8d930f4f342aebbfe646",
+      "bytes": 180277,
+      "stratum": "QDII+multi-class+long"
+    },
+    {
+      "case_id": "B03",
+      "group": "dev",
+      "file": "广发品质优选混合型发起式证券投资基金基金合同.docx",
+      "relative": "funds_word/基金合同第一批/广发品质优选混合型发起式证券投资基金基金合同.docx",
+      "sha256": "e61bef7bceeea4fa0eb9efc2db33b065d41f1267d30a5d75fb3c322b0c083e85",
+      "bytes": 101087,
+      "stratum": "dev-representative"
+    },
+    {
+      "case_id": "B04",
+      "group": "dev",
+      "file": "广发富信优选六个月持有期混合型基金中基金（FOF）基金合同20261020.docx",
+      "relative": "funds_word/基金合同第一批/广发富信优选六个月持有期混合型基金中基金（FOF）基金合同20261020.docx",
+      "sha256": "2b9cfdaf11955ceae564d40e0f7b74c470c94b51f18dbe7497bf20c276e4fad5",
+      "bytes": 138022,
+      "stratum": "dev-representative"
+    },
+    {
+      "case_id": "B05",
+      "group": "dev",
+      "file": "广发弘利3个月滚动持有债券型证券投资基金基金合同.docx",
+      "relative": "funds_word/基金合同第一批/广发弘利3个月滚动持有债券型证券投资基金基金合同.docx",
+      "sha256": "ac16b236ee55184e972519f1e01610d9b3b529c559db662d00ec8dc1514a02f7",
+      "bytes": 161694,
+      "stratum": "dev-representative"
+    },
+    {
+      "case_id": "B06",
+      "group": "dev",
+      "file": "广发恒昌一年持有期混合型证券投资基金基金合同20261022.docx",
+      "relative": "funds_word/基金合同第一批/广发恒昌一年持有期混合型证券投资基金基金合同20261022.docx",
+      "sha256": "1994aa1c7e9e1dfa220c4d8ecaa74bf2d6743d426c1a956ffc5e2ee157bca63d",
+      "bytes": 140540,
+      "stratum": "dev-representative"
+    },
+    {
+      "case_id": "BH03",
+      "group": "holdout",
+      "file": "广发恒裕一年持有期混合型证券投资基金基金合同.docx",
+      "relative": "funds_word/基金合同第一批/广发恒裕一年持有期混合型证券投资基金基金合同.docx",
+      "sha256": "c2ad777a7e5ea52c71d1d8ed50b048f42070ddcaf1a1c3de373a4696931cbcc3",
+      "bytes": 129679,
+      "stratum": "holding-period+long+duplicate-summary"
+    },
+    {
+      "case_id": "B07",
+      "group": "dev",
+      "file": "广发恒鑫一年持有期混合型证券投资基金基金合同20261020.docx",
+      "relative": "funds_word/基金合同第一批/广发恒鑫一年持有期混合型证券投资基金基金合同20261020.docx",
+      "sha256": "da79b554f688122c6fe2ce6301731dedc627eb2d5f797afd010e14b7b75b7905",
+      "bytes": 125247,
+      "stratum": "dev-representative"
+    },
+    {
+      "case_id": "B08",
+      "group": "dev",
+      "file": "广发恒阳一年持有期混合型证券投资基金基金合同20261022.docx",
+      "relative": "funds_word/基金合同第一批/广发恒阳一年持有期混合型证券投资基金基金合同20261022.docx",
+      "sha256": "716468579d469ea058e4b2300e7271dd9471f3726ceedd391176fbb225f3d51a",
+      "bytes": 105324,
+      "stratum": "dev-representative"
+    },
+    {
+      "case_id": "B09",
+      "group": "dev",
+      "file": "广发恒隆一年持有期混合型证券投资基金基金合同20261020.docx",
+      "relative": "funds_word/基金合同第一批/广发恒隆一年持有期混合型证券投资基金基金合同20261020.docx",
+      "sha256": "4acb4f0bb8bdc1f015224b9a2b68c09fe6752eac0e28b7d3896cccd80734b263",
+      "bytes": 117377,
+      "stratum": "dev-representative"
+    },
+    {
+      "case_id": "B10",
+      "group": "dev",
+      "file": "广发招利混合型证券投资基金基金合同.docx",
+      "relative": "funds_word/基金合同第一批/广发招利混合型证券投资基金基金合同.docx",
+      "sha256": "60ed76a828649c46516985de13cac58223576acbdb982a83b8fda25dc99ddae4",
+      "bytes": 123191,
+      "stratum": "dev-representative"
+    },
+    {
+      "case_id": "B11",
+      "group": "dev",
+      "file": "广发景宁纯债债券型证券投资基金基金合同.docx",
+      "relative": "funds_word/基金合同第一批/广发景宁纯债债券型证券投资基金基金合同.docx",
+      "sha256": "9150051732445ce306db0b17e37f38746f8827c1c8a327a3474a433633e2e4b4",
+      "bytes": 120925,
+      "stratum": "dev-representative"
+    },
+    {
+      "case_id": "BH04",
+      "group": "holdout",
+      "file": "广发景荣纯债债券型证券投资基金基金合同.docx",
+      "relative": "funds_word/基金合同第一批/广发景荣纯债债券型证券投资基金基金合同.docx",
+      "sha256": "f8b94aaad5d34a34f732ec71c16e96b7275312d04bf3c24b003c21aeca7e6a7e",
+      "bytes": 143661,
+      "stratum": "single-class+bond"
+    },
+    {
+      "case_id": "B12",
+      "group": "dev",
+      "file": "广发沪深300指数增强型发起式证券投资基金基金合同.docx",
+      "relative": "funds_word/基金合同第一批/广发沪深300指数增强型发起式证券投资基金基金合同.docx",
+      "sha256": "257a7b95c05b0e5c0ea5fac4ca149a66101c8195eecbf622b2d0125a117d9123",
+      "bytes": 141934,
+      "stratum": "dev-representative"
+    },
+    {
+      "case_id": "B13",
+      "group": "dev",
+      "file": "广发沪港深精选混合型证券投资基金基金合同.docx",
+      "relative": "funds_word/基金合同第一批/广发沪港深精选混合型证券投资基金基金合同.docx",
+      "sha256": "36672146ecff9e5374113cf69056a676e6cb701edd200f274150e1772b28d574",
+      "bytes": 101425,
+      "stratum": "dev-representative"
+    },
+    {
+      "case_id": "BH05",
+      "group": "holdout",
+      "file": "广发港股通恒生综合中型股指数证券投资基金（LOF）基金合同.docx",
+      "relative": "funds_word/基金合同第一批/广发港股通恒生综合中型股指数证券投资基金（LOF）基金合同.docx",
+      "sha256": "5d09bcb5520a26884c41a28e1f59465261ad29cd48c5b5c524325507a1848e9b",
+      "bytes": 151100,
+      "stratum": "LOF+multi-class+long"
+    },
+    {
+      "case_id": "B14",
+      "group": "dev",
+      "file": "广发睿明优质企业混合型证券投资基金基金合同.docx",
+      "relative": "funds_word/基金合同第一批/广发睿明优质企业混合型证券投资基金基金合同.docx",
+      "sha256": "e91d703c256cd479ea28090069cc05a43ef08933b86262162cc33975ee2227dc",
+      "bytes": 122710,
+      "stratum": "dev-representative"
+    },
+    {
+      "case_id": "BH06",
+      "group": "holdout",
+      "file": "广发稳信六个月持有期混合型证券投资基金基金合同.docx",
+      "relative": "funds_word/基金合同第一批/广发稳信六个月持有期混合型证券投资基金基金合同.docx",
+      "sha256": "0662daa3e878894a1a1f492d5a58ffd65357da5fb9b03a52f30663d346f7d86c",
+      "bytes": 147294,
+      "stratum": "protected-boundary"
+    },
+    {
+      "case_id": "BH07",
+      "group": "holdout",
+      "file": "广发稳健养老目标一年持有期混合型基金中基金（FOF）基金合同.docx",
+      "relative": "funds_word/基金合同第一批/广发稳健养老目标一年持有期混合型基金中基金（FOF）基金合同.docx",
+      "sha256": "ad8779be2e82c4ad8fc7a613f8072c33c5d7bf9109ee6972cfbecdf3eeda633f",
+      "bytes": 150668,
+      "stratum": "FOF+multi-class"
+    },
+    {
+      "case_id": "BH08",
+      "group": "holdout",
+      "file": "广发纳斯达克生物科技指数型发起式证券投资基金基金合同.docx",
+      "relative": "funds_word/基金合同第一批/广发纳斯达克生物科技指数型发起式证券投资基金基金合同.docx",
+      "sha256": "2227412493bde1e483aa567695944d7dbf799d1b16c2c87a8de6558f964ec3a4",
+      "bytes": 133345,
+      "stratum": "QDII-index+long"
+    },
+    {
+      "case_id": "B15",
+      "group": "dev",
+      "file": "广发美国房地产指数证券投资基金基金合同.docx",
+      "relative": "funds_word/基金合同第一批/广发美国房地产指数证券投资基金基金合同.docx",
+      "sha256": "8ff0edd303613ce2b57abb5adbe5cd2735b6ef3fe13369dc30ee71d0cd9cd74f",
+      "bytes": 144037,
+      "stratum": "dev-representative"
+    },
+    {
+      "case_id": "B16",
+      "group": "dev",
+      "file": "广发聚安混合型证券投资基金基金合同.docx",
+      "relative": "funds_word/基金合同第一批/广发聚安混合型证券投资基金基金合同.docx",
+      "sha256": "2c310672cd48fb7c569b4518b525bd4a740caf927ded8055a5823bf37301b100",
+      "bytes": 96650,
+      "stratum": "dev-representative"
+    },
+    {
+      "case_id": "B17",
+      "group": "dev",
+      "file": "广发道琼斯美国石油开发与生产指数证券投资基金（QDII-LOF）基金合同.docx",
+      "relative": "funds_word/基金合同第一批/广发道琼斯美国石油开发与生产指数证券投资基金（QDII-LOF）基金合同.docx",
+      "sha256": "5a1e11f64a48d8a2655994f8bb3c1de9d531c9f36cb3604f0170c3a84e70ad7c",
+      "bytes": 121186,
+      "stratum": "dev-representative"
+    },
+    {
+      "case_id": "B18",
+      "group": "dev",
+      "file": "广发鑫裕灵活配置混合型证券投资基金基金合同.docx",
+      "relative": "funds_word/基金合同第一批/广发鑫裕灵活配置混合型证券投资基金基金合同.docx",
+      "sha256": "6593e2eb52b7f7d04cc86da4981783db6ee3639007c6676cd4dd79c29c8179af",
+      "bytes": 107892,
+      "stratum": "dev-representative"
+    },
+    {
+      "case_id": "B19",
+      "group": "dev",
+      "file": "广发锐意进取3个月持有期混合型发起式基金中基金（FOF）基金合同.docx",
+      "relative": "funds_word/基金合同第一批/广发锐意进取3个月持有期混合型发起式基金中基金（FOF）基金合同.docx",
+      "sha256": "00311bd2578c6849b99c8c7a3d26664287664eaf9e48549a2c4a556e4b1d5f00",
+      "bytes": 140192,
+      "stratum": "dev-representative"
+    },
+    {
+      "case_id": "B20",
+      "group": "dev",
+      "file": "广发集盛债券型证券投资基金基金合同.docx",
+      "relative": "funds_word/基金合同第一批/广发集盛债券型证券投资基金基金合同.docx",
+      "sha256": "1f8c1ad9d070067a23469c79ac0a14421054b34c686a140f27ea5193cf1aa3d8",
+      "bytes": 124139,
+      "stratum": "dev-representative"
+    }
+  ]
+}
