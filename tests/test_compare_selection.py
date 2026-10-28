@@ -85,7 +85,7 @@ def test_overlapping_result_is_reported_as_structural_blocker():
         require_generation_ready((first, second), {"D0001": "left", "D0002": "right"})
 
 
-def test_cross_block_diff_is_one_decision_but_writer_blocked():
+def test_cross_block_diff_is_one_decision_and_writer_eligible():
     item = DiffItem(
         "D0001", "modify",
         TextSpan("b1", 0, 1, "甲"), TextSpan("r1", 0, 1, "乙"),
@@ -94,9 +94,11 @@ def test_cross_block_diff_is_one_decision_but_writer_blocked():
     )
     state = assess_selection((item,), {"D0001": "right"})
     assert state.decision_map == {"D0001": "right"}
-    assert any(issue.code == "MULTI_BLOCK_DIFF" for issue in state.issues)
-    with pytest.raises(SelectionError, match="SELECTION_UNSUPPORTED"):
-        require_generation_ready((item,), {"D0001": "right"})
+    issue = next(issue for issue in state.issues if issue.code == "MULTI_BLOCK_DIFF")
+    assert issue.blocking is False
+    # The writer owns the structural decision now; preview must not reject a
+    # possible paragraph split/merge before it can inspect the DOCX.
+    assert require_generation_ready((item,), {"D0001": "right"}).decision_map == {"D0001": "right"}
 
 
 def test_snapshot_binds_sources_result_and_epoch():

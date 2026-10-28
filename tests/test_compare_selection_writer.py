@@ -22,6 +22,18 @@ def _save_doc(path: Path, paragraphs: list[str], *, table: tuple[str, str] | Non
     document.save(path)
 
 
+def _save_cell_doc(path: Path, paragraphs: list[str]) -> None:
+    document = Document()
+    cell = document.add_table(rows=1, cols=1).cell(0, 0)
+    cell.text = ""
+    for index, text in enumerate(paragraphs):
+        if index == 0:
+            cell.paragraphs[0].text = text
+        else:
+            cell.add_paragraph(text)
+    document.save(path)
+
+
 def _result(left: Path, right: Path) -> tuple[dict, str]:
     payload = compare_docx(left, right).to_dict()
     encoded = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode()
@@ -113,17 +125,81 @@ def test_modify_choice_left_keeps_left_and_has_no_redline_for_unmodified_selecti
         assert b"w:ins" not in archive.read(DOCUMENT)
 
 
-def test_structural_insert_delete_is_blocked_before_output(tmp_path):
-    left = tmp_path / "left.docx"
-    right = tmp_path / "right.docx"
-    _save_doc(left, ["前文", "尾部"])
-    _save_doc(right, ["前文", "新增整段", "尾部"])
-    result, result_hash = _result(left, right)
-    decisions = {diff["id"]: "right" for diff in result["diffs"]}
-    with pytest.raises(DocxError, match="SELECTION_STRUCTURAL_DIFF_UNSUPPORTED"):
-        generate_selection_artifacts(left, right, result, decisions,
-                                     tmp_path / "final.docx", tmp_path / "redline.docx",
-                                     selection_epoch=1, result_sha256=result_hash)
+def test_paragraph_insert_is_written_and_redlined(tmp_path):
+    left, right, final, redline, result, validation = _generate(
+        tmp_path, ["前文", "尾部"], ["前文", "新增整段", "尾部"], {"D0001": "right"})
+    assert [paragraph.text for paragraph in Document(final).paragraphs] == [
+        "前文", "新增整段", "尾部"]
+    assert len(validation.manifest) == 1
+    with ZipFile(redline) as archive:
+        xml = archive.read(DOCUMENT)
+    assert xml.count(b"<w:ins ") >= 2
+    assert xml.count(b"<w:del ") == 0
+
+
+def test_paragraph_delete_is_written_and_redlined(tmp_path):
+    left, right, final, redline, result, validation = _generate(
+        tmp_path, ["前文", "删除整段", "尾部"], ["前文", "尾部"], {"D0001": "right"})
+    assert [paragraph.text for paragraph in Document(final).paragraphs] == ["前文", "尾部"]
+    assert len(validation.manifest) == 1
+    with ZipFile(redline) as archive:
+        xml = archive.read(DOCUMENT)
+    assert xml.count(b"<w:ins ") == 0
+    assert xml.count(b"<w:del ") >= 2
+
+
+def test_two_paragraphs_replaced_by_two_paragraphs(tmp_path):
+    left, right, final, redline, result, validation = _generate(
+        tmp_path, ["A1", "A2", "尾部"], ["B1", "B2", "尾部"],
+        {"D0001": "right", "D0002": "right", "D0003": "right", "D0004": "right"})
+    assert [paragraph.text for paragraph in Document(final).paragraphs] == ["B1", "B2", "尾部"]
+    assert len(validation.manifest) == 4
+    with ZipFile(redline) as archive:
+        xml = archive.read(DOCUMENT)
+    assert xml.count(b"<w:ins ") >= 2
+    assert xml.count(b"<w:del ") >= 2
+
+
+def test_cross_paragraph_split_is_written(tmp_path):
+    left, right, final, redline, result, validation = _generate(
+        tmp_path, ["abcdefgh"], ["abcdX", "Yefgh"], {"D0001": "right"})
+    assert [paragraph.text for paragraph in Document(final).paragraphs] == ["abcdX", "Yefgh"]
+    assert len(validation.manifest) == 1
+    with ZipFile(redline) as archive:
+        xml = archive.read(DOCUMENT)
+    assert xml.count(b"<w:ins ") >= 2
+    assert xml.count(b"<w:del ") >= 1
+
+
+def test_cross_paragraph_merge_is_written(tmp_path):
+    left, right, final, redline, result, validation = _generate(
+        tmp_path, ["abcdX", "Yefgh"], ["abcdefgh"], {"D0001": "right"})
+    assert [paragraph.text for paragraph in Document(final).paragraphs] == ["abcdefgh"]
+    assert len(validation.manifest) == 1
+    with ZipFile(redline) as archive:
+        xml = archive.read(DOCUMENT)
+    assert xml.count(b"<w:ins ") >= 1
+    assert xml.count(b"<w:del ") >= 2
+
+
+def test_table_cell_paragraph_insert_delete_and_split(tmp_path):
+    for paragraphs, changed, expected in (
+            (["A", "B"], ["A", "X", "B"], ["A", "X", "B"]),
+            (["A", "X", "B"], ["A", "B"], ["A", "B"]),
+            (["abcdefgh"], ["abcdX", "Yefgh"], ["abcdX", "Yefgh"])):
+        left, right = tmp_path / "left.docx", tmp_path / "right.docx"
+        _save_cell_doc(left, paragraphs)
+        _save_cell_doc(right, changed)
+        result, result_hash = _result(left, right)
+        decisions = {diff["id"]: "right" for diff in result["diffs"]}
+        final, redline = tmp_path / "final.docx", tmp_path / "redline.docx"
+        final.unlink(missing_ok=True); redline.unlink(missing_ok=True)
+        validation = generate_selection_artifacts(
+            left, right, result, decisions, final, redline,
+            selection_epoch=1, result_sha256=result_hash)
+        reopened = Document(final)
+        assert [paragraph.text for paragraph in reopened.tables[0].cell(0, 0).paragraphs] == expected
+        assert validation.manifest
 
 
 def test_table_cell_selection_is_written_and_reopened(tmp_path):
@@ -150,12 +226,17 @@ def test_pending_and_source_or_result_tampering_are_blocked(tmp_path):
                                      selection_epoch=1, result_sha256=result_hash)
 
 
-def test_structural_diff_is_blocked_before_output(tmp_path):
+def test_table_row_structure_change_is_blocked_before_output(tmp_path):
     left, right = tmp_path / "left.docx", tmp_path / "right.docx"
-    _save_doc(left, ["前文", "尾部"])
-    _save_doc(right, ["前文", "新增整段", "尾部"])
+    for path, rows in ((left, 1), (right, 2)):
+        document = Document()
+        table = document.add_table(rows=rows, cols=1)
+        for index in range(rows):
+            table.cell(index, 0).text = f"R{index}"
+        document.save(path)
     result, result_hash = _result(left, right)
     decisions = {diff["id"]: "right" for diff in result["diffs"]}
-    with pytest.raises(DocxError, match="SELECTION_STRUCTURAL_DIFF_UNSUPPORTED"):
+    with pytest.raises(DocxError) as caught:
         generate_selection_artifacts(left, right, result, decisions, tmp_path / "f.docx", tmp_path / "r.docx",
                                      selection_epoch=1, result_sha256=result_hash)
+    assert caught.value.code.startswith("SELECTION_BLOCK_")
