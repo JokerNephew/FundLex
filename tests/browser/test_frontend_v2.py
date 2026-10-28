@@ -308,7 +308,7 @@ def test_compare_result_view_supports_pair_navigation_and_mobile_switching(brows
         pair_one: {"pair": {"id": pair_one, "label": "第一组", "status": "succeeded"}, "left": {"name": "a-1.docx", "html": "<p>" + "</p><p>".join(f"合同段落 {index}" for index in range(80)) + "</p><p>旧文 <span class='compare-diff-modify' data-diff-id='D1'>A</span></p>"}, "right": {"name": "b-1.docx", "html": "<p>" + "</p><p>".join(f"合同段落 {index}" for index in range(80)) + "</p><p>新文 <span class='compare-diff-modify' data-diff-id='D1'>B</span> <span class='compare-diff-insert' data-diff-id='D3'>新增</span></p>"}, "summary": {"total": 2, "modify": 1, "insert": 1, "delete": 0}, "coverage": {"status": "complete"}, "diffs": [{"id": "D1", "type": "modify", "section": "正文", "left": {"block_id": "p1", "start": 0, "end": 1, "text": "A"}, "right": {"block_id": "p1", "start": 0, "end": 1, "text": "B"}}, {"id": "D3", "type": "insert", "section": "正文", "right": {"block_id": "p1", "start": 2, "end": 4, "text": "新增"}}]},
         pair_two: {"pair": {"id": pair_two, "label": "第二组", "status": "succeeded"}, "left": {"name": "a-2.docx", "html": "<p>原文 <span class='compare-diff-insert' data-diff-id='D2'>新增</span></p>"}, "right": {"name": "b-2.docx", "html": "<p>修订 <span class='compare-diff-insert' data-diff-id='D2'>新增</span></p>"}, "summary": {"total": 1, "modify": 0, "insert": 1, "delete": 0}, "coverage": {"status": "complete"}, "diffs": [{"id": "D2", "type": "insert", "section": "正文", "left": {"block_id": "p1", "start": 0, "end": 1, "text": ""}, "right": {"block_id": "p1", "start": 0, "end": 1, "text": "新增"}}]},
     }
-    context = browser.new_context(viewport={"width": 390, "height": 844})
+    context = browser.new_context(viewport={"width": 1440, "height": 900})
     context.add_init_script("localStorage.setItem('fundlex-dev-user','compare-browser-check');")
     page = context.new_page()
     page_errors: list[str] = []
@@ -335,6 +335,25 @@ def test_compare_result_view_supports_pair_navigation_and_mobile_switching(brows
         assert response and response.ok
         page.get_by_role("heading", name="合同对比").first.wait_for(state="visible")
         page.get_by_text("共 2 处差异 · 修改 1 · 新增 1 · 删除 0").wait_for(state="visible")
+        assert page.locator('.compare-splitter').count() == 1
+        assert page.locator('.compare-splitter .ant-splitter-panel').count() == 2
+        assert page.locator('.compare-splitter .ant-splitter-bar-dragger').count() == 1
+        page.locator('.compare-lines path').first.wait_for(state="attached")
+        left_panel = page.locator('.compare-splitter .ant-splitter-panel').first
+        dragger = page.locator('.compare-splitter .ant-splitter-bar-dragger')
+        dragger.scroll_into_view_if_needed()
+        width_before = left_panel.bounding_box()["width"]
+        dragger_box = dragger.bounding_box()
+        page.mouse.move(dragger_box["x"] + dragger_box["width"] / 2, dragger_box["y"] + dragger_box["height"] / 2)
+        page.mouse.down()
+        page.mouse.move(dragger_box["x"] + dragger_box["width"] / 2 - 120, dragger_box["y"] + dragger_box["height"] / 2, steps=8)
+        page.mouse.up()
+        page.wait_for_timeout(300)
+        assert left_panel.bounding_box()["width"] < width_before - 40
+        assert page.locator('.compare-lines path').count() >= 1
+        page.set_viewport_size({"width": 390, "height": 844})
+        page.wait_for_function("() => !document.querySelector('.compare-splitter')")
+        page.locator('.compare-mobile-switch').wait_for(state="visible")
         assert page.locator('[data-diff-id="D1"]').count() == 2
         assert page.locator('.compare-diff-rail').count() == 1
         outer_scroll_before = page.evaluate("() => window.scrollY")

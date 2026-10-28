@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { lazy, Suspense, useEffect } from 'react'
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { Button, Spinner } from '../components/ui'
 import { AppShell } from '../components/layout'
@@ -13,8 +13,9 @@ import { TaskDetailIndexPage } from '../pages/TaskDetail/TaskDetailIndexPage'
 import { ReviewPage } from '../pages/Review/ReviewPage'
 import { TasksPage } from '../pages/Tasks'
 import { UsersPage } from '../pages/Users'
-import { ComparePage } from '../pages/Compare/ComparePage'
 import { getBasePath } from '../api/client'
+
+const ComparePage = lazy(() => import('../pages/Compare/ComparePage').then((module) => ({ default: module.ComparePage })))
 
 function AppRoutes() {
   const auth = useAuthStore()
@@ -36,7 +37,7 @@ function AppRoutes() {
     <Route path="/guides/:guideId" element={<GuideDetailPage />} />
     <Route path="/settings" element={<SettingsPage />} />
      <Route path="/users" element={<UsersPage />} />
-     <Route path="/compare" element={<ComparePage />} />
+     <Route path="/compare" element={<Suspense fallback={<Spinner label="正在加载合同对比" />}><ComparePage /></Suspense>} />
     <Route path="*" element={<Navigate to="/tasks" replace />} />
   </Route></Routes>
 }
