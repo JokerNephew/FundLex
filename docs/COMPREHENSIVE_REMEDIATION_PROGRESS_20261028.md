@@ -18,4 +18,5 @@
 
 原审查证据保留`/tmp/opencode/comprehensive-audit-20261028/`，新执行证据`/tmp/opencode/comprehensive-remediation-20261028/`，prestart patch已保存。原合同/gold/历史manifest和两个备份目录不动。开发agent开工问题先交主agent内部澄清，开工后自主开发测试，不向用户反复提问。
 
-主agent当前：审阅候选接口/生产分叉、准备S6独立标签盲读和S7验收脚本；未部署/重启，不重复agent负责代码。MySQL独立测试库暂受应用账号仅`fundlex.*`权限且root无口令访问被拒，待建隔离实例，不能指向生产drop表。
+主agent当前：审阅候选接口/生产分叉、准备S6独立标签盲读和S7验收脚本；未部署/重启，不重复agent负责代码。首批selection已在`adcb416`冻结（20dev/8holdout，含保护边界BH06；5个旧.doc排除并记录）。S7脚本`tools/evaluation/production_first_batch_e2e_20261028.py`已加入（`be978a7`），待发布后执行正式工作台+产物+选择版+未授权检查。
+MySQL独立实例已在本机3308临时数据目录启动（非生产库），`tests/test_db_mysql.py` **6 passed**，可作为后续并发/迁移验证；凭据仅运行时环境，不写入仓库或文档。不得把该测试指向生产`fundlex`库。
