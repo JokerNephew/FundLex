@@ -32,6 +32,7 @@ class UploadGuardError(Exception):
 class UploadGuardSettings:
     max_request_bytes: int = 52 * 1024 * 1024
     guide_request_bytes: int = 26 * 1024 * 1024
+    regulation_request_bytes: int = 82 * 1024 * 1024
     max_concurrent_per_ip: int = 2
     max_concurrent_global: int = 8
     requests_per_minute: int = 12
@@ -67,6 +68,8 @@ class UploadGuardSettings:
         return cls(
             max_request_bytes=integer("FUNDLEX_UPLOAD_REQUEST_BYTES", cls.max_request_bytes),
             guide_request_bytes=integer("FUNDLEX_GUIDE_REQUEST_BYTES", cls.guide_request_bytes),
+            regulation_request_bytes=integer("FUNDLEX_REGULATION_REQUEST_BYTES",
+                                             cls.regulation_request_bytes),
             max_concurrent_per_ip=integer("FUNDLEX_UPLOAD_CONCURRENCY_PER_IP", cls.max_concurrent_per_ip),
             max_concurrent_global=integer("FUNDLEX_UPLOAD_CONCURRENCY_GLOBAL", cls.max_concurrent_global),
             requests_per_minute=integer("FUNDLEX_UPLOAD_REQUESTS_PER_MINUTE", cls.requests_per_minute),
@@ -100,8 +103,16 @@ class BoundedMultiPartParser(MultiPartParser):
                          max_part_size=max_part_size)
         self.max_request_parts = _positive_env("FUNDLEX_MULTIPART_MAX_PARTS", self.max_request_parts)
         self.max_request_fields = _positive_env("FUNDLEX_MULTIPART_MAX_FIELDS", self.max_request_fields)
-        self.max_file_bytes = _positive_env("FUNDLEX_MAX_UPLOAD_BYTES", self.max_file_bytes)
-        self.max_total_file_bytes = _positive_env("FUNDLEX_MAX_BATCH_BYTES", self.max_total_file_bytes)
+        # The parser is shared by all routes. A regulation upload may be up to
+        # 80 MiB, so its ceiling must not make the route's documented limit
+        # unreachable; task/guide routes remain bounded earlier by the ASGI
+        # path-specific request limits and by their own per-file checks.
+        self.max_file_bytes = max(
+            _positive_env("FUNDLEX_MAX_UPLOAD_BYTES", self.max_file_bytes),
+            _positive_env("FUNDLEX_REGULATION_REQUEST_BYTES", 82 * 1024 * 1024))
+        self.max_total_file_bytes = max(
+            _positive_env("FUNDLEX_MAX_BATCH_BYTES", self.max_total_file_bytes),
+            _positive_env("FUNDLEX_REGULATION_REQUEST_BYTES", 82 * 1024 * 1024))
         self.max_field_bytes = _positive_env("FUNDLEX_MULTIPART_MAX_FIELD_BYTES", self.max_field_bytes)
         self.max_header_bytes = _positive_env("FUNDLEX_MULTIPART_MAX_HEADER_BYTES", self.max_header_bytes)
         self.max_headers_per_part = _positive_env("FUNDLEX_MULTIPART_MAX_HEADERS", self.max_headers_per_part)
@@ -181,6 +192,12 @@ def _positive_env(name: str, default: int) -> int:
 class UploadResourceMiddleware:
     """ASGI guard for upload request size, concurrency, rate and time limits."""
 
+    # The retired batch-creation route still appears in the OpenAPI schema for
+    # its 410 contract. It must be answered before Starlette parses multipart
+    # fields, otherwise a caller can spend the parser budget on a dead route.
+    RETIRED_PATHS = {"/api/batches"}
+    GUIDE_UPLOAD_PATHS = {"/api/guides", "/api/guide-generation/runs"}
+
     def __init__(self, app: Callable, *, settings: UploadGuardSettings):
         self.app = app
         self.settings = settings
@@ -194,7 +211,8 @@ class UploadResourceMiddleware:
         if scope.get("type") != "http" or scope.get("method", "").upper() != "POST":
             return False
         path = scope.get("path", "")
-        return path.endswith("/uploads") or path == "/api/guides"
+        return (path.endswith("/uploads") or path in UploadResourceMiddleware.GUIDE_UPLOAD_PATHS
+                or path in UploadResourceMiddleware.RETIRED_PATHS)
 
     @staticmethod
     def _client_key(scope: dict[str, Any]) -> str:
@@ -202,7 +220,11 @@ class UploadResourceMiddleware:
         return str(client[0]) if client else "unknown"
 
     def _request_limit(self, path: str) -> int:
-        return self.settings.guide_request_bytes if path == "/api/guides" else self.settings.max_request_bytes
+        if path == "/api/guide-generation/runs":
+            return self.settings.regulation_request_bytes
+        if path in self.GUIDE_UPLOAD_PATHS:
+            return self.settings.guide_request_bytes
+        return self.settings.max_request_bytes
 
     async def _admit(self, key: str) -> None:
         now = time.monotonic()
@@ -238,6 +260,11 @@ class UploadResourceMiddleware:
     async def __call__(self, scope: dict[str, Any], receive: Callable, send: Callable):
         if not self._is_upload(scope):
             await self.app(scope, receive, send)
+            return
+
+        if scope.get("path") in self.RETIRED_PATHS:
+            await self._response(UploadGuardError(
+                410, "RULESET_RETIRED", "RULESET_RETIRED"))(scope, receive, send)
             return
 
         headers = Headers(scope=scope)

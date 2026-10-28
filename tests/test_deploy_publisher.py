@@ -20,6 +20,7 @@ UNITS = (
     "fundlex-recall-api.service",
     "fundlex-recall-worker.service",
     "fundlex-compare-worker.service",
+    "fundlex-guide-worker.service",
     "fundlex-feishu.service",
 )
 DIRS = ("fundlex", "frontend", "guides", "rules", "tools", "docs", "tests")
@@ -57,6 +58,7 @@ with sqlite3.connect(data / "runs.sqlite3") as db:
     db.execute("CREATE TABLE import_side_effect (id INTEGER)")
 ''')
     for name in ("selective.py", "jobs.py", "compare/__init__.py", "compare/worker.py",
+                 "guide_generation/__init__.py", "guide_generation/worker.py",
                  "integrations/__init__.py", "integrations/feishu/__init__.py",
                  "integrations/feishu/service_main.py"):
         write(paths["src"] / "fundlex" / name, "")
@@ -151,7 +153,8 @@ sleep() { :; }
 '''
 
 
-def run_publish(release: dict[str, Path], scenario: str = "success") -> subprocess.CompletedProcess[str]:
+def run_publish(release: dict[str, Path], scenario: str = "success",
+                arguments: tuple[str, ...] = ()) -> subprocess.CompletedProcess[str]:
     # Sourcing is inert; override fixed paths before calling the complete main.
     assignments = "\n".join(
         f"{name}={shlex.quote(str(release[key]))}"
@@ -159,7 +162,9 @@ def run_publish(release: dict[str, Path], scenario: str = "success") -> subproce
                           ("TEMP_ROOT", "temp"), ("ENV_FILE", "env"), ("LOCK_FILE", "lock"),
                           ("STATE", "state"), ("FOREIGN", "foreign"))
     )
-    script = f"source {shlex.quote(str(PUBLISHER))}\n{assignments}\nSCENARIO={shlex.quote(scenario)}\n{MOCKS}\nmain\n"
+    args = " ".join(shlex.quote(value) for value in arguments)
+    script = (f"source {shlex.quote(str(PUBLISHER))}\n{assignments}\n"
+              f"SCENARIO={shlex.quote(scenario)}\n{MOCKS}\nmain --source \"$SRC\" {args}\n")
     env = {**os.environ, "PYTHONPATH": str(release["foreign"]),
            "FUNDLEX_DATABASE_URL": "must-never-use", "FUNDLEX_AUTH_DATABASE": "must-never-use",
            "FUNDLEX_BOOTSTRAP_ADMIN_PASSWORD": "must-never-use", "LLM_API_KEY": "must-never-use"}
@@ -281,7 +286,8 @@ migrate_schema
     import sqlite3
     with sqlite3.connect(data / "runs.sqlite3") as db:
         tables = {row[0] for row in db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
-    assert {"batches", "documents", "tasks", "guide_versions", "external_identities", "compare_tasks"} <= tables
+    assert {"batches", "documents", "tasks", "guide_versions", "external_identities",
+            "compare_tasks", "gg_runs", "gg_candidate_guides"} <= tables
     with sqlite3.connect(data / "auth.db") as db:
         tables = {row[0] for row in db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
     assert {"users", "sessions"} <= tables
@@ -313,3 +319,92 @@ def test_manifest_is_stable_while_python_cache_is_written(release):
     baseline = subprocess.run(["bash", "-c", script], text=True, capture_output=True, timeout=10)
     assert baseline.returncode == 0, baseline.stderr
     assert baseline.stdout == result.stdout
+
+
+def test_dry_run_stages_and_hashes_without_touching_services_or_deployment(release):
+    before = snapshot(release["dst"])
+    result = run_publish(release, arguments=("--dry-run",))
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert snapshot(release["dst"]) == before
+    tx = transaction(release)
+    assert (tx / "status").read_text().strip() == "dry-run"
+    record = (tx / "release-record.json").read_text()
+    assert '"dry_run": true' in record and '"manifest":' in record
+    events = (release["state"] / "events").read_text() if (release["state"] / "events").exists() else ""
+    assert "systemctl stop" not in events and "systemctl start" not in events
+    assert (tx / "candidate/fundlex/api.py").is_file()
+
+
+def test_commit_must_match_a_clean_source_head(release):
+    subprocess.run(["git", "init", "-q"], cwd=release["src"], check=True)
+    subprocess.run(["git", "config", "user.email", "deploy@example.invalid"],
+                   cwd=release["src"], check=True)
+    subprocess.run(["git", "config", "user.name", "Deploy Test"],
+                   cwd=release["src"], check=True)
+    subprocess.run(["git", "add", "-A"], cwd=release["src"], check=True)
+    subprocess.run(["git", "commit", "-qm", "candidate"], cwd=release["src"], check=True)
+    before = snapshot(release["dst"])
+
+    result = run_publish(release, arguments=("--commit", "HEAD"))
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert snapshot(release["dst"]) != before
+    committed_units = snapshot(release["units"])
+    record = (transaction(release) / "release-record.json").read_text()
+    assert '"commit":' in record and '"unknown"' not in record
+
+    # A dirty tracked file must be rejected before the outage begins.
+    write(release["src"] / "README.md", "dirty candidate\n")
+    stale_before = snapshot(release["dst"])
+    failed = run_publish(release, arguments=("--commit", "HEAD"))
+    assert failed.returncode != 0
+    assert "uncommitted or untracked changes" in failed.stderr
+    assert snapshot(release["dst"]) == stale_before
+    assert snapshot(release["units"]) == committed_units
+
+
+def test_drift_checker_detects_only_real_script_or_unit_differences(release, tmp_path):
+    checker = Path(__file__).resolve().parents[1] / "tools/deploy/check_publish_drift.sh"
+    root_script = tmp_path / "root-publish"
+    root_script.write_text("same\n")
+    repo_script = tmp_path / "repo-publish"
+    repo_script.write_text("same\n")
+    ok = subprocess.run(["bash", str(checker), "--root-script", str(root_script),
+                         "--repo-script", str(repo_script)],
+                        text=True, capture_output=True, timeout=10)
+    assert ok.returncode == 0 and "OK" in ok.stdout
+
+    repo_script.write_text("different\n")
+    drift = subprocess.run(["bash", str(checker), "--root-script", str(root_script),
+                            "--repo-script", str(repo_script)],
+                           text=True, capture_output=True, timeout=10)
+    assert drift.returncode == 1 and "DRIFT" in drift.stderr
+
+
+def test_all_five_service_templates_are_sandboxed():
+    root = Path(__file__).resolve().parents[1] / "tools/deploy"
+    for unit in UNITS:
+        text = (root / f"{unit}.template").read_text()
+        for directive in ("NoNewPrivileges=true", "PrivateTmp=true", "ProtectHome=true",
+                          "ProtectSystem=strict", "ReadWritePaths=/var/lib/fundlex",
+                          "RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6",
+                          "UMask=0077"):
+            assert directive in text, (unit, directive)
+
+
+def test_nginx_template_covers_every_multipart_entry():
+    template = (Path(__file__).resolve().parents[1] /
+                "tools/deploy/nginx-upload-limits.conf.template").read_text()
+    assert "location = /api/guides" in template
+    assert "location = /api/guide-generation/runs" in template
+    assert "tasks/[^/]+/uploads" in template
+    assert "compare/tasks/[^/]+/uploads" in template
+    assert "retired POST /api/batches" in template
+
+
+def test_publisher_refuses_an_implicit_source_tree(release):
+    script = f"source {shlex.quote(str(PUBLISHER))}\nmain\n"
+    result = subprocess.run(["bash", "-c", script], cwd=release["foreign"], text=True,
+                            capture_output=True, timeout=10)
+    assert result.returncode != 0
+    assert "explicit --source is required" in result.stderr
+    assert not list(release["dst"].parent.glob(".fundlex-publish-*"))

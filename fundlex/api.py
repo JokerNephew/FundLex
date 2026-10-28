@@ -60,6 +60,7 @@ from .integrations.feishu.oauth import FeishuOAuthClient, FeishuOAuthError, oaut
 from .compare.store import CompareStore
 from .compare.api import register_compare_routes
 from .guide_generation.api import register_guide_generation_routes
+from .workspace import register_workspace_routes
 from .guide_generation.store import GuideGenerationStore
 from .api_errors import (
     CORRELATION_ID_HEADER, code_from_detail, correlation_id, error_code,
@@ -1385,6 +1386,10 @@ def create_app(data_dir: str | Path | None = None, *, auth_db=None) -> FastAPI:
                             max_upload_bytes=MAX_UPLOAD_BYTES,
                             max_batch_bytes=MAX_BATCH_BYTES,
                             max_pairs=1000)
+    # The V1 home page aggregates revision, compare and guide-generation task
+    # metadata for one owner. The route must be registered before the SPA
+    # catch-all fallback so the browser never receives the HTML shell here.
+    register_workspace_routes(application, store, _user)
 
     frontend = Path(__file__).resolve().parent.parent / "frontend"
     dist = frontend / "dist"
