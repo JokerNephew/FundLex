@@ -47,6 +47,15 @@
 | delete compose重试 | 二次正确仍报首次错误 | 每次attempt独立校验 |
 | G14重复“基金” | 绑定失败 | 归一化后可绑定表述2 |
 
+## 2.1.1 第二批（提交 `2953a87` 及之后）
+
+- T3/定位：`locate_unresolved_targets(approvals=...)` 接受“候选窗口内真实 quote + 有效批准”，词袋不命中只记 `anchor_bypassed`；无批准/越界/伪造/过期仍拒。候选发现可分页（第13个可达，带 `has_more/remaining/next_cursor`）。
+- 事实：`derive_fact_statuses` 按申购费/销售服务费分别推导，未知服务费不再抹掉已证实申购费组。
+- 分页：`replay_claims`/`check_delete_residuals` 到40边界返回 `truncated/remaining/next_cursor`；`ensure_delete_targets` 支持 `cursor/page_info`，pipeline 循环取页并在页预算耗尽时记 `coverage_gaps`。
+- 交付分类：`EFFECT_SITE_UNPROVEN` 等新码归为阻断，未知码 fail-closed。
+- 执行器升级：确定性执行器无法表达变体时，**有有效批准**才允许受控 compose fallback；无批准仍 `RECALL_ROUTED_EXECUTOR_UNAVAILABLE`（commit `102435a`）。
+- 事实语法：集合枚举接受“现有/设/包括”等真实写法（仍要求标签集合与当前类别完全一致）；收费证据识别“实行/适用 …% 年费率”。
+
 ## 2.2 仍需立即处理的高优先项
 
 1. **S0基线分离**：把本任务相关改动与既有dirty工作分开，形成可审阅commit；否则无法安全发布。
@@ -57,6 +66,18 @@
 6. **S8–S11**：真实前端、独立标签、真实模型、生产发布与用户E2E全部未做。
 
 S1后S2/S4及部分测试可并行；S3依赖S2/契约，S5依赖批准/事实，S6依赖规划契约，S7/S8可隔离模块并行，S9须等集成稳定，S10须等S9门槛通过。共享文件采用单写者，不机械按阶段表串行等待所有独立工作。
+
+## 2.3 本轮提交记录（分支 `codex/semantic-engine-remediation-20261028`）
+
+| commit | 内容 |
+|---|---|
+| `f2e318e` | 语义批准/多叶子scope/真实证明首批（含引擎dirty基线） |
+| `2953a87` | 批准感知locator、事实分族、候选/删除/失败分页、交付分类 |
+| `102435a` | 有批准才允许受控compose升级；集合枚举/收费“实行”语法 |
+| `af2acd7` | 批准变体升级回归测试 |
+| `e9ce4f6` | 截断的残留扫描计入未完成 |
+
+未提交：既有frontend/compare/feishu等无关dirty工作保持原状，未混入以上提交。
 
 ## 3. 执行时每项必须填写
 
