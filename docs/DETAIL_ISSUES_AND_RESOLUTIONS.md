@@ -17,6 +17,14 @@
 - 状态与验证：**已实施、测试并生产发布。** 分支 `codex/compare-selection-group-fix` 提交 `429f1bf` / `38861f4` 已推送；Compare 全套 **112 passed / 6 skipped**。生产 `selection.py` SHA `3a5a6d39...`、`selection_writer.py` SHA `2898dcb8...`，API active、capabilities 200。生产 API 小样本三组（整段插入、整段删除、跨段拆分）全部生成成功；真实 1,417 段合同插入整段后 final 1,418 段、p836 为新增文本、redline 2 处 `w:ins` + 0 `w:del`；生产浏览器完成跨段拆分选择、预览、生成、下载，final 为 `abcdX`/`Yefgh`，0 页面/控制台错误。证据 `/tmp/opencode/fundlex-compare-block-e2e-20261028/`、`/tmp/opencode/fundlex-compare-block-browser-20261028/`。临时账号/任务/对象已清理；发布备份 `/tmp/opencode/fundlex-compare-block-selection-20261028/`。
 - 下一步：整表/整行、合并单元格、content control、域/drawing 仍未开放；header/footer 比较仍是独立事项。
 
+## FL-D448 引擎与叠加修订已推送并受控部署，前端/V1保持生产版本（2026-10-28）
+
+- 用户要求推送并部署。分支 `codex/outer-remediation-20261028` 已推送至 origin（`3edb89e..6b84a8e` 及后续提交）。
+- 部署方式：因生产前端与工作区分叉（生产有 `workspace.js`，app.js/compare.js 更新），**未执行整树发布器**，改为受控后端部署：备份 `/opt/fundlex-recall-first/fundlex`、`frontend` 到 `/tmp/opencode/fundlex-engine-deploy-20261028-225456/`；安装 `docx.py`、`semantic_evidence.py`、`rule_scope.py`、`recall.py`、`recall_pipeline.py`、`targeting.py`、`fact_evidence.py`、`fee_evidence.py`、`delivery.py`、`applicability.py`、`obligations.py`、`facts_recovery.py`、`generation/*`、`compare/revisions.py`；生产 `api.py` 仅移除上传时的 `EXISTING_REVISION_UNSUPPORTED` 拒绝块。
+- 验证：生产 venv 导入 `fundlex.recall_pipeline/semantic_evidence/rule_scope` 通过；部署文件 SHA 与工作区一致；五个服务 active；`/api/capabilities` 200。前端（app.js/compare.js/workspace.js/guide_generation.*）未覆盖，生产 V1/Compare 保持原状。
+- 未部署：`fundlex/guide_generation/{store,model_router,pipeline}.py` 的新修复需要 `guide_generation/vector.py` 等新模块，生产缺该模块；尝试部署导致 guide-worker 失败，已从备份回滚并重启恢复。后续需整包部署 guide_generation 及其依赖并做真实任务验证。
+- 状态：**引擎/叠加修订后端已部署；guide generation 后端修复未部署；前端未更新**。回滚路径：备份目录 + `systemctl restart` 五服务。项目整体仍 NO-GO（证明闭环与真实整批未完成）。
+
 ## FL-D446 带既有修订痕迹的DOCX需叠加并区分FundLex修订（2026-10-28，设计）
 
 - 发现日期：2026-10-28，用户新要求：上传件可能是其他部门改过、带Word修订痕迹的DOCX，需要在其上叠加修订，并与原有修订区分。
