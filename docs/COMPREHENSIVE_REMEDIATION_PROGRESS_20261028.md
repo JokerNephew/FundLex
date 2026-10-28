@@ -4,19 +4,20 @@
 
 | 阶段 | 状态 | 验证/提交/剩余 |
 |---|---|---|
-| S0 基线/ownership | 已合并代码，回归中 | 分支`codex/comprehensive-remediation-20261028`；基线`9e85f91`，合并A–H及独立标签分支；全量pytest与真实模型运行中。不将合并/单测误作业务修复 |
-| S1 安全/无cap/资格 | 开发中 | 运行策略/评分D、法规生成C、发布/依赖E并行；预检有阻塞须先报主agent |
-| S2 业务完整性/证明 | 开发中 | A引擎；生产价值优选摘要假complete必须复验 |
-| S3 DOCX/Compare | 开发中 | B |
-| S4 多渠道/前端恢复 | 开发中 | G任务/飞书owner+fencing+事件；H前端基于生产V1快照与当前修复三方合并，修竞态/epoch/引导初始化/下载/键盘；C负责法规侧恢复 |
-| S5 发布/运维恢复 | 开发中 | E处理候选发布器/workspace/依赖；主agent部署阶段执行root侧 |
-| S6 真实评测优化 | 进行中（标签第一波） | 用户2026-10-29扩展：28→约100→约250→funds_word根514+首批28（unique约542）；每波独立冻结标签/评分/分母，改善后再扩；当前首批20dev/8holdout盲标进行中，旧gold/manifest不改 |
-| S7 部署/正式用户E2E | 待开工 | 非离线替身；产物独立复核及授权下载 |
+| S0 基线/ownership | 已合并，回归通过 | 分支`codex/comprehensive-remediation-20261028`；基线`9e85f91`，A–H及标签分支已合并；非浏览器（含隔离MySQL）**2106 passed/6 skipped/679.14s**，浏览器**69 passed/224.11s**。不将合并/单测误作业务修复 |
+| S1 安全/无cap/资格 | 已实施，待生产/真实模型 | D/C/E：cap纯观测、config/资格/不可变/fencing/下载核验/依赖/上传/sandbox代码与回归已合并；生产env/root发布/权限仍待执行 |
+| S2 业务完整性/证明 | 已实施，待真实产物 | A：批准绑定、site proof、坐标、分页、摘要目标、统一门禁；真实value摘要复验进行中 |
+| S3 DOCX/Compare | 已实施，待Word/真实任务 | B：叠加/Review/坐标/Compare边界；合成及弘利临时副本+相关测试通过，Word/WPS未验 |
+| S4 多渠道/前端恢复 | 已实施，待真实渠道 | G/H/C：任务/飞书/前端/法规恢复代码及隔离测试通过；真实飞书/生产workspace/浏览器生产E2E待验 |
+| S5 发布/运维恢复 | 代码已准备，未部署 | E：workspace/五服务发布器/依赖/备份工具/sandbox模板；root `/usr/local/sbin`、生产env、备份恢复待主agent受控执行 |
+| S6 真实评测优化 | 首波标签v2完成，真实运行中 | 28→约100→约250→funds_word根514+首批28（unique约542）；v2 501 targets/51 unresolved findings单列；value真实模型运行进行中（v4-flash因reasoning/token曾截断，已提高输出） |
+| S7 部署/正式用户E2E | 待开工 | 非离线替身；生产env/发布、真实合同、产物独立复核及授权下载 |
 
 当前整体NO-GO，尚无本轮工程修复完成声明；只有测试、独立业务复核和真实E2E通过后才更新。独立worktree：
 `/tmp/opencode/fundlex-remediation-{engine,docx-compare,guide-runner,runtime-scorer,ops-release}`；分支名`codex/remediation-*`。
 
 原审查证据保留`/tmp/opencode/comprehensive-audit-20261028/`，新执行证据`/tmp/opencode/comprehensive-remediation-20261028/`，prestart patch已保存。原合同/gold/历史manifest和两个备份目录不动。开发agent开工问题先交主agent内部澄清，开工后自主开发测试，不向用户反复提问。
 
-主agent当前：审阅候选接口/生产分叉、准备S6独立标签盲读和S7验收脚本；未部署/重启，不重复agent负责代码。首批selection已在`adcb416`冻结（20dev/8holdout，含保护边界BH06；5个旧.doc排除并记录）。S7脚本`tools/evaluation/production_first_batch_e2e_20261028.py`已加入（`be978a7`），待发布后执行正式工作台+产物+选择版+未授权检查。
-MySQL独立实例已在本机3308临时数据目录启动（非生产库），`tests/test_db_mysql.py` **6 passed**，可作为后续并发/迁移验证；凭据仅运行时环境，不写入仓库或文档。不得把该测试指向生产`fundlex`库。
+主agent当前：已把A–H及v2标签合并；`p6_score`适配新标签schema并增加段落hash到全XML坐标的映射（`a4d2b46`）。首批v2标签501 targets/51未解决findings单列；真实value运行`real-value-first4`进行中，使用新端点`deepseek/deepseek-v4-flash`、`thinking=disabled`、24k输出；此前first/first2/first3分别因mode参数/4k/12k reasoning截断，保留为失败证据，不当作业务结果。
+S7脚本`tools/evaluation/production_first_batch_e2e_20261028.py`已加入（`be978a7`），待正式候选部署后执行浏览器+授权下载+选择版。
+MySQL独立实例已在本机3308临时数据目录启动（非生产库），`tests/test_db_mysql.py` **6 passed**，可作为后续并发/迁移验证；凭据仅运行时环境，不写入仓库或文档。不得把该测试指向生产`fundlex`库。生产env/root publisher/DB+对象备份仍未动。

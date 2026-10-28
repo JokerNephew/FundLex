@@ -38,6 +38,19 @@
 - 状态与验证：**四个离线实际DOCX反例已复现，评分代码未改；历史受影响分母待重算**。这是评测工具缺陷，不等同生产引擎已发生同种错误。
 - 下一步：修评分器后冻结评分版本，按原标签与分母回算，不改gold制造通过。
 
+## FL-D479 独立标签段落编号与评分器全XML坐标不一致（2026-10-29）
+
+- 发现日期：2026-10-29，主agent首次用首批v2标签评分空运行/旧生产产物时发现；与FL-D450评分器改造配套。
+- 问题与影响：标签由`inspect_docx`/引擎段落编号记录`paragraph_index`，`p6_score.paragraphs_of()`枚举全部`w:p`（含目录/表格内部段），两者相差约24段。直接用数值索引会把销售服务费摘要目标指到收益分配段，导致目标误判/无法评分。标签也无顶层`target_count`和旧`facts`形状，评分器首次直接KeyError。
+- 证据与修复：`docs/evidence/labels-first-batch-20261028-v2.json` B02 G15 `paragraph_index=1258`，全XML正确段为1282；B02 G16摘要锚点1257对应全XML1281。新增`_case_facts()`/`_case_source_path()`兼容新facts/relative，评分时优先用`paragraph_text_sha256`定位，并按`summary/main` scope与“基金合同内容摘要”标题消歧；无法消歧时保留unknown。测试`tests/test_p6_score_first_batch_schema.py`断言B02 G15→1282、G16→1281；p6评分相关30 passed。旧生产价值优选重新评分得到18/21 completed、1 kept（摘要G15）、1 false complete，证明此前complete未覆盖摘要。
+- 状态：**代码修复并离线验证；真实新产物评分待运行**。不修改标签原文/旧分数，不把索引修复当业务通过。
+
+## FL-D480 deepseek-v4-flash推理占满输出上限导致MODEL_OUTPUT_TRUNCATED（2026-10-29）
+
+- 发现日期：2026-10-29，真实模型首次接入新端点。`real-value-first`使用错误`FUNDLEX_MODEL_MODE=real`被拒绝；first2使用默认4k输出在`recall_scope`截断；first3把输出提高到12k，仍在`recall_inventory`以`completion=12000, content_chars=0, finish=length`截断。模型返回大量`reasoning_content`，正文JSON未生成。
+- 处理：真实运行改为`thinking={"type":"disabled"}`+`reasoning_effort=low`+`max_output_tokens=24000`+`context_chars=32000`；已观测facts/scope/inventory成功（inventory 21460 completion/4033 content/stop）。生产env仍未改，需部署时同步设置；不能只增加CLI参数不改服务端env。
+- 状态：**运行配置调整并观察到阶段成功，仍未完成整合同/交付**。若仍截断，改用支持更大输出或更少推理的模型，并保留失败证据；不以重试成功冒充业务结果。
+
 ## FL-D451 生产V1首页请求任务聚合接口404，部分发布破坏前后端契约（2026-10-28）
 
 - 发现日期：2026-10-28，真实注册登录后的生产首页检查（P1）。

@@ -60,3 +60,24 @@ def test_append_at_a_declared_site_is_not_satisfied_by_source_text():
     verdict = score_target(target, _case_facts(case), paragraphs, paragraphs)
     assert verdict["verdict"] != "completed"
     assert verdict["site_scoped"] is True
+
+
+def test_label_hash_resolves_inspection_index_to_full_xml_paragraph():
+    case = _case("B02")
+    source = _case_source_path(case, REPO, REPO / "funds_word")
+    assert source is not None
+    target = next(
+        item for item in case["targets"]
+        if item["rule_id"] == "G15" and item.get("scope") == "summary"
+    )
+    paragraphs = paragraphs_of(source)
+    verdict = score_target(target, _case_facts(case), paragraphs, paragraphs)
+    assert verdict["original_paragraph"] == 1282
+    assert "基金销售服务费每日计提" in paragraphs[verdict["original_paragraph"]]
+    append = next(
+        item for item in case["targets"]
+        if item["rule_id"] == "G16" and item.get("scope") == "summary"
+    )
+    append_verdict = score_target(append, _case_facts(case), paragraphs, paragraphs)
+    assert append_verdict["original_paragraph"] == 1281
+    assert paragraphs[append_verdict["original_paragraph"]].startswith("E为C类基金份额")

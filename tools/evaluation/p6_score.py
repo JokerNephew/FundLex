@@ -493,9 +493,44 @@ def score_target(target: dict, facts: dict, final_paragraphs: list[str],
     final_compact = compact("\n".join(final_paragraphs))
     compact_offset = target.get("compact_start")
     original_index = -1
-    if isinstance(site.get("paragraph_index"), int) and site["paragraph_index"] >= 0:
+    # Independent labels use inspect_docx paragraph numbering, while the scorer
+    # extracts every ``w:p`` (including TOC/table paragraphs).  A paragraph hash
+    # is the common coordinate and prevents a valid target from being applied to
+    # an unrelated paragraph that happens to share the numerical index.
+    hashes = {
+        value for value in (target.get("paragraph_text_sha256"),
+                            target.get("anchor_paragraph_text_sha256"))
+        if isinstance(value, str) and value
+    }
+    if hashes:
+        matches = [index for index, paragraph in enumerate(original_paragraphs)
+                   if hashlib.sha256(paragraph.encode("utf-8")).hexdigest() in hashes]
+        if matches:
+            # The same formula/anchor paragraph can occur in both the body and
+            # the summary.  The label declares which copy it means; use the
+            # contract's summary heading to disambiguate instead of taking the
+            # first hash match (which sent the summary G16 target to the body).
+            scope = str(site.get("scope") or target.get("scope") or "").lower()
+            summary_headings = [
+                index for index, paragraph in enumerate(original_paragraphs)
+                if "基金合同内容摘要" in compact(paragraph)
+            ]
+            summary_start = max(summary_headings) if summary_headings else -1
+            if scope == "summary" and summary_start >= 0:
+                scoped = [index for index in matches if index >= summary_start]
+                if scoped:
+                    matches = scoped
+            elif scope in {"main", "body"} and summary_start >= 0:
+                scoped = [index for index in matches if index < summary_start]
+                if scoped:
+                    matches = scoped
+            original_index = matches[0]
+            site["paragraph_index"] = original_index
+            site["resolved_by_paragraph_hash"] = True
+    if original_index < 0 and isinstance(site.get("paragraph_index"), int) \
+            and site["paragraph_index"] >= 0:
         original_index = site["paragraph_index"]
-    elif isinstance(compact_offset, int):
+    elif original_index < 0 and isinstance(compact_offset, int):
         original_index = paragraph_of_offset(original_paragraphs, compact_offset)
     if site_declared and original_index < 0:
         result.update(verdict="unknown",
