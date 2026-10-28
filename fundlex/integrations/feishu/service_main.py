@@ -11,15 +11,20 @@ from ...config import local_data_dir
 from ...store import RunStore
 from ...tasks import TaskStore
 from ...application import TaskApplicationService
+from ...compare.store import CompareStore
+from ...guide_generation.store import GuideGenerationStore
 from .client import FeishuOpenApiClient
 from .service import FeishuService
 
 
 def main() -> int:
-    from ... import guide_store
     store = RunStore(local_data_dir())
     tasks = TaskStore(store)
-    service = FeishuService(store, tasks, TaskApplicationService(store, tasks), FeishuOpenApiClient.from_env())
+    service = FeishuService(
+        store, tasks, TaskApplicationService(store, tasks), FeishuOpenApiClient.from_env(),
+        compare_store=CompareStore(store),
+        guide_store=GuideGenerationStore(store),
+    )
     service.install()
     background = threading.Thread(target=service.run_background, name="fundlex-feishu-sync", daemon=True)
     background.start()

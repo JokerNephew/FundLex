@@ -2,8 +2,16 @@
 from __future__ import annotations
 
 import json
+import logging
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 from dataclasses import dataclass
 from typing import Any
+
+log = logging.getLogger(__name__)
+# Feishu expects a card callback response within ~3 seconds.  Heavy work
+# (task creation, uploading many files, sending result files) runs in this
+# pool while the callback returns a short acknowledgement.
+_CARD_ACTIONS = ThreadPoolExecutor(max_workers=4, thread_name_prefix="feishu-card")
 
 
 def _get(value: Any, *names: str, default: Any = None) -> Any:
@@ -63,6 +71,15 @@ def parse_message_event(data: Any) -> MessageEvent:
     )
 
 
+def _log_card_action_failure(future) -> None:
+    try:
+        exc = future.exception()
+    except Exception:  # cancelled
+        return
+    if exc is not None:
+        log.warning("Feishu deferred card action failed error=%s", type(exc).__name__)
+
+
 def build_event_handler(client: Any):
     import lark_oapi as lark
     from lark_oapi.event.callback.model.p2_card_action_trigger import P2CardActionTriggerResponse
@@ -71,13 +88,22 @@ def build_event_handler(client: Any):
     def on_message(data):
         service = active_service()
         if service is not None:
-             service.handle_message_event(data)
+            service.handle_message_event(data)
 
     def on_card_action(data):
         service = active_service()
         if service is None:
             return P2CardActionTriggerResponse({"toast": {"type": "warning", "content": "FundLex 服务尚未就绪"}})
-        message = service.handle_card_action_event(data)
+        future = _CARD_ACTIONS.submit(service.handle_card_action_event, data)
+        future.add_done_callback(_log_card_action_failure)
+        try:
+            message = future.result(timeout=2.0)
+        except FuturesTimeoutError:
+            return P2CardActionTriggerResponse({
+                "toast": {"type": "info", "content": "已开始处理，请稍候；下一步卡片会自动出现。"}})
+        except Exception as exc:  # pragma: no cover - defensive boundary
+            log.warning("Feishu card callback failed error=%s", type(exc).__name__)
+            message = "操作失败，请稍后重试。"
         return P2CardActionTriggerResponse({"toast": {"type": "success", "content": message}})
 
     return (lark.EventDispatcherHandler.builder("", "")

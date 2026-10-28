@@ -9,6 +9,7 @@ No token, app secret, or authorization code is logged by this module.
 """
 from __future__ import annotations
 
+import base64
 import json
 import os
 import shutil
@@ -130,7 +131,26 @@ class FeishuOAuthClient:
         svg = result.stdout.decode("utf-8", errors="replace")
         if "<svg" not in svg or len(svg) > 300_000:
             return None
+        # qrencode emits anti-aliased, non-square SVG sizing. Keep module
+        # edges crisp so high-density QR codes remain scannable at screen size.
+        svg = svg.replace('preserveAspectRatio="none"', 'preserveAspectRatio="xMidYMid meet"')
+        svg = svg.replace("<svg ", '<svg shape-rendering="crispEdges" ', 1)
         return svg
+
+    @staticmethod
+    def qr_png(value: str) -> str | None:
+        """Return a high-resolution PNG data URI for reliable screen scanning."""
+        try:
+            binary = shutil.which("qrencode") or "/usr/bin/qrencode"
+            result = subprocess.run(
+                [binary, "-t", "PNG", "-s", "10", "-o", "-", value],
+                capture_output=True, timeout=5, check=False,
+            )
+        except (OSError, subprocess.SubprocessError):
+            return None
+        if result.returncode != 0 or not result.stdout.startswith(b"\x89PNG\r\n\x1a\n"):
+            return None
+        return "data:image/png;base64," + base64.b64encode(result.stdout).decode("ascii")
 
 
 def oauth_available() -> bool:

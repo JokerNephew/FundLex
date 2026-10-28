@@ -22,6 +22,9 @@ class FeishuClient(Protocol):
     def reply_card(self, message_id: str, card: dict[str, Any]) -> str: ...
     def update_card(self, message_id: str, card: dict[str, Any]) -> None: ...
     def download_message_resource(self, message_id: str, file_key: str, resource_type: str = "file") -> tuple[bytes, str | None]: ...
+    def send_file(self, receive_id: str, filename: str, data: bytes) -> str: ...
+    def pin_message(self, message_id: str) -> None: ...
+    def unpin_message(self, message_id: str) -> None: ...
     def start(self) -> None: ...
 
 
@@ -98,6 +101,45 @@ class FeishuOpenApiClient:
         if stream is None:
             raise RuntimeError("FEISHU_FILE_EMPTY")
         return stream.read(), getattr(response, "file_name", None)
+
+    def send_file(self, receive_id: str, filename: str, data: bytes) -> str:
+        from lark_oapi.api.im.v1 import (CreateFileRequest, CreateFileRequestBody,
+                                         CreateMessageRequest, CreateMessageRequestBody)
+        upload = (CreateFileRequestBody.builder().file_type("stream").file_name(filename)
+                  .file(io.BytesIO(data)).build())
+        response = self.client.im.v1.file.create(CreateFileRequest.builder().request_body(upload).build())
+        error = _response_error(response)
+        if error:
+            raise error
+        file_key = str(getattr(getattr(response, "data", None), "file_key", "") or "")
+        if not file_key:
+            raise RuntimeError("FEISHU_FILE_KEY_MISSING")
+        body = (CreateMessageRequestBody.builder().receive_id(receive_id).msg_type("file")
+                .content(json.dumps({"file_key": file_key}, ensure_ascii=False))
+                .uuid(os.urandom(16).hex()).build())
+        response = self.client.im.v1.message.create(
+            CreateMessageRequest.builder().receive_id_type("chat_id").request_body(body).build())
+        error = _response_error(response)
+        if error:
+            raise error
+        return str(getattr(getattr(response, "data", None), "message_id", "") or "")
+
+    def pin_message(self, message_id: str) -> None:
+        from lark_oapi.api.im.v1 import CreatePinRequest, CreatePinRequestBody
+        response = self.client.im.v1.pin.create(
+            CreatePinRequest.builder().request_body(
+                CreatePinRequestBody.builder().message_id(message_id).build()).build())
+        error = _response_error(response)
+        if error:
+            raise error
+
+    def unpin_message(self, message_id: str) -> None:
+        from lark_oapi.api.im.v1 import DeletePinRequest
+        response = self.client.im.v1.pin.delete(
+            DeletePinRequest.builder().message_id(message_id).build())
+        error = _response_error(response)
+        if error:
+            raise error
 
     def start(self) -> None:
         from .events import build_event_handler

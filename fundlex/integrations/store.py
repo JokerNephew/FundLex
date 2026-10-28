@@ -54,6 +54,8 @@ class IntegrationStore:
                     id TEXT PRIMARY KEY, tenant_key TEXT NOT NULL, open_id TEXT NOT NULL,
                     chat_id TEXT NOT NULL, owner_user_id TEXT NOT NULL, name TEXT NOT NULL,
                     status TEXT NOT NULL, card_message_id TEXT, task_id TEXT,
+                    task_type VARCHAR(32) NOT NULL DEFAULT 'revision', step VARCHAR(32) NOT NULL DEFAULT 'collecting',
+                    metadata_json TEXT, target_id TEXT,
                     submit_idempotency_key TEXT NOT NULL UNIQUE, created_at REAL NOT NULL,
                     updated_at REAL NOT NULL, expires_at REAL NOT NULL, version INTEGER NOT NULL DEFAULT 0,
                     last_error_code TEXT
@@ -62,13 +64,17 @@ class IntegrationStore:
                     id TEXT PRIMARY KEY, draft_id TEXT NOT NULL, message_id TEXT NOT NULL,
                     file_key TEXT NOT NULL, name TEXT NOT NULL, size INTEGER NOT NULL,
                     sha256 TEXT NOT NULL, storage_key TEXT NOT NULL, status TEXT NOT NULL,
+                    side VARCHAR(16) NOT NULL DEFAULT '', kind VARCHAR(16) NOT NULL DEFAULT 'contract',
+                    pair_index INTEGER NOT NULL DEFAULT 0, revisions_accepted INTEGER NOT NULL DEFAULT 0,
                     error_code TEXT, created_at REAL NOT NULL,
                     UNIQUE(draft_id, message_id, file_key)
                 );
                  CREATE TABLE IF NOT EXISTS task_channels (
                      provider TEXT NOT NULL, task_id TEXT NOT NULL, tenant_key TEXT NOT NULL,
                      open_id TEXT NOT NULL, owner_user_id TEXT NOT NULL DEFAULT '', chat_id TEXT NOT NULL, card_message_id TEXT,
-                    last_task_status TEXT, last_completed INTEGER NOT NULL DEFAULT 0,
+                    task_type VARCHAR(32) NOT NULL DEFAULT 'revision',
+                    last_task_status TEXT, last_external_status TEXT, last_progress_json TEXT,
+                    last_completed INTEGER NOT NULL DEFAULT 0,
                     last_failed INTEGER NOT NULL DEFAULT 0, last_delivery_state TEXT,
                     last_state_fingerprint TEXT, last_synced_at REAL, created_at REAL NOT NULL,
                     PRIMARY KEY(provider, task_id)
@@ -80,19 +86,58 @@ class IntegrationStore:
                      created_at REAL NOT NULL, sent_at REAL, last_error_code TEXT,
                      lease_until REAL, fencing_token INTEGER NOT NULL DEFAULT 0
                  );
+                 CREATE TABLE IF NOT EXISTS integration_state (
+                     provider TEXT NOT NULL, state_key TEXT NOT NULL, state_value TEXT NOT NULL,
+                     updated_at REAL NOT NULL, PRIMARY KEY(provider, state_key)
+                 );
             """)
             columns = {row["name"] for row in db.execute("PRAGMA table_info(task_channels)")}
             if "owner_user_id" not in columns:
-                db.execute("ALTER TABLE task_channels ADD COLUMN owner_user_id TEXT NOT NULL DEFAULT ''")
+                self._add_column(db, "task_channels", "owner_user_id", "TEXT NOT NULL DEFAULT ''")
+            for name, definition in {
+                "task_type": "VARCHAR(32) NOT NULL DEFAULT 'revision'",
+                "last_external_status": "TEXT",
+                "last_progress_json": "TEXT",
+            }.items():
+                if name not in columns:
+                    self._add_column(db, "task_channels", name, definition)
+            draft_columns = {row["name"] for row in db.execute("PRAGMA table_info(feishu_drafts)")}
+            for name, definition in {
+                "task_type": "VARCHAR(32) NOT NULL DEFAULT 'revision'",
+                "step": "VARCHAR(32) NOT NULL DEFAULT 'collecting'",
+                "metadata_json": "TEXT",
+                "target_id": "TEXT",
+            }.items():
+                if name not in draft_columns:
+                    self._add_column(db, "feishu_drafts", name, definition)
+            draft_file_columns = {row["name"] for row in db.execute("PRAGMA table_info(feishu_draft_files)")}
+            for name, definition in {
+                "side": "VARCHAR(16) NOT NULL DEFAULT ''",
+                "kind": "VARCHAR(16) NOT NULL DEFAULT 'contract'",
+                "pair_index": "INTEGER NOT NULL DEFAULT 0",
+                "revisions_accepted": "INTEGER NOT NULL DEFAULT 0",
+            }.items():
+                if name not in draft_file_columns:
+                    self._add_column(db, "feishu_draft_files", name, definition)
             outbox_columns = {row["name"] for row in db.execute("PRAGMA table_info(integration_outbox)")}
             if "lease_until" not in outbox_columns:
-                db.execute("ALTER TABLE integration_outbox ADD COLUMN lease_until REAL")
+                self._add_column(db, "integration_outbox", "lease_until", "REAL")
             if "fencing_token" not in outbox_columns:
-                db.execute("ALTER TABLE integration_outbox ADD COLUMN fencing_token INTEGER NOT NULL DEFAULT 0")
+                self._add_column(db, "integration_outbox", "fencing_token", "INTEGER NOT NULL DEFAULT 0")
 
     @staticmethod
     def _hash(value: str) -> str:
         return hashlib.sha256(value.encode("utf-8")).hexdigest()
+
+    @staticmethod
+    def _add_column(db, table: str, name: str, definition: str) -> None:
+        """Add a migration column without failing a concurrent starter."""
+        try:
+            db.execute(f"ALTER TABLE {table} ADD COLUMN {name} {definition}")
+        except Exception:
+            present = {row["name"] for row in db.execute(f"PRAGMA table_info({table})")}
+            if name not in present:
+                raise
 
     def create_binding_code(self, provider: str, user_id: str, ttl_seconds: int = 600) -> dict[str, Any]:
         code = secrets.token_urlsafe(12).replace("-", "A").replace("_", "B")[:12].upper()
@@ -238,43 +283,118 @@ class IntegrationStore:
             db.execute("UPDATE integration_events SET status=?,processed_at=?,attempts=attempts+1,error_code=? WHERE provider=? AND event_id=?",
                        (status, time.time(), error_code, provider, event_id))
 
-    def active_draft(self, tenant_key: str, open_id: str, chat_id: str) -> dict[str, Any] | None:
+    def active_draft(self, tenant_key: str, open_id: str, chat_id: str,
+                     task_type: str | None = None) -> dict[str, Any] | None:
         now = time.time()
         with self.store._connect() as db:
-            row = db.execute("SELECT * FROM feishu_drafts WHERE tenant_key=? AND open_id=? AND chat_id=? AND status IN ('COLLECTING','CONFIRMING') AND expires_at>? ORDER BY created_at DESC LIMIT 1",
-                             (tenant_key, open_id, chat_id, now)).fetchone()
+            sql = ("SELECT * FROM feishu_drafts WHERE tenant_key=? AND open_id=? AND chat_id=? "
+                   "AND status IN ('COLLECTING','CONFIRMING') AND expires_at>?")
+            values: list[Any] = [tenant_key, open_id, chat_id, now]
+            if task_type:
+                sql += " AND task_type=?"
+                values.append(task_type)
+            sql += " ORDER BY created_at DESC LIMIT 1"
+            row = db.execute(sql, values).fetchone()
         return dict(row) if row else None
 
-    def create_draft(self, tenant_key: str, open_id: str, chat_id: str, owner_user_id: str, name: str, ttl_seconds: int = 86400) -> dict[str, Any]:
+    def create_draft(self, tenant_key: str, open_id: str, chat_id: str, owner_user_id: str, name: str,
+                     ttl_seconds: int = 86400, *, task_type: str = "revision",
+                     step: str = "collecting", metadata: dict[str, Any] | None = None) -> dict[str, Any]:
         now = time.time()
-        result = (uuid.uuid4().hex, tenant_key, open_id, chat_id, owner_user_id, name, "COLLECTING", "", None,
+        draft_id = uuid.uuid4().hex
+        result = (draft_id, tenant_key, open_id, chat_id, owner_user_id, name, "COLLECTING", "", None,
+                  task_type, step, json.dumps(metadata or {}, ensure_ascii=False), None,
                   f"feishu:{tenant_key}:{uuid.uuid4().hex}", now, now, now + ttl_seconds, 0, None)
         with self.store._connect() as db:
-            db.execute("INSERT INTO feishu_drafts(id,tenant_key,open_id,chat_id,owner_user_id,name,status,card_message_id,task_id,submit_idempotency_key,created_at,updated_at,expires_at,version,last_error_code) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", result)
-            row = db.execute("SELECT * FROM feishu_drafts WHERE id=?", (result[0],)).fetchone()
+            db.execute("INSERT INTO feishu_drafts(id,tenant_key,open_id,chat_id,owner_user_id,name,status,card_message_id,task_id,task_type,step,metadata_json,target_id,submit_idempotency_key,created_at,updated_at,expires_at,version,last_error_code) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", result)
+            row = db.execute("SELECT * FROM feishu_drafts WHERE id=?", (draft_id,)).fetchone()
         return dict(row)
 
     def draft_files(self, draft_id: str) -> list[dict[str, Any]]:
         with self.store._connect() as db:
             return [dict(row) for row in db.execute("SELECT * FROM feishu_draft_files WHERE draft_id=? ORDER BY created_at", (draft_id,))]
 
-    def add_draft_file(self, draft_id: str, message_id: str, file_key: str, name: str, size: int, sha256: str, storage_key: str, status: str = "accepted", error_code: str | None = None) -> bool:
+    def add_draft_file(self, draft_id: str, message_id: str, file_key: str, name: str, size: int, sha256: str,
+                       storage_key: str, status: str = "accepted", error_code: str | None = None, *,
+                       side: str = "", kind: str = "contract", pair_index: int = 0,
+                       revisions_accepted: int = 0) -> bool:
         try:
             with self.store._connect() as db:
-                db.execute("INSERT INTO feishu_draft_files(id,draft_id,message_id,file_key,name,size,sha256,storage_key,status,error_code,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)",
-                           (uuid.uuid4().hex, draft_id, message_id, file_key, name, size, sha256, storage_key, status, error_code, time.time()))
+                db.execute("INSERT INTO feishu_draft_files(id,draft_id,message_id,file_key,name,size,sha256,storage_key,status,side,kind,pair_index,revisions_accepted,error_code,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                           (uuid.uuid4().hex, draft_id, message_id, file_key, name, size, sha256, storage_key,
+                            status, side, kind, pair_index, revisions_accepted, error_code, time.time()))
             return True
         except Exception:
             return False
 
-    def set_draft(self, draft_id: str, *, status: str | None = None, card_message_id: str | None = None, task_id: str | None = None, error_code: str | None = None) -> None:
+    def draft_metadata(self, draft: dict[str, Any]) -> dict[str, Any]:
+        try:
+            value = json.loads(draft.get("metadata_json") or "{}")
+        except (TypeError, ValueError):
+            return {}
+        return value if isinstance(value, dict) else {}
+
+    def update_draft(self, draft_id: str, *, status: str | None = None, card_message_id: str | None = None,
+                     task_id: str | None = None, target_id: str | None = None, step: str | None = None,
+                     name: str | None = None, metadata: dict[str, Any] | None = None,
+                     error_code: str | None = None) -> None:
         values, updates = [], []
-        for key, value in (("status", status), ("card_message_id", card_message_id), ("task_id", task_id), ("last_error_code", error_code)):
+        for key, value in (("status", status), ("card_message_id", card_message_id), ("task_id", task_id),
+                           ("target_id", target_id), ("step", step), ("name", name),
+                           ("metadata_json", json.dumps(metadata, ensure_ascii=False) if metadata is not None else None),
+                           ("last_error_code", error_code)):
             if value is not None:
                 updates.append(f"{key}=?"); values.append(value)
         updates.extend(["updated_at=?", "version=version+1"]); values.extend([time.time(), draft_id])
         with self.store._connect() as db:
             db.execute(f"UPDATE feishu_drafts SET {','.join(updates)} WHERE id=?", values)
+
+    def set_draft(self, draft_id: str, *, status: str | None = None, card_message_id: str | None = None,
+                  task_id: str | None = None, target_id: str | None = None, error_code: str | None = None) -> None:
+        """Compatibility wrapper; new code should use ``update_draft``."""
+        self.update_draft(draft_id, status=status, card_message_id=card_message_id, task_id=task_id,
+                          target_id=target_id, error_code=error_code)
+
+    def remove_draft_file(self, draft_id: str, file_id: str) -> dict[str, Any] | None:
+        with self.store._connect() as db:
+            row = db.execute("SELECT * FROM feishu_draft_files WHERE id=? AND draft_id=?",
+                             (file_id, draft_id)).fetchone()
+            if row is None:
+                return None
+            db.execute("UPDATE feishu_draft_files SET status='removed' WHERE id=? AND draft_id=?",
+                       (file_id, draft_id))
+        return dict(row)
+
+    def discard_draft_files(self, draft_id: str) -> int:
+        removed = 0
+        with self.store._connect() as db:
+            rows = db.execute("SELECT storage_key FROM feishu_draft_files WHERE draft_id=?",
+                              (draft_id,)).fetchall()
+            db.execute("DELETE FROM feishu_draft_files WHERE draft_id=?", (draft_id,))
+        for row in rows:
+            key = str(row["storage_key"] or "")
+            if key:
+                try:
+                    self.store.object_path(key).unlink(missing_ok=True)
+                except OSError:
+                    pass
+                removed += 1
+        return removed
+
+    def swap_draft_files(self, draft_id: str) -> bool:
+        """Swap the left/right compare inputs for one draft."""
+        with self.store._connect() as db:
+            rows = db.execute("SELECT * FROM feishu_draft_files WHERE draft_id=? AND side IN ('left','right')",
+                              (draft_id,)).fetchall()
+            sides = {row["side"]: row for row in rows}
+            left, right = sides.get("left"), sides.get("right")
+            if left is None or right is None:
+                return False
+            db.execute("UPDATE feishu_draft_files SET side='' WHERE draft_id=? AND id IN (?,?)",
+                       (draft_id, left["id"], right["id"]))
+            db.execute("UPDATE feishu_draft_files SET side='left' WHERE id=?", (right["id"],))
+            db.execute("UPDATE feishu_draft_files SET side='right' WHERE id=?", (left["id"],))
+        return True
 
     def claim_draft_for_submit(self, draft_id: str) -> dict[str, Any] | None:
         """Atomically move one collecting draft into its submit phase."""
@@ -302,29 +422,41 @@ class IntegrationStore:
             raise IntegrationNotFound("FEISHU_DRAFT_NOT_FOUND")
         return dict(row)
 
-    def link_task(self, task_id: str, draft: dict[str, Any], card_message_id: str | None) -> None:
+    def link_task(self, task_id: str, draft: dict[str, Any], card_message_id: str | None,
+                  *, task_type: str | None = None) -> None:
         now = time.time()
+        task_type = task_type or draft.get("task_type") or "revision"
         with self.store._connect() as db:
             existing = db.execute("SELECT task_id FROM task_channels WHERE provider='feishu' AND task_id=?", (task_id,)).fetchone()
             if existing is None:
-                db.execute("INSERT INTO task_channels(provider,task_id,tenant_key,open_id,owner_user_id,chat_id,card_message_id,last_task_status,created_at) VALUES(?,?,?,?,?,?,?,?,?)",
-                           ("feishu", task_id, draft["tenant_key"], draft["open_id"], draft["owner_user_id"], draft["chat_id"], card_message_id, "queued", now))
-            db.execute("UPDATE feishu_drafts SET status='SUBMITTED',task_id=?,card_message_id=?,last_error_code=NULL,updated_at=?,version=version+1 WHERE id=?",
-                       (task_id, card_message_id, now, draft["id"]))
+                db.execute("INSERT INTO task_channels(provider,task_id,tenant_key,open_id,owner_user_id,chat_id,card_message_id,task_type,last_task_status,created_at) VALUES(?,?,?,?,?,?,?,?,?,?)",
+                           ("feishu", task_id, draft["tenant_key"], draft["open_id"], draft["owner_user_id"],
+                            draft["chat_id"], card_message_id, task_type, "queued", now))
+            db.execute("UPDATE feishu_drafts SET status='SUBMITTED',task_id=?,target_id=?,card_message_id=?,last_error_code=NULL,updated_at=?,version=version+1 WHERE id=?",
+                       (task_id, task_id, card_message_id, now, draft["id"]))
 
-    def channels(self) -> list[dict[str, Any]]:
+    def channels(self, task_type: str | None = None) -> list[dict[str, Any]]:
         with self.store._connect() as db:
-            return [dict(row) for row in db.execute("SELECT * FROM task_channels WHERE provider='feishu' ORDER BY created_at")]
+            sql = "SELECT * FROM task_channels WHERE provider='feishu'"
+            values: list[Any] = []
+            if task_type:
+                sql += " AND task_type=?"
+                values.append(task_type)
+            sql += " ORDER BY created_at"
+            return [dict(row) for row in db.execute(sql, values)]
 
-    def update_channel(self, task_id: str, status: str, completed: int, failed: int, delivery_state: str, fingerprint: str) -> bool:
+    def update_channel(self, task_id: str, status: str, completed: int, failed: int, delivery_state: str,
+                       fingerprint: str, *, external_status: str | None = None,
+                       progress_json: str | None = None) -> bool:
         with self.store._connect() as db:
             row = db.execute("SELECT last_state_fingerprint FROM task_channels WHERE provider='feishu' AND task_id=?", (task_id,)).fetchone()
             if row is None:
                 return False
             if row["last_state_fingerprint"] == fingerprint:
                 return False
-            db.execute("UPDATE task_channels SET last_task_status=?,last_completed=?,last_failed=?,last_delivery_state=?,last_state_fingerprint=?,last_synced_at=? WHERE provider='feishu' AND task_id=?",
-                       (status, completed, failed, delivery_state, fingerprint, time.time(), task_id))
+            db.execute("UPDATE task_channels SET last_task_status=?,last_external_status=?,last_progress_json=?,last_completed=?,last_failed=?,last_delivery_state=?,last_state_fingerprint=?,last_synced_at=? WHERE provider='feishu' AND task_id=?",
+                       (status, external_status, progress_json, completed, failed, delivery_state, fingerprint,
+                        time.time(), task_id))
             return True
 
     def set_channel_card(self, task_id: str, card_message_id: str) -> None:
@@ -369,6 +501,18 @@ class IntegrationStore:
                 where += " AND fencing_token=?"
                 values.append(fencing_token)
             db.execute(f"UPDATE integration_outbox SET status=?,sent_at=?,next_attempt_at=?,last_error_code=?,lease_until=NULL WHERE {where}", values)
+
+    def get_state(self, provider: str, key: str) -> str:
+        with self.store._connect() as db:
+            row = db.execute("SELECT state_value FROM integration_state WHERE provider=? AND state_key=?",
+                             (provider, key)).fetchone()
+        return str(row["state_value"]) if row else ""
+
+    def set_state(self, provider: str, key: str, value: str) -> None:
+        with self.store._connect() as db:
+            db.execute("DELETE FROM integration_state WHERE provider=? AND state_key=?", (provider, key))
+            db.execute("INSERT INTO integration_state(provider,state_key,state_value,updated_at) VALUES(?,?,?,?)",
+                       (provider, key, value, time.time()))
 
     def health(self) -> dict[str, Any]:
         with self.store._connect() as db:
