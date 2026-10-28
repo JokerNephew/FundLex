@@ -47,7 +47,8 @@ def _polarities(text: str, field: str) -> set[bool]:
         positive |= bool(re.search(
             fee + r"(?:费率|率)?(?:最高)?(?:不超过|不高于)[^。；;，,]{0,20}?"
                   r"[1-9]\d*(?:\.\d+)?[%％]", rest))
-    for match in re.finditer(fee + r"(?:年费率|率|年|按|的|为|是|：|:|以)*(\d+(?:\.\d+)?)[%％]", text):
+    for match in re.finditer(fee + r"(?:年费率|率|年|按|的|为|是|：|:|以|实行|适用|设定为)*"
+                                  r"(\d+(?:\.\d+)?)[%％]", text):
         negative |= float(match.group(1)) == 0
         positive |= float(match.group(1)) > 0
     # A fee's own explicit NAV calculation is evidence. The narrow grammar

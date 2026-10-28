@@ -7014,9 +7014,19 @@ def _plan_target_inner(rule: dict, target: Target, inspection: DocumentInspectio
         if compose_budget[0] <= 0:
             raise RecallError("RECALL_COMPOSE_BUDGET_EXHAUSTED", {"target": target.target_id})
         if not route_plan.get("allow_compose_fallback"):
-            raise RecallError("RECALL_ROUTED_EXECUTOR_UNAVAILABLE", {
-                "target": target.target_id, "executor": routed_executor,
-                "required": "compose", "rule": rule_id})
+            # A code-verified approval already binds this operation to this source
+            # span and scope.  When the deterministic executor cannot express the
+            # variant, a bounded compose under independent verification is the
+            # authorized fallback; without an approval the run still fails closed
+            # (R07).  Deletes prefer approved_span_delete above and only reach here
+            # when the approved span is not a complete clause.
+            if approvals is None or not approvals.allows(target, inspection).ok:
+                raise RecallError("RECALL_ROUTED_EXECUTOR_UNAVAILABLE", {
+                    "target": target.target_id, "executor": routed_executor,
+                    "required": "compose", "rule": rule_id})
+            setattr(target, "_approval_check", {
+                "approval_id": str(getattr(target, "approval_id", "") or ""),
+                "ok": True, "code": "", "escalation": "approved_compose_fallback"})
         # A deterministic executor was selected but could not produce a safe
         # bounded edit.  Record the structural escalation before composing so the
         # selected executor evidence describes the code path that actually ran.

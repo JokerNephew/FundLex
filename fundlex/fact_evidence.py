@@ -45,7 +45,11 @@ def verify_class_set(inspection: Any, classes: Sequence[Any], quote: str) -> dic
     if not matches:
         return result
     result["quote_verified"] = True
-    if not re.search(r"分为|分设|设置|设立|分成|仅有|一种|单一", text):
+    # Enumeration verbs are a fast path, not the semantic truth: the label set
+    # below still has to match the current classes exactly.  Contracts also write
+    # "本基金现有A类与C类基金份额" / "本基金设A类、C类份额" (FL-D440).
+    if not re.search(r"分为|分设|设置|设立|分成|仅有|一种|单一|现有|设有|设|包括|包含",
+                     text):
         result["reason"] = "CLASS_SET_ENUMERATION_UNPROVEN"
         return result
     labels = class_labels(text)
