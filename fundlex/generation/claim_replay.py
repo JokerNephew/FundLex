@@ -1128,6 +1128,14 @@ def _filter_scoped_targets(targets: Sequence[Mapping[str, Any]],
     return result
 
 
+def _approval_target(target: Mapping[str, Any]) -> Any:
+    """Adapt a serialized target for ``ApprovalBook.allows``."""
+    from types import SimpleNamespace
+    return SimpleNamespace(approval_id=str(target.get("approval_id") or ""),
+                           operations=tuple(target.get("operations") or ()),
+                           scope_id=str(target.get("scope_id") or ""))
+
+
 def replay_claims(edits: Sequence[Mapping[str, Any]], before_inspection: Any,
                   after_inspection: Any, *, rules_by_id: Mapping[str, dict],
                   facts: Any = None, max_failures: int = 40,
@@ -1138,6 +1146,7 @@ def replay_claims(edits: Sequence[Mapping[str, Any]], before_inspection: Any,
                   obligations: Any = None,
                   scopes: Mapping[str, Any] | None = None,
                   absent_coverage_by_operation: Mapping[str, Mapping[str, Any]] | None = None,
+                  approvals: Any = None,
                   cursor: int = 0, page_size: int | None = None
                   ) -> dict:
     """Replay every edit's claim against the actual artifact paragraphs.
@@ -1854,9 +1863,24 @@ def replay_claims(edits: Sequence[Mapping[str, Any]], before_inspection: Any,
                                   "quote": normalized[int(start):int(end)]})
                 except (KeyError, ValueError, IndexError, AttributeError):
                     continue
-            if not operation_site_bound(record.spec, quote, before_inspection,
-                                        location, facts, parts=parts,
-                                        occurrence_index=_occurrence_index(target)):
+            site_bound = operation_site_bound(
+                record.spec, quote, before_inspection, location, facts, parts=parts,
+                occurrence_index=_occurrence_index(target))
+            approval_proof = None
+            if not site_bound and approvals is not None:
+                # A satisfied target carries the model's judgement that the clause
+                # already expresses the new policy, bound to a verified source
+                # quote and an approved operation/scope.  The proof stage must not
+                # re-decide that semantic question with another site word list
+                # (R01/R03); the approval record is the evidence.
+                from ..semantic_evidence import ApprovalBook
+                if isinstance(approvals, ApprovalBook):
+                    check = approvals.allows(_approval_target(target), before_inspection)
+                    if check.ok:
+                        approval_proof = {"approval_id": str(target.get("approval_id") or ""),
+                                          "state": "satisfied", "code": "SEMANTIC_APPROVAL"}
+                        site_bound = True
+            if not site_bound:
                 continue
             identity = {"state": ("satisfied" if state == "absent"
                                    else target.get("state")),

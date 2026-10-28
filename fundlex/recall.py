@@ -7539,18 +7539,22 @@ def merge_edits(edits: Sequence[PlannedEdit], inspection: DocumentInspection,
                     current_components = [item_component]
                     continue
             alternative = _operations_are_alternatives(current, item, obligations)
+            # A contained edit may be absorbed when the outer replacement really
+            # carries its effect.  This holds for declared ONE_OF siblings and for
+            # same-rule operations whose policy text is identical (G11:0/G11:1 are
+            # two historical wordings of the same clause and share one new_text).
+            same_rule = current.rule_id == item.rule_id
             if item.start >= current.start and item.end <= current.end:
-                # A contained edit may only be absorbed by a declared ONE_OF sibling
-                # whose replacement really carries it.  Same-rule independent operations
-                # must flow to Joint Compose instead of being dropped as "covered".
-                if alternative and (_component_covered(item_component, current.replacement)
-                                    or _compact(item.replacement) == _compact(current.replacement)):
+                if (alternative or same_rule) and (
+                        _component_covered(item_component, current.replacement)
+                        or _compact(item.replacement) == _compact(current.replacement)):
                     covered.append(item.target_id)
                     continue
             current_component = _component(current, inspection)
             if current.start >= item.start and current.end <= item.end:
-                if alternative and (_component_covered(current_component, item.replacement)
-                                    or _compact(current.replacement) == _compact(item.replacement)):
+                if (alternative or same_rule) and (
+                        _component_covered(current_component, item.replacement)
+                        or _compact(current.replacement) == _compact(item.replacement)):
                     covered.append(current.target_id)
                     current = item
                     current_components = [item_component]
@@ -7920,7 +7924,7 @@ def approval_book_for(rules_by_id: Mapping[str, dict], targets: Sequence[Target]
     guide_sha256 = guide_fingerprint([rules_by_id[key] for key in sorted(rules_by_id)])
     book = ApprovalBook()
     for target in targets:
-        if (target.state != "needs_edit" or target.out_of_scope
+        if (target.state not in {"needs_edit", "satisfied"} or target.out_of_scope
                 or not target.operations or target.attribution_error):
             continue
         approval_id = str(getattr(target, "approval_id", "") or "") \

@@ -2231,10 +2231,12 @@ def _run_audit(model: Any, rules_by_id: dict[str, dict], targets: Sequence[Targe
         # Audit is a semantic review; the shared replay/effect evaluator owns
         # completion proof. An unsupported opinion cannot undo that proof.
         from .generation.claim_replay import replay_claims
+        from .recall import approval_book_for
         replay = replay_claims(planned.get("edits") or [], original, actual,
                               rules_by_id=rules_by_id, facts=facts,
                               targets_by_id={target.target_id: target.as_dict() for target in targets},
-                              obligations=obligations, scopes=scopes)
+                              obligations=obligations, scopes=scopes,
+                              approvals=approval_book_for(rules_by_id, targets, original))
         artifact_proofs = replay["obligations"]
         artifact_failures = replay["failures"]
     auditable_by_rule = _targets_by_rule(auditable)
@@ -4813,6 +4815,7 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
                             "components_by_rule": components_by_rule,
                             "required_terms_by_rule": required_terms_by_rule,
                             "target_rules": target_rules})
+                    from .recall import approval_book_for
                     result = replay_claims(
                         plan.get("edits") or [], inspection, actual,
                         rules_by_id=rules_by_id, facts=facts,
@@ -4822,7 +4825,8 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
                         targets_by_id={target.target_id: target.as_dict()
                                        for target in targets},
                         obligations=obligation_ledger,
-                        scopes=scopes)
+                        scopes=scopes,
+                        approvals=approval_book_for(rules_by_id, targets, inspection))
                     residuals = check_delete_residuals(
                         rules_by_id, actual, edits=plan.get("edits") or [], original=inspection,
                         targets=[target.as_dict() for target in targets], facts=facts,
