@@ -16,6 +16,10 @@ from .db import DatabaseError
 from .config import local_data_dir
 from . import observability, trace_sink
 
+def _env_flag(name: str) -> bool:
+    return os.environ.get(name, '').strip().lower() in {'1', 'true', 'yes', 'on'}
+
+
 def _trace_attempt(*, task_type: str, prompt_version: str, system: str,
                    bounded_context: str, value: Any, event: dict) -> None:
     """Best-effort: publish one model attempt to the local JSONL sink and,
@@ -146,7 +150,12 @@ class ModelGateway:
                  retries: int = 1, client: httpx.Client | None = None,
                  budget: ModelBudget | None = None, provider: str = '', request_options: dict | None = None,
                  extra_headers: dict | None = None, user_agent: str = 'fundlex/0.3.0',
-                 mode: str | None = None, cassette_dir: str | Path | None = None):
+                 mode: str | None = None, cassette_dir: str | Path | None = None,
+                 enforce_calls: bool = False):
+        if isinstance(max_calls, bool) or not isinstance(max_calls, int) or max_calls < 0:
+            raise ModelError('MODEL_CALL_CAP_INVALID')
+        if enforce_calls and max_calls < 1:
+            raise ModelError('MODEL_CALL_CAP_INVALID')
         self.mode = mode or os.environ.get('FUNDLEX_MODEL_MODE', 'live')
         if self.mode not in {'live', 'record', 'replay'}:
             raise ModelError('MODEL_MODE_INVALID')
@@ -175,6 +184,7 @@ class ModelGateway:
             raise ModelError('MODEL_EXTRA_HEADERS_INVALID')
         self.user_agent = user_agent or 'fundlex/0.3.0'
         self.max_context_chars,self.max_calls = max_context_chars,max_calls
+        self.enforce_calls = bool(enforce_calls)
         self.max_completion_tokens,self.timeout_s,self.retries = max_completion_tokens,timeout_s,retries
         self.calls = 0
         self._client = client or (None if self.mode == 'replay' else
@@ -205,36 +215,42 @@ class ModelGateway:
         if os.environ.get('FUNDLEX_MODEL_MODE') == 'replay':
             return cls(base_url='', model=os.environ.get('LLM_MODEL', ''), api_key='',
                        mode='replay', max_context_chars=int(os.environ.get('FUNDLEX_MODEL_CONTEXT_CHARS','12000')),
-                       max_calls=int(os.environ.get('FUNDLEX_MODEL_MAX_CALLS','16')),
+                       max_calls=int(os.environ.get('FUNDLEX_MODEL_MAX_CALLS','16') or 0),
                        max_completion_tokens=int(os.environ.get('FUNDLEX_MODEL_MAX_OUTPUT_TOKENS','1500')),
-                       request_options=json.loads(os.environ.get('FUNDLEX_MODEL_REQUEST_OPTIONS_JSON','{}')))
+                       request_options=json.loads(os.environ.get('FUNDLEX_MODEL_REQUEST_OPTIONS_JSON','{}')),
+                       enforce_calls=_env_flag('FUNDLEX_MODEL_ENFORCE_LIMITS'))
         data_dir = local_data_dir()
         try:
             extra_headers = json.loads(os.environ.get('FUNDLEX_MODEL_EXTRA_HEADERS_JSON', '{}'))
         except ValueError as exc:
             raise ModelError('MODEL_EXTRA_HEADERS_INVALID') from exc
         budget = ModelBudget(os.environ.get('FUNDLEX_MODEL_LEDGER',str(data_dir/'model_budget.sqlite')),
-            max_requests=int(os.environ.get('FUNDLEX_MODEL_MAX_REQUESTS','16')),
-            max_cost_usd=float(os.environ.get('FUNDLEX_MODEL_MAX_COST_USD','1')),
+            max_requests=int(os.environ.get('FUNDLEX_MODEL_MAX_REQUESTS','0') or 0),
+            max_cost_usd=float(os.environ.get('FUNDLEX_MODEL_MAX_COST_USD','0') or 0),
             concurrency=int(os.environ.get('FUNDLEX_MODEL_CONCURRENCY','1')),
             input_usd_per_million=float(os.environ.get('FUNDLEX_MODEL_INPUT_USD_PER_M','1')),
-            output_usd_per_million=float(os.environ.get('FUNDLEX_MODEL_OUTPUT_USD_PER_M','5')))
+            output_usd_per_million=float(os.environ.get('FUNDLEX_MODEL_OUTPUT_USD_PER_M','5')),
+            enforce_limits=_env_flag('FUNDLEX_MODEL_ENFORCE_LIMITS'))
         return cls(base_url=os.environ.get('LLM_BASE_URL',''),model=os.environ.get('LLM_MODEL',''),
             api_key=os.environ.get('LLM_API_KEY',''),provider=os.environ.get('LLM_PROVIDER',''),budget=budget,
             max_context_chars=int(os.environ.get('FUNDLEX_MODEL_CONTEXT_CHARS','12000')),
-            max_calls=int(os.environ.get('FUNDLEX_MODEL_MAX_CALLS','16')),
+            max_calls=int(os.environ.get('FUNDLEX_MODEL_MAX_CALLS','16') or 0),
             max_completion_tokens=int(os.environ.get('FUNDLEX_MODEL_MAX_OUTPUT_TOKENS','1500')),
             timeout_s=float(os.environ.get('FUNDLEX_MODEL_TIMEOUT_S','45')),
             retries=int(os.environ.get('FUNDLEX_MODEL_RETRIES','1')),
             request_options=json.loads(os.environ.get('FUNDLEX_MODEL_REQUEST_OPTIONS_JSON','{}')),
             extra_headers=extra_headers,
-            user_agent=os.environ.get('FUNDLEX_MODEL_USER_AGENT','fundlex/0.3.0'))
+            user_agent=os.environ.get('FUNDLEX_MODEL_USER_AGENT','fundlex/0.3.0'),
+            enforce_calls=_env_flag('FUNDLEX_MODEL_ENFORCE_LIMITS'))
     def metrics(self) -> dict:
         with self._state_lock:
             events = list(self.events)
             calls = self.calls
             invalidations = self.checkpoints.invalidations if self.checkpoints else 0
         return {'logical_calls':calls,'http_attempts':sum(not (e.get('reused_checkpoint') or e.get('replayed')) for e in events),
+            'max_calls_reference':self.max_calls,
+            'call_cap_enforced':self.enforce_calls,
+            'call_reference_exceeded':bool(self.max_calls and calls>self.max_calls),
             'cassette_replays':sum(bool(e.get('replayed')) for e in events),
             'checkpoint_reuses':sum(bool(e.get('reused_checkpoint')) for e in events),
             'checkpoint_invalidations':invalidations,
@@ -268,7 +284,12 @@ class ModelGateway:
             raise ModelError('MODEL_TASK_UNSUPPORTED')
         jsonschema.Draft202012Validator.check_schema(response_schema)
         with self._state_lock:
-            if self.calls>=self.max_calls: raise ModelError('MODEL_CALL_BUDGET_EXCEEDED')
+            # ``max_calls`` is a planning/observation reference by default. It only
+            # stops a run when a caller explicitly opts into the legacy hard cap
+            # (FL-D445/FL-D449). Deployment-wide cost/request caps live in the
+            # shared ledger and follow the same observation-first policy.
+            if self.enforce_calls and self.max_calls and self.calls>=self.max_calls:
+                raise ModelError('MODEL_CALL_BUDGET_EXCEEDED')
             self.calls += 1
         query = {'task_type':task_type,'bounded_context_sha256':hashlib.sha256(bounded_context.encode()).hexdigest(),
                  'response_schema':response_schema,'instruction':instruction,'prompt_version':prompt_version}

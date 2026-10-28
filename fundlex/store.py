@@ -1041,7 +1041,7 @@ class RunStore:
         if row["lease_until"] is None or row["lease_until"] <= now:
             raise Conflict("expired worker lease")
         terminal = row["attempt"] >= max_attempts
-        pause_required = error_code in {"MODEL_CIRCUIT_OPEN", "MODEL_GLOBAL_CALL_BUDGET_EXCEEDED", "MODEL_COST_BUDGET_EXCEEDED", "MODEL_CALL_BUDGET_EXCEEDED", "MODEL_LEDGER_UNAVAILABLE", "MODEL_CHECKPOINT_UNAVAILABLE", "MODEL_REPLAY_MISS", "MODEL_CASSETTE_UNAVAILABLE"}
+        pause_required = error_code in {"MODEL_CIRCUIT_OPEN", "MODEL_LEDGER_UNAVAILABLE", "MODEL_CHECKPOINT_UNAVAILABLE", "MODEL_REPLAY_MISS", "MODEL_CASSETTE_UNAVAILABLE"}
         delay = min(base_delay_seconds * (2 ** max(row["attempt"] - 1, 0)) * random.uniform(0.8, 1.2), 300)
         report_json = json.dumps(report, ensure_ascii=False) if isinstance(report, dict) else None
         if terminal:

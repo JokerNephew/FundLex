@@ -130,9 +130,9 @@ def test_pause_whole_task_and_new_segment_inherits_pause(client):
         assert client.app.state.store.get_batch("alice", bid)["status"] == "paused"
     assert client.post(f"/api/tasks/{task}/resume", headers=ALICE).json()["status"] == "queued"
     job = client.app.state.store.claim()
-    client.app.state.store.retry(job["id"], job["fencing_token"], error_code="MODEL_GLOBAL_CALL_BUDGET_EXCEEDED")
+    client.app.state.store.retry(job["id"], job["fencing_token"], error_code="MODEL_LEDGER_UNAVAILABLE")
     state = client.get(f"/api/tasks/{task}", headers=ALICE).json()
-    assert state["status"] == "paused" and state["pause_reason"] == "MODEL_GLOBAL_CALL_BUDGET_EXCEEDED"
+    assert state["status"] == "paused" and state["pause_reason"] == "MODEL_LEDGER_UNAVAILABLE"
     assert client.app.state.store.claim() is None
     upload(client, task, files[2:], data)
     assert client.app.state.store.claim() is None

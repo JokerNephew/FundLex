@@ -1,7 +1,19 @@
-"""Process-shared request, concurrency and estimated-cost limits for local runs.
+"""Process-shared usage ledger, concurrency gate and circuit breaker for model calls.
 
-The first argument accepts either a SQLite file path (local profile) or a
-``mysql://`` URL (shared production ledger).
+The ledger is the authoritative record of HTTP attempts, token usage and the
+estimated (configuration-price, never provider-invoice) cost.  Cost and total
+request thresholds are **observations by default**: reaching them is recorded in
+the snapshot and metrics but never pauses, rejects or emits a NO-GO on its own
+(FL-D445/FL-D449).  The safety boundaries that remain hard are:
+
+* the shared ``concurrency`` reservation limit;
+* the circuit breaker for repeated provider/network failures;
+* reservation leases and the ledger itself.
+
+Explicit hard cost/request caps remain available for legacy tests and controlled
+environments through ``enforce_limits=True``.  ``0``/``None`` mean "not
+configured" and never trigger a cap; enabling enforcement with an unset threshold
+is a configuration error, so a zero can not accidentally stop a run.
 """
 from __future__ import annotations
 import json
@@ -16,20 +28,34 @@ class BudgetError(RuntimeError):
     pass
 
 class ModelBudget:
-    """Every HTTP attempt reserves worst-case cost; missing usage keeps that charge."""
-    def __init__(self, path: str | Path, *, max_requests: int = 16,
-                 max_cost_usd: float = 1.0, concurrency: int = 1,
+    """Every HTTP attempt reserves worst-case cost; missing usage keeps that charge.
+
+    ``max_requests``/``max_cost_usd`` are observation thresholds unless
+    ``enforce_limits=True`` is passed explicitly.  Historical runs and the
+    production ledger are never reset by constructing a new instance.
+    """
+    def __init__(self, path: str | Path, *, max_requests: int | None = None,
+                 max_cost_usd: float | None = None, concurrency: int = 1,
                  input_usd_per_million: float = 1.0, output_usd_per_million: float = 5.0,
-                 circuit_failures: int = 3, circuit_cooldown_s: float = 120):
-        if min(max_requests, concurrency) < 1 or min(max_cost_usd, input_usd_per_million, output_usd_per_million) <= 0:
-            raise ValueError('model budget and rates must be positive')
+                 circuit_failures: int = 3, circuit_cooldown_s: float = 120,
+                 enforce_limits: bool = False):
+        if concurrency < 1 or min(input_usd_per_million, output_usd_per_million) <= 0:
+            raise ValueError('model concurrency and rates must be positive')
+        if circuit_failures < 1 or circuit_cooldown_s < 0:
+            raise ValueError('model circuit settings must be positive')
+        self.max_requests = _optional_positive_int(max_requests, 'max_requests')
+        self.max_cost_usd = _optional_positive_float(max_cost_usd, 'max_cost_usd')
+        if enforce_limits and (self.max_requests is None or self.max_cost_usd is None):
+            raise ValueError('enforce_limits requires positive max_requests and max_cost_usd; '
+                             '0/None means no local threshold and must not stop a run')
+        self.enforce_limits = bool(enforce_limits)
         self.database = Database(path, timeout=20)
         if self.database.path is not None:
             self.path = self.database.path
             self.path.parent.mkdir(parents=True, exist_ok=True)
         else:
             self.path = None
-        self.max_requests, self.max_cost_usd, self.concurrency = max_requests, max_cost_usd, concurrency
+        self.concurrency = concurrency
         self.input_rate, self.output_rate = input_usd_per_million, output_usd_per_million
         self.circuit_failures,self.circuit_cooldown_s=circuit_failures,circuit_cooldown_s
         with self._connect() as db:
@@ -53,8 +79,10 @@ class ModelBudget:
             if len(recent)==self.circuit_failures and now-recent[0]['started']<self.circuit_cooldown_s and all(json.loads(r['metadata']).get('error_code') in service_errors for r in recent):
                 raise BudgetError('MODEL_CIRCUIT_OPEN')
             row = db.execute('SELECT COUNT(*) n,COALESCE(SUM(charged_cost),0) cost FROM requests').fetchone()
-            if row['n'] >= self.max_requests: raise BudgetError('MODEL_GLOBAL_CALL_BUDGET_EXCEEDED')
-            if row['cost']+cost > self.max_cost_usd: raise BudgetError('MODEL_COST_BUDGET_EXCEEDED')
+            if self.enforce_limits and row['n'] >= self.max_requests:
+                raise BudgetError('MODEL_GLOBAL_CALL_BUDGET_EXCEEDED')
+            if self.enforce_limits and row['cost']+cost > self.max_cost_usd:
+                raise BudgetError('MODEL_COST_BUDGET_EXCEEDED')
             if db.execute("SELECT COUNT(*) FROM requests WHERE status='reserved'").fetchone()[0] >= self.concurrency:
                 raise BudgetError('MODEL_CONCURRENCY_LIMIT')
             reservation = uuid.uuid4().hex
@@ -77,8 +105,29 @@ class ModelBudget:
         with self._connect() as db:
             row = db.execute('SELECT COUNT(*) calls,COALESCE(SUM(charged_cost),0) cost FROM requests').fetchone()
             statuses = {r['status']:r['n'] for r in db.execute('SELECT status,COUNT(*) n FROM requests GROUP BY status')}
-        return {'http_attempts':row['calls'],'estimated_cost_usd':row['cost'],
+        calls, cost = row['calls'], row['cost']
+        return {'http_attempts':calls,'estimated_cost_usd':cost,
                 'max_http_attempts':self.max_requests,'max_cost_usd':self.max_cost_usd,
+                'request_cap_enforced':self.enforce_limits,
+                'cost_cap_enforced':self.enforce_limits,
+                'request_cap_exceeded':bool(self.max_requests and calls>self.max_requests),
+                'cost_cap_exceeded':bool(self.max_cost_usd and cost>self.max_cost_usd),
                 'concurrency':self.concurrency,'statuses':statuses,
                 'rates_usd_per_million':{'input':self.input_rate,'output':self.output_rate},
                 'cost_is_provider_invoice':False}
+
+
+def _optional_positive_int(value: int | None, name: str) -> int | None:
+    if value is None or value == 0:
+        return None
+    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+        raise ValueError(f'{name} must be a non-negative integer (0/None means unset)')
+    return value
+
+
+def _optional_positive_float(value: float | None, name: str) -> float | None:
+    if value is None or value == 0:
+        return None
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or value < 0:
+        raise ValueError(f'{name} must be a non-negative number (0/None means unset)')
+    return float(value)

@@ -55,7 +55,7 @@ ModelGateway 读取通用变量 `LLM_PROVIDER`、`LLM_BASE_URL`、`LLM_MODEL`、
 
 当前联调端点：OpenCode Go（`https://opencode.ai/inference/go/v1`，模型 `deepseek-v4.1-flash`；该服务要求客户端发送稳定 `x-opencode-session` 会话头与自有 User-Agent，用 `FUNDLEX_MODEL_EXTRA_HEADERS_JSON` / `FUNDLEX_MODEL_USER_AGENT` 配置；DeepSeek V4.1 Flash 在该网关声明数据不用于训练、0 天保留）。供应商/模型可替换，模块和业务规则不含供应商分支；发布包绑定当前模型传输指纹（头名与 UA 在内，会话值轮换不失效）。
 
-默认全局预算账本累计最多 16 次 HTTP 请求、USD 1 的配置价格估计、并发 1。`FUNDLEX_MODEL_MAX_REQUESTS`、`FUNDLEX_MODEL_MAX_COST_USD`、输入/输出单价、上下文和输出上限可配置；每次重试也预留预算，未知 token 用量保留保守预留值，账本不随重启清零。修改模型、价格或预算前应重新登记和验证。估计费用不是供应商账单。当前联调的低延迟请求选项通过 `FUNDLEX_MODEL_REQUEST_OPTIONS_JSON` 注入；不能覆盖输入、模型、输出长度或 schema 校验。
+共享账本记录每次 HTTP 尝试、token 用量和按配置单价估算的费用（不是供应商账单），并发默认 1。费用与总请求阈值默认**只观测**：`FUNDLEX_MODEL_MAX_REQUESTS`、`FUNDLEX_MODEL_MAX_COST_USD` 和历史部署值会在快照/报告中显示是否超过参考值，但不会暂停、拒绝或触发 NO-GO；账本不随重启清零。仅显式设置 `FUNDLEX_MODEL_ENFORCE_LIMITS=1` 时恢复旧的硬费用/次数门限，仅供受控测试，生产不得启用。`FUNDLEX_MODEL_MAX_CALLS` 是单实例逻辑调用参考值，同样不硬停。并发 reservation、断路器、超时、上下文/输出容量和有限技术重试仍为硬安全边界。当前联调的低延迟请求选项通过 `FUNDLEX_MODEL_REQUEST_OPTIONS_JSON` 注入；不能覆盖输入、模型、输出长度或 schema 校验。
 
 详见 [评测协议（已归档）](docs/archive/v2-matching/EVALUATION_PROTOCOL.md)、[部署参数](docs/DEPLOYMENT_PARAMETERS.md) 和 [实施计划（已归档）](docs/archive/design/IMPLEMENTATION_PLAN.md)。不同合同全文不会拼成一次请求，模型不生成写入文字或 OOXML。
 

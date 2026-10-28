@@ -39,8 +39,7 @@ VARIANT_MATCH_RATIO = 0.95
 VARIANT_MIN_CHARS = 24
 SURVEY_ZONES = frozenset({"body", "summary"})
 # Transport/budget stops that must pause the whole run instead of failing one target.
-_STOP_CODES = frozenset({"MODEL_GLOBAL_CALL_BUDGET_EXCEEDED", "MODEL_COST_BUDGET_EXCEEDED",
-                         "MODEL_CALL_BUDGET_EXCEEDED", "MODEL_CIRCUIT_OPEN",
+_STOP_CODES = frozenset({"MODEL_CIRCUIT_OPEN",
                          "MODEL_LEDGER_UNAVAILABLE", "MODEL_CONFIG_MISSING",
                          "MODEL_HTTP_ERROR", "MODEL_RETRY_EXHAUSTED"})
 # Only long reference texts may be matched as wording variants, and only at a

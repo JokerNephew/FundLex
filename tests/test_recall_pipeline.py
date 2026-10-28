@@ -622,7 +622,9 @@ def test_zero_edit_already_satisfied_unchanged(tmp_path: Path):
 
 def test_stop_code_during_facts_raises(tmp_path: Path):
     def stop_facts(context: str) -> dict:
-        raise ModelError("MODEL_CALL_BUDGET_EXCEEDED")
+        # Budget thresholds are observations now; an infrastructure/ledger stop
+        # (still hard) is the remaining whole-run pause path (FL-D449).
+        raise ModelError("MODEL_LEDGER_UNAVAILABLE")
 
     source = tmp_path / "contract.docx"
     build_contract(source)
@@ -630,7 +632,7 @@ def test_stop_code_during_facts_raises(tmp_path: Path):
     gateway = PipelineGateway(base_responses(recall_facts=stop_facts))
     with pytest.raises(RecallPipelineStop) as excinfo:
         process_recall_first(source, output_dir, guide_document=guide_document(), gateway=gateway)
-    assert excinfo.value.code == "MODEL_CALL_BUDGET_EXCEEDED"
+    assert excinfo.value.code == "MODEL_LEDGER_UNAVAILABLE"
     assert excinfo.value.report["verification_status"] == "verification_blocked"
     assert excinfo.value.report["verification_blockers"][0]["stage"] == "facts"
     assert docx_names(output_dir) == set()
