@@ -6,16 +6,20 @@ API only enqueues long-running work; the worker performs all model calls.
 from __future__ import annotations
 
 import json
+import time
+import uuid
 from pathlib import Path
 from typing import Any
 
 from fastapi import Depends, File, Form, HTTPException, Query, UploadFile
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, Response
 from pydantic import BaseModel
 
 from ..store import Conflict, NotFound, RunStore
 from .human import rebuild_evidence, update_guide_item
-from .service import ALLOWED_SUFFIXES, MAX_REGULATION_BYTES, create_run
+from .service import (ALLOWED_SUFFIXES, MAX_PUBLIC_CONFIG_CHARS, MAX_REGULATION_BYTES,
+                      ArtifactIntegrityError, candidate_engine_identity, create_run,
+                      verified_artifact)
 from .store import GuideGenerationStore
 DOWNLOAD_KINDS = {
     "guide": ("generated_guide.docx", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"),
@@ -114,6 +118,8 @@ def register_guide_generation_routes(application, store: RunStore,
             raise HTTPException(413, "REGULATION_FILE_LIMIT")
         if not data:
             raise HTTPException(422, "REGULATION_EMPTY")
+        if len(config or "") > MAX_PUBLIC_CONFIG_CHARS:
+            raise HTTPException(422, "CONFIG_TOO_LARGE")
         try:
             config_payload = json.loads(config or "{}")
         except ValueError:
@@ -247,50 +253,97 @@ def register_guide_generation_routes(application, store: RunStore,
 
     @application.get("/api/guide-generation/runs/{run_id}/evidence")
     def guide_evidence(run_id: str, user: str = Depends(user_dependency)):
-        run = run_for(user, run_id)
-        artifact = gg.get_artifact(run_id, "evidence_json")
-        if not artifact:
-            raise HTTPException(404, "evidence not ready")
+        run_for(user, run_id)
+        try:
+            artifact = verified_artifact(gg, run_id, "evidence_json", owner=user)
+        except ArtifactIntegrityError as exc:
+            raise HTTPException(409, str(exc.code)) from None
+        except NotFound:
+            raise HTTPException(404, "evidence not ready") from None
         return JSONResponse(content={"artifact": {
             "sha256": artifact["sha256"], "size": artifact["size"],
             "download_url": f"/api/guide-generation/runs/{run_id}/download/evidence_json",
             "report_url": f"/api/guide-generation/runs/{run_id}/download/evidence_html",
-        }, "summary": _public_run(gg, run, detail=True)["summary"]})
+        }, "summary": _public_run(gg, gg.get_run(run_id), detail=True)["summary"]})
 
     @application.get("/api/guide-generation/runs/{run_id}/report", response_class=HTMLResponse)
     def guide_report(run_id: str, user: str = Depends(user_dependency)):
         run_for(user, run_id)
-        artifact = gg.get_artifact(run_id, "evidence_html")
-        if not artifact:
-            raise HTTPException(404, "report not ready")
-        path = store.object_path(artifact["object_key"])
-        if not path.is_file():
-            raise HTTPException(404, "report not ready")
-        return HTMLResponse(path.read_text(encoding="utf-8"))
+        try:
+            artifact = verified_artifact(gg, run_id, "evidence_html", owner=user)
+        except ArtifactIntegrityError as exc:
+            raise HTTPException(409, str(exc.code)) from None
+        except NotFound:
+            raise HTTPException(404, "report not ready") from None
+        return HTMLResponse(artifact["data"].decode("utf-8", errors="replace"))
 
     @application.get("/api/guide-generation/runs/{run_id}/download/{kind}")
     def guide_download(run_id: str, kind: str, user: str = Depends(user_dependency)):
         run_for(user, run_id)
-        artifact = gg.get_artifact(run_id, kind)
-        if not artifact:
-            raise HTTPException(404, "artifact not found")
-        path = store.object_path(artifact["object_key"])
-        if not path.is_file():
-            raise HTTPException(404, "artifact not found")
+        try:
+            artifact = verified_artifact(gg, run_id, kind, owner=user)
+        except ArtifactIntegrityError as exc:
+            raise HTTPException(409, str(exc.code)) from None
+        except NotFound:
+            raise HTTPException(404, "artifact not found") from None
         filename, media_type = DOWNLOAD_KINDS.get(
             kind, (Path(artifact["object_key"]).name, "application/octet-stream"))
-        return FileResponse(path, media_type=media_type, filename=filename)
+        return Response(content=artifact["data"], media_type=media_type,
+                        headers={"Content-Disposition":
+                                 f'attachment; filename="{filename}"'})
 
     @application.post("/api/guide-generation/runs/{run_id}/engine-compatibility", status_code=202)
     def guide_engine_compatibility(run_id: str, user: str = Depends(user_dependency)):
         run = run_for(user, run_id)
         if run.get("status") not in {"complete", "complete_with_unresolved", "completed"}:
             raise HTTPException(409, "RUN_NOT_COMPLETE")
-        payload = run.get("payload") or {}
+        try:
+            identity = candidate_engine_identity(gg, run_id)
+        except NotFound:
+            raise HTTPException(409, "CANDIDATE_NOT_AVAILABLE") from None
+        payload = dict(run.get("payload") or {})
+        engine_status = payload.get("engine_status") or run.get("engine_status") or "not_run"
+        completed_input = payload.get("engine_completed_input_sha256") or ""
+        if engine_status == "completed" and completed_input == identity["input_sha256"]:
+            return {"status": "completed", "idempotent": True,
+                    "engine_status": "completed",
+                    "candidate_version_id": identity["candidate_version_id"],
+                    "input_sha256": identity["input_sha256"]}
+        if engine_status in {"queued", "running"}:
+            current_request = payload.get("engine_request") or {}
+            if current_request.get("input_sha256") == identity["input_sha256"]:
+                return {"status": "queued", "idempotent": True,
+                        "engine_status": engine_status,
+                        "candidate_version_id": identity["candidate_version_id"],
+                        "input_sha256": identity["input_sha256"]}
+        request_id = uuid.uuid4().hex
         payload["engine_requested"] = True
+        payload["engine_status"] = "queued"
+        payload["engine_request"] = {
+            "request_id": request_id,
+            "input_sha256": identity["input_sha256"],
+            "candidate_version_id": identity["candidate_version_id"],
+            "candidate_version_no": identity["candidate_version_no"],
+            "content_sha256": identity["content_sha256"],
+            "guide_sha256": identity["guide_sha256"],
+            "requested_at": time.time(),
+        }
         gg.update_run(run_id, engine_status="queued", payload=payload)
-        gg.enqueue(run_id)
-        return {"status": "queued"}
+        gg.enqueue(run_id, preserve_run_status=True)
+        return {"status": "queued", "request_id": request_id,
+                "candidate_version_id": identity["candidate_version_id"],
+                "input_sha256": identity["input_sha256"]}
+
+    @application.post("/api/guide-generation/runs/{run_id}/resume")
+    def guide_resume(run_id: str, user: str = Depends(user_dependency)):
+        run_for(user, run_id)
+        try:
+            return gg.resume_run(run_id, owner=user, actor=user,
+                                 reason="owner_resume")
+        except Conflict as exc:
+            raise HTTPException(409, str(exc)) from None
+        except NotFound:
+            raise HTTPException(404, "guide generation run not found") from None
 
     @application.get("/api/guide-generation/corpus")
     def guide_corpus(user: str = Depends(user_dependency)):
