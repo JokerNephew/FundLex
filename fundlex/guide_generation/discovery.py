@@ -60,9 +60,9 @@ class DiscoveryConfig:
     # requirement ids a model can attach to one finding.
     path_b_max_requirements: int = 12
     path_b_latest_only: bool = True
-    path_b_max_calls: int = 4000
+    path_b_max_calls: int | None = None  # observation only
     path_c_enabled: bool = True
-    path_c_max_calls: int = 240
+    path_c_max_calls: int | None = None  # observation only
     adjudicate_lexical: bool = True
     adjudicate_batch: int = 20
     vector_top_k: int = 30
@@ -191,10 +191,11 @@ def path_a_requirement_retrieval(router, store, requirements: list[PolicyRequire
         if requirement.disposition not in {"modify_contract", "uncertain", "needs_external_baseline"}:
             continue
         intents: list[dict] = []
-        if intent_calls < config.path_a_max_intent_calls:
-            intents, used = _intents_for_requirement(router, requirement)
-            intent_calls += used
-            calls += used
+        # Every requirement gets its intent call; there is no cumulative call
+        # cap.  Deterministic fallback remains only for an empty model result.
+        intents, used = _intents_for_requirement(router, requirement)
+        intent_calls += used
+        calls += used
         if not intents:
             intents_by_requirement[requirement.requirement_id] = []
             query = deterministic_query(requirement)
@@ -402,7 +403,8 @@ def path_b_contract_sweep(router, store, requirements: list[PolicyRequirement],
     suspicions: list[dict] = []
     batch_evidence: list[dict] = []
     calls = 0
-    limit = config.path_b_max_calls if max_calls is None else max_calls
+    # No cumulative batch/call limit: every clause window must be scanned.
+    # The remaining bounds are per-request context/schema limits.
     jobs = []
     max_requirements = max(1, int(config.path_b_max_requirements))
     # Every requirement must appear in a window for EVERY contract, otherwise
@@ -420,8 +422,6 @@ def path_b_contract_sweep(router, store, requirements: list[PolicyRequirement],
         contract_batches = _batches(clauses, config.path_b_batch_chars)
         covered_ids: set[str] = set()
         for batch in contract_batches:
-            if len(jobs) + len(contract_jobs) >= limit:
-                break
             related = _sweep_requirements(requirements, batch, max_requirements)
             related_ids = {item.requirement_id for item in related}
             window = related[:8]
@@ -448,12 +448,8 @@ def path_b_contract_sweep(router, store, requirements: list[PolicyRequirement],
             for start in range(0, len(missing), max_requirements):
                 group = missing[start:start + max_requirements]
                 for batch in contract_batches:
-                    if len(jobs) + len(contract_jobs) >= limit:
-                        break
                     contract_jobs.append((contract, batch, group))
         jobs.extend(contract_jobs)
-        if len(jobs) >= limit:
-            break
     if not jobs:
         return [], [], [], 0
 
@@ -520,7 +516,7 @@ def path_b_contract_sweep(router, store, requirements: list[PolicyRequirement],
     failed = run_jobs(jobs)
     if failed:
         # One bounded retry after a schema/network failure; never unbounded.
-        retry_failed = run_jobs(failed[:min(len(failed), config.path_b_max_calls)])
+        retry_failed = run_jobs(failed)
         if retry_failed:
             for contract, batch, window in retry_failed:
                 batch_evidence.append({
@@ -548,14 +544,11 @@ def resolve_uncertain_batches(router, requirements: list[PolicyRequirement],
     version_map = {item.contract_version_id: item for item in versions}
     impacts: list[ImpactCandidate] = []
     calls = 0
-    limit = config.path_b_max_calls if max_calls is None else max_calls
     for batch_evidence in sweep_batches:
         if str(batch_evidence.get("status") or "") not in {"uncertain", "affected"}:
             continue
         if batch_evidence.get("resolution"):
             continue
-        if calls >= limit:
-            break
         version = version_map.get(str(batch_evidence.get("contract_version_id") or ""))
         if version is None:
             continue

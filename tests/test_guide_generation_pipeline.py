@@ -369,7 +369,7 @@ def test_api_upload_worker_human_edit_and_download(tmp_path, monkeypatch):
         data={"config": json.dumps({"corpus_dir": "funds_word", "corpus_limit": 2,
                                     "path_b_latest_only": False, "path_b_max_calls": 10,
                                     "path_c_enabled": False, "semantic_applicability": False,
-                                    "max_residual_rounds": 1, "residual_max_calls_per_round": 5})})
+                                    "max_residual_rounds": 2, "residual_max_calls_per_round": 5})})
     assert response.status_code == 201, response.text
     run_id = response.json()["id"]
     # Owner isolation.

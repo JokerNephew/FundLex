@@ -16,6 +16,7 @@ import hashlib
 import json
 import math
 import os
+import re
 import sqlite3
 import time
 import uuid
@@ -29,6 +30,7 @@ from .models import ClauseUnit, canonical_json, sha256_text
 
 
 VECTOR_SCHEMA_VERSION = "guide-vector-1"
+_ENV_NAME = re.compile(r"^[A-Z][A-Z0-9_]{0,63}$")
 
 
 class EmbeddingProvider(Protocol):
@@ -41,6 +43,30 @@ class EmbeddingProvider(Protocol):
 
 class VectorIndexError(RuntimeError):
     """A vector derivative cannot be used safely."""
+
+
+def _validated_http_url(value: str, *, code: str) -> str:
+    """Accept only credential-free http(s) endpoints from server config."""
+    from urllib.parse import urlsplit
+    try:
+        parts = urlsplit(str(value or ""))
+    except ValueError:
+        raise VectorIndexError(code) from None
+    if (parts.scheme not in {"http", "https"} or not parts.hostname
+            or parts.username or parts.password):
+        raise VectorIndexError(code)
+    return str(value)
+
+
+def _validated_index_path(root: str | Path, value: str | Path) -> Path:
+    root_path = Path(root).resolve()
+    path = Path(value)
+    if not path.is_absolute():
+        path = root_path / path
+    path = path.resolve()
+    if not path.is_relative_to(root_path):
+        raise VectorIndexError("VECTOR_INDEX_PATH_FORBIDDEN")
+    return path
 
 
 @dataclass(frozen=True)
@@ -57,7 +83,8 @@ class HttpEmbeddingProvider:
 
     def __init__(self, base_url: str, model: str, *, api_key: str = "",
                  version: str = "", timeout_s: float = 120.0):
-        self.base_url = base_url.rstrip("/")
+        self.base_url = _validated_http_url(
+            base_url, code="VECTOR_EMBEDDING_URL_INVALID").rstrip("/")
         self.model = model
         self.version = version or model
         self.api_key = api_key
@@ -71,6 +98,8 @@ class HttpEmbeddingProvider:
         selected_model = model or os.environ.get("FUNDLEX_EMBEDDING_MODEL", "")
         if not endpoint or not selected_model:
             raise VectorIndexError("VECTOR_EMBEDDING_NOT_CONFIGURED")
+        if not _ENV_NAME.fullmatch(api_key_env or ""):
+            raise VectorIndexError("VECTOR_CREDENTIAL_ENV_INVALID")
         return cls(endpoint, selected_model,
                    api_key=os.environ.get(api_key_env, ""), version=version,
                    timeout_s=timeout_s)
@@ -473,12 +502,13 @@ def build_dense_retriever(config: Any, root: str | Path) -> DenseRetriever | Non
         timeout_s=float(getattr(config, "vector_embedding_timeout_s", 120.0)),
     )
     path = str(getattr(config, "vector_index_path", "") or "")
-    index_path = Path(path) if path else Path(root) / "guide_vectors.sqlite3"
+    index_path = _validated_index_path(root, path) if path else Path(root).resolve() / "guide_vectors.sqlite3"
     backend = str(getattr(config, "vector_backend", "sqlite") or "sqlite").lower()
     if backend == "qdrant":
         url = str(getattr(config, "vector_qdrant_url", "") or "") or os.environ.get("FUNDLEX_VECTOR_QDRANT_URL", "")
         if not url:
             raise VectorIndexError("VECTOR_QDRANT_NOT_CONFIGURED")
+        url = _validated_http_url(url, code="VECTOR_QDRANT_URL_INVALID")
         key_env = str(getattr(config, "vector_qdrant_api_key_env", "QDRANT_API_KEY") or "QDRANT_API_KEY")
         key = os.environ.get(key_env, "")
         prefix = str(getattr(config, "vector_qdrant_collection_prefix", "fundlex-clauses") or "fundlex-clauses")

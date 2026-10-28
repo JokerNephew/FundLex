@@ -12,6 +12,7 @@ import hashlib
 import json
 import os
 import subprocess
+import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Iterable
@@ -37,6 +38,7 @@ from .models import (
 )
 from .quality import run_quality_gate
 from .scope import load_builtin_guide_scope, section_in_scope
+from .eligibility import evaluate_run_eligibility, open_critical_findings
 from ..regulatory.ingestion import ingest_regulation, validate_regulation_document
 from .requirements import extract_requirements
 from .residual import ResidualConfig, run_residual_mining
@@ -74,22 +76,22 @@ class PipelineConfig:
     path_b_batch_chars: int = 12000
     path_b_max_requirements: int = 12
     path_b_latest_only: bool = True
-    path_b_max_calls: int = 4000
+    path_b_max_calls: int | None = None  # observation only
     path_c_enabled: bool = True
-    path_c_max_calls: int = 240
+    path_c_max_calls: int | None = None  # observation only
     adjudicate_lexical: bool = True
     local_batch_size: int = 4
     repair_rounds: int = 2
     supplement_rounds: int = 2
     guide_scope_sections: list[str] = field(default_factory=list)
-    max_residual_rounds: int = 4
+    max_residual_rounds: int | None = None
     required_clean_rounds: int = 2
-    residual_max_calls_per_round: int = 600
+    residual_max_calls_per_round: int | None = None  # observation only
     semantic_applicability: bool = True
     run_engine_compatibility: bool = False
     sample_contract: str = ""
-    soft_max_calls: int = 8000
-    soft_max_cost: float = 20.0
+    soft_max_calls: int | None = None  # observation only
+    soft_max_cost: float | None = None  # observation only
     vector_enabled: bool = False
     vector_index_path: str = ""
     vector_embedding_base_url: str = ""
@@ -161,8 +163,10 @@ class GuidePipeline:
         self.run_dir = store.store.objects / "guide_generation" / run_id
         self.run_dir.mkdir(parents=True, exist_ok=True)
         self.router.set_call_callback(lambda record: store.record_model_call(run_id, record))
-        self.router.run_max_calls = self.config.soft_max_calls
-        self.router.run_max_cost = self.config.soft_max_cost
+        # Cost/call totals are observations; completion is decided by the
+        # coverage/residual/quality gates and bounded no-progress protection.
+        self.router.run_max_calls = None
+        self.router.run_max_cost = None
         self._restore_run()
         self.dense_retriever = None
         if self.config.vector_enabled:
@@ -198,9 +202,9 @@ class GuidePipeline:
             self.payload = payload
         self.run_record = self.store.update_run(self.run_id, payload=self.payload, **fields)
 
-    def _stage(self, stage: str, input_hash: str, fn, *args, **kwargs) -> Any:
+    def _stage(self, stage: str, input_hash: str, fn, *args, revalidate=None, **kwargs) -> Any:
         completed = self.store.get_completed_step(self.run_id, stage, input_hash)
-        if completed:
+        if completed and (revalidate is None or revalidate(completed.get("payload") or {})):
             return completed.get("payload") or {}
         self._update(status="running", stage=stage)
         attempt = self.store.start_step(
@@ -268,6 +272,29 @@ class GuidePipeline:
         for item in new_findings:
             existing[item["finding_id"]] = item
         self.store.replace_findings(self.run_id, existing.values())
+
+    def _refresh_quality_summary(self) -> dict[str, Any]:
+        """Recompute the quality summary after later stages add findings.
+
+        Coverage and residual mining run after the quality review.  They can
+        add ``semantic_coverage`` or ``guide_conflict`` criticals; if the
+        persisted quality summary is not recomputed, a later finalize can see
+        an obsolete ``pass`` and admit an ineligible candidate (INT-02).
+        """
+        findings = self.store.get_findings(self.run_id)
+        critical = open_critical_findings(findings)
+        major = [value for value in findings if value.get("severity") == "major"
+                 and value.get("status") in {"open", "", None}]
+        overall = "fail" if critical else ("pass_with_findings" if major else "pass")
+        current = dict(self.payload.get("quality") or {})
+        current.update({
+            "run_status": overall,
+            "findings": len(findings),
+            "open_critical_findings": len(critical),
+            "recomputed_after": current.get("recomputed_after") or "post_quality_stages",
+        })
+        self.payload["quality"] = current
+        return current
 
     # -- stages ---------------------------------------------------------------
     def stage_ingest(self) -> dict[str, Any]:
@@ -686,6 +713,7 @@ class GuidePipeline:
                 finding["superseded_by"] = "coverage_reaudit"
         self.store.replace_findings(self.run_id, existing_findings)
         self._merge_findings(result.findings)
+        self._refresh_quality_summary()
         self.store.replace_impacts(self.run_id, impacts)
         coverage_by_item: dict[str, list[str]] = {}
         for row in result.rows:
@@ -808,7 +836,12 @@ class GuidePipeline:
         saturated = False
         total_calls = 0
         status = "max_rounds_reached"
-        for round_no in range(1, self.config.max_residual_rounds + 1):
+        round_no = 0
+        while True:
+            round_no += 1
+            if (self.config.max_residual_rounds is not None
+                    and round_no > self.config.max_residual_rounds):
+                break
             try:
                 result = run_residual_mining(
                     self.router, requirements, items, impacts, versions, clauses_by_version, clauses,
@@ -867,101 +900,120 @@ class GuidePipeline:
         self.payload["residual"] = {"rounds": rounds, "saturated": saturated,
                                     "clean_streak": clean_streak, "calls": total_calls,
                                     "status": status}
+        self._refresh_quality_summary()
         self._update(payload=self.payload)
         return self.payload["residual"]
 
     def stage_finalize(self) -> dict[str, Any]:
-        requirements = self.store.get_requirements(self.run_id)
-        items = self._all_items()
-        findings = self.store.get_findings(self.run_id)
-        unhandled = sum(1 for item in requirements if not item.disposition)
-        critical_quality = [item for item in findings if item.get("severity") == "critical"
-                            and item.get("status") in {"open", "", None}
-                            and item.get("category") in {"regulation_fidelity", "draft_text_fidelity",
-                                                         "provenance"}
-                            and (item.get("source") != "guide_reviewer" or item.get("evidence_verified", True))]
-        coverage_summary = self.payload.get("coverage") or {}
-        residual_summary = self.payload.get("residual") or {}
-        quality_summary = self.payload.get("quality") or {}
-        unresolved_impacts = (coverage_summary.get("impacts") or {}).get("unresolved", 0)
-        requirement_gaps = (coverage_summary.get("requirements") or {}).get("gap", 0)
-        latest_uncertain = coverage_summary.get("latest_uncertain", 0)
-        # The quality stage counts every critical finding, including
-        # requirement-review failures and coverage criticals.  Finalization
-        # must honour that gate; filtering only three text categories here
-        # would let a failed review or a coverage critical become
-        # candidate_ready while the recorded quality status is fail.
-        quality_gate_passed = quality_summary.get("run_status") != "fail"
-        complete = (unhandled == 0 and not critical_quality and quality_gate_passed
-                    and requirement_gaps == 0
-                    and unresolved_impacts == 0 and latest_uncertain == 0
-                    and residual_summary.get("saturated") is True)
-        status = "complete" if complete else "complete_with_unresolved"
-        qualification = "candidate_ready" if complete else "candidate_with_findings"
-        docx_path = self.run_dir / "generated_guide.docx"
-        export = export_guide_docx(items, docx_path, title="新法规候选修改指引",
-                                   regulation_title=self.run_record.get("title") or "")
-        self.store.put_artifact(self.run_id, "guide",
-                                str(docx_path.relative_to(self.store.store.objects)),
-                                export["sha256"], export["size"])
-        ai_path = self.run_dir / "generated_guide_ai.docx"
-        ai_path.write_bytes(docx_path.read_bytes())
-        self.store.put_artifact(self.run_id, "guide_ai",
-                                str(ai_path.relative_to(self.store.store.objects)),
-                                export["sha256"], export["size"])
+        # A published or approved version is immutable.  A late pipeline (for
+        # example a stale worker or a replayed internal finalize) must not
+        # replace the frozen bytes or version row of that candidate.  Keep the
+        # rejection in the payload as evidence instead of silently ignoring it.
         candidate = self.store.get_candidate(self.run_id)
         current_version = self.store.get_candidate_version(
             self.run_id, candidate["current_version_id"])
-        self.payload["finalize"] = {
-            "status": status, "qualification_status": qualification,
-            "unhandled_requirements": unhandled,
-            "critical_quality_findings": len(critical_quality),
-            "quality_run_status": quality_summary.get("run_status"),
-            "guide_scope_sections": list(self.guide_scope),
-            "requirement_gaps": requirement_gaps,
-            "unresolved_impacts": unresolved_impacts,
-            "latest_contract_uncertain": latest_uncertain,
-            "residual_saturated": bool(residual_summary.get("saturated")),
-            "checklist": {
-                "all_requirements_have_evidence": all(item.source_quote and item.source_block_ids
-                                                      for item in requirements),
-                "all_requirements_dispositioned": unhandled == 0,
-                "all_guide_items_have_requirement": all(item.requirement_ids for item in items),
-                "all_guide_items_have_impact": all(item.impact_ids for item in items),
-                "all_guide_items_have_new_text_origin": all(item.new_text_origin for item in items),
-                "quality_gate_passed": quality_gate_passed,
-                "requirement_coverage_complete": requirement_gaps == 0,
-                "impact_coverage_complete": unresolved_impacts == 0,
-                "latest_contract_coverage_complete": latest_uncertain == 0,
+        if current_version.get("status") in {"published", "approved", "human_draft"}:
+            existing = dict(self.payload.get("finalize") or {})
+            rejection = {
+                "late_rejected": True, "late_rejected_at": utc_now(),
+                "candidate_version_id": current_version["candidate_version_id"],
+                "candidate_version_status": current_version.get("status"),
+                "reason": "CANDIDATE_VERSION_FROZEN",
+            }
+            self.payload.setdefault("finalize_late_rejections", []).append(rejection)
+            self._update(payload=self.payload)
+            return {**existing, **rejection}
+
+        with self.store.candidate_transaction(self.run_id):
+            requirements = self.store.get_requirements(self.run_id)
+            items = self._all_items()
+            gates = evaluate_run_eligibility(self.store, self.run_id)
+            coverage_summary = self.payload.get("coverage") or {}
+            residual_summary = self.payload.get("residual") or {}
+            quality_summary = self.payload.get("quality") or {}
+            complete = bool(gates["qualified"])
+            status = "complete" if complete else "complete_with_unresolved"
+            qualification = "candidate_ready" if complete else "candidate_with_findings"
+            content_sha256 = gates["guide_items_sha256"]
+            finalize_id = uuid.uuid4().hex
+            version_dir = self.run_dir / f"finalize-{finalize_id}"
+            version_dir.mkdir(parents=True, exist_ok=True)
+            # Version-unique object paths are deliberate: a fixed name could be
+            # overwritten by a later finalize even when the version row and its
+            # registered hash stayed unchanged (FL-D338).
+            docx_path = version_dir / "generated_guide.docx"
+            export = export_guide_docx(items, docx_path, title="新法规候选修改指引",
+                                       regulation_title=self.run_record.get("title") or "")
+            self.store.put_artifact(self.run_id, "guide",
+                                    str(docx_path.relative_to(self.store.store.objects)),
+                                    export["sha256"], export["size"])
+            ai_path = version_dir / "generated_guide_ai.docx"
+            ai_path.write_bytes(docx_path.read_bytes())
+            ai_sha = hashlib.sha256(ai_path.read_bytes()).hexdigest()
+            self.store.put_artifact(self.run_id, "guide_ai",
+                                    str(ai_path.relative_to(self.store.store.objects)),
+                                    ai_sha, ai_path.stat().st_size)
+            finalize_payload = {
+                "status": status, "qualification_status": qualification,
+                "qualified": complete,
+                "gate_sha256": gates["gate_sha256"],
+                "gates": gates,
+                "unhandled_requirements": gates["unhandled_requirements"],
+                "critical_quality_findings": gates["open_critical_findings"],
+                "quality_run_status": quality_summary.get("run_status"),
+                "coverage_run_status": coverage_summary.get("run_status"),
+                "guide_scope_sections": list(self.guide_scope),
+                "requirement_gaps": gates["requirement_gaps"],
+                "unresolved_impacts": gates["unresolved_impacts"],
+                "latest_contract_uncertain": gates["latest_contract_uncertain"],
                 "residual_saturated": bool(residual_summary.get("saturated")),
-            },
-        }
-        if current_version.get("status") == "draft":
-            version = self.store.create_candidate_version(
-                self.run_id, status="candidate_ready",
-                payload={
-                    "schema_version": "candidate-guide-version-1",
-                    "run_id": self.run_id,
-                    "source_sha256": self.run_record.get("source_sha256", ""),
-                    "regulation_document_sha256": self.run_record.get(
-                        "regulation_document_sha256", ""),
-                    "guide_items": [item.to_dict() for item in items],
-                    "finalize": self.payload["finalize"],
-                    "guide_artifact": {"kind": "guide", "sha256": export["sha256"],
-                                       "size": export["size"],
-                                       "object_key": str(docx_path.relative_to(self.store.store.objects))},
-                    "ai_artifact": {"kind": "guide_ai", "sha256": export["sha256"],
-                                    "size": export["size"],
-                                    "object_key": str(ai_path.relative_to(self.store.store.objects))},
+                "content_sha256": content_sha256,
+                "guide_artifact": {"kind": "guide", "sha256": export["sha256"],
+                                   "size": export["size"],
+                                   "object_key": str(docx_path.relative_to(self.store.store.objects))},
+                "ai_artifact": {"kind": "guide_ai", "sha256": ai_sha,
+                                "size": ai_path.stat().st_size,
+                                "object_key": str(ai_path.relative_to(self.store.store.objects))},
+                "checklist": dict(gates["checks"]),
+                "finalized_at": utc_now(),
+            }
+            version_payload = {
+                "schema_version": "candidate-guide-version-2",
+                "run_id": self.run_id,
+                "source_sha256": self.run_record.get("source_sha256", ""),
+                "regulation_document_sha256": self.run_record.get(
+                    "regulation_document_sha256", ""),
+                "guide_items": [item.to_dict() for item in items],
+                "finalize": finalize_payload,
+                "qualification": {
+                    "qualified": complete,
+                    "gate_sha256": gates["gate_sha256"],
+                    "gates": gates,
+                    "content_sha256": content_sha256,
+                    "status": "machine_qualified" if complete else "blocked",
+                    "finalized_at": finalize_payload["finalized_at"],
                 },
-                content_sha256=sha256_json([item.to_dict() for item in items]),
-                expected_current_version_id=current_version["candidate_version_id"])
-            self.payload["candidate_version_id"] = version["candidate_version_id"]
-            self.payload["candidate_version_no"] = version["version_no"]
-        self._update(status=status, stage="FINALIZE_GUIDE",
-                     qualification_status=qualification,
-                     guide_sha256=export["sha256"], payload=self.payload)
-        return self.payload["finalize"]
+                "guide_artifact": finalize_payload["guide_artifact"],
+                "ai_artifact": finalize_payload["ai_artifact"],
+            }
+            if current_version.get("status") in {"draft", "candidate_ready"}:
+                version = self.store.create_candidate_version(
+                    self.run_id,
+                    status="candidate_ready" if complete else "draft",
+                    payload=version_payload,
+                    content_sha256=content_sha256,
+                    qualification_status="machine_qualified" if complete else "blocked",
+                    qualification_sha256=gates["gate_sha256"],
+                    expected_current_version_id=current_version["candidate_version_id"])
+                finalize_payload["candidate_version_id"] = version["candidate_version_id"]
+                finalize_payload["candidate_version_no"] = version["version_no"]
+                self.payload["candidate_version_id"] = version["candidate_version_id"]
+                self.payload["candidate_version_no"] = version["version_no"]
+            self.payload["finalize"] = finalize_payload
+            self._update(status=status, stage="FINALIZE_GUIDE",
+                         qualification_status=qualification,
+                         guide_sha256=export["sha256"], payload=self.payload)
+        return finalize_payload
 
     def stage_evidence(self) -> dict[str, Any]:
         run = self.store.get_run(self.run_id)
@@ -994,10 +1046,10 @@ class GuidePipeline:
             human_versions=self.store.list_human_versions(self.run_id),
             human_changes=self.store.list_human_changes(self.run_id),
         )
-        evidence_path = self.run_dir / "guide_generation_evidence.json"
+        evidence_path = self.run_dir / f"guide_generation_evidence-{uuid.uuid4().hex}.json"
         evidence_path.write_text(json.dumps(package, ensure_ascii=False, indent=2, default=str),
                                  encoding="utf-8")
-        html_path = self.run_dir / "guide_generation_report.html"
+        html_path = self.run_dir / f"guide_generation_report-{uuid.uuid4().hex}.html"
         html_path.write_text(render_evidence_html(package), encoding="utf-8")
         evidence_sha = hashlib.sha256(evidence_path.read_bytes()).hexdigest()
         report_sha = hashlib.sha256(html_path.read_bytes()).hexdigest()
@@ -1010,6 +1062,12 @@ class GuidePipeline:
         self._update(evidence_sha256=evidence_sha, report_sha256=report_sha,
                      stage="BUILD_EVIDENCE", payload=self.payload)
         return {"evidence_sha256": evidence_sha, "report_sha256": report_sha}
+
+    def _finalize_cache_valid(self, cached: dict[str, Any]) -> bool:
+        """A cached finalize is only reusable while every dependency matches."""
+        gates = evaluate_run_eligibility(self.store, self.run_id)
+        return (str(cached.get("gate_sha256") or "") == gates["gate_sha256"]
+                and bool(cached.get("qualified")) == bool(gates["qualified"]))
 
     def run(self) -> dict[str, Any]:
         self._update(status="running", stage="INGEST_REGULATION",
@@ -1077,48 +1135,102 @@ class GuidePipeline:
                     self.stage_residual)
         self._stage("FINALIZE_GUIDE",
                     sha256_json({"items": [item.to_dict() for item in self._all_items()],
+                                 "requirements": [item.to_dict() for item in self.store.get_requirements(self.run_id)],
+                                 "quality": self.payload.get("quality"),
+                                 "findings": self.store.get_findings(self.run_id),
                                  "coverage": self.payload.get("coverage"),
-                                 "residual": self.payload.get("residual")}),
-                    self.stage_finalize)
+                                 "residual": self.payload.get("residual"),
+                                 "config": self.config.to_dict()}),
+                    self.stage_finalize,
+                    revalidate=self._finalize_cache_valid)
         self._stage("BUILD_EVIDENCE",
                     sha256_json({"items": [item.to_dict() for item in self._all_items()],
                                  "findings": self.store.get_findings(self.run_id),
                                  "coverage": self.payload.get("coverage")}),
                     self.stage_evidence)
         if self.config.run_engine_compatibility:
-            self.run_record_engine_compatibility()
+            self.run_engine_compatibility()
         final_status = (self.payload.get("finalize") or {}).get("status") or "complete_with_unresolved"
         self._update(status=final_status, stage="COMPLETED", payload=self.payload)
         return self.store.get_run(self.run_id)
 
-    def run_engine_compatibility(self) -> dict[str, Any]:
-        artifact = self.store.get_artifact(self.run_id, "guide")
+    def engine_input(self) -> dict[str, Any]:
+        """Identity of the candidate bytes an engine report describes."""
+        candidate = self.store.get_candidate(self.run_id)
+        version = self.store.get_candidate_version(
+            self.run_id, candidate["current_version_id"])
+        artifact = (version.get("payload") or {}).get("guide_artifact") or {}
+        payload = {
+            "candidate_version_id": version["candidate_version_id"],
+            "candidate_version_no": version.get("version_no"),
+            "content_sha256": version.get("content_sha256") or "",
+            "guide_sha256": artifact.get("sha256") or "",
+            "guide_object_key": artifact.get("object_key") or "",
+            "engine_compatibility": "engine-compatibility-1",
+        }
+        payload["input_sha256"] = sha256_json(payload)
+        return payload
+
+    def run_engine_compatibility(self, *, request_id: str = "",
+                                 input_sha256: str = "") -> dict[str, Any]:
+        identity = self.engine_input()
+        if input_sha256 and input_sha256 != identity["input_sha256"]:
+            raise ValueError("ENGINE_INPUT_MISMATCH")
+        input_sha = identity["input_sha256"]
+        # A completed report for exactly these candidate bytes is the
+        # idempotent result.  It never rewrites the guide or its qualification.
+        for existing in reversed(self.store.get_engine_runs(self.run_id)):
+            if (existing.get("status") == "completed"
+                    and existing.get("input_sha256") == input_sha):
+                self._update(engine_status="completed",
+                             payload={**self.payload, "engine_status": "completed",
+                                      "engine_completed_input_sha256": input_sha,
+                                      "engine_requested": False})
+                return {**existing, "reused": True}
+        artifact = self.store.get_download_artifact(self.run_id, "guide")
         if not artifact:
             raise ValueError("GUIDE_ARTIFACT_MISSING")
         guide_path = self.store.store.object_path(artifact["object_key"])
+        if not guide_path.is_file():
+            raise ValueError("GUIDE_ARTIFACT_MISSING")
         requirements = self.store.get_requirements(self.run_id)
         items = self._all_items()
-        output = self.run_dir / "engine_compatibility"
+        output = self.run_dir / f"engine-{uuid.uuid4().hex}"
+        output.mkdir(parents=True, exist_ok=True)
+        self._update(engine_status="running",
+                     payload={**self.payload, "engine_status": "running",
+                              "engine_started_input_sha256": input_sha,
+                              "engine_request_id": request_id})
         result = run_engine_compatibility(
             guide_docx=guide_path, items=items, requirements=requirements,
             router=self.router, sample_contract=self.config.sample_contract or None,
             output_dir=output)
+        result.update({
+            "input_sha256": input_sha,
+            "request_id": request_id,
+            "candidate_version_id": identity["candidate_version_id"],
+            "content_sha256": identity["content_sha256"],
+            "guide_sha256": identity["guide_sha256"],
+            "candidate_input": identity,
+        })
         attempt = len(self.store.get_engine_runs(self.run_id)) + 1
         self.store.save_engine_run(self.run_id, attempt, result.get("status", "completed"), result)
         self.store.replace_engine_results(self.run_id, result.get("results") or [])
-        json_path = self.run_dir / "engine_compatibility_report.json"
+        json_path = output / "engine_compatibility_report.json"
+        html_path = output / "engine_compatibility_report.html"
         json_path.write_text(json.dumps(result, ensure_ascii=False, indent=2, default=str),
                              encoding="utf-8")
-        html_path = self.run_dir / "engine_compatibility_report.html"
         html_path.write_text(_engine_html(result), encoding="utf-8")
         for kind, path in (("engine_json", json_path), ("engine_html", html_path)):
             data = path.read_bytes()
             self.store.put_artifact(self.run_id, kind,
                                     str(path.relative_to(self.store.store.objects)),
                                     hashlib.sha256(data).hexdigest(), len(data))
-        self._update(engine_status=result.get("status", "completed"), payload=self.payload)
+        self._update(engine_status=result.get("status", "completed"),
+                     payload={**self.payload, "engine_status": result.get("status", "completed"),
+                              "engine_requested": False,
+                              "engine_completed_input_sha256": input_sha})
         return result
-
 
 def _engine_html(result: dict[str, Any]) -> str:
     import html as _html

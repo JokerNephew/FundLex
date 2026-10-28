@@ -8,6 +8,7 @@ id; stages are resumable through ``gg_steps`` and ``gg_jobs``.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import time
 import uuid
@@ -63,6 +64,8 @@ CREATE TABLE IF NOT EXISTS gg_candidate_versions (
     candidate_version_id TEXT PRIMARY KEY, candidate_guide_id TEXT NOT NULL, run_id TEXT NOT NULL,
     version_no INTEGER NOT NULL, parent_version_id TEXT NOT NULL DEFAULT '', status TEXT NOT NULL DEFAULT 'draft',
     content_sha256 TEXT NOT NULL DEFAULT '', human_version_no INTEGER NOT NULL DEFAULT 0,
+    qualification_status TEXT NOT NULL DEFAULT '', qualification_sha256 TEXT NOT NULL DEFAULT '',
+    approval_gate_sha256 TEXT NOT NULL DEFAULT '',
     approved_by TEXT NOT NULL DEFAULT '', approved_at REAL, published_by TEXT NOT NULL DEFAULT '', published_at REAL,
     created_at REAL NOT NULL, payload_json MEDIUMTEXT NOT NULL DEFAULT '{}',
     UNIQUE(candidate_guide_id, version_no)
@@ -122,7 +125,7 @@ CREATE TABLE IF NOT EXISTS gg_steps (
 CREATE TABLE IF NOT EXISTS gg_jobs (
     id TEXT PRIMARY KEY, run_id TEXT NOT NULL, status TEXT NOT NULL,
     attempts INTEGER NOT NULL DEFAULT 0, lease_until REAL, fencing_token INTEGER NOT NULL DEFAULT 0,
-    stage TEXT NOT NULL DEFAULT '', error_code TEXT NOT NULL DEFAULT '',
+    next_attempt_at REAL, stage TEXT NOT NULL DEFAULT '', error_code TEXT NOT NULL DEFAULT '',
     created_at REAL NOT NULL, updated_at REAL NOT NULL
 );
 CREATE INDEX IF NOT EXISTS gg_jobs_work ON gg_jobs(status, lease_until);
@@ -230,6 +233,11 @@ class GuideGenerationStore:
         self.read_only = read_only or bool(getattr(store, "read_only", False))
         self._schema_ready = False
         self._transaction_db = ContextVar(f"gg_transaction_{id(self)}", default=None)
+        # Worker writes carry the claimed job/epoch.  Every mutation checks the
+        # current lease before touching the run, stages or artifacts, so a
+        # worker that loses its lease cannot publish stale bytes after a newer
+        # worker has taken over (FL-D453).
+        self._fence = ContextVar(f"gg_fence_{id(self)}", default=None)
 
     @contextmanager
     def _connect(self):
@@ -238,7 +246,64 @@ class GuideGenerationStore:
             yield active
             return
         with self.database.connect() as db:
+            # Every operation performed by a worker carries the claimed job
+            # lease.  Checking when the connection opens fences reads, stage
+            # writes, artifact registration and terminal run updates alike.
+            if self._fence.get() is not None:
+                self._assert_fence(db=db)
             yield db
+
+    @contextmanager
+    def fencing(self, job_id: str, token: int, run_id: str):
+        """Bind all writes in this context to one live job lease.
+
+        The guard is intentionally checked in the database for every write
+        rather than cached: a heartbeat can fail between two writes, and the
+        next write must then be rejected.
+        """
+        self._assert_fence(job_id, token, run_id)
+        marker = self._fence.set({"job_id": job_id, "token": int(token), "run_id": run_id})
+        try:
+            yield
+        finally:
+            self._fence.reset(marker)
+
+    def _assert_fence(self, job_id: str | None = None, token: int | None = None,
+                      run_id: str | None = None, *, db=None) -> None:
+        if job_id is None:
+            active = self._fence.get()
+            if active is None:
+                return
+            job_id, token, run_id = active["job_id"], active["token"], active["run_id"]
+        conn = db
+        if conn is None:
+            with self._connect() as opened:
+                self._assert_fence(job_id, token, run_id, db=opened)
+            return
+        row = conn.execute(
+            "SELECT run_id,status,fencing_token,lease_until FROM gg_jobs WHERE id=?",
+            (job_id,)).fetchone()
+        now = time.time()
+        if (row is None or row["run_id"] != run_id or row["status"] != "leased"
+                or int(row["fencing_token"]) != int(token)
+                or row["lease_until"] is None or float(row["lease_until"]) <= now):
+            raise Conflict("stale guide generation worker lease")
+
+    def _check_fence(self, db=None) -> None:
+        self._assert_fence(db=db)
+
+    def _ensure_column(self, db, table: str, name: str, definition: str) -> None:
+        """Add a column to an existing SQLite/MySQL table idempotently."""
+        if self.database.dialect == "mysql":
+            row = db.execute(
+                "SELECT column_name AS name FROM information_schema.columns "
+                "WHERE table_schema=DATABASE() AND table_name=? AND column_name=?",
+                (table, name)).fetchone()
+            exists = row is not None
+        else:
+            exists = name in {item["name"] for item in db.execute(f"PRAGMA table_info({table})").fetchall()}
+        if not exists:
+            db.execute(f"ALTER TABLE {table} ADD COLUMN {name} {definition}")
 
     @contextmanager
     def candidate_transaction(self, run_id: str):
@@ -268,6 +333,13 @@ class GuideGenerationStore:
             return
         with self._connect() as db:
             db.executescript(_SCHEMA)
+            self._ensure_column(db, "gg_candidate_versions", "qualification_status",
+                                "TEXT NOT NULL DEFAULT ''")
+            self._ensure_column(db, "gg_candidate_versions", "qualification_sha256",
+                                "TEXT NOT NULL DEFAULT ''")
+            self._ensure_column(db, "gg_candidate_versions", "approval_gate_sha256",
+                                "TEXT NOT NULL DEFAULT ''")
+            self._ensure_column(db, "gg_jobs", "next_attempt_at", "REAL")
         self._schema_ready = True
 
     # -- runs -----------------------------------------------------------------
@@ -327,6 +399,7 @@ class GuideGenerationStore:
 
     def update_run(self, run_id: str, **fields: Any) -> dict[str, Any]:
         self.ensure_schema()
+        self._check_fence()
         allowed = {"filename", "source_type", "source_sha256", "title", "status", "stage",
                    "error_code", "corpus_snapshot_id", "regulation_document_id",
                    "regulation_document_sha256", "guide_sha256", "evidence_sha256",
@@ -405,8 +478,11 @@ class GuideGenerationStore:
 
     def create_candidate_version(self, run_id: str, *, status: str, payload: dict[str, Any],
                                  content_sha256: str = "", human_version_no: int = 0,
-                                 expected_current_version_id: str | None = None) -> dict[str, Any]:
+                                 expected_current_version_id: str | None = None,
+                                 qualification_status: str = "",
+                                 qualification_sha256: str = "") -> dict[str, Any]:
         self.ensure_schema()
+        self._check_fence()
         if status not in CANDIDATE_VERSION_STATUSES:
             raise ValueError("invalid candidate version status")
         now = time.time()
@@ -422,50 +498,145 @@ class GuideGenerationStore:
             parent = latest["candidate_version_id"] if latest else ""
             version_id = uuid.uuid4().hex
             db.execute("""INSERT INTO gg_candidate_versions
-                (candidate_version_id,candidate_guide_id,run_id,version_no,parent_version_id,status,content_sha256,human_version_no,created_at,payload_json)
-                VALUES (?,?,?,?,?,?,?,?,?,?)""",
+                (candidate_version_id,candidate_guide_id,run_id,version_no,parent_version_id,status,content_sha256,human_version_no,qualification_status,qualification_sha256,created_at,payload_json)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""",
                        (version_id, guide["candidate_guide_id"], run_id, number, parent, status,
-                        content_sha256, human_version_no, now, _dumps(payload)))
+                        content_sha256, human_version_no, qualification_status,
+                        qualification_sha256, now, _dumps(payload)))
             db.execute("UPDATE gg_candidate_guides SET current_version_id=?,status=?,updated_at=? WHERE run_id=?",
                        (version_id, status, now, run_id))
         return self.get_candidate_version(run_id, version_id)
+
+    def _version_content_sha256(self, version: dict[str, Any]) -> str:
+        items = (version.get("payload") or {}).get("guide_items") or []
+        return sha256_json(items)
+
+    def _verify_version_artifact(self, version: dict[str, Any], *, kind: str = "guide") -> dict[str, Any]:
+        """Verify the frozen version artifact bytes and their recorded hash."""
+        payload = version.get("payload") or {}
+        artifact = payload.get("guide_artifact") if kind == "guide" else payload.get("ai_artifact")
+        if not isinstance(artifact, dict) or not artifact.get("object_key"):
+            raise Conflict("CANDIDATE_ARTIFACT_MISSING")
+        try:
+            path = self.store.object_path(str(artifact["object_key"]))
+        except (StoreError, ValueError):
+            raise Conflict("CANDIDATE_ARTIFACT_INVALID") from None
+        if not path.is_file():
+            raise Conflict("CANDIDATE_ARTIFACT_MISSING")
+        data = path.read_bytes()
+        expected_sha = str(artifact.get("sha256") or "")
+        expected_size = int(artifact.get("size") or 0)
+        if (not expected_sha or len(data) != expected_size
+                or hashlib.sha256(data).hexdigest() != expected_sha):
+            raise Conflict("CANDIDATE_ARTIFACT_INTEGRITY")
+        return artifact
+
+    def _require_version_eligibility(self, run_row, version_row, *, owner: str | None,
+                                     require_human_review: bool) -> dict[str, Any]:
+        """Re-evaluate the frozen qualification inside the transition txn."""
+        from .eligibility import evaluate_run_eligibility
+        if owner is not None and run_row["owner"] != owner:
+            raise NotFound("candidate guide not found")
+        from .eligibility import RUN_COMPLETE_STATUSES
+        if run_row["status"] not in RUN_COMPLETE_STATUSES:
+            raise Conflict("RUN_NOT_COMPLETE")
+        status = version_row["status"]
+        qualification_status = str(version_row.get("qualification_status") or "")
+        allowed_status = "human_draft" if require_human_review else "candidate_ready"
+        required_qualification = "human_review_required" if require_human_review else "machine_qualified"
+        if status != allowed_status or qualification_status != required_qualification:
+            raise Conflict("candidate version is not approvable")
+        version = self.get_candidate_version(run_row["id"], version_row["candidate_version_id"])
+        content_sha = str(version.get("content_sha256") or "")
+        if not content_sha or content_sha != self._version_content_sha256(version):
+            raise Conflict("CANDIDATE_CONTENT_HASH_MISMATCH")
+        gate = evaluate_run_eligibility(self, run_row["id"])
+        if not gate.get("qualified"):
+            raise Conflict("CANDIDATE_QUALIFICATION_BLOCKED")
+        if str(version_row.get("qualification_sha256") or "") != gate["gate_sha256"]:
+            raise Conflict("CANDIDATE_QUALIFICATION_STALE")
+        self._verify_version_artifact(version, kind="guide")
+        return gate
 
     def approve_candidate(self, run_id: str, *, actor: str, version_id: str,
                           owner: str | None = None) -> dict[str, Any]:
         self.ensure_schema()
         with self.candidate_transaction(run_id), self._connect() as db:
-            sql = "SELECT current_version_id FROM gg_candidate_guides WHERE run_id=?"
+            sql = "SELECT * FROM gg_candidate_guides WHERE run_id=?"
             params: list[Any] = [run_id]
             if owner is not None:
                 sql += " AND owner=?"
                 params.append(owner)
-            row = db.execute(sql, params).fetchone()
-            if row is None or row["current_version_id"] != version_id:
+            guide = db.execute(sql, params).fetchone()
+            if guide is None or guide["current_version_id"] != version_id:
                 raise Conflict("candidate approval requires the current version")
-            cursor = db.execute("UPDATE gg_candidate_versions SET status='approved',approved_by=?,approved_at=? WHERE candidate_version_id=? AND status IN ('candidate_ready','human_draft')",
-                                (actor, time.time(), version_id))
+            run_row = db.execute("SELECT id,owner,status FROM gg_runs WHERE id=?", (run_id,)).fetchone()
+            version_row = db.execute("SELECT * FROM gg_candidate_versions WHERE candidate_version_id=?",
+                                     (version_id,)).fetchone()
+            if run_row is None or version_row is None:
+                raise NotFound("candidate guide version not found")
+            run_row = dict(run_row)
+            version_row = dict(version_row)
+            gate = self._require_version_eligibility(
+                run_row, version_row, owner=owner,
+                require_human_review=version_row["status"] == "human_draft")
+            cursor = db.execute("""UPDATE gg_candidate_versions
+                SET status='approved',approved_by=?,approved_at=?,approval_gate_sha256=?
+                WHERE candidate_version_id=? AND status=? AND qualification_sha256=?""",
+                (actor, time.time(), gate["gate_sha256"], version_id,
+                 version_row["status"], gate["gate_sha256"]))
             if cursor.rowcount != 1:
                 raise Conflict("candidate version is not approvable")
-            db.execute("UPDATE gg_candidate_guides SET status='approved',updated_at=? WHERE run_id=?", (time.time(), run_id))
+            db.execute("UPDATE gg_candidate_guides SET status='approved',updated_at=? WHERE run_id=?",
+                       (time.time(), run_id))
         return self.get_candidate_version(run_id, version_id)
 
     def publish_candidate(self, run_id: str, *, actor: str, version_id: str,
                           owner: str | None = None) -> dict[str, Any]:
         self.ensure_schema()
         with self.candidate_transaction(run_id), self._connect() as db:
-            sql = "SELECT current_version_id FROM gg_candidate_guides WHERE run_id=?"
+            sql = "SELECT * FROM gg_candidate_guides WHERE run_id=?"
             params: list[Any] = [run_id]
             if owner is not None:
                 sql += " AND owner=?"
                 params.append(owner)
-            row = db.execute(sql, params).fetchone()
-            if row is None or row["current_version_id"] != version_id:
+            guide = db.execute(sql, params).fetchone()
+            if guide is None or guide["current_version_id"] != version_id:
                 raise Conflict("candidate publication requires the current version")
-            cursor = db.execute("UPDATE gg_candidate_versions SET status='published',published_by=?,published_at=? WHERE candidate_version_id=? AND status='approved'",
-                                (actor, time.time(), version_id))
+            run_row = db.execute("SELECT id,owner,status FROM gg_runs WHERE id=?", (run_id,)).fetchone()
+            version_row = db.execute("SELECT * FROM gg_candidate_versions WHERE candidate_version_id=?",
+                                     (version_id,)).fetchone()
+            if run_row is None or version_row is None:
+                raise NotFound("candidate guide version not found")
+            run_row = dict(run_row)
+            version_row = dict(version_row)
+            if version_row["status"] != "approved":
+                raise Conflict("candidate version must be approved before publication")
+            from .eligibility import evaluate_run_eligibility
+            from .eligibility import RUN_COMPLETE_STATUSES
+            if owner is not None and run_row["owner"] != owner:
+                raise NotFound("candidate guide not found")
+            if run_row["status"] not in RUN_COMPLETE_STATUSES:
+                raise Conflict("RUN_NOT_COMPLETE")
+            gate = evaluate_run_eligibility(self, run_id)
+            if not gate.get("qualified"):
+                raise Conflict("CANDIDATE_QUALIFICATION_BLOCKED")
+            if (str(version_row.get("qualification_sha256") or "") != gate["gate_sha256"]
+                    or str(version_row.get("approval_gate_sha256") or "") != gate["gate_sha256"]):
+                raise Conflict("CANDIDATE_QUALIFICATION_STALE")
+            version = self.get_candidate_version(run_id, version_id)
+            if (str(version.get("content_sha256") or "")
+                    != self._version_content_sha256(version)):
+                raise Conflict("CANDIDATE_CONTENT_HASH_MISMATCH")
+            self._verify_version_artifact(version, kind="guide")
+            cursor = db.execute("""UPDATE gg_candidate_versions
+                SET status='published',published_by=?,published_at=?
+                WHERE candidate_version_id=? AND status='approved' AND approval_gate_sha256=?""",
+                (actor, time.time(), version_id, gate["gate_sha256"]))
             if cursor.rowcount != 1:
                 raise Conflict("candidate version must be approved before publication")
-            db.execute("UPDATE gg_candidate_guides SET status='published',updated_at=? WHERE run_id=?", (time.time(), run_id))
+            db.execute("UPDATE gg_candidate_guides SET status='published',updated_at=? WHERE run_id=?",
+                       (time.time(), run_id))
         return self.get_candidate_version(run_id, version_id)
 
     # -- blocks and requirements ---------------------------------------------
@@ -707,18 +878,26 @@ class GuideGenerationStore:
                      "finished_at": row["finished_at"]} for row in rows]
 
     # -- jobs -----------------------------------------------------------------
-    def enqueue(self, run_id: str) -> str:
+    def enqueue(self, run_id: str, *, preserve_run_status: bool = False) -> str:
         self.ensure_schema()
+        now = time.time()
         with self._connect() as db:
+            db.execute("BEGIN IMMEDIATE")
+            lock = "SELECT id FROM gg_runs WHERE id=?"
+            if self.database.dialect == "mysql":
+                lock += " FOR UPDATE"
+            if db.execute(lock, (run_id,)).fetchone() is None:
+                raise NotFound("guide generation run not found")
             existing = db.execute("SELECT id FROM gg_jobs WHERE run_id=? AND status IN ('queued','leased')",
                                   (run_id,)).fetchone()
             if existing:
                 return existing["id"]
             job_id = uuid.uuid4().hex
-            now = time.time()
             db.execute("""INSERT INTO gg_jobs (id,run_id,status,attempts,created_at,updated_at)
                 VALUES (?,?,'queued',0,?,?)""", (job_id, run_id, now, now))
-            db.execute("UPDATE gg_runs SET status='queued',stage='QUEUED',updated_at=? WHERE id=?", (now, run_id))
+            if not preserve_run_status:
+                db.execute("UPDATE gg_runs SET status='queued',stage='QUEUED',updated_at=? WHERE id=?",
+                           (now, run_id))
             return job_id
 
     def claim(self, *, lease_seconds: int = 3600) -> dict | None:
@@ -726,30 +905,94 @@ class GuideGenerationStore:
         now = time.time()
         with self._connect() as db:
             db.execute("BEGIN IMMEDIATE")
-            row = db.execute("""SELECT * FROM gg_jobs WHERE status='queued'
-                OR (status='leased' AND lease_until<?) ORDER BY created_at LIMIT 1""", (now,)).fetchone()
+            sql = """SELECT * FROM gg_jobs WHERE status='queued'
+                OR (status='leased' AND lease_until<?)
+                OR (status='retry_wait' AND (next_attempt_at IS NULL OR next_attempt_at<=?))
+                ORDER BY created_at LIMIT 1"""
+            if self.database.dialect == "mysql":
+                sql += " FOR UPDATE"
+            row = db.execute(sql, (now, now)).fetchone()
             if row is None:
                 return None
             token = int(row["fencing_token"]) + 1
             db.execute("""UPDATE gg_jobs SET status='leased',attempts=attempts+1,fencing_token=?,
-                lease_until=?,updated_at=? WHERE id=?""", (token, now + lease_seconds, now, row["id"]))
+                lease_until=?,next_attempt_at=NULL,updated_at=? WHERE id=?""",
+                (token, now + lease_seconds, now, row["id"]))
             return {"id": row["id"], "run_id": row["run_id"], "fencing_token": token,
                     "attempts": row["attempts"] + 1}
 
     def heartbeat(self, job_id: str, token: int, *, lease_seconds: int = 3600) -> None:
+        self.ensure_schema()
+        now = time.time()
         with self._connect() as db:
             cursor = db.execute("""UPDATE gg_jobs SET lease_until=?,updated_at=? WHERE id=?
-                AND fencing_token=? AND status='leased'""",
-                (time.time() + lease_seconds, time.time(), job_id, token))
+                AND fencing_token=? AND status='leased' AND lease_until>?""",
+                (now + lease_seconds, now, job_id, token, now))
             if cursor.rowcount != 1:
                 raise Conflict("stale guide generation worker lease")
 
-    def finish_job(self, job_id: str, token: int, *, status: str, error_code: str = "") -> None:
+    def finish_job(self, job_id: str, token: int, *, status: str, error_code: str = "",
+                   next_attempt_at: float | None = None) -> None:
+        self.ensure_schema()
+        now = time.time()
         with self._connect() as db:
-            cursor = db.execute("""UPDATE gg_jobs SET status=?,error_code=?,updated_at=?,lease_until=NULL
-                WHERE id=? AND fencing_token=?""", (status, error_code, time.time(), job_id, token))
+            cursor = db.execute("""UPDATE gg_jobs SET status=?,error_code=?,updated_at=?,
+                lease_until=NULL,next_attempt_at=?
+                WHERE id=? AND fencing_token=? AND status='leased' AND lease_until>?""",
+                (status, error_code, now, next_attempt_at, job_id, token, now))
             if cursor.rowcount != 1:
                 raise Conflict("stale guide generation worker lease")
+
+    def resume_run(self, run_id: str, *, owner: str, actor: str, reason: str = "") -> dict[str, Any]:
+        """Owner-authorised, idempotent resume that creates a new job epoch.
+
+        The paused job row is retained as evidence; a new job id is inserted so
+        the previous fencing token can never write into the new attempt.
+        """
+        self.ensure_schema()
+        with self._connect() as db:
+            db.execute("BEGIN IMMEDIATE")
+            sql = "SELECT * FROM gg_runs WHERE id=?"
+            if self.database.dialect == "mysql":
+                sql += " FOR UPDATE"
+            run = db.execute(sql, (run_id,)).fetchone()
+            if run is None or run["owner"] != owner:
+                raise NotFound("guide generation run not found")
+            live = db.execute("SELECT id FROM gg_jobs WHERE run_id=? AND status IN ('queued','leased') ORDER BY created_at DESC LIMIT 1",
+                              (run_id,)).fetchone()
+            if live:
+                return {"status": "already_running", "job_id": live["id"], "run_id": run_id}
+            paused_job = db.execute("SELECT * FROM gg_jobs WHERE run_id=? AND status IN ('paused','retry_wait','failed') ORDER BY created_at DESC LIMIT 1",
+                                    (run_id,)).fetchone()
+            if run["status"] not in {"paused", "retry_wait", "failed"}:
+                raise Conflict("RUN_NOT_PAUSED")
+            now = time.time()
+            # Retire every old wait/error epoch before inserting the new job.
+            # Otherwise a retry_wait row whose due time arrives later could be
+            # claimed in parallel with the resumed epoch.
+            db.execute("""UPDATE gg_jobs SET status='superseded',updated_at=?
+                WHERE run_id=? AND status IN ('paused','retry_wait','failed')""",
+                (now, run_id))
+            job_id = uuid.uuid4().hex
+            db.execute("""INSERT INTO gg_jobs (id,run_id,status,attempts,created_at,updated_at)
+                VALUES (?,?,'queued',0,?,?)""", (job_id, run_id, now, now))
+            payload = _loads(run["payload_json"], {})
+            history = list(payload.get("resume_history") or [])
+            history.append({
+                "job_id": job_id, "run_id": run_id, "actor": actor, "reason": reason,
+                "created_at": utc_now(),
+                "previous_job_id": paused_job["id"] if paused_job else "",
+                "previous_status": run["status"],
+                "previous_error_code": run["error_code"],
+            })
+            payload["resume_history"] = history[-20:]
+            payload["resume_epoch"] = int(payload.get("resume_epoch") or 0) + 1
+            payload.pop("blocked_reason", None)
+            db.execute("""UPDATE gg_runs SET status='queued',stage='REQUEUED',error_code='',
+                payload_json=?,updated_at=? WHERE id=?""",
+                (_dumps(payload), now, run_id))
+            return {"status": "queued", "job_id": job_id, "run_id": run_id,
+                    "resume_epoch": payload["resume_epoch"]}
 
     # -- impacts and candidates ----------------------------------------------
     def replace_impacts(self, run_id: str, impacts: Iterable[ImpactCandidate]) -> None:
@@ -1058,6 +1301,38 @@ class GuideGenerationStore:
         with self._connect() as db:
             row = db.execute("SELECT * FROM gg_artifacts WHERE run_id=? AND kind=?", (run_id, kind)).fetchone()
             return dict(row) if row else None
+
+    def get_download_artifact(self, run_id: str, kind: str) -> dict[str, Any] | None:
+        """Return the artifact bound to the current candidate version.
+
+        Candidate guide bytes are version-scoped.  Downloading the run-level
+        row for a published candidate would let a later finalize change what a
+        user receives, so the frozen version payload wins whenever it names an
+        artifact of this kind.
+        """
+        self.ensure_schema()
+        try:
+            candidate = self.get_candidate(run_id)
+        except NotFound:
+            candidate = None
+        if candidate and candidate.get("current_version_id"):
+            for version in candidate.get("versions") or []:
+                if version.get("candidate_version_id") != candidate["current_version_id"]:
+                    continue
+                payload = version.get("payload") or {}
+                artifact = (payload.get("guide_artifact") if kind == "guide"
+                            else payload.get("ai_artifact") if kind == "guide_ai" else None)
+                if isinstance(artifact, dict) and artifact.get("object_key"):
+                    return {
+                        "run_id": run_id, "kind": kind,
+                        "object_key": str(artifact["object_key"]),
+                        "sha256": str(artifact.get("sha256") or ""),
+                        "size": int(artifact.get("size") or 0),
+                        "candidate_version_id": version.get("candidate_version_id"),
+                        "version_no": version.get("version_no"),
+                    }
+                break
+        return self.get_artifact(run_id, kind)
 
     def list_artifacts(self, run_id: str) -> list[dict[str, Any]]:
         self.ensure_schema()

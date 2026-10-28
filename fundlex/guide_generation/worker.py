@@ -2,6 +2,11 @@
 
 This worker deliberately uses the ``gg_jobs`` lease/fencing tables and the
 candidate pipeline.  It never enters the ordinary contract execution queue.
+
+Every pipeline/run/artifact write happens inside :meth:`fencing`, so a worker
+whose lease was taken over cannot overwrite the new epoch's run or files.
+Model/infrastructure failures pause the run (or schedule a bounded transient
+retry) instead of exporting an empty candidate.
 """
 from __future__ import annotations
 
@@ -15,6 +20,31 @@ from ..store import Conflict, RunStore
 from .model_router import GuideModelRouter
 from .pipeline import GuidePipeline, PipelineConfig
 from .store import GuideGenerationStore
+
+
+# Transport/rate failures are recoverable with bounded backoff.  Authentication,
+# configuration, balance and local budget-cap errors are not: they pause and
+# require an owner resume, so a permanent provider failure cannot loop forever.
+TRANSIENT_MODEL_CODES = frozenset({
+    "MODEL_NETWORK_ERROR", "MODEL_HTTP_ERROR", "MODEL_RETRY_EXHAUSTED",
+    "MODEL_CONCURRENCY_LIMIT", "MODEL_CIRCUIT_OPEN", "MODEL_LEDGER_UNAVAILABLE",
+})
+ENGINE_QUEUED_STATUSES = frozenset({"queued", "running", "failed"})
+
+
+def _transient_attempt_limit() -> int:
+    try:
+        return max(1, int(os.environ.get("FUNDLEX_GUIDE_TRANSIENT_ATTEMPTS", "5")))
+    except ValueError:
+        return 5
+
+
+def _retry_delay(attempts: int) -> float:
+    try:
+        base = max(1.0, float(os.environ.get("FUNDLEX_GUIDE_RETRY_BASE_SECONDS", "10")))
+    except ValueError:
+        base = 10.0
+    return min(300.0, base * (2 ** max(0, attempts - 1)))
 
 
 class GuideGenerationWorker:
@@ -36,6 +66,49 @@ class GuideGenerationWorker:
                 errors.append(exc)
                 return
 
+    def _pause_or_retry(self, run_id: str, job: dict[str, Any], code: str,
+                        *, engine: bool = False) -> None:
+        transient = code in TRANSIENT_MODEL_CODES
+        attempts = int(job.get("attempts") or 1)
+        if transient and attempts < _transient_attempt_limit():
+            delay = _retry_delay(attempts)
+            self.gg_store.update_run(
+                run_id, status="retry_wait", stage="RETRY_WAIT", error_code=code,
+                payload={**self.gg_store.get_run(run_id).get("payload", {}),
+                         "blocked_reason": code, "retry_attempt": attempts,
+                         "retry_next_at": time.time() + delay,
+                         "retry_max_attempts": _transient_attempt_limit()})
+            self.gg_store.finish_job(job["id"], job["fencing_token"], status="retry_wait",
+                                     error_code=code, next_attempt_at=time.time() + delay)
+            return
+        self.gg_store.update_run(
+            run_id, status="paused", stage="PAUSED", error_code=code,
+            payload={**self.gg_store.get_run(run_id).get("payload", {}),
+                     "blocked_reason": code, "paused_at": time.time(),
+                     "pause_job_id": job["id"],
+                     "pause_fencing_token": job["fencing_token"]})
+        self.gg_store.finish_job(job["id"], job["fencing_token"], status="paused",
+                                 error_code=code)
+
+    def _run_engine_only(self, run_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+        request = payload.get("engine_request") or {}
+        input_sha256 = str(request.get("input_sha256") or "")
+        request_id = str(request.get("request_id") or "")
+        run = self.gg_store.get_run(run_id)
+        config = PipelineConfig.from_payload(run.get("config") or payload.get("config") or {})
+        router = self.router_factory()
+        try:
+            pipeline = GuidePipeline(self.gg_store, run_id, router, config)
+            current = pipeline.engine_input()
+            if input_sha256 and input_sha256 != current["input_sha256"]:
+                raise ValueError("ENGINE_INPUT_MISMATCH")
+            return pipeline.run_engine_compatibility(request_id=request_id,
+                                                     input_sha256=input_sha256)
+        finally:
+            close = getattr(router, "close", None)
+            if close:
+                close()
+
     def run_once(self) -> bool:
         job = self.gg_store.claim(lease_seconds=self.lease_seconds)
         if job is None:
@@ -47,34 +120,77 @@ class GuideGenerationWorker:
         heartbeat_errors: list[BaseException] = []
         thread = threading.Thread(target=self._heartbeat, args=(job_id, token, stop, heartbeat_errors), daemon=True)
         thread.start()
+        engine_only = False
         try:
-            run = self.gg_store.get_run(run_id)
-            config = PipelineConfig.from_payload(run.get("config") or run.get("payload", {}).get("config") or {})
-            router = self.router_factory()
-            try:
-                result = GuidePipeline(self.gg_store, run_id, router, config).run()
-            finally:
-                close = getattr(router, "close", None)
-                if close:
-                    close()
-            if heartbeat_errors:
-                raise heartbeat_errors[0]
-            self.gg_store.update_run(run_id, status=result.get("status", "complete_with_unresolved"), stage="COMPLETED")
-            self.gg_store.finish_job(job_id, token, status="completed")
-        except (ModelError,) as exc:
+            with self.gg_store.fencing(job_id, token, run_id):
+                run = self.gg_store.get_run(run_id)
+                payload = run.get("payload") or {}
+                engine_only = bool(payload.get("engine_requested")) and (
+                    payload.get("engine_status") in ENGINE_QUEUED_STATUSES)
+                if engine_only:
+                    try:
+                        self._run_engine_only(run_id, payload)
+                    except Exception as exc:  # noqa: BLE001 - engine failure is isolated
+                        code = getattr(exc, "code", None) or str(exc)[:160] or type(exc).__name__
+                        self.gg_store.update_run(
+                            run_id, engine_status="failed",
+                            payload={**self.gg_store.get_run(run_id).get("payload", {}),
+                                     "engine_status": "failed",
+                                     "engine_requested": False,
+                                     "engine_error_code": code,
+                                     "engine_error": str(exc)[:500],
+                                     "engine_failed_at": time.time()})
+                        self.gg_store.finish_job(job_id, token, status="failed", error_code=code)
+                        return True
+                    self.gg_store.finish_job(job_id, token, status="completed")
+                    return True
+                config = PipelineConfig.from_payload(run.get("config") or payload.get("config") or {})
+                router = self.router_factory()
+                try:
+                    result = GuidePipeline(self.gg_store, run_id, router, config).run()
+                finally:
+                    close = getattr(router, "close", None)
+                    if close:
+                        close()
+                if heartbeat_errors:
+                    raise heartbeat_errors[0]
+                self.gg_store.update_run(run_id, status=result.get("status", "complete_with_unresolved"),
+                                         stage="COMPLETED")
+                self.gg_store.finish_job(job_id, token, status="completed")
+        except ModelError as exc:
             code = getattr(exc, "code", "MODEL_ERROR")
-            self.gg_store.update_run(run_id, status="paused", stage="PAUSED", error_code=code,
-                                     payload={"blocked_reason": code})
-            self.gg_store.finish_job(job_id, token, status="retry_wait", error_code=code)
+            try:
+                if engine_only:
+                    self.gg_store.update_run(
+                        run_id, engine_status="failed",
+                        payload={**self.gg_store.get_run(run_id).get("payload", {}),
+                                 "engine_status": "failed", "engine_requested": False,
+                                 "engine_error_code": code,
+                                 "engine_failed_at": time.time()})
+                    self.gg_store.finish_job(job_id, token, status="failed", error_code=code)
+                else:
+                    self._pause_or_retry(run_id, job, code)
+            except Conflict:
+                return True
         except Conflict:
             # A stale worker must never publish a result over a newer lease.
             return True
         except Exception as exc:  # noqa: BLE001 - persist the terminal stage failure
             code = getattr(exc, "code", None) or str(exc)[:160] or type(exc).__name__
-            self.gg_store.update_run(run_id, status="failed", stage="FAILED", error_code=code,
-                                     payload={"worker_error": type(exc).__name__})
             try:
-                self.gg_store.finish_job(job_id, token, status="failed", error_code=code)
+                if engine_only:
+                    self.gg_store.update_run(
+                        run_id,
+                        payload={**self.gg_store.get_run(run_id).get("payload", {}),
+                                 "engine_status": "failed", "engine_requested": False,
+                                 "engine_error_code": code,
+                                 "engine_error": str(exc)[:500],
+                                 "engine_failed_at": time.time()})
+                    self.gg_store.finish_job(job_id, token, status="failed", error_code=code)
+                else:
+                    self.gg_store.update_run(run_id, status="failed", stage="FAILED", error_code=code,
+                                             payload={"worker_error": type(exc).__name__})
+                    self.gg_store.finish_job(job_id, token, status="failed", error_code=code)
             except Conflict:
                 return True
         finally:
