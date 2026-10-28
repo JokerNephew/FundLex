@@ -84,6 +84,27 @@ Do not reuse an earlier engine prediction when labelling a later wave.
 | `review_flags`, `provenance` | review/completion provenance (for example `guide_exact_completion` when a guide-exact G13 delete site was completed deterministically) |
 | `related_target_ids` | main/summary or same-rule counterparts |
 
+## First-batch merge and documented corrections
+
+The first batch was produced in one full run plus three targeted re-runs of cases
+that failed deterministic completeness checks (B01, B05, BH04, BH06, BH07, BH08,
+B15, B16, B19). `tools/evaluation/finalize_first_batch_labels_20261028.py` merges
+the latest run per case and applies only these documented, guide-based corrections:
+
+| case | correction | basis |
+| --- | --- | --- |
+| B15 | drop G22 targets; G22 → `not_applicable` | contract has a sequential liquidation list, not the guide's "依据基金财产清算的分配方案…全部剩余资产" replacement clause |
+| B15 | add G05 delete of `并报中国证监会备案` at p87 | guide-exact phrase in the class-setup clause |
+| BH07 | G14 → `satisfied` (p240 already only `适当调低基金申购费率`), no target | no redemption/conversion/service-fee wording left to remove |
+| BH08 | G08 → `unknown` with an `uncertain` record | purchase-fee sentence is a multi-class variant using A类人民币/A类美元/C类 wording; the adapted replacement has more than one defensible reading, so it is not counted as confirmed gold |
+| BH06 | keep `DOCUMENT_PROTECTED`, no targets, denominator retained | `word/settings.xml` has `documentProtection` |
+
+`labeler.merge_provenance` records each run file, its SHA-256 and its tool hash;
+`labeler.tool_sha256_history` lists the labeler revisions used; and
+`labeler.usage_observed_all_runs` aggregates observed calls/tokens across the full
+run and all re-runs. The generator is generic for later waves; the merge/finalizer
+script is batch-specific and must not be reused to inject later-wave labels.
+
 ## Validation built into the producer
 
 * selection count and every source SHA-256 are checked before labelling;
