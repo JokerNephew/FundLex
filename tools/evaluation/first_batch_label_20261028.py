@@ -1465,7 +1465,7 @@ def mandatory_checks(
         if not has_target("G12", [idx]):
             issues.append(f"G12 missing target at p{idx}: redemption-fee attribution clause must change")
     # G14
-    base_g14 = re.compile(r"适当调低.*申购费率")
+    base_g14 = re.compile(r"适当(?:调低|调整).*申购费率")
     for idx in candidate_paras("G14", lambda t: bool(base_g14.search(t))):
         if not has_target("G14", [idx]):
             issues.append(f"G14 missing target at p{idx}: promotion fee-change sentence must change")
@@ -1495,6 +1495,9 @@ def mandatory_checks(
     for idx in candidate_paras("G05", lambda t: "调低赎回费率" in t and "基金份额类别" in t):
         if not has_target("G05", [idx]):
             issues.append(f"G05 missing target at p{idx}: class fee-adjustment clause must change")
+    for idx in candidate_paras("G05", lambda t: "并报中国证监会备案" in t and "基金份额类别" in t):
+        if not has_target("G05", [idx]):
+            issues.append(f"G05 missing delete target at p{idx}: the filing phrase must be deleted")
     # G06
     for idx in candidate_paras("G06", lambda t: "不得互相转换" in t):
         if not has_target("G06", [idx]):
