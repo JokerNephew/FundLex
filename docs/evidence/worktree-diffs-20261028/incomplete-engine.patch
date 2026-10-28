@@ -1,0 +1,208 @@
+diff --git a/fundlex/generation/effects.py b/fundlex/generation/effects.py
+index 27d1e38..e052bda 100644
+--- a/fundlex/generation/effects.py
++++ b/fundlex/generation/effects.py
+@@ -619,7 +619,7 @@ def evaluate_operation_effect(obligation: Any, original: Any, artifact: Any,
+         # operation happened to write the same new phrase into this paragraph.
+         # Require the operation's own policy to be present in the source when
+         # there is no validated unit carrying it into the artifact.
+-        if not own_units and expected and not one_of_group:
++        if not own and expected and not one_of_group:
+             expected_present = expected_present and source_has_expected
+         if occurrence >= 0 and spec.op == "replace":
+             from .claim_replay import _occurrence_positions
+@@ -644,7 +644,7 @@ def evaluate_operation_effect(obligation: Any, original: Any, artifact: Any,
+         old_wordings = [str(spec.old_text or ""), *getattr(spec, "alternatives", ())]
+         source_policy_equivalent = False
+         if (not source_has_expected and spec.op in {"replace", "append"}
+-                and expected and not own_units and not one_of_group):
++                and expected and not own and not one_of_group):
+             # Semantic equivalence is still operation-scoped, but it must be
+             # established in the ORIGINAL source.  Checking only ``after`` lets
+             # an unrelated sibling's identical insertion close this operation.
+@@ -746,7 +746,7 @@ def evaluate_operation_effect(obligation: Any, original: Any, artifact: Any,
+     worst = failure or unproven
+     status = worst["artifact_status"] if worst else (
+         "VERIFIED_ABSENT" if spec.op == "delete" else
+-        "EXPECTED_EFFECT_PRESENT" if own_units else "ALREADY_SATISFIED")
++        "EXPECTED_EFFECT_PRESENT" if edit_ids else "ALREADY_SATISFIED")
+     return OperationEffect(worst["state"] if worst else "PASS", status, **base,
+         sites=tuple(sorted(seen)), edit_ids=tuple(dict.fromkeys(edit_ids)), evidence=tuple(evidence),
+         failure_code=worst["failure_code"] if worst else "", site_effects=tuple(results))
+diff --git a/fundlex/recall.py b/fundlex/recall.py
+index 0915b87..1d10e40 100644
+--- a/fundlex/recall.py
++++ b/fundlex/recall.py
+@@ -3537,6 +3537,16 @@ def append_applicability_targets(inspection: DocumentInspection, rules: Sequence
+             members = [span for span in paragraphs if span.location in set(section.locations)
+                        and not _looks_like_heading(span.text)
+                        and _append_member(rule_id, span, inspection)]
++            if rule_id in {"G01", "G03"}:
++                # Resolve the lexical definition boundary before counting candidates.
++                # Word can split inside "在投资|者申购", not just before "类别".
++                # Both fragments then pass membership but represent one append site.
++                ends = {}
++                for member in members:
++                    end = _split_definition_end(member, inspection) or member
++                    if end.location in section.locations:
++                        ends[end.location] = end
++                members = list(ends.values())
+             prefer = (hinted or {}).get(rule_id)
+             preferred = next((span for span in members if span.location == prefer), None)
+             # G16 has one payment mechanism per body/summary copy, so every member
+diff --git a/fundlex/recall_pipeline.py b/fundlex/recall_pipeline.py
+index 661c3e3..19b35eb 100644
+--- a/fundlex/recall_pipeline.py
++++ b/fundlex/recall_pipeline.py
+@@ -3136,14 +3136,15 @@ def _apply_artifact_proof_to_findings(findings: list[dict[str, Any]], replay: di
+         quote_matches_old = any(
+             sentence in quote or (len(quote) >= 8 and quote in sentence)
+             for sentence in old_sentences)
+-        expected_quote = finding.get("issue") == "wrong_text" and residual and any(_quote_is_expected_effect(
++        expected_quote = residual and any(_quote_is_expected_effect(
+             str(finding.get("quote") or ""), record, facts, edits=edits,
+             location=location, before_text=source_text, actual_text=artifact_text, obligations=obligations,
+             proofs=states) for record in related_records)
+         if residual and quote_matches_old and not expected_quote:
+             finding["proof_kind"] = "RESIDUAL_CONFIRMED"
+             continue
+-        if quote and not (residual and quote_matches_old) and _sibling_expected_effect(
++        if related and all(effect_proof_passed(state) for state in related) \
++                and quote and not (residual and quote_matches_old) and _sibling_expected_effect(
+                 str(finding.get("quote") or ""), location, obligations, states,
+                 facts=facts, edits=edits, original=original, actual=actual):
+             # The finding quotes a sibling operation's authorized final text at the
+diff --git a/tests/test_append_applicability.py b/tests/test_append_applicability.py
+index f3e321f..16eeab2 100644
+--- a/tests/test_append_applicability.py
++++ b/tests/test_append_applicability.py
+@@ -120,6 +120,27 @@ def test_replace_only_rule_is_untouched():
+     assert hits == []
+ 
+ 
++def test_split_fee_definition_is_one_append_candidate_at_its_end():
++    rule = {**APPEND_RULE, "rule_id": "G03", "section_hint": "基金的基本情况"}
++    head = "本基金根据申购费用收取方式的不同，将基金份额分为不同的类别。在投资"
++    tail = ("者申购基金份额时收取申购费用，而不计提销售服务费的，称为A类基金份额；"
++            "在投资者申购基金份额时不收取申购费用，而计提销售服务费的，称为C类基金份额。")
++    inspection = _FakeInspection([
++        ("p1", "基金份额类别：释义中的独立定义。"),
++        ("p2", head), ("p3", tail),
++        ("p4", "基金管理人可以增加新的基金份额类别、调低赎回费率。"),
++    ])
++    sections = [_section("S1", "释义", ["p1"]),
++                _section("S2", "基金的基本情况", ["p2", "p3", "p4"])]
++    hits = append_applicability_targets(inspection, [rule], _facts(), sections)
++    assert len(hits) == 1
++    assert hits[0].locations == ("p3",)
++    assert hits[0].quote == tail
++    assert hits[0].operation_keys == ("G03:0",)
++    assert append_applicability_targets(inspection, [rule], _facts(), sections,
++                                        known=[("G03", "p3")]) == []
++
++
+ def test_service_group_empty_does_not_suppress_the_append():
+     """A contract with no service-fee class still gets the unconditional append.
+ 
+diff --git a/tests/test_final_validation_regressions.py b/tests/test_final_validation_regressions.py
+index 91f08b7..e110f20 100644
+--- a/tests/test_final_validation_regressions.py
++++ b/tests/test_final_validation_regressions.py
+@@ -866,6 +866,36 @@ def test_sweep_wrong_text_requires_authorized_new_wording_and_own_site(tmp_path)
+     assert findings[2]["status"] == "pending"
+ 
+ 
++@pytest.mark.parametrize("issue", ["unaddressed_requirement", "residual_old_text"])
++def test_sweep_retained_authorized_sentence_uses_own_site_proof(tmp_path, issue):
++    from fundlex.recall_pipeline import _apply_artifact_proof_to_findings
++    from test_operation_execution_closure import Facts, Inspection
++
++    retained = "赎回费用由基金份额持有人承担，在赎回基金份额时收取。"
++    old, new = retained + "旧比例条款。", retained + "赎回费用全额计入基金财产。"
++    rule = {"rule_id": "G99", "operations": [dict(op="replace", old_text=old,
++            new_text=new, condition={"kind": "none"})]}
++    ledger = compile_obligations({"groups": [rule]})
++    from fundlex.obligations import apply_facts
++    apply_facts(ledger, Facts())
++    original, actual = Inspection([old, old]), Inspection([new, old])
++    edit = dict(rule_id="G99", target_id="T0", location="p0", start=0, end=len(old),
++        replacement=new, operation="replace", content_source="guide_text",
++        operation_keys=["G99:0"], evidence={"fixed_text": new})
++    targets = {f"T{i}": Target(f"T{i}", "G99", f"p{i}", old, "needs_edit", "test",
++        start=0, end=len(old), resolution="resolved", operations=("G99:0",)).as_dict()
++        for i in range(2)}
++    replay = replay_claims([edit], original, actual, rules_by_id={"G99": rule},
++                           targets_by_id=targets, obligations=ledger, facts=Facts())
++    findings = [dict(rule_id="G99", operation_id="G99:0", location=f"p{i}",
++                     quote=retained, issue=issue, status="pending") for i in range(2)]
++    _apply_artifact_proof_to_findings(findings, replay, actual, ledger, {"G99": rule},
++                                    facts=Facts(), edits=[edit], original=original)
++    assert findings[0]["status"] == "resolved"
++    assert findings[0]["proof_kind"] == "REVIEW_UNPROVEN"
++    assert findings[1]["status"] == "pending"
++
++
+ def test_local_proof_keeps_occurrence_identity_and_rejects_unknown_site():
+     from fundlex.recall_pipeline import _local_operation_proofs
+     from fundlex.generation.effects import effect_proof_passed
+diff --git a/tests/test_operation_execution_closure.py b/tests/test_operation_execution_closure.py
+index e10b0fa..8ce99fa 100644
+--- a/tests/test_operation_execution_closure.py
++++ b/tests/test_operation_execution_closure.py
+@@ -217,6 +217,56 @@ def test_residual_confirmed_is_not_resolved_by_claim_replay():
+     assert findings[0]["proof_kind"] == "RESIDUAL_CONFIRMED"
+ 
+ 
++def test_equivalent_source_site_is_satisfied_while_same_operation_edits_other_site():
++    from fundlex.generation.effects import evaluate_operation_effect, effect_proof_passed
++
++    old = "本基金各类基金份额由于费用收取不同，其可供分配利润将有所不同。"
++    new = "本基金各类基金份额由于基金费用的不同，其可供分配利润将有所不同。"
++    equivalent = "由于基金费用的不同，本基金各类基金份额的可供分配利润将有所不同。"
++    guide_rule = rule("G18", [{"op": "replace", "old_text": old,
++                               "new_text": new, "condition": {"kind": "none"}}])
++    ledger = compile_obligations({"groups": [guide_rule]})
++    apply_facts(ledger, Facts())
++    before, after = Inspection([equivalent, old]), Inspection([equivalent, new])
++    edit = dict(rule_id="G18", target_id="T1", location="p1", start=0, end=len(old),
++                replacement=new, operation_keys=["G18:0"])
++    sites = [{"location": "p0", "quote": equivalent}, {"location": "p1", "quote": old}]
++    proof = evaluate_operation_effect(ledger.records[0], before, after, sites, [edit], Facts(),
++        validated_units=[dict(location="p1", operation_id="G18:0", verdict="PASS")])
++    assert effect_proof_passed(proof.as_dict()), proof.as_dict()
++    local, edited = proof.site_effects
++    assert local["artifact_status"] == "ALREADY_SATISFIED"
++    assert local["proof_kind"] == "source_operation_policy_equivalent"
++    assert edited["artifact_status"] == "EXPECTED_EFFECT_PRESENT"
++    local_only = evaluate_operation_effect(ledger.records[0], before, after, sites[:1],
++                                          [edit], Facts())
++    assert local_only.artifact_status == "ALREADY_SATISFIED"
++    assert local_only.edit_ids == ()
++    assert effect_proof_passed(local_only.as_dict())
++
++
++def test_sweep_cannot_borrow_sibling_effect_when_own_operation_has_no_site_proof():
++    from fundlex.generation.effects import evaluate_operation_effect
++
++    rules = [rule("G98", [{"op": "replace", "old_text": "独立旧政策仍需处理。",
++                          "new_text": "独立新政策。", "condition": {"kind": "none"}}]),
++             rule("G99", [{"op": "replace", "old_text": "原有业务政策。",
++                          "new_text": "授权新的业务政策。", "condition": {"kind": "none"}}])]
++    ledger = compile_obligations({"groups": rules})
++    apply_facts(ledger, Facts())
++    original, actual = Inspection(["授权新的业务政策。"]), Inspection(["授权新的业务政策。"])
++    sibling = ledger.record("G99:0")
++    proof = evaluate_operation_effect(sibling, original, actual,
++        [{"location": "p0", "quote": actual.paragraphs[0].text}], [], Facts()).as_dict()
++    findings = [dict(status="pending", rule_id="G98", operation_id="G98:0",
++                     location="p0", quote=actual.paragraphs[0].text,
++                     issue="unaddressed_requirement")]
++    _apply_artifact_proof_to_findings(findings, {"obligations": {sibling.obligation_id: proof}},
++        actual, ledger, {item["rule_id"]: item for item in rules}, original=original, facts=Facts())
++    assert findings[0]["status"] == "pending"
++    assert findings[0]["proof_kind"] == "SEMANTIC_UNCERTAIN"
++
++
+ def test_no_progress_snapshot_changes_only_when_inputs_change():
+     inspection = Inspection(["调低赎回费率"])
+     planned = {"edits": [{"target_id": "T1", "location": "p0", "start": 0, "end": 6,

@@ -1,0 +1,743 @@
+{
+  "date": "2026-10-28",
+  "mode": "offline_current_behaviour",
+  "not_acceptance_evidence": true,
+  "model_calls": 0,
+  "source_fingerprints": {
+    "fundlex/rule_scope.py": "03501ca47002504ddf3d5fac66340ca803a2aa88a1aa40486eb82e8b9e977ffd",
+    "fundlex/recall.py": "9775bfc12df4639dbb78a24fc0bd1a5b4b37c5a079e0b310deeadde862616e0a",
+    "fundlex/applicability.py": "0aa1f547ed0f3ecb0bc300c1bd8f188dfc5fd3ad60e8ba012de08eed80bd6407",
+    "fundlex/facts_recovery.py": "41b8c11f62227e7cf8cc37a60e4d0c9ccdbd426a867586b8071885acd2deca66",
+    "fundlex/fact_evidence.py": "4197809e970729c260c168026741fedde3e75d0fa5336fb7a197b5ae301b113b",
+    "fundlex/fee_evidence.py": "600eccc80ea6c27ca667f34e6722a9f3e3d8f90f038ec6dd609312fff27c61c1",
+    "fundlex/docx.py": "83ccbb01c2e5308f01b6d716f15482e0107fd4336d3b91a08b886ccf82257b43",
+    "fundlex/recall_pipeline.py": "836a935d9497ec0c765d65c4d0ecd71d3fe5c8710ea9361f1ad1c59e0ea3c2ec",
+    "fundlex/targeting.py": "7cd7e92805577546d38de91e79f10a43273f70c82517955ade5fb5e43e92a28d",
+    "fundlex/generation/effects.py": "fc4c390bec79773693fb168b1cf43366185739b2cfc543484e4f97a8544e394e",
+    "fundlex/generation/claim_replay.py": "f6806884ce9177eba552feeb965042921cc7b98377201961990b0c7b42953823",
+    "guides/builtin_guide_v1.json": "20bc6677f50677e911d14935b70709a40652b3b6d15af43f6cb87878da5fe85b"
+  },
+  "probes": [
+    {
+      "id": "scope_duplicate_body_clause",
+      "source": "funds_word/基金合同第一批/广发景宁纯债债券型证券投资基金基金合同.docx",
+      "source_sha256": "9150051732445ce306db0b17e37f38746f8827c1c8a327a3474a433633e2e4b4",
+      "p148_zone": "body",
+      "p155_zone": "body",
+      "p148_section": "第三部分基金的基本情况",
+      "p155_section": "第三部分基金的基本情况",
+      "p148_in_G05_scope": true,
+      "p155_in_G05_scope": false,
+      "p155_has_old_fee": true,
+      "p155_has_filing": true,
+      "scope": {
+        "rule_id": "G05",
+        "leaf_ids": [
+          "S05:L09"
+        ],
+        "locations": [
+          "p147",
+          "p148",
+          "p149"
+        ],
+        "location_count": 3,
+        "zone": "body",
+        "include_summary_copies": false,
+        "copy_keys": [
+          "份额类别"
+        ],
+        "resolution": "resolved",
+        "evidence": [
+          "policy=G05.class_basics",
+          "base_sections=S05",
+          "definition_candidates=2",
+          "leaf=S05:L09:基金份额类别设置",
+          "source=basic_info_class_leaf"
+        ]
+      },
+      "historical_artifact": {
+        "path": "/tmp/opencode/smoke5-fix-20261028/run/002-广发景宁纯债债券型证券投资基金基金合同",
+        "final_sha256": "bc9cd2f52485517bbcfa2778be34bb90537e2e47b577ed98f716564e2ba63899",
+        "report_sha256": "f51189f0fb9c2e0f3fa60fda0419fec5f4c9a01258a51e5a4d6ea2587878d6ce",
+        "delivery_status": "complete",
+        "claim_verified": true,
+        "final_omission_status": "PASS",
+        "p148_old_fee_survives": false,
+        "p155_old_fee_survives": true,
+        "p155_filing_survives": true
+      }
+    },
+    {
+      "id": "fee_chapter_without_tax",
+      "scope": {
+        "rule_id": "G15",
+        "leaf_ids": [],
+        "locations": [],
+        "location_count": 0,
+        "zone": "",
+        "include_summary_copies": false,
+        "copy_keys": [],
+        "resolution": "unresolved",
+        "evidence": [
+          "policy=G15.sales_service_fee",
+          "base_sections=S01",
+          "sales_service_fee_leaf_missing"
+        ]
+      },
+      "observation": "An explicit fee leaf in the mapped chapter is unresolved."
+    },
+    {
+      "id": "multiple_definition_leaves_choose_first",
+      "scope": {
+        "rule_id": "G04",
+        "leaf_ids": [
+          "S01:L01"
+        ],
+        "locations": [
+          "p0",
+          "p1"
+        ],
+        "location_count": 2,
+        "zone": "body",
+        "include_summary_copies": false,
+        "copy_keys": [
+          "份额类别"
+        ],
+        "resolution": "resolved",
+        "evidence": [
+          "policy=G04.class_basics",
+          "base_sections=S01",
+          "definition_candidates=2",
+          "leaf=S01:L01:基金份额类别设置",
+          "source=basic_info_definition"
+        ]
+      },
+      "p3_in_scope": false
+    },
+    {
+      "id": "rule_id_changes_scope_policy",
+      "G01": {
+        "rule_id": "G01",
+        "leaf_ids": [],
+        "locations": [],
+        "location_count": 0,
+        "zone": "",
+        "include_summary_copies": false,
+        "copy_keys": [],
+        "resolution": "unresolved",
+        "evidence": [
+          "policy=G01.glossary_class_definition",
+          "glossary_sections=",
+          "glossary_class_definition_missing"
+        ]
+      },
+      "CUSTOM01": {
+        "rule_id": "CUSTOM01",
+        "leaf_ids": [
+          "S01:L01"
+        ],
+        "locations": [
+          "p0",
+          "p1"
+        ],
+        "location_count": 2,
+        "zone": "body",
+        "include_summary_copies": false,
+        "copy_keys": [
+          "销售服务费"
+        ],
+        "resolution": "resolved",
+        "evidence": [
+          "base_sections=S01",
+          "anchor=基金销售服务费",
+          "leaf=S01:L01:基金销售服务费"
+        ]
+      },
+      "scope": "synthetic custom-guide policy dispatch, not a built-in G01 clause"
+    },
+    {
+      "id": "class_enumeration_verb_gate",
+      "quote": "本基金现有A类与C类基金份额。",
+      "result": {
+        "quote_verified": true,
+        "set_complete_verified": false,
+        "parsed_classes": [],
+        "reason": "CLASS_SET_ENUMERATION_UNPROVEN"
+      }
+    },
+    {
+      "id": "fee_grammar_gate",
+      "quote": "C类基金份额销售服务费实行0.5%的年费率。",
+      "fee_value": null
+    },
+    {
+      "id": "unrelated_fee_fact_coupling",
+      "statuses": {
+        "fund_type": "VERIFIED",
+        "share_class_structure": "VERIFIED",
+        "subscription_fee_group": "UNKNOWN",
+        "service_fee_group": "UNKNOWN",
+        "direct_sales_exempt_group": "UNKNOWN",
+        "other_sales_charged_group": "UNKNOWN"
+      },
+      "observation": "All subscription polarities are proven; service C is unknown."
+    },
+    {
+      "id": "unknown_fact_blocks_applicability_judge",
+      "decision": {
+        "status": "UNKNOWN",
+        "condition": {
+          "kind": "class_count",
+          "value": "multiple"
+        },
+        "rule_id": "",
+        "operation_id": "",
+        "source": "deterministic",
+        "evidence_quote": "",
+        "reason": "condition_status:UNKNOWN",
+        "history": []
+      },
+      "gateway_calls": 0,
+      "observation": "Fact recovery is separate; this judge cannot override an unknown fact."
+    },
+    {
+      "id": "facts_context_oversized_paragraph_stops_later_evidence",
+      "context": "CONTRACT_SOURCE\n[p0] 本基金设A类、C类基金份额。",
+      "late_fee_shown": false,
+      "scope": "synthetic long paragraph; corpus results below are separate"
+    }
+  ],
+  "facts_context_corpus_probe": [
+    {
+      "file": "广发ESG责任投资混合型证券投资基金基金合同.docx",
+      "source_sha256": "736df8d4fa17cea3f81669c76a1b59df22e1c989dafa872ec2448c508bcdca58",
+      "context_chars": 19904,
+      "body_fee_paragraphs": 7,
+      "body_fee_locations_not_shown": []
+    },
+    {
+      "file": "广发中证A50交易型开放式指数证券投资基金联接基金合同20261020.docx",
+      "source_sha256": "d6c4c0d68aa74a8c9f3571098492a203815e8586c310e76204d28d6328e0d487",
+      "context_chars": 26624,
+      "body_fee_paragraphs": 7,
+      "body_fee_locations_not_shown": []
+    },
+    {
+      "file": "广发价值优选混合型证券投资基金基金合同.docx",
+      "source_sha256": "708bca5d2197d0688c59ebb7a0eaee1432b79162e2404a8545cd60d488fd67c7",
+      "context_chars": 19228,
+      "body_fee_paragraphs": 8,
+      "body_fee_locations_not_shown": []
+    },
+    {
+      "file": "广发全球稳健配置混合型证券投资基金（QDII）基金合同.docx",
+      "source_sha256": "c832eccecaa906ef20a82aac34ebef1c5121dd189ccd8d930f4f342aebbfe646",
+      "context_chars": 22429,
+      "body_fee_paragraphs": 7,
+      "body_fee_locations_not_shown": []
+    },
+    {
+      "file": "广发品质优选混合型发起式证券投资基金基金合同.docx",
+      "source_sha256": "e61bef7bceeea4fa0eb9efc2db33b065d41f1267d30a5d75fb3c322b0c083e85",
+      "context_chars": 20449,
+      "body_fee_paragraphs": 7,
+      "body_fee_locations_not_shown": []
+    },
+    {
+      "file": "广发富信优选六个月持有期混合型基金中基金（FOF）基金合同20261020.docx",
+      "source_sha256": "2b9cfdaf11955ceae564d40e0f7b74c470c94b51f18dbe7497bf20c276e4fad5",
+      "context_chars": 21335,
+      "body_fee_paragraphs": 8,
+      "body_fee_locations_not_shown": []
+    },
+    {
+      "file": "广发弘利3个月滚动持有债券型证券投资基金基金合同.docx",
+      "source_sha256": "ac16b236ee55184e972519f1e01610d9b3b529c559db662d00ec8dc1514a02f7",
+      "context_chars": 22660,
+      "body_fee_paragraphs": 6,
+      "body_fee_locations_not_shown": []
+    },
+    {
+      "file": "广发恒昌一年持有期混合型证券投资基金基金合同20261022.docx",
+      "source_sha256": "1994aa1c7e9e1dfa220c4d8ecaa74bf2d6743d426c1a956ffc5e2ee157bca63d",
+      "context_chars": 19713,
+      "body_fee_paragraphs": 8,
+      "body_fee_locations_not_shown": []
+    },
+    {
+      "file": "广发恒裕一年持有期混合型证券投资基金基金合同.docx",
+      "source_sha256": "c2ad777a7e5ea52c71d1d8ed50b048f42070ddcaf1a1c3de373a4696931cbcc3",
+      "context_chars": 20704,
+      "body_fee_paragraphs": 8,
+      "body_fee_locations_not_shown": []
+    },
+    {
+      "file": "广发恒鑫一年持有期混合型证券投资基金基金合同20261020.docx",
+      "source_sha256": "da79b554f688122c6fe2ce6301731dedc627eb2d5f797afd010e14b7b75b7905",
+      "context_chars": 19691,
+      "body_fee_paragraphs": 8,
+      "body_fee_locations_not_shown": []
+    },
+    {
+      "file": "广发恒阳一年持有期混合型证券投资基金基金合同20261022.docx",
+      "source_sha256": "716468579d469ea058e4b2300e7271dd9471f3726ceedd391176fbb225f3d51a",
+      "context_chars": 19869,
+      "body_fee_paragraphs": 8,
+      "body_fee_locations_not_shown": []
+    },
+    {
+      "file": "广发恒隆一年持有期混合型证券投资基金基金合同20261020.docx",
+      "source_sha256": "4acb4f0bb8bdc1f015224b9a2b68c09fe6752eac0e28b7d3896cccd80734b263",
+      "context_chars": 19722,
+      "body_fee_paragraphs": 8,
+      "body_fee_locations_not_shown": []
+    },
+    {
+      "file": "广发招利混合型证券投资基金基金合同.docx",
+      "source_sha256": "60ed76a828649c46516985de13cac58223576acbdb982a83b8fda25dc99ddae4",
+      "context_chars": 19535,
+      "body_fee_paragraphs": 7,
+      "body_fee_locations_not_shown": []
+    },
+    {
+      "file": "广发景宁纯债债券型证券投资基金基金合同.docx",
+      "source_sha256": "9150051732445ce306db0b17e37f38746f8827c1c8a327a3474a433633e2e4b4",
+      "context_chars": 17001,
+      "body_fee_paragraphs": 7,
+      "body_fee_locations_not_shown": []
+    },
+    {
+      "file": "广发景荣纯债债券型证券投资基金基金合同.docx",
+      "source_sha256": "f8b94aaad5d34a34f732ec71c16e96b7275312d04bf3c24b003c21aeca7e6a7e",
+      "context_chars": 15560,
+      "body_fee_paragraphs": 0,
+      "body_fee_locations_not_shown": []
+    },
+    {
+      "file": "广发沪深300指数增强型发起式证券投资基金基金合同.docx",
+      "source_sha256": "257a7b95c05b0e5c0ea5fac4ca149a66101c8195eecbf622b2d0125a117d9123",
+      "context_chars": 19334,
+      "body_fee_paragraphs": 6,
+      "body_fee_locations_not_shown": []
+    },
+    {
+      "file": "广发沪港深精选混合型证券投资基金基金合同.docx",
+      "source_sha256": "36672146ecff9e5374113cf69056a676e6cb701edd200f274150e1772b28d574",
+      "context_chars": 19276,
+      "body_fee_paragraphs": 8,
+      "body_fee_locations_not_shown": []
+    },
+    {
+      "file": "广发港股通恒生综合中型股指数证券投资基金（LOF）基金合同.docx",
+      "source_sha256": "5d09bcb5520a26884c41a28e1f59465261ad29cd48c5b5c524325507a1848e9b",
+      "context_chars": 21090,
+      "body_fee_paragraphs": 10,
+      "body_fee_locations_not_shown": []
+    },
+    {
+      "file": "广发睿明优质企业混合型证券投资基金基金合同.docx",
+      "source_sha256": "e91d703c256cd479ea28090069cc05a43ef08933b86262162cc33975ee2227dc",
+      "context_chars": 19145,
+      "body_fee_paragraphs": 7,
+      "body_fee_locations_not_shown": []
+    },
+    {
+      "file": "广发稳信六个月持有期混合型证券投资基金基金合同.docx",
+      "parse_error": "DOCUMENT_PROTECTED"
+    },
+    {
+      "file": "广发稳健养老目标一年持有期混合型基金中基金（FOF）基金合同.docx",
+      "source_sha256": "ad8779be2e82c4ad8fc7a613f8072c33c5d7bf9109ee6972cfbecdf3eeda633f",
+      "context_chars": 19923,
+      "body_fee_paragraphs": 1,
+      "body_fee_locations_not_shown": []
+    },
+    {
+      "file": "广发纳斯达克生物科技指数型发起式证券投资基金基金合同.docx",
+      "source_sha256": "2227412493bde1e483aa567695944d7dbf799d1b16c2c87a8de6558f964ec3a4",
+      "context_chars": 22107,
+      "body_fee_paragraphs": 6,
+      "body_fee_locations_not_shown": []
+    },
+    {
+      "file": "广发美国房地产指数证券投资基金基金合同.docx",
+      "source_sha256": "8ff0edd303613ce2b57abb5adbe5cd2735b6ef3fe13369dc30ee71d0cd9cd74f",
+      "context_chars": 25458,
+      "body_fee_paragraphs": 7,
+      "body_fee_locations_not_shown": []
+    },
+    {
+      "file": "广发聚安混合型证券投资基金基金合同.docx",
+      "source_sha256": "2c310672cd48fb7c569b4518b525bd4a740caf927ded8055a5823bf37301b100",
+      "context_chars": 18169,
+      "body_fee_paragraphs": 9,
+      "body_fee_locations_not_shown": []
+    },
+    {
+      "file": "广发道琼斯美国石油开发与生产指数证券投资基金（QDII-LOF）基金合同.docx",
+      "source_sha256": "5a1e11f64a48d8a2655994f8bb3c1de9d531c9f36cb3604f0170c3a84e70ad7c",
+      "context_chars": 23549,
+      "body_fee_paragraphs": 10,
+      "body_fee_locations_not_shown": []
+    },
+    {
+      "file": "广发鑫裕灵活配置混合型证券投资基金基金合同.docx",
+      "source_sha256": "6593e2eb52b7f7d04cc86da4981783db6ee3639007c6676cd4dd79c29c8179af",
+      "context_chars": 17672,
+      "body_fee_paragraphs": 8,
+      "body_fee_locations_not_shown": []
+    },
+    {
+      "file": "广发锐意进取3个月持有期混合型发起式基金中基金（FOF）基金合同.docx",
+      "source_sha256": "00311bd2578c6849b99c8c7a3d26664287664eaf9e48549a2c4a556e4b1d5f00",
+      "context_chars": 20174,
+      "body_fee_paragraphs": 12,
+      "body_fee_locations_not_shown": []
+    },
+    {
+      "file": "广发集盛债券型证券投资基金基金合同.docx",
+      "source_sha256": "1f8c1ad9d070067a23469c79ac0a14421054b34c686a140f27ea5193cf1aa3d8",
+      "context_chars": 19923,
+      "body_fee_paragraphs": 7,
+      "body_fee_locations_not_shown": []
+    }
+  ],
+  "capacity_and_structure_probes": {
+    "fixture_directory": "/tmp/opencode/strictness-audit-hz88w399",
+    "structures": [
+      {
+        "location": "p0",
+        "text": "普通正文",
+        "safe_text": "普通正文",
+        "editable": true,
+        "zone": "body"
+      },
+      {
+        "location": "tbl0/r0/c0/p0",
+        "text": "表格旧文",
+        "safe_text": "表格旧文",
+        "editable": true,
+        "zone": "body"
+      },
+      {
+        "location": "p1",
+        "text": "￹链接可见￹",
+        "safe_text": "",
+        "editable": false,
+        "zone": "body"
+      },
+      {
+        "location": "p2",
+        "text": "￹日期结果￹",
+        "safe_text": "",
+        "editable": false,
+        "zone": "body"
+      },
+      {
+        "location": "readonly:/w:document/w:body/w:sdt/w:sdtContent/w:p",
+        "text": "￹控件可见￹",
+        "safe_text": "",
+        "editable": false,
+        "zone": "unsupported_structure"
+      }
+    ],
+    "table_written": "表格新文",
+    "header_enumerated": false,
+    "full_modes_equal": true,
+    "sections": {
+      "default": 80,
+      "raised_limit": 85,
+      "last_in_inventory": false,
+      "last_in_prescope_sweep": true,
+      "last_in_scoped_sweep": false,
+      "blind": [
+        {
+          "chunk": "C005",
+          "locations": [
+            "p160",
+            "p161",
+            "p162",
+            "p163",
+            "p164",
+            "p165",
+            "p166",
+            "p167",
+            "p168",
+            "p169"
+          ],
+          "skipped": "OUT_OF_RULE_SCOPE"
+        }
+      ]
+    },
+    "delete_cap": {
+      "candidates": 25,
+      "default": 20,
+      "raised_limit": 25
+    },
+    "candidate_cap": {
+      "source_candidates": 25,
+      "discovered": 12,
+      "context_allowed": 12
+    },
+    "claim_cap": {
+      "default_checked": 40,
+      "raised_checked": 45,
+      "verified": false
+    },
+    "residual_cap": {
+      "default": 40,
+      "raised_limit": 45
+    },
+    "composite": {
+      "contiguous": true,
+      "skips_independent": false,
+      "cross_section": false
+    }
+  },
+  "semantic_gate_probes": {
+    "G13": {
+      "source": "本基金对持有不足7日的投资者收取不低于1.50%的赎回费，并将上述赎回费全额计入基金财产。",
+      "site_ok": true,
+      "attribution_errors": [],
+      "operations": [
+        "G13:0"
+      ],
+      "effect_site_bound": false,
+      "candidates": [],
+      "locator": [
+        {
+          "target_id": "T",
+          "rule_id": "G13",
+          "location": "p0",
+          "quote": "本基金对持有不足7日的投资者收取不低于1.50%的赎回费，并将上述赎回费全额计入基金财产。",
+          "semantic_role": "fee_clause",
+          "reason": "exact source",
+          "status": "rejected",
+          "reject_reason": "anchor_mismatch:quote_keyword_bag_missing"
+        }
+      ],
+      "unchanged_without_sites_proof": {
+        "state": "PASS",
+        "artifact_status": "VERIFIED_ABSENT",
+        "rule_id": "G13",
+        "operation_id": "G13:0",
+        "obligation_id": "G13:B1:O1",
+        "sites": [],
+        "edit_ids": [],
+        "evidence": [
+          {
+            "proof_kind": "document_literal_absent",
+            "operation_id": "G13:0",
+            "obligation_id": "G13:B1:O1",
+            "searched_literals": [
+              "本基金对持续持有期少于7日的投资者收取不低于1.50%的赎回费，并将上述赎回费全额计入基金财产。"
+            ],
+            "match_count": 0,
+            "document_sha256": "offline-synthetic-probe"
+          }
+        ],
+        "failure_code": "",
+        "reason": "",
+        "site_effects": [],
+        "operations": [
+          "G13:0"
+        ]
+      },
+      "plan_error": {
+        "code": "RECALL_ROUTED_EXECUTOR_UNAVAILABLE",
+        "detail": {
+          "target": "T",
+          "executor": "delete",
+          "required": "compose",
+          "rule": "G13"
+        }
+      },
+      "scripted_generation_calls": []
+    },
+    "G17": {
+      "source": "C类基金份额的销售服务费用于支付销售机构佣金、以及基金管理人的基金行销广告费、促销活动费、基金份额持有人服务费等。C类基金份额的销售服务费用途不包括基金募集期间的上述费用。",
+      "site_ok": false,
+      "attribution_errors": [],
+      "operations": [
+        "G17:0"
+      ],
+      "effect_site_bound": false,
+      "candidates": [
+        "p0"
+      ],
+      "locator": [
+        {
+          "target_id": "T",
+          "rule_id": "G17",
+          "location": "p0",
+          "quote": "C类基金份额的销售服务费用于支付销售机构佣金、以及基金管理人的基金行销广告费、促销活动费、基金份额持有人服务费等。C类基金份额的销售服务费用途不包括基金募集期间的上述费用。",
+          "semantic_role": "fee_clause",
+          "reason": "exact source",
+          "status": "rejected",
+          "reject_reason": "anchor_mismatch:target_site_mismatch"
+        }
+      ],
+      "unchanged_without_sites_proof": {
+        "state": "PASS",
+        "artifact_status": "VERIFIED_ABSENT",
+        "rule_id": "G17",
+        "operation_id": "G17:0",
+        "obligation_id": "G17:B1:O1",
+        "sites": [],
+        "edit_ids": [],
+        "evidence": [
+          {
+            "proof_kind": "document_literal_absent",
+            "operation_id": "G17:0",
+            "obligation_id": "G17:B1:O1",
+            "searched_literals": [
+              "C类基金份额的销售服务费主要用于支付销售机构佣金、以及基金管理人的基金行销广告费、促销活动费、基金份额持有人服务费等。C类基金份额的销售服务费使用范围不包括基金募集期间的上述费用。"
+            ],
+            "match_count": 0,
+            "document_sha256": "offline-synthetic-probe"
+          }
+        ],
+        "failure_code": "",
+        "reason": "",
+        "site_effects": [],
+        "operations": [
+          "G17:0"
+        ]
+      },
+      "plan_error": {
+        "code": "TARGET_SOURCE_MISMATCH",
+        "detail": {
+          "rule": "G17",
+          "target": "T",
+          "location": "p0"
+        }
+      },
+      "scripted_generation_calls": []
+    },
+    "G11": {
+      "source": "申购费用由投资人支付，不列入基金财产。",
+      "site_ok": true,
+      "attribution_errors": [],
+      "operations": [
+        "G11:0"
+      ],
+      "effect_site_bound": false,
+      "candidates": [],
+      "locator": [
+        {
+          "target_id": "T",
+          "rule_id": "G11",
+          "location": "p0",
+          "quote": "申购费用由投资人支付，不列入基金财产。",
+          "semantic_role": "fee_clause",
+          "reason": "exact source",
+          "status": "rejected",
+          "reject_reason": "anchor_mismatch:quote_class_missing"
+        }
+      ],
+      "plan_source": "tier1_template",
+      "replay_failures": [
+        {
+          "rule_id": "G11",
+          "location": "p0",
+          "target_id": "T",
+          "operation_id": "G11:0",
+          "obligation_id": "G11:B1:O1",
+          "authorized_span": [
+            0,
+            19
+          ],
+          "scope": "operations",
+          "code": "CLAIM_OPERATION_SPAN_UNAUTHORIZED",
+          "reason": "the operation did not use its own authorization"
+        },
+        {
+          "rule_id": "G11",
+          "operation_id": "G11:0",
+          "obligation_id": "G11:B1:O1",
+          "location": "p0",
+          "code": "CLAIM_PLANNED_EFFECT_MISSING",
+          "reason": "operation effect is not proven at every verified site"
+        },
+        {
+          "rule_id": "G11",
+          "operation_id": "G11:1",
+          "obligation_id": "G11:B1:O2",
+          "location": "",
+          "code": "CLAIM_OPERATION_UNPROVEN",
+          "reason": "verified site missing"
+        }
+      ],
+      "scripted_generation_calls": []
+    },
+    "G09": {
+      "source": "投资者赎回所得金额按确认的有效赎回份额乘以当日对应份额类别的基金份额净值，再减去应扣的相关费用计算，赎回金额单位为元。",
+      "site_ok": true,
+      "attribution_errors": [],
+      "operations": [
+        "G09:0"
+      ],
+      "effect_site_bound": true,
+      "candidates": [],
+      "locator": [
+        {
+          "target_id": "T",
+          "rule_id": "G09",
+          "location": "p0",
+          "quote": "投资者赎回所得金额按确认的有效赎回份额乘以当日对应份额类别的基金份额净值，再减去应扣的相关费用计算，赎回金额单位为元。",
+          "semantic_role": "fee_clause",
+          "reason": "exact source",
+          "status": "rejected",
+          "reject_reason": "anchor_mismatch:quote_anchor_missing"
+        }
+      ],
+      "plan_error": {
+        "code": "RECALL_ROUTED_EXECUTOR_UNAVAILABLE",
+        "detail": {
+          "target": "T",
+          "executor": "splice",
+          "required": "compose",
+          "rule": "G09"
+        }
+      },
+      "scripted_generation_calls": []
+    },
+    "real_G17": {
+      "source": "funds_word/基金合同第一批/广发弘利3个月滚动持有债券型证券投资基金基金合同.docx",
+      "source_sha256": "ac16b236ee55184e972519f1e01610d9b3b529c559db662d00ec8dc1514a02f7",
+      "quote": "销售服务费可用于本基金市场推广、销售以及基金份额持有人服务等各项费用。",
+      "in_scope": true,
+      "scope_resolution": "resolved",
+      "attribution": [],
+      "plan_error": {
+        "code": "TARGET_SOURCE_MISMATCH",
+        "detail": {
+          "rule": "G17",
+          "target": "REAL",
+          "location": "p784"
+        }
+      },
+      "scripted_calls": []
+    },
+    "fixed_text_before_review": {
+      "code": "RECALL_COMPOSE_FIXED_TEXT_MISSING",
+      "scripted_calls": [
+        "recall_compose"
+      ]
+    },
+    "delete_retry_stale_error": {
+      "code": "RECALL_COMPOSE_DELETE_NOT_SHRINKING",
+      "scripted_calls": [
+        "recall_compose",
+        "recall_compose"
+      ]
+    },
+    "protected_word_change": {
+      "outcome": [
+        false,
+        "program_check:LOST_PROTECTED_LITERAL"
+      ],
+      "scripted_calls": []
+    }
+  }
+}

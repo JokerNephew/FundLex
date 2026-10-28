@@ -1,0 +1,212 @@
+{
+  "schema_version": "guide-generation-benchmark-gold-1",
+  "benchmark_id": "sales-fee-regulation-2025-retrospective-blind",
+  "regulation_title": "公开募集证券投资基金销售费用管理规定",
+  "regulation_source": "references/source/附件1：公开募集证券投资基金销售费用管理规定.pdf",
+  "human_guide_source": "references/source/v4存量基金适用销售费用新规的基金合同修改指引_文案勘误版.docx",
+  "generation_inputs_allowed": [
+    "regulation_source",
+    "funds_word/*.docx"
+  ],
+  "generation_inputs_forbidden": [
+    "human_guide_source",
+    "benchmarks/sales_fee_regulation_2025/gold.json"
+  ],
+  "critical_requirements": [
+    {
+      "id": "G-R01",
+      "description": "基金管理人销售其管理的基金，不得收取认（申）购费、销售服务费",
+      "article_hint": "第七条",
+      "must_terms": ["不得收取", "认（申）购费"],
+      "any_terms": ["销售服务费", "基金管理人"],
+      "guide_expected_terms": ["直销机构", "不收取", "申购费"]
+    },
+    {
+      "id": "G-R02",
+      "description": "直销机构申购不收取申购费；直销机构申购C类不收取销售服务费；非直销C类持有超过一年不再收取销售服务费",
+      "article_hint": "第七条",
+      "must_terms": ["直销机构", "不收取"],
+      "any_terms": ["申购费", "销售服务费", "一年"],
+      "guide_expected_terms": ["直销机构", "申购费", "销售服务费"]
+    },
+    {
+      "id": "G-R03",
+      "description": "主动偏股型基金认（申）购费不高于0.8%",
+      "article_hint": "第八条",
+      "must_terms": ["0.8%"],
+      "any_terms": ["主动偏股型", "认（申）购费"],
+      "guide_expected_terms": ["0.8%", "申购费"]
+    },
+    {
+      "id": "G-R04",
+      "description": "其他混合型0.5%，指数型、债券型0.3%",
+      "article_hint": "第八条",
+      "must_terms": ["0.5%", "0.3%"],
+      "any_terms": ["混合型", "指数型", "债券型"],
+      "guide_expected_terms": ["0.5%", "0.3%"]
+    },
+    {
+      "id": "G-R05",
+      "description": "赎回费应当全额计入基金财产",
+      "article_hint": "第十条",
+      "must_terms": ["赎回费", "全额计入基金财产"],
+      "any_terms": ["赎回"],
+      "guide_expected_terms": ["赎回费", "全额计入基金财产"]
+    },
+    {
+      "id": "G-R06",
+      "description": "持续持有少于七日收取不低于1.5%赎回费",
+      "article_hint": "第十条",
+      "must_terms": ["七日", "1.5%"],
+      "any_terms": ["赎回费", "持有"],
+      "guide_expected_terms": ["7日", "1.5%", "赎回费"]
+    },
+    {
+      "id": "G-R07",
+      "description": "销售服务费上限：股票/混合0.4%/年，指数/债券0.2%/年，货币0.15%/年",
+      "article_hint": "第十一条",
+      "must_terms": ["0.4%", "0.2%", "0.15%"],
+      "any_terms": ["销售服务费", "销售服务费率"],
+      "guide_expected_terms": ["销售服务费", "0.4%"]
+    },
+    {
+      "id": "G-R08",
+      "description": "个人投资者客户维护费不得超过管理费的50%",
+      "article_hint": "第十二条",
+      "must_terms": ["客户维护费", "50%"],
+      "any_terms": ["管理费", "个人投资者"],
+      "guide_expected_terms": ["客户维护费", "50%"]
+    },
+    {
+      "id": "G-R09",
+      "description": "基金合同、招募说明书等应载明销售费用收取方式、用途和标准及综合费用水平",
+      "article_hint": "第二十二条",
+      "must_terms": ["基金合同", "销售费用"],
+      "any_terms": ["招募说明书", "披露", "载明"],
+      "guide_expected_terms": ["基金合同", "销售费用", "披露"]
+    },
+    {
+      "id": "G-R10",
+      "description": "已发售基金不符合新规的，应在施行之日起12个月内调整并修改基金合同、招募说明书等法律文件",
+      "article_hint": "第二十九条",
+      "must_terms": ["12个月", "基金合同"],
+      "any_terms": ["调整", "修改", "招募说明书"],
+      "guide_expected_terms": ["12个月", "基金合同", "招募说明书"]
+    },
+    {
+      "id": "G-R11",
+      "description": "基金销售费用包括认（申）购费、赎回费、销售服务费，应在基金合同等法律文件中约定收取标准",
+      "article_hint": "第七条",
+      "must_terms": ["基金合同", "收取标准"],
+      "any_terms": ["认（申）购费", "赎回费", "销售服务费"],
+      "guide_expected_terms": ["基金合同", "销售服务费"]
+    },
+    {
+      "id": "G-R12",
+      "description": "不得设置专属份额或专属产品实施歧视性、排他性、绑定性销售安排",
+      "article_hint": "第十五条",
+      "must_terms": ["专属份额", "不公平对待"],
+      "any_terms": ["歧视性", "排他性", "绑定性", "专属基金产品"],
+      "guide_expected_terms": ["专属份额", "不公平对待", "投资者"]
+    }
+  ],
+  "clause_patterns": [
+    {
+      "id": "G-P01",
+      "critical": true,
+      "description": "份额类别变更条款中的“调低赎回费率”需按是否有销售服务费改为“调低销售服务费率”或删除",
+      "section_hint": "基金的基本情况",
+      "must_terms": ["调低赎回费率"],
+      "any_terms": ["变更现有基金份额类别的申购费率", "增加新的基金份额类别"],
+      "expected_action_terms": ["调低销售服务费率"]
+    },
+    {
+      "id": "G-P02",
+      "critical": true,
+      "description": "删除份额类别变更后的“并报中国证监会备案”",
+      "must_terms": ["并报中国证监会备案"],
+      "any_terms": ["调整前基金管理人需及时公告"],
+      "expected_action_terms": ["删除", "备案"]
+    },
+    {
+      "id": "G-P03",
+      "critical": true,
+      "description": "删除不同份额类别之间不得互相转换的限制（或按新规处理）",
+      "must_terms": ["不同基金份额类别之间不得互相转换"],
+      "any_terms": ["基金份额类别", "转换"],
+      "expected_action_terms": ["删除", "转换"]
+    },
+    {
+      "id": "G-P04",
+      "critical": true,
+      "description": "申购费率由管理人决定并仅在招募说明书列示，需增加直销机构不收取申购费的表述",
+      "must_terms": ["申购费率由基金管理人决定", "招募说明书中列示"],
+      "any_terms": ["申购份额的计算", "申购费"],
+      "expected_action_terms": ["直销机构", "不收取申购费"]
+    },
+    {
+      "id": "G-P05",
+      "critical": true,
+      "description": "赎回金额计算中的“扣除相应的费用”需覆盖扣除或加上费用的情形",
+      "must_terms": ["赎回金额", "扣除相应的费用"],
+      "any_terms": ["赎回份额", "基金份额净值"],
+      "expected_action_terms": ["扣除或加上"]
+    },
+    {
+      "id": "G-P06",
+      "critical": true,
+      "description": "申购费用由投资人承担、不列入基金财产，需按单/多份额类别增加直销机构安排",
+      "must_terms": ["申购费用由投资人承担", "不列入基金财产"],
+      "any_terms": ["申购费", "基金财产"],
+      "expected_action_terms": ["直销机构", "不收取申购费"]
+    },
+    {
+      "id": "G-P07",
+      "critical": true,
+      "description": "赎回费用归入基金财产的比例按相关规定执行，需改为全额计入基金财产",
+      "must_terms": ["赎回费用归入基金财产的比例"],
+      "any_terms": ["赎回费用", "基金财产"],
+      "expected_action_terms": ["全额计入基金财产"]
+    },
+    {
+      "id": "G-P08",
+      "critical": true,
+      "description": "删除对持续持有期少于7日投资者收取1.5%赎回费的旧句（如新规费率已被其他条款覆盖）",
+      "must_terms": ["持续持有期少于7日", "1.50%"],
+      "any_terms": ["赎回费", "全额计入基金财产"],
+      "expected_action_terms": ["删除", "赎回费"]
+    },
+    {
+      "id": "G-P09",
+      "critical": true,
+      "description": "基金促销计划中的费率调低范围需按单/多份额类别调整",
+      "must_terms": ["适当调低基金申购费率和赎回费率"],
+      "any_terms": ["基金促销计划", "调低"],
+      "expected_action_terms": ["申购费率", "销售服务费率"]
+    },
+    {
+      "id": "G-P10",
+      "critical": true,
+      "description": "C类销售服务费每日计提、按月支付的旧支付安排需按新规调整",
+      "must_terms": ["销售服务费每日计提", "按月支付"],
+      "any_terms": ["销售服务费", "基金托管人"],
+      "expected_action_terms": ["销售服务费", "每日计提"]
+    },
+    {
+      "id": "G-P11",
+      "critical": false,
+      "description": "基金费用章节应列示销售服务费计算方法与费率",
+      "must_terms": ["销售服务费", "年费率"],
+      "any_terms": ["H＝E×", "基金资产净值"],
+      "expected_action_terms": ["销售服务费", "年费率"]
+    },
+    {
+      "id": "G-P12",
+      "critical": false,
+      "description": "申购赎回费用及计算方式应在招募说明书列示",
+      "must_terms": ["申购费率", "赎回费率", "招募说明书"],
+      "any_terms": ["收费方式", "计算"],
+      "expected_action_terms": ["申购费率", "赎回费率"]
+    }
+  ]
+}

@@ -1,0 +1,258 @@
+diff --git a/fundlex/compare/models.py b/fundlex/compare/models.py
+index 5def153..32f65fb 100644
+--- a/fundlex/compare/models.py
++++ b/fundlex/compare/models.py
+@@ -49,6 +49,7 @@ class CompareBlock:
+     match_text: str = ""
+     diff_text: str = ""
+     container: str = "body"
++    story: str = ""
+     table_index: int | None = None
+     row_index: int | None = None
+     cell_index: int | None = None
+@@ -71,6 +72,7 @@ class CompareBlock:
+             "section_path": self.section_path, "raw_text": self.raw_text,
+             "match_text": self.match_text, "diff_text": self.diff_text,
+             "container": self.container, "table_index": self.table_index,
++            "story": self.story,
+             "row_index": self.row_index, "cell_index": self.cell_index,
+             "paragraph_index": self.paragraph_index, "style": self.style,
+             "warnings": list(self.warnings),
+diff --git a/fundlex/compare/parser.py b/fundlex/compare/parser.py
+index edf4722..2643221 100644
+--- a/fundlex/compare/parser.py
++++ b/fundlex/compare/parser.py
+@@ -23,6 +23,8 @@ from .normalize import normalize_diff, normalize_match
+ from .presentation import Presentation
+ 
+ MC = "http://schemas.openxmlformats.org/markup-compatibility/2006"
++A = "http://schemas.openxmlformats.org/drawingml/2006/main"
++V = "urn:schemas-microsoft-com:vml"
+ 
+ 
+ def _text(element: etree._Element) -> str:
+@@ -30,8 +32,17 @@ def _text(element: etree._Element) -> str:
+     # containing existing revisions, although compare's normal contract forbids
+     # them. fld instructions are deliberately excluded.
+     out: list[str] = []
+-    for node in element.iter():
+-        if node.tag in {Q("t"), Q("delText")}:
++
++    def visit(node: etree._Element) -> None:
++        if node.tag == f"{{{MC}}}AlternateContent":
++            choices = [child for child in node if child.tag == f"{{{MC}}}Choice"]
++            selected = choices[0] if choices else next(
++                (child for child in node if child.tag == f"{{{MC}}}Fallback"), None)
++            if selected is not None:
++                for child in selected:
++                    visit(child)
++            return
++        if node.tag in {Q("t"), Q("delText"), f"{{{A}}}t"}:
+             out.append(node.text or "")
+         elif node.tag in {Q("br"), Q("cr")}:
+             out.append("\n")
+@@ -39,9 +50,32 @@ def _text(element: etree._Element) -> str:
+             out.append("\t")
+         elif node.tag in {Q("noBreakHyphen")}:
+             out.append("\u2011")
++        for child in node:
++            visit(child)
++
++    visit(element)
+     return "".join(out)
+ 
+ 
++def _alternate_supported(node: etree._Element) -> bool:
++    choices = [child for child in node if child.tag == f"{{{MC}}}Choice"]
++    fallback = next((child for child in node if child.tag == f"{{{MC}}}Fallback"), None)
++    if not choices:
++        return fallback is not None
++    return fallback is not None and all(_text(choice) == _text(fallback) for choice in choices)
++
++
++def _drawing_supported(node: etree._Element) -> bool:
++    tags = {child.tag for child in node.iter() if isinstance(child.tag, str)}
++    local_names = {etree.QName(tag).localname for tag in tags}
++    return f"{{{A}}}t" in tags and not local_names.intersection({"blip", "chart", "oleObj", "object"})
++
++
++def _pict_supported(node: etree._Element) -> bool:
++    local_names = {etree.QName(child).localname for child in node.iter() if isinstance(child.tag, str)}
++    return node.find(f".//{Q('t')}") is not None and "imagedata" not in local_names
++
++
+ def _style(paragraph: etree._Element) -> str:
+     ppr = paragraph.find(Q("pPr"))
+     if ppr is None:
+@@ -70,11 +104,12 @@ def _block(block_id: str, ordinal: int, location: str, kind: str, raw: str,
+            table_rowspan: int = 1, table_col_start: int = 0,
+            table_cell_continuation: bool = False,
+            table_origin_row: int | None = None,
+-           table_origin_cell: int | None = None) -> CompareBlock:
++           table_origin_cell: int | None = None,
++           story: str = "") -> CompareBlock:
+     return CompareBlock(block_id=block_id, ordinal=ordinal, location=location, kind=kind,
+                         section_path=section, raw_text=raw,
+                         match_text=normalize_match(raw), diff_text=normalize_diff(raw),
+-                        container=container, table_index=table, row_index=row,
++                         container=container, story=story, table_index=table, row_index=row,
+                         cell_index=cell, paragraph_index=paragraph, style=style,
+                         warnings=warnings, runs=tuple(runs),
+                         paragraph_format=tuple(paragraph_format),
+@@ -107,35 +142,12 @@ def _parse_parts(parts: Mapping[str, bytes], *, filename: str = "", side: str =
+     presentation = Presentation(parts, limits)
+     page_format = presentation.page(body)
+ 
+-    # The first compare scope is the main document body.  Story parts are
+-    # deliberately not compared, but visible text in them must not be
+-    # mistaken for a complete comparison.  Empty default headers/footers are
+-    # common and do not create noise; non-empty supported Word story parts do.
+-    for part_name, data in parts.items():
+-        if part_name == DOCUMENT or not part_name.endswith(".xml"):
+-            continue
+-        story = None
+-        for marker, label in (("word/header", "header"), ("word/footer", "footer"),
+-                              ("word/footnotes", "footnote"), ("word/endnotes", "endnote"),
+-                              ("word/comments", "comment")):
+-            if marker in part_name:
+-                story = label
+-                break
+-        if story is None:
+-            continue
+-        try:
+-            story_root = _xml(data, limits)
+-            story_text = _text(story_root)
+-        except Exception:
+-            story_text = ""
+-        if story_text.strip():
+-            warning = f"UNSUPPORTED_VISIBLE_CONTENT:{story}"
+-            if warning not in warnings:
+-                warnings.append(warning)
+-
+     def report_unsupported(node: etree._Element) -> None:
+         local = etree.QName(node).localname if isinstance(node.tag, str) else "unknown"
+-        if local in {"drawing", "pict", "object", "AlternateContent", "txbxContent", "sym"}:
++        supported = ((local == "drawing" and _drawing_supported(node)) or
++                     (local == "pict" and _pict_supported(node)) or
++                     (local == "AlternateContent" and _alternate_supported(node)))
++        if local in {"drawing", "pict", "object", "AlternateContent", "txbxContent", "sym"} and not supported:
+             warning = f"UNSUPPORTED_VISIBLE_CONTENT:{local}"
+             if warning not in warnings:
+                 warnings.append(warning)
+@@ -146,17 +158,19 @@ def _parse_parts(parts: Mapping[str, bytes], *, filename: str = "", side: str =
+ 
+     def append_para(p: etree._Element, location: str, *, kind: str, table: int | None,
+                     row: int | None, cell: int | None, paragraph: int | None,
+-                    table_meta: Mapping[str, Any] | None = None) -> None:
++                    table_meta: Mapping[str, Any] | None = None,
++                    container: str = "body", story: str = "") -> None:
+         nonlocal current_section
+         walk_unsupported(p)
+         raw = _text(p)
+         style = _style(p)
+         paragraph_format, run_base = presentation.paragraph(p)
+         runs = presentation.runs(p, run_base)
+-        if _is_heading(style, raw) and normalize_match(raw):
++        if _is_heading(style, raw) and normalize_match(raw) and container == "body":
+             current_section = normalize_match(raw)
+         blocks.append(_block(f"{side}{len(blocks):06d}", len(blocks), location, kind, raw,
+-                             current_section, container="table" if table is not None else "body",
++                             current_section if container == "body" else story,
++                             container=container, story=story,
+                              table=table, row=row, cell=cell, paragraph=paragraph, style=style,
+                              runs=runs, paragraph_format=paragraph_format,
+                              table_colspan=int((table_meta or {}).get("colspan", 1)),
+@@ -166,7 +180,7 @@ def _parse_parts(parts: Mapping[str, bytes], *, filename: str = "", side: str =
+                              table_origin_row=(table_meta or {}).get("origin_row"),
+                              table_origin_cell=(table_meta or {}).get("origin_cell")))
+ 
+-    def append_table(tbl: etree._Element, ti: int) -> None:
++    def append_table(tbl: etree._Element, ti: int, *, container: str = "body", story: str = "") -> None:
+         nonlocal current_section
+         active: dict[int, dict[str, Any]] = {}
+         origins: dict[tuple[int, int], dict[str, Any]] = {}
+@@ -213,12 +227,12 @@ def _parse_parts(parts: Mapping[str, bytes], *, filename: str = "", side: str =
+                 for node in tc:
+                     if node.tag == Q("p"):
+                         append_para(node, f"tbl{ti}/r{ri}/c{ci}/p{pi}", kind="table_paragraph",
+-                                    table=ti, row=ri, cell=ci, paragraph=pi,
+-                                    table_meta=table_meta)
++                                     table=ti, row=ri, cell=ci, paragraph=pi,
++                                     table_meta=table_meta, container=container, story=story)
+                         pi += 1
+                     elif node.tag == Q("sdt"):
+                         append_sdt(node, table=ti, row=ri, cell=ci, paragraph_start=pi,
+-                                   table_meta=table_meta)
++                                   table_meta=table_meta, container=container, story=story)
+                         pi += 1
+                     elif node.tag == Q("tbl"):
+                         warning = "UNSUPPORTED_NESTED_TABLE"
+@@ -250,7 +264,8 @@ def _parse_parts(parts: Mapping[str, bytes], *, filename: str = "", side: str =
+     def append_sdt(sdt: etree._Element, *, table: int | None = None,
+                    row: int | None = None, cell: int | None = None,
+                    paragraph_start: int = 0,
+-                   table_meta: Mapping[str, Any] | None = None) -> None:
++                    table_meta: Mapping[str, Any] | None = None,
++                    container: str = "body", story: str = "") -> None:
+         """Treat content controls as transparent, including nested controls."""
+         nonlocal body_para, table_index
+         content = sdt.find(Q("sdtContent"))
+@@ -270,13 +285,14 @@ def _parse_parts(parts: Mapping[str, bytes], *, filename: str = "", side: str =
+                     paragraph_no += 1
+                     kind = "table_paragraph"
+                 append_para(node, location, kind=kind, table=table, row=row, cell=cell,
+-                            paragraph=paragraph, table_meta=table_meta)
++                            paragraph=paragraph, table_meta=table_meta,
++                            container=container, story=story)
+             elif node.tag == Q("tbl"):
+-                append_table(node, table_index)
++                append_table(node, table_index, container=container, story=story)
+                 table_index += 1
+             elif node.tag == Q("sdt"):
+                 append_sdt(node, table=table, row=row, cell=cell, paragraph_start=paragraph_no,
+-                           table_meta=table_meta)
++                           table_meta=table_meta, container=container, story=story)
+             elif _text(node).strip():
+                 walk_unsupported(node)
+                 warning = "UNSUPPORTED_VISIBLE_CONTENT:sdt"
+@@ -297,6 +313,40 @@ def _parse_parts(parts: Mapping[str, bytes], *, filename: str = "", side: str =
+             warning = "UNSUPPORTED_VISIBLE_CONTENT:body"
+             if warning not in warnings:
+                 warnings.append(warning)
++
++    def append_story(root: etree._Element, container: str, story: str) -> None:
++        nonlocal table_index
++        story_root = root.find(Q("hdr")) or root.find(Q("ftr")) or root
++        paragraph_no = 0
++        for child in story_root:
++            if child.tag == Q("p"):
++                append_para(child, f"{story}/p{paragraph_no}", kind="paragraph",
++                            table=None, row=None, cell=None, paragraph=paragraph_no,
++                            container=container, story=story)
++                paragraph_no += 1
++            elif child.tag == Q("tbl"):
++                append_table(child, table_index, container=container, story=story)
++                table_index += 1
++            elif child.tag == Q("sdt"):
++                append_sdt(child, paragraph_start=paragraph_no,
++                           container=container, story=story)
++            elif _text(child).strip():
++                walk_unsupported(child)
++                warning = f"UNSUPPORTED_VISIBLE_CONTENT:{container}"
++                if warning not in warnings:
++                    warnings.append(warning)
++
++    for part_name in sorted(parts):
++        if not (part_name.startswith("word/header") or part_name.startswith("word/footer")):
++            continue
++        container = "header" if "/header" in part_name else "footer"
++        story = f"{container}:{part_name.rsplit('/', 1)[-1]}"
++        try:
++            append_story(_xml(parts[part_name], limits), container, story)
++        except Exception:
++            warning = f"UNSUPPORTED_VISIBLE_CONTENT:{container}"
++            if warning not in warnings:
++                warnings.append(warning)
+     coverage = Coverage("incomplete" if warnings else "complete", tuple(warnings))
+     return CompareDocument(tuple(blocks), source_sha256 or sha256(parts[DOCUMENT]).hexdigest(), filename, coverage,
+                             page_format=page_format)

@@ -1,0 +1,2698 @@
+{
+  "schema": "fundlex-operation-validation-retention-manifest-v1",
+  "generated_at": "2026-10-27T07:34:56.376707+00:00",
+  "source_root": "/tmp/opencode/operation-validation-20261024",
+  "decision": "retain-in-place",
+  "deletion_authorized": false,
+  "historical_boundary": {
+    "is_runtime_dependency": false,
+    "active_evaluation_process_observed": false,
+    "new_evaluations_must_use_new_root_and_ledger": true,
+    "ledger_status": "historical-over-cap",
+    "ledger_summary": {
+      "terminal_requests": 2293,
+      "charged_cost_usd": 2.3238441,
+      "registered_cap_requests": 2000,
+      "registered_cap_usd": 2.0
+    }
+  },
+  "categories": {
+    "authoritative_evidence": [
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/ledger.sqlite",
+        "kind": "file",
+        "size_bytes": 1675264,
+        "mtime": "2026-10-25T00:49:18.808351+00:00",
+        "reason": "权威历史证据或其直接绑定输入；不得删除或改写",
+        "direct_refs": [
+          "docs/evidence/development-gate-reconciliation-20261025/D01-D20-gate-reconciliation.json",
+          "docs/ACTIVE_HANDOFF.md",
+          "docs/REAL_REVISION_EVALUATION_RESULTS.md",
+          "docs/DETAIL_ISSUES_AND_RESOLUTIONS.md"
+        ],
+        "sha256": "4967357ce9b18a3526fdcd5995d13b036494941db1248288e83e15cdb47913ca"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/dev-05",
+        "kind": "directory",
+        "size_bytes": null,
+        "mtime": "2026-10-24T02:57:34.195554+00:00",
+        "reason": "权威历史证据或其直接绑定输入；不得删除或改写",
+        "direct_refs": [
+          "docs/evidence/development-gate-reconciliation-20261025/D01-D20-gate-reconciliation.json",
+          "docs/ACTIVE_HANDOFF.md",
+          "docs/REAL_REVISION_EVALUATION_RESULTS.md",
+          "docs/DETAIL_ISSUES_AND_RESOLUTIONS.md"
+        ]
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/dev-05-review-packets",
+        "kind": "directory",
+        "size_bytes": null,
+        "mtime": "2026-10-24T02:56:55.591344+00:00",
+        "reason": "权威历史证据或其直接绑定输入；不得删除或改写",
+        "direct_refs": [
+          "docs/evidence/development-gate-reconciliation-20261025/D01-D20-gate-reconciliation.json",
+          "docs/ACTIVE_HANDOFF.md",
+          "docs/REAL_REVISION_EVALUATION_RESULTS.md",
+          "docs/DETAIL_ISSUES_AND_RESOLUTIONS.md"
+        ]
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/target-19",
+        "kind": "directory",
+        "size_bytes": null,
+        "mtime": "2026-10-24T16:16:28.358038+00:00",
+        "reason": "权威历史证据或其直接绑定输入；不得删除或改写",
+        "direct_refs": [
+          "docs/evidence/development-gate-reconciliation-20261025/D01-D20-gate-reconciliation.json",
+          "docs/ACTIVE_HANDOFF.md",
+          "docs/REAL_REVISION_EVALUATION_RESULTS.md",
+          "docs/DETAIL_ISSUES_AND_RESOLUTIONS.md"
+        ]
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/target-19-review-packets",
+        "kind": "directory",
+        "size_bytes": null,
+        "mtime": "2026-10-24T16:38:46.506971+00:00",
+        "reason": "权威历史证据或其直接绑定输入；不得删除或改写",
+        "direct_refs": [
+          "docs/evidence/development-gate-reconciliation-20261025/D01-D20-gate-reconciliation.json",
+          "docs/ACTIVE_HANDOFF.md",
+          "docs/REAL_REVISION_EVALUATION_RESULTS.md",
+          "docs/DETAIL_ISSUES_AND_RESOLUTIONS.md"
+        ]
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/target-20",
+        "kind": "directory",
+        "size_bytes": null,
+        "mtime": "2026-10-24T16:39:54.161091+00:00",
+        "reason": "权威历史证据或其直接绑定输入；不得删除或改写",
+        "direct_refs": [
+          "docs/evidence/development-gate-reconciliation-20261025/D01-D20-gate-reconciliation.json",
+          "docs/ACTIVE_HANDOFF.md",
+          "docs/REAL_REVISION_EVALUATION_RESULTS.md",
+          "docs/DETAIL_ISSUES_AND_RESOLUTIONS.md"
+        ]
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/target-20-review-packets",
+        "kind": "directory",
+        "size_bytes": null,
+        "mtime": "2026-10-24T16:41:09.449450+00:00",
+        "reason": "权威历史证据或其直接绑定输入；不得删除或改写",
+        "direct_refs": [
+          "docs/evidence/development-gate-reconciliation-20261025/D01-D20-gate-reconciliation.json",
+          "docs/ACTIVE_HANDOFF.md",
+          "docs/REAL_REVISION_EVALUATION_RESULTS.md",
+          "docs/DETAIL_ISSUES_AND_RESOLUTIONS.md"
+        ]
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/snapshot-19",
+        "kind": "directory",
+        "size_bytes": null,
+        "mtime": "2026-10-24T01:18:04.924589+00:00",
+        "reason": "权威历史证据或其直接绑定输入；不得删除或改写",
+        "direct_refs": [
+          "docs/evidence/development-gate-reconciliation-20261025/D01-D20-gate-reconciliation.json",
+          "docs/ACTIVE_HANDOFF.md",
+          "docs/REAL_REVISION_EVALUATION_RESULTS.md",
+          "docs/DETAIL_ISSUES_AND_RESOLUTIONS.md"
+        ]
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/snapshot-20",
+        "kind": "directory",
+        "size_bytes": null,
+        "mtime": "2026-10-24T01:18:04.924589+00:00",
+        "reason": "权威历史证据或其直接绑定输入；不得删除或改写",
+        "direct_refs": [
+          "docs/evidence/development-gate-reconciliation-20261025/D01-D20-gate-reconciliation.json",
+          "docs/ACTIVE_HANDOFF.md",
+          "docs/REAL_REVISION_EVALUATION_RESULTS.md",
+          "docs/DETAIL_ISSUES_AND_RESOLUTIONS.md"
+        ]
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/current-candidate-full-test-start.json",
+        "kind": "file",
+        "size_bytes": 18796,
+        "mtime": "2026-10-24T20:07:32.614534+00:00",
+        "reason": "权威历史证据或其直接绑定输入；不得删除或改写",
+        "direct_refs": [
+          "docs/evidence/development-gate-reconciliation-20261025/D01-D20-gate-reconciliation.json",
+          "docs/ACTIVE_HANDOFF.md",
+          "docs/REAL_REVISION_EVALUATION_RESULTS.md",
+          "docs/DETAIL_ISSUES_AND_RESOLUTIONS.md"
+        ],
+        "sha256": "ec6afe337d1cd75d307c0259aae631702af545fb80b1bb485ddaeb16426fca41"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/current-candidate-full-test-result.json",
+        "kind": "file",
+        "size_bytes": 520,
+        "mtime": "2026-10-24T20:13:37.897985+00:00",
+        "reason": "权威历史证据或其直接绑定输入；不得删除或改写",
+        "direct_refs": [
+          "docs/evidence/development-gate-reconciliation-20261025/D01-D20-gate-reconciliation.json",
+          "docs/ACTIVE_HANDOFF.md",
+          "docs/REAL_REVISION_EVALUATION_RESULTS.md",
+          "docs/DETAIL_ISSUES_AND_RESOLUTIONS.md"
+        ],
+        "sha256": "2d7463d615a29674bf0c0809559385ad751764727db0072c8d8c453a85883ffd"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/run_context-19.json",
+        "kind": "file",
+        "size_bytes": 436151,
+        "mtime": "2026-10-24T16:35:33.363918+00:00",
+        "reason": "权威历史证据或其直接绑定输入；不得删除或改写",
+        "direct_refs": [
+          "docs/evidence/development-gate-reconciliation-20261025/D01-D20-gate-reconciliation.json",
+          "docs/ACTIVE_HANDOFF.md",
+          "docs/REAL_REVISION_EVALUATION_RESULTS.md",
+          "docs/DETAIL_ISSUES_AND_RESOLUTIONS.md"
+        ],
+        "sha256": "b617038c25b9aa7c5e736391454cae34e9921a8f11acb6e0f3cc83ad2ed6b50f"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/run_context-20.json",
+        "kind": "file",
+        "size_bytes": 436235,
+        "mtime": "2026-10-24T20:13:37.896985+00:00",
+        "reason": "权威历史证据或其直接绑定输入；不得删除或改写",
+        "direct_refs": [
+          "docs/evidence/development-gate-reconciliation-20261025/D01-D20-gate-reconciliation.json",
+          "docs/ACTIVE_HANDOFF.md",
+          "docs/REAL_REVISION_EVALUATION_RESULTS.md",
+          "docs/DETAIL_ISSUES_AND_RESOLUTIONS.md"
+        ],
+        "sha256": "a6594c7d3dd0e43b92fed70e734d4ad143d5e97f36edfa86c8946d28bf2f2198"
+      }
+    ],
+    "supporting_replay_and_provenance": [
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/head.tar",
+        "kind": "file",
+        "size_bytes": 234854400,
+        "mtime": "2026-10-24T01:44:34.504369+00:00",
+        "reason": "历史复现、输入快照、数据库或派生复核材料；归档校验前保留"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/data",
+        "kind": "directory",
+        "size_bytes": null,
+        "mtime": "2026-10-24T03:27:38.338053+00:00",
+        "reason": "历史复现、输入快照、数据库或派生复核材料；归档校验前保留"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/data-05",
+        "kind": "directory",
+        "size_bytes": null,
+        "mtime": "2026-10-24T02:55:58.394553+00:00",
+        "reason": "历史复现、输入快照、数据库或派生复核材料；归档校验前保留"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/data-21",
+        "kind": "directory",
+        "size_bytes": null,
+        "mtime": "2026-10-25T00:49:20.595407+00:00",
+        "reason": "历史复现、输入快照、数据库或派生复核材料；归档校验前保留"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/snapshot",
+        "kind": "directory",
+        "size_bytes": null,
+        "mtime": "2026-10-24T00:49:34.578028+00:00",
+        "reason": "历史复现、输入快照、数据库或派生复核材料；归档校验前保留"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/snapshot-02",
+        "kind": "directory",
+        "size_bytes": null,
+        "mtime": "2026-10-24T01:02:23.181098+00:00",
+        "reason": "历史复现、输入快照、数据库或派生复核材料；归档校验前保留"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/snapshot-03",
+        "kind": "directory",
+        "size_bytes": null,
+        "mtime": "2026-10-24T01:18:04.924589+00:00",
+        "reason": "历史复现、输入快照、数据库或派生复核材料；归档校验前保留"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/snapshot-04",
+        "kind": "directory",
+        "size_bytes": null,
+        "mtime": "2026-10-24T01:44:36.509432+00:00",
+        "reason": "历史复现、输入快照、数据库或派生复核材料；归档校验前保留"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/snapshot-05",
+        "kind": "directory",
+        "size_bytes": null,
+        "mtime": "2026-10-24T01:54:16.336593+00:00",
+        "reason": "历史复现、输入快照、数据库或派生复核材料；归档校验前保留"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/snapshot-06",
+        "kind": "directory",
+        "size_bytes": null,
+        "mtime": "2026-10-24T02:18:59.108038+00:00",
+        "reason": "历史复现、输入快照、数据库或派生复核材料；归档校验前保留"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/snapshot-07",
+        "kind": "directory",
+        "size_bytes": null,
+        "mtime": "2026-10-24T01:18:04.924589+00:00",
+        "reason": "历史复现、输入快照、数据库或派生复核材料；归档校验前保留"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/snapshot-08",
+        "kind": "directory",
+        "size_bytes": null,
+        "mtime": "2026-10-24T01:18:04.924589+00:00",
+        "reason": "历史复现、输入快照、数据库或派生复核材料；归档校验前保留"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/snapshot-09",
+        "kind": "directory",
+        "size_bytes": null,
+        "mtime": "2026-10-24T01:18:04.924589+00:00",
+        "reason": "历史复现、输入快照、数据库或派生复核材料；归档校验前保留"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/snapshot-10",
+        "kind": "directory",
+        "size_bytes": null,
+        "mtime": "2026-10-24T01:18:04.924589+00:00",
+        "reason": "历史复现、输入快照、数据库或派生复核材料；归档校验前保留"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/snapshot-11",
+        "kind": "directory",
+        "size_bytes": null,
+        "mtime": "2026-10-24T01:18:04.924589+00:00",
+        "reason": "历史复现、输入快照、数据库或派生复核材料；归档校验前保留"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/snapshot-12",
+        "kind": "directory",
+        "size_bytes": null,
+        "mtime": "2026-10-24T01:18:04.924589+00:00",
+        "reason": "历史复现、输入快照、数据库或派生复核材料；归档校验前保留"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/snapshot-13",
+        "kind": "directory",
+        "size_bytes": null,
+        "mtime": "2026-10-24T01:18:04.924589+00:00",
+        "reason": "历史复现、输入快照、数据库或派生复核材料；归档校验前保留"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/snapshot-14",
+        "kind": "directory",
+        "size_bytes": null,
+        "mtime": "2026-10-24T01:18:04.924589+00:00",
+        "reason": "历史复现、输入快照、数据库或派生复核材料；归档校验前保留"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/snapshot-15",
+        "kind": "directory",
+        "size_bytes": null,
+        "mtime": "2026-10-24T01:18:04.924589+00:00",
+        "reason": "历史复现、输入快照、数据库或派生复核材料；归档校验前保留"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/snapshot-16",
+        "kind": "directory",
+        "size_bytes": null,
+        "mtime": "2026-10-24T01:18:04.924589+00:00",
+        "reason": "历史复现、输入快照、数据库或派生复核材料；归档校验前保留"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/snapshot-17",
+        "kind": "directory",
+        "size_bytes": null,
+        "mtime": "2026-10-24T01:18:04.924589+00:00",
+        "reason": "历史复现、输入快照、数据库或派生复核材料；归档校验前保留"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/snapshot-18",
+        "kind": "directory",
+        "size_bytes": null,
+        "mtime": "2026-10-24T01:18:04.924589+00:00",
+        "reason": "历史复现、输入快照、数据库或派生复核材料；归档校验前保留"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/debug-snapshot-03",
+        "kind": "directory",
+        "size_bytes": null,
+        "mtime": "2026-10-24T01:18:04.924589+00:00",
+        "reason": "历史复现、输入快照、数据库或派生复核材料；归档校验前保留"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/replay-snapshot-03",
+        "kind": "directory",
+        "size_bytes": null,
+        "mtime": "2026-10-24T01:18:04.924589+00:00",
+        "reason": "历史复现、输入快照、数据库或派生复核材料；归档校验前保留"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/dev-21-full",
+        "kind": "directory",
+        "size_bytes": null,
+        "mtime": "2026-10-25T00:51:21.115182+00:00",
+        "reason": "历史复现、输入快照、数据库或派生复核材料；归档校验前保留"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/dev-source-review-05",
+        "kind": "directory",
+        "size_bytes": null,
+        "mtime": "2026-10-24T01:53:22.076894+00:00",
+        "reason": "历史复现、输入快照、数据库或派生复核材料；归档校验前保留"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/dev-05-independent-business-reviews",
+        "kind": "directory",
+        "size_bytes": null,
+        "mtime": "2026-10-24T16:55:30.546434+00:00",
+        "reason": "历史复现、输入快照、数据库或派生复核材料；归档校验前保留"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/offline-d03-g08-same-sentence",
+        "kind": "directory",
+        "size_bytes": null,
+        "mtime": "2026-10-24T06:04:26.755716+00:00",
+        "reason": "历史复现、输入快照、数据库或派生复核材料；归档校验前保留"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/offline-D03-g15-fixed",
+        "kind": "directory",
+        "size_bytes": null,
+        "mtime": "2026-10-24T04:26:04.624857+00:00",
+        "reason": "历史复现、输入快照、数据库或派生复核材料；归档校验前保留"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/offline-D03-g15-fixed2",
+        "kind": "directory",
+        "size_bytes": null,
+        "mtime": "2026-10-24T04:26:45.984153+00:00",
+        "reason": "历史复现、输入快照、数据库或派生复核材料；归档校验前保留"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/offline-d03-g15-raw-current",
+        "kind": "directory",
+        "size_bytes": null,
+        "mtime": "2026-10-24T04:42:32.984818+00:00",
+        "reason": "历史复现、输入快照、数据库或派生复核材料；归档校验前保留"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/offline-d03-merged-definition",
+        "kind": "directory",
+        "size_bytes": null,
+        "mtime": "2026-10-24T06:15:45.299961+00:00",
+        "reason": "历史复现、输入快照、数据库或派生复核材料；归档校验前保留"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/offline-d05-g15-boundary-current",
+        "kind": "directory",
+        "size_bytes": null,
+        "mtime": "2026-10-24T04:46:12.330690+00:00",
+        "reason": "历史复现、输入快照、数据库或派生复核材料；归档校验前保留"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/offline-D05-g15-fixed",
+        "kind": "directory",
+        "size_bytes": null,
+        "mtime": "2026-10-24T04:26:10.516042+00:00",
+        "reason": "历史复现、输入快照、数据库或派生复核材料；归档校验前保留"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/offline-D05-g15-fixed2",
+        "kind": "directory",
+        "size_bytes": null,
+        "mtime": "2026-10-24T04:26:52.752365+00:00",
+        "reason": "历史复现、输入快照、数据库或派生复核材料；归档校验前保留"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/offline-d05-g15-g17-current",
+        "kind": "directory",
+        "size_bytes": null,
+        "mtime": "2026-10-24T04:48:50.050630+00:00",
+        "reason": "历史复现、输入快照、数据库或派生复核材料；归档校验前保留"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/offline-d05-g15-g17-current-proof",
+        "kind": "directory",
+        "size_bytes": null,
+        "mtime": "2026-10-24T04:49:43.904317+00:00",
+        "reason": "历史复现、输入快照、数据库或派生复核材料；归档校验前保留"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/offline-d05-g17-site-closure",
+        "kind": "directory",
+        "size_bytes": null,
+        "mtime": "2026-10-24T04:55:35.907344+00:00",
+        "reason": "历史复现、输入快照、数据库或派生复核材料；归档校验前保留"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/offline-d07-boundaries",
+        "kind": "directory",
+        "size_bytes": null,
+        "mtime": "2026-10-24T04:13:41.772588+00:00",
+        "reason": "历史复现、输入快照、数据库或派生复核材料；归档校验前保留"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/offline-d07-g09-proof-current",
+        "kind": "directory",
+        "size_bytes": null,
+        "mtime": "2026-10-24T04:31:37.785294+00:00",
+        "reason": "历史复现、输入快照、数据库或派生复核材料；归档校验前保留"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/offline-d18-cross-delay",
+        "kind": "directory",
+        "size_bytes": null,
+        "mtime": "2026-10-24T05:57:00.465740+00:00",
+        "reason": "历史复现、输入快照、数据库或派生复核材料；归档校验前保留"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/offline-d225-planning-real",
+        "kind": "directory",
+        "size_bytes": null,
+        "mtime": "2026-10-24T09:05:46.609427+00:00",
+        "reason": "历史复现、输入快照、数据库或派生复核材料；归档校验前保留"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/offline-d225-real-source-slices",
+        "kind": "directory",
+        "size_bytes": null,
+        "mtime": "2026-10-24T08:17:56.476554+00:00",
+        "reason": "历史复现、输入快照、数据库或派生复核材料；归档校验前保留"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/offline-d225-real-source-slices-verified",
+        "kind": "directory",
+        "size_bytes": null,
+        "mtime": "2026-10-24T08:18:53.873352+00:00",
+        "reason": "历史复现、输入快照、数据库或派生复核材料；归档校验前保留"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/offline-d226-real",
+        "kind": "directory",
+        "size_bytes": null,
+        "mtime": "2026-10-24T09:17:18.091077+00:00",
+        "reason": "历史复现、输入快照、数据库或派生复核材料；归档校验前保留"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/offline-d227-real",
+        "kind": "directory",
+        "size_bytes": null,
+        "mtime": "2026-10-24T09:35:01.263345+00:00",
+        "reason": "历史复现、输入快照、数据库或派生复核材料；归档校验前保留"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/offline-d228-g12-real",
+        "kind": "directory",
+        "size_bytes": null,
+        "mtime": "2026-10-24T09:40:38.644906+00:00",
+        "reason": "历史复现、输入快照、数据库或派生复核材料；归档校验前保留"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/offline-d231-d234-real-current",
+        "kind": "directory",
+        "size_bytes": null,
+        "mtime": "2026-10-24T16:02:07.976078+00:00",
+        "reason": "历史复现、输入快照、数据库或派生复核材料；归档校验前保留"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/offline-d231-d234-real-postpatch",
+        "kind": "directory",
+        "size_bytes": null,
+        "mtime": "2026-10-24T16:30:59.329331+00:00",
+        "reason": "历史复现、输入快照、数据库或派生复核材料；归档校验前保留"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/offline-plan-03",
+        "kind": "directory",
+        "size_bytes": null,
+        "mtime": "2026-10-24T01:17:40.623828+00:00",
+        "reason": "历史复现、输入快照、数据库或派生复核材料；归档校验前保留"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/pilot-01",
+        "kind": "directory",
+        "size_bytes": null,
+        "mtime": "2026-10-24T01:05:34.972105+00:00",
+        "reason": "历史复现、输入快照、数据库或派生复核材料；归档校验前保留"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/pilot-02",
+        "kind": "directory",
+        "size_bytes": null,
+        "mtime": "2026-10-24T01:16:12.005053+00:00",
+        "reason": "历史复现、输入快照、数据库或派生复核材料；归档校验前保留"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/pilot-03",
+        "kind": "directory",
+        "size_bytes": null,
+        "mtime": "2026-10-24T01:23:59.633696+00:00",
+        "reason": "历史复现、输入快照、数据库或派生复核材料；归档校验前保留"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/pilot-03-review-packets",
+        "kind": "directory",
+        "size_bytes": null,
+        "mtime": "2026-10-24T01:53:24.794979+00:00",
+        "reason": "历史复现、输入快照、数据库或派生复核材料；归档校验前保留"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/replay-fixed-d03",
+        "kind": "directory",
+        "size_bytes": null,
+        "mtime": "2026-10-24T01:39:41.145181+00:00",
+        "reason": "历史复现、输入快照、数据库或派生复核材料；归档校验前保留"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/replay-original-d03",
+        "kind": "directory",
+        "size_bytes": null,
+        "mtime": "2026-10-24T01:37:54.538843+00:00",
+        "reason": "历史复现、输入快照、数据库或派生复核材料；归档校验前保留"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/target-07",
+        "kind": "directory",
+        "size_bytes": null,
+        "mtime": "2026-10-24T03:41:08.208401+00:00",
+        "reason": "历史复现、输入快照、数据库或派生复核材料；归档校验前保留"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/target-07-review-packets",
+        "kind": "directory",
+        "size_bytes": null,
+        "mtime": "2026-10-24T03:40:31.389248+00:00",
+        "reason": "历史复现、输入快照、数据库或派生复核材料；归档校验前保留"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/target-08",
+        "kind": "directory",
+        "size_bytes": null,
+        "mtime": "2026-10-24T05:47:15.013407+00:00",
+        "reason": "历史复现、输入快照、数据库或派生复核材料；归档校验前保留"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/target-09",
+        "kind": "directory",
+        "size_bytes": null,
+        "mtime": "2026-10-24T05:50:02.733659+00:00",
+        "reason": "历史复现、输入快照、数据库或派生复核材料；归档校验前保留"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/target-10",
+        "kind": "directory",
+        "size_bytes": null,
+        "mtime": "2026-10-24T06:05:05.863940+00:00",
+        "reason": "历史复现、输入快照、数据库或派生复核材料；归档校验前保留"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/target-11",
+        "kind": "directory",
+        "size_bytes": null,
+        "mtime": "2026-10-24T06:12:06.061097+00:00",
+        "reason": "历史复现、输入快照、数据库或派生复核材料；归档校验前保留"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/target-12",
+        "kind": "directory",
+        "size_bytes": null,
+        "mtime": "2026-10-24T06:44:12.747427+00:00",
+        "reason": "历史复现、输入快照、数据库或派生复核材料；归档校验前保留"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/target-13",
+        "kind": "directory",
+        "size_bytes": null,
+        "mtime": "2026-10-24T07:15:38.845494+00:00",
+        "reason": "历史复现、输入快照、数据库或派生复核材料；归档校验前保留"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/target-14",
+        "kind": "directory",
+        "size_bytes": null,
+        "mtime": "2026-10-24T07:36:13.602168+00:00",
+        "reason": "历史复现、输入快照、数据库或派生复核材料；归档校验前保留"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/target-15",
+        "kind": "directory",
+        "size_bytes": null,
+        "mtime": "2026-10-24T08:24:36.944096+00:00",
+        "reason": "历史复现、输入快照、数据库或派生复核材料；归档校验前保留"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/target-16",
+        "kind": "directory",
+        "size_bytes": null,
+        "mtime": "2026-10-24T08:39:56.655898+00:00",
+        "reason": "历史复现、输入快照、数据库或派生复核材料；归档校验前保留"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/target-17",
+        "kind": "directory",
+        "size_bytes": null,
+        "mtime": "2026-10-24T09:21:49.633575+00:00",
+        "reason": "历史复现、输入快照、数据库或派生复核材料；归档校验前保留"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/target-18",
+        "kind": "directory",
+        "size_bytes": null,
+        "mtime": "2026-10-24T10:04:23.834528+00:00",
+        "reason": "历史复现、输入快照、数据库或派生复核材料；归档校验前保留"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/source-review-dev",
+        "kind": "directory",
+        "size_bytes": null,
+        "mtime": "2026-10-24T00:52:43.349940+00:00",
+        "reason": "历史复现、输入快照、数据库或派生复核材料；归档校验前保留"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/debug-d03",
+        "kind": "directory",
+        "size_bytes": null,
+        "mtime": "2026-10-24T01:29:59.407963+00:00",
+        "reason": "历史复现、输入快照、数据库或派生复核材料；归档校验前保留"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/dev-03",
+        "kind": "directory",
+        "size_bytes": null,
+        "mtime": "2026-10-24T01:22:30.118893+00:00",
+        "reason": "历史复现、输入快照、数据库或派生复核材料；归档校验前保留"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/dev-04",
+        "kind": "directory",
+        "size_bytes": null,
+        "mtime": "2026-10-24T01:47:18.592509+00:00",
+        "reason": "历史复现、输入快照、数据库或派生复核材料；归档校验前保留"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/check_d225_planning_real.py",
+        "kind": "file",
+        "size_bytes": 3645,
+        "mtime": "2026-10-24T09:05:21.333636+00:00",
+        "reason": "历史审计/回放脚本；不是当前运行时依赖，迁移前保留",
+        "sha256": "9d167361a91ace3341fa287365827275f80cd5a80bf88300327fed187e93936e"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/check_d225_real_slices.py",
+        "kind": "file",
+        "size_bytes": 4555,
+        "mtime": "2026-10-24T08:18:29.919601+00:00",
+        "reason": "历史审计/回放脚本；不是当前运行时依赖，迁移前保留",
+        "sha256": "4ff09cdfe23222f9dd161fdf4012178bb9fa2400b906c4ed778a31b637e7edf6"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/check_d226_real.py",
+        "kind": "file",
+        "size_bytes": 3084,
+        "mtime": "2026-10-24T09:17:02.005573+00:00",
+        "reason": "历史审计/回放脚本；不是当前运行时依赖，迁移前保留",
+        "sha256": "0c805faaebc38994310ea21592efaeffc78319c18e385390084d516dc3b01cc2"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/check_d227_real.py",
+        "kind": "file",
+        "size_bytes": 4253,
+        "mtime": "2026-10-24T09:34:35.532539+00:00",
+        "reason": "历史审计/回放脚本；不是当前运行时依赖，迁移前保留",
+        "sha256": "f5ed3290109201596c0a68db7ce2c01eff35e06a6533c77e9e9eea4ade48800c"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/freeze_snapshot_05.py",
+        "kind": "file",
+        "size_bytes": 1843,
+        "mtime": "2026-10-24T01:48:30.036747+00:00",
+        "reason": "历史审计/回放脚本；不是当前运行时依赖，迁移前保留",
+        "sha256": "aa37488c13b177f1998be4f3a9ede9b52850ca75116ab22d1c07ba0e8c585753"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/freeze_snapshot_07.py",
+        "kind": "file",
+        "size_bytes": 2138,
+        "mtime": "2026-10-24T03:26:32.159982+00:00",
+        "reason": "历史审计/回放脚本；不是当前运行时依赖，迁移前保留",
+        "sha256": "b88946a3850d92b26df34561ee332d4ec0f98ba998ee632d54a296249c4c4cca"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/freeze_snapshot_08.py",
+        "kind": "file",
+        "size_bytes": 3129,
+        "mtime": "2026-10-24T05:33:23.070351+00:00",
+        "reason": "历史审计/回放脚本；不是当前运行时依赖，迁移前保留",
+        "sha256": "1601a1624c3a5305ef47969650cc15d2de8bbab32617aad2a8e492b7820a18ce"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/freeze_snapshot_09.py",
+        "kind": "file",
+        "size_bytes": 3007,
+        "mtime": "2026-10-24T05:43:46.725884+00:00",
+        "reason": "历史审计/回放脚本；不是当前运行时依赖，迁移前保留",
+        "sha256": "f568f91294e31fffa81c2b06bbeadf2ac9a5ef914608f4952b0a2127703989bb"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/freeze_snapshot_10.py",
+        "kind": "file",
+        "size_bytes": 2340,
+        "mtime": "2026-10-24T05:58:47.037078+00:00",
+        "reason": "历史审计/回放脚本；不是当前运行时依赖，迁移前保留",
+        "sha256": "9089ed036418281c74461d1f29c28999c28dd1c7cd39e495d45476533c9cf5e7"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/freeze_snapshot_11.py",
+        "kind": "file",
+        "size_bytes": 2770,
+        "mtime": "2026-10-24T06:07:02.168583+00:00",
+        "reason": "历史审计/回放脚本；不是当前运行时依赖，迁移前保留",
+        "sha256": "6a17d9f38204d5e67ea0ffd07dee5534ddb97bb32bd5a848648e96d2a3a7c2e7"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/freeze_snapshot_12.py",
+        "kind": "file",
+        "size_bytes": 3827,
+        "mtime": "2026-10-24T06:36:16.241504+00:00",
+        "reason": "历史审计/回放脚本；不是当前运行时依赖，迁移前保留",
+        "sha256": "554ebda8cd95786b948bcd6d9767c8765d7bbe711500cb5dfa7a7f29008f12d0"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/freeze_snapshot_13.py",
+        "kind": "file",
+        "size_bytes": 3588,
+        "mtime": "2026-10-24T07:10:25.635683+00:00",
+        "reason": "历史审计/回放脚本；不是当前运行时依赖，迁移前保留",
+        "sha256": "0d6ce222a9930fa704cbb72167b5b68aac4a5b23d31fc009a4146a999cab1c59"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/freeze_snapshot_14.py",
+        "kind": "file",
+        "size_bytes": 3508,
+        "mtime": "2026-10-24T07:26:21.049608+00:00",
+        "reason": "历史审计/回放脚本；不是当前运行时依赖，迁移前保留",
+        "sha256": "1f7394edfaa5a9fc18d98f2e333c8d33c5b8d1d5e1a6389ae1bc0bbfee661c76"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/freeze_snapshot_15.py",
+        "kind": "file",
+        "size_bytes": 3527,
+        "mtime": "2026-10-24T08:15:40.597298+00:00",
+        "reason": "历史审计/回放脚本；不是当前运行时依赖，迁移前保留",
+        "sha256": "ce7c4930ff70c3ff63b81b08593fa19ce61cebdd7bead88d9c39c0423d5daad9"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/freeze_snapshot_16.py",
+        "kind": "file",
+        "size_bytes": 3403,
+        "mtime": "2026-10-24T09:10:58.754200+00:00",
+        "reason": "历史审计/回放脚本；不是当前运行时依赖，迁移前保留",
+        "sha256": "37da958a3b2944895e7476a88375ed6f04065383664e6f572faffcf0c1b668c3"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/freeze_snapshot_17.py",
+        "kind": "file",
+        "size_bytes": 3888,
+        "mtime": "2026-10-24T09:48:47.494210+00:00",
+        "reason": "历史审计/回放脚本；不是当前运行时依赖，迁移前保留",
+        "sha256": "f33195edfc79b266596ca0539ac1618715ce1237bfb902c8c85e09bcc179ca38"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/freeze_snapshot_18.py",
+        "kind": "file",
+        "size_bytes": 3911,
+        "mtime": "2026-10-24T16:08:38.307309+00:00",
+        "reason": "历史审计/回放脚本；不是当前运行时依赖，迁移前保留",
+        "sha256": "c77abe1fe79849df3785a25fa0adc468a496936680878e95e5641f47cc6dbb02"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/freeze_snapshot_19.py",
+        "kind": "file",
+        "size_bytes": 3978,
+        "mtime": "2026-10-24T16:32:07.763475+00:00",
+        "reason": "历史审计/回放脚本；不是当前运行时依赖，迁移前保留",
+        "sha256": "dec51c1957f58626dffcc23a855b7700f0127f72b550b371f0a89299fece4c0b"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/probe_g15_raw.py",
+        "kind": "file",
+        "size_bytes": 1734,
+        "mtime": "2026-10-24T04:31:59.227965+00:00",
+        "reason": "历史审计/回放脚本；不是当前运行时依赖，迁移前保留",
+        "sha256": "b321cce1c73405076347010c243167ed7eff2d9d8438d038d8b8e653bda62331"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/rebuild_d231_d234_real.py",
+        "kind": "file",
+        "size_bytes": 6493,
+        "mtime": "2026-10-24T16:01:45.717381+00:00",
+        "reason": "历史审计/回放脚本；不是当前运行时依赖，迁移前保留",
+        "sha256": "59eebd7679646ce29e6381f7c0df3b8d954143338a703da8eb2bae4e2a0031d3"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/rebuild_d231_d234_real_postpatch.py",
+        "kind": "file",
+        "size_bytes": 6495,
+        "mtime": "2026-10-24T16:30:45.903910+00:00",
+        "reason": "历史审计/回放脚本；不是当前运行时依赖，迁移前保留",
+        "sha256": "371dab79afbe948753789d0a4c498045845e8e2aa7e0bf5c17c3d0f57f8ab8c6"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/replay_d03_g15_raw_current.py",
+        "kind": "file",
+        "size_bytes": 3164,
+        "mtime": "2026-10-24T04:39:41.560448+00:00",
+        "reason": "历史审计/回放脚本；不是当前运行时依赖，迁移前保留",
+        "sha256": "6ae4aa322ea42c1879fe0b836f3f45e97aa93d56ec185863e2c77de68ab8a8cd"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/replay_d03_runtime.py",
+        "kind": "file",
+        "size_bytes": 3140,
+        "mtime": "2026-10-24T01:36:28.042134+00:00",
+        "reason": "历史审计/回放脚本；不是当前运行时依赖，迁移前保留",
+        "sha256": "10fe3d3dbdb6d5b50d7233a26be4f73fe52b6c9608e0692d786cb596c5215680"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/replay_d05_g15_g17_current.py",
+        "kind": "file",
+        "size_bytes": 3876,
+        "mtime": "2026-10-24T04:49:29.088853+00:00",
+        "reason": "历史审计/回放脚本；不是当前运行时依赖，迁移前保留",
+        "sha256": "d8bec871fbb6d8e83a5982145829e5ab7a85d5b6c10507aa52a6023b77f64d2b"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/replay_d07_boundaries.py",
+        "kind": "file",
+        "size_bytes": 3795,
+        "mtime": "2026-10-24T04:13:29.573205+00:00",
+        "reason": "历史审计/回放脚本；不是当前运行时依赖，迁移前保留",
+        "sha256": "bb5b43b82d0fbfe46dddfa3b0ae020bef9ee914be284a4aa0b6b2f64fa226eb7"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/replay_d07_g09_current.py",
+        "kind": "file",
+        "size_bytes": 2297,
+        "mtime": "2026-10-24T04:31:30.394062+00:00",
+        "reason": "历史审计/回放脚本；不是当前运行时依赖，迁移前保留",
+        "sha256": "5611fd211325661384d03e6264297c04e26abb8860c045027ad4721d28718c35"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/replay_d225_dev.py",
+        "kind": "file",
+        "size_bytes": 2634,
+        "mtime": "2026-10-24T08:15:40.597298+00:00",
+        "reason": "历史审计/回放脚本；不是当前运行时依赖，迁移前保留",
+        "sha256": "151fbf513799c0226b2a0419c6845e32c1deaf87e23911e3390b24001bb491e1"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/replay_dev_artifacts.py",
+        "kind": "file",
+        "size_bytes": 2685,
+        "mtime": "2026-10-24T03:06:06.090589+00:00",
+        "reason": "历史审计/回放脚本；不是当前运行时依赖，迁移前保留",
+        "sha256": "8066803d49faf9e88aec6b18ab493d4cc2a9ecdab49463d70b6bac15e63c696c"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/replay_pilot_plan.py",
+        "kind": "file",
+        "size_bytes": 3223,
+        "mtime": "2026-10-24T01:17:16.122061+00:00",
+        "reason": "历史审计/回放脚本；不是当前运行时依赖，迁移前保留",
+        "sha256": "00dc2dfa27364a970b6f9bd7034db5bc8ff45d169043dc8b551ebd1a1176e8ff"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/replay_saved_case.py",
+        "kind": "file",
+        "size_bytes": 3068,
+        "mtime": "2026-10-24T08:20:27.468283+00:00",
+        "reason": "历史审计/回放脚本；不是当前运行时依赖，迁移前保留",
+        "sha256": "0708c21eda6188c7e4523d08b1d2b1b9f9721ff0b56b4e07d511cd0488cdae86"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/review_d03_g08_same_sentence.py",
+        "kind": "file",
+        "size_bytes": 3807,
+        "mtime": "2026-10-24T06:04:06.510082+00:00",
+        "reason": "历史审计/回放脚本；不是当前运行时依赖，迁移前保留",
+        "sha256": "d5df856e0a83db13d2995ca4b92a270bc3b3bc9abe4f5f3520f3f01acb71dc9e"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/review_d03_merged_definition.py",
+        "kind": "file",
+        "size_bytes": 3604,
+        "mtime": "2026-10-24T06:15:32.484560+00:00",
+        "reason": "历史审计/回放脚本；不是当前运行时依赖，迁移前保留",
+        "sha256": "aa15b40933a6c7b948fb212bce3221d9c2222614b9529ad8e0d66e89f316eb74"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/review_d18_cross_delay.py",
+        "kind": "file",
+        "size_bytes": 4195,
+        "mtime": "2026-10-24T05:56:42.617182+00:00",
+        "reason": "历史审计/回放脚本；不是当前运行时依赖，迁移前保留",
+        "sha256": "b1bb7eae2b2814dc11dc5f357d8c4fef5d9e4349f02117437c52e52e2f0034c6"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/review_pilot_sites.py",
+        "kind": "file",
+        "size_bytes": 6643,
+        "mtime": "2026-10-24T01:16:00.036678+00:00",
+        "reason": "历史审计/回放脚本；不是当前运行时依赖，迁移前保留",
+        "sha256": "c03c7f8419e2a8c8bd1552f7419026823e76f5da0298d181713b7091e662eb51"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/review_target08_sites.py",
+        "kind": "file",
+        "size_bytes": 6095,
+        "mtime": "2026-10-24T05:57:34.068793+00:00",
+        "reason": "历史审计/回放脚本；不是当前运行时依赖，迁移前保留",
+        "sha256": "57077e5146e711aa499306c12507223c5ddd52519bd3712a5c5c9738524a3b74"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/review_target12_d03.py",
+        "kind": "file",
+        "size_bytes": 3769,
+        "mtime": "2026-10-24T06:47:49.879226+00:00",
+        "reason": "历史审计/回放脚本；不是当前运行时依赖，迁移前保留",
+        "sha256": "b7e5fc7facb426b3221d7c9d6147bb33333f97a9688a0644a51f790d887cdeb8"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/review_target14_d224.py",
+        "kind": "file",
+        "size_bytes": 4316,
+        "mtime": "2026-10-24T07:56:25.474122+00:00",
+        "reason": "历史审计/回放脚本；不是当前运行时依赖，迁移前保留",
+        "sha256": "f26eef2df9c4e957c1d82e221e560d5ea879efe7110dfde2617d2a718bfb5a6d"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/review_target15.py",
+        "kind": "file",
+        "size_bytes": 2978,
+        "mtime": "2026-10-24T08:25:35.151919+00:00",
+        "reason": "历史审计/回放脚本；不是当前运行时依赖，迁移前保留",
+        "sha256": "e104591910eeb18f6eae7ce8410a119f89240b6f6fdf6a6f8d038dc2fd5a2423"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/review_target16_g17.py",
+        "kind": "file",
+        "size_bytes": 5396,
+        "mtime": "2026-10-24T09:02:47.750828+00:00",
+        "reason": "历史审计/回放脚本；不是当前运行时依赖，迁移前保留",
+        "sha256": "844edacd36a2a05740cf68dad4dfb42253e471592c228c3c8e460013ea2a2b4f"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/review_target17.py",
+        "kind": "file",
+        "size_bytes": 3502,
+        "mtime": "2026-10-24T09:19:20.278902+00:00",
+        "reason": "历史审计/回放脚本；不是当前运行时依赖，迁移前保留",
+        "sha256": "c56a4ca0225a20b7aab4a3454a34c40225f6f41f3ef1fff9cf4c569353011ee7"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/review_target19_d04_independent.py",
+        "kind": "file",
+        "size_bytes": 7129,
+        "mtime": "2026-10-24T16:39:41.529695+00:00",
+        "reason": "历史审计/回放脚本；不是当前运行时依赖，迁移前保留",
+        "sha256": "595b508525c0c40eead0532f7203eca2ddfde3beac539ff2d997cc9f03232a23"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/review_target20_d06_independent.py",
+        "kind": "file",
+        "size_bytes": 8780,
+        "mtime": "2026-10-24T16:41:44.883560+00:00",
+        "reason": "历史审计/回放脚本；不是当前运行时依赖，迁移前保留",
+        "sha256": "002ded88fdfef62764e0f91a43e6ab04d16c7929b250af49be99fb5b3dd7ef39"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/review_target20_d06_independent_corrected.py",
+        "kind": "file",
+        "size_bytes": 9861,
+        "mtime": "2026-10-24T16:45:21.351344+00:00",
+        "reason": "历史审计/回放脚本；不是当前运行时依赖，迁移前保留",
+        "sha256": "35584280fb50c77be67eb4b2ac5450609b91de5d263b382a931157f282003bf6"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/verify_d05_g17_site_closure.py",
+        "kind": "file",
+        "size_bytes": 4980,
+        "mtime": "2026-10-24T04:55:15.075691+00:00",
+        "reason": "历史审计/回放脚本；不是当前运行时依赖，迁移前保留",
+        "sha256": "7132f495ab4005c61d3c56b84f11d7f89bed74f51b61a8fd05302614f3ab4a9c"
+      }
+    ],
+    "derived_diagnostics_and_failure_records": [
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/d09-single-class-evidence-review.json",
+        "kind": "file",
+        "size_bytes": 5054,
+        "mtime": "2026-10-24T06:37:54.611585+00:00",
+        "reason": "历史诊断、测试日志或结果派生物；可能包含失败记录，归档和引用迁移完成前保留",
+        "sha256": "ed8bba7d17d13226bbc8e7ce41a8cc1f6b8ea1e779cef9d8dd2361df915d8d32"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/d13-single-class-evidence-review.json",
+        "kind": "file",
+        "size_bytes": 4001,
+        "mtime": "2026-10-24T06:37:55.121601+00:00",
+        "reason": "历史诊断、测试日志或结果派生物；可能包含失败记录，归档和引用迁移完成前保留",
+        "sha256": "fefd91699d576458a8c2f740a2331779888791eb50f4bd8fe5c8558f5cc0e01d"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/d224-final-full-test-result.json",
+        "kind": "file",
+        "size_bytes": 264,
+        "mtime": "2026-10-24T08:04:39.251586+00:00",
+        "reason": "历史诊断、测试日志或结果派生物；可能包含失败记录，归档和引用迁移完成前保留",
+        "sha256": "cfbf9a06e3e0e9ecbffcf542d69b333589dc0a4a703eb688fce852eb60dbd5e9"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/d224-final-full-test-start.json",
+        "kind": "file",
+        "size_bytes": 18552,
+        "mtime": "2026-10-24T07:59:29.185875+00:00",
+        "reason": "历史诊断、测试日志或结果派生物；可能包含失败记录，归档和引用迁移完成前保留",
+        "sha256": "242b870843deca48dd6e16bf0e0790f8d30acdf6dcf0328735b44be5c25d3925"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/d224-full-test-start.json",
+        "kind": "file",
+        "size_bytes": 18552,
+        "mtime": "2026-10-24T07:52:23.872555+00:00",
+        "reason": "历史诊断、测试日志或结果派生物；可能包含失败记录，归档和引用迁移完成前保留",
+        "sha256": "8413034855143c30df89e8b32730202ac1b3613bf512a1a1d7ee72070cdcaf05"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/d225-final-full-test-result.json",
+        "kind": "file",
+        "size_bytes": 264,
+        "mtime": "2026-10-24T08:21:15.054773+00:00",
+        "reason": "历史诊断、测试日志或结果派生物；可能包含失败记录，归档和引用迁移完成前保留",
+        "sha256": "455c5c6dc13b40c95765b3f5f38b7147f57e2b7da13488c7d4a86aa4582dc679"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/d225-final-full-test-start.json",
+        "kind": "file",
+        "size_bytes": 18552,
+        "mtime": "2026-10-24T08:15:47.627519+00:00",
+        "reason": "历史诊断、测试日志或结果派生物；可能包含失败记录，归档和引用迁移完成前保留",
+        "sha256": "0daa77d29bf01196297c758abc57cabc795a761a33bff1ef457c1b1308559dde"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/d225-full-test-result.json",
+        "kind": "file",
+        "size_bytes": 264,
+        "mtime": "2026-10-24T08:14:20.650795+00:00",
+        "reason": "历史诊断、测试日志或结果派生物；可能包含失败记录，归档和引用迁移完成前保留",
+        "sha256": "49020bcaf7c1375adb85ffd106dd83178f0e855dbdac40d903067af79e01eef6"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/d225-full-test-start.json",
+        "kind": "file",
+        "size_bytes": 18552,
+        "mtime": "2026-10-24T08:09:32.449768+00:00",
+        "reason": "历史诊断、测试日志或结果派生物；可能包含失败记录，归档和引用迁移完成前保留",
+        "sha256": "6c44f32304f91f8e7ffb7665086aca2aa8603ada3533e32e9e7dea74b9c5625b"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/d225-planning-full-test-result.json",
+        "kind": "file",
+        "size_bytes": 189,
+        "mtime": "2026-10-24T09:11:07.685480+00:00",
+        "reason": "历史诊断、测试日志或结果派生物；可能包含失败记录，归档和引用迁移完成前保留",
+        "sha256": "2099a71eb566e53e8ff6626be5ce7279950c6ab3a9291c8795ab8929e035acf1"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/d225-planning-full-test-start.json",
+        "kind": "file",
+        "size_bytes": 18552,
+        "mtime": "2026-10-24T09:04:28.839993+00:00",
+        "reason": "历史诊断、测试日志或结果派生物；可能包含失败记录，归档和引用迁移完成前保留",
+        "sha256": "7505ddb81437804f1c175be51b0b3ccb5983bf7f94e8658007944412707d8ffb"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/d226-full-test-result.json",
+        "kind": "file",
+        "size_bytes": 189,
+        "mtime": "2026-10-24T09:22:02.677983+00:00",
+        "reason": "历史诊断、测试日志或结果派生物；可能包含失败记录，归档和引用迁移完成前保留",
+        "sha256": "d4ff9f688edcc314a71f473ee3e5d6b3aa9e9950b4a2fd1fe5e165d676109035"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/d226-full-test-start.json",
+        "kind": "file",
+        "size_bytes": 18498,
+        "mtime": "2026-10-24T09:16:46.038073+00:00",
+        "reason": "历史诊断、测试日志或结果派生物；可能包含失败记录，归档和引用迁移完成前保留",
+        "sha256": "3f488627ce57db7c634373da801dc26f166f9345e2022f2b36460e97174b9f73"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/d227-full-test-result.json",
+        "kind": "file",
+        "size_bytes": 284,
+        "mtime": "2026-10-24T09:35:19.323910+00:00",
+        "reason": "历史诊断、测试日志或结果派生物；可能包含失败记录，归档和引用迁移完成前保留",
+        "sha256": "17acae0c169eb11766519fac80121e4a013822b234936d9401dc17b41ab86f2f"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/d227-full-test-start.json",
+        "kind": "file",
+        "size_bytes": 18498,
+        "mtime": "2026-10-24T09:29:14.112483+00:00",
+        "reason": "历史诊断、测试日志或结果派生物；可能包含失败记录，归档和引用迁移完成前保留",
+        "sha256": "b1500b5d4049cdccc044faaf481d49c904f8e09a80cd32eb52514ce4279944de"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/d228-full-test-start.json",
+        "kind": "file",
+        "size_bytes": 18498,
+        "mtime": "2026-10-24T09:36:57.316977+00:00",
+        "reason": "历史诊断、测试日志或结果派生物；可能包含失败记录，归档和引用迁移完成前保留",
+        "sha256": "ee501003b8760001b6d2ed560e94ace8be6ec5d17737cfdbaec165c4cc09d8c1"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/d231-d234-full-test-result.json",
+        "kind": "file",
+        "size_bytes": 281,
+        "mtime": "2026-10-24T16:08:52.744761+00:00",
+        "reason": "历史诊断、测试日志或结果派生物；可能包含失败记录，归档和引用迁移完成前保留",
+        "sha256": "03415e7b2a319d1d4d3a6bc8abca1b67d8910a644c1adb68d534d88ab146589f"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/d231-d234-full-test-start.json",
+        "kind": "file",
+        "size_bytes": 18686,
+        "mtime": "2026-10-24T16:08:47.938611+00:00",
+        "reason": "历史诊断、测试日志或结果派生物；可能包含失败记录，归档和引用迁移完成前保留",
+        "sha256": "f6ff41139d263557d06a61a5373032f44d1a396d6575915d29ecccbf238d1025"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/data-07",
+        "kind": "directory",
+        "size_bytes": null,
+        "mtime": "2026-10-24T03:39:47.400872+00:00",
+        "reason": "历史诊断、测试日志或结果派生物；可能包含失败记录，归档和引用迁移完成前保留"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/data-08",
+        "kind": "directory",
+        "size_bytes": null,
+        "mtime": "2026-10-24T05:46:18.785646+00:00",
+        "reason": "历史诊断、测试日志或结果派生物；可能包含失败记录，归档和引用迁移完成前保留"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/data-09",
+        "kind": "directory",
+        "size_bytes": null,
+        "mtime": "2026-10-24T05:49:41.866005+00:00",
+        "reason": "历史诊断、测试日志或结果派生物；可能包含失败记录，归档和引用迁移完成前保留"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/data-10",
+        "kind": "directory",
+        "size_bytes": null,
+        "mtime": "2026-10-24T06:04:36.433019+00:00",
+        "reason": "历史诊断、测试日志或结果派生物；可能包含失败记录，归档和引用迁移完成前保留"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/data-11",
+        "kind": "directory",
+        "size_bytes": null,
+        "mtime": "2026-10-24T06:11:49.977594+00:00",
+        "reason": "历史诊断、测试日志或结果派生物；可能包含失败记录，归档和引用迁移完成前保留"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/data-12",
+        "kind": "directory",
+        "size_bytes": null,
+        "mtime": "2026-10-24T06:42:30.944239+00:00",
+        "reason": "历史诊断、测试日志或结果派生物；可能包含失败记录，归档和引用迁移完成前保留"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/data-13",
+        "kind": "directory",
+        "size_bytes": null,
+        "mtime": "2026-10-24T07:14:44.449790+00:00",
+        "reason": "历史诊断、测试日志或结果派生物；可能包含失败记录，归档和引用迁移完成前保留"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/data-14",
+        "kind": "directory",
+        "size_bytes": null,
+        "mtime": "2026-10-24T07:33:44.109486+00:00",
+        "reason": "历史诊断、测试日志或结果派生物；可能包含失败记录，归档和引用迁移完成前保留"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/data-15",
+        "kind": "directory",
+        "size_bytes": null,
+        "mtime": "2026-10-24T08:24:17.654492+00:00",
+        "reason": "历史诊断、测试日志或结果派生物；可能包含失败记录，归档和引用迁移完成前保留"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/data-16",
+        "kind": "directory",
+        "size_bytes": null,
+        "mtime": "2026-10-24T09:06:53.405519+00:00",
+        "reason": "历史诊断、测试日志或结果派生物；可能包含失败记录，归档和引用迁移完成前保留"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/data-17",
+        "kind": "directory",
+        "size_bytes": null,
+        "mtime": "2026-10-24T09:21:19.100620+00:00",
+        "reason": "历史诊断、测试日志或结果派生物；可能包含失败记录，归档和引用迁移完成前保留"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/data-18",
+        "kind": "directory",
+        "size_bytes": null,
+        "mtime": "2026-10-24T10:03:20.784553+00:00",
+        "reason": "历史诊断、测试日志或结果派生物；可能包含失败记录，归档和引用迁移完成前保留"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/data-19",
+        "kind": "directory",
+        "size_bytes": null,
+        "mtime": "2026-10-24T16:16:03.704266+00:00",
+        "reason": "历史诊断、测试日志或结果派生物；可能包含失败记录，归档和引用迁移完成前保留"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/data-20",
+        "kind": "directory",
+        "size_bytes": null,
+        "mtime": "2026-10-24T16:39:04.734542+00:00",
+        "reason": "历史诊断、测试日志或结果派生物；可能包含失败记录，归档和引用迁移完成前保留"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/dev-05-clause-closure-replay.json",
+        "kind": "file",
+        "size_bytes": 1761194,
+        "mtime": "2026-10-24T03:06:44.752800+00:00",
+        "reason": "历史诊断、测试日志或结果派生物；可能包含失败记录，归档和引用迁移完成前保留",
+        "sha256": "7c6a4a5bcb5bcae22283b339c838f5fff2035afb6f0ad91e62b39452a43e3a3a"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/dev-05-d225-final-replay.json",
+        "kind": "file",
+        "size_bytes": 1835317,
+        "mtime": "2026-10-24T08:16:33.125944+00:00",
+        "reason": "历史诊断、测试日志或结果派生物；可能包含失败记录，归档和引用迁移完成前保留",
+        "sha256": "c256e9cfb70564e88991e2134eb6b9cc11174e691dd550838086d5f0ea9193f7"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/dev-05-d225-replay.json",
+        "kind": "file",
+        "size_bytes": 1840616,
+        "mtime": "2026-10-24T08:11:55.903261+00:00",
+        "reason": "历史诊断、测试日志或结果派生物；可能包含失败记录，归档和引用迁移完成前保留",
+        "sha256": "bb6c6bbd305008f07e61dcf6fc2723a5e1bb7fb4bd0c0f8a2fcad53f3cd92c6d"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/dev-21-full-D12-current-patch-replay.json",
+        "kind": "file",
+        "size_bytes": 30539,
+        "mtime": "2026-10-25T01:36:13.127521+00:00",
+        "reason": "历史诊断、测试日志或结果派生物；可能包含失败记录，归档和引用迁移完成前保留",
+        "sha256": "0c049a025bcd88c462fde850f34102f3dd45b72656661478227cc17e48ef96e0"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/dev-21-full-D19-current-patch-replay.json",
+        "kind": "file",
+        "size_bytes": 108303,
+        "mtime": "2026-10-25T01:36:14.110552+00:00",
+        "reason": "历史诊断、测试日志或结果派生物；可能包含失败记录，归档和引用迁移完成前保留",
+        "sha256": "fa0e44e6a038224a5c82c411ade26c640578a8af2a2d3143fee89a299defc4b9"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/dev-21-full-D20-current-patch-replay.json",
+        "kind": "file",
+        "size_bytes": 107208,
+        "mtime": "2026-10-25T01:36:13.417530+00:00",
+        "reason": "历史诊断、测试日志或结果派生物；可能包含失败记录，归档和引用迁移完成前保留",
+        "sha256": "1e6c26a760f4fce64ca191e2952b80b2f5448620deb172898155b827695bfad3"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/docs-api.html",
+        "kind": "file",
+        "size_bytes": 146,
+        "mtime": "2026-10-24T16:10:08.939149+00:00",
+        "reason": "历史诊断、测试日志或结果派生物；可能包含失败记录，归档和引用迁移完成前保留",
+        "sha256": "55f7d9e99b8e2d4e0e193b2f0275501e6d9c1ebd29cadbea6a0da48a8587e3e0"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/fee-facts-current-recertification.json",
+        "kind": "file",
+        "size_bytes": 19435,
+        "mtime": "2026-10-24T06:21:36.996971+00:00",
+        "reason": "历史诊断、测试日志或结果派生物；可能包含失败记录，归档和引用迁移完成前保留",
+        "sha256": "da70ddc3ab762c7e9e921833d7465149cd065ffbd527e49ad6e670e5c15b507d"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/fee-quote-diagnostic-20261024.json",
+        "kind": "file",
+        "size_bytes": 20445,
+        "mtime": "2026-10-24T06:18:08.379440+00:00",
+        "reason": "历史诊断、测试日志或结果派生物；可能包含失败记录，归档和引用迁移完成前保留",
+        "sha256": "aa9dc886130114ea8bd36d5ae165cbdb161abde54ad1fa6d17b059ad2e0c7539"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/fee-separate-final-test-start.json",
+        "kind": "file",
+        "size_bytes": 18491,
+        "mtime": "2026-10-24T06:26:26.124022+00:00",
+        "reason": "历史诊断、测试日志或结果派生物；可能包含失败记录，归档和引用迁移完成前保留",
+        "sha256": "93fc7d167f9ef66620b08547a8b997de4ccb19cafb6dd11a8f786176a281bbaa"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/fee-separate-positive-offline.json",
+        "kind": "file",
+        "size_bytes": 11750,
+        "mtime": "2026-10-24T06:27:03.159182+00:00",
+        "reason": "历史诊断、测试日志或结果派生物；可能包含失败记录，归档和引用迁移完成前保留",
+        "sha256": "9836592dd037f045d9038eea3c96833e240758d4d21a346d964fbcf1356f18d2"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/final-full-test-result.json",
+        "kind": "file",
+        "size_bytes": 277,
+        "mtime": "2026-10-24T09:48:49.011257+00:00",
+        "reason": "历史诊断、测试日志或结果派生物；可能包含失败记录，归档和引用迁移完成前保留",
+        "sha256": "fd3b529ae3403e4a585e5db01258ff6844fb021c56359f1ac2ee1e94507933b1"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/final-full-test-start.json",
+        "kind": "file",
+        "size_bytes": 18498,
+        "mtime": "2026-10-24T09:42:33.526502+00:00",
+        "reason": "历史诊断、测试日志或结果派生物；可能包含失败记录，归档和引用迁移完成前保留",
+        "sha256": "d1c3261f34c0f529d5b301c27212812a8883a841cf5253fbc5a7ed2238e21f96"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/freeze12-supplement-evidence.json",
+        "kind": "file",
+        "size_bytes": 687,
+        "mtime": "2026-10-24T06:35:53.127780+00:00",
+        "reason": "历史诊断、测试日志或结果派生物；可能包含失败记录，归档和引用迁移完成前保留",
+        "sha256": "ccbcd582a6bcdf6050847e3b1567777abd734f3cf948a6a68fefa6f01ce29a94"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/g02-g04-postpatch-full-test-result.json",
+        "kind": "file",
+        "size_bytes": 289,
+        "mtime": "2026-10-24T16:35:33.364918+00:00",
+        "reason": "历史诊断、测试日志或结果派生物；可能包含失败记录，归档和引用迁移完成前保留",
+        "sha256": "162dd9eba80d72afad5edb00f01665f7f680cafd0e89fa532ee4b023bcd26043"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/g02-g04-postpatch-full-test-start.json",
+        "kind": "file",
+        "size_bytes": 18687,
+        "mtime": "2026-10-24T16:35:31.833870+00:00",
+        "reason": "历史诊断、测试日志或结果派生物；可能包含失败记录，归档和引用迁移完成前保留",
+        "sha256": "4973b787a9f91f18a2ea3fb3b22439402c7156073d47d2969f4b610152b3d879"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/g09-d04-d12-readonly-full-replay.json",
+        "kind": "file",
+        "size_bytes": 7221,
+        "mtime": "2026-10-24T06:41:46.294841+00:00",
+        "reason": "历史诊断、测试日志或结果派生物；可能包含失败记录，归档和引用迁移完成前保留",
+        "sha256": "8f2f49b17c2f6c477e54471a27e0e55d750a928de2abec8d35810bae2136dd47"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/g09-d04-d12-readonly-review.json",
+        "kind": "file",
+        "size_bytes": 24470,
+        "mtime": "2026-10-24T06:41:26.562222+00:00",
+        "reason": "历史诊断、测试日志或结果派生物；可能包含失败记录，归档和引用迁移完成前保留",
+        "sha256": "b3d5a73b98b88ecb4e2daf7d117a019a66d4e6d6ce0dbf6aa63a29ac75d5ce09"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/health-api.json",
+        "kind": "file",
+        "size_bytes": 146,
+        "mtime": "2026-10-24T16:10:08.932149+00:00",
+        "reason": "历史诊断、测试日志或结果派生物；可能包含失败记录，归档和引用迁移完成前保留",
+        "sha256": "55f7d9e99b8e2d4e0e193b2f0275501e6d9c1ebd29cadbea6a0da48a8587e3e0"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/release-candidate-02.json",
+        "kind": "file",
+        "size_bytes": 912,
+        "mtime": "2026-10-24T01:04:45.540557+00:00",
+        "reason": "历史诊断、测试日志或结果派生物；可能包含失败记录，归档和引用迁移完成前保留",
+        "sha256": "4dcc27979d408793bb51abd0f68ebce1358e5210a60cf226ea1b137391c4edd1"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/release-candidate-04.json",
+        "kind": "file",
+        "size_bytes": 381,
+        "mtime": "2026-10-24T01:46:54.895766+00:00",
+        "reason": "历史诊断、测试日志或结果派生物；可能包含失败记录，归档和引用迁移完成前保留",
+        "sha256": "d194edb65b3ae732b85e8ced131957cb07e07be2f0c29ddd304f9ab36b773204"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/release-candidate-05.json",
+        "kind": "file",
+        "size_bytes": 1531,
+        "mtime": "2026-10-24T01:55:16.786487+00:00",
+        "reason": "历史诊断、测试日志或结果派生物；可能包含失败记录，归档和引用迁移完成前保留",
+        "sha256": "60cc7c2fe624a656d96723665604f0286e38ec5499664126cfa661f3452f4425"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/root-api.json",
+        "kind": "file",
+        "size_bytes": 138,
+        "mtime": "2026-10-24T16:10:08.925148+00:00",
+        "reason": "历史诊断、测试日志或结果派生物；可能包含失败记录，归档和引用迁移完成前保留",
+        "sha256": "301bd9f16f94feedfae7a946a14bac38cb73c43efe6117bc5586835af03d7d6f"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/run_context-02.json",
+        "kind": "file",
+        "size_bytes": 415853,
+        "mtime": "2026-10-24T00:59:39.572975+00:00",
+        "reason": "历史诊断、测试日志或结果派生物；可能包含失败记录，归档和引用迁移完成前保留",
+        "sha256": "8c5c5377cc7bb249f112be5f467863aa575163b4ab7d9974564d17de56fb2429"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/run_context-03.json",
+        "kind": "file",
+        "size_bytes": 415898,
+        "mtime": "2026-10-24T01:15:25.189587+00:00",
+        "reason": "历史诊断、测试日志或结果派生物；可能包含失败记录，归档和引用迁移完成前保留",
+        "sha256": "5b4d400b3d8fb0fc1aee8c6850e5c23444195b2e8a92313a0e986abc0f6de75d"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/run_context-04.json",
+        "kind": "file",
+        "size_bytes": 414889,
+        "mtime": "2026-10-24T01:45:29.767100+00:00",
+        "reason": "历史诊断、测试日志或结果派生物；可能包含失败记录，归档和引用迁移完成前保留",
+        "sha256": "680086545deae2809434ae31f7e26567e1d7e721b121bc6618d46a7ac2e34eef"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/run_context-05.json",
+        "kind": "file",
+        "size_bytes": 414680,
+        "mtime": "2026-10-24T01:48:37.413978+00:00",
+        "reason": "历史诊断、测试日志或结果派生物；可能包含失败记录，归档和引用迁移完成前保留",
+        "sha256": "c8cf18fd450d8c1f1440dda01bf251b8afb57eb8125cbfc783609465adbf519f"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/run_context-06.json",
+        "kind": "file",
+        "size_bytes": 414687,
+        "mtime": "2026-10-24T02:16:13.092838+00:00",
+        "reason": "历史诊断、测试日志或结果派生物；可能包含失败记录，归档和引用迁移完成前保留",
+        "sha256": "2886a826fbd98bbf9e6931101170394530f97b940bc265b1b0512d242a36359f"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/run_context-07.json",
+        "kind": "file",
+        "size_bytes": 415920,
+        "mtime": "2026-10-24T03:26:37.488149+00:00",
+        "reason": "历史诊断、测试日志或结果派生物；可能包含失败记录，归档和引用迁移完成前保留",
+        "sha256": "086edf37d037c0f04f601d93a46091fa5aa282e1c9662344bbf2a8c3def5ea6b"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/run_context-08.json",
+        "kind": "file",
+        "size_bytes": 416434,
+        "mtime": "2026-10-24T05:33:31.724622+00:00",
+        "reason": "历史诊断、测试日志或结果派生物；可能包含失败记录，归档和引用迁移完成前保留",
+        "sha256": "8c0335c0c7d139e14ebeecd8ec44aeabade08a3bb63769a8eda42e66d138bb23"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/run_context-09.json",
+        "kind": "file",
+        "size_bytes": 416606,
+        "mtime": "2026-10-24T05:47:24.712710+00:00",
+        "reason": "历史诊断、测试日志或结果派生物；可能包含失败记录，归档和引用迁移完成前保留",
+        "sha256": "8f2f36632bc71cca545e0e7ef8fee3b800ca45d8fcc54ba24d1c3e25c757bf4a"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/run_context-10.json",
+        "kind": "file",
+        "size_bytes": 416674,
+        "mtime": "2026-10-24T06:01:25.809050+00:00",
+        "reason": "历史诊断、测试日志或结果派生物；可能包含失败记录，归档和引用迁移完成前保留",
+        "sha256": "9ac40646bc18aabbacdb77982368c7275ab8cecfff30d0223ddb4c01ab033cd2"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/run_context-11.json",
+        "kind": "file",
+        "size_bytes": 416785,
+        "mtime": "2026-10-24T06:09:17.532821+00:00",
+        "reason": "历史诊断、测试日志或结果派生物；可能包含失败记录，归档和引用迁移完成前保留",
+        "sha256": "499638889d2ed63ea8ac79393f31970742691c8d7f6ff225eb7268c8da1f0c7a"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/run_context-12.json",
+        "kind": "file",
+        "size_bytes": 417888,
+        "mtime": "2026-10-24T06:36:35.315101+00:00",
+        "reason": "历史诊断、测试日志或结果派生物；可能包含失败记录，归档和引用迁移完成前保留",
+        "sha256": "29534c7b12b28729f424e9225d2dab0e1dd3c051d1e5132d4e491edd199a838b"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/run_context-13.json",
+        "kind": "file",
+        "size_bytes": 435660,
+        "mtime": "2026-10-24T07:11:25.367554+00:00",
+        "reason": "历史诊断、测试日志或结果派生物；可能包含失败记录，归档和引用迁移完成前保留",
+        "sha256": "fa1fb8c88dc65faf2f7ad0c142faca0836a27abedfbf62c03eba514b81d23cd0"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/run_context-14.json",
+        "kind": "file",
+        "size_bytes": 435623,
+        "mtime": "2026-10-24T07:30:48.912998+00:00",
+        "reason": "历史诊断、测试日志或结果派生物；可能包含失败记录，归档和引用迁移完成前保留",
+        "sha256": "d2d866fe3bfc3b87960ea980268be8c555c552dfd533bd4f99f3e3fc56605b67"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/run_context-15.json",
+        "kind": "file",
+        "size_bytes": 435822,
+        "mtime": "2026-10-24T08:21:31.340283+00:00",
+        "reason": "历史诊断、测试日志或结果派生物；可能包含失败记录，归档和引用迁移完成前保留",
+        "sha256": "725f2ae7174ce8f3ef952148fba08b0de735b8783c2ac93c851dfd0a21404ee9"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/run_context-16.json",
+        "kind": "file",
+        "size_bytes": 435710,
+        "mtime": "2026-10-24T09:11:07.684480+00:00",
+        "reason": "历史诊断、测试日志或结果派生物；可能包含失败记录，归档和引用迁移完成前保留",
+        "sha256": "a86b2e0547094eb1bfb5390094140768af904fb9133c3bddc80b722dc4dbc55a"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/run_context-17.json",
+        "kind": "file",
+        "size_bytes": 435877,
+        "mtime": "2026-10-24T09:48:49.010257+00:00",
+        "reason": "历史诊断、测试日志或结果派生物；可能包含失败记录，归档和引用迁移完成前保留",
+        "sha256": "178ef85bef11832af80182cedc1367810a428c71e23eb72d27527a99ae579856"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/run_context-18.json",
+        "kind": "file",
+        "size_bytes": 436125,
+        "mtime": "2026-10-24T16:08:52.744761+00:00",
+        "reason": "历史诊断、测试日志或结果派生物；可能包含失败记录，归档和引用迁移完成前保留",
+        "sha256": "551796704174325973ab58fc8a0bbfebc1c2ee44ab3949eb80622145f8fd4465"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/run_context.json",
+        "kind": "file",
+        "size_bytes": 414889,
+        "mtime": "2026-10-24T01:44:37.513463+00:00",
+        "reason": "历史诊断、测试日志或结果派生物；可能包含失败记录，归档和引用迁移完成前保留",
+        "sha256": "680086545deae2809434ae31f7e26567e1d7e721b121bc6618d46a7ac2e34eef"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/target-14-D03-d225-final-replay.json",
+        "kind": "file",
+        "size_bytes": 131992,
+        "mtime": "2026-10-24T08:20:35.688540+00:00",
+        "reason": "历史诊断、测试日志或结果派生物；可能包含失败记录，归档和引用迁移完成前保留",
+        "sha256": "9b607e40be1b849912be26cd2804eaedaf026318c1ab5cb413c8de4f7da84524"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/target-14-d224-audit-replay.json",
+        "kind": "file",
+        "size_bytes": 27326,
+        "mtime": "2026-10-24T07:54:23.686308+00:00",
+        "reason": "历史诊断、测试日志或结果派生物；可能包含失败记录，归档和引用迁移完成前保留",
+        "sha256": "b00ad0c6c72ce72259dd8fcb67699a92c26a848594f69d91c338e3ac78943c40"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/target-14-d224-business-diff-review.json",
+        "kind": "file",
+        "size_bytes": 19630,
+        "mtime": "2026-10-24T07:56:36.632471+00:00",
+        "reason": "历史诊断、测试日志或结果派生物；可能包含失败记录，归档和引用迁移完成前保留",
+        "sha256": "535fb683160186281a32905b177cb2ac87a63e40d67b7e7911bffc5cdc43cab0"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/target-14-d224-source-scope-replay.json",
+        "kind": "file",
+        "size_bytes": 101330,
+        "mtime": "2026-10-24T07:48:44.910698+00:00",
+        "reason": "历史诊断、测试日志或结果派生物；可能包含失败记录，归档和引用迁移完成前保留",
+        "sha256": "7edb05588a57f2079b08c71d4a4ce5bf09fa67046169a525b09526a935ab0153"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/target-14-d224-strict-unit-replay.json",
+        "kind": "file",
+        "size_bytes": 101330,
+        "mtime": "2026-10-24T07:46:29.756465+00:00",
+        "reason": "历史诊断、测试日志或结果派生物；可能包含失败记录，归档和引用迁移完成前保留",
+        "sha256": "7edb05588a57f2079b08c71d4a4ce5bf09fa67046169a525b09526a935ab0153"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/target-14-d225-audit-replay.json",
+        "kind": "file",
+        "size_bytes": 27302,
+        "mtime": "2026-10-24T08:10:39.585871+00:00",
+        "reason": "历史诊断、测试日志或结果派生物；可能包含失败记录，归档和引用迁移完成前保留",
+        "sha256": "9ada179118e6025ff63fdf476935af8f5e12565c5773d0d0d3c87dab476043e9"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/target-14-d225-source-scope-replay.json",
+        "kind": "file",
+        "size_bytes": 101330,
+        "mtime": "2026-10-24T08:09:32.421767+00:00",
+        "reason": "历史诊断、测试日志或结果派生物；可能包含失败记录，归档和引用迁移完成前保留",
+        "sha256": "7edb05588a57f2079b08c71d4a4ce5bf09fa67046169a525b09526a935ab0153"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/target-15-D03-d225-replay.json",
+        "kind": "file",
+        "size_bytes": 131270,
+        "mtime": "2026-10-24T08:24:38.653150+00:00",
+        "reason": "历史诊断、测试日志或结果派生物；可能包含失败记录，归档和引用迁移完成前保留",
+        "sha256": "9ab839bf54c265f7d5b9a31f8582602ea10d21632a9d9be4c26d297ec26ec07a"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/target-15-D03-final-replay.json",
+        "kind": "file",
+        "size_bytes": 131270,
+        "mtime": "2026-10-24T08:26:05.340865+00:00",
+        "reason": "历史诊断、测试日志或结果派生物；可能包含失败记录，归档和引用迁移完成前保留",
+        "sha256": "9ab839bf54c265f7d5b9a31f8582602ea10d21632a9d9be4c26d297ec26ec07a"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/target-16-D04-d226-replay.json",
+        "kind": "file",
+        "size_bytes": 97190,
+        "mtime": "2026-10-24T08:40:45.261420+00:00",
+        "reason": "历史诊断、测试日志或结果派生物；可能包含失败记录，归档和引用迁移完成前保留",
+        "sha256": "599cca0d15ef3bc90b3eda748d501de9de39f2ca3d1137654d4e3823cc218c44"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/target-16-D06-d226-replay.json",
+        "kind": "file",
+        "size_bytes": 144344,
+        "mtime": "2026-10-24T08:40:45.471426+00:00",
+        "reason": "历史诊断、测试日志或结果派生物；可能包含失败记录，归档和引用迁移完成前保留",
+        "sha256": "db154dc1724a7303db64ee601236d6e8fce95502479d424fd7df75c2a3f36c14"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/target-16-g17-business-review-corrected.json",
+        "kind": "file",
+        "size_bytes": 28310,
+        "mtime": "2026-10-24T09:04:09.759395+00:00",
+        "reason": "历史诊断、测试日志或结果派生物；可能包含失败记录，归档和引用迁移完成前保留",
+        "sha256": "5b4766a4fb398ef618a712f82c1127cc033b08759fb44b31c7898d760cf8f604"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/target-16-g17-business-review.json",
+        "kind": "file",
+        "size_bytes": 54254,
+        "mtime": "2026-10-24T08:39:55.680867+00:00",
+        "reason": "历史诊断、测试日志或结果派生物；可能包含失败记录，归档和引用迁移完成前保留",
+        "sha256": "382c5a1ce6007f6a3d42754b31dd3ba63118b996fda3b69021be03704e9d06bd"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/target-16-metering-reconciliation.json",
+        "kind": "file",
+        "size_bytes": 5475,
+        "mtime": "2026-10-24T09:06:14.056287+00:00",
+        "reason": "历史诊断、测试日志或结果派生物；可能包含失败记录，归档和引用迁移完成前保留",
+        "sha256": "fa3b7ee0a6a0167fd764f27fc2ebfce641371bc72a38fc7d99a00067cbc91dbc"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/target-17-D04-snapshot16-replay.json",
+        "kind": "file",
+        "size_bytes": 92667,
+        "mtime": "2026-10-24T09:17:45.017920+00:00",
+        "reason": "历史诊断、测试日志或结果派生物；可能包含失败记录，归档和引用迁移完成前保留",
+        "sha256": "58dfc92f859c6a3e8205878673d3350941c2edfb784e8edf0876a2fe8177a72f"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/target-17-D06-snapshot16-replay.json",
+        "kind": "file",
+        "size_bytes": 145481,
+        "mtime": "2026-10-24T09:21:49.228563+00:00",
+        "reason": "历史诊断、测试日志或结果派生物；可能包含失败记录，归档和引用迁移完成前保留",
+        "sha256": "541c455e979be297f3235e6b6f8466f15ce7b1cd324979c8f69708a47d80f11e"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/target-17-metering-reconciliation.json",
+        "kind": "file",
+        "size_bytes": 277,
+        "mtime": "2026-10-24T09:21:47.777517+00:00",
+        "reason": "历史诊断、测试日志或结果派生物；可能包含失败记录，归档和引用迁移完成前保留",
+        "sha256": "799ff518df1df405ea01431a0f66209e208b0cb7337cc32c0b643d4d538da88a"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/target-18-D04-r1-replay.json",
+        "kind": "file",
+        "size_bytes": 107712,
+        "mtime": "2026-10-24T10:04:23.588520+00:00",
+        "reason": "历史诊断、测试日志或结果派生物；可能包含失败记录，归档和引用迁移完成前保留",
+        "sha256": "b877bf26f4f66e6ce1869760c606dc32a6bf11a4503e7f8e74ee3583694cac78"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/target-18-D06-d234current-replay.json",
+        "kind": "file",
+        "size_bytes": 133925,
+        "mtime": "2026-10-24T10:31:43.432856+00:00",
+        "reason": "历史诊断、测试日志或结果派生物；可能包含失败记录，归档和引用迁移完成前保留",
+        "sha256": "0be4dfa40eb77f3d262eb012caa09b2108e6b883cd0eb3d2d9bbdb262a576b42"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/target-18-D06-r1-replay.json",
+        "kind": "file",
+        "size_bytes": 142567,
+        "mtime": "2026-10-24T10:04:24.172538+00:00",
+        "reason": "历史诊断、测试日志或结果派生物；可能包含失败记录，归档和引用迁移完成前保留",
+        "sha256": "9850ad577ac5f26fcb2ee02aa82ca68271e0034158d2aa475df130376d817999"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/target-19-D04-independent-business-review.json",
+        "kind": "file",
+        "size_bytes": 21003,
+        "mtime": "2026-10-24T16:39:42.649730+00:00",
+        "reason": "历史诊断、测试日志或结果派生物；可能包含失败记录，归档和引用迁移完成前保留",
+        "sha256": "5b83d48d5a3cb92fe6346c635910396dcf6fcac2d02d0fd5f00c7afa671a0916"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/target-19-D04-postbusiness-replay.json",
+        "kind": "file",
+        "size_bytes": 131382,
+        "mtime": "2026-10-24T16:17:08.867308+00:00",
+        "reason": "历史诊断、测试日志或结果派生物；可能包含失败记录，归档和引用迁移完成前保留",
+        "sha256": "fac4c4220acc66b763c7f755003d01aeaa49e12559f1c6361e88eb8603f39a3b"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/target-19-D06-postbusiness-replay.json",
+        "kind": "file",
+        "size_bytes": 155844,
+        "mtime": "2026-10-24T16:17:09.011312+00:00",
+        "reason": "历史诊断、测试日志或结果派生物；可能包含失败记录，归档和引用迁移完成前保留",
+        "sha256": "7dfb0ab336d98db0911cb90a22ce07a453a2234a1c61a1bff1b6771be08de2ad"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/target-20-D06-independent-business-review-corrected.json",
+        "kind": "file",
+        "size_bytes": 148167,
+        "mtime": "2026-10-24T16:45:26.178495+00:00",
+        "reason": "历史诊断、测试日志或结果派生物；可能包含失败记录，归档和引用迁移完成前保留",
+        "sha256": "81e645341cd1f9354898b4ea7a6f013546b5ad07e2cc992591400e9df3c654af"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/target-20-D06-independent-business-review.json",
+        "kind": "file",
+        "size_bytes": 147620,
+        "mtime": "2026-10-24T16:45:10.176993+00:00",
+        "reason": "历史诊断、测试日志或结果派生物；可能包含失败记录，归档和引用迁移完成前保留",
+        "sha256": "7e7a37f511544ada62c2dea246aa0cf394364a20c472851af4297b696262670f"
+      }
+    ],
+    "potential_cleanup_after_archive_only": [
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/__pycache__",
+        "kind": "directory",
+        "size_bytes": null,
+        "mtime": "2026-10-24T07:26:43.565314+00:00",
+        "reason": "仅为潜在空间回收候选；必须先完成不可变归档、引用迁移、哈希复核和负责人复核"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/clause-closure-full-pytest.log",
+        "kind": "file",
+        "size_bytes": 2285,
+        "mtime": "2026-10-24T03:08:54.129853+00:00",
+        "reason": "仅为潜在空间回收候选；必须先完成不可变归档、引用迁移、哈希复核和负责人复核",
+        "sha256": "41fe42048fc24310e96ad08eac618f6257d26fd345f1832aa4c0878dbd098d5b"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/clause-closure-pytest.log",
+        "kind": "file",
+        "size_bytes": 341,
+        "mtime": "2026-10-24T03:04:45.734072+00:00",
+        "reason": "仅为潜在空间回收候选；必须先完成不可变归档、引用迁移、哈希复核和负责人复核",
+        "sha256": "580013930dcd15fc9f7737fce719b495a6e90452a1c09fcd279e7f62cd3f1a60"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/clause-failure.log",
+        "kind": "file",
+        "size_bytes": 5564,
+        "mtime": "2026-10-24T03:03:32.551780+00:00",
+        "reason": "仅为潜在空间回收候选；必须先完成不可变归档、引用迁移、哈希复核和负责人复核",
+        "sha256": "0425c0385d0cfd77cfc8ae3f14c25b6f1e66744f5fa4144495ad02484560c219"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/clause-number-full-pytest.log",
+        "kind": "file",
+        "size_bytes": 2365,
+        "mtime": "2026-10-24T05:44:57.412097+00:00",
+        "reason": "仅为潜在空间回收候选；必须先完成不可变归档、引用迁移、哈希复核和负责人复核",
+        "sha256": "305c6f5fe94ef85429ce24ffb11df292dcaa3988061d5bfc59d5dcf4c39adc37"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/d07-boundary-full-pytest.log",
+        "kind": "file",
+        "size_bytes": 2285,
+        "mtime": "2026-10-24T04:16:41.682223+00:00",
+        "reason": "仅为潜在空间回收候选；必须先完成不可变归档、引用迁移、哈希复核和负责人复核",
+        "sha256": "852de27d31635461ed4473bd46f661339d4938e3c7e90cd1e1748f6e20f4325d"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/d224-final-full-pytest.log",
+        "kind": "file",
+        "size_bytes": 2445,
+        "mtime": "2026-10-24T08:04:07.763600+00:00",
+        "reason": "仅为潜在空间回收候选；必须先完成不可变归档、引用迁移、哈希复核和负责人复核",
+        "sha256": "6cddedb764157529c25a2318e1b301d2f9f4d34c99fbc5df80b2288d9909b752"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/d224-full-pytest.log",
+        "kind": "file",
+        "size_bytes": 3184,
+        "mtime": "2026-10-24T07:57:17.074738+00:00",
+        "reason": "仅为潜在空间回收候选；必须先完成不可变归档、引用迁移、哈希复核和负责人复核",
+        "sha256": "35183b4ebd95a283a0fd5a757d5c2f67cbf48ac8a6c011a880b8493bc4415df8"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/d225-final-full-pytest.log",
+        "kind": "file",
+        "size_bytes": 2445,
+        "mtime": "2026-10-24T08:20:40.120679+00:00",
+        "reason": "仅为潜在空间回收候选；必须先完成不可变归档、引用迁移、哈希复核和负责人复核",
+        "sha256": "821c15acbbda992ce4c38a3803226bb5e5d85027251bf27a3e424208f1ab428a"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/d225-full-pytest.log",
+        "kind": "file",
+        "size_bytes": 2445,
+        "mtime": "2026-10-24T08:14:10.857488+00:00",
+        "reason": "仅为潜在空间回收候选；必须先完成不可变归档、引用迁移、哈希复核和负责人复核",
+        "sha256": "28754c96226a1b057bc81b32e75a2807c97d6087ad4755f6be0e3d3b24667b6b"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/d225-planning-full-pytest.log",
+        "kind": "file",
+        "size_bytes": 2445,
+        "mtime": "2026-10-24T09:09:07.451715+00:00",
+        "reason": "仅为潜在空间回收候选；必须先完成不可变归档、引用迁移、哈希复核和负责人复核",
+        "sha256": "72adead4e244e161e7b135b2c709b1a464670123642d31af617dbad8699fd46a"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/d226-full-pytest.log",
+        "kind": "file",
+        "size_bytes": 2445,
+        "mtime": "2026-10-24T09:21:40.248281+00:00",
+        "reason": "仅为潜在空间回收候选；必须先完成不可变归档、引用迁移、哈希复核和负责人复核",
+        "sha256": "2fbd6e54b90bcaf1c4a5d861fb14ff6c322960990c6745983969fce0ee9a7f0b"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/d227-full-pytest.log",
+        "kind": "file",
+        "size_bytes": 5692,
+        "mtime": "2026-10-24T09:34:11.401784+00:00",
+        "reason": "仅为潜在空间回收候选；必须先完成不可变归档、引用迁移、哈希复核和负责人复核",
+        "sha256": "fe5f7cddd0d70675e4472dcc1508e1b0a27e9519dfea3007de7bdb6b8fa2c89d"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/d228-full-pytest.log",
+        "kind": "file",
+        "size_bytes": 2445,
+        "mtime": "2026-10-24T09:41:42.125893+00:00",
+        "reason": "仅为潜在空间回收候选；必须先完成不可变归档、引用迁移、哈希复核和负责人复核",
+        "sha256": "f69443074cf62d6d790662558f091a86cb2018547f1309bfcae43d2461461265"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/d231-d234-focused-final.log",
+        "kind": "file",
+        "size_bytes": 341,
+        "mtime": "2026-10-24T10:31:56.435263+00:00",
+        "reason": "仅为潜在空间回收候选；必须先完成不可变归档、引用迁移、哈希复核和负责人复核",
+        "sha256": "74863bd2ef143da5383cde0e3dfcb77f211ebf95a866724fec0ff4985e4007b1"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/d231-d234-focused.log",
+        "kind": "file",
+        "size_bytes": 341,
+        "mtime": "2026-10-24T10:30:31.546605+00:00",
+        "reason": "仅为潜在空间回收候选；必须先完成不可变归档、引用迁移、哈希复核和负责人复核",
+        "sha256": "af8181303d1ad2758d44119c7ee5194e312863c6642578e273801d33747603b8"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/d231-d234-full-pytest.log",
+        "kind": "file",
+        "size_bytes": 174,
+        "mtime": "2026-10-24T16:08:47.938611+00:00",
+        "reason": "仅为潜在空间回收候选；必须先完成不可变归档、引用迁移、哈希复核和负责人复核",
+        "sha256": "cc0d1abf753147a0f36aa54231c440cd109099282a6413d082a903770d79df97"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/debug-d03-api.log",
+        "kind": "file",
+        "size_bytes": 3101,
+        "mtime": "2026-10-24T01:32:15.857236+00:00",
+        "reason": "仅为潜在空间回收候选；必须先完成不可变归档、引用迁移、哈希复核和负责人复核",
+        "sha256": "bb5869dfeddddcad85692e08e0454df64361c5e463ba6c7f8f8806971a6e5ad9"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/debug-d03-worker.log",
+        "kind": "file",
+        "size_bytes": 1092,
+        "mtime": "2026-10-24T01:32:15.074212+00:00",
+        "reason": "仅为潜在空间回收候选；必须先完成不可变归档、引用迁移、哈希复核和负责人复核",
+        "sha256": "a3628f5175c49b4089d7fcee90e3702ef52ab32e69f8093525abc90d08fdae52"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/debug-d03.log",
+        "kind": "file",
+        "size_bytes": 278,
+        "mtime": "2026-10-24T01:32:15.624229+00:00",
+        "reason": "仅为潜在空间回收候选；必须先完成不可变归档、引用迁移、哈希复核和负责人复核",
+        "sha256": "b631b0ff394e2a0d905eb44892033dbad36578d0b3d1ba4be2496292228d31d3"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/dev-03-api.log",
+        "kind": "file",
+        "size_bytes": 3665,
+        "mtime": "2026-10-24T01:25:34.548669+00:00",
+        "reason": "仅为潜在空间回收候选；必须先完成不可变归档、引用迁移、哈希复核和负责人复核",
+        "sha256": "53d8e6caec83de827873182fab3c712cc14db4c47e4a7a499fed1a93cdcf72de"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/dev-03-worker.log",
+        "kind": "file",
+        "size_bytes": 0,
+        "mtime": "2026-10-24T01:22:28.753850+00:00",
+        "reason": "仅为潜在空间回收候选；必须先完成不可变归档、引用迁移、哈希复核和负责人复核",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/dev-03.log",
+        "kind": "file",
+        "size_bytes": 275,
+        "mtime": "2026-10-24T01:25:34.388664+00:00",
+        "reason": "仅为潜在空间回收候选；必须先完成不可变归档、引用迁移、哈希复核和负责人复核",
+        "sha256": "b1ba1ff71fce96b81b3c987c57ad9287e5f618b4d523cbf36da3e0235a69c72a"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/dev-04-api.log",
+        "kind": "file",
+        "size_bytes": 4063,
+        "mtime": "2026-10-24T01:47:26.863768+00:00",
+        "reason": "仅为潜在空间回收候选；必须先完成不可变归档、引用迁移、哈希复核和负责人复核",
+        "sha256": "f4bc2a8f312f629d84c4dc3c439b7db051805eb069901f93ef73c39d8137af8f"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/dev-04-worker.log",
+        "kind": "file",
+        "size_bytes": 0,
+        "mtime": "2026-10-24T01:44:43.851662+00:00",
+        "reason": "仅为潜在空间回收候选；必须先完成不可变归档、引用迁移、哈希复核和负责人复核",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/dev-04.log",
+        "kind": "file",
+        "size_bytes": 1316,
+        "mtime": "2026-10-24T01:47:26.904769+00:00",
+        "reason": "仅为潜在空间回收候选；必须先完成不可变归档、引用迁移、哈希复核和负责人复核",
+        "sha256": "c00e37208389b21fc6f699e2c8119ab7cf6191dc189b2a6416409649445537bb"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/dev-05-api.log",
+        "kind": "file",
+        "size_bytes": 72849,
+        "mtime": "2026-10-24T02:55:58.650561+00:00",
+        "reason": "仅为潜在空间回收候选；必须先完成不可变归档、引用迁移、哈希复核和负责人复核",
+        "sha256": "dba5ca5bdc4cbd7892b4bbdc106bf21a135e29daf8ec391389e22b554022fd6f"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/dev-05-artifact-review.log",
+        "kind": "file",
+        "size_bytes": 15893,
+        "mtime": "2026-10-24T02:57:04.699630+00:00",
+        "reason": "仅为潜在空间回收候选；必须先完成不可变归档、引用迁移、哈希复核和负责人复核",
+        "sha256": "4f947a41fccd747ad56fd340a8578287ffea9d8808ff4330f751061363ff09e0"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/dev-05-clause-closure-replay.log",
+        "kind": "file",
+        "size_bytes": 605,
+        "mtime": "2026-10-24T03:06:44.752800+00:00",
+        "reason": "仅为潜在空间回收候选；必须先完成不可变归档、引用迁移、哈希复核和负责人复核",
+        "sha256": "fd3ef47c85abe1a9df1352b962e6d4021dbdf9bcc79f1cdaf7f62a8ddbe0042d"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/dev-05-d225-final-replay.log",
+        "kind": "file",
+        "size_bytes": 1105,
+        "mtime": "2026-10-24T08:16:33.080942+00:00",
+        "reason": "仅为潜在空间回收候选；必须先完成不可变归档、引用迁移、哈希复核和负责人复核",
+        "sha256": "0b5c8c0d19a3d70345230fa2a890483599da2015f2326d92e75f7d02a7fdeffb"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/dev-05-d225-replay.log",
+        "kind": "file",
+        "size_bytes": 1605,
+        "mtime": "2026-10-24T08:11:55.856260+00:00",
+        "reason": "仅为潜在空间回收候选；必须先完成不可变归档、引用迁移、哈希复核和负责人复核",
+        "sha256": "69255e38b7217bba8fc3954daf77c1c3e1d2c5e215e30f8e714766a28e42c553"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/dev-05-worker.log",
+        "kind": "file",
+        "size_bytes": 0,
+        "mtime": "2026-10-24T01:48:59.262662+00:00",
+        "reason": "仅为潜在空间回收候选；必须先完成不可变归档、引用迁移、哈希复核和负责人复核",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/dev-05.log",
+        "kind": "file",
+        "size_bytes": 1705,
+        "mtime": "2026-10-24T02:55:58.440554+00:00",
+        "reason": "仅为潜在空间回收候选；必须先完成不可变归档、引用迁移、哈希复核和负责人复核",
+        "sha256": "512c8fa98458ec936c765298430142fc74881711ff7092080a2c47bc1e2e1a7a"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/dev-21-full-api.log",
+        "kind": "file",
+        "size_bytes": 72039,
+        "mtime": "2026-10-25T00:49:20.860415+00:00",
+        "reason": "仅为潜在空间回收候选；必须先完成不可变归档、引用迁移、哈希复核和负责人复核",
+        "sha256": "778c151bc8953b2fe016a9e85a5c1e56a2b11ad316a48932baccbb5b56b8a012"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/dev-21-full-worker.log",
+        "kind": "file",
+        "size_bytes": 0,
+        "mtime": "2026-10-24T23:43:31.255661+00:00",
+        "reason": "仅为潜在空间回收候选；必须先完成不可变归档、引用迁移、哈希复核和负责人复核",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/dev-api.log",
+        "kind": "file",
+        "size_bytes": 421,
+        "mtime": "2026-10-24T09:53:17.435661+00:00",
+        "reason": "仅为潜在空间回收候选；必须先完成不可变归档、引用迁移、哈希复核和负责人复核",
+        "sha256": "13f885af18b46887f5c2287efb839924cd6af1201c48deb891518436a6b362c1"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/dev-worker.log",
+        "kind": "file",
+        "size_bytes": 0,
+        "mtime": "2026-10-24T09:53:15.077587+00:00",
+        "reason": "仅为潜在空间回收候选；必须先完成不可变归档、引用迁移、哈希复核和负责人复核",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/failure-metering-pytest.log",
+        "kind": "file",
+        "size_bytes": 675,
+        "mtime": "2026-10-24T03:25:46.768561+00:00",
+        "reason": "仅为潜在空间回收候选；必须先完成不可变归档、引用迁移、哈希复核和负责人复核",
+        "sha256": "ac6564c6c58130791d8ffaaef2940312ef6971d7b62f5bb5d07a9a5560e89d5a"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/fee-evidence-current-full-pytest.log",
+        "kind": "file",
+        "size_bytes": 2445,
+        "mtime": "2026-10-24T06:25:26.590158+00:00",
+        "reason": "仅为潜在空间回收候选；必须先完成不可变归档、引用迁移、哈希复核和负责人复核",
+        "sha256": "5fb31c88bd8e427dae2de2ab14d6dac1a1dedfd6432f37e798d20f1fbd7c7d88"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/fee-separate-final-full-pytest.log",
+        "kind": "file",
+        "size_bytes": 2445,
+        "mtime": "2026-10-24T06:31:19.282203+00:00",
+        "reason": "仅为潜在空间回收候选；必须先完成不可变归档、引用迁移、哈希复核和负责人复核",
+        "sha256": "a7a040bdfc9b30b6452938438d9e606fc663adf4b1064f533f18243571dd3ed8"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/final-full-pytest.log",
+        "kind": "file",
+        "size_bytes": 2445,
+        "mtime": "2026-10-24T09:47:14.399296+00:00",
+        "reason": "仅为潜在空间回收候选；必须先完成不可变归档、引用迁移、哈希复核和负责人复核",
+        "sha256": "632216d0a74aa5965d81ec878a2d4dc7c9f45933955bbc5dcd74fa3a779cfdbd"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/freeze-07.log",
+        "kind": "file",
+        "size_bytes": 764,
+        "mtime": "2026-10-24T03:26:37.488149+00:00",
+        "reason": "仅为潜在空间回收候选；必须先完成不可变归档、引用迁移、哈希复核和负责人复核",
+        "sha256": "afedaf4a10adb2fdffdb7bd10980fb2f2b79f0878f229c1ad2fe6d7db8756d0f"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/frontend-freeze12-supplement-fixed.log",
+        "kind": "file",
+        "size_bytes": 99,
+        "mtime": "2026-10-24T06:35:37.955305+00:00",
+        "reason": "仅为潜在空间回收候选；必须先完成不可变归档、引用迁移、哈希复核和负责人复核",
+        "sha256": "6ad0f5e1dfa58f8846a5a869a0b37cd14d6f9589f5a6473c4abb43babafe2474"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/frontend-freeze12-supplement.log",
+        "kind": "file",
+        "size_bytes": 1545,
+        "mtime": "2026-10-24T06:33:55.721103+00:00",
+        "reason": "仅为潜在空间回收候选；必须先完成不可变归档、引用迁移、哈希复核和负责人复核",
+        "sha256": "51d8f58e8a95f14d9e15a5cc0879b12ad8cdad26ece7411ebece4d154e5b7cb7"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/g02-g04-postpatch-full-pytest.log",
+        "kind": "file",
+        "size_bytes": 2445,
+        "mtime": "2026-10-24T16:35:31.694866+00:00",
+        "reason": "仅为潜在空间回收候选；必须先完成不可变归档、引用迁移、哈希复核和负责人复核",
+        "sha256": "9c80ccdd1ec65e7a3e0d01430bd39caf3d3f55e6deaffd45871ef2439e2cd5dc"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/g08-same-sentence-full-pytest.log",
+        "kind": "file",
+        "size_bytes": 2365,
+        "mtime": "2026-10-24T06:08:08.741667+00:00",
+        "reason": "仅为潜在空间回收候选；必须先完成不可变归档、引用迁移、哈希复核和负责人复核",
+        "sha256": "6a80717ff81c9e26dc5e46522c838e3cec8f8ffc50131467920f8cc9bbbba232"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/g09-proof-full-pytest.log",
+        "kind": "file",
+        "size_bytes": 2285,
+        "mtime": "2026-10-24T04:34:50.764339+00:00",
+        "reason": "仅为潜在空间回收候选；必须先完成不可变归档、引用迁移、哈希复核和负责人复核",
+        "sha256": "a466bff641e522c1f54b62a3c875d2455370fcbf4f1932512bcaaf61afbbbfff"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/g15-cross-paragraph-full-pytest.log",
+        "kind": "file",
+        "size_bytes": 2365,
+        "mtime": "2026-10-24T06:00:46.263811+00:00",
+        "reason": "仅为潜在空间回收候选；必须先完成不可变归档、引用迁移、哈希复核和负责人复核",
+        "sha256": "e30ba47259e00df45587656a81bc2b6d31e7d27810f15fe8a9205efa95fd9c71"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/g15-raw-boundary-full-pytest.log",
+        "kind": "file",
+        "size_bytes": 2365,
+        "mtime": "2026-10-24T04:44:51.614161+00:00",
+        "reason": "仅为潜在空间回收候选；必须先完成不可变归档、引用迁移、哈希复核和负责人复核",
+        "sha256": "0e69939e7cbf23beacadff41a79827de4b52da949765db808d64944b2a64e8c3"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/g17-closure-full-pytest.log",
+        "kind": "file",
+        "size_bytes": 2365,
+        "mtime": "2026-10-24T05:02:03.721491+00:00",
+        "reason": "仅为潜在空间回收候选；必须先完成不可变归档、引用迁移、哈希复核和负责人复核",
+        "sha256": "759bed07d367a9bdf9e1f01ad027b0cee09eae168b823f354e7449b8086161ad"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/merged-definition-audit-full-pytest.log",
+        "kind": "file",
+        "size_bytes": 2365,
+        "mtime": "2026-10-24T06:19:59.465918+00:00",
+        "reason": "仅为潜在空间回收候选；必须先完成不可变归档、引用迁移、哈希复核和负责人复核",
+        "sha256": "7f15ce63d0e67f16dd16de64bfa3f1f69b099d809e4513d025fe9263a2b2f69d"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/pilot-01-api.log",
+        "kind": "file",
+        "size_bytes": 9311,
+        "mtime": "2026-10-24T00:58:26.003671+00:00",
+        "reason": "仅为潜在空间回收候选；必须先完成不可变归档、引用迁移、哈希复核和负责人复核",
+        "sha256": "e11591161a0f2d877a2c5121e00715a190e1fb78e488703630287c942997c2e2"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/pilot-01-worker.log",
+        "kind": "file",
+        "size_bytes": 0,
+        "mtime": "2026-10-24T00:49:34.263018+00:00",
+        "reason": "仅为潜在空间回收候选；必须先完成不可变归档、引用迁移、哈希复核和负责人复核",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/pilot-01.log",
+        "kind": "file",
+        "size_bytes": 275,
+        "mtime": "2026-10-24T00:58:25.774663+00:00",
+        "reason": "仅为潜在空间回收候选；必须先完成不可变归档、引用迁移、哈希复核和负责人复核",
+        "sha256": "72657d3bdb6e104f174a8db44c18697f1c069f2874491f32de4467ea8df33be6"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/pilot-02-api.log",
+        "kind": "file",
+        "size_bytes": 8445,
+        "mtime": "2026-10-24T01:07:32.442784+00:00",
+        "reason": "仅为潜在空间回收候选；必须先完成不可变归档、引用迁移、哈希复核和负责人复核",
+        "sha256": "a5ffe21e2af62618541b1fcba0d3efed103acd49dc764d14bbf403e3cf6bff1a"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/pilot-02-worker.log",
+        "kind": "file",
+        "size_bytes": 0,
+        "mtime": "2026-10-24T00:59:52.708386+00:00",
+        "reason": "仅为潜在空间回收候选；必须先完成不可变归档、引用迁移、哈希复核和负责人复核",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/pilot-02.log",
+        "kind": "file",
+        "size_bytes": 263,
+        "mtime": "2026-10-24T01:07:32.247777+00:00",
+        "reason": "仅为潜在空间回收候选；必须先完成不可变归档、引用迁移、哈希复核和负责人复核",
+        "sha256": "08024cf3914a9a9229b267b9cf486385dfdf8f05ebbc2018d2517c948c5050a4"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/pilot-03-api.log",
+        "kind": "file",
+        "size_bytes": 6909,
+        "mtime": "2026-10-24T01:21:05.336238+00:00",
+        "reason": "仅为潜在空间回收候选；必须先完成不可变归档、引用迁移、哈希复核和负责人复核",
+        "sha256": "88cd8e44a5fd26f2a62219a64bc07e0063ceb4328261bce56eefb46454dbd1e4"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/pilot-03-worker.log",
+        "kind": "file",
+        "size_bytes": 0,
+        "mtime": "2026-10-24T01:15:33.784856+00:00",
+        "reason": "仅为潜在空间回收候选；必须先完成不可变归档、引用迁移、哈希复核和负责人复核",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/pilot-03.log",
+        "kind": "file",
+        "size_bytes": 270,
+        "mtime": "2026-10-24T01:21:05.146232+00:00",
+        "reason": "仅为潜在空间回收候选；必须先完成不可变归档、引用迁移、哈希复核和负责人复核",
+        "sha256": "e661bfbe376ba68cafc2cf057ab919d473e3921d30b68807c2cb15f548d23bad"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/post-d220-d221-full-pytest.log",
+        "kind": "file",
+        "size_bytes": 2445,
+        "mtime": "2026-10-24T06:58:26.227151+00:00",
+        "reason": "仅为潜在空间回收候选；必须先完成不可变归档、引用迁移、哈希复核和负责人复核",
+        "sha256": "6aba61b614d61b3dd4eb74d8750c9c9b2a842302dc5886aea2b7a987c4b5d81a"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/post-d221-source-repair-full-pytest.log",
+        "kind": "file",
+        "size_bytes": 2445,
+        "mtime": "2026-10-24T07:30:30.461420+00:00",
+        "reason": "仅为潜在空间回收候选；必须先完成不可变归档、引用迁移、哈希复核和负责人复核",
+        "sha256": "7c1f3888722b5dd4126e74784b03e0ec53688c25616d8f5f2094b6b25da5b0f0"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/post-d222-full-pytest.log",
+        "kind": "file",
+        "size_bytes": 2445,
+        "mtime": "2026-10-24T07:09:28.408891+00:00",
+        "reason": "仅为潜在空间回收候选；必须先完成不可变归档、引用迁移、哈希复核和负责人复核",
+        "sha256": "c89deab4c57b87a52f8f23561d2ec9dfaa71b1177e038e3d480cc82815e06c19"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/slice-formula-full-pytest.log",
+        "kind": "file",
+        "size_bytes": 2285,
+        "mtime": "2026-10-24T03:26:14.606432+00:00",
+        "reason": "仅为潜在空间回收候选；必须先完成不可变归档、引用迁移、哈希复核和负责人复核",
+        "sha256": "0e00f6f331ef30e08af6dd1ca1d006ad450474f72f93617923e02d43eaa30e05"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/slice-formula-pytest.log",
+        "kind": "file",
+        "size_bytes": 3973,
+        "mtime": "2026-10-24T03:21:04.394722+00:00",
+        "reason": "仅为潜在空间回收候选；必须先完成不可变归档、引用迁移、哈希复核和负责人复核",
+        "sha256": "6031ae0cab37f1b31cf043bc17a884389e820381646ed1b451b4fa616ac3ce52"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/snapshot-02-pytest.log",
+        "kind": "file",
+        "size_bytes": 2239,
+        "mtime": "2026-10-24T01:02:23.493108+00:00",
+        "reason": "仅为潜在空间回收候选；必须先完成不可变归档、引用迁移、哈希复核和负责人复核",
+        "sha256": "b30b37d399315e7b4ef7fddddab263aba83ba1be388a6832118d0f30241770b2"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/snapshot-03-pytest.log",
+        "kind": "file",
+        "size_bytes": 2239,
+        "mtime": "2026-10-24T01:18:05.227598+00:00",
+        "reason": "仅为潜在空间回收候选；必须先完成不可变归档、引用迁移、哈希复核和负责人复核",
+        "sha256": "70fea2b60dd6d874dd67c5e115e92f909ab2669d83cec7722ea9d6e29fafc83e"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/snapshot-05-pytest.log",
+        "kind": "file",
+        "size_bytes": 2319,
+        "mtime": "2026-10-24T01:54:16.620602+00:00",
+        "reason": "仅为潜在空间回收候选；必须先完成不可变归档、引用迁移、哈希复核和负责人复核",
+        "sha256": "d75422b07490ddbb7ec9bf800f8fa13eeb212cb075dbeb2ce4b6bd96009339b0"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/snapshot-06-pytest.log",
+        "kind": "file",
+        "size_bytes": 2319,
+        "mtime": "2026-10-24T02:18:59.400048+00:00",
+        "reason": "仅为潜在空间回收候选；必须先完成不可变归档、引用迁移、哈希复核和负责人复核",
+        "sha256": "a4325a474c59e9e7922215f07d0a9265cda6c599d13e0dc4e799884292d7507e"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/snapshot-pytest.log",
+        "kind": "file",
+        "size_bytes": 2239,
+        "mtime": "2026-10-24T00:53:59.126313+00:00",
+        "reason": "仅为潜在空间回收候选；必须先完成不可变归档、引用迁移、哈希复核和负责人复核",
+        "sha256": "4cbe88518d1aa83e0c6b82c54265c47313b2641d08c10e14af79eee8a094cdca"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/split-append-pytest.log",
+        "kind": "file",
+        "size_bytes": 341,
+        "mtime": "2026-10-24T03:14:42.873777+00:00",
+        "reason": "仅为潜在空间回收候选；必须先完成不可变归档、引用迁移、哈希复核和负责人复核",
+        "sha256": "2d1b4360333d7fbf6803df2ff3f13a5e5e60096377ae5b3048fdb6bd75d09fcf"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/target-07-api.log",
+        "kind": "file",
+        "size_bytes": 13083,
+        "mtime": "2026-10-24T03:39:47.608878+00:00",
+        "reason": "仅为潜在空间回收候选；必须先完成不可变归档、引用迁移、哈希复核和负责人复核",
+        "sha256": "29cc5eec79348532d3bf733626ec8c080db12d10c00f59205e0f1c8566c3e5d7"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/target-07-artifact-verification.log",
+        "kind": "file",
+        "size_bytes": 3213,
+        "mtime": "2026-10-24T03:41:08.208401+00:00",
+        "reason": "仅为潜在空间回收候选；必须先完成不可变归档、引用迁移、哈希复核和负责人复核",
+        "sha256": "5bbb360808ba176bbc7e348e42967c87e1defcd18123b28bc9195df333f3feb6"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/target-07-worker.log",
+        "kind": "file",
+        "size_bytes": 0,
+        "mtime": "2026-10-24T03:29:04.270743+00:00",
+        "reason": "仅为潜在空间回收候选；必须先完成不可变归档、引用迁移、哈希复核和负责人复核",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/target-08-api.log",
+        "kind": "file",
+        "size_bytes": 14211,
+        "mtime": "2026-10-24T05:46:18.898649+00:00",
+        "reason": "仅为潜在空间回收候选；必须先完成不可变归档、引用迁移、哈希复核和负责人复核",
+        "sha256": "cc0e36a3b51c7004b76f112f11de949fcfdcc7efb7e9b2632c7ad17f36fda963"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/target-08-worker.log",
+        "kind": "file",
+        "size_bytes": 0,
+        "mtime": "2026-10-24T05:33:59.311486+00:00",
+        "reason": "仅为潜在空间回收候选；必须先完成不可变归档、引用迁移、哈希复核和负责人复核",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/target-08.log",
+        "kind": "file",
+        "size_bytes": 425,
+        "mtime": "2026-10-24T05:46:18.754645+00:00",
+        "reason": "仅为潜在空间回收候选；必须先完成不可变归档、引用迁移、哈希复核和负责人复核",
+        "sha256": "c850d833a77c444fbe4288a8fd6de633b789f2c196ab965255c912d0a77a4209"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/target-09-api.log",
+        "kind": "file",
+        "size_bytes": 3313,
+        "mtime": "2026-10-24T05:49:42.112013+00:00",
+        "reason": "仅为潜在空间回收候选；必须先完成不可变归档、引用迁移、哈希复核和负责人复核",
+        "sha256": "461449d8a2c36b18d70e1c24ed2cb68212d1ebdacd649042b3f20fc8b1fc3bb4"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/target-09-worker.log",
+        "kind": "file",
+        "size_bytes": 0,
+        "mtime": "2026-10-24T05:47:32.090941+00:00",
+        "reason": "仅为潜在空间回收候选；必须先完成不可变归档、引用迁移、哈希复核和负责人复核",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/target-09.log",
+        "kind": "file",
+        "size_bytes": 200,
+        "mtime": "2026-10-24T05:49:41.874006+00:00",
+        "reason": "仅为潜在空间回收候选；必须先完成不可变归档、引用迁移、哈希复核和负责人复核",
+        "sha256": "670e0388a91495ac621b9aeb7017740dc05caee8c9bf499cb1ba1bfa647fbc76"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/target-10-api.log",
+        "kind": "file",
+        "size_bytes": 3689,
+        "mtime": "2026-10-24T06:04:36.669026+00:00",
+        "reason": "仅为潜在空间回收候选；必须先完成不可变归档、引用迁移、哈希复核和负责人复核",
+        "sha256": "e7c8c30a95cbdedf4cdbf84c3f663a3cb1645004a5adba7f47e79f891066e1ee"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/target-10-worker.log",
+        "kind": "file",
+        "size_bytes": 0,
+        "mtime": "2026-10-24T06:01:53.557919+00:00",
+        "reason": "仅为潜在空间回收候选；必须先完成不可变归档、引用迁移、哈希复核和负责人复核",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/target-10.log",
+        "kind": "file",
+        "size_bytes": 200,
+        "mtime": "2026-10-24T06:04:36.443019+00:00",
+        "reason": "仅为潜在空间回收候选；必须先完成不可变归档、引用迁移、哈希复核和负责人复核",
+        "sha256": "dd40b25d022194d5fa15c5ef3f24c2e11fef8f229706a88d2d26af6b13876022"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/target-11-api.log",
+        "kind": "file",
+        "size_bytes": 3501,
+        "mtime": "2026-10-24T06:11:50.210601+00:00",
+        "reason": "仅为潜在空间回收候选；必须先完成不可变归档、引用迁移、哈希复核和负责人复核",
+        "sha256": "ad1116252571b5298d6e3f9995e0f677055f2a3a2fb0034ef50912c6f3fd9095"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/target-11-worker.log",
+        "kind": "file",
+        "size_bytes": 0,
+        "mtime": "2026-10-24T06:09:24.181030+00:00",
+        "reason": "仅为潜在空间回收候选；必须先完成不可变归档、引用迁移、哈希复核和负责人复核",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/target-11.log",
+        "kind": "file",
+        "size_bytes": 199,
+        "mtime": "2026-10-24T06:11:49.984594+00:00",
+        "reason": "仅为潜在空间回收候选；必须先完成不可变归档、引用迁移、哈希复核和负责人复核",
+        "sha256": "a9830502be1e10c18e359c83a44c8eed5a120a979166274bbdddfe89dd42e7ab"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/target-12-api.log",
+        "kind": "file",
+        "size_bytes": 5679,
+        "mtime": "2026-10-24T06:42:31.073243+00:00",
+        "reason": "仅为潜在空间回收候选；必须先完成不可变归档、引用迁移、哈希复核和负责人复核",
+        "sha256": "0b2a942967df87044fe908fe4ddd3a718c643f20cb86c8273ca2b9999f84deb7"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/target-12-worker.log",
+        "kind": "file",
+        "size_bytes": 0,
+        "mtime": "2026-10-24T06:36:59.815869+00:00",
+        "reason": "仅为潜在空间回收候选；必须先完成不可变归档、引用迁移、哈希复核和负责人复核",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/target-12.log",
+        "kind": "file",
+        "size_bytes": 202,
+        "mtime": "2026-10-24T06:42:30.913238+00:00",
+        "reason": "仅为潜在空间回收候选；必须先完成不可变归档、引用迁移、哈希复核和负责人复核",
+        "sha256": "e3b3c76a779636308e61891ff13828a006dcf0c80c3946c3657a759160198efb"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/target-13-api.log",
+        "kind": "file",
+        "size_bytes": 3893,
+        "mtime": "2026-10-24T07:14:44.633795+00:00",
+        "reason": "仅为潜在空间回收候选；必须先完成不可变归档、引用迁移、哈希复核和负责人复核",
+        "sha256": "c6bb563a54de2c1d8fb22cfe2b851da43619ba1a1e45d964b1474fc3c8513109"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/target-13-worker.log",
+        "kind": "file",
+        "size_bytes": 0,
+        "mtime": "2026-10-24T07:11:46.639220+00:00",
+        "reason": "仅为潜在空间回收候选；必须先完成不可变归档、引用迁移、哈希复核和负责人复核",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/target-13.log",
+        "kind": "file",
+        "size_bytes": 193,
+        "mtime": "2026-10-24T07:14:44.467790+00:00",
+        "reason": "仅为潜在空间回收候选；必须先完成不可变归档、引用迁移、哈希复核和负责人复核",
+        "sha256": "688949f8cc20f98caeb4479c3fe3a1b47336320e506491f0f5e971ab928c6355"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/target-14-api.log",
+        "kind": "file",
+        "size_bytes": 3595,
+        "mtime": "2026-10-24T07:33:44.352493+00:00",
+        "reason": "仅为潜在空间回收候选；必须先完成不可变归档、引用迁移、哈希复核和负责人复核",
+        "sha256": "f7a89f4806fcb413f1fda14c6da9b8c2bdd571747df65c0adf30c30e352a4fac"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/target-14-worker.log",
+        "kind": "file",
+        "size_bytes": 0,
+        "mtime": "2026-10-24T07:31:09.213634+00:00",
+        "reason": "仅为潜在空间回收候选；必须先完成不可变归档、引用迁移、哈希复核和负责人复核",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/target-14.log",
+        "kind": "file",
+        "size_bytes": 200,
+        "mtime": "2026-10-24T07:33:44.117486+00:00",
+        "reason": "仅为潜在空间回收候选；必须先完成不可变归档、引用迁移、哈希复核和负责人复核",
+        "sha256": "f99ac6dba43870a972169210ce27f06dcc16823c160b3a5bb929290e26f169fc"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/target-15-api.log",
+        "kind": "file",
+        "size_bytes": 3219,
+        "mtime": "2026-10-24T08:24:17.896500+00:00",
+        "reason": "仅为潜在空间回收候选；必须先完成不可变归档、引用迁移、哈希复核和负责人复核",
+        "sha256": "fec1fa14d928cf53ff7f3b2227866dd970fbc2cb01c8ed47bfff4ecfdb8bf494"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/target-15-worker.log",
+        "kind": "file",
+        "size_bytes": 0,
+        "mtime": "2026-10-24T08:22:15.861678+00:00",
+        "reason": "仅为潜在空间回收候选；必须先完成不可变归档、引用迁移、哈希复核和负责人复核",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/target-16-api.log",
+        "kind": "file",
+        "size_bytes": 9667,
+        "mtime": "2026-10-24T08:39:18.668708+00:00",
+        "reason": "仅为潜在空间回收候选；必须先完成不可变归档、引用迁移、哈希复核和负责人复核",
+        "sha256": "4a4f4c35677570e3626a29516adfee06540ff888168901d21a3d0aea09ab8bf6"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/target-16-worker.log",
+        "kind": "file",
+        "size_bytes": 0,
+        "mtime": "2026-10-24T08:29:55.851084+00:00",
+        "reason": "仅为潜在空间回收候选；必须先完成不可变归档、引用迁移、哈希复核和负责人复核",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/target-17-api.log",
+        "kind": "file",
+        "size_bytes": 9761,
+        "mtime": "2026-10-24T09:21:19.339627+00:00",
+        "reason": "仅为潜在空间回收候选；必须先完成不可变归档、引用迁移、哈希复核和负责人复核",
+        "sha256": "f4982047370051928d03f6f4fcac0457b9ca78a32ef195f738b1c57503a2eb4f"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/target-17-worker.log",
+        "kind": "file",
+        "size_bytes": 0,
+        "mtime": "2026-10-24T09:11:47.492726+00:00",
+        "reason": "仅为潜在空间回收候选；必须先完成不可变归档、引用迁移、哈希复核和负责人复核",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/target-18-api.log",
+        "kind": "file",
+        "size_bytes": 9761,
+        "mtime": "2026-10-24T10:03:20.954559+00:00",
+        "reason": "仅为潜在空间回收候选；必须先完成不可变归档、引用迁移、哈希复核和负责人复核",
+        "sha256": "dc36d919474064ae470983be0df20e98a16d89b31a3d1c4c9d0f5c35c1b105d4"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/target-18-worker.log",
+        "kind": "file",
+        "size_bytes": 0,
+        "mtime": "2026-10-24T09:53:50.181686+00:00",
+        "reason": "仅为潜在空间回收候选；必须先完成不可变归档、引用迁移、哈希复核和负责人复核",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/target-19-api.log",
+        "kind": "file",
+        "size_bytes": 6925,
+        "mtime": "2026-10-24T16:16:03.883271+00:00",
+        "reason": "仅为潜在空间回收候选；必须先完成不可变归档、引用迁移、哈希复核和负责人复核",
+        "sha256": "f6a4631d492ade81971117d50119b1b9e526bd9fdb4f1967af2bc1c57db653db"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/target-19-worker.log",
+        "kind": "file",
+        "size_bytes": 0,
+        "mtime": "2026-10-24T16:10:32.406884+00:00",
+        "reason": "仅为潜在空间回收候选；必须先完成不可变归档、引用迁移、哈希复核和负责人复核",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/target-20-api.log",
+        "kind": "file",
+        "size_bytes": 3611,
+        "mtime": "2026-10-24T16:39:04.987550+00:00",
+        "reason": "仅为潜在空间回收候选；必须先完成不可变归档、引用迁移、哈希复核和负责人复核",
+        "sha256": "6b7991fa84789ecb17b9bacad30ba2bc0a0ff1c3fc1caeba1e23e11a798457eb"
+      },
+      {
+        "path": "/tmp/opencode/operation-validation-20261024/target-20-worker.log",
+        "kind": "file",
+        "size_bytes": 0,
+        "mtime": "2026-10-24T16:36:29.881689+00:00",
+        "reason": "仅为潜在空间回收候选；必须先完成不可变归档、引用迁移、哈希复核和负责人复核",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    ]
+  },
+  "cleanup_gate": [
+    "archive this manifest and every authoritative/supporting item to durable storage",
+    "verify archive extraction hashes against this manifest",
+    "migrate or annotate all direct references without rewriting historical results",
+    "run development_gate_reconciliation.py against the archived evidence root",
+    "obtain an explicit cleanup decision; this manifest is not authorization"
+  ]
+}

@@ -1,0 +1,1383 @@
+{
+  "schema_version": "guide-generation-benchmark-result-1",
+  "benchmark_id": "sales-fee-regulation-2025-retrospective-blind",
+  "run_id": "3c694aebc9bd4579aec1996bf8dac9df",
+  "generated_at": "2026-10-26T16:07:55+00:00",
+  "regulation_sha256": "1d6a149e0eadbb04823786b0ccaeab8344a89d6c239af0b9bcb22869bf964b04",
+  "corpus_snapshot_id": "SNAP-66c317752e37960768c369f2",
+  "corpus": {
+    "contracts": 2,
+    "clauses": 930
+  },
+  "metrics": {
+    "critical_requirement_recall": 0.75,
+    "critical_guide_false_negative": 0,
+    "known_clause_pattern_recall": 1.0,
+    "condition_term_coverage": 0.5833,
+    "guide_false_positive_rate": 0.0667,
+    "critical_fidelity_findings": 6,
+    "guide_item_count": 45,
+    "manual_review_burden_items": 45,
+    "average_human_guide_overlap": 0.2575,
+    "residual_rounds": 3,
+    "residual_status": "max_rounds_reached",
+    "residual_saturated": false
+  },
+  "requirement_results": [
+    {
+      "gold_id": "G-R01",
+      "critical": true,
+      "description": "基金管理人销售其管理的基金，不得收取认（申）购费、销售服务费",
+      "matched": true,
+      "matched_requirement_ids": [
+        "R-d421e0bbd5"
+      ],
+      "matched_requirement_count": 1
+    },
+    {
+      "gold_id": "G-R02",
+      "critical": true,
+      "description": "直销机构申购不收取申购费；直销机构申购C类不收取销售服务费；非直销C类持有超过一年不再收取销售服务费",
+      "matched": false,
+      "matched_requirement_ids": [],
+      "matched_requirement_count": 0
+    },
+    {
+      "gold_id": "G-R03",
+      "critical": true,
+      "description": "主动偏股型基金认（申）购费不高于0.8%",
+      "matched": true,
+      "matched_requirement_ids": [
+        "R-069ab7aa9f"
+      ],
+      "matched_requirement_count": 1
+    },
+    {
+      "gold_id": "G-R04",
+      "critical": true,
+      "description": "其他混合型0.5%，指数型、债券型0.3%",
+      "matched": true,
+      "matched_requirement_ids": [
+        "R-069ab7aa9f"
+      ],
+      "matched_requirement_count": 1
+    },
+    {
+      "gold_id": "G-R05",
+      "critical": true,
+      "description": "赎回费应当全额计入基金财产",
+      "matched": true,
+      "matched_requirement_ids": [
+        "R-84a6baaac1"
+      ],
+      "matched_requirement_count": 1
+    },
+    {
+      "gold_id": "G-R06",
+      "critical": true,
+      "description": "持续持有少于七日收取不低于1.5%赎回费",
+      "matched": true,
+      "matched_requirement_ids": [
+        "R-dc74016400"
+      ],
+      "matched_requirement_count": 1
+    },
+    {
+      "gold_id": "G-R07",
+      "critical": true,
+      "description": "销售服务费上限：股票/混合0.4%/年，指数/债券0.2%/年，货币0.15%/年",
+      "matched": true,
+      "matched_requirement_ids": [
+        "R-795e4da866"
+      ],
+      "matched_requirement_count": 1
+    },
+    {
+      "gold_id": "G-R08",
+      "critical": true,
+      "description": "个人投资者客户维护费不得超过管理费的50%",
+      "matched": true,
+      "matched_requirement_ids": [
+        "R-1f810e5be8"
+      ],
+      "matched_requirement_count": 1
+    },
+    {
+      "gold_id": "G-R09",
+      "critical": true,
+      "description": "基金合同、招募说明书等应载明销售费用收取方式、用途和标准及综合费用水平",
+      "matched": true,
+      "matched_requirement_ids": [
+        "R-245150df91"
+      ],
+      "matched_requirement_count": 1
+    },
+    {
+      "gold_id": "G-R10",
+      "critical": true,
+      "description": "已发售基金不符合新规的，应在施行之日起12个月内调整并修改基金合同、招募说明书等法律文件",
+      "matched": true,
+      "matched_requirement_ids": [
+        "R-fd17b4471e"
+      ],
+      "matched_requirement_count": 1
+    },
+    {
+      "gold_id": "G-R11",
+      "critical": true,
+      "description": "基金销售费用包括认（申）购费、赎回费、销售服务费，应在基金合同等法律文件中约定收取标准",
+      "matched": false,
+      "matched_requirement_ids": [],
+      "matched_requirement_count": 0
+    },
+    {
+      "gold_id": "G-R12",
+      "critical": true,
+      "description": "不得设置专属份额或专属产品实施歧视性、排他性、绑定性销售安排",
+      "matched": false,
+      "matched_requirement_ids": [],
+      "matched_requirement_count": 0
+    }
+  ],
+  "pattern_results": [
+    {
+      "gold_id": "G-P01",
+      "critical": true,
+      "description": "份额类别变更条款中的“调低赎回费率”需按是否有销售服务费改为“调低销售服务费率”或删除",
+      "matching_clause_count": 2,
+      "covered_clause_count": 2,
+      "covered_clause_ids": [
+        "CL-ff30f7e3684d6a0168fa",
+        "CL-579638c70205775c3f11"
+      ],
+      "covered_by": [
+        {
+          "clause_id": "CL-ff30f7e3684d6a0168fa",
+          "impact_id": "IC-c7a7f1b3a9224a72eaa0",
+          "guide_item_ids": [
+            "G-d5e9af9dd71ca2ec8ff9"
+          ]
+        },
+        {
+          "clause_id": "CL-579638c70205775c3f11",
+          "impact_id": "IC-ac7c0c44be15fa9b4709",
+          "guide_item_ids": [
+            "G-48649a7d457f3229009f"
+          ]
+        }
+      ],
+      "present_in_corpus": true,
+      "covered": true,
+      "recall": 1.0
+    },
+    {
+      "gold_id": "G-P02",
+      "critical": true,
+      "description": "删除份额类别变更后的“并报中国证监会备案”",
+      "matching_clause_count": 1,
+      "covered_clause_count": 1,
+      "covered_clause_ids": [
+        "CL-ff30f7e3684d6a0168fa"
+      ],
+      "covered_by": [
+        {
+          "clause_id": "CL-ff30f7e3684d6a0168fa",
+          "impact_id": "IC-c7a7f1b3a9224a72eaa0",
+          "guide_item_ids": [
+            "G-d5e9af9dd71ca2ec8ff9"
+          ]
+        }
+      ],
+      "present_in_corpus": true,
+      "covered": true,
+      "recall": 1.0
+    },
+    {
+      "gold_id": "G-P03",
+      "critical": true,
+      "description": "删除不同份额类别之间不得互相转换的限制（或按新规处理）",
+      "matching_clause_count": 0,
+      "covered_clause_count": 0,
+      "covered_clause_ids": [],
+      "covered_by": [],
+      "present_in_corpus": false,
+      "covered": false,
+      "recall": null
+    },
+    {
+      "gold_id": "G-P04",
+      "critical": true,
+      "description": "申购费率由管理人决定并仅在招募说明书列示，需增加直销机构不收取申购费的表述",
+      "matching_clause_count": 2,
+      "covered_clause_count": 2,
+      "covered_clause_ids": [
+        "CL-71204b156e06ca50d51d",
+        "CL-be1714220a99787ec5fe"
+      ],
+      "covered_by": [
+        {
+          "clause_id": "CL-71204b156e06ca50d51d",
+          "impact_id": "IC-71c0b43a3b501107d883",
+          "guide_item_ids": [
+            "G-1440ccd9cefcb1c8caa8"
+          ]
+        },
+        {
+          "clause_id": "CL-be1714220a99787ec5fe",
+          "impact_id": "IC-3c16157cb0bd84dbb04b",
+          "guide_item_ids": [
+            "G-1440ccd9cefcb1c8caa8"
+          ]
+        }
+      ],
+      "present_in_corpus": true,
+      "covered": true,
+      "recall": 1.0
+    },
+    {
+      "gold_id": "G-P05",
+      "critical": true,
+      "description": "赎回金额计算中的“扣除相应的费用”需覆盖扣除或加上费用的情形",
+      "matching_clause_count": 2,
+      "covered_clause_count": 2,
+      "covered_clause_ids": [
+        "CL-61c2c63fed2989d627af",
+        "CL-c9fe86b5e81aa8778375"
+      ],
+      "covered_by": [
+        {
+          "clause_id": "CL-61c2c63fed2989d627af",
+          "impact_id": "IC-884afc6f2d0c1c08bde5",
+          "guide_item_ids": [
+            "G-51bc46be6ff9f36c489b"
+          ]
+        },
+        {
+          "clause_id": "CL-c9fe86b5e81aa8778375",
+          "impact_id": "IC-e38446c5ef19cf7bc23b",
+          "guide_item_ids": [
+            "G-1440ccd9cefcb1c8caa8"
+          ]
+        }
+      ],
+      "present_in_corpus": true,
+      "covered": true,
+      "recall": 1.0
+    },
+    {
+      "gold_id": "G-P06",
+      "critical": true,
+      "description": "申购费用由投资人承担、不列入基金财产，需按单/多份额类别增加直销机构安排",
+      "matching_clause_count": 1,
+      "covered_clause_count": 1,
+      "covered_clause_ids": [
+        "CL-855a4b8ca10e1d142dbb"
+      ],
+      "covered_by": [
+        {
+          "clause_id": "CL-855a4b8ca10e1d142dbb",
+          "impact_id": "IC-28415daa0767c7fa9f2b",
+          "guide_item_ids": [
+            "G-c82525c1ff587a25f61e"
+          ]
+        }
+      ],
+      "present_in_corpus": true,
+      "covered": true,
+      "recall": 1.0
+    },
+    {
+      "gold_id": "G-P07",
+      "critical": true,
+      "description": "赎回费用归入基金财产的比例按相关规定执行，需改为全额计入基金财产",
+      "matching_clause_count": 2,
+      "covered_clause_count": 2,
+      "covered_clause_ids": [
+        "CL-855a4b8ca10e1d142dbb",
+        "CL-0eddd273d592c94bfb75"
+      ],
+      "covered_by": [
+        {
+          "clause_id": "CL-855a4b8ca10e1d142dbb",
+          "impact_id": "IC-28415daa0767c7fa9f2b",
+          "guide_item_ids": [
+            "G-c82525c1ff587a25f61e"
+          ]
+        },
+        {
+          "clause_id": "CL-0eddd273d592c94bfb75",
+          "impact_id": "IC-901efa217b8d30ed8cc5",
+          "guide_item_ids": [
+            "G-3e69bd2669934ffa7e2a"
+          ]
+        }
+      ],
+      "present_in_corpus": true,
+      "covered": true,
+      "recall": 1.0
+    },
+    {
+      "gold_id": "G-P08",
+      "critical": true,
+      "description": "删除对持续持有期少于7日投资者收取1.5%赎回费的旧句（如新规费率已被其他条款覆盖）",
+      "matching_clause_count": 2,
+      "covered_clause_count": 2,
+      "covered_clause_ids": [
+        "CL-855a4b8ca10e1d142dbb",
+        "CL-ad145cc477bbac6955a4"
+      ],
+      "covered_by": [
+        {
+          "clause_id": "CL-855a4b8ca10e1d142dbb",
+          "impact_id": "IC-28415daa0767c7fa9f2b",
+          "guide_item_ids": [
+            "G-c82525c1ff587a25f61e"
+          ]
+        },
+        {
+          "clause_id": "CL-ad145cc477bbac6955a4",
+          "impact_id": "IC-461750c34330e9b87e3a",
+          "guide_item_ids": [
+            "G-c82525c1ff587a25f61e"
+          ]
+        }
+      ],
+      "present_in_corpus": true,
+      "covered": true,
+      "recall": 1.0
+    },
+    {
+      "gold_id": "G-P09",
+      "critical": true,
+      "description": "基金促销计划中的费率调低范围需按单/多份额类别调整",
+      "matching_clause_count": 0,
+      "covered_clause_count": 0,
+      "covered_clause_ids": [],
+      "covered_by": [],
+      "present_in_corpus": false,
+      "covered": false,
+      "recall": null
+    },
+    {
+      "gold_id": "G-P10",
+      "critical": true,
+      "description": "C类销售服务费每日计提、按月支付的旧支付安排需按新规调整",
+      "matching_clause_count": 4,
+      "covered_clause_count": 4,
+      "covered_clause_ids": [
+        "CL-105269588d9cf6563dc2",
+        "CL-20602056e7385a129366",
+        "CL-7cfa8bf875c3414cb7d5",
+        "CL-ad71830e0cd258fd34d2"
+      ],
+      "covered_by": [
+        {
+          "clause_id": "CL-105269588d9cf6563dc2",
+          "impact_id": "IC-9914f7a60997fefb0f29",
+          "guide_item_ids": [
+            "G-18bd59e00ca614cb370b"
+          ]
+        },
+        {
+          "clause_id": "CL-20602056e7385a129366",
+          "impact_id": "IC-56a08221430894d99a11",
+          "guide_item_ids": [
+            "G-7b93608e434feb19b0f2"
+          ]
+        },
+        {
+          "clause_id": "CL-7cfa8bf875c3414cb7d5",
+          "impact_id": "IC-79aecdd6fb17f0d57b68",
+          "guide_item_ids": [
+            "G-792f279062d319edb05c"
+          ]
+        },
+        {
+          "clause_id": "CL-ad71830e0cd258fd34d2",
+          "impact_id": "IC-934e87d1600dfa7a4181",
+          "guide_item_ids": [
+            "G-d7d17cdf5446a5339545"
+          ]
+        }
+      ],
+      "present_in_corpus": true,
+      "covered": true,
+      "recall": 1.0
+    },
+    {
+      "gold_id": "G-P11",
+      "critical": false,
+      "description": "基金费用章节应列示销售服务费计算方法与费率",
+      "matching_clause_count": 4,
+      "covered_clause_count": 4,
+      "covered_clause_ids": [
+        "CL-105269588d9cf6563dc2",
+        "CL-20602056e7385a129366",
+        "CL-7cfa8bf875c3414cb7d5",
+        "CL-ad71830e0cd258fd34d2"
+      ],
+      "covered_by": [
+        {
+          "clause_id": "CL-105269588d9cf6563dc2",
+          "impact_id": "IC-9914f7a60997fefb0f29",
+          "guide_item_ids": [
+            "G-18bd59e00ca614cb370b"
+          ]
+        },
+        {
+          "clause_id": "CL-20602056e7385a129366",
+          "impact_id": "IC-56a08221430894d99a11",
+          "guide_item_ids": [
+            "G-7b93608e434feb19b0f2"
+          ]
+        },
+        {
+          "clause_id": "CL-7cfa8bf875c3414cb7d5",
+          "impact_id": "IC-79aecdd6fb17f0d57b68",
+          "guide_item_ids": [
+            "G-792f279062d319edb05c"
+          ]
+        },
+        {
+          "clause_id": "CL-ad71830e0cd258fd34d2",
+          "impact_id": "IC-934e87d1600dfa7a4181",
+          "guide_item_ids": [
+            "G-d7d17cdf5446a5339545"
+          ]
+        }
+      ],
+      "present_in_corpus": true,
+      "covered": true,
+      "recall": 1.0
+    },
+    {
+      "gold_id": "G-P12",
+      "critical": false,
+      "description": "申购赎回费用及计算方式应在招募说明书列示",
+      "matching_clause_count": 4,
+      "covered_clause_count": 4,
+      "covered_clause_ids": [
+        "CL-ff30f7e3684d6a0168fa",
+        "CL-132ec47995adac5dec08",
+        "CL-579638c70205775c3f11",
+        "CL-ad145cc477bbac6955a4"
+      ],
+      "covered_by": [
+        {
+          "clause_id": "CL-ff30f7e3684d6a0168fa",
+          "impact_id": "IC-c7a7f1b3a9224a72eaa0",
+          "guide_item_ids": [
+            "G-d5e9af9dd71ca2ec8ff9"
+          ]
+        },
+        {
+          "clause_id": "CL-132ec47995adac5dec08",
+          "impact_id": "IC-1aa58c883233975c6632",
+          "guide_item_ids": [
+            "G-1440ccd9cefcb1c8caa8"
+          ]
+        },
+        {
+          "clause_id": "CL-579638c70205775c3f11",
+          "impact_id": "IC-ac7c0c44be15fa9b4709",
+          "guide_item_ids": [
+            "G-48649a7d457f3229009f"
+          ]
+        },
+        {
+          "clause_id": "CL-ad145cc477bbac6955a4",
+          "impact_id": "IC-461750c34330e9b87e3a",
+          "guide_item_ids": [
+            "G-c82525c1ff587a25f61e"
+          ]
+        }
+      ],
+      "present_in_corpus": true,
+      "covered": true,
+      "recall": 1.0
+    }
+  ],
+  "condition_results": [
+    {
+      "gold_id": "G-R01",
+      "expected_terms": [
+        "直销机构",
+        "不收取",
+        "申购费"
+      ],
+      "matched": false,
+      "guide_item_ids": []
+    },
+    {
+      "gold_id": "G-R02",
+      "expected_terms": [
+        "直销机构",
+        "申购费",
+        "销售服务费"
+      ],
+      "matched": false,
+      "guide_item_ids": []
+    },
+    {
+      "gold_id": "G-R03",
+      "expected_terms": [
+        "0.8%",
+        "申购费"
+      ],
+      "matched": false,
+      "guide_item_ids": []
+    },
+    {
+      "gold_id": "G-R04",
+      "expected_terms": [
+        "0.5%",
+        "0.3%"
+      ],
+      "matched": false,
+      "guide_item_ids": []
+    },
+    {
+      "gold_id": "G-R05",
+      "expected_terms": [
+        "赎回费",
+        "全额计入基金财产"
+      ],
+      "matched": true,
+      "guide_item_ids": [
+        "G-7de4e8c425d96d9b4f14",
+        "G-476384e47169babddfa6",
+        "G-c08ada2b79c5c14b32ad",
+        "G-7744b034d5035461a8f7",
+        "G-120671ceb7a68aa1dd2b",
+        "G-830297ace642db2b4f4e",
+        "G-c82525c1ff587a25f61e",
+        "G-3e69bd2669934ffa7e2a"
+      ]
+    },
+    {
+      "gold_id": "G-R06",
+      "expected_terms": [
+        "7日",
+        "1.5%",
+        "赎回费"
+      ],
+      "matched": true,
+      "guide_item_ids": [
+        "G-7de4e8c425d96d9b4f14",
+        "G-0026dae2d2be3c8037c4",
+        "G-c82525c1ff587a25f61e"
+      ]
+    },
+    {
+      "gold_id": "G-R07",
+      "expected_terms": [
+        "销售服务费",
+        "0.4%"
+      ],
+      "matched": true,
+      "guide_item_ids": [
+        "G-697c540ef7bc6da281d0",
+        "G-18bd59e00ca614cb370b",
+        "G-c73aacfef9239fd0ded8",
+        "G-7b93608e434feb19b0f2"
+      ]
+    },
+    {
+      "gold_id": "G-R08",
+      "expected_terms": [
+        "客户维护费",
+        "50%"
+      ],
+      "matched": false,
+      "guide_item_ids": []
+    },
+    {
+      "gold_id": "G-R09",
+      "expected_terms": [
+        "基金合同",
+        "销售费用",
+        "披露"
+      ],
+      "matched": true,
+      "guide_item_ids": [
+        "G-1440ccd9cefcb1c8caa8",
+        "G-b3738e9a8cea62cd61f5",
+        "G-d5e9af9dd71ca2ec8ff9"
+      ]
+    },
+    {
+      "gold_id": "G-R10",
+      "expected_terms": [
+        "12个月",
+        "基金合同",
+        "招募说明书"
+      ],
+      "matched": true,
+      "guide_item_ids": [
+        "G-d64c126503a723973a3a",
+        "G-c385ac85869bf2fb2386"
+      ]
+    },
+    {
+      "gold_id": "G-R11",
+      "expected_terms": [
+        "基金合同",
+        "销售服务费"
+      ],
+      "matched": true,
+      "guide_item_ids": [
+        "G-2638e8fd216b7e2c34d1",
+        "G-6fc4387aa409c0ee8408",
+        "G-10f40d3918928a9c18ff",
+        "G-d8ba80cc090a8f4ef4b6",
+        "G-6f3733afe5e246626883"
+      ]
+    },
+    {
+      "gold_id": "G-R12",
+      "expected_terms": [
+        "专属份额",
+        "不公平对待",
+        "投资者"
+      ],
+      "matched": true,
+      "guide_item_ids": [
+        "G-48649a7d457f3229009f",
+        "G-896880bc53e4cfd8ddf7",
+        "G-d43638b2719ba85e28ac",
+        "G-3d2005439fc3b67ff5e5"
+      ]
+    }
+  ],
+  "guide_false_positive_ids": [
+    "G-c6d2d77fa31f519d007d",
+    "G-d7d17cdf5446a5339545",
+    "G-792f279062d319edb05c"
+  ],
+  "critical_fidelity_findings": [
+    {
+      "category": "regulation_fidelity",
+      "description": "The guide item's `new_text` fails to implement the core regulatory requirement of 'full inclusion' for all redemption fees. The regulation (R-84a6baaac1) mandates that ALL redemption fees be fully included in fund assets ('赎回费应当全额计入基金财产'). However, the proposed text only explicitly states full inclusion for the specific subset of investors holding for less than 7 days ('其中，对持续持有期少于7日的投资者...并全额计入基金财产'). It retains the vague language from the old contract pattern ('归入基金财产的比例应根据相关规定执行') for other holding periods, which contradicts the absolute mandate of the new regulation. This creates a legal gap where fees for holders >= 7 days might not be fully included if 'relevant regulations' allow partial retention.",
+      "evidence_quote": "第十条 赎回费应当全额计入基金财产。",
+      "evidence_verified": true,
+      "finding_id": "F-057447fe301666502edb",
+      "guide_item_id": "G-7744b034d5035461a8f7",
+      "recommendation": "Revise `new_text` to state unconditionally that all redemption fees are fully included in fund assets, removing any reference to proportional inclusion based on other regulations or share classes.",
+      "severity": "critical",
+      "source": "guide_reviewer",
+      "status": "superseded",
+      "superseded_by": "guide_repair"
+    },
+    {
+      "category": "draft_text_fidelity",
+      "description": "The proposed contract wording introduces a conditional logic ('if the fund is equity/hybrid... if index/bond...') that does not exist in the regulation or standard practice. Fund contracts specify a single, fixed rate for the specific fund type being established. The regulation sets caps for different types, but a specific contract must state the actual rate applicable to that fund (e.g., '0.4% per year' for an equity fund), not a menu of potential rates based on hypothetical fund types. This creates ambiguity and is legally unenforceable as drafted.",
+      "evidence_quote": "本基金A类基金份额不收取销售服务费，C类基金份额的销售服务费按前一日C类基金份额资产净值的年费率计提，且该年费率不高于基金财产的0.4%/年（本基金为股票型或混合型基金时）、0.2%/年（本基金为指数型或债券型基金时）或0.15%/年（本基金为货币市场基金时）。",
+      "evidence_verified": true,
+      "finding_id": "F-1389c381f5669c143a2f",
+      "guide_item_id": "G-697c540ef7bc6da281d0",
+      "recommendation": "",
+      "severity": "critical",
+      "source": "guide_reviewer",
+      "status": "superseded",
+      "superseded_by": "guide_repair"
+    },
+    {
+      "category": "regulation_fidelity",
+      "description": "The guide item omits the prohibition on charging subscription fees (认（申）购费). The regulation explicitly states '不得收取认（申）购费、销售服务费' (shall not charge subscription/purchase fees, sales service fees). The guide's business requirement, scope statement, and new text only address 'sales service fees', effectively narrowing the regulatory prohibition and failing to cover the mandatory ban on subscription fees.",
+      "evidence_quote": "基金管理人销售其管理的基金，不得收取认（申）购费、销售服务费。",
+      "evidence_verified": true,
+      "finding_id": "F-1e29f544e386888e0aa3",
+      "guide_item_id": "G-82c7eed9ef0c3db6f1a9",
+      "recommendation": "Update the guide item to include the prohibition on both subscription/purchase fees AND sales service fees. The new text must reflect that fund managers cannot charge either fee when selling their own funds.",
+      "severity": "critical",
+      "source": "guide_reviewer",
+      "status": "superseded",
+      "superseded_by": "guide_repair"
+    },
+    {
+      "category": "draft_text_fidelity",
+      "description": "The proposed contract wording ('new_text') contains a logical contradiction and fails to implement the regulatory prohibition. It states that C-class shares accrue sales service fees at an annual rate of 0.10% without any condition limiting this accrual for holders with >1 year tenure, while simultaneously quoting the regulation '...不得继续收取销售服务费' (shall not continue to charge). The text does not modify the calculation formula or accrual logic to stop charging after one year; it merely appends the prohibition sentence to the existing fee structure. This creates ambiguity: does the 0.10% apply indefinitely, or is there a hidden cut-off? The draft must explicitly state that the accrual stops or the rate becomes zero for holdings exceeding one year.",
+      "evidence_quote": "C类基金份额的销售服务费按前一日C类基金份额资产净值的0.10%年费率计提。除货币市场基金以及中国证监会认可的其他基金外，对于投资者持续持有期限超过一年的基金份额，不得继续收取销售服务费。计算方法如下：H＝E×0.10%÷当年天数……",
+      "evidence_verified": true,
+      "finding_id": "F-551e57daf8750c1b9942",
+      "guide_item_id": "G-3bf2c931e2dbe64e55b9",
+      "recommendation": "Revise the 'new_text' to explicitly exclude holdings over one year from the fee accrual. For example: 'For C-class fund shares held by investors for more than one year, no sales service fee shall be accrued. For other C-class fund shares, the sales service fee is accrued at an annual rate of 0.10%...' or adjust the formula description to reflect the time-based exemption.",
+      "severity": "critical",
+      "source": "guide_reviewer",
+      "status": "superseded",
+      "superseded_by": "guide_repair"
+    },
+    {
+      "category": "regulation_fidelity",
+      "description": "The guide item's 'new_text' and 'business_requirement' explicitly state that subscription fees are charged for A and D class shares ('在投资者申购 A 类及 D 类基金份额时收取申购费用'). This directly contradicts the regulation which prohibits fund managers from charging subscription (认/申) fees when selling their own managed funds. The guide fails to distinguish between sales by the manager (prohibited fees) and sales by third-party distributors (permitted fees), or incorrectly applies the general contract clause (which often covers all channels or assumes third-party distribution context) to the specific regulatory constraint of self-sales.",
+      "evidence_quote": "基金管理人销售其管理的基金，不得收取认（申）购费、销售服务费。",
+      "evidence_verified": true,
+      "finding_id": "F-5e4b0902e57520913921",
+      "guide_item_id": "G-2638e8fd216b7e2c34d1",
+      "recommendation": "Revise the text to clarify that while the fund structure includes fee-bearing classes, these fees cannot be collected when the transaction is executed directly through the Fund Manager. Alternatively, remove the explicit statement about charging fees in the context of the prohibition unless it is clearly qualified as applying only to non-manager channels.",
+      "severity": "critical",
+      "source": "guide_reviewer",
+      "status": "open"
+    },
+    {
+      "category": "regulation_fidelity",
+      "description": "The guide item's 'new_text' introduces a conditional exception ('Investors subscribing... through other fund sales institutions') that is not present in the regulation. The regulation (Article 7) states an absolute prohibition: 'Fund managers selling their managed funds shall not charge subscription fees or sales service fees.' It does not distinguish between direct sales and sales through third-party agencies for the purpose of this specific prohibition on the *manager*. By adding 'through other fund sales institutions', the draft text implies that if the manager sells directly, they might be allowed to charge, or conversely, it misattributes the fee structure logic. More critically, the regulation prohibits the *manager* from charging these fees when *they* sell. The drafted text mixes the general share class fee structure (which applies regardless of channel in many contexts, but specifically here the regulation targets the manager's own sales activity) with a channel-specific condition that isn't in the source rule. If the intent is to say 'When the manager sells, no fees; when others sell, standard fees apply', the wording 'Investors through other... pay fees' is factually describing the contract evidence, but attaching it to the regulatory quote creates a misleading legal interpretation that the regulation itself contains this distinction. The regulation is silent on third-party channels in this specific clause; it only restricts the manager. The draft text conflates the regulatory restriction with the contractual fee schedule.",
+      "evidence_quote": "基金管理人销售其管理的基金，不得收取认（申）购费、销售服务费。",
+      "evidence_verified": true,
+      "finding_id": "F-f10667b00a71eb7026e9",
+      "guide_item_id": "G-2638e8fd216b7e2c34d1",
+      "recommendation": "Remove the second sentence from 'new_text' or clearly separate the regulatory compliance statement from the contractual fee description. The regulatory requirement is simply that the manager cannot charge these fees when selling directly. The existing contract clauses about A/C/D classes are separate commercial terms. Do not merge them into a single 'new_text' block that suggests the regulation authorizes fees via other channels.",
+      "severity": "critical",
+      "source": "guide_reviewer",
+      "status": "superseded",
+      "superseded_by": "guide_repair"
+    }
+  ],
+  "human_guide": {
+    "available": true,
+    "source_sha256": "b77be53c3439d785a9ffad0f09d8d03ba74f7722397576b999ae6f5dd6eef895",
+    "paragraphs": 105
+  },
+  "human_guide_overlap": [
+    {
+      "guide_item_id": "G-2638e8fd216b7e2c34d1",
+      "overlap": 0.2543,
+      "human_paragraph": "基金份额类别：本基金将基金份额分为A类和C类不同的类别。在投资者认购、申购基金时收取认购、申购费用而不计提销售服务费的，称为A类基金份额；在投资者认购、申购基金份额时不收取认购、申购费用而是从本类别基金资产中计提销售服务费的，称为C类基金份额。"
+    },
+    {
+      "guide_item_id": "G-7de4e8c425d96d9b4f14",
+      "overlap": 0.2424,
+      "human_paragraph": "描述2：赎回费用由赎回基金份额的基金份额持有人承担，在基金份额持有人赎回基金份额时收取。赎回费用归入基金财产的比例依照相关法律法规设定，具体见招募说明书的规定，未归入基金财产的部分用于支付登记费和其他必要的手续费。其中，对持续持有期少于7日的投资者收取不低于1.5%的赎回费，并全额计入基金财产。"
+    },
+    {
+      "guide_item_id": "G-ae66d6919898742be92e",
+      "overlap": 0.1842,
+      "human_paragraph": "将“本基金的申购费率由基金管理人决定，并在招募说明书中列示。”变更为“本基金A类基金份额在申购时收取申购费用，C类基金份额不收取申购费用。通过直销机构申购本基金A类基金份额不收取申购费。通过直销机构以外的其他销售机构申购本基金的申购费率由基金管理人决定，并在招募说明书中列示。”"
+    },
+    {
+      "guide_item_id": "G-476384e47169babddfa6",
+      "overlap": 0.4969,
+      "human_paragraph": "描述2：赎回费用由赎回基金份额的基金份额持有人承担，在基金份额持有人赎回基金份额时收取。赎回费用归入基金财产的比例依照相关法律法规设定，具体见招募说明书的规定，未归入基金财产的部分用于支付登记费和其他必要的手续费。其中，对持续持有期少于7日的投资者收取不低于1.5%的赎回费，并全额计入基金财产。"
+    },
+    {
+      "guide_item_id": "G-c6d2d77fa31f519d007d",
+      "overlap": 0.2353,
+      "human_paragraph": "本基金A类基金份额不收取销售服务费，C类基金份额的销售服务费按前一日C类基金份额资产净值的0.40%年费率计提。计算方法如下："
+    },
+    {
+      "guide_item_id": "G-c08ada2b79c5c14b32ad",
+      "overlap": 0.4405,
+      "human_paragraph": "新条款：删除“本基金对持续持有期少于7日的投资者收取不低于1.50%的赎回费，并将上述赎回费全额计入基金财产。”"
+    },
+    {
+      "guide_item_id": "G-7744b034d5035461a8f7",
+      "overlap": 0.3897,
+      "human_paragraph": "描述1：赎回费用由赎回基金份额的基金份额持有人承担，在基金份额持有人赎回基金份额时收取。赎回费用归入基金财产的比例应根据相关规定执行，并在招募说明书中列示。"
+    },
+    {
+      "guide_item_id": "G-26477c5b6dcab65f491e",
+      "overlap": 0.3571,
+      "human_paragraph": "C类基金份额的销售服务费主要用于支付销售机构佣金、以及基金管理人的基金行销广告费、促销活动费、基金份额持有人服务费等。"
+    },
+    {
+      "guide_item_id": "G-6fc4387aa409c0ee8408",
+      "overlap": 0.2026,
+      "human_paragraph": "原条款：本基金的申购费率、申购份额具体的计算方法、赎回费率、赎回金额具体的计算方法和收费方式由基金管理人根据基金合同的规定确定，并在招募说明书中列示。基金管理人可以在基金合同约定的范围内调整费率或收费方式，并最迟应于新的费率或收费方式实施日前依照《信息披露办法》的有关规定在指定媒介上公告。本基金对持续持有期少于7日的投资者收取不低于1.50%的赎回费，并将上述赎回费全额计入基金财产。"
+    },
+    {
+      "guide_item_id": "G-10f40d3918928a9c18ff",
+      "overlap": 0.2395,
+      "human_paragraph": "原条款：本基金的申购费率、申购份额具体的计算方法、赎回费率、赎回金额具体的计算方法和收费方式由基金管理人根据基金合同的规定确定，并在招募说明书中列示。基金管理人可以在基金合同约定的范围内调整费率或收费方式，并最迟应于新的费率或收费方式实施日前依照《信息披露办法》的有关规定在指定媒介上公告。本基金对持续持有期少于7日的投资者收取不低于1.50%的赎回费，并将上述赎回费全额计入基金财产。"
+    },
+    {
+      "guide_item_id": "G-3bf2c931e2dbe64e55b9",
+      "overlap": 0.2543,
+      "human_paragraph": "本基金A类基金份额不收取销售服务费，C类基金份额的销售服务费按前一日C类基金份额资产净值的0.40%年费率计提。计算方法如下："
+    },
+    {
+      "guide_item_id": "G-697c540ef7bc6da281d0",
+      "overlap": 0.2416,
+      "human_paragraph": "本基金A类基金份额不收取销售服务费，C类基金份额的销售服务费按前一日C类基金份额资产净值的0.40%年费率计提。计算方法如下："
+    },
+    {
+      "guide_item_id": "G-18bd59e00ca614cb370b",
+      "overlap": 0.1735,
+      "human_paragraph": "本基金A类基金份额不收取销售服务费，C类基金份额的销售服务费按前一日C类基金份额资产净值的0.40%年费率计提。计算方法如下："
+    },
+    {
+      "guide_item_id": "G-82c7eed9ef0c3db6f1a9",
+      "overlap": 0.3982,
+      "human_paragraph": "C类基金份额的销售服务费主要用于支付销售机构佣金、以及基金管理人的基金行销广告费、促销活动费、基金份额持有人服务费等。"
+    },
+    {
+      "guide_item_id": "G-0026dae2d2be3c8037c4",
+      "overlap": 0.2199,
+      "human_paragraph": "新条款：删除“本基金对持续持有期少于7日的投资者收取不低于1.50%的赎回费，并将上述赎回费全额计入基金财产。”"
+    },
+    {
+      "guide_item_id": "G-1440ccd9cefcb1c8caa8",
+      "overlap": 0.1925,
+      "human_paragraph": "原条款：本基金的申购费率、申购份额具体的计算方法、赎回费率、赎回金额具体的计算方法和收费方式由基金管理人根据基金合同的规定确定，并在招募说明书中列示。基金管理人可以在基金合同约定的范围内调整费率或收费方式，并最迟应于新的费率或收费方式实施日前依照《信息披露办法》的有关规定在指定媒介上公告。本基金对持续持有期少于7日的投资者收取不低于1.50%的赎回费，并将上述赎回费全额计入基金财产。"
+    },
+    {
+      "guide_item_id": "G-b3738e9a8cea62cd61f5",
+      "overlap": 0.1405,
+      "human_paragraph": "将“本基金的申购费率由基金管理人决定，并在招募说明书中列示。”变更为“本基金A类基金份额在申购时收取申购费用，C类基金份额不收取申购费用。通过直销机构申购本基金A类基金份额不收取申购费。通过直销机构以外的其他销售机构申购本基金的申购费率由基金管理人决定，并在招募说明书中列示。”"
+    },
+    {
+      "guide_item_id": "G-d5e9af9dd71ca2ec8ff9",
+      "overlap": 0.3107,
+      "human_paragraph": "在符合法律法规、基金合同的约定且不损害已有基金份额持有人权益的情况下，经与基金托管人协商一致，基金管理人在履行适当程序后可以增加新的基金份额类别、或者在法律法规和基金合同规定的范围内变更现有基金份额类别的申购费率、调低赎回费率或变更收费方式、或者停止现有基金份额类别的销售等，调整前基金管理人需及时公告并报中国证监会备案。"
+    },
+    {
+      "guide_item_id": "G-48649a7d457f3229009f",
+      "overlap": 0.1402,
+      "human_paragraph": "原条款，参考如下描述，实际份额类别以具体产品为准：本基金根据费用收取方式的不同，将基金份额分为不同的类别。在投资者认购、申购基金份额时收取认购、申购费用，而不计提销售服务费的，称为A类基金份额；在投资者认购、申购基金份额时不收取认购、申购费用，而是从本类别基金资产中计提销售服务费的，称为C类基金份额。"
+    },
+    {
+      "guide_item_id": "G-896880bc53e4cfd8ddf7",
+      "overlap": 0.0606,
+      "human_paragraph": "基金管理人基金销售子公司销售母公司所管理基金的，按照本条要求执行。"
+    },
+    {
+      "guide_item_id": "G-d43638b2719ba85e28ac",
+      "overlap": 0.051,
+      "human_paragraph": "在符合法律法规、基金合同的约定且不损害已有基金份额持有人权益的情况下，经与基金托管人协商一致，基金管理人在履行适当程序后可以增加新的基金份额类别、或者在法律法规和基金合同规定的范围内变更现有基金份额类别的申购费率、调低赎回费率或变更收费方式、或者停止现有基金份额类别的销售等，调整前基金管理人需及时公告并报中国证监会备案。"
+    },
+    {
+      "guide_item_id": "G-3d2005439fc3b67ff5e5",
+      "overlap": 0.5863,
+      "human_paragraph": "原条款：本基金的申购费率、申购份额具体的计算方法、赎回费率、赎回金额具体的计算方法和收费方式由基金管理人根据基金合同的规定确定，并在招募说明书中列示。基金管理人可以在基金合同约定的范围内调整费率或收费方式，并最迟应于新的费率或收费方式实施日前依照《信息披露办法》的有关规定在指定媒介上公告。本基金对持续持有期少于7日的投资者收取不低于1.50%的赎回费，并将上述赎回费全额计入基金财产。"
+    },
+    {
+      "guide_item_id": "G-c73aacfef9239fd0ded8",
+      "overlap": 0.1641,
+      "human_paragraph": "C类基金份额的销售服务费每日计提，按月支付。由基金管理人向基金托管人发送基金销售服务费划付指令，经基金托管人复核后于次月首日起10个工作日内从基金财产中一次性支付给登记机构，由登记机构代付给销售机构。若遇法定节假日、公休日等，支付日期顺延。"
+    },
+    {
+      "guide_item_id": "G-120671ceb7a68aa1dd2b",
+      "overlap": 0.7692,
+      "human_paragraph": "原条款：赎回金额的计算及处理方式：本基金赎回金额的计算详见《招募说明书》。本基金的赎回费率由基金管理人决定，并在招募说明书中列示。赎回金额为按实际确认的有效赎回份额乘以当日对应份额类别的基金份额净值并扣除相应的费用，赎回金额单位为元。上述计算结果均按四舍五入方法，保留到小数点后2位，由此产生的收益或损失由基金财产承担。"
+    },
+    {
+      "guide_item_id": "G-e099d66241dad4149b4c",
+      "overlap": 0.2317,
+      "human_paragraph": "原条款：本基金的申购费率、申购份额具体的计算方法、赎回费率、赎回金额具体的计算方法和收费方式由基金管理人根据基金合同的规定确定，并在招募说明书中列示。基金管理人可以在基金合同约定的范围内调整费率或收费方式，并最迟应于新的费率或收费方式实施日前依照《信息披露办法》的有关规定在指定媒介上公告。本基金对持续持有期少于7日的投资者收取不低于1.50%的赎回费，并将上述赎回费全额计入基金财产。"
+    },
+    {
+      "guide_item_id": "G-51bc46be6ff9f36c489b",
+      "overlap": 0.25,
+      "human_paragraph": "原条款：本基金的申购费率、申购份额具体的计算方法、赎回费率、赎回金额具体的计算方法和收费方式由基金管理人根据基金合同的规定确定，并在招募说明书中列示。基金管理人可以在基金合同约定的范围内调整费率或收费方式，并最迟应于新的费率或收费方式实施日前依照《信息披露办法》的有关规定在指定媒介上公告。本基金对持续持有期少于7日的投资者收取不低于1.50%的赎回费，并将上述赎回费全额计入基金财产。"
+    },
+    {
+      "guide_item_id": "G-5649825d581eaa97961d",
+      "overlap": 0.3311,
+      "human_paragraph": "在符合法律法规、基金合同的约定且不损害已有基金份额持有人权益的情况下，经与基金托管人协商一致，基金管理人在履行适当程序后可以增加新的基金份额类别、或者在法律法规和基金合同规定的范围内变更现有基金份额类别的申购费率、调低赎回费率或变更收费方式、或者停止现有基金份额类别的销售等，调整前基金管理人需及时公告并报中国证监会备案。"
+    },
+    {
+      "guide_item_id": "G-e59be4f07a317c57de84",
+      "overlap": 0.3089,
+      "human_paragraph": "本基金A类基金份额不收取销售服务费，C类基金份额的销售服务费按前一日C类基金份额资产净值的0.40%年费率计提。计算方法如下："
+    },
+    {
+      "guide_item_id": "G-35dee2802095a08529e3",
+      "overlap": 0.1901,
+      "human_paragraph": "原条款：本基金的申购费率、申购份额具体的计算方法、赎回费率、赎回金额具体的计算方法和收费方式由基金管理人根据基金合同的规定确定，并在招募说明书中列示。基金管理人可以在基金合同约定的范围内调整费率或收费方式，并最迟应于新的费率或收费方式实施日前依照《信息披露办法》的有关规定在指定媒介上公告。本基金对持续持有期少于7日的投资者收取不低于1.50%的赎回费，并将上述赎回费全额计入基金财产。"
+    },
+    {
+      "guide_item_id": "G-54df242272b671a9dbd9",
+      "overlap": 0.2275,
+      "human_paragraph": "本基金A类基金份额不收取销售服务费，C类基金份额的销售服务费按前一日C类基金份额资产净值的0.40%年费率计提。计算方法如下："
+    },
+    {
+      "guide_item_id": "G-d8ba80cc090a8f4ef4b6",
+      "overlap": 0.0619,
+      "human_paragraph": "原条款：本基金的申购费率、申购份额具体的计算方法、赎回费率、赎回金额具体的计算方法和收费方式由基金管理人根据基金合同的规定确定，并在招募说明书中列示。基金管理人可以在基金合同约定的范围内调整费率或收费方式，并最迟应于新的费率或收费方式实施日前依照《信息披露办法》的有关规定在指定媒介上公告。本基金对持续持有期少于7日的投资者收取不低于1.50%的赎回费，并将上述赎回费全额计入基金财产。"
+    },
+    {
+      "guide_item_id": "G-fef21d5d67282be25294",
+      "overlap": 0.1712,
+      "human_paragraph": "本基金A类基金份额不收取销售服务费，C类基金份额的销售服务费按前一日C类基金份额资产净值的0.40%年费率计提。计算方法如下："
+    },
+    {
+      "guide_item_id": "G-6f3733afe5e246626883",
+      "overlap": 0.1836,
+      "human_paragraph": "本基金A类基金份额不收取销售服务费，C类基金份额的销售服务费按前一日C类基金份额资产净值的0.40%年费率计提。计算方法如下："
+    },
+    {
+      "guide_item_id": "G-816a03feb5eb7f85fc20",
+      "overlap": 0.1187,
+      "human_paragraph": "本基金A类基金份额不收取销售服务费，C类基金份额的销售服务费按前一日C类基金份额资产净值的0.40%年费率计提。计算方法如下："
+    },
+    {
+      "guide_item_id": "G-7713dc7f29b88fcc5025",
+      "overlap": 0.3538,
+      "human_paragraph": "原条款：基金管理人可以在不违反法律法规规定及基金合同约定的情形下根据市场情况制定基金促销计划。针对基金投资者定期和不定期地开展基金促销活动。在基金促销活动期间，按相关监管部门要求履行必要手续后，基金管理人可以适当调低基金申购费率和赎回费率。"
+    },
+    {
+      "guide_item_id": "G-19f21e0c7fdc6e41d87c",
+      "overlap": 0.1127,
+      "human_paragraph": "原条款：本基金的申购费率、申购份额具体的计算方法、赎回费率、赎回金额具体的计算方法和收费方式由基金管理人根据基金合同的规定确定，并在招募说明书中列示。基金管理人可以在基金合同约定的范围内调整费率或收费方式，并最迟应于新的费率或收费方式实施日前依照《信息披露办法》的有关规定在指定媒介上公告。本基金对持续持有期少于7日的投资者收取不低于1.50%的赎回费，并将上述赎回费全额计入基金财产。"
+    },
+    {
+      "guide_item_id": "G-3015a1ed0911df8f0a02",
+      "overlap": 0.0921,
+      "human_paragraph": "销售服务费每日计提。"
+    },
+    {
+      "guide_item_id": "G-d64c126503a723973a3a",
+      "overlap": 0.164,
+      "human_paragraph": "原条款：本基金的申购费率、申购份额具体的计算方法、赎回费率、赎回金额具体的计算方法和收费方式由基金管理人根据基金合同的规定确定，并在招募说明书中列示。基金管理人可以在基金合同约定的范围内调整费率或收费方式，并最迟应于新的费率或收费方式实施日前依照《信息披露办法》的有关规定在指定媒介上公告。本基金对持续持有期少于7日的投资者收取不低于1.50%的赎回费，并将上述赎回费全额计入基金财产。"
+    },
+    {
+      "guide_item_id": "G-c385ac85869bf2fb2386",
+      "overlap": 0.2638,
+      "human_paragraph": "在符合法律法规、基金合同的约定且不损害已有基金份额持有人权益的情况下，经与基金托管人协商一致，基金管理人在履行适当程序后可以增加新的基金份额类别、或者在法律法规和基金合同规定的范围内变更现有基金份额类别的申购费率、调低赎回费率或变更收费方式、或者停止现有基金份额类别的销售等，调整前基金管理人需及时公告并报中国证监会备案。"
+    },
+    {
+      "guide_item_id": "G-d7d17cdf5446a5339545",
+      "overlap": 0.1893,
+      "human_paragraph": "本基金A类基金份额不收取销售服务费，C类基金份额的销售服务费按前一日C类基金份额资产净值的0.40%年费率计提。计算方法如下："
+    },
+    {
+      "guide_item_id": "G-792f279062d319edb05c",
+      "overlap": 0.2388,
+      "human_paragraph": "本基金A类基金份额不收取销售服务费，C类基金份额的销售服务费按前一日C类基金份额资产净值的0.40%年费率计提。计算方法如下："
+    },
+    {
+      "guide_item_id": "G-830297ace642db2b4f4e",
+      "overlap": 0.3786,
+      "human_paragraph": "描述1：赎回费用由赎回基金份额的基金份额持有人承担，在基金份额持有人赎回基金份额时收取。赎回费用归入基金财产的比例应根据相关规定执行，并在招募说明书中列示。"
+    },
+    {
+      "guide_item_id": "G-c82525c1ff587a25f61e",
+      "overlap": 0.2609,
+      "human_paragraph": "新条款：删除“本基金对持续持有期少于7日的投资者收取不低于1.50%的赎回费，并将上述赎回费全额计入基金财产。”"
+    },
+    {
+      "guide_item_id": "G-3e69bd2669934ffa7e2a",
+      "overlap": 0.5127,
+      "human_paragraph": "描述2：赎回费用由赎回基金份额的基金份额持有人承担，在基金份额持有人赎回基金份额时收取。赎回费用归入基金财产的比例依照相关法律法规设定，具体见招募说明书的规定，未归入基金财产的部分用于支付登记费和其他必要的手续费。其中，对持续持有期少于7日的投资者收取不低于1.5%的赎回费，并全额计入基金财产。"
+    },
+    {
+      "guide_item_id": "G-7b93608e434feb19b0f2",
+      "overlap": 0.2,
+      "human_paragraph": "本基金A类基金份额不收取销售服务费，C类基金份额的销售服务费按前一日C类基金份额资产净值的0.40%年费率计提。计算方法如下："
+    }
+  ],
+  "residual_rounds": [
+    {
+      "round_no": 1,
+      "status": "new_uncovered",
+      "created_at": 1793028472.113695,
+      "calls": 11,
+      "clean_streak": 0,
+      "new_impact_ids": [
+        "IC-be74520c6fc0cab08b23",
+        "IC-79aecdd6fb17f0d57b68",
+        "IC-934e87d1600dfa7a4181",
+        "IC-b37c7c4f20470e4fe509",
+        "IC-56a08221430894d99a11",
+        "IC-96c2911d2de08e5da24b",
+        "IC-901efa217b8d30ed8cc5",
+        "IC-4bff3e8c4bb1de481e58",
+        "IC-5c5667a92f8d82513755",
+        "IC-885d5dd6d0459fc6e3e2",
+        "IC-025ffc6c111f6486251d",
+        "IC-28415daa0767c7fa9f2b",
+        "IC-461750c34330e9b87e3a",
+        "IC-2731bf7b61dae2e070fe",
+        "IC-b84950b6d2cde559d004"
+      ],
+      "new_impacts": 15,
+      "new_patterns": 13,
+      "uncovered": [
+        {
+          "clause_ids": [
+            "CL-ad145cc477bbac6955a4"
+          ],
+          "contract_version_id": "CV-792b0ceeede845a460f4caa5",
+          "evidence_quote": "本基金对持续持有期少于 7 日的投资者收取 1.50%的赎回费，并将上述赎回费全额计入基金财产。",
+          "pattern_description": "Missing tiered redemption fee structure for holding periods between 7 and 180 days.",
+          "pattern_key": "PAT-65c9141ab3a5734fccae",
+          "reason": "The clause only specifies a redemption fee for holding periods less than 7 days. It fails to specify the mandatory minimum redemption fees for holding periods of 7-30 days (>=1%) and 30-180 days (>=0.5%) required by R-dc74016400, nor does it address the exception allowing different rates for index/bond funds held >=7 days by individuals as per R-aa2dbc6471.",
+          "requirement_ids": [
+            "R-dc74016400",
+            "R-aa2dbc6471"
+          ]
+        },
+        {
+          "clause_ids": [
+            "CL-0eddd273d592c94bfb75"
+          ],
+          "contract_version_id": "CV-792b0ceeede845a460f4caa5",
+          "evidence_quote": "赎回费用归入基金财产的比例依照相关法律法规设定，具体见招募说明书的规定。未归入基金财产的部分用于支付登记费和其他必要的手续费。",
+          "pattern_description": "Redemption fee allocation clause allows partial retention for costs instead of full crediting to fund assets.",
+          "pattern_key": "PAT-1e187e8253ac8f4a19ed",
+          "reason": "The clause states that the proportion of redemption fees credited to fund assets is set according to laws and regulations, with details in the prospectus, and explicitly mentions that the uncredited portion pays for registration fees. This contradicts R-84a6baaac1 which mandates that redemption fees must be fully credited to fund assets.",
+          "requirement_ids": [
+            "R-84a6baaac1"
+          ]
+        },
+        {
+          "clause_ids": [
+            "CL-7cfa8bf875c3414cb7d5"
+          ],
+          "contract_version_id": "CV-792b0ceeede845a460f4caa5",
+          "evidence_quote": "C 类基金份额的销售服务费按前一日 C 类基金份额资产净值的 0.10%年费率计提。",
+          "pattern_description": "Missing prohibition on charging sales service fees after one year of holding.",
+          "pattern_key": "PAT-89339c14e2a07ed15705",
+          "reason": "The contract clause specifies a sales service fee rate of 0.10% for Class C shares but does not include the mandatory provision prohibiting the collection of sales service fees for investors holding the fund for more than one year, as required by Article 11.",
+          "requirement_ids": [
+            "R-0336f9ab56"
+          ]
+        },
+        {
+          "clause_ids": [
+            "CL-b5896deb4af28c49a091"
+          ],
+          "contract_version_id": "CV-792b0ceeede845a460f4caa5",
+          "evidence_quote": "销售服务费主要用于支付销售机构佣金、以及基金管理人的基金行销广告费、促销活动费、基金份额持有人服务费等。",
+          "pattern_description": "Sales service fee usage includes prohibited advertising/marketing costs.",
+          "pattern_key": "PAT-dc0b0f0c76d4baa5ddd8",
+          "reason": "The clause states that sales service fees are used to pay for 'fund marketing advertising fees' (基金行销广告费). This contradicts the requirement that prohibits using advertising fees or similar items to disguisedly pay or collect fund sales expenses.",
+          "requirement_ids": [
+            "R-ec70b7ed98"
+          ]
+        },
+        {
+          "clause_ids": [
+            "CL-20602056e7385a129366"
+          ],
+          "contract_version_id": "CV-0738fca0a65cb975e4ba52db",
+          "evidence_quote": "C 类基金份额的销售服务费按前一日 C 类基金份额资产净值的 0.50%年费率计提。",
+          "pattern_description": "Sales service fee rate exceeding regulatory cap and missing holding period exemption",
+          "pattern_key": "PAT-d2842165ea4b265d33a4",
+          "reason": "The clause sets the sales service fee at 0.50% per annum, which exceeds the regulatory cap of 0.4% for mixed funds (this fund is a mixed-type fund). Additionally, it lacks the mandatory provision prohibiting the collection of sales service fees for shares held by investors for more than one year.",
+          "requirement_ids": [
+            "R-0336f9ab56",
+            "R-795e4da866"
+          ]
+        },
+        {
+          "clause_ids": [
+            "CL-855a4b8ca10e1d142dbb"
+          ],
+          "contract_version_id": "CV-0738fca0a65cb975e4ba52db",
+          "evidence_quote": "其中，对持续持有期少于 7 日的投资者收取不低于 1.50%的赎回费，并全额计入基金财产。",
+          "pattern_description": "Missing tiered minimum redemption fees for holding periods between 7-30 days and 30-180 days.",
+          "pattern_key": "PAT-32211dcc69d69da0aa87",
+          "reason": "The clause only specifies the minimum redemption fee for holding periods less than 7 days (1.5%). It fails to specify the mandatory minimum rates for holding periods of 7-30 days (1%) and 30-180 days (0.5%) as required by Article 10, leaving these tiers undefined in the contract text.",
+          "requirement_ids": [
+            "R-dc74016400"
+          ]
+        },
+        {
+          "clause_ids": [
+            "CL-855a4b8ca10e1d142dbb"
+          ],
+          "contract_version_id": "CV-0738fca0a65cb975e4ba52db",
+          "evidence_quote": "赎回费用归入基金财产的比例应根据相关规定执行，并在招募说明书中列示。",
+          "pattern_description": "Ambiguous or partial statement on redemption fee crediting to fund assets, lacking explicit confirmation of full crediting for all tiers.",
+          "pattern_key": "PAT-2f2091a0285e9d240bbf",
+          "reason": "The clause states that the proportion of redemption fees credited to fund assets 'should be executed according to relevant regulations' and only explicitly confirms full crediting for the <7 day tier. It does not affirmatively state that all redemption fees must be fully credited to fund assets as required by Article 10, creating ambiguity for other holding periods.",
+          "requirement_ids": [
+            "R-84a6baaac1"
+          ]
+        },
+        {
+          "clause_ids": [
+            "CL-d6f039ad354838e5a5ba"
+          ],
+          "contract_version_id": "CV-792b0ceeede845a460f4caa5",
+          "evidence_quote": "在法律法规和《基金合同》规定的范围内并对基金份额持有人利益无实质性不利影响的前提下，调整本基金的申购费率、调低赎回费率、调低销售服务费率或变更收费方式；",
+          "pattern_description": "Unilateral fee adjustment authority",
+          "pattern_key": "PAT-8c0fc342a657a7ba0b2b",
+          "reason": "The clause allows the fund manager and custodian to adjust subscription fees, lower redemption fees, or change fee collection methods without a shareholders' meeting. This conflicts with R-885d8e168a which prohibits changing fee items or standards for investors without public announcement, as it implies unilateral changes are permissible under certain conditions.",
+          "requirement_ids": [
+            "R-885d8e168a"
+          ]
+        },
+        {
+          "clause_ids": [
+            "CL-3d27a1f1de62124047de"
+          ],
+          "contract_version_id": "CV-792b0ceeede845a460f4caa5",
+          "evidence_quote": "编制季度报告、中期报告和年度报告；",
+          "pattern_description": "General periodic report obligation without specific fee disclosure requirements",
+          "pattern_key": "PAT-c7aff74134b40040504a",
+          "reason": "The clause lists general reporting obligations (quarterly, interim, annual) but does not explicitly mandate the specific disclosure of sales service fees, client maintenance fees, and net management fees required by R-8699ee82d4. Current guide items do not cover this specific content requirement for periodic reports.",
+          "requirement_ids": [
+            "R-8699ee82d4"
+          ]
+        },
+        {
+          "clause_ids": [
+            "CL-ad71830e0cd258fd34d2"
+          ],
+          "contract_version_id": "CV-792b0ceeede845a460f4caa5",
+          "evidence_quote": "基金销售服务费每日计提，逐日累计至每月月末，按月支付",
+          "pattern_description": "Sales service fee clauses lacking the 'no charge after 1-year holding period' restriction.",
+          "pattern_key": "PAT-9c357d18c9058694f2c8",
+          "reason": "The clause defines the sales service fee accrual method (daily, monthly payment) but fails to include the mandatory restriction that no sales service fee shall be charged for fund shares held by investors for more than one year. This is a critical compliance gap for non-money market funds.",
+          "requirement_ids": [
+            "R-0336f9ab56"
+          ]
+        },
+        {
+          "clause_ids": [
+            "CL-af1d282bf7d66e273b71"
+          ],
+          "contract_version_id": "CV-792b0ceeede845a460f4caa5",
+          "evidence_quote": "销售服务费主要用于支付销售机构佣金、以及基金管理人的基金行销广告费、促销活动费、基金份额持有人服务费等。",
+          "pattern_description": "Sales service fee usage scope including prohibited items like advertising/promotion fees.",
+          "pattern_key": "PAT-f725800f5e62d14bac53",
+          "reason": "The clause explicitly states that sales service fees are used to pay for 'fund marketing advertising fees' and 'promotional activity fees'. Regulation R-ec70b7ed98 prohibits paying or receiving fund sales fees in disguised forms such as advertising fees. The current wording directly conflicts with this prohibition.",
+          "requirement_ids": [
+            "R-ec70b7ed98"
+          ]
+        },
+        {
+          "clause_ids": [
+            "CL-7ec8b88c81178ffcbcf4"
+          ],
+          "contract_version_id": "CV-0738fca0a65cb975e4ba52db",
+          "evidence_quote": "管理费、托管费、销售服务费、申购费、赎回费等费用计提标准、计提方式和费率发生变更；",
+          "pattern_description": "Missing requirement to disclose net management fees and total client maintenance fees in periodic reports.",
+          "pattern_key": "PAT-eac7dc5bfdbe845f6eb6",
+          "reason": "The clause lists fee changes as a major event requiring interim disclosure but does not mandate the specific annual/interim report disclosures of management fee net amount and client maintenance fees required by R-8699ee82d4.",
+          "requirement_ids": [
+            "R-8699ee82d4"
+          ]
+        },
+        {
+          "clause_ids": [
+            "CL-b3c2bd3862ea26fca8c3"
+          ],
+          "contract_version_id": "CV-0738fca0a65cb975e4ba52db",
+          "evidence_quote": "基金管理人应当在《基金合同》、招募说明书等信息披露文件上载明基金份额申购、赎回价格的计算方式及有关申购、赎回费率，并保证投资者能够在基金销售机构网站或营业网点查阅或者复制前述信息资料。",
+          "pattern_description": "Omission of comprehensive fee level disclosure with simple examples in legal documents.",
+          "pattern_key": "PAT-fe29049d8506cca87f9b",
+          "reason": "The clause requires disclosure of subscription/redemption rates but fails to include the mandatory disclosure of comprehensive fee levels with examples as specified in R-245150df91.",
+          "requirement_ids": [
+            "R-245150df91"
+          ]
+        }
+      ]
+    },
+    {
+      "round_no": 2,
+      "status": "new_uncovered",
+      "created_at": 1793029060.5951529,
+      "calls": 12,
+      "clean_streak": 0,
+      "new_impact_ids": [
+        "IC-5a3a857efecb8ae11a71",
+        "IC-79aecdd6fb17f0d57b68",
+        "IC-934e87d1600dfa7a4181",
+        "IC-df1fa3b171c2fa0317d5",
+        "IC-901efa217b8d30ed8cc5",
+        "IC-5c5667a92f8d82513755",
+        "IC-885d5dd6d0459fc6e3e2",
+        "IC-bc82303bae9476de6103",
+        "IC-ee7368d14ad74da2cb04",
+        "IC-461750c34330e9b87e3a",
+        "IC-4cceb756a2bd37644f22",
+        "IC-2731bf7b61dae2e070fe",
+        "IC-b84950b6d2cde559d004",
+        "IC-1b2fa6ef60ed79d6deed"
+      ],
+      "new_impacts": 14,
+      "new_patterns": 13,
+      "uncovered": [
+        {
+          "clause_ids": [
+            "CL-67324c3d524d61701193"
+          ],
+          "contract_version_id": "CV-792b0ceeede845a460f4caa5",
+          "evidence_quote": "若将来本基金管理人推出同一标的指数的交易型开放式指数基金（ETF），则基金管理人在履行适当程序后使本基金采取 ETF 联接基金模式并相应修改《基金合同》。",
+          "pattern_description": "Fund mode conversion (to ETF Feeder) not linked to mandatory fee structure compliance adjustments",
+          "pattern_key": "PAT-42fd5764183f93cead21",
+          "reason": "The clause allows the fund to convert into an ETF feeder fund upon manager's initiative and agreement with custodian, without mentioning the mandatory adjustment of sales fee structures or re-signing of sales agreements required by R-fd17b4471e if existing fees are non-compliant. This conversion path bypasses the specific compliance timeline and document revision requirements for fee structures.",
+          "requirement_ids": [
+            "R-fd17b4471e"
+          ]
+        },
+        {
+          "clause_ids": [
+            "CL-ad145cc477bbac6955a4"
+          ],
+          "contract_version_id": "CV-792b0ceeede845a460f4caa5",
+          "evidence_quote": "本基金对持续持有期少于 7 日的投资者收取 1.50%的赎回费，并将上述赎回费全额计入基金财产。",
+          "pattern_description": "Missing tiered redemption fee structure for intermediate holding periods (7-30 days and 30-180 days).",
+          "pattern_key": "PAT-8c1cd214974bb406badc",
+          "reason": "The clause only specifies a redemption fee for holding periods less than 7 days. It fails to specify the mandatory minimum redemption fees for holding periods of 7-30 days (>=1%) and 30-180 days (>=0.5%) as required by Article 10, leaving these fee tiers undefined in the contract text.",
+          "requirement_ids": [
+            "R-dc74016400"
+          ]
+        },
+        {
+          "clause_ids": [
+            "CL-0eddd273d592c94bfb75"
+          ],
+          "contract_version_id": "CV-792b0ceeede845a460f4caa5",
+          "evidence_quote": "赎回费用归入基金财产的比例依照相关法律法规设定，具体见招募说明书的规定。未归入基金财产的部分用于支付登记费和其他必要的手续费。",
+          "pattern_description": "Redemption fee allocation language allowing retention of fees outside fund assets for operational costs.",
+          "pattern_key": "PAT-13246509e9f92b4e3273",
+          "reason": "The clause states that redemption fees are allocated according to relevant laws and regulations, with the unallocated portion used for registration fees and other necessary handling fees. This contradicts the requirement that redemption fees must be fully included in fund assets, implying a partial allocation is permitted or standard.",
+          "requirement_ids": [
+            "R-84a6baaac1"
+          ]
+        },
+        {
+          "clause_ids": [
+            "CL-7cfa8bf875c3414cb7d5"
+          ],
+          "contract_version_id": "CV-792b0ceeede845a460f4caa5",
+          "evidence_quote": "C 类基金份额的销售服务费按前一日 C 类基金份额资产净值的 0.10%年费率计提。",
+          "pattern_description": "Sales service fee accrual lacks the mandatory cessation mechanism for holding periods exceeding one year.",
+          "pattern_key": "PAT-34d1145a2b7bdf6632b9",
+          "reason": "The clause specifies a fixed annual sales service fee rate (0.10%) for C-class shares without any provision to stop charging this fee after the investor has held the fund for more than one year, violating the requirement that no sales service fee shall be charged for holdings exceeding one year.",
+          "requirement_ids": [
+            "R-0336f9ab56"
+          ]
+        },
+        {
+          "clause_ids": [
+            "CL-b5896deb4af28c49a091"
+          ],
+          "contract_version_id": "CV-792b0ceeede845a460f4caa5",
+          "evidence_quote": "销售服务费主要用于支付销售机构佣金、以及基金管理人的基金行销广告费、促销活动费、基金份额持有人服务费等。",
+          "pattern_description": "Sales service fee usage scope includes prohibited categories like advertising and promotional fees.",
+          "pattern_key": "PAT-172109f1fdd460cbcf73",
+          "reason": "The clause explicitly states that sales service fees are used to pay for 'fund marketing advertising fees' and 'promotional activity fees', which constitutes disguised payment of sales expenses via advertising/promotion channels, prohibited by the regulation.",
+          "requirement_ids": [
+            "R-ec70b7ed98"
+          ]
+        },
+        {
+          "clause_ids": [
+            "CL-16d3122e28b7b4f854db"
+          ],
+          "contract_version_id": "CV-792b0ceeede845a460f4caa5",
+          "evidence_quote": "在法律法规和《基金合同》规定的范围内并对基金份额持有人利益无实质性不利影响的前提下，调整本基金的申购费率、调低赎回费率、调低销售服务费率或变更收费方式；",
+          "pattern_description": "Unilateral fee adjustment authority in contract vs mandatory announcement requirement",
+          "pattern_key": "PAT-905c2dfe54a830320f60",
+          "reason": "The clause allows the fund manager and custodian to adjust subscription fees, lower redemption fees, or change charging methods without a shareholders' meeting. This conflicts with R-885d8e168a which prohibits changing fee items or standards without public announcement, as it implies unilateral modification power that may bypass required disclosure/announcement procedures for fee changes.",
+          "requirement_ids": [
+            "R-885d8e168a"
+          ]
+        },
+        {
+          "clause_ids": [
+            "CL-d6f039ad354838e5a5ba"
+          ],
+          "contract_version_id": "CV-792b0ceeede845a460f4caa5",
+          "pattern_description": "Contract clauses permitting unilateral adjustment of sales fees (subscription/redemption/service) by manager/custodian without shareholder approval may violate the prohibition on changing fee standards without proper announcement/procedure.",
+          "pattern_key": "PAT-bc89e280b0dd4e1ba5e4",
+          "reason": "The clause allows the fund manager and custodian to adjust subscription rates, lower redemption rates, or change fee collection methods without a shareholders' meeting if it has no substantial adverse impact. This conflicts with R-885d8e168a which prohibits unauthorized changes to fee items or standards without public announcement.",
+          "requirement_ids": [
+            "R-885d8e168a"
+          ]
+        },
+        {
+          "clause_ids": [
+            "CL-4c5cb8b12b9add8d5fd7"
+          ],
+          "contract_version_id": "CV-792b0ceeede845a460f4caa5",
+          "pattern_description": "General rights clauses allowing managers to sell shares and collect fees without explicit statutory exclusions for direct sales.",
+          "pattern_key": "PAT-99de33fe6d4a0a393802",
+          "reason": "The clause grants the fund manager the right to 'sell fund shares' and generally collect fees, but does not explicitly exclude subscription/redemption fees or sales service fees for direct sales as required by R-d421e0bbd5. Current guide items focus on specific fee structures in offering documents, not the general rights definition in the contract.",
+          "requirement_ids": [
+            "R-d421e0bbd5"
+          ]
+        },
+        {
+          "clause_ids": [
+            "CL-3d27a1f1de62124047de"
+          ],
+          "contract_version_id": "CV-792b0ceeede845a460f4caa5",
+          "pattern_description": "Reporting obligations that lack specific content requirements for fee-related disclosures mandated by new regulations.",
+          "pattern_key": "PAT-b3f454bcce804a50d59c",
+          "reason": "The clause mandates the preparation of quarterly, interim, and annual reports but does not specify the disclosure of management fees, custody fees, sales service fees, client maintenance fees, and net management fees as required by R-8699ee82d4.",
+          "requirement_ids": [
+            "R-8699ee82d4"
+          ]
+        },
+        {
+          "clause_ids": [
+            "CL-105269588d9cf6563dc2"
+          ],
+          "contract_version_id": "CV-0738fca0a65cb975e4ba52db",
+          "pattern_description": "Sales service fee rate exceeds statutory cap and lacks holding period exemption clause.",
+          "pattern_key": "PAT-b4f0437444cf1ee00c34",
+          "reason": "The contract sets the sales service fee at 0.50% per annum, which exceeds the regulatory cap of 0.40% for mixed-type funds (this fund is a mixed-type fund). Additionally, the clause does not include the mandatory provision prohibiting the collection of sales service fees on units held by investors for more than one year.",
+          "requirement_ids": [
+            "R-795e4da866",
+            "R-0336f9ab56"
+          ]
+        },
+        {
+          "clause_ids": [
+            "CL-fabeb8bb27b1a2e4925e"
+          ],
+          "contract_version_id": "CV-0738fca0a65cb975e4ba52db",
+          "pattern_description": "Sales service fee usage includes prohibited advertising and promotional expense categories.",
+          "pattern_key": "PAT-4f321f3ac3e2716d4efe",
+          "reason": "The clause explicitly states that sales service fees are used to pay for 'fund marketing advertising fees' (基金行销广告费) and 'promotional activity fees' (促销活动费). This violates the prohibition against using sales service fees to indirectly pay or collect fund sales expenses via advertising or promotional costs.",
+          "requirement_ids": [
+            "R-ec70b7ed98"
+          ]
+        },
+        {
+          "clause_ids": [
+            "CL-ad71830e0cd258fd34d2"
+          ],
+          "contract_version_id": "CV-792b0ceeede845a460f4caa5",
+          "pattern_description": "Missing 'no sales service fee after 1-year holding' restriction in sales service fee definition clauses.",
+          "pattern_key": "PAT-2113c15be18a83596c1c",
+          "reason": "The clause defines the sales service fee accrual method but fails to include the mandatory prohibition on charging sales service fees for fund shares held by investors for more than one year, as required by Article 11. The current guide items cover this requirement in other contexts or with different rates, but this specific clause remains non-compliant.",
+          "requirement_ids": [
+            "R-0336f9ab56"
+          ]
+        },
+        {
+          "clause_ids": [
+            "CL-af1d282bf7d66e273b71"
+          ],
+          "contract_version_id": "CV-792b0ceeede845a460f4caa5",
+          "pattern_description": "Sales service fee usage description includes prohibited categories (advertising) without the regulatory disclaimer/prohibition.",
+          "pattern_key": "PAT-0dc53c8b8cf011d9b043",
+          "reason": "The clause states that sales service fees are used for 'fund marketing advertising fees' (基金行销广告费). This directly conflicts with the regulation prohibiting the disguised payment of sales fees via advertising costs. The text lacks the explicit prohibition against using these categories for disguised sales fee payments.",
+          "requirement_ids": [
+            "R-ec70b7ed98"
+          ]
+        }
+      ]
+    },
+    {
+      "round_no": 3,
+      "status": "clean",
+      "created_at": 1793029063.5348928,
+      "calls": 0,
+      "clean_streak": 0,
+      "new_impact_ids": [],
+      "new_impacts": 0,
+      "new_patterns": 0,
+      "uncovered": []
+    }
+  ],
+  "run_status": "complete_with_unresolved",
+  "qualification_status": "candidate_with_findings",
+  "blind_input_policy": {
+    "generation_inputs_allowed": [
+      "regulation_source",
+      "funds_word/*.docx"
+    ],
+    "generation_inputs_forbidden": [
+      "human_guide_source",
+      "benchmarks/sales_fee_regulation_2025/gold.json"
+    ],
+    "human_guide_revealed_after_generation": true
+  }
+}
