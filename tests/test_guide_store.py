@@ -39,6 +39,25 @@ def parsed_document() -> dict:
             "validation": {"errors": [], "warnings": [], "coverage_gaps": [], "clean": True}}
 
 
+def test_guide_schema_adds_parent_version_id_to_old_tables(tmp_path):
+    store = RunStore(tmp_path / "state")
+    with store._connect() as db:
+        db.execute("""CREATE TABLE guide_versions (
+            id TEXT PRIMARY KEY, owner TEXT NOT NULL, built_in INTEGER NOT NULL DEFAULT 0,
+            filename TEXT NOT NULL, source_sha256 TEXT NOT NULL, rules_json TEXT NOT NULL DEFAULT '',
+            rules_sha256 TEXT NOT NULL DEFAULT '', status TEXT NOT NULL,
+            issues_json TEXT NOT NULL DEFAULT '{}', qualification_status TEXT NOT NULL DEFAULT 'not_run',
+            created_at REAL NOT NULL, updated_at REAL NOT NULL)""")
+        db.execute("INSERT INTO guide_versions(id,owner,built_in,filename,source_sha256,status,created_at,updated_at)"
+                   " VALUES('old','alice',0,'old.docx','00','parsed',1,1)")
+    guide_store._ensure_tables(store)
+    with store._connect() as db:
+        columns = {row["name"] for row in db.execute("PRAGMA table_info(guide_versions)")}
+        row = db.execute("SELECT parent_version_id FROM guide_versions WHERE id='old'").fetchone()
+    assert "parent_version_id" in columns
+    assert row["parent_version_id"] == ""
+
+
 def test_builtin_guide_is_idempotent_and_visible_to_everyone(tmp_path):
     store = RunStore(tmp_path / "state")
     assert guide_store.ensure_builtin_guide(store) == guide_store.BUILTIN_GUIDE_ID
