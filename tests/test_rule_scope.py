@@ -114,7 +114,7 @@ def test_d06_g06_ignores_near_keyword_conversion_paragraph_in_purchase_chapter(d
     assert {f"p{number}" for number in range(130, 138)} <= scope.locations
 
 
-def test_d06_g15_g16_g17_default_body_only_excludes_summary_fee_copies(d06):
+def test_d06_g15_g16_g17_default_includes_real_summary_fee_copies(d06):
     inspection, sections = d06
     rules = [_rule(rule_id, "基金费用与税收-3、基金销售服务费")
              for rule_id in ("G15", "G16", "G17")]
@@ -125,10 +125,12 @@ def test_d06_g15_g16_g17_default_body_only_excludes_summary_fee_copies(d06):
     for rule_id in ("G15", "G16", "G17"):
         scope = scopes[rule_id]
         assert scope.resolution == "resolved"
-        assert scope.include_summary_copies is False
-        assert scope.zone == "body"
+        # FL-D384/434/443: a real summary copy of the same fee clause is a physical
+        # business site, not an excluded default.
+        assert scope.include_summary_copies is True
+        assert scope.zone == "body+summary"
         assert {f"p{number}" for number in range(807, 811)} <= scope.locations
-        assert not (scope.locations & summary_copies)
+        assert summary_copies <= scope.locations
         # The fee-types list mentions 销售服务费 but is not the fee clause site.
         assert "p768" not in scope.locations
 
@@ -137,8 +139,8 @@ def test_qdii_g15_g16_g17_resolve_class_prefixed_fee_heading(qdii):
     """QDII titles the fee clause ``3、C类基金份额的销售服务费``.
 
     The class prefix must still identify the sales-service-fee leaf; the body
-    payment/usage paragraphs p969-p971 belong to it, while the summary copy
-    p1151 stays excluded by the default policy.
+    payment/usage paragraphs p969-p971 belong to it, and the real summary copy
+    p1151 is included by the body-copy policy.
     """
     inspection, sections = qdii
     rules = [_rule(rule_id, "基金费用与税收-3、基金销售服务费")
@@ -149,35 +151,40 @@ def test_qdii_g15_g16_g17_resolve_class_prefixed_fee_heading(qdii):
     for rule_id in ("G15", "G16", "G17"):
         scope = scopes[rule_id]
         assert scope.resolution == "resolved"
-        assert scope.leaf_ids == frozenset({"S17:L04"})
+        assert {"S17:L04"} == {leaf for leaf in scope.leaf_ids if leaf.startswith("S17")}
         assert {"p969", "p970", "p971"} <= scope.locations
-        assert "p1151" not in scope.locations
-        assert scope.include_summary_copies is False
+        assert "S26:L09" in scope.leaf_ids
+        assert scope.include_summary_copies is True
 
 
-def test_d06_g15_summary_copy_requires_both_explicit_flag_and_copy_key(d06):
+def test_d06_g15_summary_copy_is_included_by_default_and_can_be_disabled(d06):
     inspection, sections = d06
     rules = [_rule("G15", "基金费用与税收-3、基金销售服务费")]
     mapping = {"G15": ["S16", "S28"]}
 
     default = resolve_rule_scopes(rules, sections, inspection, mapping)["G15"]
-    assert default.include_summary_copies is False
-    assert "p1286" not in default.locations and "p1289" not in default.locations
+    assert default.include_summary_copies is True
+    assert "p1286" in default.locations and "p1289" in default.locations
 
-    flag_only = resolve_rule_scopes(
+    disabled = resolve_rule_scopes(
         rules, sections, inspection, mapping,
-        include_summary_copies={"G15": True},
+        include_summary_copies={"G15": False},
     )["G15"]
-    assert flag_only.include_summary_copies is False
-    assert "p1286" not in flag_only.locations
+    assert disabled.include_summary_copies is False
+    assert "p1286" not in disabled.locations
+
+    narrowed = resolve_rule_scopes(
+        rules, sections, inspection, mapping,
+        summary_copy_keys={"G15": ["基金费用种类"]},
+    )["G15"]
+    assert narrowed.include_summary_copies is False
+    assert "p1286" not in narrowed.locations
 
     explicit = resolve_rule_scopes(
         rules, sections, inspection, mapping,
-        include_summary_copies={"G15": True},
         summary_copy_keys={"G15": ["销售服务费"]},
     )["G15"]
     assert explicit.include_summary_copies is True
-    assert explicit.zone == "body+summary"
     assert {f"p{number}" for number in range(1286, 1290)} <= explicit.locations
     assert {f"p{number}" for number in range(807, 811)} <= explicit.locations
 
