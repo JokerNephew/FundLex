@@ -59,7 +59,6 @@ def test_manifest_segmented_upload_idempotency_and_refresh(client):
     assert result.json()["total"] == 25 and result.json()["uploaded"] == 0
     assert create(client, files).json()["id"] == task
     assert create(client, files, name="changed").status_code == 409
-    assert upload(client, task, files, data).status_code == 413
     first = upload(client, task, files[:20], data).json()
     assert first["task"]["uploaded"] == 20
     assert len({r["batch_id"] for r in first["receipts"]}) == 1
@@ -75,6 +74,16 @@ def test_manifest_segmented_upload_idempotency_and_refresh(client):
     assert all(d["upload_status"] == "accepted" and d["report_url"] is None for d in docs["items"])
     assert client.get("/api/tasks", headers=ALICE).json()["total"] == 1
     assert client.app.state.store.claim() is not None
+
+
+def test_more_than_twenty_files_accepted_in_one_request(client):
+    data = package()
+    files = manifest(25, data)
+    task = create(client, files).json()["id"]
+    response = upload(client, task, files, data)
+    assert response.status_code == 200, response.text
+    assert response.json()["task"]["uploaded"] == 25
+    assert len(response.json()["receipts"]) == 25
 
 
 def test_per_file_rejection_retry_and_manifest_total_preserved(client):
@@ -97,6 +106,17 @@ def test_per_file_rejection_retry_and_manifest_total_preserved(client):
     assert docs[0]["upload_status"] == "accepted" and docs[0]["error_code"] is None
     unknown = dict(files[2], client_id="unknown")
     assert upload(client, task, [unknown], good).json()["receipts"][0]["error_code"] == "MANIFEST_ENTRY_NOT_FOUND"
+
+
+def test_legacy_doc_upload_is_rejected_with_conversion_guidance(client):
+    data = b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1" + b"legacy bytes"
+    files = [{"client_id": "legacy", "name": "合同.doc", "size": len(data)}]
+    task = create(client, files).json()["id"]
+    response = upload(client, task, files, data)
+    assert response.status_code == 200
+    receipt = response.json()["receipts"][0]
+    assert receipt["error_code"] == "LEGACY_DOC_UNSUPPORTED"
+    assert response.json()["task"]["rejected"] == 1
 
 
 def test_pause_whole_task_and_new_segment_inherits_pause(client):
@@ -229,7 +249,7 @@ def test_identity_isolation_capabilities_and_historical_mapping(client, monkeypa
     engine = caps["engine"]
     assert engine["id"] == "recall_first" and engine["rule_source"] == "guide"
     assert engine["actions_total"] == int((engine["guide"] or {}).get("groups") or 0)
-    assert caps["upload_limits"]["max_request_files"] == 20
+    assert "max_request_files" not in caps["upload_limits"]
     # Legacy batches can no longer be created over HTTP; the historical read and
     # control mapping they exercise is still supported, so seed one directly.
     seeded = client.app.state.store.create_batch(owner="alice", ruleset_version="v1", ruleset_sha256="0" * 64,

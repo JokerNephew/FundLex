@@ -48,12 +48,12 @@ def bound_store(tmp_path) -> tuple[RunStore, dict]:
 
 
 def submit_task(store, *, data: bytes, guide_version_id: str, guide_rules_sha256: str,
-                engine_id: str = "recall_first", owner: str = OWNER):
+                engine_id: str = "recall_first", owner: str = OWNER, mode: str = "delivery"):
     tasks = TaskStore(store)
     task = tasks.create(owner, "召回任务", load_ruleset("v1"),
                         [{"client_id": "c1", "name": "contract.docx", "size": len(data)}],
                         engine_id=engine_id, guide_version_id=guide_version_id,
-                        guide_rules_sha256=guide_rules_sha256)
+                        guide_rules_sha256=guide_rules_sha256, mode=mode)
     receipts = tasks.uploads(owner, task["id"], [{"client_id": "c1", "name": "contract.docx", "data": data}])
     assert receipts["receipts"][0]["status"] == "accepted"
     return tasks, task["id"], receipts["receipts"][0]["batch_id"], receipts["receipts"][0]["document_id"]
@@ -184,6 +184,31 @@ def test_recall_pipeline_stop_pauses_task(tmp_path):
     assert document["error_code"] == "MODEL_CIRCUIT_OPEN"
 
 
+def test_worker_persists_verification_blocked_report_on_replay_retry(tmp_path):
+    store, version = bound_store(tmp_path)
+
+    def processor(source, output, ruleset):
+        return {
+            "engine_id": "recall_first", "schema_version": "3",
+            "error_code": "MODEL_REPLAY_MISS",
+            "delivery_status": "not_generated",
+            "verification_status": "verification_blocked",
+            "verification_blockers": [{"code": "MODEL_REPLAY_MISS", "stage": "audit"}],
+        }
+
+    tasks, task_id, _, _ = submit_task(
+        store, data=contract_bytes(), guide_version_id=version["id"],
+        guide_rules_sha256=version["rules_sha256"])
+    assert Worker(store, processor).run_once()
+    document = tasks.documents(OWNER, task_id)["items"][0]
+    assert document["job_status"] == "retry_wait"
+    assert document["error_code"] == "MODEL_REPLAY_MISS"
+    report = store.get_report(OWNER, document["batch_id"], document["document_id"])
+    assert report["verification_status"] == "verification_blocked"
+    assert report["verification_blockers"][0]["stage"] == "audit"
+    assert tasks.get(OWNER, task_id)["status"] == "paused"
+
+
 def test_validate_delivery_requires_actual_content_verification(tmp_path):
     source = tmp_path / "contract.docx"
     source.write_bytes(contract_bytes())
@@ -201,6 +226,10 @@ def test_validate_delivery_requires_actual_content_verification(tmp_path):
         validate_delivery(report, artifacts)
     report["output_validation"]["checks"].append("actual_content_verification")
     validate_delivery(report, artifacts)
+    report["verification_status"] = "verification_blocked"
+    with pytest.raises(ValueError, match="MISSING_VERIFIED_ARTIFACTS"):
+        validate_delivery(report, artifacts)
+    report.pop("verification_status")
     # An incomplete recall result must never pass while presenting the final names.
     report["delivery_status"] = "incomplete"
     report["output_validation"]["kind"] = "recall_working_edits"
@@ -285,6 +314,48 @@ def test_worker_releases_guide_job_on_model_stop(tmp_path, monkeypatch):
     with store._connect() as db:
         job = db.execute("SELECT status,attempts,error_code FROM guide_jobs WHERE id=?",
                          (version["job_id"],)).fetchone()
-    assert job["status"] == "queued" and job["attempts"] == 1 and job["error_code"] is None
+    assert job["status"] == "queued" and job["attempts"] == 0 and job["error_code"] is None
     assert guide_store.get_version(store, OWNER, version["id"])["status"] == "uploaded"
     assert worker.run_once() is False  # backoff, the attempt is not consumed twice
+
+
+def test_diagnosis_mode_publishes_report_only(tmp_path):
+    app = create_app(tmp_path / "state")
+    store = app.state.store
+    guide_store.ensure_builtin_guide(store)
+    version = guide_store.get_version(store, OWNER, guide_store.BUILTIN_GUIDE_ID)
+    data = contract_bytes()
+    tasks, task_id, batch_id, document_id = submit_task(
+        store, data=data, guide_version_id=version["id"], guide_rules_sha256=version["rules_sha256"],
+        mode="diagnosis")
+    assert Worker(store, complete_recall_processor).run_once()
+    document = tasks.documents(OWNER, task_id)["items"][0]
+    assert document["delivery_status"] == "diagnosed"
+    assert {"report_md", "report_json"}.issubset(document["downloads"])
+    assert not {"final", "redline", "working_final", "working_redline"} & set(document["downloads"])
+    client = TestClient(app)
+    assert client.get(document["downloads"]["report_json"], headers=HEADERS).status_code == 200
+    assert client.get(f"/api/batches/{batch_id}/documents/{document_id}/download/final",
+                      headers=HEADERS).status_code == 404
+
+
+def test_evaluation_mode_publishes_evaluation_pair_only(tmp_path):
+    app = create_app(tmp_path / "state")
+    store = app.state.store
+    guide_store.ensure_builtin_guide(store)
+    version = guide_store.get_version(store, OWNER, guide_store.BUILTIN_GUIDE_ID)
+    data = contract_bytes()
+    tasks, task_id, batch_id, document_id = submit_task(
+        store, data=data, guide_version_id=version["id"], guide_rules_sha256=version["rules_sha256"],
+        mode="evaluation")
+    assert Worker(store, complete_recall_processor).run_once()
+    document = tasks.documents(OWNER, task_id)["items"][0]
+    assert document["delivery_status"] == "evaluation_unmodified"
+    assert {"evaluation_final", "evaluation_redline", "report_json"}.issubset(document["downloads"])
+    assert not {"final", "redline"} & set(document["downloads"])
+    client = TestClient(app)
+    final = client.get(document["downloads"]["evaluation_final"], headers=HEADERS)
+    assert final.status_code == 200 and final.content == data
+    assert client.get(document["downloads"]["evaluation_redline"], headers=HEADERS).status_code == 200
+    assert client.get(f"/api/batches/{batch_id}/documents/{document_id}/download/final",
+                      headers=HEADERS).status_code == 404
