@@ -9,6 +9,7 @@ from typing import Any
 from ..store import Conflict
 
 from .export import build_evidence_package, export_guide_docx, render_evidence_html
+from .eligibility import evaluate_run_eligibility
 from .models import GuideItem, sha256_json, stable_id, utc_now
 from .store import GuideGenerationStore
 
@@ -120,22 +121,38 @@ def _update_guide_item(store: GuideGenerationStore, run_id: str, item_id: str,
     store.update_run(run_id, guide_sha256=export["sha256"],
                      payload={**(run.get("payload") or {}), "human_edited": True,
                               "human_version": version_no})
+    gates = evaluate_run_eligibility(store, run_id)
+    content_sha256 = sha256_json([item.to_dict() for item in items])
+    qualification = {
+        "qualified": bool(gates["qualified"]),
+        "gate_sha256": gates["gate_sha256"],
+        "gates": gates,
+        "content_sha256": content_sha256,
+        # A human edit is a draft.  It never inherits machine qualification;
+        # the explicit owner approve action is the auditable disposition and
+        # re-checks this frozen gate snapshot in the candidate transaction.
+        "status": "human_review_required",
+        "edited_at": utc_now(),
+    }
     candidate_version = store.create_candidate_version(
         run_id, status="human_draft",
         payload={
-            "schema_version": "candidate-guide-version-1",
+            "schema_version": "candidate-guide-version-2",
             "run_id": run_id,
             "guide_items": [item.to_dict() for item in items],
             "human_version_no": version_no,
             "base_ai_items_sha256": sha256_json(baseline_items),
             "finalize": (run.get("payload") or {}).get("finalize", {}),
+            "qualification": qualification,
             "human_change_ids": [change["change_id"] for change in change_records],
             "guide_artifact": {"kind": "guide", "sha256": export["sha256"],
                                "size": export["size"],
                                "object_key": str(docx_path.relative_to(store.store.objects))},
         },
-        content_sha256=sha256_json([item.to_dict() for item in items]),
+        content_sha256=content_sha256,
         human_version_no=version_no,
+        qualification_status="human_review_required",
+        qualification_sha256=gates["gate_sha256"],
         expected_current_version_id=candidate["current_version_id"])
     store.update_run(run_id, payload={**(store.get_run(run_id).get("payload") or {}),
                                       "candidate_version_id": candidate_version["candidate_version_id"],
