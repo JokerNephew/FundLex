@@ -190,6 +190,8 @@ def test_publish_success_stages_with_deployment_python_and_preserves_backup(rele
     assert (tx / "status").read_text().strip() == "committed"
     assert (tx / "old/fundlex/stale.py").read_text() == "original module\n"
     assert (tx / "old/.fundlex-engine-build").read_text() == "old marker\n"
+    service_marker = (dst / ".fundlex-service-build").read_text().strip()
+    assert len(service_marker) == 64 and all(ch in "0123456789abcdef" for ch in service_marker)
     assert not list(release["temp"].iterdir())  # Temporary SQLite stores cleaned.
     assert not list(dst.rglob("*.sqlite3"))
     events = (release["state"] / "events").read_text()
