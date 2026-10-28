@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>新法规候选修改指引 · FundLex</title>
+<link rel="stylesheet" href="/static/app.css">
+<link rel="stylesheet" href="/static/guide_generation.css">
+</head>
+<body>
+<div class="gg-shell">
+  <header class="gg-topbar">
+    <a class="gg-brand" href="/">FundLex</a>
+    <div class="gg-title">新法规候选修改指引</div>
+    <div class="gg-top-actions">
+      <span id="gg-identity" class="gg-identity"></span>
+      <a class="btn btn-sm" href="/">返回合同工作台</a>
+    </div>
+  </header>
+  <main class="gg-main">
+    <div id="gg-login" class="gg-login" hidden>
+      <h1>需要登录</h1>
+      <p>请先在 FundLex 工作台登录，再打开本页。</p>
+      <a class="btn btn-primary" href="/">前往登录</a>
+    </div>
+
+    <section class="gg-hero">
+      <div>
+        <span class="eyebrow">REGULATION → GUIDE</span>
+        <h1>上传新监管规定，生成候选修改指引</h1>
+        <p>系统自动完成法规要求原子化、多路合同扫描、影响发现、候选指引起草、独立质量复核、语义覆盖与 residual mining。结果只是高质量候选指引，人工拥有最终决定权。</p>
+      </div>
+      <div class="gg-hero-actions">
+        <label class="btn" for="gg-corpus-refresh">合同 Corpus</label>
+        <span id="gg-corpus" class="gg-muted">读取中…</span>
+      </div>
+    </section>
+
+    <section class="gg-card">
+      <div class="gg-card-head">
+        <div><h2>上传法规</h2><p class="gg-muted">支持 DOCX 或带文本层的结构化 PDF；不接收扫描件，不做 OCR。</p></div>
+      </div>
+      <form id="gg-upload-form" class="gg-upload-form">
+        <input id="gg-file" type="file" accept=".docx,.pdf" required>
+        <label class="gg-check"><input id="gg-latest-only" type="checkbox" checked> 语义扫描仅 latest-known 合同（历史版本仍保留词法扫描）</label>
+        <label class="gg-check"><input id="gg-engine" type="checkbox"> 完成后运行 Engine Compatibility（独立报告）</label>
+        <button class="btn btn-primary" id="gg-upload-btn" type="submit">上传并开始生成</button>
+        <span id="gg-upload-msg" class="gg-muted" role="status"></span>
+      </form>
+    </section>
+
+    <div class="gg-layout">
+      <aside class="gg-sidebar">
+        <div class="gg-card">
+          <div class="gg-card-head"><h2>生成任务</h2><button class="btn btn-sm" id="gg-refresh-runs">刷新</button></div>
+          <div id="gg-run-list" class="gg-run-list"><p class="gg-muted">读取中…</p></div>
+        </div>
+      </aside>
+      <section class="gg-content">
+        <div id="gg-empty" class="gg-card gg-empty">
+          <h2>选择一个生成任务</h2>
+          <p>上传法规后，系统会在后台运行；任务可能持续较长时间。你可以随时刷新页面查看阶段和进度。</p>
+        </div>
+        <div id="gg-detail" hidden>
+          <div class="gg-card">
+            <div class="gg-card-head">
+              <div><span class="eyebrow">RUN</span><h2 id="gg-run-title"></h2><p id="gg-run-subtitle" class="gg-muted"></p></div>
+              <div class="gg-actions">
+                <button class="btn btn-sm" id="gg-reload-run">刷新</button>
+                <button class="btn btn-sm" id="gg-engine-btn">运行 Engine Compatibility</button>
+              </div>
+            </div>
+            <div id="gg-run-badges" class="gg-badges"></div>
+            <div id="gg-summary-cards" class="gg-cards"></div>
+            <div id="gg-stage-rail" class="gg-stage-rail"></div>
+            <p id="gg-run-error" class="gg-error" hidden></p>
+          </div>
+
+          <nav class="gg-tabs" aria-label="生成任务视图">
+            <button class="gg-tab is-active" data-tab="overview">总览</button>
+            <button class="gg-tab" data-tab="requirements">Requirement Matrix</button>
+            <button class="gg-tab" data-tab="impacts">Impact Overview</button>
+            <button class="gg-tab" data-tab="guide">Guide Candidate / 人工编辑</button>
+            <button class="gg-tab" data-tab="quality">Quality Findings</button>
+            <button class="gg-tab" data-tab="coverage">Coverage</button>
+            <button class="gg-tab" data-tab="residual">Residual Mining</button>
+            <button class="gg-tab" data-tab="evidence">Evidence / 导出</button>
+          </nav>
+
+          <div class="gg-tab-panel is-active" id="gg-panel-overview"></div>
+          <div class="gg-tab-panel" id="gg-panel-requirements"></div>
+          <div class="gg-tab-panel" id="gg-panel-impacts"></div>
+          <div class="gg-tab-panel" id="gg-panel-guide"></div>
+          <div class="gg-tab-panel" id="gg-panel-quality"></div>
+          <div class="gg-tab-panel" id="gg-panel-coverage"></div>
+          <div class="gg-tab-panel" id="gg-panel-residual"></div>
+          <div class="gg-tab-panel" id="gg-panel-evidence"></div>
+        </div>
+      </section>
+    </div>
+  </main>
+</div>
+<div id="gg-toast" class="gg-toast" hidden></div>
+<script src="/static/guide_generation.js" defer></script>
+</body>
+</html>
