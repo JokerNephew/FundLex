@@ -133,7 +133,10 @@ def _item_spans(text: str) -> list[tuple[int, int, str]]:
 
 def _surface_start(text: str, start: int) -> int:
     """Extend an item's span over its own descriptor prefix ("基金申购费率")."""
-    for prefix in ("基金", "的基金"):
+    # Keep the guide's canonical surface: a contract may say "本基金的申购费率"
+    # where the guide says "基金申购费率".  Dropping the extra qualifier is what
+    # makes the rebuilt sentence converge to the authorized new_text (G14).
+    for prefix in ("本基金的", "本基金", "的基金", "基金"):
         if text[max(0, start - len(prefix)):start] == prefix:
             return start - len(prefix)
     return start
@@ -194,21 +197,24 @@ def _rebuild(before: str, spans: list[tuple[int, int, str]], allowed: set[str],
              *, canonical_tail: str = "") -> str | None:
     kept: list[tuple[str, str]] = []
     present: set[str] = set()
+    canonical_surfaces = {
+        item: canonical_tail[_surface_start(canonical_tail, start):end]
+        for start, end, item in _item_spans(canonical_tail)
+    }
     for start, end, item in spans:
         if item not in allowed:
             continue
         surface_start = _surface_start(before, start)
-        kept.append((item, before[surface_start:end]))
+        # Prefer the guide's own surface for a surviving item ("基金申购费率"),
+        # otherwise a contract qualifier such as "本基金的" survives and the
+        # replacement no longer matches the authorized new_text (G14).
+        kept.append((item, canonical_surfaces.get(item) or before[surface_start:end]))
         present.add(item)
     missing = [item for item in (allowed_order or []) if item not in present]
     if missing:
         # Never manufacture wording from an item label (for example ``基金`` +
         # ``销售服务费率``).  A missing item is safe only when the operation supplied
         # the complete canonical wording from which its surface form can be copied.
-        canonical_surfaces = {
-            item: canonical_tail[start:end]
-            for start, end, item in _item_spans(canonical_tail)
-        }
         if any(item not in canonical_surfaces for item in missing):
             return None
         for item in missing:

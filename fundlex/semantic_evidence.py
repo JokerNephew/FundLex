@@ -184,7 +184,7 @@ def evidence_from_span(evidence_id: str, inspection: Any, location: str, *,
         start = positions[occurrence_index]
         end = start + len(needle)
         quote = body[start:end]
-    quote = body[start:end] if not quote else quote
+    quote = body[start:end] if not quote else _display_text(quote)[0]
     if body[start:end] != quote:
         raise EvidenceError("EVIDENCE_QUOTE_MISMATCH",
                             {"location": location, "start": start, "end": end})

@@ -3039,7 +3039,8 @@ def resolve_absent_site_targets(targets: Sequence[Target], rules_by_id: dict[str
                     rule_id="G05", location=target.location, quote=span.text,
                     state="satisfied", reason=f"{target.reason}|ALREADY_ABSENT_AT_CLASS_SETUP",
                     start=0, end=len(span.text), resolution="resolved",
-                    segment_ok=True, operations=(operation_id,))
+                    segment_ok=True, operations=(operation_id,),
+                    scope_id=target.scope_id)
                 targets.append(clone)
                 records.append({"target_id": clone.target_id, "rule_id": "G05",
                                 "operation_id": operation_id, "location": target.location})
@@ -7924,9 +7925,13 @@ def approval_book_for(rules_by_id: Mapping[str, dict], targets: Sequence[Target]
     guide_sha256 = guide_fingerprint([rules_by_id[key] for key in sorted(rules_by_id)])
     book = ApprovalBook()
     for target in targets:
-        if (target.state not in {"needs_edit", "satisfied"} or target.out_of_scope
+        if (target.state not in {"needs_edit", "satisfied"}
                 or not target.operations or target.attribution_error):
             continue
+        # A target marked out of scope by a rule-specific site word list is still
+        # provable when the model's quote and the physical scope are verified.
+        # A true scope violation has no scope_id (the scope gate never stamped
+        # it), so requiring scope_id below still fails closed for that case.
         approval_id = str(getattr(target, "approval_id", "") or "") \
             or f"AP:{target.target_id}"
         try:
