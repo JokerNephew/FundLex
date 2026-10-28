@@ -63,7 +63,6 @@ export function NewTaskPage() {
   const [fileFilter, setFileFilter] = useState<'all' | 'accepted' | 'issue'>('all')
   const [filePage, setFilePage] = useState(1)
   const maxBytes = capabilities.data?.upload_limits?.max_file_bytes
-  const maxRequestFiles = capabilities.data?.upload_limits?.max_request_files || 20
   const maxRequestBytes = capabilities.data?.upload_limits?.max_request_bytes
   const recoveryItems = useMemo(() => recoveryDocuments.data || [], [recoveryDocuments.data])
   const recoveryIds = Object.fromEntries(recoveryItems.filter((item) => item.client_id).map((item) => [manifestKey(item.name, item.size), item.client_id as string]))
@@ -113,7 +112,7 @@ export function NewTaskPage() {
       const chunks: Array<{ files: File[]; ids: string[] }> = []
       let chunkFiles: File[] = []; let chunkIds: string[] = []; let chunkBytes = 0
       files.forEach((file, index) => {
-        if (chunkFiles.length >= maxRequestFiles || Boolean(maxRequestBytes && chunkFiles.length && chunkBytes + file.size > maxRequestBytes)) {
+        if (maxRequestBytes && chunkFiles.length && chunkBytes + file.size > maxRequestBytes) {
           chunks.push({ files: chunkFiles, ids: chunkIds }); chunkFiles = []; chunkIds = []; chunkBytes = 0
         }
         chunkFiles.push(file); chunkIds.push(uploadIds[index]); chunkBytes += file.size
