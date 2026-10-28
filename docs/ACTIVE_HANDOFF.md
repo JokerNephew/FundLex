@@ -6,7 +6,10 @@
 - 方案`docs/COMPREHENSIVE_REMEDIATION_EXECUTION_PLAN_20261028.md`，进度`docs/COMPREHENSIVE_REMEDIATION_PROGRESS_20261028.md`，评测阶梯`docs/EVALUATION_AND_OPTIMIZATION_PLAN.md` §0；S0基线已完成，S1–S7与A–H独立ownership/worktrees并行。新证据`/tmp/opencode/comprehensive-remediation-20261028/`，prestart.patch已保存。
 - 当前范围核对：`funds_word`根目录514份DOCX，与第一批28份hash不重叠（unique约542）；第一批含5份旧`.doc`作为格式边界。最终“覆盖”不等于所有都能成功修改，解析/保护/排除/失败边界必须如实报告。
 - 无费用/calls审批，账本只观测；保留资源/权限/文件安全、上下文/输出容量和无进展限制，不泄凭据。业务范围/既有修订/正文摘要要求按已确认规格，不再次当业务待定。
-- 下一动作：接收A–H各agent提交→按ownership审阅/cherry-pick/冲突解决→全量回归与多波真实评测→冻结候选→受控部署→正式工作台真实模型/产物/授权下载E2E。子agent不得自行发布生产混版；扩样须以上一波质量门槛为前提。
+- 2026-10-29当前集成：8个工作树A–H均已提交并合并到`codex/comprehensive-remediation-20261028`；全量非浏览器（含隔离MySQL）**2106 passed/6 skipped/4 warnings/679.14s**。分支HEAD含`27f7239`/标签v2`76e0c8d`；工作树只剩未跟踪合同备份目录和本轮待提交的`p6_score`/进度/集中记录修改（提交前核对）。
+- 独立标签v2已合并：28份/501 targets，review346条中应用44、驳回251、未解决51单列uncertain；不是最终gold。首批transcript/产物评分未完成。
+- 真实模型新端点`https://api.commandcode.ai/provider/v1`、模型`deepseek/deepseek-v4-flash`，key只在`/tmp/opencode/comprehensive-remediation-20261028/model-new.env`(600)；未写仓库/文档/日志。首两次真实run因reasoning耗尽`max_tokens`报`MODEL_OUTPUT_TRUNCATED`（`real-value-first{,2}`），第三次已用`thinking=disabled`+12000输出+context32000启动，结果待记录；不能把失败/重试当业务完成。
+- 当前未部署/未重启/未改生产env；生产仍是旧OpenCode端点。下一动作：真实value run完成→检查p1258摘要及实际final，独立业务复核，再跑首批20dev评分；通过后才合并/冻结候选、更新生产env/root publisher/五服务部署、正式工作台E2E；扩样需质量门槛。
 
 ## 最新断点（2026-10-28，8-agent全面检查完成，整改未执行）
 

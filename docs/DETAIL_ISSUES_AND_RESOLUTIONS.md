@@ -4,6 +4,21 @@
 >
 > 测试中遇到的业务问题单独汇总在 [`BUSINESS_ISSUES_FROM_TESTS.md`](BUSINESS_ISSUES_FROM_TESTS.md)，与代码/定位缺陷分开维护。
 
+## 全面整改合并批次（2026-10-29，尚未生产验收）
+
+- 分支`codex/comprehensive-remediation-20261028`合并A–H及独立标签分支；HEAD含`343a375`（运行时/评分）、`145d115`（引擎）、`d76aa76`（DOCX/Compare）、`4d746e6`（法规生成）、`7d37d91`（workspace/发布/依赖）、`1fea578`（任务/飞书）、`e6b796f`（前端）、`27f7239`（标签）、`76e0c8d`（标签v2）等。原8个后台agent均未部署/未改生产。
+- **合并后全量非浏览器回归（含隔离MySQL 8）**：`2106 passed / 6 skipped / 4 warnings / 679.14s`（`/tmp/opencode/comprehensive-remediation-20261028/integration-pytest.log`）。浏览器套件与真实模型/产物验证另列，不能把回归数当业务通过。
+- **独立标签v2**：`docs/evidence/labels-first-batch-20261028-v2.json`，28份/501 targets；`review_resolutions`346条，应用44、驳回251、未解决51单列`uncertain`。仍是独立标签草稿，51条未解决不能当gold；BH06保护边界保留。v1保留。
+- **逐问题实施状态**（均已合并代码，测试见对应的新测试；**未生产部署/未完成正式E2E**）：
+  - A引擎：FL-D457批准绑定物理站点；FL-D458审计真实site proof；FL-D459删除坐标；FL-D441分页消费者；FL-D384/434/443正文摘要目标；FL-D437统一交付门禁。新增6个测试文件，定向29 passed/相关224 passed；不能以单测替代真实合同。
+  - B DOCX/Compare：FL-D446 A01/A02/A03（外方修订选择、accepted/barrier坐标、属性/story/段落标记准入）；FL-D460同段多diff oracle；FL-D447末段/结构差异；FL-D461 OPC story；FL-D462格式/编号披露。新增2个测试文件，相关86/126/175 passed；仍不支持结构明确拒绝，Word/WPS往返未验。
+  - C法规生成：FL-D452 config allowlist；FL-D374/338资格与不可变版本；FL-D453全写入fencing；FL-D455下载hash；FL-D468兼容性消费；FL-D469 resume/retry；guide runner cap纯观测。新增3测试文件，相关85/168 passed；FakeRouter不代表真实法规质量。
+  - D运行时/评分：FL-D445/449费用/调用cap纯观测（显式`FUNDLEX_MODEL_ENFORCE_LIMITS=1`仅兼容测试），FL-D450完整义务+site-aware评分；实际DOCX反例通过。旧分数回算会下降，未改写旧gold/分数；真实模型与生产env迁移待验证。
+  - E发布/workspace：FL-D451 `/api/workspace/tasks`及V1 workspace入口；FL-D303/382/448候选发布器五服务/服务hash/回滚、依赖与sandbox模板；FL-D288/284/464/463/465/478按工具/文档处理。尚未在root生产停服发布/备份恢复/权限修复，`/usr/local/sbin`旧脚本仍需受控替换。
+  - G任务/飞书：FL-D454统一artifact bytes核验；FL-D456权威execution_mode；FL-D466 owner/binding失效；FL-D467事件租约恢复；FL-D470全量分页。隔离SQLite/fake Feishu通过，未发真实飞书，未验证MySQL并发。
+  - H前端：FL-D451 workspace生产V1骨架；FL-D471/472/473/474/475/476/477及FL-D312 V2 epoch修复。typecheck/lint/Vitest16、browser 69 passed（Fake模型/隔离服务）；workspace真实后端集成与生产E2E待验。
+- **仍未完成/阻塞**：真实模型`deepseek/deepseek-v4-flash`首轮曾因reasoning占满`max_tokens`报`MODEL_OUTPUT_TRUNCATED`；已用`thinking=disabled`+提高输出上限重跑（结果待记录）；首批真实修改/实际DOCX评分、全量扩样、生产部署、Word/WPS、飞书真实回传、MySQL并发和云备份恢复仍未完成。项目继续NO-GO。
+
 ## FL-D449 现行预算审批规定与用户明确要求不符（2026-10-28）
 
 - 发现日期：2026-10-28，多agent全面检查期间用户再次明确：“我从来没有限制过付费模型的调用，如果有哪条规定是这么写的帮我改掉，然后你再正常按你的规划进行检查”。不将旧限制归因于用户。

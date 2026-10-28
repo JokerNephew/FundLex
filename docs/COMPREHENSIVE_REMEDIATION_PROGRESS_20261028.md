@@ -4,7 +4,7 @@
 
 | 阶段 | 状态 | 验证/提交/剩余 |
 |---|---|---|
-| S0 基线/ownership | 已完成基线 | 分支`codex/comprehensive-remediation-20261028`，基线提交`9e85f91`；五个隔离worktree已建。不将审查提交误作业务修复 |
+| S0 基线/ownership | 已合并代码，回归中 | 分支`codex/comprehensive-remediation-20261028`；基线`9e85f91`，合并A–H及独立标签分支；全量pytest与真实模型运行中。不将合并/单测误作业务修复 |
 | S1 安全/无cap/资格 | 开发中 | 运行策略/评分D、法规生成C、发布/依赖E并行；预检有阻塞须先报主agent |
 | S2 业务完整性/证明 | 开发中 | A引擎；生产价值优选摘要假complete必须复验 |
 | S3 DOCX/Compare | 开发中 | B |

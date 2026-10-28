@@ -691,11 +691,73 @@ def _select_label_cases(label_cases: list[dict], run_dir: Path, group: str
     return selected, missing, None
 
 
+def _case_facts(label: dict) -> dict:
+    """Return the scorer facts for both legacy and first-batch label schemas.
+
+    The independent first-batch labeler records richer, human-readable facts under
+    ``fund`` (``share_classes`` with long field names) rather than the old scorer's
+    compact ``classes`` list.  Do not flatten the evidence away: adapt only the
+    fields the scorer consumes, and fail closed to an empty class list when the
+    source does not prove a class set.
+    """
+    facts = label.get("facts") if isinstance(label.get("facts"), dict) else {}
+    fund = label.get("fund") if isinstance(label.get("fund"), dict) else {}
+    classes = list(facts.get("classes") or []) if isinstance(facts.get("classes"), list) else []
+    if not classes:
+        for item in fund.get("share_classes") or []:
+            if not isinstance(item, dict):
+                continue
+            letter = str(item.get("label") or "").strip()
+            name = item.get("name") or (f"{letter}类基金份额" if letter else "基金份额")
+            classes.append({
+                "name": name,
+                "letter": letter,
+                "subscription_fee": bool(item.get("pays_purchase_fee")),
+                "service_fee": bool(item.get("charges_sales_service_fee")),
+            })
+    has_service_fee = facts.get("has_service_fee")
+    if not isinstance(has_service_fee, bool):
+        has_service_fee = facts.get("has_sales_service_fee")
+    if not isinstance(has_service_fee, bool):
+        has_service_fee = any(item.get("service_fee") for item in classes
+                              if isinstance(item, dict))
+    return {
+        **facts,
+        "fund_type": facts.get("fund_type") or fund.get("fund_type") or "",
+        "excluded": bool(facts.get("excluded") or fund.get("excluded")),
+        "class_count": int(facts.get("class_count") or fund.get("class_count")
+                           or len(classes)),
+        "classes": classes,
+        "has_service_fee": bool(has_service_fee),
+        "is_floating_fee": bool(facts.get("is_floating_fee")
+                                if isinstance(facts.get("is_floating_fee"), bool)
+                                else (facts.get("floating_management_fee")
+                                      or fund.get("floating_management_fee"))),
+    }
+
+
+def _case_source_path(label: dict, source_root: Path, words_root: Path) -> Path | None:
+    """Resolve a label's source without assuming old ``data/funds_word`` layout."""
+    relative = label.get("relative")
+    if isinstance(relative, str) and relative:
+        path = source_root / relative
+        if path.is_file():
+            return path
+    name = label.get("file")
+    if isinstance(name, str) and name:
+        path = words_root / name
+        if path.is_file():
+            return path
+    return None
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--labels", default="var/recall-first-evaluation/p6/labels.json")
     parser.add_argument("--run", required=True)
     parser.add_argument("--data-root", default="/home/opencode/data")
+    parser.add_argument("--source-root", default="/home/opencode/fundlex",
+                        help="project root used to resolve label 'relative' paths")
     parser.add_argument("--output", default=None)
     parser.add_argument("--group", choices=("run", "dev", "holdout", "all"), default="run",
                         help="Label cases to score. 'run' (default) scores exactly the cases "
@@ -730,9 +792,14 @@ def main() -> int:
     for label in selected:
         case_id = label["case_id"]
         case_dir = run_dir / case_id
-        entry: dict = {"case_id": case_id, "group": label["group"],
-                       "editable": label["target_count"] > 0,
-                       "facts": label["facts"]}
+        targets = label.get("targets") or []
+        target_count = label.get("target_count")
+        if not isinstance(target_count, int):
+            target_count = len(targets)
+        facts = _case_facts(label)
+        entry: dict = {"case_id": case_id, "group": label.get("group") or "",
+                       "editable": target_count > 0,
+                       "facts": facts}
         final = None
         for candidate in ("final", "final.docx", "working_final", "working_final.docx"):
             path = case_dir / candidate
@@ -748,7 +815,7 @@ def main() -> int:
             entry["delivery_status"] = report.get("delivery_status")
             entry["verdicts"] = [{"target_id": t.get("target_id"), "rule_id": t["rule_id"],
                                   "verdict": "not_executed", "detail": "no artifact"}
-                                 for t in label["targets"]]
+                                 for t in targets]
         else:
             entry["artifact"] = str(final)
             entry["artifact_sha256"] = hashlib.sha256(final.read_bytes()).hexdigest()
@@ -756,8 +823,8 @@ def main() -> int:
                 if (case_dir / "report.json").exists() else {}
             entry["delivery_status"] = report.get("delivery_status")
             final_paragraphs = paragraphs_of(final)
-            original_path = words_root / label["file"]
-            original_paragraphs = paragraphs_of(original_path) if original_path.exists() else []
+            original_path = _case_source_path(label, Path(args.source_root), words_root)
+            original_paragraphs = paragraphs_of(original_path) if original_path and original_path.exists() else []
             entry["original"] = str(original_path)
             # The engine's own applicability decisions are cross-checked, never used to
             # score the text. A label the engine judged not applicable / already satisfied
@@ -767,8 +834,8 @@ def main() -> int:
                 engine_status.setdefault(item.get("rule_id"), set()).add(item.get("status"))
             verdicts: list[dict] = []
             conflicts: list[dict] = []
-            for label_target in label["targets"]:
-                verdict = score_target(label_target, label["facts"], final_paragraphs,
+            for label_target in targets:
+                verdict = score_target(label_target, facts, final_paragraphs,
                                        original_paragraphs)
                 statuses = engine_status.get(verdict["rule_id"]) or set()
                 if statuses and statuses <= {"not_applicable", "satisfied"} \
