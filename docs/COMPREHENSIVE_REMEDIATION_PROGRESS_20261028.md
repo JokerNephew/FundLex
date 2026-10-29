@@ -4,7 +4,7 @@
 
 | 阶段 | 状态 | 验证/提交/剩余 |
 |---|---|---|
-| S0 基线/ownership | 已合并，回归通过 | 分支`codex/comprehensive-remediation-20261028`；基线`9e85f91`，A–H及标签分支已合并；最新非浏览器（含隔离MySQL）**2158 passed/6 skipped/750.46s**，浏览器最近**69 passed**。不将合并/单测误作业务修复 |
+| S0 基线/ownership | 已合并，回归通过 | 分支`codex/comprehensive-remediation-20261028`；基线`9e85f91`，A–H及标签分支已合并；最新非浏览器（含隔离MySQL）**2158 passed/6 skipped/760.67s**，浏览器最近**69 passed**。不将合并/单测误作业务修复 |
 | S1 安全/无cap/资格 | 已实施并部署 | D/C/E：cap纯观测、config/资格/不可变/fencing/下载核验/依赖/上传/sandbox代码与回归已合并；生产env新endpoint/无ENFORCE开关、certifi升级、备份权限已执行 |
 | S2 业务完整性/证明 | 单合同生产验证通过 | A：批准绑定、site proof、坐标、分页、摘要目标、统一门禁；生产value7 21/21标签、独立复核通过（P2空白段），其余20dev/8holdout/514待跑 |
 | S3 DOCX/Compare | 已实施，待Word/真实任务 | B：叠加/Review/坐标/Compare边界；合成及弘利临时副本+相关测试通过，Word/WPS未验 |

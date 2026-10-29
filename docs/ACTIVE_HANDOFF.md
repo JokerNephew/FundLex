@@ -13,7 +13,7 @@
 - 备份/发布事故已修：第一/第二DB备份工具曾写raw `.sql.gz`，已修复为先raw临时再gzip、verify通过，并在隔离MySQL恢复54表/93users/711docs后清理测试库；旧备份权限已收紧。发布器journalctl时间格式bug已修；生产`tools/ops/fundlex_backup.py`已同步修复版。
 - 第一波旧代码20份保留为失败证据：`first-wave-dev-{1..4}`。新代码重跑：`first-wave2-dev-{1..4}` + 定向 `fixcheck*/edge-run-*`。
 - **第一波最终（2026-10-29）**：20份dev中 **15份业务复核通过**、5份失败保留；v2标签 **304/390（77.95%）**，标签实际complete 14/20，false_complete 1（B01的2个标签口径争议，业务复核通过）。通过：B01/B02/B03/B04/B06/B07/B08/B09/B10/B11/B13/B14/B16/B18/B20；失败：B05弘利、B12沪深300、B15美国房地产、B17道琼斯、B19锐意。证据`docs/evidence/first-wave2-*`与`docs/REAL_REVISION_EVALUATION_RESULTS.md`。
-- 最新代码全量非浏览器回归 **2158 passed/6 skipped/750.46s**（提交`6539437`；之后仅G05 scoped delete、G17 composite guard等小修，最终回归以最新日志为准）。生产仍是候选`cdf298e`，尚未重新部署最新修复，也未重跑生产E2E。
+- 最新代码全量非浏览器回归 **2158 passed/6 skipped/760.67s**（提交`6539437`；之后仅G05 scoped delete、G17 composite guard等小修，最终回归以最新日志为准）。生产仍是候选`cdf298e`，尚未重新部署最新修复，也未重跑生产E2E。
 - 工作树有**非本轮改动**未提交：`frontend/compare.*`、`frontend/src/pages/Compare/*`、`frontend/src/types/api.ts`、`fundlex/compare/*`、`fundlex/guide_generation/*`、`tests/test_guide_generation_pipeline.py`、`tests/test_compare_merged_render.py`、`合同比对.png`；这些疑似用户/并行agent工作，未覆盖、未提交。
 - 下一步：①处理B05/B12/B15/B17/B19剩余变体（G02/G04/G16/G09/G22）；②最新代码重新部署生产并重跑正式E2E；③8份holdout冻结后验收；④扩样100/250/514+。
 - 独立标签v2已合并：28份/501 targets，review346条中应用44、驳回251、未解决51单列uncertain；不是最终gold。首批transcript/产物评分未完成。
@@ -1489,3 +1489,16 @@
 - 最终验证：干净 worktree `/home/opencode/.local/share/opencode/worktree/29a9a9/outer-integration` 全量 pytest **1782 passed / 85 skipped**（`/tmp/opencode/outer-full-pytest-final2.log`）；V1 浏览器 **34 passed**，V2 浏览器 **10 passed**；前端 typecheck/lint/Vitest/build 通过。
 - 未做：未发布生产、未跑真实模型 E2E。`engine_build()` 一次性变更要求发布前清空/暂停队列；分页仍有 `reason_options` 全量报告解析、error_code 回退 Python、legacy 分页和 MySQL 未实跑等保留项。
 - 下一步：用户验收；发布前按计划完成迁移/队列/回滚演练并登记真实 E2E 预算，不能把自动化测试冒充真实合同交付验收。
+
+## 当前断点（2026-10-29，Compare Word 三栏视图）
+
+- **目标**：按用户 2026-10-29 截图与要求，把合同比对改为 Word「比较」页形式；用户确认“保留”双栏视图、“按 word 来”。
+- **已实施（未提交、未发布）**：
+  - 后端 `fundlex/compare/render.py` 新增 `render_merged_document()`；`/api/compare/pairs/{id}/view` 新增 `merged.html`。
+  - V1 `frontend/compare.{html,css,js}` 增加「Word 视图 / 双栏对照」切换；Word 视图为左修订栏、中合并稿、右上下源文档，保留双栏的拖动、连线和差异栏；插入/删除统一 Word 红色，支持显示源文档与所有/简单/最终标记。
+  - V2 `frontend/src/pages/Compare/ComparePage.tsx`、`frontend/src/styles/app.css`、`frontend/src/types/api.ts` 同步三栏/双栏切换。
+  - 新增 `tests/test_compare_merged_render.py`，更新 Compare API 与 V1 浏览器测试；`docs/CONTRACT_COMPARE_DESIGN.md`、`docs/DETAIL_ISSUES_AND_RESOLUTIONS.md` 的 FL-D260/FL-D512 已登记。
+- **已验证**：Compare 专项 `129 passed / 6 skipped`；V1 浏览器 remediation `10 passed`；V2 typecheck/lint/Vitest `16 passed`/build 通过；本地临时服务用两份公开 DOCX 走真实上传/seal/CompareWorker/view，1421 处差异、`incomplete`，页面无 JS 错误；截图在 `/tmp/opencode/v1-real-compare-1600.png`、`/tmp/opencode/v1-real-compare-classic-390.png`。
+- **未做**：全量 pytest、干净 worktree 提交、发布、生产真实合同 E2E、生产 V1/V2 复核。
+- **下一步**：运行全量 pytest；只提交本次 Compare 相关文件（工作区仍有 `recall.py`、`guide_generation/*` 等他人未提交修改，勿一并提交）；从干净 worktree 发布并复验生产 `/` 的 V1 Compare 与双栏切换。
+- **注意**：本次未改 coverage 判定；`incomplete` 仍必须显示人工复核提示，不能因新视图宣称全文无差异。
