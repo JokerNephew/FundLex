@@ -1129,9 +1129,50 @@ def _expand_duplicate_copy_scopes(targets: list[Target],
             include_summary_copies=True, copy_keys=frozenset(scope.copy_keys),
             resolution=str(scope.resolution),
             evidence=tuple(scope.evidence) + ("duplicate_copy_scope",))
-    from .recall import duplicate_copy_targets
+    from .recall import duplicate_copy_targets, resolve_quote, Target
     for copy in duplicate_copy_targets(targets, rules_by_id, inspection, scopes):
         targets.append(copy)
+    # Income and liquidation summary copies often keep the same sentence but
+    # replace the body list marker ("1、" vs "（1）", "（4）" vs "4）").  Match
+    # the marker-stripped clause and bind the same core quote in the copy.
+    def strip_marker(value: str) -> str:
+        return re.sub(r"^\s*(?:\d+[、.．)）]|[（(]\d+[）)])\s*", "", value or "")
+    normalized: dict[str, list[str]] = {}
+    for location, text in paragraph_text.items():
+        if len(strip_marker(text)) >= 12:
+            normalized.setdefault(strip_marker(text), []).append(location)
+    existing_sites = {(target.rule_id, target.location, tuple(sorted(target.operations)))
+                      for target in targets if not target.out_of_scope}
+    for target in list(targets):
+        if (target.out_of_scope or target.state != "needs_edit"
+                or target.rule_id not in {"G18", "G22"} or not target.quote):
+            continue
+        scope = scopes.get(str(target.rule_id))
+        if scope is None or not scope.contains(target.location):
+            continue
+        key = strip_marker(paragraph_text.get(target.location, ""))
+        for location in normalized.get(key, ()):
+            if location == target.location:
+                continue
+            site = (target.rule_id, location, tuple(sorted(target.operations)))
+            if site in existing_sites:
+                continue
+            try:
+                span = inspection.by_location(location)
+            except (KeyError, DocxError):
+                continue
+            located = resolve_quote(span, target.quote)
+            if located is None:
+                continue
+            clone = Target(
+                target_id=f"{target.target_id}-N{len(targets)}",
+                rule_id=target.rule_id, location=location, quote=target.quote,
+                state="needs_edit", reason=f"{target.reason}|NORMALIZED_COPY",
+                start=located[0], end=located[1], resolution="resolved",
+                operations=tuple(target.operations or ()))
+            clone.segment_ok = True
+            targets.append(clone)
+            existing_sites.add(site)
 
 
 def _apply_scope_gate(targets: Sequence[Target], scopes: Mapping[str, Any] | None,

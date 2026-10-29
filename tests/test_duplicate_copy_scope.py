@@ -25,3 +25,26 @@ def test_fee_clause_summary_copy_is_added_to_scope():
     assert scopes["G15"].contains("p1129")
     assert scopes["G15"].include_summary_copies
     assert any(item.location == "p1129" for item in targets)
+
+
+def test_numbered_income_and_liquidation_summary_copies_are_cloned():
+    from fundlex.recall import Target
+    inspection = inspect_docx(SOURCE, full=True)
+    guide = {rule["rule_id"]: rule for rule in GUIDE["groups"]}
+    scopes = {
+        "G18": RuleScope("G18", frozenset(), frozenset({"p734"}), "body", False,
+                         frozenset({"收益分配"}), "resolved", ()),
+        "G22": RuleScope("G22", frozenset(), frozenset({"p883"}), "body", False,
+                         frozenset(), "resolved", ()),
+    }
+    targets = [
+        Target("T18", "G18", "p734",
+               "由于本基金A类基金份额不收取销售服务费，而C类基金份额收取销售服务费",
+               "needs_edit", "", operations=("G18:0",)),
+        Target("T22", "G22", "p883",
+               "按基金份额持有人持有的基金份额比例进行分配。",
+               "needs_edit", "", operations=("G22:0",)),
+    ]
+    _expand_duplicate_copy_scopes(targets, scopes, inspection, guide)
+    assert any(item.rule_id == "G18" and item.location == "p1095" for item in targets)
+    assert any(item.rule_id == "G22" and item.location == "p1239" for item in targets)

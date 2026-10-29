@@ -9634,7 +9634,7 @@ def ensure_g08_actual_rate_targets(targets: Sequence[Target], rules_by_id: dict[
 
 
 _G22_ORDERED_ITEM = re.compile(
-    r"^[（(]\d+[）)]\s*按基金份额持有人持有的基金份额比例进行分配")
+    r"^[（(]?\d+[）)]\s*按基金份额持有人持有的基金份额比例进行分配")
 
 
 def g22_appended_suffix(operation: Mapping[str, Any]) -> str:
