@@ -36,6 +36,16 @@ from .parser import parse_compare_document
 from .selection import SelectionError, make_snapshot
 from .text_diff import compare_documents
 
+# Paragraph-level OOXML markers that carry no visible text. Word writes
+# proofErr for spelling/grammar state and bookmark markers around headings;
+# neither should block a safe text edit.
+_PARAGRAPH_MARKERS = {
+    Q("proofErr"),
+    Q("bookmarkStart"), Q("bookmarkEnd"),
+    Q("commentRangeStart"), Q("commentRangeEnd"),
+    Q("permStart"), Q("permEnd"),
+}
+
 
 def _digest_bytes(data: bytes) -> str:
     return sha256(data).hexdigest()
@@ -387,10 +397,23 @@ def _build_plan(left_doc, right_doc, diffs: Sequence[Mapping[str, Any]], decisio
 
 
 def _run_text(run: etree._Element) -> str:
-    children = [child for child in run if child.tag != Q("rPr")]
-    if len(children) != 1 or children[0].tag != Q("t"):
-        raise DocxError("SELECTION_RUN_UNSUPPORTED")
-    return children[0].text or ""
+    parts: list[str] = []
+    for child in run:
+        if child.tag in {Q("rPr"), Q("lastRenderedPageBreak")}:
+            continue
+        if child.tag == Q("t"):
+            parts.append(child.text or "")
+        elif child.tag == Q("tab"):
+            parts.append("\t")
+        elif child.tag in {Q("br"), Q("cr")}:
+            parts.append("\n")
+        elif child.tag == Q("noBreakHyphen"):
+            parts.append("\u2011")
+        elif child.tag == Q("softHyphen"):
+            parts.append("\u00ad")
+        else:
+            raise DocxError("SELECTION_RUN_UNSUPPORTED")
+    return "".join(parts)
 
 
 def _copy_run(template: etree._Element | None, value: str, *, deleted: bool = False) -> etree._Element:
@@ -430,7 +453,7 @@ def _direct_runs(paragraph: etree._Element) -> tuple[list[etree._Element], str]:
     runs: list[etree._Element] = []
     values: list[str] = []
     for child in paragraph:
-        if child.tag == Q("pPr"):
+        if child.tag == Q("pPr") or child.tag in _PARAGRAPH_MARKERS:
             continue
         if child.tag != Q("r"):
             raise DocxError("SELECTION_PARAGRAPH_UNSUPPORTED")

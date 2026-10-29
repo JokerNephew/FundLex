@@ -240,3 +240,24 @@ def test_table_row_structure_change_is_blocked_before_output(tmp_path):
         generate_selection_artifacts(left, right, result, decisions, tmp_path / "f.docx", tmp_path / "r.docx",
                                      selection_epoch=1, result_sha256=result_hash)
     assert caught.value.code.startswith("SELECTION_BLOCK_")
+
+
+def test_public_v4_guide_with_proofing_markers_generates(tmp_path):
+    """Word proofErr/bookmark markers and lastRenderedPageBreak runs are
+    metadata, not unsupported paragraph content. The real public guide pair
+    must remain selectable and generatable."""
+    left = Path("references/source/v4存量基金适用销售费用新规的基金合同修改指引.docx")
+    right = Path("references/source/v4存量基金适用销售费用新规的基金合同修改指引_文案勘误版.docx")
+    if not left.is_file() or not right.is_file():
+        pytest.skip("public v4 guide fixtures are not present")
+    result, result_hash = _result(left, right)
+    choices = {diff["id"]: "right" for diff in result["diffs"]}
+    final, redline = tmp_path / "final.docx", tmp_path / "redline.docx"
+    validation = generate_selection_artifacts(
+        left, right, result, choices, final, redline,
+        selection_epoch=1, result_sha256=result_hash)
+    assert final.is_file() and redline.is_file()
+    assert validation.final_sha256 == hashlib.sha256(final.read_bytes()).hexdigest()
+    assert validation.redline_sha256 == hashlib.sha256(redline.read_bytes()).hexdigest()
+    reopened = Document(final)
+    assert any("销售服务费" in paragraph.text for paragraph in reopened.paragraphs)
