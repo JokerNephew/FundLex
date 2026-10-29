@@ -1,5 +1,4 @@
 import { createElement, useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type CSSProperties, type ReactNode, type RefObject } from 'react'
-import Splitter from 'antd/es/splitter'
 import { Button, Card, Spinner, StatusBadge } from '../../components/ui'
 import { saveBlob } from '../../api/client'
 import {
@@ -47,7 +46,7 @@ function statusLabel(status?: string): string {
 }
 function pairDone(pair?: ComparePair): boolean { return Boolean(pair && ['succeeded', 'incomplete'].includes(pair.status)) }
 
-const safeTags = new Set(['article', 'blockquote', 'br', 'caption', 'col', 'colgroup', 'dd', 'div', 'dl', 'dt', 'em', 'figcaption', 'figure', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'hr', 'i', 'li', 'mark', 'main', 'ol', 'p', 'pre', 'q', 'section', 'small', 'span', 'strong', 'sub', 'sup', 'table', 'tbody', 'td', 'tfoot', 'th', 'thead', 'tr', 'u', 'ul'])
+const safeTags = new Set(['article', 'blockquote', 'br', 'caption', 'col', 'colgroup', 'dd', 'del', 'div', 'dl', 'dt', 'em', 'figcaption', 'figure', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'hr', 'i', 'ins', 'li', 'mark', 'main', 'ol', 'p', 'pre', 'q', 'section', 'small', 'span', 'strong', 'sub', 'sup', 'table', 'tbody', 'td', 'tfoot', 'th', 'thead', 'tr', 'u', 'ul'])
 const voidTags = new Set(['br', 'col', 'hr'])
 
 function safeStyle(element: Element): CSSProperties {
@@ -97,6 +96,7 @@ function renderCompareNode(node: Node, key: string): ReactNode {
   const children = Array.from(element.childNodes).map((child, index) => renderCompareNode(child, `${key}-${index}`))
   const diffId = element.getAttribute('data-diff-id')
   if (diffId) {
+    if (tag === 'ins' || tag === 'del') return createElement(tag, { key, className: tag === 'ins' ? 'compare-ins' : 'compare-del', 'data-diff-id': diffId, tabIndex: -1, role: 'button', 'aria-label': '定位此处差异' }, children)
     const backendClass = element.getAttribute('class') || ''
     const kind = backendClass.split(/\s+/).map((token) => token.match(/^(?:(?:compare-)?diff-)?(modify|insert|delete)$/)?.[1]).find(Boolean)
     if (backendClass.split(/\s+/).includes('compare-diff-anchor')) return <span key={key} className="compare-diff-anchor" data-diff-id={diffId} aria-hidden="true" />
@@ -106,22 +106,22 @@ function renderCompareNode(node: Node, key: string): ReactNode {
   return voidTags.has(tag) ? createElement(tag, props) : createElement(tag, props, children)
 }
 
-export function SafeCompareDocument({ html, side, activeDiffId, onDiff }: { html: string; side: 'left' | 'right'; activeDiffId?: string; onDiff: (id: string) => void }) {
+export function SafeCompareDocument({ html, label, activeDiffId, onDiff }: { html: string; label: string; activeDiffId?: string; onDiff: (id: string) => void }) {
   const articleRef = useRef<HTMLElement>(null)
   const content = useMemo(() => {
     if (typeof DOMParser === 'undefined') return []
     const parsed = new DOMParser().parseFromString(html, 'text/html')
-    return Array.from(parsed.body.childNodes).map((node, index) => renderCompareNode(node, `${side}-${index}`))
-  }, [html, side])
+    return Array.from(parsed.body.childNodes).map((node, index) => renderCompareNode(node, `${label}-${index}`))
+  }, [html, label])
   useEffect(() => {
     const article = articleRef.current
     article?.querySelectorAll('.is-active').forEach((node) => { node.classList.remove('is-active'); node.setAttribute('tabindex', '-1') })
-    const marks = activeDiffId ? article?.querySelectorAll<HTMLElement>(`mark[data-diff-id="${CSS.escape(activeDiffId)}"]`) : undefined
+    const marks = activeDiffId ? article?.querySelectorAll<HTMLElement>(`[data-diff-id="${CSS.escape(activeDiffId)}"]`) : undefined
     marks?.forEach((node) => node.classList.add('is-active'))
-    const first = marks?.[0] || article?.querySelector<HTMLElement>('mark[data-diff-id]')
+    const first = marks?.[0] || article?.querySelector<HTMLElement>('[data-diff-id]')
     first?.setAttribute('tabindex', '0')
   }, [activeDiffId, html])
-  return <article ref={articleRef} className="compare-pane" aria-label={side === 'left' ? '原版合同' : '对比版合同'} tabIndex={0} onClick={(event) => { const id = (event.target as Element).closest('[data-diff-id]')?.getAttribute('data-diff-id'); if (id) onDiff(id) }} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { const id = (event.target as Element).closest('[data-diff-id]')?.getAttribute('data-diff-id'); if (id) { event.preventDefault(); onDiff(id) } } }}>{content.length ? content : <p className="compare-empty">暂无可呈现内容。</p>}</article>
+  return <article ref={articleRef} className="compare-word-doc-content" aria-label={label} tabIndex={0} onClick={(event) => { const id = (event.target as Element).closest('[data-diff-id]')?.getAttribute('data-diff-id'); if (id) onDiff(id) }} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { const id = (event.target as Element).closest('[data-diff-id]')?.getAttribute('data-diff-id'); if (id) { event.preventDefault(); onDiff(id) } } }}>{content.length ? content : <p className="compare-empty">暂无可呈现内容。</p>}</article>
 }
 
 function PairInput({ pair, index, onChange, onRemove }: { pair: PairDraft; index: number; onChange: (side: 'left' | 'right', file?: File) => void; onRemove: () => void }) {
@@ -135,6 +135,10 @@ function taskDescription(task: CompareTask): string {
   return `${done}/${task.total || pairs.length || 0} 组完成 · ${differences ? `${differences} 处差异` : '差异待读取'}`
 }
 
+type WordPane = 'merged' | 'left' | 'right'
+type ViewMode = 'word' | 'classic'
+type ClassicSide = 'left' | 'right'
+
 type CompareReaderProps = {
   view?: CompareView
   selectedPair?: ComparePair
@@ -143,47 +147,92 @@ type CompareReaderProps = {
   visibleDiffs: CompareDiff[]
   diffIndex: number
   diffType: string
-  activeOnly: boolean
-  mobileSide: 'left' | 'right'
+  mobilePane: WordPane
+  viewMode: ViewMode
+  classicSide: ClassicSide
   isMobile: boolean
+  showSources: boolean
+  markup: 'all' | 'simple' | 'final'
   setDiffType: (value: string) => void
-  setActiveOnly: (value: boolean | ((current: boolean) => boolean)) => void
-  setMobileSide: (value: 'left' | 'right') => void
-  onSplitterResize: () => void
+  setMobilePane: (value: WordPane) => void
+  setViewMode: (value: ViewMode) => void
+  setClassicSide: (value: ClassicSide) => void
+  setShowSources: (value: boolean) => void
+  setMarkup: (value: 'all' | 'simple' | 'final') => void
   focusDiff: (index: number) => void
   selectPairDiff: (id: string) => void
   downloadReport: () => void
+  mergedRef: RefObject<HTMLDivElement | null>
   leftRef: RefObject<HTMLDivElement | null>
   rightRef: RefObject<HTMLDivElement | null>
-  columnsRef: RefObject<HTMLDivElement | null>
-  lines: Array<{ id: string; x1: number; y1: number; x2: number; y2: number }>
-  lineSize: { width: number; height: number }
+  classicLeftRef: RefObject<HTMLDivElement | null>
+  classicRightRef: RefObject<HTMLDivElement | null>
   syncScroll: (source: HTMLElement) => void
 }
 
-function CompareReader({ view, selectedPair, viewQuery, activeDiff, visibleDiffs, diffIndex, diffType, activeOnly, mobileSide, isMobile, setDiffType, setActiveOnly, setMobileSide, onSplitterResize, focusDiff, selectPairDiff, downloadReport, leftRef, rightRef, columnsRef, lines, lineSize, syncScroll }: CompareReaderProps) {
-  return <div className="compare-reader-layout">
-    <section className="compare-reader-main" aria-label="合同并列阅读区">
-      <div className="compare-reader-label"><span>合同正文</span><small>点击正文中的标记可定位同一处差异</small></div>
-      <div className="compare-columns-head"><span><i className="compare-side-badge">A</i><b>原版 · 基准</b><small>{view?.left.name || selectedPair?.left.name || '原版'}</small></span><span className="compare-columns-arrow" aria-hidden="true">→</span><span><i className="compare-side-badge is-revised">B</i><b>对比版 · 修订</b><small>{view?.right.name || selectedPair?.right.name || '对比版'}</small></span></div>
-      <div className="compare-mobile-switch" role="group" aria-label="移动端阅读侧栏"><Button type="button" aria-pressed={mobileSide === 'left'} onClick={() => setMobileSide('left')}>查看原版</Button><Button type="button" aria-pressed={mobileSide === 'right'} onClick={() => setMobileSide('right')}>查看对比版</Button></div>
-      <div className="compare-columns" ref={columnsRef}>
-        {isMobile ? <>
-          <div ref={leftRef} className="compare-pane-wrap" onScroll={(event) => syncScroll(event.currentTarget)}><SafeCompareDocument html={view?.left.html || ''} side="left" activeDiffId={activeDiff?.id} onDiff={selectPairDiff} /></div>
-          <div ref={rightRef} className="compare-pane-wrap" onScroll={(event) => syncScroll(event.currentTarget)}><SafeCompareDocument html={view?.right.html || ''} side="right" activeDiffId={activeDiff?.id} onDiff={selectPairDiff} /></div>
-        </> : <Splitter className="compare-splitter" onResize={onSplitterResize}>
-          <Splitter.Panel defaultSize="50%" min="20%" max="80%"><div ref={leftRef} className="compare-pane-wrap" onScroll={(event) => syncScroll(event.currentTarget)}><SafeCompareDocument html={view?.left.html || ''} side="left" activeDiffId={activeDiff?.id} onDiff={selectPairDiff} /></div></Splitter.Panel>
-          <Splitter.Panel defaultSize="50%" min="20%" max="80%"><div ref={rightRef} className="compare-pane-wrap" onScroll={(event) => syncScroll(event.currentTarget)}><SafeCompareDocument html={view?.right.html || ''} side="right" activeDiffId={activeDiff?.id} onDiff={selectPairDiff} /></div></Splitter.Panel>
-        </Splitter>}
-        <svg className="compare-lines" aria-hidden="true" viewBox={`0 0 ${lineSize.width} ${lineSize.height}`} preserveAspectRatio="none">{lines.map((line) => <path key={line.id} d={`M ${line.x1} ${line.y1} C ${(line.x1 + line.x2) / 2} ${line.y1}, ${(line.x1 + line.x2) / 2} ${line.y2}, ${line.x2} ${line.y2}`} className={line.id === activeDiff?.id ? 'active' : ''} />)}</svg>
+function CompareReader({ view, selectedPair, viewQuery, activeDiff, visibleDiffs, diffIndex, diffType, mobilePane, viewMode, classicSide, isMobile, showSources, markup, setDiffType, setMobilePane, setViewMode, setClassicSide, setShowSources, setMarkup, focusDiff, selectPairDiff, downloadReport, mergedRef, leftRef, rightRef, classicLeftRef, classicRightRef, syncScroll }: CompareReaderProps) {
+  const leftName = view?.left.name || selectedPair?.left.name || '原文档'
+  const rightName = view?.right.name || selectedPair?.right.name || '修订的文档'
+  const mergedName = view?.merged?.name || rightName
+  const pairLabel = view?.pair.label || selectedPair?.label || '合同比较'
+  return <div className="compare-word-shell">
+    <div className="compare-word-toolbar" role="toolbar" aria-label="文档比较显示设置">
+      <div className="compare-word-toolbar-main">
+        <div className="compare-view-mode" role="group" aria-label="对比视图">
+          <Button type="button" aria-pressed={viewMode === 'word'} onClick={() => setViewMode('word')}>Word 视图</Button>
+          <Button type="button" aria-pressed={viewMode === 'classic'} onClick={() => setViewMode('classic')}>双栏对照</Button>
+        </div>
+        <span className="compare-word-revision-summary"><strong>{view?.summary?.total ?? visibleDiffs.length}</strong> 处修订</span>
+        {viewMode === 'word' && <label className="compare-word-toggle"><input type="checkbox" checked={showSources} onChange={(event) => setShowSources(event.target.checked)} /> 显示源文档</label>}
+        {viewMode === 'word' && <label className="compare-word-markup">显示标记<select value={markup} onChange={(event) => setMarkup(event.target.value as 'all' | 'simple' | 'final')}><option value="all">所有标记</option><option value="simple">简单标记</option><option value="final">最终状态</option></select></label>}
       </div>
-    </section>
-    <aside className="compare-diff-rail" aria-label="差异导航">
-      <div className="compare-diff-rail-head"><div><span className="eyebrow">差异导航</span><strong>{visibleDiffs.length ? `${diffIndex + 1} / ${visibleDiffs.length}` : '暂无差异'}</strong></div><Button type="button" onClick={downloadReport} disabled={!view}>下载报告</Button></div>
-      <div className="compare-diff-toolbar"><Button type="button" aria-pressed={activeOnly} onClick={() => setActiveOnly((value) => !value)}>仅显示当前连线</Button><label className="muted">类型 <select value={diffType} onChange={(event) => setDiffType(event.target.value)}><option value="">全部</option><option value="modify">修改</option><option value="insert">新增</option><option value="delete">删除</option></select></label></div>
-      {viewQuery.error ? <div className="error-state">读取结果失败：{messageOf(viewQuery.error, '结果暂时不可用')}</div> : viewQuery.loading && !view ? <Spinner label="正在读取对比结果" /> : <div className="compare-diff-list">{visibleDiffs.length ? visibleDiffs.map((diff, index) => <button type="button" className={`compare-diff-item ${index === diffIndex ? 'is-active' : ''}`} key={diff.id} onClick={() => focusDiff(index)}><span>{index + 1}</span><strong>{diff.type === 'modify' ? '修改' : diff.type === 'insert' ? '新增' : '删除'}</strong><span>{diff.section || '正文'} · {diff.left?.text || ''}{diff.right?.text ? ` → ${diff.right.text}` : ''}</span></button>) : <p className="empty-state">{view?.coverage?.status === 'complete' ? '两份合同没有文字差异。' : '已覆盖范围内没有发现文字差异，无法确认全文无差异。'}</p>}</div>}
-      </aside>
+      <div className="compare-word-toolbar-actions"><Button type="button" onClick={downloadReport} disabled={!view}>下载报告</Button></div>
     </div>
+    <div className="compare-view-body" data-view-mode={viewMode}>
+      <aside className="compare-diff-rail compare-word-revisions" aria-labelledby="compare-rail-title">
+        <div className="compare-word-pane-head compare-word-revisions-head"><div><span className="compare-word-pane-kicker">修订</span><strong id="compare-rail-title">{visibleDiffs.length} 处修订</strong></div><div className="compare-diff-nav"><Button type="button" onClick={() => focusDiff(diffIndex - 1)} disabled={!visibleDiffs.length}>↑ 上一处</Button><strong>{visibleDiffs.length ? `${diffIndex + 1} / ${visibleDiffs.length}` : '0 / 0'}</strong><Button type="button" onClick={() => focusDiff(diffIndex + 1)} disabled={!visibleDiffs.length}>下一处 ↓</Button></div></div>
+        <div className="compare-diff-toolbar"><label className="muted">筛选 <select value={diffType} onChange={(event) => setDiffType(event.target.value)}><option value="">全部</option><option value="modify">修改</option><option value="insert">新增</option><option value="delete">删除</option></select></label></div>
+        {viewQuery.error ? <div className="error-state">读取结果失败：{messageOf(viewQuery.error, '结果暂时不可用')}</div> : viewQuery.loading && !view ? <Spinner label="正在读取对比结果" /> : <div className="compare-diff-list">{visibleDiffs.length ? visibleDiffs.map((diff, index) => <div className={`compare-diff-item ${index === diffIndex ? 'is-active' : ''}`} key={diff.id}><button type="button" className="compare-diff-jump" onClick={() => focusDiff(index)}><span className="compare-diff-index">{index + 1}</span><span className={`compare-diff-kind is-${diff.type}`}>{diff.type === 'modify' ? '修改' : diff.type === 'insert' ? '插入' : '删除'}</span><span className="compare-diff-preview"><small>FundLex 对比</small><span>{diff.section || '正文'} · {diff.left?.text || ''}{diff.right?.text ? ` → ${diff.right.text}` : ''}</span></span></button></div>) : <p className="empty-state">{view?.coverage?.status === 'complete' ? '两份合同没有文字差异。' : '已覆盖范围内没有发现文字差异，无法确认全文无差异。'}</p>}</div>}
+      </aside>
+      <div className="compare-word-view" hidden={viewMode !== 'word'}>
+        <div className="compare-mobile-switch" role="group" aria-label="切换文档视图">
+          {(['merged', 'left', 'right'] as const).map((pane) => <Button key={pane} type="button" aria-pressed={mobilePane === pane} onClick={() => setMobilePane(pane)}>{pane === 'merged' ? '比较的文档' : pane === 'left' ? '原文档' : '修订的文档'}</Button>)}
+        </div>
+        <div className={`compare-word-layout ${showSources ? '' : 'is-sources-hidden'}`.trim()} data-markup={markup}>
+          <section className="compare-word-document" aria-labelledby="compare-merged-title">
+            <div className="compare-word-pane-head"><div><span className="compare-word-pane-kicker">比较的文档</span><strong id="compare-merged-title">{pairLabel}</strong><small>{mergedName}</small></div><span className="compare-word-legend" aria-label="修订标记说明"><i className="compare-legend-ins">插入</i><i className="compare-legend-del">删除</i></span></div>
+            <div ref={mergedRef} className="compare-word-pane compare-merged-pane" onScroll={(event) => syncScroll(event.currentTarget)}><SafeCompareDocument html={view?.merged?.html || view?.right.html || ''} label="比较的文档" activeDiffId={activeDiff?.id} onDiff={selectPairDiff} /></div>
+          </section>
+          <aside className="compare-word-sources" aria-label="源文档">
+            <section className="compare-word-source" aria-labelledby="compare-source-left-title">
+              <div className="compare-word-pane-head"><div><span className="compare-word-pane-kicker">原文档</span><strong id="compare-source-left-title">{leftName}</strong><small>只读源文档</small></div><button className="compare-word-close" type="button" onClick={() => setShowSources(false)} aria-label="关闭源文档">×</button></div>
+              <div ref={leftRef} className="compare-word-pane" onScroll={(event) => syncScroll(event.currentTarget)}><SafeCompareDocument html={view?.left.html || ''} label="原文档" activeDiffId={activeDiff?.id} onDiff={selectPairDiff} /></div>
+            </section>
+            <section className="compare-word-source" aria-labelledby="compare-source-right-title">
+              <div className="compare-word-pane-head"><div><span className="compare-word-pane-kicker">修订的文档</span><strong id="compare-source-right-title">{rightName}</strong><small>只读源文档</small></div><button className="compare-word-close" type="button" onClick={() => setShowSources(false)} aria-label="关闭源文档">×</button></div>
+              <div ref={rightRef} className="compare-word-pane" onScroll={(event) => syncScroll(event.currentTarget)}><SafeCompareDocument html={view?.right.html || ''} label="修订的文档" activeDiffId={activeDiff?.id} onDiff={selectPairDiff} /></div>
+            </section>
+          </aside>
+        </div>
+      </div>
+      <div className="compare-classic-view" hidden={viewMode !== 'classic'}>
+        <div className="compare-document-area">
+          <div className="compare-reader-label"><span>合同正文</span><small>双栏联动阅读，拖动中间分隔线可调整宽度</small></div>
+          <div className="compare-columns-head"><span><i className="compare-side-badge">A</i><b>合同A</b><small>{leftName}</small></span><span className="compare-columns-arrow" aria-hidden="true">→</span><span><i className="compare-side-badge is-revised">B</i><b>合同B</b><small>{rightName}</small></span></div>
+          <div className="compare-mobile-switch" role="group" aria-label="切换合同A或合同B">
+            <Button type="button" aria-pressed={classicSide === 'left'} onClick={() => setClassicSide('left')}>查看合同A</Button>
+            <Button type="button" aria-pressed={classicSide === 'right'} onClick={() => setClassicSide('right')}>查看合同B</Button>
+          </div>
+          <div className="compare-columns" data-mobile-side={classicSide}>
+            <div ref={classicLeftRef} className="compare-pane" onScroll={(event) => syncScroll(event.currentTarget)}><SafeCompareDocument html={view?.left.html || ''} label="合同A正文" activeDiffId={activeDiff?.id} onDiff={selectPairDiff} /></div>
+            <div className="compare-classic-divider" aria-hidden="true" />
+            <div ref={classicRightRef} className="compare-pane" onScroll={(event) => syncScroll(event.currentTarget)}><SafeCompareDocument html={view?.right.html || ''} label="合同B正文" activeDiffId={activeDiff?.id} onDiff={selectPairDiff} /></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    {isMobile && <p className="compare-word-mobile-note">当前为移动端单文档视图；切换上方标签查看源文档。</p>}
+  </div>
 }
 
 export function ComparePage() {
@@ -199,8 +248,11 @@ export function ComparePage() {
   const [selectedPairId, setSelectedPairId] = useState<string>()
   const [diffType, setDiffType] = useState('')
   const [diffIndex, setDiffIndex] = useState(0)
-  const [activeOnly, setActiveOnly] = useState(false)
-  const [mobileSide, setMobileSide] = useState<'left' | 'right'>('left')
+  const [mobilePane, setMobilePane] = useState<WordPane>('merged')
+  const [viewMode, setViewMode] = useState<ViewMode>('word')
+  const [classicSide, setClassicSide] = useState<ClassicSide>('left')
+  const [showSources, setShowSources] = useState(true)
+  const [markup, setMarkup] = useState<'all' | 'simple' | 'final'>('all')
   const [folderFiles, setFolderFiles] = useState<{ left: File[]; right: File[] }>({ left: [], right: [] })
   const isMobile = useMediaQuery('(max-width: 760px)')
   const createMutation = useCompareTaskMutation()
@@ -210,13 +262,12 @@ export function ComparePage() {
   const selectedPairIndex = task.data?.pairs?.findIndex((pair) => pair.id === selectedPairId) ?? -1
   const viewQuery = useCompareView(selectedPairId && pairDone(selectedPair) ? selectedPairId : undefined)
   const view = viewQuery.data
+  const mergedRef = useRef<HTMLDivElement>(null)
   const leftRef = useRef<HTMLDivElement>(null)
   const rightRef = useRef<HTMLDivElement>(null)
-  const columnsRef = useRef<HTMLDivElement>(null)
+  const classicLeftRef = useRef<HTMLDivElement>(null)
+  const classicRightRef = useRef<HTMLDivElement>(null)
   const scrollLockRef = useRef(false)
-  const splitterFrameRef = useRef<number | null>(null)
-  const [lines, setLines] = useState<Array<{ id: string; x1: number; y1: number; x2: number; y2: number }>>([])
-  const [lineSize, setLineSize] = useState({ width: 100, height: 100 })
 
   useEffect(() => {
     if (!selectedTaskId && tasks.data?.items[0]) setSelectedTaskId(tasks.data.items[0].id)
@@ -231,7 +282,7 @@ export function ComparePage() {
   }, [diffType, view?.diffs])
   const activeDiff = visibleDiffs[diffIndex]
   const scrollToDiff = useCallback((pane: HTMLDivElement | null, id: string) => {
-    if (!pane) return false
+    if (!pane || !pane.clientHeight) return false
     const target = pane.querySelector<HTMLElement>(`[data-diff-id="${CSS.escape(id)}"]`)
     if (!target) return false
     const paneRect = pane.getBoundingClientRect()
@@ -240,94 +291,75 @@ export function ComparePage() {
     pane.scrollTo({ top: Math.max(0, Math.min(nextTop, pane.scrollHeight - pane.clientHeight)), behavior: 'auto' })
     return true
   }, [])
+  const allPanes = useCallback(() => [mergedRef.current, leftRef.current, rightRef.current, classicLeftRef.current, classicRightRef.current], [])
   const focusDiff = useCallback((index: number) => {
     if (!visibleDiffs.length) return
     const nextIndex = (index + visibleDiffs.length) % visibleDiffs.length
     const id = visibleDiffs[nextIndex].id
     setDiffIndex(nextIndex)
-    const leftFound = Boolean(leftRef.current?.querySelector(`[data-diff-id="${CSS.escape(id)}"]`))
-    const rightFound = Boolean(rightRef.current?.querySelector(`[data-diff-id="${CSS.escape(id)}"]`))
+    const selector = `[data-diff-id="${CSS.escape(id)}"]`
+    const wordPanes: Record<WordPane, HTMLDivElement | null> = { merged: mergedRef.current, left: leftRef.current, right: rightRef.current }
+    const classicPanes: Record<ClassicSide, HTMLDivElement | null> = { left: classicLeftRef.current, right: classicRightRef.current }
     if (isMobile) {
-      const currentFound = mobileSide === 'left' ? leftFound : rightFound
-      const otherFound = mobileSide === 'left' ? rightFound : leftFound
-      const nextSide = currentFound ? mobileSide : otherFound ? (mobileSide === 'left' ? 'right' : 'left') : mobileSide
-      if (nextSide !== mobileSide) {
-        scrollLockRef.current = true
-        setMobileSide(nextSide)
-        requestAnimationFrame(() => {
-          scrollToDiff(nextSide === 'left' ? leftRef.current : rightRef.current, id)
-          requestAnimationFrame(() => { scrollLockRef.current = false })
-        })
+      let target: HTMLDivElement | null = null
+      if (viewMode === 'word') {
+        let targetKey: WordPane = mobilePane
+        if (!wordPanes[targetKey]?.querySelector(selector)) {
+          targetKey = (['merged', 'right', 'left'] as const).find((pane) => wordPanes[pane]?.querySelector(selector)) || mobilePane
+          if (targetKey !== mobilePane) setMobilePane(targetKey)
+        }
+        target = wordPanes[targetKey]
       } else {
-        scrollLockRef.current = true
-        scrollToDiff(nextSide === 'left' ? leftRef.current : rightRef.current, id)
-        requestAnimationFrame(() => { scrollLockRef.current = false })
+        let targetSide: ClassicSide = classicSide
+        if (!classicPanes[targetSide]?.querySelector(selector)) {
+          const other: ClassicSide = targetSide === 'left' ? 'right' : 'left'
+          if (classicPanes[other]?.querySelector(selector)) { targetSide = other; setClassicSide(other) }
+        }
+        target = classicPanes[targetSide]
       }
+      scrollLockRef.current = true
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          scrollToDiff(target, id)
+          scrollLockRef.current = false
+        })
+      })
       return
     }
     scrollLockRef.current = true
-    scrollToDiff(leftRef.current, id)
-    scrollToDiff(rightRef.current, id)
+    allPanes().forEach((pane) => scrollToDiff(pane, id))
     requestAnimationFrame(() => { scrollLockRef.current = false })
-  }, [isMobile, mobileSide, scrollToDiff, visibleDiffs])
+  }, [allPanes, classicSide, isMobile, mobilePane, scrollToDiff, viewMode, visibleDiffs])
   useEffect(() => {
     const id = activeDiff?.id
     if (!id) return
     const frame = requestAnimationFrame(() => {
       const panes = isMobile
-        ? [mobileSide === 'left' ? leftRef.current : rightRef.current]
-        : [leftRef.current, rightRef.current]
+        ? viewMode === 'word'
+          ? [mobilePane === 'merged' ? mergedRef.current : mobilePane === 'left' ? leftRef.current : rightRef.current]
+          : [classicSide === 'left' ? classicLeftRef.current : classicRightRef.current]
+        : allPanes()
       scrollLockRef.current = true
       panes.forEach((pane) => scrollToDiff(pane, id))
       requestAnimationFrame(() => { scrollLockRef.current = false })
     })
     return () => cancelAnimationFrame(frame)
-  }, [activeDiff?.id, isMobile, mobileSide, scrollToDiff])
+  }, [activeDiff?.id, allPanes, classicSide, isMobile, mobilePane, scrollToDiff, viewMode])
   useEffect(() => { setDiffIndex(0) }, [diffType, view?.pair.id])
 
-  const drawLines = useCallback(() => {
-    if (!columnsRef.current || !leftRef.current || !rightRef.current || !view || isMobile) { setLines([]); return }
-    const root = columnsRef.current.getBoundingClientRect()
-    setLineSize({ width: root.width || 100, height: root.height || 100 })
-    const left = leftRef.current.getBoundingClientRect()
-    const right = rightRef.current.getBoundingClientRect()
-    const active = activeDiff?.id
-    const next = (view.diffs || []).flatMap((diff) => {
-      if (activeOnly && diff.id !== active) return []
-      const leftMark = leftRef.current?.querySelector(`[data-diff-id="${CSS.escape(diff.id)}"]`)
-      const rightMark = rightRef.current?.querySelector(`[data-diff-id="${CSS.escape(diff.id)}"]`)
-      if (!leftMark || !rightMark) return []
-      const a = leftMark.getBoundingClientRect(); const b = rightMark.getBoundingClientRect()
-      if (a.bottom < left.top && b.bottom < right.top) return []
-      if (a.top > left.bottom && b.top > right.bottom) return []
-      const x1 = a.right - root.left; const x2 = b.left - root.left
-      return [{ id: diff.id, x1, y1: a.top + a.height / 2 - root.top, x2, y2: b.top + b.height / 2 - root.top }]
-    })
-    setLines(next)
-  }, [activeDiff?.id, activeOnly, isMobile, view])
-  useEffect(() => { const frame = requestAnimationFrame(drawLines); return () => cancelAnimationFrame(frame) }, [drawLines, view?.left.html, view?.right.html, diffIndex])
-  useEffect(() => { const onResize = () => drawLines(); window.addEventListener('resize', onResize); return () => window.removeEventListener('resize', onResize) }, [drawLines])
-
-  const scheduleDrawLines = useCallback(() => {
-    if (splitterFrameRef.current !== null) return
-    splitterFrameRef.current = requestAnimationFrame(() => {
-      splitterFrameRef.current = null
-      drawLines()
-    })
-  }, [drawLines])
-  useEffect(() => () => {
-    if (splitterFrameRef.current !== null) cancelAnimationFrame(splitterFrameRef.current)
-  }, [])
-
   const syncScroll = (source: HTMLElement) => {
-    if (scrollLockRef.current) return
-    const target = source === leftRef.current ? rightRef.current : leftRef.current
-    if (!target || isMobile) { drawLines(); return }
+    if (scrollLockRef.current || isMobile) return
+    const panes = allPanes().filter((pane): pane is HTMLDivElement => Boolean(pane && pane.clientHeight))
+    const targets = panes.filter((pane) => pane !== source)
+    if (!targets.length) return
     const sourceMax = Math.max(0, source.scrollHeight - source.clientHeight)
-    const targetMax = Math.max(0, target.scrollHeight - target.clientHeight)
+    const ratio = sourceMax ? source.scrollTop / sourceMax : 0
     scrollLockRef.current = true
-    target.scrollTop = sourceMax ? source.scrollTop / sourceMax * targetMax : 0
-    requestAnimationFrame(() => { scrollLockRef.current = false; drawLines() })
+    targets.forEach((target) => {
+      const targetMax = Math.max(0, target.scrollHeight - target.clientHeight)
+      target.scrollTop = ratio * targetMax
+    })
+    requestAnimationFrame(() => { scrollLockRef.current = false })
   }
 
   const selectFiles = (index: number, side: 'left' | 'right', file?: File) => setPairs((current) => current.map((pair, itemIndex) => itemIndex === index ? { ...pair, [side]: file } : pair))
@@ -387,7 +419,7 @@ export function ComparePage() {
     const next = pairItems[currentIndex + direction]
     if (next) {
       setSelectedPairId(next.id)
-      setMobileSide('left')
+      setMobilePane('merged')
     }
   }
   const downloadReport = () => { if (!view) return; saveBlob(new Blob([JSON.stringify(view, null, 2)], { type: 'application/json;charset=utf-8' }), `${task.data?.name || '合同对比'}-差异报告.json`) }
@@ -398,15 +430,15 @@ export function ComparePage() {
      <Card className="compare-task-card"><div className="page-heading"><div><h2>我的对比任务</h2><p className="muted">多组任务会分别展示处理状态，失败或覆盖不完整的分组保留人工复核提示。</p></div></div>{tasks.error ? <div className="error-state">读取对比任务失败：{messageOf(tasks.error, '服务暂时不可用')}</div> : tasks.loading && !tasks.data ? <Spinner /> : tasks.data?.items.length ? <div className="table-scroll"><table className="data-table"><thead><tr><th>任务</th><th>分组</th><th>状态</th><th>结果</th><th /></tr></thead><tbody>{tasks.data.items.map((item) => <tr key={item.id}><td><button type="button" className="table-link compare-task-name-cell" title={item.name} onClick={() => setSelectedTaskId(item.id)}>{item.name}</button></td><td>{item.total || item.pairs?.length || 0}</td><td><StatusBadge value={statusLabel(item.status)} /></td><td className="compare-task-result-cell">{taskDescription(item)}</td><td><Button type="button" onClick={() => setSelectedTaskId(item.id)}>查看</Button></td></tr>)}</tbody></table></div> : <div className="empty-state"><strong>还没有合同对比任务</strong><p>创建一组或多组左右合同开始比较。</p></div>}</Card>
     {createOpen && <Card className="compare-create"><div className="compare-create-intro"><div><h2>新建对比任务</h2><p className="muted">先选择原版（基准文本），再选择对比版（修订文本）。</p></div><span className="compare-step">1 / 2 · 准备文件</span></div><label className="compare-task-name">任务名称<input value={taskName} maxLength={200} onChange={(event) => setTaskName(event.target.value)} placeholder="例如：法务与产品部合同差异" /></label><div className="compare-folder-actions"><label className="ui-button"><span>选择原版文件夹</span><input type="file" {...{ webkitdirectory: '', directory: '' } as Record<string, string>} multiple hidden onChange={(event) => applyFolder('left', event)} /></label><label className="ui-button"><span>选择对比版文件夹</span><input type="file" {...{ webkitdirectory: '', directory: '' } as Record<string, string>} multiple hidden onChange={(event) => applyFolder('right', event)} /></label><span className="muted">按相同相对路径配对；未配对文件可以手工补齐。</span></div>{pairs.map((pair, index) => <PairInput key={index} pair={pair} index={index} onChange={(side, file) => selectFiles(index, side, file)} onRemove={() => setPairs((current) => current.length > 1 ? current.filter((_, itemIndex) => itemIndex !== index) : current)} />)}<div className="action-row"><Button type="button" onClick={() => setPairs((current) => [...current, {}])}>＋ 添加一组</Button><Button type="button" variant="primary" disabled={createMutation.isPending || uploadMutation.isPending || sealMutation.isPending} onClick={() => void (uploadDraft ? continueUpload(uploadDraft) : createTask())}>{uploadDraft ? '继续上传' : '开始上传并对比'}</Button></div></Card>}
     {selectedTaskId && <Card className="compare-detail"><div className="page-heading"><div><h2>{task.data?.name || '合同对比任务'}</h2><p className="muted">{task.data ? `${statusLabel(task.data.status)} · ${task.data.pairs?.length || 0} 组` : '正在读取任务…'}</p></div><Button type="button" onClick={() => void task.refetch()} disabled={task.refreshing}>刷新状态</Button></div><div className="compare-direction-note"><span className="compare-direction-icon" aria-hidden="true">→</span><div><strong>阅读方向</strong><span>原版（基准） → 对比版（修订）</span></div><small>新增 / 删除均按此方向解释</small></div>{task.error ? <div className="error-state">读取任务失败：{messageOf(task.error, '服务暂时不可用')}</div> : task.loading && !task.data ? <Spinner /> : <div className="compare-pair-statuses">{(task.data?.pairs || []).map((pair, index) => <button type="button" className={`compare-pair-status ${pair.id === selectedPairId ? 'is-selected' : ''} ${pairDone(pair) ? 'is-done' : ''} ${pair.status === 'incomplete' ? 'is-incomplete' : ''} ${pair.status === 'failed' ? 'is-failed' : ''}`} key={pair.id} onClick={() => setSelectedPairId(pair.id)}><span className="compare-pair-number">{String(index + 1).padStart(2, '0')}</span><span className="compare-pair-main"><strong>{pair.label || `第 ${index + 1} 组`}</strong><small>{pair.left?.name || '原版未命名'} → {pair.right?.name || '对比版未命名'}</small></span><span className="compare-pair-state">{statusLabel(pair.status)}{pair.summary ? ` · ${pair.summary.total || 0} 处` : ''}</span>{pair.error_code && <span className="compare-pair-error">处理失败：{pair.error_code}</span>}</button>)}</div>}</Card>}
-    {selectedPairId && <Card className="compare-viewer" data-mobile-side={mobileSide}>
+    {selectedPairId && <Card className="compare-viewer" data-mobile-pane={mobilePane} data-view-mode={viewMode}>
       <div className="compare-viewer-toolbar">
-        <div className="compare-viewer-title"><div><span className="eyebrow">DIFF READER</span><strong>{view?.pair.label || selectedPair?.label || '合同对比'}</strong><p className="compare-reader-subtitle">逐处核对正文变化，点击标记或右侧差异条目可定位段落。</p></div>
+        <div className="compare-viewer-title"><div><span className="eyebrow">DIFF READER</span><strong>{view?.pair.label || selectedPair?.label || '合同对比'}</strong><p className="compare-reader-subtitle">左侧修订栏定位变化，中间比较文档显示插入与删除痕迹，右侧对照原文档与修订文档。</p></div>
           <div className="action-row"><Button type="button" onClick={() => movePair(-1)} disabled={selectedPairIndex <= 0}>上一组</Button><span className="compare-pair-counter">{task.data?.pairs?.length && selectedPairIndex >= 0 ? `${selectedPairIndex + 1} / ${task.data.pairs.length}` : '0 / 0'}</span><Button type="button" onClick={() => movePair(1)} disabled={!task.data?.pairs || selectedPairIndex < 0 || selectedPairIndex >= task.data.pairs.length - 1}>下一组</Button><Button type="button" onClick={() => focusDiff(diffIndex - 1)} disabled={!visibleDiffs.length}>上一处</Button><span className="compare-diff-counter">{visibleDiffs.length ? `${diffIndex + 1} / ${visibleDiffs.length}` : '0 / 0'}</span><Button type="button" onClick={() => focusDiff(diffIndex + 1)} disabled={!visibleDiffs.length}>下一处</Button></div>
         </div>
-        <div className="compare-summary-row"><div className="compare-summary-stat"><span>当前结果</span><strong>{view?.summary ? `共 ${view.summary.total || 0} 处差异 · 修改 ${view.summary.modify || 0} · 新增 ${view.summary.insert || 0} · 删除 ${view.summary.delete || 0}` : '结果尚未就绪'}</strong></div><div className="compare-sync-note">双栏联动阅读</div></div>
+        <div className="compare-summary-row"><div className="compare-summary-stat"><span>当前结果</span><strong>{view?.summary ? `共 ${view.summary.total || 0} 处差异 · 修改 ${view.summary.modify || 0} · 新增 ${view.summary.insert || 0} · 删除 ${view.summary.delete || 0}` : '结果尚未就绪'}</strong></div><div className="compare-sync-note">三栏联动阅读</div></div>
         {view?.coverage?.status !== 'complete' && view?.coverage && <div className="compare-coverage is-incomplete" role="status"><strong>覆盖不完整</strong><p>以下内容未纳入比较，请人工复核，不要据此确认全文无差异。</p>{view.coverage.warnings?.length ? <ul>{view.coverage.warnings.map((warning, index) => <li key={`${warning}-${index}`}>{warning}</li>)}</ul> : null}</div>}
       </div>
-      {viewQuery.error ? <div className="error-state">读取结果失败：{messageOf(viewQuery.error, '结果暂时不可用')}</div> : viewQuery.loading && !view ? <Spinner label="正在读取对比结果" /> : view && <CompareReader view={view} selectedPair={selectedPair} viewQuery={viewQuery} activeDiff={activeDiff} visibleDiffs={visibleDiffs} diffIndex={diffIndex} diffType={diffType} activeOnly={activeOnly} mobileSide={mobileSide} isMobile={isMobile} setDiffType={setDiffType} setActiveOnly={setActiveOnly} setMobileSide={setMobileSide} onSplitterResize={scheduleDrawLines} focusDiff={focusDiff} selectPairDiff={selectPairDiff} downloadReport={downloadReport} leftRef={leftRef} rightRef={rightRef} columnsRef={columnsRef} lines={lines} lineSize={lineSize} syncScroll={syncScroll} />}
+      {viewQuery.error ? <div className="error-state">读取结果失败：{messageOf(viewQuery.error, '结果暂时不可用')}</div> : viewQuery.loading && !view ? <Spinner label="正在读取对比结果" /> : view && <CompareReader view={view} selectedPair={selectedPair} viewQuery={viewQuery} activeDiff={activeDiff} visibleDiffs={visibleDiffs} diffIndex={diffIndex} diffType={diffType} mobilePane={mobilePane} viewMode={viewMode} classicSide={classicSide} isMobile={isMobile} showSources={showSources} markup={markup} setDiffType={setDiffType} setMobilePane={setMobilePane} setViewMode={setViewMode} setClassicSide={setClassicSide} setShowSources={setShowSources} setMarkup={setMarkup} focusDiff={focusDiff} selectPairDiff={selectPairDiff} downloadReport={downloadReport} mergedRef={mergedRef} leftRef={leftRef} rightRef={rightRef} classicLeftRef={classicLeftRef} classicRightRef={classicRightRef} syncScroll={syncScroll} />}
     </Card>}
 
   </div>

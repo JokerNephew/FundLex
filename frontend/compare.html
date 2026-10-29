@@ -585,14 +585,13 @@
 <div>
 <strong id="compare-pair-title">
 </strong>
-<p class="compare-reader-subtitle">逐处核对正文变化，点击标记或差异条目可定位到对应段落。</p>
+<p class="compare-reader-subtitle">左侧修订栏定位变化，中间比较文档显示插入与删除痕迹，右侧对照原文档与修订文档。</p>
 </div>
 <div class="head-actions">
 <button class="btn btn-sm" id="compare-prev-pair">上一组</button>
 <span class="compare-pair-counter" id="compare-pair-counter">
 </span>
 <button class="btn btn-sm" id="compare-next-pair">下一组</button>
-<button class="btn btn-sm" id="compare-report">下载差异报告</button>
 </div>
 </div>
 <div class="compare-summary-row">
@@ -604,14 +603,106 @@
 <div class="compare-sync-note">
 <span class="compare-sync-dot" aria-hidden="true">
 </span>
-<span class="compare-sync-desktop">滚动任一侧同步阅读，点击差异可定位。</span>
-<span class="compare-sync-mobile">切换合同A/B，点击差异定位。</span>
+<span class="compare-sync-desktop">三栏同步阅读，点击修订条目可定位。</span>
+<span class="compare-sync-mobile">切换视图，点击修订条目定位。</span>
 </div>
 </div>
 <p id="compare-coverage" role="status" hidden>
 </p>
 </div>
-<div class="compare-reader-layout">
+<div class="compare-word-toolbar" role="toolbar" aria-label="文档比较显示设置">
+<div class="compare-word-toolbar-main">
+<div class="compare-view-mode" role="group" aria-label="对比视图">
+<button class="btn btn-sm is-active" id="compare-view-word" type="button" data-compare-view-mode="word">Word 视图</button>
+<button class="btn btn-sm" id="compare-view-classic" type="button" data-compare-view-mode="classic">双栏对照</button>
+</div>
+<span class="compare-word-revision-summary"><strong id="compare-revision-count">0</strong> 处修订</span>
+<label class="compare-word-toggle compare-word-only"><input type="checkbox" id="compare-show-sources" checked> 显示源文档</label>
+<label class="compare-word-markup compare-word-only" for="compare-markup-mode">显示标记
+<select id="compare-markup-mode" class="control-select">
+<option value="all">所有标记</option>
+<option value="simple">简单标记</option>
+<option value="final">最终状态</option>
+</select>
+</label>
+</div>
+<div class="compare-word-toolbar-actions">
+<button class="btn btn-sm" id="compare-report">下载差异报告</button>
+</div>
+</div>
+<div class="compare-view-body" id="compare-view-body" data-view-mode="word">
+<aside class="compare-diff-rail compare-word-revisions" aria-labelledby="compare-rail-title">
+<div class="compare-word-pane-head compare-word-revisions-head">
+<div>
+<span class="compare-word-pane-kicker">修订</span>
+<strong id="compare-rail-title"><span id="compare-revision-count-rail">0</span> 处修订</strong>
+</div>
+<div class="compare-diff-nav">
+<button class="btn btn-sm" id="compare-prev-diff" type="button" title="上一处修订">↑ 上一处</button>
+<strong id="compare-diff-counter" aria-live="polite">0 / 0</strong>
+<button class="btn btn-sm" id="compare-next-diff" type="button" title="下一处修订">下一处 ↓</button>
+</div>
+</div>
+<div class="compare-diff-toolbar">
+<label for="compare-diff-filter">筛选</label>
+<select id="compare-diff-filter" class="control-select">
+<option value="">全部差异</option>
+<option value="modify">修改</option>
+<option value="insert">新增</option>
+<option value="delete">删除</option>
+</select>
+</div>
+<div class="compare-diff-list" id="compare-diff-list" aria-label="修订列表" tabindex="0">
+</div>
+</aside>
+<div class="compare-word-view" id="compare-word-view">
+<div class="compare-mobile-switch" role="group" aria-label="切换文档视图">
+<button type="button" class="btn btn-sm is-active" data-word-pane="merged">比较的文档</button>
+<button type="button" class="btn btn-sm" data-word-pane="left">原文档</button>
+<button type="button" class="btn btn-sm" data-word-pane="right">修订的文档</button>
+</div>
+<div class="compare-word-layout" id="compare-word-layout" data-mobile-pane="merged" data-markup="all">
+<section class="compare-word-document" aria-labelledby="compare-merged-title">
+<div class="compare-word-pane-head">
+<div>
+<span class="compare-word-pane-kicker">比较的文档</span>
+<strong id="compare-merged-title">比较结果</strong>
+<small id="compare-merged-name"></small>
+</div>
+<span class="compare-word-legend" aria-label="修订标记说明"><i class="compare-legend-ins">插入</i><i class="compare-legend-del">删除</i></span>
+</div>
+<div class="compare-word-pane compare-merged-pane" id="compare-word-merged-pane" aria-label="比较的文档，含插入与删除修订痕迹" tabindex="0">
+</div>
+</section>
+<aside class="compare-word-sources" id="compare-word-sources" aria-label="源文档">
+<section class="compare-word-source" aria-labelledby="compare-left-title">
+<div class="compare-word-pane-head">
+<div>
+<span class="compare-word-pane-kicker">原文档</span>
+<strong id="compare-left-title">合同A</strong>
+<small id="compare-left-name"></small>
+</div>
+<button class="compare-word-close" type="button" data-compare-sources-close aria-label="关闭源文档" title="关闭源文档">×</button>
+</div>
+<div class="compare-word-pane" id="compare-word-left-pane" aria-label="原文档正文" tabindex="0">
+</div>
+</section>
+<section class="compare-word-source" aria-labelledby="compare-right-title">
+<div class="compare-word-pane-head">
+<div>
+<span class="compare-word-pane-kicker">修订的文档</span>
+<strong id="compare-right-title">合同B</strong>
+<small id="compare-right-name"></small>
+</div>
+<button class="compare-word-close" type="button" data-compare-sources-close aria-label="关闭源文档" title="关闭源文档">×</button>
+</div>
+<div class="compare-word-pane" id="compare-word-right-pane" aria-label="修订的文档正文" tabindex="0">
+</div>
+</section>
+</aside>
+</div>
+</div>
+<div class="compare-classic-view" id="compare-classic-view" hidden>
 <div class="compare-document-area">
 <div class="compare-reader-label">
 <span>合同正文</span>
@@ -621,14 +712,14 @@
 <span>
 <i class="compare-side-badge">A</i>
 <b>合同A</b>
-<small id="compare-left-name">
+<small id="compare-classic-left-name">
 </small>
 </span>
 <span class="compare-columns-arrow" aria-hidden="true">→</span>
 <span>
 <i class="compare-side-badge">B</i>
 <b>合同B</b>
-<small id="compare-right-name">
+<small id="compare-classic-right-name">
 </small>
 </span>
 </div>
@@ -650,29 +741,7 @@
 </svg>
 </div>
 </div>
-<aside class="compare-diff-rail" aria-labelledby="compare-rail-title">
-<div class="compare-rail-heading"><div><h3 id="compare-rail-title">差异列表</h3></div></div>
-<div class="compare-diff-toolbar">
-<div class="compare-diff-nav">
-<button class="btn btn-sm" id="compare-prev-diff">上一处</button>
-<strong id="compare-diff-counter" aria-live="polite">0 / 0</strong>
-<button class="btn btn-sm" id="compare-next-diff">下一处</button>
 </div>
-<span class="compare-toolbar-divider" aria-hidden="true">
-</span>
-<label>
-<input type="checkbox" id="compare-active-only"> 只连接当前差异</label>
-<label for="compare-diff-filter">筛选</label>
-<select id="compare-diff-filter" class="control-select">
-<option value="">全部差异</option>
-<option value="modify">修改</option>
-<option value="insert">新增</option>
-<option value="delete">删除</option>
-</select>
-</div>
-<div class="compare-diff-list" id="compare-diff-list" aria-label="差异列表" tabindex="0">
-</div>
-</aside>
 </div>
 <div class="compare-selection-panel" aria-label="人工选择与生成">
 <div class="compare-selection-summary">

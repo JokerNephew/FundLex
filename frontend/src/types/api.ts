@@ -288,6 +288,7 @@ export interface CompareView {
   pair: { id: Id; label?: string; ordinal?: number; status: string }
   left: { name: string; html: string }
   right: { name: string; html: string }
+  merged?: { name: string; html: string }
   summary?: { total?: number; modify?: number; insert?: number; delete?: number }
   coverage?: { status?: string; warnings?: string[] }
   diffs: CompareDiff[]

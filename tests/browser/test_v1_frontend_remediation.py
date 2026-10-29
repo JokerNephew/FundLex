@@ -301,6 +301,82 @@ def test_compare_generate_late_response_cannot_save_the_previous_pair(browser, l
         context.close()
 
 
+def test_compare_word_style_reader_renders_merged_redline_and_display_modes(browser, live_dev):
+    _app, base = live_dev
+    context = browser.new_context(viewport={"width": 1440, "height": 1000})
+    context.add_init_script("localStorage.setItem('fundlex-dev-user','compare-word-style')")
+    page = context.new_page()
+    page_errors: list[str] = []
+    page.on("pageerror", lambda error: page_errors.append(str(error)))
+
+    merged = ('<div class="compare-document compare-merged-document">'
+              '<p class="compare-block has-change" data-block-id="R1">保留 <del class="compare-del" data-diff-id="D1">旧条款</del>'
+              '<ins class="compare-ins" data-diff-id="D1">新条款</ins> 结尾</p></div>')
+    diffs = [{"id": "D1", "type": "modify", "section": "正文",
+              "left": {"text": "旧条款", "block_id": "L1"},
+              "right": {"text": "新条款", "block_id": "R1"}}]
+
+    def view():
+        return {"pair": {"id": "P1", "label": "Word 样式"}, "result_sha256": "a" * 64,
+                "left": {"name": "原文档.docx", "html": '<p data-block-id="L1"><mark class="compare-diff modify" data-diff-id="D1">旧条款</mark></p>'},
+                "right": {"name": "修订文档.docx", "html": '<p data-block-id="R1"><mark class="compare-diff modify" data-diff-id="D1">新条款</mark></p>'},
+                "merged": {"name": "修订文档.docx", "html": merged},
+                "summary": {"total": 1, "modify": 1, "insert": 0, "delete": 0}, "coverage": {"status": "complete"},
+                "diffs": diffs}
+
+    def selection():
+        return {"pair_id": "P1", "result_sha256": "a" * 64, "left_source_sha256": "b" * 64,
+                "right_source_sha256": "c" * 64, "selection_epoch": 0,
+                "draft": {"selection_epoch": 0, "decisions": {"D1": "pending"}, "decision_hash": "d" * 64},
+                "decisions": {"D1": "pending"}, "assessment": {"pending_ids": ["D1"], "issues": [], "can_generate": False},
+                "diffs": diffs, "artifacts": []}
+
+    def scenario(path, query, route):
+        if path == "/api/compare/tasks":
+            return respond(route, {"items": [{"id": "T", "name": "word-style", "status": "succeeded", "total": 1,
+                                              "pairs": [{"id": "P1", "label": "Word 样式", "status": "succeeded",
+                                                         "left": {"name": "原文档.docx"}, "right": {"name": "修订文档.docx"},
+                                                         "summary": {"total": 1}}]}]})
+        if path == "/api/compare/tasks/T":
+            return respond(route, {"id": "T", "name": "word-style", "status": "succeeded", "total": 1,
+                                   "pairs": [{"id": "P1", "label": "Word 样式", "status": "succeeded",
+                                              "left": {"name": "原文档.docx"}, "right": {"name": "修订文档.docx"},
+                                              "summary": {"total": 1}}]})
+        if path == "/api/compare/pairs/P1/view":
+            return respond(route, view())
+        if path == "/api/compare/pairs/P1/selection":
+            return respond(route, selection())
+        return respond(route, {})
+
+    install_api(page, base_api(scenario))
+    try:
+        open_dev(page, base, "#compare?mode=detail&id=T&pair=P1")
+        page.locator("#compare-word-merged-pane .compare-ins").filter(has_text="新条款").wait_for()
+        assert page.locator("#compare-word-merged-pane .compare-del").inner_text() == "旧条款"
+        assert page.locator("#compare-revision-count").inner_text() == "1"
+        assert page.locator("#compare-merged-title").inner_text() == "Word 样式"
+
+        page.locator("#compare-show-sources").uncheck()
+        assert page.locator(".compare-word-sources").evaluate("element => getComputedStyle(element).display") == "none"
+        page.locator("#compare-show-sources").check()
+        assert page.locator(".compare-word-sources").evaluate("element => getComputedStyle(element).display") != "none"
+
+        page.locator("#compare-markup-mode").select_option("final")
+        assert page.locator("#compare-word-merged-pane .compare-del").evaluate("element => getComputedStyle(element).display") == "none"
+        assert page.locator("#compare-word-merged-pane .compare-block.has-change").evaluate("element => getComputedStyle(element, '::before').display") == "none"
+
+        page.locator('[data-compare-view-mode="classic"]').click()
+        assert page.locator("#compare-word-view").is_hidden()
+        assert page.locator("#compare-classic-view").is_visible()
+        assert page.locator("#compare-left-pane .compare-diff").inner_text() == "旧条款"
+        page.locator('[data-compare-view-mode="word"]').click()
+        assert page.locator("#compare-word-view").is_visible()
+        assert page.locator("#compare-classic-view").is_hidden()
+    finally:
+        context.close()
+    assert page_errors == []
+
+
 def test_guide_run_switch_rejects_late_detail_and_download(browser, live_dev):
     _app, base = live_dev
     context = browser.new_context(viewport={"width": 1440, "height": 1000})

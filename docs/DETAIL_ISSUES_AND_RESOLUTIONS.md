@@ -5679,6 +5679,8 @@ H＝E×…
 - 下一步：发布前仍需保留真实 renderer 的视觉截图并决定是否受控发布。后端完整 Word 还原仍需继续补齐复杂列宽/边框、header/footer、drawing/pict/AlternateContent 和真实分页等覆盖判断。
 - 变更记录：2026-10-26 新增；来源为用户反馈和独立多模态视觉审查。该条与 FL-D256 的差异颜色问题关联，但范围扩展到长文导航、定位、布局和 Word-like 呈现，不合并为颜色问题。
 
+- 变更记录：2026-10-29 用户要求改为 Word 比较页形式并保留双栏视图；已按 FL-D512 实施合并稿三栏视图与视图切换。
+
 ## FL-D261 Compare 回归命令未显式设置仓库导入路径（2026-10-26）
 
 - 发现日期：2026-10-26。
@@ -6252,3 +6254,17 @@ H＝E×…
 - 状态与验证：**代码与自动化测试完成，未发布生产**。干净 worktree 最终全量 pytest **1782 passed / 85 skipped**（`/tmp/opencode/outer-full-pytest-final2.log`）；V1 浏览器 **34 passed**，V2 **10 passed**，前端 typecheck/lint/Vitest/build 通过。分页保留项：`reason_options` 仍解析该任务全部 report_json、`error_code` 精确过滤可能回退 Python、legacy 分页仍为 O(legacy batches+page depth)、MySQL 未实跑。当前未跑真实模型 E2E，未发布生产。
 - 下一步：合并 Agent D；全量/浏览器/迁移/发布演练；真实合同 E2E 需预登记预算；完成后更新本条目。
 - 变更记录：2026-10-28 新增；同日更新实施进度。
+
+## FL-D512 合同比对改为 Word 比较页形式并保留双栏对照（2026-10-29）
+
+- 发现日期：2026-10-29，用户提供 Microsoft Word「比较」页截图并明确要求“改成像 word 的比较页面一样”，随后确认“保留”双栏视图、“按 word 来”。
+- 问题与影响：原 Compare 阅读器是「左 A / 右 B 双栏 + 连线 + 右侧差异列表」，用户需要像 Word 一样在中间阅读一份合并后的“比较的文档”：插入文字带下划线、删除文字带删除线、改动段落左侧有变更条；左侧是修订列表，右侧可同时查看原文档和修订的文档。仅双栏对照无法提供这种合并稿阅读路径。
+- 处理方法：
+  - 后端新增确定性 `render_merged_document()`，以修订版（右侧）文档为结构基底，把删除文本以 `<del>` 放回对应锚点、插入/修改文本以 `<ins>` 标记；整段删除投影为独立删除段落，表格单元格结构保持不变；文本先 HTML escape，非法 span 仍抛 `COMPARE_RESULT_INVALID`。`/api/compare/pairs/{id}/view` 新增 `merged.html`，不调用模型。
+  - V1 工作台改为「Word 视图 / 双栏对照」可切换：Word 视图为左侧修订栏、中间比较文档、右侧上下原文档/修订文档；双栏对照保留原 A/B 双栏、可拖动分隔线、连线与独立差异栏。两视图共用修订列表和人工采用 A/B 状态。
+  - Word 视图增加「显示源文档」「所有标记 / 简单标记 / 最终状态」控制；插入与删除统一采用 Word 作者红色（插入下划线、删除删除线、段旁红色变更条），不再使用绿色高亮。源文档仅保留红色修订标记，不改变正文文本。
+  - React V2 `/compare` 同步提供 Word 三栏与双栏对照切换、共享修订栏、同步滚动和移动端单文档标签；V1 仍是当前生产默认入口。
+- 状态与验证：**代码已实施，定向验证通过；尚未提交、发布或完成生产真实合同验收**。后端 Compare 专项 **129 passed / 6 skipped**；V1 浏览器 remediation **10 passed**（含 Word 合并稿、显示模式、视图切换）；V2 typecheck/lint/Vitest **16 passed**/build 通过；本地临时服务用两份公开 DOCX 走真实上传、seal、CompareWorker 和 `/view`，结果 1421 处差异、`incomplete`，页面无 JS 错误，V1 Word/双栏与 390px 布局截图保存在 `/tmp/opencode/`（`v1-real-compare-1600.png`、`v1-real-compare-classic-390.png`）。
+- 下一步：运行全量 pytest 与浏览器回归；在干净 worktree 提交并受控发布；用生产正式入口完成真实合同上传→Worker→Word/双栏阅读→报告下载验收；确认 `incomplete` 仍显示人工复核提示，不以本次 UI 改动改变覆盖状态。
+- 变更记录：2026-10-29 新增；用户明确要求保留双栏并采用 Word 视觉。与 FL-D260 的 Word 风格第二阶段直接相关，不重写既有编号。
+

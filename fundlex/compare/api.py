@@ -70,14 +70,15 @@ class CompareSelectionGenerate(BaseModel):
     result_sha256: str = Field(min_length=1, max_length=128)
 
 
-def _render_view(pair_result: dict[str, Any], left_path: Path, right_path: Path) -> tuple[str, str]:
+def _render_view(pair_result: dict[str, Any], left_path: Path, right_path: Path) -> tuple[str, str, str]:
     from . import parser
-    from .render import render_compare_document
+    from .render import render_compare_document, render_merged_document
     left_doc = parser.parse_compare_document(left_path, filename=pair_result.get("left", {}).get("filename", ""), side="L")
     right_doc = parser.parse_compare_document(right_path, filename=pair_result.get("right", {}).get("filename", ""), side="R")
     diffs = pair_result.get("diffs") or []
     return (render_compare_document(left_doc, diffs, side="left"),
-            render_compare_document(right_doc, diffs, side="right"))
+            render_compare_document(right_doc, diffs, side="right"),
+            render_merged_document(right_doc, diffs, left_document=left_doc))
 
 
 def register_compare_routes(application, compare_store: CompareStore, user_dependency: Callable,
@@ -191,7 +192,7 @@ def register_compare_routes(application, compare_store: CompareStore, user_depen
                 if (not path.is_file() or path.stat().st_size != f["size"]
                         or hashlib.sha256(path.read_bytes()).hexdigest() != f["source_sha256"]):
                     raise Conflict("COMPARE_INPUT_INTEGRITY_FAILED")
-            left_html, right_html = _render_view(pair["result"], lp, rp)
+            left_html, right_html, merged_html = _render_view(pair["result"], lp, rp)
         except (NotFound, Conflict) as exc:
             raise_api_error(409, exc, fallback="CONFLICT")
         except (OSError, ValueError, KeyError) as exc:
@@ -199,6 +200,7 @@ def register_compare_routes(application, compare_store: CompareStore, user_depen
         return {"pair": {k: pair[k] for k in ("id", "label", "ordinal", "status")},
                 "left": {"name": pair["left"]["name"], "html": left_html},
                 "right": {"name": pair["right"]["name"], "html": right_html},
+                "merged": {"name": pair["right"]["name"], "html": merged_html},
                 "summary": pair["result"].get("summary"), "coverage": pair["result"].get("coverage"),
                 "diffs": pair["result"].get("diffs", []), "result_sha256": pair.get("result_sha256")}
 

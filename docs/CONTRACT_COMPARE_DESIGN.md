@@ -33,10 +33,12 @@ GET  /api/compare/pairs/{pair_id}/view
 
 ## HTML 与前端
 
-`render.py` 对所有合同文本先 HTML escape，后端提供稳定 `data-block-id` 和 `data-diff-id`，插入/删除一侧使用虚拟 anchor。`frontend/compare.js` 使用原生 DOM，与现有工作台只共享认证 JSON adapter；双栏独立滚动，差异列表支持点击、上一处/下一处，批量 pair 支持上一组/下一组。SVG 线条由浏览器实际 `getBoundingClientRect()` 计算，在 scroll、resize、ResizeObserver 和 requestAnimationFrame 时重算。文件夹配对按相对路径精确匹配，未配对文件不猜测。
+`render.py` 对所有合同文本先 HTML escape，后端提供稳定 `data-block-id` 和 `data-diff-id`，插入/删除一侧使用虚拟 anchor。除左右源文档投影外，`render_merged_document()` 生成 Word「比较的文档」式合并稿：以修订版结构为基底，删除文本以 `<del>` 放回原锚点，插入/修改文本以 `<ins>` 标记，整段删除投影为独立段落，普通表格结构不变。
+
+`frontend/compare.js` 与 React V2 `/compare` 都提供「Word 视图 / 双栏对照」切换。Word 视图为三栏：左侧可点击修订列表、中间合并稿、右侧上下堆叠的原文档与修订文档；修订列表与源文档联动滚动，支持「显示源文档」和「所有标记 / 简单标记 / 最终状态」显示模式。双栏对照保留原 A/B 双栏、可拖动分隔线、SVG 连线和独立差异栏。插入与删除使用 Word 作者红色（插入下划线、删除删除线），改动段落显示红色变更条；人工「采用 A / 采用 B」选择在两视图间共享。文件夹配对按相对路径精确匹配，未配对文件不猜测。
 
 ## 测试与已知范围
 
-算法、API、认证、对象完整性、批量失败隔离、恶意文本、确定性、对称性和真实合同 mutation 评测分别测试。冻结语料为20份公开合同、386个 mutation pair（14 dev / 6 holdout）；gold 独立读取 OOXML，不能作为 compare 输出的自证。最终证据保存在 `/tmp/opencode/compare-continuation/`，holdout 中 B14–B19 曾在前一轮暴露，按回归 split 披露。第一版不比较字体、字号、颜色、粗体、行距、页边距、分页、header/footer、footnote、endnote、comment、embedded file 和未支持的 text box；后者会在 coverage 中明确告警。
+算法、API、认证、对象完整性、批量失败隔离、恶意文本、确定性、对称性和真实合同 mutation 评测分别测试，合并稿投影另有 `tests/test_compare_merged_render.py` 覆盖插入、删除、整段删除、HTML 转义和表格结构。冻结语料为20份公开合同、386个 mutation pair（14 dev / 6 holdout）；gold 独立读取 OOXML，不能作为 compare 输出的自证。最终证据保存在 `/tmp/opencode/compare-continuation/`，holdout 中 B14–B19 曾在前一轮暴露，按回归 split 披露。第一版不比较字体、字号、颜色、粗体、行距、页边距、分页、header/footer、footnote、endnote、comment、embedded file 和未支持的 text box；后者会在 coverage 中明确告警。
 
 当前已知分类限制：split/merge 结构变化伴随局部文字修改时，部分对齐会保守退化为整组 delete + insert，字符差异仍保留但 `modify` 粒度下降；该限制记录在 FL-D152，不能用分类优化削弱差异召回。生产部署和正式工作台交付验收本轮未执行。

@@ -335,48 +335,40 @@ def test_compare_result_view_supports_pair_navigation_and_mobile_switching(brows
         assert response and response.ok
         page.get_by_role("heading", name="合同对比").first.wait_for(state="visible")
         page.get_by_text("共 2 处差异 · 修改 1 · 新增 1 · 删除 0").wait_for(state="visible")
-        assert page.locator('.compare-splitter').count() == 1
-        assert page.locator('.compare-splitter .ant-splitter-panel').count() == 2
-        assert page.locator('.compare-splitter .ant-splitter-bar-dragger').count() == 1
-        page.locator('.compare-lines path').first.wait_for(state="attached")
-        left_panel = page.locator('.compare-splitter .ant-splitter-panel').first
-        dragger = page.locator('.compare-splitter .ant-splitter-bar-dragger')
-        dragger.scroll_into_view_if_needed()
-        width_before = left_panel.bounding_box()["width"]
-        dragger_box = dragger.bounding_box()
-        page.mouse.move(dragger_box["x"] + dragger_box["width"] / 2, dragger_box["y"] + dragger_box["height"] / 2)
-        page.mouse.down()
-        page.mouse.move(dragger_box["x"] + dragger_box["width"] / 2 - 120, dragger_box["y"] + dragger_box["height"] / 2, steps=8)
-        page.mouse.up()
-        page.wait_for_timeout(300)
-        assert left_panel.bounding_box()["width"] < width_before - 40
-        assert page.locator('.compare-lines path').count() >= 1
-        page.set_viewport_size({"width": 390, "height": 844})
-        page.wait_for_function("() => !document.querySelector('.compare-splitter')")
-        page.locator('.compare-mobile-switch').wait_for(state="visible")
-        assert page.locator('[data-diff-id="D1"]').count() == 2
+        # Word view is the default: revision rail + merged document + source documents.
+        assert page.locator('.compare-word-layout').count() == 1
+        assert page.locator('.compare-merged-pane').count() == 1
         assert page.locator('.compare-diff-rail').count() == 1
-        outer_scroll_before = page.evaluate("() => window.scrollY")
+        assert page.locator('[data-diff-id="D1"]').count() >= 2
+
+        # The retained dual-pane view is still reachable and scrolls to a diff.
+        page.get_by_role("button", name="双栏对照").click()
+        page.locator('.compare-classic-view').wait_for(state="visible")
+        assert page.locator('.compare-word-layout').is_hidden()
+        assert page.locator('.compare-classic-view .compare-pane').count() == 2
         page.locator('.compare-diff-item').first.evaluate("node => node.click()")
-        page.wait_for_function("() => document.querySelector('.compare-pane-wrap')?.scrollTop > 0")
-        assert page.evaluate("() => window.scrollY") == outer_scroll_before
-        assert page.locator('.compare-pane-wrap').first.evaluate("pane => { const target = pane.querySelector('[data-diff-id=\\\"D1\\\"]'); const a = pane.getBoundingClientRect(); const b = target.getBoundingClientRect(); return b.top < a.bottom && b.bottom > a.top }")
-        assert page.locator('[data-diff-id="D3"]').count() == 1
-        page.locator('.compare-diff-item').nth(1).evaluate("node => node.click()")
-        page.locator('.compare-viewer[data-mobile-side="right"]').wait_for(state="attached")
-        page.wait_for_function("() => { const pane = document.querySelector('.compare-viewer[data-mobile-side=\"right\"] .compare-pane-wrap:last-of-type'); const target = pane?.querySelector('[data-diff-id=\"D3\"]'); if (!pane || !target) return false; const a = pane.getBoundingClientRect(); const b = target.getBoundingClientRect(); return b.top < a.bottom && b.bottom > a.top }")
+        page.wait_for_timeout(350)
+        assert page.locator('.compare-classic-view .compare-pane').first.evaluate("pane => pane.scrollTop > 0")
+
+        # Back to Word view for the phone-width single-document tabs.
+        page.get_by_role("button", name="Word 视图").click()
+        page.locator('.compare-word-layout').wait_for(state="visible")
+        page.set_viewport_size({"width": 390, "height": 844})
+        page.locator('.compare-word-view .compare-mobile-switch').wait_for(state="visible")
+        assert page.get_by_role("button", name="比较的文档").count() == 1
+        page.locator('.compare-diff-item').first.evaluate("node => node.click()")
+        page.wait_for_timeout(350)
+        page.get_by_role("button", name="原文档").click()
+        assert page.locator('.compare-word-sources').is_visible()
         metrics = page.evaluate("""() => ({ viewport: innerWidth, documentWidth: document.documentElement.scrollWidth, bodyWidth: document.body.scrollWidth })""")
         assert metrics["documentWidth"] <= metrics["viewport"]
         assert metrics["bodyWidth"] <= metrics["viewport"]
 
-        page.get_by_role("button", name="查看对比版").click()
-        assert page.locator('.compare-viewer[data-mobile-side="right"]').count() == 1
         next_pair = page.get_by_role("button", name="下一组", exact=True)
         next_pair.wait_for(state="visible")
         next_pair.click()
         page.get_by_text("共 1 处差异 · 修改 0 · 新增 1 · 删除 0").wait_for(state="visible")
-        assert page.locator('[data-diff-id="D2"]').count() == 2
-        assert page.locator('.compare-viewer[data-mobile-side="left"]').count() == 1
+        assert page.locator('[data-diff-id="D2"]').count() >= 1
         assert not page_errors, page_errors
         assert not console_errors, console_errors
     finally:

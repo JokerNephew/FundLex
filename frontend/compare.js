@@ -3,7 +3,7 @@
   const api = window.FundLexWorkbench || {};
   const $ = id => document.getElementById(id);
   const esc = api.esc || (v => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])));
-  const state = { tasks: [], task: null, pairs: [], pairIndex: 0, selectedPairId: null, view: null, selection: null, selectionDraft: null, selectionDirty: false, selectionSaving: false, selectionToken: 0, selectionSaveToken: 0, poll: null, requestToken: 0, lineFrame: null, scrollFrame: null, scrollSource: null, identityToken: 0, listToken: 0, inputs: [{}], uploadDraft: null, splitRatio: .5, pendingSplitRatio: .5, splitDragging: false, leftMarks: null, rightMarks: null };
+  const state = { tasks: [], task: null, pairs: [], pairIndex: 0, selectedPairId: null, view: null, selection: null, selectionDraft: null, selectionDirty: false, selectionSaving: false, selectionToken: 0, selectionSaveToken: 0, poll: null, requestToken: 0, lineFrame: null, scrollFrame: null, scrollSource: null, identityToken: 0, listToken: 0, inputs: [{}], uploadDraft: null, splitRatio: .5, pendingSplitRatio: .5, splitDragging: false, leftMarks: null, rightMarks: null, mergedMarks: null, wordLeftMarks: null, wordRightMarks: null, viewMode: 'word', classicSide: 'left' };
   const SPLIT_KEY = 'fundlex-compare-split-ratio', SPLIT_GUTTER = 28;
   const clampSplitRatio = value => { const number = Number(value); return value !== null && value !== '' && Number.isFinite(number) ? Math.min(.8, Math.max(.2, number)) : .5; };
   function storedSplitRatio() { try { return clampSplitRatio(localStorage.getItem(SPLIT_KEY)); } catch { return .5; } }
@@ -31,7 +31,7 @@
   function syncInputIndexes() { document.querySelectorAll('#compare-pair-inputs .compare-pair-input').forEach((row,i)=>{ row.dataset.pairIndex=String(i); row.querySelector('[data-compare-left]')?.setAttribute('data-compare-left',String(i)); row.querySelector('[data-compare-right]')?.setAttribute('data-compare-right',String(i)); row.querySelector('[data-compare-remove]')?.setAttribute('data-compare-remove',String(i)); }); }
   function selectedFiles() { return (state.inputs || []).map(x => ({ left: x._left || x.left, right: x._right || x.right })).filter(x => x.left || x.right); }
   function resetFolders() { state.folderLeft=[]; state.folderRight=[]; for(const id of ['compare-left-folder','compare-right-folder'])if($(id))$(id).value=''; }
-  function showCreate(show=true) { $('compare-create').hidden = !show; if (show) { clearTimeout(state.poll); state.requestToken++; $('compare-detail').hidden=true; $('compare-viewer').hidden=true; state.view=null; state.leftMarks=state.rightMarks=null; state.uploadDraft=null; state.inputs=[{}]; resetFolders(); $('compare-upload-message').textContent=''; $('compare-retry').hidden=true; $('compare-lines').replaceChildren(); renderInputs(); } }
+  function showCreate(show=true) { $('compare-create').hidden = !show; if (show) { clearTimeout(state.poll); state.requestToken++; $('compare-detail').hidden=true; $('compare-viewer').hidden=true; state.view=null; state.mergedMarks=state.leftMarks=state.rightMarks=null; state.uploadDraft=null; state.inputs=[{}]; resetFolders(); $('compare-upload-message').textContent=''; $('compare-retry').hidden=true; $('compare-lines')?.replaceChildren(); renderInputs(); } }
   function statusLabel(v) { return ({pending:'待上传',queued:'排队中',leased:'处理中',running:'处理中',succeeded:'已处理',incomplete:'覆盖不完整',failed:'失败',retry_wait:'等待重试',sealed:'已提交',uploading:'上传中',completed:'已处理'}[v] || v || '—'); }
   function taskMetrics(task) {
     const pairs=task.pairs||[], counts=task.counts||{};
@@ -154,9 +154,15 @@
     applySplitRatio(storedSplitRatio(), false);
   }
   function refreshDiffMarks() {
-    const left=$('compare-left-pane'),right=$('compare-right-pane');
-    state.leftMarks=left?new Map([...left.querySelectorAll('[data-diff-id]')].map(n=>[n.dataset.diffId,n])):null;
-    state.rightMarks=right?new Map([...right.querySelectorAll('[data-diff-id]')].map(n=>[n.dataset.diffId,n])):null;
+    const marks = id => {
+      const pane = $(id);
+      return pane ? new Map([...pane.querySelectorAll('[data-diff-id]')].map(n => [n.dataset.diffId, n])) : null;
+    };
+    state.mergedMarks = marks('compare-word-merged-pane');
+    state.wordLeftMarks = marks('compare-word-left-pane');
+    state.wordRightMarks = marks('compare-word-right-pane');
+    state.leftMarks = marks('compare-left-pane');
+    state.rightMarks = marks('compare-right-pane');
   }
   function drawLines() {
     if(state.lineFrame!==null)return;
@@ -182,17 +188,24 @@
       svg.append(fragment);
     });
   }
+  function visiblePanels() {
+    return allPanels().filter(pane => pane.offsetParent !== null && pane.clientHeight > 0);
+  }
   function syncPaneScroll(source) {
     if(state.focusScrolling){drawLines();return;}
     if (window.matchMedia('(max-width: 760px)').matches) { drawLines(); return; }
     if (state.scrollSource && state.scrollSource !== source) { drawLines(); return; }
-    const panes = [$('compare-left-pane'), $('compare-right-pane')].filter(Boolean), target = panes.find(p => p !== source);
-    if (!target) return;
+    const targets = visiblePanels().filter(p => p !== source);
+    if (!targets.length) return;
     state.scrollSource = source;
     cancelAnimationFrame(state.scrollFrame);
     state.scrollFrame = requestAnimationFrame(() => {
-      const sourceMax = Math.max(0, source.scrollHeight - source.clientHeight), targetMax = Math.max(0, target.scrollHeight - target.clientHeight);
-      target.scrollTop = (sourceMax ? source.scrollTop / sourceMax : 0) * targetMax;
+      const sourceMax = Math.max(0, source.scrollHeight - source.clientHeight);
+      const ratio = sourceMax ? source.scrollTop / sourceMax : 0;
+      targets.forEach(target => {
+        const targetMax = Math.max(0, target.scrollHeight - target.clientHeight);
+        target.scrollTop = ratio * targetMax;
+      });
       drawLines();
       state.scrollFrame = requestAnimationFrame(() => { state.scrollSource = null; state.scrollFrame = null; drawLines(); });
     });
@@ -308,31 +321,100 @@
       if(selectionCurrent(context))selectionStatus('下载已开始。');
     } catch(e){if(selectionCurrent(context))selectionStatus(e.message,true);}
   }
+  const WORD_PANES = ['compare-word-merged-pane','compare-word-left-pane','compare-word-right-pane'];
+  const CLASSIC_PANES = ['compare-left-pane','compare-right-pane'];
+  function allPanels() { return [...WORD_PANES, ...CLASSIC_PANES].map(id => $(id)).filter(Boolean); }
+  function setViewMode(mode, persist=true) {
+    const next = mode === 'classic' ? 'classic' : 'word';
+    state.viewMode = next;
+    const viewer = $('compare-viewer'), body = $('compare-view-body');
+    if (viewer) viewer.dataset.viewMode = next;
+    if (body) body.dataset.viewMode = next;
+    const word = $('compare-word-view'), classic = $('compare-classic-view');
+    if (word) word.hidden = next !== 'word';
+    if (classic) classic.hidden = next !== 'classic';
+    document.querySelectorAll('[data-compare-view-mode]').forEach(button => {
+      const active = button.dataset.compareViewMode === next;
+      button.classList.toggle('is-active', active);
+      button.setAttribute('aria-pressed', String(active));
+    });
+    if (persist) { try { localStorage.setItem('fundlex-compare-view-mode', next); } catch {} }
+    if (next === 'classic') applySplitRatio(state.splitRatio, false);
+    requestAnimationFrame(() => { drawLines(); if (state.view) focusDiff(state.diffIndex); });
+  }
+  function setClassicSide(side, persist=true) {
+    const next = side === 'right' ? 'right' : 'left';
+    state.classicSide = next;
+    const viewer = $('compare-viewer');
+    if (viewer) viewer.dataset.mobileSide = next;
+    document.querySelectorAll('#compare-classic-view [data-compare-side]').forEach(button => {
+      const active = button.dataset.compareSide === next;
+      button.classList.toggle('is-active', active);
+      button.setAttribute('aria-pressed', String(active));
+    });
+    if (persist) { try { localStorage.setItem('fundlex-compare-classic-side', next); } catch {} }
+    if (state.view) requestAnimationFrame(() => focusDiff(state.diffIndex));
+  }
+  function setMobilePane(pane, persist=true) {
+    const next = ['merged','left','right'].includes(pane) ? pane : 'merged';
+    const viewer = $('compare-viewer'); if (viewer) viewer.dataset.mobilePane = next;
+    document.querySelectorAll('[data-word-pane]').forEach(button => {
+      const active = button.dataset.wordPane === next;
+      button.classList.toggle('is-active', active);
+      button.setAttribute('aria-pressed', String(active));
+    });
+    if (persist) { try { localStorage.setItem('fundlex-compare-mobile-pane', next); } catch {} }
+  }
+  function setSourcesVisible(show, persist=true) {
+    const layout = $('compare-word-layout'); if (!layout) return;
+    layout.classList.toggle('is-sources-hidden', !show);
+    const toggle = $('compare-show-sources'); if (toggle) toggle.checked = show;
+    if (persist) { try { localStorage.setItem('fundlex-compare-show-sources', show ? '1' : '0'); } catch {} }
+    requestAnimationFrame(() => { drawLines(); });
+  }
+  function setMarkupMode(mode, persist=true) {
+    const layout = $('compare-word-layout'); if (!layout) return;
+    const next = ['all','simple','final'].includes(mode) ? mode : 'all';
+    layout.dataset.markup = next;
+    const select = $('compare-markup-mode'); if (select) select.value = next;
+    if (persist) { try { localStorage.setItem('fundlex-compare-markup', next); } catch {} }
+  }
   function visibleDiffs() { const all=state.view?.diffs||[], filter=$('compare-diff-filter')?.value||''; return filter?all.filter(x=>x.type===filter):all; }
+  function paneHasTarget(paneId, selector) { return Boolean($(paneId)?.querySelector(selector)); }
   function focusDiff(index) {
     const ds=visibleDiffs();
     document.querySelectorAll('.compare-diff.is-active,.compare-diff-item.is-active').forEach(n=>n.classList.remove('is-active'));
     if(!ds.length){$('compare-diff-counter').textContent='0 / 0';return;}
     state.diffIndex=(index+ds.length)%ds.length;const id=ds[state.diffIndex].id;
     const selector=`[data-diff-id="${CSS.escape(id)}"]`;
-    document.querySelectorAll(`#compare-left-pane ${selector},#compare-right-pane ${selector}`).forEach(n=>n.classList.add('is-active'));
+    const paneIds=[...WORD_PANES,...CLASSIC_PANES];
+    document.querySelectorAll(paneIds.map(pane=>`#${pane} ${selector}`).join(',')).forEach(n=>n.classList.add('is-active'));
     const item=document.querySelector(`.compare-diff-item[data-compare-diff="${CSS.escape(id)}"]`),list=$('compare-diff-list');
     item?.classList.add('is-active');
     if(item){const ir=item.getBoundingClientRect(),lr=list.getBoundingClientRect();if(ir.top<lr.top||ir.bottom>lr.bottom)list.scrollTop+=ir.top-lr.top;}
     $('compare-diff-counter').textContent=`${state.diffIndex+1} / ${ds.length}`;
     if(matchMedia('(max-width:760px)').matches){
-      const current=$('compare-viewer').dataset.mobileSide||'left';
-      if(!$(`compare-${current}-pane`).querySelector(selector)){
-        const side=current==='left'?'right':'left';$('compare-viewer').dataset.mobileSide=side;
-        document.querySelectorAll('[data-compare-side]').forEach(n=>n.classList.toggle('is-active',n.dataset.compareSide===side));
+      if(state.viewMode==='word'){
+        const currentId=state.mobilePane==='left'?'compare-word-left-pane':state.mobilePane==='right'?'compare-word-right-pane':'compare-word-merged-pane';
+        if(!paneHasTarget(currentId,selector)){
+          const candidates=[['merged','compare-word-merged-pane'],['right','compare-word-right-pane'],['left','compare-word-left-pane']];
+          const next=candidates.find(([,paneId])=>paneHasTarget(paneId,selector));
+          if(next)setMobilePane(next[0],false);
+        }
+      } else {
+        const currentId=state.classicSide==='right'?'compare-right-pane':'compare-left-pane';
+        if(!paneHasTarget(currentId,selector)){
+          const otherId=state.classicSide==='right'?'compare-left-pane':'compare-right-pane';
+          if(paneHasTarget(otherId,selector))setClassicSide(state.classicSide==='right'?'left':'right',false);
+        }
       }
     }
     cancelAnimationFrame(state.scrollFrame);state.scrollSource=null;state.focusScrolling=true;
-    for(const side of ['left','right']){const pane=$(`compare-${side}-pane`),target=pane?.querySelector(selector);if(pane&&target&&pane.clientHeight){const pr=pane.getBoundingClientRect(),tr=target.getBoundingClientRect();pane.scrollTop+=tr.top+tr.height/2-pr.top-pr.height/2;}}
+    for(const paneId of paneIds){const pane=$(paneId),target=pane?.querySelector(selector);if(pane&&target&&pane.clientHeight){const pr=pane.getBoundingClientRect(),tr=target.getBoundingClientRect();pane.scrollTop+=tr.top+tr.height/2-pr.top-pr.height/2;}}
     requestAnimationFrame(()=>requestAnimationFrame(()=>{state.focusScrolling=false;}));
     requestAnimationFrame(drawLines);
   }
-  function renderDiffList() { const d=visibleDiffs(), disabled=!state.selection||state.selectionSaving; $('compare-diff-list').innerHTML=d.length?d.map((x,i)=>{const choice=selectionDecision(x.id);return `<div class="compare-diff-item ${choice!=='pending'?'is-selected-choice':''}" data-compare-diff="${esc(x.id)}"><button type="button" class="compare-diff-jump" data-compare-diff="${esc(x.id)}"><span>${i+1}</span><strong>${esc(x.type==='modify'?'修改':x.type==='insert'?'新增':'删除')}</strong><span>${esc(x.section||'正文')} · ${esc(x.left?.text||'')} ${x.right?.text?'→ '+esc(x.right.text):''}</span></button><div class="compare-choice" role="group" aria-label="${esc(x.id)} 采用 A 或 B"><label class="${choice==='left'?'is-checked':''}"><input type="radio" name="choice-${esc(x.id)}" value="left" data-selection-choice="left" data-diff-id="${esc(x.id)}" ${choice==='left'?'checked':''} ${disabled?'disabled':''}>采用 A</label><label class="${choice==='right'?'is-checked':''}"><input type="radio" name="choice-${esc(x.id)}" value="right" data-selection-choice="right" data-diff-id="${esc(x.id)}" ${choice==='right'?'checked':''} ${disabled?'disabled':''}>采用 B</label></div></div>`;}).join(''):'<p class="empty">当前筛选条件下没有差异。</p>'; }
+  function renderDiffList() { const d=visibleDiffs(), disabled=!state.selection||state.selectionSaving; $('compare-diff-list').innerHTML=d.length?d.map((x,i)=>{const choice=selectionDecision(x.id);const kind=x.type==='modify'?'修改':x.type==='insert'?'插入':'删除';return `<div class="compare-diff-item ${choice!=='pending'?'is-selected-choice':''}" data-compare-diff="${esc(x.id)}"><button type="button" class="compare-diff-jump" data-compare-diff="${esc(x.id)}"><span class="compare-diff-index">${i+1}</span><span class="compare-diff-kind is-${esc(x.type)}">${esc(kind)}</span><span class="compare-diff-preview"><small>FundLex 对比</small><span>${esc(x.section||'正文')} · ${esc(x.left?.text||'')} ${x.right?.text?'→ '+esc(x.right.text):''}</span></span></button><div class="compare-choice" role="group" aria-label="${esc(x.id)} 采用 A 或 B"><label class="${choice==='left'?'is-checked':''}"><input type="radio" name="choice-${esc(x.id)}" value="left" data-selection-choice="left" data-diff-id="${esc(x.id)}" ${choice==='left'?'checked':''} ${disabled?'disabled':''}>采用 A</label><label class="${choice==='right'?'is-checked':''}"><input type="radio" name="choice-${esc(x.id)}" value="right" data-selection-choice="right" data-diff-id="${esc(x.id)}" ${choice==='right'?'checked':''} ${disabled?'disabled':''}>采用 B</label></div></div>`;}).join(''):'<p class="empty">当前筛选条件下没有差异。</p>'; }
   function renderContract(pane, html) {
     pane.innerHTML=html||'';
     // Word projects absolute pt/px sizes on paragraphs AND runs. Shrink each
@@ -345,14 +427,41 @@
     }));
   }
   function renderViewer(payload) {
-    state.view=payload; state.diffIndex=0; const d=payload.diffs||[]; $('compare-viewer').hidden=false; $('compare-pair-title').textContent=payload.pair?.label||'合同比对'; $('compare-left-name').textContent=payload.left?.name||'合同A'; $('compare-right-name').textContent=payload.right?.name||'合同B'; const s=payload.summary||{}; $('compare-summary').textContent=`共 ${s.total||0} 处差异 · 修改 ${s.modify||0} · 新增 ${s.insert||0} · 删除 ${s.delete||0}`; const cov=payload.coverage||{}; const incomplete=cov.status!=='complete'; $('compare-coverage').hidden=!incomplete; $('compare-coverage').className=incomplete?'is-incomplete':''; $('compare-coverage').textContent=incomplete?`覆盖不完整：以下内容未纳入比较。请人工复核，不要据此确认全文无差异。${(cov.warnings||[]).length?' 未覆盖：'+cov.warnings.join('、'):''}`:'覆盖完整'; renderContract($('compare-left-pane'),payload.left.html); renderContract($('compare-right-pane'),payload.right.html); document.querySelectorAll('#compare-left-pane [data-diff-id],#compare-right-pane [data-diff-id]').forEach(mark=>{mark.tabIndex=0;mark.setAttribute('role','button');mark.setAttribute('aria-label','定位此处差异');}); refreshDiffMarks(); $('compare-diff-counter').textContent='0 / 0'; renderDiffList(); if(!d.length)$('compare-diff-list').innerHTML=`<p class="empty">${incomplete?'已覆盖范围内没有发现文字差异。':'两份合同没有文字差异。'}</p>`; drawLines();if(d.length)focusDiff(0); }
+    state.view=payload; state.diffIndex=0; const d=payload.diffs||[]; $('compare-viewer').hidden=false;
+    const pairLabel=payload.pair?.label||'合同比对';
+    $('compare-pair-title').textContent=pairLabel;
+    const leftName=payload.left?.name||'合同A',rightName=payload.right?.name||'合同B';
+    $('compare-left-name').textContent=leftName; $('compare-right-name').textContent=rightName;
+    $('compare-classic-left-name').textContent=leftName; $('compare-classic-right-name').textContent=rightName;
+    $('compare-merged-name').textContent=payload.merged?.name||rightName;
+    $('compare-left-title').textContent=leftName; $('compare-right-title').textContent=rightName;
+    $('compare-merged-title').textContent=pairLabel;
+    const s=payload.summary||{};
+    $('compare-summary').textContent=`共 ${s.total||0} 处差异 · 修改 ${s.modify||0} · 新增 ${s.insert||0} · 删除 ${s.delete||0}`;
+    $('compare-revision-count').textContent=String(d.length);
+    $('compare-revision-count-rail').textContent=String(d.length);
+    const cov=payload.coverage||{}; const incomplete=cov.status!=='complete';
+    $('compare-coverage').hidden=!incomplete; $('compare-coverage').className=incomplete?'is-incomplete':'';
+    $('compare-coverage').textContent=incomplete?`覆盖不完整：以下内容未纳入比较。请人工复核，不要据此确认全文无差异。${(cov.warnings||[]).length?' 未覆盖：'+cov.warnings.join('、'):''}`:'覆盖完整';
+    renderContract($('compare-word-merged-pane'),payload.merged?.html||payload.right?.html);
+    renderContract($('compare-word-left-pane'),payload.left.html);
+    renderContract($('compare-word-right-pane'),payload.right.html);
+    renderContract($('compare-left-pane'),payload.left.html);
+    renderContract($('compare-right-pane'),payload.right.html);
+    document.querySelectorAll('#compare-word-merged-pane [data-diff-id],#compare-word-left-pane [data-diff-id],#compare-word-right-pane [data-diff-id],#compare-left-pane [data-diff-id],#compare-right-pane [data-diff-id]').forEach(mark=>{mark.tabIndex=0;mark.setAttribute('role','button');mark.setAttribute('aria-label','定位此处差异');});
+    refreshDiffMarks(); $('compare-diff-counter').textContent='0 / 0'; renderDiffList();
+    if(!d.length)$('compare-diff-list').innerHTML=`<p class="empty">${incomplete?'已覆盖范围内没有发现文字差异。':'两份合同没有文字差异。'}</p>`;
+    setMobilePane('merged',false);
+    drawLines();
+    if(d.length)focusDiff(0);
+  }
   async function openPair(index,fromRoute=false) {
     const p=state.pairs[index];if(!p)return;
     if(!fromRoute&&state.view&&api.navigate&&api.route?.().pair!==p.id){api.navigate('compare',{mode:'detail',id:state.task.id,pair:p.id});return;}
     if(state.selectionDirty){selectionStatus('请先保存当前选择，再切换合同组。',true);return;}
     resetSelection();const token=++state.requestToken;
-    state.pairIndex=index;state.selectedPairId=p.id;state.view=null;state.leftMarks=state.rightMarks=null;renderPairs();
-    $('compare-viewer').hidden=true;$('compare-lines').replaceChildren();$('compare-pair-counter').textContent=`${index+1} / ${state.pairs.length}`;
+    state.pairIndex=index;state.selectedPairId=p.id;state.view=null;state.mergedMarks=state.wordLeftMarks=state.wordRightMarks=state.leftMarks=state.rightMarks=null;renderPairs();
+    $('compare-viewer').hidden=true;$('compare-lines')?.replaceChildren();$('compare-word-merged-pane').innerHTML='';$('compare-word-left-pane').innerHTML='';$('compare-word-right-pane').innerHTML='';$('compare-left-pane').innerHTML='';$('compare-right-pane').innerHTML='';$('compare-pair-counter').textContent=`${index+1} / ${state.pairs.length}`;
     if(!['succeeded','incomplete'].includes(p.status))return;
     try {const payload=await json(`/api/compare/pairs/${encodeURIComponent(p.id)}/view`);if(token===state.requestToken){p.viewError='';renderPairs();renderViewer(payload);await loadSelection(p.id);}}
     catch(e){if(token===state.requestToken){p.viewError=`读取结果失败：${e.message}`;renderPairs();}}
@@ -398,13 +507,18 @@
     document.addEventListener('fundlex:identity-reset',resetSelection);
     window.addEventListener('beforeunload',event=>{if(state.selectionDirty){event.preventDefault();event.returnValue='';}});
     $('compare-new')?.addEventListener('click',()=>api.navigate?api.navigate('compare',{mode:'new'}):showCreate(true)); $('compare-add-pair')?.addEventListener('click',()=>{const index=state.inputs.length;state.inputs.push({});$('compare-pair-inputs')?.insertAdjacentHTML('beforeend',pairRow({},index));syncInputIndexes();}); $('compare-submit')?.addEventListener('click',createTask); $('compare-refresh')?.addEventListener('click',loadTasks);
-    $('compare-prev-diff')?.addEventListener('click',()=>focusDiff(state.diffIndex-1)); $('compare-next-diff')?.addEventListener('click',()=>focusDiff(state.diffIndex+1)); $('compare-prev-pair')?.addEventListener('click',()=>openPair(Math.max(0,state.pairIndex-1))); $('compare-next-pair')?.addEventListener('click',()=>openPair(Math.min(state.pairs.length-1,state.pairIndex+1))); $('compare-report')?.addEventListener('click',()=>{if(!state.view)return;const blob=new Blob([JSON.stringify(state.view,null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=`${state.task?.name||'合同比对'}-差异报告.json`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}); $('compare-selection-left-all')?.addEventListener('click',()=>setAllSelections('left')); $('compare-selection-right-all')?.addEventListener('click',()=>setAllSelections('right')); $('compare-selection-pending')?.addEventListener('click',()=>{const index=visibleDiffs().findIndex(item=>selectionDecision(item.id)==='pending');if(index>=0)focusDiff(index);}); $('compare-selection-save')?.addEventListener('click',saveSelectionDraft); $('compare-selection-preview')?.addEventListener('click',previewSelection); $('compare-selection-generate')?.addEventListener('click',generateSelection); $('compare-active-only')?.addEventListener('change',drawLines); $('compare-diff-filter')?.addEventListener('change',()=>{state.diffIndex=0;renderDiffList();focusDiff(0);}); $('compare-retry')?.addEventListener('click',continueUploads); document.querySelectorAll('[data-compare-side]').forEach(btn=>btn.addEventListener('click',()=>{document.querySelectorAll('[data-compare-side]').forEach(x=>x.classList.toggle('is-active',x===btn));$('compare-viewer').dataset.mobileSide=btn.dataset.compareSide;}));
-      document.addEventListener('click',e=>{ const task=e.target.closest('[data-compare-task]');if(task){openTask(task.dataset.compareTask);return;}const pair=e.target.closest('[data-compare-pair]');if(pair){openPair(Number(pair.dataset.comparePair));return;}const download=e.target.closest('[data-selection-download]');if(download){downloadSelection(download.dataset.selectionDownload,download.dataset.selectionFilename);return;}const diff=e.target.closest('[data-compare-diff]');if(diff&&!e.target.closest('input')){focusDiff(visibleDiffs().findIndex(x=>x.id===diff.dataset.compareDiff));return;}const mark=e.target.closest('#compare-left-pane [data-diff-id],#compare-right-pane [data-diff-id]');if(mark){focusDiff(visibleDiffs().findIndex(x=>x.id===mark.dataset.diffId));return;}const remove=e.target.closest('[data-compare-remove]');if(remove){const index=Number(remove.dataset.compareRemove),row=remove.closest('.compare-pair-input');state.inputs.splice(index,1);row?.remove();if(!state.inputs.length){state.inputs=[{}];renderInputs();}else syncInputIndexes();return;} });
-     document.addEventListener('keydown',e=>{if((e.key==='Enter'||e.key===' ')&&e.target.matches('#compare-left-pane [data-diff-id],#compare-right-pane [data-diff-id]')){e.preventDefault();focusDiff(visibleDiffs().findIndex(x=>x.id===e.target.dataset.diffId));}});
+    $('compare-prev-diff')?.addEventListener('click',()=>focusDiff(state.diffIndex-1)); $('compare-next-diff')?.addEventListener('click',()=>focusDiff(state.diffIndex+1)); $('compare-prev-pair')?.addEventListener('click',()=>openPair(Math.max(0,state.pairIndex-1))); $('compare-next-pair')?.addEventListener('click',()=>openPair(Math.min(state.pairs.length-1,state.pairIndex+1))); $('compare-report')?.addEventListener('click',()=>{if(!state.view)return;const blob=new Blob([JSON.stringify(state.view,null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=`${state.task?.name||'合同比对'}-差异报告.json`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}); $('compare-selection-left-all')?.addEventListener('click',()=>setAllSelections('left')); $('compare-selection-right-all')?.addEventListener('click',()=>setAllSelections('right')); $('compare-selection-pending')?.addEventListener('click',()=>{const index=visibleDiffs().findIndex(item=>selectionDecision(item.id)==='pending');if(index>=0)focusDiff(index);}); $('compare-selection-save')?.addEventListener('click',saveSelectionDraft); $('compare-selection-preview')?.addEventListener('click',previewSelection); $('compare-selection-generate')?.addEventListener('click',generateSelection); $('compare-active-only')?.addEventListener('change',drawLines); $('compare-diff-filter')?.addEventListener('change',()=>{state.diffIndex=0;renderDiffList();focusDiff(0);}); $('compare-retry')?.addEventListener('click',continueUploads); document.querySelectorAll('[data-word-pane]').forEach(btn=>btn.addEventListener('click',()=>setMobilePane(btn.dataset.wordPane))); $('compare-show-sources')?.addEventListener('change',e=>setSourcesVisible(e.target.checked)); $('compare-markup-mode')?.addEventListener('change',e=>setMarkupMode(e.target.value)); document.querySelectorAll('[data-compare-sources-close]').forEach(btn=>btn.addEventListener('click',()=>setSourcesVisible(false)));
+      document.addEventListener('click',e=>{ const task=e.target.closest('[data-compare-task]');if(task){openTask(task.dataset.compareTask);return;}const pair=e.target.closest('[data-compare-pair]');if(pair){openPair(Number(pair.dataset.comparePair));return;}const download=e.target.closest('[data-selection-download]');if(download){downloadSelection(download.dataset.selectionDownload,download.dataset.selectionFilename);return;}const diff=e.target.closest('[data-compare-diff]');if(diff&&!e.target.closest('input')){focusDiff(visibleDiffs().findIndex(x=>x.id===diff.dataset.compareDiff));return;}const mark=e.target.closest('#compare-word-merged-pane [data-diff-id],#compare-word-left-pane [data-diff-id],#compare-word-right-pane [data-diff-id],#compare-left-pane [data-diff-id],#compare-right-pane [data-diff-id]');if(mark){focusDiff(visibleDiffs().findIndex(x=>x.id===mark.dataset.diffId));return;}const remove=e.target.closest('[data-compare-remove]');if(remove){const index=Number(remove.dataset.compareRemove),row=remove.closest('.compare-pair-input');state.inputs.splice(index,1);row?.remove();if(!state.inputs.length){state.inputs=[{}];renderInputs();}else syncInputIndexes();return;} });
+     document.addEventListener('keydown',e=>{if((e.key==='Enter'||e.key===' ')&&e.target.matches('#compare-word-merged-pane [data-diff-id],#compare-word-left-pane [data-diff-id],#compare-word-right-pane [data-diff-id],#compare-left-pane [data-diff-id],#compare-right-pane [data-diff-id]')){e.preventDefault();focusDiff(visibleDiffs().findIndex(x=>x.id===e.target.dataset.diffId));}});
       document.addEventListener('change',e=>{const choice=e.target.closest('[data-selection-choice]');if(choice){chooseSelection(choice.dataset.diffId,choice.value);return;}const row=e.target.closest('.compare-pair-input');if(row&&e.target.matches('input[type=file]')){const i=Number(row.dataset.pairIndex),entry=state.inputs[i]||(state.inputs[i]={});entry[e.target.matches('[data-compare-left]')?'_left':'_right']=e.target.files?.[0]||null;row.querySelector('.compare-file-label').textContent=[entry._left?.name,entry._right?.name].filter(Boolean).join(' / ')||'尚未选择文件';return;}if(e.target.id==='compare-left-folder'||e.target.id==='compare-right-folder'){const side=e.target.id.includes('left')?'left':'right';state[`folder${side[0].toUpperCase()+side.slice(1)}`]=[...e.target.files].filter(f=>fileName(f).toLowerCase().endsWith('.docx')).sort((a,b)=>relativePath(a).localeCompare(relativePath(b)));const other=side==='left'?state.folderRight:state.folderLeft;if(!other?.length)return;const left=state.folderLeft||[],right=state.folderRight||[],map=new Map(right.map(f=>[relativePath(f),f])),used=new Set(),entries=left.map(f=>{const r=map.get(relativePath(f));if(r)used.add(r);return {_left:f,_right:r||null};});for(const f of right)if(!used.has(f))entries.push({_left:null,_right:f});state.inputs=entries;renderInputs();$('compare-upload-message').textContent=`已按相对路径配对 ${entries.filter(x=>x._left&&x._right).length} 组；${entries.filter(x=>!x._left||!x._right).length} 个文件未配对，可手工补齐。`;}});
      bindCompareSplitter();
-     const cols=$('compare-columns'); if(cols){ for(const pane of [$('compare-left-pane'),$('compare-right-pane')])pane?.addEventListener('scroll',()=>syncPaneScroll(pane),{passive:true}); window.addEventListener('resize',()=>{applySplitRatio(state.splitRatio,false);drawLines();}); if(window.ResizeObserver)new ResizeObserver(drawLines).observe(cols); }
-      document.addEventListener('fundlex:view',e=>{if(e.detail==='compare'){applySplitRatio(state.splitRatio,false);drawLines();}}); document.addEventListener('fundlex:identity-reset',()=>{clearTimeout(state.poll);state.identityToken++;state.listToken++;state.tasks=[];state.task=null;state.pairs=[];state.selectedPairId=null;state.view=null;state.leftMarks=state.rightMarks=null;state.selection=null;state.selectionDraft=null;state.selectionDirty=false;state.uploadDraft=null;state.inputs=[{}];state.requestToken++;state.selectionToken++;resetFolders();$('compare-create').hidden=true;$('compare-submit').disabled=false;$('compare-retry').hidden=true;$('compare-upload-message').textContent='';$('compare-name').value='';$('compare-detail').hidden=true;$('compare-viewer').hidden=true;$('compare-left-pane').innerHTML='';$('compare-right-pane').innerHTML='';$('compare-diff-list').innerHTML='';$('compare-selection-downloads').replaceChildren();selectionStatus('');$('compare-lines').replaceChildren();$('compare-diff-counter').textContent='0 / 0';renderInputs();renderTasks();}); state.inputs=[{}];renderInputs();applyRoute(api.route?.()||{view:'compare',mode:'list'});
+      for(const pane of allPanels())pane?.addEventListener('scroll',()=>syncPaneScroll(pane),{passive:true});
+      window.addEventListener('resize',drawLines);
+      const body=$('compare-view-body'); if(body&&window.ResizeObserver)new ResizeObserver(drawLines).observe(body);
+      document.querySelectorAll('[data-compare-view-mode]').forEach(button=>button.addEventListener('click',()=>setViewMode(button.dataset.compareViewMode)));
+      document.querySelectorAll('#compare-classic-view [data-compare-side]').forEach(button=>button.addEventListener('click',()=>setClassicSide(button.dataset.compareSide)));
+      try { const storedSources=localStorage.getItem('fundlex-compare-show-sources'); if(storedSources==='0')setSourcesVisible(false,false); const storedMarkup=localStorage.getItem('fundlex-compare-markup'); if(storedMarkup)setMarkupMode(storedMarkup,false); const storedPane=localStorage.getItem('fundlex-compare-mobile-pane'); if(storedPane)setMobilePane(storedPane,false); const storedMode=localStorage.getItem('fundlex-compare-view-mode'); if(storedMode)setViewMode(storedMode,false); const storedSide=localStorage.getItem('fundlex-compare-classic-side'); if(storedSide)setClassicSide(storedSide,false); } catch {}
+      document.addEventListener('fundlex:view',e=>{if(e.detail==='compare'){drawLines();}}); document.addEventListener('fundlex:identity-reset',()=>{clearTimeout(state.poll);state.identityToken++;state.listToken++;state.tasks=[];state.task=null;state.pairs=[];state.selectedPairId=null;state.view=null;state.mergedMarks=state.wordLeftMarks=state.wordRightMarks=state.leftMarks=state.rightMarks=null;state.selection=null;state.selectionDraft=null;state.selectionDirty=false;state.uploadDraft=null;state.inputs=[{}];state.requestToken++;state.selectionToken++;resetFolders();$('compare-create').hidden=true;$('compare-submit').disabled=false;$('compare-retry').hidden=true;$('compare-upload-message').textContent='';$('compare-name').value='';$('compare-detail').hidden=true;$('compare-viewer').hidden=true;$('compare-word-merged-pane').innerHTML='';$('compare-word-left-pane').innerHTML='';$('compare-word-right-pane').innerHTML='';$('compare-left-pane').innerHTML='';$('compare-right-pane').innerHTML='';$('compare-diff-list').innerHTML='';$('compare-selection-downloads').replaceChildren();selectionStatus('');$('compare-lines')?.replaceChildren();$('compare-diff-counter').textContent='0 / 0';$('compare-revision-count').textContent='0';$('compare-revision-count-rail').textContent='0';renderInputs();renderTasks();}); state.inputs=[{}];renderInputs();applyRoute(api.route?.()||{view:'compare',mode:'list'});
   }
   if (document.readyState==='loading') document.addEventListener('DOMContentLoaded',bind); else bind();
 })();

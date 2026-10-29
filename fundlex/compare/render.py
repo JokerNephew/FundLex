@@ -248,5 +248,235 @@ def render_compare_document(document: CompareDocument, diffs: Iterable[Any], *, 
     return ''.join(chunks)
 
 
+def _diff_type(item: Any) -> str:
+    value = item.type if isinstance(item, DiffItem) else item.get("type", "")
+    return str(value)
+
+
+def _deleted_fragments(spans: Iterable[TextSpan], diff_id: str) -> str:
+    """Return escaped deletion markup while keeping removed paragraph breaks."""
+    parts: list[str] = []
+    previous_block = ""
+    for span in spans:
+        if previous_block and span.block_id != previous_block:
+            parts.append('<span class="compare-paragraph-mark" aria-hidden="true"></span><br>')
+        parts.append(escape(span.text))
+        previous_block = span.block_id
+    return (f'<del class="compare-del" data-diff-id="{escape(diff_id, quote=True)}">'
+            f'{"".join(parts)}</del>')
+
+
+def _deleted_paragraphs(spans: Iterable[TextSpan], diff_id: str, left_blocks: dict[str, Any]) -> list[str]:
+    """Render fully removed blocks as Word-style struck-through paragraphs."""
+    groups: list[list[TextSpan]] = []
+    for span in spans:
+        if groups and groups[-1][0].block_id == span.block_id:
+            groups[-1].append(span)
+        else:
+            groups.append([span])
+    paragraphs: list[str] = []
+    for group in groups:
+        block = left_blocks.get(group[0].block_id)
+        text = "".join(span.text for span in group)
+        classes = "compare-block compare-deleted-paragraph has-change"
+        if block is not None:
+            style_class, tag = _style_projection(block.style)
+            if style_class:
+                classes += f" {style_class}"
+            location = escape(block.location, quote=True)
+        else:
+            tag, location = "p", ""
+        paragraphs.append(
+            f'<{tag} class="{classes}" data-location="{location}">'
+            f'<del class="compare-del" data-diff-id="{escape(diff_id, quote=True)}">{escape(text)}</del>'
+            f'<span class="compare-paragraph-mark" aria-hidden="true"></span></{tag}>')
+    return paragraphs
+
+
+def render_merged_document(document: CompareDocument, diffs: Iterable[Any], *,
+                           left_document: CompareDocument | None = None) -> str:
+    """Render the right-hand document as Word's "Compared Document".
+
+    Inserted text is wrapped in ``<ins>`` and removed text in ``<del>`` at its
+    original position.  Fully removed paragraphs are projected as separate
+    struck-through blocks.  The projection is text + run formatting only; it
+    deliberately does not claim to reproduce Word's track-changes metadata.
+    """
+    blocks = {b.block_id: b for b in document.blocks}
+    left_blocks = {b.block_id: b for b in left_document.blocks} if left_document else {}
+    insert_marks: dict[str, list[tuple[int, int, str]]] = {}
+    inline_deletions: dict[str, list[tuple[int, str, str]]] = {}
+    deleted_before: dict[str, list[str]] = {}
+    deleted_after: dict[str, list[str]] = {}
+    changed: set[str] = set()
+    orphan: list[str] = []
+
+    for item in diffs:
+        diff_id = _item_id(item)
+        kind = _diff_type(item)
+        if kind not in {"modify", "insert", "delete"}:
+            raise ValueError("COMPARE_RESULT_INVALID")
+        right_spans = _item_spans(item, "right")
+        left_spans = _item_spans(item, "left")
+        for span in right_spans:
+            block = blocks.get(span.block_id)
+            if (block is None or not 0 <= span.start < span.end <= len(block.raw_text)
+                    or block.raw_text[span.start:span.end] != span.text):
+                raise ValueError("COMPARE_RESULT_INVALID")
+            if kind in {"insert", "modify"}:
+                insert_marks.setdefault(span.block_id, []).append((span.start, span.end, diff_id))
+                changed.add(span.block_id)
+        if kind not in {"delete", "modify"} or not left_spans:
+            continue
+        anchor = _item_value(item, "right_anchor")
+        if anchor is not None:
+            block_id, offset = anchor.block_id, anchor.start
+        elif right_spans:
+            block_id, offset = right_spans[0].block_id, right_spans[0].start
+        elif document.blocks:
+            block_id, offset = document.blocks[0].block_id, 0
+        else:
+            block_id, offset = "", 0
+        if block_id not in blocks:
+            if not document.blocks:
+                orphan.extend(_deleted_paragraphs(left_spans, diff_id, left_blocks))
+                continue
+            block_id, offset = document.blocks[0].block_id, 0
+        block = blocks[block_id]
+        offset = max(0, min(offset, len(block.raw_text)))
+        fully_deleted = kind == "delete" and all(
+            (left := left_blocks.get(span.block_id)) is not None
+            and span.start == 0 and span.end == len(left.raw_text)
+            for span in left_spans)
+        at_boundary = offset == 0 or offset == len(block.raw_text)
+        if fully_deleted and at_boundary and block.table_index is None:
+            paragraphs = _deleted_paragraphs(left_spans, diff_id, left_blocks)
+            target = deleted_before if offset == 0 else deleted_after
+            target.setdefault(block_id, []).extend(paragraphs)
+        else:
+            inline_deletions.setdefault(block_id, []).append(
+                (offset, diff_id, _deleted_fragments(left_spans, diff_id)))
+            changed.add(block_id)
+
+    def body_html(block) -> str:
+        text = block.raw_text
+        marks = sorted(insert_marks.get(block.block_id, []), key=lambda x: (x[0], x[1], x[2]))
+        deletions = sorted(inline_deletions.get(block.block_id, []), key=lambda x: (x[0], x[1]))
+        for start, end, _ in marks:
+            if not 0 <= start < end <= len(text):
+                raise ValueError("COMPARE_RESULT_INVALID")
+        runs = block.runs
+        if ("".join(run.text for run in runs) != text
+                or any(run.start < 0 or run.end > len(text)
+                       or text[run.start:run.end] != run.text for run in runs)):
+            runs = ()
+        boundaries = sorted({
+            0, len(text),
+            *(x for mark in marks for x in mark[:2]),
+            *(offset for offset, _, _ in deletions),
+            *(x for run in runs for x in (run.start, run.end)),
+        })
+        body: list[str] = []
+        mark_index = run_index = 0
+        for i, start in enumerate(boundaries):
+            body.extend(html for offset, _, html in deletions if offset == start)
+            if i + 1 == len(boundaries):
+                break
+            end = boundaries[i + 1]
+            while mark_index < len(marks) and marks[mark_index][1] <= start:
+                mark_index += 1
+            while run_index < len(runs) and runs[run_index].end <= start:
+                run_index += 1
+            fragment = escape(text[start:end])
+            if run_index < len(runs) and runs[run_index].start <= start < runs[run_index].end:
+                fragment = f'<span class="compare-run"{_run_style(runs[run_index])}>{fragment}</span>'
+            if mark_index < len(marks) and marks[mark_index][0] <= start < marks[mark_index][1]:
+                _, _, did = marks[mark_index]
+                fragment = f'<ins class="compare-ins" data-diff-id="{escape(did, quote=True)}">{fragment}</ins>'
+            body.append(fragment)
+        return "".join(body)
+
+    chunks = [f'<div class="compare-document compare-merged-document"{_style_attr(document.page_format)}>']
+    table = row = cell = None
+    rendered_blocks: set[str] = set()
+
+    def close_table():
+        nonlocal table, row, cell
+        if table is not None:
+            chunks.append('</td></tr></tbody></table>')
+        table = row = cell = None
+
+    def cell_open(block) -> str:
+        attrs = []
+        if block.table_colspan > 1:
+            attrs.append(f' colspan="{block.table_colspan}"')
+        if block.table_rowspan > 1:
+            attrs.append(f' rowspan="{block.table_rowspan}"')
+        return "<td" + "".join(attrs) + ">"
+
+    for block in document.blocks:
+        if block.table_index is not None:
+            if block.table_cell_continuation:
+                continue
+            if table != block.table_index:
+                close_table()
+                chunks.append('<table class="compare-table"><tbody><tr>' + cell_open(block))
+                table, row, cell = block.table_index, block.row_index, block.cell_index
+            elif row != block.row_index:
+                chunks.append('</td></tr><tr>' + cell_open(block))
+                row, cell = block.row_index, block.cell_index
+            elif cell != block.cell_index:
+                chunks.append('</td>' + cell_open(block))
+                cell = block.cell_index
+        else:
+            close_table()
+        # Deleted paragraphs are emitted inside the surrounding cell when the
+        # anchor sits in a table, so table geometry is never broken.
+        chunks.extend(deleted_before.get(block.block_id, []))
+        style_class, tag = _style_projection(block.style)
+        fmt = dict(block.paragraph_format)
+        if fmt.get("heading-level") in {"1", "2", "3", "4", "5", "6"}:
+            tag = f'h{fmt["heading-level"]}'
+        classes = ["compare-block"]
+        if style_class:
+            classes.append(style_class)
+        if tag in {"h1", "h2", "h3", "h4", "h5", "h6"}:
+            classes.append("compare-heading")
+        if fmt.get("list-label"):
+            classes.extend(("compare-list-item", "compare-list-with-label"))
+        if block.block_id in changed:
+            classes.append("has-change")
+        attrs = (f' class="{" ".join(classes)}" data-block-id="{escape(block.block_id, quote=True)}"'
+                 f' data-location="{escape(block.location, quote=True)}"')
+        attrs += _style_attr(block.paragraph_format)
+        label = (f'<span class="compare-list-label" aria-hidden="true">'
+                 f'{escape(fmt["list-label"])}\t</span>' if fmt.get("list-label") else "")
+        chunks.append(f'<{tag}{attrs}>{label}{body_html(block)}</{tag}>')
+        rendered_blocks.add(block.block_id)
+        chunks.extend(deleted_after.get(block.block_id, []))
+    close_table()
+    # A vertical-merge continuation or malformed anchor can name a block that
+    # the projection never emits. Keep the deleted text visible rather than
+    # dropping it silently.
+    for block_id, items in inline_deletions.items():
+        if block_id not in rendered_blocks:
+            for _, _, html in items:
+                chunks.append(f'<p class="compare-block compare-deleted-paragraph has-change">{html}</p>')
+    for block_id, paragraphs in deleted_before.items():
+        if block_id not in rendered_blocks:
+            chunks.extend(paragraphs)
+    for block_id, paragraphs in deleted_after.items():
+        if block_id not in rendered_blocks:
+            chunks.extend(paragraphs)
+    if not document.blocks:
+        chunks.extend(orphan)
+    elif orphan:
+        # An anchor pointing outside the revised document still has to remain
+        # visible; append it rather than silently dropping deleted text.
+        chunks.extend(orphan)
+    chunks.append("</div>")
+    return "".join(chunks)
+
+
 # Backwards-friendly alias used by the API worker.
 render_document = render_compare_document

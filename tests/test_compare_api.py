@@ -56,6 +56,8 @@ def test_compare_api_roundtrip_and_xss(tmp_path):
     assert CompareWorker(c.app.state.compare_store).run_once(); pid=created.json()['pairs'][0]['id']
     view=c.get(f'/api/compare/pairs/{pid}/view',headers=h); assert view.status_code==200
     assert '<script>' not in view.json()['left']['html']
+    assert '<script>' not in view.json()['merged']['html']
+    assert view.json()['merged']['name'] == 'b.docx'
     assert c.get(f'/api/compare/pairs/{pid}',headers={'X-FundLex-User':'bob'}).status_code==404
 
 
