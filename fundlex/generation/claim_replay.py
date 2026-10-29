@@ -1922,6 +1922,15 @@ def replay_claims(edits: Sequence[Mapping[str, Any]], before_inspection: Any,
             except (KeyError, ValueError, IndexError, AttributeError):
                 continue
             state = str(target.get("state") or "")
+            target_id = str(target.get("target_id") or "")
+            reason = str(target.get("reason") or "")
+            if (target_id.startswith("ABSENT-")
+                    or "OLD_WORDING_ABSENT_IN_RULE_SCOPE" in reason):
+                # A synthetic absence marker is a scan result, not a physical
+                # source site.  Let the caller's absence certificate prove the
+                # operation; otherwise a replace at the same marker is evaluated
+                # as MISSING_EFFECT (弘利 G05:0).
+                continue
             from ..recall import resolve_quote, resolve_source_quote
             before_span = before_inspection.by_location(location)
             target_quote = str(target.get("quote") or "")

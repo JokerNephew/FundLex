@@ -9513,10 +9513,13 @@ def absent_delete_coverage(rules_by_id: Mapping[str, Any],
     in_scope_operations: set[str] = set()
     for target in targets:
         if (target.out_of_scope or target.attribution_error
+                or str(target.target_id).startswith("ABSENT-")
+                or "OLD_WORDING_ABSENT_IN_RULE_SCOPE" in str(target.reason or "")
                 or target.state not in {"needs_edit", "satisfied"}):
-            # ``absent``/``not_applicable`` are qualification opinions, not a
-            # physical site.  They must not suppress the deterministic scan that
-            # decides whether the old clause really exists.
+            # ``absent``/``not_applicable`` and synthetic ABSENT markers are
+            # qualification/scan opinions, not a physical site.  They must not
+            # suppress the deterministic scan that decides whether the old clause
+            # really exists.
             continue
         in_scope_operations.update(str(key) for key in target.operations or ())
     locations = [str(span.location) for span in inspection.paragraphs]
