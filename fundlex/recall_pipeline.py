@@ -1174,6 +1174,16 @@ def _expand_duplicate_copy_scopes(targets: list[Target],
             setattr(clone, "normalized_copy", True)
             targets.append(clone)
             existing_sites.add(site)
+            scope = scopes.get(str(target.rule_id))
+            if scope is not None and not scope.contains(location):
+                scopes[str(target.rule_id)] = RuleScope(
+                    rule_id=str(target.rule_id),
+                    leaf_ids=frozenset(scope.leaf_ids),
+                    locations=frozenset(scope.locations) | {location},
+                    zone=str(scope.zone), include_summary_copies=True,
+                    copy_keys=frozenset(scope.copy_keys),
+                    resolution=str(scope.resolution),
+                    evidence=tuple(scope.evidence) + ("normalized_copy_scope",))
 
 
 def _apply_scope_gate(targets: Sequence[Target], scopes: Mapping[str, Any] | None,
