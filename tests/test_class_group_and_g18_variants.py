@@ -156,8 +156,9 @@ def test_g18_preserves_distribution_tail_after_fee_sentence():
 
 def test_g18_fee_existence_variant_is_already_satisfied():
     from fundlex.recall import satisfied_operation_keys
+    from test_recall_core import _facts as simple_facts
     rule = _rule("G18")
-    facts = _facts()  # A/C two classes
+    facts = simple_facts()  # A/C two classes
     body = ("4、由于本基金A类和C类基金份额的费用存在不同，不同类别的基金份额在收益分配"
             "数额方面可能有所不同，基金管理人可对各类别基金份额分别制定收益分配方案，"
             "同一类别内的每一基金份额享有同等分配权；")
