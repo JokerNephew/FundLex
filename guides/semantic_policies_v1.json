@@ -71,7 +71,8 @@
       "operation": "replace",
       "required_new_terms": [
         "当日该类基金份额的基金份额净值",
-        "扣除或加上"
+        "扣除或加上",
+        "赎回金额单位为元"
       ],
       "preserve_terms": [
         "赎回金额单位为元",
