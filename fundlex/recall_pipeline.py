@@ -4510,10 +4510,17 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
             for target in semantic_targets:
                 adopted = False
                 for old in targets:
+                    operations_match = bool(
+                        set(old.operations or ()) & set(target.operations or ()))
+                    geometry_match = bool(
+                        not old.operations
+                        and old.start is not None and old.end is not None
+                        and target.start is not None and target.end is not None
+                        and old.start < target.end and target.start < old.end)
                     if (old.rule_id == target.rule_id
                             and old.location == target.location
                             and not old.out_of_scope
-                            and set(old.operations or ()) & set(target.operations or ())):
+                            and (operations_match or geometry_match)):
                         # Reuse the existing physical target instead of creating a
                         # second target for the same operation/site.  Two targets
                         # would make Claim Replay report an occurrence conflict even
