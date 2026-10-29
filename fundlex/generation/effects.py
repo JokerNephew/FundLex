@@ -724,6 +724,15 @@ def evaluate_operation_effect(obligation: Any, original: Any, artifact: Any,
         else:
             document = _compact("".join(str(getattr(span, "text", ""))
                                          for span in getattr(original, "paragraphs", ())))
+        if rule_id == "G05" and absent_coverage is not None:
+            scoped_coverage = _absent_coverage_evidence(
+                absent_coverage, operation_id=operation_id,
+                obligation_id=obligation_id, original=original)
+            if scoped_coverage is not None:
+                document = _compact("".join(
+                    str(original.by_location(str(location)).text)
+                    for location in scoped_coverage.get("scanned_locations") or ()
+                    if str(location)))
         review_hits = _semantic_delete_review_hits(rule_id, document)
         review_allowed = (bool(review_hits) and _review_hits_are_one_way_only(review_hits)
                           and _absent_coverage_evidence(
