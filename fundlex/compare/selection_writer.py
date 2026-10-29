@@ -569,7 +569,8 @@ def _simple_paragraph(document, block) -> etree._Element:
                 texts += 1
                 if texts > 1:
                     raise DocxError("SELECTION_BLOCK_RUN_UNSUPPORTED", block.block_id)
-            elif value.tag not in {Q("br"), Q("tab")}:
+            elif value.tag not in {Q("br"), Q("tab"), Q("lastRenderedPageBreak"),
+                                     Q("noBreakHyphen"), Q("softHyphen")}:
                 raise DocxError("SELECTION_BLOCK_RUN_UNSUPPORTED", block.block_id)
     return element
 
@@ -607,7 +608,8 @@ def _simple_paragraph_element(element: etree._Element, block) -> None:
                 texts += 1
                 if texts > 1:
                     raise DocxError("SELECTION_BLOCK_RUN_UNSUPPORTED", block.block_id)
-            elif value.tag not in {Q("br"), Q("tab")}:
+            elif value.tag not in {Q("br"), Q("tab"), Q("lastRenderedPageBreak"),
+                                     Q("noBreakHyphen"), Q("softHyphen")}:
                 raise DocxError("SELECTION_BLOCK_RUN_UNSUPPORTED", block.block_id)
 
 
