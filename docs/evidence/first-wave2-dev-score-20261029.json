@@ -1,0 +1,6906 @@
+{
+ "schema": "fundlex-p6-score-v1",
+ "scorer_version": "p6-score-2-site-complete-20261029",
+ "scored_at": "2026-10-29T07:45:33.947262+00:00",
+ "run": "/tmp/opencode/comprehensive-remediation-20261028/first-wave2-mapped",
+ "labels_sha256": "61a2c514625aa6589c20a53c831b86cf1a7189b109224ef329bb82044b3cb431",
+ "totals": {
+  "targets": 390,
+  "completed": 304,
+  "target_completion_rate": 0.7795,
+  "verdicts": {
+   "completed": 304,
+   "wrong": 2,
+   "not_executed": 84
+  },
+  "applicability_conflicts": 0
+ },
+ "delivery": {
+  "reported_complete": 15,
+  "actually_complete": 14,
+  "false_complete": 1,
+  "editable_cases": 20
+ },
+ "scoring": {
+  "site_scoped_targets": 390,
+  "legacy_document_wide_targets": 0,
+  "site_aware": true
+ },
+ "limitations": [],
+ "cases_scored": 20,
+ "groups": {
+  "dev": 20
+ },
+ "rule_completion": {
+  "G01": {
+   "completed": 15,
+   "total": 19,
+   "rate": 0.7895
+  },
+  "G03": {
+   "completed": 15,
+   "total": 20,
+   "rate": 0.75
+  },
+  "G05": {
+   "completed": 29,
+   "total": 32,
+   "rate": 0.9062
+  },
+  "G06": {
+   "completed": 5,
+   "total": 5,
+   "rate": 1.0
+  },
+  "G08": {
+   "completed": 15,
+   "total": 19,
+   "rate": 0.7895
+  },
+  "G09": {
+   "completed": 15,
+   "total": 20,
+   "rate": 0.75
+  },
+  "G11": {
+   "completed": 15,
+   "total": 20,
+   "rate": 0.75
+  },
+  "G12": {
+   "completed": 15,
+   "total": 20,
+   "rate": 0.75
+  },
+  "G13": {
+   "completed": 10,
+   "total": 14,
+   "rate": 0.7143
+  },
+  "G14": {
+   "completed": 15,
+   "total": 20,
+   "rate": 0.75
+  },
+  "G15": {
+   "completed": 30,
+   "total": 40,
+   "rate": 0.75
+  },
+  "G16": {
+   "completed": 30,
+   "total": 40,
+   "rate": 0.75
+  },
+  "G17": {
+   "completed": 37,
+   "total": 47,
+   "rate": 0.7872
+  },
+  "G18": {
+   "completed": 28,
+   "total": 36,
+   "rate": 0.7778
+  },
+  "G22": {
+   "completed": 30,
+   "total": 38,
+   "rate": 0.7895
+  }
+ },
+ "cases": [
+  {
+   "case_id": "B01",
+   "group": "dev",
+   "editable": true,
+   "facts": {
+    "classes": [
+     {
+      "name": "A类基金份额",
+      "subscription_fee": true,
+      "service_fee": false
+     },
+     {
+      "name": "C类基金份额",
+      "subscription_fee": false,
+      "service_fee": true
+     }
+    ],
+    "class_count": 2,
+    "class_count_basis": "fee_group",
+    "has_sales_service_fee": true,
+    "floating_management_fee": false,
+    "fund_type": "ETF联接基金（指数型）",
+    "currency_variants": [],
+    "excluded": false,
+    "has_service_fee": true,
+    "is_floating_fee": false
+   },
+   "artifact": "/tmp/opencode/comprehensive-remediation-20261028/first-wave2-mapped/B01/final.docx",
+   "artifact_sha256": "12c2901978ffb3c9d85567112b0376a0ea715963d4bc91693a2469ca26df11a4",
+   "delivery_status": "complete",
+   "original": "/home/opencode/fundlex/funds_word/基金合同第一批/广发中证A50交易型开放式指数证券投资基金联接基金合同20261020.docx",
+   "verdicts": [
+    {
+     "target_id": "T001",
+     "rule_id": "G01",
+     "op": "append",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 122,
+      "site_scope": "main",
+      "location": "第二部分  释义",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 122
+     },
+     "original_paragraph": 122,
+     "final_paragraph": 122,
+     "verdict": "completed",
+     "detail": "appended policy text present at its declared site"
+    },
+    {
+     "target_id": "T002",
+     "rule_id": "G03",
+     "op": "append",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 147,
+      "site_scope": "main",
+      "location": "第三部分  基金的基本情况 > 七、基金份额类别",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 147
+     },
+     "original_paragraph": 147,
+     "final_paragraph": 147,
+     "verdict": "completed",
+     "detail": "appended policy text present at its declared site"
+    },
+    {
+     "target_id": "T003",
+     "rule_id": "G05",
+     "op": "replace",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 151,
+      "site_scope": "main",
+      "location": "第三部分  基金的基本情况 > 七、基金份额类别",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 151
+     },
+     "original_paragraph": 151,
+     "final_paragraph": 151,
+     "verdict": "completed",
+     "detail": "complete replacement present at its declared site"
+    },
+    {
+     "target_id": "T004",
+     "rule_id": "G08",
+     "op": "replace",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 204,
+      "site_scope": "main",
+      "location": "第六部分  基金份额的申购与赎回 > 六、申购和赎回的价格、费用及其用途",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 204
+     },
+     "original_paragraph": 204,
+     "final_paragraph": 204,
+     "verdict": "completed",
+     "detail": "complete replacement present at its declared site"
+    },
+    {
+     "target_id": "T005",
+     "rule_id": "G09",
+     "op": "replace",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 205,
+      "site_scope": "main",
+      "location": "第六部分  基金份额的申购与赎回 > 六、申购和赎回的价格、费用及其用途",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 205
+     },
+     "original_paragraph": 205,
+     "final_paragraph": 205,
+     "verdict": "completed",
+     "detail": "complete replacement present at its declared site"
+    },
+    {
+     "target_id": "T006",
+     "rule_id": "G11",
+     "op": "replace",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 206,
+      "site_scope": "main",
+      "location": "第六部分  基金份额的申购与赎回 > 六、申购和赎回的价格、费用及其用途",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 206
+     },
+     "original_paragraph": 206,
+     "final_paragraph": 206,
+     "verdict": "completed",
+     "detail": "complete replacement present at its declared site"
+    },
+    {
+     "target_id": "T007",
+     "rule_id": "G12",
+     "op": "replace",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 207,
+      "site_scope": "main",
+      "location": "第六部分  基金份额的申购与赎回 > 六、申购和赎回的价格、费用及其用途",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 207
+     },
+     "original_paragraph": 207,
+     "final_paragraph": 207,
+     "verdict": "completed",
+     "detail": "complete replacement present at its declared site"
+    },
+    {
+     "target_id": "T008",
+     "rule_id": "G13",
+     "op": "delete",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 207,
+      "site_scope": "main",
+      "location": "第六部分  基金份额的申购与赎回 > 六、申购和赎回的价格、费用及其用途",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 207
+     },
+     "original_paragraph": 207,
+     "final_paragraph": 207,
+     "verdict": "completed",
+     "detail": "deleted clause gone from its region"
+    },
+    {
+     "target_id": "T009",
+     "rule_id": "G14",
+     "op": "replace",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 209,
+      "site_scope": "main",
+      "location": "第六部分  基金份额的申购与赎回 > 六、申购和赎回的价格、费用及其用途",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 209
+     },
+     "original_paragraph": 209,
+     "final_paragraph": 209,
+     "verdict": "completed",
+     "detail": "complete replacement present at its declared site"
+    },
+    {
+     "target_id": "T010",
+     "rule_id": "G16",
+     "op": "append",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 797,
+      "site_scope": "main",
+      "location": "第十五部分  基金费用与税收 > 二、基金费用计提方法、计提标准和支付方式",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 797
+     },
+     "original_paragraph": 797,
+     "final_paragraph": 797,
+     "verdict": "completed",
+     "detail": "appended policy text present at its declared site"
+    },
+    {
+     "target_id": "T011",
+     "rule_id": "G15",
+     "op": "delete",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 798,
+      "site_scope": "main",
+      "location": "第十五部分  基金费用与税收 > 二、基金费用计提方法、计提标准和支付方式",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 798
+     },
+     "original_paragraph": 798,
+     "final_paragraph": 798,
+     "verdict": "completed",
+     "detail": "deleted clause gone from its region"
+    },
+    {
+     "target_id": "T012",
+     "rule_id": "G17",
+     "op": "delete",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 799,
+      "site_scope": "main",
+      "location": "第十五部分  基金费用与税收 > 二、基金费用计提方法、计提标准和支付方式",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 799
+     },
+     "original_paragraph": 799,
+     "final_paragraph": 799,
+     "verdict": "completed",
+     "detail": "deleted clause gone from its region"
+    },
+    {
+     "target_id": "T013",
+     "rule_id": "G17",
+     "op": "delete",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 800,
+      "site_scope": "main",
+      "location": "第十五部分  基金费用与税收 > 二、基金费用计提方法、计提标准和支付方式",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 800
+     },
+     "original_paragraph": 800,
+     "final_paragraph": 800,
+     "verdict": "completed",
+     "detail": "deleted clause gone from its region"
+    },
+    {
+     "target_id": "T014",
+     "rule_id": "G18",
+     "op": "replace",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 823,
+      "site_scope": "main",
+      "location": "第十六部分  基金的收益与分配 > 三、基金收益分配原则",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 823
+     },
+     "original_paragraph": 823,
+     "final_paragraph": 823,
+     "verdict": "wrong",
+     "detail": "declared site changed but the complete required obligation is absent"
+    },
+    {
+     "target_id": "T015",
+     "rule_id": "G22",
+     "op": "replace",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 966,
+      "site_scope": "main",
+      "location": "第十九部分  基金合同的变更、终止与基金财产的清算 > 五、基金财产清算剩余资产的分配",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 966
+     },
+     "original_paragraph": 966,
+     "final_paragraph": 966,
+     "verdict": "completed",
+     "detail": "complete replacement present at its declared site"
+    },
+    {
+     "target_id": "T016",
+     "rule_id": "G18",
+     "op": "replace",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 1223,
+      "site_scope": "summary",
+      "location": "第二十四部分  基金合同内容摘要 > （三）基金收益分配原则",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 1223
+     },
+     "original_paragraph": 1223,
+     "final_paragraph": 1223,
+     "verdict": "wrong",
+     "detail": "declared site changed but the complete required obligation is absent"
+    },
+    {
+     "target_id": "T017",
+     "rule_id": "G16",
+     "op": "append",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 1253,
+      "site_scope": "summary",
+      "location": "第二十四部分  基金合同内容摘要 > （三）销售服务费",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 1253
+     },
+     "original_paragraph": 1253,
+     "final_paragraph": 1253,
+     "verdict": "completed",
+     "detail": "appended policy text present at its declared site"
+    },
+    {
+     "target_id": "T018",
+     "rule_id": "G15",
+     "op": "delete",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 1254,
+      "site_scope": "summary",
+      "location": "第二十四部分  基金合同内容摘要 > （三）销售服务费",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 1254
+     },
+     "original_paragraph": 1254,
+     "final_paragraph": 1254,
+     "verdict": "completed",
+     "detail": "deleted clause gone from its region"
+    },
+    {
+     "target_id": "T019",
+     "rule_id": "G17",
+     "op": "delete",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 1255,
+      "site_scope": "summary",
+      "location": "第二十四部分  基金合同内容摘要 > （三）销售服务费",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 1255
+     },
+     "original_paragraph": 1255,
+     "final_paragraph": 1255,
+     "verdict": "completed",
+     "detail": "deleted clause gone from its region"
+    },
+    {
+     "target_id": "T020",
+     "rule_id": "G17",
+     "op": "delete",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 1256,
+      "site_scope": "summary",
+      "location": "第二十四部分  基金合同内容摘要 > （三）销售服务费",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 1256
+     },
+     "original_paragraph": 1256,
+     "final_paragraph": 1256,
+     "verdict": "completed",
+     "detail": "deleted clause gone from its region"
+    },
+    {
+     "target_id": "T021",
+     "rule_id": "G22",
+     "op": "replace",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 1340,
+      "site_scope": "summary",
+      "location": "第二十四部分  基金合同内容摘要 > （五）基金财产清算剩余资产的分配",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 1340
+     },
+     "original_paragraph": 1340,
+     "final_paragraph": 1340,
+     "verdict": "completed",
+     "detail": "complete replacement present at its declared site"
+    }
+   ],
+   "applicability_conflicts": [],
+   "counts": {
+    "completed": 19,
+    "wrong": 2
+   },
+   "integrated_complete": false
+  },
+  {
+   "case_id": "B02",
+   "group": "dev",
+   "editable": true,
+   "facts": {
+    "classes": [
+     {
+      "name": "A类基金份额",
+      "subscription_fee": true,
+      "service_fee": false
+     },
+     {
+      "name": "C类基金份额",
+      "subscription_fee": false,
+      "service_fee": true
+     }
+    ],
+    "class_count": 2,
+    "class_count_basis": "fee_group",
+    "has_sales_service_fee": true,
+    "floating_management_fee": false,
+    "fund_type": "混合型",
+    "currency_variants": [],
+    "excluded": false,
+    "has_service_fee": true,
+    "is_floating_fee": false
+   },
+   "artifact": "/tmp/opencode/comprehensive-remediation-20261028/first-wave2-mapped/B02/final.docx",
+   "artifact_sha256": "46d9168e238e0e25f7e1d8ec67134559d42e13cb2467767e47c4d7747445d3f2",
+   "delivery_status": "complete",
+   "original": "/home/opencode/fundlex/funds_word/基金合同第一批/广发价值优选混合型证券投资基金基金合同.docx",
+   "verdicts": [
+    {
+     "target_id": "T001",
+     "rule_id": "G01",
+     "op": "append",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 92,
+      "site_scope": "main",
+      "location": "第二部分  释义",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 116
+     },
+     "original_paragraph": 116,
+     "final_paragraph": 116,
+     "verdict": "completed",
+     "detail": "appended policy text present at its declared site"
+    },
+    {
+     "target_id": "T002",
+     "rule_id": "G03",
+     "op": "append",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 124,
+      "site_scope": "main",
+      "location": "第三部分  基金的基本情况 > 八、基金份额类别设置",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 148
+     },
+     "original_paragraph": 148,
+     "final_paragraph": 148,
+     "verdict": "completed",
+     "detail": "appended policy text present at its declared site"
+    },
+    {
+     "target_id": "T003",
+     "rule_id": "G05",
+     "op": "delete",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 128,
+      "site_scope": "main",
+      "location": "第三部分  基金的基本情况 > 八、基金份额类别设置",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 152
+     },
+     "original_paragraph": 152,
+     "final_paragraph": 152,
+     "verdict": "completed",
+     "detail": "deleted clause gone from its region"
+    },
+    {
+     "target_id": "T004",
+     "rule_id": "G05",
+     "op": "replace",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 128,
+      "site_scope": "main",
+      "location": "第三部分  基金的基本情况 > 八、基金份额类别设置",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 152
+     },
+     "original_paragraph": 152,
+     "final_paragraph": 152,
+     "verdict": "completed",
+     "detail": "complete replacement present at its declared site"
+    },
+    {
+     "target_id": "T005",
+     "rule_id": "G06",
+     "op": "delete",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 128,
+      "site_scope": "main",
+      "location": "第三部分  基金的基本情况 > 八、基金份额类别设置",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 152
+     },
+     "original_paragraph": 152,
+     "final_paragraph": 152,
+     "verdict": "completed",
+     "detail": "deleted clause gone from its region"
+    },
+    {
+     "target_id": "T006",
+     "rule_id": "G08",
+     "op": "replace",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 204,
+      "site_scope": "main",
+      "location": "第六部分  基金份额的申购与赎回 > 六、申购和赎回的价格、费用及其用途",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 228
+     },
+     "original_paragraph": 228,
+     "final_paragraph": 228,
+     "verdict": "completed",
+     "detail": "complete replacement present at its declared site"
+    },
+    {
+     "target_id": "T007",
+     "rule_id": "G09",
+     "op": "replace",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 205,
+      "site_scope": "main",
+      "location": "第六部分  基金份额的申购与赎回 > 六、申购和赎回的价格、费用及其用途",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 229
+     },
+     "original_paragraph": 229,
+     "final_paragraph": 229,
+     "verdict": "completed",
+     "detail": "complete replacement present at its declared site"
+    },
+    {
+     "target_id": "T008",
+     "rule_id": "G11",
+     "op": "replace",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 206,
+      "site_scope": "main",
+      "location": "第六部分  基金份额的申购与赎回 > 六、申购和赎回的价格、费用及其用途",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 230
+     },
+     "original_paragraph": 230,
+     "final_paragraph": 230,
+     "verdict": "completed",
+     "detail": "complete replacement present at its declared site"
+    },
+    {
+     "target_id": "T009",
+     "rule_id": "G12",
+     "op": "replace",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 207,
+      "site_scope": "main",
+      "location": "第六部分  基金份额的申购与赎回 > 六、申购和赎回的价格、费用及其用途",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 231
+     },
+     "original_paragraph": 231,
+     "final_paragraph": 231,
+     "verdict": "completed",
+     "detail": "complete replacement present at its declared site"
+    },
+    {
+     "target_id": "T010",
+     "rule_id": "G13",
+     "op": "delete",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 207,
+      "site_scope": "main",
+      "location": "第六部分  基金份额的申购与赎回 > 六、申购和赎回的价格、费用及其用途",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 231
+     },
+     "original_paragraph": 231,
+     "final_paragraph": 231,
+     "verdict": "completed",
+     "detail": "deleted clause gone from its region"
+    },
+    {
+     "target_id": "T011",
+     "rule_id": "G14",
+     "op": "replace",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 209,
+      "site_scope": "main",
+      "location": "第六部分  基金份额的申购与赎回 > 六、申购和赎回的价格、费用及其用途",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 233
+     },
+     "original_paragraph": 233,
+     "final_paragraph": 233,
+     "verdict": "completed",
+     "detail": "complete replacement present at its declared site"
+    },
+    {
+     "target_id": "T012",
+     "rule_id": "G16",
+     "op": "append",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 799,
+      "site_scope": "main",
+      "location": "第十五部分  基金费用与税收 > 二、基金费用计提方法、计提标准和支付方式",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 823
+     },
+     "original_paragraph": 823,
+     "final_paragraph": 823,
+     "verdict": "completed",
+     "detail": "appended policy text present at its declared site"
+    },
+    {
+     "target_id": "T013",
+     "rule_id": "G15",
+     "op": "delete",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 800,
+      "site_scope": "main",
+      "location": "第十五部分  基金费用与税收 > 二、基金费用计提方法、计提标准和支付方式",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 824
+     },
+     "original_paragraph": 824,
+     "final_paragraph": 824,
+     "verdict": "completed",
+     "detail": "deleted clause gone from its region"
+    },
+    {
+     "target_id": "T014",
+     "rule_id": "G17",
+     "op": "delete",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 801,
+      "site_scope": "main",
+      "location": "第十五部分  基金费用与税收 > 二、基金费用计提方法、计提标准和支付方式",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 825
+     },
+     "original_paragraph": 825,
+     "final_paragraph": 825,
+     "verdict": "completed",
+     "detail": "deleted clause gone from its region"
+    },
+    {
+     "target_id": "T015",
+     "rule_id": "G17",
+     "op": "delete",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 802,
+      "site_scope": "main",
+      "location": "第十五部分  基金费用与税收 > 二、基金费用计提方法、计提标准和支付方式",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 826
+     },
+     "original_paragraph": 826,
+     "final_paragraph": 826,
+     "verdict": "completed",
+     "detail": "deleted clause gone from its region"
+    },
+    {
+     "target_id": "T016",
+     "rule_id": "G18",
+     "op": "replace",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 827,
+      "site_scope": "main",
+      "location": "第十六部分  基金的收益与分配 > 三、基金收益分配原则",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 851
+     },
+     "original_paragraph": 851,
+     "final_paragraph": 851,
+     "verdict": "completed",
+     "detail": "complete replacement present at its declared site"
+    },
+    {
+     "target_id": "T017",
+     "rule_id": "G22",
+     "op": "replace",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 978,
+      "site_scope": "main",
+      "location": "第十九部分  基金合同的变更、终止与基金财产的清算 > 五、基金财产清算剩余资产的分配",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 1002
+     },
+     "original_paragraph": 1002,
+     "final_paragraph": 1002,
+     "verdict": "completed",
+     "detail": "complete replacement present at its declared site"
+    },
+    {
+     "target_id": "T018",
+     "rule_id": "G18",
+     "op": "replace",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 1228,
+      "site_scope": "summary",
+      "location": "第二十四部分  基金合同内容摘要 > （一）基金收益分配原则",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 1252
+     },
+     "original_paragraph": 1252,
+     "final_paragraph": 1252,
+     "verdict": "completed",
+     "detail": "complete replacement present at its declared site"
+    },
+    {
+     "target_id": "T019",
+     "rule_id": "G16",
+     "op": "append",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 1257,
+      "site_scope": "summary",
+      "location": "第二十四部分  基金合同内容摘要 > （三）基金销售服务费",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 1281
+     },
+     "original_paragraph": 1281,
+     "final_paragraph": 1281,
+     "verdict": "completed",
+     "detail": "appended policy text present at its declared site"
+    },
+    {
+     "target_id": "T020",
+     "rule_id": "G15",
+     "op": "delete",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 1258,
+      "site_scope": "summary",
+      "location": "第二十四部分  基金合同内容摘要 > （三）基金销售服务费",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 1282
+     },
+     "original_paragraph": 1282,
+     "final_paragraph": 1282,
+     "verdict": "completed",
+     "detail": "deleted clause gone from its region"
+    },
+    {
+     "target_id": "T021",
+     "rule_id": "G22",
+     "op": "replace",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 1346,
+      "site_scope": "summary",
+      "location": "第二十四部分  基金合同内容摘要 > （五）基金财产清算剩余资产的分配",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 1370
+     },
+     "original_paragraph": 1370,
+     "final_paragraph": 1370,
+     "verdict": "completed",
+     "detail": "complete replacement present at its declared site"
+    }
+   ],
+   "applicability_conflicts": [],
+   "counts": {
+    "completed": 21
+   },
+   "integrated_complete": true
+  },
+  {
+   "case_id": "B03",
+   "group": "dev",
+   "editable": true,
+   "facts": {
+    "classes": [
+     {
+      "name": "A类基金份额",
+      "subscription_fee": true,
+      "service_fee": false
+     },
+     {
+      "name": "C类基金份额",
+      "subscription_fee": false,
+      "service_fee": true
+     }
+    ],
+    "class_count": 2,
+    "class_count_basis": "fee_group",
+    "has_sales_service_fee": true,
+    "floating_management_fee": false,
+    "fund_type": "混合型",
+    "currency_variants": [],
+    "excluded": false,
+    "has_service_fee": true,
+    "is_floating_fee": false
+   },
+   "artifact": "/tmp/opencode/comprehensive-remediation-20261028/first-wave2-mapped/B03/final.docx",
+   "artifact_sha256": "9b0c3a1d832743c6b8064f1c5a57da02bd2b756ec802f1bf76c6b39fff5f540a",
+   "delivery_status": "complete",
+   "original": "/home/opencode/fundlex/funds_word/基金合同第一批/广发品质优选混合型发起式证券投资基金基金合同.docx",
+   "verdicts": [
+    {
+     "target_id": "T001",
+     "rule_id": "G01",
+     "op": "append",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 99,
+      "site_scope": "main",
+      "location": "第二部分  释义",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 123
+     },
+     "original_paragraph": 123,
+     "final_paragraph": 123,
+     "verdict": "completed",
+     "detail": "appended policy text present at its declared site"
+    },
+    {
+     "target_id": "T002",
+     "rule_id": "G03",
+     "op": "append",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 141,
+      "site_scope": "main",
+      "location": "第三部分  基金的基本情况 > 九、基金份额类别设置",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 165
+     },
+     "original_paragraph": 165,
+     "final_paragraph": 165,
+     "verdict": "completed",
+     "detail": "appended policy text present at its declared site"
+    },
+    {
+     "target_id": "T003",
+     "rule_id": "G05",
+     "op": "delete",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 145,
+      "site_scope": "main",
+      "location": "第三部分  基金的基本情况 > 九、基金份额类别设置",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 169
+     },
+     "original_paragraph": 169,
+     "final_paragraph": 169,
+     "verdict": "completed",
+     "detail": "deleted clause gone from its region"
+    },
+    {
+     "target_id": "T004",
+     "rule_id": "G05",
+     "op": "replace",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 145,
+      "site_scope": "main",
+      "location": "第三部分  基金的基本情况 > 九、基金份额类别设置",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 169
+     },
+     "original_paragraph": 169,
+     "final_paragraph": 169,
+     "verdict": "completed",
+     "detail": "complete replacement present at its declared site"
+    },
+    {
+     "target_id": "T005",
+     "rule_id": "G08",
+     "op": "replace",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 228,
+      "site_scope": "main",
+      "location": "第六部分  基金份额的申购与赎回 > 六、申购和赎回的价格、费用及其用途",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 252
+     },
+     "original_paragraph": 252,
+     "final_paragraph": 252,
+     "verdict": "completed",
+     "detail": "complete replacement present at its declared site"
+    },
+    {
+     "target_id": "T006",
+     "rule_id": "G09",
+     "op": "replace",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 229,
+      "site_scope": "main",
+      "location": "第六部分  基金份额的申购与赎回 > 六、申购和赎回的价格、费用及其用途",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 253
+     },
+     "original_paragraph": 253,
+     "final_paragraph": 253,
+     "verdict": "completed",
+     "detail": "complete replacement present at its declared site"
+    },
+    {
+     "target_id": "T007",
+     "rule_id": "G11",
+     "op": "replace",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 230,
+      "site_scope": "main",
+      "location": "第六部分  基金份额的申购与赎回 > 六、申购和赎回的价格、费用及其用途",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 254
+     },
+     "original_paragraph": 254,
+     "final_paragraph": 254,
+     "verdict": "completed",
+     "detail": "complete replacement present at its declared site"
+    },
+    {
+     "target_id": "T008",
+     "rule_id": "G12",
+     "op": "replace",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 231,
+      "site_scope": "main",
+      "location": "第六部分  基金份额的申购与赎回 > 六、申购和赎回的价格、费用及其用途",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 255
+     },
+     "original_paragraph": 255,
+     "final_paragraph": 255,
+     "verdict": "completed",
+     "detail": "complete replacement present at its declared site"
+    },
+    {
+     "target_id": "T009",
+     "rule_id": "G13",
+     "op": "delete",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 231,
+      "site_scope": "main",
+      "location": "第六部分  基金份额的申购与赎回 > 六、申购和赎回的价格、费用及其用途",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 255
+     },
+     "original_paragraph": 255,
+     "final_paragraph": 255,
+     "verdict": "completed",
+     "detail": "deleted clause gone from its region"
+    },
+    {
+     "target_id": "T010",
+     "rule_id": "G14",
+     "op": "replace",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 233,
+      "site_scope": "main",
+      "location": "第六部分  基金份额的申购与赎回 > 六、申购和赎回的价格、费用及其用途",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 257
+     },
+     "original_paragraph": 257,
+     "final_paragraph": 257,
+     "verdict": "completed",
+     "detail": "complete replacement present at its declared site"
+    },
+    {
+     "target_id": "T011",
+     "rule_id": "G16",
+     "op": "append",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 816,
+      "site_scope": "main",
+      "location": "第十五部分  基金费用与税收 > 二、基金费用计提方法、计提标准和支付方式",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 840
+     },
+     "original_paragraph": 840,
+     "final_paragraph": 840,
+     "verdict": "completed",
+     "detail": "appended policy text present at its declared site"
+    },
+    {
+     "target_id": "T012",
+     "rule_id": "G15",
+     "op": "delete",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 817,
+      "site_scope": "main",
+      "location": "第十五部分  基金费用与税收 > 二、基金费用计提方法、计提标准和支付方式",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 841
+     },
+     "original_paragraph": 841,
+     "final_paragraph": 841,
+     "verdict": "completed",
+     "detail": "deleted clause gone from its region"
+    },
+    {
+     "target_id": "T013",
+     "rule_id": "G17",
+     "op": "delete",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 818,
+      "site_scope": "main",
+      "location": "第十五部分  基金费用与税收 > 二、基金费用计提方法、计提标准和支付方式",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 842
+     },
+     "original_paragraph": 842,
+     "final_paragraph": 842,
+     "verdict": "completed",
+     "detail": "deleted clause gone from its region"
+    },
+    {
+     "target_id": "T014",
+     "rule_id": "G17",
+     "op": "delete",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 819,
+      "site_scope": "main",
+      "location": "第十五部分  基金费用与税收 > 二、基金费用计提方法、计提标准和支付方式",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 843
+     },
+     "original_paragraph": 843,
+     "final_paragraph": 843,
+     "verdict": "completed",
+     "detail": "deleted clause gone from its region"
+    },
+    {
+     "target_id": "T015",
+     "rule_id": "G18",
+     "op": "replace",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 841,
+      "site_scope": "main",
+      "location": "第十六部分  基金的收益与分配 > 三、基金收益分配原则",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 865
+     },
+     "original_paragraph": 865,
+     "final_paragraph": 865,
+     "verdict": "completed",
+     "detail": "complete replacement present at its declared site"
+    },
+    {
+     "target_id": "T016",
+     "rule_id": "G22",
+     "op": "replace",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 997,
+      "site_scope": "main",
+      "location": "第十九部分  基金合同的变更、终止与基金财产的清算 > 五、基金财产清算剩余资产的分配",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 1021
+     },
+     "original_paragraph": 1021,
+     "final_paragraph": 1021,
+     "verdict": "completed",
+     "detail": "complete replacement present at its declared site"
+    },
+    {
+     "target_id": "T017",
+     "rule_id": "G18",
+     "op": "replace",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 1249,
+      "site_scope": "summary",
+      "location": "第二十四部分  基金合同内容摘要 > （一）基金收益分配原则",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 1273
+     },
+     "original_paragraph": 1273,
+     "final_paragraph": 1273,
+     "verdict": "completed",
+     "detail": "complete replacement present at its declared site"
+    },
+    {
+     "target_id": "T018",
+     "rule_id": "G16",
+     "op": "append",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 1279,
+      "site_scope": "summary",
+      "location": "第二十四部分  基金合同内容摘要 > （三）基金销售服务费",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 1303
+     },
+     "original_paragraph": 1303,
+     "final_paragraph": 1303,
+     "verdict": "completed",
+     "detail": "appended policy text present at its declared site"
+    },
+    {
+     "target_id": "T019",
+     "rule_id": "G15",
+     "op": "delete",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 1280,
+      "site_scope": "summary",
+      "location": "第二十四部分  基金合同内容摘要 > （三）基金销售服务费",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 1304
+     },
+     "original_paragraph": 1304,
+     "final_paragraph": 1304,
+     "verdict": "completed",
+     "detail": "deleted clause gone from its region"
+    },
+    {
+     "target_id": "T020",
+     "rule_id": "G22",
+     "op": "replace",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 1371,
+      "site_scope": "summary",
+      "location": "第二十四部分  基金合同内容摘要 > （五）基金财产清算剩余资产的分配",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 1395
+     },
+     "original_paragraph": 1395,
+     "final_paragraph": 1395,
+     "verdict": "completed",
+     "detail": "complete replacement present at its declared site"
+    }
+   ],
+   "applicability_conflicts": [],
+   "counts": {
+    "completed": 20
+   },
+   "integrated_complete": true
+  },
+  {
+   "case_id": "B04",
+   "group": "dev",
+   "editable": true,
+   "facts": {
+    "classes": [
+     {
+      "name": "A类基金份额",
+      "subscription_fee": true,
+      "service_fee": false
+     },
+     {
+      "name": "C类基金份额",
+      "subscription_fee": false,
+      "service_fee": true
+     }
+    ],
+    "class_count": 2,
+    "class_count_basis": "fee_group",
+    "has_sales_service_fee": true,
+    "floating_management_fee": false,
+    "fund_type": "混合型FOF",
+    "currency_variants": [],
+    "excluded": false,
+    "has_service_fee": true,
+    "is_floating_fee": false
+   },
+   "artifact": "/tmp/opencode/comprehensive-remediation-20261028/first-wave2-mapped/B04/final.docx",
+   "artifact_sha256": "1020bf2512632bf011f16cded2d95c24561804279a16283aa2c0d5cf40898643",
+   "delivery_status": "complete",
+   "original": "/home/opencode/fundlex/funds_word/基金合同第一批/广发富信优选六个月持有期混合型基金中基金（FOF）基金合同20261020.docx",
+   "verdicts": [
+    {
+     "target_id": "T001",
+     "rule_id": "G01",
+     "op": "append",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 125,
+      "site_scope": "main",
+      "location": "第二部分  释义",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 125
+     },
+     "original_paragraph": 125,
+     "final_paragraph": 125,
+     "verdict": "completed",
+     "detail": "appended policy text present at its declared site"
+    },
+    {
+     "target_id": "T002",
+     "rule_id": "G03",
+     "op": "append",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 160,
+      "site_scope": "main",
+      "location": "第三部分  基金的基本情况 > 八、基金份额类别设置",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 160
+     },
+     "original_paragraph": 160,
+     "final_paragraph": 160,
+     "verdict": "completed",
+     "detail": "appended policy text present at its declared site"
+    },
+    {
+     "target_id": "T003",
+     "rule_id": "G05",
+     "op": "delete",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 164,
+      "site_scope": "main",
+      "location": "第三部分  基金的基本情况 > 八、基金份额类别设置",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 164
+     },
+     "original_paragraph": 164,
+     "final_paragraph": 164,
+     "verdict": "completed",
+     "detail": "deleted clause gone from its region"
+    },
+    {
+     "target_id": "T004",
+     "rule_id": "G05",
+     "op": "replace",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 164,
+      "site_scope": "main",
+      "location": "第三部分  基金的基本情况 > 八、基金份额类别设置",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 164
+     },
+     "original_paragraph": 164,
+     "final_paragraph": 164,
+     "verdict": "completed",
+     "detail": "complete replacement present at its declared site"
+    },
+    {
+     "target_id": "T005",
+     "rule_id": "G08",
+     "op": "replace",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 243,
+      "site_scope": "main",
+      "location": "第六部分  基金份额的申购与赎回 > 六、申购和赎回的价格、费用及其用途",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 243
+     },
+     "original_paragraph": 243,
+     "final_paragraph": 243,
+     "verdict": "completed",
+     "detail": "complete replacement present at its declared site"
+    },
+    {
+     "target_id": "T006",
+     "rule_id": "G09",
+     "op": "replace",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 244,
+      "site_scope": "main",
+      "location": "第六部分  基金份额的申购与赎回 > 六、申购和赎回的价格、费用及其用途",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 244
+     },
+     "original_paragraph": 244,
+     "final_paragraph": 244,
+     "verdict": "completed",
+     "detail": "complete replacement present at its declared site"
+    },
+    {
+     "target_id": "T007",
+     "rule_id": "G11",
+     "op": "replace",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 245,
+      "site_scope": "main",
+      "location": "第六部分  基金份额的申购与赎回 > 六、申购和赎回的价格、费用及其用途",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 245
+     },
+     "original_paragraph": 245,
+     "final_paragraph": 245,
+     "verdict": "completed",
+     "detail": "complete replacement present at its declared site"
+    },
+    {
+     "target_id": "T008",
+     "rule_id": "G12",
+     "op": "replace",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 246,
+      "site_scope": "main",
+      "location": "第六部分  基金份额的申购与赎回 > 六、申购和赎回的价格、费用及其用途",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 246
+     },
+     "original_paragraph": 246,
+     "final_paragraph": 246,
+     "verdict": "completed",
+     "detail": "complete replacement present at its declared site"
+    },
+    {
+     "target_id": "T009",
+     "rule_id": "G14",
+     "op": "replace",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 248,
+      "site_scope": "main",
+      "location": "第六部分  基金份额的申购与赎回 > 六、申购和赎回的价格、费用及其用途",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 248
+     },
+     "original_paragraph": 248,
+     "final_paragraph": 248,
+     "verdict": "completed",
+     "detail": "complete replacement present at its declared site"
+    },
+    {
+     "target_id": "T010",
+     "rule_id": "G15",
+     "op": "delete",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 829,
+      "site_scope": "main",
+      "location": "第十五部分  基金费用与税收 > 二、基金费用计提方法、计提标准和支付方式",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 829
+     },
+     "original_paragraph": 829,
+     "final_paragraph": 829,
+     "verdict": "completed",
+     "detail": "deleted clause gone from its region"
+    },
+    {
+     "target_id": "T011",
+     "rule_id": "G17",
+     "op": "delete",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 830,
+      "site_scope": "main",
+      "location": "第十五部分  基金费用与税收 > 二、基金费用计提方法、计提标准和支付方式",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 830
+     },
+     "original_paragraph": 830,
+     "final_paragraph": 830,
+     "verdict": "completed",
+     "detail": "deleted clause gone from its region"
+    },
+    {
+     "target_id": "T012",
+     "rule_id": "G17",
+     "op": "delete",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 831,
+      "site_scope": "main",
+      "location": "第十五部分  基金费用与税收 > 二、基金费用计提方法、计提标准和支付方式",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 831
+     },
+     "original_paragraph": 831,
+     "final_paragraph": 831,
+     "verdict": "completed",
+     "detail": "deleted clause gone from its region"
+    },
+    {
+     "target_id": "T013",
+     "rule_id": "G16",
+     "op": "append",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 832,
+      "site_scope": "main",
+      "location": "第十五部分  基金费用与税收 > 二、基金费用计提方法、计提标准和支付方式",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 832
+     },
+     "original_paragraph": 832,
+     "final_paragraph": 832,
+     "verdict": "completed",
+     "detail": "appended policy text present at its declared site"
+    },
+    {
+     "target_id": "T014",
+     "rule_id": "G18",
+     "op": "replace",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 854,
+      "site_scope": "main",
+      "location": "第十六部分  基金的收益与分配 > 三、基金收益分配原则",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 854
+     },
+     "original_paragraph": 854,
+     "final_paragraph": 854,
+     "verdict": "completed",
+     "detail": "complete replacement present at its declared site"
+    },
+    {
+     "target_id": "T015",
+     "rule_id": "G22",
+     "op": "replace",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 1004,
+      "site_scope": "main",
+      "location": "第十九部分  基金合同的变更、终止与基金财产的清算 > 五、基金财产清算剩余资产的分配",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 1004
+     },
+     "original_paragraph": 1004,
+     "final_paragraph": 1004,
+     "verdict": "completed",
+     "detail": "complete replacement present at its declared site"
+    },
+    {
+     "target_id": "T016",
+     "rule_id": "G18",
+     "op": "replace",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 1261,
+      "site_scope": "summary",
+      "location": "第二十四部分  基金合同内容摘要 > （三）基金收益分配原则",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 1261
+     },
+     "original_paragraph": 1261,
+     "final_paragraph": 1261,
+     "verdict": "completed",
+     "detail": "complete replacement present at its declared site"
+    },
+    {
+     "target_id": "T017",
+     "rule_id": "G15",
+     "op": "delete",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 1293,
+      "site_scope": "summary",
+      "location": "第二十四部分  基金合同内容摘要 > （三）基金销售服务费",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 1293
+     },
+     "original_paragraph": 1293,
+     "final_paragraph": 1293,
+     "verdict": "completed",
+     "detail": "deleted clause gone from its region"
+    },
+    {
+     "target_id": "T018",
+     "rule_id": "G17",
+     "op": "delete",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 1294,
+      "site_scope": "summary",
+      "location": "第二十四部分  基金合同内容摘要 > （三）基金销售服务费",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 1294
+     },
+     "original_paragraph": 1294,
+     "final_paragraph": 1294,
+     "verdict": "completed",
+     "detail": "deleted clause gone from its region"
+    },
+    {
+     "target_id": "T019",
+     "rule_id": "G17",
+     "op": "delete",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 1295,
+      "site_scope": "summary",
+      "location": "第二十四部分  基金合同内容摘要 > （三）基金销售服务费",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 1295
+     },
+     "original_paragraph": 1295,
+     "final_paragraph": 1295,
+     "verdict": "completed",
+     "detail": "deleted clause gone from its region"
+    },
+    {
+     "target_id": "T020",
+     "rule_id": "G16",
+     "op": "append",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 1296,
+      "site_scope": "summary",
+      "location": "第二十四部分  基金合同内容摘要 > （三）基金销售服务费",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 1296
+     },
+     "original_paragraph": 1296,
+     "final_paragraph": 1296,
+     "verdict": "completed",
+     "detail": "appended policy text present at its declared site"
+    },
+    {
+     "target_id": "T021",
+     "rule_id": "G22",
+     "op": "replace",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 1378,
+      "site_scope": "summary",
+      "location": "第二十四部分  基金合同内容摘要 > （五）基金财产清算剩余资产的分配",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 1378
+     },
+     "original_paragraph": 1378,
+     "final_paragraph": 1378,
+     "verdict": "completed",
+     "detail": "complete replacement present at its declared site"
+    }
+   ],
+   "applicability_conflicts": [],
+   "counts": {
+    "completed": 21
+   },
+   "integrated_complete": true
+  },
+  {
+   "case_id": "B05",
+   "group": "dev",
+   "editable": true,
+   "facts": {
+    "classes": [
+     {
+      "name": "A类基金份额",
+      "subscription_fee": true,
+      "service_fee": false
+     },
+     {
+      "name": "C类基金份额",
+      "subscription_fee": false,
+      "service_fee": true
+     }
+    ],
+    "class_count": 2,
+    "class_count_basis": "fee_group",
+    "has_sales_service_fee": true,
+    "floating_management_fee": false,
+    "fund_type": "债券型",
+    "currency_variants": [],
+    "excluded": false,
+    "has_service_fee": true,
+    "is_floating_fee": false
+   },
+   "artifact": null,
+   "delivery_status": "incomplete",
+   "verdicts": [
+    {
+     "target_id": "T001",
+     "rule_id": "G01",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T002",
+     "rule_id": "G03",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T003",
+     "rule_id": "G08",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T004",
+     "rule_id": "G09",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T005",
+     "rule_id": "G11",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T006",
+     "rule_id": "G12",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T007",
+     "rule_id": "G14",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T008",
+     "rule_id": "G16",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T009",
+     "rule_id": "G15",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T010",
+     "rule_id": "G22",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T011",
+     "rule_id": "G16",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T012",
+     "rule_id": "G15",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T013",
+     "rule_id": "G22",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    }
+   ],
+   "counts": {
+    "not_executed": 13
+   },
+   "integrated_complete": false
+  },
+  {
+   "case_id": "B06",
+   "group": "dev",
+   "editable": true,
+   "facts": {
+    "classes": [
+     {
+      "name": "A类基金份额",
+      "subscription_fee": true,
+      "service_fee": false
+     },
+     {
+      "name": "C类基金份额",
+      "subscription_fee": false,
+      "service_fee": true
+     }
+    ],
+    "class_count": 2,
+    "class_count_basis": "fee_group",
+    "has_sales_service_fee": true,
+    "floating_management_fee": false,
+    "fund_type": "混合型",
+    "currency_variants": [],
+    "excluded": false,
+    "has_service_fee": true,
+    "is_floating_fee": false
+   },
+   "artifact": "/tmp/opencode/comprehensive-remediation-20261028/first-wave2-mapped/B06/final.docx",
+   "artifact_sha256": "d209944666a44fc0b6022e7bf5f0dba55a8b460ed472b2a1b725cea6beec81ac",
+   "delivery_status": "complete",
+   "original": "/home/opencode/fundlex/funds_word/基金合同第一批/广发恒昌一年持有期混合型证券投资基金基金合同20261022.docx",
+   "verdicts": [
+    {
+     "target_id": "T001",
+     "rule_id": "G01",
+     "op": "append",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 124,
+      "site_scope": "main",
+      "location": "第二部分  释义",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 124
+     },
+     "original_paragraph": 124,
+     "final_paragraph": 124,
+     "verdict": "completed",
+     "detail": "appended policy text present at its declared site"
+    },
+    {
+     "target_id": "T002",
+     "rule_id": "G03",
+     "op": "append",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 158,
+      "site_scope": "main",
+      "location": "第三部分  基金的基本情况 > 八、基金份额类别设置",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 158
+     },
+     "original_paragraph": 158,
+     "final_paragraph": 158,
+     "verdict": "completed",
+     "detail": "appended policy text present at its declared site"
+    },
+    {
+     "target_id": "T003",
+     "rule_id": "G05",
+     "op": "delete",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 162,
+      "site_scope": "main",
+      "location": "第三部分  基金的基本情况 > 八、基金份额类别设置",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 162
+     },
+     "original_paragraph": 162,
+     "final_paragraph": 162,
+     "verdict": "completed",
+     "detail": "deleted clause gone from its region"
+    },
+    {
+     "target_id": "T004",
+     "rule_id": "G05",
+     "op": "replace",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 162,
+      "site_scope": "main",
+      "location": "第三部分  基金的基本情况 > 八、基金份额类别设置",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 162
+     },
+     "original_paragraph": 162,
+     "final_paragraph": 162,
+     "verdict": "completed",
+     "detail": "complete replacement present at its declared site"
+    },
+    {
+     "target_id": "T005",
+     "rule_id": "G08",
+     "op": "replace",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 241,
+      "site_scope": "main",
+      "location": "第六部分  基金份额的申购与赎回 > 六、申购和赎回的价格、费用及其用途",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 241
+     },
+     "original_paragraph": 241,
+     "final_paragraph": 241,
+     "verdict": "completed",
+     "detail": "complete replacement present at its declared site"
+    },
+    {
+     "target_id": "T006",
+     "rule_id": "G09",
+     "op": "replace",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 242,
+      "site_scope": "main",
+      "location": "第六部分  基金份额的申购与赎回 > 六、申购和赎回的价格、费用及其用途",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 242
+     },
+     "original_paragraph": 242,
+     "final_paragraph": 242,
+     "verdict": "completed",
+     "detail": "complete replacement present at its declared site"
+    },
+    {
+     "target_id": "T007",
+     "rule_id": "G11",
+     "op": "replace",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 243,
+      "site_scope": "main",
+      "location": "第六部分  基金份额的申购与赎回 > 六、申购和赎回的价格、费用及其用途",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 243
+     },
+     "original_paragraph": 243,
+     "final_paragraph": 243,
+     "verdict": "completed",
+     "detail": "complete replacement present at its declared site"
+    },
+    {
+     "target_id": "T008",
+     "rule_id": "G12",
+     "op": "replace",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 244,
+      "site_scope": "main",
+      "location": "第六部分  基金份额的申购与赎回 > 六、申购和赎回的价格、费用及其用途",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 244
+     },
+     "original_paragraph": 244,
+     "final_paragraph": 244,
+     "verdict": "completed",
+     "detail": "complete replacement present at its declared site"
+    },
+    {
+     "target_id": "T009",
+     "rule_id": "G14",
+     "op": "replace",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 246,
+      "site_scope": "main",
+      "location": "第六部分  基金份额的申购与赎回 > 六、申购和赎回的价格、费用及其用途",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 246
+     },
+     "original_paragraph": 246,
+     "final_paragraph": 246,
+     "verdict": "completed",
+     "detail": "complete replacement present at its declared site"
+    },
+    {
+     "target_id": "T010",
+     "rule_id": "G16",
+     "op": "append",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 848,
+      "site_scope": "main",
+      "location": "第十五部分  基金费用与税收 > 二、基金费用计提方法、计提标准和支付方式",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 848
+     },
+     "original_paragraph": 848,
+     "final_paragraph": 848,
+     "verdict": "completed",
+     "detail": "appended policy text present at its declared site"
+    },
+    {
+     "target_id": "T011",
+     "rule_id": "G15",
+     "op": "delete",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 849,
+      "site_scope": "main",
+      "location": "第十五部分  基金费用与税收 > 二、基金费用计提方法、计提标准和支付方式",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 849
+     },
+     "original_paragraph": 849,
+     "final_paragraph": 849,
+     "verdict": "completed",
+     "detail": "deleted clause gone from its region"
+    },
+    {
+     "target_id": "T012",
+     "rule_id": "G17",
+     "op": "delete",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 850,
+      "site_scope": "main",
+      "location": "第十五部分  基金费用与税收 > 二、基金费用计提方法、计提标准和支付方式",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 850
+     },
+     "original_paragraph": 850,
+     "final_paragraph": 850,
+     "verdict": "completed",
+     "detail": "deleted clause gone from its region"
+    },
+    {
+     "target_id": "T013",
+     "rule_id": "G17",
+     "op": "delete",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 851,
+      "site_scope": "main",
+      "location": "第十五部分  基金费用与税收 > 二、基金费用计提方法、计提标准和支付方式",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 851
+     },
+     "original_paragraph": 851,
+     "final_paragraph": 851,
+     "verdict": "completed",
+     "detail": "deleted clause gone from its region"
+    },
+    {
+     "target_id": "T014",
+     "rule_id": "G18",
+     "op": "replace",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 876,
+      "site_scope": "main",
+      "location": "第十六部分  基金的收益与分配 > 三、基金收益分配原则",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 876
+     },
+     "original_paragraph": 876,
+     "final_paragraph": 876,
+     "verdict": "completed",
+     "detail": "complete replacement present at its declared site"
+    },
+    {
+     "target_id": "T015",
+     "rule_id": "G22",
+     "op": "replace",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 1026,
+      "site_scope": "main",
+      "location": "第十九部分  基金合同的变更、终止与基金财产的清算 > 五、基金财产清算剩余资产的分配",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 1026
+     },
+     "original_paragraph": 1026,
+     "final_paragraph": 1026,
+     "verdict": "completed",
+     "detail": "complete replacement present at its declared site"
+    },
+    {
+     "target_id": "T016",
+     "rule_id": "G18",
+     "op": "replace",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 1274,
+      "site_scope": "summary",
+      "location": "第二十四部分  基金合同内容摘要 > （一）基金收益分配原则",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 1274
+     },
+     "original_paragraph": 1274,
+     "final_paragraph": 1274,
+     "verdict": "completed",
+     "detail": "complete replacement present at its declared site"
+    },
+    {
+     "target_id": "T017",
+     "rule_id": "G16",
+     "op": "append",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 1303,
+      "site_scope": "summary",
+      "location": "第二十四部分  基金合同内容摘要 > （三）基金销售服务费",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 1303
+     },
+     "original_paragraph": 1303,
+     "final_paragraph": 1303,
+     "verdict": "completed",
+     "detail": "appended policy text present at its declared site"
+    },
+    {
+     "target_id": "T018",
+     "rule_id": "G15",
+     "op": "delete",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 1304,
+      "site_scope": "summary",
+      "location": "第二十四部分  基金合同内容摘要 > （三）基金销售服务费",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 1304
+     },
+     "original_paragraph": 1304,
+     "final_paragraph": 1304,
+     "verdict": "completed",
+     "detail": "deleted clause gone from its region"
+    },
+    {
+     "target_id": "T019",
+     "rule_id": "G22",
+     "op": "replace",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 1392,
+      "site_scope": "summary",
+      "location": "第二十四部分  基金合同内容摘要 > （五）基金财产清算剩余资产的分配",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 1392
+     },
+     "original_paragraph": 1392,
+     "final_paragraph": 1392,
+     "verdict": "completed",
+     "detail": "complete replacement present at its declared site"
+    }
+   ],
+   "applicability_conflicts": [],
+   "counts": {
+    "completed": 19
+   },
+   "integrated_complete": true
+  },
+  {
+   "case_id": "B07",
+   "group": "dev",
+   "editable": true,
+   "facts": {
+    "classes": [
+     {
+      "name": "A类基金份额",
+      "subscription_fee": true,
+      "service_fee": false
+     },
+     {
+      "name": "C类基金份额",
+      "subscription_fee": false,
+      "service_fee": true
+     }
+    ],
+    "class_count": 2,
+    "class_count_basis": "fee_group",
+    "has_sales_service_fee": true,
+    "floating_management_fee": false,
+    "fund_type": "混合型",
+    "currency_variants": [],
+    "excluded": false,
+    "has_service_fee": true,
+    "is_floating_fee": false
+   },
+   "artifact": "/tmp/opencode/comprehensive-remediation-20261028/first-wave2-mapped/B07/final.docx",
+   "artifact_sha256": "f4d96577355a2dbae8447cf2151641e8bd576a4f236a20e16c6323a1acd81711",
+   "delivery_status": "complete",
+   "original": "/home/opencode/fundlex/funds_word/基金合同第一批/广发恒鑫一年持有期混合型证券投资基金基金合同20261020.docx",
+   "verdicts": [
+    {
+     "target_id": "T001",
+     "rule_id": "G01",
+     "op": "append",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 124,
+      "site_scope": "main",
+      "location": "第二部分  释义",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 124
+     },
+     "original_paragraph": 124,
+     "final_paragraph": 124,
+     "verdict": "completed",
+     "detail": "appended policy text present at its declared site"
+    },
+    {
+     "target_id": "T002",
+     "rule_id": "G03",
+     "op": "append",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 158,
+      "site_scope": "main",
+      "location": "第三部分  基金的基本情况 > 八、基金份额类别设置",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 158
+     },
+     "original_paragraph": 158,
+     "final_paragraph": 158,
+     "verdict": "completed",
+     "detail": "appended policy text present at its declared site"
+    },
+    {
+     "target_id": "T003",
+     "rule_id": "G05",
+     "op": "delete",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 162,
+      "site_scope": "main",
+      "location": "第三部分  基金的基本情况 > 八、基金份额类别设置",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 162
+     },
+     "original_paragraph": 162,
+     "final_paragraph": 162,
+     "verdict": "completed",
+     "detail": "deleted clause gone from its region"
+    },
+    {
+     "target_id": "T004",
+     "rule_id": "G05",
+     "op": "replace",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 162,
+      "site_scope": "main",
+      "location": "第三部分  基金的基本情况 > 八、基金份额类别设置",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 162
+     },
+     "original_paragraph": 162,
+     "final_paragraph": 162,
+     "verdict": "completed",
+     "detail": "complete replacement present at its declared site"
+    },
+    {
+     "target_id": "T005",
+     "rule_id": "G08",
+     "op": "replace",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 241,
+      "site_scope": "main",
+      "location": "第六部分  基金份额的申购与赎回 > 六、申购和赎回的价格、费用及其用途",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 241
+     },
+     "original_paragraph": 241,
+     "final_paragraph": 241,
+     "verdict": "completed",
+     "detail": "complete replacement present at its declared site"
+    },
+    {
+     "target_id": "T006",
+     "rule_id": "G09",
+     "op": "replace",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 242,
+      "site_scope": "main",
+      "location": "第六部分  基金份额的申购与赎回 > 六、申购和赎回的价格、费用及其用途",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 242
+     },
+     "original_paragraph": 242,
+     "final_paragraph": 242,
+     "verdict": "completed",
+     "detail": "complete replacement present at its declared site"
+    },
+    {
+     "target_id": "T007",
+     "rule_id": "G11",
+     "op": "replace",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 243,
+      "site_scope": "main",
+      "location": "第六部分  基金份额的申购与赎回 > 六、申购和赎回的价格、费用及其用途",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 243
+     },
+     "original_paragraph": 243,
+     "final_paragraph": 243,
+     "verdict": "completed",
+     "detail": "complete replacement present at its declared site"
+    },
+    {
+     "target_id": "T008",
+     "rule_id": "G12",
+     "op": "replace",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 244,
+      "site_scope": "main",
+      "location": "第六部分  基金份额的申购与赎回 > 六、申购和赎回的价格、费用及其用途",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 244
+     },
+     "original_paragraph": 244,
+     "final_paragraph": 244,
+     "verdict": "completed",
+     "detail": "complete replacement present at its declared site"
+    },
+    {
+     "target_id": "T009",
+     "rule_id": "G14",
+     "op": "replace",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 246,
+      "site_scope": "main",
+      "location": "第六部分  基金份额的申购与赎回 > 六、申购和赎回的价格、费用及其用途",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 246
+     },
+     "original_paragraph": 246,
+     "final_paragraph": 246,
+     "verdict": "completed",
+     "detail": "complete replacement present at its declared site"
+    },
+    {
+     "target_id": "T010",
+     "rule_id": "G16",
+     "op": "append",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 824,
+      "site_scope": "main",
+      "location": "第十五部分  基金费用与税收 > 二、基金费用计提方法、计提标准和支付方式",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 824
+     },
+     "original_paragraph": 824,
+     "final_paragraph": 824,
+     "verdict": "completed",
+     "detail": "appended policy text present at its declared site"
+    },
+    {
+     "target_id": "T011",
+     "rule_id": "G15",
+     "op": "delete",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 825,
+      "site_scope": "main",
+      "location": "第十五部分  基金费用与税收 > 二、基金费用计提方法、计提标准和支付方式",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 825
+     },
+     "original_paragraph": 825,
+     "final_paragraph": 825,
+     "verdict": "completed",
+     "detail": "deleted clause gone from its region"
+    },
+    {
+     "target_id": "T012",
+     "rule_id": "G17",
+     "op": "delete",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 826,
+      "site_scope": "main",
+      "location": "第十五部分  基金费用与税收 > 二、基金费用计提方法、计提标准和支付方式",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 826
+     },
+     "original_paragraph": 826,
+     "final_paragraph": 826,
+     "verdict": "completed",
+     "detail": "deleted clause gone from its region"
+    },
+    {
+     "target_id": "T013",
+     "rule_id": "G17",
+     "op": "delete",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 827,
+      "site_scope": "main",
+      "location": "第十五部分  基金费用与税收 > 二、基金费用计提方法、计提标准和支付方式",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 827
+     },
+     "original_paragraph": 827,
+     "final_paragraph": 827,
+     "verdict": "completed",
+     "detail": "deleted clause gone from its region"
+    },
+    {
+     "target_id": "T014",
+     "rule_id": "G17",
+     "op": "delete",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 827,
+      "site_scope": "main",
+      "location": "第十五部分  基金费用与税收 > 二、基金费用计提方法、计提标准和支付方式",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 827
+     },
+     "original_paragraph": 827,
+     "final_paragraph": 827,
+     "verdict": "completed",
+     "detail": "deleted clause gone from its region"
+    },
+    {
+     "target_id": "T015",
+     "rule_id": "G18",
+     "op": "replace",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 852,
+      "site_scope": "main",
+      "location": "第十六部分  基金的收益与分配 > 三、基金收益分配原则",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 852
+     },
+     "original_paragraph": 852,
+     "final_paragraph": 852,
+     "verdict": "completed",
+     "detail": "complete replacement present at its declared site"
+    },
+    {
+     "target_id": "T016",
+     "rule_id": "G22",
+     "op": "replace",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 1002,
+      "site_scope": "main",
+      "location": "第十九部分  基金合同的变更、终止与基金财产的清算 > 五、基金财产清算剩余资产的分配",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 1002
+     },
+     "original_paragraph": 1002,
+     "final_paragraph": 1002,
+     "verdict": "completed",
+     "detail": "complete replacement present at its declared site"
+    },
+    {
+     "target_id": "T017",
+     "rule_id": "G18",
+     "op": "replace",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 1250,
+      "site_scope": "summary",
+      "location": "第二十四部分  基金合同内容摘要 > （一）基金收益分配原则",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 1250
+     },
+     "original_paragraph": 1250,
+     "final_paragraph": 1250,
+     "verdict": "completed",
+     "detail": "complete replacement present at its declared site"
+    },
+    {
+     "target_id": "T018",
+     "rule_id": "G16",
+     "op": "append",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 1279,
+      "site_scope": "summary",
+      "location": "第二十四部分  基金合同内容摘要 > （三）基金销售服务费",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 1279
+     },
+     "original_paragraph": 1279,
+     "final_paragraph": 1279,
+     "verdict": "completed",
+     "detail": "appended policy text present at its declared site"
+    },
+    {
+     "target_id": "T019",
+     "rule_id": "G15",
+     "op": "delete",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 1280,
+      "site_scope": "summary",
+      "location": "第二十四部分  基金合同内容摘要 > （三）基金销售服务费",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 1280
+     },
+     "original_paragraph": 1280,
+     "final_paragraph": 1280,
+     "verdict": "completed",
+     "detail": "deleted clause gone from its region"
+    },
+    {
+     "target_id": "T020",
+     "rule_id": "G22",
+     "op": "replace",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 1368,
+      "site_scope": "summary",
+      "location": "第二十四部分  基金合同内容摘要 > （五）基金财产清算剩余资产的分配",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 1368
+     },
+     "original_paragraph": 1368,
+     "final_paragraph": 1368,
+     "verdict": "completed",
+     "detail": "complete replacement present at its declared site"
+    }
+   ],
+   "applicability_conflicts": [],
+   "counts": {
+    "completed": 20
+   },
+   "integrated_complete": true
+  },
+  {
+   "case_id": "B08",
+   "group": "dev",
+   "editable": true,
+   "facts": {
+    "classes": [
+     {
+      "name": "A类基金份额",
+      "subscription_fee": true,
+      "service_fee": false
+     },
+     {
+      "name": "C类基金份额",
+      "subscription_fee": false,
+      "service_fee": true
+     }
+    ],
+    "class_count": 2,
+    "class_count_basis": "fee_group",
+    "has_sales_service_fee": true,
+    "floating_management_fee": false,
+    "fund_type": "混合型",
+    "currency_variants": [],
+    "excluded": false,
+    "has_service_fee": true,
+    "is_floating_fee": false
+   },
+   "artifact": "/tmp/opencode/comprehensive-remediation-20261028/first-wave2-mapped/B08/final.docx",
+   "artifact_sha256": "2c7621784c45b45bfcafea929dfb72f4e908f9ede765fdc81ac9cf43bc69de21",
+   "delivery_status": "complete",
+   "original": "/home/opencode/fundlex/funds_word/基金合同第一批/广发恒阳一年持有期混合型证券投资基金基金合同20261022.docx",
+   "verdicts": [
+    {
+     "target_id": "T001",
+     "rule_id": "G01",
+     "op": "append",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 94,
+      "site_scope": "main",
+      "location": "第二部分  释义",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 118
+     },
+     "original_paragraph": 118,
+     "final_paragraph": 118,
+     "verdict": "completed",
+     "detail": "appended policy text present at its declared site"
+    },
+    {
+     "target_id": "T002",
+     "rule_id": "G03",
+     "op": "append",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 128,
+      "site_scope": "main",
+      "location": "第三部分  基金的基本情况 > 八、基金份额类别设置",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 152
+     },
+     "original_paragraph": 152,
+     "final_paragraph": 152,
+     "verdict": "completed",
+     "detail": "appended policy text present at its declared site"
+    },
+    {
+     "target_id": "T003",
+     "rule_id": "G05",
+     "op": "delete",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 132,
+      "site_scope": "main",
+      "location": "第三部分  基金的基本情况 > 八、基金份额类别设置",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 156
+     },
+     "original_paragraph": 156,
+     "final_paragraph": 156,
+     "verdict": "completed",
+     "detail": "deleted clause gone from its region"
+    },
+    {
+     "target_id": "T004",
+     "rule_id": "G05",
+     "op": "replace",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 132,
+      "site_scope": "main",
+      "location": "第三部分  基金的基本情况 > 八、基金份额类别设置",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 156
+     },
+     "original_paragraph": 156,
+     "final_paragraph": 156,
+     "verdict": "completed",
+     "detail": "complete replacement present at its declared site"
+    },
+    {
+     "target_id": "T005",
+     "rule_id": "G06",
+     "op": "delete",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 132,
+      "site_scope": "main",
+      "location": "第三部分  基金的基本情况 > 八、基金份额类别设置",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 156
+     },
+     "original_paragraph": 156,
+     "final_paragraph": 156,
+     "verdict": "completed",
+     "detail": "deleted clause gone from its region"
+    },
+    {
+     "target_id": "T006",
+     "rule_id": "G08",
+     "op": "replace",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 211,
+      "site_scope": "main",
+      "location": "第六部分  基金份额的申购与赎回 > 六、申购和赎回的价格、费用及其用途",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 235
+     },
+     "original_paragraph": 235,
+     "final_paragraph": 235,
+     "verdict": "completed",
+     "detail": "complete replacement present at its declared site"
+    },
+    {
+     "target_id": "T007",
+     "rule_id": "G09",
+     "op": "replace",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 212,
+      "site_scope": "main",
+      "location": "第六部分  基金份额的申购与赎回 > 六、申购和赎回的价格、费用及其用途",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 236
+     },
+     "original_paragraph": 236,
+     "final_paragraph": 236,
+     "verdict": "completed",
+     "detail": "complete replacement present at its declared site"
+    },
+    {
+     "target_id": "T008",
+     "rule_id": "G11",
+     "op": "replace",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 213,
+      "site_scope": "main",
+      "location": "第六部分  基金份额的申购与赎回 > 六、申购和赎回的价格、费用及其用途",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 237
+     },
+     "original_paragraph": 237,
+     "final_paragraph": 237,
+     "verdict": "completed",
+     "detail": "complete replacement present at its declared site"
+    },
+    {
+     "target_id": "T009",
+     "rule_id": "G12",
+     "op": "replace",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 214,
+      "site_scope": "main",
+      "location": "第六部分  基金份额的申购与赎回 > 六、申购和赎回的价格、费用及其用途",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 238
+     },
+     "original_paragraph": 238,
+     "final_paragraph": 238,
+     "verdict": "completed",
+     "detail": "complete replacement present at its declared site"
+    },
+    {
+     "target_id": "T010",
+     "rule_id": "G14",
+     "op": "replace",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 216,
+      "site_scope": "main",
+      "location": "第六部分  基金份额的申购与赎回 > 六、申购和赎回的价格、费用及其用途",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 240
+     },
+     "original_paragraph": 240,
+     "final_paragraph": 240,
+     "verdict": "completed",
+     "detail": "complete replacement present at its declared site"
+    },
+    {
+     "target_id": "T011",
+     "rule_id": "G16",
+     "op": "append",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 797,
+      "site_scope": "main",
+      "location": "第十五部分  基金费用与税收 > 二、基金费用计提方法、计提标准和支付方式",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 821
+     },
+     "original_paragraph": 821,
+     "final_paragraph": 821,
+     "verdict": "completed",
+     "detail": "appended policy text present at its declared site"
+    },
+    {
+     "target_id": "T012",
+     "rule_id": "G15",
+     "op": "delete",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 798,
+      "site_scope": "main",
+      "location": "第十五部分  基金费用与税收 > 二、基金费用计提方法、计提标准和支付方式",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 822
+     },
+     "original_paragraph": 822,
+     "final_paragraph": 822,
+     "verdict": "completed",
+     "detail": "deleted clause gone from its region"
+    },
+    {
+     "target_id": "T013",
+     "rule_id": "G17",
+     "op": "delete",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 799,
+      "site_scope": "main",
+      "location": "第十五部分  基金费用与税收 > 二、基金费用计提方法、计提标准和支付方式",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 823
+     },
+     "original_paragraph": 823,
+     "final_paragraph": 823,
+     "verdict": "completed",
+     "detail": "deleted clause gone from its region"
+    },
+    {
+     "target_id": "T014",
+     "rule_id": "G17",
+     "op": "delete",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 800,
+      "site_scope": "main",
+      "location": "第十五部分  基金费用与税收 > 二、基金费用计提方法、计提标准和支付方式",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 824
+     },
+     "original_paragraph": 824,
+     "final_paragraph": 824,
+     "verdict": "completed",
+     "detail": "deleted clause gone from its region"
+    },
+    {
+     "target_id": "T015",
+     "rule_id": "G18",
+     "op": "replace",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 825,
+      "site_scope": "main",
+      "location": "第十六部分  基金的收益与分配 > 三、基金收益分配原则",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 849
+     },
+     "original_paragraph": 849,
+     "final_paragraph": 849,
+     "verdict": "completed",
+     "detail": "complete replacement present at its declared site"
+    },
+    {
+     "target_id": "T016",
+     "rule_id": "G22",
+     "op": "replace",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 976,
+      "site_scope": "main",
+      "location": "第十九部分  基金合同的变更、终止与基金财产的清算 > 五、基金财产清算剩余资产的分配",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 1000
+     },
+     "original_paragraph": 1000,
+     "final_paragraph": 1000,
+     "verdict": "completed",
+     "detail": "complete replacement present at its declared site"
+    },
+    {
+     "target_id": "T017",
+     "rule_id": "G18",
+     "op": "replace",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 1225,
+      "site_scope": "summary",
+      "location": "第二十四部分  基金合同内容摘要 > （一）基金收益分配原则",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 1249
+     },
+     "original_paragraph": 1249,
+     "final_paragraph": 1249,
+     "verdict": "completed",
+     "detail": "complete replacement present at its declared site"
+    },
+    {
+     "target_id": "T018",
+     "rule_id": "G16",
+     "op": "append",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 1254,
+      "site_scope": "summary",
+      "location": "第二十四部分  基金合同内容摘要 > （三）基金销售服务费",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 1278
+     },
+     "original_paragraph": 1278,
+     "final_paragraph": 1278,
+     "verdict": "completed",
+     "detail": "appended policy text present at its declared site"
+    },
+    {
+     "target_id": "T019",
+     "rule_id": "G15",
+     "op": "delete",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 1255,
+      "site_scope": "summary",
+      "location": "第二十四部分  基金合同内容摘要 > （三）基金销售服务费",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 1279
+     },
+     "original_paragraph": 1279,
+     "final_paragraph": 1279,
+     "verdict": "completed",
+     "detail": "deleted clause gone from its region"
+    },
+    {
+     "target_id": "T020",
+     "rule_id": "G22",
+     "op": "replace",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 1344,
+      "site_scope": "summary",
+      "location": "第二十四部分  基金合同内容摘要 > （五）基金财产清算剩余资产的分配",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 1368
+     },
+     "original_paragraph": 1368,
+     "final_paragraph": 1368,
+     "verdict": "completed",
+     "detail": "complete replacement present at its declared site"
+    }
+   ],
+   "applicability_conflicts": [],
+   "counts": {
+    "completed": 20
+   },
+   "integrated_complete": true
+  },
+  {
+   "case_id": "B09",
+   "group": "dev",
+   "editable": true,
+   "facts": {
+    "classes": [
+     {
+      "name": "A类基金份额",
+      "subscription_fee": true,
+      "service_fee": false
+     },
+     {
+      "name": "C类基金份额",
+      "subscription_fee": false,
+      "service_fee": true
+     }
+    ],
+    "class_count": 2,
+    "class_count_basis": "fee_group",
+    "has_sales_service_fee": true,
+    "floating_management_fee": false,
+    "fund_type": "混合型",
+    "currency_variants": [],
+    "excluded": false,
+    "has_service_fee": true,
+    "is_floating_fee": false
+   },
+   "artifact": "/tmp/opencode/comprehensive-remediation-20261028/first-wave2-mapped/B09/final.docx",
+   "artifact_sha256": "34289cc80390f7ad98701fe49768d766eeba01ddfc6a0c4b3298ea968e1d2519",
+   "delivery_status": "complete",
+   "original": "/home/opencode/fundlex/funds_word/基金合同第一批/广发恒隆一年持有期混合型证券投资基金基金合同20261020.docx",
+   "verdicts": [
+    {
+     "target_id": "T001",
+     "rule_id": "G01",
+     "op": "append",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 94,
+      "site_scope": "main",
+      "location": "第二部分  释义",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 118
+     },
+     "original_paragraph": 118,
+     "final_paragraph": 118,
+     "verdict": "completed",
+     "detail": "appended policy text present at its declared site"
+    },
+    {
+     "target_id": "T002",
+     "rule_id": "G03",
+     "op": "append",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 128,
+      "site_scope": "main",
+      "location": "第三部分  基金的基本情况 > 八、基金份额类别设置",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 152
+     },
+     "original_paragraph": 152,
+     "final_paragraph": 152,
+     "verdict": "completed",
+     "detail": "appended policy text present at its declared site"
+    },
+    {
+     "target_id": "T003",
+     "rule_id": "G05",
+     "op": "delete",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 132,
+      "site_scope": "main",
+      "location": "第三部分  基金的基本情况 > 八、基金份额类别设置",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 156
+     },
+     "original_paragraph": 156,
+     "final_paragraph": 156,
+     "verdict": "completed",
+     "detail": "deleted clause gone from its region"
+    },
+    {
+     "target_id": "T004",
+     "rule_id": "G05",
+     "op": "replace",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 132,
+      "site_scope": "main",
+      "location": "第三部分  基金的基本情况 > 八、基金份额类别设置",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 156
+     },
+     "original_paragraph": 156,
+     "final_paragraph": 156,
+     "verdict": "completed",
+     "detail": "complete replacement present at its declared site"
+    },
+    {
+     "target_id": "T005",
+     "rule_id": "G06",
+     "op": "delete",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 132,
+      "site_scope": "main",
+      "location": "第三部分  基金的基本情况 > 八、基金份额类别设置",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 156
+     },
+     "original_paragraph": 156,
+     "final_paragraph": 156,
+     "verdict": "completed",
+     "detail": "deleted clause gone from its region"
+    },
+    {
+     "target_id": "T006",
+     "rule_id": "G08",
+     "op": "replace",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 211,
+      "site_scope": "main",
+      "location": "第六部分  基金份额的申购与赎回 > 六、申购和赎回的价格、费用及其用途",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 235
+     },
+     "original_paragraph": 235,
+     "final_paragraph": 235,
+     "verdict": "completed",
+     "detail": "complete replacement present at its declared site"
+    },
+    {
+     "target_id": "T007",
+     "rule_id": "G09",
+     "op": "replace",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 212,
+      "site_scope": "main",
+      "location": "第六部分  基金份额的申购与赎回 > 六、申购和赎回的价格、费用及其用途",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 236
+     },
+     "original_paragraph": 236,
+     "final_paragraph": 236,
+     "verdict": "completed",
+     "detail": "complete replacement present at its declared site"
+    },
+    {
+     "target_id": "T008",
+     "rule_id": "G11",
+     "op": "replace",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 213,
+      "site_scope": "main",
+      "location": "第六部分  基金份额的申购与赎回 > 六、申购和赎回的价格、费用及其用途",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 237
+     },
+     "original_paragraph": 237,
+     "final_paragraph": 237,
+     "verdict": "completed",
+     "detail": "complete replacement present at its declared site"
+    },
+    {
+     "target_id": "T009",
+     "rule_id": "G12",
+     "op": "replace",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 214,
+      "site_scope": "main",
+      "location": "第六部分  基金份额的申购与赎回 > 六、申购和赎回的价格、费用及其用途",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 238
+     },
+     "original_paragraph": 238,
+     "final_paragraph": 238,
+     "verdict": "completed",
+     "detail": "complete replacement present at its declared site"
+    },
+    {
+     "target_id": "T010",
+     "rule_id": "G14",
+     "op": "replace",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 216,
+      "site_scope": "main",
+      "location": "第六部分  基金份额的申购与赎回 > 六、申购和赎回的价格、费用及其用途",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 240
+     },
+     "original_paragraph": 240,
+     "final_paragraph": 240,
+     "verdict": "completed",
+     "detail": "complete replacement present at its declared site"
+    },
+    {
+     "target_id": "T011",
+     "rule_id": "G16",
+     "op": "append",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 793,
+      "site_scope": "main",
+      "location": "第十五部分  基金费用与税收 > 二、基金费用计提方法、计提标准和支付方式",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 817
+     },
+     "original_paragraph": 817,
+     "final_paragraph": 817,
+     "verdict": "completed",
+     "detail": "appended policy text present at its declared site"
+    },
+    {
+     "target_id": "T012",
+     "rule_id": "G15",
+     "op": "delete",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 794,
+      "site_scope": "main",
+      "location": "第十五部分  基金费用与税收 > 二、基金费用计提方法、计提标准和支付方式",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 818
+     },
+     "original_paragraph": 818,
+     "final_paragraph": 818,
+     "verdict": "completed",
+     "detail": "deleted clause gone from its region"
+    },
+    {
+     "target_id": "T013",
+     "rule_id": "G17",
+     "op": "delete",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 795,
+      "site_scope": "main",
+      "location": "第十五部分  基金费用与税收 > 二、基金费用计提方法、计提标准和支付方式",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 819
+     },
+     "original_paragraph": 819,
+     "final_paragraph": 819,
+     "verdict": "completed",
+     "detail": "deleted clause gone from its region"
+    },
+    {
+     "target_id": "T014",
+     "rule_id": "G17",
+     "op": "delete",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 796,
+      "site_scope": "main",
+      "location": "第十五部分  基金费用与税收 > 二、基金费用计提方法、计提标准和支付方式",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 820
+     },
+     "original_paragraph": 820,
+     "final_paragraph": 820,
+     "verdict": "completed",
+     "detail": "deleted clause gone from its region"
+    },
+    {
+     "target_id": "T015",
+     "rule_id": "G18",
+     "op": "replace",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 821,
+      "site_scope": "main",
+      "location": "第十六部分  基金的收益与分配 > 三、基金收益分配原则",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 845
+     },
+     "original_paragraph": 845,
+     "final_paragraph": 845,
+     "verdict": "completed",
+     "detail": "complete replacement present at its declared site"
+    },
+    {
+     "target_id": "T016",
+     "rule_id": "G22",
+     "op": "replace",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 972,
+      "site_scope": "main",
+      "location": "第十九部分  基金合同的变更、终止与基金财产的清算 > 五、基金财产清算剩余资产的分配",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 996
+     },
+     "original_paragraph": 996,
+     "final_paragraph": 996,
+     "verdict": "completed",
+     "detail": "complete replacement present at its declared site"
+    },
+    {
+     "target_id": "T017",
+     "rule_id": "G18",
+     "op": "replace",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 1222,
+      "site_scope": "summary",
+      "location": "第二十四部分  基金合同内容摘要 > （一）基金收益分配原则",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 1246
+     },
+     "original_paragraph": 1246,
+     "final_paragraph": 1246,
+     "verdict": "completed",
+     "detail": "complete replacement present at its declared site"
+    },
+    {
+     "target_id": "T018",
+     "rule_id": "G16",
+     "op": "append",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 1251,
+      "site_scope": "summary",
+      "location": "第二十四部分  基金合同内容摘要 > （三）基金销售服务费",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 1275
+     },
+     "original_paragraph": 1275,
+     "final_paragraph": 1275,
+     "verdict": "completed",
+     "detail": "appended policy text present at its declared site"
+    },
+    {
+     "target_id": "T019",
+     "rule_id": "G15",
+     "op": "delete",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 1252,
+      "site_scope": "summary",
+      "location": "第二十四部分  基金合同内容摘要 > （三）基金销售服务费",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 1276
+     },
+     "original_paragraph": 1276,
+     "final_paragraph": 1276,
+     "verdict": "completed",
+     "detail": "deleted clause gone from its region"
+    },
+    {
+     "target_id": "T020",
+     "rule_id": "G22",
+     "op": "replace",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 1341,
+      "site_scope": "summary",
+      "location": "第二十四部分  基金合同内容摘要 > （五）基金财产清算剩余资产的分配",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 1365
+     },
+     "original_paragraph": 1365,
+     "final_paragraph": 1365,
+     "verdict": "completed",
+     "detail": "complete replacement present at its declared site"
+    }
+   ],
+   "applicability_conflicts": [],
+   "counts": {
+    "completed": 20
+   },
+   "integrated_complete": true
+  },
+  {
+   "case_id": "B10",
+   "group": "dev",
+   "editable": true,
+   "facts": {
+    "classes": [
+     {
+      "name": "A类基金份额",
+      "subscription_fee": true,
+      "service_fee": false
+     },
+     {
+      "name": "C类基金份额",
+      "subscription_fee": false,
+      "service_fee": true
+     }
+    ],
+    "class_count": 2,
+    "class_count_basis": "fee_group",
+    "has_sales_service_fee": true,
+    "floating_management_fee": false,
+    "fund_type": "混合型",
+    "currency_variants": [],
+    "excluded": false,
+    "has_service_fee": true,
+    "is_floating_fee": false
+   },
+   "artifact": "/tmp/opencode/comprehensive-remediation-20261028/first-wave2-mapped/B10/final.docx",
+   "artifact_sha256": "7b4f010d40f3e56c763d0c23f067d33da8989eaf526115106bedd9f9c1e6c905",
+   "delivery_status": "complete",
+   "original": "/home/opencode/fundlex/funds_word/基金合同第一批/广发招利混合型证券投资基金基金合同.docx",
+   "verdicts": [
+    {
+     "target_id": "T001",
+     "rule_id": "G01",
+     "op": "append",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 127,
+      "site_scope": "main",
+      "location": "第二部分  释义",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 127
+     },
+     "original_paragraph": 127,
+     "final_paragraph": 127,
+     "verdict": "completed",
+     "detail": "appended policy text present at its declared site"
+    },
+    {
+     "target_id": "T002",
+     "rule_id": "G03",
+     "op": "append",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 161,
+      "site_scope": "main",
+      "location": "第三部分  基金的基本情况 > 八、基金份额类别设置",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 161
+     },
+     "original_paragraph": 161,
+     "final_paragraph": 161,
+     "verdict": "completed",
+     "detail": "appended policy text present at its declared site"
+    },
+    {
+     "target_id": "T003",
+     "rule_id": "G05",
+     "op": "delete",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 165,
+      "site_scope": "main",
+      "location": "第三部分  基金的基本情况 > 八、基金份额类别设置",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 165
+     },
+     "original_paragraph": 165,
+     "final_paragraph": 165,
+     "verdict": "completed",
+     "detail": "deleted clause gone from its region"
+    },
+    {
+     "target_id": "T004",
+     "rule_id": "G05",
+     "op": "replace",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 165,
+      "site_scope": "main",
+      "location": "第三部分  基金的基本情况 > 八、基金份额类别设置",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 165
+     },
+     "original_paragraph": 165,
+     "final_paragraph": 165,
+     "verdict": "completed",
+     "detail": "complete replacement present at its declared site"
+    },
+    {
+     "target_id": "T005",
+     "rule_id": "G08",
+     "op": "replace",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 244,
+      "site_scope": "main",
+      "location": "第六部分  基金份额的申购与赎回 > 六、申购和赎回的价格、费用及其用途",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 244
+     },
+     "original_paragraph": 244,
+     "final_paragraph": 244,
+     "verdict": "completed",
+     "detail": "complete replacement present at its declared site"
+    },
+    {
+     "target_id": "T006",
+     "rule_id": "G09",
+     "op": "replace",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 245,
+      "site_scope": "main",
+      "location": "第六部分  基金份额的申购与赎回 > 六、申购和赎回的价格、费用及其用途",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 245
+     },
+     "original_paragraph": 245,
+     "final_paragraph": 245,
+     "verdict": "completed",
+     "detail": "complete replacement present at its declared site"
+    },
+    {
+     "target_id": "T007",
+     "rule_id": "G11",
+     "op": "replace",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 246,
+      "site_scope": "main",
+      "location": "第六部分  基金份额的申购与赎回 > 六、申购和赎回的价格、费用及其用途",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 246
+     },
+     "original_paragraph": 246,
+     "final_paragraph": 246,
+     "verdict": "completed",
+     "detail": "complete replacement present at its declared site"
+    },
+    {
+     "target_id": "T008",
+     "rule_id": "G12",
+     "op": "replace",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 247,
+      "site_scope": "main",
+      "location": "第六部分  基金份额的申购与赎回 > 六、申购和赎回的价格、费用及其用途",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 247
+     },
+     "original_paragraph": 247,
+     "final_paragraph": 247,
+     "verdict": "completed",
+     "detail": "complete replacement present at its declared site"
+    },
+    {
+     "target_id": "T009",
+     "rule_id": "G13",
+     "op": "delete",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 247,
+      "site_scope": "main",
+      "location": "第六部分  基金份额的申购与赎回 > 六、申购和赎回的价格、费用及其用途",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 247
+     },
+     "original_paragraph": 247,
+     "final_paragraph": 247,
+     "verdict": "completed",
+     "detail": "deleted clause gone from its region"
+    },
+    {
+     "target_id": "T010",
+     "rule_id": "G14",
+     "op": "replace",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 249,
+      "site_scope": "main",
+      "location": "第六部分  基金份额的申购与赎回 > 六、申购和赎回的价格、费用及其用途",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 249
+     },
+     "original_paragraph": 249,
+     "final_paragraph": 249,
+     "verdict": "completed",
+     "detail": "complete replacement present at its declared site"
+    },
+    {
+     "target_id": "T011",
+     "rule_id": "G16",
+     "op": "append",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 816,
+      "site_scope": "main",
+      "location": "第十五部分  基金费用与税收 > 二、基金费用计提方法、计提标准和支付方式",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 816
+     },
+     "original_paragraph": 816,
+     "final_paragraph": 816,
+     "verdict": "completed",
+     "detail": "appended policy text present at its declared site"
+    },
+    {
+     "target_id": "T012",
+     "rule_id": "G15",
+     "op": "delete",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 817,
+      "site_scope": "main",
+      "location": "第十五部分  基金费用与税收 > 二、基金费用计提方法、计提标准和支付方式",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 817
+     },
+     "original_paragraph": 817,
+     "final_paragraph": 817,
+     "verdict": "completed",
+     "detail": "deleted clause gone from its region"
+    },
+    {
+     "target_id": "T013",
+     "rule_id": "G17",
+     "op": "delete",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 818,
+      "site_scope": "main",
+      "location": "第十五部分  基金费用与税收 > 二、基金费用计提方法、计提标准和支付方式",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 818
+     },
+     "original_paragraph": 818,
+     "final_paragraph": 818,
+     "verdict": "completed",
+     "detail": "deleted clause gone from its region"
+    },
+    {
+     "target_id": "T014",
+     "rule_id": "G17",
+     "op": "delete",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 819,
+      "site_scope": "main",
+      "location": "第十五部分  基金费用与税收 > 二、基金费用计提方法、计提标准和支付方式",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 819
+     },
+     "original_paragraph": 819,
+     "final_paragraph": 819,
+     "verdict": "completed",
+     "detail": "deleted clause gone from its region"
+    },
+    {
+     "target_id": "T015",
+     "rule_id": "G18",
+     "op": "replace",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 842,
+      "site_scope": "main",
+      "location": "第十六部分  基金的收益与分配 > 三、基金收益分配原则",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 842
+     },
+     "original_paragraph": 842,
+     "final_paragraph": 842,
+     "verdict": "completed",
+     "detail": "complete replacement present at its declared site"
+    },
+    {
+     "target_id": "T016",
+     "rule_id": "G22",
+     "op": "replace",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 994,
+      "site_scope": "main",
+      "location": "第十九部分  基金合同的变更、终止与基金财产的清算 > 五、基金财产清算剩余资产的分配",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 994
+     },
+     "original_paragraph": 994,
+     "final_paragraph": 994,
+     "verdict": "completed",
+     "detail": "complete replacement present at its declared site"
+    },
+    {
+     "target_id": "T017",
+     "rule_id": "G18",
+     "op": "replace",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 1241,
+      "site_scope": "summary",
+      "location": "第二十四部分  基金合同内容摘要 > （一）基金收益分配原则",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 1241
+     },
+     "original_paragraph": 1241,
+     "final_paragraph": 1241,
+     "verdict": "completed",
+     "detail": "complete replacement present at its declared site"
+    },
+    {
+     "target_id": "T018",
+     "rule_id": "G16",
+     "op": "append",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 1270,
+      "site_scope": "summary",
+      "location": "第二十四部分  基金合同内容摘要 > （三）基金销售服务费",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 1270
+     },
+     "original_paragraph": 1270,
+     "final_paragraph": 1270,
+     "verdict": "completed",
+     "detail": "appended policy text present at its declared site"
+    },
+    {
+     "target_id": "T019",
+     "rule_id": "G15",
+     "op": "delete",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 1271,
+      "site_scope": "summary",
+      "location": "第二十四部分  基金合同内容摘要 > （三）基金销售服务费",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 1271
+     },
+     "original_paragraph": 1271,
+     "final_paragraph": 1271,
+     "verdict": "completed",
+     "detail": "deleted clause gone from its region"
+    },
+    {
+     "target_id": "T020",
+     "rule_id": "G22",
+     "op": "replace",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 1356,
+      "site_scope": "summary",
+      "location": "第二十四部分  基金合同内容摘要 > （五）基金财产清算剩余资产的分配",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 1356
+     },
+     "original_paragraph": 1356,
+     "final_paragraph": 1356,
+     "verdict": "completed",
+     "detail": "complete replacement present at its declared site"
+    }
+   ],
+   "applicability_conflicts": [],
+   "counts": {
+    "completed": 20
+   },
+   "integrated_complete": true
+  },
+  {
+   "case_id": "B11",
+   "group": "dev",
+   "editable": true,
+   "facts": {
+    "classes": [
+     {
+      "name": "A类基金份额",
+      "subscription_fee": true,
+      "service_fee": false
+     },
+     {
+      "name": "C类基金份额",
+      "subscription_fee": false,
+      "service_fee": true
+     }
+    ],
+    "class_count": 2,
+    "class_count_basis": "fee_group",
+    "has_sales_service_fee": true,
+    "floating_management_fee": false,
+    "fund_type": "债券型",
+    "currency_variants": [],
+    "excluded": false,
+    "has_service_fee": true,
+    "is_floating_fee": false
+   },
+   "artifact": "/tmp/opencode/comprehensive-remediation-20261028/first-wave2-mapped/B11/final.docx",
+   "artifact_sha256": "44990511d4bd6d630eebb576fc17fdbc666f126cad133b040f0c0dbc925a3b2d",
+   "delivery_status": "complete",
+   "original": "/home/opencode/fundlex/funds_word/基金合同第一批/广发景宁纯债债券型证券投资基金基金合同.docx",
+   "verdicts": [
+    {
+     "target_id": "T001",
+     "rule_id": "G01",
+     "op": "append",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 120,
+      "site_scope": "main",
+      "location": "第二部分  释义",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 120
+     },
+     "original_paragraph": 120,
+     "final_paragraph": 120,
+     "verdict": "completed",
+     "detail": "appended policy text present at its declared site"
+    },
+    {
+     "target_id": "T002",
+     "rule_id": "G05",
+     "op": "delete",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 148,
+      "site_scope": "main",
+      "location": "第三部分  基金的基本情况 > 八、基金份额类别设置",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 148
+     },
+     "original_paragraph": 148,
+     "final_paragraph": 148,
+     "verdict": "completed",
+     "detail": "deleted clause gone from its region"
+    },
+    {
+     "target_id": "T003",
+     "rule_id": "G05",
+     "op": "replace",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 148,
+      "site_scope": "main",
+      "location": "第三部分  基金的基本情况 > 八、基金份额类别设置",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 148
+     },
+     "original_paragraph": 148,
+     "final_paragraph": 148,
+     "verdict": "completed",
+     "detail": "complete replacement present at its declared site"
+    },
+    {
+     "target_id": "T004",
+     "rule_id": "G03",
+     "op": "append",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 151,
+      "site_scope": "main",
+      "location": "第三部分  基金的基本情况 > 九、基金份额的类别",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 151
+     },
+     "original_paragraph": 151,
+     "final_paragraph": 151,
+     "verdict": "completed",
+     "detail": "appended policy text present at its declared site"
+    },
+    {
+     "target_id": "T005",
+     "rule_id": "G05",
+     "op": "delete",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 155,
+      "site_scope": "main",
+      "location": "第三部分  基金的基本情况 > 九、基金份额的类别",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 155
+     },
+     "original_paragraph": 155,
+     "final_paragraph": 155,
+     "verdict": "completed",
+     "detail": "deleted clause gone from its region"
+    },
+    {
+     "target_id": "T006",
+     "rule_id": "G05",
+     "op": "replace",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 155,
+      "site_scope": "main",
+      "location": "第三部分  基金的基本情况 > 九、基金份额的类别",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 155
+     },
+     "original_paragraph": 155,
+     "final_paragraph": 155,
+     "verdict": "completed",
+     "detail": "complete replacement present at its declared site"
+    },
+    {
+     "target_id": "T007",
+     "rule_id": "G08",
+     "op": "replace",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 207,
+      "site_scope": "main",
+      "location": "第五部分  基金份额的申购与赎回 > 六、申购和赎回的价格、费用及其用途",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 207
+     },
+     "original_paragraph": 207,
+     "final_paragraph": 207,
+     "verdict": "completed",
+     "detail": "complete replacement present at its declared site"
+    },
+    {
+     "target_id": "T008",
+     "rule_id": "G09",
+     "op": "replace",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 208,
+      "site_scope": "main",
+      "location": "第五部分  基金份额的申购与赎回 > 六、申购和赎回的价格、费用及其用途",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 208
+     },
+     "original_paragraph": 208,
+     "final_paragraph": 208,
+     "verdict": "completed",
+     "detail": "complete replacement present at its declared site"
+    },
+    {
+     "target_id": "T009",
+     "rule_id": "G11",
+     "op": "replace",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 209,
+      "site_scope": "main",
+      "location": "第五部分  基金份额的申购与赎回 > 六、申购和赎回的价格、费用及其用途",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 209
+     },
+     "original_paragraph": 209,
+     "final_paragraph": 209,
+     "verdict": "completed",
+     "detail": "complete replacement present at its declared site"
+    },
+    {
+     "target_id": "T010",
+     "rule_id": "G12",
+     "op": "replace",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 210,
+      "site_scope": "main",
+      "location": "第五部分  基金份额的申购与赎回 > 六、申购和赎回的价格、费用及其用途",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 210
+     },
+     "original_paragraph": 210,
+     "final_paragraph": 210,
+     "verdict": "completed",
+     "detail": "complete replacement present at its declared site"
+    },
+    {
+     "target_id": "T011",
+     "rule_id": "G13",
+     "op": "delete",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 211,
+      "site_scope": "main",
+      "location": "第五部分  基金份额的申购与赎回 > 六、申购和赎回的价格、费用及其用途",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 211
+     },
+     "original_paragraph": 211,
+     "final_paragraph": 211,
+     "verdict": "completed",
+     "detail": "deleted clause gone from its region"
+    },
+    {
+     "target_id": "T012",
+     "rule_id": "G14",
+     "op": "replace",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 212,
+      "site_scope": "main",
+      "location": "第五部分  基金份额的申购与赎回 > 六、申购和赎回的价格、费用及其用途",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 212
+     },
+     "original_paragraph": 212,
+     "final_paragraph": 212,
+     "verdict": "completed",
+     "detail": "complete replacement present at its declared site"
+    },
+    {
+     "target_id": "T013",
+     "rule_id": "G16",
+     "op": "append",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 768,
+      "site_scope": "main",
+      "location": "第十四部分  基金费用与税收 > 二、基金费用计提方法、计提标准和支付方式",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 768
+     },
+     "original_paragraph": 768,
+     "final_paragraph": 768,
+     "verdict": "completed",
+     "detail": "appended policy text present at its declared site"
+    },
+    {
+     "target_id": "T014",
+     "rule_id": "G15",
+     "op": "delete",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 769,
+      "site_scope": "main",
+      "location": "第十四部分  基金费用与税收 > 二、基金费用计提方法、计提标准和支付方式",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 769
+     },
+     "original_paragraph": 769,
+     "final_paragraph": 769,
+     "verdict": "completed",
+     "detail": "deleted clause gone from its region"
+    },
+    {
+     "target_id": "T015",
+     "rule_id": "G17",
+     "op": "delete",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 770,
+      "site_scope": "main",
+      "location": "第十四部分  基金费用与税收 > 二、基金费用计提方法、计提标准和支付方式",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 770
+     },
+     "original_paragraph": 770,
+     "final_paragraph": 770,
+     "verdict": "completed",
+     "detail": "deleted clause gone from its region"
+    },
+    {
+     "target_id": "T016",
+     "rule_id": "G18",
+     "op": "replace",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 794,
+      "site_scope": "main",
+      "location": "第十五部分  基金的收益与分配 > 三、基金收益分配原则",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 794
+     },
+     "original_paragraph": 794,
+     "final_paragraph": 794,
+     "verdict": "completed",
+     "detail": "complete replacement present at its declared site"
+    },
+    {
+     "target_id": "T017",
+     "rule_id": "G22",
+     "op": "replace",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 946,
+      "site_scope": "main",
+      "location": "第十八部分  基金合同的变更、终止与基金财产的清算 > 五、基金财产清算剩余资产的分配",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 946
+     },
+     "original_paragraph": 946,
+     "final_paragraph": 946,
+     "verdict": "completed",
+     "detail": "complete replacement present at its declared site"
+    },
+    {
+     "target_id": "T018",
+     "rule_id": "G18",
+     "op": "replace",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 1195,
+      "site_scope": "summary",
+      "location": "第二十三部分  基金合同内容摘要 > （三）基金收益分配原则",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 1195
+     },
+     "original_paragraph": 1195,
+     "final_paragraph": 1195,
+     "verdict": "completed",
+     "detail": "complete replacement present at its declared site"
+    },
+    {
+     "target_id": "T019",
+     "rule_id": "G16",
+     "op": "append",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 1238,
+      "site_scope": "summary",
+      "location": "第二十三部分  基金合同内容摘要 > （二）基金费用计提方法、计提标准和支付方式",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 1238
+     },
+     "original_paragraph": 1238,
+     "final_paragraph": 1238,
+     "verdict": "completed",
+     "detail": "appended policy text present at its declared site"
+    },
+    {
+     "target_id": "T020",
+     "rule_id": "G15",
+     "op": "delete",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 1239,
+      "site_scope": "summary",
+      "location": "第二十三部分  基金合同内容摘要 > （二）基金费用计提方法、计提标准和支付方式",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 1239
+     },
+     "original_paragraph": 1239,
+     "final_paragraph": 1239,
+     "verdict": "completed",
+     "detail": "deleted clause gone from its region"
+    },
+    {
+     "target_id": "T021",
+     "rule_id": "G17",
+     "op": "delete",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 1240,
+      "site_scope": "summary",
+      "location": "第二十三部分  基金合同内容摘要 > （二）基金费用计提方法、计提标准和支付方式",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 1240
+     },
+     "original_paragraph": 1240,
+     "final_paragraph": 1240,
+     "verdict": "completed",
+     "detail": "deleted clause gone from its region"
+    },
+    {
+     "target_id": "T022",
+     "rule_id": "G22",
+     "op": "replace",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 1323,
+      "site_scope": "summary",
+      "location": "第二十三部分  基金合同内容摘要 > （五）基金财产清算剩余资产的分配",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 1323
+     },
+     "original_paragraph": 1323,
+     "final_paragraph": 1323,
+     "verdict": "completed",
+     "detail": "complete replacement present at its declared site"
+    }
+   ],
+   "applicability_conflicts": [],
+   "counts": {
+    "completed": 22
+   },
+   "integrated_complete": true
+  },
+  {
+   "case_id": "B12",
+   "group": "dev",
+   "editable": true,
+   "facts": {
+    "classes": [
+     {
+      "name": "A类基金份额",
+      "subscription_fee": true,
+      "service_fee": false
+     },
+     {
+      "name": "C类基金份额",
+      "subscription_fee": false,
+      "service_fee": true
+     },
+     {
+      "name": "Y类基金份额",
+      "subscription_fee": true,
+      "service_fee": false
+     }
+    ],
+    "class_count": 3,
+    "class_count_basis": "fee_group",
+    "has_sales_service_fee": true,
+    "floating_management_fee": false,
+    "fund_type": "股票型指数增强基金",
+    "currency_variants": [],
+    "excluded": false,
+    "has_service_fee": true,
+    "is_floating_fee": false
+   },
+   "artifact": null,
+   "delivery_status": "incomplete",
+   "verdicts": [
+    {
+     "target_id": "T001",
+     "rule_id": "G01",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T002",
+     "rule_id": "G03",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T003",
+     "rule_id": "G05",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T004",
+     "rule_id": "G08",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T005",
+     "rule_id": "G09",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T006",
+     "rule_id": "G11",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T007",
+     "rule_id": "G12",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T008",
+     "rule_id": "G13",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T009",
+     "rule_id": "G14",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T010",
+     "rule_id": "G16",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T011",
+     "rule_id": "G15",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T012",
+     "rule_id": "G17",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T013",
+     "rule_id": "G17",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T014",
+     "rule_id": "G22",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T015",
+     "rule_id": "G16",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T016",
+     "rule_id": "G15",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T017",
+     "rule_id": "G17",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T018",
+     "rule_id": "G17",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T019",
+     "rule_id": "G22",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    }
+   ],
+   "counts": {
+    "not_executed": 19
+   },
+   "integrated_complete": false
+  },
+  {
+   "case_id": "B13",
+   "group": "dev",
+   "editable": true,
+   "facts": {
+    "classes": [
+     {
+      "name": "A类基金份额",
+      "subscription_fee": true,
+      "service_fee": false
+     },
+     {
+      "name": "C类基金份额",
+      "subscription_fee": false,
+      "service_fee": true
+     }
+    ],
+    "class_count": 2,
+    "class_count_basis": "fee_group",
+    "has_sales_service_fee": true,
+    "floating_management_fee": false,
+    "fund_type": "混合型",
+    "currency_variants": [],
+    "excluded": false,
+    "has_service_fee": true,
+    "is_floating_fee": false
+   },
+   "artifact": "/tmp/opencode/comprehensive-remediation-20261028/first-wave2-mapped/B13/final.docx",
+   "artifact_sha256": "d03baeab16046f15207d8f2f94da854a156a898d1070f6ad65bd32f06c4ade95",
+   "delivery_status": "complete",
+   "original": "/home/opencode/fundlex/funds_word/基金合同第一批/广发沪港深精选混合型证券投资基金基金合同.docx",
+   "verdicts": [
+    {
+     "target_id": "T001",
+     "rule_id": "G01",
+     "op": "append",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 93,
+      "site_scope": "main",
+      "location": "第二部分  释义",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 117
+     },
+     "original_paragraph": 117,
+     "final_paragraph": 117,
+     "verdict": "completed",
+     "detail": "appended policy text present at its declared site"
+    },
+    {
+     "target_id": "T002",
+     "rule_id": "G03",
+     "op": "append",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 126,
+      "site_scope": "main",
+      "location": "第三部分  基金的基本情况 > 八、基金份额类别设置",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 150
+     },
+     "original_paragraph": 150,
+     "final_paragraph": 150,
+     "verdict": "completed",
+     "detail": "appended policy text present at its declared site"
+    },
+    {
+     "target_id": "T003",
+     "rule_id": "G05",
+     "op": "delete",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 130,
+      "site_scope": "main",
+      "location": "第三部分  基金的基本情况 > 八、基金份额类别设置",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 154
+     },
+     "original_paragraph": 154,
+     "final_paragraph": 154,
+     "verdict": "completed",
+     "detail": "deleted clause gone from its region"
+    },
+    {
+     "target_id": "T004",
+     "rule_id": "G05",
+     "op": "replace",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 130,
+      "site_scope": "main",
+      "location": "第三部分  基金的基本情况 > 八、基金份额类别设置",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 154
+     },
+     "original_paragraph": 154,
+     "final_paragraph": 154,
+     "verdict": "completed",
+     "detail": "complete replacement present at its declared site"
+    },
+    {
+     "target_id": "T005",
+     "rule_id": "G08",
+     "op": "replace",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 206,
+      "site_scope": "main",
+      "location": "第六部分  基金份额的申购与赎回 > 六、申购和赎回的价格、费用及其用途",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 230
+     },
+     "original_paragraph": 230,
+     "final_paragraph": 230,
+     "verdict": "completed",
+     "detail": "complete replacement present at its declared site"
+    },
+    {
+     "target_id": "T006",
+     "rule_id": "G09",
+     "op": "replace",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 207,
+      "site_scope": "main",
+      "location": "第六部分  基金份额的申购与赎回 > 六、申购和赎回的价格、费用及其用途",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 231
+     },
+     "original_paragraph": 231,
+     "final_paragraph": 231,
+     "verdict": "completed",
+     "detail": "complete replacement present at its declared site"
+    },
+    {
+     "target_id": "T007",
+     "rule_id": "G11",
+     "op": "replace",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 208,
+      "site_scope": "main",
+      "location": "第六部分  基金份额的申购与赎回 > 六、申购和赎回的价格、费用及其用途",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 232
+     },
+     "original_paragraph": 232,
+     "final_paragraph": 232,
+     "verdict": "completed",
+     "detail": "complete replacement present at its declared site"
+    },
+    {
+     "target_id": "T008",
+     "rule_id": "G12",
+     "op": "replace",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 209,
+      "site_scope": "main",
+      "location": "第六部分  基金份额的申购与赎回 > 六、申购和赎回的价格、费用及其用途",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 233
+     },
+     "original_paragraph": 233,
+     "final_paragraph": 233,
+     "verdict": "completed",
+     "detail": "complete replacement present at its declared site"
+    },
+    {
+     "target_id": "T009",
+     "rule_id": "G13",
+     "op": "delete",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 209,
+      "site_scope": "main",
+      "location": "第六部分  基金份额的申购与赎回 > 六、申购和赎回的价格、费用及其用途",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 233
+     },
+     "original_paragraph": 233,
+     "final_paragraph": 233,
+     "verdict": "completed",
+     "detail": "deleted clause gone from its region"
+    },
+    {
+     "target_id": "T010",
+     "rule_id": "G14",
+     "op": "replace",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 211,
+      "site_scope": "main",
+      "location": "第六部分  基金份额的申购与赎回 > 六、申购和赎回的价格、费用及其用途",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 235
+     },
+     "original_paragraph": 235,
+     "final_paragraph": 235,
+     "verdict": "completed",
+     "detail": "complete replacement present at its declared site"
+    },
+    {
+     "target_id": "T011",
+     "rule_id": "G15",
+     "op": "delete",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 776,
+      "site_scope": "main",
+      "location": "第十五部分  基金费用与税收 > 二、基金费用计提方法、计提标准和支付方式",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 800
+     },
+     "original_paragraph": 800,
+     "final_paragraph": 800,
+     "verdict": "completed",
+     "detail": "deleted clause gone from its region"
+    },
+    {
+     "target_id": "T012",
+     "rule_id": "G17",
+     "op": "delete",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 777,
+      "site_scope": "main",
+      "location": "第十五部分  基金费用与税收 > 二、基金费用计提方法、计提标准和支付方式",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 801
+     },
+     "original_paragraph": 801,
+     "final_paragraph": 801,
+     "verdict": "completed",
+     "detail": "deleted clause gone from its region"
+    },
+    {
+     "target_id": "T013",
+     "rule_id": "G17",
+     "op": "delete",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 778,
+      "site_scope": "main",
+      "location": "第十五部分  基金费用与税收 > 二、基金费用计提方法、计提标准和支付方式",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 802
+     },
+     "original_paragraph": 802,
+     "final_paragraph": 802,
+     "verdict": "completed",
+     "detail": "deleted clause gone from its region"
+    },
+    {
+     "target_id": "T014",
+     "rule_id": "G16",
+     "op": "append",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 779,
+      "site_scope": "main",
+      "location": "第十五部分  基金费用与税收 > 二、基金费用计提方法、计提标准和支付方式",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 803
+     },
+     "original_paragraph": 803,
+     "final_paragraph": 803,
+     "verdict": "completed",
+     "detail": "appended policy text present at its declared site"
+    },
+    {
+     "target_id": "T015",
+     "rule_id": "G18",
+     "op": "replace",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 803,
+      "site_scope": "main",
+      "location": "第十六部分  基金的收益与分配 > 三、基金收益分配原则",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 827
+     },
+     "original_paragraph": 827,
+     "final_paragraph": 827,
+     "verdict": "completed",
+     "detail": "complete replacement present at its declared site"
+    },
+    {
+     "target_id": "T016",
+     "rule_id": "G22",
+     "op": "replace",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 955,
+      "site_scope": "main",
+      "location": "第十九部分  基金合同的变更、终止与基金财产的清算 > 五、基金财产清算剩余资产的分配",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 979
+     },
+     "original_paragraph": 979,
+     "final_paragraph": 979,
+     "verdict": "completed",
+     "detail": "complete replacement present at its declared site"
+    },
+    {
+     "target_id": "T017",
+     "rule_id": "G18",
+     "op": "replace",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 1203,
+      "site_scope": "summary",
+      "location": "第二十四部分  基金合同内容摘要 > （一）基金收益分配原则",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 1227
+     },
+     "original_paragraph": 1227,
+     "final_paragraph": 1227,
+     "verdict": "completed",
+     "detail": "complete replacement present at its declared site"
+    },
+    {
+     "target_id": "T018",
+     "rule_id": "G15",
+     "op": "delete",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 1233,
+      "site_scope": "summary",
+      "location": "第二十四部分  基金合同内容摘要 > （三）基金销售服务费",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 1257
+     },
+     "original_paragraph": 1257,
+     "final_paragraph": 1257,
+     "verdict": "completed",
+     "detail": "deleted clause gone from its region"
+    },
+    {
+     "target_id": "T019",
+     "rule_id": "G16",
+     "op": "append",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 1233,
+      "site_scope": "summary",
+      "location": "第二十四部分  基金合同内容摘要 > （三）基金销售服务费",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 1257
+     },
+     "original_paragraph": 1257,
+     "final_paragraph": 1257,
+     "verdict": "completed",
+     "detail": "appended policy text present at its declared site"
+    },
+    {
+     "target_id": "T020",
+     "rule_id": "G22",
+     "op": "replace",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 1322,
+      "site_scope": "summary",
+      "location": "第二十四部分  基金合同内容摘要 > （五）基金财产清算剩余资产的分配",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 1346
+     },
+     "original_paragraph": 1346,
+     "final_paragraph": 1346,
+     "verdict": "completed",
+     "detail": "complete replacement present at its declared site"
+    }
+   ],
+   "applicability_conflicts": [],
+   "counts": {
+    "completed": 20
+   },
+   "integrated_complete": true
+  },
+  {
+   "case_id": "B14",
+   "group": "dev",
+   "editable": true,
+   "facts": {
+    "classes": [
+     {
+      "name": "A类基金份额",
+      "subscription_fee": true,
+      "service_fee": false
+     },
+     {
+      "name": "C类基金份额",
+      "subscription_fee": false,
+      "service_fee": true
+     }
+    ],
+    "class_count": 2,
+    "class_count_basis": "fee_group",
+    "has_sales_service_fee": true,
+    "floating_management_fee": false,
+    "fund_type": "混合型",
+    "currency_variants": [],
+    "excluded": false,
+    "has_service_fee": true,
+    "is_floating_fee": false
+   },
+   "artifact": "/tmp/opencode/comprehensive-remediation-20261028/first-wave2-mapped/B14/final.docx",
+   "artifact_sha256": "a0b902c442680242fc9c4eea7627473eebeb4011e5bb86f3ec9695a09c8e9112",
+   "delivery_status": "complete",
+   "original": "/home/opencode/fundlex/funds_word/基金合同第一批/广发睿明优质企业混合型证券投资基金基金合同.docx",
+   "verdicts": [
+    {
+     "target_id": "T001",
+     "rule_id": "G01",
+     "op": "append",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 126,
+      "site_scope": "main",
+      "location": "第二部分  释义",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 126
+     },
+     "original_paragraph": 126,
+     "final_paragraph": 126,
+     "verdict": "completed",
+     "detail": "appended policy text present at its declared site"
+    },
+    {
+     "target_id": "T002",
+     "rule_id": "G03",
+     "op": "append",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 159,
+      "site_scope": "main",
+      "location": "第三部分  基金的基本情况 > 八、基金份额类别设置",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 159
+     },
+     "original_paragraph": 159,
+     "final_paragraph": 159,
+     "verdict": "completed",
+     "detail": "appended policy text present at its declared site"
+    },
+    {
+     "target_id": "T003",
+     "rule_id": "G05",
+     "op": "delete",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 163,
+      "site_scope": "main",
+      "location": "第三部分  基金的基本情况 > 八、基金份额类别设置",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 163
+     },
+     "original_paragraph": 163,
+     "final_paragraph": 163,
+     "verdict": "completed",
+     "detail": "deleted clause gone from its region"
+    },
+    {
+     "target_id": "T004",
+     "rule_id": "G05",
+     "op": "replace",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 163,
+      "site_scope": "main",
+      "location": "第三部分  基金的基本情况 > 八、基金份额类别设置",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 163
+     },
+     "original_paragraph": 163,
+     "final_paragraph": 163,
+     "verdict": "completed",
+     "detail": "complete replacement present at its declared site"
+    },
+    {
+     "target_id": "T005",
+     "rule_id": "G08",
+     "op": "replace",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 239,
+      "site_scope": "main",
+      "location": "第六部分  基金份额的申购与赎回 > 六、申购和赎回的价格、费用及其用途",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 239
+     },
+     "original_paragraph": 239,
+     "final_paragraph": 239,
+     "verdict": "completed",
+     "detail": "complete replacement present at its declared site"
+    },
+    {
+     "target_id": "T006",
+     "rule_id": "G09",
+     "op": "replace",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 240,
+      "site_scope": "main",
+      "location": "第六部分  基金份额的申购与赎回 > 六、申购和赎回的价格、费用及其用途",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 240
+     },
+     "original_paragraph": 240,
+     "final_paragraph": 240,
+     "verdict": "completed",
+     "detail": "complete replacement present at its declared site"
+    },
+    {
+     "target_id": "T007",
+     "rule_id": "G11",
+     "op": "replace",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 241,
+      "site_scope": "main",
+      "location": "第六部分  基金份额的申购与赎回 > 六、申购和赎回的价格、费用及其用途",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 241
+     },
+     "original_paragraph": 241,
+     "final_paragraph": 241,
+     "verdict": "completed",
+     "detail": "complete replacement present at its declared site"
+    },
+    {
+     "target_id": "T008",
+     "rule_id": "G12",
+     "op": "replace",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 242,
+      "site_scope": "main",
+      "location": "第六部分  基金份额的申购与赎回 > 六、申购和赎回的价格、费用及其用途",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 242
+     },
+     "original_paragraph": 242,
+     "final_paragraph": 242,
+     "verdict": "completed",
+     "detail": "complete replacement present at its declared site"
+    },
+    {
+     "target_id": "T009",
+     "rule_id": "G13",
+     "op": "delete",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 242,
+      "site_scope": "main",
+      "location": "第六部分  基金份额的申购与赎回 > 六、申购和赎回的价格、费用及其用途",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 242
+     },
+     "original_paragraph": 242,
+     "final_paragraph": 242,
+     "verdict": "completed",
+     "detail": "deleted clause gone from its region"
+    },
+    {
+     "target_id": "T010",
+     "rule_id": "G14",
+     "op": "replace",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 244,
+      "site_scope": "main",
+      "location": "第六部分  基金份额的申购与赎回 > 六、申购和赎回的价格、费用及其用途",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 244
+     },
+     "original_paragraph": 244,
+     "final_paragraph": 244,
+     "verdict": "completed",
+     "detail": "complete replacement present at its declared site"
+    },
+    {
+     "target_id": "T011",
+     "rule_id": "G16",
+     "op": "append",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 830,
+      "site_scope": "main",
+      "location": "第十五部分  基金费用与税收 > 二、基金费用计提方法、计提标准和支付方式",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 830
+     },
+     "original_paragraph": 830,
+     "final_paragraph": 830,
+     "verdict": "completed",
+     "detail": "appended policy text present at its declared site"
+    },
+    {
+     "target_id": "T012",
+     "rule_id": "G15",
+     "op": "delete",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 831,
+      "site_scope": "main",
+      "location": "第十五部分  基金费用与税收 > 二、基金费用计提方法、计提标准和支付方式",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 831
+     },
+     "original_paragraph": 831,
+     "final_paragraph": 831,
+     "verdict": "completed",
+     "detail": "deleted clause gone from its region"
+    },
+    {
+     "target_id": "T013",
+     "rule_id": "G17",
+     "op": "delete",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 832,
+      "site_scope": "main",
+      "location": "第十五部分  基金费用与税收 > 二、基金费用计提方法、计提标准和支付方式",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 832
+     },
+     "original_paragraph": 832,
+     "final_paragraph": 832,
+     "verdict": "completed",
+     "detail": "deleted clause gone from its region"
+    },
+    {
+     "target_id": "T014",
+     "rule_id": "G17",
+     "op": "delete",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 833,
+      "site_scope": "main",
+      "location": "第十五部分  基金费用与税收 > 二、基金费用计提方法、计提标准和支付方式",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 833
+     },
+     "original_paragraph": 833,
+     "final_paragraph": 833,
+     "verdict": "completed",
+     "detail": "deleted clause gone from its region"
+    },
+    {
+     "target_id": "T015",
+     "rule_id": "G18",
+     "op": "replace",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 856,
+      "site_scope": "main",
+      "location": "第十六部分  基金的收益与分配 > 三、基金收益分配原则",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 856
+     },
+     "original_paragraph": 856,
+     "final_paragraph": 856,
+     "verdict": "completed",
+     "detail": "complete replacement present at its declared site"
+    },
+    {
+     "target_id": "T016",
+     "rule_id": "G22",
+     "op": "replace",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 1008,
+      "site_scope": "main",
+      "location": "第十九部分  基金合同的变更、终止与基金财产的清算 > 五、基金财产清算剩余资产的分配",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 1008
+     },
+     "original_paragraph": 1008,
+     "final_paragraph": 1008,
+     "verdict": "completed",
+     "detail": "complete replacement present at its declared site"
+    },
+    {
+     "target_id": "T017",
+     "rule_id": "G18",
+     "op": "replace",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 1256,
+      "site_scope": "summary",
+      "location": "第二十四部分  基金合同内容摘要 > （一）基金收益分配原则",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 1256
+     },
+     "original_paragraph": 1256,
+     "final_paragraph": 1256,
+     "verdict": "completed",
+     "detail": "complete replacement present at its declared site"
+    },
+    {
+     "target_id": "T018",
+     "rule_id": "G16",
+     "op": "append",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 1285,
+      "site_scope": "summary",
+      "location": "第二十四部分  基金合同内容摘要 > （三）基金销售服务费",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 1285
+     },
+     "original_paragraph": 1285,
+     "final_paragraph": 1285,
+     "verdict": "completed",
+     "detail": "appended policy text present at its declared site"
+    },
+    {
+     "target_id": "T019",
+     "rule_id": "G15",
+     "op": "delete",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 1286,
+      "site_scope": "summary",
+      "location": "第二十四部分  基金合同内容摘要 > （三）基金销售服务费",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 1286
+     },
+     "original_paragraph": 1286,
+     "final_paragraph": 1286,
+     "verdict": "completed",
+     "detail": "deleted clause gone from its region"
+    },
+    {
+     "target_id": "T020",
+     "rule_id": "G22",
+     "op": "replace",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 1371,
+      "site_scope": "summary",
+      "location": "第二十四部分  基金合同内容摘要 > （五）基金财产清算剩余资产的分配",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 1371
+     },
+     "original_paragraph": 1371,
+     "final_paragraph": 1371,
+     "verdict": "completed",
+     "detail": "complete replacement present at its declared site"
+    }
+   ],
+   "applicability_conflicts": [],
+   "counts": {
+    "completed": 20
+   },
+   "integrated_complete": true
+  },
+  {
+   "case_id": "B15",
+   "group": "dev",
+   "editable": true,
+   "facts": {
+    "classes": [
+     {
+      "name": "A类基金份额",
+      "subscription_fee": true,
+      "service_fee": false
+     },
+     {
+      "name": "C类基金份额",
+      "subscription_fee": false,
+      "service_fee": true
+     }
+    ],
+    "class_count": 2,
+    "class_count_basis": "fee_group",
+    "has_sales_service_fee": true,
+    "floating_management_fee": false,
+    "fund_type": "股票型、QDII、指数型",
+    "currency_variants": [],
+    "excluded": false,
+    "has_service_fee": true,
+    "is_floating_fee": false
+   },
+   "artifact": null,
+   "delivery_status": "incomplete",
+   "verdicts": [
+    {
+     "target_id": "T001",
+     "rule_id": "G03",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T002",
+     "rule_id": "G05",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T003",
+     "rule_id": "G09",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T004",
+     "rule_id": "G13",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T005",
+     "rule_id": "G11",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T006",
+     "rule_id": "G12",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T007",
+     "rule_id": "G14",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T008",
+     "rule_id": "G16",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T009",
+     "rule_id": "G15",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T010",
+     "rule_id": "G17",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T011",
+     "rule_id": "G18",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T012",
+     "rule_id": "G18",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T013",
+     "rule_id": "G16",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T014",
+     "rule_id": "G15",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T015",
+     "rule_id": "G17",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    }
+   ],
+   "counts": {
+    "not_executed": 15
+   },
+   "integrated_complete": false
+  },
+  {
+   "case_id": "B16",
+   "group": "dev",
+   "editable": true,
+   "facts": {
+    "classes": [
+     {
+      "name": "A类基金份额",
+      "subscription_fee": true,
+      "service_fee": false
+     },
+     {
+      "name": "C类基金份额",
+      "subscription_fee": false,
+      "service_fee": true
+     }
+    ],
+    "class_count": 2,
+    "class_count_basis": "fee_group",
+    "has_sales_service_fee": true,
+    "floating_management_fee": false,
+    "fund_type": "混合型",
+    "currency_variants": [],
+    "excluded": false,
+    "has_service_fee": true,
+    "is_floating_fee": false
+   },
+   "artifact": "/tmp/opencode/comprehensive-remediation-20261028/first-wave2-mapped/B16/final.docx",
+   "artifact_sha256": "169e685ef72e836c6b6265c3e6a3f0e211d05b6ec312fdcd04b8ccf912fecd94",
+   "delivery_status": "complete",
+   "original": "/home/opencode/fundlex/funds_word/基金合同第一批/广发聚安混合型证券投资基金基金合同.docx",
+   "verdicts": [
+    {
+     "target_id": "T001",
+     "rule_id": "G01",
+     "op": "append",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 87,
+      "site_scope": "main",
+      "location": "第二部分  释义",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 111
+     },
+     "original_paragraph": 111,
+     "final_paragraph": 111,
+     "verdict": "completed",
+     "detail": "appended policy text present at its declared site"
+    },
+    {
+     "target_id": "T002",
+     "rule_id": "G03",
+     "op": "append",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 119,
+      "site_scope": "main",
+      "location": "第三部分  基金的基本情况 > 八、基金份额类别",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 143
+     },
+     "original_paragraph": 143,
+     "final_paragraph": 143,
+     "verdict": "completed",
+     "detail": "appended policy text present at its declared site"
+    },
+    {
+     "target_id": "T003",
+     "rule_id": "G05",
+     "op": "delete",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 123,
+      "site_scope": "main",
+      "location": "第三部分  基金的基本情况 > 八、基金份额类别",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 147
+     },
+     "original_paragraph": 147,
+     "final_paragraph": 147,
+     "verdict": "completed",
+     "detail": "deleted clause gone from its region"
+    },
+    {
+     "target_id": "T004",
+     "rule_id": "G05",
+     "op": "replace",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 123,
+      "site_scope": "main",
+      "location": "第三部分  基金的基本情况 > 八、基金份额类别",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 147
+     },
+     "original_paragraph": 147,
+     "final_paragraph": 147,
+     "verdict": "completed",
+     "detail": "complete replacement present at its declared site"
+    },
+    {
+     "target_id": "T005",
+     "rule_id": "G06",
+     "op": "delete",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 123,
+      "site_scope": "main",
+      "location": "第三部分  基金的基本情况 > 八、基金份额类别",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 147
+     },
+     "original_paragraph": 147,
+     "final_paragraph": 147,
+     "verdict": "completed",
+     "detail": "deleted clause gone from its region"
+    },
+    {
+     "target_id": "T006",
+     "rule_id": "G08",
+     "op": "replace",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 197,
+      "site_scope": "main",
+      "location": "第六部分  基金份额的申购与赎回 > 六、申购和赎回的价格、费用及其用途",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 221
+     },
+     "original_paragraph": 221,
+     "final_paragraph": 221,
+     "verdict": "completed",
+     "detail": "complete replacement present at its declared site"
+    },
+    {
+     "target_id": "T007",
+     "rule_id": "G09",
+     "op": "replace",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 198,
+      "site_scope": "main",
+      "location": "第六部分  基金份额的申购与赎回 > 六、申购和赎回的价格、费用及其用途",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 222
+     },
+     "original_paragraph": 222,
+     "final_paragraph": 222,
+     "verdict": "completed",
+     "detail": "complete replacement present at its declared site"
+    },
+    {
+     "target_id": "T008",
+     "rule_id": "G11",
+     "op": "replace",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 199,
+      "site_scope": "main",
+      "location": "第六部分  基金份额的申购与赎回 > 六、申购和赎回的价格、费用及其用途",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 223
+     },
+     "original_paragraph": 223,
+     "final_paragraph": 223,
+     "verdict": "completed",
+     "detail": "complete replacement present at its declared site"
+    },
+    {
+     "target_id": "T009",
+     "rule_id": "G12",
+     "op": "replace",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 200,
+      "site_scope": "main",
+      "location": "第六部分  基金份额的申购与赎回 > 六、申购和赎回的价格、费用及其用途",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 224
+     },
+     "original_paragraph": 224,
+     "final_paragraph": 224,
+     "verdict": "completed",
+     "detail": "complete replacement present at its declared site"
+    },
+    {
+     "target_id": "T010",
+     "rule_id": "G13",
+     "op": "delete",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 200,
+      "site_scope": "main",
+      "location": "第六部分  基金份额的申购与赎回 > 六、申购和赎回的价格、费用及其用途",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 224
+     },
+     "original_paragraph": 224,
+     "final_paragraph": 224,
+     "verdict": "completed",
+     "detail": "deleted clause gone from its region"
+    },
+    {
+     "target_id": "T011",
+     "rule_id": "G14",
+     "op": "replace",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 202,
+      "site_scope": "main",
+      "location": "第六部分  基金份额的申购与赎回 > 六、申购和赎回的价格、费用及其用途",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 226
+     },
+     "original_paragraph": 226,
+     "final_paragraph": 226,
+     "verdict": "completed",
+     "detail": "complete replacement present at its declared site"
+    },
+    {
+     "target_id": "T012",
+     "rule_id": "G16",
+     "op": "append",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 795,
+      "site_scope": "main",
+      "location": "第十五部分  基金费用与税收 > 二、基金费用计提方法、计提标准和支付方式",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 819
+     },
+     "original_paragraph": 819,
+     "final_paragraph": 819,
+     "verdict": "completed",
+     "detail": "appended policy text present at its declared site"
+    },
+    {
+     "target_id": "T013",
+     "rule_id": "G15",
+     "op": "delete",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 796,
+      "site_scope": "main",
+      "location": "第十五部分  基金费用与税收 > 二、基金费用计提方法、计提标准和支付方式",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 820
+     },
+     "original_paragraph": 820,
+     "final_paragraph": 820,
+     "verdict": "completed",
+     "detail": "deleted clause gone from its region"
+    },
+    {
+     "target_id": "T014",
+     "rule_id": "G17",
+     "op": "delete",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 797,
+      "site_scope": "main",
+      "location": "第十五部分  基金费用与税收 > 二、基金费用计提方法、计提标准和支付方式",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 821
+     },
+     "original_paragraph": 821,
+     "final_paragraph": 821,
+     "verdict": "completed",
+     "detail": "deleted clause gone from its region"
+    },
+    {
+     "target_id": "T015",
+     "rule_id": "G17",
+     "op": "delete",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 798,
+      "site_scope": "main",
+      "location": "第十五部分  基金费用与税收 > 二、基金费用计提方法、计提标准和支付方式",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 822
+     },
+     "original_paragraph": 822,
+     "final_paragraph": 822,
+     "verdict": "completed",
+     "detail": "deleted clause gone from its region"
+    },
+    {
+     "target_id": "T016",
+     "rule_id": "G18",
+     "op": "replace",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 824,
+      "site_scope": "main",
+      "location": "第十六部分  基金的收益与分配 > 三、基金收益分配原则",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 848
+     },
+     "original_paragraph": 848,
+     "final_paragraph": 848,
+     "verdict": "completed",
+     "detail": "complete replacement present at its declared site"
+    },
+    {
+     "target_id": "T017",
+     "rule_id": "G22",
+     "op": "replace",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 986,
+      "site_scope": "main",
+      "location": "第十九部分  基金合同的变更、终止与基金财产的清算 > 五、基金财产清算剩余资产的分配",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 1010
+     },
+     "original_paragraph": 1010,
+     "final_paragraph": 1010,
+     "verdict": "completed",
+     "detail": "complete replacement present at its declared site"
+    },
+    {
+     "target_id": "T018",
+     "rule_id": "G18",
+     "op": "replace",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 1238,
+      "site_scope": "summary",
+      "location": "第二十四部分  基金合同内容摘要 > （九）实施侧袋机制期间基金份额持有人大会的特殊约定",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 1262
+     },
+     "original_paragraph": 1262,
+     "final_paragraph": 1262,
+     "verdict": "completed",
+     "detail": "complete replacement present at its declared site"
+    },
+    {
+     "target_id": "T019",
+     "rule_id": "G16",
+     "op": "append",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 1268,
+      "site_scope": "summary",
+      "location": "第二十四部分  基金合同内容摘要 > （五）实施侧袋机制期间的收益分配",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 1292
+     },
+     "original_paragraph": 1292,
+     "final_paragraph": 1292,
+     "verdict": "completed",
+     "detail": "appended policy text present at its declared site"
+    },
+    {
+     "target_id": "T020",
+     "rule_id": "G15",
+     "op": "delete",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 1269,
+      "site_scope": "summary",
+      "location": "第二十四部分  基金合同内容摘要 > （五）实施侧袋机制期间的收益分配",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 1293
+     },
+     "original_paragraph": 1293,
+     "final_paragraph": 1293,
+     "verdict": "completed",
+     "detail": "deleted clause gone from its region"
+    },
+    {
+     "target_id": "T021",
+     "rule_id": "G17",
+     "op": "delete",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 1270,
+      "site_scope": "summary",
+      "location": "第二十四部分  基金合同内容摘要 > （五）实施侧袋机制期间的收益分配",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 1294
+     },
+     "original_paragraph": 1294,
+     "final_paragraph": 1294,
+     "verdict": "completed",
+     "detail": "deleted clause gone from its region"
+    },
+    {
+     "target_id": "T022",
+     "rule_id": "G17",
+     "op": "delete",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 1271,
+      "site_scope": "summary",
+      "location": "第二十四部分  基金合同内容摘要 > （五）实施侧袋机制期间的收益分配",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 1295
+     },
+     "original_paragraph": 1295,
+     "final_paragraph": 1295,
+     "verdict": "completed",
+     "detail": "deleted clause gone from its region"
+    },
+    {
+     "target_id": "T023",
+     "rule_id": "G22",
+     "op": "replace",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 1355,
+      "site_scope": "summary",
+      "location": "第二十四部分  基金合同内容摘要 > （五） 基金财产清算剩余资产的分配",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 1379
+     },
+     "original_paragraph": 1379,
+     "final_paragraph": 1379,
+     "verdict": "completed",
+     "detail": "complete replacement present at its declared site"
+    }
+   ],
+   "applicability_conflicts": [],
+   "counts": {
+    "completed": 23
+   },
+   "integrated_complete": true
+  },
+  {
+   "case_id": "B17",
+   "group": "dev",
+   "editable": true,
+   "facts": {
+    "classes": [
+     {
+      "name": "A类基金份额",
+      "subscription_fee": true,
+      "service_fee": false
+     },
+     {
+      "name": "C类基金份额",
+      "subscription_fee": false,
+      "service_fee": true
+     },
+     {
+      "name": "E类基金份额",
+      "subscription_fee": false,
+      "service_fee": true
+     }
+    ],
+    "class_count": 3,
+    "class_count_basis": "fee_group",
+    "has_sales_service_fee": true,
+    "floating_management_fee": false,
+    "fund_type": "股票型、指数型、QDII、LOF",
+    "currency_variants": [],
+    "excluded": false,
+    "has_service_fee": true,
+    "is_floating_fee": false
+   },
+   "artifact": null,
+   "delivery_status": "incomplete",
+   "verdicts": [
+    {
+     "target_id": "T001",
+     "rule_id": "G01",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T002",
+     "rule_id": "G03",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T003",
+     "rule_id": "G08",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T004",
+     "rule_id": "G09",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T005",
+     "rule_id": "G13",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T006",
+     "rule_id": "G11",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T007",
+     "rule_id": "G12",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T008",
+     "rule_id": "G14",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T009",
+     "rule_id": "G16",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T010",
+     "rule_id": "G15",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T011",
+     "rule_id": "G17",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T012",
+     "rule_id": "G18",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T013",
+     "rule_id": "G22",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T014",
+     "rule_id": "G18",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T015",
+     "rule_id": "G16",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T016",
+     "rule_id": "G15",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T017",
+     "rule_id": "G17",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T018",
+     "rule_id": "G22",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    }
+   ],
+   "counts": {
+    "not_executed": 18
+   },
+   "integrated_complete": false
+  },
+  {
+   "case_id": "B18",
+   "group": "dev",
+   "editable": true,
+   "facts": {
+    "classes": [
+     {
+      "name": "A类基金份额",
+      "subscription_fee": true,
+      "service_fee": false
+     },
+     {
+      "name": "C类基金份额",
+      "subscription_fee": false,
+      "service_fee": true
+     }
+    ],
+    "class_count": 2,
+    "class_count_basis": "fee_group",
+    "has_sales_service_fee": true,
+    "floating_management_fee": false,
+    "fund_type": "混合型",
+    "currency_variants": [],
+    "excluded": false,
+    "has_service_fee": true,
+    "is_floating_fee": false
+   },
+   "artifact": "/tmp/opencode/comprehensive-remediation-20261028/first-wave2-mapped/B18/final.docx",
+   "artifact_sha256": "c3703ab41440c6e4c96470782565e6db47236b45efacf94251a3fef9f5f1abb4",
+   "delivery_status": "complete",
+   "original": "/home/opencode/fundlex/funds_word/基金合同第一批/广发鑫裕灵活配置混合型证券投资基金基金合同.docx",
+   "verdicts": [
+    {
+     "target_id": "T001",
+     "rule_id": "G01",
+     "op": "append",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 119,
+      "site_scope": "main",
+      "location": "第二部分  释义",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 119
+     },
+     "original_paragraph": 119,
+     "final_paragraph": 119,
+     "verdict": "completed",
+     "detail": "appended policy text present at its declared site"
+    },
+    {
+     "target_id": "T002",
+     "rule_id": "G03",
+     "op": "append",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 140,
+      "site_scope": "main",
+      "location": "第三部分  基金的基本情况 > 八、基金份额类别",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 140
+     },
+     "original_paragraph": 140,
+     "final_paragraph": 140,
+     "verdict": "completed",
+     "detail": "appended policy text present at its declared site"
+    },
+    {
+     "target_id": "T003",
+     "rule_id": "G05",
+     "op": "replace",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 144,
+      "site_scope": "main",
+      "location": "第三部分  基金的基本情况 > 八、基金份额类别",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 144
+     },
+     "original_paragraph": 144,
+     "final_paragraph": 144,
+     "verdict": "completed",
+     "detail": "complete replacement present at its declared site"
+    },
+    {
+     "target_id": "T004",
+     "rule_id": "G06",
+     "op": "delete",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 144,
+      "site_scope": "main",
+      "location": "第三部分  基金的基本情况 > 八、基金份额类别",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 144
+     },
+     "original_paragraph": 144,
+     "final_paragraph": 144,
+     "verdict": "completed",
+     "detail": "deleted clause gone from its region"
+    },
+    {
+     "target_id": "T005",
+     "rule_id": "G08",
+     "op": "replace",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 219,
+      "site_scope": "main",
+      "location": "第六部分  基金份额的申购与赎回 > 六、申购和赎回的价格、费用及其用途",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 219
+     },
+     "original_paragraph": 219,
+     "final_paragraph": 219,
+     "verdict": "completed",
+     "detail": "complete replacement present at its declared site"
+    },
+    {
+     "target_id": "T006",
+     "rule_id": "G09",
+     "op": "replace",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 220,
+      "site_scope": "main",
+      "location": "第六部分  基金份额的申购与赎回 > 六、申购和赎回的价格、费用及其用途",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 220
+     },
+     "original_paragraph": 220,
+     "final_paragraph": 220,
+     "verdict": "completed",
+     "detail": "complete replacement present at its declared site"
+    },
+    {
+     "target_id": "T007",
+     "rule_id": "G11",
+     "op": "replace",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 221,
+      "site_scope": "main",
+      "location": "第六部分  基金份额的申购与赎回 > 六、申购和赎回的价格、费用及其用途",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 221
+     },
+     "original_paragraph": 221,
+     "final_paragraph": 221,
+     "verdict": "completed",
+     "detail": "complete replacement present at its declared site"
+    },
+    {
+     "target_id": "T008",
+     "rule_id": "G12",
+     "op": "replace",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 222,
+      "site_scope": "main",
+      "location": "第六部分  基金份额的申购与赎回 > 六、申购和赎回的价格、费用及其用途",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 222
+     },
+     "original_paragraph": 222,
+     "final_paragraph": 222,
+     "verdict": "completed",
+     "detail": "complete replacement present at its declared site"
+    },
+    {
+     "target_id": "T009",
+     "rule_id": "G13",
+     "op": "delete",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 222,
+      "site_scope": "main",
+      "location": "第六部分  基金份额的申购与赎回 > 六、申购和赎回的价格、费用及其用途",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 222
+     },
+     "original_paragraph": 222,
+     "final_paragraph": 222,
+     "verdict": "completed",
+     "detail": "deleted clause gone from its region"
+    },
+    {
+     "target_id": "T010",
+     "rule_id": "G14",
+     "op": "replace",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 224,
+      "site_scope": "main",
+      "location": "第六部分  基金份额的申购与赎回 > 六、申购和赎回的价格、费用及其用途",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 224
+     },
+     "original_paragraph": 224,
+     "final_paragraph": 224,
+     "verdict": "completed",
+     "detail": "complete replacement present at its declared site"
+    },
+    {
+     "target_id": "T011",
+     "rule_id": "G16",
+     "op": "append",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 809,
+      "site_scope": "main",
+      "location": "第十五部分  基金费用与税收 > 二、基金费用计提方法、计提标准和支付方式",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 809
+     },
+     "original_paragraph": 809,
+     "final_paragraph": 809,
+     "verdict": "completed",
+     "detail": "appended policy text present at its declared site"
+    },
+    {
+     "target_id": "T012",
+     "rule_id": "G15",
+     "op": "delete",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 810,
+      "site_scope": "main",
+      "location": "第十五部分  基金费用与税收 > 二、基金费用计提方法、计提标准和支付方式",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 810
+     },
+     "original_paragraph": 810,
+     "final_paragraph": 810,
+     "verdict": "completed",
+     "detail": "deleted clause gone from its region"
+    },
+    {
+     "target_id": "T013",
+     "rule_id": "G17",
+     "op": "delete",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 811,
+      "site_scope": "main",
+      "location": "第十五部分  基金费用与税收 > 二、基金费用计提方法、计提标准和支付方式",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 811
+     },
+     "original_paragraph": 811,
+     "final_paragraph": 811,
+     "verdict": "completed",
+     "detail": "deleted clause gone from its region"
+    },
+    {
+     "target_id": "T014",
+     "rule_id": "G18",
+     "op": "replace",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 836,
+      "site_scope": "main",
+      "location": "第十六部分  基金的收益与分配 > 三、基金收益分配原则",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 836
+     },
+     "original_paragraph": 836,
+     "final_paragraph": 836,
+     "verdict": "completed",
+     "detail": "complete replacement present at its declared site"
+    },
+    {
+     "target_id": "T015",
+     "rule_id": "G22",
+     "op": "replace",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 992,
+      "site_scope": "main",
+      "location": "第十九部分  基金合同的变更、终止与基金财产的清算 > 五、基金财产清算剩余资产的分配",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 992
+     },
+     "original_paragraph": 992,
+     "final_paragraph": 992,
+     "verdict": "completed",
+     "detail": "complete replacement present at its declared site"
+    },
+    {
+     "target_id": "T016",
+     "rule_id": "G18",
+     "op": "replace",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 1235,
+      "site_scope": "summary",
+      "location": "第二十四部分  基金合同内容摘要 > （一）基金收益分配原则",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 1235
+     },
+     "original_paragraph": 1235,
+     "final_paragraph": 1235,
+     "verdict": "completed",
+     "detail": "complete replacement present at its declared site"
+    },
+    {
+     "target_id": "T017",
+     "rule_id": "G16",
+     "op": "append",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 1262,
+      "site_scope": "summary",
+      "location": "第二十四部分  基金合同内容摘要 > （三）销售服务费",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 1262
+     },
+     "original_paragraph": 1262,
+     "final_paragraph": 1262,
+     "verdict": "completed",
+     "detail": "appended policy text present at its declared site"
+    },
+    {
+     "target_id": "T018",
+     "rule_id": "G15",
+     "op": "delete",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 1263,
+      "site_scope": "summary",
+      "location": "第二十四部分  基金合同内容摘要 > （三）销售服务费",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 1263
+     },
+     "original_paragraph": 1263,
+     "final_paragraph": 1263,
+     "verdict": "completed",
+     "detail": "deleted clause gone from its region"
+    },
+    {
+     "target_id": "T019",
+     "rule_id": "G17",
+     "op": "delete",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 1264,
+      "site_scope": "summary",
+      "location": "第二十四部分  基金合同内容摘要 > （三）销售服务费",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 1264
+     },
+     "original_paragraph": 1264,
+     "final_paragraph": 1264,
+     "verdict": "completed",
+     "detail": "deleted clause gone from its region"
+    },
+    {
+     "target_id": "T020",
+     "rule_id": "G22",
+     "op": "replace",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 1358,
+      "site_scope": "summary",
+      "location": "第二十四部分  基金合同内容摘要 > （五）基金财产清算剩余资产的分配",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 1358
+     },
+     "original_paragraph": 1358,
+     "final_paragraph": 1358,
+     "verdict": "completed",
+     "detail": "complete replacement present at its declared site"
+    }
+   ],
+   "applicability_conflicts": [],
+   "counts": {
+    "completed": 20
+   },
+   "integrated_complete": true
+  },
+  {
+   "case_id": "B19",
+   "group": "dev",
+   "editable": true,
+   "facts": {
+    "classes": [
+     {
+      "name": "A类基金份额",
+      "subscription_fee": true,
+      "service_fee": false
+     },
+     {
+      "name": "C类基金份额",
+      "subscription_fee": false,
+      "service_fee": true
+     },
+     {
+      "name": "E类基金份额",
+      "subscription_fee": false,
+      "service_fee": true
+     }
+    ],
+    "class_count": 3,
+    "class_count_basis": "fee_group",
+    "has_sales_service_fee": true,
+    "floating_management_fee": false,
+    "fund_type": "FOF（基金中基金）",
+    "currency_variants": [],
+    "excluded": false,
+    "has_service_fee": true,
+    "is_floating_fee": false
+   },
+   "artifact": null,
+   "delivery_status": "incomplete",
+   "verdicts": [
+    {
+     "target_id": "T001",
+     "rule_id": "G01",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T002",
+     "rule_id": "G03",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T003",
+     "rule_id": "G05",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T004",
+     "rule_id": "G08",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T005",
+     "rule_id": "G09",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T006",
+     "rule_id": "G11",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T007",
+     "rule_id": "G12",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T008",
+     "rule_id": "G13",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T009",
+     "rule_id": "G14",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T010",
+     "rule_id": "G16",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T011",
+     "rule_id": "G15",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T012",
+     "rule_id": "G17",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T013",
+     "rule_id": "G18",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T014",
+     "rule_id": "G22",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T015",
+     "rule_id": "G18",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T016",
+     "rule_id": "G16",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T017",
+     "rule_id": "G15",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T018",
+     "rule_id": "G17",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T019",
+     "rule_id": "G22",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    }
+   ],
+   "counts": {
+    "not_executed": 19
+   },
+   "integrated_complete": false
+  },
+  {
+   "case_id": "B20",
+   "group": "dev",
+   "editable": true,
+   "facts": {
+    "classes": [
+     {
+      "name": "A类基金份额",
+      "subscription_fee": true,
+      "service_fee": false
+     },
+     {
+      "name": "C类基金份额",
+      "subscription_fee": false,
+      "service_fee": true
+     }
+    ],
+    "class_count": 2,
+    "class_count_basis": "fee_group",
+    "has_sales_service_fee": true,
+    "floating_management_fee": false,
+    "fund_type": "债券型",
+    "currency_variants": [],
+    "excluded": false,
+    "has_service_fee": true,
+    "is_floating_fee": false
+   },
+   "artifact": "/tmp/opencode/comprehensive-remediation-20261028/first-wave2-mapped/B20/final.docx",
+   "artifact_sha256": "e8f5c035bf90f24d6f6504e2339c2f2ae0ceb03d56e9b3cd45d5450231a2db17",
+   "delivery_status": "complete",
+   "original": "/home/opencode/fundlex/funds_word/基金合同第一批/广发集盛债券型证券投资基金基金合同.docx",
+   "verdicts": [
+    {
+     "target_id": "T001",
+     "rule_id": "G01",
+     "op": "append",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 121,
+      "site_scope": "main",
+      "location": "第二部分  释义",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 121
+     },
+     "original_paragraph": 121,
+     "final_paragraph": 121,
+     "verdict": "completed",
+     "detail": "appended policy text present at its declared site"
+    },
+    {
+     "target_id": "T002",
+     "rule_id": "G03",
+     "op": "append",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 157,
+      "site_scope": "main",
+      "location": "第三部分  基金的基本情况 > 八、基金份额类别设置",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 157
+     },
+     "original_paragraph": 157,
+     "final_paragraph": 157,
+     "verdict": "completed",
+     "detail": "appended policy text present at its declared site"
+    },
+    {
+     "target_id": "T003",
+     "rule_id": "G05",
+     "op": "replace",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 161,
+      "site_scope": "main",
+      "location": "第三部分  基金的基本情况 > 八、基金份额类别设置",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 161
+     },
+     "original_paragraph": 161,
+     "final_paragraph": 161,
+     "verdict": "completed",
+     "detail": "complete replacement present at its declared site"
+    },
+    {
+     "target_id": "T004",
+     "rule_id": "G08",
+     "op": "replace",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 242,
+      "site_scope": "main",
+      "location": "第六部分  基金份额的申购与赎回 > 六、申购和赎回的价格、费用及其用途",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 242
+     },
+     "original_paragraph": 242,
+     "final_paragraph": 242,
+     "verdict": "completed",
+     "detail": "complete replacement present at its declared site"
+    },
+    {
+     "target_id": "T005",
+     "rule_id": "G09",
+     "op": "replace",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 243,
+      "site_scope": "main",
+      "location": "第六部分  基金份额的申购与赎回 > 六、申购和赎回的价格、费用及其用途",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 243
+     },
+     "original_paragraph": 243,
+     "final_paragraph": 243,
+     "verdict": "completed",
+     "detail": "complete replacement present at its declared site"
+    },
+    {
+     "target_id": "T006",
+     "rule_id": "G11",
+     "op": "replace",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 244,
+      "site_scope": "main",
+      "location": "第六部分  基金份额的申购与赎回 > 六、申购和赎回的价格、费用及其用途",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 244
+     },
+     "original_paragraph": 244,
+     "final_paragraph": 244,
+     "verdict": "completed",
+     "detail": "complete replacement present at its declared site"
+    },
+    {
+     "target_id": "T007",
+     "rule_id": "G12",
+     "op": "replace",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 245,
+      "site_scope": "main",
+      "location": "第六部分  基金份额的申购与赎回 > 六、申购和赎回的价格、费用及其用途",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 245
+     },
+     "original_paragraph": 245,
+     "final_paragraph": 245,
+     "verdict": "completed",
+     "detail": "complete replacement present at its declared site"
+    },
+    {
+     "target_id": "T008",
+     "rule_id": "G13",
+     "op": "delete",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 245,
+      "site_scope": "main",
+      "location": "第六部分  基金份额的申购与赎回 > 六、申购和赎回的价格、费用及其用途",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 245
+     },
+     "original_paragraph": 245,
+     "final_paragraph": 245,
+     "verdict": "completed",
+     "detail": "deleted clause gone from its region"
+    },
+    {
+     "target_id": "T009",
+     "rule_id": "G14",
+     "op": "replace",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 247,
+      "site_scope": "main",
+      "location": "第六部分  基金份额的申购与赎回 > 六、申购和赎回的价格、费用及其用途",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 247
+     },
+     "original_paragraph": 247,
+     "final_paragraph": 247,
+     "verdict": "completed",
+     "detail": "complete replacement present at its declared site"
+    },
+    {
+     "target_id": "T010",
+     "rule_id": "G16",
+     "op": "append",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 853,
+      "site_scope": "main",
+      "location": "第十五部分  基金费用与税收 > 二、基金费用计提方法、计提标准和支付方式",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 853
+     },
+     "original_paragraph": 853,
+     "final_paragraph": 853,
+     "verdict": "completed",
+     "detail": "appended policy text present at its declared site"
+    },
+    {
+     "target_id": "T011",
+     "rule_id": "G15",
+     "op": "delete",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 854,
+      "site_scope": "main",
+      "location": "第十五部分  基金费用与税收 > 二、基金费用计提方法、计提标准和支付方式",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 854
+     },
+     "original_paragraph": 854,
+     "final_paragraph": 854,
+     "verdict": "completed",
+     "detail": "deleted clause gone from its region"
+    },
+    {
+     "target_id": "T012",
+     "rule_id": "G17",
+     "op": "delete",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 855,
+      "site_scope": "main",
+      "location": "第十五部分  基金费用与税收 > 二、基金费用计提方法、计提标准和支付方式",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 855
+     },
+     "original_paragraph": 855,
+     "final_paragraph": 855,
+     "verdict": "completed",
+     "detail": "deleted clause gone from its region"
+    },
+    {
+     "target_id": "T013",
+     "rule_id": "G17",
+     "op": "delete",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 856,
+      "site_scope": "main",
+      "location": "第十五部分  基金费用与税收 > 二、基金费用计提方法、计提标准和支付方式",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 856
+     },
+     "original_paragraph": 856,
+     "final_paragraph": 856,
+     "verdict": "completed",
+     "detail": "deleted clause gone from its region"
+    },
+    {
+     "target_id": "T014",
+     "rule_id": "G18",
+     "op": "replace",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 878,
+      "site_scope": "main",
+      "location": "第十六部分  基金的收益与分配 > 三、基金收益分配原则",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 878
+     },
+     "original_paragraph": 878,
+     "final_paragraph": 878,
+     "verdict": "completed",
+     "detail": "complete replacement present at its declared site"
+    },
+    {
+     "target_id": "T015",
+     "rule_id": "G22",
+     "op": "replace",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 1027,
+      "site_scope": "main",
+      "location": "第十九部分  基金合同的变更、终止与基金财产的清算 > 五、基金财产清算剩余资产的分配",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 1027
+     },
+     "original_paragraph": 1027,
+     "final_paragraph": 1027,
+     "verdict": "completed",
+     "detail": "complete replacement present at its declared site"
+    },
+    {
+     "target_id": "T016",
+     "rule_id": "G18",
+     "op": "replace",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 1281,
+      "site_scope": "summary",
+      "location": "第二十四部分  基金合同内容摘要 > （三）基金收益分配原则",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 1281
+     },
+     "original_paragraph": 1281,
+     "final_paragraph": 1281,
+     "verdict": "completed",
+     "detail": "complete replacement present at its declared site"
+    },
+    {
+     "target_id": "T017",
+     "rule_id": "G16",
+     "op": "append",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 1311,
+      "site_scope": "summary",
+      "location": "第二十四部分  基金合同内容摘要 > （三）基金销售服务费",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 1311
+     },
+     "original_paragraph": 1311,
+     "final_paragraph": 1311,
+     "verdict": "completed",
+     "detail": "appended policy text present at its declared site"
+    },
+    {
+     "target_id": "T018",
+     "rule_id": "G15",
+     "op": "delete",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 1312,
+      "site_scope": "summary",
+      "location": "第二十四部分  基金合同内容摘要 > （三）基金销售服务费",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 1312
+     },
+     "original_paragraph": 1312,
+     "final_paragraph": 1312,
+     "verdict": "completed",
+     "detail": "deleted clause gone from its region"
+    },
+    {
+     "target_id": "T019",
+     "rule_id": "G22",
+     "op": "replace",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 1389,
+      "site_scope": "summary",
+      "location": "第二十四部分  基金合同内容摘要 > （五）基金财产清算剩余资产的分配",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 1389
+     },
+     "original_paragraph": 1389,
+     "final_paragraph": 1389,
+     "verdict": "completed",
+     "detail": "complete replacement present at its declared site"
+    }
+   ],
+   "applicability_conflicts": [],
+   "counts": {
+    "completed": 19
+   },
+   "integrated_complete": true
+  }
+ ]
+}
