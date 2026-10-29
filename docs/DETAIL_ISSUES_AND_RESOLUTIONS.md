@@ -6267,4 +6267,3 @@ H＝E×…
 - 状态与验证：**已提交、已受控生产发布，生产真实合同 E2E 通过**。提交 `f6723fe`；全量 pytest **2151 passed / 83 skipped**；Compare 专项 **129 passed / 6 skipped**；V1 浏览器 remediation **10 passed**；V2 浏览器 **10 passed**；V2 typecheck/lint/Vitest **16 passed**/build 通过。生产发布器 engine `fbb74e18…`、service `1eddb569…`，五服务 active，`/api/capabilities` 200，工作区与部署 `compare.js`/`render.py` SHA-256 一致。通过 `https://fundlex.club` 正式入口注册临时账号、上传两份公开 DOCX、seal、真实 Compare Worker 完成并打开结果：1421 处差异（修改 234/新增 628/删除 559）、coverage `incomplete`；Word 视图显示 2734 个插入、795 个删除，源文档可见，双栏切换正常且差异导航可滚动，页面/控制台错误 0；报告下载 5,328,953 bytes，JSON 含 `merged` 和 1421 个 diffs。证据 `/tmp/opencode/prod-compare-word-1600.png`、`/tmp/opencode/prod-compare-classic-1600.png`、`/tmp/opencode/prod-compare-report.json`；临时账号、compare 任务和对象已清理。
 - 下一步：继续保留 `incomplete` 人工复核提示；后续如调整 Word 视图的段落/表格投影，沿用同一真实合同回归并核对 `merged` 与报告一致。
 - 变更记录：2026-10-29 新增；用户明确要求保留双栏并采用 Word 视觉。与 FL-D260 的 Word 风格第二阶段直接相关，不重写既有编号。
-
