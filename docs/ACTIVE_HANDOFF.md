@@ -1498,7 +1498,6 @@
   - V1 `frontend/compare.{html,css,js}` 增加「Word 视图 / 双栏对照」切换；Word 视图为左修订栏、中合并稿、右上下源文档，保留双栏的拖动、连线和差异栏；插入/删除统一 Word 红色，支持显示源文档与所有/简单/最终标记。
   - V2 `frontend/src/pages/Compare/ComparePage.tsx`、`frontend/src/styles/app.css`、`frontend/src/types/api.ts` 同步三栏/双栏切换。
   - 新增 `tests/test_compare_merged_render.py`，更新 Compare API 与 V1 浏览器测试；`docs/CONTRACT_COMPARE_DESIGN.md`、`docs/DETAIL_ISSUES_AND_RESOLUTIONS.md` 的 FL-D260/FL-D512 已登记。
-- **已验证**：Compare 专项 `129 passed / 6 skipped`；V1 浏览器 remediation `10 passed`；V2 typecheck/lint/Vitest `16 passed`/build 通过；本地临时服务用两份公开 DOCX 走真实上传/seal/CompareWorker/view，1421 处差异、`incomplete`，页面无 JS 错误；截图在 `/tmp/opencode/v1-real-compare-1600.png`、`/tmp/opencode/v1-real-compare-classic-390.png`。
-- **未做**：全量 pytest、干净 worktree 提交、发布、生产真实合同 E2E、生产 V1/V2 复核。
-- **下一步**：运行全量 pytest；只提交本次 Compare 相关文件（工作区仍有 `recall.py`、`guide_generation/*` 等他人未提交修改，勿一并提交）；从干净 worktree 发布并复验生产 `/` 的 V1 Compare 与双栏切换。
-- **注意**：本次未改 coverage 判定；`incomplete` 仍必须显示人工复核提示，不能因新视图宣称全文无差异。
+- **已验证**：全量 pytest `2151 passed / 83 skipped`；Compare 专项 `129 passed / 6 skipped`；V1 浏览器 `10 passed`；V2 浏览器 `10 passed`；V2 typecheck/lint/Vitest `16 passed`/build 通过。
+- **已发布**：提交 `f6723fe` 已从干净 worktree 发布；engine `fbb74e18…`、service `1eddb569…`，五服务 active，`/api/capabilities` 200。生产 `https://fundlex.club` 正式入口用两份公开 DOCX 完成真实 Compare Worker 结果：1421 处差异、`incomplete`，Word/双栏切换正常，报告 5,328,953 bytes 且含 `merged`；临时账号/任务/对象已清理。证据 `/tmp/opencode/prod-compare-word-1600.png`、`/tmp/opencode/prod-compare-classic-1600.png`、`/tmp/opencode/prod-compare-report.json`。
+- **剩余**：本次未改 coverage 判定；`incomplete` 仍必须显示人工复核提示，不能因新视图宣称全文无差异。后续修改合并稿投影需沿用真实合同回归。
