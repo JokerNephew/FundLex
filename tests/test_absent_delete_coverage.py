@@ -103,3 +103,28 @@ def test_one_way_y_restriction_does_not_block_mutual_ban_absence():
         absent_coverage=coverage["G06:0"])
     assert effect.state == "PASS"
     assert effect.artifact_status == "VERIFIED_ABSENT"
+
+
+def test_absent_replace_uses_the_same_coverage_certificate():
+    from types import SimpleNamespace
+
+    from fundlex.generation.effects import evaluate_operation_effect
+
+    from fundlex.obligations import apply_facts
+    from test_recall_core import _facts
+
+    source = BATCH / "广发美国房地产指数证券投资基金基金合同.docx"
+    inspection = inspect_docx(source, full=True)
+    ledger = _ledger("G05")
+    apply_facts(ledger, _facts())
+    coverage = absent_delete_coverage(
+        {}, [], inspection,
+        {"G05": SimpleNamespace(locations=frozenset({f"p{i}" for i in range(82, 88)}))},
+        ledger)
+    assert "G05:0" in coverage
+    record = next(item for item in ledger.records if item.spec.operation_id == "G05:0")
+    effect = evaluate_operation_effect(
+        record, inspection, inspection, [], [], None,
+        absent_coverage=coverage["G05:0"])
+    assert effect.state == "PASS"
+    assert effect.artifact_status == "VERIFIED_ABSENT"

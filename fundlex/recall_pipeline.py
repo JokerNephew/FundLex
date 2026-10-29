@@ -1083,6 +1083,14 @@ def _apply_scope_gate(targets: Sequence[Target], scopes: Mapping[str, Any] | Non
     if scopes is None:
         return list(targets)
     for target in targets:
+        if (str(target.rule_id) == "G22"
+                and "g22_ordered_list_variant" in str(target.reason or "")):
+            # The ordered-list liquidation clause is source-proven by the
+            # deterministic G22 pass even when section mapping cannot form a
+            # liquidation leaf (美国房地产 p883).  Do not drop it as unscoped.
+            if not target.scope_id:
+                target.scope_id = "G22:ordered_list"
+            continue
         ok, scope = _target_scope_ok(target, scopes)
         if not ok:
             if not target.out_of_scope:

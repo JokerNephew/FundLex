@@ -1230,7 +1230,8 @@ def structure_index(inspection: DocumentInspection, *,
 # empty scope; callers must fail closed instead of falling back to a document-wide
 # semantic sweep.
 _G06_SUBSECTION_RE = re.compile(
-    r"^(?:[一二三四五六七八九十百零〇]+、|\d+[、.])"
+    r"^(?:(?:[一二三四五六七八九十百零〇]+、|\d+[、.])|"
+    r"(?:[（(][一二三四五六七八九十百零〇]+[）)]))"
     r"(?:基金)?(?:份额类别|份额的类别|基金份额类别)(?:设置)?$"
 )
 
@@ -1272,6 +1273,8 @@ def g06_scope_locations(inspection: DocumentInspection) -> frozenset[str]:
             if (candidate_text and (
                     _G06_SUBSECTION_RE.fullmatch(candidate_text)
                     or bool(re.match(r"^[一二三四五六七八九十百零〇]+、", candidate_text))
+                    or bool(re.match(r"^[（(][一二三四五六七八九十百零〇]+[）)]",
+                                     candidate_text))
                     or bool(re.match(r"^\d+[、.]", candidate_text)))):
                 end = candidate_index
                 break
@@ -1287,6 +1290,8 @@ def g06_scope_locations(inspection: DocumentInspection) -> frozenset[str]:
     # fail-closed.
     has_numbered_heading = any(
         re.match(r"^[一二三四五六七八九十百零〇]+、", _compact(display_text(span.text)[0]))
+        or re.match(r"^[（(][一二三四五六七八九十百零〇]+[）)]",
+                    _compact(display_text(span.text)[0]))
         or re.match(r"^\d+[、.]", _compact(display_text(span.text)[0]))
         for span in paragraphs
     )

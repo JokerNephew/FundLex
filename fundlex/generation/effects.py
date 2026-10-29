@@ -780,6 +780,24 @@ def evaluate_operation_effect(obligation: Any, original: Any, artifact: Any,
                            "document_sha256": getattr(original, "source_sha256", ""),
                            "reason": "literal absence needs an explicit site-scan "
                                      "coverage record"},))
+    if not sites and spec.op == "replace":
+        coverage = _absent_coverage_evidence(
+            absent_coverage, operation_id=operation_id,
+            obligation_id=obligation_id, original=original)
+        if coverage is not None:
+            references = [str(getattr(spec, "old_text", "") or ""),
+                          *[str(value) for value in getattr(spec, "alternatives", ())]]
+            references = [value for value in references if len(_compact(value)) >= 2]
+            return OperationEffect(
+                "PASS", "VERIFIED_ABSENT", **base, evidence=({
+                    "proof_kind": "document_literal_absent",
+                    "operation_id": operation_id,
+                    "obligation_id": obligation_id,
+                    "searched_literals": references,
+                    "match_count": 0,
+                    "document_sha256": getattr(original, "source_sha256", ""),
+                    "coverage": coverage,
+                },))
     if not sites:
         return OperationEffect("OPEN", "UNPROVEN", **base,
                                failure_code="CLAIM_OPERATION_UNPROVEN", reason="verified site missing")
