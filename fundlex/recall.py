@@ -7164,12 +7164,20 @@ def _plan_target_inner(rule: dict, target: Target, inspection: DocumentInspectio
             # protected-term check and leaves the obligation open (道琼斯 p926).
             span_text = span.text[target.start:target.end]
             if "销售服务费" in span_text and "由于本基金" in span_text:
+                # The target may quote the distribution tail after the fee
+                # sentence.  The guide only authorizes replacing the fee clause;
+                # keep the tail verbatim instead of dropping it (道琼斯 p1322).
+                suffix = ""
+                last = span_text.rfind("销售服务费")
+                if last >= 0:
+                    suffix = span_text[last + len("销售服务费"):]
+                replacement = expected + suffix
                 return finish(PlannedEdit(
                     target_id=target.target_id, rule_id=rule_id,
                     location=target.location, start=target.start, end=target.end,
-                    replacement=expected, operation="replace",
+                    replacement=replacement, operation="replace",
                     content_source="g18_class_group_replace",
-                    evidence={"fixed_text": expected,
+                    evidence={"fixed_text": replacement,
                               "replaced_text": span_text,
                               "guide_paragraphs": rule.get("source_paragraphs") or []}))
     semantic_replacement = getattr(target, "semantic_replacement", None)

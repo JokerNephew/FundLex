@@ -129,3 +129,26 @@ def test_g11_replaces_pre_existing_c_class_sentence_without_duplication():
     assert edit is not None
     after = text[:edit.start] + edit.replacement + text[edit.end:]
     assert after.count("本基金C类基金份额不收取申购费用。") == 1
+
+
+def test_g18_preserves_distribution_tail_after_fee_sentence():
+    inspection = inspect_docx(SOURCE, full=True)
+    text = inspection.by_location("p1322").text
+    quote = ("由于本基金A类基金份额不收取销售服务费，"
+             "而C类基金份额和E类基金份额收取销售服务费，"
+             "各基金份额类别对应的可供分配利润将有所不同，"
+             "本基金同一类别的每一基金份额享有同等分配权；")
+    start = text.find(quote)
+    target = Target("T", "G18", "p1322", quote, "needs_edit", "",
+                    start=start, end=start + len(quote), resolution="resolved",
+                    operations=("G18:0",))
+    rule = _rule("G18")
+    ledger = compile_obligations({"groups": [rule]})
+    facts = _facts()
+    apply_facts(ledger, facts)
+    edit = plan_target(rule, target, inspection, facts, NoModel(),
+                       compose_budget=[3], obligations=ledger)
+    assert edit is not None
+    assert edit.replacement.endswith(
+        "，各基金份额类别对应的可供分配利润将有所不同，"
+        "本基金同一类别的每一基金份额享有同等分配权；")
