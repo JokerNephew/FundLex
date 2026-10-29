@@ -3407,6 +3407,33 @@ def dedupe_operation_targets(targets: Sequence[Target], rules_by_id: dict[str, d
     composites = [target for target in targets
                   if target.state == "needs_edit" and not target.out_of_scope
                   and target.composite and target.operations]
+    # A G17 composite must consist only of operation-owned complete sentences.
+    # A broader inventory quote (usage sentence + an unrelated rate-discount tail)
+    # must not suppress the precise deterministic delete target.
+    valid_composites: list[Target] = []
+    for composite in composites:
+        if composite.rule_id != "G17":
+            valid_composites.append(composite)
+            continue
+        rule = rules_by_id.get("G17") or {}
+        owned = _g17_source_sentence_parts(inspection, rule.get("operations") or [])
+        parts = []
+        try:
+            for part in composite.composite:
+                loc, left, right = part.rsplit(":", 2)
+                parts.append((loc, int(left), int(right)))
+        except ValueError:
+            parts = []
+        valid = bool(parts) and all(
+            any(owner_loc == loc and owner_left <= left and right <= owner_right
+                for occurrence in owned for owner_loc, owner_left, owner_right in occurrence)
+            for loc, left, right in parts)
+        if valid:
+            valid_composites.append(composite)
+        else:
+            composite.out_of_scope = True
+            composite.reason = f"{composite.reason}|UNAUTHORIZED_G17_COMPOSITE_TAIL"
+    composites = valid_composites
     for target in targets:
         if target.state != "needs_edit" or target.out_of_scope or target.composite \
                 or not target.operations:
