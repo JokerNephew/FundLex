@@ -11,8 +11,11 @@
 - 生产当前候选`cdf298e`（engine`25308351015f...`/service`e0625b495b5c...`），五服务active、workspace未登录401。最终生产浏览器E2E任务`6bbb6712e9a34b6bbfb2400e239ffc09`/doc`5d35ba80d3414de49e93e4bccabe06e0`：651秒、27逻辑/27HTTP、240639 tokens、约$0.08126，complete；final`4f0a10ab...`、16 ins/16 del，10项机械检查全过，v2标签B02 21/21、false_complete=0，独立复核通过（P2 p800/p801空段）。证据`docs/evidence/production-value7-*`。
 - 多轮生产E2E失败均保留：G06缺失、G03 canonical/orphan、G09 survey、G17 audit/guard、G15 residual；对应修复已提交并通过定向测试。生产发布候选已从e更新到g（cdf298e）；旧`/opt`发布事务和release worktree已清理，根盘约4.5GB可用。
 - 备份/发布事故已修：第一/第二DB备份工具曾写raw `.sql.gz`，已修复为先raw临时再gzip、verify通过，并在隔离MySQL恢复54表/93users/711docs后清理测试库；旧备份权限已收紧。发布器journalctl时间格式bug已修；生产`tools/ops/fundlex_backup.py`已同步修复版。
-- 第一波旧代码20份已全部完成，作为失败证据保留：`first-wave-dev-{1..4}`，仅鑫裕/聚安complete、集盛MODEL_NETWORK_ERROR、其余incomplete；失败规则集中在G06/G13/G14/G05/G09/G11/G22及沪深300的G12/浮动事实。已修复FL-D488–501并新增FL-D495–500（inventory方括号、G12分号尾、多段事实quote、G02协调类别组、G18多类compose、G22顺序列表）；全量非浏览器回归**2144 passed/6 skipped/693.52s**，提交`38d30f8`。
-- 第一波新代码重跑已启动：`first-wave2-dev-{1..4}`（同一20份，真实v4-flash，独立ledger/日志）。单合同先行验证：恒阳B08在`fixcheck-hengyang`complete并通过独立业务复核（P2 5项）；美国房地产`fixcheck2-realestate`运行中（旧模块，仅作库存恢复观察）。重跑完成前不得用旧运行或单合同外推整批。
+- 第一波旧代码20份保留为失败证据：`first-wave-dev-{1..4}`。新代码重跑：`first-wave2-dev-{1..4}` + 定向 `fixcheck*/edge-run-*`。
+- **第一波最终（2026-10-29）**：20份dev中 **15份业务复核通过**、5份失败保留；v2标签 **304/390（77.95%）**，标签实际complete 14/20，false_complete 1（B01的2个标签口径争议，业务复核通过）。通过：B01/B02/B03/B04/B06/B07/B08/B09/B10/B11/B13/B14/B16/B18/B20；失败：B05弘利、B12沪深300、B15美国房地产、B17道琼斯、B19锐意。证据`docs/evidence/first-wave2-*`与`docs/REAL_REVISION_EVALUATION_RESULTS.md`。
+- 最新代码全量非浏览器回归 **2158 passed/6 skipped/750.46s**（提交`6539437`；之后仅G05 scoped delete、G17 composite guard等小修，最终回归以最新日志为准）。生产仍是候选`cdf298e`，尚未重新部署最新修复，也未重跑生产E2E。
+- 工作树有**非本轮改动**未提交：`frontend/compare.*`、`frontend/src/pages/Compare/*`、`frontend/src/types/api.ts`、`fundlex/compare/*`、`fundlex/guide_generation/*`、`tests/test_guide_generation_pipeline.py`、`tests/test_compare_merged_render.py`、`合同比对.png`；这些疑似用户/并行agent工作，未覆盖、未提交。
+- 下一步：①处理B05/B12/B15/B17/B19剩余变体（G02/G04/G16/G09/G22）；②最新代码重新部署生产并重跑正式E2E；③8份holdout冻结后验收；④扩样100/250/514+。
 - 独立标签v2已合并：28份/501 targets，review346条中应用44、驳回251、未解决51单列uncertain；不是最终gold。首批transcript/产物评分未完成。
 - 真实模型新端点`https://api.commandcode.ai/provider/v1`、模型`deepseek/deepseek-v4-flash`，key只在`/tmp/opencode/comprehensive-remediation-20261028/model-new.env`(600)；未写仓库/文档/日志。首两次真实run因reasoning耗尽`max_tokens`报`MODEL_OUTPUT_TRUNCATED`（`real-value-first{,2}`），第三次已用`thinking=disabled`+12000输出+context32000启动，结果待记录；不能把失败/重试当业务完成。
 - 当前未部署/未重启/未改生产env；生产仍是旧OpenCode端点。下一动作：真实value run完成→检查p1258摘要及实际final，独立业务复核，再跑首批20dev评分；通过后才合并/冻结候选、更新生产env/root publisher/五服务部署、正式工作台E2E；扩样需质量门槛。
