@@ -1503,3 +1503,16 @@
 - **已验证**：全量 pytest `2151 passed / 83 skipped`；Compare 专项 `129 passed / 6 skipped`；V1 浏览器 `10 passed`；V2 浏览器 `10 passed`；V2 typecheck/lint/Vitest `16 passed`/build 通过。
 - **已发布**：提交 `f6723fe`（Word 三栏）、`9f5b61d`（全屏弹窗）和 `f49e982`（紧凑头部/留边弹窗）已发布；engine `fbb74e18…`、service `1eddb569…`，五服务 active，`/api/capabilities` 200。生产 `https://fundlex.club` 正式入口用两份公开 DOCX 完成真实 Compare Worker 结果：1421 处差异、`incomplete`，Word/双栏切换正常，弹窗四周留 20px 且带遮罩，顶部说明已删、覆盖警告改为一行 chip，关闭/Esc/重开通过，报告 5,328,953 bytes 且含 `merged`；临时账号/任务/对象已清理。证据 `/tmp/opencode/prod-compare-word-1600.png`、`/tmp/opencode/prod-compare-classic-1600.png`、`/tmp/opencode/prod-compare-report.json`。
 - **剩余**：本次未改 coverage 判定；`incomplete` 仍必须显示人工复核提示，不能因新视图宣称全文无差异。后续修改合并稿投影需沿用真实合同回归。
+
+## 当前断点（2026-10-29，长合同虚拟化与审阅弹窗）
+
+- **目标**：按用户方案优化长合同比对（正文/修订列表虚拟化、源文档按需、连线缓存、接口压缩/缓存），并把合同修改的合同审阅页改成弹窗。
+- **已实施并发布**：提交 `62e7278`。
+  - `frontend/compare.js` 新增 `VirtualDocument` 分片虚拟渲染、修订列表固定行高窗口化、源文档按需解析/渲染、连线位置缓存、同合同组复用。
+  - `frontend/compare.css`/`html` 默认隐藏源文档、列表窗口样式、弹窗间隙/遮罩。
+  - `frontend/app.css` 审阅页居中弹窗（桌面四周 20px、移动端 6px、遮罩、关闭入口）。
+  - `fundlex/compare/api.py` `/view` gzip 与最多 4 条渲染 LRU 缓存。
+- **已验证**：Compare 专项 129 passed / 6 skipped；V1 浏览器 10 passed；V2 浏览器 10 passed；前端 typecheck/lint/Vitest 16 passed、build 通过。生产 `https://fundlex.club` 真实 Compare Worker E2E：gzip 生效、首屏 DOM 891（原 70,862）、列表 24 条（原 1,421）、源文档按需各 60 块、双栏 1,325 节点/31 条连线、关闭/Esc/遮罩正常、页面/控制台错误 0。审阅弹窗在 1440×1000 下 1400×960，生成选择版浏览器流程通过。
+- **部署注意**：第一次发布因根分区剩余空间低于预留阈值失败；清理旧发布事务后第二次又因 `recall-worker restarted during startup` 回滚；先停止五个服务并确认无残留后发布成功。当前根分区约 1.5GB 可用。
+- **未做**：审阅页未重新跑真实模型任务（仅真实 HTML/JS/CSS 浏览器测试）；`/view` 仍一次返回合并稿+左右源文档，源文档只是前端按需解析；浏览器原生查找只能命中当前虚拟窗口。
+- **下一步**：后台全量 pytest 结果补记；如需进一步降首包，拆分 `/view` 与 `/view/sources`；全文搜索需单独索引。

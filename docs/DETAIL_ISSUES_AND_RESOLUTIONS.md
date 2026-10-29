@@ -6274,3 +6274,19 @@ H＝E×…
 - 状态与验证：**已提交、已受控生产发布，生产真实合同 E2E 通过**。提交 `f6723fe`（Word 视图）+ `9f5b61d`（全屏弹窗）+ `f49e982`（紧凑头部/留边弹窗）；全量 pytest **2151 passed / 83 skipped**；Compare 专项 **129 passed / 6 skipped**；V1 浏览器 remediation **10 passed**；V2 浏览器 **10 passed**；V2 typecheck/lint/Vitest **16 passed**/build 通过。生产发布器 engine `fbb74e18…`、service `1eddb569…`，五服务 active，`/api/capabilities` 200，工作区与部署 `compare.js`/`render.py` SHA-256 一致。全屏弹窗在 1600×1000 和 390×844 视口验证：桌面端四边各留 20px（1600×1000 下弹窗 1560×960），半透明遮罩 z-index 139，`role=dialog`、`position=fixed`、背景滚动锁定；顶部说明段落已删除，覆盖警告由大块横幅改为一行「覆盖不完整 · 38 项未覆盖」chip，点击展开明细且不挤压正文；关闭按钮恢复任务详情、点击合同组可重开、Esc 关闭，双栏切换正常，页面/控制台错误 0。证据 `/tmp/opencode/prod-compare-compact-word.png`、`/tmp/opencode/prod-compare-compact-classic.png`。通过 `https://fundlex.club` 正式入口注册临时账号、上传两份公开 DOCX、seal、真实 Compare Worker 完成并打开结果：1421 处差异（修改 234/新增 628/删除 559）、coverage `incomplete`；Word 视图显示 2734 个插入、795 个删除，源文档可见，双栏切换正常且差异导航可滚动，页面/控制台错误 0；报告下载 5,328,953 bytes，JSON 含 `merged` 和 1421 个 diffs。证据 `/tmp/opencode/prod-compare-word-1600.png`、`/tmp/opencode/prod-compare-classic-1600.png`、`/tmp/opencode/prod-compare-report.json`；临时账号、compare 任务和对象已清理。
 - 下一步：继续保留 `incomplete` 人工复核提示；后续如调整 Word 视图的段落/表格投影，沿用同一真实合同回归并核对 `merged` 与报告一致。
 - 变更记录：2026-10-29 新增；用户明确要求保留双栏并采用 Word 视觉。与 FL-D260 的 Word 风格第二阶段直接相关，不重写既有编号。
+
+## FL-D513 长合同比对卡顿与审阅页改弹窗（2026-10-29）
+
+- 发现日期：2026-10-29，用户反馈“文档很长页面就很卡”，并要求把合同修改的合同审阅页也改成弹窗。
+- 问题与影响：长合同比对在旧实现中同时渲染 Word 合并稿、左右源文档和双栏两份文档，1421 处差异时约 70,862 个 DOM 节点、4MB+ HTML；修订列表一次生成 1421 条并在每次采用 A/B 后全量重刷；双栏连线每次滚动对全部差异读取约 2800 次位置；`/view` 每次重新解析两份 DOCX、返回约 4.97MB JSON（本地实测约 2 秒）。打开和交互都会明显卡顿。
+- 处理方法：
+  - 文档正文改为按块分片虚拟渲染，只挂载可视区域附近的分片；合并稿、源文档、双栏共用同一套 `VirtualDocument`，滚动到边界只增删分片，分片 HTML 首次渲染后缓存，避免重复缩放/解析。
+  - 修订列表改为固定行高（128px）窗口化，只渲染当前窗口约 24 条；选择 A/B 只更新单条，不再全量 `renderDiffList()`；筛选/定位时按索引滚动窗口。
+  - 源文档默认不显示、不解析；勾选“显示源文档”或移动端切到源文档时才按需解析和虚拟渲染。合并稿始终优先渲染。
+  - 双栏连线改为缓存分片内差异位置，Word 视图直接跳过；分片变化时失效重算，不再每帧全量读取。
+  - `/view` JSON 在客户端支持 gzip 时压缩返回；API 进程内增加最多 4 条渲染结果 LRU 缓存；前端关闭后重新打开同一合同组复用已渲染结果。
+  - 合同审阅页 `#detail-panel:has(.review-layout)` 改为居中弹窗：桌面四周留 20px、圆角/阴影/半透明遮罩，移动端留 6px；审阅文档和修订清单内部滚动，顶部显示关闭入口。
+- 状态与验证：**已提交、已发布，生产真实合同比对 E2E 通过；审阅弹窗由真实 HTML/JS/CSS 的浏览器测试验证，未重新跑真实模型审阅任务**。提交 `62e7278`；Compare 专项 **129 passed / 6 skipped**；V1 浏览器 **10 passed**；V2 浏览器 **10 passed**；前端 typecheck/lint/Vitest **16 passed**、build 通过。生产 `https://fundlex.club` 用两份公开 DOCX 完成真实 Compare Worker 后：`/view` 返回 `content-encoding: gzip`；首屏 DOM **891**（原 70,862）、修订列表 **24** 条（原 1,421）、源文档默认不渲染；展开源文档后左右各 60 个可视块；滚动后 DOM 3,673；双栏 1,325 节点/31 条可见连线；关闭/Esc/遮罩正常，页面/控制台错误 0。审阅弹窗在 1440×1000 下实际面板 1400×960，关闭入口可见，生成选择版流程浏览器测试通过。
+- 部署注意：首次发布因根分区剩余空间低于预留阈值失败（recall-worker 退出）；清理旧发布事务后重试，又因停止/启动竞态被判定 `recall-worker restarted during startup`；先手动停止五个服务、确认无残留进程后再发布成功。当前根分区约 1.5GB 可用；发布前应保留足够空间并避免旧服务竞争。
+- 下一步：后台全量 pytest 完成后补记结果；如继续优化，可把 `/view` 拆成合并稿与源文档两个按需响应，进一步降低首包和服务器解析时间；浏览器原生查找只能命中当前虚拟窗口内容，需要全文搜索时另做搜索索引。
+- 变更记录：2026-10-29 新增；与 FL-D512 的 Word/全屏弹窗直接相关，但本次为性能与审阅页范围，单独编号。
