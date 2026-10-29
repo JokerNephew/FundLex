@@ -2662,6 +2662,39 @@ def _audit_recovery_contexts(issues: Sequence[dict[str, Any]], *,
     return contexts
 
 
+def _reopen_audit_disagreed_targets(issues: Sequence[dict[str, Any]],
+                                    targets: Sequence[Target],
+                                    rules_by_id: Mapping[str, dict],
+                                    facts: Facts) -> list[str]:
+    """Reopen a model-satisfied class target when audit proves it still needs work.
+
+    G02/G04 are class-group substitutions.  A general phrase such as "A类基金份额"
+    can look satisfied to the inventory model while the guide still requires the
+    concrete actual classes.  The hard-fact no-op check distinguishes the two:
+    only a product whose instantiated group equals the guide reference may stay
+    satisfied; otherwise the auditor's missing-replacement verdict reopens it.
+    """
+    from .recall import class_substitution_letter_stable
+    by_id = {target.target_id: target for target in targets}
+    reopened: list[str] = []
+    for issue in issues:
+        if issue.get("code") != "AUDIT_NOT_COMPLETED":
+            continue
+        target = by_id.get(str(issue.get("target_id") or ""))
+        if (target is None or target.state != "satisfied"
+                or target.rule_id not in {"G02", "G04"}):
+            continue
+        rule = rules_by_id.get(target.rule_id) or {}
+        if class_substitution_letter_stable(rule, facts):
+            continue
+        target.state = "needs_edit"
+        target.resolution = "unresolved"
+        target.plan_reason = None
+        target.reason = f"{target.reason}|AUDIT_REOPENED"
+        reopened.append(target.target_id)
+    return reopened
+
+
 def _audit_issues(state: dict[str, Any], targets: Sequence[Target]) -> list[dict[str, Any]]:
     """Current unresolved audit problems: missing/incomplete verdicts and missed targets."""
     issues: list[dict[str, Any]] = []
@@ -4728,6 +4761,10 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
                 audit_rounds.append(round_ledger)
                 _merge_audit_state(audit_state, round_ledger, targets)
                 issues = _audit_issues(audit_state, targets)
+                reopened = _reopen_audit_disagreed_targets(
+                    issues, targets, rules_by_id, facts)
+                if reopened:
+                    round_ledger["reopened_targets"] = reopened
                 round_ledger["issues"] = issues
                 report["audit"] = {"rounds": audit_rounds, "issues": issues}
                 report["targets"] = _target_ledger(targets, planned, audit_state, origins)
