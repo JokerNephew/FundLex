@@ -4459,6 +4459,7 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
             for target in semantic_targets:
                 for old in targets:
                     if (old is not target and old.rule_id == target.rule_id
+                            and old.location == target.location
                             and not old.out_of_scope
                             and old.state in {"needs_edit", "satisfied"}):
                         old.out_of_scope = True
