@@ -9563,23 +9563,30 @@ def absent_delete_coverage(rules_by_id: Mapping[str, Any],
                 continue
             if re.search(r"调低[^。；;]{0,16}费率", scoped_document):
                 continue
-        if _semantic_delete_hits(spec.rule_id, document):
+        semantic_hits = _semantic_delete_hits(spec.rule_id, document)
+        if spec.rule_id == "G06":
+            semantic_hits = [hit for hit in semantic_hits
+                             if not _is_one_way_y_class_conversion(hit)]
+        if semantic_hits:
             continue
-        if _semantic_delete_review_hits(spec.rule_id, document):
+        review_hits = _semantic_delete_review_hits(spec.rule_id, document)
+        if review_hits and not all(
+                _is_one_way_y_class_conversion(hit) for hit in review_hits):
             continue
         # Broader, rule-specific keyword gates.  A semantic probe is a fast path;
         # these plainer shapes must also block a negative certificate so a
         # reworded clause (``7天`` / ``各类基金份额不得转换`` / ``用途``) never
         # becomes a false ALREADY_SATISFIED.
         sentences = [part for part in re.split(r"(?<=[。；;！？!?])", document) if part]
-        if spec.rule_id == "G06" and any(
-                re.search(
-                    r"(?:份额类别|(?:[A-ZＡ-Ｚ]类|各类|不同类别)"
-                    r"[^。；;]{0,12}基金?份额)"
-                    r"[^。；;]{0,12}(?:不得|不允许|暂不允许|不能|不可)"
-                    r"[^。；;]{0,12}转换", sentence)
-                for sentence in sentences):
-            continue
+        if spec.rule_id == "G06":
+            broad = [sentence for sentence in sentences if re.search(
+                r"(?:份额类别|(?:[A-ZＡ-Ｚ]类|各类|不同类别)"
+                r"[^。；;]{0,12}基金?份额)"
+                r"[^。；;]{0,12}(?:不得|不允许|暂不允许|不能|不可)"
+                r"[^。；;]{0,12}转换", sentence)]
+            if broad and not all(_is_one_way_y_class_conversion(sentence)
+                                 for sentence in broad):
+                continue
         if spec.rule_id == "G13" and any(
                 "赎回费" in sentence
                 and any(token in sentence for token in ("7日", "七日", "7天", "七天"))
@@ -9598,8 +9605,9 @@ def absent_delete_coverage(rules_by_id: Mapping[str, Any],
             "obligation_id": record.obligation_id,
             "scanned_locations": scanned,
             "document_sha256": inspection.source_sha256,
-            "reason": ("deterministic absence scan: zero literal, semantic and "
-                       "review hits across the scanned rule scope"),
+            "reason": ("deterministic absence scan: zero literal and semantic hits; "
+                       "one-way Y-class review candidates retained"),
+            "review_candidates": review_hits,
         }
     return records
 

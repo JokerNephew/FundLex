@@ -85,3 +85,21 @@ def test_hengli_g05_absent_replace_closes_in_its_rule_scope():
     assert "G05:0" in coverage
     assert all(location.startswith("p15") for location
                in coverage["G05:0"]["scanned_locations"])
+
+
+def test_one_way_y_restriction_does_not_block_mutual_ban_absence():
+    from fundlex.generation.effects import evaluate_operation_effect
+    from test_recall_core import _facts
+
+    source = BATCH / "广发沪深300指数增强型发起式证券投资基金基金合同.docx"
+    inspection = inspect_docx(source, full=True)
+    ledger = _ledger("G06")
+    coverage = absent_delete_coverage({}, [], inspection, None, ledger)
+    assert "G06:0" in coverage
+    assert any("Y类" in item for item in
+               coverage["G06:0"].get("review_candidates") or ())
+    effect = evaluate_operation_effect(
+        ledger.records[0], inspection, inspection, [], [], _facts(),
+        absent_coverage=coverage["G06:0"])
+    assert effect.state == "PASS"
+    assert effect.artifact_status == "VERIFIED_ABSENT"

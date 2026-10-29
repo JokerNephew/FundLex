@@ -648,6 +648,20 @@ def _verified_site_closure(sites: Sequence[Mapping[str, Any]], original: Any,
     return closed
 
 
+def _review_hits_are_one_way_only(hits: Sequence[str]) -> bool:
+    """Whether every G06 review candidate is a one-way Y-class restriction.
+
+    The guide authorizes deleting the mutual class-conversion ban.  A one-way
+    ``Y类基金份额不能转换为A类、C类基金份额`` restriction is a distinct policy;
+    it stays visible as a review candidate but must not block closing the mutual
+    ban's absence (沪深300 p217).
+    """
+    if not hits:
+        return False
+    from ..recall import _is_one_way_y_class_conversion
+    return all(_is_one_way_y_class_conversion(hit) for hit in hits)
+
+
 def evaluate_operation_effect(obligation: Any, original: Any, artifact: Any,
                               sites: Sequence[Mapping[str, Any]],
                               edits: Sequence[Mapping[str, Any]], facts: Any,
@@ -711,7 +725,7 @@ def evaluate_operation_effect(obligation: Any, original: Any, artifact: Any,
             document = _compact("".join(str(getattr(span, "text", ""))
                                          for span in getattr(original, "paragraphs", ())))
         review_hits = _semantic_delete_review_hits(rule_id, document)
-        if review_hits:
+        if review_hits and not _review_hits_are_one_way_only(review_hits):
             return OperationEffect(
                 "OPEN", "UNPROVEN", **base,
                 failure_code="EFFECT_SITE_UNPROVEN",
@@ -722,6 +736,10 @@ def evaluate_operation_effect(obligation: Any, original: Any, artifact: Any,
                            "probe_hits": review_hits[:20],
                            "match_count": len(review_hits)},))
         semantic_hits = _semantic_delete_hits(rule_id, document)
+        if rule_id == "G06":
+            from ..recall import _is_one_way_y_class_conversion
+            semantic_hits = [hit for hit in semantic_hits
+                             if not _is_one_way_y_class_conversion(hit)]
         if semantic_hits:
             return OperationEffect(
                 "OPEN", "UNPROVEN", **base,
@@ -746,6 +764,7 @@ def evaluate_operation_effect(obligation: Any, original: Any, artifact: Any,
                         "match_count": 0,
                         "document_sha256": getattr(original, "source_sha256", ""),
                         "coverage": coverage,
+                        "review_candidates": review_hits,
                     },))
             # Fail closed: no verified site and no explicit coverage record means
             # the operation's old semantic object is simply unproven.
