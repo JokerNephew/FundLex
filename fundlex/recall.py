@@ -9411,6 +9411,12 @@ def target_site_ok(rule_id: str, span: Any, inspection: DocumentInspection) -> b
         if any(token in paragraph for token in
                ("基金份额类别", "份额类别", "将基金份额分为", "分类")):
             return True
+        # A per-class definition entry ("A类基金份额：申购时收取申购费…") is a
+        # real class-group site even though it does not repeat the generic heading.
+        if (re.match(r"^\s*[A-ZＡ-Ｚ]类(?:基金)?份额\s*[：:]", paragraph)
+                and any(token in compact for token in
+                        ("申购费", "认购费", "销售服务费"))):
+            return True
         # Split definitions: the heading is one paragraph and the actual fee-group
         # wording is the next one.  That second paragraph carries the real site; a
         # generic fee sentence must still supply both fee concepts and at least two
@@ -10111,4 +10117,61 @@ def _ensure_delete_targets_page(targets: Sequence[Target], rules_by_id: dict[str
                 covered.setdefault(rule_id, []).append((location, _compact(candidate)))
                 if len(created) >= limit:
                     return created
+    return created
+
+
+def ensure_class_group_noop_targets(targets: Sequence[Target], rules_by_id: dict[str, dict],
+                                    inspection: DocumentInspection, facts: Facts,
+                                    scopes: Mapping[str, Any] | None = None) -> list[Target]:
+    """Bind G02/G04's already-correct class groups as satisfied business sites.
+
+    When the hard class facts make every instantiated replacement equal its guide
+    reference, the class definition is already correct and no edit may be planned.
+    A model may still omit the site, so create one satisfied target per operation at
+    a real fee-group paragraph that carries the group.  Claim Replay then closes the
+    obligation as ALREADY_SATISFIED instead of leaving a no-op OPEN.
+    """
+    created: list[Target] = []
+    for rule_id in ("G02", "G04"):
+        rule = rules_by_id.get(rule_id)
+        if not rule or not rule.get("class_substitution"):
+            continue
+        if not class_substitution_letter_stable(rule, facts):
+            continue
+        scope = (scopes or {}).get(rule_id)
+        locations = sorted(str(location) for location in
+                           getattr(scope, "locations", ()) or ())
+        if not locations:
+            locations = [str(span.location) for span in inspection.paragraphs]
+        covered = {str(key) for target in targets
+                   if target.rule_id == rule_id and not target.out_of_scope
+                   for key in target.operations or ()}
+        for index, operation in enumerate(rule.get("operations") or ()):
+            if operation.get("op") != "replace":
+                continue
+            operation_id = _rule_operation_key(rule, index)
+            if operation_id in covered:
+                continue
+            expected, issues = instantiate_slots(
+                str(operation.get("new_text") or ""), facts)
+            if issues or not expected:
+                continue
+            expected_compact = _compact(expected)
+            for location in locations:
+                try:
+                    span = inspection.by_location(location)
+                except (KeyError, DocxError):
+                    continue
+                if not target_site_ok(rule_id, span, inspection):
+                    continue
+                if expected_compact not in _compact(span.text):
+                    continue
+                created.append(Target(
+                    target_id=f"NOOP-{rule_id}-{index}-{location}",
+                    rule_id=rule_id, location=location, quote=span.text,
+                    state="satisfied", reason="class_substitution_noop",
+                    start=0, end=len(span.text), resolution="resolved",
+                    segment_ok=containing_segment(span, 0, len(span.text)) is not None,
+                    operations=(operation_id,)))
+                break
     return created

@@ -52,7 +52,8 @@ from .recall import (BOUNDARY_POLICY, ENGINE_ID, ENGINE_VERSION, SCHEMA_VERSION,
                       source_parts_contiguous,
                       absent_delete_coverage,
                       ensure_g22_ordered_list_targets,
-                      ensure_g08_actual_rate_targets)
+                      ensure_g08_actual_rate_targets,
+                      ensure_class_group_noop_targets)
 from .recall_prompts import (AUDIT_INSTRUCTION, AUDIT_PROMPT_VERSION, AUDIT_SCHEMA,
                              PROMPT_VERSIONS, SWEEP_INSTRUCTION, SWEEP_PROMPT_VERSION,
                              SWEEP_SCHEMA)
@@ -3845,6 +3846,24 @@ def _apply_artifact_proof_to_findings(findings: list[dict[str, Any]], replay: di
                 if local:
                     related.extend(local)
                     related_records.append(record)
+        if not related and obligations is not None:
+            rule_records = [record for record in getattr(obligations, "records", ())
+                            if record.spec.rule_id == rule_id
+                            and getattr(getattr(record, "applicability", None),
+                                        "status", "UNKNOWN") == "TRUE"]
+            rule_states = [states.get(record.obligation_id) for record in rule_records]
+            if (rule_records and all(state is not None
+                                     and effect_proof_passed(state)
+                                     and str(state.get("artifact_status") or "") in
+                                     {"VERIFIED_ABSENT", "ALREADY_SATISFIED"}
+                                     for state in rule_states)):
+                # Every applicable operation of this rule is already closed by a
+                # deterministic no-op/absence certificate.  A sweep opinion about
+                # missing new text at some other paragraph cannot invent a site
+                # that the rule itself does not authorize (G05 p159).
+                finding["status"] = "resolved"
+                finding["resolution"] = "rule_absent_noop"
+                continue
         quote = _compact(str(finding.get("quote") or ""))
         body = artifact_text = source_text = ""
         try:
@@ -4510,6 +4529,12 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
             synthetic.append(target)
             targets.append(target)
             origins[target.target_id] = "g08_actual_rate_variant"
+        class_noops = ensure_class_group_noop_targets(
+            targets, rules_by_id, inspection, facts, scopes)
+        for target in class_noops:
+            synthetic.append(target)
+            targets.append(target)
+            origins[target.target_id] = "class_group_noop"
         from .semantic_contract import discover_for_rules
         semantic_enabled = os.environ.get(
             "FUNDLEX_SEMANTIC_V2", "0").strip().lower() in {"1", "true", "on", "yes"}

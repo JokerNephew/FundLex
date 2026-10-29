@@ -171,3 +171,21 @@ def test_class_group_connector_variant_is_already_satisfied():
             "而从本类别基金资产中计提销售服务费。")
     keys = satisfied_operation_keys(rule, facts, body)
     assert "G04:0" in keys and "G04:1" in keys
+
+
+def test_hengli_g04_noop_creates_satisfied_site_targets():
+    from fundlex.recall import ensure_class_group_noop_targets
+    from test_recall_core import _facts
+    from types import SimpleNamespace
+
+    source = BATCH / "广发弘利3个月滚动持有债券型证券投资基金基金合同.docx"
+    inspection = inspect_docx(source, full=True)
+    rules = {rule["rule_id"]: rule for rule in GUIDE["groups"]
+             if rule["rule_id"] in {"G02", "G04"}}
+    scope = {"G02": SimpleNamespace(locations=frozenset({"p117"})),
+             "G04": SimpleNamespace(locations=frozenset({f"p{i}" for i in range(154, 160)}))}
+    targets = ensure_class_group_noop_targets([], rules, inspection, _facts(), scope)
+    by_key = {(target.rule_id, target.operations): target for target in targets}
+    assert ("G04", ("G04:0",)) in by_key
+    assert ("G04", ("G04:1",)) in by_key
+    assert all(target.state == "satisfied" for target in targets)
