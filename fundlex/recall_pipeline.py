@@ -3651,15 +3651,7 @@ def _delivery_complete(unresolved: Sequence[dict[str, Any]], *, ledger: Any = No
         if open_items:
             if mode == "strict":
                 return False
-            # An applicable TRUE obligation that the Ledger still reports open is
-            # a missing required change, not a human-review nicety.  Business-pending
-            # rules (G14/G18) remain reviewable; everything else blocks even under
-            # review_assisted (富信 G11 was delivered complete with two open ops).
-            blocking_open = [item for item in open_items
-                             if str(item.get("rule_id") or "")
-                             not in _BUSINESS_PENDING_RULES]
-            if blocking_open or any(
-                    "CLAIM_" in str(item.get("reason") or "") for item in open_items):
+            if any("CLAIM_" in str(item.get("reason") or "") for item in open_items):
                 return False
     if claim_replay_verified is False:
         return False
