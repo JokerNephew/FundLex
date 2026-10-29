@@ -6987,6 +6987,19 @@ def _plan_target_inner(rule: dict, target: Target, inspection: DocumentInspectio
         raise RecallError("TARGET_SOURCE_MISMATCH",
                           {"rule": rule_id, "target": target.target_id,
                            "location": target.location})
+    if (rule_id == "G08" and len(operations) == 1
+            and operations[0].get("op") == "replace"
+            and _G08_ACTUAL_RATE in span.text[target.start:target.end]):
+        expected, issues = instantiate_slots(
+            str(operations[0].get("new_text") or ""), facts)
+        if not issues and expected:
+            return finish(PlannedEdit(
+                target_id=target.target_id, rule_id=rule_id,
+                location=target.location, start=target.start, end=target.end,
+                replacement=expected, operation="replace",
+                content_source="g08_actual_rate_replace",
+                evidence={"fixed_text": expected,
+                          "guide_paragraphs": rule.get("source_paragraphs") or []}))
     if rule_id == "G22" and len(operations) == 1 and operations[0].get("op") == "replace":
         suffix = g22_appended_suffix(operations[0])
         anchor = "按基金份额持有人持有的基金份额比例进行分配"
@@ -9372,6 +9385,45 @@ def target_site_ok(rule_id: str, span: Any, inspection: DocumentInspection) -> b
     anchors, mode = _TARGET_ANCHORS[rule_id]
     return (any(anchor in paragraph for anchor in anchors) if mode == "any"
             else all(anchor in paragraph for anchor in anchors))
+
+
+_G08_ACTUAL_RATE = "实际执行的申购费率在招募说明书中载明"
+
+
+def ensure_g08_actual_rate_targets(targets: Sequence[Target], rules_by_id: dict[str, dict],
+                                   inspection: DocumentInspection,
+                                   scopes: Mapping[str, Any] | None = None) -> list[Target]:
+    """Bind G08's "实际执行的申购费率在招募说明书..." variant."""
+    rule = rules_by_id.get("G08")
+    if rule is None:
+        return []
+    operations = list(rule.get("operations") or ())
+    operation = next((item for item in operations if item.get("op") == "replace"), None)
+    if operation is None:
+        return []
+    scope = (scopes or {}).get("G08")
+    allowed = {str(location) for location in getattr(scope, "locations", ())} if scope else None
+    covered = {str(target.location) for target in targets
+               if target.rule_id == "G08" and not target.out_of_scope}
+    created: list[Target] = []
+    for span in inspection.paragraphs:
+        if allowed is not None and span.location not in allowed:
+            continue
+        text = span.text
+        index = text.find(_G08_ACTUAL_RATE)
+        if index < 0 or span.location in covered:
+            continue
+        end = index + len(_G08_ACTUAL_RATE)
+        if text[end:end + 1] in {"。", "；", ";"}:
+            end += 1
+        created.append(Target(
+            target_id=f"G08V{len(created) + 1:03d}", rule_id="G08",
+            location=span.location, quote=text[index:end], state="needs_edit",
+            reason="g08_actual_rate_variant", start=index, end=end,
+            resolution="resolved",
+            segment_ok=containing_segment(span, index, end) is not None,
+            operations=(_rule_operation_key(rule, operations.index(operation)),)))
+    return created
 
 
 _G22_ORDERED_ITEM = re.compile(

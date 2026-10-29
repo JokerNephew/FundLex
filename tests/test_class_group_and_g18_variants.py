@@ -81,3 +81,29 @@ def test_g18_uses_every_actual_class_group():
     assert edit is not None
     assert edit.replacement == ("由于本基金A类人民币、A类美元现汇和"
                                 "C类人民币、C类美元现汇、E类人民币、E类美元现汇费用收取不同")
+
+
+def test_g08_actual_rate_variant_is_bound_and_replaced():
+    from types import SimpleNamespace
+
+    from fundlex.recall import ensure_g08_actual_rate_targets, assign_target_operations
+
+    inspection = inspect_docx(
+        ROOT / "funds_word" / "基金合同第一批" /
+        "广发美国房地产指数证券投资基金基金合同.docx", full=True)
+    rule = _rule("G08")
+    facts = _facts()
+    ledger = compile_obligations({"groups": [rule]})
+    apply_facts(ledger, facts)
+    scope = {"G08": SimpleNamespace(locations=frozenset(
+        {f"p{i}" for i in range(123, 348)}))}
+    targets = ensure_g08_actual_rate_targets([], {"G08": rule}, inspection, scope)
+    assert len(targets) == 1
+    target = targets[0]
+    assert target.location == "p162"
+    assign_target_operations(targets, {"G08": rule}, inspection, facts, ledger)
+    edit = plan_target(rule, target, inspection, facts, NoModel(),
+                       compose_budget=[3], obligations=ledger)
+    assert edit is not None
+    assert "在申购时收取申购费用" in edit.replacement
+    assert "通过直销机构申购本基金" in edit.replacement
