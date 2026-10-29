@@ -2923,6 +2923,13 @@ def _selected_operation_indices(rule: dict, target: Target,
                 # The ordered-list wording carries the same distribution item;
                 # the guide's single-sentence prefix is absent by construction.
                 continue
+            if (rule_id == "G08" and operation.get("op") == "replace"
+                    and "申购费率由基金管理人决定" in span_body
+                    and "招募说明书" in span_body):
+                # Contracts commonly prefix the guide sentence with the class
+                # ("本基金A类基金份额的申购费率…") and extend the disclosure
+                # list.  This is the same G08 policy clause, not a topic flip.
+                continue
             # A one-word topic flip is a different clause, not a paraphrase.  A model
             # target quoting the 认购费率 sentence must not be accepted for G08's
             # 申购费率 operation (live p156 false target).

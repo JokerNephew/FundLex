@@ -164,3 +164,21 @@ def test_g18_fee_existence_variant_is_already_satisfied():
             "同一类别内的每一基金份额享有同等分配权；")
     keys = satisfied_operation_keys(rule, facts, body)
     assert "G18:0" in keys
+
+
+def test_g08_prefixed_class_fee_clause_is_attributed():
+    from fundlex.recall import assign_target_operations, Target
+    inspection = inspect_docx(
+        ROOT / "funds_word" / "基金合同第一批" /
+        "广发弘利3个月滚动持有债券型证券投资基金基金合同.docx", full=True)
+    text = inspection.by_location("p216").text
+    target = Target("T", "G08", "p216", text, "needs_edit", "",
+                    start=0, end=len(text), resolution="resolved",
+                    operations=("G08:0",))
+    rule = _rule("G08")
+    ledger = compile_obligations({"groups": [rule]})
+    facts = _facts()
+    apply_facts(ledger, facts)
+    errors = assign_target_operations([target], {"G08": rule}, inspection, facts, ledger)
+    assert not errors, errors
+    assert target.operations == ("G08:0",)
