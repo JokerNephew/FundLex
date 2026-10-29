@@ -300,6 +300,33 @@ def test_compare_generate_late_response_cannot_save_the_previous_pair(browser, l
         context.close()
 
 
+def test_compare_stale_task_404_clears_previous_identity_cards(browser, live_dev):
+    _app, base = live_dev
+    context = browser.new_context(viewport={"width": 1440, "height": 1000})
+    context.add_init_script("localStorage.setItem('fundlex-dev-user','compare-stale')")
+    page = context.new_page()
+
+    def scenario(path, query, route):
+        if path == "/api/compare/tasks":
+            return respond(route, {"items": [], "total": 0})
+        if path == "/api/compare/tasks/MISSING":
+            return respond(route, {"detail": "not found"}, status=404)
+        return respond(route, {})
+
+    install_api(page, base_api(scenario))
+    try:
+        open_dev(page, base, "#compare?mode=detail&id=MISSING")
+        page.locator("#compare-task-name").filter(has_text="任务不可用").wait_for()
+        assert "读取任务失败" in page.locator("#compare-task-status").inner_text()
+        assert page.locator("#compare-pair-list").inner_text().strip() == ""
+        back = page.locator("[data-compare-back-list]")
+        assert back.is_visible()
+        back.click()
+        page.wait_for_url(re.compile(r".*#compare\?.*mode=list.*"))
+    finally:
+        context.close()
+
+
 def test_compare_word_style_reader_renders_merged_redline_and_display_modes(browser, live_dev):
     _app, base = live_dev
     context = browser.new_context(viewport={"width": 1440, "height": 1000})
