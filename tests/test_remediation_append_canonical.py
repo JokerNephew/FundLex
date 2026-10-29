@@ -44,3 +44,23 @@ def test_body_append_site_is_canonical_while_summary_copy_stays():
         "canonical_target_id": "S03#1:T019",
         "location": "p802",
     }]
+
+
+def test_g03_prefers_class_definition_over_later_adjustment_paragraph():
+    inspection = inspect_docx(SOURCE, full=True)
+    definition = Target(
+        "Y010", "G03", "p124", "本基金根据认购、申购费用收取方式的不同", "needs_edit",
+        "append", operations=("G03:0",), resolution="resolved",
+    )
+    adjustment = Target(
+        "S03#1:T002", "G03", "p128", "有关基金份额类别的具体设置", "needs_edit",
+        "append", operations=("G03:0",), resolution="resolved",
+    )
+    changes = canonicalize_append_targets(
+        [definition, adjustment],
+        {"G03": {"operations": [{"op": "append"}]}},
+        inspection,
+    )
+    assert definition.out_of_scope is False
+    assert adjustment.out_of_scope is True
+    assert changes and changes[0]["canonical_target_id"] == "Y010"

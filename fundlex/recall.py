@@ -3212,6 +3212,7 @@ def canonicalize_append_targets(targets: Sequence[Target], rules_by_id: dict[str
             clause_by_location[location] = clause
     indices = {span.location: index for index, span in enumerate(inspection.paragraphs)}
     groups: dict[tuple[object, ...], list[Target]] = {}
+    append_site_priority: dict[str, tuple[int, str]] = {}
     for target in targets:
         if (target.state != "needs_edit" or target.out_of_scope
                 or not target.operations or not target.location):
@@ -3243,6 +3244,16 @@ def canonicalize_append_targets(targets: Sequence[Target], rules_by_id: dict[str
         key = (target.rule_id, tuple(sorted(operations)), span.zone,
                clause or (span.section_path,))
         groups.setdefault(key, []).append(target)
+        # G01/G03 are definition appends.  The model can also propose the
+        # later "份额类别具体设置/调整" paragraph; both look like the same
+        # section, but only the definition paragraph carries the class
+        # division.  Prefer that physical wording when the rule is G01/G03.
+        if target.rule_id in {"G01", "G03"}:
+            text = _compact(span.text)
+            append_site_priority.setdefault(target.target_id, (
+                0 if ("将基金份额分为" in text or "基金份额类别：" in text) else 1,
+                text,
+            ))
 
     changes: list[dict[str, str]] = []
     for items in groups.values():
@@ -3251,6 +3262,7 @@ def canonicalize_append_targets(targets: Sequence[Target], rules_by_id: dict[str
         # Open-rule targets carry stable `T...` ids; survey duplicates use `Y...`.
         # Prefer the former, then a non-composite target, then the earlier address.
         ordered = sorted(items, key=lambda item: (
+            append_site_priority.get(item.target_id, (0, ""))[0],
             item.target_id.startswith("Y"),
             bool(item.composite),
             item.location,
