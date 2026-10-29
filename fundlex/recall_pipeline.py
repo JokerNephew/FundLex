@@ -4489,7 +4489,8 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
                         old.resolution = target.resolution
                         old.state = "needs_edit"
                         old.reason = f"semantic_v2:{target.reason}"
-                        setattr(old, "semantic_replacement", target.replacement)
+                        setattr(old, "semantic_replacement",
+                                getattr(target, "semantic_replacement", ""))
                         setattr(old, "semantic_preserved_text",
                                 getattr(target, "semantic_preserved_text", ()))
                         adopted = True
