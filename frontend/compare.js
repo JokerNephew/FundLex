@@ -435,7 +435,7 @@
   }
   function focusDiff(index) {
     const ds=visibleDiffs();
-    document.querySelectorAll('.compare-diff.is-active,.compare-diff-item.is-active').forEach(n=>n.classList.remove('is-active'));
+    document.querySelectorAll('.compare-diff.is-active,.compare-diff-item.is-active,.compare-ins.is-active,.compare-del.is-active').forEach(n=>n.classList.remove('is-active'));
     if(!ds.length){$('compare-diff-counter').textContent='0 / 0';return;}
     state.diffIndex=(index+ds.length)%ds.length;const id=ds[state.diffIndex].id,diff=ds[state.diffIndex];
     const selector=`[data-diff-id="${CSS.escape(id)}"]`;
