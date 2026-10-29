@@ -725,7 +725,11 @@ def evaluate_operation_effect(obligation: Any, original: Any, artifact: Any,
             document = _compact("".join(str(getattr(span, "text", ""))
                                          for span in getattr(original, "paragraphs", ())))
         review_hits = _semantic_delete_review_hits(rule_id, document)
-        if review_hits and not _review_hits_are_one_way_only(review_hits):
+        review_allowed = (bool(review_hits) and _review_hits_are_one_way_only(review_hits)
+                          and _absent_coverage_evidence(
+                              absent_coverage, operation_id=operation_id,
+                              obligation_id=obligation_id, original=original) is not None)
+        if review_hits and not review_allowed:
             return OperationEffect(
                 "OPEN", "UNPROVEN", **base,
                 failure_code="EFFECT_SITE_UNPROVEN",
@@ -784,6 +788,22 @@ def evaluate_operation_effect(obligation: Any, original: Any, artifact: Any,
         coverage = _absent_coverage_evidence(
             absent_coverage, operation_id=operation_id,
             obligation_id=obligation_id, original=original)
+        if coverage is not None and spec.rule_id == "G05":
+            # The coverage record cannot turn a meeting-exemption clause into the
+            # class-setup site.  At least one scanned location must pass the rule's
+            # own site guard.
+            from ..recall import target_site_ok
+            valid_site = False
+            for location in coverage.get("scanned_locations") or ():
+                try:
+                    candidate_span = original.by_location(str(location))
+                except (KeyError, ValueError, AttributeError):
+                    continue
+                if target_site_ok("G05", candidate_span, original):
+                    valid_site = True
+                    break
+            if not valid_site:
+                coverage = None
         if coverage is not None:
             references = [str(getattr(spec, "old_text", "") or ""),
                           *[str(value) for value in getattr(spec, "alternatives", ())]]

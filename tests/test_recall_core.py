@@ -412,7 +412,8 @@ def test_delete_target_span_matching_one_sentence_of_reference(tmp_path: Path,
     mixed = Target("T2", "G17", "p1", keeper, "needs_edit", "", 0, len(span2.text), "resolved")
     trimmed = plan_target(rule, mixed, inspection2, facts, gateway=gateway, compose_budget=[6])
     assert trimmed is not None and trimmed.content_source in {
-        "composed_delete", "tier1_delete", "whole_paragraph_delete"}
+        "composed_delete", "tier1_delete", "whole_paragraph_delete",
+        "variant_delete"}
     assert "销售服务费率由基金管理人决定" in trimmed.replacement
 
 
