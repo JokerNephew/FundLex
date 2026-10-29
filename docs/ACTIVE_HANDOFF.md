@@ -11,6 +11,7 @@
 - 生产当前候选`cdf298e`（engine`25308351015f...`/service`e0625b495b5c...`），五服务active、workspace未登录401。最终生产浏览器E2E任务`6bbb6712e9a34b6bbfb2400e239ffc09`/doc`5d35ba80d3414de49e93e4bccabe06e0`：651秒、27逻辑/27HTTP、240639 tokens、约$0.08126，complete；final`4f0a10ab...`、16 ins/16 del，10项机械检查全过，v2标签B02 21/21、false_complete=0，独立复核通过（P2 p800/p801空段）。证据`docs/evidence/production-value7-*`。
 - 多轮生产E2E失败均保留：G06缺失、G03 canonical/orphan、G09 survey、G17 audit/guard、G15 residual；对应修复已提交并通过定向测试。生产发布候选已从e更新到g（cdf298e）；旧`/opt`发布事务和release worktree已清理，根盘约4.5GB可用。
 - 备份/发布事故已修：第一/第二DB备份工具曾写raw `.sql.gz`，已修复为先raw临时再gzip、verify通过，并在隔离MySQL恢复54表/93users/711docs后清理测试库；旧备份权限已收紧。发布器journalctl时间格式bug已修；生产`tools/ops/fundlex_backup.py`已同步修复版。
+- 第一波扩展已启动：20份dev分成4组，真实模型v4-flash并行运行在`/tmp/opencode/comprehensive-remediation-20261028/first-wave-dev-{1..4}`；各组独立ledger/日志，尚未完成，不能预判整批结果。
 - 独立标签v2已合并：28份/501 targets，review346条中应用44、驳回251、未解决51单列uncertain；不是最终gold。首批transcript/产物评分未完成。
 - 真实模型新端点`https://api.commandcode.ai/provider/v1`、模型`deepseek/deepseek-v4-flash`，key只在`/tmp/opencode/comprehensive-remediation-20261028/model-new.env`(600)；未写仓库/文档/日志。首两次真实run因reasoning耗尽`max_tokens`报`MODEL_OUTPUT_TRUNCATED`（`real-value-first{,2}`），第三次已用`thinking=disabled`+12000输出+context32000启动，结果待记录；不能把失败/重试当业务完成。
 - 当前未部署/未重启/未改生产env；生产仍是旧OpenCode端点。下一动作：真实value run完成→检查p1258摘要及实际final，独立业务复核，再跑首批20dev评分；通过后才合并/冻结候选、更新生产env/root publisher/五服务部署、正式工作台E2E；扩样需质量门槛。
