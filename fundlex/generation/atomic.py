@@ -1,8 +1,28 @@
 """Combine independently validated paragraph transforms on ORIGINAL coordinates."""
 from __future__ import annotations
 
+import re
 from difflib import SequenceMatcher
 from typing import Any, Mapping, Sequence
+
+_ORPHAN_TAIL = re.compile(r"(?:[，,、；;：:]\s*)?(?:其中|以及|并且|同时|另外)\s*[，,：:]?$")
+_DANGLING_TAIL = re.compile(r"[，,、；;：:]$")
+
+
+def _trim_orphan_tail(result: str, original: str) -> str:
+    """Drop a connector left dangling by a deletion at the paragraph end.
+
+    Deleting ``其中，本基金对…`` or a trailing clause after ``其中，`` must not
+    leave ``…列示。其中，`` in the artifact.  The trim only fires when the source
+    paragraph did not already end that way, so authored trailing punctuation is
+    never rewritten.
+    """
+    source = original.rstrip()
+    if _ORPHAN_TAIL.search(source) or _DANGLING_TAIL.search(source):
+        return result
+    stripped = _ORPHAN_TAIL.sub("", result.rstrip())
+    stripped = _DANGLING_TAIL.sub("", stripped.rstrip())
+    return stripped if stripped else result
 
 
 def compose_paragraph(original: str, components: Sequence[Mapping[str, Any]]) -> str | None:
@@ -43,4 +63,7 @@ def compose_paragraph(original: str, components: Sequence[Mapping[str, Any]]) ->
         result.extend((original[cursor:start], replacement))
         cursor = end
     result.append(original[cursor:])
-    return "".join(result)
+    composed = "".join(result)
+    if composed != original:
+        composed = _trim_orphan_tail(composed, original)
+    return composed

@@ -10,7 +10,7 @@ from __future__ import annotations
 import json
 import os
 import re
-from typing import TYPE_CHECKING, Any, Mapping, Sequence
+from typing import TYPE_CHECKING, Any, Iterable, Mapping, Sequence
 
 if TYPE_CHECKING:  # pragma: no cover - typing only, avoids an import cycle at runtime
     from .semantic_evidence import ApprovalBook
@@ -78,6 +78,30 @@ LOCATE_INSTRUCTION = (
 )
 
 LOCATE_PROMPT_VERSION = "recall_locate_v1"
+
+
+def normalise_locator_location(value: str, allowed: Iterable[str]) -> str:
+    """Normalise the display-form location a locator may copy from context.
+
+    Candidate context labels paragraphs as ``[p164] …``.  Models routinely copy
+    that display form ("[p164]") into the location field even though the schema
+    asks for ``p164``.  The label is normalised before the window check; a
+    correct locator answer must not be rejected as
+    location_outside_candidate_window (FL-D488).
+    """
+    location = str(value or "").strip()
+    stripped = re.sub(r"^[\[\(【]\s*", "", location)
+    stripped = re.sub(r"\s*[\]\)】]$", "", stripped)
+    if stripped and stripped != location:
+        location = stripped
+    allowed = tuple(str(item) for item in allowed)
+    if location not in allowed and location:
+        matches = [candidate for candidate in allowed
+                   if re.search(rf"(?<![A-Za-z0-9_]){re.escape(candidate)}"
+                                rf"(?![A-Za-z0-9_])", location)]
+        if len(matches) == 1:
+            location = matches[0]
+    return location
 
 
 def _enabled() -> bool:
@@ -241,6 +265,14 @@ def _open_operation_candidates(
         if rule_id == "G13" and not (
                 "少于7日" in text and "赎回费" in text and
                 ("1.5%" in text or "1.50%" in text)):
+            return 0
+        if rule_id == "G09" and not (
+                "赎回金额为按实际确认的有效赎回份额" in text
+                and "基金份额净值" in text and "扣除" in text):
+            # G09's guide literal names "对应份额类别"; contracts already using
+            # "该类基金份额净值" do not contain that fragment but still carry the
+            # clause the rule must complete ("扣除或加上").  Anchor on the policy
+            # shape rather than the historical noun.
             return 0
         if append_site:
             # G16 appends into the sales-service-fee accrual/payment clause, not the
@@ -576,6 +608,7 @@ def locate_unresolved_targets(targets: Sequence[Any], inspection: Any,
         value = result.value if isinstance(result.value, dict) else {}
         location = str(value.get("location") or "").strip()
         quote = str(value.get("quote") or "").strip()
+        location = normalise_locator_location(location, allowed_locations)
         record.update(location=location, quote=quote,
                       semantic_role=str(value.get("semantic_role") or ""),
                       reason=str(value.get("reason") or ""))

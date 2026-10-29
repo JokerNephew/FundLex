@@ -49,7 +49,8 @@ from .recall import (BOUNDARY_POLICY, ENGINE_ID, ENGINE_VERSION, SCHEMA_VERSION,
                       _declared_operation_key,
                       _expand_fee_rate_reference,
                       dedupe_operation_targets,
-                      source_parts_contiguous)
+                      source_parts_contiguous,
+                      absent_delete_coverage)
 from .recall_prompts import (AUDIT_INSTRUCTION, AUDIT_PROMPT_VERSION, AUDIT_SCHEMA,
                              PROMPT_VERSIONS, SWEEP_INSTRUCTION, SWEEP_PROMPT_VERSION,
                              SWEEP_SCHEMA)
@@ -2304,7 +2305,9 @@ def _run_audit(model: Any, rules_by_id: dict[str, dict], targets: Sequence[Targe
                               rules_by_id=rules_by_id, facts=facts,
                               targets_by_id={target.target_id: target.as_dict() for target in targets},
                               obligations=obligations, scopes=scopes,
-                              approvals=approval_book)
+                              approvals=approval_book,
+                              absent_coverage_by_operation=absent_delete_coverage(
+                                  rules_by_id, targets, original, scopes, obligations))
         artifact_proofs = replay["obligations"]
         artifact_failures = replay["failures"]
     auditable_by_rule = _targets_by_rule(auditable)
@@ -4978,7 +4981,10 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
                         obligations=obligation_ledger,
                         scopes=scopes,
                         approvals=approval_book,
-                        audit_proofs=audit_proofs)
+                        audit_proofs=audit_proofs,
+                        absent_coverage_by_operation=absent_delete_coverage(
+                            rules_by_id, targets, inspection, scopes,
+                            obligation_ledger))
                     residuals = check_delete_residuals(
                         rules_by_id, actual, edits=plan.get("edits") or [], original=inspection,
                         targets=[target.as_dict() for target in targets], facts=facts,

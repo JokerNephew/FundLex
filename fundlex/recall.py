@@ -80,15 +80,21 @@ def _compact(value: str) -> str:
 # The noun does not change the policy.  Normalisation is only used for operation
 # identity/site matching; the guide and the artifact keep their original text.
 _FEE_RATE_ITEM = r"(?:申购|赎回|转换|销售服务)费率"
+_FEE_RATE_JOIN = r"[、和及]"
 
 
 def _normalise_fee_rate_reference(value: str) -> str:
-    return re.sub(rf"、基金(?={_FEE_RATE_ITEM})", "、", _compact(value))
+    # Contracts repeat the noun after ``、`` *and* after ``和/及``:
+    # 合同: 调低基金申购费率和基金赎回费率
+    # 指引: 调低基金申购费率和赎回费率
+    return re.sub(rf"{_FEE_RATE_JOIN}基金(?={_FEE_RATE_ITEM})",
+                  lambda match: match.group(0)[0], _compact(value))
 
 
 def _expand_fee_rate_reference(value: str) -> str:
     """Insert the optional repeated noun so an exact document search can find it."""
-    return re.sub(rf"、(?={_FEE_RATE_ITEM})", "、基金", _compact(value))
+    return re.sub(rf"{_FEE_RATE_JOIN}(?={_FEE_RATE_ITEM})",
+                  lambda match: match.group(0) + "基金", _compact(value))
 
 
 def compact_offsets(span_text: str) -> tuple[str, list[int]]:
@@ -1903,6 +1909,17 @@ def satisfied_by_new_text(rule: dict, facts: Facts, compact_body: str) -> str | 
       "…费用收取不同" (FL-D047).
     """
     if not compact_body or not str(rule.get("requirement") or "").strip():
+        return None
+    rule_id = str(rule.get("rule_id") or "")
+    # Multi-component replacements: a short tail sentence that also occurs in the
+    # OLD clause cannot prove the new policy.  G09's "赎回金额单位为元。" tail and
+    # G11's C-class sentence both occur in the old wording; the discriminating
+    # first component must be present before any suffix/reordered proof is used.
+    if rule_id == "G09" and not ("扣除或加上相应的费用" in compact_body
+                                  and "当日该类基金份额的基金份额净值" in compact_body):
+        return None
+    if rule_id == "G11" and not ("通过直销机构" in compact_body
+                                  and "其他销售机构" in compact_body):
         return None
     replacements: list[str] = []
     references: list[str] = []
@@ -9139,6 +9156,99 @@ _DELETE_REVIEW_PROBES = {
         r"(?=.*(?:不得|不允许|暂不允许|不能|不可)[^。；;！？!?]{0,32}转换)"
     ),
 }
+
+
+def absent_delete_coverage(rules_by_id: Mapping[str, Any],
+                           targets: Sequence[Target], inspection: DocumentInspection,
+                           scopes: Mapping[str, Any] | None, obligations: Any,
+                           ) -> dict[str, dict[str, Any]]:
+    """Deterministically certify a delete whose old policy object is absent.
+
+    Claim Replay refuses to close ``document_literal_absent_without_coverage``
+    without a caller-supplied site scan.  A guide delete can legitimately have
+    nothing to delete (contracts that never had the class-conversion ban or the
+    7-day fee); the operation must still close as ``ALREADY_SATISFIED`` instead
+    of leaving every run ``incomplete``.  This helper performs that scan for the
+    probe-backed delete rules and returns one record per truly absent operation.
+
+    A target for the operation (even one the planner rejected) disables the
+    record: a real site exists and must be proven through the edit, not through
+    an absence certificate.  Semantic variants and review-only candidates also
+    block the record, so a reworded old clause never becomes a false absence.
+    """
+    if obligations is None:
+        return {}
+    from .generation.effects import (_semantic_delete_hits,
+                                     _semantic_delete_review_hits)
+    probe_backed = {"G06", "G13", "G17"}
+    in_scope_operations: set[str] = set()
+    for target in targets:
+        if (target.out_of_scope or target.attribution_error
+                or target.state not in {"needs_edit", "satisfied"}):
+            # ``absent``/``not_applicable`` are qualification opinions, not a
+            # physical site.  They must not suppress the deterministic scan that
+            # decides whether the old clause really exists.
+            continue
+        in_scope_operations.update(str(key) for key in target.operations or ())
+    locations = [str(span.location) for span in inspection.paragraphs]
+    document = _compact("\n".join(str(span.text) for span in inspection.paragraphs))
+    records: dict[str, dict[str, Any]] = {}
+    for record in getattr(obligations, "records", ()):
+        spec = record.spec
+        if (spec.op != "delete" or spec.rule_id not in probe_backed
+                or record.applicability.status != "TRUE"):
+            continue
+        if spec.operation_id in in_scope_operations:
+            continue
+        references = [str(value) for value in
+                      (spec.old_text, *spec.alternatives) if str(value).strip()]
+        if any(_compact(reference) in document for reference in references):
+            continue
+        if _semantic_delete_hits(spec.rule_id, document):
+            continue
+        if _semantic_delete_review_hits(spec.rule_id, document):
+            continue
+        # Broader, rule-specific keyword gates.  A semantic probe is a fast path;
+        # these plainer shapes must also block a negative certificate so a
+        # reworded clause (``7天`` / ``各类基金份额不得转换`` / ``用途``) never
+        # becomes a false ALREADY_SATISFIED.
+        sentences = [part for part in re.split(r"(?<=[。；;！？!?])", document) if part]
+        if spec.rule_id == "G06" and any(
+                re.search(
+                    r"(?:份额类别|(?:[A-ZＡ-Ｚ]类|各类|不同类别)"
+                    r"[^。；;]{0,12}基金?份额)"
+                    r"[^。；;]{0,12}(?:不得|不允许|暂不允许|不能|不可)"
+                    r"[^。；;]{0,12}转换", sentence)
+                for sentence in sentences):
+            continue
+        if spec.rule_id == "G13" and any(
+                "赎回费" in sentence
+                and any(token in sentence for token in ("7日", "七日", "7天", "七天"))
+                and any(token in sentence for token in ("少于", "不足", "不满", "未满"))
+                for sentence in sentences):
+            continue
+        if spec.rule_id == "G17" and any(
+                "销售服务费" in sentence
+                and any(token in sentence for token in
+                        ("主要用于", "使用范围", "用途"))
+                for sentence in sentences):
+            continue
+        scope = (scopes or {}).get(spec.rule_id)
+        scanned = sorted(scope.locations) if scope is not None else locations
+        scanned = [location for location in scanned
+                   if any(str(span.location) == location for span in inspection.paragraphs)]
+        if not scanned:
+            continue
+        records[spec.operation_id] = {
+            "kind": "rule_scope_scan" if scope is not None else "document_site_scan",
+            "operation_id": spec.operation_id,
+            "obligation_id": record.obligation_id,
+            "scanned_locations": scanned,
+            "document_sha256": inspection.source_sha256,
+            "reason": ("deterministic delete scan: zero literal, semantic and "
+                       "review hits across the scanned rule scope"),
+        }
+    return records
 
 
 def semantic_delete_review_candidates(rule_id: str, text: str) -> list[str]:
