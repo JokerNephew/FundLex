@@ -138,6 +138,48 @@ H＝E×…
 - 处理：未越权扩展G15删除范围；按指引只删授权句。记录为待业务裁决：是否需要把“代收”尾句纳入G15，或在新G16中明确其仍适用。不得由agent自行改指引后冒充已验证规则。
 - 状态：**开放（需产品/法务裁决）；当前作为P2保留**。
 
+## FL-D503 管理费事实quote中“计提年费率为0.25%的销售服务费”无法解析（2026-10-29）
+
+- 发现日期：2026-10-29，弘利重跑。P1。
+- 问题与影响：C类定义写“从本类别基金资产中计提年费率为0.25%的销售服务费”；`fee_evidence`只支持费率在费用名之后，`FEE_QUOTE_UNPROVEN`→`service_fee_group UNKNOWN`，G05/G08/G11/G16/G22全部`RECALL_FACT_UNVERIFIED`。
+- 处理（已实施）：增加“收取/计提+年费率+数字%+的+费用名”解析；`tests/test_fee_rate_before_noun.py`。
+- 状态：**代码修复+定向测试通过；弘利真实重跑待完成**。
+
+## FL-D504 G06单侧Y类转换禁令阻断“互相转换禁令不存在”闭环（2026-10-29）
+
+- 发现日期：2026-10-29，沪深300重跑。P1。
+- 问题与影响：合同有“但Y类基金份额不能转换为A类、C类基金份额”，没有指引要删的“不同基金份额类别之间不得互相转换”。语义探针把单侧Y类限制当作G06变体，coverage不生成，G06永远OPEN。
+- 处理（已实施）：G06语义/宽关键词/review候选中的单侧Y类限制保留为`review_candidates`，不再阻断互相禁令缺失的`ALREADY_SATISFIED`；真正互相禁令仍阻断。`tests/test_absent_delete_coverage.py`新增沪深300用例。
+- 状态：**代码修复+定向测试通过；沪深300真实重跑进行中**。
+
+## FL-D505 G17整段删除带走了未授权的费率优惠尾句（2026-10-29）
+
+- 发现日期：2026-10-29，A50重跑。P1。
+- 问题与影响：p799为“销售服务费主要用于…服务费等；基金管理人可根据…下调销售服务费率…”。原逻辑把整段当G17删除，Claim Replay判`CLAIM_OPERATION_SPAN_UNAUTHORIZED`，G17 OPEN；同时会误删未授权尾句。
+- 处理（已实施）：G17规划前把目标span收窄到`_g17_source_sentence_parts`的授权完整句；只删用途句，保留费率优惠尾句。`tests/test_g17_tail_not_deleted.py`；A50单合同重跑`fixcheck3-a50` complete。
+- 状态：**代码修复+单合同真实运行通过**。
+
+## FL-D506 G12“各类基金份额…不低于25%…注册登记费”整句无法compose（2026-10-29）
+
+- 发现日期：2026-10-29，美国房地产重跑。P1。
+- 问题与影响：旧归入句与指引措辞差异大，自由compose删除“注册登记费”被受保护词检查拒绝，`RECALL_COMPOSE_UNVERIFIED`，G12 OPEN。
+- 处理（已实施）：G12对完整归入句（含“赎回费用…承担…归入基金财产/全额计入…”，≤200字且以句末标点结束）直接用授权new_text整句替换；`tests/test_g12_allocation_variant.py`。
+- 状态：**代码修复+定向测试通过；美国房地产真实重跑进行中**。
+
+## FL-D507 合成`ABSENT-G05-*`目标被replay当成真实站点，replace判MISSING_EFFECT（2026-10-29）
+
+- 发现日期：2026-10-29，弘利重跑。P1。
+- 问题与影响：`ABSENT-G05-0/2`状态satisfied但out_of_scope/审计时序不同；replay把p158当G05:0站点，replace没有编辑→`CLAIM_OPERATION_NOT_PLANNED`，而G05:2靠该站点通过。结果G05:0无法用absence证书关闭。
+- 处理（已实施）：replay与`absent_delete_coverage`都识别`ABSENT-*`/`OLD_WORDING_ABSENT_IN_RULE_SCOPE`为扫描标记，不作为真实站点；G05:0/G05:2均由rule-scope扫描证书关闭。定向回归153项通过。
+- 状态：**代码修复+定向测试通过；弘利真实重跑进行中**。
+
+## FL-D508 类别名缺少可选“基金”导致类别集不完整（2026-10-29）
+
+- 发现日期：2026-10-29，美国房地产重跑。P1。
+- 问题与影响：模型返回`A类人民币份额`，合同写`A类人民币基金份额`；`verify_class_set`要求全名逐字出现→`CLASS_SET_MISMATCH`，share_class/subscription/service facts UNKNOWN，整批规则被fact gate阻断。
+- 处理（已实施）：`fact_evidence._name_in_text`允许可选“基金”；`tests/test_class_set_optional_fund_noun.py`。
+- 状态：**代码修复+定向测试通过；美国房地产真实重跑进行中**。
+
 ## FL-D488 第一波真实运行大面积因G06/G13/G17删除目标“原文不存在”未闭环（2026-10-29）
 
 - 发现日期：2026-10-29，首批20份dev真实运行。P0（阻断整批交付）。
