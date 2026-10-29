@@ -4,13 +4,13 @@
 
 | 阶段 | 状态 | 验证/提交/剩余 |
 |---|---|---|
-| S0 基线/ownership | 已合并，回归通过 | 分支`codex/comprehensive-remediation-20261028`；基线`9e85f91`，A–H及标签分支已合并；非浏览器（含隔离MySQL）**2118 passed/6 skipped/676.41s**，浏览器**69 passed/224.11s**。不将合并/单测误作业务修复 |
+| S0 基线/ownership | 已合并，回归通过 | 分支`codex/comprehensive-remediation-20261028`；基线`9e85f91`，A–H及标签分支已合并；最新非浏览器（含隔离MySQL）**2158 passed/6 skipped/750.46s**，浏览器最近**69 passed**。不将合并/单测误作业务修复 |
 | S1 安全/无cap/资格 | 已实施并部署 | D/C/E：cap纯观测、config/资格/不可变/fencing/下载核验/依赖/上传/sandbox代码与回归已合并；生产env新endpoint/无ENFORCE开关、certifi升级、备份权限已执行 |
 | S2 业务完整性/证明 | 单合同生产验证通过 | A：批准绑定、site proof、坐标、分页、摘要目标、统一门禁；生产value7 21/21标签、独立复核通过（P2空白段），其余20dev/8holdout/514待跑 |
 | S3 DOCX/Compare | 已实施，待Word/真实任务 | B：叠加/Review/坐标/Compare边界；合成及弘利临时副本+相关测试通过，Word/WPS未验 |
 | S4 多渠道/前端恢复 | 前端/workspace生产通过，真实飞书待验 | G/H/C：任务/飞书/前端/法规恢复代码及隔离测试通过；生产workspace及浏览器E2E通过；真实飞书消息/回调、法规全类型生产E2E待验 |
 | S5 发布/运维恢复 | **已受控部署候选cdf298e** | E：workspace/五服务发布器/依赖/备份工具/sandbox；生产env新endpoint、certifi2026.10.19、DB+对象备份与隔离恢复通过；备份/发布器时间戳bug已修；五服务active、workspace401 |
-| S6 真实评测优化 | 首波标签v2完成，单合同生产通过 | 28→约100→约250→funds_word根514+首批28（unique约542）；v2 501 targets/51 unresolved findings单列；B02生产value7 21/21+独立复核通过；其余20dev/8holdout/514待跑 |
+| S6 真实评测优化 | **第一波20 dev完成：15业务通过/5失败** | 标签304/390=77.95%，14/20 actually complete，false_complete 1（B01口径争议）；失败B05/B12/B15/B17/B19保留；下一步holdout 8份→扩样100/250/514+ |
 | S7 部署/正式用户E2E | **单合同生产E2E通过** | 生产candidate cdf298e，五服务active；浏览器注册/指引/上传/真实模型/结果页/final/redline/报告下载、10项机械检查、21/21标签、独立复核通过；P2空白段 |
 
 当前整体NO-GO，尚无本轮工程修复完成声明；只有测试、独立业务复核和真实E2E通过后才更新。独立worktree：
