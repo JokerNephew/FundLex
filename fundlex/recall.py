@@ -7039,6 +7039,25 @@ def _plan_target_inner(rule: dict, target: Target, inspection: DocumentInspectio
                               "replaced_group": group_text,
                               "guide_paragraphs": rule.get("source_paragraphs") or []}))
     actual = span.text[target.start:target.end]
+    if (rule_id == "G22" and target.quote and not _same_compact(target.quote, actual)):
+        # A rebind can set a resolved target to the guide reference offsets while
+        # the contract omits one noun ("持有的份额比例" vs "持有的基金份额比例").
+        # Expand the bound span to the source clause before composition so the
+        # replacement cannot leave the source tail behind.
+        for operation in operations:
+            if operation.get("op") != "replace":
+                continue
+            reference = str(operation.get("old_text") or "")
+            if len(_compact(reference)) < 8:
+                continue
+            bound = fuzzy_span_clause(span.text, reference,
+                                      threshold=VARIANT_MATCH_RATIO)
+            if (bound is not None and abs(bound[0] - target.start) <= 2
+                    and bound[1] > target.end):
+                target.end = bound[1]
+                target.quote = span.text[target.start:target.end]
+                actual = span.text[target.start:target.end]
+                break
     # Routing is performed after source binding and operation narrowing.  This is
     # the execution contract for this target; the branches below may only use the
     # executor selected here.  In particular, a deterministic failure cannot
