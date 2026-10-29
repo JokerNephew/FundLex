@@ -144,3 +144,30 @@ def test_hengli_g02_class_definition_already_generic_closes_as_noop():
         [], inspection, scope, ledger, facts=_facts())
     assert "G02:0" in coverage and "G02:1" in coverage
     assert coverage["G02:0"]["scanned_locations"] == ["p117"]
+
+
+def test_class_group_connector_variant_is_already_satisfied():
+    from fundlex.recall import ClassFact, Facts, satisfied_operation_keys
+
+    rule = next(rule for rule in GUIDE["groups"] if rule["rule_id"] == "G04")
+    facts = Facts(
+        fund_type="open_regular", fund_type_quote="", fund_type_basis="",
+        classes=(
+            ClassFact(name="A类基金份额", subscription_fee=True, service_fee=False,
+                      current=True, rate="1.2%", quote="A类"),
+            ClassFact(name="C类基金份额", subscription_fee=False, service_fee=True,
+                      current=True, rate="0.4%", quote="C类"),
+            ClassFact(name="E类基金份额", subscription_fee=False, service_fee=True,
+                      current=True, rate="0.3%", quote="E类"),
+        ),
+        floating_management_fee=False, floating_quote="", floating_basis="",
+        notes="", quotes_verified={}, problems=(),
+        fact_status={"share_class_structure": "VERIFIED",
+                     "subscription_fee_group": "VERIFIED",
+                     "service_fee_group": "VERIFIED"},
+    )
+    body = ("本基金将基金份额分为A类、C类、E类三种不同的类别。在投资者申购A类基金份额时"
+            "收取申购费用，不计提销售服务费；在投资者申购C类和E类基金份额时不收取申购费用，"
+            "而从本类别基金资产中计提销售服务费。")
+    keys = satisfied_operation_keys(rule, facts, body)
+    assert "G04:0" in keys and "G04:1" in keys

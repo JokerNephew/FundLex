@@ -1971,6 +1971,16 @@ _KEYWORD_VARIANTS: dict[str, tuple[str, ...]] = {
 _NEGATION_PREFIXES = ("不", "无须", "无需", "免于", "取消")
 
 
+def _normalise_class_group_connectors(text: str) -> str:
+    """Treat class-group separators as equivalent for satisfaction checks.
+
+    Contracts write the same group as "C类和E类基金份额" or "C类、E类基金份额".
+    The guide uses the enumeration comma.  Normalise only a connector between two
+    share-class labels, never general prose conjunctions.
+    """
+    return re.sub(r"(?<=类)(?:、|和|及|与)(?=[A-ZＡ-Ｚ]类)", "、", text)
+
+
 def satisfied_by_new_text(rule: dict, facts: Facts, compact_body: str) -> str | None:
     """Replacement text that proves this rule is already carried out in a paragraph.
 
@@ -1986,6 +1996,8 @@ def satisfied_by_new_text(rule: dict, facts: Facts, compact_body: str) -> str | 
     if not compact_body or not str(rule.get("requirement") or "").strip():
         return None
     rule_id = str(rule.get("rule_id") or "")
+    if rule_id in {"G02", "G04"}:
+        compact_body = _normalise_class_group_connectors(compact_body)
     # Multi-component replacements: a short tail sentence that also occurs in the
     # OLD clause cannot prove the new policy.  G09's "赎回金额单位为元。" tail and
     # G11's C-class sentence both occur in the old wording; the discriminating
@@ -2011,6 +2023,8 @@ def satisfied_by_new_text(rule: dict, facts: Facts, compact_body: str) -> str | 
     if not replacements:
         return None
     combined = "".join(replacements)
+    if rule_id in {"G02", "G04"}:
+        combined = _normalise_class_group_connectors(combined)
     compact_replacement = _compact(combined)
     if compact_replacement and compact_replacement in compact_body:
         return combined
@@ -2661,7 +2675,11 @@ def satisfied_operation_keys(rule: dict, facts: Facts, compact_body: str) -> set
         if issues or not instantiated:
             continue
         compact = _compact(instantiated)
-        if compact and compact in compact_body:
+        body = (compact_body if rule_id not in {"G02", "G04"}
+                else _normalise_class_group_connectors(compact_body))
+        if rule_id in {"G02", "G04"}:
+            compact = _normalise_class_group_connectors(compact)
+        if compact and compact in body:
             keys.add(_rule_operation_key(rule, index))
             continue
         # The paragraph may express the same operation with reordered subjects or a
