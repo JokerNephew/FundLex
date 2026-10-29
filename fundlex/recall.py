@@ -5040,6 +5040,27 @@ def _g06_prohibition_bounds(text: str, start: int | None, end: int | None
     return left, right, sentence
 
 
+def _g13_short_holding_span(text: str, operation: Mapping[str, Any]) -> tuple[int, int] | None:
+    """Locate the complete short-holding delete sentence anywhere in a span."""
+    old = _compact(str(operation.get("old_text") or ""))
+    if (operation.get("op") != "delete" or not all(
+            token in old.replace("1.50%", "1.5%")
+            for token in ("少于7日", "1.5%", "赎回费", "全额计入基金财产"))):
+        return None
+    compact, offsets = compact_offsets(text)
+    match = re.search(
+        r"(?:其中[，,]?)?(?:本基金)?(?:对于|对)?持续持有期少于7日的投资[者人]"
+        r"收取(?:不低于)?1\.5(?:0)?%的赎回费[，,]"
+        r"(?:并(?:将上述赎回费)?|并将赎回费|并)?全额计入基金财产[。；;]", compact)
+    if match is None:
+        return None
+    start = match.start()
+    # Remove the preceding clause separator so the paragraph does not end in "；".
+    if start > 0 and compact[start - 1] in "；;，,":
+        start -= 1
+    return offsets[start], offsets[match.end() - 1] + 1
+
+
 def _g13_short_holding_end(text: str, operation: Mapping[str, Any]) -> int | None:
     """One complete short-holding sentence, authorized by this deletion alone."""
     old = _compact(str(operation.get("old_text") or ""))
@@ -6973,10 +6994,14 @@ def _plan_target_inner(rule: dict, target: Target, inspection: DocumentInspectio
             site_ok = target_site_ok(rule_id, span, inspection)
     else:
         site_ok = target_site_ok(rule_id, span, inspection)
-    if not site_ok and approvals is not None:
+    if (not site_ok and approvals is not None
+            and not any(operation.get("op") == "append" for operation in operations)):
         # The source, operation identity, scope and guide identity were already
         # verified when the approval was created.  A different word list must not
         # reject the same target again (弘利 G17 "可用于", FL-D394/R01).
+        # An append anchor is structural, not a semantic word bag: a valid
+        # approval must never append G16 to an unrelated paragraph
+        # (富信 p1296 ETF clause).
         check = approvals.allows(target, inspection)
         if check.ok:
             site_ok = True
@@ -7117,6 +7142,13 @@ def _plan_target_inner(rule: dict, target: Target, inspection: DocumentInspectio
                 content_source="g06_prohibition_delete",
                 evidence={"deleted_quote": sentence}))
     if rule_id == "G13" and len(operations) == 1 and len(delete_ops) == 1:
+        short_span = _g13_short_holding_span(actual, delete_ops[0])
+        if short_span is not None:
+            return finish(PlannedEdit(
+                target_id=target.target_id, rule_id=rule_id, location=target.location,
+                start=target.start + short_span[0], end=target.start + short_span[1],
+                replacement="", operation="replace", content_source="short_holding_delete",
+                evidence={"deleted_quote": actual[short_span[0]:short_span[1]]}))
         short_end = _g13_short_holding_end(actual, delete_ops[0])
         if short_end is None:
             short_end = _g13_short_holding_owned(

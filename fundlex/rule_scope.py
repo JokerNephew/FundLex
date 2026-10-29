@@ -912,6 +912,14 @@ def _resolve_fee_tax(rule_id: str, sections: Sequence[Any], leaves: Sequence[Lea
     summary_leaves: list[LeafSection] = []
     if enabled:
         summary_ids = [str(section.id) for section in base if str(section.zone) == "summary"]
+        if not summary_ids:
+            # The model's section mapping sometimes omits the contract-summary
+            # chapter even though the body fee leaf has a real copy there.  The
+            # copy_key + summary_of pair is deterministic evidence; scan every
+            # summary section rather than silently leaving the summary unedited
+            # (A50/聚安 p1254/p1294).
+            summary_ids = [str(section.id) for section in sections
+                           if str(section.zone) == "summary"]
         body_keys = {leaf.copy_key for leaf in body if leaf.copy_key}
         body_leaf_ids = {leaf.id for leaf in body}
         summary_leaves = [
@@ -959,6 +967,9 @@ def _resolve_income(rule_id: str, sections: Sequence[Any], leaves: Sequence[Leaf
 
     selected: list[LeafSection] = list(body)
     summary_ids = [str(section.id) for section in base if str(section.zone) == "summary"]
+    if not summary_ids:
+        summary_ids = [str(section.id) for section in sections
+                       if str(section.zone) == "summary"]
     enabled = _summary_enabled(summary_overrides, rule_id, True)
     summary_leaves = ([leaf for leaf in _leaves_for(leaves, summary_ids, zone="summary")
                        if leaf.copy_key == "收益分配"
