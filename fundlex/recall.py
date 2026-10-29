@@ -4455,30 +4455,46 @@ def rebind_g16_clause_targets(targets: Sequence[Target],
         index = indices.get(target.location)
         if index is None:
             continue
-        for head_index in range(index, max(-1, index - 7), -1):
-            head = spans[head_index]
-            if not _g16_payment_anchor(head.text):
-                continue
-            section = next((item for item in sections if head.location in item.locations), None)
-            if section is None:
-                continue
-            end = _g16_clause_end(head, section, inspection)
-            if not head_index <= index <= indices[end.location]:
-                continue
-            clause = list(section.locations)[list(section.locations).index(head.location):
-                                             list(section.locations).index(end.location) + 1]
-            append_end = _g16_append_end(inspection, clause)
-            if target.location != end.location or target.end != append_end:
-                changes.append({"target_id": target.target_id, "from": target.location,
-                                "to": end.location})
-                target.location = end.location
-                target.quote = end.text[:append_end]
-                target.start, target.end = 0, append_end
-                target.composite = ()
-                target.resolution = "resolved"
-                target.segment_ok = True
-                target.reason = f"{target.reason}|G16_CLAUSE_END"
-            break
+        head_index = -1
+        for candidate_index in range(index, max(-1, index - 7), -1):
+            if _g16_payment_anchor(spans[candidate_index].text):
+                head_index = candidate_index
+                break
+        if head_index < 0:
+            # A model can name the formula tail immediately above the payment
+            # sentence as the clause end (for example "E为C类基金份额前一日的
+            # 基金资产净值").  The append still belongs to the payment clause
+            # below it; bind forward only across an unterminated formula line so
+            # an unrelated closed paragraph never borrows a later clause.
+            current = spans[index]
+            current_text, _ = display_text(current.text)
+            if not current_text.rstrip().endswith(("。", "；", ";", "！", "？", "!", "?")):
+                for candidate_index in range(index + 1, min(len(spans), index + 4)):
+                    if _g16_payment_anchor(spans[candidate_index].text):
+                        head_index = candidate_index
+                        break
+        if head_index < 0:
+            continue
+        head = spans[head_index]
+        section = next((item for item in sections if head.location in item.locations), None)
+        if section is None:
+            continue
+        end = _g16_clause_end(head, section, inspection)
+        if index > indices[end.location]:
+            continue
+        clause = list(section.locations)[list(section.locations).index(head.location):
+                                         list(section.locations).index(end.location) + 1]
+        append_end = _g16_append_end(inspection, clause)
+        if target.location != end.location or target.end != append_end:
+            changes.append({"target_id": target.target_id, "from": target.location,
+                            "to": end.location})
+            target.location = end.location
+            target.quote = end.text[:append_end]
+            target.start, target.end = 0, append_end
+            target.composite = ()
+            target.resolution = "resolved"
+            target.segment_ok = True
+            target.reason = f"{target.reason}|G16_CLAUSE_END"
     return changes
 
 

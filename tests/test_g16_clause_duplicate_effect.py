@@ -153,3 +153,24 @@ def test_g16_rebind_prevents_payment_head_from_cloning_into_standalone_summary(t
     assert targets[0].location == "p2"
     assert targets[1].location == "p3"
     assert duplicate_copy_targets(targets, {"G16": rule}, source) == []
+
+
+def test_formula_tail_before_payment_head_binds_forward_to_clause_end(tmp_path):
+    """A model may name the accrual formula line as G16's append site."""
+    source = _write(tmp_path / "formula-tail.docx", [
+        "3、基金的销售服务费",
+        "C类基金份额的销售服务费按前一日C类基金份额资产净值的0.4%年费率计提。计算方法如下：",
+        "H＝E×0.4%÷当年天数",
+        "H为C类基金份额每日应计提的销售服务费",
+        "E为C类基金份额前一日的基金资产净值",
+        HEAD,
+        USAGE,
+    ])
+    target = Target("formula", "G16", "p4", source.by_location("p4").text,
+                    "needs_edit", "inventory", start=0,
+                    end=len(source.by_location("p4").text),
+                    resolution="resolved", operations=("G16:0",))
+    rebind_g16_clause_targets([target], source)
+    assert target.location == "p6"
+    assert target.quote == USAGE
+    assert "G16_CLAUSE_END" in target.reason
