@@ -552,7 +552,13 @@ def score_target(target: dict, facts: dict, final_paragraphs: list[str],
     result["site"]["resolved_final_paragraph"] = final_index
     region = compact(final_paragraphs[final_index]) if final_index >= 0 else ""
     site_text = _site_text(final_paragraphs, final_index, after=2)
-    append_text = _site_text(final_paragraphs, final_index, after=2)
+    # A fee clause can be split across several short paragraphs (formula, old
+    # payment sentence, usage sentence, section tail).  The engine may choose a
+    # different valid anchor inside the same clause (p799 vs p802); searching a
+    # small clause window prevents a correct append from being reported missing
+    # while still requiring the full policy text.  A body/summary target has its
+    # own declared site and is scored separately.
+    append_text = _site_text(final_paragraphs, final_index, after=6)
 
     if operation == "append":
         if not required:

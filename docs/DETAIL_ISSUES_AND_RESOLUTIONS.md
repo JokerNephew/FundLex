@@ -49,8 +49,16 @@
 ## FL-D480 deepseek-v4-flash推理占满输出上限导致MODEL_OUTPUT_TRUNCATED（2026-10-29）
 
 - 发现日期：2026-10-29，真实模型首次接入新端点。`real-value-first`使用错误`FUNDLEX_MODEL_MODE=real`被拒绝；first2使用默认4k输出在`recall_scope`截断；first3把输出提高到12k，仍在`recall_inventory`以`completion=12000, content_chars=0, finish=length`截断。模型返回大量`reasoning_content`，正文JSON未生成。
-- 处理：真实运行改为`thinking={"type":"disabled"}`+`reasoning_effort=low`+`max_output_tokens=24000`+`context_chars=32000`；已观测facts/scope/inventory成功（inventory 21460 completion/4033 content/stop）。生产env仍未改，需部署时同步设置；不能只增加CLI参数不改服务端env。
+- 处理：真实运行改为`thinking={"type":"disabled"}`+`reasoning_effort=low`+`max_output_tokens=32000`+`context_chars=32000`；24k仍有一次inventory截断，32k first6 inventory已成功（16031 completion/4015 content/stop）。生产env仍未改，需部署时同步设置；不能只增加CLI参数不改服务端env。
 - 状态：**运行配置调整并观察到阶段成功，仍未完成整合同/交付**。若仍截断，改用支持更大输出或更少推理的模型，并保留失败证据；不以重试成功冒充业务结果。
+
+## FL-D481 同一正文G16 append被Open-rule与survey各计划一次，最终重复整段（2026-10-29）
+
+- 发现日期：2026-10-29，真实value运行first4独立业务复核发现；评分器只按一个站点标签评分，未捕获重复。
+- 问题与影响：B02正文p799（open-rule T019）与p802（survey Y009）同属`G16:0`、同一body section；`rebind_g16_clause_targets`只向前找payment head，两目标未被归一，plan包含p799 insert和p802 replace（与G17删除复合），最终两份327字新机制，p800/p801为空；redline同重复。`operation_coverage`将同一义务在p799/p802/p1258三处标ARTIFACT_VERIFIED，Claim Replay/complete未检查“只出现一次”。p802原用途删除句虽被删除，但新机制重复进入final。
+- 证据：`/tmp/opencode/comprehensive-remediation-20261028/real-value-first4/001-.../report.json` target T019/Y009、plan edit 16、sweep findings；独立审核`new-value-business-review.md`；final p799/p802文本相同（327字）。
+- 处理（已实施）：新增`canonicalize_append_targets()`，以`_g16_clause_locations`的**同一物理clause**为归一键（不能只用section_path，否则会误删两个独立但同文的费用条款；公式段p799可映射到紧邻payment head p800的clause），同rule+append operations+zone+clause内按T3优先于survey、非composite、地址稳定保留一个；其他标out_of_scope并留`DUPLICATE_APPEND_SITE_CANONICAL`。body与summary按zone/clause分离保留。调用点位于rebind/split后、approval/plan前；`tests/test_g16_clause_duplicate_effect.py`的合法双clause测试与`tests/test_remediation_append_canonical.py`均通过。旧first4作为失败证据保留。
+- 状态与验证：**已修复并通过真实模型first7 + 独立业务复核**。first7 final正文G16只p802一处、摘要p1258一处，21/21 v2目标completed，16 ins/16 del，接受=final/拒绝=source；独立复核通过，仅P2留两空白段（p800/p801，建议清理）。first7证据`docs/evidence/value-first7-score-20261029.json`、`docs/evidence/value-first7-business-review.md`。仍未扩展到28份/514；评分器需后续检测同一义务多站点重复，不能只按单站点完成。
 
 ## FL-D451 生产V1首页请求任务聚合接口404，部分发布破坏前后端契约（2026-10-28）
 
@@ -548,6 +556,8 @@
 - 变更记录：2026-10-27 新增；生产 V1 定向发布，V2 仅工作区构建；不涉及真实合同任务或模型调用。
 
 ## FL-D384 第一批 smoke 的重复摘要副本与无操作站点证明未闭合（2026-10-27）
+
+- **2026-10-29 新引擎复跑补证（单合同）**：价值优选B02在合并摘要scope/独立证明/append去重后，真实模型first7 `complete`，摘要p1258及正文G16均只各1份，21/21 v2目标completed，独立业务复核通过（P2空白段）；详见`docs/REAL_REVISION_EVALUATION_RESULTS.md`。first4旧代码曾重复p799/p802，作为失败证据保留；其余合同/28份/514份仍未完成，不能据此关闭整条FL-D384。
 
 - **2026-10-28 正式生产复发（P1，实证错误complete）**：浏览器注册→当前指引→上传第一批价值优选→真实Worker/model→结果页→授权下载完成，任务`3860e8c301ab4343bb228d609cc968b2`、build`1621a30b4f023efdaf86e58f808cf390f54430392587be7dc54043c385d8e57c`。15处修改、15ins+15del、接受/拒绝/哈希等10项机械校验全过；report complete/查漏PASS/open0。但先盘点原件指引再读产物的独立复核发现摘要p1258（XML p1282）旧全渠道自动月付登记机构条款原样残留，缺直销返还/365天/超一年机制，正文p802已更新。主agent读source/final再次确认；redline该段无修订。report的G15/G16 `summary_copy=excluded_default`仅核正文，**本份业务验收未通过，不能宣称完整交付**；不是范围外新增。证据`/tmp/opencode/comprehensive-audit-20261028/business-inventory.json`、`business-review.md`、`production-v2/{result,report,artifact-review,business-counterexample}.json`及下载DOCX；source SHA708bca5d.../final d8f1dc99.../redline602b4487...，27逻辑/28HTTP、149372tokens、约$0.03656805、429恢复。原报告不改，不以本份算批量准确率。另G03在p124/p128重复正确政策为P3观察，不授权范围外去重。**未修复/未发布**；下一步一般化摘要scope/独立覆盖后正式路径复验，关联FL-D434/435/443。
 

@@ -1581,10 +1581,10 @@ def _plan_and_generate(model: Any, rules_by_id: dict[str, dict], targets: Sequen
                        scope_audit: dict[str, Any] | None = None
                        ) -> tuple[dict[str, Any], list[dict[str, Any]], Any, Any, DocumentInspection]:
     """Plan from the ORIGINAL inspection, validate, generate and re-read the final."""
-    from .recall import (append_site_ok, duplicate_copy_targets,
-                         ensure_unique_target_ids, target_site_ok,
-                         rebind_g16_clause_targets, rebind_split_append_targets,
-                         guard_g17_deletes_against_g16,
+    from .recall import (append_site_ok, canonicalize_append_targets,
+                         duplicate_copy_targets, ensure_unique_target_ids,
+                         target_site_ok, rebind_g16_clause_targets,
+                         rebind_split_append_targets, guard_g17_deletes_against_g16,
                          g15_delay_continuation_targets)
     # Final scope gate: no target outside its rule's physical scope may reach the
     # planner.  Out-of-scope targets keep a ledger row but are never planned.
@@ -1607,6 +1607,9 @@ def _plan_and_generate(model: Any, rules_by_id: dict[str, dict], targets: Sequen
     targets.extend(g15_delay_continuation_targets(targets, rules_by_id, inspection))
     ensure_unique_target_ids(targets)
     rebind_split_append_targets(targets, inspection)
+    append_duplicates = canonicalize_append_targets(targets, rules_by_id, inspection)
+    if scope_audit is not None and append_duplicates:
+        scope_audit.setdefault("append_site_dedupe", []).extend(append_duplicates)
     # Build one code-verified approval per attributable target.  Every later stage
     # (site guard, planner, effect proof, Claim Replay) consumes this record, so a
     # rule-specific word list cannot reject a target whose source, operation

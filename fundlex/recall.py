@@ -12,7 +12,7 @@ import re
 from dataclasses import dataclass, field, replace
 from typing import Any, Iterable, Mapping, Sequence
 
-from .docx import BARRIER, DocumentInspection, ParagraphSpan, TextSegment
+from .docx import BARRIER, DocxError, DocumentInspection, ParagraphSpan, TextSegment
 from .generation.flags import strategy_mode
 from .model import ModelError
 from .recall_prompts import (
@@ -3191,6 +3191,79 @@ def ensure_unique_target_ids(targets: Sequence[Target], origins: dict[str, str] 
             if origins is not None and old in origins:
                 origins[candidate] = origins.pop(old)
     return renamed
+
+
+def canonicalize_append_targets(targets: Sequence[Target], rules_by_id: dict[str, dict],
+                                inspection: DocumentInspection) -> list[dict[str, str]]:
+    """Keep one append target per rule/operation/zone/section.
+
+    Inventory and survey can independently discover the same G16 insert at two
+    points in one fee section (formula tail and usage-scope tail).  Planning both
+    inserts the identical policy twice, even though each site individually passes
+    Claim Replay.  A single append obligation has no second physical occurrence
+    inside the same section; keep the open-rule target (non-``Y``) as canonical
+    and mark the survey duplicate out of scope.  Body and summary are separate
+    zones and both remain.
+    """
+    clause_by_location: dict[str, tuple[str, ...]] = {}
+    clauses = _g16_clause_locations(inspection)
+    for clause in clauses:
+        for location in clause:
+            clause_by_location[location] = clause
+    indices = {span.location: index for index, span in enumerate(inspection.paragraphs)}
+    groups: dict[tuple[object, ...], list[Target]] = {}
+    for target in targets:
+        if (target.state != "needs_edit" or target.out_of_scope
+                or not target.operations or not target.location):
+            continue
+        rule = rules_by_id.get(target.rule_id) or {}
+        operations = {str(key) for key in target.operations}
+        append_keys = {f"{target.rule_id}:{index}" for index, operation in
+                       enumerate(rule.get("operations") or [])
+                       if operation.get("op") == "append"}
+        if not operations or not operations <= append_keys:
+            continue
+        try:
+            span = inspection.by_location(target.location)
+        except DocxError:
+            continue
+        # A distinct clause (separate payment head) may legitimately need the same
+        # append, e.g. two duplicate fee clauses.  Only two targets resolving to
+        # the SAME clause are the open-rule/survey duplicate; section_path alone
+        # would collapse the legitimate duplicate clauses.
+        clause = clause_by_location.get(target.location)
+        if clause is None:
+            target_index = indices.get(target.location)
+            # The formula paragraph immediately before the payment head is the
+            # canonical append anchor supplied by the open-rule planner.
+            for item in clauses:
+                if indices.get(item[0]) == (target_index or -9) + 1:
+                    clause = item
+                    break
+        key = (target.rule_id, tuple(sorted(operations)), span.zone,
+               clause or (span.section_path,))
+        groups.setdefault(key, []).append(target)
+
+    changes: list[dict[str, str]] = []
+    for items in groups.values():
+        if len(items) < 2:
+            continue
+        # Open-rule targets carry stable `T...` ids; survey duplicates use `Y...`.
+        # Prefer the former, then a non-composite target, then the earlier address.
+        ordered = sorted(items, key=lambda item: (
+            item.target_id.startswith("Y"),
+            bool(item.composite),
+            item.location,
+        ))
+        keep, duplicates = ordered[0], ordered[1:]
+        for duplicate in duplicates:
+            duplicate.out_of_scope = True
+            duplicate.reason = (f"{duplicate.reason}|"
+                                f"DUPLICATE_APPEND_SITE_CANONICAL:{keep.target_id}")
+            changes.append({"target_id": duplicate.target_id,
+                            "canonical_target_id": keep.target_id,
+                            "location": duplicate.location})
+    return changes
 
 
 def dedupe_operation_targets(targets: Sequence[Target], rules_by_id: dict[str, dict],

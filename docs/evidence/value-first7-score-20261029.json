@@ -1,0 +1,3442 @@
+{
+ "schema": "fundlex-p6-score-v1",
+ "scorer_version": "p6-score-2-site-complete-20261029",
+ "scored_at": "2026-10-29T00:52:47.719204+00:00",
+ "run": "/tmp/opencode/comprehensive-remediation-20261028/value7-mapped",
+ "labels_sha256": "61a2c514625aa6589c20a53c831b86cf1a7189b109224ef329bb82044b3cb431",
+ "totals": {
+  "targets": 390,
+  "completed": 21,
+  "target_completion_rate": 0.0538,
+  "verdicts": {
+   "not_executed": 369,
+   "completed": 21
+  },
+  "applicability_conflicts": 0
+ },
+ "delivery": {
+  "reported_complete": 1,
+  "actually_complete": 1,
+  "false_complete": 0,
+  "editable_cases": 20
+ },
+ "scoring": {
+  "site_scoped_targets": 390,
+  "legacy_document_wide_targets": 0,
+  "site_aware": true
+ },
+ "limitations": [],
+ "cases_scored": 20,
+ "groups": {
+  "dev": 20
+ },
+ "rule_completion": {
+  "G01": {
+   "completed": 1,
+   "total": 19,
+   "rate": 0.0526
+  },
+  "G03": {
+   "completed": 1,
+   "total": 20,
+   "rate": 0.05
+  },
+  "G05": {
+   "completed": 2,
+   "total": 32,
+   "rate": 0.0625
+  },
+  "G06": {
+   "completed": 1,
+   "total": 5,
+   "rate": 0.2
+  },
+  "G08": {
+   "completed": 1,
+   "total": 19,
+   "rate": 0.0526
+  },
+  "G09": {
+   "completed": 1,
+   "total": 20,
+   "rate": 0.05
+  },
+  "G11": {
+   "completed": 1,
+   "total": 20,
+   "rate": 0.05
+  },
+  "G12": {
+   "completed": 1,
+   "total": 20,
+   "rate": 0.05
+  },
+  "G13": {
+   "completed": 1,
+   "total": 14,
+   "rate": 0.0714
+  },
+  "G14": {
+   "completed": 1,
+   "total": 20,
+   "rate": 0.05
+  },
+  "G15": {
+   "completed": 2,
+   "total": 40,
+   "rate": 0.05
+  },
+  "G16": {
+   "completed": 2,
+   "total": 40,
+   "rate": 0.05
+  },
+  "G17": {
+   "completed": 2,
+   "total": 47,
+   "rate": 0.0426
+  },
+  "G18": {
+   "completed": 2,
+   "total": 36,
+   "rate": 0.0556
+  },
+  "G22": {
+   "completed": 2,
+   "total": 38,
+   "rate": 0.0526
+  }
+ },
+ "cases": [
+  {
+   "case_id": "B01",
+   "group": "dev",
+   "editable": true,
+   "facts": {
+    "classes": [
+     {
+      "name": "A类基金份额",
+      "subscription_fee": true,
+      "service_fee": false
+     },
+     {
+      "name": "C类基金份额",
+      "subscription_fee": false,
+      "service_fee": true
+     }
+    ],
+    "class_count": 2,
+    "class_count_basis": "fee_group",
+    "has_sales_service_fee": true,
+    "floating_management_fee": false,
+    "fund_type": "ETF联接基金（指数型）",
+    "currency_variants": [],
+    "excluded": false,
+    "has_service_fee": true,
+    "is_floating_fee": false
+   },
+   "artifact": null,
+   "delivery_status": null,
+   "verdicts": [
+    {
+     "target_id": "T001",
+     "rule_id": "G01",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T002",
+     "rule_id": "G03",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T003",
+     "rule_id": "G05",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T004",
+     "rule_id": "G08",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T005",
+     "rule_id": "G09",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T006",
+     "rule_id": "G11",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T007",
+     "rule_id": "G12",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T008",
+     "rule_id": "G13",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T009",
+     "rule_id": "G14",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T010",
+     "rule_id": "G16",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T011",
+     "rule_id": "G15",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T012",
+     "rule_id": "G17",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T013",
+     "rule_id": "G17",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T014",
+     "rule_id": "G18",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T015",
+     "rule_id": "G22",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T016",
+     "rule_id": "G18",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T017",
+     "rule_id": "G16",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T018",
+     "rule_id": "G15",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T019",
+     "rule_id": "G17",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T020",
+     "rule_id": "G17",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T021",
+     "rule_id": "G22",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    }
+   ],
+   "counts": {
+    "not_executed": 21
+   },
+   "integrated_complete": false
+  },
+  {
+   "case_id": "B02",
+   "group": "dev",
+   "editable": true,
+   "facts": {
+    "classes": [
+     {
+      "name": "A类基金份额",
+      "subscription_fee": true,
+      "service_fee": false
+     },
+     {
+      "name": "C类基金份额",
+      "subscription_fee": false,
+      "service_fee": true
+     }
+    ],
+    "class_count": 2,
+    "class_count_basis": "fee_group",
+    "has_sales_service_fee": true,
+    "floating_management_fee": false,
+    "fund_type": "混合型",
+    "currency_variants": [],
+    "excluded": false,
+    "has_service_fee": true,
+    "is_floating_fee": false
+   },
+   "artifact": "/tmp/opencode/comprehensive-remediation-20261028/value7-mapped/B02/final.docx",
+   "artifact_sha256": "bd97b693db002e68894498455f72caafc180ab11499a13c219c2e39d88e85027",
+   "delivery_status": "complete",
+   "original": "/home/opencode/fundlex/funds_word/基金合同第一批/广发价值优选混合型证券投资基金基金合同.docx",
+   "verdicts": [
+    {
+     "target_id": "T001",
+     "rule_id": "G01",
+     "op": "append",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 92,
+      "site_scope": "main",
+      "location": "第二部分  释义",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 116
+     },
+     "original_paragraph": 116,
+     "final_paragraph": 116,
+     "verdict": "completed",
+     "detail": "appended policy text present at its declared site"
+    },
+    {
+     "target_id": "T002",
+     "rule_id": "G03",
+     "op": "append",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 124,
+      "site_scope": "main",
+      "location": "第三部分  基金的基本情况 > 八、基金份额类别设置",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 148
+     },
+     "original_paragraph": 148,
+     "final_paragraph": 148,
+     "verdict": "completed",
+     "detail": "appended policy text present at its declared site"
+    },
+    {
+     "target_id": "T003",
+     "rule_id": "G05",
+     "op": "delete",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 128,
+      "site_scope": "main",
+      "location": "第三部分  基金的基本情况 > 八、基金份额类别设置",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 152
+     },
+     "original_paragraph": 152,
+     "final_paragraph": 152,
+     "verdict": "completed",
+     "detail": "deleted clause gone from its region"
+    },
+    {
+     "target_id": "T004",
+     "rule_id": "G05",
+     "op": "replace",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 128,
+      "site_scope": "main",
+      "location": "第三部分  基金的基本情况 > 八、基金份额类别设置",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 152
+     },
+     "original_paragraph": 152,
+     "final_paragraph": 152,
+     "verdict": "completed",
+     "detail": "complete replacement present at its declared site"
+    },
+    {
+     "target_id": "T005",
+     "rule_id": "G06",
+     "op": "delete",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 128,
+      "site_scope": "main",
+      "location": "第三部分  基金的基本情况 > 八、基金份额类别设置",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 152
+     },
+     "original_paragraph": 152,
+     "final_paragraph": 152,
+     "verdict": "completed",
+     "detail": "deleted clause gone from its region"
+    },
+    {
+     "target_id": "T006",
+     "rule_id": "G08",
+     "op": "replace",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 204,
+      "site_scope": "main",
+      "location": "第六部分  基金份额的申购与赎回 > 六、申购和赎回的价格、费用及其用途",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 228
+     },
+     "original_paragraph": 228,
+     "final_paragraph": 228,
+     "verdict": "completed",
+     "detail": "complete replacement present at its declared site"
+    },
+    {
+     "target_id": "T007",
+     "rule_id": "G09",
+     "op": "replace",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 205,
+      "site_scope": "main",
+      "location": "第六部分  基金份额的申购与赎回 > 六、申购和赎回的价格、费用及其用途",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 229
+     },
+     "original_paragraph": 229,
+     "final_paragraph": 229,
+     "verdict": "completed",
+     "detail": "complete replacement present at its declared site"
+    },
+    {
+     "target_id": "T008",
+     "rule_id": "G11",
+     "op": "replace",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 206,
+      "site_scope": "main",
+      "location": "第六部分  基金份额的申购与赎回 > 六、申购和赎回的价格、费用及其用途",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 230
+     },
+     "original_paragraph": 230,
+     "final_paragraph": 230,
+     "verdict": "completed",
+     "detail": "complete replacement present at its declared site"
+    },
+    {
+     "target_id": "T009",
+     "rule_id": "G12",
+     "op": "replace",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 207,
+      "site_scope": "main",
+      "location": "第六部分  基金份额的申购与赎回 > 六、申购和赎回的价格、费用及其用途",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 231
+     },
+     "original_paragraph": 231,
+     "final_paragraph": 231,
+     "verdict": "completed",
+     "detail": "complete replacement present at its declared site"
+    },
+    {
+     "target_id": "T010",
+     "rule_id": "G13",
+     "op": "delete",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 207,
+      "site_scope": "main",
+      "location": "第六部分  基金份额的申购与赎回 > 六、申购和赎回的价格、费用及其用途",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 231
+     },
+     "original_paragraph": 231,
+     "final_paragraph": 231,
+     "verdict": "completed",
+     "detail": "deleted clause gone from its region"
+    },
+    {
+     "target_id": "T011",
+     "rule_id": "G14",
+     "op": "replace",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 209,
+      "site_scope": "main",
+      "location": "第六部分  基金份额的申购与赎回 > 六、申购和赎回的价格、费用及其用途",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 233
+     },
+     "original_paragraph": 233,
+     "final_paragraph": 233,
+     "verdict": "completed",
+     "detail": "complete replacement present at its declared site"
+    },
+    {
+     "target_id": "T012",
+     "rule_id": "G16",
+     "op": "append",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 799,
+      "site_scope": "main",
+      "location": "第十五部分  基金费用与税收 > 二、基金费用计提方法、计提标准和支付方式",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 823
+     },
+     "original_paragraph": 823,
+     "final_paragraph": 823,
+     "verdict": "completed",
+     "detail": "appended policy text present at its declared site"
+    },
+    {
+     "target_id": "T013",
+     "rule_id": "G15",
+     "op": "delete",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 800,
+      "site_scope": "main",
+      "location": "第十五部分  基金费用与税收 > 二、基金费用计提方法、计提标准和支付方式",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 824
+     },
+     "original_paragraph": 824,
+     "final_paragraph": 824,
+     "verdict": "completed",
+     "detail": "deleted clause gone from its region"
+    },
+    {
+     "target_id": "T014",
+     "rule_id": "G17",
+     "op": "delete",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 801,
+      "site_scope": "main",
+      "location": "第十五部分  基金费用与税收 > 二、基金费用计提方法、计提标准和支付方式",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 825
+     },
+     "original_paragraph": 825,
+     "final_paragraph": 825,
+     "verdict": "completed",
+     "detail": "deleted clause gone from its region"
+    },
+    {
+     "target_id": "T015",
+     "rule_id": "G17",
+     "op": "delete",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 802,
+      "site_scope": "main",
+      "location": "第十五部分  基金费用与税收 > 二、基金费用计提方法、计提标准和支付方式",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 826
+     },
+     "original_paragraph": 826,
+     "final_paragraph": 826,
+     "verdict": "completed",
+     "detail": "deleted clause gone from its region"
+    },
+    {
+     "target_id": "T016",
+     "rule_id": "G18",
+     "op": "replace",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 827,
+      "site_scope": "main",
+      "location": "第十六部分  基金的收益与分配 > 三、基金收益分配原则",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 851
+     },
+     "original_paragraph": 851,
+     "final_paragraph": 851,
+     "verdict": "completed",
+     "detail": "complete replacement present at its declared site"
+    },
+    {
+     "target_id": "T017",
+     "rule_id": "G22",
+     "op": "replace",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 978,
+      "site_scope": "main",
+      "location": "第十九部分  基金合同的变更、终止与基金财产的清算 > 五、基金财产清算剩余资产的分配",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 1002
+     },
+     "original_paragraph": 1002,
+     "final_paragraph": 1002,
+     "verdict": "completed",
+     "detail": "complete replacement present at its declared site"
+    },
+    {
+     "target_id": "T018",
+     "rule_id": "G18",
+     "op": "replace",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 1228,
+      "site_scope": "summary",
+      "location": "第二十四部分  基金合同内容摘要 > （一）基金收益分配原则",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 1252
+     },
+     "original_paragraph": 1252,
+     "final_paragraph": 1252,
+     "verdict": "completed",
+     "detail": "complete replacement present at its declared site"
+    },
+    {
+     "target_id": "T019",
+     "rule_id": "G16",
+     "op": "append",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 1257,
+      "site_scope": "summary",
+      "location": "第二十四部分  基金合同内容摘要 > （三）基金销售服务费",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 1281
+     },
+     "original_paragraph": 1281,
+     "final_paragraph": 1281,
+     "verdict": "completed",
+     "detail": "appended policy text present at its declared site"
+    },
+    {
+     "target_id": "T020",
+     "rule_id": "G15",
+     "op": "delete",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 1258,
+      "site_scope": "summary",
+      "location": "第二十四部分  基金合同内容摘要 > （三）基金销售服务费",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 1282
+     },
+     "original_paragraph": 1282,
+     "final_paragraph": 1282,
+     "verdict": "completed",
+     "detail": "deleted clause gone from its region"
+    },
+    {
+     "target_id": "T021",
+     "rule_id": "G22",
+     "op": "replace",
+     "site_scoped": true,
+     "site": {
+      "declared": true,
+      "paragraph_index": 1346,
+      "site_scope": "summary",
+      "location": "第二十四部分  基金合同内容摘要 > （五）基金财产清算剩余资产的分配",
+      "from_compact_start": false,
+      "resolved_final_paragraph": 1370
+     },
+     "original_paragraph": 1370,
+     "final_paragraph": 1370,
+     "verdict": "completed",
+     "detail": "complete replacement present at its declared site"
+    }
+   ],
+   "applicability_conflicts": [],
+   "counts": {
+    "completed": 21
+   },
+   "integrated_complete": true
+  },
+  {
+   "case_id": "B03",
+   "group": "dev",
+   "editable": true,
+   "facts": {
+    "classes": [
+     {
+      "name": "A类基金份额",
+      "subscription_fee": true,
+      "service_fee": false
+     },
+     {
+      "name": "C类基金份额",
+      "subscription_fee": false,
+      "service_fee": true
+     }
+    ],
+    "class_count": 2,
+    "class_count_basis": "fee_group",
+    "has_sales_service_fee": true,
+    "floating_management_fee": false,
+    "fund_type": "混合型",
+    "currency_variants": [],
+    "excluded": false,
+    "has_service_fee": true,
+    "is_floating_fee": false
+   },
+   "artifact": null,
+   "delivery_status": null,
+   "verdicts": [
+    {
+     "target_id": "T001",
+     "rule_id": "G01",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T002",
+     "rule_id": "G03",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T003",
+     "rule_id": "G05",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T004",
+     "rule_id": "G05",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T005",
+     "rule_id": "G08",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T006",
+     "rule_id": "G09",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T007",
+     "rule_id": "G11",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T008",
+     "rule_id": "G12",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T009",
+     "rule_id": "G13",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T010",
+     "rule_id": "G14",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T011",
+     "rule_id": "G16",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T012",
+     "rule_id": "G15",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T013",
+     "rule_id": "G17",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T014",
+     "rule_id": "G17",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T015",
+     "rule_id": "G18",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T016",
+     "rule_id": "G22",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T017",
+     "rule_id": "G18",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T018",
+     "rule_id": "G16",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T019",
+     "rule_id": "G15",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T020",
+     "rule_id": "G22",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    }
+   ],
+   "counts": {
+    "not_executed": 20
+   },
+   "integrated_complete": false
+  },
+  {
+   "case_id": "B04",
+   "group": "dev",
+   "editable": true,
+   "facts": {
+    "classes": [
+     {
+      "name": "A类基金份额",
+      "subscription_fee": true,
+      "service_fee": false
+     },
+     {
+      "name": "C类基金份额",
+      "subscription_fee": false,
+      "service_fee": true
+     }
+    ],
+    "class_count": 2,
+    "class_count_basis": "fee_group",
+    "has_sales_service_fee": true,
+    "floating_management_fee": false,
+    "fund_type": "混合型FOF",
+    "currency_variants": [],
+    "excluded": false,
+    "has_service_fee": true,
+    "is_floating_fee": false
+   },
+   "artifact": null,
+   "delivery_status": null,
+   "verdicts": [
+    {
+     "target_id": "T001",
+     "rule_id": "G01",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T002",
+     "rule_id": "G03",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T003",
+     "rule_id": "G05",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T004",
+     "rule_id": "G05",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T005",
+     "rule_id": "G08",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T006",
+     "rule_id": "G09",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T007",
+     "rule_id": "G11",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T008",
+     "rule_id": "G12",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T009",
+     "rule_id": "G14",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T010",
+     "rule_id": "G15",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T011",
+     "rule_id": "G17",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T012",
+     "rule_id": "G17",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T013",
+     "rule_id": "G16",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T014",
+     "rule_id": "G18",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T015",
+     "rule_id": "G22",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T016",
+     "rule_id": "G18",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T017",
+     "rule_id": "G15",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T018",
+     "rule_id": "G17",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T019",
+     "rule_id": "G17",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T020",
+     "rule_id": "G16",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T021",
+     "rule_id": "G22",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    }
+   ],
+   "counts": {
+    "not_executed": 21
+   },
+   "integrated_complete": false
+  },
+  {
+   "case_id": "B05",
+   "group": "dev",
+   "editable": true,
+   "facts": {
+    "classes": [
+     {
+      "name": "A类基金份额",
+      "subscription_fee": true,
+      "service_fee": false
+     },
+     {
+      "name": "C类基金份额",
+      "subscription_fee": false,
+      "service_fee": true
+     }
+    ],
+    "class_count": 2,
+    "class_count_basis": "fee_group",
+    "has_sales_service_fee": true,
+    "floating_management_fee": false,
+    "fund_type": "债券型",
+    "currency_variants": [],
+    "excluded": false,
+    "has_service_fee": true,
+    "is_floating_fee": false
+   },
+   "artifact": null,
+   "delivery_status": null,
+   "verdicts": [
+    {
+     "target_id": "T001",
+     "rule_id": "G01",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T002",
+     "rule_id": "G03",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T003",
+     "rule_id": "G08",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T004",
+     "rule_id": "G09",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T005",
+     "rule_id": "G11",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T006",
+     "rule_id": "G12",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T007",
+     "rule_id": "G14",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T008",
+     "rule_id": "G16",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T009",
+     "rule_id": "G15",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T010",
+     "rule_id": "G22",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T011",
+     "rule_id": "G16",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T012",
+     "rule_id": "G15",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T013",
+     "rule_id": "G22",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    }
+   ],
+   "counts": {
+    "not_executed": 13
+   },
+   "integrated_complete": false
+  },
+  {
+   "case_id": "B06",
+   "group": "dev",
+   "editable": true,
+   "facts": {
+    "classes": [
+     {
+      "name": "A类基金份额",
+      "subscription_fee": true,
+      "service_fee": false
+     },
+     {
+      "name": "C类基金份额",
+      "subscription_fee": false,
+      "service_fee": true
+     }
+    ],
+    "class_count": 2,
+    "class_count_basis": "fee_group",
+    "has_sales_service_fee": true,
+    "floating_management_fee": false,
+    "fund_type": "混合型",
+    "currency_variants": [],
+    "excluded": false,
+    "has_service_fee": true,
+    "is_floating_fee": false
+   },
+   "artifact": null,
+   "delivery_status": null,
+   "verdicts": [
+    {
+     "target_id": "T001",
+     "rule_id": "G01",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T002",
+     "rule_id": "G03",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T003",
+     "rule_id": "G05",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T004",
+     "rule_id": "G05",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T005",
+     "rule_id": "G08",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T006",
+     "rule_id": "G09",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T007",
+     "rule_id": "G11",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T008",
+     "rule_id": "G12",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T009",
+     "rule_id": "G14",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T010",
+     "rule_id": "G16",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T011",
+     "rule_id": "G15",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T012",
+     "rule_id": "G17",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T013",
+     "rule_id": "G17",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T014",
+     "rule_id": "G18",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T015",
+     "rule_id": "G22",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T016",
+     "rule_id": "G18",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T017",
+     "rule_id": "G16",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T018",
+     "rule_id": "G15",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T019",
+     "rule_id": "G22",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    }
+   ],
+   "counts": {
+    "not_executed": 19
+   },
+   "integrated_complete": false
+  },
+  {
+   "case_id": "B07",
+   "group": "dev",
+   "editable": true,
+   "facts": {
+    "classes": [
+     {
+      "name": "A类基金份额",
+      "subscription_fee": true,
+      "service_fee": false
+     },
+     {
+      "name": "C类基金份额",
+      "subscription_fee": false,
+      "service_fee": true
+     }
+    ],
+    "class_count": 2,
+    "class_count_basis": "fee_group",
+    "has_sales_service_fee": true,
+    "floating_management_fee": false,
+    "fund_type": "混合型",
+    "currency_variants": [],
+    "excluded": false,
+    "has_service_fee": true,
+    "is_floating_fee": false
+   },
+   "artifact": null,
+   "delivery_status": null,
+   "verdicts": [
+    {
+     "target_id": "T001",
+     "rule_id": "G01",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T002",
+     "rule_id": "G03",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T003",
+     "rule_id": "G05",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T004",
+     "rule_id": "G05",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T005",
+     "rule_id": "G08",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T006",
+     "rule_id": "G09",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T007",
+     "rule_id": "G11",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T008",
+     "rule_id": "G12",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T009",
+     "rule_id": "G14",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T010",
+     "rule_id": "G16",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T011",
+     "rule_id": "G15",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T012",
+     "rule_id": "G17",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T013",
+     "rule_id": "G17",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T014",
+     "rule_id": "G17",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T015",
+     "rule_id": "G18",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T016",
+     "rule_id": "G22",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T017",
+     "rule_id": "G18",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T018",
+     "rule_id": "G16",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T019",
+     "rule_id": "G15",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T020",
+     "rule_id": "G22",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    }
+   ],
+   "counts": {
+    "not_executed": 20
+   },
+   "integrated_complete": false
+  },
+  {
+   "case_id": "B08",
+   "group": "dev",
+   "editable": true,
+   "facts": {
+    "classes": [
+     {
+      "name": "A类基金份额",
+      "subscription_fee": true,
+      "service_fee": false
+     },
+     {
+      "name": "C类基金份额",
+      "subscription_fee": false,
+      "service_fee": true
+     }
+    ],
+    "class_count": 2,
+    "class_count_basis": "fee_group",
+    "has_sales_service_fee": true,
+    "floating_management_fee": false,
+    "fund_type": "混合型",
+    "currency_variants": [],
+    "excluded": false,
+    "has_service_fee": true,
+    "is_floating_fee": false
+   },
+   "artifact": null,
+   "delivery_status": null,
+   "verdicts": [
+    {
+     "target_id": "T001",
+     "rule_id": "G01",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T002",
+     "rule_id": "G03",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T003",
+     "rule_id": "G05",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T004",
+     "rule_id": "G05",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T005",
+     "rule_id": "G06",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T006",
+     "rule_id": "G08",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T007",
+     "rule_id": "G09",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T008",
+     "rule_id": "G11",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T009",
+     "rule_id": "G12",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T010",
+     "rule_id": "G14",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T011",
+     "rule_id": "G16",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T012",
+     "rule_id": "G15",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T013",
+     "rule_id": "G17",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T014",
+     "rule_id": "G17",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T015",
+     "rule_id": "G18",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T016",
+     "rule_id": "G22",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T017",
+     "rule_id": "G18",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T018",
+     "rule_id": "G16",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T019",
+     "rule_id": "G15",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T020",
+     "rule_id": "G22",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    }
+   ],
+   "counts": {
+    "not_executed": 20
+   },
+   "integrated_complete": false
+  },
+  {
+   "case_id": "B09",
+   "group": "dev",
+   "editable": true,
+   "facts": {
+    "classes": [
+     {
+      "name": "A类基金份额",
+      "subscription_fee": true,
+      "service_fee": false
+     },
+     {
+      "name": "C类基金份额",
+      "subscription_fee": false,
+      "service_fee": true
+     }
+    ],
+    "class_count": 2,
+    "class_count_basis": "fee_group",
+    "has_sales_service_fee": true,
+    "floating_management_fee": false,
+    "fund_type": "混合型",
+    "currency_variants": [],
+    "excluded": false,
+    "has_service_fee": true,
+    "is_floating_fee": false
+   },
+   "artifact": null,
+   "delivery_status": null,
+   "verdicts": [
+    {
+     "target_id": "T001",
+     "rule_id": "G01",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T002",
+     "rule_id": "G03",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T003",
+     "rule_id": "G05",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T004",
+     "rule_id": "G05",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T005",
+     "rule_id": "G06",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T006",
+     "rule_id": "G08",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T007",
+     "rule_id": "G09",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T008",
+     "rule_id": "G11",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T009",
+     "rule_id": "G12",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T010",
+     "rule_id": "G14",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T011",
+     "rule_id": "G16",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T012",
+     "rule_id": "G15",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T013",
+     "rule_id": "G17",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T014",
+     "rule_id": "G17",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T015",
+     "rule_id": "G18",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T016",
+     "rule_id": "G22",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T017",
+     "rule_id": "G18",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T018",
+     "rule_id": "G16",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T019",
+     "rule_id": "G15",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T020",
+     "rule_id": "G22",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    }
+   ],
+   "counts": {
+    "not_executed": 20
+   },
+   "integrated_complete": false
+  },
+  {
+   "case_id": "B10",
+   "group": "dev",
+   "editable": true,
+   "facts": {
+    "classes": [
+     {
+      "name": "A类基金份额",
+      "subscription_fee": true,
+      "service_fee": false
+     },
+     {
+      "name": "C类基金份额",
+      "subscription_fee": false,
+      "service_fee": true
+     }
+    ],
+    "class_count": 2,
+    "class_count_basis": "fee_group",
+    "has_sales_service_fee": true,
+    "floating_management_fee": false,
+    "fund_type": "混合型",
+    "currency_variants": [],
+    "excluded": false,
+    "has_service_fee": true,
+    "is_floating_fee": false
+   },
+   "artifact": null,
+   "delivery_status": null,
+   "verdicts": [
+    {
+     "target_id": "T001",
+     "rule_id": "G01",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T002",
+     "rule_id": "G03",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T003",
+     "rule_id": "G05",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T004",
+     "rule_id": "G05",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T005",
+     "rule_id": "G08",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T006",
+     "rule_id": "G09",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T007",
+     "rule_id": "G11",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T008",
+     "rule_id": "G12",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T009",
+     "rule_id": "G13",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T010",
+     "rule_id": "G14",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T011",
+     "rule_id": "G16",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T012",
+     "rule_id": "G15",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T013",
+     "rule_id": "G17",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T014",
+     "rule_id": "G17",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T015",
+     "rule_id": "G18",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T016",
+     "rule_id": "G22",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T017",
+     "rule_id": "G18",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T018",
+     "rule_id": "G16",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T019",
+     "rule_id": "G15",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T020",
+     "rule_id": "G22",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    }
+   ],
+   "counts": {
+    "not_executed": 20
+   },
+   "integrated_complete": false
+  },
+  {
+   "case_id": "B11",
+   "group": "dev",
+   "editable": true,
+   "facts": {
+    "classes": [
+     {
+      "name": "A类基金份额",
+      "subscription_fee": true,
+      "service_fee": false
+     },
+     {
+      "name": "C类基金份额",
+      "subscription_fee": false,
+      "service_fee": true
+     }
+    ],
+    "class_count": 2,
+    "class_count_basis": "fee_group",
+    "has_sales_service_fee": true,
+    "floating_management_fee": false,
+    "fund_type": "债券型",
+    "currency_variants": [],
+    "excluded": false,
+    "has_service_fee": true,
+    "is_floating_fee": false
+   },
+   "artifact": null,
+   "delivery_status": null,
+   "verdicts": [
+    {
+     "target_id": "T001",
+     "rule_id": "G01",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T002",
+     "rule_id": "G05",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T003",
+     "rule_id": "G05",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T004",
+     "rule_id": "G03",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T005",
+     "rule_id": "G05",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T006",
+     "rule_id": "G05",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T007",
+     "rule_id": "G08",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T008",
+     "rule_id": "G09",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T009",
+     "rule_id": "G11",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T010",
+     "rule_id": "G12",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T011",
+     "rule_id": "G13",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T012",
+     "rule_id": "G14",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T013",
+     "rule_id": "G16",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T014",
+     "rule_id": "G15",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T015",
+     "rule_id": "G17",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T016",
+     "rule_id": "G18",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T017",
+     "rule_id": "G22",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T018",
+     "rule_id": "G18",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T019",
+     "rule_id": "G16",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T020",
+     "rule_id": "G15",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T021",
+     "rule_id": "G17",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T022",
+     "rule_id": "G22",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    }
+   ],
+   "counts": {
+    "not_executed": 22
+   },
+   "integrated_complete": false
+  },
+  {
+   "case_id": "B12",
+   "group": "dev",
+   "editable": true,
+   "facts": {
+    "classes": [
+     {
+      "name": "A类基金份额",
+      "subscription_fee": true,
+      "service_fee": false
+     },
+     {
+      "name": "C类基金份额",
+      "subscription_fee": false,
+      "service_fee": true
+     },
+     {
+      "name": "Y类基金份额",
+      "subscription_fee": true,
+      "service_fee": false
+     }
+    ],
+    "class_count": 3,
+    "class_count_basis": "fee_group",
+    "has_sales_service_fee": true,
+    "floating_management_fee": false,
+    "fund_type": "股票型指数增强基金",
+    "currency_variants": [],
+    "excluded": false,
+    "has_service_fee": true,
+    "is_floating_fee": false
+   },
+   "artifact": null,
+   "delivery_status": null,
+   "verdicts": [
+    {
+     "target_id": "T001",
+     "rule_id": "G01",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T002",
+     "rule_id": "G03",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T003",
+     "rule_id": "G05",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T004",
+     "rule_id": "G08",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T005",
+     "rule_id": "G09",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T006",
+     "rule_id": "G11",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T007",
+     "rule_id": "G12",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T008",
+     "rule_id": "G13",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T009",
+     "rule_id": "G14",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T010",
+     "rule_id": "G16",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T011",
+     "rule_id": "G15",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T012",
+     "rule_id": "G17",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T013",
+     "rule_id": "G17",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T014",
+     "rule_id": "G22",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T015",
+     "rule_id": "G16",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T016",
+     "rule_id": "G15",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T017",
+     "rule_id": "G17",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T018",
+     "rule_id": "G17",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T019",
+     "rule_id": "G22",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    }
+   ],
+   "counts": {
+    "not_executed": 19
+   },
+   "integrated_complete": false
+  },
+  {
+   "case_id": "B13",
+   "group": "dev",
+   "editable": true,
+   "facts": {
+    "classes": [
+     {
+      "name": "A类基金份额",
+      "subscription_fee": true,
+      "service_fee": false
+     },
+     {
+      "name": "C类基金份额",
+      "subscription_fee": false,
+      "service_fee": true
+     }
+    ],
+    "class_count": 2,
+    "class_count_basis": "fee_group",
+    "has_sales_service_fee": true,
+    "floating_management_fee": false,
+    "fund_type": "混合型",
+    "currency_variants": [],
+    "excluded": false,
+    "has_service_fee": true,
+    "is_floating_fee": false
+   },
+   "artifact": null,
+   "delivery_status": null,
+   "verdicts": [
+    {
+     "target_id": "T001",
+     "rule_id": "G01",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T002",
+     "rule_id": "G03",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T003",
+     "rule_id": "G05",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T004",
+     "rule_id": "G05",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T005",
+     "rule_id": "G08",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T006",
+     "rule_id": "G09",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T007",
+     "rule_id": "G11",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T008",
+     "rule_id": "G12",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T009",
+     "rule_id": "G13",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T010",
+     "rule_id": "G14",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T011",
+     "rule_id": "G15",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T012",
+     "rule_id": "G17",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T013",
+     "rule_id": "G17",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T014",
+     "rule_id": "G16",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T015",
+     "rule_id": "G18",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T016",
+     "rule_id": "G22",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T017",
+     "rule_id": "G18",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T018",
+     "rule_id": "G15",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T019",
+     "rule_id": "G16",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T020",
+     "rule_id": "G22",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    }
+   ],
+   "counts": {
+    "not_executed": 20
+   },
+   "integrated_complete": false
+  },
+  {
+   "case_id": "B14",
+   "group": "dev",
+   "editable": true,
+   "facts": {
+    "classes": [
+     {
+      "name": "A类基金份额",
+      "subscription_fee": true,
+      "service_fee": false
+     },
+     {
+      "name": "C类基金份额",
+      "subscription_fee": false,
+      "service_fee": true
+     }
+    ],
+    "class_count": 2,
+    "class_count_basis": "fee_group",
+    "has_sales_service_fee": true,
+    "floating_management_fee": false,
+    "fund_type": "混合型",
+    "currency_variants": [],
+    "excluded": false,
+    "has_service_fee": true,
+    "is_floating_fee": false
+   },
+   "artifact": null,
+   "delivery_status": null,
+   "verdicts": [
+    {
+     "target_id": "T001",
+     "rule_id": "G01",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T002",
+     "rule_id": "G03",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T003",
+     "rule_id": "G05",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T004",
+     "rule_id": "G05",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T005",
+     "rule_id": "G08",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T006",
+     "rule_id": "G09",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T007",
+     "rule_id": "G11",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T008",
+     "rule_id": "G12",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T009",
+     "rule_id": "G13",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T010",
+     "rule_id": "G14",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T011",
+     "rule_id": "G16",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T012",
+     "rule_id": "G15",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T013",
+     "rule_id": "G17",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T014",
+     "rule_id": "G17",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T015",
+     "rule_id": "G18",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T016",
+     "rule_id": "G22",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T017",
+     "rule_id": "G18",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T018",
+     "rule_id": "G16",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T019",
+     "rule_id": "G15",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T020",
+     "rule_id": "G22",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    }
+   ],
+   "counts": {
+    "not_executed": 20
+   },
+   "integrated_complete": false
+  },
+  {
+   "case_id": "B15",
+   "group": "dev",
+   "editable": true,
+   "facts": {
+    "classes": [
+     {
+      "name": "A类基金份额",
+      "subscription_fee": true,
+      "service_fee": false
+     },
+     {
+      "name": "C类基金份额",
+      "subscription_fee": false,
+      "service_fee": true
+     }
+    ],
+    "class_count": 2,
+    "class_count_basis": "fee_group",
+    "has_sales_service_fee": true,
+    "floating_management_fee": false,
+    "fund_type": "股票型、QDII、指数型",
+    "currency_variants": [],
+    "excluded": false,
+    "has_service_fee": true,
+    "is_floating_fee": false
+   },
+   "artifact": null,
+   "delivery_status": null,
+   "verdicts": [
+    {
+     "target_id": "T001",
+     "rule_id": "G03",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T002",
+     "rule_id": "G05",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T003",
+     "rule_id": "G09",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T004",
+     "rule_id": "G13",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T005",
+     "rule_id": "G11",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T006",
+     "rule_id": "G12",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T007",
+     "rule_id": "G14",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T008",
+     "rule_id": "G16",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T009",
+     "rule_id": "G15",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T010",
+     "rule_id": "G17",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T011",
+     "rule_id": "G18",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T012",
+     "rule_id": "G18",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T013",
+     "rule_id": "G16",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T014",
+     "rule_id": "G15",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T015",
+     "rule_id": "G17",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    }
+   ],
+   "counts": {
+    "not_executed": 15
+   },
+   "integrated_complete": false
+  },
+  {
+   "case_id": "B16",
+   "group": "dev",
+   "editable": true,
+   "facts": {
+    "classes": [
+     {
+      "name": "A类基金份额",
+      "subscription_fee": true,
+      "service_fee": false
+     },
+     {
+      "name": "C类基金份额",
+      "subscription_fee": false,
+      "service_fee": true
+     }
+    ],
+    "class_count": 2,
+    "class_count_basis": "fee_group",
+    "has_sales_service_fee": true,
+    "floating_management_fee": false,
+    "fund_type": "混合型",
+    "currency_variants": [],
+    "excluded": false,
+    "has_service_fee": true,
+    "is_floating_fee": false
+   },
+   "artifact": null,
+   "delivery_status": null,
+   "verdicts": [
+    {
+     "target_id": "T001",
+     "rule_id": "G01",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T002",
+     "rule_id": "G03",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T003",
+     "rule_id": "G05",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T004",
+     "rule_id": "G05",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T005",
+     "rule_id": "G06",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T006",
+     "rule_id": "G08",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T007",
+     "rule_id": "G09",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T008",
+     "rule_id": "G11",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T009",
+     "rule_id": "G12",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T010",
+     "rule_id": "G13",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T011",
+     "rule_id": "G14",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T012",
+     "rule_id": "G16",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T013",
+     "rule_id": "G15",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T014",
+     "rule_id": "G17",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T015",
+     "rule_id": "G17",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T016",
+     "rule_id": "G18",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T017",
+     "rule_id": "G22",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T018",
+     "rule_id": "G18",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T019",
+     "rule_id": "G16",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T020",
+     "rule_id": "G15",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T021",
+     "rule_id": "G17",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T022",
+     "rule_id": "G17",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T023",
+     "rule_id": "G22",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    }
+   ],
+   "counts": {
+    "not_executed": 23
+   },
+   "integrated_complete": false
+  },
+  {
+   "case_id": "B17",
+   "group": "dev",
+   "editable": true,
+   "facts": {
+    "classes": [
+     {
+      "name": "A类基金份额",
+      "subscription_fee": true,
+      "service_fee": false
+     },
+     {
+      "name": "C类基金份额",
+      "subscription_fee": false,
+      "service_fee": true
+     },
+     {
+      "name": "E类基金份额",
+      "subscription_fee": false,
+      "service_fee": true
+     }
+    ],
+    "class_count": 3,
+    "class_count_basis": "fee_group",
+    "has_sales_service_fee": true,
+    "floating_management_fee": false,
+    "fund_type": "股票型、指数型、QDII、LOF",
+    "currency_variants": [],
+    "excluded": false,
+    "has_service_fee": true,
+    "is_floating_fee": false
+   },
+   "artifact": null,
+   "delivery_status": null,
+   "verdicts": [
+    {
+     "target_id": "T001",
+     "rule_id": "G01",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T002",
+     "rule_id": "G03",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T003",
+     "rule_id": "G08",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T004",
+     "rule_id": "G09",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T005",
+     "rule_id": "G13",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T006",
+     "rule_id": "G11",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T007",
+     "rule_id": "G12",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T008",
+     "rule_id": "G14",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T009",
+     "rule_id": "G16",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T010",
+     "rule_id": "G15",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T011",
+     "rule_id": "G17",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T012",
+     "rule_id": "G18",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T013",
+     "rule_id": "G22",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T014",
+     "rule_id": "G18",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T015",
+     "rule_id": "G16",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T016",
+     "rule_id": "G15",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T017",
+     "rule_id": "G17",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T018",
+     "rule_id": "G22",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    }
+   ],
+   "counts": {
+    "not_executed": 18
+   },
+   "integrated_complete": false
+  },
+  {
+   "case_id": "B18",
+   "group": "dev",
+   "editable": true,
+   "facts": {
+    "classes": [
+     {
+      "name": "A类基金份额",
+      "subscription_fee": true,
+      "service_fee": false
+     },
+     {
+      "name": "C类基金份额",
+      "subscription_fee": false,
+      "service_fee": true
+     }
+    ],
+    "class_count": 2,
+    "class_count_basis": "fee_group",
+    "has_sales_service_fee": true,
+    "floating_management_fee": false,
+    "fund_type": "混合型",
+    "currency_variants": [],
+    "excluded": false,
+    "has_service_fee": true,
+    "is_floating_fee": false
+   },
+   "artifact": null,
+   "delivery_status": null,
+   "verdicts": [
+    {
+     "target_id": "T001",
+     "rule_id": "G01",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T002",
+     "rule_id": "G03",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T003",
+     "rule_id": "G05",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T004",
+     "rule_id": "G06",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T005",
+     "rule_id": "G08",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T006",
+     "rule_id": "G09",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T007",
+     "rule_id": "G11",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T008",
+     "rule_id": "G12",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T009",
+     "rule_id": "G13",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T010",
+     "rule_id": "G14",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T011",
+     "rule_id": "G16",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T012",
+     "rule_id": "G15",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T013",
+     "rule_id": "G17",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T014",
+     "rule_id": "G18",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T015",
+     "rule_id": "G22",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T016",
+     "rule_id": "G18",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T017",
+     "rule_id": "G16",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T018",
+     "rule_id": "G15",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T019",
+     "rule_id": "G17",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T020",
+     "rule_id": "G22",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    }
+   ],
+   "counts": {
+    "not_executed": 20
+   },
+   "integrated_complete": false
+  },
+  {
+   "case_id": "B19",
+   "group": "dev",
+   "editable": true,
+   "facts": {
+    "classes": [
+     {
+      "name": "A类基金份额",
+      "subscription_fee": true,
+      "service_fee": false
+     },
+     {
+      "name": "C类基金份额",
+      "subscription_fee": false,
+      "service_fee": true
+     },
+     {
+      "name": "E类基金份额",
+      "subscription_fee": false,
+      "service_fee": true
+     }
+    ],
+    "class_count": 3,
+    "class_count_basis": "fee_group",
+    "has_sales_service_fee": true,
+    "floating_management_fee": false,
+    "fund_type": "FOF（基金中基金）",
+    "currency_variants": [],
+    "excluded": false,
+    "has_service_fee": true,
+    "is_floating_fee": false
+   },
+   "artifact": null,
+   "delivery_status": null,
+   "verdicts": [
+    {
+     "target_id": "T001",
+     "rule_id": "G01",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T002",
+     "rule_id": "G03",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T003",
+     "rule_id": "G05",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T004",
+     "rule_id": "G08",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T005",
+     "rule_id": "G09",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T006",
+     "rule_id": "G11",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T007",
+     "rule_id": "G12",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T008",
+     "rule_id": "G13",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T009",
+     "rule_id": "G14",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T010",
+     "rule_id": "G16",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T011",
+     "rule_id": "G15",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T012",
+     "rule_id": "G17",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T013",
+     "rule_id": "G18",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T014",
+     "rule_id": "G22",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T015",
+     "rule_id": "G18",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T016",
+     "rule_id": "G16",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T017",
+     "rule_id": "G15",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T018",
+     "rule_id": "G17",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T019",
+     "rule_id": "G22",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    }
+   ],
+   "counts": {
+    "not_executed": 19
+   },
+   "integrated_complete": false
+  },
+  {
+   "case_id": "B20",
+   "group": "dev",
+   "editable": true,
+   "facts": {
+    "classes": [
+     {
+      "name": "A类基金份额",
+      "subscription_fee": true,
+      "service_fee": false
+     },
+     {
+      "name": "C类基金份额",
+      "subscription_fee": false,
+      "service_fee": true
+     }
+    ],
+    "class_count": 2,
+    "class_count_basis": "fee_group",
+    "has_sales_service_fee": true,
+    "floating_management_fee": false,
+    "fund_type": "债券型",
+    "currency_variants": [],
+    "excluded": false,
+    "has_service_fee": true,
+    "is_floating_fee": false
+   },
+   "artifact": null,
+   "delivery_status": null,
+   "verdicts": [
+    {
+     "target_id": "T001",
+     "rule_id": "G01",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T002",
+     "rule_id": "G03",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T003",
+     "rule_id": "G05",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T004",
+     "rule_id": "G08",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T005",
+     "rule_id": "G09",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T006",
+     "rule_id": "G11",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T007",
+     "rule_id": "G12",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T008",
+     "rule_id": "G13",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T009",
+     "rule_id": "G14",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T010",
+     "rule_id": "G16",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T011",
+     "rule_id": "G15",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T012",
+     "rule_id": "G17",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T013",
+     "rule_id": "G17",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T014",
+     "rule_id": "G18",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T015",
+     "rule_id": "G22",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T016",
+     "rule_id": "G18",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T017",
+     "rule_id": "G16",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T018",
+     "rule_id": "G15",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    },
+    {
+     "target_id": "T019",
+     "rule_id": "G22",
+     "verdict": "not_executed",
+     "detail": "no artifact"
+    }
+   ],
+   "counts": {
+    "not_executed": 19
+   },
+   "integrated_complete": false
+  }
+ ]
+}
