@@ -1546,8 +1546,8 @@
 
 - **用户问题**：点“保存当前选择”后仍不能生成选择结果。
 - **根因三层**：生产 MySQL 旧表缺 `report_json`/`stale`，`compare_selection_drafts.binding_hash/created_at` NOT NULL 无默认值；保存按钮监听把点击事件当数组传入，异常后保存状态卡死；选择写入器拒绝 Word 的 `proofErr`/书签/`lastRenderedPageBreak`。
-- **已修复并发布**：`bd179f8`（基于 `8dfb5fc` 的 compare 热修分支 `codex/compare-save-hotfix`，未包含并行 semantic 提交）。CompareStore 启动迁移旧表并在插入时兼容旧列；前端保存重试恢复；writer 接受 Word 元数据标记。
+- **已修复并发布**：`eb8b8c7`（基于 `8dfb5fc` 的 compare 热修分支 `codex/compare-save-hotfix`，未包含并行 semantic 提交）。CompareStore 启动迁移旧表并在插入时兼容旧列；前端保存重试恢复；writer 接受 Word 元数据标记。
 - **生产验证**：公开 v4 指引 7 差异任务，“全部采用 B”保存 200、生成按钮启用、生成版本 1；最终 DOCX 与合同 B 文本差异 0；痕迹版 7 个修订（2 ins / 5 del）；临时数据已清理。截图 `/tmp/opencode/prod-save-generate-1600.png`。
 - **测试**：V1 浏览器 13 passed；selection writer/API 21 passed/1 skipped；部署分支全量 2133 passed/114 skipped。主工作区因并行 semantic 提交出现 2 个无关 recall/recovery 失败，需由对应工作处理。
-- **当前生产**：`bd179f8`，五服务 active；`app.css`/`compare.css` 版本仍为视觉改版版本。
+- **当前生产**：`eb8b8c7`，五服务 active；`app.css`/`compare.css` 版本仍为视觉改版版本。
 - **下一步**：用户强刷后用原任务重试保存和生成；若仍失败，记录具体任务 ID、时间、`correlation_id` 和服务端错误码。

@@ -6427,7 +6427,7 @@ H＝E×…
   - `CompareStore` 启动时检测旧表并原地补 `report_json`、`stale`，回填 `status='stale'`；插入时兼容旧表的 `binding_hash`、`created_at`、`status` 列，避免 NOT NULL 无默认值失败；API 多 worker 并发启动时对重复补列做容错。
   - 保存按钮改为 `()=>saveSelectionDraft()`，`updateIds` 只接受数组；保存前置状态更新移入 `try`，`finally` 一定解除 `selectionSaving`。
   - 选择写入器把 `proofErr`、`bookmarkStart/End`、`commentRangeStart/End`、`permStart/End` 视为无文本元数据；支持 run 内的 `tab`、`br`/`cr`、`noBreakHyphen`、`softHyphen`，忽略 `lastRenderedPageBreak`。
-- 状态与验证：**已部署 `bd179f8`，生产真实端到端通过**。用公开 v4 指引两份 DOCX 新建比对任务（7 处差异），点击“全部采用 B”后保存 200、生成按钮启用；点击生成返回版本 1；下载最终 DOCX 22,984 bytes，重新比较与合同 B 文本差异 **0**；带痕迹版 23,147 bytes，含 **2 个 `w:ins`、5 个 `w:del`、7 个修订作者标记**，与 7 处差异一致。生产旧表已完成迁移（`report_json`/`stale` 存在、`binding_hash` 可空）。临时账号/任务/对象已清理。V1 浏览器 **13 passed**；选择 writer/API **21 passed / 1 skipped**；部署分支全量 **2133 passed / 114 skipped**（worktree 补 `.venv` 符号链接后）。
+- 状态与验证：**已部署 `eb8b8c7`（含保存/生成修复与结构校验兼容），生产真实端到端通过**。用公开 v4 指引两份 DOCX 新建比对任务（7 处差异），点击“全部采用 B”后保存 200、生成按钮启用；点击生成返回版本 1；下载最终 DOCX 22,984 bytes，重新比较与合同 B 文本差异 **0**；带痕迹版 23,147 bytes，含 **2 个 `w:ins`、5 个 `w:del`、7 个修订作者标记**，与 7 处差异一致。生产旧表已完成迁移（`report_json`/`stale` 存在、`binding_hash` 可空）。临时账号/任务/对象已清理。V1 浏览器 **13 passed**；选择 writer/API **21 passed / 1 skipped**；部署分支全量 **2133 passed / 114 skipped**（worktree 补 `.venv` 符号链接后）。
 - 说明：主工作区全量回归出现的 2 个 recall/recovery 失败来自并行 semantic 提交，不在本次部署分支；本次生产部署分支基于 `8dfb5fc` + 3 个 compare 修复提交，未包含那些 semantic 提交。
 - 下一步：用户强刷后重新保存并生成；已有旧草稿会被保留，保存会走 UPDATE 路径。
 - 变更记录：2026-10-30 新增；与 FL-D516 视觉改版相邻，但属于保存/生成链路的独立故障。
