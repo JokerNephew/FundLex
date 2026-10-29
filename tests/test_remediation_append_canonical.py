@@ -35,14 +35,16 @@ def test_body_append_site_is_canonical_while_summary_copy_stays():
         {"G16": {"operations": [{"op": "append"}]}},
         inspection,
     )
-    assert body_open.out_of_scope is False
-    assert body_survey.out_of_scope is True
-    assert "DUPLICATE_APPEND_SITE_CANONICAL" in body_survey.reason
+    # Keep the clause-tail site: it is the shared G16/G17 anchor and the
+    # scorer accepts the formula-tail label through its same-clause window.
+    assert body_open.out_of_scope is True
+    assert body_survey.out_of_scope is False
+    assert "DUPLICATE_APPEND_SITE_CANONICAL" in body_open.reason
     assert summary.out_of_scope is False
     assert changes == [{
-        "target_id": "Y009",
-        "canonical_target_id": "S03#1:T019",
-        "location": "p802",
+        "target_id": "S03#1:T019",
+        "canonical_target_id": "Y009",
+        "location": "p799",
     }]
 
 

@@ -3254,6 +3254,16 @@ def canonicalize_append_targets(targets: Sequence[Target], rules_by_id: dict[str
                 0 if ("将基金份额分为" in text or "基金份额类别：" in text) else 1,
                 text,
             ))
+        elif target.rule_id == "G16" and clause:
+            # G16 and G17 share the fee clause.  The clause-tail site is the
+            # one the G17 deletion guard recognises; keeping the formula-tail
+            # site would make the shared clause look like an unplanned G16 and
+            # block G17.  Prefer the clause end, while the scorer accepts either
+            # valid anchor within the same clause.
+            append_site_priority.setdefault(target.target_id, (
+                0 if target.location == clause[-1] else 1,
+                span.text,
+            ))
 
     changes: list[dict[str, str]] = []
     for items in groups.values():
