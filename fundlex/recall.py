@@ -7137,6 +7137,19 @@ def _plan_target_inner(rule: dict, target: Target, inspection: DocumentInspectio
                     evidence={"fixed_text": expected,
                               "replaced_text": span_text,
                               "guide_paragraphs": rule.get("source_paragraphs") or []}))
+    semantic_replacement = getattr(target, "semantic_replacement", None)
+    if semantic_replacement:
+        # Model-first semantic target: the quote/span/scope/protected terms were
+        # already validated by fundlex.semantic_contract; the model supplies the
+        # complete replacement and code records the exact authorized span.
+        return finish(PlannedEdit(
+            target_id=target.target_id, rule_id=rule_id,
+            location=target.location, start=target.start, end=target.end,
+            replacement=str(semantic_replacement), operation="replace",
+            content_source="semantic_v2",
+            evidence={"fixed_text": str(semantic_replacement),
+                      "preserved_text": list(getattr(target, "semantic_preserved_text", ())),
+                      "guide_paragraphs": rule.get("source_paragraphs") or []}))
     # These two source shapes are fully deterministic. Keep them before every
     # routed/compose branch so a zero compose budget cannot block a bounded edit.
     append_ops = [operation for operation in operations if operation.get("op") == "append"]

@@ -4448,6 +4448,28 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
             synthetic.append(target)
             targets.append(target)
             origins[target.target_id] = "g08_actual_rate_variant"
+        from .semantic_contract import discover_for_rules
+        semantic_enabled = os.environ.get(
+            "FUNDLEX_SEMANTIC_V2", "0").strip().lower() in {"1", "true", "on", "yes"}
+        if semantic_enabled:
+            semantic_rules = [item.strip() for item in os.environ.get(
+                "FUNDLEX_SEMANTIC_V2_RULES", "G09,G22").split(",") if item.strip()]
+            semantic_targets, semantic_rejected = discover_for_rules(
+                model, inspection, rules_by_id, scopes, semantic_rules)
+            for target in semantic_targets:
+                for old in targets:
+                    if (old is not target and old.rule_id == target.rule_id
+                            and not old.out_of_scope
+                            and old.state in {"needs_edit", "satisfied"}):
+                        old.out_of_scope = True
+                        old.reason = f"{old.reason}|SUPERSEDED_BY_SEMANTIC_TARGET"
+                synthetic.append(target)
+                targets.append(target)
+                origins[target.target_id] = "semantic_v2"
+            report["semantic_v2"] = {
+                "accepted": [target.as_dict() for target in semantic_targets],
+                "rejected": semantic_rejected,
+            }
         if frozen_run is not None:
             frozen_run.boundary("targets", {"facts": facts.as_ledger(),
                 "targets": [target.as_dict() for target in targets]})

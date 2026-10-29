@@ -1,0 +1,61 @@
+{
+  "version": "semantic-policies-v1",
+  "policies": [
+    {
+      "rule_id": "G02",
+      "policy_object": "class_definition",
+      "operation": "replace",
+      "required_new_terms": [],
+      "preserve_terms": ["基金份额", "认购", "申购", "销售服务费"],
+      "selector_examples": ["本基金根据申购费用、销售服务费收取方式的不同，将基金份额分为不同的类别。", "A类基金份额：申购时收取申购费，不计提销售服务费。"]
+    },
+    {
+      "rule_id": "G03",
+      "policy_object": "class_definition_append",
+      "operation": "append",
+      "required_new_terms": ["直销机构", "其他销售机构", "一年"],
+      "preserve_terms": ["基金份额类别", "申购费", "销售服务费"],
+      "selector_examples": ["释义的基金份额类别定义", "基金的基本情况份额类别设置"]
+    },
+    {
+      "rule_id": "G04",
+      "policy_object": "class_definition",
+      "operation": "replace",
+      "required_new_terms": [],
+      "preserve_terms": ["基金份额", "认购", "申购", "销售服务费"],
+      "selector_examples": ["基金的基本情况份额类别设置", "本基金将基金份额分为A类、C类等不同类别。"]
+    },
+    {
+      "rule_id": "G05",
+      "policy_object": "class_fee_adjustment",
+      "operation": "replace_or_delete",
+      "required_new_terms": [],
+      "preserve_terms": ["份额类别", "费率", "招募说明书"],
+      "selector_examples": ["份额类别设置中调低赎回费率的表述", "有关基金份额类别的具体设置、费率水平等由基金管理人确定。"]
+    },
+    {
+      "rule_id": "G09",
+      "policy_object": "redemption_amount_calculation",
+      "operation": "replace",
+      "required_new_terms": ["当日该类基金份额的基金份额净值", "扣除或加上"],
+      "preserve_terms": ["赎回金额单位为元", "四舍五入", "基金财产", "小数点"],
+      "selector_examples": ["赎回金额为按实际确认的有效赎回份额乘以申请当日基金份额净值的金额", "赎回金额为按实际确认的有效赎回份额乘以当日对应份额类别的基金份额净值并扣除相应的费用。"]
+    },
+    {
+      "rule_id": "G18",
+      "policy_object": "income_distribution_fee_difference",
+      "operation": "replace",
+      "required_new_terms": ["费用收取不同"],
+      "preserve_terms": ["可供分配利润", "同等分配权", "基金份额类别"],
+      "selector_examples": ["由于本基金A类基金份额不收取销售服务费，而C类基金份额收取销售服务费"]
+    },
+    {
+      "rule_id": "G22",
+      "policy_object": "liquidation_residual_distribution",
+      "operation": "replace_or_append",
+      "required_new_terms": ["返还基金份额持有人的销售服务费"],
+      "preserve_terms": ["清算费用", "所欠税款", "基金债务", "基金份额比例"],
+      "selector_examples": ["依据基金财产清算的分配方案，将基金财产清算后的全部剩余资产扣除基金财产清算费用、交纳所欠税款并清偿基金债务后，按基金份额持有人持有的基金份额比例进行分配。", "基金财产按下列顺序清偿"]
+    }
+  ]
+}
