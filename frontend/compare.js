@@ -627,9 +627,10 @@
     scrollToBlock(blockId){
       const index=this.blockIndex.get(blockId);if(index===undefined)return false;
       let chunkIndex=0;for(let i=0;i<this.chunks.length;i++){if(index<this.chunks[i].end){chunkIndex=i;break;}}
-      this.container.scrollTop=Math.max(0,this.totalBefore(chunkIndex)-24);
-      this.refresh(true);
-      requestAnimationFrame(()=>this.refresh(true));
+      const top=()=>Math.max(0,this.totalBefore(chunkIndex)-24);
+      this.container.scrollTop=top();this.refresh(true);
+      this.container.scrollTop=top();this.refresh(true);
+      requestAnimationFrame(()=>{this.container.scrollTop=top();this.refresh(true);});
       return true;
     }
   }
