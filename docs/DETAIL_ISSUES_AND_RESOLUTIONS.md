@@ -6431,3 +6431,59 @@ H＝E×…
 - 说明：主工作区全量回归出现的 2 个 recall/recovery 失败来自并行 semantic 提交，不在本次部署分支；本次生产部署分支基于 `8dfb5fc` + 3 个 compare 修复提交，未包含那些 semantic 提交。
 - 下一步：用户强刷后重新保存并生成；已有旧草稿会被保留，保存会走 UPDATE 路径。
 - 变更记录：2026-10-30 新增；与 FL-D516 视觉改版相邻，但属于保存/生成链路的独立故障。
+
+## FL-D529 G11替换保留源类别前缀造成重复病句（2026-10-29）
+
+- 发现日期：2026-10-29，B12沪深300独立复核`sem-run-s`。P1。
+- 问题与影响：p243原文“4、本基金A类、Y类基金份额的申购费用由投资人承担…”，目标只绑定“申购费用由投资人承担…”；fragment splice保留前缀，最终变成“本基金A类、Y类基金份额的通过直销机构申购本基金A类…”，语义重复且报告仍显示完成。
+- 处理（已实施）：G11 replace且目标前有“编号+类别组+的”前缀、new_text以“通过直销机构”开头时，从编号之后开始替换整个旧句，丢掉重复前缀；新增B12 p243回归。
+- 状态：**代码修复+定向测试通过；B12复跑`run-y`独立复核通过（P1=0）**。
+- 变更记录：2026-10-29新增。
+
+## FL-D530 DOCX标题带隐藏标注字符，G18章节被误判不存在（2026-10-30）
+
+- 发现日期：2026-10-30，B15美国房地产独立复核`sem-run-t/x`。P1。
+- 问题与影响：p727标题实际为`\ufff9十八、基金收益与分配\ufff962\ufff9`，`_plain_contract_heading`不识别，整个收益分配章节仍归在上一个section；`mark_absent_guide_sections`判`GUIDE_SECTION_ABSENT:基金的收益与分配`，G18直接NOT_APPLICABLE，正文/摘要旧句保留。
+- 处理（已实施）：DOCX heading识别去除PUA/零宽标注字符和尾随书签编号，并比较时忽略可选“的”；`_normalise_guide_section`/`_section_for_hint`同步清洗；`_resolve_income`在模型映射缺失时按章节标题回退。新增标题/scope回归。
+- 状态：**代码修复+定向测试通过；B15复跑`run-x/ab`已见G18正文执行，摘要副本问题见FL-D531**。
+- 变更记录：2026-10-30新增。
+
+## FL-D531 摘要副本编号不同（1、vs（1））未纳入G18/G22 scope（2026-10-30）
+
+- 发现日期：2026-10-30，B15美国房地产`run-x`复核。P1。
+- 问题与影响：正文p734“1、由于…”与摘要p1095“（1）由于…”仅编号形式不同，p883“（4）按…”与p1239“4）按…”同样；字节级重复检测和scope都不匹配，正文改、摘要不改。
+- 处理（已实施）：`_expand_duplicate_copy_scopes`新增去编号归一匹配，仅对G18/G22创建同quote的normalized copy target并把位置写入scope；G22有序项识别接受`4）`形式。review确认摘要内容已同步后，仍需确保clone进入Claim Replay（见FL-D532）。
+- 状态：**代码修复+定向测试通过；B15复跑`run-ae`进行中**。
+- 变更记录：2026-10-30新增。
+
+## FL-D532 归一化摘要clone被scope gate排除，正文改摘要改但仍报open（2026-10-30）
+
+- 发现日期：2026-10-30，B15 `sem-run-ac`。P1。
+- 问题与影响：p1095摘要已实际改写，report `delivery_status=complete`，但`delivery_gate`仍有1个UNRESOLVED、`FINAL_COVERAGE_UNRESOLVED p1095`；Claim Replay只列p734，因为clone的scope_id为`G18:normalized_copy`，replay用`scope.contains`仍把p1095过滤掉。状态complete与open obligation并存，属错误complete。
+- 处理（已实施）：clone创建时直接把location写入`RuleScope.locations`（include_summary_copies=True），scope gate对source-proven normalized copy放行；新增scope注册断言。complete仍要求open obligation清零，不以review_assisted掩盖。
+- 状态：**代码修复+定向测试通过；B15复跑`run-ae`进行中**。
+- 变更记录：2026-10-30新增。
+
+## FL-D533 G09语义替换漏“赎回金额单位为元”（2026-10-30）
+
+- 发现日期：2026-10-30，B15 `run-x`复核P2。P2（业务完整性）。
+- 问题与影响：源p159无“赎回金额单位为元”，`preserve_terms`因源文不含该词而跳过，模型replacement也省略，最终缺少指引固定文本中的单位。
+- 处理（已实施）：G09 `required_new_terms`增加“赎回金额单位为元”，模型缺失时拒绝并重试；保留term检查仍只对源文已有词生效。
+- 状态：**代码修复+定向测试通过；B15复跑`run-ab` p159已含单位**。
+- 变更记录：2026-10-30新增。
+
+## FL-D534 G12整句替换删除源编号“5、”（2026-10-30）
+
+- 发现日期：2026-10-30，B17道琼斯`run-w`复核P2。P2（格式/编号）。
+- 问题与影响：p295目标span从0开始且quote含“5、”，`g12_allocation_replace`用不含编号的new_text整段替换，最终条款编号丢失，后续编号从4跳到6。
+- 处理（已实施）：G12替换若span以编号开头，编辑起点后移到编号之后，保留“5、”；新增p295编号回归。
+- 状态：**代码修复+定向测试通过；B17复跑`run-af`进行中**。
+- 变更记录：2026-10-30新增。
+
+## FL-D535 G08已含类别分组但缺直销豁免时compose被判components unverified（2026-10-30）
+
+- 发现日期：2026-10-30，B17道琼斯`run-ad`。P1。
+- 问题与影响：p292已写“C/E不收取申购费，A类…申购费率由管理人决定”，但缺“通过直销机构申购A类不收取申购费”；自由compose的产物未通过G08 policy components检查，G08 OPEN，整份incomplete。
+- 处理（已实施）：G08 replace且目标span同时含“不收取申购费”“申购费率由基金管理人决定”“招募说明书”时，直接用instantiate后的guide new_text整句替换，不再让模型自由拼接。新增p292回归。
+- 状态：**代码修复+定向测试通过；B17复跑`run-af`进行中**。
+- 变更记录：2026-10-30新增。
