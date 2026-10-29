@@ -6322,3 +6322,51 @@ H＝E×…
 - 下一步：发布后在 `https://fundlex.club` 用真实账号复核三个阅读器；再按用户反馈微调字重、间距或移动端默认落点。
 - 范围说明：本次作用于生产 V1 阅读器；V2 React 页面未做同版视觉改版，深色模式未做；未改任何业务字段、接口或生成规则。
 - 变更记录：2026-10-29 新增；与 FL-D515 的虚拟定位修复同批提交，但一个是视觉规范、一个是定位正确性，分开登记。
+
+## FL-D517 G16目标落在销售服务费公式尾行，append无法绑定支付条款（2026-10-29）
+
+- 发现日期：2026-10-29，B15美国房地产Semantic V2重跑 `sem-run-m`。P1。
+- 问题与影响：模型/盘点把G16目标定在p719“E为C类基金份额前一日的基金资产净值”，该段是公式尾行，不是支付机制；`rebind_g16_clause_targets`只向回找支付锚点，未回退到紧随其后的p720，导致`TARGET_SOURCE_MISMATCH`，整份只剩G16 OPEN。
+- 处理（已实施）：目标本身以句末标点未闭合、且其后1–3段内出现`_g16_payment_anchor`（销售服务费+计提+按月支付）时，允许向前重绑到该支付条款的clause end；仍要求目标在物理section内。新增`test_formula_tail_before_payment_head_binds_forward_to_clause_end`。
+- 状态：**代码修复+定向测试通过；B15真实重跑`sem-run-n`进行中**。
+- 变更记录：2026-10-29新增。
+
+## FL-D518 G16固定政策模板在Semantic V2中被当作整段replace，与G15/G17删除重叠（2026-10-29）
+
+- 发现日期：2026-10-29，B12沪深300/B15美国房地产Semantic V2重跑。P1。
+- 问题与影响：G16指引操作是append，但Semantic V2对所有目标统一生成`operation=replace`；模板模式下既可能丢失原文受保护词（旧支付句的“基金财产”），又会与同段G15/G17删除冲突，`RECALL_POLICY_COMPONENTS_UNVERIFIED`或`DUPLICATE_SITE_DIVERGED`无法闭环。
+- 处理（已实施）：SemanticTarget记录指引操作的`operation_mode`；G16模板目标规划为在clause end `insert`，由既有`merged_delete_append`与G17删除合并；G16语义策略改为append并移除模板中不存在的“基金财产”保留词。新增`test_semantic_target_carries_guide_operation_mode`。
+- 状态：**代码修复+定向测试通过；B12/B15真实重跑待执行**。
+- 变更记录：2026-10-29新增。
+
+## FL-D519 G02/G04在泛化份额类别定义中旧文不存在时无法关闭（2026-10-29）
+
+- 发现日期：2026-10-29，B05弘利 `sem-run-b`。P1。
+- 问题与影响：释义p117只写“将基金份额分为不同的类别”，不含A/C类字样；G02:0/1的旧文`A类基金份额`/`C类基金份额`在释义scope内不存在，模型给出ABSENT标记但replay不接受replace的absence证书，两个G02义务保持OPEN，整份incomplete。
+- 处理（已实施）：`absent_delete_coverage`对G02/G04增加硬事实no-op证书：仅当`class_substitution_letter_stable`为真（实际类别实例化后与指引引用完全相同）且旧文在规则scope内不存在时，记录rule-scope扫描并关闭为ALREADY_SATISFIED；实际类别不同时仍必须定位修改，不用absence掩盖。
+- 状态：**代码修复+`test_hengli_g02_class_definition_already_generic_closes_as_noop`通过；B05真实重跑`sem-run-o`进行中**。
+- 变更记录：2026-10-29新增。
+
+## FL-D520 类别组连接词“和/、”导致已满足的G02/G04被判缺失（2026-10-29）
+
+- 发现日期：2026-10-29，B19锐意 `sem-run-b`/first-wave复核。P1。
+- 问题与影响：合同p160写“C类和E类基金份额”，指引实例化为“C类、E类基金份额”；字面比较不相等，G04:1被判未满足，recovery生成R035重复目标，最终`RECALL_TARGET_UNRESOLVED`/`CLAIM_OPERATION_NOT_PLANNED`，整份incomplete。
+- 处理（已实施）：仅对G02/G04在satisfaction比较中把两个类别标签之间的`和/及/与/、`归一为`、`，不触碰普通语句连接词；新增类别组连接词回归测试。
+- 状态：**代码修复+定向测试通过；B19真实重跑待执行**。
+- 变更记录：2026-10-29新增。
+
+## FL-D521 G18确定性替换丢掉收益分配尾句（2026-10-29）
+
+- 发现日期：2026-10-29，B17道琼斯 `fixcheck7-dow`独立复核。P1。
+- 问题与影响：p1322目标quote包含“，各基金份额类别对应的可供分配利润将有所不同，本基金同一类别的每一基金份额享有同等分配权；”，`g18_class_group_replace`用只含费用句的new_text整段替换，尾句被删除，审计判G18 incomplete；p926无尾句则正常。
+- 处理（已实施）：G18整句替换时保留目标span中最后一个“销售服务费”之后的原文尾串，只替换费用句本身；新增p1322尾句保留测试。
+- 状态：**代码修复+定向测试通过；B17真实重跑待执行**。
+- 变更记录：2026-10-29新增。
+
+## FL-D522 模型把G02/G04泛化类别判为satisfied，审计认定仍需实际类别但无法重开（2026-10-29）
+
+- 发现日期：2026-10-29，B17道琼斯独立复核。P1。
+- 问题与影响：p126/p174只写“A类基金份额”“C类基金份额或E类基金份额”，实际类别为A类人民币/美元、C/E类人民币/美元；盘点模型以泛化类别“已覆盖”标satisfied，审计明确要求替换为实际类别，但satisfied目标不进入planner，最终`AUDIT_NOT_COMPLETED`+`FINAL_OPERATION_UNPROVEN`。
+- 处理（已实施）：审计出现`AUDIT_NOT_COMPLETED`且目标为G02/G04、`class_substitution_letter_stable`为假时，把satisfied目标重开为needs_edit并清空plan_reason；硬事实no-op（B05）不重开，避免把真实无操作合同重新打开。
+- 状态：**代码修复+定向测试通过；B17真实重跑待执行**。
+- 变更记录：2026-10-29新增。
