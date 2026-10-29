@@ -858,6 +858,12 @@ def _collect_targets(entries: Sequence[_WindowState], synthetic: Sequence[Target
                           for location in _target_locations(target)}
     collected = list(window_targets)
     for target in synthetic:
+        if getattr(target, "semantic_replacement", None):
+            # A model-first semantic target is source-proven and must survive
+            # recovery rebuilds; else a same-site inventory placeholder would
+            # suppress it again.
+            collected.append(target)
+            continue
         rule = rules_by_id.get(target.rule_id)
         operations = tuple(getattr(target, "operations", ()) or ()) or tuple(
             target_operation_keys(target, rule, inspection))
