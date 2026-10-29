@@ -1171,6 +1171,7 @@ def _expand_duplicate_copy_scopes(targets: list[Target],
                 start=located[0], end=located[1], resolution="resolved",
                 operations=tuple(target.operations or ()))
             clone.segment_ok = True
+            setattr(clone, "normalized_copy", True)
             targets.append(clone)
             existing_sites.add(site)
 
@@ -1186,6 +1187,13 @@ def _apply_scope_gate(targets: Sequence[Target], scopes: Mapping[str, Any] | Non
     if scopes is None:
         return list(targets)
     for target in targets:
+        if getattr(target, "normalized_copy", False):
+            # A numbered summary copy matched by clause text (1、 vs （1）) was
+            # added after the original scope was resolved; it is the same policy
+            # clause and must not be dropped by the marker difference.
+            if not target.scope_id:
+                target.scope_id = f"{target.rule_id}:normalized_copy"
+            continue
         if (str(target.rule_id) == "G22"
                 and ("g22_ordered_list_variant" in str(target.reason or "")
                      or getattr(target, "semantic_replacement", None))):
