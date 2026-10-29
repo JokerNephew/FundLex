@@ -7159,11 +7159,16 @@ def _plan_target_inner(rule: dict, target: Target, inspection: DocumentInspectio
         # Model-first semantic target: the quote/span/scope/protected terms were
         # already validated by fundlex.semantic_contract; the model supplies the
         # complete replacement and code records the exact authorized span.
+        # An append operation inserts the fixed policy after the located clause
+        # instead of replacing it, so a sibling delete (G15/G17) can merge with it.
+        append_mode = getattr(target, "semantic_operation_mode", "replace") == "append"
         return finish(PlannedEdit(
             target_id=target.target_id, rule_id=rule_id,
-            location=target.location, start=target.start, end=target.end,
-            replacement=str(semantic_replacement), operation="replace",
-            content_source="semantic_v2",
+            location=target.location,
+            start=target.end if append_mode else target.start, end=target.end,
+            replacement=str(semantic_replacement),
+            operation="insert" if append_mode else "replace",
+            content_source="semantic_v2_append" if append_mode else "semantic_v2",
             evidence={"fixed_text": str(semantic_replacement),
                       "preserved_text": list(getattr(target, "semantic_preserved_text", ())),
                       "guide_paragraphs": rule.get("source_paragraphs") or []}))

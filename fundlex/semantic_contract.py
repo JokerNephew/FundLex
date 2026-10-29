@@ -88,6 +88,7 @@ class SemanticTarget:
     replacement: str
     preserved_text: tuple[str, ...] = ()
     reason: str = ""
+    operation_mode: str = "replace"
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -100,6 +101,7 @@ class SemanticTarget:
             "replacement": self.replacement,
             "preserved_text": list(self.preserved_text),
             "reason": self.reason,
+            "operation_mode": self.operation_mode,
         }
 
 
@@ -271,6 +273,7 @@ def parse_semantic_targets(value: Mapping[str, Any], rule: Mapping[str, Any],
             preserved_text=tuple(str(value) for value in
                                  item.get("preserved_text") or () if str(value)),
             reason=str(item.get("reason") or ""),
+            operation_mode=str(operation_spec.get("op") or "replace"),
         )
         ok, reason = validate_semantic_target(
             target, rule, inspection, allowed, policy=policy)
@@ -320,6 +323,7 @@ def semantic_target_to_target(target: SemanticTarget) -> Any:
     )
     setattr(item, "semantic_replacement", target.replacement)
     setattr(item, "semantic_preserved_text", target.preserved_text)
+    setattr(item, "semantic_operation_mode", target.operation_mode)
     return item
 
 

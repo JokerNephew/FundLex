@@ -121,7 +121,7 @@
     {
       "rule_id": "G16",
       "policy_object": "sales_service_fee_payment_mechanism",
-      "operation": "replace",
+      "operation": "append",
       "required_new_terms": [
         "每日计提",
         "直销机构",
@@ -131,8 +131,7 @@
       "preserve_terms": [
         "销售服务费",
         "基金托管人",
-        "销售机构",
-        "基金财产"
+        "销售机构"
       ],
       "selector_examples": [
         "基金销售服务费每日计提，按月支付。由基金托管人根据与基金管理人核对一致的财务数据支付。",

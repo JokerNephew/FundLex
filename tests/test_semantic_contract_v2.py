@@ -160,3 +160,17 @@ def test_invalid_quote_is_retried_once(tmp_path):
         gateway, _rule(), inspection, ["p0"], load_semantic_policies()["G09"])
     assert len(accepted) == 1
     assert gateway.calls == 2
+
+
+def test_semantic_target_carries_guide_operation_mode(tmp_path):
+    from fundlex.semantic_contract import parse_semantic_targets, semantic_target_to_target
+    rule = next(item for item in GUIDE["groups"] if item["rule_id"] == "G16")
+    old = "C类基金份额的销售服务费每日计提，按月支付。"
+    inspection = _doc(tmp_path, old)
+    accepted, rejected = parse_semantic_targets({"targets": [{
+        "location": "p0", "quote": old, "operation_id": "G16:0",
+        "replacement": "ignored", "preserved_text": [], "reason": "payment",
+    }]}, rule, inspection, ["p0"], load_semantic_policies()["G16"])
+    assert not rejected, rejected
+    converted = semantic_target_to_target(accepted[0])
+    assert converted.semantic_operation_mode == "append"
