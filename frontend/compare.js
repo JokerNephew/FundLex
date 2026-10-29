@@ -384,7 +384,7 @@
     if (next === 'classic' && state.view && !state.classicRendered) renderClassicView();
     if (next === 'word' && state.view && !state.wordSourcesRendered) renderWordSources();
     if (next === 'classic') applySplitRatio(state.splitRatio, false);
-    requestAnimationFrame(() => { drawLines(); if (state.view) focusDiff(state.diffIndex); });
+    requestAnimationFrame(() => { refreshVirtualLayouts(); drawLines(); if (state.view) focusDiff(state.diffIndex); });
   }
   function setClassicSide(side, persist=true) {
     const next = side === 'right' ? 'right' : 'left';
@@ -536,7 +536,9 @@
       const tag=element.tagName.toLowerCase();
       const text=element.textContent||'';
       const heading=/^h[1-6]$/.test(tag)||element.classList.contains('compare-heading');
-      return {html:element.outerHTML,blockId:element.getAttribute('data-block-id')||'',textLength:text.length,kind:tag==='table'?'table':heading?'heading':'paragraph'};
+      const blockIds=[...element.querySelectorAll('[data-block-id]')].map(node=>node.getAttribute('data-block-id')||'').filter(Boolean);
+      const blockId=element.getAttribute('data-block-id')||blockIds[0]||'';
+      return {html:element.outerHTML,blockId,blockIds,textLength:text.length,kind:tag==='table'?'table':heading?'heading':'paragraph'};
     });
     return {style:wrapper.getAttribute('style')||'',blocks};
   }
@@ -546,7 +548,7 @@
       this.chunkSize=options.chunkSize||20; this.overscan=options.overscan||2;
       this.charsPerLine=options.charsPerLine||46; this.merged=Boolean(options.merged);
       this.onChange=options.onChange||null; this.chunks=[]; this.first=0; this.last=0; this.frame=null;
-      this.blockIndex=new Map(); this.blocks.forEach((block,index)=>{if(block.blockId)this.blockIndex.set(block.blockId,index);});
+      this.blockIndex=new Map(); this.blocks.forEach((block,index)=>{(block.blockIds||[block.blockId]).filter(Boolean).forEach(id=>this.blockIndex.set(id,index));});
       this.scrollHandler=()=>this.schedule();
       this.container.addEventListener('scroll',this.scrollHandler,{passive:true});
       this.build();
