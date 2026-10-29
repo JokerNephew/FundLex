@@ -382,7 +382,7 @@
     });
     if (persist) { try { localStorage.setItem('fundlex-compare-view-mode', next); } catch {} }
     if (next === 'classic' && state.view && !state.classicRendered) renderClassicView();
-    if (next === 'word' && state.view && !state.wordSourcesRendered) renderWordSources();
+    if (next === 'word' && state.view && !state.wordSourcesRendered && !$('compare-word-layout')?.classList.contains('is-sources-hidden')) renderWordSources();
     if (next === 'classic') applySplitRatio(state.splitRatio, false);
     requestAnimationFrame(() => { refreshVirtualLayouts(); drawLines(); if (state.view) focusDiff(state.diffIndex); });
   }
