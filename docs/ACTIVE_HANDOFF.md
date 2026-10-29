@@ -1499,5 +1499,5 @@
   - V2 `frontend/src/pages/Compare/ComparePage.tsx`、`frontend/src/styles/app.css`、`frontend/src/types/api.ts` 同步三栏/双栏切换。
   - 新增 `tests/test_compare_merged_render.py`，更新 Compare API 与 V1 浏览器测试；`docs/CONTRACT_COMPARE_DESIGN.md`、`docs/DETAIL_ISSUES_AND_RESOLUTIONS.md` 的 FL-D260/FL-D512 已登记。
 - **已验证**：全量 pytest `2151 passed / 83 skipped`；Compare 专项 `129 passed / 6 skipped`；V1 浏览器 `10 passed`；V2 浏览器 `10 passed`；V2 typecheck/lint/Vitest `16 passed`/build 通过。
-- **已发布**：提交 `f6723fe` 已从干净 worktree 发布；engine `fbb74e18…`、service `1eddb569…`，五服务 active，`/api/capabilities` 200。生产 `https://fundlex.club` 正式入口用两份公开 DOCX 完成真实 Compare Worker 结果：1421 处差异、`incomplete`，Word/双栏切换正常，报告 5,328,953 bytes 且含 `merged`；临时账号/任务/对象已清理。证据 `/tmp/opencode/prod-compare-word-1600.png`、`/tmp/opencode/prod-compare-classic-1600.png`、`/tmp/opencode/prod-compare-report.json`。
+- **已发布**：提交 `f6723fe`（Word 三栏）和 `9f5b61d`（全屏弹窗）已发布；engine `fbb74e18…`、service `1eddb569…`，五服务 active，`/api/capabilities` 200。生产 `https://fundlex.club` 正式入口用两份公开 DOCX 完成真实 Compare Worker 结果：1421 处差异、`incomplete`，Word/双栏切换正常，全屏弹窗关闭/Esc/重开通过，报告 5,328,953 bytes 且含 `merged`；临时账号/任务/对象已清理。证据 `/tmp/opencode/prod-compare-word-1600.png`、`/tmp/opencode/prod-compare-classic-1600.png`、`/tmp/opencode/prod-compare-report.json`。
 - **剩余**：本次未改 coverage 判定；`incomplete` 仍必须显示人工复核提示，不能因新视图宣称全文无差异。后续修改合并稿投影需沿用真实合同回归。
