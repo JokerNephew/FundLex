@@ -302,3 +302,42 @@ def test_paragraph_insert_selection_generates_and_tampered_artifact_fail_closed(
     response = client.get(artifact["files"]["final"]["download_url"], headers=headers)
     assert response.status_code == 409
     assert response.json()["detail"] == "COMPARE_SELECTION_ARTIFACT_INVALID"
+
+
+def test_compare_store_migrates_legacy_selection_artifact_columns(tmp_path):
+    """Existing MySQL deployments have the pre-versioning artifact schema.
+    Opening CompareStore must add report_json/stale and backfill stale from
+    the legacy status column instead of failing the first save."""
+    store = RunStore(tmp_path / "legacy-store")
+    with store._connect() as db:
+        db.execute("""CREATE TABLE compare_selection_artifacts (
+            pair_id TEXT NOT NULL, version INTEGER NOT NULL, kind TEXT NOT NULL,
+            object_key TEXT NOT NULL, sha256 TEXT NOT NULL, size INTEGER NOT NULL,
+            selection_epoch INTEGER NOT NULL, result_sha256 TEXT NOT NULL,
+            left_source_sha256 TEXT NOT NULL, right_source_sha256 TEXT NOT NULL,
+            decision_hash TEXT NOT NULL, binding_hash TEXT NOT NULL,
+            idempotency_key TEXT, status TEXT NOT NULL DEFAULT 'current',
+            created_at REAL NOT NULL, PRIMARY KEY(pair_id, version, kind))""")
+        for version, status in ((1, "current"), (2, "stale")):
+            db.execute("""INSERT INTO compare_selection_artifacts
+                (pair_id,version,kind,object_key,sha256,size,selection_epoch,
+                 result_sha256,left_source_sha256,right_source_sha256,
+                 decision_hash,binding_hash,status,created_at)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                ("pair", version, "final", f"object-{version}", "a" * 64, 1,
+                 version, "r" * 64, "l" * 64, "g" * 64, "d" * 64,
+                 "b" * 64, status, 1.0))
+
+    CompareStore(store)
+
+    with store._connect() as db:
+        columns = {row["name"] for row in db.execute(
+            "PRAGMA table_info(compare_selection_artifacts)")}
+        rows = {
+            int(row["version"]): dict(row)
+            for row in db.execute(
+                "SELECT version,stale FROM compare_selection_artifacts ORDER BY version")
+        }
+    assert {"report_json", "stale"} <= columns
+    assert rows[1]["stale"] == 0
+    assert rows[2]["stale"] == 1

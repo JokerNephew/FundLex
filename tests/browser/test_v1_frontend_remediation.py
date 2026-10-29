@@ -421,6 +421,86 @@ def test_compare_word_style_reader_renders_merged_redline_and_display_modes(brow
     assert page_errors == []
 
 
+def test_compare_save_retry_enables_generate_after_failed_autosave(browser, live_dev):
+    """A failed automatic save must leave the explicit save action usable.
+    Clicking it must not pass the click event as a diff-id array, and a
+    successful retry must enable generation."""
+    _app, base = live_dev
+    context = browser.new_context(viewport={"width": 1440, "height": 900})
+    context.add_init_script("localStorage.setItem('fundlex-dev-user','compare-save-retry')")
+    page = context.new_page()
+    page_errors: list[str] = []
+    page.on("pageerror", lambda error: page_errors.append(str(error)))
+
+    merged = ('<div class="compare-document compare-merged-document">'
+              '<p class="compare-block has-change" data-block-id="R4">保留 <del class="compare-del" data-diff-id="D4">旧条款</del>'
+              '<ins class="compare-ins" data-diff-id="D4">新条款</ins> 结尾</p></div>')
+    diffs = [{"id": "D4", "type": "modify", "section": "正文",
+              "left": {"text": "旧条款", "block_id": "L4"},
+              "right": {"text": "新条款", "block_id": "R4"}}]
+    put_count = {"value": 0}
+
+    def selection(decision="pending", epoch=0):
+        decisions = {"D4": decision}
+        pending = [] if decision != "pending" else ["D4"]
+        return {"pair_id": "P4", "result_sha256": "a" * 64,
+                "left_source_sha256": "b" * 64, "right_source_sha256": "c" * 64,
+                "selection_epoch": epoch,
+                "draft": {"selection_epoch": epoch, "decisions": decisions, "decision_hash": "d" * 64},
+                "decisions": decisions,
+                "assessment": {"pending_ids": pending, "issues": [], "can_generate": not pending},
+                "diffs": diffs, "artifacts": []}
+
+    def view():
+        return {"pair": {"id": "P4", "label": "保存重试"}, "result_sha256": "a" * 64,
+                "left": {"name": "原文档.docx", "html": '<p data-block-id="L4"><mark class="compare-diff modify" data-diff-id="D4">旧条款</mark></p>'},
+                "right": {"name": "修订文档.docx", "html": '<p data-block-id="R4"><mark class="compare-diff modify" data-diff-id="D4">新条款</mark></p>'},
+                "merged": {"name": "修订文档.docx", "html": merged},
+                "summary": {"total": 1, "modify": 1, "insert": 0, "delete": 0},
+                "coverage": {"status": "complete", "warnings": []}, "diffs": diffs}
+
+    def scenario(path, query, route):
+        if path == "/api/compare/tasks":
+            return respond(route, {"items": [{"id": "T4", "name": "save-retry", "status": "succeeded", "total": 1,
+                                              "pairs": [{"id": "P4", "label": "保存重试", "status": "succeeded",
+                                                         "left": {"name": "原文档.docx"}, "right": {"name": "修订文档.docx"},
+                                                         "summary": {"total": 1}}]}]})
+        if path == "/api/compare/tasks/T4":
+            return respond(route, {"id": "T4", "name": "save-retry", "status": "succeeded", "total": 1,
+                                   "pairs": [{"id": "P4", "label": "保存重试", "status": "succeeded",
+                                              "left": {"name": "原文档.docx"}, "right": {"name": "修订文档.docx"},
+                                              "summary": {"total": 1}}]})
+        if path == "/api/compare/pairs/P4/view":
+            return respond(route, view())
+        if path == "/api/compare/pairs/P4/selection":
+            if route.request.method == "PUT":
+                put_count["value"] += 1
+                if put_count["value"] == 1:
+                    return respond(route, {"detail": "forced failure"}, status=500)
+                return respond(route, selection("right", 1))
+            return respond(route, selection())
+        return respond(route, {})
+
+    install_api(page, base_api(scenario))
+    try:
+        open_dev(page, base, "#compare?mode=detail&id=T4&pair=P4")
+        page.locator("#compare-word-merged-pane .compare-ins").wait_for(state="visible")
+        page.locator("#compare-selection-right-all").click()
+        page.locator("#compare-selection-status").filter(has_text="保存未完成").wait_for()
+        assert page.locator("#compare-selection-save").is_enabled()
+        assert not page.locator("#compare-selection-generate").is_enabled()
+        page.locator("#compare-selection-save").click()
+        page.locator("#compare-selection-status").filter(has_text="已保存").wait_for()
+        page.wait_for_timeout(100)
+        assert not page.locator("#compare-selection-save").is_enabled()
+        assert page.locator("#compare-selection-generate").is_enabled()
+        assert "1 / 1" in page.locator("#compare-selection-progress").inner_text()
+        assert put_count["value"] == 2
+    finally:
+        context.close()
+    assert page_errors == []
+
+
 def test_compare_diff_click_locates_virtualized_pure_insertion(browser, live_dev):
     """A pure insertion whose right block id is absent from the merged projection
     must still scroll the virtual document to its inserted mark."""

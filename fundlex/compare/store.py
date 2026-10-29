@@ -18,6 +18,7 @@ import uuid
 from pathlib import Path
 from typing import Any, Mapping
 
+from ..db import DatabaseError
 from ..docx import DocxError
 from ..store import Conflict, NotFound, RunStore, sha256_file
 from .selection import (SelectionError, assess_selection, decision_hash,
@@ -111,6 +112,34 @@ class CompareStore:
             }.items():
                 if name not in columns:
                     db.execute(f"ALTER TABLE compare_pair_files ADD COLUMN {name} {definition}")
+            # Older MySQL deployments predate the selection version columns.
+            # CREATE TABLE IF NOT EXISTS cannot add columns, so migrate in place
+            # before the first save/generate request reaches this table.
+            def selection_columns():
+                return {row["name"] for row in db.execute(
+                    "PRAGMA table_info(compare_selection_artifacts)")}
+
+            def add_selection_column(name, definition):
+                if name in selection_columns():
+                    return
+                try:
+                    db.execute(f"ALTER TABLE compare_selection_artifacts ADD COLUMN {name} {definition}")
+                except DatabaseError:
+                    # API workers start concurrently; another process may have
+                    # added the same column between the check and the ALTER.
+                    if name not in selection_columns():
+                        raise
+
+            columns = selection_columns()
+            if columns:
+                add_selection_column("report_json", "LONGTEXT")
+                add_selection_column("stale", "INTEGER NOT NULL DEFAULT 0")
+                if self.store.database.dialect == "mysql" and "binding_hash" in columns:
+                    # The current writer does not populate the legacy binding
+                    # hash, and the original column was NOT NULL.
+                    db.execute("ALTER TABLE compare_selection_artifacts MODIFY COLUMN binding_hash VARCHAR(255) NULL")
+                if "status" in columns:
+                    db.execute("UPDATE compare_selection_artifacts SET stale=CASE WHEN status='stale' THEN 1 ELSE 0 END")
 
     def _connect(self):
         return self.store._connect()
@@ -760,8 +789,9 @@ class CompareStore:
 
     def _version_dict(self, rows: list[Any]) -> dict[str, Any]:
         first = rows[0]
+        raw_report = first["report_json"] if "report_json" in first.keys() else None
         try:
-            report = json.loads(first["report_json"])
+            report = json.loads(raw_report) if raw_report else {}
         except (TypeError, ValueError):
             raise Conflict("COMPARE_SELECTION_INVALID") from None
         return {"version": int(first["version"]),
