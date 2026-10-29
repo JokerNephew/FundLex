@@ -174,3 +174,18 @@ def test_formula_tail_before_payment_head_binds_forward_to_clause_end(tmp_path):
     assert target.location == "p6"
     assert target.quote == USAGE
     assert "G16_CLAUSE_END" in target.reason
+
+
+def test_semantic_g16_target_supersedes_the_same_clause_tail_target(tmp_path):
+    source = _write(tmp_path / "g16-dedupe.docx", [HEAD, USAGE])
+    semantic = Target("semantic", "G16", "p0", HEAD, "needs_edit", "",
+                      start=0, end=len(HEAD), resolution="resolved",
+                      operations=("G16:0",))
+    setattr(semantic, "semantic_replacement", "销售服务费每日计提。")
+    tail = Target("tail", "G16", "p1", USAGE, "needs_edit", "",
+                  start=0, end=len(USAGE), resolution="resolved",
+                  operations=("G16:0",))
+    rebind_g16_clause_targets([tail, semantic], source)
+    assert not semantic.out_of_scope
+    assert tail.out_of_scope
+    assert "SUPERSEDED_BY_G16_CLAUSE_TARGET" in tail.reason

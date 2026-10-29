@@ -4520,6 +4520,33 @@ def rebind_g16_clause_targets(targets: Sequence[Target],
             target.resolution = "resolved"
             target.segment_ok = True
             target.reason = f"{target.reason}|G16_CLAUSE_END"
+    # Inventory/open-rule passes can leave two G16 append targets in the same
+    # physical fee clause (payment head and usage tail).  They are one insertion,
+    # so keep the semantic target when present, else the clause-end target.
+    clause_by_location = {location: clause for clause in _g16_clause_locations(inspection)
+                          for location in clause}
+    groups: dict[tuple[str, ...], list[Target]] = {}
+    for target in targets:
+        if (target.rule_id == "G16" and target.state == "needs_edit"
+                and not target.out_of_scope and target.location in clause_by_location):
+            groups.setdefault(clause_by_location[target.location], []).append(target)
+    for items in groups.values():
+        if len(items) < 2:
+            continue
+        def clause_score(item: Target) -> tuple[int, int, bool, str]:
+            clause = clause_by_location.get(item.location, ())
+            return (0 if getattr(item, "semantic_replacement", None) else 1,
+                    0 if clause and item.location == clause[-1] else 1,
+                    item.target_id.startswith("Y"), item.location)
+        items.sort(key=clause_score)
+        keep = items[0]
+        for duplicate in items[1:]:
+            duplicate.out_of_scope = True
+            duplicate.operations = ()
+            duplicate.claimed_operations = ()
+            duplicate.reason = f"{duplicate.reason}|SUPERSEDED_BY_G16_CLAUSE_TARGET:{keep.target_id}"
+            changes.append({"target_id": duplicate.target_id, "from": duplicate.location,
+                            "to": keep.location, "deduplicated": True})
     return changes
 
 
