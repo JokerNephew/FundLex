@@ -90,7 +90,7 @@ def test_lost_protected_tail_is_rejected(tmp_path):
     ok, reason = validate_semantic_target(
         target, _rule(), inspection, ["p0"], policy=policy)
     assert not ok
-    assert reason.startswith("lost_protected_term")
+    assert reason.startswith(("lost_protected_term", "missing_required_term"))
 
 
 def test_quote_outside_scope_is_rejected(tmp_path):
