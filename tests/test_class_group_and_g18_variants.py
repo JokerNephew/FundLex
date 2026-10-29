@@ -107,3 +107,25 @@ def test_g08_actual_rate_variant_is_bound_and_replaced():
     assert edit is not None
     assert "在申购时收取申购费用" in edit.replacement
     assert "通过直销机构申购本基金" in edit.replacement
+
+
+def test_g11_replaces_pre_existing_c_class_sentence_without_duplication():
+    inspection = inspect_docx(
+        ROOT / "funds_word" / "基金合同第一批" /
+        "广发富信优选六个月持有期混合型基金中基金（FOF）基金合同20261020.docx", full=True)
+    rule = _rule("G11")
+    text = inspection.by_location("p245").text
+    quote = "申购费用由投资人承担，不列入基金财产。"
+    start = text.find(quote)
+    target = Target("T", "G11", "p245", quote, "needs_edit", "",
+                    start=start, end=start + len(quote), resolution="resolved",
+                    operations=("G11:1",))
+    facts = _facts()
+    # This fixture has A/C/E classes; the G11 text instantiates C only once.
+    ledger = compile_obligations({"groups": [rule]})
+    apply_facts(ledger, facts)
+    edit = plan_target(rule, target, inspection, facts, NoModel(),
+                       compose_budget=[3], obligations=ledger)
+    assert edit is not None
+    after = text[:edit.start] + edit.replacement + text[edit.end:]
+    assert after.count("本基金C类基金份额不收取申购费用。") == 1

@@ -7042,30 +7042,28 @@ def _plan_target_inner(rule: dict, target: Target, inspection: DocumentInspectio
                 evidence={"fixed_text": replacement,
                           "appended_suffix": suffix,
                           "guide_paragraphs": rule.get("source_paragraphs") or []}))
-    if (rule_id == "G17" and len(operations) == 1
-            and operations[0].get("op") == "delete"
+    if (rule_id == "G11" and len(operations) == 1
+            and operations[0].get("op") == "replace"
             and target.start is not None and target.end is not None):
-        # The target paragraph may append an unrelated tail after the authorized
-        # usage sentence ("…服务费等；基金管理人可…下调销售服务费率…").  Deleting
-        # the whole paragraph removes that tail without authorization.  Narrow the
-        # span to the exactly matched operation-owned sentence(s) first.
-        compact_body, positions = compact_offsets(span.text)
-        owned: list[tuple[int, int]] = []
-        for occurrence in _g17_source_sentence_parts(inspection, operations):
-            if len(occurrence) != 1 or occurrence[0][0] != target.location:
-                continue
-            _loc, left, right = occurrence[0]
-            if not (0 <= left < right <= len(positions)):
-                continue
-            raw_start = positions[left]
-            raw_end = positions[right - 1] + 1
-            if target.start <= raw_start and raw_end <= target.end:
-                owned.append((raw_start, raw_end))
-        owned = sorted(set(owned))
-        if len(owned) == 1 and owned[0] != (target.start, target.end):
-            target.start, target.end = owned[0]
-            target.quote = span.text[target.start:target.end]
-            actual = span.text[target.start:target.end]
+        expected, issues = instantiate_slots(
+            str(operations[0].get("new_text") or ""), facts)
+        if not issues and expected and expected.rstrip().endswith(
+                "本基金C类基金份额不收取申购费用。"):
+            span_text = span.text
+            tail = span_text[target.end:].lstrip()
+            duplicate = "本基金C类基金份额不收取申购费用。"
+            if tail.startswith(duplicate):
+                # The source already carried the C-class sentence after the old
+                # subscription-fee sentence; the new policy repeats it, so replace
+                # both to avoid "…不收取申购费用。本基金C类…" duplication (富信 p245).
+                end = target.end + (len(span_text[target.end:]) - len(tail)) + len(duplicate)
+                return finish(PlannedEdit(
+                    target_id=target.target_id, rule_id=rule_id,
+                    location=target.location, start=target.start, end=end,
+                    replacement=expected, operation="replace",
+                    content_source="g11_subscription_fee_replace",
+                    evidence={"fixed_text": expected,
+                              "guide_paragraphs": rule.get("source_paragraphs") or []}))
     if (rule_id == "G12" and len(operations) == 1
             and operations[0].get("op") == "replace"
             and target.start is not None and target.end is not None):
@@ -7073,6 +7071,8 @@ def _plan_target_inner(rule: dict, target: Target, inspection: DocumentInspectio
         if ("赎回费用" in span_text and "承担" in span_text
                 and ("归入基金财产" in span_text or "全额计入基金财产" in span_text)
                 and span_text.rstrip()[-1:] in "。；;"
+                and "对于持续持有期" not in span_text
+                and "赎回金额计算" not in span_text
                 and len(_compact(span_text)) <= 200):
             expected, issues = instantiate_slots(
                 str(operations[0].get("new_text") or ""), facts)
