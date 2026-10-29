@@ -430,6 +430,7 @@
     const viewer=$('compare-viewer'); if(!viewer)return;
     document.body.classList.toggle('compare-fullscreen-open', Boolean(open));
     viewer.hidden=!open;
+    const backdrop=$('compare-viewer-backdrop'); if(backdrop)backdrop.hidden=!open;
     if(open)requestAnimationFrame(()=>viewer.focus?.());
   }
   function closeViewer() {
@@ -450,9 +451,17 @@
     $('compare-summary').textContent=`共 ${s.total||0} 处差异 · 修改 ${s.modify||0} · 新增 ${s.insert||0} · 删除 ${s.delete||0}`;
     $('compare-revision-count').textContent=String(d.length);
     $('compare-revision-count-rail').textContent=String(d.length);
-    const cov=payload.coverage||{}; const incomplete=cov.status!=='complete';
-    $('compare-coverage').hidden=!incomplete; $('compare-coverage').className=incomplete?'is-incomplete':'';
-    $('compare-coverage').textContent=incomplete?`覆盖不完整：以下内容未纳入比较。请人工复核，不要据此确认全文无差异。${(cov.warnings||[]).length?' 未覆盖：'+cov.warnings.join('、'):''}`:'覆盖完整';
+    const cov=payload.coverage||{}; const incomplete=cov.status!=='complete'; const warnings=cov.warnings||[];
+    const chip=$('compare-coverage-chip'), chipSummary=$('compare-coverage-summary'), chipList=$('compare-coverage-list');
+    if(chip&&chipSummary&&chipList){
+      chip.hidden=!incomplete; chip.open=false;
+      chipSummary.textContent=incomplete?`覆盖不完整 · ${warnings.length} 项未覆盖`:'';
+      chipList.replaceChildren();
+      if(incomplete){
+        const intro=document.createElement('p'); intro.textContent='以下内容未纳入比较，请人工复核，不要据此确认全文无差异。'; chipList.append(intro);
+        if(warnings.length){const ul=document.createElement('ul'); warnings.forEach(warning=>{const li=document.createElement('li');li.textContent=warning;ul.append(li);});chipList.append(ul);}
+      }
+    }
     renderContract($('compare-word-merged-pane'),payload.merged?.html||payload.right?.html);
     renderContract($('compare-word-left-pane'),payload.left.html);
     renderContract($('compare-word-right-pane'),payload.right.html);
@@ -518,6 +527,8 @@
     window.addEventListener('beforeunload',event=>{if(state.selectionDirty){event.preventDefault();event.returnValue='';}});
     $('compare-new')?.addEventListener('click',()=>api.navigate?api.navigate('compare',{mode:'new'}):showCreate(true)); $('compare-add-pair')?.addEventListener('click',()=>{const index=state.inputs.length;state.inputs.push({});$('compare-pair-inputs')?.insertAdjacentHTML('beforeend',pairRow({},index));syncInputIndexes();}); $('compare-submit')?.addEventListener('click',createTask); $('compare-refresh')?.addEventListener('click',loadTasks);
     $('compare-close-viewer')?.addEventListener('click',closeViewer);
+    $('compare-viewer-backdrop')?.addEventListener('click',closeViewer);
+    document.addEventListener('click',event=>{const chip=$('compare-coverage-chip');if(chip&&chip.open&&!event.target.closest('#compare-coverage-chip'))chip.open=false;});
     document.addEventListener('keydown',event=>{if(event.key==='Escape'&&!$('compare-viewer').hidden){event.preventDefault();closeViewer();}});
     $('compare-prev-diff')?.addEventListener('click',()=>focusDiff(state.diffIndex-1)); $('compare-next-diff')?.addEventListener('click',()=>focusDiff(state.diffIndex+1)); $('compare-prev-pair')?.addEventListener('click',()=>openPair(Math.max(0,state.pairIndex-1))); $('compare-next-pair')?.addEventListener('click',()=>openPair(Math.min(state.pairs.length-1,state.pairIndex+1))); $('compare-report')?.addEventListener('click',()=>{if(!state.view)return;const blob=new Blob([JSON.stringify(state.view,null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=`${state.task?.name||'合同比对'}-差异报告.json`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}); $('compare-selection-left-all')?.addEventListener('click',()=>setAllSelections('left')); $('compare-selection-right-all')?.addEventListener('click',()=>setAllSelections('right')); $('compare-selection-pending')?.addEventListener('click',()=>{const index=visibleDiffs().findIndex(item=>selectionDecision(item.id)==='pending');if(index>=0)focusDiff(index);}); $('compare-selection-save')?.addEventListener('click',saveSelectionDraft); $('compare-selection-preview')?.addEventListener('click',previewSelection); $('compare-selection-generate')?.addEventListener('click',generateSelection); $('compare-active-only')?.addEventListener('change',drawLines); $('compare-diff-filter')?.addEventListener('change',()=>{state.diffIndex=0;renderDiffList();focusDiff(0);}); $('compare-retry')?.addEventListener('click',continueUploads); document.querySelectorAll('[data-word-pane]').forEach(btn=>btn.addEventListener('click',()=>setMobilePane(btn.dataset.wordPane))); $('compare-show-sources')?.addEventListener('change',e=>setSourcesVisible(e.target.checked)); $('compare-markup-mode')?.addEventListener('change',e=>setMarkupMode(e.target.value)); document.querySelectorAll('[data-compare-sources-close]').forEach(btn=>btn.addEventListener('click',()=>setSourcesVisible(false)));
       document.addEventListener('click',e=>{ const task=e.target.closest('[data-compare-task]');if(task){openTask(task.dataset.compareTask);return;}const pair=e.target.closest('[data-compare-pair]');if(pair){openPair(Number(pair.dataset.comparePair));return;}const download=e.target.closest('[data-selection-download]');if(download){downloadSelection(download.dataset.selectionDownload,download.dataset.selectionFilename);return;}const diff=e.target.closest('[data-compare-diff]');if(diff&&!e.target.closest('input')){focusDiff(visibleDiffs().findIndex(x=>x.id===diff.dataset.compareDiff));return;}const mark=e.target.closest('#compare-word-merged-pane [data-diff-id],#compare-word-left-pane [data-diff-id],#compare-word-right-pane [data-diff-id],#compare-left-pane [data-diff-id],#compare-right-pane [data-diff-id]');if(mark){focusDiff(visibleDiffs().findIndex(x=>x.id===mark.dataset.diffId));return;}const remove=e.target.closest('[data-compare-remove]');if(remove){const index=Number(remove.dataset.compareRemove),row=remove.closest('.compare-pair-input');state.inputs.splice(index,1);row?.remove();if(!state.inputs.length){state.inputs=[{}];renderInputs();}else syncInputIndexes();return;} });

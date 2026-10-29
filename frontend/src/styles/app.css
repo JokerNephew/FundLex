@@ -619,3 +619,24 @@ body.compare-fullscreen-open{overflow:hidden!important}
   .compare-viewer[role="dialog"] .compare-word-layout{height:100%;min-height:0}
   .compare-viewer[role="dialog"] .compare-classic-view{height:68vh;min-height:430px}
 }
+
+/* Leave a visible gap and dimmed backdrop so the reader reads as a modal. */
+.compare-viewer-backdrop{position:fixed;inset:0;z-index:139;background:rgb(16 24 32 / .48);backdrop-filter:blur(2px)}
+.compare-viewer[role="dialog"]{inset:auto;left:50%;top:50%;transform:translate(-50%,-50%);width:min(1800px,calc(100vw - 40px));height:min(1100px,calc(100vh - 40px));border:1px solid #c9d1d8;border-radius:14px;box-shadow:0 28px 90px rgb(10 17 24 / .38)}
+@media(max-width:760px){
+  .compare-viewer[role="dialog"]{width:calc(100vw - 12px);height:calc(100vh - 12px);border-radius:10px}
+}
+
+/* Compact result header and coverage chip: no vertical banner eating the reader. */
+.compare-viewer[role="dialog"] .compare-viewer-toolbar{padding:9px 18px 7px}
+.compare-viewer[role="dialog"] .compare-viewer-title strong{font-size:16px}
+.compare-viewer[role="dialog"] .compare-summary-row{margin-top:5px;padding-top:5px}
+.compare-coverage-chip{position:relative;flex:0 0 auto}
+.compare-coverage-chip summary{display:inline-flex;align-items:center;gap:5px;padding:2px 8px;border:1px solid #e2c56f;border-radius:99px;background:#fff8e2;color:#76550d;font-size:11px;cursor:pointer;list-style:none;white-space:nowrap}
+.compare-coverage-chip summary::-webkit-details-marker{display:none}
+.compare-coverage-chip summary::marker{content:""}
+.compare-coverage-chip[open] summary{border-color:#c99b2d;background:#fff3cf}
+.compare-coverage-popover{position:absolute;right:0;top:calc(100% + 6px);z-index:30;width:min(560px,82vw);max-height:220px;overflow:auto;padding:10px 12px;border:1px solid #e2c56f;border-radius:8px;background:#fffdf4;color:#6b4e0c;box-shadow:0 14px 36px rgb(15 23 32 / .2);font-size:11px;line-height:1.65;overflow-wrap:anywhere;word-break:break-word}
+.compare-coverage-popover p{margin:0 0 6px}
+.compare-coverage-popover ul{margin:0;padding-left:16px}
+.compare-coverage-popover li{overflow-wrap:anywhere;word-break:break-word}

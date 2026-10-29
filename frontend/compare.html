@@ -579,13 +579,13 @@
 </div>
 <details class="compare-groups-disclosure"><summary>查看与切换全部合同组</summary><div id="compare-pair-list"></div></details>
 </div>
-      <div class="card compare-viewer" id="compare-viewer" role="dialog" aria-modal="true" aria-labelledby="compare-pair-title" tabindex="-1" hidden>
+      <div class="compare-viewer-backdrop" id="compare-viewer-backdrop" hidden></div>
+<div class="card compare-viewer" id="compare-viewer" role="dialog" aria-modal="true" aria-labelledby="compare-pair-title" tabindex="-1" hidden>
 <div class="compare-viewer-toolbar">
 <div class="compare-viewer-title">
 <div>
 <strong id="compare-pair-title">
 </strong>
-<p class="compare-reader-subtitle">左侧修订栏定位变化，中间比较文档显示插入与删除痕迹，右侧对照原文档与修订文档。</p>
 </div>
 <div class="head-actions">
 <button class="btn btn-sm" id="compare-prev-pair">上一组</button>
@@ -601,15 +601,11 @@
 <strong id="compare-summary">
 </strong>
 </div>
-<div class="compare-sync-note">
-<span class="compare-sync-dot" aria-hidden="true">
-</span>
-<span class="compare-sync-desktop">三栏同步阅读，点击修订条目可定位。</span>
-<span class="compare-sync-mobile">切换视图，点击修订条目定位。</span>
+<details class="compare-coverage-chip" id="compare-coverage-chip" hidden>
+<summary id="compare-coverage-summary">覆盖不完整</summary>
+<div class="compare-coverage-popover" id="compare-coverage-list" role="status"></div>
+</details>
 </div>
-</div>
-<p id="compare-coverage" role="status" hidden>
-</p>
 </div>
 <div class="compare-word-toolbar" role="toolbar" aria-label="文档比较显示设置">
 <div class="compare-word-toolbar-main">

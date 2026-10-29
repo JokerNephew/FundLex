@@ -320,7 +320,7 @@ def test_compare_word_style_reader_renders_merged_redline_and_display_modes(brow
                 "left": {"name": "原文档.docx", "html": '<p data-block-id="L1"><mark class="compare-diff modify" data-diff-id="D1">旧条款</mark></p>'},
                 "right": {"name": "修订文档.docx", "html": '<p data-block-id="R1"><mark class="compare-diff modify" data-diff-id="D1">新条款</mark></p>'},
                 "merged": {"name": "修订文档.docx", "html": merged},
-                "summary": {"total": 1, "modify": 1, "insert": 0, "delete": 0}, "coverage": {"status": "complete"},
+                "summary": {"total": 1, "modify": 1, "insert": 0, "delete": 0}, "coverage": {"status": "incomplete", "warnings": ["UNSUPPORTED_VISIBLE_CONTENT:header", "UNSUPPORTED_VISIBLE_CONTENT:footer"]},
                 "diffs": diffs}
 
     def selection():
@@ -354,9 +354,16 @@ def test_compare_word_style_reader_renders_merged_redline_and_display_modes(brow
         assert page.locator("#compare-word-merged-pane .compare-del").inner_text() == "旧条款"
         assert page.locator("#compare-revision-count").inner_text() == "1"
         assert page.locator("#compare-merged-title").inner_text() == "Word 样式"
+        assert page.locator("#compare-coverage-chip").is_visible()
+        assert "2 项未覆盖" in page.locator("#compare-coverage-summary").inner_text()
+        page.locator("#compare-coverage-summary").click()
+        assert "header" in page.locator("#compare-coverage-list").inner_text()
+        assert page.locator("#compare-coverage-list").is_visible()
         assert page.locator("#compare-viewer").get_attribute("role") == "dialog"
         box = page.locator("#compare-viewer").bounding_box()
-        assert box and box["width"] >= 1430 and box["height"] >= 990
+        assert box and box["x"] >= 10 and box["y"] >= 10
+        assert box["width"] <= 1430 and box["height"] <= 990
+        assert page.locator("#compare-viewer-backdrop").is_visible()
         assert page.evaluate("document.body.classList.contains('compare-fullscreen-open')") is True
 
         page.locator("#compare-close-viewer").click()
