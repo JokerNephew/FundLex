@@ -461,7 +461,9 @@ def test_scope_projection_helpers(d06):
     window = SimpleNamespace(locations=("p130", "p807", "p1286"))
     projected = scope_locations_for_window(scopes, window)
     assert projected["G06"] == frozenset({"p130"})
-    assert projected["G15"] == frozenset({"p807"})
+    # A real contract-summary fee copy is included even when the model's
+    # section mapping omitted the summary chapter (A50/聚安).
+    assert projected["G15"] == frozenset({"p807", "p1286"})
 
 
 def test_unresolved_rule_does_not_fall_back_to_mapped_chapter(d06):

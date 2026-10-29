@@ -912,6 +912,7 @@ def _resolve_fee_tax(rule_id: str, sections: Sequence[Any], leaves: Sequence[Lea
     summary_leaves: list[LeafSection] = []
     if enabled:
         summary_ids = [str(section.id) for section in base if str(section.zone) == "summary"]
+        fallback_summary = False
         if not summary_ids:
             # The model's section mapping sometimes omits the contract-summary
             # chapter even though the body fee leaf has a real copy there.  The
@@ -920,12 +921,14 @@ def _resolve_fee_tax(rule_id: str, sections: Sequence[Any], leaves: Sequence[Lea
             # (A50/聚安 p1254/p1294).
             summary_ids = [str(section.id) for section in sections
                            if str(section.zone) == "summary"]
+            fallback_summary = True
         body_keys = {leaf.copy_key for leaf in body if leaf.copy_key}
         body_leaf_ids = {leaf.id for leaf in body}
         summary_leaves = [
             leaf for leaf in _leaves_for(leaves, summary_ids, zone="summary")
             if leaf.copy_key in body_keys
-            and (not leaf.summary_of or leaf.summary_of in body_leaf_ids)
+            and (leaf.summary_of in body_leaf_ids if fallback_summary
+                 else (not leaf.summary_of or leaf.summary_of in body_leaf_ids))
             and (not explicit_keys or _copy_key_match(leaf, explicit_keys))
         ]
         selected.extend(summary_leaves)
@@ -967,13 +970,18 @@ def _resolve_income(rule_id: str, sections: Sequence[Any], leaves: Sequence[Leaf
 
     selected: list[LeafSection] = list(body)
     summary_ids = [str(section.id) for section in base if str(section.zone) == "summary"]
+    fallback_summary = False
     if not summary_ids:
         summary_ids = [str(section.id) for section in sections
                        if str(section.zone) == "summary"]
+        fallback_summary = True
     enabled = _summary_enabled(summary_overrides, rule_id, True)
+    body_ids = {leaf.id for leaf in body}
     summary_leaves = ([leaf for leaf in _leaves_for(leaves, summary_ids, zone="summary")
                        if leaf.copy_key == "收益分配"
-                       and "收益分配原则" in _compact(leaf.title)] if enabled else [])
+                       and "收益分配原则" in _compact(leaf.title)
+                       and (leaf.summary_of in body_ids if fallback_summary else True)]
+                      if enabled else [])
     selected.extend(summary_leaves)
     evidence.extend(_leaf_label(leaf) for leaf in selected)
     if summary_leaves:
