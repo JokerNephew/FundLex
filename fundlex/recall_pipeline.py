@@ -2688,7 +2688,7 @@ def _reopen_audit_disagreed_targets(issues: Sequence[dict[str, Any]],
         if class_substitution_letter_stable(rule, facts):
             continue
         target.state = "needs_edit"
-        target.resolution = "unresolved"
+        target.resolution = "resolved"
         target.plan_reason = None
         target.reason = f"{target.reason}|AUDIT_REOPENED"
         reopened.append(target.target_id)
