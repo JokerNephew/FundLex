@@ -1761,6 +1761,12 @@ def operation_search_key_pairs(rule: dict, condition_facts: "Facts | None" = Non
         if len(old_text) < 8:
             continue
         add(old_text, operation_key)
+        if rule_id == "G14":
+            # Contracts repeat the noun ("…和基金赎回费率"); the expanded form is
+            # the same policy, and the exact search must be able to see it.
+            expanded = _expand_fee_rate_reference(old_text)
+            if expanded != old_text:
+                add(expanded, operation_key)
         if operation.get("op") != "delete":
             continue
         for fragment in reference_fragments(old_raw):
@@ -4579,6 +4585,12 @@ def _looks_like_heading(text: str) -> bool:
     if compacted.endswith(("。", "；", "，", "：")) and len(compacted) > 12:
         return False
     if re.match(r"^第[一二三四五六七八九十百零〇\d]+部分", compacted):
+        return True
+    if re.match(r"^[（(][一二三四五六七八九十]+[）)]", compacted):
+        # Full-width parenthesised Chinese ordinals are subsection headings
+        # ("（五）基金财产清算剩余资产的分配").  Treating one as body text let an
+        # ``absent`` window placeholder become a G22 operation site and blocked a
+        # correct edit elsewhere (恒鑫 p1367).
         return True
     return bool(re.match(r"^[一二三四五六七八九十]+[、.]", compacted))
 
@@ -9181,6 +9193,12 @@ def absent_delete_coverage(rules_by_id: Mapping[str, Any],
     from .generation.effects import (_semantic_delete_hits,
                                      _semantic_delete_review_hits)
     probe_backed = {"G06", "G13", "G17"}
+    # A replace whose authorized old wording is absent from its own rule scope is
+    # a no-op, not a missing edit: the class-setup clause may simply never have
+    # offered the redemption-fee reduction (弘利 p159).  This is narrower than the
+    # delete rules: any surviving fee-adjustment wording in scope blocks the
+    # certificate, so a paraphrase cannot be closed as absent.
+    replace_noop = {"G05", "G14"}
     in_scope_operations: set[str] = set()
     for target in targets:
         if (target.out_of_scope or target.attribution_error
@@ -9195,15 +9213,36 @@ def absent_delete_coverage(rules_by_id: Mapping[str, Any],
     records: dict[str, dict[str, Any]] = {}
     for record in getattr(obligations, "records", ()):
         spec = record.spec
-        if (spec.op != "delete" or spec.rule_id not in probe_backed
-                or record.applicability.status != "TRUE"):
+        if record.applicability.status != "TRUE":
+            continue
+        if spec.op == "delete":
+            if spec.rule_id not in probe_backed:
+                continue
+        elif spec.op == "replace":
+            if spec.rule_id not in replace_noop:
+                continue
+        else:
             continue
         if spec.operation_id in in_scope_operations:
             continue
         references = [str(value) for value in
                       (spec.old_text, *spec.alternatives) if str(value).strip()]
-        if any(_compact(reference) in document for reference in references):
+        scope = (scopes or {}).get(spec.rule_id)
+        scanned = sorted(scope.locations) if scope is not None else locations
+        scanned = [location for location in scanned
+                   if any(str(span.location) == location for span in inspection.paragraphs)]
+        if not scanned:
             continue
+        scoped_document = _compact("\n".join(
+            inspection.by_location(location).text for location in scanned))
+        haystack = scoped_document if spec.op == "replace" else document
+        if any(_compact(reference) in haystack for reference in references):
+            continue
+        if spec.op == "replace":
+            if not references:
+                continue
+            if re.search(r"调低[^。；;]{0,16}费率", scoped_document):
+                continue
         if _semantic_delete_hits(spec.rule_id, document):
             continue
         if _semantic_delete_review_hits(spec.rule_id, document):
@@ -9233,19 +9272,13 @@ def absent_delete_coverage(rules_by_id: Mapping[str, Any],
                         ("主要用于", "使用范围", "用途"))
                 for sentence in sentences):
             continue
-        scope = (scopes or {}).get(spec.rule_id)
-        scanned = sorted(scope.locations) if scope is not None else locations
-        scanned = [location for location in scanned
-                   if any(str(span.location) == location for span in inspection.paragraphs)]
-        if not scanned:
-            continue
         records[spec.operation_id] = {
             "kind": "rule_scope_scan" if scope is not None else "document_site_scan",
             "operation_id": spec.operation_id,
             "obligation_id": record.obligation_id,
             "scanned_locations": scanned,
             "document_sha256": inspection.source_sha256,
-            "reason": ("deterministic delete scan: zero literal, semantic and "
+            "reason": ("deterministic absence scan: zero literal, semantic and "
                        "review hits across the scanned rule scope"),
         }
     return records

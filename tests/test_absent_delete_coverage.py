@@ -63,3 +63,25 @@ def test_existing_target_blocks_absence_coverage():
     target = Target("T1", "G06", "p128", "stale", "needs_edit", "",
                     operations=("G06:0",))
     assert absent_delete_coverage({}, [target], inspection, None, _ledger("G06")) == {}
+
+
+def test_hengli_g05_absent_replace_closes_in_its_rule_scope():
+    from types import SimpleNamespace
+
+    from fundlex.obligations import apply_facts
+    from test_recall_core import _facts
+
+    source = BATCH / "广发弘利3个月滚动持有债券型证券投资基金基金合同.docx"
+    inspection = inspect_docx(source, full=True)
+    ledger = _ledger("G05")
+    apply_facts(ledger, _facts())
+    record = next(item for item in ledger.records if item.spec.operation_id == "G05:0")
+    assert record.applicability.status == "TRUE"
+    # Minimal scope: the class-setup leaf only.  The fee-adjustment wording at
+    # p420/p1116 is another section and must not block the no-op certificate.
+    scope = {"G05": SimpleNamespace(locations=frozenset(
+        {"p154", "p155", "p156", "p157", "p158", "p159"}))}
+    coverage = absent_delete_coverage({}, [], inspection, scope, ledger)
+    assert "G05:0" in coverage
+    assert all(location.startswith("p15") for location
+               in coverage["G05:0"]["scanned_locations"])

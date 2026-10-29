@@ -1939,6 +1939,12 @@ def replay_claims(edits: Sequence[Mapping[str, Any]], before_inspection: Any,
                         source_bound = bound
             if state == "satisfied" and source_bound is None:
                 continue
+            if state == "absent" and str(getattr(record.spec, "op", "")) != "delete":
+                # The absent-window proof exists only for an independent delete
+                # whose literal is already gone at a real business site (G05:2).
+                # A replace cannot be proven by "old text absent here": the new
+                # policy still has to be present in the artifact.
+                continue
             if state in {"absent", "satisfied"}:
                 from ..recall import _looks_like_heading
                 if _looks_like_heading(before_text):
