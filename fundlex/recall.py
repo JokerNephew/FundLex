@@ -9224,6 +9224,15 @@ def _ensure_delete_targets_page(targets: Sequence[Target], rules_by_id: dict[str
             continue
         if target.out_of_scope or target.attribution_error:
             continue
+        # An ``absent``/``not_applicable`` target is not proof that a real
+        # source copy is covered.  In particular G06's guide includes an
+        # optional ``除非…`` prefix; the model can mark the canonical clause
+        # absent while the short prohibition sentence still exists in p128.
+        # If that quote is treated as coverage, the deterministic residual pass
+        # never creates the delete edit and the engine later claims VERIFIED_ABSENT
+        # against a file that still contains it.
+        if target.state in {"absent", "not_applicable"}:
+            continue
         locations = ([part.rsplit(":", 2)[0] for part in target.composite]
                      if target.composite else [target.location])
         for location in locations:

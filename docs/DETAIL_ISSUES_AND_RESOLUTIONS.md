@@ -60,6 +60,14 @@
 - 处理（已实施）：新增`canonicalize_append_targets()`，以`_g16_clause_locations`的**同一物理clause**为归一键（不能只用section_path，否则会误删两个独立但同文的费用条款；公式段p799可映射到紧邻payment head p800的clause），同rule+append operations+zone+clause内按T3优先于survey、非composite、地址稳定保留一个；其他标out_of_scope并留`DUPLICATE_APPEND_SITE_CANONICAL`。body与summary按zone/clause分离保留。调用点位于rebind/split后、approval/plan前；`tests/test_g16_clause_duplicate_effect.py`的合法双clause测试与`tests/test_remediation_append_canonical.py`均通过。旧first4作为失败证据保留。
 - 状态与验证：**已修复并通过真实模型first7 + 独立业务复核**。first7 final正文G16只p802一处、摘要p1258一处，21/21 v2目标completed，16 ins/16 del，接受=final/拒绝=source；独立复核通过，仅P2留两空白段（p800/p801，建议清理）。first7证据`docs/evidence/value-first7-score-20261029.json`、`docs/evidence/value-first7-business-review.md`。仍未扩展到28份/514；评分器需后续检测同一义务多站点重复，不能只按单站点完成。
 
+## FL-D482 生产E2E中G06短禁令句被absent目标当作已覆盖，错误保留（2026-10-29）
+
+- 发现日期：2026-10-29，生产浏览器E2E任务`e6677e7e9de042fda3dec3076f91a1fb`的独立业务复核。P1。
+- 问题与影响：生产final p128仍含“本基金不同基金份额类别之间不得互相转换。”；模型G06目标state=absent（因指引的可选“除非…”变体未出现），`ensure_delete_targets`的covered集合仍把该absent目标quote当成覆盖，未创建确定性删除目标；计划无G06，audit/`operation_coverage`却记ALREADY_SATISFIED/VERIFIED_ABSENT，Claim 20项PASS未包含G06，交付complete错误。
+- 证据：`docs/evidence/value-first7-business-review`不是生产；生产复核`/tmp/.../production-value-business-review.md`；生产report targets T009、operation_coverage G06、plan无G06；final p128全文；first7本地final已删除、生产重跑回归。生产E2E任务号、doc、final SHA见`production-value-20261029/result.json`。
+- 处理（已实施，待真实重跑）：`ensure_delete_targets`不再把`absent/not_applicable`目标的quote计入covered，保留`needs_edit/satisfied`路径；新增`tests/test_g06_absent_coverage_delete.py`，实际源p128应生成G06删除目标；相关20项测试通过。该修复不按合同名特判，使用G06物理scope+语义禁令探针。
+- 状态：**代码修复+离线正例通过；生产候选尚未重新部署/真实E2E未复验**。旧生产产物保留为失败证据，不能宣称本份或项目通过。
+
 ## FL-D451 生产V1首页请求任务聚合接口404，部分发布破坏前后端契约（2026-10-28）
 
 - 发现日期：2026-10-28，真实注册登录后的生产首页检查（P1）。
