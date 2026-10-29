@@ -6999,6 +6999,30 @@ def _plan_target_inner(rule: dict, target: Target, inspection: DocumentInspectio
                 evidence={"fixed_text": replacement,
                           "appended_suffix": suffix,
                           "guide_paragraphs": rule.get("source_paragraphs") or []}))
+    if (rule_id == "G17" and len(operations) == 1
+            and operations[0].get("op") == "delete"
+            and target.start is not None and target.end is not None):
+        # The target paragraph may append an unrelated tail after the authorized
+        # usage sentence ("…服务费等；基金管理人可…下调销售服务费率…").  Deleting
+        # the whole paragraph removes that tail without authorization.  Narrow the
+        # span to the exactly matched operation-owned sentence(s) first.
+        compact_body, positions = compact_offsets(span.text)
+        owned: list[tuple[int, int]] = []
+        for occurrence in _g17_source_sentence_parts(inspection, operations):
+            if len(occurrence) != 1 or occurrence[0][0] != target.location:
+                continue
+            _loc, left, right = occurrence[0]
+            if not (0 <= left < right <= len(positions)):
+                continue
+            raw_start = positions[left]
+            raw_end = positions[right - 1] + 1
+            if target.start <= raw_start and raw_end <= target.end:
+                owned.append((raw_start, raw_end))
+        owned = sorted(set(owned))
+        if len(owned) == 1 and owned[0] != (target.start, target.end):
+            target.start, target.end = owned[0]
+            target.quote = span.text[target.start:target.end]
+            actual = span.text[target.start:target.end]
     if (rule_id == "G12" and len(operations) == 1
             and operations[0].get("op") == "replace"
             and target.start is not None and target.end is not None):
