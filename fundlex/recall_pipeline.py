@@ -50,7 +50,8 @@ from .recall import (BOUNDARY_POLICY, ENGINE_ID, ENGINE_VERSION, SCHEMA_VERSION,
                       _expand_fee_rate_reference,
                       dedupe_operation_targets,
                       source_parts_contiguous,
-                      absent_delete_coverage)
+                      absent_delete_coverage,
+                      ensure_g22_ordered_list_targets)
 from .recall_prompts import (AUDIT_INSTRUCTION, AUDIT_PROMPT_VERSION, AUDIT_SCHEMA,
                              PROMPT_VERSIONS, SWEEP_INSTRUCTION, SWEEP_PROMPT_VERSION,
                              SWEEP_SCHEMA)
@@ -4426,6 +4427,12 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
                 coverage_gaps.append({"pass": "delete_targets",
                                       "limit_reached": "delete_targets_pages",
                                       "cursor": cursor})
+        g22_targets = ensure_g22_ordered_list_targets(
+            targets, rules_by_id, inspection, facts)
+        for target in g22_targets:
+            synthetic.append(target)
+            targets.append(target)
+            origins[target.target_id] = "g22_ordered_list_variant"
         if frozen_run is not None:
             frozen_run.boundary("targets", {"facts": facts.as_ledger(),
                 "targets": [target.as_dict() for target in targets]})

@@ -20,8 +20,13 @@ def _trim_orphan_tail(result: str, original: str) -> str:
     source = original.rstrip()
     if _ORPHAN_TAIL.search(source) or _DANGLING_TAIL.search(source):
         return result
-    stripped = _ORPHAN_TAIL.sub("", result.rstrip())
+    base = result.rstrip(" \t\r\n")
+    stripped = _ORPHAN_TAIL.sub("", base)
     stripped = _DANGLING_TAIL.sub("", stripped.rstrip())
+    if stripped == base:
+        # No connector/dangling punctuation removed: keep the original text,
+        # including a deliberate trailing space in the source paragraph.
+        return result
     return stripped if stripped else result
 
 

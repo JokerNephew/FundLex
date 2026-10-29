@@ -80,6 +80,57 @@
 - 处理（已实施）：新增`canonicalize_append_targets()`，以`_g16_clause_locations`的**同一物理clause**为归一键（不能只用section_path，否则会误删两个独立但同文的费用条款；公式段p799可映射到紧邻payment head p800的clause），同rule+append operations+zone+clause内按T3优先于survey、非composite、地址稳定保留一个；其他标out_of_scope并留`DUPLICATE_APPEND_SITE_CANONICAL`。body与summary按zone/clause分离保留。调用点位于rebind/split后、approval/plan前；`tests/test_g16_clause_duplicate_effect.py`的合法双clause测试与`tests/test_remediation_append_canonical.py`均通过。旧first4作为失败证据保留。
 - 状态与验证：**已修复并通过真实模型first7 + 独立业务复核**。first7 final正文G16只p802一处、摘要p1258一处，21/21 v2目标completed，16 ins/16 del，接受=final/拒绝=source；独立复核通过，仅P2留两空白段（p800/p801，建议清理）。first7证据`docs/evidence/value-first7-score-20261029.json`、`docs/evidence/value-first7-business-review.md`。仍未扩展到28份/514；评分器需后续检测同一义务多站点重复，不能只按单站点完成。
 
+## FL-D495 Inventory把候选展示标签“[tbl0/…]”当location，整窗目标被丢弃（2026-10-29）
+
+- 发现日期：2026-10-29，美国房地产QDII合同first-wave运行。P0。
+- 问题与影响：候选上下文以`[p87]`/`[tbl0/r55/c1/p0]`展示，模型把方括号原样写进inventory location；`inventory_window`直接与window.locations比较，整窗14个合法目标全部`INVENTORY_ITEM_INVALID`，只做facts/scope/inventory共8次调用即结束，最终只剩4个survey目标、2处edit，所有规则OPEN。与FL-D491是同一展示形式在不同入口的重复缺陷。
+- 处理（已实施）：新增`_normalise_physical_location()`，inventory在window校验前去除方括号/圆括号/【】，并在唯一候选名出现时提取；未知值仍按原文失败。`tests/test_inventory_location_normalisation.py`。
+- 状态：**代码修复+离线测试通过；真实重跑待执行**。
+
+## FL-D496 G12旧句以“；”结尾时模糊匹配回退整句，保留旧归入句（2026-10-29）
+
+- 发现日期：2026-10-29，沪深300指数增强first-wave运行。P1。
+- 问题与影响：p244 G12旧句“…并在招募说明书中列示；对于持续持有期…”源文以“；”连接G13句。`fuzzy_span_clause`因段落末尾没有指引的“。”而回退到上一句号，只匹配第一句40字；variant_replace把新句插到前面并保留“赎回费用归入基金财产的比例应…”旧句，最终同时存在新旧政策，audit `wrong`、`RESIDUAL_OLD_TEXT`。
+- 处理（已实施）：`fuzzy_span_clause`在匹配末尾已是段落结尾（无剩余文本）时不再回退整句；variant尾句校验允许≤2字符起始偏移并扩展到真实“；”边界。`tests/test_fuzzy_clause_unterminated_paragraph.py`、`tests/test_g12_semicolon_variant.py`用真实p244验证替换为完整新句。
+- 状态：**代码修复+离线测试通过；真实重跑待执行**。
+
+## FL-D497 多段管理费quote逐行校验失败，浮动管理费事实UNKNOWN阻断G19–G22（2026-10-29）
+
+- 发现日期：2026-10-29，沪深300 first-wave运行。P1。
+- 问题与影响：`floating_management_fee` quote是“（1）…
+本基金…1.0%…
+H＝E×…
+…”多段文本；`_verify_quote`只按省略号切分，把整段当单一quote，任何单段都不包含整串，`FLOATING_QUOTE_UNVERIFIED`→`status_of(floating_management_fee)=UNKNOWN`，G19/G20/G21/G22全部`FACT_PREREQUISITE_UNVERIFIED`，即使合同明确按固定年费率计提。
+- 处理（已实施）：`_verify_quote`先按省略号、再按换行拆成独立片段，每个片段仍须字面存在于源文；伪造任一行仍失败。`tests/test_multiline_quote_verification.py`用真实管理费条款验证多行通过、伪造行失败。
+- 状态：**代码修复+离线测试通过；真实重跑待执行**。
+
+## FL-D498 G02协调类别组只替换首标签，残留“或E类基金份额”（2026-10-29）
+
+- 发现日期：2026-10-29，道琼斯QDII-LOF first-wave运行。P1。
+- 问题与影响：源文p126“称为C类基金份额或E类基金份额”，指引operation old_text为“C类基金份额”。片段替换只改6字标签，结果“C类人民币、C类美元现汇、E类人民币、E类美元现汇或E类基金份额”，G02 audit不通过、范围外残留旧类名。
+- 处理（已实施）：新增`_class_group_phrase_span()`把单个标签扩展为相邻`、/或/和/及/以及`连接的完整类别组；G02/G04在组内比较实际类别集合（`_class_labels`），整组替换为slot实例化文本。`tests/test_class_group_and_g18_variants.py`用真实p126验证整组替换。
+- 状态：**代码修复+离线测试通过；真实重跑待执行**。
+
+## FL-D499 G18自由compose遗漏实际E类，受保护词检查失败（2026-10-29）
+
+- 发现日期：2026-10-29，道琼斯QDII-LOF first-wave运行。P1。
+- 问题与影响：G18 old/new模板只举A/C两类，合同有A/C/E六个实际类别；LLM compose输出遗漏E类基金份额，`program_check:protected:E类基金份额`→`RECALL_COMPOSE_UNVERIFIED`，G18保持OPEN。
+- 处理（已实施）：G18用`instantiate_slots`从已验证subscription/service groups确定性生成完整类别组文本（A人民币、A美元现汇和C/E各组），整段替换，不再依赖自由compose。`tests/test_class_group_and_g18_variants.py`验证真实p926输出包含全部类。
+- 状态：**代码修复+离线测试通过；真实重跑待执行**。
+
+## FL-D500 G22清算顺序列表变体无站点（2026-10-29）
+
+- 发现日期：2026-10-29，美国房地产QDII first-wave运行。P1。
+- 问题与影响：合同用“基金财产按下列顺序清偿：…（4）按基金份额持有人持有的基金份额比例进行分配。”，不含指引单句旧文；G22无target，即使模型识别到该项也因inventory多段/range location被丢弃，OBLIGATION OPEN。
+- 处理（已实施）：新增`ensure_g22_ordered_list_targets()`，在清算顺序列表内定位（4）分配项并建立G22:0目标；`_selected_operation_indices`/`target_site_ok`/`plan_target`支持该变体，按old/new公共前缀推导追加“并加上返还…（如有）”。真实美国房地产p883离线规划通过。
+- 状态：**代码修复+离线测试通过；真实重跑待执行**。
+
+## FL-D501 集盛债券真实运行MODEL_NETWORK_ERROR未生成交付（2026-10-29）
+
+- 发现日期：2026-10-29，first-wave group4。P1（基础设施/重试）。
+- 问题与影响：30 targets/17 edits后模型网络错误，`delivery_status=not_generated`、`error_code=MODEL_NETWORK_ERROR`、无final/redline。不是业务质量结论；该合同必须重跑并保留失败证据。
+- 处理：按真实调用政策重跑；不据单次网络错误改规则或伪造交付。状态：**待重跑**。
+
 ## FL-D488 第一波真实运行大面积因G06/G13/G17删除目标“原文不存在”未闭环（2026-10-29）
 
 - 发现日期：2026-10-29，首批20份dev真实运行。P0（阻断整批交付）。
