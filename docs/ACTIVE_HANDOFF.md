@@ -6,9 +6,11 @@
 - 方案`docs/COMPREHENSIVE_REMEDIATION_EXECUTION_PLAN_20261028.md`，进度`docs/COMPREHENSIVE_REMEDIATION_PROGRESS_20261028.md`，评测阶梯`docs/EVALUATION_AND_OPTIMIZATION_PLAN.md` §0；S0基线已完成，S1–S7与A–H独立ownership/worktrees并行。新证据`/tmp/opencode/comprehensive-remediation-20261028/`，prestart.patch已保存。
 - 当前范围核对：`funds_word`根目录514份DOCX，与第一批28份hash不重叠（unique约542）；第一批含5份旧`.doc`作为格式边界。最终“覆盖”不等于所有都能成功修改，解析/保护/排除/失败边界必须如实报告。
 - 无费用/calls审批，账本只观测；保留资源/权限/文件安全、上下文/输出容量和无进展限制，不泄凭据。业务范围/既有修订/正文摘要要求按已确认规格，不再次当业务待定。
-- 2026-10-29当前集成：8个工作树A–H均已提交并合并到`codex/comprehensive-remediation-20261028`；最终全量非浏览器（含隔离MySQL）**2114 passed/6 skipped/4 warnings/692.86s**，浏览器**69 passed/224.11s**。分支HEAD当前`4e07839`后另有备份/发布器安全修复待提交；工作树仅剩未跟踪合同备份目录。
+- 2026-10-29当前集成：8个工作树A–H均已提交并合并到`codex/comprehensive-remediation-20261028`；最终全量非浏览器（含隔离MySQL）**2118 passed/6 skipped/4 warnings/676.41s**，浏览器**69 passed/224.11s**；生产E2E value7 21/21及独立复核通过。工作树仅剩未跟踪合同备份目录。
 - 生产已受控发布候选`4e07839`：engine build`2d9a34a6...`、service build`27f50d82...`；五服务 active、capabilities 200、未登录workspace 401。发布前创建并验证DB+对象备份`/var/backups/fundlex/fundlex-20261029-090618`（gzip/54表恢复测试通过）；旧发布器因journalctl时间格式失败两次，已修复后第三次成功；模型env已切到新endpoint/key（只记录变量/路径，不记录值），certifi已升级2026.10.19，旧备份权限已收紧。
-- 生产正式浏览器E2E任务：最新value文档`a854921ceafa4c60870b56ffe2ef0353`当前running，使用新endpoint/key、真实worker；尚未用complete/下载结果宣称通过，独立复核待产物。
+- 生产当前候选`cdf298e`（engine`25308351015f...`/service`e0625b495b5c...`），五服务active、workspace未登录401。最终生产浏览器E2E任务`6bbb6712e9a34b6bbfb2400e239ffc09`/doc`5d35ba80d3414de49e93e4bccabe06e0`：651秒、27逻辑/27HTTP、240639 tokens、约$0.08126，complete；final`4f0a10ab...`、16 ins/16 del，10项机械检查全过，v2标签B02 21/21、false_complete=0，独立复核通过（P2 p800/p801空段）。证据`docs/evidence/production-value7-*`。
+- 多轮生产E2E失败均保留：G06缺失、G03 canonical/orphan、G09 survey、G17 audit/guard、G15 residual；对应修复已提交并通过定向测试。生产发布候选已从e更新到g（cdf298e）；旧`/opt`发布事务和release worktree已清理，根盘约4.5GB可用。
+- 备份/发布事故已修：第一/第二DB备份工具曾写raw `.sql.gz`，已修复为先raw临时再gzip、verify通过，并在隔离MySQL恢复54表/93users/711docs后清理测试库；旧备份权限已收紧。发布器journalctl时间格式bug已修；生产`tools/ops/fundlex_backup.py`已同步修复版。
 - 独立标签v2已合并：28份/501 targets，review346条中应用44、驳回251、未解决51单列uncertain；不是最终gold。首批transcript/产物评分未完成。
 - 真实模型新端点`https://api.commandcode.ai/provider/v1`、模型`deepseek/deepseek-v4-flash`，key只在`/tmp/opencode/comprehensive-remediation-20261028/model-new.env`(600)；未写仓库/文档/日志。首两次真实run因reasoning耗尽`max_tokens`报`MODEL_OUTPUT_TRUNCATED`（`real-value-first{,2}`），第三次已用`thinking=disabled`+12000输出+context32000启动，结果待记录；不能把失败/重试当业务完成。
 - 当前未部署/未重启/未改生产env；生产仍是旧OpenCode端点。下一动作：真实value run完成→检查p1258摘要及实际final，独立业务复核，再跑首批20dev评分；通过后才合并/冻结候选、更新生产env/root publisher/五服务部署、正式工作台E2E；扩样需质量门槛。

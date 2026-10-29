@@ -4,6 +4,26 @@
 >
 > 测试中遇到的业务问题单独汇总在 [`BUSINESS_ISSUES_FROM_TESTS.md`](BUSINESS_ISSUES_FROM_TESTS.md)，与代码/定位缺陷分开维护。
 
+## FL-D446 smoke29 因供应商/主模型变更大量截断并中止，不能作为 scope 验证（2026-10-29）
+
+- 发现日期：2026-10-29，用户同意的唯一一次 scope-aware 定向验证。
+- 问题与影响：主模型身份变为 `deepseek/deepseek-v4-flash`，provider 为 `commandcode`，base URL 为 `https://api.commandcode.ai/provider/v1`（不再是 `OpenCodeGo/deepseek-v4.1-flash`）。运行出现 **64 次 MODEL_OUTPUT_TRUNCATED**（req_extract 10、req_review 3、intent 2、impact_sweep 26、batch_resolve 9、adjudicate 12、local_candidate 2）和 4 次 quality review `MODEL_HTTP_ERROR`；pipeline 在 finalize 前中止，仅 29 requirements、15 items、194 requests、约 $0.7118，未进入 coverage/residual。
+- 证据：run `a7221f859e454010bf966a95323934da`；`gg_runs.payload.model_identity` 主模型为 `deepseek/deepseek-v4-flash`；`/etc/fundlex-recall.env` 的 `LLM_PROVIDER/LLM_MODEL/LLM_BASE_URL` 已变更（未记录密钥）。
+- 处理方法：不把该运行当作 scope/资格证据；保留目录/账本。先确认目标 provider/model；若 commandcode 是目标，需要按新模型的上下文/输出容量调整批次、max tokens，并修正 quality 阻塞错误的传播/重试；若不是，恢复原配置后重跑。
+- 状态与验证：**无效运行，未解决**。scope/final supplement 代码仅有 45 项定向测试通过，未获真实验证。
+- 下一步：确认模型配置并做一次配置适配，不批量跑；用户同意后再做唯一一次有效验证。不得把 smoke29 写成 scope 失败或功能通过。
+- 补充（2026-10-29）：用户确认 `commandcode/deepseek-v4-flash` 与 `OpenCodeGo/deepseek-v4.1-flash` 性能等价。账本中所有截断均为 `completion_tokens=8000 / finish_reason=length`，根因是 smoke29 把 `FUNDLEX_GUIDE_MAX_TOKENS` 设为 **8000**，而环境允许 **32000**，不是模型差异。smoke30 改为 20000 tokens、240s、6 次重试，作为唯一一次有效重试（run `b539c4b4d77549ada0f639be1e090b9d`）。
+- 变更记录：2026-10-29 新增；同日晚补充截断根因与 smoke30 配置。
+
+## FL-D447 法规生成批次必须按章节切分，不能按输出/字符上限跨章节切（2026-10-29）
+
+- 发现日期：2026-10-29，用户指出“为什么按上限切，不是按章节切”。
+- 问题与影响：`_batches()` 只按 `path_b_batch_chars` 字符上限分组，可能把不同章节的条款混进同一模型请求，导致发现结果跨章节、输出不稳定，也让“只覆盖内置指引 6 章”的 scope 失去意义。输出 token 上限只是单章内的次级限制，不能作为批次边界。
+- 处理方法：`_batches()` 先按 `clause.section_path[:2]`（章 + 小节）分组，保持文档顺序；只有单个章节/小节本身超过字符预算时，才在该组内继续按字符拆分，绝不跨章节合并。`discover()` / `path_b_contract_sweep()` 增加 `scope_sections`，在进入批次前就把条款限定到内置指引的 6 个章节；authoring/coverage/Residual 也已按 scope 过滤。
+- 状态与验证：**已实施并通过离线回归**。新增“跨章节小预算也不混批”用例；`test_guide_generation.py + pipeline` **46 passed**。smoke30 因仍使用旧批法在启动后停止，不作为资格证据；未再大量跑真实运行。
+- 下一步：在用户同意后做一次按章节批次的 scope-aware 验证；输出上限 20000 只是单章内的次级配置。
+- 变更记录：2026-10-29 新增。
+
 ## 全面整改合并批次（2026-10-29，尚未生产验收）
 
 - 分支`codex/comprehensive-remediation-20261028`合并A–H及独立标签分支；HEAD含`343a375`（运行时/评分）、`145d115`（引擎）、`d76aa76`（DOCX/Compare）、`4d746e6`（法规生成）、`7d37d91`（workspace/发布/依赖）、`1fea578`（任务/飞书）、`e6b796f`（前端）、`27f7239`（标签）、`76e0c8d`（标签v2）等。原8个后台agent均未部署/未改生产。
@@ -66,7 +86,28 @@
 - 问题与影响：生产final p128仍含“本基金不同基金份额类别之间不得互相转换。”；模型G06目标state=absent（因指引的可选“除非…”变体未出现），`ensure_delete_targets`的covered集合仍把该absent目标quote当成覆盖，未创建确定性删除目标；计划无G06，audit/`operation_coverage`却记ALREADY_SATISFIED/VERIFIED_ABSENT，Claim 20项PASS未包含G06，交付complete错误。
 - 证据：`docs/evidence/value-first7-business-review`不是生产；生产复核`/tmp/.../production-value-business-review.md`；生产report targets T009、operation_coverage G06、plan无G06；final p128全文；first7本地final已删除、生产重跑回归。生产E2E任务号、doc、final SHA见`production-value-20261029/result.json`。
 - 处理（已实施，待真实重跑）：`ensure_delete_targets`不再把`absent/not_applicable`目标的quote计入covered，保留`needs_edit/satisfied`路径；新增`tests/test_g06_absent_coverage_delete.py`，实际源p128应生成G06删除目标；相关20项测试通过。该修复不按合同名特判，使用G06物理scope+语义禁令探针。
-- 状态：**代码修复+离线正例通过；生产候选尚未重新部署/真实E2E未复验**。旧生产产物保留为失败证据，不能宣称本份或项目通过。
+- 状态与验证：**代码修复+生产value7复验通过**。生产任务`6bbb6712...`/doc`5d35ba80...` complete，p128 G06禁令句0残留；final `4f0a10ab...`、21/21 v2标签、独立复核通过（P2空白段）。旧生产complete失败产物保留。仍不据单份外推28/514。
+
+## FL-D485 G03定义段与调整段被append归一去重，留下孤儿p128站点（2026-10-29）
+
+- 发现日期：2026-10-29，生产value2/5真实E2E。P1。
+- 问题与影响：G03在p124类定义和p128调整段各被模型/survey发现；通用append去重按section_path把两者当同一站点，保留T3 p128、丢弃Y010 p124；最终p124被追加但Claim Replay仍把p128列为G03 orphan `CLAIM_OPERATION_NOT_PLANNED`，或反过来漏掉定义段，导致complete被阻断。
+- 处理（已实施）：G01/G03 canonical优先“将基金份额分为/基金份额类别：”定义段；G16 canonical优先共享G16/G17 clause tail；被淘汰append目标同时清空operations/claimed_operations，避免其操作站点继续进入coverage。新增回归`test_remediation_append_canonical.py`；`test_g16_clause_duplicate_effect.py`合法双clause保留。生产value7最终G03 p124已追加、p128无G03 orphan，最终独立复核通过。
+- 状态：**代码修复+生产value7通过**；仍需扩展到其他合同/多站点，不能声称通用append去重已穷尽。
+
+## FL-D486 G15残留删除目标被site guard判out_of_scope，旧支付句保留（2026-10-29）
+
+- 发现日期：2026-10-29，生产value6真实E2E。P1。
+- 问题与影响：`claim_residual:RESIDUAL_OLD_TEXT`在p800找到exact旧支付短句，但`target_site_ok`因rule词袋/全句匹配将其标`TARGET_SOURCE_MISMATCH`，R031/R032 out_of_scope；计划只改摘要p1258，正文p800旧句保留。report随后complete/incomplete异常。
+- 处理（已实施）：`recall_pipeline`对`claim_residual:`且start/end、quote确实存在当前span的目标，允许作为residual site-bound目标，不再被宽松词袋二次否决；仍保留未绑定/伪造/越界fail-closed。G15/G17相关47项回归通过；生产value7 p800旧句0残留。
+- 状态：**代码修复+生产value7通过**；需扩展到所有费用/删除规则的真实变体测试。
+
+## FL-D487 生产发布/备份占用导致Worker本地保留阈值失败（2026-10-29）
+
+- 发现日期：2026-10-29，生产连续候选发布期间。P1运维。
+- 问题与影响：根盘满至24MB，Worker报`local storage below configured free-space reserve`并重启；发布器因此失败，回滚也因旧marker/空间失败，compare/guide/feishu被停。清理旧候选worktree/旧发布事务后恢复；根盘约4.5GB可用。
+- 处理：删除本轮已弃用的release worktree、旧`/opt/.fundlex-publish-*`和node_modules（用户已授权清理），保留当前候选/两份有效DB备份；释放后五服务active。发布前后必须检查磁盘和Worker reserve，不能把发布器成功仅当API 200。
+- 状态：**已清理并恢复生产**；长期容量/保留策略仍待规划，不能假定4.5GB永久充足。
 
 ## FL-D483 运维备份把原始mysqldump写成.sql.gz，备份不可解压（2026-10-29）
 

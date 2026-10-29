@@ -1,0 +1,2779 @@
+{
+  "base": "https://fundlex.club",
+  "source": "广发价值优选混合型证券投资基金基金合同.docx",
+  "source_sha256": "708bca5d2197d0688c59ebb7a0eaee1432b79162e2404a8545cd60d488fd67c7",
+  "audit_username": "audit-batch-ugsehuwkul",
+  "task_name": "首批合同正式交付验收-ti6e5q",
+  "credentials_retained": false,
+  "scope": "deployed browser path; mechanical checks only, independent business review still required",
+  "registered_login": true,
+  "workspace_http": 200,
+  "workspace": {
+    "total": 0,
+    "stats": {
+      "active": 0,
+      "attention": 0,
+      "recent_completed": 0,
+      "recent_window_days": 7
+    },
+    "item_count": 0
+  },
+  "guide_page": true,
+  "guide_excerpt": "FundLex\n修改指引\n首批合同交付验收临时账号\n修改密码\n退出登录\n工作台\n业务功能\n合同修改\n合同比对\n指引生成\n资源与协作\n修改指引\n飞书绑定\n报告与诊断文件不作为最终合同\n\n生成的候选指引需经过导入与核验，不能自动替换当前版本。\n\n前往指引生成\n当前指引\n刷新\n恢复内置指引\n正在读取当前指引…\n\n新任务创建时绑定当前指引版本；切换指引或恢复内置只影响之后创建的任务，已创建任务保持原绑定。\n\n可用指引\n每个账号独立维护，不能访问他人指引\n文件名\t状态\t规则\t问题\t类型\t创建时间\t操作\n\n正在读取指引列表\n\n上传自定义指引\n仅接收 DOCX 指引原件\n\n上传后自动解析并独立核验；新版本不会自动启用，确认状态后再启用。\n\n选择 DOCX 文件\n尚未选择文件\n上传指引\n\n解析失败可在列表中查看问题并重新解析。\n\n© 2026 广发基金\n·\nFundLex v0.1.0\n·\n帮助中心\n·\n隐私政策\n·\n服务条款",
+  "browser_submitted": true,
+  "task_id": "6bbb6712e9a34b6bbfb2400e239ffc09",
+  "phases": [
+    {
+      "task": "queued",
+      "job": "queued",
+      "delivery": "not_generated"
+    },
+    {
+      "task": "running",
+      "job": "running",
+      "delivery": "not_generated"
+    },
+    {
+      "task": "completed",
+      "job": "succeeded",
+      "delivery": "complete"
+    }
+  ],
+  "elapsed_seconds": 651.2,
+  "task": {
+    "status": "completed",
+    "total": 1,
+    "uploaded": 1,
+    "completed": 1,
+    "failed": 0,
+    "exceptions": 0,
+    "delivery_counts": {
+      "complete": 1
+    },
+    "pause_reason": null,
+    "guide_snapshot": {
+      "version_id": "builtin-v1",
+      "rules_sha256": "7b68793d3d371fb8007dfca9d697517b632558cfacfdc339901be7bbe51642ab"
+    }
+  },
+  "document": {
+    "document_id": "5d35ba80d3414de49e93e4bccabe06e0",
+    "job_status": "succeeded",
+    "delivery_status": "complete",
+    "phase": "",
+    "reason_codes": [],
+    "downloads": {
+      "final": "/api/tasks/6bbb6712e9a34b6bbfb2400e239ffc09/documents/5d35ba80d3414de49e93e4bccabe06e0/download/final",
+      "redline": "/api/tasks/6bbb6712e9a34b6bbfb2400e239ffc09/documents/5d35ba80d3414de49e93e4bccabe06e0/download/redline",
+      "report_json": "/api/tasks/6bbb6712e9a34b6bbfb2400e239ffc09/documents/5d35ba80d3414de49e93e4bccabe06e0/download/report_json",
+      "report_md": "/api/tasks/6bbb6712e9a34b6bbfb2400e239ffc09/documents/5d35ba80d3414de49e93e4bccabe06e0/download/report_md"
+    },
+    "batch_id": "de24a98ff84c4e9b9189a8ae7f1c160b"
+  },
+  "report_http": 200,
+  "report_summary": {
+    "delivery_status": "complete",
+    "engine_id": "recall_first",
+    "engine_version": "0.1.1",
+    "engine_build": "25308351015fd895936c49d133b3ab5129828be3e27dc792ccff526e2299a130",
+    "error_code": null,
+    "model": {
+      "configured_model": "deepseek/deepseek-v4-flash",
+      "prompt_versions": {
+        "facts": "recall_facts_v5",
+        "scope": "recall_scope_v1",
+        "inventory": "recall_inventory_v2",
+        "compose": "recall_compose_v1",
+        "verify": "recall_verify_v1",
+        "audit": "recall_audit_v3",
+        "sweep": "recall_sweep_v2"
+      },
+      "logical_calls": 27,
+      "http_attempts": 27,
+      "max_calls_reference": 192,
+      "call_cap_enforced": false,
+      "call_reference_exceeded": false,
+      "cassette_replays": 0,
+      "checkpoint_reuses": 0,
+      "checkpoint_invalidations": 0,
+      "prompt_tokens": 140269,
+      "completion_tokens": 100370,
+      "total_tokens": 240639,
+      "latency_ms": 617055,
+      "rate_limit_count": 0,
+      "error_count": 0,
+      "estimated_cost_usd": 0.08126234999999998,
+      "events": [
+        {
+          "task_type": "recall_facts",
+          "prompt_version": "recall_facts_v5",
+          "context_sha256": "2e32616e8a012b4efc1ef272f004958572c6faf6e072bb28ede8854f96923c79",
+          "configured_model": "deepseek/deepseek-v4-flash",
+          "attempt": 1,
+          "error_code": null,
+          "request_options_sha256": "22d249d31788f688946b0091189853180cf24397f702a54a18adfe23591ec018",
+          "http_status": 200,
+          "request_id": null,
+          "actual_model": "deepseek/deepseek-v4-flash",
+          "finish_reason": "stop",
+          "content_chars": 1070,
+          "prompt_tokens": 11734,
+          "completion_tokens": 3578,
+          "total_tokens": 15312,
+          "latency_ms": 21447,
+          "estimated_cost_usd": 0.0039069,
+          "role": "primary"
+        },
+        {
+          "task_type": "recall_scope",
+          "prompt_version": "recall_scope_v1",
+          "context_sha256": "5bc6a5dbce9a891fe7333c88fcf761db4af12e341ecf625ee34b124a8efcc18d",
+          "configured_model": "deepseek/deepseek-v4-flash",
+          "attempt": 1,
+          "error_code": null,
+          "request_options_sha256": "22d249d31788f688946b0091189853180cf24397f702a54a18adfe23591ec018",
+          "http_status": 200,
+          "request_id": null,
+          "actual_model": "deepseek/deepseek-v4-flash",
+          "finish_reason": "stop",
+          "content_chars": 2300,
+          "prompt_tokens": 3444,
+          "completion_tokens": 5451,
+          "total_tokens": 8895,
+          "latency_ms": 29371,
+          "estimated_cost_usd": 0.0037871999999999997,
+          "role": "primary"
+        },
+        {
+          "task_type": "recall_inventory",
+          "prompt_version": "recall_inventory_v2",
+          "context_sha256": "ff4a5a4bf44dd7bb13bd17a095302007cb70d0bc63f40e6f326f7291e120cef2",
+          "configured_model": "deepseek/deepseek-v4-flash",
+          "attempt": 1,
+          "error_code": null,
+          "request_options_sha256": "22d249d31788f688946b0091189853180cf24397f702a54a18adfe23591ec018",
+          "http_status": 200,
+          "request_id": null,
+          "actual_model": "deepseek/deepseek-v4-flash",
+          "finish_reason": "stop",
+          "content_chars": 3811,
+          "prompt_tokens": 15392,
+          "completion_tokens": 20740,
+          "total_tokens": 36132,
+          "latency_ms": 113407,
+          "estimated_cost_usd": 0.0147528,
+          "role": "primary"
+        },
+        {
+          "task_type": "recall_inventory",
+          "prompt_version": "recall_inventory_v2",
+          "context_sha256": "9a3566611c618df29f1eac77f1e793ade59f83c06d081dc32af70f68de89bf16",
+          "configured_model": "deepseek/deepseek-v4-flash",
+          "attempt": 1,
+          "error_code": null,
+          "request_options_sha256": "22d249d31788f688946b0091189853180cf24397f702a54a18adfe23591ec018",
+          "http_status": 200,
+          "request_id": null,
+          "actual_model": "deepseek/deepseek-v4-flash",
+          "finish_reason": "stop",
+          "content_chars": 1262,
+          "prompt_tokens": 16637,
+          "completion_tokens": 14154,
+          "total_tokens": 30791,
+          "latency_ms": 83955,
+          "estimated_cost_usd": 0.010987949999999998,
+          "role": "primary"
+        },
+        {
+          "task_type": "recall_locate",
+          "prompt_version": "recall_locate_v1",
+          "context_sha256": "31cceb6f78cfaa77cd6cab228a5ca11b0835033a20203dd9849a9e9f1e80d231",
+          "configured_model": "deepseek/deepseek-v4-flash",
+          "attempt": 1,
+          "error_code": null,
+          "request_options_sha256": "22d249d31788f688946b0091189853180cf24397f702a54a18adfe23591ec018",
+          "http_status": 200,
+          "request_id": null,
+          "actual_model": "deepseek/deepseek-v4-flash",
+          "finish_reason": "stop",
+          "content_chars": 504,
+          "prompt_tokens": 1507,
+          "completion_tokens": 836,
+          "total_tokens": 2343,
+          "latency_ms": 6664,
+          "estimated_cost_usd": 0.0007276499999999999,
+          "role": "primary"
+        },
+        {
+          "task_type": "recall_compose",
+          "prompt_version": "recall_compose_v1",
+          "context_sha256": "46472443c96465629fb4dc9d7728506ee724e49fb948302a4be6468076b4ed84",
+          "configured_model": "deepseek/deepseek-v4-flash",
+          "attempt": 1,
+          "error_code": null,
+          "request_options_sha256": "22d249d31788f688946b0091189853180cf24397f702a54a18adfe23591ec018",
+          "http_status": 200,
+          "request_id": null,
+          "actual_model": "deepseek/deepseek-v4-flash",
+          "finish_reason": "stop",
+          "content_chars": 200,
+          "prompt_tokens": 1745,
+          "completion_tokens": 3114,
+          "total_tokens": 4859,
+          "latency_ms": 20334,
+          "estimated_cost_usd": 0.0021301499999999995,
+          "role": "primary"
+        },
+        {
+          "task_type": "recall_compose",
+          "prompt_version": "recall_compose_v1",
+          "context_sha256": "647659077ebfd72efe29c102d6d26dbadae527afb42cdb66b70329aa31bae988",
+          "configured_model": "deepseek/deepseek-v4-flash",
+          "attempt": 1,
+          "error_code": null,
+          "request_options_sha256": "22d249d31788f688946b0091189853180cf24397f702a54a18adfe23591ec018",
+          "http_status": 200,
+          "request_id": null,
+          "actual_model": "deepseek/deepseek-v4-flash",
+          "finish_reason": "stop",
+          "content_chars": 196,
+          "prompt_tokens": 1790,
+          "completion_tokens": 2469,
+          "total_tokens": 4259,
+          "latency_ms": 16373,
+          "estimated_cost_usd": 0.0017498999999999998,
+          "role": "primary"
+        },
+        {
+          "task_type": "recall_audit",
+          "prompt_version": "recall_audit_v3",
+          "context_sha256": "43a4b27f14720ffff6678112469f50f0e06468c016d3e09becc65491b7d727f5",
+          "configured_model": "deepseek/deepseek-v4-flash",
+          "attempt": 1,
+          "error_code": null,
+          "request_options_sha256": "22d249d31788f688946b0091189853180cf24397f702a54a18adfe23591ec018",
+          "http_status": 200,
+          "request_id": null,
+          "actual_model": "deepseek/deepseek-v4-flash",
+          "finish_reason": "stop",
+          "content_chars": 666,
+          "prompt_tokens": 2693,
+          "completion_tokens": 1204,
+          "total_tokens": 3897,
+          "latency_ms": 9203,
+          "estimated_cost_usd": 0.00112635,
+          "role": "review"
+        },
+        {
+          "task_type": "recall_audit",
+          "prompt_version": "recall_audit_v3",
+          "context_sha256": "43426073eafd92b2593b2d6ed337c67af941e8e1c8274de339bc7120c383ef0c",
+          "configured_model": "deepseek/deepseek-v4-flash",
+          "attempt": 1,
+          "error_code": null,
+          "request_options_sha256": "22d249d31788f688946b0091189853180cf24397f702a54a18adfe23591ec018",
+          "http_status": 200,
+          "request_id": null,
+          "actual_model": "deepseek/deepseek-v4-flash",
+          "finish_reason": "stop",
+          "content_chars": 1043,
+          "prompt_tokens": 2689,
+          "completion_tokens": 1502,
+          "total_tokens": 4191,
+          "latency_ms": 10290,
+          "estimated_cost_usd": 0.00130455,
+          "role": "review"
+        },
+        {
+          "task_type": "recall_audit",
+          "prompt_version": "recall_audit_v3",
+          "context_sha256": "f2ad86b60f5e5e79e1e4e3e85eda727c60695844dabd640f9fd1a7d728806a38",
+          "configured_model": "deepseek/deepseek-v4-flash",
+          "attempt": 1,
+          "error_code": null,
+          "request_options_sha256": "22d249d31788f688946b0091189853180cf24397f702a54a18adfe23591ec018",
+          "http_status": 200,
+          "request_id": null,
+          "actual_model": "deepseek/deepseek-v4-flash",
+          "finish_reason": "stop",
+          "content_chars": 634,
+          "prompt_tokens": 2699,
+          "completion_tokens": 1342,
+          "total_tokens": 4041,
+          "latency_ms": 9347,
+          "estimated_cost_usd": 0.00121005,
+          "role": "review"
+        },
+        {
+          "task_type": "recall_audit",
+          "prompt_version": "recall_audit_v3",
+          "context_sha256": "ea4141a7e95bc1d4ac9441ddcefd58392d3211c8a0d748647668614feec71bc4",
+          "configured_model": "deepseek/deepseek-v4-flash",
+          "attempt": 1,
+          "error_code": null,
+          "request_options_sha256": "22d249d31788f688946b0091189853180cf24397f702a54a18adfe23591ec018",
+          "http_status": 200,
+          "request_id": null,
+          "actual_model": "deepseek/deepseek-v4-flash",
+          "finish_reason": "stop",
+          "content_chars": 568,
+          "prompt_tokens": 2693,
+          "completion_tokens": 1480,
+          "total_tokens": 4173,
+          "latency_ms": 10498,
+          "estimated_cost_usd": 0.00129195,
+          "role": "review"
+        },
+        {
+          "task_type": "recall_audit",
+          "prompt_version": "recall_audit_v3",
+          "context_sha256": "768a18c3c4e071885a12407af07e10ccb227d21259aacb68ef9f8de11b02fd16",
+          "configured_model": "deepseek/deepseek-v4-flash",
+          "attempt": 1,
+          "error_code": null,
+          "request_options_sha256": "22d249d31788f688946b0091189853180cf24397f702a54a18adfe23591ec018",
+          "http_status": 200,
+          "request_id": null,
+          "actual_model": "deepseek/deepseek-v4-flash",
+          "finish_reason": "stop",
+          "content_chars": 717,
+          "prompt_tokens": 2481,
+          "completion_tokens": 1454,
+          "total_tokens": 3935,
+          "latency_ms": 10165,
+          "estimated_cost_usd": 0.0012445499999999999,
+          "role": "review"
+        },
+        {
+          "task_type": "recall_audit",
+          "prompt_version": "recall_audit_v3",
+          "context_sha256": "cc65a9279b457ee71a77db9fbf5a53e80e3a8d808fe63ef4bb3de43311630a37",
+          "configured_model": "deepseek/deepseek-v4-flash",
+          "attempt": 1,
+          "error_code": null,
+          "request_options_sha256": "22d249d31788f688946b0091189853180cf24397f702a54a18adfe23591ec018",
+          "http_status": 200,
+          "request_id": null,
+          "actual_model": "deepseek/deepseek-v4-flash",
+          "finish_reason": "stop",
+          "content_chars": 448,
+          "prompt_tokens": 2348,
+          "completion_tokens": 1246,
+          "total_tokens": 3594,
+          "latency_ms": 9450,
+          "estimated_cost_usd": 0.0010998,
+          "role": "review"
+        },
+        {
+          "task_type": "recall_audit",
+          "prompt_version": "recall_audit_v3",
+          "context_sha256": "186241bc4f90dcde01a6f4f8e783d15c30ccefcfc05cf8f6da66a4478ec673b0",
+          "configured_model": "deepseek/deepseek-v4-flash",
+          "attempt": 1,
+          "error_code": null,
+          "request_options_sha256": "22d249d31788f688946b0091189853180cf24397f702a54a18adfe23591ec018",
+          "http_status": 200,
+          "request_id": null,
+          "actual_model": "deepseek/deepseek-v4-flash",
+          "finish_reason": "stop",
+          "content_chars": 611,
+          "prompt_tokens": 2570,
+          "completion_tokens": 1022,
+          "total_tokens": 3592,
+          "latency_ms": 7271,
+          "estimated_cost_usd": 0.0009987,
+          "role": "review"
+        },
+        {
+          "task_type": "recall_audit",
+          "prompt_version": "recall_audit_v3",
+          "context_sha256": "de7745e1eb5c0890f1aaa34341555b4c52342d228314d53dbbe278afef8894b1",
+          "configured_model": "deepseek/deepseek-v4-flash",
+          "attempt": 1,
+          "error_code": null,
+          "request_options_sha256": "22d249d31788f688946b0091189853180cf24397f702a54a18adfe23591ec018",
+          "http_status": 200,
+          "request_id": null,
+          "actual_model": "deepseek/deepseek-v4-flash",
+          "finish_reason": "stop",
+          "content_chars": 339,
+          "prompt_tokens": 2462,
+          "completion_tokens": 412,
+          "total_tokens": 2874,
+          "latency_ms": 3808,
+          "estimated_cost_usd": 0.0006165,
+          "role": "review"
+        },
+        {
+          "task_type": "recall_audit",
+          "prompt_version": "recall_audit_v3",
+          "context_sha256": "2954a3e7fa71d9555413868b4e816336428532c2a7e2d4f605d08cd595f8180f",
+          "configured_model": "deepseek/deepseek-v4-flash",
+          "attempt": 1,
+          "error_code": null,
+          "request_options_sha256": "22d249d31788f688946b0091189853180cf24397f702a54a18adfe23591ec018",
+          "http_status": 200,
+          "request_id": null,
+          "actual_model": "deepseek/deepseek-v4-flash",
+          "finish_reason": "stop",
+          "content_chars": 518,
+          "prompt_tokens": 2550,
+          "completion_tokens": 775,
+          "total_tokens": 3325,
+          "latency_ms": 6654,
+          "estimated_cost_usd": 0.0008475,
+          "role": "review"
+        },
+        {
+          "task_type": "recall_audit",
+          "prompt_version": "recall_audit_v3",
+          "context_sha256": "924d4effec48bf54f49274e849cd8c73f895fd9dc3c4a40b14b8d46d6b293399",
+          "configured_model": "deepseek/deepseek-v4-flash",
+          "attempt": 1,
+          "error_code": null,
+          "request_options_sha256": "22d249d31788f688946b0091189853180cf24397f702a54a18adfe23591ec018",
+          "http_status": 200,
+          "request_id": null,
+          "actual_model": "deepseek/deepseek-v4-flash",
+          "finish_reason": "stop",
+          "content_chars": 740,
+          "prompt_tokens": 2739,
+          "completion_tokens": 2309,
+          "total_tokens": 5048,
+          "latency_ms": 15786,
+          "estimated_cost_usd": 0.0017962499999999997,
+          "role": "review"
+        },
+        {
+          "task_type": "recall_audit",
+          "prompt_version": "recall_audit_v3",
+          "context_sha256": "ef4074b9160db43e342616c96cc6a085c4d6b27fbe5797d89823b7b3f17de762",
+          "configured_model": "deepseek/deepseek-v4-flash",
+          "attempt": 1,
+          "error_code": null,
+          "request_options_sha256": "22d249d31788f688946b0091189853180cf24397f702a54a18adfe23591ec018",
+          "http_status": 200,
+          "request_id": null,
+          "actual_model": "deepseek/deepseek-v4-flash",
+          "finish_reason": "stop",
+          "content_chars": 249,
+          "prompt_tokens": 2249,
+          "completion_tokens": 1124,
+          "total_tokens": 3373,
+          "latency_ms": 8084,
+          "estimated_cost_usd": 0.00101175,
+          "role": "review"
+        },
+        {
+          "task_type": "recall_audit",
+          "prompt_version": "recall_audit_v3",
+          "context_sha256": "67d4503e13526385f80bf2b4e440eaf5a459628a60418b13b4b935ad9f006c1c",
+          "configured_model": "deepseek/deepseek-v4-flash",
+          "attempt": 1,
+          "error_code": null,
+          "request_options_sha256": "22d249d31788f688946b0091189853180cf24397f702a54a18adfe23591ec018",
+          "http_status": 200,
+          "request_id": null,
+          "actual_model": "deepseek/deepseek-v4-flash",
+          "finish_reason": "stop",
+          "content_chars": 363,
+          "prompt_tokens": 2782,
+          "completion_tokens": 579,
+          "total_tokens": 3361,
+          "latency_ms": 5441,
+          "estimated_cost_usd": 0.0007647,
+          "role": "review"
+        },
+        {
+          "task_type": "recall_audit",
+          "prompt_version": "recall_audit_v3",
+          "context_sha256": "d1c37bb11fb58b620bc48b72ea4dee87fa29bce493bdc915cab454d91d39aa91",
+          "configured_model": "deepseek/deepseek-v4-flash",
+          "attempt": 1,
+          "error_code": null,
+          "request_options_sha256": "22d249d31788f688946b0091189853180cf24397f702a54a18adfe23591ec018",
+          "http_status": 200,
+          "request_id": null,
+          "actual_model": "deepseek/deepseek-v4-flash",
+          "finish_reason": "stop",
+          "content_chars": 1036,
+          "prompt_tokens": 2865,
+          "completion_tokens": 7936,
+          "total_tokens": 10801,
+          "latency_ms": 48438,
+          "estimated_cost_usd": 0.005191349999999999,
+          "role": "review"
+        },
+        {
+          "task_type": "recall_audit",
+          "prompt_version": "recall_audit_v3",
+          "context_sha256": "a1e36c473204b937de168abcab59d8b173cd10fe7625aeb0dd52b336bd6a83b8",
+          "configured_model": "deepseek/deepseek-v4-flash",
+          "attempt": 1,
+          "error_code": null,
+          "request_options_sha256": "22d249d31788f688946b0091189853180cf24397f702a54a18adfe23591ec018",
+          "http_status": 200,
+          "request_id": null,
+          "actual_model": "deepseek/deepseek-v4-flash",
+          "finish_reason": "stop",
+          "content_chars": 1469,
+          "prompt_tokens": 3529,
+          "completion_tokens": 4870,
+          "total_tokens": 8399,
+          "latency_ms": 29144,
+          "estimated_cost_usd": 0.0034513499999999997,
+          "role": "review"
+        },
+        {
+          "task_type": "recall_audit",
+          "prompt_version": "recall_audit_v3",
+          "context_sha256": "7a4bbf99b1533b46fd08690badb3f3f8688c8076109ad7c6e6aad80ed3da69c8",
+          "configured_model": "deepseek/deepseek-v4-flash",
+          "attempt": 1,
+          "error_code": null,
+          "request_options_sha256": "22d249d31788f688946b0091189853180cf24397f702a54a18adfe23591ec018",
+          "http_status": 200,
+          "request_id": null,
+          "actual_model": "deepseek/deepseek-v4-flash",
+          "finish_reason": "stop",
+          "content_chars": 1208,
+          "prompt_tokens": 2355,
+          "completion_tokens": 5465,
+          "total_tokens": 7820,
+          "latency_ms": 32843,
+          "estimated_cost_usd": 0.00363225,
+          "role": "review"
+        },
+        {
+          "task_type": "recall_audit",
+          "prompt_version": "recall_audit_v3",
+          "context_sha256": "6e91cf25fc186d6695857e2afb9a622faf3e1ed571776c1e9e8ed549295839f1",
+          "configured_model": "deepseek/deepseek-v4-flash",
+          "attempt": 1,
+          "error_code": null,
+          "request_options_sha256": "22d249d31788f688946b0091189853180cf24397f702a54a18adfe23591ec018",
+          "http_status": 200,
+          "request_id": null,
+          "actual_model": "deepseek/deepseek-v4-flash",
+          "finish_reason": "stop",
+          "content_chars": 893,
+          "prompt_tokens": 2509,
+          "completion_tokens": 625,
+          "total_tokens": 3134,
+          "latency_ms": 5992,
+          "estimated_cost_usd": 0.0007513499999999999,
+          "role": "review"
+        },
+        {
+          "task_type": "recall_audit",
+          "prompt_version": "recall_audit_v3",
+          "context_sha256": "743003c671f53c17243f02244e8fc1cdf3b63399c90dc62e8e9893555120c6c1",
+          "configured_model": "deepseek/deepseek-v4-flash",
+          "attempt": 1,
+          "error_code": null,
+          "request_options_sha256": "22d249d31788f688946b0091189853180cf24397f702a54a18adfe23591ec018",
+          "http_status": 200,
+          "request_id": null,
+          "actual_model": "deepseek/deepseek-v4-flash",
+          "finish_reason": "stop",
+          "content_chars": 795,
+          "prompt_tokens": 2810,
+          "completion_tokens": 542,
+          "total_tokens": 3352,
+          "latency_ms": 5253,
+          "estimated_cost_usd": 0.0007467000000000001,
+          "role": "review"
+        },
+        {
+          "task_type": "recall_sweep",
+          "prompt_version": "recall_sweep_v2",
+          "context_sha256": "4a73333d71ae1c1379506ed010ab39de3d1f11fb75611ec46babace270f4450f",
+          "configured_model": "deepseek/deepseek-v4-flash",
+          "attempt": 1,
+          "error_code": null,
+          "request_options_sha256": "22d249d31788f688946b0091189853180cf24397f702a54a18adfe23591ec018",
+          "http_status": 200,
+          "request_id": null,
+          "actual_model": "deepseek/deepseek-v4-flash",
+          "finish_reason": "stop",
+          "content_chars": 16,
+          "prompt_tokens": 15912,
+          "completion_tokens": 10668,
+          "total_tokens": 26580,
+          "latency_ms": 62021,
+          "estimated_cost_usd": 0.0087876,
+          "role": "review"
+        },
+        {
+          "task_type": "recall_sweep",
+          "prompt_version": "recall_sweep_v2",
+          "context_sha256": "77951372537f49a4311b6bbe5fecbc89776e2c89c5f0245a978e1c9ce3ae6e0f",
+          "configured_model": "deepseek/deepseek-v4-flash",
+          "attempt": 1,
+          "error_code": null,
+          "request_options_sha256": "22d249d31788f688946b0091189853180cf24397f702a54a18adfe23591ec018",
+          "http_status": 200,
+          "request_id": null,
+          "actual_model": "deepseek/deepseek-v4-flash",
+          "finish_reason": "stop",
+          "content_chars": 15,
+          "prompt_tokens": 15129,
+          "completion_tokens": 1471,
+          "total_tokens": 16600,
+          "latency_ms": 10612,
+          "estimated_cost_usd": 0.0031519499999999997,
+          "role": "review"
+        },
+        {
+          "task_type": "recall_sweep",
+          "prompt_version": "recall_sweep_v2",
+          "context_sha256": "f3333009eb4773996ba4259e59e3799b578a282255765e882341b0cff7e30c21",
+          "configured_model": "deepseek/deepseek-v4-flash",
+          "attempt": 1,
+          "error_code": null,
+          "request_options_sha256": "22d249d31788f688946b0091189853180cf24397f702a54a18adfe23591ec018",
+          "http_status": 200,
+          "request_id": null,
+          "actual_model": "deepseek/deepseek-v4-flash",
+          "finish_reason": "stop",
+          "content_chars": 16,
+          "prompt_tokens": 11956,
+          "completion_tokens": 4002,
+          "total_tokens": 15958,
+          "latency_ms": 25204,
+          "estimated_cost_usd": 0.0041946,
+          "role": "review"
+        }
+      ],
+      "roles": {
+        "primary": {
+          "model": "deepseek/deepseek-v4-flash",
+          "calls": 7,
+          "task_types": [
+            "recall_compose",
+            "recall_facts",
+            "recall_inventory",
+            "recall_locate",
+            "recall_scope"
+          ]
+        },
+        "review": {
+          "model": "deepseek/deepseek-v4-flash",
+          "calls": 20,
+          "task_types": [
+            "recall_audit",
+            "recall_sweep"
+          ]
+        }
+      },
+      "role_calls": [
+        {
+          "role": "primary",
+          "task_type": "recall_facts",
+          "model": "deepseek/deepseek-v4-flash",
+          "reused_checkpoint": false
+        },
+        {
+          "role": "primary",
+          "task_type": "recall_scope",
+          "model": "deepseek/deepseek-v4-flash",
+          "reused_checkpoint": false
+        },
+        {
+          "role": "primary",
+          "task_type": "recall_inventory",
+          "model": "deepseek/deepseek-v4-flash",
+          "reused_checkpoint": false
+        },
+        {
+          "role": "primary",
+          "task_type": "recall_inventory",
+          "model": "deepseek/deepseek-v4-flash",
+          "reused_checkpoint": false
+        },
+        {
+          "role": "primary",
+          "task_type": "recall_locate",
+          "model": "deepseek/deepseek-v4-flash",
+          "reused_checkpoint": false
+        },
+        {
+          "role": "primary",
+          "task_type": "recall_compose",
+          "model": "deepseek/deepseek-v4-flash",
+          "reused_checkpoint": false
+        },
+        {
+          "role": "primary",
+          "task_type": "recall_compose",
+          "model": "deepseek/deepseek-v4-flash",
+          "reused_checkpoint": false
+        },
+        {
+          "role": "review",
+          "task_type": "recall_audit",
+          "model": "deepseek/deepseek-v4-flash",
+          "reused_checkpoint": false
+        },
+        {
+          "role": "review",
+          "task_type": "recall_audit",
+          "model": "deepseek/deepseek-v4-flash",
+          "reused_checkpoint": false
+        },
+        {
+          "role": "review",
+          "task_type": "recall_audit",
+          "model": "deepseek/deepseek-v4-flash",
+          "reused_checkpoint": false
+        },
+        {
+          "role": "review",
+          "task_type": "recall_audit",
+          "model": "deepseek/deepseek-v4-flash",
+          "reused_checkpoint": false
+        },
+        {
+          "role": "review",
+          "task_type": "recall_audit",
+          "model": "deepseek/deepseek-v4-flash",
+          "reused_checkpoint": false
+        },
+        {
+          "role": "review",
+          "task_type": "recall_audit",
+          "model": "deepseek/deepseek-v4-flash",
+          "reused_checkpoint": false
+        },
+        {
+          "role": "review",
+          "task_type": "recall_audit",
+          "model": "deepseek/deepseek-v4-flash",
+          "reused_checkpoint": false
+        },
+        {
+          "role": "review",
+          "task_type": "recall_audit",
+          "model": "deepseek/deepseek-v4-flash",
+          "reused_checkpoint": false
+        },
+        {
+          "role": "review",
+          "task_type": "recall_audit",
+          "model": "deepseek/deepseek-v4-flash",
+          "reused_checkpoint": false
+        },
+        {
+          "role": "review",
+          "task_type": "recall_audit",
+          "model": "deepseek/deepseek-v4-flash",
+          "reused_checkpoint": false
+        },
+        {
+          "role": "review",
+          "task_type": "recall_audit",
+          "model": "deepseek/deepseek-v4-flash",
+          "reused_checkpoint": false
+        },
+        {
+          "role": "review",
+          "task_type": "recall_audit",
+          "model": "deepseek/deepseek-v4-flash",
+          "reused_checkpoint": false
+        },
+        {
+          "role": "review",
+          "task_type": "recall_audit",
+          "model": "deepseek/deepseek-v4-flash",
+          "reused_checkpoint": false
+        },
+        {
+          "role": "review",
+          "task_type": "recall_audit",
+          "model": "deepseek/deepseek-v4-flash",
+          "reused_checkpoint": false
+        },
+        {
+          "role": "review",
+          "task_type": "recall_audit",
+          "model": "deepseek/deepseek-v4-flash",
+          "reused_checkpoint": false
+        },
+        {
+          "role": "review",
+          "task_type": "recall_audit",
+          "model": "deepseek/deepseek-v4-flash",
+          "reused_checkpoint": false
+        },
+        {
+          "role": "review",
+          "task_type": "recall_audit",
+          "model": "deepseek/deepseek-v4-flash",
+          "reused_checkpoint": false
+        },
+        {
+          "role": "review",
+          "task_type": "recall_sweep",
+          "model": "deepseek/deepseek-v4-flash",
+          "reused_checkpoint": false
+        },
+        {
+          "role": "review",
+          "task_type": "recall_sweep",
+          "model": "deepseek/deepseek-v4-flash",
+          "reused_checkpoint": false
+        },
+        {
+          "role": "review",
+          "task_type": "recall_sweep",
+          "model": "deepseek/deepseek-v4-flash",
+          "reused_checkpoint": false
+        }
+      ]
+    },
+    "output_validation": {
+      "kind": "recall_validated_edits",
+      "checks": [
+        "package",
+        "revisions",
+        "final_equivalence",
+        "non_target",
+        "template_text",
+        "content_verification",
+        "actual_content_verification"
+      ],
+      "final_sha256": "4f0a10abc0c58fadc25561e3de6b21f167441848838b7f6e253f641d94f96707",
+      "redline_sha256": "0b394535a2201910123bc7dabc33b5b7d5ce235ea3e45f8d6eb5398c09651552"
+    },
+    "artifact_claim_replay": {
+      "verified": true,
+      "checked": 16,
+      "checked_this_page": 16,
+      "units_checked": 21,
+      "total_locations": 16,
+      "operations": [
+        {
+          "location": "p1228",
+          "rule_id": "G18",
+          "target_id": "S25_S26#1:T002",
+          "operation_id": "G18:0",
+          "obligation_id": "G18:B1:O1",
+          "start": 2,
+          "end": 36,
+          "before": "由于本基金A类基金份额不收取销售服务费，而C类基金份额收取销售服务费",
+          "replacement": "由于本基金A类基金份额和C类基金份额费用收取不同",
+          "scope": "operations",
+          "effect_errors": [],
+          "verdict": "PASS"
+        },
+        {
+          "location": "p124",
+          "rule_id": "G03",
+          "target_id": "S03_S04_S07_S16_S17_S20#1:T004",
+          "operation_id": "G03:0",
+          "obligation_id": "G03:B1:O1",
+          "start": 131,
+          "end": 131,
+          "before": "",
+          "replacement": "投资者通过直销机构（含基金管理人及其销售子公司，下同）申购本基金A类基金份额时，不收取认购/申购费用；通过直销机构申购的C类基金份额，不收取销售服务费。对于投资者通过直销机构之外的其他销售机构申购的C类基金份额且持续持有期限超过一年的，不再继续收取销售服务费。",
+          "scope": "operations",
+          "effect_errors": [],
+          "verdict": "PASS"
+        },
+        {
+          "location": "p1258",
+          "rule_id": "G16",
+          "target_id": "S25_S26#1:T001",
+          "operation_id": "G16:0",
+          "obligation_id": "G16:B1:O1",
+          "start": 114,
+          "end": 114,
+          "before": "",
+          "replacement": "销售服务费每日计提。（1）直销机构：对于投资者通过直销机构持有的C类基金份额计提的销售服务费，在投资者赎回C类基金份额或基金合同终止时，随赎回款（或清算款）一并返还给投资者。基金管理人基金销售子公司销售母公司所管理基金的，按照本条要求执行。（2）直销机构以外的其他销售机构：对于投资者持续持有期限未超过一年（即365天，下同）的基金份额收取的销售服务费，按月支付，基金托管人按照与基金管理人协商一致的方式于次月首日起5个工作日内按照指定的账户路径进行支付。若遇法定节假日、公休日或不可抗力等，支付日期顺延。对于持续持有期限超过一年的基金份额，持有超过一年后继续计提的销售服务费，在投资者赎回基金份额或基金合同终止时，随赎回款（或清算款）一并返还给投资者。",
+          "scope": "operations",
+          "effect_errors": [],
+          "verdict": "PASS"
+        },
+        {
+          "location": "p1258",
+          "rule_id": "G15",
+          "target_id": "Y003",
+          "operation_id": "G15:0",
+          "obligation_id": "G15:B1:O1",
+          "start": 0,
+          "end": 114,
+          "before": "基金销售服务费每日计提，按月支付。由基金托管人根据与基金管理人核对一致的财务数据，自动在次月初5个工作日内按照指定的账户路径进行支付，注册登记机构收到后按相关合同规定支付给基金销售机构等。若遇法定节假日、公休假等，支付日期顺延。",
+          "replacement": "",
+          "scope": "operations",
+          "effect_errors": [],
+          "verdict": "PASS"
+        },
+        {
+          "location": "p128",
+          "rule_id": "G05",
+          "target_id": "S03_S04_S07_S16_S17_S20#1:T007",
+          "operation_id": "G05:0",
+          "obligation_id": "G05:B1:O1",
+          "start": 130,
+          "end": 136,
+          "before": "调低赎回费率",
+          "replacement": "调低销售服务费率",
+          "scope": "operations",
+          "effect_errors": [],
+          "verdict": "PASS"
+        },
+        {
+          "location": "p128",
+          "rule_id": "G05",
+          "target_id": "S03_S04_S07_S16_S17_S20#1:T008",
+          "operation_id": "G05:2",
+          "obligation_id": "G05:B3:O1",
+          "start": 174,
+          "end": 183,
+          "before": "并报中国证监会备案",
+          "replacement": "",
+          "scope": "operations",
+          "effect_errors": [],
+          "verdict": "PASS"
+        },
+        {
+          "location": "p128",
+          "rule_id": "G06",
+          "target_id": "S03_S04_S07_S16_S17_S20#1:T009",
+          "operation_id": "G06:0",
+          "obligation_id": "G06:B1:O1",
+          "start": 184,
+          "end": 204,
+          "before": "本基金不同基金份额类别之间不得互相转换。",
+          "replacement": "",
+          "scope": "operations",
+          "effect_errors": [],
+          "verdict": "PASS"
+        },
+        {
+          "location": "p1346",
+          "rule_id": "G22",
+          "target_id": "S25_S26#1:T003",
+          "operation_id": "G22:0",
+          "obligation_id": "G22:B1:O1",
+          "start": 0,
+          "end": 77,
+          "before": "依据基金财产清算的分配方案，将基金财产清算后的全部剩余资产扣除基金财产清算费用、交纳所欠税款并清偿基金债务后，按基金份额持有人持有的基金份额比例进行分配。",
+          "replacement": "依据基金财产清算的分配方案，将基金财产清算后的全部剩余资产扣除基金财产清算费用、交纳所欠税款并清偿基金债务后，按基金份额持有人持有的基金份额比例进行分配，并加上返还基金份额持有人的销售服务费（如有）。",
+          "scope": "operations",
+          "effect_errors": [],
+          "verdict": "PASS"
+        },
+        {
+          "location": "p204",
+          "rule_id": "G08",
+          "target_id": "S03_S04_S07_S16_S17_S20#1:T010",
+          "operation_id": "G08:0",
+          "obligation_id": "G08:B1:O1",
+          "start": 38,
+          "end": 66,
+          "before": "本基金的申购费率由基金管理人决定，并在招募说明书中列示。",
+          "replacement": "本基金A类基金份额在申购时收取申购费用，C类基金份额不收取申购费用。通过直销机构申购本基金A类基金份额不收取申购费。通过直销机构以外的其他销售机构申购本基金的申购费率由基金管理人决定，并在招募说明书中列示。",
+          "scope": "operations",
+          "effect_errors": [],
+          "verdict": "PASS"
+        },
+        {
+          "location": "p205",
+          "rule_id": "G09",
+          "target_id": "S03_S04_S07_S16_S17_S20#1:T011",
+          "operation_id": "G09:0",
+          "obligation_id": "G09:B1:O1",
+          "start": 72,
+          "end": 117,
+          "before": "赎回金额为按实际确认的有效赎回份额乘以当日基金份额净值并扣除相应的费用，赎回金额单位为元。",
+          "replacement": "赎回金额为按实际确认的有效赎回份额乘以当日该类基金份额的基金份额净值并扣除或加上相应的费用，赎回金额单位为元。",
+          "scope": "operations",
+          "effect_errors": [],
+          "verdict": "PASS"
+        },
+        {
+          "location": "p206",
+          "rule_id": "G11",
+          "target_id": "S03_S04_S07_S16_S17_S20#1:T012",
+          "operation_id": "G11:1",
+          "obligation_id": "G11:B1:O2",
+          "start": 2,
+          "end": 21,
+          "before": "申购费用由投资人承担，不列入基金财产。",
+          "replacement": "通过直销机构申购本基金A类基金份额不收取申购费，通过其他销售机构申购本基金A类基金份额的申购费用由投资人承担，不列入基金财产。本基金C类基金份额不收取申购费用。",
+          "scope": "operations",
+          "effect_errors": [],
+          "verdict": "PASS"
+        },
+        {
+          "location": "p207",
+          "rule_id": "G12",
+          "target_id": "S03_S04_S07_S16_S17_S20#1:T013",
+          "operation_id": "G12:0",
+          "obligation_id": "G12:B1:O1",
+          "start": 2,
+          "end": 76,
+          "before": "赎回费用由赎回基金份额的基金份额持有人承担，在基金份额持有人赎回基金份额时收取。赎回费用归入基金财产的比例应根据相关规定执行，并在招募说明书中列示。",
+          "replacement": "赎回费用由赎回基金份额的基金份额持有人承担，在基金份额持有人赎回基金份额时收取。赎回费用全额计入基金财产。",
+          "scope": "operations",
+          "effect_errors": [],
+          "verdict": "PASS"
+        },
+        {
+          "location": "p207",
+          "rule_id": "G13",
+          "target_id": "S03_S04_S07_S16_S17_S20#1:T014",
+          "operation_id": "G13:0",
+          "obligation_id": "G13:B1:O1",
+          "start": 76,
+          "end": 118,
+          "before": "其中，对持续持有期少于7日的投资者收取不低于1.50%的赎回费，并全额计入基金财产。",
+          "replacement": "",
+          "scope": "operations",
+          "effect_errors": [],
+          "verdict": "PASS"
+        },
+        {
+          "location": "p209",
+          "rule_id": "G14",
+          "target_id": "S03_S04_S07_S16_S17_S20#1:T015",
+          "operation_id": "G14:3",
+          "obligation_id": "G14:B2:O1",
+          "start": 119,
+          "end": 144,
+          "before": "基金管理人可以适当调低基金申购费率和基金赎回费率。",
+          "replacement": "基金管理人可以适当调低基金申购费率和销售服务费率。",
+          "scope": "operations",
+          "effect_errors": [],
+          "verdict": "PASS"
+        },
+        {
+          "location": "p800",
+          "rule_id": "G15",
+          "target_id": "S03_S04_S07_S16_S17_S20#1:T016",
+          "operation_id": "G15:0",
+          "obligation_id": "G15:B1:O1",
+          "start": 0,
+          "end": 112,
+          "before": "基金销售服务费每日计提，按月支付。由基金托管人根据与基金管理人核对一致的财务数据，在次月初5个工作日内按照指定的账户路径进行支付，注册登记机构收到后按相关合同规定支付给基金销售机构等。若遇法定节假日、公休假等，支付日期顺延。",
+          "replacement": "",
+          "scope": "operations",
+          "effect_errors": [],
+          "verdict": "PASS"
+        },
+        {
+          "location": "p801",
+          "rule_id": "G17",
+          "target_id": "Y004",
+          "operation_id": "G17:0",
+          "obligation_id": "G17:B1:O1",
+          "start": 0,
+          "end": 52,
+          "before": "销售服务费主要用于支付销售机构佣金、以及基金管理人的基金行销广告费、促销活动费、基金份额持有人服务费等。",
+          "replacement": "",
+          "scope": "operations",
+          "effect_errors": [],
+          "verdict": "PASS"
+        },
+        {
+          "location": "p802",
+          "rule_id": "G16",
+          "target_id": "S03_S04_S07_S16_S17_S20#1:T017",
+          "operation_id": "G16:0",
+          "obligation_id": "G16:B1:O1",
+          "start": 25,
+          "end": 25,
+          "before": "",
+          "replacement": "销售服务费每日计提。（1）直销机构：对于投资者通过直销机构持有的C类基金份额计提的销售服务费，在投资者赎回C类基金份额或基金合同终止时，随赎回款（或清算款）一并返还给投资者。基金管理人基金销售子公司销售母公司所管理基金的，按照本条要求执行。（2）直销机构以外的其他销售机构：对于投资者持续持有期限未超过一年（即365天，下同）的基金份额收取的销售服务费，按月支付，基金托管人按照与基金管理人协商一致的方式于次月首日起5个工作日内按照指定的账户路径进行支付。若遇法定节假日、公休日或不可抗力等，支付日期顺延。对于持续持有期限超过一年的基金份额，持有超过一年后继续计提的销售服务费，在投资者赎回基金份额或基金合同终止时，随赎回款（或清算款）一并返还给投资者。",
+          "scope": "operations",
+          "effect_errors": [],
+          "verdict": "PASS"
+        },
+        {
+          "location": "p802",
+          "rule_id": "G17",
+          "target_id": "Y004",
+          "operation_id": "G17:0",
+          "obligation_id": "G17:B1:O1",
+          "start": 0,
+          "end": 25,
+          "before": "销售服务费的使用范围不包括基金募集期间的上述费用。",
+          "replacement": "",
+          "scope": "operations",
+          "effect_errors": [],
+          "verdict": "PASS"
+        },
+        {
+          "location": "p827",
+          "rule_id": "G18",
+          "target_id": "S03_S04_S07_S16_S17_S20#1:T018",
+          "operation_id": "G18:0",
+          "obligation_id": "G18:B1:O1",
+          "start": 2,
+          "end": 36,
+          "before": "由于本基金A类基金份额不收取销售服务费，而C类基金份额收取销售服务费",
+          "replacement": "由于本基金A类基金份额和C类基金份额费用收取不同",
+          "scope": "operations",
+          "effect_errors": [],
+          "verdict": "PASS"
+        },
+        {
+          "location": "p92",
+          "rule_id": "G01",
+          "target_id": "S03_S04_S07_S16_S17_S20#1:T001",
+          "operation_id": "G01:0",
+          "obligation_id": "G01:B1:O1",
+          "start": 126,
+          "end": 126,
+          "before": "",
+          "replacement": "。投资者通过直销机构（含基金管理人及其销售子公司，下同）申购本基金A类基金份额时，不收取认购/申购费用；通过直销机构申购的C类基金份额，不收取销售服务费。对于投资者通过直销机构之外的其他销售机构申购的C类基金份额且持续持有期限超过一年的，不再继续收取销售服务费。",
+          "scope": "operations",
+          "effect_errors": [],
+          "verdict": "PASS"
+        },
+        {
+          "location": "p978",
+          "rule_id": "G22",
+          "target_id": "S03_S04_S07_S16_S17_S20#1:T019",
+          "operation_id": "G22:0",
+          "obligation_id": "G22:B1:O1",
+          "start": 0,
+          "end": 77,
+          "before": "依据基金财产清算的分配方案，将基金财产清算后的全部剩余资产扣除基金财产清算费用、交纳所欠税款并清偿基金债务后，按基金份额持有人持有的基金份额比例进行分配。",
+          "replacement": "依据基金财产清算的分配方案，将基金财产清算后的全部剩余资产扣除基金财产清算费用、交纳所欠税款并清偿基金债务后，按基金份额持有人持有的基金份额比例进行分配，并加上返还基金份额持有人的销售服务费（如有）。",
+          "scope": "operations",
+          "effect_errors": [],
+          "verdict": "PASS"
+        }
+      ],
+      "obligations": {
+        "G01:B1:O1": {
+          "state": "PASS",
+          "artifact_status": "EXPECTED_EFFECT_PRESENT",
+          "rule_id": "G01",
+          "operation_id": "G01:0",
+          "obligation_id": "G01:B1:O1",
+          "sites": [
+            "p92"
+          ],
+          "edit_ids": [
+            "G01:S03_S04_S07_S16_S17_S20#1:T001"
+          ],
+          "evidence": [
+            {
+              "rule_id": "G01",
+              "operation_id": "G01:0",
+              "obligation_id": "G01:B1:O1",
+              "site_id": "p92",
+              "location": "p92",
+              "before_quote": "58、基金份额类别：本基金将基金份额分为A类和C类不同的类别。在投资者认购、申购基金份额时收取认购、申购费用而不计提销售服务费的，称为A类基金份额；在投资者认购、申购基金份额时不收取认购、申购费用而是从本类别基金资产中计提销售服务费的，称为C类基金份额",
+              "after_quote": "58、基金份额类别：本基金将基金份额分为A类和C类不同的类别。在投资者认购、申购基金份额时收取认购、申购费用而不计提销售服务费的，称为A类基金份额；在投资者认购、申购基金份额时不收取认购、申购费用而是从本类别基金资产中计提销售服务费的，称为C类基金份额。投资者通过直销机构（含基金管理人及其销售子公司，下同）申购本基金A类基金份额时，不收取认购/申购费用；通过直销机构申购的C类基金份额，不收取销售服务费。对于投资者通过直销机构之外的其他销售机构申购的C类基金份额且持续持有期限超过一年的，不再继续收取销售服务费。",
+              "proof_kind": "site_final_plan_reconstruction",
+              "one_of_group": ""
+            }
+          ],
+          "failure_code": "",
+          "reason": "",
+          "site_effects": [
+            {
+              "site_id": "p92",
+              "location": "p92",
+              "rule_id": "G01",
+              "operation_id": "G01:0",
+              "obligation_id": "G01:B1:O1",
+              "state": "PASS",
+              "artifact_status": "EXPECTED_EFFECT_PRESENT",
+              "failure_code": "",
+              "before_quote": "58、基金份额类别：本基金将基金份额分为A类和C类不同的类别。在投资者认购、申购基金份额时收取认购、申购费用而不计提销售服务费的，称为A类基金份额；在投资者认购、申购基金份额时不收取认购、申购费用而是从本类别基金资产中计提销售服务费的，称为C类基金份额",
+              "after_quote": "58、基金份额类别：本基金将基金份额分为A类和C类不同的类别。在投资者认购、申购基金份额时收取认购、申购费用而不计提销售服务费的，称为A类基金份额；在投资者认购、申购基金份额时不收取认购、申购费用而是从本类别基金资产中计提销售服务费的，称为C类基金份额。投资者通过直销机构（含基金管理人及其销售子公司，下同）申购本基金A类基金份额时，不收取认购/申购费用；通过直销机构申购的C类基金份额，不收取销售服务费。对于投资者通过直销机构之外的其他销售机构申购的C类基金份额且持续持有期限超过一年的，不再继续收取销售服务费。",
+              "proof_kind": "site_final_plan_reconstruction",
+              "one_of_group": ""
+            }
+          ],
+          "operations": [
+            "G01:0"
+          ]
+        },
+        "G02:B1:O1": {
+          "state": "PASS",
+          "artifact_status": "ALREADY_SATISFIED",
+          "rule_id": "G02",
+          "operation_id": "G02:0",
+          "obligation_id": "G02:B1:O1",
+          "sites": [
+            "p92"
+          ],
+          "edit_ids": [],
+          "evidence": [
+            {
+              "rule_id": "G02",
+              "operation_id": "G02:0",
+              "obligation_id": "G02:B1:O1",
+              "site_id": "p92",
+              "location": "p92",
+              "before_quote": "58、基金份额类别：本基金将基金份额分为A类和C类不同的类别。在投资者认购、申购基金份额时收取认购、申购费用而不计提销售服务费的，称为A类基金份额；在投资者认购、申购基金份额时不收取认购、申购费用而是从本类别基金资产中计提销售服务费的，称为C类基金份额",
+              "after_quote": "58、基金份额类别：本基金将基金份额分为A类和C类不同的类别。在投资者认购、申购基金份额时收取认购、申购费用而不计提销售服务费的，称为A类基金份额；在投资者认购、申购基金份额时不收取认购、申购费用而是从本类别基金资产中计提销售服务费的，称为C类基金份额。投资者通过直销机构（含基金管理人及其销售子公司，下同）申购本基金A类基金份额时，不收取认购/申购费用；通过直销机构申购的C类基金份额，不收取销售服务费。对于投资者通过直销机构之外的其他销售机构申购的C类基金份额且持续持有期限超过一年的，不再继续收取销售服务费。",
+              "proof_kind": "source_operation_policy",
+              "one_of_group": ""
+            }
+          ],
+          "failure_code": "",
+          "reason": "",
+          "site_effects": [
+            {
+              "site_id": "p92",
+              "location": "p92",
+              "rule_id": "G02",
+              "operation_id": "G02:0",
+              "obligation_id": "G02:B1:O1",
+              "state": "PASS",
+              "artifact_status": "ALREADY_SATISFIED",
+              "failure_code": "",
+              "before_quote": "58、基金份额类别：本基金将基金份额分为A类和C类不同的类别。在投资者认购、申购基金份额时收取认购、申购费用而不计提销售服务费的，称为A类基金份额；在投资者认购、申购基金份额时不收取认购、申购费用而是从本类别基金资产中计提销售服务费的，称为C类基金份额",
+              "after_quote": "58、基金份额类别：本基金将基金份额分为A类和C类不同的类别。在投资者认购、申购基金份额时收取认购、申购费用而不计提销售服务费的，称为A类基金份额；在投资者认购、申购基金份额时不收取认购、申购费用而是从本类别基金资产中计提销售服务费的，称为C类基金份额。投资者通过直销机构（含基金管理人及其销售子公司，下同）申购本基金A类基金份额时，不收取认购/申购费用；通过直销机构申购的C类基金份额，不收取销售服务费。对于投资者通过直销机构之外的其他销售机构申购的C类基金份额且持续持有期限超过一年的，不再继续收取销售服务费。",
+              "proof_kind": "source_operation_policy",
+              "one_of_group": ""
+            }
+          ],
+          "operations": [
+            "G02:0"
+          ]
+        },
+        "G02:B1:O2": {
+          "state": "PASS",
+          "artifact_status": "ALREADY_SATISFIED",
+          "rule_id": "G02",
+          "operation_id": "G02:1",
+          "obligation_id": "G02:B1:O2",
+          "sites": [
+            "p92"
+          ],
+          "edit_ids": [],
+          "evidence": [
+            {
+              "rule_id": "G02",
+              "operation_id": "G02:1",
+              "obligation_id": "G02:B1:O2",
+              "site_id": "p92",
+              "location": "p92",
+              "before_quote": "58、基金份额类别：本基金将基金份额分为A类和C类不同的类别。在投资者认购、申购基金份额时收取认购、申购费用而不计提销售服务费的，称为A类基金份额；在投资者认购、申购基金份额时不收取认购、申购费用而是从本类别基金资产中计提销售服务费的，称为C类基金份额",
+              "after_quote": "58、基金份额类别：本基金将基金份额分为A类和C类不同的类别。在投资者认购、申购基金份额时收取认购、申购费用而不计提销售服务费的，称为A类基金份额；在投资者认购、申购基金份额时不收取认购、申购费用而是从本类别基金资产中计提销售服务费的，称为C类基金份额。投资者通过直销机构（含基金管理人及其销售子公司，下同）申购本基金A类基金份额时，不收取认购/申购费用；通过直销机构申购的C类基金份额，不收取销售服务费。对于投资者通过直销机构之外的其他销售机构申购的C类基金份额且持续持有期限超过一年的，不再继续收取销售服务费。",
+              "proof_kind": "source_operation_policy",
+              "one_of_group": ""
+            }
+          ],
+          "failure_code": "",
+          "reason": "",
+          "site_effects": [
+            {
+              "site_id": "p92",
+              "location": "p92",
+              "rule_id": "G02",
+              "operation_id": "G02:1",
+              "obligation_id": "G02:B1:O2",
+              "state": "PASS",
+              "artifact_status": "ALREADY_SATISFIED",
+              "failure_code": "",
+              "before_quote": "58、基金份额类别：本基金将基金份额分为A类和C类不同的类别。在投资者认购、申购基金份额时收取认购、申购费用而不计提销售服务费的，称为A类基金份额；在投资者认购、申购基金份额时不收取认购、申购费用而是从本类别基金资产中计提销售服务费的，称为C类基金份额",
+              "after_quote": "58、基金份额类别：本基金将基金份额分为A类和C类不同的类别。在投资者认购、申购基金份额时收取认购、申购费用而不计提销售服务费的，称为A类基金份额；在投资者认购、申购基金份额时不收取认购、申购费用而是从本类别基金资产中计提销售服务费的，称为C类基金份额。投资者通过直销机构（含基金管理人及其销售子公司，下同）申购本基金A类基金份额时，不收取认购/申购费用；通过直销机构申购的C类基金份额，不收取销售服务费。对于投资者通过直销机构之外的其他销售机构申购的C类基金份额且持续持有期限超过一年的，不再继续收取销售服务费。",
+              "proof_kind": "source_operation_policy",
+              "one_of_group": ""
+            }
+          ],
+          "operations": [
+            "G02:1"
+          ]
+        },
+        "G03:B1:O1": {
+          "state": "PASS",
+          "artifact_status": "EXPECTED_EFFECT_PRESENT",
+          "rule_id": "G03",
+          "operation_id": "G03:0",
+          "obligation_id": "G03:B1:O1",
+          "sites": [
+            "p124"
+          ],
+          "edit_ids": [
+            "G03:S03_S04_S07_S16_S17_S20#1:T004"
+          ],
+          "evidence": [
+            {
+              "rule_id": "G03",
+              "operation_id": "G03:0",
+              "obligation_id": "G03:B1:O1",
+              "site_id": "p124",
+              "location": "p124",
+              "before_quote": "本基金根据认购、申购费用收取方式的不同，将基金份额分为不同的类别。在投资者认购、申购基金份额时收取认购、申购费用，而不计提销售服务费的，称为A类基金份额；在投资者认购、申购基金份额时不收取认购、申购费用，而是从本类别基金资产中计提销售服务费的，称为C类基金份额。",
+              "after_quote": "本基金根据认购、申购费用收取方式的不同，将基金份额分为不同的类别。在投资者认购、申购基金份额时收取认购、申购费用，而不计提销售服务费的，称为A类基金份额；在投资者认购、申购基金份额时不收取认购、申购费用，而是从本类别基金资产中计提销售服务费的，称为C类基金份额。投资者通过直销机构（含基金管理人及其销售子公司，下同）申购本基金A类基金份额时，不收取认购/申购费用；通过直销机构申购的C类基金份额，不收取销售服务费。对于投资者通过直销机构之外的其他销售机构申购的C类基金份额且持续持有期限超过一年的，不再继续收取销售服务费。",
+              "proof_kind": "site_final_plan_reconstruction",
+              "one_of_group": ""
+            }
+          ],
+          "failure_code": "",
+          "reason": "",
+          "site_effects": [
+            {
+              "site_id": "p124",
+              "location": "p124",
+              "rule_id": "G03",
+              "operation_id": "G03:0",
+              "obligation_id": "G03:B1:O1",
+              "state": "PASS",
+              "artifact_status": "EXPECTED_EFFECT_PRESENT",
+              "failure_code": "",
+              "before_quote": "本基金根据认购、申购费用收取方式的不同，将基金份额分为不同的类别。在投资者认购、申购基金份额时收取认购、申购费用，而不计提销售服务费的，称为A类基金份额；在投资者认购、申购基金份额时不收取认购、申购费用，而是从本类别基金资产中计提销售服务费的，称为C类基金份额。",
+              "after_quote": "本基金根据认购、申购费用收取方式的不同，将基金份额分为不同的类别。在投资者认购、申购基金份额时收取认购、申购费用，而不计提销售服务费的，称为A类基金份额；在投资者认购、申购基金份额时不收取认购、申购费用，而是从本类别基金资产中计提销售服务费的，称为C类基金份额。投资者通过直销机构（含基金管理人及其销售子公司，下同）申购本基金A类基金份额时，不收取认购/申购费用；通过直销机构申购的C类基金份额，不收取销售服务费。对于投资者通过直销机构之外的其他销售机构申购的C类基金份额且持续持有期限超过一年的，不再继续收取销售服务费。",
+              "proof_kind": "site_final_plan_reconstruction",
+              "one_of_group": ""
+            }
+          ],
+          "operations": [
+            "G03:0"
+          ]
+        },
+        "G04:B1:O1": {
+          "state": "PASS",
+          "artifact_status": "ALREADY_SATISFIED",
+          "rule_id": "G04",
+          "operation_id": "G04:0",
+          "obligation_id": "G04:B1:O1",
+          "sites": [
+            "p124"
+          ],
+          "edit_ids": [],
+          "evidence": [
+            {
+              "rule_id": "G04",
+              "operation_id": "G04:0",
+              "obligation_id": "G04:B1:O1",
+              "site_id": "p124",
+              "location": "p124",
+              "before_quote": "本基金根据认购、申购费用收取方式的不同，将基金份额分为不同的类别。在投资者认购、申购基金份额时收取认购、申购费用，而不计提销售服务费的，称为A类基金份额；在投资者认购、申购基金份额时不收取认购、申购费用，而是从本类别基金资产中计提销售服务费的，称为C类基金份额。",
+              "after_quote": "本基金根据认购、申购费用收取方式的不同，将基金份额分为不同的类别。在投资者认购、申购基金份额时收取认购、申购费用，而不计提销售服务费的，称为A类基金份额；在投资者认购、申购基金份额时不收取认购、申购费用，而是从本类别基金资产中计提销售服务费的，称为C类基金份额。投资者通过直销机构（含基金管理人及其销售子公司，下同）申购本基金A类基金份额时，不收取认购/申购费用；通过直销机构申购的C类基金份额，不收取销售服务费。对于投资者通过直销机构之外的其他销售机构申购的C类基金份额且持续持有期限超过一年的，不再继续收取销售服务费。",
+              "proof_kind": "source_operation_policy",
+              "one_of_group": ""
+            }
+          ],
+          "failure_code": "",
+          "reason": "",
+          "site_effects": [
+            {
+              "site_id": "p124",
+              "location": "p124",
+              "rule_id": "G04",
+              "operation_id": "G04:0",
+              "obligation_id": "G04:B1:O1",
+              "state": "PASS",
+              "artifact_status": "ALREADY_SATISFIED",
+              "failure_code": "",
+              "before_quote": "本基金根据认购、申购费用收取方式的不同，将基金份额分为不同的类别。在投资者认购、申购基金份额时收取认购、申购费用，而不计提销售服务费的，称为A类基金份额；在投资者认购、申购基金份额时不收取认购、申购费用，而是从本类别基金资产中计提销售服务费的，称为C类基金份额。",
+              "after_quote": "本基金根据认购、申购费用收取方式的不同，将基金份额分为不同的类别。在投资者认购、申购基金份额时收取认购、申购费用，而不计提销售服务费的，称为A类基金份额；在投资者认购、申购基金份额时不收取认购、申购费用，而是从本类别基金资产中计提销售服务费的，称为C类基金份额。投资者通过直销机构（含基金管理人及其销售子公司，下同）申购本基金A类基金份额时，不收取认购/申购费用；通过直销机构申购的C类基金份额，不收取销售服务费。对于投资者通过直销机构之外的其他销售机构申购的C类基金份额且持续持有期限超过一年的，不再继续收取销售服务费。",
+              "proof_kind": "source_operation_policy",
+              "one_of_group": ""
+            }
+          ],
+          "operations": [
+            "G04:0"
+          ]
+        },
+        "G04:B1:O2": {
+          "state": "PASS",
+          "artifact_status": "ALREADY_SATISFIED",
+          "rule_id": "G04",
+          "operation_id": "G04:1",
+          "obligation_id": "G04:B1:O2",
+          "sites": [
+            "p124"
+          ],
+          "edit_ids": [],
+          "evidence": [
+            {
+              "rule_id": "G04",
+              "operation_id": "G04:1",
+              "obligation_id": "G04:B1:O2",
+              "site_id": "p124",
+              "location": "p124",
+              "before_quote": "本基金根据认购、申购费用收取方式的不同，将基金份额分为不同的类别。在投资者认购、申购基金份额时收取认购、申购费用，而不计提销售服务费的，称为A类基金份额；在投资者认购、申购基金份额时不收取认购、申购费用，而是从本类别基金资产中计提销售服务费的，称为C类基金份额。",
+              "after_quote": "本基金根据认购、申购费用收取方式的不同，将基金份额分为不同的类别。在投资者认购、申购基金份额时收取认购、申购费用，而不计提销售服务费的，称为A类基金份额；在投资者认购、申购基金份额时不收取认购、申购费用，而是从本类别基金资产中计提销售服务费的，称为C类基金份额。投资者通过直销机构（含基金管理人及其销售子公司，下同）申购本基金A类基金份额时，不收取认购/申购费用；通过直销机构申购的C类基金份额，不收取销售服务费。对于投资者通过直销机构之外的其他销售机构申购的C类基金份额且持续持有期限超过一年的，不再继续收取销售服务费。",
+              "proof_kind": "source_operation_policy",
+              "one_of_group": ""
+            }
+          ],
+          "failure_code": "",
+          "reason": "",
+          "site_effects": [
+            {
+              "site_id": "p124",
+              "location": "p124",
+              "rule_id": "G04",
+              "operation_id": "G04:1",
+              "obligation_id": "G04:B1:O2",
+              "state": "PASS",
+              "artifact_status": "ALREADY_SATISFIED",
+              "failure_code": "",
+              "before_quote": "本基金根据认购、申购费用收取方式的不同，将基金份额分为不同的类别。在投资者认购、申购基金份额时收取认购、申购费用，而不计提销售服务费的，称为A类基金份额；在投资者认购、申购基金份额时不收取认购、申购费用，而是从本类别基金资产中计提销售服务费的，称为C类基金份额。",
+              "after_quote": "本基金根据认购、申购费用收取方式的不同，将基金份额分为不同的类别。在投资者认购、申购基金份额时收取认购、申购费用，而不计提销售服务费的，称为A类基金份额；在投资者认购、申购基金份额时不收取认购、申购费用，而是从本类别基金资产中计提销售服务费的，称为C类基金份额。投资者通过直销机构（含基金管理人及其销售子公司，下同）申购本基金A类基金份额时，不收取认购/申购费用；通过直销机构申购的C类基金份额，不收取销售服务费。对于投资者通过直销机构之外的其他销售机构申购的C类基金份额且持续持有期限超过一年的，不再继续收取销售服务费。",
+              "proof_kind": "source_operation_policy",
+              "one_of_group": ""
+            }
+          ],
+          "operations": [
+            "G04:1"
+          ]
+        },
+        "G05:B1:O1": {
+          "state": "PASS",
+          "artifact_status": "EXPECTED_EFFECT_PRESENT",
+          "rule_id": "G05",
+          "operation_id": "G05:0",
+          "obligation_id": "G05:B1:O1",
+          "sites": [
+            "p128"
+          ],
+          "edit_ids": [
+            "G05+G06:S03_S04_S07_S16_S17_S20#1:T007+S03_S04_S07_S16_S17_S20#1:T008+S03_S04_S07_S16_S17_S20#1:T009"
+          ],
+          "evidence": [
+            {
+              "rule_id": "G05",
+              "operation_id": "G05:0",
+              "obligation_id": "G05:B1:O1",
+              "site_id": "p128",
+              "location": "p128",
+              "before_quote": "有关基金份额类别的具体设置等由基金管理人确定，并在招募说明书中公告。根据基金销售情况，在符合法律法规且不损害已有基金份额持有人权益的情况下，基金管理人在履行适当程序后可以增加新的基金份额类别、或者在法律法规和基金合同规定的范围内变更现有基金份额类别的申购费率、调低赎回费率或变更收费方式、或者停止现有基金份额类别的销售等，调整前基金管理人需及时公告并报中国证监会备案。本基金不同基金份额类别之间不得互相转换。\n",
+              "after_quote": "有关基金份额类别的具体设置等由基金管理人确定，并在招募说明书中公告。根据基金销售情况，在符合法律法规且不损害已有基金份额持有人权益的情况下，基金管理人在履行适当程序后可以增加新的基金份额类别、或者在法律法规和基金合同规定的范围内变更现有基金份额类别的申购费率、调低销售服务费率或变更收费方式、或者停止现有基金份额类别的销售等，调整前基金管理人需及时公告。\n",
+              "proof_kind": "site_final_plan_reconstruction",
+              "one_of_group": ""
+            }
+          ],
+          "failure_code": "",
+          "reason": "",
+          "site_effects": [
+            {
+              "site_id": "p128",
+              "location": "p128",
+              "rule_id": "G05",
+              "operation_id": "G05:0",
+              "obligation_id": "G05:B1:O1",
+              "state": "PASS",
+              "artifact_status": "EXPECTED_EFFECT_PRESENT",
+              "failure_code": "",
+              "before_quote": "有关基金份额类别的具体设置等由基金管理人确定，并在招募说明书中公告。根据基金销售情况，在符合法律法规且不损害已有基金份额持有人权益的情况下，基金管理人在履行适当程序后可以增加新的基金份额类别、或者在法律法规和基金合同规定的范围内变更现有基金份额类别的申购费率、调低赎回费率或变更收费方式、或者停止现有基金份额类别的销售等，调整前基金管理人需及时公告并报中国证监会备案。本基金不同基金份额类别之间不得互相转换。\n",
+              "after_quote": "有关基金份额类别的具体设置等由基金管理人确定，并在招募说明书中公告。根据基金销售情况，在符合法律法规且不损害已有基金份额持有人权益的情况下，基金管理人在履行适当程序后可以增加新的基金份额类别、或者在法律法规和基金合同规定的范围内变更现有基金份额类别的申购费率、调低销售服务费率或变更收费方式、或者停止现有基金份额类别的销售等，调整前基金管理人需及时公告。\n",
+              "proof_kind": "site_final_plan_reconstruction",
+              "one_of_group": ""
+            }
+          ],
+          "operations": [
+            "G05:0"
+          ]
+        },
+        "G05:B3:O1": {
+          "state": "PASS",
+          "artifact_status": "VERIFIED_ABSENT",
+          "rule_id": "G05",
+          "operation_id": "G05:2",
+          "obligation_id": "G05:B3:O1",
+          "sites": [
+            "p128"
+          ],
+          "edit_ids": [
+            "G05+G06:S03_S04_S07_S16_S17_S20#1:T007+S03_S04_S07_S16_S17_S20#1:T008+S03_S04_S07_S16_S17_S20#1:T009"
+          ],
+          "evidence": [
+            {
+              "rule_id": "G05",
+              "operation_id": "G05:2",
+              "obligation_id": "G05:B3:O1",
+              "site_id": "p128",
+              "location": "p128",
+              "before_quote": "有关基金份额类别的具体设置等由基金管理人确定，并在招募说明书中公告。根据基金销售情况，在符合法律法规且不损害已有基金份额持有人权益的情况下，基金管理人在履行适当程序后可以增加新的基金份额类别、或者在法律法规和基金合同规定的范围内变更现有基金份额类别的申购费率、调低赎回费率或变更收费方式、或者停止现有基金份额类别的销售等，调整前基金管理人需及时公告并报中国证监会备案。本基金不同基金份额类别之间不得互相转换。\n",
+              "after_quote": "有关基金份额类别的具体设置等由基金管理人确定，并在招募说明书中公告。根据基金销售情况，在符合法律法规且不损害已有基金份额持有人权益的情况下，基金管理人在履行适当程序后可以增加新的基金份额类别、或者在法律法规和基金合同规定的范围内变更现有基金份额类别的申购费率、调低销售服务费率或变更收费方式、或者停止现有基金份额类别的销售等，调整前基金管理人需及时公告。\n",
+              "proof_kind": "site_final_plan_reconstruction",
+              "one_of_group": ""
+            }
+          ],
+          "failure_code": "",
+          "reason": "",
+          "site_effects": [
+            {
+              "site_id": "p128",
+              "location": "p128",
+              "rule_id": "G05",
+              "operation_id": "G05:2",
+              "obligation_id": "G05:B3:O1",
+              "state": "PASS",
+              "artifact_status": "VERIFIED_ABSENT",
+              "failure_code": "",
+              "before_quote": "有关基金份额类别的具体设置等由基金管理人确定，并在招募说明书中公告。根据基金销售情况，在符合法律法规且不损害已有基金份额持有人权益的情况下，基金管理人在履行适当程序后可以增加新的基金份额类别、或者在法律法规和基金合同规定的范围内变更现有基金份额类别的申购费率、调低赎回费率或变更收费方式、或者停止现有基金份额类别的销售等，调整前基金管理人需及时公告并报中国证监会备案。本基金不同基金份额类别之间不得互相转换。\n",
+              "after_quote": "有关基金份额类别的具体设置等由基金管理人确定，并在招募说明书中公告。根据基金销售情况，在符合法律法规且不损害已有基金份额持有人权益的情况下，基金管理人在履行适当程序后可以增加新的基金份额类别、或者在法律法规和基金合同规定的范围内变更现有基金份额类别的申购费率、调低销售服务费率或变更收费方式、或者停止现有基金份额类别的销售等，调整前基金管理人需及时公告。\n",
+              "proof_kind": "site_final_plan_reconstruction",
+              "one_of_group": ""
+            }
+          ],
+          "operations": [
+            "G05:2"
+          ]
+        },
+        "G06:B1:O1": {
+          "state": "PASS",
+          "artifact_status": "VERIFIED_ABSENT",
+          "rule_id": "G06",
+          "operation_id": "G06:0",
+          "obligation_id": "G06:B1:O1",
+          "sites": [
+            "p128"
+          ],
+          "edit_ids": [
+            "G05+G06:S03_S04_S07_S16_S17_S20#1:T007+S03_S04_S07_S16_S17_S20#1:T008+S03_S04_S07_S16_S17_S20#1:T009"
+          ],
+          "evidence": [
+            {
+              "rule_id": "G06",
+              "operation_id": "G06:0",
+              "obligation_id": "G06:B1:O1",
+              "site_id": "p128",
+              "location": "p128",
+              "before_quote": "有关基金份额类别的具体设置等由基金管理人确定，并在招募说明书中公告。根据基金销售情况，在符合法律法规且不损害已有基金份额持有人权益的情况下，基金管理人在履行适当程序后可以增加新的基金份额类别、或者在法律法规和基金合同规定的范围内变更现有基金份额类别的申购费率、调低赎回费率或变更收费方式、或者停止现有基金份额类别的销售等，调整前基金管理人需及时公告并报中国证监会备案。本基金不同基金份额类别之间不得互相转换。\n",
+              "after_quote": "有关基金份额类别的具体设置等由基金管理人确定，并在招募说明书中公告。根据基金销售情况，在符合法律法规且不损害已有基金份额持有人权益的情况下，基金管理人在履行适当程序后可以增加新的基金份额类别、或者在法律法规和基金合同规定的范围内变更现有基金份额类别的申购费率、调低销售服务费率或变更收费方式、或者停止现有基金份额类别的销售等，调整前基金管理人需及时公告。\n",
+              "proof_kind": "site_final_plan_reconstruction",
+              "one_of_group": ""
+            }
+          ],
+          "failure_code": "",
+          "reason": "",
+          "site_effects": [
+            {
+              "site_id": "p128",
+              "location": "p128",
+              "rule_id": "G06",
+              "operation_id": "G06:0",
+              "obligation_id": "G06:B1:O1",
+              "state": "PASS",
+              "artifact_status": "VERIFIED_ABSENT",
+              "failure_code": "",
+              "before_quote": "有关基金份额类别的具体设置等由基金管理人确定，并在招募说明书中公告。根据基金销售情况，在符合法律法规且不损害已有基金份额持有人权益的情况下，基金管理人在履行适当程序后可以增加新的基金份额类别、或者在法律法规和基金合同规定的范围内变更现有基金份额类别的申购费率、调低赎回费率或变更收费方式、或者停止现有基金份额类别的销售等，调整前基金管理人需及时公告并报中国证监会备案。本基金不同基金份额类别之间不得互相转换。\n",
+              "after_quote": "有关基金份额类别的具体设置等由基金管理人确定，并在招募说明书中公告。根据基金销售情况，在符合法律法规且不损害已有基金份额持有人权益的情况下，基金管理人在履行适当程序后可以增加新的基金份额类别、或者在法律法规和基金合同规定的范围内变更现有基金份额类别的申购费率、调低销售服务费率或变更收费方式、或者停止现有基金份额类别的销售等，调整前基金管理人需及时公告。\n",
+              "proof_kind": "site_final_plan_reconstruction",
+              "one_of_group": ""
+            }
+          ],
+          "operations": [
+            "G06:0"
+          ]
+        },
+        "G08:B1:O1": {
+          "state": "PASS",
+          "artifact_status": "EXPECTED_EFFECT_PRESENT",
+          "rule_id": "G08",
+          "operation_id": "G08:0",
+          "obligation_id": "G08:B1:O1",
+          "sites": [
+            "p204"
+          ],
+          "edit_ids": [
+            "G08:S03_S04_S07_S16_S17_S20#1:T010"
+          ],
+          "evidence": [
+            {
+              "rule_id": "G08",
+              "operation_id": "G08:0",
+              "obligation_id": "G08:B1:O1",
+              "site_id": "p204",
+              "location": "p204",
+              "before_quote": "2、申购份额的计算及余额的处理方式：本基金申购份额的计算详见《招募说明书》。本基金的申购费率由基金管理人决定，并在招募说明书中列示。申购的有效份额为净申购金额除以当日的基金份额净值，有效份额单位为份，上述计算结果均按四舍五入方法，保留到小数点后2位，由此产生的收益或损失由基金财产承担。",
+              "after_quote": "2、申购份额的计算及余额的处理方式：本基金申购份额的计算详见《招募说明书》。本基金A类基金份额在申购时收取申购费用，C类基金份额不收取申购费用。通过直销机构申购本基金A类基金份额不收取申购费。通过直销机构以外的其他销售机构申购本基金的申购费率由基金管理人决定，并在招募说明书中列示。申购的有效份额为净申购金额除以当日的基金份额净值，有效份额单位为份，上述计算结果均按四舍五入方法，保留到小数点后2位，由此产生的收益或损失由基金财产承担。",
+              "proof_kind": "site_final_plan_reconstruction",
+              "one_of_group": ""
+            }
+          ],
+          "failure_code": "",
+          "reason": "",
+          "site_effects": [
+            {
+              "site_id": "p204",
+              "location": "p204",
+              "rule_id": "G08",
+              "operation_id": "G08:0",
+              "obligation_id": "G08:B1:O1",
+              "state": "PASS",
+              "artifact_status": "EXPECTED_EFFECT_PRESENT",
+              "failure_code": "",
+              "before_quote": "2、申购份额的计算及余额的处理方式：本基金申购份额的计算详见《招募说明书》。本基金的申购费率由基金管理人决定，并在招募说明书中列示。申购的有效份额为净申购金额除以当日的基金份额净值，有效份额单位为份，上述计算结果均按四舍五入方法，保留到小数点后2位，由此产生的收益或损失由基金财产承担。",
+              "after_quote": "2、申购份额的计算及余额的处理方式：本基金申购份额的计算详见《招募说明书》。本基金A类基金份额在申购时收取申购费用，C类基金份额不收取申购费用。通过直销机构申购本基金A类基金份额不收取申购费。通过直销机构以外的其他销售机构申购本基金的申购费率由基金管理人决定，并在招募说明书中列示。申购的有效份额为净申购金额除以当日的基金份额净值，有效份额单位为份，上述计算结果均按四舍五入方法，保留到小数点后2位，由此产生的收益或损失由基金财产承担。",
+              "proof_kind": "site_final_plan_reconstruction",
+              "one_of_group": ""
+            }
+          ],
+          "operations": [
+            "G08:0"
+          ]
+        },
+        "G09:B1:O1": {
+          "state": "PASS",
+          "artifact_status": "EXPECTED_EFFECT_PRESENT",
+          "rule_id": "G09",
+          "operation_id": "G09:0",
+          "obligation_id": "G09:B1:O1",
+          "sites": [
+            "p205"
+          ],
+          "edit_ids": [
+            "G09:S03_S04_S07_S16_S17_S20#1:T011"
+          ],
+          "evidence": [
+            {
+              "rule_id": "G09",
+              "operation_id": "G09:0",
+              "obligation_id": "G09:B1:O1",
+              "site_id": "p205",
+              "location": "p205",
+              "before_quote": "3、赎回金额的计算及处理方式：本基金赎回金额的计算详见《招募说明书》，赎回金额单位为元。本基金的赎回费率由基金管理人决定，并在招募说明书中列示。赎回金额为按实际确认的有效赎回份额乘以当日基金份额净值并扣除相应的费用，赎回金额单位为元。上述计算结果均按四舍五入方法，保留到小数点后2位，由此产生的收益或损失由基金财产承担。",
+              "after_quote": "3、赎回金额的计算及处理方式：本基金赎回金额的计算详见《招募说明书》，赎回金额单位为元。本基金的赎回费率由基金管理人决定，并在招募说明书中列示。赎回金额为按实际确认的有效赎回份额乘以当日该类基金份额的基金份额净值并扣除或加上相应的费用，赎回金额单位为元。上述计算结果均按四舍五入方法，保留到小数点后2位，由此产生的收益或损失由基金财产承担。",
+              "proof_kind": "site_final_plan_reconstruction",
+              "one_of_group": ""
+            }
+          ],
+          "failure_code": "",
+          "reason": "",
+          "site_effects": [
+            {
+              "site_id": "p205",
+              "location": "p205",
+              "rule_id": "G09",
+              "operation_id": "G09:0",
+              "obligation_id": "G09:B1:O1",
+              "state": "PASS",
+              "artifact_status": "EXPECTED_EFFECT_PRESENT",
+              "failure_code": "",
+              "before_quote": "3、赎回金额的计算及处理方式：本基金赎回金额的计算详见《招募说明书》，赎回金额单位为元。本基金的赎回费率由基金管理人决定，并在招募说明书中列示。赎回金额为按实际确认的有效赎回份额乘以当日基金份额净值并扣除相应的费用，赎回金额单位为元。上述计算结果均按四舍五入方法，保留到小数点后2位，由此产生的收益或损失由基金财产承担。",
+              "after_quote": "3、赎回金额的计算及处理方式：本基金赎回金额的计算详见《招募说明书》，赎回金额单位为元。本基金的赎回费率由基金管理人决定，并在招募说明书中列示。赎回金额为按实际确认的有效赎回份额乘以当日该类基金份额的基金份额净值并扣除或加上相应的费用，赎回金额单位为元。上述计算结果均按四舍五入方法，保留到小数点后2位，由此产生的收益或损失由基金财产承担。",
+              "proof_kind": "site_final_plan_reconstruction",
+              "one_of_group": ""
+            }
+          ],
+          "operations": [
+            "G09:0"
+          ]
+        },
+        "G11:B1:O1": {
+          "state": "PASS",
+          "artifact_status": "ALREADY_SATISFIED",
+          "rule_id": "G11",
+          "operation_id": "G11:0",
+          "obligation_id": "G11:B1:O1",
+          "sites": [
+            "p206"
+          ],
+          "edit_ids": [],
+          "evidence": [
+            {
+              "rule_id": "G11",
+              "operation_id": "G11:0",
+              "obligation_id": "G11:B1:O1",
+              "site_id": "p206",
+              "location": "p206",
+              "before_quote": "4、申购费用由投资人承担，不列入基金财产。",
+              "after_quote": "4、通过直销机构申购本基金A类基金份额不收取申购费，通过其他销售机构申购本基金A类基金份额的申购费用由投资人承担，不列入基金财产。本基金C类基金份额不收取申购费用。",
+              "proof_kind": "alternative_site_effect",
+              "one_of_group": "G11:history:wording"
+            }
+          ],
+          "failure_code": "",
+          "reason": "",
+          "site_effects": [
+            {
+              "site_id": "p206",
+              "location": "p206",
+              "rule_id": "G11",
+              "operation_id": "G11:0",
+              "obligation_id": "G11:B1:O1",
+              "state": "PASS",
+              "artifact_status": "ALREADY_SATISFIED",
+              "failure_code": "",
+              "before_quote": "4、申购费用由投资人承担，不列入基金财产。",
+              "after_quote": "4、通过直销机构申购本基金A类基金份额不收取申购费，通过其他销售机构申购本基金A类基金份额的申购费用由投资人承担，不列入基金财产。本基金C类基金份额不收取申购费用。",
+              "proof_kind": "alternative_site_effect",
+              "one_of_group": "G11:history:wording"
+            }
+          ],
+          "operations": [
+            "G11:0"
+          ]
+        },
+        "G11:B1:O2": {
+          "state": "PASS",
+          "artifact_status": "EXPECTED_EFFECT_PRESENT",
+          "rule_id": "G11",
+          "operation_id": "G11:1",
+          "obligation_id": "G11:B1:O2",
+          "sites": [
+            "p206"
+          ],
+          "edit_ids": [
+            "G11:S03_S04_S07_S16_S17_S20#1:T012"
+          ],
+          "evidence": [
+            {
+              "rule_id": "G11",
+              "operation_id": "G11:1",
+              "obligation_id": "G11:B1:O2",
+              "site_id": "p206",
+              "location": "p206",
+              "before_quote": "4、申购费用由投资人承担，不列入基金财产。",
+              "after_quote": "4、通过直销机构申购本基金A类基金份额不收取申购费，通过其他销售机构申购本基金A类基金份额的申购费用由投资人承担，不列入基金财产。本基金C类基金份额不收取申购费用。",
+              "proof_kind": "site_final_plan_reconstruction",
+              "one_of_group": "G11:history:wording"
+            }
+          ],
+          "failure_code": "",
+          "reason": "",
+          "site_effects": [
+            {
+              "site_id": "p206",
+              "location": "p206",
+              "rule_id": "G11",
+              "operation_id": "G11:1",
+              "obligation_id": "G11:B1:O2",
+              "state": "PASS",
+              "artifact_status": "EXPECTED_EFFECT_PRESENT",
+              "failure_code": "",
+              "before_quote": "4、申购费用由投资人承担，不列入基金财产。",
+              "after_quote": "4、通过直销机构申购本基金A类基金份额不收取申购费，通过其他销售机构申购本基金A类基金份额的申购费用由投资人承担，不列入基金财产。本基金C类基金份额不收取申购费用。",
+              "proof_kind": "site_final_plan_reconstruction",
+              "one_of_group": "G11:history:wording"
+            }
+          ],
+          "operations": [
+            "G11:1"
+          ]
+        },
+        "G12:B1:O1": {
+          "state": "PASS",
+          "artifact_status": "EXPECTED_EFFECT_PRESENT",
+          "rule_id": "G12",
+          "operation_id": "G12:0",
+          "obligation_id": "G12:B1:O1",
+          "sites": [
+            "p207"
+          ],
+          "edit_ids": [
+            "G12+G13:S03_S04_S07_S16_S17_S20#1:T013+S03_S04_S07_S16_S17_S20#1:T014"
+          ],
+          "evidence": [
+            {
+              "rule_id": "G12",
+              "operation_id": "G12:0",
+              "obligation_id": "G12:B1:O1",
+              "site_id": "p207",
+              "location": "p207",
+              "before_quote": "5、赎回费用由赎回基金份额的基金份额持有人承担，在基金份额持有人赎回基金份额时收取。赎回费用归入基金财产的比例应根据相关规定执行，并在招募说明书中列示。其中，对持续持有期少于7日的投资者收取不低于1.50%的赎回费，并全额计入基金财产。",
+              "after_quote": "5、赎回费用由赎回基金份额的基金份额持有人承担，在基金份额持有人赎回基金份额时收取。赎回费用全额计入基金财产。",
+              "proof_kind": "site_final_plan_reconstruction",
+              "one_of_group": "G12:history:wording"
+            }
+          ],
+          "failure_code": "",
+          "reason": "",
+          "site_effects": [
+            {
+              "site_id": "p207",
+              "location": "p207",
+              "rule_id": "G12",
+              "operation_id": "G12:0",
+              "obligation_id": "G12:B1:O1",
+              "state": "PASS",
+              "artifact_status": "EXPECTED_EFFECT_PRESENT",
+              "failure_code": "",
+              "before_quote": "5、赎回费用由赎回基金份额的基金份额持有人承担，在基金份额持有人赎回基金份额时收取。赎回费用归入基金财产的比例应根据相关规定执行，并在招募说明书中列示。其中，对持续持有期少于7日的投资者收取不低于1.50%的赎回费，并全额计入基金财产。",
+              "after_quote": "5、赎回费用由赎回基金份额的基金份额持有人承担，在基金份额持有人赎回基金份额时收取。赎回费用全额计入基金财产。",
+              "proof_kind": "site_final_plan_reconstruction",
+              "one_of_group": "G12:history:wording"
+            }
+          ],
+          "operations": [
+            "G12:0"
+          ]
+        },
+        "G12:B1:O2": {
+          "state": "PASS",
+          "artifact_status": "ALREADY_SATISFIED",
+          "rule_id": "G12",
+          "operation_id": "G12:1",
+          "obligation_id": "G12:B1:O2",
+          "sites": [
+            "p207"
+          ],
+          "edit_ids": [],
+          "evidence": [
+            {
+              "rule_id": "G12",
+              "operation_id": "G12:1",
+              "obligation_id": "G12:B1:O2",
+              "site_id": "p207",
+              "location": "p207",
+              "before_quote": "5、赎回费用由赎回基金份额的基金份额持有人承担，在基金份额持有人赎回基金份额时收取。赎回费用归入基金财产的比例应根据相关规定执行，并在招募说明书中列示。其中，对持续持有期少于7日的投资者收取不低于1.50%的赎回费，并全额计入基金财产。",
+              "after_quote": "5、赎回费用由赎回基金份额的基金份额持有人承担，在基金份额持有人赎回基金份额时收取。赎回费用全额计入基金财产。",
+              "proof_kind": "alternative_site_effect",
+              "one_of_group": "G12:history:wording"
+            }
+          ],
+          "failure_code": "",
+          "reason": "",
+          "site_effects": [
+            {
+              "site_id": "p207",
+              "location": "p207",
+              "rule_id": "G12",
+              "operation_id": "G12:1",
+              "obligation_id": "G12:B1:O2",
+              "state": "PASS",
+              "artifact_status": "ALREADY_SATISFIED",
+              "failure_code": "",
+              "before_quote": "5、赎回费用由赎回基金份额的基金份额持有人承担，在基金份额持有人赎回基金份额时收取。赎回费用归入基金财产的比例应根据相关规定执行，并在招募说明书中列示。其中，对持续持有期少于7日的投资者收取不低于1.50%的赎回费，并全额计入基金财产。",
+              "after_quote": "5、赎回费用由赎回基金份额的基金份额持有人承担，在基金份额持有人赎回基金份额时收取。赎回费用全额计入基金财产。",
+              "proof_kind": "alternative_site_effect",
+              "one_of_group": "G12:history:wording"
+            }
+          ],
+          "operations": [
+            "G12:1"
+          ]
+        },
+        "G13:B1:O1": {
+          "state": "PASS",
+          "artifact_status": "VERIFIED_ABSENT",
+          "rule_id": "G13",
+          "operation_id": "G13:0",
+          "obligation_id": "G13:B1:O1",
+          "sites": [
+            "p207"
+          ],
+          "edit_ids": [
+            "G12+G13:S03_S04_S07_S16_S17_S20#1:T013+S03_S04_S07_S16_S17_S20#1:T014"
+          ],
+          "evidence": [
+            {
+              "rule_id": "G13",
+              "operation_id": "G13:0",
+              "obligation_id": "G13:B1:O1",
+              "site_id": "p207",
+              "location": "p207",
+              "before_quote": "5、赎回费用由赎回基金份额的基金份额持有人承担，在基金份额持有人赎回基金份额时收取。赎回费用归入基金财产的比例应根据相关规定执行，并在招募说明书中列示。其中，对持续持有期少于7日的投资者收取不低于1.50%的赎回费，并全额计入基金财产。",
+              "after_quote": "5、赎回费用由赎回基金份额的基金份额持有人承担，在基金份额持有人赎回基金份额时收取。赎回费用全额计入基金财产。",
+              "proof_kind": "site_final_plan_reconstruction",
+              "one_of_group": ""
+            }
+          ],
+          "failure_code": "",
+          "reason": "",
+          "site_effects": [
+            {
+              "site_id": "p207",
+              "location": "p207",
+              "rule_id": "G13",
+              "operation_id": "G13:0",
+              "obligation_id": "G13:B1:O1",
+              "state": "PASS",
+              "artifact_status": "VERIFIED_ABSENT",
+              "failure_code": "",
+              "before_quote": "5、赎回费用由赎回基金份额的基金份额持有人承担，在基金份额持有人赎回基金份额时收取。赎回费用归入基金财产的比例应根据相关规定执行，并在招募说明书中列示。其中，对持续持有期少于7日的投资者收取不低于1.50%的赎回费，并全额计入基金财产。",
+              "after_quote": "5、赎回费用由赎回基金份额的基金份额持有人承担，在基金份额持有人赎回基金份额时收取。赎回费用全额计入基金财产。",
+              "proof_kind": "site_final_plan_reconstruction",
+              "one_of_group": ""
+            }
+          ],
+          "operations": [
+            "G13:0"
+          ]
+        },
+        "G14:B2:O1": {
+          "state": "PASS",
+          "artifact_status": "EXPECTED_EFFECT_PRESENT",
+          "rule_id": "G14",
+          "operation_id": "G14:3",
+          "obligation_id": "G14:B2:O1",
+          "sites": [
+            "p209"
+          ],
+          "edit_ids": [
+            "G14:S03_S04_S07_S16_S17_S20#1:T015"
+          ],
+          "evidence": [
+            {
+              "rule_id": "G14",
+              "operation_id": "G14:3",
+              "obligation_id": "G14:B2:O1",
+              "site_id": "p209",
+              "location": "p209",
+              "before_quote": "7、在对基金份额持有人利益无实质性不利影响的前提下，基金管理人可以在不违反法律法规规定及基金合同约定的情形下根据市场情况制定基金促销计划。针对基金投资者定期和不定期地开展基金促销活动。在基金促销活动期间，按相关监管部门要求履行必要手续后，基金管理人可以适当调低基金申购费率和基金赎回费率。",
+              "after_quote": "7、在对基金份额持有人利益无实质性不利影响的前提下，基金管理人可以在不违反法律法规规定及基金合同约定的情形下根据市场情况制定基金促销计划。针对基金投资者定期和不定期地开展基金促销活动。在基金促销活动期间，按相关监管部门要求履行必要手续后，基金管理人可以适当调低基金申购费率和销售服务费率。",
+              "proof_kind": "site_final_plan_reconstruction",
+              "one_of_group": "G14:history:multiple"
+            }
+          ],
+          "failure_code": "",
+          "reason": "",
+          "site_effects": [
+            {
+              "site_id": "p209",
+              "location": "p209",
+              "rule_id": "G14",
+              "operation_id": "G14:3",
+              "obligation_id": "G14:B2:O1",
+              "state": "PASS",
+              "artifact_status": "EXPECTED_EFFECT_PRESENT",
+              "failure_code": "",
+              "before_quote": "7、在对基金份额持有人利益无实质性不利影响的前提下，基金管理人可以在不违反法律法规规定及基金合同约定的情形下根据市场情况制定基金促销计划。针对基金投资者定期和不定期地开展基金促销活动。在基金促销活动期间，按相关监管部门要求履行必要手续后，基金管理人可以适当调低基金申购费率和基金赎回费率。",
+              "after_quote": "7、在对基金份额持有人利益无实质性不利影响的前提下，基金管理人可以在不违反法律法规规定及基金合同约定的情形下根据市场情况制定基金促销计划。针对基金投资者定期和不定期地开展基金促销活动。在基金促销活动期间，按相关监管部门要求履行必要手续后，基金管理人可以适当调低基金申购费率和销售服务费率。",
+              "proof_kind": "site_final_plan_reconstruction",
+              "one_of_group": "G14:history:multiple"
+            }
+          ],
+          "operations": [
+            "G14:3"
+          ]
+        },
+        "G14:B2:O2": {
+          "state": "PASS",
+          "artifact_status": "ALREADY_SATISFIED",
+          "rule_id": "G14",
+          "operation_id": "G14:4",
+          "obligation_id": "G14:B2:O2",
+          "sites": [
+            "p209"
+          ],
+          "edit_ids": [],
+          "evidence": [
+            {
+              "rule_id": "G14",
+              "operation_id": "G14:4",
+              "obligation_id": "G14:B2:O2",
+              "site_id": "p209",
+              "location": "p209",
+              "before_quote": "7、在对基金份额持有人利益无实质性不利影响的前提下，基金管理人可以在不违反法律法规规定及基金合同约定的情形下根据市场情况制定基金促销计划。针对基金投资者定期和不定期地开展基金促销活动。在基金促销活动期间，按相关监管部门要求履行必要手续后，基金管理人可以适当调低基金申购费率和基金赎回费率。",
+              "after_quote": "7、在对基金份额持有人利益无实质性不利影响的前提下，基金管理人可以在不违反法律法规规定及基金合同约定的情形下根据市场情况制定基金促销计划。针对基金投资者定期和不定期地开展基金促销活动。在基金促销活动期间，按相关监管部门要求履行必要手续后，基金管理人可以适当调低基金申购费率和销售服务费率。",
+              "proof_kind": "alternative_site_effect",
+              "one_of_group": "G14:history:multiple"
+            }
+          ],
+          "failure_code": "",
+          "reason": "",
+          "site_effects": [
+            {
+              "site_id": "p209",
+              "location": "p209",
+              "rule_id": "G14",
+              "operation_id": "G14:4",
+              "obligation_id": "G14:B2:O2",
+              "state": "PASS",
+              "artifact_status": "ALREADY_SATISFIED",
+              "failure_code": "",
+              "before_quote": "7、在对基金份额持有人利益无实质性不利影响的前提下，基金管理人可以在不违反法律法规规定及基金合同约定的情形下根据市场情况制定基金促销计划。针对基金投资者定期和不定期地开展基金促销活动。在基金促销活动期间，按相关监管部门要求履行必要手续后，基金管理人可以适当调低基金申购费率和基金赎回费率。",
+              "after_quote": "7、在对基金份额持有人利益无实质性不利影响的前提下，基金管理人可以在不违反法律法规规定及基金合同约定的情形下根据市场情况制定基金促销计划。针对基金投资者定期和不定期地开展基金促销活动。在基金促销活动期间，按相关监管部门要求履行必要手续后，基金管理人可以适当调低基金申购费率和销售服务费率。",
+              "proof_kind": "alternative_site_effect",
+              "one_of_group": "G14:history:multiple"
+            }
+          ],
+          "operations": [
+            "G14:4"
+          ]
+        },
+        "G14:B2:O3": {
+          "state": "PASS",
+          "artifact_status": "ALREADY_SATISFIED",
+          "rule_id": "G14",
+          "operation_id": "G14:5",
+          "obligation_id": "G14:B2:O3",
+          "sites": [
+            "p209"
+          ],
+          "edit_ids": [],
+          "evidence": [
+            {
+              "rule_id": "G14",
+              "operation_id": "G14:5",
+              "obligation_id": "G14:B2:O3",
+              "site_id": "p209",
+              "location": "p209",
+              "before_quote": "7、在对基金份额持有人利益无实质性不利影响的前提下，基金管理人可以在不违反法律法规规定及基金合同约定的情形下根据市场情况制定基金促销计划。针对基金投资者定期和不定期地开展基金促销活动。在基金促销活动期间，按相关监管部门要求履行必要手续后，基金管理人可以适当调低基金申购费率和基金赎回费率。",
+              "after_quote": "7、在对基金份额持有人利益无实质性不利影响的前提下，基金管理人可以在不违反法律法规规定及基金合同约定的情形下根据市场情况制定基金促销计划。针对基金投资者定期和不定期地开展基金促销活动。在基金促销活动期间，按相关监管部门要求履行必要手续后，基金管理人可以适当调低基金申购费率和销售服务费率。",
+              "proof_kind": "alternative_site_effect",
+              "one_of_group": "G14:history:multiple"
+            }
+          ],
+          "failure_code": "",
+          "reason": "",
+          "site_effects": [
+            {
+              "site_id": "p209",
+              "location": "p209",
+              "rule_id": "G14",
+              "operation_id": "G14:5",
+              "obligation_id": "G14:B2:O3",
+              "state": "PASS",
+              "artifact_status": "ALREADY_SATISFIED",
+              "failure_code": "",
+              "before_quote": "7、在对基金份额持有人利益无实质性不利影响的前提下，基金管理人可以在不违反法律法规规定及基金合同约定的情形下根据市场情况制定基金促销计划。针对基金投资者定期和不定期地开展基金促销活动。在基金促销活动期间，按相关监管部门要求履行必要手续后，基金管理人可以适当调低基金申购费率和基金赎回费率。",
+              "after_quote": "7、在对基金份额持有人利益无实质性不利影响的前提下，基金管理人可以在不违反法律法规规定及基金合同约定的情形下根据市场情况制定基金促销计划。针对基金投资者定期和不定期地开展基金促销活动。在基金促销活动期间，按相关监管部门要求履行必要手续后，基金管理人可以适当调低基金申购费率和销售服务费率。",
+              "proof_kind": "alternative_site_effect",
+              "one_of_group": "G14:history:multiple"
+            }
+          ],
+          "operations": [
+            "G14:5"
+          ]
+        },
+        "G15:B1:O1": {
+          "state": "PASS",
+          "artifact_status": "VERIFIED_ABSENT",
+          "rule_id": "G15",
+          "operation_id": "G15:0",
+          "obligation_id": "G15:B1:O1",
+          "sites": [
+            "p1258",
+            "p800"
+          ],
+          "edit_ids": [
+            "G15:S03_S04_S07_S16_S17_S20#1:T016",
+            "G16+G15:S25_S26#1:T001+Y003"
+          ],
+          "evidence": [
+            {
+              "rule_id": "G15",
+              "operation_id": "G15:0",
+              "obligation_id": "G15:B1:O1",
+              "site_id": "p800",
+              "location": "p800",
+              "before_quote": "基金销售服务费每日计提，按月支付。由基金托管人根据与基金管理人核对一致的财务数据，在次月初5个工作日内按照指定的账户路径进行支付，注册登记机构收到后按相关合同规定支付给基金销售机构等。若遇法定节假日、公休假等，支付日期顺延。",
+              "after_quote": "",
+              "proof_kind": "site_final_plan_reconstruction",
+              "one_of_group": ""
+            },
+            {
+              "rule_id": "G15",
+              "operation_id": "G15:0",
+              "obligation_id": "G15:B1:O1",
+              "site_id": "p1258",
+              "location": "p1258",
+              "before_quote": "基金销售服务费每日计提，按月支付。由基金托管人根据与基金管理人核对一致的财务数据，自动在次月初5个工作日内按照指定的账户路径进行支付，注册登记机构收到后按相关合同规定支付给基金销售机构等。若遇法定节假日、公休假等，支付日期顺延。",
+              "after_quote": "销售服务费每日计提。（1）直销机构：对于投资者通过直销机构持有的C类基金份额计提的销售服务费，在投资者赎回C类基金份额或基金合同终止时，随赎回款（或清算款）一并返还给投资者。基金管理人基金销售子公司销售母公司所管理基金的，按照本条要求执行。（2）直销机构以外的其他销售机构：对于投资者持续持有期限未超过一年（即365天，下同）的基金份额收取的销售服务费，按月支付，基金托管人按照与基金管理人协商一致的方式于次月首日起5个工作日内按照指定的账户路径进行支付。若遇法定节假日、公休日或不可抗力等，支付日期顺延。对于持续持有期限超过一年的基金份额，持有超过一年后继续计提的销售服务费，在投资者赎回基金份额或基金合同终止时，随赎回款（或清算款）一并返还给投资者。",
+              "proof_kind": "site_final_plan_reconstruction",
+              "one_of_group": ""
+            }
+          ],
+          "failure_code": "",
+          "reason": "",
+          "site_effects": [
+            {
+              "site_id": "p800",
+              "location": "p800",
+              "rule_id": "G15",
+              "operation_id": "G15:0",
+              "obligation_id": "G15:B1:O1",
+              "state": "PASS",
+              "artifact_status": "VERIFIED_ABSENT",
+              "failure_code": "",
+              "before_quote": "基金销售服务费每日计提，按月支付。由基金托管人根据与基金管理人核对一致的财务数据，在次月初5个工作日内按照指定的账户路径进行支付，注册登记机构收到后按相关合同规定支付给基金销售机构等。若遇法定节假日、公休假等，支付日期顺延。",
+              "after_quote": "",
+              "proof_kind": "site_final_plan_reconstruction",
+              "one_of_group": ""
+            },
+            {
+              "site_id": "p1258",
+              "location": "p1258",
+              "rule_id": "G15",
+              "operation_id": "G15:0",
+              "obligation_id": "G15:B1:O1",
+              "state": "PASS",
+              "artifact_status": "VERIFIED_ABSENT",
+              "failure_code": "",
+              "before_quote": "基金销售服务费每日计提，按月支付。由基金托管人根据与基金管理人核对一致的财务数据，自动在次月初5个工作日内按照指定的账户路径进行支付，注册登记机构收到后按相关合同规定支付给基金销售机构等。若遇法定节假日、公休假等，支付日期顺延。",
+              "after_quote": "销售服务费每日计提。（1）直销机构：对于投资者通过直销机构持有的C类基金份额计提的销售服务费，在投资者赎回C类基金份额或基金合同终止时，随赎回款（或清算款）一并返还给投资者。基金管理人基金销售子公司销售母公司所管理基金的，按照本条要求执行。（2）直销机构以外的其他销售机构：对于投资者持续持有期限未超过一年（即365天，下同）的基金份额收取的销售服务费，按月支付，基金托管人按照与基金管理人协商一致的方式于次月首日起5个工作日内按照指定的账户路径进行支付。若遇法定节假日、公休日或不可抗力等，支付日期顺延。对于持续持有期限超过一年的基金份额，持有超过一年后继续计提的销售服务费，在投资者赎回基金份额或基金合同终止时，随赎回款（或清算款）一并返还给投资者。",
+              "proof_kind": "site_final_plan_reconstruction",
+              "one_of_group": ""
+            }
+          ],
+          "operations": [
+            "G15:0"
+          ]
+        },
+        "G16:B1:O1": {
+          "state": "PASS",
+          "artifact_status": "EXPECTED_EFFECT_PRESENT",
+          "rule_id": "G16",
+          "operation_id": "G16:0",
+          "obligation_id": "G16:B1:O1",
+          "sites": [
+            "p1258",
+            "p802"
+          ],
+          "edit_ids": [
+            "G16+G17:S03_S04_S07_S16_S17_S20#1:T017+Y004",
+            "G16+G15:S25_S26#1:T001+Y003"
+          ],
+          "evidence": [
+            {
+              "rule_id": "G16",
+              "operation_id": "G16:0",
+              "obligation_id": "G16:B1:O1",
+              "site_id": "p802",
+              "location": "p802",
+              "before_quote": "销售服务费的使用范围不包括基金募集期间的上述费用。",
+              "after_quote": "销售服务费每日计提。（1）直销机构：对于投资者通过直销机构持有的C类基金份额计提的销售服务费，在投资者赎回C类基金份额或基金合同终止时，随赎回款（或清算款）一并返还给投资者。基金管理人基金销售子公司销售母公司所管理基金的，按照本条要求执行。（2）直销机构以外的其他销售机构：对于投资者持续持有期限未超过一年（即365天，下同）的基金份额收取的销售服务费，按月支付，基金托管人按照与基金管理人协商一致的方式于次月首日起5个工作日内按照指定的账户路径进行支付。若遇法定节假日、公休日或不可抗力等，支付日期顺延。对于持续持有期限超过一年的基金份额，持有超过一年后继续计提的销售服务费，在投资者赎回基金份额或基金合同终止时，随赎回款（或清算款）一并返还给投资者。",
+              "proof_kind": "site_final_plan_reconstruction",
+              "one_of_group": ""
+            },
+            {
+              "rule_id": "G16",
+              "operation_id": "G16:0",
+              "obligation_id": "G16:B1:O1",
+              "site_id": "p1258",
+              "location": "p1258",
+              "before_quote": "基金销售服务费每日计提，按月支付。由基金托管人根据与基金管理人核对一致的财务数据，自动在次月初5个工作日内按照指定的账户路径进行支付，注册登记机构收到后按相关合同规定支付给基金销售机构等。若遇法定节假日、公休假等，支付日期顺延。",
+              "after_quote": "销售服务费每日计提。（1）直销机构：对于投资者通过直销机构持有的C类基金份额计提的销售服务费，在投资者赎回C类基金份额或基金合同终止时，随赎回款（或清算款）一并返还给投资者。基金管理人基金销售子公司销售母公司所管理基金的，按照本条要求执行。（2）直销机构以外的其他销售机构：对于投资者持续持有期限未超过一年（即365天，下同）的基金份额收取的销售服务费，按月支付，基金托管人按照与基金管理人协商一致的方式于次月首日起5个工作日内按照指定的账户路径进行支付。若遇法定节假日、公休日或不可抗力等，支付日期顺延。对于持续持有期限超过一年的基金份额，持有超过一年后继续计提的销售服务费，在投资者赎回基金份额或基金合同终止时，随赎回款（或清算款）一并返还给投资者。",
+              "proof_kind": "site_final_plan_reconstruction",
+              "one_of_group": ""
+            }
+          ],
+          "failure_code": "",
+          "reason": "",
+          "site_effects": [
+            {
+              "site_id": "p802",
+              "location": "p802",
+              "rule_id": "G16",
+              "operation_id": "G16:0",
+              "obligation_id": "G16:B1:O1",
+              "state": "PASS",
+              "artifact_status": "EXPECTED_EFFECT_PRESENT",
+              "failure_code": "",
+              "before_quote": "销售服务费的使用范围不包括基金募集期间的上述费用。",
+              "after_quote": "销售服务费每日计提。（1）直销机构：对于投资者通过直销机构持有的C类基金份额计提的销售服务费，在投资者赎回C类基金份额或基金合同终止时，随赎回款（或清算款）一并返还给投资者。基金管理人基金销售子公司销售母公司所管理基金的，按照本条要求执行。（2）直销机构以外的其他销售机构：对于投资者持续持有期限未超过一年（即365天，下同）的基金份额收取的销售服务费，按月支付，基金托管人按照与基金管理人协商一致的方式于次月首日起5个工作日内按照指定的账户路径进行支付。若遇法定节假日、公休日或不可抗力等，支付日期顺延。对于持续持有期限超过一年的基金份额，持有超过一年后继续计提的销售服务费，在投资者赎回基金份额或基金合同终止时，随赎回款（或清算款）一并返还给投资者。",
+              "proof_kind": "site_final_plan_reconstruction",
+              "one_of_group": ""
+            },
+            {
+              "site_id": "p1258",
+              "location": "p1258",
+              "rule_id": "G16",
+              "operation_id": "G16:0",
+              "obligation_id": "G16:B1:O1",
+              "state": "PASS",
+              "artifact_status": "EXPECTED_EFFECT_PRESENT",
+              "failure_code": "",
+              "before_quote": "基金销售服务费每日计提，按月支付。由基金托管人根据与基金管理人核对一致的财务数据，自动在次月初5个工作日内按照指定的账户路径进行支付，注册登记机构收到后按相关合同规定支付给基金销售机构等。若遇法定节假日、公休假等，支付日期顺延。",
+              "after_quote": "销售服务费每日计提。（1）直销机构：对于投资者通过直销机构持有的C类基金份额计提的销售服务费，在投资者赎回C类基金份额或基金合同终止时，随赎回款（或清算款）一并返还给投资者。基金管理人基金销售子公司销售母公司所管理基金的，按照本条要求执行。（2）直销机构以外的其他销售机构：对于投资者持续持有期限未超过一年（即365天，下同）的基金份额收取的销售服务费，按月支付，基金托管人按照与基金管理人协商一致的方式于次月首日起5个工作日内按照指定的账户路径进行支付。若遇法定节假日、公休日或不可抗力等，支付日期顺延。对于持续持有期限超过一年的基金份额，持有超过一年后继续计提的销售服务费，在投资者赎回基金份额或基金合同终止时，随赎回款（或清算款）一并返还给投资者。",
+              "proof_kind": "site_final_plan_reconstruction",
+              "one_of_group": ""
+            }
+          ],
+          "operations": [
+            "G16:0"
+          ]
+        },
+        "G17:B1:O1": {
+          "state": "PASS",
+          "artifact_status": "VERIFIED_ABSENT",
+          "rule_id": "G17",
+          "operation_id": "G17:0",
+          "obligation_id": "G17:B1:O1",
+          "sites": [
+            "p801",
+            "p802"
+          ],
+          "edit_ids": [
+            "G16+G17:S03_S04_S07_S16_S17_S20#1:T017+Y004",
+            "G17:Y004"
+          ],
+          "evidence": [
+            {
+              "rule_id": "G17",
+              "operation_id": "G17:0",
+              "obligation_id": "G17:B1:O1",
+              "site_id": "p802",
+              "location": "p802",
+              "before_quote": "销售服务费的使用范围不包括基金募集期间的上述费用。",
+              "after_quote": "销售服务费每日计提。（1）直销机构：对于投资者通过直销机构持有的C类基金份额计提的销售服务费，在投资者赎回C类基金份额或基金合同终止时，随赎回款（或清算款）一并返还给投资者。基金管理人基金销售子公司销售母公司所管理基金的，按照本条要求执行。（2）直销机构以外的其他销售机构：对于投资者持续持有期限未超过一年（即365天，下同）的基金份额收取的销售服务费，按月支付，基金托管人按照与基金管理人协商一致的方式于次月首日起5个工作日内按照指定的账户路径进行支付。若遇法定节假日、公休日或不可抗力等，支付日期顺延。对于持续持有期限超过一年的基金份额，持有超过一年后继续计提的销售服务费，在投资者赎回基金份额或基金合同终止时，随赎回款（或清算款）一并返还给投资者。",
+              "proof_kind": "site_final_plan_reconstruction",
+              "one_of_group": ""
+            },
+            {
+              "rule_id": "G17",
+              "operation_id": "G17:0",
+              "obligation_id": "G17:B1:O1",
+              "site_id": "p801",
+              "location": "p801",
+              "before_quote": "销售服务费主要用于支付销售机构佣金、以及基金管理人的基金行销广告费、促销活动费、基金份额持有人服务费等。",
+              "after_quote": "",
+              "proof_kind": "site_final_plan_reconstruction",
+              "one_of_group": ""
+            }
+          ],
+          "failure_code": "",
+          "reason": "",
+          "site_effects": [
+            {
+              "site_id": "p802",
+              "location": "p802",
+              "rule_id": "G17",
+              "operation_id": "G17:0",
+              "obligation_id": "G17:B1:O1",
+              "state": "PASS",
+              "artifact_status": "VERIFIED_ABSENT",
+              "failure_code": "",
+              "before_quote": "销售服务费的使用范围不包括基金募集期间的上述费用。",
+              "after_quote": "销售服务费每日计提。（1）直销机构：对于投资者通过直销机构持有的C类基金份额计提的销售服务费，在投资者赎回C类基金份额或基金合同终止时，随赎回款（或清算款）一并返还给投资者。基金管理人基金销售子公司销售母公司所管理基金的，按照本条要求执行。（2）直销机构以外的其他销售机构：对于投资者持续持有期限未超过一年（即365天，下同）的基金份额收取的销售服务费，按月支付，基金托管人按照与基金管理人协商一致的方式于次月首日起5个工作日内按照指定的账户路径进行支付。若遇法定节假日、公休日或不可抗力等，支付日期顺延。对于持续持有期限超过一年的基金份额，持有超过一年后继续计提的销售服务费，在投资者赎回基金份额或基金合同终止时，随赎回款（或清算款）一并返还给投资者。",
+              "proof_kind": "site_final_plan_reconstruction",
+              "one_of_group": ""
+            },
+            {
+              "site_id": "p801",
+              "location": "p801",
+              "rule_id": "G17",
+              "operation_id": "G17:0",
+              "obligation_id": "G17:B1:O1",
+              "state": "PASS",
+              "artifact_status": "VERIFIED_ABSENT",
+              "failure_code": "",
+              "before_quote": "销售服务费主要用于支付销售机构佣金、以及基金管理人的基金行销广告费、促销活动费、基金份额持有人服务费等。",
+              "after_quote": "",
+              "proof_kind": "site_final_plan_reconstruction",
+              "one_of_group": ""
+            }
+          ],
+          "operations": [
+            "G17:0"
+          ]
+        },
+        "G18:B1:O1": {
+          "state": "PASS",
+          "artifact_status": "EXPECTED_EFFECT_PRESENT",
+          "rule_id": "G18",
+          "operation_id": "G18:0",
+          "obligation_id": "G18:B1:O1",
+          "sites": [
+            "p1228",
+            "p827"
+          ],
+          "edit_ids": [
+            "G18:S03_S04_S07_S16_S17_S20#1:T018",
+            "G18:S25_S26#1:T002"
+          ],
+          "evidence": [
+            {
+              "rule_id": "G18",
+              "operation_id": "G18:0",
+              "obligation_id": "G18:B1:O1",
+              "site_id": "p827",
+              "location": "p827",
+              "before_quote": "4、由于本基金A类基金份额不收取销售服务费，而C类基金份额收取销售服务费，各基金份额类别对应的可分配收益将有所不同。本基金同一类别的每一基金份额享有同等分配权；",
+              "after_quote": "4、由于本基金A类基金份额和C类基金份额费用收取不同，各基金份额类别对应的可分配收益将有所不同。本基金同一类别的每一基金份额享有同等分配权；",
+              "proof_kind": "site_final_plan_reconstruction",
+              "one_of_group": ""
+            },
+            {
+              "rule_id": "G18",
+              "operation_id": "G18:0",
+              "obligation_id": "G18:B1:O1",
+              "site_id": "p1228",
+              "location": "p1228",
+              "before_quote": "4、由于本基金A类基金份额不收取销售服务费，而C类基金份额收取销售服务费，各基金份额类别对应的可分配收益将有所不同。本基金同一类别的本基金每一基金份额享有同等分配权；",
+              "after_quote": "4、由于本基金A类基金份额和C类基金份额费用收取不同，各基金份额类别对应的可分配收益将有所不同。本基金同一类别的本基金每一基金份额享有同等分配权；",
+              "proof_kind": "site_final_plan_reconstruction",
+              "one_of_group": ""
+            }
+          ],
+          "failure_code": "",
+          "reason": "",
+          "site_effects": [
+            {
+              "site_id": "p827",
+              "location": "p827",
+              "rule_id": "G18",
+              "operation_id": "G18:0",
+              "obligation_id": "G18:B1:O1",
+              "state": "PASS",
+              "artifact_status": "EXPECTED_EFFECT_PRESENT",
+              "failure_code": "",
+              "before_quote": "4、由于本基金A类基金份额不收取销售服务费，而C类基金份额收取销售服务费，各基金份额类别对应的可分配收益将有所不同。本基金同一类别的每一基金份额享有同等分配权；",
+              "after_quote": "4、由于本基金A类基金份额和C类基金份额费用收取不同，各基金份额类别对应的可分配收益将有所不同。本基金同一类别的每一基金份额享有同等分配权；",
+              "proof_kind": "site_final_plan_reconstruction",
+              "one_of_group": ""
+            },
+            {
+              "site_id": "p1228",
+              "location": "p1228",
+              "rule_id": "G18",
+              "operation_id": "G18:0",
+              "obligation_id": "G18:B1:O1",
+              "state": "PASS",
+              "artifact_status": "EXPECTED_EFFECT_PRESENT",
+              "failure_code": "",
+              "before_quote": "4、由于本基金A类基金份额不收取销售服务费，而C类基金份额收取销售服务费，各基金份额类别对应的可分配收益将有所不同。本基金同一类别的本基金每一基金份额享有同等分配权；",
+              "after_quote": "4、由于本基金A类基金份额和C类基金份额费用收取不同，各基金份额类别对应的可分配收益将有所不同。本基金同一类别的本基金每一基金份额享有同等分配权；",
+              "proof_kind": "site_final_plan_reconstruction",
+              "one_of_group": ""
+            }
+          ],
+          "operations": [
+            "G18:0"
+          ]
+        },
+        "G22:B1:O1": {
+          "state": "PASS",
+          "artifact_status": "EXPECTED_EFFECT_PRESENT",
+          "rule_id": "G22",
+          "operation_id": "G22:0",
+          "obligation_id": "G22:B1:O1",
+          "sites": [
+            "p1346",
+            "p978"
+          ],
+          "edit_ids": [
+            "G22:S03_S04_S07_S16_S17_S20#1:T019",
+            "G22:S25_S26#1:T003"
+          ],
+          "evidence": [
+            {
+              "rule_id": "G22",
+              "operation_id": "G22:0",
+              "obligation_id": "G22:B1:O1",
+              "site_id": "p978",
+              "location": "p978",
+              "before_quote": "依据基金财产清算的分配方案，将基金财产清算后的全部剩余资产扣除基金财产清算费用、交纳所欠税款并清偿基金债务后，按基金份额持有人持有的基金份额比例进行分配。",
+              "after_quote": "依据基金财产清算的分配方案，将基金财产清算后的全部剩余资产扣除基金财产清算费用、交纳所欠税款并清偿基金债务后，按基金份额持有人持有的基金份额比例进行分配，并加上返还基金份额持有人的销售服务费（如有）。",
+              "proof_kind": "site_final_plan_reconstruction",
+              "one_of_group": ""
+            },
+            {
+              "rule_id": "G22",
+              "operation_id": "G22:0",
+              "obligation_id": "G22:B1:O1",
+              "site_id": "p1346",
+              "location": "p1346",
+              "before_quote": "依据基金财产清算的分配方案，将基金财产清算后的全部剩余资产扣除基金财产清算费用、交纳所欠税款并清偿基金债务后，按基金份额持有人持有的基金份额比例进行分配。",
+              "after_quote": "依据基金财产清算的分配方案，将基金财产清算后的全部剩余资产扣除基金财产清算费用、交纳所欠税款并清偿基金债务后，按基金份额持有人持有的基金份额比例进行分配，并加上返还基金份额持有人的销售服务费（如有）。",
+              "proof_kind": "site_final_plan_reconstruction",
+              "one_of_group": ""
+            }
+          ],
+          "failure_code": "",
+          "reason": "",
+          "site_effects": [
+            {
+              "site_id": "p978",
+              "location": "p978",
+              "rule_id": "G22",
+              "operation_id": "G22:0",
+              "obligation_id": "G22:B1:O1",
+              "state": "PASS",
+              "artifact_status": "EXPECTED_EFFECT_PRESENT",
+              "failure_code": "",
+              "before_quote": "依据基金财产清算的分配方案，将基金财产清算后的全部剩余资产扣除基金财产清算费用、交纳所欠税款并清偿基金债务后，按基金份额持有人持有的基金份额比例进行分配。",
+              "after_quote": "依据基金财产清算的分配方案，将基金财产清算后的全部剩余资产扣除基金财产清算费用、交纳所欠税款并清偿基金债务后，按基金份额持有人持有的基金份额比例进行分配，并加上返还基金份额持有人的销售服务费（如有）。",
+              "proof_kind": "site_final_plan_reconstruction",
+              "one_of_group": ""
+            },
+            {
+              "site_id": "p1346",
+              "location": "p1346",
+              "rule_id": "G22",
+              "operation_id": "G22:0",
+              "obligation_id": "G22:B1:O1",
+              "state": "PASS",
+              "artifact_status": "EXPECTED_EFFECT_PRESENT",
+              "failure_code": "",
+              "before_quote": "依据基金财产清算的分配方案，将基金财产清算后的全部剩余资产扣除基金财产清算费用、交纳所欠税款并清偿基金债务后，按基金份额持有人持有的基金份额比例进行分配。",
+              "after_quote": "依据基金财产清算的分配方案，将基金财产清算后的全部剩余资产扣除基金财产清算费用、交纳所欠税款并清偿基金债务后，按基金份额持有人持有的基金份额比例进行分配，并加上返还基金份额持有人的销售服务费（如有）。",
+              "proof_kind": "site_final_plan_reconstruction",
+              "one_of_group": ""
+            }
+          ],
+          "operations": [
+            "G22:0"
+          ]
+        }
+      },
+      "failures": [],
+      "truncated": false,
+      "remaining": 0,
+      "remaining_unknown": false,
+      "next_cursor": null,
+      "recovery_state_hashes": {
+        "targets_hash": "66251fd8047199e42638fba0d0f8f16e020faf738b5daaf7a0682b1b9539e361",
+        "plan_hash": "abb298b7bf073ef91e4f5b3890508d398aa08b726bb5cb21047b7a14503b09d4",
+        "artifact_hash": "a87f818a036ac30d9e2163268d5761f04a60c2749582335e2930bbba6c24d8d3",
+        "failures_hash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "facts_hash": "2ee0b7d5c8ef5d3d4814be54f5e8432a5db4e5729f09d51f49a2734b6f050c41",
+        "applicability_hash": "6c99444f9f0c82bc5cb81ff5395717ee53fe6addb3bdfbde903d5cfb501b0623",
+        "scope_hash": "bf3bee86bcc0c428f580a67f5dfa3fc72d31f89971b96c94d38dc4cd36939ea1",
+        "operation_coverage_hash": "75da7dff8b3a6a48a32715cc1f5fc074e7c6ecdffe8ac2cfb9d312929b77fd3f",
+        "final_edit_hash": "d28bef5cd8a5bcd4275e05d245988184b9fd93577857d247590d3a2324d3bce9"
+      }
+    },
+    "final_omission_review": {
+      "status": "PASS",
+      "basis": "independent_model_sweep+deterministic_operation_replay",
+      "checked_operations": [
+        {
+          "rule_id": "G01",
+          "operation_id": "G01:0",
+          "obligation_id": "G01:B1:O1",
+          "sites": [
+            "p92"
+          ],
+          "completion": "ARTIFACT_VERIFIED"
+        },
+        {
+          "rule_id": "G02",
+          "operation_id": "G02:0",
+          "obligation_id": "G02:B1:O1",
+          "sites": [
+            "p92"
+          ],
+          "completion": "ALREADY_SATISFIED"
+        },
+        {
+          "rule_id": "G02",
+          "operation_id": "G02:1",
+          "obligation_id": "G02:B1:O2",
+          "sites": [
+            "p92"
+          ],
+          "completion": "ALREADY_SATISFIED"
+        },
+        {
+          "rule_id": "G03",
+          "operation_id": "G03:0",
+          "obligation_id": "G03:B1:O1",
+          "sites": [
+            "p124"
+          ],
+          "completion": "ARTIFACT_VERIFIED"
+        },
+        {
+          "rule_id": "G04",
+          "operation_id": "G04:0",
+          "obligation_id": "G04:B1:O1",
+          "sites": [
+            "p124"
+          ],
+          "completion": "ALREADY_SATISFIED"
+        },
+        {
+          "rule_id": "G04",
+          "operation_id": "G04:1",
+          "obligation_id": "G04:B1:O2",
+          "sites": [
+            "p124"
+          ],
+          "completion": "ALREADY_SATISFIED"
+        },
+        {
+          "rule_id": "G05",
+          "operation_id": "G05:0",
+          "obligation_id": "G05:B1:O1",
+          "sites": [
+            "p128"
+          ],
+          "completion": "ARTIFACT_VERIFIED"
+        },
+        {
+          "rule_id": "G05",
+          "operation_id": "G05:2",
+          "obligation_id": "G05:B3:O1",
+          "sites": [
+            "p128"
+          ],
+          "completion": "ARTIFACT_VERIFIED"
+        },
+        {
+          "rule_id": "G06",
+          "operation_id": "G06:0",
+          "obligation_id": "G06:B1:O1",
+          "sites": [
+            "p128"
+          ],
+          "completion": "ARTIFACT_VERIFIED"
+        },
+        {
+          "rule_id": "G08",
+          "operation_id": "G08:0",
+          "obligation_id": "G08:B1:O1",
+          "sites": [
+            "p204"
+          ],
+          "completion": "ARTIFACT_VERIFIED"
+        },
+        {
+          "rule_id": "G09",
+          "operation_id": "G09:0",
+          "obligation_id": "G09:B1:O1",
+          "sites": [
+            "p205"
+          ],
+          "completion": "ARTIFACT_VERIFIED"
+        },
+        {
+          "rule_id": "G11",
+          "operation_id": "G11:0",
+          "obligation_id": "G11:B1:O1",
+          "sites": [
+            "p206"
+          ],
+          "completion": "ALREADY_SATISFIED"
+        },
+        {
+          "rule_id": "G11",
+          "operation_id": "G11:1",
+          "obligation_id": "G11:B1:O2",
+          "sites": [
+            "p206"
+          ],
+          "completion": "ARTIFACT_VERIFIED"
+        },
+        {
+          "rule_id": "G12",
+          "operation_id": "G12:0",
+          "obligation_id": "G12:B1:O1",
+          "sites": [
+            "p207"
+          ],
+          "completion": "ARTIFACT_VERIFIED"
+        },
+        {
+          "rule_id": "G12",
+          "operation_id": "G12:1",
+          "obligation_id": "G12:B1:O2",
+          "sites": [
+            "p207"
+          ],
+          "completion": "ALREADY_SATISFIED"
+        },
+        {
+          "rule_id": "G13",
+          "operation_id": "G13:0",
+          "obligation_id": "G13:B1:O1",
+          "sites": [
+            "p207"
+          ],
+          "completion": "ARTIFACT_VERIFIED"
+        },
+        {
+          "rule_id": "G14",
+          "operation_id": "G14:3",
+          "obligation_id": "G14:B2:O1",
+          "sites": [
+            "p209"
+          ],
+          "completion": "ARTIFACT_VERIFIED"
+        },
+        {
+          "rule_id": "G14",
+          "operation_id": "G14:4",
+          "obligation_id": "G14:B2:O2",
+          "sites": [
+            "p209"
+          ],
+          "completion": "ALREADY_SATISFIED"
+        },
+        {
+          "rule_id": "G14",
+          "operation_id": "G14:5",
+          "obligation_id": "G14:B2:O3",
+          "sites": [
+            "p209"
+          ],
+          "completion": "ALREADY_SATISFIED"
+        },
+        {
+          "rule_id": "G15",
+          "operation_id": "G15:0",
+          "obligation_id": "G15:B1:O1",
+          "sites": [
+            "p1258",
+            "p800"
+          ],
+          "completion": "ARTIFACT_VERIFIED"
+        },
+        {
+          "rule_id": "G16",
+          "operation_id": "G16:0",
+          "obligation_id": "G16:B1:O1",
+          "sites": [
+            "p1258",
+            "p802"
+          ],
+          "completion": "ARTIFACT_VERIFIED"
+        },
+        {
+          "rule_id": "G17",
+          "operation_id": "G17:0",
+          "obligation_id": "G17:B1:O1",
+          "sites": [
+            "p801",
+            "p802"
+          ],
+          "completion": "ARTIFACT_VERIFIED"
+        },
+        {
+          "rule_id": "G18",
+          "operation_id": "G18:0",
+          "obligation_id": "G18:B1:O1",
+          "sites": [
+            "p1228",
+            "p827"
+          ],
+          "completion": "ARTIFACT_VERIFIED"
+        },
+        {
+          "rule_id": "G22",
+          "operation_id": "G22:0",
+          "obligation_id": "G22:B1:O1",
+          "sites": [
+            "p1346",
+            "p978"
+          ],
+          "completion": "ARTIFACT_VERIFIED"
+        }
+      ],
+      "checked_operation_count": 24,
+      "model_sweep_findings": 0,
+      "issues": []
+    },
+    "unresolved": []
+  },
+  "result_page_opened": true,
+  "downloads": {
+    "final": {
+      "path": "/tmp/opencode/comprehensive-remediation-20261028/production-value7-20261029/final.docx",
+      "bytes": 101961,
+      "sha256": "4f0a10abc0c58fadc25561e3de6b21f167441848838b7f6e253f641d94f96707",
+      "content_type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      "docx": {
+        "valid_zip": true,
+        "document_xml_sha256": "184f6dd84330d539a6fae0b5ebd98365cba783d310b58be6dcde700013da7466",
+        "insertions": 2,
+        "deletions": 0,
+        "has_revision_markup": true,
+        "document_xml_bytes": 734066
+      },
+      "unauthenticated_http": 401
+    },
+    "redline": {
+      "path": "/tmp/opencode/comprehensive-remediation-20261028/production-value7-20261029/redline.docx",
+      "bytes": 103365,
+      "sha256": "0b394535a2201910123bc7dabc33b5b7d5ce235ea3e45f8d6eb5398c09651552",
+      "content_type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      "docx": {
+        "valid_zip": true,
+        "document_xml_sha256": "9c9a135f1761403a42ae2c85a07038ee70d73860563ffcbdc15fed131044f0b6",
+        "insertions": 18,
+        "deletions": 72,
+        "has_revision_markup": true,
+        "document_xml_bytes": 743819
+      },
+      "unauthenticated_http": 401
+    },
+    "report_json": {
+      "path": "/tmp/opencode/comprehensive-remediation-20261028/production-value7-20261029/report_json.json",
+      "bytes": 958111,
+      "sha256": "a5ccc5de2510c8c72a8a310447265836ea2dca8801b1cee3d64eb23f7385920e",
+      "content_type": "application/json",
+      "unauthenticated_http": 401
+    },
+    "report_md": {
+      "path": "/tmp/opencode/comprehensive-remediation-20261028/production-value7-20261029/report_md.md",
+      "bytes": 20383,
+      "sha256": "8653bec2f08a274098841de30678e50364c08f2cb40af147c2133d466aeb3873",
+      "content_type": "text/markdown; charset=utf-8",
+      "unauthenticated_http": 401
+    }
+  },
+  "artifact_review": {
+    "mechanical_pass": true,
+    "business_complete": "not assessed by this tool",
+    "checks": {
+      "source_hash": true,
+      "final_available": true,
+      "final_hash": true,
+      "redline_available": true,
+      "redline_hash": true,
+      "accepted_matches_final": true,
+      "rejected_matches_source": true,
+      "final_no_revisions": true,
+      "paragraph_locations_preserved": true,
+      "plan_matches_actual": true
+    },
+    "revisions": {
+      "ins": 16,
+      "del": 16
+    },
+    "final_sha256": "4f0a10abc0c58fadc25561e3de6b21f167441848838b7f6e253f641d94f96707",
+    "redline_sha256": "0b394535a2201910123bc7dabc33b5b7d5ce235ea3e45f8d6eb5398c09651552",
+    "changed_paragraphs": 16,
+    "plan_artifact_mismatches": 0
+  },
+  "hash_checks": {
+    "final": {
+      "actual": "4f0a10abc0c58fadc25561e3de6b21f167441848838b7f6e253f641d94f96707",
+      "expected": "4f0a10abc0c58fadc25561e3de6b21f167441848838b7f6e253f641d94f96707",
+      "matched": true
+    },
+    "redline": {
+      "actual": "0b394535a2201910123bc7dabc33b5b7d5ce235ea3e45f8d6eb5398c09651552",
+      "expected": "0b394535a2201910123bc7dabc33b5b7d5ce235ea3e45f8d6eb5398c09651552",
+      "matched": true
+    }
+  },
+  "revision_count": 16,
+  "selection_http": 200,
+  "selected_downloads": {
+    "selected_final": {
+      "path": "/tmp/opencode/comprehensive-remediation-20261028/production-value7-20261029/selected_final.docx",
+      "bytes": 101973,
+      "sha256": "cbc6a2132a937afa83d897a7205c4a9b76fe5a16661a00798b6af832f9e1b1a1",
+      "content_type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      "docx": {
+        "valid_zip": true,
+        "document_xml_sha256": "ed11cffe11068a46f502a7e3336c1bc023c7c978a38247dfddbd32cbc472fdef",
+        "insertions": 2,
+        "deletions": 0,
+        "has_revision_markup": true,
+        "document_xml_bytes": 734401
+      }
+    },
+    "selected_redline": {
+      "path": "/tmp/opencode/comprehensive-remediation-20261028/production-value7-20261029/selected_redline.docx",
+      "bytes": 103320,
+      "sha256": "4a5945546ea01d40caed490c59ba664f11d3b17b5b6519481b50e5a17d1b186a",
+      "content_type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      "docx": {
+        "valid_zip": true,
+        "document_xml_sha256": "389455cae8f96a3d281a617e39bc0513d973344f194643d9b10bcee3a78843de",
+        "insertions": 17,
+        "deletions": 65,
+        "has_revision_markup": true,
+        "document_xml_bytes": 743422
+      }
+    }
+  },
+  "selected_unauthorized_http": 401,
+  "terminal_success": true,
+  "responsive": {
+    "1440": {
+      "width": 1440,
+      "scroll": 1440
+    },
+    "390": {
+      "width": 390,
+      "scroll": 390
+    }
+  },
+  "page_errors": [],
+  "console_errors": [],
+  "audit_session_logged_out": true,
+  "errors": []
+}
