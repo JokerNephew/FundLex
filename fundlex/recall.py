@@ -6999,6 +6999,30 @@ def _plan_target_inner(rule: dict, target: Target, inspection: DocumentInspectio
                 evidence={"fixed_text": replacement,
                           "appended_suffix": suffix,
                           "guide_paragraphs": rule.get("source_paragraphs") or []}))
+    if (rule_id == "G12" and len(operations) == 1
+            and operations[0].get("op") == "replace"
+            and target.start is not None and target.end is not None):
+        span_text = span.text[target.start:target.end]
+        if ("赎回费用" in span_text and "承担" in span_text
+                and ("归入基金财产" in span_text or "全额计入基金财产" in span_text)
+                and span_text.rstrip()[-1:] in "。；;"
+                and len(_compact(span_text)) <= 200):
+            expected, issues = instantiate_slots(
+                str(operations[0].get("new_text") or ""), facts)
+            if not issues and expected:
+                # The allocation clause can be worded "各类基金份额…其中不低于
+                # 25%…其余用于支付注册登记费…".  The guide authorizes replacing
+                # the whole clause; free compose sees 注册登记费 as a protected
+                # literal and fails (美国房地产 p165).  The target quote is the
+                # full clause, so use the authorized policy text directly.
+                return finish(PlannedEdit(
+                    target_id=target.target_id, rule_id=rule_id,
+                    location=target.location, start=target.start, end=target.end,
+                    replacement=expected, operation="replace",
+                    content_source="g12_allocation_replace",
+                    evidence={"fixed_text": expected,
+                              "replaced_text": span_text,
+                              "guide_paragraphs": rule.get("source_paragraphs") or []}))
     if (rule_id == "G18" and len(operations) == 1
             and operations[0].get("op") == "replace"
             and target.start is not None and target.end is not None):
