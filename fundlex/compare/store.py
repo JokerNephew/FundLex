@@ -140,6 +140,15 @@ class CompareStore:
                     db.execute("ALTER TABLE compare_selection_artifacts MODIFY COLUMN binding_hash VARCHAR(255) NULL")
                 if "status" in columns:
                     db.execute("UPDATE compare_selection_artifacts SET stale=CASE WHEN status='stale' THEN 1 ELSE 0 END")
+                self._artifact_legacy_binding = "binding_hash" in columns
+                self._artifact_legacy_status = "status" in columns
+            else:
+                self._artifact_legacy_binding = False
+                self._artifact_legacy_status = False
+            draft_columns = {row["name"] for row in db.execute(
+                "PRAGMA table_info(compare_selection_drafts)")}
+            self._draft_legacy_binding = "binding_hash" in draft_columns
+            self._draft_legacy_created = "created_at" in draft_columns
 
     def _connect(self):
         return self.store._connect()
@@ -873,12 +882,21 @@ class CompareStore:
             if not unchanged:
                 new_epoch = current + 1
                 if draft is None:
-                    db.execute("""INSERT INTO compare_selection_drafts
-                        (pair_id,selection_epoch,result_sha256,left_source_sha256,
-                         right_source_sha256,decisions_json,decision_hash,updated_at)
-                        VALUES (?,?,?,?,?,?,?,?)""",
-                               (pair_id, new_epoch, result_sha256, left_hash, right_hash,
-                                _json(normalized), digest, now))
+                    draft_fields = ["pair_id", "selection_epoch", "result_sha256",
+                                    "left_source_sha256", "right_source_sha256",
+                                    "decisions_json", "decision_hash", "updated_at"]
+                    draft_values = [pair_id, new_epoch, result_sha256, left_hash,
+                                    right_hash, _json(normalized), digest, now]
+                    if getattr(self, "_draft_legacy_binding", False):
+                        draft_fields.append("binding_hash")
+                        draft_values.append("")
+                    if getattr(self, "_draft_legacy_created", False):
+                        draft_fields.append("created_at")
+                        draft_values.append(now)
+                    placeholders = ",".join("?" for _ in draft_fields)
+                    db.execute(f"""INSERT INTO compare_selection_drafts
+                        ({','.join(draft_fields)}) VALUES ({placeholders})""",
+                               tuple(draft_values))
                 else:
                     db.execute("""UPDATE compare_selection_drafts SET selection_epoch=?,
                         result_sha256=?,left_source_sha256=?,right_source_sha256=?,
@@ -982,15 +1000,25 @@ class CompareStore:
                 if self._selection_artifacts(db, pair_id, expected_epoch):
                     raise Conflict("SELECTION_GENERATION_CONFLICT")
                 for kind, (key, digest, size) in staged.items():
-                    db.execute("""INSERT INTO compare_selection_artifacts
-                        (pair_id,version,kind,object_key,sha256,size,selection_epoch,
-                         decision_hash,result_sha256,left_source_sha256,right_source_sha256,
-                         report_json,stale,created_at)
-                        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,0,?)""",
-                               (pair_id, expected_epoch, kind, key, digest, size,
-                                expected_epoch, draft["decision_hash"], result_sha256,
-                                draft["left_source_sha256"], draft["right_source_sha256"],
-                                encoded_report, report["created_at"]))
+                    artifact_fields = ["pair_id", "version", "kind", "object_key",
+                                       "sha256", "size", "selection_epoch", "decision_hash",
+                                       "result_sha256", "left_source_sha256",
+                                       "right_source_sha256", "report_json", "stale",
+                                       "created_at"]
+                    artifact_values = [pair_id, expected_epoch, kind, key, digest, size,
+                                       expected_epoch, draft["decision_hash"], result_sha256,
+                                       draft["left_source_sha256"], draft["right_source_sha256"],
+                                       encoded_report, 0, report["created_at"]]
+                    if getattr(self, "_artifact_legacy_binding", False):
+                        artifact_fields.append("binding_hash")
+                        artifact_values.append("")
+                    if getattr(self, "_artifact_legacy_status", False):
+                        artifact_fields.append("status")
+                        artifact_values.append("current")
+                    placeholders = ",".join("?" for _ in artifact_fields)
+                    db.execute(f"""INSERT INTO compare_selection_artifacts
+                        ({','.join(artifact_fields)}) VALUES ({placeholders})""",
+                               tuple(artifact_values))
                 db.execute("UPDATE compare_pairs SET updated_at=? WHERE id=?",
                            (report["created_at"], pair_id))
             staged = {}

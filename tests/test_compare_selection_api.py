@@ -341,3 +341,35 @@ def test_compare_store_migrates_legacy_selection_artifact_columns(tmp_path):
     assert {"report_json", "stale"} <= columns
     assert rows[1]["stale"] == 0
     assert rows[2]["stale"] == 1
+
+
+def test_save_selection_supports_legacy_draft_columns(tmp_path):
+    """SQLite deployments that predate the current draft schema still have
+    NOT NULL binding_hash/created_at columns. The insert must populate them
+    rather than requiring an unsupported ALTER TABLE rebuild."""
+    app = create_app(tmp_path)
+    client = TestClient(app)
+    pair_id, headers = _pair(client, ["前文", "费率为0.40%", "后文"],
+                             ["前文", "费率为0.30%", "后文"])
+    state = client.get(f"/api/compare/pairs/{pair_id}/selection", headers=headers).json()
+    store = app.state.compare_store
+    with store._connect() as db:
+        db.execute("DROP TABLE compare_selection_drafts")
+        db.execute("""CREATE TABLE compare_selection_drafts (
+            pair_id TEXT PRIMARY KEY, selection_epoch INTEGER NOT NULL DEFAULT 0,
+            result_sha256 TEXT NOT NULL, left_source_sha256 TEXT NOT NULL,
+            right_source_sha256 TEXT NOT NULL, decisions_json TEXT NOT NULL,
+            decision_hash TEXT NOT NULL, binding_hash TEXT NOT NULL,
+            updated_at REAL NOT NULL, created_at REAL NOT NULL)""")
+    legacy_store = CompareStore(store.store)
+    diff_id = state["diffs"][0]["id"]
+    saved = legacy_store.save_selection(
+        "alice", pair_id, expected_epoch=0,
+        result_sha256=state["result_sha256"],
+        left_source_sha256=state["left_source_sha256"],
+        right_source_sha256=state["right_source_sha256"],
+        decisions={diff_id: "left"})
+    assert saved["selection_epoch"] == 1
+    assert saved["decisions"][diff_id] == "left"
+    assert legacy_store._draft_legacy_binding is True
+    assert legacy_store._draft_legacy_created is True
