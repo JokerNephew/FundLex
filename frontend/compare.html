@@ -579,7 +579,7 @@
 </div>
 <details class="compare-groups-disclosure"><summary>查看与切换全部合同组</summary><div id="compare-pair-list"></div></details>
 </div>
-      <div class="card compare-viewer" id="compare-viewer" hidden>
+      <div class="card compare-viewer" id="compare-viewer" role="dialog" aria-modal="true" aria-labelledby="compare-pair-title" tabindex="-1" hidden>
 <div class="compare-viewer-toolbar">
 <div class="compare-viewer-title">
 <div>
@@ -592,6 +592,7 @@
 <span class="compare-pair-counter" id="compare-pair-counter">
 </span>
 <button class="btn btn-sm" id="compare-next-pair">下一组</button>
+<button class="btn btn-sm compare-viewer-close" id="compare-close-viewer" type="button" aria-label="关闭比对结果">× 关闭</button>
 </div>
 </div>
 <div class="compare-summary-row">

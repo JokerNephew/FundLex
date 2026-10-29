@@ -283,8 +283,7 @@ def test_compare_generate_late_response_cannot_save_the_previous_pair(browser, l
 
         page.locator("#compare-selection-generate").click()
         assert held, "generate request should be held"
-        page.locator("details.compare-groups-disclosure summary").click()
-        page.locator('[data-compare-pair="1"]').click()
+        page.locator("#compare-next-pair").click()
         page.locator("#compare-pair-title").filter(has_text="P2").wait_for()
         page.locator("#compare-selection-progress").filter(has_text="待选择").wait_for()
         page.wait_for_timeout(300)
@@ -355,6 +354,17 @@ def test_compare_word_style_reader_renders_merged_redline_and_display_modes(brow
         assert page.locator("#compare-word-merged-pane .compare-del").inner_text() == "旧条款"
         assert page.locator("#compare-revision-count").inner_text() == "1"
         assert page.locator("#compare-merged-title").inner_text() == "Word 样式"
+        assert page.locator("#compare-viewer").get_attribute("role") == "dialog"
+        box = page.locator("#compare-viewer").bounding_box()
+        assert box and box["width"] >= 1430 and box["height"] >= 990
+        assert page.evaluate("document.body.classList.contains('compare-fullscreen-open')") is True
+
+        page.locator("#compare-close-viewer").click()
+        assert page.locator("#compare-viewer").is_hidden()
+        assert page.evaluate("document.body.classList.contains('compare-fullscreen-open')") is False
+        page.locator("details.compare-groups-disclosure summary").click()
+        page.locator('[data-compare-pair="0"]').click()
+        page.locator("#compare-viewer").wait_for(state="visible")
 
         page.locator("#compare-show-sources").uncheck()
         assert page.locator(".compare-word-sources").evaluate("element => getComputedStyle(element).display") == "none"

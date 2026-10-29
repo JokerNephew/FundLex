@@ -603,3 +603,19 @@ input[type="file"]::file-selector-button { margin-right: 10px; border: 1px solid
   .compare-classic-view .compare-columns[data-mobile-side="right"] .compare-pane:last-child{display:block}
   .compare-classic-view .compare-classic-divider{display:none}
 }
+
+/* Full-screen comparison dialog (React parity). */
+body.compare-fullscreen-open{overflow:hidden!important}
+.compare-viewer[role="dialog"]{position:fixed;inset:0;z-index:140;display:flex;flex-direction:column;width:auto;max-width:none;height:auto;margin:0;border:0;border-radius:0;background:#f4f6f8;box-shadow:none;overflow:hidden}
+.compare-viewer[role="dialog"]>.compare-word-shell{display:flex;flex-direction:column;flex:1;min-height:0}
+.compare-viewer[role="dialog"] .compare-viewer-toolbar{flex:0 0 auto;padding:14px 22px 12px;background:#fff}
+.compare-viewer[role="dialog"] .compare-word-toolbar{flex:0 0 auto}
+.compare-viewer[role="dialog"] .compare-view-body{flex:1 1 auto;height:auto;min-height:0}
+.compare-viewer-close{flex:0 0 auto}
+@media(max-width:760px){
+  .compare-viewer[role="dialog"] .compare-viewer-toolbar{padding:12px 14px 10px}
+  .compare-viewer[role="dialog"] .compare-view-body{display:block;flex:1 1 auto;min-height:0;overflow:auto}
+  .compare-viewer[role="dialog"] .compare-word-view{height:68vh;min-height:430px}
+  .compare-viewer[role="dialog"] .compare-word-layout{height:100%;min-height:0}
+  .compare-viewer[role="dialog"] .compare-classic-view{height:68vh;min-height:430px}
+}

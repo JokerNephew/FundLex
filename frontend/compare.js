@@ -31,7 +31,7 @@
   function syncInputIndexes() { document.querySelectorAll('#compare-pair-inputs .compare-pair-input').forEach((row,i)=>{ row.dataset.pairIndex=String(i); row.querySelector('[data-compare-left]')?.setAttribute('data-compare-left',String(i)); row.querySelector('[data-compare-right]')?.setAttribute('data-compare-right',String(i)); row.querySelector('[data-compare-remove]')?.setAttribute('data-compare-remove',String(i)); }); }
   function selectedFiles() { return (state.inputs || []).map(x => ({ left: x._left || x.left, right: x._right || x.right })).filter(x => x.left || x.right); }
   function resetFolders() { state.folderLeft=[]; state.folderRight=[]; for(const id of ['compare-left-folder','compare-right-folder'])if($(id))$(id).value=''; }
-  function showCreate(show=true) { $('compare-create').hidden = !show; if (show) { clearTimeout(state.poll); state.requestToken++; $('compare-detail').hidden=true; $('compare-viewer').hidden=true; state.view=null; state.mergedMarks=state.leftMarks=state.rightMarks=null; state.uploadDraft=null; state.inputs=[{}]; resetFolders(); $('compare-upload-message').textContent=''; $('compare-retry').hidden=true; $('compare-lines')?.replaceChildren(); renderInputs(); } }
+  function showCreate(show=true) { $('compare-create').hidden = !show; if (show) { clearTimeout(state.poll); state.requestToken++; $('compare-detail').hidden=true; setFullscreenViewer(false); state.view=null; state.mergedMarks=state.leftMarks=state.rightMarks=null; state.uploadDraft=null; state.inputs=[{}]; resetFolders(); $('compare-upload-message').textContent=''; $('compare-retry').hidden=true; $('compare-lines')?.replaceChildren(); renderInputs(); } }
   function statusLabel(v) { return ({pending:'待上传',queued:'排队中',leased:'处理中',running:'处理中',succeeded:'已处理',incomplete:'覆盖不完整',failed:'失败',retry_wait:'等待重试',sealed:'已提交',uploading:'上传中',completed:'已处理'}[v] || v || '—'); }
   function taskMetrics(task) {
     const pairs=task.pairs||[], counts=task.counts||{};
@@ -426,8 +426,18 @@
       if(match)node.style.setProperty(property,`${Number((Number(match[1])*.9).toFixed(3))}${match[2]}`);
     }));
   }
+  function setFullscreenViewer(open) {
+    const viewer=$('compare-viewer'); if(!viewer)return;
+    document.body.classList.toggle('compare-fullscreen-open', Boolean(open));
+    viewer.hidden=!open;
+    if(open)requestAnimationFrame(()=>viewer.focus?.());
+  }
+  function closeViewer() {
+    setFullscreenViewer(false);
+    document.querySelector('.compare-pair-status.is-selected')?.focus?.();
+  }
   function renderViewer(payload) {
-    state.view=payload; state.diffIndex=0; const d=payload.diffs||[]; $('compare-viewer').hidden=false;
+    state.view=payload; state.diffIndex=0; const d=payload.diffs||[]; setFullscreenViewer(true);
     const pairLabel=payload.pair?.label||'合同比对';
     $('compare-pair-title').textContent=pairLabel;
     const leftName=payload.left?.name||'合同A',rightName=payload.right?.name||'合同B';
@@ -461,7 +471,7 @@
     if(state.selectionDirty){selectionStatus('请先保存当前选择，再切换合同组。',true);return;}
     resetSelection();const token=++state.requestToken;
     state.pairIndex=index;state.selectedPairId=p.id;state.view=null;state.mergedMarks=state.wordLeftMarks=state.wordRightMarks=state.leftMarks=state.rightMarks=null;renderPairs();
-    $('compare-viewer').hidden=true;$('compare-lines')?.replaceChildren();$('compare-word-merged-pane').innerHTML='';$('compare-word-left-pane').innerHTML='';$('compare-word-right-pane').innerHTML='';$('compare-left-pane').innerHTML='';$('compare-right-pane').innerHTML='';$('compare-pair-counter').textContent=`${index+1} / ${state.pairs.length}`;
+    setFullscreenViewer(false);$('compare-lines')?.replaceChildren();$('compare-word-merged-pane').innerHTML='';$('compare-word-left-pane').innerHTML='';$('compare-word-right-pane').innerHTML='';$('compare-left-pane').innerHTML='';$('compare-right-pane').innerHTML='';$('compare-pair-counter').textContent=`${index+1} / ${state.pairs.length}`;
     if(!['succeeded','incomplete'].includes(p.status))return;
     try {const payload=await json(`/api/compare/pairs/${encodeURIComponent(p.id)}/view`);if(token===state.requestToken){p.viewError='';renderPairs();renderViewer(payload);await loadSelection(p.id);}}
     catch(e){if(token===state.requestToken){p.viewError=`读取结果失败：${e.message}`;renderPairs();}}
@@ -477,12 +487,12 @@
      }catch(e){if(token===state.requestToken){$('compare-detail').hidden=false;$('compare-task-status').textContent=`读取任务失败：${e.message}`;}}
    }
   function applyRoute(route){
-    if(route.view!=='compare'){clearTimeout(state.poll);return;}
+    if(route.view!=='compare'){clearTimeout(state.poll);closeViewer();return;}
     const mode=['list','new','detail'].includes(route.mode)?route.mode:'list';$('view-compare').dataset.mode=mode;
     if(mode==='detail'&&state.task?.id!==route.id)$('compare-task-name').textContent='正在读取任务…';
     if(mode==='new'){if($('compare-create').hidden)showCreate(true);return;}
     $('compare-create').hidden=true;
-    if(mode==='list'){$('compare-search').value=route.q||'';$('compare-list-filter').value=route.status||'';$('compare-detail').hidden=true;$('compare-viewer').hidden=true;clearTimeout(state.poll);if(api.ready?.())loadTasks();return;}
+    if(mode==='list'){$('compare-search').value=route.q||'';$('compare-list-filter').value=route.status||'';$('compare-detail').hidden=true;closeViewer();clearTimeout(state.poll);if(api.ready?.())loadTasks();return;}
     if(!api.ready?.())return;
     if(route.id)openTask(route.id);else{$('compare-task-status').textContent='请先从比对任务列表选择任务。';$('compare-detail').hidden=false;}
   }
@@ -507,6 +517,8 @@
     document.addEventListener('fundlex:identity-reset',resetSelection);
     window.addEventListener('beforeunload',event=>{if(state.selectionDirty){event.preventDefault();event.returnValue='';}});
     $('compare-new')?.addEventListener('click',()=>api.navigate?api.navigate('compare',{mode:'new'}):showCreate(true)); $('compare-add-pair')?.addEventListener('click',()=>{const index=state.inputs.length;state.inputs.push({});$('compare-pair-inputs')?.insertAdjacentHTML('beforeend',pairRow({},index));syncInputIndexes();}); $('compare-submit')?.addEventListener('click',createTask); $('compare-refresh')?.addEventListener('click',loadTasks);
+    $('compare-close-viewer')?.addEventListener('click',closeViewer);
+    document.addEventListener('keydown',event=>{if(event.key==='Escape'&&!$('compare-viewer').hidden){event.preventDefault();closeViewer();}});
     $('compare-prev-diff')?.addEventListener('click',()=>focusDiff(state.diffIndex-1)); $('compare-next-diff')?.addEventListener('click',()=>focusDiff(state.diffIndex+1)); $('compare-prev-pair')?.addEventListener('click',()=>openPair(Math.max(0,state.pairIndex-1))); $('compare-next-pair')?.addEventListener('click',()=>openPair(Math.min(state.pairs.length-1,state.pairIndex+1))); $('compare-report')?.addEventListener('click',()=>{if(!state.view)return;const blob=new Blob([JSON.stringify(state.view,null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=`${state.task?.name||'合同比对'}-差异报告.json`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}); $('compare-selection-left-all')?.addEventListener('click',()=>setAllSelections('left')); $('compare-selection-right-all')?.addEventListener('click',()=>setAllSelections('right')); $('compare-selection-pending')?.addEventListener('click',()=>{const index=visibleDiffs().findIndex(item=>selectionDecision(item.id)==='pending');if(index>=0)focusDiff(index);}); $('compare-selection-save')?.addEventListener('click',saveSelectionDraft); $('compare-selection-preview')?.addEventListener('click',previewSelection); $('compare-selection-generate')?.addEventListener('click',generateSelection); $('compare-active-only')?.addEventListener('change',drawLines); $('compare-diff-filter')?.addEventListener('change',()=>{state.diffIndex=0;renderDiffList();focusDiff(0);}); $('compare-retry')?.addEventListener('click',continueUploads); document.querySelectorAll('[data-word-pane]').forEach(btn=>btn.addEventListener('click',()=>setMobilePane(btn.dataset.wordPane))); $('compare-show-sources')?.addEventListener('change',e=>setSourcesVisible(e.target.checked)); $('compare-markup-mode')?.addEventListener('change',e=>setMarkupMode(e.target.value)); document.querySelectorAll('[data-compare-sources-close]').forEach(btn=>btn.addEventListener('click',()=>setSourcesVisible(false)));
       document.addEventListener('click',e=>{ const task=e.target.closest('[data-compare-task]');if(task){openTask(task.dataset.compareTask);return;}const pair=e.target.closest('[data-compare-pair]');if(pair){openPair(Number(pair.dataset.comparePair));return;}const download=e.target.closest('[data-selection-download]');if(download){downloadSelection(download.dataset.selectionDownload,download.dataset.selectionFilename);return;}const diff=e.target.closest('[data-compare-diff]');if(diff&&!e.target.closest('input')){focusDiff(visibleDiffs().findIndex(x=>x.id===diff.dataset.compareDiff));return;}const mark=e.target.closest('#compare-word-merged-pane [data-diff-id],#compare-word-left-pane [data-diff-id],#compare-word-right-pane [data-diff-id],#compare-left-pane [data-diff-id],#compare-right-pane [data-diff-id]');if(mark){focusDiff(visibleDiffs().findIndex(x=>x.id===mark.dataset.diffId));return;}const remove=e.target.closest('[data-compare-remove]');if(remove){const index=Number(remove.dataset.compareRemove),row=remove.closest('.compare-pair-input');state.inputs.splice(index,1);row?.remove();if(!state.inputs.length){state.inputs=[{}];renderInputs();}else syncInputIndexes();return;} });
      document.addEventListener('keydown',e=>{if((e.key==='Enter'||e.key===' ')&&e.target.matches('#compare-word-merged-pane [data-diff-id],#compare-word-left-pane [data-diff-id],#compare-word-right-pane [data-diff-id],#compare-left-pane [data-diff-id],#compare-right-pane [data-diff-id]')){e.preventDefault();focusDiff(visibleDiffs().findIndex(x=>x.id===e.target.dataset.diffId));}});
@@ -518,7 +530,7 @@
       document.querySelectorAll('[data-compare-view-mode]').forEach(button=>button.addEventListener('click',()=>setViewMode(button.dataset.compareViewMode)));
       document.querySelectorAll('#compare-classic-view [data-compare-side]').forEach(button=>button.addEventListener('click',()=>setClassicSide(button.dataset.compareSide)));
       try { const storedSources=localStorage.getItem('fundlex-compare-show-sources'); if(storedSources==='0')setSourcesVisible(false,false); const storedMarkup=localStorage.getItem('fundlex-compare-markup'); if(storedMarkup)setMarkupMode(storedMarkup,false); const storedPane=localStorage.getItem('fundlex-compare-mobile-pane'); if(storedPane)setMobilePane(storedPane,false); const storedMode=localStorage.getItem('fundlex-compare-view-mode'); if(storedMode)setViewMode(storedMode,false); const storedSide=localStorage.getItem('fundlex-compare-classic-side'); if(storedSide)setClassicSide(storedSide,false); } catch {}
-      document.addEventListener('fundlex:view',e=>{if(e.detail==='compare'){drawLines();}}); document.addEventListener('fundlex:identity-reset',()=>{clearTimeout(state.poll);state.identityToken++;state.listToken++;state.tasks=[];state.task=null;state.pairs=[];state.selectedPairId=null;state.view=null;state.mergedMarks=state.wordLeftMarks=state.wordRightMarks=state.leftMarks=state.rightMarks=null;state.selection=null;state.selectionDraft=null;state.selectionDirty=false;state.uploadDraft=null;state.inputs=[{}];state.requestToken++;state.selectionToken++;resetFolders();$('compare-create').hidden=true;$('compare-submit').disabled=false;$('compare-retry').hidden=true;$('compare-upload-message').textContent='';$('compare-name').value='';$('compare-detail').hidden=true;$('compare-viewer').hidden=true;$('compare-word-merged-pane').innerHTML='';$('compare-word-left-pane').innerHTML='';$('compare-word-right-pane').innerHTML='';$('compare-left-pane').innerHTML='';$('compare-right-pane').innerHTML='';$('compare-diff-list').innerHTML='';$('compare-selection-downloads').replaceChildren();selectionStatus('');$('compare-lines')?.replaceChildren();$('compare-diff-counter').textContent='0 / 0';$('compare-revision-count').textContent='0';$('compare-revision-count-rail').textContent='0';renderInputs();renderTasks();}); state.inputs=[{}];renderInputs();applyRoute(api.route?.()||{view:'compare',mode:'list'});
+      document.addEventListener('fundlex:view',e=>{if(e.detail==='compare'){drawLines();}}); document.addEventListener('fundlex:identity-reset',()=>{clearTimeout(state.poll);state.identityToken++;state.listToken++;state.tasks=[];state.task=null;state.pairs=[];state.selectedPairId=null;state.view=null;state.mergedMarks=state.wordLeftMarks=state.wordRightMarks=state.leftMarks=state.rightMarks=null;state.selection=null;state.selectionDraft=null;state.selectionDirty=false;state.uploadDraft=null;state.inputs=[{}];state.requestToken++;state.selectionToken++;resetFolders();$('compare-create').hidden=true;$('compare-submit').disabled=false;$('compare-retry').hidden=true;$('compare-upload-message').textContent='';$('compare-name').value='';$('compare-detail').hidden=true;setFullscreenViewer(false);$('compare-word-merged-pane').innerHTML='';$('compare-word-left-pane').innerHTML='';$('compare-word-right-pane').innerHTML='';$('compare-left-pane').innerHTML='';$('compare-right-pane').innerHTML='';$('compare-diff-list').innerHTML='';$('compare-selection-downloads').replaceChildren();selectionStatus('');$('compare-lines')?.replaceChildren();$('compare-diff-counter').textContent='0 / 0';$('compare-revision-count').textContent='0';$('compare-revision-count-rail').textContent='0';renderInputs();renderTasks();}); state.inputs=[{}];renderInputs();applyRoute(api.route?.()||{view:'compare',mode:'list'});
   }
   if (document.readyState==='loading') document.addEventListener('DOMContentLoaded',bind); else bind();
 })();
