@@ -3280,6 +3280,11 @@ def canonicalize_append_targets(targets: Sequence[Target], rules_by_id: dict[str
         keep, duplicates = ordered[0], ordered[1:]
         for duplicate in duplicates:
             duplicate.out_of_scope = True
+            # An out-of-scope duplicate must not leave its operation key in the
+            # site inventory; otherwise Claim Replay reports an orphan site
+            # (p128) even though the canonical p124 append was executed.
+            duplicate.operations = ()
+            duplicate.claimed_operations = ()
             duplicate.reason = (f"{duplicate.reason}|"
                                 f"DUPLICATE_APPEND_SITE_CANONICAL:{keep.target_id}")
             changes.append({"target_id": duplicate.target_id,

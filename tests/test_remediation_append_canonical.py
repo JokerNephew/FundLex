@@ -38,6 +38,7 @@ def test_body_append_site_is_canonical_while_summary_copy_stays():
     # Keep the clause-tail site: it is the shared G16/G17 anchor and the
     # scorer accepts the formula-tail label through its same-clause window.
     assert body_open.out_of_scope is True
+    assert body_open.operations == ()
     assert body_survey.out_of_scope is False
     assert "DUPLICATE_APPEND_SITE_CANONICAL" in body_open.reason
     assert summary.out_of_scope is False
@@ -65,4 +66,5 @@ def test_g03_prefers_class_definition_over_later_adjustment_paragraph():
     )
     assert definition.out_of_scope is False
     assert adjustment.out_of_scope is True
+    assert adjustment.operations == ()
     assert changes and changes[0]["canonical_target_id"] == "Y010"
