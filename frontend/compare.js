@@ -446,10 +446,12 @@
       const spans=side==='left'?diff.left_spans:diff.right_spans;
       return span?.block_id||anchor?.block_id||spans?.[0]?.block_id||'';
     };
+    const scrolled=new Set();
     const findBlock=(paneId,side)=>{
       const pane=$(paneId);if(!pane||!pane._virtualDoc||!pane.clientHeight)return;
       const blockId=blockFor(side)||blockFor(side==='left'?'right':'left');
-      if(blockId)pane._virtualDoc.scrollToBlock(blockId);
+      if(blockId&&pane._virtualDoc.scrollToBlock(blockId)){scrolled.add(paneId);return;}
+      if(pane._virtualDoc.scrollToBlock(id))scrolled.add(paneId);
     };
     findBlock('compare-word-merged-pane','right');findBlock('compare-word-left-pane','left');findBlock('compare-word-right-pane','right');
     findBlock('compare-left-pane','left');findBlock('compare-right-pane','right');
@@ -480,11 +482,17 @@
       }
     }
     cancelAnimationFrame(state.scrollFrame);state.scrollSource=null;state.focusScrolling=true;
-    for(const paneId of paneIds){const pane=$(paneId),target=pane?.querySelector(selector);if(pane&&target&&pane.clientHeight){const pr=pane.getBoundingClientRect(),tr=target.getBoundingClientRect();pane.scrollTop+=tr.top+tr.height/2-pr.top-pr.height/2;}}
+    for(const paneId of paneIds){
+      if(scrolled.has(paneId))continue;
+      const pane=$(paneId),target=pane?.querySelector(selector);
+      if(!pane||!target||!pane.clientHeight)continue;
+      const pr=pane.getBoundingClientRect(),tr=target.getBoundingClientRect();
+      if(tr.top<pr.top+8||tr.bottom>pr.bottom-8)pane.scrollTop+=tr.top+tr.height/2-pr.top-pr.height/2;
+    }
     requestAnimationFrame(()=>requestAnimationFrame(()=>{state.focusScrolling=false;}));
     requestAnimationFrame(drawLines);
   }
-  const DIFF_ITEM_HEIGHT=128, DIFF_RENDER_COUNT=24;
+  const DIFF_ITEM_HEIGHT=136, DIFF_RENDER_COUNT=24;
   function diffItemHtml(x,index,choice,disabled){
     const kind=x.type==='modify'?'修改':x.type==='insert'?'插入':'删除';
     return `<div class="compare-diff-item ${choice!=='pending'?'is-selected-choice':''}" data-compare-diff="${esc(x.id)}"><button type="button" class="compare-diff-jump" data-compare-diff="${esc(x.id)}"><span class="compare-diff-index">${index+1}</span><span class="compare-diff-kind is-${esc(x.type)}">${esc(kind)}</span><span class="compare-diff-preview"><small>FundLex 对比</small><span>${esc(x.section||'正文')} · ${esc(x.left?.text||'')} ${x.right?.text?'→ '+esc(x.right.text):''}</span></span></button><div class="compare-choice" role="group" aria-label="${esc(x.id)} 采用 A 或 B"><label class="${choice==='left'?'is-checked':''}"><input type="radio" name="choice-${esc(x.id)}" value="left" data-selection-choice="left" data-diff-id="${esc(x.id)}" ${choice==='left'?'checked':''} ${disabled?'disabled':''}>采用 A</label><label class="${choice==='right'?'is-checked':''}"><input type="radio" name="choice-${esc(x.id)}" value="right" data-selection-choice="right" data-diff-id="${esc(x.id)}" ${choice==='right'?'checked':''} ${disabled?'disabled':''}>采用 B</label></div></div>`;
@@ -536,9 +544,11 @@
       const tag=element.tagName.toLowerCase();
       const text=element.textContent||'';
       const heading=/^h[1-6]$/.test(tag)||element.classList.contains('compare-heading');
-      const blockIds=[...element.querySelectorAll('[data-block-id]')].map(node=>node.getAttribute('data-block-id')||'').filter(Boolean);
+      const ids=[...element.querySelectorAll('[data-block-id],[data-diff-id]')];
+      const blockIds=ids.map(node=>node.getAttribute('data-block-id')||'').filter(Boolean);
+      const diffIds=ids.map(node=>node.getAttribute('data-diff-id')||'').filter(Boolean);
       const blockId=element.getAttribute('data-block-id')||blockIds[0]||'';
-      return {html:element.outerHTML,blockId,blockIds,textLength:text.length,kind:tag==='table'?'table':heading?'heading':'paragraph'};
+      return {html:element.outerHTML,blockId,blockIds,diffIds,textLength:text.length,kind:tag==='table'?'table':heading?'heading':'paragraph'};
     });
     return {style:wrapper.getAttribute('style')||'',blocks};
   }
@@ -548,7 +558,7 @@
       this.chunkSize=options.chunkSize||20; this.overscan=options.overscan||2;
       this.charsPerLine=options.charsPerLine||46; this.merged=Boolean(options.merged);
       this.onChange=options.onChange||null; this.chunks=[]; this.first=0; this.last=0; this.frame=null;
-      this.blockIndex=new Map(); this.blocks.forEach((block,index)=>[block.blockId,...(block.blockIds||[])].filter(Boolean).forEach(id=>this.blockIndex.set(id,index)));
+      this.blockIndex=new Map(); this.blocks.forEach((block,index)=>[block.blockId,...(block.blockIds||[]),...(block.diffIds||[])].filter(Boolean).forEach(id=>this.blockIndex.set(id,index)));
       this.scrollHandler=()=>this.schedule();
       this.container.addEventListener('scroll',this.scrollHandler,{passive:true});
       this.build();
@@ -628,15 +638,26 @@
       const index=this.blockIndex.get(blockId);if(index===undefined)return false;
       let chunkIndex=0;for(let i=0;i<this.chunks.length;i++){if(index<this.chunks[i].end){chunkIndex=i;break;}}
       const range=[Math.max(0,chunkIndex-1),Math.min(this.chunks.length,chunkIndex+2)];
+      const block=this.blocks[index];
+      const domId=block?.blockId||'';
+      const place=()=>{
+        let target=domId?this.container.querySelector(`[data-block-id="${CSS.escape(domId)}"]`):null;
+        if(!target)target=this.container.querySelector(`[data-diff-id="${CSS.escape(blockId)}"]`);
+        if(target){
+          const paneRect=this.container.getBoundingClientRect(),targetRect=target.getBoundingClientRect();
+          this.container.scrollTop+=targetRect.top-paneRect.top-24;
+        }
+        return Boolean(target);
+      };
       this.refresh(true,range);
-      const target=this.container.querySelector(`[data-block-id="${CSS.escape(blockId)}"]`);
-      if(target){
-        const paneRect=this.container.getBoundingClientRect(),targetRect=target.getBoundingClientRect();
-        this.container.scrollTop+=targetRect.top-paneRect.top-24;
-      }
+      const found=place();
+      // The first refresh measures the target chunks and may restore an old
+      // anchor. Re-place the block after measurement so the clicked change
+      // stays at the top edge instead of jumping back to the previous region.
       this.refresh(true);
-      requestAnimationFrame(()=>{this.refresh(true);});
-      return true;
+      place();
+      requestAnimationFrame(()=>{this.refresh(true);place();});
+      return found;
     }
   }
   function virtualize(container, document, options={}){

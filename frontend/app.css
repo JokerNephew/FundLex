@@ -365,3 +365,342 @@ button.footer-link:hover{color:var(--accent-dark);text-decoration:underline}
   #detail-panel:has(.review-layout)>.detail-body>p.subnote{padding:0 12px 10px;max-height:80px}
 }
 body:has(.detail-overlay.inline-contract-detail:not([hidden]) .review-layout){overflow:hidden}
+
+/* ==========================================================================
+   Unified legal-review surfaces: contract review + contract comparison.
+   Scoped tokens only; workbench, task tables and forms keep their own brand.
+   ========================================================================== */
+:root{
+  --fx-primary:#2f5b83;
+  --fx-primary-strong:#244866;
+  --fx-primary-soft:#eef4fa;
+  --fx-primary-line:#c9d8e6;
+  --fx-ink:#1f2933;
+  --fx-muted:#667380;
+  --fx-line:#d7dee5;
+  --fx-line-soft:#eaeef2;
+  --fx-canvas:#f1f4f7;
+  --fx-surface:#fff;
+  --fx-surface-soft:#f8fafc;
+  --fx-diff-del:#9d4a43;
+  --fx-diff-del-bg:#fbefee;
+  --fx-diff-del-line:#d8aaa5;
+  --fx-diff-ins:#2f6b4f;
+  --fx-diff-ins-bg:#edf6f0;
+  --fx-diff-ins-line:#a9c9b7;
+  --fx-diff-mod:#87631f;
+  --fx-diff-mod-bg:#fdf5e3;
+  --fx-focus:#b07a24;
+  --fx-focus-bg:#fff3d5;
+  --fx-radius-modal:12px;
+  --fx-radius-card:9px;
+  --fx-radius-ctl:6px;
+  --fx-radius-tag:4px;
+  --fx-shadow-modal:0 24px 80px rgb(10 20 30 / .38);
+  --fx-shadow-card:0 1px 2px rgb(20 30 40 / .05);
+}
+#detail-panel:has(.review-layout){
+  --accent:var(--fx-primary);
+  --accent-dark:var(--fx-primary-strong);
+  --accent-soft:var(--fx-primary-soft);
+  --ink:var(--fx-ink);
+  --muted:var(--fx-muted);
+  --line:var(--fx-line);
+  --line-soft:var(--fx-line-soft);
+  --green:var(--fx-diff-ins);
+  --green-soft:var(--fx-diff-ins-bg);
+  --red:var(--fx-diff-del);
+  --red-soft:var(--fx-diff-del-bg);
+  --amber:var(--fx-diff-mod);
+  --amber-soft:var(--fx-diff-mod-bg);
+  --radius:var(--fx-radius-card);
+  --shadow:var(--fx-shadow-card);
+}
+#detail-panel:has(.review-layout) button:focus-visible,
+#detail-panel:has(.review-layout) summary:focus-visible,
+#detail-panel:has(.review-layout) input:focus-visible,
+#compare-viewer button:focus-visible,
+#compare-viewer summary:focus-visible,
+#compare-viewer input:focus-visible,
+#compare-viewer select:focus-visible,
+#compare-viewer [tabindex]:focus-visible{outline-color:rgb(47 91 131 / .62)}
+.detail-overlay.inline-contract-detail:has(.review-layout){
+  background:rgb(15 23 32 / .56)!important;
+  backdrop-filter:blur(2px);
+}
+#detail-panel:has(.review-layout){
+  border-color:#c4cfd9;
+  border-radius:var(--fx-radius-modal);
+  box-shadow:var(--fx-shadow-modal);
+}
+#detail-panel:has(.review-layout) .detail-head{
+  align-items:center;
+  padding:13px 18px;
+  border-bottom:1px solid var(--fx-line);
+  background:#fff;
+}
+#detail-panel:has(.review-layout) .detail-head .object-title{
+  font-size:17px;
+  line-height:1.42;
+  letter-spacing:-.01em;
+  color:var(--fx-ink);
+}
+#detail-panel:has(.review-layout) #close-detail{
+  min-height:30px;
+  padding:5px 11px;
+  border:1px solid var(--fx-line);
+  border-radius:var(--fx-radius-ctl);
+  background:#fff;
+  color:#4e5c69;
+  font-size:12px;
+  font-weight:600;
+}
+#detail-panel:has(.review-layout) #close-detail:hover{background:#f6f8fa;border-color:#b9c6d3;color:var(--fx-ink)}
+#detail-panel:has(.review-layout) .detail-body{padding:0;background:var(--fx-canvas)}
+#detail-panel:has(.review-layout) .review-layout{
+  grid-template-columns:minmax(0,1fr) clamp(320px,26vw,380px);
+  gap:16px;
+  padding:16px 18px 12px;
+  background:var(--fx-canvas);
+}
+#detail-panel:has(.review-layout) .review-doc-wrap{
+  border:1px solid var(--fx-line);
+  border-radius:var(--fx-radius-card);
+  background:#fff;
+  box-shadow:var(--fx-shadow-card);
+  overflow:hidden;
+}
+#detail-panel:has(.review-layout) .review-toolbar{
+  gap:8px;
+  padding:10px 14px;
+  border-bottom:1px solid var(--fx-line);
+  border-radius:0;
+  background:var(--fx-surface-soft);
+}
+#detail-panel:has(.review-layout) .review-toolbar>strong{
+  color:var(--fx-ink);
+  font-size:13px;
+  font-weight:700;
+  letter-spacing:.01em;
+  white-space:nowrap;
+}
+#detail-panel:has(.review-layout) #review-count{
+  color:var(--fx-muted);
+  font-size:11.5px;
+  font-variant-numeric:tabular-nums;
+}
+#detail-panel:has(.review-layout) .review-toolbar .review-nav{gap:5px}
+#detail-panel:has(.review-layout) .review-toolbar .btn,
+#detail-panel:has(.review-layout) .review-actions .btn{
+  min-height:29px;
+  padding:4px 10px;
+  border-radius:var(--fx-radius-ctl);
+  font-size:11.5px;
+}
+#detail-panel:has(.review-layout) .review-toolbar .btn{background:#fff}
+#detail-panel:has(.review-layout) .review-toolbar .btn:hover{background:#f2f6fa;border-color:#b9c6d3}
+#detail-panel:has(.review-layout) .review-doc{
+  padding:26px clamp(22px,3.2vw,44px);
+  background:#fff;
+  color:#26313c;
+  font-family:"Songti SC","Noto Serif SC","Source Han Serif SC","SimSun",Georgia,serif;
+  font-size:14.5px;
+  line-height:2;
+}
+#detail-panel:has(.review-layout) .review-doc .doc-p{margin:0 0 12px;text-align:justify}
+#detail-panel:has(.review-layout) .review-doc .doc-heading{color:#1f2933;font-weight:700}
+#detail-panel:has(.review-layout) .review-doc .doc-toc{color:#46525e}
+#detail-panel:has(.review-layout) .review-doc .doc-tbl td{border-color:#dbe2e8;padding:6px 8px;font-size:12.5px}
+#detail-panel:has(.review-layout) .review-doc ins.rev{
+  padding:0 2px;
+  border-bottom:1px solid var(--fx-diff-ins-line);
+  border-radius:2px;
+  background:var(--fx-diff-ins-bg);
+  color:var(--fx-diff-ins);
+  text-decoration:none;
+}
+#detail-panel:has(.review-layout) .review-doc del.rev{
+  padding:0 2px;
+  border-radius:2px;
+  background:var(--fx-diff-del-bg);
+  color:var(--fx-diff-del);
+  text-decoration-color:var(--fx-diff-del-line);
+}
+#detail-panel:has(.review-layout) .review-doc ins.rev.rejected{
+  background:#f1f4f6;
+  color:#8b959f;
+  border-bottom-color:#d5dce2;
+  text-decoration:line-through;
+}
+#detail-panel:has(.review-layout) .review-doc del.rev.rejected{
+  background:transparent;
+  color:var(--fx-ink);
+  text-decoration:none;
+}
+#detail-panel:has(.review-layout) .review-doc ins.rev.active,
+#detail-panel:has(.review-layout) .review-doc del.rev.active{
+  outline:2px solid var(--fx-focus);
+  outline-offset:2px;
+}
+#detail-panel:has(.review-layout) .review-list h3{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  flex-wrap:wrap;
+  margin:0 0 10px;
+  color:#53616e;
+  font-size:12px;
+  letter-spacing:.02em;
+}
+#detail-panel:has(.review-layout) .review-kbd{
+  margin-left:auto;
+  padding:2px 7px;
+  border:1px solid var(--fx-line);
+  border-radius:999px;
+  background:#fff;
+  color:#87919b;
+  font-size:10px;
+  white-space:nowrap;
+}
+#detail-panel:has(.review-layout) .rev-list{
+  padding:0 2px 0 0;
+  scrollbar-width:thin;
+  scrollbar-color:#c6d0d9 transparent;
+}
+#detail-panel:has(.review-layout) .rev-item{
+  margin:0 0 8px;
+  padding:11px 12px;
+  border:1px solid var(--fx-line);
+  border-radius:8px;
+  background:#fff;
+  box-shadow:none;
+  transition:border-color .15s,background .15s,box-shadow .15s;
+}
+#detail-panel:has(.review-layout) .rev-item:hover{border-color:#b8c6d4;background:#fcfdff}
+#detail-panel:has(.review-layout) .rev-item.active{
+  border-color:var(--fx-primary-line);
+  background:#f7fafd;
+  box-shadow:inset 3px 0 0 var(--fx-primary),0 1px 2px rgb(20 30 40 / .04);
+}
+#detail-panel:has(.review-layout) .rev-item.rejected{opacity:.6;background:#fafbfc}
+#detail-panel:has(.review-layout) .rev-head{gap:6px;margin-bottom:6px}
+#detail-panel:has(.review-layout) .rev-head .rid{color:#85919c;font-size:10.5px;font-weight:650}
+#detail-panel:has(.review-layout) .rev-head .rule{
+  padding:1px 6px;
+  border:1px solid #e0e6ec;
+  border-radius:var(--fx-radius-tag);
+  background:#f2f5f8;
+  color:#52606d;
+  font-size:10px;
+}
+#detail-panel:has(.review-layout) .rev-head .rev-op{
+  padding:1px 6px;
+  border-radius:var(--fx-radius-tag);
+  background:var(--fx-diff-mod-bg);
+  color:var(--fx-diff-mod);
+  font-size:10px;
+  font-weight:650;
+}
+#detail-panel:has(.review-layout) .rev-head label{margin-left:auto;color:#5d6a76;font-size:11px}
+#detail-panel:has(.review-layout) .rev-head input{accent-color:var(--fx-primary)}
+#detail-panel:has(.review-layout) .rev-sec{margin:0 0 7px;color:#34404b;font-size:12px}
+#detail-panel:has(.review-layout) .clause-compare{gap:7px}
+#detail-panel:has(.review-layout) .review-list .evidence.quote{
+  margin:0;
+  padding:8px 10px;
+  border:1px solid var(--fx-line-soft);
+  border-left:3px solid #9fb0c0;
+  border-radius:6px;
+  background:#f8fafc;
+  font-size:11.5px;
+  line-height:1.7;
+}
+#detail-panel:has(.review-layout) .review-list .evidence.quote .quote-label{
+  margin-bottom:3px;
+  color:#687785;
+  font-size:10px;
+  letter-spacing:.05em;
+}
+#detail-panel:has(.review-layout) .review-list .evidence.quote.quote-after{
+  border-left-color:var(--fx-diff-ins);
+  background:var(--fx-diff-ins-bg);
+}
+#detail-panel:has(.review-layout) .review-list .evidence.quote.quote-after .quote-label{color:var(--fx-diff-ins)}
+#detail-panel:has(.review-layout) .review-actions{
+  gap:9px;
+  margin:0;
+  padding:11px 18px;
+  border-top:1px solid var(--fx-line);
+  background:#fff;
+}
+#detail-panel:has(.review-layout) .review-actions .btn{min-height:33px;padding:5px 12px;font-size:12px}
+#detail-panel:has(.review-layout) .review-actions .btn-primary{
+  border-color:var(--fx-primary);
+  background:var(--fx-primary);
+  color:#fff;
+}
+#detail-panel:has(.review-layout) .review-actions .btn-primary:hover{
+  border-color:var(--fx-primary-strong);
+  background:var(--fx-primary-strong);
+}
+#detail-panel:has(.review-layout) #review-message{color:var(--fx-muted);font-size:11.5px}
+#detail-panel:has(.review-layout) .review-hint{
+  margin:0;
+  padding:0 18px 12px;
+  border-top:0;
+  background:#fff;
+}
+#detail-panel:has(.review-layout) .review-hint summary{
+  display:inline-flex;
+  align-items:center;
+  gap:5px;
+  padding:5px 0 3px;
+  color:#7b8793;
+  font-size:10.5px;
+  cursor:pointer;
+  list-style:none;
+}
+#detail-panel:has(.review-layout) .review-hint summary::-webkit-details-marker{display:none}
+#detail-panel:has(.review-layout) .review-hint summary::before{content:"?";display:inline-grid;place-items:center;width:13px;height:13px;border:1px solid #c9d4dd;border-radius:50%;color:#7b8793;font-size:9px;line-height:1}
+#detail-panel:has(.review-layout) .review-hint[open] summary{color:#52606d}
+#detail-panel:has(.review-layout) .review-hint p{
+  max-height:96px;
+  margin:4px 0 0;
+  padding:8px 10px;
+  overflow:auto;
+  border:1px solid var(--fx-line-soft);
+  border-radius:6px;
+  background:var(--fx-surface-soft);
+  color:#6b7885;
+  font-size:10.5px;
+  line-height:1.7;
+}
+@media(max-width:1000px){
+  #detail-panel:has(.review-layout) .review-layout{padding:12px 14px 10px;gap:12px}
+}
+@media(max-width:760px){
+  #detail-panel:has(.review-layout){border-radius:10px}
+  #detail-panel:has(.review-layout) .detail-head{padding:11px 12px}
+  #detail-panel:has(.review-layout) .detail-head .object-title{font-size:15px}
+  #detail-panel:has(.review-layout) .review-layout{padding:10px 12px 8px;gap:10px}
+  #detail-panel:has(.review-layout) .review-doc{padding:18px 14px;font-size:13.5px;line-height:1.9}
+  #detail-panel:has(.review-layout) .review-actions{padding:9px 12px}
+  #detail-panel:has(.review-layout) .review-hint{padding:0 12px 9px}
+}
+#detail-panel:has(.review-layout) .detail-head>div::before{
+  content:"合同修订审查";
+  display:block;
+  margin:0 0 2px;
+  color:var(--fx-muted);
+  font-size:10px;
+  font-weight:700;
+  letter-spacing:.12em;
+}
+@media(max-width:760px){
+  .detail-overlay.inline-contract-detail:has(.review-layout){
+    padding:6px!important;
+    justify-content:center!important;
+    align-items:center!important;
+  }
+}
+#detail-panel:has(.review-layout) .review-doc>*{max-width:920px;margin-left:auto;margin-right:auto}

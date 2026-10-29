@@ -421,6 +421,81 @@ def test_compare_word_style_reader_renders_merged_redline_and_display_modes(brow
     assert page_errors == []
 
 
+def test_compare_diff_click_locates_virtualized_pure_insertion(browser, live_dev):
+    """A pure insertion whose right block id is absent from the merged projection
+    must still scroll the virtual document to its inserted mark."""
+    _app, base = live_dev
+    context = browser.new_context(viewport={"width": 1440, "height": 900})
+    context.add_init_script("localStorage.setItem('fundlex-dev-user','compare-virtual-click')")
+    page = context.new_page()
+    page_errors: list[str] = []
+    page.on("pageerror", lambda error: page_errors.append(str(error)))
+
+    blocks = []
+    for index in range(70):
+        text = f"第{index + 1}条 " + "本合同双方应当按照约定履行义务。" * 8
+        if index == 55:
+            blocks.append(f'<p class="compare-block has-change">{text}<ins class="compare-ins" data-diff-id="D60">新增条款</ins></p>')
+        else:
+            blocks.append(f'<p class="compare-block">{text}</p>')
+    merged = '<div class="compare-document compare-merged-document">' + ''.join(blocks) + '</div>'
+    diffs = [{"id": "D60", "type": "insert", "section": "正文",
+              "left": None, "right": {"text": "新增条款", "block_id": "R-MISSING"},
+              "right_spans": [{"block_id": "R-MISSING"}]}]
+
+    def view():
+        return {"pair": {"id": "P2", "label": "虚拟定位"}, "result_sha256": "a" * 64,
+                "left": {"name": "原文档.docx", "html": '<p data-block-id="L1">原条款</p>'},
+                "right": {"name": "修订文档.docx", "html": '<p data-block-id="R-MISSING">新增条款</p>'},
+                "merged": {"name": "修订文档.docx", "html": merged},
+                "summary": {"total": 1, "insert": 1, "modify": 0, "delete": 0},
+                "coverage": {"status": "complete", "warnings": []}, "diffs": diffs}
+
+    def selection():
+        return {"pair_id": "P2", "result_sha256": "a" * 64,
+                "left_source_sha256": "b" * 64, "right_source_sha256": "c" * 64,
+                "selection_epoch": 0,
+                "draft": {"selection_epoch": 0, "decisions": {"D60": "pending"}, "decision_hash": "d" * 64},
+                "decisions": {"D60": "pending"},
+                "assessment": {"pending_ids": ["D60"], "issues": [], "can_generate": False},
+                "diffs": diffs, "artifacts": []}
+
+    def scenario(path, query, route):
+        if path == "/api/compare/tasks":
+            return respond(route, {"items": [{"id": "T2", "name": "virtual-click", "status": "succeeded", "total": 1,
+                                              "pairs": [{"id": "P2", "label": "虚拟定位", "status": "succeeded",
+                                                         "left": {"name": "原文档.docx"}, "right": {"name": "修订文档.docx"},
+                                                         "summary": {"total": 1}}]}]})
+        if path == "/api/compare/tasks/T2":
+            return respond(route, {"id": "T2", "name": "virtual-click", "status": "succeeded", "total": 1,
+                                   "pairs": [{"id": "P2", "label": "虚拟定位", "status": "succeeded",
+                                              "left": {"name": "原文档.docx"}, "right": {"name": "修订文档.docx"},
+                                              "summary": {"total": 1}}]})
+        if path == "/api/compare/pairs/P2/view":
+            return respond(route, view())
+        if path == "/api/compare/pairs/P2/selection":
+            return respond(route, selection())
+        return respond(route, {})
+
+    install_api(page, base_api(scenario))
+    try:
+        open_dev(page, base, "#compare?mode=detail&id=T2&pair=P2")
+        page.locator("#compare-word-merged-pane .compare-ins").wait_for(state="attached")
+        page.locator(".compare-diff-item .compare-diff-jump").first.click()
+        page.wait_for_timeout(700)
+        assert page.locator("#compare-diff-counter").inner_text() == "1 / 1"
+        mark = page.locator('#compare-word-merged-pane .compare-ins.is-active[data-diff-id="D60"]')
+        assert mark.count() == 1
+        mark_box = mark.bounding_box()
+        pane_box = page.locator("#compare-word-merged-pane").bounding_box()
+        assert mark_box and pane_box
+        assert mark_box["y"] >= pane_box["y"] - 1
+        assert mark_box["y"] + mark_box["height"] <= pane_box["y"] + pane_box["height"] + 1
+    finally:
+        context.close()
+    assert page_errors == []
+
+
 def test_guide_run_switch_rejects_late_detail_and_download(browser, live_dev):
     _app, base = live_dev
     context = browser.new_context(viewport={"width": 1440, "height": 1000})
