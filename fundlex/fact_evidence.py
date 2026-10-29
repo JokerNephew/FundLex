@@ -19,6 +19,19 @@ def class_labels(value: str) -> set[str]:
     return labels
 
 
+def _name_in_text(name: str, text: str) -> bool:
+    """Match a class display name with or without the optional noun 基金.
+
+    Models routinely return ``A类人民币份额`` for the contract's
+    ``A类人民币基金份额``.  The noun is grammatical, not a different class.
+    """
+    if name in text:
+        return True
+    if "基金份额" not in name and name.endswith("份额"):
+        return name[:-2] + "基金份额" in text
+    return False
+
+
 def verify_class_set(inspection: Any, classes: Sequence[Any], quote: str) -> dict[str, Any]:
     text = _normal(quote)
     result: dict[str, Any] = {"quote_verified": False, "set_complete_verified": False,
@@ -75,8 +88,10 @@ def verify_class_set(inspection: Any, classes: Sequence[Any], quote: str) -> dic
         count = re.search(r"([一二两三四五六\d]+)(?:种|个|类)(?:不同)?(?:的)?(?:份额)?类别", text)
         number = (int(count[1]) if count and count[1].isdigit()
                   else counts.get(count[1]) if count else None)
-        complete = number == len(expected) and all(name in text for name in expected)
-        if not complete and number is None and all(name in text for name in expected):
+        complete = number == len(expected) and all(
+            _name_in_text(name, text) for name in expected)
+        if not complete and number is None and all(
+                _name_in_text(name, text) for name in expected):
             # An exhaustive enumeration of every full display name is complete
             # even without an explicit "四种" count.  The truncation check above
             # already rejected a sentence that names an additional class.
