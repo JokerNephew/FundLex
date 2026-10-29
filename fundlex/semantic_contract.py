@@ -63,6 +63,7 @@ class SemanticPolicy:
     required_new_terms: tuple[str, ...]
     preserve_terms: tuple[str, ...]
     selector_examples: tuple[str, ...]
+    replacement_mode: str = "model"
 
     def as_context(self) -> dict[str, Any]:
         return {
@@ -72,6 +73,7 @@ class SemanticPolicy:
             "required_new_terms": list(self.required_new_terms),
             "preserve_terms": list(self.preserve_terms),
             "selector_examples": list(self.selector_examples),
+            "replacement_mode": self.replacement_mode,
         }
 
 
@@ -118,6 +120,7 @@ def load_semantic_policies(path: Path | None = None) -> dict[str, SemanticPolicy
                                  item.get("preserve_terms") or () if str(value)),
             selector_examples=tuple(str(value) for value in
                                     item.get("selector_examples") or () if str(value)),
+            replacement_mode=str(item.get("replacement_mode") or "model"),
         )
     return result
 
@@ -214,7 +217,7 @@ def validate_semantic_target(target: SemanticTarget, rule: Mapping[str, Any],
 def parse_semantic_targets(value: Mapping[str, Any], rule: Mapping[str, Any],
                            inspection: Any, locations: Iterable[str],
                            policy: SemanticPolicy) -> tuple[list[SemanticTarget], list[dict[str, Any]]]:
-    from .recall import resolve_source_quote
+    from .recall import _rule_operation_key, resolve_source_quote
     allowed = {str(item) for item in locations}
     accepted: list[SemanticTarget] = []
     rejected: list[dict[str, Any]] = []
@@ -234,15 +237,37 @@ def parse_semantic_targets(value: Mapping[str, Any], rule: Mapping[str, Any],
                              "reason": "quote_not_bindable"})
             continue
         operation_id = str(item.get("operation_id") or "").strip()
-        operation_ids = _rule_operation_ids(rule)
-        if operation_id not in operation_ids and operation_id == str(rule.get("rule_id") or ""):
+        operation_map = {
+            _rule_operation_key(rule, index): operation
+            for index, operation in enumerate(rule.get("operations") or ())
+            if isinstance(operation, Mapping)
+        }
+        operation_ids = set(operation_map)
+        if operation_id not in operation_ids:
+            # The semantic model names the business action, not necessarily the
+            # engine's operation key.  Code owns operation identity: infer it from
+            # a single operation or from the quoted source wording.
             if len(operation_ids) == 1:
                 operation_id = next(iter(operation_ids))
+            else:
+                quote_compact = _compact(quote)
+                matches = [
+                    key for key, operation in operation_map.items()
+                    if _compact(str(operation.get("old_text") or ""))
+                    and (_compact(str(operation.get("old_text") or "")) in quote_compact
+                         or quote_compact in _compact(str(operation.get("old_text") or "")))
+                ]
+                if len(matches) == 1:
+                    operation_id = matches[0]
+        replacement = str(item.get("replacement") or "")
+        operation_spec = operation_map.get(operation_id) or {}
+        if policy.replacement_mode == "template":
+            replacement = str(operation_spec.get("new_text") or "")
         target = SemanticTarget(
             rule_id=str(rule.get("rule_id") or ""),
             operation_id=operation_id,
             location=location, quote=quote, start=located[0], end=located[1],
-            replacement=str(item.get("replacement") or ""),
+            replacement=replacement,
             preserved_text=tuple(str(value) for value in
                                  item.get("preserved_text") or () if str(value)),
             reason=str(item.get("reason") or ""),
@@ -305,6 +330,17 @@ def discover_for_rules(gateway: Any, inspection: Any, rules_by_id: Mapping[str, 
             continue
         scope = (scopes or {}).get(str(rule_id))
         locations = sorted(str(item) for item in getattr(scope, "locations", ()) or ())
+        if not locations:
+            # Structural fallback for a rule whose leaf resolver could not form a
+            # section (for example the ordered liquidation list): use the section
+            # named by the guide's section_hint, not a contract-wording regex.
+            from .recall import structure_index
+            hint = str(rule.get("section_hint") or "").replace(" ", "")
+            sections = structure_index(inspection)
+            locations = sorted({str(location)
+                                for section in sections
+                                if hint and hint in str(section.title).replace(" ", "")
+                                for location in section.locations})
         if not locations:
             rejected.append({"rule_id": rule_id, "reason": "scope_empty"})
             continue

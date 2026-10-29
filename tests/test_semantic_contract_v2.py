@@ -101,3 +101,33 @@ def test_quote_outside_scope_is_rejected(tmp_path):
         policy=load_semantic_policies()["G09"])
     assert not ok
     assert reason == "location_outside_scope"
+
+
+def test_multi_operation_rule_infers_operation_from_quote(tmp_path):
+    from fundlex.semantic_contract import parse_semantic_targets
+    rule = next(item for item in GUIDE["groups"] if item["rule_id"] == "G02")
+    inspection = _doc(tmp_path, "A类基金份额：申购时收取申购费，不计提销售服务费。")
+    policy = load_semantic_policies()["G02"]
+    accepted, rejected = parse_semantic_targets({"targets": [{
+        "location": "p0", "quote": "A类基金份额：申购时收取申购费，不计提销售服务费。", "operation_id": "replace",
+        "replacement": "A类人民币、A类美元现汇：申购时收取申购费，不计提销售服务费。",
+        "preserved_text": [], "reason": "class group",
+    }]}, rule, inspection, ["p0"], policy)
+    assert not rejected, rejected
+    assert accepted[0].operation_id == "G02:0"
+
+
+def test_template_policy_ignores_model_replacement_text(tmp_path):
+    """G16 uses the guide's fixed policy text; the model only locates the site."""
+    from fundlex.semantic_contract import parse_semantic_targets
+    rule = next(item for item in GUIDE["groups"] if item["rule_id"] == "G16")
+    old = "C类基金份额的销售服务费每日计提，按月支付。"
+    inspection = _doc(tmp_path, old)
+    policy = load_semantic_policies()["G16"]
+    accepted, rejected = parse_semantic_targets({"targets": [{
+        "location": "p0", "quote": old, "operation_id": "G16:0",
+        "replacement": "每年支付一次的错误文本",
+        "preserved_text": [], "reason": "payment clause",
+    }]}, rule, inspection, ["p0"], policy)
+    assert not rejected, rejected
+    assert accepted[0].replacement == str(rule["operations"][0]["new_text"])
