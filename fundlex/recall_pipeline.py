@@ -4468,6 +4468,20 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
                 synthetic.append(target)
                 targets.append(target)
                 origins[target.target_id] = "semantic_v2"
+            if semantic_targets:
+                from .rule_scope import RuleScope
+                by_rule: dict[str, set[str]] = {}
+                for target in semantic_targets:
+                    by_rule.setdefault(str(target.rule_id), set()).add(str(target.location))
+                for rule_id, locations in by_rule.items():
+                    current = scopes.get(rule_id)
+                    if current is None or not getattr(current, "locations", ()):
+                        scopes[rule_id] = RuleScope(
+                            rule_id=rule_id, leaf_ids=frozenset(),
+                            locations=frozenset(locations), zone="body",
+                            include_summary_copies=False, copy_keys=frozenset(),
+                            resolution="semantic_v2",
+                            evidence=("semantic_v2_source_proven",))
             report["semantic_v2"] = {
                 "accepted": [target.as_dict() for target in semantic_targets],
                 "rejected": semantic_rejected,
