@@ -2083,7 +2083,7 @@ def satisfied_by_new_text(rule: dict, facts: Facts, compact_body: str) -> str | 
 # "费用收取不同" family: the same policy expressed with different word order.
 _FEE_DIFFERENCE_MARKERS = (
     "费用收取不同", "费用收取上不同", "费用的不同", "费用不同",
-    "费率不同", "费用存在差异")
+    "费率不同", "费用存在差异", "费用存在不同")
 
 
 def _policy_phrase_equivalent(compact_new: str, compact_body: str,

@@ -2695,7 +2695,9 @@ def _reopen_audit_disagreed_targets(issues: Sequence[dict[str, Any]],
     return reopened
 
 
-def _audit_issues(state: dict[str, Any], targets: Sequence[Target]) -> list[dict[str, Any]]:
+def _audit_issues(state: dict[str, Any], targets: Sequence[Target],
+                  rules_by_id: Mapping[str, dict] | None = None,
+                  facts: Facts | None = None) -> list[dict[str, Any]]:
     """Current unresolved audit problems: missing/incomplete verdicts and missed targets."""
     issues: list[dict[str, Any]] = []
     results = state.get("results") or {}
@@ -2708,6 +2710,15 @@ def _audit_issues(state: dict[str, Any], targets: Sequence[Target]) -> list[dict
                            "target_id": target.target_id, "location": target.location})
         elif not result.get("artifact_proven") and (
                 result["verdict"] != "completed" or not result["evidence_verified"]):
+            if target.rule_id == "G18" and rules_by_id and facts is not None:
+                from .recall import satisfied_operation_keys
+                rule = rules_by_id.get("G18") or {}
+                if set(target.operations or ()) <= satisfied_operation_keys(
+                        rule, facts, _compact(target.quote)):
+                    # The source already states the same fee-difference policy
+                    # with a different connector ("费用存在不同").  The auditor's
+                    # literal-wording complaint is not a missing effect.
+                    continue
             # A model can quote the target's old text, correctly report that it is
             # present in BEFORE and absent in AFTER, yet still write an
             # "incomplete" verdict.  The evidence is the deterministic proof for
@@ -4767,7 +4778,7 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
                 round_ledger.update(round=round_number, scope=scope)
                 audit_rounds.append(round_ledger)
                 _merge_audit_state(audit_state, round_ledger, targets)
-                issues = _audit_issues(audit_state, targets)
+                issues = _audit_issues(audit_state, targets, rules_by_id, facts)
                 reopened = _reopen_audit_disagreed_targets(
                     issues, targets, rules_by_id, facts)
                 if reopened:
@@ -5021,7 +5032,7 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
                                   and not target.out_of_scope
                                   and plan_by_target.get(target.target_id, {}).get("status")
                                   not in {"planned", "satisfied", "not_applicable"}]
-            audit_issues = _audit_issues(audit_state, targets)
+            audit_issues = _audit_issues(audit_state, targets, rules_by_id, facts)
             pending_findings = [finding for finding in findings
                                 if finding["status"] in {"pending", "unresolved"}]
             unresolved: list[dict[str, Any]] = []
