@@ -4727,11 +4727,11 @@ def _section_for_hint(sections: Sequence[Section], hint: Any) -> Section | None:
     text = str(hint or "").strip()
     if not text:
         return None
-    compact_hint = _compact(text)
+    compact_hint = _compact(text).replace("的", "")
     best: Section | None = None
     best_length = 0
     for section in sections:
-        compact_title = _compact(section.title)
+        compact_title = _compact(section.title).replace("的", "")
         if compact_hint and compact_hint in compact_title:
             if len(compact_title) > best_length:
                 best, best_length = section, len(compact_title)

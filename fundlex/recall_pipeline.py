@@ -298,7 +298,7 @@ def _window_ledger(entry: _WindowState) -> dict[str, Any]:
 
 def _normalise_guide_section(text: str) -> str:
     value = re.sub(r"^第[一二三四五六七八九十百零〇\d]+(?:部分|章)", "", str(text or "").strip())
-    return re.sub(r"[\s\-—_:：、，,。；;（）()]+", "", value)
+    return re.sub(r"[\s\-—_:：、，,。；;（）()]+", "", value).replace("的", "")
 
 
 def _guide_section_present(hint: str, section_titles: Sequence[str]) -> bool:
