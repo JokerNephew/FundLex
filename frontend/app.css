@@ -364,3 +364,4 @@ button.footer-link:hover{color:var(--accent-dark);text-decoration:underline}
   #detail-panel:has(.review-layout) .review-actions{margin:8px 12px 0}
   #detail-panel:has(.review-layout)>.detail-body>p.subnote{padding:0 12px 10px;max-height:80px}
 }
+body:has(.detail-overlay.inline-contract-detail:not([hidden]) .review-layout){overflow:hidden}
