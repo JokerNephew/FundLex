@@ -1539,4 +1539,5 @@
 - **已验证**：V1 浏览器 **12 passed**；V2 浏览器 **10 passed**；Compare 专项 **10 passed**；全量 pytest **2158 passed / 85 skipped**；本地 1600/1440/390 三种宽度截图复核，页面错误 0；真实 1421 差异合同点击第 6、63 条目标均可见。
 - **规范文档**：`docs/READER_VISUAL_SYSTEM.md`；集中问题 FL-D515 追加证据、FL-D516 新增。
 - **未做**：V2 React 阅读器未做同版视觉改版；深色模式未做。
-- **下一步**：发布 `72e0c70` 后用生产真实任务复核三个阅读器，重点看 1440 宽下工具栏换行、源文档、修订清单和移动端落点。
+- **已发布**：`8dfb5fc`；生产 `app.css?v=eb49c4a4a518cb9d`、`compare.css?v=eb49c4a4a518cb9d`，五个服务 active，`/api/capabilities` 200。生产用公开指引合同完成真实 Compare Worker 任务（7 处差异）：`--fx-primary=#2f5b83`、弹窗 12px、按钮 6px/30px、删除标签浅红底；Word 视图点击第 1/3/7 条目标均可见，双栏连线 1 条且左右目标可见，页面错误 0。截图 `/tmp/opencode/prod-visual-word-1600.png`、`/tmp/opencode/prod-visual-classic-1600.png`、`/tmp/opencode/prod-visual-word-click-1600.png`。
+- **下一步**：用户强刷后复核三个阅读器；审查页生产端未新建真实模型修订任务，需用户用已有修订任务确认字体、间距与移动端落点。
