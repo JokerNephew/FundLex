@@ -3,7 +3,7 @@
   const api = window.FundLexWorkbench || {};
   const $ = id => document.getElementById(id);
   const esc = api.esc || (v => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])));
-  const state = { tasks: [], task: null, pairs: [], pairIndex: 0, selectedPairId: null, view: null, selection: null, selectionDraft: null, selectionDirty: false, selectionSaving: false, selectionToken: 0, selectionSaveToken: 0, poll: null, requestToken: 0, lineFrame: null, scrollFrame: null, scrollSource: null, identityToken: 0, listToken: 0, inputs: [{}], uploadDraft: null, splitRatio: .5, pendingSplitRatio: .5, splitDragging: false, leftMarks: null, rightMarks: null, mergedMarks: null, wordLeftMarks: null, wordRightMarks: null, viewMode: 'word', classicSide: 'left' };
+  const state = { tasks: [], task: null, pairs: [], pairIndex: 0, selectedPairId: null, view: null, selection: null, selectionDraft: null, selectionDirty: false, selectionSaving: false, selectionToken: 0, selectionSaveToken: 0, poll: null, requestToken: 0, lineFrame: null, scrollFrame: null, scrollSource: null, identityToken: 0, listToken: 0, inputs: [{}], uploadDraft: null, splitRatio: .5, pendingSplitRatio: .5, splitDragging: false, leftMarks: null, rightMarks: null, mergedMarks: null, wordLeftMarks: null, wordRightMarks: null, viewMode: 'word', classicSide: 'left', classicRendered: false, wordSourcesRendered: false, diffPositions: null, docs: null, rawDocs: null };
   const SPLIT_KEY = 'fundlex-compare-split-ratio', SPLIT_GUTTER = 28;
   const clampSplitRatio = value => { const number = Number(value); return value !== null && value !== '' && Number.isFinite(number) ? Math.min(.8, Math.max(.2, number)) : .5; };
   function storedSplitRatio() { try { return clampSplitRatio(localStorage.getItem(SPLIT_KEY)); } catch { return .5; } }
@@ -31,7 +31,7 @@
   function syncInputIndexes() { document.querySelectorAll('#compare-pair-inputs .compare-pair-input').forEach((row,i)=>{ row.dataset.pairIndex=String(i); row.querySelector('[data-compare-left]')?.setAttribute('data-compare-left',String(i)); row.querySelector('[data-compare-right]')?.setAttribute('data-compare-right',String(i)); row.querySelector('[data-compare-remove]')?.setAttribute('data-compare-remove',String(i)); }); }
   function selectedFiles() { return (state.inputs || []).map(x => ({ left: x._left || x.left, right: x._right || x.right })).filter(x => x.left || x.right); }
   function resetFolders() { state.folderLeft=[]; state.folderRight=[]; for(const id of ['compare-left-folder','compare-right-folder'])if($(id))$(id).value=''; }
-  function showCreate(show=true) { $('compare-create').hidden = !show; if (show) { clearTimeout(state.poll); state.requestToken++; $('compare-detail').hidden=true; setFullscreenViewer(false); state.view=null; state.mergedMarks=state.leftMarks=state.rightMarks=null; state.uploadDraft=null; state.inputs=[{}]; resetFolders(); $('compare-upload-message').textContent=''; $('compare-retry').hidden=true; $('compare-lines')?.replaceChildren(); renderInputs(); } }
+  function showCreate(show=true) { $('compare-create').hidden = !show; if (show) { clearTimeout(state.poll); state.requestToken++; $('compare-detail').hidden=true; setFullscreenViewer(false); state.view=null; state.mergedMarks=state.leftMarks=state.rightMarks=null; state.uploadDraft=null; state.inputs=[{}]; resetFolders(); $('compare-upload-message').textContent=''; $('compare-retry').hidden=true; $('compare-lines')?.replaceChildren(); for(const pane of [$('compare-word-merged-pane'),$('compare-word-left-pane'),$('compare-word-right-pane'),$('compare-left-pane'),$('compare-right-pane')]){clearVirtual(pane);if(pane)pane.innerHTML='';} renderInputs(); } }
   function statusLabel(v) { return ({pending:'待上传',queued:'排队中',leased:'处理中',running:'处理中',succeeded:'已处理',incomplete:'覆盖不完整',failed:'失败',retry_wait:'等待重试',sealed:'已提交',uploading:'上传中',completed:'已处理'}[v] || v || '—'); }
   function taskMetrics(task) {
     const pairs=task.pairs||[], counts=task.counts||{};
@@ -93,6 +93,7 @@
   function applySplitRatio(value, persist = true) {
     const ratio = clampSplitRatio(value), cols=$('compare-columns'), head=$('compare-columns-head'), gutter=$('compare-gutter');
     if (!cols) return;
+    state.diffPositions = null;
     state.splitRatio = ratio;
     cols.style.gridTemplateColumns = `${ratio}fr ${SPLIT_GUTTER}px ${1 - ratio}fr`;
     if (head) head.style.gridTemplateColumns = `${ratio}fr ${SPLIT_GUTTER}px ${1 - ratio}fr`;
@@ -126,7 +127,7 @@
       gutter.classList.remove('is-dragging');
       if (preview) { preview.style.left = ''; preview.style.opacity = ''; }
       window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', onUp); window.removeEventListener('pointercancel', onCancel);
-      applySplitRatio(apply ? state.pendingSplitRatio : state.splitRatio, true); drawLines();
+      applySplitRatio(apply ? state.pendingSplitRatio : state.splitRatio, true); refreshVirtualLayouts(); drawLines();
     };
     const onUp = () => finish(true);
     const onCancel = () => finish(false);
@@ -164,28 +165,48 @@
     state.leftMarks = marks('compare-left-pane');
     state.rightMarks = marks('compare-right-pane');
   }
+  function cacheDiffPositions() {
+    if(!state.view||!state.leftMarks||!state.rightMarks)return;
+    const left=$('compare-left-pane'),right=$('compare-right-pane'); if(!left||!right)return;
+    const lr=left.getBoundingClientRect(),rr=right.getBoundingClientRect(),positions=[];
+    for(const d of state.view.diffs||[]){
+      const l=state.leftMarks.get(d.id),r=state.rightMarks.get(d.id); if(!l||!r)continue;
+      const a=l.getBoundingClientRect(),b=r.getBoundingClientRect();
+      positions.push({id:d.id,leftY:a.top-lr.top+left.scrollTop,rightY:b.top-rr.top+right.scrollTop,leftH:a.height,rightH:b.height,leftX:a.right-lr.left,rightX:b.left-rr.left});
+    }
+    state.diffPositions=positions;
+  }
   function drawLines() {
     if(state.lineFrame!==null)return;
     state.lineFrame=requestAnimationFrame(()=>{
       state.lineFrame=null;
+      const classic=$('compare-classic-view');
+      if(!classic||classic.hidden||!state.view||$('compare-viewer').hidden)return;
       const cols=$('compare-columns'),svg=$('compare-lines'); if(!cols||!svg)return;
-      svg.replaceChildren(); if(!state.view||$('compare-viewer').hidden)return;
-      const cr=cols.getBoundingClientRect(),left=$('compare-left-pane'),right=$('compare-right-pane'),lr=left.getBoundingClientRect(),rr=right.getBoundingClientRect();
-      if(!cr.width||!cr.height)return;
-      svg.setAttribute('viewBox',`0 0 ${cr.width} ${cr.height}`);
-       const active=visibleDiffs()[state.diffIndex]?.id,activeOnly=$('compare-active-only')?.checked,fragment=document.createDocumentFragment();
-      const visible=(rect,pane)=>rect.bottom>=pane.top&&rect.top<=pane.bottom&&rect.right>=pane.left&&rect.left<=pane.right;
-      if(!state.leftMarks||!state.rightMarks)refreshDiffMarks();
-      const leftMarks=state.leftMarks,rightMarks=state.rightMarks;
-      for(const d of state.view.diffs||[]) {
-        if(activeOnly&&d.id!==active)continue;
-        const l=leftMarks.get(d.id),r=rightMarks.get(d.id); if(!l||!r)continue;
-        const a=l.getBoundingClientRect(),b=r.getBoundingClientRect();
-        if(d.id!==active&&!visible(a,lr)&&!visible(b,rr))continue;
-        const x1=a.right-cr.left,y1=a.top+a.height/2-cr.top,x2=b.left-cr.left,y2=b.top+b.height/2-cr.top,path=document.createElementNS('http://www.w3.org/2000/svg','path');
-        path.setAttribute('d',`M ${x1} ${y1} C ${(x1+x2)/2} ${y1}, ${(x1+x2)/2} ${y2}, ${x2} ${y2}`); path.dataset.diffId=d.id; path.classList.toggle('active',d.id===active); fragment.append(path);
+      const cr=cols.getBoundingClientRect(); if(!cr.width||!cr.height)return;
+      const left=$('compare-left-pane'),right=$('compare-right-pane'); if(!left||!right)return;
+      const lr=left.getBoundingClientRect(),rr=right.getBoundingClientRect();
+      if(!state.diffPositions)cacheDiffPositions();
+      if(!state.diffPositions)return;
+      const active=visibleDiffs()[state.diffIndex]?.id;
+      const leftTop=left.scrollTop,leftBottom=leftTop+left.clientHeight,rightTop=right.scrollTop,rightBottom=rightTop+right.clientHeight;
+      const fragment=document.createDocumentFragment(); let count=0;
+      for(const p of state.diffPositions){
+        if(p.id!==active){
+          const above=p.leftY+p.leftH<leftTop-80&&p.rightY+p.rightH<rightTop-80;
+          const below=p.leftY>leftBottom+80&&p.rightY>rightBottom+80;
+          if(above||below)continue;
+        }
+        const x1=lr.left-cr.left+p.leftX,y1=lr.top-cr.top+(p.leftY-leftTop)+p.leftH/2;
+        const x2=rr.left-cr.left+p.rightX,y2=rr.top-cr.top+(p.rightY-rightTop)+p.rightH/2;
+        if(p.id!==active&&((y1<-40&&y2<-40)||(y1>cr.height+40&&y2>cr.height+40)))continue;
+        const path=document.createElementNS('http://www.w3.org/2000/svg','path');
+        path.setAttribute('d',`M ${x1} ${y1} C ${(x1+x2)/2} ${y1}, ${(x1+x2)/2} ${y2}, ${x2} ${y2}`);
+        path.dataset.diffId=p.id;path.classList.toggle('active',p.id===active);fragment.append(path);
+        if(++count>=240)break;
       }
-      svg.append(fragment);
+      svg.setAttribute('viewBox',`0 0 ${cr.width} ${cr.height}`);
+      svg.replaceChildren(fragment);
     });
   }
   function visiblePanels() {
@@ -225,6 +246,27 @@
     return {...payload,selection_epoch:epoch,decisions,selection:{selection_epoch:epoch,decisions},artifacts};
   }
   function selectionDecision(id) { return state.selectionDraft?.[id] || state.selection?.decisions?.[id] || 'pending'; }
+  function syncSelectionControls() {
+    const disabled=!state.selection||state.selectionSaving;
+    document.querySelectorAll('#compare-diff-list .compare-diff-item').forEach(item=>{
+      const id=item.dataset.compareDiff; if(!id)return;
+      const choice=selectionDecision(id);
+      item.classList.toggle('is-selected-choice',choice!=='pending');
+      item.querySelectorAll('[data-selection-choice]').forEach(input=>{
+        const checked=input.value===choice; input.checked=checked; input.disabled=disabled;
+        input.closest('label')?.classList.toggle('is-checked',checked);
+      });
+    });
+  }
+  function updateSelectionItem(id) {
+    const item=document.querySelector(`.compare-diff-item[data-compare-diff="${CSS.escape(id)}"]`); if(!item)return;
+    const choice=selectionDecision(id), disabled=!state.selection||state.selectionSaving;
+    item.classList.toggle('is-selected-choice',choice!=='pending');
+    item.querySelectorAll('[data-selection-choice]').forEach(input=>{
+      const checked=input.value===choice; input.checked=checked; input.disabled=disabled;
+      input.closest('label')?.classList.toggle('is-checked',checked);
+    });
+  }
   function selectionBinding() { const s=state.selection; if(!s)return null; return {expected_epoch:Number.isInteger(s.selection_epoch)?s.selection_epoch:0,result_sha256:s.result_sha256,left_source_sha256:s.left_source_sha256,right_source_sha256:s.right_source_sha256}; }
   function selectionStatus(message, error=false) { const node=$('compare-selection-status'); if(node){node.textContent=message||'';node.classList.toggle('is-error',!!error);} }
   function selectionCounts() { const ds=state.view?.diffs||[], counts={pending:0,left:0,right:0}; ds.forEach(d=>{const value=selectionDecision(d.id);if(counts[value]!==undefined)counts[value]++;}); return {counts,total:ds.length,pending:counts.pending}; }
@@ -237,7 +279,7 @@
   function resetSelection() {
     state.selectionToken++;state.selectionSaveToken++;state.selection=null;state.selectionDraft=null;
     state.selectionDirty=false;state.selectionSaving=false;state.selectionBusy=false;state.generationKey=null;
-    selectionStatus('');$('compare-selection-downloads')?.replaceChildren();renderSelection();
+    selectionStatus('');$('compare-selection-downloads')?.replaceChildren();renderSelection();syncSelectionControls();
   }
   function renderSelectionDownloads() {
     const box=$('compare-selection-downloads'); if(!box)return;
@@ -265,14 +307,14 @@
   }
   async function loadSelection(pairId) {
     resetSelection();const token=state.selectionToken;
-    try { const payload=await json(`/api/compare/pairs/${encodeURIComponent(pairId)}/selection`); if(token!==state.selectionToken||pairId!==state.selectedPairId)return; state.selection=normalizeSelection(payload);state.selectionDraft={...(state.selection?.decisions||{})};renderSelection();renderDiffList(); }
+    try { const payload=await json(`/api/compare/pairs/${encodeURIComponent(pairId)}/selection`); if(token!==state.selectionToken||pairId!==state.selectedPairId)return; state.selection=normalizeSelection(payload);state.selectionDraft={...(state.selection?.decisions||{})};renderSelection();syncSelectionControls(); }
     catch(e){if(token===state.selectionToken){selectionStatus(`读取选择状态失败：${e.message}`,true);renderSelection();}}
   }
-  async function saveSelectionDraft() {
+  async function saveSelectionDraft(updateIds) {
     const binding=selectionBinding(); if(!binding||!state.selectionDraft)return;
     if(state.selectionSaving||state.selectionBusy)return;
     const context=selectionContext(), token=++state.selectionSaveToken, decisions={...state.selectionDraft};
-    state.selectionSaving=true;state.selectionDirty=true;selectionStatus('正在保存选择…');renderSelection();renderDiffList();
+    state.selectionSaving=true;state.selectionDirty=true;selectionStatus('正在保存选择…');renderSelection();if(updateIds)updateIds.forEach(updateSelectionItem);else syncSelectionControls();
     try {
       const payload=await json(`/api/compare/pairs/${encodeURIComponent(context.pairId)}/selection`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({...binding,decisions})});
       if(!selectionCurrent(context)||token!==state.selectionSaveToken)return;
@@ -287,14 +329,14 @@
         } catch { /* Keep the local map; a failed reload must not discard it. */ }
       }
       if(selectionCurrent(context)){state.selectionDirty=true;selectionStatus('保存未完成，本地选择已保留。请核对后点击“保存当前选择”重试。',true);}
-    } finally {if(selectionCurrent(context)&&token===state.selectionSaveToken){state.selectionSaving=false;renderSelection();renderDiffList();}}
+    } finally {if(selectionCurrent(context)&&token===state.selectionSaveToken){state.selectionSaving=false;renderSelection();if(updateIds)updateIds.forEach(updateSelectionItem);else syncSelectionControls();}}
   }
-  function chooseSelection(id, choice) { if(!state.selection||state.selectionSaving||state.selectionBusy)return; state.selectionDraft={...(state.selectionDraft||{}),[id]:choice};state.selectionDirty=true;saveSelectionDraft(); }
-  function setAllSelections(choice) { if(!state.selection||state.selectionSaving||state.selectionBusy)return; const next={};(state.view?.diffs||[]).forEach(item=>{next[item.id]=choice;});state.selectionDraft=next;state.selectionDirty=true;saveSelectionDraft(); }
+  function chooseSelection(id, choice) { if(!state.selection||state.selectionSaving||state.selectionBusy)return; state.selectionDraft={...(state.selectionDraft||{}),[id]:choice};state.selectionDirty=true;updateSelectionItem(id);saveSelectionDraft([id]); }
+  function setAllSelections(choice) { if(!state.selection||state.selectionSaving||state.selectionBusy)return; const next={};(state.view?.diffs||[]).forEach(item=>{next[item.id]=choice;});state.selectionDraft=next;state.selectionDirty=true;syncSelectionControls();saveSelectionDraft(); }
   async function selectionAction(kind) {
     const binding=selectionBinding();if(!binding||state.selectionSaving||state.selectionBusy||state.selectionDirty||(kind==='generate'&&!selectionCanGenerate()))return;
     const context=selectionContext();state.selectionBusy=true;
-    selectionStatus(kind==='generate'?'正在生成选择结果 DOCX，请稍候…':'正在检查生成条件…');renderSelection();renderDiffList();
+    selectionStatus(kind==='generate'?'正在生成选择结果 DOCX，请稍候…':'正在检查生成条件…');renderSelection();syncSelectionControls();
     const headers={'Content-Type':'application/json'};
     if(kind==='generate'){state.generationKey ||= `compare-${crypto.randomUUID()}`;headers['Idempotency-Key']=state.generationKey;}
     try {
@@ -310,7 +352,7 @@
       }
       else {state.selection={...state.selection,assessment:result.assessment};const pending=result.assessment.pending_ids.length,blocked=selectionIssues().some(x=>x.blocking);selectionStatus(pending?`仍有 ${pending} 处待选择，全部明确选择后才能生成。`:blocked?'当前结果包含暂不支持的结构，请查看说明。':'当前选择可以提交生成；生成时还会校验 DOCX 结构。',!!(pending||blocked));}
     } catch(e){if(selectionCurrent(context))selectionStatus(e.raw||e.message,true);}
-    finally {if(selectionCurrent(context)){state.selectionBusy=false;renderSelection();renderDiffList();}}
+    finally {if(selectionCurrent(context)){state.selectionBusy=false;renderSelection();syncSelectionControls();}}
   }
   const previewSelection=()=>selectionAction('preview'), generateSelection=()=>selectionAction('generate');
   async function downloadSelection(url, filename) {
@@ -339,6 +381,8 @@
       button.setAttribute('aria-pressed', String(active));
     });
     if (persist) { try { localStorage.setItem('fundlex-compare-view-mode', next); } catch {} }
+    if (next === 'classic' && state.view && !state.classicRendered) renderClassicView();
+    if (next === 'word' && state.view && !state.wordSourcesRendered) renderWordSources();
     if (next === 'classic') applySplitRatio(state.splitRatio, false);
     requestAnimationFrame(() => { drawLines(); if (state.view) focusDiff(state.diffIndex); });
   }
@@ -357,6 +401,7 @@
   }
   function setMobilePane(pane, persist=true) {
     const next = ['merged','left','right'].includes(pane) ? pane : 'merged';
+    if(next!=='merged'&&$('compare-word-layout')?.classList.contains('is-sources-hidden'))setSourcesVisible(true,false);
     const viewer = $('compare-viewer'); if (viewer) viewer.dataset.mobilePane = next;
     document.querySelectorAll('[data-word-pane]').forEach(button => {
       const active = button.dataset.wordPane === next;
@@ -369,8 +414,9 @@
     const layout = $('compare-word-layout'); if (!layout) return;
     layout.classList.toggle('is-sources-hidden', !show);
     const toggle = $('compare-show-sources'); if (toggle) toggle.checked = show;
+    if (show && state.view && !state.wordSourcesRendered) renderWordSources();
     if (persist) { try { localStorage.setItem('fundlex-compare-show-sources', show ? '1' : '0'); } catch {} }
-    requestAnimationFrame(() => { drawLines(); });
+    requestAnimationFrame(() => { if(show){const merged=$('compare-word-merged-pane');if(merged)syncPaneScroll(merged);} drawLines(); });
   }
   function setMarkupMode(mode, persist=true) {
     const layout = $('compare-word-layout'); if (!layout) return;
@@ -381,17 +427,41 @@
   }
   function visibleDiffs() { const all=state.view?.diffs||[], filter=$('compare-diff-filter')?.value||''; return filter?all.filter(x=>x.type===filter):all; }
   function paneHasTarget(paneId, selector) { return Boolean($(paneId)?.querySelector(selector)); }
+  function markActiveDiff() {
+    const item=visibleDiffs()[state.diffIndex]; if(!item)return;
+    const selector=`[data-diff-id="${CSS.escape(item.id)}"]`;
+    document.querySelectorAll([...WORD_PANES,...CLASSIC_PANES].map(pane=>`#${pane} ${selector}`).join(',')).forEach(node=>node.classList.add('is-active'));
+    document.querySelector(`.compare-diff-item[data-compare-diff="${CSS.escape(item.id)}"]`)?.classList.add('is-active');
+  }
   function focusDiff(index) {
     const ds=visibleDiffs();
     document.querySelectorAll('.compare-diff.is-active,.compare-diff-item.is-active').forEach(n=>n.classList.remove('is-active'));
     if(!ds.length){$('compare-diff-counter').textContent='0 / 0';return;}
-    state.diffIndex=(index+ds.length)%ds.length;const id=ds[state.diffIndex].id;
+    state.diffIndex=(index+ds.length)%ds.length;const id=ds[state.diffIndex].id,diff=ds[state.diffIndex];
     const selector=`[data-diff-id="${CSS.escape(id)}"]`;
     const paneIds=[...WORD_PANES,...CLASSIC_PANES];
+    const blockFor=side=>{
+      const span=side==='left'?diff.left:diff.right;
+      const anchor=side==='left'?diff.left_anchor:diff.right_anchor;
+      const spans=side==='left'?diff.left_spans:diff.right_spans;
+      return span?.block_id||anchor?.block_id||spans?.[0]?.block_id||'';
+    };
+    const findBlock=(paneId,side)=>{
+      const pane=$(paneId);if(!pane||!pane._virtualDoc||!pane.clientHeight)return;
+      const blockId=blockFor(side)||blockFor(side==='left'?'right':'left');
+      if(blockId)pane._virtualDoc.scrollToBlock(blockId);
+    };
+    findBlock('compare-word-merged-pane','right');findBlock('compare-word-left-pane','left');findBlock('compare-word-right-pane','right');
+    findBlock('compare-left-pane','left');findBlock('compare-right-pane','right');
     document.querySelectorAll(paneIds.map(pane=>`#${pane} ${selector}`).join(',')).forEach(n=>n.classList.add('is-active'));
-    const item=document.querySelector(`.compare-diff-item[data-compare-diff="${CSS.escape(id)}"]`),list=$('compare-diff-list');
+    const list=$('compare-diff-list');
+    if(list&&state.diffList?.length&&(!state.diffWindow||state.diffIndex<state.diffWindow.start||state.diffIndex>=state.diffWindow.end)){
+      const desired=Math.max(0,state.diffIndex*DIFF_ITEM_HEIGHT-(list.clientHeight-DIFF_ITEM_HEIGHT)/2);
+      list.scrollTop=desired;renderDiffWindow(Math.max(0,Math.floor(desired/DIFF_ITEM_HEIGHT)-4));
+    }
+    const item=document.querySelector(`.compare-diff-item[data-compare-diff="${CSS.escape(id)}"]`);
     item?.classList.add('is-active');
-    if(item){const ir=item.getBoundingClientRect(),lr=list.getBoundingClientRect();if(ir.top<lr.top||ir.bottom>lr.bottom)list.scrollTop+=ir.top-lr.top;}
+    if(item&&list){const ir=item.getBoundingClientRect(),lr=list.getBoundingClientRect();if(ir.top<lr.top||ir.bottom>lr.bottom)list.scrollTop+=ir.top-lr.top;}
     $('compare-diff-counter').textContent=`${state.diffIndex+1} / ${ds.length}`;
     if(matchMedia('(max-width:760px)').matches){
       if(state.viewMode==='word'){
@@ -414,17 +484,188 @@
     requestAnimationFrame(()=>requestAnimationFrame(()=>{state.focusScrolling=false;}));
     requestAnimationFrame(drawLines);
   }
-  function renderDiffList() { const d=visibleDiffs(), disabled=!state.selection||state.selectionSaving; $('compare-diff-list').innerHTML=d.length?d.map((x,i)=>{const choice=selectionDecision(x.id);const kind=x.type==='modify'?'修改':x.type==='insert'?'插入':'删除';return `<div class="compare-diff-item ${choice!=='pending'?'is-selected-choice':''}" data-compare-diff="${esc(x.id)}"><button type="button" class="compare-diff-jump" data-compare-diff="${esc(x.id)}"><span class="compare-diff-index">${i+1}</span><span class="compare-diff-kind is-${esc(x.type)}">${esc(kind)}</span><span class="compare-diff-preview"><small>FundLex 对比</small><span>${esc(x.section||'正文')} · ${esc(x.left?.text||'')} ${x.right?.text?'→ '+esc(x.right.text):''}</span></span></button><div class="compare-choice" role="group" aria-label="${esc(x.id)} 采用 A 或 B"><label class="${choice==='left'?'is-checked':''}"><input type="radio" name="choice-${esc(x.id)}" value="left" data-selection-choice="left" data-diff-id="${esc(x.id)}" ${choice==='left'?'checked':''} ${disabled?'disabled':''}>采用 A</label><label class="${choice==='right'?'is-checked':''}"><input type="radio" name="choice-${esc(x.id)}" value="right" data-selection-choice="right" data-diff-id="${esc(x.id)}" ${choice==='right'?'checked':''} ${disabled?'disabled':''}>采用 B</label></div></div>`;}).join(''):'<p class="empty">当前筛选条件下没有差异。</p>'; }
-  function renderContract(pane, html) {
-    pane.innerHTML=html||'';
+  const DIFF_ITEM_HEIGHT=128, DIFF_RENDER_COUNT=24;
+  function diffItemHtml(x,index,choice,disabled){
+    const kind=x.type==='modify'?'修改':x.type==='insert'?'插入':'删除';
+    return `<div class="compare-diff-item ${choice!=='pending'?'is-selected-choice':''}" data-compare-diff="${esc(x.id)}"><button type="button" class="compare-diff-jump" data-compare-diff="${esc(x.id)}"><span class="compare-diff-index">${index+1}</span><span class="compare-diff-kind is-${esc(x.type)}">${esc(kind)}</span><span class="compare-diff-preview"><small>FundLex 对比</small><span>${esc(x.section||'正文')} · ${esc(x.left?.text||'')} ${x.right?.text?'→ '+esc(x.right.text):''}</span></span></button><div class="compare-choice" role="group" aria-label="${esc(x.id)} 采用 A 或 B"><label class="${choice==='left'?'is-checked':''}"><input type="radio" name="choice-${esc(x.id)}" value="left" data-selection-choice="left" data-diff-id="${esc(x.id)}" ${choice==='left'?'checked':''} ${disabled?'disabled':''}>采用 A</label><label class="${choice==='right'?'is-checked':''}"><input type="radio" name="choice-${esc(x.id)}" value="right" data-selection-choice="right" data-diff-id="${esc(x.id)}" ${choice==='right'?'checked':''} ${disabled?'disabled':''}>采用 B</label></div></div>`;
+  }
+  function renderDiffWindow(start){
+    const list=$('compare-diff-list'),items=state.diffList||[];if(!list)return;
+    if(!items.length){list.innerHTML='<p class="empty">当前筛选条件下没有差异。</p>';state.diffWindow={start:0,end:0};return;}
+    const safeStart=Math.max(0,Math.min(items.length-1,start)),end=Math.min(items.length,safeStart+DIFF_RENDER_COUNT);
+    const disabled=!state.selection||state.selectionSaving;
+    const html=items.slice(safeStart,end).map((item,offset)=>diffItemHtml(item,safeStart+offset,selectionDecision(item.id),disabled)).join('');
+    list.innerHTML=`<div class="compare-diff-spacer" style="height:${safeStart*DIFF_ITEM_HEIGHT}px"></div>${html}<div class="compare-diff-spacer" style="height:${Math.max(0,(items.length-end)*DIFF_ITEM_HEIGHT)}px"></div>`;
+    state.diffWindow={start:safeStart,end};
+  }
+  function renderDiffList(){
+    state.diffList=visibleDiffs();
+    const list=$('compare-diff-list');if(list)list.scrollTop=0;
+    renderDiffWindow(0);
+    $('compare-diff-counter').textContent='0 / 0';
+  }
+  function onDiffListScroll(){
+    const list=$('compare-diff-list'),items=state.diffList||[];if(!list||!items.length)return;
+    const start=Math.max(0,Math.floor(list.scrollTop/DIFF_ITEM_HEIGHT)-4);
+    if(!state.diffWindow||start!==state.diffWindow.start)renderDiffWindow(start);
+  }
+  function scalePaneDimensions(root) {
     // Word projects absolute pt/px sizes on paragraphs AND runs. Shrink each
     // absolute display dimension once; inherited/em/% sizes retain their ratios.
     // Never change text, block IDs, table spans, or the downloaded source DOCX.
     const dimensions=['font-size','line-height','margin-left','margin-right','margin-top','margin-bottom','text-indent','padding-left','padding-right','padding-top','padding-bottom'];
-    pane.querySelectorAll('[style]').forEach(node=>dimensions.forEach(property=>{
+    root.querySelectorAll('[style]').forEach(node=>dimensions.forEach(property=>{
       const value=node.style.getPropertyValue(property).trim(),match=value.match(/^(-?\d+(?:\.\d+)?)(pt|px)$/);
       if(match)node.style.setProperty(property,`${Number((Number(match[1])*.9).toFixed(3))}${match[2]}`);
     }));
+  }
+  function renderContract(pane, html) {
+    pane.innerHTML=html||'';
+    scalePaneDimensions(pane);
+  }
+  function markDiffTargets(pane) {
+    if(!pane)return;
+    pane.querySelectorAll('[data-diff-id]').forEach(mark=>{mark.tabIndex=0;mark.setAttribute('role','button');mark.setAttribute('aria-label','定位此处差异');});
+  }
+  function parseVirtualDocument(html) {
+    if(!html||typeof DOMParser==='undefined')return {style:'',blocks:[]};
+    const parsed=new DOMParser().parseFromString(html,'text/html');
+    const wrapper=parsed.querySelector('.compare-document')||parsed.body;
+    if(!wrapper)return {style:'',blocks:[]};
+    const blocks=Array.from(wrapper.children).map(element=>{
+      const tag=element.tagName.toLowerCase();
+      const text=element.textContent||'';
+      const heading=/^h[1-6]$/.test(tag)||element.classList.contains('compare-heading');
+      return {html:element.outerHTML,blockId:element.getAttribute('data-block-id')||'',textLength:text.length,kind:tag==='table'?'table':heading?'heading':'paragraph'};
+    });
+    return {style:wrapper.getAttribute('style')||'',blocks};
+  }
+  class VirtualDocument {
+    constructor(container,document,options={}) {
+      this.container=container; this.blocks=document.blocks||[]; this.style=document.style||'';
+      this.chunkSize=options.chunkSize||20; this.overscan=options.overscan||2;
+      this.charsPerLine=options.charsPerLine||46; this.merged=Boolean(options.merged);
+      this.onChange=options.onChange||null; this.chunks=[]; this.first=0; this.last=0; this.frame=null;
+      this.blockIndex=new Map(); this.blocks.forEach((block,index)=>{if(block.blockId)this.blockIndex.set(block.blockId,index);});
+      this.scrollHandler=()=>this.schedule();
+      this.container.addEventListener('scroll',this.scrollHandler,{passive:true});
+      this.build();
+    }
+    destroy(){this.container.removeEventListener('scroll',this.scrollHandler);this.container.replaceChildren();}
+    estimate(block){
+      if(block.kind==='table')return Math.max(80,Math.min(1400,Math.ceil(block.textLength/36)*22+40));
+      const lines=Math.max(1,Math.ceil(block.textLength/Math.max(16,this.charsPerLine)));
+      return block.kind==='heading'?Math.max(34,lines*28+16):Math.max(26,lines*24+18);
+    }
+    build(){
+      this.chunks=[];
+      for(let start=0;start<this.blocks.length;start+=this.chunkSize){
+        const end=Math.min(this.blocks.length,start+this.chunkSize);let height=0;
+        for(let i=start;i<end;i++)height+=this.estimate(this.blocks[i]);
+        this.chunks.push({start,end,height,el:null});
+      }
+      this.container.replaceChildren();
+      const wrapper=document.createElement('div');
+      wrapper.className='compare-document compare-virtual-document'+(this.merged?' compare-merged-document':'');
+      if(this.style)wrapper.setAttribute('style',this.style);
+      this.wrapper=wrapper;
+      this.top=document.createElement('div');this.top.className='compare-virtual-spacer';
+      this.windowEl=document.createElement('div');this.windowEl.className='compare-virtual-window';
+      this.bottom=document.createElement('div');this.bottom.className='compare-virtual-spacer';
+      wrapper.append(this.top,this.windowEl,this.bottom);this.container.append(wrapper);
+      if(!this.blocks.length){
+        const empty=document.createElement('p');empty.className='compare-block compare-empty';empty.textContent='暂无可呈现内容。';this.windowEl.append(empty);return;
+      }
+      this.refresh(true);
+    }
+    totalBefore(index){let sum=0;for(let i=0;i<index;i++)sum+=this.chunks[i].height;return sum;}
+    totalAfter(index){let sum=0;for(let i=index;i<this.chunks.length;i++)sum+=this.chunks[i].height;return sum;}
+    schedule(){if(this.frame!==null)return;this.frame=requestAnimationFrame(()=>{this.frame=null;this.refresh(false);});}
+    currentRange(scrollTop,viewHeight){
+      const overscanPx=Math.max(240,viewHeight*.6);let first=0,top=0;
+      while(first<this.chunks.length-1&&top+this.chunks[first].height<scrollTop-overscanPx){top+=this.chunks[first].height;first++;}
+      let last=first,y=top;
+      while(last<this.chunks.length&&y<scrollTop+viewHeight+overscanPx){y+=this.chunks[last].height;last++;}
+      first=Math.max(0,first-this.overscan);last=Math.min(this.chunks.length,last+this.overscan);
+      return [first,last];
+    }
+    anchor(){const scrollTop=this.container.scrollTop;let top=0;for(let i=0;i<this.chunks.length;i++){if(scrollTop<top+this.chunks[i].height||i===this.chunks.length-1)return {index:i,offset:scrollTop-top};top+=this.chunks[i].height;}return {index:0,offset:0};}
+    refresh(force){
+      if(!this.chunks.length)return;
+      const [first,last]=this.currentRange(this.container.scrollTop,this.container.clientHeight||600);
+      if(!force&&first===this.first&&last===this.last)return;
+      const anchor=this.anchor(),anchorTop=this.totalBefore(anchor.index);
+      this.first=first;this.last=last;
+      for(let i=0;i<this.chunks.length;i++){const chunk=this.chunks[i];if((i<first||i>=last)&&chunk.el){chunk.el.remove();chunk.el=null;chunk.measured=false;}}
+      for(let i=first;i<last;i++){
+        const chunk=this.chunks[i];
+        if(!chunk.el){
+          const element=document.createElement('div');element.className='compare-virtual-chunk';
+          if(chunk.html){element.innerHTML=chunk.html;}
+          else{
+            element.innerHTML=this.blocks.slice(chunk.start,chunk.end).map(block=>block.html).join('');
+            scalePaneDimensions(element);markDiffTargets(element);chunk.html=element.innerHTML;
+          }
+          chunk.el=element;chunk.measured=false;
+        }
+      }
+      this.windowEl.replaceChildren(...this.chunks.slice(first,last).map(chunk=>chunk.el).filter(Boolean));
+      for(let i=first;i<last;i++){const chunk=this.chunks[i];if(!chunk.measured&&chunk.el){chunk.height=Math.max(1,chunk.el.getBoundingClientRect().height);chunk.measured=true;}}
+      this.top.style.height=`${this.totalBefore(first)}px`;
+      this.bottom.style.height=`${this.totalAfter(last)}px`;
+      if(anchor.index>=first&&anchor.index<last){
+        const nextTop=this.totalBefore(anchor.index);
+        if(Math.abs(nextTop-anchorTop)>.5)this.container.scrollTop=nextTop+anchor.offset;
+      }
+      if(this.onChange)this.onChange();
+    }
+    resetMeasurements(){
+      for(const chunk of this.chunks){chunk.measured=false;}
+    }
+    scrollToBlock(blockId){
+      const index=this.blockIndex.get(blockId);if(index===undefined)return false;
+      let chunkIndex=0;for(let i=0;i<this.chunks.length;i++){if(index<this.chunks[i].end){chunkIndex=i;break;}}
+      this.container.scrollTop=Math.max(0,this.totalBefore(chunkIndex)-24);
+      this.refresh(true);
+      requestAnimationFrame(()=>this.refresh(true));
+      return true;
+    }
+  }
+  function virtualize(container, document, options={}){
+    if(!container)return null;
+    if(container._virtualDoc)container._virtualDoc.destroy();
+    const instance=new VirtualDocument(container,document,options);
+    container._virtualDoc=instance;
+    return instance;
+  }
+  function refreshVirtualLayouts(){
+    for(const id of ['compare-word-merged-pane','compare-word-left-pane','compare-word-right-pane','compare-left-pane','compare-right-pane']){
+      const pane=$(id),instance=pane?._virtualDoc;
+      if(instance&&pane.clientHeight){instance.resetMeasurements();instance.refresh(true);}
+    }
+  }
+
+  function onVirtualChange(){
+    refreshDiffMarks();markActiveDiff();
+    if(state.viewMode==='classic'){state.diffPositions=null;drawLines();}
+  }
+  function clearVirtual(container){if(container?._virtualDoc){container._virtualDoc.destroy();container._virtualDoc=null;}}
+  function ensureDoc(side){
+    if(!state.docs)state.docs={};
+    if(!state.docs[side])state.docs[side]=parseVirtualDocument(state.rawDocs?.[side]||'');
+    return state.docs[side];
+  }
+  function renderWordSources() {
+    if(!state.view||state.wordSourcesRendered||!state.docs)return;
+    virtualize($('compare-word-left-pane'),ensureDoc('left'),{charsPerLine:30,onChange:onVirtualChange});
+    virtualize($('compare-word-right-pane'),ensureDoc('right'),{charsPerLine:30,onChange:onVirtualChange});
+    state.wordSourcesRendered=true;refreshDiffMarks();markActiveDiff();
+  }
+  function renderClassicView() {
+    if(!state.view||state.classicRendered||!state.docs)return;
+    virtualize($('compare-left-pane'),ensureDoc('left'),{charsPerLine:40,onChange:onVirtualChange});
+    virtualize($('compare-right-pane'),ensureDoc('right'),{charsPerLine:40,onChange:onVirtualChange});
+    state.classicRendered=true;state.diffPositions=null;refreshDiffMarks();markActiveDiff();
   }
   function setFullscreenViewer(open) {
     const viewer=$('compare-viewer'); if(!viewer)return;
@@ -462,25 +703,30 @@
         if(warnings.length){const ul=document.createElement('ul'); warnings.forEach(warning=>{const li=document.createElement('li');li.textContent=warning;ul.append(li);});chipList.append(ul);}
       }
     }
-    renderContract($('compare-word-merged-pane'),payload.merged?.html||payload.right?.html);
-    renderContract($('compare-word-left-pane'),payload.left.html);
-    renderContract($('compare-word-right-pane'),payload.right.html);
-    renderContract($('compare-left-pane'),payload.left.html);
-    renderContract($('compare-right-pane'),payload.right.html);
-    document.querySelectorAll('#compare-word-merged-pane [data-diff-id],#compare-word-left-pane [data-diff-id],#compare-word-right-pane [data-diff-id],#compare-left-pane [data-diff-id],#compare-right-pane [data-diff-id]').forEach(mark=>{mark.tabIndex=0;mark.setAttribute('role','button');mark.setAttribute('aria-label','定位此处差异');});
+    state.classicRendered=false; state.wordSourcesRendered=false; state.diffPositions=null;
+    state.rawDocs={left:payload.left?.html||'',right:payload.right?.html||''};
+    state.docs={merged:parseVirtualDocument(payload.merged?.html||payload.right?.html)};
+    virtualize($('compare-word-merged-pane'),state.docs.merged,{merged:true,charsPerLine:48,onChange:onVirtualChange});
     refreshDiffMarks(); $('compare-diff-counter').textContent='0 / 0'; renderDiffList();
     if(!d.length)$('compare-diff-list').innerHTML=`<p class="empty">${incomplete?'已覆盖范围内没有发现文字差异。':'两份合同没有文字差异。'}</p>`;
     setMobilePane('merged',false);
     drawLines();
+    if(state.viewMode==='classic')renderClassicView();
     if(d.length)focusDiff(0);
+    const layout=$('compare-word-layout');
+    if(state.viewMode==='word'&&layout&&!layout.classList.contains('is-sources-hidden')){
+      const schedule=window.requestIdleCallback?window.requestIdleCallback(()=>{if(state.view===payload)renderWordSources();},{timeout:600}):setTimeout(()=>{if(state.view===payload)renderWordSources();},60);
+      void schedule;
+    }
   }
   async function openPair(index,fromRoute=false) {
     const p=state.pairs[index];if(!p)return;
     if(!fromRoute&&state.view&&api.navigate&&api.route?.().pair!==p.id){api.navigate('compare',{mode:'detail',id:state.task.id,pair:p.id});return;}
     if(state.selectionDirty){selectionStatus('请先保存当前选择，再切换合同组。',true);return;}
+    if(state.view?.pair?.id===p.id){state.pairIndex=index;state.selectedPairId=p.id;renderPairs();setFullscreenViewer(true);await loadSelection(p.id);return;}
     resetSelection();const token=++state.requestToken;
-    state.pairIndex=index;state.selectedPairId=p.id;state.view=null;state.mergedMarks=state.wordLeftMarks=state.wordRightMarks=state.leftMarks=state.rightMarks=null;renderPairs();
-    setFullscreenViewer(false);$('compare-lines')?.replaceChildren();$('compare-word-merged-pane').innerHTML='';$('compare-word-left-pane').innerHTML='';$('compare-word-right-pane').innerHTML='';$('compare-left-pane').innerHTML='';$('compare-right-pane').innerHTML='';$('compare-pair-counter').textContent=`${index+1} / ${state.pairs.length}`;
+    state.pairIndex=index;state.selectedPairId=p.id;state.view=null;state.classicRendered=false;state.wordSourcesRendered=false;state.diffPositions=null;state.docs=null;state.rawDocs=null;state.mergedMarks=state.wordLeftMarks=state.wordRightMarks=state.leftMarks=state.rightMarks=null;renderPairs();
+    setFullscreenViewer(false);$('compare-lines')?.replaceChildren();for(const pane of [$('compare-word-merged-pane'),$('compare-word-left-pane'),$('compare-word-right-pane'),$('compare-left-pane'),$('compare-right-pane')]){clearVirtual(pane);if(pane)pane.innerHTML='';}$('compare-pair-counter').textContent=`${index+1} / ${state.pairs.length}`;
     if(!['succeeded','incomplete'].includes(p.status))return;
     try {const payload=await json(`/api/compare/pairs/${encodeURIComponent(p.id)}/view`);if(token===state.requestToken){p.viewError='';renderPairs();renderViewer(payload);await loadSelection(p.id);}}
     catch(e){if(token===state.requestToken){p.viewError=`读取结果失败：${e.message}`;renderPairs();}}
@@ -536,12 +782,12 @@
       document.addEventListener('change',e=>{const choice=e.target.closest('[data-selection-choice]');if(choice){chooseSelection(choice.dataset.diffId,choice.value);return;}const row=e.target.closest('.compare-pair-input');if(row&&e.target.matches('input[type=file]')){const i=Number(row.dataset.pairIndex),entry=state.inputs[i]||(state.inputs[i]={});entry[e.target.matches('[data-compare-left]')?'_left':'_right']=e.target.files?.[0]||null;row.querySelector('.compare-file-label').textContent=[entry._left?.name,entry._right?.name].filter(Boolean).join(' / ')||'尚未选择文件';return;}if(e.target.id==='compare-left-folder'||e.target.id==='compare-right-folder'){const side=e.target.id.includes('left')?'left':'right';state[`folder${side[0].toUpperCase()+side.slice(1)}`]=[...e.target.files].filter(f=>fileName(f).toLowerCase().endsWith('.docx')).sort((a,b)=>relativePath(a).localeCompare(relativePath(b)));const other=side==='left'?state.folderRight:state.folderLeft;if(!other?.length)return;const left=state.folderLeft||[],right=state.folderRight||[],map=new Map(right.map(f=>[relativePath(f),f])),used=new Set(),entries=left.map(f=>{const r=map.get(relativePath(f));if(r)used.add(r);return {_left:f,_right:r||null};});for(const f of right)if(!used.has(f))entries.push({_left:null,_right:f});state.inputs=entries;renderInputs();$('compare-upload-message').textContent=`已按相对路径配对 ${entries.filter(x=>x._left&&x._right).length} 组；${entries.filter(x=>!x._left||!x._right).length} 个文件未配对，可手工补齐。`;}});
      bindCompareSplitter();
       for(const pane of allPanels())pane?.addEventListener('scroll',()=>syncPaneScroll(pane),{passive:true});
-      window.addEventListener('resize',drawLines);
+      window.addEventListener('resize',()=>{state.diffPositions=null;refreshVirtualLayouts();drawLines();});
       const body=$('compare-view-body'); if(body&&window.ResizeObserver)new ResizeObserver(drawLines).observe(body);
       document.querySelectorAll('[data-compare-view-mode]').forEach(button=>button.addEventListener('click',()=>setViewMode(button.dataset.compareViewMode)));
       document.querySelectorAll('#compare-classic-view [data-compare-side]').forEach(button=>button.addEventListener('click',()=>setClassicSide(button.dataset.compareSide)));
-      try { const storedSources=localStorage.getItem('fundlex-compare-show-sources'); if(storedSources==='0')setSourcesVisible(false,false); const storedMarkup=localStorage.getItem('fundlex-compare-markup'); if(storedMarkup)setMarkupMode(storedMarkup,false); const storedPane=localStorage.getItem('fundlex-compare-mobile-pane'); if(storedPane)setMobilePane(storedPane,false); const storedMode=localStorage.getItem('fundlex-compare-view-mode'); if(storedMode)setViewMode(storedMode,false); const storedSide=localStorage.getItem('fundlex-compare-classic-side'); if(storedSide)setClassicSide(storedSide,false); } catch {}
-      document.addEventListener('fundlex:view',e=>{if(e.detail==='compare'){drawLines();}}); document.addEventListener('fundlex:identity-reset',()=>{clearTimeout(state.poll);state.identityToken++;state.listToken++;state.tasks=[];state.task=null;state.pairs=[];state.selectedPairId=null;state.view=null;state.mergedMarks=state.wordLeftMarks=state.wordRightMarks=state.leftMarks=state.rightMarks=null;state.selection=null;state.selectionDraft=null;state.selectionDirty=false;state.uploadDraft=null;state.inputs=[{}];state.requestToken++;state.selectionToken++;resetFolders();$('compare-create').hidden=true;$('compare-submit').disabled=false;$('compare-retry').hidden=true;$('compare-upload-message').textContent='';$('compare-name').value='';$('compare-detail').hidden=true;setFullscreenViewer(false);$('compare-word-merged-pane').innerHTML='';$('compare-word-left-pane').innerHTML='';$('compare-word-right-pane').innerHTML='';$('compare-left-pane').innerHTML='';$('compare-right-pane').innerHTML='';$('compare-diff-list').innerHTML='';$('compare-selection-downloads').replaceChildren();selectionStatus('');$('compare-lines')?.replaceChildren();$('compare-diff-counter').textContent='0 / 0';$('compare-revision-count').textContent='0';$('compare-revision-count-rail').textContent='0';renderInputs();renderTasks();}); state.inputs=[{}];renderInputs();applyRoute(api.route?.()||{view:'compare',mode:'list'});
+      try { const storedSources=localStorage.getItem('fundlex-compare-show-sources'); setSourcesVisible(storedSources==='1',false); const storedMarkup=localStorage.getItem('fundlex-compare-markup'); if(storedMarkup)setMarkupMode(storedMarkup,false); const storedPane=localStorage.getItem('fundlex-compare-mobile-pane'); if(storedPane)setMobilePane(storedPane,false); const storedMode=localStorage.getItem('fundlex-compare-view-mode'); if(storedMode)setViewMode(storedMode,false); const storedSide=localStorage.getItem('fundlex-compare-classic-side'); if(storedSide)setClassicSide(storedSide,false); } catch {}
+      document.addEventListener('fundlex:view',e=>{if(e.detail==='compare'){drawLines();}}); document.addEventListener('fundlex:identity-reset',()=>{clearTimeout(state.poll);state.identityToken++;state.listToken++;state.tasks=[];state.task=null;state.pairs=[];state.selectedPairId=null;state.view=null;state.mergedMarks=state.wordLeftMarks=state.wordRightMarks=state.leftMarks=state.rightMarks=null;state.selection=null;state.selectionDraft=null;state.selectionDirty=false;state.uploadDraft=null;state.inputs=[{}];state.requestToken++;state.selectionToken++;resetFolders();$('compare-create').hidden=true;$('compare-submit').disabled=false;$('compare-retry').hidden=true;$('compare-upload-message').textContent='';$('compare-name').value='';$('compare-detail').hidden=true;setFullscreenViewer(false);for(const pane of [$('compare-word-merged-pane'),$('compare-word-left-pane'),$('compare-word-right-pane'),$('compare-left-pane'),$('compare-right-pane')]){clearVirtual(pane);if(pane)pane.innerHTML='';}$('compare-diff-list').innerHTML='';$('compare-selection-downloads').replaceChildren();selectionStatus('');$('compare-lines')?.replaceChildren();$('compare-diff-counter').textContent='0 / 0';$('compare-revision-count').textContent='0';$('compare-revision-count-rail').textContent='0';renderInputs();renderTasks();}); state.inputs=[{}];renderInputs();applyRoute(api.route?.()||{view:'compare',mode:'list'});
   }
   if (document.readyState==='loading') document.addEventListener('DOMContentLoaded',bind); else bind();
 })();

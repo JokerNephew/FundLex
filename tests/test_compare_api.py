@@ -54,7 +54,8 @@ def test_compare_api_roundtrip_and_xss(tmp_path):
     tid=created.json()['id']; c.post(f'/api/compare/tasks/{tid}/uploads',headers=h,data={'client_ids':'["l","r"]'},files=[('files',('a.docx',a)),('files',('b.docx',b))])
     c.post(f'/api/compare/tasks/{tid}/seal',headers=h); from fundlex.compare.worker import CompareWorker
     assert CompareWorker(c.app.state.compare_store).run_once(); pid=created.json()['pairs'][0]['id']
-    view=c.get(f'/api/compare/pairs/{pid}/view',headers=h); assert view.status_code==200
+    view=c.get(f'/api/compare/pairs/{pid}/view',headers={**h, 'Accept-Encoding': 'gzip'}); assert view.status_code==200
+    assert view.headers.get('content-encoding') == 'gzip'
     assert '<script>' not in view.json()['left']['html']
     assert '<script>' not in view.json()['merged']['html']
     assert view.json()['merged']['name'] == 'b.docx'

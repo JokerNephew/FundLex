@@ -1,16 +1,23 @@
 """FastAPI routes for the independent contract comparison feature."""
 from __future__ import annotations
+import gzip
 import hashlib
 import json
+from collections import OrderedDict
+from threading import Lock
 from pathlib import Path
 from typing import Any, Callable
 
-from fastapi import Depends, File, Form, Header, HTTPException, UploadFile
+from fastapi import Depends, File, Form, Header, HTTPException, Request, Response, UploadFile
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from .store import CompareStore, Conflict, NotFound
 from ..api_errors import raise_api_error
+
+_VIEW_CACHE: OrderedDict[str, tuple[str, str, str]] = OrderedDict()
+_VIEW_CACHE_LOCK = Lock()
+_VIEW_CACHE_MAX = 4
 
 
 class CompareFileManifest(BaseModel):
@@ -70,15 +77,29 @@ class CompareSelectionGenerate(BaseModel):
     result_sha256: str = Field(min_length=1, max_length=128)
 
 
-def _render_view(pair_result: dict[str, Any], left_path: Path, right_path: Path) -> tuple[str, str, str]:
+def _render_view(pair_result: dict[str, Any], left_path: Path, right_path: Path,
+                 *, cache_key: str = "") -> tuple[str, str, str]:
+    if cache_key:
+        with _VIEW_CACHE_LOCK:
+            cached = _VIEW_CACHE.get(cache_key)
+            if cached is not None:
+                _VIEW_CACHE.move_to_end(cache_key)
+                return cached
     from . import parser
     from .render import render_compare_document, render_merged_document
     left_doc = parser.parse_compare_document(left_path, filename=pair_result.get("left", {}).get("filename", ""), side="L")
     right_doc = parser.parse_compare_document(right_path, filename=pair_result.get("right", {}).get("filename", ""), side="R")
     diffs = pair_result.get("diffs") or []
-    return (render_compare_document(left_doc, diffs, side="left"),
-            render_compare_document(right_doc, diffs, side="right"),
-            render_merged_document(right_doc, diffs, left_document=left_doc))
+    rendered = (render_compare_document(left_doc, diffs, side="left"),
+                render_compare_document(right_doc, diffs, side="right"),
+                render_merged_document(right_doc, diffs, left_document=left_doc))
+    if cache_key:
+        with _VIEW_CACHE_LOCK:
+            _VIEW_CACHE[cache_key] = rendered
+            _VIEW_CACHE.move_to_end(cache_key)
+            while len(_VIEW_CACHE) > _VIEW_CACHE_MAX:
+                _VIEW_CACHE.popitem(last=False)
+    return rendered
 
 
 def register_compare_routes(application, compare_store: CompareStore, user_dependency: Callable,
@@ -179,7 +200,7 @@ def register_compare_routes(application, compare_store: CompareStore, user_depen
         return call(compare_store.get_pair, user, pair_id)
 
     @application.get("/api/compare/pairs/{pair_id}/view")
-    def view_compare_pair(pair_id: str, user: str = Depends(user_dependency)):
+    def view_compare_pair(pair_id: str, request: Request, user: str = Depends(user_dependency)):
         pair = call(compare_store.get_pair, user, pair_id)
         if pair.get("status") not in {"succeeded", "incomplete"} or not pair.get("result"):
             raise HTTPException(409, "COMPARE_RESULT_NOT_READY")
@@ -192,17 +213,27 @@ def register_compare_routes(application, compare_store: CompareStore, user_depen
                 if (not path.is_file() or path.stat().st_size != f["size"]
                         or hashlib.sha256(path.read_bytes()).hexdigest() != f["source_sha256"]):
                     raise Conflict("COMPARE_INPUT_INTEGRITY_FAILED")
-            left_html, right_html, merged_html = _render_view(pair["result"], lp, rp)
+            left_html, right_html, merged_html = _render_view(
+                pair["result"], lp, rp,
+                cache_key=f"{pair['id']}:{pair.get('result_sha256') or ''}")
         except (NotFound, Conflict) as exc:
             raise_api_error(409, exc, fallback="CONFLICT")
         except (OSError, ValueError, KeyError) as exc:
             raise HTTPException(409, "COMPARE_RESULT_INVALID") from exc
-        return {"pair": {k: pair[k] for k in ("id", "label", "ordinal", "status")},
-                "left": {"name": pair["left"]["name"], "html": left_html},
-                "right": {"name": pair["right"]["name"], "html": right_html},
-                "merged": {"name": pair["right"]["name"], "html": merged_html},
-                "summary": pair["result"].get("summary"), "coverage": pair["result"].get("coverage"),
-                "diffs": pair["result"].get("diffs", []), "result_sha256": pair.get("result_sha256")}
+        payload = {"pair": {k: pair[k] for k in ("id", "label", "ordinal", "status")},
+                   "left": {"name": pair["left"]["name"], "html": left_html},
+                   "right": {"name": pair["right"]["name"], "html": right_html},
+                   "merged": {"name": pair["right"]["name"], "html": merged_html},
+                   "summary": pair["result"].get("summary"), "coverage": pair["result"].get("coverage"),
+                   "diffs": pair["result"].get("diffs", []), "result_sha256": pair.get("result_sha256")}
+        # Long contracts produce multi-megabyte HTML. Compress this one JSON
+        # response when the client supports gzip; browsers transparently decode
+        # it and the payload drops by roughly an order of magnitude.
+        if "gzip" in request.headers.get("accept-encoding", "").lower():
+            body = gzip.compress(json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8"), compresslevel=5)
+            return Response(content=body, media_type="application/json",
+                            headers={"Content-Encoding": "gzip", "Vary": "Accept-Encoding"})
+        return payload
 
     @application.get("/api/compare/pairs/{pair_id}/selection")
     def get_compare_selection(pair_id: str, user: str = Depends(user_dependency)):

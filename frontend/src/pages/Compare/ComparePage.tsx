@@ -196,14 +196,14 @@ function CompareReader({ view, selectedPair, viewQuery, activeDiff, visibleDiffs
       </aside>
       <div className="compare-word-view" hidden={viewMode !== 'word'}>
         <div className="compare-mobile-switch" role="group" aria-label="切换文档视图">
-          {(['merged', 'left', 'right'] as const).map((pane) => <Button key={pane} type="button" aria-pressed={mobilePane === pane} onClick={() => setMobilePane(pane)}>{pane === 'merged' ? '比较的文档' : pane === 'left' ? '原文档' : '修订的文档'}</Button>)}
+          {(['merged', 'left', 'right'] as const).map((pane) => <Button key={pane} type="button" aria-pressed={mobilePane === pane} onClick={() => { if (pane !== 'merged') setShowSources(true); setMobilePane(pane) }}>{pane === 'merged' ? '比较的文档' : pane === 'left' ? '原文档' : '修订的文档'}</Button>)}
         </div>
         <div className={`compare-word-layout ${showSources ? '' : 'is-sources-hidden'}`.trim()} data-markup={markup}>
           <section className="compare-word-document" aria-labelledby="compare-merged-title">
             <div className="compare-word-pane-head"><div><span className="compare-word-pane-kicker">比较的文档</span><strong id="compare-merged-title">{pairLabel}</strong><small>{mergedName}</small></div><span className="compare-word-legend" aria-label="修订标记说明"><i className="compare-legend-ins">插入</i><i className="compare-legend-del">删除</i></span></div>
             <div ref={mergedRef} className="compare-word-pane compare-merged-pane" onScroll={(event) => syncScroll(event.currentTarget)}><SafeCompareDocument html={view?.merged?.html || view?.right.html || ''} label="比较的文档" activeDiffId={activeDiff?.id} onDiff={selectPairDiff} /></div>
           </section>
-          <aside className="compare-word-sources" aria-label="源文档">
+          {showSources && <aside className="compare-word-sources" aria-label="源文档">
             <section className="compare-word-source" aria-labelledby="compare-source-left-title">
               <div className="compare-word-pane-head"><div><span className="compare-word-pane-kicker">原文档</span><strong id="compare-source-left-title">{leftName}</strong><small>只读源文档</small></div><button className="compare-word-close" type="button" onClick={() => setShowSources(false)} aria-label="关闭源文档">×</button></div>
               <div ref={leftRef} className="compare-word-pane" onScroll={(event) => syncScroll(event.currentTarget)}><SafeCompareDocument html={view?.left.html || ''} label="原文档" activeDiffId={activeDiff?.id} onDiff={selectPairDiff} /></div>
@@ -212,7 +212,7 @@ function CompareReader({ view, selectedPair, viewQuery, activeDiff, visibleDiffs
               <div className="compare-word-pane-head"><div><span className="compare-word-pane-kicker">修订的文档</span><strong id="compare-source-right-title">{rightName}</strong><small>只读源文档</small></div><button className="compare-word-close" type="button" onClick={() => setShowSources(false)} aria-label="关闭源文档">×</button></div>
               <div ref={rightRef} className="compare-word-pane" onScroll={(event) => syncScroll(event.currentTarget)}><SafeCompareDocument html={view?.right.html || ''} label="修订的文档" activeDiffId={activeDiff?.id} onDiff={selectPairDiff} /></div>
             </section>
-          </aside>
+          </aside>}
         </div>
       </div>
       <div className="compare-classic-view" hidden={viewMode !== 'classic'}>
@@ -252,7 +252,7 @@ export function ComparePage() {
   const [viewMode, setViewMode] = useState<ViewMode>('word')
   const [classicSide, setClassicSide] = useState<ClassicSide>('left')
   const [viewerOpen, setViewerOpen] = useState(false)
-  const [showSources, setShowSources] = useState(true)
+  const [showSources, setShowSources] = useState(false)
   const [markup, setMarkup] = useState<'all' | 'simple' | 'final'>('all')
   const [folderFiles, setFolderFiles] = useState<{ left: File[]; right: File[] }>({ left: [], right: [] })
   const isMobile = useMediaQuery('(max-width: 760px)')

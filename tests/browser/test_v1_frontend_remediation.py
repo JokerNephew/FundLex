@@ -626,6 +626,10 @@ def test_v1_review_generation_submits_selection_epoch_and_manifest(browser, live
     try:
         open_dev(page, base, "#document?id=t&document=doc&tab=review")
         page.locator('[data-action="generate-selected"]').wait_for()
+        panel = page.locator("#detail-panel").bounding_box()
+        assert panel and panel["x"] >= 10 and panel["y"] >= 10
+        assert panel["width"] <= 1430 and panel["height"] <= 990
+        assert page.locator("#detail-overlay").is_visible()
         page.locator('[data-action="generate-selected"]').click()
         page.locator("#review-message").filter(has_text="已生成").wait_for()
         assert bodies[0]["selection_epoch"] == 0 and bodies[0]["manifest_hash"] == "a" * 64
