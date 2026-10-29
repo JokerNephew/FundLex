@@ -51,6 +51,11 @@ def _polarities(text: str, field: str) -> set[bool]:
                                   r"(\d+(?:\.\d+)?)[%％]", text):
         negative |= float(match.group(1)) == 0
         positive |= float(match.group(1)) > 0
+    # The rate can precede its fee noun: "计提年费率为0.25%的销售服务费".
+    for match in re.finditer(r"(?:收取|计提)(?:年费率|费率|年费率|年)?(?:为|是|：|:)?"
+                             r"\s*(\d+(?:\.\d+)?)[%％]的?" + fee, text):
+        negative |= float(match.group(1)) == 0
+        positive |= float(match.group(1)) > 0
     # A fee's own explicit NAV calculation is evidence. The narrow grammar
     # cannot absorb another fee name or an intervening negative predicate.
     nav_rate = (r"(?:的)?" + fee +
