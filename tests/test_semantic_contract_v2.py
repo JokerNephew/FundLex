@@ -131,3 +131,32 @@ def test_template_policy_ignores_model_replacement_text(tmp_path):
     }]}, rule, inspection, ["p0"], policy)
     assert not rejected, rejected
     assert accepted[0].replacement == str(rule["operations"][0]["new_text"])
+
+
+class _RetryGateway:
+    max_context_chars = 12000
+
+    def __init__(self, payloads):
+        self.payloads = list(payloads)
+        self.calls = 0
+
+    def call(self, **kwargs):
+        payload = self.payloads[min(self.calls, len(self.payloads) - 1)]
+        self.calls += 1
+        return SimpleNamespace(value=payload)
+
+
+def test_invalid_quote_is_retried_once(tmp_path):
+    inspection = _doc(tmp_path, OLD)
+    bad = {"targets": [{"location": "p0", "quote": "不存在的句子",
+                        "operation_id": "G09", "replacement": NEW,
+                        "preserved_text": [], "reason": "bad"}]}
+    good = {"targets": [{"location": "p0", "quote": OLD,
+                         "operation_id": "G09", "replacement": NEW,
+                         "preserved_text": ["各计算结果均保留至小数点后两位"],
+                         "reason": "good"}]}
+    gateway = _RetryGateway([bad, good])
+    accepted, rejected, _ = discover_semantic_targets(
+        gateway, _rule(), inspection, ["p0"], load_semantic_policies()["G09"])
+    assert len(accepted) == 1
+    assert gateway.calls == 2

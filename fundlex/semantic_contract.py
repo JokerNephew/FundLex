@@ -287,14 +287,25 @@ def discover_semantic_targets(gateway: Any, rule: Mapping[str, Any],
                                                                 list[dict[str, Any]], Any]:
     context = semantic_candidate_context(inspection, locations, policy,
                                          limit=getattr(gateway, "max_context_chars", 28000))
-    result = gateway.call(task_type="recall_semantic_target",
-                          bounded_context=context,
-                          response_schema=SEMANTIC_TARGET_SCHEMA,
-                          instruction=SEMANTIC_TARGET_INSTRUCTION,
-                          prompt_version=SEMANTIC_PROMPT_VERSION)
-    value = result.value if isinstance(getattr(result, "value", None), dict) else {}
-    accepted, rejected = parse_semantic_targets(
-        value, rule, inspection, locations, policy)
+    result = None
+    accepted: list[SemanticTarget] = []
+    rejected: list[dict[str, Any]] = []
+    for attempt in range(2):
+        call_context = context
+        if attempt and rejected:
+            call_context = (context + "\n\nPREVIOUS ATTEMPT REJECTED:\n"
+                            + json.dumps(rejected[:5], ensure_ascii=False)
+                            + "\nReturn only exact contiguous source quotes and complete replacements.")
+        result = gateway.call(task_type="recall_semantic_target",
+                              bounded_context=call_context,
+                              response_schema=SEMANTIC_TARGET_SCHEMA,
+                              instruction=SEMANTIC_TARGET_INSTRUCTION,
+                              prompt_version=SEMANTIC_PROMPT_VERSION)
+        value = result.value if isinstance(getattr(result, "value", None), dict) else {}
+        accepted, rejected = parse_semantic_targets(
+            value, rule, inspection, locations, policy)
+        if accepted:
+            break
     return accepted, rejected, result
 
 
