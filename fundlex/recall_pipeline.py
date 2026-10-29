@@ -4474,16 +4474,29 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
             semantic_targets, semantic_rejected = discover_for_rules(
                 model, inspection, rules_by_id, scopes, semantic_rules)
             for target in semantic_targets:
+                adopted = False
                 for old in targets:
-                    if (old is not target and old.rule_id == target.rule_id
+                    if (old.rule_id == target.rule_id
                             and old.location == target.location
                             and not old.out_of_scope
-                            and old.state in {"needs_edit", "satisfied"}):
-                        old.out_of_scope = True
-                        old.reason = f"{old.reason}|SUPERSEDED_BY_SEMANTIC_TARGET"
-                synthetic.append(target)
-                targets.append(target)
-                origins[target.target_id] = "semantic_v2"
+                            and set(old.operations or ()) & set(target.operations or ())):
+                        # Reuse the existing physical target instead of creating a
+                        # second target for the same operation/site.  Two targets
+                        # would make Claim Replay report an occurrence conflict even
+                        # though the semantic edit is correct.
+                        old.quote = target.quote
+                        old.start, old.end = target.start, target.end
+                        old.resolution = target.resolution
+                        old.state = "needs_edit"
+                        old.reason = f"semantic_v2:{target.reason}"
+                        setattr(old, "semantic_replacement", target.replacement)
+                        setattr(old, "semantic_preserved_text", target.preserved_text)
+                        adopted = True
+                        break
+                if not adopted:
+                    synthetic.append(target)
+                    targets.append(target)
+                    origins[target.target_id] = "semantic_v2"
             if semantic_targets:
                 from .rule_scope import RuleScope
                 by_rule: dict[str, set[str]] = {}
