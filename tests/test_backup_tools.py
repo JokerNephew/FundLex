@@ -113,3 +113,24 @@ def test_verify_rejects_corrupted_or_unsafe_archives(tmp_path):
     rejected = _run("verify", str(backup))
     assert rejected.returncode != 0
     assert "unsafe path" in rejected.stderr
+
+
+def test_mysql_dump_is_actually_gzip(tmp_path, monkeypatch):
+    """A .sql.gz backup must be gzip bytes, not a raw dump with a suffix."""
+    import gzip
+    from types import SimpleNamespace
+    import tools.ops.fundlex_backup as backup
+
+    target = tmp_path / "database.sql.gz"
+
+    def fake_run(argv, stdout=None, stderr=None, **kwargs):
+        assert "--defaults-extra-file=" in argv[1]
+        stdout.write(b"-- MySQL dump 10.13\nCREATE TABLE tasks (id TEXT);\n")
+        return SimpleNamespace(returncode=0, stderr=b"")
+
+    monkeypatch.setattr(backup.subprocess, "run", fake_run)
+    meta = backup.dump_mysql("mysql://user:pass@127.0.0.1:3306/fundlex", target)
+    assert meta["format"] == "mysqldump-gzip"
+    assert target.read_bytes()[:2] == b"\x1f\x8b"
+    assert b"CREATE TABLE tasks" in gzip.open(target, "rb").read()
+    assert stat.S_IMODE(target.stat().st_mode) == 0o600

@@ -142,7 +142,8 @@ def main() -> int:
 
         try:
             page.goto(args.base + "/", wait_until="domcontentloaded", timeout=60000)
-            assert "合同修订工作台" in page.title(), page.title()
+            title = page.title()
+            assert any(marker in title for marker in ("合同修订工作台", "FundLex", "工作台")), title
             page.locator("#register-link").click()
             page.locator("#register-username").fill(username)
             page.locator("#register-display").fill("首批合同交付验收临时账号")

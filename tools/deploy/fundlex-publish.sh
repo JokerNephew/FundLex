@@ -523,7 +523,9 @@ main() {
   [ "$expected" = "$actual" ] || { fail "deployed engine mismatch"; return 1; }
   [ "$expected_service" = "$actual_service" ] || { fail "deployed service mismatch"; return 1; }
   migrate_schema
-  started_at=$(date --iso-8601=seconds)
+  # journalctl --since accepts a local date/time, not the ISO T/Z form on
+  # this host; use the same local clock as systemd.
+  started_at=$(date '+%Y-%m-%d %H:%M:%S')
   start_services
   check_logs
   [ "$manifest" = "$(tree_manifest "$DST" "$python_bin")" ] || { fail "deployed bytes changed after startup"; return 1; }

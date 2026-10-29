@@ -104,7 +104,10 @@ def dump_mysql(url: str, target: Path) -> dict[str, object]:
             for key in ("user", "password", "host", "port"):
                 handle.write(f"{key}={config[key]}\n")
         try:
-            with target.open("wb") as output:
+            # The manifest promises mysqldump-gzip.  Passing the raw stream
+            # through gzip is required; a plain file named .sql.gz is not a
+            # restorable backup and fails verify.
+            with gzip.open(target, "wb", compresslevel=6) as output:
                 result = subprocess.run(
                     ["mysqldump", f"--defaults-extra-file={config_path}",
                      "--no-tablespaces", "--single-transaction", "--quick",
