@@ -9635,6 +9635,7 @@ _DELETE_REVIEW_PROBES = {
 def absent_delete_coverage(rules_by_id: Mapping[str, Any],
                            targets: Sequence[Target], inspection: DocumentInspection,
                            scopes: Mapping[str, Any] | None, obligations: Any,
+                           facts: Any = None,
                            ) -> dict[str, dict[str, Any]]:
     """Deterministically certify a delete whose old policy object is absent.
 
@@ -9660,7 +9661,7 @@ def absent_delete_coverage(rules_by_id: Mapping[str, Any],
     # offered the redemption-fee reduction (弘利 p159).  This is narrower than the
     # delete rules: any surviving fee-adjustment wording in scope blocks the
     # certificate, so a paraphrase cannot be closed as absent.
-    replace_noop = {"G05", "G14"}
+    replace_noop = {"G05", "G14", "G02", "G04"}
     in_scope_operations: set[str] = set()
     for target in targets:
         if (target.out_of_scope or target.attribution_error
@@ -9686,6 +9687,13 @@ def absent_delete_coverage(rules_by_id: Mapping[str, Any],
         elif spec.op == "replace":
             if spec.rule_id not in replace_noop:
                 continue
+            if spec.rule_id in {"G02", "G04"}:
+                # Class-group substitution is a no-op only when the hard class
+                # facts instantiate every replacement to the existing wording.
+                # A different class set must still be located and edited.
+                rule = rules_by_id.get(spec.rule_id) or {}
+                if facts is None or not class_substitution_letter_stable(rule, facts):
+                    continue
         else:
             continue
         if spec.operation_id in in_scope_operations:
@@ -9712,7 +9720,13 @@ def absent_delete_coverage(rules_by_id: Mapping[str, Any],
         if spec.op == "replace":
             if not references:
                 continue
-            if re.search(r"调低[^。；;]{0,16}费率", scoped_document):
+            if spec.rule_id in {"G02", "G04"}:
+                # The generic class definition may not name the guide's example
+                # classes at all; absence is a no-op only after the hard-fact
+                # no-op check above.  Any enumerated replacement class that is
+                # already present is also left to the normal target path.
+                pass
+            elif re.search(r"调低[^。；;]{0,16}费率", scoped_document):
                 continue
         semantic_hits = _semantic_delete_hits(spec.rule_id, document)
         if spec.rule_id == "G06":

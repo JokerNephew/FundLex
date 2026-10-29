@@ -128,3 +128,19 @@ def test_absent_replace_uses_the_same_coverage_certificate():
         absent_coverage=coverage["G05:0"])
     assert effect.state == "PASS"
     assert effect.artifact_status == "VERIFIED_ABSENT"
+
+
+def test_hengli_g02_class_definition_already_generic_closes_as_noop():
+    from fundlex.obligations import apply_facts
+    from test_recall_core import _facts
+
+    source = BATCH / "广发弘利3个月滚动持有债券型证券投资基金基金合同.docx"
+    inspection = inspect_docx(source, full=True)
+    ledger = _ledger("G02")
+    apply_facts(ledger, _facts())
+    scope = {"G02": type("S", (), {"locations": frozenset({"p117"})})()}
+    coverage = absent_delete_coverage(
+        {rule["rule_id"]: rule for rule in GUIDE["groups"] if rule["rule_id"] == "G02"},
+        [], inspection, scope, ledger, facts=_facts())
+    assert "G02:0" in coverage and "G02:1" in coverage
+    assert coverage["G02:0"]["scanned_locations"] == ["p117"]

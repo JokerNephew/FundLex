@@ -2324,7 +2324,8 @@ def _run_audit(model: Any, rules_by_id: dict[str, dict], targets: Sequence[Targe
                               obligations=obligations, scopes=scopes,
                               approvals=approval_book,
                               absent_coverage_by_operation=absent_delete_coverage(
-                                  rules_by_id, targets, original, scopes, obligations))
+                                  rules_by_id, targets, original, scopes, obligations,
+                                  facts=facts))
         artifact_proofs = replay["obligations"]
         artifact_failures = replay["failures"]
     auditable_by_rule = _targets_by_rule(auditable)
@@ -5077,7 +5078,7 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
                         audit_proofs=audit_proofs,
                         absent_coverage_by_operation=absent_delete_coverage(
                             rules_by_id, targets, inspection, scopes,
-                            obligation_ledger))
+                            obligation_ledger, facts=facts))
                     residuals = check_delete_residuals(
                         rules_by_id, actual, edits=plan.get("edits") or [], original=inspection,
                         targets=[target.as_dict() for target in targets], facts=facts,
