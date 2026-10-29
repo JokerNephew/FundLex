@@ -1661,6 +1661,17 @@ def _plan_and_generate(model: Any, rules_by_id: dict[str, dict], targets: Sequen
                 # planner replaces that tail with the complete instantiated clause.
                 # Keep it actionable instead of marking it target-source mismatch.
                 site_ok = True
+            if not site_ok and str(target.reason or "").startswith("claim_residual:"):
+                # The residual scanner has already bound an exact quote to this
+                # physical span.  A short residual phrase (for example G15's
+                # "销售服务费每日计提，按月支付。") need not pass the broader
+                # rule word bag; otherwise the detector observes the old text and
+                # then marks its own target out of scope, leaving it in the final.
+                if (target.start is not None and target.end is not None
+                        and target.quote
+                        and target.quote in inspection.by_location(target.location).text):
+                    site_ok = True
+                    target.reason = f"{target.reason}|RESIDUAL_SITE_BOUND"
             if not site_ok:
                 check = approvals.allows(target, inspection)
                 if check.ok:
