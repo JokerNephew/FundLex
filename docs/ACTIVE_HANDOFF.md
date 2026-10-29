@@ -15,7 +15,9 @@
 - **第一波最终（2026-10-29）**：20份dev中 **15份业务复核通过**、5份失败保留；v2标签 **304/390（77.95%）**，标签实际complete 14/20，false_complete 1（B01的2个标签口径争议，业务复核通过）。通过：B01/B02/B03/B04/B06/B07/B08/B09/B10/B11/B13/B14/B16/B18/B20；失败：B05弘利、B12沪深300、B15美国房地产、B17道琼斯、B19锐意。证据`docs/evidence/first-wave2-*`与`docs/REAL_REVISION_EVALUATION_RESULTS.md`。
 - 最新代码全量非浏览器回归 **2158 passed/6 skipped/760.67s**（提交`6539437`；之后仅G05 scoped delete、G17 composite guard等小修，最终回归以最新日志为准）。生产仍是候选`cdf298e`，尚未重新部署最新修复，也未重跑生产E2E。
 - 工作树有**非本轮改动**未提交：`frontend/compare.*`、`frontend/src/pages/Compare/*`、`frontend/src/types/api.ts`、`fundlex/compare/*`、`fundlex/guide_generation/*`、`tests/test_guide_generation_pipeline.py`、`tests/test_compare_merged_render.py`、`合同比对.png`；这些疑似用户/并行agent工作，未覆盖、未提交。
-- 下一步：①处理B05/B12/B15/B17/B19剩余变体（G02/G04/G16/G09/G22）；②最新代码重新部署生产并重跑正式E2E；③8份holdout冻结后验收；④扩样100/250/514+。
+- **Semantic V2（模型语义 + 代码证明）Phase 1 已开始**：新增`fundlex/semantic_contract.py`、`guides/semantic_policies_v1.json`、模型任务`recall_semantic_target`；G02/G03/G04/G05/G09/G18/G22策略由指引sidecar描述，模型返回exact quote/full replacement/preserved_text，代码只校验span/scope/operation/required terms/protected terms。默认关闭，`FUNDLEX_SEMANTIC_V2=1`+`FUNDLEX_SEMANTIC_V2_RULES=G09,G22`开启。首个真实切片（美国房地产G09）模型给出了正确quote/replacement，但因返回`G09`而非`G09:0`被拒；已归一化单operation规则ID，定向58项测试通过，真实复跑待执行。旧确定性分支暂保留作shadow/回归。
+- 当前HEAD `740c35e`；2026-10-29最新全量非浏览器回归**2158 passed/6 skipped/760.67s**（Semantic V2 flag默认关闭）。
+- 下一步：①处理B05/B12/B15/B17/B19剩余变体（G02/G04/G16/G09/G22）；②最新代码重新部署生产并重跑正式E2E；③8份holdout冻结后验收；④扩样100/250/514+；⑤Semantic V2真实复跑并做旧/新影子对比后再删旧分支。
 - 独立标签v2已合并：28份/501 targets，review346条中应用44、驳回251、未解决51单列uncertain；不是最终gold。首批transcript/产物评分未完成。
 - 真实模型新端点`https://api.commandcode.ai/provider/v1`、模型`deepseek/deepseek-v4-flash`，key只在`/tmp/opencode/comprehensive-remediation-20261028/model-new.env`(600)；未写仓库/文档/日志。首两次真实run因reasoning耗尽`max_tokens`报`MODEL_OUTPUT_TRUNCATED`（`real-value-first{,2}`），第三次已用`thinking=disabled`+12000输出+context32000启动，结果待记录；不能把失败/重试当业务完成。
 - 当前未部署/未重启/未改生产env；生产仍是旧OpenCode端点。下一动作：真实value run完成→检查p1258摘要及实际final，独立业务复核，再跑首批20dev评分；通过后才合并/冻结候选、更新生产env/root publisher/五服务部署、正式工作台E2E；扩样需质量门槛。

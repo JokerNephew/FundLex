@@ -168,6 +168,13 @@ H＝E×…
 - 处理：未自行扩scope。若产品要求删除所有类别互转禁令，应把G06指引scope扩展或增加独立规则；当前保留并记录为P2。
 - 状态：**开放（产品/指引决策）**。
 
+## FL-D513 Semantic V2模型返回规则ID而非operation ID，目标被拒（2026-10-29）
+
+- 发现日期：2026-10-29，Semantic V2 首个真实垂直切片（美国房地产 G09）。
+- 问题与影响：模型 `recall_semantic_target` 返回 `operation_id=G09`，而规则 operation 是 `G09:0`，通用校验以 `operation_not_in_rule` 拒绝；模型给出的 exact quote、完整 replacement、preserved_text 实际正确。
+- 处理（已实施）：单 operation 规则允许把规则 ID 归一化为唯一 operation key；不改变多 operation 规则。`tests/test_semantic_contract_v2.py` 覆盖。
+- 状态：**代码修复+单元测试通过；带 flag 的真实合同复跑待执行**。
+
 ## FL-D503 管理费事实quote中“计提年费率为0.25%的销售服务费”无法解析（2026-10-29）
 
 - 发现日期：2026-10-29，弘利重跑。P1。
