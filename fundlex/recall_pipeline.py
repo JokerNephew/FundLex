@@ -298,7 +298,9 @@ def _window_ledger(entry: _WindowState) -> dict[str, Any]:
 
 
 def _normalise_guide_section(text: str) -> str:
-    value = re.sub(r"^第[一二三四五六七八九十百零〇\d]+(?:部分|章)", "", str(text or "").strip())
+    value = re.sub(r"[\ufff9-\ufffb\u200b-\u200f\u202a-\u202e\ufeff]", "",
+                   str(text or ""))
+    value = re.sub(r"^第[一二三四五六七八九十百零〇\d]+(?:部分|章)", "", value.strip())
     return re.sub(r"[\s\-—_:：、，,。；;（）()]+", "", value).replace("的", "")
 
 
@@ -1080,6 +1082,58 @@ def _target_scope_ok(target: Target, scopes: Mapping[str, Any] | None
     return all(scope.contains(location) for location in locations), scope
 
 
+def _expand_duplicate_copy_scopes(targets: list[Target],
+                                  scopes: Mapping[str, Any] | None,
+                                  inspection: DocumentInspection,
+                                  rules_by_id: Mapping[str, dict]) -> None:
+    """Add byte-identical clause copies to a resolved rule scope.
+
+    Some contracts place the contract summary under a chapter whose title does not
+    say 内容摘要 (for example 二十四、基金合同的效力), so the summary leaf keeps the
+    body zone and the fee/income policy scope excludes the real copy.  A paragraph
+    whose compact text is byte-identical to an already-scoped target paragraph is
+    the same business clause; include it so body and summary cannot diverge.
+    """
+    if scopes is None:
+        return
+    from .rule_scope import RuleScope
+    paragraph_text = {span.location: _compact(display_text(span.text)[0])
+                      for span in inspection.paragraphs}
+    by_text: dict[str, list[str]] = {}
+    for location, text in paragraph_text.items():
+        if len(text) >= 20:
+            by_text.setdefault(text, []).append(location)
+    additions: dict[str, set[str]] = {}
+    for target in targets:
+        if target.out_of_scope:
+            continue
+        scope = scopes.get(str(target.rule_id))
+        if scope is None or not scope.contains(target.location):
+            continue
+        text = paragraph_text.get(target.location, "")
+        if len(text) < 20:
+            continue
+        for location in by_text.get(text, ()):
+            if location != target.location:
+                additions.setdefault(str(target.rule_id), set()).add(location)
+    for rule_id, locations in additions.items():
+        scope = scopes.get(rule_id)
+        if scope is None:
+            continue
+        extra = frozenset(locations) - frozenset(scope.locations)
+        if not extra:
+            continue
+        scopes[rule_id] = RuleScope(
+            rule_id=rule_id, leaf_ids=frozenset(scope.leaf_ids),
+            locations=frozenset(scope.locations) | extra, zone=str(scope.zone),
+            include_summary_copies=True, copy_keys=frozenset(scope.copy_keys),
+            resolution=str(scope.resolution),
+            evidence=tuple(scope.evidence) + ("duplicate_copy_scope",))
+    from .recall import duplicate_copy_targets
+    for copy in duplicate_copy_targets(targets, rules_by_id, inspection, scopes):
+        targets.append(copy)
+
+
 def _apply_scope_gate(targets: Sequence[Target], scopes: Mapping[str, Any] | None,
                       audit: dict[str, Any] | None = None, *, stage: str = "plan"
                       ) -> list[Target]:
@@ -1607,6 +1661,7 @@ def _plan_and_generate(model: Any, rules_by_id: dict[str, dict], targets: Sequen
                          g15_delay_continuation_targets)
     # Final scope gate: no target outside its rule's physical scope may reach the
     # planner.  Out-of-scope targets keep a ledger row but are never planned.
+    _expand_duplicate_copy_scopes(targets, scopes, inspection, rules_by_id)
     _apply_scope_gate(targets, scopes, scope_audit, stage="plan")
     # Final exact-copy closure immediately before planning. Survey/rebind can add a
     # source target after the earlier passes; an uneditable body/summary copy must not

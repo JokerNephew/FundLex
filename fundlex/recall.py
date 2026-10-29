@@ -4795,11 +4795,14 @@ def _section_for_hint(sections: Sequence[Section], hint: Any) -> Section | None:
     text = str(hint or "").strip()
     if not text:
         return None
-    compact_hint = _compact(text).replace("的", "")
+    def clean(value: str) -> str:
+        return re.sub(r"[\ufff9-\ufffb\u200b-\u200f\u202a-\u202e\ufeff]", "",
+                      _compact(value)).replace("的", "")
+    compact_hint = clean(text)
     best: Section | None = None
     best_length = 0
     for section in sections:
-        compact_title = _compact(section.title).replace("的", "")
+        compact_title = clean(section.title)
         if compact_hint and compact_hint in compact_title:
             if len(compact_title) > best_length:
                 best, best_length = section, len(compact_title)
@@ -7434,6 +7437,31 @@ def _plan_target_inner(rule: dict, target: Target, inspection: DocumentInspectio
     spliced = actual
     applied: list[str] = []
     fragments: list[dict[str, str]] = []
+    if (rule_id == "G11" and len(operations) == 1
+            and operations[0].get("op") == "replace"
+            and target.start is not None and target.end is not None):
+        expected, issues = instantiate_slots(
+            str(operations[0].get("new_text") or ""), facts)
+        prefix = span.text[:target.start]
+        list_prefix = re.match(
+            r"^\s*(?:\d+[、.．)]|[（(][^）)]{1,8}[）)])\s*", span.text)
+        class_prefix_start = list_prefix.end() if list_prefix else 0
+        class_prefix = span.text[class_prefix_start:target.start]
+        if (not issues and expected and class_prefix.rstrip().endswith("的")
+                and "基金份额" in class_prefix
+                and _compact(expected).startswith("通过直销机构")):
+            # "4、本基金A类、Y类基金份额的 | 申购费用由投资人承担…" — the
+            # guide replacement already names the class group, so keeping the
+            # source prefix produces a duplicated subject.  Replace from the
+            # list marker through the whole old sentence.
+            return finish(PlannedEdit(
+                target_id=target.target_id, rule_id=rule_id,
+                location=target.location, start=class_prefix_start, end=target.end,
+                replacement=expected, operation="replace",
+                content_source="g11_class_prefix_replace",
+                evidence={"fixed_text": expected,
+                          "dropped_prefix": class_prefix,
+                          "guide_paragraphs": rule.get("source_paragraphs") or []}))
     for operation in [*delete_ops, *replace_ops]:
         op_kind = operation.get("op")
         old_text = str(operation.get("old_text") or "")

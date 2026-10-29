@@ -955,6 +955,11 @@ def _resolve_income(rule_id: str, sections: Sequence[Any], leaves: Sequence[Leaf
     base_ids = [str(section.id) for section in base]
     body_ids = [str(section.id) for section in base
                 if str(section.zone) == "body" and _is_income_section(section.title)]
+    if not body_ids:
+        # The model's section map can omit the income chapter; recognize the
+        # chapter by its own title rather than leaving G18 not-applicable.
+        body_ids = [str(section.id) for section in sections
+                    if str(section.zone) == "body" and _is_income_section(section.title)]
     evidence = [f"policy={rule_id}.income_distribution", f"base_sections={','.join(base_ids)}"]
     body = [leaf for leaf in _leaves_for(leaves, body_ids, zone="body")
             if "收益分配原则" in _compact(leaf.title)]
