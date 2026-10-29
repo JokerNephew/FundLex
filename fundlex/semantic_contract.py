@@ -233,9 +233,14 @@ def parse_semantic_targets(value: Mapping[str, Any], rule: Mapping[str, Any],
             rejected.append({"location": location, "quote": quote[:80],
                              "reason": "quote_not_bindable"})
             continue
+        operation_id = str(item.get("operation_id") or "").strip()
+        operation_ids = _rule_operation_ids(rule)
+        if operation_id not in operation_ids and operation_id == str(rule.get("rule_id") or ""):
+            if len(operation_ids) == 1:
+                operation_id = next(iter(operation_ids))
         target = SemanticTarget(
             rule_id=str(rule.get("rule_id") or ""),
-            operation_id=str(item.get("operation_id") or ""),
+            operation_id=operation_id,
             location=location, quote=quote, start=located[0], end=located[1],
             replacement=str(item.get("replacement") or ""),
             preserved_text=tuple(str(value) for value in

@@ -52,7 +52,7 @@ def _rule(rule_id="G09"):
 def test_model_target_is_validated_and_planned(tmp_path):
     inspection = _doc(tmp_path, OLD)
     gateway = _Gateway({"targets": [{
-        "location": "p0", "quote": OLD, "operation_id": "G09:0",
+        "location": "p0", "quote": OLD, "operation_id": "G09",
         "replacement": NEW, "preserved_text": ["各计算结果均保留至小数点后两位"],
         "reason": "redemption amount clause",
     }]})
