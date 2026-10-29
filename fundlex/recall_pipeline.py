@@ -5988,6 +5988,9 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
         _finalize_failure(report, published)
         return report
     except Exception as exc:  # noqa: BLE001 - preserve metering on unexpected failures
+        if os.environ.get("FUNDLEX_DEBUG_TRACEBACK", "").strip().lower() in {"1", "true", "yes"}:
+            import traceback
+            traceback.print_exc()
         report["error_code"] = "PROCESSING_FAILED"
         report["qualification_status"] = "failed"
         report["errors"].append({"code": "PROCESSING_FAILED", "stage": stage,
