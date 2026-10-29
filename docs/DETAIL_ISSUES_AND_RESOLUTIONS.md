@@ -24,6 +24,15 @@
 - 下一步：在用户同意后做一次按章节批次的 scope-aware 验证；输出上限 20000 只是单章内的次级配置。
 - 变更记录：2026-10-29 新增。
 
+## FL-D448 用户决定删除 Residual 检查轮次（2026-10-29）
+
+- 发现日期：2026-10-29，用户明确“删除 Residual 这轮检查”。
+- 处理：默认流水线 `STAGES` 移除 `RESIDUAL_MINING`，`run()` 不再调度 `stage_residual`；`eligibility.py` 的资格 checks 和 snapshot 移除 `residual_saturated` 门禁，改为 `residual_check="disabled"`、`residual_saturated=None`；`finalize` 同样标记 disabled。质量复核、覆盖审计、主题判定、最终 supplement、独立复核保留。`stage_residual` 方法保留但默认不调度，便于以后显式恢复；配置字段保留兼容，不参与门禁。
+- 影响：Residual 不再消耗调用、不再阻塞 `candidate_ready`；但也不再提供“连续两轮 clean”的漏项证明。覆盖审计和范围内 missing topics 仍是硬门禁，不能把删除 Residual 当成覆盖完整。
+- 状态与验证：**已实施并通过定向回归**。`test_guide_generation.py + pipeline + remediation eligibility/config` **70 passed**；未跑真实 smoke。历史 smoke 的 Residual 结果保留为历史证据，不改写。
+- 下一步：按新的四层检查（要求复核、质量复核+修复、覆盖审计+补写、独立复核）做一次用户同意的真实验证；若以后需要，可显式恢复 Residual。
+- 变更记录：2026-10-29 新增；不把“删除 Residual”写成“覆盖已完整”。
+
 ## 全面整改合并批次（2026-10-29，尚未生产验收）
 
 - 分支`codex/comprehensive-remediation-20261028`合并A–H及独立标签分支；HEAD含`343a375`（运行时/评分）、`145d115`（引擎）、`d76aa76`（DOCX/Compare）、`4d746e6`（法规生成）、`7d37d91`（workspace/发布/依赖）、`1fea578`（任务/飞书）、`e6b796f`（前端）、`27f7239`（标签）、`76e0c8d`（标签v2）等。原8个后台agent均未部署/未改生产。
@@ -137,6 +146,27 @@ H＝E×…
 - 问题与影响：源p798为“基金销售服务费每日计提…支付日期顺延。销售服务费由注册登记机构代收，注册登记机构收到后按相关合同规定支付给基金销售机构。”G15 old_text只覆盖第一句；删除后final p798仍保留“由注册登记机构代收…支付给销售机构”，而同段/新G16写“基金托管人…支付”，支付主体存在歧义。
 - 处理：未越权扩展G15删除范围；按指引只删授权句。记录为待业务裁决：是否需要把“代收”尾句纳入G15，或在新G16中明确其仍适用。不得由agent自行改指引后冒充已验证规则。
 - 状态：**开放（需产品/法务裁决）；当前作为P2保留**。
+
+## FL-D509 部分合同摘要中的G15/G16/G17/G18未纳入scope，正文改摘要不改（2026-10-29）
+
+- 发现日期：2026-10-29，第一波独立复核B01 A50、B16 聚安。P1。
+- 问题与影响：正文p798/p823等已改，但第二十四部分“基金合同内容摘要”p1254-1256/p1238等仍是旧支付/用途/G18句；report scope_audit显示G15-G17仅body、include_summary_copies=false。原因是模型`scope_map`有时未包含摘要章节，`_resolve_fee_tax`只在mapped base里找summary，导致真实摘要副本被漏改。
+- 处理（已实施）：fee/income摘要回退扫描所有summary section；只有copy_key匹配且summary_of指向已选body leaf的真实副本才加入；无summary_of的泛化摘要仍排除。测试`tests/test_rule_scope.py`更新。
+- 状态：**代码修复+单元测试通过；A50/聚安最新重跑待完成**。
+
+## FL-D510 G16 append被approval绕过结构站点，在无关ETF段落重复插入（2026-10-29）
+
+- 发现日期：2026-10-29，B04富信独立复核。P1。
+- 问题与影响：summary p1295已有完整G16，p1296（“运用基金财产申购自身管理基金…ETF除外”）又插入同一机制；目标T002靠`SITE_GUARD_WAIVED_BY_APPROVAL`通过，append_site_ok本应拒绝（该段无每日计提/按月支付）。
+- 处理（已实施）：append操作不允许approval覆盖`append_site_ok`，结构锚点失败即fail closed。`tests/test_g16_clause_duplicate_effect.py`等17项通过。
+- 状态：**代码修复+定向测试通过；富信最新重跑待完成**。
+
+## FL-D511 恒隆p255互相转换禁令在G06 class-setup scope之外未删（2026-10-29）
+
+- 发现日期：2026-10-29，B09独立复核。P2（需产品确认）。
+- 问题与影响：p255“本基金A类基金份额和C类基金份额之间暂不允许进行相互转换。”位于基金份额转换章节，不在G06映射的“基金的基本情况-份额类别设置”scope；引擎按scope只处理class setup，未删除该句。
+- 处理：未自行扩scope。若产品要求删除所有类别互转禁令，应把G06指引scope扩展或增加独立规则；当前保留并记录为P2。
+- 状态：**开放（产品/指引决策）**。
 
 ## FL-D503 管理费事实quote中“计提年费率为0.25%的销售服务费”无法解析（2026-10-29）
 
