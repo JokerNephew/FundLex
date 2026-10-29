@@ -3486,7 +3486,8 @@ def dedupe_operation_targets(targets: Sequence[Target], rules_by_id: dict[str, d
             continue
         rule = rules_by_id.get(key[0]) or {}
 
-        def score(target: Target) -> tuple[int, int]:
+        def score(target: Target) -> tuple[int, int, int, int]:
+            semantic = 1 if getattr(target, "semantic_replacement", None) else 0
             quote = _compact(target.quote)
             exact = 0
             for operation in rule.get("operations") or []:
@@ -3510,7 +3511,7 @@ def dedupe_operation_targets(targets: Sequence[Target], rules_by_id: dict[str, d
             # as already satisfied, keep the actionable target. A false positive
             # still has to pass source/plan/audit checks; letting the satisfied
             # duplicate win would silently suppress a required edit.
-            return (exact, 1 if target.state == "needs_edit" else 0, -width)
+            return (semantic, exact, 1 if target.state == "needs_edit" else 0, -width)
         kept: list[Target] = []
         for item in sorted(items, key=score, reverse=True):
             def same_occurrence(other: Target) -> bool:

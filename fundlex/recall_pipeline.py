@@ -4449,6 +4449,16 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
             synthetic.append(target)
             targets.append(target)
             origins[target.target_id] = "g22_ordered_list_variant"
+        if g22_targets:
+            current = scopes.get("G22")
+            if current is None or not getattr(current, "locations", ()):
+                from .rule_scope import RuleScope
+                scopes["G22"] = RuleScope(
+                    rule_id="G22", leaf_ids=frozenset(),
+                    locations=frozenset(str(target.location) for target in g22_targets),
+                    zone="body", include_summary_copies=False,
+                    copy_keys=frozenset(), resolution="g22_ordered_list",
+                    evidence=("g22_ordered_list_source_proven",))
         g08_targets = ensure_g08_actual_rate_targets(
             targets, rules_by_id, inspection, scopes)
         for target in g08_targets:
@@ -4460,7 +4470,7 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
             "FUNDLEX_SEMANTIC_V2", "0").strip().lower() in {"1", "true", "on", "yes"}
         if semantic_enabled:
             semantic_rules = [item.strip() for item in os.environ.get(
-                "FUNDLEX_SEMANTIC_V2_RULES", "G09,G22").split(",") if item.strip()]
+                "FUNDLEX_SEMANTIC_V2_RULES", "G09").split(",") if item.strip()]
             semantic_targets, semantic_rejected = discover_for_rules(
                 model, inspection, rules_by_id, scopes, semantic_rules)
             for target in semantic_targets:
