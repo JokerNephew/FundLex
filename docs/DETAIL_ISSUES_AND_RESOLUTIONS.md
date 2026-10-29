@@ -68,6 +68,20 @@
 - 处理（已实施，待真实重跑）：`ensure_delete_targets`不再把`absent/not_applicable`目标的quote计入covered，保留`needs_edit/satisfied`路径；新增`tests/test_g06_absent_coverage_delete.py`，实际源p128应生成G06删除目标；相关20项测试通过。该修复不按合同名特判，使用G06物理scope+语义禁令探针。
 - 状态：**代码修复+离线正例通过；生产候选尚未重新部署/真实E2E未复验**。旧生产产物保留为失败证据，不能宣称本份或项目通过。
 
+## FL-D483 运维备份把原始mysqldump写成.sql.gz，备份不可解压（2026-10-29）
+
+- 发现日期：2026-10-29，生产维护窗口。P1（回滚保障缺失）。
+- 问题与影响：`tools/ops/fundlex_backup.py::dump_mysql`直接把mysqldump原始stdout写入文件名`.sql.gz`，manifest却标`mysqldump-gzip`；`gzip -t`失败，verify报database archive not readable。即使第一次改成`gzip.open`作为subprocess stdout，GzipFile.fileno()仍暴露底层描述符，subprocess绕过压缩继续写raw，第二次备份仍失败。不能把“文件存在/大小”当可恢复备份。
+- 处理（已实施）：先写private临时`.sql`，再流式gzip到目标，失败清理；保留permissions/umask。新增`test_mysql_dump_is_actually_gzip`（gzip magic+CREATE TABLE）；生产第一次备份手工压缩并更新manifest，第二次同样修复；`verify`通过；从备份恢复到隔离MySQL 3308验证54表/93 users/711 documents，恢复测试库已删除。生产`tools/ops/fundlex_backup.py`需安装最新修复。
+- 状态：**代码修复、生产备份已修复/verify/隔离恢复通过；生产工具文件同步待完成**。原失败文件保留在备份目录/证据；不删除历史备份。
+
+## FL-D484 发布器journalctl时间格式导致启动检查误判并触发回滚（2026-10-29）
+
+- 发现日期：2026-10-29，生产首次受控发布。P1（部署可靠性）。
+- 问题与影响：`started_at=$(date --iso-8601=seconds)`带`+08:00`，`journalctl --since`报Failed to parse timestamp；发布器把健康服务误判startup errors，自动回滚。第一次回滚又因旧`.fundlex-engine-build` marker(32f...)与实际engine hash(1621...)不一致报recovery-failed；服务仍active but workspace404。改用`Z`仍无法解析，最终用本地`date '+%Y-%m-%d %H:%M:%S'`。已把旧marker校正为实际旧engine hash；第二次部署回滚验证成功；修复后第三次发布成功。
+- 证据：`/tmp/.../publisher-production{,2,3,4}.log`、`publisher-dry-run*.log`、`/opt/.fundlex-publish-*`；当前五服务active、capabilities200、workspace未登录401。
+- 状态：**发布器root脚本已修复并安装；部署c候选成功**。仍需把修复提交/同步到仓库/生产工具；发布记录保留。
+
 ## FL-D451 生产V1首页请求任务聚合接口404，部分发布破坏前后端契约（2026-10-28）
 
 - 发现日期：2026-10-28，真实注册登录后的生产首页检查（P1）。

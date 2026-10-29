@@ -103,22 +103,31 @@ def dump_mysql(url: str, target: Path) -> dict[str, object]:
             handle.write("[client]\n")
             for key in ("user", "password", "host", "port"):
                 handle.write(f"{key}={config[key]}\n")
+        raw_descriptor, raw_name = tempfile.mkstemp(
+            prefix=".fundlex-db-", suffix=".sql", dir=str(target.parent))
+        os.close(raw_descriptor)
+        raw = Path(raw_name)
         try:
-            # The manifest promises mysqldump-gzip.  Passing the raw stream
-            # through gzip is required; a plain file named .sql.gz is not a
-            # restorable backup and fails verify.
-            with gzip.open(target, "wb", compresslevel=6) as output:
+            # GzipFile.fileno() exposes the underlying raw descriptor, so
+            # subprocess stdout must not write directly into gzip.open().  Dump
+            # to a private temporary SQL file first, then compress it.
+            with raw.open("wb") as output:
                 result = subprocess.run(
                     ["mysqldump", f"--defaults-extra-file={config_path}",
                      "--no-tablespaces", "--single-transaction", "--quick",
                      config["database"]],
                     stdout=output, stderr=subprocess.PIPE)
+            if result.returncode:
+                target.unlink(missing_ok=True)
+                fail("mysqldump failed; no SQL dump was published")
+            with raw.open("rb") as source_handle, gzip.open(
+                    target, "wb", compresslevel=6) as output:
+                shutil.copyfileobj(source_handle, output, 1024 * 1024)
         except OSError:
             target.unlink(missing_ok=True)
             fail("mysqldump is unavailable; no SQL dump was published")
-        if result.returncode:
-            target.unlink(missing_ok=True)
-            fail("mysqldump failed; no SQL dump was published")
+        finally:
+            raw.unlink(missing_ok=True)
     finally:
         config_path.unlink(missing_ok=True)
     secure_file(target)
