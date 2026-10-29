@@ -80,6 +80,55 @@
 - 处理（已实施）：新增`canonicalize_append_targets()`，以`_g16_clause_locations`的**同一物理clause**为归一键（不能只用section_path，否则会误删两个独立但同文的费用条款；公式段p799可映射到紧邻payment head p800的clause），同rule+append operations+zone+clause内按T3优先于survey、非composite、地址稳定保留一个；其他标out_of_scope并留`DUPLICATE_APPEND_SITE_CANONICAL`。body与summary按zone/clause分离保留。调用点位于rebind/split后、approval/plan前；`tests/test_g16_clause_duplicate_effect.py`的合法双clause测试与`tests/test_remediation_append_canonical.py`均通过。旧first4作为失败证据保留。
 - 状态与验证：**已修复并通过真实模型first7 + 独立业务复核**。first7 final正文G16只p802一处、摘要p1258一处，21/21 v2目标completed，16 ins/16 del，接受=final/拒绝=source；独立复核通过，仅P2留两空白段（p800/p801，建议清理）。first7证据`docs/evidence/value-first7-score-20261029.json`、`docs/evidence/value-first7-business-review.md`。仍未扩展到28份/514；评分器需后续检测同一义务多站点重复，不能只按单站点完成。
 
+## FL-D488 第一波真实运行大面积因G06/G13/G17删除目标“原文不存在”未闭环（2026-10-29）
+
+- 发现日期：2026-10-29，首批20份dev真实运行。P0（阻断整批交付）。
+- 问题与影响：8份G06、6份G13失败，代码均报`OPEN_OBLIGATION`+`FINAL_OPERATION_UNPROVEN/dataset_literal_absent_without_coverage`。这些合同的源文件确实没有“不同基金份额类别不得互相转换”/“7日赎回费”等旧条款，本应作为`ALREADY_SATISFIED`关闭；Claim Replay要求调用方提供rule-scope扫描记录，但此前没有任何代码生成该记录，导致正常合同永远incomplete。
+- 处理（已实施）：新增`absent_delete_coverage()`（`fundlex/recall.py`），对G06/G13/G17的delete操作，在没有真实站点目标时做规则scope内确定扫描；要求参考原文、语义探针、review探针及规则专属宽关键词全部零命中才发`rule_scope_scan`记录，传入audit与最终两次`replay_claims`。`tests/test_absent_delete_coverage.py`覆盖A50/恒昌/价值及“已有目标不豁免”场景。
+- 状态：**代码修复+离线测试通过；first-wave真实重跑待执行**。旧20份运行保留为失败证据。
+
+## FL-D489 删除G13尾句后残留“其中，”连接词（2026-10-29）
+
+- 发现日期：2026-10-29，A50合同first-wave运行。P1。
+- 问题与影响：G12+G13合并段落编辑删除“本基金对持续持有期少于7日的投资者…”后，段落以“…列示。其中，”结尾；审计判G13删除不完整，交付incomplete。业务上不应留下孤立连接词。
+- 处理（已实施）：`compose_paragraph`在组合结果与原文不同且原文本身不以该形式结尾时，清理尾部`其中/以及/并且/同时/另外`及悬挂逗号/冒号/分号。`tests/test_atomic_orphan_tail.py`覆盖尾句删除和“原文本来以逗号结尾不改写”。
+- 状态：**代码修复+离线测试通过；真实重跑待执行**。
+
+## FL-D490 G14合同在费率项前重复“基金”导致定位失败（2026-10-29）
+
+- 发现日期：2026-10-29，价值优选/恒阳/恒鑫first-wave运行。P0（G14整组未闭环）。
+- 问题与影响：指引写“调低基金申购费率和赎回费率”，合同写“调低基金申购费率和基金赎回费率”。旧`_normalise_fee_rate_reference`只处理“、基金”，`_expand_fee_rate_reference`只扩展“、”，导致target被`TARGET_SOURCE_MISMATCH`标out_of_scope，或survey完全漏检，G14三个ONE_OF操作保持OPEN。
+- 处理（已实施）：归一化/扩展同时支持`、`/`和`/`及`；`operation_search_key_pairs`为G14加入展开后的检索key；`tests/test_g14_fee_rate_variant.py`覆盖归一化、展开和真实p209绑定G14:3。
+- 状态：**代码修复+离线测试通过；真实重跑待执行**。
+
+## FL-D491 Open-obligation locator返回“[p164]”被当作越界候选（2026-10-29）
+
+- 发现日期：2026-10-29，富信/恒阳G05恢复。P1。
+- 问题与影响：候选上下文以`[p164] …`展示，模型把`[p164]`原样放进location；代码用`location not in allowed_locations`拒绝，`reject_reason=location_outside_candidate_window`，G05:0无法绑定，整份incomplete。回答内容（段落与quote）实际正确。
+- 处理（已实施）：新增`normalise_locator_location()`，去除方括号/圆括号/【】并在唯一候选名出现于字符串时提取；`tests/test_multicomponent_satisfaction_guards.py`覆盖。窗口/quote存在性/唯一性检查保持不变。
+- 状态：**代码修复+离线测试通过；真实重跑待执行**。
+
+## FL-D492 G09/G11尾部旧句被误判“新政策已存在”（2026-10-29）
+
+- 发现日期：2026-10-29，富信first-wave运行。P1。
+- 问题与影响：G09在p244用旧句尾“赎回金额单位为元。”命中`satisfied_by_new_text`，Survey gap又因重复无法绑定，G09 OPEN；G11在p245用旧尾“本基金C类基金份额不收取申购费用。”把整条误标satisfied，audit指出仍缺“通过直销机构/其他销售机构”新政策，G11:0/1未计划。
+- 处理（已实施）：`satisfied_by_new_text`对G09要求同时出现“扣除或加上相应的费用”和“当日该类基金份额的基金份额净值”；对G11要求“通过直销机构”和“其他销售机构”。`tests/test_multicomponent_satisfaction_guards.py`覆盖旧尾不满足、完整新文本满足。
+- 状态：**代码修复+离线测试通过；真实重跑待执行**。
+
+## FL-D493 G22把“（五）…”清算标题当作absent业务站点，产生孤儿证据（2026-10-29）
+
+- 发现日期：2026-10-29，恒鑫first-wave运行。P1。
+- 问题与影响：窗口内absent目标定位在标题“（五）基金财产清算剩余资产的分配”，`_looks_like_heading`不识别全角括号中文序号；replay把它当成absent satisfied site（p1367），与真实编辑站点p1368形成`CLAIM_OPERATION_NOT_PLANNED`孤儿，G22 OPEN。
+- 处理（已实施）：`_looks_like_heading`识别`（五）`类全角序号；replay中absent目标仅可用于delete，replace不得用“此处旧文不存在”证明。`tests/test_fullwidth_heading_guard.py`；完整回归相关189项通过。
+- 状态：**代码修复+离线测试通过；真实重跑待执行**。
+
+## FL-D494 G05 replace在规则scope内旧文确实缺失时仍未闭环（2026-10-29）
+
+- 发现日期：2026-10-29，弘利first-wave运行。P1。
+- 问题与影响：弘利份额类别设置p159本来就没有“调低赎回费率”，p420/p1116的“调低赎回费率”属于持有人大会条款、不是G05站点；`absent_delete_coverage`此前只处理delete，G05:0 replace保持OPEN，整份incomplete。
+- 处理（已实施）：absence证书扩展到G05/G14的replace，仅当规则physical scope内既无参考原文也无任何“调低…费率”表述；scope外同文不阻断，已有目标不豁免。`tests/test_absent_delete_coverage.py::test_hengli_g05_absent_replace_closes_in_its_rule_scope`。
+- 状态：**代码修复+离线测试通过；真实重跑待执行**。
+
 ## FL-D482 生产E2E中G06短禁令句被absent目标当作已覆盖，错误保留（2026-10-29）
 
 - 发现日期：2026-10-29，生产浏览器E2E任务`e6677e7e9de042fda3dec3076f91a1fb`的独立业务复核。P1。
