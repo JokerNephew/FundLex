@@ -223,6 +223,23 @@ _RECALL_ARTIFACT_HASHES = {"final": "final_sha256", "redline": "redline_sha256",
 # alongside delivery artifacts but are not part of delivery validation.
 SELECTED_KINDS = {"selected_final", "selected_redline"}
 
+EVALUATION_KINDS = {"evaluation_final", "evaluation_redline"}
+
+
+def servable_artifact_kinds(kinds, execution_mode: Any) -> list[str]:
+    """Artifact kinds that the download gate can actually serve (FL-D555 A3-F6).
+
+    Mirrors the mode binding in ``RunStore.get_artifact``: evaluation pairs are
+    only served while the persisted execution mode is evaluation, and
+    user-selected derivatives are never served for evaluation documents. The
+    listing surfaces (``_document_dict``, task document dicts) must advertise
+    the same set so the UI never offers a download that must fail.
+    """
+    mode = str(execution_mode or "")
+    return [str(kind) for kind in kinds
+            if (kind not in EVALUATION_KINDS or mode == "evaluation")
+            and (kind not in SELECTED_KINDS or mode != "evaluation")]
+
 
 def _manifests_available(report: dict[str, Any]) -> bool:
     """Whether a persisted report can still drive selective decisions."""
@@ -274,6 +291,7 @@ def _validate_recall_delivery(report: dict[str, Any], artifacts: dict[str, Path]
         if not complete_status or not _RECALL_EDIT_CHECKS.issubset(checks):
             raise ValueError("MISSING_VERIFIED_ARTIFACTS")
         _require_recall_pair(artifacts, validation, ("final", "redline"))
+        _validate_manifest_plan_binding(report)
         return
     if kind == "recall_validated_unchanged":
         if not complete_status or not _RECALL_UNCHANGED_CHECKS.issubset(checks):
@@ -287,8 +305,36 @@ def _validate_recall_delivery(report: dict[str, Any], artifacts: dict[str, Path]
         if {"final", "redline"} & set(artifacts):
             raise ValueError("MISSING_VERIFIED_ARTIFACTS")
         _require_recall_pair(artifacts, validation, ("working_final", "working_redline"))
+        _validate_manifest_plan_binding(report)
         return
     raise ValueError("MISSING_VERIFIED_ARTIFACTS")
+
+
+def _validate_manifest_plan_binding(report: dict[str, Any]) -> None:
+    """Every embedded revision must trace back to a planned edit (FL-D555 A3-F5).
+
+    The plan ledger may legitimately hold edits the DOCX writer skipped (an
+    insert without an anchor text), so the binding is one-directional: a
+    manifest entry whose edit_id matches no plan edit means the modification
+    report and the redline have drifted apart, and delivery fails closed.
+    """
+    manifest = report.get("revision_manifest")
+    if not isinstance(manifest, list) or not manifest:
+        return
+    plan = report.get("plan")
+    edits = plan.get("edits") if isinstance(plan, dict) else None
+    known: set[str] = set()
+    if isinstance(edits, list):
+        for edit in edits:
+            if not isinstance(edit, dict):
+                continue
+            if edit.get("edit_id"):
+                known.add(str(edit["edit_id"]))
+            if edit.get("rule_id") is not None or edit.get("target_id") is not None:
+                known.add(f"{edit.get('rule_id')}:{edit.get('target_id')}")
+    for entry in manifest:
+        if not isinstance(entry, dict) or str(entry.get("edit_id") or "") not in known:
+            raise ValueError("REVISION_MANIFEST_PLAN_MISMATCH")
 
 
 def _review_rejected_report_only(report: dict[str, Any], artifacts: dict[str, Path]) -> bool:
@@ -637,6 +683,7 @@ class RunStore:
             report_error = exc.code
         else:
             report_error = None
+        servable = servable_artifact_kinds([item["kind"] for item in artifacts], row["execution_mode"])
         return {key: row[key] for key in ("id", "batch_id", "filename", "source_sha256", "status",
                                           "qualification_status", "delivery_status", "error_code", "attempt",
                                           "execution_mode")} | {
@@ -645,7 +692,8 @@ class RunStore:
             "selection_decision_hash": row["selection_decision_hash"] if "selection_decision_hash" in row.keys() else "",
             "artifacts": [item["kind"] for item in artifacts],
             "report_url": f"/api/batches/{row['batch_id']}/documents/{row['id']}/report",
-            "download_urls": {item["kind"]: f"/api/batches/{row['batch_id']}/documents/{row['id']}/download/{item['kind']}" for item in artifacts},
+            "download_urls": {kind: f"/api/batches/{row['batch_id']}/documents/{row['id']}/download/{kind}"
+                              for kind in servable},
             "report_error": report_error,
         }
 
@@ -986,6 +1034,7 @@ class RunStore:
                      expired["id"], expired["fencing_token"], now, max_attempts)).rowcount
                 if changed == 1:
                     self._refresh_batch(db, expired["batch_id"], now)
+            self._heal_task_pause(db, now)
             active_scope = "active.batch_id=d.batch_id"
             if db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='task_batches'").fetchone():
                 active_scope = """COALESCE((SELECT task_id FROM task_batches WHERE batch_id=active.batch_id),active.batch_id)
@@ -1064,7 +1113,10 @@ class RunStore:
             raise Conflict("stale worker lease")
         job_mode = str(job["job_mode"] or "delivery")
         report_mode = str(report.get("execution_mode") or "delivery")
-        if job["task_id"] and report_mode != job_mode:
+        # The fence is unconditional (FL-D555 A3-F7): batches.mode is always
+        # persisted, so a report may never relabel the batch's mode even for a
+        # batch that is not bound to a first-class task.
+        if report_mode != job_mode:
             raise Conflict("EXECUTION_MODE_MISMATCH")
         # Verify all outputs before publication. Only report files are allowed for incomplete results.
         try:
@@ -1141,6 +1193,7 @@ class RunStore:
                     db.execute("INSERT OR REPLACE INTO artifacts VALUES (?,?,?,?,?)",
                                (document_id, kind, key, digest, size))
                 self._refresh_batch(db, row["batch_id"], transition_now)
+                self._heal_task_pause(db, transition_now)
         except Exception:
             for target in published:
                 target.unlink(missing_ok=True)
@@ -1204,6 +1257,9 @@ class RunStore:
                     if task:
                         db.execute("UPDATE tasks SET paused=1,pause_reason=?,updated_at=? WHERE id=?", (error_code, transition_now, task["task_id"]))
                         db.execute("UPDATE batches SET status='paused',updated_at=? WHERE id IN (SELECT batch_id FROM task_batches WHERE task_id=?) AND status!='completed'", (transition_now, task["task_id"]))
+                        # Terminal pause-required failures leave no batch to
+                        # pause; the bit must not survive a completed batch.
+                        self._heal_task_pause(db, transition_now)
 
     def pause(self, owner: str, batch_id: str) -> dict[str, Any]:
         self.get_batch(owner, batch_id)
@@ -1242,3 +1298,24 @@ class RunStore:
         current = db.execute("SELECT status FROM batches WHERE id=?", (batch_id,)).fetchone()["status"]
         state = "completed" if row["pending"] == 0 else ("paused" if current == "paused" else "running")
         db.execute("UPDATE batches SET status=?,updated_at=? WHERE id=?", (state, now, batch_id))
+
+    @staticmethod
+    def _heal_task_pause(db: Connection, now: float) -> None:
+        """Clear a stale ``tasks.paused`` bit once the task is fully terminal (FL-D553 B14-03).
+
+        Pausing a task whose in-flight batch then completes leaves
+        ``tasks.paused=1`` behind even though nothing can ever run again; the
+        derived task status already shows ``completed`` while the workspace
+        still reports ``paused``, and a later upload would silently start
+        paused. Tasks that still have files to upload or a non-completed batch
+        keep their pause bit — uploading to a paused task must stay queued.
+        """
+        if not db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='task_batches'").fetchone():
+            return
+        db.execute("""UPDATE tasks SET paused=0,pause_reason=NULL,updated_at=?
+            WHERE paused=1 AND NOT EXISTS (
+                SELECT 1 FROM task_batches tb JOIN batches b ON b.id=tb.batch_id
+                WHERE tb.task_id=tasks.id AND b.status!='completed')
+            AND NOT EXISTS (
+                SELECT 1 FROM task_files f
+                WHERE f.task_id=tasks.id AND f.document_id IS NULL AND f.upload_status!='rejected')""", (now,))

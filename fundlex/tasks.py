@@ -18,7 +18,7 @@ from .edit_summary import (DELIVERY_TEXT, edit_count,
                            summary_detail)
 from .recall import ENGINE_ID as RECALL_ENGINE_ID
 from .store import (Conflict, NotFound, ReportJsonError, RunStore, SCHEMA_VERSION,
-                     engine_build, parse_report_json)
+                     engine_build, parse_report_json, servable_artifact_kinds)
 
 
 # One task document is a LEFT JOIN of its manifest row and its published
@@ -367,7 +367,8 @@ class TaskStore:
             "report_url": (f"/api/tasks/{task_id}/documents/{document_id}/report"
                            if document_id and row["report_json"] else None),
             "downloads": ({kind: f"/api/tasks/{task_id}/documents/{document_id}/download/{kind}"
-                           for kind in kinds} if document_id else {}),
+                           for kind in servable_artifact_kinds(kinds, row["execution_mode"])}
+                          if document_id else {}),
             "source_sha256": row["source_sha256"],
             "phase": phase,
             "report_error": report_error,
@@ -515,7 +516,8 @@ class TaskStore:
                          "report_url": (f"/api/batches/{batch_id}/documents/{row['id']}/report"
                                         if row["report_json"] else None),
                          "downloads": {kind: f"/api/batches/{batch_id}/documents/{row['id']}/download/{kind}"
-                                       for kind in artifacts.get(row["id"], ())},
+                                       for kind in servable_artifact_kinds(artifacts.get(row["id"], ()),
+                                                                           row["execution_mode"])},
                          "source_sha256": row["source_sha256"], "report_error": report_error,
                          "ordinal": row["ordinal"], "reason_codes": reasons})
         task = dict(batch) | {"id": task_id, "name": "历史任务 · " + datetime.fromtimestamp(batch["created_at"], timezone.utc).strftime("%Y-%m-%d %H:%M"),
@@ -964,6 +966,10 @@ class TaskStore:
                     bid = row["batch_id"]
                     pending = db.execute("SELECT COUNT(*) FROM documents WHERE batch_id=? AND status NOT IN ('succeeded','failed')", (bid,)).fetchone()[0]
                     db.execute("UPDATE batches SET status=?,updated_at=? WHERE id=?", ("completed" if not pending else "paused" if operation == "pause" else "queued", now, bid))
+                # A pause on a task whose batches are all already terminal must
+                # not leave a stale paused bit contradicting completed batches
+                # (FL-D553 B14-03).
+                self.store._heal_task_pause(db, now)
             return self._snapshot(db, self._owned(db, owner, task_id))
 
     def report(self, owner, task_id):

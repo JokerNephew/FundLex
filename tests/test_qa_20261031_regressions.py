@@ -733,3 +733,187 @@ def test_template_policy_fails_closed_when_slots_cannot_fill(tmp_path):
     }]}, rule, actual, ["p0"], policy, facts=_class_facts())
     assert not accepted
     assert any(entry.get("reason") == "template_slots_unresolved" for entry in rejected)
+
+
+# ==========================================================================
+# FL-D553 B14-03 / FL-D555 A3-F5 / A3-F6 / A3-F7 (2026-10-31 backend fixes)
+# ==========================================================================
+
+def _qa_bound_store(tmp_path):
+    from fundlex import guide_store
+    from fundlex.store import RunStore
+    store = RunStore(tmp_path / "state-b1403")
+    guide_store.ensure_builtin_guide(store)
+    version = guide_store.get_version(store, "qa-owner", guide_store.BUILTIN_GUIDE_ID)
+    return store, version
+
+
+def _qa_contract_bytes() -> bytes:
+    import io
+
+    from docx import Document
+    stream = io.BytesIO()
+    document = Document()
+    document.add_paragraph("公开合同正文示例")
+    document.save(stream)
+    return stream.getvalue()
+
+
+def _qa_submit_task(store, version):
+    from fundlex.tasks import TaskStore
+    payload = _qa_contract_bytes()
+    tasks = TaskStore(store)
+    task = tasks.create("qa-owner", "暂停位回归任务", {"version": "v1", "sha256": ""},
+                        [{"client_id": "c1", "name": "contract.docx", "size": len(payload)}],
+                        engine_id="recall_first", guide_version_id=version["id"],
+                        guide_rules_sha256=version.get("sha256") or version["rules_sha256"],
+                        mode="delivery")
+    receipts = tasks.uploads("qa-owner", task["id"],
+                             [{"client_id": "c1", "name": "contract.docx", "data": payload}])
+    assert receipts["receipts"][0]["status"] == "accepted"
+    first = receipts["receipts"][0]
+    return tasks, task["id"], first["batch_id"], first["document_id"], payload
+
+
+def _qa_complete_report(source, final_path, redline_path):
+    from fundlex.docx import generate_unchanged_artifacts, validate_edit_plan
+    plan = validate_edit_plan(source, [], {})
+    validation = generate_unchanged_artifacts(source, plan, redline_path, final_path)
+    return {"engine_id": "recall_first", "schema_version": "3", "execution_mode": "delivery",
+            "qualification_status": "eligible", "delivery_status": "complete",
+            "output_validation": {"kind": "recall_validated_unchanged",
+                                  "checks": list(validation.checks),
+                                  "final_sha256": validation.final_sha256,
+                                  "redline_sha256": validation.redline_sha256}}
+
+
+def test_task_pause_stale_bit_healed_when_last_batch_completes(tmp_path):
+    """B14-03: pause during an in-flight run must not leave tasks.paused=1
+    next to a completed batch once the running document finishes."""
+    from fundlex.store import RunStore
+    store: RunStore
+    store, version = _qa_bound_store(tmp_path)
+    tasks, task_id, batch_id, document_id, payload = _qa_submit_task(store, version)
+    source = tmp_path / "input.docx"
+    source.write_bytes(payload)
+    claimed = store.claim(lease_seconds=300)
+    assert claimed is not None
+    snapshot = tasks.control("qa-owner", task_id, "pause")
+    assert snapshot["status"] == "paused"
+    with store._connect() as db:
+        assert db.execute("SELECT paused FROM tasks WHERE id=?", (task_id,)).fetchone()["paused"] == 1
+    report = _qa_complete_report(source, tmp_path / "final.docx", tmp_path / "redline.docx")
+    store.finish(document_id, claimed["fencing_token"], report=report,
+                 artifacts={"final": tmp_path / "final.docx", "redline": tmp_path / "redline.docx"})
+    with store._connect() as db:
+        batch = db.execute("SELECT status FROM batches WHERE id=?", (batch_id,)).fetchone()
+        task_row = db.execute("SELECT paused,pause_reason FROM tasks WHERE id=?", (task_id,)).fetchone()
+    assert batch["status"] == "completed"
+    assert task_row["paused"] == 0 and not task_row["pause_reason"]
+    assert tasks.get("qa-owner", task_id)["status"] == "completed"
+
+
+def test_task_pause_on_fully_terminal_task_does_not_stick(tmp_path):
+    """B14-03: pausing an already-completed task must not leave a stale bit,
+    while pausing a task that still has pending work must keep it."""
+    store, version = _qa_bound_store(tmp_path)
+    tasks, task_id, _batch_id, _doc_id, payload = _qa_submit_task(store, version)
+    # Still pending: the bit must stay.
+    tasks.control("qa-owner", task_id, "pause")
+    with store._connect() as db:
+        assert db.execute("SELECT paused FROM tasks WHERE id=?", (task_id,)).fetchone()["paused"] == 1
+        db.execute("UPDATE documents SET status='succeeded',finished_at=1,updated_at=1")
+        db.execute("UPDATE batches SET status='completed'")
+    snapshot = tasks.control("qa-owner", task_id, "pause")
+    assert snapshot["status"] == "completed"
+    with store._connect() as db:
+        assert db.execute("SELECT paused FROM tasks WHERE id=?", (task_id,)).fetchone()["paused"] == 0
+
+
+def test_terminal_pause_required_retry_clears_task_pause(tmp_path):
+    """B14-03: a terminal pause-required failure leaves no batch to pause,
+    so the stale task bit must be healed in the same transaction."""
+    store, version = _qa_bound_store(tmp_path)
+    tasks, task_id, batch_id, document_id, payload = _qa_submit_task(store, version)
+    source = tmp_path / "input.docx"
+    source.write_bytes(payload)
+    claimed = store.claim(lease_seconds=300, max_attempts=1)
+    assert claimed is not None
+    store.retry(document_id, claimed["fencing_token"], error_code="MODEL_CIRCUIT_OPEN",
+                max_attempts=1, report={"execution_mode": "delivery"})
+    with store._connect() as db:
+        assert db.execute("SELECT status FROM batches WHERE id=?", (batch_id,)).fetchone()["status"] == "completed"
+        assert db.execute("SELECT paused FROM tasks WHERE id=?", (task_id,)).fetchone()["paused"] == 0
+
+
+def _qa_recall_edits_report(validation, *, manifest_edit_id, status="complete", kind="recall_validated_edits"):
+    report = {"engine_id": "recall_first", "schema_version": "3", "execution_mode": "delivery",
+              "delivery_status": status,
+              "output_validation": {"kind": kind,
+                                    "checks": sorted(store_module._RECALL_EDIT_CHECKS),
+                                    "final_sha256": validation["final"],
+                                    "redline_sha256": validation["redline"]},
+              "plan": {"count": 1, "edits": [{"rule_id": "G01", "target_id": "T1"}]},
+              "revision_manifest": [{"edit_id": manifest_edit_id, "location": "p0"}]}
+    if status == "incomplete":
+        report["unresolved"] = [{"kind": "target", "rule_id": "G01"}]
+    return report
+
+
+def test_delivery_cross_checks_revision_manifest_against_plan_edits(tmp_path):
+    """A3-F5: a manifest entry without a matching planned edit must fail
+    closed; a bound manifest must be accepted for both produced-pair kinds."""
+    from fundlex.store import sha256_file, validate_delivery
+    final, redline = tmp_path / "final.bin", tmp_path / "redline.bin"
+    final.write_bytes(b"final")
+    redline.write_bytes(b"redline")
+    validation = {"final": sha256_file(final), "redline": sha256_file(redline)}
+    pair = {"final": final, "redline": redline}
+    ok = _qa_recall_edits_report(validation, manifest_edit_id="G01:T1")
+    validate_delivery(ok, pair)
+    drifted = _qa_recall_edits_report(validation, manifest_edit_id="G01:GHOST")
+    with pytest.raises(ValueError, match="REVISION_MANIFEST_PLAN_MISMATCH"):
+        validate_delivery(drifted, pair)
+    working_pair = {"working_final": final, "working_redline": redline}
+    working = _qa_recall_edits_report(validation, manifest_edit_id="G01:GHOST",
+                                      status="incomplete", kind="recall_working_edits")
+    with pytest.raises(ValueError, match="REVISION_MANIFEST_PLAN_MISMATCH"):
+        validate_delivery(working, working_pair)
+
+
+def test_document_download_urls_filtered_by_execution_mode(tmp_path):
+    """A3-F6: download_urls must mirror the get_artifact mode binding —
+    no evaluation URLs on delivery documents, no selected URLs on
+    evaluation documents."""
+    store, version = _qa_bound_store(tmp_path)
+    tasks, _task_id, batch_id, document_id, payload = _qa_submit_task(store, version)
+    with store._connect() as db:
+        db.execute("INSERT INTO artifacts VALUES (?,?,?,?,?)",
+                   (document_id, "final", "objects/x", "0" * 64, 1))
+        db.execute("INSERT INTO artifacts VALUES (?,?,?,?,?)",
+                   (document_id, "evaluation_final", "objects/y", "0" * 64, 1))
+    doc = store.get_document("qa-owner", batch_id, document_id)
+    assert "final" in doc["download_urls"]
+    assert "evaluation_final" not in doc["download_urls"]
+    with store._connect() as db:
+        db.execute("UPDATE documents SET execution_mode='evaluation' WHERE id=?", (document_id,))
+        db.execute("INSERT INTO artifacts VALUES (?,?,?,?,?)",
+                   (document_id, "selected_final", "objects/z", "0" * 64, 1))
+    doc = store.get_document("qa-owner", batch_id, document_id)
+    assert "evaluation_final" in doc["download_urls"]
+    assert "selected_final" not in doc["download_urls"]
+
+
+def test_finish_mode_fence_applies_without_task_binding(tmp_path):
+    """A3-F7: a report may never relabel batches.mode, even for a batch not
+    bound to a first-class task."""
+    from fundlex.store import Conflict, RunStore
+    store = RunStore(tmp_path / "state-a3f7")
+    store.create_batch(owner="qa-owner", ruleset_version="v1",
+                       uploads=[("contract.docx", _qa_contract_bytes())])
+    claimed = store.claim(lease_seconds=300)
+    assert claimed is not None
+    report = {"execution_mode": "evaluation", "delivery_status": "excluded",
+              "engine_id": "v2", "schema_version": "2"}
+    with pytest.raises(Conflict, match="EXECUTION_MODE_MISMATCH"):
+        store.finish(claimed["id"], claimed["fencing_token"], report=report, artifacts={})
