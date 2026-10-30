@@ -68,6 +68,7 @@ _ENGINE_BUILD_MODULES = (
     "fundlex/rules.py",
     "fundlex/rules_v2.py",
     "fundlex/selective.py",
+    "fundlex/semantic_contract.py",
     "fundlex/semantic_evidence.py",
     "fundlex/stage_replay.py",
     "fundlex/targeting.py",

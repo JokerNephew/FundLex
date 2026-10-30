@@ -152,12 +152,32 @@ def find_normalized(haystack: str, needle: str) -> tuple[int, int] | None:
         start = compact_positions[position]
         end = compact_positions[position + len(target) - 1] + 1
         return start, end
-    nfkc_positions = [i for i, char in enumerate(haystack) if not char.isspace()]
-    nfkc = _nfkc_compact(haystack)
-    position = nfkc.find(_nfkc_compact(needle))
+    # NFKC folding may change the string length for a single source character
+    # (for example "㏄" → "cc"), so positions must be recorded per produced
+    # character; indexing the folded string with original non-space offsets
+    # otherwise drifts and mislocates the span (A7-03).
+    import unicodedata
+    nfkc_positions: list[int] = []
+    nfkc_chars: list[str] = []
+    for i, char in enumerate(haystack):
+        for folded in unicodedata.normalize("NFKC", char):
+            if folded.isspace():
+                continue
+            nfkc_positions.append(i)
+            nfkc_chars.append(folded)
+    nfkc = "".join(nfkc_chars)
+    nfkc_needle_chars: list[str] = []
+    for char in needle:
+        for folded in unicodedata.normalize("NFKC", char):
+            if not folded.isspace():
+                nfkc_needle_chars.append(folded)
+    nfkc_needle = "".join(nfkc_needle_chars)
+    if not nfkc_needle:
+        return None
+    position = nfkc.find(nfkc_needle)
     if position >= 0:
         start = nfkc_positions[position]
-        end = nfkc_positions[position + len(_nfkc_compact(needle)) - 1] + 1
+        end = nfkc_positions[position + len(nfkc_needle) - 1] + 1
         return start, end
     return None
 
@@ -3021,9 +3041,14 @@ def assign_target_operations(targets: Sequence[Target], rules_by_id: dict[str, d
                     target.reason = f"{target.reason}|TARGET_OPERATION_NOT_APPLICABLE"
                     continue
         if target.rule_id == "G16" and target.state == "satisfied":
+            # Rebind the rule locally: the earlier ``rule`` name is only
+            # assigned inside conditionally-executed branches above, so a
+            # satisfied+out_of_scope first target would read an unbound or
+            # stale value here (A7-01).
+            g16_rule = rules_by_id.get("G16") or {}
             quote_body = _compact(target.quote)
             expected_policy = _compact(str(
-                (rule.get("operations") or [{}])[0].get("new_text") or ""))
+                (g16_rule.get("operations") or [{}])[0].get("new_text") or ""))
             if (quote_body and quote_body in expected_policy
                     and not all(token in quote_body for token in
                                 ("每日计提", "直销机构", "其他销售机构"))):

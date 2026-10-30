@@ -4685,10 +4685,15 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
                 "1", "true", "on", "yes"}:
             # Page through residual delete candidates so a long contract cannot
             # lose its tail to the per-call safety limit (FL-D441).
+            # The paging input must stay frozen for the whole walk: the newly
+            # created clones expand the ``covered`` set on each call, which
+            # rewrites the candidate list the cursor indexes into and silently
+            # skips pages (A7-02).
             cursor = 0
+            paging_base = list(targets)
             for _page in range(10):
                 info: dict[str, Any] = {}
-                page = ensure_delete_targets(targets, rules_by_id, inspection,
+                page = ensure_delete_targets(paging_base, rules_by_id, inspection,
                                              scopes=scopes, cursor=cursor,
                                              page_info=info)
                 for target in page:

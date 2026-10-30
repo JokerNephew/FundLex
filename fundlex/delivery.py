@@ -187,7 +187,10 @@ def requires_blocker(item: Any) -> bool:
     """
     if not isinstance(item, Mapping):
         return False
-    if str(item.get("kind") or "").strip().lower() == "claim_replay" \
+    # Orphan evidence always blocks: project_unresolved documents these rows as
+    # blockers, and the generic code-prefix table must not downgrade them to a
+    # review note under review_assisted mode (A8-F2).
+    if str(item.get("kind") or "").strip().lower() in {"claim_replay", "orphan_evidence"} \
             or bool(item.get("claim_replay_failed")):
         return True
     code = _item_code(item)
