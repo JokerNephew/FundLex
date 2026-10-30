@@ -6824,3 +6824,13 @@ H＝E×…
 - **验证过的健壮面（如实记录）**：跨 owner 越权 14 入口全 404；会话/下载门禁+字节级复哈希；错误包络无泄露；SQL 全参数化；HTML 视图转义完备。
 - **处理**：修复 agent 已启动（DB 化限速计数+TRUSTED_PROXY 白名单采信 XFF、multipart 上限对齐产品口径并 env 可调、CSV 公式注入统一转义、F-02 随机制一并修）；修复与验证结果回报后更新本条。
 - **状态**：修复中。
+
+## FL-D565 二轮盲审：引擎交付门禁七项（2026-10-31，R2-engine-delivery）
+
+- **来源**：第二轮盲审，报告 /tmp/opencode/qa/findings-r2/R2-engine-delivery.md，PoC /tmp/opencode/qa/findings-r2/e2e/{fundtype_gap.py,f2_unit.py}。
+- **F1（HIGH）**：`FUND_TYPE_UNVERIFIED`（排除类型合同且引文未核验）在默认 review_assisted 策略下 `delivery_status: complete` 并发布 final/redline，直接违反 FL-D114「禁止 complete」。缺陷链：只进 unresolved 投影 → requires_blocker 因 "FUND_TYPE" 属 `_KNOWN_ITEM_PREFIXES` 放行 → review 桶 → `_delivery_complete` 硬闸门只查 CLAIM_/FINAL_COVERAGE，资格缺口盲区。**影响评测解读**：冻结 0b1a813 版 dev20 中若有排除类样本，其 complete 声明不可信，修复后需对相关 case 重跑复测。
+- **F2（MEDIUM）**：`_apply_artifact_proof_to_findings` 对 location 查无（LOCATION_NOT_FOUND）与"残留不存在"同分支处理，真实残留被静默置 resolved+错误证据标签（触发面窄但一旦触发即静默漏改）。
+- **LOW×5**：F1 项 summary 文案误标；coverage_open 死代码重复块；semantic_contract offset_mismatch 死检查+template 模式 new_text 无 slot 实例化；claimed 引文正则缺中文单引号；三层阻断判定字段口径不一致。
+- **正面证据（如实记录）**：ledger/claim-replay 硬闸门结构完整、相关测试 151 项全绿、happy path e2e 正常 complete。
+- **处理**：引擎修复 agent 已启动（F1/F2 必修+LOW 逐条，PoC 防复现回归）；结果回报后更新本条。
+- **状态**：修复中。
