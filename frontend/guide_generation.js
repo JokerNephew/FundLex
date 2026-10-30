@@ -19,6 +19,7 @@
     human_draft: "人工草稿 · 待审阅", approved: "候选已批准", published: "候选已发布",
     not_run: "未核验", not_requested: "未请求", pending: "待处理", pass: "通过", passed: "通过",
     fail: "未通过", pass_with_findings: "存在问题", human_review_pending: "人工修改后待审阅",
+    review_execution: "独立复核未完成",
     covered: "已覆盖", disposed: "已有去向", gap: "覆盖缺口", uncovered: "未覆盖", uncertain: "尚不确定", unresolved: "尚未解决",
     not_ready: "未就绪", incomplete: "结果不完整", complete_with_exceptions: "已交付（含例外条款）",
     not_applicable: "不适用", false_positive: "非真实影响", affected: "有影响", not_affected: "无影响",
@@ -36,6 +37,7 @@
     all_guide_items_have_requirement: "指引条目均关联法规要求", all_guide_items_have_impact: "指引条目均关联合同影响",
     all_guide_items_have_new_text_origin: "建议新文均标注来源", requirement_coverage_complete: "法规要求无覆盖缺口",
     impact_coverage_complete: "合同影响无未解决项", latest_contract_coverage_complete: "最新合同无不确定项",
+    independent_model_review_qualified: "独立复核模型与作者不同且资格有效",
     residual_saturated: "补漏达到当前策略的停止条件",
   };
   const FIELDS = {

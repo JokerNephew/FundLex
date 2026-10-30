@@ -347,10 +347,16 @@ def _review_one(router, item: GuideItem, requirement_map, impact_map, clauses,
                 "source": "guide_reviewer",
             }, item))
         verdict = str(result.value.get("verdict") or "uncertain")
+        if verdict in {"fail", "uncertain"}:
+            item_findings.append(_finding(
+                item, "review_verdict", "critical",
+                f"独立质量复核结论为 {verdict}，不得按通过处理。",
+                source="guide_reviewer"))
     except Exception as exc:
         verdict = "uncertain"
         item_findings.append(_finding(
-            item, "other", "major", f"独立质量复核模型调用失败：{type(exc).__name__}",
+            item, "review_execution", "critical",
+            f"独立质量复核未完成：模型调用失败（{type(exc).__name__}）",
             source="guide_reviewer"))
     critical = [value for value in item_findings if value["severity"] == "critical"
                 and (value.get("source") != "guide_reviewer" or value.get("evidence_verified", True))]

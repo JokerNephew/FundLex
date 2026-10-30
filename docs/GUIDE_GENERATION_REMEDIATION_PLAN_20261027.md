@@ -1,10 +1,12 @@
 # 法规指引生成修复与验证计划（2026-10-27）
 
+> **2026-10-30 当前执行口径**：用户随后提供了新模型配置并允许配置后正常做模型测试，故此前“额度暂时用完、不调用真实模型”的限制已由最新用户消息更新；新密钥安全注入前仍不做真实调用。模型测试允许不等于本轮已完成真实合同评测/资格评测，后两者须按确认范围执行。用户 2026-10-29 已要求删除 Residual 检查轮次（FL-D448）：当前默认流水线和资格门禁不再执行/要求 Residual，资格快照为 `guide-eligibility-2`，不可沿用本文历史阶段中“Residual 饱和是 candidate_ready 条件”的旧口径。剩余资格门禁仍包括要求处置/证据、指引质量、范围内覆盖与不确定项，以及**独立模型身份合格且复核成功完成**（FL-D546）；删除 Residual 不代表覆盖完整。密钥不能写入源码或工具日志（FL-D547）。
+
 > **2026-10-28调用政策更正（FL-D445、FL-D449）**：按需真实调用，无需费用/次数审批、不预登记费用/调用上限、不因本地cap停；账本仅作观测。下文旧smoke cap及实耗数字原样保留为历史，不是用户限制；运行时cap仍须整改，不冒称文档更正已关闭cap。上下文token容量、API限流/并发、物理资源、有限技术重试/无进展保护、真实余额/鉴权故障、业务权限和发布门禁仍保留。
 
 ## 目标
 
-让真实法规与合同输入在严格证据门禁下稳定产生可审查候选。`candidate_ready` 只能在要求、影响、质量、覆盖和 Residual 全部闭合，且独立模型复核身份合格后产生；离线 fake/replay 结果只用于开发验证。
+让真实法规与合同输入在严格证据门禁下稳定产生可审查候选。按当前口径，`candidate_ready` 由要求、影响、质量、范围内覆盖/不确定项全部闭合，以及独立模型身份合格且质量 reviewer 调用成功决定；Residual 检查已由用户删除，不再是发布资格门禁。离线 fake/replay 结果只用于开发验证。
 
 ## 已确认根因
 
@@ -25,7 +27,7 @@
 
 当前状态：**已实施并通过离线回归**。`path_b_max_requirements=12` 贯穿 Pipeline→DiscoveryConfig；每个条款批次只携带与该批条款有证据关联的至多 12 条要求，schema `requirement_ids.maxItems=12`；空/超限/越界绑定整批 `INVALID_REQUIREMENT_BINDINGS` fail closed 并一次有界重试；多要求 finding 按每个要求生成独立 Impact；`evidence_quote_2` 显式建模，任一引文精确匹配即可验证并记录匹配索引（FL-D377）。新增回归覆盖未知/超限绑定、多要求拆分、双证据、部分匹配与未知字段。真实效果待 P4。
 
-### P2：Residual 收敛
+### P2：Residual 收敛（历史实现；默认阶段与门禁已按 FL-D448 禁用）
 
 - 模式键使用合同版本、物理 clause 地址、规范化 requirement IDs 和稳定语义字段；不使用模型自由描述作为唯一身份。
 - 同一位置已在本轮发现后，后续轮次只能作为复核，不重复新增 impact；保留不同 requirement 或不同物理位置的独立缺口。
@@ -33,7 +35,7 @@
 
 出口：夹具中同一位置换描述会收敛，不同位置/要求不会被错误合并；Residual 不能靠重复扫描伪造饱和。
 
-当前状态：**已实施并通过离线回归**。模式键为“合同版本 + 物理 clause 地址 + 规范化 requirement IDs”；已有 Impact 物理模式预置为 seen；模型错误/无效绑定/其他审计 finding 记为 `blocked` 并清零 clean streak。新增回归证明同一位置换描述两轮 clean、saturated=true，且不新增 Impact。真实收敛效果待 P4。
+历史实现状态：**已实施并通过离线回归**。模式键为“合同版本 + 物理 clause 地址 + 规范化 requirement IDs”；已有 Impact 物理模式预置为 seen；模型错误/无效绑定/其他审计 finding 记为 `blocked` 并清零 clean streak。用户后续决定删除该轮检查后，默认流水线不再调度它，也不再要求其饱和；历史实现和 smoke 证据保留，不作为当前资格门禁。
 
 ### P1b：并发与账本一致性（FL-D372）
 
@@ -70,7 +72,7 @@
 ### P4：全新账本真实复测
 
 - 磁盘、模型配置及供应商真实可用性满足后，使用新运行目录和冻结manifest按需重跑smoke；账本仅观测，独立账本统一汇总，不需费用/次数审批、不因本地cap停止。
-- 核对 schema failures、quality、coverage、Residual、模型身份和费用；只在全部门禁通过后进入 Blind Benchmark。
+- （未来额度恢复、用户同意后）核对 schema failures、quality、coverage、模型身份和调用账本；Residual 不属于当前资格门禁。只有其余门禁通过后才进入下一阶段。
 
 当前状态：**smoke14 与 smoke17 均已完成，均未达资格**。smoke14（`390677df707040d68839708c4f9e38c2`）614 次逻辑调用 0 error，76 requirements/843 impacts/90 items/545 findings，gaps 0、unresolved 7、critical_quality 0，但 quality fail（31 semantic_coverage 等）、latest uncertain 88、Residual 24/19/5 未饱和，费用 $0.479236。smoke17（`fd1084ed48284cc5998ffd270a936ab5`，含 FL-D379/380）766 次逻辑调用 0 error、无中止；100 requirements/1094 impacts/100 items/679 findings，gaps 0、unresolved 10、latest uncertain 115、critical_quality 9、quality fail，critical 合计 106（semantic_coverage 78），Residual 56/29/22 未饱和，费用 $0.576609。smoke15/smoke16 为中止的非资格尝试（$0.0533/$0.2347），目录与账本保留。smoke9–13 与历史账本保持只读。独立模型复核仍为同一模型，即使其余门禁通过也不能宣称资格闭合。
 
@@ -141,11 +143,11 @@
 - FL-D397 按合同 coverage tail + FL-D398 circuit 等待重试已实施；全量回归 **1848 passed / 0 failed**。
 - smoke25：run `462f25deebf1452f87ca21fb7201047d`，path_b_max_calls=150、Residual 5 轮，待最终结果。
 
-- 新目录/新账本，冻结 P5–P8 代码，核对 quality critical、coverage unresolved/latest uncertain、Residual 饱和、模型身份、费用。
-- 只有质量、覆盖、Residual、独立身份全部通过，才可进入 Blind Benchmark。
+- 新目录/新账本，冻结代码，核对 quality critical、coverage unresolved/latest uncertain、独立模型身份及调用账本；Residual 结果仅作历史对照，不属于当前门禁。
+- 历史 smoke 数据仅作历史证据；Residual 结果不再是当前门禁。真实评测恢复后，只有当前剩余门禁全部通过才可进入后续 benchmark。
 
 ## 验收口径
 
 - 任何模型 schema 失败保留结构化错误并 fail closed。
-- 质量、覆盖、Residual 任一未通过，运行状态保持 `complete_with_unresolved / candidate_with_findings`。
+- 质量或范围内覆盖/不确定项任一未通过，运行状态保持 `complete_with_unresolved / candidate_with_findings`；Residual 当前禁用。
 - 本计划不修改历史 smoke9–13 结果、不改写历史账本、不把离线测试冒称真实资格证据。

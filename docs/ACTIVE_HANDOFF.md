@@ -1,13 +1,28 @@
 # FundLex 当前断点（ACTIVE_HANDOFF）
 
+## 2026-10-30 法规指引生成与模型切换续接
+
+- 用户先前因额度要求暂停真实模型/合同评测；2026-10-30 后续更新提供了新模型 endpoint/model，并明确允许配置后正常做模型测试。该更新允许模型连通/行为测试，但当前新 key 尚未安全写入配置；完整真实合同评测/资格验证尚未开始，不得把离线单测表述为业务质量或资格通过。
+- 当前分支 `codex/comprehensive-remediation-20261028`，起始 HEAD `cba0adc`。本线保留的未提交源码为 `fundlex/guide_generation/{discovery,eligibility,pipeline,quality}.py`、`frontend/guide_generation.js` 与对应法规测试；其它 Compare 前端、配置分析、合同备份等并行改动未覆盖。
+- 现已实现按章节优先分批：整章在上下文预算内则整章为一批；超限才按小节拆，单节过大才按字符拆；Path A/B/C 使用内置修订指引 6 章 scope。Residual 默认阶段已按 FL-D448 删除，资格门禁 schema 升为 `guide-eligibility-2` 并明确 `residual_check=disabled`。另修正 FL-D546：资格须绑定质量复核时冻结的 reviewer 身份，且身份与作者不同、调用成功、结论不为 fail/uncertain。
+- 离线验证：法规生成、Pipeline、eligibility/config 四套件 **78 passed / 1 warning**，全 fake/离线；另有 `node --check`、`py_compile`、`git diff --check` 通过。无真实模型调用和合同评测，临时 basetemp 已清理。没有跑完整项目回归、部署或生产任务。
+- 本次模型配置进度：已核实服务使用 root-only `/etc/fundlex-recall.env`，关键字段名为 `LLM_PROVIDER`、`LLM_MODEL`、`LLM_BASE_URL`、`LLM_API_KEY`；备份 `/etc/fundlex-recall.env.bak-20261030-model-switch`，权限 0600。用户要求 agent 直接写入，但当前工具无 secret-write 通道；尚未修改原配置、重启服务或调用模型，避免把 key 放进工具日志。敏感配置检查意外回显事件见 FL-D547；用户当前表示不要求轮换旧凭据，未做轮换。对 endpoint host 的无凭据 HTTPS GET 为 200/TLS valid，不代表模型接口已验证。
+- 下一步：取得受保护的密钥注入途径后，应用指定模型配置，先做最小真实 API 连通测试，再按用户确认范围继续模型测试。当前不能宣称模型配置切换、正式可用或部署资格完成。
+- 本线最近离线验证：法规生成、Pipeline、eligibility/config 四套件 **78 passed / 1 warning**；fake/offline。未执行真实合同/资格评测、部署或生产任务。
+
 ## 2026-10-30 合同修改任务页排版与详情精简（FL-D544，已发布）
 
 - 用户要求：合同修改任务列表创建时间独立成列，列表不显示指引；任务详情显示使用的指引版本，并删文件大小、交付统计块、任务/匹配数量提示；修复文字/按钮拥挤和对齐。
-- 实施提交：主工作区 `codex/comprehensive-remediation-20261028`，源码提交 `b5048fa`；发布线 `/tmp/opencode/compare-alignment-release-20261030`，HEAD `9972441`。本任务仅提交 `frontend/{app.js,app.css,compare.html}` 与 `tests/browser/test_workbench.py`；并行 `fundlex/guide_generation/*`、相关测试、配置分析文档、合同备份目录及 `合同比对.png` 保持未提交、未混入。
+- 实施提交：主工作区 `codex/comprehensive-remediation-20261028`，源码提交 `b5048fa`；发布线 `/tmp/opencode/compare-alignment-release-20261030`，HEAD `9972441`。本任务源码仅提交 `frontend/{app.js,app.css,compare.html}` 与 `tests/browser/test_workbench.py`；并行 `fundlex/guide_generation/*`、相关测试、配置分析文档、合同备份目录及 `合同比对.png` 保持未提交、未混入。
 - 已实施：独立创建时间列；指引文件名+版本ID移到详情，深链时加载指引目录；删除文件大小及请求的统计/匹配信息；窄屏操作区换行，列表表格横向滚动容器/列对齐。未改 API、引擎、DOCX校验或过滤/排序逻辑。
 - 验证：新增多视口/深链/列/删除项/搜索/名称排序浏览器测试 **1 passed**；`test_workbench.py` 宽回归 **48 passed、3 deselected**（其中两项单独复现为模态覆盖底层面包屑点击；第三项未在该宽回归中验证）；V1前端回归 **15 passed**，前端资源入口 **3 passed**；`node --check`、`git diff --check`通过。截图 `/tmp/opencode/task-list-{390,1440}.png`、`task-detail-{390,768,1280,1440}.png`。
 - 生产：`9972441` 已部署，事务 `/opt/.fundlex-publish-RbwfPZ`；engine/service 哈希未变，五个服务 active。生产首页及版本化 `app.css`、`app.js` 返回 200（版本 `8334b9fda5a61a17`），登录页无浏览器错误。生产为密码登录，未取得/使用授权账号，因此尚未检查登录后任务页；不创建可能触发真实 Worker/模型调用的新任务。本轮无模型调用。FL-D541 长合同选择生成 `SELECTION_FINAL_TEXT_MISMATCH` 独立跟踪，未因本次UI部署宣称解决。
 - 下一步：如需生产任务列表/详情确认，使用获授权生产账号做只读检查；不创建任务。未完成该登录态检查前不宣称生产任务页已E2E验收。集中问题记录详见 `DETAIL_ISSUES_AND_RESOLUTIONS.md` FL-D544。
+
+## 2026-10-30 磁盘临时数据清理（FL-D543）
+
+- 用户授权后清理旧 pytest basetemp、无运行测试时的 pytest 临时目录、旧 Codex 包副本、DNF/uv 缓存及旧 journal；保留最新 full-pytest-oct30c、Node/Playwright、全部 smoke/语料/发布备份和并行 worktree。详见 `DETAIL_ISSUES_AND_RESOLUTIONS.md` FL-D543。
+- 当前根分区最后观测约 **2.6G 可用（94%）**；读数有波动。Recall API/worker 保持 active。
 
 ## 2026-10-30 工作台文案精简已上线（FL-D542）
 

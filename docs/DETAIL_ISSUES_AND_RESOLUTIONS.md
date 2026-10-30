@@ -4,6 +4,34 @@
 >
 > 测试中遇到的业务问题单独汇总在 [`BUSINESS_ISSUES_FROM_TESTS.md`](BUSINESS_ISSUES_FROM_TESTS.md)，与代码/定位缺陷分开维护。
 
+## FL-D547 配置检查意外回显现有凭据，模型切换待安全注入新密钥（2026-10-30）
+
+- 发现日期：2026-10-30，处理用户提供的新模型配置时。
+- 问题与影响：一次检查 `/etc/fundlex-recall.env` 的命令遮蔽规则不完整，工具输出回显了数据库连接字符串中的凭据及引导管理员凭据。新提供的模型 API key 未出现在该输出中。会话工具输出含有上述旧凭据，不能保证其仅本机可见。
+- 处理：停止重复输出与任何模型调用；不将凭据写入源码、文档或新命令。用户看到风险提示后表示“直接用，没关系”，未要求轮换；当前未自行变更数据库/管理员凭据。为后续配置预留安全回滚，已按原权限备份 `/etc/fundlex-recall.env.bak-20261030-model-switch`（root:root、0600）；原文件也为 root:root、0600。未改原配置、未重启服务。
+- 状态与验证：**凭据回显已发生，未轮换；新模型配置尚未应用，真实模型调用未开始。** 当前代码从 `LLM_PROVIDER`、`LLM_MODEL`、`LLM_BASE_URL`、`LLM_API_KEY` 读取主模型。对用户给定 host 的无凭据 HTTPS GET 返回 HTTP 200、TLS 校验通过；这只证明该 host 可达，不证明模型 API 路径、鉴权或模型可用。用户明确希望由 agent 直接配置、不想自行操作；但当前工具没有不记录密钥值的 secret-write 通道，不能把 key 放进 shell/patch 工具参数而违反凭据不入日志规定。
+- 下一步：提供受保护密钥注入能力，或由管理员安全写入 root-only 环境文件后告知完成；随后应用用户指定 endpoint/model 并做获准的最小真实模型连接测试。轮换已回显的旧凭据仍建议由管理员评估；遵从用户当前不轮换的决定，不宣称风险已消除。
+- 变更记录：2026-10-30 新增；凭据值、URL 中认证内容和口令均未记入本条。
+
+## FL-D546 候选资格门禁未显式阻断非独立 reviewer、调用失败或不确定结论（2026-10-30）
+
+- 发现日期：2026-10-30，按用户要求继续法规指引生成代码审查时发现。
+- 问题与影响：`quality.py` 和 `pipeline.stage_quality()` 会记录 `independent_model_review` 身份状态，但 `evaluate_run_eligibility()` 原先只检查 quality 总状态与 open critical。若 author/reviewer 实际同模型，quality 仍可能为 pass；reviewer 调用异常原记录为 `major/other`，`pass_with_findings` 属于允许状态，因此未实际审阅也可能通过；有效返回 `verdict=uncertain/fail` 且没有详细 findings 时也缺少明确阻断 finding。
+- 处理：eligibility 增加 `independent_model_review_qualified` 硬门禁，要求质量阶段记录 `qualified`，并将 reviewer/author router identity 在质量复核阶段冻结到 `quality.model_identity`；资格检查和哈希以该快照为准，不能被 worker 恢复时刷新的顶层运行身份替换。快照还须标记 qualified、独立布尔为真，且 author/reviewer 模型名非空并不同。工作台显示中文检查项。质量 reviewer 调用失败单独记录为 `critical/review_execution`；`fail/uncertain` 结论记录为 `critical/review_verdict`；两者均令质量阶段 fail closed，不当作文案错误交给 repair。沿用 `guide-eligibility-2` schema，不允许缺失元数据默认通过。
+- 状态与验证：**已实施，离线验证通过**。same-model fake router 证明 quality `run_status=pass` 仍不能 `candidate_with_findings`；故障及 uncertain-verdict fake router 证明复核失败/不确定均为 open critical 且阻断资格；配置变化回归证明资格快照仍指向复核时的 reviewer，而非重启后的 router。法规生成、Pipeline、eligibility/config 四套件 **78 passed / 1 warning**；前端 JS `node --check`、Python `py_compile`、`git diff --check` 通过。未调用真实模型、未跑真实合同评测；仅验证 fail-closed 与身份绑定逻辑，不证明真实 reviewer 质量。
+- 下一步：额度恢复且用户明确允许真实评测后，确认真实 quality payload 记录 reviewer 身份，并验证不合格身份阻断、合格身份通过身份门禁；不得将当前 fake 测试当作独立业务复核。
+- 变更记录：2026-10-30 新增。
+
+## FL-D545 飞书同事扫码绑定提示无权限，租户与应用范围待核实（2026-10-30）
+
+- 发现日期：2026-10-30，用户反馈让同事扫码接入飞书时显示“没有权限”。
+- 问题与影响：该同事目前无法完成飞书身份绑定。尚不能判断是跨飞书租户、账号不在应用可用范围、扫码账号不匹配，还是二维码过期/已使用或应用授权配置问题；当前实现的扫码只把飞书身份绑定到已登录的 FundLex 账号，不是 FundLex 登录 SSO。
+- 证据：用户反馈；[`FEISHU_INTEGRATION.md`](FEISHU_INTEGRATION.md) 说明企业自建应用只在同一飞书租户可用，且须在应用可用范围内。FL-D295 记录应用可用范围于 2026-10-26 曾设置为全员；本次未核验当前平台配置。用户选择希望覆盖同租户全部部门及其他企业。官方文档说明商店应用可供不同租户安装；事件长连接仅支持企业自建应用，不支持商店应用（[应用类型](https://open.feishu.cn/document/home/app-types-introduction/self-built-apps-and-store-apps)、[长连接限制](https://open.feishu.cn/document/event-subscription-guide/callback-subscription/step-1-choose-a-subscription-mode/configure-callback-request-address?lang=zh-CN)）。本项目现有 `fundlex/integrations/feishu/client.py` 使用单组 `FUNDLEX_FEISHU_APP_ID/SECRET` 和 WebSocket 长连接；身份/草稿存储已含 `tenant_key`，但不能据此认为整个集成已支持商店应用。当前仍未取得同事租户、扫描账号和具体错误原文，也未复现真实回调。
+- 处理方法：同租户跨部门由管理员确认应用可用范围覆盖全部需要使用的成员（“全员”仅指当前租户）。跨租户需另行创建/申请商店应用并通过飞书 ISV/发布审核，由各企业管理员安装和授权；现有企业自建应用按不同应用类型分别处理，不假设可直接切换类型。工程上需将 WebSocket 改造/补充为商店应用支持的 HTTPS 事件回调，接入 app_ticket、按 tenant_key 获取并安全缓存租户 token，增加安装/卸载生命周期和应用标识维度的事件隔离，并验证租户间数据/权限隔离。以上是待实施方案，不是已完成事实。
+- 状态与验证：**跨部门/跨租户路径已澄清；功能未实施、未验证**。未改飞书平台配置、代码或生产服务。应用商店资质、审核和租户安装属于外部前置条件。
+- 下一步：先核验同租户全员范围现值；如推进跨租户实现，创建独立商店应用并确认 ISV 申请/审核前置条件，再分阶段实现回调、按租户 token 和数据隔离，使用测试租户验收。继续确认同事租户及脱敏后的具体错误。
+- 变更记录：2026-10-30 新增；同日按用户选择补充“全租户 + 跨租户”目标和官方平台限制。保留“应用曾设全员”历史证据，不据此推断当前配置仍然如此。
+
 ## FL-D544 合同修改任务列表与详情信息布局（2026-10-30）
 
 - 发现日期：2026-10-30，用户要求创建时间独立成列、指引版本移入详情，并删除文件大小、交付统计块和匹配数量提示；同时指出现有文字/按钮有贴靠、未对齐现象。
@@ -14,6 +42,26 @@
 - 发布：候选提交 `997244104fc7bb3f509e68debf919a8a18147ba0` 已部署，事务 `/opt/.fundlex-publish-RbwfPZ`；生产 `engine`/`service` 哈希保持 `6a16258e…`/`8b6c9472…`，五个服务均 active。生产首页、版本化 `app.css`/`app.js` 返回 200，资源版本 `8334b9fda5a61a17`；首页要求密码登录，浏览器登录页无页面错误。生产账号未取得/使用，故登录后的任务列表、详情未核验；不创建可能触发真实 Worker/模型调用的生产任务。本轮无模型调用。
 - 状态：**前端已实施、候选已发布；本地多视口/任务操作和生产静态资源验证通过。登录后生产任务页仍待授权账号只读核验。** FL-D541 长合同选择生成校验问题未触及。
 - 变更记录：2026-10-30 新增；同日补充候选发布、静态资源验证及登录态验证边界。
+
+## FL-D543 根分区接近写满，清理可重建的测试临时数据（2026-10-30）
+
+- 发现日期：2026-10-30，用户询问磁盘可清理内容并授权执行。
+- 问题与影响：根分区 40G，开始时约 1.2G 可用（97%）。继续占满会影响测试、部署暂存和服务写入。
+- 证据：`df -h /`；主要可重建临时数据为 `/tmp/opencode/comprehensive-remediation-20261028/*pytest*`（19 个 basetemp，约 4.0G）及若干旧 pytest basetemp；其他清理项详见处理记录。
+- 处理：保留最新 `full-pytest-oct30c`，删除其余 18 个综合回归 pytest basetemp、旧 engine/reviewer pytest basetemp、无运行 pytest 时的 `/tmp/pytest-of-opencode`（约 328M）、旧且未被进程使用的 `/tmp/opencode/codex-pkg` 副本（约 588M）；执行 `journalctl --vacuum-size=50M`（释放 184M）、`dnf clean all` 和一次 `uv cache clean`（清除 167.4M uv 缓存）。没有清理 smoke/ledger、operation-validation、compare corpus/gold、release/rollback、运行中的服务或 MySQL 数据、Node、Playwright 缓存、并行 worktree。
+- 状态与验证：清理后曾观测 `df -h /` 3.7G 可用（91%）；后续离线开发/测试期间最新观测 2.6G 可用（94%）。中途曾观测 6.3G 和 2.8G 可用，空间读数有波动，不能将差值都归因于本次删除或测试。剩余大型项目/发布/评测数据未因本次操作删除。服务 `fundlex-recall-api`、`fundlex-recall-worker` 保持 active；本次开发无真实模型调用/合同评测。
+- 下一步：如需继续降低占用，先逐个核对并行 worktree、发布备份及临时语料的归属和未提交内容，不做整目录盲删；部署前重新核对磁盘余量。
+- 变更记录：2026-10-30 新增。
+
+## FL-D450 分支切换丢失未提交的“按章节批次/发现 scope”改动，已恢复（2026-10-29）
+
+- 发现日期：2026-10-29，用户询问部署资格时核对工作区发现。
+- 问题与影响：此前已实现并通过 46 项定向测试的 `discovery.py` 按章节批次（`_batches`）及发现阶段 `scope_sections` 过滤，在当前工作区消失；`tests/test_guide_generation.py` 对应用例也只剩 `__pycache__`，说明分支/工作区被切换或覆盖，未提交改动丢失。`pipeline.py` 仍保留 coverage scope，但 discovery 调用没有 scope，章节批次也回退为纯字符切分。若此时部署，会把用户明确要求的“按章节切”退回旧行为。
+- 证据：`git status` 未显示 discovery 改动；`git log --all -S"scope_sections" -- fundlex/guide_generation/discovery.py` 无结果；pyc 中存在 `test_batching_never_mixes_chapters` 而源码没有。
+- 处理方法：重新实现 `_batches` 的章/小节分组与单节内字符拆分、`discover`/`path_b_contract_sweep` 的 `scope_sections` 过滤，并恢复定向用例；pipeline 的 `discover()` 调用重新传入 `self.guide_scope`。
+- 状态与验证：**已恢复并通过离线定向回归**；`test_guide_generation.py + pipeline + remediation eligibility` **54 passed**。尚未跑真实 scope 验证或全量回归。
+- 下一步：部署前先做全量非浏览器回归，并在用户同意后做一次按章节批次的真实 scope 验证；不得把本次恢复当成功能已验收。
+- 变更记录：2026-10-29 新增。
 
 ## FL-D446 smoke29 因供应商/主模型变更大量截断并中止，不能作为 scope 验证（2026-10-29）
 
@@ -30,19 +78,19 @@
 
 - 发现日期：2026-10-29，用户指出“为什么按上限切，不是按章节切”。
 - 问题与影响：`_batches()` 只按 `path_b_batch_chars` 字符上限分组，可能把不同章节的条款混进同一模型请求，导致发现结果跨章节、输出不稳定，也让“只覆盖内置指引 6 章”的 scope 失去意义。输出 token 上限只是单章内的次级限制，不能作为批次边界。
-- 处理方法：`_batches()` 先按 `clause.section_path[:2]`（章 + 小节）分组，保持文档顺序；只有单个章节/小节本身超过字符预算时，才在该组内继续按字符拆分，绝不跨章节合并。`discover()` / `path_b_contract_sweep()` 增加 `scope_sections`，在进入批次前就把条款限定到内置指引的 6 个章节；authoring/coverage/Residual 也已按 scope 过滤。
-- 状态与验证：**已实施并通过离线回归**。新增“跨章节小预算也不混批”用例；`test_guide_generation.py + pipeline` **46 passed**。smoke30 因仍使用旧批法在启动后停止，不作为资格证据；未再大量跑真实运行。
-- 下一步：在用户同意后做一次按章节批次的 scope-aware 验证；输出上限 20000 只是单章内的次级配置。
-- 变更记录：2026-10-29 新增。
+- 处理方法：`_batches()` 先按章分组；整章未超过字符预算时保持整章一批。只有超预算章节才按小节拆分；只有超预算小节才按字符拆分，单个超长 ClauseUnit 保持完整，绝不跨章节合并。发现、authoring、coverage 及保留的 Residual 辅助阶段统一按 section_path 首段（主章节）判断内置指引 6 章 scope；范围外章节不会因子标题偶然含有范围内章名而误入。Residual 已按 FL-D448 从默认流水线删除。
+- 状态与验证：**已实施并通过离线回归**。回归覆盖章节可容纳时整章保留、超限时按小节拆、超大小节再按字符拆、章节不混批，以及范围外主章节带有范围内子标题时仍被排除。最新包含该回归的 `test_guide_generation.py + pipeline + remediation eligibility/config` **78 passed**。本轮没有真实模型调用或真实合同评测；smoke30仍是按旧批法启动后停止的无效验证，不作为资格证据。
+- 下一步：额度恢复且用户同意后，再做一次按章批次的 scope-aware 真实验证；在此之前仅继续代码审查和 fake/offline 测试。
+- 变更记录：2026-10-29 新增；2026-10-30 修正为“整章优先、超限后按小节/字符降级拆分”，统一以主章节应用 scope 并补充范围哨兵用例；后续最新离线套件为 78 passed。
 
 ## FL-D448 用户决定删除 Residual 检查轮次（2026-10-29）
 
 - 发现日期：2026-10-29，用户明确“删除 Residual 这轮检查”。
 - 处理：默认流水线 `STAGES` 移除 `RESIDUAL_MINING`，`run()` 不再调度 `stage_residual`；`eligibility.py` 的资格 checks 和 snapshot 移除 `residual_saturated` 门禁，改为 `residual_check="disabled"`、`residual_saturated=None`；`finalize` 同样标记 disabled。质量复核、覆盖审计、主题判定、最终 supplement、独立复核保留。`stage_residual` 方法保留但默认不调度，便于以后显式恢复；配置字段保留兼容，不参与门禁。
 - 影响：Residual 不再消耗调用、不再阻塞 `candidate_ready`；但也不再提供“连续两轮 clean”的漏项证明。覆盖审计和范围内 missing topics 仍是硬门禁，不能把删除 Residual 当成覆盖完整。
-- 状态与验证：**已实施并通过定向回归**。`test_guide_generation.py + pipeline + remediation eligibility/config` **70 passed**；未跑真实 smoke。历史 smoke 的 Residual 结果保留为历史证据，不改写。
-- 下一步：按新的四层检查（要求复核、质量复核+修复、覆盖审计+补写、独立复核）做一次用户同意的真实验证；若以后需要，可显式恢复 Residual。
-- 变更记录：2026-10-29 新增；不把“删除 Residual”写成“覆盖已完整”。
+- 状态与验证：**已实施并通过定向回归**。管线回归断言不再调度 Residual、不发 `guide_residual_sweep` 调用，finalize 明示 `residual_check=disabled`、`residual_saturated=null`。资格快照版本提升到 `guide-eligibility-2`，避免以旧门禁 schema 表示新资格口径。`test_guide_generation.py + pipeline + remediation eligibility/config` 最新 **78 passed**；没有真实模型调用/合同评测。历史 smoke 的 Residual 结果保留为历史证据，不改写。
+- 下一步：额度恢复且用户同意后，按四层检查（要求复核、质量复核+修复、覆盖审计+补写、独立复核）做一次真实验证；若以后需要，可显式恢复 Residual。
+- 变更记录：2026-10-29 新增；2026-10-30 补充 eligibility schema v2 和离线验证；不把“删除 Residual”写成“覆盖已完整”。
 
 ## 全面整改合并批次（2026-10-29，尚未生产验收）
 
@@ -6532,6 +6580,17 @@ H＝E×…
 - 状态与验证：**已部署 `5d5da7c`（含分隔条快捷键隔离）**。本地拖动测试：审阅列表 360→460、Word 修订栏 300→380、源文档 360→440、双栏修订栏 380→430，均持久化；生产真实任务复核 Word 修订栏 300→380、源文档 360→430、双栏 380→430，页面错误 0。V1 浏览器 **13 passed**；审查栏拖动专项 **1 passed**。生产静态版本 `8014ff05cd33761a`；分隔条获得焦点时 A/R 快捷键不会触发接受/拒绝。
 - 范围：纯前端栏宽交互，不改 DOCX 内容、修订标记、保存/生成、A/B 选择逻辑，也不改变现有 A/B 中间拖动条。
 - 下一步：用户强刷后拖动三条分隔线确认宽度和持久化。
+
+## FL-D538 配置化能力分散、用户自助面过窄，缺少统一设置/快照/审计（2026-10-30）
+
+- 发现日期：2026-10-30，用户提出“希望项目尽可能配置化，让用户可以自主配置很多东西”，要求先分析可配置范围。
+- 问题与影响：当前设置页仅展示运行能力、修改密码和飞书绑定；指引页仅上传/解析/启用/恢复默认；新建任务页实际只提交任务名和文件，指引固定用“当前指引”。运行代码直接读取至少 58 个 `FUNDLEX_*` 环境变量，另有按 `G01-G22` 写死的执行策略/作用域/交付分类，以及硬编码的 DOCX 修订作者 `资金清算部`。用户无法自助配置修订作者、输出命名、规则组启停、整份排除类型、交付策略、报告品牌、组织共享指引等；同时也没有统一的配置分层、任务快照和变更审计，后续逐个加开关会形成新的技术债。
+- 分析结论（建议，未实施）：按 **L0 代码不变量 / L1 部署运维 / L2 组织业务 / L3 个人偏好 / L4 任务覆盖** 分层；任务创建时解析有效配置并写入 `config_json/config_sha256` 快照；密钥、发布门禁、证据/写入边界、权限提升不得进入用户配置。优先做统一设置基座、修订作者、输出命名、任务级指引选择、个人默认值、规则组启停、排除类型、交付策略/报告品牌、运行时指引规则编辑、模型预设。最大技术缺口是把规则执行元数据从 G 编号硬编码改为指引版本 sidecar，否则自定义指引仍会被内置策略绑架（关联 FL-D439）。
+- 证据与详细清单：见 [`CONFIGURABILITY_ANALYSIS_20261030.md`](CONFIGURABILITY_ANALYSIS_20261030.md)，含现状盘点、40+ 项候选配置、分层/权限、数据模型/API/UI 建议、分阶段路线和验收标准。关键源码位置：`frontend/src/pages/Settings/index.tsx`、`frontend/src/pages/NewTask/index.tsx:110`、`fundlex/api.py:107-116`、`fundlex/docx.py:1304-1305`、`fundlex/recall_pipeline.py:73-76,156-158,3748-3750`、`fundlex/generation/registry.py`、`fundlex/guide_generation/service.py:24-72`。
+- 状态与验证：**仅完成只读分析与文档，未改代码/配置，未调用真实模型，未部署，未做任何配置化功能验收。** 文中的优先级和工作量是建议，不是承诺。
+- 补充（2026-10-30）：用户明确“用户就是普通使用这些功能的人”，不是组织管理员或运维。普通用户设置页应只放个人偏好、任务级选项、自己的指引维护和通知；交付策略、整份排除类型、报告品牌、模型/密钥、权限/配额仍属管理员或运维，不能混入普通用户设置。详细重排见分析文档 §9。
+- 下一步：先确认普通用户是否需要直接编辑指引单条规则，以及是否需要多用户共享指引；然后按分析文档 §9.1 实现普通用户 P0（设置基座、修订作者、输出命名、任务级指引选择、个人默认值、通知），默认配置必须复现当前行为，再逐项开放并补快照/审计/端到端验收。
+- 变更记录：2026-10-30 新增；同日补充“用户=普通业务使用者”的范围澄清，并据此重排优先级。
 
 ## FL-D540 合同比对 Word/双栏正文滚动位置不对应（2026-10-30）
 

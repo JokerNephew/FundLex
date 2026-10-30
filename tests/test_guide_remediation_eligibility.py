@@ -9,6 +9,7 @@ from fastapi.testclient import TestClient
 
 from fundlex.guide_generation.api import register_guide_generation_routes
 from fundlex.guide_generation.coverage import CoverageResult
+from fundlex.guide_generation.eligibility import evaluate_run_eligibility
 from fundlex.guide_generation.pipeline import GuidePipeline, PipelineConfig
 from fundlex.guide_generation.store import GuideGenerationStore
 from fundlex.store import RunStore
@@ -57,6 +58,88 @@ def test_quality_failure_creates_blocked_draft_not_approvable(tmp_path):
     with TestClient(application) as client:
         assert client.post(f"/api/guide-generation/runs/{run_id}/candidate/approve").status_code == 409
         assert client.post(f"/api/guide-generation/runs/{run_id}/candidate/publish").status_code == 409
+
+
+def test_unqualified_independent_reviewer_blocks_candidate_ready(tmp_path):
+    store, gg, run_id, corpus = _prepare(tmp_path)
+
+    class SameModelRouter(FakeGuideRouter):
+        def identity(self):
+            identity = super().identity()
+            author = identity["guide_author"]["model"]
+            identity["guide_reviewer"]["model"] = author
+            identity["guide_reviewer"]["same_model_as_author"] = True
+            identity["independent_model_review"] = False
+            identity["independent_model_review_status"] = "independent_model_review_not_qualified"
+            return identity
+
+    result = GuidePipeline(gg, run_id, SameModelRouter(), _config(corpus)).run()
+
+    assert result["payload"]["quality"]["run_status"] == "pass"
+    assert result["qualification_status"] == "candidate_with_findings"
+    assert result["payload"]["finalize"]["checklist"][
+        "independent_model_review_qualified"] is False
+    assert result["payload"]["finalize"]["gates"][
+        "configured_independent_model_review_status"] == "independent_model_review_not_qualified"
+
+
+def test_eligibility_uses_identity_frozen_at_quality_review(tmp_path):
+    store, gg, run_id, corpus, _router = _complete_run(tmp_path)
+
+    class ChangedQualifiedRouter(FakeGuideRouter):
+        def identity(self):
+            identity = super().identity()
+            identity["guide_reviewer"]["model"] = "later-reviewer-config"
+            return identity
+
+    # Reopening a completed run refreshes top-level runtime identity, but must
+    # not rewrite which independently qualified reviewer actually reviewed it.
+    resumed = GuidePipeline(gg, run_id, ChangedQualifiedRouter(), _config(corpus))
+    resumed._update(payload=resumed.payload)
+    gates = evaluate_run_eligibility(gg, run_id)
+
+    assert gates["qualified"] is True
+    assert gates["model_identity"]["guide_reviewer"]["model"] == "fake-guide-reviewer"
+
+
+def test_independent_reviewer_call_failure_is_a_blocking_critical(tmp_path):
+    store, gg, run_id, corpus = _prepare(tmp_path)
+
+    class ReviewerFailureRouter(FakeGuideRouter):
+        def _value(self, task_type, context):
+            if task_type == "guide_quality_review":
+                raise RuntimeError("fake reviewer unavailable")
+            return super()._value(task_type, context)
+
+    result = GuidePipeline(gg, run_id, ReviewerFailureRouter(), _config(corpus)).run()
+    review_failures = [finding for finding in gg.get_findings(run_id)
+                       if finding.get("category") == "review_execution"
+                       and finding.get("status") == "open"]
+
+    assert result["qualification_status"] == "candidate_with_findings"
+    assert result["payload"]["quality"]["run_status"] == "fail"
+    assert review_failures
+    assert all(finding["severity"] == "critical" for finding in review_failures)
+
+
+def test_independent_reviewer_uncertain_verdict_blocks_candidate_ready(tmp_path):
+    store, gg, run_id, corpus = _prepare(tmp_path)
+
+    class UncertainReviewerRouter(FakeGuideRouter):
+        def _value(self, task_type, context):
+            if task_type == "guide_quality_review":
+                return {"verdict": "uncertain", "findings": [], "notes": "fake uncertainty"}
+            return super()._value(task_type, context)
+
+    result = GuidePipeline(gg, run_id, UncertainReviewerRouter(), _config(corpus)).run()
+    blocked_findings = [finding for finding in gg.get_findings(run_id)
+                        if finding.get("category") == "review_verdict"
+                        and finding.get("status") == "open"]
+
+    assert result["qualification_status"] == "candidate_with_findings"
+    assert result["payload"]["quality"]["run_status"] == "fail"
+    assert blocked_findings
+    assert all(finding["severity"] == "critical" for finding in blocked_findings)
 
 
 def test_coverage_critical_after_quality_recomputes_quality_gate(tmp_path, monkeypatch):

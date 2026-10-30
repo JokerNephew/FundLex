@@ -37,7 +37,7 @@ from .models import (
     utc_now,
 )
 from .quality import run_quality_gate
-from .scope import load_builtin_guide_scope, section_in_scope
+from .scope import load_builtin_guide_scope, section_in_scope, section_path_in_scope
 from .eligibility import evaluate_run_eligibility, open_critical_findings
 from ..regulatory.ingestion import ingest_regulation, validate_regulation_document
 from .requirements import extract_requirements
@@ -59,7 +59,6 @@ STAGES = (
     "GUIDE_REPAIR",
     "SEMANTIC_COVERAGE",
     "SUPPLEMENT_COVERAGE",
-    "RESIDUAL_MINING",
     "FINALIZE_GUIDE",
     "BUILD_EVIDENCE",
 )
@@ -164,7 +163,7 @@ class GuidePipeline:
         self.run_dir.mkdir(parents=True, exist_ok=True)
         self.router.set_call_callback(lambda record: store.record_model_call(run_id, record))
         # Cost/call totals are observations; completion is decided by the
-        # coverage/residual/quality gates and bounded no-progress protection.
+        # coverage/quality gates and bounded no-progress protection.
         self.router.run_max_calls = None
         self.router.run_max_cost = None
         self._restore_run()
@@ -276,8 +275,8 @@ class GuidePipeline:
     def _refresh_quality_summary(self) -> dict[str, Any]:
         """Recompute the quality summary after later stages add findings.
 
-        Coverage and residual mining run after the quality review.  They can
-        add ``semantic_coverage`` or ``guide_conflict`` criticals; if the
+        Coverage runs after the quality review. It can add
+        ``semantic_coverage`` or ``guide_conflict`` criticals; if the
         persisted quality summary is not recomputed, a later finalize can see
         an obsolete ``pass`` and admit an ineligible candidate (INT-02).
         """
@@ -418,7 +417,8 @@ class GuidePipeline:
             vector_max_candidates=self.config.vector_max_candidates,
         )
         result = discover(self.router, self.store, requirements, snapshot, versions,
-                          run_id=self.run_id, config=config, dense=self.dense_retriever)
+                          run_id=self.run_id, config=config, dense=self.dense_retriever,
+                          scope_sections=self.guide_scope)
         self.store.replace_impacts(self.run_id, result.impacts)
         evidence = []
         for index, batch in enumerate(result.sweep_batches):
@@ -483,8 +483,8 @@ class GuidePipeline:
             # Do not author guide items for contract chapters outside the
             # built-in guide's declared scope.
             target = [item for item in target
-                      if any(section_in_scope(" > ".join(clauses[clause_id].section_path),
-                                               self.guide_scope)
+                      if any(section_path_in_scope(clauses[clause_id].section_path,
+                                                   self.guide_scope)
                              for clause_id in item.clause_ids if clause_id in clauses)]
         config = AuthoringConfig(local_batch_size=self.config.local_batch_size)
         local, calls = build_local_candidates(self.router, requirements, target, clauses, config)
@@ -619,6 +619,7 @@ class GuidePipeline:
                 current.quality_status = item.quality_status
                 self.store.update_guide_item(self.run_id, current)
 
+        review_model_identity = self.router.identity()
         result = run_quality_gate(self.router, target, requirements, impacts, clauses,
                                   on_item=on_item, max_workers=4)
         all_items = self._all_items()
@@ -638,6 +639,7 @@ class GuidePipeline:
             "item_status": result.item_status, "calls": result.calls,
             "reviewed_now": len(target),
             "independent_model_review": result.independent_review,
+            "model_identity": review_model_identity,
         }
         self._update(payload=self.payload)
         return {"run_status": overall, "findings": len(all_findings), "reviewed": len(target)}
@@ -929,7 +931,6 @@ class GuidePipeline:
             items = self._all_items()
             gates = evaluate_run_eligibility(self.store, self.run_id)
             coverage_summary = self.payload.get("coverage") or {}
-            residual_summary = self.payload.get("residual") or {}
             quality_summary = self.payload.get("quality") or {}
             complete = bool(gates["qualified"])
             status = "complete" if complete else "complete_with_unresolved"
@@ -966,7 +967,8 @@ class GuidePipeline:
                 "requirement_gaps": gates["requirement_gaps"],
                 "unresolved_impacts": gates["unresolved_impacts"],
                 "latest_contract_uncertain": gates["latest_contract_uncertain"],
-                "residual_saturated": bool(residual_summary.get("saturated")),
+                "residual_check": "disabled",
+                "residual_saturated": None,
                 "content_sha256": content_sha256,
                 "guide_artifact": {"kind": "guide", "sha256": export["sha256"],
                                    "size": export["size"],
@@ -1128,18 +1130,12 @@ class GuidePipeline:
                                  "topics": (self.payload.get("coverage") or {}).get("missing_topics") or [],
                                  "identity": identity_hash}),
                     self.stage_supplement)
-        self._stage("RESIDUAL_MINING",
-                    sha256_json({"items": [item.to_dict() for item in self._all_items()],
-                                 "impacts": [item.impact_id for item in self._all_impacts()],
-                                 "config": self.config.to_dict()}),
-                    self.stage_residual)
         self._stage("FINALIZE_GUIDE",
                     sha256_json({"items": [item.to_dict() for item in self._all_items()],
                                  "requirements": [item.to_dict() for item in self.store.get_requirements(self.run_id)],
                                  "quality": self.payload.get("quality"),
                                  "findings": self.store.get_findings(self.run_id),
                                  "coverage": self.payload.get("coverage"),
-                                 "residual": self.payload.get("residual"),
                                  "config": self.config.to_dict()}),
                     self.stage_finalize,
                     revalidate=self._finalize_cache_valid)

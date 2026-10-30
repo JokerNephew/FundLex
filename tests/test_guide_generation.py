@@ -13,6 +13,7 @@ from fundlex.guide_generation.corpus_catalog import parse_contract_filename, syn
 from fundlex.guide_generation.corpus_segmenter import segment_contract
 from fundlex.guide_generation.discovery import (
     DiscoveryConfig,
+    _batches,
     _validate_sweep,
     path_b_contract_sweep,
     resolve_uncertain_batches,
@@ -557,7 +558,9 @@ def test_coverage_audit_batches_unresolved_impacts_and_keeps_unbound_covered_ope
 
 
 def test_guide_scope_comes_from_builtin_revision_guide():
-    from fundlex.guide_generation.scope import load_builtin_guide_scope, section_in_scope
+    from fundlex.guide_generation.scope import (
+        load_builtin_guide_scope, section_in_scope, section_path_in_scope,
+    )
 
     scope = load_builtin_guide_scope()
     assert "基金费用与税收" in scope
@@ -568,6 +571,8 @@ def test_guide_scope_comes_from_builtin_revision_guide():
     assert section_in_scope("第三部分  基金的基本情况", scope)
     assert not section_in_scope("第十八部分  基金的信息披露", scope)
     assert not section_in_scope("第七部分  基金合同当事人及权利义务", scope)
+    assert not section_path_in_scope(
+        ["第十八部分  基金的信息披露", "一、基金费用与税收"], scope)
 
 
 def test_coverage_marks_out_of_scope_requirement_without_gap():
@@ -887,6 +892,98 @@ def test_topic_coverage_judge_closes_only_covered_topics():
                for value in uncovered.findings)
     assert any(row["level"] == "topic" and row["status"] == "unresolved"
                for row in uncovered.rows)
+
+
+def test_batching_never_mixes_chapters():
+    clauses = [
+        ClauseUnit("C1", "V", ["第六部分  基金份额的申购与赎回", "一、申购"], 1, 1, "甲" * 500),
+        ClauseUnit("C2", "V", ["第六部分  基金份额的申购与赎回", "一、申购"], 2, 2, "乙" * 500),
+        ClauseUnit("C3", "V", ["第十五部分  基金费用与税收", "一、基金费用"], 3, 3, "丙" * 500),
+        ClauseUnit("C4", "V", ["第十五部分  基金费用与税收", "二、税收"], 4, 4, "丁" * 500),
+    ]
+    batches = _batches(clauses, 600)  # forces a split inside a chapter
+    assert len(batches) > 2
+    for batch in batches:
+        keys = {tuple(clause.section_path[:2]) for clause in batch}
+        assert len(keys) == 1, keys
+    assert [clause.clause_id for batch in batches for clause in batch] == ["C1", "C2", "C3", "C4"]
+
+
+def test_batching_keeps_chapter_whole_and_only_splits_oversized_chapters():
+    clauses = [
+        ClauseUnit("A1", "V", ["第一部分  基金费用与税收", "一、管理费"], 1, 1, "甲" * 100),
+        ClauseUnit("A2", "V", ["第一部分  基金费用与税收", "二、销售服务费"], 2, 2, "乙" * 100),
+        ClauseUnit("B1", "V", ["第二部分  基金收益分配", "一、收益分配"], 3, 3, "丙" * 100),
+    ]
+
+    batches = _batches(clauses, 2000)
+
+    assert [[clause.clause_id for clause in batch] for batch in batches] == [["A1", "A2"], ["B1"]]
+
+
+def test_batching_splits_large_chapter_by_subsection_then_by_chars():
+    clauses = [
+        ClauseUnit("A1", "V", ["第一部分  释义", "一、类别"], 1, 1, "甲" * 200),
+        ClauseUnit("A2", "V", ["第一部分  释义", "二、术语"], 2, 2, "乙" * 200),
+        ClauseUnit("B1", "V", ["第二部分  费用", "一、费用"], 3, 3, "丙" * 250),
+        ClauseUnit("B2", "V", ["第二部分  费用", "一、费用"], 4, 4, "丁" * 250),
+        ClauseUnit("C1", "V", ["第三部分  清算", "一、清算"], 5, 5, "戊" * 100),
+    ]
+
+    batches = _batches(clauses, 500)
+
+    # Chapter A is split at its subsection boundary; chapter B's oversized
+    # subsection is split within itself; chapter C remains its own batch.
+    assert [[clause.clause_id for clause in batch] for batch in batches] == [
+        ["A1"], ["A2"], ["B1"], ["B2"], ["C1"],
+    ]
+    for batch in batches:
+        assert len({clause.section_path[0] for clause in batch}) == 1
+
+
+def test_contract_sweep_filters_out_of_scope_chapters_before_batching():
+    requirement = PolicyRequirement(
+        requirement_id="R-scope-sweep", source_block_ids=["B-scope-sweep"],
+        source_quote="基金管理人应当列明费用。", article="第一条",
+        norm_type="obligation", subject="基金管理人", object="基金费用",
+        requirement="基金管理人应当列明费用。", disposition="modify_contract",
+        candidate_contract_domains=["基金费用与税收"],
+    )
+    version = ContractVersion("CV-scope-sweep", "C-scope-sweep", "测试基金", "测试合同",
+                              latest_known_version=True)
+    clauses = [
+        ClauseUnit("CL-scope-in", "CV-scope-sweep",
+                   ["第十五部分  基金费用与税收", "一、基金费用"], 1, 1,
+                   "范围内费用条款证据。"),
+        ClauseUnit("CL-scope-out", "CV-scope-sweep",
+                   ["第十六部分  基金的信息披露", "一、基金费用与税收"], 2, 2,
+                   "范围外信息披露哨兵文本。"),
+    ]
+
+    class ScopeCaptureRouter(FakeGuideRouter):
+        def __init__(self):
+            super().__init__()
+            self.sweep_contexts = []
+
+        def _value(self, task_type, context):
+            if task_type == "guide_impact_sweep":
+                self.sweep_contexts.append(context)
+                return {"findings": [], "uncovered_suspicions": [],
+                        "section_assessment": "not_affected"}
+            return super()._value(task_type, context)
+
+    router = ScopeCaptureRouter()
+    path_b_contract_sweep(
+        router, None, [requirement], [version], {version.contract_version_id: clauses},
+        DiscoveryConfig(path_b_batch_chars=5000, path_b_max_requirements=2,
+                        path_b_max_calls=10, path_c_enabled=False),
+        max_workers=1, scope_sections=["基金费用与税收"],
+    )
+
+    assert router.sweep_contexts
+    combined = "\n".join(router.sweep_contexts)
+    assert "范围内费用条款证据" in combined
+    assert "范围外信息披露哨兵文本" not in combined
 
 
 def test_impact_sweep_rejects_unknown_or_overbound_requirement_ids():

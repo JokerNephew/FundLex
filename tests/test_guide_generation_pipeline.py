@@ -76,13 +76,18 @@ def test_pipeline_end_to_end_with_fake_models(tmp_path):
                             path_b_max_calls=20, path_c_enabled=False,
                             semantic_applicability=False, max_residual_rounds=2,
                             residual_max_calls_per_round=10, soft_max_calls=500)
-    result = GuidePipeline(gg, run_id, FakeGuideRouter(), config).run()
+    router = FakeGuideRouter()
+    result = GuidePipeline(gg, run_id, router, config).run()
     assert result["status"] == "complete", result
     assert result["qualification_status"] == "candidate_ready"
     assert result["payload"]["finalize"]["unhandled_requirements"] == 0
     assert result["payload"]["finalize"]["requirement_gaps"] == 0
     assert result["payload"]["finalize"]["unresolved_impacts"] == 0
-    assert result["payload"]["finalize"]["residual_saturated"] is True
+    assert result["payload"]["finalize"]["residual_check"] == "disabled"
+    assert result["payload"]["finalize"]["residual_saturated"] is None
+    assert result["payload"]["finalize"]["gates"]["schema_version"] == "guide-eligibility-2"
+    assert "residual" not in result["payload"]
+    assert all(record["task_type"] != "guide_residual_sweep" for record in router.records)
     items = gg.get_guide_items(run_id)
     assert items
     assert all(item.requirement_ids for item in items)
@@ -277,7 +282,8 @@ def test_critical_quality_finding_blocks_candidate_ready_even_when_other_gates_p
     assert finalize["checklist"]["quality_gate_passed"] is False
     assert finalize["unresolved_impacts"] == 0
     assert finalize["requirement_gaps"] == 0
-    assert finalize["residual_saturated"] is True
+    assert finalize["residual_check"] == "disabled"
+    assert finalize["residual_saturated"] is None
 
 
 def test_candidate_versions_are_snapshot_bound_and_stale_writes_fail(tmp_path):

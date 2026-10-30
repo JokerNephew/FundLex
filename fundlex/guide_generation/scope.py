@@ -56,5 +56,11 @@ def section_in_scope(text: str, scope: Iterable[str]) -> bool:
     return any(item in candidate or candidate in item for item in scopes)
 
 
+def section_path_in_scope(section_path: Iterable[str], scope: Iterable[str]) -> bool:
+    """Check a contract clause against scope using its top-level chapter only."""
+    chapter = next((str(part).strip() for part in section_path if str(part).strip()), "")
+    return section_in_scope(chapter, scope)
+
+
 def texts_in_scope(values: Iterable[str], scope: Iterable[str]) -> bool:
     return any(section_in_scope(value, scope) for value in values if str(value or "").strip())

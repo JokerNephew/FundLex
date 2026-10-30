@@ -16,7 +16,7 @@ from .models import (
     stable_id,
     unique,
 )
-from .scope import section_in_scope, texts_in_scope
+from .scope import section_in_scope, section_path_in_scope, texts_in_scope
 from .prompts import (
     APPLICABILITY_INSTRUCTION,
     APPLICABILITY_SCHEMA,
@@ -261,7 +261,7 @@ def run_coverage_gate(router, requirements: list[PolicyRequirement], impacts: li
             return True
         for clause_id in impact.clause_ids:
             clause = clauses.get(clause_id)
-            if clause and section_in_scope(" > ".join(clause.section_path), scope):
+            if clause and section_path_in_scope(clause.section_path, scope):
                 return True
         return False
 

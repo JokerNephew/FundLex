@@ -14,6 +14,7 @@ from dataclasses import dataclass, field
 from typing import Any, Iterable
 
 from .lexical import LexicalIndex, Query, deterministic_query, query_from_intents
+from .scope import section_in_scope, section_path_in_scope
 from .vector import DenseRetriever, VectorHit, VectorIndexError
 from ..model import ModelError
 from .models import (
@@ -108,19 +109,66 @@ def _compact_clause(clause: ClauseUnit, *, max_chars: int = 0) -> str:
 
 
 def _batches(clauses: list[ClauseUnit], max_chars: int) -> list[list[ClauseUnit]]:
+    """Keep a chapter together unless it exceeds the secondary size bound.
+
+    Oversized chapters split on subsection boundaries first; only an oversized
+    subsection is split by character budget.  No batch may cross a chapter.
+    A single clause larger than the budget remains intact rather than being
+    truncated or silently dropped.
+    """
+    def path_for(clause: ClauseUnit) -> tuple[str, ...]:
+        return tuple(str(part).strip() for part in clause.section_path if str(part).strip())
+
+    def size_of(group: list[ClauseUnit]) -> int:
+        return sum(len(clause.text) + len(clause.clause_id) + 80 for clause in group)
+
+    def contiguous_groups(group: list[ClauseUnit], key_for) -> list[list[ClauseUnit]]:
+        result: list[list[ClauseUnit]] = []
+        current: list[ClauseUnit] = []
+        current_key = None
+        for clause in group:
+            key = key_for(clause)
+            if current and key != current_key:
+                result.append(current)
+                current = []
+            current.append(clause)
+            current_key = key
+        if current:
+            result.append(current)
+        return result
+
+    chapters = contiguous_groups(clauses, lambda clause: (path_for(clause) or ("",))[0])
     batches: list[list[ClauseUnit]] = []
-    current: list[ClauseUnit] = []
-    size = 0
-    for clause in clauses:
-        piece = len(clause.text) + len(clause.clause_id) + 80
-        if current and size + piece > max_chars:
-            batches.append(current)
-            current = []
-            size = 0
-        current.append(clause)
-        size += piece
-    if current:
-        batches.append(current)
+    for chapter in chapters:
+        if size_of(chapter) <= max_chars:
+            batches.append(chapter)
+            continue
+
+        # A chapter that does not fit is split at its second-level headings.
+        subsections = contiguous_groups(
+            chapter,
+            lambda clause: path_for(clause)[:2] or ("",),
+        )
+        for subsection in subsections:
+            if size_of(subsection) <= max_chars:
+                batches.append(subsection)
+                continue
+
+            # Last resort: split only within this subsection.  Keep an
+            # individually oversized clause whole; the caller can then record
+            # a context/output-capacity failure without corrupting its source.
+            current: list[ClauseUnit] = []
+            current_size = 0
+            for clause in subsection:
+                piece = len(clause.text) + len(clause.clause_id) + 80
+                if current and current_size + piece > max_chars:
+                    batches.append(current)
+                    current = []
+                    current_size = 0
+                current.append(clause)
+                current_size += piece
+            if current:
+                batches.append(current)
     return batches
 
 
@@ -397,7 +445,9 @@ def path_b_contract_sweep(router, store, requirements: list[PolicyRequirement],
                           prompt_version: str = IMPACT_SWEEP_VERSION,
                           role: str = "discovery",
                           max_calls: int | None = None,
-                          max_workers: int = 4) -> tuple[list[ImpactCandidate], list[dict], list[dict], int]:
+                          max_workers: int = 4,
+                          scope_sections: list[str] | None = None
+                          ) -> tuple[list[ImpactCandidate], list[dict], list[dict], int]:
     from concurrent.futures import ThreadPoolExecutor, as_completed
     impacts: list[ImpactCandidate] = []
     suspicions: list[dict] = []
@@ -416,6 +466,9 @@ def path_b_contract_sweep(router, store, requirements: list[PolicyRequirement],
     rotating_cursor = 0
     for contract in versions:
         clauses = clauses_by_version.get(contract.contract_version_id) or []
+        if scope_sections:
+            clauses = [clause for clause in clauses
+                       if section_path_in_scope(clause.section_path, scope_sections)]
         if not clauses:
             continue
         contract_jobs = []
@@ -699,20 +752,25 @@ def _best_requirement_anchor(requirement: PolicyRequirement,
 
 def discover(router, store, requirements: list[PolicyRequirement], snapshot,
              versions: list[ContractVersion], *, run_id: str = "",
-             config: DiscoveryConfig | None = None, dense: DenseRetriever | None = None) -> DiscoveryResult:
+             config: DiscoveryConfig | None = None, dense: DenseRetriever | None = None,
+             scope_sections: list[str] | None = None) -> DiscoveryResult:
     config = config or DiscoveryConfig()
     latest_ids = set(snapshot.latest_version_ids)
     selected = [item for item in versions if (not config.path_b_latest_only or item.contract_version_id in latest_ids)]
     clauses_by_version = _clauses_by_contract(store, [item.contract_version_id for item in versions])
     all_clauses = [clause for version_id in [item.contract_version_id for item in versions]
                    for clause in clauses_by_version.get(version_id, [])]
+    if scope_sections:
+        all_clauses = [clause for clause in all_clauses
+                       if section_path_in_scope(clause.section_path, scope_sections)]
     clauses_by_id = {clause.clause_id: clause for clause in all_clauses}
     source_hashes = {item.contract_version_id: item.source_sha256 for item in versions}
     path_a, intents, calls_a, notes = path_a_requirement_retrieval(
         router, store, requirements, all_clauses, config, run_id=run_id,
         dense=dense, source_hashes=source_hashes)
     path_b, suspicions, batches, calls_b = path_b_contract_sweep(
-        router, store, requirements, selected, clauses_by_version, config, run_id=run_id)
+        router, store, requirements, selected, clauses_by_version, config, run_id=run_id,
+        scope_sections=scope_sections)
     all_impacts = _merge_impacts(path_a + path_b)
     calls = calls_a + calls_b
     path_c_status = "not_configured"
@@ -737,7 +795,8 @@ def discover(router, store, requirements: list[PolicyRequirement], snapshot,
             instruction=IMPACT_SWEEP_INSTRUCTION + " This is an independent second-model pass; "
                         "assume the first pass may have missed a subtle or differently worded impact.",
             prompt_version=IMPACT_SWEEP_VERSION + "_alt",
-            role="guide_author", max_calls=config.path_c_max_calls)
+            role="guide_author", max_calls=config.path_c_max_calls,
+            scope_sections=scope_sections)
         calls += calls_c
         all_impacts = _merge_impacts(all_impacts + alt)
         suspicions.extend(alt_suspicions)

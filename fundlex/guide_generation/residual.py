@@ -20,7 +20,7 @@ from .models import (
     stable_id,
     unique,
 )
-from .scope import section_in_scope
+from .scope import section_path_in_scope
 from .prompts import (
     RESIDUAL_INSTRUCTION,
     RESIDUAL_SCHEMA,
@@ -159,7 +159,7 @@ def run_residual_mining(router, requirements: list[PolicyRequirement], items: li
             subset = clauses
         if scope_sections:
             subset = [clause for clause in subset
-                      if section_in_scope(" > ".join(clause.section_path), scope_sections)]
+                      if section_path_in_scope(clause.section_path, scope_sections)]
             if not subset:
                 continue
         for batch in _batches(subset, config.batch_chars):
