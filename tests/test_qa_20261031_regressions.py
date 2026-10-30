@@ -94,12 +94,14 @@ def test_engine_build_modules_include_semantic_contract():
     assert "fundlex/semantic_contract.py" in store_module._ENGINE_BUILD_MODULES
 
 
-# --- A8-F2 -----------------------------------------------------------------
+# --- A8-F2 (resolution: stale docstring; review-assisted contract kept) ------
 
-def test_orphan_evidence_requires_blocker():
+def test_orphan_evidence_is_review_item_not_silent_drop():
     item = {"kind": "orphan_evidence", "code": "LEDGER_EVIDENCE_UNBOUND",
             "rule_id": "G05", "location": "p12"}
-    assert requires_blocker(item) is True
+    # Review-assisted delivery treats unbound evidence like open obligations:
+    # always visible in unresolved, never silently dropped, never auto-blocking.
+    assert requires_blocker(item) is False
 
 
 # --- API/security fixes (main-agent batch) -----------------------------------
