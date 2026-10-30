@@ -225,7 +225,7 @@
 <div class="filter-chips" id="task-filter-chips" hidden>
 </div>
 <div class="table-wrap">
-<table class="table" style="min-width:820px">
+<table class="table task-list-table">
 <thead>
 <tr>
 <th>任务</th>
@@ -233,6 +233,7 @@
 <th>成功 / 异常</th>
 <th>状态</th>
 <th>进度</th>
+<th>创建时间</th>
 <th>
 </th>
 </tr>
@@ -390,7 +391,7 @@
 <span id="task-status">
 </span>
 </div>
-<div class="head-actions">
+<div class="head-actions task-detail-actions">
 <button class="btn btn-sm" data-action="refresh">刷新状态</button>
 <button class="btn btn-sm" data-action="toggle-pause" id="pause-btn">暂停任务</button>
 <button class="btn btn-sm" data-action="recover" id="recover-btn">补传未接收文件</button>
@@ -401,6 +402,7 @@
 </div>
 <p class="subnote" id="selected-task-subtitle">
 </p>
+<div class="task-guide-meta" id="task-guide-meta" hidden><span>使用的修改指引</span><strong id="task-guide-value"></strong></div>
 <div class="compact-kpis counts-kpis" id="overall-counts">
 </div>
 <div class="stage-rail task-stage-rail">
@@ -443,16 +445,10 @@
 <i style="background:#8b7ba8">
 </i>评测已处理</span>
 </div>
-<p class="scope-callout" id="doc-scope-note" hidden>
-</p>
 </div>
 <div class="card card-pad">
 <div class="section-title">
 <h2 id="selected-task-title">逐合同明细</h2>
-<small id="doc-scope">
-</small>
-</div>
-<div class="batch-summary" id="result-counts">
 </div>
 <div class="toolbar">
 <div class="searchbox">
