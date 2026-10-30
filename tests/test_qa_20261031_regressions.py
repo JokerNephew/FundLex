@@ -125,7 +125,9 @@ def _fl568_source(tmp_path) -> Path:
             + DOCX_HELPERS["run"]("乙") + "</w:p>"
             + "<w:p>" + DOCX_HELPERS["run"]("尾") + '<w:bookmarkEnd w:id="7"/>'
             + "</w:p><w:p>" + DOCX_HELPERS["run"]("合法目标") + "</w:p>")
-    return DOCX_HELPERS["package"](tmp_path / "fl568", body, None)
+    directory = tmp_path / "fl568"
+    directory.mkdir(exist_ok=True)
+    return DOCX_HELPERS["package"](directory, body, None)
 
 
 def _fl568_edit(source, location, old, new, target_id):

@@ -1744,6 +1744,52 @@ def _make_synthetic_target(target_id: str, rule_id: str, location: str, quote: s
 # Planning, writing and inspection
 # ---------------------------------------------------------------------------
 
+def _drop_unvalidatable_edits(input_path: Path, edits: list[dict], planned: dict,
+                              *, content_check: Any) -> list[dict] | None:
+    """Probe each planned edit through validation on its own and drop the guilty.
+
+    Returns the reduced edit list with ``planned`` updated (records removed and
+    ledger entries demoted to unresolved) when at least one edit is attributable
+    as individually invalid; ``None`` when no single edit can be blamed, so the
+    caller re-raises the original error and document-level failures stay
+    fail-closed (FL-D112, FL-D568).
+    """
+    kept: list[dict] = []
+    dropped: list[dict] = []
+    for edit in edits:
+        try:
+            validate_edit_plan(input_path, [edit], {}, content_check=content_check,
+                               allow_existing_revisions=True)
+        except DocxError:
+            dropped.append(edit)
+        else:
+            kept.append(edit)
+    if not dropped or len(dropped) == len(edits):
+        # Nothing individually guilty, or every edit fails alone (document-level
+        # problem): no single edit to degrade.
+        return None
+    dropped_keys = {(str(edit.get("target_id")), str(edit.get("location")),
+                     int(edit.get("start", -1)), int(edit.get("end", -2)))
+                    for edit in dropped}
+    removed: set[str] = set()
+    records: list[dict] = []
+    for record in planned["edits"]:
+        key = (str(record.get("target_id")), str(record.get("location")),
+               int(record.get("start", -1)), int(record.get("end", -2)))
+        if key in dropped_keys:
+            removed.add(str(record.get("target_id")))
+            removed.update(str(component.get("target_id"))
+                           for component in record.get("components") or [])
+            continue
+        records.append(record)
+    planned["edits"] = records
+    for entry in planned["ledger"]:
+        if entry.get("target_id") in removed and entry.get("status") == "planned":
+            entry["status"] = "unresolved"
+            entry["reason"] = "RECALL_EDIT_VALIDATE_REJECTED"
+    return kept
+
+
 def _plan_and_generate(model: Any, rules_by_id: dict[str, dict], targets: Sequence[Target],
                        inspection: DocumentInspection, facts: Facts, input_path: Path,
                        temp_dir: Path, *, max_compose_calls: int,
@@ -1947,8 +1993,24 @@ def _plan_and_generate(model: Any, rules_by_id: dict[str, dict], targets: Sequen
     from .recall import _reconcile_final_plan_ledger
     _reconcile_final_plan_ledger(planned["ledger"], planned["edits"],
                                  planned.get("conflicts") or [], [], [])
-    plan = validate_edit_plan(input_path, edits, {}, content_check=content_check,
-                              allow_existing_revisions=True)
+    try:
+        plan = validate_edit_plan(input_path, edits, {}, content_check=content_check,
+                                  allow_existing_revisions=True)
+    except DocxError:
+        # A single edit failing validation on unsupported structure (e.g. a
+        # span swallowing one half of a ranged bookmark whose partner lives in
+        # another paragraph, FL-D568) must degrade to "drop that edit, keep its
+        # target unresolved" instead of scrapping the whole contract (FL-D112).
+        edits = _drop_unvalidatable_edits(input_path, edits, planned,
+                                          content_check=content_check)
+        if edits is None:
+            raise
+        _reconcile_final_plan_ledger(planned["ledger"], planned["edits"],
+                                     planned.get("conflicts") or [], [], [])
+        # The reduced plan is validated strictly; edits that only clash in
+        # combination (overlaps) still fail the whole contract here.
+        plan = validate_edit_plan(input_path, edits, {}, content_check=content_check,
+                                  allow_existing_revisions=True)
     redline, final = temp_dir / "redline.docx", temp_dir / "final.docx"
     if edits:
         artifacts = generate_artifacts(input_path, plan, redline, final,

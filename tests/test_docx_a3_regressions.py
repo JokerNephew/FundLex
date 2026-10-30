@@ -256,6 +256,45 @@ def test_bookmark_end_inside_start_in_earlier_paragraph_rejected(tmp_path):
     assert error.value.code == "EDIT_BOOKMARK_RANGE_BROKEN"
 
 
+@pytest.mark.parametrize("direction", ["start_in_span", "end_in_span"])
+def test_bookmark_partner_at_body_level_removed_pairwise(tmp_path, direction):
+    """FL-D568 (B16 广发聚安): Word writes bookmark halves as direct children
+    of ``w:body`` (e.g. the ``_GoBack`` tail). A partner at body level carries
+    no text and belongs to no non-target paragraph, so it dies pairwise with
+    the span-dropped half instead of rejecting a legal edit.
+    """
+    if direction == "start_in_span":
+        body = ("<w:p>" + HELPERS["run"]("前缀甲") + HELPERS["run"]("目标乙")
+                + _bm_start(78) + HELPERS["run"]("目标丙") + "</w:p>"
+                + "<w:p>" + HELPERS["run"]("无关段落") + "</w:p>" + _bm_end(78))
+        old, new = "目标乙目标丙", "新文"
+    else:
+        body = (_bm_start(78) + "<w:p>" + HELPERS["run"]("目标乙")
+                + _bm_end(78) + HELPERS["run"]("目标丙") + "</w:p>"
+                + "<w:p>" + HELPERS["run"]("无关段落") + "</w:p>")
+        old, new = "目标乙目标丙", "新文"
+    source = _build(tmp_path, body)
+    redline, final, _ = _generate(source, tmp_path, old=old, new=new)
+    assert _bookmark_ids(final) == ([], [])
+    assert _bookmark_ids(redline) == ([], [])
+    final_text = editor.inspect_docx(final, full=True).by_location("p1").text
+    assert "无关段落" in final_text
+    assert "新文" in editor.inspect_docx(final, full=True).by_location("p0").text
+
+
+def test_bookmark_in_other_paragraph_still_fail_closed_at_body_tail_present(tmp_path):
+    """A partner inside another *paragraph* remains an unconditional rejection:
+    the body-level exception must not widen the fail-closed geometry."""
+    body = ("<w:p>" + HELPERS["run"]("甲") + _bm_start(7) + HELPERS["run"]("乙")
+            + "</w:p><w:p>" + HELPERS["run"]("尾") + _bm_end(7) + "</w:p>"
+            + _bm_end(9))  # stray body-level half must not relax the rule
+    source = _build(tmp_path, body)
+    edit = _plan(source, "p0", "甲乙", "新文")
+    with pytest.raises(editor.DocxError) as error:
+        editor.validate_edit_plan(source, [edit], {"fixed": "新文"})
+    assert error.value.code == "EDIT_BOOKMARK_RANGE_BROKEN"
+
+
 def test_unpaired_bookmark_half_without_any_partner_stays_allowed(tmp_path):
     """A lone malformed bookmark half dropped inside the span has no surviving
     partner; removing it cannot orphan anything."""

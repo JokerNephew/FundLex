@@ -12,7 +12,7 @@ from datetime import datetime, timezone
 from hashlib import sha256
 from pathlib import Path
 from tempfile import NamedTemporaryFile
-from typing import Any, Mapping, Sequence
+from typing import Any, Collection, Mapping, Sequence
 from urllib.parse import unquote
 import io
 import os
@@ -1107,9 +1107,13 @@ def _bookmark_dropped_partners(root: etree._Element, paragraph: etree._Element,
     Both ends of a bookmark range must die together: a survivor would be an
     unpaired bookmarkStart/bookmarkEnd and silently break every cross-reference
     to its name.  A partner inside the same edited paragraph is returned for
-    removal (edited paragraphs may drop navigation anchors).  A partner living
-    anywhere else cannot be touched without breaking non-target conservation,
-    so the edit is rejected fail-closed.
+    removal (edited paragraphs may drop navigation anchors).  Word also writes
+    bookmark halves as direct children of ``w:body`` (e.g. the ``_GoBack``
+    tail marker): such a partner carries no text and belongs to no non-target
+    paragraph, so removing it together with the dropped half is
+    conservation-safe and the pair is returned for removal as well (FL-D568).
+    A partner living inside any other paragraph cannot be touched without
+    breaking non-target conservation, so the edit is rejected fail-closed.
     """
     dropped = {node.get(Q("id"), ""): etree.QName(node).localname
                for node in between
@@ -1132,7 +1136,8 @@ def _bookmark_dropped_partners(root: etree._Element, paragraph: etree._Element,
         if kind == dropped[bookmark_id]:
             continue
         parent = node.getparent()
-        if parent is not None and tree.getpath(parent) == paragraph_path:
+        if parent is not None and (tree.getpath(parent) == paragraph_path
+                                   or parent.tag == Q("body")):
             partners.append(node)
         else:
             raise DocxError("EDIT_BOOKMARK_RANGE_BROKEN", bookmark_id)
@@ -1141,11 +1146,22 @@ def _bookmark_dropped_partners(root: etree._Element, paragraph: etree._Element,
 
 def _apply_one(root: etree._Element, edit: Mapping[str, Any], del_id: int,
                ins_id: int, author: str, when: str, limits: ZipLimits,
-               *, overlay: bool = False) -> None:
+               *, overlay: bool = False) -> list[str]:
+    """Apply one validated edit in place.
+
+    Returns the ids of bookmark halves removed at ``w:body`` level (partner of
+    a half dropped inside the edited span, FL-D568) so the non-target
+    skeleton check can normalize exactly the same nodes.
+    """
     paragraph, between, selected, runs, insert_at = _edit_region(
         root, edit, limits, overlay=overlay)
     partners = _bookmark_dropped_partners(root, paragraph, between)
-    shift = sum(1 for node in partners if paragraph.index(node) < insert_at)
+    # Body-level partner halves (e.g. the trailing ``_GoBack`` tail, FL-D568)
+    # are not paragraph children: they shift no run index and are removed via
+    # their own parent below.
+    in_paragraph = [node for node in partners
+                    if node.getparent() is not None and node.getparent().tag != Q("body")]
+    shift = sum(1 for node in in_paragraph if paragraph.index(node) < insert_at)
     start, end = int(edit["start"]), int(edit["end"])
     deleted_runs = [
         _make_text_run(run, (node.text or "")[max(start - lo, 0):min(end - lo, hi - lo)],
@@ -1167,10 +1183,17 @@ def _apply_one(root: etree._Element, edit: Mapping[str, Any], del_id: int,
         replacement.append(_make_text_run(last_run, suffix))
     for node in between:
         paragraph.remove(node)
+    body_removed: list[str] = []
     for node in partners:
-        paragraph.remove(node)
+        parent = node.getparent()
+        if parent is None:
+            continue
+        if parent.tag == Q("body"):
+            body_removed.append(node.get(Q("id"), ""))
+        parent.remove(node)
     for offset, node in enumerate(replacement):
         paragraph.insert(insert_at - shift + offset, node)
+    return body_removed
 
 
 def _accept_our_revisions(root: etree._Element, manifests: Sequence[Mapping[str, Any]]) -> None:
@@ -1250,14 +1273,25 @@ def _non_target_snapshot(root: etree._Element, edited: set[str]) -> dict[str, by
     return snapshot
 
 
-def _structure_snapshot(root: etree._Element, edited: set[str]) -> bytes:
+def _structure_snapshot(root: etree._Element, edited: set[str], *,
+                        body_dropped_bookmarks: Collection[str] = ()) -> bytes:
     """Keep the complete document topology, including target paragraph properties.
 
     Only ordinary text runs in edited paragraphs can be split by the editor.
     Everything else (including nested stories, fields and table properties) is
-    compared canonically across independently reopened packages.
+    compared canonically across independently reopened packages.  Bookmark
+    halves the writer removed at ``w:body`` level (partner of a span-dropped
+    half, FL-D568) are normalized out exactly as reported.
     """
     clone = deepcopy(root)
+    if body_dropped_bookmarks:
+        dropped = set(body_dropped_bookmarks)
+        body = clone.find(Q("body"))
+        if body is not None:
+            for node in list(body):
+                if node.tag in {Q("bookmarkStart"), Q("bookmarkEnd")} \
+                        and node.get(Q("id"), "") in dropped:
+                    body.remove(node)
     for location in edited:
         paragraph = _paragraph_element(clone, location)
         for node in list(paragraph):
@@ -1427,10 +1461,12 @@ def generate_artifacts(source: str | Path, plan: ValidatedPlan, redline_path: st
     now = datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
     manifest: list[dict[str, Any]] = []
     try:
+        body_dropped_bookmarks: set[str] = set()
         for number, edit in enumerate(sorted(plan.edits, key=lambda e: (e["location"], -e["start"])), start=1):
             del_id, ins_id = base_id + number * 2 - 2, base_id + number * 2 - 1
-            _apply_one(root, edit, del_id, ins_id, author, now, limits,
-                       overlay=allow_existing_revisions)
+            body_dropped_bookmarks.update(
+                _apply_one(root, edit, del_id, ins_id, author, now, limits,
+                           overlay=allow_existing_revisions))
             manifest.append({"edit_id": edit.get("edit_id", f"edit-{number}"), "location": edit["location"],
                              "start": edit["start"], "end": edit["end"], "expected_old_text": edit["expected_old_text"],
                              "replacement": edit["replacement"], "template_id": edit.get("template_id", ""),
@@ -1504,8 +1540,12 @@ def generate_artifacts(source: str | Path, plan: ValidatedPlan, redline_path: st
             _accept_all_revisions(baseline)
             comparison = accepted
         edited = {str(edit["location"]) for edit in plan.edits}
-        skeleton = _structure_snapshot(baseline, edited)
-        if skeleton != _structure_snapshot(comparison, edited) or skeleton != _structure_snapshot(final_reopen, edited):
+        skeleton = _structure_snapshot(baseline, edited,
+                                       body_dropped_bookmarks=body_dropped_bookmarks)
+        if skeleton != _structure_snapshot(comparison, edited,
+                                           body_dropped_bookmarks=body_dropped_bookmarks) \
+                or skeleton != _structure_snapshot(final_reopen, edited,
+                                                   body_dropped_bookmarks=body_dropped_bookmarks):
             raise DocxError("NON_TARGET_STRUCTURE_CHANGED")
         source_snapshot = _non_target_snapshot(baseline, edited)
         if source_snapshot != _non_target_snapshot(comparison, edited) or source_snapshot != _non_target_snapshot(final_reopen, edited):
