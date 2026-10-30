@@ -6801,14 +6801,14 @@ H＝E×…
 - **处理方法**：列入 M 系列测试补强（与 M2 docx 层 EXPECTED_TEXT_MISMATCH 零断言防线、Q3 D01 fixture 恒 skip 同一批测试体系待办）。
 - **状态**：open（测试待补），修复本身已独立验证。
 
-## FL-D564 eval 注入 /etc/fundlex-recall.env 时 bash 吞掉 JSON 引号（2026-10-31）
+## FL-D567 eval 注入 /etc/fundlex-recall.env 时 bash 吞掉 JSON 引号（2026-10-31）
 
 - 问题与影响：按既有约定 `eval "$(sudo -n cat /etc/fundlex-recall.env | grep -E '^(LLM_|FUNDLEX_MODEL_)')"` 注入模型 env 时，文件里**本就合法**的 `FUNDLEX_MODEL_REQUEST_OPTIONS_JSON={...JSON...}` 在 bash eval 中被剥离双引号，`ModelGateway.from_env()` 抛出 `JSONDecodeError: Expecting property name enclosed in double quotes`，任何模型请求发出前即失败。与 FL-Dxxx（line 1569 记录的 MODEL_EXTRA_HEADERS_INVALID）同一根源：bash source/eval 语义对裸 JSON 值不安全。
 - 证据：qa-base wave1 冒烟（b16，聚安混合）两次失败 traceback；文件内值本身 `json.loads` 通过（在 python 直读文件验证）。
 - 处理方法：改用 python 按行读取原始值、`shlex.quote` 生成 export 语句再 eval（脚本 `var/recall-first-evaluation/qa-wave1-dev-20261031-0b1a813/load_env.sh`）。不修改 env 文件本身（值合法，生产 systemd 直读不受影响）。
 - 状态：已绕开并验证（冒烟通过前置 `env json ok`）；建议后续统一把评测/部署的 env 注入入口收敛到该安全加载方式。
 
-## FL-D565 Wave-1 基线冒烟 B16 整合同 not_generated：EDIT_BOOKMARK_RANGE_BROKEN（2026-10-31）
+## FL-D568 Wave-1 基线冒烟 B16 整合同 not_generated：EDIT_BOOKMARK_RANGE_BROKEN（2026-10-31）
 
 - 发现日期：2026-10-31，qa-full-audit 波一 dev20 基线冒烟（合同：广发聚安混合型证券投资基金基金合同.docx，B16，96,650B）。
 - 问题与影响：`_plan_and_generate` 的 `validate_edit_plan` 抛出 `EDIT_BOOKMARK_RANGE_BROKEN`（`fundlex/docx.py` `_bookmark_dropped_partners`，467db01 A3-W4 新增校验），异常沿 `_plan_and_generate` 直达顶层 stage="write" 处理器，**整份合同**丢弃为 not_generated；报告 targets=[]、plan.count=0，而 obligations 全 UNRESOLVED/PENDING、survey 命中 11 处，扣分细节随 reset 丢失。单条跨书签编辑未按 FL-D112 的“drop 单 edit、保留目标 unresolved”语义降级，属整合同级误伤疑点。
@@ -6834,3 +6834,10 @@ H＝E×…
 - **正面证据（如实记录）**：ledger/claim-replay 硬闸门结构完整、相关测试 151 项全绿、happy path e2e 正常 complete。
 - **处理**：引擎修复 agent 已启动（F1/F2 必修+LOW 逐条，PoC 防复现回归）；结果回报后更新本条。
 - **状态**：修复中。
+
+## FL-D566 Wave-1 冒烟 B05 报告 complete 但评分存在 wrong 目标（false_complete）（2026-10-31）
+
+- 证据：`var/recall-first-evaluation/qa-wave1-dev-20261031-0b1a813/smoke/b05_mapped/score.json` — B05（弘利3个月）delivery_status=complete、edits=11，但冻结评分 10 completed / **1 wrong**（T003/G08 p216 replace：“declared site changed but the complete required obligation is absent”），交付完整性=reported_complete 1 / actually_complete 0 / false_complete 1。
+- 影响：交付门禁声称 complete 与真实目标完成度不一致，与 FL-D437 同类（假 complete）；B05 产物本身可解析且有 11 组修订痕迹，问题在完整性与门禁口径。
+- 状态：open，波一基线信号；待 dev20 全量完成后统计 false_complete 面，并交引擎组定责（目标判定 wrong 的原因与 delivery 门禁判定 complete 的原因两条线）。
+- 变更记录：2026-10-31 新增（子 agent 登记）。
