@@ -7132,6 +7132,25 @@ def _plan_target_inner(rule: dict, target: Target, inspection: DocumentInspectio
                            "location": target.location})
     if (rule_id == "G08" and len(operations) == 1
             and operations[0].get("op") == "replace"
+            and "不收取申购费" in _compact(span.text[target.start:target.end])
+            and "申购费率由基金管理人决定" in _compact(span.text[target.start:target.end])
+            and "招募说明书" in _compact(span.text[target.start:target.end])):
+        expected, issues = instantiate_slots(
+            str(operations[0].get("new_text") or ""), facts)
+        if not issues and expected:
+            # The contract already states the class split but omits the
+            # direct-sales exemption.  Replace the whole located policy sentence
+            # with the guide text instead of asking the model to splice prose.
+            return finish(PlannedEdit(
+                target_id=target.target_id, rule_id=rule_id,
+                location=target.location, start=target.start, end=target.end,
+                replacement=expected, operation="replace",
+                content_source="g08_partial_policy_replace",
+                evidence={"fixed_text": expected,
+                          "replaced_text": span.text[target.start:target.end],
+                          "guide_paragraphs": rule.get("source_paragraphs") or []}))
+    if (rule_id == "G08" and len(operations) == 1
+            and operations[0].get("op") == "replace"
             and _G08_ACTUAL_RATE in span.text[target.start:target.end]):
         expected, issues = instantiate_slots(
             str(operations[0].get("new_text") or ""), facts)
@@ -7200,9 +7219,16 @@ def _plan_target_inner(rule: dict, target: Target, inspection: DocumentInspectio
                 # the whole clause; free compose sees 注册登记费 as a protected
                 # literal and fails (美国房地产 p165).  The target quote is the
                 # full clause, so use the authorized policy text directly.
+                start = target.start
+                list_prefix = re.match(
+                    r"^\s*(?:\d+[、.．)）]|[（(]\d+[）)])\s*", span_text)
+                if start == 0 and list_prefix:
+                    # The guide replacement is the clause body; keep the source's
+                    # list numbering ("5、") instead of deleting it with the span.
+                    start = list_prefix.end()
                 return finish(PlannedEdit(
                     target_id=target.target_id, rule_id=rule_id,
-                    location=target.location, start=target.start, end=target.end,
+                    location=target.location, start=start, end=target.end,
                     replacement=expected, operation="replace",
                     content_source="g12_allocation_replace",
                     evidence={"fixed_text": expected,
