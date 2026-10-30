@@ -1735,3 +1735,11 @@
 - FL-D564 已修复验证（`986c1eb`，F-01/02/03/04/06/08；F-05/07/09 与全局喷洒桶、_global_active 跨 worker 列为产品/架构决策）。**部署条件**：/etc/fundlex-recall.env 加 FUNDLEX_TRUSTED_PROXY_HOSTS=127.0.0.1。
 - **竞态归因**：`986c1eb` 意外打包了引擎修复 agent 暂存的 delivery.py/recall_pipeline.py/semantic_contract.py 及部分测试 hunk（后续 `6fd382d` 仅标注归属）。内容完整、测试绿，不 revert；引擎 agent 剩余工作（F2/LOW）继续在工作区。后续并行 fixer 一律 `git add 指定文件` 且不跨领域触碰。
 - 仍在途：前端修复、引擎剩余项、B16 DOCX（FL-D568）、dev20 全量（PID 3919383）。
+
+## 断点补充（2026-10-31 夜，修复批全部落地）
+
+- HEAD `58eac20`（FL-D568 B16 书签：body 级半片成对移除+单 edit 探针降级，复放 validate 14/14、全套件 2309 passed/41 skipped）。此前 `8b1dc2f` 前端 R2（V1 浏览器 82 全绿，FL-D560 三项基线失败消除）。
+- **两轮盲审全部关闭**：R2 安全（986c1eb，终审 PASS）、R2 引擎（986c1eb 打包+6fd382d 归因，终审 PASS）、R2 前端（8b1dc2f，复核中）。
+- **独立复核在途**：R2 前端批次、B16 DOCX 批次。
+- **dev20 全量**：10/20（PID 3919383）。跑完→score_first_batch_20261029 --group dev→错误分析→按§6 优化闭环→冻结新版全量重跑 dev20→门槛达标→8 份留出→全量回归（含浏览器）→受控发布（publish_workspace.sh + /etc/fundlex-recall.env 加 FUNDLEX_TRUSTED_PROXY_HOSTS=127.0.0.1 + 新 engine/guide 版本）→正式 E2E（真实合同修订+Compare 全链+下载 hash 复核）→GO/NO-GO。
+- 主 agent 未办代码项：B14-03（paused=1 陈旧位）、A3-F5/F6/F7、M2、FL-D563 测试、Q3、A9-F04 测试加固。
