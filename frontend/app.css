@@ -780,3 +780,29 @@ body:has(.detail-overlay.inline-contract-detail:not([hidden]) .review-layout){ov
 .review-splitter:focus-visible::after,
 .compare-column-splitter:hover::after,.compare-column-splitter.is-dragging::after,
 .compare-column-splitter:focus-visible::after{height:38px;background:var(--fx-primary)}
+
+/* Task list: keep dates, progress, and actions aligned as independent columns. */
+.task-list-table{min-width:960px;table-layout:fixed}
+.task-list-table th:nth-child(1){width:27%}
+.task-list-table th:nth-child(2){width:8%}
+.task-list-table th:nth-child(3){width:11%}
+.task-list-table th:nth-child(4){width:12%}
+.task-list-table th:nth-child(5){width:18%}
+.task-list-table th:nth-child(6){width:19%}
+.task-list-table th:nth-child(7){width:5%}
+.task-list-table th:not(:first-child),.task-list-table td:not(:first-child){text-align:center}
+.task-list-table td:nth-child(5){text-align:left}
+.task-list-table .task-list-name{max-width:none;min-width:0}
+.task-list-table .task-progress{min-width:0;width:100%}
+.task-list-table .task-progress small{white-space:normal;line-height:1.35}
+.task-list-table .task-created-time{white-space:nowrap;font-variant-numeric:tabular-nums;color:#535e68}
+.task-list-table .btn-link{white-space:nowrap}
+.task-detail-actions{flex:1 1 100%;justify-content:flex-start;min-width:0;margin:8px 0 0}
+.task-guide-meta{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 12px;min-width:0;margin:0 0 12px;padding:9px 12px;border-left:3px solid var(--accent);border-radius:4px;background:#f8f9fa}
+.task-guide-meta span{flex:0 0 auto;color:var(--muted);font-size:12px}
+.task-guide-meta strong{min-width:0;overflow-wrap:anywhere;font-size:13px}
+@media(max-width:760px){
+  .task-detail-actions{gap:7px}
+  .task-detail-actions .btn{padding:6px 9px;font-size:12px}
+  .task-guide-meta{align-items:flex-start;flex-direction:column;gap:2px}
+}

@@ -215,6 +215,96 @@ def test_overview_units_filters_and_single_supported_mode(ui):
     assert page.locator("#import-mode").inner_text() == "合同修订"
 
 
+def test_revision_task_columns_detail_metadata_and_responsive_layout(ui):
+    task, _ = seed(ui, count=2, name="布局检查任务")
+    seed(ui, name="A排序任务")
+    page, context, _, base = ui
+    headers = {"X-FundLex-User": "browser-check"}
+    task_data = context.request.get(base + f"/api/tasks/{task}", headers=headers).json()
+    guide_id = task_data["guide_snapshot"]["version_id"]
+    guides = context.request.get(base + "/api/guides", headers=headers).json()["items"]
+    guide = next(item for item in guides if item["id"] == guide_id)
+
+    # Open by task route rather than entering through the list: the guide label
+    # must resolve even when overview never loaded the guide catalogue first.
+    page.goto(base + f"/#task?id={task}")
+    page.wait_for_selector("#doc-rows [data-detail]")
+    page.wait_for_function("!document.querySelector('#task-guide-meta').hidden")
+    assert page.locator("#task-guide-value").inner_text() == f"{guide['filename']} · 版本 {guide_id}"
+
+    page.goto(base + "/#overview")
+    row = page.locator(f'#task-rows tr:has([data-task="{task}"])')
+    row.wait_for()
+    page.fill("#task-search", "布局检查任务")
+    page.wait_for_function("document.querySelectorAll('#task-rows tr[data-row-key]').length===1")
+    page.fill("#task-search", "")
+    page.wait_for_function("document.querySelectorAll('#task-rows tr[data-row-key]').length===2")
+    page.select_option("#task-sort", "name")
+    page.wait_for_function("document.querySelector('#task-rows tr[data-row-key] .task-list-name')?.textContent==='A排序任务'")
+    assert page.locator("#task-rows .task-list-name").all_text_contents() == ["A排序任务", "布局检查任务"]
+    assert [text.strip() for text in page.locator("#view-overview .task-list-table th").all_text_contents()] == [
+        "任务", "合同份数", "成功 / 异常", "状态", "进度", "创建时间", ""
+    ]
+    assert row.locator("td").count() == 7
+    assert row.locator("td").nth(0).locator("small, .row-sub").count() == 0
+    assert row.locator("td").nth(5).inner_text().strip()
+    assert guide["filename"] not in row.inner_text()
+
+    for width in (390, 768, 1280, 1440):
+        page.set_viewport_size({"width": width, "height": 900})
+        layout = page.evaluate("""() => {
+          const wrap = document.querySelector('#view-overview .task-list-table').parentElement;
+          const table = wrap.querySelector('table');
+          const cells = [...document.querySelector('#task-rows tr').cells].map(cell => {
+            const rect = cell.getBoundingClientRect();
+            return {left: rect.left, right: rect.right};
+          });
+          return {width: innerWidth, pageWidth: document.documentElement.scrollWidth,
+            left: wrap.getBoundingClientRect().left, right: wrap.getBoundingClientRect().right,
+            clientWidth: wrap.clientWidth, tableWidth: table.scrollWidth, cells};
+        }""")
+        assert layout["pageWidth"] <= width + 1
+        assert layout["left"] >= -1 and layout["right"] <= width + 1
+        assert layout["tableWidth"] >= layout["clientWidth"]
+        assert all(layout["cells"][i]["left"] >= layout["cells"][i - 1]["right"] - 1
+                   for i in range(1, len(layout["cells"])))
+
+    row.locator("[data-task]").click()
+    page.wait_for_selector("#doc-rows [data-detail]")
+    assert page.locator("#result-counts, #doc-scope, #doc-scope-note").count() == 0
+    assert page.locator("#doc-rows .row-sub").count() == 0
+    assert "本次交付" not in page.inner_text("#view-task")
+    assert " · 匹配 " not in page.inner_text("#view-task")
+
+    for width in (390, 768, 1280, 1440):
+        page.set_viewport_size({"width": width, "height": 900})
+        layout = page.evaluate("""() => {
+          const actions = document.querySelector('.task-detail-actions');
+          const card = actions.closest('.card').getBoundingClientRect();
+          const buttons = [...actions.querySelectorAll('.btn')].map(button => {
+            const rect = button.getBoundingClientRect();
+            return {left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom};
+          });
+          const guide = document.querySelector('#task-guide-meta strong');
+          return {width: innerWidth, pageWidth: document.documentElement.scrollWidth,
+            cardLeft: card.left, cardRight: card.right,
+            actionsLeft: actions.getBoundingClientRect().left,
+            actionsRight: actions.getBoundingClientRect().right,
+            buttons, guideWidth: guide.clientWidth, guideScrollWidth: guide.scrollWidth};
+        }""")
+        assert layout["pageWidth"] <= width + 1
+        assert layout["actionsLeft"] >= layout["cardLeft"] - 1
+        assert layout["actionsRight"] <= layout["cardRight"] + 1
+        assert layout["guideScrollWidth"] <= layout["guideWidth"] + 1
+        for i, first in enumerate(layout["buttons"]):
+            assert first["left"] >= layout["cardLeft"] - 1
+            assert first["right"] <= layout["cardRight"] + 1
+            for second in layout["buttons"][i + 1:]:
+                overlap_x = min(first["right"], second["right"]) - max(first["left"], second["left"])
+                overlap_y = min(first["bottom"], second["bottom"]) - max(first["top"], second["top"])
+                assert overlap_x <= 0 or overlap_y <= 0
+
+
 def test_delivery_counts_and_worker_filter_match_api(ui):
     states = [("succeeded", "eligible", "complete"), ("succeeded", "eligible", "incomplete"),
               ("failed", "failed", "incomplete"), ("succeeded", "excluded_by_fund_type", "not_generated"),
