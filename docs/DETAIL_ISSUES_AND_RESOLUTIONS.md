@@ -6487,3 +6487,19 @@ H＝E×…
 - 处理（已实施）：G08 replace且目标span同时含“不收取申购费”“申购费率由基金管理人决定”“招募说明书”时，直接用instantiate后的guide new_text整句替换，不再让模型自由拼接。新增p292回归。
 - 状态：**代码修复+定向测试通过；B17复跑`run-af`进行中**。
 - 变更记录：2026-10-30新增。
+
+## FL-D536 存在FINAL_COVERAGE_UNRESOLVED时仍标complete（2026-10-30）
+
+- 发现日期：2026-10-30，B15 `sem-run-ac`。P1（错误complete）。
+- 问题与影响：`delivery_gate.counts.UNRESOLVED=1`、`open_obligations=1`，report仍为`complete`；review_assisted只把`CLAIM_`字样当作阻断，`FINAL_COVERAGE_UNRESOLVED`被当成普通review item。即使根因是摘要scope未注册，状态本身已违反“不得错误complete”。
+- 处理（已实施）：`_delivery_complete`在ledger存在open item且reason含`CLAIM_`/`FINAL_`/`COVERAGE_UNRESOLVED`时一律拒绝complete；AUDIT_NOT_COMPLETED仍按原review_assisted语义保留。新增`FINAL_COVERAGE_UNRESOLVED`门禁测试。
+- 状态：**代码修复+定向测试通过；真实复跑待用户恢复模型调用**。
+- 变更记录：2026-10-30新增。
+
+## FL-D537 规则级sweep仲裁误用有站点证明关闭其他站点finding（2026-10-30）
+
+- 发现日期：2026-10-30，离线全量回归。P1（回归）。
+- 问题与影响：为修G05“规则本无旧条款却被sweep要求新增”新增的规则级仲裁，把“该规则全部操作都有PASS证明”误当成可关闭任意站点的finding；G99 delete在p0有证明时，p1的另一条款finding被错误resolved，违反FL-D115“另一站点不能借用删除证明”。
+- 处理（已实施）：规则级仲裁只接受**无站点**的VERIFIED_ABSENT/ALREADY_SATISFIED证书（`sites`为空），有站点的效果证明仍必须按finding自身location/operation仲裁。恢复两个回归测试。
+- 状态：**代码修复+定向回归通过；全量回归`full-pytest-oct30b`运行中**。
+- 变更记录：2026-10-30新增。
