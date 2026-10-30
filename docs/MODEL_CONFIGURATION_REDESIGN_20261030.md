@@ -4,7 +4,7 @@
 
 用户需要配置自己的供应商、模型与API Key，不是调整超时/输出token/重试/上下文字符或编写JSON。
 检查模型和执行模型必须可分别配置。此前实现将供应商和Key锁为系统配置、默认隐藏复核设置，偏离需求。
-独立页面入口保留。BYOK 已在独立开发工作树实施初版；**尚未提交或发布**。
+独立页面入口保留。BYOK已按生产发布基线移植并部署；实际生产前端当前仍默认V1。
 
 ## 页面结构
 
@@ -36,9 +36,11 @@
   不展示含密钥/请求头/内部路径的原始供应商错误。不能把“保存成功”写成“连接验证成功”。
 - 连接测试是用户明确触发的真实请求，可能产生少量费用，给出简短说明；不提交合同文本。
   当前真实调用暂停保持，未经恢复授权不由agent自动测试。模型列表/最小响应测试与实际任务能力区别标记。
-- 已实现owner隔离的供应商连接：Fernet 加密保存，主密钥通过部署变量
+- 已实现owner隔离的供应商连接：Fernet加密保存，主密钥通过部署变量
   `FUNDLEX_MODEL_SECRETS_KEY`注入；API/任务快照/报告不返回密钥，Worker按不可变连接版本引用解密。
-  部署前必须生成高熵密钥并限权备份；丢失或轮换会使既有密文不可恢复。开发/生产运行环境配置仍未完成。
+  生产已配置此变量并完成Fernet往返检查；0600配置备份为
+  `/var/backups/fundlex/fundlex-recall-env-with-byok-key-20261030-225108`，独立主密钥备份位于
+  `/var/backups/fundlex/fundlex-model-secrets-key-20261030-224747/FUNDLEX_MODEL_SECRETS_KEY.env`（父目录0700、文件0600）。
 - 用户自填服务地址只能携带该用户为该连接提供的Key，绝不携带系统共享Key或任意服务器环境变量。
   限制公网HTTPS出口、内网/回环/链路本地/云元数据地址及重定向/DNS重绑定；不是开放任意服务器请求代理。
 - 两个角色已接入primary/review真实路由：V2任务固定primary为执行、review为检查；两者可独立选择个人连接或对应角色的系统默认端点配置。
@@ -50,8 +52,18 @@
 - V1/V2模型页均提供始终可见的执行/检查卡片，分别选择系统默认或个人模型；可分别设置供应商、访问密钥和模型名。提供自定义兼容服务公网HTTPS地址、复制配置、恢复默认与费用说明；用户页面不暴露timeout/token/retry/context/JSON选项。连接测试先由用户确认，可能产生少量费用，不发送合同。
 - 密钥owner隔离加密存储；任务/批次仅引用不可变连接ID，按任务owner解析。创建任务时在插入任务的同一事务内读取设置（MySQL对设置行加锁），避免旋转/恢复并发回收刚被任务快照引用的密钥。Worker在成功/异常后关闭本任务新建的RoleGateway。更新/恢复设置时，仍被任务快照引用的连接保留；无引用的密文可回收。自定义地址只使用个人Key，DNS所有解析地址均须公网、连接固定到校验IP、保留TLS SNI/Host、禁代理和重定向。
 - 本轮真实供应商/模型调用为 **0**。测试均使用合成Key与MockTransport；尚未确认各预设供应商账号/模型实际可用，也未执行真实合同用户端到端。
-- 最新离线验证记录在FL-D539：BYOK定向后端102 passed，另task API/Worker/recall/store相关套件88 passed；V1/V2浏览器模型页专项4 passed；V2 typecheck/lint、Vitest 16 passed、build通过。生产仍运行旧版本，不具备本次BYOK能力。
-- 发布前置：核对生产`cryptography`运行依赖；设置并限权备份`FUNDLEX_MODEL_SECRETS_KEY`；此变量缺失会阻止个人Key保存，备份遗失会造成密文不可读。前置完成后再做无模型调用的部署页面验收。最终合同交付仍须按项目规定另行完成。
+- 发布候选：干净生产基线 `877a980e96d740f09e17b47bcad103ccfbb0f3a2` 上的代码提交
+  `477ba5a488d7b736bbc56fdb650f9e42700eda41` 已发布。候选相关后端测试167 passed/1 skipped；
+  V1/V2浏览器模型配置专项4 passed；前端typecheck/lint、Vitest16 passed、production build通过。
+- 生产无模型调用验收：V1普通member登录后分别保存执行/检查的不同供应商、模型和合成Key，刷新回读正常；
+  页面输入、页面正文、API响应均未回显Key，生产DB中的两条密文可由部署Fernet key解密为owner/id绑定payload；
+  临时用户及设置已清理。连接测试、合同任务/上传、真实供应商调用均为0。证据见FL-D539及
+  `/tmp/opencode/user-config-byok-deployment-smoke-2.json`。生产`FUNDLEX_FRONTEND_VERSION`未设置，默认V1；
+  React V2构建与本地专项通过，但本次未切换生产前端模式。
+- 生产venv已安装锁定依赖`cryptography==46.0.7`（以及`cffi==2.1.1`、`pycparser==3.12`）。
+  DB+对象一致性备份`/var/backups/fundlex/fundlex-20261030-225006-before-byok-477ba5a`完整性验证通过，
+  但未做数据库导入恢复演练。MySQL任务快照行锁仍未由生产并发测试验证。正式真实合同交付E2E仍未完成，
+  不以部署或页面验收冒称合同修改最终通过。
 
 ## 验收建议
 
