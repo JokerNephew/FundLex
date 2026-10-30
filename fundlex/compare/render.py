@@ -287,7 +287,7 @@ def _deleted_paragraphs(spans: Iterable[TextSpan], diff_id: str, left_blocks: di
         else:
             tag, location = "p", ""
         paragraphs.append(
-            f'<{tag} class="{classes}" data-location="{location}">'
+            f'<{tag} class="{classes}" data-block-id="{escape(group[0].block_id, quote=True)}" data-location="{location}">'
             f'<del class="compare-del" data-diff-id="{escape(diff_id, quote=True)}">{escape(text)}</del>'
             f'<span class="compare-paragraph-mark" aria-hidden="true"></span></{tag}>')
     return paragraphs

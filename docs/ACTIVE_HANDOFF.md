@@ -1,5 +1,15 @@
 # FundLex 当前断点（ACTIVE_HANDOFF）
 
+## 2026-10-30 合同比对位置对齐修复（未发布，FL-D539）
+
+- 用户要求继续修Word/双栏位置不对应；保留所有选择、生成、下载、分栏及长合同性能。本机身份已核验；公网出口观测112.120.123.60，与历史出口不同，不据此误判机器。
+- 分支`codex/comprehensive-remediation-20261028`，起点HEAD`364dd2f`；本轮文件`frontend/compare.{js,css}`、`fundlex/compare/{api,models,render}.py`、`tests/browser/test_v1_frontend_remediation.py`、`tests/test_compare_api.py`。其它guide_generation/config分析改动为并行工作，不提交覆盖。
+- 已做：完整alignment组返回+旧结果重建，删除段落L来源ID，段落锚点滚动；修虚拟高度zoom换算、窗口替换clamp及实际可见锚点保护、差异跳转同步取消。V1 **15 passed**、Compare **133 passed/6 skipped**；650块插删/不等段长/双向与双栏覆盖。真实1421差异诊断及差异点击通过，无页面错误；性能open1.44s/Word平均53ms/双栏81ms。详见FL-D539，未宣称本轮全项目回归。
+- 当前发布阻点：15:34观测生产五服务inactive、公网502；另一会话存在最新`codex/user-config-release-20261030`候选`cdcf52c`，本轮不抢改/重启他人发布事务。旧Compare发布线`codex/compare-save-hotfix`停在`5d5da7c`，不能不核实就再次从旧基线整仓发布，否则会回退新配置功能。
+- 下一动作：核实生产恢复和最新发布commit→将本轮独立代码commit移植到最新生产基线的干净worktree→候选import/Compare测试/发布dry-run→受控发布→正式注册登录上传真实DOCX、Compare Worker、Word/双栏双向滚动/差异点击/拖宽/选择生成下载。比对不需模型，本轮0调用；不启动修订引擎模型任务（另会话最新暂停指令仍保留）。
+- 证据脚本`/tmp/opencode/diagnose_long_align.py`、`diagnose_align3.py`、`v1_compare_click_perf.py`；性能`/tmp/opencode/align-perf-final.log`。无本轮后台进程或子agent；文件/脚本不含凭据。
+- 发布续记：五服务已恢复active；`/opt/.fundlex-publish-aiGdMv/release-record.json`确认最新发布`cdcf52c`，后续以此为基线追加Compare补丁，不回退用户配置功能。
+
 ## 2026-10-30 最新断点（真实模型暂停，等待用户恢复）
 
 - **用户最新指令（2026-10-30）**：有需要可继续开发，但**暂时不要跑真实模型调用**。当前没有运行中的 `recall_run`；恢复真实运行前需用户明确同意。

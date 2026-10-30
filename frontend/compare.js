@@ -3,7 +3,7 @@
   const api = window.FundLexWorkbench || {};
   const $ = id => document.getElementById(id);
   const esc = api.esc || (v => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])));
-  const state = { tasks: [], task: null, pairs: [], pairIndex: 0, selectedPairId: null, view: null, selection: null, selectionDraft: null, selectionDirty: false, selectionSaving: false, selectionToken: 0, selectionSaveToken: 0, poll: null, requestToken: 0, lineFrame: null, scrollFrame: null, scrollSource: null, identityToken: 0, listToken: 0, inputs: [{}], uploadDraft: null, splitRatio: .5, pendingSplitRatio: .5, splitDragging: false, leftMarks: null, rightMarks: null, mergedMarks: null, wordLeftMarks: null, wordRightMarks: null, viewMode: 'word', classicSide: 'left', classicRendered: false, wordSourcesRendered: false, diffPositions: null, docs: null, rawDocs: null };
+  const state = { tasks: [], task: null, pairs: [], pairIndex: 0, selectedPairId: null, view: null, selection: null, selectionDraft: null, selectionDirty: false, selectionSaving: false, selectionToken: 0, selectionSaveToken: 0, poll: null, requestToken: 0, lineFrame: null, scrollFrame: null, scrollSource: null, syncTargets: new Set(), syncSettle: null, identityToken: 0, listToken: 0, inputs: [{}], uploadDraft: null, splitRatio: .5, pendingSplitRatio: .5, splitDragging: false, leftMarks: null, rightMarks: null, mergedMarks: null, wordLeftMarks: null, wordRightMarks: null, viewMode: 'word', classicSide: 'left', classicRendered: false, wordSourcesRendered: false, diffPositions: null, docs: null, rawDocs: null, alignment: null };
   const SPLIT_KEY = 'fundlex-compare-split-ratio', SPLIT_GUTTER = 28;
   const clampSplitRatio = value => { const number = Number(value); return value !== null && value !== '' && Number.isFinite(number) ? Math.min(.8, Math.max(.2, number)) : .5; };
   function storedSplitRatio() { try { return clampSplitRatio(localStorage.getItem(SPLIT_KEY)); } catch { return .5; } }
@@ -156,15 +156,16 @@
   }
   function bindPanelSplitters() {
     if (!window.FundLexColumnSplitter) return;
-    let frame = null;
+    let frame = null, alignTimer = null;
     const refresh = () => {
       state.diffPositions = null;
-      if (frame) return;
-      frame = requestAnimationFrame(() => {
+      if (!frame) frame = requestAnimationFrame(() => {
         frame = null;
         refreshVirtualLayouts();
         drawLines();
       });
+      clearTimeout(alignTimer);
+      alignTimer = setTimeout(alignPanels, 160);
     };
     window.FundLexColumnSplitter($('compare-rail-splitter'), $('compare-view-body'), document.querySelector('.compare-word-revisions'), {
       key: 'fundlex-compare-revisions-width',
@@ -241,24 +242,193 @@
   function visiblePanels() {
     return allPanels().filter(pane => pane.offsetParent !== null && pane.clientHeight > 0);
   }
+  function buildAlignmentModel() {
+    const left = state.docs?.left, right = state.docs?.right, merged = state.docs?.merged;
+    if (!left || !right) return null;
+    const lookup = doc => {
+      if (doc.blockIndex) return doc.blockIndex;
+      const index = new Map();
+      doc.blocks.forEach((block, position) => {
+        [block.blockId, ...(block.blockIds || []), ...(block.diffIds || [])].filter(Boolean)
+          .forEach(id => index.set(id, position));
+      });
+      return index;
+    };
+    const leftLookup = lookup(left), rightLookup = lookup(right);
+    const anchors = [{left: 0, right: 0}];
+    const groups=state.view?.alignment||[];
+    for(const group of groups){
+      const ls=(group.left||[]).map(id=>leftLookup.get(id)).filter(Number.isInteger);
+      const rs=(group.right||[]).map(id=>rightLookup.get(id)).filter(Number.isInteger);
+      if(!ls.length||!rs.length)continue;
+      const count=Math.max(ls.length,rs.length);
+      for(let i=0;i<count;i++)anchors.push({left:ls[Math.min(ls.length-1,Math.floor(i*ls.length/count))],right:rs[Math.min(rs.length-1,Math.floor(i*rs.length/count))]});
+    }
+    for (const diff of groups.length?[]:state.view?.diffs || []) {
+      const leftBlock = diff.left?.block_id || diff.left_anchor?.block_id || diff.left_spans?.[0]?.block_id;
+      const rightBlock = diff.right?.block_id || diff.right_anchor?.block_id || diff.right_spans?.[0]?.block_id;
+      const leftIndex = leftLookup.get(leftBlock);
+      const rightIndex = rightLookup.get(rightBlock);
+      if (Number.isInteger(leftIndex) && Number.isInteger(rightIndex)) {
+        anchors.push({left: leftIndex, right: rightIndex});
+      }
+    }
+    anchors.push({left: left.blocks.length - 1, right: right.blocks.length - 1});
+    anchors.sort((a, b) => a.left - b.left || a.right - b.right);
+    const clean = [];
+    let lastRight = -1;
+    for (const anchor of anchors) {
+      if (anchor.left < 0 || anchor.right < 0) continue;
+      if (anchor.right <= lastRight && anchor.right !== clean[clean.length - 1]?.right) continue;
+      clean.push(anchor);
+      lastRight = Math.max(lastRight, anchor.right);
+    }
+    if (!clean.length || clean[0].left !== 0 || clean[0].right !== 0) clean.unshift({left: 0, right: 0});
+    const end = {left: left.blocks.length - 1, right: right.blocks.length - 1};
+    if (clean[clean.length - 1].left !== end.left || clean[clean.length - 1].right !== end.right) clean.push(end);
+
+    const rightToMerged = new Array(right.blocks.length).fill(-1);
+    const mergedToRight = new Array(merged?.blocks.length || 0).fill(-1);
+    if (merged) {
+      const mergedRightIndex = lookup(merged);
+      right.blocks.forEach((block, index) => {
+        const value = mergedRightIndex.get(block.blockId);
+        if (Number.isInteger(value)) rightToMerged[index] = value;
+      });
+      let previous = 0;
+      for (let i = 0; i < rightToMerged.length; i++) {
+        if (rightToMerged[i] < 0) rightToMerged[i] = previous;
+        else previous = rightToMerged[i];
+      }
+      const rightIndexByBlock = rightLookup;
+      let nearest = 0;
+      for (let i = 0; i < mergedToRight.length; i++) {
+        const value = rightIndexByBlock.get(merged.blocks[i].blockId);
+        if (Number.isInteger(value)) { mergedToRight[i] = value; nearest = value; }
+        else mergedToRight[i] = nearest;
+      }
+      for (let i = 1; i < rightToMerged.length; i++) rightToMerged[i] = Math.max(rightToMerged[i], rightToMerged[i - 1]);
+      for (let i = 1; i < mergedToRight.length; i++) mergedToRight[i] = Math.max(mergedToRight[i], mergedToRight[i - 1]);
+    }
+    const model={anchors: clean, rightToMerged, mergedToRight};
+    const mergedLookup=merged?lookup(merged):new Map();
+    model.leftToMerged=left.blocks.map((block,i)=>mergedLookup.get(block.blockId)??rightToMerged[mapAnchorIndex(i,'left','right',model)]);
+    model.mergedToLeft=(merged?.blocks||[]).map((block,i)=>leftLookup.get(block.blockId)??mapAnchorIndex(mergedToRight[i],'right','left',model));
+    return model;
+  }
+  function alignmentModel() {
+    if (state.alignment === null) state.alignment = buildAlignmentModel();
+    return state.alignment;
+  }
+  function mapAnchorIndex(index, from, to, model) {
+    const anchors = model.anchors;
+    if (!anchors.length) return index;
+    if (index <= anchors[0][from]) return anchors[0][to];
+    for (let i = 1; i < anchors.length; i++) {
+      const a = anchors[i - 1], b = anchors[i];
+      if (index <= b[from]) {
+        if (b[from] === a[from]) return b[to];
+        const ratio = (index - a[from]) / (b[from] - a[from]);
+        return Math.round(a[to] + ratio * (b[to] - a[to]));
+      }
+    }
+    return anchors[anchors.length - 1][to];
+  }
   function syncPaneScroll(source) {
     if(state.focusScrolling){drawLines();return;}
     if (window.matchMedia('(max-width: 760px)').matches) { drawLines(); return; }
-    if (state.scrollSource && state.scrollSource !== source) { drawLines(); return; }
+    if (state.syncTargets.has(source)) { drawLines(); return; }
+    if (state.scrollFrame !== null) { drawLines(); return; }
     const targets = visiblePanels().filter(p => p !== source);
     if (!targets.length) return;
     state.scrollSource = source;
-    cancelAnimationFrame(state.scrollFrame);
     state.scrollFrame = requestAnimationFrame(() => {
-      const sourceMax = Math.max(0, source.scrollHeight - source.clientHeight);
-      const ratio = sourceMax ? source.scrollTop / sourceMax : 0;
-      targets.forEach(target => {
-        const targetMax = Math.max(0, target.scrollHeight - target.clientHeight);
-        target.scrollTop = ratio * targetMax;
-      });
+      state.scrollFrame = null;
+      targets.forEach(target => state.syncTargets.add(target));
+      const sourceDoc = source._virtualDoc;
+      const view=state.view;
+      sourceDoc?.refresh(false);
+      const anchor = sourceDoc?.visibleBlock?.();
+      const model = alignmentModel();
+      if (anchor && model) {
+        // Align by paragraph position, not by scrollbar ratio. Diff anchors
+        // give the correspondence between the two source documents; merged
+        // blocks then map through the right-side block id.
+        let leftIndex = anchor.index, rightIndex = anchor.index;
+        if (source.id === 'compare-word-merged-pane') {
+          rightIndex = model.mergedToRight[anchor.index] ?? anchor.index;
+          leftIndex = model.mergedToLeft[anchor.index];
+        } else if (source.id === 'compare-word-left-pane' || source.id === 'compare-left-pane') {
+          rightIndex = mapAnchorIndex(leftIndex, 'left', 'right', model);
+        } else {
+          leftIndex = mapAnchorIndex(rightIndex, 'right', 'left', model);
+        }
+        const targetIndex = target => {
+          if (target.id === 'compare-word-merged-pane') return source.id.includes('left')?model.leftToMerged[leftIndex]:model.rightToMerged[rightIndex] ?? rightIndex;
+          if (target.id === 'compare-word-left-pane' || target.id === 'compare-left-pane') return leftIndex;
+          return rightIndex;
+        };
+        targets.forEach(target => {
+          const doc = target._virtualDoc;
+          if (!doc) return;
+          if (doc.scrollToBlockIndexEstimate) doc.scrollToBlockIndexEstimate(targetIndex(target), anchor.fraction);
+          else if (doc.scrollToBlockIndex) doc.scrollToBlockIndex(targetIndex(target), anchor.fraction, false);
+        });
+        clearTimeout(state.syncSettle);
+        state.syncSettle = setTimeout(() => {
+          if(state.view!==view||source._virtualDoc!==sourceDoc||!source.clientHeight)return;
+          const latest = sourceDoc?.visibleBlock?.();
+          const currentModel = alignmentModel();
+          if (!latest || !currentModel) return;
+          let latestLeft = latest.index, latestRight = latest.index;
+          if (source.id === 'compare-word-merged-pane') {
+            latestRight = currentModel.mergedToRight[latest.index] ?? latest.index;
+            latestLeft = currentModel.mergedToLeft[latest.index];
+          } else if (source.id === 'compare-word-left-pane' || source.id === 'compare-left-pane') {
+            latestRight = mapAnchorIndex(latestLeft, 'left', 'right', currentModel);
+          } else {
+            latestLeft = mapAnchorIndex(latestRight, 'right', 'left', currentModel);
+          }
+          targets.forEach(target => {
+            const doc = target._virtualDoc;
+            if (!doc?.scrollToBlockIndex) return;
+            const index = target.id === 'compare-word-merged-pane'
+              ? (source.id.includes('left')?currentModel.leftToMerged[latestLeft]:currentModel.rightToMerged[latestRight] ?? latestRight)
+              : target.id === 'compare-word-left-pane' || target.id === 'compare-left-pane'
+                ? latestLeft : latestRight;
+            doc.scrollToBlockIndex(index, latest.fraction, false);
+          });
+        }, 150);
+      } else if (anchor) {
+        const sourceLast = Math.max(1, sourceDoc.blocks.length - 1);
+        const ratio = anchor.index / sourceLast;
+        targets.forEach(target => {
+          const doc = target._virtualDoc;
+          if (!doc?.scrollToBlockIndex) return;
+          const targetLast = Math.max(1, doc.blocks.length - 1);
+          doc.scrollToBlockIndex(Math.round(ratio * targetLast), anchor.fraction, false);
+        });
+      } else {
+        const sourceMax = Math.max(0, source.scrollHeight - source.clientHeight);
+        const ratio = sourceMax ? source.scrollTop / sourceMax : 0;
+        targets.forEach(target => {
+          const targetMax = Math.max(0, target.scrollHeight - target.clientHeight);
+          target.scrollTop = ratio * targetMax;
+        });
+      }
       drawLines();
-      state.scrollFrame = requestAnimationFrame(() => { state.scrollSource = null; state.scrollFrame = null; drawLines(); });
+      clearTimeout(state.syncRelease);
+      state.syncRelease=setTimeout(() => {
+        state.syncTargets.clear();
+        state.scrollSource = null;
+        drawLines();
+      }, 220);
     });
+  }
+  function alignPanels() {
+    if (!state.view || $('compare-viewer').hidden) return;
+    const source = state.viewMode === 'classic' ? $('compare-left-pane') : $('compare-word-merged-pane');
+    if (source) syncPaneScroll(source);
   }
   function normalizeSelection(payload) {
     if(!payload)return null;
@@ -465,9 +635,11 @@
     document.querySelector(`.compare-diff-item[data-compare-diff="${CSS.escape(item.id)}"]`)?.classList.add('is-active');
   }
   function focusDiff(index) {
+    cancelAnimationFrame(state.scrollFrame);state.scrollFrame=null;
+    clearTimeout(state.syncSettle);state.syncTargets.clear();state.focusScrolling=true;
     const ds=visibleDiffs();
     document.querySelectorAll('.compare-diff.is-active,.compare-diff-item.is-active,.compare-ins.is-active,.compare-del.is-active').forEach(n=>n.classList.remove('is-active'));
-    if(!ds.length){$('compare-diff-counter').textContent='0 / 0';return;}
+    if(!ds.length){$('compare-diff-counter').textContent='0 / 0';state.focusScrolling=false;return;}
     state.diffIndex=(index+ds.length)%ds.length;const id=ds[state.diffIndex].id,diff=ds[state.diffIndex];
     const selector=`[data-diff-id="${CSS.escape(id)}"]`;
     const paneIds=[...WORD_PANES,...CLASSIC_PANES];
@@ -588,7 +760,7 @@
       this.container=container; this.blocks=document.blocks||[]; this.style=document.style||'';
       this.chunkSize=options.chunkSize||20; this.overscan=options.overscan||2;
       this.charsPerLine=options.charsPerLine||46; this.merged=Boolean(options.merged);
-      this.onChange=options.onChange||null; this.chunks=[]; this.first=0; this.last=0; this.frame=null;
+      this.onChange=options.onChange||null; this.chunks=[]; this.first=0; this.last=0; this.frame=null; this.anchorLockUntil=0;
       this.blockIndex=new Map(); this.blocks.forEach((block,index)=>[block.blockId,...(block.blockIds||[]),...(block.diffIds||[])].filter(Boolean).forEach(id=>this.blockIndex.set(id,index)));
       this.scrollHandler=()=>this.schedule();
       this.container.addEventListener('scroll',this.scrollHandler,{passive:true});
@@ -616,6 +788,7 @@
       this.windowEl=document.createElement('div');this.windowEl.className='compare-virtual-window';
       this.bottom=document.createElement('div');this.bottom.className='compare-virtual-spacer';
       wrapper.append(this.top,this.windowEl,this.bottom);this.container.append(wrapper);
+      this.scale=Number.parseFloat(getComputedStyle(wrapper).zoom)||1;
       if(!this.blocks.length){
         const empty=document.createElement('p');empty.className='compare-block compare-empty';empty.textContent='暂无可呈现内容。';this.windowEl.append(empty);return;
       }
@@ -638,6 +811,13 @@
       const [first,last]=forcedRange||this.currentRange(this.container.scrollTop,this.container.clientHeight||600);
       if(!force&&first===this.first&&last===this.last)return;
       const anchor=this.anchor(),anchorTop=this.totalBefore(anchor.index);
+      const visible=!forcedRange?this.visibleBlock():null;
+      const visibleNode=visible?this.chunks.find(chunk=>visible.index>=chunk.start&&visible.index<chunk.end)?.el?.children[visible.index%this.chunkSize]:null;
+      const visibleY=visibleNode?.getBoundingClientRect().top;
+      const previousScroll=this.container.scrollTop;
+      // Keep the scroll range alive while replacing mounted chunks. Otherwise
+      // the browser clamps scrollTop before the new spacers are installed.
+      this.wrapper.style.minHeight=`${this.container.scrollHeight/this.scale}px`;
       this.first=first;this.last=last;
       for(let i=0;i<this.chunks.length;i++){const chunk=this.chunks[i];if((i<first||i>=last)&&chunk.el){chunk.el.remove();chunk.el=null;chunk.measured=false;}}
       for(let i=first;i<last;i++){
@@ -654,9 +834,14 @@
       }
       this.windowEl.replaceChildren(...this.chunks.slice(first,last).map(chunk=>chunk.el).filter(Boolean));
       for(let i=first;i<last;i++){const chunk=this.chunks[i];if(!chunk.measured&&chunk.el){chunk.height=Math.max(1,chunk.el.getBoundingClientRect().height);chunk.measured=true;}}
-      this.top.style.height=`${this.totalBefore(first)}px`;
-      this.bottom.style.height=`${this.totalAfter(last)}px`;
-      if(anchor.index>=first&&anchor.index<last){
+      this.top.style.height=`${this.totalBefore(first)/this.scale}px`;
+      this.bottom.style.height=`${this.totalAfter(last)/this.scale}px`;
+      this.wrapper.style.minHeight='';
+      this.container.scrollTop=previousScroll;
+      const retained=visible?this.chunks.find(chunk=>visible.index>=chunk.start&&visible.index<chunk.end)?.el?.children[visible.index%this.chunkSize]:null;
+      if(retained&&visibleY!==undefined){
+        this.container.scrollTop+=retained.getBoundingClientRect().top-visibleY;
+      }else if(anchor.index>=first&&anchor.index<last&&performance.now()>=this.anchorLockUntil){
         const nextTop=this.totalBefore(anchor.index);
         if(Math.abs(nextTop-anchorTop)>.5)this.container.scrollTop=nextTop+anchor.offset;
       }
@@ -664,6 +849,56 @@
     }
     resetMeasurements(){
       for(const chunk of this.chunks){chunk.measured=false;}
+    }
+    visibleBlock(){
+      const top=this.container.scrollTop, paneRect=this.container.getBoundingClientRect();
+      for(let ci=this.first;ci<this.last;ci++){
+        const chunk=this.chunks[ci], host=chunk?.el;
+        if(!host)continue;
+        for(let offset=0;offset<host.children.length;offset++){
+          const node=host.children[offset], rect=node.getBoundingClientRect();
+          const nodeTop=rect.top-paneRect.top+top;
+          if(nodeTop+rect.height>top+1){
+            const index=Math.min(this.blocks.length-1,chunk.start+offset);
+            return {index,fraction:Math.max(0,Math.min(1,(top-nodeTop)/Math.max(1,rect.height)))};
+          }
+        }
+      }
+      return null;
+    }
+    scrollToBlockIndexEstimate(index,fraction=0){
+      if(!this.blocks.length)return;
+      const targetIndex=Math.max(0,Math.min(this.blocks.length-1,Math.round(index)));
+      let chunkIndex=0;
+      for(let i=0;i<this.chunks.length;i++){if(targetIndex<this.chunks[i].end){chunkIndex=i;break;}}
+      const chunk=this.chunks[chunkIndex];
+      let top=this.totalBefore(chunkIndex);
+      for(let i=chunk.start;i<targetIndex;i++)top+=this.estimate(this.blocks[i]);
+      const height=this.estimate(this.blocks[targetIndex]);
+      this.anchorLockUntil=performance.now()+220;
+      this.container.scrollTop=Math.max(0,top+Math.max(0,Math.min(1,fraction))*height);
+    }
+    scrollToBlockIndex(index,fraction=0,settle=true){
+      if(!this.blocks.length)return false;
+      this.anchorLockUntil=performance.now()+220;
+      const targetIndex=Math.max(0,Math.min(this.blocks.length-1,Math.round(index)));
+      let chunkIndex=0;
+      for(let i=0;i<this.chunks.length;i++){if(targetIndex<this.chunks[i].end){chunkIndex=i;break;}}
+      const chunk=this.chunks[chunkIndex];
+      const range=[Math.max(0,chunkIndex-1),Math.min(this.chunks.length,chunkIndex+2)];
+      const place=()=>{
+        const target=chunk?.el?.children[targetIndex-chunk.start];
+        if(!target)return false;
+        const paneRect=this.container.getBoundingClientRect(),targetRect=target.getBoundingClientRect();
+        const targetTop=targetRect.top-paneRect.top+this.container.scrollTop;
+        this.container.scrollTop=Math.max(0,targetTop+Math.max(0,Math.min(1,fraction))*targetRect.height);
+        return true;
+      };
+      this.refresh(true,range);
+      const found=place();
+      this.refresh(true);place();
+      if(settle)requestAnimationFrame(()=>{this.refresh(true);place();});
+      return found;
     }
     scrollToBlock(blockId){
       const index=this.blockIndex.get(blockId);if(index===undefined)return false;
@@ -694,6 +929,11 @@
   function virtualize(container, document, options={}){
     if(!container)return null;
     if(container._virtualDoc)container._virtualDoc.destroy();
+    // Small and medium contracts fit comfortably in one chunk. Keeping every
+    // paragraph mounted removes measurement jumps during linked scrolling;
+    // large contracts keep the 20-block window for first-paint performance.
+    const blockCount=(document.blocks||[]).length;
+    if(!options.chunkSize&&blockCount&&blockCount<=400)options={...options,chunkSize:blockCount};
     const instance=new VirtualDocument(container,document,options);
     container._virtualDoc=instance;
     return instance;
@@ -712,7 +952,7 @@
   function clearVirtual(container){if(container?._virtualDoc){container._virtualDoc.destroy();container._virtualDoc=null;}}
   function ensureDoc(side){
     if(!state.docs)state.docs={};
-    if(!state.docs[side])state.docs[side]=parseVirtualDocument(state.rawDocs?.[side]||'');
+    if(!state.docs[side]){state.docs[side]=parseVirtualDocument(state.rawDocs?.[side]||'');state.alignment=null;}
     return state.docs[side];
   }
   function renderWordSources() {
@@ -739,7 +979,7 @@
     document.querySelector('.compare-pair-status.is-selected')?.focus?.();
   }
   function renderViewer(payload) {
-    state.view=payload; state.diffIndex=0; const d=payload.diffs||[]; setFullscreenViewer(true);
+    state.view=payload; state.alignment=null; state.diffIndex=0; const d=payload.diffs||[]; setFullscreenViewer(true);
     const pairLabel=payload.pair?.label||'合同比对';
     $('compare-pair-title').textContent=pairLabel;
     const leftName=payload.left?.name||'合同A',rightName=payload.right?.name||'合同B';
@@ -851,8 +1091,12 @@
       document.addEventListener('change',e=>{const choice=e.target.closest('[data-selection-choice]');if(choice){chooseSelection(choice.dataset.diffId,choice.value);return;}const row=e.target.closest('.compare-pair-input');if(row&&e.target.matches('input[type=file]')){const i=Number(row.dataset.pairIndex),entry=state.inputs[i]||(state.inputs[i]={});entry[e.target.matches('[data-compare-left]')?'_left':'_right']=e.target.files?.[0]||null;row.querySelector('.compare-file-label').textContent=[entry._left?.name,entry._right?.name].filter(Boolean).join(' / ')||'尚未选择文件';return;}if(e.target.id==='compare-left-folder'||e.target.id==='compare-right-folder'){const side=e.target.id.includes('left')?'left':'right';state[`folder${side[0].toUpperCase()+side.slice(1)}`]=[...e.target.files].filter(f=>fileName(f).toLowerCase().endsWith('.docx')).sort((a,b)=>relativePath(a).localeCompare(relativePath(b)));const other=side==='left'?state.folderRight:state.folderLeft;if(!other?.length)return;const left=state.folderLeft||[],right=state.folderRight||[],map=new Map(right.map(f=>[relativePath(f),f])),used=new Set(),entries=left.map(f=>{const r=map.get(relativePath(f));if(r)used.add(r);return {_left:f,_right:r||null};});for(const f of right)if(!used.has(f))entries.push({_left:null,_right:f});state.inputs=entries;renderInputs();$('compare-upload-message').textContent=`已按相对路径配对 ${entries.filter(x=>x._left&&x._right).length} 组；${entries.filter(x=>!x._left||!x._right).length} 个文件未配对，可手工补齐。`;}});
      bindCompareSplitter();
     bindPanelSplitters();
-      for(const pane of allPanels())pane?.addEventListener('scroll',()=>syncPaneScroll(pane),{passive:true});
-      window.addEventListener('resize',()=>{state.diffPositions=null;refreshVirtualLayouts();drawLines();});
+      for(const pane of allPanels()){
+        pane?.addEventListener('scroll',()=>syncPaneScroll(pane),{passive:true});
+        const takeControl=()=>{clearTimeout(state.syncSettle);state.syncTargets.clear();};
+        for(const event of ['wheel','pointerdown','touchstart'])pane?.addEventListener(event,takeControl,{passive:true});
+      }
+      window.addEventListener('resize',()=>{state.diffPositions=null;refreshVirtualLayouts();drawLines();setTimeout(alignPanels,160);});
       const body=$('compare-view-body'); if(body&&window.ResizeObserver)new ResizeObserver(drawLines).observe(body);
       document.querySelectorAll('[data-compare-view-mode]').forEach(button=>button.addEventListener('click',()=>setViewMode(button.dataset.compareViewMode)));
       document.querySelectorAll('#compare-classic-view [data-compare-side]').forEach(button=>button.addEventListener('click',()=>setClassicSide(button.dataset.compareSide)));
