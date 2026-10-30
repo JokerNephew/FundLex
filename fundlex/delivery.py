@@ -399,6 +399,27 @@ def _issues(report: Mapping[str, Any]) -> list[dict[str, Any]]:
             "quote_exact_site": exact_site,
             "review_note": review_note,
         })
+    for item in report.get("disabled_rules") or []:
+        if not isinstance(item, Mapping):
+            continue
+        rule_id = str(item.get("rule_id") or "")
+        key = (rule_id, "", "用户在本任务关闭了该规则，未执行")
+        if key in seen:
+            continue
+        seen.add(key)
+        issues.append({
+            "rule_id": rule_id,
+            "code": "RULE_DISABLED_BY_USER",
+            "title": str(item.get("title") or "用户关闭的规则"),
+            "section": str(item.get("section_hint") or ""),
+            "location": "",
+            "obligation_id": "",
+            "business_reason": "用户在本任务关闭了该规则，未执行",
+            "requirement": "",
+            "quote": "",
+            "quote_exact_site": False,
+            "review_note": "如需该规则生效，请在“我的指引 → 规则组启停”中重新启用后新建任务。",
+        })
     return issues
 
 
@@ -447,7 +468,15 @@ def build_user_summary(report: Mapping[str, Any]) -> dict[str, Any]:
         return {"status": VERIFICATION_BLOCKED, "headline": "验证暂未完成，等待恢复处理",
                 "issues": issues, "notices": notices,
                 "verification_blockers": list(report.get("verification_blockers") or [])}
-    if status == "complete" and not blockers:
+    disabled_rules = [item for item in (report.get("disabled_rules") or [])
+                      if isinstance(item, Mapping)]
+    if status in {"complete", "complete_with_exceptions"} and not blockers:
+        if disabled_rules:
+            return {"status": COMPLETE_WITH_NOTICES,
+                    "headline": f"修改完成；{len(disabled_rules)} 条规则由用户关闭",
+                    "issues": issues, "notices": notices,
+                    "review_items": review_items, "business_pending": business_items,
+                    "disabled_rules": disabled_rules}
         if review_items or business_items:
             parts = []
             if review_items:
@@ -463,7 +492,7 @@ def build_user_summary(report: Mapping[str, Any]) -> dict[str, Any]:
                     "headline": "修改完成，但有业务提示",
                     "issues": [], "notices": notices}
         return {"status": COMPLETE, "headline": "修改完成", "issues": [], "notices": []}
-    if status == "complete" and blockers and not issues:
+    if status in {"complete", "complete_with_exceptions"} and blockers and not issues:
         first_blocker = next((item for item in blockers
                               if isinstance(item, Mapping)), None)
         if first_blocker is None:

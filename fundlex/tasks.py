@@ -88,7 +88,9 @@ class TaskStore:
             for name, definition in {"engine_id": "TEXT NOT NULL DEFAULT ''",
                                      "guide_version_id": "TEXT NOT NULL DEFAULT ''",
                                      "guide_rules_sha256": "TEXT NOT NULL DEFAULT ''",
-                                     "mode": "VARCHAR(32) NOT NULL DEFAULT 'delivery'"}.items():
+                                     "mode": "VARCHAR(32) NOT NULL DEFAULT 'delivery'",
+                                     "disabled_rule_ids": "TEXT NOT NULL DEFAULT '[]'",
+                                     "model_preferences": "MEDIUMTEXT NOT NULL DEFAULT '{}'"}.items():
                 if name not in {row["name"] for row in db.execute("PRAGMA table_info(tasks)")}:
                     db.execute(f"ALTER TABLE tasks ADD COLUMN {name} {definition}")
 
@@ -100,7 +102,8 @@ class TaskStore:
         return row
 
     def create(self, owner, name, source, files, idempotency_key=None,
-               engine_id="", guide_version_id="", guide_rules_sha256="", mode="delivery"):
+               engine_id="", guide_version_id="", guide_rules_sha256="", mode="delivery",
+               disabled_rule_ids=None, model_preferences=None, model_preferences_factory=None):
         """Create a task bound to a rule source.
 
         ``source`` is the bound guide version for the recall-first engine; the
@@ -109,19 +112,27 @@ class TaskStore:
         """
         if mode not in {"delivery", "evaluation", "diagnosis"}:
             raise ValueError("TASK_MODE_INVALID")
-        binding = [engine_id, guide_version_id, guide_rules_sha256]
-        if mode != "delivery":
-            binding.append(mode)
+        disabled = sorted({str(item).strip() for item in (disabled_rule_ids or [])
+                           if str(item).strip()})
         source_version = _source_field(source, "version")
         source_sha256 = _source_field(source, "sha256")
-        payload = [name, source_version, source_sha256, files]
-        if any(binding):
-            # Legacy requests keep their previous fingerprint; a bound engine is
-            # part of the identity of a new-style task.
-            payload.append(binding)
-        fingerprint = hashlib.sha256(json.dumps(payload, ensure_ascii=False, sort_keys=True).encode()).hexdigest()
         with self.store._connect() as db:
             db.execute("BEGIN IMMEDIATE")
+            if model_preferences_factory is not None:
+                model_preferences = model_preferences_factory(db)
+            binding = [engine_id, guide_version_id, guide_rules_sha256]
+            if disabled:
+                binding.append(disabled)
+            if model_preferences:
+                binding.append(model_preferences)
+            if mode != "delivery":
+                binding.append(mode)
+            payload = [name, source_version, source_sha256, files]
+            if any(binding):
+                # Legacy requests keep their previous fingerprint; a bound engine is
+                # part of the identity of a new-style task.
+                payload.append(binding)
+            fingerprint = hashlib.sha256(json.dumps(payload, ensure_ascii=False, sort_keys=True).encode()).hexdigest()
             if idempotency_key:
                 old = db.execute("SELECT id,request_hash FROM tasks WHERE owner=? AND idempotency_key=?",
                                  (owner, idempotency_key)).fetchone()
@@ -131,10 +142,13 @@ class TaskStore:
                     return self._snapshot(db, self._owned(db, owner, old["id"]))
             task_id, now = uuid.uuid4().hex, time.time()
             db.execute("""INSERT INTO tasks(id,owner,name,ruleset_version,ruleset_sha256,engine_id,
-                guide_version_id,guide_rules_sha256,mode,idempotency_key,request_hash,created_at,updated_at)
-                VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                guide_version_id,guide_rules_sha256,mode,disabled_rule_ids,idempotency_key,request_hash,
+                created_at,updated_at,model_preferences)
+                VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                        (task_id, owner, name, source_version, source_sha256, engine_id,
-                        guide_version_id, guide_rules_sha256, mode, idempotency_key, fingerprint, now, now))
+                        guide_version_id, guide_rules_sha256, mode,
+                        json.dumps(disabled, ensure_ascii=False), idempotency_key, fingerprint, now, now,
+                        json.dumps(model_preferences or {}, ensure_ascii=False)))
             db.executemany("INSERT INTO task_files(task_id,client_id,ordinal,name,size) VALUES(?,?,?,?,?)",
                            [(task_id, item["client_id"], i, item["name"], item["size"]) for i, item in enumerate(files)])
             return self._snapshot(db, self._owned(db, owner, task_id))
@@ -432,9 +446,18 @@ class TaskStore:
             key=lambda doc: doc.get("document_updated_at", 0),
             default={},
         ).get("phase", "")
+        try:
+            disabled_rule_ids = json.loads(row["disabled_rule_ids"] or "[]")
+        except (TypeError, ValueError):
+            disabled_rule_ids = []
+        if not isinstance(disabled_rule_ids, list):
+            disabled_rule_ids = []
         return {"id": row["id"], "name": row["name"], "legacy": legacy, "ruleset_version": row["ruleset_version"],
                 "ruleset_sha256": row["ruleset_sha256"], "status": status,
                 "engine_id": row["engine_id"], "mode": row["mode"] or "delivery",
+                "disabled_rule_ids": disabled_rule_ids,
+                "model_preferences": json.loads(row["model_preferences"] or "{}")
+                    if "model_preferences" in row.keys() else {},
                 "guide_snapshot": {"version_id": row["guide_version_id"],
                                    "rules_sha256": row["guide_rules_sha256"]},
                 "upload_status": "complete" if uploaded == total else "sealed_incomplete" if row["sealed"] else "partial" if uploaded else "pending",
@@ -891,12 +914,13 @@ class TaskStore:
                     if ordinal == 0:
                         db.execute("""INSERT INTO batches(id,owner,ruleset_version,ruleset_sha256,mode,status,request_hash,
                             created_at,updated_at,engine_build,schema_version,engine_id,guide_version_id,
-                            guide_rules_sha256) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                            guide_rules_sha256,disabled_rule_ids,model_preferences) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                                    (batch_id, owner, task["ruleset_version"], task["ruleset_sha256"],
                                     task["mode"] or "delivery",
                                     "paused" if task["paused"] else "queued",
                                     uuid.uuid4().hex, now, now, build, SCHEMA_VERSION, task["engine_id"],
-                                    task["guide_version_id"], task["guide_rules_sha256"]))
+                                    task["guide_version_id"], task["guide_rules_sha256"],
+                                    task["disabled_rule_ids"] or "[]", task["model_preferences"] or "{}"))
                         db.execute("INSERT INTO task_batches VALUES(?,?)", (task_id, batch_id))
                     document_id = uuid.uuid4().hex
                     db.execute("""INSERT INTO documents(id,batch_id,ordinal,filename,source_sha256,source_size,input_key,

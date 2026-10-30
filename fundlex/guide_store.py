@@ -51,6 +51,11 @@ CREATE TABLE IF NOT EXISTS guide_versions (
 CREATE TABLE IF NOT EXISTS guide_config (
     owner TEXT PRIMARY KEY, guide_version_id TEXT NOT NULL, updated_at REAL NOT NULL
 );
+CREATE TABLE IF NOT EXISTS guide_rule_config (
+    owner TEXT NOT NULL, guide_version_id TEXT NOT NULL,
+    disabled_json MEDIUMTEXT NOT NULL DEFAULT '[]', updated_at REAL NOT NULL,
+    PRIMARY KEY (owner, guide_version_id)
+);
 CREATE TABLE IF NOT EXISTS guide_jobs (
     id TEXT PRIMARY KEY, guide_version_id TEXT NOT NULL, owner TEXT NOT NULL, status TEXT NOT NULL,
     attempts INTEGER NOT NULL DEFAULT 0, lease_until REAL, error_code TEXT,
@@ -271,6 +276,79 @@ def set_current_guide(store: RunStore, owner: str, version_id: str) -> dict[str,
         db.execute("INSERT OR REPLACE INTO guide_config(owner,guide_version_id,updated_at) VALUES(?,?,?)",
                    (owner, version_id, time.time()))
     return version
+
+
+def _rule_entries(document: dict[str, Any]) -> list[dict[str, Any]]:
+    """Flatten guide groups, accepting both flat rules and nested groups."""
+    entries: list[dict[str, Any]] = []
+    for group in (document or {}).get("groups") or []:
+        if not isinstance(group, dict):
+            continue
+        nested = group.get("rules")
+        if isinstance(nested, list):
+            for rule in nested:
+                if isinstance(rule, dict) and rule.get("rule_id"):
+                    entries.append(rule)
+        elif group.get("rule_id"):
+            entries.append(group)
+    return entries
+
+
+def rule_settings(store: RunStore, owner: str, version_id: str) -> dict[str, Any]:
+    """Owner-scoped enable/disable state for one guide version.
+
+    Disabling is a task-level business choice, not a mutation of the certified
+    guide.  The guide document and its hashes stay untouched; the task snapshot
+    records which rule ids were disabled at creation time.
+    """
+    version = get_version(store, owner, version_id)
+    if version["status"] not in ENABLEABLE_STATUSES:
+        raise ValueError("GUIDE_NOT_READY")
+    document = guide_document(store, version_id)
+    entries = _rule_entries(document)
+    with store._connect() as db:
+        row = db.execute("SELECT disabled_json FROM guide_rule_config "
+                         "WHERE owner=? AND guide_version_id=?", (owner, version_id)).fetchone()
+    raw = row["disabled_json"] if row is not None else "[]"
+    try:
+        disabled = json.loads(raw)
+    except (ValueError, TypeError):
+        raise ValueError("GUIDE_RULE_SETTINGS_INVALID") from None
+    if not isinstance(disabled, list) or any(not isinstance(item, str) for item in disabled):
+        raise ValueError("GUIDE_RULE_SETTINGS_INVALID")
+    disabled_set = {str(item) for item in disabled if isinstance(item, str)}
+    known = {str(rule.get("rule_id")) for rule in entries}
+    if disabled_set - known:
+        raise ValueError("GUIDE_RULE_SETTINGS_INVALID")
+    return {
+        "version_id": version_id,
+        "disabled_rule_ids": sorted(disabled_set),
+        "rules": [{
+            "rule_id": str(rule.get("rule_id")),
+            "title": str(rule.get("title") or ""),
+            "section_hint": str(rule.get("section_hint") or ""),
+            "enabled": str(rule.get("rule_id")) not in disabled_set,
+        } for rule in entries],
+    }
+
+
+def set_rule_settings(store: RunStore, owner: str, version_id: str,
+                      disabled_rule_ids: list[str] | tuple[str, ...] | None) -> dict[str, Any]:
+    """Persist disabled rule ids after validating them against the bound guide."""
+    settings = rule_settings(store, owner, version_id)
+    known = {item["rule_id"] for item in settings["rules"]}
+    disabled = sorted({str(item).strip() for item in (disabled_rule_ids or [])
+                       if str(item).strip()})
+    unknown = sorted(set(disabled) - known)
+    if unknown:
+        raise ValueError("GUIDE_RULE_UNKNOWN:" + ",".join(unknown))
+    if known and not (known - set(disabled)):
+        raise ValueError("GUIDE_RULES_ALL_DISABLED")
+    with store._connect() as db:
+        db.execute("INSERT OR REPLACE INTO guide_rule_config"
+                   "(owner,guide_version_id,disabled_json,updated_at) VALUES(?,?,?,?)",
+                   (owner, version_id, json.dumps(disabled, ensure_ascii=False), time.time()))
+    return rule_settings(store, owner, version_id)
 
 
 def create_custom_version(store: RunStore, owner: str, filename: str, source_bytes: bytes,

@@ -16,6 +16,7 @@ dependencies = [
     "PyYAML>=6,<7",
     "jsonschema>=4.26,<5",
     "httpx>=0.28,<1",
+    "cryptography>=46,<47",
     "certifi>=2026.10.19,<2027",
     "pymysql>=1.1",
     "lark-oapi>=1.7,<2",

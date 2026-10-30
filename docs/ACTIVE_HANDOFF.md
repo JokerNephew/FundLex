@@ -43,6 +43,45 @@
 - **最终发布**：主工作区代码`680da13`，干净发布线`codex/compare-alignment-release-20261030`的`2e65cba`，合并其它会话新生产`3e1db8d`后发布`fe31ae2`。release worktree `/tmp/opencode/compare-alignment-release-20261030`保留；真实发布事务`/opt/.fundlex-publish-Qw73Kl`；engine6a16258e/service e86d271a；五服务active/capabilities200。没有回退用户配置或engine fingerprint修复。
 - **正式页面验证**：第一批价值优选原件/受控增删改副本3差异，三窗300/650/200块、拖宽199块、双栏600/250块均对应，逐条点击通过/页面错误0。证据`/tmp/opencode/prod-align-long-result.json`。公开v4原版/勘误版7差异同样对齐，全部采用B保存/生成/实际授权下载成功；final对B零差异，接受redline对final零差异，2ins/5del，页面哈希与下载一致。证据`prod-align-guide-result.json`，未新测报告下载、未调用模型。
 - **新断点FL-D541**：价值优选增删段样本全部采用B生成`SELECTION_FINAL_TEXT_MISMATCH`，无DOCX交付；不能把阅读器通过称作该长合同交付完成。任务5802555f27fe4359a98917777fff431d（复现）/d9e97ac662ce4436af4b342f5bb27eee（另轮）；脚本`/tmp/opencode/prod_align_e2e.py`。下一可执行动作：离线以原件+受控副本重现selection writer，拆分插/删/尾加并找实际final首个差异，再修复/回归/正式下载验收。不要关掉最终文本校验。当前无本轮后台测试/agent，发布已结束；主工作区其它guide_generation改动继续保留。
+## 2026-10-31 最新：项目模型切换为 hon-maas `kimi-k3`（不限量、无预算门禁）
+
+- 用户要求把项目模型改为 `https://token-service-qy.hon-maas.com` 的 `kimi-k3`，并记录**不限量使用、完全不用考虑预算问题**。生产 `/etc/fundlex-recall.env`（及旧部署源 `/etc/fundlex.env`）已更新：`LLM_PROVIDER=hon-maas`、`LLM_BASE_URL=https://token-service-qy.hon-maas.com/v1`、`LLM_MODEL=kimi-k3`，密钥仅存于 0600 环境文件（值不记录）。详见 FL-D540。
+- 不限量：`FUNDLEX_MODEL_MAX_CALLS/MAX_REQUESTS/MAX_COST_USD` 均为 `0`（未设阈值），`FUNDLEX_MODEL_ENFORCE_LIMITS` 未设置；台账继续观测调用/token/估算费用，不删除不重置，不作为停止条件。保留并发、限流、上下文/输出容量、超时等技术限制。
+- 验证：端点 `/v1/models` 含 `kimi-k3`，`json_object`+`max_tokens=32000`+现有 request options 均 200；六个生产服务已重启并加载新配置，capabilities/工作台 200；以生产环境执行一次真实 `ModelGateway` 最小调用成功（1 次 HTTP、0 错误、schema 通过、约 2.7s、399 tokens），budget 阈值为 None 且未强制。本次未恢复暂停批次、未上传合同、未跑真实合同/法规生成任务。
+- 回滚：`/var/backups/fundlex/fundlex-recall.env-before-honmaas-kimi-k3-20261031-002945` 与 `/var/backups/fundlex/fundlex.env-before-honmaas-kimi-k3-20261031-002945`（0600 root:root）。
+- 边界：新模型下的合同修改/交付质量尚未验证；`kimi-k3` 为推理模型，输出预算过小会 `finish_reason=length` 且 content 为空，任务侧应使用当前 32000 输出容量或缩小单次任务，不得误判为预算停止。
+
+## 2026-10-30 最新：BYOK执行/检查模型配置（已部署；合同E2E未做）
+
+- **发布源**：只把BYOK变更移植到生产发布基线，未合并开发分支中其他引擎差异。代码提交 `477ba5a488d7b736bbc56fdb650f9e42700eda41`，branch `codex/user-config-release-20261030`，工作树 `/tmp/opencode/user-config-release-20261030`。发布事务 `/opt/.fundlex-publish-QTsA1U`（committed）；dry-run `/opt/.fundlex-publish-eAP8t6` 通过。
+- **生产版本**：engine `74a8772324e86caa0c8ac20d1daaa9456dfad3919928321f236653200e270e06`；service `1270ad2eaeb2f984d3518ad718ab60139d2caf74159cf78fe0be084169a2bf2d`。五服务 active 且 cwd=`/opt/fundlex-recall-first`；capabilities/workspace 200，未登录模型API 401。当前 `FUNDLEX_FRONTEND_VERSION` 未设置，生产默认V1；已做生产 `/#models` 验收，React V2仅在候选构建及本地专项浏览器测试覆盖，本次未切换生产前端模式。
+- **密钥/依赖**：已向 `/etc/fundlex-recall.env` 增加 `FUNDLEX_MODEL_SECRETS_KEY`（值不记录）；Fernet往返自检通过。锁定依赖 `cryptography==46.0.7`、`cffi==2.1.1`、`pycparser==3.12` 已装入生产venv。env前置备份 `/var/backups/fundlex/fundlex-recall-env-before-byok-20261030-224728`、含新配置备份 `/var/backups/fundlex/fundlex-recall-env-with-byok-key-20261030-225108` 均为 root:root 0600；主密钥备份目录 `/var/backups/fundlex/fundlex-model-secrets-key-20261030-224747` 为0700，文件 `FUNDLEX_MODEL_SECRETS_KEY.env` 为0600。
+- **数据库/对象备份**：五服务停止后生成 `/var/backups/fundlex/fundlex-20261030-225006-before-byok-477ba5a`，包含3535个对象；DB SHA-256 `bb19fe3b0a25f77b91b91f56590281f244f89d686d90c15d60d9a740fe6f7f6e`，objects SHA-256 `0ddaa8c32c5f237e3515f14280f0c2c692af3739640a9f5919ab2c38becc6d99`。哈希、gzip/tar及归档结构verify通过；未做数据库导入恢复演练。
+- **回归与生产页面验收**：候选后端相关套件167 passed/1 skipped（1条Starlette弃用warning）；前端typecheck/lint、Vitest16 passed、production build通过；V1/V2模型配置专项浏览器4 passed。生产临时member实际登录V1，经真实侧栏确认模型页与飞书页内容分离，再为执行/检查分别保存不同供应商/模型/合成Key并刷新回读；两Key未出现在字段、页面或API响应，DB中两条密文可由Fernet解密为owner/id绑定payload；页面错误0、连接测试0、任务提交/合同上传0。临时用户及其设置/凭据精确清理，残留核验为0；最终证据 `/tmp/opencode/user-config-byok-deployment-smoke-4.json`（9项检查）。早期selector/异步等待失败尝试也均保留证据并清理临时账号。
+- **队列/真实调用边界**：发布前无 leased/running 文档；余下10个queued/retry_wait文档均在4个paused批次中，发布后暂停状态保留。Compare现有8个uploading任务、8个pending pairs，因未封存/非queued不可被worker领取；Guide Generation无job，发布启动后`gg_model_calls`新增0。本次无真实供应商调用、无合同上传、无连接测试；不代表真实合同修改或最终交付E2E已验收。MySQL真实并发锁行为、数据库恢复演练及正式合同E2E仍待完成。
+- **开发树**：`/home/opencode/.local/share/opencode/worktree/29a9a9/user-config-20261030` branch `codex/user-config-20261030`、HEAD `d8d2d08f5329e4a58e4ed4b87f5b4511be86bad9` 保留未提交的开发改动及 `frontend/node_modules` symlink；不是发布源，不要整分支合并覆盖发布基线。下一步仅在用户需要生产V2前端或恢复正式合同验证时继续；本次部署本身已完成。
+
+## 2026-10-30 早期配置功能版本（已由上方BYOK版本替代）
+
+- **生产版本 `3e1db8d`**，发布分支 `codex/user-config-release-20261030`，干净工作树 `/tmp/opencode/user-config-release-20261030`。正式事务 `/opt/.fundlex-publish-1ISJ22`；engine `6a16258e221640a16192c1ee4d5aad041980062a0b3ff57e582ff50945e3eaf0`，service `3501fd1d5b10e65d4b55712042d7f5024a70fe1a9d33c2081af3c36ea47c9342`。五服务active/cwd核验通过，capabilities200、工作台200、未登录模型配置401。
+- 功能入口：修改指引页里的“我的指引”与版本“规则组”，设置页里的个人模型配置。普通member可保存自己的主/复核模型选择及参数，不开放服务URL/密钥/env变量名/请求头；仅新建合同修改任务使用，指引解析/法规生成仍使用系统模型。已创建任务不追随设置变更。
+- 发布隔离：开发源分支3969891保留完整开发引擎；发布分支先快照生产5个差异引擎文件（6dadacf），再cherry-pick配置功能（b067b50），未整批覆盖生产docx/recall/semantic/scope未发布变体。为避免旧覆盖门禁错误complete，额外移植9行FL-D536门禁（cdcf52c）；加入model_settings.py引擎指纹清单（3e1db8d）。本树源码store manifest已同步，文档待本轮commit。
+- 回归：开发分支完整非浏览器**2164 passed/41 skipped/698.95s**（在最后角色参数修复前启动，不能冒称发布分支全量）；发布分支配置/任务/集成183 passed，pipeline最终54 passed（与模型配置合跑82 passed），指纹/配置/角色65 passed，V1功能/登录专项6 passed；TS typecheck/lint/Vitest16/build通过。开发V1全套历史2个失败在干净基线同样复现，未声称修复。
+- **生产浏览器已验证**：临时普通member登录→模型保存→刷新回读→修改指引规则开关保存→创建无上传任务检查disabled_rules/model_preferences快照→未登录401；页面错误0。最终任务`9a4ff9f680df4896ac8c95d4ed2e4195`为验收临时无上传任务，账号/配置/任务已精确清理，未动真实合同。证据`/tmp/opencode/user-config-production-smoke.json`（test_records_cleaned=true）、两个production截图、smoke/cleanup脚本。
+- 备份：五服务停服后`/var/backups/fundlex/fundlex-20261030-153317-user-config-20261030`，DB gzip+3506对象，哈希/gzip/tar完整性verify通过，**未做本轮数据库导入恢复测试**。发布器与仓库无漂移；新表/列为增量兼容迁移，未修改生产凭据/env。
+- 边界：用户先前暂停真实模型仍有效。**上线和不调用模型的配置链路验收已完成；没有真实模型/真实合同修改最终验收**，不是整个项目完成。恢复真实调用授权后补正式合同端到端验证。
+- 无运行中的本轮后台回归/agent/生产验收脚本；真实模型新增调用0。本开发工作树和release工作树均保留，frontend/node_modules仅开发symlink不能提交。下一步用户强刷使用；如要整合回主开发分支，不能把发布分支“生产基线回退”提交6dadacf整体合回，按配置功能提交/文档逐项合并，保护main未提交的guide_generation和分析文档。
+
+## 2026-10-30 用户配置化开发断点（本工作树）
+
+- 目标：用户已授权规则组启停、模型配置、我的指引；普通业务用户自助配置，不是管理员控制台。“我的指引”留在修改指引页；任务页不加指引选择。
+- 工作树 `/home/opencode/.local/share/opencode/worktree/29a9a9/user-config-20261030`；branch `codex/user-config-20261030`、基线HEAD364dd2f，尚无本轮commit。主工作区原有guide_generation修改/合同备份及分析文档未动；其FL-D538尚未提交，本树新增FL-D539。
+- 当前改动：fundlex/{model_settings(新),api,guide_store,tasks,store,jobs,delivery,recall_pipeline,db,models/roles,application/task_service}.py；V1 app.js/app.css/compare.html；React Settings/Guides/TaskDetail、types/api、hooks/endpoints及CSS/导航；新增test_model_settings/test_user_configuration、browser test_workbench。所有修改在本树未提交。frontend/node_modules是本轮指向主工作区的未跟踪符号链接，不能提交；.venv同样链接主树。
+- 已做：owner+guide版本规则启停、创建快照、默认Worker活动规则过滤（原认证哈希不变）、关闭规则报告/complete_with_exceptions；两前端指引复用原页。模型早期全局文件草稿已改为owner私有DB设置，禁URL/凭据/环境变量名/头；tasks→batches持久模型选择，独立RoleGateway不改进程env。仅新建合同修改任务使用，指引解析/法规生成暂仍用系统模型，UI需写清。
+- 最新验证：个人模型最终相关后端**236 passed(151.81s)**，含普通密码member隔离、模型快照、默认Worker脚本模型生成DOCX与授权下载；检查G06原文保留、其他实际修改、hash和ins/del。TS typecheck/lint、Vitest16、build通过；V1规则/模型保存刷新重置/登录专项**6 passed**。V1全套历史49 passed/2 failed，两个失败干净364dd2f同样复现。临时baseline-browser-check工作树已移除。
+- 后台全量非浏览器回归正在运行：shell `sh_18ba9ca0400111mkd56DCsm9Q8`，`.venv/bin/python -m pytest -q tests --ignore=tests/browser`，日志`/tmp/opencode/user-config-20261030-regression.log`。工具会自动通知，**不轮询**。开始后只改前端/文档，未改后端；全量结果尚未拿到。无后台agent/服务/真实模型由本轮启动；无真实调用/费用，不重置账本。
+- 仍需：完善V1 save/reset提示/跨身份异步、普通密码member隔离测试、Worker离线生成+授权下载验证；检查关闭规则后实际产物/报告一致，移除未用global helper（已去）；补配置审计与并发；最后跑相关回归/Vitest/build/浏览器；只提交明确本轮文件。**未部署未最终验收**，原真实模型暂停保持。
+- 下一动作：全量自动通知后读日志收尾，不冒称基线失败已修；`build_role_gateway`目前同endpoint同model会合并transport，可能忽略复核角色独立token/超时参数（待补同endpoint不同参数测试并修正共享条件）；`public_settings.review_inherits`默认未设置时需准确反映部署独立review配置。修后跑模型/角色/配置测试。检查文档与当前差异、只提交本轮文件，不提交frontend/node_modules链接，不整树覆盖主工作区。无手动压缩工具，若上下文不足请通过平台压缩/新会话接续先读本节。
 
 ## 2026-10-30 最新断点（真实模型暂停，等待用户恢复）
 

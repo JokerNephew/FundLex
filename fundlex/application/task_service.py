@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from typing import Any, Callable
 
-from .. import guide_store
+from .. import guide_store, model_settings
 from ..tasks import TaskStore
 
 
@@ -28,9 +28,25 @@ class TaskApplicationService:
                     guide_version_id: str | None = None, idempotency_key: str | None = None,
                     mode: str = "delivery") -> dict[str, Any]:
         guide = self._guide_resolver(owner, guide_version_id)
+        # Rule switches are owner configuration.  Resolve them here, not from the
+        # request body, and snapshot the result into the task so a later settings
+        # change cannot alter an already-created task.
+        switches = guide_store.rule_settings(self.store, owner, guide["id"])
+        disabled = list(switches.get("disabled_rule_ids") or [])
+
+        # Snapshot settings in the same transaction that inserts the task.
+        # This serializes against BYOK reset/rotation and its orphan-key GC.
+        model_settings.ensure_schema(self.store)
+
+        def model_snapshot(db):
+            return model_settings.snapshot_in_task_transaction(
+                db, owner, mysql=self.store.database.dialect == "mysql")
+
         return self.tasks.create(owner, name, guide, files, idempotency_key,
                                  engine_id="recall_first", guide_version_id=guide["id"],
-                                 guide_rules_sha256=guide["rules_sha256"], mode=mode)
+                                 guide_rules_sha256=guide["rules_sha256"], mode=mode,
+                                 disabled_rule_ids=disabled,
+                                 model_preferences_factory=model_snapshot)
 
     def upload_files(self, owner: str, task_id: str, files: list[dict[str, Any]]) -> dict[str, Any]:
         return self.tasks.uploads(owner, task_id, files)

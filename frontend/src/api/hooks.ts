@@ -2,7 +2,7 @@ import { useMutation, useQuery as useTanStackQuery } from '@tanstack/react-query
 import { useCallback } from 'react'
 import { api } from './endpoints'
 import { queryClient } from './queryClient'
-import type { Capabilities, CompareTask, Decision, GuideDetail, GuideSettings, GuideSummary, Paginated, Report, RevisionView, TaskDetail, TaskDocument, TaskStats, TaskSummary, UploadResult } from '../types'
+import type { Capabilities, CompareTask, Decision, GuideDetail, GuideRuleSettings, GuideSettings, GuideSummary, ModelSettings, Paginated, Report, RevisionView, TaskDetail, TaskDocument, TaskStats, TaskSummary, UploadResult } from '../types'
 
 type QueryState<T> = {
   data: T | undefined
@@ -25,6 +25,8 @@ const queryKeys = {
   guides: ['guides'] as const,
   guideSettings: ['guide-settings'] as const,
   guide: (id: string) => ['guide', id] as const,
+  guideRuleSettings: (id: string) => ['guide-rule-settings', id] as const,
+  modelSettings: ['model-settings'] as const,
   taskReport: (id: string) => ['task-report', id] as const,
   documentReport: (taskId: string, documentId: string) => ['document-report', taskId, documentId] as const,
   revisions: (taskId: string, documentId: string) => ['revisions', taskId, documentId] as const,
@@ -133,6 +135,10 @@ export function useCompareSealMutation() {
 export function useGuideMutation() { return useApiMutation<GuideSettings, string | null>((id) => api.setGuide(id), ['guides', 'guide-settings']) }
 export function useGuideUploadMutation() { return useApiMutation<{ version: GuideSummary }, File>((file) => api.uploadGuide(file), ['guides']) }
 export function useGuideParseMutation() { return useApiMutation<{ version: GuideSummary }, string>((id) => api.parseGuide(id), ['guides']) }
+export function useGuideRuleSettings(id: string | undefined) { return useServerQuery<GuideRuleSettings>(queryKeys.guideRuleSettings(id || ''), () => api.guideRuleSettings(id as string), { enabled: Boolean(id) }) }
+export function useGuideRuleSettingsMutation() { return useApiMutation<GuideRuleSettings, { id: string; disabled: string[] }>((input) => api.setGuideRuleSettings(input.id, input.disabled), ['guide-rule-settings']) }
+export function useModelSettings() { return useServerQuery<ModelSettings>(queryKeys.modelSettings, api.modelSettings) }
+export function useModelSettingsMutation() { return useApiMutation<ModelSettings, { primary: Record<string, unknown>; review?: Record<string, unknown> | null }>((input) => api.saveModelSettings(input), ['model-settings']) }
 
 export function useCapabilities(): QueryState<Capabilities> { return useServerQuery(queryKeys.capabilities, api.capabilities) }
 export function useTasks(params: Record<string, string | number | undefined> = {}, options?: QueryOptions) { return useServerQuery<Paginated<TaskSummary>>(queryKeys.tasks(params), () => api.tasks(params), options) }

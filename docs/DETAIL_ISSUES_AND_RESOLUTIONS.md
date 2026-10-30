@@ -1,5 +1,47 @@
 # FundLex 细节问题与处理记录
 
+## FL-D540 项目模型切换为 hon-maas `kimi-k3`，并明确不限量、不做预算门禁（2026-10-31）
+
+- 发现/需求日期：2026-10-31。用户要求把项目调用的模型改为 `https://token-service-qy.hon-maas.com` 上的 `kimi-k3`，并在文档中记录**不限量使用、完全不用考虑预算问题**。
+- 配置变更（生产，`/etc/fundlex-recall.env` 与旧部署源 `/etc/fundlex.env` 同步修改）：
+  `LLM_PROVIDER=hon-maas`、`LLM_BASE_URL=https://token-service-qy.hon-maas.com/v1`、`LLM_MODEL=kimi-k3`；
+  `LLM_API_KEY` 已替换为用户提供的密钥，**密钥值只存在于 0600 环境文件，未写入仓库、文档、prompt、日志或本记录**。
+  同时把 `FUNDLEX_MODEL_MAX_CALLS`、`FUNDLEX_MODEL_MAX_REQUESTS`、`FUNDLEX_MODEL_MAX_COST_USD` 置为 `0`（表示未设置阈值），并确认 `FUNDLEX_MODEL_ENFORCE_LIMITS` 未设置。
+- 不限量政策（本次明确生效）：本项目模型调用按任务需要执行，**不设调用次数/费用上限，不因预算暂停、询问或判定 NO-GO**。账本 `/var/lib/fundlex/model_budget.sqlite` 继续记录 HTTP 次数、token 与按配置单价的估算费用，仅用于观测与追溯；历史账本不删除、不重置。仍保留的技术约束只有：并发槽位（当前 `FUNDLEX_MODEL_CONCURRENCY=1`）、供应商限流/重试、上下文与输出 token 容量、超时和文件安全限制。
+- 变更前备份：`/var/backups/fundlex/fundlex-recall.env-before-honmaas-kimi-k3-20261031-002945` 与 `/var/backups/fundlex/fundlex.env-before-honmaas-kimi-k3-20261031-002945`，均 `0600 root:root`，`cmp` 校验一致。改后 `/etc/fundlex-recall.env` 为 `0600 root:root`，`/etc/fundlex.env` 保持原 `0640 root:fundlex`。密钥落盘后用哈希比对确认与环境文件一致，临时密钥文件已删除。
+- 端点与兼容性验证（切换前、用临时 0600 密钥文件、不打印密钥）：`GET /v1/models` 返回 200，目录含 `kimi-k3`；`POST /v1/chat/completions` 在 `temperature=0`、`response_format={"type":"json_object"}`、`max_tokens=32000` 且沿用 `thinking=disabled`/`reasoning_effort=low` 时返回 200 与合法 JSON。`kimi-k3` 是推理模型，响应同时含 `reasoning_content`，推理 token 计入 completion；`max_tokens` 过小会先耗尽推理预算并返回 `finish_reason=length` 和空 content，因此保留 32000 输出容量，不能沿用很小的输出上限。
+- 切换后验证：六个使用该环境文件的生产服务（recall API/Worker、compare worker、guide worker、guide-generation worker、feishu）全部 active，进程环境 `LLM_MODEL=kimi-k3`、`LLM_BASE_URL` 为新端点；capabilities 与工作台 200。以生产环境文件在 `fundlex` 用户下执行一次真实 `ModelGateway` 调用（`guide_verify`，最小 JSON schema）：HTTP 1 次、错误 0、模型返回 `kimi-k3`、399 tokens、延迟约 2.7s、响应通过 schema 校验；`budget.snapshot()` 显示 `max_http_attempts=None`、`max_cost_usd=None`、`enforce=False`、`exceeded=False`。账本新增 1 条 completed 记录（估算费用约 $0.00012，仅为观测）。
+- 角色与范围：未设置 `FUNDLEX_MODEL_ROLES_FILE`，主模型与检查模型均使用该端点/模型（`same_endpoint=True`）；普通用户自行配置的个人执行/检查模型仍按各自 BYOK 设置生效，不受本次系统默认切换影响。指引解析、法规生成与合同修改任务都走该环境配置。
+- 未做/边界：本次未恢复暂停批次、未上传合同、未跑合同修改或法规生成真实任务，因此**不代表新模型下的合同交付质量已验收**；FL-D446 中记录的 `commandcode/deepseek-v4-flash` 模型身份已被本次切换取代。后续真实任务需关注推理模型的输出预算、延迟和 schema 稳定性；如出现 `MODEL_OUTPUT_TRUNCATED`，应提高输出容量或缩小单次任务，而不是当作预算问题停跑。
+- 密钥轮换/回滚：回滚用上述两份备份并重启六个服务；轮换只需更新两个环境文件的 `LLM_API_KEY`（或整体恢复备份）后重启。端点或鉴权故障会以 `MODEL_HTTP_ERROR`/`MODEL_NETWORK_ERROR` 等业务错误出现，不因预算被拦截。
+- 变更记录：2026-10-31 新增。
+
+## FL-D539 普通用户规则启停、模型偏好与“我的指引”实施（2026-10-30）
+
+- **BYOK最终实现（2026-10-30）**：执行/检查两角色在V1/V2始终分别可见，支持系统默认或个人OpenAI Chat Completions兼容供应商、API Key及模型；不向普通用户展示timeout/token/retry/context/JSON。个人Key按owner隔离并以Fernet加密，任务仅引用不可变凭据版本，Worker按owner解密；连接测试需用户主动确认并提示可能收费，不含合同文本。自定义服务地址限制公网HTTPS，校验所有DNS结果并固定连接IP、保留TLS SNI/Host、禁用代理/重定向。任务快照与凭据轮换GC竞态、Worker gateway清理已有定向回归；MySQL真实锁行为仍未验证。
+- **生产部署（2026-10-30）**：从干净发布基线`877a980e96d740f09e17b47bcad103ccfbb0f3a2`逐项移植BYOK，未合入开发分支其他引擎差异；生产源提交`477ba5a488d7b736bbc56fdb650f9e42700eda41`，事务`/opt/.fundlex-publish-QTsA1U`，dry-run `/opt/.fundlex-publish-eAP8t6`。engine=`74a8772324e86caa0c8ac20d1daaa9456dfad3919928321f236653200e270e06`、service=`1270ad2eaeb2f984d3518ad718ab60139d2caf74159cf78fe0be084169a2bf2d`；五服务active/cwd核验、capabilities/workspace 200、未登录模型API 401通过。
+- **生产前置与备份**：已配置`/etc/fundlex-recall.env`变量`FUNDLEX_MODEL_SECRETS_KEY`（不记录值），Fernet roundtrip通过；生产venv安装锁定`cryptography==46.0.7`、`cffi==2.1.1`、`pycparser==3.12`。配置备份`/var/backups/fundlex/fundlex-recall-env-before-byok-20261030-224728`及含新配置副本`/var/backups/fundlex/fundlex-recall-env-with-byok-key-20261030-225108`为0600；key备份目录`/var/backups/fundlex/fundlex-model-secrets-key-20261030-224747`为0700，文件`FUNDLEX_MODEL_SECRETS_KEY.env`为0600。DB+对象备份`/var/backups/fundlex/fundlex-20261030-225006-before-byok-477ba5a`含3535对象，SHA-256分别为DB `bb19fe3b0a25f77b91b91f56590281f244f89d686d90c15d60d9a740fe6f7f6e`、objects `0ddaa8c32c5f237e3515f14280f0c2c692af3739640a9f5919ab2c38becc6d99`；哈希/gzip/tar验证通过，**未做数据库导入恢复演练**。
+- **测试与生产页面验收**：候选后端相关测试167 passed/1 skipped（1条Starlette弃用warning）；前端typecheck/lint、Vitest16 passed、production build通过；模型页浏览器专项4 passed。生产V1普通member通过真实侧栏在“模型配置”与“飞书绑定”间切换，确认页面内容互斥；再分别保存不同供应商、模型及合成Key并刷新回读。页面输入、正文、API响应均不回显Key，实际DB两条密文Fernet解密后确认是owner/id绑定payload；pageerror0、连接测试0、任务提交/合同上传0。临时用户/设置/凭据精确清理；最终证据`/tmp/opencode/user-config-byok-deployment-smoke-4.json`（9项检查，test_records_cleaned=true）。生产配置未设置`FUNDLEX_FRONTEND_VERSION`，故当前入口默认V1；React V2已构建并通过本地浏览器专项，但本次未切换生产模式。
+- **队列边界与未完成项**：发布前无leased/running文档；剩余10个queued/retry_wait文档均属于4个paused批次，重启后仍paused。Compare有8个uploading任务/8个pending pairs（未封存/非queued，不符合worker领取条件）；无Guide Generation job，发布后`gg_model_calls`新增0。真实供应商调用/连接测试/合同上传均为0，正式合同E2E仍未完成；不得以页面保存或部署成功宣称合同交付通过。
+- **验证脚本发现**：首次生产smoke误从V2 `/models`入口进入，实际生产默认V1会重定向到`/#overview`；后改真实用户入口`/#models`。接着一次脚本在切回模型页后未等待设置GET完成，造成与旧禁用表单交互的超时；已等待GET响应后重跑通过。另cleanup helper最初对session表字段假设错误（实际`token_hash`），修正后完成精确清理。失败尝试用户均已删除；最终smoke4记录页面互斥、保存回读、密钥不回显及无模型/合同调用，生产用户/session/设置/密文残留核验均为0。均属验收脚本问题，不是产品缺陷。
+
+> 以下“开发中/待发布”等内容为本条的开发期历史；当前状态以上述BYOK生产部署与验收记录为准。
+
+- **页面纠偏（2026-10-30，已部署于BYOK生产版本）**：用户明确要求模型配置不与飞书绑定同页。V1独立导航`#models`保留旧`#settings`飞书入口；React V2独立`/models`组件与`/settings`分离。实际生产当前默认V1，V1生产页面分离已通过上方no-model验收；React V2经候选本地浏览器验证，生产未切换V2模式。
+
+- **上一轮部署更新（2026-10-30；已由上方BYOK版本替代）**：用户要求“部署”，已发布干净候选`3e1db8d`（发布分支`codex/user-config-release-20261030`，保留生产既有引擎基线，仅合入配置功能及覆盖门禁/新模块指纹）。五服务active、capabilities/页面200、未登录模型401。五服务停服备份`/var/backups/fundlex/fundlex-20261030-153317-user-config-20261030`（DB+3506对象），verify完整性通过，未本轮导入恢复。事务`/opt/.fundlex-publish-1ISJ22`，engine`6a16258e...`、service`3501fd1d...`。
+- 最新验证：开发全量非浏览器2164 passed/41 skipped（最后角色参数修复前启动，不冒充发布分支全量）；发布分支相关183 passed、pipeline54 passed、指纹/配置/角色65 passed、V1专项6 passed、TS/Vitest16/build通过。生产真实浏览器普通member登录、个人模型保存刷新回读、规则保存、创建无上传任务检查两个快照、未登录401全部通过，pageerror0。最终临时任务`9a4ff9f680df4896ac8c95d4ed2e4195`及临时账号/设置已精确清理。证据`/tmp/opencode/user-config-production-smoke.json`与同名前缀PNG/script。**已部署并验证配置链路；未上传真实合同、未新增真实模型调用，正式合同最终验收仍未完成**。
+- 发布发现与处理：store原来只接受recall complete，导致complete_with_exceptions写入/下载拒绝，已在保持pair/hash校验下支持带明确USER_DISABLED清单的例外状态；模型同endpoint不同token/超时参数现在独立transport，默认review继承标记按实际部署角色显示；模型新模块加入engine指纹。发布前保留未发布引擎差异，单独带上已验证的FINAL_COVERAGE_UNRESOLVED阻断，防止开关配置削弱未关闭规则的覆盖证明。以下为历史开发过程记录。
+
+- 用户授权：实现规则组启停、模型配置、我的指引；“用户”明确为普通使用者，“我的指引”复用修改指引页面，不新增一级导航/任务页指引选择。分析文档及 FL-D538 在主工作区尚未提交，不覆盖该文档。
+- 当前实施：V1/V2 指引页增加本人版本管理与规则开关；开关按 owner+guide_version 存库，任务创建后经 tasks→batches→Worker 固定快照；认证指引原文/hash 不改，仅在校验认证后生成活动规则副本。关闭项在 JSON/Markdown/用户摘要明确展示，成功完成其余规则时状态为 complete_with_exceptions，不冒充全指引 complete。至少保留一条规则。
+- 模型实现纠偏：早期草稿把配置放到共享角色文件、仅管理员可编辑，与普通用户目标不符，**已撤回该草稿逻辑**。现为 user_model_settings.owner 私有偏好，普通成员可改自己的主/复核模型名及有界超时、输出容量、重试、上下文、reasoning 选项；不允许 provider/base_url/api_key_env/api_key/headers，避免读取任意环境凭据或把共享密钥转发到用户地址。系统提供服务和凭据；只影响本人新建合同修改任务，不影响他人或已创建任务；指引解析/法规生成暂不接入个人模型。可以恢复系统默认，不自动发出付费连接测试。
+- 持久范围：个人模型选择写入 tasks/batches.model_preferences，创建指纹包含选择，Worker 使用该快照构造独立角色网关；密钥仍由部署提供且不入偏好/报告。坏 JSON/未知字段/损坏规则开关失败关闭，不默认放开全部规则。
+- 验证：早期全局模型草稿曾有后端228 passed、前端16 passed/typecheck/lint/build；此数字不冒充当前个人模型版本结果。改为个人版后，后端定向125 passed（98s），typecheck/lint通过；后续新增快照/下载链路测试待跑。V1专项新增1 passed，V1全套49 passed/2 failed；两失败在干净364dd2f基线同样复现（审阅弹窗遮挡面包屑/insert定位），不是本次配置化已修复项。MySQL专项6 skipped，不能当实库通过。
+- 最新验证补充：最终个人版相关后端**236 passed/151.81s**；默认Worker离线全链路发现并修复store对complete_with_exceptions写入/下载不兼容。脚本模型下实际final与源不同、关闭G06转换原文保留、final无修订而redline有ins/del、hash一致、owner下载200/他人404、报告含关闭项。V1专项**6 passed**（包含模型保存→刷新回读→恢复默认和普通用户登录），修复首次打开#settings时capabilities加载完成后未加载模型表单的问题；typecheck/lint/Vitest16/build通过。完整非浏览器回归后台中，结果未出。
+- 状态：**代码开发中、未提交、未部署、无真实模型调用，无正式用户真实合同E2E验收**。用户先前暂停真实模型尚未恢复；“继续”视为继续开发而非撤销暂停。当前出口实测112.120.123.60（与文档旧出口不同），主机名/内网/实例ID确认仍为原云机，不凭出口判机器。
+- 下一步：继续个人模型隔离/任务快照/默认Worker真实写DOCX的离线集成、V1表单保存回读、默认回归；补模型选择可用性与配置审计；确认发布基线后受控发布，恢复真实模型授权后才能正式验收。按真实验证范围更新本条，不能宣称完成。
+
 > 编号说明（2026-10-27）：历史记录中存在少量重复编号（例如 FL-D365、FL-D297–FL-D299 等），原因是并行工作分别登记。当前不删除、不重编号既有标题，避免破坏历史引用；引用时同时写明标题与日期。新增问题从 FL-D381 起编号，重复编号的归并映射另行处理。
 >
 > 测试中遇到的业务问题单独汇总在 [`BUSINESS_ISSUES_FROM_TESTS.md`](BUSINESS_ISSUES_FROM_TESTS.md)，与代码/定位缺陷分开维护。

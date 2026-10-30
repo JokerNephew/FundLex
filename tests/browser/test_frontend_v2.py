@@ -143,6 +143,49 @@ def test_built_entry_and_assets_are_cacheable(browser, live_app):
         context.close()
 
 
+def test_model_roles_and_confirmed_connection_test(browser, live_app, monkeypatch):
+    from cryptography.fernet import Fernet
+    from playwright.sync_api import expect
+
+    monkeypatch.setenv("FUNDLEX_MODEL_SECRETS_KEY", Fernet.generate_key().decode())
+    context = browser.new_context(viewport={"width": 1280, "height": 900})
+    context.add_init_script("localStorage.setItem('fundlex-dev-user','v2-model-check')")
+    page = context.new_page()
+    calls = []
+
+    def fake_test(route):
+        calls.append(route.request.post_data_json)
+        route.fulfill(status=200, json={"ok": True, "message": "连接正常，测试响应已收到。"})
+
+    context.route("**/api/settings/model/test", fake_test)
+    try:
+        response = page.goto(live_app + "/models", wait_until="networkidle")
+        assert response and response.ok
+        expect(page.get_by_role("heading", name="模型配置")).to_be_visible()
+        form = page.locator("form")
+        cards = form.locator(".ui-card")
+        assert cards.count() == 2
+        primary = cards.nth(0)
+        expect(primary).to_contain_text("执行模型")
+        expect(cards.nth(1)).to_contain_text("检查模型")
+        primary.get_by_label("使用方式").select_option("personal")
+        primary.get_by_label("访问密钥（API Key）").fill("browser-fixture-test-key")
+        primary.locator('input[list="model-primary-suggestions"]').fill("fixture-model")
+
+        page.once("dialog", lambda dialog: dialog.dismiss())
+        primary.get_by_role("button", name="验证连接").click()
+        assert not calls, "cancelled confirmation must not send a request"
+
+        page.once("dialog", lambda dialog: dialog.accept())
+        primary.get_by_role("button", name="验证连接").click()
+        expect(primary.get_by_role("status")).to_contain_text("连接正常")
+        assert len(calls) == 1
+        assert calls[0]["model"] == "fixture-model"
+        assert calls[0]["api_key"] == "browser-fixture-test-key"
+    finally:
+        context.close()
+
+
 def test_prefixed_entry_routes_assets_api_and_logo_same_origin(browser, prefixed_live_app):
     context = browser.new_context(viewport={"width": 390, "height": 844})
     context.add_init_script("localStorage.setItem('fundlex-dev-user','v2-prefix-browser-check');")

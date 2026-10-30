@@ -55,6 +55,8 @@ _ENGINE_BUILD_MODULES = (
     "fundlex/guide.py",
     "fundlex/model.py",
     "fundlex/model_budget.py",
+    "fundlex/model_settings.py",
+    "fundlex/user_model_connections.py",
     "fundlex/obligations.py",
     "fundlex/pipeline.py",
     "fundlex/qualification.py",
@@ -258,13 +260,22 @@ def _validate_recall_delivery(report: dict[str, Any], artifacts: dict[str, Path]
     checks = set(checks) if isinstance(checks, (list, tuple)) else set()
     if status in {"excluded", "not_generated"}:
         return
+    complete_status = status == "complete"
+    if status == "complete_with_exceptions":
+        disabled = report.get("disabled_rules")
+        guide_ids = (report.get("guide") or {}).get("disabled_rule_ids")
+        complete_status = (isinstance(disabled, list) and bool(disabled)
+                           and all(isinstance(item, dict) and item.get("rule_id")
+                                   and item.get("reason") == "USER_DISABLED" for item in disabled)
+                           and isinstance(guide_ids, list)
+                           and sorted(item["rule_id"] for item in disabled) == sorted(guide_ids))
     if kind == "recall_validated_edits":
-        if status != "complete" or not _RECALL_EDIT_CHECKS.issubset(checks):
+        if not complete_status or not _RECALL_EDIT_CHECKS.issubset(checks):
             raise ValueError("MISSING_VERIFIED_ARTIFACTS")
         _require_recall_pair(artifacts, validation, ("final", "redline"))
         return
     if kind == "recall_validated_unchanged":
-        if status != "complete" or not _RECALL_UNCHANGED_CHECKS.issubset(checks):
+        if not complete_status or not _RECALL_UNCHANGED_CHECKS.issubset(checks):
             raise ValueError("MISSING_VERIFIED_ARTIFACTS")
         _require_recall_pair(artifacts, validation, ("final", "redline"))
         return
@@ -488,7 +499,9 @@ class RunStore:
                                      "engine_id": "TEXT NOT NULL DEFAULT ''",
                                      "guide_version_id": "TEXT NOT NULL DEFAULT ''",
                                      "guide_rules_sha256": "TEXT NOT NULL DEFAULT ''",
-                                     "mode": "VARCHAR(32) NOT NULL DEFAULT 'delivery'"}.items():
+                                     "mode": "VARCHAR(32) NOT NULL DEFAULT 'delivery'",
+                                     "disabled_rule_ids": "TEXT NOT NULL DEFAULT '[]'",
+                                     "model_preferences": "MEDIUMTEXT NOT NULL DEFAULT '{}'"}.items():
                 if name not in {row["name"] for row in db.execute("PRAGMA table_info(batches)")}:
                     db.execute(f"ALTER TABLE batches ADD COLUMN {name} {definition}")
             document_columns = {row["name"] for row in db.execute("PRAGMA table_info(documents)")}
@@ -878,7 +891,7 @@ class RunStore:
                                  for key, path in pairs.items()}
                         validate_delivery(probe, pairs)
                     else:
-                        if kind in {"final", "redline"} and status != "complete":
+                        if kind in {"final", "redline"} and status not in {"complete", "complete_with_exceptions"}:
                             raise ValueError("RECALL_DELIVERY_NOT_COMPLETE")
                         if kind in {"working_final", "working_redline"} and status != "incomplete":
                             raise ValueError("RECALL_DELIVERY_NOT_INCOMPLETE")
@@ -977,7 +990,8 @@ class RunStore:
                 active_scope = """COALESCE((SELECT task_id FROM task_batches WHERE batch_id=active.batch_id),active.batch_id)
                     = COALESCE((SELECT task_id FROM task_batches WHERE batch_id=d.batch_id),d.batch_id)"""
             candidate = f"""SELECT d.*, b.ruleset_version, b.ruleset_sha256, b.engine_build, b.schema_version,
-                b.engine_id, b.guide_version_id, b.guide_rules_sha256, b.mode, b.owner
+                b.engine_id, b.guide_version_id, b.guide_rules_sha256, b.disabled_rule_ids,
+                b.model_preferences, b.mode, b.owner
                 FROM documents d JOIN batches b ON b.id=d.batch_id
                 WHERE b.status IN ('queued','running') AND d.attempt < ? AND
                 (d.status='queued' OR (d.status='retry_wait' AND d.next_attempt_at<=?) OR

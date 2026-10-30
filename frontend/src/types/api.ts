@@ -90,6 +90,43 @@ export interface GuideSettings {
   engine_id?: string
 }
 
+export interface GuideRuleSetting {
+  rule_id: string
+  title?: string
+  section_hint?: string
+  enabled: boolean
+}
+
+export interface GuideRuleSettings {
+  version_id: string
+  disabled_rule_ids: string[]
+  rules: GuideRuleSetting[]
+}
+
+export interface ModelRoleSettings {
+  role: 'primary' | 'review'
+  provider?: string
+  model?: string
+  api_key_set?: boolean
+  source?: 'system' | 'personal'
+  base_url?: string
+  connection_id?: string
+  system_model?: string
+  legacy_model?: string
+}
+
+export interface ModelSettings {
+  editable: boolean
+  source: 'personal' | 'deployment' | string
+  config_error?: string
+  primary: ModelRoleSettings
+  review: ModelRoleSettings
+  review_inherits: boolean
+  task_roles?: Record<string, string>
+  legacy_preferences?: boolean
+  providers: Array<{ id: string; label: string; base_url: string; models: string[] }>
+}
+
 export type TaskStatus = 'uploading' | 'queued' | 'running' | 'paused' | 'completed' | 'completed_with_exceptions' | 'failed' | string
 
 export interface GuideSnapshot {
@@ -106,6 +143,7 @@ export interface TaskSummary {
   ruleset_version?: string
   ruleset_sha256?: string
   guide_snapshot?: GuideSnapshot
+  disabled_rule_ids?: string[]
   upload_status?: string
   total?: number
   uploaded?: number

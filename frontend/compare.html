@@ -114,6 +114,7 @@
 </svg>
 <span>修改指引</span>
 </button>
+<button class="nav-btn" data-nav="models"><svg><use href="#i-settings"/></svg><span>模型配置</span></button>
 <button class="nav-btn" data-nav="settings">
 <svg>
 <use href="#i-settings"/>
@@ -762,8 +763,8 @@
     </section>
 <section class="section" id="view-generation" aria-label="指引生成"><div id="gg-root"></div></section>
 <section class="section" id="view-document" aria-label="合同结果"><div id="document-host"></div></section>
-    <section class="section" id="view-guide" aria-label="修改指引">
-<div class="page-actions"><p class="subnote">生成的候选指引需经过导入与核验，不能自动替换当前版本。</p><button class="btn" type="button" data-nav="generation">前往指引生成</button></div>
+    <section class="section" id="view-guide" aria-label="我的指引">
+<div class="page-actions"><p class="subnote">管理自己的指引版本、启停规则组，并决定新建任务使用哪一版。生成的候选指引需经过导入与核验，不能自动替换当前版本。</p><button class="btn" type="button" data-nav="generation">前往指引生成</button></div>
       <div class="card card-pad">
 <div class="section-title">
 <div class="batch-title">
@@ -781,7 +782,7 @@
 </div>
       <div class="card card-pad" style="margin-top:14px">
 <div class="section-title">
-<h2>可用指引</h2>
+<h2>我的指引</h2>
 <small>每个账号独立维护，不能访问他人指引</small>
 </div>
 <div class="table-wrap">
@@ -819,6 +820,12 @@
 <p class="subnote" id="guide-upload-message" aria-live="polite">解析失败可在列表中查看问题并重新解析。</p>
 </div>
     </section>
+    <section class="section" id="view-models" aria-label="模型配置">
+<div class="card card-pad" id="model-settings-card" style="margin-bottom:14px">
+<div class="section-title"><h2>模型配置</h2><small id="model-settings-source">读取中</small></div>
+<div id="model-settings-body" class="subnote">正在读取模型配置…</div>
+</div>
+</section>
     <section class="section" id="view-settings" aria-label="飞书绑定">
 <div class="feishu-binding-layout">
 <div class="card feishu-connect-card" id="feishu-connect-card" data-state="loading">
