@@ -3701,6 +3701,15 @@ def _delivery_complete(unresolved: Sequence[dict[str, Any]], *, ledger: Any = No
                 return False
             if any("CLAIM_" in str(item.get("reason") or "") for item in open_items):
                 return False
+            coverage_open = any("FINAL_COVERAGE_UNRESOLVED" in
+                                str(item.get("reason") or "") for item in open_items)
+            if coverage_open and not any(
+                    str(item.get("code") or "") == "FINAL_COVERAGE_UNRESOLVED"
+                    and "AUDIT_NOT_COMPLETED" in str(item.get("reason") or "")
+                    for item in unresolved):
+                # User-disabled rules are explicit exceptions, not a reason to
+                # relax independent coverage proofs of the remaining rules.
+                return False
     if claim_replay_verified is False:
         return False
     if final_omission_blocking:
