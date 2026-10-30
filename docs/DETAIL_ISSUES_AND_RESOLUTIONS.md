@@ -6814,8 +6814,11 @@ H＝E×…
 - 问题与影响：`_plan_and_generate` 的 `validate_edit_plan` 抛出 `EDIT_BOOKMARK_RANGE_BROKEN`（`fundlex/docx.py` `_bookmark_dropped_partners`，467db01 A3-W4 新增校验），异常沿 `_plan_and_generate` 直达顶层 stage="write" 处理器，**整份合同**丢弃为 not_generated；报告 targets=[]、plan.count=0，而 obligations 全 UNRESOLVED/PENDING、survey 命中 11 处，扣分细节随 reset 丢失。单条跨书签编辑未按 FL-D112 的“drop 单 edit、保留目标 unresolved”语义降级，属整合同级误伤疑点。
 - 证据：`var/recall-first-evaluation/qa-wave1-dev-20261031-0b1a813/smoke/b16/001-*/report.json`（delivery_status=not_generated, errors=[{"code":"EDIT_BOOKMARK_RANGE_BROKEN","stage":"write"}]）；对原件做书签几何探测：**该文档不存在跨段落的书签对（split-across-paragraph count=0），仅 1 个文档末尾未配对 bookmarkStart(id=78)**——按当前校验逻辑本不应触发“partner 在其他段落”分支，疑似 wrapper（w:hyperlink/sdt/w:ins 等 parent 路径不同）导致误判，或校验取到了非预期段落。待引擎组复核 `_bookmark_dropped_partners` 的 paragraph 对比口径。
 - 复现实验建议：用 `tools/evaluation/replay_checkpoints.py` 复放 smoke/b16/checkpoints，在 validate 前打印触发 edit 的 location/start/end 与实际 dropped bookmark id。
-- 状态：open（待引擎修复后重跑 B16 复测）；已登记为波一基线的第一份实测缺陷，**不阻塞全量运行**（该失败本身即基线数据）。
-- 变更记录：2026-10-31 新增（子 agent 登记）。
+- 根因（修复 agent 复放确认）：①几何侧——B16 的书签 78 即 `_GoBack`：`bookmarkStart(78)` 位于 p1355 被改 span 内，其 `bookmarkEnd(78)` 是 `w:body` 直接子节点（文档尾）；旧逻辑把"partner 不在同段落"一律判 `EDIT_BOOKMARK_RANGE_BROKEN`，但 body 级半片不属任何非目标段落、无文本，与其成对的另一半已在 span 内被丢弃，本可成对安全移除。②交付侧——单条 edit 校验失败异常直达 `_plan_and_generate` 顶层，整合同 not_generated，未按 FL-D112 单 edit 降级。（此前"文末仅 1 个未配对 bookmarkStart(78)"的探测口径有误：实际为 start 在 p1355、end 在 body 级的一对。）
+- 修复（fundlex/docx.py + fundlex/recall_pipeline.py）：`_bookmark_dropped_partners` 允许 partner 为 `w:body` 直接子节点时成对移除（真跨段——partner 在其他 `w:p`——仍 fail-closed）；`_apply_one` 对 body 级 partner 经其父节点移除并回报 id，`_structure_snapshot` 增加 `body_dropped_bookmarks` 归一化参数使非目标骨架检查不误报；`recall_pipeline._plan_and_generate` 新增 `_drop_unvalidatable_edits`：整计划 validate 失败时逐 edit 探针定位肇事 edit，丢弃该 edit、ledger 目标转 unresolved（reason=`RECALL_EDIT_VALIDATE_REJECTED`），剩余计划再严格复验；无法归因（全数单独失败或无一可责）时维持整合同 fail-closed。
+- 验证：①B16 checkpoints 复放（生产参数 overlay=True）：修复前 validate 抛 id=78；修复后 validate OK 14/14 edits、generate_artifacts 六项 checks 全过（package/revisions/final_equivalence/non_target/template_text/content_verification）、产物书签成对无 id=78。②回归：tests/test_docx_a3_regressions.py 25 全绿（新增 body 级 partner 成对移除 start/end 两向 + 带 body 级杂散半片时其他段落 partner 仍 fail-closed 3 个）；tests -k "docx" 158 passed/1 skipped；tests/test_qa_20261031_regressions.py 36 全绿（新增 `_drop_unvalidatable_edits` 降级测试）。G22 p1355 目标由 unresolved 变为实改交付。
+- 状态：修复已实现并单测/复放验证；待 dev20/重跑 B16 正式任务复测确认交付状态恢复。
+- 变更记录：2026-10-31 新增（子 agent 登记）；2026-10-31 根因复核修复并复放验证（DOCX 修复 agent）。
 
 ## FL-D564 二轮盲审：安全/API 九项（2026-10-31，R2-security-api）
 
@@ -6834,8 +6837,9 @@ H＝E×…
 - **F2（MEDIUM）**：`_apply_artifact_proof_to_findings` 对 location 查无（LOCATION_NOT_FOUND）与"残留不存在"同分支处理，真实残留被静默置 resolved+错误证据标签（触发面窄但一旦触发即静默漏改）。
 - **LOW×5**：F1 项 summary 文案误标；coverage_open 死代码重复块；semantic_contract offset_mismatch 死检查+template 模式 new_text 无 slot 实例化；claimed 引文正则缺中文单引号；三层阻断判定字段口径不一致。
 - **正面证据（如实记录）**：ledger/claim-replay 硬闸门结构完整、相关测试 151 项全绿、happy path e2e 正常 complete。
-- **处理**：引擎修复 agent 已启动（F1/F2 必修+LOW 逐条，PoC 防复现回归）；结果回报后更新本条。
-- **状态**：修复中。
+- **处理与验证（2026-10-31，内容随 `986c1eb` 提交、归因见 `6fd382d`）**：F1 已修——`FUND_TYPE_UNVERIFIED` 入 `_ALWAYS_BLOCKING_CODES`，strict/review_assisted 双策略阻断，资格项补 reason 字段消除口径缝隙；PoC：修复前 complete+发布 final/redline → 修复后 incomplete、blockers=[FUND_TYPE_UNVERIFIED]、仅发 working 产物。F2 已修——location 缺失独立分支：pending + SEMANTIC_UNCERTAIN + LOCATION_NOT_FOUND，不再静默 resolved（正对照仍 resolved）。LOW×5 全修（summary 文案、死代码块清理、template 模式 instantiate_slots+fail-closed、claimed 正则补中文单引号、阻断判定单点化）。新增回归 7 条；test_recall_pipeline 54、QA regressions 36、delivery/obligation 137 passed；happy-path e2e 正常 complete。A8-F2 orphan evidence 行为未动（复核确认点）。
+- **独立复核**：已启动（含 PoC 独立复跑），结论回报后最终确认。
+- **状态**：已修复待独立复核终验。
 
 ## FL-D566 Wave-1 冒烟 B05 报告 complete 但评分存在 wrong 目标（false_complete）（2026-10-31）
 
