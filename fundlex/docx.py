@@ -909,8 +909,23 @@ def validate_edit_plan(source: str | Path, edits: Sequence[Mapping[str, Any]],
         old = paragraph.text[start:end]
         if old != edit.get("expected_old_text") or _sha(old.encode("utf-8")) != edit.get("expected_old_hash"):
             raise DocxError("EXPECTED_TEXT_MISMATCH")
+        if str(edit.get("expected_old_text", "")) == str(edit.get("replacement", "")):
+            # A replacement identical to the source text would publish a
+            # redline that changes nothing while the report claims an edit.
+            raise DocxError("NOOP_EDIT", location)
         if not any(segment.start <= start and end <= segment.end for segment in paragraph.segments):
             raise DocxError("EDIT_CROSSES_BARRIER")
+        try:
+            paragraph_node, between, _, _, _ = _edit_region(tree, edit, limits,
+                                                            overlay=allow_existing_revisions)
+        except DocxError:
+            # Geometry/structure failures keep their existing enforcement at
+            # generation; validation only adds the bookmark pairing rule here.
+            between = None
+        if between is not None:
+            # Raises EDIT_BOOKMARK_RANGE_BROKEN when the surviving half of a
+            # bookmark range sits outside the edited paragraph.
+            _bookmark_dropped_partners(tree, paragraph_node, between)
         if not _safe_grapheme_boundary(paragraph.text, start) or not _safe_grapheme_boundary(paragraph.text, end):
             raise DocxError("GRAPHEME_BOUNDARY_INVALID")
         for existing_start, existing_end in occupied.setdefault(location, []):
@@ -1085,30 +1100,43 @@ def _edit_region(root: etree._Element, edit: Mapping[str, Any], limits: ZipLimit
     return paragraph, between, selected, runs, insert_at
 
 
-def _check_bookmark_pairing(root: etree._Element, between: Sequence[etree._Element]) -> None:
-    """Reject an edit whose dropped anchors would orphan one bookmark half.
+def _bookmark_dropped_partners(root: etree._Element, paragraph: etree._Element,
+                               between: Sequence[etree._Element]) -> list[etree._Element]:
+    """Resolve bookmark halves whose partner is dropped inside an edited span.
 
-    The writer drops bookmarkStart/bookmarkEnd markers that sit inside the
-    edited span.  That is only sound when both ends of a range are dropped
-    together: otherwise the surviving half is an unpaired marker and every
-    cross-reference to the bookmark name breaks silently.
+    Both ends of a bookmark range must die together: a survivor would be an
+    unpaired bookmarkStart/bookmarkEnd and silently break every cross-reference
+    to its name.  A partner inside the same edited paragraph is returned for
+    removal (edited paragraphs may drop navigation anchors).  A partner living
+    anywhere else cannot be touched without breaking non-target conservation,
+    so the edit is rejected fail-closed.
     """
     dropped = {node.get(Q("id"), ""): etree.QName(node).localname
                for node in between
                if node.tag in {Q("bookmarkStart"), Q("bookmarkEnd")}}
     if not dropped:
-        return
-    inside = {id(node) for node in between}
-    surviving: dict[str, set[str]] = {}
+        return []
+    # lxml element proxies are not identity-stable across iterations, so use
+    # absolute paths on the (unmutated) tree to tell nodes apart.
+    tree = root.getroottree()
+    inside = {tree.getpath(node) for node in between}
+    paragraph_path = tree.getpath(paragraph)
+    partners: list[etree._Element] = []
     for node in root.iter():
-        if not isinstance(node.tag, str) or id(node) in inside:
+        if not isinstance(node.tag, str) or node.tag not in {Q("bookmarkStart"), Q("bookmarkEnd")}:
             continue
-        if node.tag in {Q("bookmarkStart"), Q("bookmarkEnd")}:
-            surviving.setdefault(node.get(Q("id"), ""), set()).add(etree.QName(node).localname)
-    for bookmark_id, kind in dropped.items():
-        partner = "bookmarkEnd" if kind == "bookmarkStart" else "bookmarkStart"
-        if partner in surviving.get(bookmark_id, set()):
+        bookmark_id = node.get(Q("id"), "")
+        kind = etree.QName(node).localname
+        if bookmark_id not in dropped or tree.getpath(node) in inside:
+            continue
+        if kind == dropped[bookmark_id]:
+            continue
+        parent = node.getparent()
+        if parent is not None and tree.getpath(parent) == paragraph_path:
+            partners.append(node)
+        else:
             raise DocxError("EDIT_BOOKMARK_RANGE_BROKEN", bookmark_id)
+    return partners
 
 
 def _apply_one(root: etree._Element, edit: Mapping[str, Any], del_id: int,
@@ -1116,6 +1144,8 @@ def _apply_one(root: etree._Element, edit: Mapping[str, Any], del_id: int,
                *, overlay: bool = False) -> None:
     paragraph, between, selected, runs, insert_at = _edit_region(
         root, edit, limits, overlay=overlay)
+    partners = _bookmark_dropped_partners(root, paragraph, between)
+    shift = sum(1 for node in partners if paragraph.index(node) < insert_at)
     start, end = int(edit["start"]), int(edit["end"])
     deleted_runs = [
         _make_text_run(run, (node.text or "")[max(start - lo, 0):min(end - lo, hi - lo)],
@@ -1137,8 +1167,10 @@ def _apply_one(root: etree._Element, edit: Mapping[str, Any], del_id: int,
         replacement.append(_make_text_run(last_run, suffix))
     for node in between:
         paragraph.remove(node)
+    for node in partners:
+        paragraph.remove(node)
     for offset, node in enumerate(replacement):
-        paragraph.insert(insert_at + offset, node)
+        paragraph.insert(insert_at - shift + offset, node)
 
 
 def _accept_our_revisions(root: etree._Element, manifests: Sequence[Mapping[str, Any]]) -> None:
@@ -1293,10 +1325,11 @@ def _accepted_offsets(text: str, start: int, end: int) -> tuple[int, int]:
     """Map barrier-view offsets to the plain accepted text.
 
     The inspection projection keeps ``BARRIER`` characters around text that
-    belongs to another author.  Plans use those offsets; the accepted final has
-    no barriers, so validation must remove exactly the barriers before the
-    target.  The mapping is explicit rather than silently assuming both views
-    share an origin.
+    belongs to another author or to a persistent barrier (tab, hyperlink,
+    field, ...).  Plans use those offsets; validation compares the plain view
+    with every barrier mark stripped, so it must remove exactly the barrier
+    marks before the target.  The mapping is explicit rather than silently
+    assuming both views share an origin.
     """
     clean_length = len(text.replace(BARRIER, ""))
 
@@ -1383,12 +1416,19 @@ def generate_artifacts(source: str | Path, plan: ValidatedPlan, redline_path: st
                          if allow_existing_revisions else ())
     next_id = (_max_revision_id_in_parts(parts, limits) if allow_existing_revisions
                else _max_revision_id(original))
+    # The selective-review contract requires an odd ``del_id`` with
+    # ``ins_id == del_id + 1``.  Foreign revision ids carry no parity
+    # guarantee, so the first generated pair starts at the next odd number
+    # above ``next_id`` instead of blindly adding one.
+    base_id = next_id + 1
+    if base_id % 2 == 0:
+        base_id += 1
     root = deepcopy(original)
     now = datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
     manifest: list[dict[str, Any]] = []
     try:
         for number, edit in enumerate(sorted(plan.edits, key=lambda e: (e["location"], -e["start"])), start=1):
-            del_id, ins_id = next_id + number * 2 - 1, next_id + number * 2
+            del_id, ins_id = base_id + number * 2 - 2, base_id + number * 2 - 1
             _apply_one(root, edit, del_id, ins_id, author, now, limits,
                        overlay=allow_existing_revisions)
             manifest.append({"edit_id": edit.get("edit_id", f"edit-{number}"), "location": edit["location"],
@@ -1474,22 +1514,35 @@ def generate_artifacts(source: str | Path, plan: ValidatedPlan, redline_path: st
         source_projection = {span.location: span.text for span in
                              _enumerate_paragraphs(original, limits,
                                                    overlay=allow_existing_revisions)[0]}
+        # Compare expected against actual in one shared plain view.  Persistent
+        # barriers (w:tab, hyperlink results, field markers, ...) survive into
+        # the final package, so stripping their barrier marks from both sides
+        # maps plan offsets, expectations and the reopened final onto the same
+        # coordinate system.
         for location, old_text in source_texts.items():
-            expected = old_text
+            expected = old_text.replace(BARRIER, "")
             coordinates = source_projection.get(location, old_text)
             for edit in sorted((e for e in plan.edits if e["location"] == location), key=lambda e: -e["start"]):
                 start, end = _accepted_offsets(coordinates, int(edit["start"]), int(edit["end"]))
                 expected = expected[:start] + str(edit["replacement"]) + expected[end:]
-            if final_texts.get(location) != expected:
+            final_text = final_texts.get(location)
+            if final_text is None or final_text.replace(BARRIER, "") != expected:
                 raise DocxError("FINAL_TEXT_MISMATCH", location)
         for location in edited:
-            expected_formats = _text_formats(baseline, location, limits)
+            baseline_view = source_texts[location]
+            expected_formats = [fmt for char, fmt in
+                                zip(baseline_view, _text_formats(baseline, location, limits))
+                                if char != BARRIER]
             barrier_text = source_projection.get(location, "")
             for edit in sorted((e for e in plan.edits if e["location"] == location), key=lambda e: -e["start"]):
                 start, end = _accepted_offsets(barrier_text, int(edit["start"]), int(edit["end"]))
                 inherited = expected_formats[start - 1 if start == end else start]
                 expected_formats[start:end] = [None if char == "\n" else inherited for char in str(edit["replacement"])]
-            if _text_formats(final_reopen, location, limits) != expected_formats:
+            final_view = final_texts.get(location, "")
+            final_formats = [fmt for char, fmt in
+                             zip(final_view, _text_formats(final_reopen, location, limits))
+                             if char != BARRIER]
+            if final_formats != expected_formats:
                 raise DocxError("RUN_FORMAT_CHANGED", location)
         return ArtifactValidation(_sha(redline_path.read_bytes()), _sha(final_path.read_bytes()),
                                   tuple(manifest), ("package", "revisions", "final_equivalence", "non_target",
