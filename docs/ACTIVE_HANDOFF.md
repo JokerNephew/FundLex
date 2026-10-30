@@ -1,5 +1,10 @@
 # FundLex 当前断点（ACTIVE_HANDOFF）
 
+## 2026-10-30 工作台文案精简（FL-D542，待发布）
+
+- 已按用户清单删除7处辅助说明及任务名创建时间小字；表格时间列改为创建时间/created_at，功能/排序不变。主代码a58a36b，发布线927bebc。
+- 发布线先合并最新生产877a980，保留模型独立页面与Compare对齐，不整仓回退并行成果。workspace浏览器专项1 passed；下一步发布dry-run→受控发布→生产真实登录检查工作台，不调用模型。
+
 ## 2026-10-30 Compare对齐候选（FL-D540）
 
 - 基线为最新已发布普通用户配置线cdcf52c，叠加主工作区680da13中的7个Compare代码/测试文件，未回退配置功能。分支codex/compare-alignment-release-20261030，路径/tmp/opencode/compare-alignment-release-20261030。
