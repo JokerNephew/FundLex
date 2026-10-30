@@ -3857,8 +3857,9 @@ def _delivery_complete(unresolved: Sequence[dict[str, Any]], *, ledger: Any = No
     if ledger is not None:
         from .obligations import open_obligations
         # The Ledger owns business completion.  The unresolved argument is only
-        # its diagnostic projection plus orphan/resource blockers, so it may
-        # never close an open record and it still blocks an unbound evidence row.
+        # its diagnostic projection plus resource blockers, so it may never
+        # close an open record; an unbound evidence row stays visible as a
+        # review item under review-assisted delivery (see project_unresolved).
         open_items = open_obligations(ledger)
         if open_items:
             if mode == "strict":

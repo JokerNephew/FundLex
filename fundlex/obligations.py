@@ -612,9 +612,12 @@ def project_unresolved(ledger: ObligationLedger,
     The Ledger row is the completion source.  Claim Replay rows that are already
     represented by an open obligation are collapsed into that canonical row, while
     detailed target/audit/sweep/coverage diagnostics remain visible for operators.
-    Rows that cannot be bound to an obligation remain visible as orphan evidence and
-    block delivery; all returned evidence rows are diagnostic projections, never a
-    second completion ledger.
+    Rows that cannot be bound to an obligation remain visible as orphan evidence
+    rows; under review-assisted delivery they are review items for the human
+    reviewer like open obligations, not automatic blockers (the earlier
+    "must block delivery" wording was stale relative to the tested
+    review-assisted contract).  All returned evidence rows are diagnostic
+    projections, never a second completion ledger.
     """
     rows = open_obligations(ledger)
     open_records = tuple(record for record in ledger.records if not record.closed)
