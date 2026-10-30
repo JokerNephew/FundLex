@@ -12,7 +12,7 @@
   - **B19 锐意**：本轮未完成新的真实全量运行；上一轮G04连接词/R035问题已用`092c215`等修复并有定向测试，仍需真实复跑。
 - `run-ae`/`run-af` 在用户暂停指令前后因 `MODEL_RETRY_EXHAUSTED` 停止，targets=0，不是业务结果，不作为通过/失败证据。
 - 本轮新增离线修复：G11类别前缀、G18/PUA标题与摘要副本、G22编号副本、G09必需单位、G12编号保留、G08部分政策模板、G16同clause去重、class no-op站点、G05 sweep仲裁。集中记录见`docs/DETAIL_ISSUES_AND_RESOLUTIONS.md` FL-D517–D535。
-- 离线全量回归正在`/tmp/opencode/comprehensive-remediation-20261028/full-pytest-oct30.log`运行；结果以该日志为准，未完成前不宣称回归通过。
+- 离线全量非浏览器回归（含隔离MySQL）**2183 passed / 6 skipped / 4 warnings / 716.25s**，日志`/tmp/opencode/comprehensive-remediation-20261028/full-pytest-oct30c.log`；提交`02843de`。浏览器回归`browser-oct30.log`运行中。
 - 下一步（需用户允许真实调用后）：①重跑B15一次，确认G18/G22摘要进入Claim Replay、open obligation=0；②重跑B17一次确认p295编号与G08；③重跑B19；④20 dev整体重新评分+独立复核；⑤冻结版本/tag后跑8份holdout；⑥最新候选干净worktree部署生产+正式工作台真实E2E。真实调用暂停期间可继续离线单测、文档、部署脚本和前端检查，不启动真实模型。
 
 ## 当前执行任务（2026-10-29，全面整改、分波扩样及端到端交付）
