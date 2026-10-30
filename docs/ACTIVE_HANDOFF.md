@@ -1,6 +1,17 @@
 # FundLex 当前断点（ACTIVE_HANDOFF）
 
 ## 2026-10-30 法规指引生成与模型切换续接
+## 2026-10-30 工作台文案精简（FL-D542，待发布）
+
+- 已按用户清单删除7处辅助说明及任务名创建时间小字；表格时间列改为创建时间/created_at，功能/排序不变。主代码a58a36b，发布线927bebc。
+- 发布线先合并最新生产877a980，保留模型独立页面与Compare对齐，不整仓回退并行成果。workspace浏览器专项1 passed；下一步发布dry-run→受控发布→生产真实登录检查工作台，不调用模型。
+
+## 2026-10-30 Compare对齐候选（FL-D540）
+
+- 基线为最新已发布普通用户配置线cdcf52c，叠加主工作区680da13中的7个Compare代码/测试文件，未回退配置功能。分支codex/compare-alignment-release-20261030，路径/tmp/opencode/compare-alignment-release-20261030。
+- 完整对齐组、删除段落来源、zoom虚拟高度与窗口锚点已修；主工作区V1浏览器15 passed/Compare133 passed6 skipped；650块插删及真实1421差异合同验证，详见集中问题FL-D540。
+- 下一动作：候选专项测试→dry-run/受控发布→正式注册登录上传DOCX→真实Compare Worker→Word/双栏滚动、差异导航、拖宽、选择生成及下载。无需模型，不启动修改引擎真实模型任务。当前未发布，不宣称生产已修复。
+## 2026-10-30 模型配置独立页面更新（待发布）
 
 - 用户先前因额度要求暂停真实模型/合同评测；2026-10-30 后续更新提供了新模型 endpoint/model，并明确允许配置后正常做模型测试。该更新允许模型连通/行为测试，但当前新 key 尚未安全写入配置；完整真实合同评测/资格验证尚未开始，不得把离线单测表述为业务质量或资格通过。
 - 当前分支 `codex/comprehensive-remediation-20261028`，起始 HEAD `cba0adc`。本线保留的未提交源码为 `fundlex/guide_generation/{discovery,eligibility,pipeline,quality}.py`、`frontend/guide_generation.js` 与对应法规测试；其它 Compare 前端、配置分析、合同备份等并行改动未覆盖。

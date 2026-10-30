@@ -462,7 +462,7 @@
       hideLogin();renderAuthUI();state.cap=cap;renderFooter();
       if(!state.importMode)state.importMode='revision';
       $('upload-limit').textContent=`仅接收 DOCX（.doc 请先用 Word/WPS 另存为 .docx） · 单文件 ≤ ${size(cap.upload_limits.max_file_bytes)}`;
-      updateDeliveryNote();renderImport();if(state.view==='settings')loadFeishuBinding();if(state.view==='models')loadModelSettings();
+      renderImport();if(state.view==='settings')loadFeishuBinding();if(state.view==='models')loadModelSettings();
       if(!wasReady&&state.view==='overview')restoreRevisionFilters();
       if(!wasReady)dispatchRoute();
       if(state.view==='document'&&!state.detail)openDocumentRoute(state.route);
