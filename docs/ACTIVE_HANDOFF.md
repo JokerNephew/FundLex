@@ -1,5 +1,11 @@
 # FundLex 当前断点（ACTIVE_HANDOFF）
 
+## 2026-10-30 Compare对齐候选（FL-D540）
+
+- 基线为最新已发布普通用户配置线cdcf52c，叠加主工作区680da13中的7个Compare代码/测试文件，未回退配置功能。分支codex/compare-alignment-release-20261030，路径/tmp/opencode/compare-alignment-release-20261030。
+- 完整对齐组、删除段落来源、zoom虚拟高度与窗口锚点已修；主工作区V1浏览器15 passed/Compare133 passed6 skipped；650块插删及真实1421差异合同验证，详见集中问题FL-D540。
+- 下一动作：候选专项测试→dry-run/受控发布→正式注册登录上传DOCX→真实Compare Worker→Word/双栏滚动、差异导航、拖宽、选择生成及下载。无需模型，不启动修改引擎真实模型任务。当前未发布，不宣称生产已修复。
+
 ## 2026-10-30 用户配置化开发断点（本工作树）
 
 - 目标：用户已授权规则组启停、模型配置、我的指引；普通业务用户自助配置，不是管理员控制台。“我的指引”留在修改指引页；任务页不加指引选择。

@@ -443,6 +443,119 @@ def test_compare_word_style_reader_renders_merged_redline_and_display_modes(brow
     assert page_errors == []
 
 
+@pytest.mark.parametrize("count,unequal", [(60, False), (650, True)])
+def test_compare_scroll_sync_uses_aligned_paragraphs(browser, live_dev, count, unequal):
+    """Scrolling a long-enough document must keep the left, merged and right
+    panes on the same paragraph instead of mapping scrollbar ratios."""
+    _app, base = live_dev
+    context = browser.new_context(viewport={"width": 1440, "height": 900})
+    context.add_init_script("localStorage.setItem('fundlex-dev-user','compare-scroll-sync')")
+    page = context.new_page()
+    page_errors: list[str] = []
+    page.on("pageerror", lambda error: page_errors.append(str(error)))
+
+    def block(index: int, side: str) -> str:
+        text = f"第{index + 1}条 " + ("本合同双方应当按照约定履行义务。" * (3 + index % 4))
+        if index == 30:
+            text += '<ins class="compare-ins" data-diff-id="D1">新增内容</ins>'
+        return f'<p class="compare-block" data-block-id="{side}{index}">{text}</p>'
+
+    inserted = ''.join(f'<p class="compare-block" data-block-id="R-extra-{i}">新增独立条款{i}</p>' for i in range(15)) if unequal else ''
+    right_ids = [i for i in range(count) if not (unequal and 280 <= i < 300)]
+    merged = '<div class="compare-document compare-merged-document">' + inserted + "".join(
+        block(index, "L" if unequal and 280 <= index < 300 else "R") for index in range(count)) + "</div>"
+    left_html = '<div class="compare-document">' + "".join(block(index, "L") for index in range(count)) + "</div>"
+    right_html = '<div class="compare-document">' + inserted + "".join(block(index, "R") for index in right_ids) + "</div>"
+    alignment = [{"id": f"G{i}", "left": [f"L{i}"], "right": [f"R{i}"] if i in right_ids else []} for i in range(count)]
+    diffs = [{"id": "D1", "type": "insert", "section": "正文",
+              "left": None, "left_anchor": {"block_id": "L30"},
+              "right": {"text": "新增内容", "block_id": "R30"},
+              "right_spans": [{"block_id": "R30"}]}]
+
+    def view():
+        return {"pair": {"id": "P5", "label": "滚动同步"}, "result_sha256": "a" * 64,
+                "left": {"name": "原文档.docx", "html": left_html},
+                "right": {"name": "修订文档.docx", "html": right_html},
+                "merged": {"name": "修订文档.docx", "html": merged},
+                "summary": {"total": 1, "insert": 1, "modify": 0, "delete": 0},
+                "coverage": {"status": "complete", "warnings": []}, "diffs": diffs, "alignment": alignment}
+
+    def selection():
+        return {"pair_id": "P5", "result_sha256": "a" * 64,
+                "left_source_sha256": "b" * 64, "right_source_sha256": "c" * 64,
+                "selection_epoch": 0,
+                "draft": {"selection_epoch": 0, "decisions": {"D1": "pending"}, "decision_hash": "d" * 64},
+                "decisions": {"D1": "pending"},
+                "assessment": {"pending_ids": ["D1"], "issues": [], "can_generate": False},
+                "diffs": diffs, "artifacts": []}
+
+    def scenario(path, query, route):
+        if path == "/api/compare/tasks":
+            return respond(route, {"items": [{"id": "T5", "name": "scroll-sync", "status": "succeeded", "total": 1,
+                                              "pairs": [{"id": "P5", "label": "滚动同步", "status": "succeeded",
+                                                         "left": {"name": "原文档.docx"}, "right": {"name": "修订文档.docx"},
+                                                         "summary": {"total": 1}}]}]})
+        if path == "/api/compare/tasks/T5":
+            return respond(route, {"id": "T5", "name": "scroll-sync", "status": "succeeded", "total": 1,
+                                   "pairs": [{"id": "P5", "label": "滚动同步", "status": "succeeded",
+                                              "left": {"name": "原文档.docx"}, "right": {"name": "修订文档.docx"},
+                                              "summary": {"total": 1}}]})
+        if path == "/api/compare/pairs/P5/view":
+            return respond(route, view())
+        if path == "/api/compare/pairs/P5/selection":
+            return respond(route, selection())
+        return respond(route, {})
+
+    install_api(page, base_api(scenario))
+    try:
+        open_dev(page, base, "#compare?mode=detail&id=T5&pair=P5")
+        page.locator("#compare-word-merged-pane .compare-ins").wait_for(state="attached")
+        page.locator("#compare-show-sources").check()
+        page.locator("#compare-word-left-pane .compare-block").first.wait_for(state="visible")
+        page.wait_for_timeout(300)
+        page.locator("#compare-word-merged-pane").evaluate("element => { element.scrollTop += 520; }")
+        page.wait_for_timeout(700)
+        read_visible = """() => {
+          const read = id => {
+            const pane = document.getElementById(id), doc = pane?._virtualDoc;
+            if (!pane || !doc) return null;
+            const top = pane.scrollTop, rect = pane.getBoundingClientRect();
+            for (const chunk of doc.chunks) {
+              if (!chunk.el) continue;
+              for (let i = 0; i < chunk.el.children.length; i++) {
+                const node = chunk.el.children[i], r = node.getBoundingClientRect();
+                if (r.top - rect.top + top + r.height > top + 1) {
+                  return {index: chunk.start + i, text: node.textContent.trim().slice(0, 18)};
+                }
+              }
+            }
+            return null;
+          };
+          return document.getElementById('compare-classic-view').hidden
+            ? {merged: read('compare-word-merged-pane'), left: read('compare-word-left-pane'), right: read('compare-word-right-pane')}
+            : {left: read('compare-left-pane'), right: read('compare-right-pane')};
+        }"""
+        visible = page.evaluate(read_visible)
+        assert visible["left"]["text"] == visible["right"]["text"] == visible["merged"]["text"]
+        for pane_id, index in [('compare-word-left-pane', count - 80 if unequal else 35),
+                               ('compare-word-right-pane', 160 if unequal else 22),
+                               ('compare-word-merged-pane', 350 if unequal else 32)]:
+            page.locator('#' + pane_id).evaluate('(e,i)=>e._virtualDoc.scrollToBlockIndex(i,.3)', index)
+            page.wait_for_timeout(700)
+            visible = page.evaluate(read_visible)
+            assert visible['left']['text'] == visible['right']['text'] == visible['merged']['text'], visible
+        page.locator('[data-compare-view-mode="classic"]').click()
+        page.wait_for_timeout(700)
+        for pane_id, delta in [('compare-left-pane', 5000 if unequal else 500), ('compare-right-pane', -1200 if unequal else -250)]:
+            page.locator('#' + pane_id).evaluate('(e,d)=>e.scrollTop+=d', delta)
+            page.wait_for_timeout(700)
+            visible = page.evaluate(read_visible)
+            assert visible['left']['text'] == visible['right']['text'], visible
+    finally:
+        context.close()
+    assert page_errors == []
+
+
 def test_compare_save_retry_enables_generate_after_failed_autosave(browser, live_dev):
     """A failed automatic save must leave the explicit save action usable.
     Clicking it must not pass the click event as a diff-id array, and a

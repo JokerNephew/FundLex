@@ -790,3 +790,7 @@ body.compare-fullscreen-open{overflow:hidden!important}
 @media(max-width:760px){
   #compare-viewer .compare-column-splitter{display:none}
 }
+/* Virtual chunk replacement must not be re-anchored by the browser: the
+   reader keeps its own paragraph anchor and otherwise jumps to the page end. */
+#compare-viewer .compare-word-pane,#compare-viewer .compare-pane{overflow-anchor:none}
+#compare-viewer .compare-virtual-chunk{display:flow-root}

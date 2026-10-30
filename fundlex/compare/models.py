@@ -240,5 +240,6 @@ class CompareResult:
                 "right": {"filename": self.right.filename, "sha256": self.right.source_sha256},
                 "summary": self.summary.to_dict(), "coverage": self.coverage.to_dict(),
                 "comparison_scope": self.comparison_scope,
+                "alignment": [group.to_dict() for group in self.alignment],
                 "diffs": [d.to_dict() for d in self.diffs],
                 "diagnostics": dict(self.diagnostics)}

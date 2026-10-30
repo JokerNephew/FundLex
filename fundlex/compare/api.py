@@ -15,7 +15,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 from .store import CompareStore, Conflict, NotFound
 from ..api_errors import raise_api_error
 
-_VIEW_CACHE: OrderedDict[str, tuple[str, str, str]] = OrderedDict()
+_VIEW_CACHE: OrderedDict[str, tuple[str, str, str, list[dict[str, Any]]]] = OrderedDict()
 _VIEW_CACHE_LOCK = Lock()
 _VIEW_CACHE_MAX = 4
 
@@ -78,7 +78,7 @@ class CompareSelectionGenerate(BaseModel):
 
 
 def _render_view(pair_result: dict[str, Any], left_path: Path, right_path: Path,
-                 *, cache_key: str = "") -> tuple[str, str, str]:
+                 *, cache_key: str = "") -> tuple[str, str, str, list[dict[str, Any]]]:
     if cache_key:
         with _VIEW_CACHE_LOCK:
             cached = _VIEW_CACHE.get(cache_key)
@@ -86,13 +86,15 @@ def _render_view(pair_result: dict[str, Any], left_path: Path, right_path: Path,
                 _VIEW_CACHE.move_to_end(cache_key)
                 return cached
     from . import parser
+    from .align import align_documents
     from .render import render_compare_document, render_merged_document
     left_doc = parser.parse_compare_document(left_path, filename=pair_result.get("left", {}).get("filename", ""), side="L")
     right_doc = parser.parse_compare_document(right_path, filename=pair_result.get("right", {}).get("filename", ""), side="R")
     diffs = pair_result.get("diffs") or []
     rendered = (render_compare_document(left_doc, diffs, side="left"),
                 render_compare_document(right_doc, diffs, side="right"),
-                render_merged_document(right_doc, diffs, left_document=left_doc))
+                 render_merged_document(right_doc, diffs, left_document=left_doc),
+                 pair_result.get("alignment") or [group.to_dict() for group in align_documents(left_doc, right_doc)[0]])
     if cache_key:
         with _VIEW_CACHE_LOCK:
             _VIEW_CACHE[cache_key] = rendered
@@ -213,7 +215,7 @@ def register_compare_routes(application, compare_store: CompareStore, user_depen
                 if (not path.is_file() or path.stat().st_size != f["size"]
                         or hashlib.sha256(path.read_bytes()).hexdigest() != f["source_sha256"]):
                     raise Conflict("COMPARE_INPUT_INTEGRITY_FAILED")
-            left_html, right_html, merged_html = _render_view(
+            left_html, right_html, merged_html, alignment = _render_view(
                 pair["result"], lp, rp,
                 cache_key=f"{pair['id']}:{pair.get('result_sha256') or ''}")
         except (NotFound, Conflict) as exc:
@@ -224,6 +226,7 @@ def register_compare_routes(application, compare_store: CompareStore, user_depen
                    "left": {"name": pair["left"]["name"], "html": left_html},
                    "right": {"name": pair["right"]["name"], "html": right_html},
                    "merged": {"name": pair["right"]["name"], "html": merged_html},
+                   "alignment": alignment,
                    "summary": pair["result"].get("summary"), "coverage": pair["result"].get("coverage"),
                    "diffs": pair["result"].get("diffs", []), "result_sha256": pair.get("result_sha256")}
         # Long contracts produce multi-megabyte HTML. Compress this one JSON

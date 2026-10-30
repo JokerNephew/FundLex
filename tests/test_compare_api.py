@@ -59,7 +59,18 @@ def test_compare_api_roundtrip_and_xss(tmp_path):
     assert '<script>' not in view.json()['left']['html']
     assert '<script>' not in view.json()['merged']['html']
     assert view.json()['merged']['name'] == 'b.docx'
+    assert view.json()['alignment']
+    assert all(set(group) == {'id', 'left', 'right'} for group in view.json()['alignment'])
     assert c.get(f'/api/compare/pairs/{pid}',headers={'X-FundLex-User':'bob'}).status_code==404
+
+
+def test_compare_legacy_view_reconstructs_alignment(tmp_path):
+    from fundlex.compare.api import _render_view
+    left, right = tmp_path / 'left.docx', tmp_path / 'right.docx'
+    left.write_bytes(docx('共同条款'))
+    right.write_bytes(docx('共同条款'))
+    *_, alignment = _render_view({'diffs': []}, left, right)
+    assert any(group['left'] and group['right'] for group in alignment)
 
 
 def test_compare_upload_accepts_revisions_and_returns_audit_metadata(tmp_path):
