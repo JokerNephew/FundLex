@@ -497,3 +497,73 @@ def test_invalid_hash_toasts_and_returns_to_workspace(browser, live_dev):
         assert not errors, errors
     finally:
         context.close()
+
+
+def test_review_splitter_rebind_disposes_without_leak(browser, live_dev):
+    """A9-F04 加固：反复进入/退出修订审查，分栏实例 dispose、全局 resize 监听器不累积。
+
+    17a2984 的机制：所有分栏共用一个 window resize 监听（registry 清扫失连句柄），
+    bindReviewSplitter 重绑前 dispose 旧实例。若防线回退，存活实例数或 resize
+    监听器数会随打开次数线性增长。
+    """
+    _app, base = live_dev
+    context, page, errors = _dev_page(browser)
+    context.add_init_script("""
+        window.__resizeListeners = 0;
+        const __origAdd = window.addEventListener.bind(window);
+        window.addEventListener = function (type, listener, options) {
+            if (type === 'resize') window.__resizeListeners += 1;
+            return __origAdd(type, listener, options);
+        };
+    """)
+    install_api(page, base_api(_paused_task_scenario()))
+    try:
+        open_dev(page, base, "#task?id=t")
+        page.locator("#doc-rows [data-detail]").wait_for()
+        # 应用引导完成后包裹真实工厂：统计存活分栏实例（创建+1、dispose-1）。
+        page.evaluate("""
+            () => {
+                window.__splitterLive = 0;
+                const factory = window.FundLexColumnSplitter;
+                window.FundLexColumnSplitter = function (...args) {
+                    const instance = factory.apply(this, args);
+                    if (instance) {
+                        window.__splitterLive += 1;
+                        const dispose = instance.dispose.bind(instance);
+                        instance.dispose = function () { dispose(); window.__splitterLive -= 1; };
+                    }
+                    return instance;
+                };
+            }
+        """)
+        # 工作台外壳同时加载 app.js 与 compare.js，首次打开审查后开始记录基线；
+        # 不变量是「计数不增长」而非绝对值（基线随页面捆绑脚本而定）。
+        baseline: dict[str, int] = {}
+        for round_ in range(6):
+            page.locator("#doc-rows [data-detail]").first.click()
+            page.locator("#detail-overlay").wait_for(state="visible")
+            page.locator("[data-action='open-review']").click()
+            page.locator("#detail-overlay .review-layout").wait_for(state="visible")
+            live = page.evaluate("window.__splitterLive")
+            resize = page.evaluate("window.__resizeListeners")
+            if not baseline:
+                baseline["live"], baseline["resize"] = live, resize
+            assert live == baseline["live"], (
+                f"第 {round_ + 1} 次进入审查后存活分栏实例应保持在 {baseline['live']}，实际 {live}")
+            assert resize == baseline["resize"], (
+                f"第 {round_ + 1} 次进入审查后全局 resize 监听器应保持在 {baseline['resize']}，实际 {resize}")
+            page.locator("#detail-overlay").click(position={"x": 5, "y": 5})
+            assert page.locator("#detail-overlay").is_hidden()
+        assert page.evaluate("window.__resizeListeners") == baseline["resize"]
+        # 原地重渲染路径（全拒/全选触发 renderReview→bindReviewSplitter）同样不得泄漏。
+        page.locator("#doc-rows [data-detail]").first.click()
+        page.locator("[data-action='open-review']").click()
+        page.locator("#detail-overlay .review-layout").wait_for(state="visible")
+        for _ in range(4):
+            page.locator("[data-action='review-reject-all']").click()
+            page.locator("[data-action='review-accept-all']").click()
+        assert page.evaluate("window.__splitterLive") == baseline["live"]
+        assert page.evaluate("window.__resizeListeners") == baseline["resize"]
+        assert not errors, errors
+    finally:
+        context.close()
