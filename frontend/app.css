@@ -724,3 +724,59 @@ body:has(.detail-overlay.inline-contract-detail:not([hidden]) .review-layout){ov
   #detail-panel:has(.review-layout) .detail-head>div::before{display:none}
   #detail-panel:has(.review-layout) .review-layout{padding:8px 10px 6px;gap:8px}
 }
+/* Draggable reader columns: review list, comparison revision rail, source panes. */
+.review-splitter,.compare-column-splitter{
+  position:relative;
+  align-self:stretch;
+  width:6px;
+  min-width:6px;
+  padding:0;
+  border:0;
+  background:transparent;
+  cursor:col-resize;
+  touch-action:none;
+  user-select:none;
+  outline:none;
+  z-index:5;
+}
+.review-splitter::before,.compare-column-splitter::before{
+  position:absolute;
+  top:0;
+  bottom:0;
+  left:50%;
+  width:1px;
+  background:var(--fx-line);
+  content:"";
+  transform:translateX(-50%);
+  transition:width .12s,background .12s;
+}
+.review-splitter:hover::before,.review-splitter.is-dragging::before,
+.review-splitter:focus-visible::before,
+.compare-column-splitter:hover::before,.compare-column-splitter.is-dragging::before,
+.compare-column-splitter:focus-visible::before{width:2px;background:var(--fx-primary)}
+.review-splitter:focus-visible,.compare-column-splitter:focus-visible{outline:2px solid var(--fx-primary);outline-offset:-2px}
+#detail-panel:has(.review-layout) .review-layout{
+  grid-template-columns:minmax(0,1fr) 6px var(--review-list-width,360px);
+  column-gap:0;
+  row-gap:0;
+}
+@media(max-width:1000px){
+  #detail-panel:has(.review-layout) .review-layout{row-gap:10px}
+  #detail-panel:has(.review-layout) .review-splitter{display:none}
+}
+.review-splitter::after,.compare-column-splitter::after{
+  position:absolute;
+  top:50%;
+  left:50%;
+  width:3px;
+  height:28px;
+  border-radius:99px;
+  background:#c3ccd5;
+  content:"";
+  transform:translate(-50%,-50%);
+  transition:height .12s,background .12s,opacity .12s;
+}
+.review-splitter:hover::after,.review-splitter.is-dragging::after,
+.review-splitter:focus-visible::after,
+.compare-column-splitter:hover::after,.compare-column-splitter.is-dragging::after,
+.compare-column-splitter:focus-visible::after{height:38px;background:var(--fx-primary)}

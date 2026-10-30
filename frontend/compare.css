@@ -766,3 +766,27 @@ body.compare-fullscreen-open{overflow:hidden!important}
   #compare-viewer .compare-word-toolbar{padding:5px 12px}
   #compare-viewer .compare-selection-panel{padding:6px 12px}
 }
+/* Resizable comparison columns. The classic A/B gutter remains independent. */
+#compare-viewer .compare-view-body{
+  grid-template-columns:var(--compare-revisions-width,300px) 6px minmax(0,1fr);
+}
+#compare-viewer .compare-view-body[data-view-mode="classic"]{
+  grid-template-columns:minmax(0,1fr) 6px var(--compare-revisions-width,300px);
+}
+#compare-viewer .compare-view-body[data-view-mode="classic"] .compare-diff-rail{order:3}
+#compare-viewer .compare-view-body[data-view-mode="classic"] .compare-classic-view{order:1}
+#compare-viewer .compare-view-body[data-view-mode="classic"] .compare-column-splitter{order:2}
+#compare-viewer .compare-view-body .compare-diff-rail{border-right:0}
+#compare-viewer .compare-view-body[data-view-mode="classic"] .compare-word-revisions{border-left:0}
+#compare-viewer .compare-word-layout{
+  grid-template-columns:minmax(0,1fr) 6px var(--compare-sources-width,360px);
+}
+#compare-viewer .compare-word-layout.is-sources-hidden{grid-template-columns:minmax(0,1fr)}
+#compare-viewer .compare-word-layout.is-sources-hidden .compare-word-splitter{display:none}
+#compare-viewer .compare-word-sources{border-left:0}
+@media(max-width:1100px) and (min-width:761px){
+  #compare-viewer .compare-word-layout{grid-template-columns:minmax(0,1fr) 6px minmax(0,var(--compare-sources-width,300px))}
+}
+@media(max-width:760px){
+  #compare-viewer .compare-column-splitter{display:none}
+}

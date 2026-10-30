@@ -620,6 +620,7 @@
           <button class="btn btn-sm" data-action="review-accept-all">全部接受</button>
           <button class="btn btn-sm" data-action="review-reject-all">全部拒绝</button></div>
           <div class="review-doc" id="review-doc">${review.html}</div></div>
+        <div class="review-splitter" id="review-splitter" role="separator" aria-label="调整修订清单宽度" aria-orientation="vertical" aria-valuemin="280" aria-valuemax="680" aria-valuenow="360" tabindex="0" title="拖动调整修订清单宽度，双击恢复默认"></div>
         <aside class="review-list"><h3>修订清单 · ${review.revisions.length} 条 <span class="review-kbd">A 接受 · R 拒绝</span></h3>
           <ol class="rev-list">${items||'<li class="subnote">本合同没有可选择的修订。</li>'}</ol></aside>
       </div>
@@ -631,6 +632,18 @@
         和「（选择修订版）」（只保留你接受的修订，接受它的全部修订即得到最终版）；若全部保持默认接受，
         只给出「（全量痕迹版）」，因为它已经等于最终版。快捷键：A 接受当前选中修订，R 拒绝；切换合同前会保留当前勾选。</p></details>`;
     syncReview();
+    bindReviewSplitter();
+  }
+  function bindReviewSplitter() {
+    const layout = document.querySelector('.review-layout'), handle = $('review-splitter');
+    if (!layout || !handle || !window.FundLexColumnSplitter) return;
+    window.FundLexColumnSplitter(handle, layout, layout.querySelector('.review-list'), {
+      key: 'fundlex-review-list-width',
+      variable: '--review-list-width',
+      min: 280, max: 680, minOther: 560, fallback: 360,
+      side: 'right',
+      disabled: () => matchMedia('(max-width: 1000px)').matches,
+    });
   }
   function revisionNodes(revision){
     const ids=revision.revision_ids?.length?revision.revision_ids:[revision.del_id,revision.ins_id??Number(revision.del_id)+1];
@@ -901,6 +914,97 @@
   $('detail-overlay').classList.add('inline-contract-detail');
   $('detail-panel').removeAttribute('aria-modal');$('detail-panel').setAttribute('role','region');
   $('close-detail').textContent='返回任务';$('close-detail').setAttribute('aria-label','返回修改任务');
+  function bindColumnSplitter(handle, container, target, options = {}) {
+    if (!handle || !container || !target) return null;
+    const opts = {
+      key: '', variable: '--column-width', min: 220, max: 680,
+      minOther: 420, fallback: 320, side: 'right',
+      disabled: () => false, onChange: null, ...options,
+    };
+    const targetElement = () => typeof target === 'function' ? target() : target;
+    const maxWidth = () => {
+      // The reader dialog exists but is hidden on initial binding; do not
+      // collapse a fallback width to the minimum while clientWidth is zero.
+      if (!container.clientWidth) return opts.max;
+      return Math.max(opts.min, Math.min(opts.max, container.clientWidth - opts.minOther));
+    };
+    let current = opts.fallback;
+    if (opts.key) {
+      try {
+        const stored = Number(localStorage.getItem(opts.key));
+        if (Number.isFinite(stored) && stored > 0) current = stored;
+      } catch {}
+    }
+    const apply = (value, persist = false) => {
+      const next = Math.max(opts.min, Math.min(maxWidth(), Math.round(Number(value) || opts.fallback)));
+      const changed = next !== current;
+      current = next;
+      container.style.setProperty(opts.variable, `${next}px`);
+      handle.setAttribute('aria-valuenow', String(next));
+      handle.setAttribute('aria-valuemin', String(opts.min));
+      handle.setAttribute('aria-valuemax', String(Math.round(maxWidth())));
+      handle.setAttribute('aria-valuetext', `${next} 像素`);
+      if (persist && opts.key) {
+        try { localStorage.setItem(opts.key, String(next)); } catch {}
+      }
+      if (changed && opts.onChange) opts.onChange(next);
+      return next;
+    };
+    apply(current, false);
+    let dragging = false, startX = 0, startWidth = 0, resizeFrame = null;
+    const direction = () => typeof opts.side === 'function' ? opts.side() : opts.side;
+    const onMove = event => {
+      if (!dragging) return;
+      const delta = (event.clientX - startX) * (direction() === 'left' ? 1 : -1);
+      apply(startWidth + delta);
+    };
+    const onUp = () => {
+      if (!dragging) return;
+      dragging = false;
+      handle.classList.remove('is-dragging');
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      window.removeEventListener('pointercancel', onUp);
+      apply(current, true);
+    };
+    handle.addEventListener('pointerdown', event => {
+      if (event.button !== 0 || opts.disabled()) return;
+      const element = targetElement();
+      if (!element) return;
+      event.preventDefault();
+      dragging = true;
+      startX = event.clientX;
+      startWidth = element.getBoundingClientRect().width;
+      handle.classList.add('is-dragging');
+      handle.setPointerCapture?.(event.pointerId);
+      window.addEventListener('pointermove', onMove);
+      window.addEventListener('pointerup', onUp);
+      window.addEventListener('pointercancel', onUp);
+    });
+    handle.addEventListener('dblclick', () => apply(opts.fallback, true));
+    handle.addEventListener('keydown', event => {
+      if (opts.disabled()) return;
+      const dir = direction(), step = event.shiftKey ? 60 : 20;
+      let next = current;
+      if (event.key === 'ArrowLeft') next += dir === 'right' ? step : -step;
+      else if (event.key === 'ArrowRight') next += dir === 'right' ? -step : step;
+      else if (event.key === 'Home') next = opts.min;
+      else if (event.key === 'End') next = maxWidth();
+      else if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault(); apply(opts.fallback, true); return;
+      } else return;
+      event.preventDefault(); apply(next, true);
+    });
+    window.addEventListener('resize', () => {
+      if (resizeFrame) return;
+      resizeFrame = requestAnimationFrame(() => {
+        resizeFrame = null;
+        apply(current, false);
+      });
+    });
+    return {apply, get width() { return current; }};
+  }
+  window.FundLexColumnSplitter = bindColumnSplitter;
   window.FundLexWorkbench={json,esc,toast,go,navigate:go,download,appPath,setObjectTitle,route:()=>({...state.route}),ready:()=>!!state.cap,epoch:()=>state.epoch,view:()=>state.view,authenticated:()=>state.auth.mode!=='password'||!!state.auth.token};
   window.addEventListener('hashchange',()=>{if(location.hash!==state.routeHash){const route=routeFromHash();go(route.view,Object.fromEntries(Object.entries(route).filter(([key])=>key!=='view')));}});document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&document.title!==BASE_TITLE)document.title=BASE_TITLE;});try{$('dev-user').value=localStorage.getItem('fundlex-dev-user') || 'local-user';}catch{$('dev-user').value='local-user';}state.auth.token=storedToken();state.auth.user=storedUser();$('login-form').addEventListener('submit',submitLogin);$('register-form').addEventListener('submit',submitRegister);$('register-link').addEventListener('click',()=>switchAuthMode('register'));$('register-back').addEventListener('click',()=>switchAuthMode('login'));$('logout-btn').addEventListener('click',logout);$('password-btn').addEventListener('click',openPasswordDialog);$('pwd-cancel').addEventListener('click',closePasswordDialog);$('password-form').addEventListener('submit',submitPasswordChange);$('password-view').addEventListener('click',e=>{if(e.target===$('password-view'))closePasswordDialog();});document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!$('password-view').hidden)closePasswordDialog();});renderAuthUI();renderTask();renderImport();go(location.hash.slice(1));refresh(true).then(()=>{monitorTasks();openDeepLinkedTask();});setInterval(()=>{if(state.cap&&!state.refreshBusy&&document.visibilityState==='visible'&&(state.view==='overview'||(state.task&&['uploading','queued','running','paused'].includes(state.task.status)))){state.refreshBusy=true;refresh(true).finally(()=>{state.refreshBusy=false;});}},10000);setInterval(()=>{if(document.visibilityState==='visible')monitorTasks();},15000);document.addEventListener('keydown',e=>{if(e.key==='Escape'){$('notification-panel').hidden=true;$('notification-toggle').setAttribute('aria-expanded','false');}});document.addEventListener('click',e=>{if(!e.target.closest('.notification-center')){$('notification-panel').hidden=true;$('notification-toggle').setAttribute('aria-expanded','false');}});
 })();

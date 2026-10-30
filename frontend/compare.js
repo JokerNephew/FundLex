@@ -154,6 +154,35 @@
     });
     applySplitRatio(storedSplitRatio(), false);
   }
+  function bindPanelSplitters() {
+    if (!window.FundLexColumnSplitter) return;
+    let frame = null;
+    const refresh = () => {
+      state.diffPositions = null;
+      if (frame) return;
+      frame = requestAnimationFrame(() => {
+        frame = null;
+        refreshVirtualLayouts();
+        drawLines();
+      });
+    };
+    window.FundLexColumnSplitter($('compare-rail-splitter'), $('compare-view-body'), document.querySelector('.compare-word-revisions'), {
+      key: 'fundlex-compare-revisions-width',
+      variable: '--compare-revisions-width',
+      min: 220, max: 660, minOther: 480, fallback: 300,
+      side: () => state.viewMode === 'classic' ? 'right' : 'left',
+      disabled: () => matchMedia('(max-width: 760px)').matches,
+      onChange: refresh,
+    });
+    window.FundLexColumnSplitter($('compare-word-splitter'), $('compare-word-layout'), $('compare-word-sources'), {
+      key: 'fundlex-compare-sources-width',
+      variable: '--compare-sources-width',
+      min: 240, max: 720, minOther: 480, fallback: 360,
+      side: 'right',
+      disabled: () => matchMedia('(max-width: 760px)').matches,
+      onChange: refresh,
+    });
+  }
   function refreshDiffMarks() {
     const marks = id => {
       const pane = $(id);
@@ -821,6 +850,7 @@
      document.addEventListener('keydown',e=>{if((e.key==='Enter'||e.key===' ')&&e.target.matches('#compare-word-merged-pane [data-diff-id],#compare-word-left-pane [data-diff-id],#compare-word-right-pane [data-diff-id],#compare-left-pane [data-diff-id],#compare-right-pane [data-diff-id]')){e.preventDefault();focusDiff(visibleDiffs().findIndex(x=>x.id===e.target.dataset.diffId));}});
       document.addEventListener('change',e=>{const choice=e.target.closest('[data-selection-choice]');if(choice){chooseSelection(choice.dataset.diffId,choice.value);return;}const row=e.target.closest('.compare-pair-input');if(row&&e.target.matches('input[type=file]')){const i=Number(row.dataset.pairIndex),entry=state.inputs[i]||(state.inputs[i]={});entry[e.target.matches('[data-compare-left]')?'_left':'_right']=e.target.files?.[0]||null;row.querySelector('.compare-file-label').textContent=[entry._left?.name,entry._right?.name].filter(Boolean).join(' / ')||'尚未选择文件';return;}if(e.target.id==='compare-left-folder'||e.target.id==='compare-right-folder'){const side=e.target.id.includes('left')?'left':'right';state[`folder${side[0].toUpperCase()+side.slice(1)}`]=[...e.target.files].filter(f=>fileName(f).toLowerCase().endsWith('.docx')).sort((a,b)=>relativePath(a).localeCompare(relativePath(b)));const other=side==='left'?state.folderRight:state.folderLeft;if(!other?.length)return;const left=state.folderLeft||[],right=state.folderRight||[],map=new Map(right.map(f=>[relativePath(f),f])),used=new Set(),entries=left.map(f=>{const r=map.get(relativePath(f));if(r)used.add(r);return {_left:f,_right:r||null};});for(const f of right)if(!used.has(f))entries.push({_left:null,_right:f});state.inputs=entries;renderInputs();$('compare-upload-message').textContent=`已按相对路径配对 ${entries.filter(x=>x._left&&x._right).length} 组；${entries.filter(x=>!x._left||!x._right).length} 个文件未配对，可手工补齐。`;}});
      bindCompareSplitter();
+    bindPanelSplitters();
       for(const pane of allPanels())pane?.addEventListener('scroll',()=>syncPaneScroll(pane),{passive:true});
       window.addEventListener('resize',()=>{state.diffPositions=null;refreshVirtualLayouts();drawLines();});
       const body=$('compare-view-body'); if(body&&window.ResizeObserver)new ResizeObserver(drawLines).observe(body);

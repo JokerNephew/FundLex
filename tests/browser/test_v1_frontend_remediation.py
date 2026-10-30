@@ -392,6 +392,17 @@ def test_compare_word_style_reader_renders_merged_redline_and_display_modes(brow
         assert box["width"] <= 1430 and box["height"] <= 990
         assert page.locator("#compare-viewer-backdrop").is_visible()
         assert page.evaluate("document.body.classList.contains('compare-fullscreen-open')") is True
+        rail = page.locator(".compare-word-revisions")
+        rail_width = rail.bounding_box()["width"]
+        splitter = page.locator("#compare-rail-splitter")
+        assert splitter.is_visible()
+        grip = splitter.bounding_box()
+        page.mouse.move(grip["x"] + 3, grip["y"] + min(240, grip["height"] / 2))
+        page.mouse.down()
+        page.mouse.move(grip["x"] + 63, grip["y"] + min(240, grip["height"] / 2), steps=5)
+        page.mouse.up()
+        page.wait_for_timeout(150)
+        assert rail.bounding_box()["width"] >= rail_width + 20
 
         page.locator("#compare-close-viewer").click()
         assert page.locator("#compare-viewer").is_hidden()
@@ -404,6 +415,17 @@ def test_compare_word_style_reader_renders_merged_redline_and_display_modes(brow
         assert page.locator(".compare-word-sources").evaluate("element => getComputedStyle(element).display") == "none"
         page.locator("#compare-show-sources").check()
         assert page.locator(".compare-word-sources").evaluate("element => getComputedStyle(element).display") != "none"
+        sources = page.locator(".compare-word-sources")
+        sources_width = sources.bounding_box()["width"]
+        word_splitter = page.locator("#compare-word-splitter")
+        assert word_splitter.is_visible()
+        word_grip = word_splitter.bounding_box()
+        page.mouse.move(word_grip["x"] + 3, word_grip["y"] + min(240, word_grip["height"] / 2))
+        page.mouse.down()
+        page.mouse.move(word_grip["x"] - 47, word_grip["y"] + min(240, word_grip["height"] / 2), steps=5)
+        page.mouse.up()
+        page.wait_for_timeout(150)
+        assert sources.bounding_box()["width"] >= sources_width + 20
 
         page.locator("#compare-markup-mode").select_option("final")
         assert page.locator("#compare-word-merged-pane .compare-del").evaluate("element => getComputedStyle(element).display") == "none"

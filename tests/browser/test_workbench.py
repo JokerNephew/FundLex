@@ -406,6 +406,25 @@ def test_revision_pair_checkbox_keyboard_and_insert_navigation(ui):
     assert page.locator("#detail-overlay").is_hidden()
 
 
+def test_review_list_splitter_drag(ui):
+    presentation(ui)
+    page = ui[0]
+    page.locator('[data-action="open-review"]').click()
+    page.wait_for_selector("#review-doc")
+    review_list = page.locator(".review-list")
+    before = review_list.bounding_box()["width"]
+    splitter = page.locator("#review-splitter")
+    assert splitter.is_visible()
+    grip = splitter.bounding_box()
+    page.mouse.move(grip["x"] + 3, grip["y"] + min(220, grip["height"] / 2))
+    page.mouse.down()
+    page.mouse.move(grip["x"] - 57, grip["y"] + min(220, grip["height"] / 2), steps=5)
+    page.mouse.up()
+    page.wait_for_timeout(200)
+    assert review_list.bounding_box()["width"] >= before + 20
+    assert page.evaluate("Number(localStorage.getItem('fundlex-review-list-width'))") >= before + 20
+
+
 def test_old_review_failure_cannot_overwrite_new_report(ui):
     _, _, _ = presentation(ui, 2)
     page, context, _, _ = ui
