@@ -6820,8 +6820,9 @@ H＝E×…
 - 根因（修复 agent 复放确认）：①几何侧——B16 的书签 78 即 `_GoBack`：`bookmarkStart(78)` 位于 p1355 被改 span 内，其 `bookmarkEnd(78)` 是 `w:body` 直接子节点（文档尾）；旧逻辑把"partner 不在同段落"一律判 `EDIT_BOOKMARK_RANGE_BROKEN`，但 body 级半片不属任何非目标段落、无文本，与其成对的另一半已在 span 内被丢弃，本可成对安全移除。②交付侧——单条 edit 校验失败异常直达 `_plan_and_generate` 顶层，整合同 not_generated，未按 FL-D112 单 edit 降级。（此前"文末仅 1 个未配对 bookmarkStart(78)"的探测口径有误：实际为 start 在 p1355、end 在 body 级的一对。）
 - 修复（fundlex/docx.py + fundlex/recall_pipeline.py）：`_bookmark_dropped_partners` 允许 partner 为 `w:body` 直接子节点时成对移除（真跨段——partner 在其他 `w:p`——仍 fail-closed）；`_apply_one` 对 body 级 partner 经其父节点移除并回报 id，`_structure_snapshot` 增加 `body_dropped_bookmarks` 归一化参数使非目标骨架检查不误报；`recall_pipeline._plan_and_generate` 新增 `_drop_unvalidatable_edits`：整计划 validate 失败时逐 edit 探针定位肇事 edit，丢弃该 edit、ledger 目标转 unresolved（reason=`RECALL_EDIT_VALIDATE_REJECTED`），剩余计划再严格复验；无法归因（全数单独失败或无一可责）时维持整合同 fail-closed。
 - 验证：①B16 checkpoints 复放（生产参数 overlay=True）：修复前 validate 抛 id=78；修复后 validate OK 14/14 edits、generate_artifacts 六项 checks 全过（package/revisions/final_equivalence/non_target/template_text/content_verification）、产物书签成对无 id=78。②回归：tests/test_docx_a3_regressions.py 25 全绿（新增 body 级 partner 成对移除 start/end 两向 + 带 body 级杂散半片时其他段落 partner 仍 fail-closed 3 个）；tests -k "docx" 158 passed/1 skipped；tests/test_qa_20261031_regressions.py 36 全绿（新增 `_drop_unvalidatable_edits` 降级测试）。G22 p1355 目标由 unresolved 变为实改交付。
-- 状态：修复已实现并单测/复放验证；待 dev20/重跑 B16 正式任务复测确认交付状态恢复。
-- 变更记录：2026-10-31 新增（子 agent 登记）；2026-10-31 根因复核修复并复放验证（DOCX 修复 agent）。
+- **独立复核（2026-10-31，PASS）**：body 级新分支仅命中 span 内被丢半片的 partner（真跨段仍 fail-closed，含对抗用例）；body_dropped_bookmarks 归一化集合确定、不掩盖真实结构变化；逐 edit 探针对无辜 edit 零误伤、组合冲突保守整合同兜底；3 项新回归为真实 DOCX 构造非 mock；B16 复放独立核实 validate 14/14 与书签 78 几何与根因一致。61+158 实跑通过。
+- 状态：已修复并独立复核通过；待 dev20 重跑 B16 正式任务复测确认交付状态恢复（评测闭环步骤）。
+- 变更记录：2026-10-31 新增（子 agent 登记）；2026-10-31 根因复核修复并复放验证（DOCX 修复 agent）；2026-10-31 独立复核 PASS。
 
 ## FL-D564 二轮盲审：安全/API 九项（2026-10-31，R2-security-api）
 
