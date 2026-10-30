@@ -533,7 +533,9 @@ def _fingerprint(location: str, text: str, zone: str) -> str:
 
 def _plain_contract_heading(text: str) -> bool:
     """Recognize complete alternate chapter labels, never directory page entries."""
-    compact = re.sub(r'\s+', '', text)
+    compact = re.sub(r"[\ufff9-\ufffb\u200b-\u200f\u202a-\u202e\ufeff]", "", text)
+    compact = re.sub(r'\s+', '', compact)
+    compact = re.sub(r'\d{1,3}$', '', compact)
     match = re.fullmatch(r'(?:[一二三四五六七八九十百零〇]+[、．.]|\d+(?:\.\d+)+[、．.]?)(.+)', compact)
     titles = {'前言','绪言','释义','基金的基本情况','基金的募集','基金的历史沿革',
         '基金的存续','基金合同的生效','基金备案','基金份额的申购与赎回','基金份额的申购和赎回','基金份额的申购、赎回与转换',
@@ -542,7 +544,10 @@ def _plain_contract_heading(text: str) -> bool:
         '基金的财产','基金资产估值','基金费用与税收','基金的费用与税收','基金的收益与分配',
         '基金的会计与审计','基金的信息披露','基金合同的变更、终止与基金财产的清算',
         '违约责任','争议的处理和适用的法律','基金合同的效力','其他事项'}
-    return bool(match and match.group(1) in titles)
+    if not match:
+        return False
+    normalized = {title.replace("的", "") for title in titles}
+    return match.group(1).replace("的", "") in normalized
 
 
 def _protected_text_nodes(root: etree._Element) -> set[etree._Element]:

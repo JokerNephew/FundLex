@@ -53,7 +53,8 @@ from .recall import (BOUNDARY_POLICY, ENGINE_ID, ENGINE_VERSION, SCHEMA_VERSION,
                       source_parts_contiguous,
                       absent_delete_coverage,
                       ensure_g22_ordered_list_targets,
-                      ensure_g08_actual_rate_targets)
+                      ensure_g08_actual_rate_targets,
+                      ensure_class_group_noop_targets)
 from .recall_prompts import (AUDIT_INSTRUCTION, AUDIT_PROMPT_VERSION, AUDIT_SCHEMA,
                              PROMPT_VERSIONS, SWEEP_INSTRUCTION, SWEEP_PROMPT_VERSION,
                              SWEEP_SCHEMA)
@@ -338,7 +339,9 @@ def _window_ledger(entry: _WindowState) -> dict[str, Any]:
 
 
 def _normalise_guide_section(text: str) -> str:
-    value = re.sub(r"^第[一二三四五六七八九十百零〇\d]+(?:部分|章)", "", str(text or "").strip())
+    value = re.sub(r"[\ufff9-\ufffb\u200b-\u200f\u202a-\u202e\ufeff]", "",
+                   str(text or ""))
+    value = re.sub(r"^第[一二三四五六七八九十百零〇\d]+(?:部分|章)", "", value.strip())
     return re.sub(r"[\s\-—_:：、，,。；;（）()]+", "", value).replace("的", "")
 
 
@@ -1120,6 +1123,110 @@ def _target_scope_ok(target: Target, scopes: Mapping[str, Any] | None
     return all(scope.contains(location) for location in locations), scope
 
 
+def _expand_duplicate_copy_scopes(targets: list[Target],
+                                  scopes: Mapping[str, Any] | None,
+                                  inspection: DocumentInspection,
+                                  rules_by_id: Mapping[str, dict]) -> None:
+    """Add byte-identical clause copies to a resolved rule scope.
+
+    Some contracts place the contract summary under a chapter whose title does not
+    say 内容摘要 (for example 二十四、基金合同的效力), so the summary leaf keeps the
+    body zone and the fee/income policy scope excludes the real copy.  A paragraph
+    whose compact text is byte-identical to an already-scoped target paragraph is
+    the same business clause; include it so body and summary cannot diverge.
+    """
+    if scopes is None:
+        return
+    from .rule_scope import RuleScope
+    paragraph_text = {span.location: _compact(display_text(span.text)[0])
+                      for span in inspection.paragraphs}
+    by_text: dict[str, list[str]] = {}
+    for location, text in paragraph_text.items():
+        if len(text) >= 20:
+            by_text.setdefault(text, []).append(location)
+    additions: dict[str, set[str]] = {}
+    for target in targets:
+        if target.out_of_scope:
+            continue
+        scope = scopes.get(str(target.rule_id))
+        if scope is None or not scope.contains(target.location):
+            continue
+        text = paragraph_text.get(target.location, "")
+        if len(text) < 20:
+            continue
+        for location in by_text.get(text, ()):
+            if location != target.location:
+                additions.setdefault(str(target.rule_id), set()).add(location)
+    for rule_id, locations in additions.items():
+        scope = scopes.get(rule_id)
+        if scope is None:
+            continue
+        extra = frozenset(locations) - frozenset(scope.locations)
+        if not extra:
+            continue
+        scopes[rule_id] = RuleScope(
+            rule_id=rule_id, leaf_ids=frozenset(scope.leaf_ids),
+            locations=frozenset(scope.locations) | extra, zone=str(scope.zone),
+            include_summary_copies=True, copy_keys=frozenset(scope.copy_keys),
+            resolution=str(scope.resolution),
+            evidence=tuple(scope.evidence) + ("duplicate_copy_scope",))
+    from .recall import duplicate_copy_targets, resolve_quote, Target
+    for copy in duplicate_copy_targets(targets, rules_by_id, inspection, scopes):
+        targets.append(copy)
+    # Income and liquidation summary copies often keep the same sentence but
+    # replace the body list marker ("1、" vs "（1）", "（4）" vs "4）").  Match
+    # the marker-stripped clause and bind the same core quote in the copy.
+    def strip_marker(value: str) -> str:
+        return re.sub(r"^\s*(?:\d+[、.．)）]|[（(]\d+[）)])\s*", "", value or "")
+    normalized: dict[str, list[str]] = {}
+    for location, text in paragraph_text.items():
+        if len(strip_marker(text)) >= 12:
+            normalized.setdefault(strip_marker(text), []).append(location)
+    existing_sites = {(target.rule_id, target.location, tuple(sorted(target.operations)))
+                      for target in targets if not target.out_of_scope}
+    for target in list(targets):
+        if (target.out_of_scope or target.state != "needs_edit"
+                or target.rule_id not in {"G18", "G22"} or not target.quote):
+            continue
+        scope = scopes.get(str(target.rule_id))
+        if scope is None or not scope.contains(target.location):
+            continue
+        key = strip_marker(paragraph_text.get(target.location, ""))
+        for location in normalized.get(key, ()):
+            if location == target.location:
+                continue
+            site = (target.rule_id, location, tuple(sorted(target.operations)))
+            if site in existing_sites:
+                continue
+            try:
+                span = inspection.by_location(location)
+            except (KeyError, DocxError):
+                continue
+            located = resolve_quote(span, target.quote)
+            if located is None:
+                continue
+            clone = Target(
+                target_id=f"{target.target_id}-N{len(targets)}",
+                rule_id=target.rule_id, location=location, quote=target.quote,
+                state="needs_edit", reason=f"{target.reason}|NORMALIZED_COPY",
+                start=located[0], end=located[1], resolution="resolved",
+                operations=tuple(target.operations or ()))
+            clone.segment_ok = True
+            setattr(clone, "normalized_copy", True)
+            targets.append(clone)
+            existing_sites.add(site)
+            scope = scopes.get(str(target.rule_id))
+            if scope is not None and not scope.contains(location):
+                scopes[str(target.rule_id)] = RuleScope(
+                    rule_id=str(target.rule_id),
+                    leaf_ids=frozenset(scope.leaf_ids),
+                    locations=frozenset(scope.locations) | {location},
+                    zone=str(scope.zone), include_summary_copies=True,
+                    copy_keys=frozenset(scope.copy_keys),
+                    resolution=str(scope.resolution),
+                    evidence=tuple(scope.evidence) + ("normalized_copy_scope",))
+
+
 def _apply_scope_gate(targets: Sequence[Target], scopes: Mapping[str, Any] | None,
                       audit: dict[str, Any] | None = None, *, stage: str = "plan"
                       ) -> list[Target]:
@@ -1131,6 +1238,13 @@ def _apply_scope_gate(targets: Sequence[Target], scopes: Mapping[str, Any] | Non
     if scopes is None:
         return list(targets)
     for target in targets:
+        if getattr(target, "normalized_copy", False):
+            # A numbered summary copy matched by clause text (1、 vs （1）) was
+            # added after the original scope was resolved; it is the same policy
+            # clause and must not be dropped by the marker difference.
+            if not target.scope_id:
+                target.scope_id = f"{target.rule_id}:normalized_copy"
+            continue
         if (str(target.rule_id) == "G22"
                 and ("g22_ordered_list_variant" in str(target.reason or "")
                      or getattr(target, "semantic_replacement", None))):
@@ -1647,6 +1761,7 @@ def _plan_and_generate(model: Any, rules_by_id: dict[str, dict], targets: Sequen
                          g15_delay_continuation_targets)
     # Final scope gate: no target outside its rule's physical scope may reach the
     # planner.  Out-of-scope targets keep a ledger row but are never planned.
+    _expand_duplicate_copy_scopes(targets, scopes, inspection, rules_by_id)
     _apply_scope_gate(targets, scopes, scope_audit, stage="plan")
     # Final exact-copy closure immediately before planning. Survey/rebind can add a
     # source target after the earlier passes; an uneditable body/summary copy must not
@@ -2365,7 +2480,8 @@ def _run_audit(model: Any, rules_by_id: dict[str, dict], targets: Sequence[Targe
                               obligations=obligations, scopes=scopes,
                               approvals=approval_book,
                               absent_coverage_by_operation=absent_delete_coverage(
-                                  rules_by_id, targets, original, scopes, obligations))
+                                  rules_by_id, targets, original, scopes, obligations,
+                                  facts=facts))
         artifact_proofs = replay["obligations"]
         artifact_failures = replay["failures"]
     auditable_by_rule = _targets_by_rule(auditable)
@@ -2702,7 +2818,42 @@ def _audit_recovery_contexts(issues: Sequence[dict[str, Any]], *,
     return contexts
 
 
-def _audit_issues(state: dict[str, Any], targets: Sequence[Target]) -> list[dict[str, Any]]:
+def _reopen_audit_disagreed_targets(issues: Sequence[dict[str, Any]],
+                                    targets: Sequence[Target],
+                                    rules_by_id: Mapping[str, dict],
+                                    facts: Facts) -> list[str]:
+    """Reopen a model-satisfied class target when audit proves it still needs work.
+
+    G02/G04 are class-group substitutions.  A general phrase such as "A类基金份额"
+    can look satisfied to the inventory model while the guide still requires the
+    concrete actual classes.  The hard-fact no-op check distinguishes the two:
+    only a product whose instantiated group equals the guide reference may stay
+    satisfied; otherwise the auditor's missing-replacement verdict reopens it.
+    """
+    from .recall import class_substitution_letter_stable
+    by_id = {target.target_id: target for target in targets}
+    reopened: list[str] = []
+    for issue in issues:
+        if issue.get("code") != "AUDIT_NOT_COMPLETED":
+            continue
+        target = by_id.get(str(issue.get("target_id") or ""))
+        if (target is None or target.state != "satisfied"
+                or target.rule_id not in {"G02", "G04"}):
+            continue
+        rule = rules_by_id.get(target.rule_id) or {}
+        if class_substitution_letter_stable(rule, facts):
+            continue
+        target.state = "needs_edit"
+        target.resolution = "resolved"
+        target.plan_reason = None
+        target.reason = f"{target.reason}|AUDIT_REOPENED"
+        reopened.append(target.target_id)
+    return reopened
+
+
+def _audit_issues(state: dict[str, Any], targets: Sequence[Target],
+                  rules_by_id: Mapping[str, dict] | None = None,
+                  facts: Facts | None = None) -> list[dict[str, Any]]:
     """Current unresolved audit problems: missing/incomplete verdicts and missed targets."""
     issues: list[dict[str, Any]] = []
     results = state.get("results") or {}
@@ -2715,6 +2866,15 @@ def _audit_issues(state: dict[str, Any], targets: Sequence[Target]) -> list[dict
                            "target_id": target.target_id, "location": target.location})
         elif not result.get("artifact_proven") and (
                 result["verdict"] != "completed" or not result["evidence_verified"]):
+            if target.rule_id == "G18" and rules_by_id and facts is not None:
+                from .recall import satisfied_operation_keys
+                rule = rules_by_id.get("G18") or {}
+                if set(target.operations or ()) <= satisfied_operation_keys(
+                        rule, facts, _compact(target.quote)):
+                    # The source already states the same fee-difference policy
+                    # with a different connector ("费用存在不同").  The auditor's
+                    # literal-wording complaint is not a missing effect.
+                    continue
             # A model can quote the target's old text, correctly report that it is
             # present in BEFORE and absent in AFTER, yet still write an
             # "incomplete" verdict.  The evidence is the deterministic proof for
@@ -3699,7 +3859,17 @@ def _delivery_complete(unresolved: Sequence[dict[str, Any]], *, ledger: Any = No
         if open_items:
             if mode == "strict":
                 return False
-            if any("CLAIM_" in str(item.get("reason") or "") for item in open_items):
+            if any("CLAIM_" in str(item.get("reason") or "")
+                   for item in open_items):
+                return False
+            coverage_open = any("FINAL_COVERAGE_UNRESOLVED" in
+                                str(item.get("reason") or "") for item in open_items)
+            if coverage_open and not any(
+                    str(item.get("code") or "") == "FINAL_COVERAGE_UNRESOLVED"
+                    and "AUDIT_NOT_COMPLETED" in str(item.get("reason") or "")
+                    for item in unresolved):
+                # A missing site/coverage proof is not merely an unfinished audit;
+                # it contradicts complete delivery even under review_assisted.
                 return False
             coverage_open = any("FINAL_COVERAGE_UNRESOLVED" in
                                 str(item.get("reason") or "") for item in open_items)
@@ -3850,6 +4020,25 @@ def _apply_artifact_proof_to_findings(findings: list[dict[str, Any]], replay: di
                 if local:
                     related.extend(local)
                     related_records.append(record)
+        if not related and obligations is not None:
+            rule_records = [record for record in getattr(obligations, "records", ())
+                            if record.spec.rule_id == rule_id
+                            and getattr(getattr(record, "applicability", None),
+                                        "status", "UNKNOWN") == "TRUE"]
+            rule_states = [states.get(record.obligation_id) for record in rule_records]
+            if (rule_records and all(state is not None
+                                     and effect_proof_passed(state)
+                                     and not state.get("sites")
+                                     and str(state.get("artifact_status") or "") in
+                                     {"VERIFIED_ABSENT", "ALREADY_SATISFIED"}
+                                     for state in rule_states)):
+                # Every applicable operation of this rule is already closed by a
+                # deterministic no-op/absence certificate.  A sweep opinion about
+                # missing new text at some other paragraph cannot invent a site
+                # that the rule itself does not authorize (G05 p159).
+                finding["status"] = "resolved"
+                finding["resolution"] = "rule_absent_noop"
+                continue
         quote = _compact(str(finding.get("quote") or ""))
         body = artifact_text = source_text = ""
         try:
@@ -4535,6 +4724,12 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
             synthetic.append(target)
             targets.append(target)
             origins[target.target_id] = "g08_actual_rate_variant"
+        class_noops = ensure_class_group_noop_targets(
+            targets, rules_by_id, inspection, facts, scopes)
+        for target in class_noops:
+            synthetic.append(target)
+            targets.append(target)
+            origins[target.target_id] = "class_group_noop"
         from .semantic_contract import discover_for_rules
         semantic_enabled = os.environ.get(
             "FUNDLEX_SEMANTIC_V2", "0").strip().lower() in {"1", "true", "on", "yes"}
@@ -4546,10 +4741,17 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
             for target in semantic_targets:
                 adopted = False
                 for old in targets:
+                    operations_match = bool(
+                        set(old.operations or ()) & set(target.operations or ()))
+                    geometry_match = bool(
+                        not old.operations
+                        and old.start is not None and old.end is not None
+                        and target.start is not None and target.end is not None
+                        and old.start < target.end and target.start < old.end)
                     if (old.rule_id == target.rule_id
                             and old.location == target.location
                             and not old.out_of_scope
-                            and set(old.operations or ()) & set(target.operations or ())):
+                            and (operations_match or geometry_match)):
                         # Reuse the existing physical target instead of creating a
                         # second target for the same operation/site.  Two targets
                         # would make Claim Replay report an occurrence conflict even
@@ -4561,6 +4763,8 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
                         old.reason = f"semantic_v2:{target.reason}"
                         setattr(old, "semantic_replacement",
                                 getattr(target, "semantic_replacement", ""))
+                        setattr(old, "semantic_operation_mode",
+                                getattr(target, "semantic_operation_mode", "replace"))
                         setattr(old, "semantic_preserved_text",
                                 getattr(target, "semantic_preserved_text", ()))
                         adopted = True
@@ -4794,7 +4998,11 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
                 round_ledger.update(round=round_number, scope=scope)
                 audit_rounds.append(round_ledger)
                 _merge_audit_state(audit_state, round_ledger, targets)
-                issues = _audit_issues(audit_state, targets)
+                issues = _audit_issues(audit_state, targets, rules_by_id, facts)
+                reopened = _reopen_audit_disagreed_targets(
+                    issues, targets, rules_by_id, facts)
+                if reopened:
+                    round_ledger["reopened_targets"] = reopened
                 round_ledger["issues"] = issues
                 report["audit"] = {"rounds": audit_rounds, "issues": issues}
                 report["targets"] = _target_ledger(targets, planned, audit_state, origins)
@@ -5044,7 +5252,7 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
                                   and not target.out_of_scope
                                   and plan_by_target.get(target.target_id, {}).get("status")
                                   not in {"planned", "satisfied", "not_applicable"}]
-            audit_issues = _audit_issues(audit_state, targets)
+            audit_issues = _audit_issues(audit_state, targets, rules_by_id, facts)
             pending_findings = [finding for finding in findings
                                 if finding["status"] in {"pending", "unresolved"}]
             unresolved: list[dict[str, Any]] = []
@@ -5145,7 +5353,7 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
                         audit_proofs=audit_proofs,
                         absent_coverage_by_operation=absent_delete_coverage(
                             rules_by_id, targets, inspection, scopes,
-                            obligation_ledger))
+                            obligation_ledger, facts=facts))
                     residuals = check_delete_residuals(
                         rules_by_id, actual, edits=plan.get("edits") or [], original=inspection,
                         targets=[target.as_dict() for target in targets], facts=facts,
