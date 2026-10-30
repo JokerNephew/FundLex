@@ -856,8 +856,10 @@ def validate_edit_plan(source: str | Path, edits: Sequence[Mapping[str, Any]],
     ``DocxError`` when the server-side verification record does not bind the
     edit; edits without a check are rejected rather than published.
     """
+    limits = limits or ZipLimits()
     inspection = inspect_docx(source, full=True, limits=limits,
                               allow_existing_revisions=allow_existing_revisions)
+    tree = _xml(_read_parts(source, limits)[DOCUMENT], limits)
     validated: list[dict[str, Any]] = []
     occupied: dict[str, list[tuple[int, int]]] = {}
     for incoming in edits:
@@ -1012,9 +1014,17 @@ def _contains_revision(node: etree._Element) -> bool:
                for element in node.iter())
 
 
-def _apply_one(root: etree._Element, edit: Mapping[str, Any], del_id: int,
-               ins_id: int, author: str, when: str, limits: ZipLimits,
-               *, overlay: bool = False) -> None:
+def _edit_region(root: etree._Element, edit: Mapping[str, Any], limits: ZipLimits,
+                 *, overlay: bool = False
+                 ) -> tuple[etree._Element, list[etree._Element],
+                            list[tuple[etree._Element, int, int]], list[etree._Element], int]:
+    """Locate the writable run region for one edit.
+
+    A single geometry implementation serves both validation (bookmark pairing)
+    and the writer, so both sides accept or reject identical structure.
+    Returns the paragraph, its children between the outermost selected runs,
+    the selected text nodes, their runs and the first run's child index.
+    """
     paragraph = _paragraph_element(root, str(edit["location"]))
     # Offsets were validated against the accepted view.  Applying them to the
     # raw XML projection lets a foreign insertion/deletion earlier in the same
@@ -1050,7 +1060,6 @@ def _apply_one(root: etree._Element, edit: Mapping[str, Any], del_id: int,
     benign = {Q("bookmarkStart"), Q("bookmarkEnd"),
               Q("lastRenderedPageBreak"), Q("proofErr")}
     runs: list[etree._Element] = []
-    deleted_runs: list[etree._Element] = []
     for node, lo, hi in selected:
         run = node.getparent()
         if run is None or run.tag != Q("r") or run.getparent() is not paragraph:
@@ -1060,14 +1069,9 @@ def _apply_one(root: etree._Element, edit: Mapping[str, Any], del_id: int,
                 or any(tag not in {Q("t")} | benign for tag in content)):
             raise DocxError("RUN_STRUCTURE_UNSUPPORTED")
         runs.append(run)
-        left, right = max(start - lo, 0), min(end - lo, hi - lo)
-        deleted_runs.append(_make_text_run(run, (node.text or "")[left:right], deleted=True))
-    first, last = selected[0], selected[-1]
-    first_run = runs[0]
-    last_run = runs[-1]
     if len({id(run) for run in runs}) != len(runs):
         raise DocxError("RUN_STRUCTURE_UNSUPPORTED")
-    insert_at = paragraph.index(first_run)
+    insert_at = paragraph.index(runs[0])
     last_at = paragraph.index(runs[-1])
     between = list(paragraph)[insert_at:last_at + 1]
     # Navigation anchors and layout/proofing hints may sit between the selected
@@ -1078,6 +1082,49 @@ def _apply_one(root: etree._Element, edit: Mapping[str, Any], del_id: int,
     if any(_contains_revision(node) for node in between if node not in runs):
         raise DocxError("FOREIGN_REVISION_INTERSECTION",
                         str(edit.get("location") or ""))
+    return paragraph, between, selected, runs, insert_at
+
+
+def _check_bookmark_pairing(root: etree._Element, between: Sequence[etree._Element]) -> None:
+    """Reject an edit whose dropped anchors would orphan one bookmark half.
+
+    The writer drops bookmarkStart/bookmarkEnd markers that sit inside the
+    edited span.  That is only sound when both ends of a range are dropped
+    together: otherwise the surviving half is an unpaired marker and every
+    cross-reference to the bookmark name breaks silently.
+    """
+    dropped = {node.get(Q("id"), ""): etree.QName(node).localname
+               for node in between
+               if node.tag in {Q("bookmarkStart"), Q("bookmarkEnd")}}
+    if not dropped:
+        return
+    inside = {id(node) for node in between}
+    surviving: dict[str, set[str]] = {}
+    for node in root.iter():
+        if not isinstance(node.tag, str) or id(node) in inside:
+            continue
+        if node.tag in {Q("bookmarkStart"), Q("bookmarkEnd")}:
+            surviving.setdefault(node.get(Q("id"), ""), set()).add(etree.QName(node).localname)
+    for bookmark_id, kind in dropped.items():
+        partner = "bookmarkEnd" if kind == "bookmarkStart" else "bookmarkStart"
+        if partner in surviving.get(bookmark_id, set()):
+            raise DocxError("EDIT_BOOKMARK_RANGE_BROKEN", bookmark_id)
+
+
+def _apply_one(root: etree._Element, edit: Mapping[str, Any], del_id: int,
+               ins_id: int, author: str, when: str, limits: ZipLimits,
+               *, overlay: bool = False) -> None:
+    paragraph, between, selected, runs, insert_at = _edit_region(
+        root, edit, limits, overlay=overlay)
+    start, end = int(edit["start"]), int(edit["end"])
+    deleted_runs = [
+        _make_text_run(run, (node.text or "")[max(start - lo, 0):min(end - lo, hi - lo)],
+                       deleted=True)
+        for (node, lo, hi), run in zip(selected, runs)
+    ]
+    first, last = selected[0], selected[-1]
+    first_run = runs[0]
+    last_run = runs[-1]
     prefix = (first[0].text or "")[:start - first[1]]
     suffix = (last[0].text or "")[end - last[1]:]
     replacement: list[etree._Element] = []

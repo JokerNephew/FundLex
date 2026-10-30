@@ -200,3 +200,11 @@ def test_regulation_parser_rejects_zip_bomb(tmp_path):
         assert info.value.args[0] == "REGULATION_DOCX_EXPANDED_LIMIT"
     finally:
         docx_parser.MAX_EXPANDED_BYTES = monkey_max
+
+
+# --- A7-04 / A8-F3 -----------------------------------------------------------
+
+def test_final_omission_truncated_scan_blocks():
+    from fundlex.recall_pipeline import _final_omission_issue_blocks
+    assert _final_omission_issue_blocks(
+        {"code": "FINAL_RESIDUAL_SCAN_TRUNCATED"}) is True

@@ -3772,6 +3772,10 @@ _BUSINESS_PENDING_RULES = frozenset({"G14", "G18"})
 #: an unfinished audit or a capped sweep stay review items under review_assisted.
 _FINAL_OMISSION_BLOCKER_CODES = frozenset({
     "FINAL_OPERATION_UNPROVEN", "FINAL_RESIDUAL_OLD_TEXT",
+    # A truncated final residual scan means the "no old text remains" proof is
+    # partial; it must block delivery like the other provable failures instead
+    # of depending on the generic blocker bucket (A8-F3).
+    "FINAL_RESIDUAL_SCAN_TRUNCATED",
 })
 
 
@@ -4872,14 +4876,17 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
         absent_sites = resolve_absent_site_targets(targets, rules_by_id, inspection, facts)
         if absent_sites:
             report["absent_site_targets"] = absent_sites
-            # resolve_absent_site_targets appends an operation-specific clone to
-            # ``targets``.  Keep that clone in the synthetic source list as well;
-            # the next operation-aware _collect_targets call rebuilds its result
-            # from window targets + synthetic targets (D06 G05:2).
-            for target in targets:
-                if id(target) not in absent_target_ids and target not in synthetic:
-                    synthetic.append(target)
-                    origins[target.target_id] = "absent_site_clone"
+        # resolve_absent_site_targets and resolve_absent_operations append
+        # operation-specific clones to ``targets``.  Keep those clones in the
+        # synthetic source list as well; the next operation-aware
+        # _collect_targets call rebuilds its result from window targets +
+        # synthetic targets (D06 G05:2).  The bookkeeping must run even when
+        # the site pass found nothing, otherwise open-obligation clones are
+        # silently dropped on rebuild (A7-04).
+        for target in targets:
+            if id(target) not in absent_target_ids and target not in synthetic:
+                synthetic.append(target)
+                origins[target.target_id] = "absent_site_clone"
         # The absent-site pass can add an operation-specific G05:2 proof and the open
         # pass can add a G16 target.  Rebind those late targets before cloning so every
         # clone inherits its own physical clause identity.
