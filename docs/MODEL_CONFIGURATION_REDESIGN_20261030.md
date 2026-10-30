@@ -58,7 +58,7 @@
 - 生产无模型调用验收：V1普通member登录后分别保存执行/检查的不同供应商、模型和合成Key，刷新回读正常；
   页面输入、页面正文、API响应均未回显Key，生产DB中的两条密文可由部署Fernet key解密为owner/id绑定payload；
   临时用户及设置已清理。连接测试、合同任务/上传、真实供应商调用均为0。证据见FL-D539及
-  `/tmp/opencode/user-config-byok-deployment-smoke-2.json`。生产`FUNDLEX_FRONTEND_VERSION`未设置，默认V1；
+  `/tmp/opencode/user-config-byok-deployment-smoke-4.json`（另经侧栏验收模型页/飞书页互斥）。生产`FUNDLEX_FRONTEND_VERSION`未设置，默认V1；
   React V2构建与本地专项通过，但本次未切换生产前端模式。
 - 生产venv已安装锁定依赖`cryptography==46.0.7`（以及`cffi==2.1.1`、`pycparser==3.12`）。
   DB+对象一致性备份`/var/backups/fundlex/fundlex-20261030-225006-before-byok-477ba5a`完整性验证通过，
