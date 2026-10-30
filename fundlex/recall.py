@@ -1971,16 +1971,6 @@ _KEYWORD_VARIANTS: dict[str, tuple[str, ...]] = {
 _NEGATION_PREFIXES = ("不", "无须", "无需", "免于", "取消")
 
 
-def _normalise_class_group_connectors(text: str) -> str:
-    """Treat class-group separators as equivalent for satisfaction checks.
-
-    Contracts write the same group as "C类和E类基金份额" or "C类、E类基金份额".
-    The guide uses the enumeration comma.  Normalise only a connector between two
-    share-class labels, never general prose conjunctions.
-    """
-    return re.sub(r"(?<=类)(?:、|和|及|与)(?=[A-ZＡ-Ｚ]类)", "、", text)
-
-
 def satisfied_by_new_text(rule: dict, facts: Facts, compact_body: str) -> str | None:
     """Replacement text that proves this rule is already carried out in a paragraph.
 
@@ -1996,8 +1986,6 @@ def satisfied_by_new_text(rule: dict, facts: Facts, compact_body: str) -> str | 
     if not compact_body or not str(rule.get("requirement") or "").strip():
         return None
     rule_id = str(rule.get("rule_id") or "")
-    if rule_id in {"G02", "G04"}:
-        compact_body = _normalise_class_group_connectors(compact_body)
     # Multi-component replacements: a short tail sentence that also occurs in the
     # OLD clause cannot prove the new policy.  G09's "赎回金额单位为元。" tail and
     # G11's C-class sentence both occur in the old wording; the discriminating
@@ -2023,8 +2011,6 @@ def satisfied_by_new_text(rule: dict, facts: Facts, compact_body: str) -> str | 
     if not replacements:
         return None
     combined = "".join(replacements)
-    if rule_id in {"G02", "G04"}:
-        combined = _normalise_class_group_connectors(combined)
     compact_replacement = _compact(combined)
     if compact_replacement and compact_replacement in compact_body:
         return combined
@@ -2083,7 +2069,7 @@ def satisfied_by_new_text(rule: dict, facts: Facts, compact_body: str) -> str | 
 # "费用收取不同" family: the same policy expressed with different word order.
 _FEE_DIFFERENCE_MARKERS = (
     "费用收取不同", "费用收取上不同", "费用的不同", "费用不同",
-    "费率不同", "费用存在差异", "费用存在不同")
+    "费率不同", "费用存在差异")
 
 
 def _policy_phrase_equivalent(compact_new: str, compact_body: str,
@@ -2675,11 +2661,7 @@ def satisfied_operation_keys(rule: dict, facts: Facts, compact_body: str) -> set
         if issues or not instantiated:
             continue
         compact = _compact(instantiated)
-        body = (compact_body if rule_id not in {"G02", "G04"}
-                else _normalise_class_group_connectors(compact_body))
-        if rule_id in {"G02", "G04"}:
-            compact = _normalise_class_group_connectors(compact)
-        if compact and compact in body:
+        if compact and compact in compact_body:
             keys.add(_rule_operation_key(rule, index))
             continue
         # The paragraph may express the same operation with reordered subjects or a
@@ -2922,13 +2904,6 @@ def _selected_operation_indices(rule: dict, target: Target,
                     and "销售服务费" in str(operation.get("new_text") or "")):
                 # The ordered-list wording carries the same distribution item;
                 # the guide's single-sentence prefix is absent by construction.
-                continue
-            if (rule_id == "G08" and operation.get("op") == "replace"
-                    and "申购费率由基金管理人决定" in span_body
-                    and "招募说明书" in span_body):
-                # Contracts commonly prefix the guide sentence with the class
-                # ("本基金A类基金份额的申购费率…") and extend the disclosure
-                # list.  This is the same G08 policy clause, not a topic flip.
                 continue
             # A one-word topic flip is a different clause, not a paraphrase.  A model
             # target quoting the 认购费率 sentence must not be accepted for G08's
@@ -4480,73 +4455,30 @@ def rebind_g16_clause_targets(targets: Sequence[Target],
         index = indices.get(target.location)
         if index is None:
             continue
-        head_index = -1
-        for candidate_index in range(index, max(-1, index - 7), -1):
-            if _g16_payment_anchor(spans[candidate_index].text):
-                head_index = candidate_index
-                break
-        if head_index < 0:
-            # A model can name the formula tail immediately above the payment
-            # sentence as the clause end (for example "E为C类基金份额前一日的
-            # 基金资产净值").  The append still belongs to the payment clause
-            # below it; bind forward only across an unterminated formula line so
-            # an unrelated closed paragraph never borrows a later clause.
-            current = spans[index]
-            current_text, _ = display_text(current.text)
-            if not current_text.rstrip().endswith(("。", "；", ";", "！", "？", "!", "?")):
-                for candidate_index in range(index + 1, min(len(spans), index + 4)):
-                    if _g16_payment_anchor(spans[candidate_index].text):
-                        head_index = candidate_index
-                        break
-        if head_index < 0:
-            continue
-        head = spans[head_index]
-        section = next((item for item in sections if head.location in item.locations), None)
-        if section is None:
-            continue
-        end = _g16_clause_end(head, section, inspection)
-        if index > indices[end.location]:
-            continue
-        clause = list(section.locations)[list(section.locations).index(head.location):
-                                         list(section.locations).index(end.location) + 1]
-        append_end = _g16_append_end(inspection, clause)
-        if target.location != end.location or target.end != append_end:
-            changes.append({"target_id": target.target_id, "from": target.location,
-                            "to": end.location})
-            target.location = end.location
-            target.quote = end.text[:append_end]
-            target.start, target.end = 0, append_end
-            target.composite = ()
-            target.resolution = "resolved"
-            target.segment_ok = True
-            target.reason = f"{target.reason}|G16_CLAUSE_END"
-    # Inventory/open-rule passes can leave two G16 append targets in the same
-    # physical fee clause (payment head and usage tail).  They are one insertion,
-    # so keep the semantic target when present, else the clause-end target.
-    clause_by_location = {location: clause for clause in _g16_clause_locations(inspection)
-                          for location in clause}
-    groups: dict[tuple[str, ...], list[Target]] = {}
-    for target in targets:
-        if (target.rule_id == "G16" and target.state == "needs_edit"
-                and not target.out_of_scope and target.location in clause_by_location):
-            groups.setdefault(clause_by_location[target.location], []).append(target)
-    for items in groups.values():
-        if len(items) < 2:
-            continue
-        def clause_score(item: Target) -> tuple[int, int, bool, str]:
-            clause = clause_by_location.get(item.location, ())
-            return (0 if getattr(item, "semantic_replacement", None) else 1,
-                    0 if clause and item.location == clause[-1] else 1,
-                    item.target_id.startswith("Y"), item.location)
-        items.sort(key=clause_score)
-        keep = items[0]
-        for duplicate in items[1:]:
-            duplicate.out_of_scope = True
-            duplicate.operations = ()
-            duplicate.claimed_operations = ()
-            duplicate.reason = f"{duplicate.reason}|SUPERSEDED_BY_G16_CLAUSE_TARGET:{keep.target_id}"
-            changes.append({"target_id": duplicate.target_id, "from": duplicate.location,
-                            "to": keep.location, "deduplicated": True})
+        for head_index in range(index, max(-1, index - 7), -1):
+            head = spans[head_index]
+            if not _g16_payment_anchor(head.text):
+                continue
+            section = next((item for item in sections if head.location in item.locations), None)
+            if section is None:
+                continue
+            end = _g16_clause_end(head, section, inspection)
+            if not head_index <= index <= indices[end.location]:
+                continue
+            clause = list(section.locations)[list(section.locations).index(head.location):
+                                             list(section.locations).index(end.location) + 1]
+            append_end = _g16_append_end(inspection, clause)
+            if target.location != end.location or target.end != append_end:
+                changes.append({"target_id": target.target_id, "from": target.location,
+                                "to": end.location})
+                target.location = end.location
+                target.quote = end.text[:append_end]
+                target.start, target.end = 0, append_end
+                target.composite = ()
+                target.resolution = "resolved"
+                target.segment_ok = True
+                target.reason = f"{target.reason}|G16_CLAUSE_END"
+            break
     return changes
 
 
@@ -4795,14 +4727,11 @@ def _section_for_hint(sections: Sequence[Section], hint: Any) -> Section | None:
     text = str(hint or "").strip()
     if not text:
         return None
-    def clean(value: str) -> str:
-        return re.sub(r"[\ufff9-\ufffb\u200b-\u200f\u202a-\u202e\ufeff]", "",
-                      _compact(value)).replace("的", "")
-    compact_hint = clean(text)
+    compact_hint = _compact(text).replace("的", "")
     best: Section | None = None
     best_length = 0
     for section in sections:
-        compact_title = clean(section.title)
+        compact_title = _compact(section.title).replace("的", "")
         if compact_hint and compact_hint in compact_title:
             if len(compact_title) > best_length:
                 best, best_length = section, len(compact_title)
@@ -7042,25 +6971,6 @@ def _plan_target_inner(rule: dict, target: Target, inspection: DocumentInspectio
                               "replaced_group": group_text,
                               "guide_paragraphs": rule.get("source_paragraphs") or []}))
     actual = span.text[target.start:target.end]
-    if (rule_id == "G22" and target.quote and not _same_compact(target.quote, actual)):
-        # A rebind can set a resolved target to the guide reference offsets while
-        # the contract omits one noun ("持有的份额比例" vs "持有的基金份额比例").
-        # Expand the bound span to the source clause before composition so the
-        # replacement cannot leave the source tail behind.
-        for operation in operations:
-            if operation.get("op") != "replace":
-                continue
-            reference = str(operation.get("old_text") or "")
-            if len(_compact(reference)) < 8:
-                continue
-            bound = fuzzy_span_clause(span.text, reference,
-                                      threshold=VARIANT_MATCH_RATIO)
-            if (bound is not None and abs(bound[0] - target.start) <= 2
-                    and bound[1] > target.end):
-                target.end = bound[1]
-                target.quote = span.text[target.start:target.end]
-                actual = span.text[target.start:target.end]
-                break
     # Routing is performed after source binding and operation narrowing.  This is
     # the execution contract for this target; the branches below may only use the
     # executor selected here.  In particular, a deterministic failure cannot
@@ -7132,25 +7042,6 @@ def _plan_target_inner(rule: dict, target: Target, inspection: DocumentInspectio
                            "location": target.location})
     if (rule_id == "G08" and len(operations) == 1
             and operations[0].get("op") == "replace"
-            and "不收取申购费" in _compact(span.text[target.start:target.end])
-            and "申购费率由基金管理人决定" in _compact(span.text[target.start:target.end])
-            and "招募说明书" in _compact(span.text[target.start:target.end])):
-        expected, issues = instantiate_slots(
-            str(operations[0].get("new_text") or ""), facts)
-        if not issues and expected:
-            # The contract already states the class split but omits the
-            # direct-sales exemption.  Replace the whole located policy sentence
-            # with the guide text instead of asking the model to splice prose.
-            return finish(PlannedEdit(
-                target_id=target.target_id, rule_id=rule_id,
-                location=target.location, start=target.start, end=target.end,
-                replacement=expected, operation="replace",
-                content_source="g08_partial_policy_replace",
-                evidence={"fixed_text": expected,
-                          "replaced_text": span.text[target.start:target.end],
-                          "guide_paragraphs": rule.get("source_paragraphs") or []}))
-    if (rule_id == "G08" and len(operations) == 1
-            and operations[0].get("op") == "replace"
             and _G08_ACTUAL_RATE in span.text[target.start:target.end]):
         expected, issues = instantiate_slots(
             str(operations[0].get("new_text") or ""), facts)
@@ -7219,16 +7110,9 @@ def _plan_target_inner(rule: dict, target: Target, inspection: DocumentInspectio
                 # the whole clause; free compose sees 注册登记费 as a protected
                 # literal and fails (美国房地产 p165).  The target quote is the
                 # full clause, so use the authorized policy text directly.
-                start = target.start
-                list_prefix = re.match(
-                    r"^\s*(?:\d+[、.．)）]|[（(]\d+[）)])\s*", span_text)
-                if start == 0 and list_prefix:
-                    # The guide replacement is the clause body; keep the source's
-                    # list numbering ("5、") instead of deleting it with the span.
-                    start = list_prefix.end()
                 return finish(PlannedEdit(
                     target_id=target.target_id, rule_id=rule_id,
-                    location=target.location, start=start, end=target.end,
+                    location=target.location, start=target.start, end=target.end,
                     replacement=expected, operation="replace",
                     content_source="g12_allocation_replace",
                     evidence={"fixed_text": expected,
@@ -7246,20 +7130,12 @@ def _plan_target_inner(rule: dict, target: Target, inspection: DocumentInspectio
             # protected-term check and leaves the obligation open (道琼斯 p926).
             span_text = span.text[target.start:target.end]
             if "销售服务费" in span_text and "由于本基金" in span_text:
-                # The target may quote the distribution tail after the fee
-                # sentence.  The guide only authorizes replacing the fee clause;
-                # keep the tail verbatim instead of dropping it (道琼斯 p1322).
-                suffix = ""
-                last = span_text.rfind("销售服务费")
-                if last >= 0:
-                    suffix = span_text[last + len("销售服务费"):]
-                replacement = expected + suffix
                 return finish(PlannedEdit(
                     target_id=target.target_id, rule_id=rule_id,
                     location=target.location, start=target.start, end=target.end,
-                    replacement=replacement, operation="replace",
+                    replacement=expected, operation="replace",
                     content_source="g18_class_group_replace",
-                    evidence={"fixed_text": replacement,
+                    evidence={"fixed_text": expected,
                               "replaced_text": span_text,
                               "guide_paragraphs": rule.get("source_paragraphs") or []}))
     semantic_replacement = getattr(target, "semantic_replacement", None)
@@ -7267,16 +7143,11 @@ def _plan_target_inner(rule: dict, target: Target, inspection: DocumentInspectio
         # Model-first semantic target: the quote/span/scope/protected terms were
         # already validated by fundlex.semantic_contract; the model supplies the
         # complete replacement and code records the exact authorized span.
-        # An append operation inserts the fixed policy after the located clause
-        # instead of replacing it, so a sibling delete (G15/G17) can merge with it.
-        append_mode = getattr(target, "semantic_operation_mode", "replace") == "append"
         return finish(PlannedEdit(
             target_id=target.target_id, rule_id=rule_id,
-            location=target.location,
-            start=target.end if append_mode else target.start, end=target.end,
-            replacement=str(semantic_replacement),
-            operation="insert" if append_mode else "replace",
-            content_source="semantic_v2_append" if append_mode else "semantic_v2",
+            location=target.location, start=target.start, end=target.end,
+            replacement=str(semantic_replacement), operation="replace",
+            content_source="semantic_v2",
             evidence={"fixed_text": str(semantic_replacement),
                       "preserved_text": list(getattr(target, "semantic_preserved_text", ())),
                       "guide_paragraphs": rule.get("source_paragraphs") or []}))
@@ -7463,31 +7334,6 @@ def _plan_target_inner(rule: dict, target: Target, inspection: DocumentInspectio
     spliced = actual
     applied: list[str] = []
     fragments: list[dict[str, str]] = []
-    if (rule_id == "G11" and len(operations) == 1
-            and operations[0].get("op") == "replace"
-            and target.start is not None and target.end is not None):
-        expected, issues = instantiate_slots(
-            str(operations[0].get("new_text") or ""), facts)
-        prefix = span.text[:target.start]
-        list_prefix = re.match(
-            r"^\s*(?:\d+[、.．)]|[（(][^）)]{1,8}[）)])\s*", span.text)
-        class_prefix_start = list_prefix.end() if list_prefix else 0
-        class_prefix = span.text[class_prefix_start:target.start]
-        if (not issues and expected and class_prefix.rstrip().endswith("的")
-                and "基金份额" in class_prefix
-                and _compact(expected).startswith("通过直销机构")):
-            # "4、本基金A类、Y类基金份额的 | 申购费用由投资人承担…" — the
-            # guide replacement already names the class group, so keeping the
-            # source prefix produces a duplicated subject.  Replace from the
-            # list marker through the whole old sentence.
-            return finish(PlannedEdit(
-                target_id=target.target_id, rule_id=rule_id,
-                location=target.location, start=class_prefix_start, end=target.end,
-                replacement=expected, operation="replace",
-                content_source="g11_class_prefix_replace",
-                evidence={"fixed_text": expected,
-                          "dropped_prefix": class_prefix,
-                          "guide_paragraphs": rule.get("source_paragraphs") or []}))
     for operation in [*delete_ops, *replace_ops]:
         op_kind = operation.get("op")
         old_text = str(operation.get("old_text") or "")
@@ -9511,12 +9357,6 @@ def target_site_ok(rule_id: str, span: Any, inspection: DocumentInspection) -> b
         if any(token in paragraph for token in
                ("基金份额类别", "份额类别", "将基金份额分为", "分类")):
             return True
-        # A per-class definition entry ("A类基金份额：申购时收取申购费…") is a
-        # real class-group site even though it does not repeat the generic heading.
-        if (re.match(r"^\s*[A-ZＡ-Ｚ]类(?:基金)?份额\s*[：:]", paragraph)
-                and any(token in compact for token in
-                        ("申购费", "认购费", "销售服务费"))):
-            return True
         # Split definitions: the heading is one paragraph and the actual fee-group
         # wording is the next one.  That second paragraph carries the real site; a
         # generic fee sentence must still supply both fee concepts and at least two
@@ -9660,7 +9500,7 @@ def ensure_g08_actual_rate_targets(targets: Sequence[Target], rules_by_id: dict[
 
 
 _G22_ORDERED_ITEM = re.compile(
-    r"^[（(]?\d+[）)]\s*按基金份额持有人持有的基金份额比例进行分配")
+    r"^[（(]\d+[）)]\s*按基金份额持有人持有的基金份额比例进行分配")
 
 
 def g22_appended_suffix(operation: Mapping[str, Any]) -> str:
@@ -9774,7 +9614,6 @@ _DELETE_REVIEW_PROBES = {
 def absent_delete_coverage(rules_by_id: Mapping[str, Any],
                            targets: Sequence[Target], inspection: DocumentInspection,
                            scopes: Mapping[str, Any] | None, obligations: Any,
-                           facts: Any = None,
                            ) -> dict[str, dict[str, Any]]:
     """Deterministically certify a delete whose old policy object is absent.
 
@@ -9800,7 +9639,7 @@ def absent_delete_coverage(rules_by_id: Mapping[str, Any],
     # offered the redemption-fee reduction (弘利 p159).  This is narrower than the
     # delete rules: any surviving fee-adjustment wording in scope blocks the
     # certificate, so a paraphrase cannot be closed as absent.
-    replace_noop = {"G05", "G14", "G02", "G04"}
+    replace_noop = {"G05", "G14"}
     in_scope_operations: set[str] = set()
     for target in targets:
         if (target.out_of_scope or target.attribution_error
@@ -9826,13 +9665,6 @@ def absent_delete_coverage(rules_by_id: Mapping[str, Any],
         elif spec.op == "replace":
             if spec.rule_id not in replace_noop:
                 continue
-            if spec.rule_id in {"G02", "G04"}:
-                # Class-group substitution is a no-op only when the hard class
-                # facts instantiate every replacement to the existing wording.
-                # A different class set must still be located and edited.
-                rule = rules_by_id.get(spec.rule_id) or {}
-                if facts is None or not class_substitution_letter_stable(rule, facts):
-                    continue
         else:
             continue
         if spec.operation_id in in_scope_operations:
@@ -9859,13 +9691,7 @@ def absent_delete_coverage(rules_by_id: Mapping[str, Any],
         if spec.op == "replace":
             if not references:
                 continue
-            if spec.rule_id in {"G02", "G04"}:
-                # The generic class definition may not name the guide's example
-                # classes at all; absence is a no-op only after the hard-fact
-                # no-op check above.  Any enumerated replacement class that is
-                # already present is also left to the normal target path.
-                pass
-            elif re.search(r"调低[^。；;]{0,16}费率", scoped_document):
+            if re.search(r"调低[^。；;]{0,16}费率", scoped_document):
                 continue
         semantic_hits = _semantic_delete_hits(spec.rule_id, document)
         if spec.rule_id == "G06":
@@ -10217,61 +10043,4 @@ def _ensure_delete_targets_page(targets: Sequence[Target], rules_by_id: dict[str
                 covered.setdefault(rule_id, []).append((location, _compact(candidate)))
                 if len(created) >= limit:
                     return created
-    return created
-
-
-def ensure_class_group_noop_targets(targets: Sequence[Target], rules_by_id: dict[str, dict],
-                                    inspection: DocumentInspection, facts: Facts,
-                                    scopes: Mapping[str, Any] | None = None) -> list[Target]:
-    """Bind G02/G04's already-correct class groups as satisfied business sites.
-
-    When the hard class facts make every instantiated replacement equal its guide
-    reference, the class definition is already correct and no edit may be planned.
-    A model may still omit the site, so create one satisfied target per operation at
-    a real fee-group paragraph that carries the group.  Claim Replay then closes the
-    obligation as ALREADY_SATISFIED instead of leaving a no-op OPEN.
-    """
-    created: list[Target] = []
-    for rule_id in ("G02", "G04"):
-        rule = rules_by_id.get(rule_id)
-        if not rule or not rule.get("class_substitution"):
-            continue
-        if not class_substitution_letter_stable(rule, facts):
-            continue
-        scope = (scopes or {}).get(rule_id)
-        locations = sorted(str(location) for location in
-                           getattr(scope, "locations", ()) or ())
-        if not locations:
-            locations = [str(span.location) for span in inspection.paragraphs]
-        covered = {str(key) for target in targets
-                   if target.rule_id == rule_id and not target.out_of_scope
-                   for key in target.operations or ()}
-        for index, operation in enumerate(rule.get("operations") or ()):
-            if operation.get("op") != "replace":
-                continue
-            operation_id = _rule_operation_key(rule, index)
-            if operation_id in covered:
-                continue
-            expected, issues = instantiate_slots(
-                str(operation.get("new_text") or ""), facts)
-            if issues or not expected:
-                continue
-            expected_compact = _compact(expected)
-            for location in locations:
-                try:
-                    span = inspection.by_location(location)
-                except (KeyError, DocxError):
-                    continue
-                if not target_site_ok(rule_id, span, inspection):
-                    continue
-                if expected_compact not in _compact(span.text):
-                    continue
-                created.append(Target(
-                    target_id=f"NOOP-{rule_id}-{index}-{location}",
-                    rule_id=rule_id, location=location, quote=span.text,
-                    state="satisfied", reason="class_substitution_noop",
-                    start=0, end=len(span.text), resolution="resolved",
-                    segment_ok=containing_segment(span, 0, len(span.text)) is not None,
-                    operations=(operation_id,)))
-                break
     return created
