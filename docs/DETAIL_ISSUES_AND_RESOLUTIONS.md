@@ -6328,7 +6328,7 @@ H＝E×…
 - 发现日期：2026-10-29，B15美国房地产Semantic V2重跑 `sem-run-m`。P1。
 - 问题与影响：模型/盘点把G16目标定在p719“E为C类基金份额前一日的基金资产净值”，该段是公式尾行，不是支付机制；`rebind_g16_clause_targets`只向回找支付锚点，未回退到紧随其后的p720，导致`TARGET_SOURCE_MISMATCH`，整份只剩G16 OPEN。
 - 处理（已实施）：目标本身以句末标点未闭合、且其后1–3段内出现`_g16_payment_anchor`（销售服务费+计提+按月支付）时，允许向前重绑到该支付条款的clause end；仍要求目标在物理section内。新增`test_formula_tail_before_payment_head_binds_forward_to_clause_end`。
-- 状态：**代码修复+定向测试通过；B15真实重跑`sem-run-n`进行中**。
+- 状态：**代码修复+定向测试通过；B15后续`run-ab/ac`已见G16闭环；最终确认重跑因用户暂停真实模型调用待执行**。
 - 变更记录：2026-10-29新增。
 
 ## FL-D518 G16固定政策模板在Semantic V2中被当作整段replace，与G15/G17删除重叠（2026-10-29）
@@ -6344,7 +6344,7 @@ H＝E×…
 - 发现日期：2026-10-29，B05弘利 `sem-run-b`。P1。
 - 问题与影响：释义p117只写“将基金份额分为不同的类别”，不含A/C类字样；G02:0/1的旧文`A类基金份额`/`C类基金份额`在释义scope内不存在，模型给出ABSENT标记但replay不接受replace的absence证书，两个G02义务保持OPEN，整份incomplete。
 - 处理（已实施）：`absent_delete_coverage`对G02/G04增加硬事实no-op证书：仅当`class_substitution_letter_stable`为真（实际类别实例化后与指引引用完全相同）且旧文在规则scope内不存在时，记录rule-scope扫描并关闭为ALREADY_SATISFIED；实际类别不同时仍必须定位修改，不用absence掩盖。
-- 状态：**代码修复+`test_hengli_g02_class_definition_already_generic_closes_as_noop`通过；B05真实重跑`sem-run-o`进行中**。
+- 状态：**代码修复+定向测试通过；B05 `sem-run-z` 独立复核通过（P1=0）**。
 - 变更记录：2026-10-29新增。
 
 ## FL-D520 类别组连接词“和/、”导致已满足的G02/G04被判缺失（2026-10-29）
@@ -6376,7 +6376,7 @@ H＝E×…
 - 发现日期：2026-10-29，B05弘利 `sem-run-p`（关闭G02/G04 Semantic后）。P1。
 - 问题与影响：弘利实际只有A/C两个类别，G02/G04实例化后与指引引用完全相同，`class_substitution_letter_stable`为真；但盘点可能完全不返回G04站点，旧文又存在于p156/p157，absence证书不能发，最终G04:0/1无target、`CLAIM_OPERATION_UNPROVEN`。
 - 处理（已实施）：新增`ensure_class_group_noop_targets`：硬事实no-op时，在G02/G04规则scope内为每个操作绑定一个真实费用类别定义段，创建`satisfied`站点target；并放宽`target_site_ok`接受“A类基金份额：申购时收取申购费…”这类逐类定义段。Claim Replay按ALREADY_SATISFIED关闭，不产生编辑。
-- 状态：**代码修复+`test_hengli_g04_noop_creates_satisfied_site_targets`通过；B05真实重跑`sem-run-r`进行中**。
+- 状态：**代码修复+定向测试通过；B05 `sem-run-z` 独立复核通过（P1=0）**。
 - 变更记录：2026-10-29新增。
 
 ## FL-D524 G08“本基金A类基金份额的申购费率…”前缀变体被目标归属拒绝（2026-10-29）
@@ -6384,7 +6384,7 @@ H＝E×…
 - 发现日期：2026-10-29，B05弘利 `sem-run-o`。P1。
 - 问题与影响：p216写“本基金A类基金份额的申购费率由基金管理人决定，并在招募说明书及基金产品资料概要中列示”，指引旧文为“本基金的申购费率…”。目标有显式G08:0时，`_selected_operation_indices`要求旧文在span内或相似度≥0.35，前缀变体相似度不足，被标`TARGET_SOURCE_MISMATCH`，G08无法计划。
 - 处理（已实施）：对G08 replace，若span同时含“申购费率由基金管理人决定”和“招募说明书”，且不触发认购/赎回topic flip，则接受为同一政策条款；新增p216归属测试。
-- 状态：**代码修复+定向测试通过；B05真实重跑`sem-run-r`进行中**。
+- 状态：**代码修复+定向测试通过；B05 `sem-run-z` 独立复核通过（P1=0）**。
 - 变更记录：2026-10-29新增。
 
 ## FL-D525 G18“费用存在不同”变体被审计判未完成（2026-10-29）
@@ -6400,7 +6400,7 @@ H＝E×…
 - 发现日期：2026-10-29，B05弘利/B17道琼斯。P1。
 - 问题与影响：p159/p176只规定“份额类别具体设置及费率水平由管理人确定”，没有“调低赎回费率”；absence证书已把G05:0/G05:2关闭为VERIFIED_ABSENT，但最终sweep仍报`missing_new_text`并生成`FINAL_MODEL_SWEEP_FINDING`，整份incomplete。
 - 处理（已实施）：`_apply_artifact_proof_to_findings`增加规则级仲裁：该规则全部适用操作均由VERIFIED_ABSENT/ALREADY_SATISFIED证明时，其他段落“缺新文本”的sweep意见标记resolved，不凭空创造规则未授权的站点。
-- 状态：**代码修复+定向测试通过；B05/B17真实重跑`sem-run-r/sem-run-u`进行中**。
+- 状态：**代码修复+定向测试通过；B05 `run-z`、B17 `run-w` 独立复核通过（P1=0）；B17复跑因暂停待执行**。
 - 变更记录：2026-10-29新增。
 
 ## FL-D527 同一销售服务费clause存在支付头与用途尾两个G16目标，尾目标无法计划（2026-10-29）
@@ -6408,7 +6408,7 @@ H＝E×…
 - 发现日期：2026-10-29，B12沪深300 `sem-run-q`。P1。
 - 问题与影响：语义G16已计划p795/p1270，但open-rule又在同clause的用途尾p796生成T015；二者是同一append，T015按用途句无法通过`append_site_ok`，`TARGET_SOURCE_MISMATCH`阻塞G16。
 - 处理（已实施）：`rebind_g16_clause_targets`在重绑后按物理clause去重；同clause多目标优先保留semantic目标，其次clause-end；被淘汰目标清空operations/claimed_operations并标`SUPERSEDED_BY_G16_CLAUSE_TARGET`。新增同clause去重测试。
-- 状态：**代码修复+定向测试通过；B12真实重跑`sem-run-s`进行中**。
+- 状态：**代码修复+定向测试通过；B12 `sem-run-y` 独立复核通过（P1=0）**。
 - 变更记录：2026-10-29新增。
 
 ## FL-D528 Semantic target与既有未归属同站点target未adopt，导致语义改写丢失（2026-10-29）
@@ -6416,7 +6416,7 @@ H＝E×…
 - 发现日期：2026-10-29，B15美国房地产 `sem-run-n`。P1。
 - 问题与影响：语义G09已接受p159，但既有盘点target在注入时尚未`assign_target_operations`，operations为空；adoption只按operation交集匹配失败，随后去重把短quote的T008保留、语义target丢失，G09退回compose并`program_check:protected:赎回`，整份incomplete。
 - 处理（已实施）：adoption在operations为空但span几何重叠时也复用同站点target，并写入semantic replacement/preserved/operation_mode；新增语义adoption回归（完整pipeline测试通过）。
-- 状态：**代码修复+定向测试通过；B15真实重跑`sem-run-t`进行中**。
+- 状态：**代码修复+定向测试通过；B15 `run-ab/ac` 已消除语义丢失，最终复跑因暂停待执行**。
 - 变更记录：2026-10-29新增。
 
 ## FL-D517 保存选择 500、生成按钮不可用、生成 422（2026-10-30）
@@ -6453,7 +6453,7 @@ H＝E×…
 - 发现日期：2026-10-30，B15美国房地产`run-x`复核。P1。
 - 问题与影响：正文p734“1、由于…”与摘要p1095“（1）由于…”仅编号形式不同，p883“（4）按…”与p1239“4）按…”同样；字节级重复检测和scope都不匹配，正文改、摘要不改。
 - 处理（已实施）：`_expand_duplicate_copy_scopes`新增去编号归一匹配，仅对G18/G22创建同quote的normalized copy target并把位置写入scope；G22有序项识别接受`4）`形式。review确认摘要内容已同步后，仍需确保clone进入Claim Replay（见FL-D532）。
-- 状态：**代码修复+定向测试通过；B15复跑`run-ae`进行中**。
+- 状态：**代码修复+定向测试通过；`run-ae`因MODEL_RETRY_EXHAUSTED停止（targets=0），不作业务结果；复跑因暂停待执行**。
 - 变更记录：2026-10-30新增。
 
 ## FL-D532 归一化摘要clone被scope gate排除，正文改摘要改但仍报open（2026-10-30）
@@ -6501,5 +6501,5 @@ H＝E×…
 - 发现日期：2026-10-30，离线全量回归。P1（回归）。
 - 问题与影响：为修G05“规则本无旧条款却被sweep要求新增”新增的规则级仲裁，把“该规则全部操作都有PASS证明”误当成可关闭任意站点的finding；G99 delete在p0有证明时，p1的另一条款finding被错误resolved，违反FL-D115“另一站点不能借用删除证明”。
 - 处理（已实施）：规则级仲裁只接受**无站点**的VERIFIED_ABSENT/ALREADY_SATISFIED证书（`sites`为空），有站点的效果证明仍必须按finding自身location/operation仲裁。恢复两个回归测试。
-- 状态：**代码修复+定向回归通过；全量回归`full-pytest-oct30b`运行中**。
+- 状态：**代码修复+定向回归通过；全量非浏览器回归`full-pytest-oct30c` 2183 passed/6 skipped**。
 - 变更记录：2026-10-30新增。
