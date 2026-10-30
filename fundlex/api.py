@@ -47,6 +47,7 @@ from .store import (Conflict, NotFound, ReportJsonError, RunStore, StoreError,
 from .config import auth_db_target, local_data_dir
 from .tasks import TaskStore
 from .application import TaskApplicationService
+from . import model_settings
 from .upload_validation import (
     MAX_BATCH_BYTES, MAX_COMPRESSION_RATIO,
     MAX_PART_BYTES, MAX_UNCOMPRESSED_BYTES, MAX_UPLOAD_BYTES,
@@ -168,6 +169,29 @@ class GuideSettingRequest(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
     version_id: str | None = Field(default=None, max_length=128)
+
+
+class GuideRuleSettingsRequest(BaseModel):
+    """Per-owner rule switches for one guide version."""
+
+    model_config = ConfigDict(extra="forbid")
+    disabled_rule_ids: list[str] = Field(default_factory=list, max_length=500)
+
+    @field_validator("disabled_rule_ids")
+    @classmethod
+    def valid_rule_ids(cls, values):
+        cleaned = []
+        for value in values:
+            item = str(value or "").strip()
+            if not item or len(item) > 128 or any(ord(c) < 32 for c in item):
+                raise ValueError("invalid rule id")
+            cleaned.append(item)
+        if len(set(cleaned)) != len(cleaned):
+            raise ValueError("duplicate rule id")
+        return cleaned
+
+
+ModelSettingsRequest = model_settings.Preferences
 
 
 class FeishuBindingCodeRequest(BaseModel):
@@ -986,6 +1010,47 @@ def create_app(data_dir: str | Path | None = None, *, auth_db=None) -> FastAPI:
         except ValueError as exc:
             raise_api_error(409, exc, fallback="CONFLICT")
         return guide_settings(user)
+
+    @application.get("/api/guides/{version_id}/rule-settings")
+    def get_guide_rule_settings(version_id: str, user: str = Depends(_user)):
+        try:
+            return guide_store.rule_settings(store, user, version_id)
+        except KeyError as exc:
+            raise_api_error(404, exc, fallback="GUIDE_NOT_FOUND")
+        except ValueError as exc:
+            raise_api_error(409, exc, fallback="GUIDE_NOT_READY")
+
+    @application.put("/api/guides/{version_id}/rule-settings")
+    def update_guide_rule_settings(version_id: str, payload: GuideRuleSettingsRequest,
+                                   user: str = Depends(_user)):
+        try:
+            return guide_store.set_rule_settings(store, user, version_id,
+                                                 payload.disabled_rule_ids)
+        except KeyError as exc:
+            raise_api_error(404, exc, fallback="GUIDE_NOT_FOUND")
+        except ValueError as exc:
+            message = str(exc)
+            if message.startswith("GUIDE_RULE_UNKNOWN") or message == "GUIDE_RULES_ALL_DISABLED":
+                raise_api_error(422, exc, fallback="GUIDE_RULE_INVALID")
+            raise_api_error(409, exc, fallback="GUIDE_NOT_READY")
+
+    @application.get("/api/settings/model")
+    def get_model_settings(user: str = Depends(_user)):
+        return model_settings.public_settings(store, user)
+
+    @application.put("/api/settings/model")
+    def update_model_settings(payload: ModelSettingsRequest,
+                              user: str = Depends(_user)):
+        try:
+            return model_settings.save_settings(store, user, payload.model_dump())
+        except model_settings.ModelSettingsError as exc:
+            if exc.code == "MODEL_SETTINGS_LOCKED":
+                raise_api_error(409, exc, fallback="MODEL_SETTINGS_LOCKED")
+            raise_api_error(422, exc, fallback=exc.code or "MODEL_SETTINGS_INVALID")
+
+    @application.delete("/api/settings/model")
+    def reset_model_settings(user: str = Depends(_user)):
+        return model_settings.reset_settings(store, user)
 
     @application.post("/api/tasks", status_code=201)
     def create_task(payload: TaskSubmission,

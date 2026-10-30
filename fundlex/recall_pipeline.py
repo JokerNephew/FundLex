@@ -16,6 +16,7 @@ Two invariants are enforced here on top of the core:
 """
 from __future__ import annotations
 
+import copy
 import hashlib
 import json
 import os
@@ -170,6 +171,46 @@ def _guide_rules(guide_document: dict) -> list[dict[str, Any]]:
         elif item.get("rule_id"):
             rules.append(item)
     return rules
+
+
+def _active_guide_document(guide_document: dict,
+                           disabled_rule_ids: Sequence[str] | None) -> tuple[dict, list[dict]]:
+    """Return a processing copy with user-disabled rules removed.
+
+    The certified guide document is never mutated.  The full document remains
+    the hash/certification envelope; only the rule set handed to the engine is
+    narrowed, and the disabled ids are reported separately.
+    """
+    disabled = {str(item).strip() for item in (disabled_rule_ids or []) if str(item).strip()}
+    if not disabled:
+        return guide_document, []
+    rules = _guide_rules(guide_document)
+    known = {str(rule.get("rule_id")) for rule in rules}
+    unknown = sorted(disabled - known)
+    if unknown:
+        raise RecallError("GUIDE_RULE_UNKNOWN", {"rule_ids": unknown})
+    active = copy.deepcopy(guide_document)
+    groups: list[dict[str, Any]] = []
+    for group in active.get("groups") or []:
+        if not isinstance(group, dict):
+            continue
+        nested = group.get("rules")
+        if isinstance(nested, list):
+            kept = [rule for rule in nested
+                    if not isinstance(rule, dict) or str(rule.get("rule_id")) not in disabled]
+            if kept:
+                group["rules"] = kept
+                groups.append(group)
+        elif str(group.get("rule_id")) not in disabled:
+            groups.append(group)
+    active["groups"] = groups
+    disabled_rules = [{
+        "rule_id": str(rule.get("rule_id")),
+        "title": str(rule.get("title") or ""),
+        "section_hint": str(rule.get("section_hint") or ""),
+        "reason": "USER_DISABLED",
+    } for rule in rules if str(rule.get("rule_id")) in disabled]
+    return active, disabled_rules
 
 
 def _guide_sha(guide_document: dict) -> str:
@@ -4064,6 +4105,12 @@ def _report_markdown(report: dict[str, Any]) -> str:
         f"- 指引文档 SHA-256：{(report.get('guide') or {}).get('document_sha256') or '（未提供）'}",
         f"- 交付状态：{report.get('delivery_status')}",
     ]
+    disabled_rules = [item for item in (report.get("disabled_rules") or [])
+                      if isinstance(item, Mapping)]
+    if disabled_rules:
+        lines.append("- 用户关闭规则：" + "；".join(
+            f"{item.get('rule_id')} {item.get('title') or ''}".strip()
+            for item in disabled_rules))
     from .delivery import failure_reason
     for error in (report.get("errors") or []):
         if isinstance(error, Mapping):
@@ -4141,10 +4188,19 @@ def _report_markdown(report: dict[str, Any]) -> str:
         lines.append(f"- {rule_id} {title} {target.get('location')}："
                      f"「{_short_text(target.get('quote'), 160)}」— {_readable_reason(target.get('reason'))}")
 
-    # 3. Business items that need a product decision (never auto-applied).
+    # 3. Rules explicitly switched off by the user are visible exceptions, not
+    # silently missing modifications.
+    lines.extend(["", "## 三、用户关闭的规则（未执行）", ""])
+    if not disabled_rules:
+        lines.append("- （无）")
+    for item in disabled_rules:
+        lines.append(f"- {item.get('rule_id')} {item.get('title') or ''}"
+                     f"（{item.get('section_hint') or '未标注章节'}）：用户在本任务关闭，未执行")
+
+    # 4. Business items that need a product decision (never auto-applied).
     notices = [item for item in (report.get("business_notices") or []) if isinstance(item, Mapping)]
     business_unresolved = [item for item in business_items if item not in notices]
-    lines.extend(["", "## 三、业务待定（不自动修改）", ""])
+    lines.extend(["", "## 四、业务待定（不自动修改）", ""])
     if not notices and not business_unresolved:
         lines.append("- （无）")
     for notice in notices:
@@ -4159,19 +4215,19 @@ def _report_markdown(report: dict[str, Any]) -> str:
         seen_business.add(key)
         lines.append(f"- {_readable_item(item)}")
 
-    # 4. Blockers prevent delivery; review items are delivered but need a human check.
-    lines.extend(["", "## 四、阻断项（未交付原因）", ""])
+    # 5. Blockers prevent delivery; review items are delivered but need a human check.
+    lines.extend(["", "## 五、阻断项（未交付原因）", ""])
     if not blockers:
         lines.append("- （无）")
     for item in blockers:
         lines.append(f"- {_readable_item(item)}")
-    lines.extend(["", "## 五、人工复核清单（已交付，需确认）", ""])
+    lines.extend(["", "## 六、人工复核清单（已交付，需确认）", ""])
     if not review_items:
         lines.append("- （无）")
     for item in review_items:
         lines.append(f"- {_readable_item(item)}")
 
-    lines.extend(["", "## 六、处理概览", ""])
+    lines.extend(["", "## 七、处理概览", ""])
     lines.append(f"- 审计轮次：{len(audit.get('rounds') or [])}；"
                  f"未决问题 {len(audit.get('issues') or [])}")
     lines.append(f"- 查漏：块 {sweep.get('chunks', 0)}，发现 {len(sweep.get('findings') or [])}，"
@@ -4216,7 +4272,8 @@ def _residual_delete_indices(rule_id: str, rule: Mapping[str, Any], facts: Facts
 def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
                          guide_document: dict, gateway: Any = None,
                          execution_mode: str = "delivery", checkpoint_dir: str | Path | None = None,
-                         max_business_rounds: int = 3, max_sweep_chunks: int = 40) -> dict[str, Any]:
+                         max_business_rounds: int = 3, max_sweep_chunks: int = 40,
+                         disabled_rule_ids: Sequence[str] | None = None) -> dict[str, Any]:
     """Run the recall-first engine for one contract and return its report.
 
     Raises :class:`RecallPipelineStop` for recoverable model/transport stops so the
@@ -4265,6 +4322,10 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
             report["guide"]["certification"] = validate_runtime_guide(guide_document)
         except GuideError as exc:
             raise RecallError(exc.code, exc.details) from exc
+        active_guide, disabled_rules = _active_guide_document(guide_document, disabled_rule_ids)
+        if disabled_rules:
+            report["disabled_rules"] = disabled_rules
+            report["guide"]["disabled_rule_ids"] = [item["rule_id"] for item in disabled_rules]
         if os.environ.get("FUNDLEX_MODEL_MODE") == "record":
             from .frozen import FrozenRun
             frozen_directory = os.environ.get("FUNDLEX_FROZEN_RUN_DIR")
@@ -4284,9 +4345,9 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
                 "authors": sorted({item["author"] for item in inspection.revisions}),
                 "items": list(inspection.revisions),
             }
-        rules = _guide_rules(guide_document)
+        rules = _guide_rules(active_guide)
         if not rules:
-            raise RecallError("RECALL_GUIDE_EMPTY", {})
+            raise RecallError("GUIDE_RULES_ALL_DISABLED", {})
         for rule in rules:
             if not isinstance(rule.get("title"), str):
                 raise RecallError("RECALL_GUIDE_RULE_INVALID",
@@ -4297,7 +4358,7 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
                               {"rules": len(rules), "unique": len(rules_by_id)})
         from .obligations import (apply_facts, compile_obligations, open_obligations,
                                   project, project_unresolved)
-        obligation_ledger = compile_obligations(guide_document)
+        obligation_ledger = compile_obligations(active_guide)
         report["obligations"] = obligation_ledger.as_dict()
         model = gateway or _default_gateway()
         if checkpoint_dir is not None and hasattr(model, "bind_checkpoints"):
@@ -5866,6 +5927,7 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
                 "counts": obligation_ledger.counts,
                 "open_obligations": len(open_obligations(obligation_ledger)),
                 "blocking_unresolved": len(unresolved),
+                "disabled_rules": len(disabled_rules),
             }
             class_counts: dict[str, int] = {}
             for item in unresolved:
@@ -5913,7 +5975,8 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
                     "kind": "recall_validated_edits" if edits else "recall_validated_unchanged",
                     "checks": checks, **hashes}
                 report["artifacts"] = {"final": "final.docx", "redline": "redline.docx"}
-                report["delivery_status"] = "complete"
+                report["delivery_status"] = (
+                    "complete_with_exceptions" if disabled_rules else "complete")
             elif edits:
                 # A valid produced pair exists but the gate is not met: keep it as a
                 # working pair, never under the final names.

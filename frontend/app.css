@@ -286,7 +286,7 @@ button.footer-link:hover{color:var(--accent-dark);text-decoration:underline}
 [data-state=bound] .feishu-status-badge{color:#286847;border-color:#bfdbc8;background:#edf7f0}
 [data-state=error] .feishu-status-badge{color:var(--red);background:var(--red-soft);border-color:#eccbd0}
 .feishu-state-copy{margin:22px 0 18px;color:#58636e;font-size:13px;line-height:1.8;overflow-wrap:anywhere}
-.feishu-connect-card .settings-actions{display:flex;gap:10px;flex-wrap:wrap}.feishu-connect-card .subnote{line-height:1.7}
+.settings-actions{display:flex;gap:10px;flex-wrap:wrap;align-items:center}.check-line{display:flex;align-items:center;gap:8px;font-weight:500}#model-settings-form{display:grid;gap:14px}#model-settings-form h3{margin:0}#model-settings-form label{display:grid;gap:5px;color:#425466;font-size:13px}#model-settings-form .check-line{display:flex}#model-settings-form input,#model-settings-form textarea{border:1px solid var(--border);border-radius:8px;padding:9px 11px;font:inherit;background:#fff}.feishu-connect-card .settings-actions{display:flex;gap:10px;flex-wrap:wrap}.feishu-connect-card .subnote{line-height:1.7}
 #feishu-oauth-panel{margin-top:24px;border-top:1px solid var(--line-soft);padding-top:22px}
 .feishu-qr-heading{display:flex;gap:8px;flex-direction:column}.feishu-qr-heading strong{font-size:14px}.feishu-qr-heading span{font-size:12px;color:var(--muted)}
 .feishu-connect-card .feishu-oauth-qr{width:100%;max-width:650px;min-height:0;padding:0;margin:16px 0;border:1px solid var(--line);border-radius:8px;background:#fff;overflow:hidden}

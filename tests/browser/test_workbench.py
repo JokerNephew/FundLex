@@ -380,6 +380,39 @@ def test_guide_configuration_and_panels_do_not_expose_hashes(ui):
         page.locator('#guide-overlay-close').click()
 
 
+def test_guide_rule_switches_and_model_settings_are_editable(ui):
+    from playwright.sync_api import expect
+    page, context, _, base = ui
+    page = open_page(ui, 'guide')
+    rules_button = page.locator('#guide-rows [data-guide-rules]').first
+    guide_id = rules_button.get_attribute('data-guide-rules')
+    rules_button.click()
+    expect(page.locator('#guide-overlay-body')).to_contain_text('规则组启停')
+    toggle = page.locator('[data-guide-rule-toggle]').first
+    toggle.uncheck()
+    page.locator('[data-guide-rule-save]').click()
+    page.wait_for_timeout(500)
+    settings = context.request.get(
+        base + f'/api/guides/{guide_id}/rule-settings',
+        headers={'X-FundLex-User': 'browser-check'}).json()
+    assert settings['disabled_rule_ids'], settings
+    page.locator('#guide-overlay-close').click()
+
+    page.evaluate("location.hash='settings'")
+    expect(page.locator('#model-settings-card')).to_be_visible()
+    expect(page.locator('#model-settings-body')).to_contain_text('主模型')
+    expect(page.locator('#model-settings-form')).to_be_visible()
+    page.locator('#model-primary-model').fill('personal-browser-model')
+    with page.expect_response(lambda r: '/api/settings/model' in r.url and r.request.method == 'PUT') as saved:
+        page.locator('[data-action="model-settings-save"]').click()
+    assert saved.value.status == 200
+    expect(page.locator('#model-primary-model')).to_have_value('personal-browser-model')
+    page.reload()
+    expect(page.locator('#model-primary-model')).to_have_value('personal-browser-model')
+    page.locator('[data-action="model-settings-reset"]').click()
+    expect(page.locator('#model-settings-source')).to_have_text('系统默认')
+
+
 def test_revision_pair_checkbox_keyboard_and_insert_navigation(ui):
     presentation(ui)
     page = ui[0]
@@ -532,7 +565,7 @@ def test_login_expiry_message_and_role_hash_guard(ui, monkeypatch):
     page.wait_for_timeout(100)
     # V1 settings is now the member-facing Feishu page, not dev-only settings.
     assert page.locator("#view-settings").is_visible()
-    assert page.locator('#breadcrumb [aria-current="page"]').inner_text() == '飞书绑定'
+    assert page.locator('#breadcrumb [aria-current="page"]').inner_text() == '设置'
     assert page.locator('#feishu-binding-code-btn').count() == 0
     page.locator('.sidebar [data-nav="overview"]').click()
     token = page.evaluate("sessionStorage.getItem('fundlex-auth-token')")

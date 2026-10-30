@@ -240,12 +240,17 @@ def _task_roles_digest(task_roles: Mapping[str, str]) -> str:
 
 
 def build_role_gateway(*, budget: ModelBudget | None = None,
-                       gateway_factory: Any = None) -> RoleGateway:
+                       gateway_factory: Any = None,
+                       configs: Mapping[str, ModelRoleConfig] | None = None,
+                       task_roles: Mapping[str, str] | None = None) -> RoleGateway:
     """Build the role gateway from the environment / role file.
 
     ``gateway_factory`` is a test seam with the :func:`_make_gateway` signature.
     """
-    configs, overrides = load_role_config()
+    if configs is None:
+        configs, overrides = load_role_config()
+    else:
+        configs, overrides = dict(configs), dict(task_roles or {})
     if os.environ.get("FUNDLEX_MODEL_MODE") == "replay":
         from dataclasses import replace
         configs = {role: replace(config, api_key=config.api_key or "replay-unused",
@@ -260,7 +265,11 @@ def build_role_gateway(*, budget: ModelBudget | None = None,
     shared_budget = (None if os.environ.get("FUNDLEX_MODEL_MODE") == "replay"
                      else budget if budget is not None else _budget_from_env())
     primary = factory(primary_cfg, shared_budget)
-    review = primary if review_cfg.same_endpoint(primary_cfg) else \
+    same_transport = review_cfg.same_endpoint(primary_cfg) and all(
+        getattr(review_cfg, name) == getattr(primary_cfg, name)
+        for name in ("timeout_s", "max_tokens", "retries", "max_context_chars",
+                     "max_calls", "request_options", "extra_headers", "user_agent"))
+    review = primary if same_transport else \
         factory(review_cfg, shared_budget)
     return RoleGateway(primary, review, configs={**configs,
                                                  **({"review": review_cfg} if review is primary

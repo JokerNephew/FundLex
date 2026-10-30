@@ -29,6 +29,20 @@ RETRYABLE_MODEL_CODES = {"MODEL_NETWORK_ERROR", "MODEL_RETRY_EXHAUSTED", "MODEL_
 Processor = Callable[[Path, Path, str], dict[str, Any]]
 
 
+def _disabled_rule_ids(raw: Any) -> list[str]:
+    """A damaged snapshot must not silently enable rules the user disabled."""
+    if raw is None or raw == "":
+        return []
+    try:
+        value = json.loads(raw) if isinstance(raw, str) else raw
+    except ValueError:
+        raise ValueError("GUIDE_RULE_SETTINGS_INVALID") from None
+    if not isinstance(value, list) or any(not isinstance(item, str) or not item.strip()
+                                          for item in value):
+        raise ValueError("GUIDE_RULE_SETTINGS_INVALID")
+    return value
+
+
 @contextmanager
 def _document_trace(job: dict[str, Any], store: RunStore) -> Iterator[None]:
     """Open one Langfuse trace per document revision (no-op when tracing is off).
@@ -63,7 +77,8 @@ def _document_trace(job: dict[str, Any], store: RunStore) -> Iterator[None]:
 def _default_processor(input_path: Path, output_dir: Path, ruleset_version: str, *, engine_id: str = "",
                        guide_version_id: str = "", guide_document: dict[str, Any] | None = None,
                        checkpoint_dir: Path | None = None, gateway: Any = None,
-                       mode: str = "delivery") -> dict[str, Any]:
+                       mode: str = "delivery",
+                       disabled_rule_ids: list[str] | None = None) -> dict[str, Any]:
     # The runtime serves exactly one engine: the guide-bound recall-first
     # pipeline. The retired rulesets are no longer reachable from the worker, so
     # an unbound or legacy job fails closed instead of silently running the old
@@ -75,7 +90,8 @@ def _default_processor(input_path: Path, output_dir: Path, ruleset_version: str,
     # its own error report.
     from .recall_pipeline import process_recall_first
     return process_recall_first(input_path, output_dir, guide_document=guide_document, gateway=gateway,
-                                checkpoint_dir=checkpoint_dir, execution_mode="delivery")
+                                checkpoint_dir=checkpoint_dir, execution_mode="delivery",
+                                disabled_rule_ids=disabled_rule_ids)
 
 
 class Worker:
@@ -168,13 +184,17 @@ class Worker:
                 if job.get("engine_build") and (job["engine_build"] != engine_build() or job["schema_version"] != SCHEMA_VERSION):
                     raise ValueError("ENGINE_SCHEMA_MISMATCH")
                 guide_document = self._bound_guide_document(job)
+                from . import model_settings
+                preferences = model_settings.decode_snapshot(job.get("model_preferences") or "{}")
                 with self._lease_heartbeat(doc_id, token):
                     if self.processor is _default_processor:
                         with _document_trace(job, self.store):
                             report = self.processor(source, output_dir, job["ruleset_version"],
                                 engine_id=job.get("engine_id", ""), guide_version_id=job.get("guide_version_id", ""),
                                 guide_document=guide_document, checkpoint_dir=self.store.root / "checkpoints" / doc_id,
-                                mode=job.get("mode", "delivery"))
+                                mode=job.get("mode", "delivery"),
+                                gateway=model_settings.gateway_for(preferences) if preferences else None,
+                                disabled_rule_ids=_disabled_rule_ids(job.get("disabled_rule_ids")))
                     else:
                         report = self.processor(source, output_dir, job["ruleset_version"])
                 if isinstance(report, dict) and report.get("error_code") in RETRYABLE_MODEL_CODES:
@@ -183,6 +203,8 @@ class Worker:
                     return True
                 if not isinstance(report, dict):
                     raise ValueError("INVALID_PIPELINE_REPORT")
+                if preferences:
+                    report["model_preferences"] = preferences
                 report["document_id"] = doc_id
                 report["engine_build"] = job.get("engine_build", "")
                 if is_recall_report(report):

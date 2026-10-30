@@ -118,7 +118,7 @@
 <svg>
 <use href="#i-settings"/>
 </svg>
-<span>飞书绑定</span>
+<span>设置</span>
 </button>
 <button class="nav-btn" data-nav="users" id="nav-users" hidden>
 <svg>
@@ -766,8 +766,8 @@
     </section>
 <section class="section" id="view-generation" aria-label="指引生成"><div id="gg-root"></div></section>
 <section class="section" id="view-document" aria-label="合同结果"><div id="document-host"></div></section>
-    <section class="section" id="view-guide" aria-label="修改指引">
-<div class="page-actions"><p class="subnote">生成的候选指引需经过导入与核验，不能自动替换当前版本。</p><button class="btn" type="button" data-nav="generation">前往指引生成</button></div>
+    <section class="section" id="view-guide" aria-label="我的指引">
+<div class="page-actions"><p class="subnote">管理自己的指引版本、启停规则组，并决定新建任务使用哪一版。生成的候选指引需经过导入与核验，不能自动替换当前版本。</p><button class="btn" type="button" data-nav="generation">前往指引生成</button></div>
       <div class="card card-pad">
 <div class="section-title">
 <div class="batch-title">
@@ -785,7 +785,7 @@
 </div>
       <div class="card card-pad" style="margin-top:14px">
 <div class="section-title">
-<h2>可用指引</h2>
+<h2>我的指引</h2>
 <small>每个账号独立维护，不能访问他人指引</small>
 </div>
 <div class="table-wrap">
@@ -823,7 +823,11 @@
 <p class="subnote" id="guide-upload-message" aria-live="polite">解析失败可在列表中查看问题并重新解析。</p>
 </div>
     </section>
-    <section class="section" id="view-settings" aria-label="飞书绑定">
+    <section class="section" id="view-settings" aria-label="设置">
+<div class="card card-pad" id="model-settings-card" style="margin-bottom:14px">
+<div class="section-title"><h2>模型配置</h2><small id="model-settings-source">读取中</small></div>
+<div id="model-settings-body" class="subnote">正在读取模型配置…</div>
+</div>
 <div class="feishu-binding-layout">
 <div class="card feishu-connect-card" id="feishu-connect-card" data-state="loading">
 <div class="feishu-status-row"><span class="feishu-app-icon" aria-hidden="true">↗</span><div><h2>连接你的飞书账号</h2><p>绑定到当前 FundLex 账号 <strong id="feishu-current-user">—</strong></p></div><span class="feishu-status-badge" id="feishu-binding-badge">读取中</span></div>

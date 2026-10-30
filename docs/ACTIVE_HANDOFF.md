@@ -1,5 +1,16 @@
 # FundLex 当前断点（ACTIVE_HANDOFF）
 
+## 2026-10-30 用户配置化开发断点（本工作树）
+
+- 目标：用户已授权规则组启停、模型配置、我的指引；普通业务用户自助配置，不是管理员控制台。“我的指引”留在修改指引页；任务页不加指引选择。
+- 工作树 `/home/opencode/.local/share/opencode/worktree/29a9a9/user-config-20261030`；branch `codex/user-config-20261030`、基线HEAD364dd2f，尚无本轮commit。主工作区原有guide_generation修改/合同备份及分析文档未动；其FL-D538尚未提交，本树新增FL-D539。
+- 当前改动：fundlex/{model_settings(新),api,guide_store,tasks,store,jobs,delivery,recall_pipeline,db,models/roles,application/task_service}.py；V1 app.js/app.css/compare.html；React Settings/Guides/TaskDetail、types/api、hooks/endpoints及CSS/导航；新增test_model_settings/test_user_configuration、browser test_workbench。所有修改在本树未提交。frontend/node_modules是本轮指向主工作区的未跟踪符号链接，不能提交；.venv同样链接主树。
+- 已做：owner+guide版本规则启停、创建快照、默认Worker活动规则过滤（原认证哈希不变）、关闭规则报告/complete_with_exceptions；两前端指引复用原页。模型早期全局文件草稿已改为owner私有DB设置，禁URL/凭据/环境变量名/头；tasks→batches持久模型选择，独立RoleGateway不改进程env。仅新建合同修改任务使用，指引解析/法规生成暂仍用系统模型，UI需写清。
+- 最新验证：个人模型最终相关后端**236 passed(151.81s)**，含普通密码member隔离、模型快照、默认Worker脚本模型生成DOCX与授权下载；检查G06原文保留、其他实际修改、hash和ins/del。TS typecheck/lint、Vitest16、build通过；V1规则/模型保存刷新重置/登录专项**6 passed**。V1全套历史49 passed/2 failed，两个失败干净364dd2f同样复现。临时baseline-browser-check工作树已移除。
+- 后台全量非浏览器回归正在运行：shell `sh_18ba9ca0400111mkd56DCsm9Q8`，`.venv/bin/python -m pytest -q tests --ignore=tests/browser`，日志`/tmp/opencode/user-config-20261030-regression.log`。工具会自动通知，**不轮询**。开始后只改前端/文档，未改后端；全量结果尚未拿到。无后台agent/服务/真实模型由本轮启动；无真实调用/费用，不重置账本。
+- 仍需：完善V1 save/reset提示/跨身份异步、普通密码member隔离测试、Worker离线生成+授权下载验证；检查关闭规则后实际产物/报告一致，移除未用global helper（已去）；补配置审计与并发；最后跑相关回归/Vitest/build/浏览器；只提交明确本轮文件。**未部署未最终验收**，原真实模型暂停保持。
+- 下一动作：全量自动通知后读日志收尾，不冒称基线失败已修；`build_role_gateway`目前同endpoint同model会合并transport，可能忽略复核角色独立token/超时参数（待补同endpoint不同参数测试并修正共享条件）；`public_settings.review_inherits`默认未设置时需准确反映部署独立review配置。修后跑模型/角色/配置测试。检查文档与当前差异、只提交本轮文件，不提交frontend/node_modules链接，不整树覆盖主工作区。无手动压缩工具，若上下文不足请通过平台压缩/新会话接续先读本节。
+
 ## 2026-10-30 最新断点（真实模型暂停，等待用户恢复）
 
 - **用户最新指令（2026-10-30）**：有需要可继续开发，但**暂时不要跑真实模型调用**。当前没有运行中的 `recall_run`；恢复真实运行前需用户明确同意。

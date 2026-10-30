@@ -12,7 +12,7 @@ const workspaceLinks = [
 ] as const
 
 const configLinks = [
-  ['/guides', '指引配置', 'book'],
+  ['/guides', '修改指引', 'book'],
   ['/settings', '设置', 'settings'],
 ] as const
 
