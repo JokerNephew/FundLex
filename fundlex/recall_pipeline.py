@@ -3973,6 +3973,7 @@ def _apply_artifact_proof_to_findings(findings: list[dict[str, Any]], replay: di
             rule_states = [states.get(record.obligation_id) for record in rule_records]
             if (rule_records and all(state is not None
                                      and effect_proof_passed(state)
+                                     and not state.get("sites")
                                      and str(state.get("artifact_status") or "") in
                                      {"VERIFIED_ABSENT", "ALREADY_SATISFIED"}
                                      for state in rule_states)):
