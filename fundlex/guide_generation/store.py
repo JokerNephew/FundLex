@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import time
 import uuid
 from contextlib import contextmanager
@@ -37,6 +38,16 @@ SCHEMA_VERSION = "guide-generation-1"
 CANDIDATE_VERSION_STATUSES = {
     "draft", "candidate_ready", "human_draft", "approved", "published",
 }
+# Terminal error for a job that crashed workers until the claim cap (A2-F2).
+GG_ATTEMPTS_EXHAUSTED = "GG_ATTEMPTS_EXHAUSTED"
+
+
+def max_job_attempts() -> int:
+    """Claim cap for one guide generation job (env-tunable, normally 5)."""
+    try:
+        return max(1, int(os.environ.get("FUNDLEX_GUIDE_JOB_MAX_ATTEMPTS", "5")))
+    except ValueError:
+        return 5
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS gg_runs (
@@ -888,7 +899,11 @@ class GuideGenerationStore:
                 lock += " FOR UPDATE"
             if db.execute(lock, (run_id,)).fetchone() is None:
                 raise NotFound("guide generation run not found")
-            existing = db.execute("SELECT id FROM gg_jobs WHERE run_id=? AND status IN ('queued','leased')",
+            # A run may only ever have one live job (A2-F3): a retry_wait row
+            # is still the run's single epoch, so dedupe against it instead of
+            # inserting a second job that could process the run concurrently.
+            existing = db.execute("""SELECT id FROM gg_jobs
+                WHERE run_id=? AND status IN ('queued','leased','retry_wait') ORDER BY created_at LIMIT 1""",
                                   (run_id,)).fetchone()
             if existing:
                 return existing["id"]
@@ -900,24 +915,79 @@ class GuideGenerationStore:
                            (now, run_id))
             return job_id
 
-    def claim(self, *, lease_seconds: int = 3600) -> dict | None:
+    def claim(self, *, lease_seconds: int = 3600, max_attempts: int | None = None) -> dict | None:
         self.ensure_schema()
+        if max_attempts is None:
+            max_attempts = max_job_attempts()
         now = time.time()
+        # Crash-loop guard (A2-F2): the sweep candidates are only a hint, read
+        # before the write transaction so a racing claimant may finish or
+        # reclaim one; the terminal UPDATE below repeats the full predicate.
+        with self._connect() as db:
+            exhausted = db.execute("""SELECT id,run_id,fencing_token FROM gg_jobs
+                WHERE attempts>=? AND (status='retry_wait' OR (status='leased' AND lease_until<=?))""",
+                (max_attempts, now)).fetchall()
         with self._connect() as db:
             db.execute("BEGIN IMMEDIATE")
-            sql = """SELECT * FROM gg_jobs WHERE status='queued'
-                OR (status='leased' AND lease_until<?)
-                OR (status='retry_wait' AND (next_attempt_at IS NULL OR next_attempt_at<=?))
-                ORDER BY created_at LIMIT 1"""
-            if self.database.dialect == "mysql":
-                sql += " FOR UPDATE"
-            row = db.execute(sql, (now, now)).fetchone()
+            for doomed in exhausted:
+                # A job reclaimed this many times without a clean finish is
+                # deterministically crashing workers; retire it to a fenced
+                # terminal state instead of burning model calls forever.
+                changed = db.execute("""UPDATE gg_jobs SET status='failed',error_code=?,
+                    lease_until=NULL,next_attempt_at=NULL,updated_at=?
+                    WHERE id=? AND fencing_token=? AND attempts>=?
+                    AND (status='retry_wait' OR (status='leased' AND lease_until<=?))""",
+                    (GG_ATTEMPTS_EXHAUSTED, now, doomed["id"], doomed["fencing_token"],
+                     max_attempts, now)).rowcount
+                if changed == 1:
+                    db.execute("""UPDATE gg_runs SET status='failed',stage='FAILED',error_code=?,
+                        updated_at=? WHERE id=?""",
+                               (GG_ATTEMPTS_EXHAUSTED, now, doomed["run_id"]))
+            sql = """SELECT * FROM gg_jobs WHERE attempts<?
+                AND (status='queued'
+                     OR (status='leased' AND lease_until<?)
+                     OR (status='retry_wait' AND (next_attempt_at IS NULL OR next_attempt_at<=?)))
+                AND NOT EXISTS (SELECT 1 FROM gg_jobs sib WHERE sib.run_id=gg_jobs.run_id
+                    AND sib.id!=gg_jobs.id AND sib.status='leased' AND sib.lease_until>?)
+                ORDER BY created_at LIMIT 4"""
+            row = None
+            token = 0
+            for candidate in db.execute(sql, (max_attempts, now, now, now)).fetchall():
+                # Per-run mutual exclusion (A2-F3): lock the run row before
+                # leasing so enqueue/resume supersede writes serialise with
+                # the claim under MySQL (BEGIN IMMEDIATE does on SQLite), and
+                # never lease while a sibling job of the same run is live.
+                lock = "SELECT id FROM gg_runs WHERE id=?"
+                if self.database.dialect == "mysql":
+                    lock += " FOR UPDATE"
+                if db.execute(lock, (candidate["run_id"],)).fetchone() is None:
+                    continue
+                claim_now = time.time()
+                sibling = db.execute("""SELECT id FROM gg_jobs
+                    WHERE run_id=? AND id!=? AND status='leased' AND lease_until>?""",
+                    (candidate["run_id"], candidate["id"], claim_now)).fetchone()
+                if sibling is not None:
+                    continue
+                token = int(candidate["fencing_token"]) + 1
+                changed = db.execute("""UPDATE gg_jobs SET status='leased',attempts=attempts+1,
+                    fencing_token=?,lease_until=?,next_attempt_at=NULL,updated_at=?
+                    WHERE id=? AND attempts<?
+                    AND (status='queued'
+                         OR (status='leased' AND lease_until<?)
+                         OR (status='retry_wait' AND (next_attempt_at IS NULL OR next_attempt_at<=?)))""",
+                    (token, claim_now + lease_seconds, claim_now, candidate["id"],
+                     max_attempts, claim_now, claim_now)).rowcount
+                if changed != 1:
+                    continue  # lost the claim race; try the next candidate
+                # Exactly one active epoch per run: retire duplicate wait-state
+                # jobs left behind by historic enqueue races (A2-F3).
+                db.execute("""UPDATE gg_jobs SET status='superseded',updated_at=?
+                    WHERE run_id=? AND id!=? AND status IN ('queued','retry_wait')""",
+                    (claim_now, candidate["run_id"], candidate["id"]))
+                row = candidate
+                break
             if row is None:
                 return None
-            token = int(row["fencing_token"]) + 1
-            db.execute("""UPDATE gg_jobs SET status='leased',attempts=attempts+1,fencing_token=?,
-                lease_until=?,next_attempt_at=NULL,updated_at=? WHERE id=?""",
-                (token, now + lease_seconds, now, row["id"]))
             return {"id": row["id"], "run_id": row["run_id"], "fencing_token": token,
                     "attempts": row["attempts"] + 1}
 

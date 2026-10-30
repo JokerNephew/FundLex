@@ -28,6 +28,26 @@ RETRYABLE_MODEL_CODES = {"MODEL_NETWORK_ERROR", "MODEL_RETRY_EXHAUSTED", "MODEL_
 
 Processor = Callable[[Path, Path, str], dict[str, Any]]
 
+# Name of the liveness marker written into every ``fundlex_job_*`` workspace.
+_WORKSPACE_MARKER = "workspace.json"
+
+
+def _pid_alive(pid: int) -> bool:
+    """POSIX liveness probe.  Never use ``os.kill`` on Windows: any signal
+    value there terminates the process, so non-POSIX platforms report alive
+    and the caller must rely on its fencing-token check instead."""
+    if pid <= 0 or os.name == "nt":
+        return True
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    except OSError:
+        return True  # inconclusive: stay conservative, treat as alive
+    return True
+
 
 def _disabled_rule_ids(raw: Any) -> list[str]:
     """A damaged snapshot must not silently enable rules the user disabled."""
@@ -156,18 +176,78 @@ class Worker:
         with self._worker_lock():
             return self._run_once()
 
+    @staticmethod
+    def _is_takeover(exc: BaseException) -> bool:
+        """True when the lease predicate rejected a write: a newer attempt owns
+        the document now, so the stale worker simply stands down (fail-closed)."""
+        return isinstance(exc, Conflict) and str(exc) in {"stale worker lease", "expired worker lease"}
+
+    def _reap_attempt_objects(self, document_id: str, token: int) -> None:
+        """Drop result objects copied by a ``finish`` that failed before commit.
+
+        Object keys are namespaced per attempt (``results/<doc>/<token>/``), so
+        once ``finish`` raised, everything under the prefix was copied by this
+        attempt and is referenced by no database row: the terminal UPDATE and
+        the artifact inserts commit or roll back together (B14-02)."""
+        shutil.rmtree(self.store.object_path(f"results/{document_id}/{int(token)}"),
+                      ignore_errors=True)
+
+    def _mark_workspace(self, workspace: str, doc_id: str, token: int) -> None:
+        try:
+            (Path(workspace) / _WORKSPACE_MARKER).write_text(json.dumps({
+                "document_id": doc_id, "fencing_token": int(token),
+                "store_root": str(self.store.root.resolve()), "pid": os.getpid(),
+            }), encoding="utf-8")
+        except OSError:
+            pass  # the marker only enables stale-workspace reaping
+
+    def _reap_stale_workspaces(self) -> None:
+        """Remove ``fundlex_job_*`` workspaces orphaned by a killed worker (B14-04).
+
+        A workspace is only removed when its marker proves it belongs to this
+        store root, its owning pid is dead, and the recorded attempt is no
+        longer the live fencing epoch, so a live or foreign worker's directory
+        is never touched.  Legacy marker-less directories are left to the OS.
+        """
+        try:
+            candidates = list(Path(tempfile.gettempdir()).glob("fundlex_job_*"))
+        except OSError:
+            return
+        for path in candidates:
+            try:
+                marker = json.loads((path / _WORKSPACE_MARKER).read_text(encoding="utf-8"))
+                if marker.get("store_root") != str(self.store.root.resolve()):
+                    continue
+                pid = int(marker.get("pid") or 0)
+                if _pid_alive(pid):
+                    continue
+                document_id = str(marker.get("document_id") or "")
+                token = int(marker.get("fencing_token") or 0)
+                if not document_id or not token:
+                    continue
+                with self.store._connect() as db:
+                    row = db.execute("SELECT fencing_token,status FROM documents WHERE id=?",
+                                     (document_id,)).fetchone()
+                if (row is not None and int(row["fencing_token"]) == token
+                        and row["status"] in ("leased", "running")):
+                    continue  # the recorded attempt is still the live epoch
+                shutil.rmtree(path, ignore_errors=True)
+            except Exception:  # noqa: BLE001 - reaping is best-effort
+                continue
 
     def _run_once(self) -> bool:
         min_free = int(os.environ.get("FUNDLEX_MIN_FREE_BYTES", str(256 * 1024 * 1024)))
         if shutil.disk_usage(self.store.root).free < min_free:
             raise OSError("local storage below configured free-space reserve")
+        self._reap_stale_workspaces()
         if self._run_guide_job():
             return True
         job = self.store.claim(lease_seconds=self.lease_seconds)
         if job is None:
             return False
         doc_id, token = job["id"], job["fencing_token"]
-        with tempfile.TemporaryDirectory(prefix="fundlex_job_") as workspace:
+        with tempfile.TemporaryDirectory(prefix="fundlex_job_", ignore_cleanup_errors=True) as workspace:
+            self._mark_workspace(workspace, doc_id, token)
             output_dir = Path(workspace) / "out"
             output_dir.mkdir()
             source = self.store.object_path(job["input_key"])
@@ -332,12 +412,18 @@ class Worker:
                     paths["report_md"] = md
                 # A pipeline-written report.md already carries the per-change detail;
                 # appending the worker header would only duplicate the stub.
-                self.store.finish(doc_id, token, report=report, artifacts=paths,
-                                  failed=bool(report.get("qualification_status") == "failed" or report.get("error_code")),
-                                  error_code=report.get("error_code"))
+                try:
+                    self.store.finish(doc_id, token, report=report, artifacts=paths,
+                                      failed=bool(report.get("qualification_status") == "failed" or report.get("error_code")),
+                                      error_code=report.get("error_code"))
+                except BaseException:
+                    # finish commits its UPDATE and artifact rows atomically;
+                    # on raise, this attempt's copied objects are unreferenced.
+                    self._reap_attempt_objects(doc_id, token)
+                    raise
             except Conflict as exc:
                 # An expired worker cannot publish over a newer attempt.
-                if str(exc) in {"stale worker lease", "expired worker lease"}:
+                if self._is_takeover(exc):
                     return True
                 raise
             except Exception as exc:
@@ -345,11 +431,21 @@ class Worker:
                     # Recoverable model/transport stop: retry under the normal
                     # lease policy (budget/circuit stops also pause the task) and
                     # leave the model budget ledger to the next attempt.
-                    self.store.retry(doc_id, token, error_code=exc.code,
-                                    report=getattr(exc, "report", None))
+                    try:
+                        self.store.retry(doc_id, token, error_code=exc.code,
+                                        report=getattr(exc, "report", None))
+                    except Conflict as lease_exc:
+                        # A2-F4: the lease was taken over mid-processing; the
+                        # newer epoch owns the retry decision (fail-closed).
+                        if not self._is_takeover(lease_exc):
+                            raise
                     return True
                 if isinstance(exc, (OSError, sqlite3.OperationalError, DatabaseError)) or getattr(exc, "code", "") in RETRYABLE_MODEL_CODES:
-                    self.store.retry(doc_id, token, error_code=getattr(exc, "code", "TEMPORARY_STORAGE_FAILURE"))
+                    try:
+                        self.store.retry(doc_id, token, error_code=getattr(exc, "code", "TEMPORARY_STORAGE_FAILURE"))
+                    except Conflict as lease_exc:
+                        if not self._is_takeover(lease_exc):
+                            raise
                     return True
                 raw_code = str(exc)
                 known_codes = {"INPUT_INTEGRITY_FAILED", "RULESET_HASH_MISMATCH", "RULESET_RETIRED",
@@ -376,9 +472,16 @@ class Worker:
                 md.write_text(self._markdown(report), encoding="utf-8")
                 report_path = output_dir / "report.json"
                 report_path.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
-                self.store.finish(doc_id, token, report=report,
-                                  artifacts={"report_json": report_path, "report_md": md},
-                                  failed=True, error_code=code)
+                try:
+                    self.store.finish(doc_id, token, report=report,
+                                      artifacts={"report_json": report_path, "report_md": md},
+                                      failed=True, error_code=code)
+                except BaseException as finish_exc:
+                    self._reap_attempt_objects(doc_id, token)
+                    # A2-F4: a newer attempt took over; its epoch owns the
+                    # terminal state and this failure report must not land.
+                    if not self._is_takeover(finish_exc):
+                        raise
         return True
 
     def _run_guide_job(self) -> bool:
@@ -539,9 +642,26 @@ class Worker:
         from . import guide_store
         guide_store._ensure_tables(self.store)
         stopped = stop_event or threading.Event()
+        try:
+            transient_limit = max(1, int(os.environ.get("FUNDLEX_WORKER_DB_FAILURE_LIMIT", "6")))
+        except ValueError:
+            transient_limit = 6
         def consume():
+            transient_failures = 0
             while not stopped.is_set():
-                if not self._run_once():
+                try:
+                    progressed = self._run_once()
+                except (sqlite3.OperationalError, DatabaseError):
+                    # B14-01: a transient claim-time database fault must not
+                    # kill the consume loop.  Back off bounded; only give up
+                    # when the outage persists beyond the failure limit.
+                    transient_failures += 1
+                    if transient_failures >= transient_limit:
+                        raise
+                    stopped.wait(min(30.0, 0.5 * (2 ** (transient_failures - 1))))
+                    continue
+                transient_failures = 0
+                if not progressed:
                     stopped.wait(poll_seconds)
         with self._worker_lock():
             with ThreadPoolExecutor(max_workers=concurrency, thread_name_prefix="fundlex") as pool:
