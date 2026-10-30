@@ -6751,7 +6751,7 @@ H＝E×…
 - B12-P1-2（高 UX）：排队中「下载 ZIP/CSV/总览.md」点击无任何反馈。已修复（`17a2984`：#download-hint 提示节点）。
 - B11-P1（中）：761–1180px 表格横向滚动无任何视觉提示。已修复（`17a2984`：四层滚动阴影）。
 - A9-F04/05/06/08、B12-P1-4/P1-6/P3（日期/登出/无效hash/比对待处理分组/默认名/已暂停合成状态）、axe 文件输入 label 均已修复（`17a2984`；浏览器测试 tests/browser/test_frontend_fixes.py 12 项+remediation 15 项通过）。A9-F01 版本化第一轮不完整问题见 FL-D561。对比度 serious 全站**部分待视觉专项**。
-- **独立复核结论（2026-10-31）**：A9-F01/F02/F03/F04/F05/F06/F08、B11-P1、B12-P1-1/P1-2/P1-4/P1-6、B12-P3 全部 PASS（27+3 实跑）。遗留 CONCERNS：A9-F04 分栏 dispose 无专项测试（功能已验证，测试加固列入 M 系列待办）；A9-F05 >200 条不可达为已知缓解口径。
+- **独立复核结论（2026-10-31）**：A9-F01/F02/F03/F04/F05/F06/F08、B11-P1、B12-P1-1/P1-2/P1-4/P1-6、B12-P3 全部 PASS（27+3 实跑）。遗留 CONCERNS 已闭环：A9-F04 分栏 dispose 已补 Playwright 防线（`cf01aa8`：6 轮开关+8 次重渲染监听器/实例不增长，双 mutation 自检过）；A9-F05 >200 条不可达为已知缓解口径。
 - 待决策：状态术语体系业务翻译（B12-P1-3）需产品文案基线，登记待统一；CSP 待 inline script 清除（guide_generation.html/logic-demo.html）。
 
 ## FL-D557 性能基线与热点（2026-10-31，B13）
@@ -6764,7 +6764,7 @@ H＝E×…
 ## FL-D558 测试体系与环境纪律（2026-10-31，A10）
 
 - Q0（环境）：qa-base/.venv 为 symlink，非 repo cwd 下 import fundlex 解析到他树——规定：所有 QA 验证必须 `cd /tmp/opencode/qa-base && .venv/bin/python -m pytest`。**已遵守并写入交接**。
-- M2（中）：docx 层 expected_old_text/hash 校验被禁后全库无测试能抓住（EXPECTED_TEXT_MISMATCH 零断言）——陈旧锚防线只靠上层间接兜底。**待补专测**。
+- M2（中）：docx 层 expected_old_text/hash 校验被禁后全库无测试能抓住（EXPECTED_TEXT_MISMATCH 零断言）。已补（`cf01aa8`：test_expected_old_text_and_hash_guard_fail_closed，text/hash 双 tripwire fail-closed，mutation 自检过）。**已关闭**。
 - Q3（中）：revision_api(12)+selective(17) 依赖 var/.../D01，干净检出恒 skip，CI 等于没测。**待立决定**：要么小 fixture 入仓要么明示评测环境要求。
 - Q9（低）：venv certifi 2026.7.22 低于 pyproject ≥2026.10.19 与 lock 2026.10.23 三方不一致；test_dependency_lock 不测运行时。**待对齐**（生产 venv 一并核对）。
 - Q5/Q6/Q7（低）：discovery.py:632 批次解析失败静默 continue、14 个零引用私有函数、flags.py 注释与默认行为矛盾。**清理项**。
@@ -6801,8 +6801,8 @@ H＝E×…
 ## FL-D563 A7-04 修复缺回归测试（2026-10-31，引擎复核）
 
 - **问题**：A7-04（resolve_absent_operations 克隆入 synthetic/origins）修复（`4872cdf`）经独立复核代码层面 PASS 并离线复算验证，但无任何自动化回归测试钉住该不变量——未来重构可静默回退。
-- **处理方法**：列入 M 系列测试补强（与 M2 docx 层 EXPECTED_TEXT_MISMATCH 零断言防线、Q3 D01 fixture 恒 skip 同一批测试体系待办）。
-- **状态**：open（测试待补），修复本身已独立验证。
+- **补强（2026-10-31，`cf01aa8`）**：test_absent_clone_bookkeeping_keeps_synthetic_and_origins 真实 pipeline 走书签点断言克隆入 synthetic 且 origins=absent_site_clone；mutation 自检（还原 4872cdf 前守卫）如期 fail。
+- **状态**：已关闭（测试钉住，修复此前已独立验证）。
 
 ## FL-D567 eval 注入 /etc/fundlex-recall.env 时 bash 吞掉 JSON 引号（2026-10-31）
 
