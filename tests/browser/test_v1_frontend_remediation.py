@@ -183,6 +183,12 @@ def test_workspace_aggregate_error_empty_filter_pagination_and_deep_link(browser
         assert page.locator("#workspace-attention").inner_text() == "8"
         assert page.locator("#workspace-completed").inner_text() == "12"
         assert page.locator(".workspace-task-name").first.inner_text() == "修订任务｜价值优选"
+        assert page.locator('.workspace-launcher p, .workspace-metric small').count() == 0
+        assert page.locator('#workspace-state').inner_text() == ''
+        assert page.locator('.workspace-table th').nth(5).inner_text() == '创建时间'
+        assert page.locator('#workspace-task-rows tr').first.locator('td').first.locator('small').count() == 0
+        expected_created = page.evaluate("value => new Date(value).toLocaleString('zh-CN', {month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'})", items[0]['created_at'])
+        assert page.locator('.workspace-time').first.inner_text() == expected_created
 
         page.locator('[data-workspace-kind="compare"]').click()
         page.wait_for_url(re.compile(r".*kind=compare.*"))

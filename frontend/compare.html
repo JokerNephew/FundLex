@@ -132,19 +132,19 @@
 <div class="frame">
 <section class="section" id="view-workspace" aria-label="工作台">
   <div class="workspace-launchers">
-    <article class="card workspace-launcher is-primary"><div class="workspace-launcher-icon"><svg><use href="#i-file"/></svg></div><h2>合同修改</h2><p>按当前修改指引批量修订合同，审阅修订并下载结果。</p><button class="btn btn-primary" data-action="new-task" type="button">＋ 新建修改任务</button></article>
-    <article class="card workspace-launcher"><div class="workspace-launcher-icon"><svg><use href="#i-list"/></svg></div><h2>合同比对</h2><p>并排核对两个版本，逐处选择需要保留的内容。</p><button class="btn" type="button" data-workspace-new="compare">新建比对任务</button></article>
-    <article class="card workspace-launcher"><div class="workspace-launcher-icon"><svg><use href="#i-book"/></svg></div><h2>指引生成</h2><p>从监管法规起草候选修改指引，核对依据与版本。</p><button class="btn" type="button" data-workspace-new="generation">新建生成任务</button></article>
+    <article class="card workspace-launcher is-primary"><div class="workspace-launcher-icon"><svg><use href="#i-file"/></svg></div><h2>合同修改</h2><button class="btn btn-primary" data-action="new-task" type="button">＋ 新建修改任务</button></article>
+    <article class="card workspace-launcher"><div class="workspace-launcher-icon"><svg><use href="#i-list"/></svg></div><h2>合同比对</h2><button class="btn" type="button" data-workspace-new="compare">新建比对任务</button></article>
+    <article class="card workspace-launcher"><div class="workspace-launcher-icon"><svg><use href="#i-book"/></svg></div><h2>指引生成</h2><button class="btn" type="button" data-workspace-new="generation">新建生成任务</button></article>
   </div>
   <div class="workspace-metrics" aria-label="全部业务任务统计">
-    <button type="button" class="card workspace-metric" data-workspace-status="active"><span>进行中的任务</span><strong id="workspace-active">—</strong><small>上传、排队或处理中</small></button>
-    <button type="button" class="card workspace-metric" data-workspace-status="attention"><span>需要处理的任务</span><strong id="workspace-attention">—</strong><small>查看待办、异常或候选审阅</small></button>
-    <button type="button" class="card workspace-metric" data-workspace-status="completed"><span>近期完成的任务</span><strong id="workspace-completed">—</strong><small>最近 7 天 · 不代表均已正式交付</small></button>
+    <button type="button" class="card workspace-metric" data-workspace-status="active"><span>进行中的任务</span><strong id="workspace-active">—</strong></button>
+    <button type="button" class="card workspace-metric" data-workspace-status="attention"><span>需要处理的任务</span><strong id="workspace-attention">—</strong></button>
+    <button type="button" class="card workspace-metric" data-workspace-status="completed"><span>近期完成的任务</span><strong id="workspace-completed">—</strong></button>
   </div>
   <div class="card card-pad workspace-task-card"><div class="section-title"><h2>我的任务</h2><button class="btn btn-sm" id="workspace-refresh" type="button">刷新</button></div>
     <div class="business-tabs" role="group" aria-label="任务类型"><button type="button" class="is-active" data-workspace-kind="">全部</button><button type="button" data-workspace-kind="revision">修改</button><button type="button" data-workspace-kind="compare">比对</button><button type="button" data-workspace-kind="generation">生成</button></div>
     <div class="toolbar workspace-toolbar"><div class="searchbox"><input id="workspace-search" type="search" placeholder="搜索任务名称" aria-label="搜索全部业务任务"></div><select class="control-select" id="workspace-status" aria-label="任务情况"><option value="">全部任务</option><option value="active">进行中</option><option value="attention">需要处理</option><option value="completed">近期完成</option></select><label class="workspace-date">创建日期<input type="date" id="workspace-date-from" aria-label="创建起始日期"></label><label class="workspace-date">至<input type="date" id="workspace-date-to" aria-label="创建结束日期"></label><select class="control-select" id="workspace-sort" aria-label="任务排序"><option value="updated_desc">最近更新</option><option value="created_desc">最近创建</option><option value="name">任务名称</option></select></div>
-    <div id="workspace-state" class="subnote" role="status" aria-live="polite"></div><div class="table-wrap"><table class="table workspace-table"><thead><tr><th>任务名称</th><th>业务</th><th>规模</th><th>当前进展</th><th>待办与结果提示</th><th>更新时间</th><th></th></tr></thead><tbody id="workspace-task-rows"></tbody></table></div><div class="pagination" id="workspace-pagination"></div>
+    <div id="workspace-state" class="subnote" role="status" aria-live="polite"></div><div class="table-wrap"><table class="table workspace-table"><thead><tr><th>任务名称</th><th>业务</th><th>规模</th><th>当前进展</th><th>待办与结果提示</th><th>创建时间</th><th></th></tr></thead><tbody id="workspace-task-rows"></tbody></table></div><div class="pagination" id="workspace-pagination"></div>
   </div>
 </section>
     <section class="section" id="view-overview" aria-label="合同修改">
