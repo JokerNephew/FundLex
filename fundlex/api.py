@@ -14,6 +14,7 @@ import shutil
 import tempfile
 import json
 import os
+import time
 import zipfile
 from collections import Counter
 from datetime import datetime, timezone
@@ -519,7 +520,12 @@ def create_app(data_dir: str | Path | None = None, *, auth_db=None) -> FastAPI:
     async def stable_http_error(request: Request, exc: StarletteHTTPException):
         code = code_from_detail(exc.detail, exc.status_code)
         log_handled_error(exc, code, request_id=getattr(request.state, "correlation_id", None))
-        return api_error_response(request, exc.status_code, code)
+        response = api_error_response(request, exc.status_code, code)
+        # Headers set on the original exception (Retry-After on 429, the auth
+        # challenge on 401) must survive the stable-envelope conversion.
+        for name, value in (exc.headers or {}).items():
+            response.headers.setdefault(name, value)
+        return response
 
     @application.exception_handler(RequestValidationError)
     async def stable_validation_error(request: Request, exc: RequestValidationError):
@@ -533,6 +539,12 @@ def create_app(data_dir: str | Path | None = None, *, auth_db=None) -> FastAPI:
         log_handled_error(exc, code, request_id=getattr(request.state, "correlation_id", None))
         return api_error_response(request, 500, code)
 
+    frontend_base = os.environ.get("FUNDLEX_FRONTEND_BASE_PATH", "").rstrip("/")
+    if frontend_base and not frontend_base.startswith("/"):
+        frontend_base = f"/{frontend_base}"
+    if frontend_base == "/":
+        frontend_base = ""
+
     @application.middleware("http")
     async def correlation_context(request: Request, call_next):
         cid = new_correlation_id()
@@ -542,6 +554,21 @@ def create_app(data_dir: str | Path | None = None, *, auth_db=None) -> FastAPI:
             response = await call_next(request)
         finally:
             reset_correlation_id(token)
+        # Baseline security headers (A1-4).  A strict CSP is deferred until the
+        # remaining inline <script> shells are eliminated (tracked in FL-D list).
+        response.headers.setdefault("X-Content-Type-Options", "nosniff")
+        response.headers.setdefault("X-Frame-Options", "SAMEORIGIN")
+        response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+        response.headers.setdefault("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+        # Versioned static assets are content-hashed (``?v=``) and safe to
+        # cache long-term; anything else under /static must revalidate so a
+        # release cannot strand clients on stale code (A9-F01).
+        if request.url.path.startswith((f"{frontend_base}/static/", "/static/")):
+            if request.query_params.get("v"):
+                response.headers.setdefault("Cache-Control", "public, max-age=86400, immutable")
+            else:
+                response.headers.setdefault("Cache-Control", "no-cache")
+        return response
         response.headers[CORRELATION_ID_HEADER] = cid
         return response
 
@@ -743,18 +770,46 @@ def create_app(data_dir: str | Path | None = None, *, auth_db=None) -> FastAPI:
                                   "max_request_bytes": MAX_BATCH_BYTES},
                 "engine": engine}
 
+    # Bounded in-memory throttle counters for credential endpoints (A1):
+    # scrypt slows guessing but nothing stopped unlimited attempts before.
+    _login_failures: dict[str, list[float]] = {}
+    _register_events: dict[str, list[float]] = {}
+
+    def _throttle_hit(bucket: dict[str, list[float]], key: str, *,
+                      limit: int, window_s: float) -> bool:
+        now = time.time()
+        events = [stamp for stamp in bucket.get(key, []) if now - stamp < window_s]
+        if len(events) >= limit:
+            bucket[key] = events
+            return True
+        events.append(now)
+        bucket[key] = events
+        if len(bucket) > 10000:
+            # Drop the stalest entries so the map cannot grow unbounded.
+            ordered = sorted(bucket.items(),
+                             key=lambda kv: kv[1][-1] if kv[1] else 0.0)
+            for stale_key, _ in ordered[: len(bucket) - 8000]:
+                bucket.pop(stale_key, None)
+        return False
+
     @application.post("/api/auth/login")
     def auth_login(payload: LoginRequest, request: Request):
         if _auth_mode() != "password":
             raise HTTPException(404, "not found")
         from .auth import AccountDisabled, InvalidCredentials
         users, sessions = request.app.state.users, request.app.state.sessions
+        client = (request.client.host if request.client else "") or "unknown"
         try:
             record = users.authenticate(payload.username, payload.password)
         except AccountDisabled as exc:
             raise HTTPException(403, "account is disabled") from exc
         except InvalidCredentials as exc:
+            key = f"{client}|{payload.username}"
+            if _throttle_hit(_login_failures, key, limit=10, window_s=300):
+                raise HTTPException(429, "too many failed logins; retry later",
+                                    headers={"Retry-After": "300"}) from None
             raise HTTPException(401, "invalid username or password") from exc
+        _login_failures.pop(f"{client}|{payload.username}", None)
         return {"token": sessions.login(record["id"]), "user": _public_user(record)}
 
     @application.post("/api/auth/register", status_code=201)
@@ -764,6 +819,10 @@ def create_app(data_dir: str | Path | None = None, *, auth_db=None) -> FastAPI:
             raise HTTPException(404, "not found")
         if not _registration_open():
             raise HTTPException(403, "registration is disabled")
+        client = (request.client.host if request.client else "") or "unknown"
+        if _throttle_hit(_register_events, client, limit=10, window_s=3600):
+            raise HTTPException(429, "too many registrations from this network; retry later",
+                                headers={"Retry-After": "3600"})
         from .auth import UserExists
         from .auth import ValidationError as AuthValidationError
         users, sessions = request.app.state.users, request.app.state.sessions
@@ -1476,11 +1535,6 @@ def create_app(data_dir: str | Path | None = None, *, auth_db=None) -> FastAPI:
     # V1 is the default workbench again. Keep the Vite source/build available
     # for explicit V2 regression runs without letting a build switch the UI.
     frontend_v2 = os.environ.get("FUNDLEX_FRONTEND_VERSION", "v1") == "v2"
-    frontend_base = os.environ.get("FUNDLEX_FRONTEND_BASE_PATH", "").rstrip("/")
-    if frontend_base and not frontend_base.startswith("/"):
-        frontend_base = f"/{frontend_base}"
-    if frontend_base == "/":
-        frontend_base = ""
     if frontend_base:
         application.add_middleware(FrontendBasePathMiddleware, base_path=frontend_base)
     if frontend.is_dir():
@@ -1505,8 +1559,10 @@ def create_app(data_dir: str | Path | None = None, *, auth_db=None) -> FastAPI:
             entry = ((dist / "index.html" if (dist / "index.html").is_file() else frontend / "index.html")
                      if frontend_v2 else frontend / "compare.html")
             html = entry.read_text(encoding="utf-8")
-            version = _asset_version("dist/index.html", "app.css", "app.js", "compare.css", "compare.js", "workspace.js")
-            for name in ("app.css", "app.js", "compare.css", "compare.js", "workspace.js"):
+            _versioned_assets = ("app.css", "app.js", "compare.css", "compare.js",
+                                 "workspace.js", "guide_generation.css", "guide_generation.js")
+            version = _asset_version("dist/index.html", *_versioned_assets)
+            for name in _versioned_assets:
                 html = html.replace(f'/static/{name}"', f'/static/{name}?v={version}"')
             if frontend_base:
                 html = html.replace('="/static/', f'="{frontend_base}/static/')

@@ -101,7 +101,7 @@ def register_guide_generation_routes(application, store: RunStore,
     def run_for(user: str, run_id: str) -> dict[str, Any]:
         try:
             return gg.get_run_for_owner(user, run_id)
-        except Exception:
+        except NotFound:
             raise HTTPException(404, "guide generation run not found") from None
 
     @application.post("/api/guide-generation/runs", status_code=201)

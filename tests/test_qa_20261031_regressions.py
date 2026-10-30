@@ -100,3 +100,103 @@ def test_orphan_evidence_requires_blocker():
     item = {"kind": "orphan_evidence", "code": "LEDGER_EVIDENCE_UNBOUND",
             "rule_id": "G05", "location": "p12"}
     assert requires_blocker(item) is True
+
+
+# --- API/security fixes (main-agent batch) -----------------------------------
+
+import pytest
+from fastapi.testclient import TestClient
+
+from fundlex.api import create_app
+
+
+@pytest.fixture
+def password_client(tmp_path, monkeypatch):
+    for name in ("FUNDLEX_AUTH_DATABASE", "FUNDLEX_DATABASE_URL",
+                 "FUNDLEX_SESSION_HOURS", "FUNDLEX_BOOTSTRAP_ADMIN",
+                 "FUNDLEX_ALLOW_REGISTRATION"):
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setenv("FUNDLEX_AUTH_MODE", "password")
+    return TestClient(create_app(tmp_path), raise_server_exceptions=False)
+
+
+def test_login_throttled_after_repeated_failures(password_client):
+    password_client.post("/api/auth/register", json={
+        "username": "victim", "password": "password-123", "display_name": "v"})
+    for _ in range(10):
+        assert password_client.post("/api/auth/login", json={
+            "username": "victim", "password": "wrong"}).status_code == 401
+    blocked = password_client.post("/api/auth/login", json={
+        "username": "victim", "password": "wrong"})
+    assert blocked.status_code == 429
+    assert blocked.headers.get("Retry-After")
+
+
+def test_registration_throttled_per_client(password_client):
+    for index in range(10):
+        assert password_client.post("/api/auth/register", json={
+            "username": f"bulk{index}", "password": "password-123",
+            "display_name": "b"}).status_code == 201
+    assert password_client.post("/api/auth/register", json={
+        "username": "bulk-final", "password": "password-123",
+        "display_name": "b"}).status_code == 429
+
+
+def test_security_and_cache_headers_present(password_client):
+    response = password_client.get("/static/app.css")
+    assert response.headers.get("X-Content-Type-Options") == "nosniff"
+    assert response.headers.get("X-Frame-Options") == "SAMEORIGIN"
+    assert response.headers.get("Referrer-Policy")
+    home = password_client.get("/")
+    assert home.status_code == 200
+    assert "guide_generation.css?v=" in home.text
+    assert "guide_generation.js?v=" in home.text
+
+
+def test_upload_filename_length_capped(password_client):
+    register = password_client.post("/api/auth/register", json={
+        "username": "uploader", "password": "password-123", "display_name": "u"})
+    headers = {"Authorization": f"Bearer {register.json()['token']}"}
+    long_name = "长" * 100 + ".docx"
+    from fundlex.upload_validation import validate_docx_upload, UploadValidationError
+    with pytest.raises(UploadValidationError) as info:
+        validate_docx_upload(long_name, b"PK")
+    assert info.value.code == "UPLOAD_FILENAME_TOO_LONG"
+    assert info.value.status_code == 422
+
+
+def test_gg_run_for_not_found_vs_storage_error(password_client, monkeypatch):
+    register = password_client.post("/api/auth/register", json={
+        "username": "runner", "password": "password-123", "display_name": "r"})
+    headers = {"Authorization": f"Bearer {register.json()['token']}"}
+    missing = password_client.get("/api/guide-generation/runs/nope", headers=headers)
+    assert missing.status_code == 404
+    gg = password_client.app.state.guide_generation
+    def boom(*args, **kwargs):
+        raise RuntimeError("db down")
+    monkeypatch.setattr(gg, "get_run_for_owner", boom)
+    assert password_client.get("/api/guide-generation/runs/x",
+                               headers=headers).status_code == 500
+
+
+def test_regulation_parser_rejects_zip_bomb(tmp_path):
+    import io
+    import os
+    import zipfile
+    from fundlex.regulatory import docx_parser
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr("[Content_Types].xml", "<Types/>")
+        # Incompressible content keeps the per-member ratio guard quiet so the
+        # aggregate expanded-size guard is the one that fires.
+        archive.writestr("word/document.xml", os.urandom(2 * 1024 * 1024))
+    target = tmp_path / "bomb.docx"
+    target.write_bytes(buffer.getvalue())
+    monkey_max = docx_parser.MAX_EXPANDED_BYTES
+    docx_parser.MAX_EXPANDED_BYTES = 1024  # force the expanded-size guard
+    try:
+        with pytest.raises(docx_parser.RegulationParseError) as info:
+            docx_parser.parse_regulation_docx(target)
+        assert info.value.args[0] == "REGULATION_DOCX_EXPANDED_LIMIT"
+    finally:
+        docx_parser.MAX_EXPANDED_BYTES = monkey_max

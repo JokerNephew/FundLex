@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+import secrets
 import time
 from collections import defaultdict, deque
 from dataclasses import dataclass
@@ -254,8 +255,13 @@ class UploadResourceMiddleware:
         headers = {"Cache-Control": "no-store"}
         if error.retry_after is not None:
             headers["Retry-After"] = str(error.retry_after)
-        return JSONResponse({"error": error.code, "detail": error.detail},
-                            status_code=error.status_code, headers=headers)
+        # Align with the route-level error envelope so API clients and the
+        # frontend can treat guard rejections like any other API error
+        # (A4-F05).  ``error``/``detail`` stay for backwards compatibility.
+        body = {"error": error.code, "detail": error.detail,
+                "error_code": error.code, "message": error.detail,
+                "correlation_id": secrets.token_hex(8)}
+        return JSONResponse(body, status_code=error.status_code, headers=headers)
 
     async def __call__(self, scope: dict[str, Any], receive: Callable, send: Callable):
         if not self._is_upload(scope):
