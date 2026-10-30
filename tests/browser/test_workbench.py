@@ -398,8 +398,9 @@ def test_guide_rule_switches_and_model_settings_are_editable(ui):
     assert settings['disabled_rule_ids'], settings
     page.locator('#guide-overlay-close').click()
 
-    page.evaluate("location.hash='settings'")
+    page.locator('.sidebar [data-nav="models"]').click()
     expect(page.locator('#model-settings-card')).to_be_visible()
+    expect(page.locator('#feishu-connect-card')).to_be_hidden()
     expect(page.locator('#model-settings-body')).to_contain_text('主模型')
     expect(page.locator('#model-settings-form')).to_be_visible()
     page.locator('#model-primary-model').fill('personal-browser-model')
@@ -411,6 +412,25 @@ def test_guide_rule_switches_and_model_settings_are_editable(ui):
     expect(page.locator('#model-primary-model')).to_have_value('personal-browser-model')
     page.locator('[data-action="model-settings-reset"]').click()
     expect(page.locator('#model-settings-source')).to_have_text('系统默认')
+
+
+def test_model_and_feishu_pages_are_separate(ui):
+    from playwright.sync_api import expect
+    page, _, _, _ = ui
+    requests = []
+    page.on('request', lambda request: requests.append(request.url))
+    open_page(ui, 'models')
+    expect(page.locator('#model-settings-form')).to_be_visible()
+    expect(page.locator('#feishu-connect-card')).to_be_hidden()
+    assert not any('/api/integrations/feishu/binding' in url for url in requests)
+    page.reload()
+    expect(page.locator('#model-settings-form')).to_be_visible()
+    requests.clear()
+    page.locator('.sidebar [data-nav="settings"]').click()
+    expect(page.locator('#feishu-connect-card')).to_be_visible()
+    expect(page.locator('#model-settings-card')).to_be_hidden()
+    expect(page.locator('#breadcrumb')).to_contain_text('飞书绑定')
+    assert not any('/api/settings/model' in url for url in requests)
 
 
 def test_revision_pair_checkbox_keyboard_and_insert_navigation(ui):
