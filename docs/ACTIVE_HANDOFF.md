@@ -1,14 +1,17 @@
 # FundLex 当前断点（ACTIVE_HANDOFF）
 
-## 2026-10-30 合同比对位置对齐修复（未发布，FL-D539）
+## 2026-10-30 合同比对位置对齐修复（已发布，FL-D540；生成缺陷FL-D541待修）
 
 - 用户要求继续修Word/双栏位置不对应；保留所有选择、生成、下载、分栏及长合同性能。本机身份已核验；公网出口观测112.120.123.60，与历史出口不同，不据此误判机器。
 - 分支`codex/comprehensive-remediation-20261028`，起点HEAD`364dd2f`；本轮文件`frontend/compare.{js,css}`、`fundlex/compare/{api,models,render}.py`、`tests/browser/test_v1_frontend_remediation.py`、`tests/test_compare_api.py`。其它guide_generation/config分析改动为并行工作，不提交覆盖。
-- 已做：完整alignment组返回+旧结果重建，删除段落L来源ID，段落锚点滚动；修虚拟高度zoom换算、窗口替换clamp及实际可见锚点保护、差异跳转同步取消。V1 **15 passed**、Compare **133 passed/6 skipped**；650块插删/不等段长/双向与双栏覆盖。真实1421差异诊断及差异点击通过，无页面错误；性能open1.44s/Word平均53ms/双栏81ms。详见FL-D539，未宣称本轮全项目回归。
+- 已做：完整alignment组返回+旧结果重建，删除段落L来源ID，段落锚点滚动；修虚拟高度zoom换算、窗口替换clamp及实际可见锚点保护、差异跳转同步取消。V1 **15 passed**、Compare **133 passed/6 skipped**；650块插删/不等段长/双向与双栏覆盖。真实1421差异诊断及差异点击通过，无页面错误；性能open1.44s/Word平均53ms/双栏81ms。详见FL-D540（原临时539与并行配置线冲突后更正），未宣称本轮全项目回归。
 - 当前发布阻点：15:34观测生产五服务inactive、公网502；另一会话存在最新`codex/user-config-release-20261030`候选`cdcf52c`，本轮不抢改/重启他人发布事务。旧Compare发布线`codex/compare-save-hotfix`停在`5d5da7c`，不能不核实就再次从旧基线整仓发布，否则会回退新配置功能。
 - 下一动作：核实生产恢复和最新发布commit→将本轮独立代码commit移植到最新生产基线的干净worktree→候选import/Compare测试/发布dry-run→受控发布→正式注册登录上传真实DOCX、Compare Worker、Word/双栏双向滚动/差异点击/拖宽/选择生成下载。比对不需模型，本轮0调用；不启动修订引擎模型任务（另会话最新暂停指令仍保留）。
 - 证据脚本`/tmp/opencode/diagnose_long_align.py`、`diagnose_align3.py`、`v1_compare_click_perf.py`；性能`/tmp/opencode/align-perf-final.log`。无本轮后台进程或子agent；文件/脚本不含凭据。
 - 发布续记：五服务已恢复active；`/opt/.fundlex-publish-aiGdMv/release-record.json`确认最新发布`cdcf52c`，后续以此为基线追加Compare补丁，不回退用户配置功能。
+- **最终发布**：主工作区代码`680da13`，干净发布线`codex/compare-alignment-release-20261030`的`2e65cba`，合并其它会话新生产`3e1db8d`后发布`fe31ae2`。release worktree `/tmp/opencode/compare-alignment-release-20261030`保留；真实发布事务`/opt/.fundlex-publish-Qw73Kl`；engine6a16258e/service e86d271a；五服务active/capabilities200。没有回退用户配置或engine fingerprint修复。
+- **正式页面验证**：第一批价值优选原件/受控增删改副本3差异，三窗300/650/200块、拖宽199块、双栏600/250块均对应，逐条点击通过/页面错误0。证据`/tmp/opencode/prod-align-long-result.json`。公开v4原版/勘误版7差异同样对齐，全部采用B保存/生成/实际授权下载成功；final对B零差异，接受redline对final零差异，2ins/5del，页面哈希与下载一致。证据`prod-align-guide-result.json`，未新测报告下载、未调用模型。
+- **新断点FL-D541**：价值优选增删段样本全部采用B生成`SELECTION_FINAL_TEXT_MISMATCH`，无DOCX交付；不能把阅读器通过称作该长合同交付完成。任务5802555f27fe4359a98917777fff431d（复现）/d9e97ac662ce4436af4b342f5bb27eee（另轮）；脚本`/tmp/opencode/prod_align_e2e.py`。下一可执行动作：离线以原件+受控副本重现selection writer，拆分插/删/尾加并找实际final首个差异，再修复/回归/正式下载验收。不要关掉最终文本校验。当前无本轮后台测试/agent，发布已结束；主工作区其它guide_generation改动继续保留。
 
 ## 2026-10-30 最新断点（真实模型暂停，等待用户恢复）
 
