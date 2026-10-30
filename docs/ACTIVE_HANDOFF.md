@@ -1,5 +1,12 @@
 # FundLex 当前断点（ACTIVE_HANDOFF）
 
+## 2026-10-30 工作台文案精简已上线（FL-D542）
+
+- 用户清单内三业务说明/三统计说明/更新统计解释/任务名创建时间小字已删除；时间列改为创建时间并读取created_at。功能和排序不变。
+- 主代码a58a36b/66f1787，最终发布b5226bd；release worktree仍`/tmp/opencode/compare-alignment-release-20261030`。已合入最新生产877a980的独立模型配置页，并保留Compare对齐，不回退并行成果。首次发布旧workspace.js缓存问题已通过资源hash/?v修复。
+- 验证：干净候选V1 15 passed，入口3 passed；正式登录上传真实公开DOCX比对任务后返回工作台，说明节点0/任务名无小字/成功状态空/表头与实际created_at一致/页面错误0。证据`/tmp/opencode/prod-workspace-copy.json`和截图。五服务active，engine6a16258e/service8b6c9472，事务`/opt/.fundlex-publish-Gdn7dG`。
+- 本轮0模型，无后台agent/测试。其它guide_generation未提交改动保留；下一未解决功能仍为FL-D541长合同选择生成SELECTION_FINAL_TEXT_MISMATCH，本次仅精简工作台，未尝试修复该生成问题。
+
 ## 2026-10-30 合同比对位置对齐修复（已发布，FL-D540；生成缺陷FL-D541待修）
 
 - 用户要求继续修Word/双栏位置不对应；保留所有选择、生成、下载、分栏及长合同性能。本机身份已核验；公网出口观测112.120.123.60，与历史出口不同，不据此误判机器。

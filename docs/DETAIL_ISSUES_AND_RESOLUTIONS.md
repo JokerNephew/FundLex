@@ -6542,3 +6542,12 @@ H＝E×…
 - 影响：该长合同不能交付所选DOCX；校验未被绕过、未生成冒充最终版的文件。三窗/双栏对齐断言已通过，不以UI修复掩盖生成失败。
 - 当前状态：**已复现/未修复**；尚未定位是段落删除/插入组合、原件结构元数据还是selection writer文本投影所致，不猜测根因、不关闭安全校验。
 - 下一步：用同源副本离线复现selection writer，对比预期B与实际接受视图首个差异，分别隔离插入/删除/尾加，新增真实结构回归；修复后重走正式登录上传/Worker/选择/生成/授权下载并读实际DOCX与报告哈希。证据脚本`/tmp/opencode/prod_align_e2e.py`，第三轮定位断言`/tmp/opencode/prod-align-long-result.json`、`prod-align-long.log`。本项0模型调用。
+
+## FL-D542 工作台删除辅助说明并改为创建时间列（2026-10-30）
+
+- 用户要求：删除三业务入口说明、三统计卡说明、加载成功后的统计更新解释，以及任务名下的“创建于”小字；表格更新时间列改为创建时间。
+- 已实施：`frontend/compare.html`删除对应节点/修改表头；`workspace.js`成功后清空状态（仍保留加载/异常提示），时间单元格读取created_at。筛选、排序、统计、分页、任务跳转保持不变。
+- 生产发现与处理：首次9135e8d发布HTML已更新，workspace脚本仍命中旧缓存，成功状态/时间仍旧；根因是workspace.js未加入首页资源hash及?v替换。`fundlex/api.py`补入workspace.js，前端入口测试校验五个版本化资源。最终b5226bd已发布，不要求用户手动清缓存。
+- 验证：主工作区workspace浏览器1 passed；干净候选V1浏览器15 passed，入口单测3 passed。正式注册/登录→上传公开指引比对任务→回工作台，用真实API created_at核对表格显示、说明节点0、任务名无small、成功状态空、表头创建时间、页面错误0；证据`/tmp/opencode/prod-workspace-copy.json`及`prod-workspace-copy.png`。脚本首轮直接fetch未带应用鉴权401已改为受支持的FundLexWorkbench.json，不作为产品认证故障。
+- 发布范围：先合并最新生产877a980独立模型页面到原Compare发布线，保留此前对齐修复；本轮主代码a58a36b/66f1787，最终发布b5226bd，事务`/opt/.fundlex-publish-Gdn7dG`；五服务active，engine6a16258e/service8b6c9472。无模型调用，不改合同引擎和业务含义，不以UI验证宣称合同引擎整体验收。
+- 状态：**已实施、已发布、生产页面验证通过**。此前FL-D541生成文本不匹配仍待修，本轮未修改。
