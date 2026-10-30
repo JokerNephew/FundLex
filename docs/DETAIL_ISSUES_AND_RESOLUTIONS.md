@@ -6677,3 +6677,22 @@ H＝E×…
 - 验证：主工作区workspace浏览器1 passed；干净候选V1浏览器15 passed，入口单测3 passed。正式注册/登录→上传公开指引比对任务→回工作台，用真实API created_at核对表格显示、说明节点0、任务名无small、成功状态空、表头创建时间、页面错误0；证据`/tmp/opencode/prod-workspace-copy.json`及`prod-workspace-copy.png`。脚本首轮直接fetch未带应用鉴权401已改为受支持的FundLexWorkbench.json，不作为产品认证故障。
 - 发布范围：先合并最新生产877a980独立模型页面到原Compare发布线，保留此前对齐修复；本轮主代码a58a36b/66f1787，最终发布b5226bd，事务`/opt/.fundlex-publish-Gdn7dG`；五服务active，engine6a16258e/service8b6c9472。无模型调用，不改合同引擎和业务含义，不以UI验证宣称合同引擎整体验收。
 - 状态：**已实施、已发布、生产页面验证通过**。此前FL-D541生成文本不匹配仍待修，本轮未修改。
+
+## FL-D548 生产发布回退已交付修复，多发布线分叉未收敛（2026-10-31）
+
+- 发现：2026-10-31 QA 总攻环境核验时确认，生产当前发布 `477ba5a`（事务 `/opt/.fundlex-publish-QTsA1U`，BYOK per-user 模型配置线）不含此前已发布的 compare 对齐修复（FL-D540，`9972441` 线）、工作台文案精简（FL-D542，b5226bd）、任务页排版（FL-D544，b5048fa）；部署件 `frontend/compare.js`/`app.js` 哈希与 `477ba5a` 一致，与含修复线不一致。同时 user-config 线提交 6dadacf 将 `fundlex/{docx,recall,recall_pipeline,rule_scope,semantic_contract}.py` 回退到部署引擎基线以保持 engine 指纹，最新引擎修复（如 `_expand_duplicate_copy_scopes`，G11 等）不在生产。
+- 影响：线上用户实际使用的版本回退了已验收功能与最新引擎修复；任何以「已发布」为前提的历史结论对当前生产不成立。
+- 处理方法：QA 基线 `qa/full-audit-20261031`（worktree `/tmp/opencode/qa-base`）三路统一合并 comprehensive-remediation(158475f)+user-config(cdc07d6)+compare-alignment(9972441)；对 wholesale-take 文件逐项核验 superseded；引擎文件恢复最新版并移植 BYOK 增量 b067b50/cdcf52c（提交 7f6d981）；restored 后 `test_duplicate_copy_scope` 等 63 项相关测试通过。
+- 状态：**基线已修复（7f6d981），尚未全量回归、尚未发布**；发布前必须完成全量 pytest、浏览器回归与受控发布核对。教训登记：今后发布必须基于「含全部最新已验收修复的单一主干」，禁止为保指纹回退引擎源码。
+
+## FL-D549 两个 systemd unit 并发运行同一 guide_generation worker（2026-10-31）
+
+- 发现：`fundlex-guide-worker.service` 与 `fundlex-guide-generation-worker.service` 均 active 且同跑 `fundlex.guide_generation.worker`（后者带 FUNDLEX_GUIDE_CORPUS_DIR 等额外 env）。与 recall worker 的 `worker.lock` flock 单例机制不同，该 worker 仅靠 store 层 fencing 防重复。
+- 影响：同一 gg job 理论上可能被两个进程竞争处理；lease/fencing 应能挡住并发写，但语义重叠（“regulation guide generation” vs “candidate guide generation”）与双写风险未验证。
+- 状态：**待验证**。A2 worker 审计与 A4 API/DB 审计并行核查中；确认无重复处理路径后收敛为单 unit 或明确分工。
+
+## FL-D550 QA 基线合并语义核查发现：自动合并可能静默丢代码（2026-10-31）
+
+- 发现：首版合并基线（1c0fc63）全量 pytest collection 即失败：`tests/test_duplicate_copy_scope.py` 引用 `_expand_duplicate_copy_scopes` 不存在——6dadacf 引擎回退在自动合并中被整体采纳而无人察觉。教训：三方分叉自动合并不报冲突 ≠ 语义正确。
+- 处理方法（已确立为本 QA 任务的合并纪律）：合并后对「merged == 某一方整版」的文件做 wholesale-take 扫描，逐一确认另一方内容被 superseded；以全量测试套件作为合并正确性验证；引擎类核心文件恢复后补跑受影响测试。
+- 状态：**已实施并验证（7f6d981）**。

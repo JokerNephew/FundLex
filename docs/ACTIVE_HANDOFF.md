@@ -1,5 +1,16 @@
 # FundLex 当前断点（ACTIVE_HANDOFF）
 
+## 2026-10-31 全项目质量整改（QA 总攻，主 agent 断点）
+
+- 任务：按 /home/opencode/prompt.md 执行全项目最终质量整改（发现→修复→复核→回归→真实 E2E→受控交付）。本断点由主 agent 维护，子 agent 发现汇总于 /tmp/opencode/qa/findings/*.md。
+- 工作基线：worktree `/tmp/opencode/qa-base`，branch `qa/full-audit-20261031`，当前 HEAD 7f6d981。该基线已统一三条分叉线：comprehensive-remediation（158475f，含最新引擎修复+我的WIP保护提交）+ user-config/BYOK 生产发布线（cdc07d6，含 477ba5a per-user 模型配置与 kimi-k3 切换文档）+ compare-alignment/工作台打磨线（9972441）。
+- **关键修复（QA-001 级）**：①生产 477ba5a 丢失 compare 对齐/任务排版/工作台版本化等已发布修复——已并入基线。②6dadacf 曾把 5 个引擎文件回退到部署基线以保持指纹，自动合并会静默丢弃 _expand_duplicate_copy_scopes 等引擎修复；已恢复最新引擎并把 BYOK 的 recall_pipeline 增量（b067b50 disabled_rule_ids、cdcf52c +9 门禁）移植其上。合并语义核查方法：wholesale-take 扫描 + 差异确认 superseded，详见会话记录。
+- 环境事实：生产=fundlex.club 跑 477ba5a（V1 原生 JS 前端，React V2 不上生产）；`/etc/fundlex-recall.env` 已配 hon-maas/kimi-k3（2026-10-31 00:29 用户配好；实测 200，reasoning 模型，小 max_tokens 会空 content）。服务 9 个 active；两个 unit 同跑 guide_generation.worker（仅 fencing，无单例锁=风险 R1）。根分区空间偏紧需关注。
+- 测试基线：合并基线（未含引擎恢复前）test_duplicate_copy_scope collection error 已由 7f6d981 修复；React typecheck/lint 通过；全量 pytest baseline2 后台运行中；浏览器测试环境 OK（playwright+chromium 可用，FUNDLEX_BROWSER_TESTS=1）。
+- 运行中的并行工作：8 个 kimi-k3 审计子 agent（安全/Worker/DOCX/API+DB/Compare/引擎召回/引擎交付/前端V1，加上测试体系）；结果落 /tmp/opencode/qa/findings/。主 agent 汇总进 docs/DETAIL_ISSUES_AND_RESOLUTIONS.md（QA/FL-D 编号）后才算登记。
+- 下一步（按序）：①汇总第一波发现→定 P0/P1→分批修复（ownership 隔离）→独立复核；②浏览器 E2E+视觉审计（截图多视口）；③性能/chaos 专项；④真实模型评测分波（28→扩样）；⑤全量回归+第二轮盲审计；⑥受控发布（publish_workspace.sh 只发干净 worktree）→正式工作台真实 E2E 与 Compare E2E；⑦最终 GO/NO-GO 报告。
+- 纪律：不 reset/丢工作；不中途问用户；真实模型按需调用无预算门槛；凭据绝不落文档/日志；集中问题记录由主 agent 统一合并；完成前所有 P0/P1 清零并经两轮独立复查。
+
 ## 2026-10-30 法规指引生成与模型切换续接
 ## 2026-10-30 工作台文案精简（FL-D542，待发布）
 
