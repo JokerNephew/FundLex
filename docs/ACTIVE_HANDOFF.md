@@ -1713,3 +1713,11 @@
 - **主 agent 待办（未分派）**：B14-03 store.py paused=1 陈旧位、A3-F6 _document_dict 下载 URL 过滤、A3-F5/F7/F8、M2 docx 层 EXPECTED_TEXT_MISMATCH 零断言防线、FL-D546 compare worker 诊断透出（遗留决策）、Q3 revision_api/selective 29 项 D01 fixture 恒 skip。
 - **缓办（已记录）**：CSP（待消灭 inline script）、自助注册默认关闭（产品决策）、A4-F02、B14-03、B11 对比度/token、B12-P1-3 术语、A4-F03 索引、B13-F4 N+1、B13-F5 checkpoints/traces 无界增长。
 - **测试纪律**：一切验证 `cd /tmp/opencode/qa-base && .venv/bin/python -m pytest`（.venv 是指向主工作区的 symlink，cwd 决定 import 解析）。
+
+## 当前断点（2026-10-31 午后，QA 整改 — 盲审与评测并行）
+
+- HEAD `8978546`（+docs 更新）。全部 6 个修复批次已提交且独立复核 PASS：引擎 `a8d78f2/4872cdf/6146ee2/52c68ea`、API `7198c72`+`08e8a0c`（二轮 5 项对抗发现全关闭）、W1 `8779dac`、W2 `fe4bd37`（性能 233.5→59.6s 复测一致）、W4 `467db01`、W3 `17a2984`（浏览器 27+3 通过，复核 PASS，A9-F04 测试加固入 M 系待办）。
+- 集中问题记录：FL-D551..556/559 状态已更新；新增 FL-D560（workbench 3 项基线既有失败，open）、FL-D561（API 二轮，已修复）、FL-D562（compare 全文替换 fail-closed 能力决策）、FL-D563（A7-04 缺回归测试，open）。
+- **后台进行中**：① 第一波 dev20 真实评测 agent（kimi-k3，冻结 engine 0b1a813/guide 20bc6677/labels v2 61a2c514；2 份冒烟+18 份 nohup，输出 var/recall-first-evaluation/qa-wave1-dev-20261031-0b1a813/）② 二轮盲审 3 agent（findings-r2/R2-engine-delivery、R2-security-api、R2-frontend-ux）。
+- **后续动作**：盲审结果→登记+批量修复→评测 20 份评分（score_first_batch_20261029 + p6_score）→错误分析与优化闭环（不按时样本名打补丁）→扩波门槛→8 份留出→全量回归（含浏览器+3 项 FL-D560 处置）→受控发布 publish_workspace.sh→正式 E2E（修订+Compare 全链，下载复核 hash）→最终 GO/NO-GO。
+- 主 agent 未办代码项：B14-03（paused=1 陈旧位）、A3-F5/F6/F7、M2（docx 层 EXPECTED_TEXT_MISMATCH 防线）、FL-D563 测试、Q3（D01 fixture）、FL-D560 根因修复、导览 run 文件名 dup 无。
