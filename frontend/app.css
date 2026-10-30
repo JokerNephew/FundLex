@@ -704,3 +704,23 @@ body:has(.detail-overlay.inline-contract-detail:not([hidden]) .review-layout){ov
   }
 }
 #detail-panel:has(.review-layout) .review-doc>*{max-width:920px;margin-left:auto;margin-right:auto}
+/* Compact reader chrome: preserve controls, return height to the document. */
+#detail-panel:has(.review-layout) .detail-head{padding:7px 14px}
+#detail-panel:has(.review-layout) .detail-head>div{display:flex;align-items:baseline;gap:8px;min-width:0}
+#detail-panel:has(.review-layout) .detail-head>div::before{content:"修订审查";margin:0;font-size:10px;line-height:1;letter-spacing:.08em;white-space:nowrap}
+#detail-panel:has(.review-layout) .detail-head .object-title{font-size:15px;line-height:1.35}
+#detail-panel:has(.review-layout) #close-detail{min-height:26px;padding:3px 9px;font-size:11.5px}
+#detail-panel:has(.review-layout) .review-layout{padding:10px 14px 8px;gap:12px}
+#detail-panel:has(.review-layout) .review-toolbar{gap:6px;padding:6px 12px}
+#detail-panel:has(.review-layout) .review-toolbar>strong{font-size:12px}
+#detail-panel:has(.review-layout) #review-count{font-size:10.5px}
+#detail-panel:has(.review-layout) .review-toolbar .btn{min-height:25px;padding:2px 7px;font-size:10.5px}
+#detail-panel:has(.review-layout) .review-actions{gap:8px;padding:7px 14px}
+#detail-panel:has(.review-layout) .review-actions .btn{min-height:29px;padding:4px 10px;font-size:11.5px}
+#detail-panel:has(.review-layout) .review-hint{padding:0 14px 7px}
+#detail-panel:has(.review-layout) .review-hint summary{padding:3px 0 2px;font-size:10px}
+@media(max-width:760px){
+  #detail-panel:has(.review-layout) .detail-head{padding:8px 11px}
+  #detail-panel:has(.review-layout) .detail-head>div::before{display:none}
+  #detail-panel:has(.review-layout) .review-layout{padding:8px 10px 6px;gap:8px}
+}
