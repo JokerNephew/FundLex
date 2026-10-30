@@ -156,12 +156,28 @@ def compare_documents(left: CompareDocument, right: CompareDocument) -> CompareR
             warning = f"STRUCTURAL_DIFFERENCE_NOT_COMPARED:{group.group_id}"
             if warning not in structural:
                 structural.append(warning)
+    # Computed list labels are paragraph formatting: two paragraphs can pair
+    # with identical text while Word would render different numbers.  Such a
+    # difference must never read as complete coverage.
+    numbering: list[str] = []
+    for group in groups:
+        if not group.left or len(group.left) != len(group.right):
+            continue
+        for left_block, right_block in zip(group.left, group.right):
+            left_label = dict(left_block.paragraph_format).get("list-label", "")
+            right_label = dict(right_block.paragraph_format).get("list-label", "")
+            if left_label != right_label:
+                warning = f"NUMBERING_LABEL_DIFFERENCE_NOT_COMPARED:{left_block.block_id}"
+                if warning not in numbering:
+                    numbering.append(warning)
     diagnostics["structural_not_compared"] = bool(structural)
+    diagnostics["numbering_labels_not_compared"] = bool(numbering)
     status = "incomplete" if (left.coverage.status != "complete"
-                               or right.coverage.status != "complete" or structural) else "complete"
+                               or right.coverage.status != "complete"
+                               or structural or numbering) else "complete"
     from .models import Coverage
     coverage = Coverage(status, tuple(dict.fromkeys(
-        list(left.coverage.warnings) + list(right.coverage.warnings) + structural)))
+        list(left.coverage.warnings) + list(right.coverage.warnings) + structural + numbering)))
     return CompareResult("contract-compare-v1", left, right, groups, tuple(diffs), coverage, diagnostics)
 
 

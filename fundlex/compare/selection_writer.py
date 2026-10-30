@@ -665,22 +665,86 @@ def _block_for_element(root: etree._Element, left_by_id: Mapping[str, Any],
     return None
 
 
-def _trailing_delete_chain(root: etree._Element, parent: etree._Element,
+def _left_element_blocks(root: etree._Element, left_by_id: Mapping[str, Any]) -> dict[Any, Any]:
+    """Identity map of left paragraph elements, captured before any mutation.
+
+    Inserting paragraphs shifts index-based ``_paragraph_element`` resolution,
+    so a location-to-element probe after mutations can attribute an inserted
+    paragraph to the wrong left block.  Element identity never moves.  The
+    proxies themselves are the keys: keeping them alive keeps lxml's proxy
+    cache coherent, whereas bare ``id()`` values are reused by dead proxies.
+    """
+    blocks: dict[Any, Any] = {}
+    for block in left_by_id.values():
+        try:
+            blocks[_paragraph_element(root, block.location)] = block
+        except DocxError:
+            continue
+    return blocks
+
+
+def _paragraph_has_deleted_mark(element: etree._Element) -> bool:
+    """Whether the paragraph mark already carries a pending w:del revision."""
+    ppr = element.find(Q("pPr"))
+    rpr = ppr.find(Q("rPr")) if ppr is not None else None
+    return rpr is not None and rpr.find(Q("del")) is not None
+
+
+def _paragraph_runs_fully_deleted(element: etree._Element) -> bool:
+    """Whether every visible run of the paragraph is wrapped in w:del.
+
+    Such a paragraph is the surviving anchor of an already written trailing
+    delete chain: its mark is intentionally kept, so it collapses (or absorbs
+    cascaded text) at accept time.  A later delete operation that borders it
+    must join that chain instead of treating the paragraph as live content.
+    """
+    deleted = False
+    for child in element:
+        if child.tag == Q("pPr") or child.tag in _PARAGRAPH_MARKERS:
+            continue
+        if child.tag == Q("del"):
+            deleted = True
+            continue
+        return False
+    return deleted
+
+
+def _trailing_delete_chain(parent: etree._Element,
                            left_elements: Sequence[etree._Element],
-                           left_by_id: Mapping[str, Any]):
-    """Return the paragraph whose mark deletion removes a trailing block.
+                           element_blocks: Mapping[int, Any]):
+    """Return the elements whose paragraph marks remove a trailing block.
 
     A trailing paragraph mark cannot be deleted on its own: Word/OOXML joins a
     deleted mark into the *following* paragraph, and the project's independent
     accept implementation keeps the last paragraph when no follower exists.
-    Deleting a trailing paragraph therefore marks the preceding paragraph's
+    Deleting trailing paragraphs therefore marks the preceding paragraph's
     mark and each deleted paragraph except the last, cascading the kept text
-    into the final paragraph.
+    into the final paragraph.  When the operation borders the surviving anchor
+    of an earlier trailing chain in the same mutation pass, the deletion joins
+    that chain and every deleted element's mark is removed so the kept text
+    cascades further.  Paragraphs already carrying a pending mark deletion are
+    transparent followers: they collapse at accept time and never decide.
     """
     last_index = parent.index(left_elements[-1])
     following = list(parent)[last_index + 1:]
-    if any(child.tag == Q("p") for child in following):
-        return None
+    joins_chain = False
+    for child in following:
+        if child.tag != Q("p"):
+            continue
+        if _paragraph_has_deleted_mark(child):
+            # Either a chained keeper (runs kept, cascades onward) or a fully
+            # deleted middle paragraph; both vanish at accept time.
+            continue
+        if _paragraph_runs_fully_deleted(child):
+            # Surviving anchor of an earlier trailing chain.  Adjacent
+            # deletions join only when this operation's last element is that
+            # chain's pending keeper, i.e. the chain directly continues.
+            joins_chain = _paragraph_has_deleted_mark(left_elements[-1])
+            if not joins_chain:
+                return None
+        else:
+            return None
+        break
     if any(child.tag == Q("tbl") for child in following):
         raise DocxError("SELECTION_BLOCK_STRUCTURE_UNSUPPORTED", "trailing-table")
     first_index = parent.index(left_elements[0])
@@ -689,11 +753,15 @@ def _trailing_delete_chain(root: etree._Element, parent: etree._Element,
     predecessor = parent[first_index - 1]
     if predecessor.tag != Q("p"):
         raise DocxError("SELECTION_BLOCK_STRUCTURE_UNSUPPORTED", "trailing-no-paragraph")
-    block = _block_for_element(root, left_by_id, predecessor)
+    if _paragraph_has_deleted_mark(predecessor):
+        raise DocxError("SELECTION_BLOCK_STRUCTURE_UNSUPPORTED", "trailing-predecessor")
+    block = element_blocks.get(predecessor)
     if block is None:
         raise DocxError("SELECTION_BLOCK_STRUCTURE_UNSUPPORTED", "trailing-predecessor")
     _simple_paragraph_element(predecessor, block)
-    return block
+    if joins_chain:
+        return (predecessor, *left_elements)
+    return (predecessor, *left_elements[:-1])
 
 
 def _trailing_delete_chain_for_replace(parent: etree._Element,
@@ -739,6 +807,8 @@ def _apply_block_operations(root: etree._Element, left_doc, right_doc,
                             *, redline: bool, revision_start: int, when: str) -> int:
     left_by_id = _left_blocks_by_id(left_doc)
     right_by_id = _right_blocks_by_id(right_doc)
+    # Snapshot left element identities before any insertion mutates the tree.
+    element_blocks = _left_element_blocks(root, left_by_id)
     entries: dict[int, list[tuple[Any, int, _BlockOperation, list[etree._Element]]]] = {}
     for operation in block_operations:
         if operation.kind == "insert":
@@ -790,11 +860,15 @@ def _apply_block_operations(root: etree._Element, left_doc, right_doc,
                 continue
             if operation.kind == "delete":
                 if redline:
-                    trailing = _trailing_delete_chain(root, parent, left_elements, left_by_id)
+                    trailing = _trailing_delete_chain(parent, left_elements, element_blocks)
                     if trailing is not None:
-                        chain = [parent[parent.index(left_elements[0]) - 1]] + list(left_elements[:-1])
-                        for element in chain:
-                            block = _block_for_element(root, left_by_id, element)
+                        for element in trailing:
+                            # An element that an earlier operation already
+                            # chained into keeps its pending mark; repeating
+                            # the w:del mark would corrupt the redline.
+                            if _paragraph_has_deleted_mark(element):
+                                continue
+                            block = element_blocks.get(element)
                             if block is None:
                                 raise DocxError("SELECTION_BLOCK_STRUCTURE_UNSUPPORTED", operation.diff_id)
                             _paragraph_mark(element, "del", next_id, when)

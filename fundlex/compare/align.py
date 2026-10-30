@@ -1,6 +1,7 @@
 """Deterministic block alignment with conservative high-recall semantics."""
 from __future__ import annotations
 
+from collections import Counter
 from dataclasses import dataclass
 from difflib import SequenceMatcher
 from typing import Iterable, Sequence
@@ -25,7 +26,20 @@ def _anchor_scope(block: CompareBlock) -> tuple[object, ...]:
     return ("body",)
 
 
-@lru_cache(maxsize=50000)
+def _multiset_ratio(a: str, b: str) -> float:
+    """Character-multiset overlap, equal to ``SequenceMatcher.quick_ratio``.
+
+    ``quick_ratio`` is always evaluated through a fresh ``SequenceMatcher``,
+    whose constructor eagerly builds the full position-chain map of ``b`` even
+    though the quick score never uses it.  ``collections.Counter`` computes the
+    identical bounded intersection at C speed and makes the DP similarity
+    evaluation linear in practice.
+    """
+    common = Counter(a) & Counter(b)
+    return 2.0 * sum(common.values()) / (len(a) + len(b))
+
+
+@lru_cache(maxsize=4096)
 def _sim_text(a: str, b: str) -> float:
     if not a and not b:
         return 1.0
@@ -43,17 +57,35 @@ def _sim_text(a: str, b: str) -> float:
         width = min(48, len(a), len(b))
         prefix = sum(x == y for x, y in zip(a[:width], b[:width])) / max(width, 1)
         suffix = sum(x == y for x, y in zip(a[-width:], b[-width:])) / max(width, 1)
-        return 0.55 * ratio + 0.25 * prefix + 0.20 * suffix
+        evidence = 0.55 * ratio + 0.25 * prefix + 0.20 * suffix
+        if evidence < 0.82:
+            return evidence
+        # Shared boilerplate boundaries must not qualify two long paragraphs
+        # with unrelated middles as one modification.  The bounded character
+        # overlap is cheap deterministic evidence for the same threshold the
+        # short-text branch already applies through ``quick_ratio``.
+        if _multiset_ratio(a, b) < 0.5:
+            return 0.0
+        return evidence
     # This score only chooses a candidate pairing; text_diff remains the
     # source of truth.  ``quick_ratio`` is linear-ish and deterministic, while
     # running full Ratcliff/Obershelp for every 1..3 by 1..3 DP candidate makes
     # long contracts quadratic in both blocks and characters.  It is also
     # conservative for recall: a false pairing still enters text diff and
-    # cannot suppress a visible character difference.
-    return SequenceMatcher(None, a, b, autojunk=False).quick_ratio()
+    # cannot suppress a visible character difference.  The length bound is a
+    # strict upper bound of the multiset overlap, so rejecting below the
+    # pairing threshold upfront cannot change any alignment decision.
+    bound = 2.0 * min(len(a), len(b)) / (len(a) + len(b))
+    if bound < 0.82:
+        return bound
+    return _multiset_ratio(a, b)
 
 
 def _sim(left: Sequence[CompareBlock], right: Sequence[CompareBlock]) -> float:
+    # The dominant DP candidate is one block against one block; skip the join
+    # (and its allocation) so the cached string identity reaches _sim_text.
+    if len(left) == 1 and len(right) == 1:
+        return _sim_text(left[0].match_text, right[0].match_text)
     return _sim_text("".join(b.match_text for b in left), "".join(c.match_text for c in right))
 
 
