@@ -6702,55 +6702,55 @@ H＝E×…
 - A7-01（高）：`assign_target_operations` G16 分支复用条件块内才绑定的 `rule` 变量；satisfied+out_of_scope 首目标 NameError，非首目标错用上一条 rule 判定 expected_policy。已修复（qa 基线 `a8d78f2`，分支内本地化重取+None 保护）并有回归测试。
 - A7-02（高）：`ensure_delete_targets` 游标分页在调用方把新建克隆回灌 targets 后重算候选，`everything[cursor:]` 在缩短列表上二次偏移，60 候选实测只建 40 target 且 `has_more=False` 静默收尾。已修复（`a8d78f2`，分页输入冻结快照）+回归（60/60 全覆盖）。
 - A7-03（中→高）：`find_normalized` NFKC 变长折叠用原文非空白下标索引折叠串，㏄→cc 类输入 IndexError 或绑错 span。已修复（按产出字符建立位置映射）+回归。
-- A7-04（中）：resolve_absent_operations 克隆只进 targets 不进 synthetic，违反 4870-4877 不变量，重建轮丢 absent 证明载体。**待修**（下一轮引擎专项）。
+- A7-04（中）：resolve_absent_operations 克隆只进 targets 不进 synthetic，违反 4870-4877 不变量，重建轮丢 absent 证明载体。已修复（`4872cdf`，bookkeeping 移出条件块），独立复核 PASS；**但无回归测试**，防线缺口登记于 FL-D563。
 - A7-05（中，产品口径）：review_assisted 默认下 review/business 项非空仍写 delivery_status="complete"。**待产品确认口径**，暂登记不改。
 - A7-06/07/08/09（中/低）：scope anchor 0 回退整章过宽、income/liquidation 标题词硬匹配过窄、targets_for_open_rules fail-open、Target 中途可变、死代码若干。**待修/观察**，见 /tmp/opencode/qa/findings/A7-engine-recall.md。
 
 ## FL-D552 交付/门禁正确性六项（2026-10-31，第一波审计 A8）
 
 - A8-F1（中）：`_ENGINE_BUILD_MODULES` 漏挂 `fundlex/semantic_contract.py`，改它不触发 checkpoint 失效。已修复（`a8d78f2`）+指纹测试通过。
-- A8-F2（中）：orphan evidence 名义必拦但 `LEDGER_EVIDENCE_UNBOUND` 落 known-prefix 可降级。已修复（requires_blocker 对 kind=orphan_evidence 恒 True）+回归。
-- A8-F3：FINAL_RESIDUAL_SCAN_TRUNCATED 未入 `_FINAL_OMISSION_BLOCKER_CODES`（现靠 blocker 桶兜底，双轨口径）。**待修（低风险）**。
+- A8-F2（中）：orphan evidence 名义必拦但 `LEDGER_EVIDENCE_UNBOUND` 落 known-prefix 可降级。**决议更新（2026-10-31，6146ee2）**：初修（硬阻断）与记录的 review-assisted 交付契约（FL-D408）矛盾；最终采纳"对齐文档"方向——review-assisted 下 orphan evidence 为 review item 不自动阻断，strict 仍阻断；`requires_blocker`/`obligations`/`recall_pipeline` 注释与测试 (`test_orphan_evidence_is_review_item_not_silent_drop`) 已全部对齐契约，独立复核 PASS。
+- A8-F3：FINAL_RESIDUAL_SCAN_TRUNCATED 未入 `_FINAL_OMISSION_BLOCKER_CODES`（现靠 blocker 桶兜底，双轨口径）。已修复（`4872cdf`）+真值回归测试，独立复核 PASS。
 - A8-F4：sweep dropped 事件永不进 unresolved，delivery 中对应条款是死代码。**待修**。
 - A8-F5：blind_windows 只落 report 不进 unresolved/user_summary，与 SWEEP_CHUNK_LIMIT 口径不一。**待修**。
 - A8-F6/7/8：_delivery_complete 重复死代码段、checkpoint digest 不含 env 行为开关、validators 陈旧 docstring（_verify_composed 已强制）。**清理项**。
 
 ## FL-D553 Worker/队列与故障注入缺陷（2026-10-31，A2+B14）
 
-- A2-F1（高）：gg worker 错误路径在 fencing() 退出后 update_run，旧 token stale 写落库（finish_job 却正确拒绝）。**修复中（W1）**。
-- A2-F2（高）：gg_jobs claim 无 attempt 上限无终态清扫，确定性崩溃 run 可被 systemd 无限重启烧模型费。**修复中（W1）**。
-- A2-F3（中）：enqueue 去重只看 queued/leased，retry_wait 可插第二条 live job，同 run 并发处理成立。**修复中（W1）**。
-- A2-F4/B14-01（中）：store.retry/finish Conflict、claim 期瞬时 DB 故障穿透终结 run_forever，仅 systemd 兜底。**修复中（W1）**：循环内有界退避。
-- B14-02/04、A3-F8 附件（中/低）：finish/崩溃孤儿对象无 GC；/tmp/fundlex_job_* 泄漏；运行中 pause 残留 tasks.paused=1 与批次 completed 矛盾位。**修复中（W1，B14-03 处理）**；A3-F8（finish 持久模式围栏仅 task_bound 生效）**待决策**，现无生产者触发。
+- A2-F1（高）：gg worker 错误路径在 fencing() 退出后 update_run，旧 token stale 写落库（finish_job 却正确拒绝）。已修复（`8779dac`），独立复核 PASS。
+- A2-F2（高）：gg_jobs claim 无 attempt 上限无终态清扫，确定性崩溃 run 可被 systemd 无限重启烧模型费。已修复（`8779dac`：claim 前谓词化清扫 attempts≥max→fenced 终态 failed+GG_ATTEMPTS_EXHAUSTED，默认上限 5，env `FUNDLEX_GUIDE_JOB_MAX_ATTEMPTS`；健康心跳 job attempts 不增长不误杀），独立复核 PASS。
+- A2-F3（中）：enqueue 去重只看 queued/leased，retry_wait 可插第二条 live job，同 run 并发处理成立。已修复（`8779dac`：去重扩至 retry_wait、run 行锁+sibling leased 互斥+rowcount 校验+历史重复行 self-heal），独立复核 PASS；轻微 CONCERN：MySQL RR 下 sibling 快照读对遗留重复行理论漏检窗口（生产 SQLite 不受影响，新数据不会产生双 live job）。
+- A2-F4/B14-01（中）：store.retry/finish Conflict、claim 期瞬时 DB 故障穿透终结 run_forever，仅 systemd 兜底。已修复（`8779dac`：循环内有界退避 6 次 0.5→30s，到界重抛留库由租约回收+systemd 兜底，Conflict 以 _is_takeover stand down），独立复核 PASS。
+- B14-02/04、A3-F8 附件（中/低）：finish/崩溃孤儿对象无 GC；/tmp/fundlex_job_* 泄漏；运行中 pause 残留 tasks.paused=1 与批次 completed 矛盾位。B14-04（marker 三重校验+pid 活性）与 B14-02 之 finish 失败路径 reap 已修复（`8779dac`，复核 PASS）；**B14-02 之 kill 后全部已复制孤儿仍无清扫器，部分闭合保持 open**。B14-03（paused=1 陈旧位）**待修（主 agent）**；A3-F8（finish 持久模式围栏仅 task_bound 生效）**待决策**，现无生产者触发。
 - 正面：claim 唯一胜者、lease 回收、fencing 拒 stale、attempt 终态、checkpoint 反污染、finish 原子性、幂等键并发恰 1 行、熔断/并发闸门、kill 后 0 孤儿交付均实测通过。
 
 ## FL-D554 Compare 正确性与性能（2026-10-31，A6+B13）
 
-- FL-D541 根因坐实（高）：compare parser 的 pN 计数含 body 级 w:sdt 内段落，docx 只数直接 w:p → sdt 后全部错位；542 份真实合同 507 份（93.6%）带 24-27 段 sdt。**修复中（W2）**，修复方向已在 tmp-a6 验证。
-- A6-543（高）：正文末尾相邻 ≥2 个采用B 删除段必 SELECTION_FINAL_TEXT_MISMATCH（_trailing_delete_chain 与 _expected_sequence 索引错位；E9 全文删除同失败）。**修复中（W2）**。
-- A6-544（中）：仅 numbering/header-footer 图片差异时 coverage 静默 complete 过声明。**修复中（W2）**。
-- A6-545（低）：align >256 字符启发式与 quick_ratio 阈值行为不一致（共享法律套话跨配对 0.9511）。**修复中（W2）**。
-- B13-F1（高）：compare align _sim_text 每 DP 候选跑 difflib，案例①233s 中 ~191s（82%）；**修复中（W2）**，目标 <10s 且 diff 输出不变。
-- B13-F2（中）：compare 解析每段 3 次全子树遍历。**修复中（W2）**。
-- A6-546（低）：compare worker 未知异常只落结构化码，诊断仅入日志。**待修**。
+- FL-D541 根因坐实（高）：compare parser 的 pN 计数含 body 级 w:sdt 内段落，docx 只数直接 w:p → sdt 后全部错位；542 份真实合同 507 份（93.6%）带 24-27 段 sdt。已修复（`fe4bd37`，parser 只数 body/cell 直接 w:p，sdt 独立寻址+writer fail-closed），独立复核 PASS（真实合同复现 4/4 GENERATE OK）。
+- A6-543（高）：正文末尾相邻 ≥2 个采用B 删除段必 SELECTION_FINAL_TEXT_MISMATCH。已修复（`fe4bd37`）；全文删除/尾删+穿插插入统一 fail-closed 抛 SELECTION_BLOCK_STRUCTURE_UNSUPPORTED 且不残留产物，复核 PASS；**能力回退记录见 FL-D562**。
+- A6-544（中）：仅 numbering/header-footer 图片差异时 coverage 静默 complete 过声明。已修复（`fe4bd37`：NUMBERING_LABEL_DIFFERENCE_NOT_COMPARED/UNSUPPORTED_VISIBLE_CONTENT+incomplete），复核 PASS。
+- A6-545（低）：align >256 字符启发式与 quick_ratio 阈值行为不一致。已修复（`fe4bd37`，multiset≥0.5 门禁防跨配对；fuzz 5000/3000 组新旧一致验证），复核 PASS。
+- B13-F1（高）：compare align _sim_text 每 DP 候选跑 difflib。已修复（`fe4bd37`），**独立复核同机复测 before/after：case1 233.5→59.6s、case2 20.6→16.4s、case3 113.3→35.1s，diffs/status/anchors/groups/unmatched 逐项一致（语义未变）**。
+- B13-F2（中）：compare 解析每段 3 次全子树遍历。已修复（`fe4bd37`），复核 PASS。
+- A6-546（低）：compare worker 未知异常只落结构化码，诊断仅入日志。**接受现状（2026-10-31）**：全部异常路径终态 failed+粗码，不存在错误 complete（fail-open 风险排除，复核确认）；诊断透出列为后续增强。
 - 正面：合并单元格/既有修订/位置不可解析 fail-closed；40000+ pairings 回退正确；store 一致性模式与主库同。
 
 ## FL-D555 DOCX/选择性审稿缺陷（2026-10-31，A3）
 
-- A3-F1（高）：overlay 修订 id 按 next_id+2n-1 分配 vs selective del_id 必须奇——外来修订约半数合同 Review 全 422。**修复中（W4）**。
-- A3-F2（高，真实合同必现）：编辑位之前的持久 barrier（tab/hyperlink/域/批注范围）被 _accepted_offsets 误从期望文本剥掉 → FINAL_TEXT_MISMATCH 误拒并删产物；RUN_FORMAT 同缺陷；摘要区"（N）⇥标题"结构高发。**修复中（W4）**。
-- A3-F3/F4（中）：书签跨 span 孤儿 bookmarkEnd；no-op 编辑（replacement==expected_old_text）被接受。**修复中（W4）**。
+- A3-F1（高）：overlay 修订 id 按 next_id+2n-1 分配 vs selective del_id 必须奇——外来修订约半数合同 Review 全 422。已修复（`467db01`：base_id 向上取奇且严格大于全包外来 max id），独立复核 PASS。
+- A3-F2（高，真实合同必现）：编辑位之前的持久 barrier（tab/hyperlink/域/批注范围）被 _accepted_offsets 误从期望文本剥掉 → FINAL_TEXT_MISMATCH 误拒并删产物；RUN_FORMAT 同缺陷。已修复（`467db01`：双侧同一去 barrier 纯视图比对），复核 PASS（含真实合同冒烟实测）。
+- A3-F3/F4（中）：书签跨 span 孤儿 bookmarkEnd；no-op 编辑（replacement==expected_old_text）被接受。已修复（`467db01`：span 内成对移除/跨段 fail-closed 双重防线；validate 拒 NOOP_EDIT），复核 PASS。
 - A3-F5/F6/F7（低）：finish 不交叉校验 plan.edits 与内嵌 manifest；_document_dict 暴露全部 artifact 下载 URL。**待修/观察**。
 - 正面：accept-all c14n==final、OPC/rels 完整、双哈希闸门、selective 4 线程恰 1 胜、外来修订篡改全 fail-closed、30 轮 fuzz 主路径成立。
 
 ## FL-D556 前端 V1 功能/交互缺陷（2026-10-31，A9+B11+B12）
 
-- A9-F03（中）：Review generateSelected 异常路径控件永久禁用（unhandled rejection）。**修复中（W3）**。
-- A9-F02（中）：inline-contract-detail 下 Esc/背景点击不导航，整页空白。**修复中（W3）**。
-- B12-P1-1（高 UX）：改密当前密码错误→对话框静默关闭无提示且会话作废。**修复中（W3）**。
-- B12-P1-2（高 UX）：排队中「下载 ZIP/CSV/总览.md」点击无任何反馈。**修复中（W3）**。
-- B11-P1（中）：761–1180px 表格横向滚动无任何视觉提示，操作列看似消失。**修复中（W3）**。
-- A9-F04/05/06/08、B12 比对详情空白/状态自相矛盾/未命名任务不可区分、B11 axe critical 文件输入 label、对比度 serious 全站、登出提示误用错误红等：**修复中（W3）/部分待视觉专项**。
+- A9-F03（中）：Review generateSelected 异常路径控件永久禁用（unhandled rejection）。已修复（`17a2984`：单 try/catch/finally+prelude 失败提示），浏览器回归 12 项通过。
+- A9-F02（中）：inline-contract-detail 下 Esc/背景点击不导航，整页空白。已修复（`17a2984`：Esc+遮罩点击关闭回 #task）。
+- B12-P1-1（高 UX）：改密当前密码错误→对话框静默关闭无提示且会话作废。已修复（`17a2984`：401 后探测 /api/auth/me epoch 护栏，存活保留弹窗提示）。
+- B12-P1-2（高 UX）：排队中「下载 ZIP/CSV/总览.md」点击无任何反馈。已修复（`17a2984`：#download-hint 提示节点）。
+- B11-P1（中）：761–1180px 表格横向滚动无任何视觉提示。已修复（`17a2984`：四层滚动阴影）。
+- A9-F04/05/06/08、B12-P1-4/P1-6/P3（日期/登出/无效hash/比对待处理分组/默认名/已暂停合成状态）、axe 文件输入 label 均已修复（`17a2984`；浏览器测试 tests/browser/test_frontend_fixes.py 12 项+remediation 15 项通过）。A9-F01 版本化第一轮不完整问题见 FL-D561。对比度 serious 全站**部分待视觉专项**。
 - 待决策：状态术语体系业务翻译（B12-P1-3）需产品文案基线，登记待统一；CSP 待 inline script 清除（guide_generation.html/logic-demo.html）。
 
 ## FL-D557 性能基线与热点（2026-10-31，B13）
@@ -6773,3 +6773,28 @@ H＝E×…
 - 已修（`7198c72`）：登录/注册限速、安全响应头、法规解析防爆、guerd 错误包络。
 - 待决策：自助注册默认开放（公网可建号消耗模型配额）——已加限速缓解，是否改默认关闭属产品决定；`/api/settings/model/test` 受限代理（内网已封）保留观察。
 - 已验证有效：跨用户 IDOR 全 404、admin 404、最后管理员保护、禁用吊销会话、token sha256、下载白名单+重哈希、object_path 穿越防护、参数化 SQL、XXE 拒绝、合同上传四重防爆、无 traceback 泄露、XSS sink 全转义、scrypt 规范。
+
+## FL-D560 workbench 浏览器测试 3 项基线既有失败（2026-10-31）
+
+- **问题与影响**：`tests/browser/test_workbench.py` 中 `test_revision_pair_checkbox_keyboard_and_insert_navigation`、`test_login_expiry_message_and_role_hash_guard`、`test_generation_blocks_duplicate_requests_and_late_reply` 三项失败（FUNDLEX_BROWSER_TESTS=1 实跑 3 failed/51 passed）。
+- **证据/归因验证**：在 qa 基线合并点 `7f6d981`（本轮修复开始前）独立 worktree 实跑同样 3 项全部失败；在移除 W3 前端改动的工作树同样失败——既非本轮修复引入，也非 W3 引入。失败形态为 UI 交互层面（detail-head 拦截 pointer events、breadcrumb 等待超时）。
+- **处理方法**：登记为既有缺陷，需专项定位（可能与 BYOK/合并线引入的前端行为漂移有关）；不阻塞本轮提交，但纳入最终回归清单与 GO/NO-GO 依据。
+- **状态**：open，待专项修复并 browsers 全套复测。
+
+## FL-D561 API 第二轮独立复核发现五项（2026-10-31，复核 7198c72）
+
+- **发现**：①登录限流 key 用原始用户名而 authenticate() 会 strip()——" victim"/大小写变体对同账户无限换新 key 绕过（实测 401×15）；②429 响应体 error_code=INTERNAL_ERROR（中文"服务暂时不可用"），仅 Retry-After 头正确；③旧 `static_cache_control` 中间件（注册更晚=更外层）无条件覆写 /static max-age=31536000 immutable，A9-F01 版本化修复生产上被吃掉；④`api.py` correlation 中间件成功响应 `return response` 提前，头部赋值成死代码，成功响应丢 X-Correlation-ID；⑤POST /api/guide-generation/runs 不经 validate_docx_upload，780 字文件名 SQLite 收 201（MySQL 将复现 1406→500）。
+- **修复**：`08e8a0c`——限流 key 统一 strip().casefold()；429→RATE_LIMITED 且保留 Retry-After；旧中间件改 setdefault 不再覆写（无版本 /static 保持 no-cache）；恢复成功响应 correlation 头；gg-runs 入口补 200 字节文件名上限（UPLOAD_FILENAME_TOO_LONG）。新增 5 项对抗性回归（变体限流/包络码/文件名/静态缓存/响应头），17 项 QA 回归文件全过，api 归类 408 passed。
+- **状态**：已修复并验证。遗留：A1-5（反代后 client 皆 127.0.0.1，注册限速退化为全站共享桶）未修，与自助注册默认开放一并列为产品/部署决策（TRUSTED_PROXY 类方案）。
+
+## FL-D562 compare 全文「删除+插入全部采用B」交付能力回退（2026-10-31，W2 复审决策项）
+
+- **问题与影响**：A6-543 修复后，尾删链 fail-closed 策略同时覆盖了"全文替换式采用B（删除全部A段+插入全部B段）"场景——该场景修复前已验证可交付且 final==right（A6 E11），现抛 SELECTION_BLOCK_STRUCTURE_UNSUPPORTED 拒绝。属 fail-closed 拒绝能力而非错误产出，无半改状态，但对依赖"全部采用B"的用户是能力回退。
+- **决策（工程裁定，2026-10-31）**：保留 fail-closed 拒绝为当前正确行为（杜绝 SELECTION_FINAL_TEXT_MISMATCH 误交付风险），能力恢复（对全文替换专门路径）列为后续增强，需补"删除+插入全部采用"专项用例后解除拒绝。
+- **状态**：open（能力增强待排期）；当前行为已用例钉住，生产提示为结构化错误码可解释。
+
+## FL-D563 A7-04 修复缺回归测试（2026-10-31，引擎复核）
+
+- **问题**：A7-04（resolve_absent_operations 克隆入 synthetic/origins）修复（`4872cdf`）经独立复核代码层面 PASS 并离线复算验证，但无任何自动化回归测试钉住该不变量——未来重构可静默回退。
+- **处理方法**：列入 M 系列测试补强（与 M2 docx 层 EXPECTED_TEXT_MISMATCH 零断言防线、Q3 D01 fixture 恒 skip 同一批测试体系待办）。
+- **状态**：open（测试待补），修复本身已独立验证。

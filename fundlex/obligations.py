@@ -672,9 +672,10 @@ def project_unresolved(ledger: ObligationLedger,
                 represented.add(key)
                 rows.append(row)
             continue
-        # An evidence row tied to a closed/nonexistent operation is still an
-        # orphan blocker.  The caller must investigate the disagreement instead
-        # of allowing a closed Ledger record to hide it.
+        # An evidence row tied to a closed/nonexistent operation stays visible
+        # as an orphan review item (review-assisted delivery does not auto-block
+        # on it, see project_unresolved).  The caller must investigate the
+        # disagreement instead of allowing a closed Ledger record to hide it.
         row = dict(item)
         row["kind"] = "orphan_evidence"
         row.setdefault("code", "LEDGER_EVIDENCE_UNBOUND")
