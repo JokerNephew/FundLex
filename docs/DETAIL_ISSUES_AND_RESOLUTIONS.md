@@ -6828,7 +6828,8 @@ H＝E×…
 - **处理与验证（2026-10-31，`986c1eb`）**：F-01 已修——限速计数落 auth DB（auth.ThrottleStore，SQLite BEGIN IMMEDIATE 跨 worker 共享且重启不清零），XFF 仅在 `FUNDLEX_TRUSTED_PROXY_HOSTS` 配置时采信（fundlex/proxy_headers.py，从右向左跳过受信中继），nginx 模板已补 XFF 与配套 env 说明（默认不信任任何代理头）；F-02 随 `_client_key` 走同一机制修复；F-03 已修——multipart 上限沿用 env `FUNDLEX_MULTIPART_MAX_PARTS` 默认 1000，settings 注释与实现对齐，40 文件批量实测 200；F-04 已修——csv_safe_cell 集中转义唯一对外 CSV 导出点；F-06 已修（405/406/410 映射）；F-08 已修（限速窗口 deque 清理）。回归：28 项 QA 文件绿、354 项 api/auth/upload/rate 绿、poc_auth 35/35、multipart-40 与 csv-formula 对抗点如期翻转。
 - **待产品/架构决策（如实不修）**：F-05（需产品决策）、F-07（节流阈值口径）、F-09（信息项）；登录按 IP 全局桶（跨账号喷洒）与 `_global_active` 全局并发跨 worker 协调——阈值/架构决策，现状已记录。
 - **部署动作（发布时必做）**：生产 `/etc/fundlex-recall.env` 需配置 `FUNDLEX_TRUSTED_PROXY_HOSTS=127.0.0.1`（配合已更新的 nginx XFF 模板），否则限速/配额仍以 socket peer 计。
-- **状态**：已修复并验证（残留决策项单列）。
+- **独立终审（2026-10-31，PASS）**：跨 worker 共享限速实测（w1 6×401+w2 4×401→429）、XFF 未配不采信/配置后右走链生效、40 文件 200、CSV 转义实测；MySQL 方言经 db.prepare 可用，但 hit() 无 BEGIN IMMEDIATE 等价锁、RR 下并发超额放行仅理论弱化（生产 SQLite 不受影响，异常路径 fail-closed 500），与 FL-D553 A2-F3 的 MySQL 快照读同档记录；/tmp/r2sec/poc_upload.py 的 40 文件断言为修复前口径，不再作验收依据。
+- **状态**：已修复并独立终审通过（残留决策项单列）。
 
 ## FL-D565 二轮盲审：引擎交付门禁七项（2026-10-31，R2-engine-delivery）
 
@@ -6838,8 +6839,8 @@ H＝E×…
 - **LOW×5**：F1 项 summary 文案误标；coverage_open 死代码重复块；semantic_contract offset_mismatch 死检查+template 模式 new_text 无 slot 实例化；claimed 引文正则缺中文单引号；三层阻断判定字段口径不一致。
 - **正面证据（如实记录）**：ledger/claim-replay 硬闸门结构完整、相关测试 151 项全绿、happy path e2e 正常 complete。
 - **处理与验证（2026-10-31，内容随 `986c1eb` 提交、归因见 `6fd382d`）**：F1 已修——`FUND_TYPE_UNVERIFIED` 入 `_ALWAYS_BLOCKING_CODES`，strict/review_assisted 双策略阻断，资格项补 reason 字段消除口径缝隙；PoC：修复前 complete+发布 final/redline → 修复后 incomplete、blockers=[FUND_TYPE_UNVERIFIED]、仅发 working 产物。F2 已修——location 缺失独立分支：pending + SEMANTIC_UNCERTAIN + LOCATION_NOT_FOUND，不再静默 resolved（正对照仍 resolved）。LOW×5 全修（summary 文案、死代码块清理、template 模式 instantiate_slots+fail-closed、claimed 正则补中文单引号、阻断判定单点化）。新增回归 7 条；test_recall_pipeline 54、QA regressions 36、delivery/obligation 137 passed；happy-path e2e 正常 complete。A8-F2 orphan evidence 行为未动（复核确认点）。
-- **独立复核**：已启动（含 PoC 独立复跑），结论回报后最终确认。
-- **状态**：已修复待独立复核终验。
+- **独立终审（2026-10-31，PASS）**：PoC 独立复跑 incomplete+仅 working 产物，`git show 986c1eb^:` 静态确认修复前态；strict/review_assisted 双路径阻断实测 False；A8-F2 契约未动（LEDGER_EVIDENCE_UNBOUND 仍 review item）；F2 正对照仍 resolved，缺 location 保守 pending（fail-closed 方向）；90 passed（recall_pipeline+QA regressions）。
+- **状态**：已修复并独立终审通过。
 
 ## FL-D566 Wave-1 冒烟 B05 报告 complete 但评分存在 wrong 目标（false_complete）（2026-10-31）
 
