@@ -117,6 +117,35 @@ def test_contract_detail_closes_back_to_task_via_escape_and_background(browser, 
         context.close()
 
 
+def test_review_overlay_flushes_with_sidebar_across_breakpoints(browser, live_dev):
+    """R2-F01 复核收尾：review overlay 左边距必须始终贴合侧栏宽度。
+
+    >1180px 侧栏 252px、761-1180px 侧栏 218px、<761px 顶栏 153px。
+    """
+    _app, base = live_dev
+    context, page, errors = _dev_page(browser)
+    install_api(page, base_api(_paused_task_scenario()))
+    try:
+        open_dev(page, base, "#task?id=t")
+        page.locator("#doc-rows [data-detail]").wait_for()
+        page.locator("#doc-rows [data-detail]").first.click()
+        page.locator("[data-action='open-review']").click()
+        overlay = page.locator("#detail-overlay")
+        overlay.locator(".review-layout").wait_for(state="visible")
+        box = lambda: overlay.evaluate("el => ({left: el.getBoundingClientRect().left, "
+                                       "top: el.getBoundingClientRect().top})")
+        assert box()["left"] == 252
+        page.set_viewport_size({"width": 1000, "height": 900})
+        assert box()["left"] == 218
+        page.set_viewport_size({"width": 390, "height": 844})
+        mobile = box()
+        assert mobile["left"] == 0
+        assert mobile["top"] == 153
+        assert not errors, errors
+    finally:
+        context.close()
+
+
 def test_paused_task_shows_paused_rows_download_hint_and_verdict(browser, live_dev):
     """B12-P1-6/P1-2：任务暂停时行的处理徽标合成“已暂停”；无终态结果时给出下载提示。"""
     _app, base = live_dev
