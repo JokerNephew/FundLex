@@ -188,13 +188,24 @@ class Worker:
                 preferences = model_settings.decode_snapshot(job.get("model_preferences") or "{}")
                 with self._lease_heartbeat(doc_id, token):
                     if self.processor is _default_processor:
-                        with _document_trace(job, self.store):
-                            report = self.processor(source, output_dir, job["ruleset_version"],
-                                engine_id=job.get("engine_id", ""), guide_version_id=job.get("guide_version_id", ""),
-                                guide_document=guide_document, checkpoint_dir=self.store.root / "checkpoints" / doc_id,
-                                mode=job.get("mode", "delivery"),
-                                gateway=model_settings.gateway_for(preferences) if preferences else None,
-                                disabled_rule_ids=_disabled_rule_ids(job.get("disabled_rule_ids")))
+                        gateway = (model_settings.gateway_for(preferences, store=self.store,
+                                     owner=job.get("owner")) if preferences else None)
+                        try:
+                            with _document_trace(job, self.store):
+                                report = self.processor(source, output_dir, job["ruleset_version"],
+                                    engine_id=job.get("engine_id", ""), guide_version_id=job.get("guide_version_id", ""),
+                                    guide_document=guide_document, checkpoint_dir=self.store.root / "checkpoints" / doc_id,
+                                    mode=job.get("mode", "delivery"), gateway=gateway,
+                                    disabled_rule_ids=_disabled_rule_ids(job.get("disabled_rule_ids")))
+                        finally:
+                            # Explicitly injected gateways are caller-owned in the
+                            # pipeline API; this Worker created this one per job.
+                            close = getattr(gateway, "close", None)
+                            if callable(close):
+                                try:
+                                    close()
+                                except Exception:  # noqa: BLE001 - cleanup must not mask job result
+                                    pass
                     else:
                         report = self.processor(source, output_dir, job["ruleset_version"])
                 if isinstance(report, dict) and report.get("error_code") in RETRYABLE_MODEL_CODES:

@@ -1,10 +1,12 @@
 # FundLex 当前断点（ACTIVE_HANDOFF）
 
-## 2026-10-30 模型配置独立页面更新（待发布）
+## 2026-10-30 最新：BYOK执行/检查模型配置（候选回归完成，待发布）
 
-- 用户纠正：模型配置不能跟飞书绑定同页。V1独立侧栏/`#models`，旧`#settings`保留飞书绑定；V2独立`/models`组件，原`/settings`不再显示或加载模型设置。仅前端变更，不改后端/模型调用/数据。
-- 验证：浏览器相关6 passed（含直接打开/刷新模型页、两页显隐与不请求另一功能接口）；TS/lint、Vitest16、build通过。
-- 下一步：本开发分支提交本轮明确文件，cherry-pick到干净release分支（保留生产引擎），重新build React，受控发布后更新生产smoke脚本到#models并验证，记录最终版本；真实模型仍暂停，不上传合同。
+- 用户要求普通用户可分别配置执行模型与检查模型的系统默认或个人供应商、Key、模型；不展示超时/token/retry/context/JSON。V1/V2两角色始终可见，连接测试需用户主动确认并提示可能收费；本次不触发连接测试、不上传合同、不调用真实模型。
+- 已将BYOK实现移植到干净生产发布基线 `/tmp/opencode/user-config-release-20261030`（branch `codex/user-config-release-20261030`，基线 `877a980e96d740f09e17b47bcad103ccfbb0f3a2`），没有合并开发分支中其他生产引擎差异。候选工作树当前有明确实现改动，尚未提交/发布。
+- 候选回归：后端相关测试 **167 passed, 1 skipped**；前端 typecheck、lint、Vitest **16 passed**、production build 通过。真实供应商调用和合同上传均为0；生产MySQL并发锁行为未由SQLite测试替代验证。
+- 发布前置：生产缺少 `FUNDLEX_MODEL_SECRETS_KEY` 与 `cryptography`。仍须先备份 `/etc/fundlex-recall.env`、生成并限权保存/备份Fernet主密钥、将锁定依赖加入生产venv；确认一致性备份、空间及发布器dry-run后再发布。尚未改生产配置、停服或执行发布。
+- 下一步：完成上述受控发布前置，提交干净候选；停五服务、创建并校验DB+对象一致性备份，再用发布器发布；随后只做不调用模型的服务及登录后模型页保存/刷新回读、密钥不回显验收。真实合同端到端仍未完成。
 
 ## 2026-10-30 配置功能已生产发布（用户要求“部署”）
 

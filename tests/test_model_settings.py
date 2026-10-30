@@ -26,8 +26,9 @@ def test_private_settings_are_isolated_and_resettable(client):
     assert saved.json()["primary"]["model"] == "private-model"
     assert saved.json()["editable"] is True
     assert client.get("/api/settings/model", headers=bob).json() == original
-    for key in ("api_key", "api_key_env", "base_url", "extra_headers"):
+    for key in ("api_key", "api_key_env", "extra_headers"):
         assert key not in saved.json()["primary"]
+    assert saved.json()["primary"]["base_url"] == ""
     assert client.delete("/api/settings/model", headers=alice).status_code == 200
     assert client.get("/api/settings/model", headers=alice).json() == original
 

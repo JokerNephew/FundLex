@@ -163,28 +163,44 @@ def test_disabled_rules_are_visible_in_user_summary():
     assert summary["issues"][0]["rule_id"] == "G02"
 
 
-def test_model_choice_is_bound_at_task_creation(client):
+def test_model_choice_is_bound_at_task_creation(client, monkeypatch):
+    from cryptography.fernet import Fernet
     from fundlex import model_settings
+    monkeypatch.setenv("FUNDLEX_MODEL_SECRETS_KEY", Fernet.generate_key().decode())
     store = client.app.state.store
-    model_settings.save_settings(store, "alice", {"primary": {"model": "before"}})
+    model_settings.save_settings(store, "alice", {
+        "primary": {"source": "personal", "provider": "openai", "model": "before",
+                    "api_key": "fixture-execution-secret"},
+        "review": {"source": "personal", "provider": "deepseek", "model": "check-before",
+                   "api_key": "fixture-check-secret"}})
     data = docx_bytes()
     response = client.post("/api/tasks", headers=ALICE, json={
         "name": "模型快照", "engine_id": "recall_first",
         "files": [{"client_id": "c1", "name": "合同.docx", "size": len(data)}]})
     assert response.status_code == 201, response.text
     task = response.json()
-    model_settings.save_settings(store, "alice", {"primary": {"model": "after"}})
+    model_settings.save_settings(store, "alice", {
+        "primary": {"source": "personal", "provider": "openai", "model": "after",
+                    "api_key": "fixture-new-secret"},
+        "review": {"source": "system"}})
     current = client.get(f"/api/tasks/{task['id']}", headers=ALICE).json()
     assert current["model_preferences"]["primary"]["model"] == "before"
+    assert current["model_preferences"]["review"]["model"] == "check-before"
+    assert "fixture-execution-secret" not in json.dumps(current)
+    assert "fixture-check-secret" not in json.dumps(current)
     client.post(f"/api/tasks/{task['id']}/uploads", headers=ALICE,
                 data={"client_ids": '["c1"]'}, files=[("files", ("合同.docx", data))])
     job = store.claim()
-    assert json.loads(job["model_preferences"])["primary"]["model"] == "before"
+    frozen = json.loads(job["model_preferences"])
+    assert frozen["primary"]["model"] == "before"
+    assert frozen["review"]["model"] == "check-before"
 
 
 def test_default_worker_applies_disabled_rules_and_authorized_download(client, tmp_path, monkeypatch):
     """Real API/store/Worker/DOCX; only model responses are scripted."""
     from fundlex import model_settings
+    from cryptography.fernet import Fernet
+    monkeypatch.setenv("FUNDLEX_MODEL_SECRETS_KEY", Fernet.generate_key().decode())
     from fundlex.jobs import Worker
     from test_recall_pipeline import PipelineGateway, base_responses, build_contract, guide_document
 
@@ -198,12 +214,25 @@ def test_default_worker_applies_disabled_rules_and_authorized_download(client, t
     guide_store.finish_guide_job(store, job["id"], job["fencing_token"], document=document)
     guide_store.set_current_guide(store, "alice", version["id"])
     guide_store.set_rule_settings(store, "alice", version["id"], ["G06"])
-    model_settings.save_settings(store, "alice", {"primary": {"model": "snapshot-model"}})
+    model_settings.save_settings(store, "alice", {
+        "primary": {"source": "personal", "provider": "openai", "model": "snapshot-model",
+                    "api_key": "fixture-execution-key"},
+        "review": {"source": "personal", "provider": "deepseek", "model": "snapshot-check",
+                   "api_key": "fixture-check-key"}})
     captured = []
+    captured_gateways = []
 
-    def scripted_gateway(preferences):
+    def scripted_gateway(preferences, *, store, owner):
         captured.append(preferences)
-        return PipelineGateway(base_responses())
+        configs, _ = model_settings.resolve(preferences, store=store, owner=owner)
+        assert owner == "alice"
+        assert configs["primary"].api_key == "fixture-execution-key"
+        assert configs["review"].api_key == "fixture-check-key"
+        gateway = PipelineGateway(base_responses())
+        gateway.closed = False
+        gateway.close = lambda: setattr(gateway, "closed", True)
+        captured_gateways.append(gateway)
+        return gateway
 
     monkeypatch.setattr(model_settings, "gateway_for", scripted_gateway)
     source = tmp_path / "source.docx"
@@ -217,13 +246,17 @@ def test_default_worker_applies_disabled_rules_and_authorized_download(client, t
                           files=[("files", ("合同.docx", data))]).json()["receipts"][0]
     client.post(f"/api/tasks/{task['id']}/seal", headers=ALICE)
     assert Worker(store).run_once()
+    assert captured_gateways[0].closed
     root = f"/api/tasks/{task['id']}/documents/{receipt['document_id']}"
     report_response = client.get(root + "/report", headers=ALICE)
     assert report_response.status_code == 200, report_response.text
     report = report_response.json()
+    assert "fixture-execution-key" not in report_response.text
+    assert "fixture-check-key" not in report_response.text
     assert report["delivery_status"] == "complete_with_exceptions", report.get("errors")
     assert report["disabled_rules"][0]["rule_id"] == "G06"
     assert captured[0]["primary"]["model"] == "snapshot-model"
+    assert captured[0]["review"]["model"] == "snapshot-check"
     final = client.get(root + "/download/final", headers=ALICE)
     redline = client.get(root + "/download/redline", headers=ALICE)
     assert final.status_code == redline.status_code == 200
@@ -246,4 +279,6 @@ def test_default_worker_applies_disabled_rules_and_authorized_download(client, t
     assert client.get(root + "/download/final", headers=BOB).status_code == 404
     markdown = client.get(root + "/download/report_md", headers=ALICE)
     assert markdown.status_code == 200
+    assert "fixture-execution-key" not in markdown.text
+    assert "fixture-check-key" not in markdown.text
     assert "用户关闭的规则" in markdown.text

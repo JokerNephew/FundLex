@@ -312,27 +312,47 @@
     catch(e){if(!current(t)||state.view!=='settings'||e.name==='AbortError')return;stopFeishuOAuth();$('feishu-connect-card').dataset.state='error';$('feishu-binding-badge').textContent='读取失败';$('feishu-binding-state').textContent='暂时无法读取绑定状态，请刷新状态后重试。';$('feishu-oauth-btn').disabled=true;$('feishu-unbind-btn').hidden=true;}
     finally{if(current(t))$('feishu-binding-refresh').disabled=false;}
   }
+  let modelProviders=[];
   function modelRoleFields(prefix,role) {
-    const value=(key,fallback='')=>esc(role&&role[key]!==undefined&&role[key]!==null?role[key]:fallback);
-    const options=role&&role.request_options&&typeof role.request_options==='object'?JSON.stringify(role.request_options,null,2):'{}';
-    return `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px">
-      <label>服务商（系统提供）<input value="${value('provider')}" disabled></label>
-      <label>Model<input id="model-${prefix}-model" value="${value('model')}" required></label>
-      <label>超时（秒）<input id="model-${prefix}-timeout_s" type="number" min="1" max="600" value="${value('timeout_s',45)}"></label>
-      <label>最大输出 tokens<input id="model-${prefix}-max_tokens" type="number" min="1" value="${value('max_tokens',1500)}"></label>
-      <label>重试次数<input id="model-${prefix}-retries" type="number" min="0" max="10" value="${value('retries',1)}"></label>
-      <label>上下文字符上限<input id="model-${prefix}-max_context_chars" type="number" min="1000" value="${value('max_context_chars',12000)}"></label>
-      <label style="grid-column:1/-1">请求选项 JSON<textarea id="model-${prefix}-request_options" rows="3">${esc(options)}</textarea></label>
-    </div>`;
+    const value=(key)=>esc(role?.[key]||'');
+    const personal=role?.source==='personal';
+    return `<fieldset class="model-role-card" data-model-role="${prefix}"><legend>${prefix==='primary'?'执行模型':'检查模型'}</legend>
+      <p class="subnote">${prefix==='primary'?'理解合同、定位条款并生成修改内容。':'核验修改结果，检查错误和遗漏；可以使用不同的供应商和模型。'}</p>
+      <label>使用方式<select id="model-${prefix}-source"><option value="system" ${personal?'':'selected'}>使用系统默认</option><option value="personal" ${personal?'selected':''}>使用自己的模型</option></select></label>
+      <p id="model-${prefix}-default" class="subnote" ${personal?'hidden':''}>系统模型：${value('system_model')||'尚未配置'}</p>
+      <div id="model-${prefix}-personal" class="form-stack" ${personal?'':'hidden'}>
+      <label>供应商<select id="model-${prefix}-provider">${modelProviders.map(p=>`<option value="${esc(p.id)}" ${p.id===(role?.provider||'openai')?'selected':''}>${esc(p.label)}</option>`).join('')}</select></label>
+      <label id="model-${prefix}-address-label" ${role?.provider==='custom'?'':'hidden'}>服务地址<input id="model-${prefix}-base_url" type="url" value="${value('base_url')}" placeholder="https://你的服务商地址/v1"><span class="subnote">仅其他兼容服务需要填写，由供应商提供。</span></label>
+      <label>访问密钥（API Key）<input id="model-${prefix}-api_key" type="password" autocomplete="new-password" maxlength="4096" ${personal&&role?.connection_id?'':'required'} placeholder="${personal&&role?.api_key_set?'已保存；留空保留，填写可更换':'粘贴供应商提供的访问密钥'}"><span class="subnote">在供应商控制台获取，仅供你本人使用，加密保存，不回显。</span></label>
+      <input id="model-${prefix}-connection_id" type="hidden" value="${value('connection_id')}">
+      <label>模型<input id="model-${prefix}-model" list="model-${prefix}-suggestions" value="${personal?value('model'):''}" placeholder="选择建议或填写供应商提供的模型名称"><datalist id="model-${prefix}-suggestions"></datalist><span class="subnote">建议名称并不保证账户可用，请向供应商确认。</span></label>
+      <button class="btn" type="button" data-model-test="${prefix}">验证连接</button><span class="subnote">将向供应商发送一条简短测试，可能产生少量费用，不发送合同。</span>
+      </div><p id="model-${prefix}-status" class="subnote" role="status"></p></fieldset>`;
+  }
+  function refreshModelRole(prefix){
+    const personal=$(`model-${prefix}-source`).value==='personal';
+    $(`model-${prefix}-personal`).hidden=!personal;$(`model-${prefix}-default`).hidden=personal;
+    const provider=modelProviders.find(p=>p.id===$(`model-${prefix}-provider`).value);
+    $(`model-${prefix}-address-label`).hidden=provider?.id!=='custom';
+    $(`model-${prefix}-suggestions`).innerHTML=(provider?.models||[]).map(m=>`<option value="${esc(m)}">`).join('');
+    $(`model-${prefix}-personal`).querySelectorAll('input,select,button').forEach(n=>{n.disabled=!personal;});
+    $(`model-${prefix}-model`).required=personal;
+    $(`model-${prefix}-base_url`).required=personal&&provider?.id==='custom';
+    $(`model-${prefix}-api_key`).required=personal&&!$(`model-${prefix}-connection_id`).value;
+  }
+  function modelRolePayload(prefix){
+    if($(`model-${prefix}-source`).value==='system')return {source:'system'};
+    return {source:'personal',provider:$(`model-${prefix}-provider`).value,
+      model:$(`model-${prefix}-model`).value.trim(),api_key:$(`model-${prefix}-api_key`).value,
+      connection_id:$(`model-${prefix}-connection_id`).value,
+      base_url:$(`model-${prefix}-provider`).value==='custom'?$(`model-${prefix}-base_url`).value.trim():''};
   }
   function renderModelSettings(data){
     const body=$('model-settings-body');if(!body)return;
-    $('model-settings-source').textContent=data.source==='personal'?'我的配置':'系统默认';
-    if(!data.editable){
-      body.innerHTML=`<p class="subnote">当前模型配置由部署文件管理，页面只读；如需修改请联系系统管理员。</p><dl class="detail-grid"><dt>主模型</dt><dd>${esc(data.primary?.model||'未配置')}</dd><dt>Provider</dt><dd>${esc(data.primary?.provider||'—')}</dd><dt>Base URL</dt><dd>${esc(data.primary?.base_url||'—')}</dd><dt>主模型密钥</dt><dd>${data.primary?.api_key_set?'已配置':'未配置'}</dd><dt>复核模型</dt><dd>${data.review_inherits?'继承主模型':esc(data.review?.model||'未配置')}</dd></dl>${data.config_error?`<p class="error">${esc(data.config_error)}</p>`:''}`;
-      return;
-    }
-    body.innerHTML=`<p class="subnote">这是你的个人模型设置，仅影响你的新建合同修改任务，不改变他人设置。模型名称需由当前服务商支持；服务地址与密钥由系统提供，指引解析和法规生成暂使用系统模型。</p><form id="model-settings-form" class="form-stack"><h3>主模型</h3>${modelRoleFields('primary',data.primary)}<label class="check-line"><input type="checkbox" id="model-review-inherits" ${data.review_inherits?'checked':''}> 复核模型继承主模型选项</label><div id="model-review-fields" ${data.review_inherits?'hidden':''}><h3>复核模型</h3>${modelRoleFields('review',data.review)}</div><div class="settings-actions"><button class="btn btn-primary" type="button" data-action="model-settings-save">保存模型配置</button><button class="btn" type="button" data-action="model-settings-reset">恢复系统默认</button><span class="subnote">${data.primary?.api_key_set?'系统密钥已配置':'系统密钥未配置'}</span></div></form>${data.config_error?`<p class="error">${esc(data.config_error)}</p>`:''}`;
+    $('model-settings-source').textContent=data.source==='personal'?'我的模型配置':'系统默认';
+    modelProviders=data.providers||[];
+    body.innerHTML=`<p class="subnote">分别选择负责修改合同和检查结果的模型。仅影响你的新建合同修改任务；指引解析和法规生成仍用系统模型。</p>${data.legacy_preferences?`<p class="subnote">旧版设置仍影响新任务：执行模型 ${esc(data.primary?.legacy_model||data.primary?.system_model||'系统默认')}，检查模型 ${esc(data.review?.legacy_model||data.review?.system_model||'系统默认')}。保存下方新配置后将替换旧设置。</p>`:''}<form id="model-settings-form" class="form-stack">${modelRoleFields('primary',data.primary)}<button class="btn" type="button" data-action="model-copy-primary">将执行模型配置复制给检查模型</button>${modelRoleFields('review',data.review)}<div class="settings-actions"><button class="btn btn-primary" type="button" data-action="model-settings-save">保存配置</button><button class="btn" type="button" data-action="model-settings-reset">恢复系统默认</button></div></form>${data.config_error?`<p class="error">当前配置有问题：${esc(data.config_error)}</p>`:''}`;
+    refreshModelRole('primary');refreshModelRole('review');
   }
   async function loadModelSettings(quiet=false){
     if(!state.cap||state.view!=='models')return;
@@ -342,25 +362,50 @@
   }
   async function saveModelSettings(){
     const form=$('model-settings-form');if(!form)return;
-    const role=(prefix)=>({
-      model:$( `model-${prefix}-model`).value.trim(),
-      timeout_s:Number($( `model-${prefix}-timeout_s`).value),
-      max_tokens:Number($( `model-${prefix}-max_tokens`).value),
-      retries:Number($( `model-${prefix}-retries`).value),
-      max_context_chars:Number($( `model-${prefix}-max_context_chars`).value),
-      request_options:JSON.parse($( `model-${prefix}-request_options`).value||'{}')
-    });
+    if(!form.reportValidity())return;
     const t=ticket('model-settings-save');
-    try{const data=await json('/api/settings/model',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({primary:role('primary'),review:$('model-review-inherits').checked?null:role('review')})});if(!current(t))return;renderModelSettings(data);toast('我的模型配置已保存，仅用于之后新建的合同修改任务。');}
+    try{const data=await json('/api/settings/model',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({primary:modelRolePayload('primary'),review:modelRolePayload('review')})});if(!current(t)||state.view!=='models')return;renderModelSettings(data);toast('配置已保存；保存不代表已验证连接，仅用于新建合同修改任务。');}
     catch(e){if(current(t))errorNotice(e,'模型配置保存未完成：');}
   }
   document.addEventListener('click',async e=>{
     if(!e.target.closest('[data-action="model-settings-reset"]'))return;
+    if(!confirm('恢复系统默认？仅影响新建任务，已创建任务不受影响。'))return;
     const t=ticket('model-settings');
     try{const data=await json('/api/settings/model',{method:'DELETE'});if(current(t)&&state.view==='models')renderModelSettings(data);}
     catch(error){if(current(t))errorNotice(error,'恢复系统默认失败：');}
   });
+  document.addEventListener('input',e=>{
+    const card=e.target.closest('[data-model-role]');if(!card)return;
+    const prefix=card.dataset.modelRole;
+    state.tokens[`model-test-${prefix}`]=(state.tokens[`model-test-${prefix}`]||0)+1;
+    $(`model-${prefix}-status`).textContent='配置已更改，尚未验证。';
+  });
+  document.addEventListener('change',e=>{
+    const card=e.target.closest('[data-model-role]');if(card){const prefix=card.dataset.modelRole;if(['provider','base_url'].includes(e.target.id.replace(`model-${prefix}-`,''))){$(`model-${prefix}-connection_id`).value='';$(`model-${prefix}-api_key`).value='';}state.tokens[`model-test-${prefix}`]=(state.tokens[`model-test-${prefix}`]||0)+1;$(`model-${prefix}-status`).textContent='配置已更改，尚未验证。';refreshModelRole(prefix);}
+  });
+  document.addEventListener('click',async e=>{
+    if(e.target.closest('[data-action="model-copy-primary"]')){
+      state.tokens['model-test-review']=(state.tokens['model-test-review']||0)+1;
+      ['source','provider','model','api_key','connection_id','base_url'].forEach(field=>{$(`model-review-${field}`).value=$(`model-primary-${field}`).value;});
+      refreshModelRole('review');$('model-review-status').textContent='已复制，请保存配置；检查流程仍独立执行。';return;
+    }
+    const button=e.target.closest('[data-model-test]');if(!button)return;
+    const prefix=button.dataset.modelTest,t=ticket(`model-test-${prefix}`);
+    if(!confirm('连接测试会向供应商发送一条简短请求，可能产生少量费用，不会发送合同。继续吗？'))return;
+    const status=$(`model-${prefix}-status`);status.textContent='正在验证连接…';button.disabled=true;
+    try{const result=await json('/api/settings/model/test',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(modelRolePayload(prefix))});if(current(t)&&state.view==='models')status.textContent=result.message;}
+    catch(error){if(current(t))status.textContent='验证失败，请检查供应商、服务地址、模型与访问密钥。';}
+    finally{if(button.isConnected)button.disabled=false;}
+  });
+  document.addEventListener('fundlex:view',e=>{
+    if(e.detail==='models')return;
+    ['primary','review'].forEach(prefix=>{
+      state.tokens[`model-test-${prefix}`]=(state.tokens[`model-test-${prefix}`]||0)+1;
+      const input=$(`model-${prefix}-api_key`);if(input)input.value='';
+    });
+  });
   document.addEventListener('fundlex:identity-reset',()=>{
+    modelProviders=[];
     const body=$('model-settings-body');
     if(body)body.textContent='正在读取当前账号的模型配置…';
     const source=$('model-settings-source');

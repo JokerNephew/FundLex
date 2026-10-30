@@ -1039,14 +1039,26 @@ def create_app(data_dir: str | Path | None = None, *, auth_db=None) -> FastAPI:
         return model_settings.public_settings(store, user)
 
     @application.put("/api/settings/model")
-    def update_model_settings(payload: ModelSettingsRequest,
+    def update_model_settings(payload: dict,
                               user: str = Depends(_user)):
         try:
-            return model_settings.save_settings(store, user, payload.model_dump())
+            return model_settings.save_settings(store, user, payload)
         except model_settings.ModelSettingsError as exc:
             if exc.code == "MODEL_SETTINGS_LOCKED":
                 raise_api_error(409, exc, fallback="MODEL_SETTINGS_LOCKED")
             raise_api_error(422, exc, fallback=exc.code or "MODEL_SETTINGS_INVALID")
+        except ValueError:
+            raise HTTPException(422, "模型配置无法保存，请检查供应商、模型和访问密钥。") from None
+
+    @application.post("/api/settings/model/test")
+    def test_user_model(payload: dict, user: str = Depends(_user)):
+        from . import user_model_connections
+        try:
+            return user_model_connections.test_connection(store, user, payload)
+        except user_model_connections.ConnectionError:
+            raise HTTPException(422, "请先填写有效的供应商、模型和访问密钥；服务地址须为公网 HTTPS 地址。") from None
+        except ValueError:
+            raise HTTPException(422, "请先填写有效的供应商、模型和访问密钥；服务地址须为公网 HTTPS 地址。") from None
 
     @application.delete("/api/settings/model")
     def reset_model_settings(user: str = Depends(_user)):

@@ -103,7 +103,7 @@ class TaskStore:
 
     def create(self, owner, name, source, files, idempotency_key=None,
                engine_id="", guide_version_id="", guide_rules_sha256="", mode="delivery",
-               disabled_rule_ids=None, model_preferences=None):
+               disabled_rule_ids=None, model_preferences=None, model_preferences_factory=None):
         """Create a task bound to a rule source.
 
         ``source`` is the bound guide version for the recall-first engine; the
@@ -114,23 +114,25 @@ class TaskStore:
             raise ValueError("TASK_MODE_INVALID")
         disabled = sorted({str(item).strip() for item in (disabled_rule_ids or [])
                            if str(item).strip()})
-        binding = [engine_id, guide_version_id, guide_rules_sha256]
-        if disabled:
-            binding.append(disabled)
-        if model_preferences:
-            binding.append(model_preferences)
-        if mode != "delivery":
-            binding.append(mode)
         source_version = _source_field(source, "version")
         source_sha256 = _source_field(source, "sha256")
-        payload = [name, source_version, source_sha256, files]
-        if any(binding):
-            # Legacy requests keep their previous fingerprint; a bound engine is
-            # part of the identity of a new-style task.
-            payload.append(binding)
-        fingerprint = hashlib.sha256(json.dumps(payload, ensure_ascii=False, sort_keys=True).encode()).hexdigest()
         with self.store._connect() as db:
             db.execute("BEGIN IMMEDIATE")
+            if model_preferences_factory is not None:
+                model_preferences = model_preferences_factory(db)
+            binding = [engine_id, guide_version_id, guide_rules_sha256]
+            if disabled:
+                binding.append(disabled)
+            if model_preferences:
+                binding.append(model_preferences)
+            if mode != "delivery":
+                binding.append(mode)
+            payload = [name, source_version, source_sha256, files]
+            if any(binding):
+                # Legacy requests keep their previous fingerprint; a bound engine is
+                # part of the identity of a new-style task.
+                payload.append(binding)
+            fingerprint = hashlib.sha256(json.dumps(payload, ensure_ascii=False, sort_keys=True).encode()).hexdigest()
             if idempotency_key:
                 old = db.execute("SELECT id,request_hash FROM tasks WHERE owner=? AND idempotency_key=?",
                                  (owner, idempotency_key)).fetchone()

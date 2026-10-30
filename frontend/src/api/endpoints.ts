@@ -50,6 +50,7 @@ export const api = {
   uploadGuide: (file: File, onProgress?: UploadProgress) => { const form = new FormData(); form.append('file', file, file.name); return upload<{ version: GuideSummary }>('/api/guides', form, onProgress) },
   parseGuide: (id: string) => request<{ version: GuideSummary }>(`/api/guides/${encodeURIComponent(id)}/parse`, { method: 'POST' }),
   modelSettings: () => request<ModelSettings>('/api/settings/model'),
+  testModelConnection: (input: Record<string, unknown>) => request<{ ok: boolean; message: string }>('/api/settings/model/test', { method: 'POST', body: JSON.stringify(input) }),
   resetModelSettings: () => request<ModelSettings>('/api/settings/model', { method: 'DELETE' }),
   saveModelSettings: (input: { primary: Record<string, unknown>; review?: Record<string, unknown> | null }) => request<ModelSettings>('/api/settings/model', { method: 'PUT', body: jsonBody(input) }),
 

@@ -56,6 +56,7 @@ _ENGINE_BUILD_MODULES = (
     "fundlex/model.py",
     "fundlex/model_budget.py",
     "fundlex/model_settings.py",
+    "fundlex/user_model_connections.py",
     "fundlex/obligations.py",
     "fundlex/pipeline.py",
     "fundlex/qualification.py",

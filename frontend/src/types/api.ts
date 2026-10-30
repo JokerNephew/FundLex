@@ -108,11 +108,11 @@ export interface ModelRoleSettings {
   provider?: string
   model?: string
   api_key_set?: boolean
-  timeout_s?: number
-  max_tokens?: number
-  retries?: number
-  max_context_chars?: number
-  request_options?: Record<string, unknown>
+  source?: 'system' | 'personal'
+  base_url?: string
+  connection_id?: string
+  system_model?: string
+  legacy_model?: string
 }
 
 export interface ModelSettings {
@@ -123,6 +123,8 @@ export interface ModelSettings {
   review: ModelRoleSettings
   review_inherits: boolean
   task_roles?: Record<string, string>
+  legacy_preferences?: boolean
+  providers: Array<{ id: string; label: string; base_url: string; models: string[] }>
 }
 
 export type TaskStatus = 'uploading' | 'queued' | 'running' | 'paused' | 'completed' | 'completed_with_exceptions' | 'failed' | string

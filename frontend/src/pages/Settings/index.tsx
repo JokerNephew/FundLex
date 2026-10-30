@@ -1,57 +1,15 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../../api/endpoints'
-import { useCapabilities, useModelSettings, useModelSettingsMutation } from '../../api/hooks'
+import { useCapabilities } from '../../api/hooks'
 import { Button, Card, Spinner } from '../../components/ui'
-import type { FeishuBinding, FeishuOAuthStart, ModelRoleSettings } from '../../types'
+import type { FeishuBinding, FeishuOAuthStart } from '../../types'
 import { useAuthStore } from '../../stores/auth'
 import { ErrorState } from '../Tasks'
 
 function capabilityLabel(value: unknown, labels: Record<string, string>): string {
   const key = String(value || '')
   return labels[key] || key || '—'
-}
-
-type RoleForm = {
-  provider: string
-  model: string
-  timeout_s: string
-  max_tokens: string
-  retries: string
-  max_context_chars: string
-  request_options: string
-}
-
-function roleForm(role?: ModelRoleSettings): RoleForm {
-  return {
-    provider: role?.provider || '',
-    model: role?.model || '',
-    timeout_s: String(role?.timeout_s ?? 45),
-    max_tokens: String(role?.max_tokens ?? 1500),
-    retries: String(role?.retries ?? 1),
-    max_context_chars: String(role?.max_context_chars ?? 12000),
-    request_options: JSON.stringify(role?.request_options || {}, null, 2),
-  }
-}
-
-function RoleFields({ role, value, onChange, disabled }: { role: 'primary' | 'review'; value: RoleForm; onChange: (next: RoleForm) => void; disabled: boolean }) {
-  const update = (field: keyof RoleForm, next: string) => onChange({ ...value, [field]: next })
-  const prefix = role === 'primary' ? '主模型' : '复核模型'
-  return <div className="form-stack">
-    <div className="action-row">
-      <label>服务商（系统提供）<input value={value.provider} disabled /></label>
-      <label>{prefix} Model<input value={value.model} disabled={disabled} onChange={(event) => update('model', event.target.value)} required /></label>
-    </div>
-    <div className="action-row">
-      <label>超时（秒）<input type="number" min="1" max="600" value={value.timeout_s} disabled={disabled} onChange={(event) => update('timeout_s', event.target.value)} /></label>
-      <label>最大输出 tokens<input type="number" min="1" value={value.max_tokens} disabled={disabled} onChange={(event) => update('max_tokens', event.target.value)} /></label>
-      <label>重试次数<input type="number" min="0" max="10" value={value.retries} disabled={disabled} onChange={(event) => update('retries', event.target.value)} /></label>
-    </div>
-    <div className="action-row">
-      <label>上下文字符上限<input type="number" min="1000" value={value.max_context_chars} disabled={disabled} onChange={(event) => update('max_context_chars', event.target.value)} /></label>
-    </div>
-    <label>请求选项 JSON<textarea rows={3} value={value.request_options} disabled={disabled} onChange={(event) => update('request_options', event.target.value)} /><span className="muted">例如 {`{"thinking":{"type":"disabled"}}`}；只允许供应商支持的普通请求选项。</span></label>
-  </div>
 }
 
 export function SettingsPage() {
@@ -199,79 +157,5 @@ export function SettingsPage() {
     </Card>
 
     {user?.role === 'admin' && <Card><h2>管理员</h2><p>账号管理与业务指引配置分开控制。</p><Link to="/users"><Button>打开用户管理</Button></Link></Card>}
-  </>
-}
-
-export function ModelSettingsPage() {
-  const model = useModelSettings()
-  const modelMutation = useModelSettingsMutation()
-  const [primaryForm, setPrimaryForm] = useState<RoleForm>(roleForm())
-  const [reviewForm, setReviewForm] = useState<RoleForm>(roleForm())
-  const [reviewInherits, setReviewInherits] = useState(true)
-  const [modelMessage, setModelMessage] = useState('')
-  const [modelError, setModelError] = useState('')
-  const [modelBusy, setModelBusy] = useState(false)
-
-  useEffect(() => {
-    if (!model.data) return
-    setPrimaryForm(roleForm(model.data.primary))
-    setReviewForm(roleForm(model.data.review))
-    setReviewInherits(Boolean(model.data.review_inherits))
-  }, [model.data])
-
-  const saveModel = async (event: React.FormEvent) => {
-    event.preventDefault()
-    setModelBusy(true)
-    setModelMessage('')
-    setModelError('')
-    try {
-      const parsedOptions = (raw: string) => {
-        const value = JSON.parse(raw || '{}')
-        if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('请求选项必须是 JSON 对象')
-        return value as Record<string, unknown>
-      }
-      const toPayload = (form: RoleForm) => ({
-        model: form.model.trim(),
-        timeout_s: Number(form.timeout_s),
-        max_tokens: Number(form.max_tokens),
-        retries: Number(form.retries),
-        max_context_chars: Number(form.max_context_chars),
-        request_options: parsedOptions(form.request_options),
-      })
-      const saved = await modelMutation.mutateAsync({
-        primary: toPayload(primaryForm),
-        review: reviewInherits ? null : toPayload(reviewForm),
-      })
-      setModelMessage(saved.editable ? '我的模型配置已保存；仅用于之后新建的合同修改任务。' : '模型配置已保存。')
-      await model.refetch()
-    } catch (nextError) {
-      setModelError(nextError instanceof Error ? nextError.message : '模型配置保存失败')
-    } finally {
-      setModelBusy(false)
-    }
-  }
-
-  return <>
-    <div className="page-heading"><div><h1>模型配置</h1><p>配置自己使用的主模型和复核模型；仅影响你的新建合同修改任务。地址与密钥由系统管理，不影响其他用户。</p></div></div>
-    <Card>
-      {model.error ? <ErrorState error={model.error} onRetry={() => void model.refetch()} /> : model.loading && !model.data ? <Spinner /> : model.data ? <>
-        <p className="muted">来源：{model.data.source === 'personal' ? '我的配置' : '系统默认'} · 模型名称需由当前服务商支持 · 主模型 {model.data.primary.model || '未配置'}</p>
-        {model.data.config_error && <p className="form-error">当前配置有问题：{model.data.config_error}</p>}
-        <form className="form-stack" onSubmit={saveModel}>
-          <h3>主模型</h3>
-          <RoleFields role="primary" value={primaryForm} onChange={setPrimaryForm} disabled={!model.data.editable || modelBusy} />
-          <label className="settings-check"><input type="checkbox" checked={reviewInherits} disabled={!model.data.editable || modelBusy} onChange={(event) => setReviewInherits(event.target.checked)} /> 复核模型继承主模型</label>
-          {!reviewInherits && <>
-            <h3>复核模型</h3>
-            <RoleFields role="review" value={reviewForm} onChange={setReviewForm} disabled={!model.data.editable || modelBusy} />
-          </>}
-          {model.data.editable && <div className="action-row"><Button variant="primary" type="submit" disabled={modelBusy}>{modelBusy ? '保存中…' : '保存模型配置'}</Button>{model.data.primary.api_key_set ? <span className="muted">主模型密钥已配置</span> : <span className="form-error">主模型密钥未配置</span>}{model.data.review.api_key_set && !model.data.review_inherits ? <span className="muted">复核模型密钥已配置</span> : null}</div>}
-          {modelMessage && <p role="status">{modelMessage}</p>}
-          {modelError && <p className="form-error">{modelError}</p>}
-        </form>
-        <p className="muted">仅影响你的新建合同修改任务；已创建任务保留自己的选择快照。服务地址与密钥仍由系统提供。指引解析和法规生成暂使用系统模型。</p>
-        <Button disabled={modelBusy} onClick={() => { void api.resetModelSettings().then(() => model.refetch()).catch((nextError) => setModelError(nextError instanceof Error ? nextError.message : '恢复默认失败')) }}>恢复系统模型默认值</Button>
-      </> : null}
-    </Card>
   </>
 }

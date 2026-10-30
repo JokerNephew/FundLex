@@ -380,7 +380,9 @@ def test_guide_configuration_and_panels_do_not_expose_hashes(ui):
         page.locator('#guide-overlay-close').click()
 
 
-def test_guide_rule_switches_and_model_settings_are_editable(ui):
+def test_guide_rule_switches_and_model_settings_are_editable(ui, monkeypatch):
+    from cryptography.fernet import Fernet
+    monkeypatch.setenv('FUNDLEX_MODEL_SECRETS_KEY', Fernet.generate_key().decode())
     from playwright.sync_api import expect
     page, context, _, base = ui
     page = open_page(ui, 'guide')
@@ -401,15 +403,33 @@ def test_guide_rule_switches_and_model_settings_are_editable(ui):
     page.locator('.sidebar [data-nav="models"]').click()
     expect(page.locator('#model-settings-card')).to_be_visible()
     expect(page.locator('#feishu-connect-card')).to_be_hidden()
-    expect(page.locator('#model-settings-body')).to_contain_text('主模型')
+    expect(page.locator('#model-settings-body')).to_contain_text('执行模型')
+    expect(page.locator('#model-settings-body')).to_contain_text('检查模型')
     expect(page.locator('#model-settings-form')).to_be_visible()
+    for label in ('超时', 'tokens', '重试次数', '上下文字符', 'JSON'):
+        assert label not in page.locator('#model-settings-form').inner_text()
+    page.locator('#model-primary-source').select_option('personal')
+    page.locator('#model-primary-provider').select_option('openai')
+    page.locator('#model-primary-api_key').fill('browser-fixture-execution-key')
     page.locator('#model-primary-model').fill('personal-browser-model')
+    page.locator('#model-review-source').select_option('personal')
+    page.locator('#model-review-provider').select_option('deepseek')
+    page.locator('#model-review-api_key').fill('browser-fixture-review-key')
+    page.locator('#model-review-model').fill('different-check-model')
     with page.expect_response(lambda r: '/api/settings/model' in r.url and r.request.method == 'PUT') as saved:
         page.locator('[data-action="model-settings-save"]').click()
     assert saved.value.status == 200
     expect(page.locator('#model-primary-model')).to_have_value('personal-browser-model')
     page.reload()
     expect(page.locator('#model-primary-model')).to_have_value('personal-browser-model')
+    expect(page.locator('#model-review-model')).to_have_value('different-check-model')
+    expect(page.locator('#model-review-provider')).to_have_value('deepseek')
+    expect(page.locator('#model-primary-api_key')).to_have_value('')
+    expect(page.locator('#model-review-api_key')).to_have_value('')
+    page.locator('[data-action="model-copy-primary"]').click()
+    expect(page.locator('#model-review-model')).to_have_value('personal-browser-model')
+    expect(page.locator('#model-review-provider')).to_have_value('openai')
+    page.once('dialog', lambda dialog: dialog.accept())
     page.locator('[data-action="model-settings-reset"]').click()
     expect(page.locator('#model-settings-source')).to_have_text('系统默认')
 
@@ -431,6 +451,29 @@ def test_model_and_feishu_pages_are_separate(ui):
     expect(page.locator('#model-settings-card')).to_be_hidden()
     expect(page.locator('#breadcrumb')).to_contain_text('飞书绑定')
     assert not any('/api/settings/model' in url for url in requests)
+
+
+def test_model_connection_check_is_explicit_and_edit_invalidates_result(ui):
+    from playwright.sync_api import expect
+    page, context, _, _ = ui
+    calls = []
+    def fake_test(route):
+        calls.append(route.request.post_data_json)
+        route.fulfill(status=200, json={'ok': True, 'message': '连接正常，测试响应已收到。'})
+    context.route('**/api/settings/model/test', fake_test)
+    open_page(ui, 'models')
+    expect(page.locator('#model-settings-form')).to_be_visible()
+    assert not calls
+    page.locator('#model-primary-source').select_option('personal')
+    page.locator('#model-primary-model').fill('example-model')
+    page.locator('#model-primary-api_key').fill('browser-fixture-test-key')
+    page.once('dialog', lambda dialog: dialog.accept())
+    page.locator('[data-model-test="primary"]').click()
+    expect(page.locator('#model-primary-status')).to_contain_text('连接正常')
+    assert len(calls) == 1
+    page.locator('#model-primary-model').fill('another-model')
+    expect(page.locator('#model-primary-status')).to_contain_text('尚未验证')
+    assert len(calls) == 1
 
 
 def test_revision_pair_checkbox_keyboard_and_insert_navigation(ui):

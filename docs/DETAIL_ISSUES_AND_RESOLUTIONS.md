@@ -2,6 +2,10 @@
 
 ## FL-D539 普通用户规则启停、模型偏好与“我的指引”实施（2026-10-30）
 
+- **BYOK最终实现及发布候选状态（2026-10-30）**：执行/检查两角色在V1/V2始终分别可见，支持系统默认或个人OpenAI Chat Completions兼容供应商、API Key及模型；不向普通用户展示timeout/token/retry/context/JSON。个人Key按owner隔离并以Fernet加密，任务仅引用不可变凭据版本，Worker按owner解密；连接测试需用户主动确认并提示可能收费，不含合同文本。自定义服务地址限制公网HTTPS，校验所有DNS结果并固定连接IP、保留TLS SNI/Host、禁用代理/重定向。任务快照与凭据轮换GC竞态、Worker gateway清理已有定向回归；MySQL真实锁行为仍未验证。
+- **候选回归（2026-10-30）**：将本轮未提交BYOK补丁逐项移植到干净发布基线`877a980e96d740f09e17b47bcad103ccfbb0f3a2`，未合入开发分支其他引擎差异。候选后端相关测试167 passed/1 skipped；前端typecheck/lint、Vitest 16 passed、build通过。测试无真实供应商调用、无合同上传。候选尚未提交/部署。
+- **生产发布阻塞**：生产`/etc/fundlex-recall.env`当前缺少`FUNDLEX_MODEL_SECRETS_KEY`，生产venv缺少`cryptography`；根盘约3.3GiB可用，已盘点数据/备份，下一步先保护备份现有env并为主密钥生成限权备份，再安装锁定依赖。当前未改生产配置、未停服、未发布。部署后只进行不触发模型的服务及页面验收；不冒称真实合同E2E完成。
+
 - **页面纠偏（2026-10-30，实施中）**：用户明确要求模型配置不与飞书绑定同页。V1新增独立导航“模型配置”与`#models`，保留旧`#settings`作为飞书绑定入口；V2新增`/models`独立组件，与`/settings`账号/飞书页分离。模型页不加载飞书绑定，飞书页不加载模型设置；不改变API/存储/生效范围。待浏览器与构建验证后发布，不新增真实模型调用。
 
 - **部署更新（2026-10-30）**：用户要求“部署”，已发布干净候选`3e1db8d`（发布分支`codex/user-config-release-20261030`，保留生产既有引擎基线，仅合入配置功能及覆盖门禁/新模块指纹）。五服务active、capabilities/页面200、未登录模型401。五服务停服备份`/var/backups/fundlex/fundlex-20261030-153317-user-config-20261030`（DB+3506对象），verify完整性通过，未本轮导入恢复。事务`/opt/.fundlex-publish-1ISJ22`，engine`6a16258e...`、service`3501fd1d...`。
