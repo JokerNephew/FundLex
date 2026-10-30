@@ -3,7 +3,7 @@
 ## 2026-10-30 最新断点（真实模型暂停，等待用户恢复）
 
 - **用户最新指令（2026-10-30）**：有需要可继续开发，但**暂时不要跑真实模型调用**。当前没有运行中的 `recall_run`；恢复真实运行前需用户明确同意。
-- 当前分支 `codex/comprehensive-remediation-20261028`，最新提交 `58a2b6b`（此前 `8adf976`/`4fe0488`/`643f1aa`/`78d220e`/`5b65521` 等）。Semantic V2 仍为实验开关，默认关闭；生产仍部署旧候选 `cdf298e`，**最新代码未部署、未做生产E2E**。
+- 当前分支 `codex/comprehensive-remediation-20261028`，最新提交 `85abebc`（此前 `fa9aae2`/`02843de`/`8adf976`/`4fe0488` 等）。Semantic V2 仍为实验开关，默认关闭；生产仍部署旧候选 `cdf298e`，**最新代码未部署、未做生产E2E**。
 - 第一波剩余5份的最新真实结果（本轮已完成、无新增模型调用）：
   - **B12 沪深300 `sem-run-y`**：`complete`，独立复核**通过**（P1=0；G11 p243前缀已消除；G16/G09/G22/摘要一致；P2空段/报告文字）。
   - **B05 弘利 `sem-run-z`**：`complete`，独立复核**通过**（P1=0；G02/G04 no-op、G05无新增、G18变体、G08/G09、G22正文摘要一致；P2报告口径）。
@@ -12,7 +12,7 @@
   - **B19 锐意**：本轮未完成新的真实全量运行；上一轮G04连接词/R035问题已用`092c215`等修复并有定向测试，仍需真实复跑。
 - `run-ae`/`run-af` 在用户暂停指令前后因 `MODEL_RETRY_EXHAUSTED` 停止，targets=0，不是业务结果，不作为通过/失败证据。
 - 本轮新增离线修复：G11类别前缀、G18/PUA标题与摘要副本、G22编号副本、G09必需单位、G12编号保留、G08部分政策模板、G16同clause去重、class no-op站点、G05 sweep仲裁。集中记录见`docs/DETAIL_ISSUES_AND_RESOLUTIONS.md` FL-D517–D535。
-- 离线全量非浏览器回归（含隔离MySQL）**2183 passed / 6 skipped / 4 warnings / 716.25s**，日志`/tmp/opencode/comprehensive-remediation-20261028/full-pytest-oct30c.log`；提交`02843de`。浏览器回归`browser-oct30.log`本次 **73 skipped**（当前环境未具备浏览器运行条件），不能当通过；此前69 passed为历史环境结果。
+- 离线全量非浏览器回归（含隔离MySQL）**2183 passed / 6 skipped / 4 warnings / 716.25s**，日志`/tmp/opencode/comprehensive-remediation-20261028/full-pytest-oct30c.log`；覆盖`85abebc`前的全部工作树修改，提交后未再改业务代码。浏览器回归`browser-oct30.log`本次 **73 skipped**（当前环境未具备浏览器运行条件），不能当通过；此前69 passed为历史环境结果。
 - 下一步（需用户允许真实调用后）：①重跑B15一次，确认G18/G22摘要进入Claim Replay、open obligation=0；②重跑B17一次确认p295编号与G08；③重跑B19；④20 dev整体重新评分+独立复核；⑤冻结版本/tag后跑8份holdout；⑥最新候选干净worktree部署生产+正式工作台真实E2E。真实调用暂停期间可继续离线单测、文档、部署脚本和前端检查，不启动真实模型。
 
 ## 当前执行任务（2026-10-29，全面整改、分波扩样及端到端交付）
