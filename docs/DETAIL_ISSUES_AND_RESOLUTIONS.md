@@ -13,7 +13,7 @@
 
 - **页面纠偏（2026-10-30，已部署于BYOK生产版本）**：用户明确要求模型配置不与飞书绑定同页。V1独立导航`#models`保留旧`#settings`飞书入口；React V2独立`/models`组件与`/settings`分离。实际生产当前默认V1，V1生产页面分离已通过上方no-model验收；React V2经候选本地浏览器验证，生产未切换V2模式。
 
-- **部署更新（2026-10-30）**：用户要求“部署”，已发布干净候选`3e1db8d`（发布分支`codex/user-config-release-20261030`，保留生产既有引擎基线，仅合入配置功能及覆盖门禁/新模块指纹）。五服务active、capabilities/页面200、未登录模型401。五服务停服备份`/var/backups/fundlex/fundlex-20261030-153317-user-config-20261030`（DB+3506对象），verify完整性通过，未本轮导入恢复。事务`/opt/.fundlex-publish-1ISJ22`，engine`6a16258e...`、service`3501fd1d...`。
+- **上一轮部署更新（2026-10-30；已由上方BYOK版本替代）**：用户要求“部署”，已发布干净候选`3e1db8d`（发布分支`codex/user-config-release-20261030`，保留生产既有引擎基线，仅合入配置功能及覆盖门禁/新模块指纹）。五服务active、capabilities/页面200、未登录模型401。五服务停服备份`/var/backups/fundlex/fundlex-20261030-153317-user-config-20261030`（DB+3506对象），verify完整性通过，未本轮导入恢复。事务`/opt/.fundlex-publish-1ISJ22`，engine`6a16258e...`、service`3501fd1d...`。
 - 最新验证：开发全量非浏览器2164 passed/41 skipped（最后角色参数修复前启动，不冒充发布分支全量）；发布分支相关183 passed、pipeline54 passed、指纹/配置/角色65 passed、V1专项6 passed、TS/Vitest16/build通过。生产真实浏览器普通member登录、个人模型保存刷新回读、规则保存、创建无上传任务检查两个快照、未登录401全部通过，pageerror0。最终临时任务`9a4ff9f680df4896ac8c95d4ed2e4195`及临时账号/设置已精确清理。证据`/tmp/opencode/user-config-production-smoke.json`与同名前缀PNG/script。**已部署并验证配置链路；未上传真实合同、未新增真实模型调用，正式合同最终验收仍未完成**。
 - 发布发现与处理：store原来只接受recall complete，导致complete_with_exceptions写入/下载拒绝，已在保持pair/hash校验下支持带明确USER_DISABLED清单的例外状态；模型同endpoint不同token/超时参数现在独立transport，默认review继承标记按实际部署角色显示；模型新模块加入engine指纹。发布前保留未发布引擎差异，单独带上已验证的FINAL_COVERAGE_UNRESOLVED阻断，防止开关配置削弱未关闭规则的覆盖证明。以下为历史开发过程记录。
 
