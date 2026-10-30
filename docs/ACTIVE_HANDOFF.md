@@ -1697,3 +1697,19 @@
 - **验证**：本地与生产真实任务拖动均生效（审阅 360→460、修订栏 300→380、源文档 360→430、双栏 380→430），页面错误 0；V1 13 passed；审查栏专项 1 passed。
 - **当前生产**：`5d5da7c`，五服务 active，`app.js/compare.js?v=8014ff05cd33761a`。
 - **下一步**：用户强刷后拖动三条分隔线确认手感与持久化。
+
+## 当前断点（2026-10-31，QA 全量整改 — 修复提交与独立复核阶段）
+
+- **基线**：branch `qa/full-audit-20261031`，worktree `/tmp/opencode/qa-base`。基线全量 2209 passed/122 skipped（@7f6d981）。
+- **已提交修复**（在 7f6d981 之上，新→旧）：
+  - `fe4bd37` W2 compare：FL-D541 sdt 寻址、尾删链、fail-closed SELECTION_BLOCK_STRUCTURE_UNSUPPORTED、coverage 过声明、align 性能 233s→35s/20.6s→8.3s/113s→22s。158 compare 测试绿。
+  - `8779dac` W1 worker：A2-F1..F4+B14-01/02/04；gg claim max_attempts（env FUNDLEX_GUIDE_JOB_MAX_ATTEMPTS 默认5）、run_forever 有界退避（6次/0.5→30s）、retry_wait 缺口。118 worker/jobs 测试绿。
+  - `467db01` W4 DOCX：A3-F1..F4，23 新回归测试。158 docx 测试绿。
+  - `6146ee2` A8-F2 决议：orphan evidence 维持 review item（review-assisted 不硬阻断，strict 仍阻断），修 requires_blocker/obligations/recall_pipeline 与文档契约对齐。66 测试绿。
+  - 早前：`a8d78f2`（A7-01/02/03、A8-F1/F3）、`7198c72`（API 安全批量）、`efaa019`（文档+FL-D551..559 登记）、`4872cdf`（A7-04、A8-F3 补）。
+- **进行中**：W3 前端修复（app.js/workspace.js/compare.js/guide_generation.js/css/compare.html + tests/browser/test_frontend_fixes.py + test_frontend_entry.py 断言 5→7 属 W3，勿单独提交）；工作区其余未提交文件全部属于 W3。
+- **独立复核已启动**：5 个后台 reviewer agent（未参与实现）分别复核引擎(a8d78f2/4872cdf/6146ee2)、API(7198c72)、W1(8779dac)、W2(fe4bd37)、W4(467db01)。待回报后汇总，P0/P1 问题走 实现→Reviewer A→Reviewer B/Red Team→真实测试。
+- **剩余步骤**：W3 完成→提交→复核→第二轮盲审（新 agent 不给历史结论）→真实模型分波评测（28 份→扩样，生产 env hon-maas/kimi-k3）→集中问题记录状态更新→全量回归→受控发布 publish_workspace.sh→正式 E2E（修订+Compare 全链）→GO/NO-GO。
+- **主 agent 待办（未分派）**：B14-03 store.py paused=1 陈旧位、A3-F6 _document_dict 下载 URL 过滤、A3-F5/F7/F8、M2 docx 层 EXPECTED_TEXT_MISMATCH 零断言防线、FL-D546 compare worker 诊断透出（遗留决策）、Q3 revision_api/selective 29 项 D01 fixture 恒 skip。
+- **缓办（已记录）**：CSP（待消灭 inline script）、自助注册默认关闭（产品决策）、A4-F02、B14-03、B11 对比度/token、B12-P1-3 术语、A4-F03 索引、B13-F4 N+1、B13-F5 checkpoints/traces 无界增长。
+- **测试纪律**：一切验证 `cd /tmp/opencode/qa-base && .venv/bin/python -m pytest`（.venv 是指向主工作区的 symlink，cwd 决定 import 解析）。
