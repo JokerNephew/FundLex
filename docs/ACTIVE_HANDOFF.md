@@ -5,6 +5,22 @@
 - 基线为最新已发布普通用户配置线cdcf52c，叠加主工作区680da13中的7个Compare代码/测试文件，未回退配置功能。分支codex/compare-alignment-release-20261030，路径/tmp/opencode/compare-alignment-release-20261030。
 - 完整对齐组、删除段落来源、zoom虚拟高度与窗口锚点已修；主工作区V1浏览器15 passed/Compare133 passed6 skipped；650块插删及真实1421差异合同验证，详见集中问题FL-D540。
 - 下一动作：候选专项测试→dry-run/受控发布→正式注册登录上传DOCX→真实Compare Worker→Word/双栏滚动、差异导航、拖宽、选择生成及下载。无需模型，不启动修改引擎真实模型任务。当前未发布，不宣称生产已修复。
+## 2026-10-30 模型配置独立页面更新（待发布）
+
+- 用户纠正：模型配置不能跟飞书绑定同页。V1独立侧栏/`#models`，旧`#settings`保留飞书绑定；V2独立`/models`组件，原`/settings`不再显示或加载模型设置。仅前端变更，不改后端/模型调用/数据。
+- 验证：浏览器相关6 passed（含直接打开/刷新模型页、两页显隐与不请求另一功能接口）；TS/lint、Vitest16、build通过。
+- 下一步：本开发分支提交本轮明确文件，cherry-pick到干净release分支（保留生产引擎），重新build React，受控发布后更新生产smoke脚本到#models并验证，记录最终版本；真实模型仍暂停，不上传合同。
+
+## 2026-10-30 配置功能已生产发布（用户要求“部署”）
+
+- **生产版本 `3e1db8d`**，发布分支 `codex/user-config-release-20261030`，干净工作树 `/tmp/opencode/user-config-release-20261030`。正式事务 `/opt/.fundlex-publish-1ISJ22`；engine `6a16258e221640a16192c1ee4d5aad041980062a0b3ff57e582ff50945e3eaf0`，service `3501fd1d5b10e65d4b55712042d7f5024a70fe1a9d33c2081af3c36ea47c9342`。五服务active/cwd核验通过，capabilities200、工作台200、未登录模型配置401。
+- 功能入口：修改指引页里的“我的指引”与版本“规则组”，设置页里的个人模型配置。普通member可保存自己的主/复核模型选择及参数，不开放服务URL/密钥/env变量名/请求头；仅新建合同修改任务使用，指引解析/法规生成仍使用系统模型。已创建任务不追随设置变更。
+- 发布隔离：开发源分支3969891保留完整开发引擎；发布分支先快照生产5个差异引擎文件（6dadacf），再cherry-pick配置功能（b067b50），未整批覆盖生产docx/recall/semantic/scope未发布变体。为避免旧覆盖门禁错误complete，额外移植9行FL-D536门禁（cdcf52c）；加入model_settings.py引擎指纹清单（3e1db8d）。本树源码store manifest已同步，文档待本轮commit。
+- 回归：开发分支完整非浏览器**2164 passed/41 skipped/698.95s**（在最后角色参数修复前启动，不能冒称发布分支全量）；发布分支配置/任务/集成183 passed，pipeline最终54 passed（与模型配置合跑82 passed），指纹/配置/角色65 passed，V1功能/登录专项6 passed；TS typecheck/lint/Vitest16/build通过。开发V1全套历史2个失败在干净基线同样复现，未声称修复。
+- **生产浏览器已验证**：临时普通member登录→模型保存→刷新回读→修改指引规则开关保存→创建无上传任务检查disabled_rules/model_preferences快照→未登录401；页面错误0。最终任务`9a4ff9f680df4896ac8c95d4ed2e4195`为验收临时无上传任务，账号/配置/任务已精确清理，未动真实合同。证据`/tmp/opencode/user-config-production-smoke.json`（test_records_cleaned=true）、两个production截图、smoke/cleanup脚本。
+- 备份：五服务停服后`/var/backups/fundlex/fundlex-20261030-153317-user-config-20261030`，DB gzip+3506对象，哈希/gzip/tar完整性verify通过，**未做本轮数据库导入恢复测试**。发布器与仓库无漂移；新表/列为增量兼容迁移，未修改生产凭据/env。
+- 边界：用户先前暂停真实模型仍有效。**上线和不调用模型的配置链路验收已完成；没有真实模型/真实合同修改最终验收**，不是整个项目完成。恢复真实调用授权后补正式合同端到端验证。
+- 无运行中的本轮后台回归/agent/生产验收脚本；真实模型新增调用0。本开发工作树和release工作树均保留，frontend/node_modules仅开发symlink不能提交。下一步用户强刷使用；如要整合回主开发分支，不能把发布分支“生产基线回退”提交6dadacf整体合回，按配置功能提交/文档逐项合并，保护main未提交的guide_generation和分析文档。
 
 ## 2026-10-30 用户配置化开发断点（本工作树）
 

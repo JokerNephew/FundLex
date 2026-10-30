@@ -167,7 +167,7 @@
     for(const [key,,id] of filterDefinitions(scope)){const el=$(id);if(el)el.value=(FILTER_DEFAULTS[scope]||{})[key]??'';}
     renderFilterChips(scope);changed(scope);
   }
-  const VIEW_TITLES={workspace:'工作台',overview:'合同修改',import:'新建合同修改',task:'修改任务详情',document:'合同结果与修订审阅',guide:'我的指引',settings:'设置',users:'用户管理',compare:'合同比对',generation:'指引生成'};
+  const VIEW_TITLES={workspace:'工作台',overview:'合同修改',import:'新建合同修改',task:'修改任务详情',document:'合同结果与修订审阅',guide:'我的指引',models:'模型配置',settings:'飞书绑定',users:'用户管理',compare:'合同比对',generation:'指引生成'};
   function renderFooter(){const el=$('app-version');if(el)el.textContent=state.cap?.app_version?`v${state.cap.app_version}`:'—';}
   // Identity reset uses the same location renderer; there is no second title.
   function renderTopbarTitle(view){renderBreadcrumb(view);}
@@ -227,7 +227,7 @@
     renderBreadcrumb(view);if(!prior||prior.view!==view||prior.mode!==next.mode||prior.id!==next.id||prior.document!==next.document)document.querySelector('.main').scrollTop=0;
     document.dispatchEvent(new CustomEvent('fundlex:view',{detail:view}));dispatchRoute();
     if(!state.cap)return;
-    if(view==='users')loadUsers();if(view==='guide')loadGuides();if(view==='settings'){loadFeishuBinding();loadModelSettings();}
+    if(view==='users')loadUsers();if(view==='guide')loadGuides();if(view==='settings')loadFeishuBinding();if(view==='models')loadModelSettings();
     if(view==='overview'){restoreRevisionFilters();loadTasks();if(!state.taskGuides)loadTaskGuides(true);}
     if(view==='task'){if(next.id&&state.selected!==next.id)selectTask(next.id,false);else loadDocuments();}
     if(view==='document')openDocumentRoute(next);
@@ -335,10 +335,10 @@
     body.innerHTML=`<p class="subnote">这是你的个人模型设置，仅影响你的新建合同修改任务，不改变他人设置。模型名称需由当前服务商支持；服务地址与密钥由系统提供，指引解析和法规生成暂使用系统模型。</p><form id="model-settings-form" class="form-stack"><h3>主模型</h3>${modelRoleFields('primary',data.primary)}<label class="check-line"><input type="checkbox" id="model-review-inherits" ${data.review_inherits?'checked':''}> 复核模型继承主模型选项</label><div id="model-review-fields" ${data.review_inherits?'hidden':''}><h3>复核模型</h3>${modelRoleFields('review',data.review)}</div><div class="settings-actions"><button class="btn btn-primary" type="button" data-action="model-settings-save">保存模型配置</button><button class="btn" type="button" data-action="model-settings-reset">恢复系统默认</button><span class="subnote">${data.primary?.api_key_set?'系统密钥已配置':'系统密钥未配置'}</span></div></form>${data.config_error?`<p class="error">${esc(data.config_error)}</p>`:''}`;
   }
   async function loadModelSettings(quiet=false){
-    if(!state.cap||state.view!=='settings')return;
+    if(!state.cap||state.view!=='models')return;
     const t=ticket('model-settings');
-    try{const data=await json('/api/settings/model');if(!current(t)||state.view!=='settings')return;renderModelSettings(data);}
-    catch(e){if(!current(t)||state.view!=='settings')return;const body=$('model-settings-body');if(body)body.textContent='模型配置暂无法读取，请刷新重试。';if(!quiet&&e.code!=='404')errorNotice(e);}
+    try{const data=await json('/api/settings/model');if(!current(t)||state.view!=='models')return;renderModelSettings(data);}
+    catch(e){if(!current(t)||state.view!=='models')return;const body=$('model-settings-body');if(body)body.textContent='模型配置暂无法读取，请刷新重试。';if(!quiet&&e.code!=='404')errorNotice(e);}
   }
   async function saveModelSettings(){
     const form=$('model-settings-form');if(!form)return;
@@ -357,7 +357,7 @@
   document.addEventListener('click',async e=>{
     if(!e.target.closest('[data-action="model-settings-reset"]'))return;
     const t=ticket('model-settings');
-    try{const data=await json('/api/settings/model',{method:'DELETE'});if(current(t)&&state.view==='settings')renderModelSettings(data);}
+    try{const data=await json('/api/settings/model',{method:'DELETE'});if(current(t)&&state.view==='models')renderModelSettings(data);}
     catch(error){if(current(t))errorNotice(error,'恢复系统默认失败：');}
   });
   document.addEventListener('fundlex:identity-reset',()=>{
@@ -418,7 +418,7 @@
       hideLogin();renderAuthUI();state.cap=cap;renderFooter();
       if(!state.importMode)state.importMode='revision';
       $('upload-limit').textContent=`仅接收 DOCX（.doc 请先用 Word/WPS 另存为 .docx） · 单文件 ≤ ${size(cap.upload_limits.max_file_bytes)}`;
-      updateDeliveryNote();renderImport();if(state.view==='settings'){loadFeishuBinding();loadModelSettings();}
+      updateDeliveryNote();renderImport();if(state.view==='settings')loadFeishuBinding();if(state.view==='models')loadModelSettings();
       if(!wasReady&&state.view==='overview')restoreRevisionFilters();
       if(!wasReady)dispatchRoute();
       if(state.view==='document'&&!state.detail)openDocumentRoute(state.route);

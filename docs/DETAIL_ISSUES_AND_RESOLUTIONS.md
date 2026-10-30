@@ -10,6 +10,12 @@
 
 ## FL-D539 普通用户规则启停、模型偏好与“我的指引”实施（2026-10-30）
 
+- **页面纠偏（2026-10-30，实施中）**：用户明确要求模型配置不与飞书绑定同页。V1新增独立导航“模型配置”与`#models`，保留旧`#settings`作为飞书绑定入口；V2新增`/models`独立组件，与`/settings`账号/飞书页分离。模型页不加载飞书绑定，飞书页不加载模型设置；不改变API/存储/生效范围。待浏览器与构建验证后发布，不新增真实模型调用。
+
+- **部署更新（2026-10-30）**：用户要求“部署”，已发布干净候选`3e1db8d`（发布分支`codex/user-config-release-20261030`，保留生产既有引擎基线，仅合入配置功能及覆盖门禁/新模块指纹）。五服务active、capabilities/页面200、未登录模型401。五服务停服备份`/var/backups/fundlex/fundlex-20261030-153317-user-config-20261030`（DB+3506对象），verify完整性通过，未本轮导入恢复。事务`/opt/.fundlex-publish-1ISJ22`，engine`6a16258e...`、service`3501fd1d...`。
+- 最新验证：开发全量非浏览器2164 passed/41 skipped（最后角色参数修复前启动，不冒充发布分支全量）；发布分支相关183 passed、pipeline54 passed、指纹/配置/角色65 passed、V1专项6 passed、TS/Vitest16/build通过。生产真实浏览器普通member登录、个人模型保存刷新回读、规则保存、创建无上传任务检查两个快照、未登录401全部通过，pageerror0。最终临时任务`9a4ff9f680df4896ac8c95d4ed2e4195`及临时账号/设置已精确清理。证据`/tmp/opencode/user-config-production-smoke.json`与同名前缀PNG/script。**已部署并验证配置链路；未上传真实合同、未新增真实模型调用，正式合同最终验收仍未完成**。
+- 发布发现与处理：store原来只接受recall complete，导致complete_with_exceptions写入/下载拒绝，已在保持pair/hash校验下支持带明确USER_DISABLED清单的例外状态；模型同endpoint不同token/超时参数现在独立transport，默认review继承标记按实际部署角色显示；模型新模块加入engine指纹。发布前保留未发布引擎差异，单独带上已验证的FINAL_COVERAGE_UNRESOLVED阻断，防止开关配置削弱未关闭规则的覆盖证明。以下为历史开发过程记录。
+
 - 用户授权：实现规则组启停、模型配置、我的指引；“用户”明确为普通使用者，“我的指引”复用修改指引页面，不新增一级导航/任务页指引选择。分析文档及 FL-D538 在主工作区尚未提交，不覆盖该文档。
 - 当前实施：V1/V2 指引页增加本人版本管理与规则开关；开关按 owner+guide_version 存库，任务创建后经 tasks→batches→Worker 固定快照；认证指引原文/hash 不改，仅在校验认证后生成活动规则副本。关闭项在 JSON/Markdown/用户摘要明确展示，成功完成其余规则时状态为 complete_with_exceptions，不冒充全指引 complete。至少保留一条规则。
 - 模型实现纠偏：早期草稿把配置放到共享角色文件、仅管理员可编辑，与普通用户目标不符，**已撤回该草稿逻辑**。现为 user_model_settings.owner 私有偏好，普通成员可改自己的主/复核模型名及有界超时、输出容量、重试、上下文、reasoning 选项；不允许 provider/base_url/api_key_env/api_key/headers，避免读取任意环境凭据或把共享密钥转发到用户地址。系统提供服务和凭据；只影响本人新建合同修改任务，不影响他人或已创建任务；指引解析/法规生成暂不接入个人模型。可以恢复系统默认，不自动发出付费连接测试。

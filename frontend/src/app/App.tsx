@@ -7,7 +7,7 @@ import { LoginPage } from '../pages/Auth'
 import { DocumentDetailPage } from '../pages/DocumentDetail/DocumentDetailPage'
 import { GuidesPage, GuideDetailPage } from '../pages/Guides'
 import { NewTaskPage } from '../pages/NewTask'
-import { SettingsPage } from '../pages/Settings'
+import { ModelSettingsPage, SettingsPage } from '../pages/Settings'
 import { TaskDetailPage } from '../pages/TaskDetail'
 import { TaskDetailIndexPage } from '../pages/TaskDetail/TaskDetailIndexPage'
 import { ReviewPage } from '../pages/Review/ReviewPage'
@@ -36,6 +36,7 @@ function AppRoutes() {
     <Route path="/guides" element={<GuidesPage />} />
     <Route path="/guides/:guideId" element={<GuideDetailPage />} />
     <Route path="/settings" element={<SettingsPage />} />
+    <Route path="/models" element={<ModelSettingsPage />} />
      <Route path="/users" element={<UsersPage />} />
      <Route path="/compare" element={<Suspense fallback={<Spinner label="正在加载合同对比" />}><ComparePage /></Suspense>} />
     <Route path="*" element={<Navigate to="/tasks" replace />} />

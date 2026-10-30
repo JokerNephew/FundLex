@@ -114,11 +114,12 @@
 </svg>
 <span>修改指引</span>
 </button>
+<button class="nav-btn" data-nav="models"><svg><use href="#i-settings"/></svg><span>模型配置</span></button>
 <button class="nav-btn" data-nav="settings">
 <svg>
 <use href="#i-settings"/>
 </svg>
-<span>设置</span>
+<span>飞书绑定</span>
 </button>
 <button class="nav-btn" data-nav="users" id="nav-users" hidden>
 <svg>
@@ -823,11 +824,13 @@
 <p class="subnote" id="guide-upload-message" aria-live="polite">解析失败可在列表中查看问题并重新解析。</p>
 </div>
     </section>
-    <section class="section" id="view-settings" aria-label="设置">
+    <section class="section" id="view-models" aria-label="模型配置">
 <div class="card card-pad" id="model-settings-card" style="margin-bottom:14px">
 <div class="section-title"><h2>模型配置</h2><small id="model-settings-source">读取中</small></div>
 <div id="model-settings-body" class="subnote">正在读取模型配置…</div>
 </div>
+</section>
+    <section class="section" id="view-settings" aria-label="飞书绑定">
 <div class="feishu-binding-layout">
 <div class="card feishu-connect-card" id="feishu-connect-card" data-state="loading">
 <div class="feishu-status-row"><span class="feishu-app-icon" aria-hidden="true">↗</span><div><h2>连接你的飞书账号</h2><p>绑定到当前 FundLex 账号 <strong id="feishu-current-user">—</strong></p></div><span class="feishu-status-badge" id="feishu-binding-badge">读取中</span></div>
