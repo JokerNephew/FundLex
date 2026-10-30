@@ -121,6 +121,13 @@ _ALWAYS_BLOCKING_CODES = frozenset({
     "FINAL_REVISION_MISMATCH",
     "FINAL_TEXT_MISMATCH",
     "FINAL_ROOT",
+    # FL-D114 / R2-F1: an excluded fund type whose quote could not be verified is
+    # a whole-contract qualification gap.  It must block delivery under every
+    # policy; under review_assisted it used to slip through three independent
+    # layers (the "FUND_TYPE" known-item prefix, the reason-field business
+    # markers this item never carried, and the ledger-only hard gate) and be
+    # published as ``complete``.
+    "FUND_TYPE_UNVERIFIED",
     # Audit/sweep engineering failures are proof failures, not review opinions.
     # Only an unfinished review (AUDIT_NOT_COMPLETED / SWEEP_CHUNK_LIMIT) stays in
     # the review bucket under review_assisted.
@@ -184,6 +191,15 @@ def requires_blocker(item: Any) -> bool:
     the failure mode R13/R14 close here.  Generic kind-only rows keep the existing
     pipeline bucket, except Claim Replay rows.  The worker gate and the user summary
     call this one function so both cannot disagree on the same typed item.
+
+    Policy behavior (the same under ``strict`` and ``review_assisted``): codes in
+    ``_ALWAYS_BLOCKING_CODES``/``_ALWAYS_BLOCKING_PREFIXES`` — including
+    ``FUND_TYPE_UNVERIFIED`` (FL-D114: excluded-type qualification gap with an
+    unverifiable quote, R2-F1) and unknown codes — block delivery.  Known review
+    taxonomy codes (orphan sweep evidence, unfinished audit/coverage rows and the
+    like) do not block here; under ``review_assisted`` they are review items,
+    under ``strict`` they still block via the "every unresolved item blocks" rule
+    in ``_delivery_complete``.
     """
     if not isinstance(item, Mapping):
         return False
@@ -373,6 +389,26 @@ def _issues(report: Mapping[str, Any]) -> list[dict[str, Any]]:
         if key in seen:
             continue
         seen.add(key)
+        if (str(item.get("code") or "") == "FUND_TYPE_UNVERIFIED"
+                or str(item.get("kind") or "") == "qualification"):
+            # R2-F1 / LOW-1: this is a whole-contract eligibility doubt, not a
+            # failed clause edit.  Rendering it as "未能自动修改的条款" with a
+            # per-clause review note misdirects the human reviewer.
+            issues.append({
+                "rule_id": "",
+                "code": "FUND_TYPE_UNVERIFIED",
+                "title": "产品类型资格未核验（整份合同）",
+                "section": "",
+                "location": "",
+                "obligation_id": "",
+                "business_reason": business_reason(item),
+                "requirement": "",
+                "quote": "",
+                "quote_exact_site": False,
+                "review_note": ("合同基金类型的引用原文未能核验，整份合同的处理资格存疑；"
+                                "本次不以此身份发布最终修订文件，请人工确认产品类型后再处理。"),
+            })
+            continue
         group = groups.get(rule_id) or {}
         title = str(group.get("title") or "").strip()
         section = str(group.get("section_hint") or "").strip()

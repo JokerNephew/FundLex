@@ -42,9 +42,12 @@ class UploadGuardSettings:
     request_timeout_seconds: float = 180.0
     min_rate_bytes_per_second: int = 1024
     min_rate_grace_seconds: float = 5.0
-    # The product no longer imposes a 20-file count limit. Keep a high
-    # multipart safety ceiling so hostile zero-byte part floods still terminate.
-    max_parts: int = 20000
+    # The product no longer imposes a 20-file count limit: real batches carry
+    # hundreds of contracts.  Keep one high multipart safety ceiling (shared
+    # with BoundedMultiPartParser.max_request_parts, see that class) so hostile
+    # zero-byte part floods still terminate; per-part and per-file byte
+    # budgets below remain the primary resource bounds.  R2-F03.
+    max_parts: int = 1000
     max_fields: int = 8
     max_headers_per_part: int = 16
     max_header_bytes: int = 16 * 1024
@@ -90,7 +93,12 @@ class UploadGuardSettings:
 class BoundedMultiPartParser(MultiPartParser):
     """Starlette's parser with file, part, header and aggregate budgets."""
 
-    max_request_parts = 32
+    # Product batches routinely carry hundreds of contracts, one file per
+    # part.  The ceiling is a safety bound (not a product limit) and must
+    # match UploadGuardSettings.max_parts; both read FUNDLEX_MULTIPART_MAX_PARTS.
+    # Byte budgets below stay unchanged and bound the actual memory work.
+    # R2-F03 (the previous 32-part default rejected 32+ file uploads).
+    max_request_parts = 1000
     max_request_fields = 8
     max_file_bytes = 25 * 1024 * 1024
     max_total_file_bytes = 50 * 1024 * 1024
@@ -100,10 +108,13 @@ class BoundedMultiPartParser(MultiPartParser):
 
     def __init__(self, headers: Headers, stream, *, max_files=1000, max_fields=1000,
                  max_part_size=1024 * 1024):
-        super().__init__(headers, stream, max_files=max_files, max_fields=max_fields,
-                         max_part_size=max_part_size)
         self.max_request_parts = _positive_env("FUNDLEX_MULTIPART_MAX_PARTS", self.max_request_parts)
         self.max_request_fields = _positive_env("FUNDLEX_MULTIPART_MAX_FIELDS", self.max_request_fields)
+        # Starlette's own max_files counter must not undercut the configured
+        # part ceiling; the part ceiling itself bounds total work.
+        super().__init__(headers, stream, max_files=max(max_files, self.max_request_parts),
+                         max_fields=max(max_fields, self.max_request_parts),
+                         max_part_size=max_part_size)
         # The parser is shared by all routes. A regulation upload may be up to
         # 80 MiB, so its ceiling must not make the route's documented limit
         # unreachable; task/guide routes remain bounded earlier by the ASGI
@@ -217,8 +228,14 @@ class UploadResourceMiddleware:
 
     @staticmethod
     def _client_key(scope: dict[str, Any]) -> str:
+        # Behind a reverse proxy every socket peer is the proxy address, which
+        # would make the per-IP quota a whole-site shared bucket (R2-F02).
+        # X-Forwarded-For is honoured only when FUNDLEX_TRUSTED_PROXY_HOSTS
+        # names the proxy; see fundlex.proxy_headers.
+        from .proxy_headers import client_host
         client = scope.get("client")
-        return str(client[0]) if client else "unknown"
+        peer = str(client[0]) if client else None
+        return client_host(Headers(scope=scope), peer)
 
     def _request_limit(self, path: str) -> int:
         if path == "/api/guide-generation/runs":
@@ -250,6 +267,16 @@ class UploadResourceMiddleware:
             self._ip_active[key] = max(0, self._ip_active[key] - 1)
             if self._ip_active[key] == 0:
                 self._ip_active.pop(key, None)
+            # R2-F08: drop expired entries from the minute window deque and
+            # remove the key once empty so _recent cannot grow without bound
+            # with the number of distinct client addresses.
+            recent = self._recent.get(key)
+            if recent is not None:
+                cutoff = time.monotonic() - 60.0
+                while recent and recent[0] <= cutoff:
+                    recent.popleft()
+                if not recent:
+                    self._recent.pop(key, None)
 
     def _response(self, error: UploadGuardError) -> JSONResponse:
         headers = {"Cache-Control": "no-store"}

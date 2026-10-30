@@ -502,6 +502,19 @@ def _public_batch(batch: dict, *, detail: bool, metrics: dict[str, dict] | None 
     return base
 
 
+# R2-F04: spreadsheet formula-injection defence for exported CSV cells.
+# A contract filename is attacker-controlled and lands in 结果清单.csv; a
+# leading = + - @ TAB CR makes Excel/Sheets evaluate the cell as a formula.
+_CSV_FORMULA_PREFIXES = ("=", "+", "-", "@", "\t", "\r")
+
+
+def csv_safe_cell(value):
+    """Prefix ``'`` when a text cell would otherwise parse as a formula."""
+    if isinstance(value, str) and value.startswith(_CSV_FORMULA_PREFIXES):
+        return "'" + value
+    return value
+
+
 def create_app(data_dir: str | Path | None = None, *, auth_db=None) -> FastAPI:
     application = FastAPI(title="FundLex", version="0.1.0")
     add_upload_guard(application, max_upload_bytes=MAX_UPLOAD_BYTES,
@@ -600,7 +613,7 @@ def create_app(data_dir: str | Path | None = None, *, auth_db=None) -> FastAPI:
     # the bootstrap secret is never logged or written to disk.
     try:
         from .db import Database
-        from .auth import SessionStore, UserStore, bootstrap_admin
+        from .auth import SessionStore, ThrottleStore, UserStore, bootstrap_admin
     except ImportError as exc:
         # fundlex.db is delivered by a parallel change; dev mode stays usable
         # while it is absent, but a broken import inside an existing module is
@@ -617,6 +630,7 @@ def create_app(data_dir: str | Path | None = None, *, auth_db=None) -> FastAPI:
         application.state.auth_db = database
         application.state.users = users
         application.state.sessions = sessions
+        application.state.throttle = ThrottleStore(database)
         bootstrap_admin(database, users=users)
 
     def task_call(fn, *args, **kwargs):
@@ -769,27 +783,19 @@ def create_app(data_dir: str | Path | None = None, *, auth_db=None) -> FastAPI:
                                   "max_request_bytes": MAX_BATCH_BYTES},
                 "engine": engine}
 
-    # Bounded in-memory throttle counters for credential endpoints (A1):
-    # scrypt slows guessing but nothing stopped unlimited attempts before.
-    _login_failures: dict[str, list[float]] = {}
-    _register_events: dict[str, list[float]] = {}
+    # Credential-endpoint throttling lives in the auth database so every
+    # uvicorn worker shares one budget and restarts do not reset it (R2-F01).
+    # The X-Forwarded-For-aware client key only trusts the header when the
+    # operator configured FUNDLEX_TRUSTED_PROXY_HOSTS (R2-F01/F02); without
+    # it all reverse-proxied traffic shares one bucket, so deployments that
+    # proxy must set both the env list and the proxy header.
+    _LOGIN_BUCKET = "login"
+    _REGISTER_BUCKET = "register"
 
-    def _throttle_hit(bucket: dict[str, list[float]], key: str, *,
-                      limit: int, window_s: float) -> bool:
-        now = time.time()
-        events = [stamp for stamp in bucket.get(key, []) if now - stamp < window_s]
-        if len(events) >= limit:
-            bucket[key] = events
-            return True
-        events.append(now)
-        bucket[key] = events
-        if len(bucket) > 10000:
-            # Drop the stalest entries so the map cannot grow unbounded.
-            ordered = sorted(bucket.items(),
-                             key=lambda kv: kv[1][-1] if kv[1] else 0.0)
-            for stale_key, _ in ordered[: len(bucket) - 8000]:
-                bucket.pop(stale_key, None)
-        return False
+    def _client_host(request: Request) -> str:
+        from .proxy_headers import client_host
+        return client_host(request.headers,
+                           request.client.host if request.client else None)
 
     @application.post("/api/auth/login")
     def auth_login(payload: LoginRequest, request: Request):
@@ -797,7 +803,8 @@ def create_app(data_dir: str | Path | None = None, *, auth_db=None) -> FastAPI:
             raise HTTPException(404, "not found")
         from .auth import AccountDisabled, InvalidCredentials
         users, sessions = request.app.state.users, request.app.state.sessions
-        client = (request.client.host if request.client else "") or "unknown"
+        throttle = request.app.state.throttle
+        client = _client_host(request)
         try:
             record = users.authenticate(payload.username, payload.password)
         except AccountDisabled as exc:
@@ -807,11 +814,11 @@ def create_app(data_dir: str | Path | None = None, *, auth_db=None) -> FastAPI:
             # normalizes the username; otherwise whitespace/case variants of the
             # same account get unlimited fresh keys and bypass the limit (A1-2).
             key = f"{client}|{payload.username.strip().casefold()}"
-            if _throttle_hit(_login_failures, key, limit=10, window_s=300):
+            if throttle.hit(_LOGIN_BUCKET, key, limit=10, window_s=300):
                 raise HTTPException(429, "too many failed logins; retry later",
                                     headers={"Retry-After": "300"}) from None
             raise HTTPException(401, "invalid username or password") from exc
-        _login_failures.pop(f"{client}|{payload.username.strip().casefold()}", None)
+        throttle.clear(_LOGIN_BUCKET, f"{client}|{payload.username.strip().casefold()}")
         return {"token": sessions.login(record["id"]), "user": _public_user(record)}
 
     @application.post("/api/auth/register", status_code=201)
@@ -821,8 +828,8 @@ def create_app(data_dir: str | Path | None = None, *, auth_db=None) -> FastAPI:
             raise HTTPException(404, "not found")
         if not _registration_open():
             raise HTTPException(403, "registration is disabled")
-        client = (request.client.host if request.client else "") or "unknown"
-        if _throttle_hit(_register_events, client, limit=10, window_s=3600):
+        client = _client_host(request)
+        if request.app.state.throttle.hit(_REGISTER_BUCKET, client, limit=10, window_s=3600):
             raise HTTPException(429, "too many registrations from this network; retry later",
                                 headers={"Retry-After": "3600"})
         from .auth import UserExists
@@ -1347,7 +1354,7 @@ def create_app(data_dir: str | Path | None = None, *, auth_db=None) -> FastAPI:
                 if not count:
                     raise Conflict("暂无可下载结果，请等待合同处理完成")
                 summary = io.StringIO()
-                csv.writer(summary).writerows(rows)
+                csv.writer(summary).writerows([csv_safe_cell(cell) for cell in row] for row in rows)
                 archive.writestr("结果清单.csv", summary.getvalue().encode("utf-8-sig"))
                 archive.writestr("结果总览.md", task_call(tasks.report, user, task_id))
             output.seek(0)

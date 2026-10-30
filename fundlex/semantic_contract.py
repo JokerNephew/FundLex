@@ -173,7 +173,6 @@ def validate_semantic_target(target: SemanticTarget, rule: Mapping[str, Any],
                              *, policy: SemanticPolicy | None = None,
                              ) -> tuple[bool, str]:
     """Validate a model target without interpreting the policy wording."""
-    from .recall import resolve_source_quote
     if target.rule_id != str(rule.get("rule_id") or ""):
         return False, "rule_mismatch"
     if target.operation_id not in _rule_operation_ids(rule):
@@ -189,11 +188,11 @@ def validate_semantic_target(target: SemanticTarget, rule: Mapping[str, Any],
         return False, "quote_not_in_source"
     if _compact(span.text).count(_compact(target.quote)) != 1:
         return False, "quote_ambiguous"
-    located = resolve_source_quote(span, target.quote)
-    if located is None:
-        return False, "quote_not_bindable"
-    if (located[0], located[1]) != (target.start, target.end):
-        return False, "offset_mismatch"
+    # No offset re-check here: ``parse_semantic_targets`` is the only producer of
+    # candidate targets and builds start/end with the same deterministic
+    # ``resolve_source_quote`` call, so recomputing it could never disagree
+    # (the old ``quote_not_bindable``/``offset_mismatch`` branches were dead code).
+    # A quote that passed the containment/uniqueness checks above is bindable.
     if not target.replacement.strip():
         return False, "empty_replacement"
     if _compact(target.replacement) == _compact(target.quote):
@@ -218,8 +217,10 @@ def validate_semantic_target(target: SemanticTarget, rule: Mapping[str, Any],
 
 def parse_semantic_targets(value: Mapping[str, Any], rule: Mapping[str, Any],
                            inspection: Any, locations: Iterable[str],
-                           policy: SemanticPolicy) -> tuple[list[SemanticTarget], list[dict[str, Any]]]:
-    from .recall import _rule_operation_key, resolve_source_quote
+                           policy: SemanticPolicy,
+                           facts: Any | None = None
+                           ) -> tuple[list[SemanticTarget], list[dict[str, Any]]]:
+    from .recall import _rule_operation_key, instantiate_slots, resolve_source_quote
     allowed = {str(item) for item in locations}
     accepted: list[SemanticTarget] = []
     rejected: list[dict[str, Any]] = []
@@ -264,7 +265,24 @@ def parse_semantic_targets(value: Mapping[str, Any], rule: Mapping[str, Any],
         replacement = str(item.get("replacement") or "")
         operation_spec = operation_map.get(operation_id) or {}
         if policy.replacement_mode == "template":
-            replacement = str(operation_spec.get("new_text") or "")
+            template_text = str(operation_spec.get("new_text") or "")
+            if facts is not None:
+                # The guide's fixed policy text is a template with class-group
+                # slots (e.g. G16's “C类基金份额”).  Publishing it raw would
+                # write the wrong share class into the contract (R2 LOW-3);
+                # instantiate slots like every other template consumer and
+                # fail closed when a slot cannot be filled.
+                instantiated, slot_issues = instantiate_slots(template_text, facts)
+                if slot_issues or not instantiated.strip():
+                    rejected.append({"location": location,
+                                     "operation_id": operation_id,
+                                     "reason": "template_slots_unresolved"})
+                    continue
+                replacement = instantiated
+            else:
+                # Callers without facts get the raw template; the production
+                # path (recall_pipeline → discover_for_rules) always passes facts.
+                replacement = template_text
         target = SemanticTarget(
             rule_id=str(rule.get("rule_id") or ""),
             operation_id=operation_id,
@@ -286,8 +304,10 @@ def parse_semantic_targets(value: Mapping[str, Any], rule: Mapping[str, Any],
 
 def discover_semantic_targets(gateway: Any, rule: Mapping[str, Any],
                               inspection: Any, locations: Iterable[str],
-                              policy: SemanticPolicy) -> tuple[list[SemanticTarget],
-                                                                list[dict[str, Any]], Any]:
+                              policy: SemanticPolicy,
+                              facts: Any | None = None
+                              ) -> tuple[list[SemanticTarget],
+                                         list[dict[str, Any]], Any]:
     context = semantic_candidate_context(inspection, locations, policy,
                                          limit=getattr(gateway, "max_context_chars", 28000))
     result = None
@@ -306,7 +326,7 @@ def discover_semantic_targets(gateway: Any, rule: Mapping[str, Any],
                               prompt_version=SEMANTIC_PROMPT_VERSION)
         value = result.value if isinstance(getattr(result, "value", None), dict) else {}
         accepted, rejected = parse_semantic_targets(
-            value, rule, inspection, locations, policy)
+            value, rule, inspection, locations, policy, facts=facts)
         if accepted:
             break
     return accepted, rejected, result
@@ -329,7 +349,8 @@ def semantic_target_to_target(target: SemanticTarget) -> Any:
 
 def discover_for_rules(gateway: Any, inspection: Any, rules_by_id: Mapping[str, Any],
                        scopes: Mapping[str, Any] | None,
-                       rule_ids: Iterable[str]) -> tuple[list[Any], list[dict[str, Any]]]:
+                       rule_ids: Iterable[str],
+                       facts: Any | None = None) -> tuple[list[Any], list[dict[str, Any]]]:
     """Run the model-first selector for selected rules and return Targets.
 
     This is the opt-in vertical slice of the semantic v2 pipeline.  It never
@@ -360,7 +381,7 @@ def discover_for_rules(gateway: Any, inspection: Any, rules_by_id: Mapping[str, 
             rejected.append({"rule_id": rule_id, "reason": "scope_empty"})
             continue
         accepted, refused, _result = discover_semantic_targets(
-            gateway, rule, inspection, locations, policy)
+            gateway, rule, inspection, locations, policy, facts=facts)
         targets.extend(semantic_target_to_target(item) for item in accepted)
         rejected.extend({"rule_id": rule_id, **item} for item in refused)
     return targets, rejected

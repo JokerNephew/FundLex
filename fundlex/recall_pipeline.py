@@ -3848,10 +3848,12 @@ def _delivery_complete(unresolved: Sequence[dict[str, Any]], *, ledger: Any = No
     is delivered together with a human-review list.
 
     Independent proof layers always block, whatever the policy: a failed Claim Replay,
-    a proven final omission, or an open obligation whose own evidence is a Claim
-    Replay failure.  An unfinished audit/sweep or an unverified fact stays a review
-    item under ``review_assisted``; it is still an open Ledger record and blocks
-    ``strict`` delivery.
+    a proven final omission, an open obligation whose own evidence is a Claim Replay
+    failure, or a whole-contract qualification gap (``FUND_TYPE_UNVERIFIED``,
+    FL-D114/R2-F1 — blocking via ``requires_blocker`` in both policies).  An
+    unfinished audit/sweep or an unverified fact stays a review item under
+    ``review_assisted``; it is still an open Ledger record and blocks ``strict``
+    delivery.
     """
     mode = policy or _delivery_policy()
     if ledger is not None:
@@ -3875,13 +3877,6 @@ def _delivery_complete(unresolved: Sequence[dict[str, Any]], *, ledger: Any = No
                     for item in unresolved):
                 # A missing site/coverage proof is not merely an unfinished audit;
                 # it contradicts complete delivery even under review_assisted.
-                return False
-            coverage_open = any("FINAL_COVERAGE_UNRESOLVED" in
-                                str(item.get("reason") or "") for item in open_items)
-            if coverage_open and not any(
-                    str(item.get("code") or "") == "FINAL_COVERAGE_UNRESOLVED"
-                    and "AUDIT_NOT_COMPLETED" in str(item.get("reason") or "")
-                    for item in unresolved):
                 # User-disabled rules are explicit exceptions, not a reason to
                 # relax independent coverage proofs of the remaining rules.
                 return False
@@ -4049,10 +4044,24 @@ def _apply_artifact_proof_to_findings(findings: list[dict[str, Any]], replay: di
         try:
             artifact_text = str(actual.by_location(location).text)
             body = _compact(artifact_text)
-            if original is not None:
-                source_text = str(original.by_location(location).text)
         except Exception:  # noqa: BLE001
-            body = ""
+            # R2-F2: a location missing from the artifact (for example after a
+            # repair round rewrote it) must never look like "the quoted old text
+            # is gone".  An empty body would make every residual check below
+            # vacuously succeed and silently resolve a REAL residual finding as
+            # ``claimed_residual_absent``.  Keep the finding pending with an
+            # honest evidence code; review items / strict delivery still see it.
+            finding["proof_kind"] = "SEMANTIC_UNCERTAIN"
+            finding["resolution_evidence"] = "LOCATION_NOT_FOUND"
+            continue
+        if original is not None:
+            try:
+                source_text = str(original.by_location(location).text)
+            except Exception:  # noqa: BLE001
+                # An appended/newer paragraph may legitimately be absent from the
+                # original; an empty before_text only weakens expected-effect
+                # checks, it never invents a resolution.
+                source_text = ""
         residual = bool(quote and quote in body)
         rule = rules_by_id.get(rule_id) or {}
         old_sentences = []
@@ -4104,11 +4113,12 @@ def _apply_artifact_proof_to_findings(findings: list[dict[str, Any]], replay: di
             # evidence. Findings without a quoted old clause, or with any quoted
             # fragment still present, remain blocking.
             claimed = [match.strip() for pattern in (
-                r"“([^”]{8,})”", r"「([^」]{8,})」",
+                r"“([^”]{8,})”", r"「([^」]{8,})」", r"‘([^’]{8,})’",
                 r"'([^']{8,})'", r'"([^"]{8,})"')
                 for match in re.findall(pattern, str(finding.get("reason") or ""))]
-            # The sweep is free to quote the old clause with any of the four quote
-            # styles; a finding that quoted it with ASCII quotes used to fall through
+            # The sweep is free to quote the old clause with any of the five quote
+            # styles (including the Chinese single quotes ‘’); a finding that
+            # quoted it with ASCII quotes used to fall through
             # to SEMANTIC_UNCERTAIN and become an orphan blocker (恒裕 G15 SW002).
             # Contract text is Chinese, so only claims carrying real CJK characters
             # can be residual evidence.
@@ -4747,7 +4757,8 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
             semantic_rules = [item.strip() for item in os.environ.get(
                 "FUNDLEX_SEMANTIC_V2_RULES", "G09").split(",") if item.strip()]
             semantic_targets, semantic_rejected = discover_for_rules(
-                model, inspection, rules_by_id, scopes, semantic_rules)
+                model, inspection, rules_by_id, scopes, semantic_rules,
+                facts=facts)
             for target in semantic_targets:
                 adopted = False
                 for old in targets:
@@ -6056,6 +6067,11 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
             if qualification_gap:
                 unresolved.append({
                     "kind": "qualification", "code": "FUND_TYPE_UNVERIFIED",
+                    # R2-F1: code and reason carry the same blocker identity so
+                    # every layer of the delivery classification (code-based,
+                    # reason-based, ledger-based) sees the same typed gap instead
+                    # of the item slipping through field口径 gaps (LOW-5).
+                    "reason": "FUND_TYPE_UNVERIFIED",
                     "fund_type": facts.fund_type,
                     "message": "fund_type is an excluded type but its quote could not be verified; "
                                "the run continues but delivery must not be complete"})

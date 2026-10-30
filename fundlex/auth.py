@@ -99,6 +99,16 @@ CREATE TABLE IF NOT EXISTS sessions (
 )
 """
 
+THROTTLE_SCHEMA = """
+CREATE TABLE IF NOT EXISTS auth_throttle (
+    bucket TEXT NOT NULL,
+    throttle_key TEXT NOT NULL,
+    stamp DOUBLE NOT NULL
+);
+CREATE INDEX IF NOT EXISTS auth_throttle_bucket_key
+    ON auth_throttle (bucket, throttle_key)
+"""
+
 _USER_COLUMNS = "id, username, display_name, role, disabled, created_at, updated_at"
 
 _DUMMY_HASH: str | None = None
@@ -368,6 +378,52 @@ class SessionStore:
             else:
                 conn.execute("UPDATE sessions SET revoked=1 WHERE user_id=? AND revoked=0 AND token_hash<>?",
                              (user_id, keep_hash))
+
+
+class ThrottleStore:
+    """Sliding-window rate-limit events persisted in the auth database.
+
+    Credential-endpoint throttling previously lived in per-process dicts,
+    which split the attempt budget across uvicorn workers (R2-F01).  Events
+    are rows in ``auth_throttle`` so every worker shares one view.  The
+    check-and-insert runs in a single transaction; SQLite takes the write
+    lock up front (``BEGIN IMMEDIATE``) exactly like ``set_disabled`` does,
+    so concurrent workers cannot both pass a bucket that is one short of the
+    limit.  Counters survive restarts by design (an application restart must
+    not reset a brute-force budget).
+    """
+
+    def __init__(self, db: Database, *, clock=None):
+        self.db = db
+        self._clock = clock or time.time
+        self.ensure_schema()
+
+    def ensure_schema(self) -> None:
+        with self.db.connect() as conn:
+            conn.executescript(THROTTLE_SCHEMA)
+
+    def hit(self, bucket: str, key: str, *, limit: int, window_s: float) -> bool:
+        """Record one event; return True when the window budget is spent."""
+        now = float(self._clock())
+        with self.db.connect() as conn:
+            if self.db.dialect != "mysql":
+                conn.execute("BEGIN IMMEDIATE")
+            conn.execute("DELETE FROM auth_throttle WHERE stamp < ?", (now - window_s,))
+            count = conn.execute(
+                "SELECT COUNT(*) FROM auth_throttle WHERE bucket=? AND throttle_key=?",
+                (bucket, key)).fetchone()[0]
+            if count >= limit:
+                return True
+            conn.execute(
+                "INSERT INTO auth_throttle (bucket, throttle_key, stamp) VALUES (?,?,?)",
+                (bucket, key, now))
+        return False
+
+    def clear(self, bucket: str, key: str) -> None:
+        """Drop every event in one bucket/key (e.g. after a successful login)."""
+        with self.db.connect() as conn:
+            conn.execute("DELETE FROM auth_throttle WHERE bucket=? AND throttle_key=?",
+                         (bucket, key))
 
 
 def bootstrap_admin(db: Database, users: UserStore | None = None) -> dict | None:
