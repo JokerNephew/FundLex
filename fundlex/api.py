@@ -568,7 +568,6 @@ def create_app(data_dir: str | Path | None = None, *, auth_db=None) -> FastAPI:
                 response.headers.setdefault("Cache-Control", "public, max-age=86400, immutable")
             else:
                 response.headers.setdefault("Cache-Control", "no-cache")
-        return response
         response.headers[CORRELATION_ID_HEADER] = cid
         return response
 
@@ -804,12 +803,15 @@ def create_app(data_dir: str | Path | None = None, *, auth_db=None) -> FastAPI:
         except AccountDisabled as exc:
             raise HTTPException(403, "account is disabled") from exc
         except InvalidCredentials as exc:
-            key = f"{client}|{payload.username}"
+            # The throttle key must be normalized exactly like authentication
+            # normalizes the username; otherwise whitespace/case variants of the
+            # same account get unlimited fresh keys and bypass the limit (A1-2).
+            key = f"{client}|{payload.username.strip().casefold()}"
             if _throttle_hit(_login_failures, key, limit=10, window_s=300):
                 raise HTTPException(429, "too many failed logins; retry later",
                                     headers={"Retry-After": "300"}) from None
             raise HTTPException(401, "invalid username or password") from exc
-        _login_failures.pop(f"{client}|{payload.username}", None)
+        _login_failures.pop(f"{client}|{payload.username.strip().casefold()}", None)
         return {"token": sessions.login(record["id"]), "user": _public_user(record)}
 
     @application.post("/api/auth/register", status_code=201)
@@ -1641,8 +1643,11 @@ def create_app(data_dir: str | Path | None = None, *, auth_db=None) -> FastAPI:
             response = await call_next(request)
             path = request.url.path
             if path.startswith("/static/") or path.startswith("/assets/"):
-                # 静态资源 URL 带内容哈希，可长期缓存；入口 HTML 必须每次校验。
-                response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+                # 静态资源 URL 带内容哈希时可长期缓存；入口 HTML 必须每次校验。
+                # 无 ?v= 的旧 /static URL 不续一年缓存，与新安全头中间件同策
+                # （A9-F01；此中间件注册更晚=更外层，覆写前必须尊重已设值）。
+                if "Cache-Control" not in response.headers:
+                    response.headers["Cache-Control"] = "public, max-age=86400, immutable"
             elif path in ("/", "/index.html"):
                 response.headers["Cache-Control"] = "no-store, must-revalidate"
             return response

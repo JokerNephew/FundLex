@@ -210,3 +210,59 @@ def test_final_omission_truncated_scan_blocks():
     from fundlex.recall_pipeline import _final_omission_issue_blocks
     assert _final_omission_issue_blocks(
         {"code": "FINAL_RESIDUAL_SCAN_TRUNCATED"}) is True
+
+
+# --- API review follow-ups (round-2 adversarial findings) --------------------
+
+def test_login_throttle_key_normalized(password_client):
+    """Whitespace/case variants of one account share the throttle key (A1-2)."""
+    password_client.post("/api/auth/register", json={
+        "username": "victim2", "password": "password-123", "display_name": "v"})
+    for _ in range(10):
+        assert password_client.post("/api/auth/login", json={
+            "username": "victim2", "password": "wrong"}).status_code == 401
+    for variant in (" victim2", "  victim2  ", "VICTIM2", "Victim2"):
+        blocked = password_client.post("/api/auth/login", json={
+            "username": variant, "password": "wrong"})
+        assert blocked.status_code == 429, f"throttle bypassed via {variant!r}"
+
+
+def test_throttled_login_envelope_and_retry_after(password_client):
+    password_client.post("/api/auth/register", json={
+        "username": "victim3", "password": "password-123", "display_name": "v"})
+    for _ in range(10):
+        password_client.post("/api/auth/login", json={
+            "username": "victim3", "password": "wrong"})
+    blocked = password_client.post("/api/auth/login", json={
+        "username": "victim3", "password": "wrong"})
+    assert blocked.status_code == 429
+    assert blocked.json()["error_code"] == "RATE_LIMITED"
+    assert blocked.headers.get("Retry-After")
+
+
+def test_guidance_run_filename_length_capped(password_client):
+    """POST /api/guide-generation/runs enforces the filename cap (A4-F01)."""
+    register = password_client.post("/api/auth/register", json={
+        "username": "gguploader", "password": "password-123", "display_name": "g"})
+    headers = {"Authorization": f"Bearer {register.json()['token']}"}
+    long_name = "长" * 100 + ".docx"  # 300 UTF-8 bytes > 200-byte cap
+    rejected = password_client.post(
+        "/api/guide-generation/runs", headers=headers,
+        files={"file": (long_name, b"PK\x03\x04" + b"0" * 64)})
+    assert rejected.status_code == 422
+    assert rejected.json()["error_code"] == "UPLOAD_FILENAME_TOO_LONG"
+
+
+def test_unversioned_static_not_cached_longterm(password_client):
+    versioned = password_client.get("/static/app.css?v=abcdef0123456789")
+    assert "immutable" in versioned.headers.get("Cache-Control", "")
+    plain = password_client.get("/static/app.css")
+    cache = plain.headers.get("Cache-Control", "")
+    assert "no-cache" in cache
+    assert "31536000" not in cache
+
+
+def test_success_responses_carry_correlation_id(password_client):
+    for path in ("/", "/api/capabilities"):
+        response = password_client.get(path)
+        assert response.headers.get("X-Correlation-ID"), f"{path} lost the header"

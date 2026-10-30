@@ -63,8 +63,8 @@ def code_from_detail(detail: Any, status_code: int) -> str:
         return code
     return {400: "INVALID_REQUEST", 401: "AUTHENTICATION_REQUIRED", 403: "FORBIDDEN",
             404: "NOT_FOUND", 409: "CONFLICT", 413: "UPLOAD_TOO_LARGE",
-            415: "UNSUPPORTED_FILE", 422: "INVALID_REQUEST", 503: "SERVICE_UNAVAILABLE"}.get(
-                status_code, "INTERNAL_ERROR")
+            415: "UNSUPPORTED_FILE", 422: "INVALID_REQUEST", 429: "RATE_LIMITED",
+            503: "SERVICE_UNAVAILABLE"}.get(status_code, "INTERNAL_ERROR")
 
 
 def message_for(status_code: int) -> str:
