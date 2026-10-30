@@ -1493,8 +1493,8 @@ def create_app(data_dir: str | Path | None = None, *, auth_db=None) -> FastAPI:
             entry = ((dist / "index.html" if (dist / "index.html").is_file() else frontend / "index.html")
                      if frontend_v2 else frontend / "compare.html")
             html = entry.read_text(encoding="utf-8")
-            version = _asset_version("dist/index.html", "app.css", "app.js", "compare.css", "compare.js")
-            for name in ("app.css", "app.js", "compare.css", "compare.js"):
+            version = _asset_version("dist/index.html", "app.css", "app.js", "compare.css", "compare.js", "workspace.js")
+            for name in ("app.css", "app.js", "compare.css", "compare.js", "workspace.js"):
                 html = html.replace(f'/static/{name}"', f'/static/{name}?v={version}"')
             if frontend_base:
                 html = html.replace('="/static/', f'="{frontend_base}/static/')
