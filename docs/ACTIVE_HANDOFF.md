@@ -2,6 +2,16 @@
 
 ## 2026-10-31 全项目质量整改（QA 总攻，主 agent 断点）
 
+### 断点更新（fix wave 1 进行中）
+
+- HEAD：`7198c72`（qa/full-audit-20261031 @ /tmp/opencode/qa-base）。基线 2209 passed/122 skipped 全量绿（1350s，@7f6d981 冻结窗口复核一致）。
+- **关键环境坑（A10-Q0）**：qa-base 的 `.venv` 是指向主工作区的 symlink，`python -m pytest` 必须在 cwd=/tmp/opencode/qa-base 下运行（cwd 进入 sys.path[0]）；不要在其它目录 import fundlex 判定 qa-base 代码。全量绿证据均按此口径。
+- 已完成审计：12/12 报告在 /tmp/opencode/qa/findings/（A1 安全、A2 worker、A3 docx、A4 api+db、A6 compare、A7 引擎召回、A8 引擎交付、A9 前端V1、A10 测试体系、B11 浏览器视觉、B12 UX红队、B13 性能、B14 chaos）。
+- 主 agent 已修+提交：`a8d78f2`（A7-01 G16 rule 泄漏、A7-02 ensure_delete_targets 分页丢页、A7-03 NFKC 下标漂移、A8-F1 engine_build 漏 semantic_contract、A8-F2 orphan evidence 必拦）；`7198c72`（A9-F01 资源指纹、A1 安全头/登录与注册限速、异常处理器保留 Retry-After、A4-F01 文件名上限、A4-F05 guard 错误包络、A1-3 法规解析防爆、A4-F06 run_for 例外收窄）。回归测试 tests/test_qa_20261031_regressions.py 11 项全绿；相关既有套件全绿。
+- 进行中：4 个 kimi-k3 修复 agent——W1 worker/队列(A2-F1/F2/F3/F4+B14-01/03/02/04；jobs.py+gg worker/store)、W2 compare 正确性+性能(FL-D541 sdt 寻址 P0、尾部删除链、B13-F1 O(n²)、覆盖过声明；fundlex/compare/)、W3 前端V1(A9-F02/03/04/06/08、B11-P1 滚动提示、B12 改密静默/排队下载死按钮/状态矛盾/比对详情空白等；frontend/*.js/css/html)、W4 DOCX/选择性审稿(A3-F1 manifest 奇偶、A3-F2 barrier 误拒、A3-F3/F4；docx.py/selective.py)。
+- 待办序：①收 4 修复→独立复核（新 reviewer agent 交叉复核每个修复）→全量回归；②集中问题记录批量登记剩余发现（A2-F5~F9、A3-F5~F8、A4-F02~F10、A6 FL-D543~546 建议项、A7-04~09、A8-F3~F8、A10-Q3/Q5~Q10/M2、B12 UX 术语与对比度、B13-F3~F9 等）；③第二轮盲审（新 agent 不给历史结论）；④真实模型分波评测（28→扩样，kimi-k3 已配好）；⑤受控发布+正式 E2E（修订与 Compare 全链）。
+- 已定暂不修/待决策：CSP 待消灭 inline script 后启用；自助注册默认开→已加限速，政策调整登记待产品决定；A3-F5/F7/F8、A4-F02 翻译层加固（零使用处）列为观察项。
+
 - 任务：按 /home/opencode/prompt.md 执行全项目最终质量整改（发现→修复→复核→回归→真实 E2E→受控交付）。本断点由主 agent 维护，子 agent 发现汇总于 /tmp/opencode/qa/findings/*.md。
 - 工作基线：worktree `/tmp/opencode/qa-base`，branch `qa/full-audit-20261031`，当前 HEAD 7f6d981。该基线已统一三条分叉线：comprehensive-remediation（158475f，含最新引擎修复+我的WIP保护提交）+ user-config/BYOK 生产发布线（cdc07d6，含 477ba5a per-user 模型配置与 kimi-k3 切换文档）+ compare-alignment/工作台打磨线（9972441）。
 - **关键修复（QA-001 级）**：①生产 477ba5a 丢失 compare 对齐/任务排版/工作台版本化等已发布修复——已并入基线。②6dadacf 曾把 5 个引擎文件回退到部署基线以保持指纹，自动合并会静默丢弃 _expand_duplicate_copy_scopes 等引擎修复；已恢复最新引擎并把 BYOK 的 recall_pipeline 增量（b067b50 disabled_rule_ids、cdcf52c +9 门禁）移植其上。合并语义核查方法：wholesale-take 扫描 + 差异确认 superseded，详见会话记录。

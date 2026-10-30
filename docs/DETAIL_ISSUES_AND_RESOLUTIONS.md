@@ -6696,3 +6696,80 @@ H＝E×…
 - 发现：首版合并基线（1c0fc63）全量 pytest collection 即失败：`tests/test_duplicate_copy_scope.py` 引用 `_expand_duplicate_copy_scopes` 不存在——6dadacf 引擎回退在自动合并中被整体采纳而无人察觉。教训：三方分叉自动合并不报冲突 ≠ 语义正确。
 - 处理方法（已确立为本 QA 任务的合并纪律）：合并后对「merged == 某一方整版」的文件做 wholesale-take 扫描，逐一确认另一方内容被 superseded；以全量测试套件作为合并正确性验证；引擎类核心文件恢复后补跑受影响测试。
 - 状态：**已实施并验证（7f6d981）**。
+
+## FL-D551 修订引擎召回/归属三处真实缺陷（2026-10-31，第一波审计 A7）
+
+- A7-01（高）：`assign_target_operations` G16 分支复用条件块内才绑定的 `rule` 变量；satisfied+out_of_scope 首目标 NameError，非首目标错用上一条 rule 判定 expected_policy。已修复（qa 基线 `a8d78f2`，分支内本地化重取+None 保护）并有回归测试。
+- A7-02（高）：`ensure_delete_targets` 游标分页在调用方把新建克隆回灌 targets 后重算候选，`everything[cursor:]` 在缩短列表上二次偏移，60 候选实测只建 40 target 且 `has_more=False` 静默收尾。已修复（`a8d78f2`，分页输入冻结快照）+回归（60/60 全覆盖）。
+- A7-03（中→高）：`find_normalized` NFKC 变长折叠用原文非空白下标索引折叠串，㏄→cc 类输入 IndexError 或绑错 span。已修复（按产出字符建立位置映射）+回归。
+- A7-04（中）：resolve_absent_operations 克隆只进 targets 不进 synthetic，违反 4870-4877 不变量，重建轮丢 absent 证明载体。**待修**（下一轮引擎专项）。
+- A7-05（中，产品口径）：review_assisted 默认下 review/business 项非空仍写 delivery_status="complete"。**待产品确认口径**，暂登记不改。
+- A7-06/07/08/09（中/低）：scope anchor 0 回退整章过宽、income/liquidation 标题词硬匹配过窄、targets_for_open_rules fail-open、Target 中途可变、死代码若干。**待修/观察**，见 /tmp/opencode/qa/findings/A7-engine-recall.md。
+
+## FL-D552 交付/门禁正确性六项（2026-10-31，第一波审计 A8）
+
+- A8-F1（中）：`_ENGINE_BUILD_MODULES` 漏挂 `fundlex/semantic_contract.py`，改它不触发 checkpoint 失效。已修复（`a8d78f2`）+指纹测试通过。
+- A8-F2（中）：orphan evidence 名义必拦但 `LEDGER_EVIDENCE_UNBOUND` 落 known-prefix 可降级。已修复（requires_blocker 对 kind=orphan_evidence 恒 True）+回归。
+- A8-F3：FINAL_RESIDUAL_SCAN_TRUNCATED 未入 `_FINAL_OMISSION_BLOCKER_CODES`（现靠 blocker 桶兜底，双轨口径）。**待修（低风险）**。
+- A8-F4：sweep dropped 事件永不进 unresolved，delivery 中对应条款是死代码。**待修**。
+- A8-F5：blind_windows 只落 report 不进 unresolved/user_summary，与 SWEEP_CHUNK_LIMIT 口径不一。**待修**。
+- A8-F6/7/8：_delivery_complete 重复死代码段、checkpoint digest 不含 env 行为开关、validators 陈旧 docstring（_verify_composed 已强制）。**清理项**。
+
+## FL-D553 Worker/队列与故障注入缺陷（2026-10-31，A2+B14）
+
+- A2-F1（高）：gg worker 错误路径在 fencing() 退出后 update_run，旧 token stale 写落库（finish_job 却正确拒绝）。**修复中（W1）**。
+- A2-F2（高）：gg_jobs claim 无 attempt 上限无终态清扫，确定性崩溃 run 可被 systemd 无限重启烧模型费。**修复中（W1）**。
+- A2-F3（中）：enqueue 去重只看 queued/leased，retry_wait 可插第二条 live job，同 run 并发处理成立。**修复中（W1）**。
+- A2-F4/B14-01（中）：store.retry/finish Conflict、claim 期瞬时 DB 故障穿透终结 run_forever，仅 systemd 兜底。**修复中（W1）**：循环内有界退避。
+- B14-02/04、A3-F8 附件（中/低）：finish/崩溃孤儿对象无 GC；/tmp/fundlex_job_* 泄漏；运行中 pause 残留 tasks.paused=1 与批次 completed 矛盾位。**修复中（W1，B14-03 处理）**；A3-F8（finish 持久模式围栏仅 task_bound 生效）**待决策**，现无生产者触发。
+- 正面：claim 唯一胜者、lease 回收、fencing 拒 stale、attempt 终态、checkpoint 反污染、finish 原子性、幂等键并发恰 1 行、熔断/并发闸门、kill 后 0 孤儿交付均实测通过。
+
+## FL-D554 Compare 正确性与性能（2026-10-31，A6+B13）
+
+- FL-D541 根因坐实（高）：compare parser 的 pN 计数含 body 级 w:sdt 内段落，docx 只数直接 w:p → sdt 后全部错位；542 份真实合同 507 份（93.6%）带 24-27 段 sdt。**修复中（W2）**，修复方向已在 tmp-a6 验证。
+- A6-543（高）：正文末尾相邻 ≥2 个采用B 删除段必 SELECTION_FINAL_TEXT_MISMATCH（_trailing_delete_chain 与 _expected_sequence 索引错位；E9 全文删除同失败）。**修复中（W2）**。
+- A6-544（中）：仅 numbering/header-footer 图片差异时 coverage 静默 complete 过声明。**修复中（W2）**。
+- A6-545（低）：align >256 字符启发式与 quick_ratio 阈值行为不一致（共享法律套话跨配对 0.9511）。**修复中（W2）**。
+- B13-F1（高）：compare align _sim_text 每 DP 候选跑 difflib，案例①233s 中 ~191s（82%）；**修复中（W2）**，目标 <10s 且 diff 输出不变。
+- B13-F2（中）：compare 解析每段 3 次全子树遍历。**修复中（W2）**。
+- A6-546（低）：compare worker 未知异常只落结构化码，诊断仅入日志。**待修**。
+- 正面：合并单元格/既有修订/位置不可解析 fail-closed；40000+ pairings 回退正确；store 一致性模式与主库同。
+
+## FL-D555 DOCX/选择性审稿缺陷（2026-10-31，A3）
+
+- A3-F1（高）：overlay 修订 id 按 next_id+2n-1 分配 vs selective del_id 必须奇——外来修订约半数合同 Review 全 422。**修复中（W4）**。
+- A3-F2（高，真实合同必现）：编辑位之前的持久 barrier（tab/hyperlink/域/批注范围）被 _accepted_offsets 误从期望文本剥掉 → FINAL_TEXT_MISMATCH 误拒并删产物；RUN_FORMAT 同缺陷；摘要区"（N）⇥标题"结构高发。**修复中（W4）**。
+- A3-F3/F4（中）：书签跨 span 孤儿 bookmarkEnd；no-op 编辑（replacement==expected_old_text）被接受。**修复中（W4）**。
+- A3-F5/F6/F7（低）：finish 不交叉校验 plan.edits 与内嵌 manifest；_document_dict 暴露全部 artifact 下载 URL。**待修/观察**。
+- 正面：accept-all c14n==final、OPC/rels 完整、双哈希闸门、selective 4 线程恰 1 胜、外来修订篡改全 fail-closed、30 轮 fuzz 主路径成立。
+
+## FL-D556 前端 V1 功能/交互缺陷（2026-10-31，A9+B11+B12）
+
+- A9-F03（中）：Review generateSelected 异常路径控件永久禁用（unhandled rejection）。**修复中（W3）**。
+- A9-F02（中）：inline-contract-detail 下 Esc/背景点击不导航，整页空白。**修复中（W3）**。
+- B12-P1-1（高 UX）：改密当前密码错误→对话框静默关闭无提示且会话作废。**修复中（W3）**。
+- B12-P1-2（高 UX）：排队中「下载 ZIP/CSV/总览.md」点击无任何反馈。**修复中（W3）**。
+- B11-P1（中）：761–1180px 表格横向滚动无任何视觉提示，操作列看似消失。**修复中（W3）**。
+- A9-F04/05/06/08、B12 比对详情空白/状态自相矛盾/未命名任务不可区分、B11 axe critical 文件输入 label、对比度 serious 全站、登出提示误用错误红等：**修复中（W3）/部分待视觉专项**。
+- 待决策：状态术语体系业务翻译（B12-P1-3）需产品文案基线，登记待统一；CSP 待 inline script 清除（guide_generation.html/logic-demo.html）。
+
+## FL-D557 性能基线与热点（2026-10-31，B13）
+
+- 基线（真实合同，直连 CompareService）：①两份普通合同 233.5s/1004 diffs（align 热点 82%）②568KB vs 微改 20.6s（解析占 87%）③长度极差 113.3s/3149 diffs；inspect_docx 568KB full 10.9s。
+- 高：align O(n²)（FL-D554 条目内 W2 修复）；store N+1 实测 list_batches 30 批=199 次 SQL、get_document=13 次。**待修（下轮后端性能专项）**。
+- 中：docx 双读盘/下载 2×全文件哈希/_revision_view 每次全量重投影无缓存；download-all 循环内重复校验；无界增长：checkpoints 207MB/26716 文件无清理、traces 184MB 无轮转；两处模块级全局 dict 缓存；compare.js 2.5s 轮询无页面隐藏门控；app.js 修订审查整份 innerHTML 无虚拟化。**待修**。
+- 修复后必须用相同样本报告 before/after，且 diff 输出语义不变。
+
+## FL-D558 测试体系与环境纪律（2026-10-31，A10）
+
+- Q0（环境）：qa-base/.venv 为 symlink，非 repo cwd 下 import fundlex 解析到他树——规定：所有 QA 验证必须 `cd /tmp/opencode/qa-base && .venv/bin/python -m pytest`。**已遵守并写入交接**。
+- M2（中）：docx 层 expected_old_text/hash 校验被禁后全库无测试能抓住（EXPECTED_TEXT_MISMATCH 零断言）——陈旧锚防线只靠上层间接兜底。**待补专测**。
+- Q3（中）：revision_api(12)+selective(17) 依赖 var/.../D01，干净检出恒 skip，CI 等于没测。**待立决定**：要么小 fixture 入仓要么明示评测环境要求。
+- Q9（低）：venv certifi 2026.7.22 低于 pyproject ≥2026.10.19 与 lock 2026.10.23 三方不一致；test_dependency_lock 不测运行时。**待对齐**（生产 venv 一并核对）。
+- Q5/Q6/Q7（低）：discovery.py:632 批次解析失败静默 continue、14 个零引用私有函数、flags.py 注释与默认行为矛盾。**清理项**。
+
+## FL-D559 安全四低中项与已验证面（2026-10-31，A1）
+
+- 已修（`7198c72`）：登录/注册限速、安全响应头、法规解析防爆、guerd 错误包络。
+- 待决策：自助注册默认开放（公网可建号消耗模型配额）——已加限速缓解，是否改默认关闭属产品决定；`/api/settings/model/test` 受限代理（内网已封）保留观察。
+- 已验证有效：跨用户 IDOR 全 404、admin 404、最后管理员保护、禁用吊销会话、token sha256、下载白名单+重哈希、object_path 穿越防护、参数化 SQL、XXE 拒绝、合同上传四重防爆、无 traceback 泄露、XSS sink 全转义、scrypt 规范。
