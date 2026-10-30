@@ -144,7 +144,7 @@
   </div>
   <div class="card card-pad workspace-task-card"><div class="section-title"><h2>我的任务</h2><button class="btn btn-sm" id="workspace-refresh" type="button">刷新</button></div>
     <div class="business-tabs" role="group" aria-label="任务类型"><button type="button" class="is-active" data-workspace-kind="">全部</button><button type="button" data-workspace-kind="revision">修改</button><button type="button" data-workspace-kind="compare">比对</button><button type="button" data-workspace-kind="generation">生成</button></div>
-    <div class="toolbar workspace-toolbar"><div class="searchbox"><input id="workspace-search" type="search" placeholder="搜索任务名称" aria-label="搜索全部业务任务"></div><select class="control-select" id="workspace-status" aria-label="任务情况"><option value="">全部任务</option><option value="active">进行中</option><option value="attention">需要处理</option><option value="completed">近期完成</option></select><label class="workspace-date">创建日期<input type="date" id="workspace-date-from" aria-label="创建起始日期"></label><label class="workspace-date">至<input type="date" id="workspace-date-to" aria-label="创建结束日期"></label><select class="control-select" id="workspace-sort" aria-label="任务排序"><option value="updated_desc">最近更新</option><option value="created_desc">最近创建</option><option value="name">任务名称</option></select></div>
+    <div class="toolbar workspace-toolbar"><div class="searchbox"><input id="workspace-search" type="search" placeholder="搜索任务名称" aria-label="搜索全部业务任务"></div><select class="control-select" id="workspace-status" aria-label="任务情况"><option value="">全部任务</option><option value="active">进行中</option><option value="attention">需要处理</option><option value="completed">近期完成</option></select><label class="workspace-date">创建日期<input type="text" inputmode="numeric" maxlength="10" placeholder="YYYY-MM-DD" pattern="\d{4}-\d{2}-\d{2}" id="workspace-date-from" aria-label="创建起始日期，格式 YYYY-MM-DD"></label><label class="workspace-date">至<input type="text" inputmode="numeric" maxlength="10" placeholder="YYYY-MM-DD" pattern="\d{4}-\d{2}-\d{2}" id="workspace-date-to" aria-label="创建结束日期，格式 YYYY-MM-DD"></label><select class="control-select" id="workspace-sort" aria-label="任务排序"><option value="updated_desc">最近更新</option><option value="created_desc">最近创建</option><option value="name">任务名称</option></select></div>
     <div id="workspace-state" class="subnote" role="status" aria-live="polite"></div><div class="table-wrap"><table class="table workspace-table"><thead><tr><th>任务名称</th><th>业务</th><th>规模</th><th>当前进展</th><th>待办与结果提示</th><th>创建时间</th><th></th></tr></thead><tbody id="workspace-task-rows"></tbody></table></div><div class="pagination" id="workspace-pagination"></div>
   </div>
 </section>
@@ -294,9 +294,9 @@
 </div>
 <small id="upload-limit">正在读取单文件限制</small>
 </div>
-<input id="file-picker" class="sr-only" type="file" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" multiple>
-<input id="folder-picker" class="sr-only" type="file" webkitdirectory directory multiple>
-<input id="replace-picker" class="sr-only" type="file" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document">
+<input id="file-picker" class="sr-only" type="file" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" multiple aria-label="选择一份或多份 DOCX 合同文件">
+<input id="folder-picker" class="sr-only" type="file" webkitdirectory directory multiple aria-label="选择包含合同的文件夹">
+<input id="replace-picker" class="sr-only" type="file" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" aria-label="选择用于替换的合同文件">
 <div class="import-top">
 <h2>文件清单</h2>
 <div class="actions">
@@ -400,6 +400,7 @@
 <button class="btn btn-sm" data-action="download-summary">↓ 下载结果总览 .md</button>
 </div>
 </div>
+<p class="subnote" id="download-hint" hidden>任务还没有可打包下载的合同结果；可先「下载结果总览」或「导出结果清单 (CSV)」查看最新进度，处理出现终态结果后即可下载全部结果 ZIP。</p>
 <p class="subnote" id="selected-task-subtitle">
 </p>
 <div class="task-guide-meta" id="task-guide-meta" hidden><span>使用的修改指引</span><strong id="task-guide-value"></strong></div>
@@ -574,6 +575,7 @@
 </div>
 <small>新增 / 删除的含义均按此方向解释</small>
 </div>
+<p class="subnote" id="compare-pending-note" hidden>任务正在处理或等待上传，暂无比对结果；下方可核对各组文件配对，处理完成后选择合同组查看差异。</p>
 <details class="compare-groups-disclosure"><summary>查看与切换全部合同组</summary><div id="compare-pair-list"></div></details>
 </div>
       <div class="compare-viewer-backdrop" id="compare-viewer-backdrop" hidden></div>
@@ -812,7 +814,7 @@
 </div>
 <p class="subnote">上传后自动解析并独立核验；新版本不会自动启用，确认状态后再启用。</p>
 <div class="guide-upload">
-<input id="guide-file" class="sr-only" type="file" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document">
+<input id="guide-file" class="sr-only" type="file" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" aria-label="选择指引 DOCX 文件">
 <button class="btn" type="button" data-action="guide-choose">选择 DOCX 文件</button>
 <span class="subnote" id="guide-file-name">尚未选择文件</span>
 <button class="btn btn-primary" type="button" data-action="guide-upload" id="guide-upload-btn" disabled>上传指引</button>

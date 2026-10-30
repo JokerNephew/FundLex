@@ -55,7 +55,7 @@
     serial: 0, active: false, route: null, timer: null, runs: [], query: "", status: "", listPage: 1, listMeta: null,
     detail: null, guide: null, candidate: null, requirements: [], drafts: new Map(), selected: "",
     file: null, busy: false, impactsSerial: 0, impactPage: 1, impactRequirement: "", impactStatus: "",
-    openEpoch: null, authValue: false,
+    openEpoch: null, authValue: false, listPaged: true, runsShown: 50, pollFails: 0,
   };
   const workbench = () => window.FundLexWorkbench;
   const root = () => document.getElementById("gg-root");
@@ -147,6 +147,7 @@
     state.drafts.clear();
     state.file = null;
     state.busy = false;
+    state.pollFails = 0;
     const target = root();
     if (!target || !workbench()) return;
     state.openEpoch = workbench().epoch();
@@ -166,24 +167,34 @@
   async function loadList(ctx) {
     root().innerHTML = `<section class="card gg-card"><form id="gg-filter" class="gg-toolbar"><label class="gg-search">搜索任务<input id="gg-query" type="search" placeholder="任务名或法规文件名" value="${esc(state.query)}"></label><label>任务状态<select id="gg-status"><option value="">全部状态</option>${["queued", "running", "paused", "failed", "complete", "complete_with_unresolved"].map((value) => `<option value="${value}" ${state.status === value ? "selected" : ""}>${esc(label(value))}</option>`).join("")}</select></label><button class="btn" type="submit">筛选</button>${button("refresh", "刷新")}${button("new", "＋ 新建生成任务", "btn-primary page-primary")}</form><p class="gg-muted" id="gg-list-scope">正在读取任务…</p><div id="gg-list-results">${loading()}</div><div id="gg-list-pages" class="gg-pagination"></div></section>`;
     try {
-      const params = new URLSearchParams({ page: String(state.listPage), page_size: "20", q: state.query, status: state.status });
-      let data = await request(`${API}/runs?${params}`, {}, ctx);
-      const paged = Array.isArray(data.items) && Number.isSafeInteger(data.total) && data.total >= 0 &&
-        data.page === state.listPage && data.page_size === 20 && data.items.length <= data.page_size;
-      state.listMeta = paged ? { total: data.total, page: data.page, page_size: data.page_size } : null;
-      if (!paged) data = await request(`${API}/runs?limit=200`, {}, ctx);
+      let data;
+      if (state.listPaged !== false) {
+        const params = new URLSearchParams({ page: String(state.listPage), page_size: "20", q: state.query, status: state.status });
+        data = await request(`${API}/runs?${params}`, {}, ctx);
+        const paged = Array.isArray(data.items) && Number.isSafeInteger(data.total) && data.total >= 0 &&
+          data.page === state.listPage && data.page_size === 20 && data.items.length <= data.page_size;
+        state.listMeta = paged ? { total: data.total, page: data.page, page_size: data.page_size } : null;
+        // A9-F05：一次确认服务不分页后缓存结论，后续不再重复发两个请求。
+        state.listPaged = paged;
+        if (!paged) data = await request(`${API}/runs?limit=200`, {}, ctx);
+      } else {
+        state.listMeta = null;
+        data = await request(`${API}/runs?limit=200`, {}, ctx);
+      }
       state.runs = data.items || [];
+      state.runsShown = 50;
       renderListResults();
     } catch (error) { showError($("gg-list-results"), error, ctx); }
   }
   function renderListResults() {
     const query = state.query.trim().toLocaleLowerCase();
     const runs = state.listMeta ? state.runs : state.runs.filter((run) => (!query || `${run.title || ""} ${run.filename || ""}`.toLocaleLowerCase().includes(query)) && (!state.status || run.status === state.status));
+    const shown = state.listMeta ? runs : runs.slice(0, state.runsShown);
     $("gg-list-scope").textContent = state.listMeta
       ? `当前账号共 ${state.listMeta.total} 个匹配任务 · 第 ${state.listPage} 页 · 每页 20 个（服务端搜索与精确状态筛选）`
       : `当前服务未返回可靠分页信息，仅检索最近最多 200 个生成任务（已载入 ${state.runs.length} 个）；当前筛选 ${runs.length} 个，不代表全量任务统计。`;
-    $("gg-list-results").innerHTML = runs.length ? `<div class="gg-table-wrap"><table class="gg-table"><thead><tr><th>任务 / 法规</th><th>任务状态</th><th>当前阶段</th><th>候选门禁</th><th>更新时间</th><th>操作</th></tr></thead><tbody>${runs.map((run) => `<tr><td><strong>${esc(run.title || run.filename || "未命名任务")}</strong><small>${esc(run.filename)}</small></td><td>${badge(run.status)}</td><td>${esc(stage(run.stage))}</td><td>${badge(run.qualification_status || "draft")}</td><td>${esc(date(run.updated_at || run.created_at))}</td><td><button class="btn btn-sm" type="button" data-gg-run="${esc(run.id)}" aria-label="查看 ${esc(run.title || run.filename)}">查看</button></td></tr>`).join("")}</tbody></table></div>` : empty(state.listMeta ? "当前页没有匹配任务，请调整筛选或返回上一页。" : state.runs.length ? "当前范围内没有符合筛选条件的任务。" : "还没有生成任务。上传一份法规开始。");
-    $("gg-list-pages").innerHTML = state.listMeta ? `<button type="button" class="btn btn-sm" data-gg-list-page="${state.listPage - 1}" ${state.listPage <= 1 ? "disabled" : ""}>上一页</button><span>第 ${state.listPage} / ${Math.max(1, Math.ceil(state.listMeta.total / 20))} 页</span><button type="button" class="btn btn-sm" data-gg-list-page="${state.listPage + 1}" ${state.listPage * 20 >= state.listMeta.total ? "disabled" : ""}>下一页</button>` : "";
+    $("gg-list-results").innerHTML = shown.length ? `<div class="gg-table-wrap"><table class="gg-table"><thead><tr><th>任务 / 法规</th><th>任务状态</th><th>当前阶段</th><th>候选门禁</th><th>更新时间</th><th>操作</th></tr></thead><tbody>${shown.map((run) => `<tr><td><strong>${esc(run.title || run.filename || "未命名任务")}</strong><small>${esc(run.filename)}</small></td><td>${badge(run.status)}</td><td>${esc(stage(run.stage))}</td><td>${badge(run.qualification_status || "draft")}</td><td>${esc(date(run.updated_at || run.created_at))}</td><td><button class="btn btn-sm" type="button" data-gg-run="${esc(run.id)}" aria-label="查看 ${esc(run.title || run.filename)}">查看</button></td></tr>`).join("")}</tbody></table></div>` : empty(state.listMeta ? "当前页没有匹配任务，请调整筛选或返回上一页。" : runs.length ? "当前范围内没有符合筛选条件的任务。" : "还没有生成任务。上传一份法规开始。");
+    $("gg-list-pages").innerHTML = state.listMeta ? `<button type="button" class="btn btn-sm" data-gg-list-page="${state.listPage - 1}" ${state.listPage <= 1 ? "disabled" : ""}>上一页</button><span>第 ${state.listPage} / ${Math.max(1, Math.ceil(state.listMeta.total / 20))} 页</span><button type="button" class="btn btn-sm" data-gg-list-page="${state.listPage + 1}" ${state.listPage * 20 >= state.listMeta.total ? "disabled" : ""}>下一页</button>` : (runs.length > shown.length ? `<button type="button" class="btn btn-sm" data-gg-list-more>加载更多（已显示 ${shown.length} / ${runs.length}）</button>` : "");
   }
 
   async function renderNew(ctx) {
@@ -270,7 +281,7 @@
     workbench().setObjectTitle?.("generation", run.title || run.filename);
     const source = run.filename && run.filename !== run.title ? `${run.filename} · ` : "";
     $("gg-detail-head").innerHTML = heading(run.title || run.filename || "未命名任务", `${source}更新 ${date(run.updated_at || run.created_at)}`, button("refresh", "刷新")) +
-      `<div class="gg-task-status"><span class="gg-status-field"><strong>任务</strong>${badge(run.status)}</span><span class="gg-status-field"><strong>候选门禁</strong>${badge(run.qualification_status || "draft")}</span>${run.candidate && run.candidate.status !== run.qualification_status ? `<span class="gg-status-field"><strong>当前版本</strong>${badge(run.candidate.status)}</span>` : ""}<span class="gg-status-field"><strong>阶段</strong>${esc(stage(run.stage))}</span></div>${Number.isInteger(run.config?.corpus_limit) ? `<div id="gg-run-scope">${note(`本任务参考合同样本上限：${run.config.corpus_limit} 份。输出仅是所选样本范围下的候选指引，不代表全库覆盖；实际使用范围以任务快照为准。`, "warning")}</div>` : ""}${runProblem(run.error_code)}${run.retry ? `<div class="gg-retry"><span>处理尝试 ${esc(run.retry.attempts ?? "—")} / ${esc(run.retry.max_attempts ?? "—")} 次</span>${run.retry.can_resume === true && ["failed", "paused"].includes(run.status) ? `${button("resume", "继续处理/重试")}<p class="gg-muted">继续处理将再次调用模型、消耗预算并可能产生费用；仍受服务端预算及尝试次数上限约束。不会自动执行付费重试。</p>` : ""}<span id="gg-resume-status" role="status" aria-live="polite"></span></div>` : ""}`;
+      `<div class="gg-task-status"><span class="gg-status-field"><strong>任务</strong>${badge(run.status)}</span><span class="gg-status-field"><strong>候选门禁</strong>${badge(run.qualification_status || "draft")}</span>${run.candidate && run.candidate.status !== run.qualification_status ? `<span class="gg-status-field"><strong>当前版本</strong>${badge(run.candidate.status)}</span>` : ""}<span class="gg-status-field"><strong>阶段</strong>${esc(stage(run.stage))}</span></div>${Number.isInteger(run.config?.corpus_limit) ? `<div id="gg-run-scope">${note(`本任务参考合同样本上限：${run.config.corpus_limit} 份。输出仅是所选样本范围下的候选指引，不代表全库覆盖；实际使用范围以任务快照为准。`, "warning")}</div>` : ""}${runProblem(run.error_code)}${state.pollFails >= 3 ? note("自动刷新已连续失败，已暂停；请点击「刷新」重试，任务在后台的处理不受影响。", "warning") : ""}${run.retry ? `<div class="gg-retry"><span>处理尝试 ${esc(run.retry.attempts ?? "—")} / ${esc(run.retry.max_attempts ?? "—")} 次</span>${run.retry.can_resume === true && ["failed", "paused"].includes(run.status) ? `${button("resume", "继续处理/重试")}<p class="gg-muted">继续处理将再次调用模型、消耗预算并可能产生费用；仍受服务端预算及尝试次数上限约束。不会自动执行付费重试。</p>` : ""}<span id="gg-resume-status" role="status" aria-live="polite"></span></div>` : ""}`;
   }
   async function resumeRun(trigger) {
     if (state.busy || state.detail?.retry?.can_resume !== true || !["failed", "paused"].includes(state.detail.status)) return;
@@ -334,20 +345,28 @@
   function boundary() {
     return note("候选发布 ≠ 修改指引启用。尚未通过此工作区导入修改引擎（runtime_guide_import=not_requested）；当前启用状态未由此接口确认。需要导出后在“修改指引”中显式导入、核验并启用。不会自动改变当前修改任务的指引。", "warning");
   }
-  function schedulePoll(ctx) {
+  // A9-F08：轮询失败后按 10s/30s 退避重试，连续失败 3 次后停止并显示提示，不再静默停摆。
+  function schedulePoll(ctx, delay = 5000) {
     clearTimeout(state.timer);
     if (!alive(ctx) || !["queued", "running"].includes(state.detail?.status)) return;
     state.timer = setTimeout(async () => {
       try {
         const detail = await request(runPath(), {}, ctx);
+        state.pollFails = 0;
         if (dirty()) { schedulePoll(ctx); return; }
         state.detail = detail;
         renderDetailHead();
         if (state.route.tab === "overview") $("gg-panel").innerHTML = overview();
         // Other tabs are not replaced underneath the reader or editor.
         schedulePoll(ctx);
-      } catch (error) { notify(error, ctx); }
-    }, 5000);
+      } catch (error) {
+        state.pollFails = (state.pollFails || 0) + 1;
+        notify(error, ctx);
+        if (!alive(ctx)) return;
+        if (state.pollFails >= 3) { renderDetailHead(); return; }
+        schedulePoll(ctx, state.pollFails === 1 ? 10000 : 30000);
+      }
+    }, delay);
   }
 
   function editable() { return complete() && state.detail?.candidate?.status !== "published" && Boolean(state.detail?.candidate?.current_version_id); }
@@ -545,6 +564,9 @@
     state.impactStatus = "";
     state.impactsSerial++;
     state.openEpoch = null;
+    state.listPaged = true;
+    state.runsShown = 50;
+    state.pollFails = 0;
     if (root()) root().replaceChildren();
   }
   document.addEventListener("fundlex:route", (event) => {
@@ -612,6 +634,7 @@
     }
     if (target.dataset.ggPage) { state.impactPage = Number(target.dataset.ggPage); void loadImpacts(stamp()); }
     if (target.dataset.ggListPage) navigate({ mode: "list", page: target.dataset.ggListPage });
+    if (target.dataset.ggListMore !== undefined) { state.runsShown += 50; renderListResults(); }
     if (target.dataset.ggTransition) void transition(target.dataset.ggTransition, target);
     if (target.dataset.ggDownload) void download(target.dataset.ggDownload, target);
     const action = target.dataset.ggAction;

@@ -23,7 +23,7 @@
     const selected = [pair.left?.name || fileName(pair._left), pair.right?.name || fileName(pair._right)].filter(Boolean).join(' / ');
     const sideCard=(side,title,badge)=>{
       const name=pair[side]?.name||fileName(pair[`_${side}`]);
-      return `<div class="compare-file-card ${name?'has-file':''}" data-file-side="${side}"><div class="compare-file-card-title"><span class="compare-side-badge">${badge}</span><strong>${title}</strong></div><div class="compare-file-name" title="${esc(name)}">${esc(name||'尚未选择合同')}</div><div class="compare-file-card-action"><button type="button" class="btn btn-sm" data-compare-choose="${side}" aria-label="选择${title}">${name?'更换文件':'选择文件'}</button><span>仅支持 DOCX</span></div><input type="file" accept=".doc,.docx,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" data-compare-${side}="${index}" aria-label="${title}" hidden></div>`;
+      return `<div class="compare-file-card ${name?'has-file':''}" data-file-side="${side}"><div class="compare-file-card-title"><span class="compare-side-badge">${badge}</span><strong>${title}</strong></div><div class="compare-file-name" title="${esc(name)}">${esc(name||'尚未选择合同')}</div><div class="compare-file-card-action"><button type="button" class="btn btn-sm" data-compare-choose="${side}" aria-label="选择${title}">${name?'更换文件':'选择文件'}</button><span>仅支持 DOCX；.doc 请先另存为 .docx</span></div><input type="file" accept=".doc,.docx,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" data-compare-${side}="${index}" aria-label="${title}" hidden></div>`;
     };
     return `<div class="compare-pair-input" data-pair-index="${index}"><div class="compare-pair-head"><strong>合同组 ${String(index+1).padStart(2,'0')}</strong><button type="button" class="btn-link" data-compare-remove="${index}" ${index?'':'disabled'}>移除本组</button></div><div class="compare-side-inputs">${sideCard('left','合同A','A')}${sideCard('right','合同B','B')}</div><p class="sr-only compare-file-label" data-compare-label="${index}">${esc(selected||'尚未选择文件')}</p></div>`;
   }
@@ -57,6 +57,9 @@
   function renderTask(task) {
     state.task=task; state.pairs=task.pairs||[]; $('compare-detail').hidden=false; $('compare-task-name').textContent=task.name||'未命名任务';api.setObjectTitle?.('compare',task.name); $('compare-task-status').textContent=`${taskMetrics(task).status} · ${state.pairs.length} 组`;
     state.tasks=state.tasks.map(t=>t.id===task.id?task:t); renderTasks(); renderPairs();
+    const hasResult=state.pairs.some(p=>['succeeded','incomplete'].includes(p.status));
+    const disclosure=document.querySelector('.compare-groups-disclosure'); if(disclosure)disclosure.open=!hasResult;
+    const pendingNote=$('compare-pending-note'); if(pendingNote)pendingNote.hidden=hasResult;
   }
   function renderPairs() {
     $('compare-pair-list').innerHTML=`<div class="compare-pair-statuses">${state.pairs.map((p,i)=>`<button type="button" class="compare-pair-status ${p.id===state.selectedPairId?'is-selected':''} ${['succeeded','incomplete'].includes(p.status)?'is-done':''} ${p.status==='incomplete'?'is-incomplete':''} ${p.status==='failed'||p.viewError?'is-failed':''}" data-compare-pair="${i}"><span class="compare-pair-number">${String(i+1).padStart(2,'0')}</span><span class="compare-pair-main"><strong>${esc(p.label||`第 ${i+1} 组`)}</strong><small>合同A：${esc(p.left?.name||'未命名')} / 合同B：${esc(p.right?.name||'未命名')}</small></span><span class="compare-pair-state">${esc(statusLabel(p.status))}${p.summary?` · ${p.summary.total} 处`:''}</span>${p.error_code||p.viewError?`<span class="compare-pair-error" role="status">${esc(p.viewError||`处理失败：${p.error_code}`)}</span>`:''}</button>`).join('')}</div>`;
@@ -83,7 +86,7 @@
     const legacy=files.flatMap(x=>[x.left,x.right]).filter(f=>f&&legacyDoc(f));
     if(legacy.length){message.textContent=legacyDocMessage(legacy);return;}
     if (!files.length || files.some(x=>!x.left||!x.right)) { message.textContent='每组都需要同时选择合同A和合同B的 DOCX 文件。'; return; }
-    const identity=state.identityToken; const name=($('compare-name').value||'合同比对').trim(); const pairs=files.map((x,i)=>{const leftId=`L${i}-${crypto.randomUUID()}`,rightId=`R${i}-${crypto.randomUUID()}`;return {client_pair_id:`P${i+1}`,label:`合同 ${i+1}`,left:{client_id:leftId,name:fileName(x.left),size:x.left.size},right:{client_id:rightId,name:fileName(x.right),size:x.right.size}};});
+    const identity=state.identityToken; const name=($('compare-name').value||'').trim()||`合同比对 ${new Date().toLocaleString('zh-CN',{hour12:false})}`; const pairs=files.map((x,i)=>{const leftId=`L${i}-${crypto.randomUUID()}`,rightId=`R${i}-${crypto.randomUUID()}`;return {client_pair_id:`P${i+1}`,label:`合同 ${i+1}`,left:{client_id:leftId,name:fileName(x.left),size:x.left.size},right:{client_id:rightId,name:fileName(x.right),size:x.right.size}};});
     const key=`compare-${Date.now()}-${crypto.randomUUID()}`; message.textContent='正在创建对比任务…'; $('compare-submit').disabled=true;
     try { const task=await json('/api/compare/tasks',{method:'POST',headers:{'Content-Type':'application/json','Idempotency-Key':key},body:JSON.stringify({name,pairs})}); if(identity!==state.identityToken)return; state.uploadDraft={task,pairs,files,next:0}; await continueUploads(); }
     catch(e) { if(identity===state.identityToken){message.textContent=`创建任务失败：${e.message}`;$('compare-submit').disabled=false;} }
@@ -477,7 +480,7 @@
   function selectionCurrent(context) { return context.pairId===state.selectedPairId&&context.token===state.selectionToken&&context.identity===state.identityToken; }
   function resetSelection() {
     state.selectionToken++;state.selectionSaveToken++;state.selection=null;state.selectionDraft=null;
-    state.selectionDirty=false;state.selectionSaving=false;state.selectionBusy=false;state.generationKey=null;
+    state.selectionDirty=false;state.selectionSaving=false;state.selectionBusy=false;state.selectionSaved=false;state.generationKey=null;
     selectionStatus('');$('compare-selection-downloads')?.replaceChildren();renderSelection();syncSelectionControls();
   }
   function renderSelectionDownloads() {
@@ -506,7 +509,7 @@
   }
   async function loadSelection(pairId) {
     resetSelection();const token=state.selectionToken;
-    try { const payload=await json(`/api/compare/pairs/${encodeURIComponent(pairId)}/selection`); if(token!==state.selectionToken||pairId!==state.selectedPairId)return; state.selection=normalizeSelection(payload);state.selectionDraft={...(state.selection?.decisions||{})};renderSelection();syncSelectionControls(); }
+    try { const payload=await json(`/api/compare/pairs/${encodeURIComponent(pairId)}/selection`); if(token!==state.selectionToken||pairId!==state.selectedPairId)return; state.selection=normalizeSelection(payload);state.selectionDraft={...(state.selection?.decisions||{})};state.selectionSaved=(state.selection?.selection_epoch??0)>=1;renderSelection();syncSelectionControls(); }
     catch(e){if(token===state.selectionToken){selectionStatus(`读取选择状态失败：${e.message}`,true);renderSelection();}}
   }
   async function saveSelectionDraft(updateIds) {
@@ -519,14 +522,14 @@
       selectionStatus('正在保存选择…');renderSelection();if(ids)ids.forEach(updateSelectionItem);else syncSelectionControls();
       const payload=await json(`/api/compare/pairs/${encodeURIComponent(context.pairId)}/selection`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({...binding,decisions})});
       if(!selectionCurrent(context)||token!==state.selectionSaveToken)return;
-      state.selection=normalizeSelection(payload);state.selectionDraft={...(state.selection?.decisions||{})};state.selectionDirty=false;state.generationKey=null;selectionStatus('已保存');
+      state.selection=normalizeSelection(payload);state.selectionDraft={...(state.selection?.decisions||{})};state.selectionDirty=false;state.selectionSaved=true;state.generationKey=null;selectionStatus('已保存');
     } catch(e) {
       if(!selectionCurrent(context)||token!==state.selectionSaveToken)return;
       if(e.raw==='SELECTION_EPOCH_CONFLICT') {
         try {
           const latest=await json(`/api/compare/pairs/${encodeURIComponent(context.pairId)}/selection`);
           if(!selectionCurrent(context)||token!==state.selectionSaveToken)return;
-          if(['result_sha256','left_source_sha256','right_source_sha256'].every(k=>latest[k]===state.selection[k]))state.selection=normalizeSelection(latest);
+          if(['result_sha256','left_source_sha256','right_source_sha256'].every(k=>latest[k]===state.selection[k])){state.selection=normalizeSelection(latest);state.selectionSaved=(state.selection?.selection_epoch??0)>=1;}
         } catch { /* Keep the local map; a failed reload must not discard it. */ }
       }
       if(selectionCurrent(context)){state.selectionDirty=true;selectionStatus('保存未完成，本地选择已保留。请核对后点击“保存当前选择”重试。',true);}
@@ -536,6 +539,7 @@
   function setAllSelections(choice) { if(!state.selection||state.selectionSaving||state.selectionBusy)return; const next={};(state.view?.diffs||[]).forEach(item=>{next[item.id]=choice;});state.selectionDraft=next;state.selectionDirty=true;syncSelectionControls();saveSelectionDraft(); }
   async function selectionAction(kind) {
     const binding=selectionBinding();if(!binding||state.selectionSaving||state.selectionBusy||state.selectionDirty||(kind==='generate'&&!selectionCanGenerate()))return;
+    if(kind==='generate'&&binding.expected_epoch<1&&!state.selectionSaved){selectionStatus('请先保存当前选择，再生成选择结果。',true);return;}
     const context=selectionContext();state.selectionBusy=true;
     selectionStatus(kind==='generate'?'正在生成选择结果 DOCX，请稍候…':'正在检查生成条件…');renderSelection();syncSelectionControls();
     const headers={'Content-Type':'application/json'};

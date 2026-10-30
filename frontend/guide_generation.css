@@ -34,6 +34,19 @@
 .gg-workspace .gg-error{color:var(--red)}.gg-workspace .gg-success{color:var(--green)}.gg-workspace .gg-warning{color:var(--amber)}
 .gg-empty{text-align:center;color:var(--muted);padding:30px 14px;font-size:13px;overflow-wrap:anywhere}
 .gg-table-wrap{overflow-x:auto;max-width:100%;border:1px solid var(--line-soft);border-radius:6px}
+@media(min-width:761px) and (max-width:1180px){
+  .gg-table-wrap{
+    background-image:
+      linear-gradient(90deg,var(--paper) 30%,rgba(255,255,255,0)),
+      linear-gradient(270deg,var(--paper) 30%,rgba(255,255,255,0)),
+      radial-gradient(farthest-side at 0 50%,rgba(31,38,46,.18),rgba(31,38,46,0)),
+      radial-gradient(farthest-side at 100% 50%,rgba(31,38,46,.18),rgba(31,38,46,0));
+    background-position:0 0,100% 0,0 0,100% 0;
+    background-size:40px 100%,40px 100%,14px 100%,14px 100%;
+    background-repeat:no-repeat;
+    background-attachment:local,local,scroll,scroll;
+  }
+}
 .gg-table{border-collapse:collapse;width:100%;min-width:760px;text-align:left;font-size:12px}
 .gg-table th{background:#fafbfc;color:var(--muted);font-weight:600;padding:10px 12px;white-space:nowrap}
 .gg-table td{border-top:1px solid var(--line-soft);padding:12px;vertical-align:middle;max-width:300px;overflow-wrap:anywhere}

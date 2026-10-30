@@ -25,6 +25,21 @@
 .task-name-field input{width:100%}
 #task-name.invalid{border-color:#d98f8f;box-shadow:0 0 0 3px rgba(165,43,54,.08)}
 .field-error{color:var(--red);font-size:12px;margin:0}
+.field-note{color:var(--green);}
+/* B11-P1：窄桌面（761–1180px）下横向滚动容器两端给滚动阴影提示；滚动到边缘时白色遮盖层遮住阴影。 */
+@media(min-width:761px) and (max-width:1180px){
+  .table-wrap,.counts-kpis{
+    background-image:
+      linear-gradient(90deg,var(--paper) 30%,rgba(255,255,255,0)),
+      linear-gradient(270deg,var(--paper) 30%,rgba(255,255,255,0)),
+      radial-gradient(farthest-side at 0 50%,rgba(31,38,46,.18),rgba(31,38,46,0)),
+      radial-gradient(farthest-side at 100% 50%,rgba(31,38,46,.18),rgba(31,38,46,0));
+    background-position:0 0,100% 0,0 0,100% 0;
+    background-size:40px 100%,40px 100%,14px 100%,14px 100%;
+    background-repeat:no-repeat;
+    background-attachment:local,local,scroll,scroll;
+  }
+}
 #doc-scope-note{margin:0 0 11px}
 .evidence.quote{cursor:zoom-in;background:#f7f9fa;border:1px solid var(--line-soft);border-radius:6px;padding:9px 11px;margin-bottom:9px}
 .evidence.quote .quote-label{display:block;color:#88919a;font-size:10px;font-weight:700;letter-spacing:.08em;margin-bottom:4px}

@@ -49,7 +49,8 @@
   });
   $('workspace-refresh').addEventListener('click',load);
   $('workspace-search').addEventListener('input',()=>{clearTimeout(timer);timer=setTimeout(()=>navigate({q:$('workspace-search').value.trim(),page:'1'}),300);});
-  for(const [id,key] of [['workspace-status','status'],['workspace-sort','sort'],['workspace-date-from','date_from'],['workspace-date-to','date_to']])$(id).addEventListener('change',()=>navigate({[key]:$(id).value,page:'1'}));
+  function validDateValue(value){if(!value)return true;if(!/^\d{4}-\d{2}-\d{2}$/.test(value))return false;const[y,m,d]=value.split('-').map(Number);if(m<1||m>12||d<1||d>31)return false;const date=new Date(Date.UTC(y,m-1,d));return date.getUTCFullYear()===y&&date.getUTCMonth()===m-1&&date.getUTCDate()===d;}
+  for(const [id,key] of [['workspace-status','status'],['workspace-sort','sort'],['workspace-date-from','date_from'],['workspace-date-to','date_to']])$(id).addEventListener('change',()=>{const input=$(id);if(id.startsWith('workspace-date-')){input.setCustomValidity(validDateValue(input.value)?'':'请使用 YYYY-MM-DD 格式输入真实日期。');if(!input.checkValidity()){input.reportValidity();return;}}navigate({[key]:input.value,page:'1'});});
   document.addEventListener('fundlex:route',e=>{if(e.detail.view!=='workspace'){token++;busy=false;clearTimeout(timer);return;}route={...e.detail};delete route.view;setInputs();load();});
   document.addEventListener('fundlex:identity-reset',()=>{token++;busy=false;route={};clearTimeout(timer);$('workspace-task-rows').replaceChildren();$('workspace-pagination').replaceChildren();$('workspace-state').textContent='';for(const id of ['active','attention','completed'])$(`workspace-${id}`).textContent='—';setInputs();});
   setInterval(()=>{if(!busy&&document.visibilityState==='visible'&&api.view()==='workspace'&&document.activeElement?.id!=='workspace-search')load();},15000);
