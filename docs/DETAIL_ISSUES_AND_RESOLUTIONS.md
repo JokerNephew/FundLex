@@ -6721,7 +6721,7 @@ H＝E×…
 - A2-F2（高）：gg_jobs claim 无 attempt 上限无终态清扫，确定性崩溃 run 可被 systemd 无限重启烧模型费。已修复（`8779dac`：claim 前谓词化清扫 attempts≥max→fenced 终态 failed+GG_ATTEMPTS_EXHAUSTED，默认上限 5，env `FUNDLEX_GUIDE_JOB_MAX_ATTEMPTS`；健康心跳 job attempts 不增长不误杀），独立复核 PASS。
 - A2-F3（中）：enqueue 去重只看 queued/leased，retry_wait 可插第二条 live job，同 run 并发处理成立。已修复（`8779dac`：去重扩至 retry_wait、run 行锁+sibling leased 互斥+rowcount 校验+历史重复行 self-heal），独立复核 PASS；轻微 CONCERN：MySQL RR 下 sibling 快照读对遗留重复行理论漏检窗口（生产 SQLite 不受影响，新数据不会产生双 live job）。
 - A2-F4/B14-01（中）：store.retry/finish Conflict、claim 期瞬时 DB 故障穿透终结 run_forever，仅 systemd 兜底。已修复（`8779dac`：循环内有界退避 6 次 0.5→30s，到界重抛留库由租约回收+systemd 兜底，Conflict 以 _is_takeover stand down），独立复核 PASS。
-- B14-02/04、A3-F8 附件（中/低）：finish/崩溃孤儿对象无 GC；/tmp/fundlex_job_* 泄漏；运行中 pause 残留 tasks.paused=1 与批次 completed 矛盾位。B14-04（marker 三重校验+pid 活性）与 B14-02 之 finish 失败路径 reap 已修复（`8779dac`，复核 PASS）；**B14-02 之 kill 后全部已复制孤儿仍无清扫器，部分闭合保持 open**。B14-03（paused=1 陈旧位）**待修（主 agent）**；A3-F8（finish 持久模式围栏仅 task_bound 生效）**待决策**，现无生产者触发。
+- B14-02/04、A3-F8 附件（中/低）：finish/崩溃孤儿对象无 GC；/tmp/fundlex_job_* 泄漏；运行中 pause 残留 tasks.paused=1 与批次 completed 矛盾位。B14-04（marker 三重校验+pid 活性）与 B14-02 之 finish 失败路径 reap 已修复（`8779dac`，复核 PASS）；**B14-02 之 kill 后全部已复制孤儿仍无清扫器，部分闭合保持 open**。B14-03（paused=1 陈旧位）已修（`5bfacb7`：_heal_task_pause 挂 finish/retry/claim/TaskStore.control，仅真终态时清位，未传完保留暂停语义；6 项新回归+144 项相关测试绿）；A3-F8（finish 持久模式围栏仅 task_bound 生效）**待决策**，现无生产者触发。
 - 正面：claim 唯一胜者、lease 回收、fencing 拒 stale、attempt 终态、checkpoint 反污染、finish 原子性、幂等键并发恰 1 行、熔断/并发闸门、kill 后 0 孤儿交付均实测通过。
 
 ## FL-D554 Compare 正确性与性能（2026-10-31，A6+B13）
@@ -6740,7 +6740,7 @@ H＝E×…
 - A3-F1（高）：overlay 修订 id 按 next_id+2n-1 分配 vs selective del_id 必须奇——外来修订约半数合同 Review 全 422。已修复（`467db01`：base_id 向上取奇且严格大于全包外来 max id），独立复核 PASS。
 - A3-F2（高，真实合同必现）：编辑位之前的持久 barrier（tab/hyperlink/域/批注范围）被 _accepted_offsets 误从期望文本剥掉 → FINAL_TEXT_MISMATCH 误拒并删产物；RUN_FORMAT 同缺陷。已修复（`467db01`：双侧同一去 barrier 纯视图比对），复核 PASS（含真实合同冒烟实测）。
 - A3-F3/F4（中）：书签跨 span 孤儿 bookmarkEnd；no-op 编辑（replacement==expected_old_text）被接受。已修复（`467db01`：span 内成对移除/跨段 fail-closed 双重防线；validate 拒 NOOP_EDIT），复核 PASS。
-- A3-F5/F6/F7（低）：finish 不交叉校验 plan.edits 与内嵌 manifest；_document_dict 暴露全部 artifact 下载 URL。**待修/观察**。
+- A3-F5/F6/F7（低）：已全部修复（`5bfacb7`）——F5：finish 前 manifest ⊆ plan.edits 单向校验，漂移 fail-closed REVISION_MANIFEST_PLAN_MISMATCH；F6：servable_artifact_kinds 门禁，_document_dict/任务文档 downloads 不再暴露 evaluation/selected 不可下载 URL（artifacts 库存字段保持原样）；F7：模式围栏去 task_id 条件，无绑定也强制。6 项新回归，复核实跑 144+42 绿。
 - 正面：accept-all c14n==final、OPC/rels 完整、双哈希闸门、selective 4 线程恰 1 胜、外来修订篡改全 fail-closed、30 轮 fuzz 主路径成立。
 
 ## FL-D556 前端 V1 功能/交互缺陷（2026-10-31，A9+B11+B12）
