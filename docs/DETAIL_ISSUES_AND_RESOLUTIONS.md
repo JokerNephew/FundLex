@@ -1,5 +1,21 @@
 # FundLex 细节问题与处理记录
 
+## FL-D540 项目模型切换为 hon-maas `kimi-k3`，并明确不限量、不做预算门禁（2026-10-31）
+
+- 发现/需求日期：2026-10-31。用户要求把项目调用的模型改为 `https://token-service-qy.hon-maas.com` 上的 `kimi-k3`，并在文档中记录**不限量使用、完全不用考虑预算问题**。
+- 配置变更（生产，`/etc/fundlex-recall.env` 与旧部署源 `/etc/fundlex.env` 同步修改）：
+  `LLM_PROVIDER=hon-maas`、`LLM_BASE_URL=https://token-service-qy.hon-maas.com/v1`、`LLM_MODEL=kimi-k3`；
+  `LLM_API_KEY` 已替换为用户提供的密钥，**密钥值只存在于 0600 环境文件，未写入仓库、文档、prompt、日志或本记录**。
+  同时把 `FUNDLEX_MODEL_MAX_CALLS`、`FUNDLEX_MODEL_MAX_REQUESTS`、`FUNDLEX_MODEL_MAX_COST_USD` 置为 `0`（表示未设置阈值），并确认 `FUNDLEX_MODEL_ENFORCE_LIMITS` 未设置。
+- 不限量政策（本次明确生效）：本项目模型调用按任务需要执行，**不设调用次数/费用上限，不因预算暂停、询问或判定 NO-GO**。账本 `/var/lib/fundlex/model_budget.sqlite` 继续记录 HTTP 次数、token 与按配置单价的估算费用，仅用于观测与追溯；历史账本不删除、不重置。仍保留的技术约束只有：并发槽位（当前 `FUNDLEX_MODEL_CONCURRENCY=1`）、供应商限流/重试、上下文与输出 token 容量、超时和文件安全限制。
+- 变更前备份：`/var/backups/fundlex/fundlex-recall.env-before-honmaas-kimi-k3-20261031-002945` 与 `/var/backups/fundlex/fundlex.env-before-honmaas-kimi-k3-20261031-002945`，均 `0600 root:root`，`cmp` 校验一致。改后 `/etc/fundlex-recall.env` 为 `0600 root:root`，`/etc/fundlex.env` 保持原 `0640 root:fundlex`。密钥落盘后用哈希比对确认与环境文件一致，临时密钥文件已删除。
+- 端点与兼容性验证（切换前、用临时 0600 密钥文件、不打印密钥）：`GET /v1/models` 返回 200，目录含 `kimi-k3`；`POST /v1/chat/completions` 在 `temperature=0`、`response_format={"type":"json_object"}`、`max_tokens=32000` 且沿用 `thinking=disabled`/`reasoning_effort=low` 时返回 200 与合法 JSON。`kimi-k3` 是推理模型，响应同时含 `reasoning_content`，推理 token 计入 completion；`max_tokens` 过小会先耗尽推理预算并返回 `finish_reason=length` 和空 content，因此保留 32000 输出容量，不能沿用很小的输出上限。
+- 切换后验证：六个使用该环境文件的生产服务（recall API/Worker、compare worker、guide worker、guide-generation worker、feishu）全部 active，进程环境 `LLM_MODEL=kimi-k3`、`LLM_BASE_URL` 为新端点；capabilities 与工作台 200。以生产环境文件在 `fundlex` 用户下执行一次真实 `ModelGateway` 调用（`guide_verify`，最小 JSON schema）：HTTP 1 次、错误 0、模型返回 `kimi-k3`、399 tokens、延迟约 2.7s、响应通过 schema 校验；`budget.snapshot()` 显示 `max_http_attempts=None`、`max_cost_usd=None`、`enforce=False`、`exceeded=False`。账本新增 1 条 completed 记录（估算费用约 $0.00012，仅为观测）。
+- 角色与范围：未设置 `FUNDLEX_MODEL_ROLES_FILE`，主模型与检查模型均使用该端点/模型（`same_endpoint=True`）；普通用户自行配置的个人执行/检查模型仍按各自 BYOK 设置生效，不受本次系统默认切换影响。指引解析、法规生成与合同修改任务都走该环境配置。
+- 未做/边界：本次未恢复暂停批次、未上传合同、未跑合同修改或法规生成真实任务，因此**不代表新模型下的合同交付质量已验收**；FL-D446 中记录的 `commandcode/deepseek-v4-flash` 模型身份已被本次切换取代。后续真实任务需关注推理模型的输出预算、延迟和 schema 稳定性；如出现 `MODEL_OUTPUT_TRUNCATED`，应提高输出容量或缩小单次任务，而不是当作预算问题停跑。
+- 密钥轮换/回滚：回滚用上述两份备份并重启六个服务；轮换只需更新两个环境文件的 `LLM_API_KEY`（或整体恢复备份）后重启。端点或鉴权故障会以 `MODEL_HTTP_ERROR`/`MODEL_NETWORK_ERROR` 等业务错误出现，不因预算被拦截。
+- 变更记录：2026-10-31 新增。
+
 ## FL-D539 普通用户规则启停、模型偏好与“我的指引”实施（2026-10-30）
 
 - **BYOK最终实现（2026-10-30）**：执行/检查两角色在V1/V2始终分别可见，支持系统默认或个人OpenAI Chat Completions兼容供应商、API Key及模型；不向普通用户展示timeout/token/retry/context/JSON。个人Key按owner隔离并以Fernet加密，任务仅引用不可变凭据版本，Worker按owner解密；连接测试需用户主动确认并提示可能收费，不含合同文本。自定义服务地址限制公网HTTPS，校验所有DNS结果并固定连接IP、保留TLS SNI/Host、禁用代理/重定向。任务快照与凭据轮换GC竞态、Worker gateway清理已有定向回归；MySQL真实锁行为仍未验证。

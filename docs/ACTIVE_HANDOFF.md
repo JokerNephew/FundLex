@@ -1,5 +1,13 @@
 # FundLex 当前断点（ACTIVE_HANDOFF）
 
+## 2026-10-31 最新：项目模型切换为 hon-maas `kimi-k3`（不限量、无预算门禁）
+
+- 用户要求把项目模型改为 `https://token-service-qy.hon-maas.com` 的 `kimi-k3`，并记录**不限量使用、完全不用考虑预算问题**。生产 `/etc/fundlex-recall.env`（及旧部署源 `/etc/fundlex.env`）已更新：`LLM_PROVIDER=hon-maas`、`LLM_BASE_URL=https://token-service-qy.hon-maas.com/v1`、`LLM_MODEL=kimi-k3`，密钥仅存于 0600 环境文件（值不记录）。详见 FL-D540。
+- 不限量：`FUNDLEX_MODEL_MAX_CALLS/MAX_REQUESTS/MAX_COST_USD` 均为 `0`（未设阈值），`FUNDLEX_MODEL_ENFORCE_LIMITS` 未设置；台账继续观测调用/token/估算费用，不删除不重置，不作为停止条件。保留并发、限流、上下文/输出容量、超时等技术限制。
+- 验证：端点 `/v1/models` 含 `kimi-k3`，`json_object`+`max_tokens=32000`+现有 request options 均 200；六个生产服务已重启并加载新配置，capabilities/工作台 200；以生产环境执行一次真实 `ModelGateway` 最小调用成功（1 次 HTTP、0 错误、schema 通过、约 2.7s、399 tokens），budget 阈值为 None 且未强制。本次未恢复暂停批次、未上传合同、未跑真实合同/法规生成任务。
+- 回滚：`/var/backups/fundlex/fundlex-recall.env-before-honmaas-kimi-k3-20261031-002945` 与 `/var/backups/fundlex/fundlex.env-before-honmaas-kimi-k3-20261031-002945`（0600 root:root）。
+- 边界：新模型下的合同修改/交付质量尚未验证；`kimi-k3` 为推理模型，输出预算过小会 `finish_reason=length` 且 content 为空，任务侧应使用当前 32000 输出容量或缩小单次任务，不得误判为预算停止。
+
 ## 2026-10-30 最新：BYOK执行/检查模型配置（已部署；合同E2E未做）
 
 - **发布源**：只把BYOK变更移植到生产发布基线，未合并开发分支中其他引擎差异。代码提交 `477ba5a488d7b736bbc56fdb650f9e42700eda41`，branch `codex/user-config-release-20261030`，工作树 `/tmp/opencode/user-config-release-20261030`。发布事务 `/opt/.fundlex-publish-QTsA1U`（committed）；dry-run `/opt/.fundlex-publish-eAP8t6` 通过。
