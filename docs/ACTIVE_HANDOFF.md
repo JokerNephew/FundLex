@@ -1721,3 +1721,11 @@
 - **后台进行中**：① 第一波 dev20 真实评测 agent（kimi-k3，冻结 engine 0b1a813/guide 20bc6677/labels v2 61a2c514；2 份冒烟+18 份 nohup，输出 var/recall-first-evaluation/qa-wave1-dev-20261031-0b1a813/）② 二轮盲审 3 agent（findings-r2/R2-engine-delivery、R2-security-api、R2-frontend-ux）。
 - **后续动作**：盲审结果→登记+批量修复→评测 20 份评分（score_first_batch_20261029 + p6_score）→错误分析与优化闭环（不按时样本名打补丁）→扩波门槛→8 份留出→全量回归（含浏览器+3 项 FL-D560 处置）→受控发布 publish_workspace.sh→正式 E2E（修订+Compare 全链，下载复核 hash）→最终 GO/NO-GO。
 - 主 agent 未办代码项：B14-03（paused=1 陈旧位）、A3-F5/F6/F7、M2（docx 层 EXPECTED_TEXT_MISMATCH 防线）、FL-D563 测试、Q3（D01 fixture）、FL-D560 根因修复、导览 run 文件名 dup 无。
+
+## 当前断点（2026-10-31 傍晚，修复在途 + dev20 全量运行中）
+
+- **dev20 全量**：PID 3919383 nohup 运行，`var/recall-first-evaluation/qa-wave1-dev-20261031-0b1a813/full/`（含冒烟 2 份重跑），监控 `ls <dir>/full | wc -l` 与 `run.log`；跑完后执行 score_first_batch_20261029 --group dev --mapped full_mapped→p6_score。freeze 三件套 hash 已验证一致。
+- **冒烟基线信号（冻结 0b1a813）**：B05 delivery complete 但评分 1 wrong（G08 p216）→ false_complete=1 = FL-D566；B16 EDIT_BOOKMARK_RANGE_BROKEN 整合同 not_generated = FL-D568（修复在途）。
+- **编号调和**：评测 agent 误占 FL-D564/565，已改 FL-D567（env bash 吞 JSON 引号，安全加载器已绕开）/FL-D568（B16 书签）；检视此后子 agent 登记前须先查文档尾部编号。
+- **修复在途（4 agent）**：安全(FL-D564)、前端(FL-D560+R2-F01..05)、引擎(FL-D565 F1 HIGH+F2+LOW)、DOCX(FL-D568)。
+- **后续**：修复全部落地→复核→对受影响评测 case（排除类=FL-D565-F1、B16=FL-D568）重跑→dev20 评分与错误分析→优化闭环→留出 8 份→全量回归→发布→正式 E2E→GO/NO-GO。
