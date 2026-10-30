@@ -1,5 +1,14 @@
 # FundLex 当前断点（ACTIVE_HANDOFF）
 
+## 2026-10-30 合同修改任务页排版与详情精简（FL-D544，已发布）
+
+- 用户要求：合同修改任务列表创建时间独立成列，列表不显示指引；任务详情显示使用的指引版本，并删文件大小、交付统计块、任务/匹配数量提示；修复文字/按钮拥挤和对齐。
+- 实施提交：主工作区 `codex/comprehensive-remediation-20261028`，源码提交 `b5048fa`；发布线 `/tmp/opencode/compare-alignment-release-20261030`，HEAD `9972441`。本任务仅提交 `frontend/{app.js,app.css,compare.html}` 与 `tests/browser/test_workbench.py`；并行 `fundlex/guide_generation/*`、相关测试、配置分析文档、合同备份目录及 `合同比对.png` 保持未提交、未混入。
+- 已实施：独立创建时间列；指引文件名+版本ID移到详情，深链时加载指引目录；删除文件大小及请求的统计/匹配信息；窄屏操作区换行，列表表格横向滚动容器/列对齐。未改 API、引擎、DOCX校验或过滤/排序逻辑。
+- 验证：新增多视口/深链/列/删除项/搜索/名称排序浏览器测试 **1 passed**；`test_workbench.py` 宽回归 **48 passed、3 deselected**（其中两项单独复现为模态覆盖底层面包屑点击；第三项未在该宽回归中验证）；V1前端回归 **15 passed**，前端资源入口 **3 passed**；`node --check`、`git diff --check`通过。截图 `/tmp/opencode/task-list-{390,1440}.png`、`task-detail-{390,768,1280,1440}.png`。
+- 生产：`9972441` 已部署，事务 `/opt/.fundlex-publish-RbwfPZ`；engine/service 哈希未变，五个服务 active。生产首页及版本化 `app.css`、`app.js` 返回 200（版本 `8334b9fda5a61a17`），登录页无浏览器错误。生产为密码登录，未取得/使用授权账号，因此尚未检查登录后任务页；不创建可能触发真实 Worker/模型调用的新任务。本轮无模型调用。FL-D541 长合同选择生成 `SELECTION_FINAL_TEXT_MISMATCH` 独立跟踪，未因本次UI部署宣称解决。
+- 下一步：如需生产任务列表/详情确认，使用获授权生产账号做只读检查；不创建任务。未完成该登录态检查前不宣称生产任务页已E2E验收。集中问题记录详见 `DETAIL_ISSUES_AND_RESOLUTIONS.md` FL-D544。
+
 ## 2026-10-30 工作台文案精简已上线（FL-D542）
 
 - 用户清单内三业务说明/三统计说明/更新统计解释/任务名创建时间小字已删除；时间列改为创建时间并读取created_at。功能和排序不变。
