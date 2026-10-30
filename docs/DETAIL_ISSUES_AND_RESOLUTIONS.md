@@ -6780,7 +6780,8 @@ H＝E×…
 - **问题与影响**：`tests/browser/test_workbench.py` 中 `test_revision_pair_checkbox_keyboard_and_insert_navigation`、`test_login_expiry_message_and_role_hash_guard`、`test_generation_blocks_duplicate_requests_and_late_reply` 三项失败（FUNDLEX_BROWSER_TESTS=1 实跑 3 failed/51 passed）。
 - **证据/归因验证**：在 qa 基线合并点 `7f6d981`（本轮修复开始前）独立 worktree 实跑同样 3 项全部失败；在移除 W3 前端改动的工作树同样失败——既非本轮修复引入，也非 W3 引入。失败形态为 UI 交互层面（detail-head 拦截 pointer events、breadcrumb 等待超时）。
 - **处理方法**：登记为既有缺陷，需专项定位（可能与 BYOK/合并线引入的前端行为漂移有关）；不阻塞本轮提交，但纳入最终回归清单与 GO/NO-GO 依据。
-- **状态**：open，待专项修复并 browsers 全套复测。
+- **根因已定位（2026-10-31，R2 前端盲审）**：其中键盘导航与生成防重两项的根因是 `app.css:357` `:has(.review-layout)` 使修订审查 overlay 全屏 fixed（z-140）遮蔽面包屑/顶栏，导航点击被拦截（R2-F01，真实 UX 缺陷）；登录过期一项是测试陈旧——`VIEW_TITLES.settings` 已改「飞书绑定」，测试仍断言「设置」。生成防重功能实测本身有效。
+- **状态**：修复中（前端修复 agent 处置 R2-F01..F05 + 陈旧断言，验收含原 3 项转绿）。
 
 ## FL-D561 API 第二轮独立复核发现五项（2026-10-31，复核 7198c72）
 
