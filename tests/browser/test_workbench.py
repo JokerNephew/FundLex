@@ -718,7 +718,7 @@ def test_login_expiry_message_and_role_hash_guard(ui, monkeypatch):
     page.wait_for_timeout(100)
     # V1 settings is now the member-facing Feishu page, not dev-only settings.
     assert page.locator("#view-settings").is_visible()
-    assert page.locator('#breadcrumb [aria-current="page"]').inner_text() == '设置'
+    assert page.locator('#breadcrumb [aria-current="page"]').inner_text() == '飞书绑定'
     assert page.locator('#feishu-binding-code-btn').count() == 0
     page.locator('.sidebar [data-nav="overview"]').click()
     token = page.evaluate("sessionStorage.getItem('fundlex-auth-token')")

@@ -353,10 +353,12 @@ button.footer-link:hover{color:var(--accent-dark);text-decoration:underline}
   .page-actions{align-items:flex-start;flex-wrap:wrap}.object-title,.section-title .object-title,.detail-head .object-title,.gg-workspace .object-title{font-size:20px}
 }
 
-/* Contract review opens as a centered modal with a visible backdrop gap. */
-.detail-overlay.inline-contract-detail:has(.review-layout){position:fixed!important;inset:0!important;z-index:140!important;display:grid!important;place-items:center;padding:20px!important;background:rgb(16 24 32 / .54)!important}
+/* Contract review opens as a centered panel covering only the main content
+   area (R2-F01): the shell topbar (with the breadcrumb) and sidebar stay
+   clickable, so review never blocks workspace navigation. */
+.detail-overlay.inline-contract-detail:has(.review-layout){position:fixed!important;top:64px!important;right:0!important;bottom:0!important;left:252px!important;z-index:140!important;display:grid!important;place-items:center;padding:20px!important;background:rgb(16 24 32 / .54)!important}
 .detail-overlay.inline-contract-detail:has(.review-layout) #close-detail{display:inline-flex!important}
-#detail-panel:has(.review-layout){width:min(1600px,calc(100vw - 40px));height:min(1000px,calc(100vh - 40px));max-width:none;max-height:none;border:1px solid #c9d1d8;border-radius:14px;box-shadow:0 28px 90px rgb(10 17 24 / .38);overflow:hidden;display:flex;flex-direction:column}
+#detail-panel:has(.review-layout){width:min(1600px,100%);height:min(1000px,100%);max-width:none;max-height:none;border:1px solid #c9d1d8;border-radius:14px;box-shadow:0 28px 90px rgb(10 17 24 / .38);overflow:hidden;display:flex;flex-direction:column}
 #detail-panel:has(.review-layout) .detail-head{flex:0 0 auto}
 #detail-panel:has(.review-layout) .detail-body{display:flex;flex-direction:column;flex:1;min-height:0;padding:0;overflow:hidden}
 #detail-panel:has(.review-layout) .review-layout{display:grid;flex:1;min-height:0;grid-template-columns:minmax(0,1fr) 360px;align-items:stretch;gap:14px;padding:14px 16px 0}
@@ -374,8 +376,9 @@ button.footer-link:hover{color:var(--accent-dark);text-decoration:underline}
   #detail-panel:has(.review-layout) .rev-list{max-height:38vh}
 }
 @media(max-width:760px){
-  .detail-overlay:has(.review-layout){padding:6px}
-  #detail-panel:has(.review-layout){width:calc(100vw - 12px);height:calc(100vh - 12px);border-radius:10px}
+  /* Mobile shell: 96px topbar (with breadcrumb row) + 57px sidebar bar. */
+  .detail-overlay:has(.review-layout){top:153px!important;left:0!important;padding:6px}
+  #detail-panel:has(.review-layout){width:calc(100vw - 12px);height:calc(100% - 12px);border-radius:10px}
   #detail-panel:has(.review-layout) .review-layout{padding:10px 12px 0}
   #detail-panel:has(.review-layout) .review-actions{margin:8px 12px 0}
   #detail-panel:has(.review-layout)>.detail-body>p.subnote{padding:0 12px 10px;max-height:80px}
