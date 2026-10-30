@@ -1729,3 +1729,9 @@
 - **编号调和**：评测 agent 误占 FL-D564/565，已改 FL-D567（env bash 吞 JSON 引号，安全加载器已绕开）/FL-D568（B16 书签）；检视此后子 agent 登记前须先查文档尾部编号。
 - **修复在途（4 agent）**：安全(FL-D564)、前端(FL-D560+R2-F01..05)、引擎(FL-D565 F1 HIGH+F2+LOW)、DOCX(FL-D568)。
 - **后续**：修复全部落地→复核→对受影响评测 case（排除类=FL-D565-F1、B16=FL-D568）重跑→dev20 评分与错误分析→优化闭环→留出 8 份→全量回归→发布→正式 E2E→GO/NO-GO。
+
+## 断点补充（2026-10-31，安全修复落地 + 共享工作区竞态记录）
+
+- FL-D564 已修复验证（`986c1eb`，F-01/02/03/04/06/08；F-05/07/09 与全局喷洒桶、_global_active 跨 worker 列为产品/架构决策）。**部署条件**：/etc/fundlex-recall.env 加 FUNDLEX_TRUSTED_PROXY_HOSTS=127.0.0.1。
+- **竞态归因**：`986c1eb` 意外打包了引擎修复 agent 暂存的 delivery.py/recall_pipeline.py/semantic_contract.py 及部分测试 hunk（后续 `6fd382d` 仅标注归属）。内容完整、测试绿，不 revert；引擎 agent 剩余工作（F2/LOW）继续在工作区。后续并行 fixer 一律 `git add 指定文件` 且不跨领域触碰。
+- 仍在途：前端修复、引擎剩余项、B16 DOCX（FL-D568）、dev20 全量（PID 3919383）。

@@ -6822,8 +6822,10 @@ H＝E×…
 - **来源**：第二轮盲审（无历史结论），报告 /tmp/opencode/qa/findings-r2/R2-security-api.md，对抗脚本 /tmp/r2sec/。
 - **发现**：F-01（中）登录限速进程内分桶 × uvicorn 2 workers + 无 XFF ⇒ 预算翻倍、跨账号喷洒零限制、单攻击者可关停全站注册 1 小时；F-02（中）上传 per-IP 配额反代后全站共享（可用性）；F-03（中）multipart 部件上限实测 32，与批量上传口径冲突；F-04（低）CSV 公式注入实测（=cmd.docx 落行首）；另低级 4 条、信息 1 条（详见报告）。
 - **验证过的健壮面（如实记录）**：跨 owner 越权 14 入口全 404；会话/下载门禁+字节级复哈希；错误包络无泄露；SQL 全参数化；HTML 视图转义完备。
-- **处理**：修复 agent 已启动（DB 化限速计数+TRUSTED_PROXY 白名单采信 XFF、multipart 上限对齐产品口径并 env 可调、CSV 公式注入统一转义、F-02 随机制一并修）；修复与验证结果回报后更新本条。
-- **状态**：修复中。
+- **处理与验证（2026-10-31，`986c1eb`）**：F-01 已修——限速计数落 auth DB（auth.ThrottleStore，SQLite BEGIN IMMEDIATE 跨 worker 共享且重启不清零），XFF 仅在 `FUNDLEX_TRUSTED_PROXY_HOSTS` 配置时采信（fundlex/proxy_headers.py，从右向左跳过受信中继），nginx 模板已补 XFF 与配套 env 说明（默认不信任任何代理头）；F-02 随 `_client_key` 走同一机制修复；F-03 已修——multipart 上限沿用 env `FUNDLEX_MULTIPART_MAX_PARTS` 默认 1000，settings 注释与实现对齐，40 文件批量实测 200；F-04 已修——csv_safe_cell 集中转义唯一对外 CSV 导出点；F-06 已修（405/406/410 映射）；F-08 已修（限速窗口 deque 清理）。回归：28 项 QA 文件绿、354 项 api/auth/upload/rate 绿、poc_auth 35/35、multipart-40 与 csv-formula 对抗点如期翻转。
+- **待产品/架构决策（如实不修）**：F-05（需产品决策）、F-07（节流阈值口径）、F-09（信息项）；登录按 IP 全局桶（跨账号喷洒）与 `_global_active` 全局并发跨 worker 协调——阈值/架构决策，现状已记录。
+- **部署动作（发布时必做）**：生产 `/etc/fundlex-recall.env` 需配置 `FUNDLEX_TRUSTED_PROXY_HOSTS=127.0.0.1`（配合已更新的 nginx XFF 模板），否则限速/配额仍以 socket peer 计。
+- **状态**：已修复并验证（残留决策项单列）。
 
 ## FL-D565 二轮盲审：引擎交付门禁七项（2026-10-31，R2-engine-delivery）
 
