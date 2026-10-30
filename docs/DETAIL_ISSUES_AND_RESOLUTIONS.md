@@ -6492,8 +6492,8 @@ H＝E×…
 
 - 发现日期：2026-10-30，B15 `sem-run-ac`。P1（错误complete）。
 - 问题与影响：`delivery_gate.counts.UNRESOLVED=1`、`open_obligations=1`，report仍为`complete`；review_assisted只把`CLAIM_`字样当作阻断，`FINAL_COVERAGE_UNRESOLVED`被当成普通review item。即使根因是摘要scope未注册，状态本身已违反“不得错误complete”。
-- 处理（已实施）：`_delivery_complete`在ledger存在open item且reason含`CLAIM_`/`FINAL_`/`COVERAGE_UNRESOLVED`时一律拒绝complete；AUDIT_NOT_COMPLETED仍按原review_assisted语义保留。新增`FINAL_COVERAGE_UNRESOLVED`门禁测试。
-- 状态：**代码修复+定向测试通过；真实复跑待用户恢复模型调用**。
+- 处理（已实施）：`_delivery_complete`在ledger open item含`CLAIM_`时拒绝complete；对`FINAL_COVERAGE_UNRESOLVED`只有在unresolved项不是纯`AUDIT_NOT_COMPLETED`（例如`site_evidence_missing`）时才阻断。这样既保留review_assisted对未完成审计的可见交付，也不允许真实缺站点被标complete。新增两条门禁测试。
+- 状态：**代码修复+定向测试通过；全量回归`full-pytest-oct30c`运行中；真实复跑待用户恢复模型调用**。
 - 变更记录：2026-10-30新增。
 
 ## FL-D537 规则级sweep仲裁误用有站点证明关闭其他站点finding（2026-10-30）
