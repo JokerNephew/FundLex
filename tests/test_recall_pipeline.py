@@ -1222,6 +1222,10 @@ def test_delivery_gate_blocks_claim_failure_open_obligations_only():
                               policy="review_assisted") is True
     assert _delivery_complete([], ledger=ledger_with("FINAL_COVERAGE_UNRESOLVED"),
                               policy="review_assisted") is False
+    assert _delivery_complete([{"kind": "final_omission", "code": "FINAL_COVERAGE_UNRESOLVED",
+                                "reason": "unresolved:AUDIT_NOT_COMPLETED"}],
+                              ledger=ledger_with("FINAL_COVERAGE_UNRESOLVED"),
+                              policy="review_assisted") is True
     assert _delivery_complete([], ledger=ledger_with("AUDIT_NOT_COMPLETED"),
                               policy="strict") is False
 

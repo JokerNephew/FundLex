@@ -3818,10 +3818,15 @@ def _delivery_complete(unresolved: Sequence[dict[str, Any]], *, ledger: Any = No
         if open_items:
             if mode == "strict":
                 return False
-            if any(("CLAIM_" in str(item.get("reason") or "")
-                    or "FINAL_" in str(item.get("reason") or "")
-                    or "COVERAGE_UNRESOLVED" in str(item.get("reason") or ""))
+            if any("CLAIM_" in str(item.get("reason") or "")
                    for item in open_items):
+                return False
+            coverage_open = any("FINAL_COVERAGE_UNRESOLVED" in
+                                str(item.get("reason") or "") for item in open_items)
+            if coverage_open and not any(
+                    str(item.get("code") or "") == "FINAL_COVERAGE_UNRESOLVED"
+                    and "AUDIT_NOT_COMPLETED" in str(item.get("reason") or "")
+                    for item in unresolved):
                 # A missing site/coverage proof is not merely an unfinished audit;
                 # it contradicts complete delivery even under review_assisted.
                 return False
