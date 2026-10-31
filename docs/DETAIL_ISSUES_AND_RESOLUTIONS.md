@@ -6979,8 +6979,9 @@ H＝E×…
 - **发现日期**：2026-10-31，wave1 归因。B15 标签 T007 G14 replace 目标为 p167「在基金促销活动期间，基金管理人可以按中国证监会要求履行必要手续后，对投资者适当调整基金申购费率、赎回费率、销售服务费率和转换费率。」（评分 kept：old wording still in declared site）。引擎实际改了 p166「基金管理人可以在法律法规和本基金合同规定范围内调整申购费率和赎回费率。」（无标签依据的额外修改）。
 - **根因方向**：指引 G14 模板 old_text 均为「基金管理人可以适当调低基金申购费率…」无促销活动前缀变体；模型 survey 将 p166 保留权利句误作 G14 站点，真正应改的 p167 前缀变体反而漏定位。属「示例句当应改目标 + 应改但难定位变体」同簇。
 - **修复方向（未实施）**：G14 匹配核心应锚定「适当调低/调整 + 费率清单」语义并容忍促销活动前缀；保留权利句（「可以在…范围内调整…费率」非促销语境）不得命中。可归入指引匹配变体表或 engine_scope。
-- **状态**：open，待修复（优先级次于 FL-D601/602）；修后需 B15 复跑复核 p167 落实、p166 不再改。
+- **状态**：修复链已实施（`08cb0e6`/`e73ade8`/`9250220`/`9a230c6`/`b2561a2`），B15 verify4 落地正确、verify5 端到端复验在途（`/tmp/opencode/qa-findings-run/b15-fl606607-verify5/`）。
 - **变更记录**：2026-10-31 新增。
+  - 2026-10-31（guide 线，修复链）：①`08cb0e6` 指引 6 op 补促销 variants×3（认证 envelope 重算，29 行手术 diff，document sha `5335e401…`）+ `target_site_ok('G14')` 守卫（规定范围内句硬拒）。B15 verify1 暴露残余：p166 经 `SITE_GUARD_WAIVED_BY_APPROVAL` 双豁免逃逸、p167 因 attribution 只匹配 per-op old_text 而 TARGET_SOURCE_MISMATCH。②`e73ade8` promo attribution 回退（rule variants 证站点→携带全部适用 ops）+ `g14_site_guard_veto`（两个批准豁免点硬拒）+ G14 生成器修复（op 按 condition 过滤播种、动词收敛「适当调整→适当调低」、allowed 缺失时规范尾收敛）。verify2/3 暴露：policy gate 只认 op-level variants → LOST_PROTECTED_LITERAL。③`9a230c6` `_validate_routed_policy` 授权并入 rule-level variants。verify4：p166 拒、p167 落地且与标签逐字一致（`tier1_template` [108:139]「对投资者适当调低基金申购费率和销售服务费率」，audit 通过）——但 claim replay「own required wording」要求 canonical new_text 逐字出现 → CLAIM_OPERATION_EFFECT_MISSING。④`b2561a2` G14 生成器抽为 `_g14_tier1_result`，replay（仿 G09）复算同 slice+facts 作自身效力证明；sibling 借词检查排除对本产品 condition=FALSE 的 ops。793 passed。
 
 ## FL-D607 B15 G01 在无释义定义条款时向表格格内追加豁免条款（指引诱导，待修）（2026-10-31，guide 线）
 
@@ -7134,9 +7135,9 @@ H＝E×…
 - **状态**：open（新发现，真实双跑证据在案；FL-D643 取号后跨线候补池指针请主线合并时更新为 FL-D644）。
 - **变更记录**：2026-10-31 新增（guide 线；证据 verify4 score.json detail=old wording still in its declared site、edits.json target state=absent；对照 smoke-requal-v2 score G08 completed）。
 
-## FL-D648 B15 G09（赎回金额计算 p159）真实标签目标未被 plan 覆盖：audit missed-target 发现但未能闭环（2026-10-31，guide 线）
+## FL-D650 B15 G09（赎回金额计算 p159）真实标签目标未被 plan 覆盖：audit missed-target 发现但未能闭环（2026-10-31，guide 线）
 
-- **编号注记**：本条原登记为 FL-D646（commit `b68417f`），与第二波标签线抢先使用的 FL-D646 撞号；2026-10-31 按主线裁定改派 **FL-D648**（FL-D646/647 归标签线），跨线候补池下一空闲号 **FL-D649**。
+- **编号注记**：本条原登记为 FL-D646（commit `b68417f`），与第二波标签线抢先使用的 FL-D646 撞号，先改派 FL-D648；FL-D648/649 又被 guide-history 线抢先并入主线，2026-10-31 按主线终裁最终改派 **FL-D650**。此后本线固定子池 **FL-D650..659**，不再广播抢号（主线 DETAIL 尾部已立固定子池注记）。
 
 - **发现日期**：2026-10-31，FL-D606/607 复核跑（HEAD `08cb0e6`，`/tmp/opencode/qa-findings-run/b15-fl606607-verify/`）。B15 report unresolved：`AUDIT_MISSED_TARGET` G09 @p159（quote「赎回金额为按实际确认的有效赎回份额乘以申请当日基金份额净值的金额，净赎回金额为赎回金额扣除相应的费用的金额」，与冻结标签 T003 完全一致）+ `FINAL_COVERAGE_UNRESOLVED`（claim replay verified site missing）。本轮 edits 中无 G09 条目——audit 的 missed-target 恢复发现了正确站点但未能让它落地。
 - **标签对照**：labels-first-batch-20261028-v2 B15 T003 G09 replace p159 为真实应改目标（required：按该类基金份额净值计算、费用可「扣除或加上」）。故本条不是噪声，是**真实覆盖缺口**；同类冻结族此前无成功 B15 运行可对照（v2 预跑 15 目标全 no artifact）。
