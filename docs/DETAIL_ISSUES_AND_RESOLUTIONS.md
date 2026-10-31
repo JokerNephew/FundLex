@@ -7358,3 +7358,9 @@ H＝E×…
 - **发现**：tools/evaluation/p6_package.py 内置旧四列「结果清单.csv」构造，注释自称与工作台同格式；现两者分化为两种格式（评测包 ≠ 用户导出包）。
 - **处理**：注释/README 口径注明差异，避免后续误对齐。派 qa-export 顺带。
 - **状态**：open（文档级）。
+
+## FL-D691 主线裁决注记（2026-10-31，主线）
+
+- qa-feat-recall 归因（其树内 FL-D691 条目）经主线独立盲抽复核 **3/3 PASS**（B17 T003、B15 T005、B15 T008：义务文本在 final.docx 完整在场，量具误杀坐实）。复核另指正机制精确表述：非「折叠本身撞线」，而是折叠后形如仍异 + exact-substring 不吸收「和」重复主语。
+- **主线授权**：评分器口径修正（FL-D692，labels 冻结只动 scorer），两层等价归一按复核精确机制设计；scorer_version bump、零成本重评 loop-3 并同口径重评 v1/loop2、附正负例单测。
+- **裁决不变项**：B15 T001 G03 三直销条款真实未执行 → false_complete 修正后仍为 1，loop-3 门槛维持 FAIL；该真实缺口归 qa-recall-miss 机制 A/E 强制病例，留出 8 份继续冻结至 loop-4 达标。
