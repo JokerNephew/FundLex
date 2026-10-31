@@ -7145,3 +7145,18 @@ H＝E×…
 - **发现**：`_extend_definition_group` scope 扩展仅注册于 G01/G02（rule_scope.py:1176-1183），G03 不经此扩展；闸门放行后 claim replay `_filter_scoped_targets` 仍按 scope.contains 过滤——非 B05 合同若 G03 scope 不含组尾，「verified site missing」可复发（B05 verify4 双 PASS 系巧合性满足）。
 - **处理**：观测；若第二波/dev20 v2 中出现 G03 复发则把 G03 纳入同族扩展。
 - **状态**：open（观测项）。
+
+## FL-D648 指引重解析粒度合并破坏操作可执行性：确定性 clean 放行、召回断崖 -70%（2026-10-31，qa-f2-guide-history 线）
+
+- **发现日期**：2026-10-31，本线真实模型冒烟（生产路径：上传→worker 解析→启用→TestClient 任务→Worker 真跑，账本 /tmp/opencode/guide-{channel,v2}-ledger.sqlite、/tmp/opencode/recall-smoke-{builtin,custom15}.sqlite）。
+- **问题与影响**：同一来源 DOCX（sha 与内置 v1 完全一致）经 worker 重解析仅产出 15 条规则（G16..G22 被并入 G11..G15），确定性校验 clean、段落覆盖 105/105 与内置一致、模型验证器报「覆盖完整」→ 质量门认证放行。但该版本真实驱动 recall 出现**断崖式劣化**：3 份 funds_word 合同（聚安/品质优选/沪港深精选）内置版 32/34/28 目标全部 complete；合并版 12/8/8 目标、交付全部 incomplete（RECALL_OPERATION_REGISTRY_MISSING、G07/G10 合并分支产生残留旧文、FINAL_COVERAGE_UNRESOLVED）——召回量级 -70%。根因：解析模型将相邻指引块合并为一条多分支规则，合并后的 operations 超出运行期 registry/slot 可执行面；确定性门只看「段落被声称」而非「每块一条可执行规则」。数据 /tmp/opencode/recall-smoke/*/。
+- **处理方法（已实施，本线提交）**：①finish_guide_job 认证门槛（GUIDE_VALIDATION_UNCLEAN 终态失败+结构化原因）拦截确定性不干净的版本（对 V2 指引真实拦下：G12 GUIDE_SLOT_NOT_IN_TEXT + 原文笔误歧义 finding）；②fundlex/guide_smoke.py + worker 钩子 + tools/guide_quality_smoke.py：footprint 冒烟对父版本/内置同源基线做确定性比对，规则消失或数量腰斩 → 版本标 needs_review（不阻断、明示维度），并区分 granularity_only（粒度漂移、段落零丢失）与真覆盖丢失；③GET /api/guides/{id}/diff 确定性对比视图供人工裁决。
+- **验证**：上述合并版经冒烟正确标 needs_review（removed_rule_ids G16..G22、granularity_only=true、coverage_lost_paragraphs=[]）；后端 48 测试、vitest 24、V1 浏览器 1 绿。
+- **遗留（待主线/解析器迭代）**：certified 版本仍可能因粒度合并而不可用——needs_review 目前不阻断启用属既定设计（用户可见可裁）。根治需在解析提示词/校验层钉住「一指引块一规则」粒度（如对 source_paragraphs 重叠合并、单规则多可执行分支设确定性错误），列为后续项。
+- **状态**：机制已修复并实证；解析粒度钉死 open（后续迭代）。
+
+## FL-D649 引擎消费对齐与合同级召回冒烟结论与账本（2026-10-31，qa-f2-guide-history 线）
+
+- **结论**：修订引擎对自定义指引版本与内置版完全同路径（jobs._bound_guide_document → 同一 guide_document/_guide_rules/registry/validate_runtime_guide 代码）；真实模型三岁本对照（内置 94 目标全 complete vs 劣化版 28 目标全 incomplete）实证劣化属指引解析质量而非引擎分叉。引擎对齐冒烟**无引擎层劣化**。
+- **账本（仅观测，FL-D445）**：解析通道 4+6=10 次 kimi-k3 调用（$0.0146+$0.0204）；召回冒烟 75+41=116 次（$0.0779+$0.0492）。合计 126 次、约 $0.162。
+- **状态**：已验证完成；产物 /tmp/opencode/recall-smoke/（每轨 state+3 份 summary JSON）与 /tmp/guide-channel-li88f1cq/、/tmp/guide-v2-s_6tu6cw/（临时店，可供复核后清理）。
