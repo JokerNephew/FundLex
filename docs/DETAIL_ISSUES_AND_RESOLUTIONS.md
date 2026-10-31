@@ -7348,6 +7348,7 @@ H＝E×…
 - **处理方法（已实施并验证）**：①新增 `fundlex/guide_canary.py`：`blocking_gaps`（与运行时完全同谓词的准入检查）、`executability_report`（注册解析 + 全事实已验证路由 + 条件可满足性 8 组事实枚举 + 义务编译往返，零模型零合同）；fatal → 版本 qualification=`needs_review`、review 复核列表显式维度（`source=executability_canary`）、`set_current_guide` 以同谓词拒绝（错误码 GUIDE_OPERATION_REGISTRY_MISSING/GUIDE_NOT_CERTIFIED 兼容不变）；legacy（无 operation_id）文档与运行时同样只走兼容路径不 fatal，既保护内置/老夹具。②粒度改为**指标+块报告**（诊断不阻断）。③footprint 冒烟 review 分 source 管理，不再互相覆盖。
 - **验证**：冻结真实 15 规则合并产物（tests/fixtures/guides/merged_g15_real_20261031.json），canary 确定性检出 12 个阻断键（G03:1..G15:1，与运行时失败同类）；内置冻结文档 canary 全绿（executable_ratio 1.0）；后端 57 项 guide 测试全绿。
 - **状态**：已修复并验证（qa-guide-parse 线提交 a1289e1）；待并入主线后随发布说明注明存量 not_run 版本语义。
+- **变更记录（2026-10-31）**：worker 集成 lane happy-path 夹具对齐——`valid_parsed()` 在 G02 钉 3 条操作（供 validate 单测覆盖统计），超出 registry 内置 G02:0..1 两个槽位，经 worker 绑定后 G02:2 未注册键被 canary 判 fatal；新增 `worker_parsed()`（G01×1+G02×2，注册键全覆盖、条件可满足）承接「解析→认证→启用」集成 happy path，并补 `qualification_status=certified` 断言（提交 ee156a8）。
 
 ## FL-D661 指引粒度保障的方法论结论：结构硬规则不可通用，确定性落点=操作原子性（2026-10-31，qa-guide-parse 线）
 
