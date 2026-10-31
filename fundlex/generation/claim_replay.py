@@ -1937,6 +1937,7 @@ def replay_claims(edits: Sequence[Mapping[str, Any]], before_inspection: Any,
         for candidate in targets:
             candidate_keys = {str(key) for key in (candidate.get("operations") or ())}
             if (operation_id in candidate_keys and not candidate.get("out_of_scope")
+                    and not candidate.get("plan_rejected")
                     and str(candidate.get("state") or "") not in {"absent", "not_applicable"}
                     and str(candidate.get("location") or "")):
                 same_location_targets.setdefault(str(candidate.get("location")), []).append(candidate)
@@ -1973,6 +1974,17 @@ def replay_claims(edits: Sequence[Mapping[str, Any]], before_inspection: Any,
             # ``claimed_operations`` remains an attribution failure marker; only the
             # target's operation binding is authoritative for effect proof.
             if target.get("attribution_error"):
+                continue
+            if target.get("plan_rejected"):
+                # The plan stage deterministically rejected this candidate as a
+                # source site (e.g. TARGET_SOURCE_MISMATCH, FL-D696).  It is a
+                # refused claim, not an engine commitment: replaying it as a
+                # required site would demand an edit the planner already proved
+                # impossible, and worst-of-sites aggregation would flip a
+                # completed obligation to OPEN (B12 G16 p796).  The rejection
+                # stays visible in the target ledger; excluding it from the
+                # required set can only remove a contradictory demand, never
+                # fabricate a site.
                 continue
             keys = {str(key) for key in (target.get("operations") or ())}
             if operation_id not in keys:

@@ -3321,6 +3321,93 @@ def resolve_absent_operations(targets: Sequence[Target], rules_by_id: dict[str, 
     return created
 
 
+def refute_absent_by_variant_evidence(targets: Sequence[Target],
+                                      rules_by_id: dict[str, dict],
+                                      inspection: DocumentInspection,
+                                      scopes: Mapping[str, Any] | None = None,
+                                      facts: Facts | None = None) -> list[dict[str, Any]]:
+    """FL-D695: overturn an inventory ``absent`` verdict refuted by variant evidence.
+
+    The model's ``absent`` claim is single-shot and volatile: one window round can
+    judge a real business site "wording differs, target text absent" while the
+    deterministic variant machinery (FL-D655) already anchored a rule-domain
+    sentence at the same paragraph (B15 G09 p159).  An ``absent`` verdict that
+    survives blocks every downstream channel — no T3 locate source, no plan, and
+    replay reports "verified site missing", so the delivery gate withholds the
+    whole contract.  When deterministic evidence anchors a rule's variant (or its
+    already-compliant new form) at the SAME location the model called absent, the
+    absent verdict is contradicted by code evidence and is overturned:
+
+    - ``CERTIFIABLE``/``ANOMALOUS`` candidates restore the target to
+      ``needs_edit`` bound to the variant span; planning composes and the
+      audit/replay chain verifies as usual (fail-closed on disagreement).
+    - ``EXEMPT`` candidates (the new policy form is deterministically present)
+      restore the target to ``satisfied``; the independent audit still verifies.
+
+    Without any candidate the verdict stands (fail-closed).  A paragraph that
+    already carries a live sibling target for the same rule is never flipped —
+    the sibling owns that site and flipping would fork duplicate claim-replay
+    sites.  An absent verdict attributed to operations other than the discovered
+    one (e.g. a delete-only marker) is left untouched.
+    """
+    from .variants import discover_candidates, _replace_operations
+    refuted: list[dict[str, Any]] = []
+    live_sites = {(target.rule_id, target.location) for target in targets
+                  if target.state != "absent" and not target.out_of_scope
+                  and not target.attribution_error}
+    for target in targets:
+        if target.state != "absent" or target.out_of_scope or target.attribution_error:
+            continue
+        rule = rules_by_id.get(target.rule_id)
+        if not rule or (target.rule_id, target.location) in live_sites:
+            continue
+        scope = (scopes or {}).get(target.rule_id) if scopes else None
+        if scope is not None and not scope.contains(target.location):
+            continue
+        try:
+            span = inspection.by_location(target.location)
+        except (KeyError, DocxError):
+            continue
+        operations = _replace_operations(rule)
+        if facts is not None and all(
+                condition_status(operation.get("condition"), facts) != "TRUE"
+                for operation in operations):
+            continue
+        claimed = set(target.operations or ())
+        for index, operation in enumerate(operations):
+            operation_id = str(operation.get("operation_id")
+                               or f"{target.rule_id}:{index}")
+            if claimed and operation_id not in claimed:
+                continue
+            candidate = next((item for item in discover_candidates(operation, span.text)
+                              if item.get("bucket") in {"CERTIFIABLE", "ANOMALOUS", "EXEMPT"}),
+                             None)
+            if candidate is None:
+                continue
+            bucket = str(candidate.get("bucket") or "")
+            target.state = "satisfied" if bucket == "EXEMPT" else "needs_edit"
+            target.quote = str(candidate.get("variant") or target.quote or "")
+            target.start = int(candidate.get("start") or 0)
+            target.end = int(candidate.get("end") or 0)
+            target.resolution = "resolved"
+            target.segment_ok = containing_segment(span, target.start, target.end) is not None
+            target.operations = tuple(sorted(claimed | {operation_id}))
+            target.reason = f"{target.reason}|ABSENT_REFUTED_BY_VARIANT_EVIDENCE"
+            refuted.append({
+                "kind": "absent_refuted",
+                "code": "ABSENT_REFUTED_BY_VARIANT_EVIDENCE",
+                "target_id": target.target_id,
+                "rule_id": target.rule_id,
+                "operation_id": operation_id,
+                "location": target.location,
+                "bucket": bucket,
+                "state": target.state,
+                "quote": target.quote,
+            })
+            break
+    return refuted
+
+
 def rebind_split_class_definition_targets(targets: Sequence[Target],
                                         inspection: DocumentInspection) -> list[dict[str, Any]]:
     """Move a G02/G04 heading-fragment target onto its continuation paragraph.

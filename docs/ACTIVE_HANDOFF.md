@@ -1598,3 +1598,11 @@ dev20 v2 闭环：修复循环直到 §7 门槛（无已确证严重错误、无
 - 结构与校验：release worktree /tmp/opencode/release-20261031 @ 4377962；root 发布器已同步（drift OK）；env 新增 FUNDLEX_TRUSTED_PROXY_HOSTS=127.0.0.1（备份 .bak-20261031-release）；engine hash e555fee8；事务 /opt/.fundlex-publish-kYzo9M；前两次失败事务 7KutQx/gjyqol 留存。
 - 已验：生产 E2E 真实路径双态验收 PASS——①新版合同（广发聚富 20260821）正确判无需修改、交付门诚实扣件（fail-closed 正确行为）②老版合同（广发小盘 20230708）真实修改 5 ins/5 del/5 段、plan_matches_actual=true、final/redline 下载 hash 双核对一致、未授权 401、结果页正常。证据 /tmp/opencode/qa/e2e-release-20261031-old/result.json。E2E 工具补 300s downloads 轮询（97a46dc）。
 - 回滚：engine 旧 marker 74a8772（恢复即 10-30 树）；schema 迁移全追加可代码回滚。
+
+---
+## 2026-11-01 breakpoint（loop-5 FAIL 双因子修复，qa-recall-miss 树）
+
+- 目标：FL-D695/696 机制修复+mutation 测试+真实 B15/B12 复验+全量回归 → 报主线 → loop-6。
+- HEAD `0aecb9c`；未提交改动：fundlex/recall.py（refute_absent_by_variant_evidence）、recall_pipeline.py（_replay_targets_by_id+挂点）、generation/claim_replay.py（plan_rejected 排除）、docs/DETAIL(+FL-D695/696/792-更新)、tests 新 2 文件（10 例全绿）。
+- 后台任务/本机：本树全量 pytest；真实复验 `/tmp/opencode/qa/fl-d695-b15-recheck`（B15）与 `/tmp/opencode/qa/fl-d696-b12-recheck`（B12）（env 取自 /etc/fundlex-recall.env→/tmp/opencode/qa/.env.recheck(600)，多行 JSON 已修）。模型账本仅观测。
+- 下一步：三任务收口核对 → 复验证据解包（B15 G09 p159 执行+产物；B12 G16:B1:O1 闭合）→ 失败则复诊 → git add+本树回归绿后报主线（qa-recall-miss.md 已追加 loop-5 段）。无外部阻塞。
