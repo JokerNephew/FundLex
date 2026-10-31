@@ -35,6 +35,7 @@ _BUSINESS_REASONS = (
 # order is specific-first: a code such as RECALL_TARGET_STRUCTURE must win over
 # the generic TARGET marker.
 _FAILURE_REASONS = (
+    ("RECONCILIATION_LAYER_MISMATCH", "复核证明与义务台账结论不一致，已按未闭合阻断并留待人工复核"),
     ("EXISTING_REVISION_UNSUPPORTED", "文件包含未接受的修订痕迹，请先接受所有修订或上传清理版"),
     ("REVISION_PARAGRAPH_MERGE_UNSUPPORTED", "文件修订痕迹含跨段落合并删除，暂无法自动固化，请先在 Word 中接受或拒绝全部修订后重新上传"),
     ("REVISION_CELL_MERGE_UNSUPPORTED", "文件修订痕迹含不支持的表格单元格合并变更，请先在 Word 中接受或拒绝全部修订后重新上传"),
@@ -106,6 +107,9 @@ _COVERAGE_SUCCESS_STATES = {
 # New engine codes must never fall through to "complete with review items" merely
 # because an older classifier did not know them.
 _ALWAYS_BLOCKING_CODES = frozenset({
+    # FL-D653: a replay proof the Ledger never adopted.  The reconciliation
+    # layer upgrades it to an explicit row; it must block under every policy.
+    "RECONCILIATION_LAYER_MISMATCH",
     "EFFECT_SITE_UNPROVEN",
     "CLAIM_OPERATION_UNPROVEN",
     "CLAIM_OPERATION_NOT_PLANNED",
@@ -163,6 +167,9 @@ _KNOWN_ITEM_PREFIXES = (
     "COMPOSE", "OVERLAP", "VALIDATION", "LEDGER_EVIDENCE_UNBOUND",
     "FINAL_MODEL_SWEEP_FINDING", "FINAL_COVERAGE_UNRESOLVED", "VERIFICATION_",
     "QUALIFICATION_", "RECALL_QUOTE_UNRESOLVED", "RECALL_TARGET_",
+    # FL-D655: an anchored but uncertified variant wording is honest review
+    # evidence (a human confirms the skip), never a delivery blocker.
+    "VARIANT_",
 )
 
 
@@ -461,6 +468,62 @@ def _issues(report: Mapping[str, Any]) -> list[dict[str, Any]]:
             "review_note": "如需该规则生效，请在“我的指引 → 规则组启停”中重新启用后新建任务。",
         })
     return issues
+
+
+DELIVERY_OUTCOME_SCHEMA = "fundlex-delivery-outcome-v1"
+
+#: The user-facing delivery gate has exactly two states (FL-D654): a run either
+#: publishes a fully proven pair or it delivers an honest hold with every
+#: remnant explained in user-readable text.  Engine-internal statuses stay for
+#: wire compatibility and are exposed under ``engine_status``.
+_DELIVERY_COMPLETE_STATUSES = frozenset({"complete", "complete_with_exceptions"})
+
+
+def delivery_outcome(report: Mapping[str, Any]) -> dict[str, Any]:
+    """Two-state delivery presentation: 完整完成 or 诚实扣件.
+
+    ``complete``: the DOCX pair is published with every applicable obligation
+    closed.  ``honest_hold``: at least one remnant stayed open; each remnant is
+    rendered as Chinese user guidance (never as a bare engine key) in
+    ``holds``.  The projection is deterministic and never closes an open item.
+    """
+    status = str(report.get("delivery_status") or "")
+    complete = status in _DELIVERY_COMPLETE_STATUSES
+    holds: list[dict[str, Any]] = []
+    if not complete:
+        holds = _issues(report)
+        if not holds:
+            holds = [{
+                "rule_id": "", "code": "", "title": "任务未完成",
+                "section": "", "location": "", "obligation_id": "",
+                "business_reason": "处理未完成，未生成可交付的修订文件",
+                "requirement": "", "quote": "", "quote_exact_site": False,
+                "review_note": "",
+            }]
+        # Attach the bilingual Ledger miss classification (FL-D653) so a hold
+        # explains *why* the remnant could not close in user-readable text
+        # instead of an engine key.
+        misses = {
+            str(entry.get("obligation_id") or ""): entry
+            for entry in ((report.get("miss_classification") or {})
+                          .get("entries") or [])
+            if str(entry.get("miss_class") or "").startswith("MISS_")
+        }
+        for hold in holds:
+            entry = misses.get(str(hold.get("obligation_id") or ""))
+            if entry is not None:
+                hold["miss_class"] = str(entry.get("miss_class") or "")
+                hold["miss_reason_zh"] = str(entry.get("message_zh") or "")
+                hold["miss_reason_en"] = str(entry.get("en") or "")
+    return {
+        "schema": DELIVERY_OUTCOME_SCHEMA,
+        "state": "complete" if complete else "honest_hold",
+        "zh": "完整完成" if complete else "诚实扣件",
+        "engine_status": status,
+        "hold_count": len(holds),
+        "holds": holds,
+        "notices": list(report.get("business_notices") or []),
+    }
 
 
 def build_user_summary(report: Mapping[str, Any]) -> dict[str, Any]:

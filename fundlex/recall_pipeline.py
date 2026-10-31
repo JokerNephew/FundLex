@@ -1965,6 +1965,28 @@ def _plan_and_generate(model: Any, rules_by_id: dict[str, dict], targets: Sequen
     else:
         from copy import deepcopy
         planned = deepcopy(existing_plan)
+    # FL-D657 mechanism C: deterministic plan-output completeness guard.
+    # Rejected edits are pruned and demoted; one bounded replan of exactly the
+    # dirtied locations follows, never an unbounded loop.  A second rejection
+    # stays open as ledger evidence (FL-D688 truncation residuals surface this
+    # path instead of a partial silent plan).
+    from .recall import plan_output_guard
+    guard_issues = plan_output_guard(planned, targets)
+    if guard_issues:
+        dirty = {str(issue.get("location")) for issue in guard_issues
+                 if issue.get("location")}
+        if dirty:
+            try:
+                from .recall import replan_sites
+                planned = replan_sites(planned, dirty, rules_by_id, targets,
+                                       inspection, facts, model,
+                                       max_compose_calls=max_compose_calls,
+                                       obligations=obligations)
+                plan_output_guard(planned, targets)
+            except RecallError:
+                # The continuation failed; the demoted ledger rows are already
+                # the honest record of the incomplete plan.
+                pass
     g17_blocks = guard_g17_deletes_against_g16(planned, targets, inspection)
     if g17_blocks:
         planned.setdefault("business_notices", []).extend(g17_blocks)
@@ -4900,6 +4922,25 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
             synthetic.append(target)
             targets.append(target)
             origins[target.target_id] = "g08_legacy_variant"
+        # FL-D655 mechanism B: the same certified-variant channel generalised
+        # to every rule without its own stricter predicate.  An anchored but
+        # uncertified (anomalous) wording stays honest review evidence and can
+        # never authorise an edit.
+        from .recall import ensure_certified_variant_targets
+        from .variants import review_candidate_rows
+        for target in ensure_certified_variant_targets(targets, rules_by_id,
+                                                       inspection, facts=facts,
+                                                       scopes=scopes):
+            synthetic.append(target)
+            targets.append(target)
+            origins[target.target_id] = "certified_variant"
+        # Anomalous candidates stay ambient review evidence on the report.
+        # Routing them through coverage_gaps/unresolved would poison the
+        # Ledger: project() consumes those rows as blocking evidence and flips
+        # healthy obligations to OPEN (happy-path regression).
+        for rule_id, rule in (rules_by_id or {}).items():
+            report.setdefault("variant_candidates", []).extend(
+                review_candidate_rows(rule, inspection, scopes=scopes))
         # FL-D601/FL-D602: the ordered-list (G22) and actual-rate (G08) variant
         # wordings are applicability evidence, never edit sites.  A contract
         # whose G22/G08 obligation is fact-applicable but has neither the
@@ -5658,7 +5699,8 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
                                     break
                     if code == "RESIDUAL_OLD_TEXT" and failure.get("quote") \
                             and failure.get("location"):
-                        from .recall import resolve_quote
+                        from .recall import (g15_residual_clause_span,
+                                             resolve_quote)
                         location = str(failure.get("location"))
                         quote = str(failure.get("quote") or "")
                         try:
@@ -5687,6 +5729,20 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
                         if located is not None and delete_indices and \
                                 ((rule_id, selected_key, location) not in existing
                                  or not location_planned):
+                            # FL-D690: the detector quotes only the anchor
+                            # sentence of the surviving old effect.  A
+                            # fragment-span repair target cannot be attributed
+                            # to the delete operation (operation_span_mismatch)
+                            # and, even if planned, would shred the rest of the
+                            # payment clause.  Expand the span to the complete
+                            # source-proven clause; later-appended policy in
+                            # the same paragraph stays outside it.
+                            operation = (rule.get("operations") or [])[delete_indices[0]]
+                            if str(rule_id) == "G15":
+                                expanded = g15_residual_clause_span(
+                                    str(span.text), located[0], located[1])
+                                if expanded is not None:
+                                    quote, located = expanded
                             for old_target in targets:
                                 if old_target.rule_id == rule_id and \
                                         old_target.location == location and \
@@ -6348,6 +6404,12 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
                 final_seen.add(key)
                 final_unique.append(item)
             unresolved[:] = final_unique
+            # FL-D653: reconcile plan/edit/replay/Ledger per obligation.  Every
+            # open obligation row gains its bilingual miss classification, and a
+            # replay proof the Ledger never adopted becomes an explicit blocking
+            # row instead of a silent cross-layer overwrite.
+            from .reconciliation import apply_reconciliation
+            apply_reconciliation(report, obligation_ledger, unresolved)
             report["unresolved"] = unresolved
             report["delivery_gate"] = {
                 "basis": "obligation_ledger",
@@ -6420,6 +6482,10 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
                 report["artifacts"] = {}
                 report["delivery_status"] = "not_generated"
             mark_stage("delivery")
+            # FL-D654: the user-facing delivery gate has exactly two states —
+            # 完整完成 or 诚实扣件 with user-readable holds.
+            from .delivery import delivery_outcome
+            report["delivery"] = delivery_outcome(report)
             events = []
             try:
                 events = list(getattr(model, "events", ()) or ())

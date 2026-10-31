@@ -7369,18 +7369,28 @@ H＝E×…
 ## FL-D717 V1 任务详情指引元信息正文直显 version_id UUID（2026-10-31，主线复核）
 
 - **发现**：app.js:273-284 `guideNameForTask` 任务指引元信息正文仍直显完整 version_id UUID（如「… · 版本 <uuid>」），未入高级详情；与前端线状态文件自述不符（复核 VERIFIED：diff 仅改动词，UUID 原样）。属用户反馈④技术泄露残留。
+- **处理**：前端线改人读表述（对照 V2「修改指引已锁定」口径）；发布 #2 闸门阻塞项。
+- **状态**：已解决（bdfbda3：改「<指引名> · 已锁定」人读表述，候选树复验正文/非折叠 title 无 UUID；FL-D718/719/723 同 commit 收口，16/16 验收绿）。
+
 - **处理（qa-frontend 已实施，2026-11-01）**：`guideNameForTask` 返回 `${item?.filename||'创建时的指引'} · 已锁定`，正文/title 均无 UUID；`node --check`、V1 浏览器 16 项通过（bdfbda3）。
 - **状态**：已解决。
 
 ## FL-D718 .compare-gutter span 字号 9px 低于阶梯下限（2026-10-31，主线复核）
 
 - **发现**：app.css:235 仍 `font-size:9px`，低于统一阶梯下限 11px（用户反馈③风格不一致族）。
+- **处理**：收敛进字号阶梯（≥11px）。同批修。
+- **状态**：已解决（bdfbda3：9px→11px；V1 三 CSS 实测最小字号=11，零残留。复核所引 app.css:235 行号系基线错位，实际规则在 compare.css）。
+
 - **处理（qa-frontend 核实，2026-11-01）**：该规则实际在 `compare.css:34`（app.css 无此规则，复核所引 app.css:235 为基线行号错位）；qa-frontend 整改批已将 9px 升为 11px，V1 三 CSS 实测最小字号=阶梯下限 11px，无 9/10 及半像素字号残留（bdfbda3 核实归档，无需新改动）。
 - **状态**：已解决。
 
 ## FL-D719 download-all 新 ready 语义缺正向守门用例（2026-10-31，主线复核）
 
 - **发现**：浏览器侧仅有 paused 场景验 download-all disabled；`completed=0 && failed>0` 时按钮应启用的正向用例缺失（FL-D721 修语义后的防倒退门）。
+- **处理**：补正向用例。同批修。
+- **状态**：已解决（bdfbda3：新增 _all_failed_task_scenario 正向用例，completed=0&&failed>0 时按钮启用+hint 隐藏；test_frontend_fixes 16/16 绿）。
+- **FL-D716 根治**（同 commit）：深链断言前加显式 wait_for(state=visible,15s)，不再依赖重跑，复跑通过——状态转**已解决（根治）**。
+
 - **处理（qa-frontend 已实施，2026-11-01）**：`test_frontend_fixes.py` 新增 `_all_failed_task_scenario` 与 `test_all_failed_task_enables_download_all_with_explanatory_hint`（按钮启用+hint 隐藏+失败行徽标），套件 16/16 绿；FL-D716 深链竞态已加显式 `wait_for(timeout=15000)` 根治（bdfbda3）。
 - **状态**：已解决。
 
@@ -7389,6 +7399,119 @@ H＝E×…
 - **发现**：小字治理时 V2 ModelSettings 删掉了「验证连接可能产生少量费用、不发送合同」一句——属成本/隐私相关、用户应知信息，不是冗余小字。
 - **处理（qa-frontend 已实施，2026-11-01）**：`src/pages/Settings/ModelSettings.tsx`「验证连接」按钮下以 `.meta-line` 补回「验证连接会向供应商发送一条简短请求，可能产生少量费用；不会发送合同内容。」；vitest 24 绿、vite build 过（bdfbda3）。
 - **状态**：已解决。
+
+
+## FL-D724 发布 #2 三试两折：磁盘满→worker 存储余量闸 fail-closed→服务降级（2026-11-01，主线）
+
+- **发现**：发布 #2 首试报 recall-worker 启动错误、回滚失败（RECOVERY FAILED，API 存活、三 worker 系服务 inactive 的生产降级窗口）。journal 坐实：`OSError: local storage below configured free-space reserve`（jobs.py:266，256M 阈值闸）。根因：/dev/vda3 40G 100%——**21 个历史发布留存事务每份 ~196M（≈4G）**+工作树/冒烟堆积，staging 再要 ~200M 触发满盘。
+- **处置**：①保留当前恢复事务 mXk9ve，清除其余 20 个历史留存事务（含 FL-D684 两次留存 7KutQx/gjyqol 诊断已落册）→ 4.1G；②二试仍拒：满盘期崩溃循环计数残留被判「restarted during startup」→ 恢复成功（5/5）；③等 worker 稳定后三试成功（engine 8aab269b，5/5 active）。
+- **根教训**：a) 发布留存事务无清理机制——每次失败发布会永久占用 ~196M，N 次失败必至满盘，属发布体系缺陷；b) worker 崩溃循环计数不清零时，发布器健康观察窗会把历史重启误判为本轮失败。
+- **后续**：发布脚本建议加「留存事务保留最近 N 份/总计 X G」自动清理 + worker 重启计数基线在健康检查前重置。暂记 open（建议项，发布 #3 前择处）。
+- **状态**：已解决（发布成功）；建议项 open。
+
+## FL-D725 生产同合同双跑结果分岔（complete→incomplete）：「该改未改」波动性在生产实测（2026-11-01，主线）
+
+- **发现**：发布 #2 后两个真实任务跑同一份广发小盘（20230708）、同一 engine（8aab269b，召回内核与 #1 一致）：第一轮 complete（5 ins/5 del，hash 双核对）；~30 分钟后第二轮 **incomplete**（4 处修改行，缺失 1 处义务闭合→诚实扣件）。ZIP 导出验收本身 PASS（工作文件夹/逐份说明/清单/总览齐全、零技术泄露、401 拦截）。
+- **定性**：引擎召回闭环的跨轮波动（模型轮+恢复层叠加），正是 FL-D650/643 族与「该改未改」病灶的生产实例；**好消息**：交付门二态工作正常——未完成就如实扣件+给用户工作文件，而非谎称 complete。
+- **处理**：①佐证 recall-miss 五机制（FL-D653~657 已落码待并）生产必要性，并入发布 #3 优先级维持最高；②发布 #3 后以同合同三跑观察波动收敛情况作机制有效性的生产侧旁证。
+- **状态**：open（等机制并入后复验收敛）。
+
+## FL-D652 「该改未改」引擎系统性大修伞条目：六类病灶根因全景与五机制设计（2026-10-31，qa-recall-miss）
+
+- **发现**：产品负责人 2026-10-31 原话「合同修改还是会出现该修改但修改失败的地方……不希望再看到」，主线召集判定病灶全部有既有实例并定五机制（A 跨层对账闭环 / B 未认证变体分层处置 / C 计划输出完整性守护 / D 恢复层保守性 / E 交付门二态+可读报告），本线为执行主线，禁止规则级修补（用户会上传新指引）、quality fail-closed 方向不变、除模型轮外全确定性、FL 子池 652..659。
+- **根因全景（病灶→既有证据）**：①计划轮缺口：B17 G08 p292（FL-D588 根因=pair 不一致变体无授权→确定策略门 fail-closed，recall 线已规则级修复 `ensure_g08_variant_targets`，本线机制 B 推广）系**编辑失责计划**形态；②目标落不了执行：ORPHAN/TARGET_SOURCE_MISMATCH（如 G01 tbl，FL-D607 设计内噪声）属**呈现/对账未闭环**；③replay 已证被闸门消费失败：FL-D589 家族（B10/B14）——证明与消费闸门存在静默隔膜；④模型 not_applicable 回摆：FL-D643/650 族，确定性层只能诚实扣件+可读呈现；⑤恢复层造重复/超集目标反向阻断：B19 G04 R036/R037（FL-D588 两候选在册：satisfied 子集覆盖免造 / SUPERSEDED 排除出阻断）；⑥未认证变体保守跳过：与①同根。
+- **方法**：机制+编号耗子池 FL-D653（A）、FL-D654（E）、FL-D655（B）、FL-D656（D）、FL-D657（C）、FL-D658（综合复验）、FL-D659（留作现场新增）。新模块 `fundlex/reconciliation.py` 承载 A 的跨层对账器，报告新增 `miss_classification`（机器码+中英文本）。
+- **状态**：已实施并验证（五机制+FL-D659 收口；终轮全量回归 HEAD `723b6d9` 2516 passed/0 failed/139 skipped；后台并发复跑出现的 2 例 metering 失败经隔离复跑确认为并发资源竞争假阳性）。
+
+## FL-D658 五机制真实合同综合复验矩阵（B01/B10/B15/B17/B19，前后对照）（2026-11-01，qa-recall-miss）
+
+- **方法**：loop-2 冻结基线（d55702b full-dev 001/010/015/017/019） vs 五机制落码后同环境真实重跑（`/tmp/opencode/miss/verify-fl658/`，账本≈$0.15/5 轮）；判读以引擎 report.json 的 delivery/delivery_outcome/unresolved/miss_classification 为准（scoped 单合同外部评分 not_executed 属正常）。
+- **对照矩阵**（基线 → 复验）：
+  - **B01**：complete → **complete**；miss_classification 全 CLOSED_REPLAY（24），无回退。
+  - **B10**：incomplete(2) → **complete**（治愈；24 义务全 CLOSED_REPLAY）。
+  - **B15**：incomplete(5) → **incomplete(3) 诚实扣件**；G14/FINAL_COVERAGE 消失；G09 p159 定性=结构性不同的真替代表述（赎回金额/净赎回金额双定义式，非认证变体），机制 B 正确拒认证+ANOMALOUS 复核行保留（coverage 0.73），交付 honest_hold 为**正确终态非漏改**；G01 tbl TARGET_SOURCE_MISMATCH 为 FL-D607 设计内呈现噪声。
+  - **B17**：incomplete(5) → 首轮 complete **但定性为假完成**（FL-D659：p294 旧尾句真实残留经字面族缝隙漏检+review-only 放行）→ 修复后两次重跑 complete 且**尾句真删**（见 FL-D659）。
+  - **B19**：incomplete(7) → **incomplete(3) 诚实扣件**；D 机制生效（satisfied T005/T006 站点 R036/R037 恢复双子消失）；余 G04:B1:O2 CLAIM_OPERATION_NOT_PLANNED+MISS_PLAN_GAP（p161 orphan，计划缺口一族由 C/A/E 诚实呈现；T005/T006 satisfied 但台账开放的家族按设计诚实扣件）。
+- **每案 miss_classification 实测**：B01/B10 全 CLOSED_REPLAY；B15=CLOSED_REPLAY×20+MISS_TARGET_RESOLUTION×1（G09）；B17（修复后）全 CLOSED；B19=CLOSED 系+MISS_PLAN_GAP×1（G04:B1:O2）。无 MISS_REPLAY_GATE 升级触发（升级语义经 13 例单测锚定）。
+- **mutation/防护性测试锚点**：FL-D588 撤销授权 mutation（B17 仍阻断）、变体关键 token 置换 mutation（申购→管理费率拒认证）、机制 A 膈膜升级/具名竞争因不二次阻断、机制 D 异 op/超域不豁免、机制 C 二次守卫幂等、FL-D659 豁免额度重复句仍报。
+- **状态**：已验证（终轮全量回归 2516/0 通过，HEAD `723b6d9`）。
+
+- **设计（已实施）**：新模块 `fundlex/reconciliation.py`，在最终 Ledger 投影后、交付门计算前运行（recall_pipeline 收口链 `unresolved[:] = final_unique` 后注入 `apply_reconciliation(report, obligation_ledger, unresolved)`）。对每条 applicability=TRUE 义务按其跨层证据分类：`CLOSED_REPLAY`（replay 已证）/`CLOSED_DETERMINISTIC`（确定性层闭合无需改）/ `MISS_TARGET_RESOLUTION`（定位失败）/ `MISS_MODEL_DEFERRAL`（模型 not_applicable 回摆，诚实扣件，绝不伪造闭合）/ `MISS_RECOVERY_GENERATED`（恢复层补造目标）/ `MISS_PLAN_GAP`（目标存在但计划未出编辑，B17 族）/ `MISS_EFFECT_UNPROVEN`（编辑已写但效果未证，B15 G14 族原形态）/ `MISS_REPLAY_GATE`（replay 已 PASS 台账未采纳的跨层隔膜，FL-D589/651 族）/ `MISS_REVIEW_PENDING`。每类带中英文本+stage_owner（首责层）。报告新增 `report["miss_classification"]`（schema fundlex-reconciliation-v1，summary.counts + 逐义务 entries）；open 义务行 unresolved 附 `miss` 字段供报告/导出渲染。
+- **阻断语义（fail-closed 收敛）**：台账开放原因缺省/仅通用占位，或与 replay PASS 正面矛盾（`CLAIM_REPLAY*` 因）→ 升显式 `RECONCILIATION_LAYER_MISMATCH` 阻断行（登记 `_ALWAYS_BLOCKING_CODES` + delivery `_FAILURE_REASONS` 中文「复核证明与义务台账结论不一致，已按未闭合阻断」）；台账带具名非 replay 竞争因（如审计证据行）→ 只富化不二次阻断，避免与 review-assisted 交付策略冲突（`test_audit_failure_persists_as_review_item` 语义锚定）。
+- **边界（已在代码注释声明）**：MISS 分类器不改 fault 归属确定性——MISS_EDIT_LOST 因公开义务 `edit_ids` 在投影时清空而不可判定，不发射该码（保守归入 MISS_EFFECT_UNPROVEN），类名保留占位。
+- **测试**：`tests/test_reconciliation.py` 13 例（九类×双语文本×升级语义×富化不重复×许可假不分类）；相关域回归 547+83+66+102 全绿（含 recall_pipeline/恢复/交付 e2e）。
+- **状态**：已实施（机制 A 完成；真实病例复验随 FL-D658 统一）。
+
+## FL-D654 机制 E：交付门二态（完整完成/诚实扣件）+ 用户可读 hold_summary（2026-10-31，qa-recall-miss）
+
+- **设计（已实施）**：`delivery.delivery_outcome(report)` 纯确定性投影，主线交付分支收口时写 `report["delivery"]`。二态语义：`complete`/`complete_with_exceptions` → `完整完成`（holds 空）；其余（`incomplete`/`not_generated`/`excluded`）→ `诚实扣件`，`holds` 复用 `_issues` 用户可读清单（中文 business_reason + review_note + 章节/原文定位），并并入 FL-D653 的 miss 双语归因（`miss_class`/`miss_reason_zh`/`miss_reason_en`，机器码仅作次级审计字段）。引擎内部 delivery_status 保持线兼容（`engine_status` 透传）——二态是用户语义面层，不改 fail-closed 判定本身。
+- **测试**：`tests/test_delivery_outcome.py` 7 例（两态边界、fallback hold、miss 融合、机器码降级为次级）；交付/导出/补做面 169 绿。
+- **状态**：已实施（机制 E 完成；真实病例复验随 FL-D658 统一）。
+
+## FL-D655 机制 B：未认证变体「发现→分类→认证→授权」通用管线（2026-10-31，qa-recall-miss）
+
+- **病灶**：族 ⑥/①——合同措辞是指引 old_text 的未记录变体（类限定插入、语序微调）时，无授权通道 → 策略门 fail-closed、计划缺口（B17 G08 根因）；若一律宽松则违 fail-closed 方向。
+- **设计（已实施）**：新模块 `fundlex/variants.py`。确定性谓词链：发现=锚（最长公共块≥6 字）+4-gram 预筛；分类=CERTIFIABLE/EXEMPT/ANOMALOUS/IGNORE；认证=锚≥6 + 有序块覆盖率≥50% + 伸缩比 [0.5,2.5] + 否定轮廓（最长优先交替正则，裸「不」单列）一致 + **旧形专用域**（`_exclusive_regions`：old 相对 new 的不等长替换缺失段，须作为子串出现于候选）四道闸；EXEMPT=新形结构覆盖≥0.99 且具新专用域且无旧专用域（纯插入型 old⊂new 对无法靠专用域区分时，fail-closed 归入可编辑侧而非豁免侧，与 B17 真实语义一致）。授权两翼：①`ensure_certified_variant_targets`（recall.py，全规则通用残目标，caps 4/op，G08 保留既有更严谓词、通用层不弱化）前置 NO_GUIDE_SITE 闭合；②`_validate_routed_policy` 对每条 routed operation 增补认证句子为 remove 授权（原仅 G08 特例）。ANOMALOUS 只作环境证据 `report["variant_candidates"]`（`VARIANT_PENDING_CERTIFICATION`，登记交付已知码前缀，永不阻断/编辑）。**教训（已修复验证）**：初版把 review 行注入 coverage_gaps→被 project() 当 blocking evidence 把健康义务翻 OPEN（happy-path 回归），改挂独立字段。
+- **测试**：`tests/test_variants.py` 16 例（认证/豁免/异常/忽略/授权/残目标/双重抑制/条件门/caps/关键 token 置换 mutation）；相关域回归绿。
+- **变更记录**：2026-10-31 大回归（814/815）抓出 O·verauthorize——old⊂new 纯插入对专用域为空时「管理费率」以 22 字锚通过认证（FL-D588 规则级过度授权防护 `test_over_authorization_guard_unrelated_fee_sentence_still_blocked` 红）。修复 `d13e11e` 增补确定性闸：参考串被实质替换/删除的段（≥2 字）必须原样出现于候选（B17 类限定插入保留「本基金」子串仍过闸；「管理费率」换词拒认证）；variants/g12/g14/g22/class-group/fl_d587/d588 全绿。
+- **状态**：已实施（真实病例复验随 FL-D658 统一）。
+
+## FL-D656 机制 D：恢复层保守性——satisfied 站点免造恢复目标（2026-10-31，qa-recall-miss）
+
+- **病灶（族⑤，B19 G04 p160 实证）**：T005/T006 已 satisfied 覆盖 G04:0/G04:1 业务站点，恢复层 `target_for_missing_operation` 仍造 R036/R037 needs_edit 双子（needs_edit 是当时的唯一抑制条件），不可计划的目标并入义务台账 → 两条义务 UNRESOLVED（RECALL_TARGET_UNRESOLVED/CLAIM_REPLAY_FAILED），整份 incomplete。
+- **设计（已实施）**：`target_for_missing_operation` 增补保守性闸：同 operation 且 `satisfied`/`already_satisfied` 的 in-scope 目标存在即免造（out_of_scope 不豁免；不同 operation 的 satisfied 不豁免——operation-first 覆盖语义）。fail-closed 保持：仅显式满意态抑制，义务自身开放行不受影响（T005/T006 满意但台账开放的行为另由 A/E 诚实呈现）。
+- **测试**：`tests/test_recovery_conservatism.py` 5 例（needs_edit/双满意态抑制/异 op 不抑制/超域不抑制）。
+- **状态**：已实施（真实 B19 病例复验随 FL-D658 统一）。
+
+## FL-D657 机制 C：计划输出完整性守护（already-cited 拒收/站点自洽/义务绑定+受限续轮）（2026-10-31，qa-recall-miss）
+
+- **设计（已实施）**：`recall.plan_output_guard(planned, targets)` 确定性三查：`PLAN_CITED_CLOSED_TARGET`（编辑引用已闭合/不适用/缺席目标——already-cited 拒收）、`PLAN_SITE_INCONSISTENT`（编辑 span 越出目标认证 span 容差带 ±40）、`PLAN_OPERATION_UNBOUND`（无 operation/obligation 绑定、台账永不可闭合）。拒收=就地剪除 + 台账 planned→unresolved 降级记码（沿用 FL-D112 修剪范式），questions 入 `planned["plan_guard"]`。`_plan_and_generate` 集成：守卫命中 → 对 dirty locations **一次** `replan_sites` 续轮 → 再守卫；二次仍拒收则保持开放（A 层呈 MISS_PLAN_GAP，E 层诚实扣件），RecallError 续轮失败不吞已有降级台账。与 FL-D688 联动：截断/半输出残留经此以降级台账+诚实呈现代替静默半成品。
+- **测试**：`tests/test_plan_output_guard.py` 8 例（干净计划/三码/容差带/合成 target 豁免/二次幂等）。
+- **状态**：已实施（真实病例复验随 FL-D658 统一）。
+
+## FL-D659 该删未删漏检：份额类别集合实例化差异使子句残留检查字面落空（B17 G11 p294 假完成）（2026-11-01，FL-D658 复验发现）
+
+- **发现**：机制复验 B17 报 complete，但最终产物 p294 实含双重句——新句「本基金C类、E类基金份额不收取申购费用。」与旧尾句「C类基金份额和E类基金份额不收取申购费用。」并存。计划编辑只覆盖了复合旧句的第一分句（op1 old 为其子串），旧尾句该删未删。模型层 FINAL_MODEL_SWEEP_FINDING 真实命中，但按政策为 review-only；replay/effects 的 `_replaced_clause_residuals` 用**未实例化** canonical 引用作字面包含匹配：canonical「C类基金份额不收取申购费用」与源实写「C类基金份额和E类基金份额不收取申购费用」类别集合与联接符不同 → `clause in source` 落空 → replay PASS EXPECTED_EFFECT_PRESENT → 台账具名竞争因 + reconciliation escalate=False（设计内）→ review 行非阻断 → **complete 假完成**。六类病灶之外的真案例，病灶本质=该改未改经「字面族匹配」缝隙漏出。
+- **根因链条**：①实例化/联接符差异（「、」vs「和」，类别集合 C vs C,E）；②residual 检查不随源实现化；③review-only 政策放行真阳性模型发现——三层叠加。修复定位在①②（确定性层），不靠加严③（会把模型误报放大成假阻断）。
+- **处理（已实施）**：`effects._replaced_clause_residuals` 改为**源实现化子句匹配**：引用子句含类别枚举时按「非类别骨架相等 + 类别标签超集」在源中找实写形态（更窄类别集 fail-closed 不实现化）；残留判定=实写形态在 after 出现次数 > new 字面豁免次数；豁免=字面出现次数 or 同骨架同标签集的联接符规范化保留（仅豁免一次，重复句不被豁免——「豁免额度」模型）。另：`variants.classify_candidate` 的 ANOMALOUS 报告加与认证同档的覆盖率下限（0.5），B15 的 221 条弱锚噪声收敛为真近似变体。
+- **测试**：`tests/test_clause_residual_realization.py` 6 例（B17 实形/新文本保留豁免/联接符规范化豁免/更窄类别 fail-closed/超出豁免额度的重复仍报/字面旧行为不变）。
+- **验证**：B17 两次独立真实重跑（`/tmp/opencode/miss/verify-fl659{,b}/`）均 **complete 且 p294 尾句真实删除**（新旧句不再并存），unresolved 0、delivery 完整完成；确定性兜底已钉——若残留再现 replay 必 FAIL RESIDUAL_OLD_TEXT → 诚实扣件（单测+豁免额度模型）。variant_candidates 噪声收敛（ANOMALOUS 0.5 覆盖率下限，B17 60→24）。回归：effects/replay/claim/recall/variant/residual/coverage/delivery/obligations/targeting/recovery 758 全绿；pipeline/coverage/delivery 追跑 117 全绿。
+- **状态**：已解决（代码 `41601ba`；纳入 FL-D658 统一报验）。
+- **变更记录（2026-11-01 主线）**：recall-miss 线五机制（FL-D653~657）+ FL-D659 经主线复核并入 qa/full-audit-20261031（merge 6961c77），终轮本树全量回归 2516/0；主线合入树定向冒烟（44+243）绿。
+
+## FL-D690 B02 loop-3 新回归：G15 摘要站点 audit 判 satisfied/superseeded 与残余检测 RESIDUAL_CONFIRMED 互相矛盾，无产物（2026-10-31，qa-feat-recall）
+
+- **发现**：dev20 loop-3（de18ec1）B02 从 v1/v2loop1/v2loop2 三连 complete 翻为 incomplete，`no artifact`（评分器 21 目标全 not_executed）。直接阻断：G15:0 OPEN_OBLIGATION `CLAIM_REPLAY_FAILED` + orphan `RESIDUAL_OLD_TEXT`@p1258（`RESIDUAL_CONFIRMED`，quote「销售服务费每日计提，按月支付。」）。
+- **实证链**：loop-3 该案 G15@p1258 目标被模型 audit 判 **satisfied**（「本窗口销售服务费支付条款与G15拟删除的划付指令式表述不同，无需删除。|SUPERSEDED_BY_…」）；随后 G16 新支付政策**追加**进 p1258 而旧「按月支付」句物理残留 → 确定性残余检测诚实 fail-closed（并衍生 2 个 `claim_residual:RESIDUAL_OLD_TEXT|TARGET_SOURCE_MIS` needs_edit 目标，但已无计划轮可服务）。loop-2 同站点 audit 判 `absent`、loop-1 判 needs_edit 且该轮正确交付——**同一输入三轮三种判定**：audit（语义）与残余检测（字面/确定性）在同一站点给出互相矛盾的终局判定，属 FL-D643/650 模型不确定性族 + 判定通道一致性缺口。
+- **影响**：loop-3 硬门槛 false_complete/wrong 之外的真回归 1 案（无产物）。
+- **根因（已坐实，主线裁决①要求本线立即根因并修复）**：残余检测的 orphan failure 进入 RecoveryOrchestrator 循环后，确实走「就地补删轮」（原候选 (b) 既有机制），但 `claim_residual` 修复目标的 span 被创建为**探测 anchor 碎片句**（quote「销售服务费每日计提，按月支付。」start2/end17）；`assign_target_operations` → `_selected_operation_indices` 用该短 span 对 G15:0 的完整 old_text 长句做校验，命中 `operation_span_mismatch` → `RECALL_TARGET_OPERATION_UNATTRIBUTED` → 目标 operations 清空并被打 `|TARGET_SOURCE_MISMATCH` 出局 → 恢复循环无新进展（RECOVERY_NO_PROGRESS）→ 无产物收尾。**已用最小夹具离线复现该归因拒绝**。深挖另因：同站 verify 模型判 satisfied（site_effects SEMANTIC_VERIFIED）与确定性残余 fail 互斥，属 FL-D643/650 族判定通道不一致，但本轮真阻断点是修复目标归因，非判定权威之爭。
+- **修复（本线实施）**：`fundlex/recall.py` 新增 `g15_residual_clause_span`——复用既有共享支付条款解析器 `_g15_payment_clause_end`（与 `_g15_split_payment_head_owned`/`_g15_delay_continuation` 同家族），把残余修复 span 从碎片句扩到**完整源证支付条款区**（候选句首逐一试解析，区间须含碎片）；`recall_pipeline.py` claim_residual 创建处对 G15 调用。解析器自身边界止于顺延尾句，**同段后追加的 G16 政策尾句保留在 span 外**，删旧留新。解析失败回退原碎片行为（诚实窄 span）。
+- **验证**：新 `tests/test_fl_d690_residual_clause_repair.py` 5 项——条款扩展、跨句不吞追加尾、非支付/坏顺延句回退、**mutation 证据**（碎片 span 归因拒绝 `operation_span_mismatch` vs 扩展 span 归因为 G15:0）、端到端删除（真实 B02 段落「旧条款+追加政策」→ 删净旧条款且 APPENDED 尾句完整保留、replay verified）。G15 家族+新测试 51 绿；全量回归与 B02 单合同真实复验在跑。
+- **真实复验（B02 单合同，$0.027/25c/365s）**：delivery complete、unresolved=0；p1258 旧条款 [0,114) 精确删除（before 全句→replacement ""）、G16 追加政策完整保留、G15:B1:O1 replay PASS、RESIDUAL_OLD_TEXT 零出现。**如实说明**：本轮复验 audit 未回摆（Y004 主轮 survey 目标直接归因删除，recovery attempts=0），残余修复路径未经真实触发——其激活依赖模型判定回摆（FL-D643/650 族非确定性）；该路径由新测试以确定性夹具锁定（含真实 B02 段落端到端）。
+- **状态**：修复已实施+真实复验 PASS，全量回归在跑；待主线确认后入 loop-4 冻结。
+- **变更记录**：2026-10-31 新增（FL-D690..699 段首条）；2026-10-31 根因坐实+修复实施+测试落地+B02 真实复验 PASS。
+
+## FL-D691 评分器类别枚举/币种命名折叠严苛：loop-3 wrong:7 全部 + B15 not_executed 2/3 为量具误杀（引擎义务文本实际完整在场）（2026-10-31，qa-feat-recall）
+
+- **发现**：loop-3（de18ec1）wrong 由 loop-2 的 0 增至 **7**（B17×4、B15×3），false_complete 计 2。逐子句用评分器自身函数（`_required_clauses`+`_clause_present`）复核并对照 final.docx 实际文本：**7 处 wrong 与 B15 3 处 not_executed 中的 2 处（T008/T013）均为类名表述形态差异撞阈值/子串**，义务文本实际完整在文：
+  - 折叠枚举：标签「C类基金份额和E类基金份额不收取申购费用」↔ 引擎（指南槽位正常实例化）「C类、E类基金份额不收取申购费用」（B17 T003/T006）；「A类基金份额和C类基金份额、E类基金份额费用收取不同」↔「A类基金份额和C类、E类基金份额费用收取不同」（B17 T012/T014、B15 T011/T012）。
+  - 币种拆分类名：标签「C类基金份额…销售服务费」↔ 引擎按事实写「C类人民币、C类美元…」（B15 T005 G11 p164、T008 G16 p721、T013 G16 p1130）——G16 新支付政策经全文探针**完整在文**。
+  - 机制：`_clause_present` 长子句走 SequenceMatcher threshold=0.9 且无枚举折叠/类名归一（`_normalise_policy` 只归一类字母本体）。
+- **真实残余**：B15 T001（G03@p87）3 个直销条款确实未追加（引擎本轮未执行，v1 时 complete → 相对 v1 目标级回摆，归 FL-D650 族观察）。即使量具修正后 B15 仍真实 false_complete（1 个真实未执行目标），loop-3 门槛维持 FAIL，须 loop-4。
+- **状态**：open（量具裁决项，派主线定夺：评分器加「类枚举折叠展开等价 + 按 facts 币种拆分类名归一」层，或引擎 class_label 强制展开式；labels 已冻结不得改）。修正后 loop-3 可**零成本纯读器重评**（不耗模型）。
+- **变更记录**：2026-10-31 新增。
+
+## FL-D692 评分器类枚举折叠/币种类名归一化（主线授权量具修正，已实施+全量同口径重评）（2026-10-31，qa-feat-recall）
+
+- **背景**：FL-D691 登记后主线独立盲抽 3/3 PASS 授权修正，规格为只动 scorer、加两层确定性等价归一、bump 版本、零成本重评、附单测。
+- **实施**（`tools/evaluation/p6_score.py`，`SCORER_VERSION` `p6-score-2`→`p6-score-3-classfold-20261031`）：
+  - (b) 币种拆分类名：在既有字母坍缩之前先做 `X类(人民币|美元现汇|美元)`→`X类`（闭域词表，与既有 `认购/申购` 归一同型；labels 的 `currency_variants` 实为「人民币份额/美元现汇份额」但 B15 为空——f依赖派生覆盖不到实证分裂形态，故取词表归一并在本行声明该偏差），再对拆分产生的同名 token 去重（`A类、A类`→`A类`）；
+  - (a) 折叠/展开枚举等价：既有字母坍缩（`C类、E类基金份额`→`基金份额`，与 `test_p6_score_append` 既定语义同哲学，不同类字母互认保持不变）之后，连接词重复的裸主体 `基金份额和基金份额`/`基金份额、基金份额` 收拢为单 `基金份额`（修掉 mainline 复核指出的真机制：折叠后形如仍异+exact-substring 不吸收「和」重复主语），尾部兜底把残余裸类别 token 同样归一；两层均幂等（修到不动点）。
+- **验证**：新 `tests/test_fl_d692_scorer_classfold.py` 11 项（7 个实证正对——全部取自 loop-3 real required_text/final 站点对；3 负对；既有字母坍缩语义不变式）+ p6 全套 44 绿。
+- **零成本纯读器重评（同量具四波）**：v1 239/61.3%/fc4、loop1 315/80.8%/fc2、loop2 298/76.4%/fc0 **逐字不变**（量具等价位移零副作用）；loop-3 340/fc2/wrong7 → **349(89.5%)/fc1/wrong0、actually 16→17**（B17 四 wrong 痊愈转 actual complete；B15 T008/T013 三 not_executed 愈其二；B15 T001 真缺口保留）。原 mapped 产物封存 `full-dev-mapped-pre692`；重评分母/sha 在 `/tmp/opencode/qa/rescore/`（score sha：v1 5084eb76/loop1 f76ab8e6/loop2 a6c2f250/loop3 c1a0993c）。
+- **门槛余量**：false_complete 2→1（B15 T001 真缺口，主线定归 recall-miss 机制 A/E 强制病例）；B02 FL-D690 修复在途；B19 依旧。loop-3 门槛维持 FAIL，留出示波继续冻结。
+- **状态**：已实施并全量同口径重评；待主线复核确认。
+- **变更记录**：2026-10-31 新增。
 
 ## FL-D710 前端全页面体检：六条用户反馈对应问题点入册（2026-10-31，qa-frontend）
 
