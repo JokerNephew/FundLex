@@ -1,13 +1,22 @@
 # FundLex 当前断点（ACTIVE_HANDOFF）
 
+> **九对话并行期必读**：[docs/PARALLEL_COORDINATION_20261031.md](PARALLEL_COORDINATION_20261031.md)（清单/段位/冻结门槛/merge 顺序/qa-base 在途文件归属）；各线完成状态写到 `/tmp/opencode/qa/status/<线名>.md`。
+
 ## 2026-10-31 qa-f2-recall-tracked：带修订痕迹 DOCX 任务输入固化（本 worktree 断点）
 
 - Worktree `/home/opencode/.local/share/opencode/worktree/29a9a9/qa-f2-recall-tracked`，分支 `qa-f2-recall-tracked-20261031`，基线 `qa/full-audit-20261031`（@`1e7e05e`）。语义决策：基底=接受全部修订后视图；原痕迹固化不再保留；引擎新修订为唯一痕迹；报告记 `base_had_tracked_changes`。
 - 已实施并聚焦验证：`fundlex/docx.py::normalize_tracked_base`、`fundlex/recall_pipeline.py::process_recall_first` 输入规范化与报告字段、`fundlex/selective.py` flatten 报告兼容、`fundlex/delivery.py` 新错误文案、`fundlex/upload_validation.py` 检测职责注释。新增 `tests/test_docx_tracked_input.py` 16 项绿、`tests/browser/test_tracked_upload.py` 2 项绿（FUNDLEX_BROWSER_TESTS=1）。真实语料备份 18 份固化验证 17 绿+1 受保护边界；聚安离线引擎 redline 仅我方作者、final 零残留（证据 `/tmp/opencode/qa-tracked/`）。
 - 集中记录：FL-D610（实施）、FL-D611（作者字面值待产品确认，现按 FL-D446“资金清算部”解析）、FL-D612（受保护边界/段落合并 fail-closed/死导入观察项/无 OCR 引擎）。
 - 回路：除 FL-D574 记载的 6 项 HEAD 既有失败外无新失败预期；全量 pytest 后台运行中，绿后 `git add` 自有文件（fundlex/docx.py、recall_pipeline.py、selective.py、delivery.py、upload_validation.py、tests/test_docx_tracked_input.py、tests/browser/test_tracked_upload.py、docs/ACTIVE_HANDOFF.md、docs/DETAIL_ISSUES_AND_RESOLUTIONS.md）→ commit → `git merge --no-edit qa/full-audit-20261031`。
-
 ## 2026-10-31 全项目质量整改（QA 总攻，主 agent 断点）
+
+### 断点更新（2026-10-31 主线收口进展，最新以此为准）
+
+- HEAD：`c1ec87c`（qa/full-audit-20261031 @ /tmp/opencode/qa-base）。wave1 dev20 归因修复已收口大半：`ac697a4`（FL-D571 ONE_OF coalesce + FL-D572 G08/G09/G18/G13，B03/B01/B05/B12/B15；其中卷入的 recall.py 系 FL-D573 修复本体）、`fe4803f`（FL-D575：D573 三机制正负路径测试 8 个）。**FL-D573 已收口**：`449b36b`（Fix B claim_replay 自述证据不扩权）、`0a89e7d`（受理死代码修正：组延续受理移至 `_append_definition_anchor` 闸门之前，仍限 plan 期）、`c1ec87c`（登记）；13 项测试+mutation 自检+冻结复放（G05=[174,183) 与 gold T002 一致、p87 尾句保留、tbl r55c1 无 G01、plan 落 p84）全部完成；留裁子项（G22×2/G08/G14 裁定冲突）详见集中记录。独立复核观察项余 FL-D576（v2 重跑观察谨慎阻断）待 qa-feat-recall 线数据。全量 pytest 后台复跑中。
+- **新资产（各对话可用）**：`references/fee-rule-v2/`（带教 2026-10-31 提供，33 对黄金对照：original/ 修改前 + product_revised/ 产品部按指引V2实际修改版，MANIFEST.md 含配对+sha256）、`references/source/存量基金适用销售费用新规的基金合同修改指引V2.docx`。用途：评测比对参照、**qa-f2-guide-history 对话的指引上传/解析/对比测试输入**、Compare 真实语料。
+- 工作区他人在途文件（勿动）：fundlex/api.py、frontend/app.js、tests/test_v2_evaluation.py / test_v2_workbench.py / test_v3_delivery_review_gate.py（疑似 FL-D574 陈旧测试修复中）、tests/test_review_render_index.py / test_revision_view_cache.py（未跟踪，他人新增）、第二波标签线产物（selection-second-batch json + 2 个 py）。claim_replay.py 已随 449b36b 收口不再是 FL-D573 在途。
+- 评测关键提醒（qa-feat-recall 线必看）：dev20 v2 重跑必须含 `ac697a4`+D573 余量+FL-D574 测试定责，指南 sha 已变 `30c2625d…`（G13 variant 重认证），重冻结登记；v2 须对比 v1 阻断/交付率（FL-D576）。
+- FL-D577（G09 variant 冗余）低优先待清理。
 
 ### 断点更新（fix wave 1 进行中）
 
