@@ -1567,10 +1567,10 @@ dev20 v2 闭环：修复循环直到 §7 门槛（无已确证严重错误、无
 - FL-D685 回复 e3d6135；FL-D688 addendum 已写入 loop-2 compare（var/ 不入库）；FL-D584/585/586/587/588/589 条目在册。
 
 ## 在途
-- 无后台进程。**loop-4（6339a06）跑完评完：351/90.0%、wrong=0、kept=0、actual 17/20、fc=1 → 门槛 FAIL**。账本第 6 段 $0.5802/515c/68min。
-- 达成：B02 complete 21/21（FL-D690 收官实证）/完成率≥89.5%/wrong、kept 达标/B19 预期内。
-- FAIL 双因子已登记：**FL-D693**（B12 真回归：G12+G13 联合站点合成编辑通道 loop-4 未触发→诚实 incomplete）；**FL-D694**（五机制下 B15 仍谎报 complete，A/E 未把 T001 真缺口翻诚实 holds）。compare-multi addendum 已写。
-- 等主线：joint 合成通道机制处置 + A/E 生效处置 → loop-5 令。留出 8 份维持冻结；第二波 100 份未启动。号段余 FL-D695..699。
+- 无后台进程、无运行中波次。**FL-D790 量具窗口完成（cc3c52f）+ 五波同量具（p6-score-4）重评**：v1 242/62.1%(fc4) / loop1 逐字不变 / loop2 逐字不变 / loop3 350/89.7%(fc0) / **loop4 352/90.3%(fc 1→0)**。逐案归因：loop1/2 不变、loop3 仅 B15 T001、v1 仅 B05 T001/T002+B15 T001（均合法后移落点实证）。
+- FL-D691「真实残余」子结论与 FL-D694 已按 p84 实证改判关闭（DETAIL 已记录，历史保留）。
+- **等主线**：复核合并 cc3c52f → engine 冻结 a0aa64d（含 FL-D791）→ loop-5 dev20 令。loop-5 门槛：fc=0/wrong=0/kept 不新增/B02 保 complete/B15 T001 executed/B12 恢复 complete（FL-D792 观察项如实登记不算 FAIL 因子）。**未发令前勿启动 dev20**。
+- FL-D693（B12 joint 合成通道）仍 open 待主线机制处置。号段余 FL-D695..699；FL-D790 系主线编号（700+ 族），非本池。
 ## 下一步（可执行顺序）
 1. 已向主线报 loop-2 指标与残余归属（本次回复）。
 2. 回归绿 → 提交 FL-D588 代码 → 报主线。等 feat-guide B15 单与 B19 修复专单齐 → 新 freeze 跑 loop-3。编号 580-589 已用尽，已向主线请新段。
