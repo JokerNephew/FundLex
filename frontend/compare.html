@@ -806,6 +806,25 @@
 <p class="subnote" id="guide-list-state" aria-live="polite">
 </p>
 </div>
+      <div class="card card-pad" style="margin-top:14px" id="guide-diff-card">
+<div class="section-title">
+<h2>版本对比</h2>
+<small>选两个版本，看规则改了哪几条、原文哪里动了；对比完全在服务器本地计算，不调用模型</small>
+</div>
+<div class="guide-diff-selects">
+<label>基准版本（旧）
+<select id="guide-diff-from" class="control-select" aria-label="基准版本（旧）"></select>
+</label>
+<label>对比版本（新）
+<select id="guide-diff-to" class="control-select" aria-label="对比版本（新）"></select>
+</label>
+</div>
+<div class="guide-diff-tabs" role="tablist" aria-label="对比内容">
+<button type="button" role="tab" id="guide-diff-tab-rules" data-guide-diff-tab="rules" aria-selected="true">规则差异</button>
+<button type="button" role="tab" id="guide-diff-tab-text" data-guide-diff-tab="text" aria-selected="false">原文比对</button>
+</div>
+<div id="guide-diff-body" aria-live="polite"></div>
+</div>
       <div class="card card-pad" style="margin-top:14px">
 <div class="section-title">
 <h2>上传自定义指引</h2>

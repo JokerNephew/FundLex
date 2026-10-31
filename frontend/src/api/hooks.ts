@@ -2,7 +2,7 @@ import { useMutation, useQuery as useTanStackQuery } from '@tanstack/react-query
 import { useCallback } from 'react'
 import { api } from './endpoints'
 import { queryClient } from './queryClient'
-import type { Capabilities, CompareTask, Decision, GuideDetail, GuideDiffResult, GuideRuleSettings, GuideSettings, GuideSummary, ModelSettings, Paginated, Report, RevisionView, TaskDetail, TaskDocument, TaskStats, TaskSummary, UploadResult } from '../types'
+import type { Capabilities, CompareTask, Decision, GuideDetail, GuideDiffResult, GuideTextDiffResult, GuideRuleSettings, GuideSettings, GuideSummary, ModelSettings, Paginated, Report, RevisionView, TaskDetail, TaskDocument, TaskStats, TaskSummary, UploadResult } from '../types'
 
 type QueryState<T> = {
   data: T | undefined
@@ -27,6 +27,7 @@ const queryKeys = {
   guide: (id: string) => ['guide', id] as const,
   guideRuleSettings: (id: string) => ['guide-rule-settings', id] as const,
   guideDiff: (id: string, against: string) => ['guide-diff', id, against] as const,
+  guideTextDiff: (id: string, against: string) => ['guide-text-diff', id, against] as const,
   modelSettings: ['model-settings'] as const,
   taskReport: (id: string) => ['task-report', id] as const,
   documentReport: (taskId: string, documentId: string) => ['document-report', taskId, documentId] as const,
@@ -138,6 +139,7 @@ export function useGuideUploadMutation() { return useApiMutation<{ version: Guid
 export function useGuideParseMutation() { return useApiMutation<{ version: GuideSummary }, string>((id) => api.parseGuide(id), ['guides']) }
 export function useGuideRuleSettings(id: string | undefined) { return useServerQuery<GuideRuleSettings>(queryKeys.guideRuleSettings(id || ''), () => api.guideRuleSettings(id as string), { enabled: Boolean(id) }) }
 export function useGuideDiff(id: string | undefined, against: string | undefined) { return useServerQuery<GuideDiffResult>(queryKeys.guideDiff(id || '', against || ''), () => api.guideDiff(id as string, against as string), { enabled: Boolean(id && against && id !== against) }) }
+export function useGuideTextDiff(id: string | undefined, against: string | undefined) { return useServerQuery<GuideTextDiffResult>(queryKeys.guideTextDiff(id || '', against || ''), () => api.guideTextDiff(id as string, against as string), { enabled: Boolean(id && against && id !== against) }) }
 export function useGuideRuleSettingsMutation() { return useApiMutation<GuideRuleSettings, { id: string; disabled: string[] }>((input) => api.setGuideRuleSettings(input.id, input.disabled), ['guide-rule-settings']) }
 export function useModelSettings() { return useServerQuery<ModelSettings>(queryKeys.modelSettings, api.modelSettings) }
 export function useModelSettingsMutation() { return useApiMutation<ModelSettings, { primary: Record<string, unknown>; review?: Record<string, unknown> | null }>((input) => api.saveModelSettings(input), ['model-settings']) }
