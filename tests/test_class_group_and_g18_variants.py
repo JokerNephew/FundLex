@@ -244,3 +244,35 @@ def test_g14_promotion_clause_converges_verb_to_lower():
     assert "销售服务费率" in result.replacement
     # The non-promotion lead-in survives verbatim.
     assert result.replacement.startswith("在基金促销活动期间")
+
+
+def test_g14_promotion_site_plans_through_policy_gate():
+    """FL-D606 full plan path: promo-clause target must survive the policy gate
+    and rewrite to the 调低 + narrowed form (validator uses rule-level variants)."""
+    from fundlex.recall import _selected_operation_indices, plan_target
+
+    inspection = inspect_docx(
+        ROOT / "funds_word" / "基金合同第一批" /
+        "广发美国房地产指数证券投资基金基金合同.docx", full=True)
+    text = inspection.by_location("p167").text
+    quote = "对投资者适当调整基金申购费率、赎回费率、销售服务费率和转换费率"
+    start = text.find(quote)
+    assert start >= 0
+    rule = _rule("G14")
+    ledger = compile_obligations({"groups": [rule]})
+    facts = _facts()
+    apply_facts(ledger, facts)
+    target = Target("Y002", "G14", "p167", quote, "needs_edit", "survey_reference:1.00",
+                    start=start, end=start + len(quote), resolution="resolved")
+    indices = _selected_operation_indices(rule, target, inspection, facts, ledger)
+    assert [3, 4, 5] == indices
+    target.operations = tuple(f"G14:{index}" for index in indices)
+
+    edit = plan_target(rule, target, inspection, facts, NoModel(),
+                       compose_budget=[3], obligations=ledger)
+    assert edit is not None  # previously RECALL_POLICY_COMPONENTS_UNVERIFIED
+    assert "对投资者适当调低" in edit.replacement
+    assert "适当调整" not in edit.replacement
+    assert "赎回费率" not in edit.replacement
+    assert "转换费率" not in edit.replacement
+    assert "申购费率" in edit.replacement and "销售服务费率" in edit.replacement

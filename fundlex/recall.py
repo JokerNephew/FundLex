@@ -6872,6 +6872,15 @@ def _validate_routed_policy(rule: dict, operations: Sequence[dict], facts: Facts
         old_texts = [str(operation.get("old_text") or "")]
         old_texts.extend(str(item) for item in (operation.get("old_text_variants") or ())
                          if str(item))
+        # Rule-level variants are declared alternative wordings of the same clause
+        # family (consumed everywhere else via ``rule.get("old_text_variants")``);
+        # the policy gate must authorize the same deliberate removals for them —
+        # otherwise the G14 promotion form (FL-D606) hits LOST_PROTECTED_LITERAL
+        # for text the guide legitimately replaces.
+        for variant in (rule.get("old_text_variants") or ()):
+            variant = str(variant)
+            if variant and variant not in old_texts:
+                old_texts.append(variant)
         new_text, slot_issues = instantiate_slots(fixed_text, facts)
         if slot_issues:
             new_text = fixed_text
