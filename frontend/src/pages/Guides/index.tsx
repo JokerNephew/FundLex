@@ -82,7 +82,6 @@ export function GuidesPage() {
         <h1>指引配置</h1>
         <p>管理自己的指引版本、启停规则组，并决定新建任务使用哪一版。任务会保存创建时的指引快照。</p>
       </div>
-      <Link to="/settings"><Button>设置</Button></Link>
     </div>
     {error && <ErrorState error={error} />}
 
