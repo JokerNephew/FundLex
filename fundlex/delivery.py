@@ -167,6 +167,9 @@ _KNOWN_ITEM_PREFIXES = (
     "COMPOSE", "OVERLAP", "VALIDATION", "LEDGER_EVIDENCE_UNBOUND",
     "FINAL_MODEL_SWEEP_FINDING", "FINAL_COVERAGE_UNRESOLVED", "VERIFICATION_",
     "QUALIFICATION_", "RECALL_QUOTE_UNRESOLVED", "RECALL_TARGET_",
+    # FL-D655: an anchored but uncertified variant wording is honest review
+    # evidence (a human confirms the skip), never a delivery blocker.
+    "VARIANT_",
 )
 
 
