@@ -7340,3 +7340,31 @@ H＝E×…
 - **处理（已实施）**：候选内修改 `tools/deploy/fundlex-publish.sh` check_api 重试 24 次×5s（~120s 预算），按规程同步 root 发布器并 drift-check OK 后实发成功（4377962，engine hash e555fee8）。顺手把 cmp-D562 冒烟 renice 保持其数据无损（事后恢复）。
 - **附带观察**：诊断中发现 /var/lib/fundlex 下 auth.db（0 字节，10-31 18:59 由某 root 进程创建）、fundlex.db、runs.sqlite3 自 10-16 起为 root:root 644；由于服务实际库文件是 runs.sqlite3 且生产 API 正常，属历史权限形态，不影响本轮交付，但 root 属主库文件对 fundlex 用户不可写，巡检留意。
 - **状态**：已解决（发布闭环）。
+
+## FL-D660 指引准入/启用谓词与运行时路由谓词不一致：可执行性金丝雀对齐关闭（2026-10-31，qa-guide-parse 线）
+
+- **发现日期**：2026-10-31（本线承接 FL-D648 收口时拆根因）。
+- **问题与影响**：启用闸 `operation_registry_coverage_gaps` 对「`operation_id_generated=True` 且规则在 STRATEGY_REGISTRY」的操作**有意放行**（legacy 兼容），但运行时 `_registry_execution_authoritative` 在 `bind_operation_identities` 之后恒为 True、按权威契约处理并 fail-closed（`RECALL_OPERATION_REGISTRY_MISSING`）。谓词不一致使 FL-D648 的合并漂移解析版本能通过启用、到任务运行时才断崖。另结构性粒度硬规则（如「跨标题块合并报错」）对本指引零检出也用实测证实：合并版 15 个规则每规则恰好=一个加粗主题块；内置指引自身即「一块多规则+跨规则段落重叠」（G15/G16、G19/G20、G21/G22），任何「一块一规则」结构洁癖都会误杀内置通道。
+- **处理方法（已实施并验证）**：①新增 `fundlex/guide_canary.py`：`blocking_gaps`（与运行时完全同谓词的准入检查）、`executability_report`（注册解析 + 全事实已验证路由 + 条件可满足性 8 组事实枚举 + 义务编译往返，零模型零合同）；fatal → 版本 qualification=`needs_review`、review 复核列表显式维度（`source=executability_canary`）、`set_current_guide` 以同谓词拒绝（错误码 GUIDE_OPERATION_REGISTRY_MISSING/GUIDE_NOT_CERTIFIED 兼容不变）；legacy（无 operation_id）文档与运行时同样只走兼容路径不 fatal，既保护内置/老夹具。②粒度改为**指标+块报告**（诊断不阻断）。③footprint 冒烟 review 分 source 管理，不再互相覆盖。
+- **验证**：冻结真实 15 规则合并产物（tests/fixtures/guides/merged_g15_real_20261031.json），canary 确定性检出 12 个阻断键（G03:1..G15:1，与运行时失败同类）；内置冻结文档 canary 全绿（executable_ratio 1.0）；后端 57 项 guide 测试全绿。
+- **状态**：已修复并验证（qa-guide-parse 线提交 a1289e1）；待并入主线后随发布说明注明存量 not_run 版本语义。
+
+## FL-D661 指引粒度保障的方法论结论：结构硬规则不可通用，确定性落点=操作原子性（2026-10-31，qa-guide-parse 线）
+
+- **问题**：任务 A「解析粒度钉死」若按字面做结构硬闸（一标题块一规则/禁止一块多规则），实测两路死：①真实事故（合并版）恰恰一主题块一规则，零检出；②内置指引自身违反一切简单结构规则（块内拆分、跨规则段落重叠 97/98、101–105），硬闸会破坏内置升级路径（约束②）。
+- **结论（已按此实施）**：粒度保障的**确定性硬点**只能是「操作原子性=可执行面」（FL-D660 canary）；结构粒度（块切分、块-规则对齐、跨块规则、分支计数）作**指标与块级人读报告**呈现，帮助用户看「粒度偏粗/被拆分」，不访问 pass/fail。指引形态各异的任意上传场景下，可执行性比结构更像天然不变量。
+- **状态**：设计定稿并实施；若后续试点证明某结构信号对某类指引稳定有效，可按指引形态白名单追加硬闸（需主线评审）。
+
+## FL-D662 块级解析报告细分切分误报「合并」：改为主题标题级切分（2026-10-31，qa-guide-parse 线）
+
+- **问题**：块报告初版按「加粗/红=指令标签起点」细分块（47 块），内置合格解析被报 36 块「merged（粒度过粗）」——细分标签天然落在单规则内部（原条款/新条款/分别变更），merged 语义失真。
+- **处理**：`segment_guide_blocks` 改为主题标题级：只认域标题（既有 GUIDE_DOMAINS 前缀）加粗段落；无域标题才回退通用编号标题；全无结构回退单块。内置实测 0 merged、7 parsed+6 split（拆分为合法结构），合并版事故经 canary fatal 定位 6 个错误块。报告状态集：parsed/split/merged/uncovered/error/unparsed，全部附中文原因与修正建议。
+- **状态**：已修复并验证（同 a1289e1）。
+
+## FL-D663 footprint 冒烟与 canary 的 review 戳互相覆盖：分 source 管理（2026-10-31，qa-guide-parse 线）
+
+- **问题**：canary 在 finish 落 needs_review 后，worker footprint 冒烟对同源版本同样判 needs_review 并整体覆盖 issues.review（canary 的运行时致命维度丢失）；反向 healthy 冒烟的清除也会误清 canary 戳。
+- **处理**：review.dimensions 增 `source`（footprint_smoke / executability_canary）；冒烟只在空位或自有戳上写/清。测试钉：合并版冒烟判 needs_review 且 canary 维度仍在。
+- **状态**：已修复并验证（同 a1289e1）。
+
+> **FL-D648 变更记录（2026-10-31）**：遗留开放项「解析粒度钉死」已由 qa-guide-parse 线收口：确定性落点改为可执行性金丝雀（FL-D660），真实合并事故产物冻结钉死（12 阻断键断言），粒度结构信号转诊断指标（FL-D661）。状态由「open」推进为「机制已闭环、随主线合并生效」。
