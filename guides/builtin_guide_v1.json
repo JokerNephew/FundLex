@@ -591,7 +591,10 @@
    "old_text_variants": [
     "基金管理人可以适当调低基金申购费率和赎回费率。",
     "基金管理人可以适当调低基金申购费率、赎回费率和转换费率。",
-    "基金管理人可以适当调低基金申购费率、赎回费率、转换费率和销售服务费率。"
+    "基金管理人可以适当调低基金申购费率、赎回费率、转换费率和销售服务费率。",
+    "对投资者适当调整基金申购费率和赎回费率",
+    "对投资者适当调整基金申购费率、赎回费率和转换费率",
+    "对投资者适当调整基金申购费率、赎回费率、销售服务费率和转换费率"
    ],
    "slot_tokens": [],
    "class_substitution": false,
@@ -1325,11 +1328,11 @@
    "cost_is_provider_invoice": false
   }
  },
-  "document_sha256": "30c2625d7dd13db682e73f1f172e7943bfcedbbd91ee91ff0923d89098046c51",
+  "document_sha256": "5335e401e8409f37c19543a145ec3def177a2d678a3622b618a17b1106e416f7",
  "certification": {
   "approved": true,
   "source_sha256": "b77be53c3439d785a9ffad0f09d8d03ba74f7722397576b999ae6f5dd6eef895",
-  "guide_document_sha256": "30c2625d7dd13db682e73f1f172e7943bfcedbbd91ee91ff0923d89098046c51",
+  "guide_document_sha256": "5335e401e8409f37c19543a145ec3def177a2d678a3622b618a17b1106e416f7",
   "rule_count": 22,
   "operation_count": 34,
   "finding_dispositions": [
@@ -1339,7 +1342,7 @@
     "reason": "销售服务费按指引G15标题适用于多类别产品；加 class_count=multiple 与 G21 的单类别不替换分支互斥，避免同一清算句被两条规则同时命中。若真实合同出现单类别且收取销售服务费的边界，由引擎仲裁并登记。",
     "approved": true,
     "source_sha256": "b77be53c3439d785a9ffad0f09d8d03ba74f7722397576b999ae6f5dd6eef895",
-     "guide_document_sha256": "30c2625d7dd13db682e73f1f172e7943bfcedbbd91ee91ff0923d89098046c51",
+     "guide_document_sha256": "5335e401e8409f37c19543a145ec3def177a2d678a3622b618a17b1106e416f7",
     "review_basis": "Recorded source review, rechecked against source paragraphs on 2026-10-21; engineering certification, not a new user business ruling."
    },
    {
@@ -1348,7 +1351,7 @@
     "reason": "段21条件'如果有收取销售服务费的份额类别'为产品级存在性判断，has_service_fee 即其编码；类别级解读会与段21的互斥分支语义冲突。",
     "approved": true,
     "source_sha256": "b77be53c3439d785a9ffad0f09d8d03ba74f7722397576b999ae6f5dd6eef895",
-     "guide_document_sha256": "30c2625d7dd13db682e73f1f172e7943bfcedbbd91ee91ff0923d89098046c51",
+     "guide_document_sha256": "5335e401e8409f37c19543a145ec3def177a2d678a3622b618a17b1106e416f7",
     "review_basis": "Recorded source review, rechecked against source paragraphs on 2026-10-21; engineering certification, not a new user business ruling."
    },
    {
@@ -1357,7 +1360,7 @@
     "reason": "两个操作分别带 has_service_fee=true/false 条件，引擎按条件择一执行，即为互斥编码。",
     "approved": true,
     "source_sha256": "b77be53c3439d785a9ffad0f09d8d03ba74f7722397576b999ae6f5dd6eef895",
-     "guide_document_sha256": "30c2625d7dd13db682e73f1f172e7943bfcedbbd91ee91ff0923d89098046c51",
+     "guide_document_sha256": "5335e401e8409f37c19543a145ec3def177a2d678a3622b618a17b1106e416f7",
     "review_basis": "Recorded source review, rechecked against source paragraphs on 2026-10-21; engineering certification, not a new user business ruling."
    },
    {
@@ -1366,7 +1369,7 @@
     "reason": "条款1/条款2 已分别作为两个 replace 操作；variants 仅为定位参考。",
     "approved": true,
     "source_sha256": "b77be53c3439d785a9ffad0f09d8d03ba74f7722397576b999ae6f5dd6eef895",
-     "guide_document_sha256": "30c2625d7dd13db682e73f1f172e7943bfcedbbd91ee91ff0923d89098046c51",
+     "guide_document_sha256": "5335e401e8409f37c19543a145ec3def177a2d678a3622b618a17b1106e416f7",
     "review_basis": "Recorded source review, rechecked against source paragraphs on 2026-10-21; engineering certification, not a new user business ruling."
    },
    {
@@ -1375,7 +1378,7 @@
     "reason": "class_substitution=true 已表达该引用语义（与段5-8/13-16 的分组替换规则一致），引擎按槽位实例化执行。",
     "approved": true,
     "source_sha256": "b77be53c3439d785a9ffad0f09d8d03ba74f7722397576b999ae6f5dd6eef895",
-     "guide_document_sha256": "30c2625d7dd13db682e73f1f172e7943bfcedbbd91ee91ff0923d89098046c51",
+     "guide_document_sha256": "5335e401e8409f37c19543a145ec3def177a2d678a3622b618a17b1106e416f7",
     "review_basis": "Recorded source review, rechecked against source paragraphs on 2026-10-21; engineering certification, not a new user business ruling."
    },
    {
@@ -1384,7 +1387,7 @@
     "reason": "notes 为说明性文字，不构成新增政策；描述2与单类别新文逐字一致，按已满足处理是代码可判定的等价关系，不改变指引要求。",
     "approved": true,
     "source_sha256": "b77be53c3439d785a9ffad0f09d8d03ba74f7722397576b999ae6f5dd6eef895",
-     "guide_document_sha256": "30c2625d7dd13db682e73f1f172e7943bfcedbbd91ee91ff0923d89098046c51",
+     "guide_document_sha256": "5335e401e8409f37c19543a145ec3def177a2d678a3622b618a17b1106e416f7",
     "review_basis": "Recorded source review, rechecked against source paragraphs on 2026-10-21; engineering certification, not a new user business ruling."
    },
    {
@@ -1393,7 +1396,7 @@
     "reason": "指引段104明确'如果仅有一个份额类别，则不做替换'，class_count=1 即该分支的机器可执行编码。",
     "approved": true,
     "source_sha256": "b77be53c3439d785a9ffad0f09d8d03ba74f7722397576b999ae6f5dd6eef895",
-     "guide_document_sha256": "30c2625d7dd13db682e73f1f172e7943bfcedbbd91ee91ff0923d89098046c51",
+     "guide_document_sha256": "5335e401e8409f37c19543a145ec3def177a2d678a3622b618a17b1106e416f7",
     "review_basis": "Recorded source review, rechecked against source paragraphs on 2026-10-21; engineering certification, not a new user business ruling."
    },
    {
@@ -1402,7 +1405,7 @@
     "reason": "当前写入能力以段内文本+换行(<w:br/>)表达分项，保留（1）（2）文本层级；段级插入为已知限制 FL-D032，真实产物审计将检查可读性。",
     "approved": true,
     "source_sha256": "b77be53c3439d785a9ffad0f09d8d03ba74f7722397576b999ae6f5dd6eef895",
-     "guide_document_sha256": "30c2625d7dd13db682e73f1f172e7943bfcedbbd91ee91ff0923d89098046c51",
+     "guide_document_sha256": "5335e401e8409f37c19543a145ec3def177a2d678a3622b618a17b1106e416f7",
     "review_basis": "Recorded source review, rechecked against source paragraphs on 2026-10-21; engineering certification, not a new user business ruling."
    },
    {
@@ -1411,7 +1414,7 @@
     "reason": "source_paragraphs 记录组来源段落区间（含标题与原条款说明），删除操作文本本身逐字一致。",
     "approved": true,
     "source_sha256": "b77be53c3439d785a9ffad0f09d8d03ba74f7722397576b999ae6f5dd6eef895",
-     "guide_document_sha256": "30c2625d7dd13db682e73f1f172e7943bfcedbbd91ee91ff0923d89098046c51",
+     "guide_document_sha256": "5335e401e8409f37c19543a145ec3def177a2d678a3622b618a17b1106e416f7",
     "review_basis": "Recorded source review, rechecked against source paragraphs on 2026-10-21; engineering certification, not a new user business ruling."
    },
    {
@@ -1420,7 +1423,7 @@
     "reason": "三种表述各自带 class_count 条件成为独立操作，任一命中即替换，条件已编码。",
     "approved": true,
     "source_sha256": "b77be53c3439d785a9ffad0f09d8d03ba74f7722397576b999ae6f5dd6eef895",
-     "guide_document_sha256": "30c2625d7dd13db682e73f1f172e7943bfcedbbd91ee91ff0923d89098046c51",
+     "guide_document_sha256": "5335e401e8409f37c19543a145ec3def177a2d678a3622b618a17b1106e416f7",
     "review_basis": "Recorded source review, rechecked against source paragraphs on 2026-10-21; engineering certification, not a new user business ruling."
    }
   ]
