@@ -6796,7 +6796,12 @@ H＝E×…
 
 - **问题与影响**：A6-543 修复后，尾删链 fail-closed 策略同时覆盖了"全文替换式采用B（删除全部A段+插入全部B段）"场景——该场景修复前已验证可交付且 final==right（A6 E11），现抛 SELECTION_BLOCK_STRUCTURE_UNSUPPORTED 拒绝。属 fail-closed 拒绝能力而非错误产出，无半改状态，但对依赖"全部采用B"的用户是能力回退。
 - **决策（工程裁定，2026-10-31）**：保留 fail-closed 拒绝为当前正确行为（杜绝 SELECTION_FINAL_TEXT_MISMATCH 误交付风险），能力恢复（对全文替换专门路径）列为后续增强，需补"删除+插入全部采用"专项用例后解除拒绝。
-- **状态**：open（能力增强待排期）；当前行为已用例钉住，生产提示为结构化错误码可解释。
+- **能力恢复（2026-10-31，qa-feat-compare 专线）**：全文替换属于结构等价替换而非尾删链。新增 `_detect_full_body_replacement`（识别条件：无 inline 操作、块操作仅 delete/insert、删除集恰为左侧**全部**正文直接段落、插入集恰为右侧**全部**正文直接段落、且计划序列与右侧文档逐块逐字相等——少任何一项则维持原 fail-closed）+ 专用写入 `_apply_full_body_replacement`（保留最后一段为 keeper 锚点：其余被删段整段标记删除，锚点仅删 run 并把右侧首段 run 以 w:ins 写入锚点，其余右侧段克隆插入其后；final 由 `_accept_revisions_copy` 派生）。三重验证保留：final 解析文本==期望（==right 逐字）、自身 accept c14n==final、独立上传 accept oracle==final（SELECTION_ACCEPT_ORACLE_MISMATCH 兜底）；风格/编号校验（`_validate_block_references`）照旧。审计/撤销完备：redline 中左侧全部正文保留在 w:del（拼接==左侧全文逐字）、右侧全文在 w:ins、作者 FundLex Compare+时间戳戳记、manifest 覆盖全部 diff id、checks 增加 `full_body_replacement`。
+- **同族修复**：`_expected_sequence` 原实现按"处理后索引"为插入定槽，遇到"同锚点 before 插入"、"锚点在删除块上"等形态时序列与 writer 实际落点漂移（250 段全改+锚点 L000000 before 用例序列完全倒序），必然 MISMATCH 误拒；改为按原始位置槽位重写（同槽插入按 diff id 升序，与 `_apply_block_operations` 固定槽位语义一致），消除了整批同锚点插入场景的期望漂移；before 锚点原行为恒失败，故不存在已交付产物语义变化。
+- **验证（真实 DOCX 用例，tests/test_compare_full_body_replacement.py 10 项全绿）**：①全文替换采用B交付成功：250 段全改（inserts 组在前、before 锚）与 300 段全改（after 锚）双形态 final==right 逐字、delText==left 全文、ins 文本==right 全文、独立 oracle c14n==final、manifest 覆盖全部 diff；②尾删+穿插插入仍拒绝（锚点落在保留段，250 规模同样失败无产物）；③非全文大链删除仍拒绝（250 全改只采用删除、丢掉 1 个插入均 SELECTION_BLOCK_STRUCTURE_UNSUPPORTED 且零产物残留）；④mutation 对抗仍拒绝（右件字节篡改→SELECTION_SOURCE_HASH_MISMATCH、diff 文本篡改+自重哈希→SELECTION_RESULT_DIFF_MISMATCH、结果与源不一致→SELECTION_SOURCE_HASH_MISMATCH，均无产物）。既钉住的 10 段尾删+穿插插入拒绝用例（test_compare_sdt_locations_and_trailing_delete）保持绿。
+- **边界如实记录**：插入锚点落在被删段上的尾删+穿插插入组合（如 T 系列文本对齐顺序）在改动前就已是可正确交付的形态（旧代码同路径 final==right 三重验证通过，本次以 HEAD 代码复跑证实），非本轮能力扩张；`checks` 不含 full_body_replacement，走原普通块路径。
+- **真实语料冒烟**：542 份 funds_word 采用全文替换式变异采用B 抽写统计见 FL-D590。
+- **状态**：已修复（专线合并主线后生效）；待最终回归与最终发布证据。
 
 ## FL-D563 A7-04 修复缺回归测试（2026-10-31，引擎复核）
 
@@ -6886,6 +6891,20 @@ H＝E×…
 - p87 锚点尾句被吞（余文丢失，严重）、政策句 p83/tbl 重复错放、5 处额外修改。余文丢失属最高优先语义安全类。
 - 处理：引擎修复 agent 处置中。
 - 状态：修复中。
+
+## FL-D590 compare 全文替换式采用B 的 542 份真实语料冒烟（2026-10-31，qa-feat-compare 专线）
+
+- **目的**：FL-D562 能力恢复后，用 funds_word 全部 542 份真实合同做 selection-writer 冒烟：变异左侧全部正文直接段落生成右侧 → compare → 全部采用B → generate → 校验 final==right；全程不跑模型、语料只读、产物即验即删、输出 <500MB 落 `var/qa-compare-smoke-20261031/`。
+- **脚本**：`/tmp/opencode/qa/cmp-d562/smoke_corpus.py`（4 进程，worktree `.venv/bin/python`）。
+- **状态**：冒烟进行中（2026-10-31 上午启动，预计小时级）；fail-closed 率、拒绝码分布、抽查结构原因统计待回填。
+- **回填**：（待冒烟完成后登记 ok/fail 计数、拒绝码分布、抽查结论与语料正例入测试结果。）
+
+## FL-D591 compare worker 终态失败诊断结构化透出（A6-546 后续增强已实施，2026-10-31，qa-feat-compare 专线）
+
+- **变更记录（对 FL-D554 条目内 A6-546 的状态更新，按段位协调规则在本段登记）**："诊断透出列为后续增强"现已实施，A6-546 由"接受现状"转为"已修复（未 commit，随专线上线）"。
+- **实施**：worker 追加失败阶段跟踪（`_failed_stage`：`pairing/extracting/saving/diagnosing/generating`）；终态 failed 的 result payload 携带 `diagnostics.failure={error_code, stage, error_type, retryable:false}`（error_type 经净化，掉 traceback/路径/内部细节）；transient 重试经 `store.retry(..., diagnostics=)` 携带，不新增库表列；`_pair_dict` 透出结构化失败摘要，错误码后缀强转 str（防真异常 error_code 非字符串导致 500 遮蔽 pair 状态——本轮新发现随修）。
+- **前端**：`compare.js` `pairErrorLabel` 优先展示阶段+错误类型+可重试性（如"保存结果阶段失败：RuntimeError（不可自动重试，待人工处理）"），paused 同源口径不变。
+- **验证**：`tests/test_compare_worker.py` 新增 5 项（共 20 passed）；浏览器 `tests/browser/test_v1_frontend_remediation.py` 新增 failed-pair 诊断展示用例，16/16 全绿；node --check 过。fail-closed 不变量保持：`_execute` 仍先 `_extract_right_revision`、诊断仅现于终态 failed、无错误 complete。
 
 ## FL 编号分配（多对话并行期协调，2026-10-31）
 

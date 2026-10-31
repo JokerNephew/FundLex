@@ -61,8 +61,17 @@
     const disclosure=document.querySelector('.compare-groups-disclosure'); if(disclosure)disclosure.open=!hasResult;
     const pendingNote=$('compare-pending-note'); if(pendingNote)pendingNote.hidden=hasResult;
   }
+  function failureStageLabel(v) { return ({claim_setup:'任务领取',input_integrity:'输入校验',compare:'文本比对',heartbeat:'租约心跳',finish:'结果落库'} [v] || v || '未知阶段'); }
+  function pairErrorLabel(p) {
+    if (p.viewError) return p.viewError;
+    if (!p.error_code) return '';
+    const failure=p.diagnostics?.failure;
+    if (!failure || failure.error_code!==p.error_code) return `处理失败：${p.error_code}`;
+    const detail=[`阶段：${failureStageLabel(failure.stage)}`,failure.error_type?`类型：${failure.error_type}`:'',`可重试：${failure.retryable?'是':'否'}`].filter(Boolean).join(' · ');
+    return `处理失败：${p.error_code}（${detail}）`;
+  }
   function renderPairs() {
-    $('compare-pair-list').innerHTML=`<div class="compare-pair-statuses">${state.pairs.map((p,i)=>`<button type="button" class="compare-pair-status ${p.id===state.selectedPairId?'is-selected':''} ${['succeeded','incomplete'].includes(p.status)?'is-done':''} ${p.status==='incomplete'?'is-incomplete':''} ${p.status==='failed'||p.viewError?'is-failed':''}" data-compare-pair="${i}"><span class="compare-pair-number">${String(i+1).padStart(2,'0')}</span><span class="compare-pair-main"><strong>${esc(p.label||`第 ${i+1} 组`)}</strong><small>合同A：${esc(p.left?.name||'未命名')} / 合同B：${esc(p.right?.name||'未命名')}</small></span><span class="compare-pair-state">${esc(statusLabel(p.status))}${p.summary?` · ${p.summary.total} 处`:''}</span>${p.error_code||p.viewError?`<span class="compare-pair-error" role="status">${esc(p.viewError||`处理失败：${p.error_code}`)}</span>`:''}</button>`).join('')}</div>`;
+    $('compare-pair-list').innerHTML=`<div class="compare-pair-statuses">${state.pairs.map((p,i)=>`<button type="button" class="compare-pair-status ${p.id===state.selectedPairId?'is-selected':''} ${['succeeded','incomplete'].includes(p.status)?'is-done':''} ${p.status==='incomplete'?'is-incomplete':''} ${p.status==='failed'||p.viewError?'is-failed':''}" data-compare-pair="${i}"><span class="compare-pair-number">${String(i+1).padStart(2,'0')}</span><span class="compare-pair-main"><strong>${esc(p.label||`第 ${i+1} 组`)}</strong><small>合同A：${esc(p.left?.name||'未命名')} / 合同B：${esc(p.right?.name||'未命名')}</small></span><span class="compare-pair-state">${esc(statusLabel(p.status))}${p.summary?` · ${p.summary.total} 处`:''}</span>${p.error_code||p.viewError?`<span class="compare-pair-error" role="status">${esc(pairErrorLabel(p))}</span>`:''}</button>`).join('')}</div>`;
   }
   function markFiles(form, files, pair) { const ids=[]; for (const side of ['left','right']) { form.append('files',files[side],pair[side].name); ids.push(pair[side].client_id); } form.append('client_ids', JSON.stringify(ids)); }
   async function continueUploads() {

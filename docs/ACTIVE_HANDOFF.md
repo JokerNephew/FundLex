@@ -1,5 +1,18 @@
 # FundLex 当前断点（ACTIVE_HANDOFF）
 
+## 2026-10-31 qa-feat-compare 专线断点（FL-D562 能力恢复 + A6-546 诊断透出）
+
+- **工作区**：`/home/opencode/.local/share/opencode/worktree/29a9a9/qa-feat-compare`，分支 `qa-feat-compare-20261031`，HEAD `0b4e89a`（已合并 qa/full-audit-20261031）。一切验证 `cd <该目录> && .venv/bin/python -m pytest`。**全部改动未 commit**，仅提交自己改的文件、不 push、不动主线 worktree。
+- **未完成文件清单（git status）**：M `fundlex/compare/selection_writer.py`、`fundlex/compare/worker.py`、`fundlex/compare/store.py`、`frontend/compare.js`、`tests/test_compare_worker.py`、`tests/browser/test_v1_frontend_remediation.py`、`docs/DETAIL_ISSUES_AND_RESOLUTIONS.md`；?? `tests/test_compare_full_body_replacement.py`。
+- **已完成①（FL-D562 全文替换采用B 能力恢复）**：`_detect_full_body_replacement`（删除集==左侧全部正文直接段落、插入集==右侧全部正文直接段落、无 inline/replace、计划序列==right 逐块逐字，缺一维持 fail-closed）+ `_apply_full_body_replacement`（末段 keeper 锚点）+ `_expected_sequence` 重写为原始位置槽位语义（修同锚点 before 插入恒 MISMATCH 旧缺陷）+ checks 加 `full_body_replacement`。tests/test_compare_full_body_replacement.py 10 项全绿（四用例：①交付成功 final==right ②尾删+穿插插入仍拒 ③非全文大链删除仍拒 ④mutation 对抗仍拒）；test_compare_sdt_locations_and_trailing_delete.py 20 项仍绿。沙箱 300/250 段双锚向验证 final==right、delText==left、ins==right、oracle c14n==final。
+- **已完成②（A6-546 → FL-D591 诊断结构化透出）**：worker `_failed_stage` 阶段跟踪；终态 failed payload 带 `diagnostics.failure={error_code,stage,error_type(净化),retryable:false}`；`store.retry(..., diagnostics=)`；`_pair_dict` 透出+错误码强转 str 防 500；compare.js `pairErrorLabel` 展示阶段/类型/可重试。test_compare_worker.py 20 绿（+5）；浏览器 test_v1_frontend_remediation.py 16 绿（+1 新用例）；node --check 过。
+- **回归证据**：`tests -k compare` 158 绿；store/api/selection_writer/selection_api 四文件 30 绿。
+- **进行中③（真实语料冒烟，FL-D590）**：542 份 funds_word 全文替换变异采用B 冒烟后台运行中（脚本 `/tmp/opencode/qa/cmp-d562/smoke_corpus.py`，4 进程，输出 `var/qa-compare-smoke-20261031/`，语料只读、产物即验即删、不跑模型）。结束后读 stats.json 回填 FL-D590（fail-closed 率/拒绝码分布/抽查结构原因），并从 ok 样本挑 1 份真名合同补进 test_compare_full_body_replacement.py 语料用例。
+- **待办④（性能复测）**：冒烟结束后跑 `/tmp/opencode/qa/tmp-b13/bench_compare.py`（避免 CPU 争用失真），对照 fe4bd37 后基线 59.6s/16.4s/35.1s 如实报告。
+- **待办⑤（收尾）**：`tests -k compare` 全量复跑 + `FUNDLEX_BROWSER_TESTS=1` compare 相关用例复跑；只 `git add` 上述自己文件并提交（不 push）。
+- **合并注意事项（给主线）**：`frontend/compare.js` 与 W3 曾同文件改动，合并时本线只新增 `pairErrorLabel`/`failureStageLabel` 相关段落；selection_writer.py 变更点集中在 `_detect_full_body_replacement`/`_apply_full_body_replacement`/`_expected_sequence`/checks；worker.py 变更点为 `_failed_stage` 跟踪与 diagnostics payload；store.py 变更点为 retry diagnostics 参数与 `_pair_dict` 透出。语义回退风险：`_expected_sequence` 旧实现在该形态下恒失败，无语义回退。
+- **问题登记**：本线段位 FL-D590..599；已登记 FL-D590（冒烟，待回填）、FL-D591（A6-546 诊断透出状态更新）；FL-D562 条目已更新为"已修复"。
+
 ## 2026-10-31 全项目质量整改（QA 总攻，主 agent 断点）
 
 ### 断点更新（fix wave 1 进行中）

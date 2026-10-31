@@ -16,6 +16,8 @@ import json
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
+import re
+
 from lxml import etree
 
 from ..docx import (
@@ -794,6 +796,114 @@ def _insert_runs_into_anchor(anchor: etree._Element, right_element: etree._Eleme
     return next_id
 
 
+_DIRECT_BODY_LOCATION = re.compile(r"^p\d+$")
+
+
+def _is_direct_body_paragraph(block) -> bool:
+    return (block.container == "body" and block.kind == "paragraph"
+            and bool(_DIRECT_BODY_LOCATION.match(block.location)))
+
+
+def _detect_full_body_replacement(left_doc, right_doc, inline: Sequence[_Operation],
+                                  block_operations: Sequence[_BlockOperation],
+                                  expected: Sequence[tuple[str, str]]):
+    """Detect a whole-body replacement: delete every changed left paragraph and
+    insert every changed right paragraph, with only unchanged blocks kept.
+
+    "全部采用B" over a fully rewritten document aligns as one deletion diff per
+    left paragraph plus one insertion diff per right paragraph.  That plan is
+    not a trailing-delete chain: it is a structurally equivalent replacement of
+    the complete body, and it was deliverable before the FL-D543 fail-closed
+    hardening.  This detector re-opens exactly that shape while every other
+    trailing/truncated chain keeps failing closed.
+
+    Returns ``(deleted_ids, inserted_ids)`` or ``None``.  Conditions:
+
+    * no inline operations and delete/insert operations only (no replace);
+    * the deleted ids are *exactly* every direct body paragraph of the left
+      document and the inserted ids are *exactly* every direct body paragraph
+      of the right document — a partial tail chain, or a deleted block inside a
+      table/content control, is not a whole-body replacement and keeps the
+      ordinary fail-closed rejection;
+    * the planned output sequence equals the right document block-for-block,
+      text-for-text.  Anything less is not a full replacement and falls back to
+      the ordinary writer, which still fails closed on half-built chains.
+    """
+    if inline or not block_operations:
+        return None
+    if any(operation.kind not in {"delete", "insert"} for operation in block_operations):
+        return None
+    if [(block.container, block.raw_text) for block in right_doc.blocks] != list(expected):
+        return None
+    left_by_id = {block.block_id: block for block in left_doc.blocks}
+    right_by_id = {block.block_id: block for block in right_doc.blocks}
+    deleted: list[str] = []
+    inserted: list[str] = []
+    for operation in block_operations:
+        if operation.kind == "delete":
+            deleted.extend(operation.left_ids)
+        else:
+            inserted.extend(operation.right_ids)
+    left_direct = [block.block_id for block in left_doc.blocks
+                   if _is_direct_body_paragraph(block)]
+    right_direct = [block.block_id for block in right_doc.blocks
+                    if _is_direct_body_paragraph(block)]
+    deleted_ids = set(deleted)
+    inserted_ids = set(inserted)
+    if not left_direct or not right_direct:
+        return None
+    if deleted_ids != set(left_direct) or len(deleted) != len(left_direct):
+        return None
+    if inserted_ids != set(right_direct) or len(inserted) != len(right_direct):
+        return None
+    return tuple(left_direct), tuple(right_direct)
+
+
+def _apply_full_body_replacement(root: etree._Element, left_doc, right_root: etree._Element,
+                                 right_doc, deleted_ids: Sequence[str],
+                                 inserted_ids: Sequence[str], *, revision_start: int,
+                                 when: str) -> int:
+    """Write a whole-body replacement into ``root`` as tracked revisions.
+
+    The last deleted left paragraph survives as the keeper anchor: its runs are
+    deleted and the first right paragraph's runs are inserted into it.  Every
+    other deleted paragraph is removed entirely (mark + runs), and the
+    remaining right paragraphs are cloned in after the anchor.  Accepting the
+    redline therefore yields exactly the right document body, and rejecting it
+    restores the left document, so the audit/undo trail is complete.
+    """
+    left_by_id = _left_blocks_by_id(left_doc)
+    right_by_id = _right_blocks_by_id(right_doc)
+    elements = [_simple_paragraph(root, left_by_id[block_id]) for block_id in deleted_ids]
+    parent = elements[0].getparent()
+    if parent is None or parent.tag != Q("body") or any(
+            element.getparent() is not parent for element in elements):
+        raise DocxError("SELECTION_BLOCK_SCOPE_UNSUPPORTED", "full-body-replacement")
+    children = list(parent)
+    first_index = parent.index(elements[0])
+    window = children[first_index:first_index + len(elements)]
+    if len(window) != len(elements) or any(a is not b for a, b in zip(window, elements)):
+        raise DocxError("SELECTION_BLOCK_RANGE_UNSUPPORTED", "full-body-replacement")
+    if any(child.tag == Q("p") for child in children[first_index + len(elements):]):
+        raise DocxError("SELECTION_BLOCK_STRUCTURE_UNSUPPORTED", "full-body-replacement")
+    next_id = revision_start
+    for element, block_id in zip(elements[:-1], deleted_ids[:-1]):
+        next_id = _mark_deleted_paragraph(element, left_by_id[block_id], next_id, when)
+    anchor = elements[-1]
+    next_id = _mark_deleted_paragraph(anchor, left_by_id[deleted_ids[-1]],
+                                      next_id, when, mark_paragraph=False)
+    first = _clone_paragraph(_simple_paragraph(right_root, right_by_id[inserted_ids[0]]),
+                             right_by_id[inserted_ids[0]])
+    next_id = _insert_runs_into_anchor(anchor, first, next_id, when)
+    insert_at = parent.index(anchor) + 1
+    for offset, block_id in enumerate(inserted_ids[1:]):
+        element = _clone_paragraph(_simple_paragraph(right_root, right_by_id[block_id]),
+                                   right_by_id[block_id])
+        next_id = _mark_inserted_paragraph(element, right_by_id[block_id], next_id, when)
+        parent.insert(insert_at + offset, element)
+    return next_id
+
+
 def _left_blocks_by_id(left_doc) -> dict[str, Any]:
     return {block.block_id: block for block in left_doc.blocks}
 
@@ -953,34 +1063,55 @@ def _expected_sequence(left_doc, right_doc, inline: Sequence[_Operation],
         item["text"] = "".join(pieces)
     right_by_id = {block.block_id: block for block in right_doc.blocks}
     index_by_id = {item["id"]: index for index, item in enumerate(items)}
-    def _operation_index(operation: _BlockOperation) -> int:
-        if operation.kind == "insert":
-            return index_by_id.get(operation.anchor_id, 10**9)
-        return index_by_id.get(operation.left_ids[0], 10**9) if operation.left_ids else 10**9
-
-    ordered = sorted(block_operations, key=lambda operation: (
-        _operation_index(operation), 1 if operation.kind == "insert" else 0, operation.diff_id), reverse=True)
-    for operation in ordered:
+    insert_slots: dict[tuple[str, str], list[tuple[str, list[dict[str, Any]]]]] = {}
+    replaces: dict[str, tuple[int, list[dict[str, Any]]]] = {}
+    deleted: set[str] = set()
+    for operation in block_operations:
         right_items = [{"id": block_id, "container": right_by_id[block_id].container,
                         "text": right_by_id[block_id].raw_text} for block_id in operation.right_ids]
         if operation.kind == "insert":
-            position = index_by_id.get(operation.anchor_id)
-            if position is None:
+            if operation.anchor_id not in index_by_id:
                 raise DocxError("SELECTION_BLOCK_ANCHOR_UNSUPPORTED", operation.diff_id)
-            position += 1 if operation.anchor_position == "after" else 0
-            items[position:position] = right_items
+            slot = (operation.anchor_id, operation.anchor_position)
+            insert_slots.setdefault(slot, []).append((operation.diff_id, right_items))
+            continue
+        first = index_by_id.get(operation.left_ids[0])
+        if first is None or any(index_by_id.get(block_id) != first + offset
+                                for offset, block_id in enumerate(operation.left_ids)):
+            raise DocxError("SELECTION_BLOCK_RANGE_UNSUPPORTED", operation.diff_id)
+        if operation.kind == "delete":
+            deleted.update(operation.left_ids)
         else:
-            first = index_by_id.get(operation.left_ids[0])
-            if first is None or any(index_by_id.get(block_id) != first + offset
-                                    for offset, block_id in enumerate(operation.left_ids)):
-                raise DocxError("SELECTION_BLOCK_RANGE_UNSUPPORTED", operation.diff_id)
-            end = first + len(operation.left_ids)
-            if operation.kind == "delete":
-                del items[first:end]
-            else:
-                items[first:end] = right_items
-        index_by_id = {item["id"]: index for index, item in enumerate(items)}
-    return [(item["container"], item["text"]) for item in items]
+            replaces[operation.left_ids[0]] = (len(operation.left_ids), right_items)
+
+    def _slot_items(anchor_id: str, position: str) -> list[dict[str, Any]]:
+        # The writer inserts same-slot operations into one fixed position, so
+        # every later operation pushes the earlier ones right; the final order
+        # at one slot is ascending diff id.
+        entries = sorted(insert_slots.get((anchor_id, position), ()),
+                         key=lambda entry: entry[0])
+        return [item for _, group in entries for item in group]
+
+    sequence: list[dict[str, Any]] = []
+    index = 0
+    while index < len(items):
+        item = items[index]
+        sequence.extend(_slot_items(item["id"], "before"))
+        if item["id"] in replaces:
+            length, right_items = replaces[item["id"]]
+            sequence.extend(right_items)
+            for skip in range(index + 1, index + length):
+                skipped = items[skip]
+                sequence.extend(_slot_items(skipped["id"], "before"))
+                sequence.extend(_slot_items(skipped["id"], "after"))
+            sequence.extend(_slot_items(item["id"], "after"))
+            index += length
+            continue
+        if item["id"] not in deleted:
+            sequence.append(item)
+        sequence.extend(_slot_items(item["id"], "after"))
+        index += 1
+    return [(item["container"], item["text"]) for item in sequence]
 
 
 def _accept_revisions_copy(root: etree._Element) -> etree._Element:
@@ -1222,6 +1353,12 @@ def generate_selection_artifacts(
     inline_operations, block_operations = _build_plan(
         left_doc, right_doc, diffs, dict(snapshot.decisions), recomputed.alignment)
     expected = _expected_sequence(left_doc, right_doc, inline_operations, block_operations)
+    # FL-D562: a full "全部采用B" replacement aligns as delete-all-left +
+    # insert-all-right diffs.  That plan is a structurally equivalent whole-body
+    # replacement, not a trailing-delete chain, so it gets a dedicated writer
+    # instead of the ordinary fail-closed rejection.
+    full_replacement = _detect_full_body_replacement(
+        left_doc, right_doc, inline_operations, block_operations, expected)
     source_parts = _read_parts(left_source, limits)
     right_parts = _read_parts(right_source, limits)
     _validate_package(source_parts, limits, full=True)
@@ -1235,7 +1372,11 @@ def generate_selection_artifacts(
     when = datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
     try:
         next_revision = _apply_operations(redline_root, inline_operations, redline=True, revision_start=1, when=when)
-        if block_operations:
+        if full_replacement is not None:
+            _apply_full_body_replacement(redline_root, left_doc, right_root, right_doc,
+                                         *full_replacement, revision_start=next_revision, when=when)
+            final_root = _accept_revisions_copy(redline_root)
+        elif block_operations:
             _apply_block_operations(redline_root, left_doc, right_doc, block_operations, right_root,
                                     redline=True, revision_start=next_revision, when=when)
             # Final is the accepted state of the written redline.  Deriving it
@@ -1280,6 +1421,8 @@ def generate_selection_artifacts(
         checks = ["package", "source_binding", "result_binding", "selection_binding"]
         if block_operations:
             checks.append("block_structure")
+        if full_replacement is not None:
+            checks.append("full_body_replacement")
         checks.extend(["final_docx_reopen", "redline_reopen", "accept_oracle", "selected_text"])
         return SelectionArtifactValidation(final_hash, redline_hash, snapshot.selection_epoch,
                                            snapshot.decision_hash, snapshot.binding_hash, manifest,
