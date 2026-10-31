@@ -7366,7 +7366,8 @@ H＝E×…
 
 - **病灶**：族 ⑥/①——合同措辞是指引 old_text 的未记录变体（类限定插入、语序微调）时，无授权通道 → 策略门 fail-closed、计划缺口（B17 G08 根因）；若一律宽松则违 fail-closed 方向。
 - **设计（已实施）**：新模块 `fundlex/variants.py`。确定性谓词链：发现=锚（最长公共块≥6 字）+4-gram 预筛；分类=CERTIFIABLE/EXEMPT/ANOMALOUS/IGNORE；认证=锚≥6 + 有序块覆盖率≥50% + 伸缩比 [0.5,2.5] + 否定轮廓（最长优先交替正则，裸「不」单列）一致 + **旧形专用域**（`_exclusive_regions`：old 相对 new 的不等长替换缺失段，须作为子串出现于候选）四道闸；EXEMPT=新形结构覆盖≥0.99 且具新专用域且无旧专用域（纯插入型 old⊂new 对无法靠专用域区分时，fail-closed 归入可编辑侧而非豁免侧，与 B17 真实语义一致）。授权两翼：①`ensure_certified_variant_targets`（recall.py，全规则通用残目标，caps 4/op，G08 保留既有更严谓词、通用层不弱化）前置 NO_GUIDE_SITE 闭合；②`_validate_routed_policy` 对每条 routed operation 增补认证句子为 remove 授权（原仅 G08 特例）。ANOMALOUS 只作环境证据 `report["variant_candidates"]`（`VARIANT_PENDING_CERTIFICATION`，登记交付已知码前缀，永不阻断/编辑）。**教训（已修复验证）**：初版把 review 行注入 coverage_gaps→被 project() 当 blocking evidence 把健康义务翻 OPEN（happy-path 回归），改挂独立字段。
-- **测试**：`tests/test_variants.py` 15 例（认证/豁免/异常/忽略/授权/残目标/双重抑制/条件门/caps）；相关域回归绿。
+- **测试**：`tests/test_variants.py` 16 例（认证/豁免/异常/忽略/授权/残目标/双重抑制/条件门/caps/关键 token 置换 mutation）；相关域回归绿。
+- **变更记录**：2026-10-31 大回归（814/815）抓出 O·verauthorize——old⊂new 纯插入对专用域为空时「管理费率」以 22 字锚通过认证（FL-D588 规则级过度授权防护 `test_over_authorization_guard_unrelated_fee_sentence_still_blocked` 红）。修复 `d13e11e` 增补确定性闸：参考串被实质替换/删除的段（≥2 字）必须原样出现于候选（B17 类限定插入保留「本基金」子串仍过闸；「管理费率」换词拒认证）；variants/g12/g14/g22/class-group/fl_d587/d588 全绿。
 - **状态**：已实施（真实病例复验随 FL-D658 统一）。
 
 ## FL-D656 机制 D：恢复层保守性——satisfied 站点免造恢复目标（2026-10-31，qa-recall-miss）
