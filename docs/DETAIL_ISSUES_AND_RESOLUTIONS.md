@@ -6994,8 +6994,10 @@ H＝E×…
 
 - **发现日期**：2026-10-31，wave1 归因。B05 评分 verdicts：G01 append not_executed（释义，标签 p118）、G03 append not_executed（基本情况，标签 p155），detail 均「appended policy absent from its declared site: 3 clause(s)」；引擎 report 中两站均有 planned 目标（p117/p155），另有一个 p157 的 G03 目标被标 not_applicable，reason 含 `DUPLICATE_APPEND_SIT[E…]`。B15 G03 同症（标签 p(九) 类别条款后追加，not_executed）。
 - **疑似根因**：同一政策文本需在两个不同站点（释义/基本情况）各追加一次时，追加去重/duplicate-append 逻辑疑似把第二站点判重丢弃——与 DUPLICATE_SITE 处理族相关但方向相反（FL-D570 是假阳性阻断，本条是合法双站点被抑制）。
-- **状态**：open，待归因修复（疑似引擎 planning/dedup 域，可能交主线引擎 agent；登记于此避免线索丢失）。
-- **变更记录**：2026-10-31 新增。
+- **状态**：已解决（已验证，回归锁定；dev20 v2 端到端复验在途）。
+- **变更记录**：
+  - 2026-10-31 新增。
+  - 2026-10-31（guide 线）：归因订正——非双站点去重抑制，实为 append 锚点绑到类别划分「总定义句」（释义 p117/基本情况 p155）而非「类定义组尾」（标签站点 p119/p159），评分窗口读不到 → not_executed + false_complete。修复 `4296753`（定义组链结构化绑定组尾；无分组结构合同行为不变），B05 真实文档回归 5 例 + `test_fl_d608_definition_group_chain.py` + 变体套件全绿，主线独立复核 PASS（含 mutation 抽查）；B15 G03 已由 FL-D573 先行覆盖。主线 `017b3ed` 并入。
 
 ## FL-D609 smoke28 资格复验（smoke 子集，新冻结 3b6da2a2）：B16 全完成恢复，B05 false_complete 依旧，总体 NO-GO（2026-10-31，guide 线）
 
@@ -7008,7 +7010,7 @@ H＝E×…
 
 ## FL 编号分配（多对话并行期协调，2026-10-31）
 
-- 避免并行会话编号冲突，段位分配：主线对话 FL-D574..579；qa-feat-recall 对话 FL-D580..589；qa-feat-compare 对话 FL-D590..599；qa-feat-guide 对话 FL-D600..609；第二波标签对话与 B13 性能对话仍按"读尾部取下一号"（若与段位冲突，以段位为准顺延）。各对话只新增条目、不改他人条目正文；状态更新可采用在自己段位新增"变更记录"行或经主线合并。功能开发新对话（2026-10-31 追加）：qa-f2-recall-tracked FL-D610..619；qa-f2-compare-tracked FL-D620..629；qa-f2-guide-history FL-D630..639。
+- 避免并行会话编号冲突，段位分配：主线对话 FL-D574..579；qa-feat-recall 对话 FL-D580..589；qa-feat-compare 对话 FL-D590..599；qa-feat-guide 对话 FL-D600..609；第二波标签对话与 B13 性能对话仍按"读尾部取下一号"（若与段位冲突，以段位为准顺延）。各对话只新增条目、不改他人条目正文；状态更新可采用在自己段位新增"变更记录"行或经主线合并。功能开发新对话（2026-10-31 追加）：qa-f2-recall-tracked FL-D610..619；qa-f2-compare-tracked FL-D620..629；qa-f2-guide-history FL-D630..639。**FL-D640 起为跨线候补池（B13/标签线/主线 reviewer 统一取号），当前下一空闲号 FL-D643**（FL-D640=B13 浏览器 V2 既有失败，FL-D641/642=主线独立复核观察项，见下两条）。
 
 ## FL-D574 v2 evaluation/v3 delivery_review 测试族在 HEAD 基线即失败（2026-10-31，**已修复**）
 
@@ -7108,3 +7110,15 @@ H＝E×…
 - **疑似归因**：该两个文件含 React 构建产物/缓存头/模型连接等前端 v2 面用例，疑似依赖一次前端构建或既有环境前提（`page 内文为空`、`live_app` fixture errors 形态），需前端组定位。test_frontend_fixes 与 test_v1_frontend_remediation 同环境全绿，说明浏览器基建本身可用。
 - **影响**：默认套件这些用例 skip（opt-in），不阻塞普通回归；但 v2 前端面自验通道当前是坏的，前端 v2 改动缺护栏。
 - **状态**：open，交前端组；12/19 的完整 HEAD 对照归因进行中（qa-old 同两文件基线运行），结果回填本条。
+
+## FL-D641 FL-D601/602 确定性闭合的跨段漏检窄边（2026-10-31，主线复核）
+
+- **发现**：NO_GUIDE_SITE 确定性 FALSE 闭合的 canonical 检查为「单段 compact 包含」；指引原句被 Word 跨段拆分时漏检，若无存活 target 会从 honest-incomplete 静默改判 NOT_APPLICABLE（recall.py:10095-10099、recall_pipeline.py:4837-4839）。
+- **处理**：登记观测；对 G22/G08 出现跨段拆分的合同在扩波中留意；需要时升级为跨段 compact 匹配。
+- **状态**：open（窄边观测项）。
+
+## FL-D642 FL-D608 组链冻结边界：subdivision 后接各类定义形体的扩面观测（2026-10-31，主线复核）
+
+- **发现**：`4296753` 组链延伸的冻结边界仅覆盖 setup-tail（recall.py:4458-4462）；「闭合总定义句→再分子类尾句（subdivision）→各类定义」形体下新码会越过 subdivision 延伸到各类定义段。该形体在语料中是否存在、标签站点在哪均未证实。
+- **处理**：扩波复跑时观测（dev20 v2 / 第二波）；未见触发前不收紧。
+- **状态**：open（观测项）。
