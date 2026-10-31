@@ -322,7 +322,7 @@
   }
   function modelRoleSummary(prefix){
     const role=(state.modelData||{})[prefix]||{},personal=role.source==='personal';
-    return `<dl class="model-role-summary"><dt>使用方式</dt><dd>${personal?'自定义':'系统默认'}</dd><dt>供应商</dt><dd>${personal?esc(modelProviderLabel(role.provider)):'由管理员统一配置'}</dd><dt>模型</dt><dd>${personal?esc(role.model||'—'):'由管理员统一配置'}</dd>${personal?`<dt>访问密钥</dt><dd>${role.api_key_set?'已保存':'未设置'}</dd>`:''}<dt>验证状态</dt><dd>${personal?(state.modelVerified[prefix]?badge('succeeded','已验证'):'尚未验证'):'—'}</dd></dl>`;
+    return `<dl class="model-role-summary"><dt>使用方式</dt><dd>${personal?'自定义':'系统默认'}</dd><dt>供应商</dt><dd>${personal?esc(modelProviderLabel(role.provider)):'由管理员统一配置'}</dd><dt>模型</dt><dd>${personal?esc(role.model||'—'):'由管理员统一配置'}</dd>${personal?`<dt>访问密钥</dt><dd>${role.api_key_set?'已保存':'未设置'}</dd><dt>验证状态</dt><dd>${state.modelVerified[prefix]?badge('succeeded','已验证'):'尚未验证'}</dd>`:''}</dl>`;
   }
   function modelRoleCard(prefix){
     const role=(state.modelData||{})[prefix]||{},personal=role.source==='personal',editing=state.modelEdit===prefix;
