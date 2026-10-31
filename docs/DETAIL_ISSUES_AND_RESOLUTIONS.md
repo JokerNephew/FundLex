@@ -7132,3 +7132,16 @@ H＝E×…
 - **处理方法（建议，未定案）**：对「absent/不适用」结论要求与再生/范式同样强度的证据约束（如对 G08 窗口 fallback 校验「类收费声明句存在但未含直销豁免时应强制 needs_edit」）；或评审 absent 理由中「已明确 A/C 收费」是否足以证伪 tag 站点义务（本例 p218 仅类别收费声明，未含直销豁免义务文）。交主线/FL-D572 归属线定责。
 - **状态**：open（新发现，真实双跑证据在案；FL-D643 取号后跨线候补池指针请主线合并时更新为 FL-D644）。
 - **变更记录**：2026-10-31 新增（guide 线；证据 verify4 score.json detail=old wording still in its declared site、edits.json target state=absent；对照 smoke-requal-v2 score G08 completed）。
+
+## FL-D644 FL-D608 第二层闸门放行凭据可被模型谎称（2026-10-31，主线复核）
+
+- **发现**：`51fb45b` 的 scope 闸门守护以 `target.reason` 含 "APPEND_END" 子串为放行凭据（recall_pipeline.py:1254-1265），而 `Target.reason` 在 inventory_window 直接取自模型输出（recall.py:1765）；模型对 G01/G03 needs_edit target 谎称 "APPEND_END" 即可跳过 `_target_scope_ok`，与 FL-D573「自述证据不扩权」方向相反。越界面限于「自带定义锚点的组外段」（append_site_ok 锚点守卫仍在），属有界风险。
+- **另**：负路径测试缺「谎称 APPEND_END 的越界 target 被拒」用例。
+- **处理**（已派 qa-feat-guide）：改为校验确定性重绑端点/内部重绑标记（与模型输出绝缘）+ 补谎称负路径测试；修复后 mutation 自检。
+- **状态**：open（修复中）。dev20 v2 冻结包含 layer-2 语义并于冻结说明中登记本条。
+
+## FL-D645 G03 scope-replay 组尾覆盖不对称观察项（2026-10-31，主线复核）
+
+- **发现**：`_extend_definition_group` scope 扩展仅注册于 G01/G02（rule_scope.py:1176-1183），G03 不经此扩展；闸门放行后 claim replay `_filter_scoped_targets` 仍按 scope.contains 过滤——非 B05 合同若 G03 scope 不含组尾，「verified site missing」可复发（B05 verify4 双 PASS 系巧合性满足）。
+- **处理**：观测；若第二波/dev20 v2 中出现 G03 复发则把 G03 纳入同族扩展。
+- **状态**：open（观测项）。
