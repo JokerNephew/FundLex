@@ -6903,7 +6903,22 @@ H＝E×…
 
 - p87 锚点尾句被吞（余文丢失，严重）、政策句 p83/tbl 重复错放、5 处额外修改。余文丢失属最高优先语义安全类。
 - 处理：引擎修复 agent 处置中。
-- 状态：修复中。
+- 状态（2026-10-31 更新）：三项结构性修复已入帐并经冻结复放+回归验证；①②按修复后行为闭环，③G01 tbl 阻断闭环、③其余 4 处与 gold 裁定冲突如实降级留裁。
+- **修复与入帐**：
+  - Fix A（①主修）：`_meaningful_fragment`/`_approved_fragment_bounds`（recall.py ≈2358）——approved 整句 span 中 old_text 仅出现一次、前缀有意义、后缀仅终结符时收窄 span 只删授权片段；随 `ac697a4` 入帐。
+  - Fix B（①校验兜底）：claim_replay `_own_effect_errors` 对 `approved_span_delete`（G15/G17 之外）不再把 deleted_quote/expected_old_text/delete_texts/fragments 自述证据计入 owned_removals；入帐于 `449b36b`（注意 FL-D576 将该收紧归因于 ac697a4 有误，实际 claim_replay 改动在 449b36b，主线合并时订正）。
+  - Fix C（③G01 tbl）：`append_site_ok(allow_open_table_cell=False)` plan 阶段拒绝未以「。」闭合的表格定义格；随 `ac697a4` 入帐。
+  - Fix D（②G03 锚点）：`_definition_group_continuation_end` + `rebind_split_append_targets(include_group_continuation)` plan 期把闭合定义段锚点改绑到其细分组尾段（p83→p84），`append_site_ok` plan 期受理被改绑站点；随 `ac697a4` 入帐。
+- **验证**：
+  - 冻结复放（engine 8978546 + 全部四个修复，离线复放 499 checkpoint + 基线收割上下文相似配对，`/tmp/opencode/qa/replay_one.py`）：基线复放原样复现缺陷（complete、17 edits、G05 [157,184) 整句吞）；修复版 G05=[174,183) 与 frozen gold T002 完全一致，产物 working_final.docx p87 尾句「…经与基金托管人协商一致后，提前公告。」保留（`/tmp/opencode/qa/replay-b15-fixed/` 与 `replay-b15-base2/`）。
+  - 回归：tests/test_qa_20261031_regressions.py 新增 12 项（Fix A×3、B×3、C×3、D×2，fe4803f 入帐 8 项 + 449b36b 相邻），mutation 自检（分别还原 Fix A 收窄边界行与 Fix B executor_claim_span 行，对应测试如期转红后逐字节还原）；`pytest tests/test_qa_20261031_regressions.py` 68 passed；`pytest -k "docx or recall"` 294 passed / 1 skipped。
+- **未修子项与裁定冲突（如实降级，非修复完成）**：
+  - ③5 处额外修改中仅 G01 tbl 闭环（TARGET_SOURCE_MISMATCH 阻断，复放 edits.json 无该项、status=incomplete 诚实降级而非错产物）。G22×2（p883/p1239 `g22_ordered_list_item`）、G08 p162（`g08_actual_rate_replace`）、G14 p166（tier1）4 处系确定性 executor 有意实现与冻结 v2 标签 not_applicable 裁定之间的规则冲突，修复版产物中仍存在（与基线一致），**留产品与标签口径裁决**，不在本轮强改既有 executor。
+  - ②G03 最终落点 p84 与 gold p87 的距离、B01 p147（定义首段锚、后段新话题）与 B15 p84（同定义组直接细分延续）交叉案例差异，机制上以「定义组直接细分延续才改绑」区分成立，最终锚点口径留裁。
+  - 全管线复放不覆盖「G03 站点受理」路径（plan 期改绑 p84 使后续 repair-round 审计上下文漂移出冻结 checkpoint 集），该路径以 plan 级单元测试覆盖；线上下一轮自然运行可补给真实证据。
+- **变更记录**：
+  - 2026-10-31（修复 agent）：登记三项修复机制，状态修复中。
+  - 2026-10-31（修复 agent，本轮）：四项修复全部入帐并验证（复放+回归+mutation）；FL-D575 测试覆盖缺口随 12 项测试入帐闭合，由主线复核销号；留裁子项如上。
 
 ## FL 编号分配（多对话并行期协调，2026-10-31）
 
@@ -6939,8 +6954,8 @@ H＝E×…
 ## FL-D577 _G09_VARIANTS 长 pair 被短 pair 遮蔽冗余（2026-10-31）
 
 - **发现日期**：2026-10-31，独立复核：`ac697a4` 在 `fundlex/generation/template.py` 的 `_G09_VARIANTS` 中短 pair 先于长 pair，长 pair 实际不可达（冗余无害）。
-- **处理**：清理顺序或删除冗余项（轻量，随下一指引/模板修复批一并）。
-- **状态**：open（低优先）。
+- **处理**：`e1be2ce` 已删除冗余项并留注释（短 pair 子串重写结果与长 pair 相同，行为不变；5 项 G09 回归 + 17 项 template 套件绿）。
+- **状态**：已解决（已验证）。
 
 ## FL-D569 第二波标注默认模型不可用：gpt-6-luna/MiniMax-M3 无渠道，glm-5.3 大 prompt 500（2026-10-31）
 
