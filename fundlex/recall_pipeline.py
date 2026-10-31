@@ -3473,7 +3473,12 @@ def weak_rule_signals(rule: dict, facts: Facts, operations: Sequence[dict]) -> l
     return signals
 
 
-_DOCUMENT_COMPACT_CACHE: dict[int, str] = {}
+# Small bounded LRU of compacted document text (B13 F5).  Entries hold the
+# inspection itself, so an ``id()`` key can never be recycled onto a different
+# object while it is cached; the cap keeps the module-level dict bounded
+# (``_compact`` output of a large contract is ~1 MB).
+_DOCUMENT_COMPACT_CACHE: dict[int, tuple[DocumentInspection, str]] = {}
+_DOCUMENT_COMPACT_CACHE_MAX = 4
 
 
 def _document_compact(actual: DocumentInspection) -> str:
@@ -3481,10 +3486,15 @@ def _document_compact(actual: DocumentInspection) -> str:
     key = id(actual)
     cached = _DOCUMENT_COMPACT_CACHE.get(key)
     if cached is None:
-        cached = "".join(_compact(display_text(span.text)[0]) for span in actual.paragraphs)
-        _DOCUMENT_COMPACT_CACHE.clear()
-        _DOCUMENT_COMPACT_CACHE[key] = cached
-    return cached
+        computed = "".join(_compact(display_text(span.text)[0]) for span in actual.paragraphs)
+        if len(_DOCUMENT_COMPACT_CACHE) >= _DOCUMENT_COMPACT_CACHE_MAX:
+            # dicts keep insertion order: evict the oldest entry.
+            _DOCUMENT_COMPACT_CACHE.pop(next(iter(_DOCUMENT_COMPACT_CACHE)))
+        _DOCUMENT_COMPACT_CACHE[key] = (actual, computed)
+        return computed
+    # Refresh recency so alternating documents reuse both entries (LRU).
+    _DOCUMENT_COMPACT_CACHE[key] = _DOCUMENT_COMPACT_CACHE.pop(key)
+    return cached[1]
 
 
 def _rule_mapped_locations(rule_id: str, mapping: dict[str, list[str]],

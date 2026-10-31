@@ -6757,9 +6757,16 @@ H＝E×…
 ## FL-D557 性能基线与热点（2026-10-31，B13）
 
 - 基线（真实合同，直连 CompareService）：①两份普通合同 233.5s/1004 diffs（align 热点 82%）②568KB vs 微改 20.6s（解析占 87%）③长度极差 113.3s/3149 diffs；inspect_docx 568KB full 10.9s。
-- 高：align O(n²)（FL-D554 条目内 W2 修复）；store N+1 实测 list_batches 30 批=199 次 SQL、get_document=13 次。**待修（下轮后端性能专项）**。
-- 中：docx 双读盘/下载 2×全文件哈希/_revision_view 每次全量重投影无缓存；download-all 循环内重复校验；无界增长：checkpoints 207MB/26716 文件无清理、traces 184MB 无轮转；两处模块级全局 dict 缓存；compare.js 2.5s 轮询无页面隐藏门控；app.js 修订审查整份 innerHTML 无虚拟化。**待修**。
-- 修复后必须用相同样本报告 before/after，且 diff 输出语义不变。
+- 高：align O(n²)（FL-D554 条目内 W2 修复）；store N+1 实测 list_batches 30 批=199 次 SQL、get_document=13 次。**已修（2026-10-31 B13 后端性能专场，见下）**。
+- 中：docx 双读盘/下载 2×全文件哈希/_revision_view 每次全量重投影无缓存；download-all 循环内重复校验；无界增长：checkpoints 207MB/26716 文件无清理、traces 184MB 无轮转；两处模块级全局 dict 缓存；compare.js 2.5s 轮询无页面隐藏门控；app.js 修订审查整份 innerHTML 无虚拟化。**除 `_revision_view` 重投影缓存（F3④）与 app.js innerHTML 虚拟化（F8）外已修，见下**；这两项留作下一轮（收益最大处是交互首开，非本轮范围）。
+- **2026-10-31 修复轮（本分支 qa/full-audit-20261031，commit `f83462b`；验证机 load≈5，墙钟为同机同刻配对值）**：
+  - F4 store N+1：`list_batches` 改 批/档/产物三层各一条聚合查询（IN 分块 500）；`get_document` 改单条 JOIN 查（owner 约束并入）。**前后**：审计基线 30 批×5 档=199 次 execute；新代码在同口径数据集（可见 20 批×5 档）实测 123→5 次、get_document 13→4 次（2.5ms→1.2ms）；list/get 输出 JSON 旧（HEAD qa-old worktree）新逐字段 diff **完全一致**（含 NotFound 错误消息矩阵）。钉测试 tests/test_store_query_budget.py（计数断言 ≤8/6、批间增长 execute 恒相等、list 与 get_batch 逐字段相等）。
+  - F3①/F3③ 读取与哈希合并：`inspect_docx` 单读盘（strace 实测文件 openat 2→1 次；检查输出逐字段 hash 新旧一致；配对墙钟 full=False 4.77→4.52s、full=True 7.08→7.28s 均在噪声内，峰值 +0.6MB 因持有源字节）；`read_artifact` 改为 gate 内单读服务字节、其 digest 复用于全部完整性比较（单 kind 下载 4 次全文件扫→2 次；get_document 修复后单 kind SQL 13→4）；`validate_delivery` 增 `verified_hashes` 复用参数（默认 None，finish 路径不变）；download-all 循环按文档携带 verified 缓存，同档 4 kind 总全文件扫 ~20+→4。哈希/校验契约不回退：字节级回归 test_tasks_api（含 zip 逐字节相等、篡改→409）绿，新增 fail-closed 计数测试。
+  - F5 无界增长：新增 `fundlex/retention.prune_checkpoints`（只动 32-hex 目录内 64-hex `.json`，软链/异名全跳过，条目级 OSError fail-closed；env `FUNDLEX_CHECKPOINT_MAX_AGE_DAYS` 默认 45、`FUNDLEX_CHECKPOINT_MAX_FILES` 默认 50000，均可关）；trace_sink 写入点按大小滚动（`FUNDLEX_TRACE_MAX_BYTES` 默认 64MiB，`FUNDLEX_TRACE_KEEP_ROTATED` 默认 10，手工 `archive-*` 不动）。调度选 **worker 循环惰性清理**（`Worker._prune_storage`，`FUNDLEX_RETENTION_INTERVAL_SECONDS` 默认 6h）而非 systemd timer，理由与手工一次性执行方式见 docs/DEPLOYMENT_PARAMETERS.md「检查点与 trace 保留策略」。生产只读投影（26716 文件）：默认 45d/50k 当前均为 0 删除（全部新于 45 天），策略只约束未来增长。测试 tests/test_retention.py 9 项 + tests/test_trace_sink.py 滚动 4 项。
+  - F5 缓存评估：`recall._PARAGRAPH_GRAMS_CACHE` 每次 survey 前 clear，体积≤单文档段数，**本就有届**，且生产代码内只有写入点（读取mirror 仅存在于 test_fl_d119_guards 夹具），不加淘汰（加了也无受益且引入风险）；`recall_pipeline._DOCUMENT_COMPACT_CACHE` 改上限 4 的插入序 LRU 且条目持有自身 inspection（id 无法被复用到他对象），测试 tests/test_document_compact_cache.py。
+  - F7 compare.js：轮询改 `schedulePoll`——页面不可见不再 fire 2.5s 全量重取，`visibilitychange` 恢复时按原任务重臂；静态钉测试 tests/test_compare_polling_gate.py（浏览器层 tab 可见性模拟成本高，未做）。
+  - F3④（`_revision_view` 重投影缓存）与 F8（修订审查 innerHTML 虚拟化）明确**未修**：前者需与 compare `_VIEW_CACHE` 同构的 (key,size,mtime) 缓存及失效语义设计；后者属前端大改造，均列下一轮。
+- 遗留既有失败（非本轮引入，见 FL-D574）。
 
 ## FL-D558 测试体系与环境纪律（2026-10-31，A10）
 
@@ -6898,4 +6905,14 @@ H＝E×…
 
 ## FL 编号分配（多对话并行期协调，2026-10-31）
 
-- 避免并行会话编号冲突，段位分配：主线对话 FL-D574..579；qa-feat-recall 对话 FL-D580..589；qa-feat-compare 对话 FL-D590..599；qa-feat-guide 对话 FL-D600..609；第二波标签对话与 B13 性能对话仍按"读尾部取下一号"（若与段位冲突，以段位为准顺延）。各对话只新增条目、不改他人条目正文；状态更新可采用在自己段位新增"变更记录"行或经主线合并。
+- 避免并行会话编号冲突，段位分配：主线对话 FL-D574..579；qa-feat-recall 对话 FL-D580..589；qa-feat-compare 对话 FL-D590..599；qa-feat-guide 对话 FL-D600..609；第二波标签对话与 B13 性能对话仍按"读尾部取下一号"（若与段位冲突，以段位为准顺延）。各对话只新增条目、不改他人条目正文；状态更新可采用在自己段位新增"变更记录"行或经主线合并。功能开发新对话（2026-10-31 追加）：qa-f2-recall-tracked FL-D610..619；qa-f2-compare-tracked FL-D620..629；qa-f2-guide-history FL-D630..639。
+
+## FL-D574 tests/test_v3_delivery_review_gate.py 4 项在 HEAD 基线即失败（2026-10-31）
+
+- **发现日期**：2026-10-31，B13 性能修复轮回归时在干净 HEAD（`99318d5`）独立 worktree 复现：4 failed / 13 passed。失败项：`test_review_refusal_persists_exceptions_and_report_only_downloads`、`test_download_revalidates_persisted_v3_review_and_both_files[missing_review|missing_action|other_artifact]`。
+- **证据与疑似归因**：四项均抛 `Conflict(EXECUTION_MODE_MISMATCH)`，位置 `store.finish()` 的模式围栏（FL-D555 A3-F7，`5bfacb7` 引入）：测试用 `store.create_batch` 直种批次（batches.mode 默认 `delivery`）再 finish 一份 `execution_mode=evaluation` 的 v2 报告，按新围栏语义属于被拒场景——疑似 A3-F7 行为变化后这 4 个测试未同步改造（测试陈旧 vs 行为回归需引擎组定责，**尚未定位结论**）。
+- **影响**：本轮性能修复无关项；全套件回归计数会把该 4 项列为既有失败。修复轮自身新增测试与受影响套件（store/api/tasks/archive/trace/retention/docx）另行给出绿的对比面。
+- **状态**：open，交引擎/测试组定责（是改测试夹具走 task-bound evaluation 批次，还是评估 `create_batch(mode=...)` 种子）。
+- **变更记录**：
+  - 2026-10-31 新增（B13 性能修复 agent，QA 侧登记）。
+  - 2026-10-31（B13 提交前全套件回归复核）：qa-base（含 B13 全部改动 + 并行 agent 在途文件）全量 `-m pytest -q` 结果 6 failed / 2336 passed / 136 skipped，失败除上述 4 项 v3 外另有 `tests/test_v2_evaluation.py::test_evaluation_artifacts_persist_and_download_only_in_evaluation_mode`、`tests/test_v2_workbench.py::test_task_runs_evaluation_revision_and_downloads`；同一干净 HEAD（`99318d5`）worktree 逐条复现**同样这 6 项、同一 `EXECUTION_MODE_MISMATCH` 签名**。结论：6 项全部属 HEAD 既有失败（同一 A3-F7 模式围栏陈旧测试族），B13 改动与并行 agent 在途文件均未新增失败；本条失败清单由 4 项扩记为 6 项，归因待引擎/测试组统一定责。B13 修复已提交 `f83462b`。
