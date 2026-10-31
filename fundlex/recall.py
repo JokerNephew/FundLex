@@ -7349,6 +7349,23 @@ def _plan_target_inner(rule: dict, target: Target, inspection: DocumentInspectio
                               "replaced_group": group_text,
                               "guide_paragraphs": rule.get("source_paragraphs") or []}))
     actual = span.text[target.start:target.end]
+    # FL-D791 sentence-boundary probe: the survey occasionally stops one character
+    # before a sentence terminator (B12 loop-4 bound G13 as 76..120 where loop-3
+    # had 76..121 with the "。").  Every terminator-anchored deterministic matcher
+    # (short-holding delete, approved complete-clause delete) then misses and the
+    # edit degrades to stochastic compose, looping on identical rejections.  Extend
+    # the probe by a single adjacent terminator — the audited target identity and
+    # the compose fallbacks keep the original slice; deterministic matchers use the
+    # probe slice so their PlannedEdit bounds can consume the terminator.
+    probe_end = int(target.end)
+    if 0 <= int(target.start) < probe_end < len(span.text) \
+            and span.text[probe_end:probe_end + 1] in "。！？；":
+        probe_end += 1
+    if probe_end != int(target.end):
+        probe_actual = span.text[int(target.start):probe_end]
+        probe_target = replace(target, end=probe_end)
+    else:
+        probe_actual, probe_target = actual, target
     if (rule_id == "G22" and target.quote and not _same_compact(target.quote, actual)):
         # A rebind can set a resolved target to the guide reference offsets while
         # the contract omits one noun ("持有的份额比例" vs "持有的基金份额比例").
@@ -7627,23 +7644,23 @@ def _plan_target_inner(rule: dict, target: Target, inspection: DocumentInspectio
                 content_source="g06_prohibition_delete",
                 evidence={"deleted_quote": sentence}))
     if rule_id == "G13" and len(operations) == 1 and len(delete_ops) == 1:
-        short_span = _g13_short_holding_span(actual, delete_ops[0])
+        short_span = _g13_short_holding_span(probe_actual, delete_ops[0])
         if short_span is not None:
             return finish(PlannedEdit(
                 target_id=target.target_id, rule_id=rule_id, location=target.location,
                 start=target.start + short_span[0], end=target.start + short_span[1],
                 replacement="", operation="replace", content_source="short_holding_delete",
-                evidence={"deleted_quote": actual[short_span[0]:short_span[1]]}))
-        short_end = _g13_short_holding_end(actual, delete_ops[0])
+                evidence={"deleted_quote": probe_actual[short_span[0]:short_span[1]]}))
+        short_end = _g13_short_holding_end(probe_actual, delete_ops[0])
         if short_end is None:
             short_end = _g13_short_holding_owned(
-                inspection, target.location, actual, delete_ops[0])
+                inspection, target.location, probe_actual, delete_ops[0])
         if short_end is not None:
             return finish(PlannedEdit(
                 target_id=target.target_id, rule_id=rule_id, location=target.location,
                 start=target.start, end=target.start + short_end,
                 replacement="", operation="replace", content_source="short_holding_delete",
-                evidence={"deleted_quote": actual[:short_end]}))
+                evidence={"deleted_quote": probe_actual[:short_end]}))
     if (len(operations) == 1 and len(delete_ops) == 1 and approvals is not None
             and str(getattr(target, "approval_id", "") or "")):
         # A delete whose wording differs from the guide example cannot be spliced
@@ -7654,8 +7671,8 @@ def _plan_target_inner(rule: dict, target: Target, inspection: DocumentInspectio
         # paragraph offsets.  Both the completeness test and the span extension
         # must use the same full paragraph text, otherwise a retained prefix
         # silently pushes the legal delete back to compose.
-        check = approvals.allows(target, inspection)
-        if check.ok and _approved_span_is_complete_clause(span.text, target):
+        check = approvals.allows(probe_target, inspection)
+        if check.ok and _approved_span_is_complete_clause(span.text, probe_target):
             # An approval covers the located sentence, but the operation owns only
             # its authorized old wording.  When that wording is a fragment of the
             # approved span (unowned head + owned fragment + terminator), delete
@@ -7663,12 +7680,12 @@ def _plan_target_inner(rule: dict, target: Target, inspection: DocumentInspectio
             # remainder text (FL-D573).  The fragment path must not extend over
             # the terminator: the surviving prefix needs it to close the sentence.
             narrowed = _approved_fragment_bounds(span.text, int(target.start),
-                                                 int(target.end), delete_ops[0])
+                                                 int(probe_target.end), delete_ops[0])
             if narrowed is not None:
                 start, end = narrowed
             else:
                 start, end = _approved_delete_span(span.text, int(target.start),
-                                                   int(target.end))
+                                                   int(probe_target.end))
             if end > start:
                 return finish(PlannedEdit(
                     target_id=target.target_id, rule_id=rule_id,
