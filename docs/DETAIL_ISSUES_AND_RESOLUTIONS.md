@@ -6994,6 +6994,7 @@ H＝E×…
   - 2026-10-31（guide 线，第一轮 `015c07a`）：plan 姿态拒 tbl 锚点（审计姿态冻结，`target_site_ok` 对 G01 tbl 锚点硬拒）+ `missing_body_append_site_g01` 确定性闭合通道（释义定义仅存于表格 → applicability=FALSE 记 tbl 证据）。B15 verify1 暴露前置缺漏：闭合前检查被仍存活的 doomed tbl target 挡住，未触发。
   - 2026-10-31（guide 线，第二轮 `e73ade8` 并入）：存活 target 前置忽略 tbl 锚定目标后 verify2 G01 OPEN 义务消除（剩 `orphan_evidence` TARGET_SOURCE_MISMATCH 账本噪声，非义务）。
   - 2026-10-31（guide 线，第三轮 `9250220` 并入）：闭合逻辑抽为 `_apply_deterministic_site_closures` 并在首个 plan 完成后以 TARGET_SOURCE_MISMATCH 台账为准复跑（同轮闭合 B15 G08 p161 同类前置问题）。verify4：G01 unresolved 义务为零，delivery 残留不归因本条。
+  - 2026-10-31（guide 线，dev20 loop-2 复核，回应主线派单②）：loop-2（`d55702b`）B15 `tbl0/r55/c1/p0` 仍现 `unresolved TARGET_SOURCE_MISMATCH`——这与 verify4/verify5 形状**完全一致，是本条设计的诚实 fail-closed 处置**（plan 拒 tbl 锚点 + 义务确定性闭合），不是 anchor 调整失效：G01 义务在 obligations 层已 FALSE 闭合、**无 OPEN_OBLIGATION**，该行只是 plan 台账/孤儿证据噪声，不参与交付门禁（loop-2 阻断由 FL-D650 G09 与 FL-D651 G14:3 构成，均已各自归因）。如需消噪（把 tbl 台胀行的呈现降级为 evidence-only 而不再以 target unresolved 形态出现），属呈现层打磨，单独立项而非本条复发。
 
 ## FL-D608 B05 G01/G03、B15 G03：追加策略在声明站点缺失（同文双站点追加疑似被去重抑制）（待归因）（2026-10-31，guide 线）
 
@@ -7139,6 +7140,14 @@ H＝E×…
 - **状态**：open（新发现，真实双跑证据在案；FL-D643 取号后跨线候补池指针请主线合并时更新为 FL-D644）。
 - **变更记录**：2026-10-31 新增（guide 线；证据 verify4 score.json detail=old wording still in its declared site、edits.json target state=absent；对照 smoke-requal-v2 score G08 completed）。
 
+## FL-D651 dev20 loop-2 B15 G14:3 p167 site_evidence_missing：ONE_OF alternative-absent 证据只绑首个共享站点（2026-10-31，guide 线）
+
+- **发现日期**：2026-10-31，主线验收后 dev20 loop-2（冻结 `d55702b`，含本线 FL-D606 全五 pass）B15 仍 incomplete 残余之一，主线派单取证。
+- **问题与影响**：B15 loop-2 模型给 p167 目标的是**短语切片**（[108:139]，与 verify4 同形），FL-D606 promo attribution（`e73ade8`）按设计把 G14:3/4/5 三 op 全部绑定到该目标。claim replay 中 G14:B2:O1（op 3，canonical「…申购费率和赎回费率。」，源文档中真实不存在）先按站点评估失败（p166 绑定站点 quote 不匹配 → unproven 拖垮聚合），落入 `one_of_alternative_absent` 兜底判 PASS NOT_REQUIRED——但兜底证据行**只写 shared_sites[0]（p166）**。`build_coverage_view` 是 site 级投影：p167 无证据 → `site_evidence_missing` → FINAL_COVERAGE_UNRESOLVED → 运行时账本覆写 FAIL → delivery incomplete。与 FL-D606 已验证面无关（replay 义务本身全 PASS），属**证据绑定粒度缺陷**。
+- **处理方法（已实施并验证）**：`f4e304a`——兜底按文档级事实（old wording 全文不存在）对**每个共享站点**各写一条 `alternative_wording_absent` 证据行。确定性验证三重：①用 loop-2 自己 report 投影回放——生产形状（单点证据）确造 p166/p167 双 UNRESOLVED，固定形状（双点证据）双站全 ALREADY_SATISFIED；②`tests/test_generation_coverage.py` 新 fixture 双向锁定（新形状闭合/旧形状拒推断第二站）；③claim/effect/coverage/recall/guide 扩展面 590 passed。真实 B15 单合同复验在本条验证段补齐。
+- **状态**：已修复（待真实单合同复验证据补记 + 主线复核）。
+- **变更记录**：2026-10-31 新增（guide 线；证据 `qa-wave1-dev-v2-20261031-d55702b/full-dev/015-*/report.json` 的 O1 NOT_REQUIRED site_effects=[] evidence@p166-only + 投影回放对照 + 离线 replay 驱动 `/tmp/opencode/qa-findings-run/b15-fl651-replay/`）。
+
 ## FL-D650 B15 G09（赎回金额计算 p159）真实标签目标未被 plan 覆盖：audit missed-target 发现但未能闭环（2026-10-31，guide 线）
 
 - **编号注记**：本条原登记为 FL-D646（commit `b68417f`），与第二波标签线抢先使用的 FL-D646 撞号，先改派 FL-D648；FL-D648/649 又被 guide-history 线抢先并入主线，2026-10-31 按主线终裁最终改派 **FL-D650**。此后本线固定子池 **FL-D650..659**，不再广播抢号（主线 DETAIL 尾部已立固定子池注记）。
@@ -7150,6 +7159,7 @@ H＝E×…
 - **变更记录**：2026-10-31 新增（guide 线；证据 report.json unresolved 三项 G09 + edits.json 无 G09 target 落地）。
   - 2026-10-31（guide 线，归因证据补记）：verify2（`e73ade8`）G09 p159 **planned** 且 claim replay `G09:B1:O1` PASS（bounded splice 落地「减去…净值计算…扣除或加上相应的费用」）；verify4（`b2561a2`）同一模型同一站点翻转为 not_applicable（「与规则所针对的原文不一致，无精确替换目标」），replay 转 OPEN `CLAIM_OPERATION_UNPROVEN`。**诊断**：同一指引版本、同一站点在 planned/PASS 与 not_applicable 之间回摆，属模型侧不确定性（与 FL-D643 G08 不确定性同族），非确定性门诊缺失——本批确定性修复（FL-D606/607）不改此面。保持 open，随 FL-D643 观察族跟踪；不扩为门禁。
   - 2026-10-31（guide 线，verify5 补证，HEAD `b2561a2`）：B15 verify5（`/tmp/opencode/qa-findings-run/b15-fl606607-verify5/`）G09 再度 not_applicable（「无“当日对应份额类别…”的原文可替换」），replay `G09:B1:O1` OPEN `CLAIM_OPERATION_UNPROVEN`（verified site missing）。回摆在 verify2（planned+PASS）→ verify4/verify5（not_applicable+OPEN）间 1:2，回摆定性坐实。**B15 delivery incomplete 归因（原 FL-D576 观察方向降级落案）**：v2 预跑 15 目标全 no-artifact 的链路病因已由本批确定性修复全部解除（FL-D606 G14 全闭合✅、FL-D607/FL-D601-FL-D602 家族 G01/G08 义务闭合✅），verify5 时仅存本条 G09 OPEN 一项 → delivery 如实 incomplete（**非 false_complete**，行为方向正确）；v2 预跑无产物的 15 目标并非同因。本条 open 即 B15 虚假完成阻断供给的现存唯一来源。
+  - 2026-10-31（guide 线，loop-2 复证）：dev20 loop-2（`d55702b`）B15 G09 再度 not_applicable + `CLAIM_REPLAY_FAILED`/verified site missing OPEN（第三次回摆，与 FL-D651 修复无关、非同源）。定性维持：模型侧不确定性，随 FL-D643 族观察，不扩门禁。
 
 ## FL-D644 FL-D608 第二层闸门放行凭据可被模型谎称（2026-10-31，主线复核）
 
