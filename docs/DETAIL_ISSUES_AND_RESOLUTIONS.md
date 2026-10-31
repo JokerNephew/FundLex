@@ -7519,3 +7519,20 @@ H＝E×…
 - **影响**：loop-4 硬门槛 false_complete=0 未达；与 FL-D693 并列 loop-4 FAIL 双因子。
 - **状态**：open，归主线 recall-miss 线机制处置；本线不补规则、不动 labels/scorer。
 - **变更记录**：2026-11-01 新增。
+
+## FL-D790 评分器 append 站点窗口后向对称（主线授权量具修正，已实施+五波同口径重评；合并裁决令 2026-11-01）（2026-11-01，qa-feat-recall）
+
+- **背景**：loop-4 fc=1 的 B15 T001 经主线裁决确认为量具误杀：引擎 `DEFINITION_GROUP_APPEND_END` 把三条直销政策**逐字追加至同小节较前段落**（B15 p84，声明站 p87 后退 3 段；当时的 replay 已验证为真），而 scorer append 窗口仅前向（index-1 起）→ 判 not_executed。裁决授权窗口对称化。
+- **实施**（`tools/evaluation/p6_score.py`，`SCORER_VERSION` `p6-score-3`→`p6-score-4-appendwindow-20261101`）：`_site_text` 增 `before` 形参（默认 1 保持其余路径逐字不动），仅 append 判定窗改 `before=6, after=6`（前向不变）；labels 不动、引擎不动。
+- **测试**：新 `tests/test_fl_d790_append_window.py` 5 例（后移 4 段合法追加→completed；边界 index-6→completed/index-7→not_executed（对抗）；声明站正向不变；缺席仍 not_executed）+ 既有 append 正向用例全部不变。量具聚焦 49 绿、score/site/append/label 族 354 绿。一处既有夹具同步：`test_p6_score_sites.py` 双站用例间距 4→8 段（原几何小于新后向窗，语义断言不变）。
+- **零成本纯读五波重评（同量具）**：loop4 352/90.3%、**fc 1→0**（达成裁决硬指标）；loop1/loop2 逐字不变；loop3 350/89.7%、fc 1→0（B15 T001 同机制 +1，p84 落点实证）；v1 +3（242/62.1%：B05 T001 p119→117、T002 p159→155、B15 T001 p87→83，均同小节合法后移落点；v1 fc 仍 4 与窗口无关）。各波 verdic 翻转仅上述 4 项，无其他变化。
+- **状态**：已实施并 full-suite 族绿；待主线复核合并 → engine=a0aa64d 后执行 loop-5。
+- **变更记录**：2026-11-01 新增。
+
+## FL-D691 补充修正记录（FL-D790 推翻其「真实残余」子结论）（2026-11-01）
+
+- 原条目「真实残余：B15 T001（G03@p87）3 个直销条款确实未追加」**经 p84 实证推翻**：三句话逐字在小节前段落（合法 APPEND_END 落点），系窗口误杀，FL-D790 修正后 loop3/loop4 该目标均 completed。原「v1 回摆/FL-D650 族」推理作废。其余量具类结论保留。
+
+## FL-D694 判决改定：关闭（量具窗口误杀已修，非机制缺陷）（2026-11-01）
+
+- 原登记前提（T001 真缺口未被 A/E 翻转）不成立：T001 政策实际在场（FL-D790 证据），五机制下 B15 本就为真 complete，`holds=[]` 为正确形态。**无真实「谎报」病例**，A/E 生效性既未被证伪亦无实证，保持未决观测评注而非缺陷。loop-4 硬门事实结果：fc=0（量具修正后）。
