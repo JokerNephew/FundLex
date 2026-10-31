@@ -43,6 +43,13 @@
 .empty-state { padding: 36px 16px; color: var(--muted); text-align: center; font-size: var(--text-sm, 13px); }
 .empty-state strong { display: block; color: var(--ink, #35404a); font-size: var(--text-base, 15px); margin-bottom: 5px; }
 .stats-empty { padding: 18px 4px; margin: 0 0 14px; }
+/* 系统状态折叠区（项9 批3）：管理员可见、默认收起 */
+.system-state summary { display: flex; align-items: baseline; gap: 10px; cursor: pointer; list-style: none; }
+.system-state summary::-webkit-details-marker { display: none; }
+.system-state summary h2 { font-size: var(--text-lg, 17px); margin: 0; }
+.system-state summary::after { content: '展开'; margin-left: auto; font-size: var(--text-xs, 12px); color: var(--brand-dark); }
+.system-state[open] summary::after { content: '收起'; }
+.system-state .settings-capability-list { margin-top: 12px; }
 .stats-connection { margin: -6px 0 16px; font-size: var(--text-xs, 12px); }
 .error-state { padding: var(--space-3); border: 1px solid var(--danger-soft); border-radius: var(--radius-sm); color: var(--danger); background: var(--danger-soft); }
 .login-layout { display: grid; place-items: center; min-height: 100vh; padding: 24px; background: var(--brand-soft); }
@@ -52,6 +59,8 @@
 .form-stack { display: grid; gap: var(--space-4); }
 .form-stack label { display: grid; gap: 6px; color: var(--muted); font-size: var(--text-sm); font-weight: 600; }
 .form-stack input { border: 1px solid var(--border-strong); border-radius: 8px; padding: 10px 12px; background: #fff; }
+/* 按钮宽度规约（项9 批3）：表单内主操作不随容器拉伸 */
+.form-stack .ui-button { justify-self: start; }
 .form-stack textarea { border: 1px solid var(--border-strong); border-radius: 8px; padding: 10px 12px; background: #fff; font: inherit; resize: vertical; }
 .settings-check { display: flex !important; align-items: center; gap: 8px; font-weight: 500 !important; }
 .form-error { margin: 0; color: var(--danger); }

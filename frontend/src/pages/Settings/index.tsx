@@ -119,16 +119,18 @@ export function SettingsPage() {
       <div className="action-row"><Link to="/guides"><Button>我的指引</Button></Link>{user?.role === 'admin' && <Link to="/users"><Button>用户管理</Button></Link>}</div>
     </div>
 
-    <Card>
-      <h2>运行能力</h2>
-      {capabilities.error ? <ErrorState error={capabilities.error} /> : capabilities.loading && !capabilities.data ? <Spinner /> : <dl className="settings-capability-list">
-        <dt>认证模式</dt><dd>{capabilityLabel(capabilities.data?.auth_mode, { password: '账号密码登录', dev: '开发身份登录' })}</dd>
-        <dt>引擎</dt><dd>{capabilityLabel(capabilities.data?.engine?.id, { recall_first: '召回优先修订引擎' })}</dd>
-        <dt>交付模式</dt><dd>{capabilityLabel(capabilities.data?.engine?.delivery_mode, { formal: '正式交付模式', evaluation: '评测模式' })}</dd>
-        <dt>正式写入</dt><dd>{capabilities.data?.engine?.auto_write_enabled ? '已启用' : '当前不可用'}</dd>
-        <dt>单文件限制</dt><dd>{capabilities.data?.upload_limits?.max_file_bytes ? `${Math.round(capabilities.data.upload_limits.max_file_bytes / 1024 / 1024)} MB` : '—'}</dd>
-      </dl>}
-    </Card>
+    {user?.role === 'admin' && <Card>
+      <details className="system-state" data-testid="system-state">
+        <summary><h2>系统状态</h2><span className="muted">运行参数（管理员）</span></summary>
+        {capabilities.error ? <ErrorState error={capabilities.error} /> : capabilities.loading && !capabilities.data ? <Spinner /> : <dl className="settings-capability-list">
+          <dt>登录方式</dt><dd>{capabilityLabel(capabilities.data?.auth_mode, { password: '账号密码登录', dev: '开发身份登录' })}</dd>
+          <dt>处理引擎</dt><dd>{capabilityLabel(capabilities.data?.engine?.id, { recall_first: '召回优先修订引擎' })}</dd>
+          <dt>交付模式</dt><dd>{capabilityLabel(capabilities.data?.engine?.delivery_mode, { formal: '正式交付模式', evaluation: '评测模式' })}</dd>
+          <dt>正式写入</dt><dd>{capabilities.data?.engine?.auto_write_enabled ? '已启用' : '当前不可用'}</dd>
+          <dt>单文件大小上限</dt><dd>{capabilities.data?.upload_limits?.max_file_bytes ? `${Math.round(capabilities.data.upload_limits.max_file_bytes / 1024 / 1024)} MB` : '—'}</dd>
+        </dl>}
+      </details>
+    </Card>}
 
     <Card>
       <h2>飞书私聊绑定</h2>
