@@ -7269,3 +7269,11 @@ H＝E×…
 - **归因线索**：B17 G08 组件校验与 G08 路由/facts（直销组件组）认证相关；B19 G04 为定位级未解。两者均非本轮 v2 回归（v1 同案未交付），列修复循环后续轮次处理；不与 guide 线 FL-D604/605（暂缓召回面）冲突。
 - **状态**：open（待本轮 584/585/587 复验后专项归因）。
 - **变更记录**：2026-10-31 新增。
+
+## FL-D589 excised-by-replace 证明未过 effect_proof_passed 消费者闸门（loop-2 B10/B14 回归，已修复+mutation 验证）（2026-10-31，qa-feat-recall）
+
+- **发现**：dev20 loop-2（d55702b）B10/B14 双双 incomplete：G13 `FINAL_OPERATION_UNPROVEN / operation effect is not proven at every site`。claim replay 已给出 PASS/`VERIFIED_ABSENT`（proof_kind=`semantic_delete_excised_by_replace`，sites=[]），但终结复核统一走 `effect_proof_passed`——其 site-free 特例仅认 `document_literal_absent`，尾部通用路径要求 `sites ⊆ proven_sites 且 site_effects 非空` → 新证明恒拒 → 义务被闸回 UNRESOLVED。B10 零 G13 目标行、B14 一行 absent 态（均无 verified site），同症；工作 final 均确无 7 日句、G12 edit 均含覆盖 span——编辑本身正确，又是记账层。
+- **修复**：`effects.effect_proof_passed` 增补 `semantic_delete_excised_by_replace` 识别分支（绑 operation/obligation + covering_location；无 failure_code 且无 site_effects），与 document_literal_absent 同位。
+- **验证**：`test_excision_proof_passes_consumer_gate`（evaluate→as_dict→gate True）；mutation：改名 proof_kind 即 gate False。test_fl_d585 套件 5 项绿。
+- **状态**：已实施修复并回归验证；待 B10/B14 真实复验 + wave 确认。
+- **变更记录**：2026-10-31 新增。
