@@ -71,11 +71,12 @@ def validate_docx_upload(name: str, data: bytes) -> str:
 
 
 def has_tracked_revisions(data: bytes) -> bool:
-    """Detect Word tracked changes before a delivery task is accepted.
+    """Detect Word tracked changes in an uploaded document.
 
-    The delivery engine deliberately refuses documents with existing revision
-    marks.  Detecting this at upload time gives the user an actionable error
-    instead of a completed task that produces no deliverable.
+    Detection helper only: tracked inputs are **not** rejected.  The recall
+    pipeline normalizes them to the accepted view at task input
+    (:func:`fundlex.docx.normalize_tracked_base`) and layers the engine's own
+    new revisions on that base.
     """
     try:
         with zipfile.ZipFile(io.BytesIO(data)) as archive:

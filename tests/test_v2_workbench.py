@@ -44,9 +44,15 @@ def test_task_runs_evaluation_revision_and_downloads(tmp_path):
     source = build_fixture(tmp_path / "fixture.docx")
     app = create_app(tmp_path / "state")
     client = TestClient(app)
+    # A3-F7 (FL-D555): finish rejects a report whose execution_mode would
+    # relabel the persisted batch mode. The legacy offline v2 runner explicitly
+    # asks for evaluation, so persist mode=evaluation up front (the non-task
+    # legacy branch in jobs.py is kept for exactly this runner).
     batch = app.state.store.create_batch(owner=OWNER, ruleset_version="v2", ruleset_sha256="0" * 64,
                                          uploads=[(source.name, source.read_bytes())])
     batch_id = batch["id"]
+    with app.state.store._connect() as db:
+        db.execute("UPDATE batches SET mode='evaluation' WHERE id=?", (batch_id,))
     gateway = ScriptedGateway()
     worker = Worker(app.state.store, lambda src, out, ver: process_v2(src, out, ver, gateway, evaluation=True))
     assert worker.run_once()
