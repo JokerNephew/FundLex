@@ -553,10 +553,21 @@ class Worker:
                     raise
             return True
         try:
-            guide_store.finish_guide_job(self.store, job["id"], job["fencing_token"], document=document)
+            finished = guide_store.finish_guide_job(self.store, job["id"],
+                                                    job["fencing_token"], document=document)
         except Conflict as lease_exc:
             if str(lease_exc) != "stale guide job lease":
                 raise
+            return True
+        if finished["version"]["status"] == "parsed":
+            # Deterministic footprint smoke against the version's lineage
+            # baseline: silent regressions the model verifier missed become an
+            # advisory needs_review verdict.  The stamp must never kill a job.
+            try:
+                from .guide_smoke import review_version_footprint
+                review_version_footprint(self.store, job["owner"], job["guide_version_id"])
+            except Exception:  # noqa: BLE001 - advisory marking only
+                pass
         return True
 
     def _bound_guide_document(self, job: dict[str, Any]) -> dict[str, Any] | None:

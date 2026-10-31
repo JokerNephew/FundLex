@@ -31,3 +31,7 @@ include = ["fundlex*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+markers = [
+    "browser: opt-in Chromium browser suites (FUNDLEX_BROWSER_TESTS=1)",
+    "v1: canonical user-surface browser scenarios",
+]

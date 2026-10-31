@@ -1,7 +1,7 @@
 import { download, jsonBody, request, requestText, upload, type UploadProgress } from './client'
 import type {
   AuthSession, Capabilities, CreateTaskInput, Decision, DecisionResult,
-  GuideDetail, GuideRuleSettings, GuideSettings, GuideSummary, ModelSettings, Paginated, Report,
+  GuideDetail, GuideDiffResult, GuideRuleSettings, GuideSettings, GuideSummary, ModelSettings, Paginated, Report,
   RevisionView, TaskDetail, TaskDocument, TaskStats, TaskSummary, User, UploadResult, CompareTask,
   ComparePairManifest, CompareUploadResult, CompareView,
   FeishuBinding, FeishuBindingCode, FeishuOAuthStart,
@@ -43,6 +43,7 @@ export const api = {
   guide: (id: string) => request<GuideDetail>(`/api/guides/${encodeURIComponent(id)}`),
   guideSource: (id: string) => download(`/api/guides/${encodeURIComponent(id)}/source`),
   guideRules: (id: string) => request<Record<string, unknown>>(`/api/guides/${encodeURIComponent(id)}/rules`),
+  guideDiff: (id: string, against: string) => request<GuideDiffResult>(`/api/guides/${encodeURIComponent(id)}/diff?against=${encodeURIComponent(against)}`),
   guideSettings: () => request<GuideSettings>('/api/settings/guide'),
   setGuide: (version_id: string | null) => request<GuideSettings>('/api/settings/guide', { method: 'PUT', body: jsonBody({ version_id }) }),
   guideRuleSettings: (id: string) => request<GuideRuleSettings>(`/api/guides/${encodeURIComponent(id)}/rule-settings`),

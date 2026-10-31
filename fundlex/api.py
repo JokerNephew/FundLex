@@ -441,6 +441,15 @@ def _recall_metrics(store: RunStore, documents: list[dict], key: str) -> dict[st
     return metrics
 
 
+def _guide_enable_block_reason(version: dict) -> str | None:
+    """Machine-readable reason a version cannot be enabled (``None`` = enableable)."""
+    if version["status"] not in guide_store.ENABLEABLE_STATUSES:
+        return "GUIDE_NOT_PARSED"
+    if version["qualification_status"] not in guide_store.ENABLEABLE_QUALIFICATIONS:
+        return "GUIDE_NOT_CERTIFIED"
+    return None
+
+
 def _guide_public(version: dict, *, current: bool) -> dict:
     """Owner-facing guide metadata; server paths never appear here."""
     issues = version.get("issues")
@@ -448,10 +457,14 @@ def _guide_public(version: dict, *, current: bool) -> dict:
     if isinstance(issues, dict):
         issue_count = sum(len(issues[key]) for key in ("errors", "warnings", "coverage_gaps")
                           if isinstance(issues.get(key), list))
+    review = version.get("review")
     return {"id": version["id"], "built_in": bool(version["built_in"]),
             "parent_version_id": version.get("parent_version_id", ""),
             "filename": version["filename"],
             "status": version["status"], "qualification_status": version["qualification_status"],
+            "certified": version["qualification_status"] in guide_store.ENABLEABLE_QUALIFICATIONS,
+            "enable_block_reason": _guide_enable_block_reason(version),
+            "review": review if isinstance(review, dict) else None,
             "document_sha256": version["document_sha256"], "rules_sha256": version["rules_sha256"],
             "groups": int(version.get("rules_count") or 0), "issues": issue_count,
             "current": bool(current), "created_at": version["created_at"], "updated_at": version["updated_at"]}
@@ -1051,6 +1064,17 @@ def create_app(data_dir: str | Path | None = None, *, auth_db=None) -> FastAPI:
         return FileResponse(path, media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
                             filename=Path(version["filename"] or f"{version_id}.docx").name,
                             headers={"Cache-Control": "private, no-store"})
+
+    @application.get("/api/guides/{version_id}/diff")
+    def guide_version_diff(version_id: str, against: str = "", user: str = Depends(_user)):
+        """Deterministic rule-level diff of two visible versions (no model)."""
+        try:
+            diff = guide_store.diff_versions(store, user, version_id, against)
+        except KeyError as exc:
+            raise_api_error(404, exc, fallback="GUIDE_DIFF_UNAVAILABLE")
+        except ValueError as exc:
+            raise_api_error(422, exc, fallback="INVALID_REQUEST")
+        return {"version_id": version_id, "against": against.strip(), "diff": diff}
 
     @application.get("/api/guides/{version_id}/rules")
     def guide_rules(version_id: str, user: str = Depends(_user)):
