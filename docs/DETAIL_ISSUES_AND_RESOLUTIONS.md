@@ -7368,3 +7368,14 @@ H＝E×…
 - **状态**：已修复并验证（同 a1289e1）。
 
 > **FL-D648 变更记录（2026-10-31）**：遗留开放项「解析粒度钉死」已由 qa-guide-parse 线收口：确定性落点改为可执行性金丝雀（FL-D660），真实合并事故产物冻结钉死（12 阻断键断言），粒度结构信号转诊断指标（FL-D661）。状态由「open」推进为「机制已闭环、随主线合并生效」。
+
+## FL-D664 解析质量通道真实模型基准实跑：复发复发被金丝雀确定性拦下（2026-10-31，qa-guide-parse 线）
+
+- **实跑（2026-10-31，`tools/guide_parse_benchmark.py`，账本 /tmp/opencode/guide-parse-benchmark.sqlite、guide-parse-bench-es2.sqlite）**：
+  - v4（内置同源）重解析：模型再次系统性产出 15 规则合并形态；跑 A（3 轮）验证层报 GUIDE_SLOT_NOT_IN_TEXT+1 finding → 质量门拦下；跑 B（2 轮）**验证 clean=True、finding=0**——此形态在旧闸下必被认证启用并复现召回断崖，金丝雀以同 12 阻断键（G03:1..G15:1，与冻结事故产物完全一致）fatal → `gate_caught_nonexecutable`、qualification=needs_review、不可启用。**FL-D648 复发在真实条件下被确定性收口**。
+  - V2：15 规则，GUIDE_SLOT_NOT_IN_TEXT+2 findings → 结构化拦下（预期，原文笔误）。
+  - 通道整体不变量（v4=认证可执行∨结构化拦下，V2=必拦）三轮跑全 ok；门漏放=基准失败的设计实跑成立。
+  - 引擎冒烟（golden 语料第 2 对 .docx，builtin 轨）：complete 41/41——新闸不触引擎路径。
+- **过程问题（已处理）**：首次 es 跑因前次被 SIGTERM 进程在 scratch 账本残留的 reserved 并发租约行触 MODEL_CONCURRENCY_LIMIT（parse 0 HTTP、引擎 0 目标）；清理时 UPDATE 范围过宽误将 4 行 completed 翻转为 failed（仅状态字段、金额未动，账本为临时观测件，已如实记此）；换新账本重跑通过。教训：同一 scratch 账本被异常终止后应直接换账本文件；清理 SQL 必须限定 status='reserved'。
+- **账本（仅观测）**：解析基准 13 次 $0.0617；es2 30 次 $0.0412；含崩溃次跑合计约 47 次 ≈ $0.11。
+- **状态**：机制已验证（真实复发拦截+引擎完好）；工具与冻结夹具入库。
