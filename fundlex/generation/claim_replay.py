@@ -574,12 +574,22 @@ def _own_effect_errors(rule: Mapping[str, Any], indices: Sequence[int],
     selected = [operations[index] for index in indices
                 if 0 <= index < len(operations)]
     own_kinds = {str(operation.get("op") or "") for operation in selected}
-    sibling_texts = [
-        _compact(str(operation.get("new_text") or ""))
-        for index, operation in enumerate(operations)
-        if index not in set(indices) and operation.get("op") in {"replace", "append"}
-        and len(_compact(str(operation.get("new_text") or ""))) >= 3
-    ]
+    from ..recall import condition_status
+    sibling_texts = []
+    for index, operation in enumerate(operations):
+        if index in set(indices) or operation.get("op") not in {"replace", "append"}:
+            continue
+        sibling = _compact(str(operation.get("new_text") or ""))
+        if len(sibling) < 3:
+            continue
+        if (facts is not None
+                and condition_status(operation.get("condition"), facts) == "FALSE"):
+            # FL-D606 replay proof: a branch the product's facts close (G14
+            # single-class vs multiple-class alternatives) can never be the
+            # alternative claim for this site; its wording overlap with the true
+            # branch's text is inherent to the rule family, not borrowing.
+            continue
+        sibling_texts.append(sibling)
     own_texts = [
         _compact(str(operation.get("new_text") or ""))
         for operation in selected
@@ -783,6 +793,23 @@ def _own_effect_errors(rule: Mapping[str, Any], indices: Sequence[int],
             expected = {new_text}
             if evidence.get("mode") == "g09_bounded_splice" and fixed_text:
                 expected.add(fixed_text)
+            if (str(rule.get("rule_id") or "") == "G14"
+                    and str(evidence.get("mode") or "").startswith("g14_")):
+                # FL-D606: the promotion-context replacement deliberately keeps
+                # the contract's promotion lead-in instead of the canonical
+                # sentence, so verbatim new_text containment cannot prove the
+                # operation.  Replay recomputes the deterministic executor from
+                # this unit's own slice; a reproduced replacement is the
+                # operation's own-effect proof.
+                from ..recall import _g14_tier1_result
+                recomputed = _g14_tier1_result(
+                    [op for op in selected if op.get("op") == "replace"],
+                    facts, before_unit)
+                if recomputed is None or _compact(recomputed.replacement) != _compact(
+                        replacement):
+                    errors.add("CLAIM_OPERATION_EFFECT_MISSING")
+                else:
+                    expected.add(_compact(recomputed.replacement))
             try:
                 instantiated, issues = instantiate_policy_text(
                     str(rule.get("rule_id") or ""), operation, facts)

@@ -6572,6 +6572,71 @@ def _tier1_enabled() -> bool:
         return False
 
 
+def _g14_tier1_result(replace_ops: Sequence[dict], facts: Facts, actual: str) -> Any | None:
+    """Deterministic G14 fee-narrowing (plan §7.1, FL-D606).
+
+    Shared executor proof: the planner hands out this ``TemplateResult`` and
+    claim replay recomputes it from the recorded unit (``before`` slice +
+    selected operations + facts) — a match is the operation's own-effect proof
+    even when the promotion-context lead-in legitimately replaces the canonical
+    sentence (CLAIM replay must not demand the canonical new_text verbatim).
+    """
+    from .generation.template import (TemplateResult, fee_items, ordered_fee_items,
+                                      plan_fee_item_removal)
+    allowed: set[str] = set()
+    allowed_order: list[str] = []
+    canonical_tail = ""
+    for operation in replace_ops:
+        if (facts is not None
+                and condition_status(operation.get("condition"), facts) == "FALSE"):
+            # The allowed items and the canonical tail must come from the
+            # operations applicable to THIS product (FL-D606: otherwise the
+            # single-class ops set 允许 only 申购费率 and seed the shorter
+            # tail for a multi-class-with-service-fee product).
+            continue
+        instantiated, issues = instantiate_slots(
+            str(operation.get("new_text") or ""), facts)
+        if issues or not instantiated:
+            continue
+        for item in ordered_fee_items(instantiated):
+            if item not in allowed_order:
+                allowed_order.append(item)
+        allowed |= fee_items(instantiated)
+        if "调低" in instantiated:
+            tail = instantiated.split("调低", 1)[1].strip()
+            if len(fee_items(tail)) > len(fee_items(canonical_tail)):
+                canonical_tail = tail
+    if not allowed:
+        return None
+    result = plan_fee_item_removal(actual, allowed, canonical_tail, allowed_order)
+    if (result is not None and canonical_tail
+            and set(fee_items(result.replacement)) != allowed):
+        # FL-D606: the source's fee list carried fewer guide-ALLOWED items
+        # than the rule grants (B15 p167 drops 销售服务费率 mid-sentence).
+        # fee-item REMOVAL alone cannot restore a guide item: converge the
+        # tail to the guide's canonical wording, exactly like the existing
+        # sentence-end branch does for added items.
+        from .generation.template import _converge, _item_spans, _surface_start
+        spans = _item_spans(actual)
+        if spans:
+            result = TemplateResult(
+                replacement=_converge(actual, _surface_start(actual, spans[0][0]),
+                                      canonical_tail),
+                content_source=result.content_source,
+                evidence={**result.evidence, "mode": "g14_canonical_converge",
+                          "converged_tail": True})
+    if result is not None and "适当调整" in result.replacement:
+        # FL-D606: the promotion-context clause grants 调整 (either
+        # direction); G14 authorizes lowering only, so the promotion lead-in
+        # converges to 调低 together with the fee items (B15 p167 label:
+        # 「对投资者适当调低基金申购费率和销售服务费率」).
+        result = TemplateResult(
+            replacement=result.replacement.replace("适当调整", "适当调低"),
+            content_source=result.content_source,
+            evidence={**result.evidence, "verb_converged": True})
+    return result
+
+
 def _plan_tier1(rule: dict, operations: Sequence[dict], facts: Facts,
                 actual: str, *, routing: dict[str, Any] | None = None) -> Any | None:
     """Deterministic generators: G14 structured removal, G09 bounded splice (§7.1/§7.2).
@@ -6607,57 +6672,7 @@ def _plan_tier1(rule: dict, operations: Sequence[dict], facts: Facts,
             return None
         return result
     if rule_id == "G14":
-        allowed: set[str] = set()
-        allowed_order: list[str] = []
-        canonical_tail = ""
-        for operation in replace_ops:
-            if condition_status(operation.get("condition"), facts) == "FALSE":
-                # The allowed items and the canonical tail must come from the
-                # operations applicable to THIS product (FL-D606: otherwise the
-                # single-class ops set 允许 only 申购费率 and seed the shorter
-                # tail for a multi-class-with-service-fee product).
-                continue
-            instantiated, issues = instantiate_slots(
-                str(operation.get("new_text") or ""), facts)
-            if issues or not instantiated:
-                continue
-            for item in ordered_fee_items(instantiated):
-                if item not in allowed_order:
-                    allowed_order.append(item)
-            allowed |= fee_items(instantiated)
-            if "调低" in instantiated:
-                tail = instantiated.split("调低", 1)[1].strip()
-                if len(fee_items(tail)) > len(fee_items(canonical_tail)):
-                    canonical_tail = tail
-        if not allowed:
-            return None
-        result = plan_fee_item_removal(actual, allowed, canonical_tail, allowed_order)
-        if (result is not None and canonical_tail
-                and set(fee_items(result.replacement)) != allowed):
-            # FL-D606: the source's fee list carried fewer guide-ALLOWED items
-            # than the rule grants (B15 p167 drops 销售服务费率 mid-sentence).
-            # fee-item REMOVAL alone cannot restore a guide item: converge the
-            # tail to the guide's canonical wording, exactly like the existing
-            # sentence-end branch does for added items.
-            from .generation.template import _converge, _item_spans, _surface_start
-            spans = _item_spans(actual)
-            if spans:
-                result = TemplateResult(
-                    replacement=_converge(actual, _surface_start(actual, spans[0][0]),
-                                          canonical_tail),
-                    content_source=result.content_source,
-                    evidence={**result.evidence, "mode": "g14_canonical_converge",
-                              "converged_tail": True})
-        if result is not None and "适当调整" in result.replacement:
-            # FL-D606: the promotion-context clause grants 调整 (either
-            # direction); G14 authorizes lowering only, so the promotion lead-in
-            # converges to 调低 together with the fee items (B15 p167 label:
-            # 「对投资者适当调低基金申购费率和销售服务费率」).
-            result = TemplateResult(
-                replacement=result.replacement.replace("适当调整", "适当调低"),
-                content_source=result.content_source,
-                evidence={**result.evidence, "verb_converged": True})
-        return result
+        return _g14_tier1_result(replace_ops, facts, actual)
     if rule_id == "G18":
         from .generation.template import _G18_REASON_PAIRS, plan_g18_splice
         g18_pairs: list[tuple[str, str]] = []

@@ -276,3 +276,33 @@ def test_g14_promotion_site_plans_through_policy_gate():
     assert "赎回费率" not in edit.replacement
     assert "转换费率" not in edit.replacement
     assert "申购费率" in edit.replacement and "销售服务费率" in edit.replacement
+
+
+def test_g14_replay_does_not_flag_condition_false_branch_wording():
+    """FL-D606 replay proof: for a multi-class product the single-class G14
+    alternatives are condition-FALSE and can never be the borrowed claim; the
+    promo replacement's 调低 stems must not trip the sibling-wording check."""
+    from types import SimpleNamespace
+
+    from fundlex.generation.claim_replay import _own_effect_errors
+
+    rule = _rule("G14")
+    before = "对投资者适当调整基金申购费率、赎回费率、销售服务费率和转换费率"
+    after = "对投资者适当调低基金申购费率和销售服务费率"
+    validation = SimpleNamespace(changes=[
+        SimpleNamespace(kind="replace", after="调低基金申购费率")])
+    errors = _own_effect_errors(rule, [3, 4, 5], None, explicit_span=True,
+                                is_component=False, before_unit=before,
+                                replacement=after, validation=validation,
+                                content_source="tier1_template",
+                                facts=_facts(),
+                                evidence={"mode": "g14_fee_item_removal",
+                                          "verb_converged": True})
+    assert errors == []
+    # Without facts the guard keeps its old fail-closed shape.
+    errors_blind = _own_effect_errors(rule, [3, 4, 5], None, explicit_span=True,
+                                      is_component=False, before_unit=before,
+                                      replacement=after, validation=validation,
+                                      content_source="tier1_template", facts=None,
+                                      evidence={"mode": "g14_fee_item_removal"})
+    assert "CLAIM_OPERATION_EFFECT_MISSING" in errors_blind
