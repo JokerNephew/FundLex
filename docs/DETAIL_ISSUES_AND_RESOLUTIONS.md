@@ -7991,6 +7991,7 @@ H＝E×…
 - **发现日期**：2026-11-01（第三轮前端主线合并验收，整批浏览器回归）。
 - **问题与影响**：`tests/browser/test_guide_history.py::test_upload_list_and_compare_view` 断言 `/guides` 页可见版本 id 前 8 位原文（`text={id[:8]}`）。该文本在第二轮 FL-D721「技术黑话清除」中被有意移除（`331134d` 时代列表行展示 `· {guide.id}`，整改后不再回显原始 id），测试自第二轮起即过期，在本轮整批回归中暴露（TimeoutError 等 `text=37881f60`）。排除 V1/V2 worker 回归：V2 对 Guides 列表的改动不含 id 呈现，圆二基线同样无 id 文本。
 - **处理方法**：断言改锚到各版本详情链接 `css=a[href='/guides/{id}']`，保持「两个种子版本均在列表出现」的原意图，不把原始 id 文本请回界面。
-- **验证**：修复后 `test_guide_history.py` 独跑 1 绿（4.47s）；整批口径=97+remediation 单跑绿+本用例绿=全绿。
+- **变更记录 2026-11-01（rebase 9ebeacf 后扩展）**：合并 guide-diff 主线（FL-D770/771）后同用例再暴露两处过期断言——①摘要文案变体（stats 卡「规则数 1→2」→ 段落「规则 1 条 → 2 条」），断言改为语义口径「1→2 / 1条→2条」；②「修改规则」字段差异迁入折叠 details，`inner_text` 不再含旧标题，断言前先展开 `.guide-diff-change summary`。根因同类：guide-diff 线改造 CompareCard 交互后未回归既有浏览器用例。
+- **验证**：修复后 `test_guide_history.py` 独跑 1 绿（4.47s / rebase 后 4.56s）；rebase 后整批口径=99+remediation_drag 单跑绿+本用例绿=全绿。
 - **状态**：已解决（验证版本 qa-frontend-s2-20261101）。
 - **证据**：本仓库 `tests/browser/test_guide_history.py`、git 历史 `331134d` vs `61c4767` 列表行 diff。

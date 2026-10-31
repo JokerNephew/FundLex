@@ -130,7 +130,13 @@ def test_upload_list_and_compare_view(browser, live_app, tmp_path):
         summary = page.locator("[data-testid='guide-diff-summary']")
         summary.wait_for(timeout=15_000)
         text = summary.inner_text().replace(" ", "").replace("\u00a0", "")
-        assert "1→2" in text
+        # 摘要文案在两条前端线略异：stats 卡「规则数 1→2」 vs 段落「规则 1 条 → 2 条」，
+        # 断言只锁定「1 变 2」语义，不绑定具体排版（FL-D733 同类口径）。
+        assert "1→2" in text or "1条→2条" in text
+        # 修改规则的字段差异在折叠 details 里（guide-diff 主线交互），先展开再断言。
+        change = page.locator(".guide-diff-change summary")
+        if change.count():
+            change.first.click()
         body = page.locator("body").inner_text()
         assert "新增规则" in body and "G02" in body
         assert "新服务费条款" in body and "旧服务费条款" in body
