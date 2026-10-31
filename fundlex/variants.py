@@ -216,11 +216,17 @@ def classify_candidate(operation: Mapping[str, Any], sentence: str) -> dict[str,
     certified = certify_variant(operation, sentence)
     if certified is not None:
         return {"bucket": "CERTIFIABLE", **certified}
-    anchor_old, _ = _matching(reference, candidate)
-    if anchor_old >= MIN_ANCHOR_CHARS:
+    anchor_old, coverage_old = _matching(reference, candidate)
+    # ANOMALOUS is a *near-miss* worth human review — the same anchor and
+    # ordered-coverage floors as a certification attempt that then failed on
+    # stretch/negation/token preservation.  Weak-anchor sentences (a shared 6
+    # char fee phrase) are ambient noise: B15 produced 221 such rows, drowning
+    # the genuine candidates a reviewer must read (FL-D658 observation).
+    if anchor_old >= MIN_ANCHOR_CHARS and coverage_old >= MIN_COVERAGE_RATIO:
         return {"bucket": "ANOMALOUS", "variant": sentence,
                 "operation_id": str(operation.get("operation_id") or ""),
-                "anchor_chars": anchor_old}
+                "anchor_chars": anchor_old,
+                "coverage_ratio": round(coverage_old, 4)}
     return {"bucket": "IGNORE", "variant": sentence,
             "operation_id": str(operation.get("operation_id") or "")}
 

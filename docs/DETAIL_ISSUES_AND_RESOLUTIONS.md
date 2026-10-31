@@ -7382,3 +7382,11 @@ H＝E×…
 - **设计（已实施）**：`recall.plan_output_guard(planned, targets)` 确定性三查：`PLAN_CITED_CLOSED_TARGET`（编辑引用已闭合/不适用/缺席目标——already-cited 拒收）、`PLAN_SITE_INCONSISTENT`（编辑 span 越出目标认证 span 容差带 ±40）、`PLAN_OPERATION_UNBOUND`（无 operation/obligation 绑定、台账永不可闭合）。拒收=就地剪除 + 台账 planned→unresolved 降级记码（沿用 FL-D112 修剪范式），questions 入 `planned["plan_guard"]`。`_plan_and_generate` 集成：守卫命中 → 对 dirty locations **一次** `replan_sites` 续轮 → 再守卫；二次仍拒收则保持开放（A 层呈 MISS_PLAN_GAP，E 层诚实扣件），RecallError 续轮失败不吞已有降级台账。与 FL-D688 联动：截断/半输出残留经此以降级台账+诚实呈现代替静默半成品。
 - **测试**：`tests/test_plan_output_guard.py` 8 例（干净计划/三码/容差带/合成 target 豁免/二次幂等）。
 - **状态**：已实施（真实病例复验随 FL-D658 统一）。
+
+## FL-D659 该删未删漏检：份额类别集合实例化差异使子句残留检查字面落空（B17 G11 p294 假完成）（2026-11-01，FL-D658 复验发现）
+
+- **发现**：机制复验 B17 报 complete，但最终产物 p294 实含双重句——新句「本基金C类、E类基金份额不收取申购费用。」与旧尾句「C类基金份额和E类基金份额不收取申购费用。」并存。计划编辑只覆盖了复合旧句的第一分句（op1 old 为其子串），旧尾句该删未删。模型层 FINAL_MODEL_SWEEP_FINDING 真实命中，但按政策为 review-only；replay/effects 的 `_replaced_clause_residuals` 用**未实例化** canonical 引用作字面包含匹配：canonical「C类基金份额不收取申购费用」与源实写「C类基金份额和E类基金份额不收取申购费用」类别集合与联接符不同 → `clause in source` 落空 → replay PASS EXPECTED_EFFECT_PRESENT → 台账具名竞争因 + reconciliation escalate=False（设计内）→ review 行非阻断 → **complete 假完成**。六类病灶之外的真案例，病灶本质=该改未改经「字面族匹配」缝隙漏出。
+- **根因链条**：①实例化/联接符差异（「、」vs「和」，类别集合 C vs C,E）；②residual 检查不随源实现化；③review-only 政策放行真阳性模型发现——三层叠加。修复定位在①②（确定性层），不靠加严③（会把模型误报放大成假阻断）。
+- **处理（已实施）**：`effects._replaced_clause_residuals` 改为**源实现化子句匹配**：引用子句含类别枚举时按「非类别骨架相等 + 类别标签超集」在源中找实写形态（更窄类别集 fail-closed 不实现化）；残留判定=实写形态在 after 出现次数 > new 字面豁免次数；豁免=字面出现次数 or 同骨架同标签集的联接符规范化保留（仅豁免一次，重复句不被豁免——「豁免额度」模型）。另：`variants.classify_candidate` 的 ANOMALOUS 报告加与认证同档的覆盖率下限（0.5），B15 的 221 条弱锚噪声收敛为真近似变体。
+- **测试**：`tests/test_clause_residual_realization.py` 6 例（B17 实形/新文本保留豁免/联接符规范化豁免/更窄类别 fail-closed/超出豁免额度的重复仍报/字面旧行为不变）。
+- **状态**：in_progress（宽回归 + B17 复验重跑中；预期 B17 由 complete 变 RESIDUAL_OLD_TEXT 驱动的诚实扣件或经修复轮真删尾句）。

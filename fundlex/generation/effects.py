@@ -15,19 +15,93 @@ def _compact(value: str) -> str:
     return re.sub(r"\s+", "", value)
 
 
+_CLAUSE_TERMINALS = r"[。；;！？!?]"
+_CLASS_ENUM_RE = re.compile(
+    r"[A-ZＡ-Ｚ]类(?:基金份额)?(?:[、及和与·][A-ZＡ-Ｚ]类(?:基金份额)?)*")
+_CLASS_LABEL_RE = re.compile(r"([A-ZＡ-Ｚ])类")
+
+
+def _class_run_labels(value: str) -> set[str]:
+    return set(_CLASS_LABEL_RE.findall(value))
+
+
+def _clause_skeleton(clause: str) -> str:
+    """Class-enumeration runs become a placeholder so joiners/membership differ.
+
+    「C类基金份额和E类基金份额不收取申购费用」 and 「C类基金份额不收取申购费用」
+    share the skeleton 「\\x00不收取申购费用」; label comparison decides whether
+    the source actually realizes the reference clause (superset, fail-closed).
+    """
+    return _CLASS_ENUM_RE.sub("\x00", clause)
+
+
+def _realized_source_clauses(source: str, clause: str) -> list[str]:
+    """Contract-realized forms of one reference clause found in the source.
+
+    Real contracts enumerate share-class sets with different joiners and extra
+    members (canonical「C类基金份额」 vs source「C类基金份额和E类基金份额」).
+    A literal containment check then misses clauses that are plainly the same
+    policy statement (B17 G11 p294: the replacement removed the first sentence
+    but the class-expanded tail survived undetected, replay PASS + complete).
+    A source clause realizes the reference iff the non-class skeleton is
+    identical and its class labels are a superset of the reference's; a
+    narrower class set is a different statement and fails closed.
+    """
+    skeleton, labels = _clause_skeleton(clause), _class_run_labels(clause)
+    if skeleton == clause or not labels:
+        return [clause] if clause in source else []
+    realized: list[str] = []
+    for part in re.split(_CLAUSE_TERMINALS, source):
+        candidate = part.strip()
+        if len(candidate) < 8 or _clause_skeleton(candidate) != skeleton:
+            continue
+        if _class_run_labels(candidate) >= labels:
+            realized.append(candidate)
+    return realized
+
+
 def _replaced_clause_residuals(before: str, after: str, references: Sequence[str],
                               expected: str) -> list[str]:
     """Find source-proven old policy clauses that the replacement supersedes.
 
     Replacing a shared first sentence destroys a whole-reference literal match.
     Each substantial old clause still has to disappear unless the operation's
-    own new text retains it. Terminal punctuation is not policy evidence.
+    own new text retains it.  Retention is decided by occurrence count so a
+    clause the new text keeps once still flags a leftover duplicate; class-set
+    enumerations are matched through source realization (superset labels,
+    identical skeleton) so joiner or membership differences cannot hide a
+    survivor.  Terminal punctuation is not policy evidence.
     """
     source, actual, new = _compact(before), _compact(after), _compact(expected)
     clauses = dict.fromkeys(_compact(part) for reference in references
-                            for part in re.split(r"[。；;！？!?]", reference))
-    return [clause for clause in clauses if len(clause) >= 8
-            and clause in source and clause in actual and clause not in new]
+                            for part in re.split(_CLAUSE_TERMINALS, reference))
+    new_clauses = [part.strip() for part in re.split(_CLAUSE_TERMINALS, new)
+                   if part.strip()]
+
+    def _retained_in_new(realized: str) -> bool:
+        # The new text may keep the same statement with a normalized class-set
+        # joiner/structure; identical skeleton and identical label set is
+        # retention, not a survivor.
+        skeleton, labels = _clause_skeleton(realized), _class_run_labels(realized)
+        return bool(labels) and any(
+            _clause_skeleton(part) == skeleton
+            and _class_run_labels(part) == labels for part in new_clauses)
+
+    residuals: list[str] = []
+    for clause in clauses:
+        if len(clause) < 8:
+            continue
+        for realized in _realized_source_clauses(source, clause):
+            # Literal occurrences in the new text justify the same number of
+            # survivors; a joiner-normalized retention justifies at most one
+            # and only when the new text does not already contain it (a second
+            # copy is a duplicate, not retention).
+            justified = new.count(realized)
+            if not justified and _retained_in_new(realized):
+                justified = 1
+            if actual.count(realized) > justified:
+                residuals.append(realized)
+    return residuals
 
 
 def _class_labels(value: str) -> set[str]:
