@@ -8,6 +8,7 @@
 - 施工图：V1 worker ivRkf1jH（750-759）/ V2 worker 81FirpsQ（760-769）按规格实施三项；前端主线验收=每规格末节清单（用户视角走查、Playwright 并列截图、锚点、回归绿）。
 - 中断续接：先读本断点与状态文件第三轮节，再按 spec 推进；勿动第二轮既有锚点。
 - **验收收口（2026-11-01）**：V2 merge `45f5570` / V1 patch `5720bad` / 后端规格 `69779d8` 三笔已并入，HEAD `948834b`。验收=合并树真实 Chromium 走查 32/32（`/tmp/opencode/qa/accept-frontend-s2.py`，截图 `accept-s2/`）+ 浏览器整批全绿（两失败均 root-cause：一负载抖动、一 FL-D733 过期断言已修）+ vitest24/tsc/build/pytest14 全绿。FL-D730/731/732=已解决，FL-D733 已登记。待主线裁定合入。
+- **Rebase 返工（主线令，合并基线→9ebeacf）**：8 块真语义冲突按「两特性共存」解毕：`ef9549f` merge + `fbbda98` CompareCard 补焊（OP/META 标签并存、fieldLabel 接线、恢复分组/元信息/校验摘要行）；guide-diff 全套（V1 卡 DOM/事件/样式/CompareCard 原文比对 tab）与我的三项新结构共存。复跑：tsc/vitest24/build/pytest14/走查 32/32/V1 guide-diff 冒烟 ✓；浏览器整批 8 文件（含 test_guide_diff.py）复跑后补登记。
 
 
 ## 2026-10-31 qa-frontend：前端全面整改（本 worktree 断点）
