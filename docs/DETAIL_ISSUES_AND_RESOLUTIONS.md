@@ -7502,3 +7502,20 @@ H＝E×…
 - **门槛余量**：false_complete 2→1（B15 T001 真缺口，主线定归 recall-miss 机制 A/E 强制病例）；B02 FL-D690 修复在途；B19 依旧。loop-3 门槛维持 FAIL，留出示波继续冻结。
 - **状态**：已实施并全量同口径重评；待主线复核确认。
 - **变更记录**：2026-10-31 新增。
+
+## FL-D693 B12 loop-4 新回归：G12+G13 联合站点合成编辑通道未触发，三操作 CLAIM_OPERATION_NOT_PLANNED → 诚实 incomplete（四轮 complete 首负）（2026-11-01，qa-feat-recall）
+
+- **发现**：dev20 loop-4（6339a06，五机制 FL-D652~659 + FL-D690/692）B12 从 v1/loop1/loop2/loop3 四连 complete 翻 incomplete；scorer 19 目标全 not_executed。属「诚实不交付」形态（recovery final=unresolved，11 attempts），非谎报。
+- **实证链**：原始 p244 单句捆绑 G12 改（「归入基金财产的比例应根据相关规定执行…列示」→「全额计入基金财产」）与 G13 删（7日1.5%句）；loop-3（de18ec1）该站由 **rule_id=`G12+G13` 合成 replace** 一笔完成、replay/评分全过；loop-4 同站 `edit_plan` 无任何 G12/G13/G12+G13 条目（rule ids 清单缺 `G12+G13`），p244 文本逐字未动；目标层面 G12:0 replace 台账 `unresolved`、T3 补点 `T3_open_operation:G12:1:candidates=1`，恢复循环反复 MARK_UNRESOLVED「operation effect is not proven at every verified site / verified site missing」×3 操作（G12:0/G12:1/G13:0）后熔断，交付门诚实判 incomplete。
+- **机制面归因（不做规则级修补，纪律项7）**：loop-3→loop-4 引擎差 = 主线五机制 FL-D652~659（recall-miss A/E 等，合并树新文件含 reconciliation/recovery_conservatism 测试族）+本线 FL-D690/692（与 G12/G13 plan 无关）。**联合（joint/composite）多操作共享站点合成编辑通道在该案未被触发或被新机制抑制**——loop-3 同站同输入可合成，loop-4 不能。具体待主线在 joint 触发门/reconciliation 交互处定位；候选观测：`G15+G16` 合成在 loop-4 其他案仍在（rule ids 有），疑似 G12+G13 组合触发条件被收紧。
+- **影响**：目标完成 -19（352→被 B02 +21 对冲后净 351/90.0%）；门槛项「不新增 incomplete」实质受损（虽仅约定 wrong/kept 不新增，属真实回归须报）。
+- **状态**：open，归主线机制面处置（joint 合成触发与五机制交互）；本线不补规则。
+- **变更记录**：2026-11-01 新增（FL-D690..699 段，已用 693）。
+
+## FL-D694 五机制下 B15 仍谎报 complete：T001 真缺口未翻诚实 holds（机制 A/E 未生效病例，fc=1 硬门未达）（2026-11-01，qa-feat-recall）
+
+- **发现**：loop-4（6339a06 含 recall-miss 机制 A/E 五件套）B15 delivery 仍 `complete`、holds=[]、report.md 写「阻断 0 项」；而 labels T001（G03 append @p87 三直销条款）经 scorer 与 final.docx 双重实证**仍真实未追加**（p87 文本与原文逐字一致，「appended policy absent from its declared site: 3 clause(s)」）→ false_complete=1，硬门未达。
+- **机制面归因**：B15 T001 是主线登记的 recall-miss 机制 A/E（跨层对账+交付门二态）强制真实病例；loop-4 冻结令明确预期形态为「不再谎报 complete——incomplete+诚实扣件 holds 且人读可读」。实测该病例下 A/E **未触发翻转**：跨层对账未把 scorer 面/义务面揭露的 T001 gap 计入阻断/扣件，交付门仍判 complete。候选观测：该案 T001 在引擎内呈「目标已 satisfier 判 absent/已交付 1 处 G03 替换」状态（报告称 G03 1 处替换为同站他句），A/E 对账对「声明站点外的 append 义务未执」形态可能无覆盖。
+- **影响**：loop-4 硬门槛 false_complete=0 未达；与 FL-D693 并列 loop-4 FAIL 双因子。
+- **状态**：open，归主线 recall-miss 线机制处置；本线不补规则、不动 labels/scorer。
+- **变更记录**：2026-11-01 新增。
