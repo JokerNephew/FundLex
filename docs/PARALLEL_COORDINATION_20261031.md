@@ -5,6 +5,7 @@
 - 主线可对任意线发令：`opencode api post /api/session/<id>/prompt --data '{"text":"…"}'`；读进度 `opencode api get /api/session/<id>/message`（正文取最后 assistant text）；列表 `opencode api get /api/session`。
 - 会话映射：`ses_e7055fdb…`=guide-history；`ses_e7072d88…`=feat-recall；`ses_e708617…`=b13；`ses_e7053f1f…`=compare-tracked；`ses_e708687a…`=labels-wave2；`ses_e7071ecc…`=feat-guide；`ses_e7054415…`=recall-tracked；`ses_e70721e0…`=feat-compare。
 - 2026-10-31 已对 8 线发出阶段指令（feat-guide 第二阶段：merge+FL-D608+复验 v2；feat-recall v2 四前置；其余线收尾/推进+状态文件）。各线回报落 `/tmp/opencode/qa/status/<线名>.md`，主线轮询收敛。
+- **看门狗**：`/tmp/fundlex-watchdog.sh`（nohup，每 45min 向主线会话投递巡线 prompt）；全链路交付后由主线 `touch /tmp/fundlex-watchdog.stop` 停止。本会话服务为 opencode serve v2.1.4（无 schedule 路由，直连 API 需走 `opencode api` 鉴权）。
 
 共 9 个对话：本对话（主线 qa-base）+ 8 条线。各线**只动自己的文件/自己的段位**；完成后将状态写入 `/tmp/opencode/qa/status/<线名>.md`（自由格式，共享目录无 git 冲突），主线每轮收齐合并。
 
