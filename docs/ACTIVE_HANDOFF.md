@@ -10,7 +10,7 @@ dev20 v2 闭环：修复循环直到 §7 门槛（无已确证严重错误、无
 - 状态落 `/tmp/opencode/qa/status/qa-feat-recall.md`。
 
 ## 分支/HEAD
-- 分支 `qa-feat-recall-20261031` @ `c3d7852`（工作树 `/home/opencode/.local/share/opencode/worktree/29a9a9/qa-feat-recall`）。
+- 分支 `qa-feat-recall-20261031` @ `6e97989`（代码侧 FL-D588 B17 修复未提交：recall.py `_g08_authorized_variant_sentences`+测试，待 2454 回归绿提交）（工作树 `/home/opencode/.local/share/opencode/worktree/29a9a9/qa-feat-recall`）。
 - 链：d55702b（loop-2 freeze=自修 f2a16a0 + 主线 af15149 + guide 修复批）→ e3d6135（FL-D685 措辞更正）→ 1a530f4（handoff）→ **b10d504（FL-D589 修复）**。
 - loop-2 正式目录基于 d55702b；loop-3 需新 freeze（新 HEAD，含 b10d504）。
 
@@ -21,12 +21,14 @@ dev20 v2 闭环：修复循环直到 §7 门槛（无已确证严重错误、无
 - **FL-D589 修复（b10d504）**：`effect_proof_passed` 增补 excised-by-replace site-free 识别（B10/B14 loop-2 回摆根因=replay PASS 被消费者闸门闸回 UNPROVEN）；consumer-gate 测试+mutation（改名 proof_kind 即拒）；172 聚焦测试绿。
 - FL-D685 回复 e3d6135；FL-D688 addendum 已写入 loop-2 compare（var/ 不入库）；FL-D584/585/586/587/588/589 条目在册。
 
-## 在途
-- 无后台进程。FL-D589 真实复验**已通过**（B10/B14 双 complete，B14 为新通道首次真实生效；提交 c3d7852）。
+## 在途（后台进程）
+- 2454 全量回归：shell `sh_191a11109001dYzCsuxxv32dNe` → `/tmp/opencode/qa/qa-feat-recall-full-freeze-fl588.log`（~60min）。
+- B17 真实复验**已通过**（G08 planned@p292/replay PASS/unresolved=0；6e97989 登记）。FL-D589 早前已通过（c3d7852）。
+- FL-D588 收尾：B17 修复已验，代码待回归绿提交；B19 定性为恢复重复目标 vs satisfied 子集冲突，修复候选在册待专单。
 
 ## 下一步（可执行顺序）
 1. 已向主线报 loop-2 指标与残余归属（本次回复）。
-2. 等主线对 B15（FL-D606/607 后续 pass）/B17/B19 派单；B17/B19 已深挖为**计划生成缺口**（已挂账 needs_edit 目标无 edit；12/20 案 edits 恰=16 疑计划输出截断，FL-D688 域）。
+2. 回归绿 → 提交 FL-D588 代码 → 报主线。等 feat-guide B15 单与 B19 修复专单齐 → 新 freeze 跑 loop-3。编号 580-589 已用尽，已向主线请新段。
 3. 新 freeze（新 HEAD 含 FL-D589+后续修复）→ dev20 loop-3 全量重跑 → 评分+compare → §7 门槛。
 4. 达标 → 留出 8 份 `GROUP=holdout` 同 freeze（`var/recall-first-evaluation/v2-staging/holdout_inputs_flat/`，28/28 sha 已验）+ scorer --group holdout + 分列报告。
 5. 终局：更新 docs/REAL_REVISION_EVALUATION_RESULTS.md（v1/loop1/loop2/…、dev/holdout 分列、费用耗时、FL-D688 截断残余说明、局限）+ 主线汇总。
