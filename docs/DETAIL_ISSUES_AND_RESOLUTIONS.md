@@ -7145,3 +7145,20 @@ H＝E×…
 - **发现**：`_extend_definition_group` scope 扩展仅注册于 G01/G02（rule_scope.py:1176-1183），G03 不经此扩展；闸门放行后 claim replay `_filter_scoped_targets` 仍按 scope.contains 过滤——非 B05 合同若 G03 scope 不含组尾，「verified site missing」可复发（B05 verify4 双 PASS 系巧合性满足）。
 - **处理**：观测；若第二波/dev20 v2 中出现 G03 复发则把 G03 纳入同族扩展。
 - **状态**：open（观测项）。
+
+## FL-D646 第二波标签确定性收尾与逐段裁决惯例（2026-10-31，第二波标签线）
+
+- **发现日期**：2026-10-31。第二波 100 份盲读标签（qwen3.6-35b-a3b 单模型主/复，FL-D569）原始 v1 有 57 个 coverage/target 一致性问题、185 条 mandatory-completeness 警示、若干模型新文本违反指引形态（G14 残留赎回/转换费率、G22 漏加销售服务费（如有））。
+- **处理方法（已实施并验证）**：`tools/evaluation/finalize_second_batch_labels_20261031.py` 两遍收尾：pass1 修复 coverage=target 无 target 行；pass2 对每条 mandatory 警示按段落级证据裁决（保留并登记启发式误报 / 翻转为 target 并构建 / 更正 coverage 为 satisfied+证据引文或 not_applicable+惯例依据），新发现的口径：①指引 G14 多类新文同时剔除赎回费率**和转换费率**（早稿收尾器只剔赎回费率，已全库重建）；②跨段（句号被 Word 切到下段）按上下两片构建并以 related_target_ids 互链（W2D02 G11、W2D69/W2D65 G13、W2D47 G18、W2D17 G09、W2D43 G20→satisfied）；③顺序清单清算条款 not_applicable（沿用第一波 B15 惯例）；④G05 站点仅限基本情况（沿用 B05/B17 惯例）；⑤已改合同按新机制标志（返还给投资者/协商一致+指定账户路径/销售服务费（如有）/直销豁免句）判 satisfied 附原文证据；⑥G15 费率公式段不作删除目标、托管费段落不误伤；⑦无销售服务费的多类别合同（A1/A2/A3 型，W2D61）G08/G11 not_applicable、G14 新文本只留申购费率（事实优先于指引粗粒度 class_count 条件，记为口径偏差）；⑧G02/G04 类别定义已联合表述→satisfied（与第一波状态分布一致）；⑨G21 noop 归一 not_applicable；⑩模型新文本违形态者按自身 old_text 确定性重写并打 `finalize_repaired_new_text` 标记。
+- **验证结果**：终检 `problems=0`；`label_quality.issue_count` 全 100 案=0（与第一波 v2 同口径）；149 条校验器 warning 全部落为 per-case `adjudicated_cleared` 登记的启发式误报，live warnings=0。仅余 4 条 unknown（W2D65 单一类别文本变体 G07/G10/G12/G14，与指引触发句实质差异，理由与复核建议保留于 uncertain）。
+- **冻结物**：labels `docs/evidence/labels-second-batch-20261031-v1.json` sha256=`423c6944687a6006d493d3f8dff4b4cb32593cc6acc26c2e2b3fb423622a88f5`；验证报告 sha256=`3d71bd3393d73afb060065f879d380bf603e64034cafa1eb9585115d6458fb07`；schema/口径文档 `docs/evidence/labels-schema-second-batch-20261031-v1.md`。
+- **状态**：已解决（标签 v1 冻结，待主线门槛后进入引擎运行/评分）。
+
+## FL-D647 第二波选样冻结 sha 在状态文件中的早期误记及勘正（2026-10-31，第二波标签线）
+
+- **发现**：`/tmp/opencode/qa/status/labels-wave2.md` 早稿把 selection 文件字节 sha 误记为 `935e6662…`（第三轮校准前一次运行的旧值），实际冻结文件 `docs/evidence/selection-second-batch-20261031.json`（mtime 2026-10-31 09:13，与 envelope `frozen_at` 一致）字节 sha256=`32b36f02a9c6cafebee7a73fcda0791c707ac62d07fe67bb57e91daafc6187d9`。
+- **影响**：无实质污染——选样、标注、finalize、验证全链路均直接读取同一文件字节，验证报告 `selection_sha256` 与实际文件一致；仅状态文件文本失实。
+- **处理**：状态文件已勘正并保留误记说明；教训：冻结 sha 在最终写盘后重新计算再登记，不复用过程值。
+- **状态**：已解决（2026-10-31 验证： verifier 报告 selection_sha256、selection 文件、labels 抽样三链一致）。
+
+> **FL-D646/647 已使用（第二波标签线）；跨线候补池下一空闲号 FL-D648**（2026-10-31，第二波标签线登记）。
