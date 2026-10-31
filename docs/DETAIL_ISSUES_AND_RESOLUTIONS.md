@@ -7272,3 +7272,38 @@ H＝E×…
 - **归因线索**：B17 G08 组件校验与 G08 路由/facts（直销组件组）认证相关；B19 G04 为定位级未解。两者均非本轮 v2 回归（v1 同案未交付），列修复循环后续轮次处理；不与 guide 线 FL-D604/605（暂缓召回面）冲突。
 - **状态**：open（待本轮 584/585/587 复验后专项归因）。
 - **变更记录**：2026-10-31 新增。
+
+## FL-D680 测试函数命名腐化（test_append_site_accepts_fully_closed_table_definition_cell 断言已反转）（2026-10-31，主线复核）
+
+- 断言已随 FL-D607 改向为拒，但函数名仍是 accepts（test_fl_d608_definition_group_chain.py）。纯卫生：建议改名 `..._plan_rejects_closed_table_cell`。
+- **状态**：open（低优先）。
+
+## FL-D681 FL-D645 G03/G04 scope 对称扩展缺单测锁定（2026-10-31，主线复核）
+
+- 015c07a 的 `_extend_definition_group` 扩展至 G03/G04 只有 G01/G02 的单测断言与 B05 真实跑分佐证。建议补基本情况 leaf 仅含 headline 时 G03/G04 → group end 的单测。
+- **状态**：open（低优先）。
+
+## FL-D682 FL-D606 动词收敛全串替换的窄风险 + rule-level variants 放宽到所有规则（观测）（2026-10-31，主线复核）
+
+- `replacement.replace("适当调整","适当调低")` 全串替换：同一 unit 切片若有非费率语境的"适当调整"会被误收敛（现由 B15 测试锁定）。另 9a230c6 将 rule-level variants 授权放宽到所有规则（非仅 G14），属与其他 consumer 对齐的设计主张，列观察。
+- **状态**：open（观测项）。
+
+## FL-D685 B10 复验归因措辞与实证 proof_kind 不符（记录准确性）（2026-10-31，主线复核）
+
+- FL-D585 条目措辞强调 `semantic_delete_excised_by_replace` 通道，实证 proof_kind 为 site_literal_effect。需 pre/post 对照证明新通道必要，或在条目中更正措辞。
+- **状态**：open（记录级，派 qa-feat-recall 处置）。
+
+## FL-D686 `_semantic_delete_excised_by_replace` 在 references 为空时 leg② 退化（2026-10-31，主线复核）
+
+- 建议显式 fail-closed。
+- **状态**：open（低优先）。
+
+## FL-D687 `ensure_g08_variant_targets` 无 labels/波次门控，全量扩样过度建目标风险（观测）（2026-10-31，主线复核）
+
+- 扩波（第二波 100 份）运行时观察过度建目标面；必要时加门控。
+- **状态**：open（观测项）。
+
+## FL-D688 复验 complete 伴随 MODEL_OUTPUT_TRUNCATED 残余（B01/B03）需在 wave 报告显式隔离归因（2026-10-31，主线复核）
+
+- B01/B03 复验 summary `error_code=MODEL_OUTPUT_TRUNCATED` 仍交付 complete（review_assisted、blocking=0，B01 存 3 个非阻断 UNRESOLVED）。与 v2 基线姿态一致、与 G18/G08 修复无关，但 dev20 v3/wave 报告须显式说明该残余不归因于本批修复。
+- **状态**：open（报告口径项，派 qa-feat-recall 在其对比报告落实）。
