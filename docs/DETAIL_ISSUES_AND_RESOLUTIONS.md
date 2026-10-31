@@ -6978,5 +6978,5 @@ H＝E×…
 - **发现日期**：2026-10-31，FL-D571/572（ac697a4）复核时。FL-D573 条目仍标"修复中"，但 reset 复核发现 ac697a4 实际已含 FL-D573 规划侧代码：`_approved_fragment_bounds`（删除收窄到操作自有片段）、`_definition_group_continuation_end`（G03 定义组续段重绑、tbl 未闭句单元格 append 拒绝）；而 claim 侧残句所有权收紧（`approved_span_delete` 不得以 deleted_quote/expected_old_text 自证超操作旧文删除所有权，见 qa-base 工作树未提交的 claim_replay.py diff）截至复核时未提交。合并入 ac697a4 的 FL-D573 规划侧部分**无自动回归测试**（新 11 项测试只覆 FL-D571/572 机制与 guide 再认证）。
 - **处理（本对话段位补强）**：新增 `tests/test_fl_d573_fragment_bounds.py` 6 项单元钉测试（收窄生效 / 片段重复拒收窄 / 尾部续文保守不收窄 / 无前缀拒 / 空缺 old_text 拒 / `_meaningful_fragment` 语义），6 passed；套件设计双向覆盖反突变（恒收窄死于拒侧、恒不窄死于正侧）。claim 侧收紧属修复 agent 在途工作，不并抢；待其提交后复核。
 - **影响/风险**：claim 侧未落地前，p87 类"窄化条件不满足而宽删除吞尾句"只剩规划侧防线，无 fail-closed 兜底钉住；dev v2 冻结宜等该提交。
-- **状态**：open（测试缺口本对话已补；claim 侧提交与复核待续）。
-- **变更记录**：2026-10-31 新增（qa-feat-recall 对话，复核 ac697a4 时发现）。
+- **状态**：已解决（claim 侧 `449b36b` 已提交；主线另以 `fe4803f`/FL-D575 补三机制 8 项回归，与 FL-D582 机制测试缺口同案；本对话 6 项单元钉测试保留为互补覆盖）。
+- **变更记录**：2026-10-31 新增（qa-feat-recall 对话，复核 ac697a4 时发现）；2026-10-31 claim 侧合并后独立复核：129 passed（regressions+fragment tripwires+recall_pipeline），并以 scratch worktree 做 mutation 验证——还原 449b36b 后 `test_approved_span_delete_evidence_self_claim_does_not_own_tail` 如期转红、其余 4 项保持绿；dev20 v2 冻结重跑提供最终真实证据，见 wave v2 freeze（`var/recall-first-evaluation/qa-wave1-dev-v2-20261031-67bc9d4/freeze.json`）。
