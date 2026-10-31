@@ -55,3 +55,16 @@
 - ⏳ **qa-guide-parse（lnYRv7RA）**：等全套件终绿 → 并入；之后派 frontend（l8yCbACU）接 upload-spec + canary/parse_report 渲染
 - ⏳ merge 序：recall-miss ✅ → feat-recall ✅ → guide-parse → feat-compare → compare-tracked（EFtQKeLE 等其前置）
 - loop-4 冻结门：合并树新 HEAD 全量回归绿 → 向 CBU8V6tg 发冻结令 + dev20 评分 → false_complete=0 → 留出 8 份首验 → 第二波 100 份放行（kvvQwuiB）
+
+## 2026-11-01 会场三：用户十项新需求下派（档案 docs/USER_REQUIREMENTS_20261101_SESSION2.md）
+
+| 对话 | 新任务 | 编号段 |
+| --- | --- | --- |
+| l8yCbACU（前端主线） | 项4 列表统一规范+项3 规则可见+项1 设计总负责 | 730-749 |
+| ivRkf1jH（V1 worker） | 项1 V1 + 项4 V1 实施（worktree qa-v1-s2） | 750-759 |
+| 81FirpsQ（V2 worker） | 项1 V2 ModelSettings + 项4 V2（worktree qa-v2-s2） | 760-769 |
+| esIJeEvN（guide-diff） | 项2 指引版本比对（文件diff+规则diff；worktree qa-guide-diff） | 770-779 |
+| TGWE0lhi（feishu-onboarding） | 项5 飞书跨企业自建应用一站式向导（worktree qa-feishu-onboarding） | 780-789 |
+
+时序：项1-5 验收上线 → **存档一版（tag+发布）** → 项9 前端整体二次优化 → 项10 用户视角终审。
+磁盘治理（附项A）已完成首轮：codex 1.4G 卸载 + 废弃树 1.2G 清除（可用 4.8→7.8G）；发布留存事务保留 mXk9ve/HSmFwd 作诊断，其余已清。
