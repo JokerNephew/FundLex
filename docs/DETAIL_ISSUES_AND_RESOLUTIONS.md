@@ -7190,7 +7190,7 @@ H＝E×…
 - **处理**：状态文件已勘正并保留误记说明；教训：冻结 sha 在最终写盘后重新计算再登记，不复用过程值。
 - **状态**：已解决（2026-10-31 验证： verifier 报告 selection_sha256、selection 文件、labels 抽样三链一致）。
 
-> **FL-D640..649 全部已使用**（640 B13、641/642 主线复核、643 feat-guide、644/645 主线、646/647 标签线、648/649 guide-history；feat-guide 撞号条目改派 FL-D650）。**自 2026-10-31 起设固定子池杜绝再撞**：qa-feat-guide FL-D650..659；qa-f2-guide-history FL-D660..669；第二波标签线 FL-D670..679；主线及主线 reviewer FL-D680..689；**qa-feat-recall 原段 580-589 用尽，新派 FL-D690..699**（2026-10-31）；qa-export 导出包重构线 FL-D700..709（2026-10-31，应用户要求新派独立线）；其余读尾部顺延者 ≥FL-D710。
+> **FL-D640..649 全部已使用**（640 B13、641/642 主线复核、643 feat-guide、644/645 主线、646/647 标签线、648/649 guide-history；feat-guide 撞号条目改派 FL-D650）。**自 2026-10-31 起设固定子池杜绝再撞**：qa-feat-guide FL-D650..659；qa-f2-guide-history FL-D660..669；第二波标签线 FL-D670..679；主线及主线 reviewer FL-D680..689；**qa-feat-recall 原段 580-589 用尽，新派 FL-D690..699**（2026-10-31）；qa-export 导出包重构线 FL-D700..709（2026-10-31，应用户要求新派独立线）；qa-frontend 前端整改线 FL-D710..719（2026-10-31 用户六项前端反馈派单）；其余读尾部顺延者 ≥FL-D720。
 ## FL-D648 指引重解析粒度合并破坏操作可执行性：确定性 clean 放行、召回断崖 -70%（2026-10-31，qa-f2-guide-history 线）
 
 - **发现日期**：2026-10-31，本线真实模型冒烟（生产路径：上传→worker 解析→启用→TestClient 任务→Worker 真跑，账本 /tmp/opencode/guide-{channel,v2}-ledger.sqlite、/tmp/opencode/recall-smoke-{builtin,custom15}.sqlite）。
@@ -7379,3 +7379,27 @@ H＝E×…
 - **过程问题（已处理）**：首次 es 跑因前次被 SIGTERM 进程在 scratch 账本残留的 reserved 并发租约行触 MODEL_CONCURRENCY_LIMIT（parse 0 HTTP、引擎 0 目标）；清理时 UPDATE 范围过宽误将 4 行 completed 翻转为 failed（仅状态字段、金额未动，账本为临时观测件，已如实记此）；换新账本重跑通过。教训：同一 scratch 账本被异常终止后应直接换账本文件；清理 SQL 必须限定 status='reserved'。
 - **账本（仅观测）**：解析基准 13 次 $0.0617；es2 30 次 $0.0412；含崩溃次跑合计约 47 次 ≈ $0.11。
 - **状态**：机制已验证（真实复发拦截+引擎完好）；工具与冻结夹具入库。
+
+## FL-D720 导出层未知枚举兜底透传英文原值风险（2026-10-31，主线复核）
+
+- **发现**：`DELIVERY_TEXT.get(status, status)`、`OP_TEXT.get(op, op)`、`delivery_text` 三处回退原值；未来新增交付状态/操作枚举未同步映射时原始英文会漏入用户导出件。现枚举全覆盖且有负面断言，属前瞻性硬化。
+- **处理（已派 qa-export）**：未知值统一兜底人读文案（如「其他状态」并提示看修改说明）。
+- **状态**：open（低危）。
+
+## FL-D721 download-all 前端禁用条件未跟上后端 409 语义拓宽（2026-10-31，主线复核）
+
+- **发现**：后端改为「存在 document_id 即可下载解释性 ZIP（含全失败任务）」，但 compare 页 release 按钮禁用条件 `(completed||0)+(rejected||0)>0` 使全失败任务按钮仍禁用 → 新能力在 UI 不可达；compare.html:403 的提示文案仍是旧 409 语义。
+- **处理（已派 qa-frontend）**：ready 条件纳入 failed>0；提示文案随新语义。
+- **状态**：open。
+
+## FL-D722 p6_package 评测清单与工作台导出清单分化后的口径标注（2026-10-31，主线复核）
+
+- **发现**：tools/evaluation/p6_package.py 内置旧四列「结果清单.csv」构造，注释自称与工作台同格式；现两者分化为两种格式（评测包 ≠ 用户导出包）。
+- **处理**：注释/README 口径注明差异，避免后续误对齐。派 qa-export 顺带。
+- **状态**：open（文档级）。
+
+## FL-D691 主线裁决注记（2026-10-31，主线）
+
+- qa-feat-recall 归因（其树内 FL-D691 条目）经主线独立盲抽复核 **3/3 PASS**（B17 T003、B15 T005、B15 T008：义务文本在 final.docx 完整在场，量具误杀坐实）。复核另指正机制精确表述：非「折叠本身撞线」，而是折叠后形如仍异 + exact-substring 不吸收「和」重复主语。
+- **主线授权**：评分器口径修正（FL-D692，labels 冻结只动 scorer），两层等价归一按复核精确机制设计；scorer_version bump、零成本重评 loop-3 并同口径重评 v1/loop2、附正负例单测。
+- **裁决不变项**：B15 T001 G03 三直销条款真实未执行 → false_complete 修正后仍为 1，loop-3 门槛维持 FAIL；该真实缺口归 qa-recall-miss 机制 A/E 强制病例，留出 8 份继续冻结至 loop-4 达标。
