@@ -483,13 +483,31 @@ def _max_revision_id_in_parts(parts: Mapping[str, bytes], limits: ZipLimits) -> 
 
 
 def _read_parts(path: str | Path, limits: ZipLimits) -> dict[str, bytes]:
+    return _read_source_and_parts(path, limits)[1]
+
+
+def _read_source_and_parts(path: str | Path, limits: ZipLimits) -> tuple[bytes, dict[str, bytes]]:
+    """Read the container exactly once and return ``(source bytes, zip parts)``.
+
+    ``inspect_docx`` used to open the archive through ``ZipFile(path)`` and
+    then read the whole file a second time for the source hash (B13 F3).  Both
+    views now come from a single read.
+    """
     path = Path(path)
     if path.suffix.lower() != ".docx":
         raise DocxError("DOCX_ONLY")
     try:
         if path.stat().st_size > limits.max_file_bytes:
             raise DocxError("ZIP_FILE_LIMIT")
-        with zipfile.ZipFile(path) as archive:
+        source = path.read_bytes()
+    except OSError as exc:
+        raise DocxError("ZIP_INVALID", str(exc)) from exc
+    return source, _read_parts_bytes(source, limits)
+
+
+def _read_parts_bytes(source: bytes, limits: ZipLimits) -> dict[str, bytes]:
+    try:
+        with zipfile.ZipFile(io.BytesIO(source)) as archive:
             infos = archive.infolist()
             if len(infos) > limits.max_entries:
                 raise DocxError("ZIP_ENTRY_LIMIT")
@@ -781,8 +799,7 @@ def _enumerate_paragraphs(root: etree._Element, limits: ZipLimits, *,
 def inspect_docx(path: str | Path, *, full: bool = False, limits: ZipLimits | None = None,
                  allow_existing_revisions: bool = False) -> DocumentInspection:
     limits = limits or ZipLimits()
-    parts = _read_parts(path, limits)
-    source = Path(path).read_bytes()
+    source, parts = _read_source_and_parts(path, limits)
     _validate_package(parts, limits, full=full,
                       allow_existing_revisions=allow_existing_revisions)
     if allow_existing_revisions:

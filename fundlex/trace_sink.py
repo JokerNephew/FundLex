@@ -28,6 +28,15 @@ Environment
 ``FUNDLEX_TRACE_CAPTURE_TEXT``
     ``1`` (default) records prompt/completion text; ``0`` records only
     hashes and lengths (for runs that must not persist contract text).
+``FUNDLEX_TRACE_MAX_BYTES``
+    Size cap per active JSONL file, default 64 MiB (B13 F5: traces used to
+    grow without bound).  Reached files roll aside as
+    ``<name>.jsonl.YYYYmmdd-HHMMSS-ffffff`` in the same directory; ``<= 0``
+    disables rotation.
+``FUNDLEX_TRACE_KEEP_ROTATED``
+    Rotated copies to keep, newest first (default 10).  Only files this
+    module itself rotated match the sibling pattern — manually archived
+    ``archive-*`` files and any other filename are never touched.
 
 Record kinds
 ------------
@@ -47,15 +56,21 @@ import hashlib
 import json
 import logging
 import os
+import re
 import threading
 import time
 from contextlib import contextmanager
+from datetime import datetime, timezone
 from typing import Any, Iterator
 
 _LOGGER = logging.getLogger("fundlex.trace_sink")
 
 _LOCK = threading.Lock()
 _CAPTURE_TEXT = True
+
+_DEFAULT_MAX_BYTES = 64 * 1024 * 1024
+_DEFAULT_KEEP_ROTATED = 10
+_ROTATED_SUFFIX = re.compile(r"\.\d{8}-\d{6}-\d{6}\Z")
 
 # The document id the current work item belongs to, set by ``trace_document``.
 # Model calls deep in the engine do not receive the job record, so the sink
@@ -105,17 +120,71 @@ def _redact(text: str | None) -> Any:
     return {"sha256": hashlib.sha256(text.encode("utf-8")).hexdigest(), "chars": len(text)}
 
 
+def _rotation_limits() -> tuple[int, int]:
+    max_bytes, keep = _DEFAULT_MAX_BYTES, _DEFAULT_KEEP_ROTATED
+    raw_max, raw_keep = os.environ.get("FUNDLEX_TRACE_MAX_BYTES"), os.environ.get("FUNDLEX_TRACE_KEEP_ROTATED")
+    try:
+        if raw_max is not None and raw_max.strip():
+            max_bytes = int(raw_max.strip())
+    except ValueError:
+        _LOGGER.warning("invalid FUNDLEX_TRACE_MAX_BYTES=%r; using default %d", raw_max, _DEFAULT_MAX_BYTES)
+    try:
+        if raw_keep is not None and raw_keep.strip():
+            keep = int(raw_keep.strip())
+    except ValueError:
+        _LOGGER.warning("invalid FUNDLEX_TRACE_KEEP_ROTATED=%r; using default %d", raw_keep, _DEFAULT_KEEP_ROTATED)
+    return max_bytes, keep
+
+
+def rotate_if_needed(target: str, incoming_bytes: int) -> None:
+    """Roll an oversized JSONL aside and bound the rotated copies.
+
+    Called with the write lock held.  Only sibling files whose names carry
+    this module's own rotation timestamp are managed, so manually archived
+    ``archive-*`` files and any other filename are never touched.  All
+    failures degrade to "keep appending": rotation must never break a run
+    and must never delete anything unexpected (fail-closed).
+    """
+    max_bytes, keep = _rotation_limits()
+    if max_bytes <= 0:
+        return
+    try:
+        if os.path.getsize(target) + incoming_bytes <= max_bytes:
+            return
+    except OSError:
+        return
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S-%f")
+    rotated = f"{target}.{stamp}"
+    try:
+        os.replace(target, rotated)
+    except OSError:
+        _LOGGER.warning("jsonl trace rotation failed for %s; file keeps appending", target, exc_info=True)
+        return
+    try:
+        base = os.path.basename(target)
+        siblings = sorted(name for name in os.listdir(os.path.dirname(target) or ".")
+                          if name.startswith(base) and _ROTATED_SUFFIX.search(name))
+    except OSError:
+        return
+    for stale in siblings[:max(len(siblings) - keep, 0)]:
+        try:
+            os.remove(os.path.join(os.path.dirname(target), stale))
+        except OSError:
+            _LOGGER.warning("jsonl trace prune failed for %s", stale, exc_info=True)
+
+
 def _write(record: dict[str, Any]) -> None:
     """Append one record. Never raises: a trace sink must not break a run."""
     target = path()
     if target is None:
         return
     record.setdefault("ts", time.time())
-    line = json.dumps(record, ensure_ascii=False, default=str)
+    line = json.dumps(record, ensure_ascii=False, default=str) + "\n"
     try:
         with _LOCK:
+            rotate_if_needed(target, len(line.encode("utf-8")))
             with open(target, "a", encoding="utf-8") as handle:
-                handle.write(line + "\n")
+                handle.write(line)
     except Exception:  # pragma: no cover - defensive: tracing must never break a run
         _LOGGER.warning("jsonl trace write failed for %s", target, exc_info=True)
 

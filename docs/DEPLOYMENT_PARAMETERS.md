@@ -107,3 +107,19 @@ API 限制在导入 `fundlex.api` 时读取；变更环境后须重启 API 进�
 全量样本评测结果须以实际生成的协议、汇总和版本记录为准。本地可运行、测试通过或批次 completed 均不表示每份合同已成功修改，也不自动满足生产上线条件。
 
 模型阶段检查点放在数据目录 `checkpoints/<document_id>`，不跨任务/身份复用；不存密钥。发布版规则链路始终重新执行真实模型，避免缓存替代新发布版本验收。worker遇到过期或旧租约仅丢弃该尝试，仍可继续领取任务，不允许旧尝试发布。
+
+## 检查点与 trace 保留策略（无界增长治理，B13 F5 / FL-D557）
+
+检查点（`checkpoints/<document_id>/<query sha256>.json`）与 JSONL trace（`FUNDLEX_TRACE_JSONL` 指向的活动文件）此前只增不清（生产实测检查点 207MB/26716 文件、traces 184MB）。2026-10-31 起引入有界保留策略，默认保守、env 可配、每维可单独关闭。
+
+| 环境变量 | 默认值 / 范围 |
+| --- | --- |
+| `FUNDLEX_CHECKPOINT_MAX_AGE_DAYS` | 45 天；按文件 mtime 清理过期检查点 JSON。`<= 0` 关闭该维。 |
+| `FUNDLEX_CHECKPOINT_MAX_FILES` | 50000；存活检查点总数硬上限，超出后从最旧（mtime）开始清。`<= 0` 关闭该维。 |
+| `FUNDLEX_RETENTION_INTERVAL_SECONDS` | 21600（6 小时）；worker 循环内两次清理扫描的最小间隔，`0` 为每圈都扫。 |
+| `FUNDLEX_TRACE_MAX_BYTES` | 67108864（64 MiB）；活动 JSONL 达到上限即滚动为 `<文件名>.YYYYmmdd-HHMMSS-ffffff` 同目录副本。`<= 0` 关闭滚动。 |
+| `FUNDLEX_TRACE_KEEP_ROTATED` | 10；滚动副本按新到旧保留数量，`0` 为不保留滚动副本。 |
+
+安全口径：清理只动自己命名空间——检查点限 32 位十六进制目录内 64 位十六进制 `.json`；trace 滚动副本限本模块自身产生的时间戳后缀（手工 `archive-*.jsonl` 等不动）；符号链接与非目录条目一律跳过。任何条目的文件系统故障跳过该条目并继续（fail-closed：宁可不清，不可错删），不中断作业。
+
+调度方式（择一说明）：采用 **worker 循环内惰性清理**（`jobs.Worker._prune_storage`，与既有 `_reap_stale_workspaces` 同一模式），而不是新增 systemd timer。理由：①不需要改动生产 systemd 单元即可生效，开发与生产同策略；②与现有清理原语同位，故障隔离一致（异常只记日志，不拖垮 worker）；③trace 滚动在写入点触发，本来就无法由外部定时器完成。若需要按 cron 定点清理，可直接 `python -c "from fundlex.retention import prune_checkpoints; prune_checkpoints('<store root>')"` 人工执行，函数行为与 worker 路径一致、幂等、可重复运行。

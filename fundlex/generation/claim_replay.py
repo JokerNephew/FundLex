@@ -594,7 +594,16 @@ def _own_effect_errors(rule: Mapping[str, Any], indices: Sequence[int],
     # operation's own authorized removals, not sibling text.
     owned_removals.extend(_compact(str(value))
                           for value in rule.get("old_text_variants") or [] if value)
-    if expected_old_text:
+    # An ``approved_span_delete`` carries an approval over the *located sentence*,
+    # not over every word that sentence contains.  Its recorded deleted_quote /
+    # expected_old_text are executor self-claims; letting them extend removal
+    # ownership past the operation's own old wording made an over-wide approved
+    # span invisible to the residual-ownership proof (FL-D573 p87 尾句被吞).
+    # G15/G17 keep their dedicated source-owned re-proofs above.
+    executor_claim_span = (
+        content_source == "approved_span_delete"
+        and str(rule.get("rule_id") or "") not in {"G15", "G17"})
+    if expected_old_text and not executor_claim_span:
         owned_removals.append(_compact(expected_old_text))
     evidence = evidence or {}
     if (str(rule.get("rule_id") or "") == "G11" and len(selected) == 1
@@ -709,14 +718,18 @@ def _own_effect_errors(rule: Mapping[str, Any], indices: Sequence[int],
         own_texts.append(fixed_text)
     for key in ("matched_old_text", "deleted_quote", "deleted_paragraph",
                 "expected_old_text", "old_text", "deleted_fragment"):
+        if executor_claim_span and key != "matched_old_text":
+            continue
         value = evidence.get(key)
         if isinstance(value, str) and value:
             owned_removals.append(_compact(value))
     for key in ("delete_texts", "deleted_texts"):
+        if executor_claim_span:
+            continue
         values = evidence.get(key)
         if isinstance(values, (list, tuple)):
             owned_removals.extend(_compact(str(value)) for value in values if value)
-    for fragment in evidence.get("fragments") or []:
+    for fragment in (() if executor_claim_span else evidence.get("fragments") or []):
         if isinstance(fragment, Mapping):
             value = fragment.get("old_text")
             if value:

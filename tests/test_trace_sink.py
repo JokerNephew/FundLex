@@ -111,3 +111,55 @@ def test_model_call_inside_document_trace_is_recorded(tmp_path, monkeypatch):
     assert gen["trace_id"] == trace_sink.trace_id_for("doc-42")
     assert gen["task_type"] == "recall_facts"
     assert gen["usage"]["total"] == 12
+
+
+def test_rotation_rolls_oversize_file_and_bounds_copies(tmp_path, monkeypatch):
+    target = tmp_path / "model-calls.jsonl"
+    manual = tmp_path / "archive-20261018-hand.jsonl"
+    manual.write_text('{"kind":"manual"}\n', encoding="utf-8")
+    monkeypatch.setenv("FUNDLEX_TRACE_JSONL", str(target))
+    monkeypatch.setenv("FUNDLEX_TRACE_MAX_BYTES", "300")
+    monkeypatch.setenv("FUNDLEX_TRACE_KEEP_ROTATED", "2")
+
+    for index in range(30):
+        trace_sink.record_score(name="s", value=index, trace_seed="doc", comment="c" * 100)
+
+    assert target.is_file()  # active file keeps receiving lines
+    rotated = [path for path in tmp_path.iterdir()
+               if path.name.startswith("model-calls.jsonl.") and path != target]
+    assert 0 < len(rotated) <= 2, "rotated copies stay within FUNDLEX_TRACE_KEEP_ROTATED"
+    assert all(path.suffix != ".jsonl" or path.stem.endswith("jsonl") for path in rotated)
+    assert manual.read_text(encoding="utf-8") == '{"kind":"manual"}\n'  # manual archives untouched
+    kept = [record["value"] for path in [target, *rotated] for record in _records(path)]
+    assert len(kept) == len(set(kept)) <= 30, "no line is duplicated across active/rotated files"
+    assert 29 in kept, "the newest record is never pruned from the active file"
+
+
+def test_rotation_disabled_by_zero_cap(tmp_path, monkeypatch):
+    target = tmp_path / "trace.jsonl"
+    monkeypatch.setenv("FUNDLEX_TRACE_JSONL", str(target))
+    monkeypatch.setenv("FUNDLEX_TRACE_MAX_BYTES", "0")
+    for index in range(10):
+        trace_sink.record_score(name="s", value=index, trace_seed="doc")
+    assert target.is_file()
+    assert len(list(tmp_path.iterdir())) == 1
+
+
+def test_rotation_failure_stays_append_only_and_never_raises(tmp_path, monkeypatch):
+    target = tmp_path / "trace.jsonl"
+    monkeypatch.setenv("FUNDLEX_TRACE_JSONL", str(target))
+    monkeypatch.setenv("FUNDLEX_TRACE_MAX_BYTES", "10")
+    monkeypatch.setattr(trace_sink.os, "replace",
+                        lambda *a, **k: (_ for _ in ()).throw(OSError("simulated")))
+    trace_sink.record_score(name="s", value=1, trace_seed="doc")  # must not raise
+    assert len(_records(target)) == 1
+
+
+def test_misconfigured_rotation_env_falls_back_to_defaults(tmp_path, monkeypatch):
+    target = tmp_path / "trace.jsonl"
+    monkeypatch.setenv("FUNDLEX_TRACE_JSONL", str(target))
+    monkeypatch.setenv("FUNDLEX_TRACE_MAX_BYTES", "not-a-number")
+    monkeypatch.setenv("FUNDLEX_TRACE_KEEP_ROTATED", "many")
+    trace_sink.record_score(name="s", value=1, trace_seed="doc")
+    assert len(_records(target)) == 1
+    assert len(list(tmp_path.iterdir())) == 1

@@ -3,7 +3,7 @@
   const api = window.FundLexWorkbench || {};
   const $ = id => document.getElementById(id);
   const esc = api.esc || (v => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])));
-  const state = { tasks: [], task: null, pairs: [], pairIndex: 0, selectedPairId: null, view: null, selection: null, selectionDraft: null, selectionDirty: false, selectionSaving: false, selectionToken: 0, selectionSaveToken: 0, poll: null, requestToken: 0, lineFrame: null, scrollFrame: null, scrollSource: null, syncTargets: new Set(), syncSettle: null, identityToken: 0, listToken: 0, inputs: [{}], uploadDraft: null, splitRatio: .5, pendingSplitRatio: .5, splitDragging: false, leftMarks: null, rightMarks: null, mergedMarks: null, wordLeftMarks: null, wordRightMarks: null, viewMode: 'word', classicSide: 'left', classicRendered: false, wordSourcesRendered: false, diffPositions: null, docs: null, rawDocs: null, alignment: null };
+  const state = { tasks: [], task: null, pairs: [], pairIndex: 0, selectedPairId: null, view: null, selection: null, selectionDraft: null, selectionDirty: false, selectionSaving: false, selectionToken: 0, selectionSaveToken: 0, poll: null, pollTaskId: null, requestToken: 0, lineFrame: null, scrollFrame: null, scrollSource: null, syncTargets: new Set(), syncSettle: null, identityToken: 0, listToken: 0, inputs: [{}], uploadDraft: null, splitRatio: .5, pendingSplitRatio: .5, splitDragging: false, leftMarks: null, rightMarks: null, mergedMarks: null, wordLeftMarks: null, wordRightMarks: null, viewMode: 'word', classicSide: 'left', classicRendered: false, wordSourcesRendered: false, diffPositions: null, docs: null, rawDocs: null, alignment: null };
   const SPLIT_KEY = 'fundlex-compare-split-ratio', SPLIT_GUTTER = 28;
   const clampSplitRatio = value => { const number = Number(value); return value !== null && value !== '' && Number.isFinite(number) ? Math.min(.8, Math.max(.2, number)) : .5; };
   function storedSplitRatio() { try { return clampSplitRatio(localStorage.getItem(SPLIT_KEY)); } catch { return .5; } }
@@ -1044,6 +1044,14 @@
     try {const payload=await json(`/api/compare/pairs/${encodeURIComponent(p.id)}/view`);if(token===state.requestToken){p.viewError='';renderPairs();renderViewer(payload);await loadSelection(p.id);}}
     catch(e){if(token===state.requestToken){p.viewError=`读取结果失败：${e.message}`;renderPairs();}}
   }
+  function schedulePoll(id){
+    clearTimeout(state.poll);state.pollTaskId=id;
+    // A hidden tab must not keep re-fetching the whole task every 2.5s; the
+    // visibilitychange handler below schedules a refresh when it returns to
+    // the foreground (B13 F7).
+    if(document.visibilityState!=='visible')return;
+    state.poll=setTimeout(()=>openTask(id),2500);
+  }
    async function openTask(id) {
      if(api.navigate&&(api.route?.().view!=='compare'||api.route?.().mode!=='detail'||api.route?.().id!==id)){api.navigate('compare',{mode:'detail',id});return;}
      clearTimeout(state.poll);const token=++state.requestToken;
@@ -1051,7 +1059,7 @@
        const previousPairId=api.route?.().pair||state.selectedPairId;renderTask(task);
        const kept=state.pairs.findIndex(p=>p.id===previousPairId),idx=kept>=0?kept:state.pairs.findIndex(p=>['succeeded','incomplete'].includes(p.status));
        if(idx>=0){if(state.selectedPairId===state.pairs[idx]?.id&&state.view){$('compare-viewer').hidden=false;$('compare-pair-counter').textContent=`${idx+1} / ${state.pairs.length}`;}else await openPair(idx,true);}else $('compare-viewer').hidden=true;
-       if(['queued','running','uploading'].includes(state.task?.status))state.poll=setTimeout(()=>openTask(id),2500);
+       if(['queued','running','uploading'].includes(state.task?.status))schedulePoll(id);
      }catch(e){
        if(token!==state.requestToken)return;
        // A deep link may outlive the account that created the task. Do not
@@ -1081,6 +1089,10 @@
     document.addEventListener('click',e=>{const page=e.target.closest('[data-compare-list-page]');if(page)api.navigate('compare',{...api.route(),mode:'list',page:page.dataset.compareListPage});});
     window.FundLexCompare={hasUnsavedChanges:()=>state.selectionDirty};
     document.addEventListener('fundlex:route',e=>applyRoute(e.detail));
+    document.addEventListener('visibilitychange',()=>{
+      // Resume a task poll that was suspended while the tab was hidden.
+      if(document.visibilityState==='visible'&&state.pollTaskId&&['queued','running','uploading'].includes(state.task?.status))schedulePoll(state.pollTaskId);
+    });
     document.addEventListener('click',e=>{
       const choose=e.target.closest('[data-compare-choose]');if(choose){choose.closest('.compare-file-card').querySelector('input[type=file]').click();return;}
       const folder=e.target.closest('[data-compare-folder]');if(folder)$(`compare-${folder.dataset.compareFolder}-folder`).click();
