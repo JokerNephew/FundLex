@@ -10114,6 +10114,76 @@ def missing_guide_site(rule_id: str, targets: Sequence[Target], rules_by_id: dic
     return evidence
 
 
+_G08_VARIANT_SENTENCE_ANCHOR = "申购费率由基金管理人决定"
+_G08_VARIANT_SENTENCE_FORBIDDEN = ("赎回", "转换", "计算方法", "公告", "收费方式", "认购")
+
+
+def ensure_g08_variant_targets(targets: Sequence[Target], rules_by_id: dict[str, dict],
+                               inspection: DocumentInspection, facts: Facts | None = None,
+                               scopes: Mapping[str, Any] | None = None) -> list[Target]:
+    """Create a replace target for the class-qualified G08 legacy sentence.
+
+    FL-D587 / B03 p228: contracts may carry the canonical old clause with a
+    class qualifier inserted (「本基金A类基金份额的申购费率由基金管理人决定，
+    并在招募说明书中列示。」).  The inventory can mark the canonical sentence
+    ``absent`` and FL-D601/602's NO_GUIDE_SITE closure would then falsely
+    certify the obligation FALSE, while the frozen labels require the full
+    multi-class replacement at exactly that sentence.  The clause shape is
+    deterministic (anchor + 招募说明书, no mixed-in redemption/conversion
+    content — the same gate ``plan_policy_replacement`` applies), so a
+    residual target is created here, mirroring the delete sweep.  The
+    FL-D602 actual-rate variant sentence (「实际执行的申购费率在招募说明书
+    载明…」) contains neither the anchor nor the 列示 phrase and is untouched.
+    """
+    rule = rules_by_id.get("G08")
+    if rule is None:
+        return []
+    operation = next((item for item in rule.get("operations") or ()
+                      if item.get("op") == "replace"), None)
+    if operation is None:
+        return []
+    if facts is not None and condition_status(operation.get("condition"), facts) != "TRUE":
+        return []
+    if any(target.rule_id == "G08" and not target.out_of_scope
+           and target.state in {"needs_edit", "satisfied"} for target in targets):
+        return []
+    canonical = _compact(str(operation.get("old_text") or ""))
+    scope = (scopes or {}).get("G08") if scopes else None
+    created: list[Target] = []
+    for span in inspection.paragraphs:
+        text = span.text
+        if not text.strip():
+            continue
+        if scope is not None and not scope.contains(str(span.location)):
+            continue
+        compact_text = _compact(text)
+        if canonical and canonical in compact_text:
+            continue
+        offset = 0
+        for sentence in re.split(r"(?<=[。；;])", text):
+            start = text.find(sentence, offset)
+            offset = start + max(len(sentence), 1)
+            if not sentence.strip() or len(_compact(sentence)) < 12:
+                continue
+            if _G08_VARIANT_SENTENCE_ANCHOR not in sentence:
+                continue
+            if "招募说明书" not in sentence or "列示" not in sentence:
+                continue
+            if any(word in sentence for word in _G08_VARIANT_SENTENCE_FORBIDDEN):
+                continue
+            if len(created) >= 4:
+                return created
+            target = Target(target_id=f"G08V{len(created) + 1:03d}", rule_id="G08",
+                            location=str(span.location), quote=sentence,
+                            state="needs_edit", reason="g08_legacy_class_variant",
+                            start=start, end=start + len(sentence),
+                            operations=(str(operation.get("operation_id") or "G08:0"),))
+            target.resolution = "resolved"
+            target.segment_ok = containing_segment(span, target.start, target.end) is not None
+            created.append(target)
+    return created
+
+
 _DELETE_SENTENCE_ANCHORS = {
     "G06": ("份额类别", "转换"),
     "G13": ("7日", "赎回费", "短期"),

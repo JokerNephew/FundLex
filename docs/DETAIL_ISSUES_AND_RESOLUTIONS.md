@@ -7175,3 +7175,51 @@ H＝E×…
 - **影响**：全量回归计数需单列"已确证时序 flake 1 项"；建议后续回归在该窗口把该项标注重试一次，或为其加负载容忍（归测试体系建设，本对话不改）。
 - **状态**：open（已归因，未修；不阻塞 dev20 v2 发令口径）。
 - **变更记录**：2026-10-31 新增（qa-feat-recall 对话）。
+
+## FL-D576 dev20 v1→v2（2a416f8 正式轮）对比数据登记（2026-10-31，qa-feat-recall）
+
+- **发令要求**：总指挥 dev20 v2 发令前置④。冻结 `2a416f8`（含 FL-D568/570/571/572/573/608-layer1+2 全部；guide raw `373873f8`/document `30c2625d`；labels `61a2c514` 不变）。对比工具 `tools/evaluation/compare_wave_runs_20261031.py`，输出 `qa-wave1-dev-v2-20261031-2a416f8/compare-v1-vs-v2.md`。
+- **核心指标（v1 → v2）**：目标分母 390/390；目标完成 239(61.3%) → **315(80.8%)**（+76/+19.5pt）；整合同实际完成 9 → **14/20**；reported complete 13 → 16；**false_complete 4 → 2（B01、B03）**；verdict wrong 4 → 2；not_executed 145 → 72。按规则完成数全 15 条均上升（G18 +6、G17 +10、G05 +9、G22 +8 等）。
+- **未交付阻断码分布（report 层）**：v1 7 份未交付（B03/04/06/11/16/17/19）→ v2 4 份（B10/B15/B17/B19）。阻断码 v1：DUPLICATE/identical-copies 类×5、CLAIM_REPLAY_FAILED×6、CLAIM_OPERATION_NOT_PLANNED×5、RECALL_TARGET_UNRESOLVED×2；v2：CLAIM_REPLAY_FAILED×7、CLAIM_OPERATION_NOT_PLANNED×3、verified site missing×3、RECALL_TARGET_UNRESOLVED×2、semantic_delete_variant_present×1、TARGET_SOURCE_MISMATCH×1 等——重复/重叠类阻断已清零，残余为归因可查的目标级问题，分别登记 FL-D584..588。
+- **B05 复核**：v2 13/13 全完成（FL-D572 G08 + FL-D608 appendix 生效，此前 false_complete 消失）；B16 23/23 complete；labels sha 两轮一致——改善非标签漂移。
+- **账本**：正式轮 20 份全入账（单份 $0.027–0.033、≈300s、24–25 calls）；作废两轮账本分段封存于各自 wave 目录（67bc9d4-superseded、43457c6e-ABORTED）。
+- **状态**：已登记（数据性条目）；门槛评估结论：§7 未达（false_complete 2 + 4 份未交付），修复循环轮次以本条目为基线对比锚。
+- **变更记录**：2026-10-31 新增。
+
+## FL-D584 B01 G18 splice 被 diff 短片段对抢占：完整 kernel 未命中回退 compose（已修复+mutation 验证）（2026-10-31，qa-feat-recall）
+
+- **发现**：dev20 v2 B01 G18 wrong×2（T014/T016，两地同症）。FL-D572 的 `plan_g18_splice` 修复在树但没生效：`_plan_tier1` 的 pairs 列表先放 `splice_pairs(guide_old, guide_new)`（逐字 diff 产短片段对，如 `C类基金份额收取销售服务→C类基金份额费用收取销售服务`），`plan_g18_splice` 循环首个命中即 break——短片段先抢占生成「费用收取销售服务费」候选，完备性闸门（须含「费用收取不同」）拒绝 → 返回 None → 级联落 compose → 模型按 guide 原样生成带「本基金」文本 → 评分读 label required（无「本基金」）判 wrong。离线复现：`plan_g18_splice(B01 p823 实句, 生产序 pairs)` 返回 None（v2 report `content_source=composed` 实证）。
+- **修复**：`fundlex/generation/template.py::plan_g18_splice` 按 old kernel 长度降序试配（完整 `_G18_REASON_PAIRS` kernel 恒长于 diff 片段，先拿完整改写；机制性非 case 补丁）。
+- **验证**：新增 `test_g18_splice_prefers_full_kernel_over_diff_fragment`（用生产序 pairs + B01 实句，断言 splice 生效、保留合同主语、无残留旧 kernel）；mutation：绕过排序即返回 None 如期转红；G18 全组 4 项 + 宽面 71 项绿。
+- **状态**：已实施修复并回归验证；待 wave 重跑真实合同确认。
+- **变更记录**：2026-10-31 新增。
+
+## FL-D585 B10 v1→v2 回归：G13 无站点删除被「替换物理吞除」但无闭合通道（已修复+mutation 验证）（2026-10-31，qa-feat-recall）
+
+- **发现**：B10 v1 complete 20/20 → v2 incomplete（G13 `semantic_delete_variant_present` + CLAIM_REPLAY_FAILED）。链式：v2 清单未产出 G13 目标行（v1 有 absent 态行注明「含于 G12 替换」）；G12 宽 span 替换 p247 实际已把 7 日赎回费句物理带走（working_final 全文无「持续持有期少于7日」，edit 证据 `replaced_text` 含原句）；而 effects no-site delete 分支只对**原文**做语义探针（原句在原文必命中）→ 永 UNPROVEN → 如实 incomplete（编辑其实做对了）。
+- **修复**：`fundlex/generation/effects.py` 新增 `_semantic_delete_excised_by_replace`：三段确定性证据（① 原文含语义变体（调用方已立）② 产物全文无语义变体且无授权字面（位置无关）③ 至少一个已执行 replace 的 span 覆盖原文中的旧政策句（坐标证明，span 外不算））成立 → PASS `VERIFIED_ABSENT`/`semantic_delete_excised_by_replace`；任一腿缺失维持 fail-closed。G06 scoped 特例不动。
+- **验证**：新 `tests/test_fl_d585_excised_by_replace.py` 4 项（B10 形状闭合 / 变体迁存他处闭合拒 / span 不覆盖拒 / delete 类 edit 不能冒名）；mutation：摘除闭合通道即 UNPROVEN 如期转红；既有 effect 语义/缺席覆盖 24 项全绿。
+- **状态**：已实施修复并回归验证；待 wave 重跑真实合同确认。
+- **变更记录**：2026-10-31 新增。
+
+## FL-D586 B15 多阻断叠加：G01 表格单元格追加未物化 + CLAIM 级联（部分归因，阻塞于 guide 线在修域）（2026-10-31，qa-feat-recall）
+
+- **发现**：B15 v1 incomplete → v2 incomplete（降级：v1 残留次级 → v2 如实 incomplete，false_complete 未增）。阻断：G01@tbl0/r55/c1/p0 `TARGET_SOURCE_MISMATCH` + 「AFTER identical to BEFORE，追加未物化」；G01/G02/G09 多处 CLAIM_REPLAY_FAILED + `CLAIM_OPERATION_NOT_PLANNED` + verified site missing。
+- **归因进展**：表格单元格 append 未物化与 qa-feat-guide 线 FL-D607（tbl 追加）同域交叉，G09 与 FL-D572 G09 splice 修复后残余待核；多 CLAIM 级联疑似同源派生。非本线段位修复，避免与 guide 线在途 FL-D606/607/644 撞车。
+- **状态**：open（已部分归因；待 guide 线 FL-D607 修复落地后重跑复验；若波后仍存，本线再深挖 G09 splice 残余）。
+- **变更记录**：2026-10-31 新增。
+
+## FL-D587 B03 G08 类限定旧句被 NO_GUIDE_SITE 误闭合为 FALSE（false_complete）（已修复+mutation 验证）（2026-10-31，qa-feat-recall）
+
+- **发现**：B03 v1 如实 incomplete（G08 not_executed）→ v2 变 **false_complete**（评分 T005 kept：旧句仍在声明站点，但引擎报 complete）。链式：B03 的 G08 旧句为类限定变体「本基金A类基金份额的申购费率由基金管理人决定，并在招募说明书中列示。」（canonical `本基金的申购费率…` 中间插 A 类）；清单标 absent → FL-D601/602 `missing_guide_site` 判 canonical 全文无命中且无 live 目标 → applicability=FALSE（`NO_GUIDE_SITE:G08`）→ 义务关闭 → complete。而冻结 label T005 要求在该句做整句替换——FALSE 闭合方向与 FL-D602 的「实际执行的申购费率在招募说明书载明」（确实无站点，labels not_applicable）不同：前者是带类限定的 canonical kernel 变体，是真站点。
+- **修复**：`fundlex/recall.py::ensure_g08_variant_targets` 确定性残目标扫描（锚 `申购费率由基金管理人决定`+`招募说明书`+`列示`，无赎回/转换/计算方法/公告/收费方式/认购混入——与 `plan_policy_replacement` 的 clean 闸门同形；canonical 命中段跳过；live G08 目标抑制；scope 过滤）；`recall_pipeline.py` 在 NO_GUIDE_SITE 闭合循环**之前**挂接（origin=`g08_legacy_variant`）。创建后路由走既有 clean→tier1 `plan_policy_replacement`（锚闸门形状一致，离线验证可产出 label 整句新文），FL-D602 actual-rate 句不含锚点不受触碰。
+- **验证**：新 `tests/test_fl_d587_g08_variant.py` 6 项（B03 实句建目标/坐标回读一致/plan 产全新文含直销与 C 类义务/canonical 段跳过/live 目标抑制/actual-rate 不建/mixed 句不建）；mutation：错锚点即零目标如期转红。
+- **状态**：已实施修复并回归验证；待 wave 重跑真实合同确认。
+- **变更记录**：2026-10-31 新增。
+
+## FL-D588 B17 G08 policy 组件未验+B19 G04 目标解析失败（次级阻断，open）（2026-10-31，qa-feat-recall）
+
+- **发现**：B17（v1 false_complete → v2 诚实 incomplete，交付层面改善）G08@p292：`RECALL_POLICY_COMPONENTS_UNVERIFIED` → 计划未成形（`CLAIM_OPERATION_NOT_PLANNED`），审计如实呈现「AFTER 与 BEFORE 完全一致、未加入 A 类/直销义务句」。B19 G04@p160：`RECALL_TARGET_UNRESOLVED`（v1 次级阻断换码依旧，p161 站点 effect 未证）。
+- **归因线索**：B17 G08 组件校验与 G08 路由/facts（直销组件组）认证相关；B19 G04 为定位级未解。两者均非本轮 v2 回归（v1 同案未交付），列修复循环后续轮次处理；不与 guide 线 FL-D604/605（暂缓召回面）冲突。
+- **状态**：open（待本轮 584/585/587 复验后专项归因）。
+- **变更记录**：2026-10-31 新增。
