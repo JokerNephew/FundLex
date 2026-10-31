@@ -8182,3 +8182,10 @@ H＝E×…
 - **归类**：同案 loop-5（9ebeacf）G11 双义务 CLOSED_REPLAY、loop-4 亦正常——首选解释为模型侧运行间波动（schema 抖动），非已确证机制缺陷；现有重试/重建链按设计耗尽并诚实扣件。与 FL-D695 同类教训方向：模型单点失败缺少更硬的违约承载（如 fixed-text replace 在 ANOMALOUS 变体下无 deterministic tier1 回退，只能 compose）。
 - **二跑复测（2026-11-01，`fl-d695-b15-recheck2/`，$0.0268/23c/185s）**：同合同同引擎 G11 三义务全 CLOSED（B1:O1 ARTIFACT_VERIFIED、B1:O2 ALREADY_SATISFIED via claim_replay），delivery=complete——单发解释成立（模型 schema 抖动），不升级解剖。
 - **状态**：观察项（二跑未复发）；后续同形态在不同合同/不同 loop 再发时按 compose 校验字段定位升级。
+
+## FL-D801 发布留存事务自动清理机制（FL-D724 建议项实施）（2026-11-01，主线）
+
+- **实施**：`fundlex-publish.sh` 发布收尾统一调 `prune_retained_transactions`：保留最新 `$FUNDLEX_PUBLISH_RETAINED_KEEP`（默认 3）份事务，其余清删；当前事务自豁免；匹配仅 `.fundlex-publish-*` 前缀不碰别物。
+- **验证**：bash -n ✓；已完成发布器测试 17/17 绿；隔离假目录干跑（5 份留存、keep=2）清 t1-t3 留 t4-t5 + 自豁免正确；生产现状立即手工清到 3 份（gLmldm 最新/QQh2do/HSmFwd）；root 发布器已同步（drift-check OK）。
+- **注意**：source 整脚本会执行主入口（测试时误触过一次生产 prune 路径，root-only rm 被权限拦截无损）；后续函数级测试一律 sed 抽段执行。
+- **状态**：已解决（FL-D724 建议项关闭；另 FL-D724 的 worker 重启计数基线建议保留 open，择处）。

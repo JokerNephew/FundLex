@@ -397,7 +397,26 @@ publish_exit() {
     printf '%s\n' preflight-failed > "$transaction/status"
   fi
   [ -z "$transaction" ] || echo "fundlex-publish: retained transaction $transaction"
+  prune_retained_transactions
   exit "$status"
+}
+
+# FL-D724/801: 每次发布会留存一份事务（~196M），历史无清理机制曾致磁盘 100%、
+# worker 存储闸 fail-closed、双重发布事故。发布完成后（成功或失败）自动保留
+# 最新 $RETAINED_KEEP（默认 3）份，其余清删；当前事务永不被自己清删。
+RETAINED_KEEP=${FUNDLEX_PUBLISH_RETAINED_KEEP:-3}
+prune_retained_transactions() {
+  local parent keep current oldest
+  parent=$(dirname "$DST")
+  keep="${RETAINED_KEEP}"
+  current="${transaction:-}"
+  # 仅清理本发布器形态的留存目录，不动别物。
+  while read -r oldest; do
+    [ -n "$oldest" ] || continue
+    [ "$oldest" = "$current" ] && continue
+    rm -rf "$oldest"
+    echo "fundlex-publish: pruned old retained transaction $oldest" >&2
+  done < <(ls -1dt "$parent"/.fundlex-publish-* 2>/dev/null | tail -n +$((keep + 1)))
 }
 
 main() {
