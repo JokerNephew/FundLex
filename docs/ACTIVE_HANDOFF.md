@@ -1,5 +1,14 @@
 # FundLex 当前断点（ACTIVE_HANDOFF）
 
+## 2026-11-01 qa-frontend 第三轮（用户十项需求下派，前端主线断点）
+
+- 分支 `qa-frontend-s2-20261101`（`98d3313` = 第二轮 d27c904 + 主线 88aa5b8）。承接项：项4 列表统一（最高优先级）、项3 规则组可见即所得（含后端）、项1 模型配置重做（设计主导）。编号池 730-749。
+- 已冻结规格：`docs/frontend/SPEC_LISTS_UNIFIED_20261101.md`、`SPEC_RULE_GROUPS_WYSIWYG_20261101.md`、`SPEC_MODEL_SETTINGS_20261101.md`；协调交接写在 `/tmp/opencode/qa/status/qa-frontend.md` 第三轮节。
+- 项3 后端已实施（FL-D730）：rule_settings 增 requirement/operations 中文摘要+回退，`tests/test_user_configuration.py` 7 绿。
+- 施工图：V1 worker ivRkf1jH（750-759）/ V2 worker 81FirpsQ（760-769）按规格实施三项；前端主线验收=每规格末节清单（用户视角走查、Playwright 并列截图、锚点、回归绿）。
+- 中断续接：先读本断点与状态文件第三轮节，再按 spec 推进；勿动第二轮既有锚点。
+
+
 ## 2026-10-31 qa-frontend：前端全面整改（本 worktree 断点）
 
 - Worktree `/home/opencode/.local/share/opencode/worktree/29a9a9/qa-frontend`，分支 `qa-frontend-20261031`，基线已 merge 至 `6229069`（含 qa-export）。用户六条 + 主线补充 FL-D721。段位 FL-D710..719（已用 710-716 + 721）。
