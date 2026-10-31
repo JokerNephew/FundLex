@@ -6933,3 +6933,11 @@ H＝E×…
 - **处理方法**：本对话所有非 pytest 入口强制 `cd <本树> && python -m tools.evaluation.<mod>`（cwd 即 sys.path[0]）或脚本内显式 `sys.path.insert(0, <本树>)`（复放 harness `/tmp/opencode/qa/fl_d570_replay_rec.py`、`/tmp/opencode/qa/d573-b15-check.py` 均照此）；v2 运行脚本 `var/recall-first-evaluation/*/run_v2.sh` 已固化 `cd $(dirname)/../../..` + `python -m`。
 - **状态**：已在 qa-feat-recall 对话内绕开并固化到运行脚本；建议主线把该纪律并入 FL-D558 Q0 适用范围（未代改他人条目，按段位纪律留作建议）。
 - **变更记录**：2026-10-31 新增（qa-feat-recall 对话）。
+
+## FL-D582 FL-D573 修复拆两截：规划侧已并入 ac697a4 但无测试、claim 侧收紧未提交（2026-10-31，qa-feat-recall 复核发现）
+
+- **发现日期**：2026-10-31，FL-D571/572（ac697a4）复核时。FL-D573 条目仍标"修复中"，但 reset 复核发现 ac697a4 实际已含 FL-D573 规划侧代码：`_approved_fragment_bounds`（删除收窄到操作自有片段）、`_definition_group_continuation_end`（G03 定义组续段重绑、tbl 未闭句单元格 append 拒绝）；而 claim 侧残句所有权收紧（`approved_span_delete` 不得以 deleted_quote/expected_old_text 自证超操作旧文删除所有权，见 qa-base 工作树未提交的 claim_replay.py diff）截至复核时未提交。合并入 ac697a4 的 FL-D573 规划侧部分**无自动回归测试**（新 11 项测试只覆 FL-D571/572 机制与 guide 再认证）。
+- **处理（本对话段位补强）**：新增 `tests/test_fl_d573_fragment_bounds.py` 6 项单元钉测试（收窄生效 / 片段重复拒收窄 / 尾部续文保守不收窄 / 无前缀拒 / 空缺 old_text 拒 / `_meaningful_fragment` 语义），6 passed；套件设计双向覆盖反突变（恒收窄死于拒侧、恒不窄死于正侧）。claim 侧收紧属修复 agent 在途工作，不并抢；待其提交后复核。
+- **影响/风险**：claim 侧未落地前，p87 类"窄化条件不满足而宽删除吞尾句"只剩规划侧防线，无 fail-closed 兜底钉住；dev v2 冻结宜等该提交。
+- **状态**：open（测试缺口本对话已补；claim 侧提交与复核待续）。
+- **变更记录**：2026-10-31 新增（qa-feat-recall 对话，复核 ac697a4 时发现）。
