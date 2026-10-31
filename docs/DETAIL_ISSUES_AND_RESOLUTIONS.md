@@ -7402,3 +7402,35 @@ H＝E×…
 - **测试**：`tests/test_clause_residual_realization.py` 6 例（B17 实形/新文本保留豁免/联接符规范化豁免/更窄类别 fail-closed/超出豁免额度的重复仍报/字面旧行为不变）。
 - **验证**：B17 两次独立真实重跑（`/tmp/opencode/miss/verify-fl659{,b}/`）均 **complete 且 p294 尾句真实删除**（新旧句不再并存），unresolved 0、delivery 完整完成；确定性兜底已钉——若残留再现 replay 必 FAIL RESIDUAL_OLD_TEXT → 诚实扣件（单测+豁免额度模型）。variant_candidates 噪声收敛（ANOMALOUS 0.5 覆盖率下限，B17 60→24）。回归：effects/replay/claim/recall/variant/residual/coverage/delivery/obligations/targeting/recovery 758 全绿；pipeline/coverage/delivery 追跑 117 全绿。
 - **状态**：已解决（代码 `41601ba`；纳入 FL-D658 统一报验）。
+
+## FL-D693 loop-4 B12 四轮 complete 首负：G12+G13 同站合成编辑通道在模型 span 截断抖动下退化为随机 compose（2026-11-01，loop-4 硬门 FAIL-1）
+
+- **发现**（主线里程碑 loop-4 FAIL-1）：B12（012-广发沪深300）四轮 complete 首负。loop-3 同站 G12+G13 经 `atomic_paragraph` 确定性合成 replace 一笔完成；loop-4 文本逐字未动、3 操作 NOT_PLANNED×11 熔断 → 诚实 incomplete。指令初判「合成编辑通道未触发」，要求排查机制 C/B 兼容性。
+- **静态排除**：`content_check`/joint/atomic 相关代码 de18ec1..6339a06 零删除（diff 纯新增 +1251）；机制 C guard 剪除=0；目标清单差异仅编号平移（T010/T011→T011/T012）；模型账本仅计量无存档。
+- **实症（反转点）**：loop-4 目标 span 与 loop-3 不同（模型 survey 采样）：G12 76 列宽 span 扩展为含 G13 句整段 2..121（loop-3 为 2..76），G13 76..120 **缺句尾「。」**（loop-3 为 76..121）。离线驱动真实 `_plan_target_inner`：G12 确定性 `variant_replace` 可产出且原子合成可达，但产出文本结尾为「财产。。」双句号；G13 在截断 span 上 `_g13_short_holding_span/_end/_owned` 全部失配（正则锚定终结符 `[。；;]`），approved-span 完整子句闸同样失配 → 退化模型 `composed_delete` → 续 11 轮同错 `RECALL_EDIT_CONTENT_UNVERIFIED` → 熔断，诚实的 incomplete。
+- **定性**：非五机制回归；属 FL-D650 族模型 span 边界抖动与终结符锚定确定性通道的**接口脆点**——±1 终结符缺失即整条确定性通道静默失效，落入随机路径且无精确反馈。
+- **处理**：机制面修复见 FL-D791（`_plan_target_inner` 句界探测扩展）。验证：6 新测全绿（含真实 B12 段落端到端==loop-3 逐字文本）、全量回归 2522 绿、B12 真实重跑（见 FL-D791 证据路径）。
+- **状态**：已解决（机制修复 FL-D791；若续轮仍遇模型样fail-closed 保持诚实 incomplete）。
+
+## FL-D694 loop-4 B15 complete 判 fc=1：引擎义务真实执行，差异为评分器站点窗口口径（2026-11-01，loop-4 硬门 FAIL-2）
+
+- **发现**（主线里程碑 loop-4 FAIL-2）：B15（015-广发美国房地产）报 complete（holds=0），T001 双实证判真缺口 → fc=1 硬门 FAIL；指令要求查 reconciliation/delivery 为何未拦截。
+- **实症（深挖后反转）**：loop-4 产物 p84（scorer 空间 212）实含 T001 `required_text` 三句**逐字齐全**（直销 A 免申购费/直销 C 免销售服务费/其他渠道 C 持有一年免）；G03:B1:O1 CLOSED_REPLAY=claim_replay EXPECTED_EFFECT_PRESENT（对真实产物验证为真）；G01 释义表单元格 appl-FALSE 为 FL-D607 设计。评分器 T001 verdict=not_executed 的原因：标签声明站点=（九）小节尾段（scorer 空间 215，锚句「…报中国证监会备案。」），引擎经 FL-D394 `DEFINITION_GROUP_APPEND_END` 确定性重绑落点在同小节第 212 段（货币细分段），窗口 `site_text(after=6, before=1)` 向前不覆盖 → absent。复跑当日冻结评分器（723d20e）与波次 score.json 完全一致（215/215 → not_executed），无运行口径差；早前「87→215」疑为坐标系混淆已证伪（`python-docx` 正文索引 87 == scorer 含表索引 215）。
+- **定性**：**引擎无谎报**——义务真实执行、replay 真实验证、delivery 如实；fc=1 源自评分器「追加必须落在声明锚段 ±窗口」的严格站点口径与引擎「同小节组尾重绑」的合法落点差异。同 loop-3/loop-4 复验形态差异=模型采样（FL-D650 族）：复验轮模型未找到 Y013 追加通道而诚实 incomplete，loop-4 找到且真实完成，两形态皆诚实。
+- **处理**：登记量具争议 FL-D790 报主线裁决（评分器窗口双向容差/小节级匹配 vs 引擎追加落点向小节尾段对齐），本线不擅自改冻结量具/标签；引擎侧无可证缺陷，不打规则级补丁。
+- **状态**：引擎侧结案（无谎报证据）；量具口径争议 FL-D790 待主线裁决（影响 loop-5 之前 fc 门禁）。
+
+## FL-D790 评分器追加站点窗口向前不容差，与同小节合法落点发生口径争议（B15 T001 假 false_complete）（2026-11-01，loop-4 评分复核发现）
+
+- **发现**：`tools/evaluation/p6_score.py` 追加判定窗口 `_site_text(final, site, after=6)`（自身-1 向后+6）只覆盖锚段之后；`DEFINITION_GROUP_APPEND_END`（FL-D394）确定性重绑会把追加落在同小节较前段落（如声明锚前 3 段），三句政策齐全仍判 `not_executed` → 计入 false_complete。loop-4 B15 唯一 fc 即此。
+- **影响**：硬门 fc 口径把「同小节内合法但非锚段的追加」计为引擎谎报，可能错杀真完成；冻结标签的锚段是人工择优，指引只要求「（九）基金份额类别」位置，引擎重绑逻辑亦为确定性择优。
+- **候选处置（主线裁决，本线不擅动量具）**：(a) 窗口双向扩展至小节内（如 before=6 或按 location 小节匹配）、需主线授权并重评四波同口径（FL-D692 先例）；(b) 引擎追加落点统一对齐小节尾段（改 FL-D394 组尾定义——影响面更广且 loop-4 产物语义无错，不建议）；(c) 维持并视 B15 为已知口径差、loop-5 以双实证复核此单点。证据：`qa-wave1-dev-v2-20261101-6339a06/full-dev-mapped/score.json` B15 T001 verdict；产物 p84（scorer 212）三句逐字在文；声明锚 215 小节构成 [210..215]。
+- **状态**：已登记待主线裁决（不改冻结标签/不擅改量具）。
+
+## FL-D791 确定性删除通道的句界脆点：survey span 缺 1 字终结符即静默退化随机 compose（B12 loop-4 根因修复）（2026-11-01，FL-D693 解剖产物，qa-recall-miss）
+
+- **根因**：`_plan_target_inner` 的终结符锚定确定性删除匹配（`_g13_short_holding_span/_end/_owned` 正则锚定 `[。；;]`；`_approved_span_is_complete_clause` 要求终结符收尾）完全由模型调查 span 驱动。span 少 1 字终结符 → 全部确定性通道失配 → 退化 `composed_delete`/compose（模型） → 与 G12 宽 span 的原子合成产出「财产。。」双句号 → content_check/语义自洽连续拒 11 轮 → 熔断 incomplete；同语义目标 loop-3 因 span 恰好含终结符而全程确定性完成。该脆点对任意规则的终结符锚定确定性删除通用，非 G13 专属。
+- **修复（已实施，机制面）**：`_plan_target_inner` 计算 `actual` 后增设**句界探测**：目标 span 右邻恰为终结符（。！？；）时，探测切片/探测目标向终结符扩展 1 字（审计目标身份与 compose 回退保持原切片；确定性匹配统一改用探测值——short_holding 三分支、approved-span 的 allows/complete_clause/fragment/delete_span）。效果：L4 形状 G13 76..120 → 确定性 `short_holding_delete` (76,121)；与 G12 variant_replace [2,121) 原子合成产出与 loop-3 逐字相同（单句号），零模型调用。通用性：任意规则的终结符锚定删除同享；非终结符紧邻不扩（fail-closed 不变）。
+- **测试**：`tests/test_fl_d791_sentence_boundary_probe.py` 6 例——①截断 span 命中确定性删除含句号；②L4 形状原子合成==loop-3 逐字文本且无「。。」且零 compose 预算/零网关调用（爆炸网关桩变形测试：修复缺失则必走模型）；③loop-3 形状回归不变；④非终结符紧邻不扩（句中截断保持 fail-closed 不借权）；⑤通用 approved-span 探测吞终结符（G99 通用规则例）；⑥pipeline 形状 content_check 全过。
+- **验证**：全量回归 2522 通过/0 失败/139 跳过（基线 2516+6）；B12 真实合同端到端重跑（真实模型调用）证据路径 `/tmp/opencode/qa/fl-d791-b12-recheck/`（结果见 qa-recall-miss.md 收口记录）。
+- **状态**：已解决（含 mutation 测试与真实段落端到端证据；真实 B12 重跑结果以报告行收口）。
