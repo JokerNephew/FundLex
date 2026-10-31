@@ -80,12 +80,23 @@ def _log_card_action_failure(future) -> None:
         log.warning("Feishu deferred card action failed error=%s", type(exc).__name__)
 
 
-def build_event_handler(client: Any):
+def build_event_handler(client: Any, on_event: Any = None):
+    """Build the long-connection handler.
+
+    ``on_event`` runs for every received message before dispatch; the per-app
+    runtime uses it to record the first real message (the end-to-end proof that
+    event subscription and publishing are configured correctly).
+    """
     import lark_oapi as lark
     from lark_oapi.event.callback.model.p2_card_action_trigger import P2CardActionTriggerResponse
     from .service import active_service
 
     def on_message(data):
+        if on_event is not None:
+            try:
+                on_event(data)
+            except Exception as exc:  # observation must never block delivery
+                log.warning("Feishu onboarding event hook failed error=%s", type(exc).__name__)
         service = active_service()
         if service is not None:
             service.handle_message_event(data)

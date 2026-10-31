@@ -7502,3 +7502,154 @@ H＝E×…
 - **门槛余量**：false_complete 2→1（B15 T001 真缺口，主线定归 recall-miss 机制 A/E 强制病例）；B02 FL-D690 修复在途；B19 依旧。loop-3 门槛维持 FAIL，留出示波继续冻结。
 - **状态**：已实施并全量同口径重评；待主线复核确认。
 - **变更记录**：2026-10-31 新增。
+
+## FL-D780 跨企业用户扫码报“不是一个企业”的真实抛出点与可达性（2026-11-01，qa-feishu-onboarding）
+
+- **发现（用户重提的漏做项，2026-11-01 十项需求 #5）**：设置页“扫码绑定飞书”对非同企业用户不可用。逐层核对：前端 `frontend/app.js loadFeishuBinding` 只渲染后端返回；后端 `fundlex/integrations/feishu/oauth.py` 的授权页 `accounts.feishu.cn/.../authorize` 使用部署方自建应用，飞书在**授权页自身**以“不是一个企业”拒绝非本企业成员，浏览器根本不会回到 `/api/integrations/feishu/oauth/callback`。因此：①FundLex 服务端拿不到任何回调/错误码，无法在扫码后识别；②现有错误码表（`FEISHU_OAUTH_*`）全部与本案无关；③修复只能从**入口引导 + 自助接入**入手，不能靠回调分支。
+- **影响**：企业外用户无法使用飞书私聊处理合同，且原提示无法解释原因或给出下一步，属需求漏做。
+- **证据**：`oauth.py` 授权 URL 仅带部署应用 app_id；`api.py` `/api/integrations/feishu/oauth/callback` 仅处理 code/state；本地真实浏览器走查中未登录企业外账号，但飞书开放平台文档与授权页行为一致（自建应用仅限本企业成员）。
+- **处理**：保留原同企业扫码路径不动；在设置页增加“扫码时飞书提示‘不是一个企业’？”入口，进入“连接你自己的飞书企业”向导（FL-D781/784）。
+- **状态**：已定位并给出产品化入口；跨企业真实扫码仍需外部企业账号复核（见 FL-D788 限制）。
+- **变更记录**：2026-11-01 新增。
+
+## FL-D781 自有企业应用自助接入：后端状态机 + 真实飞书验证 + 精确诊断（2026-11-01，qa-feishu-onboarding）
+
+- **设计**：用户在**自己企业**创建自建应用，粘贴 App ID/App Secret；后端用真实飞书 OpenAPI 验证后加密保存，并由常驻长连接运行时接入同一 FundLex 服务；身份仍用既有绑定码私聊完成，避免新增公网回调地址。
+- **实现**（`fundlex/integrations/feishu/onboarding.py`）：
+  - 状态机 `no_app → ready → waiting_message → active`，异常配置为 `needs_attention`；心跳 45s 过期视为未连接。
+  - 验证顺序：`tenant_access_token/internal` → `bot/v3/info`（`activate_status==2` 为已启用，生产应用实测）→ `application/v6/applications/{app_id}` 读 scopes（需 `application:application:self_manage`，缺失时降级为 `scopes_checked=false`，不阻断）→ `tenant/v2/tenant/query`（仅取企业名，失败忽略）。
+  - 必需权限固定为 `im:message:send_as_bot`、`im:message.p2p_msg:readonly`、`im:resource`；可选 `im:message.pins:write_only`。
+  - 诊断码：`FEISHU_APP_CREDENTIALS_INVALID`（飞书 10014 等，附“凭证与基础信息”链接）、`FEISHU_APP_NOT_FOUND`、`FEISHU_APP_SCOPE_MISSING`（列出缺失 scope）、`FEISHU_APP_BOT_DISABLED`、`FEISHU_APP_ALREADY_ONBOARDED`、`FEISHU_APP_VERIFY_UNAVAILABLE/BAD_RESPONSE`、`FEISHU_APP_ID_INVALID/SECRET_INVALID`、`FEISHU_APP_SECRET_STORAGE_UNAVAILABLE/UNREADABLE`。
+  - 深链与可复制清单：`guide()` 返回创建应用/权限/机器人/事件/版本页面链接、`scopes_text`、事件名 `im.message.receive_v1`。
+- **API**（`fundlex/api.py`）：`GET /api/integrations/feishu/app`、`POST /app/credentials`、`POST /app/verify`、`DELETE /app`，全部登录态、`Cache-Control: private, no-store`。
+- **补充（避免“未检测=已通过”）**：应用未授予 `application:application:self_manage` 时 scopes 无法读取，检查项返回 `ok=null`（前端显示“待验证”而非“已完成”），并在第 3 步明说“权限清单无法自动核对，收到消息即证明生效”。状态接口增加 `warnings=["scope_check_unavailable"]`。
+- **补充（密钥轮换可见）**：`status()` 会尝试解密已存 Secret；密钥缺失/更换或密文损坏时置 `needs_attention` 并返回 `FEISHU_APP_SECRET_UNREADABLE`，第 3 步显示原因与“重新填写凭证”，不再长期假装 ready。
+- **验证**：`tests/test_feishu_app_onboarding.py` 22 项覆盖格式校验、真实错误映射、降级（含未验证不得显示为已授予）、状态流转、心跳过期、应用归属冲突、加解密失败、租户路由、跨租户绑定回复、API 契约、MySQL DDL 兼容（见 FL-D789）。
+- **部署迁移**：`tools/deploy/fundlex-publish.sh` 的 `migrate_schema` 增加 `FeishuAppOnboarding(store)`，发布时即创建 `feishu_apps`（与既有各 Store 一致），不依赖首个 HTTP 请求触发建表；部署测试断言该表存在。
+- **运维说明**：`docs/FEISHU_CROSS_TENANT_ONBOARDING.md`（无需新增环境变量，复用 `FUNDLEX_MODEL_SECRETS_KEY`）。
+- **状态**：已实施；本地真实接口 + 真实飞书凭证验证通过（FL-D788）。
+- **变更记录**：2026-11-01 新增。
+
+## FL-D782 app_secret 加密存储、零回显、零日志（2026-11-01，qa-feishu-onboarding）
+
+- **要求**：Secret 不得明文落库、不得出现在任何响应/状态/日志/异常文本。
+- **实现**：复用部署既有 `FUNDLEX_MODEL_SECRETS_KEY`（Fernet，与 BYOK 同一把密钥）加密后存 `feishu_apps.secret_cipher`；`status()`/`save()` 返回体逐字段手写，从不透传验证原始 payload；`AppOnboardingError` 文案与 `detail` 均为固定人读句，不含凭证；运行时/路由日志只记录 app_id 与异常类型；API 错误响应体固定为 `error_code/message/detail/link/correlation_id`。
+- **验证**：单测断言响应字符串、状态字典、DB `secret_cipher`、`caplog` 全量文本均不含明文，且密文为 Fernet 前缀、可解密回原值；真实走查再次断言 `GET /app` 响应与 DB 无明文（证据 `evidence/walkthrough.txt`）。
+- **状态**：已实施并验证。
+- **变更记录**：2026-11-01 新增。
+
+## FL-D783 多租户长连接运行时与按 tenant 路由（2026-11-01，qa-feishu-onboarding）
+
+- **问题**：原服务只有一个部署应用客户端；用户自有应用即使保存也无法收发，且不能用部署机器人给外企业发消息（跨企业不可达）。
+- **实现**：新增 `fundlex/integrations/feishu/runtime.py`：每 5s 同步 `feishu_apps`，为每个应用启动独立 lark WebSocket 长连接（`auto_reconnect`），记录首条真实消息为“端到端生效”证据；`client_for(tenant_key)` 供 `FeishuService._client(tenant)` 使用；`service.py` 全部 17 处收发/更新/下载/置顶改为按事件 `tenant_key` 路由，路由失败回退部署客户端，保证原有同企业路径不变；`service_main.py` 启动运行时。
+- **边界**：部署机器人客户端与运行时互不阻塞；单应用异常只记录状态码并指数退避重试（15s 起，上限 300s）。
+- **验证**：单测覆盖路由命中/回退/解析器异常回退，以及“外企业消息由该企业应用回复、部署应用零发送”；既有飞书 43 项回归绿（FL-D789）。
+- **状态**：已实施；生产尚未发布（本线 worktree 验证）。
+- **变更记录**：2026-11-01 新增。
+
+## FL-D784 前端向导：首次用户 4 步、能复制就复制、失败给下一步（2026-11-01，qa-feishu-onboarding）
+
+- **实现**（`frontend/compare.html`、`frontend/app.js`、`frontend/app.css`）：
+  - 设置页新增跨企业入口（原扫码卡片内、文案直接引用用户看到的“不是一个企业”），已接入后显示摘要卡片。
+  - 4 步向导：创建应用（含每一步在飞书点哪、需管理员提示）→ 粘贴凭证（粘贴即验，Secret 输入 `type=password` 且成功后清空）→ 配置能力（权限清单可一键复制、缺哪个标黄、机器人/事件/发布各带直达深链）→ 测试并绑定（轮询连接状态、收到消息后自动出绑定码、可换码、完成后自动显示已连接）。
+  - 可回看/可修正：完成后可“查看配置状态”回到第 3 步核对；第 3 步可“重新填写凭证”（App ID 预填、Secret 留空）或“返回测试步骤”；第 2 步有“返回”，改主意不会卡住。窄屏（820px）布局与 2 列步进卡片可用。
+  - 无技术泄漏：不展示 scope 原文以外的内部字段；错误区只显示人读原因 + “打开对应页面”。
+- **验证**：Playwright 真实浏览器、密码模式注册的首次用户，完成“入口→建应用说明→错误 Secret 诊断→正确凭证→配置核对→重新填写凭证→绑定码”全路径，10 张截图与逐屏文本见 `/tmp/opencode/qa/feishu-onboarding/evidence/`（FL-D788）。
+- **范围说明（如实）**：本次改造的是生产默认 V1（`frontend/compare.html`）。V2（`frontend/src/pages/Settings`）当前仍只有扫码绑定；`FUNDLEX_FRONTEND_VERSION` 未设置时生产走 V1，V2 若切换为默认需把同一向导移植过去（交接项）。
+- **状态**：已实施并通过首次用户走查。
+- **变更记录**：2026-11-01 新增。
+
+## FL-D785 引导接口错误响应被全局稳定化处理吞掉诊断（2026-11-01，qa-feishu-onboarding）
+
+- **发现**：实现初期把 `AppOnboardingError` 包成 `HTTPException(status, detail=exc.as_dict())`；应用级 `stable_http_error` 把任意 detail 折叠为 `code` 字符串，导致前端拿不到“下一步做什么”和飞书深链，只剩 `INVALID_REQUEST` 一类泛化码。
+- **处理**：引导相关路由直接返回 `JSONResponse`，保持既有稳定信封键（`error_code/message/detail/link/correlation_id`），其中 `message` 为人读原因、`detail` 为具体操作建议、`link` 为修复页面；前端错误渲染对标准信封的 `ALL_CAPS` code 做过滤，避免向用户暴露技术码。
+- **验证**：API 单测断言 422/503 的 `error_code`、中文原因、detail、link、correlation_id 与“响应无明文 Secret”；真实走查中错误文案为“App ID 或 App Secret 不正确。请到飞书开放平台…”。
+- **状态**：已实施并验证。
+- **变更记录**：2026-11-01 新增。
+
+## FL-D786 更换自有应用后残留旧租户与“已收到消息”状态（2026-11-01，qa-feishu-onboarding）
+
+- **发现**：`save()` 复用同一行更新凭证时未清 `tenant_key`/`first_event_at`，若用户先接 A 应用再换 B 应用，运行时会按旧租户路由，界面也可能直接显示 active。
+- **处理**：检测 `app_id` 变化（`replaced`）时清零 `tenant_key` 与 `first_event_at`；同一应用重验（`POST /app/verify`）保留历史，避免一次重新检测把“已收到消息”抹掉。
+- **验证**：单测 `test_switching_apps_clears_previous_tenant_state`（换应用→ready/tenant 空；同应用重存→active）。
+- **状态**：已修复并验证。
+- **变更记录**：2026-11-01 新增。
+
+## FL-D787 移除自有应用后长连接未关闭、失败重连无退避（2026-11-01，qa-feishu-onboarding）
+
+- **发现**：运行时删除应用时只从内存表移除，lark WebSocket 线程仍可能接收并处理该企业消息；连接失败时每 5s 重连，可能形成对飞书的高频请求。
+- **处理**：移除时将条目标记 `active=False` 并调用 SDK 的 `_disconnect()`（缺失/异常均吞掉并记类型），事件钩子对非 active 条目直接忽略；连接异常退出后指数退避（15s×2^n，上限 300s），凭证可读时重新拉起。
+- **验证**：单测覆盖 `client_for`/`_seen` 与退避路径不抛错；移除后状态置未连接。运行时代码无凭证日志。
+- **状态**：已修复；真实长连接断连/重连待生产发布后观察。
+- **变更记录**：2026-11-01 新增。
+
+## FL-D788 真实凭证端到端走查与证据（2026-11-01，qa-feishu-onboarding）
+
+- **方法**：本地起真实服务（一次性数据目录、一次性 Fernet 密钥、密码模式开放注册），用 Playwright 走首次用户路径；凭证来自服务器环境文件，仅在进程内存中读取，未写入仓库/文档/日志/命令行。服务端调用**真实飞书 OpenAPI**，非 mock。
+- **结果**：
+  - 错误 Secret：真实飞书返回拒绝，页面显示“App ID 或 App Secret 不正确”+“到凭证与基础信息复制最新 Secret”+直达链接，DB 无记录。
+  - 正确凭证：tenant_access_token 成功、机器人 `activate_status=2`、`application/v6` 读到全部 3 个必需权限（`scopes_checked=true`、`missing_scopes=[]`）；页面进入第 4 步并提示发消息；点“查看配置状态”显示 3 权限与机器人均“已完成”，事件订阅为“待验证”。
+  - 状态机：写入首条消息记录后，页面自动出现 12 位绑定码与有效期，摘要变为“已收到你的消息，等待绑定”；API 返回 `stage=active`。
+  - 安全：`GET /api/integrations/feishu/app` 响应与 `runs.sqlite3` 中均无明文 Secret（密文 Fernet 前缀、长度 140）。
+  - 证据：`/tmp/opencode/qa/feishu-onboarding/evidence/01..09*.png` + `walkthrough.txt`。
+- **限制（如实）**：本机没有第二个真实飞书企业账号，因此“外企业成员在真实飞书中给自有机器人发消息、长连接收事件、绑定码回绑”这一段未能在生产外完成真实跨企业验证；该段由单测（外租户消息经该租户应用回复、绑定成功）与真实凭证验证组合覆盖。生产发布后需用外部企业账号补一次真实跨企业闭环。
+- **状态**：真实凭证与真实用户界面路径通过；跨企业长连接闭环待外部账号复核。
+- **变更记录**：2026-11-01 新增。
+
+## FL-D789 回归与测试覆盖（2026-11-01，qa-feishu-onboarding）
+
+- **新增**：`tests/test_feishu_app_onboarding.py` 23 项（加密/零回显/日志、格式与飞书错误映射、scope 降级且未验证不显示为已授予、bot 未启用、状态流转与心跳、应用归属冲突、密文不可读/密钥轮换可见、换应用清理、租户路由与回退、运行时记录与路由、深链清单、API 401/422/503/删除、跨租户绑定回复、MySQL DDL 翻译、可选接口失败降级）。
+- **既有**：`test_feishu_integration.py`、`test_feishu_oauth_api.py`、`test_remediation_tasks_feishu.py` 43 项在 service 路由改造后保持通过。
+- **全量（最终树）**：`2566 passed, 139 skipped, 4 warnings in 690.34s`（`EXIT=0`），日志 `/tmp/opencode/qa/feishu-onboarding/full-suite-venv.log`。运行方式：在本 worktree 临时 `.venv`（`.pth` 指向 worktree 与测试依赖）下执行 `PYTHONPATH=$PWD ./.venv/bin/python -m pytest tests -q -p no:cacheprovider`；无 venv 时 `test_deploy_publisher` 的 `migrate_schema` 用例会因 `$DST/.venv/bin/python` 缺失而失败（FL-D795，环境限制非回归）。临时 `.venv` 已删除。
+- **状态**：新增 + 相关测试 + 全量回归均绿（0 failed）。
+- **变更记录**：2026-11-01 新增；2026-11-01 回填全量结果。
+
+## FL-D790 权限无法核对时向导显示“已完成”，形成虚假绿灯（2026-11-01，qa-feishu-onboarding）
+
+- **发现**：应用未授予 `application:application:self_manage` 时，`/application/v6/applications/{app_id}` 返回 99991672，无法读取已授予权限；初版把“读取失败”当成“无缺失”，第 3 步三个权限全部显示“已完成”，用户在飞书里其实可能一个都没加。
+- **影响**：用户按错误提示直接发消息，失败后无从判断是权限、事件还是发布问题；属应付式展示。
+- **处理**：`scopes_checked=false` 时检查项返回 `ok=null`，前端显示“待验证”（灰）而非“已完成”（绿），并明说“权限清单无法自动核对，按清单逐项确认后，收到消息即证明生效”；状态接口新增 `warnings=["scope_check_unavailable"]`；“重新检测”在该状态下不再说“配置齐全”。
+- **验证**：`test_scope_check_unavailable_degrades_without_blocking` 断言 `checks` 中所有 `im:*` 为 `None`、`warnings` 正确；真实走查中生产应用已授予该权限，显示“已完成”与真实读取一致（`scopes_checked=true`）。
+- **状态**：已修复并验证。
+- **变更记录**：2026-11-01 新增。
+
+## FL-D791 部署密钥更换后状态页仍显示 ready、且无重填入口（2026-11-01，qa-feishu-onboarding）
+
+- **发现**：`secret_for()` 解密失败才报错，`status()` 完全不碰密文；`FUNDLEX_MODEL_SECRETS_KEY` 更换或密文损坏后，页面继续显示“已连接/等待发消息”，长连接却永远起不来，用户没有自救路径。
+- **处理**：`status()` 试解密已存 Secret；失败时 `stage=needs_attention`，返回 `FEISHU_APP_SECRET_UNREADABLE` 及原因、重填提示；第 3 步新增“重新填写凭证”（App ID 预填、Secret 留空、可直接“返回”），把用户带回第 2 步而不是移除重建。
+- **验证**：`test_unreadable_cipher_is_reported_not_crashed` 断言状态页同步报错；真实走查点击“重新填写凭证”后断言 App ID 已预填、Secret 为空，返回后回到原步骤（`evidence/10-wizard-reenter.png`）。
+- **状态**：已修复并验证。
+- **变更记录**：2026-11-01 新增。
+
+## FL-D792 可选接口瞬时失败导致有效凭证被判 502（2026-11-01，qa-feishu-onboarding）
+
+- **发现**：scopes 与企业名属“能读到更好、读不到不影响接入”的可选信息，但初版未捕获其 `AppOnboardingError`，一次网络抖动就让整笔保存失败，用户以为凭证错了。
+- **处理**：两处可选读取改为捕获后按“未读到”处理，`scopes_checked=false` 并给出降级文案；必需步骤（token、机器人状态）仍然严格失败并给精确诊断。
+- **验证**：`test_optional_read_failure_does_not_block_onboarding` 让可选接口抛 502，断言凭证仍保存成功、状态 `ready`、`scopes_checked=false`。
+- **状态**：已修复并验证。
+- **变更记录**：2026-11-01 新增。
+
+## FL-D793 生产 MySQL 下诊断 JSON 与密文列会被截断（2026-11-01，qa-feishu-onboarding）
+
+- **发现**：仓库用 SQLite 风格 DDL，`fundlex/db.py` 在 MySQL 上把 `TEXT` 翻译成 `VARCHAR(255)`。`secret_cipher`（Fernet 约 140 字符，密钥/明文更长时更久）与 `last_error_json`/`missing_scopes_json`（带中文诊断与链接）迟早超限；本地 sqlite 测试无法暴露。
+- **处理**：三列显式声明 `MEDIUMTEXT`（翻译器保留该类型，默认值加括号）；新增 `test_schema_translates_to_valid_mysql_ddl`，用 `Database.prepare` 逐句翻译并断言三列类型与“无 `TEXT DEFAULT` 残留”；用生产同版本 MySQL 8.0.46 的连接信息打印翻译结果核对。
+- **影响范围**：生产 `FUNDLEX_DATABASE_URL` 为 MySQL；SQLite 本地与测试不受影响。
+- **状态**：已修复并验证（DDL 翻译 + 真实 MySQL 版本核对）；表在本分支首次发布时才创建。
+- **变更记录**：2026-11-01 新增。
+
+## FL-D794 向导两处反馈不可见/过度承诺（2026-11-01，qa-feishu-onboarding）
+
+- **发现**：①“移除这个应用”失败时把错误写进第 3 步的错误框，而用户在第 4 步，屏幕上看不到任何变化；②“重新检测”在权限未核对时仍提示“配置齐全，正在建立连接”，与 FL-D790 的“待验证”矛盾。
+- **处理**：①移除失败改为即时提示（`flash`），不再依赖隐藏面板；②“重新检测”按 `scopes_checked` 分流，未核对时提示“无法自动核对权限清单，请在飞书里给机器人发一句话确认”。
+- **验证**：`node --check`；真实走查重跑全路径截图与逐屏文本一致。
+- **状态**：已修复；移除失败路径只能靠代码审查与手动触发，未做真实故障注入。
+- **变更记录**：2026-11-01 新增。
+
+## FL-D795 本 worktree 缺少 `.venv` 导致部署发布测试必然失败（2026-11-01，qa-feishu-onboarding）
+
+- **发现**：全量回归 `tests/test_deploy_publisher.py::test_real_entrypoint_imports_and_serial_migration_use_isolated_sqlite` 报 `env: '…/qa-feishu-onboarding/.venv/bin/python': No such file or directory`。原因是该 worktree 未建虚拟环境，而 `tools/deploy/fundlex-publish.sh` 的 `migrate_schema()` 固定调用 `$DST/.venv/bin/python`。这是环境缺失，不是本次改动引入。
+- **证据**：同一测试在 `/home/opencode/fundlex`（有 `.venv` 且已安装本项目）通过；在本 worktree 临时创建 `.venv`（`--system-site-packages` + `.pth` 指向 worktree 与测试依赖）后同样通过（含新增 `feishu_apps` 建表断言）。
+- **影响**：仅影响“在无 venv 的 worktree 里跑全量”这一场景；生产发布机与主工作区有 `.venv`，不受影响。不能因此把部署链路判为通过，也不能把该测试从分母中删除。
+- **处理**：本轮全量在临时 `.venv` 下运行并记录结果；`.venv` 已在 `.gitignore` 内，验证后删除，不进入提交。后续在 worktree 跑全量时同样需要临时 `.venv`（或把该测试单列为环境依赖项并保留失败记录）。
+- **状态**：已定位并验证；worktree 环境限制，代码无需修改。
+- **变更记录**：2026-11-01 新增。

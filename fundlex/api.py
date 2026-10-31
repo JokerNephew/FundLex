@@ -224,6 +224,13 @@ class GuideRuleSettingsRequest(BaseModel):
 ModelSettingsRequest = model_settings.Preferences
 
 
+class FeishuAppCredentialsRequest(BaseModel):
+    """Own-tenant app credentials; the secret is encrypted and never echoed."""
+    model_config = ConfigDict(extra="forbid")
+    app_id: str = Field(min_length=4, max_length=80)
+    app_secret: str = Field(min_length=8, max_length=256)
+
+
 class FeishuBindingCodeRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     ttl_seconds: int = Field(default=600, ge=60, le=3600)
@@ -643,6 +650,8 @@ def create_app(data_dir: str | Path | None = None, *, auth_db=None) -> FastAPI:
     application.state.task_service = task_service
     integrations = IntegrationStore(store)
     application.state.integrations = integrations
+    from .integrations.feishu.onboarding import FeishuAppOnboarding
+    application.state.feishu_onboarding = FeishuAppOnboarding(store)
     compare_store = CompareStore(store)
     application.state.compare_store = compare_store
     guide_generation_store = GuideGenerationStore(store)
@@ -934,6 +943,65 @@ def create_app(data_dir: str | Path | None = None, *, auth_db=None) -> FastAPI:
     def revoke_feishu_binding(user: str = Depends(_user)):
         integrations.revoke_user_binding("feishu", user)
         return {"provider": "feishu", "bound": False}
+
+    # -- own-tenant app onboarding -------------------------------------
+    def _app_status(owner: str, request: Request) -> dict:
+        status = request.app.state.feishu_onboarding.status(owner)
+        binding = integrations.binding_for_user("feishu", owner)
+        status["binding"] = {
+            "bound": bool(binding),
+            "tenant_key": binding["tenant_key"] if binding else "",
+            "updated_at": binding["updated_at"] if binding else None,
+        }
+        return status
+
+    def _app_error(exc) -> JSONResponse:
+        """Onboarding failures keep the stable envelope plus an actionable hint.
+
+        The global handler flattens ``HTTPException.detail`` to a bare code, so
+        these routes answer directly: the same ``error_code``/``message``/
+        ``detail``/``correlation_id`` keys, with a human sentence, a concrete
+        next step and (when known) the Feishu page that fixes it.
+        """
+        cid = correlation_id()
+        log_handled_error(exc, exc.code, request_id=cid)
+        return JSONResponse(
+            status_code=exc.http_status,
+            content={"error_code": exc.code, "message": exc.message,
+                     "detail": exc.detail or "", "link": exc.link or "",
+                     "correlation_id": cid},
+            headers={CORRELATION_ID_HEADER: cid, "Cache-Control": "private, no-store"},
+        )
+
+    @application.get("/api/integrations/feishu/app")
+    def get_feishu_app(request: Request, user: str = Depends(_user)):
+        """Onboarding state for a user's own-tenant Feishu app."""
+        return _app_status(user, request)
+
+    @application.post("/api/integrations/feishu/app/credentials")
+    def save_feishu_app_credentials(payload: FeishuAppCredentialsRequest, request: Request,
+                                    user: str = Depends(_user)):
+        from .integrations.feishu.onboarding import AppOnboardingError
+        try:
+            result = request.app.state.feishu_onboarding.save(
+                user, payload.app_id, payload.app_secret)
+        except AppOnboardingError as exc:
+            return _app_error(exc)
+        return {**_app_status(user, request), "verification": result}
+
+    @application.post("/api/integrations/feishu/app/verify")
+    def verify_feishu_app(request: Request, user: str = Depends(_user)):
+        from .integrations.feishu.onboarding import AppOnboardingError
+        try:
+            result = request.app.state.feishu_onboarding.revalidate(user)
+        except AppOnboardingError as exc:
+            return _app_error(exc)
+        return {**_app_status(user, request), "verification": result}
+
+    @application.delete("/api/integrations/feishu/app")
+    def remove_feishu_app(request: Request, user: str = Depends(_user)):
+        request.app.state.feishu_onboarding.remove(user)
+        return _app_status(user, request)
 
     @application.post("/api/integrations/feishu/oauth/start")
     def start_feishu_oauth(user: str = Depends(_user)):

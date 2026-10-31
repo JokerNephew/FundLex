@@ -227,7 +227,7 @@
     renderBreadcrumb(view);if(!prior||prior.view!==view||prior.mode!==next.mode||prior.id!==next.id||prior.document!==next.document)document.querySelector('.main').scrollTop=0;
     document.dispatchEvent(new CustomEvent('fundlex:view',{detail:view}));dispatchRoute();
     if(!state.cap)return;
-    if(view==='users')loadUsers();if(view==='guide')loadGuides();if(view==='settings')loadFeishuBinding();if(view==='models')loadModelSettings();
+    if(view==='users')loadUsers();if(view==='guide')loadGuides();if(view==='settings'){loadFeishuBinding();loadFeishuApp();}if(view==='models')loadModelSettings();
     if(view==='overview'){restoreRevisionFilters();loadTasks();if(!state.taskGuides)loadTaskGuides(true);}
     if(view==='task'){if(!state.taskGuides)loadTaskGuides(true);if(next.id&&state.selected!==next.id)selectTask(next.id,false);else loadDocuments();}
     if(view==='document')openDocumentRoute(next);
@@ -447,8 +447,230 @@
     catch(e){if(current(t)&&e.name!=='AbortError')$('feishu-binding-message').textContent='解除绑定失败，请稍后重试。';}
     finally{if(current(t))button.disabled=false;}
   }
-  document.addEventListener('fundlex:view',e=>{if(e.detail!=='settings'){stopFeishuOAuth();state.tokens['feishu-binding']=(state.tokens['feishu-binding']||0)+1;$('feishu-binding-refresh').disabled=false;}});
-  document.addEventListener('fundlex:identity-reset',()=>{stopFeishuOAuth();feishuBound=false;$('feishu-connect-card').dataset.state='loading';$('feishu-binding-badge').textContent='读取中';$('feishu-binding-state').textContent='正在读取绑定状态…';$('feishu-current-user').textContent='—';$('feishu-binding-message').textContent='';$('feishu-unbind-btn').hidden=true;$('feishu-oauth-btn').hidden=false;$('feishu-oauth-btn').disabled=true;document.querySelector('[data-action="feishu-unbind-confirm"]').disabled=false;});
+  // ---- Flywheel: own-tenant Feishu app onboarding (FL-D780..784) ----
+  const feishuApp={data:null,timer:null,localStep:1,localPanel:null,reenterFrom:null,code:'',codeExpiry:0,busy:false,confirmRemove:false};
+  async function feishuAppRequest(path,options={}){
+    if(!state.auth.token&&!owner())throw new Error('请先登录后再连接飞书。');
+    const headers=new Headers(options.headers||{});
+    if(state.auth.token)headers.set('Authorization',`Bearer ${state.auth.token}`);
+    if(owner())headers.set('X-FundLex-User',owner());
+    let response;try{response=await fetch(path,{...options,headers,cache:'no-store'});}catch{throw new Error('网络连接中断，请检查网络后重试。');}
+    if(response.status===401&&state.auth.mode==='password'){handleSessionExpired();throw new Error('登录状态已失效，请重新登录。');}
+    let payload=null;try{payload=await response.json();}catch{}
+    if(!response.ok){
+      const detail=payload&&payload.detail;const message=(payload&&payload.message)||(typeof detail==='string'?detail:(detail&&detail.message))||'请求未完成，请稍后重试。';
+      const error=new Error(message);error.detail=payload||null;error.code=response.status;throw error;
+    }
+    return payload;
+  }
+  function feishuAppStep(data){
+    if(feishuApp.localPanel)return feishuApp.localPanel;
+    if(!data||!data.configured)return feishuApp.localStep;
+    if(data.stage==='needs_attention')return 3;
+    return 4;
+  }
+  function feishuAppStopPoll(){if(feishuApp.timer){clearInterval(feishuApp.timer);feishuApp.timer=null;}}
+  function feishuAppPoll(){feishuAppStopPoll();feishuApp.timer=setInterval(()=>{if(feishuAppStep(feishuApp.data)===4)loadFeishuApp(true);},3000);}
+  function feishuAppApplyLinks(guide){
+    if(!guide)return;
+    $('feishu-app-create-link').href=guide.create_app;
+    $('feishu-app-credentials-link').href=guide.create_app;
+    $('feishu-app-link-permission').href=guide.permission;
+    $('feishu-app-link-bot').href=guide.bot;
+    $('feishu-app-link-event').href=guide.event;
+    $('feishu-app-link-version').href=guide.version;
+  }
+  function feishuAppRenderScopes(data){
+    const guide=data.guide||{};const list=$('feishu-app-scopes');if(!list)return;
+    const checks=new Map((data.checks||[]).map(c=>[c.key,c.ok]));
+    const unknown=!data.scopes_checked;
+    list.replaceChildren();(guide.required_scopes||[]).forEach(scope=>{
+      const li=document.createElement('li');const ok=checks.get(scope.key);
+      const mark=document.createElement('span');mark.className=ok===true?'scope-ok':(ok===false?'scope-missing':'');mark.textContent=ok===true?'✓':(ok===false?'待添加':'•');
+      const code=document.createElement('code');code.textContent=scope.key;
+      const label=document.createElement('span');label.textContent=scope.label;
+      li.append(mark,code,label);list.append(li);
+    });
+    const setState=(name,value)=>{const el=document.querySelector(`.feishu-config-state[data-check="${name}"]`);if(!el)return;if(value===null){delete el.dataset.ok;el.textContent='待验证';return;}el.dataset.ok=String(value);el.textContent=value?'已完成':'待完成';};
+    if((guide.required_scopes||[]).length)setState('scopes',unknown?null:(guide.required_scopes||[]).every(s=>checks.get(s.key)===true));
+    setState('bot',checks.get('bot')===true);
+  }
+  function feishuAppRender(data,quiet){
+    feishuApp.data=data;
+    const guide=data.guide;feishuAppApplyLinks(guide);
+    const configured=!!data.configured;
+    $('feishu-app-entry').hidden=configured;
+    $('feishu-app-summary').hidden=!configured;
+    if(configured){
+      const stage=data.stage;const bound=!!(data.binding&&data.binding.bound);
+      const active=stage==='active'&&bound;
+      $('feishu-app-summary-title').textContent=active?'已连接你自己的飞书企业':(stage==='needs_attention'?'应用还需要完成配置':(stage==='active'?'已收到你的消息，等待绑定':'正在连接你自己的飞书企业'));
+      const bits=[];if(data.bot_name)bits.push(data.bot_name);if(data.tenant_name)bits.push(data.tenant_name);
+      bits.push(active?'可以私聊机器人处理合同':(stage==='needs_attention'?'点“查看连接”继续完成':(stage==='active'?'在飞书私聊里发送向导里的绑定码':'等待你在飞书里发消息')));
+      $('feishu-app-summary-text').textContent=bits.join(' · ');
+      $('feishu-app-summary').dataset.stage=stage;
+    }
+    if(data.binding&&data.binding.bound)feishuAppStopPoll();
+    if($('feishu-app-wizard').hidden)return;
+    feishuAppRenderPanel(data);
+    if(!quiet)feishuAppPoll();
+    if(feishuAppStep(data)===4&&data.first_event_at&&!(data.binding&&data.binding.bound))feishuAppEnsureCode();
+  }
+  function feishuAppRenderPanel(data){
+    const step=feishuAppStep(data);
+    document.querySelectorAll('#feishu-app-wizard [data-panel]').forEach(panel=>{panel.hidden=Number(panel.dataset.panel)!==step;});
+    document.querySelectorAll('#feishu-app-steps li').forEach(li=>{const n=Number(li.dataset.step);li.dataset.state=n<step?'done':(n===step?'active':'todo');});
+    const botName=(data.bot_name||'FundLex');
+    $('feishu-app-bot-name').textContent=botName;
+    $('feishu-app-view-config').hidden=!(step===4&&data.configured);
+    $('feishu-app-back-test').hidden=!(step===3&&data.configured);
+    if(step===3){
+      feishuAppRenderScopes(data);
+      if(data.error&&data.error.message)feishuAppShowError('recheck',{message:data.error.message,detail:{detail:data.error.detail||'',link:data.error.link||''}});
+      else $('feishu-app-recheck-error').hidden=true;
+      const appName=data.app_name||data.app_id||'';
+      const botName2=data.bot_name||'';
+      const appText=appName?(botName2&&botName2!==appName?`当前应用：${appName}（机器人：${botName2}）`:`当前应用：${appName}`):'正在读取应用状态…';
+      $('feishu-app-verify-summary').textContent=data.scopes_checked?appText:`${appText}。这个应用未授予「应用信息读取」权限，权限清单无法自动核对；按下面清单逐项确认后，收到消息即证明生效。`;
+      const eventState=document.querySelector('.feishu-config-state[data-check="event"]');
+      if(eventState){eventState.dataset.ok='false';eventState.textContent=data.first_event_at?'已验证':'待验证';if(data.first_event_at)eventState.dataset.ok='true';}
+    }
+    if(step!==4)return;
+    const connected=!!data.runtime_connected;const gotMessage=!!data.first_event_at;
+    const bound=!!(data.binding&&data.binding.bound);
+    const conn=$('feishu-app-conn-state');
+    if(bound){conn.dataset.state='connected';$('feishu-app-conn-title').textContent='已连接，绑定完成';$('feishu-app-conn-text').textContent='可以关闭本页，在飞书私聊机器人使用。';}
+    else if(gotMessage){conn.dataset.state='connected';$('feishu-app-conn-title').textContent='已收到你的消息，连接正常';$('feishu-app-conn-text').textContent='最后一步：把下面的绑定码发给同一个机器人。';}
+    else if(connected){conn.dataset.state='waiting';$('feishu-app-conn-title').textContent='已连接，等待你发消息';$('feishu-app-conn-text').textContent=`打开飞书，搜索「${botName}」并发送一句「你好」。`;}
+    else {conn.dataset.state='waiting';$('feishu-app-conn-title').textContent='正在建立连接…';$('feishu-app-conn-text').textContent='保存后一般 5 秒内完成。如果超过 1 分钟，请回到第 3 步检查「长连接」和「发布版本」。';}
+    $('feishu-app-binding').hidden=!(gotMessage&&!bound);
+    $('feishu-app-done').hidden=!bound;
+    if(bound)$('feishu-app-done-text').textContent=`${botName} 已连接到当前 FundLex 账号，可以在飞书私聊发送 DOCX 合同或输入「菜单」。`;
+    if(gotMessage&&!bound){$('feishu-app-code').textContent=feishuApp.code||'……';feishuAppRenderExpiry();}
+  }
+  function feishuAppRenderExpiry(){
+    const el=$('feishu-app-code-expiry');if(!el)return;
+    if(!feishuApp.codeExpiry){el.textContent='';return;}
+    const left=Math.max(0,Math.round((feishuApp.codeExpiry-Date.now())/1000));
+    el.textContent=left>0?`绑定码 ${Math.floor(left/60)} 分 ${String(left%60).padStart(2,'0')} 秒内有效；过期后点“换一个”。`:'绑定码已过期，请点“换一个”。';
+  }
+  async function feishuAppEnsureCode(){
+    if(feishuApp.busy)return;
+    if(feishuApp.code&&feishuApp.codeExpiry-Date.now()>30000){feishuAppRenderExpiry();return;}
+    feishuApp.busy=true;
+    try{
+      const result=await feishuAppRequest('/api/integrations/feishu/binding-code',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ttl_seconds:1800})});
+      feishuApp.code=result.code||'';feishuApp.codeExpiry=Number(result.expires_at||0)*1000;
+      $('feishu-app-code').textContent=feishuApp.code||'……';feishuAppRenderExpiry();
+    }catch(e){$('feishu-app-conn-text').textContent='绑定码生成失败，请稍后重试或刷新本页。';}
+    finally{feishuApp.busy=false;}
+  }
+  async function loadFeishuApp(quiet=false){
+    if(!quiet){feishuApp.code='';feishuApp.codeExpiry=0;}
+    try{const data=await feishuAppRequest('/api/integrations/feishu/app');if(state.view!=='settings')return;feishuAppRender(data,quiet);}
+    catch(e){if(state.view!=='settings')return;if(!quiet&&(state.auth.token||owner()))flash(e.message||'读取飞书企业连接失败，请稍后重试。');}
+  }
+  function openFeishuAppWizard(){
+    stopFeishuOAuth();
+    feishuApp.localStep=1;feishuApp.localPanel=null;feishuApp.reenterFrom=null;feishuAppStopPoll();
+    $('feishu-app-wizard').hidden=false;
+    feishuAppRenderPanel(feishuApp.data||{configured:false,stage:'no_app'});
+    loadFeishuApp();
+    $('feishu-app-wizard').scrollIntoView({block:'start',behavior:'smooth'});
+  }
+  function closeFeishuAppWizard(){
+    feishuAppStopPoll();$('feishu-app-wizard').hidden=true;feishuApp.localPanel=null;feishuApp.reenterFrom=null;
+    feishuApp.confirmRemove=false;
+    const remove=$('feishu-app-remove');
+    if(remove){remove.textContent='移除这个应用';remove.dataset.confirm='0';}
+    $('feishu-app-error').hidden=true;
+    $('feishu-app-recheck-error').hidden=true;
+  }
+  function feishuAppShowError(target,error){
+    const box=$(target==='recheck'?'feishu-app-recheck-error':'feishu-app-error');
+    const title=$(target==='recheck'?'feishu-app-recheck-error-title':'feishu-app-error-title');
+    const text=$(target==='recheck'?'feishu-app-recheck-error-text':'feishu-app-error-text');
+    const link=$(target==='recheck'?'feishu-app-recheck-error-link':'feishu-app-error-link');
+    const detail=error&&error.detail;
+    title.textContent=error.message||'验证未通过';
+    const raw=detail&&typeof detail==='object'?(detail.detail||''):(typeof detail==='string'?detail:'');
+    const extra=/^[A-Z][A-Z0-9_.-]{1,96}$/.test(raw)?'':raw;
+    text.textContent=extra||'请按提示修改后重试。';
+    const href=detail&&typeof detail==='object'?(detail.link||''):'';
+    if(href){link.href=href;link.hidden=false;}else{link.hidden=true;}
+    box.hidden=false;
+  }
+  async function feishuAppSubmit(event){
+    event.preventDefault();
+    const id=$('feishu-app-id').value.trim(),secret=$('feishu-app-secret').value.trim();
+    $('feishu-app-error').hidden=true;
+    if(!id||!secret){feishuAppShowError('credentials',{message:'请填写 App ID 和 App Secret'});return;}
+    const button=$('feishu-app-submit');const label=button.textContent;button.disabled=true;button.textContent='正在向飞书验证…';
+    try{
+      const data=await feishuAppRequest('/api/integrations/feishu/app/credentials',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({app_id:id,app_secret:secret})});
+      $('feishu-app-secret').value='';
+      feishuApp.localPanel=null;feishuApp.reenterFrom=null;
+      feishuAppRender(data);
+      const verification=data.verification||{};
+      if(data.stage==='needs_attention'){
+        feishuApp.localStep=3;feishuAppRenderPanel(data);
+        flash('凭证已保存。还有配置项需要完成。');
+      }else{
+        feishuApp.localStep=4;feishuAppRenderPanel(data);
+        flash(verification.scopes_checked?'凭证验证通过，权限和机器人都已就绪。':'凭证验证通过。');
+      }
+    }catch(e){feishuAppShowError('credentials',e);}
+    finally{button.disabled=false;button.textContent=label;}
+  }
+  async function feishuAppRecheck(){
+    const button=$('feishu-app-recheck');const label=button.textContent;button.disabled=true;button.textContent='正在检测…';
+    $('feishu-app-recheck-error').hidden=true;
+    try{
+      const data=await feishuAppRequest('/api/integrations/feishu/app/verify',{method:'POST'});
+      feishuApp.localPanel=null;
+      feishuAppRender(data);
+      if(data.stage==='needs_attention'){
+        const missing=(data.missing_scopes||[]).length;const checks=data.checks||[];
+        const botOk=(checks.find(c=>c.key==='bot')||{}).ok;
+        feishuAppShowError('recheck',{message:missing?`还缺少 ${missing} 个权限`:'机器人还没有启用或版本未发布',detail:{detail:missing?'请按上面标黄的权限逐项添加，然后重新发布版本。':'请在「机器人」页启用机器人，并在「版本管理与发布」创建版本、申请发布。',link:data.guide&&(missing?data.guide.permission:data.guide.bot)}});
+      }else if(data.scopes_checked){
+        flash('配置齐全，正在建立连接。');
+      }else{
+        flash('已重新检测。没有「应用信息读取」权限时无法自动核对权限清单，请在飞书里给机器人发一句话确认。');
+      }
+    }catch(e){feishuAppShowError('recheck',e);}
+    finally{button.disabled=false;button.textContent=label;}
+  }
+  function copyText(text,message){
+    const done=()=>flash(message||'已复制。');
+    if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(text).then(done).catch(()=>copyFallback(text,done));return;}
+    copyFallback(text,done);
+  }
+  function copyFallback(text,done){
+    const area=document.createElement('textarea');area.value=text;area.setAttribute('readonly','');area.style.position='fixed';area.style.opacity='0';document.body.append(area);area.select();
+    try{document.execCommand('copy');done();}catch{flash('复制失败，请手动选择文本复制。');}
+    area.remove();
+  }
+  async function feishuAppNewCode(){
+    feishuApp.code='';feishuApp.codeExpiry=0;
+    await feishuAppEnsureCode();
+    flash('已生成新的绑定码。');
+  }
+  async function feishuAppRemove(){
+    const button=$('feishu-app-remove');
+    if(button.dataset.confirm!=='1'){button.dataset.confirm='1';button.textContent='再点一次确认移除';return;}
+    button.disabled=true;
+    try{
+      const data=await feishuAppRequest('/api/integrations/feishu/app',{method:'DELETE'});
+      feishuApp.code='';feishuApp.codeExpiry=0;feishuApp.localStep=1;
+      feishuAppRender(data);feishuAppRenderPanel(data);
+      flash('已移除这个应用。');
+      button.textContent='移除这个应用';button.dataset.confirm='0';
+    }catch(e){flash(e.message||'移除失败，请稍后重试。');}
+    finally{button.disabled=false;}
+  }
+  document.addEventListener('fundlex:view',e=>{if(e.detail!=='settings'){stopFeishuOAuth();state.tokens['feishu-binding']=(state.tokens['feishu-binding']||0)+1;$('feishu-binding-refresh').disabled=false;closeFeishuAppWizard();}});
+  document.addEventListener('fundlex:identity-reset',()=>{stopFeishuOAuth();feishuBound=false;$('feishu-connect-card').dataset.state='loading';$('feishu-binding-badge').textContent='读取中';$('feishu-binding-state').textContent='正在读取绑定状态…';$('feishu-current-user').textContent='—';$('feishu-binding-message').textContent='';$('feishu-unbind-btn').hidden=true;$('feishu-oauth-btn').hidden=false;$('feishu-oauth-btn').disabled=true;document.querySelector('[data-action="feishu-unbind-confirm"]').disabled=false;closeFeishuAppWizard();feishuApp.data=null;feishuApp.code='';feishuApp.codeExpiry=0;feishuApp.localStep=1;feishuApp.confirmRemove=false;$('feishu-app-entry').hidden=false;$('feishu-app-summary').hidden=true;});
   async function loadCapabilities() {
     const t=ticket('cap'),wasReady=!!state.cap;
     try{
@@ -462,7 +684,7 @@
       hideLogin();renderAuthUI();state.cap=cap;renderFooter();
       if(!state.importMode)state.importMode='revision';
       $('upload-limit').textContent=`仅接收 DOCX（.doc 请先用 Word/WPS 另存为 .docx） · 单文件 ≤ ${size(cap.upload_limits.max_file_bytes)}`;
-      renderImport();if(state.view==='settings')loadFeishuBinding();if(state.view==='models')loadModelSettings();
+      renderImport();if(state.view==='settings'){loadFeishuBinding();loadFeishuApp();}if(state.view==='models')loadModelSettings();
       if(!wasReady&&state.view==='overview')restoreRevisionFilters();
       if(!wasReady)dispatchRoute();
       if(state.view==='document'&&!state.detail)openDocumentRoute(state.route);
@@ -472,13 +694,26 @@
   }
   document.addEventListener('click',e=>{
     const action=e.target.closest('[data-action]')?.dataset.action;
-    if(!['feishu-binding-refresh','feishu-unbind','feishu-unbind-confirm','feishu-unbind-cancel'].includes(action))return;
+    if(!['feishu-binding-refresh','feishu-unbind','feishu-unbind-confirm','feishu-unbind-cancel','feishu-app-open','feishu-app-close','feishu-app-to-credentials','feishu-app-copy-scopes','feishu-app-recheck','feishu-app-copy-code','feishu-app-new-code','feishu-app-remove','feishu-app-view-config','feishu-app-back-test','feishu-app-reenter','feishu-app-back'].includes(action))return;
     e.stopImmediatePropagation();
     if(action==='feishu-binding-refresh')loadFeishuBinding();
     if(action==='feishu-unbind'){$('feishu-unbind-confirm').hidden=false;document.querySelector('[data-action="feishu-unbind-confirm"]').focus();}
     if(action==='feishu-unbind-cancel'){$('feishu-unbind-confirm').hidden=true;$('feishu-unbind-btn').focus();}
     if(action==='feishu-unbind-confirm')revokeFeishuBinding();
+    if(action==='feishu-app-open')openFeishuAppWizard();
+    if(action==='feishu-app-close')closeFeishuAppWizard();
+    if(action==='feishu-app-to-credentials'){feishuApp.localStep=2;feishuAppRenderPanel(feishuApp.data||{configured:false});$('feishu-app-id').focus();}
+    if(action==='feishu-app-copy-scopes')copyText((feishuApp.data?.guide?.required_scopes||[]).map(s=>s.key).join('\n'),'权限清单已复制，去飞书「权限管理」逐个粘贴。');
+    if(action==='feishu-app-recheck')feishuAppRecheck();
+    if(action==='feishu-app-copy-code')copyText(feishuApp.code||'','绑定码已复制。');
+    if(action==='feishu-app-new-code')feishuAppNewCode();
+    if(action==='feishu-app-view-config'){feishuApp.localPanel=3;feishuAppRenderPanel(feishuApp.data||{configured:false});}
+    if(action==='feishu-app-back-test'){feishuApp.localPanel=null;feishuAppRenderPanel(feishuApp.data||{configured:false});}
+    if(action==='feishu-app-reenter'){feishuApp.reenterFrom=feishuAppStep(feishuApp.data||{configured:false});feishuApp.localPanel=2;feishuAppRenderPanel(feishuApp.data||{configured:false});$('feishu-app-id').value=(feishuApp.data&&feishuApp.data.app_id)||'';$('feishu-app-secret').value='';$('feishu-app-secret').focus();}
+    if(action==='feishu-app-back'){feishuApp.localPanel=feishuApp.reenterFrom||null;feishuApp.reenterFrom=null;feishuAppRenderPanel(feishuApp.data||{configured:false});}
+    if(action==='feishu-app-remove')feishuAppRemove();
   });
+  document.addEventListener('submit',e=>{if(e.target&&e.target.id==='feishu-app-form')feishuAppSubmit(e);});
   function taskMetrics(t){const failed=t.failed||0,rejected=t.rejected||0,dc=t.delivery_counts||{},incomplete=dc.incomplete||0;return {success:t.successful??((dc.complete||0)+(dc.complete_with_exceptions||0)),anomaly:t.exceptions??(failed+rejected+incomplete),breakdown:`失败 ${failed} · 接收失败 ${rejected} · 交付不完整 ${incomplete}（异常合同按份去重）`};}
   function taskRow(t){const m=taskMetrics(t),pct=t.total?Math.round(100*(t.completed||0)/t.total):0;return `<tr data-row-key="${esc(t.id)}"><td><span class="filename task-list-name" title="${esc(t.name)}">${esc(t.name)}</span></td><td><strong>${t.total}</strong></td><td title="${esc(m.breakdown)}"><span class="task-success">${m.success}</span> / <span class="task-error">${m.anomaly}</span></td><td>${badge(t.status)}</td><td><div class="task-progress"><div class="progress-line mini">${progressHTML(t)}</div><small>${pct}% · ${t.completed}/${t.total} 份终态</small></div></td><td class="task-created-time">${esc(new Date(t.created_at).toLocaleString('zh-CN'))}</td><td><button class="btn-link" data-task="${esc(t.id)}">查看</button></td></tr>`;}
   async function loadTasks(quiet=false) {
