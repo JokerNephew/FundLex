@@ -31,9 +31,14 @@ MC = "http://schemas.openxmlformats.org/markup-compatibility/2006"
 def _text(element: etree._Element) -> str:
     # ``w:t`` is visible text; delText is retained defensively for input files
     # containing existing revisions, although compare's normal contract forbids
-    # them. fld instructions are deliberately excluded.
+    # them. fld instructions are deliberately excluded.  Property subtrees
+    # (``w:pPr``) are skipped: their ``w:tabs/w:tab`` entries are tab-stop
+    # *definitions*, not content tabs, and must not count as text (FL-D595).
     out: list[str] = []
-    for node in element.iter():
+
+    def walk(node: etree._Element) -> None:
+        if node.tag == Q("pPr"):
+            return
         if node.tag in {Q("t"), Q("delText")}:
             out.append(node.text or "")
         elif node.tag in {Q("br"), Q("cr")}:
@@ -42,6 +47,10 @@ def _text(element: etree._Element) -> str:
             out.append("\t")
         elif node.tag in {Q("noBreakHyphen")}:
             out.append("\u2011")
+        for child in node:
+            walk(child)
+
+    walk(element)
     return "".join(out)
 
 

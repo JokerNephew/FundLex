@@ -6932,9 +6932,17 @@ H＝E×…
 - **目的**：FL-D562 能力恢复后，用 funds_word 全部真实合同（主线 merge 后 578 份，540 份原有 + 两个 `基金合同第一批_*_20261027/` 子目录新增）做 selection-writer 冒烟：变异左侧全部正文直接段落生成右侧 → compare → 全部采用B → generate → 校验 final==right；全程不跑模型、语料只读、产物即验即删、输出 <500MB 落 `var/qa-compare-smoke-20261031*/`。
 - **脚本**：`/tmp/opencode/qa/cmp-d562/smoke_corpus.py`（4 进程，worktree `.venv/bin/python`；外部脚本必须 `PYTHONPATH=$PWD`，见 FL-D593）。
 - **r1（作废）**：542 份，结果 ok 2 / reject 558 / error 18（LOCATION_NOT_FOUND 462 为主）——**因 import 主工作区旧树 `158475f` 整体作废**（FL-D593），只可作为主线旧树拒绝码形态参考，不代表本线行为。
-- **r2（进行中）**：578 份 `PYTHONPATH=$PWD` 重跑（2026-10-31 午后启动，预计小时级，结果内存累积、跑完落 `var/qa-compare-smoke-20261031-r2/{stats.json,results.jsonl}`），覆盖 FL-D592 二次修复后的代码。
-- **状态**：r2 冒烟进行中；fail-closed 率、拒绝码分布、抽查结构原因统计待回填。
-- **回填**：（待 r2 完成后登记 ok/fail 计数、拒绝码分布、artifacts_left、full_body_replacement_hits、抽查结论与语料正例入测试结果。）
+- **r2（完成）**：578 份 `PYTHONPATH=$PWD` 重跑（2026-10-31 16:53 启动，2026-11-01 00:03 落盘 `var/qa-compare-smoke-20261031-r2/{stats.json,results.jsonl}`，墙钟 ~7.2h 因 4 核超售 load 17-21，CPU 锚点 4 worker ~13.1 CPU-h/4.7h 时点）。**测的是 FL-D592 修复后、FL-D595 修复前的 worktree**（`04d71ed`）。
+- **r2 回填（统计即 stats.json 原口径）**：
+  - `outcomes`: ok **21** / reject 538 / error 18 / text_mismatch_after_ok 1；`artifacts_left: 0`（fail-closed 零产物保持）；`full_body_replacement_hits: 21`——**全部 ok 都走全量路径**，且 19/21 含 body 级 sdt(TOC)，正是旧计划级检测永远到不了的形态；ok 样本 manifest==diffs 全数（undo/审计覆盖完备）。
+  - `reject_codes`: SELECTION_BLOCK_SECTION_UNSUPPORTED 380（空白 sectPr 段非惰性，pre-detect 拒→普通路径撞 sectPr——按设计 fail-closed，三角样本 广发价值优选 一致）；SELECTION_BLOCK_RUN_UNSUPPORTED 80（非惰性 leftover 落普通路径遇 fldChar/多 w:t run，如价值优选 L000672 HYPERLINK 域段）；SELECTION_CONTENT_CONTROL_UNSUPPORTED 35（pre-detect 因非惰性 leftover 拒→普通路径撞 sdt 锚点）；SELECTION_BLOCK_STRUCTURE_UNSUPPORTED 25；EXISTING_REVISION_UNSUPPORTED 18（=error 18，全部位于 `基金合同第一批_修订原件备份_20261027/`，原件含既有修订，**解析期 fail-closed 预期**，非 writer 缺陷）；SELECTION_BLOCK_SCOPE_UNSUPPORTED 12；SELECTION_STRUCTURAL_DIFF_UNSUPPORTED 3；DOCUMENT_PROTECTED 1；SELECTION_MERGED_CELL_UNSUPPORTED 1；SELECTION_FINAL_TEXT_MISMATCH 1（→ FL-D595 根因消除后已转交付）；`?` 1（即 text_mismatch_after_ok 那 1 份，无 code）。
+  - **text_mismatch_after_ok 1（广发百发大数据策略价值）归因**：左侧 body[0] 为含一个空格 run 的段落→diff builder 归一视『空白』只产出 insert 不产出 delete→普通路径忠实执行『全采用』，左空白段保留、其余全部按 diff 落地。**交付忠实于已采用 diff**（非 writer 违约），只是严格口径 final≠B 逐字；归入 diff 层空白段语义边界，保持 fail-open 交付不阻断。
+  - **影响面评估**：可处理分母 560（578-18 备份原件）；ok 21（3.75%）+ text_mismatch 1（交付但非 B 逐字，0.18%）；其余 538 全部 fail-closed 零产物、拒绝码如实指向未支持的文档特征。合并门槛决策见主线。
+  - **语料正例已入测试**：`test_real_corpus_full_body_replacement_delivers` 采用 ok 样本 广发中证800自由现金流（含 body 级 sdt，skipif 语料缺席时跳过）。
+- **待办**：FL-D595 修复后按 r3 口径全量重测（低噪窗口，增量落盘版脚本），预期 SECTION/RUN/CONTENT_CONTROL 结构性拒绝不变、FINAL_TEXT_MISMATCH 归零、ok 至少 +1（已单文件复验）；性能复测 bench_compare.py 同窗口。
+- **变更记录**：
+  - 2026-10-31 新增（脚本与目的）。
+  - 2026-11-01 回填 r2 全量统计与归因抽查结论。
 
 ## FL-D591 compare worker 终态失败诊断结构化透出（A6-546 后续增强已实施，2026-10-31，qa-feat-compare 专线）
 
@@ -6967,6 +6975,30 @@ H＝E×…
 - **状态**：已确认（流程规避已生效），r2 统计为准。
 - **变更记录**：
   - 2026-10-31 新增（qa-feat-compare 专线）。
+
+## FL-D594 FL-D590 冒烟脚本不可观测与超时风险（stdout 吞没 + 结果只在内存，2026-10-31，qa-feat-compare 专线）
+
+- **发现日期**：2026-10-31，主线排障指令指出：r2（578 份）已跑 4.7h 远超标称「小时级」，且无法判断进度。
+- **问题与影响**：`smoke_corpus.py` 两个设计缺陷叠加：①stdout 经 `2>&1 | tail -30` 包一层，progress 行被管道缓冲吞掉，main/agent 中途完全看不到进度；②所有结果只在主进程内存累积，跑完才一次性落 stats.json/results.jsonl——**进程死 = 全部统计丢失**（r1 已实际经历一次「代价昂贵的重跑」，那次归因错树 FL-D593）。4 核机器 load ~17-21 超售下，重跑代价被进一步放大。
+- **处理方法（主线指令执行）**：①在跑的 r2 不杀不动，保住内存结果；②侧车分片探针 `/tmp/opencode/qa/cmp-d562/smoke_shard.py`：同工作负载、files[::6]≈96 份系统抽样、**每份完成即时追加 results.jsonl + 无缓冲 progress 打印**（进程死零损失）、`nice -n 19` + `max_workers=2` 不抢评测与其他线 CPU、支持断点续跑；探针记录每份 cpu_s（nice/争用无关）与 wall_s 分布，结合 r2 累计 CPU（4.7h 时点 4 worker ≈13.1 CPU-h）推算 r2 已完成份数与剩余诚实 ETA；③规则固化：**本线后续任何长跑脚本一律增量落盘 + 无缓冲 progress，禁止只内存累积、禁止 tail 吞 stdout**。
+- **状态**：已处置——r2 于 2026-11-01 00:03 自然跑完落盘（578 份统计已回填 FL-D590），紧急性解除；侧车探针未跑完即被服务器重启撤销（其 method 已固化进 FL-D590 待办 r3 增量落盘版脚本要求）。
+- **变更记录**：
+  - 2026-10-31 新增（qa-feat-compare 专线，主线排障指令触发）。
+  - 2026-11-01 r2 自然完成；服务器重启撤销 r2/shard 两个后台 shell（r2 已落盘无损、shard 部分 results.jsonl 留存但已被 r2 全量取代）；规则「长跑脚本一律增量落盘 + 无缓冲 progress，禁止 tail 吞 stdout」继续有效。
+
+## FL-D595 全文替换交付真实语料两缺陷：删除段落书签级联污染 + 制表位定义计入 raw_text（2026-11-01，qa-feat-compare 专线）
+
+- **发现日期**：2026-11-01，r2 唯一 `SELECTION_FINAL_TEXT_MISMATCH`（广发中证智选高股息）逐层三角（redline 正确 → final 布局 → keeper XML → parse 文本源）定位。
+- **问题与影响**：
+  1. **删除段落的书签/proofing 子节点级联污染**：`_mark_deleted_paragraph` 全删段落（mark+runs）后保留 `bookmarkStart/End/proofErr/lastRenderedPageBreak` 直接子节点；`_accept_revisions_copy` 按 OOXML 段落标记语义把已删段落的残留子节点移入**下一段**——整带删除时 1232 个段落的 26 枚书签全部级联进 keeper，交付物 final 含「书签墙」（redline 校验/独立 oracle 因同源实现均通过，文本校验漏检书签维度）。属交付物污染缺陷。
+  2. **制表位定义计入 raw_text**：`parser._text` 与 `presentation.runs` 全子树遍历把 `w:pPr/w:tabs/w:tab`（制表位**定义**非内容）计为 `\t` 文本。keeper 保留左侧 pPr（左文集为排版基准的既定策略），签名行类段落（`签订日：<tab>年<tab>月<tab>日`，pPr 含 3 个居中制表位）即被 parse 为 `'\t\t\t'+正文` ≠ right 文本 → 校验 fail-closed 拦下（安全网按设计生效但属误伤）；该误计同时污染 diff builder 的 raw_text（左右两侧同口径，diff 无伪差，但文本字段夹带幽灵制表符）。
+- **处理方法**：
+  - `_mark_deleted_paragraph`：mark_paragraph=True（整段删除）时先剥离 bookmarkStart/bookmarkEnd/proofErr/lastRenderedPageBreak 子节点——书签属于将亡段落，Word 接受删除时等同消失，级联变 no-op（对普通路径的尾部删除链同样生效，消除同源潜在污染）。
+  - `parser._text` 改为显式递归跳过 `w:pPr` 子树；`presentation.runs`（parse raw_text 实际取数源）同样跳过 pPr 子树。左右两侧同口径变化，diff 一致性与既有测试兼容。
+- **验证**：新增 `test_bookmarks_die_with_paragraph_and_tabstop_ppr_is_not_text`（签名行 keeper+书签删除段：交付、final 零书签残留、delText 覆盖撤销完备）；修复后广发中证智选高股息单文件复验 GENERATE OK（full_body_replacement=True、final==right、manifest 2476/2476）；`tests/test_compare_full_body_replacement.py` 18 项全绿（含新增语料正例 广发中证800自由现金流）；`tests -k compare` 全量回归随本登记后复跑为准（见本线状态文件）。
+- **状态**：已修复（fixture/单文件/语料正例已验证），待主线合并核对；r3 全量冒烟（低噪窗口）后回填影响面。
+- **变更记录**：
+  - 2026-11-01 新增（qa-feat-compare 专线）。
 
 ## FL 编号分配（多对话并行期协调，2026-10-31）
 

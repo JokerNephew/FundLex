@@ -431,3 +431,114 @@ def test_drawing_inside_deleted_paragraph_fails_closed(tmp_path):
     with pytest.raises(DocxError) as excinfo:
         _generate(left, right, payload, payload_hash, _adopt_all_right(payload), tmp_path)
     _assert_rejected(excinfo, final, redline)
+
+
+def test_bookmarks_die_with_paragraph_and_tabstop_ppr_is_not_text(tmp_path):
+    """FL-D595: two real-corpus defects from the 578-file smoke found together
+    on a signature-line keeper anchor:
+
+    1. A fully deleted paragraph's bookmarkStart/End (and proofing hints) must
+       die with it.  Otherwise accepting the revisions cascades every band
+       paragraph's bookmarks into the surviving keeper, piling junk navigation
+       anchors into the delivered final.
+    2. ``w:pPr/w:tabs/w:tab`` entries are tab-stop *definitions*, not content;
+       the text extractor must not render them as ``\\t``.  A signature-line
+       keeper (``签订日：<tab>年<tab>月<tab>日`` has three center tab stops in
+       its pPr) must therefore still deliver with final == right text.
+    """
+    signature = ("<w:p><w:pPr><w:tabs>"
+                 "<w:tab w:val=\"center\" w:pos=\"1800\"/>"
+                 "<w:tab w:val=\"center\" w:pos=\"2520\"/>"
+                 "<w:tab w:val=\"center\" w:pos=\"3240\"/>"
+                 "</w:tabs></w:pPr>"
+                 "<w:r><w:t>签</w:t></w:r><w:r><w:t>订</w:t></w:r><w:r><w:t>日：</w:t></w:r>"
+                 "<w:r><w:tab/></w:r><w:r><w:t>年</w:t></w:r>"
+                 "<w:r><w:tab/></w:r><w:r><w:t>月</w:t></w:r>"
+                 "<w:r><w:tab/></w:r><w:r><w:t>日</w:t></w:r></w:p>")
+    parts = []
+    for i in range(3):
+        parts.append("<w:p><w:bookmarkStart w:id=\"%d\" w:name=\"_Toc900%02d\"/>"
+                     "<w:bookmarkEnd w:id=\"%d\"/><w:r><w:t>%s</w:t></w:r></w:p>"
+                     % (i, i, i, BASE250[i]))
+    # The band's keeper is the LAST paragraph: make it the signature para.
+    body = "".join(parts) + signature
+    right_texts = ["新条款第一号采用B文本。", "新条款第二号采用B文本。", "新条款第三号采用B文本。"]
+    left, right = tmp_path / "left.docx", tmp_path / "right.docx"
+    _save_raw(left, body)
+    _save(right, right_texts)
+    payload, payload_hash = _result(left, right)
+    validation, final, redline = _generate(
+        left, right, payload, payload_hash, _adopt_all_right(payload), tmp_path, "-sig")
+    _assert_full_delivery(validation, left, right, final, redline, right_texts)
+    final_root = etree.fromstring(zipfile.ZipFile(io.BytesIO(final.read_bytes())).read(DOCUMENT))
+    # No bookmark cascade: the band carried 3 bookmark pairs in the deleted
+    # paragraphs and none may survive into the final.
+    assert not list(final_root.iter(Q("bookmarkStart")))
+    # The keeper is the signature paragraph (its pPr tab stops are preserved
+    # as left-base formatting) but its content is the right text only.
+    keeper = [p for p in final_root.find(Q("body")).findall(Q("p"))
+              if p.find(Q("pPr")) is not None and p.find(Q("pPr")).find(Q("tabs")) is not None]
+    assert len(keeper) == 1
+    texts = [node.text or "" for node in keeper[0].iter(Q("t"))]
+    assert "".join(texts) == right_texts[0]
+    # Undo trail still covers every left run.
+    redline_root = etree.fromstring(zipfile.ZipFile(io.BytesIO(redline.read_bytes())).read(DOCUMENT))
+    deleted_text = "".join(node.text or "" for node in redline_root.iter(Q("delText")))
+    assert "签订日：" in deleted_text and "年" in deleted_text and BASE250[0] in deleted_text
+
+
+CORPUS_DIR = Path(__file__).resolve().parents[1] / "funds_word"
+CORPUS_OK_SAMPLE = "广发中证800自由现金流交易型开放式指数证券投资基金基金合同_20260415.docx"
+
+
+@pytest.mark.skipif(not (CORPUS_DIR / CORPUS_OK_SAMPLE).exists(),
+                    reason="real corpus DOCX not checked out")
+def test_real_corpus_full_body_replacement_delivers(tmp_path):
+    """Corpus positive from the 578-file FL-D590 smoke (r2 ok set): the real
+    contract with a body-level TOC content control is mutated whole-body,
+    every diff adopted to the right, and the writer must deliver final ==
+    right verbatim with one manifest entry per diff.  This is the shape the
+    plan-level detection could never reach (FL-D592)."""
+    corpus = CORPUS_DIR / CORPUS_OK_SAMPLE
+    data = corpus.read_bytes()
+    left, right = tmp_path / "left.docx", tmp_path / "right.docx"
+    left.write_bytes(data)
+    marker = hashlib.sha1(corpus.name.encode()).hexdigest()[:6]
+    root = etree.fromstring(zipfile.ZipFile(io.BytesIO(data)).read(DOCUMENT))
+    body_el = root.find(Q("body"))
+    counter = 0
+    for child in body_el:
+        if child.tag != Q("p"):
+            continue
+        for node in list(child):
+            if node.tag == Q("r"):
+                child.remove(node)
+        run = etree.SubElement(child, Q("r"))
+        text = etree.SubElement(run, Q("t"))
+        text.text = f"【{marker}正文块{counter:04d}】语料级全文替换测试采用B文本甲乙丙。"
+        counter += 1
+    buffer = io.BytesIO()
+    zin = zipfile.ZipFile(io.BytesIO(data))
+    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as zout:
+        for name in zin.namelist():
+            if name == DOCUMENT:
+                zout.writestr(name, etree.tostring(root, encoding="UTF-8", xml_declaration=True))
+            else:
+                zout.writestr(name, zin.read(name))
+    right.write_bytes(buffer.getvalue())
+    payload, payload_hash = _result(left, right)
+    validation, final, redline = _generate(
+        left, right, payload, payload_hash, _adopt_all_right(payload), tmp_path, "-corpus")
+    assert "full_body_replacement" in validation.checks
+    assert len(validation.manifest) == len(payload["diffs"])
+    final_texts = [block.raw_text for block in parse_compare_document(final).blocks]
+    right_texts = [block.raw_text for block in parse_compare_document(right).blocks]
+    assert final_texts == right_texts
+    prepared = prepare_compare_input(redline.read_bytes(), limits=ZipLimits())
+    prepared_root = etree.fromstring(zipfile.ZipFile(io.BytesIO(prepared.data)).read(DOCUMENT))
+    final_root = etree.fromstring(zipfile.ZipFile(io.BytesIO(final.read_bytes())).read(DOCUMENT))
+    assert etree.tostring(prepared_root, method="c14n") == etree.tostring(
+        final_root, method="c14n")
+    # No bookmark wall may survive the band deletions on a real TOC document.
+    assert len(list(final_root.iter(Q("bookmarkStart")))) <= len(
+        list(root.iter(Q("bookmarkStart"))))

@@ -161,8 +161,13 @@ class Presentation:
         segments: list[list] = []  # [run element, [text parts]]
         total: list[str] = []
         current: list | None = None
+        # Property definitions (w:pPr/w:tabs tab stops etc.) are not visible
+        # text; skip the whole pPr subtree so tab-stop definitions do not
+        # leak into the paragraph projection (FL-D595).
+        ppr = paragraph.find(Q("pPr"))
+        skip = set(ppr.iter()) if ppr is not None else set()
         for node in paragraph.iter():
-            if node is paragraph:
+            if node is paragraph or node in skip:
                 continue
             if node.tag == Q("r"):
                 current = [node, []]

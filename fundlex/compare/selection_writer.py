@@ -740,6 +740,16 @@ def _mark_deleted_paragraph(element: etree._Element, block, revision_start: int,
     if mark_paragraph:
         _paragraph_mark(element, "del", next_id, when)
         next_id += 1
+        # A paragraph whose mark is deleted dies at accept time and its
+        # non-run children would cascade into the following paragraph (OOXML
+        # paragraph-mark semantics, see _accept_revisions_copy).  Navigation
+        # anchors and proofing hints belong to the dying paragraph, so strip
+        # them first: accepting a chain of whole-body deletions must not pile
+        # hundreds of bookmarks onto the surviving anchor.
+        for child in list(element):
+            if child.tag in {Q("bookmarkStart"), Q("bookmarkEnd"), Q("proofErr"),
+                             Q("lastRenderedPageBreak")}:
+                element.remove(child)
     for child in list(element):
         if child.tag != Q("r"):
             continue
