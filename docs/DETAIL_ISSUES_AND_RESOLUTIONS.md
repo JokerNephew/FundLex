@@ -7341,6 +7341,31 @@ H＝E×…
 - **附带观察**：诊断中发现 /var/lib/fundlex 下 auth.db（0 字节，10-31 18:59 由某 root 进程创建）、fundlex.db、runs.sqlite3 自 10-16 起为 root:root 644；由于服务实际库文件是 runs.sqlite3 且生产 API 正常，属历史权限形态，不影响本轮交付，但 root 属主库文件对 fundlex 用户不可写，巡检留意。
 - **状态**：已解决（发布闭环）。
 
+## FL-D720 导出层未知枚举兜底透传英文原值风险（2026-10-31，主线复核）
+
+- **发现**：`DELIVERY_TEXT.get(status, status)`、`OP_TEXT.get(op, op)`、`delivery_text` 三处回退原值；未来新增交付状态/操作枚举未同步映射时原始英文会漏入用户导出件。现枚举全覆盖且有负面断言，属前瞻性硬化。
+- **处理（已派 qa-export）**：未知值统一兜底人读文案（如「其他状态」并提示看修改说明）。
+- **状态**：open（低危）。
+
+## FL-D721 download-all 前端禁用条件未跟上后端 409 语义拓宽（2026-10-31，主线复核）
+
+- **发现**：后端改为「存在 document_id 即可下载解释性 ZIP（含全失败任务）」，但 compare 页 release 按钮禁用条件 `(completed||0)+(rejected||0)>0` 使全失败任务按钮仍禁用 → 新能力在 UI 不可达；compare.html:403 的提示文案仍是旧 409 语义。
+- **处理（已派 qa-frontend，2026-10-31 已实施）**：`app.js` ready 条件修为 `(t.completed||0)+(t.failed||0)>0`（全失败可下载；仍在处理中的任务不开放，防止误抓半成品包）；disabled title 改「当前尚无已出结果的合同；处理结束（含失败）后即可下载结果包」；`compare.html` download-hint 文案改「任何已接收的合同都会进入结果包；未通过处理的合同会在包内给出原因说明。」。
+- **验证**：既有浏览器用例 `test_paused_task_shows_paused_rows_download_hint_and_verdict`（paused、0 终态 → disabled+hint 可见）在该口径下语义仍成立，复跑通过；V1 浏览器套件整批通过（FL-D716）。
+- **状态**：已解决。
+
+## FL-D722 p6_package 评测清单与工作台导出清单分化后的口径标注（2026-10-31，主线复核）
+
+- **发现**：tools/evaluation/p6_package.py 内置旧四列「结果清单.csv」构造，注释自称与工作台同格式；现两者分化为两种格式（评测包 ≠ 用户导出包）。
+- **处理**：注释/README 口径注明差异，避免后续误对齐。派 qa-export 顺带。
+- **状态**：open（文档级）。
+
+## FL-D691 主线裁决注记（2026-10-31，主线）
+
+- qa-feat-recall 归因（其树内 FL-D691 条目）经主线独立盲抽复核 **3/3 PASS**（B17 T003、B15 T005、B15 T008：义务文本在 final.docx 完整在场，量具误杀坐实）。复核另指正机制精确表述：非「折叠本身撞线」，而是折叠后形如仍异 + exact-substring 不吸收「和」重复主语。
+- **主线授权**：评分器口径修正（FL-D692，labels 冻结只动 scorer），两层等价归一按复核精确机制设计；scorer_version bump、零成本重评 loop-3 并同口径重评 v1/loop2、附正负例单测。
+- **裁决不变项**：B15 T001 G03 三直销条款真实未执行 → false_complete 修正后仍为 1，loop-3 门槛维持 FAIL；该真实缺口归 qa-recall-miss 机制 A/E 强制病例，留出 8 份继续冻结至 loop-4 达标。
+
 ## FL-D710 前端全页面体检：六条用户反馈对应问题点入册（2026-10-31，qa-frontend）
 
 - **发现日期**：2026-10-31（产品负责人六条前端反馈派单，qa-frontend 线）。
@@ -7398,11 +7423,3 @@ H＝E×…
 - **结果**：`npx tsc -b --noEmit` 0 错；`npx vitest run` 6 文件 24 用例全绿（与基线一致）；`npm run build` 通过。python 浏览器套件（FUNDLEX_BROWSER_TESTS=1）：V2（test_frontend_v2、test_frontend_fixes）+ V1（test_v1_frontend_remediation、test_workbench、test_tracked_upload、test_guide_generation）批量结果见 `/tmp/opencode/qa/status/qa-frontend.md` 与体检文档第四节。
 - **状态**：已关闭（2026-10-31）：浏览器 6 文件整批 **96 passed / 1 failed**（19m50s），唯一失败 `test_real_task_document_deep_links_use_task_scoped_api` 批量前 2 次单跑+批量后 1 次单跑均通过，且相邻整批失败者轮换——多线并行 pytest 高负载环境抖动，非本线回归。中途两处回归已修复并复验（①V2 Guides 页头「我的指引」改回锚点文案「指引配置」；②FL-D721 ready 条件按指令精确修为 completed+failed>0，见 FL-D721）。
 - **注意**：V2 套件整跑时在高负载机（多线并行 pytest）出现轮换性单测失败（prefixed_entry / real_task_document_deep_links），单测均通过，判定为环境抖动非回归；批量干净跑结果以此条更新为准。
-
-## FL-D721 「下载全部结果」旧禁用口径与 409 新语义不一致（2026-10-31，qa-frontend，主线补充派单）
-
-- **发现日期**：2026-10-31（主线派单给用户原话补充）。
-- **问题与影响**：后端导出包语义已拓宽——任务存在 document_id 即可下载解释性 ZIP（全失败任务附原因说明）；V1 任务页「下载全部结果」ready() 仍为 `completed>0` 旧口径，全失败任务 UI 禁用；`download-hint` 文案仍旧 409 语义。
-- **处理方法**：`app.js` ready 条件按指令修为 `(t.completed||0)+(t.failed||0)>0`（含全失败可下载；仍在处理中的任务不开放，维持防误抓半成品）；disabled title 改「当前尚无已出结果的合同；处理结束（含失败）后即可下载结果包」；`compare.html` download-hint 文案改为「任何已接收的合同都会进入结果包；未通过处理的合同会在包内给出原因说明。」。
-- **状态**：已实施。
-- **验证**：既有浏览器用例 `test_paused_task_shows_paused_rows_download_hint_and_verdict`（paused、0 终态 → disabled+hint 可见）在该口径下语义仍成立，复跑通过。

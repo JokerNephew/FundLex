@@ -124,7 +124,8 @@ def unresolved_entries(report: dict) -> list[dict]:
 
 def delivery_text(report: dict, result: dict | None = None) -> str:
     delivery = report.get("delivery_status") or (result or {}).get("delivery_status")
-    return DELIVERY_TEXT.get(delivery, delivery or "未知")
+    # 未知枚举永不把英文原值透传给用户：落到人读兜底文案。
+    return DELIVERY_TEXT.get(delivery or "", "状态待确认")
 
 
 def summary_detail(report: dict, result: dict | None = None) -> str:
@@ -188,7 +189,8 @@ def operation_text(edit: dict) -> str:
     operation = edit.get("operation") or ""
     if operation == "replace" and not edit.get("replacement"):
         return "删除"
-    return OP_TEXT.get(operation, operation or "—")
+    # 未知枚举永不把英文原值透传给用户：落到人读兜底文案。
+    return OP_TEXT.get(operation) or ("—" if not operation else "其他修改")
 
 
 FINAL_ROOT = "最终版（接受修订后）"
