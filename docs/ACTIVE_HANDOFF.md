@@ -4,9 +4,9 @@
 
 ### 断点更新（2026-10-31 主线收口进展，最新以此为准）
 
-- HEAD：`fe4803f`（qa/full-audit-20261031 @ /tmp/opencode/qa-base）。wave1 dev20 归因修复已收口大半：`ac697a4`（FL-D571 ONE_OF coalesce + FL-D572 G08/G09/G18/G13，B03/B01/B05/B12/B15；**注意该提交意外卷入 FL-D573 agent 在途的 recall.py 改动**，其 claim_replay.py 增量仍未提交、agent 在途）、`fe4803f`（FL-D575：D573 三机制正负路径测试 8 个，68/55 绿）。独立复核已做（结论 PASS+3 观察项=FL-D575/576/577，已登记）。全量 pytest 后台复跑中。
+- HEAD：`c1ec87c`（qa/full-audit-20261031 @ /tmp/opencode/qa-base）。wave1 dev20 归因修复已收口大半：`ac697a4`（FL-D571 ONE_OF coalesce + FL-D572 G08/G09/G18/G13，B03/B01/B05/B12/B15；其中卷入的 recall.py 系 FL-D573 修复本体）、`fe4803f`（FL-D575：D573 三机制正负路径测试 8 个）。**FL-D573 已收口**：`449b36b`（Fix B claim_replay 自述证据不扩权）、`0a89e7d`（受理死代码修正：组延续受理移至 `_append_definition_anchor` 闸门之前，仍限 plan 期）、`c1ec87c`（登记）；13 项测试+mutation 自检+冻结复放（G05=[174,183) 与 gold T002 一致、p87 尾句保留、tbl r55c1 无 G01、plan 落 p84）全部完成；留裁子项（G22×2/G08/G14 裁定冲突）详见集中记录。独立复核观察项余 FL-D576（v2 重跑观察谨慎阻断）待 qa-feat-recall 线数据。全量 pytest 后台复跑中。
 - **新资产（各对话可用）**：`references/fee-rule-v2/`（带教 2026-10-31 提供，33 对黄金对照：original/ 修改前 + product_revised/ 产品部按指引V2实际修改版，MANIFEST.md 含配对+sha256）、`references/source/存量基金适用销售费用新规的基金合同修改指引V2.docx`。用途：评测比对参照、**qa-f2-guide-history 对话的指引上传/解析/对比测试输入**、Compare 真实语料。
-- 工作区他人在途文件（勿动）：claim_replay.py（FL-D573 agent）、tests/test_v2_evaluation.py / test_v2_workbench.py / test_v3_delivery_review_gate.py（疑似 FL-D574 陈旧测试修复中）、第二波标签线产物（selection-second-batch json + 2 个 py）。
+- 工作区他人在途文件（勿动）：fundlex/api.py、frontend/app.js、tests/test_v2_evaluation.py / test_v2_workbench.py / test_v3_delivery_review_gate.py（疑似 FL-D574 陈旧测试修复中）、tests/test_review_render_index.py / test_revision_view_cache.py（未跟踪，他人新增）、第二波标签线产物（selection-second-batch json + 2 个 py）。claim_replay.py 已随 449b36b 收口不再是 FL-D573 在途。
 - 评测关键提醒（qa-feat-recall 线必看）：dev20 v2 重跑必须含 `ac697a4`+D573 余量+FL-D574 测试定责，指南 sha 已变 `30c2625d…`（G13 variant 重认证），重冻结登记；v2 须对比 v1 阻断/交付率（FL-D576）。
 - FL-D577（G09 variant 冗余）低优先待清理。
 
