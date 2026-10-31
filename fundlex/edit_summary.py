@@ -48,7 +48,11 @@ CLIP_LIMIT_BEFORE = 160
 CLIP_LIMIT_AFTER = 200
 
 DELIVERY_TEXT = {
+    "": "处理进行中",
+    "not_started": "处理进行中",
+    "failed": "处理失败",
     "complete": "已修改并复核通过",
+    "complete_with_exceptions": "已修改（部分条款按安全规则保持原文）",
     "incomplete": "部分条款未修改（详见修改说明）",
     "not_generated": "未生成产物",
     "duplicate": "重复提交（同文件已处理）",
@@ -191,6 +195,98 @@ FINAL_ROOT = "最终版（接受修订后）"
 WORKING_ROOT = "工作文件（未完成）"
 NOTES_ROOT = "逐份修改说明"
 
+# ── 导出包用户视角行（结果清单.csv 与逐份（修改说明）.csv 的单一事实源）───────────────
+# Long wording in the per-edit CSV is clipped the same way as the per-case
+# explanation (前 160 / 后 200); the full text lives in the tracked-changes DOCX.
+DETAIL_CLIP_NOTE = "（全文见同目录「（全量痕迹版）」文件）"
+
+RESULT_LIST_HEADER = ["序号", "合同文件", "处理结果", "修改处数", "修改内容摘要", "备注"]
+EDIT_DETAIL_HEADER = ["序号", "修改类型", "位置", "修改前", "修改后", "对应指引"]
+
+
+def clip_detail(text: str, limit: int) -> str:
+    """clip() plus the pointer a package reader needs for the truncated tail."""
+    text = (text or "").strip().replace("\n", " ")
+    return text if len(text) <= limit else text[:limit] + "…" + DETAIL_CLIP_NOTE
+
+
+def guide_ref(guide: dict, rule_id: str) -> str:
+    """「G12＋G13：人读标签」式对应指引：编号与人读措辞一起给，不裸堆规则键。"""
+    if not rule_id:
+        return "—"
+    parts = [part.strip() for part in str(rule_id).split("+") if part.strip()]
+    label = rule_label(guide, rule_id)
+    return "＋".join(parts) + "：" + label if label else "＋".join(parts)
+
+
+def edit_detail_rows(report: dict) -> list[list[str]]:
+    """One CSV row per applied edit: 序号/修改类型/位置/修改前/修改后/对应指引."""
+    guide = report.get("guide") or {}
+    rows: list[list[str]] = []
+    for index, edit in enumerate(plan_edits(report), start=1):
+        rule_id = edit.get("rule_id") or ""
+        before, after = edit_before_after(edit)
+        rows.append([str(index), operation_text(edit), str(edit.get("location") or "—"),
+                     clip_detail(before, CLIP_LIMIT_BEFORE) or "—",
+                     clip_detail(after, CLIP_LIMIT_AFTER) or "—",
+                     guide_ref(guide, rule_id)])
+    return rows
+
+
+def exception_note(report: dict, doc: dict | None = None) -> str:
+    """清单「备注」列的例外简述（无例外为空）。"""
+    doc = doc or {}
+    delivery = doc.get("delivery_status") or report.get("delivery_status") or ""
+    job = doc.get("job_status") or ""
+    if job == "failed" or delivery == "failed":
+        return "处理未完成，未生成可交付文件；建议重新上传该合同再试一次"
+    if delivery in {"excluded", "excluded_by_fund_type"}:
+        return "该类型合同不在本流程处理范围"
+    unresolved = unresolved_entries(report)
+    if delivery == "incomplete":
+        return (f"{len(unresolved)} 项条款按安全规则保持原文，详见修改说明"
+                if unresolved else "部分条款未修改，详见修改说明")
+    return ""
+
+
+def result_list_row(index: int, name: str, report: dict, doc: dict | None = None) -> list[str]:
+    """结果清单.csv 的一行：序号/合同文件/处理结果/修改处数/修改内容摘要/备注。"""
+    labels = edit_labels(report)
+    return [str(index), name, delivery_text(report, doc), str(edit_count(report)),
+            "、".join(labels) if labels else "—", exception_note(report, doc)]
+
+
+# 结果总览「结论计数」的口径：每份合同恰好落进一类。
+OUTCOME_LABELS = ["已修改", "部分修改", "无需修改", "类型排除", "失败"]
+
+
+def outcome_label(report: dict, doc: dict | None = None) -> str:
+    """Which of the five reader-facing outcome buckets this contract lands in.
+
+    Files that never entered processing (not uploaded yet / rejected at intake)
+    are reported separately instead of inflating the 失败 bucket.
+    """
+    doc = doc or {}
+    upload = doc.get("upload_status") or ""
+    if upload == "rejected":
+        return "未接收"
+    if upload == "pending":
+        return "处理进行中"
+    delivery = doc.get("delivery_status") or report.get("delivery_status") or ""
+    job = doc.get("job_status") or ""
+    qualification = (doc.get("eligibility") or report.get("qualification_status")
+                     or (report.get("qualification") or {}).get("status") or "")
+    if (qualification == "excluded_by_fund_type"
+            or delivery in {"excluded", "excluded_by_fund_type"}):
+        return "类型排除"
+    if delivery == "complete":
+        return "已修改" if edit_count(report) else "无需修改"
+    if delivery in {"complete_with_exceptions", "incomplete"}:
+        return "部分修改"
+    if job in {"queued", "running", "paused", "not_started"} or not delivery:
+        return "处理进行中"
+    return "失败"
+
 
 def archive_entry(kind: str, name: str, suffix: str, *, delivery_status: str | None = None) -> tuple[str, str]:
     """Where one downloaded artifact goes inside the task ZIP.
@@ -267,8 +363,11 @@ def rule_requirement(guide: dict, rule_id: str) -> str:
 __all__ = [
     "RULE_SHORT", "OP_TEXT", "DELIVERY_TEXT", "CLIP_LIMIT_BEFORE", "CLIP_LIMIT_AFTER",
     "FINAL_ROOT", "WORKING_ROOT", "NOTES_ROOT",
+    "RESULT_LIST_HEADER", "EDIT_DETAIL_HEADER", "DETAIL_CLIP_NOTE", "OUTCOME_LABELS",
     "plan_edits", "rule_title", "rule_label", "audit_verdicts", "verdict_text",
     "edit_count", "edit_labels", "unresolved_entries", "delivery_text",
     "summary_detail", "edit_before_after", "operation_text", "archive_entry",
     "archive_kinds", "ARCHIVE_PREFERENCE", "clip", "rule_requirement",
+    "clip_detail", "guide_ref", "edit_detail_rows", "exception_note",
+    "result_list_row", "outcome_label",
 ]
