@@ -1567,10 +1567,10 @@ dev20 v2 闭环：修复循环直到 §7 门槛（无已确证严重错误、无
 - FL-D685 回复 e3d6135；FL-D688 addendum 已写入 loop-2 compare（var/ 不入库）；FL-D584/585/586/587/588/589 条目在册。
 
 ## 在途
-- HEAD 9ebeacf（merge 干净 ff；FL-D790 已主线并入，FL-D791 树内 6/6）。
-- **loop-5 冻结 `qa-wave1-dev-v2-20261101-loop5` 已发**：dev20 全量在跑（后台 sh_193b315e4001OFbK7W5Ao78wms，run-dev.log）。scorer=p6-score-4；六段对比脚本已备。
-- 跑完后：run_v2_post_dev.sh 评分 → compare_multi 六段表 → 门槛：fc=0/B02 保 complete/B12 恢复 complete（FL-D791 验证）/B15 T001 executed（replay+产物双实证）/wrong=0/kept 不新增/≥90%（波动归因）；FL-D792 同形态仅如实登记。
-- 达标等主线放：留出 8 份首验 + 第二波 100 份（kvvQwuiB 等令）。异常只写状态文件，中途不问用户。号段余 FL-D695..699。
+- 无后台进程。**loop-5（9ebeacf）跑完评完：337/86.4%、wrong=0、kept=0、fc=0、actual 17/20 → 门槛 FAIL**。账本第 7 段 $0.5697/507c/62min。
+- 守住：fc=0 连续两轮/B02 保 complete（FL-D690 无回摆）/B17 稳/B19 预期内。FL-D791 目标病灶实证已愈（G12+G13 composite@p244 重回 plan）。
+- FAIL 双因子已登记：**FL-D695**（B15 G09@p159 audit 翻转 absent→MISS_TARGET_RESOLUTION→诚实扣全案，-15 解释全部完成率下滑）；**FL-D696**（B12 新阻塞 G16 三站点 MISS_PLAN_GAP）。两案是否并入 FL-D792 待主线。
+- 等主线机制处置 → loop-6 令。留出/第二波未启动。号段余 FL-D697..699。
 ## 下一步（可执行顺序）
 1. 已向主线报 loop-2 指标与残余归属（本次回复）。
 2. 回归绿 → 提交 FL-D588 代码 → 报主线。等 feat-guide B15 单与 B19 修复专单齐 → 新 freeze 跑 loop-3。编号 580-589 已用尽，已向主线请新段。
