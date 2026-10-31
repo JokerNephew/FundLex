@@ -7008,6 +7008,7 @@ H＝E×…
 - **行动**：FL-D608 归因修复与主线 FL-D572 落地后，由 qa-feat-recall 线执行 dev20 v2 冻结重跑；本线修复就绪信号（`068fe94`、`1351e03`）已随复验记录给出。
 - **状态**：open（复验已执行并定判，门槛缺口待 FL-D572/FL-D608）。
 - **变更记录**：2026-10-31 新增。
+  - 2026-10-31（guide 线）：**复验 v2 GO**。冻结 `2d600be`（含 FL-D608 两层修复；freeze 文件 sha12 f9acd782，guide raw `373873f8…`/document `30c2625d…`），正式跑动 `/tmp/opencode/qa-findings-run/smoke-requal-v2-formal/`：B05 13/13 completed + integrated_complete=True + unresolved 0（G08 本轮 completed；G01/G03 append 在组尾站点闭合），B16 23/23 completed + integrated_complete=True + unresolved 0。四项门槛逐项过；FL-D565-F1 未触发声明如实保留；记录 `/tmp/opencode/qa/findings/smoke28-requal-v2-f9acd782.md`。GO 为单次真实证据，G08 不确定性（FL-D643）仍 open。
 
 ## FL 编号分配（多对话并行期协调，2026-10-31）
 
@@ -7132,3 +7133,11 @@ H＝E×…
 - **处理方法（建议，未定案）**：对「absent/不适用」结论要求与再生/范式同样强度的证据约束（如对 G08 窗口 fallback 校验「类收费声明句存在但未含直销豁免时应强制 needs_edit」）；或评审 absent 理由中「已明确 A/C 收费」是否足以证伪 tag 站点义务（本例 p218 仅类别收费声明，未含直销豁免义务文）。交主线/FL-D572 归属线定责。
 - **状态**：open（新发现，真实双跑证据在案；FL-D643 取号后跨线候补池指针请主线合并时更新为 FL-D644）。
 - **变更记录**：2026-10-31 新增（guide 线；证据 verify4 score.json detail=old wording still in its declared site、edits.json target state=absent；对照 smoke-requal-v2 score G08 completed）。
+
+## FL-D646 B15 G09（赎回金额计算 p159）真实标签目标未被 plan 覆盖：audit missed-target 发现但未能闭环（2026-10-31，guide 线）
+
+- **发现日期**：2026-10-31，FL-D606/607 复核跑（HEAD `08cb0e6`，`/tmp/opencode/qa-findings-run/b15-fl606607-verify/`）。B15 report unresolved：`AUDIT_MISSED_TARGET` G09 @p159（quote「赎回金额为按实际确认的有效赎回份额乘以申请当日基金份额净值的金额，净赎回金额为赎回金额扣除相应的费用的金额」，与冻结标签 T003 完全一致）+ `FINAL_COVERAGE_UNRESOLVED`（claim replay verified site missing）。本轮 edits 中无 G09 条目——audit 的 missed-target 恢复发现了正确站点但未能让它落地。
+- **标签对照**：labels-first-batch-20261028-v2 B15 T003 G09 replace p159 为真实应改目标（required：按该类基金份额净值计算、费用可「扣除或加上」）。故本条不是噪声，是**真实覆盖缺口**；同类冻结族此前无成功 B15 运行可对照（v2 预跑 15 目标全 no artifact）。
+- **疑似方向（未归因）**：G09 站点发现发生在 audit 阶段（非 inventory/survey），T3_open_rule 恢复通道对 G09 未生成可执行 target；或 plan 阶段 attribution/守卫在 p159 句上 fail-closed。与 FL-D572（G09 bounded splice）、FL-D643 族的关系待查。
+- **状态**：open（新登记；归因与修复排入 B15 收尾批次，优先级次于 FL-D606/607 闭合致残留验证）。
+- **变更记录**：2026-10-31 新增（guide 线；证据 report.json unresolved 三项 G09 + edits.json 无 G09 target 落地）。
