@@ -7369,19 +7369,20 @@ H＝E×…
 
 - **发现**：app.js:273-284 `guideNameForTask` 任务指引元信息正文仍直显完整 version_id UUID（如「… · 版本 <uuid>」），未入高级详情；与前端线状态文件自述不符（复核 VERIFIED：diff 仅改动词，UUID 原样）。属用户反馈④技术泄露残留。
 - **处理**：前端线改人读表述（对照 V2「修改指引已锁定」口径）；发布 #2 闸门阻塞项。
-- **状态**：open（修单已派，验收点=正文/非折叠 title 无 UUID）。
+- **状态**：已解决（bdfbda3：改「<指引名> · 已锁定」人读表述，候选树复验正文/非折叠 title 无 UUID；FL-D718/719/723 同 commit 收口，16/16 验收绿）。
 
 ## FL-D718 .compare-gutter span 字号 9px 低于阶梯下限（2026-10-31，主线复核）
 
 - **发现**：app.css:235 仍 `font-size:9px`，低于统一阶梯下限 11px（用户反馈③风格不一致族）。
 - **处理**：收敛进字号阶梯（≥11px）。同批修。
-- **状态**：open（非阻塞）。
+- **状态**：已解决（bdfbda3：9px→11px；V1 三 CSS 实测最小字号=11，零残留。复核所引 app.css:235 行号系基线错位，实际规则在 compare.css）。
 
 ## FL-D719 download-all 新 ready 语义缺正向守门用例（2026-10-31，主线复核）
 
 - **发现**：浏览器侧仅有 paused 场景验 download-all disabled；`completed=0 && failed>0` 时按钮应启用的正向用例缺失（FL-D721 修语义后的防倒退门）。
 - **处理**：补正向用例。同批修。
-- **状态**：open（非阻塞；FL-D716 深链「抖动」解释成立，根治=显式 wait_for，一并修）。
+- **状态**：已解决（bdfbda3：新增 _all_failed_task_scenario 正向用例，completed=0&&failed>0 时按钮启用+hint 隐藏；test_frontend_fixes 16/16 绿）。
+- **FL-D716 根治**（同 commit）：深链断言前加显式 wait_for(state=visible,15s)，不再依赖重跑，复跑通过——状态转**已解决（根治）**。
 
 ## FL-D723 ModelSettings 移除「验证连接费用/隐私」提示过度（2026-10-31，主线复核）
 
