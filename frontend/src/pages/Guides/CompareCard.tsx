@@ -16,6 +16,13 @@ const FIELD_LABELS: Record<string, string> = {
   section_hint: '章节提示',
 }
 
+const META_LABELS: Record<string, string> = {
+  parser_version: '解析器版本',
+  schema_version: '结构版本',
+  source_sha256: '原件摘要',
+  prompt_versions: '提示词版本',
+}
+
 const OP_LABELS: Record<string, string> = {
   append: '追加', replace: '替换为', delete: '删除', noop: '不改',
 }
@@ -25,6 +32,10 @@ function formatTime(value?: string): string {
   if (!stamp) return ''
   const date = new Date(stamp * 1000)
   return `${date.getFullYear()}/${date.getMonth() + 1}/${date.getDate()}`
+}
+
+function fieldLabel(name: string) {
+  return FIELD_LABELS[name] || META_LABELS[name] || name
 }
 
 function fieldValue(name: string, value: unknown): React.ReactNode {
@@ -85,6 +96,11 @@ function RulesDiffView({ result }: { result: GuideDiffResult }) {
       规则 {summary.rules_before} 条 → {summary.rules_after} 条；新增 {summary.added} · 删除 {summary.removed} · 修改 {summary.changed}
       {summary.identical ? '：两个版本的规则内容完全一致。' : ''}
     </p>
+    <p className="muted">
+      分组变化：新增 {summary.groups_added} / 删除 {summary.groups_removed}{summary.groups_order_changed ? ' / 顺序有变化' : ''}；
+      元信息变化 {summary.meta_fields_changed} 项{summary.meta_fields_changed ? `（${Object.keys(diff.meta).map(fieldLabel).join('、')}）` : ''}；
+      校验：{diff.validation.before.clean ? '干净' : '有遗留'}→{diff.validation.after.clean ? '干净' : '有遗留'}（发现 {diff.validation.before.findings}→{diff.validation.after.findings}）。
+    </p>
     <div className="guide-diff-grid">
       <section className="guide-diff-group">
         <h3>新增规则 · {diff.rules.added.length} 条</h3>
@@ -110,7 +126,7 @@ function RulesDiffView({ result }: { result: GuideDiffResult }) {
             <summary><strong>{item.rule_id}</strong> · {fields.length} 个字段有变化</summary>
             <dl className="guide-diff-fields">
               {fields.map(([name, change]) => <div key={name} className="guide-diff-field">
-                <dt>{FIELD_LABELS[name] || name}</dt>
+                <dt>{fieldLabel(name)}</dt>
                 <dd>
                   <span className="guide-diff-old">{fieldValue(name, change.old)}</span>
                   <span className="guide-diff-arrow">→</span>

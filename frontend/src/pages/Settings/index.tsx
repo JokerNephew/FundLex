@@ -132,7 +132,7 @@ export function SettingsPage() {
 
     <Card>
       <h2>飞书私聊绑定</h2>
-      <p>生成一次性绑定码后，在飞书与 FundLex 机器人私聊发送“绑定 绑定码”。绑定只关联当前账号，绑定码 10 分钟后失效。</p>
+      <p>扫码或在飞书与 FundLex 机器人私聊发送一次性绑定码；绑定只关联当前账号。</p>
       {bindingError && <p className="form-error">{bindingError}</p>}
       {binding?.bound ? <><p>已绑定飞书账号 <code>{binding.subject_id?.slice(0, 12)}…</code></p><Button variant="danger" onClick={() => void revokeBinding()} disabled={bindingBusy}>解除绑定</Button></> : <>
         <div className="action-row">
@@ -140,7 +140,7 @@ export function SettingsPage() {
           <Button onClick={() => void startOAuth()} disabled={bindingBusy}>{bindingBusy ? '处理中…' : '生成扫码绑定二维码'}</Button>
           {bindingCode && <code aria-label="飞书绑定码">{bindingCode}</code>}
         </div>
-        {oauth && <div style={{ marginTop: 12, maxWidth: 351 }}><div style={{ background: '#fff', border: '1px solid #d9d9d9', borderRadius: 8, padding: 10 }}>{oauth.qr_svg ? <div dangerouslySetInnerHTML={{ __html: oauth.qr_svg }} /> : oauth.qr_png ? <img src={oauth.qr_png} alt="飞书绑定二维码" style={{ display: 'block', width: '100%', height: 'auto' }} /> : null}</div><p>{oauthMessage}</p><a href={oauth.authorization_url} target="_blank" rel="noreferrer">在飞书中打开授权页</a></div>}
+        {oauth && <div className="settings-oauth"><div className="settings-qr-frame">{oauth.qr_svg ? <div dangerouslySetInnerHTML={{ __html: oauth.qr_svg }} /> : oauth.qr_png ? <img src={oauth.qr_png} alt="飞书绑定二维码" /> : null}</div><p>{oauthMessage}</p><a href={oauth.authorization_url} target="_blank" rel="noreferrer">在飞书中打开授权页</a></div>}
         {!oauth && oauthMessage && <p>{oauthMessage}</p>}
       </>}
     </Card>

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { Fragment, useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { api } from '../../api/endpoints'
 import { saveBlob } from '../../api/client'
@@ -13,6 +13,7 @@ import {
   useGuides,
 } from '../../api/hooks'
 import { Button, Card, Spinner, StatusBadge } from '../../components/ui'
+import type { GuideRuleSetting } from '../../types'
 import { ErrorState, LoadingCard } from '../Tasks'
 import { CompareCard } from './CompareCard'
 
@@ -24,6 +25,14 @@ export function enableBlockReasonText(reason?: string | null): string {
   if (reason === 'GUIDE_NOT_CERTIFIED') return '解析质量未通过认证，不能启用'
   if (reason === 'GUIDE_NOT_PARSED') return '解析未完成或已失败'
   return ''
+}
+
+export function qualificationStatusText(status?: string): string {
+  return ({ certified: '已通过认证', frozen_builtin: '内置（免认证）', not_run: '待解析认证', failed: '未通过认证' } as Record<string, string>)[status || ''] || status || '—'
+}
+
+export function guideOperationLabel(key: string): string {
+  return ({ replace: '修改', delete: '删除', insert: '新增', append: '新增', noop: '无需调整' } as Record<string, string>)[key] || '其他调整'
 }
 
 export function GuidesPage() {
@@ -70,7 +79,7 @@ export function GuidesPage() {
   return <>
     <div className="page-heading">
       <div>
-        <h1>我的指引</h1>
+        <h1>指引配置</h1>
         <p>管理自己的指引版本、启停规则组，并决定新建任务使用哪一版。任务会保存创建时的指引快照。</p>
       </div>
       <Link to="/settings"><Button>设置</Button></Link>
@@ -86,7 +95,7 @@ export function GuidesPage() {
       </div>
       {settings.error ? <ErrorState error={settings.error} onRetry={() => void settings.refetch()} /> : settings.loading && !settings.data ? <Spinner /> : !current ? <div className="empty-state">当前没有可用指引。</div> : <>
         <p>{current.filename} <StatusBadge value={current.status} /></p>
-        <p className="muted">版本 {current.id} · {guideType(current)} · 规则组 {current.groups ?? '—'}</p>
+        <p className="muted">{guideType(current)} · 规则组 {current.groups ?? '—'}</p>
         <div className="action-row">
           <Link to={`/guides/${current.id}`}><Button variant="primary">查看与启停规则组</Button></Link>
           <Button disabled={busy || current.built_in} onClick={() => void selectGuide(null)}>恢复默认内置指引</Button>
@@ -104,7 +113,7 @@ export function GuidesPage() {
       </div>
       {guides.error ? <ErrorState error={guides.error} onRetry={() => void guides.refetch()} /> : guides.loading && !guides.data ? <Spinner /> : !guides.data?.items.length ? <div className="empty-state">当前账号还没有可用指引。</div> : <div className="table-scroll">
         <table className="data-table">
-          <thead><tr><th>文件</th><th>状态</th><th>规则组</th><th>来源哈希</th><th>操作</th></tr></thead>
+          <thead><tr><th>文件</th><th>状态</th><th>规则组</th><th>操作</th></tr></thead>
           <tbody>{guides.data.items.map((guide) => {
             const blockReason = guide.enable_block_reason
               || (['parsed', 'released'].includes(guide.status) ? null : 'GUIDE_NOT_PARSED')
@@ -112,7 +121,7 @@ export function GuidesPage() {
             return <tr key={guide.id}>
               <td>
                 <Link to={`/guides/${guide.id}`}>{guide.filename}</Link>
-                <div className="muted">{guideType(guide)} · {guide.id}{guide.parent_version_id ? ` · 基于 ${guide.parent_version_id.slice(0, 12)}…` : ''}</div>
+                <div className="muted">{guideType(guide)}{guide.current ? ' · 当前使用' : guide.parent_version_id ? ' · 历史版本' : ''}</div>
               </td>
               <td>
                 <StatusBadge value={guide.status} />{guide.issues ? <div className="form-error">{guide.issues} 个问题</div> : null}
@@ -120,11 +129,10 @@ export function GuidesPage() {
                 {!canEnable && blockReason ? <div className="muted">{enableBlockReasonText(blockReason)}</div> : null}
               </td>
               <td>{guide.groups ?? '—'}</td>
-              <td>{guide.document_sha256 ? `${guide.document_sha256.slice(0, 12)}…` : '—'}</td>
               <td>
                 <div className="action-row">
-                  <Link to={`/guides/${guide.id}`}><Button variant="quiet">规则组</Button></Link>
-                  <Button disabled={busy || !canEnable || guide.current}
+                  <Link to={`/guides/${guide.id}`}><Button variant="primary">查看</Button></Link>
+                  <Button variant="quiet" disabled={busy || !canEnable || guide.current}
                     title={canEnable ? '' : enableBlockReasonText(blockReason)}
                     onClick={() => void selectGuide(guide.id)}>
                     {guide.current ? '当前使用' : canEnable ? '启用' : '不可启用'}
@@ -173,20 +181,39 @@ export function GuideDetailPage() {
     setDirty(false)
   }, [loadedVersion, ruleSettings.data])
 
+  const ruleGroups = useMemo(() => {
+    const buckets = new Map<string, GuideRuleSetting[]>()
+    const sorted = [...(ruleSettings.data?.rules || [])].sort((a, b) => a.rule_id.localeCompare(b.rule_id, 'zh-Hans-CN', { numeric: true }))
+    for (const rule of sorted) {
+      const key = (rule.section_hint || '').trim() || '未分章节'
+      const bucket = buckets.get(key) || []
+      bucket.push(rule)
+      buckets.set(key, bucket)
+    }
+    return [...buckets.entries()]
+  }, [ruleSettings.data])
+
   if (guide.error) return <ErrorState error={guide.error} onRetry={() => void guide.refetch()} />
   if (guide.loading && !guide.data) return <LoadingCard />
   if (!guide.data) return <div className="empty-state">指引版本不存在。</div>
   const data = guide.data
   const canEditRules = ['parsed', 'released'].includes(data.status)
+  const ruleTotal = ruleSettings.data?.rules.length ?? 0
   const enabledCount = (ruleSettings.data?.rules || []).filter((rule) => !disabled.includes(rule.rule_id)).length
   const toggleRule = (ruleId: string) => {
     setMessage('')
     setDirty(true)
-    setDisabled((current) => {
-      if (current.includes(ruleId)) return current.filter((item) => item !== ruleId)
-      if (enabledCount <= 1) return current
-      return [...current, ruleId]
-    })
+    setDisabled((current) => current.includes(ruleId) ? current.filter((item) => item !== ruleId) : [...current, ruleId])
+  }
+  const selectAllRules = () => {
+    setMessage('')
+    setDirty(true)
+    setDisabled([])
+  }
+  const selectNoRules = () => {
+    setMessage('')
+    setDirty(true)
+    setDisabled((ruleSettings.data?.rules || []).map((rule) => rule.rule_id))
   }
   const saveRules = async () => {
     if (!guideId) return
@@ -241,7 +268,7 @@ export function GuideDetailPage() {
       <div>
         <p><Link to="/guides">我的指引</Link> / 详情</p>
         <h1>{data.filename}</h1>
-        <p>版本 {data.id} · {data.built_in ? '内置指引' : '自定义指引'}{data.parent_version_id ? ` · 基于 ${data.parent_version_id}` : ''}</p>
+        <p>{data.built_in ? '内置指引' : '自定义指引'}{data.parent_version_id ? ' · 历史版本' : ''}</p>
       </div>
       <StatusBadge value={data.status} />
     </div>
@@ -253,46 +280,68 @@ export function GuideDetailPage() {
       <div className="stats-grid">
         <div><span className="muted">规则组</span><strong className="stat-value">{data.groups ?? '—'}</strong></div>
         <div><span className="muted">问题数</span><strong className="stat-value">{data.issues ?? 0}</strong></div>
-        <div><span className="muted">资格状态</span><strong className="stat-value">{data.qualification_status || '—'}</strong></div>
-        <div><span className="muted">规则哈希</span><strong className="hash-value">{data.rules_sha256?.slice(0, 16) || '—'}</strong></div>
+        <div><span className="muted">资格状态</span><strong className="stat-value">{qualificationStatusText(data.qualification_status)}</strong></div>
       </div>
       {data.enable_block_reason ? <p className="form-error">{enableBlockReasonText(data.enable_block_reason)}；重新解析会产生新版本并重新认证。</p> : null}
       {data.review?.status === 'needs_review' ? <>
         <p className="form-error">冒烟复核提示：该版本消费质量疑有下降（不阻断启用，请人工确认）。</p>
-        {data.review.dimensions ? <pre className="preserve">{JSON.stringify(data.review.dimensions, null, 2)}</pre> : null}
+        {data.review.dimensions ? <details className="advanced-details"><summary>高级详情</summary><pre className="preserve">{JSON.stringify(data.review.dimensions, null, 2)}</pre></details> : null}
       </> : null}
       <div className="action-row">
         <Button onClick={() => void downloadSource()} disabled={data.built_in}>下载原始 DOCX</Button>
         <Button onClick={() => void downloadRules()}>下载规则 JSON</Button>
         {!data.built_in && ['uploaded', 'parse_failed', 'parsed', 'released'].includes(data.status) && <Button onClick={() => void reparse()} disabled={busy}>{busy ? '解析中…' : '重新解析'}</Button>}
       </div>
+      <details className="advanced-details"><summary>高级详情</summary><dl className="fundlex-detail-grid"><dt>版本 ID</dt><dd><code>{data.id}</code></dd>{data.parent_version_id ? <><dt>基于版本</dt><dd><code>{data.parent_version_id}</code></dd></> : null}<dt>规则哈希</dt><dd><code>{data.rules_sha256 || '—'}</code></dd></dl></details>
     </Card>
 
     <Card>
       <div className="page-heading">
         <div>
-          <h2>规则组启停</h2>
+          <h2>规则组</h2>
           <p className="muted">关闭的规则不会在之后新建的任务中执行，并会在报告里列为“用户关闭的规则”。至少保留一条启用规则。</p>
+          {ruleSettings.data ? <p className="muted">共 {ruleTotal} 条 · 已启用 {enabledCount} / {ruleTotal}</p> : null}
         </div>
-        <Button variant="primary" onClick={() => void saveRules()} disabled={busy || !canEditRules || !ruleSettings.data || !dirty}>{busy ? '保存中…' : '保存启停'}</Button>
+        {canEditRules && ruleTotal ? <div className="action-row">
+          <Button variant="quiet" disabled={busy} onClick={selectAllRules}>全选</Button>
+          <Button variant="quiet" disabled={busy} onClick={selectNoRules}>全不选</Button>
+          <Button variant="primary" onClick={() => void saveRules()} disabled={busy || !ruleSettings.data || !dirty || !enabledCount}
+            title={dirty && !enabledCount ? '至少保留一条启用规则' : ''}>{busy ? '保存中…' : '保存启停'}</Button>
+        </div> : null}
       </div>
       {!canEditRules ? <div className="empty-state">指引解析完成后才能配置规则组。</div> : ruleSettings.error ? <ErrorState error={ruleSettings.error} onRetry={() => void ruleSettings.refetch()} /> : ruleSettings.loading && !ruleSettings.data ? <Spinner /> : !ruleSettings.data?.rules.length ? <div className="empty-state">该版本还没有可配置的规则组。</div> : <div className="table-scroll">
         <table className="data-table">
-          <thead><tr><th>启用</th><th>规则</th><th>章节</th><th>操作统计</th></tr></thead>
-          <tbody>{ruleSettings.data.rules.map((rule) => {
-            const overview = data.rules_overview?.find((item) => item.rule_id === rule.rule_id)
-            const operations = overview?.operations ? Object.entries(overview.operations).map(([key, value]) => `${key}: ${value}`).join(' · ') : '—'
-            const checked = !disabled.includes(rule.rule_id)
-            return <tr key={rule.rule_id}>
-              <td><input aria-label={`启用规则 ${rule.rule_id}`} type="checkbox" checked={checked} disabled={busy || (checked && enabledCount <= 1)} onChange={() => toggleRule(rule.rule_id)} /></td>
-              <td><strong>{rule.rule_id}</strong><div>{rule.title || '—'}</div></td>
-              <td>{rule.section_hint || '—'}</td>
-              <td>{operations}</td>
-            </tr>
-          })}</tbody>
+          <thead><tr><th>启用</th><th>规则</th><th>章节</th><th>状态</th></tr></thead>
+          {ruleGroups.map(([section, rules]) => (
+            <tbody key={section}>
+              <tr className="rule-group-row"><td colSpan={4}>{section}<span className="rule-group-count">共 {rules.length} 条</span></td></tr>
+              {rules.map((rule) => {
+                const checked = !disabled.includes(rule.rule_id)
+                const requirement = (rule.requirement || '').trim()
+                const titleText = (rule.title || '').trim() || '—'
+                return <Fragment key={rule.rule_id}>
+                  <tr className={`rule-row${checked ? '' : ' rule-row--disabled'}`}>
+                    <td><label className="rule-toggle"><input aria-label={`启用规则 ${rule.rule_id}`} type="checkbox" checked={checked} disabled={busy} onChange={() => toggleRule(rule.rule_id)} /></label></td>
+                    <td><span className="ui-tag">规则 {rule.rule_id}</span> <strong className="rule-title">{titleText}</strong></td>
+                    <td><span className="ui-tag">{rule.section_hint || '—'}</span></td>
+                    <td><span className={`status-badge status-badge--${checked ? 'success' : 'warning'}`}>{checked ? '已启用' : '已关闭'}</span></td>
+                  </tr>
+                  <tr className={`rule-detail-row${checked ? '' : ' rule-row--disabled'}`}>
+                    <td colSpan={4}>
+                      <details className="advanced-details rule-detail">
+                        <summary>查看人读详情</summary>
+                        <p className="rule-requirement">{requirement || titleText}</p>
+                        {!requirement ? <p className="meta-line">详细修改见条规条款。</p> : null}
+                        {rule.operations?.length ? <ul className="rule-operations">{rule.operations.map((operation, index) => <li key={index}><span className="ui-tag">{operation.label}</span>{operation.detail ? <span className="rule-operation-detail">{operation.detail}</span> : null}</li>)}</ul> : null}
+                      </details>
+                    </td>
+                  </tr>
+                </Fragment>
+              })}
+            </tbody>
+          ))}
         </table>
       </div>}
-      <p className="muted">当前启用 {enabledCount} / {ruleSettings.data?.rules.length ?? 0} 条。关闭规则属于业务例外，不会让报告伪造为“全部完成”。</p>
     </Card>
 
     <Card>
@@ -300,7 +349,7 @@ export function GuideDetailPage() {
       {data.issues_detail?.error_code === 'GUIDE_VALIDATION_UNCLEAN'
         ? <p className="form-error">解析结果未通过质量通道（确定性校验或独立验证有遗留），版本已标记为失败，不能启用。</p>
         : null}
-      {Object.keys(data.issues_detail || {}).length ? <pre className="preserve">{JSON.stringify(data.issues_detail, null, 2)}</pre> : <p className="muted">服务端没有记录解析问题。</p>}
+      {Object.keys(data.issues_detail || {}).length ? <details className="advanced-details" open={false}><summary>高级详情</summary><pre className="preserve">{JSON.stringify(data.issues_detail, null, 2)}</pre></details> : <p className="muted">没有记录解析问题。</p>}
     </Card>
   </>
 }

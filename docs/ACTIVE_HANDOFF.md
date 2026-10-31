@@ -1,5 +1,25 @@
 # FundLex 当前断点（ACTIVE_HANDOFF）
 
+## 2026-11-01 qa-frontend 第三轮（用户十项需求下派，前端主线断点）
+
+- 分支 `qa-frontend-s2-20261101`（`98d3313` = 第二轮 d27c904 + 主线 88aa5b8）。承接项：项4 列表统一（最高优先级）、项3 规则组可见即所得（含后端）、项1 模型配置重做（设计主导）。编号池 730-749。
+- 已冻结规格：`docs/frontend/SPEC_LISTS_UNIFIED_20261101.md`、`SPEC_RULE_GROUPS_WYSIWYG_20261101.md`、`SPEC_MODEL_SETTINGS_20261101.md`；协调交接写在 `/tmp/opencode/qa/status/qa-frontend.md` 第三轮节。
+- 项3 后端已实施（FL-D730）：rule_settings 增 requirement/operations 中文摘要+回退，`tests/test_user_configuration.py` 7 绿。
+- 施工图：V1 worker ivRkf1jH（750-759）/ V2 worker 81FirpsQ（760-769）按规格实施三项；前端主线验收=每规格末节清单（用户视角走查、Playwright 并列截图、锚点、回归绿）。
+- 中断续接：先读本断点与状态文件第三轮节，再按 spec 推进；勿动第二轮既有锚点。
+- **验收收口（2026-11-01）**：V2 merge `45f5570` / V1 patch `5720bad` / 后端规格 `69779d8` 三笔已并入，HEAD `948834b`。验收=合并树真实 Chromium 走查 32/32（`/tmp/opencode/qa/accept-frontend-s2.py`，截图 `accept-s2/`）+ 浏览器整批全绿（两失败均 root-cause：一负载抖动、一 FL-D733 过期断言已修）+ vitest24/tsc/build/pytest14 全绿。FL-D730/731/732=已解决，FL-D733 已登记。待主线裁定合入。
+- **Rebase 返工（主线令，合并基线→9ebeacf）**：8 块真语义冲突按「两特性共存」解毕：`ef9549f` merge + `fbbda98` CompareCard 补焊（OP/META 标签并存、fieldLabel 接线、恢复分组/元信息/校验摘要行）；guide-diff 全套（V1 卡 DOM/事件/样式/CompareCard 原文比对 tab）与我的三项新结构共存。复跑：tsc/vitest24/build/pytest14/走查 32/32/V1 guide-diff 冒烟 ✓；浏览器整批 8 文件（含 test_guide_diff.py）复跑后补登记。
+
+
+## 2026-10-31 qa-frontend：前端全面整改（本 worktree 断点）
+
+- Worktree `/home/opencode/.local/share/opencode/worktree/29a9a9/qa-frontend`，分支 `qa-frontend-20261031`，基线已 merge 至 `6229069`（含 qa-export）。用户六条 + 主线补充 FL-D721。段位 FL-D710..719（已用 710-716 + 721）。
+- 域：`frontend/app.js,app.css,workspace.js,compare.*,guide_generation.*,compare.html,src/**` + 新建 `frontend/status_labels.js`、`docs/FRONTEND_UI_AUDIT_AND_FIXES_20261031.md`。不动 CSV/MD 后端导出与 review/pin 语义。
+- 设计：统一 token 层（橙系 #b5471e canonical；V1 `--fx-*` 蓝系翻值收敛，变量名不动）；技术泄露全部删除或入「高级详情」折叠；V2 DocumentDetailPage 与 V1 任务详情/结果弹层 IA 重构；模型设置双列卡片；状态标签共享表；FL-D721 ready=(completed+failed>0)。
+- 验证状态：tsc 0 错；vitest 24 绿；vite build 过；两处中途回归已修（Guides 页头回锚点「指引配置」、FL-D721 条件按指令精确化）并单测复验通过；V2+V1 浏览器批量后台运行中（shell 通知待回，结果写体检文档第四节与状态文件）。
+- 回路：批量绿 → git add 只自有文件（frontend/app.js app.css workspace.js compare.js compare.css compare.html guide_generation.js guide_generation.css status_labels.js、frontend/src/**、docs/FRONTEND_UI_AUDIT_AND_FIXES_20261031.md、docs/DETAIL_ISSUES_AND_RESOLUTIONS.md、docs/ACTIVE_HANDOFF.md）→ commit → merge qa/full-audit-20261031 → 写 `/tmp/opencode/qa/status/qa-frontend.md` → 回报主线。
+
+
 ## 2026-10-31 guide_generation 资格冒烟线（qa-feat-guide 对话）
 
 - 基线：worktree `/home/opencode/.local/share/opencode/worktree/29a9a9/qa-feat-guide`，branch `qa-feat-guide-20261031`，已合并 `qa/full-audit-20261031`，HEAD `0b4e89a`。`tests -k "guide_generation or jobs"` **63 passed / 1 skipped**；worker/queue/store（FL-D553/568 段修复、`FUNDLEX_GUIDE_JOB_MAX_ATTEMPTS`、有界退避）在该套件内全绿。
@@ -1599,3 +1619,14 @@ dev20 v2 闭环：修复循环直到 §7 门槛（无已确证严重错误、无
 - 结构与校验：release worktree /tmp/opencode/release-20261031 @ 4377962；root 发布器已同步（drift OK）；env 新增 FUNDLEX_TRUSTED_PROXY_HOSTS=127.0.0.1（备份 .bak-20261031-release）；engine hash e555fee8；事务 /opt/.fundlex-publish-kYzo9M；前两次失败事务 7KutQx/gjyqol 留存。
 - 已验：生产 E2E 真实路径双态验收 PASS——①新版合同（广发聚富 20260821）正确判无需修改、交付门诚实扣件（fail-closed 正确行为）②老版合同（广发小盘 20230708）真实修改 5 ins/5 del/5 段、plan_matches_actual=true、final/redline 下载 hash 双核对一致、未授权 401、结果页正常。证据 /tmp/opencode/qa/e2e-release-20261031-old/result.json。E2E 工具补 300s downloads 轮询（97a46dc）。
 - 回滚：engine 旧 marker 74a8772（恢复即 10-30 树）；schema 迁移全追加可代码回滚。
+
+## 2026-11-01 qa-v2-s2（V2 前端第三轮：项1/3/4）终态
+
+- **目标**：按前端主线冻结规格（SPEC_LISTS_UNIFIED/SPEC_RULE_GROUPS_WYSIWYG/SPEC_MODEL_SETTINGS_20261101，勿改语义）完成 V2 React 侧项1 模型配置页重做、项3 规则组可见即所得、项4 列表统一。
+- **分支**：`qa-v2-s2-20261101`（基 qa-frontend-s2-20261101@98d3313 + merge 69779d8）；worktree `/home/opencode/.local/share/opencode/worktree/29a9a9/qa-v2-s2`。
+- **状态：全部完成、验证全绿并已提交 `5e2ca11`**（2026-11-01 总指挥令：符合主线规格即提交，不问用户）。提交含 11 文件：frontend/src/{styles/tokens.css,styles/app.css,types/api.ts,pages/Settings/ModelSettings.tsx,pages/Guides/index.tsx,pages/Tasks/index.tsx,pages/TaskDetail/index.tsx,pages/Compare/ComparePage.tsx}、tests/browser/test_frontend_v2.py、docs/DETAIL_ISSUES_AND_RESOLUTIONS.md（+FL-D760/761/762）及本断点。
+- **验证**：tsc 0；vitest 24 绿；build ✓；test_user_configuration.py 7 绿；浏览器全套 11 绿；自建用户流 19/19（模型保存流+徽标、规则组持久化、全不选禁存闸）。
+- **证据**：`/tmp/opencode/qa/shots-v2-s2/`（10 张）；汇报 `/tmp/opencode/qa/status/qa-v2-s2.md`；走查脚本 `/tmp/opencode/qa/flow-v2-s2.py`。
+- **残点**：①规格草图 h3 卡头采用站内一致的 h2（项1/项3 各一处，已备注）；②待主线 l8yCbACU 对照 V1 worker 交付作同图验收。
+- **环境**：调试进程已清理；8010 生产 fundlex-recall-first 全程未触碰；测试服务须显式 `FUNDLEX_AUTH_MODE=dev`；python 用 `PYTHONPATH=$PWD /tmp/opencode/qa-base/.venv/bin/python`。
+- **下一条动作**：已提交并报前端主线（状态文件 `/tmp/opencode/qa/status/qa-v2-s2.md` 验收申请版）；待主线 l8yCbACU 同图验收意见，如需整改在本分支续改。

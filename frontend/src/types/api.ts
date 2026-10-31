@@ -132,11 +132,18 @@ export interface GuideSettings {
   engine_id?: string
 }
 
+export interface GuideRuleOperation {
+  label: string
+  detail?: string
+}
+
 export interface GuideRuleSetting {
   rule_id: string
   title?: string
   section_hint?: string
   enabled: boolean
+  requirement?: string
+  operations?: GuideRuleOperation[]
 }
 
 export interface GuideRuleSettings {

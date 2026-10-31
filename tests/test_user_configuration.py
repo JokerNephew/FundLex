@@ -71,6 +71,14 @@ def test_guide_rule_settings_are_owner_scoped_and_validate_ids(client):
     assert [rule["rule_id"] for rule in body["rules"]] == ["G01", "G02"]
     assert all(rule["enabled"] for rule in body["rules"])
 
+    # FL-D730：规则选择可见即所得——接口必须带人读要求与操作摘要；无 requirement
+    # 字段的旧结构（本夹具）回退为 title，不出现英文或空串。
+    for rule in body["rules"]:
+        assert rule["requirement"] == rule["title"]
+        assert rule["operations"] and all(item["label"] and item["detail"] for item in rule["operations"])
+    labels = [item["label"] for rule in body["rules"] for item in rule["operations"]]
+    assert labels == ["新增 1 处", "新增 1 处"]
+
     saved = client.put(f"/api/guides/{version['id']}/rule-settings", headers=ALICE,
                        json={"disabled_rule_ids": ["G02"]})
     assert saved.status_code == 200
