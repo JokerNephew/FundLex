@@ -6804,7 +6804,12 @@ H＝E×…
 
 - **问题与影响**：A6-543 修复后，尾删链 fail-closed 策略同时覆盖了"全文替换式采用B（删除全部A段+插入全部B段）"场景——该场景修复前已验证可交付且 final==right（A6 E11），现抛 SELECTION_BLOCK_STRUCTURE_UNSUPPORTED 拒绝。属 fail-closed 拒绝能力而非错误产出，无半改状态，但对依赖"全部采用B"的用户是能力回退。
 - **决策（工程裁定，2026-10-31）**：保留 fail-closed 拒绝为当前正确行为（杜绝 SELECTION_FINAL_TEXT_MISMATCH 误交付风险），能力恢复（对全文替换专门路径）列为后续增强，需补"删除+插入全部采用"专项用例后解除拒绝。
-- **状态**：open（能力增强待排期）；当前行为已用例钉住，生产提示为结构化错误码可解释。
+- **能力恢复（2026-10-31，qa-feat-compare 专线）**：全文替换属于结构等价替换而非尾删链。新增 `_detect_full_body_replacement`（识别条件：无 inline 操作、块操作仅 delete/insert、删除集恰为左侧**全部**正文直接段落、插入集恰为右侧**全部**正文直接段落、且计划序列与右侧文档逐块逐字相等——少任何一项则维持原 fail-closed）+ 专用写入 `_apply_full_body_replacement`（保留最后一段为 keeper 锚点：其余被删段整段标记删除，锚点仅删 run 并把右侧首段 run 以 w:ins 写入锚点，其余右侧段克隆插入其后；final 由 `_accept_revisions_copy` 派生）。三重验证保留：final 解析文本==期望（==right 逐字）、自身 accept c14n==final、独立上传 accept oracle==final（SELECTION_ACCEPT_ORACLE_MISMATCH 兜底）；风格/编号校验（`_validate_block_references`）照旧。审计/撤销完备：redline 中左侧全部正文保留在 w:del（拼接==左侧全文逐字）、右侧全文在 w:ins、作者 FundLex Compare+时间戳戳记、manifest 覆盖全部 diff id、checks 增加 `full_body_replacement`。
+- **同族修复**：`_expected_sequence` 原实现按"处理后索引"为插入定槽，遇到"同锚点 before 插入"、"锚点在删除块上"等形态时序列与 writer 实际落点漂移（250 段全改+锚点 L000000 before 用例序列完全倒序），必然 MISMATCH 误拒；改为按原始位置槽位重写（同槽插入按 diff id 升序，与 `_apply_block_operations` 固定槽位语义一致），消除了整批同锚点插入场景的期望漂移；before 锚点原行为恒失败，故不存在已交付产物语义变化。
+- **验证（真实 DOCX 用例，tests/test_compare_full_body_replacement.py 10 项全绿）**：①全文替换采用B交付成功：250 段全改（inserts 组在前、before 锚）与 300 段全改（after 锚）双形态 final==right 逐字、delText==left 全文、ins 文本==right 全文、独立 oracle c14n==final、manifest 覆盖全部 diff；②尾删+穿插插入仍拒绝（锚点落在保留段，250 规模同样失败无产物）；③非全文大链删除仍拒绝（250 全改只采用删除、丢掉 1 个插入均 SELECTION_BLOCK_STRUCTURE_UNSUPPORTED 且零产物残留）；④mutation 对抗仍拒绝（右件字节篡改→SELECTION_SOURCE_HASH_MISMATCH、diff 文本篡改+自重哈希→SELECTION_RESULT_DIFF_MISMATCH、结果与源不一致→SELECTION_SOURCE_HASH_MISMATCH，均无产物）。既钉住的 10 段尾删+穿插插入拒绝用例（test_compare_sdt_locations_and_trailing_delete）保持绿。
+- **边界如实记录**：插入锚点落在被删段上的尾删+穿插插入组合（如 T 系列文本对齐顺序）在改动前就已是可正确交付的形态（旧代码同路径 final==right 三重验证通过，本次以 HEAD 代码复跑证实），非本轮能力扩张；`checks` 不含 full_body_replacement，走原普通块路径。
+- **真实语料冒烟**：542 份 funds_word 采用全文替换式变异采用B 抽写统计见 FL-D590。
+- **状态**：已修复（专线合并主线后生效）；待最终回归与最终发布证据。
 
 ## FL-D563 A7-04 修复缺回归测试（2026-10-31，引擎复核）
 
@@ -7015,6 +7020,79 @@ H＝E×…
 - **状态**：open（复验已执行并定判，门槛缺口待 FL-D572/FL-D608）。
 - **变更记录**：2026-10-31 新增。
   - 2026-10-31（guide 线）：**复验 v2 GO**。冻结 `2d600be`（含 FL-D608 两层修复；freeze 文件 sha12 f9acd782，guide raw `373873f8…`/document `30c2625d…`），正式跑动 `/tmp/opencode/qa-findings-run/smoke-requal-v2-formal/`：B05 13/13 completed + integrated_complete=True + unresolved 0（G08 本轮 completed；G01/G03 append 在组尾站点闭合），B16 23/23 completed + integrated_complete=True + unresolved 0。四项门槛逐项过；FL-D565-F1 未触发声明如实保留；记录 `/tmp/opencode/qa/findings/smoke28-requal-v2-f9acd782.md`。GO 为单次真实证据，G08 不确定性（FL-D643）仍 open。
+
+## FL-D590 compare 全文替换式采用B 的 542 份真实语料冒烟（2026-10-31，qa-feat-compare 专线）
+
+- **目的**：FL-D562 能力恢复后，用 funds_word 全部真实合同（主线 merge 后 578 份，540 份原有 + 两个 `基金合同第一批_*_20261027/` 子目录新增）做 selection-writer 冒烟：变异左侧全部正文直接段落生成右侧 → compare → 全部采用B → generate → 校验 final==right；全程不跑模型、语料只读、产物即验即删、输出 <500MB 落 `var/qa-compare-smoke-20261031*/`。
+- **脚本**：`/tmp/opencode/qa/cmp-d562/smoke_corpus.py`（4 进程，worktree `.venv/bin/python`；外部脚本必须 `PYTHONPATH=$PWD`，见 FL-D593）。
+- **r1（作废）**：542 份，结果 ok 2 / reject 558 / error 18（LOCATION_NOT_FOUND 462 为主）——**因 import 主工作区旧树 `158475f` 整体作废**（FL-D593），只可作为主线旧树拒绝码形态参考，不代表本线行为。
+- **r2（完成）**：578 份 `PYTHONPATH=$PWD` 重跑（2026-10-31 16:53 启动，2026-11-01 00:03 落盘 `var/qa-compare-smoke-20261031-r2/{stats.json,results.jsonl}`，墙钟 ~7.2h 因 4 核超售 load 17-21，CPU 锚点 4 worker ~13.1 CPU-h/4.7h 时点）。**测的是 FL-D592 修复后、FL-D595 修复前的 worktree**（`04d71ed`）。
+- **r2 回填（统计即 stats.json 原口径）**：
+  - `outcomes`: ok **21** / reject 538 / error 18 / text_mismatch_after_ok 1；`artifacts_left: 0`（fail-closed 零产物保持）；`full_body_replacement_hits: 21`——**全部 ok 都走全量路径**，且 19/21 含 body 级 sdt(TOC)，正是旧计划级检测永远到不了的形态；ok 样本 manifest==diffs 全数（undo/审计覆盖完备）。
+  - `reject_codes`: SELECTION_BLOCK_SECTION_UNSUPPORTED 380（空白 sectPr 段非惰性，pre-detect 拒→普通路径撞 sectPr——按设计 fail-closed，三角样本 广发价值优选 一致）；SELECTION_BLOCK_RUN_UNSUPPORTED 80（非惰性 leftover 落普通路径遇 fldChar/多 w:t run，如价值优选 L000672 HYPERLINK 域段）；SELECTION_CONTENT_CONTROL_UNSUPPORTED 35（pre-detect 因非惰性 leftover 拒→普通路径撞 sdt 锚点）；SELECTION_BLOCK_STRUCTURE_UNSUPPORTED 25；EXISTING_REVISION_UNSUPPORTED 18（=error 18，全部位于 `基金合同第一批_修订原件备份_20261027/`，原件含既有修订，**解析期 fail-closed 预期**，非 writer 缺陷）；SELECTION_BLOCK_SCOPE_UNSUPPORTED 12；SELECTION_STRUCTURAL_DIFF_UNSUPPORTED 3；DOCUMENT_PROTECTED 1；SELECTION_MERGED_CELL_UNSUPPORTED 1；SELECTION_FINAL_TEXT_MISMATCH 1（→ FL-D595 根因消除后已转交付）；`?` 1（即 text_mismatch_after_ok 那 1 份，无 code）。
+  - **text_mismatch_after_ok 1（广发百发大数据策略价值）归因**：左侧 body[0] 为含一个空格 run 的段落→diff builder 归一视『空白』只产出 insert 不产出 delete→普通路径忠实执行『全采用』，左空白段保留、其余全部按 diff 落地。**交付忠实于已采用 diff**（非 writer 违约），只是严格口径 final≠B 逐字；归入 diff 层空白段语义边界，保持 fail-open 交付不阻断。
+  - **影响面评估**：可处理分母 560（578-18 备份原件）；ok 21（3.75%）+ text_mismatch 1（交付但非 B 逐字，0.18%）；其余 538 全部 fail-closed 零产物、拒绝码如实指向未支持的文档特征。合并门槛决策见主线。
+  - **语料正例已入测试**：`test_real_corpus_full_body_replacement_delivers` 采用 ok 样本 广发中证800自由现金流（含 body 级 sdt，skipif 语料缺席时跳过）。
+- **待办**：FL-D595 修复后按 r3 口径全量重测（低噪窗口，增量落盘版脚本），预期 SECTION/RUN/CONTENT_CONTROL 结构性拒绝不变、FINAL_TEXT_MISMATCH 归零、ok 至少 +1（已单文件复验）；性能复测 bench_compare.py 同窗口。
+- **变更记录**：
+  - 2026-10-31 新增（脚本与目的）。
+  - 2026-11-01 回填 r2 全量统计与归因抽查结论。
+
+## FL-D591 compare worker 终态失败诊断结构化透出（A6-546 后续增强已实施，2026-10-31，qa-feat-compare 专线）
+
+- **变更记录（对 FL-D554 条目内 A6-546 的状态更新，按段位协调规则在本段登记）**："诊断透出列为后续增强"现已实施，A6-546 由"接受现状"转为"已修复（未 commit，随专线上线）"。
+- **实施**：worker 追加失败阶段跟踪（`_failed_stage`：`pairing/extracting/saving/diagnosing/generating`）；终态 failed 的 result payload 携带 `diagnostics.failure={error_code, stage, error_type, retryable:false}`（error_type 经净化，掉 traceback/路径/内部细节）；transient 重试经 `store.retry(..., diagnostics=)` 携带，不新增库表列；`_pair_dict` 透出结构化失败摘要，错误码后缀强转 str（防真异常 error_code 非字符串导致 500 遮蔽 pair 状态——本轮新发现随修）。
+- **前端**：`compare.js` `pairErrorLabel` 优先展示阶段+错误类型+可重试性（如"保存结果阶段失败：RuntimeError（不可自动重试，待人工处理）"），paused 同源口径不变。
+- **验证**：`tests/test_compare_worker.py` 新增 5 项（共 20 passed）；浏览器 `tests/browser/test_v1_frontend_remediation.py` 新增 failed-pair 诊断展示用例，16/16 全绿；node --check 过。fail-closed 不变量保持：`_execute` 仍先 `_extract_right_revision`、诊断仅现于终态 failed、无错误 complete。
+
+## FL-D592 FL-D562 全文替换采用B 检测缺口与二次修复（pre-detect + 惰性空白段 + 批发删除守卫 + 带区几何，2026-10-31，qa-feat-compare 专线）
+
+- **发现日期**：2026-10-31，FL-D590 冒烟第一轮（r1，已作废见 FL-D593）分诊与真实文件三角诊断（spy `triage.py`/`spy_pre.py`/`check_one.py`，均 `PYTHONPATH=$PWD`）。
+- **问题与影响**：`b7ca4c2` 提交的全文替换检测 `_detect_full_body_replacement` **后置**在 `_build_plan` 之后，需先算出 block operations——而语料形态下 insert 锚点普遍指向保持的 body 级 sdt（目录 TOC），`_build_plan` 对 sdt 锚点 fail-closed（`SELECTION_CONTENT_CONTROL_UNSUPPORTED`），检测根本到不了，全量路径对真实语料形同虚设（按 r1 引用分布约占 93.6% 含 TOC 语料会先死在计划级）。另两个形态缺口：①变异后左侧「惰性空白段」（`raw_text==''` 且 XML 仅 bare pPr）被 diff builder 丢弃成 leftover，原检测要求 deleted==左全部直段而不触发；②含 fldChar HYPERLINK 域段的左侧段在普通路径 `_simple_paragraph` 下 `RUN_UNSUPPORTED`，全量路径必须接受"段落级批发删除"而非逐 run 形状检查。
+- **处理方法（最终形态）**：
+  - `_pre_detect_full_body_replacement`：在 `_build_plan` **之前**直接对 adopted diffs 判定——全 diff 采用 right 且仅 delete/insert（部分采用/modify 一律回普通 fail-closed 路径）；deleted ⊆ 左直段（余量必须是惰性空白段，经 `left_root` 核 XML：仅 bare pPr、无 sectPr/pPrChange）；inserted == 右直段全集。返回综合 ops（一 diff 一 op、锚点留空——全量 writer 不用锚点），manifest 覆盖与样式/编号校验沿用原机制不变；final==right 语义仍由写入后校验（接受修订解析、独立 oracle c14n、源哈希）兜底。
+  - `_apply_full_body_replacement` 带区几何重写：保持的 body 子节点（tbl/sdt/sectPr）把左右文集切成带，带数一致且每带非空（否则 fail-closed）；每带末段 keeper 锚点插首段 run、余段 clone 后插，带区间可不同长度，最终块序==right。
+  - `_wholesale_deletable_paragraph` 批发删除守卫：放行多 w:t/fldChar run；禁 ins/del/moveFrom/sdt/fldSimple/commentRange/commentReference/footnote/endnote/drawing/pict/object 后代；sectPr/pPrChange 段直拒。
+  - `_check_field_spans_within` 全局域跨段扫描：fldChar begin/end 跨删除边界 fail-closed（orphan 域）。
+  - `_mark_deleted_paragraph(check_shape=False)` 供全量路径跳过逐 run 形状检查；`_inert_blank_paragraph` 惰性段判定。
+- **保持的 fail-closed 边界**：非全文大链拒绝、mutation 对抗拒绝、半结构失败零产物；sectPr 携带段（含空白 sectPr 段）始终不进批发路径（测试钉住"sectPr 必存活"）；右侧插入侧保持 `_simple_paragraph` 严格检查（复杂 right 内容=诚实边界）；域跨表 fail-closed。
+- **验证**：`tests/test_compare_full_body_replacement.py` 扩至 16 项全绿（含 6 项新用例：惰性空白段交付、fldChar 段交付、顶部 sdt 保持交付、域跨表 fail-closed、sectPr 空白不进批发、drawing 拒）；同跑 sdt/trailing 20 + selection_writer 15 共 51 项全绿。真实文件三角验证（`PYTHONPATH` 正确口径）：广发景辉纯债 GENERATE OK（full_body_replacement=True、final==right、manifest 2662/2662）；广发价值优选 fail-closed（sectPr 空白+fldChar 段，批发守卫放行 fldChar 段但空白 sectPr 段拒——按设计）；科创板芯片 fail-closed（sectPr 空白段非惰性）。
+- **状态**：已修复（测试与单文件级已验证），真实语料 r2 冒烟结果回填 FL-D590 后由主线核对销号。
+- **合并注意（给主线）**：`b7ca4c2` 内的 `_detect_full_body_replacement`（计划级后置版）已被本条的 pre-detect 版取代弃用；主线 merge 本线时以最新 selection_writer.py 为准，不存在两代检测并存的回退风险。
+
+## FL-D593 FL-D590 冒烟第一轮（r1）统计作废：worktree .venv symlink 致 import 主工作区旧树（2026-10-31，qa-feat-compare 专线）
+
+- **发现日期**：2026-10-31，r1 冒烟完成后 triage 发现 spy 报 `AttributeError: module 'fundlex.compare.selection_writer' has no attribute '_detect_full_body_replacement'`，而 worktree 源码里明明有——导入的根本不是本线代码。
+- **证据与归因**：worktree 的 `.venv` 是指向 `/home/opencode/fundlex/.venv` 的 symlink；以 `python /tmp/.../script.py` 运行时 `sys.path[0]` 是脚本目录，外部脚本不生效 worktree 本身，import fundlex 落到主工作区（HEAD `158475f` 快照，无任何本轮 compare 改动）。用 `PYTHONPATH=$PWD` 同脚本重跑后 spy 正常、检测正常触发，证实错树。
+- **影响**：r1 全部统计（ok 2 / reject 558 / error 18；LOCATION_NOT_FOUND 462 为主）测的是**主线旧树行为**，整体作废，不代表本线 FL-D562 能力（r1 统计目录 `var/qa-compare-smoke-20261031/` 已标注作废，仅留作拒绝码形态的参考）。这与历史 A10-Q0 类「错树验证」属同类风险。
+- **处理方法**：一切外部脚本（非 `python -m pytest` 入口）一律 `cd <worktree> && PYTHONPATH=$PWD .venv/bin/python ...`；spy/monkeypatch 断言不存在的属性可用 `AttributeError` 快速暴露错树；r2 已按正确口径重跑（578 份，含两个新增子目录语料），结果回填 FL-D590。
+- **状态**：已确认（流程规避已生效），r2 统计为准。
+- **变更记录**：
+  - 2026-10-31 新增（qa-feat-compare 专线）。
+
+## FL-D594 FL-D590 冒烟脚本不可观测与超时风险（stdout 吞没 + 结果只在内存，2026-10-31，qa-feat-compare 专线）
+
+- **发现日期**：2026-10-31，主线排障指令指出：r2（578 份）已跑 4.7h 远超标称「小时级」，且无法判断进度。
+- **问题与影响**：`smoke_corpus.py` 两个设计缺陷叠加：①stdout 经 `2>&1 | tail -30` 包一层，progress 行被管道缓冲吞掉，main/agent 中途完全看不到进度；②所有结果只在主进程内存累积，跑完才一次性落 stats.json/results.jsonl——**进程死 = 全部统计丢失**（r1 已实际经历一次「代价昂贵的重跑」，那次归因错树 FL-D593）。4 核机器 load ~17-21 超售下，重跑代价被进一步放大。
+- **处理方法（主线指令执行）**：①在跑的 r2 不杀不动，保住内存结果；②侧车分片探针 `/tmp/opencode/qa/cmp-d562/smoke_shard.py`：同工作负载、files[::6]≈96 份系统抽样、**每份完成即时追加 results.jsonl + 无缓冲 progress 打印**（进程死零损失）、`nice -n 19` + `max_workers=2` 不抢评测与其他线 CPU、支持断点续跑；探针记录每份 cpu_s（nice/争用无关）与 wall_s 分布，结合 r2 累计 CPU（4.7h 时点 4 worker ≈13.1 CPU-h）推算 r2 已完成份数与剩余诚实 ETA；③规则固化：**本线后续任何长跑脚本一律增量落盘 + 无缓冲 progress，禁止只内存累积、禁止 tail 吞 stdout**。
+- **状态**：已处置——r2 于 2026-11-01 00:03 自然跑完落盘（578 份统计已回填 FL-D590），紧急性解除；侧车探针未跑完即被服务器重启撤销（其 method 已固化进 FL-D590 待办 r3 增量落盘版脚本要求）。
+- **变更记录**：
+  - 2026-10-31 新增（qa-feat-compare 专线，主线排障指令触发）。
+  - 2026-11-01 r2 自然完成；服务器重启撤销 r2/shard 两个后台 shell（r2 已落盘无损、shard 部分 results.jsonl 留存但已被 r2 全量取代）；规则「长跑脚本一律增量落盘 + 无缓冲 progress，禁止 tail 吞 stdout」继续有效。
+
+## FL-D595 全文替换交付真实语料两缺陷：删除段落书签级联污染 + 制表位定义计入 raw_text（2026-11-01，qa-feat-compare 专线）
+
+- **发现日期**：2026-11-01，r2 唯一 `SELECTION_FINAL_TEXT_MISMATCH`（广发中证智选高股息）逐层三角（redline 正确 → final 布局 → keeper XML → parse 文本源）定位。
+- **问题与影响**：
+  1. **删除段落的书签/proofing 子节点级联污染**：`_mark_deleted_paragraph` 全删段落（mark+runs）后保留 `bookmarkStart/End/proofErr/lastRenderedPageBreak` 直接子节点；`_accept_revisions_copy` 按 OOXML 段落标记语义把已删段落的残留子节点移入**下一段**——整带删除时 1232 个段落的 26 枚书签全部级联进 keeper，交付物 final 含「书签墙」（redline 校验/独立 oracle 因同源实现均通过，文本校验漏检书签维度）。属交付物污染缺陷。
+  2. **制表位定义计入 raw_text**：`parser._text` 与 `presentation.runs` 全子树遍历把 `w:pPr/w:tabs/w:tab`（制表位**定义**非内容）计为 `\t` 文本。keeper 保留左侧 pPr（左文集为排版基准的既定策略），签名行类段落（`签订日：<tab>年<tab>月<tab>日`，pPr 含 3 个居中制表位）即被 parse 为 `'\t\t\t'+正文` ≠ right 文本 → 校验 fail-closed 拦下（安全网按设计生效但属误伤）；该误计同时污染 diff builder 的 raw_text（左右两侧同口径，diff 无伪差，但文本字段夹带幽灵制表符）。
+- **处理方法**：
+  - `_mark_deleted_paragraph`：mark_paragraph=True（整段删除）时先剥离 bookmarkStart/bookmarkEnd/proofErr/lastRenderedPageBreak 子节点——书签属于将亡段落，Word 接受删除时等同消失，级联变 no-op（对普通路径的尾部删除链同样生效，消除同源潜在污染）。
+  - `parser._text` 改为显式递归跳过 `w:pPr` 子树；`presentation.runs`（parse raw_text 实际取数源）同样跳过 pPr 子树。左右两侧同口径变化，diff 一致性与既有测试兼容。
+- **验证**：新增 `test_bookmarks_die_with_paragraph_and_tabstop_ppr_is_not_text`（签名行 keeper+书签删除段：交付、final 零书签残留、delText 覆盖撤销完备）；修复后广发中证智选高股息单文件复验 GENERATE OK（full_body_replacement=True、final==right、manifest 2476/2476）；`tests/test_compare_full_body_replacement.py` 18 项全绿（含新增语料正例 广发中证800自由现金流）；`tests -k compare` 全量回归随本登记后复跑为准（见本线状态文件）。
+- **状态**：已修复（fixture/单文件/语料正例已验证），待主线合并核对；r3 全量冒烟（低噪窗口）后回填影响面。
+- **变更记录**：
+  - 2026-11-01 新增（qa-feat-compare 专线）。
 
 ## FL 编号分配（多对话并行期协调，2026-10-31）
 

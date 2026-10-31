@@ -14,6 +14,31 @@ logger = logging.getLogger(__name__)
 _TRANSIENT_ERRORS = (OSError, DatabaseError, sqlite3.DatabaseError)
 
 
+def _safe_error_type(exc: BaseException) -> str:
+    name = "".join(ch for ch in type(exc).__name__ if ch.isalnum() or ch in "._-")
+    return name[:64] or "Exception"
+
+
+def _failure_payload(code: str, exc: BaseException | None, stage: str) -> dict:
+    """Terminal failure result with structured, leak-free diagnostics.
+
+    Only the coarse code, processing stage, exception class name and the
+    retryability verdict are recorded.  Exception messages, paths, document
+    text and SQL never leave the worker log.
+    """
+    return {"schema_version": "contract-compare-v1",
+            "error_code": code,
+            "diagnostics": {"failure": {
+                "error_code": code,
+                "stage": stage,
+                "error_type": _safe_error_type(exc) if exc is not None else "",
+                "retryable": False,
+            }},
+            "summary": {"total": 0, "modify": 0, "insert": 0, "delete": 0},
+            "diffs": [],
+            "coverage": {"status": "incomplete", "warnings": [code]}}
+
+
 class CompareWorker:
     def __init__(self, store: CompareStore, processor=None, *, lease_seconds: int = 300,
                  max_attempts: int = 3):
@@ -29,6 +54,7 @@ class CompareWorker:
         pair_id, token = job["id"], job["fencing_token"]
         stop = threading.Event()
         heartbeat_error = []
+        stage = "claim_setup"
         def beat():
             while not stop.wait(max(0.5, self.lease_seconds / 3)):
                 try:
@@ -40,6 +66,7 @@ class CompareWorker:
             self.store.heartbeat(pair_id, token, lease_seconds=self.lease_seconds)
             thread = threading.Thread(target=beat, daemon=True)
             thread.start()
+            stage = "input_integrity"
             files = {f["side"]: f for f in self.store.pair_inputs(pair_id)}
             left, right = files["left"], files["right"]
             lp = self.store.store.object_path(left["object_key"])
@@ -51,17 +78,23 @@ class CompareWorker:
                 digest = hashlib.sha256(path.read_bytes()).hexdigest()
                 if digest != entry["source_sha256"]:
                     raise ValueError("COMPARE_INPUT_INTEGRITY_FAILED")
+            stage = "compare"
             result = self.processor.compare(lp, rp, left_filename=left["filename"], right_filename=right["filename"])
             if heartbeat_error:
+                stage = "heartbeat"
                 raise heartbeat_error[0]
+            stage = "finish"
             self.store.finish(pair_id, token, result)
         except _TRANSIENT_ERRORS as exc:
             # I/O/database failures are retryable, but only for the bounded
             # number of attempts carried by the fencing row.
-            logger.warning("compare pair transient failure type=%s", type(exc).__name__)
+            logger.warning("compare pair transient failure type=%s stage=%s",
+                           type(exc).__name__, stage)
             try:
                 self.store.retry(pair_id, token, "COMPARE_TRANSIENT_FAILURE",
-                                 max_attempts=self.max_attempts)
+                                 max_attempts=self.max_attempts,
+                                 diagnostics={"stage": stage,
+                                              "error_type": _safe_error_type(exc)})
             except Conflict:
                 pass
             except _TRANSIENT_ERRORS as retry_exc:
@@ -81,9 +114,7 @@ class CompareWorker:
             else:
                 code = "COMPARE_PROCESSING_FAILED"
             try:
-                self.store.finish(pair_id, token, {"schema_version": "contract-compare-v1", "error_code": code,
-                                                  "summary": {"total": 0, "modify": 0, "insert": 0, "delete": 0},
-                                                  "diffs": [], "coverage": {"status": "incomplete", "warnings": [code]}},
+                self.store.finish(pair_id, token, _failure_payload(code, exc, stage),
                                   failed=True, error_code=code)
             except Conflict:
                 pass
