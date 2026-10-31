@@ -36,7 +36,7 @@ from lxml import etree
 W = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
 Q = lambda name: "{" + W + "}" + name
 COMPACT = re.compile(r"[\s\u3000]")
-SCORER_VERSION = "p6-score-3-classfold-20261031"
+SCORER_VERSION = "p6-score-4-appendwindow-20261101"
 _SITE_INDEX_KEYS = ("paragraph_index", "paragraph", "para_index", "source_paragraph",
                     "source_paragraph_index", "source_index")
 _SITE_LOCATION_KEYS = ("paragraph_index", "paragraph", "para_index", "index", "paragraph_id")
@@ -103,11 +103,12 @@ def target_site(target: dict) -> dict:
             "from_compact_start": index == -1}
 
 
-def _site_text(paragraphs: list[str], index: int, *, after: int = 2) -> str:
+def _site_text(paragraphs: list[str], index: int, *, after: int = 2,
+               before: int = 1) -> str:
     """Target paragraph plus the neighbouring paragraphs an edit may create."""
     if index < 0 or index >= len(paragraphs):
         return ""
-    return "\n".join(paragraphs[max(0, index - 1):index + after + 1])
+    return "\n".join(paragraphs[max(0, index - before):index + after + 1])
 
 
 def _required_clauses(required: str) -> list[str]:
@@ -586,7 +587,13 @@ def score_target(target: dict, facts: dict, final_paragraphs: list[str],
     # small clause window prevents a correct append from being reported missing
     # while still requiring the full policy text.  A body/summary target has its
     # own declared site and is scored separately.
-    append_text = _site_text(final_paragraphs, final_index, after=6)
+    # FL-D790 (mainline ruling 2026-11-01): DEFINITION_GROUP_APPEND_END legally
+    # rebinds an append to an earlier paragraph of the same subsection, with the
+    # three policy clauses verbatim and replay-verified.  The forward-only
+    # window (index-1..index+6) scored that legal landing as not_executed.
+    # Symmetrize the backward reach to 6 paragraphs; the forward window and all
+    # other paths are unchanged.
+    append_text = _site_text(final_paragraphs, final_index, after=6, before=6)
 
     if operation == "append":
         if not required:

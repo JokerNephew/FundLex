@@ -228,7 +228,7 @@
     renderBreadcrumb(view);if(!prior||prior.view!==view||prior.mode!==next.mode||prior.id!==next.id||prior.document!==next.document)document.querySelector('.main').scrollTop=0;
     document.dispatchEvent(new CustomEvent('fundlex:view',{detail:view}));dispatchRoute();
     if(!state.cap)return;
-    if(view==='users')loadUsers();if(view==='guide')loadGuides();if(view==='settings')loadFeishuBinding();if(view==='models')loadModelSettings();
+    if(view==='users')loadUsers();if(view==='guide')loadGuides();if(view==='settings'){loadFeishuBinding();loadFeishuApp();}if(view==='models')loadModelSettings();
     if(view==='overview'){restoreRevisionFilters();loadTasks();if(!state.taskGuides)loadTaskGuides(true);}
     if(view==='task'){if(!state.taskGuides)loadTaskGuides(true);if(next.id&&state.selected!==next.id)selectTask(next.id,false);else loadDocuments();}
     if(view==='document')openDocumentRoute(next);
@@ -413,6 +413,7 @@
     $(`model-${prefix}-status`).textContent='配置已更改，尚未验证。';
   });
   document.addEventListener('change',e=>{
+    if(e.target.id==='guide-diff-from'||e.target.id==='guide-diff-to'){const d=state.guideDiff||=({from:'',to:'',tab:'rules',view:'merged'});if(e.target.id==='guide-diff-from')d.from=e.target.value;else d.to=e.target.value;if(d.from&&d.to&&d.from!==d.to)renderGuideDiff();return;}
     const card=e.target.closest('.model-edit-form');if(!card)return;
     const prefix=card.closest('[data-model-role]')?.dataset.modelRole;if(!prefix)return;
     if(['provider','base_url'].includes(e.target.id.replace(`model-${prefix}-`,''))){$(`model-${prefix}-connection_id`).value='';$(`model-${prefix}-api_key`).value='';}
@@ -484,8 +485,230 @@
     catch(e){if(current(t)&&e.name!=='AbortError')$('feishu-binding-message').textContent='解除绑定失败，请稍后重试。';}
     finally{if(current(t))button.disabled=false;}
   }
-  document.addEventListener('fundlex:view',e=>{if(e.detail!=='settings'){stopFeishuOAuth();state.tokens['feishu-binding']=(state.tokens['feishu-binding']||0)+1;$('feishu-binding-refresh').disabled=false;}});
-  document.addEventListener('fundlex:identity-reset',()=>{stopFeishuOAuth();feishuBound=false;$('feishu-connect-card').dataset.state='loading';$('feishu-binding-badge').textContent='读取中';$('feishu-binding-state').textContent='正在读取绑定状态…';$('feishu-current-user').textContent='—';$('feishu-binding-message').textContent='';$('feishu-unbind-btn').hidden=true;$('feishu-oauth-btn').hidden=false;$('feishu-oauth-btn').disabled=true;document.querySelector('[data-action="feishu-unbind-confirm"]').disabled=false;});
+  // ---- Flywheel: own-tenant Feishu app onboarding (FL-D780..784) ----
+  const feishuApp={data:null,timer:null,localStep:1,localPanel:null,reenterFrom:null,code:'',codeExpiry:0,busy:false,confirmRemove:false};
+  async function feishuAppRequest(path,options={}){
+    if(!state.auth.token&&!owner())throw new Error('请先登录后再连接飞书。');
+    const headers=new Headers(options.headers||{});
+    if(state.auth.token)headers.set('Authorization',`Bearer ${state.auth.token}`);
+    if(owner())headers.set('X-FundLex-User',owner());
+    let response;try{response=await fetch(path,{...options,headers,cache:'no-store'});}catch{throw new Error('网络连接中断，请检查网络后重试。');}
+    if(response.status===401&&state.auth.mode==='password'){handleSessionExpired();throw new Error('登录状态已失效，请重新登录。');}
+    let payload=null;try{payload=await response.json();}catch{}
+    if(!response.ok){
+      const detail=payload&&payload.detail;const message=(payload&&payload.message)||(typeof detail==='string'?detail:(detail&&detail.message))||'请求未完成，请稍后重试。';
+      const error=new Error(message);error.detail=payload||null;error.code=response.status;throw error;
+    }
+    return payload;
+  }
+  function feishuAppStep(data){
+    if(feishuApp.localPanel)return feishuApp.localPanel;
+    if(!data||!data.configured)return feishuApp.localStep;
+    if(data.stage==='needs_attention')return 3;
+    return 4;
+  }
+  function feishuAppStopPoll(){if(feishuApp.timer){clearInterval(feishuApp.timer);feishuApp.timer=null;}}
+  function feishuAppPoll(){feishuAppStopPoll();feishuApp.timer=setInterval(()=>{if(feishuAppStep(feishuApp.data)===4)loadFeishuApp(true);},3000);}
+  function feishuAppApplyLinks(guide){
+    if(!guide)return;
+    $('feishu-app-create-link').href=guide.create_app;
+    $('feishu-app-credentials-link').href=guide.create_app;
+    $('feishu-app-link-permission').href=guide.permission;
+    $('feishu-app-link-bot').href=guide.bot;
+    $('feishu-app-link-event').href=guide.event;
+    $('feishu-app-link-version').href=guide.version;
+  }
+  function feishuAppRenderScopes(data){
+    const guide=data.guide||{};const list=$('feishu-app-scopes');if(!list)return;
+    const checks=new Map((data.checks||[]).map(c=>[c.key,c.ok]));
+    const unknown=!data.scopes_checked;
+    list.replaceChildren();(guide.required_scopes||[]).forEach(scope=>{
+      const li=document.createElement('li');const ok=checks.get(scope.key);
+      const mark=document.createElement('span');mark.className=ok===true?'scope-ok':(ok===false?'scope-missing':'');mark.textContent=ok===true?'✓':(ok===false?'待添加':'•');
+      const code=document.createElement('code');code.textContent=scope.key;
+      const label=document.createElement('span');label.textContent=scope.label;
+      li.append(mark,code,label);list.append(li);
+    });
+    const setState=(name,value)=>{const el=document.querySelector(`.feishu-config-state[data-check="${name}"]`);if(!el)return;if(value===null){delete el.dataset.ok;el.textContent='待验证';return;}el.dataset.ok=String(value);el.textContent=value?'已完成':'待完成';};
+    if((guide.required_scopes||[]).length)setState('scopes',unknown?null:(guide.required_scopes||[]).every(s=>checks.get(s.key)===true));
+    setState('bot',checks.get('bot')===true);
+  }
+  function feishuAppRender(data,quiet){
+    feishuApp.data=data;
+    const guide=data.guide;feishuAppApplyLinks(guide);
+    const configured=!!data.configured;
+    $('feishu-app-entry').hidden=configured;
+    $('feishu-app-summary').hidden=!configured;
+    if(configured){
+      const stage=data.stage;const bound=!!(data.binding&&data.binding.bound);
+      const active=stage==='active'&&bound;
+      $('feishu-app-summary-title').textContent=active?'已连接你自己的飞书企业':(stage==='needs_attention'?'应用还需要完成配置':(stage==='active'?'已收到你的消息，等待绑定':'正在连接你自己的飞书企业'));
+      const bits=[];if(data.bot_name)bits.push(data.bot_name);if(data.tenant_name)bits.push(data.tenant_name);
+      bits.push(active?'可以私聊机器人处理合同':(stage==='needs_attention'?'点“查看连接”继续完成':(stage==='active'?'在飞书私聊里发送向导里的绑定码':'等待你在飞书里发消息')));
+      $('feishu-app-summary-text').textContent=bits.join(' · ');
+      $('feishu-app-summary').dataset.stage=stage;
+    }
+    if(data.binding&&data.binding.bound)feishuAppStopPoll();
+    if($('feishu-app-wizard').hidden)return;
+    feishuAppRenderPanel(data);
+    if(!quiet)feishuAppPoll();
+    if(feishuAppStep(data)===4&&data.first_event_at&&!(data.binding&&data.binding.bound))feishuAppEnsureCode();
+  }
+  function feishuAppRenderPanel(data){
+    const step=feishuAppStep(data);
+    document.querySelectorAll('#feishu-app-wizard [data-panel]').forEach(panel=>{panel.hidden=Number(panel.dataset.panel)!==step;});
+    document.querySelectorAll('#feishu-app-steps li').forEach(li=>{const n=Number(li.dataset.step);li.dataset.state=n<step?'done':(n===step?'active':'todo');});
+    const botName=(data.bot_name||'FundLex');
+    $('feishu-app-bot-name').textContent=botName;
+    $('feishu-app-view-config').hidden=!(step===4&&data.configured);
+    $('feishu-app-back-test').hidden=!(step===3&&data.configured);
+    if(step===3){
+      feishuAppRenderScopes(data);
+      if(data.error&&data.error.message)feishuAppShowError('recheck',{message:data.error.message,detail:{detail:data.error.detail||'',link:data.error.link||''}});
+      else $('feishu-app-recheck-error').hidden=true;
+      const appName=data.app_name||data.app_id||'';
+      const botName2=data.bot_name||'';
+      const appText=appName?(botName2&&botName2!==appName?`当前应用：${appName}（机器人：${botName2}）`:`当前应用：${appName}`):'正在读取应用状态…';
+      $('feishu-app-verify-summary').textContent=data.scopes_checked?appText:`${appText}。这个应用未授予「应用信息读取」权限，权限清单无法自动核对；按下面清单逐项确认后，收到消息即证明生效。`;
+      const eventState=document.querySelector('.feishu-config-state[data-check="event"]');
+      if(eventState){eventState.dataset.ok='false';eventState.textContent=data.first_event_at?'已验证':'待验证';if(data.first_event_at)eventState.dataset.ok='true';}
+    }
+    if(step!==4)return;
+    const connected=!!data.runtime_connected;const gotMessage=!!data.first_event_at;
+    const bound=!!(data.binding&&data.binding.bound);
+    const conn=$('feishu-app-conn-state');
+    if(bound){conn.dataset.state='connected';$('feishu-app-conn-title').textContent='已连接，绑定完成';$('feishu-app-conn-text').textContent='可以关闭本页，在飞书私聊机器人使用。';}
+    else if(gotMessage){conn.dataset.state='connected';$('feishu-app-conn-title').textContent='已收到你的消息，连接正常';$('feishu-app-conn-text').textContent='最后一步：把下面的绑定码发给同一个机器人。';}
+    else if(connected){conn.dataset.state='waiting';$('feishu-app-conn-title').textContent='已连接，等待你发消息';$('feishu-app-conn-text').textContent=`打开飞书，搜索「${botName}」并发送一句「你好」。`;}
+    else {conn.dataset.state='waiting';$('feishu-app-conn-title').textContent='正在建立连接…';$('feishu-app-conn-text').textContent='保存后一般 5 秒内完成。如果超过 1 分钟，请回到第 3 步检查「长连接」和「发布版本」。';}
+    $('feishu-app-binding').hidden=!(gotMessage&&!bound);
+    $('feishu-app-done').hidden=!bound;
+    if(bound)$('feishu-app-done-text').textContent=`${botName} 已连接到当前 FundLex 账号，可以在飞书私聊发送 DOCX 合同或输入「菜单」。`;
+    if(gotMessage&&!bound){$('feishu-app-code').textContent=feishuApp.code||'……';feishuAppRenderExpiry();}
+  }
+  function feishuAppRenderExpiry(){
+    const el=$('feishu-app-code-expiry');if(!el)return;
+    if(!feishuApp.codeExpiry){el.textContent='';return;}
+    const left=Math.max(0,Math.round((feishuApp.codeExpiry-Date.now())/1000));
+    el.textContent=left>0?`绑定码 ${Math.floor(left/60)} 分 ${String(left%60).padStart(2,'0')} 秒内有效；过期后点“换一个”。`:'绑定码已过期，请点“换一个”。';
+  }
+  async function feishuAppEnsureCode(){
+    if(feishuApp.busy)return;
+    if(feishuApp.code&&feishuApp.codeExpiry-Date.now()>30000){feishuAppRenderExpiry();return;}
+    feishuApp.busy=true;
+    try{
+      const result=await feishuAppRequest('/api/integrations/feishu/binding-code',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ttl_seconds:1800})});
+      feishuApp.code=result.code||'';feishuApp.codeExpiry=Number(result.expires_at||0)*1000;
+      $('feishu-app-code').textContent=feishuApp.code||'……';feishuAppRenderExpiry();
+    }catch(e){$('feishu-app-conn-text').textContent='绑定码生成失败，请稍后重试或刷新本页。';}
+    finally{feishuApp.busy=false;}
+  }
+  async function loadFeishuApp(quiet=false){
+    if(!quiet){feishuApp.code='';feishuApp.codeExpiry=0;}
+    try{const data=await feishuAppRequest('/api/integrations/feishu/app');if(state.view!=='settings')return;feishuAppRender(data,quiet);}
+    catch(e){if(state.view!=='settings')return;if(!quiet&&(state.auth.token||owner()))flash(e.message||'读取飞书企业连接失败，请稍后重试。');}
+  }
+  function openFeishuAppWizard(){
+    stopFeishuOAuth();
+    feishuApp.localStep=1;feishuApp.localPanel=null;feishuApp.reenterFrom=null;feishuAppStopPoll();
+    $('feishu-app-wizard').hidden=false;
+    feishuAppRenderPanel(feishuApp.data||{configured:false,stage:'no_app'});
+    loadFeishuApp();
+    $('feishu-app-wizard').scrollIntoView({block:'start',behavior:'smooth'});
+  }
+  function closeFeishuAppWizard(){
+    feishuAppStopPoll();$('feishu-app-wizard').hidden=true;feishuApp.localPanel=null;feishuApp.reenterFrom=null;
+    feishuApp.confirmRemove=false;
+    const remove=$('feishu-app-remove');
+    if(remove){remove.textContent='移除这个应用';remove.dataset.confirm='0';}
+    $('feishu-app-error').hidden=true;
+    $('feishu-app-recheck-error').hidden=true;
+  }
+  function feishuAppShowError(target,error){
+    const box=$(target==='recheck'?'feishu-app-recheck-error':'feishu-app-error');
+    const title=$(target==='recheck'?'feishu-app-recheck-error-title':'feishu-app-error-title');
+    const text=$(target==='recheck'?'feishu-app-recheck-error-text':'feishu-app-error-text');
+    const link=$(target==='recheck'?'feishu-app-recheck-error-link':'feishu-app-error-link');
+    const detail=error&&error.detail;
+    title.textContent=error.message||'验证未通过';
+    const raw=detail&&typeof detail==='object'?(detail.detail||''):(typeof detail==='string'?detail:'');
+    const extra=/^[A-Z][A-Z0-9_.-]{1,96}$/.test(raw)?'':raw;
+    text.textContent=extra||'请按提示修改后重试。';
+    const href=detail&&typeof detail==='object'?(detail.link||''):'';
+    if(href){link.href=href;link.hidden=false;}else{link.hidden=true;}
+    box.hidden=false;
+  }
+  async function feishuAppSubmit(event){
+    event.preventDefault();
+    const id=$('feishu-app-id').value.trim(),secret=$('feishu-app-secret').value.trim();
+    $('feishu-app-error').hidden=true;
+    if(!id||!secret){feishuAppShowError('credentials',{message:'请填写 App ID 和 App Secret'});return;}
+    const button=$('feishu-app-submit');const label=button.textContent;button.disabled=true;button.textContent='正在向飞书验证…';
+    try{
+      const data=await feishuAppRequest('/api/integrations/feishu/app/credentials',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({app_id:id,app_secret:secret})});
+      $('feishu-app-secret').value='';
+      feishuApp.localPanel=null;feishuApp.reenterFrom=null;
+      feishuAppRender(data);
+      const verification=data.verification||{};
+      if(data.stage==='needs_attention'){
+        feishuApp.localStep=3;feishuAppRenderPanel(data);
+        flash('凭证已保存。还有配置项需要完成。');
+      }else{
+        feishuApp.localStep=4;feishuAppRenderPanel(data);
+        flash(verification.scopes_checked?'凭证验证通过，权限和机器人都已就绪。':'凭证验证通过。');
+      }
+    }catch(e){feishuAppShowError('credentials',e);}
+    finally{button.disabled=false;button.textContent=label;}
+  }
+  async function feishuAppRecheck(){
+    const button=$('feishu-app-recheck');const label=button.textContent;button.disabled=true;button.textContent='正在检测…';
+    $('feishu-app-recheck-error').hidden=true;
+    try{
+      const data=await feishuAppRequest('/api/integrations/feishu/app/verify',{method:'POST'});
+      feishuApp.localPanel=null;
+      feishuAppRender(data);
+      if(data.stage==='needs_attention'){
+        const missing=(data.missing_scopes||[]).length;const checks=data.checks||[];
+        const botOk=(checks.find(c=>c.key==='bot')||{}).ok;
+        feishuAppShowError('recheck',{message:missing?`还缺少 ${missing} 个权限`:'机器人还没有启用或版本未发布',detail:{detail:missing?'请按上面标黄的权限逐项添加，然后重新发布版本。':'请在「机器人」页启用机器人，并在「版本管理与发布」创建版本、申请发布。',link:data.guide&&(missing?data.guide.permission:data.guide.bot)}});
+      }else if(data.scopes_checked){
+        flash('配置齐全，正在建立连接。');
+      }else{
+        flash('已重新检测。没有「应用信息读取」权限时无法自动核对权限清单，请在飞书里给机器人发一句话确认。');
+      }
+    }catch(e){feishuAppShowError('recheck',e);}
+    finally{button.disabled=false;button.textContent=label;}
+  }
+  function copyText(text,message){
+    const done=()=>flash(message||'已复制。');
+    if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(text).then(done).catch(()=>copyFallback(text,done));return;}
+    copyFallback(text,done);
+  }
+  function copyFallback(text,done){
+    const area=document.createElement('textarea');area.value=text;area.setAttribute('readonly','');area.style.position='fixed';area.style.opacity='0';document.body.append(area);area.select();
+    try{document.execCommand('copy');done();}catch{flash('复制失败，请手动选择文本复制。');}
+    area.remove();
+  }
+  async function feishuAppNewCode(){
+    feishuApp.code='';feishuApp.codeExpiry=0;
+    await feishuAppEnsureCode();
+    flash('已生成新的绑定码。');
+  }
+  async function feishuAppRemove(){
+    const button=$('feishu-app-remove');
+    if(button.dataset.confirm!=='1'){button.dataset.confirm='1';button.textContent='再点一次确认移除';return;}
+    button.disabled=true;
+    try{
+      const data=await feishuAppRequest('/api/integrations/feishu/app',{method:'DELETE'});
+      feishuApp.code='';feishuApp.codeExpiry=0;feishuApp.localStep=1;
+      feishuAppRender(data);feishuAppRenderPanel(data);
+      flash('已移除这个应用。');
+      button.textContent='移除这个应用';button.dataset.confirm='0';
+    }catch(e){flash(e.message||'移除失败，请稍后重试。');}
+    finally{button.disabled=false;}
+  }
+  document.addEventListener('fundlex:view',e=>{if(e.detail!=='settings'){stopFeishuOAuth();state.tokens['feishu-binding']=(state.tokens['feishu-binding']||0)+1;$('feishu-binding-refresh').disabled=false;closeFeishuAppWizard();}});
+  document.addEventListener('fundlex:identity-reset',()=>{stopFeishuOAuth();feishuBound=false;$('feishu-connect-card').dataset.state='loading';$('feishu-binding-badge').textContent='读取中';$('feishu-binding-state').textContent='正在读取绑定状态…';$('feishu-current-user').textContent='—';$('feishu-binding-message').textContent='';$('feishu-unbind-btn').hidden=true;$('feishu-oauth-btn').hidden=false;$('feishu-oauth-btn').disabled=true;document.querySelector('[data-action="feishu-unbind-confirm"]').disabled=false;closeFeishuAppWizard();feishuApp.data=null;feishuApp.code='';feishuApp.codeExpiry=0;feishuApp.localStep=1;feishuApp.confirmRemove=false;$('feishu-app-entry').hidden=false;$('feishu-app-summary').hidden=true;});
   async function loadCapabilities() {
     const t=ticket('cap'),wasReady=!!state.cap;
     try{
@@ -499,7 +722,7 @@
       hideLogin();renderAuthUI();state.cap=cap;renderFooter();
       if(!state.importMode)state.importMode='revision';
       $('upload-limit').textContent=`仅接收 DOCX（.doc 请先用 Word/WPS 另存为 .docx） · 单文件 ≤ ${size(cap.upload_limits.max_file_bytes)}`;
-      renderImport();if(state.view==='settings')loadFeishuBinding();if(state.view==='models')loadModelSettings();
+      renderImport();if(state.view==='settings'){loadFeishuBinding();loadFeishuApp();}if(state.view==='models')loadModelSettings();
       if(!wasReady&&state.view==='overview')restoreRevisionFilters();
       if(!wasReady)dispatchRoute();
       if(state.view==='document'&&!state.detail)openDocumentRoute(state.route);
@@ -509,13 +732,26 @@
   }
   document.addEventListener('click',e=>{
     const action=e.target.closest('[data-action]')?.dataset.action;
-    if(!['feishu-binding-refresh','feishu-unbind','feishu-unbind-confirm','feishu-unbind-cancel'].includes(action))return;
+    if(!['feishu-binding-refresh','feishu-unbind','feishu-unbind-confirm','feishu-unbind-cancel','feishu-app-open','feishu-app-close','feishu-app-to-credentials','feishu-app-copy-scopes','feishu-app-recheck','feishu-app-copy-code','feishu-app-new-code','feishu-app-remove','feishu-app-view-config','feishu-app-back-test','feishu-app-reenter','feishu-app-back'].includes(action))return;
     e.stopImmediatePropagation();
     if(action==='feishu-binding-refresh')loadFeishuBinding();
     if(action==='feishu-unbind'){$('feishu-unbind-confirm').hidden=false;document.querySelector('[data-action="feishu-unbind-confirm"]').focus();}
     if(action==='feishu-unbind-cancel'){$('feishu-unbind-confirm').hidden=true;$('feishu-unbind-btn').focus();}
     if(action==='feishu-unbind-confirm')revokeFeishuBinding();
+    if(action==='feishu-app-open')openFeishuAppWizard();
+    if(action==='feishu-app-close')closeFeishuAppWizard();
+    if(action==='feishu-app-to-credentials'){feishuApp.localStep=2;feishuAppRenderPanel(feishuApp.data||{configured:false});$('feishu-app-id').focus();}
+    if(action==='feishu-app-copy-scopes')copyText((feishuApp.data?.guide?.required_scopes||[]).map(s=>s.key).join('\n'),'权限清单已复制，去飞书「权限管理」逐个粘贴。');
+    if(action==='feishu-app-recheck')feishuAppRecheck();
+    if(action==='feishu-app-copy-code')copyText(feishuApp.code||'','绑定码已复制。');
+    if(action==='feishu-app-new-code')feishuAppNewCode();
+    if(action==='feishu-app-view-config'){feishuApp.localPanel=3;feishuAppRenderPanel(feishuApp.data||{configured:false});}
+    if(action==='feishu-app-back-test'){feishuApp.localPanel=null;feishuAppRenderPanel(feishuApp.data||{configured:false});}
+    if(action==='feishu-app-reenter'){feishuApp.reenterFrom=feishuAppStep(feishuApp.data||{configured:false});feishuApp.localPanel=2;feishuAppRenderPanel(feishuApp.data||{configured:false});$('feishu-app-id').value=(feishuApp.data&&feishuApp.data.app_id)||'';$('feishu-app-secret').value='';$('feishu-app-secret').focus();}
+    if(action==='feishu-app-back'){feishuApp.localPanel=feishuApp.reenterFrom||null;feishuApp.reenterFrom=null;feishuAppRenderPanel(feishuApp.data||{configured:false});}
+    if(action==='feishu-app-remove')feishuAppRemove();
   });
+  document.addEventListener('submit',e=>{if(e.target&&e.target.id==='feishu-app-form')feishuAppSubmit(e);});
   function taskMetrics(t){const failed=t.failed||0,rejected=t.rejected||0,dc=t.delivery_counts||{},incomplete=dc.incomplete||0;return {success:t.successful??((dc.complete||0)+(dc.complete_with_exceptions||0)),anomaly:t.exceptions??(failed+rejected+incomplete),breakdown:`失败 ${failed} · 接收失败 ${rejected} · 交付不完整 ${incomplete}（异常合同按份去重）`};}
   function taskRow(t){const m=taskMetrics(t),pct=t.total?Math.round(100*(t.completed||0)/t.total):0;return `<tr data-row-key="${esc(t.id)}"><td><span class="filename task-list-name" title="${esc(t.name)}">${esc(t.name)}</span></td><td><strong>${t.total}</strong></td><td title="${esc(m.breakdown)}"><span class="task-success">${m.success}</span> / <span class="task-error">${m.anomaly}</span></td><td>${badge(t.status)}</td><td><div class="task-progress"><div class="progress-line mini">${progressHTML(t)}</div><small>${pct}% · ${t.completed}/${t.total} 份终态</small></div></td><td class="task-created-time">${esc(new Date(t.created_at).toLocaleString('zh-CN'))}</td><td><button class="btn-link" data-task="${esc(t.id)}">查看</button></td></tr>`;}
   async function loadTasks(quiet=false) {
@@ -1007,8 +1243,56 @@
     $('guide-list-state').textContent=items.length?`共 ${items.length} 个版本 · 上传后自动解析；启用只影响之后创建的任务。`:'';
     $('guide-reset-btn').disabled=busy||!current||!!current.built_in;
     $('guide-reset-btn').title=current&&current.built_in?'当前已使用内置指引':'恢复内置指引并用于之后创建的任务';
+    refreshGuideDiffCard();
     guidePolling();}
   function guidePolling() {clearTimeout(state.guideTimer);state.guideTimer=null;if(state.view!=='guide')return;if(!(state.guides || []).some(item=>item.status==='uploaded'||item.status==='parsing'))return;const epoch=state.epoch;state.guideTimer=setTimeout(()=>{if(identityCurrent(epoch)&&state.view==='guide')loadGuides(true);},4000);}
+  // ── 指引版本对比（规则差异 + 原文比对；全确定性，不调模型）──────────────────
+  function guideDiffLabel(item){return `${item.filename} · ${esc(guideTime(item.created_at))}${item.current?'（当前）':''}${item.built_in?'（内置）':''}`;}
+  function refreshGuideDiffCard(){const card=$('guide-diff-card');if(!card)return;const items=state.guides||[],d=state.guideDiff||=({from:'',to:'',tab:'rules',view:'merged'});
+    const from=$('guide-diff-from'),to=$('guide-diff-to');
+    if(items.length<2){from.innerHTML='';to.innerHTML='';from.disabled=to.disabled=true;$('guide-diff-body').innerHTML='<p class="subnote">至少需要两个指引版本才能对比；再上传或生成一个版本后回到这里。</p>';return;}
+    from.disabled=to.disabled=false;
+    // 选项按创建时间新→旧，自定义版本在前、内置殿后；
+    // 默认对比最近两个自定义版（内置只在用户主动选时参与）。
+    const customs=[...items].filter(item=>!item.built_in).sort((a,b)=>(b.created_at||0)-(a.created_at||0));
+    const builtins=items.filter(item=>item.built_in);
+    const ordered=[...customs,...builtins];
+    const valid=sel=>ordered.some(item=>item.id===d[sel]&&item.id!==d[sel==='from'?'to':'from']);
+    if(!valid('to'))d.to=(customs[0]||ordered[0]).id;
+    if(!valid('from'))d.from=(customs.find(item=>item.id!==d.to)||ordered.find(item=>item.id!==d.to)).id;
+    const options=sel=>ordered.map(item=>`<option value="${esc(item.id)}" ${item.id===d[sel]?'selected':''}>${guideDiffLabel(item)}</option>`).join('');
+    from.innerHTML=options('from');to.innerHTML=options('to');
+    renderGuideDiff();}
+  function guideDiffFieldLabel(name){return {title:'标题',requirement:'要求',operations:'修改操作',old_text_variants:'原文线索',slot_tokens:'槽位',class_substitution:'类别替换',references:'依据',section_hint:'章节提示'}[name]||name;}
+  function guideDiffOpLine(op){if(!op||typeof op!=='object')return '';const label={append:'追加',replace:'替换为',delete:'删除',noop:'不改'}[op.op]||'调整';const text=op.new_text?`「${esc(String(op.new_text))}」`:'';const cond=op.condition?'（满足条件时）':'';return `${label}${text}${cond}`;}
+  function guideDiffValue(name,value){if(value==null)return '—';
+    if(name==='operations'&&Array.isArray(value))return value.length?`<ul class="guide-diff-ops">${value.map(op=>`<li>${guideDiffOpLine(op)||'—'}</li>`).join('')}</ul>`:'（无操作）';
+    if(typeof value==='string')return esc(value)||'—';
+    if(Array.isArray(value))return value.length?esc(value.map(v=>typeof v==='string'?v:JSON.stringify(v)).join('；')):'—';
+    return esc(JSON.stringify(value));}
+  function guideDiffRulesHTML(diff){const s=diff.summary,rows=[];
+    rows.push(`<p class="subnote">规则 ${s.rules_before} 条 → ${s.rules_after} 条；新增 ${s.added} · 删除 ${s.removed} · 修改 ${s.changed}${s.identical?'：两个版本的规则内容完全一致。':''}</p>`);
+    const card=(title,items,html)=>`<section class="guide-diff-group"><h3>${title} · ${items.length} 条</h3>${items.length?html:'<p class="subnote">无</p>'}</section>`;
+    const simple=item=>`<li><strong>${esc(item.rule_id)}</strong>${item.rule&&item.rule.title?` ${esc(item.rule.title)}`:''}</li>`;
+    const groups=[
+      card('新增规则',diff.rules.added,`<ul class="guide-diff-rules">${diff.rules.added.map(simple).join('')}</ul>`),
+      card('删除规则',diff.rules.removed,`<ul class="guide-diff-rules">${diff.rules.removed.map(simple).join('')}</ul>`),
+      card('修改规则',diff.rules.changed,diff.rules.changed.map(item=>{const fields=Object.entries(item.fields);
+        return `<details class="guide-diff-change"><summary><strong>${esc(item.rule_id)}</strong> · ${fields.length} 个字段有变化</summary><dl class="guide-diff-fields">${fields.map(([name,change])=>`<div class="guide-diff-field"><dt>${guideDiffFieldLabel(name)}</dt><dd><span class="guide-diff-old">${guideDiffValue(name,change.old)}</span><span class="guide-diff-arrow">→</span><span class="guide-diff-new">${guideDiffValue(name,change.new)}</span></dd></div>`).join('')}</dl></details>`;}).join(''))];
+    rows.push(`<div class="guide-diff-grid">${groups.join('')}</div>`);
+    return rows.join('');}
+  async function renderGuideDiff(){const d=state.guideDiff,body=$('guide-diff-body');if(!d||!body||!d.from||!d.to)return;
+    document.querySelectorAll('[data-guide-diff-tab]').forEach(btn=>{btn.setAttribute('aria-selected',String(btn.dataset.guideDiffTab===d.tab));btn.classList.toggle('is-active',btn.dataset.guideDiffTab===d.tab);});
+    const t=ticket('guide-diff');d.error='';
+    if(d.tab==='text'&&(guideByName(d.from)?.built_in||guideByName(d.to)?.built_in)){body.innerHTML='<p class="subnote">内置指引没有上传的原文文件，无法做原文比对；可查看「规则差异」，或改用两个自己上传的版本。</p>';return;}
+    body.innerHTML='<p class="subnote">正在计算差异…</p>';
+    const url=d.tab==='rules'?`/api/guides/${encodeURIComponent(d.to)}/diff?against=${encodeURIComponent(d.from)}`:`/api/guides/${encodeURIComponent(d.to)}/text-diff?against=${encodeURIComponent(d.from)}`;
+    try{const payload=await json(url);if(!current(t))return;
+      if(d.tab==='rules'){body.innerHTML=guideDiffRulesHTML(payload.diff);}
+      else{const td=payload.text_diff,s=td.summary;
+        const head=`<p class="subnote">${td.identical?'两个版本的原文完全一致。':`共 ${s.diffs} 处差异：修改 ${s.modify} · 新增 ${s.insert} · 删除 ${s.delete}`}<span class="guide-diff-viewbtns"><button type="button" class="btn btn-sm ${d.view==='merged'?'btn-primary':''}" data-guide-diff-view="merged" ${d.view==='merged'?'disabled':''}>合并稿</button><button type="button" class="btn btn-sm ${d.view==='side'?'btn-primary':''}" data-guide-diff-view="side" ${d.view==='side'?'disabled':''}>并排对照</button></span></p>`;
+        body.innerHTML=d.view==='side'?head+`<div class="guide-diff-panes"><div class="compare-pane guide-diff-pane" aria-label="基准版本原文">${td.left_html}</div><div class="compare-pane guide-diff-pane" aria-label="对比版本原文">${td.right_html}</div></div>`:head+`<div class="guide-diff-merged compare-pane">${td.merged_html}</div>`;}}
+    catch(e){if(!current(t))return;body.innerHTML=`<p class="subnote">${e&&e.detail==='BUILTIN_SOURCE_UNAVAILABLE'?'内置指引没有上传的原文文件，无法做原文比对。':'差异暂未算出来，请稍后重试。'}</p>`;if(e&&e.code!==404)errorNotice(e);}}
   async function enableGuide(id) {if(state.guideBusy)return;state.guideBusy=id;renderGuides();const t=ticket('guide-action'),item=guideByName(id);try{const payload=await json('/api/settings/guide',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({version_id:id})});if(!current(t))return;if(Array.isArray(payload.available))state.guides=payload.available;state.guideBusy=null;renderGuides();toast(`已启用指引：${item?item.filename:id}`);closeGuidePanel();await loadCapabilities();}
     catch(e){if(!current(t))return;state.guideBusy=null;renderGuides();errorNotice(e,'指引切换未完成：');}}
   async function resetToBuiltinGuide() {if(state.guideBusy)return;state.guideBusy='reset';renderGuides();const t=ticket('guide-action');try{const payload=await json('/api/settings/guide',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({version_id:null})});if(!current(t))return;if(Array.isArray(payload.available))state.guides=payload.available;state.guideBusy=null;renderGuides();toast('已恢复内置指引，之后创建的任务使用内置指引。');await loadCapabilities();}
@@ -1078,7 +1362,7 @@
   async function saveGuideRuleSettings(id){const box=$('guide-overlay-body');if(!box||!id)return;const inputs=[...box.querySelectorAll('[data-guide-rule-toggle]')];const disabled=inputs.filter(input=>!input.checked).map(input=>input.dataset.guideRuleToggle);if(!inputs.some(input=>input.checked)){notice('至少保留一条启用规则。',true);return;}const t=ticket('guide-rule-save');try{await json(`/api/guides/${encodeURIComponent(id)}/rule-settings`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({disabled_rule_ids:disabled})});if(!current(t))return;toast('规则组启停已保存；只影响之后新建的任务。');await loadGuides(true);}catch(e){if(current(t))errorNotice(e,'规则组启停保存未完成：');}}
   document.addEventListener('change',e=>{if(e.target.matches('[data-guide-rule-toggle]')){const box=$('guide-overlay-body');if(box)syncGuideRuleUI(box);}});
   function closeGuidePanel() {const overlay=$('guide-overlay');if(!overlay||overlay.hidden)return;overlay.hidden=true;if($('login-view').hidden&&$('password-view').hidden)document.querySelector('.app').inert=false;state.tokens['guide-detail']=(state.tokens['guide-detail'] || 0)+1;state.guideDetail=null;$('guide-overlay-body').replaceChildren();$('guide-overlay-title').textContent='';if(state.focusReturn){state.focusReturn.focus();state.focusReturn=null;}}
-  document.addEventListener('click',e=>{const bindingAction=(e.target.closest('[data-action]')||{}).dataset?.action;if(bindingAction==='feishu-oauth-start'){startFeishuOAuth();return;}const crumb=e.target.closest('[data-crumb]');if(crumb){e.preventDefault();go(crumb.dataset.crumb,crumb.dataset.crumbId?{id:crumb.dataset.crumbId}:{});return;}const nav=e.target.closest('[data-nav]');if(nav){e.preventDefault();if(nav.dataset.nav==='import'&&(state.recover||!state.imports.length))newTask();else go(nav.dataset.nav);return;}const reviewAction=(e.target.closest('[data-action]')||{}).dataset?.action;if(reviewAction==='open-review'){openReview();return;}if(reviewAction==='accept-all'){generateSelected('accept');return;}if(reviewAction==='generate-selected'){generateSelected();return;}if(reviewAction==='review-close'){closeReview();return;}if(reviewAction==='review-accept-all'){setAllRevisions('accept');return;}if(reviewAction==='review-reject-all'){setAllRevisions('reject');return;}if(reviewAction==='review-prev'){switchReview(-1);return;}if(reviewAction==='review-next'){switchReview(1);return;}if(reviewAction==='download-selected'){const d=state.detail;if(d&&d.downloads&&d.downloads.selected_final)download(d.downloads.selected_final,`${d.name.replace(/\.docx$/i,'')}_selected_final.docx`);return;}const revItem=e.target.closest('[data-rev-item]');if(revItem){if(!e.target.closest('input,label'))focusRevision(Number(revItem.dataset.revItem));return;}const revNode=e.target.closest('#review-doc [data-rev]');if(revNode){if(!e.target.closest('a')){const entry=state.review?.revisions.find(r=>(r.revision_ids||[r.del_id,r.ins_id??Number(r.del_id)+1]).some(id=>String(id)===revNode.dataset.rev));if(entry)focusRevision(entry.del_id);}return;}const task=e.target.closest('[data-task]');if(task){selectTask(task.dataset.task);return;}const userToggle=e.target.closest('[data-user-toggle]');if(userToggle){toggleUser(userToggle.dataset.userToggle,userToggle.dataset.userDisabled!=='1');return;}const detail=e.target.closest('[data-detail]');if(detail){const [name,index]=detail.dataset.detail.split(':');showDetail(state.taskDocs[Number(index)]);return;}const replace=e.target.closest('[data-replace]');if(replace&&!state.uploading){state.replaceTarget=replace.dataset.replace;$('replace-picker').click();return;}const remove=e.target.closest('[data-remove]');if(remove&&!state.uploading){state.imports=state.imports.filter(f=>f.id!==remove.dataset.remove);state.createKey=null;renderImport();return;}const clearOne=e.target.closest('[data-clear-filter]');if(clearOne){const [scope,key]=clearOne.dataset.clearFilter.split(':');clearFilter(scope,key);return;}const clearAll=e.target.closest('[data-clear-filters]');if(clearAll){clearAllFilters(clearAll.dataset.clearFilters);return;}const page=e.target.closest('[data-page]');if(page){const name=page.dataset.page;state[`${name}Page`]+=page.dataset.dir==='next'?1:-1;if(name==='import')renderImport();else if(name==='task')loadTasks();else loadDocuments();return;}const dl=e.target.closest('[data-download]');if(dl&&state.detail){const kind=dl.dataset.download;const ext=kind.startsWith('report_')?(kind==='report_json'?'json':'md'):'docx';const label={final:'最终版',selected_final:'最终版（按人工选择）',redline:'修订版（引擎全量痕迹）',selected_redline:'修订版（仅人工接受）',working_final:'工作文件（未完成）',working_redline:'工作文件（未完成）修订痕迹'}[kind];download(state.detail.downloads[kind],`${state.detail.name.replace(/\.docx$/i,'')}${label?`_${label}`:''}.${ext}`);return;}const guideRulesBulk=e.target.closest('[data-guide-rules-all],[data-guide-rules-none]');if(guideRulesBulk){const box=$('guide-overlay-body');if(box){const check=!Object.hasOwn(guideRulesBulk.dataset,'guideRulesNone');box.querySelectorAll('[data-guide-rule-toggle]').forEach(input=>{input.disabled=false;input.checked=check;});syncGuideRuleUI(box);}return;}const guideRuleSave=e.target.closest('[data-guide-rule-save]');if(guideRuleSave){saveGuideRuleSettings(guideRuleSave.dataset.guideRuleSave);return;}const guideEnable=e.target.closest('[data-guide-enable]');if(guideEnable){enableGuide(guideEnable.dataset.guideEnable);return;}const guideParse=e.target.closest('[data-guide-parse]');if(guideParse){reparseGuide(guideParse.dataset.guideParse);return;}const guideReparse=e.target.closest('[data-guide-reparse]');if(guideReparse){closeGuidePanel();reparseGuide(guideReparse.dataset.guideReparse);return;}const guideIssues=e.target.closest('[data-guide-issues]');if(guideIssues){openGuidePanel(guideIssues.dataset.guideIssues,'issues');return;}const guideRules=e.target.closest('[data-guide-rules]');if(guideRules){openGuidePanel(guideRules.dataset.guideRules,'rules');return;}const guideSource=e.target.closest('[data-guide-source]');if(guideSource){downloadGuideSource(guideSource.dataset.guideSource);return;}const action=e.target.closest('[data-action]')?.dataset.action;if(!action)return;switch(action){case 'help-open':openHelp();break;case 'help-close':closeHelp();break;case 'notifications':{const panel=$('notification-panel');panel.hidden=!panel.hidden;$('notification-toggle').setAttribute('aria-expanded',String(!panel.hidden));if(!panel.hidden){notifications.forEach(n=>n.read=true);renderNotifications();}break;}case 'download-all':if(!state.task){notify('请先选择任务。',true);break;}if(document.querySelector('[data-action="download-all"]')?.disabled){notify('该任务尚无可下载的合同结果，请等待处理完成或先在“任务详情”确认产物。',true);break;}download(`${pathTask()}/download/all`,`${state.task.name}_全部结果.zip`);break;case 'new-task':newTask();break;case 'cancel-recover':if(state.uploading)break;state.importSession++;state.tokens.recovery=(state.tokens.recovery||0)+1;state.recover=null;state.imports=[];state.createKey=null;state.importPage=1;$('task-name').value='';resetImportStages();renderImport();go('task');break;case 'choose-files':$('file-picker').click();break;case 'choose-folder':$('folder-picker').click();break;case 'clear-import':if(!state.uploading){state.imports=[];state.createKey=null;state.importPage=1;state.uploadProgress=null;state.replaceTarget=null;resetImportStages(state.recover?(state.task?.id===state.recover.id?state.task:state.recover):null);renderImport();}break;case 'submit':submit();break;case 'dismiss-guide':state.guideDismissed=true;$('first-run-guide').setAttribute('hidden','');break;case 'refresh':refresh();break;case 'recover':recover();break;case 'toggle-pause':togglePause();break;case 'download-summary':if(state.task)download(state.task.summary_url,`${state.task.name}_结果总览.md`);else notice('请先选择任务。',true);break;case 'export-results':exportResults();break;case 'export-pending':exportPending();break;case 'users-refresh':loadUsers();break;case 'user-create':createUser();break;case 'model-settings-save':saveModelSettings(e.target.closest('[data-action="model-settings-save"]')?.dataset.modelSave||null);break;case 'guide-refresh':loadGuides();break;case 'guide-reset':resetToBuiltinGuide();break;case 'guide-choose':$('guide-file').click();break;case 'guide-upload':uploadGuide();break;}});
+  document.addEventListener('click',e=>{const diffTab=e.target.closest('[data-guide-diff-tab]');if(diffTab){const d=state.guideDiff||=({from:'',to:'',tab:'rules',view:'merged'});d.tab=diffTab.dataset.guideDiffTab;renderGuideDiff();return;}const diffView=e.target.closest('[data-guide-diff-view]');if(diffView){const d=state.guideDiff;if(d){d.view=diffView.dataset.guideDiffView;renderGuideDiff();}return;}const bindingAction=(e.target.closest('[data-action]')||{}).dataset?.action;if(bindingAction==='feishu-oauth-start'){startFeishuOAuth();return;}const crumb=e.target.closest('[data-crumb]');if(crumb){e.preventDefault();go(crumb.dataset.crumb,crumb.dataset.crumbId?{id:crumb.dataset.crumbId}:{});return;}const nav=e.target.closest('[data-nav]');if(nav){e.preventDefault();if(nav.dataset.nav==='import'&&(state.recover||!state.imports.length))newTask();else go(nav.dataset.nav);return;}const reviewAction=(e.target.closest('[data-action]')||{}).dataset?.action;if(reviewAction==='open-review'){openReview();return;}if(reviewAction==='accept-all'){generateSelected('accept');return;}if(reviewAction==='generate-selected'){generateSelected();return;}if(reviewAction==='review-close'){closeReview();return;}if(reviewAction==='review-accept-all'){setAllRevisions('accept');return;}if(reviewAction==='review-reject-all'){setAllRevisions('reject');return;}if(reviewAction==='review-prev'){switchReview(-1);return;}if(reviewAction==='review-next'){switchReview(1);return;}if(reviewAction==='download-selected'){const d=state.detail;if(d&&d.downloads&&d.downloads.selected_final)download(d.downloads.selected_final,`${d.name.replace(/\.docx$/i,'')}_selected_final.docx`);return;}const revItem=e.target.closest('[data-rev-item]');if(revItem){if(!e.target.closest('input,label'))focusRevision(Number(revItem.dataset.revItem));return;}const revNode=e.target.closest('#review-doc [data-rev]');if(revNode){if(!e.target.closest('a')){const entry=state.review?.revisions.find(r=>(r.revision_ids||[r.del_id,r.ins_id??Number(r.del_id)+1]).some(id=>String(id)===revNode.dataset.rev));if(entry)focusRevision(entry.del_id);}return;}const task=e.target.closest('[data-task]');if(task){selectTask(task.dataset.task);return;}const userToggle=e.target.closest('[data-user-toggle]');if(userToggle){toggleUser(userToggle.dataset.userToggle,userToggle.dataset.userDisabled!=='1');return;}const detail=e.target.closest('[data-detail]');if(detail){const [name,index]=detail.dataset.detail.split(':');showDetail(state.taskDocs[Number(index)]);return;}const replace=e.target.closest('[data-replace]');if(replace&&!state.uploading){state.replaceTarget=replace.dataset.replace;$('replace-picker').click();return;}const remove=e.target.closest('[data-remove]');if(remove&&!state.uploading){state.imports=state.imports.filter(f=>f.id!==remove.dataset.remove);state.createKey=null;renderImport();return;}const clearOne=e.target.closest('[data-clear-filter]');if(clearOne){const [scope,key]=clearOne.dataset.clearFilter.split(':');clearFilter(scope,key);return;}const clearAll=e.target.closest('[data-clear-filters]');if(clearAll){clearAllFilters(clearAll.dataset.clearFilters);return;}const page=e.target.closest('[data-page]');if(page){const name=page.dataset.page;state[`${name}Page`]+=page.dataset.dir==='next'?1:-1;if(name==='import')renderImport();else if(name==='task')loadTasks();else loadDocuments();return;}const dl=e.target.closest('[data-download]');if(dl&&state.detail){const kind=dl.dataset.download;const ext=kind.startsWith('report_')?(kind==='report_json'?'json':'md'):'docx';const label={final:'最终版',selected_final:'最终版（按人工选择）',redline:'修订版（引擎全量痕迹）',selected_redline:'修订版（仅人工接受）',working_final:'工作文件（未完成）',working_redline:'工作文件（未完成）修订痕迹'}[kind];download(state.detail.downloads[kind],`${state.detail.name.replace(/\.docx$/i,'')}${label?`_${label}`:''}.${ext}`);return;}const guideRulesBulk=e.target.closest('[data-guide-rules-all],[data-guide-rules-none]');if(guideRulesBulk){const box=$('guide-overlay-body');if(box){const check=!Object.hasOwn(guideRulesBulk.dataset,'guideRulesNone');box.querySelectorAll('[data-guide-rule-toggle]').forEach(input=>{input.disabled=false;input.checked=check;});syncGuideRuleUI(box);}return;}const guideRuleSave=e.target.closest('[data-guide-rule-save]');if(guideRuleSave){saveGuideRuleSettings(guideRuleSave.dataset.guideRuleSave);return;}const guideEnable=e.target.closest('[data-guide-enable]');if(guideEnable){enableGuide(guideEnable.dataset.guideEnable);return;}const guideParse=e.target.closest('[data-guide-parse]');if(guideParse){reparseGuide(guideParse.dataset.guideParse);return;}const guideReparse=e.target.closest('[data-guide-reparse]');if(guideReparse){closeGuidePanel();reparseGuide(guideReparse.dataset.guideReparse);return;}const guideIssues=e.target.closest('[data-guide-issues]');if(guideIssues){openGuidePanel(guideIssues.dataset.guideIssues,'issues');return;}const guideRules=e.target.closest('[data-guide-rules]');if(guideRules){openGuidePanel(guideRules.dataset.guideRules,'rules');return;}const guideSource=e.target.closest('[data-guide-source]');if(guideSource){downloadGuideSource(guideSource.dataset.guideSource);return;}const action=e.target.closest('[data-action]')?.dataset.action;if(!action)return;switch(action){case 'help-open':openHelp();break;case 'help-close':closeHelp();break;case 'notifications':{const panel=$('notification-panel');panel.hidden=!panel.hidden;$('notification-toggle').setAttribute('aria-expanded',String(!panel.hidden));if(!panel.hidden){notifications.forEach(n=>n.read=true);renderNotifications();}break;}case 'download-all':if(!state.task){notify('请先选择任务。',true);break;}if(document.querySelector('[data-action="download-all"]')?.disabled){notify('该任务尚无可下载的合同结果，请等待处理完成或先在“任务详情”确认产物。',true);break;}download(`${pathTask()}/download/all`,`${state.task.name}_全部结果.zip`);break;case 'new-task':newTask();break;case 'cancel-recover':if(state.uploading)break;state.importSession++;state.tokens.recovery=(state.tokens.recovery||0)+1;state.recover=null;state.imports=[];state.createKey=null;state.importPage=1;$('task-name').value='';resetImportStages();renderImport();go('task');break;case 'choose-files':$('file-picker').click();break;case 'choose-folder':$('folder-picker').click();break;case 'clear-import':if(!state.uploading){state.imports=[];state.createKey=null;state.importPage=1;state.uploadProgress=null;state.replaceTarget=null;resetImportStages(state.recover?(state.task?.id===state.recover.id?state.task:state.recover):null);renderImport();}break;case 'submit':submit();break;case 'dismiss-guide':state.guideDismissed=true;$('first-run-guide').setAttribute('hidden','');break;case 'refresh':refresh();break;case 'recover':recover();break;case 'toggle-pause':togglePause();break;case 'download-summary':if(state.task)download(state.task.summary_url,`${state.task.name}_结果总览.md`);else notice('请先选择任务。',true);break;case 'export-results':exportResults();break;case 'export-pending':exportPending();break;case 'users-refresh':loadUsers();break;case 'user-create':createUser();break;case 'model-settings-save':saveModelSettings(e.target.closest('[data-action="model-settings-save"]')?.dataset.modelSave||null);break;case 'guide-refresh':loadGuides();break;case 'guide-reset':resetToBuiltinGuide();break;case 'guide-choose':$('guide-file').click();break;case 'guide-upload':uploadGuide();break;}});
   for(const id of ['file-picker','folder-picker'])$(id).addEventListener('change',e=>{addFiles([...e.target.files]);e.target.value='';});$('replace-picker').addEventListener('change',e=>{const file=e.target.files&&e.target.files[0];const id=state.replaceTarget;state.replaceTarget=null;e.target.value='';if(file&&id)replaceFile(id,file);});const drop=$('dropzone');drop.addEventListener('dragover',e=>{e.preventDefault();if(!state.uploading)drop.classList.add('dragging');});drop.addEventListener('dragleave',()=>drop.classList.remove('dragging'));drop.addEventListener('drop',e=>{e.preventDefault();drop.classList.remove('dragging');addFiles([...e.dataTransfer.files]);});
   const debounces={};function changed(name){state[`${name}Page`]=1;if(name==='import')renderImport();else if(name==='task')loadTasks();else loadDocuments();}
   for(const name of ['task','import','doc'])$(`${name}-search`).addEventListener('input',()=>{clearTimeout(debounces[name]);state.tokens[name==='doc'?'doc':name==='task'?'tasks':name]=(state.tokens[name==='doc'?'doc':name==='task'?'tasks':name] || 0)+1;debounces[name]=setTimeout(()=>changed(name),250);});

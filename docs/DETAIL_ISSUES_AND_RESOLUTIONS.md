@@ -7341,6 +7341,46 @@ H＝E×…
 - **附带观察**：诊断中发现 /var/lib/fundlex 下 auth.db（0 字节，10-31 18:59 由某 root 进程创建）、fundlex.db、runs.sqlite3 自 10-16 起为 root:root 644；由于服务实际库文件是 runs.sqlite3 且生产 API 正常，属历史权限形态，不影响本轮交付，但 root 属主库文件对 fundlex 用户不可写，巡检留意。
 - **状态**：已解决（发布闭环）。
 
+## FL-D660 指引准入/启用谓词与运行时路由谓词不一致：可执行性金丝雀对齐关闭（2026-10-31，qa-guide-parse 线）
+
+- **发现日期**：2026-10-31（本线承接 FL-D648 收口时拆根因）。
+- **问题与影响**：启用闸 `operation_registry_coverage_gaps` 对「`operation_id_generated=True` 且规则在 STRATEGY_REGISTRY」的操作**有意放行**（legacy 兼容），但运行时 `_registry_execution_authoritative` 在 `bind_operation_identities` 之后恒为 True、按权威契约处理并 fail-closed（`RECALL_OPERATION_REGISTRY_MISSING`）。谓词不一致使 FL-D648 的合并漂移解析版本能通过启用、到任务运行时才断崖。另结构性粒度硬规则（如「跨标题块合并报错」）对本指引零检出也用实测证实：合并版 15 个规则每规则恰好=一个加粗主题块；内置指引自身即「一块多规则+跨规则段落重叠」（G15/G16、G19/G20、G21/G22），任何「一块一规则」结构洁癖都会误杀内置通道。
+- **处理方法（已实施并验证）**：①新增 `fundlex/guide_canary.py`：`blocking_gaps`（与运行时完全同谓词的准入检查）、`executability_report`（注册解析 + 全事实已验证路由 + 条件可满足性 8 组事实枚举 + 义务编译往返，零模型零合同）；fatal → 版本 qualification=`needs_review`、review 复核列表显式维度（`source=executability_canary`）、`set_current_guide` 以同谓词拒绝（错误码 GUIDE_OPERATION_REGISTRY_MISSING/GUIDE_NOT_CERTIFIED 兼容不变）；legacy（无 operation_id）文档与运行时同样只走兼容路径不 fatal，既保护内置/老夹具。②粒度改为**指标+块报告**（诊断不阻断）。③footprint 冒烟 review 分 source 管理，不再互相覆盖。
+- **验证**：冻结真实 15 规则合并产物（tests/fixtures/guides/merged_g15_real_20261031.json），canary 确定性检出 12 个阻断键（G03:1..G15:1，与运行时失败同类）；内置冻结文档 canary 全绿（executable_ratio 1.0）；后端 57 项 guide 测试全绿。
+- **状态**：已修复并验证（qa-guide-parse 线提交 a1289e1）；待并入主线后随发布说明注明存量 not_run 版本语义。
+- **变更记录（2026-10-31）**：worker 集成 lane happy-path 夹具对齐——`valid_parsed()` 在 G02 钉 3 条操作（供 validate 单测覆盖统计），超出 registry 内置 G02:0..1 两个槽位，经 worker 绑定后 G02:2 未注册键被 canary 判 fatal；新增 `worker_parsed()`（G01×1+G02×2，注册键全覆盖、条件可满足）承接「解析→认证→启用」集成 happy path，并补 `qualification_status=certified` 断言（提交 ee156a8）。
+
+## FL-D661 指引粒度保障的方法论结论：结构硬规则不可通用，确定性落点=操作原子性（2026-10-31，qa-guide-parse 线）
+
+- **问题**：任务 A「解析粒度钉死」若按字面做结构硬闸（一标题块一规则/禁止一块多规则），实测两路死：①真实事故（合并版）恰恰一主题块一规则，零检出；②内置指引自身违反一切简单结构规则（块内拆分、跨规则段落重叠 97/98、101–105），硬闸会破坏内置升级路径（约束②）。
+- **结论（已按此实施）**：粒度保障的**确定性硬点**只能是「操作原子性=可执行面」（FL-D660 canary）；结构粒度（块切分、块-规则对齐、跨块规则、分支计数）作**指标与块级人读报告**呈现，帮助用户看「粒度偏粗/被拆分」，不访问 pass/fail。指引形态各异的任意上传场景下，可执行性比结构更像天然不变量。
+- **状态**：设计定稿并实施；若后续试点证明某结构信号对某类指引稳定有效，可按指引形态白名单追加硬闸（需主线评审）。
+
+## FL-D662 块级解析报告细分切分误报「合并」：改为主题标题级切分（2026-10-31，qa-guide-parse 线）
+
+- **问题**：块报告初版按「加粗/红=指令标签起点」细分块（47 块），内置合格解析被报 36 块「merged（粒度过粗）」——细分标签天然落在单规则内部（原条款/新条款/分别变更），merged 语义失真。
+- **处理**：`segment_guide_blocks` 改为主题标题级：只认域标题（既有 GUIDE_DOMAINS 前缀）加粗段落；无域标题才回退通用编号标题；全无结构回退单块。内置实测 0 merged、7 parsed+6 split（拆分为合法结构），合并版事故经 canary fatal 定位 6 个错误块。报告状态集：parsed/split/merged/uncovered/error/unparsed，全部附中文原因与修正建议。
+- **状态**：已修复并验证（同 a1289e1）。
+
+## FL-D663 footprint 冒烟与 canary 的 review 戳互相覆盖：分 source 管理（2026-10-31，qa-guide-parse 线）
+
+- **问题**：canary 在 finish 落 needs_review 后，worker footprint 冒烟对同源版本同样判 needs_review 并整体覆盖 issues.review（canary 的运行时致命维度丢失）；反向 healthy 冒烟的清除也会误清 canary 戳。
+- **处理**：review.dimensions 增 `source`（footprint_smoke / executability_canary）；冒烟只在空位或自有戳上写/清。测试钉：合并版冒烟判 needs_review 且 canary 维度仍在。
+- **状态**：已修复并验证（同 a1289e1）。
+
+> **FL-D648 变更记录（2026-10-31）**：遗留开放项「解析粒度钉死」已由 qa-guide-parse 线收口：确定性落点改为可执行性金丝雀（FL-D660），真实合并事故产物冻结钉死（12 阻断键断言），粒度结构信号转诊断指标（FL-D661）。状态由「open」推进为「机制已闭环、随主线合并生效」。
+
+## FL-D664 解析质量通道真实模型基准实跑：复发复发被金丝雀确定性拦下（2026-10-31，qa-guide-parse 线）
+
+- **实跑（2026-10-31，`tools/guide_parse_benchmark.py`，账本 /tmp/opencode/guide-parse-benchmark.sqlite、guide-parse-bench-es2.sqlite）**：
+  - v4（内置同源）重解析：模型再次系统性产出 15 规则合并形态；跑 A（3 轮）验证层报 GUIDE_SLOT_NOT_IN_TEXT+1 finding → 质量门拦下；跑 B（2 轮）**验证 clean=True、finding=0**——此形态在旧闸下必被认证启用并复现召回断崖，金丝雀以同 12 阻断键（G03:1..G15:1，与冻结事故产物完全一致）fatal → `gate_caught_nonexecutable`、qualification=needs_review、不可启用。**FL-D648 复发在真实条件下被确定性收口**。
+  - V2：15 规则，GUIDE_SLOT_NOT_IN_TEXT+2 findings → 结构化拦下（预期，原文笔误）。
+  - 通道整体不变量（v4=认证可执行∨结构化拦下，V2=必拦）三轮跑全 ok；门漏放=基准失败的设计实跑成立。
+  - 引擎冒烟（golden 语料第 2 对 .docx，builtin 轨）：complete 41/41——新闸不触引擎路径。
+- **过程问题（已处理）**：首次 es 跑因前次被 SIGTERM 进程在 scratch 账本残留的 reserved 并发租约行触 MODEL_CONCURRENCY_LIMIT（parse 0 HTTP、引擎 0 目标）；清理时 UPDATE 范围过宽误将 4 行 completed 翻转为 failed（仅状态字段、金额未动，账本为临时观测件，已如实记此）；换新账本重跑通过。教训：同一 scratch 账本被异常终止后应直接换账本文件；清理 SQL 必须限定 status='reserved'。
+- **账本（仅观测）**：解析基准 13 次 $0.0617；es2 30 次 $0.0412；含崩溃次跑合计约 47 次 ≈ $0.11。
+- **状态**：机制已验证（真实复发拦截+引擎完好）；工具与冻结夹具入库。
+
 ## FL-D720 导出层未知枚举兜底透传英文原值风险（2026-10-31，主线复核）
 
 - **发现**：`DELIVERY_TEXT.get(status, status)`、`OP_TEXT.get(op, op)`、`delivery_text` 三处回退原值；未来新增交付状态/操作枚举未同步映射时原始英文会漏入用户导出件。现枚举全覆盖且有负面断言，属前瞻性硬化。
@@ -7512,6 +7552,270 @@ H＝E×…
 - **门槛余量**：false_complete 2→1（B15 T001 真缺口，主线定归 recall-miss 机制 A/E 强制病例）；B02 FL-D690 修复在途；B19 依旧。loop-3 门槛维持 FAIL，留出示波继续冻结。
 - **状态**：已实施并全量同口径重评；待主线复核确认。
 - **变更记录**：2026-10-31 新增。
+
+## FL-D665 全套件瞬时磁盘水位触发 Worker 空闲保留闸：7 项 remediation 交付测试误挂（2026-11-01，qa-guide-parse 线）
+
+- **发现日期**：2026-11-01，本线全套件二跑（无 -x，/tmp/opencode/guide-parse-fullsuite2.log）。
+- **问题与影响**：`tests/test_remediation_tasks_delivery.py` 7/8 项在全量语境失败，单跑与分批组合全绿。实际异常为 `OSError: local storage below configured free-space reserve`（jobs.py `_run_once` 的 FUNDLEX_MIN_FREE_BYTES=256MB 闸）——套件跑到 96%+ 时 / 分区瞬时跌破 256MB（两轮全套件 pytest 临时店 + 基准冒烟临时店叠加，根分区 40G 89%），属测试机环境水位而非产品质量回归。
+- **处理方法**：①失败项单跑 8/8 绿、与本线新测试组合 24/24 绿 → 排除测试间污染；②清理本线自有陈旧临时件（/tmp/pytest-of-opencode/pytest-*、/tmp/guide-bench-smoke-*，释放约 0.7G，空闲 5.1G）后复跑全套件定案；③FL-D648 证据店 `/tmp/guide-channel-li88f1cq`、`/tmp/guide-v2-s_6tu6cw` 保留不删。
+- **状态**：已验证为环境面误挂——清理后全套件三跑 **2490 passed / 0 failed**（12.6 min，含此前 7 项失败测试全部转绿，/tmp/opencode/guide-parse-fullsuite3.log）。防复发建议（短期方案为套件前置清理或将 FUNDLEX_MIN_FREE_BYTES 在 CI 语境调小）提交主线决定，非本线产品改动。
+- **过程教训**：`cd X && nohup … & echo … && git log` 中 `&` 会把整条 `cd+nohup` 背景化、后续命令在原目录执行——后台启动与后续命令必须分两行写或加显式子壳（本次 git log 误读主仓库 HEAD 虚惊一场，worktree 实测无恙）。
+
+## FL-D770 指引版本比对：指引**原文**对比能力缺失（用户两轮重提漏做项）（2026-11-01，qa-guide-diff）
+
+- **发现**：用户需求（`docs/USER_REQUIREMENTS_20261101_SESSION2.md` 项2）「指引文件本身比对，效果对标合同 compare 页体验」此前提过但被漏做——主线只有解析规则的字段级 diff（`/api/guides/{id}/diff`），没有任何指引 DOCX 原文差异入口；V1 主工作台「我的指引」无任何版本对比交互。
+- **影响**：用户改版指引后无法像看合同修改一样确认「原文哪里动了」，只能对照规则编号猜。
+- **处理**：新增 `fundlex/guide_text_diff.py` + `GET /api/guides/{version_id}/text-diff?against=`——复用合同比对算法链（compare.parse→align→diff→render_compare_document/render_merged_document），返回人读差异行（类型标签/段落定位/前后文本）+ 左右/合并三段高亮 HTML；全确定性、零模型调用。守卫：缺参 422、源不可读 422（GUIDE_TEXT_DIFF_UNREADABLE）、内置指引无原文 404（BUILTIN_SOURCE_UNAVAILABLE）、跨 owner 404 不泄露存在性；两次调用字节一致（确定性断言在测）。
+- **验证**：`tests/test_guide_text_diff_api.py` 5 项 + 浏览器走查证据（下条 FL-D771 同）。
+- **状态**：已实施并验证（本线）；待主线复核合入。
+- **变更记录**：2026-11-01 新增。
+
+## FL-D771 指引版本对比前端：V1 缺失 + V2 展示不达标（2026-11-01，qa-guide-diff）
+
+- **发现**：①V1 主工作台（compare.html/app.js）「我的指引」没有版本对比入口；②V2 `CompareCard.tsx` 规则差异是单列字符串拼接「字段：旧→新」、operations 被 JSON 拍平成一团、版本选项带 `id.slice(0,8)` UUID 前缀；③两端的**默认对比版本**都会误选内置指引（内置为默认当前版，按列表顺序兜选），默认视图变成「上传版 vs 内置」的 20+ 条伪新增——浏览器走查首轮当场抓获。
+- **处理**：V1 新增「版本对比」卡（compare.html/app.js/app.css）：两下拉（文件名+时间+当前/内置标签，无 UUID）+「规则差异/原文比对」标签页；规则差异三分组（新增/删除/修改）+ 修改项 `<details>` 展开字段级旧→新（红旧绿新、operations 逐条人读）；原文比对合并稿（ins/del 高亮）与并排对照可切换；内置侧人读提示。V2 CompareCard 同构重写（三分组+details+原文标签页+并排/合并切换），样式入 V2 app.css；两端默认选择改为「当前自定义版 vs 来源版，否则最近两个自定义版」。
+- **验证**：`tests/browser/test_guide_diff.py` 双用例（V1+V2，真实后端+Chromium，opt-in）全绿；截图证据 8 张在 `/tmp/opencode/qa/shots/guide-diff-*.png`（V1 规则/合并/并排/内置提示 + V2 规则/并排）；V2 vitest 24 + tsc 0 错。
+- **状态**：已实施并验证（本线）；待主线复核合入（前端主线 l8yCbACU 为设计总负责，规格冲突时以主线裁决）。
+- **变更记录**：2026-11-01 新增。
+
+## FL-D772 观察项：指引列表本身仍泄露技术信息（前端主线域，不在本线范围）（2026-11-01，qa-guide-diff）
+
+- **发现**：走查截图证实主线 88aa5b8 上 V1「我的指引」列表行副标题仍显示版本 UUID 全称、V2「我的指引」表仍有「来源哈希」整列与自定义行 UUID 副标题——与本仓前端去技术化基线（qa-frontend FL-D71x）表述不一致（或为未合入/回退）。
+- **影响**：用户视角的技术黑话仍在列表首屏；属前端主线项 1/4 治理范围，本线不擅动以免冲突。
+- **状态**：open（观察项，建议前端主线核定该两页是否在其队列）。
+
+## FL-D780 跨企业用户扫码报“不是一个企业”的真实抛出点与可达性（2026-11-01，qa-feishu-onboarding）
+
+- **发现（用户重提的漏做项，2026-11-01 十项需求 #5）**：设置页“扫码绑定飞书”对非同企业用户不可用。逐层核对：前端 `frontend/app.js loadFeishuBinding` 只渲染后端返回；后端 `fundlex/integrations/feishu/oauth.py` 的授权页 `accounts.feishu.cn/.../authorize` 使用部署方自建应用，飞书在**授权页自身**以“不是一个企业”拒绝非本企业成员，浏览器根本不会回到 `/api/integrations/feishu/oauth/callback`。因此：①FundLex 服务端拿不到任何回调/错误码，无法在扫码后识别；②现有错误码表（`FEISHU_OAUTH_*`）全部与本案无关；③修复只能从**入口引导 + 自助接入**入手，不能靠回调分支。
+- **影响**：企业外用户无法使用飞书私聊处理合同，且原提示无法解释原因或给出下一步，属需求漏做。
+- **证据**：`oauth.py` 授权 URL 仅带部署应用 app_id；`api.py` `/api/integrations/feishu/oauth/callback` 仅处理 code/state；本地真实浏览器走查中未登录企业外账号，但飞书开放平台文档与授权页行为一致（自建应用仅限本企业成员）。
+- **处理**：保留原同企业扫码路径不动；在设置页增加“扫码时飞书提示‘不是一个企业’？”入口，进入“连接你自己的飞书企业”向导（FL-D781/784）。
+- **状态**：已定位并给出产品化入口；跨企业真实扫码仍需外部企业账号复核（见 FL-D788 限制）。
+- **变更记录**：2026-11-01 新增。
+
+## FL-D781 自有企业应用自助接入：后端状态机 + 真实飞书验证 + 精确诊断（2026-11-01，qa-feishu-onboarding）
+
+- **设计**：用户在**自己企业**创建自建应用，粘贴 App ID/App Secret；后端用真实飞书 OpenAPI 验证后加密保存，并由常驻长连接运行时接入同一 FundLex 服务；身份仍用既有绑定码私聊完成，避免新增公网回调地址。
+- **实现**（`fundlex/integrations/feishu/onboarding.py`）：
+  - 状态机 `no_app → ready → waiting_message → active`，异常配置为 `needs_attention`；心跳 45s 过期视为未连接。
+  - 验证顺序：`tenant_access_token/internal` → `bot/v3/info`（`activate_status==2` 为已启用，生产应用实测）→ `application/v6/applications/{app_id}` 读 scopes（需 `application:application:self_manage`，缺失时降级为 `scopes_checked=false`，不阻断）→ `tenant/v2/tenant/query`（仅取企业名，失败忽略）。
+  - 必需权限固定为 `im:message:send_as_bot`、`im:message.p2p_msg:readonly`、`im:resource`；可选 `im:message.pins:write_only`。
+  - 诊断码：`FEISHU_APP_CREDENTIALS_INVALID`（飞书 10014 等，附“凭证与基础信息”链接）、`FEISHU_APP_NOT_FOUND`、`FEISHU_APP_SCOPE_MISSING`（列出缺失 scope）、`FEISHU_APP_BOT_DISABLED`、`FEISHU_APP_ALREADY_ONBOARDED`、`FEISHU_APP_VERIFY_UNAVAILABLE/BAD_RESPONSE`、`FEISHU_APP_ID_INVALID/SECRET_INVALID`、`FEISHU_APP_SECRET_STORAGE_UNAVAILABLE/UNREADABLE`。
+  - 深链与可复制清单：`guide()` 返回创建应用/权限/机器人/事件/版本页面链接、`scopes_text`、事件名 `im.message.receive_v1`。
+- **API**（`fundlex/api.py`）：`GET /api/integrations/feishu/app`、`POST /app/credentials`、`POST /app/verify`、`DELETE /app`，全部登录态、`Cache-Control: private, no-store`。
+- **补充（避免“未检测=已通过”）**：应用未授予 `application:application:self_manage` 时 scopes 无法读取，检查项返回 `ok=null`（前端显示“待验证”而非“已完成”），并在第 3 步明说“权限清单无法自动核对，收到消息即证明生效”。状态接口增加 `warnings=["scope_check_unavailable"]`。
+- **补充（密钥轮换可见）**：`status()` 会尝试解密已存 Secret；密钥缺失/更换或密文损坏时置 `needs_attention` 并返回 `FEISHU_APP_SECRET_UNREADABLE`，第 3 步显示原因与“重新填写凭证”，不再长期假装 ready。
+- **验证**：`tests/test_feishu_app_onboarding.py` 22 项覆盖格式校验、真实错误映射、降级（含未验证不得显示为已授予）、状态流转、心跳过期、应用归属冲突、加解密失败、租户路由、跨租户绑定回复、API 契约、MySQL DDL 兼容（见 FL-D789）。
+- **部署迁移**：`tools/deploy/fundlex-publish.sh` 的 `migrate_schema` 增加 `FeishuAppOnboarding(store)`，发布时即创建 `feishu_apps`（与既有各 Store 一致），不依赖首个 HTTP 请求触发建表；部署测试断言该表存在。
+- **运维说明**：`docs/FEISHU_CROSS_TENANT_ONBOARDING.md`（无需新增环境变量，复用 `FUNDLEX_MODEL_SECRETS_KEY`）。
+- **状态**：已实施；本地真实接口 + 真实飞书凭证验证通过（FL-D788）。
+- **变更记录**：2026-11-01 新增。
+
+## FL-D782 app_secret 加密存储、零回显、零日志（2026-11-01，qa-feishu-onboarding）
+
+- **要求**：Secret 不得明文落库、不得出现在任何响应/状态/日志/异常文本。
+- **实现**：复用部署既有 `FUNDLEX_MODEL_SECRETS_KEY`（Fernet，与 BYOK 同一把密钥）加密后存 `feishu_apps.secret_cipher`；`status()`/`save()` 返回体逐字段手写，从不透传验证原始 payload；`AppOnboardingError` 文案与 `detail` 均为固定人读句，不含凭证；运行时/路由日志只记录 app_id 与异常类型；API 错误响应体固定为 `error_code/message/detail/link/correlation_id`。
+- **验证**：单测断言响应字符串、状态字典、DB `secret_cipher`、`caplog` 全量文本均不含明文，且密文为 Fernet 前缀、可解密回原值；真实走查再次断言 `GET /app` 响应与 DB 无明文（证据 `evidence/walkthrough.txt`）。
+- **状态**：已实施并验证。
+- **变更记录**：2026-11-01 新增。
+
+## FL-D783 多租户长连接运行时与按 tenant 路由（2026-11-01，qa-feishu-onboarding）
+
+- **问题**：原服务只有一个部署应用客户端；用户自有应用即使保存也无法收发，且不能用部署机器人给外企业发消息（跨企业不可达）。
+- **实现**：新增 `fundlex/integrations/feishu/runtime.py`：每 5s 同步 `feishu_apps`，为每个应用启动独立 lark WebSocket 长连接（`auto_reconnect`），记录首条真实消息为“端到端生效”证据；`client_for(tenant_key)` 供 `FeishuService._client(tenant)` 使用；`service.py` 全部 17 处收发/更新/下载/置顶改为按事件 `tenant_key` 路由，路由失败回退部署客户端，保证原有同企业路径不变；`service_main.py` 启动运行时。
+- **边界**：部署机器人客户端与运行时互不阻塞；单应用异常只记录状态码并指数退避重试（15s 起，上限 300s）。
+- **验证**：单测覆盖路由命中/回退/解析器异常回退，以及“外企业消息由该企业应用回复、部署应用零发送”；既有飞书 43 项回归绿（FL-D789）。
+- **状态**：已实施；生产尚未发布（本线 worktree 验证）。
+- **变更记录**：2026-11-01 新增。
+
+## FL-D784 前端向导：首次用户 4 步、能复制就复制、失败给下一步（2026-11-01，qa-feishu-onboarding）
+
+- **实现**（`frontend/compare.html`、`frontend/app.js`、`frontend/app.css`）：
+  - 设置页新增跨企业入口（原扫码卡片内、文案直接引用用户看到的“不是一个企业”），已接入后显示摘要卡片。
+  - 4 步向导：创建应用（含每一步在飞书点哪、需管理员提示）→ 粘贴凭证（粘贴即验，Secret 输入 `type=password` 且成功后清空）→ 配置能力（权限清单可一键复制、缺哪个标黄、机器人/事件/发布各带直达深链）→ 测试并绑定（轮询连接状态、收到消息后自动出绑定码、可换码、完成后自动显示已连接）。
+  - 可回看/可修正：完成后可“查看配置状态”回到第 3 步核对；第 3 步可“重新填写凭证”（App ID 预填、Secret 留空）或“返回测试步骤”；第 2 步有“返回”，改主意不会卡住。窄屏（820px）布局与 2 列步进卡片可用。
+  - 无技术泄漏：不展示 scope 原文以外的内部字段；错误区只显示人读原因 + “打开对应页面”。
+- **验证**：Playwright 真实浏览器、密码模式注册的首次用户，完成“入口→建应用说明→错误 Secret 诊断→正确凭证→配置核对→重新填写凭证→绑定码”全路径，10 张截图与逐屏文本见 `/tmp/opencode/qa/feishu-onboarding/evidence/`（FL-D788）。
+- **范围说明（如实）**：本次改造的是生产默认 V1（`frontend/compare.html`）。V2（`frontend/src/pages/Settings`）当前仍只有扫码绑定；`FUNDLEX_FRONTEND_VERSION` 未设置时生产走 V1，V2 若切换为默认需把同一向导移植过去（交接项）。
+- **状态**：已实施并通过首次用户走查。
+- **变更记录**：2026-11-01 新增。
+
+## FL-D785 引导接口错误响应被全局稳定化处理吞掉诊断（2026-11-01，qa-feishu-onboarding）
+
+- **发现**：实现初期把 `AppOnboardingError` 包成 `HTTPException(status, detail=exc.as_dict())`；应用级 `stable_http_error` 把任意 detail 折叠为 `code` 字符串，导致前端拿不到“下一步做什么”和飞书深链，只剩 `INVALID_REQUEST` 一类泛化码。
+- **处理**：引导相关路由直接返回 `JSONResponse`，保持既有稳定信封键（`error_code/message/detail/link/correlation_id`），其中 `message` 为人读原因、`detail` 为具体操作建议、`link` 为修复页面；前端错误渲染对标准信封的 `ALL_CAPS` code 做过滤，避免向用户暴露技术码。
+- **验证**：API 单测断言 422/503 的 `error_code`、中文原因、detail、link、correlation_id 与“响应无明文 Secret”；真实走查中错误文案为“App ID 或 App Secret 不正确。请到飞书开放平台…”。
+- **状态**：已实施并验证。
+- **变更记录**：2026-11-01 新增。
+
+## FL-D786 更换自有应用后残留旧租户与“已收到消息”状态（2026-11-01，qa-feishu-onboarding）
+
+- **发现**：`save()` 复用同一行更新凭证时未清 `tenant_key`/`first_event_at`，若用户先接 A 应用再换 B 应用，运行时会按旧租户路由，界面也可能直接显示 active。
+- **处理**：检测 `app_id` 变化（`replaced`）时清零 `tenant_key` 与 `first_event_at`；同一应用重验（`POST /app/verify`）保留历史，避免一次重新检测把“已收到消息”抹掉。
+- **验证**：单测 `test_switching_apps_clears_previous_tenant_state`（换应用→ready/tenant 空；同应用重存→active）。
+- **状态**：已修复并验证。
+- **变更记录**：2026-11-01 新增。
+
+## FL-D787 移除自有应用后长连接未关闭、失败重连无退避（2026-11-01，qa-feishu-onboarding）
+
+- **发现**：运行时删除应用时只从内存表移除，lark WebSocket 线程仍可能接收并处理该企业消息；连接失败时每 5s 重连，可能形成对飞书的高频请求。
+- **处理**：移除时将条目标记 `active=False` 并调用 SDK 的 `_disconnect()`（缺失/异常均吞掉并记类型），事件钩子对非 active 条目直接忽略；连接异常退出后指数退避（15s×2^n，上限 300s），凭证可读时重新拉起。
+- **验证**：单测覆盖 `client_for`/`_seen` 与退避路径不抛错；移除后状态置未连接。运行时代码无凭证日志。
+- **状态**：已修复；真实长连接断连/重连待生产发布后观察。
+- **变更记录**：2026-11-01 新增。
+
+## FL-D788 真实凭证端到端走查与证据（2026-11-01，qa-feishu-onboarding）
+
+- **方法**：本地起真实服务（一次性数据目录、一次性 Fernet 密钥、密码模式开放注册），用 Playwright 走首次用户路径；凭证来自服务器环境文件，仅在进程内存中读取，未写入仓库/文档/日志/命令行。服务端调用**真实飞书 OpenAPI**，非 mock。
+- **结果**：
+  - 错误 Secret：真实飞书返回拒绝，页面显示“App ID 或 App Secret 不正确”+“到凭证与基础信息复制最新 Secret”+直达链接，DB 无记录。
+  - 正确凭证：tenant_access_token 成功、机器人 `activate_status=2`、`application/v6` 读到全部 3 个必需权限（`scopes_checked=true`、`missing_scopes=[]`）；页面进入第 4 步并提示发消息；点“查看配置状态”显示 3 权限与机器人均“已完成”，事件订阅为“待验证”。
+  - 状态机：写入首条消息记录后，页面自动出现 12 位绑定码与有效期，摘要变为“已收到你的消息，等待绑定”；API 返回 `stage=active`。
+  - 安全：`GET /api/integrations/feishu/app` 响应与 `runs.sqlite3` 中均无明文 Secret（密文 Fernet 前缀、长度 140）。
+  - 证据：`/tmp/opencode/qa/feishu-onboarding/evidence/01..09*.png` + `walkthrough.txt`。
+- **限制（如实）**：本机没有第二个真实飞书企业账号，因此“外企业成员在真实飞书中给自有机器人发消息、长连接收事件、绑定码回绑”这一段未能在生产外完成真实跨企业验证；该段由单测（外租户消息经该租户应用回复、绑定成功）与真实凭证验证组合覆盖。生产发布后需用外部企业账号补一次真实跨企业闭环。
+- **状态**：真实凭证与真实用户界面路径通过；跨企业长连接闭环待外部账号复核。
+- **变更记录**：2026-11-01 新增。
+
+## FL-D789 回归与测试覆盖（2026-11-01，qa-feishu-onboarding）
+
+- **新增**：`tests/test_feishu_app_onboarding.py` 23 项（加密/零回显/日志、格式与飞书错误映射、scope 降级且未验证不显示为已授予、bot 未启用、状态流转与心跳、应用归属冲突、密文不可读/密钥轮换可见、换应用清理、租户路由与回退、运行时记录与路由、深链清单、API 401/422/503/删除、跨租户绑定回复、MySQL DDL 翻译、可选接口失败降级）。
+- **既有**：`test_feishu_integration.py`、`test_feishu_oauth_api.py`、`test_remediation_tasks_feishu.py` 43 项在 service 路由改造后保持通过。
+- **全量（最终树）**：`2566 passed, 139 skipped, 4 warnings in 690.34s`（`EXIT=0`），日志 `/tmp/opencode/qa/feishu-onboarding/full-suite-venv.log`。运行方式：在本 worktree 临时 `.venv`（`.pth` 指向 worktree 与测试依赖）下执行 `PYTHONPATH=$PWD ./.venv/bin/python -m pytest tests -q -p no:cacheprovider`；无 venv 时 `test_deploy_publisher` 的 `migrate_schema` 用例会因 `$DST/.venv/bin/python` 缺失而失败（FL-D795，环境限制非回归）。临时 `.venv` 已删除。
+- **状态**：新增 + 相关测试 + 全量回归均绿（0 failed）。
+- **变更记录**：2026-11-01 新增；2026-11-01 回填全量结果。
+
+## FL-D790 权限无法核对时向导显示“已完成”，形成虚假绿灯（2026-11-01，qa-feishu-onboarding）
+
+- **发现**：应用未授予 `application:application:self_manage` 时，`/application/v6/applications/{app_id}` 返回 99991672，无法读取已授予权限；初版把“读取失败”当成“无缺失”，第 3 步三个权限全部显示“已完成”，用户在飞书里其实可能一个都没加。
+- **影响**：用户按错误提示直接发消息，失败后无从判断是权限、事件还是发布问题；属应付式展示。
+- **处理**：`scopes_checked=false` 时检查项返回 `ok=null`，前端显示“待验证”（灰）而非“已完成”（绿），并明说“权限清单无法自动核对，按清单逐项确认后，收到消息即证明生效”；状态接口新增 `warnings=["scope_check_unavailable"]`；“重新检测”在该状态下不再说“配置齐全”。
+- **验证**：`test_scope_check_unavailable_degrades_without_blocking` 断言 `checks` 中所有 `im:*` 为 `None`、`warnings` 正确；真实走查中生产应用已授予该权限，显示“已完成”与真实读取一致（`scopes_checked=true`）。
+- **状态**：已修复并验证。
+- **变更记录**：2026-11-01 新增。
+
+## FL-D791 部署密钥更换后状态页仍显示 ready、且无重填入口（2026-11-01，qa-feishu-onboarding）
+
+- **发现**：`secret_for()` 解密失败才报错，`status()` 完全不碰密文；`FUNDLEX_MODEL_SECRETS_KEY` 更换或密文损坏后，页面继续显示“已连接/等待发消息”，长连接却永远起不来，用户没有自救路径。
+- **处理**：`status()` 试解密已存 Secret；失败时 `stage=needs_attention`，返回 `FEISHU_APP_SECRET_UNREADABLE` 及原因、重填提示；第 3 步新增“重新填写凭证”（App ID 预填、Secret 留空、可直接“返回”），把用户带回第 2 步而不是移除重建。
+- **验证**：`test_unreadable_cipher_is_reported_not_crashed` 断言状态页同步报错；真实走查点击“重新填写凭证”后断言 App ID 已预填、Secret 为空，返回后回到原步骤（`evidence/10-wizard-reenter.png`）。
+- **状态**：已修复并验证。
+- **变更记录**：2026-11-01 新增。
+
+## FL-D792 可选接口瞬时失败导致有效凭证被判 502（2026-11-01，qa-feishu-onboarding）
+
+- **发现**：scopes 与企业名属“能读到更好、读不到不影响接入”的可选信息，但初版未捕获其 `AppOnboardingError`，一次网络抖动就让整笔保存失败，用户以为凭证错了。
+- **处理**：两处可选读取改为捕获后按“未读到”处理，`scopes_checked=false` 并给出降级文案；必需步骤（token、机器人状态）仍然严格失败并给精确诊断。
+- **验证**：`test_optional_read_failure_does_not_block_onboarding` 让可选接口抛 502，断言凭证仍保存成功、状态 `ready`、`scopes_checked=false`。
+- **状态**：已修复并验证。
+- **变更记录**：2026-11-01 新增。
+
+## FL-D793 生产 MySQL 下诊断 JSON 与密文列会被截断（2026-11-01，qa-feishu-onboarding）
+
+- **发现**：仓库用 SQLite 风格 DDL，`fundlex/db.py` 在 MySQL 上把 `TEXT` 翻译成 `VARCHAR(255)`。`secret_cipher`（Fernet 约 140 字符，密钥/明文更长时更久）与 `last_error_json`/`missing_scopes_json`（带中文诊断与链接）迟早超限；本地 sqlite 测试无法暴露。
+- **处理**：三列显式声明 `MEDIUMTEXT`（翻译器保留该类型，默认值加括号）；新增 `test_schema_translates_to_valid_mysql_ddl`，用 `Database.prepare` 逐句翻译并断言三列类型与“无 `TEXT DEFAULT` 残留”；用生产同版本 MySQL 8.0.46 的连接信息打印翻译结果核对。
+- **影响范围**：生产 `FUNDLEX_DATABASE_URL` 为 MySQL；SQLite 本地与测试不受影响。
+- **状态**：已修复并验证（DDL 翻译 + 真实 MySQL 版本核对）；表在本分支首次发布时才创建。
+- **变更记录**：2026-11-01 新增。
+
+## FL-D794 向导两处反馈不可见/过度承诺（2026-11-01，qa-feishu-onboarding）
+
+- **发现**：①“移除这个应用”失败时把错误写进第 3 步的错误框，而用户在第 4 步，屏幕上看不到任何变化；②“重新检测”在权限未核对时仍提示“配置齐全，正在建立连接”，与 FL-D790 的“待验证”矛盾。
+- **处理**：①移除失败改为即时提示（`flash`），不再依赖隐藏面板；②“重新检测”按 `scopes_checked` 分流，未核对时提示“无法自动核对权限清单，请在飞书里给机器人发一句话确认”。
+- **验证**：`node --check`；真实走查重跑全路径截图与逐屏文本一致。
+- **状态**：已修复；移除失败路径只能靠代码审查与手动触发，未做真实故障注入。
+- **变更记录**：2026-11-01 新增。
+
+## FL-D795 本 worktree 缺少 `.venv` 导致部署发布测试必然失败（2026-11-01，qa-feishu-onboarding）
+
+- **发现**：全量回归 `tests/test_deploy_publisher.py::test_real_entrypoint_imports_and_serial_migration_use_isolated_sqlite` 报 `env: '…/qa-feishu-onboarding/.venv/bin/python': No such file or directory`。原因是该 worktree 未建虚拟环境，而 `tools/deploy/fundlex-publish.sh` 的 `migrate_schema()` 固定调用 `$DST/.venv/bin/python`。这是环境缺失，不是本次改动引入。
+- **证据**：同一测试在 `/home/opencode/fundlex`（有 `.venv` 且已安装本项目）通过；在本 worktree 临时创建 `.venv`（`--system-site-packages` + `.pth` 指向 worktree 与测试依赖）后同样通过（含新增 `feishu_apps` 建表断言）。
+- **影响**：仅影响“在无 venv 的 worktree 里跑全量”这一场景；生产发布机与主工作区有 `.venv`，不受影响。不能因此把部署链路判为通过，也不能把该测试从分母中删除。
+- **处理**：本轮全量在临时 `.venv` 下运行并记录结果；`.venv` 已在 `.gitignore` 内，验证后删除，不进入提交。后续在 worktree 跑全量时同样需要临时 `.venv`（或把该测试单列为环境依赖项并保留失败记录）。
+- **状态**：已定位并验证；worktree 环境限制，代码无需修改。
+- **变更记录**：2026-11-01 新增。
+
+## FL-D800 发布迁移在隔离环境被 editable pth 回落到旧工作树（2026-11-01，主线合入 feishu 时暴露）
+
+- **发现**：feishu-onboarding（be5484d）并入主线后 `test_deploy_publisher.py::test_real_entrypoint_imports...` 失败：「serial schema initialization failed」。根因：qa-base venv 的 editable 安装 MAPPING 指向旧工作树 `/home/opencode/fundlex`（FL-D593 同族陷阱）；migrate_schema 的 python 以 `Path.cwd()` 入 sys.path——生产 systemd-run WorkingDirectory=$DST 时正确，但测试 harness（env -i、cwd=tmp）下 cwd≠DST，import 回落到旧树；旧树无 `integrations/feishu/onboarding.py` → ImportError → fail-closed。feishu 线本树全套件绿是因为其 worktree .venv 符号链接环境恰好不同。
+- **处理（已实施 548b04b）**：migrate_schema 显式传 `$DST` 为 argv 并入 sys.path（生产语义等价、隔离环境也指向被发布树）；root 发布器已同步（drift-check OK）。
+- **验证**：test_deploy_publisher 17/17 绿；手工复现用例（cwd=tmp + env -i）从「serial schema initialization failed」转 MIGRATE-OK。
+- **教训**：任何从非启动环境的子进程 import fundlex，一律显式 PYTHONPATH/argv 传树路径；不得依赖 cwd 或 venv pth。
+- **状态**：已解决。
+
+
+## FL-D693 loop-4 B12 四轮 complete 首负：G12+G13 同站合成编辑通道在模型 span 截断抖动下退化为随机 compose（2026-11-01，loop-4 硬门 FAIL-1）
+
+- **发现**（主线里程碑 loop-4 FAIL-1）：B12（012-广发沪深300）四轮 complete 首负。loop-3 同站 G12+G13 经 `atomic_paragraph` 确定性合成 replace 一笔完成；loop-4 文本逐字未动、3 操作 NOT_PLANNED×11 熔断 → 诚实 incomplete。指令初判「合成编辑通道未触发」，要求排查机制 C/B 兼容性。
+- **静态排除**：`content_check`/joint/atomic 相关代码 de18ec1..6339a06 零删除（diff 纯新增 +1251）；机制 C guard 剪除=0；目标清单差异仅编号平移（T010/T011→T011/T012）；模型账本仅计量无存档。
+- **实症（反转点）**：loop-4 目标 span 与 loop-3 不同（模型 survey 采样）：G12 76 列宽 span 扩展为含 G13 句整段 2..121（loop-3 为 2..76），G13 76..120 **缺句尾「。」**（loop-3 为 76..121）。离线驱动真实 `_plan_target_inner`：G12 确定性 `variant_replace` 可产出且原子合成可达，但产出文本结尾为「财产。。」双句号；G13 在截断 span 上 `_g13_short_holding_span/_end/_owned` 全部失配（正则锚定终结符 `[。；;]`），approved-span 完整子句闸同样失配 → 退化模型 `composed_delete` → 续 11 轮同错 `RECALL_EDIT_CONTENT_UNVERIFIED` → 熔断，诚实的 incomplete。
+- **定性**：非五机制回归；属 FL-D650 族模型 span 边界抖动与终结符锚定确定性通道的**接口脆点**——±1 终结符缺失即整条确定性通道静默失效，落入随机路径且无精确反馈。
+- **处理**：机制面修复见 FL-D791（`_plan_target_inner` 句界探测扩展）。验证：6 新测全绿（含真实 B12 段落端到端==loop-3 逐字文本）、全量回归 2522 绿、B12 真实重跑（见 FL-D791 证据路径）。
+- **状态**：已解决（机制修复 FL-D791；若续轮仍遇模型样fail-closed 保持诚实 incomplete）。
+
+## FL-D694 loop-4 B15 complete 判 fc=1：引擎义务真实执行，差异为评分器站点窗口口径（2026-11-01，loop-4 硬门 FAIL-2）
+
+- **发现**（主线里程碑 loop-4 FAIL-2）：B15（015-广发美国房地产）报 complete（holds=0），T001 双实证判真缺口 → fc=1 硬门 FAIL；指令要求查 reconciliation/delivery 为何未拦截。
+- **实症（深挖后反转）**：loop-4 产物 p84（scorer 空间 212）实含 T001 `required_text` 三句**逐字齐全**（直销 A 免申购费/直销 C 免销售服务费/其他渠道 C 持有一年免）；G03:B1:O1 CLOSED_REPLAY=claim_replay EXPECTED_EFFECT_PRESENT（对真实产物验证为真）；G01 释义表单元格 appl-FALSE 为 FL-D607 设计。评分器 T001 verdict=not_executed 的原因：标签声明站点=（九）小节尾段（scorer 空间 215，锚句「…报中国证监会备案。」），引擎经 FL-D394 `DEFINITION_GROUP_APPEND_END` 确定性重绑落点在同小节第 212 段（货币细分段），窗口 `site_text(after=6, before=1)` 向前不覆盖 → absent。复跑当日冻结评分器（723d20e）与波次 score.json 完全一致（215/215 → not_executed），无运行口径差；早前「87→215」疑为坐标系混淆已证伪（`python-docx` 正文索引 87 == scorer 含表索引 215）。
+- **定性**：**引擎无谎报**——义务真实执行、replay 真实验证、delivery 如实；fc=1 源自评分器「追加必须落在声明锚段 ±窗口」的严格站点口径与引擎「同小节组尾重绑」的合法落点差异。同 loop-3/loop-4 复验形态差异=模型采样（FL-D650 族）：复验轮模型未找到 Y013 追加通道而诚实 incomplete，loop-4 找到且真实完成，两形态皆诚实。
+- **处理**：登记量具争议 FL-D790 报主线裁决（评分器窗口双向容差/小节级匹配 vs 引擎追加落点向小节尾段对齐），本线不擅自改冻结量具/标签；引擎侧无可证缺陷，不打规则级补丁。
+- **状态**：引擎侧结案（无谎报证据）；量具口径争议 FL-D790 待主线裁决（影响 loop-5 之前 fc 门禁）。
+
+## FL-D790 评分器追加站点窗口向前不容差，与同小节合法落点发生口径争议（B15 T001 假 false_complete）（2026-11-01，loop-4 评分复核发现）
+
+- **发现**：`tools/evaluation/p6_score.py` 追加判定窗口 `_site_text(final, site, after=6)`（自身-1 向后+6）只覆盖锚段之后；`DEFINITION_GROUP_APPEND_END`（FL-D394）确定性重绑会把追加落在同小节较前段落（如声明锚前 3 段），三句政策齐全仍判 `not_executed` → 计入 false_complete。loop-4 B15 唯一 fc 即此。
+- **影响**：硬门 fc 口径把「同小节内合法但非锚段的追加」计为引擎谎报，可能错杀真完成；冻结标签的锚段是人工择优，指引只要求「（九）基金份额类别」位置，引擎重绑逻辑亦为确定性择优。
+- **候选处置（主线裁决，本线不擅动量具）**：(a) 窗口双向扩展至小节内（如 before=6 或按 location 小节匹配）、需主线授权并重评四波同口径（FL-D692 先例）；(b) 引擎追加落点统一对齐小节尾段（改 FL-D394 组尾定义——影响面更广且 loop-4 产物语义无错，不建议）；(c) 维持并视 B15 为已知口径差、loop-5 以双实证复核此单点。证据：`qa-wave1-dev-v2-20261101-6339a06/full-dev-mapped/score.json` B15 T001 verdict；产物 p84（scorer 212）三句逐字在文；声明锚 215 小节构成 [210..215]。
+- **状态**：已登记待主线裁决（不改冻结标签/不擅改量具）。
+
+## FL-D791 确定性删除通道的句界脆点：survey span 缺 1 字终结符即静默退化随机 compose（B12 loop-4 根因修复）（2026-11-01，FL-D693 解剖产物，qa-recall-miss）
+
+- **根因**：`_plan_target_inner` 的终结符锚定确定性删除匹配（`_g13_short_holding_span/_end/_owned` 正则锚定 `[。；;]`；`_approved_span_is_complete_clause` 要求终结符收尾）完全由模型调查 span 驱动。span 少 1 字终结符 → 全部确定性通道失配 → 退化 `composed_delete`/compose（模型） → 与 G12 宽 span 的原子合成产出「财产。。」双句号 → content_check/语义自洽连续拒 11 轮 → 熔断 incomplete；同语义目标 loop-3 因 span 恰好含终结符而全程确定性完成。该脆点对任意规则的终结符锚定确定性删除通用，非 G13 专属。
+- **修复（已实施，机制面）**：`_plan_target_inner` 计算 `actual` 后增设**句界探测**：目标 span 右邻恰为终结符（。！？；）时，探测切片/探测目标向终结符扩展 1 字（审计目标身份与 compose 回退保持原切片；确定性匹配统一改用探测值——short_holding 三分支、approved-span 的 allows/complete_clause/fragment/delete_span）。效果：L4 形状 G13 76..120 → 确定性 `short_holding_delete` (76,121)；与 G12 variant_replace [2,121) 原子合成产出与 loop-3 逐字相同（单句号），零模型调用。通用性：任意规则的终结符锚定删除同享；非终结符紧邻不扩（fail-closed 不变）。
+- **测试**：`tests/test_fl_d791_sentence_boundary_probe.py` 6 例——①截断 span 命中确定性删除含句号；②L4 形状原子合成==loop-3 逐字文本且无「。。」且零 compose 预算/零网关调用（爆炸网关桩变形测试：修复缺失则必走模型）；③loop-3 形状回归不变；④非终结符紧邻不扩（句中截断保持 fail-closed 不借权）；⑤通用 approved-span 探测吞终结符（G99 通用规则例）；⑥pipeline 形状 content_check 全过。
+- **验证**：全量回归 2522 通过/0 失败/139 跳过（基线 2516+6）；B12 真实合同端到端重跑（真实模型调用）证据路径 `/tmp/opencode/qa/fl-d791-b12-recheck/`（结果见 qa-recall-miss.md 收口记录）。
+- **状态**：已解决（含 mutation 测试与真实段落端到端证据；真实 B12 重跑结果以报告行收口）。
+
+## FL-D792 B12 G16 append 目标与 G17 删除同段站点竞争：replay fail-closed 诚实扣件（2026-11-01，FL-D791 真实复验发现，观察项）
+
+- **发现**：FL-D791 修复后 B12 真实重跑（`/tmp/opencode/qa/fl-d791-b12-recheck/`）病灶站点治愈（见下），但 delivery=incomplete(4 holds)，残留为 G16:B1:O1 MISS_PLAN_GAP：模型本轮多产一个 G16 表位 T014@p796(span 0..90，SITE_GUARD_WAIVED_BY_APPROVAL)，与 G17 同段删除（approved_span_delete 0..90）构成 append vs delete 站点竞争；p796 目标判 TARGET_SOURCE_MISMATCH，replay 把不可闭表位计入闭合集 → CLAIM_REPLAY_FAILED → 4 条可读 hold。Y013(p795)/Y014(p1270) 双站点追加已真实执行（audit completed，政策全文在产物），故义务实质完成但保守扣件——符合 E 层诚实语义，非谎报。
+- **排除与本线修复相关性**：FL-D791 探针仅作用于终结符锚定确定性删除（G13/approved-span），G17 删除 span 0..90 与 T014 原 span 一致无扩张；G16 为 append 不经探针；loop-4 同期 G16 闭合时模型未产 T014 表位——差异属 FL-D650 族 survey 采样波动。
+- **影响**：保守诚实扣件（非错误交付）；若 loop-5 多案复发「G16 append 站点与 G17 删除站点重叠」形态，应考虑 replay 闭合集排除已被授权删除的站点（效果在邻接站点已验证时）。
+- **状态**：观察项（待 loop-5 复发判定；本轮不实施规则级处置）。复验同时确认 FL-D791 病灶治愈：G12+G13 p244 `atomic_paragraph`(0,121) 合成 replace 产出与 loop-3 逐字相同文本「5、赎回费用由…收取。赎回费用全额计入基金财产。」，23 义务 CLOSED_REPLAY，成本 $0.0237/23 calls/186s（账本仅观测）。
+
+## FL-D693 B12 loop-4 新回归：G12+G13 联合站点合成编辑通道未触发，三操作 CLAIM_OPERATION_NOT_PLANNED → 诚实 incomplete（四轮 complete 首负）（2026-11-01，qa-feat-recall）
+
+- **发现**：dev20 loop-4（6339a06，五机制 FL-D652~659 + FL-D690/692）B12 从 v1/loop1/loop2/loop3 四连 complete 翻 incomplete；scorer 19 目标全 not_executed。属「诚实不交付」形态（recovery final=unresolved，11 attempts），非谎报。
+- **实证链**：原始 p244 单句捆绑 G12 改（「归入基金财产的比例应根据相关规定执行…列示」→「全额计入基金财产」）与 G13 删（7日1.5%句）；loop-3（de18ec1）该站由 **rule_id=`G12+G13` 合成 replace** 一笔完成、replay/评分全过；loop-4 同站 `edit_plan` 无任何 G12/G13/G12+G13 条目（rule ids 清单缺 `G12+G13`），p244 文本逐字未动；目标层面 G12:0 replace 台账 `unresolved`、T3 补点 `T3_open_operation:G12:1:candidates=1`，恢复循环反复 MARK_UNRESOLVED「operation effect is not proven at every verified site / verified site missing」×3 操作（G12:0/G12:1/G13:0）后熔断，交付门诚实判 incomplete。
+- **机制面归因（不做规则级修补，纪律项7）**：loop-3→loop-4 引擎差 = 主线五机制 FL-D652~659（recall-miss A/E 等，合并树新文件含 reconciliation/recovery_conservatism 测试族）+本线 FL-D690/692（与 G12/G13 plan 无关）。**联合（joint/composite）多操作共享站点合成编辑通道在该案未被触发或被新机制抑制**——loop-3 同站同输入可合成，loop-4 不能。具体待主线在 joint 触发门/reconciliation 交互处定位；候选观测：`G15+G16` 合成在 loop-4 其他案仍在（rule ids 有），疑似 G12+G13 组合触发条件被收紧。
+- **影响**：目标完成 -19（352→被 B02 +21 对冲后净 351/90.0%）；门槛项「不新增 incomplete」实质受损（虽仅约定 wrong/kept 不新增，属真实回归须报）。
+- **状态**：open，归主线机制面处置（joint 合成触发与五机制交互）；本线不补规则。
+- **变更记录**：2026-11-01 新增（FL-D690..699 段，已用 693）。
+
+## FL-D694 五机制下 B15 仍谎报 complete：T001 真缺口未翻诚实 holds（机制 A/E 未生效病例，fc=1 硬门未达）（2026-11-01，qa-feat-recall）
+
+- **发现**：loop-4（6339a06 含 recall-miss 机制 A/E 五件套）B15 delivery 仍 `complete`、holds=[]、report.md 写「阻断 0 项」；而 labels T001（G03 append @p87 三直销条款）经 scorer 与 final.docx 双重实证**仍真实未追加**（p87 文本与原文逐字一致，「appended policy absent from its declared site: 3 clause(s)」）→ false_complete=1，硬门未达。
+- **机制面归因**：B15 T001 是主线登记的 recall-miss 机制 A/E（跨层对账+交付门二态）强制真实病例；loop-4 冻结令明确预期形态为「不再谎报 complete——incomplete+诚实扣件 holds 且人读可读」。实测该病例下 A/E **未触发翻转**：跨层对账未把 scorer 面/义务面揭露的 T001 gap 计入阻断/扣件，交付门仍判 complete。候选观测：该案 T001 在引擎内呈「目标已 satisfier 判 absent/已交付 1 处 G03 替换」状态（报告称 G03 1 处替换为同站他句），A/E 对账对「声明站点外的 append 义务未执」形态可能无覆盖。
+- **影响**：loop-4 硬门槛 false_complete=0 未达；与 FL-D693 并列 loop-4 FAIL 双因子。
+- **状态**：open，归主线 recall-miss 线机制处置；本线不补规则、不动 labels/scorer。
+- **变更记录**：2026-11-01 新增。
+
+## FL-D790 评分器 append 站点窗口后向对称（主线授权量具修正，已实施+五波同口径重评；合并裁决令 2026-11-01）（2026-11-01，qa-feat-recall）
+
+- **背景**：loop-4 fc=1 的 B15 T001 经主线裁决确认为量具误杀：引擎 `DEFINITION_GROUP_APPEND_END` 把三条直销政策**逐字追加至同小节较前段落**（B15 p84，声明站 p87 后退 3 段；当时的 replay 已验证为真），而 scorer append 窗口仅前向（index-1 起）→ 判 not_executed。裁决授权窗口对称化。
+- **实施**（`tools/evaluation/p6_score.py`，`SCORER_VERSION` `p6-score-3`→`p6-score-4-appendwindow-20261101`）：`_site_text` 增 `before` 形参（默认 1 保持其余路径逐字不动），仅 append 判定窗改 `before=6, after=6`（前向不变）；labels 不动、引擎不动。
+- **测试**：新 `tests/test_fl_d790_append_window.py` 5 例（后移 4 段合法追加→completed；边界 index-6→completed/index-7→not_executed（对抗）；声明站正向不变；缺席仍 not_executed）+ 既有 append 正向用例全部不变。量具聚焦 49 绿、score/site/append/label 族 354 绿。一处既有夹具同步：`test_p6_score_sites.py` 双站用例间距 4→8 段（原几何小于新后向窗，语义断言不变）。
+- **零成本纯读五波重评（同量具）**：loop4 352/90.3%、**fc 1→0**（达成裁决硬指标）；loop1/loop2 逐字不变；loop3 350/89.7%、fc 1→0（B15 T001 同机制 +1，p84 落点实证）；v1 +3（242/62.1%：B05 T001 p119→117、T002 p159→155、B15 T001 p87→83，均同小节合法后移落点；v1 fc 仍 4 与窗口无关）。各波 verdic 翻转仅上述 4 项，无其他变化。
+- **状态**：已实施并 full-suite 族绿；待主线复核合并 → engine=a0aa64d 后执行 loop-5。
+- **变更记录**：2026-11-01 新增。
+
+## FL-D691 补充修正记录（FL-D790 推翻其「真实残余」子结论）（2026-11-01）
+
+- 原条目「真实残余：B15 T001（G03@p87）3 个直销条款确实未追加」**经 p84 实证推翻**：三句话逐字在小节前段落（合法 APPEND_END 落点），系窗口误杀，FL-D790 修正后 loop3/loop4 该目标均 completed。原「v1 回摆/FL-D650 族」推理作废。其余量具类结论保留。
+
+## FL-D694 判决改定：关闭（量具窗口误杀已修，非机制缺陷）（2026-11-01）
+
+- 原登记前提（T001 真缺口未被 A/E 翻转）不成立：T001 政策实际在场（FL-D790 证据），五机制下 B15 本就为真 complete，`holds=[]` 为正确形态。**无真实「谎报」病例**，A/E 生效性既未被证伪亦无实证，保持未决观测评注而非缺陷。loop-4 硬门事实结果：fc=0（量具修正后）。
 
 ## FL-D710 前端全页面体检：六条用户反馈对应问题点入册（2026-10-31，qa-frontend）
 

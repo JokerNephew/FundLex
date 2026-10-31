@@ -37,6 +37,10 @@ ENABLEABLE_STATUSES = frozenset({"released", "parsed"})
 QUALIFICATION_NOT_RUN = "not_run"
 QUALIFICATION_CERTIFIED = "certified"
 QUALIFICATION_FROZEN = "frozen_builtin"
+# Parsed clean but the executability canary found runtime-fatal drift
+# (FL-D648): the version enters the owner-visible review list and cannot be
+# enabled until re-parsed into an executable shape.
+QUALIFICATION_NEEDS_REVIEW = "needs_review"
 ENABLEABLE_QUALIFICATIONS = frozenset({QUALIFICATION_CERTIFIED, QUALIFICATION_FROZEN})
 PARSEABLE_STATUSES = frozenset({"uploaded", "parse_failed", "parsed", "failed"})
 # User-initiated "reparse" is a new version whenever the version may already
@@ -182,6 +186,64 @@ def _quality_failure_issues(validation: dict[str, Any]) -> dict[str, Any]:
     return issues
 
 
+def _parse_enrichment(store: RunStore, version_id: str | None,
+                      document: dict[str, Any] | None,
+                      error_code: str | None) -> dict[str, Any]:
+    """Owner-facing enrichment for a finished parse: block report + canary.
+
+    Advisory by construction — enrichment failures never fail the job or the
+    lease write; they simply reduce to no extra detail.
+    """
+    extras: dict[str, Any] = {}
+    if not version_id or (document is None and not error_code):
+        return extras
+    source = None
+    try:
+        path = _source_path(store, version_id)
+        if path.is_file():
+            from .guide import extract_guide_source
+            source = extract_guide_source(path)
+    except Exception:  # noqa: BLE001 - diagnostics must never break a finish
+        source = None
+    canary_report: dict[str, Any] | None = None
+    if document is not None:
+        try:
+            from .guide_canary import executability_report, review_dimensions
+            canary_report = executability_report(document)
+            extras["canary"] = canary_report
+            if not canary_report["passed"]:
+                from datetime import datetime, timezone
+                extras["review"] = {"status": "needs_review",
+                                    "dimensions": {"source": "executability_canary",
+                                                   **review_dimensions(canary_report)},
+                                    "evaluated_at": datetime.now(timezone.utc)
+                                    .isoformat(timespec="seconds")}
+        except Exception:  # noqa: BLE001
+            pass
+    if source is not None:
+        try:
+            from .guide_report import block_report
+            problems: dict[str, list[dict[str, Any]]] = {}
+            for finding in (canary_report or {}).get("fatal") or []:
+                rule_id = str(finding.get("rule_id") or "")
+                if rule_id:
+                    problems.setdefault(rule_id, []).append(finding)
+            extras["parse_report"] = block_report(source, document, error_code=error_code,
+                                                  rule_problems=problems or None)
+        except Exception:  # noqa: BLE001
+            pass
+    return extras
+
+
+def _job_version_id(store: RunStore, job_id: str) -> str | None:
+    """Read-only lookup of the version a parse job belongs to."""
+    _ensure_tables(store)
+    with store._connect() as db:
+        row = db.execute("SELECT guide_version_id FROM guide_jobs WHERE id=?",
+                         (job_id,)).fetchone()
+    return str(row["guide_version_id"]) if row else None
+
+
 def _version_dict(row) -> dict[str, Any]:
     rules = _json_or(row["rules_json"], {})
     groups = rules.get("groups") if isinstance(rules, dict) else None
@@ -322,10 +384,12 @@ def set_current_guide(store: RunStore, owner: str, version_id: str) -> dict[str,
     # predecessor's certification never carries over.
     if version["qualification_status"] not in ENABLEABLE_QUALIFICATIONS:
         raise ValueError("GUIDE_NOT_CERTIFIED")
-    # A parsed guide is data, not executable policy.  Custom operations must
-    # have controlled registry entries before an owner can enable the guide.
-    from .generation.registry import operation_registry_coverage_gaps
-    gaps = operation_registry_coverage_gaps(guide_document(store, version_id))
+    # A parsed guide is data, not executable policy.  Admission replays the
+    # runtime's own router predicate (FL-D648): every operation the runtime
+    # would treat as authoritative must resolve to a registered contract, so a
+    # version that would fail closed at runtime can never be enabled.
+    from .guide_canary import blocking_gaps
+    gaps = blocking_gaps(guide_document(store, version_id))
     if gaps:
         raise ValueError("GUIDE_OPERATION_REGISTRY_MISSING:" + ",".join(gaps))
     with store._connect() as db:
@@ -663,6 +727,8 @@ def finish_guide_job(store: RunStore, job_id: str, fencing_token: int, *, docume
         if not _validation_clean(validation):
             quality_issues = _quality_failure_issues(validation)
             error_code = "GUIDE_VALIDATION_UNCLEAN"
+    extras = _parse_enrichment(store, _job_version_id(store, job_id), document, error_code)
+    canary = extras.get("canary") if isinstance(extras.get("canary"), dict) else None
     with store._connect() as db:
         db.execute("BEGIN IMMEDIATE")
         job = db.execute("SELECT * FROM guide_jobs WHERE id=?", (job_id,)).fetchone()
@@ -674,7 +740,16 @@ def finish_guide_job(store: RunStore, job_id: str, fencing_token: int, *, docume
         version_id = job["guide_version_id"]
         if document is not None and not error_code:
             document_sha = _document_sha(document)
-            issues = document.get("validation") if isinstance(document.get("validation"), dict) else {}
+            issues = dict(document.get("validation") or {})
+            if extras.get("parse_report") is not None:
+                issues["parse_report"] = extras["parse_report"]
+            if canary is not None:
+                issues["canary"] = canary
+            if extras.get("review") is not None:
+                issues["review"] = extras["review"]
+            qualification = (QUALIFICATION_NEEDS_REVIEW
+                             if (canary is not None and not canary.get("passed"))
+                             else QUALIFICATION_CERTIFIED)
             db.execute("""UPDATE guide_versions SET status='parsed',rules_json=?,document_sha256=?,
                 rules_sha256=?,parser_version=?,schema_version=?,prompt_versions=?,issues_json=?,
                 qualification_status=?,updated_at=?
@@ -682,7 +757,7 @@ def finish_guide_job(store: RunStore, job_id: str, fencing_token: int, *, docume
                 (json.dumps(document, ensure_ascii=False), document_sha, document_sha,
                  str(document.get("parser_version") or ""), str(document.get("schema_version") or ""),
                  json.dumps(document.get("prompt_versions") or {}, ensure_ascii=False),
-                 json.dumps(issues, ensure_ascii=False), QUALIFICATION_CERTIFIED, now, version_id))
+                 json.dumps(issues, ensure_ascii=False), qualification, now, version_id))
             changed = db.execute("UPDATE guide_jobs SET status='completed',error_code=NULL,lease_until=NULL,"
                                  "updated_at=? WHERE id=? AND fencing_token=? AND status='leased' "
                                  "AND lease_until>?", (now, job_id, fencing_token, now)).rowcount
@@ -695,8 +770,12 @@ def finish_guide_job(store: RunStore, job_id: str, fencing_token: int, *, docume
             # the user remedy is re-upload/re-parse into a new version.
             status = "failed" if (quality_issues is not None
                                   or job["attempts"] >= MAX_GUIDE_JOB_ATTEMPTS) else "parse_failed"
-            issues = quality_issues or {"error_code": code, "errors": [{"code": code}],
-                                        "attempts": job["attempts"]}
+            issues = dict(quality_issues or {"error_code": code, "errors": [{"code": code}],
+                                             "attempts": job["attempts"]})
+            if extras.get("parse_report") is not None:
+                issues["parse_report"] = extras["parse_report"]
+            if canary is not None:
+                issues["canary"] = canary
             db.execute("UPDATE guide_versions SET status=?,issues_json=?,updated_at=? WHERE id=?",
                        (status, json.dumps(issues, ensure_ascii=False), now, version_id))
             changed = db.execute("UPDATE guide_jobs SET status=?,error_code=?,lease_until=NULL,updated_at=? "

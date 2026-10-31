@@ -690,3 +690,31 @@ body.compare-fullscreen-open{overflow:hidden!important}
 .inline-kpis { display: flex; flex-wrap: wrap; gap: var(--space-3); margin-top: var(--space-1); }
 .inline-kpi { display: inline-flex; align-items: baseline; gap: var(--space-1); color: var(--muted); font-size: var(--text-xs); }
 .inline-kpi b { color: var(--ink); font-size: var(--text-sm); }
+
+/* ── 指引版本对比（规则差异 + 原文比对）────────────────────────── */
+.guide-diff-tabs{display:flex;gap:4px;border-bottom:1px solid var(--line,#e3e7ea);margin-bottom:12px}
+.guide-diff-tabs button{border:0;background:none;padding:8px 14px;font:inherit;font-size:13px;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px}
+.guide-diff-tabs button.is-active{color:var(--accent,#b5471e);border-bottom-color:var(--accent,#b5471e);font-weight:650}
+.guide-diff-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px}
+.guide-diff-group{border:1px solid var(--line,#e3e7ea);border-radius:8px;padding:12px;background:#fff}
+.guide-diff-group h3{margin:0 0 8px;font-size:13px}
+.guide-diff-rules{list-style:none;margin:0;padding:0;display:grid;gap:6px;font-size:13px}
+.guide-diff-change{border-top:1px solid var(--line,#e3e7ea);padding:8px 0;font-size:13px}
+.guide-diff-change:first-of-type{border-top:0}
+.guide-diff-change summary{cursor:pointer}
+.guide-diff-fields{margin:8px 0 0;display:grid;gap:8px}
+.guide-diff-field dt{font-size:12px;color:var(--muted);margin-bottom:2px}
+.guide-diff-field dd{margin:0;display:flex;flex-direction:column;gap:2px}
+.guide-diff-old{color:#a33324;background:#fdf1ef;border-radius:4px;padding:3px 6px}
+.guide-diff-new{color:#1f6b3a;background:#eef8f0;border-radius:4px;padding:3px 6px}
+.guide-diff-arrow{color:var(--muted);font-size:11px}
+.guide-diff-ops{margin:0;padding-left:18px}
+.guide-diff-viewbtns{display:inline-flex;gap:6px;margin-left:12px;vertical-align:middle}
+.guide-diff-panes{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.guide-diff-pane{border:1px solid var(--line,#e3e7ea);border-radius:8px;background:#fff;max-height:60vh;overflow:auto;padding:14px 18px}
+.guide-diff-merged{border:1px solid var(--line,#e3e7ea);border-radius:8px;background:#fff;max-height:60vh;overflow:auto;padding:14px 18px}
+@media(max-width:760px){.guide-diff-panes{grid-template-columns:1fr}}
+.guide-diff-pane .compare-diff.diff-insert,.guide-diff-pane .compare-diff.insert{background:#d9f1df}
+.guide-diff-pane .compare-diff.diff-delete,.guide-diff-pane .compare-diff.delete{background:#f7d8d8}
+.guide-diff-merged .compare-ins{color:#1f6b3a}
+.guide-diff-merged .compare-del{color:#a33324}

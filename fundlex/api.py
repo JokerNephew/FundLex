@@ -224,6 +224,13 @@ class GuideRuleSettingsRequest(BaseModel):
 ModelSettingsRequest = model_settings.Preferences
 
 
+class FeishuAppCredentialsRequest(BaseModel):
+    """Own-tenant app credentials; the secret is encrypted and never echoed."""
+    model_config = ConfigDict(extra="forbid")
+    app_id: str = Field(min_length=4, max_length=80)
+    app_secret: str = Field(min_length=8, max_length=256)
+
+
 class FeishuBindingCodeRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     ttl_seconds: int = Field(default=600, ge=60, le=3600)
@@ -643,6 +650,8 @@ def create_app(data_dir: str | Path | None = None, *, auth_db=None) -> FastAPI:
     application.state.task_service = task_service
     integrations = IntegrationStore(store)
     application.state.integrations = integrations
+    from .integrations.feishu.onboarding import FeishuAppOnboarding
+    application.state.feishu_onboarding = FeishuAppOnboarding(store)
     compare_store = CompareStore(store)
     application.state.compare_store = compare_store
     guide_generation_store = GuideGenerationStore(store)
@@ -935,6 +944,65 @@ def create_app(data_dir: str | Path | None = None, *, auth_db=None) -> FastAPI:
         integrations.revoke_user_binding("feishu", user)
         return {"provider": "feishu", "bound": False}
 
+    # -- own-tenant app onboarding -------------------------------------
+    def _app_status(owner: str, request: Request) -> dict:
+        status = request.app.state.feishu_onboarding.status(owner)
+        binding = integrations.binding_for_user("feishu", owner)
+        status["binding"] = {
+            "bound": bool(binding),
+            "tenant_key": binding["tenant_key"] if binding else "",
+            "updated_at": binding["updated_at"] if binding else None,
+        }
+        return status
+
+    def _app_error(exc) -> JSONResponse:
+        """Onboarding failures keep the stable envelope plus an actionable hint.
+
+        The global handler flattens ``HTTPException.detail`` to a bare code, so
+        these routes answer directly: the same ``error_code``/``message``/
+        ``detail``/``correlation_id`` keys, with a human sentence, a concrete
+        next step and (when known) the Feishu page that fixes it.
+        """
+        cid = correlation_id()
+        log_handled_error(exc, exc.code, request_id=cid)
+        return JSONResponse(
+            status_code=exc.http_status,
+            content={"error_code": exc.code, "message": exc.message,
+                     "detail": exc.detail or "", "link": exc.link or "",
+                     "correlation_id": cid},
+            headers={CORRELATION_ID_HEADER: cid, "Cache-Control": "private, no-store"},
+        )
+
+    @application.get("/api/integrations/feishu/app")
+    def get_feishu_app(request: Request, user: str = Depends(_user)):
+        """Onboarding state for a user's own-tenant Feishu app."""
+        return _app_status(user, request)
+
+    @application.post("/api/integrations/feishu/app/credentials")
+    def save_feishu_app_credentials(payload: FeishuAppCredentialsRequest, request: Request,
+                                    user: str = Depends(_user)):
+        from .integrations.feishu.onboarding import AppOnboardingError
+        try:
+            result = request.app.state.feishu_onboarding.save(
+                user, payload.app_id, payload.app_secret)
+        except AppOnboardingError as exc:
+            return _app_error(exc)
+        return {**_app_status(user, request), "verification": result}
+
+    @application.post("/api/integrations/feishu/app/verify")
+    def verify_feishu_app(request: Request, user: str = Depends(_user)):
+        from .integrations.feishu.onboarding import AppOnboardingError
+        try:
+            result = request.app.state.feishu_onboarding.revalidate(user)
+        except AppOnboardingError as exc:
+            return _app_error(exc)
+        return {**_app_status(user, request), "verification": result}
+
+    @application.delete("/api/integrations/feishu/app")
+    def remove_feishu_app(request: Request, user: str = Depends(_user)):
+        request.app.state.feishu_onboarding.remove(user)
+        return _app_status(user, request)
+
     @application.post("/api/integrations/feishu/oauth/start")
     def start_feishu_oauth(user: str = Depends(_user)):
         """Create a one-time personal QR/OAuth URL for the current account."""
@@ -1049,6 +1117,16 @@ def create_app(data_dir: str | Path | None = None, *, auth_db=None) -> FastAPI:
             await file.close()
         return {"version": _guide_public(version, current=False)}
 
+    @application.get("/api/guides/upload-spec")
+    def guide_upload_spec(user: str = Depends(_user)):
+        """Upload-entry specification for the guide channel (static content).
+
+        The frontend renders this verbatim near the upload control; keeping it
+        server-side means the copy ships with the quality channel it describes.
+        """
+        from fundlex.api_content import GUIDE_UPLOAD_SPEC
+        return GUIDE_UPLOAD_SPEC
+
     @application.get("/api/guides/{version_id}")
     def get_guide(version_id: str, user: str = Depends(_user)):
         version = visible_guide(user, version_id)
@@ -1104,6 +1182,25 @@ def create_app(data_dir: str | Path | None = None, *, auth_db=None) -> FastAPI:
         except ValueError as exc:
             raise_api_error(422, exc, fallback="INVALID_REQUEST")
         return {"version_id": version_id, "against": against.strip(), "diff": diff}
+
+    @application.get("/api/guides/{version_id}/text-diff")
+    def guide_version_text_diff(version_id: str, against: str = "", user: str = Depends(_user)):
+        """指引原文比对：与合同比对页同套算法链的确定性文本差异（不使用模型）。
+
+        内置指引没有用户上传的原文 DOCX，任一侧为内置版时按「源不可用」拒绝；
+        解析出的规则差异请用 ``GET /api/guides/{id}/diff``。
+        """
+        from . import guide_text_diff
+        try:
+            result = guide_text_diff.guide_text_diff(store, user, version_id, against)
+        except KeyError as exc:
+            raise_api_error(404, exc, fallback="GUIDE_DIFF_UNAVAILABLE")
+        except ValueError as exc:
+            raise_api_error(422, exc, fallback="INVALID_REQUEST")
+        except guide_text_diff.TextDiffUnavailable as exc:
+            raise HTTPException(404, str(exc)) from exc
+        return {"version_id": version_id, "against": against.strip(),
+                "text_diff": result}
 
     @application.get("/api/guides/{version_id}/rules")
     def guide_rules(version_id: str, user: str = Depends(_user)):

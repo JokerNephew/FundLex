@@ -160,12 +160,15 @@ migrate_schema() {
     "$DST/.venv/bin/python" -I -B -c '
 import sys
 from pathlib import Path
-sys.path.insert(0, str(Path.cwd().resolve()))
+# argv[-1] 必为 $DST（下方命令尾），生产 cwd 与其一致；显式传入避免隔离
+# 环境（无 PYTHONPATH/cwd≠DST）下被 editable pth 回落到其它工作树（FL-D800）。
+sys.path.insert(0, str(Path(sys.argv[1]).resolve()))
 try:
     from fundlex.config import local_data_dir, auth_db_target
     from fundlex.store import RunStore
     from fundlex.tasks import TaskStore
     from fundlex.integrations import IntegrationStore
+    from fundlex.integrations.feishu.onboarding import FeishuAppOnboarding
     from fundlex.compare.store import CompareStore
     from fundlex.guide_generation.store import GuideGenerationStore
     from fundlex import guide_store
@@ -174,6 +177,7 @@ try:
     store = RunStore(local_data_dir())
     TaskStore(store)
     IntegrationStore(store)
+    FeishuAppOnboarding(store)
     CompareStore(store)
     GuideGenerationStore(store).ensure_schema()
     guide_store._ensure_tables(store)
@@ -183,7 +187,7 @@ try:
 except Exception:
     # Do not echo database targets, driver errors or configuration values.
     raise SystemExit("fundlex-publish: serial schema initialization failed") from None
-'
+' "$DST"
 }
 
 stop_services() {
