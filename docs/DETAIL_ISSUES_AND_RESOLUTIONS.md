@@ -7010,3 +7010,11 @@ H＝E×…
 - **影响/风险**：claim 侧未落地前，p87 类"窄化条件不满足而宽删除吞尾句"只剩规划侧防线，无 fail-closed 兜底钉住；dev v2 冻结宜等该提交。
 - **状态**：已解决（claim 侧 `449b36b` 已提交；主线另以 `fe4803f`/FL-D575 补三机制 8 项回归，与 FL-D582 机制测试缺口同案；本对话 6 项单元钉测试保留为互补覆盖）。
 - **变更记录**：2026-10-31 新增（qa-feat-recall 对话，复核 ac697a4 时发现）；2026-10-31 claim 侧合并后独立复核：129 passed（regressions+fragment tripwires+recall_pipeline），并以 scratch worktree 做 mutation 验证——还原 449b36b 后 `test_approved_span_delete_evidence_self_claim_does_not_own_tail` 如期转红、其余 4 项保持绿；dev20 v2 冻结重跑提供最终真实证据，见 wave v2 freeze（`var/recall-first-evaluation/qa-wave1-dev-v2-20261031-67bc9d4/freeze.json`）。
+
+## FL-D583 test_review_concurrency 在高负载窗口偶发超时失败（2026-10-31，qa-feat-recall 基线回归发现）
+
+- **发现日期**：2026-10-31，冻结 v2 窗口全量回归（`qa-feat-recall-full-v2freeze.log`，7 failed/2364 passed）中 `tests/test_operation_execution_closure.py::test_review_concurrency_keeps_rule_order_and_runs_in_parallel` 1 failed；同窗口机上有 dev20 真实模型串行运行 + 第二波标签并发 job + 本回归自身，load 高。
+- **归因**：静态环境下单独连跑 3 次全绿（0.9–1.1s）；该测试断言并行 review 的耗时/顺序，属时序敏感型，判定为负载 flake 而非行为回归。与 FL-D574/FL-D580 已确证既存失败不同源。
+- **影响**：全量回归计数需单列"已确证时序 flake 1 项"；建议后续回归在该窗口把该项标注重试一次，或为其加负载容忍（归测试体系建设，本对话不改）。
+- **状态**：open（已归因，未修；不阻塞 dev20 v2 发令口径）。
+- **变更记录**：2026-10-31 新增（qa-feat-recall 对话）。
