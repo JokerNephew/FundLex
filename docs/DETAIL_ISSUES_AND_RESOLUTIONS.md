@@ -6929,10 +6929,12 @@ H＝E×…
 
 ## FL-D590 compare 全文替换式采用B 的 542 份真实语料冒烟（2026-10-31，qa-feat-compare 专线）
 
-- **目的**：FL-D562 能力恢复后，用 funds_word 全部 542 份真实合同做 selection-writer 冒烟：变异左侧全部正文直接段落生成右侧 → compare → 全部采用B → generate → 校验 final==right；全程不跑模型、语料只读、产物即验即删、输出 <500MB 落 `var/qa-compare-smoke-20261031/`。
-- **脚本**：`/tmp/opencode/qa/cmp-d562/smoke_corpus.py`（4 进程，worktree `.venv/bin/python`）。
-- **状态**：冒烟进行中（2026-10-31 上午启动，预计小时级）；fail-closed 率、拒绝码分布、抽查结构原因统计待回填。
-- **回填**：（待冒烟完成后登记 ok/fail 计数、拒绝码分布、抽查结论与语料正例入测试结果。）
+- **目的**：FL-D562 能力恢复后，用 funds_word 全部真实合同（主线 merge 后 578 份，540 份原有 + 两个 `基金合同第一批_*_20261027/` 子目录新增）做 selection-writer 冒烟：变异左侧全部正文直接段落生成右侧 → compare → 全部采用B → generate → 校验 final==right；全程不跑模型、语料只读、产物即验即删、输出 <500MB 落 `var/qa-compare-smoke-20261031*/`。
+- **脚本**：`/tmp/opencode/qa/cmp-d562/smoke_corpus.py`（4 进程，worktree `.venv/bin/python`；外部脚本必须 `PYTHONPATH=$PWD`，见 FL-D593）。
+- **r1（作废）**：542 份，结果 ok 2 / reject 558 / error 18（LOCATION_NOT_FOUND 462 为主）——**因 import 主工作区旧树 `158475f` 整体作废**（FL-D593），只可作为主线旧树拒绝码形态参考，不代表本线行为。
+- **r2（进行中）**：578 份 `PYTHONPATH=$PWD` 重跑（2026-10-31 午后启动，预计小时级，结果内存累积、跑完落 `var/qa-compare-smoke-20261031-r2/{stats.json,results.jsonl}`），覆盖 FL-D592 二次修复后的代码。
+- **状态**：r2 冒烟进行中；fail-closed 率、拒绝码分布、抽查结构原因统计待回填。
+- **回填**：（待 r2 完成后登记 ok/fail 计数、拒绝码分布、artifacts_left、full_body_replacement_hits、抽查结论与语料正例入测试结果。）
 
 ## FL-D591 compare worker 终态失败诊断结构化透出（A6-546 后续增强已实施，2026-10-31，qa-feat-compare 专线）
 
@@ -6940,6 +6942,31 @@ H＝E×…
 - **实施**：worker 追加失败阶段跟踪（`_failed_stage`：`pairing/extracting/saving/diagnosing/generating`）；终态 failed 的 result payload 携带 `diagnostics.failure={error_code, stage, error_type, retryable:false}`（error_type 经净化，掉 traceback/路径/内部细节）；transient 重试经 `store.retry(..., diagnostics=)` 携带，不新增库表列；`_pair_dict` 透出结构化失败摘要，错误码后缀强转 str（防真异常 error_code 非字符串导致 500 遮蔽 pair 状态——本轮新发现随修）。
 - **前端**：`compare.js` `pairErrorLabel` 优先展示阶段+错误类型+可重试性（如"保存结果阶段失败：RuntimeError（不可自动重试，待人工处理）"），paused 同源口径不变。
 - **验证**：`tests/test_compare_worker.py` 新增 5 项（共 20 passed）；浏览器 `tests/browser/test_v1_frontend_remediation.py` 新增 failed-pair 诊断展示用例，16/16 全绿；node --check 过。fail-closed 不变量保持：`_execute` 仍先 `_extract_right_revision`、诊断仅现于终态 failed、无错误 complete。
+
+## FL-D592 FL-D562 全文替换采用B 检测缺口与二次修复（pre-detect + 惰性空白段 + 批发删除守卫 + 带区几何，2026-10-31，qa-feat-compare 专线）
+
+- **发现日期**：2026-10-31，FL-D590 冒烟第一轮（r1，已作废见 FL-D593）分诊与真实文件三角诊断（spy `triage.py`/`spy_pre.py`/`check_one.py`，均 `PYTHONPATH=$PWD`）。
+- **问题与影响**：`b7ca4c2` 提交的全文替换检测 `_detect_full_body_replacement` **后置**在 `_build_plan` 之后，需先算出 block operations——而语料形态下 insert 锚点普遍指向保持的 body 级 sdt（目录 TOC），`_build_plan` 对 sdt 锚点 fail-closed（`SELECTION_CONTENT_CONTROL_UNSUPPORTED`），检测根本到不了，全量路径对真实语料形同虚设（按 r1 引用分布约占 93.6% 含 TOC 语料会先死在计划级）。另两个形态缺口：①变异后左侧「惰性空白段」（`raw_text==''` 且 XML 仅 bare pPr）被 diff builder 丢弃成 leftover，原检测要求 deleted==左全部直段而不触发；②含 fldChar HYPERLINK 域段的左侧段在普通路径 `_simple_paragraph` 下 `RUN_UNSUPPORTED`，全量路径必须接受"段落级批发删除"而非逐 run 形状检查。
+- **处理方法（最终形态）**：
+  - `_pre_detect_full_body_replacement`：在 `_build_plan` **之前**直接对 adopted diffs 判定——全 diff 采用 right 且仅 delete/insert（部分采用/modify 一律回普通 fail-closed 路径）；deleted ⊆ 左直段（余量必须是惰性空白段，经 `left_root` 核 XML：仅 bare pPr、无 sectPr/pPrChange）；inserted == 右直段全集。返回综合 ops（一 diff 一 op、锚点留空——全量 writer 不用锚点），manifest 覆盖与样式/编号校验沿用原机制不变；final==right 语义仍由写入后校验（接受修订解析、独立 oracle c14n、源哈希）兜底。
+  - `_apply_full_body_replacement` 带区几何重写：保持的 body 子节点（tbl/sdt/sectPr）把左右文集切成带，带数一致且每带非空（否则 fail-closed）；每带末段 keeper 锚点插首段 run、余段 clone 后插，带区间可不同长度，最终块序==right。
+  - `_wholesale_deletable_paragraph` 批发删除守卫：放行多 w:t/fldChar run；禁 ins/del/moveFrom/sdt/fldSimple/commentRange/commentReference/footnote/endnote/drawing/pict/object 后代；sectPr/pPrChange 段直拒。
+  - `_check_field_spans_within` 全局域跨段扫描：fldChar begin/end 跨删除边界 fail-closed（orphan 域）。
+  - `_mark_deleted_paragraph(check_shape=False)` 供全量路径跳过逐 run 形状检查；`_inert_blank_paragraph` 惰性段判定。
+- **保持的 fail-closed 边界**：非全文大链拒绝、mutation 对抗拒绝、半结构失败零产物；sectPr 携带段（含空白 sectPr 段）始终不进批发路径（测试钉住"sectPr 必存活"）；右侧插入侧保持 `_simple_paragraph` 严格检查（复杂 right 内容=诚实边界）；域跨表 fail-closed。
+- **验证**：`tests/test_compare_full_body_replacement.py` 扩至 16 项全绿（含 6 项新用例：惰性空白段交付、fldChar 段交付、顶部 sdt 保持交付、域跨表 fail-closed、sectPr 空白不进批发、drawing 拒）；同跑 sdt/trailing 20 + selection_writer 15 共 51 项全绿。真实文件三角验证（`PYTHONPATH` 正确口径）：广发景辉纯债 GENERATE OK（full_body_replacement=True、final==right、manifest 2662/2662）；广发价值优选 fail-closed（sectPr 空白+fldChar 段，批发守卫放行 fldChar 段但空白 sectPr 段拒——按设计）；科创板芯片 fail-closed（sectPr 空白段非惰性）。
+- **状态**：已修复（测试与单文件级已验证），真实语料 r2 冒烟结果回填 FL-D590 后由主线核对销号。
+- **合并注意（给主线）**：`b7ca4c2` 内的 `_detect_full_body_replacement`（计划级后置版）已被本条的 pre-detect 版取代弃用；主线 merge 本线时以最新 selection_writer.py 为准，不存在两代检测并存的回退风险。
+
+## FL-D593 FL-D590 冒烟第一轮（r1）统计作废：worktree .venv symlink 致 import 主工作区旧树（2026-10-31，qa-feat-compare 专线）
+
+- **发现日期**：2026-10-31，r1 冒烟完成后 triage 发现 spy 报 `AttributeError: module 'fundlex.compare.selection_writer' has no attribute '_detect_full_body_replacement'`，而 worktree 源码里明明有——导入的根本不是本线代码。
+- **证据与归因**：worktree 的 `.venv` 是指向 `/home/opencode/fundlex/.venv` 的 symlink；以 `python /tmp/.../script.py` 运行时 `sys.path[0]` 是脚本目录，外部脚本不生效 worktree 本身，import fundlex 落到主工作区（HEAD `158475f` 快照，无任何本轮 compare 改动）。用 `PYTHONPATH=$PWD` 同脚本重跑后 spy 正常、检测正常触发，证实错树。
+- **影响**：r1 全部统计（ok 2 / reject 558 / error 18；LOCATION_NOT_FOUND 462 为主）测的是**主线旧树行为**，整体作废，不代表本线 FL-D562 能力（r1 统计目录 `var/qa-compare-smoke-20261031/` 已标注作废，仅留作拒绝码形态的参考）。这与历史 A10-Q0 类「错树验证」属同类风险。
+- **处理方法**：一切外部脚本（非 `python -m pytest` 入口）一律 `cd <worktree> && PYTHONPATH=$PWD .venv/bin/python ...`；spy/monkeypatch 断言不存在的属性可用 `AttributeError` 快速暴露错树；r2 已按正确口径重跑（578 份，含两个新增子目录语料），结果回填 FL-D590。
+- **状态**：已确认（流程规避已生效），r2 统计为准。
+- **变更记录**：
+  - 2026-10-31 新增（qa-feat-compare 专线）。
 
 ## FL 编号分配（多对话并行期协调，2026-10-31）
 

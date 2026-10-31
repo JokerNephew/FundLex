@@ -577,6 +577,97 @@ def _simple_paragraph(document, block) -> etree._Element:
     return element
 
 
+_WHOLESALE_CHILD_TAGS = {Q("pPr"), Q("r"), Q("bookmarkStart"), Q("bookmarkEnd"),
+                         Q("proofErr"), Q("lastRenderedPageBreak")}
+_WHOLESALE_FORBIDDEN_TAGS = {
+    Q("ins"), Q("del"), Q("moveFrom"), Q("moveTo"), Q("sdt"), Q("fldSimple"),
+    Q("commentRangeStart"), Q("commentRangeEnd"), Q("commentReference"),
+    Q("footnoteReference"), Q("endnoteReference"), Q("drawing"), Q("pict"), Q("object"),
+}
+
+
+def _wholesale_deletable_paragraph(document, block) -> etree._Element:
+    """Resolve a paragraph that may be deleted wholesale (full-body replacement).
+
+    Unlike ``_simple_paragraph`` the runs inside the paragraph do not need to
+    be flat: the paragraph is marked deleted run-by-run without merging, so
+    multi-``w:t`` runs and simple field characters are safe.  Anything that
+    could orphan state outside the paragraph (content controls, comments,
+    notes, drawings, nested revisions) keeps failing closed, as do section
+    boundaries and property-change tracking.  Field codes that span paragraphs
+    are checked separately by ``_check_field_spans_within``.
+    """
+    element = _paragraph_element(document, block.location)
+    if element.tag != Q("p"):
+        raise DocxError("SELECTION_BLOCK_STRUCTURE_UNSUPPORTED", block.block_id)
+    ppr = element.find(Q("pPr"))
+    if ppr is not None:
+        if ppr.find(Q("sectPr")) is not None:
+            raise DocxError("SELECTION_BLOCK_SECTION_UNSUPPORTED", block.block_id)
+        if ppr.find(Q("pPrChange")) is not None:
+            raise DocxError("SELECTION_BLOCK_STRUCTURE_UNSUPPORTED", block.block_id)
+    for child in element:
+        if child.tag not in _WHOLESALE_CHILD_TAGS:
+            raise DocxError("SELECTION_BLOCK_STRUCTURE_UNSUPPORTED", block.block_id)
+    for node in element.iter():
+        if node.tag in _WHOLESALE_FORBIDDEN_TAGS:
+            raise DocxError("SELECTION_BLOCK_STRUCTURE_UNSUPPORTED", block.block_id)
+    return element
+
+
+def _check_field_spans_within(root: etree._Element,
+                              deleted_elements: Sequence[etree._Element]) -> None:
+    """Reject when a field code begins/ends on opposite sides of a deletion.
+
+    Deleting only half of a ``fldChar begin … end`` span orphans the field and
+    corrupts the package, so a whole-body replacement may only proceed when
+    every field touching the deleted paragraphs opens and closes inside the
+    deleted set (fields fully outside it are untouched).
+    """
+    deleted_ids = {id(element) for element in deleted_elements}
+
+    def owner_paragraph(node: etree._Element) -> etree._Element:
+        parent = node.getparent()
+        while parent is not None and parent.tag != Q("p"):
+            parent = parent.getparent()
+        return parent
+
+    open_fields: list[etree._Element] = []
+    for node in root.iter(Q("fldChar")):
+        kind = node.get(Q("fldCharType"))
+        if kind == "begin":
+            owner = owner_paragraph(node)
+            if owner is not None:
+                open_fields.append(owner)
+        elif kind == "end" and open_fields:
+            begin_owner = open_fields.pop()
+            end_owner = owner_paragraph(node)
+            if (id(begin_owner) in deleted_ids) != (end_owner is not None and id(end_owner) in deleted_ids):
+                raise DocxError("SELECTION_BLOCK_STRUCTURE_UNSUPPORTED", "field-span")
+    for begin_owner in open_fields:
+        if id(begin_owner) in deleted_ids:
+            raise DocxError("SELECTION_BLOCK_STRUCTURE_UNSUPPORTED", "field-span")
+
+
+def _inert_blank_paragraph(document, block) -> bool:
+    """Whether a leftover block is a text-free bare ``pPr`` paragraph that a
+    whole-body replacement may delete wholesale."""
+    if block.raw_text != "":
+        return False
+    element = _paragraph_element(document, block.location)
+    if element.tag != Q("p"):
+        return False
+    for child in element:
+        if child.tag != Q("pPr"):
+            return False
+    ppr = element.find(Q("pPr"))
+    if ppr is not None and ppr.find(Q("sectPr")) is not None:
+        return False
+    if ppr is not None and ppr.find(Q("pPrChange")) is not None:
+        return False
+    return True
+
+
 def _clone_paragraph(element: etree._Element, block) -> etree._Element:
     clone = deepcopy(element)
     # Navigation anchors and proofing hints are not business content and can
@@ -641,8 +732,10 @@ def _mark_inserted_paragraph(element: etree._Element, block, revision_start: int
 
 
 def _mark_deleted_paragraph(element: etree._Element, block, revision_start: int, when: str,
-                            *, mark_paragraph: bool = True) -> int:
-    _simple_paragraph_element(element, block)
+                            *, mark_paragraph: bool = True,
+                            check_shape: bool = True) -> int:
+    if check_shape:
+        _simple_paragraph_element(element, block)
     next_id = revision_start
     if mark_paragraph:
         _paragraph_mark(element, "del", next_id, when)
@@ -804,59 +897,81 @@ def _is_direct_body_paragraph(block) -> bool:
             and bool(_DIRECT_BODY_LOCATION.match(block.location)))
 
 
-def _detect_full_body_replacement(left_doc, right_doc, inline: Sequence[_Operation],
-                                  block_operations: Sequence[_BlockOperation],
-                                  expected: Sequence[tuple[str, str]]):
-    """Detect a whole-body replacement: delete every changed left paragraph and
-    insert every changed right paragraph, with only unchanged blocks kept.
+def _pre_detect_full_body_replacement(left_doc, right_doc, diffs: Sequence[Mapping[str, Any]],
+                                      decisions: Mapping[str, str], *,
+                                      left_root: etree._Element):
+    """Detect a whole-body "全部采用B" replacement straight from adopted diffs.
 
-    "全部采用B" over a fully rewritten document aligns as one deletion diff per
-    left paragraph plus one insertion diff per right paragraph.  That plan is
-    not a trailing-delete chain: it is a structurally equivalent replacement of
-    the complete body, and it was deliverable before the FL-D543 fail-closed
-    hardening.  This detector re-opens exactly that shape while every other
-    trailing/truncated chain keeps failing closed.
+    This runs before ``_build_plan`` because a fully rewritten document aligns
+    as one delete diff per left paragraph plus one insert diff per right
+    paragraph, and the insert anchors habitually point at content controls
+    (TOC ``w:sdt``) or other blocks the ordinary plan builder rejects — anchors
+    the whole-body writer never uses.  The check is at least as strict as the
+    plan-shape detection it replaces:
 
-    Returns ``(deleted_ids, inserted_ids)`` or ``None``.  Conditions:
+    * every diff is adopted to the right and is a pure delete or insert —
+      partial adoption (deletes only, a single insert dropped) or any
+      modify/replace diff keeps the ordinary fail-closed path;
+    * the deleted ids cover every direct body paragraph of the left document
+      except *inert blanks* (``raw_text == ""`` and the bare ``pPr`` element
+      carries no section boundary or tracked property change, verified against
+      ``left_root``); deleted ids outside the direct body (tables, content
+      controls) reject;
+    * the inserted ids are *exactly* every direct body paragraph of the right
+      document.
 
-    * no inline operations and delete/insert operations only (no replace);
-    * the deleted ids are *exactly* every direct body paragraph of the left
-      document and the inserted ids are *exactly* every direct body paragraph
-      of the right document — a partial tail chain, or a deleted block inside a
-      table/content control, is not a whole-body replacement and keeps the
-      ordinary fail-closed rejection;
-    * the planned output sequence equals the right document block-for-block,
-      text-for-text.  Anything less is not a full replacement and falls back to
-      the ordinary writer, which still fails closed on half-built chains.
+    Returns ``(deleted_ids, inserted_ids, operations)`` or ``None``.  The
+    returned operations are synthesized one-per-diff (anchors unused by the
+    whole-body writer) so manifest coverage and style/numbering validation keep
+    working unchanged.  Final-equivalence with the right document is enforced
+    by the post-write validations (accept-derived final, independent oracle,
+    source hashes) exactly as before.
     """
-    if inline or not block_operations:
-        return None
-    if any(operation.kind not in {"delete", "insert"} for operation in block_operations):
-        return None
-    if [(block.container, block.raw_text) for block in right_doc.blocks] != list(expected):
-        return None
-    left_by_id = {block.block_id: block for block in left_doc.blocks}
-    right_by_id = {block.block_id: block for block in right_doc.blocks}
+    left_by_id = _left_blocks_by_id(left_doc)
+    right_by_id = _right_blocks_by_id(right_doc)
     deleted: list[str] = []
     inserted: list[str] = []
-    for operation in block_operations:
-        if operation.kind == "delete":
-            deleted.extend(operation.left_ids)
+    operations: list[_BlockOperation] = []
+    for diff in diffs:
+        if not isinstance(diff, Mapping):
+            return None
+        kind = str(diff.get("type", ""))
+        diff_id = str(diff.get("id", ""))
+        if kind not in {"delete", "insert"} or decisions.get(diff_id) != "right":
+            return None
+        left_ids = tuple(str(span.get("block_id")) for span in _spans_for_side(diff, "left")
+                         if isinstance(span.get("block_id"), str))
+        right_ids = tuple(str(span.get("block_id")) for span in _spans_for_side(diff, "right")
+                          if isinstance(span.get("block_id"), str))
+        if kind == "delete":
+            deleted.extend(left_ids)
         else:
-            inserted.extend(operation.right_ids)
+            inserted.extend(right_ids)
+        operations.append(_BlockOperation(
+            diff_id=diff_id, decision="right", kind=kind,
+            left_ids=left_ids, right_ids=right_ids,
+            anchor_id="", anchor_position="",
+            left_text="".join(left_by_id[block_id].raw_text for block_id in left_ids
+                              if block_id in left_by_id),
+            right_text="".join(right_by_id[block_id].raw_text for block_id in right_ids
+                               if block_id in right_by_id)))
     left_direct = [block.block_id for block in left_doc.blocks
                    if _is_direct_body_paragraph(block)]
     right_direct = [block.block_id for block in right_doc.blocks
                     if _is_direct_body_paragraph(block)]
-    deleted_ids = set(deleted)
-    inserted_ids = set(inserted)
     if not left_direct or not right_direct:
         return None
-    if deleted_ids != set(left_direct) or len(deleted) != len(left_direct):
-        return None
+    deleted_ids = set(deleted)
+    inserted_ids = set(inserted)
     if inserted_ids != set(right_direct) or len(inserted) != len(right_direct):
         return None
-    return tuple(left_direct), tuple(right_direct)
+    if not deleted_ids.issubset(set(left_direct)) or len(deleted) != len(deleted_ids):
+        return None
+    leftovers = [block_id for block_id in left_direct if block_id not in deleted_ids]
+    if any(not _inert_blank_paragraph(left_root, left_by_id[block_id])
+           for block_id in leftovers):
+        return None
+    return tuple(left_direct), tuple(right_direct), tuple(operations)
 
 
 def _apply_full_body_replacement(root: etree._Element, left_doc, right_root: etree._Element,
@@ -865,42 +980,74 @@ def _apply_full_body_replacement(root: etree._Element, left_doc, right_root: etr
                                  when: str) -> int:
     """Write a whole-body replacement into ``root`` as tracked revisions.
 
-    The last deleted left paragraph survives as the keeper anchor: its runs are
-    deleted and the first right paragraph's runs are inserted into it.  Every
-    other deleted paragraph is removed entirely (mark + runs), and the
-    remaining right paragraphs are cloned in after the anchor.  Accepting the
-    redline therefore yields exactly the right document body, and rejecting it
-    restores the left document, so the audit/undo trail is complete.
+    Kept body children (tables, content controls, ``sectPr``) partition the
+    deleted left paragraphs into bands.  Within each band the last paragraph
+    survives as the keeper anchor: its runs are deleted and the band's first
+    right paragraph runs are inserted into it; every other deleted paragraph
+    is removed entirely (mark + runs), and the remaining right paragraphs of
+    the band are cloned in after the anchor.  Accepting the redline therefore
+    yields exactly the right document body — same kept skeleton, band-local
+    text — and rejecting it restores the left document, so the audit/undo
+    trail is complete.
     """
     left_by_id = _left_blocks_by_id(left_doc)
     right_by_id = _right_blocks_by_id(right_doc)
-    elements = [_simple_paragraph(root, left_by_id[block_id]) for block_id in deleted_ids]
-    parent = elements[0].getparent()
+    pairs = [(_wholesale_deletable_paragraph(root, left_by_id[block_id]), left_by_id[block_id])
+             for block_id in deleted_ids]
+    parent = pairs[0][0].getparent()
     if parent is None or parent.tag != Q("body") or any(
-            element.getparent() is not parent for element in elements):
+            element.getparent() is not parent for element, _ in pairs):
         raise DocxError("SELECTION_BLOCK_SCOPE_UNSUPPORTED", "full-body-replacement")
-    children = list(parent)
-    first_index = parent.index(elements[0])
-    window = children[first_index:first_index + len(elements)]
-    if len(window) != len(elements) or any(a is not b for a, b in zip(window, elements)):
-        raise DocxError("SELECTION_BLOCK_RANGE_UNSUPPORTED", "full-body-replacement")
-    if any(child.tag == Q("p") for child in children[first_index + len(elements):]):
+    _check_field_spans_within(root, [element for element, _ in pairs])
+    right_body = right_root.find(Q("body"))
+    if right_body is None:
+        raise DocxError("SELECTION_BLOCK_STRUCTURE_UNSUPPORTED", "full-body-replacement")
+    left_bands: list[list[tuple[etree._Element, Any]]] = []
+    band: list[tuple[etree._Element, Any]] = []
+    pair_by_id = {id(element): (element, block) for element, block in pairs}
+    for child in parent:
+        entry = pair_by_id.get(id(child))
+        if child.tag == Q("p") and entry is not None:
+            band.append(entry)
+        else:
+            left_bands.append(band)
+            band = []
+    left_bands.append(band)
+    right_bands: list[list[int]] = []
+    right_band: list[int] = []
+    right_index = 0
+    for child in right_body:
+        if child.tag == Q("p"):
+            right_band.append(right_index)
+            right_index += 1
+        else:
+            right_bands.append(right_band)
+            right_band = []
+    right_bands.append(right_band)
+    if len(left_bands) != len(right_bands):
         raise DocxError("SELECTION_BLOCK_STRUCTURE_UNSUPPORTED", "full-body-replacement")
     next_id = revision_start
-    for element, block_id in zip(elements[:-1], deleted_ids[:-1]):
-        next_id = _mark_deleted_paragraph(element, left_by_id[block_id], next_id, when)
-    anchor = elements[-1]
-    next_id = _mark_deleted_paragraph(anchor, left_by_id[deleted_ids[-1]],
-                                      next_id, when, mark_paragraph=False)
-    first = _clone_paragraph(_simple_paragraph(right_root, right_by_id[inserted_ids[0]]),
-                             right_by_id[inserted_ids[0]])
-    next_id = _insert_runs_into_anchor(anchor, first, next_id, when)
-    insert_at = parent.index(anchor) + 1
-    for offset, block_id in enumerate(inserted_ids[1:]):
-        element = _clone_paragraph(_simple_paragraph(right_root, right_by_id[block_id]),
-                                   right_by_id[block_id])
-        next_id = _mark_inserted_paragraph(element, right_by_id[block_id], next_id, when)
-        parent.insert(insert_at + offset, element)
+    for left_band, right_indexes in zip(left_bands, right_bands):
+        if not left_band and not right_indexes:
+            continue
+        if not left_band or not right_indexes:
+            raise DocxError("SELECTION_BLOCK_STRUCTURE_UNSUPPORTED", "full-body-replacement")
+        for element, block in left_band[:-1]:
+            next_id = _mark_deleted_paragraph(element, block, next_id, when, check_shape=False)
+        anchor, anchor_block = left_band[-1]
+        next_id = _mark_deleted_paragraph(anchor, anchor_block, next_id, when,
+                                          mark_paragraph=False, check_shape=False)
+        first_id = inserted_ids[right_indexes[0]]
+        first = _clone_paragraph(_simple_paragraph(right_root, right_by_id[first_id]),
+                                 right_by_id[first_id])
+        next_id = _insert_runs_into_anchor(anchor, first, next_id, when)
+        insert_at = parent.index(anchor) + 1
+        for offset, right_index in enumerate(right_indexes[1:]):
+            block_id = inserted_ids[right_index]
+            element = _clone_paragraph(_simple_paragraph(right_root, right_by_id[block_id]),
+                                       right_by_id[block_id])
+            next_id = _mark_inserted_paragraph(element, right_by_id[block_id], next_id, when)
+            parent.insert(insert_at + offset, element)
     return next_id
 
 
@@ -1350,20 +1497,31 @@ def generate_selection_artifacts(
     diffs = result.get("diffs")
     if not isinstance(diffs, list):
         raise DocxError("SELECTION_RESULT_INVALID")
-    inline_operations, block_operations = _build_plan(
-        left_doc, right_doc, diffs, dict(snapshot.decisions), recomputed.alignment)
-    expected = _expected_sequence(left_doc, right_doc, inline_operations, block_operations)
-    # FL-D562: a full "全部采用B" replacement aligns as delete-all-left +
-    # insert-all-right diffs.  That plan is a structurally equivalent whole-body
-    # replacement, not a trailing-delete chain, so it gets a dedicated writer
-    # instead of the ordinary fail-closed rejection.
-    full_replacement = _detect_full_body_replacement(
-        left_doc, right_doc, inline_operations, block_operations, expected)
     source_parts = _read_parts(left_source, limits)
     right_parts = _read_parts(right_source, limits)
     _validate_package(source_parts, limits, full=True)
     original = _xml(source_parts[DOCUMENT], limits)
     right_root = _xml(right_parts[DOCUMENT], limits)
+    # FL-D562/FL-D592: a full "全部采用B" replacement aligns as delete-all-left +
+    # insert-all-right diffs.  That is a structurally equivalent whole-body
+    # replacement, not a trailing-delete chain, so it gets a dedicated writer.
+    # Detection runs on the adopted diffs directly: insert anchors in such
+    # plans habitually point at kept content controls (TOC w:sdt), which the
+    # ordinary plan builder rejects although the whole-body writer never uses
+    # anchors.  ``left_root`` lets the detector verify inert blank leftovers
+    # against the source package.
+    pre_full = _pre_detect_full_body_replacement(
+        left_doc, right_doc, diffs, dict(snapshot.decisions), left_root=original)
+    if pre_full is not None:
+        full_replacement = (pre_full[0], pre_full[1])
+        inline_operations: tuple = ()
+        block_operations = list(pre_full[2])
+        expected = [(block.container, block.raw_text) for block in right_doc.blocks]
+    else:
+        full_replacement = None
+        inline_operations, block_operations = _build_plan(
+            left_doc, right_doc, diffs, dict(snapshot.decisions), recomputed.alignment)
+        expected = _expected_sequence(left_doc, right_doc, inline_operations, block_operations)
     numbering_limitations: tuple[str, ...] = ()
     if block_operations:
         numbering_limitations = _validate_block_references(
@@ -1390,8 +1548,13 @@ def generate_selection_artifacts(
         redline_path.parent.mkdir(parents=True, exist_ok=True)
         _write_package(final_path, source_parts, etree.tostring(final_root, encoding="UTF-8", xml_declaration=True))
         _write_package(redline_path, source_parts, etree.tostring(redline_root, encoding="UTF-8", xml_declaration=True))
+        # In full-body mode the accepted final must equal the right document;
+        # ``expected`` may additionally carry inert blank leftovers that the
+        # wholesale deletion removed, so the right document is the target.
+        validation_expected = ([(block.container, block.raw_text) for block in right_doc.blocks]
+                               if full_replacement is not None else expected)
         final_hash, redline_hash = _validate_outputs(source_parts, final_path, redline_path,
-                                                     left_doc, expected, limits=limits)
+                                                     left_doc, validation_expected, limits=limits)
         limitations = tuple(dict.fromkeys(
             list(left_doc.coverage.warnings) + list(right_doc.coverage.warnings)
             + list(numbering_limitations)

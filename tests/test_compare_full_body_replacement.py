@@ -260,3 +260,174 @@ def test_genuinely_inconsistent_right_document_fails_closed(tmp_path):
                                      result_sha256=payload_hash)
     assert excinfo.value.code == "SELECTION_SOURCE_HASH_MISMATCH"
     assert not final.exists() and not redline.exists()
+
+
+# --------------------------------- real-corpus shapes (FL-D590 smoke) ------
+
+
+def _save_raw(path: Path, body_xml: str):
+    """Save a DOCX whose body is exactly ``body_xml`` (template sectPr kept)."""
+    document = Document()
+    document.save(path)
+    source = path.read_bytes()
+    template = zipfile.ZipFile(io.BytesIO(source)).read(DOCUMENT).decode()
+    sect_pr = template[template.index("<w:sectPr"):template.index("</w:sectPr>") + len("</w:sectPr>")]
+    document_xml = ('<w:document xmlns:w="http://schemas.openxmlformats.org/'
+                    'wordprocessingml/2006/main"><w:body>' + body_xml + sect_pr
+                    + "</w:body></w:document>")
+    zin = zipfile.ZipFile(io.BytesIO(source))
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as zout:
+        for name in zin.namelist():
+            if name == DOCUMENT:
+                zout.writestr(name, document_xml.encode())
+            else:
+                zout.writestr(name, zin.read(name))
+    path.write_bytes(buffer.getvalue())
+
+
+def _p(text: str) -> str:
+    return f"<w:p><w:r><w:t>{text}</w:t></w:r></w:p>"
+
+
+BLANK = "<w:p><w:pPr><w:spacing w:after=\"120\"/></w:pPr></w:p>"
+FIELD_PARA = ("<w:p><w:r><w:fldChar w:fldCharType=\"begin\"/></w:r>"
+              "<w:r><w:instrText xml:space=\"preserve\"> HYPERLINK \\h </w:instrText></w:r>"
+              "<w:r><w:fldChar w:fldCharType=\"separate\"/></w:r>"
+              "<w:r><w:t>{text}</w:t></w:r>"
+              "<w:r><w:fldChar w:fldCharType=\"end\"/></w:r></w:p>")
+TABLE_XML = ("<w:tbl><w:tblPr><w:tblW w:w=\"0\" w:type=\"auto\"/></w:tblPr>"
+             "<w:tblGrid><w:gridCol w:w=\"2000\"/></w:tblGrid>"
+             "<w:tr><w:tc><w:tcPr><w:tcW w:w=\"2000\" w:type=\"dxa\"/></w:tcPr>"
+             "{cell}</w:tc></w:tr></w:tbl>")
+
+
+def _assert_full_delivery(validation, left, right, final, redline, expected_texts):
+    assert "full_body_replacement" in validation.checks
+    final_texts = [block.raw_text for block in parse_compare_document(final).blocks]
+    assert final_texts == expected_texts
+    assert final_texts == [block.raw_text for block in parse_compare_document(right).blocks]
+    prepared = prepare_compare_input(redline.read_bytes(), limits=ZipLimits())
+    prepared_root = etree.fromstring(zipfile.ZipFile(io.BytesIO(prepared.data)).read(DOCUMENT))
+    final_root = etree.fromstring(zipfile.ZipFile(io.BytesIO(final.read_bytes())).read(DOCUMENT))
+    assert etree.tostring(prepared_root, method="c14n") == etree.tostring(
+        final_root, method="c14n")
+
+
+def test_full_body_replacement_with_inert_blank_paragraphs_delivers(tmp_path):
+    """Real-corpus shape from the FL-D590 smoke: the diff builder drops
+    text-free bare-``pPr`` paragraphs, so deletes cover only the non-blank
+    left paragraphs while inserts cover every right paragraph.  The blanks are
+    deleted wholesale; the final keeps none of them."""
+    left_texts = BASE250
+    body = "".join(_p(text) + BLANK for text in left_texts)  # 250 text + 250 blank
+    left, right = tmp_path / "left.docx", tmp_path / "right.docx"
+    _save_raw(left, body)
+    _save(right, REPLACEMENT250)
+    payload, payload_hash = _result(left, right)
+    validation, final, redline = _generate(
+        left, right, payload, payload_hash, _adopt_all_right(payload), tmp_path, "-blanks")
+    _assert_full_delivery(validation, left, right, final, redline, REPLACEMENT250)
+    root = etree.fromstring(zipfile.ZipFile(io.BytesIO(redline.read_bytes())).read(DOCUMENT))
+    deleted_text = "".join(node.text or "" for node in root.iter(Q("delText")))
+    assert deleted_text == "".join(left_texts)
+    # No blank paragraph leaks into the accepted final.
+    assert len(parse_compare_document(final).blocks) == len(REPLACEMENT250)
+
+
+def test_full_body_replacement_with_field_runs_delivers(tmp_path):
+    """Wholesale deletion must not require flat runs: paragraph-level deletion
+    of a whole HYPERLINK field (begin..end inside the deleted set) is safe."""
+    left_texts = [f"链接文字甲乙丙序号{i:03d}。" for i in range(250)]
+    body = "".join(FIELD_PARA.format(text=text) for text in left_texts)
+    left, right = tmp_path / "left.docx", tmp_path / "right.docx"
+    _save_raw(left, body)
+    _save(right, REPLACEMENT250)
+    payload, payload_hash = _result(left, right)
+    validation, final, redline = _generate(
+        left, right, payload, payload_hash, _adopt_all_right(payload), tmp_path, "-fields")
+    _assert_full_delivery(validation, left, right, final, redline, REPLACEMENT250)
+
+
+def test_full_body_replacement_keeps_top_sdt_and_delivers(tmp_path):
+    """Real-corpus geometry (93.6% of the FL-D590 corpus): an unchanged
+    body-level content control (TOC) at the top of the body is kept while the
+    replaced paragraphs form one band after it.  Band bookkeeping must keep the
+    sdt in place and final order must equal the right document."""
+    sdt = ("<w:sdt><w:sdtPr/><w:sdtContent>"
+           + _p("目录内容控件段落保持不变甲乙丙。") + "</w:sdtContent></w:sdt>")
+    left_body = sdt + "".join(_p(t) for t in BASE250)
+    right_body = sdt + "".join(_p(t) for t in REPLACEMENT250)
+    left, right = tmp_path / "left.docx", tmp_path / "right.docx"
+    _save_raw(left, left_body)
+    _save_raw(right, right_body)
+    payload, payload_hash = _result(left, right)
+    validation, final, redline = _generate(
+        left, right, payload, payload_hash, _adopt_all_right(payload), tmp_path, "-sdt")
+    _assert_full_delivery(validation, left, right, final, redline,
+                          ["目录内容控件段落保持不变甲乙丙。"] + REPLACEMENT250)
+    final_xml = zipfile.ZipFile(io.BytesIO(final.read_bytes())).read(DOCUMENT).decode()
+    assert "<w:sdt>" in final_xml and "目录内容控件段落保持不变甲乙丙。" in final_xml
+
+
+def test_field_span_crossing_into_kept_table_fails_closed(tmp_path):
+    """A field beginning in a deleted body paragraph but ending inside a kept
+    table cell would be orphaned by wholesale deletion: fail closed."""
+    begin_para = ("<w:p><w:r><w:fldChar w:fldCharType=\"begin\"/></w:r>"
+                  "<w:r><w:t>域起始段文本跨越表格甲乙丙。</w:t></w:r></w:p>")
+    cell = ("<w:p><w:r><w:fldChar w:fldCharType=\"end\"/></w:r>"
+            "<w:r><w:t>表格单元格内容不变。</w:t></w:r></w:p>")
+    table = TABLE_XML.format(cell=cell)
+    body = begin_para + "".join(_p(t) for t in BASE250[:249]) + table
+    left, right = tmp_path / "left.docx", tmp_path / "right.docx"
+    _save_raw(left, body)
+    right_body = "".join(_p(t) for t in REPLACEMENT250) + table
+    _save_raw(right, right_body)
+    payload, payload_hash = _result(left, right)
+    final, redline = tmp_path / "final.docx", tmp_path / "redline.docx"
+    with pytest.raises(DocxError) as excinfo:
+        _generate(left, right, payload, payload_hash, _adopt_all_right(payload), tmp_path)
+    _assert_rejected(excinfo, final, redline)
+
+
+def test_blank_paragraph_carrying_sectpr_never_enters_wholesale_path(tmp_path):
+    """A leftover blank whose pPr carries a section boundary must never be
+    deleted wholesale: the full-body detector refuses it, so the ordinary
+    writer handles (or rejects) the plan.  Pin the invariant that a
+    section-bearing paragraph always survives delivery intact."""
+    sect_blank = ("<w:p><w:pPr><w:sectPr><w:pgSz w:w=\"11906\" w:h=\"16838\"/>"
+                  "</w:sectPr></w:pPr></w:p>")
+    body = "".join(_p(t) for t in BASE250[:249]) + sect_blank
+    left, right = tmp_path / "left.docx", tmp_path / "right.docx"
+    _save_raw(left, body)
+    _save(right, REPLACEMENT250)
+    payload, payload_hash = _result(left, right)
+    final, redline = tmp_path / "final.docx", tmp_path / "redline.docx"
+    try:
+        validation, final_path, _ = _generate(
+            left, right, payload, payload_hash, _adopt_all_right(payload), tmp_path)
+    except DocxError as exc:
+        # Ordinary-path fail-closed rejection is equally acceptable; the full
+        # body wholesale writer must never see this shape.
+        assert not final.exists() and not redline.exists()
+        assert exc.code.startswith("SELECTION_")
+        return
+    assert "full_body_replacement" not in validation.checks
+    final_xml = zipfile.ZipFile(io.BytesIO(final_path.read_bytes())).read(DOCUMENT).decode()
+    assert "<w:sectPr>" in final_xml
+
+
+def test_drawing_inside_deleted_paragraph_fails_closed(tmp_path):
+    """Drawings (and other stateful descendants) are outside the wholesale
+    deletion contract; the full-body writer keeps failing closed on them."""
+    drawing_para = ("<w:p><w:r><w:t>含绘图的段落甲乙丙丁。</w:t></w:r>"
+                    "<w:r><w:drawing/></w:r></w:p>")
+    body = drawing_para + "".join(_p(t) for t in BASE250[:249])
+    left, right = tmp_path / "left.docx", tmp_path / "right.docx"
+    _save_raw(left, body)
+    _save(right, REPLACEMENT250)
+    payload, payload_hash = _result(left, right)
+    final, redline = tmp_path / "final.docx", tmp_path / "redline.docx"
+    with pytest.raises(DocxError) as excinfo:
+        _generate(left, right, payload, payload_hash, _adopt_all_right(payload), tmp_path)
+    _assert_rejected(excinfo, final, redline)
