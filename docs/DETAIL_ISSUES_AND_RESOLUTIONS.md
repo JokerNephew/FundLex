@@ -7268,7 +7268,7 @@ H＝E×…
 - **发现**：B17（v1 false_complete → v2 诚实 incomplete，交付层面改善）G08@p292：`RECALL_POLICY_COMPONENTS_UNVERIFIED` → 计划未成形（`CLAIM_OPERATION_NOT_PLANNED`），审计如实呈现「AFTER 与 BEFORE 完全一致、未加入 A 类/直销义务句」。B19 G04@p160：`RECALL_TARGET_UNRESOLVED`（v1 次级阻断换码依旧，p161 站点 effect 未证）。
 - **归因线索**：B17 G08 组件校验与 G08 路由/facts（直销组件组）认证相关；B19 G04 为定位级未解。两者均非本轮 v2 回归（v1 同案未交付），列修复循环后续轮次处理；不与 guide 线 FL-D604/605（暂缓召回面）冲突。
 - **状态**：open（待本轮 584/585/587 复验后专项归因）。
-- **变更记录**：2026-10-31 新增。2026-10-31 loop-2（d55702b）补充实证：B17 G08 replay `FAIL/MISSING_EFFECT`（sites=[p292]，`edit_ids=[]`）——FL-D587 的 `ensure_g08_variant_targets` 已把变体残目标 T009 挂账（目标存在），但**生成侧从未为该站计划 edit**（`CLAIM_OPERATION_NOT_PLANNED`）；before_quote 为「A类人民币/A类美元现汇份额申购费率由管理人决定」变体措辞，未匹配 G08 直销组件组期望 → 属召回后**计划生成缺口**而非记账层：修复方向=G08 变体措辞进入 facts/组件认证或计划器对该目标类强制成稿。
+- **变更记录**：2026-10-31 新增。2026-10-31 loop-2（d55702b）补充实证：B17 G08 replay `FAIL/MISSING_EFFECT`（sites=[p292]，`edit_ids=[]`）——FL-D587 的 `ensure_g08_variant_targets` 已把变体残目标 T009 挂账（目标存在），但**生成侧从未为该站计划 edit**（`CLAIM_OPERATION_NOT_PLANNED`）；before_quote 为「A类人民币/A类美元现汇份额申购费率由管理人决定」变体措辞，未匹配 G08 直销组件组期望 → 属召回后**计划生成缺口**而非记账层：修复方向=G08 变体措辞进入 facts/组件认证或计划器对该目标类强制成稿。同日 B19 loop-2 实证：G04 R036/R037 两 needs_edit 目标（p160）始终 `RECALL_TARGET_UNRESOLVED`，p160/p161 站点 `CLAIM_OPERATION_NOT_PLANNED`、审计 `AUDIT_VERDICT_MISSING`——与 B17 同构：**已挂账 needs_edit 目标未被计划器服务**；两案并查计划器目标消费上限/分组容量（loop-2 全部 20 案中 12 案 edits 恰为 16 宗，代码内未见显式数量上限——疑为计划侧模型输出在长合同下截断于 ~16 宗，与 FL-D688 MODEL_OUTPUT_TRUNCATED 域同源，下一轮与计划调用输出容量一并核查）。
 
 ## FL-D589 excised-by-replace 证明未过 effect_proof_passed 消费者闸门（loop-2 B10/B14 回归，已修复+mutation 验证）（2026-10-31，qa-feat-recall）
 
