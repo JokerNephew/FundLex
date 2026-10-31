@@ -7134,7 +7134,9 @@ H＝E×…
 - **状态**：open（新发现，真实双跑证据在案；FL-D643 取号后跨线候补池指针请主线合并时更新为 FL-D644）。
 - **变更记录**：2026-10-31 新增（guide 线；证据 verify4 score.json detail=old wording still in its declared site、edits.json target state=absent；对照 smoke-requal-v2 score G08 completed）。
 
-## FL-D646 B15 G09（赎回金额计算 p159）真实标签目标未被 plan 覆盖：audit missed-target 发现但未能闭环（2026-10-31，guide 线）
+## FL-D648 B15 G09（赎回金额计算 p159）真实标签目标未被 plan 覆盖：audit missed-target 发现但未能闭环（2026-10-31，guide 线）
+
+- **编号注记**：本条原登记为 FL-D646（commit `b68417f`），与第二波标签线抢先使用的 FL-D646 撞号；2026-10-31 按主线裁定改派 **FL-D648**（FL-D646/647 归标签线），跨线候补池下一空闲号 **FL-D649**。
 
 - **发现日期**：2026-10-31，FL-D606/607 复核跑（HEAD `08cb0e6`，`/tmp/opencode/qa-findings-run/b15-fl606607-verify/`）。B15 report unresolved：`AUDIT_MISSED_TARGET` G09 @p159（quote「赎回金额为按实际确认的有效赎回份额乘以申请当日基金份额净值的金额，净赎回金额为赎回金额扣除相应的费用的金额」，与冻结标签 T003 完全一致）+ `FINAL_COVERAGE_UNRESOLVED`（claim replay verified site missing）。本轮 edits 中无 G09 条目——audit 的 missed-target 恢复发现了正确站点但未能让它落地。
 - **标签对照**：labels-first-batch-20261028-v2 B15 T003 G09 replace p159 为真实应改目标（required：按该类基金份额净值计算、费用可「扣除或加上」）。故本条不是噪声，是**真实覆盖缺口**；同类冻结族此前无成功 B15 运行可对照（v2 预跑 15 目标全 no artifact）。
