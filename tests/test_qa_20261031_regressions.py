@@ -1197,6 +1197,33 @@ def test_g18_unrelated_clause_refused():
                            list(_G18_REASON_PAIRS)) is None
 
 
+def test_g18_splice_prefers_full_kernel_over_diff_fragment():
+    """FL-D584 / B01 p823: the production pair list puts short diff-derived
+    fragments (e.g. ``C类基金份额收取销售服务``) before the full reason kernels.
+    A fragment must not capture the single application slot — the complete
+    kernel rewrite has to win or the gate rejects and the target falls back to
+    compose (guide-verbatim 本基金 text, scored wrong)."""
+    from fundlex.generation.template import (_G18_REASON_PAIRS, plan_g18_splice,
+                                             splice_pairs)
+    guide_old = ("由于本基金A类基金份额不收取销售服务费，"
+                 "而C类基金份额收取销售服务费")
+    guide_new = "由于本基金A类基金份额和C类基金份额费用收取不同"
+    pairs = splice_pairs(guide_old, guide_new)
+    for pair in _G18_REASON_PAIRS:
+        if pair not in pairs:
+            pairs.append(pair)
+    before = ("4、本基金A类基金份额和C类基金份额之间由于A类基金份额不收取"
+              "而C类基金份额收取销售服务费将导致在可供分配利润上本基金同一类别"
+              "的每份基金份额享有同等分配权；")
+    result = plan_g18_splice(before, pairs)
+    assert result is not None, "splice must not fall through to compose"
+    assert result.content_source == "tier1_splice"
+    assert "由于A类基金份额和C类基金份额费用收取不同" in result.replacement
+    # Contract subject is preserved; no template 本基金 injected into the kernel.
+    assert "之间由于A类基金份额和C类基金份额费用收取不同" in result.replacement
+    assert "不收取而C类基金份额收取销售服务费" not in result.replacement
+
+
 # --- FL-D571/FL-D572: guide certification stays valid after the G13 variant --
 
 def test_guide_recertified_with_g13_variant():

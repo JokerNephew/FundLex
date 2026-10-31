@@ -327,10 +327,20 @@ def plan_g18_splice(before: str, pairs: list[tuple[str, str]]) -> TemplateResult
     A complete result replaces exactly one old reason kernel and carries the
     neutral "费用收取不同" wording; a partial or absent rewrite falls back to
     the cascade so nothing is silently reworded.
+
+    Pairs are tried most-specific first (longest old kernel).  Generic
+    diff-derived pairs (``splice_pairs``) can supply short fragments such as
+    ``C类基金份额收取销售服务``; applying one of those rewrites only part of
+    the reason kernel, the completeness gate then rejects the whole splice,
+    and the target silently falls back to compose (FL-D584).  The full
+    `_G18_REASON_PAIRS` kernels are longer than any such fragment, so a
+    descending-length order tries the complete rewrite before any fragment
+    can capture the single application slot.
     """
     replacement = before
     applied: list[list[str]] = []
-    for old_ctx, new_ctx in pairs:
+    ordered = sorted(pairs, key=lambda pair: len(pair[0]), reverse=True)
+    for old_ctx, new_ctx in ordered:
         if old_ctx and old_ctx in replacement and new_ctx not in replacement:
             candidate = replacement.replace(old_ctx, new_ctx, 1)
             if _compact(candidate) == _compact(replacement):

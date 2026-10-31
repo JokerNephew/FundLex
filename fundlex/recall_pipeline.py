@@ -4891,6 +4891,15 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
                 coverage_gaps.append({"pass": "delete_targets",
                                       "limit_reached": "delete_targets_pages",
                                       "cursor": cursor})
+        # FL-D587: the class-qualified G08 legacy sentence IS an edit site
+        # (frozen labels).  Create its residual target before the no-site
+        # closure below so NO_GUIDE_SITE cannot falsely certify it away.
+        from .recall import ensure_g08_variant_targets
+        for target in ensure_g08_variant_targets(targets, rules_by_id, inspection,
+                                                 facts=facts, scopes=scopes):
+            synthetic.append(target)
+            targets.append(target)
+            origins[target.target_id] = "g08_legacy_variant"
         # FL-D601/FL-D602: the ordered-list (G22) and actual-rate (G08) variant
         # wordings are applicability evidence, never edit sites.  A contract
         # whose G22/G08 obligation is fact-applicable but has neither the

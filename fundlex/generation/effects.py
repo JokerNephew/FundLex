@@ -218,6 +218,88 @@ def _semantic_delete_hits(rule_id: str, document: str) -> list[str]:
     return hits
 
 
+def _semantic_delete_excised_by_replace(rule_id: str, original: Any, artifact: Any,
+                                        edits: Sequence[Mapping[str, Any]],
+                                        references: Sequence[str], *,
+                                        original_document: str
+                                        ) -> dict[str, Any] | None:
+    """Prove a no-site delete when a certified replace physically consumed it.
+
+    A delete whose target row is absent (inventory emitted nothing) used to be
+    unclosable even when another operation's paragraph-wide replacement carried
+    the old policy object away.  The proof needs three deterministic facts:
+
+    1. the ORIGINAL document holds the semantic variant (already established
+       by the caller — ``original_document`` carries probe hits);
+    2. the ARTIFACT is free of the semantic variant and of every authorized
+       literal reference (whole-document, position-independent);
+    3. at least one executed replace edit spans original text that contained
+       the old policy (sentence-level probe hit or literal reference).
+
+    All three together certify *excision by replacement*; any missing leg
+    leaves the operation UNPROVEN (fail-closed preserved).
+    """
+    pattern = _SEMANTIC_DELETE_PROBES.get(rule_id)
+    if pattern is None:
+        return None
+    after_document = _compact("".join(str(getattr(span, "text", ""))
+                                      for span in getattr(artifact, "paragraphs", ())))
+    if pattern.search(after_document):
+        return None
+    reference_compacts = [_compact(value) for value in references]
+    if any(value and value in after_document for value in reference_compacts):
+        return None
+    for edit in edits:
+        if str(edit.get("operation") or "") != "replace":
+            continue
+        location = str(edit.get("location") or "")
+        if not location:
+            continue
+        try:
+            before_text = str(original.by_location(location).text)
+        except (KeyError, ValueError, IndexError, AttributeError):
+            continue
+        before_compact = _compact(before_text)
+        # The old policy must sit *inside* the replaced span: an adjacent
+        # paragraph-mate sentence that the edit never covered cannot certify
+        # excision, so attribute only when coordinates prove containment.
+        try:
+            span_start = int(edit.get("start"))
+            span_end = int(edit.get("end"))
+        except (TypeError, ValueError):
+            continue
+        covered_old = False
+        for value in references:
+            needle = str(value or "")
+            if needle:
+                position = before_text.find(needle)
+                if position >= 0 and span_start <= position \
+                        and position + len(needle) <= span_end:
+                    covered_old = True
+                    break
+        if not covered_old:
+            offset = 0
+            for sentence in re.split(r"(?<=[。；;！？!?])", before_text or ""):
+                start = before_text.find(sentence, offset)
+                offset = start + max(len(sentence), 1)
+                if not sentence.strip():
+                    continue
+                if len(_compact(sentence)) < 12 or not pattern.search(_compact(sentence)):
+                    continue
+                if start >= 0 and span_start <= start \
+                        and start + len(sentence) <= span_end:
+                    covered_old = True
+                    break
+        if not covered_old:
+            continue
+        return {"covering_location": location,
+                "covering_rule_id": str(edit.get("rule_id") or ""),
+                "covering_operation_keys": list(edit.get("operation_keys") or ()),
+                "original_probe_match_count":
+                    len(_semantic_delete_hits(rule_id, original_document))}
+    return None
+
+
 def _semantic_delete_review_hits(rule_id: str, document: str) -> list[str]:
     """Return semantic delete variants that require a business decision first."""
     if rule_id != "G06":
@@ -753,6 +835,24 @@ def evaluate_operation_effect(obligation: Any, original: Any, artifact: Any,
             from ..recall import _is_one_way_y_class_conversion
             semantic_hits = [hit for hit in semantic_hits
                              if not _is_one_way_y_class_conversion(hit)]
+        if semantic_hits and rule_id != "G06":
+            # The original carried the old policy object, but a no-site delete
+            # can still be proven when an executed replace physically consumed
+            # it (FL-D585 / B10: G12's paragraph-wide replacement carried the
+            # G13 7-day sentence away while the inventory emitted no G13
+            # target row).  Require the artifact to be free of both the
+            # semantic variant *and* every authorized literal — a surviving
+            # hit anywhere stays fail-closed.
+            covered = _semantic_delete_excised_by_replace(
+                rule_id, original, artifact, edits, references,
+                original_document=document)
+            if covered is not None:
+                return OperationEffect(
+                    "PASS", "VERIFIED_ABSENT", **base, evidence=({
+                        "proof_kind": "semantic_delete_excised_by_replace",
+                        "operation_id": operation_id,
+                        "obligation_id": obligation_id,
+                        **covered},))
         if semantic_hits:
             return OperationEffect(
                 "OPEN", "UNPROVEN", **base,
