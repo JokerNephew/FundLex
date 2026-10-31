@@ -988,3 +988,232 @@ def test_duplicate_site_dropped_business_tail_still_fails_closed():
         Inspection([after_body, body_edit["replacement"]]), rules_by_id=rules)
     codes = {failure["code"] for failure in replay["failures"]}
     assert "DUPLICATE_SITE_DIVERGED" in codes
+
+
+# ==========================================================================
+# FL-D571: ONE_OF canonical-equivalence coalescing in merge_edits (B03 G14)
+# FL-D572: G08 disclosure tail / G09+B15 / G18+B01 / G13+B12 excise
+# ==========================================================================
+
+from fundlex.recall import PlannedEdit, merge_edits
+
+
+class _G14Obligations:
+    """Minimal obligations stub: G14:3/4/5 share one ONE_OF group + new_text."""
+
+    CANONICAL = "基金管理人可以适当调低基金申购费率和销售服务费率。"
+
+    def __init__(self, new_texts=None):
+        self._records = {}
+        for key in ("G14:3", "G14:4", "G14:5"):
+            self._records[key] = SimpleNamespace(
+                spec=SimpleNamespace(one_of_group="G14:history:multiple",
+                                     new_text=(new_texts or {}).get(key, self.CANONICAL)))
+
+    def record(self, key):
+        return self._records.get(key)
+
+
+def _g14_edit(target_id, key, start, end, replacement):
+    return PlannedEdit(target_id=target_id, rule_id="G14", location="p0",
+                       start=start, end=end, replacement=replacement,
+                       operation="replace", content_source="tier1_template",
+                       evidence={}, operation_keys=(key,), obligation_ids=())
+
+
+_G14_SOURCE = "基金管理人可以适当调低基金申购费率、基金赎回费率、基金转换费率和基金销售服务费率。"
+
+
+def test_one_of_canonical_drift_coalesces_instead_of_double_drop():
+    """B03 replay: Y004 (canonical minus 。), Y005+T014 (canonical, one wider
+    span) used to collapse into RECALL_EDIT_OVERLAP and drop BOTH sides, leaving
+    G14:3/4/5 unplanned.  Canonical equivalence must coalesce them into one
+    edit that carries every operation key."""
+    obligations = _G14Obligations()
+    canonical = obligations.CANONICAL
+    y004 = _g14_edit("Y004", "G14:3", 0, 24, canonical.removesuffix("。"))
+    t014 = _g14_edit("T014", "G14:5", 0, len(_G14_SOURCE), canonical)
+    y005 = _g14_edit("Y005", "G14:4", 0, len(_G14_SOURCE), canonical)
+    merged, conflicts, covered = merge_edits([y004, t014, y005],
+                                             Inspection([_G14_SOURCE]), obligations)
+    assert conflicts == []
+    assert len(merged) == 1
+    edit, _components = merged[0]
+    assert edit.replacement == canonical
+    assert set(edit.operation_keys) == {"G14:3", "G14:4", "G14:5"}
+    assert set(covered) == {"Y004", "Y005"}
+
+
+def test_one_of_double_drift_stays_an_honest_conflict():
+    """Abuse guard: when NEITHER side matches the shared canonical new_text the
+    overlap is a real conflict — coalescing must not become a silent picker."""
+    obligations = _G14Obligations()
+    drifted_a = _g14_edit("Y004", "G14:3", 0, len(_G14_SOURCE),
+                          "基金管理人可以适当调低基金申购费率和基金销售服务费率。")
+    drifted_b = _g14_edit("Y005", "G14:4", 0, len(_G14_SOURCE),
+                          "基金管理人可以适当调低申购费率和销售服务费率。")
+    merged, conflicts, covered = merge_edits([drifted_a, drifted_b],
+                                             Inspection([_G14_SOURCE]), obligations)
+    assert covered == []
+    assert any(item["code"] == "RECALL_EDIT_OVERLAP" for item in conflicts)
+    # Both sides stay in the plan and the conflict is reported — nothing is
+    # silently picked or silently dropped.
+    assert {edit.target_id for edit, _components in merged} == {"Y004", "Y005"}
+
+
+# --- FL-D572 / B12: contained delete excised from an outer replacement -------
+
+_B12_SENTENCE = "对于持续持有期少于7日的投资者收取不低于1.5%的赎回费，并将上述赎回费全额计入基金财产。"
+_B12_PARAGRAPH = ("赎回费由赎回基金份额的基金份额持有人承担，在基金份额持有人赎回基金份额时收取。"
+                  "赎回费率在基金合同、招募说明书中列示；" + _B12_SENTENCE)
+
+
+def _b12_edits(outer_replacement):
+    start = _B12_PARAGRAPH.index(_B12_SENTENCE)
+    outer = PlannedEdit(target_id="Y002", rule_id="G12", location="p0",
+                        start=0, end=len(_B12_PARAGRAPH), replacement=outer_replacement,
+                        operation="replace", content_source="survey_replace",
+                        evidence={}, operation_keys=("G12:0",), obligation_ids=())
+    delete = PlannedEdit(target_id="T013", rule_id="G13", location="p0",
+                         start=start, end=start + len(_B12_SENTENCE), replacement="",
+                         operation="replace", content_source="tier1_delete",
+                         evidence={}, operation_keys=("G13:0",), obligation_ids=())
+    return outer, delete
+
+
+def test_replace_keeps_covered_delete_by_excising_the_sentence():
+    """B12: the G12 wide-span replacement still carried the 7-day/1.5% sentence
+    while the G13 delete vanished from the ledger (fake complete).  The merge
+    must cut the sentence out of the replacement and normalise the seam, not
+    swallow the delete or fail the whole contract."""
+    outer_replacement = _B12_PARAGRAPH  # retains the to-be-deleted sentence
+    outer, delete = _b12_edits(outer_replacement)
+    merged, conflicts, covered = merge_edits([outer, delete],
+                                             Inspection([_B12_PARAGRAPH]), None)
+    assert conflicts == []
+    assert len(merged) == 1
+    edit, _components = merged[0]
+    assert _B12_SENTENCE not in edit.replacement
+    assert edit.replacement.endswith("列示。")  # "；。" seam normalised
+    assert set(edit.operation_keys) == {"G12:0", "G13:0"}
+    assert covered == ["T013"]
+
+
+def test_excise_ambiguous_slice_stays_an_honest_conflict():
+    """A slice appearing twice in the replacement cannot be cut safely; the
+    overlap must stay a reported conflict."""
+    outer_replacement = _B12_PARAGRAPH + _B12_SENTENCE
+    outer, delete = _b12_edits(outer_replacement)
+    merged, conflicts, covered = merge_edits([outer, delete],
+                                             Inspection([_B12_PARAGRAPH]), None)
+    assert covered == []
+    assert any(item["code"] == "RECALL_EDIT_OVERLAP" for item in conflicts)
+
+
+# --- FL-D572 / B05: G08 keeps a wider disclosure enumeration -----------------
+
+def test_g08_preserves_wider_disclosure_vehicle_enumeration():
+    """B05 label: the contract enumerates 招募说明书及基金产品资料概要; the
+    template only says 招募说明书.  The edit must keep the source enumeration."""
+    from fundlex.generation.template import plan_policy_replacement
+    before = "本基金的申购费率由基金管理人决定，并在招募说明书及基金产品资料概要中列示。"
+    instantiated = "申购费率由基金管理人决定，并在招募说明书中列示。"
+    result = plan_policy_replacement(before, instantiated, "G08")
+    assert result is not None
+    assert result.replacement == "申购费率由基金管理人决定，并在招募说明书及基金产品资料概要中列示。"
+    assert result.evidence["disclosure_tail_preserved"] is True
+
+
+def test_g08_disclosure_tail_untouched_when_source_matches_template():
+    """Control: an enumeration identical to (or narrower/disjoint vs) the
+    template must NOT rewrite the template wording."""
+    from fundlex.generation.template import plan_policy_replacement
+    instantiated = "申购费率由基金管理人决定，并在基金合同、招募说明书中列示。"
+    # Clause already matches the template verbatim -> nothing to change.
+    assert plan_policy_replacement(instantiated, instantiated, "G08") is None
+    narrower = "本基金的申购费率由基金管理人决定，并在招募说明书中列示。"
+    result = plan_policy_replacement(narrower, instantiated, "G08")
+    assert result is not None
+    assert result.replacement == instantiated
+    assert result.evidence["disclosure_tail_preserved"] is False
+
+
+# --- FL-D572 / B15: G09 net-redemption formula variant -----------------------
+
+_B15_BEFORE = ("赎回金额为按实际确认的有效赎回份额乘以申请当日基金份额净值的金额，"
+               "净赎回金额为赎回金额扣除相应的费用的金额")
+
+
+def test_g09_net_redemption_formula_splices_both_kernels():
+    """B15 label: formula-wording contracts need BOTH the class-qualified NAV
+    and the 扣除或加上 fee kernel; the half-changed composed edit was scored
+    as partial.  The new variant pairs produce the complete splice."""
+    from fundlex.generation.template import plan_g09_splice
+    result = plan_g09_splice(_B15_BEFORE, [])
+    assert result is not None
+    assert "当日该类基金份额的基金份额净值" in result.replacement
+    assert "扣除或加上相应的费用" in result.replacement
+    assert "扣除相应的费用的金额" not in result.replacement
+
+
+def test_g09_partial_splice_still_refused():
+    """A contract wording whose fee kernel is unknown must NOT ship a NAV-only
+    half change — the completeness gate stays fail-closed."""
+    from fundlex.generation.template import plan_g09_splice
+    only_nav = "赎回金额为按实际确认的有效赎回份额乘以申请当日基金份额净值的金额确定"
+    assert plan_g09_splice(only_nav, []) is None
+
+
+# --- FL-D572 / B01: G18 reason-clause splice keeps the contract subject ------
+
+def test_g18_reason_splice_without_subject_insertion():
+    """B01 label: “由于A类基金份额不收取而C类基金份额收取销售服务费” must become
+    “由于A类基金份额和C类基金份额费用收取不同” — no template-injected 本基金."""
+    from fundlex.generation.template import _G18_REASON_PAIRS, plan_g18_splice
+    before = ("由于A类基金份额不收取而C类基金份额收取销售服务费，"
+              "各基金份额类别对应的可分配收益将有所不同。")
+    result = plan_g18_splice(before, list(_G18_REASON_PAIRS))
+    assert result is not None
+    assert "由于A类基金份额和C类基金份额费用收取不同" in result.replacement
+    assert "本基金" not in result.replacement
+    assert "不收取而C类基金份额收取销售服务费" not in result.replacement
+
+
+def test_g18_reason_splice_preserves_existing_subject():
+    """B02-type contracts already carry 本基金 as the subject: the splice must
+    preserve it verbatim instead of rewriting the whole clause to template text."""
+    from fundlex.generation.template import _G18_REASON_PAIRS, plan_g18_splice
+    before = ("由于本基金A类基金份额不收取销售服务费，而C类基金份额收取销售服务费，"
+              "各基金份额类别对应的可分配收益将有所不同。")
+    result = plan_g18_splice(before, list(_G18_REASON_PAIRS))
+    assert result is not None
+    assert "由于本基金A类基金份额和C类基金份额费用收取不同" in result.replacement
+    assert "不收取销售服务费，而C类基金份额收取销售服务费" not in result.replacement
+
+
+def test_g18_unrelated_clause_refused():
+    from fundlex.generation.template import _G18_REASON_PAIRS, plan_g18_splice
+    assert plan_g18_splice("本基金的收益分配原则由基金管理人拟订。",
+                           list(_G18_REASON_PAIRS)) is None
+
+
+# --- FL-D571/FL-D572: guide certification stays valid after the G13 variant --
+
+def test_guide_recertified_with_g13_variant():
+    """The G13:0 delete gained the B12 contract wording as a rule-level
+    old_text_variant; the document must still certify against its own hash
+    (operation_count unchanged at 34)."""
+    import json as _json
+    from fundlex import guide as guide_module
+    root = Path(__file__).resolve().parents[1]
+    doc = guide_module.load_guide_document(root / "guides/builtin_guide_v1.json")
+    result = guide_module.validate_runtime_guide(doc)
+    assert result["state"] == "CERTIFIED"
+    assert result["rule_count"] == 22
+    assert result["operation_count"] == 34
+    assert (doc["certification"]["guide_document_sha256"]
+            == guide_module.guide_document_sha256(doc))
+    g13 = next(rule for rule in doc["groups"] if rule["rule_id"] == "G13")
+    assert any("不低于1.5%的赎回费" in variant
+               for variant in g13.get("old_text_variants") or [])
+    del _json
