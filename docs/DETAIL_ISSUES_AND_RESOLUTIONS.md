@@ -7245,7 +7245,7 @@ H＝E×…
 - **发现**：B10 v1 complete 20/20 → v2 incomplete（G13 `semantic_delete_variant_present` + CLAIM_REPLAY_FAILED）。链式：v2 清单未产出 G13 目标行（v1 有 absent 态行注明「含于 G12 替换」）；G12 宽 span 替换 p247 实际已把 7 日赎回费句物理带走（working_final 全文无「持续持有期少于7日」，edit 证据 `replaced_text` 含原句）；而 effects no-site delete 分支只对**原文**做语义探针（原句在原文必命中）→ 永 UNPROVEN → 如实 incomplete（编辑其实做对了）。
 - **修复**：`fundlex/generation/effects.py` 新增 `_semantic_delete_excised_by_replace`：三段确定性证据（① 原文含语义变体（调用方已立）② 产物全文无语义变体且无授权字面（位置无关）③ 至少一个已执行 replace 的 span 覆盖原文中的旧政策句（坐标证明，span 外不算））成立 → PASS `VERIFIED_ABSENT`/`semantic_delete_excised_by_replace`；任一腿缺失维持 fail-closed。G06 scoped 特例不动。
 - **验证**：新 `tests/test_fl_d585_excised_by_replace.py` 4 项（B10 形状闭合 / 变体迁存他处闭合拒 / span 不覆盖拒 / delete 类 edit 不能冒名）；mutation：摘除闭合通道即 UNPROVEN 如期转红；既有 effect 语义/缺席覆盖 24 项全绿。
-- **状态**：已实施修复并回归验证；待 wave 重跑真实合同确认。
+- **状态**：已实施修复并回归验证；待 wave 重跑确认；2026-10-31 B14 真实复验中本通道已端到端生效（见 FL-D589 变更记录）。
 - **变更记录**：2026-10-31 新增。2026-10-31 更正（应主线 FL-D685）：B10 真实复验的实证 proof_kind 为 `site_literal_effect`——该轮清单**产出了** G13 目标行（absent 态，p247 quote 即 7 日句），普通站点字面通道完成闭合，新通道 `semantic_delete_excised_by_replace` **未在该真实运行中触发**。新通道的必要性 pre/post 对照：`pre`=v2（2a416f8）B10 实报——零 G13 目标行 → no-site 分支对原文做语义探针必命中 → `semantic_delete_variant_present`（report.json 在案）；`post`=同形状单元钉 `test_replace_excision_proves_no_site_delete` PASS + mutation（摘除通道即回到 UNPROVEN）。即：新通道是「清单零目标行」形状的 fail-closed→PASS 修复，真实复验翻正由清单产出波动+站点通道完成；措辞以此为准。
 
 ## FL-D586 B15 多阻断叠加：G01 表格单元格追加未物化 + CLAIM 级联（部分归因，阻塞于 guide 线在修域）（2026-10-31，qa-feat-recall）
@@ -7274,6 +7274,6 @@ H＝E×…
 
 - **发现**：dev20 loop-2（d55702b）B10/B14 双双 incomplete：G13 `FINAL_OPERATION_UNPROVEN / operation effect is not proven at every site`。claim replay 已给出 PASS/`VERIFIED_ABSENT`（proof_kind=`semantic_delete_excised_by_replace`，sites=[]），但终结复核统一走 `effect_proof_passed`——其 site-free 特例仅认 `document_literal_absent`，尾部通用路径要求 `sites ⊆ proven_sites 且 site_effects 非空` → 新证明恒拒 → 义务被闸回 UNRESOLVED。B10 零 G13 目标行、B14 一行 absent 态（均无 verified site），同症；工作 final 均确无 7 日句、G12 edit 均含覆盖 span——编辑本身正确，又是记账层。
 - **修复**：`effects.effect_proof_passed` 增补 `semantic_delete_excised_by_replace` 识别分支（绑 operation/obligation + covering_location；无 failure_code 且无 site_effects），与 document_literal_absent 同位。
-- **验证**：`test_excision_proof_passes_consumer_gate`（evaluate→as_dict→gate True）；mutation：改名 proof_kind 即 gate False。test_fl_d585 套件 5 项绿。
-- **状态**：已实施修复并回归验证；待 B10/B14 真实复验 + wave 确认。
-- **变更记录**：2026-10-31 新增。
+- **验证**：`test_excision_proof_passes_consumer_gate`（evaluate→as_dict→gate True）；mutation：改名 proof_kind 即 gate False。test_fl_d585 套件 5 项绿；冻结面 2454 全量回归绿。
+- **状态**：已实施修复并经真实复验验证（见变更记录）；待 wave 重跑确认。
+- **变更记录**：2026-10-31 新增。2026-10-31 真实复验验证（`/tmp/opencode/qa/reverify/` run2）：**B10 complete**（unresolved=0，该轮清单有 G13 目标行 → `site_literal_effect` 闭合）；**B14 complete**（unresolved=0，零目标行形状 → 走 FL-D585 `semantic_delete_excised_by_replace` 通道并经本闸门放行——**该新通道首次在真实运行中端到端生效**）。两案工作 final 7 日句残余 0（逐段+表格探针），交付无错误码、无截断残余（呼应 FL-D688：截断为轮次性非系统性）。B10 $0.0265/26 calls/245s，B14 $0.0263/24 calls/278s，入账本 reverify 段。
