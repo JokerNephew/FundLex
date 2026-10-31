@@ -863,10 +863,117 @@
 <p id="feishu-oauth-message" class="subnote" role="status" aria-live="polite"></p>
 <a id="feishu-oauth-link" class="feishu-auth-link" target="_blank" rel="noopener noreferrer" hidden>在飞书中打开授权页 ↗</a>
 </div>
+<div class="feishu-app-entry" id="feishu-app-entry">
+<div class="feishu-app-entry-text"><strong>扫码时飞书提示“不是一个企业”？</strong><p>这说明你的飞书账号属于另一家企业。可以创建属于你自己企业的应用，连上后一样能私聊机器人处理合同。</p></div>
+<button class="btn" type="button" data-action="feishu-app-open" id="feishu-app-open-btn">用我的飞书企业连接</button>
+</div>
+<div class="feishu-app-summary" id="feishu-app-summary" hidden>
+<div><span class="feishu-app-dot" aria-hidden="true"></span><strong id="feishu-app-summary-title">已连接你自己的飞书企业</strong><p id="feishu-app-summary-text"></p></div>
+<button class="btn btn-sm" type="button" data-action="feishu-app-open">查看连接</button>
+</div>
 <div class="feishu-unbind-confirm" id="feishu-unbind-confirm" hidden role="group" aria-label="确认解除绑定"><strong>确认解除飞书绑定？</strong><p>解除后，机器人将不能通过此绑定关联你的账号。已创建的任务不受影响。</p><div class="settings-actions"><button class="btn btn-danger" type="button" data-action="feishu-unbind-confirm">确认解除</button><button class="btn" type="button" data-action="feishu-unbind-cancel">暂不解除</button></div></div>
 </div>
 <aside class="card feishu-help-card" aria-label="绑定与使用步骤"><h2>从绑定到使用，只需三步</h2><ol class="feishu-steps"><li><span>1</span><div><strong>生成个人二维码</strong><p>确认左侧是你要使用的 FundLex 账号，再点击扫码绑定。</p></div></li><li><span>2</span><div><strong>飞书扫码，确认授权</strong><p>用飞书而非微信扫描。授权成功后，这里会自动显示“已绑定”。</p></div></li><li><span>3</span><div><strong>私聊机器人发送合同</strong><p>在飞书找到 FundLex 机器人，发送 DOCX，按机器人提示提交任务。</p></div></li></ol><div class="feishu-safety-note"><strong>一次绑定，之后直接使用</strong><p>无需重复扫码，也无需输入绑定码。二维码限时有效，请勿转发给他人；需要更换账号时，先解除原绑定。</p></div></aside>
 </div>
+<section class="card feishu-wizard" id="feishu-app-wizard" hidden aria-label="连接你自己的飞书企业">
+<div class="feishu-wizard-head">
+<div><h2>连接你自己的飞书企业</h2><p>按下面 4 步操作即可。每一步都写清了在飞书页面点哪里，能复制的都会直接给你。</p></div>
+<button class="btn btn-sm" type="button" data-action="feishu-app-close" id="feishu-app-close">返回扫码绑定</button>
+</div>
+<ol class="feishu-wizard-steps" id="feishu-app-steps">
+<li data-step="1"><span>1</span><div><strong>创建应用</strong><small>在飞书开放平台建一个企业自建应用</small></div></li>
+<li data-step="2"><span>2</span><div><strong>填写凭证</strong><small>粘贴 App ID 与 App Secret</small></div></li>
+<li data-step="3"><span>3</span><div><strong>配置能力</strong><small>权限、机器人、事件、发布</small></div></li>
+<li data-step="4"><span>4</span><div><strong>测试并绑定</strong><small>发一句话，再发绑定码</small></div></li>
+</ol>
+<div class="feishu-wizard-body">
+<div class="feishu-wizard-panel" data-panel="1" hidden>
+<h3>在飞书开放平台创建应用</h3>
+<ol class="feishu-howto">
+<li><span>1</span><div><strong>打开飞书开放平台并登录</strong><p>用你平时使用的飞书账号登录；手机号或扫码都可以。</p></div></li>
+<li><span>2</span><div><strong>点「创建企业自建应用」</strong><p>应用名称填 <b>FundLex</b>，简介和图标可以随意填写。</p></div></li>
+<li><span>3</span><div><strong>复制两个凭证</strong><p>进入应用后点「凭证与基础信息」，复制 <b>App ID</b> 和 <b>App Secret</b>，下一步粘贴进来。</p></div></li>
+</ol>
+<p class="feishu-tip" id="feishu-app-admin-tip">需要你是所在企业的管理员。如果应用由同事创建，请让对方把 App ID 和 App Secret 发给你，或把本页步骤转给对方。</p>
+<div class="feishu-wizard-actions">
+<a class="btn btn-primary" id="feishu-app-create-link" href="https://open.feishu.cn/app?lang=zh-CN" target="_blank" rel="noopener noreferrer">打开飞书开放平台 ↗</a>
+<button class="btn" type="button" data-action="feishu-app-to-credentials">我已创建，填写凭证</button>
+</div>
+</div>
+<div class="feishu-wizard-panel" data-panel="2" hidden>
+<h3>粘贴应用凭证</h3>
+<form class="feishu-wizard-form" id="feishu-app-form" autocomplete="off">
+<label for="feishu-app-id">App ID</label>
+<input id="feishu-app-id" name="app_id" type="text" spellcheck="false" placeholder="cli_xxxxxxxxxxxxxxxx" autocomplete="off" required>
+<label for="feishu-app-secret">App Secret</label>
+<input id="feishu-app-secret" name="app_secret" type="password" spellcheck="false" placeholder="在「凭证与基础信息」中复制" autocomplete="new-password" required>
+<p class="subnote">Secret 会加密保存在服务器，之后只显示“已保存”，不会再明文展示；也不会写进日志。</p>
+<div class="feishu-wizard-actions">
+<a class="btn" id="feishu-app-credentials-link" href="https://open.feishu.cn/app?lang=zh-CN" target="_blank" rel="noopener noreferrer">去复制凭证 ↗</a>
+<button class="btn btn-primary" type="submit" id="feishu-app-submit">验证并保存</button>
+<button class="btn" type="button" data-action="feishu-app-back">返回</button>
+</div>
+</form>
+<div class="feishu-wizard-error" id="feishu-app-error" hidden role="alert"><strong id="feishu-app-error-title"></strong><p id="feishu-app-error-text"></p><a id="feishu-app-error-link" target="_blank" rel="noopener noreferrer" hidden>打开对应页面 ↗</a></div>
+</div>
+<div class="feishu-wizard-panel" data-panel="3" hidden>
+<h3>补齐能力并发布</h3>
+<p class="subnote" id="feishu-app-verify-summary">正在读取应用状态…</p>
+<div class="feishu-config-grid">
+<div class="feishu-config-card">
+<div class="feishu-config-head"><span class="feishu-config-no">1</span><strong>添加权限</strong><span class="feishu-config-state" data-check="scopes">待检测</span></div>
+<p>在「权限管理」搜索并添加下面 3 个权限。可以一次复制全部，逐个粘贴到搜索框。</p>
+<ul class="feishu-scope-list" id="feishu-app-scopes"></ul>
+<div class="feishu-wizard-actions">
+<button class="btn btn-sm" type="button" data-action="feishu-app-copy-scopes" id="feishu-app-copy-scopes">复制权限清单</button>
+<a class="btn btn-sm" id="feishu-app-link-permission" href="https://open.feishu.cn/app?lang=zh-CN" target="_blank" rel="noopener noreferrer">打开权限管理 ↗</a>
+</div>
+</div>
+<div class="feishu-config-card">
+<div class="feishu-config-head"><span class="feishu-config-no">2</span><strong>启用机器人</strong><span class="feishu-config-state" data-check="bot">待检测</span></div>
+<p>打开「机器人」，把「启用机器人」打开。没有这一步，飞书里搜不到 FundLex。</p>
+<a class="btn btn-sm" id="feishu-app-link-bot" href="https://open.feishu.cn/app?lang=zh-CN" target="_blank" rel="noopener noreferrer">打开机器人设置 ↗</a>
+</div>
+<div class="feishu-config-card">
+<div class="feishu-config-head"><span class="feishu-config-no">3</span><strong>设置事件订阅</strong><span class="feishu-config-state" data-check="event">待验证</span></div>
+<p>「事件与回调」→ 订阅方式选 <b>使用长连接接收事件</b> → 添加事件 <b>接收消息 im.message.receive_v1</b>。长连接不需要填任何服务器地址。</p>
+<a class="btn btn-sm" id="feishu-app-link-event" href="https://open.feishu.cn/app?lang=zh-CN" target="_blank" rel="noopener noreferrer">打开事件与回调 ↗</a>
+</div>
+<div class="feishu-config-card">
+<div class="feishu-config-head"><span class="feishu-config-no">4</span><strong>发布版本</strong><span class="feishu-config-state">必须完成</span></div>
+<p>「版本管理与发布」→ 创建版本 → 申请发布。企业管理员审核通过后，权限和机器人能力才会生效。</p>
+<a class="btn btn-sm" id="feishu-app-link-version" href="https://open.feishu.cn/app?lang=zh-CN" target="_blank" rel="noopener noreferrer">打开版本管理 ↗</a>
+</div>
+</div>
+<div class="feishu-wizard-actions">
+<button class="btn btn-primary" type="button" data-action="feishu-app-recheck" id="feishu-app-recheck">我已配置好，重新检测</button>
+<button class="btn" type="button" data-action="feishu-app-reenter">重新填写凭证</button>
+<button class="btn" type="button" data-action="feishu-app-back-test" id="feishu-app-back-test" hidden>返回测试步骤</button>
+</div>
+<div class="feishu-wizard-error" id="feishu-app-recheck-error" hidden role="alert"><strong id="feishu-app-recheck-error-title"></strong><p id="feishu-app-recheck-error-text"></p><a id="feishu-app-recheck-error-link" target="_blank" rel="noopener noreferrer" hidden>打开对应页面 ↗</a></div>
+</div>
+<div class="feishu-wizard-panel" data-panel="4" hidden>
+<h3>在飞书里给机器人发一句话</h3>
+<p>打开飞书，搜索机器人 <b id="feishu-app-bot-name">FundLex</b>，给它发送「你好」。我们会自动检测，不需要你再回来点按钮。</p>
+<div class="feishu-conn-state" id="feishu-app-conn-state"><span class="feishu-conn-dot" aria-hidden="true"></span><div><strong id="feishu-app-conn-title">正在建立连接…</strong><p id="feishu-app-conn-text">保存后一般 5 秒内完成。如果一直停在这里，请回到第 3 步检查「长连接」和「发布」。</p></div></div>
+<div class="feishu-binding-code" id="feishu-app-binding" hidden>
+<h3>最后一步：把绑定码发给机器人</h3>
+<p>复制下面的绑定码，在飞书私聊里发给机器人。发送后会立即绑定，本页自动完成。</p>
+<div class="feishu-code-row"><code id="feishu-app-code">……</code><button class="btn btn-sm" type="button" data-action="feishu-app-copy-code">复制绑定码</button><button class="btn btn-sm" type="button" data-action="feishu-app-new-code">换一个</button></div>
+<p class="subnote" id="feishu-app-code-expiry"></p>
+</div>
+<div class="feishu-wizard-done" id="feishu-app-done" hidden>
+<div class="feishu-done-mark" aria-hidden="true">✓</div>
+<div><strong>已连接你自己的飞书企业</strong><p id="feishu-app-done-text">现在可以在飞书私聊机器人，发送 DOCX 合同或输入「菜单」。</p></div>
+<button class="btn btn-primary" type="button" data-action="feishu-app-close">完成</button>
+</div>
+<div class="feishu-wizard-actions">
+<button class="btn btn-sm" type="button" data-action="feishu-app-view-config" id="feishu-app-view-config">查看配置状态</button>
+<button class="btn btn-danger btn-sm" type="button" data-action="feishu-app-remove" id="feishu-app-remove">移除这个应用</button>
+</div>
+</div>
+</div>
+</section>
 </section>
 <input id="dev-user" type="hidden">
     <section class="section" id="view-users" aria-label="用户管理">

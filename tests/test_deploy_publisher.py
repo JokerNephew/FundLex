@@ -287,7 +287,7 @@ migrate_schema
     with sqlite3.connect(data / "runs.sqlite3") as db:
         tables = {row[0] for row in db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
     assert {"batches", "documents", "tasks", "guide_versions", "external_identities",
-            "compare_tasks", "gg_runs", "gg_candidate_guides"} <= tables
+            "compare_tasks", "gg_runs", "gg_candidate_guides", "feishu_apps"} <= tables
     with sqlite3.connect(data / "auth.db") as db:
         tables = {row[0] for row in db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
     assert {"users", "sessions"} <= tables

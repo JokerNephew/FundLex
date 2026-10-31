@@ -166,6 +166,7 @@ try:
     from fundlex.store import RunStore
     from fundlex.tasks import TaskStore
     from fundlex.integrations import IntegrationStore
+    from fundlex.integrations.feishu.onboarding import FeishuAppOnboarding
     from fundlex.compare.store import CompareStore
     from fundlex.guide_generation.store import GuideGenerationStore
     from fundlex import guide_store
@@ -174,6 +175,7 @@ try:
     store = RunStore(local_data_dir())
     TaskStore(store)
     IntegrationStore(store)
+    FeishuAppOnboarding(store)
     CompareStore(store)
     GuideGenerationStore(store).ensure_schema()
     guide_store._ensure_tables(store)
