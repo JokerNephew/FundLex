@@ -7570,3 +7570,28 @@ H＝E×…
 - **结果**：`npx tsc -b --noEmit` 0 错；`npx vitest run` 6 文件 24 用例全绿（与基线一致）；`npm run build` 通过。python 浏览器套件（FUNDLEX_BROWSER_TESTS=1）：V2（test_frontend_v2、test_frontend_fixes）+ V1（test_v1_frontend_remediation、test_workbench、test_tracked_upload、test_guide_generation）批量结果见 `/tmp/opencode/qa/status/qa-frontend.md` 与体检文档第四节。
 - **状态**：已关闭。**变更记录（2026-11-01，根治）**：整批 96/1 的那例失败为 `networkidle` 等待与查询渲染竞态，已按主线要求在 `test_frontend_v2.py` 深链断言前加显式 `wait_for(state='visible', timeout=15000)`，复跑通过，不再依赖重跑碰运气。中途两处回归已修复并复验（①V2 Guides 页头「我的指引」改回锚点文案「指引配置」；②FL-D721 ready 条件按指令精确修为 completed+failed>0，见 FL-D721）。
 - **注意**：V2 套件整跑时在高负载机（多线并行 pytest）出现轮换性单测失败（prefixed_entry / real_task_document_deep_links），单测均通过，判定为环境抖动非回归；批量干净跑结果以此条更新为准。
+
+## FL-D730 规则组选择不可见内容（项3，2026-11-01 用户第二轮，前端主线）
+
+- **发现日期**：2026-11-01（用户十项需求·项3，qa-frontend 前端主线承接）。
+- **问题与影响**：规则组启停列表只有 rule_id+title+章节，用户看不出每条规则要求改什么；`rule_settings` 接口只有 `rule_id/title/section_hint/enabled`。
+- **处理方法**：后端向后兼容扩字段 `requirement`（全值，无字段回退 title）与 `operations[]`（op 中文聚合标签+首条文本 80 字截断）；前端 V1/V2 按 `docs/frontend/SPEC_RULE_GROUPS_WYSIWYG_20261101.md` 实施分组/人读详情/已选未选视觉；夹具（无 requirement 的旧结构）验证回退不空值。
+- **验证**：`tests/test_user_configuration.py` 7 绿（新增断言）；内置指引真实文档函数级核验通过。
+- **状态**：后端已实施；前端 V1/V2 施工由 ivRkf1jH/81FirpsQ 按规格执行，前端主线验收。
+- **证据**：`fundlex/guide_store.py::_rule_requirement/_rule_operations_summary`；规格文档。
+
+## FL-D731 各列表风格统一（项4，2026-11-01 用户二度返工，前端主线）
+
+- **发现日期**：2026-11-01（用户点名「看起来像是没改」）。
+- **问题与影响**：V1/V2 全部列表（任务/文档行/指引/用户/compare/guide_generation/费用等）字体、行高、按钮、徽标不同程度不一致；V1 `.btn` 定义 22 处散点、compare.css 另有 19 处。
+- **处理方法**：产出统一列表规范 `docs/frontend/SPEC_LISTS_UNIFIED_20261101.md`（form-ui：`--list-*` token + 表头/单元格/行内操作主+次/徽标/分页/容器九条铁规）；V1 实施派 ivRkf1jH（750-759），V2 实施派 81FirpsQ（760-769），前端主线验收（含 Playwright 截图对比）。
+- **状态**：规范已冻结，施工待办。
+- **下一步**：worker 交付后执行规格第四节验收（截图+锚点+rg 字号外值=0）。
+
+## FL-D732 模型配置页重做（项1，2026-11-01 用户第二轮，前端主线设计）
+
+- **发现日期**：2026-11-01（用户：「不要微调，参考其他页面或好的 skill 优化」）。
+- **问题与影响**：旧设计为两个堆叠长表单，第一眼看不到「现在用哪个模型/验证过没」；验证反馈弱。
+- **处理方法**：规格 `docs/frontend/SPEC_MODEL_SETTINGS_20261101.md`：读取态角色卡（徽标+概要 dl+「修改配置」）→点击进编辑态（分段选择+回填表单+就地验证反馈）；费用/隐私提示与 FL-D723 文案保留；V1 worker（ivRkf1jH）/V2 worker（81FirpsQ）同图施工，前端主线验收一致性与锚点。
+- **状态**：规格已冻结，施工待办。
+- **下一步**：施工后执行规格第六节验收（三态截图、表单流走查、锚点、token 一致）。

@@ -350,6 +350,37 @@ def _rule_entries(document: dict[str, Any]) -> list[dict[str, Any]]:
     return entries
 
 
+RULE_OP_LABELS = {"append": "新增", "replace": "修改", "delete": "删除", "move": "移动", "keep": "保留"}
+
+
+def _rule_requirement(rule: dict[str, Any]) -> str:
+    """Human-readable what-change text for one rule (FL-D730: WYSIWYG rule pickers)."""
+    text = str(rule.get("requirement") or "").strip()
+    return text or str(rule.get("title") or "")
+
+
+def _rule_operations_summary(rule: dict[str, Any], *, limit: int = 4) -> list[dict[str, str]]:
+    """Condense raw rule operations into a few human-readable labels with a snippet."""
+    counts: dict[str, int] = {}
+    details: dict[str, str] = {}
+    for op in rule.get("operations") or []:
+        if not isinstance(op, dict):
+            continue
+        label = RULE_OP_LABELS.get(str(op.get("op") or ""), "调整")
+        counts[label] = counts.get(label, 0) + 1
+        if label not in details:
+            snippet = str(op.get("new_text") or op.get("old_text") or "").strip()
+            if snippet:
+                details[label] = snippet[:80] + ("…" if len(snippet) > 80 else "")
+    summary: list[dict[str, str]] = []
+    for label in list(counts)[:limit]:
+        entry: dict[str, str] = {"label": f"{label} {counts[label]} 处"}
+        if label in details:
+            entry["detail"] = details[label]
+        summary.append(entry)
+    return summary
+
+
 def rule_settings(store: RunStore, owner: str, version_id: str) -> dict[str, Any]:
     """Owner-scoped enable/disable state for one guide version.
 
@@ -384,6 +415,8 @@ def rule_settings(store: RunStore, owner: str, version_id: str) -> dict[str, Any
             "title": str(rule.get("title") or ""),
             "section_hint": str(rule.get("section_hint") or ""),
             "enabled": str(rule.get("rule_id")) not in disabled_set,
+            "requirement": _rule_requirement(rule),
+            "operations": _rule_operations_summary(rule),
         } for rule in entries],
     }
 
