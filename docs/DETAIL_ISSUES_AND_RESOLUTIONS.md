@@ -7190,7 +7190,7 @@ H＝E×…
 - **处理**：状态文件已勘正并保留误记说明；教训：冻结 sha 在最终写盘后重新计算再登记，不复用过程值。
 - **状态**：已解决（2026-10-31 验证： verifier 报告 selection_sha256、selection 文件、labels 抽样三链一致）。
 
-> **FL-D640..649 全部已使用**（640 B13、641/642 主线复核、643 feat-guide、644/645 主线、646/647 标签线、648/649 guide-history；feat-guide 撞号条目改派 FL-D650）。**自 2026-10-31 起设固定子池杜绝再撞**：qa-feat-guide FL-D650..659；qa-f2-guide-history FL-D660..669；第二波标签线 FL-D670..679；主线及主线 reviewer FL-D680..689；**qa-feat-recall 原段 580-589 用尽，新派 FL-D690..699**（2026-10-31）；其余读尾部顺延者 ≥FL-D700。
+> **FL-D640..649 全部已使用**（640 B13、641/642 主线复核、643 feat-guide、644/645 主线、646/647 标签线、648/649 guide-history；feat-guide 撞号条目改派 FL-D650）。**自 2026-10-31 起设固定子池杜绝再撞**：qa-feat-guide FL-D650..659；qa-f2-guide-history FL-D660..669；第二波标签线 FL-D670..679；主线及主线 reviewer FL-D680..689；**qa-feat-recall 原段 580-589 用尽，新派 FL-D690..699**（2026-10-31）；qa-export 导出包重构线 FL-D700..709（2026-10-31，应用户要求新派独立线）；其余读尾部顺延者 ≥FL-D710。
 ## FL-D648 指引重解析粒度合并破坏操作可执行性：确定性 clean 放行、召回断崖 -70%（2026-10-31，qa-f2-guide-history 线）
 
 - **发现日期**：2026-10-31，本线真实模型冒烟（生产路径：上传→worker 解析→启用→TestClient 任务→Worker 真跑，账本 /tmp/opencode/guide-{channel,v2}-ledger.sqlite、/tmp/opencode/recall-smoke-{builtin,custom15}.sqlite）。
