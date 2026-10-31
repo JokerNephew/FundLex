@@ -119,20 +119,22 @@ export function SettingsPage() {
       <div className="action-row"><Link to="/guides"><Button>我的指引</Button></Link>{user?.role === 'admin' && <Link to="/users"><Button>用户管理</Button></Link>}</div>
     </div>
 
-    <Card>
-      <h2>运行能力</h2>
-      {capabilities.error ? <ErrorState error={capabilities.error} /> : capabilities.loading && !capabilities.data ? <Spinner /> : <dl className="settings-capability-list">
-        <dt>认证模式</dt><dd>{capabilityLabel(capabilities.data?.auth_mode, { password: '账号密码登录', dev: '开发身份登录' })}</dd>
-        <dt>引擎</dt><dd>{capabilityLabel(capabilities.data?.engine?.id, { recall_first: '召回优先修订引擎' })}</dd>
-        <dt>交付模式</dt><dd>{capabilityLabel(capabilities.data?.engine?.delivery_mode, { formal: '正式交付模式', evaluation: '评测模式' })}</dd>
-        <dt>正式写入</dt><dd>{capabilities.data?.engine?.auto_write_enabled ? '已启用' : '当前不可用'}</dd>
-        <dt>单文件限制</dt><dd>{capabilities.data?.upload_limits?.max_file_bytes ? `${Math.round(capabilities.data.upload_limits.max_file_bytes / 1024 / 1024)} MB` : '—'}</dd>
-      </dl>}
-    </Card>
+    {user?.role === 'admin' && <Card>
+      <details className="system-state" data-testid="system-state">
+        <summary><h2>系统状态</h2><span className="muted">运行参数（管理员）</span></summary>
+        {capabilities.error ? <ErrorState error={capabilities.error} /> : capabilities.loading && !capabilities.data ? <Spinner /> : <dl className="settings-capability-list">
+          <dt>登录方式</dt><dd>{capabilityLabel(capabilities.data?.auth_mode, { password: '账号密码登录', dev: '开发身份登录' })}</dd>
+          <dt>处理引擎</dt><dd>{capabilityLabel(capabilities.data?.engine?.id, { recall_first: '召回优先修订引擎' })}</dd>
+          <dt>交付模式</dt><dd>{capabilityLabel(capabilities.data?.engine?.delivery_mode, { formal: '正式交付模式', evaluation: '评测模式' })}</dd>
+          <dt>正式写入</dt><dd>{capabilities.data?.engine?.auto_write_enabled ? '已启用' : '当前不可用'}</dd>
+          <dt>单文件大小上限</dt><dd>{capabilities.data?.upload_limits?.max_file_bytes ? `${Math.round(capabilities.data.upload_limits.max_file_bytes / 1024 / 1024)} MB` : '—'}</dd>
+        </dl>}
+      </details>
+    </Card>}
 
     <Card>
       <h2>飞书私聊绑定</h2>
-      <p>生成一次性绑定码后，在飞书与 FundLex 机器人私聊发送“绑定 绑定码”。绑定只关联当前账号，绑定码 10 分钟后失效。</p>
+      <p>扫码或在飞书与 FundLex 机器人私聊发送一次性绑定码；绑定只关联当前账号。</p>
       {bindingError && <p className="form-error">{bindingError}</p>}
       {binding?.bound ? <><p>已绑定飞书账号 <code>{binding.subject_id?.slice(0, 12)}…</code></p><Button variant="danger" onClick={() => void revokeBinding()} disabled={bindingBusy}>解除绑定</Button></> : <>
         <div className="action-row">
@@ -140,7 +142,7 @@ export function SettingsPage() {
           <Button onClick={() => void startOAuth()} disabled={bindingBusy}>{bindingBusy ? '处理中…' : '生成扫码绑定二维码'}</Button>
           {bindingCode && <code aria-label="飞书绑定码">{bindingCode}</code>}
         </div>
-        {oauth && <div style={{ marginTop: 12, maxWidth: 351 }}><div style={{ background: '#fff', border: '1px solid #d9d9d9', borderRadius: 8, padding: 10 }}>{oauth.qr_svg ? <div dangerouslySetInnerHTML={{ __html: oauth.qr_svg }} /> : oauth.qr_png ? <img src={oauth.qr_png} alt="飞书绑定二维码" style={{ display: 'block', width: '100%', height: 'auto' }} /> : null}</div><p>{oauthMessage}</p><a href={oauth.authorization_url} target="_blank" rel="noreferrer">在飞书中打开授权页</a></div>}
+        {oauth && <div className="settings-oauth"><div className="settings-qr-frame">{oauth.qr_svg ? <div dangerouslySetInnerHTML={{ __html: oauth.qr_svg }} /> : oauth.qr_png ? <img src={oauth.qr_png} alt="飞书绑定二维码" /> : null}</div><p>{oauthMessage}</p><a href={oauth.authorization_url} target="_blank" rel="noreferrer">在飞书中打开授权页</a></div>}
         {!oauth && oauthMessage && <p>{oauthMessage}</p>}
       </>}
     </Card>

@@ -1005,6 +1005,44 @@ def test_v1_password_late_401_from_previous_account_does_not_logout_new_session(
         context.close()
 
 
+def test_compare_failed_pair_shows_structured_failure_diagnostics(browser, live_dev):
+    """FL-D546: terminal pair failures surface stage/type/retryability from the
+    worker diagnostics field; paused pairs keep the same status label source."""
+    _app, base = live_dev
+    context = browser.new_context(viewport={"width": 1440, "height": 1000})
+    context.add_init_script("localStorage.setItem('fundlex-dev-user','compare-diagnostics')")
+    page = context.new_page()
+    pairs = [
+        {"id": "PF", "label": "失败组", "status": "failed", "error_code": "COMPARE_PROCESSING_FAILED",
+         "left": {"name": "a.docx"}, "right": {"name": "b.docx"},
+         "diagnostics": {"failure": {"error_code": "COMPARE_PROCESSING_FAILED", "stage": "compare",
+                                      "error_type": "RuntimeError", "retryable": False}}},
+        {"id": "PP", "label": "暂停组", "status": "paused",
+         "left": {"name": "c.docx"}, "right": {"name": "d.docx"}},
+    ]
+
+    def scenario(path, query, route):
+        if path == "/api/compare/tasks":
+            return respond(route, {"items": [{"id": "T", "name": "diag", "status": "completed", "total": 2,
+                                              "pairs": pairs}]})
+        if path == "/api/compare/tasks/T":
+            return respond(route, {"id": "T", "name": "diag", "status": "completed", "total": 2,
+                                   "pairs": pairs})
+        return respond(route, {})
+
+    install_api(page, base_api(scenario))
+    try:
+        open_dev(page, base, "#compare?mode=detail&id=T")
+        error = page.locator(".compare-pair-status.is-failed .compare-pair-error")
+        error.wait_for()
+        assert error.inner_text() == "处理失败：COMPARE_PROCESSING_FAILED（阶段：文本比对 · 类型：RuntimeError · 可重试：否）"
+        paused = page.locator(".compare-pair-status", has_text="暂停组")
+        assert paused.locator(".compare-pair-state").inner_text().startswith("已暂停")
+        assert page.locator(".compare-pair-status.is-failed .compare-pair-state").inner_text() == "失败"
+    finally:
+        context.close()
+
+
 def test_compare_selection_save_generate_download_restore_and_stale_version(browser, live_dev):
     _app, base = live_dev
     context = browser.new_context(viewport={"width": 1440, "height": 1000}, accept_downloads=True)

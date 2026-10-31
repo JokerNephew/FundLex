@@ -697,6 +697,38 @@ def _plan_by_target(planned: dict[str, Any]) -> dict[str, dict[str, Any]]:
     return by_target
 
 
+# Plan-stage deterministic rejections that establish "this target does not bind
+# a real source site" (FL-D696).  Claim Replay must not demand an artifact
+# effect at such a candidate: demanding an edit the planner deterministically
+# refused reopens an already-adjudicated question and turns a model-driven
+# locate over-claim into a contract-blocking gap (B12 G16 p796).  Rejection
+# reasons are code-set strings, so the set is data, not model output.
+_PLAN_SITE_REJECTIONS = frozenset({"TARGET_SOURCE_MISMATCH"})
+
+
+def _replay_targets_by_id(targets: Sequence[Target],
+                          planned: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    """Replay target payloads enriched with plan-stage site rejections.
+
+    ``Target.as_dict`` intentionally carries no plan state; a plan-ledger
+    rejection is however deterministic evidence that the candidate never bound
+    a source site.  Tag it so ``replay_claims`` can exclude the claim from the
+    obligation's required site set (FL-D696).  Exclusion to an empty set keeps
+    the original OPEN semantics — it never invents a closure.
+    """
+    rejected = {str(entry.get("target_id") or ""): str(entry.get("reason") or "")
+                for entry in ((planned or {}).get("ledger") or [])
+                if str(entry.get("reason") or "") in _PLAN_SITE_REJECTIONS}
+    payload: dict[str, dict[str, Any]] = {}
+    for target in targets:
+        record = target.as_dict()
+        reason = rejected.get(str(target.target_id))
+        if reason:
+            record["plan_rejected"] = reason
+        payload[str(target.target_id)] = record
+    return payload
+
+
 def _plan_ledger(planned: dict[str, Any], plan: Any) -> dict[str, Any]:
     # The planner's parent edit is intentionally a business record, while
     # ``validate_edit_plan`` owns the final source slice used by the DOCX writer.
@@ -2580,7 +2612,7 @@ def _run_audit(model: Any, rules_by_id: dict[str, dict], targets: Sequence[Targe
         approval_book = approval_book_for(rules_by_id, targets, original)
         replay = replay_claims(planned.get("edits") or [], original, actual,
                               rules_by_id=rules_by_id, facts=facts,
-                              targets_by_id={target.target_id: target.as_dict() for target in targets},
+                              targets_by_id=_replay_targets_by_id(targets, planned),
                               obligations=obligations, scopes=scopes,
                               approvals=approval_book,
                               absent_coverage_by_operation=absent_delete_coverage(
@@ -5053,6 +5085,14 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
             origins[target.target_id] = "duplicate_copy"
             report["target_attribution"].extend(assign_target_operations(
                 [target], rules_by_id, inspection, facts, obligation_ledger))
+        # FL-D695: an inventory "absent" verdict contradicted by deterministic
+        # variant evidence at the same paragraph is overturned before the
+        # open-rule locator burns model calls on a site that code already found.
+        from .recall import refute_absent_by_variant_evidence
+        absent_refutations = refute_absent_by_variant_evidence(
+            targets, rules_by_id, inspection, scopes, facts=facts)
+        if absent_refutations:
+            report["absent_refutations"] = absent_refutations
         from .targeting import (locate_unresolved_targets, summary_copy_targets,
                                 targets_for_open_rules)
         report["candidate_recovery_coverage"] = {}
@@ -5591,8 +5631,7 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
                         components_by_rule=components_by_rule,
                         required_terms_by_rule=required_terms_by_rule,
                         target_rules=target_rules,
-                        targets_by_id={target.target_id: target.as_dict()
-                                       for target in targets},
+                        targets_by_id=_replay_targets_by_id(targets, plan),
                         obligations=obligation_ledger,
                         scopes=scopes,
                         approvals=approval_book,

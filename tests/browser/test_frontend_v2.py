@@ -161,13 +161,14 @@ def test_model_roles_and_confirmed_connection_test(browser, live_app, monkeypatc
     try:
         response = page.goto(live_app + "/models", wait_until="networkidle")
         assert response and response.ok
-        expect(page.get_by_role("heading", name="模型配置")).to_be_visible()
+        expect(page.get_by_role("heading", name="模型配置", exact=True)).to_be_visible()
         form = page.locator("form")
         cards = form.locator(".ui-card")
         assert cards.count() == 2
         primary = cards.nth(0)
         expect(primary).to_contain_text("执行模型")
         expect(cards.nth(1)).to_contain_text("检查模型")
+        primary.get_by_role("button", name="修改配置").click()
         primary.get_by_label("使用方式").select_option("personal")
         primary.get_by_label("访问密钥（API Key）").fill("browser-fixture-test-key")
         primary.locator('input[list="model-primary-suggestions"]').fill("fixture-model")
@@ -261,6 +262,7 @@ def test_real_task_document_deep_links_use_task_scoped_api(browser, live_app):
 
         response = page.goto(live_app + f"/tasks/{task_id}/documents/{document_id}/detail", wait_until="networkidle")
         assert response and response.ok
+        page.get_by_text("深链合同.docx", exact=False).first.wait_for(state="visible", timeout=15000)
         assert "深链合同.docx" in page.locator("body").inner_text()
         assert "报告读取失败" in page.locator("body").inner_text()
 

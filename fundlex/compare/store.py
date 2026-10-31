@@ -298,6 +298,7 @@ class CompareStore:
                 result["summary"] = payload.get("summary")
                 result["coverage"] = payload.get("coverage")
                 result["comparison_scope"] = payload.get("comparison_scope")
+                result["diagnostics"] = payload.get("diagnostics")
             except (TypeError, ValueError):
                 pass
         return result
@@ -690,7 +691,8 @@ class CompareStore:
         pending = sum(r["c"] for r in counts if r["status"] not in {"succeeded", "failed", "incomplete"})
         db.execute("UPDATE compare_tasks SET status=?,updated_at=? WHERE id=?", ("completed" if pending == 0 else "running", now, task_id))
 
-    def retry(self, pair_id: str, token: int, error_code: str, *, max_attempts: int = 3) -> None:
+    def retry(self, pair_id: str, token: int, error_code: str, *, max_attempts: int = 3,
+              diagnostics: Mapping[str, Any] | None = None) -> None:
         if max_attempts <= 0:
             raise ValueError("invalid worker retry policy")
         now = _now()
@@ -705,9 +707,23 @@ class CompareStore:
             if row["lease_until"] is None or row["lease_until"] < now:
                 raise Conflict("expired compare worker lease")
             if row["attempt"] >= max_attempts:
-                changed = db.execute("""UPDATE compare_pairs SET status='failed',error_code=?,lease_until=NULL,updated_at=?
+                failure_payload = None
+                if diagnostics:
+                    failure_payload = _json({
+                        "schema_version": "contract-compare-v1",
+                        "error_code": error_code,
+                        "diagnostics": {"failure": {
+                            "error_code": error_code,
+                            "stage": str(diagnostics.get("stage", ""))[:32],
+                            "error_type": str(diagnostics.get("error_type", ""))[:64],
+                            "retryable": False,
+                        }},
+                        "summary": {"total": 0, "modify": 0, "insert": 0, "delete": 0},
+                        "diffs": [],
+                        "coverage": {"status": "incomplete", "warnings": [error_code]}})
+                changed = db.execute("""UPDATE compare_pairs SET status='failed',error_code=?,result_json=COALESCE(?,result_json),lease_until=NULL,updated_at=?
                     WHERE id=? AND fencing_token=? AND status IN ('leased','running') AND lease_until>?""",
-                                     (error_code, now, pair_id, token, now)).rowcount
+                                     (error_code, failure_payload, now, pair_id, token, now)).rowcount
                 if changed != 1:
                     raise Conflict("stale compare worker lease")
                 self._refresh_task(db, row["task_id"], now)

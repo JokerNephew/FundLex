@@ -6804,7 +6804,12 @@ H＝E×…
 
 - **问题与影响**：A6-543 修复后，尾删链 fail-closed 策略同时覆盖了"全文替换式采用B（删除全部A段+插入全部B段）"场景——该场景修复前已验证可交付且 final==right（A6 E11），现抛 SELECTION_BLOCK_STRUCTURE_UNSUPPORTED 拒绝。属 fail-closed 拒绝能力而非错误产出，无半改状态，但对依赖"全部采用B"的用户是能力回退。
 - **决策（工程裁定，2026-10-31）**：保留 fail-closed 拒绝为当前正确行为（杜绝 SELECTION_FINAL_TEXT_MISMATCH 误交付风险），能力恢复（对全文替换专门路径）列为后续增强，需补"删除+插入全部采用"专项用例后解除拒绝。
-- **状态**：open（能力增强待排期）；当前行为已用例钉住，生产提示为结构化错误码可解释。
+- **能力恢复（2026-10-31，qa-feat-compare 专线）**：全文替换属于结构等价替换而非尾删链。新增 `_detect_full_body_replacement`（识别条件：无 inline 操作、块操作仅 delete/insert、删除集恰为左侧**全部**正文直接段落、插入集恰为右侧**全部**正文直接段落、且计划序列与右侧文档逐块逐字相等——少任何一项则维持原 fail-closed）+ 专用写入 `_apply_full_body_replacement`（保留最后一段为 keeper 锚点：其余被删段整段标记删除，锚点仅删 run 并把右侧首段 run 以 w:ins 写入锚点，其余右侧段克隆插入其后；final 由 `_accept_revisions_copy` 派生）。三重验证保留：final 解析文本==期望（==right 逐字）、自身 accept c14n==final、独立上传 accept oracle==final（SELECTION_ACCEPT_ORACLE_MISMATCH 兜底）；风格/编号校验（`_validate_block_references`）照旧。审计/撤销完备：redline 中左侧全部正文保留在 w:del（拼接==左侧全文逐字）、右侧全文在 w:ins、作者 FundLex Compare+时间戳戳记、manifest 覆盖全部 diff id、checks 增加 `full_body_replacement`。
+- **同族修复**：`_expected_sequence` 原实现按"处理后索引"为插入定槽，遇到"同锚点 before 插入"、"锚点在删除块上"等形态时序列与 writer 实际落点漂移（250 段全改+锚点 L000000 before 用例序列完全倒序），必然 MISMATCH 误拒；改为按原始位置槽位重写（同槽插入按 diff id 升序，与 `_apply_block_operations` 固定槽位语义一致），消除了整批同锚点插入场景的期望漂移；before 锚点原行为恒失败，故不存在已交付产物语义变化。
+- **验证（真实 DOCX 用例，tests/test_compare_full_body_replacement.py 10 项全绿）**：①全文替换采用B交付成功：250 段全改（inserts 组在前、before 锚）与 300 段全改（after 锚）双形态 final==right 逐字、delText==left 全文、ins 文本==right 全文、独立 oracle c14n==final、manifest 覆盖全部 diff；②尾删+穿插插入仍拒绝（锚点落在保留段，250 规模同样失败无产物）；③非全文大链删除仍拒绝（250 全改只采用删除、丢掉 1 个插入均 SELECTION_BLOCK_STRUCTURE_UNSUPPORTED 且零产物残留）；④mutation 对抗仍拒绝（右件字节篡改→SELECTION_SOURCE_HASH_MISMATCH、diff 文本篡改+自重哈希→SELECTION_RESULT_DIFF_MISMATCH、结果与源不一致→SELECTION_SOURCE_HASH_MISMATCH，均无产物）。既钉住的 10 段尾删+穿插插入拒绝用例（test_compare_sdt_locations_and_trailing_delete）保持绿。
+- **边界如实记录**：插入锚点落在被删段上的尾删+穿插插入组合（如 T 系列文本对齐顺序）在改动前就已是可正确交付的形态（旧代码同路径 final==right 三重验证通过，本次以 HEAD 代码复跑证实），非本轮能力扩张；`checks` 不含 full_body_replacement，走原普通块路径。
+- **真实语料冒烟**：542 份 funds_word 采用全文替换式变异采用B 抽写统计见 FL-D590。
+- **状态**：已修复（专线合并主线后生效）；待最终回归与最终发布证据。
 
 ## FL-D563 A7-04 修复缺回归测试（2026-10-31，引擎复核）
 
@@ -7015,6 +7020,79 @@ H＝E×…
 - **状态**：open（复验已执行并定判，门槛缺口待 FL-D572/FL-D608）。
 - **变更记录**：2026-10-31 新增。
   - 2026-10-31（guide 线）：**复验 v2 GO**。冻结 `2d600be`（含 FL-D608 两层修复；freeze 文件 sha12 f9acd782，guide raw `373873f8…`/document `30c2625d…`），正式跑动 `/tmp/opencode/qa-findings-run/smoke-requal-v2-formal/`：B05 13/13 completed + integrated_complete=True + unresolved 0（G08 本轮 completed；G01/G03 append 在组尾站点闭合），B16 23/23 completed + integrated_complete=True + unresolved 0。四项门槛逐项过；FL-D565-F1 未触发声明如实保留；记录 `/tmp/opencode/qa/findings/smoke28-requal-v2-f9acd782.md`。GO 为单次真实证据，G08 不确定性（FL-D643）仍 open。
+
+## FL-D590 compare 全文替换式采用B 的 542 份真实语料冒烟（2026-10-31，qa-feat-compare 专线）
+
+- **目的**：FL-D562 能力恢复后，用 funds_word 全部真实合同（主线 merge 后 578 份，540 份原有 + 两个 `基金合同第一批_*_20261027/` 子目录新增）做 selection-writer 冒烟：变异左侧全部正文直接段落生成右侧 → compare → 全部采用B → generate → 校验 final==right；全程不跑模型、语料只读、产物即验即删、输出 <500MB 落 `var/qa-compare-smoke-20261031*/`。
+- **脚本**：`/tmp/opencode/qa/cmp-d562/smoke_corpus.py`（4 进程，worktree `.venv/bin/python`；外部脚本必须 `PYTHONPATH=$PWD`，见 FL-D593）。
+- **r1（作废）**：542 份，结果 ok 2 / reject 558 / error 18（LOCATION_NOT_FOUND 462 为主）——**因 import 主工作区旧树 `158475f` 整体作废**（FL-D593），只可作为主线旧树拒绝码形态参考，不代表本线行为。
+- **r2（完成）**：578 份 `PYTHONPATH=$PWD` 重跑（2026-10-31 16:53 启动，2026-11-01 00:03 落盘 `var/qa-compare-smoke-20261031-r2/{stats.json,results.jsonl}`，墙钟 ~7.2h 因 4 核超售 load 17-21，CPU 锚点 4 worker ~13.1 CPU-h/4.7h 时点）。**测的是 FL-D592 修复后、FL-D595 修复前的 worktree**（`04d71ed`）。
+- **r2 回填（统计即 stats.json 原口径）**：
+  - `outcomes`: ok **21** / reject 538 / error 18 / text_mismatch_after_ok 1；`artifacts_left: 0`（fail-closed 零产物保持）；`full_body_replacement_hits: 21`——**全部 ok 都走全量路径**，且 19/21 含 body 级 sdt(TOC)，正是旧计划级检测永远到不了的形态；ok 样本 manifest==diffs 全数（undo/审计覆盖完备）。
+  - `reject_codes`: SELECTION_BLOCK_SECTION_UNSUPPORTED 380（空白 sectPr 段非惰性，pre-detect 拒→普通路径撞 sectPr——按设计 fail-closed，三角样本 广发价值优选 一致）；SELECTION_BLOCK_RUN_UNSUPPORTED 80（非惰性 leftover 落普通路径遇 fldChar/多 w:t run，如价值优选 L000672 HYPERLINK 域段）；SELECTION_CONTENT_CONTROL_UNSUPPORTED 35（pre-detect 因非惰性 leftover 拒→普通路径撞 sdt 锚点）；SELECTION_BLOCK_STRUCTURE_UNSUPPORTED 25；EXISTING_REVISION_UNSUPPORTED 18（=error 18，全部位于 `基金合同第一批_修订原件备份_20261027/`，原件含既有修订，**解析期 fail-closed 预期**，非 writer 缺陷）；SELECTION_BLOCK_SCOPE_UNSUPPORTED 12；SELECTION_STRUCTURAL_DIFF_UNSUPPORTED 3；DOCUMENT_PROTECTED 1；SELECTION_MERGED_CELL_UNSUPPORTED 1；SELECTION_FINAL_TEXT_MISMATCH 1（→ FL-D595 根因消除后已转交付）；`?` 1（即 text_mismatch_after_ok 那 1 份，无 code）。
+  - **text_mismatch_after_ok 1（广发百发大数据策略价值）归因**：左侧 body[0] 为含一个空格 run 的段落→diff builder 归一视『空白』只产出 insert 不产出 delete→普通路径忠实执行『全采用』，左空白段保留、其余全部按 diff 落地。**交付忠实于已采用 diff**（非 writer 违约），只是严格口径 final≠B 逐字；归入 diff 层空白段语义边界，保持 fail-open 交付不阻断。
+  - **影响面评估**：可处理分母 560（578-18 备份原件）；ok 21（3.75%）+ text_mismatch 1（交付但非 B 逐字，0.18%）；其余 538 全部 fail-closed 零产物、拒绝码如实指向未支持的文档特征。合并门槛决策见主线。
+  - **语料正例已入测试**：`test_real_corpus_full_body_replacement_delivers` 采用 ok 样本 广发中证800自由现金流（含 body 级 sdt，skipif 语料缺席时跳过）。
+- **待办**：FL-D595 修复后按 r3 口径全量重测（低噪窗口，增量落盘版脚本），预期 SECTION/RUN/CONTENT_CONTROL 结构性拒绝不变、FINAL_TEXT_MISMATCH 归零、ok 至少 +1（已单文件复验）；性能复测 bench_compare.py 同窗口。
+- **变更记录**：
+  - 2026-10-31 新增（脚本与目的）。
+  - 2026-11-01 回填 r2 全量统计与归因抽查结论。
+
+## FL-D591 compare worker 终态失败诊断结构化透出（A6-546 后续增强已实施，2026-10-31，qa-feat-compare 专线）
+
+- **变更记录（对 FL-D554 条目内 A6-546 的状态更新，按段位协调规则在本段登记）**："诊断透出列为后续增强"现已实施，A6-546 由"接受现状"转为"已修复（未 commit，随专线上线）"。
+- **实施**：worker 追加失败阶段跟踪（`_failed_stage`：`pairing/extracting/saving/diagnosing/generating`）；终态 failed 的 result payload 携带 `diagnostics.failure={error_code, stage, error_type, retryable:false}`（error_type 经净化，掉 traceback/路径/内部细节）；transient 重试经 `store.retry(..., diagnostics=)` 携带，不新增库表列；`_pair_dict` 透出结构化失败摘要，错误码后缀强转 str（防真异常 error_code 非字符串导致 500 遮蔽 pair 状态——本轮新发现随修）。
+- **前端**：`compare.js` `pairErrorLabel` 优先展示阶段+错误类型+可重试性（如"保存结果阶段失败：RuntimeError（不可自动重试，待人工处理）"），paused 同源口径不变。
+- **验证**：`tests/test_compare_worker.py` 新增 5 项（共 20 passed）；浏览器 `tests/browser/test_v1_frontend_remediation.py` 新增 failed-pair 诊断展示用例，16/16 全绿；node --check 过。fail-closed 不变量保持：`_execute` 仍先 `_extract_right_revision`、诊断仅现于终态 failed、无错误 complete。
+
+## FL-D592 FL-D562 全文替换采用B 检测缺口与二次修复（pre-detect + 惰性空白段 + 批发删除守卫 + 带区几何，2026-10-31，qa-feat-compare 专线）
+
+- **发现日期**：2026-10-31，FL-D590 冒烟第一轮（r1，已作废见 FL-D593）分诊与真实文件三角诊断（spy `triage.py`/`spy_pre.py`/`check_one.py`，均 `PYTHONPATH=$PWD`）。
+- **问题与影响**：`b7ca4c2` 提交的全文替换检测 `_detect_full_body_replacement` **后置**在 `_build_plan` 之后，需先算出 block operations——而语料形态下 insert 锚点普遍指向保持的 body 级 sdt（目录 TOC），`_build_plan` 对 sdt 锚点 fail-closed（`SELECTION_CONTENT_CONTROL_UNSUPPORTED`），检测根本到不了，全量路径对真实语料形同虚设（按 r1 引用分布约占 93.6% 含 TOC 语料会先死在计划级）。另两个形态缺口：①变异后左侧「惰性空白段」（`raw_text==''` 且 XML 仅 bare pPr）被 diff builder 丢弃成 leftover，原检测要求 deleted==左全部直段而不触发；②含 fldChar HYPERLINK 域段的左侧段在普通路径 `_simple_paragraph` 下 `RUN_UNSUPPORTED`，全量路径必须接受"段落级批发删除"而非逐 run 形状检查。
+- **处理方法（最终形态）**：
+  - `_pre_detect_full_body_replacement`：在 `_build_plan` **之前**直接对 adopted diffs 判定——全 diff 采用 right 且仅 delete/insert（部分采用/modify 一律回普通 fail-closed 路径）；deleted ⊆ 左直段（余量必须是惰性空白段，经 `left_root` 核 XML：仅 bare pPr、无 sectPr/pPrChange）；inserted == 右直段全集。返回综合 ops（一 diff 一 op、锚点留空——全量 writer 不用锚点），manifest 覆盖与样式/编号校验沿用原机制不变；final==right 语义仍由写入后校验（接受修订解析、独立 oracle c14n、源哈希）兜底。
+  - `_apply_full_body_replacement` 带区几何重写：保持的 body 子节点（tbl/sdt/sectPr）把左右文集切成带，带数一致且每带非空（否则 fail-closed）；每带末段 keeper 锚点插首段 run、余段 clone 后插，带区间可不同长度，最终块序==right。
+  - `_wholesale_deletable_paragraph` 批发删除守卫：放行多 w:t/fldChar run；禁 ins/del/moveFrom/sdt/fldSimple/commentRange/commentReference/footnote/endnote/drawing/pict/object 后代；sectPr/pPrChange 段直拒。
+  - `_check_field_spans_within` 全局域跨段扫描：fldChar begin/end 跨删除边界 fail-closed（orphan 域）。
+  - `_mark_deleted_paragraph(check_shape=False)` 供全量路径跳过逐 run 形状检查；`_inert_blank_paragraph` 惰性段判定。
+- **保持的 fail-closed 边界**：非全文大链拒绝、mutation 对抗拒绝、半结构失败零产物；sectPr 携带段（含空白 sectPr 段）始终不进批发路径（测试钉住"sectPr 必存活"）；右侧插入侧保持 `_simple_paragraph` 严格检查（复杂 right 内容=诚实边界）；域跨表 fail-closed。
+- **验证**：`tests/test_compare_full_body_replacement.py` 扩至 16 项全绿（含 6 项新用例：惰性空白段交付、fldChar 段交付、顶部 sdt 保持交付、域跨表 fail-closed、sectPr 空白不进批发、drawing 拒）；同跑 sdt/trailing 20 + selection_writer 15 共 51 项全绿。真实文件三角验证（`PYTHONPATH` 正确口径）：广发景辉纯债 GENERATE OK（full_body_replacement=True、final==right、manifest 2662/2662）；广发价值优选 fail-closed（sectPr 空白+fldChar 段，批发守卫放行 fldChar 段但空白 sectPr 段拒——按设计）；科创板芯片 fail-closed（sectPr 空白段非惰性）。
+- **状态**：已修复（测试与单文件级已验证），真实语料 r2 冒烟结果回填 FL-D590 后由主线核对销号。
+- **合并注意（给主线）**：`b7ca4c2` 内的 `_detect_full_body_replacement`（计划级后置版）已被本条的 pre-detect 版取代弃用；主线 merge 本线时以最新 selection_writer.py 为准，不存在两代检测并存的回退风险。
+
+## FL-D593 FL-D590 冒烟第一轮（r1）统计作废：worktree .venv symlink 致 import 主工作区旧树（2026-10-31，qa-feat-compare 专线）
+
+- **发现日期**：2026-10-31，r1 冒烟完成后 triage 发现 spy 报 `AttributeError: module 'fundlex.compare.selection_writer' has no attribute '_detect_full_body_replacement'`，而 worktree 源码里明明有——导入的根本不是本线代码。
+- **证据与归因**：worktree 的 `.venv` 是指向 `/home/opencode/fundlex/.venv` 的 symlink；以 `python /tmp/.../script.py` 运行时 `sys.path[0]` 是脚本目录，外部脚本不生效 worktree 本身，import fundlex 落到主工作区（HEAD `158475f` 快照，无任何本轮 compare 改动）。用 `PYTHONPATH=$PWD` 同脚本重跑后 spy 正常、检测正常触发，证实错树。
+- **影响**：r1 全部统计（ok 2 / reject 558 / error 18；LOCATION_NOT_FOUND 462 为主）测的是**主线旧树行为**，整体作废，不代表本线 FL-D562 能力（r1 统计目录 `var/qa-compare-smoke-20261031/` 已标注作废，仅留作拒绝码形态的参考）。这与历史 A10-Q0 类「错树验证」属同类风险。
+- **处理方法**：一切外部脚本（非 `python -m pytest` 入口）一律 `cd <worktree> && PYTHONPATH=$PWD .venv/bin/python ...`；spy/monkeypatch 断言不存在的属性可用 `AttributeError` 快速暴露错树；r2 已按正确口径重跑（578 份，含两个新增子目录语料），结果回填 FL-D590。
+- **状态**：已确认（流程规避已生效），r2 统计为准。
+- **变更记录**：
+  - 2026-10-31 新增（qa-feat-compare 专线）。
+
+## FL-D594 FL-D590 冒烟脚本不可观测与超时风险（stdout 吞没 + 结果只在内存，2026-10-31，qa-feat-compare 专线）
+
+- **发现日期**：2026-10-31，主线排障指令指出：r2（578 份）已跑 4.7h 远超标称「小时级」，且无法判断进度。
+- **问题与影响**：`smoke_corpus.py` 两个设计缺陷叠加：①stdout 经 `2>&1 | tail -30` 包一层，progress 行被管道缓冲吞掉，main/agent 中途完全看不到进度；②所有结果只在主进程内存累积，跑完才一次性落 stats.json/results.jsonl——**进程死 = 全部统计丢失**（r1 已实际经历一次「代价昂贵的重跑」，那次归因错树 FL-D593）。4 核机器 load ~17-21 超售下，重跑代价被进一步放大。
+- **处理方法（主线指令执行）**：①在跑的 r2 不杀不动，保住内存结果；②侧车分片探针 `/tmp/opencode/qa/cmp-d562/smoke_shard.py`：同工作负载、files[::6]≈96 份系统抽样、**每份完成即时追加 results.jsonl + 无缓冲 progress 打印**（进程死零损失）、`nice -n 19` + `max_workers=2` 不抢评测与其他线 CPU、支持断点续跑；探针记录每份 cpu_s（nice/争用无关）与 wall_s 分布，结合 r2 累计 CPU（4.7h 时点 4 worker ≈13.1 CPU-h）推算 r2 已完成份数与剩余诚实 ETA；③规则固化：**本线后续任何长跑脚本一律增量落盘 + 无缓冲 progress，禁止只内存累积、禁止 tail 吞 stdout**。
+- **状态**：已处置——r2 于 2026-11-01 00:03 自然跑完落盘（578 份统计已回填 FL-D590），紧急性解除；侧车探针未跑完即被服务器重启撤销（其 method 已固化进 FL-D590 待办 r3 增量落盘版脚本要求）。
+- **变更记录**：
+  - 2026-10-31 新增（qa-feat-compare 专线，主线排障指令触发）。
+  - 2026-11-01 r2 自然完成；服务器重启撤销 r2/shard 两个后台 shell（r2 已落盘无损、shard 部分 results.jsonl 留存但已被 r2 全量取代）；规则「长跑脚本一律增量落盘 + 无缓冲 progress，禁止 tail 吞 stdout」继续有效。
+
+## FL-D595 全文替换交付真实语料两缺陷：删除段落书签级联污染 + 制表位定义计入 raw_text（2026-11-01，qa-feat-compare 专线）
+
+- **发现日期**：2026-11-01，r2 唯一 `SELECTION_FINAL_TEXT_MISMATCH`（广发中证智选高股息）逐层三角（redline 正确 → final 布局 → keeper XML → parse 文本源）定位。
+- **问题与影响**：
+  1. **删除段落的书签/proofing 子节点级联污染**：`_mark_deleted_paragraph` 全删段落（mark+runs）后保留 `bookmarkStart/End/proofErr/lastRenderedPageBreak` 直接子节点；`_accept_revisions_copy` 按 OOXML 段落标记语义把已删段落的残留子节点移入**下一段**——整带删除时 1232 个段落的 26 枚书签全部级联进 keeper，交付物 final 含「书签墙」（redline 校验/独立 oracle 因同源实现均通过，文本校验漏检书签维度）。属交付物污染缺陷。
+  2. **制表位定义计入 raw_text**：`parser._text` 与 `presentation.runs` 全子树遍历把 `w:pPr/w:tabs/w:tab`（制表位**定义**非内容）计为 `\t` 文本。keeper 保留左侧 pPr（左文集为排版基准的既定策略），签名行类段落（`签订日：<tab>年<tab>月<tab>日`，pPr 含 3 个居中制表位）即被 parse 为 `'\t\t\t'+正文` ≠ right 文本 → 校验 fail-closed 拦下（安全网按设计生效但属误伤）；该误计同时污染 diff builder 的 raw_text（左右两侧同口径，diff 无伪差，但文本字段夹带幽灵制表符）。
+- **处理方法**：
+  - `_mark_deleted_paragraph`：mark_paragraph=True（整段删除）时先剥离 bookmarkStart/bookmarkEnd/proofErr/lastRenderedPageBreak 子节点——书签属于将亡段落，Word 接受删除时等同消失，级联变 no-op（对普通路径的尾部删除链同样生效，消除同源潜在污染）。
+  - `parser._text` 改为显式递归跳过 `w:pPr` 子树；`presentation.runs`（parse raw_text 实际取数源）同样跳过 pPr 子树。左右两侧同口径变化，diff 一致性与既有测试兼容。
+- **验证**：新增 `test_bookmarks_die_with_paragraph_and_tabstop_ppr_is_not_text`（签名行 keeper+书签删除段：交付、final 零书签残留、delText 覆盖撤销完备）；修复后广发中证智选高股息单文件复验 GENERATE OK（full_body_replacement=True、final==right、manifest 2476/2476）；`tests/test_compare_full_body_replacement.py` 18 项全绿（含新增语料正例 广发中证800自由现金流）；`tests -k compare` 全量回归随本登记后复跑为准（见本线状态文件）。
+- **状态**：已修复（fixture/单文件/语料正例已验证），待主线合并核对；r3 全量冒烟（低噪窗口）后回填影响面。
+- **变更记录**：
+  - 2026-11-01 新增（qa-feat-compare 专线）。
 
 ## FL 编号分配（多对话并行期协调，2026-10-31）
 
@@ -7390,8 +7468,9 @@ H＝E×…
 ## FL-D721 download-all 前端禁用条件未跟上后端 409 语义拓宽（2026-10-31，主线复核）
 
 - **发现**：后端改为「存在 document_id 即可下载解释性 ZIP（含全失败任务）」，但 compare 页 release 按钮禁用条件 `(completed||0)+(rejected||0)>0` 使全失败任务按钮仍禁用 → 新能力在 UI 不可达；compare.html:403 的提示文案仍是旧 409 语义。
-- **处理（已派 qa-frontend）**：ready 条件纳入 failed>0；提示文案随新语义。
-- **状态**：open。
+- **处理（已派 qa-frontend，2026-10-31 已实施）**：`app.js` ready 条件修为 `(t.completed||0)+(t.failed||0)>0`（全失败可下载；仍在处理中的任务不开放，防止误抓半成品包）；disabled title 改「当前尚无已出结果的合同；处理结束（含失败）后即可下载结果包」；`compare.html` download-hint 文案改「任何已接收的合同都会进入结果包；未通过处理的合同会在包内给出原因说明。」。
+- **验证**：既有浏览器用例 `test_paused_task_shows_paused_rows_download_hint_and_verdict`（paused、0 终态 → disabled+hint 可见）在该口径下语义仍成立，复跑通过；V1 浏览器套件整批通过（FL-D716）。
+- **状态**：已解决。
 
 ## FL-D722 p6_package 评测清单与工作台导出清单分化后的口径标注（2026-10-31，主线复核）
 
@@ -7411,11 +7490,17 @@ H＝E×…
 - **处理**：前端线改人读表述（对照 V2「修改指引已锁定」口径）；发布 #2 闸门阻塞项。
 - **状态**：已解决（bdfbda3：改「<指引名> · 已锁定」人读表述，候选树复验正文/非折叠 title 无 UUID；FL-D718/719/723 同 commit 收口，16/16 验收绿）。
 
+- **处理（qa-frontend 已实施，2026-11-01）**：`guideNameForTask` 返回 `${item?.filename||'创建时的指引'} · 已锁定`，正文/title 均无 UUID；`node --check`、V1 浏览器 16 项通过（bdfbda3）。
+- **状态**：已解决。
+
 ## FL-D718 .compare-gutter span 字号 9px 低于阶梯下限（2026-10-31，主线复核）
 
 - **发现**：app.css:235 仍 `font-size:9px`，低于统一阶梯下限 11px（用户反馈③风格不一致族）。
 - **处理**：收敛进字号阶梯（≥11px）。同批修。
 - **状态**：已解决（bdfbda3：9px→11px；V1 三 CSS 实测最小字号=11，零残留。复核所引 app.css:235 行号系基线错位，实际规则在 compare.css）。
+
+- **处理（qa-frontend 核实，2026-11-01）**：该规则实际在 `compare.css:34`（app.css 无此规则，复核所引 app.css:235 为基线行号错位）；qa-frontend 整改批已将 9px 升为 11px，V1 三 CSS 实测最小字号=阶梯下限 11px，无 9/10 及半像素字号残留（bdfbda3 核实归档，无需新改动）。
+- **状态**：已解决。
 
 ## FL-D719 download-all 新 ready 语义缺正向守门用例（2026-10-31，主线复核）
 
@@ -7424,11 +7509,14 @@ H＝E×…
 - **状态**：已解决（bdfbda3：新增 _all_failed_task_scenario 正向用例，completed=0&&failed>0 时按钮启用+hint 隐藏；test_frontend_fixes 16/16 绿）。
 - **FL-D716 根治**（同 commit）：深链断言前加显式 wait_for(state=visible,15s)，不再依赖重跑，复跑通过——状态转**已解决（根治）**。
 
+- **处理（qa-frontend 已实施，2026-11-01）**：`test_frontend_fixes.py` 新增 `_all_failed_task_scenario` 与 `test_all_failed_task_enables_download_all_with_explanatory_hint`（按钮启用+hint 隐藏+失败行徽标），套件 16/16 绿；FL-D716 深链竞态已加显式 `wait_for(timeout=15000)` 根治（bdfbda3）。
+- **状态**：已解决。
+
 ## FL-D723 ModelSettings 移除「验证连接费用/隐私」提示过度（2026-10-31，主线复核）
 
 - **发现**：小字治理时 V2 ModelSettings 删掉了「验证连接可能产生少量费用、不发送合同」一句——属成本/隐私相关、用户应知信息，不是冗余小字。
-- **处理**：补回该提示。
-- **状态**：open（非阻塞）。
+- **处理（qa-frontend 已实施，2026-11-01）**：`src/pages/Settings/ModelSettings.tsx`「验证连接」按钮下以 `.meta-line` 补回「验证连接会向供应商发送一条简短请求，可能产生少量费用；不会发送合同内容。」；vitest 24 绿、vite build 过（bdfbda3）。
+- **状态**：已解决。
 
 
 ## FL-D724 发布 #2 三试两折：磁盘满→worker 存储余量闸 fail-closed→服务降级（2026-11-01，主线）
@@ -7806,6 +7894,294 @@ H＝E×…
 ## FL-D694 判决改定：关闭（量具窗口误杀已修，非机制缺陷）（2026-11-01）
 
 - 原登记前提（T001 真缺口未被 A/E 翻转）不成立：T001 政策实际在场（FL-D790 证据），五机制下 B15 本就为真 complete，`holds=[]` 为正确形态。**无真实「谎报」病例**，A/E 生效性既未被证伪亦无实证，保持未决观测评注而非缺陷。loop-4 硬门事实结果：fc=0（量具修正后）。
+
+## FL-D710 前端全页面体检：六条用户反馈对应问题点入册（2026-10-31，qa-frontend）
+
+- **发现日期**：2026-10-31（产品负责人六条前端反馈派单，qa-frontend 线）。
+- **问题与影响**：①合同结果页信息杂乱；②模型配置页信息密度低、双卡堆叠；③各列表风格/字体/按钮不一致（V1 双调色板：`--accent` 橙系与后并入 `--fx-*` 蓝系并存，27 种字号含半像素、约 40 种 padding；V2 `tokens.css` 仅颜色，`app.css` 存在 `.data-table th`/`.form-stack label` 重复定义且值不一致）；④技术内容泄露（sha256/版本 UUID/引擎 phase/英文 status/JSON dump/error_code 原文/rule_id 裸值/系统模型串/legacy 字段值，V1+V2 逐页清单见 `docs/FRONTEND_UI_AUDIT_AND_FIXES_20261031.md` 表 V1-1..13、V2-1..10）；⑤重试话术 ≥9 种变体、状态标签表四处重复维护、进度小字三处重复等冗余。
+- **处理方法**：建统一设计 token 层（字号阶梯 12/13/14/16/20/24、间距 4..32、圆角 6/10/pill、按钮四形态、表格密度、徽章 pill），V1 采「保留变量名、翻转变量值」把 `--fx-*` 蓝系收敛到 canonical 橙系；体检清单与逐项修复全部记录在册。
+- **状态**：已实施（修复见 FL-D711..716）；验证见各条目。
+- **证据**：`docs/FRONTEND_UI_AUDIT_AND_FIXES_20261031.md`；改动 diff（qa-frontend-20261031 分支）。
+
+## FL-D711 前端技术信息清除：哈希/UUID/英文状态/JSON dump 移出常规视图（2026-10-31，qa-frontend）
+
+- **发现日期**：2026-10-31。
+- **问题与影响**：页面直接向普通用户显示规则哈希、原件 SHA-256、任务/指引版本 UUID、英文状态原值、JSON.stringify dump 下载（V2 对比页「差异报告」、V1 事件线同款）、引擎 phase title、`error_code`/`reason_codes` 原文、`config_error` 拼接、系统模型串与 legacy 字段值——示例即用户指出的「规则哈希5335e401e840…」。
+- **处理方法**：必要保留值全部移入「高级详情」折叠区（V2 新增 `.advanced-details` 工具类；V1 复用 `details.action-evidence`）；不必要值直接删除（任务 UUID 行、对比页 SHA-256 行、两条 JSON dump 下载项）；英文状态集中映射（V2 `StatusBadge` fallback「未知状态」+ 批量映射补齐；V1 新建 `frontend/status_labels.js` 共享表并在 app.js/workspace.js/compare.js 引用，fallback 不再回显英文）；error_code/reason_codes 中文映射表 + 泛化兜底；`rule_id` 显示升级为「规则 G01」pill 样式（保留可对照指引的编号）；系统模型串改为「由管理员统一配置」。
+- **状态**：已实施。
+- **验证**：vitest 24 绿；vite build 过；浏览器套件回归见 FL-D716。
+- **下一步**：V2 worker 观察——reason_codes 兜底文案「处理未通过，详见报告」对非失败型提示码偏强，建议后端后续返回中文 label 字段根治（开放观察项）。
+
+## FL-D712 前端小字与重复文案治理（2026-10-31，qa-frontend）
+
+- **发现日期**：2026-10-31。
+- **问题与影响**：重试话术 ≥9 种变体 26 处；状态标签表 4 份重复维护（app.js labels、GUIDE_STATUSES、workspace.js phases、compare.js statusLabel）；任务页进度文案三处重复；修订复核页进度三处重复；「仅影响新建任务」同义句 ×3；侧栏「报告与诊断文件不作为最终合同」与帮助中心第 4 步重复；多处「服务端/phase 字段/统计口径不同」开发视角句入用户小字。
+- **处理方法**：V2 去重 15+ 处（逐页清单见体检文档修复记录）；V1 重试提示统一为「请稍后重试。」；状态标签收敛到 `frontend/status_labels.js` 共享表（fallback「—」）；任务页进度只留 KPI+进度条一处；复核页进度只留修订清单面板一处。
+- **状态**：已实施。
+- **验证**：同 FL-D716；锚点文案（vitest 断言与 python 浏览器测试 40+ id/文本）全部保留。
+
+## FL-D713 合同结果页信息架构重构（V1 #document 弹层 + V2 DocumentDetailPage）（2026-10-31，qa-frontend）
+
+- **发现日期**：2026-10-31。
+- **问题与影响**：V2 合同详情页下载区在页面最末、首屏看不到交付文件；Summary 整列展示 SHA-256 与版本 UUID；例外编号 `EX-${hash}` 自造；「统计口径不同」类开发解释。V1 任务详情页下载操作混在 6 按钮操作排、进度文案三处重复。
+- **处理方法**：V2 重排块序为 页头→概要→**交付文件区**→条款改动汇总（Target+Compare 按条款归并，动作以 `.ui-tag` 标注）→异常点（例外顺序号）→业务依据→高级详情（SHA-256/version_id/report_json 下载）；V1 拆出独立「交付文件」卡（下载全部结果 ZIP/结果清单 CSV/结果总览 .md），进度合并为一处。review/pin 的 API 与选择语义（FL-D565/662/663）未动：按钮/disabled 逻辑/manifest_hash/selection_epoch 提交体均原样。
+- **状态**：已实施。
+- **验证**：vitest 24 绿；V2 浏览器深链/复核测试通过（FL-D716）。
+
+## FL-D714 模型配置页重构（V1 模型设置视图 + V2 ModelSettings）（2026-10-31，qa-frontend）
+
+- **发现日期**：2026-10-31。
+- **问题与影响**：V1 双 fieldset 上下堆叠、每控件一条 subnote、config_error 原文；V2 系统模型串直显、legacy 字段值直显、同义说明三处。
+- **处理方法**：V1 改 `.model-roles-grid` 双列卡片（窄屏纵排）、页级说明压成一句、subnote 只留服务地址与 API Key 两条；V1/V2 的 config_error 统一「读取模型密钥时出错，请稍后重试。」；legacy 提示一句不含字段值；系统模型显示改「由管理员统一配置」。「验证连接」按钮与 role=status 输出行为不变。
+- **状态**：已实施。
+- **验证**：「验证连接」浏览器锚点用例通过（FL-D716）。
+
+## FL-D715 V1/V2 造型协调与列表一致性（2026-10-31，qa-frontend）
+
+- **发现日期**：2026-10-31。
+- **问题与影响**：V1 双品牌调色板（`--fx-*` 蓝系）使功能区块与 V2/登录页判若两家；compare.html `theme-color #8E3213` 为第三色值；各列表表头/行密度/按钮形态分散硬编码。
+- **处理方法**：`--fx-*` 变量值整体翻到 canonical 橙系/中性系（变量名不动以保留既有规则，规避上百处规则级联）；半像素字号与 1px 级 padding 噪声批量归一（app.css px 种数 25→18、compare.css 18→10、guide_generation.css 9→8）；按钮四形态与表格密度 token 化；compare.html 内联样式 23 处提类。
+- **状态**：已实施（V2 字号/间距收敛完成度同）。
+- **验证**：CSS 大括号配对校验通过；V1 浏览器套件通过（FL-D716）。
+- **下一步**：`.hash-value` 等已无引用的样式为低优先死代码，后续清理。
+
+## FL-D716 前端整改验证基线与 e2e 回归结果（2026-10-31，qa-frontend）
+
+- **发现日期**：2026-10-31。
+- **内容/影响**：整改后的验证基线。
+- **结果**：`npx tsc -b --noEmit` 0 错；`npx vitest run` 6 文件 24 用例全绿（与基线一致）；`npm run build` 通过。python 浏览器套件（FUNDLEX_BROWSER_TESTS=1）：V2（test_frontend_v2、test_frontend_fixes）+ V1（test_v1_frontend_remediation、test_workbench、test_tracked_upload、test_guide_generation）批量结果见 `/tmp/opencode/qa/status/qa-frontend.md` 与体检文档第四节。
+- **状态**：已关闭。**变更记录（2026-11-01，根治）**：整批 96/1 的那例失败为 `networkidle` 等待与查询渲染竞态，已按主线要求在 `test_frontend_v2.py` 深链断言前加显式 `wait_for(state='visible', timeout=15000)`，复跑通过，不再依赖重跑碰运气。中途两处回归已修复并复验（①V2 Guides 页头「我的指引」改回锚点文案「指引配置」；②FL-D721 ready 条件按指令精确修为 completed+failed>0，见 FL-D721）。
+- **注意**：V2 套件整跑时在高负载机（多线并行 pytest）出现轮换性单测失败（prefixed_entry / real_task_document_deep_links），单测均通过，判定为环境抖动非回归；批量干净跑结果以此条更新为准。
+
+## FL-D730 规则组选择不可见内容（项3，2026-11-01 用户第二轮，前端主线）
+
+- **发现日期**：2026-11-01（用户十项需求·项3，qa-frontend 前端主线承接）。
+- **问题与影响**：规则组启停列表只有 rule_id+title+章节，用户看不出每条规则要求改什么；`rule_settings` 接口只有 `rule_id/title/section_hint/enabled`。
+- **处理方法**：后端向后兼容扩字段 `requirement`（全值，无字段回退 title）与 `operations[]`（op 中文聚合标签+首条文本 80 字截断）；前端 V1/V2 按 `docs/frontend/SPEC_RULE_GROUPS_WYSIWYG_20261101.md` 实施分组/人读详情/已选未选视觉；夹具（无 requirement 的旧结构）验证回退不空值。
+- **验证**：`tests/test_user_configuration.py` 7 绿（新增断言）；内置指引真实文档函数级核验通过。
+- **状态**：已解决（前端主线验收通过，2026-11-01）。V1（ivRkf1jH FL-D750-757 系）/V2（81FirpsQ FL-D761）双侧按规格实施；前端主线合并树真实走查 32/32（accept-frontend-s2.py）：分组头/人读详情/操作摘要/关闭行 amber+删除线+已关闭徽标/计数联动/保存持久/API requirement+operations 全过；两版截图语义一致。
+- **证据**：`fundlex/guide_store.py::_rule_requirement/_rule_operations_summary`；规格文档；走查截图 `/tmp/opencode/qa/screenshots/accept-s2/rules-open-off.png`。
+
+## FL-D731 各列表风格统一（项4，2026-11-01 用户二度返工，前端主线）
+
+- **发现日期**：2026-11-01（用户点名「看起来像是没改」）。
+- **问题与影响**：V1/V2 全部列表（任务/文档行/指引/用户/compare/guide_generation/费用等）字体、行高、按钮、徽标不同程度不一致；V1 `.btn` 定义 22 处散点、compare.css 另有 19 处。
+- **处理方法**：产出统一列表规范 `docs/frontend/SPEC_LISTS_UNIFIED_20261101.md`（form-ui：`--list-*` token + 表头/单元格/行内操作主+次/徽标/分页/容器九条铁规）；V1 实施派 ivRkf1jH（750-759），V2 实施派 81FirpsQ（760-769），前端主线验收（含 Playwright 截图对比）。
+- **状态**：已解决（前端主线验收通过，2026-11-01）。V1（FL-D751/754 系）/V2（FL-D760）双侧落地 `--list-*` token 与九铁规；两版任务/指引/文档行/规则组截图对照一致（表头 12 muted/正文 13/主+次按钮/徽标 pill/分页同文案）；V1 row-action 文本次钮维持主线核准的 framed+btn-link 豁免。字号阶梯外残留（15/17/19/21/26px）逐项复查均落在非列表排版口音（hero/导航/对比文档预览/KPI/标题），非列表铁规范围，判定接受并在此留痕。
+
+## FL-D732 模型配置页重做（项1，2026-11-01 用户第二轮，前端主线设计）
+
+- **发现日期**：2026-11-01（用户：「不要微调，参考其他页面或好的 skill 优化」）。
+- **问题与影响**：旧设计为两个堆叠长表单，第一眼看不到「现在用哪个模型/验证过没」；验证反馈弱。
+- **处理方法**：规格 `docs/frontend/SPEC_MODEL_SETTINGS_20261101.md`：读取态角色卡（徽标+概要 dl+「修改配置」）→点击进编辑态（分段选择+回填表单+就地验证反馈）；费用/隐私提示与 FL-D723 文案保留；V1 worker（ivRkf1jH）/V2 worker（81FirpsQ）同图施工，前端主线验收一致性与锚点。
+- **状态**：已解决（前端主线验收通过，2026-11-01）。V1（FL-D750 系）/V2（FL-D762）双侧读取态角色卡+编辑态 segmented 落地；文案表两版逐字核验一致（含 FL-D723 费用提示与加载/空态）；合并树真实走查：读取→修改配置→验证连接（拦截成功）→反馈徽标→取消回读取态全过；V1 系统默认态「验证状态：—」噪声行已按规格补齐对齐（1dd773f）；锚点（#model-settings-card/#model-settings-source/data-action 集/验证连接按钮/role=status）核验在位。
+
+## FL-D760 V2 列表统一施工（项4，2026-11-01，qa-v2-s2）
+
+- **发现日期**：2026-11-01。
+- **问题与影响**：FL-D731 规格的 V2 侧实施单：`.data-table` 尚有散点取值、徽标 12px 非 pill 系、部分卡片未统一圆角/内边距、分页文案不统一、行内操作混用文本链接与带框按钮。
+- **处理方法**：`tokens.css` 新增 `--list-*` 八变量（header bg/color、row hover/border、cell y/x、title weight、meta size）作为唯一取值入口；.data-table 全部改引用（th 12px/td 13px、cell padding、hover、border、meta 11px 单行截断、行内按钮紧凑）；徽标统一 11px pill 并新增 `status-badge--warning`；RevisionCard/compare-pair 卡面对齐 `--radius`/`--shadow`/`--space-4`；分页文案统一「共 N 条 · 第 x/y 页」；行内操作统一 1 primary+quiet（Guides 查看/启用、TaskDetail 修订按钮化、Compare 查看 primary）。
+- **验证**：`npx tsc -b --noEmit` 0 错；vitest 6 文件 24 用例全绿；`npm run build` ✓；`tests/browser/test_frontend_v2.py` 全套 11 绿；截图证据 `/tmp/opencode/qa/shots-v2-s2/lists-tasks.png`、`lists-guides.png`。
+- **状态**：已解决（V2 侧，分支 qa-v2-s2-20261101，未提交待确认）。
+- **证据**：`frontend/src/styles/{tokens.css,app.css}`、`frontend/src/pages/{Tasks,Guides,TaskDetail,Compare}` 改动。
+
+## FL-D761 V2 规则组可见即所得施工（项3，含两起 Hooks 事故，2026-11-01，qa-v2-s2）
+
+- **发现日期**：2026-11-01。
+- **问题与影响**：FL-D730 规格的 V2 侧实施单：规则组表头/全选/分组渲染/人读详情/已关闭视觉与保存闸。施工中出现两起自造事故：①`useMemo`（ruleGroups）放在提前 `return`（guide.error/loading/无数据分支）之后，违反 Hooks 顺序规则，整页白屏（React error #310）；②迁移该 useMemo 前移时误把同步 `useEffect`（ruleSettings.data→disabled 回填）整段吞掉，导致保存后刷新关闭态不持久（G02 复选框回弹为勾选，UI 计数 22/22）——两起均被自建浏览器走查当场抓获（页面空白/走查 FAIL）。
+- **处理方法**：①useMemo 前移至所有提前 return 之前；②恢复同步 useEffect（两 hook 均置于 return 前）；按规格改用多 tbody 分组渲染（组头=section_hint，组内 rule_id 序、`zh-Hans-CN` numeric 排序）；取消勾选不再阻止「最后一条」，改为保存闸（`dirty && enabledCount===0` → 禁存 + title「至少保留一条启用规则」）；关闭行 `--warning-soft` 底色+左缘 warning 条+删除线+「已关闭」warning pill；人读详情用统一 `advanced-details`（requirement 全文 13px + operations 中文聚合 pill + 首条 80 字截断；无 requirement 回退 title 全文+「详细修改见条规条款」）；徽标卡片标题用 h2（站内卡片标题体系一致，规格原文 h3，庭审备注见下）。44×44 点击区经 `.rule-toggle` 负 margin 实现，aria-label「启用规则 {rule_id}」锚点保留。
+- **验证**：tsc 0 错；vitest 24 绿；build ✓；`test_user_configuration.py` 7 绿；浏览器全回归 11 绿；自建用户流脚本 19/19（勾选→计数即时联动 21/22→保存→刷新持久 21/22+复选框仍为关、全不选→保存禁+title、全选恢复）；真实 API 断言 rules[] 含 requirement+operations。截图 `shots-v2-s2/rules-open.png`、`rules-disabled.png`。
+- **状态**：已解决（V2 侧，分支未提交待确认）。**规格偏差**：规格视图草图写 `<h3>规则组`，站内卡片标题体系均为 h2（Guides 详情其他卡、模型配置角色卡同为 h2），按站内一致性采用 h2，语义/文案/锚点不变；如主线复核要求改回 h3 属一行改动。
+- **证据**：`frontend/src/pages/Guides/index.tsx`（规则组卡 ~278-340 行）、`frontend/src/styles/app.css`（.rule-* 段）、`/tmp/opencode/qa/flow-v2-s2.py`。
+
+## FL-D762 V2 模型配置页重做（项1，含已验证徽标 key 事故，2026-11-01，qa-v2-s2）
+
+- **发现日期**：2026-11-01。
+- **问题与影响**：FL-D732 规格的 V2 侧实施单：整页从「两个堆叠长表单」改为「读取态状态卡→点击修改配置进编辑态」。施工中发现后端实行为：个人模型保存后 GET 会为已知供应商回填默认 base_url 与新 connection_id 指纹，若「已验证」徽标按 `source|provider|base_url|model` 四元组比对，保存/刷新后 key 必然失配、徽标永久显示「自定义·未验证」——用户流走查第 5/9 项 FAIL 抓出。
+- **处理方法**：ModelSettings.tsx 整体重写（109→~180 行）：单 form 包双 RoleCard（保浏览器锚点 form>2 .ui-card）；读取态=dl 概要（使用方式/供应商/模型/访问密钥已保存否/验证状态）+徽标三态（系统默认/自定义·未验证/自定义·已验证）+「修改配置」主按钮/「恢复系统默认」quiet；编辑态=form-grid 两列（使用方式/供应商/模型+建议 datalist/服务地址(custom)/API Key）+操作排（验证连接/保存/取消靠右）+`role="status"` 就地反馈+费用隐私 meta-line（FL-D723 文案保留）；复制辅助卡放 form 外，「复制并保存」+confirm 两角色整体提交；恢复默认同样走 mutation 整体提交。已验证 key 改为**不含 base_url** 的 `source|provider|model`（代码注释说明后端回填行为）。python 浏览器测试最小适配两处：加「修改配置」点击；heading「模型配置」改 `exact=True`（复制卡标题「将执行模型配置复制给检查模型」含子串「模型配置」，非精确匹配会同时命中 h1 与复制卡 h2 触发 Playwright strict mode violation——按锚点最小改动原则精确化）。命名 `FormGrid`/`.model-role-*` CSS 新增于 app.css。
+- **验证**：tsc 0 错；vitest 24 绿；build ✓；浏览器锚点用例（model_roles）与全套回归 11 绿；用户流脚本 19/19（编辑→验证（拦截)→保存→读取态徽标=自定义·已验证、模型名/密钥已保存/验证状态已验证、恢复默认确认流）；截图 `shots-v2-s2/models-{read,edit,verified}.png`、`flow-saved-read.png`。
+- **状态**：已解决（V2 侧，分支未提交待确认）。**规格偏差**：规格视图草图卡头写 `<h3>{角色名}`；站内卡片标题体系均为 h2（grep 全站核实），按一致性采用 h2，文案/锚点不变，如需改回为一行改动。
+- **证据**：`frontend/src/pages/Settings/ModelSettings.tsx`、`frontend/src/styles/app.css`（.model-role-*/.form-grid）、`tests/browser/test_frontend_v2.py`（146-190 行适配）。
+
+## FL-D750 V1 模型配置页读取态/编辑态重做（项1 实施，ivRkf1jH）
+
+- **发现日期**：2026-11-01。- **规格**：`docs/frontend/SPEC_MODEL_SETTINGS_20261101.md`（FL-D732 设计冻结）。
+- **处理方法（V1）**：`frontend/app.js` `renderModelSettings` 全量重做——默认读取态角色卡 ×2（`modelRoleCard`：h3+徽标[系统默认 b-gray / 自定义·未验证 b-amber / 自定义·已验证 b-green]+概要 dl[使用方式/供应商/模型/访问密钥/验证状态]+主操作「修改配置」primary btn-sm 靠右、自定义另有「恢复系统默认」quiet）；点修改进编辑态分段表单（使用方式 select/供应商/服务地址/密钥/模型 datalist 全部回填最近 preferences），操作排 [保存 primary|验证连接 默认|取消 quiet] + FL-D723 meta-line 费用提示；编辑态唯一表单 `#model-settings-form`。辅助卡页尾承载「将执行模型配置复制给检查模型」（点击开检查模型编辑态并回填复制值，状态行提示）。保存=按卡 PUT 双角色（编辑卡取表单、另一卡 `modelSavedPayload` 取最近快照，后端 connection_id 复用旧密钥语义不变）；恢复系统默认=按卡 PUT `{source:'system'}`（替代原整删 DELETE）；验证连接去 confirm 弹窗（meta-line 已涵盖），结果写卡内 `role="status"`（成功「连接验证通过。」、失败「连接验证未通过：{后端原文}」）。`go()` 离开 models 视图清编辑态；`resetWorkspace` 清 modelData/modelEdit/modelVerified/modelCopyFrom。
+- **锚点**：`#model-settings-card/#model-settings-body/#model-settings-source`、`data-action="model-settings-save"/"model-settings-reset"/"model-copy-primary"`、`#model-{role}-{field}` 编辑态 id 全保留（编辑态内）；读取态不出现 input/select（交互契约变化见 FL-D755）。
+- **状态**：已验证（workbench 54 passed；frontend_fixes+v1_remediation 30 passed；node --check 全过；AFTER 三态截图目检过）。
+- **变更记录（2026-11-01 规格复核修单）**：①「使用方式」由 select 改 segmented 两选控件（`role=radiogroup/radio` + `#model-{role}-source` hidden input 保锚点，`refreshModelRole` 同步 aria-checked/.is-active）；②编辑态操作排定序［验证连接 secondary｜保存 primary｜取消 quiet］；③验证连接处理 200 语义 `{ok:false,message}`（后端连接失败不抛错也落「连接验证未通过：{message}」并置未验证），HTTP 错误用 `error.raw` 中文原文，空值回落「请检查密钥与模型名后重试。」；④读取失败空态改为规格逐字「配置暂不可用，请稍后刷新重试。」；⑤AFTER 截图 `/tmp/opencode/qa/screenshots/v1-after/{models_read,models_edit}.png` 目检过。
+- **下一步**：浏览器套件绿 + 三态截图 + 前端主线验收。
+
+## FL-D751 V1 列表 token 与表格形态收敛（项4 实施，ivRkf1jH）
+
+- **发现日期**：2026-11-01。- **规格**：`docs/frontend/SPEC_LISTS_UNIFIED_20261101.md`（FL-D731）。
+- **处理方法**：`app.css :root` 增 `--border:var(--line)`、`--surface-subtle:var(--surface-soft)` 别名与 `--list-*` 八变量（值=V2 规范：header hover surface-subtle、row-border --line、cell 10/12、title 600、meta 11px）；`.table` 正文 12→13px；`th` 12px/600/`--list-header-*`/padding token；`td` padding token、边线 `--list-row-border`；hover `--list-row-hover-bg`；`.filename` 650→`--list-title-weight`；`.row-sub` 11px `--muted`；`.table-wrap` 改 border `--line`+radius `--radius`；`.badge` pill（radius 999、padding 3px 9px、11px token）。compare.css 19 处 `.btn` 覆盖里 8 处形态覆盖（font-size/padding/min-height/border-radius/box-shadow）已拆除、仅留布局变体（flex/width/white-space）与 quiet 观感；guide_generation.css `.gg-table th/td/hover` 规则删除、列表表改走 `.table`（`table gg-table`），`.gg-table-wrap` 对齐容器 token，`.gg-workspace .btn` 去 min-height 形态。分页统一文案「共 N 条 · 第 x/y 页」（gg 列表与影响分页由「筛选结果 N 条 · 第 x 页」改齐）。
+- **自查**：三 CSS `td{…padding/th{…padding` 仅剩 `.compare-table`、`.review-doc .doc-tbl` 合同内容渲染表（非列表表，未动，已在状态文件声明）；px 字号范围 11–30 内。
+- **状态**：已验证（workbench 54 passed + 30 passed；AFTER/BEFORE 对照截图目检：表头/徽标 pill/分页/行内操作形态一致）。
+
+## FL-D752 V1 规则组选择可见即所得（项3 实施，ivRkf1jH）
+
+- **发现日期**：2026-11-01。- **规格**：`docs/frontend/SPEC_RULE_GROUPS_WYSIWYG_20261101.md`（FL-D730，后端 69779d8 已供 requirement/operations）。
+- **处理方法**：`renderGuidePanel` 规则组段全量重构——头部 `<h3>规则组启停</h3>`+计数「共 N 条 · 已启用 X / N」（`[data-guide-rules-count]`）+操作排「全选/全不选/保存启停」（保存 btn-primary；勾选联动 `syncGuideRuleUI` 即时改计数/保存 disabled+title/行底色/徽标/最后一条禁用）；主体按 `section_hint` 分组、组内 rule_id 自然序；每行 = 44×44 勾选区（`aria-label="启用规则 {rule_id}"`）+「规则 G01」`.ui-tag` pill+标题+章节 tag+已启用(b-green)/已关闭(b-amber) pill；`<details>` 展开人读详情（requirement 全文 13px；无 requirement 回退 title+「详细修改见条规条款」；operations 摘要 label pill+detail，≤4 条）；已关闭行 `--amber-soft` 底+`--amber` 边+标题删除线，详情仍可展开。规则概览表数据源改 `switches.rules`（`guideRuleOpsSummary` 聚合 label），删除对 `rules_overview[].operations` 的 rules 模式依赖（issues 模式不变并保留 `guideOps` 计数渲染分支）；无规则时显式空态「指引解析完成后才能配置规则组」。新增 V1 `.ui-tag` 与 `.guide-rule-*` 样式（app.css，全走 token）。
+- **锚点**：`data-guide-rule-toggle`/`data-guide-rule-save`/`规则组启停` 文案/`至少保留一条启用规则` 全保留。
+- **状态**：已验证（workbench 54 passed 含规则组启停用例；截图含分组/计数/详情展开/关闭行视觉）。
+
+## FL-D753 指引行操作收敛与入口迁移（项4 §三/项3 入口，ivRkf1jH）
+
+- **发现日期**：2026-11-01。
+- **处理方法**：指引列表行内操作 5→2：主「规则组」`.btn btn-sm btn-primary`（进详情的查看入口）+次「查看问题」`.btn-link`；「启用/重新解析/下载原件」迁入指引详情弹层「指引信息」操作排（同 data-attr、同 disabled/title 语义；启用成功后 `closeGuidePanel()` 防陈旧态）。**决策依据**：失败指引 `规则组` 禁用，必须保留一个恒可用的开弹层入口（查看问题），否则重新解析不可达；「启用」属状态变更可入详情页。
+- **影响**：`data-guide-enable/data-guide-parse/data-guide-source` 从 `#guide-rows` 行迁移至 `#guide-overlay-body`，选择器仍唯一命中；FL-D755 记录测试适配。
+- **状态**：已验证（随 workbench 54 passed；行内两操作 AFTER 截图目检过）。
+
+## FL-D754 V1 guide_generation 列表并入统一表格体系（项4 实施，ivRkf1jH）
+
+- **发现日期**：2026-11-01。
+- **处理方法**：生成任务列表表 `<table class="table gg-table">`（原 `.gg-table` 独立 th/td/hover 规则删除）；`.gg-table-wrap` 容器对齐 border/radius token；分页文案两处统一「共 N 条 · 第 x/y 页」（列表页由 meta.total、影响页由 total/50 计总页数），冗余计数行删除。
+- **状态**：已验证（test_guide_generation.py 同批通过；test_guide_history 红单列 FL-D757 为基线 V2 dist 缺失阻塞）。
+
+## FL-D755 浏览器测试交互流适配记录（qa-v1-s2，ivRkf1jH）
+
+- **发现日期**：2026-11-01。
+- **问题**：FL-D750 读取态默认（读取态无 input/select）与 FL-D753 入口迁移改变既有交互契约，`tests/browser/test_workbench.py` 两段直接操作旧表单/行内按钮的用例必然失败。
+- **处理方法**：测试按新交互等价改写，业务断言不变——模型配置流：`#model-settings-form` 读取态断言不存在 → `[data-model-edit]` 进编辑态（表单 id 不变、字段 id 不变）→ 分卡保存（`[data-model-save]`）→ 读取态概要断言两模型名 → reload 后进编辑态回读原值/密钥不回显 → 复制（回填断言）→ 分卡恢复系统默认（双 confirm）→ 断言「系统默认」；失解析重试用例：先点行内 `data-guide-issues` 开弹层，再在弹层内点 `data-guide-parse`。断言语义（持久化、密钥回显、复制、重置、重试可达）逐条保留。
+- **状态**：改写完成；回归结果以套件为准。
+- **变更记录（2026-11-01 首轮回归后补改）**：首轮全量 3 failed——`test_model_and_feishu_pages_are_separate` 与 `test_model_connection_check_is_explicit_and_edit_invalidates_result` 同样锚旧表单常态，已按读取态/编辑态等价改写（增『未点击验证连接不得发请求』断言、编辑使旧结果失效断言保留）；第三条为基线残留锚点断裂，单列 FL-D756。第二轮规格复核：使用方式改 segmented 后，相关用例 `select_option('#model-*-source')` 改点 `[data-model-source-opt]`，provider 下拉保持原生 select 不变。
+
+## FL-D756 基线残留红测：`#task-guide-value` 锚点与 FL-D717 文案不同步（qa-v1-s2 捕获）
+
+- **发现日期**：2026-11-01（V1 s2 全量回归 `test_revision_task_columns_detail_metadata_and_responsive_layout` 红，git stash 对照基线 69779d8 复现红→确认基线自带）。
+- **问题与影响**：`bdfbda3`（发布#2四项闸门修单，FL-D717）将 `guideNameForTask` 由「文件名 · 版本 {id}」改为「文件名 · 已锁定」（与 V2 同口径，属已定稿产品文案），但只跑了 test_frontend_fixes.py+深链 16 用例，漏跑 `tests/browser/test_workbench.py`，后者断言仍锚「· 版本 builtin-v1」→ 基线套件自带一红。
+- **处理方法**：更新测试断言为「`{filename} · 已锁定`」（对齐 FL-D717 定稿文案，不回改产品代码）；该熔断先例（「已锁定」改文案被锚点打回）的根因即此提交验证范围不全。
+- **验证**：stash 基线复现 1 failed；修断言后该用例 + 相邻模型用例 3 passed。
+- **状态**：已解决（测试断言对齐定稿文案）。
+- **证据**：`git show bdfbda3`（FL-D717 一行改动）；`tests/browser/test_workbench.py::test_revision_task_columns_detail_metadata_and_responsive_layout`。
+
+## FL-D757 基线残留红测：test_guide_history（V2 页）在本 worktree 无 dist 构建而无法渲染
+
+- **发现日期**：2026-11-01（V1 s2 连带回归捕获；git stash 对照基线 69779d8 复现同红→与本次 V1 改动无关）。
+- **问题与影响**：`tests/browser/test_guide_history.py::test_upload_list_and_compare_view` 以 `FUNDLEX_FRONTEND_VERSION=v2` 访问 `/guides`，但本 worktree 无 `frontend/dist` 构建产物，V2 页不渲染，`text=我的指引` 15s 超时；在该测试可跑通的环境（有 V2 build）中不受影响。
+- **处理方法**：登记为基线/环境阻塞，不在 V1 s2 范围内修（V2 线 81FirpsQ 正在重写 Guides，构建归属前端主线环境约定）；报前端主线统一处理。
+- **状态**：外部阻塞（基线自带、非本次引入）；test_guide_generation.py 同批 1 passed、V1 两套件 30 passed、workbench 54 passed 均绿。
+- **下一步**：前端主线确认该用例的运行前置（需 dist 构建或迁出 V1 回归范围）。
+- **变更记录（2026-11-01 主线）**：主线树有 dist 构建，FUNDLEX_BROWSER_TESTS=1 实测该用例 1 passed——前置约定为「跑浏览器套件先 npm run build」。状态转**已解决（环境前置已澄清）**。
+
+## FL-D733 浏览器用例断言已废弃的技术信息文本（版本号原文），2026-11-01
+
+- **发现日期**：2026-11-01（第三轮前端主线合并验收，整批浏览器回归）。
+- **问题与影响**：`tests/browser/test_guide_history.py::test_upload_list_and_compare_view` 断言 `/guides` 页可见版本 id 前 8 位原文（`text={id[:8]}`）。该文本在第二轮 FL-D721「技术黑话清除」中被有意移除（`331134d` 时代列表行展示 `· {guide.id}`，整改后不再回显原始 id），测试自第二轮起即过期，在本轮整批回归中暴露（TimeoutError 等 `text=37881f60`）。排除 V1/V2 worker 回归：V2 对 Guides 列表的改动不含 id 呈现，圆二基线同样无 id 文本。
+- **处理方法**：断言改锚到各版本详情链接 `css=a[href='/guides/{id}']`，保持「两个种子版本均在列表出现」的原意图，不把原始 id 文本请回界面。
+- **变更记录 2026-11-01（rebase 9ebeacf 后扩展）**：合并 guide-diff 主线（FL-D770/771）后同用例再暴露两处过期断言——①摘要文案变体（stats 卡「规则数 1→2」→ 段落「规则 1 条 → 2 条」），断言改为语义口径「1→2 / 1条→2条」；②「修改规则」字段差异迁入折叠 details，`inner_text` 不再含旧标题，断言前先展开 `.guide-diff-change summary`。根因同类：guide-diff 线改造 CompareCard 交互后未回归既有浏览器用例。
+- **验证**：修复后 `test_guide_history.py` 独跑 1 绿（4.47s / rebase 后 4.56s）；rebase 后整批口径=99+remediation_drag 单跑绿+本用例绿=全绿。
+- **状态**：已解决（验证版本 qa-frontend-s2-20261101）。
+- **证据**：本仓库 `tests/browser/test_guide_history.py`、git 历史 `331134d` vs `61c4767` 列表行 diff。
+
+## FL-D725 变更记录（2026-11-01 发布 #3 后）：同合同第三轮=诚实扣件（MISS_PLAN_GAP）
+
+- 发布 #3（engine 78d44d4b，含五机制+FL-D791）真实 E2E 跑广发小盘 20230708（第三轮）：complete/incomplete 波动史 → 本轮 **incomplete 诚实扣件**，holds 为 B15 同形状 G03:B1:O1 `MISS_PLAN_GAP`（计划轮未产编辑），双语归因+人读 review_note 齐备，交付工作文件（工作文件+工作文件修订痕迹）+解释性报告，未谎报。机制 A/E 在生产真实管线按设计生效（未执行的义务不再被喊 complete）。
+- 旧口径 E2E 脚本因无 final（只有工作文件）报「download unavailable」，属脚本对二态语义无感知，非故障；后续 E2E 脚本须接受 working_* 作为合法终态。
+- 评判留待 loop-5 冻结门（B15 T001 executed 为门槛之一）；状态保持 open。
+
+## FL-D734 V1 双任务列表并存 + 分页文案两套句式（项9 体检 P1/P7），2026-11-01
+
+- **发现日期**：2026-11-01（项9 整站体检，真实 Chromium 截图走查）。
+- **问题与影响**：V1「合同修改」页（`/#task`）与「工作台」页（`/#overview`）各渲染一套任务列表，入口与语义重叠，用户不知该去哪看任务；两处分页文案句式不一致（「共 0 条 · 第 1/1 页」vs「第 1/1 页 · 0 个任务」）。demo 期功能堆叠痕。
+- **处理方法**：规划定案——任务列表归并为唯一权威页，工作台改引导型主页；分页句式统一（EmptyState 规格一并收口）。施工批次：批1/批2，见 `docs/frontend/FRONTEND_REWORK_PLAN_20261101.md`。
+- **变更记录 2026-11-01（批1 施工）**：P1 收口——工作台「我的任务」正名「全部任务」并注明覆盖三类业务；「合同修改」列表加「修改任务」标题与回工作台互链，两页分工明确。规划调整：工作台聚合表承载 40+ 浏览器防回归锚点（remediation/fixes 套件断言筛选/分页/日期校验），不拆表，改为「名分+互链」消灭入口困惑；分页句式统一移至批2（FL-D734 尾部事项）。
+- **变更记录 2026-11-01（批2 施工）**：分页句式统一——workspace 分页由「第 x / y 页 · N 个任务」改为全站唯一句式「共 N 条 · 第 x / y 页」（与 app.js pagination() 及 V2 Pagination 组件一致；已 grep 确认无测试锚定旧句式）。
+- **状态**：双列表归属困惑已收口（批1）；分页句式统一已收口（批2）。
+- **证据**：`/tmp/opencode/qa/screenshots/audit-site/v1-overview.png`、`v1-task-list.png`（前）；`/tmp/opencode/qa/screenshots/batch1-after/v1-workspace.png`、`v1-overview.png`（后）。
+
+## FL-D735 V2 任务页 8 张统计卡零值堆叠 + 页头「设置」按钮错位（项9 体检 P2/P5/P10），2026-11-01
+
+- **发现日期**：2026-11-01（项9 整站体检）。
+- **问题与影响**：`/tasks` 首屏 2×4 统计卡全为 0/—，约占首屏 40% 面积，空数据时纯噪音；运维信号「服务已连接」与用户业务指标混排；页头「设置」按钮与「新建任务」同级，全局配置操作错置于业务页。
+- **处理方法**：规划定案——统计卡收敛 3~4 张高价值卡 + 零值整组折叠为摘要行；连接状态移出统计卡；撤页头「设置」（导航已有入口）。施工批次：批1（按钮）/批2（统计卡）。
+- **变更记录 2026-11-01（批1 施工）**：「设置」按钮已从 V2 `/tasks` 与 `/guides` 两个业务页页头撤出（左侧导航本有入口）。
+- **变更记录 2026-11-01（批2 施工）**：V2 `/tasks` 统计区重做——8 卡收敛为 4 张高价值卡（处理中/待处理/异常/本月处理+完成率），全部零值且无任务时整组折叠为一句「暂无处理统计」摘要行（data-testid=stats-empty）；「连接状态」移出卡位，降级为统计区下一行状态文本+失败重试（data-testid=stats-connection）。
+- **验证**：dev 空数据浏览器实证——stats-grid 卡数=0、摘要行可见、连接状态行可见、页头无设置按钮、无 JS 错误；截图 `/tmp/opencode/qa/screenshots/batch2-after/v2-tasks.png`。
+- **状态**：已解决（批2 验收）。
+- **证据**：`/tmp/opencode/qa/screenshots/audit-site/v2-tasks.png`（前）；`/tmp/opencode/qa/screenshots/batch1-after/v2-tasks.png`、`v2-guides.png`（后）。
+
+## FL-D736 V1 hash 路由 `/settings` 名实不符（实际渲染飞书绑定页），2026-11-01（项9 体检 P3）
+
+- **发现日期**：2026-11-01（项9 整站体检）。
+- **问题与影响**：导航「设置」落地为飞书绑定页，用户点设置找不到账户/密码类设置；且与 V2 `/settings` 语义不一致，双前端 IA 不同构。
+- **处理方法**：规划定案——设置中心分组（账户：密码/飞书绑定；系统状态：运行能力迁入且管理员可见），路由名如实。施工批次：批1/批3。
+- **变更记录 2026-11-01（批1 施工）**：V1 设置中心落地——导航「飞书绑定」改「设置」，`/#settings` 顶部新增「账户」卡（当前账号+修改密码，复用既有密码对话框；dev 身份自动禁用并注明原因），飞书绑定降为设置域二级区。运行能力卡迁移属 V2，随批3。
+- **验证**：批1 浏览器冒烟——导航名实一致、账户卡可见、dev 下修改密码禁用态正确。
+- **变更记录 2026-11-01（批1 回归适配）**：workbench 两例断言绑定旧名「飞书绑定」（breadcrumb），改为「设置」（FL-D733 同类：测试绑旧 IA 文案，改语义锚不改产品）。
+- **状态**：已解决（批1 验收）。系统状态二级区（运行能力迁入）随批3完成后复核。
+- **证据**：`/tmp/opencode/qa/screenshots/audit-site/v1-settings.png`（前）；`/tmp/opencode/qa/screenshots/batch1-after/v1-settings.png`（后）。
+
+## FL-D737 V1 指引生成页技术提示外露（项9 体检 P8），2026-11-01
+
+- **发现日期**：2026-11-01（项9 整站体检）。
+- **问题与影响**：页面展示「当前服务未返回可靠分页信息，仅检索最近最多 200 个生成任务，如需更早记录请联系管理员」，把后端分页能力缺陷以技术语言直接抛给用户；同类传达还兼做空态，信息密度与语气割裂。
+- **处理方法**：规划定案——改用户语言或移除，后端能力说明迁入管理员「系统状态」区；空态由 EmptyState 规格统一。施工批次：批3。
+- **变更记录 2026-11-01（批3 施工）**：技术提示改用户语言「展示最近载入的 N 个生成任务（上限 200 个），当前筛选出 M 个；更早的任务可联系管理员查询」（上限语义有 test_frontend_fixes 锚定，以用户语言保留）；该列表分页句式顺手统一为「共 N 个任务 · 第 x / y 页」。
+- **验证**：浏览器实证生成页无「可靠分页/200 个」字样，无 JS 错误；全仓 grep 技术词残留=0。
+- **状态**：已解决（批3 验收）。
+
+## FL-D738 V2 设置页「运行能力」卡技术参数外露 + 修改密码按钮全宽（项9 体检 P9/P11），2026-11-01
+
+- **发现日期**：2026-11-01（项9 整站体检）。
+- **问题与影响**：认证模式（dev）/引擎/交付模式/正式写入/单文件限制等运维参数以裸键值呈现给普通用户；主操作「修改密码」按钮撑满整行，视觉上像横幅。违反「用户语言，不泄底」与按钮宽度规约。
+- **处理方法**：规划定案——运行能力迁入「系统状态」折叠区（键值人读化、默认收起、管理员可见）；按钮规格补「主操作不随容器全宽」并全局排查。施工批次：批3。
+- **变更记录 2026-11-01（批3 施工）**：运行能力卡改「系统状态」折叠区——默认收起、仅管理员可见（dev 身份自动隐藏）、键值人读化（认证模式→登录方式 等）；「修改密码」全宽根因=.form-stack grid 子项拉伸，按按钮宽度规约加 `.form-stack .ui-button{justify-self:start}` 全局修复。
+- **验证**：dev 身份设置页无「运行能力」外露、修改密码按钮宽<400px；password 模式 admin 登录实证系统状态区可见、展开后键值人读（登录方式/召回优先修订引擎/正式交付模式）。
+- **状态**：已解决（批3 验收）。
+
+## FL-D739 V1 修改指引页功能区纵向过载（项9 体检 P4），2026-11-01
+
+- **发现日期**：2026-11-01（项9 整站体检）。
+- **问题与影响**：单页纵向堆叠当前指引卡 + 我的指引列表 + 版本对比 + 上传自定义指引 + 规则组启停（折叠才见）五个功能区，页面过长主次不清；项3 已验收的规则组 WYSIWYG 主交互被埋。
+- **处理方法**：规划定案——页内分区 tab 化（当前指引/版本与对比/规则组），上传并入版本区；Tabs 模式由 guide-diff 局部样式提升为通用规格后复用。施工批次：批1。
+- **变更记录 2026-11-01（批1 施工）**：修改指引页 tab 化「指引版本 / 版本对比与上传 / 规则组启停」三区；规则组由弹层交互提升为一级 tab（版本选择+内嵌 WYSIWYG，renderGuidePanel 参数化复用，overlay 路径保留兼容既有锚点）。页长五区堆叠消除。
+- **验证**：浏览器冒烟 12/12（tab 切换/三区显隐/版本选择渲染）；内嵌规则组「关 G01→保存→重载仍关」持久化实证；accept 走查 32/32 复跑通过。
+- **变更记录 2026-11-01（批1 回归适配）**：guide_diff walkthrough 原本默认版本对比卡直显，tab 化后需先点「版本对比与上传」分区；断言按新交互先切 tab（语义锚点不变）。
+- **状态**：已解决（批1 验收）。
+- **证据**：`/tmp/opencode/qa/screenshots/audit-site/v1-guide.png`（前）；`/tmp/opencode/qa/screenshots/batch1-after/v1-guide.png`、`v1-guide-diff.png`、`v1-guide-rules.png`（后）。
+
+## FL-D740 V2 dev 身份下 `/login` 不落登录页 + V1 侧栏游离声明（项9 体检 P12/P13），2026-11-01
+
+- **发现日期**：2026-11-01（项9 整站体检）。
+- **问题与影响**：dev 身份下访问 `/login` 直接跳转任务页，登录页视觉/交互无法验收；V1 侧栏底部「报告与诊断文件不作为最终合同」声明与导航混排、归属不清。
+- **处理方法**：规划定案——dev 下 `/login` 渲染登录页并附「以开发身份继续」入口；侧栏声明归入设置/帮助域。施工批次：批3。
+- **变更记录 2026-11-01（批3 施工）**：V2 新增 `/login` 路由——password 模式渲染原登录页；dev 模式渲染开发身份登录说明卡（当前身份+「以开发身份继续」入口），登录页恢复可验收；V1 侧栏游离声明移至设置页账户卡 footnote，侧栏改为产品名。
+- **验证**：dev `/login` 实证落登录页（不再直跳任务页）；侧栏无声明、设置页含 footnote。
+- **状态**：已解决（批3 验收）。
+
+## FL-D695 单轮 inventory absent 判定摇摆把可执行义务变全案无产物：变体证据反证闸（B15 G09@p159）（2026-11-01，loop-5 门槛 FAIL-1，qa-recall-miss）
+
+- **发现**：loop-5（9ebeacf）B15 G09@p159——loop-4 模型判 needs_edit、合成 replace 已执行交付，loop-5 同窗口 round 0 模型改判 absent（理由「窗口中不存在规则目标原文…现有赎回金额条款措辞不同」），而本段实有赎回金额条款变体（惩罚金额段 p159，canonical old_text 字面不在、anchored 变体在），report.variant_candidates 早有确定性证据 `VARIANT_PENDING_CERTIFICATION G09:0 @p159`。absent 判决 → T3 恢复 locator 五次失败（RETRY_DETERMINISTIC+MARK_UNRESOLVED×4）→ 目标不可计划 → replay 站点集空 → OPEN「verified site missing」→ 交付门诚实扣全案无产物。属 FL-D650 族模型单次判定摇摆，但违约承载缺一层：确定性代码证据早已反证该判决，管线却无条件接受。
+- **根因**：inventory absent 是无复核的单次模型判定；确定性变体通道（FL-D655）与其在同一文档上各说各话，无人裁决矛盾。
+- **修复（机制面，对任意规则生效）**：新增 `refute_absent_by_variant_evidence`（`fundlex/recall.py`，挂点 `recall_pipeline` targeting 阶段 T3 开放规则定位之前）——同一 (rule, location) 存在确定性变体证据时 absent 被代码证据推翻：CERTIFIABLE/ANOMALOUS 候选项恢复 needs_edit 并绑定变体 span（后续走正常 compose→audit→replay 验证链，分歧仍 fail-closed）；EXEMPT 候选项（新政策形态已确定性在位）恢复 satisfied，独立 audit 仍复核；无候选保持 absent（fail-closed）。守卫：同段落已有 live 同类目标不翻（防 replay 同址歧义/双站点分叉）、归属其他操作的 absent 表位不动、out_of_scope/超 scope 不动。
+- **证据**：写入 report["absent_refutations"]（code ABSENT_REFUTED_BY_VARIANT_EVIDENCE，含 bucket/state/quote）。
+- **测试**：`tests/test_absent_variant_refutation.py` 6 例——变体在→needs_edit 恢复（span 0..112 与真实 B15 p159 形状一致）/无候选→保持 absent/EXEMPT→satisfied/同址 live 同族目标→不动/归属其他操作→不动/out_of_scope→不动。
+- **真实 B15 复验（2026-11-01，两轮）**：第一轮（`fl-d695-b15-recheck/`，$0.0377/34c）G09@p159 恢复（T3 采样有利直接锚定 0..112 planned），新阻塞 G11 登记 FL-D793；**第二轮（`fl-d695-b15-recheck2/`，$0.0268/23c/185s）反证闸真实实发**——本轮 inventory 再次误判 G09 absent（与 loop-5 同抖动复发），`ABSENT_REFUTED_BY_VARIANT_EVIDENCE`（ANOMALOUS@p159）推翻后恢复 needs_edit 0..112→planned replacep159 全句适配替换（「乘以申请当日该类基金份额的基金份额净值…扣除或加上」入 final 与 redline，原文无）→ 21/21 CLOSED_REPLAY、replay verified、delivery=complete(holds=0)、final+redline 交付。完整因果链：absent 抖动复发→代码证据反证→compose 执行→独立复核→产物。
+- **状态**：已解决（6 例单测+真实病灶站点端到端实发证据）；本树全量回归收口后报主线。
+
+## FL-D696 计划阶段已否决的站点主张混入 Claim Replay 闭合必需集：worst-of-sites 把已完成义务翻 OPEN（B12 G16 三站点）（2026-11-01，loop-5 门槛 FAIL-2，qa-recall-miss）
+
+- **发现**：loop-5 B12 G16:B1:O1——survey 双站点 Y012(p795)/Y013(p1270) 均 planned 且 audit completed（政策全文在产物），T3 多产的表位 T002@p796(0..90) 被计划阶段确定性否决（plan ledger status=unresolved/reason=TARGET_SOURCE_MISMATCH，对应 FL-D792 观察到的 append vs delete 同段竞争形态的复发）。但 Claim Replay 从 targets 派生站点时不知计划否决，仍把 p796 计入闭合必需集（G16 append 站点过滤器 `_own_rule_append_sites` 认 operations 归属，不读计划态），evaluate_operation_effect 站点聚合=worst-of-sites → p796 无 edit → CLAIM_OPERATION_NOT_PLANNED → CLAIM_REPLAY_FAILED → 4 条 hold、delivery=incomplete。义务实质完成却被模型驱动 locator 的过度主张拖倒。
+- **根因**：`Target.as_dict` 不含计划态，replay 侧无法区分「引擎承诺的站点」与「计划已否决的候选主张」；责任在 replay 输入契约缺位，非属性归因错误。
+- **修复（机制面）**：`recall_pipeline._replay_targets_by_id` 以 plan ledger 确定性否决理由集（当前仅 TARGET_SOURCE_MISMATCH，记 `_PLAN_SITE_REJECTIONS`）为 replay 载荷加 `plan_rejected` 标签（两个 replay_claims 调用点一致接入，含 recovery 重放）；`claim_replay` 站点派生两处（同址歧义集与主站点循环）排除带标签主张。排除到空集维持原 OPEN「verified site missing」语义——该机制只移除与计划台账矛盾的请求，绝不凭空造闭合；否决理由留痕在目标台账。
+- **测试**：`tests/test_plan_rejected_replay_sites.py` 4 例——载荷只标 code 集合内否决理由（model 错误不标）/标签主张不阻塞已完成 append（verified+全 PASS）/mutation 无标签同形状仍 CLAIM_OPERATION_NOT_PLANNED（旧行为对照）/排除到空集仍 fail-closed OPEN。
+- **真实 B12 复验（2026-11-01，`/tmp/opencode/qa/fl-d696-b12-recheck/`，$0.0234/23 calls/163s，账本仅观测）**：模型本轮**再次**产生同形 T3 过度主张（T017@p796，TARGET_SOURCE_MISMATCH）——FL-D792 复发判定获第三实证，非采样波动；修复后 replay 不再把 p796 计入闭合集，G16:B1:O1 replay PASS、23 义务 CLOSED、delivery=complete(holds=0)，final.docx 政策文本实写 p795/p1270（原文 0 命中→产物 2 命中），redline 15 ins/15 del 修订痕迹齐备。
+- **残留（诚实可观测，非阻断）**：台账层 G16 记录仍 UNRESOLVED/TARGET_SOURCE_MISMATCH（指 p796 被拒主张，与 replay PASS 不矛盾），reconciliation 按 FL-D651 机制 A 分类 MISS_REPLAY_GATE + 显式升级记录但不升级为阻断行（named cause 非 CLAIM_REPLAY 族）——跨层隔膜显式留痕，交付门不计 hold；台账采纳 replay 证明的写入策略属后续观察项，不作为本门槛修复范围。
+- **状态**：已解决（单测+真实 B12 端到端证据）；本树全量回归收口后报主线。
+
+## FL-D792 归属判定更新：由观察项改判 FL-D696 同根机制缺陷并随其修复收口（2026-11-01，qa-recall-miss）
+
+- **判定**：loop-4 复验时 FL-D792 归因为「survey 采样波动、保守诚实扣件」观察项；loop-5 同形态在 B12 原址复发（T002@p796 同 span 0..90、同 TARGET_SOURCE_MISMATCH、同 CLAIM_REPLAY_FAILED 链）。复发证明这不是采样噪声而是结构性缺陷：replay 闭合必需集系统性混入计划阶段已否决的站点主张。归属变更：FL-D792 = FL-D696 首次临床（loop-4 重跑），同根同修；原「若多案复发考虑排除」建议由 FL-D696 以更一般的机制（任意计划的确定性站点否决，不限 G16/append-delete 竞争）实施。
+- **状态**：归属结论已下（同族机制问题，非新机制、非纯波动）；修复验证随 FL-D696 真实 B12 复验一并收口。
+
+## FL-D793 B15 本轮新阻塞 G11 compose 连续 MODEL_SCHEMA_INVALID→诚实 incomplete（2026-11-01，FL-D695 真实复验发现，观察项）
+
+- **发现**：FL-D695 修复后 B15 真实复验第一轮（`/tmp/opencode/qa/fl-d695-b15-recheck/`，$0.0377/34 calls/326s）：G09@p159 病灶治愈（T3 locator 本轮自行锚定 p159 变体 span 0..112，absent 未复发，故 absent 反证闸无实发——属采样有利局）；但新阻塞落在 G11：inventory 判 needs_edit@p164(0..74)，模型 compose 返回格式连续不过 schema 校验（gateway 层已对 MODEL_SCHEMA_INVALID 有限重试，recovery 9 次含 REBUILD_PLAN 后仍 MARK_UNRESOLVED）→ G11:B1:O1 MISS_TARGET_RESOLUTION+G11:B1:O2 CLAIM_OPERATION_NOT_PLANNED → 9 holds 诚实 incomplete（无产物）。
+- **归类**：同案 loop-5（9ebeacf）G11 双义务 CLOSED_REPLAY、loop-4 亦正常——首选解释为模型侧运行间波动（schema 抖动），非已确证机制缺陷；现有重试/重建链按设计耗尽并诚实扣件。与 FL-D695 同类教训方向：模型单点失败缺少更硬的违约承载（如 fixed-text replace 在 ANOMALOUS 变体下无 deterministic tier1 回退，只能 compose）。
+- **二跑复测（2026-11-01，`fl-d695-b15-recheck2/`，$0.0268/23c/185s）**：同合同同引擎 G11 三义务全 CLOSED（B1:O1 ARTIFACT_VERIFIED、B1:O2 ALREADY_SATISFIED via claim_replay），delivery=complete——单发解释成立（模型 schema 抖动），不升级解剖。
+- **状态**：观察项（二跑未复发）；后续同形态在不同合同/不同 loop 再发时按 compose 校验字段定位升级。
 
 ## FL-D695 B15 loop-5 新回归：G09@p159 audit 翻转 needs_edit→absent（MISS_TARGET_RESOLUTION）→ 交付门诚实扣全案（complete→no artifact）（2026-11-01，qa-feat-recall）
 

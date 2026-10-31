@@ -173,6 +173,95 @@ def test_worker_uses_max_attempts_for_retry_exhaustion(tmp_path):
     assert pair["error_code"] == "COMPARE_TRANSIENT_FAILURE"
 
 
+# ------------------------------------------------------------ FL-D546 --
+
+
+def test_unknown_exception_failure_surfaces_structured_diagnostics(tmp_path):
+    store, task = _queued(tmp_path)
+
+    class Processor:
+        def compare(self, *args, **kwargs):
+            raise RuntimeError("secret path /var/lib/fundlex internals")
+
+    assert CompareWorker(store, Processor()).run_once()
+    pair = store.get_pair("alice", task["pairs"][0]["id"])
+    assert pair["status"] == "failed"
+    assert pair["error_code"] == "COMPARE_PROCESSING_FAILED"
+    failure = pair["diagnostics"]["failure"]
+    assert failure == {"error_code": "COMPARE_PROCESSING_FAILED", "stage": "compare",
+                       "error_type": "RuntimeError", "retryable": False}
+    assert "secret path" not in str(pair)
+
+
+def test_docx_parse_failure_diagnostics_keep_parse_code(tmp_path):
+    store, task = _queued(tmp_path)
+
+    class Processor:
+        def compare(self, *args, **kwargs):
+            raise DocxError("XML_INVALID", "detail-only-log")
+
+    assert CompareWorker(store, Processor()).run_once()
+    pair = store.get_pair("alice", task["pairs"][0]["id"])
+    assert pair["status"] == "failed"
+    assert pair["error_code"] == "COMPARE_PARSE_FAILED"
+    failure = pair["diagnostics"]["failure"]
+    assert failure["stage"] == "compare"
+    assert failure["error_type"] == "DocxError"
+    assert failure["retryable"] is False
+    assert "detail-only-log" not in str(pair)
+
+
+def test_input_integrity_failure_reports_integrity_stage(tmp_path):
+    left, right = _docx("left"), _docx("right")
+    store, task = _queued(tmp_path, left, right)
+    pair_id = task["pairs"][0]["id"]
+    files = {f["side"]: f for f in store.pair_inputs(pair_id)}
+    store.store.object_path(files["right"]["object_key"]).unlink()
+    assert CompareWorker(store).run_once()
+    pair = store.get_pair("alice", pair_id)
+    assert pair["status"] == "failed"
+    assert pair["error_code"] == "COMPARE_INPUT_INTEGRITY_FAILED"
+    assert pair["diagnostics"]["failure"]["stage"] == "input_integrity"
+
+
+def test_transient_retry_exhaustion_surfaces_diagnostics(tmp_path):
+    store, task = _queued(tmp_path)
+
+    class Processor:
+        def compare(self, *args, **kwargs):
+            raise DatabaseError("temporary db outage")
+
+    worker = CompareWorker(store, Processor(), max_attempts=2)
+    pair_id = task["pairs"][0]["id"]
+    assert worker.run_once()
+    with store._connect() as db:
+        db.execute("UPDATE compare_pairs SET lease_until=0 WHERE id=?", (pair_id,))
+    assert worker.run_once()
+    pair = store.get_pair("alice", pair_id)
+    assert pair["status"] == "failed"
+    assert pair["error_code"] == "COMPARE_TRANSIENT_FAILURE"
+    failure = pair["diagnostics"]["failure"]
+    assert failure == {"error_code": "COMPARE_TRANSIENT_FAILURE", "stage": "compare",
+                       "error_type": "DatabaseError", "retryable": False}
+    assert "temporary db outage" not in str(pair)
+
+
+def test_error_type_name_is_sanitized(tmp_path):
+    store, task = _queued(tmp_path)
+
+    weird = type("Odd\nName<script>", (Exception,), {})
+
+    class Processor:
+        def compare(self, *args, **kwargs):
+            raise weird("detail-only-log")
+
+    assert CompareWorker(store, Processor()).run_once()
+    pair = store.get_pair("alice", task["pairs"][0]["id"])
+    failure = pair["diagnostics"]["failure"]
+    assert failure["error_type"] == "OddNamescript"
+    assert "\n" not in failure["error_type"] and "<" not in failure["error_type"]
+
+
 def test_run_forever_survives_transient_claim_failure():
     class Store:
         def __init__(self):

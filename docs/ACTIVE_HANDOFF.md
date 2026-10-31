@@ -1,5 +1,27 @@
 # FundLex 当前断点（ACTIVE_HANDOFF）
 
+## 2026-11-01 qa-frontend 第三轮（用户十项需求下派，前端主线断点）
+
+- 分支 `qa-frontend-s2-20261101`（`98d3313` = 第二轮 d27c904 + 主线 88aa5b8）。承接项：项4 列表统一（最高优先级）、项3 规则组可见即所得（含后端）、项1 模型配置重做（设计主导）。编号池 730-749。
+- 已冻结规格：`docs/frontend/SPEC_LISTS_UNIFIED_20261101.md`、`SPEC_RULE_GROUPS_WYSIWYG_20261101.md`、`SPEC_MODEL_SETTINGS_20261101.md`；协调交接写在 `/tmp/opencode/qa/status/qa-frontend.md` 第三轮节。
+- 项3 后端已实施（FL-D730）：rule_settings 增 requirement/operations 中文摘要+回退，`tests/test_user_configuration.py` 7 绿。
+- 施工图：V1 worker ivRkf1jH（750-759）/ V2 worker 81FirpsQ（760-769）按规格实施三项；前端主线验收=每规格末节清单（用户视角走查、Playwright 并列截图、锚点、回归绿）。
+- 中断续接：先读本断点与状态文件第三轮节，再按 spec 推进；勿动第二轮既有锚点。
+- **验收收口（2026-11-01）**：V2 merge `45f5570` / V1 patch `5720bad` / 后端规格 `69779d8` 三笔已并入，HEAD `948834b`。验收=合并树真实 Chromium 走查 32/32（`/tmp/opencode/qa/accept-frontend-s2.py`，截图 `accept-s2/`）+ 浏览器整批全绿（两失败均 root-cause：一负载抖动、一 FL-D733 过期断言已修）+ vitest24/tsc/build/pytest14 全绿。FL-D730/731/732=已解决，FL-D733 已登记。待主线裁定合入。
+- **项9 二次优化施工收口（2026-11-01，动码令后四批全交付）**：批1 `ad1ec2e`/`e584d39`（信息归属导航：V2 撤设置按钮、V1 设置中心+账户卡、全部任务/修改任务名分互链、指引页三区 tab 化规则组内嵌持久化）→ 批2 `9acc3be`（V2 统计卡收敛+全零折叠、分页句式统一、EmptyState 规格）→ 批3 `5d6eb3c`/`b948d22`（生成页黑话治理、系统状态折叠区 admin 可见、按钮宽度规约、dev /login 说明卡、侧栏声明归位）→ 批4 终扫（整批 8 文件全绿+全链路 7/7+整站 18 张复核）。规划调整留痕入规划文档头部。FL-D734~740 全已解决。待主线合并。
+- **项9 二次优化规划完成（2026-11-01，只规划不动码）**：`3d42299` 产出 `docs/frontend/FRONTEND_REWORK_PLAN_20261101.md`（四节：体检 P1-P13 / 目标 IA A1-A6 / token 巩固六项补全 / 批1-批4 施工+逐批验收）。取证 19 张截图 `/tmp/opencode/qa/screenshots/audit-site/`（脚本 `/tmp/opencode/qa/audit-site-shots.py` 可复用对照）。新发现登记 FL-D734~740（状态=规划完成待动码令）。下一步：等主线发布#3 后动码令，按批1 开工。
+- **Rebase 返工（主线令，合并基线→9ebeacf）**：8 块真语义冲突按「两特性共存」解毕：`ef9549f` merge + `fbbda98` CompareCard 补焊（OP/META 标签并存、fieldLabel 接线、恢复分组/元信息/校验摘要行）；guide-diff 全套（V1 卡 DOM/事件/样式/CompareCard 原文比对 tab）与我的三项新结构共存。复跑：tsc/vitest24/build/pytest14/走查 32/32/V1 guide-diff 冒烟 ✓；浏览器整批 8 文件（含 test_guide_diff.py）复跑后补登记。
+
+
+## 2026-10-31 qa-frontend：前端全面整改（本 worktree 断点）
+
+- Worktree `/home/opencode/.local/share/opencode/worktree/29a9a9/qa-frontend`，分支 `qa-frontend-20261031`，基线已 merge 至 `6229069`（含 qa-export）。用户六条 + 主线补充 FL-D721。段位 FL-D710..719（已用 710-716 + 721）。
+- 域：`frontend/app.js,app.css,workspace.js,compare.*,guide_generation.*,compare.html,src/**` + 新建 `frontend/status_labels.js`、`docs/FRONTEND_UI_AUDIT_AND_FIXES_20261031.md`。不动 CSV/MD 后端导出与 review/pin 语义。
+- 设计：统一 token 层（橙系 #b5471e canonical；V1 `--fx-*` 蓝系翻值收敛，变量名不动）；技术泄露全部删除或入「高级详情」折叠；V2 DocumentDetailPage 与 V1 任务详情/结果弹层 IA 重构；模型设置双列卡片；状态标签共享表；FL-D721 ready=(completed+failed>0)。
+- 验证状态：tsc 0 错；vitest 24 绿；vite build 过；两处中途回归已修（Guides 页头回锚点「指引配置」、FL-D721 条件按指令精确化）并单测复验通过；V2+V1 浏览器批量后台运行中（shell 通知待回，结果写体检文档第四节与状态文件）。
+- 回路：批量绿 → git add 只自有文件（frontend/app.js app.css workspace.js compare.js compare.css compare.html guide_generation.js guide_generation.css status_labels.js、frontend/src/**、docs/FRONTEND_UI_AUDIT_AND_FIXES_20261031.md、docs/DETAIL_ISSUES_AND_RESOLUTIONS.md、docs/ACTIVE_HANDOFF.md）→ commit → merge qa/full-audit-20261031 → 写 `/tmp/opencode/qa/status/qa-frontend.md` → 回报主线。
+
+
 ## 2026-10-31 guide_generation 资格冒烟线（qa-feat-guide 对话）
 
 - 基线：worktree `/home/opencode/.local/share/opencode/worktree/29a9a9/qa-feat-guide`，branch `qa-feat-guide-20261031`，已合并 `qa/full-audit-20261031`，HEAD `0b4e89a`。`tests -k "guide_generation or jobs"` **63 passed / 1 skipped**；worker/queue/store（FL-D553/568 段修复、`FUNDLEX_GUIDE_JOB_MAX_ATTEMPTS`、有界退避）在该套件内全绿。
@@ -20,6 +42,19 @@
 - 已实施并聚焦验证：`fundlex/docx.py::normalize_tracked_base`、`fundlex/recall_pipeline.py::process_recall_first` 输入规范化与报告字段、`fundlex/selective.py` flatten 报告兼容、`fundlex/delivery.py` 新错误文案、`fundlex/upload_validation.py` 检测职责注释。新增 `tests/test_docx_tracked_input.py` 16 项绿、`tests/browser/test_tracked_upload.py` 2 项绿（FUNDLEX_BROWSER_TESTS=1）。真实语料备份 18 份固化验证 17 绿+1 受保护边界；聚安离线引擎 redline 仅我方作者、final 零残留（证据 `/tmp/opencode/qa-tracked/`）。
 - 集中记录：FL-D610（实施）、FL-D611（作者字面值待产品确认，现按 FL-D446“资金清算部”解析）、FL-D612（受保护边界/段落合并 fail-closed/死导入观察项/无 OCR 引擎）。
 - **已收尾（2026-10-31）**：commit `38c0727`（9 文件 +940/-6）→ merge `f7ccbb5`（合入主线 @cdb1d46，docs 双文件尾部追加冲突已手工合并）。全量 pytest（pre-merge 树）6 failed/2352 passed，6 项恰为 FL-D574 既有失败，零新失败（日志 `/tmp/opencode/qa-tracked/full-pytest.log`）；合并后受影响套件全绿：聚焦 38+focused、recall_pipeline 55、frozen/metering/feishu/tasks/revision_api/recall_core/docx 154、delivery 31、deploy/dependency_lock 19、browser 2。状态文件 `/tmp/opencode/qa/status/qa-f2-recall-tracked.md` 已写（测试矩阵、修订组合清单、遗留）。遗留：FL-D611 作者字面值交主线/产品；FL-D612 观察项 open。
+
+## 2026-10-31 qa-feat-compare 专线断点（FL-D562 能力恢复 + A6-546 诊断透出）
+
+- **工作区**：`/home/opencode/.local/share/opencode/worktree/29a9a9/qa-feat-compare`，分支 `qa-feat-compare-20261031`。本线第一波已提交 `b7ca4c2`（9 文件）并 `merge --no-edit qa/full-audit-20261031`（`ac44e1d`，主线至 `cdb1d46`）。一切验证 `cd <该目录> && .venv/bin/python -m pytest`；**外部脚本跑必须加 `PYTHONPATH=$PWD`**（.venv 是指向主工作区 venv 的 symlink，否则 import 主工作区旧树 158475f，见 FL-D593）。不 push、不动主线 worktree。
+- **已完成①（FL-D562 全文替换采用B 能力恢复，二次重构最终形态，未提交）**：r1 冒烟分诊（FL-D592）发现 `b7ca4c2` 的计划级后置检测被 sdt(TOC) 锚点 CONTENT_CONTROL 挡死（覆盖不了 ~93.6% 真实语料）、惰性空白段 leftover 与 fldChar 域段两个形态缺口。最终实现：`_pre_detect_full_body_replacement`（`_build_plan` **之前**直接对 adopted diffs 判定：全 diff adopt-right 且仅 delete/insert、deleted ⊆ 左直段且余量必须惰性空白段、inserted == 右直段全集；返回综合 ops 供 manifest/编号校验复用）+ `_apply_full_body_replacement` 带区几何（kept tbl/sdt/sectPr 切带、每带末段 keeper 锚点、带不同长度允许）+ `_wholesale_deletable_paragraph` 批发守卫（放行多 w:t/fldChar run，禁 sdt/drawing/comment/footnote 等后代）+ `_check_field_spans_within` 域跨段扫描 + `_inert_blank_paragraph` 惰性判定；全量模式校验目标 == right 序列。tests/test_compare_full_body_replacement.py 16 项 + sdt/trailing 20 + selection_writer 15 = **51 项全绿**。真实文件三角验证（PYTHONPATH 正确）：广发景辉纯债 OK（final==right、manifest 2662/2662）；广发价值优选/科创板芯片按设计 fail-closed（空白 sectPr 段非惰性）。**此重构 + 测试新增 + FL-D592/593 登记均未提交**，待 r2 冒烟 + `tests -k compare` 回归后一并 commit。
+- **已完成②（A6-546 → FL-D591 诊断结构化透出，已提交 b7ca4c2）**：worker `_failed_stage` 阶段跟踪；终态 failed payload 带 `diagnostics.failure={error_code,stage,error_type(净化),retryable:false}`；`store.retry(..., diagnostics=)`；`_pair_dict` 透出+错误码强转 str 防 500；compare.js `pairErrorLabel` 展示阶段/类型/可重试。test_compare_worker.py 20 绿（+5）；浏览器 test_v1_frontend_remediation.py 16 绿（+1 新用例）；node --check 过。
+- **回归证据（merge ac44e1d 后、`b7ca4c2` 时点）**：`tests -k compare` 175 passed / 22 skipped；浏览器 16 passed。重构后的全量回归待 r2 冒烟前复跑。
+- **已完成③（真实语料冒烟 r2，FL-D590 已回填）**：578 份 2026-11-01 00:03 落盘：**ok 21（全部走全量路径、19/21 含 body 级 sdt、manifest==diffs 全数）/ reject 538（SECTION 380、RUN 80、CONTENT_CONTROL 35、STRUCTURE 25、SCOPE 12 等结构性 fail-closed，artifacts_left=0）/ error 18（全部为修订原件备份目录解析期 fail-closed，预期）/ text_mismatch 1（百发大数据：含空格段落 diff 层只出 insert——交付忠实于 adopted diff，严格口径 final≠B，登记为边界）**。语料正例 `test_real_corpus_full_body_replacement_delivers`（广发中证800自由现金流，skipif 语料缺席跳过）已入测试。统计基于 FL-D595 修复前 worktree。
+- **已完成④（FL-D595 两缺陷修复，随 r2 分诊）**：①`_mark_deleted_paragraph` 整段删除时剥离书签/proofing 子节点（消 26 枚书签级联进 keeper 的交付物污染）；②`parser._text` 与 `presentation.runs` 跳过 `w:pPr` 子树（制表位**定义**不再计为文本）。智选高股息单文件复验 GENERATE OK（final==right、manifest 2476/2476）。新增 fixture 测试 + 语料正例。
+- **待办⑤（性能复测+r3）**：低噪窗口跑 `/tmp/opencode/qa/tmp-b13/bench_compare.py`（对照 59.6s/16.4s/35.1s）；r3 全量冒烟用增量落盘版脚本复测（预期 FINAL_TEXT_MISMATCH 归零、ok≥22，结构性拒绝码不变）。
+- **合并注意事项（给主线）**：`frontend/compare.js` 与主线 polling-gate 改动同文件，merge 已自动合入（本线只新增 `pairErrorLabel`/`failureStageLabel` 相关段落）；selection_writer.py 本轮为二次重构——`b7ca4c2` 的 `_detect_full_body_replacement`（计划级后置版）已被 `_pre_detect_full_body_replacement` 取代弃用（FL-D592），主线 merge 本线时以最新为准，无两代并存回退风险；worker.py 变更点为 `_failed_stage` 跟踪与 diagnostics payload；store.py 变更点为 retry diagnostics 参数与 `_pair_dict` 透出。
+- **问题登记**：本线段位 FL-D590..599；已登记 FL-D590（r2 全量回填完成）、FL-D591（A6-546 状态更新）、FL-D592（检测缺口与二次修复）、FL-D593（r1 错树作废）、FL-D594（r2 不可观测，已处置+规则固化）、FL-D595（书签级联污染+制表位定义计入文本，已修复）；FL-D562 条目已更新为"已修复"。
+
 ## 2026-10-31 全项目质量整改（QA 总攻，主 agent 断点）
 
 ### 断点更新（2026-10-31 主线收口进展，最新以此为准）
@@ -1599,3 +1634,29 @@ dev20 v2 闭环：修复循环直到 §7 门槛（无已确证严重错误、无
 - 结构与校验：release worktree /tmp/opencode/release-20261031 @ 4377962；root 发布器已同步（drift OK）；env 新增 FUNDLEX_TRUSTED_PROXY_HOSTS=127.0.0.1（备份 .bak-20261031-release）；engine hash e555fee8；事务 /opt/.fundlex-publish-kYzo9M；前两次失败事务 7KutQx/gjyqol 留存。
 - 已验：生产 E2E 真实路径双态验收 PASS——①新版合同（广发聚富 20260821）正确判无需修改、交付门诚实扣件（fail-closed 正确行为）②老版合同（广发小盘 20230708）真实修改 5 ins/5 del/5 段、plan_matches_actual=true、final/redline 下载 hash 双核对一致、未授权 401、结果页正常。证据 /tmp/opencode/qa/e2e-release-20261031-old/result.json。E2E 工具补 300s downloads 轮询（97a46dc）。
 - 回滚：engine 旧 marker 74a8772（恢复即 10-30 树）；schema 迁移全追加可代码回滚。
+
+## 2026-11-01 qa-v2-s2（V2 前端第三轮：项1/3/4）终态
+
+- **目标**：按前端主线冻结规格（SPEC_LISTS_UNIFIED/SPEC_RULE_GROUPS_WYSIWYG/SPEC_MODEL_SETTINGS_20261101，勿改语义）完成 V2 React 侧项1 模型配置页重做、项3 规则组可见即所得、项4 列表统一。
+- **分支**：`qa-v2-s2-20261101`（基 qa-frontend-s2-20261101@98d3313 + merge 69779d8）；worktree `/home/opencode/.local/share/opencode/worktree/29a9a9/qa-v2-s2`。
+- **状态：全部完成、验证全绿并已提交 `5e2ca11`**（2026-11-01 总指挥令：符合主线规格即提交，不问用户）。提交含 11 文件：frontend/src/{styles/tokens.css,styles/app.css,types/api.ts,pages/Settings/ModelSettings.tsx,pages/Guides/index.tsx,pages/Tasks/index.tsx,pages/TaskDetail/index.tsx,pages/Compare/ComparePage.tsx}、tests/browser/test_frontend_v2.py、docs/DETAIL_ISSUES_AND_RESOLUTIONS.md（+FL-D760/761/762）及本断点。
+- **验证**：tsc 0；vitest 24 绿；build ✓；test_user_configuration.py 7 绿；浏览器全套 11 绿；自建用户流 19/19（模型保存流+徽标、规则组持久化、全不选禁存闸）。
+- **证据**：`/tmp/opencode/qa/shots-v2-s2/`（10 张）；汇报 `/tmp/opencode/qa/status/qa-v2-s2.md`；走查脚本 `/tmp/opencode/qa/flow-v2-s2.py`。
+- **残点**：①规格草图 h3 卡头采用站内一致的 h2（项1/项3 各一处，已备注）；②待主线 l8yCbACU 对照 V1 worker 交付作同图验收。
+- **环境**：调试进程已清理；8010 生产 fundlex-recall-first 全程未触碰；测试服务须显式 `FUNDLEX_AUTH_MODE=dev`；python 用 `PYTHONPATH=$PWD /tmp/opencode/qa-base/.venv/bin/python`。
+- **下一条动作**：已提交并报前端主线（状态文件 `/tmp/opencode/qa/status/qa-v2-s2.md` 验收申请版）；待主线 l8yCbACU 同图验收意见，如需整改在本分支续改。
+
+---
+## 2026-11-01 breakpoint（loop-5 FAIL 双因子修复，qa-recall-miss 树）
+
+- 目标：FL-D695/696 机制修复+mutation 测试+真实 B15/B12 复验+全量回归 → 报主线 → loop-6。
+- HEAD `0aecb9c`；未提交改动：fundlex/recall.py（refute_absent_by_variant_evidence）、recall_pipeline.py（_replay_targets_by_id+挂点）、generation/claim_replay.py（plan_rejected 排除）、docs/DETAIL(+FL-D695/696/792-更新)、tests 新 2 文件（10 例全绿）。
+- 后台任务/本机：本树全量 pytest；真实复验 `/tmp/opencode/qa/fl-d695-b15-recheck`（B15）与 `/tmp/opencode/qa/fl-d696-b12-recheck`（B12）（env 取自 /etc/fundlex-recall.env→/tmp/opencode/qa/.env.recheck(600)，多行 JSON 已修）。模型账本仅观测。
+- 下一步：三任务收口核对 → 复验证据解包（B15 G09 p159 执行+产物；B12 G16:B1:O1 闭合）→ 失败则复诊 → git add+本树回归绿后报主线（qa-recall-miss.md 已追加 loop-5 段）。无外部阻塞。
+
+---
+## 2026-11-01 breakpoint（loop-5 双因子修复已收口，HEAD 68a0025）
+
+- 完成：FL-D695/696 修复+10 测、全量回归 2532/0/139（662s 前台）、真实复验 B12 complete+B15 二跑 complete（反证闸实发）；FL-D792 归属改判、FL-D793 观察项；全部登记。
+- 已提交 `68a0025`；qa-recall-miss.md 已报主线，待复核合并→ feat-recall loop-6 冻结令。无外部阻塞、无在跑进程。
+- 账本（仅观测）：B12 $0.0234/23c；B15 两轮 $0.0377/34c + $0.0268/23c。
