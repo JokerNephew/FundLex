@@ -19,6 +19,28 @@ def _compact(value: str) -> str:
     return re.sub(r"[\s\u3000\u00a0\u200b]+", "", value or "")
 
 
+# A duplicated clause frequently sits inside a numbered list item.  Sibling edits
+# cover different spans: one starts after the "4、" marker, the other covers it,
+# so one final paragraph keeps the enumeration prefix and the other drops it even
+# though the duplicated clause content is identical (FL-D570: B04/B06/B11/B17/B19
+# were wrongly blocked by DUPLICATE_SITE_DIVERGED).  A leading list-item marker is
+# structural numbering, not clause content, and a marker-only difference never
+# hides a business-text divergence (any real content difference survives the
+# normalization).  Strip it only for the duplicate-divergence comparison.
+_DUPLICATE_ENUM_PREFIX_RE = re.compile(
+    r"^(?:[（(]?(?:[0-9０-９]+|[一二三四五六七八九十百千]+)[）、])+")
+
+
+def _duplicate_comparable(value: str) -> str:
+    """Comparison form of a duplicate copy's final text for the divergence gate.
+
+    ``value`` is the already-compacted final paragraph text.  The enumeration
+    prefix is removed so copies edited with different span boundaries compare by
+    their actual clause content instead of by paragraph layout.
+    """
+    return _DUPLICATE_ENUM_PREFIX_RE.sub("", value, count=1)
+
+
 def _own_rule_append_sites(rule_id: str, operation_id: str,
                            sites: Sequence[Mapping[str, Any]],
                            targets: Sequence[Mapping[str, Any]]
@@ -1461,6 +1483,14 @@ def replay_claims(edits: Sequence[Mapping[str, Any]], before_inspection: Any,
             except Exception:  # noqa: BLE001 - missing copy reported separately
                 continue
         if len(after_values) > 1:
+            # Boundary-only difference (FL-D570): sibling edits covered different
+            # spans, so one final copy keeps the list-item enumeration prefix and
+            # the other does not, while the duplicated clause content itself is
+            # identical.  Compare the content form; a genuine divergence of the
+            # clause text still fails closed below.
+            comparable = {_duplicate_comparable(value) for value in after_values}
+            if len(comparable) <= 1:
+                continue
             duplicate_failures.append({
                 "rule_id": "", "location": edited_copies[0],
                 "locations": edited_copies,

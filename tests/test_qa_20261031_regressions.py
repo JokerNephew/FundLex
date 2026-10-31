@@ -917,3 +917,74 @@ def test_finish_mode_fence_applies_without_task_binding(tmp_path):
               "engine_id": "v2", "schema_version": "2"}
     with pytest.raises(Conflict, match="EXECUTION_MODE_MISMATCH"):
         store.finish(claimed["id"], claimed["fencing_token"], report=report, artifacts={})
+
+
+# --- FL-D570: DUPLICATE_SITE_DIVERGED span-boundary false positive ------------
+
+def _fl_d570_setup():
+    """Rebuild the B04 p854/p1261 shape: one duplicated numbered clause edited
+    with different spans.  The body edit starts after the "4、" marker, the
+    summary edit covers the whole paragraph; the new clause content is identical
+    in both copies."""
+    clause_old = ("由于本基金A类基金份额不收取销售服务费，而C类基金份额收取销售服务费，"
+                  "各基金份额类别对应的可分配收益将有所不同。")
+    tail = "本基金同一类别的每一基金份额享有同等分配权；"
+    before = "4、" + clause_old + tail
+    clause_new = ("由于本基金A类基金份额和C类基金份额费用收取不同，"
+                  "各基金份额类别对应的可分配收益将有所不同。")
+    body_edit = {"rule_id": "G18", "location": "p0", "start": 2,
+                 "end": 2 + len(clause_old), "replacement": clause_new}
+    summary_edit = {"rule_id": "G18", "location": "p1", "start": 0,
+                    "end": len(before), "replacement": clause_new + tail}
+    after_body = "4、" + clause_new + tail
+    rules = {"G18": {"rule_id": "G18", "operations": [
+        {"op": "replace", "old_text": clause_old, "new_text": clause_new}]}}
+    return before, body_edit, summary_edit, after_body, rules
+
+
+def test_duplicate_site_span_boundary_difference_is_not_diverged():
+    """FL-D570: identical clause copies edited with different span boundaries —
+    one final paragraph keeps only the list-item enumeration prefix, the clause
+    content is identical — must NOT be blocked by DUPLICATE_SITE_DIVERGED."""
+    from fundlex.generation.claim_replay import replay_claims
+    before, body_edit, summary_edit, after_body, rules = _fl_d570_setup()
+    # summary replacement == clause_new + tail; body keeps the "4、" prefix.
+    after_summary = summary_edit["replacement"]
+    replay = replay_claims(
+        [body_edit, summary_edit], Inspection([before, before]),
+        Inspection([after_body, after_summary]), rules_by_id=rules)
+    codes = {failure["code"] for failure in replay["failures"]}
+    assert "DUPLICATE_SITE_DIVERGED" not in codes, replay["failures"]
+
+
+def test_duplicate_site_true_divergence_still_fails_closed():
+    """FL-D570 mutation self-check: copies genuinely edited to different clause
+    wording must still be blocked by DUPLICATE_SITE_DIVERGED (fail-closed)."""
+    from fundlex.generation.claim_replay import replay_claims
+    before, body_edit, summary_edit, after_body, rules = _fl_d570_setup()
+    diverged_clause = ("由于本基金A类基金份额和C类基金份额费用收取比例不同，"
+                       "各基金份额类别对应的可分配收益将有所不同。")
+    summary_edit = dict(summary_edit,
+                        replacement=diverged_clause + summary_edit["replacement"][
+                            len(body_edit["replacement"]):])
+    after_summary = diverged_clause + after_body[len("4、" + body_edit["replacement"]):]
+    replay = replay_claims(
+        [body_edit, summary_edit], Inspection([before, before]),
+        Inspection([after_body, after_summary]), rules_by_id=rules)
+    codes = {failure["code"] for failure in replay["failures"]}
+    assert "DUPLICATE_SITE_DIVERGED" in codes
+
+
+def test_duplicate_site_dropped_business_tail_still_fails_closed():
+    """FL-D570 adverse mutation: enumeration-prefix normalization must NOT mask a
+    copy that deleted a whole business sentence from the duplicated paragraph."""
+    from fundlex.generation.claim_replay import replay_claims
+    before, body_edit, summary_edit, after_body, rules = _fl_d570_setup()
+    # The summary copy's edit covers the whole paragraph but drops the tail
+    # sentence entirely: a real divergence of disposition, not a boundary diff.
+    summary_edit = dict(summary_edit, replacement=body_edit["replacement"])
+    replay = replay_claims(
+        [body_edit, summary_edit], Inspection([before, before]),
+        Inspection([after_body, body_edit["replacement"]]), rules_by_id=rules)
+    codes = {failure["code"] for failure in replay["failures"]}
+    assert "DUPLICATE_SITE_DIVERGED" in codes
