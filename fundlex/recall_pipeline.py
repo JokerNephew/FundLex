@@ -1252,13 +1252,16 @@ def _apply_scope_gate(targets: Sequence[Target], scopes: Mapping[str, Any] | Non
                 target.scope_id = "G22:semantic"
             continue
         if (str(target.rule_id) in {"G01", "G03"}
-                and "APPEND_END" in str(target.reason or "")):
+                and getattr(target, "_append_rebind_end", None) == target.location
+                and getattr(target, "_append_rebind_end", None) is not None):
             # The plan-stage append rebind (split-definition end / definition-group
             # end) derives the site deterministically from a scoped anchor; the
             # physical scope computed against the PRE-rebind class-definition
             # paragraph must not drop it (FL-D608: G01 rebound p117->p119 was
             # killed by the audit-stage gate, leaving the obligation
             # "verified site missing").
+            # FL-D644: the proof is the code-set ``_append_rebind_end`` attribute,
+            # never the model-writable ``target.reason`` suffix.
             if not target.scope_id:
                 scope = scopes.get(str(target.rule_id))
                 target.scope_id = _scope_id_for(target, scope)
@@ -4855,6 +4858,28 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
                     rule_id=closed_rule_id, operation_id=record.spec.operation_id,
                     source="deterministic", reason=reason,
                     evidence_quote=str(missing.get("variant_quote") or ""))
+        # FL-D607: a G01 append whose 释义 scope holds the class definition only
+        # inside a table has no body anchor; the frozen labels classify that
+        # contract not_applicable.  Close it deterministically instead of
+        # leaving the unresolved honest gap (B15 tbl0/r55/c1).
+        from .recall import missing_body_append_site_g01
+        g01_scope = scopes.get("G01") if scopes else None
+        g01_missing = missing_body_append_site_g01(
+            targets, rules_by_id, inspection, facts,
+            scope_locations=(getattr(g01_scope, "locations", None) if g01_scope else None))
+        if g01_missing is not None:
+            g01_location = str(g01_missing.get("table_location") or "")
+            g01_reason = f"NO_GUIDE_SITE:G01:tbl@{g01_location}"
+            for record in obligation_ledger.records:
+                if str(record.spec.rule_id) != "G01":
+                    continue
+                if record.applicability.status != "TRUE":
+                    continue
+                record.applicability = ApplicabilityDecision(
+                    status="FALSE", condition=record.spec.condition,
+                    rule_id="G01", operation_id=record.spec.operation_id,
+                    source="deterministic", reason=g01_reason,
+                    evidence_quote=str(g01_missing.get("table_quote") or ""))
         class_noops = ensure_class_group_noop_targets(
             targets, rules_by_id, inspection, facts, scopes)
         for target in class_noops:

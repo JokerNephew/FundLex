@@ -766,6 +766,11 @@ def _resolve_class_basics(rule_id: str,
             evidence.extend([f"definition_candidates={count}"])
             if len(def_leaves) > 1:
                 evidence.append(f"multi_leaf={len(def_leaves)}")
+            # FL-D645 alignment: extend through the same deterministic definition
+            # group chain as G01/G02, so a 基本情况 leaf holding only the
+            # headline definition admits the rebound group end for the audit gate
+            # and the replay boundary instead of a coincidental wide leaf.
+            def_leaves = _extend_definition_group(def_leaves, spans, evidence)
             evidence.extend([_leaf_label(leaf) for leaf in def_leaves])
             evidence.append("source=basic_info_definition")
             return _class_scope(rule_id, def_leaves, resolution="resolved", base=base,

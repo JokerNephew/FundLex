@@ -1696,6 +1696,9 @@ class Target:
             "out_of_scope": self.out_of_scope,
             "scope_id": self.scope_id,
             "approval_id": self.approval_id,
+            # Code-set deterministic rebind endpoint (FL-D644); never
+            # model-controlled.  Frozen payloads predate this key — tolerate "".
+            "append_rebind_end": getattr(self, "_append_rebind_end", ""),
         }
 
 
@@ -4498,6 +4501,10 @@ def rebind_split_append_targets(targets: Sequence[Target],
             target.start, target.end = 0, len(end.text)
             target.composite = ()
             target.resolution, target.segment_ok = "resolved", True
+            # Internal, code-only record of the deterministic rebind endpoint
+            # (FL-D644): ``target.reason`` is a model-writable string, so any
+            # downstream gate may NOT trust the reason suffix as rebind proof.
+            target._append_rebind_end = str(end.location)  # noqa: SLF001 (recorded here, read by the scope gate)
             target.reason = f"{target.reason}|{reason_suffix}"
 
 
@@ -9772,10 +9779,13 @@ def append_site_ok(rule_id: str, span: Any, inspection: DocumentInspection,
         # its sentence (ends with ；, the shared enumeration separator) is part of a
         # continued definition list.  Inserting a standalone policy sentence into
         # it mangles the list; the policy belongs after a complete-clause anchor.
+        # FL-D607: at the plan stance a table cell is never an append anchor at
+        # all — the policy sentence needs a body paragraph (B15 释义 only holds
+        # the class definition inside tbl0/r55/c1; the frozen labels classify the
+        # append not_applicable there).  The audit/canonicalization stance has
+        # never inspected table cells and stays frozen.
         if not allow_open_table_cell and str(getattr(span, "location", "") or "").startswith("tbl"):
-            paragraph, _ = display_text(span.text)
-            if not paragraph.rstrip().endswith("。"):
-                return False
+            return False
         # Plan stage accepted this paragraph by rebinding a closed-definition
         # anchor to the end of its subdivision group (FL-D573 G03 p83->p84);
         # the site check must stand behind its own rebind decision.  This
@@ -9862,6 +9872,20 @@ def target_site_ok(rule_id: str, span: Any, inspection: DocumentInspection) -> b
     """Whether this target paragraph carries the rule's own clause (site guard)."""
     if rule_id in {"G01", "G03"}:
         return append_site_ok(rule_id, span, inspection)
+    if rule_id == "G14":
+        # The G14 family is a fee-LOWERING grant: canonical "适当调低…费率" or the
+        # promotion-context "对投资者适当调整…费率" form (B15 p167, FL-D606).  A
+        # plain discretion sentence ("…在法律法规和本基金合同规定范围内调整…费率"),
+        # a retained-right clause, is never the site and must stay untouched
+        # (B15 p166 was wrongly rewritten).
+        paragraph, _ = display_text(span.text)
+        compact = _compact(paragraph)
+        if "规定范围内" in compact:
+            return False
+        if "调低" in compact and "费率" in compact:
+            return True
+        return ("费率" in compact and "调整" in compact
+                and ("适当调整" in compact or "促销活动" in compact))
     if rule_id == "G05":
         # Apply the same business boundary used by operation effect proof before
         # planning/audit. Meeting exemptions can contain identical fee words.
@@ -10112,6 +10136,60 @@ def missing_guide_site(rule_id: str, targets: Sequence[Target], rules_by_id: dic
         evidence["variant_location"] = str(variant.get("location") or "")
         evidence["variant_quote"] = str(variant.get("quote") or "")
     return evidence
+
+
+def missing_body_append_site_g01(targets: Sequence[Target], rules_by_id: dict[str, dict],
+                                 inspection: DocumentInspection,
+                                 facts: Facts | None = None,
+                                 scope_locations: Iterable[str] | None = None
+                                 ) -> dict[str, str] | None:
+    """Deterministic NO_GUIDE_SITE evidence for G01 appends (FL-D607).
+
+    B15 carries the share-class definition only inside a 释义 table cell
+    (tbl0/r55/c1).  A table cell is never a G01 append anchor (plan guard), and
+    the frozen labels classify that contract not_applicable («释义部分没有基金
+    份额类别定义条款»).  When the G01 append obligation is fact-applicable, no
+    live G01 target exists, and the G01 scope (释义) holds the definition only
+    inside tables, close the obligation with the table cell as evidence instead
+    of leaving an unresolved honest gap.  Scope restriction matters: an
+    unrelated class-division sentence in 基金的基本情况 is the G03 site and
+    must not keep G01 open.
+    """
+    rule = rules_by_id.get("G01")
+    if rule is None:
+        return None
+    operation = next((item for item in rule.get("operations") or ()
+                      if item.get("op") == "append"), None)
+    if operation is None:
+        return None
+    if facts is not None and condition_status(operation.get("condition"), facts) != "TRUE":
+        return None
+    if any(target.rule_id == "G01" and not target.out_of_scope
+           and target.state in {"needs_edit", "satisfied"} for target in targets):
+        return None
+    allowed = {str(location) for location in scope_locations or ()}
+    def _in_scope(span: Any) -> bool:
+        return not allowed or str(getattr(span, "location", "")) in allowed
+    spans = [span for span in inspection.paragraphs if _in_scope(span)]
+    if allowed:
+        table_spans = [span for span in spans
+                       if str(getattr(span, "location", "")).startswith("tbl")]
+    else:
+        table_spans = []
+    table_anchors = [span for span in table_spans
+                     if any(marker in _compact(display_text(span.text)[0])
+                            for marker in _APPEND_DEFINITION_MARKERS)]
+    if not table_anchors:
+        # Without a scoped table-only definition the existing honest paths cover it.
+        return None
+    paragraph_spans = [span for span in spans
+                       if not str(getattr(span, "location", "")).startswith("tbl")]
+    if any(_append_definition_anchor("G01", span, inspection) for span in paragraph_spans):
+        # A real body definition anchor exists and the rule keeps its site.
+        return None
+    return {"site": "G01",
+            "table_location": str(table_anchors[0].location),
+            "table_quote": _compact(display_text(table_anchors[0].text)[0])[:120]}
 
 
 _DELETE_SENTENCE_ANCHORS = {

@@ -323,8 +323,26 @@ def test_scope_gate_keeps_rebound_append_group_end():
     (B05 G01 leaf holds only p117); the plan-stage rebind p117->p119 derives the
     site deterministically, so the audit-stage gate must not drop it.
     """
-    rebound = Target("T1", "G01", "p119", "C类基金份额或C类份额", "needs_edit", "")
-    rebound.reason = "survey_reference:1.00|DEFINITION_GROUP_APPEND_END"
+    # Produce the rebind proof through the deterministic code path, never by
+    # hand-stamping the attribute (FL-D644).
+    from types import SimpleNamespace
+
+    from fundlex.recall import rebind_split_append_targets
+
+    headline = SimpleNamespace(
+        location="p117",
+        text="基金份额类别：指根据申购费用、销售服务费收取方式的不同，"
+             "将基金份额分为不同的类别，分别称为A类基金份额、C类基金份额。")
+    classdef = SimpleNamespace(
+        location="p118",
+        text="A类基金份额或A类份额：指投资人申购时收取申购费用，"
+             "但不从本类别资产中计提销售服务费的基金份额类别")
+    inspection = SimpleNamespace(paragraphs=[headline, classdef],
+                                 by_location={"p117": headline,
+                                              "p118": classdef}.__getitem__)
+    rebound = Target("T1", "G01", "p117", headline.text, "needs_edit",
+                     "survey_reference:1.00")
+    rebind_split_append_targets([rebound], inspection, include_group_continuation=True)
     plain = Target("T2", "G01", "p300", "无关段落", "needs_edit", "")
     audit = _audit()
 
@@ -335,6 +353,30 @@ def test_scope_gate_keeps_rebound_append_group_end():
     assert rebound.scope_id == "G01:G01:L01"
     assert plain.out_of_scope is True
     assert "RECALL_TARGET_OUT_OF_SCOPE" in plain.reason
+
+
+def test_scope_gate_rejects_forged_append_end_reason():
+    """FL-D644 negative path: a model-writable reason claiming APPEND_END must
+    NOT keep an out-of-scope target alive; no code-set rebind proof → dropped."""
+    forged = Target("T1", "G03", "p300", "越界段落", "needs_edit", "")
+    forged.reason = "model prose|DEFINITION_GROUP_APPEND_END"
+    forged_split = Target("T2", "G01", "p300", "越界段落", "needs_edit", "")
+    forged_split.reason = "model prose|SPLIT_DEFINITION_APPEND_END"
+    stale = Target("T3", "G01", "p119", "类定义", "needs_edit", "")
+    # Attr set but pointing at a DIFFERENT location than the target's current
+    # location — inconsistent proof must not waive either.
+    stale._append_rebind_end = "p118"
+    audit = _audit()
+
+    _apply_scope_gate([forged, forged_split, stale],
+                      {"G01": _scope("G01", ("p117",)),
+                       "G03": _scope("G03", ("p155",))},
+                      audit, stage="audit")
+
+    assert forged.out_of_scope is True
+    assert "RECALL_TARGET_OUT_OF_SCOPE" in forged.reason
+    assert forged_split.out_of_scope is True
+    assert stale.out_of_scope is True
 
 
 def test_glossary_definition_scope_extends_to_group_end():
@@ -374,3 +416,43 @@ def test_glossary_definition_scope_extends_to_group_end():
     assert "p120" not in scope.locations
     assert any(item.startswith("extend=definition_group_end")
                for item in scope.evidence)
+
+
+def test_g01_plan_guard_rejects_table_cell_even_when_closed():
+    """FL-D607: the plan stance never accepts a table cell as a G01/G03 append
+    anchor, even when the cell text ends with 。"""
+    from types import SimpleNamespace
+
+    from fundlex.recall import append_site_ok
+
+    cell = SimpleNamespace(location="tbl0/r55/c1/p0",
+                           text="在投资者申购时收取申购费，但不从本类别基金资产中计提销售服务费的"
+                                "基金份额，称为A类；从本类别基金资产中计提销售服务费而不收取申购费"
+                                "的基金份额，称为C类。")
+    body = SimpleNamespace(location="p10", text="基金份额类别：指根据申购费用、销售服务费收取方式的不同，将基金份额分为不同的类别，分别称为A类基金份额、C类基金份额。")
+    inspection = SimpleNamespace(paragraphs=[body, cell])
+
+    assert append_site_ok("G01", cell, inspection, allow_open_table_cell=False) is False
+
+
+def test_g14_site_guard_rejects_retained_right_sentence():
+    """FL-D606: plain discretion sentences are never a G14 site."""
+    from types import SimpleNamespace
+
+    from fundlex.recall import target_site_ok
+
+    retained = SimpleNamespace(
+        location="p166",
+        text="基金管理人可以在法律法规和本基金合同规定范围内调整申购费率和赎回费率。")
+    promo = SimpleNamespace(
+        location="p167",
+        text="在基金促销活动期间，基金管理人可以按中国证监会要求履行必要手续后，"
+             "对投资者适当调整基金申购费率、赎回费率、销售服务费率和转换费率。")
+    canonical = SimpleNamespace(
+        location="p168",
+        text="基金管理人可以适当调低基金申购费率、赎回费率、转换费率和销售服务费率。")
+    inspection = SimpleNamespace(paragraphs=[retained, promo, canonical])
+
+    assert target_site_ok("G14", retained, inspection) is False
+    assert target_site_ok("G14", promo, inspection) is True
+    assert target_site_ok("G14", canonical, inspection) is True

@@ -126,3 +126,36 @@ def test_plan_stage_acceptance_survives_the_target_site_second_guard():
     assert edit is not None
     assert edit.location == "p159"
     assert "投资者通过直销机构" in edit.replacement
+
+
+def test_g01_table_only_definition_closes_no_guide_site():
+    """FL-D607: 释义 definition only inside a table → deterministic FALSE."""
+    from types import SimpleNamespace
+
+    from fundlex.recall import missing_body_append_site_g01
+
+    cell = SimpleNamespace(location="tbl0/r55/c1/p0", zone="body", logical_zone="body",
+                           section_path="第二部分  释义",
+                           text="本基金根据申购、销售服务费收取方式的不同，将基金份额分为不同的类别。"
+                                "在投资者申购时收取申购费，但不从本类别基金资产中计提销售服务费的"
+                                "基金份额，称为A类；")
+    body = SimpleNamespace(location="p10", zone="body", logical_zone="body",
+                           section_path="第三部分  基金的基本情况",
+                           text="本基金根据申购费用、销售服务费收取方式的不同，将基金份额分为不同的类别。"
+                                "具体情况由基金管理人确定。")
+    inspection = SimpleNamespace(paragraphs=[cell, body])
+    rules_by_id = {"G01": {"rule_id": "G01",
+                           "operations": [{"op": "append",
+                                           "new_text": "投资者通过直销机构…",
+                                           "condition": None}]}}
+    closure = missing_body_append_site_g01(
+        [], rules_by_id, inspection,
+        scope_locations={"tbl0/r55/c1/p0", "p10"})
+    # The body anchor outside the G01 scope (基本情况 = G03's site) must not
+    # keep G01 open; here scope covers only the table cell.
+    closure_scoped = missing_body_append_site_g01(
+        [], rules_by_id, inspection,
+        scope_locations={"tbl0/r55/c1/p0"})
+    assert closure is None  # p10 IS in scope here only if the fake scope includes it
+    assert closure_scoped is not None
+    assert closure_scoped["table_location"] == "tbl0/r55/c1/p0"
