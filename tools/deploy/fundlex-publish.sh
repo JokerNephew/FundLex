@@ -160,7 +160,9 @@ migrate_schema() {
     "$DST/.venv/bin/python" -I -B -c '
 import sys
 from pathlib import Path
-sys.path.insert(0, str(Path.cwd().resolve()))
+# argv[-1] 必为 $DST（下方命令尾），生产 cwd 与其一致；显式传入避免隔离
+# 环境（无 PYTHONPATH/cwd≠DST）下被 editable pth 回落到其它工作树（FL-D800）。
+sys.path.insert(0, str(Path(sys.argv[1]).resolve()))
 try:
     from fundlex.config import local_data_dir, auth_db_target
     from fundlex.store import RunStore
@@ -185,7 +187,7 @@ try:
 except Exception:
     # Do not echo database targets, driver errors or configuration values.
     raise SystemExit("fundlex-publish: serial schema initialization failed") from None
-'
+' "$DST"
 }
 
 stop_services() {
