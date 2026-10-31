@@ -1,5 +1,12 @@
 # FundLex 当前断点（ACTIVE_HANDOFF）
 
+## 2026-10-31 qa-f2-recall-tracked：带修订痕迹 DOCX 任务输入固化（本 worktree 断点）
+
+- Worktree `/home/opencode/.local/share/opencode/worktree/29a9a9/qa-f2-recall-tracked`，分支 `qa-f2-recall-tracked-20261031`，基线 `qa/full-audit-20261031`（@`1e7e05e`）。语义决策：基底=接受全部修订后视图；原痕迹固化不再保留；引擎新修订为唯一痕迹；报告记 `base_had_tracked_changes`。
+- 已实施并聚焦验证：`fundlex/docx.py::normalize_tracked_base`、`fundlex/recall_pipeline.py::process_recall_first` 输入规范化与报告字段、`fundlex/selective.py` flatten 报告兼容、`fundlex/delivery.py` 新错误文案、`fundlex/upload_validation.py` 检测职责注释。新增 `tests/test_docx_tracked_input.py` 16 项绿、`tests/browser/test_tracked_upload.py` 2 项绿（FUNDLEX_BROWSER_TESTS=1）。真实语料备份 18 份固化验证 17 绿+1 受保护边界；聚安离线引擎 redline 仅我方作者、final 零残留（证据 `/tmp/opencode/qa-tracked/`）。
+- 集中记录：FL-D610（实施）、FL-D611（作者字面值待产品确认，现按 FL-D446“资金清算部”解析）、FL-D612（受保护边界/段落合并 fail-closed/死导入观察项/无 OCR 引擎）。
+- 回路：除 FL-D574 记载的 6 项 HEAD 既有失败外无新失败预期；全量 pytest 后台运行中，绿后 `git add` 自有文件（fundlex/docx.py、recall_pipeline.py、selective.py、delivery.py、upload_validation.py、tests/test_docx_tracked_input.py、tests/browser/test_tracked_upload.py、docs/ACTIVE_HANDOFF.md、docs/DETAIL_ISSUES_AND_RESOLUTIONS.md）→ commit → `git merge --no-edit qa/full-audit-20261031`。
+
 ## 2026-10-31 全项目质量整改（QA 总攻，主 agent 断点）
 
 ### 断点更新（fix wave 1 进行中）
