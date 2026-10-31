@@ -1567,11 +1567,10 @@ dev20 v2 闭环：修复循环直到 §7 门槛（无已确证严重错误、无
 - FL-D685 回复 e3d6135；FL-D688 addendum 已写入 loop-2 compare（var/ 不入库）；FL-D584/585/586/587/588/589 条目在册。
 
 ## 在途
-- HEAD 6339a06（merge qa/full-audit-20261031 干净 ff；FL-D690/692 已在主线树）。
-- **loop-4 冻结 `qa-wave1-dev-v2-20261101-6339a06` 已发**：guide/labels/selection sha 与前四轮逐项一致；dev20 全量在跑（后台 sh_1931c2a23001zqBKBrCGiji7Pz，run-dev.log；预计 ~2h）。
-- 跑完后：run_v2_post_dev.sh 评分（树内 p6-score-3 量具）→ compare_multi.py 五段对比（脚本已扩展，输出本波目录）→ 门槛判：fc=0（硬）/B02 complete 有产物/B15 诚实形态/wrong=0/kept 不新增/完成率≥89.5% 量级（波动需归因）。
-- 达标才能启动留出 8 份（同 freeze，GROUP=holdout）；第二波 100 份等主线令（kvvQwuiB 勿自行启动）。
-- 纪律项7：pairwise 发现新缺口先登记机制面根因，禁单规则补丁。号段余 FL-D693..699。
+- 无后台进程。**loop-4（6339a06）跑完评完：351/90.0%、wrong=0、kept=0、actual 17/20、fc=1 → 门槛 FAIL**。账本第 6 段 $0.5802/515c/68min。
+- 达成：B02 complete 21/21（FL-D690 收官实证）/完成率≥89.5%/wrong、kept 达标/B19 预期内。
+- FAIL 双因子已登记：**FL-D693**（B12 真回归：G12+G13 联合站点合成编辑通道 loop-4 未触发→诚实 incomplete）；**FL-D694**（五机制下 B15 仍谎报 complete，A/E 未把 T001 真缺口翻诚实 holds）。compare-multi addendum 已写。
+- 等主线：joint 合成通道机制处置 + A/E 生效处置 → loop-5 令。留出 8 份维持冻结；第二波 100 份未启动。号段余 FL-D695..699。
 ## 下一步（可执行顺序）
 1. 已向主线报 loop-2 指标与残余归属（本次回复）。
 2. 回归绿 → 提交 FL-D588 代码 → 报主线。等 feat-guide B15 单与 B19 修复专单齐 → 新 freeze 跑 loop-3。编号 580-589 已用尽，已向主线请新段。
