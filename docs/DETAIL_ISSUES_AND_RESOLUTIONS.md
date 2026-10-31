@@ -7361,3 +7361,23 @@ H＝E×…
 - **设计（已实施）**：`delivery.delivery_outcome(report)` 纯确定性投影，主线交付分支收口时写 `report["delivery"]`。二态语义：`complete`/`complete_with_exceptions` → `完整完成`（holds 空）；其余（`incomplete`/`not_generated`/`excluded`）→ `诚实扣件`，`holds` 复用 `_issues` 用户可读清单（中文 business_reason + review_note + 章节/原文定位），并并入 FL-D653 的 miss 双语归因（`miss_class`/`miss_reason_zh`/`miss_reason_en`，机器码仅作次级审计字段）。引擎内部 delivery_status 保持线兼容（`engine_status` 透传）——二态是用户语义面层，不改 fail-closed 判定本身。
 - **测试**：`tests/test_delivery_outcome.py` 7 例（两态边界、fallback hold、miss 融合、机器码降级为次级）；交付/导出/补做面 169 绿。
 - **状态**：已实施（机制 E 完成；真实病例复验随 FL-D658 统一）。
+
+## FL-D655 机制 B：未认证变体「发现→分类→认证→授权」通用管线（2026-10-31，qa-recall-miss）
+
+- **病灶**：族 ⑥/①——合同措辞是指引 old_text 的未记录变体（类限定插入、语序微调）时，无授权通道 → 策略门 fail-closed、计划缺口（B17 G08 根因）；若一律宽松则违 fail-closed 方向。
+- **设计（已实施）**：新模块 `fundlex/variants.py`。确定性谓词链：发现=锚（最长公共块≥6 字）+4-gram 预筛；分类=CERTIFIABLE/EXEMPT/ANOMALOUS/IGNORE；认证=锚≥6 + 有序块覆盖率≥50% + 伸缩比 [0.5,2.5] + 否定轮廓（最长优先交替正则，裸「不」单列）一致 + **旧形专用域**（`_exclusive_regions`：old 相对 new 的不等长替换缺失段，须作为子串出现于候选）四道闸；EXEMPT=新形结构覆盖≥0.99 且具新专用域且无旧专用域（纯插入型 old⊂new 对无法靠专用域区分时，fail-closed 归入可编辑侧而非豁免侧，与 B17 真实语义一致）。授权两翼：①`ensure_certified_variant_targets`（recall.py，全规则通用残目标，caps 4/op，G08 保留既有更严谓词、通用层不弱化）前置 NO_GUIDE_SITE 闭合；②`_validate_routed_policy` 对每条 routed operation 增补认证句子为 remove 授权（原仅 G08 特例）。ANOMALOUS 只作环境证据 `report["variant_candidates"]`（`VARIANT_PENDING_CERTIFICATION`，登记交付已知码前缀，永不阻断/编辑）。**教训（已修复验证）**：初版把 review 行注入 coverage_gaps→被 project() 当 blocking evidence 把健康义务翻 OPEN（happy-path 回归），改挂独立字段。
+- **测试**：`tests/test_variants.py` 15 例（认证/豁免/异常/忽略/授权/残目标/双重抑制/条件门/caps）；相关域回归绿。
+- **状态**：已实施（真实病例复验随 FL-D658 统一）。
+
+## FL-D656 机制 D：恢复层保守性——satisfied 站点免造恢复目标（2026-10-31，qa-recall-miss）
+
+- **病灶（族⑤，B19 G04 p160 实证）**：T005/T006 已 satisfied 覆盖 G04:0/G04:1 业务站点，恢复层 `target_for_missing_operation` 仍造 R036/R037 needs_edit 双子（needs_edit 是当时的唯一抑制条件），不可计划的目标并入义务台账 → 两条义务 UNRESOLVED（RECALL_TARGET_UNRESOLVED/CLAIM_REPLAY_FAILED），整份 incomplete。
+- **设计（已实施）**：`target_for_missing_operation` 增补保守性闸：同 operation 且 `satisfied`/`already_satisfied` 的 in-scope 目标存在即免造（out_of_scope 不豁免；不同 operation 的 satisfied 不豁免——operation-first 覆盖语义）。fail-closed 保持：仅显式满意态抑制，义务自身开放行不受影响（T005/T006 满意但台账开放的行为另由 A/E 诚实呈现）。
+- **测试**：`tests/test_recovery_conservatism.py` 5 例（needs_edit/双满意态抑制/异 op 不抑制/超域不抑制）。
+- **状态**：已实施（真实 B19 病例复验随 FL-D658 统一）。
+
+## FL-D657 机制 C：计划输出完整性守护（already-cited 拒收/站点自洽/义务绑定+受限续轮）（2026-10-31，qa-recall-miss）
+
+- **设计（已实施）**：`recall.plan_output_guard(planned, targets)` 确定性三查：`PLAN_CITED_CLOSED_TARGET`（编辑引用已闭合/不适用/缺席目标——already-cited 拒收）、`PLAN_SITE_INCONSISTENT`（编辑 span 越出目标认证 span 容差带 ±40）、`PLAN_OPERATION_UNBOUND`（无 operation/obligation 绑定、台账永不可闭合）。拒收=就地剪除 + 台账 planned→unresolved 降级记码（沿用 FL-D112 修剪范式），questions 入 `planned["plan_guard"]`。`_plan_and_generate` 集成：守卫命中 → 对 dirty locations **一次** `replan_sites` 续轮 → 再守卫；二次仍拒收则保持开放（A 层呈 MISS_PLAN_GAP，E 层诚实扣件），RecallError 续轮失败不吞已有降级台账。与 FL-D688 联动：截断/半输出残留经此以降级台账+诚实呈现代替静默半成品。
+- **测试**：`tests/test_plan_output_guard.py` 8 例（干净计划/三码/容差带/合成 target 豁免/二次幂等）。
+- **状态**：已实施（真实病例复验随 FL-D658 统一）。
