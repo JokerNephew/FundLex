@@ -7772,3 +7772,37 @@ H＝E×…
 - **排除与本线修复相关性**：FL-D791 探针仅作用于终结符锚定确定性删除（G13/approved-span），G17 删除 span 0..90 与 T014 原 span 一致无扩张；G16 为 append 不经探针；loop-4 同期 G16 闭合时模型未产 T014 表位——差异属 FL-D650 族 survey 采样波动。
 - **影响**：保守诚实扣件（非错误交付）；若 loop-5 多案复发「G16 append 站点与 G17 删除站点重叠」形态，应考虑 replay 闭合集排除已被授权删除的站点（效果在邻接站点已验证时）。
 - **状态**：观察项（待 loop-5 复发判定；本轮不实施规则级处置）。复验同时确认 FL-D791 病灶治愈：G12+G13 p244 `atomic_paragraph`(0,121) 合成 replace 产出与 loop-3 逐字相同文本「5、赎回费用由…收取。赎回费用全额计入基金财产。」，23 义务 CLOSED_REPLAY，成本 $0.0237/23 calls/186s（账本仅观测）。
+
+## FL-D693 B12 loop-4 新回归：G12+G13 联合站点合成编辑通道未触发，三操作 CLAIM_OPERATION_NOT_PLANNED → 诚实 incomplete（四轮 complete 首负）（2026-11-01，qa-feat-recall）
+
+- **发现**：dev20 loop-4（6339a06，五机制 FL-D652~659 + FL-D690/692）B12 从 v1/loop1/loop2/loop3 四连 complete 翻 incomplete；scorer 19 目标全 not_executed。属「诚实不交付」形态（recovery final=unresolved，11 attempts），非谎报。
+- **实证链**：原始 p244 单句捆绑 G12 改（「归入基金财产的比例应根据相关规定执行…列示」→「全额计入基金财产」）与 G13 删（7日1.5%句）；loop-3（de18ec1）该站由 **rule_id=`G12+G13` 合成 replace** 一笔完成、replay/评分全过；loop-4 同站 `edit_plan` 无任何 G12/G13/G12+G13 条目（rule ids 清单缺 `G12+G13`），p244 文本逐字未动；目标层面 G12:0 replace 台账 `unresolved`、T3 补点 `T3_open_operation:G12:1:candidates=1`，恢复循环反复 MARK_UNRESOLVED「operation effect is not proven at every verified site / verified site missing」×3 操作（G12:0/G12:1/G13:0）后熔断，交付门诚实判 incomplete。
+- **机制面归因（不做规则级修补，纪律项7）**：loop-3→loop-4 引擎差 = 主线五机制 FL-D652~659（recall-miss A/E 等，合并树新文件含 reconciliation/recovery_conservatism 测试族）+本线 FL-D690/692（与 G12/G13 plan 无关）。**联合（joint/composite）多操作共享站点合成编辑通道在该案未被触发或被新机制抑制**——loop-3 同站同输入可合成，loop-4 不能。具体待主线在 joint 触发门/reconciliation 交互处定位；候选观测：`G15+G16` 合成在 loop-4 其他案仍在（rule ids 有），疑似 G12+G13 组合触发条件被收紧。
+- **影响**：目标完成 -19（352→被 B02 +21 对冲后净 351/90.0%）；门槛项「不新增 incomplete」实质受损（虽仅约定 wrong/kept 不新增，属真实回归须报）。
+- **状态**：open，归主线机制面处置（joint 合成触发与五机制交互）；本线不补规则。
+- **变更记录**：2026-11-01 新增（FL-D690..699 段，已用 693）。
+
+## FL-D694 五机制下 B15 仍谎报 complete：T001 真缺口未翻诚实 holds（机制 A/E 未生效病例，fc=1 硬门未达）（2026-11-01，qa-feat-recall）
+
+- **发现**：loop-4（6339a06 含 recall-miss 机制 A/E 五件套）B15 delivery 仍 `complete`、holds=[]、report.md 写「阻断 0 项」；而 labels T001（G03 append @p87 三直销条款）经 scorer 与 final.docx 双重实证**仍真实未追加**（p87 文本与原文逐字一致，「appended policy absent from its declared site: 3 clause(s)」）→ false_complete=1，硬门未达。
+- **机制面归因**：B15 T001 是主线登记的 recall-miss 机制 A/E（跨层对账+交付门二态）强制真实病例；loop-4 冻结令明确预期形态为「不再谎报 complete——incomplete+诚实扣件 holds 且人读可读」。实测该病例下 A/E **未触发翻转**：跨层对账未把 scorer 面/义务面揭露的 T001 gap 计入阻断/扣件，交付门仍判 complete。候选观测：该案 T001 在引擎内呈「目标已 satisfier 判 absent/已交付 1 处 G03 替换」状态（报告称 G03 1 处替换为同站他句），A/E 对账对「声明站点外的 append 义务未执」形态可能无覆盖。
+- **影响**：loop-4 硬门槛 false_complete=0 未达；与 FL-D693 并列 loop-4 FAIL 双因子。
+- **状态**：open，归主线 recall-miss 线机制处置；本线不补规则、不动 labels/scorer。
+- **变更记录**：2026-11-01 新增。
+
+## FL-D790 评分器 append 站点窗口后向对称（主线授权量具修正，已实施+五波同口径重评；合并裁决令 2026-11-01）（2026-11-01，qa-feat-recall）
+
+- **背景**：loop-4 fc=1 的 B15 T001 经主线裁决确认为量具误杀：引擎 `DEFINITION_GROUP_APPEND_END` 把三条直销政策**逐字追加至同小节较前段落**（B15 p84，声明站 p87 后退 3 段；当时的 replay 已验证为真），而 scorer append 窗口仅前向（index-1 起）→ 判 not_executed。裁决授权窗口对称化。
+- **实施**（`tools/evaluation/p6_score.py`，`SCORER_VERSION` `p6-score-3`→`p6-score-4-appendwindow-20261101`）：`_site_text` 增 `before` 形参（默认 1 保持其余路径逐字不动），仅 append 判定窗改 `before=6, after=6`（前向不变）；labels 不动、引擎不动。
+- **测试**：新 `tests/test_fl_d790_append_window.py` 5 例（后移 4 段合法追加→completed；边界 index-6→completed/index-7→not_executed（对抗）；声明站正向不变；缺席仍 not_executed）+ 既有 append 正向用例全部不变。量具聚焦 49 绿、score/site/append/label 族 354 绿。一处既有夹具同步：`test_p6_score_sites.py` 双站用例间距 4→8 段（原几何小于新后向窗，语义断言不变）。
+- **零成本纯读五波重评（同量具）**：loop4 352/90.3%、**fc 1→0**（达成裁决硬指标）；loop1/loop2 逐字不变；loop3 350/89.7%、fc 1→0（B15 T001 同机制 +1，p84 落点实证）；v1 +3（242/62.1%：B05 T001 p119→117、T002 p159→155、B15 T001 p87→83，均同小节合法后移落点；v1 fc 仍 4 与窗口无关）。各波 verdic 翻转仅上述 4 项，无其他变化。
+- **状态**：已实施并 full-suite 族绿；待主线复核合并 → engine=a0aa64d 后执行 loop-5。
+- **变更记录**：2026-11-01 新增。
+
+## FL-D691 补充修正记录（FL-D790 推翻其「真实残余」子结论）（2026-11-01）
+
+- 原条目「真实残余：B15 T001（G03@p87）3 个直销条款确实未追加」**经 p84 实证推翻**：三句话逐字在小节前段落（合法 APPEND_END 落点），系窗口误杀，FL-D790 修正后 loop3/loop4 该目标均 completed。原「v1 回摆/FL-D650 族」推理作废。其余量具类结论保留。
+
+## FL-D694 判决改定：关闭（量具窗口误杀已修，非机制缺陷）（2026-11-01）
+
+- 原登记前提（T001 真缺口未被 A/E 翻转）不成立：T001 政策实际在场（FL-D790 证据），五机制下 B15 本就为真 complete，`holds=[]` 为正确形态。**无真实「谎报」病例**，A/E 生效性既未被证伪亦无实证，保持未决观测评注而非缺陷。loop-4 硬门事实结果：fc=0（量具修正后）。
