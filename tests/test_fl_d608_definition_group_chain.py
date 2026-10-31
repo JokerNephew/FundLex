@@ -126,3 +126,115 @@ def test_plan_stage_acceptance_survives_the_target_site_second_guard():
     assert edit is not None
     assert edit.location == "p159"
     assert "投资者通过直销机构" in edit.replacement
+
+
+def test_g01_table_only_definition_closes_no_guide_site():
+    """FL-D607: 释义 definition only inside a table → deterministic FALSE."""
+    from types import SimpleNamespace
+
+    from fundlex.recall import missing_body_append_site_g01
+
+    cell = SimpleNamespace(location="tbl0/r55/c1/p0", zone="body", logical_zone="body",
+                           section_path="第二部分  释义",
+                           text="本基金根据申购、销售服务费收取方式的不同，将基金份额分为不同的类别。"
+                                "在投资者申购时收取申购费，但不从本类别基金资产中计提销售服务费的"
+                                "基金份额，称为A类；")
+    body = SimpleNamespace(location="p10", zone="body", logical_zone="body",
+                           section_path="第三部分  基金的基本情况",
+                           text="本基金根据申购费用、销售服务费收取方式的不同，将基金份额分为不同的类别。"
+                                "具体情况由基金管理人确定。")
+    inspection = SimpleNamespace(paragraphs=[cell, body])
+    rules_by_id = {"G01": {"rule_id": "G01",
+                           "operations": [{"op": "append",
+                                           "new_text": "投资者通过直销机构…",
+                                           "condition": None}]}}
+    closure = missing_body_append_site_g01(
+        [], rules_by_id, inspection,
+        scope_locations={"tbl0/r55/c1/p0", "p10"})
+    # The body anchor outside the G01 scope (基本情况 = G03's site) must not
+    # keep G01 open; here scope covers only the table cell.
+    closure_scoped = missing_body_append_site_g01(
+        [], rules_by_id, inspection,
+        scope_locations={"tbl0/r55/c1/p0"})
+    assert closure is None  # p10 IS in scope here only if the fake scope includes it
+    assert closure_scoped is not None
+    assert closure_scoped["table_location"] == "tbl0/r55/c1/p0"
+
+
+def test_g14_promotion_variant_attributes_all_applicable_operations():
+    """FL-D606: the promotion-context quote carries no canonical old_text; the
+    rule-level variant proves clause identity, so the target carries every
+    applicable G14 operation instead of failing closed."""
+    from types import SimpleNamespace
+
+    from fundlex.recall import Target, _selected_operation_indices
+
+    promo_quote = "对投资者适当调整基金申购费率、赎回费率、销售服务费率和转换费率"
+    paragraph = ("6、基金管理人可以在不违反法律法规规定及基金合同约定的情况下根据市场情况"
+                 "制定基金促销计划，经代销机构同意后，针对投资者定期和不定期地开展基金促销"
+                 "活动。在基金促销活动期间，基金管理人可以按中国证监会要求履行必要手续后，"
+                 + promo_quote + "。")
+    span = SimpleNamespace(location="p167", text=paragraph)
+    inspection = SimpleNamespace(paragraphs=[span],
+                                 by_location={"p167": span}.__getitem__)
+    rule = {"rule_id": "G14",
+            "old_text_variants": [promo_quote],
+            "operations": [
+                {"op": "replace", "new_text": "基金管理人可以适当调低基金申购费率和销售服务费率。",
+                 "old_text": "基金管理人可以适当调低基金申购费率和赎回费率。"},
+                {"op": "replace", "new_text": "基金管理人可以适当调低基金申购费率和销售服务费率。",
+                 "old_text": "基金管理人可以适当调低基金申购费率、赎回费率和转换费率。"},
+                {"op": "replace", "new_text": "基金管理人可以适当调低基金申购费率和销售服务费率。",
+                 "old_text": "基金管理人可以适当调低基金申购费率、赎回费率、转换费率和销售服务费率。"},
+            ]}
+    target = Target("Y002", "G14", "p167", promo_quote, "needs_edit",
+                    "survey_reference:1.00")
+
+    assert _selected_operation_indices(rule, target, inspection, _facts()) == [0, 1, 2]
+
+
+def test_g14_site_guard_veto_pins_retained_right_sentence():
+    """FL-D606: approvals must never waive the guard onto a 规定范围内
+    discretion sentence; promo/canonical sentences stay waivable."""
+    from types import SimpleNamespace
+
+    from fundlex.recall import g14_site_guard_veto
+
+    retained = SimpleNamespace(
+        location="p166",
+        text="基金管理人可以在法律法规和本基金合同规定范围内调整申购费率和赎回费率。")
+    promo = SimpleNamespace(
+        location="p167",
+        text="在基金促销活动期间，基金管理人可以按中国证监会要求履行必要手续后，"
+             "对投资者适当调整基金申购费率、赎回费率、销售服务费率和转换费率。")
+
+    assert g14_site_guard_veto("G14", retained) is True
+    assert g14_site_guard_veto("G14", promo) is False
+    assert g14_site_guard_veto("G17", retained) is False
+
+
+def test_g01_table_anchored_target_does_not_block_closure():
+    """FL-D607 follow-up: a G01 target anchored inside a table cell is rejected
+    at the plan guard and must not count as a live target against the
+    deterministic NO_GUIDE_SITE closure."""
+    from types import SimpleNamespace
+
+    from fundlex.recall import Target, missing_body_append_site_g01
+
+    cell = SimpleNamespace(location="tbl0/r55/c1/p0", zone="body", logical_zone="body",
+                           section_path="第二部分  释义",
+                           text="本基金根据申购、销售服务费收取方式的不同，将基金份额分为不同的类别。"
+                                "在投资者申购时收取申购费，但不从本类别基金资产中计提销售服务费的"
+                                "基金份额，称为A类；")
+    inspection = SimpleNamespace(paragraphs=[cell])
+    rules_by_id = {"G01": {"rule_id": "G01",
+                           "operations": [{"op": "append",
+                                           "new_text": "投资者通过直销机构…",
+                                           "condition": None}]}}
+    tbl_target = Target("T1", "G01", "tbl0/r55/c1/p0", cell.text, "needs_edit",
+                        "释义中的基金份额类别定义存在，需在该定义后追加。")
+    closure = missing_body_append_site_g01(
+        [tbl_target], rules_by_id, inspection,
+        scope_locations={"tbl0/r55/c1/p0"})
+    assert closure is not None
+    assert closure["table_location"] == "tbl0/r55/c1/p0"

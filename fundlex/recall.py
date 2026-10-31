@@ -1696,6 +1696,9 @@ class Target:
             "out_of_scope": self.out_of_scope,
             "scope_id": self.scope_id,
             "approval_id": self.approval_id,
+            # Code-set deterministic rebind endpoint (FL-D644); never
+            # model-controlled.  Frozen payloads predate this key — tolerate "".
+            "append_rebind_end": getattr(self, "_append_rebind_end", ""),
         }
 
 
@@ -3008,6 +3011,21 @@ def _selected_operation_indices(rule: dict, target: Target,
         # legitimately contains both the replace and the delete).  A span that proves
         # no operation is the ambiguous case and fails closed below.
         return sorted(set(inferred))
+    if rule_id == "G14":
+        try:
+            span_body = _normalise_fee_rate_reference(
+                _target_source_body(target, inspection))
+        except (RecallError, KeyError, DocxError):
+            span_body = ""
+        variants = [_normalise_fee_rate_reference(str(value))
+                    for value in (rule.get("old_text_variants") or [])]
+        if span_body and any(value and value in span_body for value in variants):
+            # FL-D606: the promotion-context clause carries none of the canonical
+            # old_texts ("适当调低…"), only the rule-level 对投资者适当调整
+            # variants.  The variant match proves the site's clause identity, so
+            # the target carries every applicable operation — exactly what a
+            # canonical site gets when all six old_texts occur in its sentence.
+            return list(true_indices)
     if len(true_indices) == 1:
         return [true_indices[0]]
     raise RecallError("RECALL_TARGET_OPERATION_UNATTRIBUTED",
@@ -4498,6 +4516,10 @@ def rebind_split_append_targets(targets: Sequence[Target],
             target.start, target.end = 0, len(end.text)
             target.composite = ()
             target.resolution, target.segment_ok = "resolved", True
+            # Internal, code-only record of the deterministic rebind endpoint
+            # (FL-D644): ``target.reason`` is a model-writable string, so any
+            # downstream gate may NOT trust the reason suffix as rebind proof.
+            target._append_rebind_end = str(end.location)  # noqa: SLF001 (recorded here, read by the scope gate)
             target.reason = f"{target.reason}|{reason_suffix}"
 
 
@@ -6550,6 +6572,71 @@ def _tier1_enabled() -> bool:
         return False
 
 
+def _g14_tier1_result(replace_ops: Sequence[dict], facts: Facts, actual: str) -> Any | None:
+    """Deterministic G14 fee-narrowing (plan §7.1, FL-D606).
+
+    Shared executor proof: the planner hands out this ``TemplateResult`` and
+    claim replay recomputes it from the recorded unit (``before`` slice +
+    selected operations + facts) — a match is the operation's own-effect proof
+    even when the promotion-context lead-in legitimately replaces the canonical
+    sentence (CLAIM replay must not demand the canonical new_text verbatim).
+    """
+    from .generation.template import (TemplateResult, fee_items, ordered_fee_items,
+                                      plan_fee_item_removal)
+    allowed: set[str] = set()
+    allowed_order: list[str] = []
+    canonical_tail = ""
+    for operation in replace_ops:
+        if (facts is not None
+                and condition_status(operation.get("condition"), facts) == "FALSE"):
+            # The allowed items and the canonical tail must come from the
+            # operations applicable to THIS product (FL-D606: otherwise the
+            # single-class ops set 允许 only 申购费率 and seed the shorter
+            # tail for a multi-class-with-service-fee product).
+            continue
+        instantiated, issues = instantiate_slots(
+            str(operation.get("new_text") or ""), facts)
+        if issues or not instantiated:
+            continue
+        for item in ordered_fee_items(instantiated):
+            if item not in allowed_order:
+                allowed_order.append(item)
+        allowed |= fee_items(instantiated)
+        if "调低" in instantiated:
+            tail = instantiated.split("调低", 1)[1].strip()
+            if len(fee_items(tail)) > len(fee_items(canonical_tail)):
+                canonical_tail = tail
+    if not allowed:
+        return None
+    result = plan_fee_item_removal(actual, allowed, canonical_tail, allowed_order)
+    if (result is not None and canonical_tail
+            and set(fee_items(result.replacement)) != allowed):
+        # FL-D606: the source's fee list carried fewer guide-ALLOWED items
+        # than the rule grants (B15 p167 drops 销售服务费率 mid-sentence).
+        # fee-item REMOVAL alone cannot restore a guide item: converge the
+        # tail to the guide's canonical wording, exactly like the existing
+        # sentence-end branch does for added items.
+        from .generation.template import _converge, _item_spans, _surface_start
+        spans = _item_spans(actual)
+        if spans:
+            result = TemplateResult(
+                replacement=_converge(actual, _surface_start(actual, spans[0][0]),
+                                      canonical_tail),
+                content_source=result.content_source,
+                evidence={**result.evidence, "mode": "g14_canonical_converge",
+                          "converged_tail": True})
+    if result is not None and "适当调整" in result.replacement:
+        # FL-D606: the promotion-context clause grants 调整 (either
+        # direction); G14 authorizes lowering only, so the promotion lead-in
+        # converges to 调低 together with the fee items (B15 p167 label:
+        # 「对投资者适当调低基金申购费率和销售服务费率」).
+        result = TemplateResult(
+            replacement=result.replacement.replace("适当调整", "适当调低"),
+            content_source=result.content_source,
+            evidence={**result.evidence, "verb_converged": True})
+    return result
+
+
 def _plan_tier1(rule: dict, operations: Sequence[dict], facts: Facts,
                 actual: str, *, routing: dict[str, Any] | None = None) -> Any | None:
     """Deterministic generators: G14 structured removal, G09 bounded splice (§7.1/§7.2).
@@ -6557,7 +6644,7 @@ def _plan_tier1(rule: dict, operations: Sequence[dict], facts: Facts,
     Returns a ``TemplateResult`` or ``None``; when ``None`` the caller keeps the
     existing cascade (splice → variant → compose).
     """
-    from .generation.template import (fee_items, ordered_fee_items,
+    from .generation.template import (TemplateResult, fee_items, ordered_fee_items,
                                       plan_fee_item_removal, plan_splice, splice_pairs)
     rule_id = str(rule.get("rule_id") or "")
     replace_ops = [operation for operation in operations
@@ -6585,23 +6672,7 @@ def _plan_tier1(rule: dict, operations: Sequence[dict], facts: Facts,
             return None
         return result
     if rule_id == "G14":
-        allowed: set[str] = set()
-        allowed_order: list[str] = []
-        canonical_tail = ""
-        for operation in replace_ops:
-            instantiated, issues = instantiate_slots(
-                str(operation.get("new_text") or ""), facts)
-            if issues or not instantiated:
-                continue
-            for item in ordered_fee_items(instantiated):
-                if item not in allowed_order:
-                    allowed_order.append(item)
-            allowed |= fee_items(instantiated)
-            if not canonical_tail and "调低" in instantiated:
-                canonical_tail = instantiated.split("调低", 1)[1].strip()
-        if not allowed:
-            return None
-        return plan_fee_item_removal(actual, allowed, canonical_tail, allowed_order)
+        return _g14_tier1_result(replace_ops, facts, actual)
     if rule_id == "G18":
         from .generation.template import _G18_REASON_PAIRS, plan_g18_splice
         g18_pairs: list[tuple[str, str]] = []
@@ -6816,6 +6887,15 @@ def _validate_routed_policy(rule: dict, operations: Sequence[dict], facts: Facts
         old_texts = [str(operation.get("old_text") or "")]
         old_texts.extend(str(item) for item in (operation.get("old_text_variants") or ())
                          if str(item))
+        # Rule-level variants are declared alternative wordings of the same clause
+        # family (consumed everywhere else via ``rule.get("old_text_variants")``);
+        # the policy gate must authorize the same deliberate removals for them —
+        # otherwise the G14 promotion form (FL-D606) hits LOST_PROTECTED_LITERAL
+        # for text the guide legitimately replaces.
+        for variant in (rule.get("old_text_variants") or ()):
+            variant = str(variant)
+            if variant and variant not in old_texts:
+                old_texts.append(variant)
         new_text, slot_issues = instantiate_slots(fixed_text, facts)
         if slot_issues:
             new_text = fixed_text
@@ -7304,7 +7384,8 @@ def _plan_target_inner(rule: dict, target: Target, inspection: DocumentInspectio
     else:
         site_ok = target_site_ok(rule_id, span, inspection)
     if (not site_ok and approvals is not None
-            and not any(operation.get("op") == "append" for operation in operations)):
+            and not any(operation.get("op") == "append" for operation in operations)
+            and not g14_site_guard_veto(rule_id, span)):
         # The source, operation identity, scope and guide identity were already
         # verified when the approval was created.  A different word list must not
         # reject the same target again (弘利 G17 "可用于", FL-D394/R01).
@@ -9772,10 +9853,13 @@ def append_site_ok(rule_id: str, span: Any, inspection: DocumentInspection,
         # its sentence (ends with ；, the shared enumeration separator) is part of a
         # continued definition list.  Inserting a standalone policy sentence into
         # it mangles the list; the policy belongs after a complete-clause anchor.
+        # FL-D607: at the plan stance a table cell is never an append anchor at
+        # all — the policy sentence needs a body paragraph (B15 释义 only holds
+        # the class definition inside tbl0/r55/c1; the frozen labels classify the
+        # append not_applicable there).  The audit/canonicalization stance has
+        # never inspected table cells and stays frozen.
         if not allow_open_table_cell and str(getattr(span, "location", "") or "").startswith("tbl"):
-            paragraph, _ = display_text(span.text)
-            if not paragraph.rstrip().endswith("。"):
-                return False
+            return False
         # Plan stage accepted this paragraph by rebinding a closed-definition
         # anchor to the end of its subdivision group (FL-D573 G03 p83->p84);
         # the site check must stand behind its own rebind decision.  This
@@ -9858,10 +9942,40 @@ def append_site_ok(rule_id: str, span: Any, inspection: DocumentInspection,
     return target_site_ok(rule_id, span, inspection)
 
 
+def g14_site_guard_veto(rule_id: str, span: Any) -> bool:
+    """A retained-right discretion sentence can never become a G14 site by approval.
+
+    FL-D606: B15 p166 ("基金管理人可以在法律法规和本基金合同规定范围内调整申购
+    费率和赎回费率。") is a retained-right discretion clause, not the fee-lowering
+    grant G14 governs.  The semantic approval inherits the model's mistaken site
+    pick (its own checks cover quote identity/scope, not clause type), so the
+    SITE_GUARD_WAIVED_BY_APPROVAL escape must not apply to it.
+    """
+    if rule_id != "G14":
+        return False
+    paragraph, _ = display_text(span.text)
+    compact = _compact(paragraph)
+    return "规定范围内" in compact and "费率" in compact
+
+
 def target_site_ok(rule_id: str, span: Any, inspection: DocumentInspection) -> bool:
     """Whether this target paragraph carries the rule's own clause (site guard)."""
     if rule_id in {"G01", "G03"}:
         return append_site_ok(rule_id, span, inspection)
+    if rule_id == "G14":
+        # The G14 family is a fee-LOWERING grant: canonical "适当调低…费率" or the
+        # promotion-context "对投资者适当调整…费率" form (B15 p167, FL-D606).  A
+        # plain discretion sentence ("…在法律法规和本基金合同规定范围内调整…费率"),
+        # a retained-right clause, is never the site and must stay untouched
+        # (B15 p166 was wrongly rewritten).
+        paragraph, _ = display_text(span.text)
+        compact = _compact(paragraph)
+        if "规定范围内" in compact:
+            return False
+        if "调低" in compact and "费率" in compact:
+            return True
+        return ("费率" in compact and "调整" in compact
+                and ("适当调整" in compact or "促销活动" in compact))
     if rule_id == "G05":
         # Apply the same business boundary used by operation effect proof before
         # planning/audit. Meeting exemptions can contain identical fee words.
@@ -10114,6 +10228,62 @@ def missing_guide_site(rule_id: str, targets: Sequence[Target], rules_by_id: dic
     return evidence
 
 
+def missing_body_append_site_g01(targets: Sequence[Target], rules_by_id: dict[str, dict],
+                                 inspection: DocumentInspection,
+                                 facts: Facts | None = None,
+                                 scope_locations: Iterable[str] | None = None
+                                 ) -> dict[str, str] | None:
+    """Deterministic NO_GUIDE_SITE evidence for G01 appends (FL-D607).
+
+    B15 carries the share-class definition only inside a 释义 table cell
+    (tbl0/r55/c1).  A table cell is never a G01 append anchor (plan guard), and
+    the frozen labels classify that contract not_applicable («释义部分没有基金
+    份额类别定义条款»).  When the G01 append obligation is fact-applicable, no
+    live G01 target exists, and the G01 scope (释义) holds the definition only
+    inside tables, close the obligation with the table cell as evidence instead
+    of leaving an unresolved honest gap.  Scope restriction matters: an
+    unrelated class-division sentence in 基金的基本情况 is the G03 site and
+    must not keep G01 open.
+    """
+    rule = rules_by_id.get("G01")
+    if rule is None:
+        return None
+    operation = next((item for item in rule.get("operations") or ()
+                      if item.get("op") == "append"), None)
+    if operation is None:
+        return None
+    if facts is not None and condition_status(operation.get("condition"), facts) != "TRUE":
+        return None
+    if any(target.rule_id == "G01" and not target.out_of_scope
+           and not str(getattr(target, "location", "")).startswith("tbl")
+           and target.state in {"needs_edit", "satisfied"} for target in targets):
+        return None
+    # A G01 target anchored inside a table cell is never a live append site at the
+    # plan stance (the plan guard rejects it), so it cannot keep the obligation
+    # open — it is evidence FOR the closure, not against it.
+    allowed = {str(location) for location in scope_locations or ()}
+    def _in_scope(span: Any) -> bool:
+        return not allowed or str(getattr(span, "location", "")) in allowed
+    spans = [span for span in inspection.paragraphs if _in_scope(span)]
+    if allowed:
+        table_spans = [span for span in spans
+                       if str(getattr(span, "location", "")).startswith("tbl")]
+    else:
+        table_spans = []
+    table_anchors = [span for span in table_spans
+                     if any(marker in _compact(display_text(span.text)[0])
+                            for marker in _APPEND_DEFINITION_MARKERS)]
+    if not table_anchors:
+        # Without a scoped table-only definition the existing honest paths cover it.
+        return None
+    paragraph_spans = [span for span in spans
+                       if not str(getattr(span, "location", "")).startswith("tbl")]
+    if any(_append_definition_anchor("G01", span, inspection) for span in paragraph_spans):
+        # A real body definition anchor exists and the rule keeps its site.
+        return None
+    return {"site": "G01",
+            "table_location": str(table_anchors[0].location),
+            "table_quote": _compact(display_text(table_anchors[0].text)[0])[:120]}
 _G08_VARIANT_SENTENCE_ANCHOR = "申购费率由基金管理人决定"
 _G08_VARIANT_SENTENCE_FORBIDDEN = ("赎回", "转换", "计算方法", "公告", "收费方式", "认购")
 

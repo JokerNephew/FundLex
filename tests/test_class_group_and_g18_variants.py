@@ -214,3 +214,95 @@ def test_g08_prefixed_class_fee_clause_is_attributed():
     errors = assign_target_operations([target], {"G08": rule}, inspection, facts, ledger)
     assert not errors, errors
     assert target.operations == ("G08:0",)
+
+
+def test_g14_promotion_clause_converges_verb_to_lower():
+    """FL-D606: the promotion-context clause grants 调整 (either direction);
+    G14 authorizes lowering only, so the deterministic generator converges the
+    verb to 调低 together with the fee-item narrowing."""
+    import fundlex.recall as recall
+
+    rule = _rule("G14")
+    replace_ops = [op for op in (rule.get("operations") or []) if op.get("op") == "replace"]
+    facts = _facts()  # multi-class with service fee → 申购费率+销售服务费率 allowed
+    actual = ("在基金促销活动期间，基金管理人可以按中国证监会要求履行必要手续后，"
+              "对投资者适当调整基金申购费率、赎回费率、销售服务费率和转换费率。")
+
+    original = recall._tier1_enabled
+    recall._tier1_enabled = lambda: True
+    try:
+        result = recall._plan_tier1(rule, replace_ops, facts, actual)
+    finally:
+        recall._tier1_enabled = original
+
+    assert result is not None
+    assert "对投资者适当调低" in result.replacement
+    assert "适当调整" not in result.replacement
+    assert "赎回费率" not in result.replacement
+    assert "转换费率" not in result.replacement
+    assert "申购费率" in result.replacement
+    assert "销售服务费率" in result.replacement
+    # The non-promotion lead-in survives verbatim.
+    assert result.replacement.startswith("在基金促销活动期间")
+
+
+def test_g14_promotion_site_plans_through_policy_gate():
+    """FL-D606 full plan path: promo-clause target must survive the policy gate
+    and rewrite to the 调低 + narrowed form (validator uses rule-level variants)."""
+    from fundlex.recall import _selected_operation_indices, plan_target
+
+    inspection = inspect_docx(
+        ROOT / "funds_word" / "基金合同第一批" /
+        "广发美国房地产指数证券投资基金基金合同.docx", full=True)
+    text = inspection.by_location("p167").text
+    quote = "对投资者适当调整基金申购费率、赎回费率、销售服务费率和转换费率"
+    start = text.find(quote)
+    assert start >= 0
+    rule = _rule("G14")
+    ledger = compile_obligations({"groups": [rule]})
+    facts = _facts()
+    apply_facts(ledger, facts)
+    target = Target("Y002", "G14", "p167", quote, "needs_edit", "survey_reference:1.00",
+                    start=start, end=start + len(quote), resolution="resolved")
+    indices = _selected_operation_indices(rule, target, inspection, facts, ledger)
+    assert [3, 4, 5] == indices
+    target.operations = tuple(f"G14:{index}" for index in indices)
+
+    edit = plan_target(rule, target, inspection, facts, NoModel(),
+                       compose_budget=[3], obligations=ledger)
+    assert edit is not None  # previously RECALL_POLICY_COMPONENTS_UNVERIFIED
+    assert "对投资者适当调低" in edit.replacement
+    assert "适当调整" not in edit.replacement
+    assert "赎回费率" not in edit.replacement
+    assert "转换费率" not in edit.replacement
+    assert "申购费率" in edit.replacement and "销售服务费率" in edit.replacement
+
+
+def test_g14_replay_does_not_flag_condition_false_branch_wording():
+    """FL-D606 replay proof: for a multi-class product the single-class G14
+    alternatives are condition-FALSE and can never be the borrowed claim; the
+    promo replacement's 调低 stems must not trip the sibling-wording check."""
+    from types import SimpleNamespace
+
+    from fundlex.generation.claim_replay import _own_effect_errors
+
+    rule = _rule("G14")
+    before = "对投资者适当调整基金申购费率、赎回费率、销售服务费率和转换费率"
+    after = "对投资者适当调低基金申购费率和销售服务费率"
+    validation = SimpleNamespace(changes=[
+        SimpleNamespace(kind="replace", after="调低基金申购费率")])
+    errors = _own_effect_errors(rule, [3, 4, 5], None, explicit_span=True,
+                                is_component=False, before_unit=before,
+                                replacement=after, validation=validation,
+                                content_source="tier1_template",
+                                facts=_facts(),
+                                evidence={"mode": "g14_fee_item_removal",
+                                          "verb_converged": True})
+    assert errors == []
+    # Without facts the guard keeps its old fail-closed shape.
+    errors_blind = _own_effect_errors(rule, [3, 4, 5], None, explicit_span=True,
+                                      is_component=False, before_unit=before,
+                                      replacement=after, validation=validation,
+                                      content_source="tier1_template", facts=None,
+                                      evidence={"mode": "g14_fee_item_removal"})
+    assert "CLAIM_OPERATION_EFFECT_MISSING" in errors_blind
