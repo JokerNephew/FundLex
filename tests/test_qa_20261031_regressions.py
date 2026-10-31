@@ -1451,7 +1451,7 @@ def test_append_site_rejects_unclosed_table_definition_cell():
     assert append_site_ok("G03", span, Inspection([])) is True
 
 
-def test_append_site_accepts_fully_closed_table_definition_cell():
+def test_append_site_plan_rejects_fully_closed_table_definition_cell():
     """FL-D607 update: a table cell is never a plan-stage G01/G03 append anchor,
     closed or not (B15 frozen labels: 释义 table-only definition → G01
     not_applicable).  The audit/canonicalization stance stays frozen and never
