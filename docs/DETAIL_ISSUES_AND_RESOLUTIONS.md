@@ -7577,24 +7577,22 @@ H＝E×…
 - **问题与影响**：规则组启停列表只有 rule_id+title+章节，用户看不出每条规则要求改什么；`rule_settings` 接口只有 `rule_id/title/section_hint/enabled`。
 - **处理方法**：后端向后兼容扩字段 `requirement`（全值，无字段回退 title）与 `operations[]`（op 中文聚合标签+首条文本 80 字截断）；前端 V1/V2 按 `docs/frontend/SPEC_RULE_GROUPS_WYSIWYG_20261101.md` 实施分组/人读详情/已选未选视觉；夹具（无 requirement 的旧结构）验证回退不空值。
 - **验证**：`tests/test_user_configuration.py` 7 绿（新增断言）；内置指引真实文档函数级核验通过。
-- **状态**：后端已实施；前端 V1/V2 施工由 ivRkf1jH/81FirpsQ 按规格执行，前端主线验收。
-- **证据**：`fundlex/guide_store.py::_rule_requirement/_rule_operations_summary`；规格文档。
+- **状态**：已解决（前端主线验收通过，2026-11-01）。V1（ivRkf1jH FL-D750-757 系）/V2（81FirpsQ FL-D761）双侧按规格实施；前端主线合并树真实走查 32/32（accept-frontend-s2.py）：分组头/人读详情/操作摘要/关闭行 amber+删除线+已关闭徽标/计数联动/保存持久/API requirement+operations 全过；两版截图语义一致。
+- **证据**：`fundlex/guide_store.py::_rule_requirement/_rule_operations_summary`；规格文档；走查截图 `/tmp/opencode/qa/screenshots/accept-s2/rules-open-off.png`。
 
 ## FL-D731 各列表风格统一（项4，2026-11-01 用户二度返工，前端主线）
 
 - **发现日期**：2026-11-01（用户点名「看起来像是没改」）。
 - **问题与影响**：V1/V2 全部列表（任务/文档行/指引/用户/compare/guide_generation/费用等）字体、行高、按钮、徽标不同程度不一致；V1 `.btn` 定义 22 处散点、compare.css 另有 19 处。
 - **处理方法**：产出统一列表规范 `docs/frontend/SPEC_LISTS_UNIFIED_20261101.md`（form-ui：`--list-*` token + 表头/单元格/行内操作主+次/徽标/分页/容器九条铁规）；V1 实施派 ivRkf1jH（750-759），V2 实施派 81FirpsQ（760-769），前端主线验收（含 Playwright 截图对比）。
-- **状态**：规范已冻结，施工待办。
-- **下一步**：worker 交付后执行规格第四节验收（截图+锚点+rg 字号外值=0）。
+- **状态**：已解决（前端主线验收通过，2026-11-01）。V1（FL-D751/754 系）/V2（FL-D760）双侧落地 `--list-*` token 与九铁规；两版任务/指引/文档行/规则组截图对照一致（表头 12 muted/正文 13/主+次按钮/徽标 pill/分页同文案）；V1 row-action 文本次钮维持主线核准的 framed+btn-link 豁免。字号阶梯外残留（15/17/19/21/26px）逐项复查均落在非列表排版口音（hero/导航/对比文档预览/KPI/标题），非列表铁规范围，判定接受并在此留痕。
 
 ## FL-D732 模型配置页重做（项1，2026-11-01 用户第二轮，前端主线设计）
 
 - **发现日期**：2026-11-01（用户：「不要微调，参考其他页面或好的 skill 优化」）。
 - **问题与影响**：旧设计为两个堆叠长表单，第一眼看不到「现在用哪个模型/验证过没」；验证反馈弱。
 - **处理方法**：规格 `docs/frontend/SPEC_MODEL_SETTINGS_20261101.md`：读取态角色卡（徽标+概要 dl+「修改配置」）→点击进编辑态（分段选择+回填表单+就地验证反馈）；费用/隐私提示与 FL-D723 文案保留；V1 worker（ivRkf1jH）/V2 worker（81FirpsQ）同图施工，前端主线验收一致性与锚点。
-- **状态**：规格已冻结，施工待办。
-- **下一步**：施工后执行规格第六节验收（三态截图、表单流走查、锚点、token 一致）。
+- **状态**：已解决（前端主线验收通过，2026-11-01）。V1（FL-D750 系）/V2（FL-D762）双侧读取态角色卡+编辑态 segmented 落地；文案表两版逐字核验一致（含 FL-D723 费用提示与加载/空态）；合并树真实走查：读取→修改配置→验证连接（拦截成功）→反馈徽标→取消回读取态全过；V1 系统默认态「验证状态：—」噪声行已按规格补齐对齐（1dd773f）；锚点（#model-settings-card/#model-settings-source/data-action 集/验证连接按钮/role=status）核验在位。
 
 ## FL-D760 V2 列表统一施工（项4，2026-11-01，qa-v2-s2）
 
@@ -7683,3 +7681,12 @@ H＝E×…
 - **处理方法**：登记为基线/环境阻塞，不在 V1 s2 范围内修（V2 线 81FirpsQ 正在重写 Guides，构建归属前端主线环境约定）；报前端主线统一处理。
 - **状态**：外部阻塞（基线自带、非本次引入）；test_guide_generation.py 同批 1 passed、V1 两套件 30 passed、workbench 54 passed 均绿。
 - **下一步**：前端主线确认该用例的运行前置（需 dist 构建或迁出 V1 回归范围）。
+
+## FL-D733 浏览器用例断言已废弃的技术信息文本（版本号原文），2026-11-01
+
+- **发现日期**：2026-11-01（第三轮前端主线合并验收，整批浏览器回归）。
+- **问题与影响**：`tests/browser/test_guide_history.py::test_upload_list_and_compare_view` 断言 `/guides` 页可见版本 id 前 8 位原文（`text={id[:8]}`）。该文本在第二轮 FL-D721「技术黑话清除」中被有意移除（`331134d` 时代列表行展示 `· {guide.id}`，整改后不再回显原始 id），测试自第二轮起即过期，在本轮整批回归中暴露（TimeoutError 等 `text=37881f60`）。排除 V1/V2 worker 回归：V2 对 Guides 列表的改动不含 id 呈现，圆二基线同样无 id 文本。
+- **处理方法**：断言改锚到各版本详情链接 `css=a[href='/guides/{id}']`，保持「两个种子版本均在列表出现」的原意图，不把原始 id 文本请回界面。
+- **验证**：修复后 `test_guide_history.py` 独跑 1 绿（4.47s）；整批口径=97+remediation 单跑绿+本用例绿=全绿。
+- **状态**：已解决（验证版本 qa-frontend-s2-20261101）。
+- **证据**：本仓库 `tests/browser/test_guide_history.py`、git 历史 `331134d` vs `61c4767` 列表行 diff。

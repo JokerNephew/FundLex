@@ -109,9 +109,11 @@ def test_upload_list_and_compare_view(browser, live_app, tmp_path):
     try:
         page.goto(f"{base}/guides", wait_until="networkidle")
         page.wait_for_selector("text=我的指引", timeout=15_000)
-        # Version list: built-in plus the two seeded, parsed versions.
-        page.wait_for_selector(f"text={ids['second'][:8]}", timeout=15_000)
-        page.wait_for_selector(f"text={ids['first'][:8]}", timeout=15_000)
+        # Version list: built-in plus the two seeded, parsed versions.  Round-2 UI
+        # intentionally hides raw version ids (FL-D721 技术黑话清除); anchor on the
+        # per-version detail links instead of visible id text (FL-D733).
+        page.wait_for_selector(f"css=a[href='/guides/{ids['second']}']", timeout=15_000)
+        page.wait_for_selector(f"css=a[href='/guides/{ids['first']}']", timeout=15_000)
         page.wait_for_selector("text=内置", timeout=15_000)
         # Upload flow: a fresh DOCX appears in the list as uploaded/parsing.
         upload_path = tmp_path / "fresh-guide.docx"
