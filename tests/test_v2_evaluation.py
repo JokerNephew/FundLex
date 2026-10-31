@@ -114,13 +114,30 @@ def submit(client: TestClient, data: bytes, ruleset: str = "v2", *, sha256: str 
         uploads=[("fixture.docx", data)])
 
 
+def submit_evaluation_batch(store, data: bytes, *, name: str = "fixture.docx",
+                            ruleset: str = "v2", sha256: str = "0" * 64):
+    """Seed a legacy direct batch explicitly persisted in evaluation mode.
+
+    A3-F7 (FL-D555): finish rejects a report whose execution_mode would
+    relabel the persisted batch mode. Legacy offline runners that explicitly
+    ask for evaluation therefore persist mode=evaluation up front (the
+    non-task-bound legacy branch in jobs.py is kept for them); production
+    evaluation batches are task-bound via TaskStore.
+    """
+    batch = store.create_batch(owner=OWNER, ruleset_version=ruleset, ruleset_sha256=sha256,
+                               uploads=[(name, data)])
+    with store._connect() as db:
+        db.execute("UPDATE batches SET mode='evaluation' WHERE id=?", (batch["id"],))
+    return batch
+
+
 def test_evaluation_artifacts_persist_and_download_only_in_evaluation_mode(tmp_path):
     source = build_fixture(tmp_path / "fixture.docx")
     app = create_app(tmp_path / "state")
     client = TestClient(app)
     headers = {"X-FundLex-User": OWNER}
-    batch = submit(client, source.read_bytes())
-    batch_id = batch["id"]
+    batch_id = submit_evaluation_batch(app.state.store, source.read_bytes(),
+                                       name=source.name)["id"]
     gateway = EvaluationGateway()
     worker = Worker(app.state.store, lambda src, out, version: process_v2(src, out, version, gateway, evaluation=True))
     assert worker.run_once()

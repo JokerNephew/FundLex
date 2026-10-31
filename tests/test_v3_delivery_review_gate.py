@@ -77,11 +77,16 @@ def run_worker(tmp_path, monkeypatch, decisions):
     client = TestClient(app)
     headers = {"X-FundLex-User": "review-test-owner"}
     # The legacy ruleset HTTP route is retired; seed the batch directly, as the
-    # offline v2 runner does.
+    # offline v2 runner does. A3-F7 (FL-D555): finish rejects a report whose
+    # execution_mode would relabel the persisted batch mode, so the runner
+    # persists mode=evaluation up front (the non-task legacy branch in jobs.py
+    # is kept for exactly this runner).
     batch = app.state.store.create_batch(owner="review-test-owner", ruleset_version="v2",
                                          ruleset_sha256="0" * 64,
                                          uploads=[("source.docx", source.read_bytes())])
     batch_id = batch["id"]
+    with app.state.store._connect() as db:
+        db.execute("UPDATE batches SET mode='evaluation' WHERE id=?", (batch_id,))
     gateway = ArtifactGateway(decisions, tmp_path / "unused-output")
     worker = Worker(app.state.store, lambda source, output, version:
                     v2_pipeline.process_v2(source, output, version, gateway, evaluation=True))
