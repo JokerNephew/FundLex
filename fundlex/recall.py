@@ -5455,6 +5455,34 @@ def _bound_g15_payment_target(text: str, start: int, end: int) -> int:
     return _extend_g15_payment_delay_target(text, start, end)
 
 
+def g15_residual_clause_span(text: str, fragment_start: int,
+                             fragment_end: int) -> tuple[str, int, int] | None:
+    """Expand a residual-repair fragment to its complete G15 payment clause.
+
+    The deterministic residual detector anchors on the head sentence of the
+    surviving old effect (for example ``销售服务费每日计提，按月支付。``).
+    Deleting only that fragment would shred the remainder of the same payment
+    clause and leave broken text behind, and the fragment span cannot be
+    attributed to the delete operation either (``operation_span_mismatch`` on
+    the full reference text, FL-D690/B02).  Re-bind the repair span to the
+    complete clause proven by the shared payment parser; the parser's own
+    boundaries stop at the delay terminator, so text appended later into the
+    same paragraph (for example a G16 policy tail) stays outside the span.
+
+    Returns ``None`` when the parser cannot prove a containing clause; callers
+    must then keep the original fragment span.
+    """
+    candidates = [0]
+    for match in re.finditer(r"[。；;！？!?]", text):
+        if match.end() <= fragment_start:
+            candidates.append(match.end())
+    for start in candidates:
+        end = _g15_payment_clause_end(text, start, len(text))
+        if end is not None and start <= fragment_start and end >= fragment_end:
+            return text[start:end], start, end
+    return None
+
+
 def _g15_payment_delete_authorized(operation: Mapping[str, Any]) -> bool:
     """Only a complete payment-and-delay deletion grants the bounded executor."""
     if operation.get("op") != "delete":

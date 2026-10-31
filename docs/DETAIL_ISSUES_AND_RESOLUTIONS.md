@@ -7346,8 +7346,12 @@ H＝E×…
 - **发现**：dev20 loop-3（de18ec1）B02 从 v1/v2loop1/v2loop2 三连 complete 翻为 incomplete，`no artifact`（评分器 21 目标全 not_executed）。直接阻断：G15:0 OPEN_OBLIGATION `CLAIM_REPLAY_FAILED` + orphan `RESIDUAL_OLD_TEXT`@p1258（`RESIDUAL_CONFIRMED`，quote「销售服务费每日计提，按月支付。」）。
 - **实证链**：loop-3 该案 G15@p1258 目标被模型 audit 判 **satisfied**（「本窗口销售服务费支付条款与G15拟删除的划付指令式表述不同，无需删除。|SUPERSEDED_BY_…」）；随后 G16 新支付政策**追加**进 p1258 而旧「按月支付」句物理残留 → 确定性残余检测诚实 fail-closed（并衍生 2 个 `claim_residual:RESIDUAL_OLD_TEXT|TARGET_SOURCE_MIS` needs_edit 目标，但已无计划轮可服务）。loop-2 同站点 audit 判 `absent`、loop-1 判 needs_edit 且该轮正确交付——**同一输入三轮三种判定**：audit（语义）与残余检测（字面/确定性）在同一站点给出互相矛盾的终局判定，属 FL-D643/650 模型不确定性族 + 判定通道一致性缺口。
 - **影响**：loop-3 硬门槛 false_complete/wrong 之外的真回归 1 案（无产物）。
-- **状态**：open。候选方向：(a) 站点级终局判定单一权威——audit satisfied 不得对抗确定性 RESIDUAL_CONFIRMED（冲突时以残余为准并把 audit 判定降级为观测）；(b) 残余驱动的 claim_residual 目标触发一次就地补删轮（有界）；(c) G16 追加落点与 G15 残余同站点时强制先删后加。待主线定夺后 loop-4 验证。
-- **变更记录**：2026-10-31 新增（FL-D690..699 段首条）。
+- **根因（已坐实，主线裁决①要求本线立即根因并修复）**：残余检测的 orphan failure 进入 RecoveryOrchestrator 循环后，确实走「就地补删轮」（原候选 (b) 既有机制），但 `claim_residual` 修复目标的 span 被创建为**探测 anchor 碎片句**（quote「销售服务费每日计提，按月支付。」start2/end17）；`assign_target_operations` → `_selected_operation_indices` 用该短 span 对 G15:0 的完整 old_text 长句做校验，命中 `operation_span_mismatch` → `RECALL_TARGET_OPERATION_UNATTRIBUTED` → 目标 operations 清空并被打 `|TARGET_SOURCE_MISMATCH` 出局 → 恢复循环无新进展（RECOVERY_NO_PROGRESS）→ 无产物收尾。**已用最小夹具离线复现该归因拒绝**。深挖另因：同站 verify 模型判 satisfied（site_effects SEMANTIC_VERIFIED）与确定性残余 fail 互斥，属 FL-D643/650 族判定通道不一致，但本轮真阻断点是修复目标归因，非判定权威之爭。
+- **修复（本线实施）**：`fundlex/recall.py` 新增 `g15_residual_clause_span`——复用既有共享支付条款解析器 `_g15_payment_clause_end`（与 `_g15_split_payment_head_owned`/`_g15_delay_continuation` 同家族），把残余修复 span 从碎片句扩到**完整源证支付条款区**（候选句首逐一试解析，区间须含碎片）；`recall_pipeline.py` claim_residual 创建处对 G15 调用。解析器自身边界止于顺延尾句，**同段后追加的 G16 政策尾句保留在 span 外**，删旧留新。解析失败回退原碎片行为（诚实窄 span）。
+- **验证**：新 `tests/test_fl_d690_residual_clause_repair.py` 5 项——条款扩展、跨句不吞追加尾、非支付/坏顺延句回退、**mutation 证据**（碎片 span 归因拒绝 `operation_span_mismatch` vs 扩展 span 归因为 G15:0）、端到端删除（真实 B02 段落「旧条款+追加政策」→ 删净旧条款且 APPENDED 尾句完整保留、replay verified）。G15 家族+新测试 51 绿；全量回归与 B02 单合同真实复验在跑。
+- **真实复验（B02 单合同，$0.027/25c/365s）**：delivery complete、unresolved=0；p1258 旧条款 [0,114) 精确删除（before 全句→replacement ""）、G16 追加政策完整保留、G15:B1:O1 replay PASS、RESIDUAL_OLD_TEXT 零出现。**如实说明**：本轮复验 audit 未回摆（Y004 主轮 survey 目标直接归因删除，recovery attempts=0），残余修复路径未经真实触发——其激活依赖模型判定回摆（FL-D643/650 族非确定性）；该路径由新测试以确定性夹具锁定（含真实 B02 段落端到端）。
+- **状态**：修复已实施+真实复验 PASS，全量回归在跑；待主线确认后入 loop-4 冻结。
+- **变更记录**：2026-10-31 新增（FL-D690..699 段首条）；2026-10-31 根因坐实+修复实施+测试落地+B02 真实复验 PASS。
 
 ## FL-D691 评分器类别枚举/币种命名折叠严苛：loop-3 wrong:7 全部 + B15 not_executed 2/3 为量具误杀（引擎义务文本实际完整在场）（2026-10-31，qa-feat-recall）
 

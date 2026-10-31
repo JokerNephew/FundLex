@@ -1567,9 +1567,11 @@ dev20 v2 闭环：修复循环直到 §7 门槛（无已确证严重错误、无
 - FL-D685 回复 e3d6135；FL-D688 addendum 已写入 loop-2 compare（var/ 不入库）；FL-D584/585/586/587/588/589 条目在册。
 
 ## 在途
-- 无后台进程。**loop-3（de18ec1）已跑完评完**：340/390(87.2%)、16/20 actual、false_complete 2、wrong 7 → 门槛 FAIL。账本第 5 段 $0.5994/517c/116min 已记。
-- 归因入册：**FL-D690**（B02 真回归：G15 摘要站 audit-satisfied vs RESIDUAL_CONFIRMED 互斥→无产物）；**FL-D691**（wrong:7 全为量具类枚举折叠/币种类名严苛，实证义务在文；B15 T001 真未执行）。compare addendum 已写。
-- 等主线裁决：FL-D691 量具归一化（可零成本纯读器重评 loop-3）+ FL-D690 处置 + loop-4 策略。号段已用 690/691，余 692-699。
+- **FL-D692 收口**（723d20e）：两层归一+11 新测试+p6 44 绿；四波同量具重评（loop-3 349/89.5%/fc1/wrong0/actual 17/20）。
+- **FL-D690 修复已实施（未提交）**：recall.py `g15_residual_clause_span` + recall_pipeline claim_residual 挂载；5 新测试（含 mutation 与真实 B02 段落端到端）+G15 家族 51 绿。
+- **B02 单合同真实复验 PASS**（/tmp/opencode/qa/reverify/b02/，$0.027/25c/365s）：complete、unresolved=0、p1258 删旧[0,114)留 G16 新政策、replay PASS、无 RESIDUAL。如实：本轮 audit 未回摆走主轮路径，残余修复路径由测试锁定。
+- **全量回归重跑中**（前次被服务器重启中断于 16%，后台 sh_19291e4a2001gefVDHTuUie0s8 → /tmp/opencode/qa/qa-feat-recall-full-freeze-fl690.log）。
+- 回归绿后：提交修复（只交自己改的文件）→ 报主线 FL-D690 收口 → 等主线 loop-4 令（B15 机制 A/E 修复齐后）。留出 8 份继续冻结。
 ## 下一步（可执行顺序）
 1. 已向主线报 loop-2 指标与残余归属（本次回复）。
 2. 回归绿 → 提交 FL-D588 代码 → 报主线。等 feat-guide B15 单与 B19 修复专单齐 → 新 freeze 跑 loop-3。编号 580-589 已用尽，已向主线请新段。

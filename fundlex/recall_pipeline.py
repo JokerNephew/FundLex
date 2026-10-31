@@ -5658,7 +5658,8 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
                                     break
                     if code == "RESIDUAL_OLD_TEXT" and failure.get("quote") \
                             and failure.get("location"):
-                        from .recall import resolve_quote
+                        from .recall import (g15_residual_clause_span,
+                                             resolve_quote)
                         location = str(failure.get("location"))
                         quote = str(failure.get("quote") or "")
                         try:
@@ -5687,6 +5688,20 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
                         if located is not None and delete_indices and \
                                 ((rule_id, selected_key, location) not in existing
                                  or not location_planned):
+                            # FL-D690: the detector quotes only the anchor
+                            # sentence of the surviving old effect.  A
+                            # fragment-span repair target cannot be attributed
+                            # to the delete operation (operation_span_mismatch)
+                            # and, even if planned, would shred the rest of the
+                            # payment clause.  Expand the span to the complete
+                            # source-proven clause; later-appended policy in
+                            # the same paragraph stays outside it.
+                            operation = (rule.get("operations") or [])[delete_indices[0]]
+                            if str(rule_id) == "G15":
+                                expanded = g15_residual_clause_span(
+                                    str(span.text), located[0], located[1])
+                                if expanded is not None:
+                                    quote, located = expanded
                             for old_target in targets:
                                 if old_target.rule_id == rule_id and \
                                         old_target.location == location and \
