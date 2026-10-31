@@ -72,6 +72,20 @@ def test_replace_excision_proves_no_site_delete():
     assert start >= 0 and end <= len(BEFORE)  # fixture sanity
 
 
+def test_excision_proof_passes_consumer_gate():
+    """Loop-3 integration gap: the final omission review routes through
+    ``effect_proof_passed``, whose site-bearing tail rejected the site-free
+    excision proof (B10/B14 loop-2 FINAL_OPERATION_UNPROVEN despite replay
+    PASS)."""
+    from fundlex.generation.effects import effect_proof_passed
+    record = _record("G13")
+    proof = evaluate_operation_effect(
+        record, Inspection([BEFORE]), Inspection([AFTER]),
+        [], [_g12_edit(2, len(BEFORE))], None)
+    assert effect_proof_passed(proof.as_dict(), operation_id="G13:0",
+                               obligation_id=record.obligation_id)
+
+
 def test_variant_surviving_elsewhere_stays_unproven():
     record = _record("G13")
     artifact = Inspection([AFTER, "其他条款。" + SEVEN_DAY])

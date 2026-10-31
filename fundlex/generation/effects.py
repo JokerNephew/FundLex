@@ -416,6 +416,19 @@ def effect_proof_passed(proof: Mapping[str, Any] | None, *, operation_id: str = 
         # A code-scanned document-wide delete proof has no site by construction;
         # its own evidence binds operation, obligation and zero matches.
         return not proof.get("failure_code") and not (proof.get("site_effects") or ())
+    if artifact_status == "VERIFIED_ABSENT" and any(
+            isinstance(item, Mapping)
+            and item.get("proof_kind") == "semantic_delete_excised_by_replace"
+            and item.get("operation_id") == proof.get("operation_id")
+            and item.get("obligation_id") == proof.get("obligation_id")
+            and bool(item.get("covering_location"))
+            for item in evidence):
+        # Excised-by-replace is site-free by construction too (FL-D585 loop-3
+        # integration gap): an executed replace's span physically consumed the
+        # old policy and the artifact-wide probes came back clean.  Without
+        # this recognition the final omission review re-blocks an obligation
+        # claim replay already proved (B10/B14 loop-2 regression).
+        return not proof.get("failure_code") and not (proof.get("site_effects") or ())
     sites = set(proof.get("sites") or ())
     proven_sites = {item.get("site_id") for item in evidence if isinstance(item, Mapping)
                     and item.get("proof_kind") and item.get("operation_id") == proof.get("operation_id")
