@@ -1,6 +1,5 @@
 import { createElement, useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type CSSProperties, type ReactNode, type RefObject } from 'react'
 import { Button, Card, Spinner, StatusBadge } from '../../components/ui'
-import { saveBlob } from '../../api/client'
 import {
   useCompareSealMutation,
   useCompareTask,
@@ -42,7 +41,8 @@ function relativePath(file: File): string {
 }
 function messageOf(error: unknown, fallback: string): string { return error instanceof Error ? error.message : fallback }
 function statusLabel(status?: string): string {
-  return ({ pending: '待上传', queued: '排队中', leased: '处理中', running: '处理中', succeeded: '已完成', incomplete: '覆盖不完整', failed: '失败', retry_wait: '等待重试', sealed: '已提交', uploading: '上传中', completed: '已处理' } as Record<string, string>)[status || ''] || status || '—'
+  if (!status) return '—'
+  return ({ pending: '待上传', queued: '排队中', leased: '处理中', running: '处理中', succeeded: '已完成', incomplete: '覆盖不完整', failed: '失败', retry_wait: '等待重试', sealed: '已提交', uploading: '上传中', completed: '已处理' } as Record<string, string>)[status] || '处理中'
 }
 function pairDone(pair?: ComparePair): boolean { return Boolean(pair && ['succeeded', 'incomplete'].includes(pair.status)) }
 
@@ -161,7 +161,6 @@ type CompareReaderProps = {
   setMarkup: (value: 'all' | 'simple' | 'final') => void
   focusDiff: (index: number) => void
   selectPairDiff: (id: string) => void
-  downloadReport: () => void
   mergedRef: RefObject<HTMLDivElement | null>
   leftRef: RefObject<HTMLDivElement | null>
   rightRef: RefObject<HTMLDivElement | null>
@@ -170,7 +169,7 @@ type CompareReaderProps = {
   syncScroll: (source: HTMLElement) => void
 }
 
-function CompareReader({ view, selectedPair, viewQuery, activeDiff, visibleDiffs, diffIndex, diffType, mobilePane, viewMode, classicSide, isMobile, showSources, markup, setDiffType, setMobilePane, setViewMode, setClassicSide, setShowSources, setMarkup, focusDiff, selectPairDiff, downloadReport, mergedRef, leftRef, rightRef, classicLeftRef, classicRightRef, syncScroll }: CompareReaderProps) {
+function CompareReader({ view, selectedPair, viewQuery, activeDiff, visibleDiffs, diffIndex, diffType, mobilePane, viewMode, classicSide, isMobile, showSources, markup, setDiffType, setMobilePane, setViewMode, setClassicSide, setShowSources, setMarkup, focusDiff, selectPairDiff, mergedRef, leftRef, rightRef, classicLeftRef, classicRightRef, syncScroll }: CompareReaderProps) {
   const leftName = view?.left.name || selectedPair?.left.name || '原文档'
   const rightName = view?.right.name || selectedPair?.right.name || '修订的文档'
   const mergedName = view?.merged?.name || rightName
@@ -186,13 +185,12 @@ function CompareReader({ view, selectedPair, viewQuery, activeDiff, visibleDiffs
         {viewMode === 'word' && <label className="compare-word-toggle"><input type="checkbox" checked={showSources} onChange={(event) => setShowSources(event.target.checked)} /> 显示源文档</label>}
         {viewMode === 'word' && <label className="compare-word-markup">显示标记<select value={markup} onChange={(event) => setMarkup(event.target.value as 'all' | 'simple' | 'final')}><option value="all">所有标记</option><option value="simple">简单标记</option><option value="final">最终状态</option></select></label>}
       </div>
-      <div className="compare-word-toolbar-actions"><Button type="button" onClick={downloadReport} disabled={!view}>下载报告</Button></div>
     </div>
     <div className="compare-view-body" data-view-mode={viewMode}>
       <aside className="compare-diff-rail compare-word-revisions" aria-labelledby="compare-rail-title">
         <div className="compare-word-pane-head compare-word-revisions-head"><div><span className="compare-word-pane-kicker">修订</span><strong id="compare-rail-title">{visibleDiffs.length} 处修订</strong></div><div className="compare-diff-nav"><Button type="button" onClick={() => focusDiff(diffIndex - 1)} disabled={!visibleDiffs.length}>↑ 上一处</Button><strong>{visibleDiffs.length ? `${diffIndex + 1} / ${visibleDiffs.length}` : '0 / 0'}</strong><Button type="button" onClick={() => focusDiff(diffIndex + 1)} disabled={!visibleDiffs.length}>下一处 ↓</Button></div></div>
         <div className="compare-diff-toolbar"><label className="muted">筛选 <select value={diffType} onChange={(event) => setDiffType(event.target.value)}><option value="">全部</option><option value="modify">修改</option><option value="insert">新增</option><option value="delete">删除</option></select></label></div>
-        {viewQuery.error ? <div className="error-state">读取结果失败：{messageOf(viewQuery.error, '结果暂时不可用')}</div> : viewQuery.loading && !view ? <Spinner label="正在读取对比结果" /> : <div className="compare-diff-list">{visibleDiffs.length ? visibleDiffs.map((diff, index) => <div className={`compare-diff-item ${index === diffIndex ? 'is-active' : ''}`} key={diff.id}><button type="button" className="compare-diff-jump" onClick={() => focusDiff(index)}><span className="compare-diff-index">{index + 1}</span><span className={`compare-diff-kind is-${diff.type}`}>{diff.type === 'modify' ? '修改' : diff.type === 'insert' ? '插入' : '删除'}</span><span className="compare-diff-preview"><small>FundLex 对比</small><span>{diff.section || '正文'} · {diff.left?.text || ''}{diff.right?.text ? ` → ${diff.right.text}` : ''}</span></span></button></div>) : <p className="empty-state">{view?.coverage?.status === 'complete' ? '两份合同没有文字差异。' : '已覆盖范围内没有发现文字差异，无法确认全文无差异。'}</p>}</div>}
+        {viewQuery.error ? <div className="error-state">读取结果失败：{messageOf(viewQuery.error, '结果暂时不可用')}</div> : viewQuery.loading && !view ? <Spinner label="正在读取对比结果" /> : <div className="compare-diff-list">{visibleDiffs.length ? visibleDiffs.map((diff, index) => <div className={`compare-diff-item ${index === diffIndex ? 'is-active' : ''}`} key={diff.id}><button type="button" className="compare-diff-jump" onClick={() => focusDiff(index)}><span className="compare-diff-index">{index + 1}</span><span className={`compare-diff-kind is-${diff.type}`}>{diff.type === 'modify' ? '修改' : diff.type === 'insert' ? '插入' : '删除'}</span><span className="compare-diff-preview"><span>{diff.section || '正文'} · {diff.left?.text || ''}{diff.right?.text ? ` → ${diff.right.text}` : ''}</span></span></button></div>) : <p className="empty-state">{view?.coverage?.status === 'complete' ? '两份合同没有文字差异。' : '已覆盖范围内没有发现文字差异，无法确认全文无差异。'}</p>}</div>}
       </aside>
       <div className="compare-word-view" hidden={viewMode !== 'word'}>
         <div className="compare-mobile-switch" role="group" aria-label="切换文档视图">
@@ -437,8 +435,6 @@ export function ComparePage() {
       setMobilePane('merged')
     }
   }
-  const downloadReport = () => { if (!view) return; saveBlob(new Blob([JSON.stringify(view, null, 2)], { type: 'application/json;charset=utf-8' }), `${task.data?.name || '合同对比'}-差异报告.json`) }
-
   return <div className="fundlex-compare-page">
     <div className="page-heading"><div><h1>合同对比</h1><p>按“原版 → 对比版”阅读两份 DOCX 的正文与普通表格差异，结果只代表已覆盖内容。</p></div><div className="action-row"><Button type="button" onClick={() => void tasks.refetch()}>刷新</Button><Button type="button" variant="primary" onClick={resetCreate}>＋ 新建对比任务</Button></div></div>
     {error && <div className="error-state" role="alert">{error}</div>}{message && <div className="fundlex-message" role="status">{message}</div>}
@@ -452,7 +448,7 @@ export function ComparePage() {
         </div>
         <div className="compare-summary-row"><div className="compare-summary-stat"><span>当前结果</span><strong>{view?.summary ? `共 ${view.summary.total || 0} 处差异 · 修改 ${view.summary.modify || 0} · 新增 ${view.summary.insert || 0} · 删除 ${view.summary.delete || 0}` : '结果尚未就绪'}</strong></div>{view?.coverage?.status !== 'complete' && view?.coverage && <details className="compare-coverage-chip"><summary>覆盖不完整 · {view.coverage.warnings?.length || 0} 项未覆盖</summary><div className="compare-coverage-popover" role="status"><p>以下内容未纳入比较，请人工复核，不要据此确认全文无差异。</p>{view.coverage.warnings?.length ? <ul>{view.coverage.warnings.map((warning, index) => <li key={`${warning}-${index}`}>{warning}</li>)}</ul> : null}</div></details>}</div>
       </div>
-      {viewQuery.error ? <div className="error-state">读取结果失败：{messageOf(viewQuery.error, '结果暂时不可用')}</div> : viewQuery.loading && !view ? <Spinner label="正在读取对比结果" /> : view && <CompareReader view={view} selectedPair={selectedPair} viewQuery={viewQuery} activeDiff={activeDiff} visibleDiffs={visibleDiffs} diffIndex={diffIndex} diffType={diffType} mobilePane={mobilePane} viewMode={viewMode} classicSide={classicSide} isMobile={isMobile} showSources={showSources} markup={markup} setDiffType={setDiffType} setMobilePane={setMobilePane} setViewMode={setViewMode} setClassicSide={setClassicSide} setShowSources={setShowSources} setMarkup={setMarkup} focusDiff={focusDiff} selectPairDiff={selectPairDiff} downloadReport={downloadReport} mergedRef={mergedRef} leftRef={leftRef} rightRef={rightRef} classicLeftRef={classicLeftRef} classicRightRef={classicRightRef} syncScroll={syncScroll} />}
+      {viewQuery.error ? <div className="error-state">读取结果失败：{messageOf(viewQuery.error, '结果暂时不可用')}</div> : viewQuery.loading && !view ? <Spinner label="正在读取对比结果" /> : view && <CompareReader view={view} selectedPair={selectedPair} viewQuery={viewQuery} activeDiff={activeDiff} visibleDiffs={visibleDiffs} diffIndex={diffIndex} diffType={diffType} mobilePane={mobilePane} viewMode={viewMode} classicSide={classicSide} isMobile={isMobile} showSources={showSources} markup={markup} setDiffType={setDiffType} setMobilePane={setMobilePane} setViewMode={setViewMode} setClassicSide={setClassicSide} setShowSources={setShowSources} setMarkup={setMarkup} focusDiff={focusDiff} selectPairDiff={selectPairDiff} mergedRef={mergedRef} leftRef={leftRef} rightRef={rightRef} classicLeftRef={classicLeftRef} classicRightRef={classicRightRef} syncScroll={syncScroll} />}
     </Card>}
 
   </div>

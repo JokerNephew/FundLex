@@ -7340,3 +7340,69 @@ H＝E×…
 - **处理（已实施）**：候选内修改 `tools/deploy/fundlex-publish.sh` check_api 重试 24 次×5s（~120s 预算），按规程同步 root 发布器并 drift-check OK 后实发成功（4377962，engine hash e555fee8）。顺手把 cmp-D562 冒烟 renice 保持其数据无损（事后恢复）。
 - **附带观察**：诊断中发现 /var/lib/fundlex 下 auth.db（0 字节，10-31 18:59 由某 root 进程创建）、fundlex.db、runs.sqlite3 自 10-16 起为 root:root 644；由于服务实际库文件是 runs.sqlite3 且生产 API 正常，属历史权限形态，不影响本轮交付，但 root 属主库文件对 fundlex 用户不可写，巡检留意。
 - **状态**：已解决（发布闭环）。
+
+## FL-D710 前端全页面体检：六条用户反馈对应问题点入册（2026-10-31，qa-frontend）
+
+- **发现日期**：2026-10-31（产品负责人六条前端反馈派单，qa-frontend 线）。
+- **问题与影响**：①合同结果页信息杂乱；②模型配置页信息密度低、双卡堆叠；③各列表风格/字体/按钮不一致（V1 双调色板：`--accent` 橙系与后并入 `--fx-*` 蓝系并存，27 种字号含半像素、约 40 种 padding；V2 `tokens.css` 仅颜色，`app.css` 存在 `.data-table th`/`.form-stack label` 重复定义且值不一致）；④技术内容泄露（sha256/版本 UUID/引擎 phase/英文 status/JSON dump/error_code 原文/rule_id 裸值/系统模型串/legacy 字段值，V1+V2 逐页清单见 `docs/FRONTEND_UI_AUDIT_AND_FIXES_20261031.md` 表 V1-1..13、V2-1..10）；⑤重试话术 ≥9 种变体、状态标签表四处重复维护、进度小字三处重复等冗余。
+- **处理方法**：建统一设计 token 层（字号阶梯 12/13/14/16/20/24、间距 4..32、圆角 6/10/pill、按钮四形态、表格密度、徽章 pill），V1 采「保留变量名、翻转变量值」把 `--fx-*` 蓝系收敛到 canonical 橙系；体检清单与逐项修复全部记录在册。
+- **状态**：已实施（修复见 FL-D711..716）；验证见各条目。
+- **证据**：`docs/FRONTEND_UI_AUDIT_AND_FIXES_20261031.md`；改动 diff（qa-frontend-20261031 分支）。
+
+## FL-D711 前端技术信息清除：哈希/UUID/英文状态/JSON dump 移出常规视图（2026-10-31，qa-frontend）
+
+- **发现日期**：2026-10-31。
+- **问题与影响**：页面直接向普通用户显示规则哈希、原件 SHA-256、任务/指引版本 UUID、英文状态原值、JSON.stringify dump 下载（V2 对比页「差异报告」、V1 事件线同款）、引擎 phase title、`error_code`/`reason_codes` 原文、`config_error` 拼接、系统模型串与 legacy 字段值——示例即用户指出的「规则哈希5335e401e840…」。
+- **处理方法**：必要保留值全部移入「高级详情」折叠区（V2 新增 `.advanced-details` 工具类；V1 复用 `details.action-evidence`）；不必要值直接删除（任务 UUID 行、对比页 SHA-256 行、两条 JSON dump 下载项）；英文状态集中映射（V2 `StatusBadge` fallback「未知状态」+ 批量映射补齐；V1 新建 `frontend/status_labels.js` 共享表并在 app.js/workspace.js/compare.js 引用，fallback 不再回显英文）；error_code/reason_codes 中文映射表 + 泛化兜底；`rule_id` 显示升级为「规则 G01」pill 样式（保留可对照指引的编号）；系统模型串改为「由管理员统一配置」。
+- **状态**：已实施。
+- **验证**：vitest 24 绿；vite build 过；浏览器套件回归见 FL-D716。
+- **下一步**：V2 worker 观察——reason_codes 兜底文案「处理未通过，详见报告」对非失败型提示码偏强，建议后端后续返回中文 label 字段根治（开放观察项）。
+
+## FL-D712 前端小字与重复文案治理（2026-10-31，qa-frontend）
+
+- **发现日期**：2026-10-31。
+- **问题与影响**：重试话术 ≥9 种变体 26 处；状态标签表 4 份重复维护（app.js labels、GUIDE_STATUSES、workspace.js phases、compare.js statusLabel）；任务页进度文案三处重复；修订复核页进度三处重复；「仅影响新建任务」同义句 ×3；侧栏「报告与诊断文件不作为最终合同」与帮助中心第 4 步重复；多处「服务端/phase 字段/统计口径不同」开发视角句入用户小字。
+- **处理方法**：V2 去重 15+ 处（逐页清单见体检文档修复记录）；V1 重试提示统一为「请稍后重试。」；状态标签收敛到 `frontend/status_labels.js` 共享表（fallback「—」）；任务页进度只留 KPI+进度条一处；复核页进度只留修订清单面板一处。
+- **状态**：已实施。
+- **验证**：同 FL-D716；锚点文案（vitest 断言与 python 浏览器测试 40+ id/文本）全部保留。
+
+## FL-D713 合同结果页信息架构重构（V1 #document 弹层 + V2 DocumentDetailPage）（2026-10-31，qa-frontend）
+
+- **发现日期**：2026-10-31。
+- **问题与影响**：V2 合同详情页下载区在页面最末、首屏看不到交付文件；Summary 整列展示 SHA-256 与版本 UUID；例外编号 `EX-${hash}` 自造；「统计口径不同」类开发解释。V1 任务详情页下载操作混在 6 按钮操作排、进度文案三处重复。
+- **处理方法**：V2 重排块序为 页头→概要→**交付文件区**→条款改动汇总（Target+Compare 按条款归并，动作以 `.ui-tag` 标注）→异常点（例外顺序号）→业务依据→高级详情（SHA-256/version_id/report_json 下载）；V1 拆出独立「交付文件」卡（下载全部结果 ZIP/结果清单 CSV/结果总览 .md），进度合并为一处。review/pin 的 API 与选择语义（FL-D565/662/663）未动：按钮/disabled 逻辑/manifest_hash/selection_epoch 提交体均原样。
+- **状态**：已实施。
+- **验证**：vitest 24 绿；V2 浏览器深链/复核测试通过（FL-D716）。
+
+## FL-D714 模型配置页重构（V1 模型设置视图 + V2 ModelSettings）（2026-10-31，qa-frontend）
+
+- **发现日期**：2026-10-31。
+- **问题与影响**：V1 双 fieldset 上下堆叠、每控件一条 subnote、config_error 原文；V2 系统模型串直显、legacy 字段值直显、同义说明三处。
+- **处理方法**：V1 改 `.model-roles-grid` 双列卡片（窄屏纵排）、页级说明压成一句、subnote 只留服务地址与 API Key 两条；V1/V2 的 config_error 统一「读取模型密钥时出错，请稍后重试。」；legacy 提示一句不含字段值；系统模型显示改「由管理员统一配置」。「验证连接」按钮与 role=status 输出行为不变。
+- **状态**：已实施。
+- **验证**：「验证连接」浏览器锚点用例通过（FL-D716）。
+
+## FL-D715 V1/V2 造型协调与列表一致性（2026-10-31，qa-frontend）
+
+- **发现日期**：2026-10-31。
+- **问题与影响**：V1 双品牌调色板（`--fx-*` 蓝系）使功能区块与 V2/登录页判若两家；compare.html `theme-color #8E3213` 为第三色值；各列表表头/行密度/按钮形态分散硬编码。
+- **处理方法**：`--fx-*` 变量值整体翻到 canonical 橙系/中性系（变量名不动以保留既有规则，规避上百处规则级联）；半像素字号与 1px 级 padding 噪声批量归一（app.css px 种数 25→18、compare.css 18→10、guide_generation.css 9→8）；按钮四形态与表格密度 token 化；compare.html 内联样式 23 处提类。
+- **状态**：已实施（V2 字号/间距收敛完成度同）。
+- **验证**：CSS 大括号配对校验通过；V1 浏览器套件通过（FL-D716）。
+- **下一步**：`.hash-value` 等已无引用的样式为低优先死代码，后续清理。
+
+## FL-D716 前端整改验证基线与 e2e 回归结果（2026-10-31，qa-frontend）
+
+- **发现日期**：2026-10-31。
+- **内容/影响**：整改后的验证基线。
+- **结果**：`npx tsc -b --noEmit` 0 错；`npx vitest run` 6 文件 24 用例全绿（与基线一致）；`npm run build` 通过。python 浏览器套件（FUNDLEX_BROWSER_TESTS=1）：V2（test_frontend_v2、test_frontend_fixes）+ V1（test_v1_frontend_remediation、test_workbench、test_tracked_upload、test_guide_generation）批量结果见 `/tmp/opencode/qa/status/qa-frontend.md` 与体检文档第四节。
+- **状态**：已关闭（2026-10-31）：浏览器 6 文件整批 **96 passed / 1 failed**（19m50s），唯一失败 `test_real_task_document_deep_links_use_task_scoped_api` 批量前 2 次单跑+批量后 1 次单跑均通过，且相邻整批失败者轮换——多线并行 pytest 高负载环境抖动，非本线回归。中途两处回归已修复并复验（①V2 Guides 页头「我的指引」改回锚点文案「指引配置」；②FL-D721 ready 条件按指令精确修为 completed+failed>0，见 FL-D721）。
+- **注意**：V2 套件整跑时在高负载机（多线并行 pytest）出现轮换性单测失败（prefixed_entry / real_task_document_deep_links），单测均通过，判定为环境抖动非回归；批量干净跑结果以此条更新为准。
+
+## FL-D721 「下载全部结果」旧禁用口径与 409 新语义不一致（2026-10-31，qa-frontend，主线补充派单）
+
+- **发现日期**：2026-10-31（主线派单给用户原话补充）。
+- **问题与影响**：后端导出包语义已拓宽——任务存在 document_id 即可下载解释性 ZIP（全失败任务附原因说明）；V1 任务页「下载全部结果」ready() 仍为 `completed>0` 旧口径，全失败任务 UI 禁用；`download-hint` 文案仍旧 409 语义。
+- **处理方法**：`app.js` ready 条件按指令修为 `(t.completed||0)+(t.failed||0)>0`（含全失败可下载；仍在处理中的任务不开放，维持防误抓半成品）；disabled title 改「当前尚无已出结果的合同；处理结束（含失败）后即可下载结果包」；`compare.html` download-hint 文案改为「任何已接收的合同都会进入结果包；未通过处理的合同会在包内给出原因说明。」。
+- **状态**：已实施。
+- **验证**：既有浏览器用例 `test_paused_task_shows_paused_rows_download_hint_and_verdict`（paused、0 终态 → disabled+hint 可见）在该口径下语义仍成立，复跑通过。

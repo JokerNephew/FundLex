@@ -18,7 +18,7 @@ const FIELD_LABELS: Record<string, string> = {
 const META_LABELS: Record<string, string> = {
   parser_version: '解析器版本',
   schema_version: '结构版本',
-  source_sha256: '来源哈希',
+  source_sha256: '原件摘要',
   prompt_versions: '提示词版本',
 }
 
@@ -124,12 +124,12 @@ export function CompareCard({ items, currentId }: { items: GuideSummary[]; curre
 
   if (candidates.length < 2) return null
   const label = (item: GuideSummary) =>
-    `${item.filename} · ${item.built_in ? '内置' : item.id.slice(0, 8)}${item.current ? '（当前）' : ''}`
+    `${item.filename} · ${item.built_in ? '内置' : '自定义'}${item.current ? '（当前）' : ''}`
   return <Card>
     <div className="page-heading">
       <div>
         <h2>版本对比</h2>
-        <p className="muted">默认对比当前版本与上一版本；可任选两个已解析版本并排查看确定性差异（不使用模型）。</p>
+        <p className="muted">任选两个已解析版本查看规则差异。</p>
       </div>
     </div>
     <div className="action-row">

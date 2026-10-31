@@ -124,7 +124,7 @@ export function AppShell() {
           <div className="nav-group">配置</div>
           {configLinks.map(([to, label, icon]) => <NavLink key={to} to={to} className={({ isActive }) => isActive ? 'nav-link is-active' : 'nav-link'}><NavIcon name={icon} /><span>{label}</span></NavLink>)}
           {user?.role === 'admin' && <NavLink to="/users" className={({ isActive }) => isActive ? 'nav-link is-active' : 'nav-link'}><NavIcon name="settings" /><span>用户管理</span></NavLink>}
-          <div className="sidebar-note">报告与诊断文件不作为最终合同</div>
+          <div className="sidebar-note">FundLex · 广发基金合同修订工作台</div>
         </nav>
       </aside>
       <main className="main-content"><Outlet /></main>

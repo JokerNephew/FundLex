@@ -192,11 +192,11 @@ export function ReviewPage() {
   return <div className="fundlex-review-page">
     
     <header className="fundlex-review-header">
-      <div><div className="fundlex-review-meta"><Link to={`/tasks/${taskId}/documents/${document.document_id}/report`}>← 返回合同详情</Link><StatusBadge value={document.delivery_status} /></div><h1>修订复核</h1><p className="muted">{document.name} · 已处理 {resolvedCount} / {items.length} 条</p></div>
+      <div><div className="fundlex-review-meta"><Link to={`/tasks/${taskId}/documents/${document.document_id}/report`}>← 返回合同详情</Link><StatusBadge value={document.delivery_status} /></div><h1>修订复核</h1><p className="muted">{document.name}</p></div>
        <div className="fundlex-review-actions"><DocumentNavigator index={currentIndex} total={usableDocuments.length} disabled={busy} onPrevious={() => moveDocument(-1)} onNext={() => moveDocument(1)} /><Button variant="primary" type="button" disabled={busy || !items.length || pendingCount > 0} onClick={() => void generate()}>生成选择版合同</Button></div>
     </header>
     {(error || message) && <div className={`fundlex-message${error ? ' error' : ''}`} role={error ? 'alert' : 'status'}>{error || message}</div>}
-    <div className="fundlex-review-toolbar"><span className="fundlex-review-toolbar__keys">快捷键：A 接受 · R 拒绝 · ↑ / ↓ 定位上一条或下一条</span><span className="fundlex-muted">进度：{resolvedCount} / {items.length} · 待处理 {pendingCount}</span></div>
+    <div className="fundlex-review-toolbar"><span className="fundlex-muted">快捷键 A 接受 / R 拒绝 / ↑ ↓ 定位；选择版按每条修订的接受或拒绝结果生成，待处理项不会写入。</span></div>
     <SplitPane
        left={<><div className="fundlex-review-toolbar"><strong>合同原文与修订</strong><span className="fundlex-muted">点击高亮内容可定位右侧修订</span></div><DocumentViewer ref={viewerRef} html={html} activeRevisionId={activeRevisionId} activeRevisionIds={activeRevisionIds} decisions={markerDecisions} onRevisionClick={(id) => { setMobilePane('right'); selectRevision(id) }} /></>}
         right={<RevisionPanel revisions={revisionData as RevisionItem[]} decisions={decisions} activeRevisionId={activeRevisionId} busy={busy} onFocus={(id) => { setMobilePane('left'); selectRevision(id) }} onDecision={setRevisionDecision} onPrevious={() => moveRevision(-1)} onNext={() => moveRevision(1)} previousDisabled={activeRevisionIndex <= 0} nextDisabled={activeRevisionIndex < 0 || activeRevisionIndex >= items.length - 1} onBulkDecision={(decision) => updateDecisions(Object.fromEntries(items.map((item) => [String(item.del_id), decision])))} />}
@@ -205,6 +205,6 @@ export function ReviewPage() {
        mobilePane={mobilePane}
        onMobilePaneChange={setMobilePane}
      />
-     <footer className="fundlex-review-actions"><Button type="button" disabled={busy || !items.length} onClick={() => updateDecisions(Object.fromEntries(items.map((item) => [String(item.del_id), 'accept'])))}>批量接受</Button><Button type="button" variant="danger" disabled={busy || !items.length} onClick={() => updateDecisions(Object.fromEntries(items.map((item) => [String(item.del_id), 'reject'])))}>批量拒绝</Button><span className="fundlex-muted">选择版会按每条修订的接受/拒绝结果生成；待处理项不会被默认为接受。</span></footer>
+     <footer className="fundlex-review-actions"><Button type="button" disabled={busy || !items.length} onClick={() => updateDecisions(Object.fromEntries(items.map((item) => [String(item.del_id), 'accept'])))}>批量接受</Button><Button type="button" variant="danger" disabled={busy || !items.length} onClick={() => updateDecisions(Object.fromEntries(items.map((item) => [String(item.del_id), 'reject'])))}>批量拒绝</Button></footer>
   </div>
 }

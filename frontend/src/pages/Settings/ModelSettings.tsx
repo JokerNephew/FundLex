@@ -54,13 +54,12 @@ function RoleCard({ name, role, value, onChange, providers, systemModel, disable
     <p>{role === 'primary' ? '理解合同、定位条款并生成修改内容。' : '核验修改结果，检查错误和遗漏；可以使用不同的供应商和模型。'}</p>
     <div className="form-stack">
       <label>使用方式<select value={value.source} disabled={disabled} onChange={event => update('source', event.target.value)}><option value="system">使用系统默认</option><option value="personal">使用自己的模型</option></select></label>
-      {value.source === 'system' ? <p className="muted">系统模型：{systemModel || '尚未配置'}</p> : <>
+      {value.source === 'system' ? <p className="muted">{systemModel ? '由管理员统一配置' : '系统模型尚未配置，请联系管理员。'}</p> : <>
         <label>供应商<select value={value.provider} disabled={disabled} onChange={event => update('provider', event.target.value)}>{providers.map(provider => <option value={provider.id} key={provider.id}>{provider.label}</option>)}</select></label>
         {value.provider === 'custom' && <label>服务地址<input type="url" value={value.base_url} disabled={disabled} required placeholder="https://你的服务商地址/v1" onChange={event => update('base_url', event.target.value)} /><span className="muted">由供应商提供，仅其他兼容服务需要填写。</span></label>}
         <label>访问密钥（API Key）<input type="password" autoComplete="new-password" maxLength={4096} required={!value.connection_id} value={value.api_key} disabled={disabled} placeholder={value.connection_id ? '已保存；留空保留，填写可更换' : '粘贴供应商提供的访问密钥'} onChange={event => update('api_key', event.target.value)} /><span className="muted">在供应商控制台获取，仅供你本人使用，加密保存，不回显。</span></label>
         <label>模型<input value={value.model} list={`model-${role}-suggestions`} required disabled={disabled} placeholder="选择建议或填写供应商提供的模型名称" onChange={event => update('model', event.target.value)} /><datalist id={`model-${role}-suggestions`}>{suggestions.map(model => <option key={model} value={model} />)}</datalist><span className="muted">建议名称并不保证账户可用，请向供应商确认。</span></label>
         <Button type="button" disabled={disabled || testing} onClick={() => void test()}>{testing ? '验证中…' : '验证连接'}</Button>
-        <p className="muted">将向供应商发送一条简短测试，可能产生少量费用，不发送合同。</p>
       </>}
       {status && <p role="status">{status}</p>}
     </div>
@@ -83,12 +82,12 @@ export function ModelSettingsPage() {
     try {
       await mutation.mutateAsync({ primary: payload(primary), review: payload(review) })
       await model.refetch()
-      setMessage('配置已保存；保存不代表已验证连接，仅用于新建合同修改任务。')
+      setMessage('配置已保存；连接尚未验证，建议保存后先点“验证连接”。')
     } catch { setMessage('配置无法保存，请检查供应商、模型与访问密钥，或联系管理员检查密钥存储。') }
     finally { setBusy(false) }
   }
   const reset = async () => {
-    if (!window.confirm('恢复系统默认？仅影响新建任务，已创建任务不受影响。')) return
+    if (!window.confirm('恢复系统默认？已创建任务不受影响。')) return
     setBusy(true)
     try { await api.resetModelSettings(); await model.refetch(); setMessage('已恢复系统默认。') }
     catch { setMessage('暂时无法恢复默认，请稍后重试。') }
@@ -97,8 +96,8 @@ export function ModelSettingsPage() {
   return <>
     <div className="page-heading"><div><h1>模型配置</h1><p>分别选择负责修改合同和检查结果的模型。仅影响你的新建合同修改任务；指引解析和法规生成仍用系统模型。</p></div></div>
     {model.error ? <ErrorState error={model.error} onRetry={() => void model.refetch()} /> : !model.data ? <Spinner /> : <form className="form-stack" onSubmit={event => void save(event)}>
-      {model.data.config_error && <p role="alert" className="form-error">模型密钥暂时无法读取（{model.data.config_error}），请联系管理员检查加密配置。在问题修复前请勿重置或覆盖个人配置。</p>}
-      {model.data.legacy_preferences && <p>旧版设置仍影响新任务：执行模型 {model.data.primary.legacy_model || model.data.primary.system_model || '系统默认'}，检查模型 {model.data.review.legacy_model || model.data.review.system_model || '系统默认'}。保存下方新配置后将替换旧设置；已创建任务不受影响。</p>}
+      {model.data.config_error && <p role="alert" className="form-error">读取模型密钥时出错，请稍后重试。在问题修复前请勿重置或覆盖个人配置。</p>}
+      {model.data.legacy_preferences && <p>检测到旧保存设置，保存下方新配置后将切换到新配置；已创建任务不受影响。</p>}
       <RoleCard name="执行模型" role="primary" value={primary} onChange={setPrimary} providers={model.data.providers} systemModel={model.data.primary.system_model || ''} disabled={busy} />
       <Button type="button" disabled={busy} onClick={() => setReview({ ...primary })}>将执行模型配置复制给检查模型</Button>
       <RoleCard name="检查模型" role="review" value={review} onChange={setReview} providers={model.data.providers} systemModel={model.data.review.system_model || ''} disabled={busy} />

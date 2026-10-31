@@ -24,7 +24,7 @@ export function RevisionCard({
     <button type="button" className="fundlex-revision-card__focus" onClick={onFocus} aria-label={`定位第 ${revision.index || 0} 条修订`}>
       <span className="fundlex-revision-card__number">#{revision.index || '—'}</span>
       <span>{operationLabels[revision.operation || ''] || revision.operation || '修改'}</span>
-      {revision.rule_id && <code>{revision.rule_id}</code>}
+      {revision.rule_id && <span className="ui-tag">规则 {revision.rule_id}</span>}
       {revision.section && <span className="fundlex-muted">{revision.section}</span>}
     </button>
     <div className="fundlex-revision-card__comparison">

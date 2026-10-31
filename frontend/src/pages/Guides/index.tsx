@@ -26,6 +26,14 @@ export function enableBlockReasonText(reason?: string | null): string {
   return ''
 }
 
+export function qualificationStatusText(status?: string): string {
+  return ({ certified: '已通过认证', frozen_builtin: '内置（免认证）', not_run: '待解析认证', failed: '未通过认证' } as Record<string, string>)[status || ''] || status || '—'
+}
+
+export function guideOperationLabel(key: string): string {
+  return ({ replace: '修改', delete: '删除', insert: '新增', append: '新增', noop: '无需调整' } as Record<string, string>)[key] || '其他调整'
+}
+
 export function GuidesPage() {
   const guides = useGuides({ pollMs: 10_000 })
   const settings = useGuideSettings({ pollMs: 10_000 })
@@ -70,7 +78,7 @@ export function GuidesPage() {
   return <>
     <div className="page-heading">
       <div>
-        <h1>我的指引</h1>
+        <h1>指引配置</h1>
         <p>管理自己的指引版本、启停规则组，并决定新建任务使用哪一版。任务会保存创建时的指引快照。</p>
       </div>
       <Link to="/settings"><Button>设置</Button></Link>
@@ -86,7 +94,7 @@ export function GuidesPage() {
       </div>
       {settings.error ? <ErrorState error={settings.error} onRetry={() => void settings.refetch()} /> : settings.loading && !settings.data ? <Spinner /> : !current ? <div className="empty-state">当前没有可用指引。</div> : <>
         <p>{current.filename} <StatusBadge value={current.status} /></p>
-        <p className="muted">版本 {current.id} · {guideType(current)} · 规则组 {current.groups ?? '—'}</p>
+        <p className="muted">{guideType(current)} · 规则组 {current.groups ?? '—'}</p>
         <div className="action-row">
           <Link to={`/guides/${current.id}`}><Button variant="primary">查看与启停规则组</Button></Link>
           <Button disabled={busy || current.built_in} onClick={() => void selectGuide(null)}>恢复默认内置指引</Button>
@@ -104,7 +112,7 @@ export function GuidesPage() {
       </div>
       {guides.error ? <ErrorState error={guides.error} onRetry={() => void guides.refetch()} /> : guides.loading && !guides.data ? <Spinner /> : !guides.data?.items.length ? <div className="empty-state">当前账号还没有可用指引。</div> : <div className="table-scroll">
         <table className="data-table">
-          <thead><tr><th>文件</th><th>状态</th><th>规则组</th><th>来源哈希</th><th>操作</th></tr></thead>
+          <thead><tr><th>文件</th><th>状态</th><th>规则组</th><th>操作</th></tr></thead>
           <tbody>{guides.data.items.map((guide) => {
             const blockReason = guide.enable_block_reason
               || (['parsed', 'released'].includes(guide.status) ? null : 'GUIDE_NOT_PARSED')
@@ -112,7 +120,7 @@ export function GuidesPage() {
             return <tr key={guide.id}>
               <td>
                 <Link to={`/guides/${guide.id}`}>{guide.filename}</Link>
-                <div className="muted">{guideType(guide)} · {guide.id}{guide.parent_version_id ? ` · 基于 ${guide.parent_version_id.slice(0, 12)}…` : ''}</div>
+                <div className="muted">{guideType(guide)}{guide.current ? ' · 当前使用' : guide.parent_version_id ? ' · 历史版本' : ''}</div>
               </td>
               <td>
                 <StatusBadge value={guide.status} />{guide.issues ? <div className="form-error">{guide.issues} 个问题</div> : null}
@@ -120,7 +128,6 @@ export function GuidesPage() {
                 {!canEnable && blockReason ? <div className="muted">{enableBlockReasonText(blockReason)}</div> : null}
               </td>
               <td>{guide.groups ?? '—'}</td>
-              <td>{guide.document_sha256 ? `${guide.document_sha256.slice(0, 12)}…` : '—'}</td>
               <td>
                 <div className="action-row">
                   <Link to={`/guides/${guide.id}`}><Button variant="quiet">规则组</Button></Link>
@@ -241,7 +248,7 @@ export function GuideDetailPage() {
       <div>
         <p><Link to="/guides">我的指引</Link> / 详情</p>
         <h1>{data.filename}</h1>
-        <p>版本 {data.id} · {data.built_in ? '内置指引' : '自定义指引'}{data.parent_version_id ? ` · 基于 ${data.parent_version_id}` : ''}</p>
+        <p>{data.built_in ? '内置指引' : '自定义指引'}{data.parent_version_id ? ' · 历史版本' : ''}</p>
       </div>
       <StatusBadge value={data.status} />
     </div>
@@ -253,19 +260,19 @@ export function GuideDetailPage() {
       <div className="stats-grid">
         <div><span className="muted">规则组</span><strong className="stat-value">{data.groups ?? '—'}</strong></div>
         <div><span className="muted">问题数</span><strong className="stat-value">{data.issues ?? 0}</strong></div>
-        <div><span className="muted">资格状态</span><strong className="stat-value">{data.qualification_status || '—'}</strong></div>
-        <div><span className="muted">规则哈希</span><strong className="hash-value">{data.rules_sha256?.slice(0, 16) || '—'}</strong></div>
+        <div><span className="muted">资格状态</span><strong className="stat-value">{qualificationStatusText(data.qualification_status)}</strong></div>
       </div>
       {data.enable_block_reason ? <p className="form-error">{enableBlockReasonText(data.enable_block_reason)}；重新解析会产生新版本并重新认证。</p> : null}
       {data.review?.status === 'needs_review' ? <>
         <p className="form-error">冒烟复核提示：该版本消费质量疑有下降（不阻断启用，请人工确认）。</p>
-        {data.review.dimensions ? <pre className="preserve">{JSON.stringify(data.review.dimensions, null, 2)}</pre> : null}
+        {data.review.dimensions ? <details className="advanced-details"><summary>高级详情</summary><pre className="preserve">{JSON.stringify(data.review.dimensions, null, 2)}</pre></details> : null}
       </> : null}
       <div className="action-row">
         <Button onClick={() => void downloadSource()} disabled={data.built_in}>下载原始 DOCX</Button>
         <Button onClick={() => void downloadRules()}>下载规则 JSON</Button>
         {!data.built_in && ['uploaded', 'parse_failed', 'parsed', 'released'].includes(data.status) && <Button onClick={() => void reparse()} disabled={busy}>{busy ? '解析中…' : '重新解析'}</Button>}
       </div>
+      <details className="advanced-details"><summary>高级详情</summary><dl className="fundlex-detail-grid"><dt>版本 ID</dt><dd><code>{data.id}</code></dd>{data.parent_version_id ? <><dt>基于版本</dt><dd><code>{data.parent_version_id}</code></dd></> : null}<dt>规则哈希</dt><dd><code>{data.rules_sha256 || '—'}</code></dd></dl></details>
     </Card>
 
     <Card>
@@ -281,7 +288,7 @@ export function GuideDetailPage() {
           <thead><tr><th>启用</th><th>规则</th><th>章节</th><th>操作统计</th></tr></thead>
           <tbody>{ruleSettings.data.rules.map((rule) => {
             const overview = data.rules_overview?.find((item) => item.rule_id === rule.rule_id)
-            const operations = overview?.operations ? Object.entries(overview.operations).map(([key, value]) => `${key}: ${value}`).join(' · ') : '—'
+            const operations = overview?.operations ? Object.entries(overview.operations).map(([key, value]) => `${guideOperationLabel(key)} ${value}`).join(' · ') : '—'
             const checked = !disabled.includes(rule.rule_id)
             return <tr key={rule.rule_id}>
               <td><input aria-label={`启用规则 ${rule.rule_id}`} type="checkbox" checked={checked} disabled={busy || (checked && enabledCount <= 1)} onChange={() => toggleRule(rule.rule_id)} /></td>
@@ -300,7 +307,7 @@ export function GuideDetailPage() {
       {data.issues_detail?.error_code === 'GUIDE_VALIDATION_UNCLEAN'
         ? <p className="form-error">解析结果未通过质量通道（确定性校验或独立验证有遗留），版本已标记为失败，不能启用。</p>
         : null}
-      {Object.keys(data.issues_detail || {}).length ? <pre className="preserve">{JSON.stringify(data.issues_detail, null, 2)}</pre> : <p className="muted">服务端没有记录解析问题。</p>}
+      {Object.keys(data.issues_detail || {}).length ? <details className="advanced-details" open={false}><summary>高级详情</summary><pre className="preserve">{JSON.stringify(data.issues_detail, null, 2)}</pre></details> : <p className="muted">没有记录解析问题。</p>}
     </Card>
   </>
 }

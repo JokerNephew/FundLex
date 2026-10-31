@@ -1,5 +1,14 @@
 # FundLex 当前断点（ACTIVE_HANDOFF）
 
+## 2026-10-31 qa-frontend：前端全面整改（本 worktree 断点）
+
+- Worktree `/home/opencode/.local/share/opencode/worktree/29a9a9/qa-frontend`，分支 `qa-frontend-20261031`，基线已 merge 至 `6229069`（含 qa-export）。用户六条 + 主线补充 FL-D721。段位 FL-D710..719（已用 710-716 + 721）。
+- 域：`frontend/app.js,app.css,workspace.js,compare.*,guide_generation.*,compare.html,src/**` + 新建 `frontend/status_labels.js`、`docs/FRONTEND_UI_AUDIT_AND_FIXES_20261031.md`。不动 CSV/MD 后端导出与 review/pin 语义。
+- 设计：统一 token 层（橙系 #b5471e canonical；V1 `--fx-*` 蓝系翻值收敛，变量名不动）；技术泄露全部删除或入「高级详情」折叠；V2 DocumentDetailPage 与 V1 任务详情/结果弹层 IA 重构；模型设置双列卡片；状态标签共享表；FL-D721 ready=(completed+failed>0)。
+- 验证状态：tsc 0 错；vitest 24 绿；vite build 过；两处中途回归已修（Guides 页头回锚点「指引配置」、FL-D721 条件按指令精确化）并单测复验通过；V2+V1 浏览器批量后台运行中（shell 通知待回，结果写体检文档第四节与状态文件）。
+- 回路：批量绿 → git add 只自有文件（frontend/app.js app.css workspace.js compare.js compare.css compare.html guide_generation.js guide_generation.css status_labels.js、frontend/src/**、docs/FRONTEND_UI_AUDIT_AND_FIXES_20261031.md、docs/DETAIL_ISSUES_AND_RESOLUTIONS.md、docs/ACTIVE_HANDOFF.md）→ commit → merge qa/full-audit-20261031 → 写 `/tmp/opencode/qa/status/qa-frontend.md` → 回报主线。
+
+
 ## 2026-10-31 guide_generation 资格冒烟线（qa-feat-guide 对话）
 
 - 基线：worktree `/home/opencode/.local/share/opencode/worktree/29a9a9/qa-feat-guide`，branch `qa-feat-guide-20261031`，已合并 `qa/full-audit-20261031`，HEAD `0b4e89a`。`tests -k "guide_generation or jobs"` **63 passed / 1 skipped**；worker/queue/store（FL-D553/568 段修复、`FUNDLEX_GUIDE_JOB_MAX_ATTEMPTS`、有界退避）在该套件内全绿。

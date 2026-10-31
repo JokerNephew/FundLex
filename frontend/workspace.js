@@ -2,7 +2,7 @@
   'use strict';
   const api=window.FundLexWorkbench,$=id=>document.getElementById(id),esc=api.esc;
   const kinds={revision:'合同修改',compare:'合同比对',generation:'指引生成'};
-  const phases={uploading:'等待上传',queued:'排队中',running:'处理中',leased:'处理中',paused:'已暂停',retry_wait:'等待重试',completed:'处理结束',complete:'处理结束',complete_with_unresolved:'含待处理问题',failed:'处理失败',INGEST_REGULATION:'读取法规',EXTRACT_REQUIREMENTS:'提取法规要求',VERIFY_REQUIREMENTS:'核验法规要求',BUILD_CORPUS_SNAPSHOT:'准备合同语料',DISCOVER_IMPACTS:'分析合同影响',AUTHOR_GUIDE:'起草候选指引',QUALITY_REVIEW:'质量核验',COVERAGE_REVIEW:'覆盖核验',RESIDUAL_MINING:'查漏与补充',FINALIZE_GUIDE:'整理候选指引',BUILD_EVIDENCE:'生成证据报告'};
+  const phases={...(window.FUNDLEX_STATUS_LABELS||{}),uploading:'等待上传',completed:'处理结束',complete:'处理结束',complete_with_unresolved:'含待处理问题',failed:'处理失败',INGEST_REGULATION:'读取法规',EXTRACT_REQUIREMENTS:'提取法规要求',VERIFY_REQUIREMENTS:'核验法规要求',BUILD_CORPUS_SNAPSHOT:'准备合同语料',DISCOVER_IMPACTS:'分析合同影响',AUTHOR_GUIDE:'起草候选指引',QUALITY_REVIEW:'质量核验',COVERAGE_REVIEW:'覆盖核验',RESIDUAL_MINING:'查漏与补充',FINALIZE_GUIDE:'整理候选指引',BUILD_EVIDENCE:'生成证据报告'};
   let route={},token=0,timer=null,busy=false;
   function navigate(values){api.navigate('workspace',{...route,...values});}
   function time(value){if(!value)return '—';const d=new Date(typeof value==='number'?value*1000:value);return Number.isNaN(d.getTime())?'—':d.toLocaleString('zh-CN',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'});}
@@ -34,8 +34,8 @@
       $('workspace-pagination').innerHTML=`<span>第 ${page} / ${max} 页 · ${data.total} 个任务</span><button type="button" class="btn btn-sm" data-workspace-page="${page-1}" ${page<=1?'disabled':''}>上一页</button><button type="button" class="btn btn-sm" data-workspace-page="${page+1}" ${page>=max?'disabled':''}>下一页</button>`;
     }catch(error){
       if(current!==token||epoch!==api.epoch()||error.name==='AbortError')return;
-      $('workspace-state').textContent='任务暂时无法读取，请点击刷新重试。';
-      $('workspace-task-rows').innerHTML='<tr><td colspan="7"><div class="empty">请点击刷新重试。</div></td></tr>';
+      $('workspace-state').textContent='任务暂时无法读取，请稍后重试。';
+      $('workspace-task-rows').innerHTML='<tr><td colspan="7"><div class="empty">请稍后重试。</div></td></tr>';
       $('workspace-pagination').replaceChildren();for(const id of ['active','attention','completed'])$(`workspace-${id}`).textContent='—';
     }finally{if(current===token){busy=false;$('workspace-task-rows').removeAttribute('aria-busy');}}
   }

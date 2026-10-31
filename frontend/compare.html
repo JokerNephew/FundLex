@@ -8,6 +8,8 @@
 <link rel="icon" type="image/png" href="/static/assets/gf-favicon.png">
 <link rel="stylesheet" href="/static/compare.css">
 <link rel="stylesheet" href="/static/guide_generation.css">
+<script src="/static/status_labels.js" defer>
+</script>
 <script src="/static/app.js" defer>
 </script>
 <script src="/static/compare.js" defer>
@@ -360,8 +362,8 @@
 <button class="btn btn-sm cancel-recover" data-action="cancel-recover" id="cancel-recover" hidden>退出补传，返回任务进度</button>
 <div class="plan-list" id="task-check">
 </div>
-<button class="btn btn-sm" style="width:100%;margin-top:10px" data-action="export-pending" id="export-pending" hidden>导出待补传清单 (CSV)</button>
-<button class="btn btn-primary" style="width:100%;margin-top:13px" data-action="submit" id="submit-task">创建任务并上传</button>
+<button class="btn btn-sm u-w-full u-mt-3" data-action="export-pending" id="export-pending" hidden>导出待补传清单 (CSV)</button>
+<button class="btn btn-primary u-w-full u-mt-4" data-action="submit" id="submit-task">创建任务并上传</button>
 <div class="upload-progress" id="upload-progress" hidden>
 <div class="upload-progress-head">
 <strong id="upload-progress-label">正在上传</strong>
@@ -374,7 +376,7 @@
 <div class="upload-progress-meta" id="upload-progress-meta">
 </div>
 </div>
-<p class="subnote" id="upload-message" aria-live="polite" style="margin-bottom:0">选择或拖入 DOCX 合同，确认文件清单后创建任务。</p>
+<p class="subnote u-mb-0" id="upload-message" aria-live="polite">选择或拖入 DOCX 合同，确认文件清单后创建任务。</p>
 </aside>
 </div>
 </section>
@@ -384,7 +386,7 @@
 </select>
 </label>
 </div>
-<div class="card card-pad" style="margin-bottom:14px">
+<div class="card card-pad u-mb-4">
 <div class="section-title">
 <div class="batch-title">
 <h1 class="object-title" id="task-object-title">正在读取任务…</h1>
@@ -395,12 +397,8 @@
 <button class="btn btn-sm" data-action="refresh">刷新状态</button>
 <button class="btn btn-sm" data-action="toggle-pause" id="pause-btn">暂停任务</button>
 <button class="btn btn-sm" data-action="recover" id="recover-btn">补传未接收文件</button>
-<button class="btn btn-sm btn-primary" data-action="download-all" disabled>↓ 下载全部结果 ZIP</button>
-<button class="btn btn-sm" data-action="export-results">导出结果清单 (CSV)</button>
-<button class="btn btn-sm" data-action="download-summary">↓ 下载结果总览 .md</button>
 </div>
 </div>
-<p class="subnote" id="download-hint" hidden>任务还没有可打包下载的合同结果；可先「下载结果总览」或「导出结果清单 (CSV)」查看最新进度，处理出现终态结果后即可下载全部结果 ZIP。</p>
 <p class="subnote" id="selected-task-subtitle">
 </p>
 <div class="task-guide-meta" id="task-guide-meta" hidden><span>使用的修改指引</span><strong id="task-guide-value"></strong></div>
@@ -418,34 +416,39 @@
 </small>
 </div>
 </div>
-<div class="section-title">
-<strong id="task-percent">
-</strong>
-<small id="task-overall-label">
-</small>
-</div>
 <div class="progress-line" id="overall-progress">
 </div>
 <div class="legend">
 <span>
-<i style="background:var(--green)">
+<i class="p-done">
 </i>交付完成</span>
 <span>
-<i style="background:#d87769">
+<i class="p-fail">
 </i>交付异常/接收失败</span>
 <span>
-<i style="background:#d89b55">
+<i class="p-work">
 </i>处理中</span>
 <span>
-<i style="background:#d8dce0">
+<i class="p-queue">
 </i>排队</span>
 <span>
-<i style="background:#94a3b8">
+<i class="p-excluded">
 </i>已排除</span>
 <span id="progress-evaluation-legend" hidden>
-<i style="background:#8b7ba8">
+<i class="p-evaluation">
 </i>评测已处理</span>
 </div>
+</div>
+<div class="card card-pad u-mb-4">
+<div class="section-title">
+<h2>交付文件</h2>
+</div>
+<div class="detail-actions">
+<button class="btn btn-sm btn-primary" data-action="download-all" disabled>↓ 下载全部结果 ZIP</button>
+<button class="btn btn-sm" data-action="export-results">导出结果清单 (CSV)</button>
+<button class="btn btn-sm" data-action="download-summary">↓ 下载结果总览 .md</button>
+</div>
+<p class="subnote" id="download-hint" hidden>任何已接收的合同都会进入结果包；未通过处理的合同会在包内给出原因说明。</p>
 </div>
 <div class="card card-pad">
 <div class="section-title">
@@ -621,9 +624,6 @@
 </select>
 </label>
 </div>
-<div class="compare-word-toolbar-actions">
-<button class="btn btn-sm" id="compare-report">下载差异报告</button>
-</div>
 </div>
 <div class="compare-view-body" id="compare-view-body" data-view-mode="word">
 <aside class="compare-diff-rail compare-word-revisions" aria-labelledby="compare-rail-title">
@@ -781,7 +781,7 @@
 <div id="guide-current-body" class="guide-current">正在读取当前指引…</div>
 <p class="subnote">新任务创建时绑定当前指引版本；切换指引或恢复内置只影响之后创建的任务，已创建任务保持原绑定。</p>
 </div>
-      <div class="card card-pad" style="margin-top:14px">
+      <div class="card card-pad u-mt-4">
 <div class="section-title">
 <h2>我的指引</h2>
 <small>每个账号独立维护，不能访问他人指引</small>
@@ -806,7 +806,7 @@
 <p class="subnote" id="guide-list-state" aria-live="polite">
 </p>
 </div>
-      <div class="card card-pad" style="margin-top:14px">
+      <div class="card card-pad u-mt-4">
 <div class="section-title">
 <h2>上传自定义指引</h2>
 <small>仅接收 DOCX 指引原件</small>
@@ -822,7 +822,7 @@
 </div>
     </section>
     <section class="section" id="view-models" aria-label="模型配置">
-<div class="card card-pad" id="model-settings-card" style="margin-bottom:14px">
+<div class="card card-pad u-mb-4" id="model-settings-card">
 <div class="section-title"><h2>模型配置</h2><small id="model-settings-source">读取中</small></div>
 <div id="model-settings-body" class="subnote">正在读取模型配置…</div>
 </div>
@@ -876,7 +876,7 @@
 </table>
 </div>
 </div>
-<div class="card card-pad" style="margin-top:14px">
+<div class="card card-pad u-mt-4">
 <div class="section-title">
 <h2>新建账号</h2>
 <small>创建后请将用户名与初始密码告知本人</small>
