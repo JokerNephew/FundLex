@@ -6907,3 +6907,18 @@ H＝E×…
 - **变更记录**：
   - 2026-10-31 新增（B13 性能修复 agent，QA 侧登记）。
   - 2026-10-31（B13 提交前全套件回归复核）：qa-base（含 B13 全部改动 + 并行 agent 在途文件）全量 `-m pytest -q` 结果 6 failed / 2336 passed / 136 skipped，失败除上述 4 项 v3 外另有 `tests/test_v2_evaluation.py::test_evaluation_artifacts_persist_and_download_only_in_evaluation_mode`、`tests/test_v2_workbench.py::test_task_runs_evaluation_revision_and_downloads`；同一干净 HEAD（`99318d5`）worktree 逐条复现**同样这 6 项、同一 `EXECUTION_MODE_MISMATCH` 签名**。结论：6 项全部属 HEAD 既有失败（同一 A3-F7 模式围栏陈旧测试族），B13 改动与并行 agent 在途文件均未新增失败；本条失败清单由 4 项扩记为 6 项，归因待引擎/测试组统一定责。B13 修复已提交 `f83462b`。
+
+## FL-D580 test_v2_evaluation/test_v2_workbench 各 1 项与 FL-D574 同源既存失败（2026-10-31，qa-feat-recall 对话复核时发现）
+
+- **发现日期**：2026-10-31，qa-feat-recall 对话全量基线回归（2314 passed 中筛出）。失败项：`tests/test_v2_evaluation.py::test_evaluation_artifacts_persist_and_download_only_in_evaluation_mode`、`tests/test_v2_workbench.py::test_task_runs_evaluation_revision_and_downloads`，均为 `Conflict(EXECUTION_MODE_MISMATCH)`（store.finish 模式围栏，FL-D555 A3-F7 语义引入后测试夹具未同步），与 FL-D574 登记的 4 项 test_v3_delivery_review_gate 同签名同类。
+- **归因验证**：在干净 `0b4e89a`（FL-D555 围栏已含、B13 性能 f83462b 未含）独立 worktree 复现同样 2 failed，排除 2026-10-31 性能提交引入；属 FL-D555 围栏改造后的测试陈旧残留，FL-D574 仅覆盖 v3 文件 4 项，此 2 项为补遗。
+- **影响**：全套件回归计数含此 2 项已确证既存失败；不影响 recall 评测链路（库级 recall_run 不经 store.finish 围栏）。
+- **状态**：open，与 FL-D574 同一归属（引擎/测试组定责测试夹具改造 vs 行为回归）；qa-feat-recall 对话不归并修复以免与主线决策冲突。
+- **变更记录**：2026-10-31 新增（qa-feat-recall 对话，复核/基线回归时发现并做归因隔离）。
+
+## FL-D581 评测/复放脚本直接运行时 fundlex 解析到错误工作树风险（2026-10-31，qa-feat-recall 对话）
+
+- **发现日期**：2026-10-31，复放 FL-D568 B16 checkpoints 时实测：共享 .venv 含 editable install（`__editable__.fundlex-0.1.0.pth` → `/home/opencode/fundlex`），`python tools/evaluation/replay_checkpoints.py` 直接运行时 sys.path[0]=脚本目录，fundlex 解析到主工作区而非本分支，复放结论一度指向错误代码；与 FL-D558 Q0 同类根因但作用于"非 pytest 的工具脚本"场景（Q0 仅覆盖 pytest cwd 规定）。
+- **处理方法**：本对话所有非 pytest 入口强制 `cd <本树> && python -m tools.evaluation.<mod>`（cwd 即 sys.path[0]）或脚本内显式 `sys.path.insert(0, <本树>)`（复放 harness `/tmp/opencode/qa/fl_d570_replay_rec.py`、`/tmp/opencode/qa/d573-b15-check.py` 均照此）；v2 运行脚本 `var/recall-first-evaluation/*/run_v2.sh` 已固化 `cd $(dirname)/../../..` + `python -m`。
+- **状态**：已在 qa-feat-recall 对话内绕开并固化到运行脚本；建议主线把该纪律并入 FL-D558 Q0 适用范围（未代改他人条目，按段位纪律留作建议）。
+- **变更记录**：2026-10-31 新增（qa-feat-recall 对话）。
