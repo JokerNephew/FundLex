@@ -3011,6 +3011,21 @@ def _selected_operation_indices(rule: dict, target: Target,
         # legitimately contains both the replace and the delete).  A span that proves
         # no operation is the ambiguous case and fails closed below.
         return sorted(set(inferred))
+    if rule_id == "G14":
+        try:
+            span_body = _normalise_fee_rate_reference(
+                _target_source_body(target, inspection))
+        except (RecallError, KeyError, DocxError):
+            span_body = ""
+        variants = [_normalise_fee_rate_reference(str(value))
+                    for value in (rule.get("old_text_variants") or [])]
+        if span_body and any(value and value in span_body for value in variants):
+            # FL-D606: the promotion-context clause carries none of the canonical
+            # old_texts ("适当调低…"), only the rule-level 对投资者适当调整
+            # variants.  The variant match proves the site's clause identity, so
+            # the target carries every applicable operation — exactly what a
+            # canonical site gets when all six old_texts occur in its sentence.
+            return list(true_indices)
     if len(true_indices) == 1:
         return [true_indices[0]]
     raise RecallError("RECALL_TARGET_OPERATION_UNATTRIBUTED",
@@ -7311,7 +7326,8 @@ def _plan_target_inner(rule: dict, target: Target, inspection: DocumentInspectio
     else:
         site_ok = target_site_ok(rule_id, span, inspection)
     if (not site_ok and approvals is not None
-            and not any(operation.get("op") == "append" for operation in operations)):
+            and not any(operation.get("op") == "append" for operation in operations)
+            and not g14_site_guard_veto(rule_id, span)):
         # The source, operation identity, scope and guide identity were already
         # verified when the approval was created.  A different word list must not
         # reject the same target again (弘利 G17 "可用于", FL-D394/R01).
@@ -9868,6 +9884,22 @@ def append_site_ok(rule_id: str, span: Any, inspection: DocumentInspection,
     return target_site_ok(rule_id, span, inspection)
 
 
+def g14_site_guard_veto(rule_id: str, span: Any) -> bool:
+    """A retained-right discretion sentence can never become a G14 site by approval.
+
+    FL-D606: B15 p166 ("基金管理人可以在法律法规和本基金合同规定范围内调整申购
+    费率和赎回费率。") is a retained-right discretion clause, not the fee-lowering
+    grant G14 governs.  The semantic approval inherits the model's mistaken site
+    pick (its own checks cover quote identity/scope, not clause type), so the
+    SITE_GUARD_WAIVED_BY_APPROVAL escape must not apply to it.
+    """
+    if rule_id != "G14":
+        return False
+    paragraph, _ = display_text(span.text)
+    compact = _compact(paragraph)
+    return "规定范围内" in compact and "费率" in compact
+
+
 def target_site_ok(rule_id: str, span: Any, inspection: DocumentInspection) -> bool:
     """Whether this target paragraph carries the rule's own clause (site guard)."""
     if rule_id in {"G01", "G03"}:
@@ -10165,8 +10197,12 @@ def missing_body_append_site_g01(targets: Sequence[Target], rules_by_id: dict[st
     if facts is not None and condition_status(operation.get("condition"), facts) != "TRUE":
         return None
     if any(target.rule_id == "G01" and not target.out_of_scope
+           and not str(getattr(target, "location", "")).startswith("tbl")
            and target.state in {"needs_edit", "satisfied"} for target in targets):
         return None
+    # A G01 target anchored inside a table cell is never a live append site at the
+    # plan stance (the plan guard rejects it), so it cannot keep the obligation
+    # open — it is evidence FOR the closure, not against it.
     allowed = {str(location) for location in scope_locations or ()}
     def _in_scope(span: Any) -> bool:
         return not allowed or str(getattr(span, "location", "")) in allowed

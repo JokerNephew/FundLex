@@ -53,6 +53,7 @@ from .recall import (BOUNDARY_POLICY, ENGINE_ID, ENGINE_VERSION, SCHEMA_VERSION,
                       source_parts_contiguous,
                       absent_delete_coverage,
                       missing_guide_site,
+                      g14_site_guard_veto,
                       ensure_class_group_noop_targets)
 from .recall_prompts import (AUDIT_INSTRUCTION, AUDIT_PROMPT_VERSION, AUDIT_SCHEMA,
                              PROMPT_VERSIONS, SWEEP_INSTRUCTION, SWEEP_PROMPT_VERSION,
@@ -1905,6 +1906,13 @@ def _plan_and_generate(model: Any, rules_by_id: dict[str, dict], targets: Sequen
                     site_ok = True
                     target.reason = f"{target.reason}|RESIDUAL_SITE_BOUND"
             if not site_ok:
+                if g14_site_guard_veto(target.rule_id, span):
+                    # FL-D606: a retained-right discretion sentence is structurally
+                    # not the G14 fee-lowering grant; the approval only echoes the
+                    # model's mistaken site pick and must not waive the guard.
+                    target.out_of_scope = True
+                    target.reason = f"{target.reason}|TARGET_SOURCE_MISMATCH"
+                    continue
                 check = approvals.allows(target, inspection)
                 if check.ok:
                     # The model's site selection was already verified against the
