@@ -19,7 +19,7 @@
 | qa-feat-recall | `qa-feat-recall-20261031` | 580-589 | 已提交 wave-compare 工具、FL-D582 闭环；**待 dev20 v2 冻结重跑（门槛见下）** |
 | qa-feat-compare | `qa-feat-compare-20261031` | 590-599 | compare 引擎能力恢复在途（selection_writer/store/worker/compare.js 未提交） |
 | qa-feat-guide | `qa-feat-guide-20261031` | 600-609 | FL-D601/602 已修（068fe94）；smoke28 复验 FL-D609=NO-GO（B05 false_complete 依旧，因 FL-D608 append not_executed 未归因、且复验时 FL-D572 尚未并入）；**下一步：merge 主线（含 ac697a4 FL-D572）→ 归因修复 FL-D608 → smoke28 复验 v2** |
-| qa-f2-recall-tracked | `qa-f2-recall-tracked-20261031` | 610-619 | 带痕迹输入支持在途（docx/delivery/selective/recall_pipeline 未提交） |
+| qa-f2-recall-tracked | `qa-f2-recall-tracked-20261031` | 610-619 | ✅ 已完成并并入主线（38c0727+f7ccbb5 合并进 qa-base） |
 | qa-f2-compare-tracked | `qa-f2-compare-tracked-20261031` | 620-629 | 已提交 92c6b93（accept-all 基线元数据+矩阵测试），推进中 |
 | qa-f2-guide-history | `qa-f2-guide-history-20261031` | 630-639 | 指引生命周期在途（guide_store/api.py/React Guides 页未提交）；**测试输入可用 references/fee-rule-v2/ 与 references/source/…指引V2.docx（主线已备）** |
 
@@ -43,3 +43,7 @@
 - 任何子 agent 汇报引用的规则/FL 编号须回源核实（FL-D575 注记的虚构编号教训）。
 - 合同/指引为公开资料可入库可传出；凭据（值）永不落盘。
 - 细节问题一律进 docs/DETAIL_ISSUES_AND_RESOLUTIONS.md 自己段位；状态变化在本段位加变更记录行。
+
+## 编号候补池（2026-10-31 起）
+
+- FL-D640+ 为跨线候补池：任何「读尾部顺延」的线（B13、标签线及后续）一律用 640 起的下一空闲号，禁止复用各线段位号。首例：B13 的浏览器 V2 失败条目已由 FL-D610（撞 recall-tracked 段位）改派为 **FL-D640**。
