@@ -1,5 +1,7 @@
 # FundLex 当前断点（ACTIVE_HANDOFF）
 
+> **九对话并行期必读**：[docs/PARALLEL_COORDINATION_20261031.md](PARALLEL_COORDINATION_20261031.md)（清单/段位/冻结门槛/merge 顺序/qa-base 在途文件归属）；各线完成状态写到 `/tmp/opencode/qa/status/<线名>.md`。
+
 ## 2026-10-31 全项目质量整改（QA 总攻，主 agent 断点）
 
 ### 断点更新（2026-10-31 主线收口进展，最新以此为准）
