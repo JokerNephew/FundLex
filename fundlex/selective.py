@@ -190,7 +190,14 @@ def _source_revisions_from_report(report: Mapping[str, Any]) -> list[dict[str, s
     Selection must keep foreign revisions only when their part, kind, id,
     author, date and content are the ones generation recorded.  An old report
     without a bound inventory cannot authorize an unknown revision.
+
+    Base-flattened reports (``base_had_tracked_changes``) processed their input
+    through the accepted view: pre-existing revisions were normalized into the
+    base text before generation, so the artifacts carry no foreign revisions to
+    preserve and the recorded inventory is informational only.
     """
+    if report.get("base_had_tracked_changes"):
+        return []
     manifest = report.get("source_revision_manifest")
     items: Any = manifest
     if not items:
@@ -263,9 +270,12 @@ def _manifests_from_report(report: Mapping[str, Any]) -> list[dict[str, Any]]:
                  "expected_old_text": _expected_old(e),
                  "replacement": str(e.get("replacement", ""))}
                 for n, e in enumerate(ordered, start=1)]
-    if report.get("source_revision_manifest") or report.get("source_revisions"):
+    if (report.get("source_revision_manifest") or report.get("source_revisions")) \
+            and not report.get("base_had_tracked_changes"):
         # Recreating ids from plan order would silently address a foreign
         # revision.  Only a report persisted with its exact manifest may be used.
+        # Base-flattened reports carry no foreign revisions, so the deterministic
+        # plan-order rebuild addresses only the engine's own edits.
         raise DocxError("REVISION_MANIFEST_UNAVAILABLE")
     return []
 

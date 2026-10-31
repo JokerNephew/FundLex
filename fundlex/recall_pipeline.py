@@ -4570,6 +4570,7 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
     model: Any = gateway
     frozen_run = None
     published: list[Path] = []
+    normalized_base_dir: tempfile.TemporaryDirectory[str] | None = None
     report: dict[str, Any] = {
         "schema_version": SCHEMA_VERSION, "engine_id": ENGINE_ID, "engine_version": ENGINE_VERSION,
         "execution_mode": execution_mode, "source_sha256": "",
@@ -4579,6 +4580,7 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
         "qualification": {}, "facts": {}, "scope_mapping": {}, "windows": [], "targets": [],
         "plan": {"count": 0, "sha256": None, "edits": [], "conflicts": [],
                  "boundary_policy": BOUNDARY_POLICY},
+        "base_had_tracked_changes": False,
         "audit": {"rounds": [], "issues": []},
         "survey": [], "rebind": [],
         "sweep": {"chunks": 0, "findings": [], "rounds": [], "gaps": []},
@@ -4611,6 +4613,29 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
         if disabled_rules:
             report["disabled_rules"] = disabled_rules
             report["guide"]["disabled_rule_ids"] = [item["rule_id"] for item in disabled_rules]
+        # Task input normalization (2026-10-31 product decision): a contract
+        # that still carries another department's tracked changes is processed
+        # from its accepted view.  The original marks are flattened into the
+        # base text up front; every later stage (scope filtering, paragraph
+        # indexing, page mapping, bookmarks, claims and the deliverables) works
+        # on that base, and the engine's own new revisions are the only tracked
+        # changes a delivery ever shows.  Inputs without marks keep their exact
+        # bytes.  The original inventory and hashes stay in the report so the
+        # run remains traceable to the uploaded file.
+        from .docx import normalize_tracked_base
+        tracked_base = normalize_tracked_base(input_path.read_bytes())
+        if tracked_base.had_tracked_changes:
+            normalized_base_dir = tempfile.TemporaryDirectory(prefix="fundlex-base-")
+            base_file = Path(normalized_base_dir.name) / "base.docx"
+            base_file.write_bytes(tracked_base.data)
+            input_path = base_file
+            report["base_had_tracked_changes"] = True
+            report["normalized_base_sha256"] = tracked_base.base_sha256
+            report["source_revisions"] = {
+                "count": len(tracked_base.source_revisions),
+                "authors": sorted({item["author"] for item in tracked_base.source_revisions}),
+                "items": [dict(item) for item in tracked_base.source_revisions],
+            }
         if os.environ.get("FUNDLEX_MODEL_MODE") == "record":
             from .frozen import FrozenRun
             frozen_directory = os.environ.get("FUNDLEX_FROZEN_RUN_DIR")
@@ -4621,7 +4646,9 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
         inspection = inspect_docx(input_path, full=True,
                                   allow_existing_revisions=True)
         output_dir.mkdir(parents=True, exist_ok=True)
-        report["source_sha256"] = inspection.source_sha256
+        report["source_sha256"] = (tracked_base.original_sha256
+                                   if tracked_base.had_tracked_changes
+                                   else inspection.source_sha256)
         if inspection.revisions:
             # Existing tracked changes from another department: keep them visible
             # and separate from FundLex revisions in the report/UI.
@@ -6418,3 +6445,7 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
                                      "message": type(exc).__name__})
             if published:
                 _finalize_failure(report, published)
+        if normalized_base_dir is not None:
+            # The flattened task-input base is only needed while the run reads
+            # the contract; artifacts and the report are already persisted.
+            normalized_base_dir.cleanup()

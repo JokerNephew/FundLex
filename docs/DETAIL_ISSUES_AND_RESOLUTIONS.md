@@ -6988,3 +6988,30 @@ H＝E×…
 - **发现日期**：2026-10-31，独立复核：`449b36b` 收紧后，own_kinds 非纯 {delete}（如含 noop 共选）且属 G15/G17 的 approved_span_delete，理论上不再被任何 source-owned re-proof 覆盖，自述证据仍有理论扩权通道；现实指引中 G15/G17 删除形态均命中既有 re-proof（claim_replay.py:638-687），未见现实触发。
 - **处理**：低优先备查；若未来指引/执行器出现该组合，升级为修复项。
 - **状态**：open（低优先）。
+
+## FL-D610 修订流水线任务输入固化：带修订痕迹 DOCX 的基底语义实施（2026-10-31）
+
+- **发现日期**：2026-10-31（qa-f2-recall-tracked 对话）。需求：用户上传件可能带其他部门的 Word 修订痕迹；本轮决策为**基底=接受全部修订后的视图**（`w:ins`/`w:moveTo` 保留内容、`w:del`/`w:moveFrom` 移除），原痕迹在基底中文固化、不再作为痕迹保留，FundLex 本轮修改在固化基底上以全新修订痕迹呈现；拒绝修订=原始视图本期不设入口。
+- **处理方法（已实施）**：
+  - `fundlex/docx.py` 新增 `normalize_tracked_base()`：复用 Compare 的 accept-all 变换（覆盖 ins/del/move 对、hyperlink/SDT/嵌套、表格行/单元格、段落标记删除合并、属性变更快照、范围标记，以及 comments 等全部 story 部件），全包前后双重 `_validate_package(full=True)`，确定性 ZIP 写出后重开比对；无痕迹输入字节级原样直通，不改变普通路径行为。返回原始/基底哈希、接受条数与受约束的原痕迹清单（`TrackedBaseNormalization`）。
+  - `fundlex/recall_pipeline.py::process_recall_first` 任务输入规范化入口：检测含痕迹后写入临时基底文件并重定向 `input_path`，scope 过滤/段落索引/页码映射/bookmarks/claims/交付物全部基于固化基底；报告新增 `base_had_tracked_changes`(bool)、`normalized_base_sha256`、`source_revisions`（原痕迹清单，作者/时间/位置/内容哈希），`source_sha256` 保持=上传原件哈希；临时基目录在 finally 统一清理。
+  - `fundlex/selective.py`：报告含 `base_had_tracked_changes` 时公开评审（selected_final/selected_redline）按"无外来修订"处理（清单仅作追溯），修订 id 按序重建不再误拦。
+  - `fundlex/upload_validation.py::has_tracked_revisions` 改为检测职责（不再拒收）；`fundlex/delivery.py` 新增 REVISION_PARAGRAPH_MERGE_UNSUPPORTED / REVISION_CELL_MERGE_UNSUPPORTED / REVISION_NORMALIZATION_MISMATCH / REVISION_STRUCTURE_INVALID 的用户文案。
+- **验证**：新增 `tests/test_docx_tracked_input.py` 16 项全绿——python-docx+OOXML 注入夹具矩阵（ins/del/move 对/hyperlink 内修订/hyperlink 在 ins 内/SDT 内修订/嵌套 ins-del/comments story 内修订/pPrChange/rPrChange 快照/段落标记删除合并/幂等/不支持的段落合并 fail-closed），断言固化后 document.xml 全文无残留修订标记、接受视图文本正确、round-trip 可打开；脚本网关离线端到端：报告 `base_had_tracked_changes=true`、redline 仅含我方（引擎作者）ins/del 且与固化旧文本同段共存、final 全包零修订残留、选择性评审与 flatten 报告互操作；普通输入回归 flag=false。真实语料 `funds_word/基金合同第一批_修订原件备份_20261027` 18 份：17 份固化成功且全包零残留（ins/del/pPrChange/rPrChange 等全部接受），1 份 `广发恒裕` 为 DOCUMENT_PROTECTED 既有边界（受保护文档仍拒收，属既定输入边界非回归）；`广发聚安` 脚本网关端到端产出 working 产物，redline 仅我方作者、final 零残留。证据 `/tmp/opencode/qa-tracked/corpus-normalize.{log,json}`、`corpus-pipeline.log`。V1 浏览器 `tests/browser/test_tracked_upload.py` 2 项：API 与页面两种入口上传带痕迹文件均不再拒收、无修订拒收提示。
+- **状态**：已实施并验证；最终全量回归与主线终验（真实工作台端到端）待主线合并后确认。
+- **变更记录**：
+  - 2026-10-31 新增（qa-f2-recall-tracked 对话）。
+
+## FL-D611 新修订作者名解析：沿用引擎作者“资金清算部”，字面值“FundLex”待产品确认（2026-10-31）
+
+- **发现日期**：2026-10-31（qa-f2-recall-tracked 对话）。任务说明写“作者=FundLex，不与原痕迹混淆”；而 FL-D446（2026-10-28 用户明确决策）将我方修订作者定为“资金清算部”，生产产物与既有证据均按此作者，且 `generate_artifacts(author=...)` 默认值为“资金清算部”。
+- **影响**：字面改名会让带痕输入产物作者与普通输入产物作者不一致，并破坏大量既有证据口径；固化语义下原痕迹已不存在，"不与原痕迹混淆"天然成立。
+- **处理方法**：本轮不改全局作者，新痕迹继续以引擎统一作者“资金清算部”呈现（与 FL-D446 一致）；将“作者=FundLex”解析为“FundLex 出品的全新修订、与原痕迹不混淆”，并按此撰写测试断言（作者==引擎作者、原作者不存在于任何修订标记中）。若产品要求字面字符串 `FundLex`，属一行改名级变更，需在主线终验前明确。
+- **状态**：open（待产品确认是否改字面值）；实现按确定性解析完成。
+
+## FL-D612 固化边界与残留事项：受保护文档、段落合并修订、死导入、OCR 路径不存在（2026-10-31）
+
+- **发现日期**：2026-10-31（qa-f2-recall-tracked 对话）。
+- **问题与影响**：①含修订+DOCUMENT_PROTECTED 的合同（真实语料广发恒裕）仍按既有输入边界拒收，需保持现状并在终验样本中标注；②段落标记删除后接非段落（如表格）的组合 fail-closed 为 `REVISION_PARAGRAPH_MERGE_UNSUPPORTED`（Compare 变换既有语义），用户需先在 Word 处理；③`has_tracked_revisions` 在 `fundlex/api.py` 与 `fundlex/integrations/feishu/service.py` 仅为死导入（检测函数本体保留，飞书 cards 中 EXISTING_REVISION_UNSUPPORTED 文案为遗留映射）；④任务提到的 `fundlex/ocr_engine.py` 与 libreoffice_engine 在当前基线不存在，除 `fundlex/regulatory/pdf_parser.py`（法规 PDF，非 DOCX）外无其他 DOCX 文本提取路径，无需同口径对齐。
+- **处理方法**：③死导入与飞书遗留文案列为观察项（极低风险，删除需另行评估调用面）；①②④如实记录。
+- **状态**：open（观察项）；主功能不依赖。

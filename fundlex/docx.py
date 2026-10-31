@@ -1432,6 +1432,80 @@ def _accept_all_revision_parts(parts: Mapping[str, bytes], limits: ZipLimits) ->
     return replacements
 
 
+@dataclass(frozen=True)
+class TrackedBaseNormalization:
+    """Result of flattening pre-existing tracked changes into the base text."""
+
+    had_tracked_changes: bool
+    data: bytes
+    original_sha256: str
+    base_sha256: str
+    revisions_accepted: int
+    #: Bound inventory of the pre-existing revisions that were flattened.
+    source_revisions: tuple[dict[str, str], ...]
+
+
+def normalize_tracked_base(data: bytes, *, limits: ZipLimits | None = None) -> TrackedBaseNormalization:
+    """Return the accepted-view (base) bytes for a task input DOCX.
+
+    Task input normalization (2026-10-31 product decision): a contract that
+    still carries another department's tracked changes enters the recall
+    pipeline through its **accepted view** — every ``w:ins``/``w:moveTo`` keeps
+    its content, every ``w:del``/``w:moveFrom`` is dropped, and range markers,
+    cell markers and property-change snapshots are removed everywhere in the
+    package (main story, tables, SDT content, headers/footers, footnotes,
+    endnotes and comments).  The original marks are *not* carried into the
+    output; the engine's new revisions are the only tracked changes a delivery
+    ever shows.  A rejected-view (original) projection is intentionally not
+    offered this round.
+
+    Inputs without any revision tag are returned byte-identical with
+    ``had_tracked_changes False`` so the normal path keeps its exact behavior.
+    The transform reuses the Compare accept-all implementation and the same
+    full package validation before and after; the normalized package is written
+    through the deterministic ZIP writer, re-opened and must match the
+    transformed parts exactly, like Compare input preparation.  Unsupported
+    structures (for example a paragraph-mark merge the writer cannot join)
+    fail closed with a typed ``DocxError`` instead of passing silently.
+    """
+    from .compare.revisions import _accept_revisions, _write_normalized_package
+
+    limits = limits or ZipLimits()
+    original_sha256 = _sha(data)
+    parts = _read_parts_bytes(data, limits)
+    _validate_package(parts, limits, full=True, allow_existing_revisions=True)
+    inventory = _overlay_revision_inventory(parts, limits)
+    if not inventory:
+        return TrackedBaseNormalization(False, data, original_sha256,
+                                        original_sha256, 0, ())
+    changed = dict(parts)
+    accepted = 0
+    for name, content in parts.items():
+        if not name.endswith(".xml"):
+            continue
+        root = _xml(content, limits)
+        if not _has_word_revisions(root):
+            continue
+        accepted += _accept_revisions(root)
+        changed[name] = etree.tostring(root, encoding="UTF-8", xml_declaration=True)
+    # Full validation rejects any Word revision tag left behind, so a missed
+    # combination cannot leak tracked marks into the flattened base.
+    _validate_package(changed, limits, full=True)
+    with NamedTemporaryFile(prefix="fundlex-base-", suffix=".docx", delete=False) as temp:
+        normalized = Path(temp.name)
+    try:
+        _write_normalized_package(normalized, changed, changed[DOCUMENT])
+        reopened = _read_parts(normalized, limits)
+        _validate_package(reopened, limits, full=True)
+        if reopened != changed:
+            raise DocxError("REVISION_NORMALIZATION_MISMATCH")
+        output = normalized.read_bytes()
+    finally:
+        normalized.unlink(missing_ok=True)
+    return TrackedBaseNormalization(True, output, original_sha256,
+                                    _sha(output), accepted, inventory)
+
+
 def generate_artifacts(source: str | Path, plan: ValidatedPlan, redline_path: str | Path,
                        final_path: str | Path, *, author: str = "资金清算部",
                        limits: ZipLimits | None = None,
