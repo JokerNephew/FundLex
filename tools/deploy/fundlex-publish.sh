@@ -221,10 +221,19 @@ capture_restart_baselines() {
 }
 
 check_api() {
-  local code
-  code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 \
-    http://127.0.0.1:8010/api/capabilities) || return 1
-  [[ "$code" = 2?? ]] || { fail "API capabilities check failed ($code)"; return 1; }
+  local code attempt
+  # Fresh trees cold-import under production load; uvicorn child workers can
+  # take far longer than a single probe to become ready. Retry the liveness
+  # endpoint for up to ~120 seconds instead of failing the whole release on
+  # one early probe.
+  for attempt in $(seq 1 24); do
+    code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 \
+      http://127.0.0.1:8010/api/capabilities || true)
+    if [[ "$code" = 2?? ]]; then return 0; fi
+    sleep 5
+  done
+  fail "API capabilities check failed ($code)"
+  return 1
 }
 
 start_services() {
