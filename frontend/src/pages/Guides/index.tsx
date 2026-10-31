@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { Fragment, useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { api } from '../../api/endpoints'
 import { saveBlob } from '../../api/client'
@@ -13,6 +13,7 @@ import {
   useGuides,
 } from '../../api/hooks'
 import { Button, Card, Spinner, StatusBadge } from '../../components/ui'
+import type { GuideRuleSetting } from '../../types'
 import { ErrorState, LoadingCard } from '../Tasks'
 import { CompareCard } from './CompareCard'
 
@@ -130,8 +131,8 @@ export function GuidesPage() {
               <td>{guide.groups ?? '—'}</td>
               <td>
                 <div className="action-row">
-                  <Link to={`/guides/${guide.id}`}><Button variant="quiet">规则组</Button></Link>
-                  <Button disabled={busy || !canEnable || guide.current}
+                  <Link to={`/guides/${guide.id}`}><Button variant="primary">查看</Button></Link>
+                  <Button variant="quiet" disabled={busy || !canEnable || guide.current}
                     title={canEnable ? '' : enableBlockReasonText(blockReason)}
                     onClick={() => void selectGuide(guide.id)}>
                     {guide.current ? '当前使用' : canEnable ? '启用' : '不可启用'}
@@ -180,20 +181,39 @@ export function GuideDetailPage() {
     setDirty(false)
   }, [loadedVersion, ruleSettings.data])
 
+  const ruleGroups = useMemo(() => {
+    const buckets = new Map<string, GuideRuleSetting[]>()
+    const sorted = [...(ruleSettings.data?.rules || [])].sort((a, b) => a.rule_id.localeCompare(b.rule_id, 'zh-Hans-CN', { numeric: true }))
+    for (const rule of sorted) {
+      const key = (rule.section_hint || '').trim() || '未分章节'
+      const bucket = buckets.get(key) || []
+      bucket.push(rule)
+      buckets.set(key, bucket)
+    }
+    return [...buckets.entries()]
+  }, [ruleSettings.data])
+
   if (guide.error) return <ErrorState error={guide.error} onRetry={() => void guide.refetch()} />
   if (guide.loading && !guide.data) return <LoadingCard />
   if (!guide.data) return <div className="empty-state">指引版本不存在。</div>
   const data = guide.data
   const canEditRules = ['parsed', 'released'].includes(data.status)
+  const ruleTotal = ruleSettings.data?.rules.length ?? 0
   const enabledCount = (ruleSettings.data?.rules || []).filter((rule) => !disabled.includes(rule.rule_id)).length
   const toggleRule = (ruleId: string) => {
     setMessage('')
     setDirty(true)
-    setDisabled((current) => {
-      if (current.includes(ruleId)) return current.filter((item) => item !== ruleId)
-      if (enabledCount <= 1) return current
-      return [...current, ruleId]
-    })
+    setDisabled((current) => current.includes(ruleId) ? current.filter((item) => item !== ruleId) : [...current, ruleId])
+  }
+  const selectAllRules = () => {
+    setMessage('')
+    setDirty(true)
+    setDisabled([])
+  }
+  const selectNoRules = () => {
+    setMessage('')
+    setDirty(true)
+    setDisabled((ruleSettings.data?.rules || []).map((rule) => rule.rule_id))
   }
   const saveRules = async () => {
     if (!guideId) return
@@ -278,28 +298,50 @@ export function GuideDetailPage() {
     <Card>
       <div className="page-heading">
         <div>
-          <h2>规则组启停</h2>
+          <h2>规则组</h2>
           <p className="muted">关闭的规则不会在之后新建的任务中执行，并会在报告里列为“用户关闭的规则”。至少保留一条启用规则。</p>
+          {ruleSettings.data ? <p className="muted">共 {ruleTotal} 条 · 已启用 {enabledCount} / {ruleTotal}</p> : null}
         </div>
-        <Button variant="primary" onClick={() => void saveRules()} disabled={busy || !canEditRules || !ruleSettings.data || !dirty}>{busy ? '保存中…' : '保存启停'}</Button>
+        {canEditRules && ruleTotal ? <div className="action-row">
+          <Button variant="quiet" disabled={busy} onClick={selectAllRules}>全选</Button>
+          <Button variant="quiet" disabled={busy} onClick={selectNoRules}>全不选</Button>
+          <Button variant="primary" onClick={() => void saveRules()} disabled={busy || !ruleSettings.data || !dirty || !enabledCount}
+            title={dirty && !enabledCount ? '至少保留一条启用规则' : ''}>{busy ? '保存中…' : '保存启停'}</Button>
+        </div> : null}
       </div>
       {!canEditRules ? <div className="empty-state">指引解析完成后才能配置规则组。</div> : ruleSettings.error ? <ErrorState error={ruleSettings.error} onRetry={() => void ruleSettings.refetch()} /> : ruleSettings.loading && !ruleSettings.data ? <Spinner /> : !ruleSettings.data?.rules.length ? <div className="empty-state">该版本还没有可配置的规则组。</div> : <div className="table-scroll">
         <table className="data-table">
-          <thead><tr><th>启用</th><th>规则</th><th>章节</th><th>操作统计</th></tr></thead>
-          <tbody>{ruleSettings.data.rules.map((rule) => {
-            const overview = data.rules_overview?.find((item) => item.rule_id === rule.rule_id)
-            const operations = overview?.operations ? Object.entries(overview.operations).map(([key, value]) => `${guideOperationLabel(key)} ${value}`).join(' · ') : '—'
-            const checked = !disabled.includes(rule.rule_id)
-            return <tr key={rule.rule_id}>
-              <td><input aria-label={`启用规则 ${rule.rule_id}`} type="checkbox" checked={checked} disabled={busy || (checked && enabledCount <= 1)} onChange={() => toggleRule(rule.rule_id)} /></td>
-              <td><strong>{rule.rule_id}</strong><div>{rule.title || '—'}</div></td>
-              <td>{rule.section_hint || '—'}</td>
-              <td>{operations}</td>
-            </tr>
-          })}</tbody>
+          <thead><tr><th>启用</th><th>规则</th><th>章节</th><th>状态</th></tr></thead>
+          {ruleGroups.map(([section, rules]) => (
+            <tbody key={section}>
+              <tr className="rule-group-row"><td colSpan={4}>{section}<span className="rule-group-count">共 {rules.length} 条</span></td></tr>
+              {rules.map((rule) => {
+                const checked = !disabled.includes(rule.rule_id)
+                const requirement = (rule.requirement || '').trim()
+                const titleText = (rule.title || '').trim() || '—'
+                return <Fragment key={rule.rule_id}>
+                  <tr className={`rule-row${checked ? '' : ' rule-row--disabled'}`}>
+                    <td><label className="rule-toggle"><input aria-label={`启用规则 ${rule.rule_id}`} type="checkbox" checked={checked} disabled={busy} onChange={() => toggleRule(rule.rule_id)} /></label></td>
+                    <td><span className="ui-tag">规则 {rule.rule_id}</span> <strong className="rule-title">{titleText}</strong></td>
+                    <td><span className="ui-tag">{rule.section_hint || '—'}</span></td>
+                    <td><span className={`status-badge status-badge--${checked ? 'success' : 'warning'}`}>{checked ? '已启用' : '已关闭'}</span></td>
+                  </tr>
+                  <tr className={`rule-detail-row${checked ? '' : ' rule-row--disabled'}`}>
+                    <td colSpan={4}>
+                      <details className="advanced-details rule-detail">
+                        <summary>查看人读详情</summary>
+                        <p className="rule-requirement">{requirement || titleText}</p>
+                        {!requirement ? <p className="meta-line">详细修改见条规条款。</p> : null}
+                        {rule.operations?.length ? <ul className="rule-operations">{rule.operations.map((operation, index) => <li key={index}><span className="ui-tag">{operation.label}</span>{operation.detail ? <span className="rule-operation-detail">{operation.detail}</span> : null}</li>)}</ul> : null}
+                      </details>
+                    </td>
+                  </tr>
+                </Fragment>
+              })}
+            </tbody>
+          ))}
         </table>
       </div>}
-      <p className="muted">当前启用 {enabledCount} / {ruleSettings.data?.rules.length ?? 0} 条。关闭规则属于业务例外，不会让报告伪造为“全部完成”。</p>
     </Card>
 
     <Card>

@@ -7595,3 +7595,30 @@ H＝E×…
 - **处理方法**：规格 `docs/frontend/SPEC_MODEL_SETTINGS_20261101.md`：读取态角色卡（徽标+概要 dl+「修改配置」）→点击进编辑态（分段选择+回填表单+就地验证反馈）；费用/隐私提示与 FL-D723 文案保留；V1 worker（ivRkf1jH）/V2 worker（81FirpsQ）同图施工，前端主线验收一致性与锚点。
 - **状态**：规格已冻结，施工待办。
 - **下一步**：施工后执行规格第六节验收（三态截图、表单流走查、锚点、token 一致）。
+
+## FL-D760 V2 列表统一施工（项4，2026-11-01，qa-v2-s2）
+
+- **发现日期**：2026-11-01。
+- **问题与影响**：FL-D731 规格的 V2 侧实施单：`.data-table` 尚有散点取值、徽标 12px 非 pill 系、部分卡片未统一圆角/内边距、分页文案不统一、行内操作混用文本链接与带框按钮。
+- **处理方法**：`tokens.css` 新增 `--list-*` 八变量（header bg/color、row hover/border、cell y/x、title weight、meta size）作为唯一取值入口；.data-table 全部改引用（th 12px/td 13px、cell padding、hover、border、meta 11px 单行截断、行内按钮紧凑）；徽标统一 11px pill 并新增 `status-badge--warning`；RevisionCard/compare-pair 卡面对齐 `--radius`/`--shadow`/`--space-4`；分页文案统一「共 N 条 · 第 x/y 页」；行内操作统一 1 primary+quiet（Guides 查看/启用、TaskDetail 修订按钮化、Compare 查看 primary）。
+- **验证**：`npx tsc -b --noEmit` 0 错；vitest 6 文件 24 用例全绿；`npm run build` ✓；`tests/browser/test_frontend_v2.py` 全套 11 绿；截图证据 `/tmp/opencode/qa/shots-v2-s2/lists-tasks.png`、`lists-guides.png`。
+- **状态**：已解决（V2 侧，分支 qa-v2-s2-20261101，未提交待确认）。
+- **证据**：`frontend/src/styles/{tokens.css,app.css}`、`frontend/src/pages/{Tasks,Guides,TaskDetail,Compare}` 改动。
+
+## FL-D761 V2 规则组可见即所得施工（项3，含两起 Hooks 事故，2026-11-01，qa-v2-s2）
+
+- **发现日期**：2026-11-01。
+- **问题与影响**：FL-D730 规格的 V2 侧实施单：规则组表头/全选/分组渲染/人读详情/已关闭视觉与保存闸。施工中出现两起自造事故：①`useMemo`（ruleGroups）放在提前 `return`（guide.error/loading/无数据分支）之后，违反 Hooks 顺序规则，整页白屏（React error #310）；②迁移该 useMemo 前移时误把同步 `useEffect`（ruleSettings.data→disabled 回填）整段吞掉，导致保存后刷新关闭态不持久（G02 复选框回弹为勾选，UI 计数 22/22）——两起均被自建浏览器走查当场抓获（页面空白/走查 FAIL）。
+- **处理方法**：①useMemo 前移至所有提前 return 之前；②恢复同步 useEffect（两 hook 均置于 return 前）；按规格改用多 tbody 分组渲染（组头=section_hint，组内 rule_id 序、`zh-Hans-CN` numeric 排序）；取消勾选不再阻止「最后一条」，改为保存闸（`dirty && enabledCount===0` → 禁存 + title「至少保留一条启用规则」）；关闭行 `--warning-soft` 底色+左缘 warning 条+删除线+「已关闭」warning pill；人读详情用统一 `advanced-details`（requirement 全文 13px + operations 中文聚合 pill + 首条 80 字截断；无 requirement 回退 title 全文+「详细修改见条规条款」）；徽标卡片标题用 h2（站内卡片标题体系一致，规格原文 h3，庭审备注见下）。44×44 点击区经 `.rule-toggle` 负 margin 实现，aria-label「启用规则 {rule_id}」锚点保留。
+- **验证**：tsc 0 错；vitest 24 绿；build ✓；`test_user_configuration.py` 7 绿；浏览器全回归 11 绿；自建用户流脚本 19/19（勾选→计数即时联动 21/22→保存→刷新持久 21/22+复选框仍为关、全不选→保存禁+title、全选恢复）；真实 API 断言 rules[] 含 requirement+operations。截图 `shots-v2-s2/rules-open.png`、`rules-disabled.png`。
+- **状态**：已解决（V2 侧，分支未提交待确认）。**规格偏差**：规格视图草图写 `<h3>规则组`，站内卡片标题体系均为 h2（Guides 详情其他卡、模型配置角色卡同为 h2），按站内一致性采用 h2，语义/文案/锚点不变；如主线复核要求改回 h3 属一行改动。
+- **证据**：`frontend/src/pages/Guides/index.tsx`（规则组卡 ~278-340 行）、`frontend/src/styles/app.css`（.rule-* 段）、`/tmp/opencode/qa/flow-v2-s2.py`。
+
+## FL-D762 V2 模型配置页重做（项1，含已验证徽标 key 事故，2026-11-01，qa-v2-s2）
+
+- **发现日期**：2026-11-01。
+- **问题与影响**：FL-D732 规格的 V2 侧实施单：整页从「两个堆叠长表单」改为「读取态状态卡→点击修改配置进编辑态」。施工中发现后端实行为：个人模型保存后 GET 会为已知供应商回填默认 base_url 与新 connection_id 指纹，若「已验证」徽标按 `source|provider|base_url|model` 四元组比对，保存/刷新后 key 必然失配、徽标永久显示「自定义·未验证」——用户流走查第 5/9 项 FAIL 抓出。
+- **处理方法**：ModelSettings.tsx 整体重写（109→~180 行）：单 form 包双 RoleCard（保浏览器锚点 form>2 .ui-card）；读取态=dl 概要（使用方式/供应商/模型/访问密钥已保存否/验证状态）+徽标三态（系统默认/自定义·未验证/自定义·已验证）+「修改配置」主按钮/「恢复系统默认」quiet；编辑态=form-grid 两列（使用方式/供应商/模型+建议 datalist/服务地址(custom)/API Key）+操作排（验证连接/保存/取消靠右）+`role="status"` 就地反馈+费用隐私 meta-line（FL-D723 文案保留）；复制辅助卡放 form 外，「复制并保存」+confirm 两角色整体提交；恢复默认同样走 mutation 整体提交。已验证 key 改为**不含 base_url** 的 `source|provider|model`（代码注释说明后端回填行为）。python 浏览器测试最小适配两处：加「修改配置」点击；heading「模型配置」改 `exact=True`（复制卡标题「将执行模型配置复制给检查模型」含子串「模型配置」，非精确匹配会同时命中 h1 与复制卡 h2 触发 Playwright strict mode violation——按锚点最小改动原则精确化）。命名 `FormGrid`/`.model-role-*` CSS 新增于 app.css。
+- **验证**：tsc 0 错；vitest 24 绿；build ✓；浏览器锚点用例（model_roles）与全套回归 11 绿；用户流脚本 19/19（编辑→验证（拦截)→保存→读取态徽标=自定义·已验证、模型名/密钥已保存/验证状态已验证、恢复默认确认流）；截图 `shots-v2-s2/models-{read,edit,verified}.png`、`flow-saved-read.png`。
+- **状态**：已解决（V2 侧，分支未提交待确认）。**规格偏差**：规格视图草图卡头写 `<h3>{角色名}`；站内卡片标题体系均为 h2（grep 全站核实），按一致性采用 h2，文案/锚点不变，如需改回为一行改动。
+- **证据**：`frontend/src/pages/Settings/ModelSettings.tsx`、`frontend/src/styles/app.css`（.model-role-*/.form-grid）、`tests/browser/test_frontend_v2.py`（146-190 行适配）。
