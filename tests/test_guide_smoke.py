@@ -20,9 +20,13 @@ def docx_bytes(label: str) -> bytes:
     return stream.getvalue()
 
 
-def document(rules) -> dict:
+def document(rules, *, paragraphs=None) -> dict:
+    groups = []
+    for pos, rid in enumerate(rules):
+        span = paragraphs[rid] if paragraphs and rid in paragraphs else [pos]
+        groups.append({"rule_id": rid, "title": f"规则{rid}", "source_paragraphs": span})
     return {"schema_version": GUIDE_SCHEMA_VERSION, "parser_version": "guide-parse-1",
-            "groups": [{"rule_id": rid, "title": f"规则{rid}"} for rid in rules],
+            "groups": groups,
             "validation": {"errors": [], "warnings": [], "coverage_gaps": [], "clean": True,
                            "verification": {"findings": [], "invalid_findings": 0}}}
 
@@ -58,6 +62,8 @@ def test_same_source_as_builtin_degraded_marked_needs_review(tmp_path):
     assert dims["baseline_version_id"] == guide_store.BUILTIN_GUIDE_ID
     assert dims["rules_before"] == len(builtin_doc["groups"]) and dims["rules_after"] == 2
     assert len(dims["removed_rule_ids"]) == len(builtin_doc["groups"]) - 2
+    assert dims["granularity_only"] is False
+    assert dims["coverage_lost_paragraphs"]
     version = guide_store.get_version(store, "alice", parsed["id"])
     assert version["review"]["status"] == "needs_review"
     assert version["review"]["dimensions"] == dims
@@ -82,7 +88,8 @@ def test_reparse_lineage_regression_and_recovery(tmp_path):
     third_req = guide_store.reparse_version(store, "alice", second["id"])
     job = guide_store.claim_guide_job(store)
     third = guide_store.finish_guide_job(store, job["id"], job["fencing_token"],
-                                         document=document(["G01", "G02", "G03"]))
+                                         document=document(["G01", "G02", "G03"],
+                                                           paragraphs={"G01": [0], "G02": [1], "G03": [2]}))
     healthy = review_version_footprint(store, "alice", third["version"]["id"])
     assert healthy["needs_review"] is False
     assert healthy["baseline"] == third_req["parent_version_id"]
@@ -91,6 +98,26 @@ def test_reparse_lineage_regression_and_recovery(tmp_path):
     # Changed-but-complete footprints stay quiet.
     quiet = review_version_footprint(store, "alice", first["id"])
     assert quiet["skipped"] == "no_baseline"
+
+
+def test_rule_id_churn_without_coverage_loss_is_granularity_only(tmp_path):
+    """Merged/split rules keep every source paragraph: advisory must say so."""
+    store = make_store(tmp_path)
+    version = guide_store.create_custom_version(store, "alice", "base.docx", docx_bytes("基线"))
+    job = guide_store.claim_guide_job(store)
+    first = guide_store.finish_guide_job(store, job["id"], job["fencing_token"],
+                                         document=document(["G01", "G02"],
+                                                           paragraphs={"G01": [0, 1], "G02": [2]}))["version"]
+    reparsed = guide_store.reparse_version(store, "alice", first["id"])
+    job = guide_store.claim_guide_job(store)
+    merged = guide_store.finish_guide_job(store, job["id"], job["fencing_token"],
+                                          document=document(["G01"],
+                                                            paragraphs={"G01": [0, 1, 2]}))["version"]
+    result = review_version_footprint(store, "alice", merged["id"])
+    assert result["needs_review"] is True
+    assert result["dimensions"]["removed_rule_ids"] == ["G02"]
+    assert result["dimensions"]["granularity_only"] is True
+    assert result["dimensions"]["coverage_lost_paragraphs"] == []
 
 
 def test_unrelated_new_guide_has_no_baseline(tmp_path):

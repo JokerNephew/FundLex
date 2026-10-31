@@ -36,6 +36,15 @@ def _flatten_rule_ids(document: dict[str, Any]) -> list[str]:
     return sorted(ids)
 
 
+def _covered_paragraphs(document: dict[str, Any]) -> set[int]:
+    covered: set[int] = set()
+    for group in (document or {}).get("groups") or []:
+        if isinstance(group, dict):
+            covered.update(index for index in (group.get("source_paragraphs") or [])
+                           if isinstance(index, int))
+    return covered
+
+
 def _baseline(store: RunStore, owner: str, version: dict[str, Any]) -> tuple[str, dict[str, Any]] | None:
     """The comparison baseline for one version, or ``None`` when there is none."""
     parent_id = version.get("parent_version_id") or ""
@@ -71,12 +80,21 @@ def review_version_footprint(store: RunStore, owner: str, version_id: str) -> di
     removed = sorted(before_ids - after_ids)
     summary = diff["summary"]
     cliff = bool(before_ids) and summary["rules_after"] < CLIFF_RATIO * summary["rules_before"]
+    # Rule-id churn without paragraph-coverage loss is granularity drift
+    # (rules merged/split), not lost instructions — still advisory, but the
+    # dimensions must say so instead of reading as a content cliff.
+    before_covered = _covered_paragraphs(baseline_doc)
+    after_covered = _covered_paragraphs(document)
+    coverage_lost = sorted(before_covered - after_covered)
+    granularity_only = not coverage_lost
     needs_review = bool(removed) or cliff
     dimensions = {"baseline_version_id": baseline_id,
                   "rules_before": summary["rules_before"], "rules_after": summary["rules_after"],
                   "removed_rule_ids": removed, "added_rule_ids": sorted(after_ids - before_ids),
                   "changed_rules": summary["changed"], "cliff_ratio": CLIFF_RATIO,
-                  "cliff": cliff}
+                  "cliff": cliff,
+                  "coverage_lost_paragraphs": coverage_lost,
+                  "granularity_only": granularity_only}
     if needs_review:
         review = {"status": "needs_review", "dimensions": dimensions,
                   "evaluated_at": datetime.now(timezone.utc).isoformat(timespec="seconds")}
