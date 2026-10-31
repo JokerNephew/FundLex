@@ -24,7 +24,8 @@ from fundlex.rules import load_ruleset
 from fundlex.store import NotFound, RunStore, validate_delivery
 from fundlex.tasks import TaskStore
 
-from test_guide import (GUIDE_PARAGRAPHS, ScriptedGateway, build_docx, clean_verification, valid_parsed)
+from test_guide import (GUIDE_PARAGRAPHS, ScriptedGateway, build_docx, clean_verification, valid_parsed,
+                        worker_parsed)
 from test_recall_core import build_contract, guide_rules
 from test_recall_pipeline import GUIDE_SHA, PipelineGateway, base_responses, guide_document
 
@@ -282,17 +283,18 @@ def test_worker_parses_queued_guide_job(tmp_path, monkeypatch):
     store, _ = bound_store(tmp_path)
     guide_path = build_docx(tmp_path / "guide.docx", GUIDE_PARAGRAPHS)
     version = guide_store.create_custom_version(store, OWNER, "guide.docx", guide_path.read_bytes())
-    gateway = ScriptedGateway([("guide_parse", valid_parsed()), ("guide_verify", clean_verification())])
+    gateway = ScriptedGateway([("guide_parse", worker_parsed()), ("guide_verify", clean_verification())])
     monkeypatch.setattr("fundlex.model.ModelGateway.from_env", staticmethod(lambda: gateway))
     worker = Worker(store)
     assert worker.run_once() is True
     assert worker.run_once() is False
     parsed = guide_store.get_version(store, OWNER, version["id"])
-    assert parsed["status"] == "parsed" and parsed["rules_count"] == 3
+    assert parsed["status"] == "parsed" and parsed["rules_count"] == 2
+    assert parsed["qualification_status"] == guide_store.QUALIFICATION_CERTIFIED
     assert parsed["parser_version"] == "guide-parse-1"
     assert parsed["prompt_versions"] == {"guide_parse": "guide_parse_v1", "guide_verify": "guide_verify_v1"}
     document = guide_store.guide_document(store, version["id"])
-    assert document["schema_version"] == GUIDE_SCHEMA_VERSION and len(document["groups"]) == 3
+    assert document["schema_version"] == GUIDE_SCHEMA_VERSION and len(document["groups"]) == 2
     guide_store.set_current_guide(store, OWNER, version["id"])
     assert guide_store.current_guide(store, OWNER)["id"] == version["id"]
     with store._connect() as db:
