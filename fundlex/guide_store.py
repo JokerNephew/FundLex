@@ -29,6 +29,15 @@ BUILTIN_GUIDE_ID = "builtin-v1"
 BUILTIN_GUIDE_PATH = Path(__file__).resolve().parent.parent / "guides" / "builtin_guide_v1.json"
 GUIDE_SOURCE_DIR = "guides"
 ENABLEABLE_STATUSES = frozenset({"released", "parsed"})
+# Certification lifecycle: a parsed version only becomes enableable when its
+# parse went through the same quality channel as the built-in guide
+# (deterministic validation clean + independent verification without leftover
+# findings).  Reparse always creates a new version, so certification is never
+# inherited from a predecessor.
+QUALIFICATION_NOT_RUN = "not_run"
+QUALIFICATION_CERTIFIED = "certified"
+QUALIFICATION_FROZEN = "frozen_builtin"
+ENABLEABLE_QUALIFICATIONS = frozenset({QUALIFICATION_CERTIFIED, QUALIFICATION_FROZEN})
 PARSEABLE_STATUSES = frozenset({"uploaded", "parse_failed", "parsed", "failed"})
 # User-initiated "reparse" is a new version whenever the version may already
 # have been observed by a task.  Only an unpublished, never-parsed version can
@@ -134,9 +143,49 @@ def _document_sha(doc: dict[str, Any]) -> str:
     return guide_document_sha256(doc)
 
 
+def _validation_clean(validation: dict[str, Any]) -> bool:
+    """The built-in channel's exit condition, recomputed from components.
+
+    Mirrors :func:`fundlex.guide.build_guide_document`: no deterministic
+    errors, no uncovered paragraphs and no verifier leftovers.  Missing keys
+    count as empty so older fixtures stay valid; anything present and
+    non-empty fails closed.
+    """
+    if not isinstance(validation, dict):
+        return False
+    if validation.get("errors") or validation.get("coverage_gaps"):
+        return False
+    verification = validation.get("verification")
+    if isinstance(verification, dict):
+        if verification.get("findings") or verification.get("invalid_findings"):
+            return False
+    return True
+
+
+def _quality_failure_issues(validation: dict[str, Any]) -> dict[str, Any]:
+    """Structured, user-facing reasons when the quality channel rejects a parse."""
+    verification = validation.get("verification")
+    verification = verification if isinstance(verification, dict) else {}
+    issues: dict[str, Any] = {
+        "error_code": "GUIDE_VALIDATION_UNCLEAN",
+        "clean": False,
+        "errors": validation.get("errors") or [],
+        "warnings": validation.get("warnings") or [],
+        "coverage_gaps": validation.get("coverage_gaps") or [],
+        "verification": {"findings": verification.get("findings") or [],
+                         "invalid_findings": verification.get("invalid_findings") or 0,
+                         "coverage_explanation": verification.get("coverage_explanation") or ""},
+        "rounds": validation.get("rounds") or 0,
+        "rounds_detail": validation.get("rounds_detail") or [],
+        "detail": "解析结果未通过确定性校验或独立验证，不能启用；请修正指引后重新上传解析。",
+    }
+    return issues
+
+
 def _version_dict(row) -> dict[str, Any]:
     rules = _json_or(row["rules_json"], {})
     groups = rules.get("groups") if isinstance(rules, dict) else None
+    issues = _json_or(row["issues_json"], {})
     return {
         "id": row["id"], "owner": row["owner"], "built_in": bool(row["built_in"]),
         "parent_version_id": row["parent_version_id"] or "",
@@ -144,8 +193,9 @@ def _version_dict(row) -> dict[str, Any]:
         "document_sha256": row["document_sha256"], "rules_sha256": row["rules_sha256"],
         "parser_version": row["parser_version"], "schema_version": row["schema_version"],
         "prompt_versions": _json_or(row["prompt_versions"], {}),
-        "status": row["status"], "issues": _json_or(row["issues_json"], {}),
+        "status": row["status"], "issues": issues,
         "qualification_status": row["qualification_status"],
+        "review": issues.get("review") if isinstance(issues.get("review"), dict) else None,
         "rules_count": len(groups) if isinstance(groups, list) else 0,
         "created_at": row["created_at"], "updated_at": row["updated_at"],
         "released_at": row["released_at"],
@@ -266,6 +316,12 @@ def set_current_guide(store: RunStore, owner: str, version_id: str) -> dict[str,
     version = get_version(store, owner, version_id)
     if version["status"] not in ENABLEABLE_STATUSES:
         raise ValueError("GUIDE_NOT_ENABLEABLE")
+    # Enabling requires the same qualification as the built-in guide:
+    # deterministic validation clean plus verification without leftover
+    # findings.  A re-parse produces a new version that must re-qualify; the
+    # predecessor's certification never carries over.
+    if version["qualification_status"] not in ENABLEABLE_QUALIFICATIONS:
+        raise ValueError("GUIDE_NOT_CERTIFIED")
     # A parsed guide is data, not executable policy.  Custom operations must
     # have controlled registry entries before an owner can enable the guide.
     from .generation.registry import operation_registry_coverage_gaps
@@ -555,13 +611,25 @@ def finish_guide_job(store: RunStore, job_id: str, fencing_token: int, *, docume
     """Close a claimed job; returns ``{"job": ..., "version": ...}`` records.
 
     A parsed document moves the version to ``parsed`` with its rules, hashes,
-    parser/prompt versions and validation issues.  An error moves it to
-    ``parse_failed`` (retryable) or ``failed`` once attempts are exhausted.
+    parser/prompt versions and validation issues — but only when the parse
+    passed the same quality channel as the built-in guide (deterministic
+    validation clean plus verification without leftover findings).  An unclean
+    document is converted here into a terminal ``GUIDE_VALIDATION_UNCLEAN``
+    failure with structured, user-facing reasons; low-quality parses are never
+    silently released.  A re-parse creates a new version, which must qualify
+    from scratch.  Other errors move the version to ``parse_failed``
+    (retryable) or ``failed`` once attempts are exhausted.
     """
     _ensure_tables(store)
     if document is not None and not isinstance(document, dict):
         raise ValueError("GUIDE_DOCUMENT_INVALID")
     now = time.time()
+    quality_issues: dict[str, Any] | None = None
+    if document is not None and not error_code:
+        validation = document.get("validation") if isinstance(document.get("validation"), dict) else {}
+        if not _validation_clean(validation):
+            quality_issues = _quality_failure_issues(validation)
+            error_code = "GUIDE_VALIDATION_UNCLEAN"
     with store._connect() as db:
         db.execute("BEGIN IMMEDIATE")
         job = db.execute("SELECT * FROM guide_jobs WHERE id=?", (job_id,)).fetchone()
@@ -575,12 +643,13 @@ def finish_guide_job(store: RunStore, job_id: str, fencing_token: int, *, docume
             document_sha = _document_sha(document)
             issues = document.get("validation") if isinstance(document.get("validation"), dict) else {}
             db.execute("""UPDATE guide_versions SET status='parsed',rules_json=?,document_sha256=?,
-                rules_sha256=?,parser_version=?,schema_version=?,prompt_versions=?,issues_json=?,updated_at=?
+                rules_sha256=?,parser_version=?,schema_version=?,prompt_versions=?,issues_json=?,
+                qualification_status=?,updated_at=?
                 WHERE id=?""",
                 (json.dumps(document, ensure_ascii=False), document_sha, document_sha,
                  str(document.get("parser_version") or ""), str(document.get("schema_version") or ""),
                  json.dumps(document.get("prompt_versions") or {}, ensure_ascii=False),
-                 json.dumps(issues, ensure_ascii=False), now, version_id))
+                 json.dumps(issues, ensure_ascii=False), QUALIFICATION_CERTIFIED, now, version_id))
             changed = db.execute("UPDATE guide_jobs SET status='completed',error_code=NULL,lease_until=NULL,"
                                  "updated_at=? WHERE id=? AND fencing_token=? AND status='leased' "
                                  "AND lease_until>?", (now, job_id, fencing_token, now)).rowcount
@@ -588,8 +657,13 @@ def finish_guide_job(store: RunStore, job_id: str, fencing_token: int, *, docume
                 raise Conflict("stale guide job lease")
         else:
             code = error_code or "GUIDE_PARSE_FAILED"
-            status = "failed" if job["attempts"] >= MAX_GUIDE_JOB_ATTEMPTS else "parse_failed"
-            issues = {"error_code": code, "errors": [{"code": code}], "attempts": job["attempts"]}
+            # Quality-gate rejections are terminal for this version: the same
+            # source re-parsed automatically would repeat the model spend, and
+            # the user remedy is re-upload/re-parse into a new version.
+            status = "failed" if (quality_issues is not None
+                                  or job["attempts"] >= MAX_GUIDE_JOB_ATTEMPTS) else "parse_failed"
+            issues = quality_issues or {"error_code": code, "errors": [{"code": code}],
+                                        "attempts": job["attempts"]}
             db.execute("UPDATE guide_versions SET status=?,issues_json=?,updated_at=? WHERE id=?",
                        (status, json.dumps(issues, ensure_ascii=False), now, version_id))
             changed = db.execute("UPDATE guide_jobs SET status=?,error_code=?,lease_until=NULL,updated_at=? "
@@ -600,6 +674,46 @@ def finish_guide_job(store: RunStore, job_id: str, fencing_token: int, *, docume
         refreshed_job = db.execute("SELECT * FROM guide_jobs WHERE id=?", (job_id,)).fetchone()
         version = db.execute("SELECT * FROM guide_versions WHERE id=?", (version_id,)).fetchone()
     return {"job": _job_dict(refreshed_job), "version": _version_dict(version)}
+
+
+def mark_guide_review(store: RunStore, owner: str, version_id: str,
+                      review: dict[str, Any] | None) -> dict[str, Any]:
+    """Record (or clear, with ``None``) a smoke-review verdict on a version.
+
+    A ``needs_review`` verdict is advisory — it never blocks enabling — but it
+    is shown to the owner with the dimensions that degraded versus the
+    built-in guide.  ``review`` must be JSON-serializable; recommended shape:
+    ``{"status": "needs_review", "dimensions": {...}, "evaluated_at": ...}``.
+    """
+    version = get_version(store, owner, version_id)
+    if review is not None:
+        if not isinstance(review, dict):
+            raise ValueError("GUIDE_REVIEW_INVALID")
+        json.dumps(review, ensure_ascii=False)  # fail fast on non-serializable values
+    issues = version.get("issues") if isinstance(version.get("issues"), dict) else {}
+    updated_issues = dict(issues)
+    if review is None:
+        updated_issues.pop("review", None)
+    else:
+        updated_issues["review"] = review
+    with store._connect() as db:
+        db.execute("UPDATE guide_versions SET issues_json=?,updated_at=? WHERE id=?",
+                   (json.dumps(updated_issues, ensure_ascii=False), time.time(), version["id"]))
+    return get_version(store, owner, version_id)
+
+
+def diff_versions(store: RunStore, owner: str, version_id: str,
+                  against_id: str) -> dict[str, Any]:
+    """Deterministic diff of two visible, parsed versions (``against`` is the base)."""
+    if not isinstance(against_id, str) or not against_id.strip():
+        raise ValueError("GUIDE_DIFF_AGAINST_REQUIRED")
+    # get_version enforces owner visibility for each side independently.
+    get_version(store, owner, version_id)
+    get_version(store, owner, against_id.strip())
+    before = guide_document(store, against_id.strip())
+    after = guide_document(store, version_id)
+    from .guide_diff import diff_guide_documents
+    return diff_guide_documents(before, after)
 
 
 def guide_source_path(store: RunStore, version_id: str) -> Path:

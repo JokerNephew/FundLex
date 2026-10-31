@@ -7017,7 +7017,7 @@ H＝E×…
 
 ## FL 编号分配（多对话并行期协调，2026-10-31）
 
-- 避免并行会话编号冲突，段位分配：主线对话 FL-D574..579；qa-feat-recall 对话 FL-D580..589；qa-feat-compare 对话 FL-D590..599；qa-feat-guide 对话 FL-D600..609；第二波标签对话与 B13 性能对话仍按"读尾部取下一号"（若与段位冲突，以段位为准顺延）。各对话只新增条目、不改他人条目正文；状态更新可采用在自己段位新增"变更记录"行或经主线合并。功能开发新对话（2026-10-31 追加）：qa-f2-recall-tracked FL-D610..619；qa-f2-compare-tracked FL-D620..629；qa-f2-guide-history FL-D630..639。**FL-D640 起为跨线候补池（B13/标签线/主线 reviewer 统一取号），当前下一空闲号 FL-D643**（FL-D640=B13 浏览器 V2 既有失败，FL-D641/642=主线独立复核观察项，见下两条）。
+- 避免并行会话编号冲突，段位分配：主线对话 FL-D574..579；qa-feat-recall 对话 FL-D580..589；qa-feat-compare 对话 FL-D590..599；qa-feat-guide 对话 FL-D600..609；第二波标签对话与 B13 性能对话仍按"读尾部取下一号"（若与段位冲突，以段位为准顺延）。各对话只新增条目、不改他人条目正文；状态更新可采用在自己段位新增"变更记录"行或经主线合并。功能开发新对话（2026-10-31 追加）：qa-f2-recall-tracked FL-D610..619；qa-f2-compare-tracked FL-D620..629；qa-f2-guide-history FL-D630..639。**FL-D640 起为跨线候补池；2026-10-31 末期改为固定子池（见文末注记）：qa-feat-guide 650-659、guide-history 660-669、标签线 670-679、主线/reviewer 680-689、其余 ≥690。**
 
 ## FL-D574 v2 evaluation/v3 delivery_review 测试族在 HEAD 基线即失败（2026-10-31，**已修复**）
 
@@ -7150,3 +7150,47 @@ H＝E×…
 - **变更记录**：2026-10-31 新增（guide 线；证据 report.json unresolved 三项 G09 + edits.json 无 G09 target 落地）。
   - 2026-10-31（guide 线，归因证据补记）：verify2（`e73ade8`）G09 p159 **planned** 且 claim replay `G09:B1:O1` PASS（bounded splice 落地「减去…净值计算…扣除或加上相应的费用」）；verify4（`b2561a2`）同一模型同一站点翻转为 not_applicable（「与规则所针对的原文不一致，无精确替换目标」），replay 转 OPEN `CLAIM_OPERATION_UNPROVEN`。**诊断**：同一指引版本、同一站点在 planned/PASS 与 not_applicable 之间回摆，属模型侧不确定性（与 FL-D643 G08 不确定性同族），非确定性门诊缺失——本批确定性修复（FL-D606/607）不改此面。保持 open，随 FL-D643 观察族跟踪；不扩为门禁。
   - 2026-10-31（guide 线，verify5 补证，HEAD `b2561a2`）：B15 verify5（`/tmp/opencode/qa-findings-run/b15-fl606607-verify5/`）G09 再度 not_applicable（「无“当日对应份额类别…”的原文可替换」），replay `G09:B1:O1` OPEN `CLAIM_OPERATION_UNPROVEN`（verified site missing）。回摆在 verify2（planned+PASS）→ verify4/verify5（not_applicable+OPEN）间 1:2，回摆定性坐实。**B15 delivery incomplete 归因（原 FL-D576 观察方向降级落案）**：v2 预跑 15 目标全 no-artifact 的链路病因已由本批确定性修复全部解除（FL-D606 G14 全闭合✅、FL-D607/FL-D601-FL-D602 家族 G01/G08 义务闭合✅），verify5 时仅存本条 G09 OPEN 一项 → delivery 如实 incomplete（**非 false_complete**，行为方向正确）；v2 预跑无产物的 15 目标并非同因。本条 open 即 B15 虚假完成阻断供给的现存唯一来源。
+
+## FL-D644 FL-D608 第二层闸门放行凭据可被模型谎称（2026-10-31，主线复核）
+
+- **发现**：`51fb45b` 的 scope 闸门守护以 `target.reason` 含 "APPEND_END" 子串为放行凭据（recall_pipeline.py:1254-1265），而 `Target.reason` 在 inventory_window 直接取自模型输出（recall.py:1765）；模型对 G01/G03 needs_edit target 谎称 "APPEND_END" 即可跳过 `_target_scope_ok`，与 FL-D573「自述证据不扩权」方向相反。越界面限于「自带定义锚点的组外段」（append_site_ok 锚点守卫仍在），属有界风险。
+- **另**：负路径测试缺「谎称 APPEND_END 的越界 target 被拒」用例。
+- **处理**（已派 qa-feat-guide）：改为校验确定性重绑端点/内部重绑标记（与模型输出绝缘）+ 补谎称负路径测试；修复后 mutation 自检。
+- **状态**：open（修复中）。dev20 v2 冻结包含 layer-2 语义并于冻结说明中登记本条。
+
+## FL-D645 G03 scope-replay 组尾覆盖不对称观察项（2026-10-31，主线复核）
+
+- **发现**：`_extend_definition_group` scope 扩展仅注册于 G01/G02（rule_scope.py:1176-1183），G03 不经此扩展；闸门放行后 claim replay `_filter_scoped_targets` 仍按 scope.contains 过滤——非 B05 合同若 G03 scope 不含组尾，「verified site missing」可复发（B05 verify4 双 PASS 系巧合性满足）。
+- **处理**：观测；若第二波/dev20 v2 中出现 G03 复发则把 G03 纳入同族扩展。
+- **状态**：open（观测项）。
+
+## FL-D646 第二波标签确定性收尾与逐段裁决惯例（2026-10-31，第二波标签线）
+
+- **发现日期**：2026-10-31。第二波 100 份盲读标签（qwen3.6-35b-a3b 单模型主/复，FL-D569）原始 v1 有 57 个 coverage/target 一致性问题、185 条 mandatory-completeness 警示、若干模型新文本违反指引形态（G14 残留赎回/转换费率、G22 漏加销售服务费（如有））。
+- **处理方法（已实施并验证）**：`tools/evaluation/finalize_second_batch_labels_20261031.py` 两遍收尾：pass1 修复 coverage=target 无 target 行；pass2 对每条 mandatory 警示按段落级证据裁决（保留并登记启发式误报 / 翻转为 target 并构建 / 更正 coverage 为 satisfied+证据引文或 not_applicable+惯例依据），新发现的口径：①指引 G14 多类新文同时剔除赎回费率**和转换费率**（早稿收尾器只剔赎回费率，已全库重建）；②跨段（句号被 Word 切到下段）按上下两片构建并以 related_target_ids 互链（W2D02 G11、W2D69/W2D65 G13、W2D47 G18、W2D17 G09、W2D43 G20→satisfied）；③顺序清单清算条款 not_applicable（沿用第一波 B15 惯例）；④G05 站点仅限基本情况（沿用 B05/B17 惯例）；⑤已改合同按新机制标志（返还给投资者/协商一致+指定账户路径/销售服务费（如有）/直销豁免句）判 satisfied 附原文证据；⑥G15 费率公式段不作删除目标、托管费段落不误伤；⑦无销售服务费的多类别合同（A1/A2/A3 型，W2D61）G08/G11 not_applicable、G14 新文本只留申购费率（事实优先于指引粗粒度 class_count 条件，记为口径偏差）；⑧G02/G04 类别定义已联合表述→satisfied（与第一波状态分布一致）；⑨G21 noop 归一 not_applicable；⑩模型新文本违形态者按自身 old_text 确定性重写并打 `finalize_repaired_new_text` 标记。
+- **验证结果**：终检 `problems=0`；`label_quality.issue_count` 全 100 案=0（与第一波 v2 同口径）；149 条校验器 warning 全部落为 per-case `adjudicated_cleared` 登记的启发式误报，live warnings=0。仅余 4 条 unknown（W2D65 单一类别文本变体 G07/G10/G12/G14，与指引触发句实质差异，理由与复核建议保留于 uncertain）。
+- **冻结物**：labels `docs/evidence/labels-second-batch-20261031-v1.json` sha256=`423c6944687a6006d493d3f8dff4b4cb32593cc6acc26c2e2b3fb423622a88f5`；验证报告 sha256=`3d71bd3393d73afb060065f879d380bf603e64034cafa1eb9585115d6458fb07`；schema/口径文档 `docs/evidence/labels-schema-second-batch-20261031-v1.md`。
+- **状态**：已解决（标签 v1 冻结，待主线门槛后进入引擎运行/评分）。
+
+## FL-D647 第二波选样冻结 sha 在状态文件中的早期误记及勘正（2026-10-31，第二波标签线）
+
+- **发现**：`/tmp/opencode/qa/status/labels-wave2.md` 早稿把 selection 文件字节 sha 误记为 `935e6662…`（第三轮校准前一次运行的旧值），实际冻结文件 `docs/evidence/selection-second-batch-20261031.json`（mtime 2026-10-31 09:13，与 envelope `frozen_at` 一致）字节 sha256=`32b36f02a9c6cafebee7a73fcda0791c707ac62d07fe67bb57e91daafc6187d9`。
+- **影响**：无实质污染——选样、标注、finalize、验证全链路均直接读取同一文件字节，验证报告 `selection_sha256` 与实际文件一致；仅状态文件文本失实。
+- **处理**：状态文件已勘正并保留误记说明；教训：冻结 sha 在最终写盘后重新计算再登记，不复用过程值。
+- **状态**：已解决（2026-10-31 验证： verifier 报告 selection_sha256、selection 文件、labels 抽样三链一致）。
+
+> **FL-D640..649 全部已使用**（640 B13、641/642 主线复核、643 feat-guide、644/645 主线、646/647 标签线、648/649 guide-history；feat-guide 撞号条目改派 FL-D650）。**自 2026-10-31 起设固定子池杜绝再撞**：qa-feat-guide FL-D650..659；qa-f2-guide-history FL-D660..669；第二波标签线 FL-D670..679；主线及主线 reviewer FL-D680..689；其余读尾部顺延者 ≥FL-D690。
+## FL-D648 指引重解析粒度合并破坏操作可执行性：确定性 clean 放行、召回断崖 -70%（2026-10-31，qa-f2-guide-history 线）
+
+- **发现日期**：2026-10-31，本线真实模型冒烟（生产路径：上传→worker 解析→启用→TestClient 任务→Worker 真跑，账本 /tmp/opencode/guide-{channel,v2}-ledger.sqlite、/tmp/opencode/recall-smoke-{builtin,custom15}.sqlite）。
+- **问题与影响**：同一来源 DOCX（sha 与内置 v1 完全一致）经 worker 重解析仅产出 15 条规则（G16..G22 被并入 G11..G15），确定性校验 clean、段落覆盖 105/105 与内置一致、模型验证器报「覆盖完整」→ 质量门认证放行。但该版本真实驱动 recall 出现**断崖式劣化**：3 份 funds_word 合同（聚安/品质优选/沪港深精选）内置版 32/34/28 目标全部 complete；合并版 12/8/8 目标、交付全部 incomplete（RECALL_OPERATION_REGISTRY_MISSING、G07/G10 合并分支产生残留旧文、FINAL_COVERAGE_UNRESOLVED）——召回量级 -70%。根因：解析模型将相邻指引块合并为一条多分支规则，合并后的 operations 超出运行期 registry/slot 可执行面；确定性门只看「段落被声称」而非「每块一条可执行规则」。数据 /tmp/opencode/recall-smoke/*/。
+- **处理方法（已实施，本线提交）**：①finish_guide_job 认证门槛（GUIDE_VALIDATION_UNCLEAN 终态失败+结构化原因）拦截确定性不干净的版本（对 V2 指引真实拦下：G12 GUIDE_SLOT_NOT_IN_TEXT + 原文笔误歧义 finding）；②fundlex/guide_smoke.py + worker 钩子 + tools/guide_quality_smoke.py：footprint 冒烟对父版本/内置同源基线做确定性比对，规则消失或数量腰斩 → 版本标 needs_review（不阻断、明示维度），并区分 granularity_only（粒度漂移、段落零丢失）与真覆盖丢失；③GET /api/guides/{id}/diff 确定性对比视图供人工裁决。
+- **验证**：上述合并版经冒烟正确标 needs_review（removed_rule_ids G16..G22、granularity_only=true、coverage_lost_paragraphs=[]）；后端 48 测试、vitest 24、V1 浏览器 1 绿。
+- **遗留（待主线/解析器迭代）**：certified 版本仍可能因粒度合并而不可用——needs_review 目前不阻断启用属既定设计（用户可见可裁）。根治需在解析提示词/校验层钉住「一指引块一规则」粒度（如对 source_paragraphs 重叠合并、单规则多可执行分支设确定性错误），列为后续项。
+- **状态**：机制已修复并实证；解析粒度钉死 open（后续迭代）。
+
+## FL-D649 引擎消费对齐与合同级召回冒烟结论与账本（2026-10-31，qa-f2-guide-history 线）
+
+- **结论**：修订引擎对自定义指引版本与内置版完全同路径（jobs._bound_guide_document → 同一 guide_document/_guide_rules/registry/validate_runtime_guide 代码）；真实模型三岁本对照（内置 94 目标全 complete vs 劣化版 28 目标全 incomplete）实证劣化属指引解析质量而非引擎分叉。引擎对齐冒烟**无引擎层劣化**。
+- **账本（仅观测，FL-D445）**：解析通道 4+6=10 次 kimi-k3 调用（$0.0146+$0.0204）；召回冒烟 75+41=116 次（$0.0779+$0.0492）。合计 126 次、约 $0.162。
+- **状态**：已验证完成；产物 /tmp/opencode/recall-smoke/（每轨 state+3 份 summary JSON）与 /tmp/guide-channel-li88f1cq/、/tmp/guide-v2-s_6tu6cw/（临时店，可供复核后清理）。

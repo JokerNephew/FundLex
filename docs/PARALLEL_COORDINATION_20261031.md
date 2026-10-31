@@ -14,14 +14,14 @@
 | 线 | 分支 / 工作区 | FL 段位 | 状态（主线最近核实） |
 |---|---|---|---|
 | 主线（协调+收口） | `qa/full-audit-20261031` @ `/tmp/opencode/qa-base` | 574-579 | 本文件 |
-| 第二波 100 份标签 | 直接在 qa-base 作业 | 读尾部顺延 | 在途：selection-second-batch json+2 py 未提交 |
-| B13 性能治理 | 直接在 qa-base 作业 | 读尾部顺延（FL-D557 等） | 在途：api.py 投影缓存 F3④、app.js 渲染索引 F8、2 新 pin 测试；疑似同时认领 FL-D574 陈旧测试修复（3 个测试文件中 mode=evaluation 夹具改造） |
-| qa-feat-recall | `qa-feat-recall-20261031` | 580-589 | 已提交 wave-compare 工具、FL-D582 闭环；**待 dev20 v2 冻结重跑（门槛见下）** |
-| qa-feat-compare | `qa-feat-compare-20261031` | 590-599 | compare 引擎能力恢复在途（selection_writer/store/worker/compare.js 未提交） |
-| qa-feat-guide | `qa-feat-guide-20261031` | 600-609 | FL-D601/602 已修（068fe94）；smoke28 复验 FL-D609=NO-GO（B05 false_complete 依旧，因 FL-D608 append not_executed 未归因、且复验时 FL-D572 尚未并入）；**下一步：merge 主线（含 ac697a4 FL-D572）→ 归因修复 FL-D608 → smoke28 复验 v2** |
+| 第二波 100 份标签 | qa-base | FL-D670..679 | ✅ 100 份冻结（labels 423c6944/problems=0/1254 目标）+ 运行脚手架 8a10295 就绪，**等 dev20 v2 门槛放行令** |
+| B13 性能治理 | qa-base | FL-D640 | ✅ 全线收口（f83462b/977c054；FL-D574 关闭=测试陈旧定责；全量 2375/0 绿） |
+| qa-feat-recall | `qa-feat-recall-20261031` | 580-589 | 🔥 dev20 v2 正式轮运行中（冻结 2a416f8；abort 轮已作废标记；评分→对比→FL-D576→留出 8 份 流程） |
+| qa-feat-compare | `qa-feat-compare-20261031` | 590-599 | 代码完成（b7ca4c2/ac44e1d，175 绿）；**FL-D590 语料冒烟运行中**（完成后主线先收它再收 compare-tracked） |
+| qa-feat-guide | `qa-feat-guide-20261031` | 600-609 + 650-659 | 第一批（D608双层/601/602）已并主线；FL-D644/645/606/607 修复批在途（报验后统一 merge+复核）；smoke28 复验 v2 与 B15 降级归因待办 |
 | qa-f2-recall-tracked | `qa-f2-recall-tracked-20261031` | 610-619 | ✅ 已完成并并入主线（38c0727+f7ccbb5 合并进 qa-base） |
-| qa-f2-compare-tracked | `qa-f2-compare-tracked-20261031` | 620-629 | 已提交 92c6b93（accept-all 基线元数据+矩阵测试），推进中 |
-| qa-f2-guide-history | `qa-f2-guide-history-20261031` | 630-639 | 指引生命周期在途（guide_store/api.py/React Guides 页未提交）；**测试输入可用 references/fee-rule-v2/ 与 references/source/…指引V2.docx（主线已备）** |
+| qa-f2-compare-tracked | `qa-f2-compare-tracked-20261031` | 620-629 | ✅ 完成（185d5e6，含 merge 主线），**待 feat-compare 先收后按序并入主线** |
+| qa-f2-guide-history | `qa-f2-guide-history-20261031` | 630-639 + 660-669 | ✅ 全范围完成并入主线（94ad5ed）：diff API+认证门槛+生命周期质量通道+引擎对齐冒烟 PASS+浏览器；留 FL-D648 解析粒度开放项 |
 
 ## 二、冻结与发布门槛（谁先谁后，铁律）
 

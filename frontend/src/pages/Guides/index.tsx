@@ -14,9 +14,16 @@ import {
 } from '../../api/hooks'
 import { Button, Card, Spinner, StatusBadge } from '../../components/ui'
 import { ErrorState, LoadingCard } from '../Tasks'
+import { CompareCard } from './CompareCard'
 
 function guideType(guide: { built_in?: boolean }) {
   return guide.built_in ? '内置' : '自定义'
+}
+
+export function enableBlockReasonText(reason?: string | null): string {
+  if (reason === 'GUIDE_NOT_CERTIFIED') return '解析质量未通过认证，不能启用'
+  if (reason === 'GUIDE_NOT_PARSED') return '解析未完成或已失败'
+  return ''
 }
 
 export function GuidesPage() {
@@ -99,19 +106,27 @@ export function GuidesPage() {
         <table className="data-table">
           <thead><tr><th>文件</th><th>状态</th><th>规则组</th><th>来源哈希</th><th>操作</th></tr></thead>
           <tbody>{guides.data.items.map((guide) => {
-            const canEnable = ['parsed', 'released'].includes(guide.status)
+            const blockReason = guide.enable_block_reason
+              || (['parsed', 'released'].includes(guide.status) ? null : 'GUIDE_NOT_PARSED')
+            const canEnable = !blockReason
             return <tr key={guide.id}>
               <td>
                 <Link to={`/guides/${guide.id}`}>{guide.filename}</Link>
                 <div className="muted">{guideType(guide)} · {guide.id}{guide.parent_version_id ? ` · 基于 ${guide.parent_version_id.slice(0, 12)}…` : ''}</div>
               </td>
-              <td><StatusBadge value={guide.status} />{guide.issues ? <div className="form-error">{guide.issues} 个问题</div> : null}</td>
+              <td>
+                <StatusBadge value={guide.status} />{guide.issues ? <div className="form-error">{guide.issues} 个问题</div> : null}
+                {guide.review?.status === 'needs_review' ? <div className="form-error">冒烟复核提示：消费质量疑有下降，请查看详情</div> : null}
+                {!canEnable && blockReason ? <div className="muted">{enableBlockReasonText(blockReason)}</div> : null}
+              </td>
               <td>{guide.groups ?? '—'}</td>
               <td>{guide.document_sha256 ? `${guide.document_sha256.slice(0, 12)}…` : '—'}</td>
               <td>
                 <div className="action-row">
                   <Link to={`/guides/${guide.id}`}><Button variant="quiet">规则组</Button></Link>
-                  <Button disabled={busy || !canEnable || guide.current} onClick={() => void selectGuide(guide.id)}>
+                  <Button disabled={busy || !canEnable || guide.current}
+                    title={canEnable ? '' : enableBlockReasonText(blockReason)}
+                    onClick={() => void selectGuide(guide.id)}>
                     {guide.current ? '当前使用' : canEnable ? '启用' : '不可启用'}
                   </Button>
                 </div>
@@ -121,6 +136,8 @@ export function GuidesPage() {
         </table>
       </div>}
     </Card>
+
+    <CompareCard items={guides.data?.items || []} currentId={current?.id} />
 
     <Card>
       <h2>上传新指引</h2>
@@ -239,6 +256,11 @@ export function GuideDetailPage() {
         <div><span className="muted">资格状态</span><strong className="stat-value">{data.qualification_status || '—'}</strong></div>
         <div><span className="muted">规则哈希</span><strong className="hash-value">{data.rules_sha256?.slice(0, 16) || '—'}</strong></div>
       </div>
+      {data.enable_block_reason ? <p className="form-error">{enableBlockReasonText(data.enable_block_reason)}；重新解析会产生新版本并重新认证。</p> : null}
+      {data.review?.status === 'needs_review' ? <>
+        <p className="form-error">冒烟复核提示：该版本消费质量疑有下降（不阻断启用，请人工确认）。</p>
+        {data.review.dimensions ? <pre className="preserve">{JSON.stringify(data.review.dimensions, null, 2)}</pre> : null}
+      </> : null}
       <div className="action-row">
         <Button onClick={() => void downloadSource()} disabled={data.built_in}>下载原始 DOCX</Button>
         <Button onClick={() => void downloadRules()}>下载规则 JSON</Button>
@@ -275,6 +297,9 @@ export function GuideDetailPage() {
 
     <Card>
       <h2>解析问题</h2>
+      {data.issues_detail?.error_code === 'GUIDE_VALIDATION_UNCLEAN'
+        ? <p className="form-error">解析结果未通过质量通道（确定性校验或独立验证有遗留），版本已标记为失败，不能启用。</p>
+        : null}
       {Object.keys(data.issues_detail || {}).length ? <pre className="preserve">{JSON.stringify(data.issues_detail, null, 2)}</pre> : <p className="muted">服务端没有记录解析问题。</p>}
     </Card>
   </>
