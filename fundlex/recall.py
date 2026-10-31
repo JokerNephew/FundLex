@@ -9703,25 +9703,29 @@ def append_site_ok(rule_id: str, span: Any, inspection: DocumentInspection,
             paragraph, _ = display_text(span.text)
             if not paragraph.rstrip().endswith("。"):
                 return False
+        # Plan stage accepted this paragraph by rebinding a closed-definition
+        # anchor to the end of its subdivision group (FL-D573 G03 p83->p84);
+        # the site check must stand behind its own rebind decision.  This
+        # acceptance must run BEFORE the definition-clause gate below: a
+        # subdivision paragraph ("在每一份额类别内…再分为…") carries no
+        # definition marker of its own and would otherwise be rejected there,
+        # making the acceptance dead code.
+        spans = list(inspection.paragraphs)
+        position = next((i for i, item in enumerate(spans) if item.location == span.location), -1)
+        if not allow_open_table_cell and any(
+                (end := _definition_group_continuation_end(anchor, inspection)) is not None
+                and end.location == span.location
+                for anchor in spans[max(0, position - 6):max(0, position)]):
+            return True
         # A model inventory target can point at the amendment trigger
         # "基金份额类别设置" or a split fragment.  Require a real definition clause
         # before accepting the site; otherwise the policy is appended twice (once to
         # the fragment by the model and once to the definition by the survey).
         if not _append_definition_anchor(rule_id, span, inspection):
             return False
-        spans = list(inspection.paragraphs)
-        position = next((i for i, item in enumerate(spans) if item.location == span.location), -1)
         if any((end := _split_definition_end(anchor, inspection)) is not None
                and end.location == span.location
                for anchor in spans[max(0, position - 6):max(0, position)]):
-            return True
-        if not allow_open_table_cell and any(
-                (end := _definition_group_continuation_end(anchor, inspection)) is not None
-                and end.location == span.location
-                for anchor in spans[max(0, position - 6):max(0, position)]):
-            # Plan stage accepted this paragraph by rebinding a closed-definition
-            # anchor to the end of its subdivision group (FL-D573 G03 p83->p84);
-            # the site check must stand behind its own rebind decision.
             return True
         paragraph, _ = display_text(span.text)
         if any(anchor in paragraph for anchor in _TARGET_ANCHORS[rule_id][0]):

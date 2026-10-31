@@ -1347,6 +1347,26 @@ def test_definition_group_continuation_rebinds_append_to_group_end():
     assert "DEFINITION_GROUP_APPEND_END" in target.reason
 
 
+def test_append_site_accepts_rebound_group_end_at_plan_stage_only():
+    """FL-D573 G03 p83->p84 受理: the subdivision paragraph the planner rebinds
+    to carries NO definition marker of its own, so the definition-clause gate
+    alone rejects it — the acceptance must run at plan stage before that gate
+    (an earlier revision placed it after the gate, dead code, and G03 fell
+    back to honest-incomplete instead of landing after the group)."""
+    inspection = Inspection([_D573_DEF, _D573_GROUP, _D573_NEW_TOPIC])
+    span = inspection.by_location("p1")
+    assert append_site_ok("G03", span, inspection,
+                          allow_open_table_cell=False) is True
+    # The audit/canonicalization stance (frozen shape) must NOT drift: the
+    # same span stays outside pre-plan append membership.
+    assert append_site_ok("G03", span, inspection) is False
+    # No boundless widening: a merely-following new-topic paragraph (the B01
+    # p148 pattern) is never accepted through this branch.
+    boundary = Inspection([_D573_DEF, _D573_NEW_TOPIC])
+    assert append_site_ok("G03", boundary.by_location("p1"), boundary,
+                          allow_open_table_cell=False) is False
+
+
 def test_definition_group_continuation_stops_at_group_boundary():
     """Negative: a follower that starts a new topic (代码/净值计算) does NOT
     continue the group — the anchor must stay on the definition itself, so
