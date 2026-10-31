@@ -7340,3 +7340,18 @@ H＝E×…
 - **处理（已实施）**：候选内修改 `tools/deploy/fundlex-publish.sh` check_api 重试 24 次×5s（~120s 预算），按规程同步 root 发布器并 drift-check OK 后实发成功（4377962，engine hash e555fee8）。顺手把 cmp-D562 冒烟 renice 保持其数据无损（事后恢复）。
 - **附带观察**：诊断中发现 /var/lib/fundlex 下 auth.db（0 字节，10-31 18:59 由某 root 进程创建）、fundlex.db、runs.sqlite3 自 10-16 起为 root:root 644；由于服务实际库文件是 runs.sqlite3 且生产 API 正常，属历史权限形态，不影响本轮交付，但 root 属主库文件对 fundlex 用户不可写，巡检留意。
 - **状态**：已解决（发布闭环）。
+
+## FL-D652 「该改未改」引擎系统性大修伞条目：六类病灶根因全景与五机制设计（2026-10-31，qa-recall-miss）
+
+- **发现**：产品负责人 2026-10-31 原话「合同修改还是会出现该修改但修改失败的地方……不希望再看到」，主线召集判定病灶全部有既有实例并定五机制（A 跨层对账闭环 / B 未认证变体分层处置 / C 计划输出完整性守护 / D 恢复层保守性 / E 交付门二态+可读报告），本线为执行主线，禁止规则级修补（用户会上传新指引）、quality fail-closed 方向不变、除模型轮外全确定性、FL 子池 652..659。
+- **根因全景（病灶→既有证据）**：①计划轮缺口：B17 G08 p292（FL-D588 根因=pair 不一致变体无授权→确定策略门 fail-closed，recall 线已规则级修复 `ensure_g08_variant_targets`，本线机制 B 推广）系**编辑失责计划**形态；②目标落不了执行：ORPHAN/TARGET_SOURCE_MISMATCH（如 G01 tbl，FL-D607 设计内噪声）属**呈现/对账未闭环**；③replay 已证被闸门消费失败：FL-D589 家族（B10/B14）——证明与消费闸门存在静默隔膜；④模型 not_applicable 回摆：FL-D643/650 族，确定性层只能诚实扣件+可读呈现；⑤恢复层造重复/超集目标反向阻断：B19 G04 R036/R037（FL-D588 两候选在册：satisfied 子集覆盖免造 / SUPERSEDED 排除出阻断）；⑥未认证变体保守跳过：与①同根。
+- **方法**：机制+编号耗子池 FL-D653（A）、FL-D654（E）、FL-D655（B）、FL-D656（D）、FL-D657（C）、FL-D658（综合复验）、FL-D659（留作现场新增）。新模块 `fundlex/reconciliation.py` 承载 A 的跨层对账器，报告新增 `miss_classification`（机器码+中英文本）。
+- **状态**：in_progress（设计与实施中，详见各子编号条目；状态文件 `/tmp/opencode/qa/status/qa-recall-miss.md`）。
+
+## FL-D653 机制 A：plan→edit→replay→Ledger 跨层对账器与 miss_classification（2026-10-31，qa-recall-miss）
+
+- **设计（已实施）**：新模块 `fundlex/reconciliation.py`，在最终 Ledger 投影后、交付门计算前运行（recall_pipeline 收口链 `unresolved[:] = final_unique` 后注入 `apply_reconciliation(report, obligation_ledger, unresolved)`）。对每条 applicability=TRUE 义务按其跨层证据分类：`CLOSED_REPLAY`（replay 已证）/`CLOSED_DETERMINISTIC`（确定性层闭合无需改）/ `MISS_TARGET_RESOLUTION`（定位失败）/ `MISS_MODEL_DEFERRAL`（模型 not_applicable 回摆，诚实扣件，绝不伪造闭合）/ `MISS_RECOVERY_GENERATED`（恢复层补造目标）/ `MISS_PLAN_GAP`（目标存在但计划未出编辑，B17 族）/ `MISS_EFFECT_UNPROVEN`（编辑已写但效果未证，B15 G14 族原形态）/ `MISS_REPLAY_GATE`（replay 已 PASS 台账未采纳的跨层隔膜，FL-D589/651 族）/ `MISS_REVIEW_PENDING`。每类带中英文本+stage_owner（首责层）。报告新增 `report["miss_classification"]`（schema fundlex-reconciliation-v1，summary.counts + 逐义务 entries）；open 义务行 unresolved 附 `miss` 字段供报告/导出渲染。
+- **阻断语义（fail-closed 收敛）**：台账开放原因缺省/仅通用占位，或与 replay PASS 正面矛盾（`CLAIM_REPLAY*` 因）→ 升显式 `RECONCILIATION_LAYER_MISMATCH` 阻断行（登记 `_ALWAYS_BLOCKING_CODES` + delivery `_FAILURE_REASONS` 中文「复核证明与义务台账结论不一致，已按未闭合阻断」）；台账带具名非 replay 竞争因（如审计证据行）→ 只富化不二次阻断，避免与 review-assisted 交付策略冲突（`test_audit_failure_persists_as_review_item` 语义锚定）。
+- **边界（已在代码注释声明）**：MISS 分类器不改 fault 归属确定性——MISS_EDIT_LOST 因公开义务 `edit_ids` 在投影时清空而不可判定，不发射该码（保守归入 MISS_EFFECT_UNPROVEN），类名保留占位。
+- **测试**：`tests/test_reconciliation.py` 13 例（九类×双语文本×升级语义×富化不重复×许可假不分类）；相关域回归 547+83+66+102 全绿（含 recall_pipeline/恢复/交付 e2e）。
+- **状态**：已实施（机制 A 完成；真实病例复验随 FL-D658 统一）。

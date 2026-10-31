@@ -6348,6 +6348,12 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
                 final_seen.add(key)
                 final_unique.append(item)
             unresolved[:] = final_unique
+            # FL-D653: reconcile plan/edit/replay/Ledger per obligation.  Every
+            # open obligation row gains its bilingual miss classification, and a
+            # replay proof the Ledger never adopted becomes an explicit blocking
+            # row instead of a silent cross-layer overwrite.
+            from .reconciliation import apply_reconciliation
+            apply_reconciliation(report, obligation_ledger, unresolved)
             report["unresolved"] = unresolved
             report["delivery_gate"] = {
                 "basis": "obligation_ledger",

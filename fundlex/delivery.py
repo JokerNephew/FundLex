@@ -35,6 +35,7 @@ _BUSINESS_REASONS = (
 # order is specific-first: a code such as RECALL_TARGET_STRUCTURE must win over
 # the generic TARGET marker.
 _FAILURE_REASONS = (
+    ("RECONCILIATION_LAYER_MISMATCH", "复核证明与义务台账结论不一致，已按未闭合阻断并留待人工复核"),
     ("EXISTING_REVISION_UNSUPPORTED", "文件包含未接受的修订痕迹，请先接受所有修订或上传清理版"),
     ("REVISION_PARAGRAPH_MERGE_UNSUPPORTED", "文件修订痕迹含跨段落合并删除，暂无法自动固化，请先在 Word 中接受或拒绝全部修订后重新上传"),
     ("REVISION_CELL_MERGE_UNSUPPORTED", "文件修订痕迹含不支持的表格单元格合并变更，请先在 Word 中接受或拒绝全部修订后重新上传"),
@@ -106,6 +107,9 @@ _COVERAGE_SUCCESS_STATES = {
 # New engine codes must never fall through to "complete with review items" merely
 # because an older classifier did not know them.
 _ALWAYS_BLOCKING_CODES = frozenset({
+    # FL-D653: a replay proof the Ledger never adopted.  The reconciliation
+    # layer upgrades it to an explicit row; it must block under every policy.
+    "RECONCILIATION_LAYER_MISMATCH",
     "EFFECT_SITE_UNPROVEN",
     "CLAIM_OPERATION_UNPROVEN",
     "CLAIM_OPERATION_NOT_PLANNED",
