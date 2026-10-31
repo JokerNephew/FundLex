@@ -164,6 +164,8 @@ def test_guide_version_compare_first_time_user_walkthrough(live, browser):
     context, page, page_errors = _page(browser)
     try:
         page.goto(live["base"] + "/#guide", wait_until="networkidle")
+        # 批1（FL-D739）指引页 tab 化：版本对比卡位于「版本对比与上传」分区，先切过去。
+        page.locator('[data-guide-page-tab="diff"]').click()
         # 版本对比卡在指引列表之后出现；两个下拉各两个自定义版本+内置，无 UUID 上屏。
         card = page.locator("#guide-diff-card")
         card.wait_for()

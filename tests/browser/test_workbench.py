@@ -560,7 +560,7 @@ def test_model_and_feishu_pages_are_separate(ui):
     page.locator('.sidebar [data-nav="settings"]').click()
     expect(page.locator('#feishu-connect-card')).to_be_visible()
     expect(page.locator('#model-settings-card')).to_be_hidden()
-    expect(page.locator('#breadcrumb')).to_contain_text('飞书绑定')
+    expect(page.locator('#breadcrumb')).to_contain_text('设置')
     assert not any('/api/settings/model' in url for url in requests)
 
 
@@ -742,9 +742,9 @@ def test_login_expiry_message_and_role_hash_guard(ui, monkeypatch):
     assert page.locator("#view-users").is_hidden()
     page.evaluate("location.hash='settings'")
     page.wait_for_timeout(100)
-    # V1 settings is now the member-facing Feishu page, not dev-only settings.
+    # V1 settings is now the member-facing settings centre (账户+飞书绑定), not dev-only settings.
     assert page.locator("#view-settings").is_visible()
-    assert page.locator('#breadcrumb [aria-current="page"]').inner_text() == '飞书绑定'
+    assert page.locator('#breadcrumb [aria-current="page"]').inner_text() == '设置'
     assert page.locator('#feishu-binding-code-btn').count() == 0
     page.locator('.sidebar [data-nav="overview"]').click()
     token = page.evaluate("sessionStorage.getItem('fundlex-auth-token')")

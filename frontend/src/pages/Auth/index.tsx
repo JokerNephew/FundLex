@@ -1,7 +1,19 @@
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import { Button, Card } from '../../components/ui'
 import { useAuthStore } from '../../stores/auth'
 import { assetPath } from '../../api/client'
+
+/** 开发身份模式下的 /login：明确告知无需登录，并给「以开发身份继续」入口（项9 批3，FL-D740）。 */
+export function DevIdentityLogin() {
+  const user = useAuthStore((state) => state.user)
+  return <div className="login-layout"><Card className="login-card">
+    <div className="login-brand"><img src={assetPath('/static/assets/gf-logo-mark.png')} alt="广发基金" /><strong>FundLex</strong></div>
+    <div className="page-heading"><div><h1>登录工作台</h1><p>合同修订工作台</p></div></div>
+    <p className="muted">当前环境为开发身份模式，无需账号密码{user?.display_name || user?.username ? `；已使用身份 ${user.display_name || user.username}` : ''}。</p>
+    <Link to="/tasks"><Button variant="primary">以开发身份继续</Button></Link>
+  </Card></div>
+}
 
 export function LoginPage() {
   const login = useAuthStore((state) => state.login); const register = useAuthStore((state) => state.register); const registrationOpen = useAuthStore((state) => state.capabilities?.registration_open)

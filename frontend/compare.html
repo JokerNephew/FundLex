@@ -121,7 +121,7 @@
 <svg>
 <use href="#i-settings"/>
 </svg>
-<span>飞书绑定</span>
+<span>设置</span>
 </button>
 <button class="nav-btn" data-nav="users" id="nav-users" hidden>
 <svg>
@@ -129,7 +129,7 @@
 </svg>
 <span>用户管理</span>
 </button>
-<div class="sidebar-note">报告与诊断文件不作为最终合同</div>
+<div class="sidebar-note">FundLex 合同修订工作台</div>
 </nav>
   <main class="main">
 <div class="frame">
@@ -144,7 +144,7 @@
     <button type="button" class="card workspace-metric" data-workspace-status="attention"><span>需要处理的任务</span><strong id="workspace-attention">—</strong></button>
     <button type="button" class="card workspace-metric" data-workspace-status="completed"><span>近期完成的任务</span><strong id="workspace-completed">—</strong></button>
   </div>
-  <div class="card card-pad workspace-task-card"><div class="section-title"><h2>我的任务</h2><button class="btn btn-sm" id="workspace-refresh" type="button">刷新</button></div>
+  <div class="card card-pad workspace-task-card"><div class="section-title"><div><h2>全部任务</h2><small>汇总合同修改、合同比对、指引生成三类任务；各业务专属队列见对应页面</small></div><button class="btn btn-sm" id="workspace-refresh" type="button">刷新</button></div>
     <div class="business-tabs" role="group" aria-label="任务类型"><button type="button" class="is-active" data-workspace-kind="">全部</button><button type="button" data-workspace-kind="revision">修改</button><button type="button" data-workspace-kind="compare">比对</button><button type="button" data-workspace-kind="generation">生成</button></div>
     <div class="toolbar workspace-toolbar"><div class="searchbox"><input id="workspace-search" type="search" placeholder="搜索任务名称" aria-label="搜索全部业务任务"></div><select class="control-select" id="workspace-status" aria-label="任务情况"><option value="">全部任务</option><option value="active">进行中</option><option value="attention">需要处理</option><option value="completed">近期完成</option></select><label class="workspace-date">创建日期<input type="text" inputmode="numeric" maxlength="10" placeholder="YYYY-MM-DD" pattern="\d{4}-\d{2}-\d{2}" id="workspace-date-from" aria-label="创建起始日期，格式 YYYY-MM-DD"></label><label class="workspace-date">至<input type="text" inputmode="numeric" maxlength="10" placeholder="YYYY-MM-DD" pattern="\d{4}-\d{2}-\d{2}" id="workspace-date-to" aria-label="创建结束日期，格式 YYYY-MM-DD"></label><select class="control-select" id="workspace-sort" aria-label="任务排序"><option value="updated_desc">最近更新</option><option value="created_desc">最近创建</option><option value="name">任务名称</option></select></div>
     <div id="workspace-state" class="subnote" role="status" aria-live="polite"></div><div class="table-wrap"><table class="table workspace-table"><thead><tr><th>任务名称</th><th>业务</th><th>规模</th><th>当前进展</th><th>待办与结果提示</th><th>创建时间</th><th></th></tr></thead><tbody id="workspace-task-rows"></tbody></table></div><div class="pagination" id="workspace-pagination"></div>
@@ -200,6 +200,7 @@
 </div>
 <div class="split task-overview">
 <div class="card card-pad">
+<div class="section-title"><div><h2>修改任务</h2><small>仅合同修改任务；全部三类业务任务见 <a href="#workspace" data-nav="workspace">工作台 · 全部任务</a></small></div></div>
 <div class="toolbar">
 <div class="searchbox">
 <input id="task-search" type="search" placeholder="搜索任务名称" aria-label="搜索任务名称">
@@ -766,6 +767,12 @@
 <section class="section" id="view-document" aria-label="合同结果"><div id="document-host"></div></section>
     <section class="section" id="view-guide" aria-label="我的指引">
 <div class="page-actions"><p class="subnote">管理自己的指引版本、启停规则组，并决定新建任务使用哪一版。生成的候选指引需经过导入与核验，不能自动替换当前版本。</p><button class="btn" type="button" data-nav="generation">前往指引生成</button></div>
+<div class="guide-diff-tabs guide-page-tabs" role="tablist" aria-label="指引管理分区">
+<button type="button" role="tab" data-guide-page-tab="versions" class="is-active" aria-selected="true">指引版本</button>
+<button type="button" role="tab" data-guide-page-tab="diff" aria-selected="false">版本对比与上传</button>
+<button type="button" role="tab" data-guide-page-tab="rules" aria-selected="false">规则组启停</button>
+</div>
+<div data-guide-pane="versions">
       <div class="card card-pad">
 <div class="section-title">
 <div class="batch-title">
@@ -806,6 +813,8 @@
 <p class="subnote" id="guide-list-state" aria-live="polite">
 </p>
 </div>
+</div>
+<div data-guide-pane="diff" hidden>
       <div class="card card-pad u-mt-4" id="guide-diff-card">
 <div class="section-title">
 <h2>版本对比</h2>
@@ -839,6 +848,14 @@
 </div>
 <p class="subnote" id="guide-upload-message" aria-live="polite">解析失败可在列表中查看问题并重新解析。</p>
 </div>
+</div>
+<div data-guide-pane="rules" hidden>
+      <div class="card card-pad u-mt-4">
+<div class="section-title"><h2>规则组启停</h2><small>选择一个已解析版本，查看并启停它的规则组；只影响之后新建的任务</small></div>
+<div class="guide-diff-selects"><label>指引版本<select id="guide-rules-version" class="control-select" aria-label="选择要配置规则组的指引版本"></select></label></div>
+<div id="guide-rules-inline" aria-live="polite"><p class="subnote">选择一个版本后在此管理规则组。</p></div>
+</div>
+</div>
     </section>
     <section class="section" id="view-models" aria-label="模型配置">
 <div class="card card-pad u-mb-4" id="model-settings-card">
@@ -846,7 +863,13 @@
 <div id="model-settings-body" class="subnote">正在读取模型配置…</div>
 </div>
 </section>
-    <section class="section" id="view-settings" aria-label="飞书绑定">
+    <section class="section" id="view-settings" aria-label="设置">
+<div class="card card-pad">
+<div class="section-title"><h2>账户</h2><small>当前登录账号与密码管理</small></div>
+<div class="settings-account-row"><span>当前账号 <strong id="settings-current-user">—</strong></span><button class="btn btn-sm" type="button" data-action="open-password">修改密码</button></div>
+<p class="footnote">报告与诊断文件不作为最终合同。</p>
+</div>
+<div class="section-title u-mt-4"><h2>飞书绑定</h2><small>绑定后可直接在飞书私聊机器人发送合同、提交任务</small></div>
 <div class="feishu-binding-layout">
 <div class="card feishu-connect-card" id="feishu-connect-card" data-state="loading">
 <div class="feishu-status-row"><span class="feishu-app-icon" aria-hidden="true">↗</span><div><h2>连接你的飞书账号</h2><p>绑定到当前 FundLex 账号 <strong id="feishu-current-user">—</strong></p></div><span class="feishu-status-badge" id="feishu-binding-badge">读取中</span></div>

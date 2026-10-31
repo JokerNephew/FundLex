@@ -3,7 +3,7 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { Button, Spinner } from '../components/ui'
 import { AppShell } from '../components/layout'
 import { useAuthStore } from '../stores/auth'
-import { LoginPage } from '../pages/Auth'
+import { DevIdentityLogin, LoginPage } from '../pages/Auth'
 import { DocumentDetailPage } from '../pages/DocumentDetail/DocumentDetailPage'
 import { GuidesPage, GuideDetailPage } from '../pages/Guides'
 import { NewTaskPage } from '../pages/NewTask'
@@ -23,7 +23,7 @@ function AppRoutes() {
   if (!auth.ready) return <div className="login-layout"><Spinner label="连接服务" /></div>
   if (auth.error) return <div className="login-layout"><div className="fundlex-error" role="alert"><strong>暂时无法连接服务</strong><p>{auth.error instanceof Error ? auth.error.message : '服务初始化失败，请稍后重试。'}</p><Button type="button" onClick={() => void auth.load()}>重试</Button></div></div>
   if (auth.capabilities?.login_required && !auth.user) return <LoginPage />
-  return <Routes><Route element={<AppShell />}>
+  return <Routes><Route path="/login" element={auth.capabilities?.login_required ? <LoginPage /> : <DevIdentityLogin />} /><Route element={<AppShell />}>
     <Route path="/" element={<Navigate to="/tasks" replace />} />
     <Route path="/workspace" element={<Navigate to="/tasks" replace />} />
     <Route path="/tasks" element={<TasksPage />} />
