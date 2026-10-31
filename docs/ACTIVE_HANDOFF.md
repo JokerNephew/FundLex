@@ -1554,7 +1554,7 @@ dev20 v2 闭环：修复循环直到 §7 门槛（无已确证严重错误、无
 - 状态落 `/tmp/opencode/qa/status/qa-feat-recall.md`。
 
 ## 分支/HEAD
-- 分支 `qa-feat-recall-20261031` @ `56105ce`（merge qa/full-audit-20261031@4d3edf4，含 feat-guide **FL-D651** B15 修复链 f4e304a 等 8 提交；DETAIL 冲突按主线置前解，FL-D588/589 区块手工保全）
+- 分支 `qa-feat-recall-20261031` @ `55c562b`（merge qa/full-audit-20261031@4d3edf4，含 feat-guide **FL-D651** B15 修复链 f4e304a 等 8 提交；DETAIL 冲突按主线置前解，FL-D588/589 区块手工保全）
 - B17 修复链：e1ce9dc（recall.py `_g08_authorized_variant_sentences`+策略门授权挂接+4 测试）；全量回归 **2459 passed**（qa-feat-recall-full-freeze-fl588.log）；合并树聚焦 126 绿。
 - 链：d55702b（loop-2 freeze=自修 f2a16a0 + 主线 af15149 + guide 修复批）→ e3d6135（FL-D685 措辞更正）→ 1a530f4（handoff）→ **b10d504（FL-D589 修复）**。
 - loop-2 正式目录基于 d55702b；loop-3 需新 freeze（新 HEAD，含 b10d504）。
@@ -1567,9 +1567,9 @@ dev20 v2 闭环：修复循环直到 §7 门槛（无已确证严重错误、无
 - FL-D685 回复 e3d6135；FL-D688 addendum 已写入 loop-2 compare（var/ 不入库）；FL-D584/585/586/587/588/589 条目在册。
 
 ## 在途
-- 无后台进程。B17 修复全链路收口（e1ce9dc + 2459 回归绿 + 合并树 126 聚焦绿）；已 merge qa/full-audit-20261031（FL-D651 in tree）。
-- **等主线 loop-3 冻结令**（B15 FL-D651 单 + B17 FL-D588 单两单已齐并报验）。
-- B19 修复候选在册待专单（FL-D690..699 段可用）。
+- 无后台进程。**loop-3（de18ec1）已跑完评完**：340/390(87.2%)、16/20 actual、false_complete 2、wrong 7 → 门槛 FAIL。账本第 5 段 $0.5994/517c/116min 已记。
+- 归因入册：**FL-D690**（B02 真回归：G15 摘要站 audit-satisfied vs RESIDUAL_CONFIRMED 互斥→无产物）；**FL-D691**（wrong:7 全为量具类枚举折叠/币种类名严苛，实证义务在文；B15 T001 真未执行）。compare addendum 已写。
+- 等主线裁决：FL-D691 量具归一化（可零成本纯读器重评 loop-3）+ FL-D690 处置 + loop-4 策略。号段已用 690/691，余 692-699。
 ## 下一步（可执行顺序）
 1. 已向主线报 loop-2 指标与残余归属（本次回复）。
 2. 回归绿 → 提交 FL-D588 代码 → 报主线。等 feat-guide B15 单与 B19 修复专单齐 → 新 freeze 跑 loop-3。编号 580-589 已用尽，已向主线请新段。
