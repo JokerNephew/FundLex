@@ -7,6 +7,7 @@
 - 项3 后端已实施（FL-D730）：rule_settings 增 requirement/operations 中文摘要+回退，`tests/test_user_configuration.py` 7 绿。
 - 施工图：V1 worker ivRkf1jH（750-759）/ V2 worker 81FirpsQ（760-769）按规格实施三项；前端主线验收=每规格末节清单（用户视角走查、Playwright 并列截图、锚点、回归绿）。
 - 中断续接：先读本断点与状态文件第三轮节，再按 spec 推进；勿动第二轮既有锚点。
+- **验收收口（2026-11-01）**：V2 merge `45f5570` / V1 patch `5720bad` / 后端规格 `69779d8` 三笔已并入，HEAD `948834b`。验收=合并树真实 Chromium 走查 32/32（`/tmp/opencode/qa/accept-frontend-s2.py`，截图 `accept-s2/`）+ 浏览器整批全绿（两失败均 root-cause：一负载抖动、一 FL-D733 过期断言已修）+ vitest24/tsc/build/pytest14 全绿。FL-D730/731/732=已解决，FL-D733 已登记。待主线裁定合入。
 
 
 ## 2026-10-31 qa-frontend：前端全面整改（本 worktree 断点）
