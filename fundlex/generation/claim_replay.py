@@ -2375,16 +2375,23 @@ def replay_claims(edits: Sequence[Mapping[str, Any]], before_inspection: Any,
                     str(getattr(span, "text", ""))
                     for span in getattr(before_inspection, "paragraphs", ())))
                 if old_wording and old_wording not in source_body:
+                    # FL-D651: bind the absence evidence to EVERY shared site, not
+                    # only the first.  The coverage ledger projects per site; a
+                    # proof tied to shared_sites[0] left the sibling business site
+                    # without evidence and invented FINAL_COVERAGE_UNRESOLVED
+                    # (B15 dev20 loop-2: G14:3 closed NOT_REQUIRED at p167 but the
+                    # single evidence row sat on p166 → site_evidence_missing).
                     evidence = [{"rule_id": record.spec.rule_id,
                                  "operation_id": record.spec.operation_id,
                                  "obligation_id": record.obligation_id,
                                  "proof_kind": "alternative_wording_absent",
-                                 "site_id": shared_sites[0]["location"],
-                                 "location": shared_sites[0]["location"],
+                                 "site_id": site["location"],
+                                 "location": site["location"],
                                  "searched_literals": [str(record.spec.old_text or "")],
                                  "match_count": 0,
                                  "document_sha256": str(getattr(
-                                     before_inspection, "source_sha256", ""))}]
+                                     before_inspection, "source_sha256", ""))}
+                                for site in shared_sites]
                     obligation_state[record.obligation_id] = {
                         "state": "PASS", "artifact_status": "NOT_REQUIRED",
                         "rule_id": record.spec.rule_id,

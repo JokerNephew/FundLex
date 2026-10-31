@@ -6979,9 +6979,10 @@ H＝E×…
 - **发现日期**：2026-10-31，wave1 归因。B15 标签 T007 G14 replace 目标为 p167「在基金促销活动期间，基金管理人可以按中国证监会要求履行必要手续后，对投资者适当调整基金申购费率、赎回费率、销售服务费率和转换费率。」（评分 kept：old wording still in declared site）。引擎实际改了 p166「基金管理人可以在法律法规和本基金合同规定范围内调整申购费率和赎回费率。」（无标签依据的额外修改）。
 - **根因方向**：指引 G14 模板 old_text 均为「基金管理人可以适当调低基金申购费率…」无促销活动前缀变体；模型 survey 将 p166 保留权利句误作 G14 站点，真正应改的 p167 前缀变体反而漏定位。属「示例句当应改目标 + 应改但难定位变体」同簇。
 - **修复方向（未实施）**：G14 匹配核心应锚定「适当调低/调整 + 费率清单」语义并容忍促销活动前缀；保留权利句（「可以在…范围内调整…费率」非促销语境）不得命中。可归入指引匹配变体表或 engine_scope。
-- **状态**：修复链已实施（`08cb0e6`/`e73ade8`/`9250220`/`9a230c6`/`b2561a2`），B15 verify4 落地正确、verify5 端到端复验在途（`/tmp/opencode/qa-findings-run/b15-fl606607-verify5/`）。
+- **状态**：已解决（已验证，B15 verify5 端到端复验通过；修复链 `08cb0e6`→`e73ade8`→`9250220`→`9a230c6`→`b2561a2`，待主线统一 merge+独立复核）。
 - **变更记录**：2026-10-31 新增。
   - 2026-10-31（guide 线，修复链）：①`08cb0e6` 指引 6 op 补促销 variants×3（认证 envelope 重算，29 行手术 diff，document sha `5335e401…`）+ `target_site_ok('G14')` 守卫（规定范围内句硬拒）。B15 verify1 暴露残余：p166 经 `SITE_GUARD_WAIVED_BY_APPROVAL` 双豁免逃逸、p167 因 attribution 只匹配 per-op old_text 而 TARGET_SOURCE_MISMATCH。②`e73ade8` promo attribution 回退（rule variants 证站点→携带全部适用 ops）+ `g14_site_guard_veto`（两个批准豁免点硬拒）+ G14 生成器修复（op 按 condition 过滤播种、动词收敛「适当调整→适当调低」、allowed 缺失时规范尾收敛）。verify2/3 暴露：policy gate 只认 op-level variants → LOST_PROTECTED_LITERAL。③`9a230c6` `_validate_routed_policy` 授权并入 rule-level variants。verify4：p166 拒、p167 落地且与标签逐字一致（`tier1_template` [108:139]「对投资者适当调低基金申购费率和销售服务费率」，audit 通过）——但 claim replay「own required wording」要求 canonical new_text 逐字出现 → CLAIM_OPERATION_EFFECT_MISSING。④`b2561a2` G14 生成器抽为 `_g14_tier1_result`，replay（仿 G09）复算同 slice+facts 作自身效力证明；sibling 借词检查排除对本产品 condition=FALSE 的 ops。793 passed。
+  - 2026-10-31（guide 线，**verify5 终验**，`b2561a2`，`/tmp/opencode/qa-findings-run/b15-fl606607-verify5/`）：B15 真实复跑——G14 p167 planned+落地「在基金促销活动期间，基金管理人可以按中国证监会要求履行必要手续后，对投资者适当调低基金申购费率和销售服务费率。」（与冻结标签 T007 内容一致）；p166 保留权利句全链未命中（train 逃逸消失）；claim replay **G14:B2:O1/O2/O3 全部 PASS**（VERIFIED_ABSENT×2/EXPECTED_EFFECT_PRESENT），CLAIM_OPERATION_EFFECT_MISSING 与 SITE_GUARD_WAIVED_BY_APPROVAL 逃逸双双消除。本条残留归零。
 
 ## FL-D607 B15 G01 在无释义定义条款时向表格格内追加豁免条款（指引诱导，待修）（2026-10-31，guide 线）
 
@@ -6993,6 +6994,7 @@ H＝E×…
   - 2026-10-31（guide 线，第一轮 `015c07a`）：plan 姿态拒 tbl 锚点（审计姿态冻结，`target_site_ok` 对 G01 tbl 锚点硬拒）+ `missing_body_append_site_g01` 确定性闭合通道（释义定义仅存于表格 → applicability=FALSE 记 tbl 证据）。B15 verify1 暴露前置缺漏：闭合前检查被仍存活的 doomed tbl target 挡住，未触发。
   - 2026-10-31（guide 线，第二轮 `e73ade8` 并入）：存活 target 前置忽略 tbl 锚定目标后 verify2 G01 OPEN 义务消除（剩 `orphan_evidence` TARGET_SOURCE_MISMATCH 账本噪声，非义务）。
   - 2026-10-31（guide 线，第三轮 `9250220` 并入）：闭合逻辑抽为 `_apply_deterministic_site_closures` 并在首个 plan 完成后以 TARGET_SOURCE_MISMATCH 台账为准复跑（同轮闭合 B15 G08 p161 同类前置问题）。verify4：G01 unresolved 义务为零，delivery 残留不归因本条。
+  - 2026-10-31（guide 线，dev20 loop-2 复核，回应主线派单②）：loop-2（`d55702b`）B15 `tbl0/r55/c1/p0` 仍现 `unresolved TARGET_SOURCE_MISMATCH`——这与 verify4/verify5 形状**完全一致，是本条设计的诚实 fail-closed 处置**（plan 拒 tbl 锚点 + 义务确定性闭合），不是 anchor 调整失效：G01 义务在 obligations 层已 FALSE 闭合、**无 OPEN_OBLIGATION**，该行只是 plan 台账/孤儿证据噪声，不参与交付门禁（loop-2 阻断由 FL-D650 G09 与 FL-D651 G14:3 构成，均已各自归因）。如需消噪（把 tbl 台胀行的呈现降级为 evidence-only 而不再以 target unresolved 形态出现），属呈现层打磨，单独立项而非本条复发。
 
 ## FL-D608 B05 G01/G03、B15 G03：追加策略在声明站点缺失（同文双站点追加疑似被去重抑制）（待归因）（2026-10-31，guide 线）
 
@@ -7138,6 +7140,15 @@ H＝E×…
 - **状态**：open（新发现，真实双跑证据在案；FL-D643 取号后跨线候补池指针请主线合并时更新为 FL-D644）。
 - **变更记录**：2026-10-31 新增（guide 线；证据 verify4 score.json detail=old wording still in its declared site、edits.json target state=absent；对照 smoke-requal-v2 score G08 completed）。
 
+## FL-D651 dev20 loop-2 B15 G14:3 p167 site_evidence_missing：ONE_OF alternative-absent 证据只绑首个共享站点（2026-10-31，guide 线）
+
+- **发现日期**：2026-10-31，主线验收后 dev20 loop-2（冻结 `d55702b`，含本线 FL-D606 全五 pass）B15 仍 incomplete 残余之一，主线派单取证。
+- **问题与影响**：B15 loop-2 模型给 p167 目标的是**短语切片**（[108:139]，与 verify4 同形），FL-D606 promo attribution（`e73ade8`）按设计把 G14:3/4/5 三 op 全部绑定到该目标。claim replay 中 G14:B2:O1（op 3，canonical「…申购费率和赎回费率。」，源文档中真实不存在）先按站点评估失败（p166 绑定站点 quote 不匹配 → unproven 拖垮聚合），落入 `one_of_alternative_absent` 兜底判 PASS NOT_REQUIRED——但兜底证据行**只写 shared_sites[0]（p166）**。`build_coverage_view` 是 site 级投影：p167 无证据 → `site_evidence_missing` → FINAL_COVERAGE_UNRESOLVED → 运行时账本覆写 FAIL → delivery incomplete。与 FL-D606 已验证面无关（replay 义务本身全 PASS），属**证据绑定粒度缺陷**。
+- **处理方法（已实施并验证）**：`f4e304a`——兜底按文档级事实（old wording 全文不存在）对**每个共享站点**各写一条 `alternative_wording_absent` 证据行。确定性验证三重：①用 loop-2 自己 report 投影回放——生产形状（单点证据）确造 p166/p167 双 UNRESOLVED，固定形状（双点证据）双站全 ALREADY_SATISFIED；②`tests/test_generation_coverage.py` 新 fixture 双向锁定（新形状闭合/旧形状拒推断第二站）；③claim/effect/coverage/recall/guide 扩展面 590 passed。
+- **真实单合同复验（2026-10-31，`f4e304a`+docs，B15，`/tmp/opencode/qa-findings-run/b15-fl651-verify/`，score sha `4aa64d75…`）**：模型再次选 loop-2 同形切片（[108:139]，replacement「对投资者适当调低基金申购费率和销售服务费率」），本轮 O1/O2/O3 **全部 PASS EXPECTED_EFFECT_PRESENT**（站点播种差异使兜底未触发，三种已见形态——整句/切片+兜底/切片不兜底——现均闭合）；**FINAL_COVERAGE_UNRESOLVED 与 site_evidence_missing 双双消除**，G14 零 unresolved。整份 B15 仅存 G09 OPEN（FL-D650 第四次回摆）与 G01 tbl 台账噪声 ⇒ delivery 如实 incomplete（与归因一致，G14/G08/G01 均非开放因子）。
+- **状态**：已解决（已验证：投影回放 + fixture 双向锁定 + 扩展面 590 passed + B15 真实复验；待主线复核并入）。
+- **变更记录**：2026-10-31 新增（guide 线；证据 `qa-wave1-dev-v2-20261031-d55702b/full-dev/015-*/report.json` 的 O1 NOT_REQUIRED site_effects=[] evidence@p166-only + 投影回放对照 + 离线 replay 驱动 `/tmp/opencode/qa-findings-run/b15-fl651-replay/`）。
+
 ## FL-D650 B15 G09（赎回金额计算 p159）真实标签目标未被 plan 覆盖：audit missed-target 发现但未能闭环（2026-10-31，guide 线）
 
 - **编号注记**：本条原登记为 FL-D646（commit `b68417f`），与第二波标签线抢先使用的 FL-D646 撞号，先改派 FL-D648；FL-D648/649 又被 guide-history 线抢先并入主线，2026-10-31 按主线终裁最终改派 **FL-D650**。此后本线固定子池 **FL-D650..659**，不再广播抢号（主线 DETAIL 尾部已立固定子池注记）。
@@ -7148,6 +7159,9 @@ H＝E×…
 - **状态**：open（定性为模型不确定性回摆，FL-D643 同族观察对象；非修复阻塞项）。
 - **变更记录**：2026-10-31 新增（guide 线；证据 report.json unresolved 三项 G09 + edits.json 无 G09 target 落地）。
   - 2026-10-31（guide 线，归因证据补记）：verify2（`e73ade8`）G09 p159 **planned** 且 claim replay `G09:B1:O1` PASS（bounded splice 落地「减去…净值计算…扣除或加上相应的费用」）；verify4（`b2561a2`）同一模型同一站点翻转为 not_applicable（「与规则所针对的原文不一致，无精确替换目标」），replay 转 OPEN `CLAIM_OPERATION_UNPROVEN`。**诊断**：同一指引版本、同一站点在 planned/PASS 与 not_applicable 之间回摆，属模型侧不确定性（与 FL-D643 G08 不确定性同族），非确定性门诊缺失——本批确定性修复（FL-D606/607）不改此面。保持 open，随 FL-D643 观察族跟踪；不扩为门禁。
+  - 2026-10-31（guide 线，verify5 补证，HEAD `b2561a2`）：B15 verify5（`/tmp/opencode/qa-findings-run/b15-fl606607-verify5/`）G09 再度 not_applicable（「无“当日对应份额类别…”的原文可替换」），replay `G09:B1:O1` OPEN `CLAIM_OPERATION_UNPROVEN`（verified site missing）。回摆在 verify2（planned+PASS）→ verify4/verify5（not_applicable+OPEN）间 1:2，回摆定性坐实。**B15 delivery incomplete 归因（原 FL-D576 观察方向降级落案）**：v2 预跑 15 目标全 no-artifact 的链路病因已由本批确定性修复全部解除（FL-D606 G14 全闭合✅、FL-D607/FL-D601-FL-D602 家族 G01/G08 义务闭合✅），verify5 时仅存本条 G09 OPEN 一项 → delivery 如实 incomplete（**非 false_complete**，行为方向正确）；v2 预跑无产物的 15 目标并非同因。本条 open 即 B15 虚假完成阻断供给的现存唯一来源。
+  - 2026-10-31（guide 线，loop-2 复证）：dev20 loop-2（`d55702b`）B15 G09 再度 not_applicable + `CLAIM_REPLAY_FAILED`/verified site missing OPEN（第三次回摆，与 FL-D651 修复无关、非同源）。定性维持：模型侧不确定性，随 FL-D643 族观察，不扩门禁。
+
 ## FL-D644 FL-D608 第二层闸门放行凭据可被模型谎称（2026-10-31，主线复核）
 
 - **发现**：`51fb45b` 的 scope 闸门守护以 `target.reason` 含 "APPEND_END" 子串为放行凭据（recall_pipeline.py:1254-1265），而 `Target.reason` 在 inventory_window 直接取自模型输出（recall.py:1765）；模型对 G01/G03 needs_edit target 谎称 "APPEND_END" 即可跳过 `_target_scope_ok`，与 FL-D573「自述证据不扩权」方向相反。越界面限于「自带定义锚点的组外段」（append_site_ok 锚点守卫仍在），属有界风险。
@@ -7176,7 +7190,7 @@ H＝E×…
 - **处理**：状态文件已勘正并保留误记说明；教训：冻结 sha 在最终写盘后重新计算再登记，不复用过程值。
 - **状态**：已解决（2026-10-31 验证： verifier 报告 selection_sha256、selection 文件、labels 抽样三链一致）。
 
-> **FL-D640..649 全部已使用**（640 B13、641/642 主线复核、643 feat-guide、644/645 主线、646/647 标签线、648/649 guide-history；feat-guide 撞号条目改派 FL-D650）。**自 2026-10-31 起设固定子池杜绝再撞**：qa-feat-guide FL-D650..659；qa-f2-guide-history FL-D660..669；第二波标签线 FL-D670..679；主线及主线 reviewer FL-D680..689；其余读尾部顺延者 ≥FL-D690。
+> **FL-D640..649 全部已使用**（640 B13、641/642 主线复核、643 feat-guide、644/645 主线、646/647 标签线、648/649 guide-history；feat-guide 撞号条目改派 FL-D650）。**自 2026-10-31 起设固定子池杜绝再撞**：qa-feat-guide FL-D650..659；qa-f2-guide-history FL-D660..669；第二波标签线 FL-D670..679；主线及主线 reviewer FL-D680..689；**qa-feat-recall 原段 580-589 用尽，新派 FL-D690..699**（2026-10-31）；其余读尾部顺延者 ≥FL-D700。
 ## FL-D648 指引重解析粒度合并破坏操作可执行性：确定性 clean 放行、召回断崖 -70%（2026-10-31，qa-f2-guide-history 线）
 
 - **发现日期**：2026-10-31，本线真实模型冒烟（生产路径：上传→worker 解析→启用→TestClient 任务→Worker 真跑，账本 /tmp/opencode/guide-{channel,v2}-ledger.sqlite、/tmp/opencode/recall-smoke-{builtin,custom15}.sqlite）。
@@ -7267,7 +7281,7 @@ H＝E×…
 
 - **发现**：B17（v1 false_complete → v2 诚实 incomplete，交付层面改善）G08@p292：`RECALL_POLICY_COMPONENTS_UNVERIFIED` → 计划未成形（`CLAIM_OPERATION_NOT_PLANNED`），审计如实呈现「AFTER 与 BEFORE 完全一致、未加入 A 类/直销义务句」。B19 G04@p160：`RECALL_TARGET_UNRESOLVED`（v1 次级阻断换码依旧，p161 站点 effect 未证）。
 - **归因线索**：B17 G08 组件校验与 G08 路由/facts（直销组件组）认证相关；B19 G04 为定位级未解。两者均非本轮 v2 回归（v1 同案未交付），列修复循环后续轮次处理；不与 guide 线 FL-D604/605（暂缓召回面）冲突。
-- **状态**：B17 已修复待真实复验与全量回归收口；B19 定性完成待修复派单（见变更记录 2026-10-31 主线 FL-D588 派单专项）。
+- **状态**：B17 已修复并收口——真实复验 PASS（G08 planned@p292/replay PASS/unresolved=0/complete，$0.029/28c/281s）+ 全量回归 2459 绿 + 代码提交 e1ce9dc；B19 定性完成待修复专单（候选两路在册）。
 - **变更记录**：2026-10-31 新增。2026-10-31 loop-2（d55702b）补充实证：B17 G08 replay `FAIL/MISSING_EFFECT`（sites=[p292]，`edit_ids=[]`）——FL-D587 的 `ensure_g08_variant_targets` 已把变体残目标 T009 挂账（目标存在），但**生成侧从未为该站计划 edit**（`CLAIM_OPERATION_NOT_PLANNED`）；before_quote 为「A类人民币/A类美元现汇份额申购费率由管理人决定」变体措辞，未匹配 G08 直销组件组期望 → 属召回后**计划生成缺口**而非记账层：修复方向=G08 变体措辞进入 facts/组件认证或计划器对该目标类强制成稿。同日 B19 loop-2 实证：G04 R036/R037 两 needs_edit 目标（p160）始终 `RECALL_TARGET_UNRESOLVED`，p160/p161 站点 `CLAIM_OPERATION_NOT_PLANNED`、审计 `AUDIT_VERDICT_MISSING`——与 B17 同构：**已挂账 needs_edit 目标未被计划器服务**；两案并查计划器目标消费上限/分组容量（loop-2 全部 20 案中 12 案 edits 恰为 16 宗，代码内未见显式数量上限——疑为计划侧模型输出在长合同下截断于 ~16 宗，与 FL-D688 MODEL_OUTPUT_TRUNCATED 域同源，下一轮与计划调用输出容量一并核查）。
   - **主线 FL-D588 派单专项（2026-10-31 晚）**：①**截断假设排除**——loop-2 账本 `recall_inventory` 全波共 7 次 `finish_reason=length`，但 B17/B19 两案 `report.model.events` 全部调用（inventory×4/×2、audit×17 等）均 `finish_reason=stop`、无 TRUNCATED 错误码；「12/20 案 edits=16」为聚类巧合的可能性上升，截断致计划缺目标**不成立**。②B17 根因坐实为**确定性策略门 fail-closed**：目标 T009 载体句为 G08 旧句族的带类限定变体（A类人民币/A类美元现汇…申购费率由管理人决定…），guide 对 G08 无任何 `old_text_variants` → `_validate_routed_policy` 授权边界不含该句 → `explain_changes` 判限定词移除为 UNEXPLAINED_HARD（无 finding code，verdict=FAIL，与 loop-2 台账 `findings:["FAIL"]` 吻合）→ 计划层 MARK_UNRESOLVED。**修复**：新增 `_g08_authorized_variant_sentences`（与召回侧 `ensure_g08_variant_targets` 同一边界谓词：anchor=申购费率由基金管理人决定 + 招募说明书 + 列示、禁赎回/转换/公告等杂质、≥12 字），在 `_validate_routed_policy` 对 G08 把源 span 内该族句追加为授权 remove_patterns；fail-closed 边界外句（管理费率句等）仍拒。新测试 `tests/test_fl_d588_g08_variant_authorization.py` 4 项（认证器边界/B17 通过/过度授权守卫/mutation：绕过 hook 即恢复 UNEXPLAINED_HARD），聚焦面 283 绿；真实复验 B17 + 全量回归在途。③B19 定性为**另一独立机制**：恢复层 `recovery_missing_operation:G04:1` 造出 R036/R037 复合目标——R036 被判 `TARGET_SOURCE_MISMATCH`（`SUPERSEDED_BY_OPERATION_SUBSET_TARGETS` 只消化其一），R037 **完全无台账行**（静默缺席计划）→ 以 OPEN_OBLIGATION `RECALL_TARGET_UNRESOLVED` + coverage `unresolved:target` 同时拖住 G04:0/G04:1 两义务，尽管子集目标 T005/T006 已被召回判 satisfied（「现有分组已符合实际」）。即：**满意的子集目标不能闭合义务，悬挂的恢复重复目标反而阻断义务**——属恢复去重/义务闭口子系统，修复候选：(a) 恢复造目标前检查操作已被 satisfied 子集覆盖则免造；(b) 覆盖视图将被 SUPERSEDED 的重复目标排除出义务阻断集。建议下一轮专单。④B17 修复真实复验**通过**（2026-10-31，`/tmp/opencode/qa/reverify/b17`）：G08 台账 planned@p292、replay PASS/SEMANTIC_VERIFIED、unresolved=0、delivery complete；替换文本为标准三类政策句且与释义段既有直销表述一致；$0.029/28 calls/281s 入账本 reverify 段；本轮 edits=15 再证「16 聚类」非截断上限。待 2454 全量回归绿后提交代码收口。
 
@@ -7278,3 +7292,44 @@ H＝E×…
 - **验证**：`test_excision_proof_passes_consumer_gate`（evaluate→as_dict→gate True）；mutation：改名 proof_kind 即 gate False。test_fl_d585 套件 5 项绿；冻结面 2454 全量回归绿。
 - **状态**：已实施修复并经真实复验验证（见变更记录）；待 wave 重跑确认。
 - **变更记录**：2026-10-31 新增。2026-10-31 真实复验验证（`/tmp/opencode/qa/reverify/` run2）：**B10 complete**（unresolved=0，该轮清单有 G13 目标行 → `site_literal_effect` 闭合）；**B14 complete**（unresolved=0，零目标行形状 → 走 FL-D585 `semantic_delete_excised_by_replace` 通道并经本闸门放行——**该新通道首次在真实运行中端到端生效**）。两案工作 final 7 日句残余 0（逐段+表格探针），交付无错误码、无截断残余（呼应 FL-D688：截断为轮次性非系统性）。B10 $0.0265/26 calls/245s，B14 $0.0263/24 calls/278s，入账本 reverify 段。
+
+## FL-D680 测试函数命名腐化（test_append_site_accepts_fully_closed_table_definition_cell 断言已反转）（2026-10-31，主线复核）
+
+- 断言已随 FL-D607 改向为拒，但函数名仍是 accepts（test_fl_d608_definition_group_chain.py）。纯卫生：建议改名 `..._plan_rejects_closed_table_cell`。
+- **状态**：open（低优先）。
+
+## FL-D681 FL-D645 G03/G04 scope 对称扩展缺单测锁定（2026-10-31，主线复核）
+
+- 015c07a 的 `_extend_definition_group` 扩展至 G03/G04 只有 G01/G02 的单测断言与 B05 真实跑分佐证。建议补基本情况 leaf 仅含 headline 时 G03/G04 → group end 的单测。
+- **状态**：open（低优先）。
+
+## FL-D682 FL-D606 动词收敛全串替换的窄风险 + rule-level variants 放宽到所有规则（观测）（2026-10-31，主线复核）
+
+- `replacement.replace("适当调整","适当调低")` 全串替换：同一 unit 切片若有非费率语境的"适当调整"会被误收敛（现由 B15 测试锁定）。另 9a230c6 将 rule-level variants 授权放宽到所有规则（非仅 G14），属与其他 consumer 对齐的设计主张，列观察。
+- **状态**：open（观测项）。
+
+## FL-D685 B10 复验归因措辞与实证 proof_kind 不符（记录准确性）（2026-10-31，主线复核）
+
+- FL-D585 条目措辞强调 `semantic_delete_excised_by_replace` 通道，实证 proof_kind 为 site_literal_effect。需 pre/post 对照证明新通道必要，或在条目中更正措辞。
+- **状态**：open（记录级，派 qa-feat-recall 处置）。
+
+## FL-D686 `_semantic_delete_excised_by_replace` 在 references 为空时 leg② 退化（2026-10-31，主线复核）
+
+- 建议显式 fail-closed。
+- **状态**：open（低优先）。
+
+## FL-D687 `ensure_g08_variant_targets` 无 labels/波次门控，全量扩样过度建目标风险（观测）（2026-10-31，主线复核）
+
+- 扩波（第二波 100 份）运行时观察过度建目标面；必要时加门控。
+- **状态**：open（观测项）。
+
+## FL-D688 复验 complete 伴随 MODEL_OUTPUT_TRUNCATED 残余（B01/B03）需在 wave 报告显式隔离归因（2026-10-31，主线复核）
+
+- B01/B03 复验 summary `error_code=MODEL_OUTPUT_TRUNCATED` 仍交付 complete（review_assisted、blocking=0，B01 存 3 个非阻断 UNRESOLVED）。与 v2 基线姿态一致、与 G18/G08 修复无关，但 dev20 v3/wave 报告须显式说明该残余不归因于本批修复。
+- **状态**：open（报告口径项，派 qa-feat-recall 在其对比报告落实）。
+
+## FL-D683 FL-D651 修复路径真实触发仅离线回放覆盖（2026-10-31，主线复核）
+
+- **发现**：FL-D651（ONE_OF alternative-absent 证据按共享站点展开）真实 B15 复验 run 中模型走 EXPECTED_EFFECT_PRESENT 完成，兜底新路径未被真实管道行使；闭合证据依赖投影回放+fixture。
+- **处理**：观测；第二波扩波运行中若出现该兜底形状将自然补真实覆盖。
+- **状态**：open（观测项，不阻断 FL-D651 收口）。
