@@ -7190,7 +7190,7 @@ H＝E×…
 - **处理**：状态文件已勘正并保留误记说明；教训：冻结 sha 在最终写盘后重新计算再登记，不复用过程值。
 - **状态**：已解决（2026-10-31 验证： verifier 报告 selection_sha256、selection 文件、labels 抽样三链一致）。
 
-> **FL-D640..649 全部已使用**（640 B13、641/642 主线复核、643 feat-guide、644/645 主线、646/647 标签线、648/649 guide-history；feat-guide 撞号条目改派 FL-D650）。**自 2026-10-31 起设固定子池杜绝再撞**：qa-feat-guide FL-D650..659；qa-f2-guide-history FL-D660..669；第二波标签线 FL-D670..679；主线及主线 reviewer FL-D680..689；其余读尾部顺延者 ≥FL-D690。
+> **FL-D640..649 全部已使用**（640 B13、641/642 主线复核、643 feat-guide、644/645 主线、646/647 标签线、648/649 guide-history；feat-guide 撞号条目改派 FL-D650）。**自 2026-10-31 起设固定子池杜绝再撞**：qa-feat-guide FL-D650..659；qa-f2-guide-history FL-D660..669；第二波标签线 FL-D670..679；主线及主线 reviewer FL-D680..689；**qa-feat-recall 原段 580-589 用尽，新派 FL-D690..699**（2026-10-31）；其余读尾部顺延者 ≥FL-D700。
 ## FL-D648 指引重解析粒度合并破坏操作可执行性：确定性 clean 放行、召回断崖 -70%（2026-10-31，qa-f2-guide-history 线）
 
 - **发现日期**：2026-10-31，本线真实模型冒烟（生产路径：上传→worker 解析→启用→TestClient 任务→Worker 真跑，账本 /tmp/opencode/guide-{channel,v2}-ledger.sqlite、/tmp/opencode/recall-smoke-{builtin,custom15}.sqlite）。
@@ -7318,3 +7318,9 @@ H＝E×…
 
 - B01/B03 复验 summary `error_code=MODEL_OUTPUT_TRUNCATED` 仍交付 complete（review_assisted、blocking=0，B01 存 3 个非阻断 UNRESOLVED）。与 v2 基线姿态一致、与 G18/G08 修复无关，但 dev20 v3/wave 报告须显式说明该残余不归因于本批修复。
 - **状态**：open（报告口径项，派 qa-feat-recall 在其对比报告落实）。
+
+## FL-D683 FL-D651 修复路径真实触发仅离线回放覆盖（2026-10-31，主线复核）
+
+- **发现**：FL-D651（ONE_OF alternative-absent 证据按共享站点展开）真实 B15 复验 run 中模型走 EXPECTED_EFFECT_PRESENT 完成，兜底新路径未被真实管道行使；闭合证据依赖投影回放+fixture。
+- **处理**：观测；第二波扩波运行中若出现该兜底形状将自然补真实覆盖。
+- **状态**：open（观测项，不阻断 FL-D651 收口）。
