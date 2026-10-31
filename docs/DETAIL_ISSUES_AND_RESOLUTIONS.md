@@ -7390,3 +7390,11 @@ H＝E×…
 - **处理**：补回该提示。
 - **状态**：open（非阻塞）。
 
+
+## FL-D724 发布 #2 三试两折：磁盘满→worker 存储余量闸 fail-closed→服务降级（2026-11-01，主线）
+
+- **发现**：发布 #2 首试报 recall-worker 启动错误、回滚失败（RECOVERY FAILED，API 存活、三 worker 系服务 inactive 的生产降级窗口）。journal 坐实：`OSError: local storage below configured free-space reserve`（jobs.py:266，256M 阈值闸）。根因：/dev/vda3 40G 100%——**21 个历史发布留存事务每份 ~196M（≈4G）**+工作树/冒烟堆积，staging 再要 ~200M 触发满盘。
+- **处置**：①保留当前恢复事务 mXk9ve，清除其余 20 个历史留存事务（含 FL-D684 两次留存 7KutQx/gjyqol 诊断已落册）→ 4.1G；②二试仍拒：满盘期崩溃循环计数残留被判「restarted during startup」→ 恢复成功（5/5）；③等 worker 稳定后三试成功（engine 8aab269b，5/5 active）。
+- **根教训**：a) 发布留存事务无清理机制——每次失败发布会永久占用 ~196M，N 次失败必至满盘，属发布体系缺陷；b) worker 崩溃循环计数不清零时，发布器健康观察窗会把历史重启误判为本轮失败。
+- **后续**：发布脚本建议加「留存事务保留最近 N 份/总计 X G」自动清理 + worker 重启计数基线在健康检查前重置。暂记 open（建议项，发布 #3 前择处）。
+- **状态**：已解决（发布成功）；建议项 open。
