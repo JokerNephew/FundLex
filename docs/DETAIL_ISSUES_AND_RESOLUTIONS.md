@@ -6968,6 +6968,15 @@ H＝E×…
 - **状态**：open，待归因修复（疑似引擎 planning/dedup 域，可能交主线引擎 agent；登记于此避免线索丢失）。
 - **变更记录**：2026-10-31 新增。
 
+## FL-D609 smoke28 资格复验（smoke 子集，新冻结 3b6da2a2）：B16 全完成恢复，B05 false_complete 依旧，总体 NO-GO（2026-10-31，guide 线）
+
+- **记录**：/tmp/opencode/qa/findings/smoke28-requal-3b6da2a2.md。冻结：selection `d89f40b5`、labels `61a2c514`、guide `20bc6677`（均与基线一致），engine `1351e03`（qa-feat-guide-20261031，含 FL-D601/602 修复 `068fe94` 与主线至 `3ef6f87`）。评分 sha `06d26a82…`，账本约 $0.0343（29 次真实调用）。
+- **结果**：B16 由基线整合同中止（FL-D568，23 目标全丢）恢复为 **23/23 完成且如实 complete**（FL-D568 真实路径生效证据）；B05 与基线同缺口（G08 wrong=FL-D572 主线在途；G01/G03 append not_executed=FL-D608 待归因），report=complete 但评分有缺口，**false_complete 依旧**。
+- **门槛判定**：①无严重政策/事实错误 **未过**（B05 G08 模板保文错误未解）；②无错误 complete **未过**（B05 false_complete；另如实声明：FL-D565-F1 的 FUND_TYPE_UNVERIFIED 路径在本双子集中未被触发，其生效验证需 dev20 v2 全量或含排除类型样本）；③正常用例实际完成能力 **过**（B16 23/23）；④结果已核对 过。总体 **NO-GO**，非回归（B05 缺口同因未变）。
+- **行动**：FL-D608 归因修复与主线 FL-D572 落地后，由 qa-feat-recall 线执行 dev20 v2 冻结重跑；本线修复就绪信号（`068fe94`、`1351e03`）已随复验记录给出。
+- **状态**：open（复验已执行并定判，门槛缺口待 FL-D572/FL-D608）。
+- **变更记录**：2026-10-31 新增。
+
 ## FL 编号分配（多对话并行期协调，2026-10-31）
 
 - 避免并行会话编号冲突，段位分配：主线对话 FL-D574..579；qa-feat-recall 对话 FL-D580..589；qa-feat-compare 对话 FL-D590..599；qa-feat-guide 对话 FL-D600..609；第二波标签对话与 B13 性能对话仍按"读尾部取下一号"（若与段位冲突，以段位为准顺延）。各对话只新增条目、不改他人条目正文；状态更新可采用在自己段位新增"变更记录"行或经主线合并。功能开发新对话（2026-10-31 追加）：qa-f2-recall-tracked FL-D610..619；qa-f2-compare-tracked FL-D620..629；qa-f2-guide-history FL-D630..639。
