@@ -6896,6 +6896,13 @@ def _validate_routed_policy(rule: dict, operations: Sequence[dict], facts: Facts
             variant = str(variant)
             if variant and variant not in old_texts:
                 old_texts.append(variant)
+        if str(rule.get("rule_id") or "") == "G08":
+            # FL-D588 / B17: class-qualified members of the G08 legacy-clause
+            # family present at this source span are declared alternative forms
+            # of old_text (same bounded predicate the recall side certifies).
+            for sentence in _g08_authorized_variant_sentences(before):
+                if sentence not in old_texts:
+                    old_texts.append(sentence)
         new_text, slot_issues = instantiate_slots(fixed_text, facts)
         if slot_issues:
             new_text = fixed_text
@@ -10286,6 +10293,36 @@ def missing_body_append_site_g01(targets: Sequence[Target], rules_by_id: dict[st
             "table_quote": _compact(display_text(table_anchors[0].text)[0])[:120]}
 _G08_VARIANT_SENTENCE_ANCHOR = "申购费率由基金管理人决定"
 _G08_VARIANT_SENTENCE_FORBIDDEN = ("赎回", "转换", "计算方法", "公告", "收费方式", "认购")
+
+
+def _g08_authorized_variant_sentences(text: str) -> list[str]:
+    """Sentences in ``text`` certified as members of the G08 legacy-clause family.
+
+    FL-D588 / B17 p292: the recall side already certifies this family with a
+    deterministic predicate (anchor + 招募说明书 + 列示, forbidding redemption/
+    conversion/announcement content — the same gate ``ensure_g08_variant_targets``
+    uses to create residual targets).  ``_validate_routed_policy`` authorizes
+    removal of exactly these sentences so a class-qualified variant
+    (「A类人民币基金份额和A类美元现汇基金份额的申购费率由基金管理人决定…」) can be
+    replaced by the standard multi-class policy text instead of tripping
+    UNEXPLAINED_HARD on the qualifier tokens.  Fail-closed is preserved: any
+    sentence outside this bounded family remains an unauthorized removal.
+    """
+    authorized: list[str] = []
+    offset = 0
+    for sentence in re.split(r"(?<=[。；;])", text or ""):
+        start = (text or "").find(sentence, offset)
+        offset = start + max(len(sentence), 1)
+        if not sentence.strip() or len(_compact(sentence)) < 12:
+            continue
+        if _G08_VARIANT_SENTENCE_ANCHOR not in sentence:
+            continue
+        if "招募说明书" not in sentence or "列示" not in sentence:
+            continue
+        if any(word in sentence for word in _G08_VARIANT_SENTENCE_FORBIDDEN):
+            continue
+        authorized.append(sentence)
+    return authorized
 
 
 def ensure_g08_variant_targets(targets: Sequence[Target], rules_by_id: dict[str, dict],
