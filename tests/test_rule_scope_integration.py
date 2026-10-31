@@ -418,6 +418,48 @@ def test_glossary_definition_scope_extends_to_group_end():
                for item in scope.evidence)
 
 
+def test_basic_info_definition_scope_extends_to_group_end_for_g03_g04():
+    """FL-D645 (FL-D681 lock): a 基本情况 leaf holding only the headline class
+    definition follows the same deterministic group chain as G01/G02, so the
+    plan-stage append rebind to the group end stays inside the G03/G04 scope
+    for the audit gate and the claim-replay boundary."""
+    from types import SimpleNamespace
+
+    from fundlex.rule_scope import LeafSection, _resolve_class_basics
+
+    def _span(location: str, text: str):
+        return SimpleNamespace(location=location, text=text)
+
+    # Headline form that already names the classes (real-contract variant):
+    # the leaf holds only this paragraph; p156/p157 are the per-class
+    # definitions forming the group chain.
+    headline = ("基金份额类别：指根据申购费用、销售服务费收取方式的不同，"
+                "将基金份额分为A类基金份额和C类基金份额，"
+                "各类基金份额分别设置代码，分别计算并公布基金份额净值")
+    spans = {
+        "p155": _span("p155", headline),
+        "p156": _span("p156", "A类基金份额或A类份额：指投资人申购时收取申购费用，"
+                              "但不从本类别资产中计提销售服务费的基金份额类别"),
+        "p157": _span("p157", "C类基金份额或C类份额：指从本类别基金资产中计提年费率"
+                              "为0.25%的销售服务费而不收取申购费用的基金份额类别"),
+        "p158": _span("p158", "基金存续期限：不定期。"),
+    }
+    sections = [SimpleNamespace(id="S07", title="第七部分  基金的基本情况",
+                                zone="body", locations=("p155", "p158"))]
+    leaf = LeafSection(id="S07:L1", parent_section_id="S07", title="基金份额类别",
+                       zone="body", heading_level=1, locations=("p155",),
+                       copy_key="份额类别")
+    for rule_id in ("G03", "G04"):
+        scope = _resolve_class_basics(rule_id, sections, [leaf], spans,
+                                      {rule_id: ["S07"]})
+        assert scope.resolution == "resolved", rule_id
+        assert "p155" in scope.locations, rule_id
+        assert "p157" in scope.locations, rule_id
+        assert "p158" not in scope.locations, rule_id
+        assert any(item.startswith("extend=definition_group_end")
+                   for item in scope.evidence), rule_id
+
+
 def test_g01_plan_guard_rejects_table_cell_even_when_closed():
     """FL-D607: the plan stance never accepts a table cell as a G01/G03 append
     anchor, even when the cell text ends with 。"""
