@@ -6863,8 +6863,11 @@ H＝E×…
 ## FL-D570 DUPLICATE_SITE_DIVERGED 门禁假阳性误拒约 99 目标（2026-10-31，P0）
 
 - 5 份合同（B04/B06/B11/B17/B19）被 DUPLICATE_SITE_DIVERGED 阻断交付：复句最终内容一致、仅 span 边界不同即判分歧。属校验层语义过严，非真实冲突。
-- 处理：引擎修复 agent 处置中（先 checkpoints 复放复现→语义等价判定→防滥用对抗测试→复放验证放行）；完成并复核后重跑 5 份。
-- 状态：修复中。
+- 根因：编号列表内的重复条款兄弟编辑 span 边界不同（正文 edit 从「4、」标记后开始，摘要 edit 覆盖全段），一处终稿保留列表编号前缀、另一处不保留，校验层直接比较终稿整段文本即误判分歧。
+- 处理（commit 66d0748，`fundlex/generation/claim_replay.py`）：分歧判定改用去列表编号前缀（阿拉伯/中文数字+顿号或括号形式）的比较口径；编号属结构编号非条款内容，任何真实业务文本差异经归一化后仍不一致 → 真实分歧仍 fail-closed。对抗测试：另一副本条款措辞不同、摘要副本删整条业务尾句两种 mutation 均仍被 DUPLICATE_SITE_DIVERGED 拦下（`tests/test_qa_20261031_regressions.py` 新增 3 条回归）。
+- 复放验证（离线 harness `/tmp/opencode/qa/fl_d570_replay.py`，用 wave1 产物 working_final.docx+edits.json 直接重跑 replay_claims）：修复前 5 份均复现 DUPLICATE_SITE_DIVERGED；修复后 B04/B06/B11 failures=0 verified=True，B17/B19 不再被该码阻断（残余 CLAIM_OPERATION_EFFECT_MISSING/OCCURRENCE 等次级阻断与修复前完全一致，属 FL-D571 既有真实阻断，如实呈现）。测试：test_recall_pipeline+test_qa_20261031_regressions 100 绿；tests -k "delivery or semantic or verification" 133 绿（4 failed 为 test_v3_delivery_review_gate，已在本变更 stash 前验证为共享工作区其他 agent 在途改动所致的预先失败，与本修复无关）。
+- 待办：全 dev20 用本修复重跑 B04/B06/B11/B17/B19 交付链路。
+- 状态：修复已实施并复放验证，待 dev20 重跑确认交付恢复。
 
 ## FL-D571 B03 计划重叠+claim 未证阻断 20 目标（2026-10-31）
 
