@@ -1589,3 +1589,10 @@ dev20 v2 闭环：修复循环直到 §7 门槛（无已确证严重错误、无
 
 ## 账本分段
 67bc9d4-superseded / 43457c6e-ABORTED(FL-D608) / 2a416f8(loop-1) / d55702b(loop-2)+reverify（单合同 dev $0.026-0.038、~230-340s、23-28 calls）。
+
+## 2026-10-31 受控发布 #1（用户令「先部署可部署部分」）完成
+
+- 发布内容：主线 4377962 = 修订引擎修复全批（recall-tracked/FL-D584/585/587/589、FL-D608 双层、606/607、644/645、651）+ 指引生命周期全量 + B13 性能 + 测试 2456/0 全绿回归 + FL-D684 发布器健康预算修复。**compare 域（FL-D562/620-629）未含**，第二发布波处理。
+- 结构与校验：release worktree /tmp/opencode/release-20261031 @ 4377962；root 发布器已同步（drift OK）；env 新增 FUNDLEX_TRUSTED_PROXY_HOSTS=127.0.0.1（备份 .bak-20261031-release）；engine hash e555fee8；事务 /opt/.fundlex-publish-kYzo9M；前两次失败事务 7KutQx/gjyqol 留存。
+- 在验：生产 E2E 真实路径（工具 production_first_batch_e2e_20261028.py，广发聚富合同）输出 /tmp/opencode/qa/e2e-release-20261031/。
+- 回滚：engine 旧 marker 74a8772（恢复即 10-30 树）；schema 迁移全追加可代码回滚。
