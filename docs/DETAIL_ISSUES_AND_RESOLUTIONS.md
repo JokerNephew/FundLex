@@ -8150,3 +8150,35 @@ H＝E×…
 - **变更记录 2026-11-01（批3 施工）**：V2 新增 `/login` 路由——password 模式渲染原登录页；dev 模式渲染开发身份登录说明卡（当前身份+「以开发身份继续」入口），登录页恢复可验收；V1 侧栏游离声明移至设置页账户卡 footnote，侧栏改为产品名。
 - **验证**：dev `/login` 实证落登录页（不再直跳任务页）；侧栏无声明、设置页含 footnote。
 - **状态**：已解决（批3 验收）。
+
+## FL-D695 单轮 inventory absent 判定摇摆把可执行义务变全案无产物：变体证据反证闸（B15 G09@p159）（2026-11-01，loop-5 门槛 FAIL-1，qa-recall-miss）
+
+- **发现**：loop-5（9ebeacf）B15 G09@p159——loop-4 模型判 needs_edit、合成 replace 已执行交付，loop-5 同窗口 round 0 模型改判 absent（理由「窗口中不存在规则目标原文…现有赎回金额条款措辞不同」），而本段实有赎回金额条款变体（惩罚金额段 p159，canonical old_text 字面不在、anchored 变体在），report.variant_candidates 早有确定性证据 `VARIANT_PENDING_CERTIFICATION G09:0 @p159`。absent 判决 → T3 恢复 locator 五次失败（RETRY_DETERMINISTIC+MARK_UNRESOLVED×4）→ 目标不可计划 → replay 站点集空 → OPEN「verified site missing」→ 交付门诚实扣全案无产物。属 FL-D650 族模型单次判定摇摆，但违约承载缺一层：确定性代码证据早已反证该判决，管线却无条件接受。
+- **根因**：inventory absent 是无复核的单次模型判定；确定性变体通道（FL-D655）与其在同一文档上各说各话，无人裁决矛盾。
+- **修复（机制面，对任意规则生效）**：新增 `refute_absent_by_variant_evidence`（`fundlex/recall.py`，挂点 `recall_pipeline` targeting 阶段 T3 开放规则定位之前）——同一 (rule, location) 存在确定性变体证据时 absent 被代码证据推翻：CERTIFIABLE/ANOMALOUS 候选项恢复 needs_edit 并绑定变体 span（后续走正常 compose→audit→replay 验证链，分歧仍 fail-closed）；EXEMPT 候选项（新政策形态已确定性在位）恢复 satisfied，独立 audit 仍复核；无候选保持 absent（fail-closed）。守卫：同段落已有 live 同类目标不翻（防 replay 同址歧义/双站点分叉）、归属其他操作的 absent 表位不动、out_of_scope/超 scope 不动。
+- **证据**：写入 report["absent_refutations"]（code ABSENT_REFUTED_BY_VARIANT_EVIDENCE，含 bucket/state/quote）。
+- **测试**：`tests/test_absent_variant_refutation.py` 6 例——变体在→needs_edit 恢复（span 0..112 与真实 B15 p159 形状一致）/无候选→保持 absent/EXEMPT→satisfied/同址 live 同族目标→不动/归属其他操作→不动/out_of_scope→不动。
+- **真实 B15 复验（2026-11-01，两轮）**：第一轮（`fl-d695-b15-recheck/`，$0.0377/34c）G09@p159 恢复（T3 采样有利直接锚定 0..112 planned），新阻塞 G11 登记 FL-D793；**第二轮（`fl-d695-b15-recheck2/`，$0.0268/23c/185s）反证闸真实实发**——本轮 inventory 再次误判 G09 absent（与 loop-5 同抖动复发），`ABSENT_REFUTED_BY_VARIANT_EVIDENCE`（ANOMALOUS@p159）推翻后恢复 needs_edit 0..112→planned replacep159 全句适配替换（「乘以申请当日该类基金份额的基金份额净值…扣除或加上」入 final 与 redline，原文无）→ 21/21 CLOSED_REPLAY、replay verified、delivery=complete(holds=0)、final+redline 交付。完整因果链：absent 抖动复发→代码证据反证→compose 执行→独立复核→产物。
+- **状态**：已解决（6 例单测+真实病灶站点端到端实发证据）；本树全量回归收口后报主线。
+
+## FL-D696 计划阶段已否决的站点主张混入 Claim Replay 闭合必需集：worst-of-sites 把已完成义务翻 OPEN（B12 G16 三站点）（2026-11-01，loop-5 门槛 FAIL-2，qa-recall-miss）
+
+- **发现**：loop-5 B12 G16:B1:O1——survey 双站点 Y012(p795)/Y013(p1270) 均 planned 且 audit completed（政策全文在产物），T3 多产的表位 T002@p796(0..90) 被计划阶段确定性否决（plan ledger status=unresolved/reason=TARGET_SOURCE_MISMATCH，对应 FL-D792 观察到的 append vs delete 同段竞争形态的复发）。但 Claim Replay 从 targets 派生站点时不知计划否决，仍把 p796 计入闭合必需集（G16 append 站点过滤器 `_own_rule_append_sites` 认 operations 归属，不读计划态），evaluate_operation_effect 站点聚合=worst-of-sites → p796 无 edit → CLAIM_OPERATION_NOT_PLANNED → CLAIM_REPLAY_FAILED → 4 条 hold、delivery=incomplete。义务实质完成却被模型驱动 locator 的过度主张拖倒。
+- **根因**：`Target.as_dict` 不含计划态，replay 侧无法区分「引擎承诺的站点」与「计划已否决的候选主张」；责任在 replay 输入契约缺位，非属性归因错误。
+- **修复（机制面）**：`recall_pipeline._replay_targets_by_id` 以 plan ledger 确定性否决理由集（当前仅 TARGET_SOURCE_MISMATCH，记 `_PLAN_SITE_REJECTIONS`）为 replay 载荷加 `plan_rejected` 标签（两个 replay_claims 调用点一致接入，含 recovery 重放）；`claim_replay` 站点派生两处（同址歧义集与主站点循环）排除带标签主张。排除到空集维持原 OPEN「verified site missing」语义——该机制只移除与计划台账矛盾的请求，绝不凭空造闭合；否决理由留痕在目标台账。
+- **测试**：`tests/test_plan_rejected_replay_sites.py` 4 例——载荷只标 code 集合内否决理由（model 错误不标）/标签主张不阻塞已完成 append（verified+全 PASS）/mutation 无标签同形状仍 CLAIM_OPERATION_NOT_PLANNED（旧行为对照）/排除到空集仍 fail-closed OPEN。
+- **真实 B12 复验（2026-11-01，`/tmp/opencode/qa/fl-d696-b12-recheck/`，$0.0234/23 calls/163s，账本仅观测）**：模型本轮**再次**产生同形 T3 过度主张（T017@p796，TARGET_SOURCE_MISMATCH）——FL-D792 复发判定获第三实证，非采样波动；修复后 replay 不再把 p796 计入闭合集，G16:B1:O1 replay PASS、23 义务 CLOSED、delivery=complete(holds=0)，final.docx 政策文本实写 p795/p1270（原文 0 命中→产物 2 命中），redline 15 ins/15 del 修订痕迹齐备。
+- **残留（诚实可观测，非阻断）**：台账层 G16 记录仍 UNRESOLVED/TARGET_SOURCE_MISMATCH（指 p796 被拒主张，与 replay PASS 不矛盾），reconciliation 按 FL-D651 机制 A 分类 MISS_REPLAY_GATE + 显式升级记录但不升级为阻断行（named cause 非 CLAIM_REPLAY 族）——跨层隔膜显式留痕，交付门不计 hold；台账采纳 replay 证明的写入策略属后续观察项，不作为本门槛修复范围。
+- **状态**：已解决（单测+真实 B12 端到端证据）；本树全量回归收口后报主线。
+
+## FL-D792 归属判定更新：由观察项改判 FL-D696 同根机制缺陷并随其修复收口（2026-11-01，qa-recall-miss）
+
+- **判定**：loop-4 复验时 FL-D792 归因为「survey 采样波动、保守诚实扣件」观察项；loop-5 同形态在 B12 原址复发（T002@p796 同 span 0..90、同 TARGET_SOURCE_MISMATCH、同 CLAIM_REPLAY_FAILED 链）。复发证明这不是采样噪声而是结构性缺陷：replay 闭合必需集系统性混入计划阶段已否决的站点主张。归属变更：FL-D792 = FL-D696 首次临床（loop-4 重跑），同根同修；原「若多案复发考虑排除」建议由 FL-D696 以更一般的机制（任意计划的确定性站点否决，不限 G16/append-delete 竞争）实施。
+- **状态**：归属结论已下（同族机制问题，非新机制、非纯波动）；修复验证随 FL-D696 真实 B12 复验一并收口。
+
+## FL-D793 B15 本轮新阻塞 G11 compose 连续 MODEL_SCHEMA_INVALID→诚实 incomplete（2026-11-01，FL-D695 真实复验发现，观察项）
+
+- **发现**：FL-D695 修复后 B15 真实复验第一轮（`/tmp/opencode/qa/fl-d695-b15-recheck/`，$0.0377/34 calls/326s）：G09@p159 病灶治愈（T3 locator 本轮自行锚定 p159 变体 span 0..112，absent 未复发，故 absent 反证闸无实发——属采样有利局）；但新阻塞落在 G11：inventory 判 needs_edit@p164(0..74)，模型 compose 返回格式连续不过 schema 校验（gateway 层已对 MODEL_SCHEMA_INVALID 有限重试，recovery 9 次含 REBUILD_PLAN 后仍 MARK_UNRESOLVED）→ G11:B1:O1 MISS_TARGET_RESOLUTION+G11:B1:O2 CLAIM_OPERATION_NOT_PLANNED → 9 holds 诚实 incomplete（无产物）。
+- **归类**：同案 loop-5（9ebeacf）G11 双义务 CLOSED_REPLAY、loop-4 亦正常——首选解释为模型侧运行间波动（schema 抖动），非已确证机制缺陷；现有重试/重建链按设计耗尽并诚实扣件。与 FL-D695 同类教训方向：模型单点失败缺少更硬的违约承载（如 fixed-text replace 在 ANOMALOUS 变体下无 deterministic tier1 回退，只能 compose）。
+- **二跑复测（2026-11-01，`fl-d695-b15-recheck2/`，$0.0268/23c/185s）**：同合同同引擎 G11 三义务全 CLOSED（B1:O1 ARTIFACT_VERIFIED、B1:O2 ALREADY_SATISFIED via claim_replay），delivery=complete——单发解释成立（模型 schema 抖动），不升级解剖。
+- **状态**：观察项（二跑未复发）；后续同形态在不同合同/不同 loop 再发时按 compose 校验字段定位升级。
