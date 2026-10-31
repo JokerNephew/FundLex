@@ -467,6 +467,62 @@ def _issues(report: Mapping[str, Any]) -> list[dict[str, Any]]:
     return issues
 
 
+DELIVERY_OUTCOME_SCHEMA = "fundlex-delivery-outcome-v1"
+
+#: The user-facing delivery gate has exactly two states (FL-D654): a run either
+#: publishes a fully proven pair or it delivers an honest hold with every
+#: remnant explained in user-readable text.  Engine-internal statuses stay for
+#: wire compatibility and are exposed under ``engine_status``.
+_DELIVERY_COMPLETE_STATUSES = frozenset({"complete", "complete_with_exceptions"})
+
+
+def delivery_outcome(report: Mapping[str, Any]) -> dict[str, Any]:
+    """Two-state delivery presentation: 完整完成 or 诚实扣件.
+
+    ``complete``: the DOCX pair is published with every applicable obligation
+    closed.  ``honest_hold``: at least one remnant stayed open; each remnant is
+    rendered as Chinese user guidance (never as a bare engine key) in
+    ``holds``.  The projection is deterministic and never closes an open item.
+    """
+    status = str(report.get("delivery_status") or "")
+    complete = status in _DELIVERY_COMPLETE_STATUSES
+    holds: list[dict[str, Any]] = []
+    if not complete:
+        holds = _issues(report)
+        if not holds:
+            holds = [{
+                "rule_id": "", "code": "", "title": "任务未完成",
+                "section": "", "location": "", "obligation_id": "",
+                "business_reason": "处理未完成，未生成可交付的修订文件",
+                "requirement": "", "quote": "", "quote_exact_site": False,
+                "review_note": "",
+            }]
+        # Attach the bilingual Ledger miss classification (FL-D653) so a hold
+        # explains *why* the remnant could not close in user-readable text
+        # instead of an engine key.
+        misses = {
+            str(entry.get("obligation_id") or ""): entry
+            for entry in ((report.get("miss_classification") or {})
+                          .get("entries") or [])
+            if str(entry.get("miss_class") or "").startswith("MISS_")
+        }
+        for hold in holds:
+            entry = misses.get(str(hold.get("obligation_id") or ""))
+            if entry is not None:
+                hold["miss_class"] = str(entry.get("miss_class") or "")
+                hold["miss_reason_zh"] = str(entry.get("message_zh") or "")
+                hold["miss_reason_en"] = str(entry.get("en") or "")
+    return {
+        "schema": DELIVERY_OUTCOME_SCHEMA,
+        "state": "complete" if complete else "honest_hold",
+        "zh": "完整完成" if complete else "诚实扣件",
+        "engine_status": status,
+        "hold_count": len(holds),
+        "holds": holds,
+        "notices": list(report.get("business_notices") or []),
+    }
+
+
 def build_user_summary(report: Mapping[str, Any]) -> dict[str, Any]:
     status = str(report.get("delivery_status") or "")
     notices = list(report.get("business_notices") or [])

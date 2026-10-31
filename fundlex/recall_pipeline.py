@@ -6426,6 +6426,10 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
                 report["artifacts"] = {}
                 report["delivery_status"] = "not_generated"
             mark_stage("delivery")
+            # FL-D654: the user-facing delivery gate has exactly two states —
+            # 完整完成 or 诚实扣件 with user-readable holds.
+            from .delivery import delivery_outcome
+            report["delivery"] = delivery_outcome(report)
             events = []
             try:
                 events = list(getattr(model, "events", ()) or ())

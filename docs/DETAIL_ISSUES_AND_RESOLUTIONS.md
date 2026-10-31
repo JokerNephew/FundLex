@@ -7355,3 +7355,9 @@ H＝E×…
 - **边界（已在代码注释声明）**：MISS 分类器不改 fault 归属确定性——MISS_EDIT_LOST 因公开义务 `edit_ids` 在投影时清空而不可判定，不发射该码（保守归入 MISS_EFFECT_UNPROVEN），类名保留占位。
 - **测试**：`tests/test_reconciliation.py` 13 例（九类×双语文本×升级语义×富化不重复×许可假不分类）；相关域回归 547+83+66+102 全绿（含 recall_pipeline/恢复/交付 e2e）。
 - **状态**：已实施（机制 A 完成；真实病例复验随 FL-D658 统一）。
+
+## FL-D654 机制 E：交付门二态（完整完成/诚实扣件）+ 用户可读 hold_summary（2026-10-31，qa-recall-miss）
+
+- **设计（已实施）**：`delivery.delivery_outcome(report)` 纯确定性投影，主线交付分支收口时写 `report["delivery"]`。二态语义：`complete`/`complete_with_exceptions` → `完整完成`（holds 空）；其余（`incomplete`/`not_generated`/`excluded`）→ `诚实扣件`，`holds` 复用 `_issues` 用户可读清单（中文 business_reason + review_note + 章节/原文定位），并并入 FL-D653 的 miss 双语归因（`miss_class`/`miss_reason_zh`/`miss_reason_en`，机器码仅作次级审计字段）。引擎内部 delivery_status 保持线兼容（`engine_status` 透传）——二态是用户语义面层，不改 fail-closed 判定本身。
+- **测试**：`tests/test_delivery_outcome.py` 7 例（两态边界、fallback hold、miss 融合、机器码降级为次级）；交付/导出/补做面 169 绿。
+- **状态**：已实施（机制 E 完成；真实病例复验随 FL-D658 统一）。
