@@ -314,3 +314,63 @@ def test_delete_residuals_scope_includes_real_summary_fee_copies(d06_fee_replay_
     assert {"p1286", "p1289"} <= scoped_locations
     assert "p1289" in legacy_locations
     assert "p1286" in legacy_locations
+
+
+def test_scope_gate_keeps_rebound_append_group_end():
+    """FL-D608: a G01/G03 append rebound to its definition-group end stays in scope.
+
+    The rule scope is computed against the pre-rebind class-definition paragraph
+    (B05 G01 leaf holds only p117); the plan-stage rebind p117->p119 derives the
+    site deterministically, so the audit-stage gate must not drop it.
+    """
+    rebound = Target("T1", "G01", "p119", "C类基金份额或C类份额", "needs_edit", "")
+    rebound.reason = "survey_reference:1.00|DEFINITION_GROUP_APPEND_END"
+    plain = Target("T2", "G01", "p300", "无关段落", "needs_edit", "")
+    audit = _audit()
+
+    _apply_scope_gate([rebound, plain], {"G01": _scope("G01", ("p117",))}, audit,
+                      stage="audit")
+
+    assert rebound.out_of_scope is False
+    assert rebound.scope_id == "G01:G01:L01"
+    assert plain.out_of_scope is True
+    assert "RECALL_TARGET_OUT_OF_SCOPE" in plain.reason
+
+
+def test_glossary_definition_scope_extends_to_group_end():
+    """FL-D608: G01/G02 scopes follow the class-definition group end, so the
+    plan-stage append rebind (p117->p119) stays inside its own rule scope for the
+    audit gate and the claim-replay final boundary."""
+    from types import SimpleNamespace
+
+    from fundlex.rule_scope import LeafSection, _resolve_definition
+
+    def _span(location: str, text: str):
+        return SimpleNamespace(location=location, text=text)
+
+    headline = ("基金份额类别：指根据申购费用、销售服务费收取方式的不同，"
+                "将基金份额分为不同的类别，各基金份额类别代码不同，"
+                "并分别公布各类基金份额净值和基金份额累计净值")
+    spans = {
+        "p117": _span("p117", headline),
+        "p118": _span("p118", "A类基金份额或A类份额：指投资人申购时收取申购费用，"
+                              "但不从本类别资产中计提销售服务费的基金份额类别"),
+        "p119": _span("p119", "C类基金份额或C类份额：指从本类别基金资产中计提年费率"
+                              "为0.25%的销售服务费而不收取申购费用的基金份额类别"),
+        "p120": _span("p120", "运作期起始日：对于每份原集合计划合同生效日登记在册的"
+                              "份额的第一个运作期起始日，指原集合计划合同生效日"),
+    }
+    sections = [SimpleNamespace(id="S04", title="第二部分  释义", zone="body",
+                                locations=("p117", "p120"))]
+    leaf = LeafSection(id="S04:L57", parent_section_id="S04", title="基金份额类别",
+                       zone="body", heading_level=0, locations=("p117",),
+                       copy_key="份额类别")
+    scope = _resolve_definition("G01", sections, [leaf], spans,
+                                {"G01": ["S04"]})
+
+    assert scope.resolution == "resolved"
+    assert "p119" in scope.locations
+    assert "p117" in scope.locations
+    assert "p120" not in scope.locations
+    assert any(item.startswith("extend=definition_group_end")
+               for item in scope.evidence)

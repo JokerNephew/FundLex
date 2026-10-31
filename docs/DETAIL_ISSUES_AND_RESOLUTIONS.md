@@ -6994,10 +6994,11 @@ H＝E×…
 
 - **发现日期**：2026-10-31，wave1 归因。B05 评分 verdicts：G01 append not_executed（释义，标签 p118）、G03 append not_executed（基本情况，标签 p155），detail 均「appended policy absent from its declared site: 3 clause(s)」；引擎 report 中两站均有 planned 目标（p117/p155），另有一个 p157 的 G03 目标被标 not_applicable，reason 含 `DUPLICATE_APPEND_SIT[E…]`。B15 G03 同症（标签 p(九) 类别条款后追加，not_executed）。
 - **疑似根因**：同一政策文本需在两个不同站点（释义/基本情况）各追加一次时，追加去重/duplicate-append 逻辑疑似把第二站点判重丢弃——与 DUPLICATE_SITE 处理族相关但方向相反（FL-D570 是假阳性阻断，本条是合法双站点被抑制）。
-- **状态**：已解决（已验证，回归锁定；dev20 v2 端到端复验在途）。
+- **状态**：已解决（已验证，回归锁定；dev20 v2 端到端复验在途）。**第二层闭合证据（2026-10-31 verify4，`/tmp/opencode/qa-findings-run/b05-d608-verify4/`）**：B05 复跑 G01:B1:O1 PASS（site p119）、G03:B1:O1 PASS（site p159），unresolved 0，真实产物 final.docx/redline.docx 落地；评分 T001 G01 append **completed**（"appended policy text present at its declared site"）、T002 G03 append **completed**、共 12 completed/1 kept（剩 G08=FL-D643 不确定性回摆，与本条无关）。回归：497 passed（recall/obligations/targeting/append/definition/scope 面）。
 - **变更记录**：
   - 2026-10-31 新增。
   - 2026-10-31（guide 线）：归因订正——非双站点去重抑制，实为 append 锚点绑到类别划分「总定义句」（释义 p117/基本情况 p155）而非「类定义组尾」（标签站点 p119/p159），评分窗口读不到 → not_executed + false_complete。修复 `4296753`（定义组链结构化绑定组尾；无分组结构合同行为不变），B05 真实文档回归 5 例 + `test_fl_d608_definition_group_chain.py` + 变体套件全绿，主线独立复核 PASS（含 mutation 抽查）；B15 G03 已由 FL-D573 先行覆盖。主线 `017b3ed` 并入。
+  - 2026-10-31（guide 线，第二层）：`4296753` 后 B05 真实复跑暴露三处连锁拦截，重绑生效但 edit 仍不落地/义务不闭合——①plan 阶段第二道守卫 `target_site_ok` 以审计姿态复跑 `append_site_ok`（无组链受理），否决自身重绑结果 → G01/G03 TARGET_SOURCE_MISMATCH 未产 edit；②audit 阶段 scope 闸门把重绑 target 判出界（G01 已解析 scope 仅含重绑前总定义句 p117）；③claim replay 终界同样按该 scope 过滤已验证的 p119 站点 → 「verified site missing」。修复 `51fb45b`：plan 守卫对 G01/G03 免于审计姿态复查（沿用 FL-D573「站点判定站在自身重绑决定之后」）；`_resolve_definition` 沿同一定义组链把 G01/G02 scope 扩展至组尾（带 `extend=definition_group_end` 证据）；闸门层保留对 APPEND_END 重绑 target 的守护。回归：plan_target 真实文档双断言 + scope 扩展单测，面回归 497 passed。**dev20 v2 若以 017b3ed（仅第一层）开跑，B05 类案件 G01 仍会 CLAIM 未闭合；须含 ≥51fb45b**。
 
 ## FL-D609 smoke28 资格复验（smoke 子集，新冻结 3b6da2a2）：B16 全完成恢复，B05 false_complete 依旧，总体 NO-GO（2026-10-31，guide 线）
 
@@ -7122,6 +7123,27 @@ H＝E×…
 
 - **发现**：`4296753` 组链延伸的冻结边界仅覆盖 setup-tail（recall.py:4458-4462）；「闭合总定义句→再分子类尾句（subdivision）→各类定义」形体下新码会越过 subdivision 延伸到各类定义段。该形体在语料中是否存在、标签站点在哪均未证实。
 - **处理**：扩波复跑时观测（dev20 v2 / 第二波）；未见触发前不收紧。
+- **状态**：open（观测项）。
+
+## FL-D643 B05 G08 已满足误判不确定性回摆：inventory/absent 分支可绕过 FL-D572 确定性防线（2026-10-31，guide 线）
+
+- **发现日期**：2026-10-31，guide 线 FL-D608 第二层复核同头复跑（`4f76f7f`/verify4，`/tmp/opencode/qa-findings-run/b05-d608-verify4/`）。B05 G08 评分 verdict=**kept**（声明站点 p216 旧措辞仍在、应有替换未落），final p216 与原件逐字一致；引擎 target 状态 `absent`，理由为模型自证「规则目标句在本窗口不存在…已明确A类收取、C类不收取（p218），不构成本操作的精确目标」→ 编辑未生产。同 HEAD 族内对比：v2 预跑（`eb4cdbb`）G08 engine planned + 评分 completed（应改替换正确落点）——**同一冻结族内两跑结果翻转**，属 inventory 适用性判断的模型不确定性。
+- **问题与影响**：FL-D572 防线（`ac697a4`）约束的是 wrong/假满足的确定性校验；本次模型直接判 absent（规则不适用）并给出合理化理由，编辑从未进入 plan/audit 链路，任一确定性防线无从截取——false-satisfaction 以 absent 形态复发。B05 属 smoke28 复验双子集；该不确定性使门槛①（无严重政策/事实错误）与门槛②（false_complete）在 v2 冻结重跑中达到什么结论不可预判，须如实按冻结跑动结果判定。
+- **处理方法（建议，未定案）**：对「absent/不适用」结论要求与再生/范式同样强度的证据约束（如对 G08 窗口 fallback 校验「类收费声明句存在但未含直销豁免时应强制 needs_edit」）；或评审 absent 理由中「已明确 A/C 收费」是否足以证伪 tag 站点义务（本例 p218 仅类别收费声明，未含直销豁免义务文）。交主线/FL-D572 归属线定责。
+- **状态**：open（新发现，真实双跑证据在案；FL-D643 取号后跨线候补池指针请主线合并时更新为 FL-D644）。
+- **变更记录**：2026-10-31 新增（guide 线；证据 verify4 score.json detail=old wording still in its declared site、edits.json target state=absent；对照 smoke-requal-v2 score G08 completed）。
+
+## FL-D644 FL-D608 第二层闸门放行凭据可被模型谎称（2026-10-31，主线复核）
+
+- **发现**：`51fb45b` 的 scope 闸门守护以 `target.reason` 含 "APPEND_END" 子串为放行凭据（recall_pipeline.py:1254-1265），而 `Target.reason` 在 inventory_window 直接取自模型输出（recall.py:1765）；模型对 G01/G03 needs_edit target 谎称 "APPEND_END" 即可跳过 `_target_scope_ok`，与 FL-D573「自述证据不扩权」方向相反。越界面限于「自带定义锚点的组外段」（append_site_ok 锚点守卫仍在），属有界风险。
+- **另**：负路径测试缺「谎称 APPEND_END 的越界 target 被拒」用例。
+- **处理**（已派 qa-feat-guide）：改为校验确定性重绑端点/内部重绑标记（与模型输出绝缘）+ 补谎称负路径测试；修复后 mutation 自检。
+- **状态**：open（修复中）。dev20 v2 冻结包含 layer-2 语义并于冻结说明中登记本条。
+
+## FL-D645 G03 scope-replay 组尾覆盖不对称观察项（2026-10-31，主线复核）
+
+- **发现**：`_extend_definition_group` scope 扩展仅注册于 G01/G02（rule_scope.py:1176-1183），G03 不经此扩展；闸门放行后 claim replay `_filter_scoped_targets` 仍按 scope.contains 过滤——非 B05 合同若 G03 scope 不含组尾，「verified site missing」可复发（B05 verify4 双 PASS 系巧合性满足）。
+- **处理**：观测；若第二波/dev20 v2 中出现 G03 复发则把 G03 纳入同族扩展。
 - **状态**：open（观测项）。
 ## FL-D580 test_v2_evaluation/test_v2_workbench 各 1 项与 FL-D574 同源既存失败（2026-10-31，qa-feat-recall 对话复核时发现）
 

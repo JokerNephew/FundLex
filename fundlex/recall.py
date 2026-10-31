@@ -7292,7 +7292,14 @@ def _plan_target_inner(rule: dict, target: Target, inspection: DocumentInspectio
         # clause-end anchor G16 resolves to (FL-D159).  Other append rules still
         # keep the ordinary target-site guard as an additional check.
         site_ok = append_site_ok(rule_id, span, inspection, allow_open_table_cell=False)
-        if site_ok and rule_id != "G16":
+        if site_ok and rule_id not in {"G16", "G01", "G03"}:
+            # G01/G03's ``target_site_ok`` is ``append_site_ok`` at the AUDIT stance,
+            # which deliberately lacks the plan-stage group-continuation acceptance.
+            # Re-running it here would veto the same span the plan stage just
+            # rebound to its definition-group end (FL-D608: G01/G03 never planned,
+            # claim replay MISSING_EFFECT / site missing).  For an append the
+            # plan-stance append-site guard above is authoritative and must stand
+            # behind its own rebind decision (FL-D573 0a89e7d semantics).
             site_ok = target_site_ok(rule_id, span, inspection)
     else:
         site_ok = target_site_ok(rule_id, span, inspection)
