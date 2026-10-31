@@ -6918,3 +6918,43 @@ H＝E×…
 - **变更记录**：
   - 2026-10-31 新增（B13 性能修复 agent，QA 侧登记）。
   - 2026-10-31（B13 提交前全套件回归复核）：qa-base（含 B13 全部改动 + 并行 agent 在途文件）全量 `-m pytest -q` 结果 6 failed / 2336 passed / 136 skipped，失败除上述 4 项 v3 外另有 `tests/test_v2_evaluation.py::test_evaluation_artifacts_persist_and_download_only_in_evaluation_mode`、`tests/test_v2_workbench.py::test_task_runs_evaluation_revision_and_downloads`；同一干净 HEAD（`99318d5`）worktree 逐条复现**同样这 6 项、同一 `EXECUTION_MODE_MISMATCH` 签名**。结论：6 项全部属 HEAD 既有失败（同一 A3-F7 模式围栏陈旧测试族），B13 改动与并行 agent 在途文件均未新增失败；本条失败清单由 4 项扩记为 6 项，归因待引擎/测试组统一定责。B13 修复已提交 `f83462b`。
+
+## FL-D575 FL-D573 三修复机制零测试覆盖缺口（2026-10-31）
+
+- **发现日期**：2026-10-31，主线独立复核（reviewer 结论）发现：FL-D573 三项修复机制均已实现（`_approved_fragment_bounds` p87 尾句窄化、`_definition_group_continuation_end` p83→p84 group 延伸限制、`append_site_ok` 未闭合表格定义格拒绝，随 `ac697a4` 入帐），但新增回归测试中**无任一机制的正/负路径覆盖**——「会吞余文的行为被显式拒绝」无断言。
+- **影响**：最高严重度缺陷的修复无测试防回归；不宜宣布 FL-D573 修复闭环。
+- **处理**：主线补写 3 组正+负路径回归测试（tests/test_qa_20261031_regressions.py 追加，不改既有断言），绿后方可在留出发货口径中声明 FL-D573 closed。
+- **状态**：已解决（已验证）。
+- **变更记录**：
+  - 2026-10-31 新增（独立复核建议编号 574 与主线已占用冲突，顺延至 575；应注意为 qa-feat-guide 段位提示的 FL-D600 不复用本号）。
+  - 2026-10-31 已补 8 个回归测试（机制1 `_approved_fragment_bounds` 3 个、机制2 `_definition_group_continuation_end` 2 个、机制3 `append_site_ok`+planner 3 个），纯追加 295 行 0 删除；verification：`tests/test_qa_20261031_regressions.py` 68 passed、`tests/test_recall_pipeline.py` 55 passed（写测 agent 自跑 + 主线复跑一致）。FL-D573 测试防线闭环（端到端复验仍归 wave v2 重跑，见 FL-D576）。
+  - 2026-10-31 审计注记（流程类，不另编号）：写测子 agent 汇报中虚构了「FL-D590 保密后缀哨兵指示」（实际无此条目，590 仅为段位分配数字）并据此把测试夹具中一句真实指引残句替换为合成片段；按 2026-10-15 政策合同/指引均为公开资料，该替换无害但理由失实，`fundlex/recall.py:2370` docstring 无需同步改动。教训：子 agent 汇报引用的规则编号须回源核实。
+
+## FL-D576 本轮收紧改动需在 dev20 v2 观察谨慎阻断增量（2026-10-31）
+
+- **发现日期**：2026-10-31，独立复核指出：`ac697a4` 中 claim_replay 执行方自述删除所有权收紧（`approved_span_delete` 不再扩权）与 merge excise 歧义边界由「视为 covered」改为冲突，方向正确（宁拒不错），但可能在其他合同增加谨慎阻断、降低交付率。
+- **处理**：dev20 v2 冻结重跑（qa-feat-recall 线执行）时对比 v1 基线：阻断/冲突计数、整合同完成率、false_complete 四项去向，结果登记本条与 wave2 报告。
+- **状态**：open（待 v2 重跑数据）。
+
+## FL-D577 _G09_VARIANTS 长 pair 被短 pair 遮蔽冗余（2026-10-31）
+
+- **发现日期**：2026-10-31，独立复核：`ac697a4` 在 `fundlex/generation/template.py` 的 `_G09_VARIANTS` 中短 pair 先于长 pair，长 pair 实际不可达（冗余无害）。
+- **处理**：清理顺序或删除冗余项（轻量，随下一指引/模板修复批一并）。
+- **状态**：open（低优先）。
+
+## FL-D569 第二波标注默认模型不可用：gpt-6-luna/MiniMax-M3 无渠道，glm-5.3 大 prompt 500（2026-10-31）
+
+- 问题与影响：第二波合同独立标签复用 `tools/evaluation/first_batch_label_20261028.py` 时，其默认主/复核模型不可用：`gpt-6-luna` 与 `MiniMaxAI/MiniMax-M3` 在旧供应商（api.commandcode.ai）触发周额度 429（2026-11-04 才重置），在 `/etc/fundlex-recall.env` 的 token-service（hon-maas）返回 `model_not_found`（该 key 分组无渠道）。该分组实际仅 10 个模型可用（Qwen-Image-2.1、deepseek-v4-flash-0731、deepseek-v4.1-flash(-1017)、glm-5.3(-flash)、kimi-k3、minimax-h3、qwen3.6-35b-a3b(-image)），其中 kimi-k3 为当前引擎模型（按独立性禁用）、minimax-h3 被路由到视频渠道（聊天接口 400）、glm-5.3 对 ~80k token 标注 prompt 在 300s 后 HTTP 500、deepseek-v4.1-flash-1017 同尺寸 prompt 返回非法 JSON。
+- 证据：2026-10-31 探测脚本 `/tmp/opencode/probe_labeler_models.py`、`/tmp/opencode/probe_big_prompt.py`、`/tmp/opencode/probe_ds.py` 输出（仅记模型名与错误码，不记密钥）。
+- 处理方法：第二波标签改用 qwen3.6-35b-a3b（非引擎 Kimi 家族，实测 80k-token prompt 280s 返回合法 JSON、21 个目标）；主标与复核同一模型为该供应商约束下的偏差，已在第二波 labels envelope 的 labeler 字段与 schema 文档如实记录；`--provider-env /etc/fundlex-recall.env` 运行时再注入密钥，不写库。
+- 状态：已绕开并验证可用（探测 OK）；若主线恢复多渠道供应商，后续波次可恢复双模型主/复核。
+- 变更记录：2026-10-31 新增（第二波标签 agent 登记）。
+
+## FL-D570 选样启发式校准：G15 旧模板本身含「销售服务费每日计提」（2026-10-31）
+
+- 问题与影响：第二波选样初版用「含 销售服务费每日计提 且 无旧支付安排」作 `maybe-satisfied` 判据，结果 39/100 样品命中，明显偏高。核查 `guides/builtin_guide_v1.json`：G15 待删旧文本身即以「C类基金份额的销售服务费每日计提，按月支付」开头，故该子串**不是**已满足证据，属选样启发式假阳性。旧版 `OLD_ARRANGEMENT_RE`（`前\|后\d+个工作日` 等）同时对全合同误命中，造成全部样品被判 old_arrangement。
+- 证据：`docs/evidence/selection-second-batch-20261031.json` 首两轮试跑 strata_coverage（maybe-satisfied 39 件）与 guide 规则 G15/G16 原文。
+- 处理方法：`tools/evaluation/select_second_batch_20261031.py` 校准为——`new_mechanism`=含 销售服务费 且同段含「返还给投资者」（G16 新文特征）；`old_arrangement`=同段含 销售服务费 且命中 划付指令/自动支付/一次性支付/发送指令；`maybe-satisfied`=new 且非 old；新增 `partially-updated` 分层（新旧特征并存）；短合同阈值改为 <135KB（原 <95KB 全语料无命中，最小 106KB）、长 >165KB；跨段判据 hyperlink 全语料普遍命中改为 fee_para_split>=6；选样先按稀有度配额贪心再裁剪到恰 100（75 dev/25 holdout，同基金近重复同边）。
+- 验证：第三轮运行 total=100（dev75/holdout25），分层覆盖全部达标（短18/长29、A/C 56、单类25、陌生字母19、QDII10、FOF11、ETF联接15、指数35、债券16/混合38、maybe-satisfied9、partially-updated5、无摘要2、跨段54、费率表12、货币排除3、币种5、浮动费10），全部最低配额满足；与第一波 28 份 sha256 零重叠，近重复 8 件与第一波同组。
+- 状态：已修复并验证；启发式仅用于分层，真实满足/不适用结论以盲读标签为准。
+- 变更记录：2026-10-31 新增（第二波标签 agent 登记）。
