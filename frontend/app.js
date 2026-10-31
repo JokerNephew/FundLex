@@ -727,6 +727,20 @@
         <p class="subnote">把某条修订改为“不接受”后，交付包会同时给出「（全量痕迹版）」（引擎全部改动）
         和「（选择修订版）」（只保留你接受的修订，接受它的全部修订即得到最终版）；若全部保持默认接受，
         只给出「（全量痕迹版）」，因为它已经等于最终版。快捷键：A 接受当前选中修订，R 拒绝；切换合同前会保留当前勾选。</p></details>`;
+    // FL-D557 F8: index the freshly rendered nodes once. syncReview used to
+    // run ~3 full-document querySelector(All) lookups per revision on every
+    // toggle; with the index each decision is O(1) map gets.
+    const nodeMap=new Map();
+    ($('review-doc')||body).querySelectorAll('[data-rev]').forEach(n=>{
+      const key=n.getAttribute('data-rev');
+      if(!nodeMap.has(key))nodeMap.set(key,[]);
+      nodeMap.get(key).push(n);
+    });
+    const itemMap=new Map();
+    body.querySelectorAll('[data-rev-item]').forEach(item=>{
+      itemMap.set(String(item.getAttribute('data-rev-item')),{item,input:item.querySelector('[data-rev-toggle]')});
+    });
+    review.index={nodeMap,itemMap};
     syncReview();
     bindReviewSplitter();
   }
@@ -744,6 +758,8 @@
   }
   function revisionNodes(revision){
     const ids=revision.revision_ids?.length?revision.revision_ids:[revision.del_id,revision.ins_id??Number(revision.del_id)+1];
+    const map=state.review?.index?.nodeMap;
+    if(map)return ids.flatMap(id=>map.get(String(id))||[]);
     return ids.flatMap(id=>[...document.querySelectorAll(`#review-doc [data-rev="${CSS.escape(String(id))}"]`)]);
   }
   function syncReview(){
@@ -755,8 +771,9 @@
       if(verdict==='accept') accepted++;
       const nodes=revisionNodes(r);
       nodes.forEach(n=>{n.classList.toggle('rejected',verdict==='reject');n.classList.toggle('active',String(review.active)===String(r.del_id));});
-      const item=document.querySelector(`[data-rev-item="${r.del_id}"]`);
-      if(item){const input=item.querySelector('[data-rev-toggle]');if(input)input.checked=verdict==='accept';item.classList.toggle('rejected',verdict==='reject');item.classList.toggle('active',String(review.active)===String(r.del_id));}
+      const entry=review.index?.itemMap.get(String(r.del_id));
+      const item=entry?entry.item:document.querySelector(`[data-rev-item="${r.del_id}"]`);
+      if(item){const input=entry?entry.input:item.querySelector('[data-rev-toggle]');if(input)input.checked=verdict==='accept';item.classList.toggle('rejected',verdict==='reject');item.classList.toggle('active',String(review.active)===String(r.del_id));}
     }
     const count=$('review-count');
     if(count) count.textContent=`共 ${review.revisions.length} 条修订 · 已选接受 ${accepted} 条 · 已选拒绝 ${review.revisions.length-accepted} 条`;
@@ -769,7 +786,9 @@
   function setAllRevisions(verdict){
     const review=state.review;if(!review||state.selectionBusy?.doc===review.doc)return;
     for(const r of review.revisions)review.chosen[r.del_id]=verdict;
-    reviewDecisionsSave();renderReview();
+    // FL-D557 F8: every revision state is class/checkbox driven, so a class
+    // sync covers accept-all/reject-all — no full-document innerHTML rebuild.
+    reviewDecisionsSave();syncReview();
     toast(verdict==='accept'?`已全部标记接受（${review.revisions.length} 条）`:`已全部标记拒绝（${review.revisions.length} 条）`);
   }
   function focusRevision(delId){

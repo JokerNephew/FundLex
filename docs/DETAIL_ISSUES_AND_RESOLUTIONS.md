@@ -6765,8 +6765,9 @@ H＝E×…
   - F5 无界增长：新增 `fundlex/retention.prune_checkpoints`（只动 32-hex 目录内 64-hex `.json`，软链/异名全跳过，条目级 OSError fail-closed；env `FUNDLEX_CHECKPOINT_MAX_AGE_DAYS` 默认 45、`FUNDLEX_CHECKPOINT_MAX_FILES` 默认 50000，均可关）；trace_sink 写入点按大小滚动（`FUNDLEX_TRACE_MAX_BYTES` 默认 64MiB，`FUNDLEX_TRACE_KEEP_ROTATED` 默认 10，手工 `archive-*` 不动）。调度选 **worker 循环惰性清理**（`Worker._prune_storage`，`FUNDLEX_RETENTION_INTERVAL_SECONDS` 默认 6h）而非 systemd timer，理由与手工一次性执行方式见 docs/DEPLOYMENT_PARAMETERS.md「检查点与 trace 保留策略」。生产只读投影（26716 文件）：默认 45d/50k 当前均为 0 删除（全部新于 45 天），策略只约束未来增长。测试 tests/test_retention.py 9 项 + tests/test_trace_sink.py 滚动 4 项。
   - F5 缓存评估：`recall._PARAGRAPH_GRAMS_CACHE` 每次 survey 前 clear，体积≤单文档段数，**本就有届**，且生产代码内只有写入点（读取mirror 仅存在于 test_fl_d119_guards 夹具），不加淘汰（加了也无受益且引入风险）；`recall_pipeline._DOCUMENT_COMPACT_CACHE` 改上限 4 的插入序 LRU 且条目持有自身 inspection（id 无法被复用到他对象），测试 tests/test_document_compact_cache.py。
   - F7 compare.js：轮询改 `schedulePoll`——页面不可见不再 fire 2.5s 全量重取，`visibilitychange` 恢复时按原任务重臂；静态钉测试 tests/test_compare_polling_gate.py（浏览器层 tab 可见性模拟成本高，未做）。
-  - F3④（`_revision_view` 重投影缓存）与 F8（修订审查 innerHTML 虚拟化）明确**未修**：前者需与 compare `_VIEW_CACHE` 同构的 (key,size,mtime) 缓存及失效语义设计；后者属前端大改造，均列下一轮。
-- 遗留既有失败（非本轮引入，见 FL-D574）。
+  - F3④ `_revision_view` 重投影缓存（**2026-10-31 已修**）：`api._project_revision_view` 模块级插入序 LRU（上限 4），键 (path, size, mtime_ns, report sha256)——产物重发/报告变更自然失效；钉测试 tests/test_revision_view_cache.py 6 项（命中/字节漂移/mtime 漂移/报告漂移/LRU 有界与 recency/真实投影冒烟）。
+  - F8 修订审查渲染性能（**2026-10-31 已修本轮可修部分**）：renderReview 渲染后一次性建 `review.index={nodeMap,itemMap}`，syncReview 由「每条修订 ~3 次全文档 querySelector(All)」降为 O(1) map 查（每次勾选/键盘 A/R 都触发）；全部接受/拒绝由整页 innerHTML 重建（重解析整份合同投影 HTML）改为仅类名同步；钉测试 tests/test_review_render_index.py 3 项；浏览器套件 test_frontend_fixes 14、test_v1_frontend_remediation 15 实跑绿。真正的清单虚拟化（滚动窗口化）未做，会改变键盘导航/查找语义，登记为潜在后续项。
+- 遗留既有失败已修复（FL-D574，6 项测试陈旧归位，非行为回归）。
 
 ## FL-D558 测试体系与环境纪律（2026-10-31，A10）
 
@@ -6922,16 +6923,104 @@ H＝E×…
   - 2026-10-31（修复 agent，本轮）：四项修复全部入帐并验证（复放+回归+mutation）；FL-D575 测试覆盖缺口随 12 项测试入帐闭合，由主线复核销号；留裁子项如上。
   - 2026-10-31（修复 agent，同轮复核）：发现受理块死代码（闸门顺序），修正为闸门前受理；新增受理×1 回归测试（共 13 项 FL-D573 测试），全管线复放补证 plan 落点 p84 与防错 incomplete；本变记录与修正代码一并提交。
 
+## FL-D600 smoke28/29/30 均不构成当前 QA 基线的指引资格证据（2026-10-31，guide 线）
+
+- 复核日期：2026-10-31（qa-feat-guide 对话）。smoke28（run `581020e2e3584086bbf705a6aa98006a`，`/tmp/opencode/gg-real-smoke28`，EXIT=0，账本 1339 次 HTTP：1316 completed + 23 failed，记账约 $1.1847，仅观测）终态：quality_run_status=**fail**、critical_quality_findings=0、requirement_gaps=0、latest uncertain **4**、unresolved **19**（impact 7 + missing topic 12，其中 1 个 topic 为 not_covered）、independent_model_review_status=**qualified**、Residual 8 轮均 `new_uncovered`（10/6/2/1/5/6/1/1，143 次真实调用、未被 circuit 或上下文截断主导，但**未饱和**）。
+- **证据无效根因**：smoke28 运行时代码**早于快照 158475f**——其 finalize checklist 仍是旧键名（`impact_coverage_complete`/`requirement_coverage_complete`/`residual_saturated`），与当前基线 `guide-eligibility-2` 键名（`quality_gate_passed`/`coverage_gate_passed`/`no_open_critical_findings`）不同；且用当前 eligibility 口径回读 smoke28 store 可直接观察到不一致：store 现存 **17 个 open critical**（coverage_gate：12 个 missing topic + 4 个 definite impact 无候选 + 1 个 contract uncertain），而该次 finalize 的 gates 记 `open_critical_findings=0` 但 `quality_run_status=fail`——旧代码下质量摘要与资格门禁存在时点错位。快照后代码已把口径统一（`_refresh_quality_summary` 在 coverage/residual 后重算、finalize 走 `evaluate_run_eligibility`、Residual 不再进门禁、章节分批已实施，见 handoff 2026-10-30 段），因此必须用当前 QA 基线代码新跑一轮资格冒烟。
+- smoke29 于 GUIDE_QUALITY_REVIEW 阶段 `MODEL_HTTP_ERROR` 中断（EXIT=1，供应商侧错误，目录保留）；smoke30（run `b539c4b4d77549ada0f639be1e090b9d`）被操作者以 `batching_must_be_by_chapter` 中止——按章节优先分批已在快照中实施，smoke30 不代表当前基线，仅作历史记录（账本保留，不重置）。
+- **新环境事实（登记）**：worktree 的 `.venv` 致 `import fundlex` 默认解析到主工作区 `/home/opencode/fundlex`（证据：smoke29 traceback 路径）；历史 smoke 实际跑的是主工作区代码。本线（qa-feat-guide）跑自己基线必须显式 `PYTHONPATH=<worktree>`。
+- 处理：新开 **smoke31**（`/tmp/opencode/gg-real-smoke31`、全新账本、run `2aa38fd14e184c8093cdbbf36e5721e6`，PYTHONPATH 指向 qa-feat-guide worktree，HEAD `0b4e89a`），配置与 smoke28 对齐（8 轮 Residual、glm-5.3-flash 独立 reviewer、scope-aware、轮转窗口）。模型环境已按 FL-D540 切换为 hon-maas：author=`kimi-k3`、reviewer=`glm-5.3-flash`，启动前两角色最小真实调用均 200/schema 通过；kimi-k3 为推理模型，需关注单次输出 8000 token 下的截断事件。资格判定沿用 smoke25/26 六项口径；账本仅观测（FL-D445），不做停止门禁。
+- 状态：smoke31 已完成——终态与判定见 **FL-D603**（`candidate_with_findings`/qualified=false，NO-GO）。变更记录：2026-10-31 新增；2026-10-31 smoke31 完成并登记 FL-D603。
+
+## FL-D601 G22 有序列表变体定位假阳性——引擎在冷冻标签判 not_applicable 的合同上主动造修改目标（2026-10-31，guide 线）
+
+- **发现日期**：2026-10-31，wave1 dev20 基线（冻结 0b1a813）逐 case 归因。B15（广发美国房地产）引擎对 p883/p1239 各造一个 G22 edit（`G22V001/002`，reason=`g22_ordered_list_variant`），将有序列表尾句「按基金份额持有人持有的基金份额比例进行分配。」追加销售服务费返还；冻结标签（sha 61a2c514）判 G22 main+summary 均 **not_applicable**：「no guide-style 依据基金财产清算的分配方案…全部剩余资产 clause; replacement has no site」。
+- **根因**：`ensure_g22_ordered_list_targets`（fundlex/recall.py）把「基金财产按下列顺序清偿…（N）按基金份额持有人持有的基金份额比例进行分配」有序列表形式当作 G22 合法站点；该变体形式无标签依据（39 个样本标签无一以有序列表尾句为站点），属指引诱导的额外修改。
+- **处理（已实施，本次提交）**：变体不再造 Target。`ensure_g22_ordered_list_targets` 替换为仅取证据的 `find_g22_ordered_list_site`；新增 `missing_guide_site`：规则事实条件 TRUE、无存活目标、且指引 canonical old_text 全文无命中时返回 NO_GUIDE_SITE 证据；recall_pipeline 在主 targeting 后对 G22/G08 无 canonical 站点的 obligation 记 **ApplicabilityDecision(FALSE, source=deterministic, reason=NO_GUIDE_SITE:G22…, evidence_quote=变体句)**，completion 正常归一化为 NOT_APPLICABLE（仿 `mark_absent_guide_sections` 先例）；同步移除 scopes 注入与 `_apply_scope_gate` 的 `g22_ordered_list_variant` 特例（保留 semantic_replacement 分支）。`plan_target` 的 G22/G08 变体替换分支保留为防御路径。
+- **验证**：新增回归 `test_g22_ordered_list_variant_is_evidence_not_a_site`（真实 B15 docx：站点证据 p883、闭合证据成立、无 Target 产生）、`test_missing_guide_site_keeps_live_target_and_canonical_sentence`（存活目标/canonical 在场均阻断闭合；无站点无变体仍给证据）；`tests -k "recall or obligations or targeting or guide_generation or jobs"` 258 passed / 1 skipped。**端到端复核通过**：B15 真实模型单合同复跑（`/tmp/opencode/fl-d601-b15`，新账本 34 completed/1 failed/$0.0432）——G22 不再产生任何 edit/target；obligation `applicability=FALSE(source=deterministic, reason=NO_GUIDE_SITE:G22:variant@p883, evidence_quote=按基金份额持有人持有的基金份额比例进行分配。)`、`completion=NOT_APPLICABLE`；delivery_status=complete 且无 OPEN_OBLIGATION 阻断；edits 17→13（消失的另两处为 FL-D602 G08 与 FL-D606 待修的 G14 p166）。
+- **状态**：已解决（代码+回归+真实复核均已验证，适用范围：qa-feat-guide-20261031 修复提交及之后）。
+- **变更记录**：2026-10-31 新增；2026-10-31 端到端复核通过转已解决。
+
+## FL-D602 G08 实际执行费率变体定位假阳性（2026-10-31，guide 线，与 FL-D601 同簇）
+
+- **发现日期**：2026-10-31，同一归因。B15 引擎对 p162 造 G08 edit（reason=`g08_actual_rate_variant`，quote「实际执行的申购费率在招募说明书中载明。」）；冷冻标签判 G08 not_applicable：「多类别条件满足，但合同没有指引所列『本基金的申购费率由基金管理人决定，并在招募说明书中列示。』原句可供替换。」
+- **根因**：`ensure_g08_actual_rate_targets` 把「实际执行的申购费率在招募说明书中载明」表述当作 G08 站点；全部样本标签无一以该句为站点，属指引诱导额外修改。
+- **处理（已实施，与 FL-D601 同提交）**：`ensure_g08_actual_rate_targets` 替换为仅取证据的 `find_g08_actual_rate_site`；G08 纳入 `missing_guide_site` FALSE 闭合路径（同上）。
+- **验证**：回归改造 `test_g08_actual_rate_variant_is_evidence_not_a_site`（旧断言"造 target 并替换成功"改为"仅证据 p162，无 Target"）；套件同 FL-D601 全绿。**端到端复核通过**（同 FL-D601 的 B15 复跑）：G08 p162 edit 消失，唯一 G08 target 状态 not_applicable；obligation `applicability=FALSE(reason=NO_GUIDE_SITE:G08:variant@p162, evidence_quote=实际执行的申购费率在招募说明书中载明。)`、`completion=NOT_APPLICABLE`。
+- **状态**：已解决（与 FL-D601 同提交、同次真实复核）。
+- **变更记录**：2026-10-31 新增；2026-10-31 端到端复核通过转已解决。
+
+## FL-D603 smoke31 指引资格冒烟终态：quality/coverage 双门禁未过，不构成资格（2026-10-31，guide 线）
+
+- **运行**：run `2aa38fd14e184c8093cdbbf36e5721e6`（`/tmp/opencode/gg-real-smoke31`，EXIT=0，2026-10-31 完成；PYTHONPATH 指向 qa-feat-guide worktree、head 0b4e89a 基线、全新账本）。真实调用账本：430 completed / 1 failed，记账约 $0.2994（仅观测，FL-D445）。
+- **终态（guide-eligibility-2 口径）**：`complete_with_unresolved` / `candidate_with_findings` / qualified=**false**。quality_run_status=**fail**（open_critical_findings 15，全部 source=coverage_gate）；coverage_gate_passed=**false**（missing_topics 5、requirement_gaps 2、unresolved_impacts 37）；latest_contract_uncertain **0**；independent_model_review_status **qualified**（glm-5.3-flash 独立，配置与作者不同且调用成功）；residual_check=disabled（FL-D448 口径）；requirements 59 条全 dispositioned（modify 11 / no_change 30 / out_of_scope 15 / needs_external_baseline 3）、unhandled_requirements 0。
+- **未过项内容**：5 个 missing topic 多为外部基准型要求（客户维护费占管理费比率上限 50%/30%/15%、销售协议签订与分成比例约定、证监会规定的其他费用信息兜底披露、ETF/同业存单/货基赎回费产品类型例外×2）；15 个 open critical 均 coverage_gate 来源的 requirement/semantic/impact_coverage。quality fail 的根因关联这些 coverage findings，非 circuit/截断主导（kimi-k3 单输出 8000 下未见系统性 MODEL_OUTPUT_TRUNCATED）。
+- **判定**：NO-GO（对 eligibility）；smoke28 的结论（FL-D600）维持——旧证据无效，smoke31 为当前基线首个有效证据但**未达资格**。下一步：逐项核对 15 个 open critical 是否均为确证内容缺口（外部基准类是否应 disposition=needs_external_baseline 而非 critical），再决定补指引内容或修订 disposition 口径。
+- **导航差异（登记）**：任务提示词引用的资格路径 `docs/EVALUATION_FIRST_BATCH_EXECUTION_20261028.md §七` 在当前主线（qa/full-audit-20261031）与本 worktree 均不存在（stale 引用）；资格执行往来一律以 wave1 冻结目录 `freeze.json`（schema `fundlex-qa-wave1-freeze-v1`）+ `tools/evaluation/recall_run` + `score_first_batch` 评分链路与本文件条目为准。
+- **变更记录**：2026-10-31 新增；2026-10-31 补记导航差异。
+
+## FL-D604 A7-06 rule_scope 三处过宽/过窄（已确认偏差，暂缓实施）（2026-10-31，guide 线登记）
+
+- **来源**：盲审报告 /tmp/opencode/qa/findings/A7-engine-recall.md A7-06。①anchor/hint 命中≠1 时 `_resolve_default` 整章回退（过宽，误改窗口上移）；②`_resolve_income`/`_resolve_liquidation` 标题硬匹配「收益分配原则」「清算剩余资产」词族盲区（过窄→unresolved→fail-closed 漏目标）；③摘要副本 copy_key 硬匹配丢非典型章名副本（有 `_expand_duplicate_copy_scopes` 兜底）。
+- **判定**：偏差确认属实（读码核实 rule_scope.py:964-1090）。修复方向（盲审建议认可）：anchor 0 命中改最近邻叶子+`anchor_miss` ledger；标题匹配改词族表；summary 副本按 copy_key 前缀纳入。
+- **状态**：**暂缓实施**——属召回面变更，需 dev20 v2 冻结基线测量护航（召回率与误改率前后对比），避免在无测量下注入召回行为变化；建议由 qa-feat-recall 线在 v2 计划中排入。
+- **变更记录**：2026-10-31 新增（guide 线代登记，未实施）。
+
+## FL-D605 A7-07 targets_for_open_rules 对 scope 缺失 fail-open（已确认偏差，暂缓实施）（2026-10-31，guide 线登记）
+
+- **来源**：同报告 A7-07。读码核实 `fundlex/targeting.py:_scan_scope_pages`（793-794 行）：`scope is None` 时 `accepted = list(page)` 全收（fail-open）；而 `_target_scope_ok`（recall_pipeline）对 scope 缺失/unresolved fail-closed——姊妹函数口径不一致。
+- **影响**：scope 未解析的 open operation 可获得全文 T3 候选，存在跨条款错站风险（与 G14 p166 错改句同方向，但未有直接因果证据）。
+- **处理设计（认可）**：`scopes is not None` 且 `scopes.get(rule_id) is None` 时 fail-closed（skip + coverage 记录），与 `_target_scope_ok` 对齐。
+- **状态**：**暂缓实施**，理由同 FL-D604（需 dev20 v2 基线测量）；随 FL-D604 一并移交 qa-feat-recall 线。
+- **变更记录**：2026-10-31 新增（guide 线代登记，未实施）。
+
+## FL-D606 G14 促销活动费率变体未定位 + 保留权利句误改（指引诱导，待修）（2026-10-31，guide 线）
+
+- **发现日期**：2026-10-31，wave1 归因。B15 标签 T007 G14 replace 目标为 p167「在基金促销活动期间，基金管理人可以按中国证监会要求履行必要手续后，对投资者适当调整基金申购费率、赎回费率、销售服务费率和转换费率。」（评分 kept：old wording still in declared site）。引擎实际改了 p166「基金管理人可以在法律法规和本基金合同规定范围内调整申购费率和赎回费率。」（无标签依据的额外修改）。
+- **根因方向**：指引 G14 模板 old_text 均为「基金管理人可以适当调低基金申购费率…」无促销活动前缀变体；模型 survey 将 p166 保留权利句误作 G14 站点，真正应改的 p167 前缀变体反而漏定位。属「示例句当应改目标 + 应改但难定位变体」同簇。
+- **修复方向（未实施）**：G14 匹配核心应锚定「适当调低/调整 + 费率清单」语义并容忍促销活动前缀；保留权利句（「可以在…范围内调整…费率」非促销语境）不得命中。可归入指引匹配变体表或 engine_scope。
+- **状态**：open，待修复（优先级次于 FL-D601/602）；修后需 B15 复跑复核 p167 落实、p166 不再改。
+- **变更记录**：2026-10-31 新增。
+
+## FL-D607 B15 G01 在无释义定义条款时向表格格内追加豁免条款（指引诱导，待修）（2026-10-31，guide 线）
+
+- **发现日期**：2026-10-31，wave1 归因。B15 标签判 G01 not_applicable：「释义部分没有基金份额类别定义条款，不能按本规则在释义定义后追加。」引擎却对 `tbl0/r55/c1/p0`（表格单元格内的类别定义句）planned 并执行了 G01 豁免条款追加（无标签依据的额外修改）。
+- **根因方向**：G01 追加站点定位未排除表格容器；「释义定义后追加」语义应限正文段落定义条款。表格格内追加另有结构风险（书签半片 FL-D568 同类）。
+- **修复方向（未实施）**：G01（append 到释义定义后的场景）站点须为正文段落（body zone 的 definition 上下文），表格格内文本不作为追加锚点；或把该情形归 NOT_APPLICABLE 并记证据。
+- **状态**：open，待修复。
+- **变更记录**：2026-10-31 新增。
+
+## FL-D608 B05 G01/G03、B15 G03：追加策略在声明站点缺失（同文双站点追加疑似被去重抑制）（待归因）（2026-10-31，guide 线）
+
+- **发现日期**：2026-10-31，wave1 归因。B05 评分 verdicts：G01 append not_executed（释义，标签 p118）、G03 append not_executed（基本情况，标签 p155），detail 均「appended policy absent from its declared site: 3 clause(s)」；引擎 report 中两站均有 planned 目标（p117/p155），另有一个 p157 的 G03 目标被标 not_applicable，reason 含 `DUPLICATE_APPEND_SIT[E…]`。B15 G03 同症（标签 p(九) 类别条款后追加，not_executed）。
+- **疑似根因**：同一政策文本需在两个不同站点（释义/基本情况）各追加一次时，追加去重/duplicate-append 逻辑疑似把第二站点判重丢弃——与 DUPLICATE_SITE 处理族相关但方向相反（FL-D570 是假阳性阻断，本条是合法双站点被抑制）。
+- **状态**：已解决（已验证，回归锁定；dev20 v2 端到端复验在途）。**第二层闭合证据（2026-10-31 verify4，`/tmp/opencode/qa-findings-run/b05-d608-verify4/`）**：B05 复跑 G01:B1:O1 PASS（site p119）、G03:B1:O1 PASS（site p159），unresolved 0，真实产物 final.docx/redline.docx 落地；评分 T001 G01 append **completed**（"appended policy text present at its declared site"）、T002 G03 append **completed**、共 12 completed/1 kept（剩 G08=FL-D643 不确定性回摆，与本条无关）。回归：497 passed（recall/obligations/targeting/append/definition/scope 面）。
+- **变更记录**：
+  - 2026-10-31 新增。
+  - 2026-10-31（guide 线）：归因订正——非双站点去重抑制，实为 append 锚点绑到类别划分「总定义句」（释义 p117/基本情况 p155）而非「类定义组尾」（标签站点 p119/p159），评分窗口读不到 → not_executed + false_complete。修复 `4296753`（定义组链结构化绑定组尾；无分组结构合同行为不变），B05 真实文档回归 5 例 + `test_fl_d608_definition_group_chain.py` + 变体套件全绿，主线独立复核 PASS（含 mutation 抽查）；B15 G03 已由 FL-D573 先行覆盖。主线 `017b3ed` 并入。
+  - 2026-10-31（guide 线，第二层）：`4296753` 后 B05 真实复跑暴露三处连锁拦截，重绑生效但 edit 仍不落地/义务不闭合——①plan 阶段第二道守卫 `target_site_ok` 以审计姿态复跑 `append_site_ok`（无组链受理），否决自身重绑结果 → G01/G03 TARGET_SOURCE_MISMATCH 未产 edit；②audit 阶段 scope 闸门把重绑 target 判出界（G01 已解析 scope 仅含重绑前总定义句 p117）；③claim replay 终界同样按该 scope 过滤已验证的 p119 站点 → 「verified site missing」。修复 `51fb45b`：plan 守卫对 G01/G03 免于审计姿态复查（沿用 FL-D573「站点判定站在自身重绑决定之后」）；`_resolve_definition` 沿同一定义组链把 G01/G02 scope 扩展至组尾（带 `extend=definition_group_end` 证据）；闸门层保留对 APPEND_END 重绑 target 的守护。回归：plan_target 真实文档双断言 + scope 扩展单测，面回归 497 passed。**dev20 v2 若以 017b3ed（仅第一层）开跑，B05 类案件 G01 仍会 CLAIM 未闭合；须含 ≥51fb45b**。
+
+## FL-D609 smoke28 资格复验（smoke 子集，新冻结 3b6da2a2）：B16 全完成恢复，B05 false_complete 依旧，总体 NO-GO（2026-10-31，guide 线）
+
+- **记录**：/tmp/opencode/qa/findings/smoke28-requal-3b6da2a2.md。冻结：selection `d89f40b5`、labels `61a2c514`、guide `20bc6677`（均与基线一致），engine `1351e03`（qa-feat-guide-20261031，含 FL-D601/602 修复 `068fe94` 与主线至 `3ef6f87`）。评分 sha `06d26a82…`，账本约 $0.0343（29 次真实调用）。
+- **结果**：B16 由基线整合同中止（FL-D568，23 目标全丢）恢复为 **23/23 完成且如实 complete**（FL-D568 真实路径生效证据）；B05 与基线同缺口（G08 wrong=FL-D572 主线在途；G01/G03 append not_executed=FL-D608 待归因），report=complete 但评分有缺口，**false_complete 依旧**。
+- **门槛判定**：①无严重政策/事实错误 **未过**（B05 G08 模板保文错误未解）；②无错误 complete **未过**（B05 false_complete；另如实声明：FL-D565-F1 的 FUND_TYPE_UNVERIFIED 路径在本双子集中未被触发，其生效验证需 dev20 v2 全量或含排除类型样本）；③正常用例实际完成能力 **过**（B16 23/23）；④结果已核对 过。总体 **NO-GO**，非回归（B05 缺口同因未变）。
+- **行动**：FL-D608 归因修复与主线 FL-D572 落地后，由 qa-feat-recall 线执行 dev20 v2 冻结重跑；本线修复就绪信号（`068fe94`、`1351e03`）已随复验记录给出。
+- **状态**：open（复验已执行并定判，门槛缺口待 FL-D572/FL-D608）。
+- **变更记录**：2026-10-31 新增。
+
 ## FL 编号分配（多对话并行期协调，2026-10-31）
 
-- 避免并行会话编号冲突，段位分配：主线对话 FL-D574..579；qa-feat-recall 对话 FL-D580..589；qa-feat-compare 对话 FL-D590..599；qa-feat-guide 对话 FL-D600..609；第二波标签对话与 B13 性能对话仍按"读尾部取下一号"（若与段位冲突，以段位为准顺延）。各对话只新增条目、不改他人条目正文；状态更新可采用在自己段位新增"变更记录"行或经主线合并。功能开发新对话（2026-10-31 追加）：qa-f2-recall-tracked FL-D610..619；qa-f2-compare-tracked FL-D620..629；qa-f2-guide-history FL-D630..639。
+- 避免并行会话编号冲突，段位分配：主线对话 FL-D574..579；qa-feat-recall 对话 FL-D580..589；qa-feat-compare 对话 FL-D590..599；qa-feat-guide 对话 FL-D600..609；第二波标签对话与 B13 性能对话仍按"读尾部取下一号"（若与段位冲突，以段位为准顺延）。各对话只新增条目、不改他人条目正文；状态更新可采用在自己段位新增"变更记录"行或经主线合并。功能开发新对话（2026-10-31 追加）：qa-f2-recall-tracked FL-D610..619；qa-f2-compare-tracked FL-D620..629；qa-f2-guide-history FL-D630..639。**FL-D640 起为跨线候补池（B13/标签线/主线 reviewer 统一取号），当前下一空闲号 FL-D643**（FL-D640=B13 浏览器 V2 既有失败，FL-D641/642=主线独立复核观察项，见下两条）。
 
-## FL-D574 tests/test_v3_delivery_review_gate.py 4 项在 HEAD 基线即失败（2026-10-31）
+## FL-D574 v2 evaluation/v3 delivery_review 测试族在 HEAD 基线即失败（2026-10-31，**已修复**）
 
 - **发现日期**：2026-10-31，B13 性能修复轮回归时在干净 HEAD（`99318d5`）独立 worktree 复现：4 failed / 13 passed。失败项：`test_review_refusal_persists_exceptions_and_report_only_downloads`、`test_download_revalidates_persisted_v3_review_and_both_files[missing_review|missing_action|other_artifact]`。
 - **证据与疑似归因**：四项均抛 `Conflict(EXECUTION_MODE_MISMATCH)`，位置 `store.finish()` 的模式围栏（FL-D555 A3-F7，`5bfacb7` 引入）：测试用 `store.create_batch` 直种批次（batches.mode 默认 `delivery`）再 finish 一份 `execution_mode=evaluation` 的 v2 报告，按新围栏语义属于被拒场景——疑似 A3-F7 行为变化后这 4 个测试未同步改造（测试陈旧 vs 行为回归需引擎组定责，**尚未定位结论**）。
 - **影响**：本轮性能修复无关项；全套件回归计数会把该 4 项列为既有失败。修复轮自身新增测试与受影响套件（store/api/tasks/archive/trace/retention/docx）另行给出绿的对比面。
-- **状态**：open，交引擎/测试组定责（是改测试夹具走 task-bound evaluation 批次，还是评估 `create_batch(mode=...)` 种子）。
+- **状态**：**已修复（2026-10-31，测试侧归位）**。定责结论：陈旧测试而非行为回归——jobs.py 显式保留非任务绑定的 legacy direct-batch evaluation 分支（"Legacy direct-batch runners keep their historical report mode when they explicitly ask for evaluation"），A3-F7 后该路径要求离线 runner 在种子批次时就把 `batches.mode` 持久化为 `evaluation`（生产 evaluation 批次一律走 `TaskStore.create(mode=...)` task-bound，与 `mode` 列同义）。修复：6 个测试夹具全部改为种子后显式 `UPDATE batches SET mode='evaluation'`（与 jobs.py legacy 分支契约一致，且不改引擎语义）；曾评估改走 task-bound 路径，但该路径的 worker 评估处理按 recall 引擎交付形报告（final/redline + complete 状态）裁剪产物，与 v2 runner 的 evaluation 形报告（evaluation_* 产物 + evaluation_* 状态）结构性不兼容，属引擎行为扩大，不做。
+- **主线验证（2026-10-31）**：合并后全量 2375 passed / 0 failed（66min，/tmp/qa-full-a24e320.log），6 项原失败全部转绿；dfd7735 合入口径钉测试复测绿。本条关闭。
+- **验证**：`tests/test_v3_delivery_review_gate.py + test_v2_evaluation.py + test_v2_workbench.py` 23 passed（原 6 failed）；未触碰 `store.finish` 围栏与 jobs.py 语义。
 - **变更记录**：
   - 2026-10-31 新增（B13 性能修复 agent，QA 侧登记）。
   - 2026-10-31（B13 提交前全套件回归复核）：qa-base（含 B13 全部改动 + 并行 agent 在途文件）全量 `-m pytest -q` 结果 6 failed / 2336 passed / 136 skipped，失败除上述 4 项 v3 外另有 `tests/test_v2_evaluation.py::test_evaluation_artifacts_persist_and_download_only_in_evaluation_mode`、`tests/test_v2_workbench.py::test_task_runs_evaluation_revision_and_downloads`；同一干净 HEAD（`99318d5`）worktree 逐条复现**同样这 6 项、同一 `EXECUTION_MODE_MISMATCH` 签名**。结论：6 项全部属 HEAD 既有失败（同一 A3-F7 模式围栏陈旧测试族），B13 改动与并行 agent 在途文件均未新增失败；本条失败清单由 4 项扩记为 6 项，归因待引擎/测试组统一定责。B13 修复已提交 `f83462b`。
@@ -6988,3 +7077,71 @@ H＝E×…
 - **发现日期**：2026-10-31，独立复核：`449b36b` 收紧后，own_kinds 非纯 {delete}（如含 noop 共选）且属 G15/G17 的 approved_span_delete，理论上不再被任何 source-owned re-proof 覆盖，自述证据仍有理论扩权通道；现实指引中 G15/G17 删除形态均命中既有 re-proof（claim_replay.py:638-687），未见现实触发。
 - **处理**：低优先备查；若未来指引/执行器出现该组合，升级为修复项。
 - **状态**：open（低优先）。
+
+## FL-D610 修订流水线任务输入固化：带修订痕迹 DOCX 的基底语义实施（2026-10-31）
+
+- **发现日期**：2026-10-31（qa-f2-recall-tracked 对话）。需求：用户上传件可能带其他部门的 Word 修订痕迹；本轮决策为**基底=接受全部修订后的视图**（`w:ins`/`w:moveTo` 保留内容、`w:del`/`w:moveFrom` 移除），原痕迹在基底中文固化、不再作为痕迹保留，FundLex 本轮修改在固化基底上以全新修订痕迹呈现；拒绝修订=原始视图本期不设入口。
+- **处理方法（已实施）**：
+  - `fundlex/docx.py` 新增 `normalize_tracked_base()`：复用 Compare 的 accept-all 变换（覆盖 ins/del/move 对、hyperlink/SDT/嵌套、表格行/单元格、段落标记删除合并、属性变更快照、范围标记，以及 comments 等全部 story 部件），全包前后双重 `_validate_package(full=True)`，确定性 ZIP 写出后重开比对；无痕迹输入字节级原样直通，不改变普通路径行为。返回原始/基底哈希、接受条数与受约束的原痕迹清单（`TrackedBaseNormalization`）。
+  - `fundlex/recall_pipeline.py::process_recall_first` 任务输入规范化入口：检测含痕迹后写入临时基底文件并重定向 `input_path`，scope 过滤/段落索引/页码映射/bookmarks/claims/交付物全部基于固化基底；报告新增 `base_had_tracked_changes`(bool)、`normalized_base_sha256`、`source_revisions`（原痕迹清单，作者/时间/位置/内容哈希），`source_sha256` 保持=上传原件哈希；临时基目录在 finally 统一清理。
+  - `fundlex/selective.py`：报告含 `base_had_tracked_changes` 时公开评审（selected_final/selected_redline）按"无外来修订"处理（清单仅作追溯），修订 id 按序重建不再误拦。
+  - `fundlex/upload_validation.py::has_tracked_revisions` 改为检测职责（不再拒收）；`fundlex/delivery.py` 新增 REVISION_PARAGRAPH_MERGE_UNSUPPORTED / REVISION_CELL_MERGE_UNSUPPORTED / REVISION_NORMALIZATION_MISMATCH / REVISION_STRUCTURE_INVALID 的用户文案。
+- **验证**：新增 `tests/test_docx_tracked_input.py` 16 项全绿——python-docx+OOXML 注入夹具矩阵（ins/del/move 对/hyperlink 内修订/hyperlink 在 ins 内/SDT 内修订/嵌套 ins-del/comments story 内修订/pPrChange/rPrChange 快照/段落标记删除合并/幂等/不支持的段落合并 fail-closed），断言固化后 document.xml 全文无残留修订标记、接受视图文本正确、round-trip 可打开；脚本网关离线端到端：报告 `base_had_tracked_changes=true`、redline 仅含我方（引擎作者）ins/del 且与固化旧文本同段共存、final 全包零修订残留、选择性评审与 flatten 报告互操作；普通输入回归 flag=false。真实语料 `funds_word/基金合同第一批_修订原件备份_20261027` 18 份：17 份固化成功且全包零残留（ins/del/pPrChange/rPrChange 等全部接受），1 份 `广发恒裕` 为 DOCUMENT_PROTECTED 既有边界（受保护文档仍拒收，属既定输入边界非回归）；`广发聚安` 脚本网关端到端产出 working 产物，redline 仅我方作者、final 零残留。证据 `/tmp/opencode/qa-tracked/corpus-normalize.{log,json}`、`corpus-pipeline.log`。V1 浏览器 `tests/browser/test_tracked_upload.py` 2 项：API 与页面两种入口上传带痕迹文件均不再拒收、无修订拒收提示。
+- **状态**：已实施并验证；最终全量回归与主线终验（真实工作台端到端）待主线合并后确认。
+- **变更记录**：
+  - 2026-10-31 新增（qa-f2-recall-tracked 对话）。
+
+## FL-D611 新修订作者名解析：沿用引擎作者“资金清算部”，字面值“FundLex”待产品确认（2026-10-31）
+
+- **发现日期**：2026-10-31（qa-f2-recall-tracked 对话）。任务说明写“作者=FundLex，不与原痕迹混淆”；而 FL-D446（2026-10-28 用户明确决策）将我方修订作者定为“资金清算部”，生产产物与既有证据均按此作者，且 `generate_artifacts(author=...)` 默认值为“资金清算部”。
+- **影响**：字面改名会让带痕输入产物作者与普通输入产物作者不一致，并破坏大量既有证据口径；固化语义下原痕迹已不存在，"不与原痕迹混淆"天然成立。
+- **处理方法**：本轮不改全局作者，新痕迹继续以引擎统一作者“资金清算部”呈现（与 FL-D446 一致）；将“作者=FundLex”解析为“FundLex 出品的全新修订、与原痕迹不混淆”，并按此撰写测试断言（作者==引擎作者、原作者不存在于任何修订标记中）。若产品要求字面字符串 `FundLex`，属一行改名级变更，需在主线终验前明确。
+- **状态**：open（待产品确认是否改字面值）；实现按确定性解析完成。
+
+## FL-D612 固化边界与残留事项：受保护文档、段落合并修订、死导入、OCR 路径不存在（2026-10-31）
+
+- **发现日期**：2026-10-31（qa-f2-recall-tracked 对话）。
+- **问题与影响**：①含修订+DOCUMENT_PROTECTED 的合同（真实语料广发恒裕）仍按既有输入边界拒收，需保持现状并在终验样本中标注；②段落标记删除后接非段落（如表格）的组合 fail-closed 为 `REVISION_PARAGRAPH_MERGE_UNSUPPORTED`（Compare 变换既有语义），用户需先在 Word 处理；③`has_tracked_revisions` 在 `fundlex/api.py` 与 `fundlex/integrations/feishu/service.py` 仅为死导入（检测函数本体保留，飞书 cards 中 EXISTING_REVISION_UNSUPPORTED 文案为遗留映射）；④任务提到的 `fundlex/ocr_engine.py` 与 libreoffice_engine 在当前基线不存在，除 `fundlex/regulatory/pdf_parser.py`（法规 PDF，非 DOCX）外无其他 DOCX 文本提取路径，无需同口径对齐。
+- **处理方法**：③死导入与飞书遗留文案列为观察项（极低风险，删除需另行评估调用面）；①②④如实记录。
+- **状态**：open（观察项）；主功能不依赖。
+## FL-D640 浏览器套件 test_frontend_v2/test_workbench 多项 opt-in 测试基线失败（2026-10-31）
+
+- **编号注记**：本条原登记为 FL-D610，与 qa-f2-recall-tracked 段位（610-619，已用于 FL-D610 任务输入固化）冲突；主线合并时改派 FL-D640，并开设 FL-D640+ 为跨线候补池（见编号分配段）。
+
+- **发现日期**：2026-10-31，B13 后续轮（F8 修订审查渲染修复后）实跑 `FUNDLEX_BROWSER_TESTS=1 tests/browser/test_frontend_v2.py tests/browser/test_workbench.py`：12 failed / 35 passed / 19 errors。抽查归因：`test_review_renders_void_document_tags_without_page_error`、`test_react_routes_and_deep_links` 在干净 HEAD（qa-old worktree）同环境逐条复现同样失败——**非本轮 F8/F3④ 改动引入**（F8 关联面 test_frontend_fixes 14 项、test_v1_frontend_remediation 15 项实跑均绿）。
+- **疑似归因**：该两个文件含 React 构建产物/缓存头/模型连接等前端 v2 面用例，疑似依赖一次前端构建或既有环境前提（`page 内文为空`、`live_app` fixture errors 形态），需前端组定位。test_frontend_fixes 与 test_v1_frontend_remediation 同环境全绿，说明浏览器基建本身可用。
+- **影响**：默认套件这些用例 skip（opt-in），不阻塞普通回归；但 v2 前端面自验通道当前是坏的，前端 v2 改动缺护栏。
+- **状态**：open，交前端组；12/19 的完整 HEAD 对照归因进行中（qa-old 同两文件基线运行），结果回填本条。
+
+## FL-D641 FL-D601/602 确定性闭合的跨段漏检窄边（2026-10-31，主线复核）
+
+- **发现**：NO_GUIDE_SITE 确定性 FALSE 闭合的 canonical 检查为「单段 compact 包含」；指引原句被 Word 跨段拆分时漏检，若无存活 target 会从 honest-incomplete 静默改判 NOT_APPLICABLE（recall.py:10095-10099、recall_pipeline.py:4837-4839）。
+- **处理**：登记观测；对 G22/G08 出现跨段拆分的合同在扩波中留意；需要时升级为跨段 compact 匹配。
+- **状态**：open（窄边观测项）。
+
+## FL-D642 FL-D608 组链冻结边界：subdivision 后接各类定义形体的扩面观测（2026-10-31，主线复核）
+
+- **发现**：`4296753` 组链延伸的冻结边界仅覆盖 setup-tail（recall.py:4458-4462）；「闭合总定义句→再分子类尾句（subdivision）→各类定义」形体下新码会越过 subdivision 延伸到各类定义段。该形体在语料中是否存在、标签站点在哪均未证实。
+- **处理**：扩波复跑时观测（dev20 v2 / 第二波）；未见触发前不收紧。
+- **状态**：open（观测项）。
+
+## FL-D643 B05 G08 已满足误判不确定性回摆：inventory/absent 分支可绕过 FL-D572 确定性防线（2026-10-31，guide 线）
+
+- **发现日期**：2026-10-31，guide 线 FL-D608 第二层复核同头复跑（`4f76f7f`/verify4，`/tmp/opencode/qa-findings-run/b05-d608-verify4/`）。B05 G08 评分 verdict=**kept**（声明站点 p216 旧措辞仍在、应有替换未落），final p216 与原件逐字一致；引擎 target 状态 `absent`，理由为模型自证「规则目标句在本窗口不存在…已明确A类收取、C类不收取（p218），不构成本操作的精确目标」→ 编辑未生产。同 HEAD 族内对比：v2 预跑（`eb4cdbb`）G08 engine planned + 评分 completed（应改替换正确落点）——**同一冻结族内两跑结果翻转**，属 inventory 适用性判断的模型不确定性。
+- **问题与影响**：FL-D572 防线（`ac697a4`）约束的是 wrong/假满足的确定性校验；本次模型直接判 absent（规则不适用）并给出合理化理由，编辑从未进入 plan/audit 链路，任一确定性防线无从截取——false-satisfaction 以 absent 形态复发。B05 属 smoke28 复验双子集；该不确定性使门槛①（无严重政策/事实错误）与门槛②（false_complete）在 v2 冻结重跑中达到什么结论不可预判，须如实按冻结跑动结果判定。
+- **处理方法（建议，未定案）**：对「absent/不适用」结论要求与再生/范式同样强度的证据约束（如对 G08 窗口 fallback 校验「类收费声明句存在但未含直销豁免时应强制 needs_edit」）；或评审 absent 理由中「已明确 A/C 收费」是否足以证伪 tag 站点义务（本例 p218 仅类别收费声明，未含直销豁免义务文）。交主线/FL-D572 归属线定责。
+- **状态**：open（新发现，真实双跑证据在案；FL-D643 取号后跨线候补池指针请主线合并时更新为 FL-D644）。
+- **变更记录**：2026-10-31 新增（guide 线；证据 verify4 score.json detail=old wording still in its declared site、edits.json target state=absent；对照 smoke-requal-v2 score G08 completed）。
+
+## FL-D644 FL-D608 第二层闸门放行凭据可被模型谎称（2026-10-31，主线复核）
+
+- **发现**：`51fb45b` 的 scope 闸门守护以 `target.reason` 含 "APPEND_END" 子串为放行凭据（recall_pipeline.py:1254-1265），而 `Target.reason` 在 inventory_window 直接取自模型输出（recall.py:1765）；模型对 G01/G03 needs_edit target 谎称 "APPEND_END" 即可跳过 `_target_scope_ok`，与 FL-D573「自述证据不扩权」方向相反。越界面限于「自带定义锚点的组外段」（append_site_ok 锚点守卫仍在），属有界风险。
+- **另**：负路径测试缺「谎称 APPEND_END 的越界 target 被拒」用例。
+- **处理**（已派 qa-feat-guide）：改为校验确定性重绑端点/内部重绑标记（与模型输出绝缘）+ 补谎称负路径测试；修复后 mutation 自检。
+- **状态**：open（修复中）。dev20 v2 冻结包含 layer-2 语义并于冻结说明中登记本条。
+
+## FL-D645 G03 scope-replay 组尾覆盖不对称观察项（2026-10-31，主线复核）
+
+- **发现**：`_extend_definition_group` scope 扩展仅注册于 G01/G02（rule_scope.py:1176-1183），G03 不经此扩展；闸门放行后 claim replay `_filter_scoped_targets` 仍按 scope.contains 过滤——非 B05 合同若 G03 scope 不含组尾，「verified site missing」可复发（B05 verify4 双 PASS 系巧合性满足）。
+- **处理**：观测；若第二波/dev20 v2 中出现 G03 复发则把 G03 纳入同族扩展。
+- **状态**：open（观测项）。

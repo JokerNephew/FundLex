@@ -1,7 +1,23 @@
 # FundLex 当前断点（ACTIVE_HANDOFF）
 
+## 2026-10-31 guide_generation 资格冒烟线（qa-feat-guide 对话）
+
+- 基线：worktree `/home/opencode/.local/share/opencode/worktree/29a9a9/qa-feat-guide`，branch `qa-feat-guide-20261031`，已合并 `qa/full-audit-20261031`，HEAD `0b4e89a`。`tests -k "guide_generation or jobs"` **63 passed / 1 skipped**；worker/queue/store（FL-D553/568 段修复、`FUNDLEX_GUIDE_JOB_MAX_ATTEMPTS`、有界退避）在该套件内全绿。
+- smoke28 复核结论（run `581020e2e3584086bbf705a6aa98006a`）：已完成但**不合格且不是当前基线有效证据**——quality fail、latest uncertain 4、unresolved 19、missing topics 12、Residual 8 轮未饱和（均有真实调用、非 circuit 主导）；且其运行代码早于快照 158475f（finalize checklist 为旧口径）。smoke29 于质量复核阶段 `MODEL_HTTP_ERROR` 中断；smoke30 被操作者中止（batching_must_be_by_chapter，该能力已在快照实施）。详情登记 FL-D600。
+- **smoke31 已完成（2026-10-31，NO-GO）**：run `2aa38fd14e184c8093cdbbf36e5721e6`（`/tmp/opencode/gg-real-smoke31`，EXIT=0，430 completed/1 failed，约 $0.2994）终态 `complete_with_unresolved`/`candidate_with_findings`/qualified=**false**：quality fail（open critical 15，全部 coverage_gate 来源：5 missing topics+2 requirement gaps+37 unresolved impacts，多为外部基准型要求缺口）、latest uncertain 0、independent_model_review=qualified（glm-5.3-flash）、residual disabled、非 circuit/截断主导。是当前 QA 基线首个有效资格证据但未达标；登记 **FL-D603**，下一步逐项核对 15 个 open critical 与外部基准 disposition 口径。
+- **主线指引诱导修复（本对话第二阶段）**：FL-D601（G22 有序列表变体假阳性）+ FL-D602（G08 实际费率变体假阳性）已修并真实复核通过，提交 `068fe94`（B15 复跑：变体不再造 edit，obligation FALSE/NO_GUIDE_SITE 闭合，交付 complete 无 OPEN_OBLIGATION）；FL-D604/605（A7-06/A7-07 已确认偏差）暂缓实施、移交 qa-feat-recall 线在 dev20 v2 计划排入；FL-D606（G14 p167 变体缺口）、FL-D607（B15 G01 表格格内追加）、FL-D608（B05 G01/G03+B15 G03 追加站点抑制）已登记 open。
+- **smoke28 资格复验已完成（NO-GO，FL-D609）**：新冻结 `3b6da2a2`（engine `1351e03`），记录 `/tmp/opencode/qa/findings/smoke28-requal-3b6da2a2.md`。B16 23/23 完成且诚实 complete（FL-D568 真实生效）；B05 false_complete 依旧（G08=FL-D572 主线在途、G01/G03=FL-D608 待归因）。门槛 ①② 未过、③④ 过；FL-D565-F1 触发路径未覆盖（需 dev20 v2）。dev20 v2 冻结重跑移交 qa-feat-recall 线，待 FL-D572 落地 + FL-D608 修复。导航差异：`docs/EVALUATION_FIRST_BATCH_EXECUTION_20261028.md §七` 为 stale 引用（已登记 FL-D603）。
+- 磁盘观察：根分区约 4.0G 可用（90%），单轮冒烟产物约 30MB，可承受，继续观察。
+- 本线 FL 编号段位 FL-D600..609（已用 FL-D600..609）。
+
 > **九对话并行期必读**：[docs/PARALLEL_COORDINATION_20261031.md](PARALLEL_COORDINATION_20261031.md)（清单/段位/冻结门槛/merge 顺序/qa-base 在途文件归属）；各线完成状态写到 `/tmp/opencode/qa/status/<线名>.md`。
 
+## 2026-10-31 qa-f2-recall-tracked：带修订痕迹 DOCX 任务输入固化（本 worktree 断点）
+
+- Worktree `/home/opencode/.local/share/opencode/worktree/29a9a9/qa-f2-recall-tracked`，分支 `qa-f2-recall-tracked-20261031`，基线 `qa/full-audit-20261031`（@`1e7e05e`）。语义决策：基底=接受全部修订后视图；原痕迹固化不再保留；引擎新修订为唯一痕迹；报告记 `base_had_tracked_changes`。
+- 已实施并聚焦验证：`fundlex/docx.py::normalize_tracked_base`、`fundlex/recall_pipeline.py::process_recall_first` 输入规范化与报告字段、`fundlex/selective.py` flatten 报告兼容、`fundlex/delivery.py` 新错误文案、`fundlex/upload_validation.py` 检测职责注释。新增 `tests/test_docx_tracked_input.py` 16 项绿、`tests/browser/test_tracked_upload.py` 2 项绿（FUNDLEX_BROWSER_TESTS=1）。真实语料备份 18 份固化验证 17 绿+1 受保护边界；聚安离线引擎 redline 仅我方作者、final 零残留（证据 `/tmp/opencode/qa-tracked/`）。
+- 集中记录：FL-D610（实施）、FL-D611（作者字面值待产品确认，现按 FL-D446“资金清算部”解析）、FL-D612（受保护边界/段落合并 fail-closed/死导入观察项/无 OCR 引擎）。
+- **已收尾（2026-10-31）**：commit `38c0727`（9 文件 +940/-6）→ merge `f7ccbb5`（合入主线 @cdb1d46，docs 双文件尾部追加冲突已手工合并）。全量 pytest（pre-merge 树）6 failed/2352 passed，6 项恰为 FL-D574 既有失败，零新失败（日志 `/tmp/opencode/qa-tracked/full-pytest.log`）；合并后受影响套件全绿：聚焦 38+focused、recall_pipeline 55、frozen/metering/feishu/tasks/revision_api/recall_core/docx 154、delivery 31、deploy/dependency_lock 19、browser 2。状态文件 `/tmp/opencode/qa/status/qa-f2-recall-tracked.md` 已写（测试矩阵、修订组合清单、遗留）。遗留：FL-D611 作者字面值交主线/产品；FL-D612 观察项 open。
 ## 2026-10-31 全项目质量整改（QA 总攻，主 agent 断点）
 
 ### 断点更新（2026-10-31 主线收口进展，最新以此为准）

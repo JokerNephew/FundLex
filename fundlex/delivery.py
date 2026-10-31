@@ -36,6 +36,10 @@ _BUSINESS_REASONS = (
 # the generic TARGET marker.
 _FAILURE_REASONS = (
     ("EXISTING_REVISION_UNSUPPORTED", "文件包含未接受的修订痕迹，请先接受所有修订或上传清理版"),
+    ("REVISION_PARAGRAPH_MERGE_UNSUPPORTED", "文件修订痕迹含跨段落合并删除，暂无法自动固化，请先在 Word 中接受或拒绝全部修订后重新上传"),
+    ("REVISION_CELL_MERGE_UNSUPPORTED", "文件修订痕迹含不支持的表格单元格合并变更，请先在 Word 中接受或拒绝全部修订后重新上传"),
+    ("REVISION_NORMALIZATION_MISMATCH", "修订痕迹固化结果未能通过一致性校验，任务已安全失败，请重新上传或在 Word 中清理修订后重试"),
+    ("REVISION_STRUCTURE_INVALID", "文件修订痕迹结构不完整，无法自动处理，请在 Word 中另存后重新上传"),
     ("DOCUMENT_PROTECTED", "文件受文档保护，无法写入修改"),
     ("INPUT_INTEGRITY_FAILED", "上传文件损坏或格式不受支持"),
     ("RECALL_TARGET_STRUCTURE", "目标段落含不可编辑结构（域、文本框或内容控件），无法写入修订"),

@@ -72,6 +72,34 @@ from .api_errors import (
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
+# Revision-review projection cache (FL-D557 F3④): ``project_docx`` re-reads and
+# re-projects the redline DOCX on every page open. The projection is a pure
+# function of the artifact bytes and the persisted report, so key on
+# (path, size, mtime_ns, report digest): any republished artifact or changed
+# report invalidates naturally. Insertion-ordered LRU, mirroring
+# ``recall_pipeline._DOCUMENT_COMPACT_CACHE``.
+_REVISION_VIEW_CACHE: dict[tuple[str, int, int, str], dict[str, Any]] = {}
+_REVISION_VIEW_CACHE_MAX = 4
+
+
+def _project_revision_view(path: Path, report: dict[str, Any]) -> dict[str, Any]:
+    stat = path.stat()
+    report_digest = hashlib.sha256(
+        json.dumps(report, ensure_ascii=False, sort_keys=True, default=str).encode()).hexdigest()
+    key = (str(path), stat.st_size, stat.st_mtime_ns, report_digest)
+    cached = _REVISION_VIEW_CACHE.get(key)
+    if cached is not None:
+        # Refresh recency so alternating documents reuse both entries (LRU).
+        _REVISION_VIEW_CACHE[key] = _REVISION_VIEW_CACHE.pop(key)
+        return cached
+    view = project_docx(str(path), report=report)
+    entry = {"html": view["html"], "revisions": view["revisions"], "meta": view["meta"]}
+    if len(_REVISION_VIEW_CACHE) >= _REVISION_VIEW_CACHE_MAX:
+        _REVISION_VIEW_CACHE.pop(next(iter(_REVISION_VIEW_CACHE)))
+    _REVISION_VIEW_CACHE[key] = entry
+    return entry
+
+
 class FrontendBasePathMiddleware:
     """Accept requests forwarded with an optional deployment path prefix."""
 
@@ -675,7 +703,7 @@ def create_app(data_dir: str | Path | None = None, *, auth_db=None) -> FastAPI:
         path, report = _redline_for(owner, batch_id, document_id)
         document = store.get_document(owner, batch_id, document_id)
         manifests = _manifests_from_report(report)
-        view = project_docx(str(path), report=report)
+        view = _project_revision_view(path, report)
         return {
             "document_id": document_id,
             "html": view["html"],

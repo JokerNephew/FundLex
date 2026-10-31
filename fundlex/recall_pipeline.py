@@ -52,8 +52,7 @@ from .recall import (BOUNDARY_POLICY, ENGINE_ID, ENGINE_VERSION, SCHEMA_VERSION,
                       dedupe_operation_targets,
                       source_parts_contiguous,
                       absent_delete_coverage,
-                      ensure_g22_ordered_list_targets,
-                      ensure_g08_actual_rate_targets,
+                      missing_guide_site,
                       ensure_class_group_noop_targets)
 from .recall_prompts import (AUDIT_INSTRUCTION, AUDIT_PROMPT_VERSION, AUDIT_SCHEMA,
                              PROMPT_VERSIONS, SWEEP_INSTRUCTION, SWEEP_PROMPT_VERSION,
@@ -1246,13 +1245,23 @@ def _apply_scope_gate(targets: Sequence[Target], scopes: Mapping[str, Any] | Non
                 target.scope_id = f"{target.rule_id}:normalized_copy"
             continue
         if (str(target.rule_id) == "G22"
-                and ("g22_ordered_list_variant" in str(target.reason or "")
-                     or getattr(target, "semantic_replacement", None))):
-            # The ordered-list liquidation clause is source-proven by the
-            # deterministic G22 pass even when section mapping cannot form a
-            # liquidation leaf (美国房地产 p883).  Do not drop it as unscoped.
+                and getattr(target, "semantic_replacement", None)):
+            # A semantic-v2 G22 target carries its own located scope; do not
+            # drop it as unscoped when section mapping formed no liquidation leaf.
             if not target.scope_id:
-                target.scope_id = "G22:ordered_list"
+                target.scope_id = "G22:semantic"
+            continue
+        if (str(target.rule_id) in {"G01", "G03"}
+                and "APPEND_END" in str(target.reason or "")):
+            # The plan-stage append rebind (split-definition end / definition-group
+            # end) derives the site deterministically from a scoped anchor; the
+            # physical scope computed against the PRE-rebind class-definition
+            # paragraph must not drop it (FL-D608: G01 rebound p117->p119 was
+            # killed by the audit-stage gate, leaving the obligation
+            # "verified site missing").
+            if not target.scope_id:
+                scope = scopes.get(str(target.rule_id))
+                target.scope_id = _scope_id_for(target, scope)
             continue
         ok, scope = _target_scope_ok(target, scopes)
         if not ok:
@@ -4570,6 +4579,7 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
     model: Any = gateway
     frozen_run = None
     published: list[Path] = []
+    normalized_base_dir: tempfile.TemporaryDirectory[str] | None = None
     report: dict[str, Any] = {
         "schema_version": SCHEMA_VERSION, "engine_id": ENGINE_ID, "engine_version": ENGINE_VERSION,
         "execution_mode": execution_mode, "source_sha256": "",
@@ -4579,6 +4589,7 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
         "qualification": {}, "facts": {}, "scope_mapping": {}, "windows": [], "targets": [],
         "plan": {"count": 0, "sha256": None, "edits": [], "conflicts": [],
                  "boundary_policy": BOUNDARY_POLICY},
+        "base_had_tracked_changes": False,
         "audit": {"rounds": [], "issues": []},
         "survey": [], "rebind": [],
         "sweep": {"chunks": 0, "findings": [], "rounds": [], "gaps": []},
@@ -4611,6 +4622,29 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
         if disabled_rules:
             report["disabled_rules"] = disabled_rules
             report["guide"]["disabled_rule_ids"] = [item["rule_id"] for item in disabled_rules]
+        # Task input normalization (2026-10-31 product decision): a contract
+        # that still carries another department's tracked changes is processed
+        # from its accepted view.  The original marks are flattened into the
+        # base text up front; every later stage (scope filtering, paragraph
+        # indexing, page mapping, bookmarks, claims and the deliverables) works
+        # on that base, and the engine's own new revisions are the only tracked
+        # changes a delivery ever shows.  Inputs without marks keep their exact
+        # bytes.  The original inventory and hashes stay in the report so the
+        # run remains traceable to the uploaded file.
+        from .docx import normalize_tracked_base
+        tracked_base = normalize_tracked_base(input_path.read_bytes())
+        if tracked_base.had_tracked_changes:
+            normalized_base_dir = tempfile.TemporaryDirectory(prefix="fundlex-base-")
+            base_file = Path(normalized_base_dir.name) / "base.docx"
+            base_file.write_bytes(tracked_base.data)
+            input_path = base_file
+            report["base_had_tracked_changes"] = True
+            report["normalized_base_sha256"] = tracked_base.base_sha256
+            report["source_revisions"] = {
+                "count": len(tracked_base.source_revisions),
+                "authors": sorted({item["author"] for item in tracked_base.source_revisions}),
+                "items": [dict(item) for item in tracked_base.source_revisions],
+            }
         if os.environ.get("FUNDLEX_MODEL_MODE") == "record":
             from .frozen import FrozenRun
             frozen_directory = os.environ.get("FUNDLEX_FROZEN_RUN_DIR")
@@ -4621,7 +4655,9 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
         inspection = inspect_docx(input_path, full=True,
                                   allow_existing_revisions=True)
         output_dir.mkdir(parents=True, exist_ok=True)
-        report["source_sha256"] = inspection.source_sha256
+        report["source_sha256"] = (tracked_base.original_sha256
+                                   if tracked_base.had_tracked_changes
+                                   else inspection.source_sha256)
         if inspection.revisions:
             # Existing tracked changes from another department: keep them visible
             # and separate from FundLex revisions in the report/UI.
@@ -4794,28 +4830,31 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
                 coverage_gaps.append({"pass": "delete_targets",
                                       "limit_reached": "delete_targets_pages",
                                       "cursor": cursor})
-        g22_targets = ensure_g22_ordered_list_targets(
-            targets, rules_by_id, inspection, facts)
-        for target in g22_targets:
-            synthetic.append(target)
-            targets.append(target)
-            origins[target.target_id] = "g22_ordered_list_variant"
-        if g22_targets:
-            current = scopes.get("G22")
-            if current is None or not getattr(current, "locations", ()):
-                from .rule_scope import RuleScope
-                scopes["G22"] = RuleScope(
-                    rule_id="G22", leaf_ids=frozenset(),
-                    locations=frozenset(str(target.location) for target in g22_targets),
-                    zone="body", include_summary_copies=False,
-                    copy_keys=frozenset(), resolution="g22_ordered_list",
-                    evidence=("g22_ordered_list_source_proven",))
-        g08_targets = ensure_g08_actual_rate_targets(
-            targets, rules_by_id, inspection, scopes)
-        for target in g08_targets:
-            synthetic.append(target)
-            targets.append(target)
-            origins[target.target_id] = "g08_actual_rate_variant"
+        # FL-D601/FL-D602: the ordered-list (G22) and actual-rate (G08) variant
+        # wordings are applicability evidence, never edit sites.  A contract
+        # whose G22/G08 obligation is fact-applicable but has neither the
+        # guide's canonical sentence nor a live target is closed as
+        # applicability=FALSE («replacement has no site», frozen labels).
+        from .applicability import ApplicabilityDecision
+        for closed_rule_id in ("G22", "G08"):
+            missing = missing_guide_site(closed_rule_id, targets, rules_by_id,
+                                         inspection, facts)
+            if missing is None:
+                continue
+            location = str(missing.get("variant_location") or "")
+            reason = f"NO_GUIDE_SITE:{closed_rule_id}"
+            if location:
+                reason += f":variant@{location}"
+            for record in obligation_ledger.records:
+                if str(record.spec.rule_id) != closed_rule_id:
+                    continue
+                if record.applicability.status != "TRUE":
+                    continue
+                record.applicability = ApplicabilityDecision(
+                    status="FALSE", condition=record.spec.condition,
+                    rule_id=closed_rule_id, operation_id=record.spec.operation_id,
+                    source="deterministic", reason=reason,
+                    evidence_quote=str(missing.get("variant_quote") or ""))
         class_noops = ensure_class_group_noop_targets(
             targets, rules_by_id, inspection, facts, scopes)
         for target in class_noops:
@@ -6418,3 +6457,7 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
                                      "message": type(exc).__name__})
             if published:
                 _finalize_failure(report, published)
+        if normalized_base_dir is not None:
+            # The flattened task-input base is only needed while the run reads
+            # the contract; artifacts and the report are already persisted.
+            normalized_base_dir.cleanup()
