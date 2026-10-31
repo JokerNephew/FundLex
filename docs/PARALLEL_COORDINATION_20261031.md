@@ -77,3 +77,10 @@
 - ⏳ V2 worker：已纠错（不等"用户确认"），commit+验收申请流程纠正
 - ⏳ V1 worker：等前端主线规格单（规格冻结 commit 69779d8 已出在 qa-v2-s2 枝上）
 - ⏳ loop-4：feat-recall dev20 在跑（~2h，冻结 6339a06）
+
+### 2026-11-01 06:5x 收口进度
+
+- ✅ 项9 批4 → 302280a（项9 施工全量收口；FL-D757 结案=dist 前置环境约定）
+- ✅ recall-miss r3 → 9efe827（FL-D695/696 机制修复）；loop-6 冻结令已发 feat-recall
+- ✅ compare-tracked → 30cf69e（修订痕迹接受视图；worker/store 双特性共存）——compare 域全部线收口
+- 在跑：loop-6 dev20；项9 已完；留 compare 性能复测（低噪窗口）
