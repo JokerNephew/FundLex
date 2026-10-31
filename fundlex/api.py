@@ -1341,8 +1341,13 @@ def create_app(data_dir: str | Path | None = None, *, auth_db=None) -> FastAPI:
                     name = "".join(c for c in name if c.isalnum() or c in " _-（）()")[:100] or "合同"
                     name = unique(name)
                     included = []
+                    # Reuse digests verified earlier in this request for the
+                    # pair checks of sibling kinds of the same document.
+                    verified: dict[str, str] = {}
                     for kind in archive_kinds(doc.get("downloads")):
-                        data, digest = store.read_artifact(user, doc["batch_id"], doc["document_id"], kind)
+                        data, digest = store.read_artifact(user, doc["batch_id"], doc["document_id"], kind,
+                                                           verified_hashes=verified)
+                        verified[kind] = digest
                         suffix = ".docx" if kind.endswith(("final", "redline")) else \
                             ".json" if kind == "report_json" else ".md"
                         _, arcname = archive_entry(kind, name, suffix,

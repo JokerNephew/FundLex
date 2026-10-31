@@ -7,6 +7,7 @@ import tempfile
 import time
 import threading
 from concurrent.futures import ThreadPoolExecutor
+import logging
 import os
 import sqlite3
 import shutil
@@ -19,6 +20,8 @@ from .store import (Conflict, RunStore, sha256_file, engine_build, SCHEMA_VERSIO
 from .db import DatabaseError
 from .config import local_data_dir
 
+
+_logger = logging.getLogger(__name__)
 
 RETRYABLE_MODEL_CODES = {"MODEL_NETWORK_ERROR", "MODEL_RETRY_EXHAUSTED", "MODEL_CIRCUIT_OPEN",
                          "MODEL_GLOBAL_CALL_BUDGET_EXCEEDED", "MODEL_COST_BUDGET_EXCEEDED", "MODEL_CALL_BUDGET_EXCEEDED",
@@ -122,6 +125,28 @@ class Worker:
         if lease_seconds <= 0:
             raise ValueError("lease_seconds must be positive")
         self.lease_seconds = lease_seconds
+        self._last_retention_sweep = 0.0
+
+    def _prune_storage(self, now: float) -> None:
+        """Periodic bounded-retention sweep (B13 F5 / FL-D557).
+
+        Runs lazily inside the worker loop like ``_reap_stale_workspaces``:
+        no extra systemd unit to deploy, the same policy covers the dev
+        profile, and any failure is logged and contained — retention must
+        never take the worker or a job down.
+        """
+        from . import retention
+        if now - self._last_retention_sweep < retention.retention_interval_seconds():
+            return
+        self._last_retention_sweep = now
+        try:
+            stats = retention.prune_checkpoints(self.store.root, now=now)
+        except Exception as exc:  # noqa: BLE001 - retention must be fail-closed
+            _logger.warning("checkpoint retention sweep failed: %s", type(exc).__name__)
+            return
+        if stats["removed_files"] or stats["removed_dirs"]:
+            _logger.info("checkpoint retention removed %d files (%d bytes) and %d dirs",
+                         stats["removed_files"], stats["removed_bytes"], stats["removed_dirs"])
 
     @contextmanager
     def _worker_lock(self):
@@ -240,6 +265,7 @@ class Worker:
         if shutil.disk_usage(self.store.root).free < min_free:
             raise OSError("local storage below configured free-space reserve")
         self._reap_stale_workspaces()
+        self._prune_storage(time.time())
         if self._run_guide_job():
             return True
         job = self.store.claim(lease_seconds=self.lease_seconds)
