@@ -140,6 +140,21 @@ def certify_variant(operation: Mapping[str, Any], sentence: str
         return None  # already satisfied wording is exempt, never an old-variant
     if not (_keygrams(candidate) & _keygrams(reference)):
         return None
+    # Critical-token preservation: every materially replaced or removed
+    # reference segment (≥2 chars) must still appear verbatim in the
+    # candidate.  Without this gate 「管理费率」certifies as a variant of
+    # 「…申购费率…」 (FL-D588 over-authorization mutation): the two sentences
+    # share a 22-char anchor while differing in exactly the fee item.
+    # Class-qualifier insertions (B17) keep the replaced fragment (e.g.
+    # 「本基金」) as a substring and stay certified.
+    matcher = difflib.SequenceMatcher(None, reference, candidate,
+                                      autojunk=False)
+    for tag, i1, i2, _j1, _j2 in matcher.get_opcodes():
+        if tag == "equal":
+            continue
+        segment = reference[i1:i2]
+        if len(segment) >= 2 and segment not in candidate:
+            return None
     # The candidate must carry at least one *distinguishing* old-form region —
     # skeleton overlap alone cannot tell an old variant from a new one.
     old_exclusive = _exclusive_regions(reference, new_text)

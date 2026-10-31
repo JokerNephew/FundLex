@@ -156,3 +156,15 @@ def test_certified_target_cap_is_respected():
 def test_discover_candidates_marks_exempt_for_new_form():
     candidates = discover_candidates(_rule()["operations"][0], NEW)
     assert candidates == [] or candidates[0]["bucket"] == "EXEMPT"
+
+
+def test_critical_token_swap_never_certifies():
+    """FL-D588 over-authorization mutation in generic form: a 22-char anchor
+    with the fee item swapped (申购→管理) must stay blocked, mirroring the
+    rule-specific G08 guard test."""
+    op = {"op": "replace",
+          "old_text": "本基金的申购费率由基金管理人决定，并在招募说明书中列示。",
+          "new_text": "本基金A类份额不收取申购费，其他机构申购费率由基金管理人决定。",
+          "operation_id": "G91:0"}
+    assert certify_variant(op, "本基金的管理费率由基金管理人决定，并在招募说明书中列示。") is None
+    assert certify_variant(op, "本基金A类份额的申购费率由基金管理人决定，并在招募说明书中列示。") is not None
