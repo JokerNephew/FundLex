@@ -7467,6 +7467,7 @@ H＝E×…
 - **测试**：`tests/test_clause_residual_realization.py` 6 例（B17 实形/新文本保留豁免/联接符规范化豁免/更窄类别 fail-closed/超出豁免额度的重复仍报/字面旧行为不变）。
 - **验证**：B17 两次独立真实重跑（`/tmp/opencode/miss/verify-fl659{,b}/`）均 **complete 且 p294 尾句真实删除**（新旧句不再并存），unresolved 0、delivery 完整完成；确定性兜底已钉——若残留再现 replay 必 FAIL RESIDUAL_OLD_TEXT → 诚实扣件（单测+豁免额度模型）。variant_candidates 噪声收敛（ANOMALOUS 0.5 覆盖率下限，B17 60→24）。回归：effects/replay/claim/recall/variant/residual/coverage/delivery/obligations/targeting/recovery 758 全绿；pipeline/coverage/delivery 追跑 117 全绿。
 - **状态**：已解决（代码 `41601ba`；纳入 FL-D658 统一报验）。
+- **变更记录（2026-11-01 主线）**：recall-miss 线五机制（FL-D653~657）+ FL-D659 经主线复核并入 qa/full-audit-20261031（merge 6961c77），终轮本树全量回归 2516/0；主线合入树定向冒烟（44+243）绿。
 
 ## FL-D690 B02 loop-3 新回归：G15 摘要站点 audit 判 satisfied/superseeded 与残余检测 RESIDUAL_CONFIRMED 互相矛盾，无产物（2026-10-31，qa-feat-recall）
 
