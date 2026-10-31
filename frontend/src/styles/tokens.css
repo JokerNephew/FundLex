@@ -55,9 +55,19 @@
   --radius: 10px;
   --radius-pill: 999px;
 
-  /* Table density */
+  /* Table density (legacy aliases kept; list tokens below are the source of truth). */
   --table-cell-y: 11px;
   --table-cell-x: 10px;
+
+  /* Unified list/table tokens (FL-D731: 所有列表唯一取值入口) */
+  --list-header-bg: var(--surface-subtle);
+  --list-header-color: var(--muted);
+  --list-row-hover-bg: var(--surface-subtle);
+  --list-row-border: var(--border);
+  --list-cell-y: 10px;
+  --list-cell-x: 12px;
+  --list-title-weight: 600;
+  --list-meta-size: var(--text-2xs);
 
   --focus: #b5471e;
   --shadow: 0 4px 18px rgb(34 40 48 / 0.05);

@@ -29,7 +29,7 @@ function taskSummary(task: { status: string; total?: number; completed?: number;
 export function Pagination({ page, pageSize, total, onChange }: { page: number; pageSize: number; total: number; onChange: (page: number) => void }) {
   const pages = Math.max(1, Math.ceil(total / pageSize))
   if (pages <= 1) return null
-  return <div className="action-row" aria-label="分页"><Button disabled={page <= 1} onClick={() => onChange(page - 1)}>上一页</Button><span className="muted">第 {page} / {pages} 页，共 {total} 个任务</span><Button disabled={page >= pages} onClick={() => onChange(page + 1)}>下一页</Button></div>
+  return <div className="action-row" aria-label="分页"><Button disabled={page <= 1} onClick={() => onChange(page - 1)}>上一页</Button><span className="muted">共 {total} 条 · 第 {page} / {pages} 页</span><Button disabled={page >= pages} onClick={() => onChange(page + 1)}>下一页</Button></div>
 }
 
 export function TasksPage() {

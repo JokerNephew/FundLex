@@ -1,14 +1,14 @@
 import { useEffect, useRef, useState } from 'react'
 import { api } from '../../api/endpoints'
 import { useModelSettings, useModelSettingsMutation } from '../../api/hooks'
-import { Button, Card, Spinner } from '../../components/ui'
+import { Button, Card } from '../../components/ui'
 import type { ModelRoleSettings, ModelSettings } from '../../types'
-import { ErrorState } from '../Tasks'
 
 type RoleForm = {
   source: 'system' | 'personal'; provider: string; model: string
   api_key: string; base_url: string; connection_id: string
 }
+type RoleKey = 'primary' | 'review'
 function roleForm(value?: ModelRoleSettings): RoleForm {
   return { source: value?.source || 'system', provider: value?.source === 'personal' ? value.provider || 'openai' : 'openai',
     model: value?.source === 'personal' ? value.model || '' : '', api_key: '',
@@ -17,16 +17,24 @@ function roleForm(value?: ModelRoleSettings): RoleForm {
 function payload(value: RoleForm) {
   return value.source === 'system' ? { source: 'system' } : { ...value, base_url: value.provider === 'custom' ? value.base_url.trim() : '' }
 }
+// 后端会为已知供应商回填默认服务地址，已验证徽标只比对使用方式/供应商/模型。
+function settingsKey(value?: { source?: string; provider?: string; model?: string }) {
+  return value ? `${value.source || 'system'}|${value.provider || ''}|${value.model || ''}` : ''
+}
 
-function RoleCard({ name, role, value, onChange, providers, systemModel, disabled }: {
-  name: string; role: string; value: RoleForm; onChange: (value: RoleForm) => void
-  providers: ModelSettings['providers']; systemModel: string; disabled: boolean
+function RoleCard({ name, role, saved, value, editing, verified, busy, providers, systemModel,
+  onEdit, onCancel, onChange, onReset, onVerified }: {
+  name: string; role: RoleKey; saved?: ModelRoleSettings; value: RoleForm; editing: boolean
+  verified: boolean; busy: boolean; providers: ModelSettings['providers']; systemModel: string
+  onEdit: () => void; onCancel: () => void; onChange: (value: RoleForm) => void
+  onReset: () => void; onVerified: () => void
 }) {
   const [status, setStatus] = useState('')
   const [testing, setTesting] = useState(false)
   const generation = useRef(0)
   useEffect(() => { generation.current += 1; setStatus('') }, [value])
   useEffect(() => () => { generation.current += 1 }, [])
+  useEffect(() => { if (!editing) setStatus('') }, [editing])
   const update = (key: keyof RoleForm, next: string) => {
     if (key === 'provider' && next !== value.provider) onChange({ ...value, provider: next, base_url: '', connection_id: '', api_key: '' })
     else if (key === 'base_url') onChange({ ...value, base_url: next, connection_id: '', api_key: '' })
@@ -43,27 +51,63 @@ function RoleCard({ name, role, value, onChange, providers, systemModel, disable
     setTesting(true); setStatus('正在验证连接…')
     try {
       const result = await api.testModelConnection(payload(value))
-      if (id === generation.current) setStatus(result.message)
-    } catch {
-      if (id === generation.current) setStatus('验证失败，请检查供应商、模型、服务地址与访问密钥。')
+      if (id !== generation.current) return
+      if (result.ok) { setStatus(result.message || '连接验证通过。'); onVerified() }
+      else setStatus(`连接验证未通过：${result.message || '请检查密钥与模型名后重试'}`)
+    } catch (nextError) {
+      if (id === generation.current) {
+        const detail = nextError instanceof Error && nextError.message ? nextError.message : '请检查密钥与模型名后重试'
+        setStatus(`连接验证未通过：${detail}`)
+      }
     } finally { setTesting(false) }
   }
   const suggestions = providers.find(provider => provider.id === value.provider)?.models || []
+  const isPersonal = saved?.source === 'personal'
+  const providerLabel = providers.find(provider => provider.id === saved?.provider)?.label || saved?.provider || '—'
+  const badge = !isPersonal
+    ? <span className="status-badge status-badge--neutral">系统默认</span>
+    : verified ? <span className="status-badge status-badge--success">自定义·已验证</span>
+      : <span className="status-badge status-badge--warning">自定义·未验证</span>
   return <Card>
-    <h2>{name}</h2>
-    <p>{role === 'primary' ? '理解合同、定位条款并生成修改内容。' : '核验修改结果，检查错误和遗漏；可以使用不同的供应商和模型。'}</p>
-    <div className="form-stack">
-      <label>使用方式<select value={value.source} disabled={disabled} onChange={event => update('source', event.target.value)}><option value="system">使用系统默认</option><option value="personal">使用自己的模型</option></select></label>
-      {value.source === 'system' ? <p className="muted">{systemModel ? '由管理员统一配置' : '系统模型尚未配置，请联系管理员。'}</p> : <>
-        <label>供应商<select value={value.provider} disabled={disabled} onChange={event => update('provider', event.target.value)}>{providers.map(provider => <option value={provider.id} key={provider.id}>{provider.label}</option>)}</select></label>
-        {value.provider === 'custom' && <label>服务地址<input type="url" value={value.base_url} disabled={disabled} required placeholder="https://你的服务商地址/v1" onChange={event => update('base_url', event.target.value)} /><span className="muted">由供应商提供，仅其他兼容服务需要填写。</span></label>}
-        <label>访问密钥（API Key）<input type="password" autoComplete="new-password" maxLength={4096} required={!value.connection_id} value={value.api_key} disabled={disabled} placeholder={value.connection_id ? '已保存；留空保留，填写可更换' : '粘贴供应商提供的访问密钥'} onChange={event => update('api_key', event.target.value)} /><span className="muted">在供应商控制台获取，仅供你本人使用，加密保存，不回显。</span></label>
-        <label>模型<input value={value.model} list={`model-${role}-suggestions`} required disabled={disabled} placeholder="选择建议或填写供应商提供的模型名称" onChange={event => update('model', event.target.value)} /><datalist id={`model-${role}-suggestions`}>{suggestions.map(model => <option key={model} value={model} />)}</datalist><span className="muted">建议名称并不保证账户可用，请向供应商确认。</span></label>
-        <Button type="button" disabled={disabled || testing} onClick={() => void test()}>{testing ? '验证中…' : '验证连接'}</Button>
-        <p className="meta-line">验证连接会向供应商发送一条简短请求，可能产生少量费用；不会发送合同内容。</p>
-      </>}
-      {status && <p role="status">{status}</p>}
+    <div className="model-role-head">
+      <div><h2>{name}</h2><p className="muted">{role === 'primary' ? '理解合同、定位条款并生成修改内容。' : '核验修改结果，检查错误和遗漏；可以使用不同的供应商和模型。'}</p></div>
+      {badge}
     </div>
+    {editing ? <>
+      <div className="form-grid">
+        <label className="form-grid-full">使用方式<select value={value.source} disabled={busy} onChange={event => update('source', event.target.value)}><option value="system">使用系统默认</option><option value="personal">使用自己的模型</option></select></label>
+        {value.source === 'personal' ? <>
+          <label>供应商<select value={value.provider} disabled={busy} onChange={event => update('provider', event.target.value)}>{providers.map(provider => <option value={provider.id} key={provider.id}>{provider.label}</option>)}</select></label>
+          <label>模型<input value={value.model} list={`model-${role}-suggestions`} required disabled={busy} placeholder="选择建议或填写供应商提供的模型名称" onChange={event => update('model', event.target.value)} /><datalist id={`model-${role}-suggestions`}>{suggestions.map(model => <option key={model} value={model} />)}</datalist><span className="muted">建议名称并不保证账户可用，请向供应商确认。</span></label>
+          {value.provider === 'custom' ? <label className="form-grid-full">服务地址<input type="url" value={value.base_url} disabled={busy} required placeholder="https://你的服务商地址/v1" onChange={event => update('base_url', event.target.value)} /><span className="muted">由供应商提供，仅其他兼容服务需要填写。</span></label> : null}
+          <label className="form-grid-full">访问密钥（API Key）<input type="password" autoComplete="new-password" maxLength={4096} required={!value.connection_id} value={value.api_key} disabled={busy} placeholder={value.connection_id ? '已保存；留空保留，填写可更换' : '粘贴供应商提供的访问密钥'} onChange={event => update('api_key', event.target.value)} /><span className="muted">在供应商控制台获取，仅供你本人使用，加密保存，不回显。</span></label>
+        </> : <p className="muted form-grid-full">由管理员统一配置；需要自定义时选择「使用自己的模型」。</p>}
+      </div>
+      <div className="model-role-actions">
+        <div className="model-role-actions-row">
+          <Button type="button" disabled={busy || testing || value.source !== 'personal'} onClick={() => void test()}>{testing ? '验证中…' : '验证连接'}</Button>
+          <Button type="submit" variant="primary" disabled={busy || testing}>{busy ? '保存中…' : '保存'}</Button>
+          <Button type="button" variant="quiet" disabled={busy || testing} onClick={onCancel}>取消</Button>
+        </div>
+        {status && <p role="status">{status}</p>}
+        <p className="meta-line">验证连接会向供应商发送一条简短请求，可能产生少量费用；不会发送合同内容。</p>
+      </div>
+    </> : <>
+      <dl className="fundlex-detail-grid">
+        <dt>使用方式</dt><dd>{isPersonal ? '自定义' : '系统默认'}</dd>
+        <dt>供应商</dt><dd>{isPersonal ? providerLabel : '由管理员统一配置'}</dd>
+        <dt>模型</dt><dd>{isPersonal ? (saved?.model || '—') : '由管理员统一配置'}</dd>
+        {isPersonal ? <>
+          <dt>访问密钥</dt><dd>{saved?.api_key_set ? '已保存' : '未设置'}</dd>
+          <dt>验证状态</dt><dd>{verified ? <span className="status-badge status-badge--success">已验证</span> : '尚未验证'}</dd>
+        </> : null}
+      </dl>
+      {!isPersonal && !systemModel ? <p className="muted">系统模型尚未配置，请联系管理员。</p> : null}
+      <div className="model-role-actions">
+        <Button type="button" variant="primary" disabled={busy} onClick={onEdit}>修改配置</Button>
+        {isPersonal ? <Button type="button" variant="quiet" disabled={busy} onClick={onReset}>恢复系统默认</Button> : null}
+      </div>
+    </>}
   </Card>
 }
 
@@ -72,38 +116,76 @@ export function ModelSettingsPage() {
   const mutation = useModelSettingsMutation()
   const [primary, setPrimary] = useState<RoleForm>(roleForm())
   const [review, setReview] = useState<RoleForm>(roleForm())
+  const [editing, setEditing] = useState<RoleKey | ''>('')
+  const [verified, setVerified] = useState<Record<string, string>>({})
   const [message, setMessage] = useState('')
   const [busy, setBusy] = useState(false)
   useEffect(() => {
     if (!model.data) return
     setPrimary(roleForm(model.data.primary)); setReview(roleForm(model.data.review))
   }, [model.data])
-  const save = async (event: React.FormEvent) => {
-    event.preventDefault(); setBusy(true); setMessage('')
+  const data = model.data
+  const submitPreferences = async (nextPrimary: RoleForm, nextReview: RoleForm, success: string) => {
+    setBusy(true); setMessage('')
     try {
-      await mutation.mutateAsync({ primary: payload(primary), review: payload(review) })
+      await mutation.mutateAsync({ primary: payload(nextPrimary), review: payload(nextReview) })
       await model.refetch()
-      setMessage('配置已保存；连接尚未验证，建议保存后先点“验证连接”。')
+      setEditing('')
+      setMessage(success)
     } catch { setMessage('配置无法保存，请检查供应商、模型与访问密钥，或联系管理员检查密钥存储。') }
     finally { setBusy(false) }
   }
-  const reset = async () => {
+  const save = (event: React.FormEvent) => {
+    event.preventDefault()
+    void submitPreferences(primary, review, '配置已保存；保存不代表已验证连接，仅用于新建合同修改任务。')
+  }
+  const resetRole = (role: RoleKey) => {
     if (!window.confirm('恢复系统默认？已创建任务不受影响。')) return
-    setBusy(true)
-    try { await api.resetModelSettings(); await model.refetch(); setMessage('已恢复系统默认。') }
-    catch { setMessage('暂时无法恢复默认，请稍后重试。') }
-    finally { setBusy(false) }
+    const nextPrimary = role === 'primary' ? roleForm({ source: 'system' } as ModelRoleSettings) : primary
+    const nextReview = role === 'review' ? roleForm({ source: 'system' } as ModelRoleSettings) : review
+    setPrimary(nextPrimary); setReview(nextReview)
+    void submitPreferences(nextPrimary, nextReview, '已恢复系统默认。')
+  }
+  const copyPrimaryToReview = () => {
+    if (!window.confirm('将执行模型配置复制给检查模型并保存？')) return
+    const nextReview = { ...primary }
+    setReview(nextReview)
+    void submitPreferences(primary, nextReview, '已将执行模型配置复制给检查模型。')
+  }
+  const cancelEdit = (role: RoleKey) => {
+    if (!data) return
+    if (role === 'primary') setPrimary(roleForm(data.primary))
+    else setReview(roleForm(data.review))
+    setEditing('')
   }
   return <>
-    <div className="page-heading"><div><h1>模型配置</h1><p>分别选择负责修改合同和检查结果的模型。仅影响你的新建合同修改任务；指引解析和法规生成仍用系统模型。</p></div></div>
-    {model.error ? <ErrorState error={model.error} onRetry={() => void model.refetch()} /> : !model.data ? <Spinner /> : <form className="form-stack" onSubmit={event => void save(event)}>
-      {model.data.config_error && <p role="alert" className="form-error">读取模型密钥时出错，请稍后重试。在问题修复前请勿重置或覆盖个人配置。</p>}
-      {model.data.legacy_preferences && <p>检测到旧保存设置，保存下方新配置后将切换到新配置；已创建任务不受影响。</p>}
-      <RoleCard name="执行模型" role="primary" value={primary} onChange={setPrimary} providers={model.data.providers} systemModel={model.data.primary.system_model || ''} disabled={busy} />
-      <Button type="button" disabled={busy} onClick={() => setReview({ ...primary })}>将执行模型配置复制给检查模型</Button>
-      <RoleCard name="检查模型" role="review" value={review} onChange={setReview} providers={model.data.providers} systemModel={model.data.review.system_model || ''} disabled={busy} />
-      <div className="action-row"><Button type="submit" variant="primary" disabled={busy}>{busy ? '保存中…' : '保存配置'}</Button><Button type="button" disabled={busy} onClick={() => void reset()}>恢复系统默认</Button></div>
-    </form>}
+    <div className="page-heading"><div><h1>模型配置</h1><p>分别用于修改合同与复核结果，仅影响你此后新建的任务。</p></div></div>
+    {model.error ? <div className="error-state"><span>配置暂不可用，请稍后刷新重试。</span><Button type="button" variant="quiet" onClick={() => void model.refetch()}>重试</Button></div>
+      : !data ? <p className="muted">正在读取模型配置…</p> : <>
+      {data.config_error && <p role="alert" className="error-state">读取模型密钥时出错，请稍后重试。</p>}
+      {data.legacy_preferences && <p className="fundlex-detail-warning">检测到旧保存设置，保存后切换到新配置。</p>}
+      <form onSubmit={save}>
+        <div className="model-role-grid">
+          <RoleCard name="执行模型" role="primary" saved={data.primary} value={primary}
+            editing={editing === 'primary'} verified={Boolean(verified.primary && verified.primary === settingsKey(data.primary))}
+            busy={busy} providers={data.providers} systemModel={data.primary.system_model || ''}
+            onEdit={() => setEditing('primary')} onCancel={() => cancelEdit('primary')} onChange={setPrimary}
+            onReset={() => resetRole('primary')} onVerified={() => setVerified(current => ({ ...current, primary: settingsKey(primary) }))} />
+          <RoleCard name="检查模型" role="review" saved={data.review} value={review}
+            editing={editing === 'review'} verified={Boolean(verified.review && verified.review === settingsKey(data.review))}
+            busy={busy} providers={data.providers} systemModel={data.review.system_model || ''}
+            onEdit={() => setEditing('review')} onCancel={() => cancelEdit('review')} onChange={setReview}
+            onReset={() => resetRole('review')} onVerified={() => setVerified(current => ({ ...current, review: settingsKey(review) }))} />
+        </div>
+      </form>
+      <Card>
+        <h2>将执行模型配置复制给检查模型</h2>
+        <p className="muted">检查模型将改用与执行模型相同的供应商、模型与访问密钥，保存后立即生效于新建任务。</p>
+        <div className="model-role-actions">
+          <Button type="button" disabled={busy} onClick={copyPrimaryToReview}>复制并保存</Button>
+        </div>
+      </Card>
+    </>}
     {message && <p role="status">{message}</p>}
   </>
 }
