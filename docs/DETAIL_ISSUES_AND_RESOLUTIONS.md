@@ -7724,3 +7724,11 @@ H＝E×…
 - **处理**：本轮全量在临时 `.venv` 下运行并记录结果；`.venv` 已在 `.gitignore` 内，验证后删除，不进入提交。后续在 worktree 跑全量时同样需要临时 `.venv`（或把该测试单列为环境依赖项并保留失败记录）。
 - **状态**：已定位并验证；worktree 环境限制，代码无需修改。
 - **变更记录**：2026-11-01 新增。
+
+## FL-D800 发布迁移在隔离环境被 editable pth 回落到旧工作树（2026-11-01，主线合入 feishu 时暴露）
+
+- **发现**：feishu-onboarding（be5484d）并入主线后 `test_deploy_publisher.py::test_real_entrypoint_imports...` 失败：「serial schema initialization failed」。根因：qa-base venv 的 editable 安装 MAPPING 指向旧工作树 `/home/opencode/fundlex`（FL-D593 同族陷阱）；migrate_schema 的 python 以 `Path.cwd()` 入 sys.path——生产 systemd-run WorkingDirectory=$DST 时正确，但测试 harness（env -i、cwd=tmp）下 cwd≠DST，import 回落到旧树；旧树无 `integrations/feishu/onboarding.py` → ImportError → fail-closed。feishu 线本树全套件绿是因为其 worktree .venv 符号链接环境恰好不同。
+- **处理（已实施 548b04b）**：migrate_schema 显式传 `$DST` 为 argv 并入 sys.path（生产语义等价、隔离环境也指向被发布树）；root 发布器已同步（drift-check OK）。
+- **验证**：test_deploy_publisher 17/17 绿；手工复现用例（cwd=tmp + env -i）从「serial schema initialization failed」转 MIGRATE-OK。
+- **教训**：任何从非启动环境的子进程 import fundlex，一律显式 PYTHONPATH/argv 传树路径；不得依赖 cwd 或 venv pth。
+- **状态**：已解决。
