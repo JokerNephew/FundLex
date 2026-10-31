@@ -6979,9 +6979,10 @@ H＝E×…
 - **发现日期**：2026-10-31，wave1 归因。B15 标签 T007 G14 replace 目标为 p167「在基金促销活动期间，基金管理人可以按中国证监会要求履行必要手续后，对投资者适当调整基金申购费率、赎回费率、销售服务费率和转换费率。」（评分 kept：old wording still in declared site）。引擎实际改了 p166「基金管理人可以在法律法规和本基金合同规定范围内调整申购费率和赎回费率。」（无标签依据的额外修改）。
 - **根因方向**：指引 G14 模板 old_text 均为「基金管理人可以适当调低基金申购费率…」无促销活动前缀变体；模型 survey 将 p166 保留权利句误作 G14 站点，真正应改的 p167 前缀变体反而漏定位。属「示例句当应改目标 + 应改但难定位变体」同簇。
 - **修复方向（未实施）**：G14 匹配核心应锚定「适当调低/调整 + 费率清单」语义并容忍促销活动前缀；保留权利句（「可以在…范围内调整…费率」非促销语境）不得命中。可归入指引匹配变体表或 engine_scope。
-- **状态**：修复链已实施（`08cb0e6`/`e73ade8`/`9250220`/`9a230c6`/`b2561a2`），B15 verify4 落地正确、verify5 端到端复验在途（`/tmp/opencode/qa-findings-run/b15-fl606607-verify5/`）。
+- **状态**：已解决（已验证，B15 verify5 端到端复验通过；修复链 `08cb0e6`→`e73ade8`→`9250220`→`9a230c6`→`b2561a2`，待主线统一 merge+独立复核）。
 - **变更记录**：2026-10-31 新增。
   - 2026-10-31（guide 线，修复链）：①`08cb0e6` 指引 6 op 补促销 variants×3（认证 envelope 重算，29 行手术 diff，document sha `5335e401…`）+ `target_site_ok('G14')` 守卫（规定范围内句硬拒）。B15 verify1 暴露残余：p166 经 `SITE_GUARD_WAIVED_BY_APPROVAL` 双豁免逃逸、p167 因 attribution 只匹配 per-op old_text 而 TARGET_SOURCE_MISMATCH。②`e73ade8` promo attribution 回退（rule variants 证站点→携带全部适用 ops）+ `g14_site_guard_veto`（两个批准豁免点硬拒）+ G14 生成器修复（op 按 condition 过滤播种、动词收敛「适当调整→适当调低」、allowed 缺失时规范尾收敛）。verify2/3 暴露：policy gate 只认 op-level variants → LOST_PROTECTED_LITERAL。③`9a230c6` `_validate_routed_policy` 授权并入 rule-level variants。verify4：p166 拒、p167 落地且与标签逐字一致（`tier1_template` [108:139]「对投资者适当调低基金申购费率和销售服务费率」，audit 通过）——但 claim replay「own required wording」要求 canonical new_text 逐字出现 → CLAIM_OPERATION_EFFECT_MISSING。④`b2561a2` G14 生成器抽为 `_g14_tier1_result`，replay（仿 G09）复算同 slice+facts 作自身效力证明；sibling 借词检查排除对本产品 condition=FALSE 的 ops。793 passed。
+  - 2026-10-31（guide 线，**verify5 终验**，`b2561a2`，`/tmp/opencode/qa-findings-run/b15-fl606607-verify5/`）：B15 真实复跑——G14 p167 planned+落地「在基金促销活动期间，基金管理人可以按中国证监会要求履行必要手续后，对投资者适当调低基金申购费率和销售服务费率。」（与冻结标签 T007 内容一致）；p166 保留权利句全链未命中（train 逃逸消失）；claim replay **G14:B2:O1/O2/O3 全部 PASS**（VERIFIED_ABSENT×2/EXPECTED_EFFECT_PRESENT），CLAIM_OPERATION_EFFECT_MISSING 与 SITE_GUARD_WAIVED_BY_APPROVAL 逃逸双双消除。本条残留归零。
 
 ## FL-D607 B15 G01 在无释义定义条款时向表格格内追加豁免条款（指引诱导，待修）（2026-10-31，guide 线）
 
@@ -7148,3 +7149,4 @@ H＝E×…
 - **状态**：open（定性为模型不确定性回摆，FL-D643 同族观察对象；非修复阻塞项）。
 - **变更记录**：2026-10-31 新增（guide 线；证据 report.json unresolved 三项 G09 + edits.json 无 G09 target 落地）。
   - 2026-10-31（guide 线，归因证据补记）：verify2（`e73ade8`）G09 p159 **planned** 且 claim replay `G09:B1:O1` PASS（bounded splice 落地「减去…净值计算…扣除或加上相应的费用」）；verify4（`b2561a2`）同一模型同一站点翻转为 not_applicable（「与规则所针对的原文不一致，无精确替换目标」），replay 转 OPEN `CLAIM_OPERATION_UNPROVEN`。**诊断**：同一指引版本、同一站点在 planned/PASS 与 not_applicable 之间回摆，属模型侧不确定性（与 FL-D643 G08 不确定性同族），非确定性门诊缺失——本批确定性修复（FL-D606/607）不改此面。保持 open，随 FL-D643 观察族跟踪；不扩为门禁。
+  - 2026-10-31（guide 线，verify5 补证，HEAD `b2561a2`）：B15 verify5（`/tmp/opencode/qa-findings-run/b15-fl606607-verify5/`）G09 再度 not_applicable（「无“当日对应份额类别…”的原文可替换」），replay `G09:B1:O1` OPEN `CLAIM_OPERATION_UNPROVEN`（verified site missing）。回摆在 verify2（planned+PASS）→ verify4/verify5（not_applicable+OPEN）间 1:2，回摆定性坐实。**B15 delivery incomplete 归因（原 FL-D576 观察方向降级落案）**：v2 预跑 15 目标全 no-artifact 的链路病因已由本批确定性修复全部解除（FL-D606 G14 全闭合✅、FL-D607/FL-D601-FL-D602 家族 G01/G08 义务闭合✅），verify5 时仅存本条 G09 OPEN 一项 → delivery 如实 incomplete（**非 false_complete**，行为方向正确）；v2 预跑无产物的 15 目标并非同因。本条 open 即 B15 虚假完成阻断供给的现存唯一来源。
