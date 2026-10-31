@@ -248,7 +248,25 @@ def main() -> int:
             result["result_page_opened"] = True
             page.screenshot(path=str(output / "result-1440.png"), full_page=True)
 
-            downloads = document.get("downloads") or {}
+            # Delivery artifact materialization can lag the terminal job status;
+            # poll the document listing until final/redline links are published.
+            download_deadline = time.monotonic() + 300
+            while True:
+                downloads = document.get("downloads") or {}
+                if downloads.get("final") and downloads.get("redline"):
+                    break
+                if time.monotonic() > download_deadline:
+                    break
+                page.wait_for_timeout(4000)
+                docs_response = browser_json(
+                    page, f"/api/tasks/{task_id}/documents?page=1&page_size=20&sort=oldest"
+                )
+                docs = (docs_response.get("body") or {}).get("items", [])
+                if docs:
+                    document = docs[0]
+            result["download_wait_seconds"] = round(
+                max(0.0, 300 - (download_deadline - time.monotonic())), 1
+            )
             result["downloads"] = {}
             for kind, url in downloads.items():
                 if kind not in {"final", "redline", "working_final", "working_redline",
