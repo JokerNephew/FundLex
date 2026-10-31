@@ -7324,3 +7324,10 @@ H＝E×…
 - **发现**：FL-D651（ONE_OF alternative-absent 证据按共享站点展开）真实 B15 复验 run 中模型走 EXPECTED_EFFECT_PRESENT 完成，兜底新路径未被真实管道行使；闭合证据依赖投影回放+fixture。
 - **处理**：观测；第二波扩波运行中若出现该兜底形状将自然补真实覆盖。
 - **状态**：open（观测项，不阻断 FL-D651 收口）。
+
+## FL-D684 发布健康检查预算在冷导入+高负载下不足（两次发布失败自动回滚）（2026-10-31，主线部署）
+
+- **发现**：4377962 之前的两次实发均在 recall-api 健康检查环节失败并自动恢复旧树。根因：`fundlex-publish` 的 check_api 仅在进程稳定检查后 ~8s 发单次 curl，而冷导入状态下 uvicorn worker 子进程就绪需 ~10s+（含旧树，此前 10-30 发布环境空闲未踩线）。诊断经复现确认：同一候选以生产 env+fundlex 用户手动起服务 4-20s 内返回 200，候选本身健康。
+- **处理（已实施）**：候选内修改 `tools/deploy/fundlex-publish.sh` check_api 重试 24 次×5s（~120s 预算），按规程同步 root 发布器并 drift-check OK 后实发成功（4377962，engine hash e555fee8）。顺手把 cmp-D562 冒烟 renice 保持其数据无损（事后恢复）。
+- **附带观察**：诊断中发现 /var/lib/fundlex 下 auth.db（0 字节，10-31 18:59 由某 root 进程创建）、fundlex.db、runs.sqlite3 自 10-16 起为 root:root 644；由于服务实际库文件是 runs.sqlite3 且生产 API 正常，属历史权限形态，不影响本轮交付，但 root 属主库文件对 fundlex 用户不可写，巡检留意。
+- **状态**：已解决（发布闭环）。
