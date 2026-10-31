@@ -3658,6 +3658,56 @@ def _window_rule_scope(chunks: Sequence[_Chunk], *, mapping: dict[str, list[str]
     return scoped
 
 
+def _apply_deterministic_site_closures(targets: Sequence[Target], rules_by_id: dict,
+                                       inspection: DocumentInspection, facts: Facts,
+                                       scopes: Mapping[str, Any] | None,
+                                       obligation_ledger: Any) -> None:
+    """Deterministic NO_GUIDE_SITE closures (FL-D601/FL-D602/FL-D607).
+
+    Idempotent: an obligation already closed (status != "TRUE") is skipped, so
+    this may run again after the plan stage once guard-rejected targets are
+    known dead (FL-D607-family follow-up, B15 G08 p161).
+    """
+    from .applicability import ApplicabilityDecision
+    for closed_rule_id in ("G22", "G08"):
+        missing = missing_guide_site(closed_rule_id, targets, rules_by_id,
+                                     inspection, facts)
+        if missing is None:
+            continue
+        location = str(missing.get("variant_location") or "")
+        reason = f"NO_GUIDE_SITE:{closed_rule_id}"
+        if location:
+            reason += f":variant@{location}"
+        for record in obligation_ledger.records:
+            if str(record.spec.rule_id) != closed_rule_id:
+                continue
+            if record.applicability.status != "TRUE":
+                continue
+            record.applicability = ApplicabilityDecision(
+                status="FALSE", condition=record.spec.condition,
+                rule_id=closed_rule_id, operation_id=record.spec.operation_id,
+                source="deterministic", reason=reason,
+                evidence_quote=str(missing.get("variant_quote") or ""))
+    from .recall import missing_body_append_site_g01
+    g01_scope = scopes.get("G01") if scopes else None
+    g01_missing = missing_body_append_site_g01(
+        targets, rules_by_id, inspection, facts,
+        scope_locations=(getattr(g01_scope, "locations", None) if g01_scope else None))
+    if g01_missing is not None:
+        g01_location = str(g01_missing.get("table_location") or "")
+        g01_reason = f"NO_GUIDE_SITE:G01:tbl@{g01_location}"
+        for record in obligation_ledger.records:
+            if str(record.spec.rule_id) != "G01":
+                continue
+            if record.applicability.status != "TRUE":
+                continue
+            record.applicability = ApplicabilityDecision(
+                status="FALSE", condition=record.spec.condition,
+                rule_id="G01", operation_id=record.spec.operation_id,
+                source="deterministic", reason=g01_reason,
+                evidence_quote=str(g01_missing.get("table_quote") or ""))
+
+
 def _sweep_scope_plan(chunks: Sequence[_Chunk], *, scopes: Mapping[str, Any] | None,
                       mapping: dict[str, list[str]], sections: Sequence[Any],
                       rules: Sequence[dict], mandatory: set[str],
@@ -4846,48 +4896,11 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
         # whose G22/G08 obligation is fact-applicable but has neither the
         # guide's canonical sentence nor a live target is closed as
         # applicability=FALSE («replacement has no site», frozen labels).
-        from .applicability import ApplicabilityDecision
-        for closed_rule_id in ("G22", "G08"):
-            missing = missing_guide_site(closed_rule_id, targets, rules_by_id,
-                                         inspection, facts)
-            if missing is None:
-                continue
-            location = str(missing.get("variant_location") or "")
-            reason = f"NO_GUIDE_SITE:{closed_rule_id}"
-            if location:
-                reason += f":variant@{location}"
-            for record in obligation_ledger.records:
-                if str(record.spec.rule_id) != closed_rule_id:
-                    continue
-                if record.applicability.status != "TRUE":
-                    continue
-                record.applicability = ApplicabilityDecision(
-                    status="FALSE", condition=record.spec.condition,
-                    rule_id=closed_rule_id, operation_id=record.spec.operation_id,
-                    source="deterministic", reason=reason,
-                    evidence_quote=str(missing.get("variant_quote") or ""))
         # FL-D607: a G01 append whose 释义 scope holds the class definition only
         # inside a table has no body anchor; the frozen labels classify that
-        # contract not_applicable.  Close it deterministically instead of
-        # leaving the unresolved honest gap (B15 tbl0/r55/c1).
-        from .recall import missing_body_append_site_g01
-        g01_scope = scopes.get("G01") if scopes else None
-        g01_missing = missing_body_append_site_g01(
-            targets, rules_by_id, inspection, facts,
-            scope_locations=(getattr(g01_scope, "locations", None) if g01_scope else None))
-        if g01_missing is not None:
-            g01_location = str(g01_missing.get("table_location") or "")
-            g01_reason = f"NO_GUIDE_SITE:G01:tbl@{g01_location}"
-            for record in obligation_ledger.records:
-                if str(record.spec.rule_id) != "G01":
-                    continue
-                if record.applicability.status != "TRUE":
-                    continue
-                record.applicability = ApplicabilityDecision(
-                    status="FALSE", condition=record.spec.condition,
-                    rule_id="G01", operation_id=record.spec.operation_id,
-                    source="deterministic", reason=g01_reason,
-                    evidence_quote=str(g01_missing.get("table_quote") or ""))
+        # contract not_applicable (B15 tbl0/r55/c1).
+        _apply_deterministic_site_closures(targets, rules_by_id, inspection, facts,
+                                           scopes, obligation_ledger)
         class_noops = ensure_class_group_noop_targets(
             targets, rules_by_id, inspection, facts, scopes)
         for target in class_noops:
@@ -5130,6 +5143,21 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
                 max_compose_calls=compose_calls, obligations=obligation_ledger,
                     frozen_run=frozen_run, scopes=scopes, scope_audit=scope_audit)
             report["plan"] = _plan_ledger(planned, plan)
+            # FL-D607-family follow-up: targets the plan stage deterministically
+            # rejected (TARGET_SOURCE_MISMATCH) were still alive when the pre-plan
+            # NO_GUIDE_SITE closures ran.  Re-run the closures treating those
+            # targets as dead so a fact-applicable rule with no legitimate site
+            # closes as applicability=FALSE instead of surviving as an OPEN
+            # obligation the audit then chases without a site (B15 G08 p161).
+            plan_rejected = {str(entry.get("target_id") or "")
+                             for entry in (planned.get("ledger") or [])
+                             if str(entry.get("reason") or "") == "TARGET_SOURCE_MISMATCH"}
+            if plan_rejected:
+                post_plan_targets = [target for target in targets
+                                     if str(target.target_id) not in plan_rejected]
+                _apply_deterministic_site_closures(
+                    post_plan_targets, rules_by_id, inspection, facts,
+                    scopes, obligation_ledger)
             report["targets"] = _target_ledger(targets, planned, {}, origins)
             mark_stage("planning_generation")
 

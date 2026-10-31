@@ -214,3 +214,33 @@ def test_g08_prefixed_class_fee_clause_is_attributed():
     errors = assign_target_operations([target], {"G08": rule}, inspection, facts, ledger)
     assert not errors, errors
     assert target.operations == ("G08:0",)
+
+
+def test_g14_promotion_clause_converges_verb_to_lower():
+    """FL-D606: the promotion-context clause grants 调整 (either direction);
+    G14 authorizes lowering only, so the deterministic generator converges the
+    verb to 调低 together with the fee-item narrowing."""
+    import fundlex.recall as recall
+
+    rule = _rule("G14")
+    replace_ops = [op for op in (rule.get("operations") or []) if op.get("op") == "replace"]
+    facts = _facts()  # multi-class with service fee → 申购费率+销售服务费率 allowed
+    actual = ("在基金促销活动期间，基金管理人可以按中国证监会要求履行必要手续后，"
+              "对投资者适当调整基金申购费率、赎回费率、销售服务费率和转换费率。")
+
+    original = recall._tier1_enabled
+    recall._tier1_enabled = lambda: True
+    try:
+        result = recall._plan_tier1(rule, replace_ops, facts, actual)
+    finally:
+        recall._tier1_enabled = original
+
+    assert result is not None
+    assert "对投资者适当调低" in result.replacement
+    assert "适当调整" not in result.replacement
+    assert "赎回费率" not in result.replacement
+    assert "转换费率" not in result.replacement
+    assert "申购费率" in result.replacement
+    assert "销售服务费率" in result.replacement
+    # The non-promotion lead-in survives verbatim.
+    assert result.replacement.startswith("在基金促销活动期间")

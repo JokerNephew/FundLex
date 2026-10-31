@@ -6579,7 +6579,7 @@ def _plan_tier1(rule: dict, operations: Sequence[dict], facts: Facts,
     Returns a ``TemplateResult`` or ``None``; when ``None`` the caller keeps the
     existing cascade (splice → variant → compose).
     """
-    from .generation.template import (fee_items, ordered_fee_items,
+    from .generation.template import (TemplateResult, fee_items, ordered_fee_items,
                                       plan_fee_item_removal, plan_splice, splice_pairs)
     rule_id = str(rule.get("rule_id") or "")
     replace_ops = [operation for operation in operations
@@ -6611,6 +6611,12 @@ def _plan_tier1(rule: dict, operations: Sequence[dict], facts: Facts,
         allowed_order: list[str] = []
         canonical_tail = ""
         for operation in replace_ops:
+            if condition_status(operation.get("condition"), facts) == "FALSE":
+                # The allowed items and the canonical tail must come from the
+                # operations applicable to THIS product (FL-D606: otherwise the
+                # single-class ops set 允许 only 申购费率 and seed the shorter
+                # tail for a multi-class-with-service-fee product).
+                continue
             instantiated, issues = instantiate_slots(
                 str(operation.get("new_text") or ""), facts)
             if issues or not instantiated:
@@ -6619,11 +6625,39 @@ def _plan_tier1(rule: dict, operations: Sequence[dict], facts: Facts,
                 if item not in allowed_order:
                     allowed_order.append(item)
             allowed |= fee_items(instantiated)
-            if not canonical_tail and "调低" in instantiated:
-                canonical_tail = instantiated.split("调低", 1)[1].strip()
+            if "调低" in instantiated:
+                tail = instantiated.split("调低", 1)[1].strip()
+                if len(fee_items(tail)) > len(fee_items(canonical_tail)):
+                    canonical_tail = tail
         if not allowed:
             return None
-        return plan_fee_item_removal(actual, allowed, canonical_tail, allowed_order)
+        result = plan_fee_item_removal(actual, allowed, canonical_tail, allowed_order)
+        if (result is not None and canonical_tail
+                and set(fee_items(result.replacement)) != allowed):
+            # FL-D606: the source's fee list carried fewer guide-ALLOWED items
+            # than the rule grants (B15 p167 drops 销售服务费率 mid-sentence).
+            # fee-item REMOVAL alone cannot restore a guide item: converge the
+            # tail to the guide's canonical wording, exactly like the existing
+            # sentence-end branch does for added items.
+            from .generation.template import _converge, _item_spans, _surface_start
+            spans = _item_spans(actual)
+            if spans:
+                result = TemplateResult(
+                    replacement=_converge(actual, _surface_start(actual, spans[0][0]),
+                                          canonical_tail),
+                    content_source=result.content_source,
+                    evidence={**result.evidence, "mode": "g14_canonical_converge",
+                              "converged_tail": True})
+        if result is not None and "适当调整" in result.replacement:
+            # FL-D606: the promotion-context clause grants 调整 (either
+            # direction); G14 authorizes lowering only, so the promotion lead-in
+            # converges to 调低 together with the fee items (B15 p167 label:
+            # 「对投资者适当调低基金申购费率和销售服务费率」).
+            result = TemplateResult(
+                replacement=result.replacement.replace("适当调整", "适当调低"),
+                content_source=result.content_source,
+                evidence={**result.evidence, "verb_converged": True})
+        return result
     if rule_id == "G18":
         from .generation.template import _G18_REASON_PAIRS, plan_g18_splice
         g18_pairs: list[tuple[str, str]] = []
