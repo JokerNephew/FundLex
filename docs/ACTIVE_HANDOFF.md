@@ -8,7 +8,8 @@
 - **主线指引诱导修复（本对话第二阶段）**：FL-D601（G22 有序列表变体假阳性）+ FL-D602（G08 实际费率变体假阳性）已修并真实复核通过，提交 `068fe94`（B15 复跑：变体不再造 edit，obligation FALSE/NO_GUIDE_SITE 闭合，交付 complete 无 OPEN_OBLIGATION）；FL-D604/605（A7-06/A7-07 已确认偏差）暂缓实施、移交 qa-feat-recall 线在 dev20 v2 计划排入；FL-D606（G14 p167 变体缺口）、FL-D607（B15 G01 表格格内追加）、FL-D608（B05 G01/G03+B15 G03 追加站点抑制）已登记 open。
 - **smoke28 资格复验已完成（NO-GO，FL-D609）**：新冻结 `3b6da2a2`（engine `1351e03`），记录 `/tmp/opencode/qa/findings/smoke28-requal-3b6da2a2.md`。B16 23/23 完成且诚实 complete（FL-D568 真实生效）；B05 false_complete 依旧（G08=FL-D572 主线在途、G01/G03=FL-D608 待归因）。门槛 ①② 未过、③④ 过；FL-D565-F1 触发路径未覆盖（需 dev20 v2）。dev20 v2 冻结重跑移交 qa-feat-recall 线，待 FL-D572 落地 + FL-D608 修复。导航差异：`docs/EVALUATION_FIRST_BATCH_EXECUTION_20261028.md §七` 为 stale 引用（已登记 FL-D603）。
 - 磁盘观察：根分区约 4.0G 可用（90%），单轮冒烟产物约 30MB，可承受，继续观察。
-- 本线 FL 编号段位 FL-D600..609（已用 FL-D600..609）。
+- **本线已整体收口（2026-10-31，verify5 终验）**：HEAD `f5bfd54`（含 merge `qa/full-audit-20261031`，DETAIL 冲突按保留双方处理）。统一报验已写 `/tmp/opencode/qa/status/qa-feat-guide.md`（commit 清单 10 笔+测试证据）。FL-D606/607/644/645 已解决（verify5 真实复验：G14 全 PASS、G01/G08 义务闭合、793 passed 扩展面）；smoke28 复验 v2 **GO**（记录 `/tmp/opencode/qa/findings/smoke28-requal-v2-f9acd782.md`）；**FL-D650**（B15 G09 p159 模型回摆，verify2 PASS ↔ verify4/5 OPEN 1:2）定性 FL-D643 同族不确定性，open 观察；B15 delivery incomplete 归因落案=FL-D650 唯一存留 OPEN（非 false_complete）。dev20 v2 口径提醒：须含 ≥`51fb45b`。待主线统一 merge+独立复核。
+- 本线 FL 编号段位：原 FL-D600..609 + 主线终裁固定子池 **FL-D650..659**（已用 FL-D650；不再广播抢号，主线 DETAIL 尾部注记为准）。
 
 > **九对话并行期必读**：[docs/PARALLEL_COORDINATION_20261031.md](PARALLEL_COORDINATION_20261031.md)（清单/段位/冻结门槛/merge 顺序/qa-base 在途文件归属）；各线完成状态写到 `/tmp/opencode/qa/status/<线名>.md`。
 
