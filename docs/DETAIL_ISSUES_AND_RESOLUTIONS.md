@@ -7018,6 +7018,7 @@ H＝E×…
 - **证据与疑似归因**：四项均抛 `Conflict(EXECUTION_MODE_MISMATCH)`，位置 `store.finish()` 的模式围栏（FL-D555 A3-F7，`5bfacb7` 引入）：测试用 `store.create_batch` 直种批次（batches.mode 默认 `delivery`）再 finish 一份 `execution_mode=evaluation` 的 v2 报告，按新围栏语义属于被拒场景——疑似 A3-F7 行为变化后这 4 个测试未同步改造（测试陈旧 vs 行为回归需引擎组定责，**尚未定位结论**）。
 - **影响**：本轮性能修复无关项；全套件回归计数会把该 4 项列为既有失败。修复轮自身新增测试与受影响套件（store/api/tasks/archive/trace/retention/docx）另行给出绿的对比面。
 - **状态**：**已修复（2026-10-31，测试侧归位）**。定责结论：陈旧测试而非行为回归——jobs.py 显式保留非任务绑定的 legacy direct-batch evaluation 分支（"Legacy direct-batch runners keep their historical report mode when they explicitly ask for evaluation"），A3-F7 后该路径要求离线 runner 在种子批次时就把 `batches.mode` 持久化为 `evaluation`（生产 evaluation 批次一律走 `TaskStore.create(mode=...)` task-bound，与 `mode` 列同义）。修复：6 个测试夹具全部改为种子后显式 `UPDATE batches SET mode='evaluation'`（与 jobs.py legacy 分支契约一致，且不改引擎语义）；曾评估改走 task-bound 路径，但该路径的 worker 评估处理按 recall 引擎交付形报告（final/redline + complete 状态）裁剪产物，与 v2 runner 的 evaluation 形报告（evaluation_* 产物 + evaluation_* 状态）结构性不兼容，属引擎行为扩大，不做。
+- **主线验证（2026-10-31）**：合并后全量 2375 passed / 0 failed（66min，/tmp/qa-full-a24e320.log），6 项原失败全部转绿；dfd7735 合入口径钉测试复测绿。本条关闭。
 - **验证**：`tests/test_v3_delivery_review_gate.py + test_v2_evaluation.py + test_v2_workbench.py` 23 passed（原 6 failed）；未触碰 `store.finish` 围栏与 jobs.py 语义。
 - **变更记录**：
   - 2026-10-31 新增（B13 性能修复 agent，QA 侧登记）。
