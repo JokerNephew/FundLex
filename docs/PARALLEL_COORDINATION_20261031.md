@@ -47,3 +47,11 @@
 ## 编号候补池（2026-10-31 起）
 
 - FL-D640+ 为跨线候补池：任何「读尾部顺延」的线（B13、标签线及后续）一律用 640 起的下一空闲号，禁止复用各线段位号。首例：B13 的浏览器 V2 失败条目已由 FL-D610（撞 recall-tracked 段位）改派为 **FL-D640**。
+
+## 2026-11-01 会场二收口进度（主线维护）
+
+- ✅ **qa-recall-miss（原 LzndoPec/feat-guide 线）**：五机制 FL-D652~659 交付，主线复核 PASS → 已并入主线（`6961c77`）
+- ✅ **qa-feat-recall（CBU8V6tg）**：FL-D690 B02 根治 + FL-D692 量具归一 → 已并入主线（`9538d6c`，de18ec1 本就曾在主线）
+- ⏳ **qa-guide-parse（lnYRv7RA）**：等全套件终绿 → 并入；之后派 frontend（l8yCbACU）接 upload-spec + canary/parse_report 渲染
+- ⏳ merge 序：recall-miss ✅ → feat-recall ✅ → guide-parse → feat-compare → compare-tracked（EFtQKeLE 等其前置）
+- loop-4 冻结门：合并树新 HEAD 全量回归绿 → 向 CBU8V6tg 发冻结令 + dev20 评分 → false_complete=0 → 留出 8 份首验 → 第二波 100 份放行（kvvQwuiB）
