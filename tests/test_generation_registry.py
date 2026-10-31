@@ -144,8 +144,17 @@ def test_enablement_blocks_unregistered_custom_operation(tmp_path):
     }
     job = guide_store.claim_guide_job(store)
     guide_store.finish_guide_job(store, job["id"], job["fencing_token"], document=document)
-    with pytest.raises(ValueError, match="GUIDE_OPERATION_REGISTRY_MISSING:G99:CUSTOM"):
+    # Since the executability canary (FL-D660) the unregistered operation is
+    # already fatal at finish: the version lands on the needs_review rail…
+    refreshed = guide_store.get_version(store, "alice", version["id"])
+    assert refreshed["qualification_status"] == guide_store.QUALIFICATION_NEEDS_REVIEW
+    assert refreshed["review"]["dimensions"]["blocking_gaps"] == ["G99:CUSTOM"]
+    # …and enabling is refused on the certification rail first.
+    with pytest.raises(ValueError, match="GUIDE_NOT_CERTIFIED"):
         guide_store.set_current_guide(store, "alice", version["id"])
+    # The admission predicate itself still surfaces the exact runtime key.
+    from fundlex.guide_canary import blocking_gaps
+    assert blocking_gaps(document) == ["G99:CUSTOM"]
 
 
 def test_routed_planner_fails_closed_for_missing_custom_operation_registry_entry(

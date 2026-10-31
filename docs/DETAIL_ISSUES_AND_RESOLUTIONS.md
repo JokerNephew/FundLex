@@ -7341,6 +7341,46 @@ H＝E×…
 - **附带观察**：诊断中发现 /var/lib/fundlex 下 auth.db（0 字节，10-31 18:59 由某 root 进程创建）、fundlex.db、runs.sqlite3 自 10-16 起为 root:root 644；由于服务实际库文件是 runs.sqlite3 且生产 API 正常，属历史权限形态，不影响本轮交付，但 root 属主库文件对 fundlex 用户不可写，巡检留意。
 - **状态**：已解决（发布闭环）。
 
+## FL-D660 指引准入/启用谓词与运行时路由谓词不一致：可执行性金丝雀对齐关闭（2026-10-31，qa-guide-parse 线）
+
+- **发现日期**：2026-10-31（本线承接 FL-D648 收口时拆根因）。
+- **问题与影响**：启用闸 `operation_registry_coverage_gaps` 对「`operation_id_generated=True` 且规则在 STRATEGY_REGISTRY」的操作**有意放行**（legacy 兼容），但运行时 `_registry_execution_authoritative` 在 `bind_operation_identities` 之后恒为 True、按权威契约处理并 fail-closed（`RECALL_OPERATION_REGISTRY_MISSING`）。谓词不一致使 FL-D648 的合并漂移解析版本能通过启用、到任务运行时才断崖。另结构性粒度硬规则（如「跨标题块合并报错」）对本指引零检出也用实测证实：合并版 15 个规则每规则恰好=一个加粗主题块；内置指引自身即「一块多规则+跨规则段落重叠」（G15/G16、G19/G20、G21/G22），任何「一块一规则」结构洁癖都会误杀内置通道。
+- **处理方法（已实施并验证）**：①新增 `fundlex/guide_canary.py`：`blocking_gaps`（与运行时完全同谓词的准入检查）、`executability_report`（注册解析 + 全事实已验证路由 + 条件可满足性 8 组事实枚举 + 义务编译往返，零模型零合同）；fatal → 版本 qualification=`needs_review`、review 复核列表显式维度（`source=executability_canary`）、`set_current_guide` 以同谓词拒绝（错误码 GUIDE_OPERATION_REGISTRY_MISSING/GUIDE_NOT_CERTIFIED 兼容不变）；legacy（无 operation_id）文档与运行时同样只走兼容路径不 fatal，既保护内置/老夹具。②粒度改为**指标+块报告**（诊断不阻断）。③footprint 冒烟 review 分 source 管理，不再互相覆盖。
+- **验证**：冻结真实 15 规则合并产物（tests/fixtures/guides/merged_g15_real_20261031.json），canary 确定性检出 12 个阻断键（G03:1..G15:1，与运行时失败同类）；内置冻结文档 canary 全绿（executable_ratio 1.0）；后端 57 项 guide 测试全绿。
+- **状态**：已修复并验证（qa-guide-parse 线提交 a1289e1）；待并入主线后随发布说明注明存量 not_run 版本语义。
+- **变更记录（2026-10-31）**：worker 集成 lane happy-path 夹具对齐——`valid_parsed()` 在 G02 钉 3 条操作（供 validate 单测覆盖统计），超出 registry 内置 G02:0..1 两个槽位，经 worker 绑定后 G02:2 未注册键被 canary 判 fatal；新增 `worker_parsed()`（G01×1+G02×2，注册键全覆盖、条件可满足）承接「解析→认证→启用」集成 happy path，并补 `qualification_status=certified` 断言（提交 ee156a8）。
+
+## FL-D661 指引粒度保障的方法论结论：结构硬规则不可通用，确定性落点=操作原子性（2026-10-31，qa-guide-parse 线）
+
+- **问题**：任务 A「解析粒度钉死」若按字面做结构硬闸（一标题块一规则/禁止一块多规则），实测两路死：①真实事故（合并版）恰恰一主题块一规则，零检出；②内置指引自身违反一切简单结构规则（块内拆分、跨规则段落重叠 97/98、101–105），硬闸会破坏内置升级路径（约束②）。
+- **结论（已按此实施）**：粒度保障的**确定性硬点**只能是「操作原子性=可执行面」（FL-D660 canary）；结构粒度（块切分、块-规则对齐、跨块规则、分支计数）作**指标与块级人读报告**呈现，帮助用户看「粒度偏粗/被拆分」，不访问 pass/fail。指引形态各异的任意上传场景下，可执行性比结构更像天然不变量。
+- **状态**：设计定稿并实施；若后续试点证明某结构信号对某类指引稳定有效，可按指引形态白名单追加硬闸（需主线评审）。
+
+## FL-D662 块级解析报告细分切分误报「合并」：改为主题标题级切分（2026-10-31，qa-guide-parse 线）
+
+- **问题**：块报告初版按「加粗/红=指令标签起点」细分块（47 块），内置合格解析被报 36 块「merged（粒度过粗）」——细分标签天然落在单规则内部（原条款/新条款/分别变更），merged 语义失真。
+- **处理**：`segment_guide_blocks` 改为主题标题级：只认域标题（既有 GUIDE_DOMAINS 前缀）加粗段落；无域标题才回退通用编号标题；全无结构回退单块。内置实测 0 merged、7 parsed+6 split（拆分为合法结构），合并版事故经 canary fatal 定位 6 个错误块。报告状态集：parsed/split/merged/uncovered/error/unparsed，全部附中文原因与修正建议。
+- **状态**：已修复并验证（同 a1289e1）。
+
+## FL-D663 footprint 冒烟与 canary 的 review 戳互相覆盖：分 source 管理（2026-10-31，qa-guide-parse 线）
+
+- **问题**：canary 在 finish 落 needs_review 后，worker footprint 冒烟对同源版本同样判 needs_review 并整体覆盖 issues.review（canary 的运行时致命维度丢失）；反向 healthy 冒烟的清除也会误清 canary 戳。
+- **处理**：review.dimensions 增 `source`（footprint_smoke / executability_canary）；冒烟只在空位或自有戳上写/清。测试钉：合并版冒烟判 needs_review 且 canary 维度仍在。
+- **状态**：已修复并验证（同 a1289e1）。
+
+> **FL-D648 变更记录（2026-10-31）**：遗留开放项「解析粒度钉死」已由 qa-guide-parse 线收口：确定性落点改为可执行性金丝雀（FL-D660），真实合并事故产物冻结钉死（12 阻断键断言），粒度结构信号转诊断指标（FL-D661）。状态由「open」推进为「机制已闭环、随主线合并生效」。
+
+## FL-D664 解析质量通道真实模型基准实跑：复发复发被金丝雀确定性拦下（2026-10-31，qa-guide-parse 线）
+
+- **实跑（2026-10-31，`tools/guide_parse_benchmark.py`，账本 /tmp/opencode/guide-parse-benchmark.sqlite、guide-parse-bench-es2.sqlite）**：
+  - v4（内置同源）重解析：模型再次系统性产出 15 规则合并形态；跑 A（3 轮）验证层报 GUIDE_SLOT_NOT_IN_TEXT+1 finding → 质量门拦下；跑 B（2 轮）**验证 clean=True、finding=0**——此形态在旧闸下必被认证启用并复现召回断崖，金丝雀以同 12 阻断键（G03:1..G15:1，与冻结事故产物完全一致）fatal → `gate_caught_nonexecutable`、qualification=needs_review、不可启用。**FL-D648 复发在真实条件下被确定性收口**。
+  - V2：15 规则，GUIDE_SLOT_NOT_IN_TEXT+2 findings → 结构化拦下（预期，原文笔误）。
+  - 通道整体不变量（v4=认证可执行∨结构化拦下，V2=必拦）三轮跑全 ok；门漏放=基准失败的设计实跑成立。
+  - 引擎冒烟（golden 语料第 2 对 .docx，builtin 轨）：complete 41/41——新闸不触引擎路径。
+- **过程问题（已处理）**：首次 es 跑因前次被 SIGTERM 进程在 scratch 账本残留的 reserved 并发租约行触 MODEL_CONCURRENCY_LIMIT（parse 0 HTTP、引擎 0 目标）；清理时 UPDATE 范围过宽误将 4 行 completed 翻转为 failed（仅状态字段、金额未动，账本为临时观测件，已如实记此）；换新账本重跑通过。教训：同一 scratch 账本被异常终止后应直接换账本文件；清理 SQL 必须限定 status='reserved'。
+- **账本（仅观测）**：解析基准 13 次 $0.0617；es2 30 次 $0.0412；含崩溃次跑合计约 47 次 ≈ $0.11。
+- **状态**：机制已验证（真实复发拦截+引擎完好）；工具与冻结夹具入库。
+
 ## FL-D720 导出层未知枚举兜底透传英文原值风险（2026-10-31，主线复核）
 
 - **发现**：`DELIVERY_TEXT.get(status, status)`、`OP_TEXT.get(op, op)`、`delivery_text` 三处回退原值；未来新增交付状态/操作枚举未同步映射时原始英文会漏入用户导出件。现枚举全覆盖且有负面断言，属前瞻性硬化。
@@ -7502,3 +7542,11 @@ H＝E×…
 - **门槛余量**：false_complete 2→1（B15 T001 真缺口，主线定归 recall-miss 机制 A/E 强制病例）；B02 FL-D690 修复在途；B19 依旧。loop-3 门槛维持 FAIL，留出示波继续冻结。
 - **状态**：已实施并全量同口径重评；待主线复核确认。
 - **变更记录**：2026-10-31 新增。
+
+## FL-D665 全套件瞬时磁盘水位触发 Worker 空闲保留闸：7 项 remediation 交付测试误挂（2026-11-01，qa-guide-parse 线）
+
+- **发现日期**：2026-11-01，本线全套件二跑（无 -x，/tmp/opencode/guide-parse-fullsuite2.log）。
+- **问题与影响**：`tests/test_remediation_tasks_delivery.py` 7/8 项在全量语境失败，单跑与分批组合全绿。实际异常为 `OSError: local storage below configured free-space reserve`（jobs.py `_run_once` 的 FUNDLEX_MIN_FREE_BYTES=256MB 闸）——套件跑到 96%+ 时 / 分区瞬时跌破 256MB（两轮全套件 pytest 临时店 + 基准冒烟临时店叠加，根分区 40G 89%），属测试机环境水位而非产品质量回归。
+- **处理方法**：①失败项单跑 8/8 绿、与本线新测试组合 24/24 绿 → 排除测试间污染；②清理本线自有陈旧临时件（/tmp/pytest-of-opencode/pytest-*、/tmp/guide-bench-smoke-*，释放约 0.7G，空闲 5.1G）后复跑全套件定案；③FL-D648 证据店 `/tmp/guide-channel-li88f1cq`、`/tmp/guide-v2-s_6tu6cw` 保留不删。
+- **状态**：已验证为环境面误挂——清理后全套件三跑 **2490 passed / 0 failed**（12.6 min，含此前 7 项失败测试全部转绿，/tmp/opencode/guide-parse-fullsuite3.log）。防复发建议（短期方案为套件前置清理或将 FUNDLEX_MIN_FREE_BYTES 在 CI 语境调小）提交主线决定，非本线产品改动。
+- **过程教训**：`cd X && nohup … & echo … && git log` 中 `&` 会把整条 `cd+nohup` 背景化、后续命令在原目录执行——后台启动与后续命令必须分两行写或加显式子壳（本次 git log 误读主仓库 HEAD 虚惊一场，worktree 实测无恙）。
