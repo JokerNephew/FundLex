@@ -6901,7 +6901,72 @@ H＝E×…
 - smoke29 于 GUIDE_QUALITY_REVIEW 阶段 `MODEL_HTTP_ERROR` 中断（EXIT=1，供应商侧错误，目录保留）；smoke30（run `b539c4b4d77549ada0f639be1e090b9d`）被操作者以 `batching_must_be_by_chapter` 中止——按章节优先分批已在快照中实施，smoke30 不代表当前基线，仅作历史记录（账本保留，不重置）。
 - **新环境事实（登记）**：worktree 的 `.venv` 致 `import fundlex` 默认解析到主工作区 `/home/opencode/fundlex`（证据：smoke29 traceback 路径）；历史 smoke 实际跑的是主工作区代码。本线（qa-feat-guide）跑自己基线必须显式 `PYTHONPATH=<worktree>`。
 - 处理：新开 **smoke31**（`/tmp/opencode/gg-real-smoke31`、全新账本、run `2aa38fd14e184c8093cdbbf36e5721e6`，PYTHONPATH 指向 qa-feat-guide worktree，HEAD `0b4e89a`），配置与 smoke28 对齐（8 轮 Residual、glm-5.3-flash 独立 reviewer、scope-aware、轮转窗口）。模型环境已按 FL-D540 切换为 hon-maas：author=`kimi-k3`、reviewer=`glm-5.3-flash`，启动前两角色最小真实调用均 200/schema 通过；kimi-k3 为推理模型，需关注单次输出 8000 token 下的截断事件。资格判定沿用 smoke25/26 六项口径；账本仅观测（FL-D445），不做停止门禁。
-- 状态：smoke31 运行中（2026-10-31 启动）。变更记录：2026-10-31 新增。
+- 状态：smoke31 已完成——终态与判定见 **FL-D603**（`candidate_with_findings`/qualified=false，NO-GO）。变更记录：2026-10-31 新增；2026-10-31 smoke31 完成并登记 FL-D603。
+
+## FL-D601 G22 有序列表变体定位假阳性——引擎在冷冻标签判 not_applicable 的合同上主动造修改目标（2026-10-31，guide 线）
+
+- **发现日期**：2026-10-31，wave1 dev20 基线（冻结 0b1a813）逐 case 归因。B15（广发美国房地产）引擎对 p883/p1239 各造一个 G22 edit（`G22V001/002`，reason=`g22_ordered_list_variant`），将有序列表尾句「按基金份额持有人持有的基金份额比例进行分配。」追加销售服务费返还；冻结标签（sha 61a2c514）判 G22 main+summary 均 **not_applicable**：「no guide-style 依据基金财产清算的分配方案…全部剩余资产 clause; replacement has no site」。
+- **根因**：`ensure_g22_ordered_list_targets`（fundlex/recall.py）把「基金财产按下列顺序清偿…（N）按基金份额持有人持有的基金份额比例进行分配」有序列表形式当作 G22 合法站点；该变体形式无标签依据（39 个样本标签无一以有序列表尾句为站点），属指引诱导的额外修改。
+- **处理（已实施，本次提交）**：变体不再造 Target。`ensure_g22_ordered_list_targets` 替换为仅取证据的 `find_g22_ordered_list_site`；新增 `missing_guide_site`：规则事实条件 TRUE、无存活目标、且指引 canonical old_text 全文无命中时返回 NO_GUIDE_SITE 证据；recall_pipeline 在主 targeting 后对 G22/G08 无 canonical 站点的 obligation 记 **ApplicabilityDecision(FALSE, source=deterministic, reason=NO_GUIDE_SITE:G22…, evidence_quote=变体句)**，completion 正常归一化为 NOT_APPLICABLE（仿 `mark_absent_guide_sections` 先例）；同步移除 scopes 注入与 `_apply_scope_gate` 的 `g22_ordered_list_variant` 特例（保留 semantic_replacement 分支）。`plan_target` 的 G22/G08 变体替换分支保留为防御路径。
+- **验证**：新增回归 `test_g22_ordered_list_variant_is_evidence_not_a_site`（真实 B15 docx：站点证据 p883、闭合证据成立、无 Target 产生）、`test_missing_guide_site_keeps_live_target_and_canonical_sentence`（存活目标/canonical 在场均阻断闭合；无站点无变体仍给证据）；`tests -k "recall or obligations or targeting or guide_generation or jobs"` 258 passed / 1 skipped。**端到端复核通过**：B15 真实模型单合同复跑（`/tmp/opencode/fl-d601-b15`，新账本 34 completed/1 failed/$0.0432）——G22 不再产生任何 edit/target；obligation `applicability=FALSE(source=deterministic, reason=NO_GUIDE_SITE:G22:variant@p883, evidence_quote=按基金份额持有人持有的基金份额比例进行分配。)`、`completion=NOT_APPLICABLE`；delivery_status=complete 且无 OPEN_OBLIGATION 阻断；edits 17→13（消失的另两处为 FL-D602 G08 与 FL-D606 待修的 G14 p166）。
+- **状态**：已解决（代码+回归+真实复核均已验证，适用范围：qa-feat-guide-20261031 修复提交及之后）。
+- **变更记录**：2026-10-31 新增；2026-10-31 端到端复核通过转已解决。
+
+## FL-D602 G08 实际执行费率变体定位假阳性（2026-10-31，guide 线，与 FL-D601 同簇）
+
+- **发现日期**：2026-10-31，同一归因。B15 引擎对 p162 造 G08 edit（reason=`g08_actual_rate_variant`，quote「实际执行的申购费率在招募说明书中载明。」）；冷冻标签判 G08 not_applicable：「多类别条件满足，但合同没有指引所列『本基金的申购费率由基金管理人决定，并在招募说明书中列示。』原句可供替换。」
+- **根因**：`ensure_g08_actual_rate_targets` 把「实际执行的申购费率在招募说明书中载明」表述当作 G08 站点；全部样本标签无一以该句为站点，属指引诱导额外修改。
+- **处理（已实施，与 FL-D601 同提交）**：`ensure_g08_actual_rate_targets` 替换为仅取证据的 `find_g08_actual_rate_site`；G08 纳入 `missing_guide_site` FALSE 闭合路径（同上）。
+- **验证**：回归改造 `test_g08_actual_rate_variant_is_evidence_not_a_site`（旧断言"造 target 并替换成功"改为"仅证据 p162，无 Target"）；套件同 FL-D601 全绿。**端到端复核通过**（同 FL-D601 的 B15 复跑）：G08 p162 edit 消失，唯一 G08 target 状态 not_applicable；obligation `applicability=FALSE(reason=NO_GUIDE_SITE:G08:variant@p162, evidence_quote=实际执行的申购费率在招募说明书中载明。)`、`completion=NOT_APPLICABLE`。
+- **状态**：已解决（与 FL-D601 同提交、同次真实复核）。
+- **变更记录**：2026-10-31 新增；2026-10-31 端到端复核通过转已解决。
+
+## FL-D603 smoke31 指引资格冒烟终态：quality/coverage 双门禁未过，不构成资格（2026-10-31，guide 线）
+
+- **运行**：run `2aa38fd14e184c8093cdbbf36e5721e6`（`/tmp/opencode/gg-real-smoke31`，EXIT=0，2026-10-31 完成；PYTHONPATH 指向 qa-feat-guide worktree、head 0b4e89a 基线、全新账本）。真实调用账本：430 completed / 1 failed，记账约 $0.2994（仅观测，FL-D445）。
+- **终态（guide-eligibility-2 口径）**：`complete_with_unresolved` / `candidate_with_findings` / qualified=**false**。quality_run_status=**fail**（open_critical_findings 15，全部 source=coverage_gate）；coverage_gate_passed=**false**（missing_topics 5、requirement_gaps 2、unresolved_impacts 37）；latest_contract_uncertain **0**；independent_model_review_status **qualified**（glm-5.3-flash 独立，配置与作者不同且调用成功）；residual_check=disabled（FL-D448 口径）；requirements 59 条全 dispositioned（modify 11 / no_change 30 / out_of_scope 15 / needs_external_baseline 3）、unhandled_requirements 0。
+- **未过项内容**：5 个 missing topic 多为外部基准型要求（客户维护费占管理费比率上限 50%/30%/15%、销售协议签订与分成比例约定、证监会规定的其他费用信息兜底披露、ETF/同业存单/货基赎回费产品类型例外×2）；15 个 open critical 均 coverage_gate 来源的 requirement/semantic/impact_coverage。quality fail 的根因关联这些 coverage findings，非 circuit/截断主导（kimi-k3 单输出 8000 下未见系统性 MODEL_OUTPUT_TRUNCATED）。
+- **判定**：NO-GO（对 eligibility）；smoke28 的结论（FL-D600）维持——旧证据无效，smoke31 为当前基线首个有效证据但**未达资格**。下一步：逐项核对 15 个 open critical 是否均为确证内容缺口（外部基准类是否应 disposition=needs_external_baseline 而非 critical），再决定补指引内容或修订 disposition 口径。
+- **导航差异（登记）**：任务提示词引用的资格路径 `docs/EVALUATION_FIRST_BATCH_EXECUTION_20261028.md §七` 在当前主线（qa/full-audit-20261031）与本 worktree 均不存在（stale 引用）；资格执行往来一律以 wave1 冻结目录 `freeze.json`（schema `fundlex-qa-wave1-freeze-v1`）+ `tools/evaluation/recall_run` + `score_first_batch` 评分链路与本文件条目为准。
+- **变更记录**：2026-10-31 新增；2026-10-31 补记导航差异。
+
+## FL-D604 A7-06 rule_scope 三处过宽/过窄（已确认偏差，暂缓实施）（2026-10-31，guide 线登记）
+
+- **来源**：盲审报告 /tmp/opencode/qa/findings/A7-engine-recall.md A7-06。①anchor/hint 命中≠1 时 `_resolve_default` 整章回退（过宽，误改窗口上移）；②`_resolve_income`/`_resolve_liquidation` 标题硬匹配「收益分配原则」「清算剩余资产」词族盲区（过窄→unresolved→fail-closed 漏目标）；③摘要副本 copy_key 硬匹配丢非典型章名副本（有 `_expand_duplicate_copy_scopes` 兜底）。
+- **判定**：偏差确认属实（读码核实 rule_scope.py:964-1090）。修复方向（盲审建议认可）：anchor 0 命中改最近邻叶子+`anchor_miss` ledger；标题匹配改词族表；summary 副本按 copy_key 前缀纳入。
+- **状态**：**暂缓实施**——属召回面变更，需 dev20 v2 冻结基线测量护航（召回率与误改率前后对比），避免在无测量下注入召回行为变化；建议由 qa-feat-recall 线在 v2 计划中排入。
+- **变更记录**：2026-10-31 新增（guide 线代登记，未实施）。
+
+## FL-D605 A7-07 targets_for_open_rules 对 scope 缺失 fail-open（已确认偏差，暂缓实施）（2026-10-31，guide 线登记）
+
+- **来源**：同报告 A7-07。读码核实 `fundlex/targeting.py:_scan_scope_pages`（793-794 行）：`scope is None` 时 `accepted = list(page)` 全收（fail-open）；而 `_target_scope_ok`（recall_pipeline）对 scope 缺失/unresolved fail-closed——姊妹函数口径不一致。
+- **影响**：scope 未解析的 open operation 可获得全文 T3 候选，存在跨条款错站风险（与 G14 p166 错改句同方向，但未有直接因果证据）。
+- **处理设计（认可）**：`scopes is not None` 且 `scopes.get(rule_id) is None` 时 fail-closed（skip + coverage 记录），与 `_target_scope_ok` 对齐。
+- **状态**：**暂缓实施**，理由同 FL-D604（需 dev20 v2 基线测量）；随 FL-D604 一并移交 qa-feat-recall 线。
+- **变更记录**：2026-10-31 新增（guide 线代登记，未实施）。
+
+## FL-D606 G14 促销活动费率变体未定位 + 保留权利句误改（指引诱导，待修）（2026-10-31，guide 线）
+
+- **发现日期**：2026-10-31，wave1 归因。B15 标签 T007 G14 replace 目标为 p167「在基金促销活动期间，基金管理人可以按中国证监会要求履行必要手续后，对投资者适当调整基金申购费率、赎回费率、销售服务费率和转换费率。」（评分 kept：old wording still in declared site）。引擎实际改了 p166「基金管理人可以在法律法规和本基金合同规定范围内调整申购费率和赎回费率。」（无标签依据的额外修改）。
+- **根因方向**：指引 G14 模板 old_text 均为「基金管理人可以适当调低基金申购费率…」无促销活动前缀变体；模型 survey 将 p166 保留权利句误作 G14 站点，真正应改的 p167 前缀变体反而漏定位。属「示例句当应改目标 + 应改但难定位变体」同簇。
+- **修复方向（未实施）**：G14 匹配核心应锚定「适当调低/调整 + 费率清单」语义并容忍促销活动前缀；保留权利句（「可以在…范围内调整…费率」非促销语境）不得命中。可归入指引匹配变体表或 engine_scope。
+- **状态**：open，待修复（优先级次于 FL-D601/602）；修后需 B15 复跑复核 p167 落实、p166 不再改。
+- **变更记录**：2026-10-31 新增。
+
+## FL-D607 B15 G01 在无释义定义条款时向表格格内追加豁免条款（指引诱导，待修）（2026-10-31，guide 线）
+
+- **发现日期**：2026-10-31，wave1 归因。B15 标签判 G01 not_applicable：「释义部分没有基金份额类别定义条款，不能按本规则在释义定义后追加。」引擎却对 `tbl0/r55/c1/p0`（表格单元格内的类别定义句）planned 并执行了 G01 豁免条款追加（无标签依据的额外修改）。
+- **根因方向**：G01 追加站点定位未排除表格容器；「释义定义后追加」语义应限正文段落定义条款。表格格内追加另有结构风险（书签半片 FL-D568 同类）。
+- **修复方向（未实施）**：G01（append 到释义定义后的场景）站点须为正文段落（body zone 的 definition 上下文），表格格内文本不作为追加锚点；或把该情形归 NOT_APPLICABLE 并记证据。
+- **状态**：open，待修复。
+- **变更记录**：2026-10-31 新增。
+
+## FL-D608 B05 G01/G03、B15 G03：追加策略在声明站点缺失（同文双站点追加疑似被去重抑制）（待归因）（2026-10-31，guide 线）
+
+- **发现日期**：2026-10-31，wave1 归因。B05 评分 verdicts：G01 append not_executed（释义，标签 p118）、G03 append not_executed（基本情况，标签 p155），detail 均「appended policy absent from its declared site: 3 clause(s)」；引擎 report 中两站均有 planned 目标（p117/p155），另有一个 p157 的 G03 目标被标 not_applicable，reason 含 `DUPLICATE_APPEND_SIT[E…]`。B15 G03 同症（标签 p(九) 类别条款后追加，not_executed）。
+- **疑似根因**：同一政策文本需在两个不同站点（释义/基本情况）各追加一次时，追加去重/duplicate-append 逻辑疑似把第二站点判重丢弃——与 DUPLICATE_SITE 处理族相关但方向相反（FL-D570 是假阳性阻断，本条是合法双站点被抑制）。
+- **状态**：open，待归因修复（疑似引擎 planning/dedup 域，可能交主线引擎 agent；登记于此避免线索丢失）。
+- **变更记录**：2026-10-31 新增。
 
 ## FL 编号分配（多对话并行期协调，2026-10-31）
 
