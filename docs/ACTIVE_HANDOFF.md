@@ -4,9 +4,11 @@
 
 - 基线：worktree `/home/opencode/.local/share/opencode/worktree/29a9a9/qa-feat-guide`，branch `qa-feat-guide-20261031`，已合并 `qa/full-audit-20261031`，HEAD `0b4e89a`。`tests -k "guide_generation or jobs"` **63 passed / 1 skipped**；worker/queue/store（FL-D553/568 段修复、`FUNDLEX_GUIDE_JOB_MAX_ATTEMPTS`、有界退避）在该套件内全绿。
 - smoke28 复核结论（run `581020e2e3584086bbf705a6aa98006a`）：已完成但**不合格且不是当前基线有效证据**——quality fail、latest uncertain 4、unresolved 19、missing topics 12、Residual 8 轮未饱和（均有真实调用、非 circuit 主导）；且其运行代码早于快照 158475f（finalize checklist 为旧口径）。smoke29 于质量复核阶段 `MODEL_HTTP_ERROR` 中断；smoke30 被操作者中止（batching_must_be_by_chapter，该能力已在快照实施）。详情登记 FL-D600。
-- **进行中：smoke31**（`/tmp/opencode/gg-real-smoke31`、新账本、run `2aa38fd14e184c8093cdbbf36e5721e6`、启动脚本 `/tmp/opencode/run_guide_smoke31.py`、日志 `/tmp/opencode/smoke31.log`）：PYTHONPATH 显式指向本 worktree（新环境事实：不设时 `import fundlex` 会解析到主工作区，见 FL-D600）；配置对齐 smoke28（8 轮 Residual、轮转窗口、scope-aware、glm-5.3-flash 独立 reviewer）；模型环境 = hon-maas/kimi-k3（FL-D540），双角色真实探测已通过。资格判定沿用 smoke25/26 口径：quality ≥ pass_with_findings、critical 0、gaps 0、independent=qualified、latest uncertain 收敛、Residual 有真实调用且不被 circuit/截断主导。账本仅观测、不设停止门禁（FL-D445）。
+- **smoke31 已完成（2026-10-31，NO-GO）**：run `2aa38fd14e184c8093cdbbf36e5721e6`（`/tmp/opencode/gg-real-smoke31`，EXIT=0，430 completed/1 failed，约 $0.2994）终态 `complete_with_unresolved`/`candidate_with_findings`/qualified=**false**：quality fail（open critical 15，全部 coverage_gate 来源：5 missing topics+2 requirement gaps+37 unresolved impacts，多为外部基准型要求缺口）、latest uncertain 0、independent_model_review=qualified（glm-5.3-flash）、residual disabled、非 circuit/截断主导。是当前 QA 基线首个有效资格证据但未达标；登记 **FL-D603**，下一步逐项核对 15 个 open critical 与外部基准 disposition 口径。
+- **主线指引诱导修复（本对话第二阶段）**：FL-D601（G22 有序列表变体假阳性）+ FL-D602（G08 实际费率变体假阳性）已修并真实复核通过，提交 `068fe94`（B15 复跑：变体不再造 edit，obligation FALSE/NO_GUIDE_SITE 闭合，交付 complete 无 OPEN_OBLIGATION）；FL-D604/605（A7-06/A7-07 已确认偏差）暂缓实施、移交 qa-feat-recall 线在 dev20 v2 计划排入；FL-D606（G14 p167 变体缺口）、FL-D607（B15 G01 表格格内追加）、FL-D608（B05 G01/G03+B15 G03 追加站点抑制）已登记 open。
+- **smoke28 资格复验进行中**：b05（广发弘利3个月）+b16（广发聚安）以新 HEAD `068fe94` 复跑+评分（`/tmp/opencode/qa-findings-run/smoke-requal-068fe94/`，新账本）；冻结文件 `/tmp/opencode/qa-findings-run/freeze_smoke_requal.json`（selection d89f40b5、labels 61a2c514、guide 20bc6677 均与基线一致，engine_sha=068fe94）。导航差异：`docs/EVALUATION_FIRST_BATCH_EXECUTION_20261028.md §七` 为 stale 引用（已登记 FL-D603）。
 - 磁盘观察：根分区约 4.0G 可用（90%），单轮冒烟产物约 30MB，可承受，继续观察。
-- 本线 FL 编号段位 FL-D600..609（首个 FL-D600 已登记）。
+- 本线 FL 编号段位 FL-D600..609（已用 FL-D600..608，余 609）。
 
 ## 2026-10-31 全项目质量整改（QA 总攻，主 agent 断点）
 
