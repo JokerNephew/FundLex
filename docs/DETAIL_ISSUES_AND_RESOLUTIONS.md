@@ -7434,3 +7434,10 @@ H＝E×…
 - **测试**：`tests/test_fl_d791_sentence_boundary_probe.py` 6 例——①截断 span 命中确定性删除含句号；②L4 形状原子合成==loop-3 逐字文本且无「。。」且零 compose 预算/零网关调用（爆炸网关桩变形测试：修复缺失则必走模型）；③loop-3 形状回归不变；④非终结符紧邻不扩（句中截断保持 fail-closed 不借权）；⑤通用 approved-span 探测吞终结符（G99 通用规则例）；⑥pipeline 形状 content_check 全过。
 - **验证**：全量回归 2522 通过/0 失败/139 跳过（基线 2516+6）；B12 真实合同端到端重跑（真实模型调用）证据路径 `/tmp/opencode/qa/fl-d791-b12-recheck/`（结果见 qa-recall-miss.md 收口记录）。
 - **状态**：已解决（含 mutation 测试与真实段落端到端证据；真实 B12 重跑结果以报告行收口）。
+
+## FL-D792 B12 G16 append 目标与 G17 删除同段站点竞争：replay fail-closed 诚实扣件（2026-11-01，FL-D791 真实复验发现，观察项）
+
+- **发现**：FL-D791 修复后 B12 真实重跑（`/tmp/opencode/qa/fl-d791-b12-recheck/`）病灶站点治愈（见下），但 delivery=incomplete(4 holds)，残留为 G16:B1:O1 MISS_PLAN_GAP：模型本轮多产一个 G16 表位 T014@p796(span 0..90，SITE_GUARD_WAIVED_BY_APPROVAL)，与 G17 同段删除（approved_span_delete 0..90）构成 append vs delete 站点竞争；p796 目标判 TARGET_SOURCE_MISMATCH，replay 把不可闭表位计入闭合集 → CLAIM_REPLAY_FAILED → 4 条可读 hold。Y013(p795)/Y014(p1270) 双站点追加已真实执行（audit completed，政策全文在产物），故义务实质完成但保守扣件——符合 E 层诚实语义，非谎报。
+- **排除与本线修复相关性**：FL-D791 探针仅作用于终结符锚定确定性删除（G13/approved-span），G17 删除 span 0..90 与 T014 原 span 一致无扩张；G16 为 append 不经探针；loop-4 同期 G16 闭合时模型未产 T014 表位——差异属 FL-D650 族 survey 采样波动。
+- **影响**：保守诚实扣件（非错误交付）；若 loop-5 多案复发「G16 append 站点与 G17 删除站点重叠」形态，应考虑 replay 闭合集排除已被授权删除的站点（效果在邻接站点已验证时）。
+- **状态**：观察项（待 loop-5 复发判定；本轮不实施规则级处置）。复验同时确认 FL-D791 病灶治愈：G12+G13 p244 `atomic_paragraph`(0,121) 合成 replace 产出与 loop-3 逐字相同文本「5、赎回费用由…收取。赎回费用全额计入基金财产。」，23 义务 CLOSED_REPLAY，成本 $0.0237/23 calls/186s（账本仅观测）。
