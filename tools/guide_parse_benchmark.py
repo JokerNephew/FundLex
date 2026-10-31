@@ -133,9 +133,10 @@ def engine_smoke(guide_document: dict | None, count: int, out_dir: Path) -> list
                     continue
             client = TestClient(create_app(store_dir))
             data = contract.read_bytes()
+            import hashlib
+            idem = "bench-" + hashlib.sha256(f"{mode}:{contract.name}".encode()).hexdigest()[:12]
             created = client.post("/api/tasks",
-                                  headers={"X-FundLex-User": "qa",
-                                           "Idempotency-Key": f"bench-{mode}-{contract.stem[:8]}"},
+                                  headers={"X-FundLex-User": "qa", "Idempotency-Key": idem},
                                   json={"name": f"bench-{mode}", "engine_id": "recall_first",
                                         "files": [{"client_id": "c1", "name": contract.name,
                                                    "size": len(data)}]})
