@@ -261,6 +261,7 @@ def test_real_task_document_deep_links_use_task_scoped_api(browser, live_app):
 
         response = page.goto(live_app + f"/tasks/{task_id}/documents/{document_id}/detail", wait_until="networkidle")
         assert response and response.ok
+        page.get_by_text("深链合同.docx", exact=False).first.wait_for(state="visible", timeout=15000)
         assert "深链合同.docx" in page.locator("body").inner_text()
         assert "报告读取失败" in page.locator("body").inner_text()
 

@@ -29,6 +29,27 @@ def _dev_page(browser, width=1440, height=1000):
     return context, page, errors
 
 
+def _all_failed_task_scenario():
+    doc = {"task_id": "t", "batch_id": "b", "document_id": "doc", "name": "失败合同.docx", "size": 100,
+           "upload_status": "accepted", "eligibility": "eligible", "job_status": "failed",
+           "delivery_status": "not_generated", "downloads": {},
+           "reason_codes": [], "review_url": "/api/tasks/t/documents/doc/revisions",
+           "report_url": "/api/tasks/t/report"}
+    task = {"id": "t", "name": "全失败任务", "status": "failed", "total": 1, "uploaded": 1, "pending_upload": 0,
+            "rejected": 0, "completed": 0, "processing": 0, "queued": 0, "failed": 1, "legacy": False,
+            "delivery_counts": {}, "qualification_counts": {"eligible": 1}, "successful": 0, "exceptions": 1,
+            "summary_url": "/api/tasks/t/report"}
+
+    def scenario(path, query, route):
+        if path == "/api/tasks/t":
+            return respond(route, task)
+        if path == "/api/tasks/t/documents":
+            return respond(route, {"items": [doc], "total": 1, "page": 1, "page_size": 20})
+        return respond(route, {})
+
+    return scenario
+
+
 def _paused_task_scenario():
     doc = {"task_id": "t", "batch_id": "b", "document_id": "doc", "name": "合同.docx", "size": 100,
            "upload_status": "accepted", "eligibility": "eligible", "job_status": "queued",
@@ -164,6 +185,24 @@ def test_paused_task_shows_paused_rows_download_hint_and_verdict(browser, live_d
         assert page.locator(".result-verdict strong").inner_text() == "已暂停"
         grid = page.locator(".result-status-grid")
         assert "已暂停" in grid.inner_text()
+        assert not errors, errors
+    finally:
+        context.close()
+
+
+def test_all_failed_task_enables_download_all_with_explanatory_hint(browser, live_dev):
+    """FL-D721/FL-D719：completed=0 且 failed>0 的全失败任务同样可以下载结果包
+    （后端解释性 ZIP 新语义），按钮必须启用、下载提示收起。"""
+    _app, base = live_dev
+    context, page, errors = _dev_page(browser)
+    install_api(page, base_api(_all_failed_task_scenario()))
+    try:
+        open_dev(page, base, "#task?id=t")
+        page.locator("#doc-rows [data-detail]").wait_for()
+        download_all = page.locator('[data-action="download-all"]')
+        assert download_all.is_enabled()
+        assert page.locator("#download-hint").is_hidden()
+        assert "失败" in page.locator("#doc-rows tr").first.inner_text()
         assert not errors, errors
     finally:
         context.close()

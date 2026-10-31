@@ -60,6 +60,7 @@ function RoleCard({ name, role, value, onChange, providers, systemModel, disable
         <label>访问密钥（API Key）<input type="password" autoComplete="new-password" maxLength={4096} required={!value.connection_id} value={value.api_key} disabled={disabled} placeholder={value.connection_id ? '已保存；留空保留，填写可更换' : '粘贴供应商提供的访问密钥'} onChange={event => update('api_key', event.target.value)} /><span className="muted">在供应商控制台获取，仅供你本人使用，加密保存，不回显。</span></label>
         <label>模型<input value={value.model} list={`model-${role}-suggestions`} required disabled={disabled} placeholder="选择建议或填写供应商提供的模型名称" onChange={event => update('model', event.target.value)} /><datalist id={`model-${role}-suggestions`}>{suggestions.map(model => <option key={model} value={model} />)}</datalist><span className="muted">建议名称并不保证账户可用，请向供应商确认。</span></label>
         <Button type="button" disabled={disabled || testing} onClick={() => void test()}>{testing ? '验证中…' : '验证连接'}</Button>
+        <p className="meta-line">验证连接会向供应商发送一条简短请求，可能产生少量费用；不会发送合同内容。</p>
       </>}
       {status && <p role="status">{status}</p>}
     </div>

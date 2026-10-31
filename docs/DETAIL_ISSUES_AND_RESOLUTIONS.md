@@ -7421,5 +7421,5 @@ H＝E×…
 - **发现日期**：2026-10-31。
 - **内容/影响**：整改后的验证基线。
 - **结果**：`npx tsc -b --noEmit` 0 错；`npx vitest run` 6 文件 24 用例全绿（与基线一致）；`npm run build` 通过。python 浏览器套件（FUNDLEX_BROWSER_TESTS=1）：V2（test_frontend_v2、test_frontend_fixes）+ V1（test_v1_frontend_remediation、test_workbench、test_tracked_upload、test_guide_generation）批量结果见 `/tmp/opencode/qa/status/qa-frontend.md` 与体检文档第四节。
-- **状态**：已关闭（2026-10-31）：浏览器 6 文件整批 **96 passed / 1 failed**（19m50s），唯一失败 `test_real_task_document_deep_links_use_task_scoped_api` 批量前 2 次单跑+批量后 1 次单跑均通过，且相邻整批失败者轮换——多线并行 pytest 高负载环境抖动，非本线回归。中途两处回归已修复并复验（①V2 Guides 页头「我的指引」改回锚点文案「指引配置」；②FL-D721 ready 条件按指令精确修为 completed+failed>0，见 FL-D721）。
+- **状态**：已关闭。**变更记录（2026-11-01，根治）**：整批 96/1 的那例失败为 `networkidle` 等待与查询渲染竞态，已按主线要求在 `test_frontend_v2.py` 深链断言前加显式 `wait_for(state='visible', timeout=15000)`，复跑通过，不再依赖重跑碰运气。中途两处回归已修复并复验（①V2 Guides 页头「我的指引」改回锚点文案「指引配置」；②FL-D721 ready 条件按指令精确修为 completed+failed>0，见 FL-D721）。
 - **注意**：V2 套件整跑时在高负载机（多线并行 pytest）出现轮换性单测失败（prefixed_entry / real_task_document_deep_links），单测均通过，判定为环境抖动非回归；批量干净跑结果以此条更新为准。
