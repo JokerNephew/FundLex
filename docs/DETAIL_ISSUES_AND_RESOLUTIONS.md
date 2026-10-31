@@ -7404,3 +7404,11 @@ H＝E×…
 - qa-feat-recall 归因（其树内 FL-D691 条目）经主线独立盲抽复核 **3/3 PASS**（B17 T003、B15 T005、B15 T008：义务文本在 final.docx 完整在场，量具误杀坐实）。复核另指正机制精确表述：非「折叠本身撞线」，而是折叠后形如仍异 + exact-substring 不吸收「和」重复主语。
 - **主线授权**：评分器口径修正（FL-D692，labels 冻结只动 scorer），两层等价归一按复核精确机制设计；scorer_version bump、零成本重评 loop-3 并同口径重评 v1/loop2、附正负例单测。
 - **裁决不变项**：B15 T001 G03 三直销条款真实未执行 → false_complete 修正后仍为 1，loop-3 门槛维持 FAIL；该真实缺口归 qa-recall-miss 机制 A/E 强制病例，留出 8 份继续冻结至 loop-4 达标。
+
+## FL-D665 全套件瞬时磁盘水位触发 Worker 空闲保留闸：7 项 remediation 交付测试误挂（2026-11-01，qa-guide-parse 线）
+
+- **发现日期**：2026-11-01，本线全套件二跑（无 -x，/tmp/opencode/guide-parse-fullsuite2.log）。
+- **问题与影响**：`tests/test_remediation_tasks_delivery.py` 7/8 项在全量语境失败，单跑与分批组合全绿。实际异常为 `OSError: local storage below configured free-space reserve`（jobs.py `_run_once` 的 FUNDLEX_MIN_FREE_BYTES=256MB 闸）——套件跑到 96%+ 时 / 分区瞬时跌破 256MB（两轮全套件 pytest 临时店 + 基准冒烟临时店叠加，根分区 40G 89%），属测试机环境水位而非产品质量回归。
+- **处理方法**：①失败项单跑 8/8 绿、与本线新测试组合 24/24 绿 → 排除测试间污染；②清理本线自有陈旧临时件（/tmp/pytest-of-opencode/pytest-*、/tmp/guide-bench-smoke-*，释放约 0.7G，空闲 5.1G）后复跑全套件定案；③FL-D648 证据店 `/tmp/guide-channel-li88f1cq`、`/tmp/guide-v2-s_6tu6cw` 保留不删。
+- **状态**：复跑中；若再发，短期方案为套件前置清理 cron 或将 FUNDLEX_MIN_FREE_BYTES 在 CI 语境调小，需主线决定。
+- **过程教训**：`cd X && nohup … & echo … && git log` 中 `&` 会把整条 `cd+nohup` 背景化、后续命令在原目录执行——后台启动与后续命令必须分两行写或加显式子壳（本次 git log 误读主仓库 HEAD 虚惊一场，worktree 实测无恙）。
