@@ -2355,6 +2355,37 @@ def _approved_delete_span(text: str, start: int, end: int) -> tuple[int, int]:
     return start, end
 
 
+def _meaningful_fragment(value: str) -> bool:
+    """Whether ``value`` still carries words once punctuation is stripped."""
+    return bool(re.sub(r"[，,。；;：:、\s]", "", str(value or "")))
+
+
+def _approved_fragment_bounds(text: str, start: int, end: int,
+                              operation: Mapping[str, Any]) -> tuple[int, int] | None:
+    """Narrow an approved clause span to the operation-owned fragment.
+
+    A rule ``delete`` whose ``old_text`` is only part of the approved sentence must
+    remove exactly that fragment: deleting the whole sentence swallows surrounding
+    wording the operation never owned (FL-D573, p87 尾句
+    “经与基金托管人协商一致后，提前公告并报中国证监会备案。”).  Narrowing applies
+    only when the fragment occurs exactly once, unowned content stands *before* it
+    and the remainder after it is at most a terminator — the surviving prefix then
+    stays a complete, readable sentence.  A *trailing* continuation (``,并…``) or a
+    paraphrase whose old wording is absent keeps the model-approved wider span.
+    """
+    old_text = str(operation.get("old_text") or "")
+    if not old_text or not 0 <= start < end <= len(text):
+        return None
+    quote = text[start:end]
+    if quote.count(old_text) != 1:
+        return None
+    left = quote.index(old_text)
+    prefix, suffix = quote[:left], quote[left + len(old_text):]
+    if not _meaningful_fragment(prefix) or _meaningful_fragment(suffix):
+        return None
+    return start + left, start + left + len(old_text)
+
+
 def _g17_target_is_owned_sentence(inspection: Any, target: Any,
                                   operations: Sequence[Mapping[str, Any]]) -> bool:
     """Whether the target span is exactly one complete operation-owned sentence."""
@@ -4339,8 +4370,50 @@ def _split_definition_end(anchor: Any, inspection: DocumentInspection) -> Any | 
     return None
 
 
+def _definition_group_continuation_end(anchor: Any,
+                                       inspection: DocumentInspection) -> Any | None:
+    """End of a definition group that continues in the next paragraph.
+
+    Some contracts keep the same share-class definition going with a subdivision
+    paragraph ("在每一份额类别内…再分为…").  An append must follow the whole
+    definition group; inserting between the definition and its subdivision splits
+    the group (FL-D573 美国房地产 G03 错放 p83).  A closed anchor followed by a
+    same-group subdivision paragraph rebinds to that follower's end.  Anything
+    starting a new topic (代码/净值计算 etc.) does not continue the group.
+    """
+    spans = list(inspection.paragraphs)
+    try:
+        index = next(i for i, span in enumerate(spans) if span.location == anchor.location)
+    except StopIteration:
+        return None
+    head = _compact(display_text(anchor.text)[0])
+    if not any(marker in head for marker in _APPEND_DEFINITION_MARKERS):
+        return None
+    if not head or head[-1] not in "。；;！？!?":
+        return None
+    if index + 1 >= len(spans):
+        return None
+    follower = spans[index + 1]
+    body = _compact(display_text(follower.text)[0])
+    if not body or _looks_like_heading(follower.text):
+        return None
+    if not (body.startswith("在每一份额类别内") and "再分为" in body):
+        return None
+    return follower
+
+
 def rebind_split_append_targets(targets: Sequence[Target],
-                                inspection: DocumentInspection) -> None:
+                                inspection: DocumentInspection,
+                                *,
+                                include_group_continuation: bool = False) -> None:
+    """Rebind append targets to the true end of their definition site.
+
+    ``include_group_continuation`` is a plan-stage refinement: the closed-definition
+    group continuation rebind re-shapes the target and therefore must not run in the
+    pre-audit canonicalization pass, whose outputs are part of the frozen audit
+    context (replay determinism).  The split-definition rebind is part of the
+    canonical shape and stays unconditional.
+    """
     for target in targets:
         if (target.rule_id not in {"G01", "G03"} or target.state != "needs_edit"
                 or target.out_of_scope):
@@ -4350,12 +4423,16 @@ def rebind_split_append_targets(targets: Sequence[Target],
         except (KeyError, ValueError):
             continue
         end = _split_definition_end(anchor, inspection)
+        reason_suffix = "SPLIT_DEFINITION_APPEND_END"
+        if end is None and include_group_continuation:
+            end = _definition_group_continuation_end(anchor, inspection)
+            reason_suffix = "DEFINITION_GROUP_APPEND_END"
         if end is not None:
             target.location, target.quote = end.location, end.text
             target.start, target.end = 0, len(end.text)
             target.composite = ()
             target.resolution, target.segment_ok = "resolved", True
-            target.reason = f"{target.reason}|SPLIT_DEFINITION_APPEND_END"
+            target.reason = f"{target.reason}|{reason_suffix}"
 
 
 def _append_definition_anchor(rule_id: str, span: Any,
@@ -6419,7 +6496,7 @@ def _plan_tier1(rule: dict, operations: Sequence[dict], facts: Facts,
     rule_id = str(rule.get("rule_id") or "")
     replace_ops = [operation for operation in operations
                    if operation.get("op") == "replace"]
-    if not replace_ops or rule_id not in {"G14", "G09", "G08", "G10", "G11"}:
+    if not replace_ops or rule_id not in {"G14", "G09", "G08", "G10", "G11", "G18"}:
         return None
     executor = str((routing or {}).get("executor") or "template")
     if executor not in {"template", "splice"}:
@@ -6459,6 +6536,22 @@ def _plan_tier1(rule: dict, operations: Sequence[dict], facts: Facts,
         if not allowed:
             return None
         return plan_fee_item_removal(actual, allowed, canonical_tail, allowed_order)
+    if rule_id == "G18":
+        from .generation.template import _G18_REASON_PAIRS, plan_g18_splice
+        g18_pairs: list[tuple[str, str]] = []
+        for operation in replace_ops:
+            instantiated, issues = instantiate_policy_text(rule_id, operation, facts)
+            if issues or not instantiated:
+                continue
+            g18_pairs.extend(splice_pairs(str(operation.get("old_text") or ""), instantiated))
+            for old_kernel, new_kernel in _G18_REASON_PAIRS:
+                instantiated_pair = (instantiate_slots(old_kernel, facts)[0],
+                                     instantiate_slots(new_kernel, facts)[0])
+                if all(instantiated_pair) and instantiated_pair not in g18_pairs:
+                    g18_pairs.append(instantiated_pair)
+        if not g18_pairs:
+            return None
+        return plan_g18_splice(actual, g18_pairs)
     pairs: list[tuple[str, str]] = []
     for operation in replace_ops:
         instantiated, issues = instantiate_policy_text(rule_id, operation, facts)
@@ -6917,7 +7010,7 @@ def _plan_target_inner(rule: dict, target: Target, inspection: DocumentInspectio
         # Out-of-scope rules are decided above; a resolved-scope target that cannot bind
         # to the contract text is a genuine unresolved failure.
         raise RecallError("RECALL_TARGET_UNRESOLVED", {"target": target.target_id})
-    rebind_split_append_targets([target], inspection)
+    rebind_split_append_targets([target], inspection, include_group_continuation=True)
     span = inspection.by_location(target.location)
     if (rule_id == "G08" and len(operations) == 1
             and _same_compact(target.quote, span.text[target.start:target.end])):
@@ -7132,7 +7225,7 @@ def _plan_target_inner(rule: dict, target: Target, inspection: DocumentInspectio
         # For an append, the append-site guard is authoritative: it accepts the
         # clause-end anchor G16 resolves to (FL-D159).  Other append rules still
         # keep the ordinary target-site guard as an additional check.
-        site_ok = append_site_ok(rule_id, span, inspection)
+        site_ok = append_site_ok(rule_id, span, inspection, allow_open_table_cell=False)
         if site_ok and rule_id != "G16":
             site_ok = target_site_ok(rule_id, span, inspection)
     else:
@@ -7366,8 +7459,19 @@ def _plan_target_inner(rule: dict, target: Target, inspection: DocumentInspectio
         # silently pushes the legal delete back to compose.
         check = approvals.allows(target, inspection)
         if check.ok and _approved_span_is_complete_clause(span.text, target):
-            start, end = _approved_delete_span(span.text, int(target.start),
-                                               int(target.end))
+            # An approval covers the located sentence, but the operation owns only
+            # its authorized old wording.  When that wording is a fragment of the
+            # approved span (unowned head + owned fragment + terminator), delete
+            # exactly the fragment; a wider delete would swallow untargeted
+            # remainder text (FL-D573).  The fragment path must not extend over
+            # the terminator: the surviving prefix needs it to close the sentence.
+            narrowed = _approved_fragment_bounds(span.text, int(target.start),
+                                                 int(target.end), delete_ops[0])
+            if narrowed is not None:
+                start, end = narrowed
+            else:
+                start, end = _approved_delete_span(span.text, int(target.start),
+                                                   int(target.end))
             if end > start:
                 return finish(PlannedEdit(
                     target_id=target.target_id, rule_id=rule_id,
@@ -7425,7 +7529,8 @@ def _plan_target_inner(rule: dict, target: Target, inspection: DocumentInspectio
                         index = -1
                     next_span = (inspection.paragraphs[index + 1]
                                  if 0 <= index < len(inspection.paragraphs) - 1 else None)
-                    if next_span is None or not append_site_ok(rule_id, next_span, inspection):
+                    if next_span is None or not append_site_ok(
+                            rule_id, next_span, inspection, allow_open_table_cell=False):
                         raise RecallError("RECALL_APPEND_CLAUSE_INCOMPLETE",
                                           {"rule": rule_id, "target": target.target_id})
                     span = next_span
@@ -8074,6 +8179,109 @@ def _operations_are_alternatives(left: PlannedEdit, right: PlannedEdit,
     return bool(left_groups & right_groups)
 
 
+def _alternatives_shared_group_canonical(left: PlannedEdit, right: PlannedEdit,
+                                         obligations: Any
+                                         ) -> tuple[str, str] | None:
+    """Shared ONE_OF group + canonical new_text for two overlapping edits.
+
+    A merged edit can carry keys outside the group (e.g. a joint_compose
+    partner); only keys that actually belong to a declared one_of_group are
+    compared.  Returns ``(group, new_text)`` when both sides hold keys in one
+    common group and every such key resolves to the same non-empty new_text
+    -- the certification invariant already requires ONE_OF members to share
+    new_text, so a mismatch means the texts genuinely diverge and the overlap
+    must stay a conflict.
+    """
+    if obligations is None or not left.operation_keys or not right.operation_keys:
+        return None
+    grouped: list[dict[str, list[str]]] = []
+    for edit in (left, right):
+        store: dict[str, list[str]] = {}
+        for key in edit.operation_keys:
+            record = obligations.record(str(key))
+            if record is None:
+                continue
+            group = str(getattr(record.spec, "one_of_group", "") or "")
+            new_text = str(getattr(record.spec, "new_text", "") or "")
+            if group:
+                store.setdefault(group, []).append(new_text)
+        grouped.append(store)
+    for group in grouped[0].keys() & grouped[1].keys():
+        texts = grouped[0][group] + grouped[1][group]
+        if texts and all(text and text == texts[0] for text in texts):
+            return group, texts[0]
+    return None
+
+
+def _coalesce_alternative_equivalents(current: PlannedEdit, item: PlannedEdit,
+                                      obligations: Any
+                                      ) -> tuple[PlannedEdit, str] | None:
+    """Merge ONE_OF siblings whose replacements are canonically one effect but
+    drifted locally during composition (B03: a joint_compose variant wrote
+    「基金销售服务费率」 where the guide new_text and the tier1 template both
+    say 「销售服务费率」 — one effect, two near-identical spellings, and the
+    old code dropped BOTH sides as RECALL_EDIT_OVERLAP, leaving the G14
+    obligations unplanned).
+
+    Coalescing is only allowed when the shared group's canonical new_text is
+    identical on both sides and at least one replacement already equals that
+    canonical text; the canonical side is kept, operation/obligation identity
+    is unioned so claim replay still sees every planned operation, and the
+    other edit is reported covered.  When neither side matches the canonical
+    text (two genuinely different variant spellings) the overlap stays an
+    honest conflict.
+    """
+    shared = _alternatives_shared_group_canonical(current, item, obligations)
+    if shared is None:
+        return None
+    _group, canonical = shared
+    current_is_canonical = _compact(current.replacement) == _compact(canonical)
+    item_is_canonical = _compact(item.replacement) == _compact(canonical)
+    if not (current_is_canonical or item_is_canonical):
+        return None
+    keeper, other = (current, item) if current_is_canonical else (item, current)
+    merged = PlannedEdit(
+        target_id=keeper.target_id,
+        rule_id=keeper.rule_id,
+        location=keeper.location, start=keeper.start, end=keeper.end,
+        replacement=keeper.replacement, operation=keeper.operation,
+        content_source="alternative_canonical_coalesce",
+        evidence={"merged": [current.evidence, item.evidence],
+                  "coalesced_equivalent": True,
+                  "canonical_new_text": canonical},
+        operation_keys=_edit_operation_keys(current, item),
+        obligation_ids=_edit_obligation_ids(current, item),
+    )
+    return merged, other.target_id
+
+
+_SEAM_PUNCTUATION = (("；。", "。"), ("，。", "。"), ("：。", "。"))
+
+
+def _excise_covered_slice(replacement: str, deleted_slice: str) -> str | None:
+    """Remove a contained deletion's source slice from an outer replacement.
+
+    B12: the G12-style replacement retains the 7-day/1.5% redemption-fee
+    sentence that the covered G13 delete removes.  Excising that sentence from
+    the replacement is deterministic -- but only when the slice appears exactly
+    once verbatim.  Seam punctuation left by the cut (「…列示；对于持续…」
+    becomes 「…列示。」) is normalised.  Returns None when the cut is not
+    unambiguous so the caller falls through to an honest conflict.
+    """
+    if not deleted_slice or replacement.count(deleted_slice) != 1:
+        return None
+    excised = replacement.replace(deleted_slice, "")
+    for seam, fixed in _SEAM_PUNCTUATION:
+        excised = excised.replace(seam, fixed)
+    excised = re.sub(r"。{2,}", "。", excised)
+    if excised.endswith(("；", "，")):
+        # The cut removed the final clause: the leftover connector must not
+        # dangle at the end of the replacement (「…列示；对于持续…。」 cut
+        # leaves 「…列示；」).
+        excised = excised[:-1] + "。"
+    return excised
+
+
 def _edit_operation_keys(left: PlannedEdit, right: PlannedEdit) -> tuple[str, ...]:
     return tuple(dict.fromkeys((*left.operation_keys, *right.operation_keys)))
 
@@ -8206,16 +8414,28 @@ def merge_edits(edits: Sequence[PlannedEdit], inspection: DocumentInspection,
                     and set(current.operation_keys) != set(item.operation_keys)
                     and item.start >= current.start and item.end <= current.end):
                 deleted_slice = span_slice(inspection, location, item.start, item.end)
-                if deleted_slice and _compact(deleted_slice) not in _compact(current.replacement):
+                excised = None
+                if deleted_slice and _compact(deleted_slice) in _compact(current.replacement):
+                    # B12: the outer replacement still carries the sentence the
+                    # covered delete removes -- cut it out deterministically
+                    # instead of dropping the delete on the floor or failing
+                    # the whole contract.  Ambiguous slices keep the honest
+                    # conflict path below.
+                    excised = _excise_covered_slice(current.replacement, deleted_slice)
+                if deleted_slice and (
+                        _compact(deleted_slice) not in _compact(current.replacement)
+                        or excised is not None):
                     current_components = current_components + [item_component]
                     current = PlannedEdit(
                         target_id=current.target_id + "+" + item.target_id,
                         rule_id=current.rule_id + "+" + item.rule_id,
                         location=location, start=current.start, end=current.end,
-                        replacement=current.replacement, operation="replace",
+                        replacement=current.replacement if excised is None else excised,
+                        operation="replace",
                         content_source="replace_covers_delete",
                         evidence={"merged": [current.evidence, item.evidence],
-                                  "covered_delete": True},
+                                  "covered_delete": True,
+                                  "excised_slice": excised is not None},
                         operation_keys=_edit_operation_keys(current, item),
                         obligation_ids=_edit_obligation_ids(current, item),
                     )
@@ -8246,6 +8466,20 @@ def merge_edits(edits: Sequence[PlannedEdit], inspection: DocumentInspection,
                         _component_covered(item_component, current.replacement)
                         or _compact(item.replacement) == _compact(current.replacement)):
                     covered.append(item.target_id)
+                    if alternative and (item.operation_keys or item.obligation_ids):
+                        # The surviving edit carries the covered sibling's
+                        # operation identity, so ONE_OF members keep their
+                        # planned credit on the edit itself, not only via the
+                        # covered list (B03 G14:3/4/5).
+                        current = PlannedEdit(
+                            target_id=current.target_id, rule_id=current.rule_id,
+                            location=current.location, start=current.start,
+                            end=current.end, replacement=current.replacement,
+                            operation=current.operation,
+                            content_source=current.content_source,
+                            evidence=current.evidence,
+                            operation_keys=_edit_operation_keys(current, item),
+                            obligation_ids=_edit_obligation_ids(current, item))
                     continue
             current_component = _component(current, inspection)
             if current.start >= item.start and current.end <= item.end:
@@ -8253,9 +8487,26 @@ def merge_edits(edits: Sequence[PlannedEdit], inspection: DocumentInspection,
                         _component_covered(current_component, item.replacement)
                         or _compact(current.replacement) == _compact(item.replacement)):
                     covered.append(current.target_id)
+                    if alternative and (item.operation_keys or item.obligation_ids):
+                        item = PlannedEdit(
+                            target_id=item.target_id, rule_id=item.rule_id,
+                            location=item.location, start=item.start,
+                            end=item.end, replacement=item.replacement,
+                            operation=item.operation,
+                            content_source=item.content_source,
+                            evidence=item.evidence,
+                            operation_keys=_edit_operation_keys(current, item),
+                            obligation_ids=_edit_obligation_ids(current, item))
                     current = item
                     current_components = [item_component]
                     continue
+            coalesced = _coalesce_alternative_equivalents(current, item, obligations)
+            if coalesced is not None:
+                merged_edit, covered_id = coalesced
+                covered.append(covered_id)
+                current_components = [_component(merged_edit, inspection)]
+                current = merged_edit
+                continue
             conflicts.append({"code": "RECALL_EDIT_OVERLAP", "location": location,
                               "targets": [current.target_id, item.target_id],
                               "spans": [[current.start, current.end], [item.start, item.end]]})
@@ -9434,9 +9685,24 @@ _TARGET_ANCHORS: dict[str, tuple[tuple[str, ...], str]] = {
 }
 
 
-def append_site_ok(rule_id: str, span: Any, inspection: DocumentInspection) -> bool:
-    """An append anchor must carry its own clause, never a neighbour's anchor."""
+def append_site_ok(rule_id: str, span: Any, inspection: DocumentInspection,
+                   *, allow_open_table_cell: bool = True) -> bool:
+    """An append anchor must carry its own clause, never a neighbour's anchor.
+
+    ``allow_open_table_cell=False`` is the plan-stage stance: canonicalization and
+    approval bookkeeping keep every audit-relevant target shape stable (frozen
+    replay contexts), while the planner rejects policy insertion into an
+    unterminated table definition cell (FL-D573 tbl0/r55/c1/p0 duplicate add).
+    """
     if rule_id in {"G01", "G03"}:
+        # A definition entry inside a classification table cell that does not close
+        # its sentence (ends with ；, the shared enumeration separator) is part of a
+        # continued definition list.  Inserting a standalone policy sentence into
+        # it mangles the list; the policy belongs after a complete-clause anchor.
+        if not allow_open_table_cell and str(getattr(span, "location", "") or "").startswith("tbl"):
+            paragraph, _ = display_text(span.text)
+            if not paragraph.rstrip().endswith("。"):
+                return False
         # A model inventory target can point at the amendment trigger
         # "基金份额类别设置" or a split fragment.  Require a real definition clause
         # before accepting the site; otherwise the policy is appended twice (once to
@@ -9448,6 +9714,14 @@ def append_site_ok(rule_id: str, span: Any, inspection: DocumentInspection) -> b
         if any((end := _split_definition_end(anchor, inspection)) is not None
                and end.location == span.location
                for anchor in spans[max(0, position - 6):max(0, position)]):
+            return True
+        if not allow_open_table_cell and any(
+                (end := _definition_group_continuation_end(anchor, inspection)) is not None
+                and end.location == span.location
+                for anchor in spans[max(0, position - 6):max(0, position)]):
+            # Plan stage accepted this paragraph by rebinding a closed-definition
+            # anchor to the end of its subdivision group (FL-D573 G03 p83->p84);
+            # the site check must stand behind its own rebind decision.
             return True
         paragraph, _ = display_text(span.text)
         if any(anchor in paragraph for anchor in _TARGET_ANCHORS[rule_id][0]):
