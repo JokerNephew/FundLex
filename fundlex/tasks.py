@@ -14,7 +14,7 @@ from collections import Counter
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from .edit_summary import (DELIVERY_TEXT, OUTCOME_LABELS, edit_count,
+from .edit_summary import (OUTCOME_LABELS, delivery_text, edit_count,
                            outcome_label, summary_detail)
 from .recall import ENGINE_ID as RECALL_ENGINE_ID
 from .store import (Conflict, NotFound, ReportJsonError, RunStore, SCHEMA_VERSION,
@@ -1023,8 +1023,8 @@ class TaskStore:
             reviewed = "selected_redline" in downloads
             lines.append("| " + " | ".join([
                 safe(doc["name"]),
-                safe(DELIVERY_TEXT.get(doc["delivery_status"],
-                                       doc["delivery_status"] or "—")),
+                # 交付完整性走单一事实源的人读映射（未知枚举兜底不透传英文）。
+                safe(delivery_text(report, doc)),
                 "按人工选择" if reviewed else "引擎全量",
                 str(count), safe(detail)]) + " |")
         failed = [doc for doc in docs

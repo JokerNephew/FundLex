@@ -81,6 +81,22 @@ def test_exception_note_failure_and_exclusion():
     assert exception_note(report([edit()]), {"delivery_status": "complete"}) == ""
 
 
+def test_unknown_enums_fall_back_to_readable_text():
+    """FL-D720：未知 delivery/operation 枚举不得把英文原值透传给用户。"""
+    from fundlex.edit_summary import delivery_text, operation_text
+    assert delivery_text({"delivery_status": "incomplete_v9"}) == "状态待确认"
+    assert delivery_text({}, {}) == "处理进行中"  # 空值仍是「处理进行中」
+    assert operation_text({"operation": "overwrite_paragraph"}) == "其他修改"
+    assert operation_text({"operation": ""}) == "—"
+    row = result_list_row(1, "合同.docx", {"delivery_status": "legacy_state",
+                                           "plan": {"edits": [{"operation": "legacy_op"}]}},
+                          {"delivery_status": "legacy_state"})
+    assert row[2] == "状态待确认" and "legacy" not in ",".join(row)
+    detail = edit_detail_rows({"plan": {"edits": [{"operation": "legacy_op",
+                                                   "rule_id": "G12"}]}})
+    assert detail[0][1] == "其他修改" and "legacy_op" not in ",".join(detail[0])
+
+
 def test_outcome_labels_cover_the_five_buckets():
     assert OUTCOME_LABELS == ["已修改", "部分修改", "无需修改", "类型排除", "失败"]
     cases = [
