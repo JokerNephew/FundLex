@@ -34,6 +34,10 @@ function formatTime(value?: string): string {
   return `${date.getFullYear()}/${date.getMonth() + 1}/${date.getDate()}`
 }
 
+function fieldLabel(name: string) {
+  return FIELD_LABELS[name] || META_LABELS[name] || name
+}
+
 function fieldValue(name: string, value: unknown): React.ReactNode {
   if (value === null || value === undefined) return '—'
   if (name === 'operations' && Array.isArray(value)) {
@@ -92,6 +96,11 @@ function RulesDiffView({ result }: { result: GuideDiffResult }) {
       规则 {summary.rules_before} 条 → {summary.rules_after} 条；新增 {summary.added} · 删除 {summary.removed} · 修改 {summary.changed}
       {summary.identical ? '：两个版本的规则内容完全一致。' : ''}
     </p>
+    <p className="muted">
+      分组变化：新增 {summary.groups_added} / 删除 {summary.groups_removed}{summary.groups_order_changed ? ' / 顺序有变化' : ''}；
+      元信息变化 {summary.meta_fields_changed} 项{summary.meta_fields_changed ? `（${Object.keys(diff.meta).map(fieldLabel).join('、')}）` : ''}；
+      校验：{diff.validation.before.clean ? '干净' : '有遗留'}→{diff.validation.after.clean ? '干净' : '有遗留'}（发现 {diff.validation.before.findings}→{diff.validation.after.findings}）。
+    </p>
     <div className="guide-diff-grid">
       <section className="guide-diff-group">
         <h3>新增规则 · {diff.rules.added.length} 条</h3>
@@ -117,7 +126,7 @@ function RulesDiffView({ result }: { result: GuideDiffResult }) {
             <summary><strong>{item.rule_id}</strong> · {fields.length} 个字段有变化</summary>
             <dl className="guide-diff-fields">
               {fields.map(([name, change]) => <div key={name} className="guide-diff-field">
-                <dt>{FIELD_LABELS[name] || name}</dt>
+                <dt>{fieldLabel(name)}</dt>
                 <dd>
                   <span className="guide-diff-old">{fieldValue(name, change.old)}</span>
                   <span className="guide-diff-arrow">→</span>
