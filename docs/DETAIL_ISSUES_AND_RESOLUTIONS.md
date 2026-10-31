@@ -7358,3 +7358,15 @@ H＝E×…
 - **真实残余**：B15 T001（G03@p87）3 个直销条款确实未追加（引擎本轮未执行，v1 时 complete → 相对 v1 目标级回摆，归 FL-D650 族观察）。即使量具修正后 B15 仍真实 false_complete（1 个真实未执行目标），loop-3 门槛维持 FAIL，须 loop-4。
 - **状态**：open（量具裁决项，派主线定夺：评分器加「类枚举折叠展开等价 + 按 facts 币种拆分类名归一」层，或引擎 class_label 强制展开式；labels 已冻结不得改）。修正后 loop-3 可**零成本纯读器重评**（不耗模型）。
 - **变更记录**：2026-10-31 新增。
+
+## FL-D692 评分器类枚举折叠/币种类名归一化（主线授权量具修正，已实施+全量同口径重评）（2026-10-31，qa-feat-recall）
+
+- **背景**：FL-D691 登记后主线独立盲抽 3/3 PASS 授权修正，规格为只动 scorer、加两层确定性等价归一、bump 版本、零成本重评、附单测。
+- **实施**（`tools/evaluation/p6_score.py`，`SCORER_VERSION` `p6-score-2`→`p6-score-3-classfold-20261031`）：
+  - (b) 币种拆分类名：在既有字母坍缩之前先做 `X类(人民币|美元现汇|美元)`→`X类`（闭域词表，与既有 `认购/申购` 归一同型；labels 的 `currency_variants` 实为「人民币份额/美元现汇份额」但 B15 为空——f依赖派生覆盖不到实证分裂形态，故取词表归一并在本行声明该偏差），再对拆分产生的同名 token 去重（`A类、A类`→`A类`）；
+  - (a) 折叠/展开枚举等价：既有字母坍缩（`C类、E类基金份额`→`基金份额`，与 `test_p6_score_append` 既定语义同哲学，不同类字母互认保持不变）之后，连接词重复的裸主体 `基金份额和基金份额`/`基金份额、基金份额` 收拢为单 `基金份额`（修掉 mainline 复核指出的真机制：折叠后形如仍异+exact-substring 不吸收「和」重复主语），尾部兜底把残余裸类别 token 同样归一；两层均幂等（修到不动点）。
+- **验证**：新 `tests/test_fl_d692_scorer_classfold.py` 11 项（7 个实证正对——全部取自 loop-3 real required_text/final 站点对；3 负对；既有字母坍缩语义不变式）+ p6 全套 44 绿。
+- **零成本纯读器重评（同量具四波）**：v1 239/61.3%/fc4、loop1 315/80.8%/fc2、loop2 298/76.4%/fc0 **逐字不变**（量具等价位移零副作用）；loop-3 340/fc2/wrong7 → **349(89.5%)/fc1/wrong0、actually 16→17**（B17 四 wrong 痊愈转 actual complete；B15 T008/T013 三 not_executed 愈其二；B15 T001 真缺口保留）。原 mapped 产物封存 `full-dev-mapped-pre692`；重评分母/sha 在 `/tmp/opencode/qa/rescore/`（score sha：v1 5084eb76/loop1 f76ab8e6/loop2 a6c2f250/loop3 c1a0993c）。
+- **门槛余量**：false_complete 2→1（B15 T001 真缺口，主线定归 recall-miss 机制 A/E 强制病例）；B02 FL-D690 修复在途；B19 依旧。loop-3 门槛维持 FAIL，留出示波继续冻结。
+- **状态**：已实施并全量同口径重评；待主线复核确认。
+- **变更记录**：2026-10-31 新增。
