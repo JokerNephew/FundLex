@@ -295,7 +295,9 @@ _G09_VARIANTS: tuple[tuple[str, str], ...] = (
     # carries the fee clause without the guide's "并…，赎回金额单位为元" tail.
     # The fee kernel is the same transformation (FL-D572 / wave-1 B15 G09).
     ("赎回金额扣除相应的费用", "赎回金额扣除或加上相应的费用"),
-    ("净赎回金额为赎回金额扣除相应的费用", "净赎回金额为赎回金额扣除或加上相应的费用"),
+    # NOTE: a longer "净赎回金额为赎回金额扣除相应的费用" pair is redundant —
+    # the shorter pair above already rewrites it as a substring to the same
+    # result (FL-D577).
     ("当日基金份额净值", "当日该类基金份额的基金份额净值"),
     ("当日该类基金份额净值", "当日该类基金份额的基金份额净值"),
     ("当日对应份额类别的基金份额净值", "当日该类基金份额的基金份额净值"),
