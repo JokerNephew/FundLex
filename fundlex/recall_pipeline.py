@@ -1251,6 +1251,18 @@ def _apply_scope_gate(targets: Sequence[Target], scopes: Mapping[str, Any] | Non
             if not target.scope_id:
                 target.scope_id = "G22:semantic"
             continue
+        if (str(target.rule_id) in {"G01", "G03"}
+                and "APPEND_END" in str(target.reason or "")):
+            # The plan-stage append rebind (split-definition end / definition-group
+            # end) derives the site deterministically from a scoped anchor; the
+            # physical scope computed against the PRE-rebind class-definition
+            # paragraph must not drop it (FL-D608: G01 rebound p117->p119 was
+            # killed by the audit-stage gate, leaving the obligation
+            # "verified site missing").
+            if not target.scope_id:
+                scope = scopes.get(str(target.rule_id))
+                target.scope_id = _scope_id_for(target, scope)
+            continue
         ok, scope = _target_scope_ok(target, scopes)
         if not ok:
             if not target.out_of_scope:
