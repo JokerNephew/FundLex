@@ -39,7 +39,11 @@
 .data-table td .muted { display: block; max-width: 100%; overflow: hidden; font-size: var(--list-meta-size); text-overflow: ellipsis; white-space: nowrap; }
 .data-table .ui-button { min-height: 32px; padding: 4px 10px; font-size: var(--text-sm); }
 .data-table a { color: var(--brand-dark); text-decoration: none; font-weight: 650; }
-.empty-state { padding: 46px 10px; color: var(--muted); text-align: center; }
+/* EmptyState 规格（项9 批2）：标题一句 + 说明一句 + 至多一个主动作；与 V1 .empty 同构 */
+.empty-state { padding: 36px 16px; color: var(--muted); text-align: center; font-size: var(--text-sm, 13px); }
+.empty-state strong { display: block; color: var(--ink, #35404a); font-size: var(--text-base, 15px); margin-bottom: 5px; }
+.stats-empty { padding: 18px 4px; margin: 0 0 14px; }
+.stats-connection { margin: -6px 0 16px; font-size: var(--text-xs, 12px); }
 .error-state { padding: var(--space-3); border: 1px solid var(--danger-soft); border-radius: var(--radius-sm); color: var(--danger); background: var(--danger-soft); }
 .login-layout { display: grid; place-items: center; min-height: 100vh; padding: 24px; background: var(--brand-soft); }
 .login-card { width: min(410px, 100%); }
@@ -138,7 +142,7 @@ input[type="file"]::file-selector-button { margin-right: 10px; border: 1px solid
 .data-table tbody tr { transition: background .12s ease; }
 .data-table tbody tr:hover { background: var(--list-row-hover-bg); }
 .data-table a { color: var(--brand-dark); }
-.empty-state { padding: 34px 10px; }
+.empty-state { padding: 36px 16px; }
 .status-badge { padding: 3px 8px; border: 1px solid transparent; font-weight: 650; }
 .error-state, .fundlex-error { border-radius: var(--radius-sm); background: var(--danger-soft); }
 .fundlex-review-actions, .fundlex-revision-panel__bulk, .fundlex-revision-card__actions { gap: 6px; }
