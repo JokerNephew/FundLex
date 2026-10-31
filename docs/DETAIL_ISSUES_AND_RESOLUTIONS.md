@@ -7340,3 +7340,21 @@ H＝E×…
 - **处理（已实施）**：候选内修改 `tools/deploy/fundlex-publish.sh` check_api 重试 24 次×5s（~120s 预算），按规程同步 root 发布器并 drift-check OK 后实发成功（4377962，engine hash e555fee8）。顺手把 cmp-D562 冒烟 renice 保持其数据无损（事后恢复）。
 - **附带观察**：诊断中发现 /var/lib/fundlex 下 auth.db（0 字节，10-31 18:59 由某 root 进程创建）、fundlex.db、runs.sqlite3 自 10-16 起为 root:root 644；由于服务实际库文件是 runs.sqlite3 且生产 API 正常，属历史权限形态，不影响本轮交付，但 root 属主库文件对 fundlex 用户不可写，巡检留意。
 - **状态**：已解决（发布闭环）。
+
+## FL-D690 B02 loop-3 新回归：G15 摘要站点 audit 判 satisfied/superseeded 与残余检测 RESIDUAL_CONFIRMED 互相矛盾，无产物（2026-10-31，qa-feat-recall）
+
+- **发现**：dev20 loop-3（de18ec1）B02 从 v1/v2loop1/v2loop2 三连 complete 翻为 incomplete，`no artifact`（评分器 21 目标全 not_executed）。直接阻断：G15:0 OPEN_OBLIGATION `CLAIM_REPLAY_FAILED` + orphan `RESIDUAL_OLD_TEXT`@p1258（`RESIDUAL_CONFIRMED`，quote「销售服务费每日计提，按月支付。」）。
+- **实证链**：loop-3 该案 G15@p1258 目标被模型 audit 判 **satisfied**（「本窗口销售服务费支付条款与G15拟删除的划付指令式表述不同，无需删除。|SUPERSEDED_BY_…」）；随后 G16 新支付政策**追加**进 p1258 而旧「按月支付」句物理残留 → 确定性残余检测诚实 fail-closed（并衍生 2 个 `claim_residual:RESIDUAL_OLD_TEXT|TARGET_SOURCE_MIS` needs_edit 目标，但已无计划轮可服务）。loop-2 同站点 audit 判 `absent`、loop-1 判 needs_edit 且该轮正确交付——**同一输入三轮三种判定**：audit（语义）与残余检测（字面/确定性）在同一站点给出互相矛盾的终局判定，属 FL-D643/650 模型不确定性族 + 判定通道一致性缺口。
+- **影响**：loop-3 硬门槛 false_complete/wrong 之外的真回归 1 案（无产物）。
+- **状态**：open。候选方向：(a) 站点级终局判定单一权威——audit satisfied 不得对抗确定性 RESIDUAL_CONFIRMED（冲突时以残余为准并把 audit 判定降级为观测）；(b) 残余驱动的 claim_residual 目标触发一次就地补删轮（有界）；(c) G16 追加落点与 G15 残余同站点时强制先删后加。待主线定夺后 loop-4 验证。
+- **变更记录**：2026-10-31 新增（FL-D690..699 段首条）。
+
+## FL-D691 评分器类别枚举/币种命名折叠严苛：loop-3 wrong:7 全部 + B15 not_executed 2/3 为量具误杀（引擎义务文本实际完整在场）（2026-10-31，qa-feat-recall）
+
+- **发现**：loop-3（de18ec1）wrong 由 loop-2 的 0 增至 **7**（B17×4、B15×3），false_complete 计 2。逐子句用评分器自身函数（`_required_clauses`+`_clause_present`）复核并对照 final.docx 实际文本：**7 处 wrong 与 B15 3 处 not_executed 中的 2 处（T008/T013）均为类名表述形态差异撞阈值/子串**，义务文本实际完整在文：
+  - 折叠枚举：标签「C类基金份额和E类基金份额不收取申购费用」↔ 引擎（指南槽位正常实例化）「C类、E类基金份额不收取申购费用」（B17 T003/T006）；「A类基金份额和C类基金份额、E类基金份额费用收取不同」↔「A类基金份额和C类、E类基金份额费用收取不同」（B17 T012/T014、B15 T011/T012）。
+  - 币种拆分类名：标签「C类基金份额…销售服务费」↔ 引擎按事实写「C类人民币、C类美元…」（B15 T005 G11 p164、T008 G16 p721、T013 G16 p1130）——G16 新支付政策经全文探针**完整在文**。
+  - 机制：`_clause_present` 长子句走 SequenceMatcher threshold=0.9 且无枚举折叠/类名归一（`_normalise_policy` 只归一类字母本体）。
+- **真实残余**：B15 T001（G03@p87）3 个直销条款确实未追加（引擎本轮未执行，v1 时 complete → 相对 v1 目标级回摆，归 FL-D650 族观察）。即使量具修正后 B15 仍真实 false_complete（1 个真实未执行目标），loop-3 门槛维持 FAIL，须 loop-4。
+- **状态**：open（量具裁决项，派主线定夺：评分器加「类枚举折叠展开等价 + 按 facts 币种拆分类名归一」层，或引擎 class_label 强制展开式；labels 已冻结不得改）。修正后 loop-3 可**零成本纯读器重评**（不耗模型）。
+- **变更记录**：2026-10-31 新增。
