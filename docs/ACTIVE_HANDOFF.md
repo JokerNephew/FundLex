@@ -1614,9 +1614,9 @@ dev20 v2 闭环：修复循环直到 §7 门槛（无已确证严重错误、无
 
 - **目标**：按前端主线冻结规格（SPEC_LISTS_UNIFIED/SPEC_RULE_GROUPS_WYSIWYG/SPEC_MODEL_SETTINGS_20261101，勿改语义）完成 V2 React 侧项1 模型配置页重做、项3 规则组可见即所得、项4 列表统一。
 - **分支**：`qa-v2-s2-20261101`（基 qa-frontend-s2-20261101@98d3313 + merge 69779d8）；worktree `/home/opencode/.local/share/opencode/worktree/29a9a9/qa-v2-s2`。
-- **状态：全部完成并验证，改动未 commit（git mutation 待用户确认）**。M 文件 10 个：frontend/src/{styles/tokens.css,styles/app.css,types/api.ts,pages/Settings/ModelSettings.tsx,pages/Guides/index.tsx,pages/Tasks/index.tsx,pages/TaskDetail/index.tsx,pages/Compare/ComparePage.tsx}、tests/browser/test_frontend_v2.py、docs/DETAIL_ISSUES_AND_RESOLUTIONS.md（+FL-D760/761/762）。
+- **状态：全部完成、验证全绿并已提交 `5e2ca11`**（2026-11-01 总指挥令：符合主线规格即提交，不问用户）。提交含 11 文件：frontend/src/{styles/tokens.css,styles/app.css,types/api.ts,pages/Settings/ModelSettings.tsx,pages/Guides/index.tsx,pages/Tasks/index.tsx,pages/TaskDetail/index.tsx,pages/Compare/ComparePage.tsx}、tests/browser/test_frontend_v2.py、docs/DETAIL_ISSUES_AND_RESOLUTIONS.md（+FL-D760/761/762）及本断点。
 - **验证**：tsc 0；vitest 24 绿；build ✓；test_user_configuration.py 7 绿；浏览器全套 11 绿；自建用户流 19/19（模型保存流+徽标、规则组持久化、全不选禁存闸）。
 - **证据**：`/tmp/opencode/qa/shots-v2-s2/`（10 张）；汇报 `/tmp/opencode/qa/status/qa-v2-s2.md`；走查脚本 `/tmp/opencode/qa/flow-v2-s2.py`。
 - **残点**：①规格草图 h3 卡头采用站内一致的 h2（项1/项3 各一处，已备注）；②待主线 l8yCbACU 对照 V1 worker 交付作同图验收。
 - **环境**：调试进程已清理；8010 生产 fundlex-recall-first 全程未触碰；测试服务须显式 `FUNDLEX_AUTH_MODE=dev`；python 用 `PYTHONPATH=$PWD /tmp/opencode/qa-base/.venv/bin/python`。
-- **下一条动作**：用户确认后 commit 分支 → 报前端主线。
+- **下一条动作**：已提交并报前端主线（状态文件 `/tmp/opencode/qa/status/qa-v2-s2.md` 验收申请版）；待主线 l8yCbACU 同图验收意见，如需整改在本分支续改。
