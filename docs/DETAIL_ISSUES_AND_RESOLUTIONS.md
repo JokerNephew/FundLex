@@ -7995,3 +7995,9 @@ H＝E×…
 - **验证**：修复后 `test_guide_history.py` 独跑 1 绿（4.47s / rebase 后 4.56s）；rebase 后整批口径=99+remediation_drag 单跑绿+本用例绿=全绿。
 - **状态**：已解决（验证版本 qa-frontend-s2-20261101）。
 - **证据**：本仓库 `tests/browser/test_guide_history.py`、git 历史 `331134d` vs `61c4767` 列表行 diff。
+
+## FL-D725 变更记录（2026-11-01 发布 #3 后）：同合同第三轮=诚实扣件（MISS_PLAN_GAP）
+
+- 发布 #3（engine 78d44d4b，含五机制+FL-D791）真实 E2E 跑广发小盘 20230708（第三轮）：complete/incomplete 波动史 → 本轮 **incomplete 诚实扣件**，holds 为 B15 同形状 G03:B1:O1 `MISS_PLAN_GAP`（计划轮未产编辑），双语归因+人读 review_note 齐备，交付工作文件（工作文件+工作文件修订痕迹）+解释性报告，未谎报。机制 A/E 在生产真实管线按设计生效（未执行的义务不再被喊 complete）。
+- 旧口径 E2E 脚本因无 final（只有工作文件）报「download unavailable」，属脚本对二态语义无感知，非故障；后续 E2E 脚本须接受 working_* 作为合法终态。
+- 评判留待 loop-5 冻结门（B15 T001 executed 为门槛之一）；状态保持 open。
