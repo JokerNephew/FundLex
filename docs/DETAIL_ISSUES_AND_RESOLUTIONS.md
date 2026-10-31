@@ -7144,8 +7144,9 @@ H＝E×…
 
 - **发现日期**：2026-10-31，主线验收后 dev20 loop-2（冻结 `d55702b`，含本线 FL-D606 全五 pass）B15 仍 incomplete 残余之一，主线派单取证。
 - **问题与影响**：B15 loop-2 模型给 p167 目标的是**短语切片**（[108:139]，与 verify4 同形），FL-D606 promo attribution（`e73ade8`）按设计把 G14:3/4/5 三 op 全部绑定到该目标。claim replay 中 G14:B2:O1（op 3，canonical「…申购费率和赎回费率。」，源文档中真实不存在）先按站点评估失败（p166 绑定站点 quote 不匹配 → unproven 拖垮聚合），落入 `one_of_alternative_absent` 兜底判 PASS NOT_REQUIRED——但兜底证据行**只写 shared_sites[0]（p166）**。`build_coverage_view` 是 site 级投影：p167 无证据 → `site_evidence_missing` → FINAL_COVERAGE_UNRESOLVED → 运行时账本覆写 FAIL → delivery incomplete。与 FL-D606 已验证面无关（replay 义务本身全 PASS），属**证据绑定粒度缺陷**。
-- **处理方法（已实施并验证）**：`f4e304a`——兜底按文档级事实（old wording 全文不存在）对**每个共享站点**各写一条 `alternative_wording_absent` 证据行。确定性验证三重：①用 loop-2 自己 report 投影回放——生产形状（单点证据）确造 p166/p167 双 UNRESOLVED，固定形状（双点证据）双站全 ALREADY_SATISFIED；②`tests/test_generation_coverage.py` 新 fixture 双向锁定（新形状闭合/旧形状拒推断第二站）；③claim/effect/coverage/recall/guide 扩展面 590 passed。真实 B15 单合同复验在本条验证段补齐。
-- **状态**：已修复（待真实单合同复验证据补记 + 主线复核）。
+- **处理方法（已实施并验证）**：`f4e304a`——兜底按文档级事实（old wording 全文不存在）对**每个共享站点**各写一条 `alternative_wording_absent` 证据行。确定性验证三重：①用 loop-2 自己 report 投影回放——生产形状（单点证据）确造 p166/p167 双 UNRESOLVED，固定形状（双点证据）双站全 ALREADY_SATISFIED；②`tests/test_generation_coverage.py` 新 fixture 双向锁定（新形状闭合/旧形状拒推断第二站）；③claim/effect/coverage/recall/guide 扩展面 590 passed。
+- **真实单合同复验（2026-10-31，`f4e304a`+docs，B15，`/tmp/opencode/qa-findings-run/b15-fl651-verify/`，score sha `4aa64d75…`）**：模型再次选 loop-2 同形切片（[108:139]，replacement「对投资者适当调低基金申购费率和销售服务费率」），本轮 O1/O2/O3 **全部 PASS EXPECTED_EFFECT_PRESENT**（站点播种差异使兜底未触发，三种已见形态——整句/切片+兜底/切片不兜底——现均闭合）；**FINAL_COVERAGE_UNRESOLVED 与 site_evidence_missing 双双消除**，G14 零 unresolved。整份 B15 仅存 G09 OPEN（FL-D650 第四次回摆）与 G01 tbl 台账噪声 ⇒ delivery 如实 incomplete（与归因一致，G14/G08/G01 均非开放因子）。
+- **状态**：已解决（已验证：投影回放 + fixture 双向锁定 + 扩展面 590 passed + B15 真实复验；待主线复核并入）。
 - **变更记录**：2026-10-31 新增（guide 线；证据 `qa-wave1-dev-v2-20261031-d55702b/full-dev/015-*/report.json` 的 O1 NOT_REQUIRED site_effects=[] evidence@p166-only + 投影回放对照 + 离线 replay 驱动 `/tmp/opencode/qa-findings-run/b15-fl651-replay/`）。
 
 ## FL-D650 B15 G09（赎回金额计算 p159）真实标签目标未被 plan 覆盖：audit missed-target 发现但未能闭环（2026-10-31，guide 线）
