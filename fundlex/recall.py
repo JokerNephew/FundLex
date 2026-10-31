@@ -4370,16 +4370,53 @@ def _split_definition_end(anchor: Any, inspection: DocumentInspection) -> Any | 
     return None
 
 
+_CLASS_DEFINITION_LEAD = re.compile(
+    r"^[（(]?[A-ZＡ-Ｚ]类(?:基金份额|份额)[^。；;]{0,30}(?:：|:)\s*指")
+_CLASS_DEFINITION_ALIAS = re.compile(r"为[A-ZＡ-Ｚ]类基金份额[；;]?$")
+
+
+def _definition_group_follower(body: str) -> bool:
+    """Whether a paragraph continues the class-definition group (FL-D608).
+
+    Group members after a closed class-division definition:
+    - a subdivision tail ("在每一份额类别内…再分为…", FL-D573);
+    - per-class definitions in definition form ("A类基金份额或A类份额：指…",
+      "A类基金份额：投资人申购时…，为A类基金份额；");
+    - class-setup tails inside a basic-info category block ("本基金A类、C类…
+      分别设置代码…", "本基金有关份额类别的具体设置…").
+    Anything else (fee-rate sentences, new-definition topics, headings)
+    terminates the group.
+    """
+    if body.startswith("在每一份额类别内") and "再分为" in body:
+        return True
+    if _CLASS_DEFINITION_LEAD.match(body):
+        return True
+    if (re.match(r"^[（(]?[A-ZＡ-Ｚ]类(?:基金份额|份额)[：:]", body)
+            and _CLASS_DEFINITION_ALIAS.search(body)):
+        return True
+    return _definition_group_setup_tail(body)
+
+
+def _definition_group_setup_tail(body: str) -> bool:
+    """Class-setup tails of a basic-info category block (代码/净值设置、类别具体设置)."""
+    return (body.startswith("本基金") and (
+            "设置代码" in body
+            or ("份额类别" in body and "具体设置" in body)))
+
+
 def _definition_group_continuation_end(anchor: Any,
                                        inspection: DocumentInspection) -> Any | None:
-    """End of a definition group that continues in the next paragraph.
+    """End of a definition group that continues in the following paragraphs.
 
     Some contracts keep the same share-class definition going with a subdivision
-    paragraph ("在每一份额类别内…再分为…").  An append must follow the whole
-    definition group; inserting between the definition and its subdivision splits
-    the group (FL-D573 美国房地产 G03 错放 p83).  A closed anchor followed by a
-    same-group subdivision paragraph rebinds to that follower's end.  Anything
-    starting a new topic (代码/净值计算 etc.) does not continue the group.
+    paragraph ("在每一份额类别内…再分为…", FL-D573) or with per-class
+    definitions / setup tails after the class-division headline
+    ("A类基金份额或A类份额：指…", FL-D608 B05).  An append must follow the
+    whole definition group; inserting between the headline definition and its
+    class definitions splits the group and lands the policy text before the
+    label-declared site.  A closed anchor followed by same-group members
+    rebinds to the group's end.  Anything starting a new topic (其他定义条目/
+    代码/净值计算 etc.) does not continue the group.
     """
     spans = list(inspection.paragraphs)
     try:
@@ -4389,17 +4426,46 @@ def _definition_group_continuation_end(anchor: Any,
     head = _compact(display_text(anchor.text)[0])
     if not any(marker in head for marker in _APPEND_DEFINITION_MARKERS):
         return None
-    if not head or head[-1] not in "。；;！？!?":
-        return None
-    if index + 1 >= len(spans):
-        return None
-    follower = spans[index + 1]
-    body = _compact(display_text(follower.text)[0])
-    if not body or _looks_like_heading(follower.text):
-        return None
-    if not (body.startswith("在每一份额类别内") and "再分为" in body):
-        return None
-    return follower
+    closed = bool(head) and head[-1] in "。；;！？!?"
+    if not closed:
+        # Some contracts leave the class-division headline definition without
+        # terminal punctuation (B05 释义 p117).  Treat it as a group anchor only
+        # when the very next paragraph is a per-class definition; anything else
+        # stays with the split-definition mechanism or stays put.
+        if index + 1 >= len(spans):
+            return None
+        first_body = _compact(display_text(spans[index + 1].text)[0])
+        if not (_CLASS_DEFINITION_LEAD.match(first_body)
+                or (re.match(r"^[（(]?[A-ZＡ-Ｚ]类(?:基金份额|份额)[：:]", first_body)
+                    and _CLASS_DEFINITION_ALIAS.search(first_body))):
+            return None
+    end = None
+    saw_subdivision = False
+    saw_class_def = False
+    for position in range(index + 1, min(len(spans), index + 7)):
+        follower = spans[position]
+        body = _compact(display_text(follower.text)[0])
+        if not body or _looks_like_heading(follower.text):
+            break
+        if body.startswith("在每一份额类别内") and "再分为" in body:
+            saw_subdivision = True
+            end = follower
+            continue
+        if _definition_group_setup_tail(body):
+            # Setup tails only extend a 基本情况 group that already carried
+            # per-class definition paragraphs (FL-D608 B05).  After a mere
+            # subdivision tail — or with no per-class definition at all — the
+            # code/NAV boilerplate starts a new topic (FL-D573 boundary stays
+            # frozen).
+            if not saw_class_def or saw_subdivision:
+                break
+            end = follower
+            continue
+        if not _definition_group_follower(body):
+            break
+        saw_class_def = True
+        end = follower
+    return end
 
 
 def rebind_split_append_targets(targets: Sequence[Target],
@@ -9926,40 +9992,24 @@ def target_site_ok(rule_id: str, span: Any, inspection: DocumentInspection) -> b
 _G08_ACTUAL_RATE = "实际执行的申购费率在招募说明书中载明"
 
 
-def ensure_g08_actual_rate_targets(targets: Sequence[Target], rules_by_id: dict[str, dict],
-                                   inspection: DocumentInspection,
-                                   scopes: Mapping[str, Any] | None = None) -> list[Target]:
-    """Bind G08's "实际执行的申购费率在招募说明书..." variant."""
-    rule = rules_by_id.get("G08")
-    if rule is None:
-        return []
-    operations = list(rule.get("operations") or ())
-    operation = next((item for item in operations if item.get("op") == "replace"), None)
-    if operation is None:
-        return []
-    scope = (scopes or {}).get("G08")
-    allowed = {str(location) for location in getattr(scope, "locations", ())} if scope else None
-    covered = {str(target.location) for target in targets
-               if target.rule_id == "G08" and not target.out_of_scope}
-    created: list[Target] = []
+def find_g08_actual_rate_site(inspection: DocumentInspection) -> dict[str, str] | None:
+    """Locate the "实际执行的申购费率在招募说明书载明" variant wording.
+
+    Evidence only (FL-D602): this sentence is NOT an edit site for G08.  The
+    frozen labels classify a contract that only carries this wording as
+    not_applicable («replacement has no site»), so the phrase is recorded as
+    applicability evidence and never turned into a target.
+    """
     for span in inspection.paragraphs:
-        if allowed is not None and span.location not in allowed:
-            continue
         text = span.text
         index = text.find(_G08_ACTUAL_RATE)
-        if index < 0 or span.location in covered:
+        if index < 0:
             continue
         end = index + len(_G08_ACTUAL_RATE)
         if text[end:end + 1] in {"。", "；", ";"}:
             end += 1
-        created.append(Target(
-            target_id=f"G08V{len(created) + 1:03d}", rule_id="G08",
-            location=span.location, quote=text[index:end], state="needs_edit",
-            reason="g08_actual_rate_variant", start=index, end=end,
-            resolution="resolved",
-            segment_ok=containing_segment(span, index, end) is not None,
-            operations=(_rule_operation_key(rule, operations.index(operation)),)))
-    return created
+        return {"location": str(span.location), "quote": text[index:end]}
+    return None
 
 
 _G22_ORDERED_ITEM = re.compile(
@@ -9986,39 +10036,21 @@ def g22_appended_suffix(operation: Mapping[str, Any]) -> str:
     return suffix if len(suffix) >= 6 else ""
 
 
-def ensure_g22_ordered_list_targets(targets: Sequence[Target], rules_by_id: dict[str, dict],
-                                    inspection: DocumentInspection,
-                                    facts: Facts | None = None) -> list[Target]:
-    """Find G22's ordered-list distribution wording (清算顺序列表).
+def find_g22_ordered_list_site(inspection: DocumentInspection) -> dict[str, str] | None:
+    """Locate the ordered-list liquidation distribution item (清算顺序列表尾句).
 
-    A contract can state the liquidation distribution as ``基金财产按下列顺序
-    清偿：…（4）按基金份额持有人持有的基金份额比例进行分配。`` instead of the
-    guide's single sentence.  The policy is the same and the numeric item is a
-    real business site; without this pass the obligation stays OPEN even though
-    the model identifies the item (美国房地产 p883).
+    Evidence only (FL-D601): a contract may state the liquidation distribution
+    as ``基金财产按下列顺序清偿：…（N）按基金份额持有人持有的基金份额比例进行分
+    配。`` instead of the guide's single sentence.  The frozen labels classify
+    that form as not_applicable («no guide-style clause; replacement has no
+    site»), so the item is recorded as applicability evidence and must never
+    become an edit target (美国房地产 p883/p1239 were false positives).
     """
-    rule = rules_by_id.get("G22")
-    if rule is None:
-        return []
-    operation = next((item for item in rule.get("operations") or ()
-                      if item.get("op") == "replace"), None)
-    if operation is None:
-        return []
-    if facts is not None and condition_status(operation.get("condition"), facts) != "TRUE":
-        return []
-    if not g22_appended_suffix(operation):
-        return []
-    covered = {str(target.location) for target in targets
-               if target.rule_id == "G22" and not target.out_of_scope
-               and target.state in {"needs_edit", "satisfied"}}
     paragraphs = [span for span in inspection.paragraphs if span.text.strip()]
-    created: list[Target] = []
     for index, span in enumerate(paragraphs):
         text = display_text(span.text)[0]
         compact = _compact(text)
         if not _G22_ORDERED_ITEM.match(compact):
-            continue
-        if span.location in covered:
             continue
         window = paragraphs[max(0, index - 6):index]
         if not any(("基金财产按下列顺序清偿" in item.text
@@ -10032,14 +10064,47 @@ def ensure_g22_ordered_list_targets(targets: Sequence[Target], rules_by_id: dict
         end = start + len(anchor)
         if text[end:end + 1] in {"。", "；", ";"}:
             end += 1
-        created.append(Target(
-            target_id=f"G22V{len(created) + 1:03d}", rule_id="G22",
-            location=span.location, quote=text[start:end], state="needs_edit",
-            reason="g22_ordered_list_variant", start=start, end=end,
-            resolution="resolved",
-            segment_ok=containing_segment(span, start, end) is not None,
-            operations=(_rule_operation_key(rule, list(rule.get("operations") or ()).index(operation)),)))
-    return created
+        return {"location": str(span.location), "quote": text[start:end]}
+    return None
+
+
+def missing_guide_site(rule_id: str, targets: Sequence[Target], rules_by_id: dict[str, dict],
+                       inspection: DocumentInspection,
+                       facts: Facts | None = None) -> dict[str, str] | None:
+    """Deterministic NO_GUIDE_SITE evidence for replace rules (FL-D601/FL-D602).
+
+    Returns closure evidence when the rule is fact-applicable but the guide's
+    canonical old text has no occurrence anywhere in the contract and no live
+    target exists.  Ordered-list (G22) / actual-rate (G08) variant wordings are
+    attached as evidence but are never edit sites: the frozen labels classify
+    those contracts as not_applicable («replacement has no site»).  Returns
+    ``None`` when the rule keeps a legitimate site or is not fact-applicable.
+    """
+    rule = rules_by_id.get(rule_id)
+    if rule is None:
+        return None
+    operation = next((item for item in rule.get("operations") or ()
+                      if item.get("op") == "replace"), None)
+    if operation is None:
+        return None
+    if facts is not None and condition_status(operation.get("condition"), facts) != "TRUE":
+        return None
+    if any(target.rule_id == rule_id and not target.out_of_scope
+           and target.state in {"needs_edit", "satisfied"} for target in targets):
+        return None
+    old_text = _compact(str(operation.get("old_text") or ""))
+    if old_text:
+        for span in inspection.paragraphs:
+            if old_text in _compact(span.text):
+                return None
+    variant = (find_g22_ordered_list_site(inspection) if rule_id == "G22"
+               else find_g08_actual_rate_site(inspection) if rule_id == "G08"
+               else None)
+    evidence = {"site": rule_id}
+    if variant:
+        evidence["variant_location"] = str(variant.get("location") or "")
+        evidence["variant_quote"] = str(variant.get("quote") or "")
+    return evidence
 
 
 _DELETE_SENTENCE_ANCHORS = {

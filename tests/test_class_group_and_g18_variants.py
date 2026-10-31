@@ -83,30 +83,62 @@ def test_g18_uses_every_actual_class_group():
                                 "C类人民币、C类美元现汇、E类人民币、E类美元现汇费用收取不同")
 
 
-def test_g08_actual_rate_variant_is_bound_and_replaced():
-    from types import SimpleNamespace
-
-    from fundlex.recall import ensure_g08_actual_rate_targets, assign_target_operations
+def test_g08_actual_rate_variant_is_evidence_not_a_site():
+    """FL-D602: the actual-rate wording closes applicability, it is never a target."""
+    from fundlex.recall import find_g08_actual_rate_site, missing_guide_site
 
     inspection = inspect_docx(
         ROOT / "funds_word" / "基金合同第一批" /
         "广发美国房地产指数证券投资基金基金合同.docx", full=True)
     rule = _rule("G08")
     facts = _facts()
-    ledger = compile_obligations({"groups": [rule]})
-    apply_facts(ledger, facts)
-    scope = {"G08": SimpleNamespace(locations=frozenset(
-        {f"p{i}" for i in range(123, 348)}))}
-    targets = ensure_g08_actual_rate_targets([], {"G08": rule}, inspection, scope)
-    assert len(targets) == 1
-    target = targets[0]
-    assert target.location == "p162"
-    assign_target_operations(targets, {"G08": rule}, inspection, facts, ledger)
-    edit = plan_target(rule, target, inspection, facts, NoModel(),
-                       compose_budget=[3], obligations=ledger)
-    assert edit is not None
-    assert "在申购时收取申购费用" in edit.replacement
-    assert "通过直销机构申购本基金" in edit.replacement
+    site = find_g08_actual_rate_site(inspection)
+    assert site is not None and site["location"] == "p162"
+    evidence = missing_guide_site("G08", [], {"G08": rule}, inspection, facts)
+    assert evidence is not None
+    assert evidence["variant_location"] == "p162"
+    assert "实际执行的申购费率" in evidence["variant_quote"]
+
+
+def test_g22_ordered_list_variant_is_evidence_not_a_site():
+    """FL-D601: the ordered-list liquidation item closes applicability, never a target."""
+    import dataclasses
+
+    from fundlex.recall import find_g22_ordered_list_site, missing_guide_site
+
+    inspection = inspect_docx(
+        ROOT / "funds_word" / "基金合同第一批" /
+        "广发美国房地产指数证券投资基金基金合同.docx", full=True)
+    rule = _rule("G22")
+    facts = dataclasses.replace(_facts(), quotes_verified={"floating": True})
+    site = find_g22_ordered_list_site(inspection)
+    assert site is not None
+    assert site["location"] == "p883"
+    assert site["quote"].startswith("按基金份额持有人持有的基金份额比例进行分配")
+    evidence = missing_guide_site("G22", [], {"G22": rule}, inspection, facts)
+    assert evidence is not None
+    assert evidence["variant_location"] == "p883"
+
+
+def test_missing_guide_site_keeps_live_target_and_canonical_sentence():
+    """FL-D601/602: a live target or the canonical sentence blocks FALSE closure."""
+    import dataclasses
+    from types import SimpleNamespace
+
+    from fundlex.recall import missing_guide_site
+
+    rule = _rule("G22")
+    facts = dataclasses.replace(_facts(), quotes_verified={"floating": True})
+    canonical = str(rule["operations"][0]["old_text"])
+    inspection = SimpleNamespace(paragraphs=[SimpleNamespace(text=canonical,
+                                                             location="p1")])
+    live = Target("T", "G22", "p1", canonical, "needs_edit", "")
+    assert missing_guide_site("G22", [live], {"G22": rule}, inspection, facts) is None
+    assert missing_guide_site("G22", [], {"G22": rule}, inspection, facts) is None
+    empty = SimpleNamespace(paragraphs=[SimpleNamespace(text="无关条款。", location="p1")])
+    evidence = missing_guide_site("G22", [], {"G22": rule}, empty, facts)
+    assert evidence is not None and evidence["site"] == "G22"
+    assert "variant_location" not in evidence
 
 
 def test_g11_replaces_pre_existing_c_class_sentence_without_duplication():
