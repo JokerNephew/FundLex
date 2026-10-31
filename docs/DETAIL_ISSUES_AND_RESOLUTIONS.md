@@ -7806,3 +7806,20 @@ H＝E×…
 ## FL-D694 判决改定：关闭（量具窗口误杀已修，非机制缺陷）（2026-11-01）
 
 - 原登记前提（T001 真缺口未被 A/E 翻转）不成立：T001 政策实际在场（FL-D790 证据），五机制下 B15 本就为真 complete，`holds=[]` 为正确形态。**无真实「谎报」病例**，A/E 生效性既未被证伪亦无实证，保持未决观测评注而非缺陷。loop-4 硬门事实结果：fc=0（量具修正后）。
+
+## FL-D695 B15 loop-5 新回归：G09@p159 audit 翻转 needs_edit→absent（MISS_TARGET_RESOLUTION）→ 交付门诚实扣全案（complete→no artifact）（2026-11-01，qa-feat-recall）
+
+- **发现**：dev20 loop-5（9ebeacf，FL-D791+FL-D790）B15 从 loop-3/loop-4 二连 complete 翻 incomplete 且**无产物**（final.docx 缺）。
+- **实证链**：同一物理段 p159，loop-4 audit 判 `needs_edit`（「该赎回金额条款未按类别净值表述…需改」，正确识别）且该轮 G09 执行、全案 complete；loop-5 同站同文 audit 判 `absent`（「现有赎回金额条款措辞不同」）→ 目标零解析（MISS_TARGET_RESOLUTION/targeting）→ G09:0 FINAL_OPERATION_UNPROVEN「verified site missing」→ 验证层交付门诚实扣留全案产物（主线机制面诚实形态，report 诊断结构化：miss_class/stage_owner 中文可读）。
+- **机制面归因（不补规则）**：触发源为 audit 判定回摆——同文同站两轮相反判定，属 FL-D650/683 模型不确定族；与 loop-4→loop-5 引擎差（FL-D791 句界探测）的交互待主线判定是否并入 **FL-D792 同形观察项**（本线如实登记，不主张规则级修补）。
+- **影响**：B15 15 目标全 not_executed（-15）；loop-5 完成率 86.4%（352→337，全部由此案解释）；门槛「B15 T001 executed」无法达成（无产物无从双实证）。
+- **状态**：open，归主线判定 FL-D792 归属或新机制项。
+- **变更记录**：2026-11-01 新增。
+
+## FL-D696 B12 loop-5：FL-D791 治愈 G12+G13 合成遗漏（p244 重回计划），但新阻塞 G16 三站点 MISS_PLAN_GAP（p795/796/1270）→ 仍诚实 incomplete（2026-11-01，qa-feat-recall）
+
+- **发现**：loop-5 B12 仍 incomplete 无产物，门槛「B12 恢复 complete」未达。**但 FL-D791 目标病灶已愈**：loop-4 的 G12+G13 联合站点合成遗漏在 loop-5 恢复——plan 台账 `G12+G13` composite replace@p244 重新在场（与 loop-3 形态一致），T3001 补点退出。
+- **新阻塞**：G16:0 三站点（正文 p795/p796 + 摘要 p1270）全部 needs_edit 未计划：T002@p796（T3 追加句尾点）+Y012@p795/Y013@p1270（survey_reference 1.00）→ OPEN_OBLIGATION MISS_PLAN_GAP（plan stage）+ FINAL_COVERAGE_UNRESOLVED → 交付门扣全案。对照：loop-3 同案 complete（G16 经 `G15+G16` 合成完成）。
+- **机制面归因**：FL-D791 句界探测对多站点追加（append 双正文位+摘要位）的绑定/归并可能收紧；是否并入 FL-D792 同形观察项待主线。
+- **状态**：open，归主线机制处置。
+- **变更记录**：2026-11-01 新增。
