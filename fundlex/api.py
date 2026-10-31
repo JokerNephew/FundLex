@@ -1115,6 +1115,25 @@ def create_app(data_dir: str | Path | None = None, *, auth_db=None) -> FastAPI:
             raise_api_error(422, exc, fallback="INVALID_REQUEST")
         return {"version_id": version_id, "against": against.strip(), "diff": diff}
 
+    @application.get("/api/guides/{version_id}/text-diff")
+    def guide_version_text_diff(version_id: str, against: str = "", user: str = Depends(_user)):
+        """指引原文比对：与合同比对页同套算法链的确定性文本差异（不使用模型）。
+
+        内置指引没有用户上传的原文 DOCX，任一侧为内置版时按「源不可用」拒绝；
+        解析出的规则差异请用 ``GET /api/guides/{id}/diff``。
+        """
+        from . import guide_text_diff
+        try:
+            result = guide_text_diff.guide_text_diff(store, user, version_id, against)
+        except KeyError as exc:
+            raise_api_error(404, exc, fallback="GUIDE_DIFF_UNAVAILABLE")
+        except ValueError as exc:
+            raise_api_error(422, exc, fallback="INVALID_REQUEST")
+        except guide_text_diff.TextDiffUnavailable as exc:
+            raise HTTPException(404, str(exc)) from exc
+        return {"version_id": version_id, "against": against.strip(),
+                "text_diff": result}
+
     @application.get("/api/guides/{version_id}/rules")
     def guide_rules(version_id: str, user: str = Depends(_user)):
         version = visible_guide(user, version_id)

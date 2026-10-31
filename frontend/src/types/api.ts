@@ -378,3 +378,25 @@ export interface CompareView {
 export interface ApiErrorBody {
   detail?: unknown
 }
+
+export interface GuideTextDiffRow {
+  id: string
+  type: 'modify' | 'insert' | 'delete' | string
+  type_label: string
+  section?: string
+  location?: string
+  old_text?: string
+  new_text?: string
+}
+
+export interface GuideTextDiff {
+  algorithm: string
+  identical: boolean
+  summary: { diffs: number; modify: number; insert: number; delete: number }
+  diffs: GuideTextDiffRow[]
+  left_html: string
+  right_html: string
+  merged_html: string
+}
+
+export interface GuideTextDiffResult { version_id: string; against: string; text_diff: GuideTextDiff }
