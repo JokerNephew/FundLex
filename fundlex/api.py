@@ -38,7 +38,8 @@ from fastapi.staticfiles import StaticFiles
 
 from . import __version__, guide_store
 from .docx import DocxError
-from .edit_summary import archive_entry, archive_kinds
+from .edit_summary import (EDIT_DETAIL_HEADER, RESULT_LIST_HEADER, archive_entry,
+                           archive_kinds, edit_detail_rows, result_list_row)
 from .html_view import project_docx
 from .selective import (accept_all as selective_accept_all, generate_selected_artifact,
                         generate_selected_redline, manifest_fingerprint,
@@ -1368,11 +1369,12 @@ def create_app(data_dir: str | Path | None = None, *, auth_db=None) -> FastAPI:
         output = tempfile.SpooledTemporaryFile(max_size=8 * 1024 * 1024, mode="w+b")
         try:
             count = 0
-            rows = [["合同", "处理状态", "交付状态", "已打包文件"]]
+            # 用户视角的结果清单（行构造单一事实源在 fundlex.edit_summary）：
+            # 去掉了 job_status/artifact 种类等技术列。
+            rows = [list(RESULT_LIST_HEADER)]
             # The accepted-revision contracts go into their own folder so the deliverable
             # is the same shape as the offline package: 结果总览.md + 结果清单.csv +
             # 最终版（接受修订后）/<合同>.docx + 逐份修改说明/<合同>/.
-            final_dir = "最终版（接受修订后）"
             notes_dir = "逐份修改说明"
             used_names: set[str] = set()
 
@@ -1392,23 +1394,40 @@ def create_app(data_dir: str | Path | None = None, *, auth_db=None) -> FastAPI:
                     name = Path(doc["name"].replace("\\", "/")).stem
                     name = "".join(c for c in name if c.isalnum() or c in " _-（）()")[:100] or "合同"
                     name = unique(name)
-                    included = []
+                    report: dict = {}
+                    if doc.get("document_id"):
+                        try:
+                            report = store.get_report(user, doc["batch_id"], doc["document_id"])
+                        except (NotFound, ReportJsonError):
+                            report = {}
                     # Reuse digests verified earlier in this request for the
                     # pair checks of sibling kinds of the same document.
                     verified: dict[str, str] = {}
                     for kind in archive_kinds(doc.get("downloads")):
+                        # report_json（内部技术件）与 report_md（引擎/哈希/模型计数等
+                        # 技术追溯信息，与修改说明重复）都不进用户导出包；
+                        # 工作台单独下载两个报告不受影响。
+                        if kind in {"report_json", "report_md"}:
+                            continue
                         data, digest = store.read_artifact(user, doc["batch_id"], doc["document_id"], kind,
                                                            verified_hashes=verified)
                         verified[kind] = digest
-                        suffix = ".docx" if kind.endswith(("final", "redline")) else \
-                            ".json" if kind == "report_json" else ".md"
+                        suffix = ".docx" if kind.endswith(("final", "redline")) else ".md"
                         _, arcname = archive_entry(kind, name, suffix,
                                                   delivery_status=doc["delivery_status"])
                         archive.writestr(arcname, data)
-                        included.append(kind)
                         count += 1
-                    rows.append([doc["name"], doc["job_status"], doc["delivery_status"], "; ".join(included)])
-                if not count:
+                    detail_rows = edit_detail_rows(report)
+                    if detail_rows:
+                        detail = io.StringIO()
+                        csv.writer(detail).writerows(
+                            [csv_safe_cell(cell) for cell in row]
+                            for row in [list(EDIT_DETAIL_HEADER), *detail_rows])
+                        archive.writestr(f"{notes_dir}/{name}/{name}（修改说明）.csv",
+                                         detail.getvalue().encode("utf-8-sig"))
+                        count += 1
+                    rows.append(result_list_row(index, doc["name"], report, doc))
+                if not any(doc.get("document_id") for doc in docs):
                     raise Conflict("暂无可下载结果，请等待合同处理完成")
                 summary = io.StringIO()
                 csv.writer(summary).writerows([csv_safe_cell(cell) for cell in row] for row in rows)

@@ -14,8 +14,8 @@ from collections import Counter
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from .edit_summary import (DELIVERY_TEXT, edit_count,
-                           summary_detail)
+from .edit_summary import (DELIVERY_TEXT, OUTCOME_LABELS, edit_count,
+                           outcome_label, summary_detail)
 from .recall import ENGINE_ID as RECALL_ENGINE_ID
 from .store import (Conflict, NotFound, ReportJsonError, RunStore, SCHEMA_VERSION,
                      engine_build, parse_report_json, servable_artifact_kinds)
@@ -973,27 +973,14 @@ class TaskStore:
             return self._snapshot(db, self._owned(db, owner, task_id))
 
     def report(self, owner, task_id):
+        """结果总览.md：面向合同交付的阅读件，不含资格/错误码/引擎标识等技术信息。"""
         summary = self.get(owner, task_id)
         docs = self.documents(owner, task_id, page_size=100000)["items"]
+
         def safe(value):
             return str(value or "—").replace("|", "\\|").replace("\r", " ").replace("\n", " ")
-        lines = ["# FundLex 合同修改结果总览", "", f"- 任务：{safe(summary['name'])}",
-                 f"- 合同总数：{summary['total']}", f"- 已接收：{summary['uploaded']}",
-                 f"- 尚未上传：{summary['pending_upload']}", f"- 接收失败：{summary['rejected']}",
-                 f"- 处理结束：{summary['completed']}", f"- 失败关闭：{summary['failed']}",
-                 f"- 资格统计：{summary['qualification_counts']}", f"- 交付统计：{summary['delivery_counts']}",
-                 "", "## 每份合同的修改情况", "",
-                 "下表逐份列出合同改了几处、涉及哪些条款；逐处「改之前 / 改之后」的对照见"
-                 "结果包内「逐份修改说明」下的同名修改说明。", "",
-                 "「版本」列说明交付包里的最终版来自哪里，以及附带几份修订痕迹文件：", "",
-                 "- **引擎全量**：未在工作台逐条选择，最终版与引擎结果一致；"
-                 "附「（全量痕迹版）」，即引擎打算做的全部改动。",
-                 "- **按人工选择**：在工作台把部分修订改成了「不接受」，最终版按该选择生成；"
-                 "附「（全量痕迹版）」和「（选择修订版）」两份 —— 后者只保留你接受的修订，"
-                 "接受它的全部修订即可得到最终版。", "",
-                 "| 合同文件 | 交付完整性 | 版本 | 修改处数 | 涉及条款 |",
-                 "| --- | --- | --- | --- | --- |"]
-        rows = []
+
+        reports: dict[str, dict] = {}
         for doc in docs:
             report: dict = {}
             if doc["document_id"]:
@@ -1001,6 +988,32 @@ class TaskStore:
                     report = self.store.get_report(owner, doc["batch_id"], doc["document_id"])
                 except (NotFound, ReportJsonError):
                     report = {}
+            reports[doc.get("document_id") or f"pending:{doc['name']}"] = report
+
+        outcomes: Counter = Counter()
+        for doc in docs:
+            key = doc.get("document_id") or f"pending:{doc['name']}"
+            outcomes[outcome_label(reports[key], doc)] += 1
+        lines = ["# FundLex 合同修改结果总览", "", f"- 任务：{safe(summary['name'])}",
+                 f"- 合同总数：{summary['total']}", f"- 已接收：{summary['uploaded']}",
+                 f"- 尚未上传：{summary['pending_upload']}", f"- 接收失败：{summary['rejected']}"]
+        counts = "；".join(f"{label} {outcomes.get(label, 0)} 份" for label in OUTCOME_LABELS)
+        extras = "；".join(f"{label} {outcomes[label]} 份"
+                           for label in ("处理进行中", "未接收") if outcomes.get(label))
+        lines += [f"- 处理结论：{counts}" + (f"；{extras}" if extras else ""),
+                  "", "## 每份合同的修改情况", "",
+                  "下表逐份列出合同改了几处、涉及哪些条款；逐处「改了什么地方、改之前 / 改之后、"
+                  "对应指引哪一条」的对照见结果包内「逐份修改说明/<合同名>/（修改说明）.csv」。", "",
+                  "「版本」列说明交付包里的最终版来自哪里，以及附带几份修订痕迹文件：", "",
+                  "- **引擎全量**：未在工作台逐条选择，最终版与引擎结果一致；"
+                  "附「（全量痕迹版）」，即引擎打算做的全部改动。",
+                  "- **按人工选择**：在工作台把部分修订改成了「不接受」，最终版按该选择生成；"
+                  "附「（全量痕迹版）」和「（选择修订版）」两份 —— 后者只保留你接受的修订，"
+                  "接受它的全部修订即可得到最终版。", "",
+                  "| 合同文件 | 交付完整性 | 版本 | 修改处数 | 涉及条款 |",
+                  "| --- | --- | --- | --- | --- |"]
+        for doc in docs:
+            report = reports[doc.get("document_id") or f"pending:{doc['name']}"]
             count = edit_count(report)
             detail = summary_detail(report) if report else "—"
             downloads = doc.get("downloads") or {}
@@ -1008,30 +1021,24 @@ class TaskStore:
             # actually turned something down; otherwise the engine redline already
             # is the record of the choice.
             reviewed = "selected_redline" in downloads
-            rows.append([safe(doc["name"]),
-                         safe(DELIVERY_TEXT.get(doc["delivery_status"], doc["delivery_status"])),
-                         "按人工选择" if reviewed else "引擎全量",
-                         str(count), safe(detail)])
-            lines.append("| " + " | ".join(rows[-1]) + " |")
-        lines += ["", "处理结束、资格符合和合同可直接使用分别记录；仅交付完整并通过验证的合同开放下载。", "",
-                  "| 文件 | 上传 | 处理 | 资格 | 交付 | 原因码 |", "|---|---|---|---|---|---|"]
-        lines.extend("| " + " | ".join(safe(doc[k]) for k in ("name", "upload_status", "job_status", "eligibility", "delivery_status"))
-                     + " | " + safe(", ".join(doc["reason_codes"])) + " |" for doc in docs)
-        actions, candidates = Counter(), Counter()
-        for d in docs:
-            if not d["document_id"]:
-                continue
-            try:
-                report = self.store.get_report(owner, d["batch_id"], d["document_id"])
-            except (NotFound, ReportJsonError):
-                continue
-            for action in report.get("actions", []):
-                if isinstance(action, dict):
-                    actions[action.get("status") or action.get("processing_status") or "unknown"] += 1
-                    for candidate in action.get("candidates", []):
-                        if isinstance(candidate, dict):
-                            candidates[candidate.get("status") or candidate.get("result") or "unknown"] += 1
-        if actions or candidates:
-            lines.extend(["", "## 规则与候选核验汇总", "", f"- action 状态：{dict(actions)}",
-                          f"- 候选位置状态：{dict(candidates)}"])
+            lines.append("| " + " | ".join([
+                safe(doc["name"]),
+                safe(DELIVERY_TEXT.get(doc["delivery_status"],
+                                       doc["delivery_status"] or "—")),
+                "按人工选择" if reviewed else "引擎全量",
+                str(count), safe(detail)]) + " |")
+        failed = [doc for doc in docs
+                  if outcome_label(reports[doc.get("document_id") or f"pending:{doc['name']}"], doc) == "失败"]
+        if failed:
+            lines += ["", "## 需要重新提交或人工处理的合同", ""]
+            for doc in failed:
+                lines.append(f"- 《{safe(doc['name'])}》处理未产出可用结果，未包含可交付文件。"
+                             "建议：在工作台重新上传该合同再试一次；若多次失败，"
+                             "请联系支持并提供任务名称与该合同文件名。")
+        failed_upload = [doc for doc in docs if doc["upload_status"] == "rejected"]
+        if failed_upload:
+            lines += ["", "## 未接收的文件", ""]
+            for doc in failed_upload:
+                lines.append(f"- 《{safe(doc['name'])}》未通过接收校验，未进入处理；"
+                             "请修正文件后重新上传。")
         return "\n".join(lines) + "\n"
