@@ -14,6 +14,28 @@ logger = logging.getLogger(__name__)
 _TRANSIENT_ERRORS = (OSError, DatabaseError, sqlite3.DatabaseError)
 
 
+def _with_input_metadata(result: dict, left: dict, right: dict) -> dict:
+    """Record the accept-all-view baseline both inputs were normalized to.
+
+    Either side of a compare upload may carry Word tracked changes; the upload
+    path stores an accept-all normalized copy (see ``compare.revisions``), so
+    the comparison and this report are always based on that view.  The flags
+    make the original input state observable: ``current`` is the left side and
+    ``other`` is the right side.  There is deliberately no rejected-view entry
+    point.
+    """
+    metadata = {
+        "comparison_baseline": "accepted_tracked_changes",
+        "original_had_tracked_changes": {
+            "current": bool(int(left.get("revisions_accepted") or 0)),
+            "other": bool(int(right.get("revisions_accepted") or 0)),
+        },
+    }
+    payload = dict(result)
+    payload["metadata"] = metadata
+    return payload
+
+
 class CompareWorker:
     def __init__(self, store: CompareStore, processor=None, *, lease_seconds: int = 300,
                  max_attempts: int = 3):
@@ -52,6 +74,7 @@ class CompareWorker:
                 if digest != entry["source_sha256"]:
                     raise ValueError("COMPARE_INPUT_INTEGRITY_FAILED")
             result = self.processor.compare(lp, rp, left_filename=left["filename"], right_filename=right["filename"])
+            result = _with_input_metadata(result, left, right)
             if heartbeat_error:
                 raise heartbeat_error[0]
             self.store.finish(pair_id, token, result)

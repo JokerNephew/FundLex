@@ -3,6 +3,13 @@
 The user's upload is never modified in place.  The returned bytes are a
 separately written DOCX which has passed the same package and OOXML checks as
 the original input.
+
+``_accept_revisions`` below is the single canonical accept-all implementation
+for the whole project: Compare input normalization and the revision engine's
+foreign-revision final view (``fundlex.docx._accept_all_revisions``) both use
+it.  New consumers of an "accept all tracked changes" view must reuse this
+function instead of re-implementing it, so move/hyperlink/SDT/nested handling
+stays consistent across entry points.
 """
 from __future__ import annotations
 
