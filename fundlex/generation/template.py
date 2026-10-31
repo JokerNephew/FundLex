@@ -85,6 +85,40 @@ def clause_number_prefix(text: str) -> str:
     return match.group(0) if match else ""
 
 
+#: The disclosure-vehicle frame shared by the fee-rate clauses ("并在…中列示").
+#: When the contract clause enumerates MORE disclosure vehicles than the guide
+#: template ("招募说明书及基金产品资料概要" vs "招募说明书"), the replacement must
+#: keep the contract's own enumeration — the guide authorizes the fee policy,
+#: not a reduction of the disclosure list (FL-D572 / wave-1 B05 G08).
+_DISCLOSURE_FRAME = re.compile(r"并在(?P<vehicles>[^，。；、]*?)中列示(?P<stop>[。；]?)$")
+
+_DISCLOSURE_ITEM_SPLIT = re.compile(r"[及和与、，]")
+
+
+def _preserve_disclosure_tail(before: str, replacement: str) -> str:
+    """Mirror the source clause's disclosure-vehicle enumeration, when wider.
+
+    Both texts must end with the same "并在X中列示" frame.  The source's vehicle
+    list is kept only when it enumerates every template item plus extra ones
+    (a pure enumeration extension); anything else (different frame, narrower or
+    disjoint list) leaves the template wording untouched.
+    """
+    before_match = _DISCLOSURE_FRAME.search(_compact(before))
+    raw_match = _DISCLOSURE_FRAME.search(replacement)
+    if before_match is None or raw_match is None:
+        return replacement
+    before_vehicles = _compact(before_match.group("vehicles"))
+    template_vehicles = _compact(raw_match.group("vehicles"))
+    before_items = [item for item in _DISCLOSURE_ITEM_SPLIT.split(before_vehicles) if item]
+    template_items = [item for item in _DISCLOSURE_ITEM_SPLIT.split(template_vehicles) if item]
+    if not template_items or before_items == template_items:
+        return replacement
+    if set(template_items) - set(before_items):
+        return replacement
+    return (replacement[:raw_match.start("vehicles")] + before_vehicles
+            + replacement[raw_match.end("vehicles"):])
+
+
 def plan_policy_replacement(before: str, instantiated: str, rule_id: str) -> TemplateResult | None:
     """Clean-clause deterministic policy replacement (plan §19.1).
 
@@ -111,11 +145,13 @@ def plan_policy_replacement(before: str, instantiated: str, rule_id: str) -> Tem
     if not anchor_ok or any(word in compact for word in forbidden):
         return None
     replacement = clause_number_prefix(before) + instantiated.strip()
-    if _compact(replacement) == compact:
+    preserved = _preserve_disclosure_tail(before, replacement)
+    if _compact(preserved) == compact:
         return None
-    return TemplateResult(replacement=replacement, content_source="tier1_template",
+    return TemplateResult(replacement=preserved, content_source="tier1_template",
                           evidence={"mode": "clean_clause_policy_replacement",
-                                    "rule": rule_id})
+                                    "rule": rule_id,
+                                    "disclosure_tail_preserved": preserved != replacement})
 
 
 def _compact(value: str) -> str:
@@ -255,11 +291,63 @@ def _converge(before: str, first_start: int, canonical_tail: str) -> str:
 _G09_VARIANTS: tuple[tuple[str, str], ...] = (
     ("并扣除相应的费用", "并扣除或加上相应的费用"),
     ("并扣除其他相应的费用", "并扣除或加上相应的费用"),
+    # Net-redemption formula family: "净赎回金额为赎回金额扣除相应的费用的金额"
+    # carries the fee clause without the guide's "并…，赎回金额单位为元" tail.
+    # The fee kernel is the same transformation (FL-D572 / wave-1 B15 G09).
+    ("赎回金额扣除相应的费用", "赎回金额扣除或加上相应的费用"),
+    ("净赎回金额为赎回金额扣除相应的费用", "净赎回金额为赎回金额扣除或加上相应的费用"),
     ("当日基金份额净值", "当日该类基金份额的基金份额净值"),
     ("当日该类基金份额净值", "当日该类基金份额的基金份额净值"),
     ("当日对应份额类别的基金份额净值", "当日该类基金份额的基金份额净值"),
     ("赎回金额单位为人民币元", "赎回金额单位为元"),
 )
+
+
+#: Reason-clause rewrite pairs for G18.  The guide rewrites the fee-based
+#: explanation ("不收取销售服务费，而C类基金份额收取销售服务费") into the neutral
+#: "和C类基金份额费用收取不同" while the sentence subject ("由于[本基金]A类…")
+#: belongs to the contract and must survive verbatim.  Contracts that open the
+#: clause without "本基金" or without "销售服务费" after "不收取" use the shorter
+#: spelling; each variant rewrites only the fee kernel (FL-D572 / wave-1 B01).
+_G18_REASON_PAIRS: tuple[tuple[str, str], ...] = (
+    ("A类基金份额不收取销售服务费，而C类基金份额收取销售服务费",
+     "A类基金份额和C类基金份额费用收取不同"),
+    ("A类基金份额不收取而C类基金份额收取销售服务费",
+     "A类基金份额和C类基金份额费用收取不同"),
+    ("不收取销售服务费，而C类基金份额收取销售服务费", "和C类基金份额费用收取不同"),
+    ("不收取而C类基金份额收取销售服务费", "和C类基金份额费用收取不同"),
+)
+
+
+def plan_g18_splice(before: str, pairs: list[tuple[str, str]]) -> TemplateResult | None:
+    """G18: rewrite only the fee-based reason clause, keeping the contract subject.
+
+    A complete result replaces exactly one old reason kernel and carries the
+    neutral "费用收取不同" wording; a partial or absent rewrite falls back to
+    the cascade so nothing is silently reworded.
+    """
+    replacement = before
+    applied: list[list[str]] = []
+    for old_ctx, new_ctx in pairs:
+        if old_ctx and old_ctx in replacement and new_ctx not in replacement:
+            candidate = replacement.replace(old_ctx, new_ctx, 1)
+            if _compact(candidate) == _compact(replacement):
+                continue
+            replacement = candidate
+            applied.append([old_ctx, new_ctx])
+            break
+    if not applied:
+        return None
+    compact = _compact(replacement)
+    if "费用收取不同" not in compact:
+        return None
+    # Any surviving old reason kernel means only part of the clause moved.
+    for old_ctx, _new_ctx in pairs:
+        if old_ctx and "销售服务费" in old_ctx and _compact(old_ctx) in compact:
+            return None
+    return TemplateResult(replacement=replacement, content_source="tier1_splice",
+                          evidence={"mode": "g18_reason_clause_splice", "applied": applied,
+                                    "fixed_text": replacement})
 
 
 def plan_g09_splice(before: str, pairs: list[tuple[str, str]]) -> TemplateResult | None:

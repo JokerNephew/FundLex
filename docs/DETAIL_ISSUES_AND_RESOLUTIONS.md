@@ -6879,14 +6879,25 @@ H＝E×…
 ## FL-D571 B03 计划重叠+claim 未证阻断 20 目标（2026-10-31）
 
 - B03（广发品质优选）因计划重叠与 claim 未证被阻断 20 目标；需区分真实冲突与证据链缺陷。
-- 处理：引擎修复 agent 处置中。
-- 状态：修复中。
+- 归因（经冻结 HEAD 8978546 worktree 离线复放证明）：G14:3/4/5 为同一 one_of_group（G14:history:multiple）、同 new_text「基金管理人可以适当调低基金申购费率和销售服务费率。」；p233 上 Y005（tier1 模板，canonical）与 Y004+T014（joint_compose 近因写成「…和基金销售服务费率。」，偏差一字）同 span 但 replacement 不一字不差 → `merge_edits` 判 RECALL_EDIT_OVERLAP 双丢 → G14 三义务 CLAIM_OPERATION_NOT_PLANNED 整合同阻断。**非真实重叠**，属同一效果的 canonical 等效变体。
+- 修复（`fundlex/recall.py`）：① `merge_edits` 冲突分支前新增 ONE_OF canonical 等效合并 `_coalesce_alternative_equivalents`——共享组 canonical new_text 双方一致且至少一方 replacement==canonical 时保留 canonical 方、并集 operation_keys/obligation_ids、另一方 covered；双方都偏离 canonical（真实两种拼法）保守保留 conflict；② contained-covered 的 ONE_OF 兄弟（完全等同替换）并集 keys 到幸存编辑，操作身份不只靠 covered 列表记账。附含删除切除分支见 FL-D572（B12）。
+- 验证：B03 离线复放（`/tmp/opencode/qa-replay-8978546/var/replay_b03_plan.py` 复制件 `var/replay_b03_plan_fix.py`）conflicts 由 1 降为 0，p233 单 edit 承载 G14:3/4/5，Y004/Y005 satisfied；回归 2 条（等效合并 + 双偏离反滥用仍 conflict）入 `tests/test_qa_20261031_regressions.py`；`test_recall_pipeline.py + test_qa_20261031_regressions.py` 112 全绿。
+- 待办：wave 重跑确认 B03 整合同链路（含 G08 残腿 OPEN_OBLIGATION 是否随 FL-D572 G08 修复解除，如实记录）。
+- 状态：引擎层修复已实施并单合同复放验证，待 wave 重跑。
+- 变更记录：2026-10-31 引擎修复 agent 补记归因/修复/验证。
 
 ## FL-D572 新文模板/来源错 4 目标（2026-10-31）
 
 - G08 漏"及基金产品资料概要"（B05，FL-D566 同源）、G18 多插"本基金"（B01×2）、G13 应删未删（B12）、G09 半改（B15）。按原因修模板/来源槽位或规划逻辑，不按样本名打补丁；每类配回归。
-- 处理：引擎修复 agent 处置中。
-- 状态：修复中。
+- 归因与修复（均按通用机制，非 case 特判）：
+  - **G08（B05）**：模板丢披露媒介枚举尾件——合同枚举「招募说明书及基金产品资料概要」，模板只写「招募说明书」，整句收敛把更宽的披露列表收窄。修 `fundlex/generation/template.py` 新增 `_preserve_disclosure_tail`（通用「并在X中列示」框架：源枚举为模板枚举超集时保留源尾件，否则不动模板措辞）。
+  - **G18（B01×2）**：指南 new_text 写死「本基金」，label 按合同自身主语（B01 无「本基金」，B02 类有）。修：template.py 新增 `_G18_REASON_PAIRS` + `plan_g18_splice`（只重写费用原因 kernel「不收取[销售服务费]，而C类…收取销售服务费」→「…费用收取不同」，保留合同主语；完备性闸门：须含「费用收取不同」且无旧 kernel 残留，否则拒），`recall.py` `_plan_tier1` 加 G18 分支。
+  - **G09（B15）**：净赎回公式族措辞无变体对 → splice 缺 fee kernel 致半改（"赎回金额单位为元"杂质）。修 `_G09_VARIANTS` 增 2 对（「净赎回金额为赎回金额扣除相应的费用」→「…扣除或加上…」等），完整性闸门（须双 kernel 在场，部改仍拒）不变。
+  - **G13（B12）**：双因。① guide G13:0 old_text 无 B12 措辞（无「本基金」前缀、1.5% 非 1.50%），定位缺口使 ledger 采信 not_applicable 假 complete → guide 规则级 old_text_variants += B12 原句，重认证（operation_count 34 不变，新 guide_document_sha256 `30c2625d7dd13db682e73f1f172e7943bfcedbbd91ee91ff0923d89098046c51`）；② `merge_edits` `replace_covers_delete` 对「外层 replacement 仍含被删句」原有缺口（G12 宽 span 替换保留 G13 句，T013 删除被吞）→ 新增 `_excise_covered_slice`：原文唯一出现时切除被删句并规整接缝标点（「；。」/「，。」/「：。」→「。」，结尾悬挂「；/，」→「。」），并集 keys 并 covered；原文出现多次（歧义）保守保留 conflict。
+- 验证：回归 9 条（G08 尾件保留+对照、G09 双 kernel+部改拒、G18 B01/B02 主语对照+无关句拒、B12 切除+歧义冲突、guide 认证有效）入 `tests/test_qa_20261031_regressions.py`；`test_recall_pipeline.py + test_qa_20261031_regressions.py` 112 全绿。
+- 待办：wave 重跑对 B01/B02/B05/B12/B15 真实合同端到端复验（含 B03 G08 残腿）；gold 对照 labels 冻结版 v2。
+- 状态：引擎层修复已实施并回归验证，待 wave 重跑。
+- 变更记录：2026-10-31 引擎修复 agent 补记归因/修复/验证与 guide 新 sha。
 
 ## FL-D573 B15 余文吞与错放严重缺陷（2026-10-31）
 
