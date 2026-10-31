@@ -1743,3 +1743,11 @@
 - **独立复核在途**：R2 前端批次、B16 DOCX 批次。
 - **dev20 全量**：10/20（PID 3919383）。跑完→score_first_batch_20261029 --group dev→错误分析→按§6 优化闭环→冻结新版全量重跑 dev20→门槛达标→8 份留出→全量回归（含浏览器）→受控发布（publish_workspace.sh + /etc/fundlex-recall.env 加 FUNDLEX_TRUSTED_PROXY_HOSTS=127.0.0.1 + 新 engine/guide 版本）→正式 E2E（真实合同修订+Compare 全链+下载 hash 复核）→GO/NO-GO。
 - 主 agent 未办代码项：B14-03（paused=1 陈旧位）、A3-F5/F6/F7、M2、FL-D563 测试、Q3、A9-F04 测试加固。
+
+## 断点补充（2026-10-31 深夜，wave1 基线完成，优化闭环第一轮）
+
+- dev20 基线（0b1a813）：完成 61.3%（239/390）、整合同 45%（9/20）、召回 93.3%、false_complete 4、$0.6282/544 次。报告 /tmp/opencode/qa/findings/wave1-dev20-analysis-0b1a813.md。
+- 按原因修复在途 ×3：FL-D570（DUPLICATE_SITE 假阳性≈99 目标，P0）、FL-D573（B15 余文吞/错放/额外修改）、FL-D571+572（B03 claim、模板错 G08/G18/G13/G09）。
+- 提交纪律重申：各 fixer 只 git add 自有文件（986c1eb 打包教训）。修复完→复核→受影响合同重跑→**冻结新版 dev20 全量重跑**（最终证据须属最终冻结版本）→门槛（§7：无严重政策/事实错误、无错误 complete、正常可编辑用例全部正确完成）→留出→回归→发布→E2E。
+- 并行新对话（用户已开）：第二波 100 份标签制作；B13 性能与数据治理包。
+- 评测冻结信息：engine_head、guide(labels) hash 见 full/freeze.json；若 guide 改动须更新 freeze 并记录。
