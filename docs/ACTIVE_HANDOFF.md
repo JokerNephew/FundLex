@@ -1606,3 +1606,10 @@ dev20 v2 闭环：修复循环直到 §7 门槛（无已确证严重错误、无
 - HEAD `0aecb9c`；未提交改动：fundlex/recall.py（refute_absent_by_variant_evidence）、recall_pipeline.py（_replay_targets_by_id+挂点）、generation/claim_replay.py（plan_rejected 排除）、docs/DETAIL(+FL-D695/696/792-更新)、tests 新 2 文件（10 例全绿）。
 - 后台任务/本机：本树全量 pytest；真实复验 `/tmp/opencode/qa/fl-d695-b15-recheck`（B15）与 `/tmp/opencode/qa/fl-d696-b12-recheck`（B12）（env 取自 /etc/fundlex-recall.env→/tmp/opencode/qa/.env.recheck(600)，多行 JSON 已修）。模型账本仅观测。
 - 下一步：三任务收口核对 → 复验证据解包（B15 G09 p159 执行+产物；B12 G16:B1:O1 闭合）→ 失败则复诊 → git add+本树回归绿后报主线（qa-recall-miss.md 已追加 loop-5 段）。无外部阻塞。
+
+---
+## 2026-11-01 breakpoint（loop-5 双因子修复已收口，HEAD 68a0025）
+
+- 完成：FL-D695/696 修复+10 测、全量回归 2532/0/139（662s 前台）、真实复验 B12 complete+B15 二跑 complete（反证闸实发）；FL-D792 归属改判、FL-D793 观察项；全部登记。
+- 已提交 `68a0025`；qa-recall-miss.md 已报主线，待复核合并→ feat-recall loop-6 冻结令。无外部阻塞、无在跑进程。
+- 账本（仅观测）：B12 $0.0234/23c；B15 两轮 $0.0377/34c + $0.0268/23c。
