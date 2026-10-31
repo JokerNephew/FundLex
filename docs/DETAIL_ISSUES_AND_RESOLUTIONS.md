@@ -6908,17 +6908,19 @@ H＝E×…
   - Fix A（①主修）：`_meaningful_fragment`/`_approved_fragment_bounds`（recall.py ≈2358）——approved 整句 span 中 old_text 仅出现一次、前缀有意义、后缀仅终结符时收窄 span 只删授权片段；随 `ac697a4` 入帐。
   - Fix B（①校验兜底）：claim_replay `_own_effect_errors` 对 `approved_span_delete`（G15/G17 之外）不再把 deleted_quote/expected_old_text/delete_texts/fragments 自述证据计入 owned_removals；入帐于 `449b36b`（注意 FL-D576 将该收紧归因于 ac697a4 有误，实际 claim_replay 改动在 449b36b，主线合并时订正）。
   - Fix C（③G01 tbl）：`append_site_ok(allow_open_table_cell=False)` plan 阶段拒绝未以「。」闭合的表格定义格；随 `ac697a4` 入帐。
-  - Fix D（②G03 锚点）：`_definition_group_continuation_end` + `rebind_split_append_targets(include_group_continuation)` plan 期把闭合定义段锚点改绑到其细分组尾段（p83→p84），`append_site_ok` plan 期受理被改绑站点；随 `ac697a4` 入帐。
+  - Fix D（②G03 锚点）：`_definition_group_continuation_end` + `rebind_split_append_targets(include_group_continuation)` plan 期把闭合定义段锚点改绑到其细分组尾段（p83→p84），`append_site_ok` plan 期受理被改绑站点；随 `ac697a4` 入帐。**复核发现受理块原为死代码**（置于 `_append_definition_anchor` 闸门之后，细分段无定义标记必先 False），已将其移至闸门之前并仍限 plan 期（`not allow_open_table_cell`），审计/规范化姿态行为不变；含此修正的追加提交在本轮收尾入帐，新增正/负/边界三断言回归测试（plan 期受理 p84、审计姿态不受理冻结形状、新话题段不受理），mutation 自检（受理分支失效→测试如期转红→逐字节还原）。
 - **验证**：
-  - 冻结复放（engine 8978546 + 全部四个修复，离线复放 499 checkpoint + 基线收割上下文相似配对，`/tmp/opencode/qa/replay_one.py`）：基线复放原样复现缺陷（complete、17 edits、G05 [157,184) 整句吞）；修复版 G05=[174,183) 与 frozen gold T002 完全一致，产物 working_final.docx p87 尾句「…经与基金托管人协商一致后，提前公告。」保留（`/tmp/opencode/qa/replay-b15-fixed/` 与 `replay-b15-base2/`）。
-  - 回归：tests/test_qa_20261031_regressions.py 新增 12 项（Fix A×3、B×3、C×3、D×2，fe4803f 入帐 8 项 + 449b36b 相邻），mutation 自检（分别还原 Fix A 收窄边界行与 Fix B executor_claim_span 行，对应测试如期转红后逐字节还原）；`pytest tests/test_qa_20261031_regressions.py` 68 passed；`pytest -k "docx or recall"` 294 passed / 1 skipped。
+  - 冻结复放（engine 8978546 + 全部四个修复，离线复放 499 checkpoint + 基线收割上下文相似配对 + 确定性模型等提示等响应的幂等重载，`/tmp/opencode/qa/replay_one.py`）：基线复放原样复现缺陷（complete、17 edits、G05 [157,184) 整句吞）；修复版 G05=[174,183) 与 frozen gold T002 完全一致，产物 working_final.docx p87 尾句「…经与基金托管人协商一致后，提前公告。」保留（`/tmp/opencode/qa/replay-b15-fixed/` 与 `replay-b15-base2/`）。
+  - 含受理修正的全管线复放（`/tmp/opencode/qa/replay-b15-fixed-accept/`）：plan 期 G03 落到 p84（report.md 「G03 p84」审计行）、表格 r55c1 无 G01 政策句、G05 收窄交付；G03/G01 最终在 claim 覆盖阶段按防错原则 CLAIM_REPLAY_FAILED→honest incomplete——原因是复放的 checkpoint 响应录制于原运行，不含只存在于修复版的新增编辑之审计证据，引擎对无法证明的编辑坚持不交付；线上真实运行下 p84 落点将获得当轮真实审计响应，可正常完成。离线复放对该路径的证据边界如上如实记录。
+  - 回归：tests/test_qa_20261031_regressions.py 新增 13 项（Fix A×3、B×3、C×3、D×2、受理×1，fe4803f 入帐 8 项、449b36b Fix B、受理修正随本轮提交），mutation 自检三处（Fix A 收窄边界行、Fix B executor_claim_span 行、受理分支失效），对应测试如期转红后逐字节还原；`pytest tests/test_qa_20261031_regressions.py` 69 passed；`pytest -k "docx or recall"` 294 passed / 1 skipped。
 - **未修子项与裁定冲突（如实降级，非修复完成）**：
   - ③5 处额外修改中仅 G01 tbl 闭环（TARGET_SOURCE_MISMATCH 阻断，复放 edits.json 无该项、status=incomplete 诚实降级而非错产物）。G22×2（p883/p1239 `g22_ordered_list_item`）、G08 p162（`g08_actual_rate_replace`）、G14 p166（tier1）4 处系确定性 executor 有意实现与冻结 v2 标签 not_applicable 裁定之间的规则冲突，修复版产物中仍存在（与基线一致），**留产品与标签口径裁决**，不在本轮强改既有 executor。
   - ②G03 最终落点 p84 与 gold p87 的距离、B01 p147（定义首段锚、后段新话题）与 B15 p84（同定义组直接细分延续）交叉案例差异，机制上以「定义组直接细分延续才改绑」区分成立，最终锚点口径留裁。
-  - 全管线复放不覆盖「G03 站点受理」路径（plan 期改绑 p84 使后续 repair-round 审计上下文漂移出冻结 checkpoint 集），该路径以 plan 级单元测试覆盖；线上下一轮自然运行可补给真实证据。
+  - 全管线复放可覆盖 G03 plan 期落点（p84）与防错降级，但无法提供仅存在于修复版的新增编辑之真实审计/复核证据（checkpoint 录制于原运行）；该缺口由 plan 级单元测试覆盖，线上真实运行可补齐完成证据。
 - **变更记录**：
   - 2026-10-31（修复 agent）：登记三项修复机制，状态修复中。
   - 2026-10-31（修复 agent，本轮）：四项修复全部入帐并验证（复放+回归+mutation）；FL-D575 测试覆盖缺口随 12 项测试入帐闭合，由主线复核销号；留裁子项如上。
+  - 2026-10-31（修复 agent，同轮复核）：发现受理块死代码（闸门顺序），修正为闸门前受理；新增受理×1 回归测试（共 13 项 FL-D573 测试），全管线复放补证 plan 落点 p84 与防错 incomplete；本变记录与修正代码一并提交。
 
 ## FL-D600 smoke28/29/30 均不构成当前 QA 基线的指引资格证据（2026-10-31，guide 线）
 
@@ -7056,3 +7058,16 @@ H＝E×…
 - 验证：第三轮运行 total=100（dev75/holdout25），分层覆盖全部达标（短18/长29、A/C 56、单类25、陌生字母19、QDII10、FOF11、ETF联接15、指数35、债券16/混合38、maybe-satisfied9、partially-updated5、无摘要2、跨段54、费率表12、货币排除3、币种5、浮动费10），全部最低配额满足；与第一波 28 份 sha256 零重叠，近重复 8 件与第一波同组。
 - 状态：已修复并验证；启发式仅用于分层，真实满足/不适用结论以盲读标签为准。
 - 变更记录：2026-10-31 新增（第二波标签 agent 登记）。
+
+## FL-D578 449b36b commit message 与实际 diff 不一致（2026-10-31）
+
+- **发现日期**：2026-10-31，独立复核：`449b36b` message 称「+12 项回归测试」，实际测试在先行提交 `fe4803f`（+295 行），本 commit 仅含 claim_replay.py（15+/2-）。
+- **影响**：仅记录准确性；代码与测试均已被复核通过。
+- **处理**：登记备查（不改历史 commit message；后续提交要求 fixer message 与 diff 一致核对）。
+- **状态**：已登记（无需行动）。
+
+## FL-D579 G15/G17 自述扩权理论残留通道（低优先备查，2026-10-31）
+
+- **发现日期**：2026-10-31，独立复核：`449b36b` 收紧后，own_kinds 非纯 {delete}（如含 noop 共选）且属 G15/G17 的 approved_span_delete，理论上不再被任何 source-owned re-proof 覆盖，自述证据仍有理论扩权通道；现实指引中 G15/G17 删除形态均命中既有 re-proof（claim_replay.py:638-687），未见现实触发。
+- **处理**：低优先备查；若未来指引/执行器出现该组合，升级为修复项。
+- **状态**：open（低优先）。
