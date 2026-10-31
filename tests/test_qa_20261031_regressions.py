@@ -988,3 +988,547 @@ def test_duplicate_site_dropped_business_tail_still_fails_closed():
         Inspection([after_body, body_edit["replacement"]]), rules_by_id=rules)
     codes = {failure["code"] for failure in replay["failures"]}
     assert "DUPLICATE_SITE_DIVERGED" in codes
+
+
+# ==========================================================================
+# FL-D571: ONE_OF canonical-equivalence coalescing in merge_edits (B03 G14)
+# FL-D572: G08 disclosure tail / G09+B15 / G18+B01 / G13+B12 excise
+# ==========================================================================
+
+from fundlex.recall import PlannedEdit, merge_edits
+
+
+class _G14Obligations:
+    """Minimal obligations stub: G14:3/4/5 share one ONE_OF group + new_text."""
+
+    CANONICAL = "基金管理人可以适当调低基金申购费率和销售服务费率。"
+
+    def __init__(self, new_texts=None):
+        self._records = {}
+        for key in ("G14:3", "G14:4", "G14:5"):
+            self._records[key] = SimpleNamespace(
+                spec=SimpleNamespace(one_of_group="G14:history:multiple",
+                                     new_text=(new_texts or {}).get(key, self.CANONICAL)))
+
+    def record(self, key):
+        return self._records.get(key)
+
+
+def _g14_edit(target_id, key, start, end, replacement):
+    return PlannedEdit(target_id=target_id, rule_id="G14", location="p0",
+                       start=start, end=end, replacement=replacement,
+                       operation="replace", content_source="tier1_template",
+                       evidence={}, operation_keys=(key,), obligation_ids=())
+
+
+_G14_SOURCE = "基金管理人可以适当调低基金申购费率、基金赎回费率、基金转换费率和基金销售服务费率。"
+
+
+def test_one_of_canonical_drift_coalesces_instead_of_double_drop():
+    """B03 replay: Y004 (canonical minus 。), Y005+T014 (canonical, one wider
+    span) used to collapse into RECALL_EDIT_OVERLAP and drop BOTH sides, leaving
+    G14:3/4/5 unplanned.  Canonical equivalence must coalesce them into one
+    edit that carries every operation key."""
+    obligations = _G14Obligations()
+    canonical = obligations.CANONICAL
+    y004 = _g14_edit("Y004", "G14:3", 0, 24, canonical.removesuffix("。"))
+    t014 = _g14_edit("T014", "G14:5", 0, len(_G14_SOURCE), canonical)
+    y005 = _g14_edit("Y005", "G14:4", 0, len(_G14_SOURCE), canonical)
+    merged, conflicts, covered = merge_edits([y004, t014, y005],
+                                             Inspection([_G14_SOURCE]), obligations)
+    assert conflicts == []
+    assert len(merged) == 1
+    edit, _components = merged[0]
+    assert edit.replacement == canonical
+    assert set(edit.operation_keys) == {"G14:3", "G14:4", "G14:5"}
+    assert set(covered) == {"Y004", "Y005"}
+
+
+def test_one_of_double_drift_stays_an_honest_conflict():
+    """Abuse guard: when NEITHER side matches the shared canonical new_text the
+    overlap is a real conflict — coalescing must not become a silent picker."""
+    obligations = _G14Obligations()
+    drifted_a = _g14_edit("Y004", "G14:3", 0, len(_G14_SOURCE),
+                          "基金管理人可以适当调低基金申购费率和基金销售服务费率。")
+    drifted_b = _g14_edit("Y005", "G14:4", 0, len(_G14_SOURCE),
+                          "基金管理人可以适当调低申购费率和销售服务费率。")
+    merged, conflicts, covered = merge_edits([drifted_a, drifted_b],
+                                             Inspection([_G14_SOURCE]), obligations)
+    assert covered == []
+    assert any(item["code"] == "RECALL_EDIT_OVERLAP" for item in conflicts)
+    # Both sides stay in the plan and the conflict is reported — nothing is
+    # silently picked or silently dropped.
+    assert {edit.target_id for edit, _components in merged} == {"Y004", "Y005"}
+
+
+# --- FL-D572 / B12: contained delete excised from an outer replacement -------
+
+_B12_SENTENCE = "对于持续持有期少于7日的投资者收取不低于1.5%的赎回费，并将上述赎回费全额计入基金财产。"
+_B12_PARAGRAPH = ("赎回费由赎回基金份额的基金份额持有人承担，在基金份额持有人赎回基金份额时收取。"
+                  "赎回费率在基金合同、招募说明书中列示；" + _B12_SENTENCE)
+
+
+def _b12_edits(outer_replacement):
+    start = _B12_PARAGRAPH.index(_B12_SENTENCE)
+    outer = PlannedEdit(target_id="Y002", rule_id="G12", location="p0",
+                        start=0, end=len(_B12_PARAGRAPH), replacement=outer_replacement,
+                        operation="replace", content_source="survey_replace",
+                        evidence={}, operation_keys=("G12:0",), obligation_ids=())
+    delete = PlannedEdit(target_id="T013", rule_id="G13", location="p0",
+                         start=start, end=start + len(_B12_SENTENCE), replacement="",
+                         operation="replace", content_source="tier1_delete",
+                         evidence={}, operation_keys=("G13:0",), obligation_ids=())
+    return outer, delete
+
+
+def test_replace_keeps_covered_delete_by_excising_the_sentence():
+    """B12: the G12 wide-span replacement still carried the 7-day/1.5% sentence
+    while the G13 delete vanished from the ledger (fake complete).  The merge
+    must cut the sentence out of the replacement and normalise the seam, not
+    swallow the delete or fail the whole contract."""
+    outer_replacement = _B12_PARAGRAPH  # retains the to-be-deleted sentence
+    outer, delete = _b12_edits(outer_replacement)
+    merged, conflicts, covered = merge_edits([outer, delete],
+                                             Inspection([_B12_PARAGRAPH]), None)
+    assert conflicts == []
+    assert len(merged) == 1
+    edit, _components = merged[0]
+    assert _B12_SENTENCE not in edit.replacement
+    assert edit.replacement.endswith("列示。")  # "；。" seam normalised
+    assert set(edit.operation_keys) == {"G12:0", "G13:0"}
+    assert covered == ["T013"]
+
+
+def test_excise_ambiguous_slice_stays_an_honest_conflict():
+    """A slice appearing twice in the replacement cannot be cut safely; the
+    overlap must stay a reported conflict."""
+    outer_replacement = _B12_PARAGRAPH + _B12_SENTENCE
+    outer, delete = _b12_edits(outer_replacement)
+    merged, conflicts, covered = merge_edits([outer, delete],
+                                             Inspection([_B12_PARAGRAPH]), None)
+    assert covered == []
+    assert any(item["code"] == "RECALL_EDIT_OVERLAP" for item in conflicts)
+
+
+# --- FL-D572 / B05: G08 keeps a wider disclosure enumeration -----------------
+
+def test_g08_preserves_wider_disclosure_vehicle_enumeration():
+    """B05 label: the contract enumerates 招募说明书及基金产品资料概要; the
+    template only says 招募说明书.  The edit must keep the source enumeration."""
+    from fundlex.generation.template import plan_policy_replacement
+    before = "本基金的申购费率由基金管理人决定，并在招募说明书及基金产品资料概要中列示。"
+    instantiated = "申购费率由基金管理人决定，并在招募说明书中列示。"
+    result = plan_policy_replacement(before, instantiated, "G08")
+    assert result is not None
+    assert result.replacement == "申购费率由基金管理人决定，并在招募说明书及基金产品资料概要中列示。"
+    assert result.evidence["disclosure_tail_preserved"] is True
+
+
+def test_g08_disclosure_tail_untouched_when_source_matches_template():
+    """Control: an enumeration identical to (or narrower/disjoint vs) the
+    template must NOT rewrite the template wording."""
+    from fundlex.generation.template import plan_policy_replacement
+    instantiated = "申购费率由基金管理人决定，并在基金合同、招募说明书中列示。"
+    # Clause already matches the template verbatim -> nothing to change.
+    assert plan_policy_replacement(instantiated, instantiated, "G08") is None
+    narrower = "本基金的申购费率由基金管理人决定，并在招募说明书中列示。"
+    result = plan_policy_replacement(narrower, instantiated, "G08")
+    assert result is not None
+    assert result.replacement == instantiated
+    assert result.evidence["disclosure_tail_preserved"] is False
+
+
+# --- FL-D572 / B15: G09 net-redemption formula variant -----------------------
+
+_B15_BEFORE = ("赎回金额为按实际确认的有效赎回份额乘以申请当日基金份额净值的金额，"
+               "净赎回金额为赎回金额扣除相应的费用的金额")
+
+
+def test_g09_net_redemption_formula_splices_both_kernels():
+    """B15 label: formula-wording contracts need BOTH the class-qualified NAV
+    and the 扣除或加上 fee kernel; the half-changed composed edit was scored
+    as partial.  The new variant pairs produce the complete splice."""
+    from fundlex.generation.template import plan_g09_splice
+    result = plan_g09_splice(_B15_BEFORE, [])
+    assert result is not None
+    assert "当日该类基金份额的基金份额净值" in result.replacement
+    assert "扣除或加上相应的费用" in result.replacement
+    assert "扣除相应的费用的金额" not in result.replacement
+
+
+def test_g09_partial_splice_still_refused():
+    """A contract wording whose fee kernel is unknown must NOT ship a NAV-only
+    half change — the completeness gate stays fail-closed."""
+    from fundlex.generation.template import plan_g09_splice
+    only_nav = "赎回金额为按实际确认的有效赎回份额乘以申请当日基金份额净值的金额确定"
+    assert plan_g09_splice(only_nav, []) is None
+
+
+# --- FL-D572 / B01: G18 reason-clause splice keeps the contract subject ------
+
+def test_g18_reason_splice_without_subject_insertion():
+    """B01 label: “由于A类基金份额不收取而C类基金份额收取销售服务费” must become
+    “由于A类基金份额和C类基金份额费用收取不同” — no template-injected 本基金."""
+    from fundlex.generation.template import _G18_REASON_PAIRS, plan_g18_splice
+    before = ("由于A类基金份额不收取而C类基金份额收取销售服务费，"
+              "各基金份额类别对应的可分配收益将有所不同。")
+    result = plan_g18_splice(before, list(_G18_REASON_PAIRS))
+    assert result is not None
+    assert "由于A类基金份额和C类基金份额费用收取不同" in result.replacement
+    assert "本基金" not in result.replacement
+    assert "不收取而C类基金份额收取销售服务费" not in result.replacement
+
+
+def test_g18_reason_splice_preserves_existing_subject():
+    """B02-type contracts already carry 本基金 as the subject: the splice must
+    preserve it verbatim instead of rewriting the whole clause to template text."""
+    from fundlex.generation.template import _G18_REASON_PAIRS, plan_g18_splice
+    before = ("由于本基金A类基金份额不收取销售服务费，而C类基金份额收取销售服务费，"
+              "各基金份额类别对应的可分配收益将有所不同。")
+    result = plan_g18_splice(before, list(_G18_REASON_PAIRS))
+    assert result is not None
+    assert "由于本基金A类基金份额和C类基金份额费用收取不同" in result.replacement
+    assert "不收取销售服务费，而C类基金份额收取销售服务费" not in result.replacement
+
+
+def test_g18_unrelated_clause_refused():
+    from fundlex.generation.template import _G18_REASON_PAIRS, plan_g18_splice
+    assert plan_g18_splice("本基金的收益分配原则由基金管理人拟订。",
+                           list(_G18_REASON_PAIRS)) is None
+
+
+# --- FL-D571/FL-D572: guide certification stays valid after the G13 variant --
+
+def test_guide_recertified_with_g13_variant():
+    """The G13:0 delete gained the B12 contract wording as a rule-level
+    old_text_variant; the document must still certify against its own hash
+    (operation_count unchanged at 34)."""
+    import json as _json
+    from fundlex import guide as guide_module
+    root = Path(__file__).resolve().parents[1]
+    doc = guide_module.load_guide_document(root / "guides/builtin_guide_v1.json")
+    result = guide_module.validate_runtime_guide(doc)
+    assert result["state"] == "CERTIFIED"
+    assert result["rule_count"] == 22
+    assert result["operation_count"] == 34
+    assert (doc["certification"]["guide_document_sha256"]
+            == guide_module.guide_document_sha256(doc))
+    g13 = next(rule for rule in doc["groups"] if rule["rule_id"] == "G13")
+    assert any("不低于1.5%的赎回费" in variant
+               for variant in g13.get("old_text_variants") or [])
+    del _json
+
+
+# ==========================================================================
+# FL-D573 (regression gap FL-D575): three repair mechanisms committed in
+# ac697a4 lacked dedicated tests:
+#   1. _approved_fragment_bounds — approved_span_delete narrows to the
+#      operation-owned fragment instead of the whole approved clause.
+#   2. _definition_group_continuation_end — G01/G03 append anchor extends
+#      only to the same-group subdivision boundary.
+#   3. append_site_ok — plan stage refuses appending into an unclosed
+#      table definition cell (tbl0/r55/c1/p0 duplicate add).
+# ==========================================================================
+
+from fundlex.recall import (RecallError, _approved_fragment_bounds,
+                            _definition_group_continuation_end,
+                            _plan_target_inner, append_site_ok,
+                            rebind_split_append_targets)
+
+
+# --- FL-D573 (1): approved_span_delete fragment narrowing ---------------------
+
+_D573_PREFIX = "经与基金托管人协商一致后，"
+# Synthetic fragment (不再出现在指引原文中;形状与 FL-D573 案例相同).
+_D573_FRAGMENT = "提前公告并完成后续相关程序"
+_D573_SENTENCE = _D573_PREFIX + _D573_FRAGMENT + "。"
+
+
+def test_approved_fragment_bounds_narrows_to_operation_owned_fragment():
+    """FL-D573 p87 尾句: the approved span is the whole sentence, but the
+    delete operation owns only the fragment.  A meaningful prefix plus a
+    bare terminator suffix narrows the delete to exactly the fragment —
+    the unowned head keeps its sentence closed."""
+    narrowed = _approved_fragment_bounds(
+        _D573_SENTENCE, 0, len(_D573_SENTENCE),
+        {"op": "delete", "old_text": _D573_FRAGMENT})
+    offset = _D573_SENTENCE.index(_D573_FRAGMENT)
+    assert narrowed == (offset, offset + len(_D573_FRAGMENT))
+    # The unowned prefix and the sentence terminator stay outside the delete.
+    assert _D573_SENTENCE[:narrowed[0]] == _D573_PREFIX
+    assert _D573_SENTENCE[narrowed[1]:] == "。"
+
+
+def test_approved_fragment_bounds_refuses_unprovable_or_swallowing_narrow():
+    """Negative: narrowing must NOT fire when the fragment has a meaningful
+    trailing continuation (a narrow cut there would strand a half-sentence
+    and the fallback wide delete would swallow unowned adjacent wording),
+    when the old wording is a paraphrase absent from the approved span, or
+    when it occurs more than once (ownership unprovable)."""
+    continued = _D573_FRAGMENT + "，并报中国证监会批准。"
+    assert _approved_fragment_bounds(
+        continued, 0, len(continued),
+        {"op": "delete", "old_text": _D573_FRAGMENT}) is None
+    paraphrase = "经与基金托管人协商一致，提前公告并依法履行备案程序。"
+    assert _approved_fragment_bounds(
+        paraphrase, 0, len(paraphrase),
+        {"op": "delete", "old_text": _D573_FRAGMENT}) is None
+    doubled = _D573_FRAGMENT + "；另行变更的，" + _D573_FRAGMENT + "。"
+    assert _approved_fragment_bounds(
+        doubled, 0, len(doubled),
+        {"op": "delete", "old_text": _D573_FRAGMENT}) is None
+    # An owned fragment in the HEAD position has no meaningful surviving
+    # prefix, so it is not a narrowing case either (whole-span delete path).
+    head_only = _D573_FRAGMENT + "。"
+    assert _approved_fragment_bounds(
+        head_only, 0, len(head_only),
+        {"op": "delete", "old_text": _D573_FRAGMENT}) is None
+
+
+class _AlwaysApprove:
+    """Minimal code-verified approval stub (semantic evidence already checked
+    operation identity/scope upstream; the planner consumes the verdict)."""
+
+    def allows(self, target, inspection):
+        return SimpleNamespace(ok=True, code="",
+                               approval_id=getattr(target, "approval_id", ""))
+
+
+def test_plan_approved_span_delete_narrows_to_fragment_bounds():
+    """Plan-level positive (mechanism 1): with a verified semantic approval
+    over the whole sentence, the planned delete covers exactly the owned
+    fragment — the unowned prefix "经与基金托管人协商一致后，" is not deleted
+    and the terminator survives to close the remaining sentence."""
+    rule = {"rule_id": "G22",
+            "operations": [{"op": "delete", "old_text": _D573_FRAGMENT}]}
+    inspection = Inspection([_D573_SENTENCE])
+    target = Target("T573", "G22", "p0", _D573_SENTENCE, "needs_edit", "model",
+                    start=0, end=len(_D573_SENTENCE), resolution="resolved",
+                    segment_ok=True, operations=("G22:0",))
+    target.approval_id = "APPR-FL-D573"
+    edit = _plan_target_inner(rule, target, inspection, _facts(), None,
+                              compose_budget=[0], approvals=_AlwaysApprove())
+    assert edit is not None
+    assert edit.content_source == "approved_span_delete"
+    assert edit.replacement == ""
+    offset = _D573_SENTENCE.index(_D573_FRAGMENT)
+    assert (edit.start, edit.end) == (offset, offset + len(_D573_FRAGMENT))
+    assert edit.evidence["deleted_quote"] == _D573_FRAGMENT
+    # Resulting paragraph proof: prefix + terminator remain, fragment gone.
+    assert (inspection.by_location("p0").text[:edit.start]
+            + inspection.by_location("p0").text[edit.end:]
+            == _D573_PREFIX + "。")
+
+
+# --- FL-D573 (2): definition-group append anchor extension --------------------
+
+_D573_DEF = ("本基金根据销售服务费、申购费用收取方式的不同，将基金份额分为"
+             "不同的类别，分别称为A类基金份额、C类基金份额。")
+_D573_GROUP = "在每一份额类别内，根据申购费用、赎回费用收取方式的不同，再分为不同子类别。"
+_D573_NEW_TOPIC = "本基金各类基金份额分别设置代码，并分别计算和公告基金份额净值。"
+
+
+def test_definition_group_continuation_rebinds_append_to_group_end():
+    """FL-D573 美国房地产 G03 (p83 错放): a closed definition followed by a
+    same-group subdivision paragraph ("在每一份额类别内…再分为…") rebinds the
+    append target to the SUBDIVISION paragraph, so the policy is appended
+    after the whole definition group, not between definition and group."""
+    inspection = Inspection([_D573_DEF, _D573_GROUP, _D573_NEW_TOPIC])
+    end = _definition_group_continuation_end(inspection.by_location("p0"), inspection)
+    assert end is not None
+    assert end.location == "p1"
+    target = Target("T573G", "G03", "p0", _D573_DEF, "needs_edit", "model",
+                    start=0, end=len(_D573_DEF), resolution="resolved",
+                    segment_ok=True, operations=("G03:0",))
+    rebind_split_append_targets([target], inspection, include_group_continuation=True)
+    assert target.location == "p1"
+    assert target.quote == _D573_GROUP
+    assert (target.start, target.end) == (0, len(_D573_GROUP))
+    assert "DEFINITION_GROUP_APPEND_END" in target.reason
+
+
+def test_append_site_accepts_rebound_group_end_at_plan_stage_only():
+    """FL-D573 G03 p83->p84 受理: the subdivision paragraph the planner rebinds
+    to carries NO definition marker of its own, so the definition-clause gate
+    alone rejects it — the acceptance must run at plan stage before that gate
+    (an earlier revision placed it after the gate, dead code, and G03 fell
+    back to honest-incomplete instead of landing after the group)."""
+    inspection = Inspection([_D573_DEF, _D573_GROUP, _D573_NEW_TOPIC])
+    span = inspection.by_location("p1")
+    assert append_site_ok("G03", span, inspection,
+                          allow_open_table_cell=False) is True
+    # The audit/canonicalization stance (frozen shape) must NOT drift: the
+    # same span stays outside pre-plan append membership.
+    assert append_site_ok("G03", span, inspection) is False
+    # No boundless widening: a merely-following new-topic paragraph (the B01
+    # p148 pattern) is never accepted through this branch.
+    boundary = Inspection([_D573_DEF, _D573_NEW_TOPIC])
+    assert append_site_ok("G03", boundary.by_location("p1"), boundary,
+                          allow_open_table_cell=False) is False
+
+
+def test_definition_group_continuation_stops_at_group_boundary():
+    """Negative: a follower that starts a new topic (代码/净值计算) does NOT
+    continue the group — the anchor must stay on the definition itself, so
+    definition content is never placed after (outside) its own group.
+    A bare "在每一份额类别内" phrasing without the subdivision verb ("再分为")
+    is not a group continuation either."""
+    inspection = Inspection([_D573_DEF, _D573_NEW_TOPIC])
+    assert _definition_group_continuation_end(
+        inspection.by_location("p0"), inspection) is None
+    target = Target("T573G", "G03", "p0", _D573_DEF, "needs_edit", "model",
+                    start=0, end=len(_D573_DEF), resolution="resolved",
+                    segment_ok=True, operations=("G03:0",))
+    rebind_split_append_targets([target], inspection, include_group_continuation=True)
+    assert target.location == "p0"
+    assert "GROUP_APPEND_END" not in target.reason
+    pseudo = "在每一份额类别内，投资者持有的每一份基金份额享有同等权益。"
+    no_verb = Inspection([_D573_DEF, pseudo])
+    assert _definition_group_continuation_end(
+        no_verb.by_location("p0"), no_verb) is None
+    # An OPEN anchor (no sentence terminator) belongs to the split-definition
+    # chain, never to the closed-definition group continuation.
+    open_head = _D573_DEF.rstrip("。") + "，"
+    open_inspection = Inspection([open_head, _D573_GROUP])
+    assert _definition_group_continuation_end(
+        open_inspection.by_location("p0"), open_inspection) is None
+
+
+# --- FL-D573 (3): append into an unclosed table definition cell ---------------
+
+_TBL_LOCATION = "tbl0/r55/c1/p0"
+_TBL_OPEN_CELL = ("A类基金份额类别：在投资者申购基金份额时收取申购费，"
+                  "在投资者赎回基金份额时收取赎回费；")
+_TBL_CLOSED_CELL = ("A类基金份额类别：在投资者申购基金份额时收取申购费，"
+                    "在投资者赎回基金份额时收取赎回费。")
+
+
+def _tbl_span(location, text):
+    return SimpleNamespace(location=location, text=text, zone="body",
+                           logical_zone="body", section_path="",
+                           segments=(TextSegment(0, len(text)),),
+                           fingerprint=location)
+
+
+def test_append_site_rejects_unclosed_table_definition_cell():
+    """FL-D573 tbl0/r55/c1/p0: a table definition cell whose sentence is left
+    open (ends with the enumeration separator ；) is part of a continued
+    definition list.  Plan-stage append (allow_open_table_cell=False) must
+    refuse it — inserting the policy there both mangles the list and
+    duplicates the add against the survey's proper definition anchor."""
+    span = _tbl_span(_TBL_LOCATION, _TBL_OPEN_CELL)
+    assert append_site_ok("G03", span, Inspection([]),
+                          allow_open_table_cell=False) is False
+    # The pre-plan canonicalization stance deliberately keeps the frozen
+    # audit shape (legacy default), only the plan stage tightens it.
+    assert append_site_ok("G03", span, Inspection([])) is True
+
+
+def test_append_site_accepts_fully_closed_table_definition_cell():
+    """Control: a table cell that properly closes its definition sentence
+    stays a valid G03 append anchor at plan stage — the guard must not
+    over-block terminated cells."""
+    span = _tbl_span(_TBL_LOCATION, _TBL_CLOSED_CELL)
+    assert append_site_ok("G03", span, Inspection([]),
+                          allow_open_table_cell=False) is True
+
+
+def test_plan_append_to_unclosed_table_cell_fails_closed():
+    """Plan-level effect (mechanism 3): the planner fails closed with
+    TARGET_SOURCE_MISMATCH instead of executing the duplicate append."""
+    rule = {"rule_id": "G03",
+            "operations": [{"op": "append",
+                            "new_text": "C类基金份额在投资者申购时不收取申购费。"}]}
+    inspection = _LabeledInspection([(_TBL_LOCATION, _TBL_OPEN_CELL)])
+    target = Target("T573T", "G03", _TBL_LOCATION, _TBL_OPEN_CELL,
+                    "needs_edit", "model", start=0, end=len(_TBL_OPEN_CELL),
+                    resolution="resolved", segment_ok=True,
+                    operations=("G03:0",))
+    with pytest.raises(RecallError, match="TARGET_SOURCE_MISMATCH"):
+        _plan_target_inner(rule, target, inspection, _facts(), None,
+                           compose_budget=[0])
+
+
+class _LabeledInspection:
+    """Document-inspection stub with explicit (possibly table-cell) locations."""
+
+    def __init__(self, items):
+        self.paragraphs = tuple(
+            SimpleNamespace(location=location, text=text, zone="body",
+                            logical_zone="body", section_path="",
+                            segments=(TextSegment(0, len(text)),),
+                            fingerprint=location)
+            for location, text in items)
+        self.source_sha256 = "source"
+
+    def by_location(self, location):
+        for span in self.paragraphs:
+            if span.location == location:
+                return span
+        raise KeyError(location)
+
+
+# --- FL-D573 (1-backstop): approved_span_delete self-claims are not owned ----
+
+from fundlex.generation.claim_replay import _own_effect_errors
+
+_D573_P87_PREFIX = ("有关基金份额类别的具体设置、费率水平由基金管理人确定，"
+                    "并在招募说明书中公告。")
+_D573_P87_AUTH = "并报中国证监会备案"
+_D573_P87_TAIL = "经与基金托管人协商一致后，提前公告" + _D573_P87_AUTH + "。"
+_D573_P87_UNIT = _D573_P87_PREFIX + _D573_P87_TAIL
+
+
+def _own_effect(rule_id, old_text, replacement, *, content_source,
+                expected_old_text="", evidence=None):
+    rule = {"rule_id": rule_id,
+            "operations": [{"op": "delete", "old_text": old_text}]}
+    return _own_effect_errors(
+        rule, [0], None, explicit_span=True, is_component=False,
+        before_unit=_D573_P87_UNIT, replacement=replacement,
+        validation=SimpleNamespace(changes=()), content_source=content_source,
+        evidence=evidence or {}, expected_old_text=expected_old_text,
+        location="p87", start=len(_D573_P87_PREFIX + "经与基金托管人协商一致后，提前公告"),
+        end=len(_D573_P87_UNIT))
+
+
+def test_approved_span_delete_evidence_self_claim_does_not_own_tail():
+    """FL-D573 p87 尾句被吞 backstop: the approved delete span was the whole
+    tail sentence, but the approval bound only the 9-char authorization
+    fragment.  Pre-fix, the executor's self-recorded deleted_quote /
+    expected_old_text silently extended removal ownership over the whole
+    sentence, so the residual-ownership proof could no longer see the
+    swallowed 「经与基金托管人协商一致后，提前公告。」.  The flag must refuse
+    ownership from those self-claims and surface the swallow."""
+    errors = _own_effect(
+        "G05", _D573_P87_AUTH, _D573_P87_PREFIX,
+        content_source="approved_span_delete",
+        expected_old_text=_D573_P87_TAIL,
+        evidence={"deleted_quote": _D573_P87_TAIL,
+                  "delete_texts": [_D573_P87_TAIL],
+                  "fragments": [{"old_text": _D573_P87_TAIL}]})
+    assert "CLAIM_OPERATION_SPAN_UNAUTHORIZED" in errors
+
+
+def test_approved_span_delete_own_old_text_still_authorizes():
+    """Control: when the operation's own old wording genuinely covers the
+    whole tail sentence, the same approved delete stays authorized — the
+    backstop removes self-claim laundering, not real ownership."""
+    errors = _own_effect(
+        "G05", _D573_P87_TAIL, _D573_P87_PREFIX,
+        content_source="approved_span_delete",
+        expected_old_text=_D573_P87_TAIL,
+        evidence={"deleted_quote": _D573_P87_TAIL})
+    assert "CLAIM_OPERATION_SPAN_UNAUTHORIZED" not in errors
+
+
+def test_non_approved_delete_still_trusts_recorded_expected_old_text():
+    """Scoping control: only ``approved_span_delete`` (outside the G15/G17
+    dedicated re-proofs) loses evidence-based ownership.  A plain recorded
+    expected_old_text for another source keeps its legacy trust so frozen
+    audit shapes elsewhere do not drift."""
+    errors = _own_effect(
+        "G05", "提前公告", _D573_P87_PREFIX,
+        content_source="sentence_delete",
+        expected_old_text=_D573_P87_TAIL)
+    assert "CLAIM_OPERATION_SPAN_UNAUTHORIZED" not in errors
