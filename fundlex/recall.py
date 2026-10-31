@@ -6903,6 +6903,14 @@ def _validate_routed_policy(rule: dict, operations: Sequence[dict], facts: Facts
             for sentence in _g08_authorized_variant_sentences(before):
                 if sentence not in old_texts:
                     old_texts.append(sentence)
+        # FL-D655 mechanism B: every rule authorizes removals of certified
+        # runtime variants of this operation's old text at this site.  Only the
+        # deterministic certification predicate (``fundlex.variants``) may add
+        # wordings here; an anchored-but-uncertified candidate stays blocked.
+        from .variants import authorized_variant_sentences
+        for sentence in authorized_variant_sentences(rule, operation, before):
+            if sentence not in old_texts:
+                old_texts.append(sentence)
         new_text, slot_issues = instantiate_slots(fixed_text, facts)
         if slot_issues:
             new_text = fixed_text
@@ -9275,6 +9283,79 @@ def plan_edits(rules_by_id: dict[str, dict], targets: Sequence[Target], inspecti
             "covered": sorted(covered)}
 
 
+def plan_output_guard(planned: dict[str, Any], targets: Sequence[Target]
+                      ) -> list[dict[str, Any]]:
+    """FL-D657 mechanism C: internal consistency gate on one plan output.
+
+    Deterministic pre-publication check of the plan the model round produced:
+
+    * ``PLAN_CITED_CLOSED_TARGET`` — an edit cites a target whose state is not
+      ``needs_edit`` (already satisfied / not applicable / absent).  Dropping it
+      is *already-cited rejection*: a closed site must never be edited again.
+    * ``PLAN_SITE_INCONSISTENT`` — the edit span sits outside its target's
+      certified span beyond the paragraph-wrap allowance.
+    * ``PLAN_OPERATION_UNBOUND`` — the edit binds neither an operation key nor
+      an obligation id, so no Ledger record could ever close through it.
+
+    Rejected edits are pruned in place and their ledger rows demoted to
+    ``unresolved`` with the guard code, mirroring the FL-D112 content-check
+    pruning.  The caller may then run a single bounded replan of the dirty
+    locations; whatever a second pass cannot fix stays open and honest (the
+    reconciliation layer renders the gap).
+    """
+    SPAN_ALLOWANCE = 40
+    by_id = {target.target_id: target for target in targets}
+    issues: list[dict[str, Any]] = []
+    rejected: set[tuple[str, str, int, int]] = set()
+
+    def _edit_key(record: Mapping[str, Any]) -> tuple[str, str, int, int]:
+        return (str(record.get("target_id") or ""),
+                str(record.get("location") or ""),
+                int(record.get("start", -1) or -1),
+                int(record.get("end", -2) or -2))
+
+    records = list(planned.get("edits") or [])
+    for record in records:
+        target = by_id.get(str(record.get("target_id") or ""))
+        if target is None:
+            continue  # composite/aggregated edits bind component targets below
+        problem = ""
+        if str(target.state or "") != "needs_edit":
+            problem = "PLAN_CITED_CLOSED_TARGET"
+        elif (isinstance(target.start, int) and isinstance(target.end, int)
+              and record.get("start") is not None and record.get("end") is not None
+              and (int(record["start"]) < target.start - SPAN_ALLOWANCE
+                   or int(record["end"]) > target.end + SPAN_ALLOWANCE)):
+            problem = "PLAN_SITE_INCONSISTENT"
+        elif not (record.get("operation")
+                  or (record.get("evidence") or {}).get("operation_keys")
+                  or (record.get("evidence") or {}).get("obligation_ids")):
+            problem = "PLAN_OPERATION_UNBOUND"
+        if problem:
+            issues.append({
+                "code": problem, "kind": "plan_guard",
+                "rule_id": str(record.get("rule_id") or ""),
+                "target_id": str(record.get("target_id") or ""),
+                "location": str(record.get("location") or ""),
+                "reason": problem,
+            })
+            rejected.add(_edit_key(record))
+    if not rejected:
+        return []
+    planned["edits"] = [record for record in records
+                        if _edit_key(record) not in rejected]
+    rejected_target_ids = {str(issue.get("target_id")) for issue in issues}
+    reason_by_target = {str(issue.get("target_id")): str(issue.get("code"))
+                        for issue in issues}
+    for entry in planned.get("ledger") or []:
+        target_id = str(entry.get("target_id") or "")
+        if target_id in rejected_target_ids and entry.get("status") == "planned":
+            entry["status"] = "unresolved"
+            entry["reason"] = reason_by_target[target_id]
+    planned.setdefault("plan_guard", []).extend(issues)
+    return issues
+
+
 def replan_sites(existing: dict[str, Any], dirty_locations: set[str], rules_by_id: dict[str, dict],
                  targets: Sequence[Target], inspection: DocumentInspection, facts: Facts,
                  gateway: Any, *, max_compose_calls: int, obligations: Any = None) -> dict[str, Any]:
@@ -10397,6 +10478,81 @@ _DELETE_SENTENCE_ANCHORS = {
     "G15": ("销售服务费",),
     "G17": ("销售服务费",),
 }
+
+
+def ensure_certified_variant_targets(targets: Sequence[Target], rules_by_id: dict[str, dict],
+                                     inspection: DocumentInspection, facts: Facts | None = None,
+                                     scopes: Mapping[str, Any] | None = None) -> list[Target]:
+    """FL-D655: generic certified-variant residual targets for every rule.
+
+    The G08 legacy sentence got a rule-specific predicate (FL-D587/588); this
+    is the same channel generalised: when a rule's condition is TRUE, no live
+    target exists and neither the canonical old text nor a declared variant is
+    present, a contract sentence certified by ``fundlex.variants`` IS an edit
+    site and must not be closed away by a no-site sweep.  Rules with an
+    existing stricter predicate stay exempt — the generic layer never weakens
+    such a gate.  Certification and per-operation caps live in
+    ``fundlex.variants``; an anchored-but-uncertified (anomalous) sentence
+    never becomes a target here — it is review evidence only.
+    """
+    from .variants import (MAX_VARIANTS_PER_OPERATION,
+                           RESIDUAL_TARGET_EXEMPT_RULES, _compact,
+                           discover_candidates)
+
+    created: list[Target] = []
+    for rule_id, rule in sorted((rules_by_id or {}).items()):
+        if rule_id in RESIDUAL_TARGET_EXEMPT_RULES:
+            continue
+        operations = [(index, operation)
+                      for index, operation in enumerate(rule.get("operations") or ())
+                      if str(operation.get("op") or "replace") == "replace"
+                      and str(operation.get("old_text") or "").strip()]
+        if not operations:
+            continue
+        if facts is not None and all(
+                condition_status(operation.get("condition"), facts) != "TRUE"
+                for _, operation in operations):
+            continue
+        if any(target.rule_id == rule_id and not target.out_of_scope
+               and target.state in {"needs_edit", "satisfied"} for target in targets):
+            continue
+        scope = (scopes or {}).get(rule_id) if scopes else None
+        for index, operation in operations:
+            canonical = {_compact(str(operation.get("old_text") or ""))}
+            canonical.update(_compact(str(item))
+                             for item in (rule.get("old_text_variants") or ())
+                             if str(item))
+            made = 0
+            for span in inspection.paragraphs:
+                if made >= MAX_VARIANTS_PER_OPERATION:
+                    break
+                text = span.text
+                if not text.strip():
+                    continue
+                if scope is not None and not scope.contains(str(span.location)):
+                    continue
+                compact_text = _compact(text)
+                if any(ref and ref in compact_text for ref in canonical):
+                    continue  # literal/declared wording: inventory owns it
+                for item in discover_candidates(operation, text):
+                    if item["bucket"] != "CERTIFIABLE":
+                        continue
+                    if made >= MAX_VARIANTS_PER_OPERATION:
+                        break
+                    target = Target(
+                        target_id=f"{rule_id}V{index}{made + 1:02d}",
+                        rule_id=rule_id, location=str(span.location),
+                        quote=str(item["variant"]), state="needs_edit",
+                        reason=f"certified_variant:{rule_id}:{index}",
+                        start=int(item["start"]), end=int(item["end"]),
+                        operations=(str(operation.get("operation_id")
+                                        or f"{rule_id}:{index}"),))
+                    target.resolution = "resolved"
+                    target.segment_ok = containing_segment(
+                        span, target.start, target.end) is not None
+                    created.append(target)
+                    made += 1
+    return created
 
 # Canonical guide wording is only one historical form.  These bounded semantic
 # probes are used by the deterministic delete sweep after exact/variant matching;
