@@ -88,18 +88,26 @@ def review_version_footprint(store: RunStore, owner: str, version_id: str) -> di
     coverage_lost = sorted(before_covered - after_covered)
     granularity_only = not coverage_lost
     needs_review = bool(removed) or cliff
-    dimensions = {"baseline_version_id": baseline_id,
+    dimensions = {"source": "footprint_smoke",
+                  "baseline_version_id": baseline_id,
                   "rules_before": summary["rules_before"], "rules_after": summary["rules_after"],
                   "removed_rule_ids": removed, "added_rule_ids": sorted(after_ids - before_ids),
                   "changed_rules": summary["changed"], "cliff_ratio": CLIFF_RATIO,
                   "cliff": cliff,
                   "coverage_lost_paragraphs": coverage_lost,
                   "granularity_only": granularity_only}
+    # Review-source discipline: the smoke writes and clears only its own
+    # verdicts; a review stamped by the executability canary (or any other
+    # source) stands, since it carries runtime-fatal dimensions.
+    existing = version.get("review") or {}
+    existing_source = (existing.get("dimensions") or {}).get("source")
+    own_slot = existing_source in (None, "footprint_smoke")
     if needs_review:
-        review = {"status": "needs_review", "dimensions": dimensions,
-                  "evaluated_at": datetime.now(timezone.utc).isoformat(timespec="seconds")}
-        guide_store.mark_guide_review(store, owner, version_id, review)
-    else:
+        if own_slot:
+            review = {"status": "needs_review", "dimensions": dimensions,
+                      "evaluated_at": datetime.now(timezone.utc).isoformat(timespec="seconds")}
+            guide_store.mark_guide_review(store, owner, version_id, review)
+    elif own_slot:
         # A healthy re-parse clears any verdict inherited by the previous attempt.
         guide_store.mark_guide_review(store, owner, version_id, None)
     return {"baseline": baseline_id, "needs_review": needs_review, "dimensions": dimensions}

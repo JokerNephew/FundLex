@@ -1048,6 +1048,16 @@ def create_app(data_dir: str | Path | None = None, *, auth_db=None) -> FastAPI:
             await file.close()
         return {"version": _guide_public(version, current=False)}
 
+    @application.get("/api/guides/upload-spec")
+    def guide_upload_spec(user: str = Depends(_user)):
+        """Upload-entry specification for the guide channel (static content).
+
+        The frontend renders this verbatim near the upload control; keeping it
+        server-side means the copy ships with the quality channel it describes.
+        """
+        from fundlex.api_content import GUIDE_UPLOAD_SPEC
+        return GUIDE_UPLOAD_SPEC
+
     @application.get("/api/guides/{version_id}")
     def get_guide(version_id: str, user: str = Depends(_user)):
         version = visible_guide(user, version_id)
