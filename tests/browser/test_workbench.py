@@ -230,7 +230,8 @@ def test_revision_task_columns_detail_metadata_and_responsive_layout(ui):
     page.goto(base + f"/#task?id={task}")
     page.wait_for_selector("#doc-rows [data-detail]")
     page.wait_for_function("!document.querySelector('#task-guide-meta').hidden")
-    assert page.locator("#task-guide-value").inner_text() == f"{guide['filename']} · 版本 {guide_id}"
+    # FL-D717 定稿文案：任务绑定指引快照后显示「文件名 · 已锁定」（不直显 version_id）
+    assert page.locator("#task-guide-value").inner_text() == f"{guide['filename']} · 已锁定"
 
     page.goto(base + "/#overview")
     row = page.locator(f'#task-rows tr:has([data-task="{task}"])')
@@ -495,32 +496,49 @@ def test_guide_rule_switches_and_model_settings_are_editable(ui, monkeypatch):
     expect(page.locator('#feishu-connect-card')).to_be_hidden()
     expect(page.locator('#model-settings-body')).to_contain_text('执行模型')
     expect(page.locator('#model-settings-body')).to_contain_text('检查模型')
+    # 读取态不显示表单，点击「修改配置」进入编辑态（FL-D750 读取态/编辑态重做）
+    expect(page.locator('#model-settings-form')).to_have_count(0)
+    page.locator('[data-model-edit="primary"]').click()
     expect(page.locator('#model-settings-form')).to_be_visible()
     for label in ('超时', 'tokens', '重试次数', '上下文字符', 'JSON'):
         assert label not in page.locator('#model-settings-form').inner_text()
-    page.locator('#model-primary-source').select_option('personal')
+    page.locator('[data-model-role="primary"] [data-model-source-opt="personal"]').click()
     page.locator('#model-primary-provider').select_option('openai')
     page.locator('#model-primary-api_key').fill('browser-fixture-execution-key')
     page.locator('#model-primary-model').fill('personal-browser-model')
-    page.locator('#model-review-source').select_option('personal')
+    with page.expect_response(lambda r: '/api/settings/model' in r.url and r.request.method == 'PUT') as saved:
+        page.locator('[data-action="model-settings-save"][data-model-save="primary"]').click()
+    assert saved.value.status == 200
+    page.locator('[data-model-edit="review"]').click()
+    page.locator('[data-model-role="review"] [data-model-source-opt="personal"]').click()
     page.locator('#model-review-provider').select_option('deepseek')
     page.locator('#model-review-api_key').fill('browser-fixture-review-key')
     page.locator('#model-review-model').fill('different-check-model')
-    with page.expect_response(lambda r: '/api/settings/model' in r.url and r.request.method == 'PUT') as saved:
-        page.locator('[data-action="model-settings-save"]').click()
-    assert saved.value.status == 200
-    expect(page.locator('#model-primary-model')).to_have_value('personal-browser-model')
+    with page.expect_response(lambda r: '/api/settings/model' in r.url and r.request.method == 'PUT') as saved_review:
+        page.locator('[data-action="model-settings-save"][data-model-save="review"]').click()
+    assert saved_review.value.status == 200
+    expect(page.locator('#model-settings-source')).to_have_text('我的模型配置')
+    expect(page.locator('#model-settings-body')).to_contain_text('personal-browser-model')
+    expect(page.locator('#model-settings-body')).to_contain_text('different-check-model')
     page.reload()
+    page.locator('[data-model-edit="primary"]').click()
     expect(page.locator('#model-primary-model')).to_have_value('personal-browser-model')
+    expect(page.locator('#model-primary-api_key')).to_have_value('')
+    page.locator('[data-model-edit-cancel]').click()
+    page.locator('[data-model-edit="review"]').click()
     expect(page.locator('#model-review-model')).to_have_value('different-check-model')
     expect(page.locator('#model-review-provider')).to_have_value('deepseek')
-    expect(page.locator('#model-primary-api_key')).to_have_value('')
     expect(page.locator('#model-review-api_key')).to_have_value('')
+    page.locator('[data-model-edit-cancel]').click()
     page.locator('[data-action="model-copy-primary"]').click()
     expect(page.locator('#model-review-model')).to_have_value('personal-browser-model')
     expect(page.locator('#model-review-provider')).to_have_value('openai')
+    with page.expect_response(lambda r: '/api/settings/model' in r.url and r.request.method == 'PUT'):
+        page.locator('[data-action="model-settings-save"][data-model-save="review"]').click()
     page.once('dialog', lambda dialog: dialog.accept())
-    page.locator('[data-action="model-settings-reset"]').click()
+    page.locator('[data-action="model-settings-reset"][data-model-reset="primary"]').click()
+    page.once('dialog', lambda dialog: dialog.accept())
+    page.locator('[data-action="model-settings-reset"][data-model-reset="review"]').click()
     expect(page.locator('#model-settings-source')).to_have_text('系统默认')
 
 
@@ -530,11 +548,14 @@ def test_model_and_feishu_pages_are_separate(ui):
     requests = []
     page.on('request', lambda request: requests.append(request.url))
     open_page(ui, 'models')
-    expect(page.locator('#model-settings-form')).to_be_visible()
+    # 读取态为角色卡，无表单（FL-D750）；卡容器即模型页标识
+    expect(page.locator('#model-settings-card')).to_be_visible()
+    expect(page.locator('#model-settings-body')).to_contain_text('执行模型')
     expect(page.locator('#feishu-connect-card')).to_be_hidden()
     assert not any('/api/integrations/feishu/binding' in url for url in requests)
     page.reload()
-    expect(page.locator('#model-settings-form')).to_be_visible()
+    expect(page.locator('#model-settings-card')).to_be_visible()
+    expect(page.locator('#feishu-connect-card')).to_be_hidden()
     requests.clear()
     page.locator('.sidebar [data-nav="settings"]').click()
     expect(page.locator('#feishu-connect-card')).to_be_visible()
@@ -552,12 +573,15 @@ def test_model_connection_check_is_explicit_and_edit_invalidates_result(ui):
         route.fulfill(status=200, json={'ok': True, 'message': '连接正常，测试响应已收到。'})
     context.route('**/api/settings/model/test', fake_test)
     open_page(ui, 'models')
+    # 读取态默认无表单（FL-D750）：未点击「验证连接」不得发起测试请求
+    expect(page.locator('#model-settings-form')).to_have_count(0)
+    assert not calls
+    page.locator('[data-model-edit="primary"]').click()
     expect(page.locator('#model-settings-form')).to_be_visible()
     assert not calls
-    page.locator('#model-primary-source').select_option('personal')
+    page.locator('[data-model-role="primary"] [data-model-source-opt="personal"]').click()
     page.locator('#model-primary-model').fill('example-model')
     page.locator('#model-primary-api_key').fill('browser-fixture-test-key')
-    page.once('dialog', lambda dialog: dialog.accept())
     page.locator('[data-model-test="primary"]').click()
     expect(page.locator('#model-primary-status')).to_contain_text('连接正常')
     assert len(calls) == 1
@@ -676,7 +700,9 @@ def test_failed_guide_can_be_retried_from_page(ui):
         job = guide_store.claim_guide_job(app.state.store)
         guide_store.finish_guide_job(app.state.store, job["id"], job["fencing_token"], error_code="GUIDE_PARSE_FAILED")
     open_page(ui, "guide")
-    button = page.locator(f'[data-guide-parse="{version["id"]}"]')
+    # 重新解析已收敛到指引详情弹层（FL-D753 行内操作收敛），先打开详情
+    page.locator(f'[data-guide-issues="{version["id"]}"]').click()
+    button = page.locator(f'#guide-overlay-body [data-guide-parse="{version["id"]}"]')
     assert button.is_enabled()
     button.click()
     page.wait_for_function("document.querySelector('#guide-rows').textContent.includes('待解析')")

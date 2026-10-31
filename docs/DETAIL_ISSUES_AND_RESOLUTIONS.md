@@ -7622,3 +7622,64 @@ H＝E×…
 - **验证**：tsc 0 错；vitest 24 绿；build ✓；浏览器锚点用例（model_roles）与全套回归 11 绿；用户流脚本 19/19（编辑→验证（拦截)→保存→读取态徽标=自定义·已验证、模型名/密钥已保存/验证状态已验证、恢复默认确认流）；截图 `shots-v2-s2/models-{read,edit,verified}.png`、`flow-saved-read.png`。
 - **状态**：已解决（V2 侧，分支未提交待确认）。**规格偏差**：规格视图草图卡头写 `<h3>{角色名}`；站内卡片标题体系均为 h2（grep 全站核实），按一致性采用 h2，文案/锚点不变，如需改回为一行改动。
 - **证据**：`frontend/src/pages/Settings/ModelSettings.tsx`、`frontend/src/styles/app.css`（.model-role-*/.form-grid）、`tests/browser/test_frontend_v2.py`（146-190 行适配）。
+
+## FL-D750 V1 模型配置页读取态/编辑态重做（项1 实施，ivRkf1jH）
+
+- **发现日期**：2026-11-01。- **规格**：`docs/frontend/SPEC_MODEL_SETTINGS_20261101.md`（FL-D732 设计冻结）。
+- **处理方法（V1）**：`frontend/app.js` `renderModelSettings` 全量重做——默认读取态角色卡 ×2（`modelRoleCard`：h3+徽标[系统默认 b-gray / 自定义·未验证 b-amber / 自定义·已验证 b-green]+概要 dl[使用方式/供应商/模型/访问密钥/验证状态]+主操作「修改配置」primary btn-sm 靠右、自定义另有「恢复系统默认」quiet）；点修改进编辑态分段表单（使用方式 select/供应商/服务地址/密钥/模型 datalist 全部回填最近 preferences），操作排 [保存 primary|验证连接 默认|取消 quiet] + FL-D723 meta-line 费用提示；编辑态唯一表单 `#model-settings-form`。辅助卡页尾承载「将执行模型配置复制给检查模型」（点击开检查模型编辑态并回填复制值，状态行提示）。保存=按卡 PUT 双角色（编辑卡取表单、另一卡 `modelSavedPayload` 取最近快照，后端 connection_id 复用旧密钥语义不变）；恢复系统默认=按卡 PUT `{source:'system'}`（替代原整删 DELETE）；验证连接去 confirm 弹窗（meta-line 已涵盖），结果写卡内 `role="status"`（成功「连接验证通过。」、失败「连接验证未通过：{后端原文}」）。`go()` 离开 models 视图清编辑态；`resetWorkspace` 清 modelData/modelEdit/modelVerified/modelCopyFrom。
+- **锚点**：`#model-settings-card/#model-settings-body/#model-settings-source`、`data-action="model-settings-save"/"model-settings-reset"/"model-copy-primary"`、`#model-{role}-{field}` 编辑态 id 全保留（编辑态内）；读取态不出现 input/select（交互契约变化见 FL-D755）。
+- **状态**：已验证（workbench 54 passed；frontend_fixes+v1_remediation 30 passed；node --check 全过；AFTER 三态截图目检过）。
+- **变更记录（2026-11-01 规格复核修单）**：①「使用方式」由 select 改 segmented 两选控件（`role=radiogroup/radio` + `#model-{role}-source` hidden input 保锚点，`refreshModelRole` 同步 aria-checked/.is-active）；②编辑态操作排定序［验证连接 secondary｜保存 primary｜取消 quiet］；③验证连接处理 200 语义 `{ok:false,message}`（后端连接失败不抛错也落「连接验证未通过：{message}」并置未验证），HTTP 错误用 `error.raw` 中文原文，空值回落「请检查密钥与模型名后重试。」；④读取失败空态改为规格逐字「配置暂不可用，请稍后刷新重试。」；⑤AFTER 截图 `/tmp/opencode/qa/screenshots/v1-after/{models_read,models_edit}.png` 目检过。
+- **下一步**：浏览器套件绿 + 三态截图 + 前端主线验收。
+
+## FL-D751 V1 列表 token 与表格形态收敛（项4 实施，ivRkf1jH）
+
+- **发现日期**：2026-11-01。- **规格**：`docs/frontend/SPEC_LISTS_UNIFIED_20261101.md`（FL-D731）。
+- **处理方法**：`app.css :root` 增 `--border:var(--line)`、`--surface-subtle:var(--surface-soft)` 别名与 `--list-*` 八变量（值=V2 规范：header hover surface-subtle、row-border --line、cell 10/12、title 600、meta 11px）；`.table` 正文 12→13px；`th` 12px/600/`--list-header-*`/padding token；`td` padding token、边线 `--list-row-border`；hover `--list-row-hover-bg`；`.filename` 650→`--list-title-weight`；`.row-sub` 11px `--muted`；`.table-wrap` 改 border `--line`+radius `--radius`；`.badge` pill（radius 999、padding 3px 9px、11px token）。compare.css 19 处 `.btn` 覆盖里 8 处形态覆盖（font-size/padding/min-height/border-radius/box-shadow）已拆除、仅留布局变体（flex/width/white-space）与 quiet 观感；guide_generation.css `.gg-table th/td/hover` 规则删除、列表表改走 `.table`（`table gg-table`），`.gg-table-wrap` 对齐容器 token，`.gg-workspace .btn` 去 min-height 形态。分页统一文案「共 N 条 · 第 x/y 页」（gg 列表与影响分页由「筛选结果 N 条 · 第 x 页」改齐）。
+- **自查**：三 CSS `td{…padding/th{…padding` 仅剩 `.compare-table`、`.review-doc .doc-tbl` 合同内容渲染表（非列表表，未动，已在状态文件声明）；px 字号范围 11–30 内。
+- **状态**：已验证（workbench 54 passed + 30 passed；AFTER/BEFORE 对照截图目检：表头/徽标 pill/分页/行内操作形态一致）。
+
+## FL-D752 V1 规则组选择可见即所得（项3 实施，ivRkf1jH）
+
+- **发现日期**：2026-11-01。- **规格**：`docs/frontend/SPEC_RULE_GROUPS_WYSIWYG_20261101.md`（FL-D730，后端 69779d8 已供 requirement/operations）。
+- **处理方法**：`renderGuidePanel` 规则组段全量重构——头部 `<h3>规则组启停</h3>`+计数「共 N 条 · 已启用 X / N」（`[data-guide-rules-count]`）+操作排「全选/全不选/保存启停」（保存 btn-primary；勾选联动 `syncGuideRuleUI` 即时改计数/保存 disabled+title/行底色/徽标/最后一条禁用）；主体按 `section_hint` 分组、组内 rule_id 自然序；每行 = 44×44 勾选区（`aria-label="启用规则 {rule_id}"`）+「规则 G01」`.ui-tag` pill+标题+章节 tag+已启用(b-green)/已关闭(b-amber) pill；`<details>` 展开人读详情（requirement 全文 13px；无 requirement 回退 title+「详细修改见条规条款」；operations 摘要 label pill+detail，≤4 条）；已关闭行 `--amber-soft` 底+`--amber` 边+标题删除线，详情仍可展开。规则概览表数据源改 `switches.rules`（`guideRuleOpsSummary` 聚合 label），删除对 `rules_overview[].operations` 的 rules 模式依赖（issues 模式不变并保留 `guideOps` 计数渲染分支）；无规则时显式空态「指引解析完成后才能配置规则组」。新增 V1 `.ui-tag` 与 `.guide-rule-*` 样式（app.css，全走 token）。
+- **锚点**：`data-guide-rule-toggle`/`data-guide-rule-save`/`规则组启停` 文案/`至少保留一条启用规则` 全保留。
+- **状态**：已验证（workbench 54 passed 含规则组启停用例；截图含分组/计数/详情展开/关闭行视觉）。
+
+## FL-D753 指引行操作收敛与入口迁移（项4 §三/项3 入口，ivRkf1jH）
+
+- **发现日期**：2026-11-01。
+- **处理方法**：指引列表行内操作 5→2：主「规则组」`.btn btn-sm btn-primary`（进详情的查看入口）+次「查看问题」`.btn-link`；「启用/重新解析/下载原件」迁入指引详情弹层「指引信息」操作排（同 data-attr、同 disabled/title 语义；启用成功后 `closeGuidePanel()` 防陈旧态）。**决策依据**：失败指引 `规则组` 禁用，必须保留一个恒可用的开弹层入口（查看问题），否则重新解析不可达；「启用」属状态变更可入详情页。
+- **影响**：`data-guide-enable/data-guide-parse/data-guide-source` 从 `#guide-rows` 行迁移至 `#guide-overlay-body`，选择器仍唯一命中；FL-D755 记录测试适配。
+- **状态**：已验证（随 workbench 54 passed；行内两操作 AFTER 截图目检过）。
+
+## FL-D754 V1 guide_generation 列表并入统一表格体系（项4 实施，ivRkf1jH）
+
+- **发现日期**：2026-11-01。
+- **处理方法**：生成任务列表表 `<table class="table gg-table">`（原 `.gg-table` 独立 th/td/hover 规则删除）；`.gg-table-wrap` 容器对齐 border/radius token；分页文案两处统一「共 N 条 · 第 x/y 页」（列表页由 meta.total、影响页由 total/50 计总页数），冗余计数行删除。
+- **状态**：已验证（test_guide_generation.py 同批通过；test_guide_history 红单列 FL-D757 为基线 V2 dist 缺失阻塞）。
+
+## FL-D755 浏览器测试交互流适配记录（qa-v1-s2，ivRkf1jH）
+
+- **发现日期**：2026-11-01。
+- **问题**：FL-D750 读取态默认（读取态无 input/select）与 FL-D753 入口迁移改变既有交互契约，`tests/browser/test_workbench.py` 两段直接操作旧表单/行内按钮的用例必然失败。
+- **处理方法**：测试按新交互等价改写，业务断言不变——模型配置流：`#model-settings-form` 读取态断言不存在 → `[data-model-edit]` 进编辑态（表单 id 不变、字段 id 不变）→ 分卡保存（`[data-model-save]`）→ 读取态概要断言两模型名 → reload 后进编辑态回读原值/密钥不回显 → 复制（回填断言）→ 分卡恢复系统默认（双 confirm）→ 断言「系统默认」；失解析重试用例：先点行内 `data-guide-issues` 开弹层，再在弹层内点 `data-guide-parse`。断言语义（持久化、密钥回显、复制、重置、重试可达）逐条保留。
+- **状态**：改写完成；回归结果以套件为准。
+- **变更记录（2026-11-01 首轮回归后补改）**：首轮全量 3 failed——`test_model_and_feishu_pages_are_separate` 与 `test_model_connection_check_is_explicit_and_edit_invalidates_result` 同样锚旧表单常态，已按读取态/编辑态等价改写（增『未点击验证连接不得发请求』断言、编辑使旧结果失效断言保留）；第三条为基线残留锚点断裂，单列 FL-D756。第二轮规格复核：使用方式改 segmented 后，相关用例 `select_option('#model-*-source')` 改点 `[data-model-source-opt]`，provider 下拉保持原生 select 不变。
+
+## FL-D756 基线残留红测：`#task-guide-value` 锚点与 FL-D717 文案不同步（qa-v1-s2 捕获）
+
+- **发现日期**：2026-11-01（V1 s2 全量回归 `test_revision_task_columns_detail_metadata_and_responsive_layout` 红，git stash 对照基线 69779d8 复现红→确认基线自带）。
+- **问题与影响**：`bdfbda3`（发布#2四项闸门修单，FL-D717）将 `guideNameForTask` 由「文件名 · 版本 {id}」改为「文件名 · 已锁定」（与 V2 同口径，属已定稿产品文案），但只跑了 test_frontend_fixes.py+深链 16 用例，漏跑 `tests/browser/test_workbench.py`，后者断言仍锚「· 版本 builtin-v1」→ 基线套件自带一红。
+- **处理方法**：更新测试断言为「`{filename} · 已锁定`」（对齐 FL-D717 定稿文案，不回改产品代码）；该熔断先例（「已锁定」改文案被锚点打回）的根因即此提交验证范围不全。
+- **验证**：stash 基线复现 1 failed；修断言后该用例 + 相邻模型用例 3 passed。
+- **状态**：已解决（测试断言对齐定稿文案）。
+- **证据**：`git show bdfbda3`（FL-D717 一行改动）；`tests/browser/test_workbench.py::test_revision_task_columns_detail_metadata_and_responsive_layout`。
+
+## FL-D757 基线残留红测：test_guide_history（V2 页）在本 worktree 无 dist 构建而无法渲染
+
+- **发现日期**：2026-11-01（V1 s2 连带回归捕获；git stash 对照基线 69779d8 复现同红→与本次 V1 改动无关）。
+- **问题与影响**：`tests/browser/test_guide_history.py::test_upload_list_and_compare_view` 以 `FUNDLEX_FRONTEND_VERSION=v2` 访问 `/guides`，但本 worktree 无 `frontend/dist` 构建产物，V2 页不渲染，`text=我的指引` 15s 超时；在该测试可跑通的环境（有 V2 build）中不受影响。
+- **处理方法**：登记为基线/环境阻塞，不在 V1 s2 范围内修（V2 线 81FirpsQ 正在重写 Guides，构建归属前端主线环境约定）；报前端主线统一处理。
+- **状态**：外部阻塞（基线自带、非本次引入）；test_guide_generation.py 同批 1 passed、V1 两套件 30 passed、workbench 54 passed 均绿。
+- **下一步**：前端主线确认该用例的运行前置（需 dist 构建或迁出 V1 回归范围）。
