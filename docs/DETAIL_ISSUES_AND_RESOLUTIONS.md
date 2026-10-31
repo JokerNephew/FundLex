@@ -7410,5 +7410,5 @@ H＝E×…
 - **发现日期**：2026-11-01，本线全套件二跑（无 -x，/tmp/opencode/guide-parse-fullsuite2.log）。
 - **问题与影响**：`tests/test_remediation_tasks_delivery.py` 7/8 项在全量语境失败，单跑与分批组合全绿。实际异常为 `OSError: local storage below configured free-space reserve`（jobs.py `_run_once` 的 FUNDLEX_MIN_FREE_BYTES=256MB 闸）——套件跑到 96%+ 时 / 分区瞬时跌破 256MB（两轮全套件 pytest 临时店 + 基准冒烟临时店叠加，根分区 40G 89%），属测试机环境水位而非产品质量回归。
 - **处理方法**：①失败项单跑 8/8 绿、与本线新测试组合 24/24 绿 → 排除测试间污染；②清理本线自有陈旧临时件（/tmp/pytest-of-opencode/pytest-*、/tmp/guide-bench-smoke-*，释放约 0.7G，空闲 5.1G）后复跑全套件定案；③FL-D648 证据店 `/tmp/guide-channel-li88f1cq`、`/tmp/guide-v2-s_6tu6cw` 保留不删。
-- **状态**：复跑中；若再发，短期方案为套件前置清理 cron 或将 FUNDLEX_MIN_FREE_BYTES 在 CI 语境调小，需主线决定。
+- **状态**：已验证为环境面误挂——清理后全套件三跑 **2490 passed / 0 failed**（12.6 min，含此前 7 项失败测试全部转绿，/tmp/opencode/guide-parse-fullsuite3.log）。防复发建议（短期方案为套件前置清理或将 FUNDLEX_MIN_FREE_BYTES 在 CI 语境调小）提交主线决定，非本线产品改动。
 - **过程教训**：`cd X && nohup … & echo … && git log` 中 `&` 会把整条 `cd+nohup` 背景化、后续命令在原目录执行——后台启动与后续命令必须分两行写或加显式子壳（本次 git log 误读主仓库 HEAD 虚惊一场，worktree 实测无恙）。
