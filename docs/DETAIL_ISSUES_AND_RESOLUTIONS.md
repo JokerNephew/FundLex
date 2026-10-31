@@ -7340,3 +7340,21 @@ H＝E×…
 - **处理（已实施）**：候选内修改 `tools/deploy/fundlex-publish.sh` check_api 重试 24 次×5s（~120s 预算），按规程同步 root 发布器并 drift-check OK 后实发成功（4377962，engine hash e555fee8）。顺手把 cmp-D562 冒烟 renice 保持其数据无损（事后恢复）。
 - **附带观察**：诊断中发现 /var/lib/fundlex 下 auth.db（0 字节，10-31 18:59 由某 root 进程创建）、fundlex.db、runs.sqlite3 自 10-16 起为 root:root 644；由于服务实际库文件是 runs.sqlite3 且生产 API 正常，属历史权限形态，不影响本轮交付，但 root 属主库文件对 fundlex 用户不可写，巡检留意。
 - **状态**：已解决（发布闭环）。
+
+## FL-D720 导出层未知枚举兜底透传英文原值风险（2026-10-31，主线复核）
+
+- **发现**：`DELIVERY_TEXT.get(status, status)`、`OP_TEXT.get(op, op)`、`delivery_text` 三处回退原值；未来新增交付状态/操作枚举未同步映射时原始英文会漏入用户导出件。现枚举全覆盖且有负面断言，属前瞻性硬化。
+- **处理（已派 qa-export）**：未知值统一兜底人读文案（如「其他状态」并提示看修改说明）。
+- **状态**：open（低危）。
+
+## FL-D721 download-all 前端禁用条件未跟上后端 409 语义拓宽（2026-10-31，主线复核）
+
+- **发现**：后端改为「存在 document_id 即可下载解释性 ZIP（含全失败任务）」，但 compare 页 release 按钮禁用条件 `(completed||0)+(rejected||0)>0` 使全失败任务按钮仍禁用 → 新能力在 UI 不可达；compare.html:403 的提示文案仍是旧 409 语义。
+- **处理（已派 qa-frontend）**：ready 条件纳入 failed>0；提示文案随新语义。
+- **状态**：open。
+
+## FL-D722 p6_package 评测清单与工作台导出清单分化后的口径标注（2026-10-31，主线复核）
+
+- **发现**：tools/evaluation/p6_package.py 内置旧四列「结果清单.csv」构造，注释自称与工作台同格式；现两者分化为两种格式（评测包 ≠ 用户导出包）。
+- **处理**：注释/README 口径注明差异，避免后续误对齐。派 qa-export 顺带。
+- **状态**：open（文档级）。
