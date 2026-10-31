@@ -6887,6 +6887,15 @@ H＝E×…
 - 处理：引擎修复 agent 处置中。
 - 状态：修复中。
 
+## FL-D600 smoke28/29/30 均不构成当前 QA 基线的指引资格证据（2026-10-31，guide 线）
+
+- 复核日期：2026-10-31（qa-feat-guide 对话）。smoke28（run `581020e2e3584086bbf705a6aa98006a`，`/tmp/opencode/gg-real-smoke28`，EXIT=0，账本 1339 次 HTTP：1316 completed + 23 failed，记账约 $1.1847，仅观测）终态：quality_run_status=**fail**、critical_quality_findings=0、requirement_gaps=0、latest uncertain **4**、unresolved **19**（impact 7 + missing topic 12，其中 1 个 topic 为 not_covered）、independent_model_review_status=**qualified**、Residual 8 轮均 `new_uncovered`（10/6/2/1/5/6/1/1，143 次真实调用、未被 circuit 或上下文截断主导，但**未饱和**）。
+- **证据无效根因**：smoke28 运行时代码**早于快照 158475f**——其 finalize checklist 仍是旧键名（`impact_coverage_complete`/`requirement_coverage_complete`/`residual_saturated`），与当前基线 `guide-eligibility-2` 键名（`quality_gate_passed`/`coverage_gate_passed`/`no_open_critical_findings`）不同；且用当前 eligibility 口径回读 smoke28 store 可直接观察到不一致：store 现存 **17 个 open critical**（coverage_gate：12 个 missing topic + 4 个 definite impact 无候选 + 1 个 contract uncertain），而该次 finalize 的 gates 记 `open_critical_findings=0` 但 `quality_run_status=fail`——旧代码下质量摘要与资格门禁存在时点错位。快照后代码已把口径统一（`_refresh_quality_summary` 在 coverage/residual 后重算、finalize 走 `evaluate_run_eligibility`、Residual 不再进门禁、章节分批已实施，见 handoff 2026-10-30 段），因此必须用当前 QA 基线代码新跑一轮资格冒烟。
+- smoke29 于 GUIDE_QUALITY_REVIEW 阶段 `MODEL_HTTP_ERROR` 中断（EXIT=1，供应商侧错误，目录保留）；smoke30（run `b539c4b4d77549ada0f639be1e090b9d`）被操作者以 `batching_must_be_by_chapter` 中止——按章节优先分批已在快照中实施，smoke30 不代表当前基线，仅作历史记录（账本保留，不重置）。
+- **新环境事实（登记）**：worktree 的 `.venv` 致 `import fundlex` 默认解析到主工作区 `/home/opencode/fundlex`（证据：smoke29 traceback 路径）；历史 smoke 实际跑的是主工作区代码。本线（qa-feat-guide）跑自己基线必须显式 `PYTHONPATH=<worktree>`。
+- 处理：新开 **smoke31**（`/tmp/opencode/gg-real-smoke31`、全新账本、run `2aa38fd14e184c8093cdbbf36e5721e6`，PYTHONPATH 指向 qa-feat-guide worktree，HEAD `0b4e89a`），配置与 smoke28 对齐（8 轮 Residual、glm-5.3-flash 独立 reviewer、scope-aware、轮转窗口）。模型环境已按 FL-D540 切换为 hon-maas：author=`kimi-k3`、reviewer=`glm-5.3-flash`，启动前两角色最小真实调用均 200/schema 通过；kimi-k3 为推理模型，需关注单次输出 8000 token 下的截断事件。资格判定沿用 smoke25/26 六项口径；账本仅观测（FL-D445），不做停止门禁。
+- 状态：smoke31 运行中（2026-10-31 启动）。变更记录：2026-10-31 新增。
+
 ## FL 编号分配（多对话并行期协调，2026-10-31）
 
 - 避免并行会话编号冲突，段位分配：主线对话 FL-D574..579；qa-feat-recall 对话 FL-D580..589；qa-feat-compare 对话 FL-D590..599；qa-feat-guide 对话 FL-D600..609；第二波标签对话与 B13 性能对话仍按"读尾部取下一号"（若与段位冲突，以段位为准顺延）。各对话只新增条目、不改他人条目正文；状态更新可采用在自己段位新增"变更记录"行或经主线合并。

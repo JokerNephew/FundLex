@@ -1,5 +1,13 @@
 # FundLex 当前断点（ACTIVE_HANDOFF）
 
+## 2026-10-31 guide_generation 资格冒烟线（qa-feat-guide 对话）
+
+- 基线：worktree `/home/opencode/.local/share/opencode/worktree/29a9a9/qa-feat-guide`，branch `qa-feat-guide-20261031`，已合并 `qa/full-audit-20261031`，HEAD `0b4e89a`。`tests -k "guide_generation or jobs"` **63 passed / 1 skipped**；worker/queue/store（FL-D553/568 段修复、`FUNDLEX_GUIDE_JOB_MAX_ATTEMPTS`、有界退避）在该套件内全绿。
+- smoke28 复核结论（run `581020e2e3584086bbf705a6aa98006a`）：已完成但**不合格且不是当前基线有效证据**——quality fail、latest uncertain 4、unresolved 19、missing topics 12、Residual 8 轮未饱和（均有真实调用、非 circuit 主导）；且其运行代码早于快照 158475f（finalize checklist 为旧口径）。smoke29 于质量复核阶段 `MODEL_HTTP_ERROR` 中断；smoke30 被操作者中止（batching_must_be_by_chapter，该能力已在快照实施）。详情登记 FL-D600。
+- **进行中：smoke31**（`/tmp/opencode/gg-real-smoke31`、新账本、run `2aa38fd14e184c8093cdbbf36e5721e6`、启动脚本 `/tmp/opencode/run_guide_smoke31.py`、日志 `/tmp/opencode/smoke31.log`）：PYTHONPATH 显式指向本 worktree（新环境事实：不设时 `import fundlex` 会解析到主工作区，见 FL-D600）；配置对齐 smoke28（8 轮 Residual、轮转窗口、scope-aware、glm-5.3-flash 独立 reviewer）；模型环境 = hon-maas/kimi-k3（FL-D540），双角色真实探测已通过。资格判定沿用 smoke25/26 口径：quality ≥ pass_with_findings、critical 0、gaps 0、independent=qualified、latest uncertain 收敛、Residual 有真实调用且不被 circuit/截断主导。账本仅观测、不设停止门禁（FL-D445）。
+- 磁盘观察：根分区约 4.0G 可用（90%），单轮冒烟产物约 30MB，可承受，继续观察。
+- 本线 FL 编号段位 FL-D600..609（首个 FL-D600 已登记）。
+
 ## 2026-10-31 全项目质量整改（QA 总攻，主 agent 断点）
 
 ### 断点更新（fix wave 1 进行中）
