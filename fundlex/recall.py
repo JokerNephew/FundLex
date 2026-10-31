@@ -4370,16 +4370,53 @@ def _split_definition_end(anchor: Any, inspection: DocumentInspection) -> Any | 
     return None
 
 
+_CLASS_DEFINITION_LEAD = re.compile(
+    r"^[（(]?[A-ZＡ-Ｚ]类(?:基金份额|份额)[^。；;]{0,30}(?:：|:)\s*指")
+_CLASS_DEFINITION_ALIAS = re.compile(r"为[A-ZＡ-Ｚ]类基金份额[；;]?$")
+
+
+def _definition_group_follower(body: str) -> bool:
+    """Whether a paragraph continues the class-definition group (FL-D608).
+
+    Group members after a closed class-division definition:
+    - a subdivision tail ("在每一份额类别内…再分为…", FL-D573);
+    - per-class definitions in definition form ("A类基金份额或A类份额：指…",
+      "A类基金份额：投资人申购时…，为A类基金份额；");
+    - class-setup tails inside a basic-info category block ("本基金A类、C类…
+      分别设置代码…", "本基金有关份额类别的具体设置…").
+    Anything else (fee-rate sentences, new-definition topics, headings)
+    terminates the group.
+    """
+    if body.startswith("在每一份额类别内") and "再分为" in body:
+        return True
+    if _CLASS_DEFINITION_LEAD.match(body):
+        return True
+    if (re.match(r"^[（(]?[A-ZＡ-Ｚ]类(?:基金份额|份额)[：:]", body)
+            and _CLASS_DEFINITION_ALIAS.search(body)):
+        return True
+    return _definition_group_setup_tail(body)
+
+
+def _definition_group_setup_tail(body: str) -> bool:
+    """Class-setup tails of a basic-info category block (代码/净值设置、类别具体设置)."""
+    return (body.startswith("本基金") and (
+            "设置代码" in body
+            or ("份额类别" in body and "具体设置" in body)))
+
+
 def _definition_group_continuation_end(anchor: Any,
                                        inspection: DocumentInspection) -> Any | None:
-    """End of a definition group that continues in the next paragraph.
+    """End of a definition group that continues in the following paragraphs.
 
     Some contracts keep the same share-class definition going with a subdivision
-    paragraph ("在每一份额类别内…再分为…").  An append must follow the whole
-    definition group; inserting between the definition and its subdivision splits
-    the group (FL-D573 美国房地产 G03 错放 p83).  A closed anchor followed by a
-    same-group subdivision paragraph rebinds to that follower's end.  Anything
-    starting a new topic (代码/净值计算 etc.) does not continue the group.
+    paragraph ("在每一份额类别内…再分为…", FL-D573) or with per-class
+    definitions / setup tails after the class-division headline
+    ("A类基金份额或A类份额：指…", FL-D608 B05).  An append must follow the
+    whole definition group; inserting between the headline definition and its
+    class definitions splits the group and lands the policy text before the
+    label-declared site.  A closed anchor followed by same-group members
+    rebinds to the group's end.  Anything starting a new topic (其他定义条目/
+    代码/净值计算 etc.) does not continue the group.
     """
     spans = list(inspection.paragraphs)
     try:
@@ -4389,17 +4426,46 @@ def _definition_group_continuation_end(anchor: Any,
     head = _compact(display_text(anchor.text)[0])
     if not any(marker in head for marker in _APPEND_DEFINITION_MARKERS):
         return None
-    if not head or head[-1] not in "。；;！？!?":
-        return None
-    if index + 1 >= len(spans):
-        return None
-    follower = spans[index + 1]
-    body = _compact(display_text(follower.text)[0])
-    if not body or _looks_like_heading(follower.text):
-        return None
-    if not (body.startswith("在每一份额类别内") and "再分为" in body):
-        return None
-    return follower
+    closed = bool(head) and head[-1] in "。；;！？!?"
+    if not closed:
+        # Some contracts leave the class-division headline definition without
+        # terminal punctuation (B05 释义 p117).  Treat it as a group anchor only
+        # when the very next paragraph is a per-class definition; anything else
+        # stays with the split-definition mechanism or stays put.
+        if index + 1 >= len(spans):
+            return None
+        first_body = _compact(display_text(spans[index + 1].text)[0])
+        if not (_CLASS_DEFINITION_LEAD.match(first_body)
+                or (re.match(r"^[（(]?[A-ZＡ-Ｚ]类(?:基金份额|份额)[：:]", first_body)
+                    and _CLASS_DEFINITION_ALIAS.search(first_body))):
+            return None
+    end = None
+    saw_subdivision = False
+    saw_class_def = False
+    for position in range(index + 1, min(len(spans), index + 7)):
+        follower = spans[position]
+        body = _compact(display_text(follower.text)[0])
+        if not body or _looks_like_heading(follower.text):
+            break
+        if body.startswith("在每一份额类别内") and "再分为" in body:
+            saw_subdivision = True
+            end = follower
+            continue
+        if _definition_group_setup_tail(body):
+            # Setup tails only extend a 基本情况 group that already carried
+            # per-class definition paragraphs (FL-D608 B05).  After a mere
+            # subdivision tail — or with no per-class definition at all — the
+            # code/NAV boilerplate starts a new topic (FL-D573 boundary stays
+            # frozen).
+            if not saw_class_def or saw_subdivision:
+                break
+            end = follower
+            continue
+        if not _definition_group_follower(body):
+            break
+        saw_class_def = True
+        end = follower
+    return end
 
 
 def rebind_split_append_targets(targets: Sequence[Target],
