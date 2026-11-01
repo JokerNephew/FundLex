@@ -165,3 +165,50 @@ worker claim(lease+fencing) ──> GuidePipeline.run() 逐 stage(输入哈希�
 - 完成判定 fail-closed：complete 需 11 项 checks 全绿；其余 complete_with_unresolved。
 - 基础设施故障：router 阻断→阶段失败→worker retry_wait/paused，不会错误 complete。
 - 主要 fail-open 面（政策内/已登记）：reviewer 未验证 evidence 的 critical 豁免（FL-D377）、coverage applicability/审计模型失败仅 major（FL-D828）、向量静默降级（payload 留痕）、scope 默认章回退（静默）。
+
+## 补完开发后仍存缺口清单（2026-11-01 收官归总）
+
+> 本清单是「模块盘点 + 27 文件全覆盖审计（FILE_AUDIT_SIGNOFF_20261101.md，27/27 ✅）之后
+> **明确留给后续工单**的全部缺口」的单列视图。每条给出处、定级与建议去向；均已入册
+> docs/DETAIL_APPEND_GG_AUDIT.md。本线审计纪律为只读代码，修复均不在本线实施。
+
+### A. 本线新发现（FL-D906~925，按处置优先级）
+| 编号 | 定级 | 一句话 | 建议去向 |
+| --- | --- | --- | --- |
+| FL-D907 | **P1** | segmenter TOC 退出只认「第X部分/章」，正文以「第X条」起头的合同整篇正文静默漏切（FL-D900 同族未闭合变体） | 修复首刀：修正退出谓词+PARSER_VERSION 升号+语料扫描量化+受影响合同重切（同 FL-D900 守门节奏） |
+| FL-D925 | P2 | segmenter 数字起头句误判 heading 丢条文、anchor ordinal 撞号失真、title 判定优先级 | 与 FL-D907 同一 segmenter 修复窗口 |
+| FL-D920 | P2 | corpus_catalog 符号链接跟随出语料目录 + 大写 .DOCX 静默缺席 | 语料接入修复工单 |
+| FL-D913 | P2 | worker 异常原文入 error_code/engine_error 经 API 外泄（FL-D829 后端源头） | 与前端线 FL-D829 同批修复（稳定码白名单） |
+| FL-D922 | P3 | api 英文 detail/str(exc) 原文回吐/CD 无转义/rebuild 无状态门 | 同上批（错误详情族） |
+| FL-D906 | P2 | requirements disposition_reason 覆盖矛盾（理由与处置互相打脸） | 正确性修复工单+单测 |
+| FL-D908 | P2 | store fencing 长事务空窗（candidate_transaction 跳过断言） | 持久化修复工单+「租约中途失效」单测 |
+| FL-D909 | P2 | store start_step INSERT OR REPLACE 抹既有证据行 | 持久化修复工单 |
+| FL-D910 | P2 | store update_run/update_candidate payload 读-改-写 lost update | 持久化修复工单 |
+| FL-D911 | P2 | store claim 退役漏 'leased' 态→同 run 双活 epoch 残留面 | 持久化修复工单 |
+| FL-D917 | P2 | pipeline 断点续跑 stage 哈希缺 config/guide_scope（缓存静默复用） | 正确性修复工单+「改配置必失效」回归 |
+| FL-D918 | P2 | BUILD_EVIDENCE 排在 engine 前→证据包永久记 engine not_run | 正确性修复工单 |
+| FL-D916 | P2 | discovery sweep 窗口硬编码 [:8] 与可配上限越界（FL-D823 修复邻边缺口） | 正确性修复工单 |
+| FL-D914 | P2 | engine_compat 空 title 子串恒真→capability gap 假阳性 | 正确性修复工单 |
+| FL-D915 | P2 | benchmark 空分母记满分（没测=全对） | 评测口径修复（冻结标签纪律同步） |
+| FL-D921 | P3 | eligibility all_requirements_dispositioned 判据永真（死检查） | **业务语义待主线裁定**（uncertain 是否=已处置） |
+| FL-D919 | P3 | repair/supersede status 口径不一+repair target 不滤 status 白调模型 | 低危清扫工单 |
+| FL-D923 | P3 | quality 复核截断先丢合同证据、severity 归一化英文化失效、检出描述失真 | 质量门表达修复工单 |
+| FL-D912 | P3 | store 低危包（死旋钮/死表/反序列化防御不一/注解契约失真） | 低危清扫工单 |
+| FL-D924 | P3 | 全文件低危杂项全账（无重试/内存驻留/死代码增补/截断面/注释漂移等 40+ 子项） | 低危清扫工单（fail-open 子项并入 FL-D828 同窗口） |
+
+### B. 既往遗留（本线复核仍在、未闭合）
+| 编号 | 一句话 | 状态 |
+| --- | --- | --- |
+| FL-D900 残留面 | corpus_segmenter force resync（存量已切语料重切） | 待与 FL-D907/925 同窗口执行 |
+| FL-D827/828 | 低危杂项登记/fail-open 面登记（含本轮新增同类子项） | 政策内保留，低危清扫窗口消化 |
+| FL-D822 unit 沙箱对齐 | 生产 unit 内联 Environment 与环境文件一致性守门 | 未自动化——已纳入 RELEASE_GATE_PROPOSAL.md 2.1 断言层 |
+| 凭据轮换评估 | 模型/数据库凭据轮换周期评估 | 未执行 |
+| FL-D829（前端） | run a5525 失败详情前端直渲（后端源头 FL-D913 新立） | 归前端线，后端同批修复 |
+| residual 产品决定 | FL-D824 residual 默认摘除的产品级存废决定 | 待产品决定 |
+| FL-D905（前端） | 指引问题区块 findings 改 kind_zh 渲染、detail_tech 不进浏览器 | 归前端线（后端 kind_zh 已就绪） |
+| 本线未发布代码 | qa-gg-audit 树 FL-D898 质量门/解析器 guide-parse-2/guide_quality.py 等 | 并入主线 7931390 后**待随主线发布**；发布时按 RELEASE_GATE_PROPOSAL 2.1.4 列解析器版本跃迁重解析清单 |
+
+### C. 本线已交付但需主线跟进的守门资产
+- FL-D898 解析质量门体系（GUIDE_PARSE_QUALITY_GATE.md）：解析通道确定性校验+表达检查层+code_map，已并入主线 7931390。
+- RELEASE_GATE_PROPOSAL.md（PILOT run 冒烟四层守门）：提案成稿，**待主线裁定实施**（tools/deploy/release_gate.py）。
+- FILE_AUDIT_SIGNOFF_20261101.md：27 文件逐行签认底账，随本清单生效。
