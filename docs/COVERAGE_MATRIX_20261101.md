@@ -107,16 +107,16 @@
 | frontend/vite.config.ts | FE 前端主线 | ☐ |
 | frontend/vitest.config.ts | FE 前端主线 | ☐ |
 | frontend/workspace.js | FE 前端主线 | ☐ |
-| fundlex/__init__.py | EN2 引擎审计2线 | ☐ |
+| fundlex/__init__.py | EN2 引擎审计2线 | ✅ 无发现 |
 | fundlex/api.py | PL1 飞书线 | ☐ |
 | fundlex/api_content.py | PL1 飞书线 | ☐ |
 | fundlex/api_errors.py | PL1 飞书线 | ☐ |
 | fundlex/applicability.py | EN1 recall线 | ☐ |
-| fundlex/application/__init__.py | EN2 引擎审计2线 | ☐ |
-| fundlex/application/task_service.py | EN2 引擎审计2线 | ☐ |
-| fundlex/artifact_review.py | EN2 引擎审计2线 | ☐ |
+| fundlex/application/__init__.py | EN2 引擎审计2线 | ✅ 无发现 |
+| fundlex/application/task_service.py | EN2 引擎审计2线 | ✅ 无发现 |
+| fundlex/artifact_review.py | EN2 引擎审计2线 | ✅ FL-D921~937:FL-D937 |
 | fundlex/auth.py | PL1 飞书线 | ☐ |
-| fundlex/checkpoints.py | EN2 引擎审计2线 | ☐ |
+| fundlex/checkpoints.py | EN2 引擎审计2线 | ✅ 无发现 |
 | fundlex/compare/__init__.py | CX 比对线 | ☐ |
 | fundlex/compare/align.py | CX 比对线 | ☐ |
 | fundlex/compare/api.py | CX 比对线 | ☐ |
@@ -135,29 +135,29 @@
 | fundlex/compare/worker.py | CX 比对线 | ☐ |
 | fundlex/config.py | PL1 飞书线 | ☐ |
 | fundlex/db.py | PL1 飞书线 | ☐ |
-| fundlex/delivery.py | EN2 引擎审计2线 | ☐ |
-| fundlex/docx.py | EN2 引擎审计2线 | ☐ |
+| fundlex/delivery.py | EN2 引擎审计2线 | ✅ 无发现 |
+| fundlex/docx.py | EN2 引擎审计2线 | ✅ FL-D921~937:FL-D936 |
 | fundlex/edit_summary.py | EN1 recall线 | ☐ |
 | fundlex/fact_evidence.py | EN1 recall线 | ☐ |
 | fundlex/facts_recovery.py | EN1 recall线 | ☐ |
 | fundlex/fee_evidence.py | EN1 recall线 | ☐ |
-| fundlex/frozen.py | EN2 引擎审计2线 | ☐ |
-| fundlex/generation/__init__.py | EN2 引擎审计2线 | ☐ |
-| fundlex/generation/atomic.py | EN2 引擎审计2线 | ☐ |
-| fundlex/generation/claim_replay.py | EN2 引擎审计2线 | ☐ |
-| fundlex/generation/components.py | EN2 引擎审计2线 | ☐ |
-| fundlex/generation/coverage.py | EN2 引擎审计2线 | ☐ |
-| fundlex/generation/effects.py | EN2 引擎审计2线 | ☐ |
-| fundlex/generation/flags.py | EN2 引擎审计2线 | ☐ |
-| fundlex/generation/joint.py | EN2 引擎审计2线 | ☐ |
-| fundlex/generation/registry.py | EN2 引擎审计2线 | ☐ |
-| fundlex/generation/router.py | EN2 引擎审计2线 | ☐ |
-| fundlex/generation/template.py | EN2 引擎审计2线 | ☐ |
-| fundlex/generation/types.py | EN2 引擎审计2线 | ☐ |
-| fundlex/generation/validators.py | EN2 引擎审计2线 | ☐ |
-| fundlex/guide.py | EN2 引擎审计2线 | ☐ |
-| fundlex/guide_canary.py | EN2 引擎审计2线 | ☐ |
-| fundlex/guide_diff.py | EN2 引擎审计2线 | ☐ |
+| fundlex/frozen.py | EN2 引擎审计2线 | ✅ FL-D921~937:FL-D935/936 |
+| fundlex/generation/__init__.py | EN2 引擎审计2线 | ✅ 无发现 |
+| fundlex/generation/atomic.py | EN2 引擎审计2线 | ✅ 无发现 |
+| fundlex/generation/claim_replay.py | EN2 引擎审计2线 | ✅ FL-D921~937:FL-D921/925/936 |
+| fundlex/generation/components.py | EN2 引擎审计2线 | ✅ FL-D921~937:FL-D937 |
+| fundlex/generation/coverage.py | EN2 引擎审计2线 | ✅ FL-D921~937:FL-D932 |
+| fundlex/generation/effects.py | EN2 引擎审计2线 | ✅ FL-D921~937:FL-D928 |
+| fundlex/generation/flags.py | EN2 引擎审计2线 | ✅ FL-D921~937:FL-D934 |
+| fundlex/generation/joint.py | EN2 引擎审计2线 | ✅ 无发现 |
+| fundlex/generation/registry.py | EN2 引擎审计2线 | ✅ 无发现 |
+| fundlex/generation/router.py | EN2 引擎审计2线 | ✅ FL-D921~937:FL-D933 |
+| fundlex/generation/template.py | EN2 引擎审计2线 | ✅ FL-D921~937:FL-D937 |
+| fundlex/generation/types.py | EN2 引擎审计2线 | ✅ 无发现 |
+| fundlex/generation/validators.py | EN2 引擎审计2线 | ✅ FL-D921~937:FL-D935/937 |
+| fundlex/guide.py | EN2 引擎审计2线 | ✅ FL-D921~937:FL-D931/936 |
+| fundlex/guide_canary.py | EN2 引擎审计2线 | ✅ FL-D921~937:FL-D930 |
+| fundlex/guide_diff.py | EN2 引擎审计2线 | ✅ 无发现 |
 | fundlex/guide_generation/__init__.py | GG gg线 | ☐ |
 | fundlex/guide_generation/api.py | GG gg线 | ☐ |
 | fundlex/guide_generation/authoring.py | GG gg线 | ☐ |
@@ -185,11 +185,11 @@
 | fundlex/guide_generation/store.py | GG gg线 | ☐ |
 | fundlex/guide_generation/vector.py | GG gg线 | ☐ |
 | fundlex/guide_generation/worker.py | GG gg线 | ☐ |
-| fundlex/guide_report.py | EN2 引擎审计2线 | ☐ |
-| fundlex/guide_smoke.py | EN2 引擎审计2线 | ☐ |
-| fundlex/guide_store.py | EN2 引擎审计2线 | ☐ |
-| fundlex/guide_text_diff.py | EN2 引擎审计2线 | ☐ |
-| fundlex/html_view.py | EN2 引擎审计2线 | ☐ |
+| fundlex/guide_report.py | EN2 引擎审计2线 | ✅ FL-D921~937:FL-D925 |
+| fundlex/guide_smoke.py | EN2 引擎审计2线 | ✅ 无发现 |
+| fundlex/guide_store.py | EN2 引擎审计2线 | ✅ FL-D921~937:FL-D923 |
+| fundlex/guide_text_diff.py | EN2 引擎审计2线 | ✅ 无发现 |
+| fundlex/html_view.py | EN2 引擎审计2线 | ✅ FL-D921~937:FL-D924 |
 | fundlex/integrations/__init__.py | PL1 飞书线 | ☐ |
 | fundlex/integrations/feishu/__init__.py | PL1 飞书线 | ☐ |
 | fundlex/integrations/feishu/cards.py | PL1 飞书线 | ☐ |
@@ -205,48 +205,48 @@
 | fundlex/model.py | PL1 飞书线 | ☐ |
 | fundlex/model_budget.py | PL1 飞书线 | ☐ |
 | fundlex/model_settings.py | PL1 飞书线 | ☐ |
-| fundlex/models/__init__.py | EN2 引擎审计2线 | ☐ |
-| fundlex/models/config.py | EN2 引擎审计2线 | ☐ |
-| fundlex/models/roles.py | EN2 引擎审计2线 | ☐ |
-| fundlex/obligations.py | EN2 引擎审计2线 | ☐ |
-| fundlex/observability.py | EN2 引擎审计2线 | ☐ |
-| fundlex/pipeline.py | EN2 引擎审计2线 | ☐ |
-| fundlex/proxy_headers.py | EN2 引擎审计2线 | ☐ |
-| fundlex/qualification.py | EN2 引擎审计2线 | ☐ |
-| fundlex/qualification_evidence.py | EN2 引擎审计2线 | ☐ |
+| fundlex/models/__init__.py | EN2 引擎审计2线 | ✅ 无发现 |
+| fundlex/models/config.py | EN2 引擎审计2线 | ✅ FL-D921~937:FL-D922/937 |
+| fundlex/models/roles.py | EN2 引擎审计2线 | ✅ FL-D921~937:FL-D936 |
+| fundlex/obligations.py | EN2 引擎审计2线 | ✅ FL-D921~937:FL-D935/937 |
+| fundlex/observability.py | EN2 引擎审计2线 | ✅ 无发现 |
+| fundlex/pipeline.py | EN2 引擎审计2线 | ✅ FL-D921~937:FL-D925/926 |
+| fundlex/proxy_headers.py | EN2 引擎审计2线 | ✅ 无发现 |
+| fundlex/qualification.py | EN2 引擎审计2线 | ✅ FL-D921~937:FL-D937 |
+| fundlex/qualification_evidence.py | EN2 引擎审计2线 | ✅ 无发现 |
 | fundlex/recall.py | EN1 recall线 | ☐ |
 | fundlex/recall_pipeline.py | EN1 recall线 | ☐ |
-| fundlex/recall_prompts.py | EN2 引擎审计2线 | ☐ |
-| fundlex/reconciliation.py | EN2 引擎审计2线 | ☐ |
-| fundlex/recovery/__init__.py | EN2 引擎审计2线 | ☐ |
-| fundlex/recovery/history.py | EN2 引擎审计2线 | ☐ |
-| fundlex/recovery/orchestrator.py | EN2 引擎审计2线 | ☐ |
-| fundlex/recovery/policies.py | EN2 引擎审计2线 | ☐ |
-| fundlex/recovery/types.py | EN2 引擎审计2线 | ☐ |
-| fundlex/regulatory/__init__.py | EN2 引擎审计2线 | ☐ |
-| fundlex/regulatory/anchors.py | EN2 引擎审计2线 | ☐ |
-| fundlex/regulatory/docx_parser.py | EN2 引擎审计2线 | ☐ |
-| fundlex/regulatory/ingestion.py | EN2 引擎审计2线 | ☐ |
-| fundlex/regulatory/pdf_parser.py | EN2 引擎审计2线 | ☐ |
-| fundlex/retention.py | EN2 引擎审计2线 | ☐ |
+| fundlex/recall_prompts.py | EN2 引擎审计2线 | ✅ 无发现 |
+| fundlex/reconciliation.py | EN2 引擎审计2线 | ✅ FL-D921~937:FL-D925/929 |
+| fundlex/recovery/__init__.py | EN2 引擎审计2线 | ✅ 无发现 |
+| fundlex/recovery/history.py | EN2 引擎审计2线 | ✅ 无发现 |
+| fundlex/recovery/orchestrator.py | EN2 引擎审计2线 | ✅ FL-D921~937:FL-D925/935 |
+| fundlex/recovery/policies.py | EN2 引擎审计2线 | ✅ FL-D921~937:FL-D936 |
+| fundlex/recovery/types.py | EN2 引擎审计2线 | ✅ 无发现 |
+| fundlex/regulatory/__init__.py | EN2 引擎审计2线 | ✅ 无发现 |
+| fundlex/regulatory/anchors.py | EN2 引擎审计2线 | ✅ 无发现 |
+| fundlex/regulatory/docx_parser.py | EN2 引擎审计2线 | ✅ 无发现 |
+| fundlex/regulatory/ingestion.py | EN2 引擎审计2线 | ✅ FL-D921~937:FL-D935 |
+| fundlex/regulatory/pdf_parser.py | EN2 引擎审计2线 | ✅ FL-D921~937:FL-D936 |
+| fundlex/retention.py | EN2 引擎审计2线 | ✅ 无发现 |
 | fundlex/rule_scope.py | EN1 recall线 | ☐ |
-| fundlex/rules.py | EN2 引擎审计2线 | ☐ |
-| fundlex/rules_v2.py | EN2 引擎审计2线 | ☐ |
-| fundlex/selective.py | EN2 引擎审计2线 | ☐ |
-| fundlex/semantic_contract.py | EN2 引擎审计2线 | ☐ |
+| fundlex/rules.py | EN2 引擎审计2线 | ✅ FL-D921~937:FL-D937 |
+| fundlex/rules_v2.py | EN2 引擎审计2线 | ✅ FL-D921~937:FL-D937 |
+| fundlex/selective.py | EN2 引擎审计2线 | ✅ 无发现 |
+| fundlex/semantic_contract.py | EN2 引擎审计2线 | ✅ FL-D921~937:FL-D927 |
 | fundlex/semantic_evidence.py | EN1 recall线 | ☐ |
-| fundlex/stage_replay.py | EN2 引擎审计2线 | ☐ |
+| fundlex/stage_replay.py | EN2 引擎审计2线 | ✅ 无发现 |
 | fundlex/store.py | PL1 飞书线 | ☐ |
 | fundlex/targeting.py | EN1 recall线 | ☐ |
 | fundlex/tasks.py | PL1 飞书线 | ☐ |
-| fundlex/trace_sink.py | EN2 引擎审计2线 | ☐ |
-| fundlex/upload_guard.py | EN2 引擎审计2线 | ☐ |
-| fundlex/upload_validation.py | EN2 引擎审计2线 | ☐ |
-| fundlex/user_model_connections.py | EN2 引擎审计2线 | ☐ |
-| fundlex/v2.py | EN2 引擎审计2线 | ☐ |
-| fundlex/v2_pipeline.py | EN2 引擎审计2线 | ☐ |
-| fundlex/variants.py | EN2 引擎审计2线 | ☐ |
-| fundlex/workspace.py | EN2 引擎审计2线 | ☐ |
+| fundlex/trace_sink.py | EN2 引擎审计2线 | ✅ FL-D921~937:FL-D936 |
+| fundlex/upload_guard.py | EN2 引擎审计2线 | ✅ FL-D921~937:FL-D925 |
+| fundlex/upload_validation.py | EN2 引擎审计2线 | ✅ 无发现 |
+| fundlex/user_model_connections.py | EN2 引擎审计2线 | ✅ FL-D921~937:FL-D937 |
+| fundlex/v2.py | EN2 引擎审计2线 | ✅ FL-D921~937:FL-D925/937 |
+| fundlex/v2_pipeline.py | EN2 引擎审计2线 | ✅ FL-D921~937:FL-D925/936 |
+| fundlex/variants.py | EN2 引擎审计2线 | ✅ FL-D921~937:FL-D935 |
+| fundlex/workspace.py | EN2 引擎审计2线 | ✅ 无发现 |
 | tests/browser/__init__.py | PL2 平台审计线 | ☐ |
 | tests/browser/test_compare_scroll_perf.py | PL2 平台审计线 | ☐ |
 | tests/browser/test_frontend_fixes.py | PL2 平台审计线 | ☐ |
