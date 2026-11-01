@@ -722,8 +722,8 @@ def _fragmented_phrase(previous: Any, current: Any, triggers: list[str]) -> list
         for split in range(1,min(len(needle),120)):
             if left.endswith(needle[:split]) and right.startswith(needle[split:]):
                 ls,le=left_positions[len(left)-split],left_positions[-1]+1
-                rs,re=right_positions[0],right_positions[len(needle)-split-1]+1
-                matches.append({'trigger':trigger,'location':current.location,'char_start':rs,'char_end':re,
+                rstart,rend=right_positions[0],right_positions[len(needle)-split-1]+1
+                matches.append({'trigger':trigger,'location':current.location,'char_start':rstart,'char_end':rend,
                     'quote':current.text[rs:re],'evidence_spans':[
                         {'location':previous.location,'start':ls,'end':le,'quote':previous.text[ls:le]},
                         {'location':current.location,'start':rs,'end':re,'quote':current.text[rs:re]}]})
