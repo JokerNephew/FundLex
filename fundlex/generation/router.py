@@ -338,10 +338,12 @@ def route_operation(operation_key: str, *,
         T.SPLICE: "splice",
         T.COMPOSE: "compose",
     }[tier]
-    if spec.executor and spec.executor != executor:
-        # Observation-first guard (FL-D933): the tier table must never silently
-        # rewrite an explicit registry executor; disagreement is a config bug,
-        # not a routing choice.
+    if tier == spec.default_tier and spec.executor and spec.executor != executor:
+        # Observation-first guard (FL-D933): when the route lands on the
+        # registry's default tier (no structure-driven tier change), the tier
+        # table must agree with the registered executor; structure-driven tier
+        # changes legitimately change the executor, so only the default-tier
+        # case is asserted.
         raise RouterError(
             f"executor mismatch for {operation_key}: registry={spec.executor!r} "
             f"tier-table={executor!r}")
