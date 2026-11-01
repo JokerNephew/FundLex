@@ -7637,3 +7637,18 @@ H＝E×…
 - **新追加 FM**：FM-37 带宽定义（零或单类 426/425=NOT_APPLICABLE 宇宙，资格分流主战场）；FM-39 字母集合二元假设（非 A/C 47/42、≥3 字母 25/21，引擎实证=FL-D921，处置=R7）；FM-40 未见类型×结构复合资格面（股票/货币/其他 38 批内 0 + ETF 149，处置=R8 分层门槛）；FM-41 直销渠道极性链（候选观察：直销 149/141、∩零类 86，BH07 实跑 UNKNOWN 经仲裁完结未败——**不当作已证缺陷**，r2/r3 数据定死活）。
 - **结论（报主线裁决口径）**：批外 514 中 461 份（89.7%）落在批内未测形态并集——第二波必过未测区，属分母/分层设计项非恐慌项；已修四家族确定罩量 ≈79 + ETF 结构面 149 待 R4。
 - **FL 编号说明**：FM-37/40/41 现仅挂图（候选/治理项），未占 FL-D 新号段以防与他线冲突，待主线按实证转正式登记。
+
+## FL-D981 留出 r2 BH01 回摆：审计判词身份回显失真丢证连坐（2026-11-01，qa-recall-miss，第三轮修复令）
+
+- **发现（r1↔r2 对照实锤）**：BH01（001-广发ESG）r1(aa30eaf) complete，r2(05c3ef1) 掉 incomplete：G13@p242 AUDIT_VERDICT_MISSING 单义务连坐。逐层取证：plan 两轮同形态（G12+G13 合并编辑 @p242，operation_keys 仅 G12:0），claim replay 两轮同判 G13:0 ARTIFACT_VERIFIED/VERIFIED_ABSENT（sites 含 p242，applicability TRUE），obligation ledger 同。**唯一分歧在审计结果落账**：r1 模型原样回显 target_id `S04_S05_S08_S17_S18_S21#1~a:T013`→matched completed；r2 模型回显 `S04_S05_S08_S17_S18_S21_S27_S27#1~a:T013`（S27 段笔误重复一次）→ 精确串匹失败 → 判词以 AUDIT_TARGET_UNKNOWN 丢弃（两轮审计、两次同样笔误、两次丢弃）→ T013 无 result → `_audit_issues` 报 AUDIT_VERDICT_MISSING → 连坐扣全案。**主线「计划遗漏」初诊不成立**（合并编辑已覆盖 G13 物理址），真因=审计判词身份匹配对模型回显笔误零容错——机制级洞，模型语义判词本身（completed+合规证据）被纯字符串技术性问题湮灭。
+- **旁证（审查闭环为何没兜住）**：`_reconcile_candidate_targets` 对 plan status=planned 的 target 直接跳过（T013 经合并编辑 planned），replay 终局证明不抵审计缺判——该优先级本身合理（审计是独立语义闸），洞在上一轮的身份匹配。
+- **处理（本树已实施，待提交）**：`_run_audit` 结果落账前加 `_canonical_echoed_target_id` 规范化——收缩 scope 前缀**连续重复段**（合法 id 的 scope 列表从不连续重复，故对合法 id 零扰动）；规范化后唯一候选命中才采纳（歧义 fail-closed 维持丢弃）；采纳留 `identity_repaired_from` 落账痕迹。mutation 3 例：笔误回显采纳+留痕 / 外域 id 仍 AUDIT_TARGET_UNKNOWN / 合法 id 零扰动。
+- **回归**：全量 2564 passed / 0 failed / 139 skipped（基线 2561 + 新增 3）。
+- **状态**：修复已实施，BH01 真实病灶复验在途（bh01-v4）。
+
+## FL-D982 留出 r2 BH07 恢复通道复核：FL-D869 对症实证，G14 天花板交代（2026-11-01，qa-recall-miss，第三轮修复令）
+
+- **任务**：以 r2 病灶实测复核 FL-D869（BH07 二阶，ad70cd6+877383b）是否对症，对症报主线复核并入，不对症如实交代。
+- **对照矩阵（实锤）**：r2(05c3ef1) 007-FOF 七项 CLAIM_OPERATION_UNPROVEN「verified site missing」中 G02:0/G02:1/G04:0/G04:1 四项 → CLAIM_REPLAY_FAILED → 恢复通道补造 R022-R028 缺台账依据 MISS_RECOVERY_GENERATED——与本线 bh07-v2（机制在、消费端未接）**同族同码**；bh07-v3（877383b 接线后）四 op 经 VERIFIED_ABSENT 闭合 ALREADY_SATISFIED，全案 complete 0-hold。**判：对症且实证命中。**
+- **G14 天花板（如实交代）**：G14:3/4/5 = MISS_TARGET_RESOLUTION（目标解析层），**不在 FL-D869 作用域**；r2 引擎不含 FL-D869 任何成分，其 G14 失败与 v2 同因；v3 闭合走既有 SEMANTIC_VERIFIED/alternative_wording_absent 通道（非 FL-D869 新增）。该形态本线史 2/4 波动=模型面抽样。机制天花板=目标解析依赖模型措辞命中，建议列第二波观测项而非本轮强修。**FL-D869 不为 G14 背书；r3 若 G14 复发不记 FL-D869 回摆。**
+- **状态**：复核完成，并入请求已报主线（证据=/tmp/opencode/qa/status/qa-recall-miss.md §FL-D982 + /tmp/opencode/qa/holdout-fix-matrix/bh07-v3）；FL-D869 未并入 r2 冻结版之定案维持，作 r3 引擎成分候选。
