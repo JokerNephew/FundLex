@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import time
 from pathlib import Path
 from typing import Any
@@ -14,6 +15,8 @@ from .rules import RuleError, classify_document_identity, classify_fund_type, ev
 
 
 ENGINE_VERSION = "0.1.0"
+
+_LOGGER = logging.getLogger("fundlex.pipeline")
 
 
 def _sha(path: Path) -> str:
@@ -219,4 +222,10 @@ def process(input_path: Path, output_dir: Path, ruleset_version: str,
         if gateway is None and 'model' in locals() and hasattr(model, 'close'):
             model.close()
         report["duration_ms"] = round((time.monotonic() - started) * 1000)
-        _write_report_markdown(output_dir / "report.md", report)
+        try:
+            _write_report_markdown(output_dir / "report.md", report)
+        except OSError:
+            # A human-readable report rendering must never mask the run's own
+            # result (FL-D926): an exception raised in ``finally`` would
+            # otherwise replace the computed report (or the pending error).
+            _LOGGER.warning("report.md rendering failed for %s", output_dir, exc_info=True)
