@@ -288,6 +288,94 @@ def registry_coverage_gaps(guide_document: dict[str, Any]) -> list[str]:
     return sorted(gaps)
 
 
+# --- FL-D1001 注册回流：认证指引 → 引擎派生保守默认策略 → 单点注入 -----------
+#
+# 旧契约把「操作未注册」一律 fail-closed，导致用户上传新指引解析出的规则
+# 机制性零执行（O 层直接可用率=0，EVAL 黄金集实测 GUIDE_CANARY_OP_UNREGISTERED
+# 全量阻断）。回流的执行策略不来自指引文本，而由**引擎按 op 类型确定性派生**
+# 的最保守档位——指引只声明业务内容，策略仍是引擎供给，安全边界不变：
+# 派生执行全程仍受 plan/audit/replay/applicability 既有校验链约束。
+
+DEFAULT_TIER_BY_OP: dict[str, tuple[T, tuple[T, ...], str]] = {
+    # delete: 模型定位、程序删除（与内置 G06/G13 同档）
+    "delete": (T.DELETE, (T.DELETE,), "delete"),
+    # replace: 最小拼接优先、模型组句兜底（与内置 G09 同档）
+    "replace": (T.SPLICE, (T.SPLICE, T.COMPOSE), "replace"),
+    # append: 固定文本模板实例化（与内置 G01/G03 同档）
+    "append": (T.TEMPLATE, (T.TEMPLATE,), "append"),
+    # noop: 占位不动（与内置 G21 镜像）
+    "noop": (T.COMPOSE, (T.COMPOSE,), "noop"),
+}
+
+
+def derive_operation_spec(rule_id: str, index: int, operation: Mapping[str, Any]) -> OperationSpec | None:
+    """Derive the deterministic conservative spec for one certified operation.
+
+    Returns ``None`` for op kinds outside the published tier table (fail-closed;
+    the caller reports the key as a remaining gap instead of inventing a tier).
+    """
+    default, allowed, mode = DEFAULT_TIER_BY_OP.get(
+        str(operation.get("op") or "")) or (None, None, None)
+    if default is None:
+        return None
+    rule = str(rule_id).strip().upper()
+    declared = str(operation.get("operation_id") or "").strip().upper()
+    key = declared or f"{rule}:{index}"
+    # Backflow scope: only POSITIONAL keys (RULE:<int>) — the identity shape the
+    # parse pipeline itself stamps (bind_operation_identities).  A hand-authored
+    # non-positional publisher key (e.g. G99:CUSTOM) still requires an explicit
+    # controlled PublisherOperationSpec, exactly the pre-FL-D1001 gate.
+    declared_index = declared.rsplit(":", 1)[-1]
+    if not declared_index.isdigit():
+        return None
+    # operation_index must agree with the published key identity — a declared
+    # key carries its own index (parsed extensions need not sit at their list
+    # position, e.g. a re-ordered golden doc's G02:2 at list index 0).
+    operation_index = int(declared_index)
+    condition = operation.get("condition")
+    condition_kind = str(condition.get("kind") or "") if isinstance(condition, Mapping) else ""
+    condition_value = condition.get("value") if isinstance(condition, Mapping) else None
+    return OperationSpec(
+        operation_key=key, rule_id=rule,
+        default_tier=default, allowed_tiers=tuple(allowed), mode=mode,
+        operation_index=operation_index, condition_kind=condition_kind,
+        condition_value=condition_value)
+
+
+def ensure_registered_operations(guide_document: Mapping[str, Any]) -> dict[str, list[str]]:
+    """Backflow: register engine-derived specs for every certified operation.
+
+    Certified = the document already passed the runtime/certification envelope,
+    whose integrity is the authorization event for registration.  Existing registry
+    entries (built-in or publisher-supplied) are never overwritten.  Unmappable
+    op kinds stay unregistered and are returned as ``gaps`` (fail-closed).
+    """
+    registered: list[str] = []
+    adopted: list[str] = []
+    gaps: list[str] = []
+    for group in guide_document.get("groups") or ():
+        if not isinstance(group, Mapping):
+            continue
+        rule_id = str(group.get("rule_id") or "").strip().upper()
+        for index, operation in enumerate(group.get("operations") or ()):
+            if not isinstance(operation, Mapping):
+                continue
+            declared = str(operation.get("operation_id") or "").strip().upper()
+            key = declared or f"{rule_id}:{index}"
+            if key in OPERATION_REGISTRY:
+                adopted.append(key)
+                continue
+            spec = derive_operation_spec(rule_id, index, operation)
+            if spec is None:
+                gaps.append(key)
+                continue
+            register_operation(spec)
+            registered.append(key)
+    return {"registered": sorted(set(registered)),
+            "adopted": sorted(set(adopted)),
+            "gaps": sorted(set(gaps))}
+
+
 def operation_registry_coverage_gaps(guide_document: Mapping[str, Any]) -> list[str]:
     """Return explicit guide operation keys absent from the operation registry.
 
@@ -298,6 +386,15 @@ def operation_registry_coverage_gaps(guide_document: Mapping[str, Any]) -> list[
     certification compatibility without allowing an unregistered extension to
     execute.  ``register_guide_operations`` still derives positional keys when
     a controlled publisher explicitly supplies specs.
+
+    FL-D1001: a *generated* positional id is a DECLARED identity — the parse
+    pipeline stamps it onto every operation it emits, making the whole document
+    authoritative for the runtime router.  The old skip
+    (``operation_id_generated`` on a known rule) let parsed extension ops under
+    builtin rule ids (e.g. a third operation on G02) pass this gate while the
+    runtime still raised RECALL_OPERATION_REGISTRY_MISSING — the exact
+    gate-vs-runtime divergence EVAL's golden set measured.  Declared keys are
+    now checked uniformly; only truly undeclared ops stay legacy.
     """
     gaps: list[str] = []
     for group in guide_document.get("groups") or []:
@@ -310,9 +407,6 @@ def operation_registry_coverage_gaps(guide_document: Mapping[str, Any]) -> list[
                 if not str(declared or "").strip():
                     if rule_id not in STRATEGY_REGISTRY:
                         gaps.append(f"{rule_id}:{index}")
-                    continue
-                if operation.get("operation_id_generated") is True \
-                        and rule_id in STRATEGY_REGISTRY:
                     continue
                 key = str(declared).strip().upper()
                 if key not in OPERATION_REGISTRY:

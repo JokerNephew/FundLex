@@ -590,7 +590,8 @@ class Worker:
         try:
             document = guide_store.guide_document(self.store, version_id)
             from .guide import validate_runtime_guide
-            from .generation.registry import operation_registry_coverage_gaps
+            from .generation.registry import ensure_registered_operations, operation_registry_coverage_gaps
+            ensure_registered_operations(document)
             gaps = operation_registry_coverage_gaps(document)
             if gaps:
                 raise ValueError("GUIDE_OPERATION_REGISTRY_MISSING:" + ",".join(gaps))

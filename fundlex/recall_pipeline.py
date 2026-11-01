@@ -4802,6 +4802,15 @@ def process_recall_first(input_path: str | Path, output_dir: str | Path, *,
             report["guide"]["certification"] = validate_runtime_guide(guide_document)
         except GuideError as exc:
             raise RecallError(exc.code, exc.details) from exc
+        # FL-D1001 注册回流：认证通过即引擎派生保守默认策略入册（幂等，
+        # 不覆盖既有条）；不可派生的 op kind 仍 fail-closed。
+        from .generation.registry import ensure_registered_operations
+        backflow = ensure_registered_operations(guide_document)
+        if backflow["gaps"]:
+            raise RecallError("RECALL_OPERATION_REGISTRY_MISSING", {
+                "operations": backflow["gaps"],
+                "detail": "操作类型无已发布档位映射，无法派生执行契约"})
+        report["guide"]["registration_backflow"] = backflow
         active_guide, disabled_rules = _active_guide_document(guide_document, disabled_rule_ids)
         if disabled_rules:
             report["disabled_rules"] = disabled_rules

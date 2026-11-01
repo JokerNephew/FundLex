@@ -8969,3 +8969,35 @@ H＝E×…
 - holdout25=138/274(50.4%)，wrong=0，**fc=2**（reported 8/actual 6）。
 - 形态一 gate 旁路（W2H04）：unresolved 台账明列 3 条（FINAL_COVERAGE_UNRESOLVED 等）交付仍 complete；形态二 audit 盲区（W2H12）：G22 T019 旧文在场（kept），audit 零识别。
 - EVAL 处置合纪律（不隐去/不改 gold/原档全留）；根因派 EN1（两族最小复现+机制定位+mutation 反例）；第二波总判定待全量读数后主线裁定。
+
+## FL-D1001 指引解析→引擎注册回流断路（2026-11-01，qa-recall-miss；EVAL 黄金集实测 O 层直接可用率=0）
+
+- **发现（双断点，黄金集 fee-rule-v2 实证）**：
+  1. 解析产物 ops 全部落在 OPERATION_REGISTRY 之外，上传闸/运行时双闸全域
+     fail-closed → 用户上传指引解析出的规则机制性零执行（GUIDE_CANARY_OP_UNREGISTERED
+     12 ops，与 [待批 B4-1] 同源，主线赐号 FL-D1001 正式立案）。
+  2. **gate≠runtime 谓词分叉**：`operation_registry_coverage_gaps` 对
+     `operation_id_generated=True` 且规则名在 STRATEGY_REGISTRY 的 op 一律 skip——
+     解析件在内置规则名下扩展的 op（如 G02 多出第三 op）闸口放行、运行时仍崩
+     （REGISTRY_MISSING），黄金案恰好是此形态（15 组、21 键撞内置名+12 键新）。
+- **处理（已实施）**：①registry 新增 `DEFAULT_TIER_BY_OP` + `derive_operation_spec`
+  + `ensure_registered_operations`：认证产物 → 引擎按 op 类型**确定性派生最保守档**
+  （delete→程序删/replace→splice+compose 兜底/append→template/noop 镜像 G21）→
+  单点注入；既有注册条绝不覆盖；未发布 op kind 仍 fail-closed；派生范围**仅位置型
+  键 RULE:<int>**（解析流水线身份形态），非位置型发布方键保留受控 spec 闸
+  （`test_enablement_blocks_unregistered_custom_operation` 旧契约不动）。②接入三面：
+  process_recall_first 认证后（+report 留 backflow 痕）、guide_store.enable_version、
+  jobs gate。③对齐 `operation_registry_coverage_gaps` 与运行时（generated_id 特殊
+  skip 删除）。④derive 的 operation_index 依声明键自身索引（重排解析件合法）。
+- **验证**：mutation 7 例（tests/test_registration_backflow.py：派生+可路由/内置不覆盖/
+  不可派生 fail-closed/幂等/真实生成id路径/内置名下扩展闸对齐/真 legacy 不动）+
+  `test_enablement_blocks_unregistered_custom_operation` 旧闸复绿；**黄金病灶实证**：
+  fee-rule-v2 真实解析产物——修复前 runtime-exact 闸 12 gaps（=canary 复现），
+  backflow 后 12 registered/21 adopted/0 gaps，canary 镜像全事实判据 **33/33 可路由
+  0 blocked**；关联套件 guide_store/registry/append 全绿。
+- **测试基线纪律追加（488c660）**：回流=进程级幂等注册（设计行为），pipeline 类
+  测试的临时指引也会注册；本 mutation 文件 autouse 还原出厂注册表，人为污染复验免疫。
+- **全量回归封板**：**2584 passed / 0 failed / 139 skipped**（含修复+测试基线处置）。
+- **状态**：已解决并验证（适用 0315c38+488c660；mutation/旧闸 pin/黄金病灶实证/全量
+  回归四路闭环）；17 对预留回归属 EVAL（接口对齐=公开入口 `ensure_registered_operations`，
+  主线并入后由 EVAL 复跑 score-o）。
