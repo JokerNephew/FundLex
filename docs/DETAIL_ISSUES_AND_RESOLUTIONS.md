@@ -8576,18 +8576,23 @@ H＝E×…
 - **状态**：open，报主线（统计口径与冻结校验强度属评测可信度面）。
 - **变更记录**：2026-11-01 新增。
 
-## 【报主线立号】EVAL 审计组D：死运行器族 3 高危 + 环境绑定/校验弱化族（2026-11-01，qa-feat-recall 复验确认，本线号池已尽）
+## FL-D983 死运行器族三高危：发布守门工具本身不可用（EVAL 组D，主审计复验确认）（2026-11-01，qa-feat-recall 登记，主线赐号 FL-D983）
 
-> 主审计复验确认（签名/端点逐一核对）；本线仅登记不修复（评测线工具归属主线）。建议主线立两号：**死运行器族**、**环境绑定/校验弱化族**。
+- **发现日期**：2026-11-01（EVAL 全覆盖审计组D；主线赐号 2026-11-01）。
+- **问题与影响**：三个评测/守门 runner 对现行代码与 API **确定必崩/必拒**——strictness_audit 是严格性守门工具，其崩溃意味着守门证据链本身缺一环。
+- **证据附录（逐项：文件:行号 | 证据 | 复验方式 | 后果）**：
+  1. `tools/evaluation/strictness_audit_20261028.py:121` | `_, allowed = _candidate_context(...)` 二元解包，而被调 `fundlex/targeting.py:112` 签名为 `-> tuple[str, set[str], dict[str, Any]]` 三元组 | **复验**：grep 签名 + 逐行比对 | `capacity_probes()` 调用即 `ValueError: too many values to unpack`，守门工具该探针全废。
+  2. `tools/evaluation/task_revision_run.py:66-69` | `POST /api/tasks` 携带 `ruleset_version:"v2"` 且无 `engine_id` | **复验**：`fundlex/api.py:1296` `raise HTTPException(422, "RULESET_RETIRED")` / `L1298` `422 "ENGINE_REQUIRED"` 命中分支逐条件核对 | 第一步即 422，整条 runner 死。
+  3. `tools/evaluation/v2_pilot.py:180-184` | `POST /api/batches` 带 `ruleset_version:"v2"` | **复验**：`fundlex/api.py:1566` `raise HTTPException(410, "RULESET_RETIRED")` 无条件分支 | 批量协议 runner 全死。
+- **处理方法（建议，归主线）**：①strictness 解包改三元（一行修复+补锁测试）；②两 runner 或退役删除（防守门引用假证据），或改造到现行 engine_id 调用面；③守门链健康自检纳入发布前检（runner 冒烟）。
+- **当前状态**：open，高危，归主线处置（本线仅审计登记，不改跨线工具）。
+- **验证结果**：候选项 3/3 经主审计逐行复验确认（签名表与 API 拒绝分支均现行实证）。
+- **变更记录**：2026-11-01 审计登记 → 2026-11-01 主线赐号 FL-D983、附录化。
+## FL-D984 评测证据致谎/统计口径族：审计度量自身可虚报（EVAL 组A+B，主审计复验确认）（2026-11-01，qa-feat-recall 登记，主线赐号 FL-D984）
 
-- **死运行器族（3 高危，均实证必崩/必拒）**：①`strictness_audit_20261028.py` L121 `_candidate_context` 返回三元组（fundlex/targeting.py L112 签名 `-> tuple[str, set[str], dict]`）此处二元解包 → `capacity_probes()` 必 `ValueError: too many values to unpack`；②`task_revision_run.py` L68 提交 `ruleset_version:"v2"` 且无 `engine_id` → 现行 API 必 422（fundlex/api.py L1296 RULESET_RETIRED/L1298 ENGINE_REQUIRED），整条 runner 对当前 API 已死；③`v2_pilot.py` L180 `POST /api/batches` → api.py L1566 无条件 410 RULESET_RETIRED，死引用。
-- **环境绑定族（低危 4）**：`strictness_audit` L57 硬编码 `/tmp/opencode`（缺则 FileNotFoundError）；L318 钉死历史产物绝对路径缺失静默减证；L243/L299 钉死语料文件名；`validator_shadow.py` L205 + `verify_downloaded_artifacts.py` L99 默认 `/home/opencode/data/funds_word`（机器绑定，`validator_shadow` 会静默全跳 source_missing 偷 FAIL 分母）。
-- **校验弱化族（低危 3）**：`verify_labels_v2_20261028.py` L105 `protected` 仅与同 labels 文件内自封字段互核（未对 DOCX settings.xml 复核，双字段同假即永真通过）+ L50 `case["relative"]` 缺键 KeyError 中止全体；`verify_downloaded_artifacts.py` L110 `cases[case_id]["file"]` schema 不符 KeyError 非记 problem。
-- **其他**：`v2_fixtures.py` L39 docx zip 时间戳随机构建 → fixture sha256 漂移，"冻结"期望不可跨机复验；`word_fixture.py` L13 相对 CWD 产出与消费方固定相对路径不一致；`v2_pilot.py` L194+ `ModelGateway.from_env()` 未 close 泄漏（×3/批）。
-- **状态**：open，待主线立号与处置。
-- **变更记录**：2026-11-01 新增。
-
-## 【报主线立号】EVAL 审计组A+B：评测证据致谎/统计口径族（2026-11-01，qa-feat-recall 复验确认，号尽）
+- **发现日期**：2026-11-01（EVAL 全覆盖审计）。
+- **问题与影响**：以下度量/审计脚本会把「无法验证」写成「确证错误」、把域代码计成修订、把空跑冒称完成、让标签分母可被静默缩小——**评测可信度面级问题**，其中 first_batch_label 三处直接波及在制的第二波标签线。
+- **证据附录（逐项 文件:行号 | 缺陷 | 复验状态）**：
 
 > 候选项逐一主审计复验；本线仅登记不修复。建议主线立号两族：本块「证据致谎/统计口径族」+ 下块「资源环境脆性族」。
 
@@ -8607,7 +8612,16 @@ H＝E×…
 - **controlled/其他低危**：v2_compare L85 段级 delta 错位 + L253 死计算；p6_package 死函数（规约不计）。
 - **并入低危（组A/B/C 余项）**：`production_v1_e2e_20261026.py` L148/155 无 `wait_for` 即断言（SPA 渲染竞态假失败）+ 固定任务名无随机后缀可能挂陈旧任务取错证据；`p6_select.py` L74 manifest 三字段 split 对含空格文件名脆性；`p6_trace_report.py` L37 死常量 + L168 注释引用不存在逻辑；`p6_package.py` L?? `cli as _clip` 遮蔽（签名一致，行为等价，规约记录）。
 
-## 【报主线立号】EVAL 审计组A+B：资源/环境脆性族（2026-11-01，qa-feat-recall 复验确认，号尽）
+- **处理方法（建议，归主线）**：逐项按附录修复并对 matching/delivery/controlled 三件补锁测试；first_batch_label 三件在第二波标签 finalize 前处理。
+- **校验弱化并入项（组D，复验确认）**：`verify_labels_v2_20261028.py:105-108` `protected` 仅与 labels 文件内自封字段互核、未对 DOCX settings.xml 复核（双字段同假即永真通过）；`L50` `case["relative"]` 缺键 KeyError 中止全体验证；`verify_downloaded_artifacts.py:110` `cases[case_id]["file"]` schema 不符 KeyError 而非记 problem；`production_v1_e2e_20261026.py:148/155` 无 wait_for 断言 SPA 竞态假失败 + 固定任务名挂陈旧取错证据。
+- **当前状态**：open，归主线处置。
+- **验证结果**：全部候选项经主审计复验；含一处审计员过度表述已修正（matching_audit 为模板缺失路径恒 False，非无条件恒 False）。
+- **变更记录**：2026-11-01 审计登记 → 2026-11-01 主线赐号 FL-D984、附录化。
+## FL-D985 评测资源/环境脆性族：扩波长跑与环境漂移风险（EVAL 组A+B+D，主审计复验确认）（2026-11-01，qa-feat-recall 登记，主线赐号 FL-D985）
+
+- **发现日期**：2026-11-01（EVAL 全覆盖审计）。
+- **问题与影响**：资源泄漏在 500+ 扩波长跑可累积致 fd/连接耗尽；机器绑定绝对路径使跨机/重启后静默回退或偷工分母。
+- **证据附录（逐项 文件:行号 | 缺陷 | 复验状态）**：
 
 - **资源泄漏（中 ×2，扩波长跑风险）**：`recall_run.py` L115 循环内 `ModelGateway.from_env()` 且全文件无 `close()`（复验确认）——**500+ 扩波长跑时连接/fd 逐份累积**，第二波 100 起跑前建议必须修；`v2_pilot.py` L194/236/245 同型 ×3/批。
 - **环境绑定（低）**：`compare_e2e.py` L109 硬编码 `/tmp/fundlex-compare-corpus-v4`（已陈至 v5+、易失静默回退）；`build_revision_review_packet.py` L100 / `validator_shadow.py` L205 / `p6_label.py` L378 / `verify_downloaded_artifacts.py` L99 默认指向已退役 `/home/opencode/data*`；`development_gate_reconciliation.py` L241 sqlite 读写打开自称只读（对 budget_preflight `mode=ro`）；`strictness_audit/delivery_e2e` 硬编码 `/tmp/opencode`；`corpus_audit.py` L20 runtime fixture 缺失即崩；`word_fixture.py` L13 CWD 漂移；`v2_fixtures.py` L39 docx zip 时间戳致 fixture sha 漂移不可跨机复验；`prepare_second_batch` L97-147 CWD/ROOT 双口径 + L129 KeyError + select_second_batch L284 死 setdefault。
@@ -8616,10 +8630,17 @@ H＝E×…
 - **状态**：open，待主线立号处置；**recall_run 泄漏建议列为第二波起跑前必办**。
 - **变更记录**：2026-11-01 新增。
 
-## 【报主线立号】留出 r2：FL-D864/863 双命中、FL-D862 半命中落新形态、BH01 G13 计划遗漏回摆（2026-11-01，qa-feat-recall）
+- **组D 环境并入项（复验确认）**：`strictness_audit_20261028.py:57` mkdtemp 硬编码 `/tmp/opencode`、`L318` 钉死历史产物绝对路径缺失静默减证、`L243/299` 钉死语料文件名；`v2_fixtures.py:39-40/155-158` docx zip 时间戳随构建漂移 → fixture sha256 不可跨机复验；`word_fixture.py:13` 相对 CWD 产出与消费方固定相对路径错位；`v2_pilot.py:194/236/245` `ModelGateway.from_env()` 未 close ×3/批（同 recall_run 泄漏族）。
+- **处理方法（建议，归主线）**：**recall_run gateway close() 列为第二波起跑前必办**；硬编码路径统一 repo-relative/tmp 规范；sqlite 只读改 `mode=ro`。
+- **当前状态**：open，归主线处置。
+- **验证结果**：recall_run 泄漏点复验确认（全文件无 close）；路径类逐项实测存在性。
+- **变更记录**：2026-11-01 审计登记 → 2026-11-01 主线赐号 FL-D985、附录化。
+## 留出 r2 病灶家族（FL-D864/863 命中实证、FL-D862 半命中、BH01 计划遗漏回摆）——主线已立 FL-D981/982 接修（2026-11-01，qa-feat-recall 登记）
+
+> **主线裁决（2026-11-01）**：第二波**不放行**（BH01 回摆 + BH07 新形态未决，门槛不满足）；EN1 已接第三轮修复令 **FL-D981/982**（与下两项一一对应，映射以主线登记为准）；r3 由本线在 EN1 修复并入后执行（冻结版另定）。
 
 - **命中实证**：BH02（unresolved 0，FL-D864 QDII 连坐消退）、BH04（8 规 site recovery 全愈，FL-D863a）、BH05（G06 子节愈，FL-D863b）；r2 83/111=74.8%（+23.4pp），fc=0/wrong=0。FL-D866 披露：r2 guide 条件化（12 ops），两轮非严格同 guide 已标注。
 - **FL-D862 半命中**：BH07 的 22 连发 FACT_PREREQUISITE_UNVERIFIED(service_fee) **全消退**（适用性词表实证生效）；残余新形态 G02/G04/G14 CLAIM_REPLAY_FAILED + `MISS_RECOVERY_GENERATED`（恢复通道补造 R022-R028 缺台账依据）→ 诚实扣件。建议主线立号（恢复通道生成剂量的台账锚定机制）。
 - **BH01 新回摆**：r1 complete/r2 incomplete——G13@p242 `AUDIT_VERDICT_MISSING`：audit 正确识 needs_edit（「应对短持有期赎回费表述删除」）但 **plan 台无 G13 项**（计划遗漏族形态，与 dev 线 FL-D693/791 家族同形）→ 单义务连坐扣全案 -20。是否修复副作用未确证（applicability 变更不影响 G13 TRUE）；建议主线立号并与计划守护机制族对照。
-- **状态**：open ×2（BH07 恢复通道形态、BH01 计划遗漏）；FL-D862/863/864 视主线口径可标「机制生效、残余另册」。
+- **状态**：BH07 恢复通道形态 + BH01 计划遗漏 → **主线 FL-D981/982 接修中**；FL-D862/863/864 机制生效已实证（残余另册）；第二波维持冻结。
 - **变更记录**：2026-11-01 新增。
