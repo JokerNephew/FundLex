@@ -1660,3 +1660,24 @@ dev20 v2 闭环：修复循环直到 §7 门槛（无已确证严重错误、无
 - 完成：FL-D695/696 修复+10 测、全量回归 2532/0/139（662s 前台）、真实复验 B12 complete+B15 二跑 complete（反证闸实发）；FL-D792 归属改判、FL-D793 观察项；全部登记。
 - 已提交 `68a0025`；qa-recall-miss.md 已报主线，待复核合并→ feat-recall loop-6 冻结令。无外部阻塞、无在跑进程。
 - 账本（仅观测）：B12 $0.0234/23c；B15 两轮 $0.0377/34c + $0.0268/23c。
+
+---
+## 2026-11-01 breakpoint-2（loop-6 三案解剖中，qa-recall-miss 树，HEAD 152d9dc）
+
+- 令：FL-D697(B05 -13)/FL-D698(B12 G05:2@p162)/FL-D695-残余(B15 G05+G09)。证据根 qa-wave1-dev-v2-20261101-loop6/full-dev。
+- **FL-D697 解剖**：B05 破坏性编辑=**复合/原子拼接确定性数学缺陷**（非模型 compose）：
+  - G15+G16@p788/p1237(0..133 parent)：组件 G15 删 0..132、G16 插 133..133，parent replacement=拼接组件文本，**组件边界之后的源文尾段（before[133:]="若遇法定节假日…顺延"）被丢弃** → audit AFTER 仅含新增文本，LOST_PROTECTED_LITERAL 正确拦截。
+  - G02@p118 composite_replace 0..49 把整句定义替换为裸 token「A类基金份额」；p119 G02+G01 同构尾丢。
+  - 恢复放大：RETRY_DETERMINISTIC 重放同一确定性 builder→同错；audit 3 轮无进展熔断→诚实扣件；相邻义务同窗口重盘回摆→-13。机制修复候选：合成 splice 保尾（组件间/末组件后源文逐字回填）+ 破坏性发现后禁重放相同 builder（降级到组件级校验再生）。
+- **FL-D695-残余 解剖**：loop-6 B15 反证闸第一轮生效（~b:T002 G09/~b:T003 G11 均 flip 且 G09 已执行+audit R0 completed+evidence_verified）——但**业务轮重盘 `_inventory` 用 entry.targets 整体替换**（recall_pipeline:5447-5458），第二轮模型又判 G09 absent→#1:T011，被反证翻转+已审计的执行目标被冲掉→G09 OPEN verified site missing。修复：反证闸在第 5458 行 `_collect_targets` 重建后、`locate_unresolved_targets`/`_plan_and_generate` 之前再次应用（round_number>0 同样路径）。G05@p87 absent 未 flip=正确 fail-closed（无变体证据）；G05:B1:O1/B3:O1 MISS_REPLAY_GATE replay PASS 残留=FL-D651 seam。
+- **FL-D698**：B12 loop-6 G05:B3:O1 MISS_PLAN_GAP sites p162×2，replay FAIL，待解剖（同段重复站点）。
+- LOOP-6 里程碑：87.9%/343、fc=0、wrong=0；B19 首 complete、FL-D793 销案、T014 零出现。账本第8段主线记录。
+- 下一步：FL-D697 splice 保尾修复+mutation；B15 反证第三轮应用+mutation；FL-D698 解剖后修；全量回归+三案真实复验矩阵；登记入 DETAIL（号段 794-799）。
+
+---
+## 2026-11-01 breakpoint-3（loop-6 三案修复完成，qa-recall-miss 树，HEAD c977573+文档待提交）
+
+- loop-6 三修全落+验证：FL-D697a composite 守卫、FL-D697b audit 兄弟授权覆写、FL-D698 satisfied 不计同址歧义、FL-D695 残余重盘后反证闸二挂。mutation 8 例绿；全量回归 2540/0/139（668s 前台）。
+- 真实复验矩阵（/tmp/opencode/qa/loop6-fix-matrix/，账本仅观测）：B05 complete 0-hold（-13 形态消除）、B12 complete 0-hold、B15 两轮波动残（run1 inventory 静默 18t、run2 G11 schema 双连→FL-D794 观察项登记）；冻结树同日 B15 complete 对照。
+- 登记：DETAIL 追加 FL-D697/698/695更新/794；commit c977573（码+测试）；docs 待提交。
+- 下一步：提交 docs；报 /tmp/opencode/qa/status/qa-recall-miss.md 主线，等 loop-7 冻结令。
