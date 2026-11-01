@@ -14,6 +14,7 @@ import httpx
 from cryptography.fernet import Fernet, InvalidToken
 from pydantic import BaseModel, ConfigDict, Field, SecretStr, ValidationError
 
+from .user_agent import USER_AGENT
 from .models.config import ModelRoleConfig
 
 
@@ -301,7 +302,7 @@ def resolve(store, owner, snapshot, configs):
             # These transport defaults are system-owned, not user form fields.
             configs[role] = replace(configs[role], role=role, provider=choice["provider"],
                 model=choice["model"], base_url=choice["base_url"], api_key=_decrypt(row),
-                request_options={}, extra_headers={}, user_agent="fundlex/0.3.0")
+                request_options={}, extra_headers={}, user_agent=USER_AGENT)
     return configs
 
 

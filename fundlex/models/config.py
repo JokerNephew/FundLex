@@ -28,6 +28,8 @@ import json
 import os
 from dataclasses import asdict, dataclass, field, replace
 from pathlib import Path
+
+from ..user_agent import USER_AGENT
 from typing import Any, Mapping
 
 
@@ -51,7 +53,7 @@ class ModelRoleConfig:
     max_calls: int = 16
     request_options: Mapping[str, Any] = field(default_factory=dict)
     extra_headers: Mapping[str, str] = field(default_factory=dict, repr=False)
-    user_agent: str = "fundlex/0.3.0"
+    user_agent: str = USER_AGENT
 
     @property
     def configured(self) -> bool:
@@ -169,7 +171,7 @@ def _merge_endpoint(entry: Mapping[str, Any], *, role: str,
                        (entry.get("extra_headers") or
                         (base.extra_headers if base else {})).items()},
         user_agent=str(entry.get("user_agent") or
-                       (base.user_agent if base else "fundlex/0.3.0")),
+                       (base.user_agent if base else USER_AGENT)),
     )
 
 
