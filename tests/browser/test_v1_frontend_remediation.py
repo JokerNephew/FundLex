@@ -887,7 +887,7 @@ def test_guide_badges_use_warning_not_green_pass_and_download_names(browser, liv
     try:
         open_dev(page, base, "#generation?mode=detail&id=A")
         page.locator("#gg-detail-head").filter(has_text="Regulation A").wait_for()
-        badge = page.locator(".gg-badge").filter(has_text="生成结束 · 仍有问题").first
+        badge = page.locator(".gg-badge").filter(has_text="已完成 · 仍有问题").first
         badge.wait_for()
         assert "gg-warning" in (badge.get_attribute("class") or "")
         colour = badge.evaluate("node => getComputedStyle(node).color")
@@ -1035,7 +1035,7 @@ def test_compare_failed_pair_shows_structured_failure_diagnostics(browser, live_
         open_dev(page, base, "#compare?mode=detail&id=T")
         error = page.locator(".compare-pair-status.is-failed .compare-pair-error")
         error.wait_for()
-        assert error.inner_text() == "处理失败：COMPARE_PROCESSING_FAILED（阶段：文本比对 · 类型：RuntimeError · 可重试：否）"
+        assert error.inner_text() == "处理失败：文本比对环节出错，请重新创建合同组"
         paused = page.locator(".compare-pair-status", has_text="暂停组")
         assert paused.locator(".compare-pair-state").inner_text().startswith("已暂停")
         assert page.locator(".compare-pair-status.is-failed .compare-pair-state").inner_text() == "失败"

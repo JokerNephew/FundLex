@@ -129,7 +129,6 @@
 </svg>
 <span>用户管理</span>
 </button>
-<div class="sidebar-note">FundLex 合同修订工作台</div>
 </nav>
   <main class="main">
 <div class="frame">
@@ -151,53 +150,6 @@
   </div>
 </section>
     <section class="section" id="view-overview" aria-label="合同修改">
-<div hidden aria-hidden="true">
-      <div class="card hero batch-overview-hero">
-<div class="hero-copy">
-<div class="eyebrow-row">
-<span class="eyebrow">BATCH OVERVIEW</span>
-</div>
-<h2>批量合同修订任务总览</h2>
-<p id="overview-description">本月累计处理 <strong id="overview-processed">—</strong> 份合同，平均每份 <strong id="overview-average">—</strong> 秒。异常合同会自动保留待人工处理，支持批量导出结果。</p>
-</div>
-<div class="hero-side">
-<strong id="overview-completion-rate">—</strong>
-<span>本月处理完成率</span>
-<div class="progress-line" id="overview-progress" role="progressbar" aria-label="本月处理完成率" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
-<span class="p-done" id="overview-progress-fill" style="width:0%">
-</span>
-</div>
-<small id="overview-progress-label">— / — 份已完成 · 待处理 — 份</small>
-</div>
-</div>
-      <div class="stats" id="overview-stats">
-<div class="card stat">
-<label>本月处理合同</label>
-<b id="stat-month-contracts">—</b>
-<small id="stat-month-contracts-note">环比 —</small>
-</div>
-<div class="card stat">
-<label>处理完成率</label>
-<b id="stat-completion-rate">—</b>
-<small id="stat-completion-note">— / — 份</small>
-</div>
-<div class="card stat">
-<label>待处理合同</label>
-<b id="stat-pending">—</b>
-<small id="stat-pending-note">— 个任务进行中</small>
-</div>
-<div class="card stat">
-<label>平均处理时长</label>
-<b id="stat-average">—</b>
-<small>每份合同</small>
-</div>
-<div class="card stat">
-<label>异常合同</label>
-<b id="stat-exceptions">—</b>
-<small>需人工处理</small>
-</div>
-</div>
-</div>
 <div class="split task-overview">
 <div class="card card-pad">
 <div class="section-title"><div><h2>修改任务</h2><small>仅合同修改任务；全部三类业务任务见 <a href="#workspace" data-nav="workspace">工作台 · 全部任务</a></small></div></div>
@@ -264,10 +216,9 @@
 </li>
 <li>
 <strong>查看结果与报告</strong>
-<span>按资格与交付状态筛选，打开证据详情并下载逐合同报告。</span>
+<span>按处理与交付状态筛选，打开结果详情并下载合同文件。</span>
 </li>
 </ol>
-<div class="guide-note">处理结束后，在「任务详情」查看资格、交付与失败原因，并打开每份合同的证据与报告。</div>
 </div>
 </div>
 </section>
@@ -350,7 +301,6 @@
 <h2>任务提交前检查</h2>
 <small>格式 / 大小 / 重复的本地初检</small>
 </div>
-<p class="subnote">仅接收 DOCX。检查通过的文件一起进入任务；异常文件暂不提交，可移除或替换。</p>
 <div class="guide-binding" id="guide-binding">正在读取当前指引…</div>
 <div class="mode-picker">
 <label for="import-mode">处理模式</label>
@@ -470,15 +420,15 @@
 </select>
 <select id="doc-qualification-filter" class="control-select" aria-label="资格筛选">
 <option value="">全部资格</option>
-<option value="eligible">资格符合</option>
-<option value="excluded_by_fund_type">已排除</option>
+<option value="eligible">可以处理</option>
+<option value="excluded_by_fund_type">不适用（特殊基金类型）</option>
 <option value="pending">未判定</option>
-<option value="failed">资格失败关闭</option>
+<option value="failed">资格不符</option>
 </select>
 <select id="doc-completeness-filter" class="control-select" aria-label="交付状态筛选">
 <option value="">全部交付</option>
-<option value="complete">产物完整</option>
-<option value="complete_with_exceptions">已交付（含例外条款）</option>
+<option value="complete">文件已完整交付</option>
+<option value="complete_with_exceptions">已交付（部分需人工核对）</option>
 <option value="evaluation_modified">已修改（评测）</option>
 <option value="incomplete">结果不完整</option>
 <option value="not_generated">未生成</option>
@@ -488,7 +438,7 @@
 <option value="queued">排队中</option>
 <option value="running">处理中</option>
 <option value="succeeded">已处理</option>
-<option value="failed">失败关闭</option>
+<option value="failed">处理失败</option>
 <option value="retry_wait">等待重试</option>
 <option value="not_started">尚未接收</option>
 </select>
@@ -538,7 +488,6 @@
       <div class="card card-pad compare-create" id="compare-create" hidden>
 <div class="compare-create-intro">
 <div>
-<p class="subnote">“新增 / 删除”按合同A → 合同B的方向统计。</p>
 </div>
 </div>
 <div class="compare-name-field">
@@ -704,7 +653,7 @@
 <div class="compare-document-area">
 <div class="compare-reader-label">
 <span>合同正文</span>
-<small class="compare-lines-note">连线仅展示当前可见区域</small>
+
 </div>
 <div class="compare-columns-head" id="compare-columns-head">
 <span>
@@ -1052,10 +1001,6 @@
 </span>
 <span class="footer-sep" aria-hidden="true">·</span>
       <button type="button" class="footer-link" data-action="help-open">帮助中心</button>
-<span class="footer-sep" aria-hidden="true">·</span>
-      <span class="footer-link is-disabled" title="正式文本待发布，暂不提供">隐私政策</span>
-<span class="footer-sep" aria-hidden="true">·</span>
-      <span class="footer-link is-disabled" title="正式文本待发布，暂不提供">服务条款</span>
     </footer>
   </div>
 </main>
@@ -1162,24 +1107,13 @@
 </li>
 <li>
 <strong>查看结果</strong>
-<span>在任务详情按资格、交付完整性、处理状态筛选；点“查看证据”核对条款和报告，下载最终版、修订版和报告。</span>
+<span>在任务详情按处理、交付、状态筛选；点“查看结果”核对条款和报告，下载最终版、修订版和报告。</span>
 </li>
 </ol>
 </div>
 <div class="detail-section">
-<h3>状态说明</h3>
-<dl class="detail-grid">
-<dt>资格</dt>
-<dd>符合、已排除（特殊基金类型）、未判定、资格失败关闭。</dd>
-<dt>交付完整性</dt>
-<dd>产物完整、含例外条款、结果不完整、未生成。</dd>
-<dt>处理状态</dt>
-<dd>排队、处理中、已处理、失败关闭、等待重试。</dd>
-</dl>
-</div>
-<div class="detail-section">
 <h3>数据与安全</h3>
-<p class="subnote">合同文件仅在自己的账号范围内可见；下载和报告接口需要登录授权。请勿在浏览器中保存他人账号密码。隐私政策和服务条款的正式文本尚未发布，页脚暂不提供可点击链接。</p>
+<p class="subnote">合同文件仅在自己的账号范围内可见；下载和报告接口需要登录授权。请勿在浏览器中保存他人账号密码。</p>
 </div>
 <div class="detail-actions">
 <button class="btn btn-primary" type="button" data-action="help-close">知道了</button>

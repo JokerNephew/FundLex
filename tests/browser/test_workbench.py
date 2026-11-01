@@ -204,8 +204,6 @@ def test_object_heading_long_parent_and_deep_link_return(ui, width):
 def test_overview_units_filters_and_single_supported_mode(ui):
     task, _ = seed(ui, states=[("succeeded", "eligible", "complete")])
     page = open_page(ui)
-    page.wait_for_function("document.querySelector('#overview-average').textContent==='90'")
-    assert "90 秒 秒" not in page.inner_text("#overview-description")
     page.fill("#task-search", "不存在的筛选")
     page.wait_for_function("document.querySelector('#task-rows').textContent.includes('没有任务')")
     assert page.locator("#first-run-guide").is_hidden()
@@ -480,7 +478,7 @@ def test_guide_rule_switches_and_model_settings_are_editable(ui, monkeypatch):
     rules_button = page.locator('#guide-rows [data-guide-rules]').first
     guide_id = rules_button.get_attribute('data-guide-rules')
     rules_button.click()
-    expect(page.locator('#guide-overlay-body')).to_contain_text('规则组启停')
+    expect(page.locator('#guide-overlay-body')).to_contain_text('规则开关')
     toggle = page.locator('[data-guide-rule-toggle]').first
     toggle.uncheck()
     page.locator('[data-guide-rule-save]').click()
@@ -494,8 +492,8 @@ def test_guide_rule_switches_and_model_settings_are_editable(ui, monkeypatch):
     page.locator('.sidebar [data-nav="models"]').click()
     expect(page.locator('#model-settings-card')).to_be_visible()
     expect(page.locator('#feishu-connect-card')).to_be_hidden()
-    expect(page.locator('#model-settings-body')).to_contain_text('执行模型')
-    expect(page.locator('#model-settings-body')).to_contain_text('检查模型')
+    expect(page.locator('#model-settings-body')).to_contain_text('修改模型')
+    expect(page.locator('#model-settings-body')).to_contain_text('复核模型')
     # 读取态不显示表单，点击「修改配置」进入编辑态（FL-D750 读取态/编辑态重做）
     expect(page.locator('#model-settings-form')).to_have_count(0)
     page.locator('[data-model-edit="primary"]').click()
@@ -550,7 +548,7 @@ def test_model_and_feishu_pages_are_separate(ui):
     open_page(ui, 'models')
     # 读取态为角色卡，无表单（FL-D750）；卡容器即模型页标识
     expect(page.locator('#model-settings-card')).to_be_visible()
-    expect(page.locator('#model-settings-body')).to_contain_text('执行模型')
+    expect(page.locator('#model-settings-body')).to_contain_text('修改模型')
     expect(page.locator('#feishu-connect-card')).to_be_hidden()
     assert not any('/api/integrations/feishu/binding' in url for url in requests)
     page.reload()
@@ -851,14 +849,6 @@ def test_overview_polls_other_task_after_selected_task_completed(ui):
     page.wait_for_selector(f'#task-rows [data-task="{another}"]', timeout=10000)
     assert "后台新建任务" in page.inner_text("#task-rows")
 
-
-def test_failed_stats_are_unavailable_instead_of_zero(ui):
-    page, context, _, _ = ui
-    context.route("**/api/tasks/stats", lambda route: route.fulfill(status=503, json={"detail": "fixture failure"}))
-    open_page(ui)
-    page.wait_for_timeout(100)
-    for element in ["stat-month-contracts", "stat-completion-rate", "stat-average"]:
-        assert page.locator("#" + element).inner_text() == "—"
 
 
 def test_download_all_stays_disabled_until_terminal_result_exists(ui):

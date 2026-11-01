@@ -61,14 +61,13 @@
     const disclosure=document.querySelector('.compare-groups-disclosure'); if(disclosure)disclosure.open=!hasResult;
     const pendingNote=$('compare-pending-note'); if(pendingNote)pendingNote.hidden=hasResult;
   }
-  function failureStageLabel(v) { return ({claim_setup:'任务领取',input_integrity:'输入校验',compare:'文本比对',heartbeat:'租约心跳',finish:'结果落库'} [v] || v || '未知阶段'); }
+  function failureStageLabel(v) { return ({claim_setup:'开始处理',input_integrity:'文件检查',compare:'文本比对',heartbeat:'处理中',finish:'保存结果'} [v] || v || '未知阶段'); }
   function pairErrorLabel(p) {
     if (p.viewError) return p.viewError;
     if (!p.error_code) return '';
     const failure=p.diagnostics?.failure;
-    if (!failure || failure.error_code!==p.error_code) return `处理失败：${p.error_code}`;
-    const detail=[`阶段：${failureStageLabel(failure.stage)}`,failure.error_type?`类型：${failure.error_type}`:'',`可重试：${failure.retryable?'是':'否'}`].filter(Boolean).join(' · ');
-    return `处理失败：${p.error_code}（${detail}）`;
+    if (!failure || failure.error_code!==p.error_code) return `处理失败，请稍后重试`;
+    return `处理失败：${failureStageLabel(failure.stage)}环节出错${failure.retryable?'，可重试':'，请重新创建合同组'}`;
   }
   function renderPairs() {
     $('compare-pair-list').innerHTML=`<div class="compare-pair-statuses">${state.pairs.map((p,i)=>`<button type="button" class="compare-pair-status ${p.id===state.selectedPairId?'is-selected':''} ${['succeeded','incomplete'].includes(p.status)?'is-done':''} ${p.status==='incomplete'?'is-incomplete':''} ${p.status==='failed'||p.viewError?'is-failed':''}" data-compare-pair="${i}"><span class="compare-pair-number">${String(i+1).padStart(2,'0')}</span><span class="compare-pair-main"><strong>${esc(p.label||`第 ${i+1} 组`)}</strong><small>合同A：${esc(p.left?.name||'未命名')} / 合同B：${esc(p.right?.name||'未命名')}</small></span><span class="compare-pair-state">${esc(statusLabel(p.status))}${p.summary?` · ${p.summary.total} 处`:''}</span>${p.error_code||p.viewError?`<span class="compare-pair-error" role="status">${esc(pairErrorLabel(p))}</span>`:''}</button>`).join('')}</div>`;
@@ -712,7 +711,7 @@
   const DIFF_ITEM_HEIGHT=136, DIFF_RENDER_COUNT=24;
   function diffItemHtml(x,index,choice,disabled){
     const kind=x.type==='modify'?'修改':x.type==='insert'?'插入':'删除';
-    return `<div class="compare-diff-item ${choice!=='pending'?'is-selected-choice':''}" data-compare-diff="${esc(x.id)}"><button type="button" class="compare-diff-jump" data-compare-diff="${esc(x.id)}"><span class="compare-diff-index">${index+1}</span><span class="compare-diff-kind is-${esc(x.type)}">${esc(kind)}</span><span class="compare-diff-preview"><small>FundLex 对比</small><span>${esc(x.section||'正文')} · ${esc(x.left?.text||'')} ${x.right?.text?'→ '+esc(x.right.text):''}</span></span></button><div class="compare-choice" role="group" aria-label="${esc(x.id)} 采用 A 或 B"><label class="${choice==='left'?'is-checked':''}"><input type="radio" name="choice-${esc(x.id)}" value="left" data-selection-choice="left" data-diff-id="${esc(x.id)}" ${choice==='left'?'checked':''} ${disabled?'disabled':''}>采用 A</label><label class="${choice==='right'?'is-checked':''}"><input type="radio" name="choice-${esc(x.id)}" value="right" data-selection-choice="right" data-diff-id="${esc(x.id)}" ${choice==='right'?'checked':''} ${disabled?'disabled':''}>采用 B</label></div></div>`;
+    return `<div class="compare-diff-item ${choice!=='pending'?'is-selected-choice':''}" data-compare-diff="${esc(x.id)}"><button type="button" class="compare-diff-jump" data-compare-diff="${esc(x.id)}"><span class="compare-diff-index">${index+1}</span><span class="compare-diff-kind is-${esc(x.type)}">${esc(kind)}</span><span class="compare-diff-preview"><span>${esc(x.section||'正文')} · ${esc(x.left?.text||'')} ${x.right?.text?'→ '+esc(x.right.text):''}</span></span></button><div class="compare-choice" role="group" aria-label="${esc(x.id)} 采用 A 或 B"><label class="${choice==='left'?'is-checked':''}"><input type="radio" name="choice-${esc(x.id)}" value="left" data-selection-choice="left" data-diff-id="${esc(x.id)}" ${choice==='left'?'checked':''} ${disabled?'disabled':''}>采用 A</label><label class="${choice==='right'?'is-checked':''}"><input type="radio" name="choice-${esc(x.id)}" value="right" data-selection-choice="right" data-diff-id="${esc(x.id)}" ${choice==='right'?'checked':''} ${disabled?'disabled':''}>采用 B</label></div></div>`;
   }
   function renderDiffWindow(start){
     const list=$('compare-diff-list'),items=state.diffList||[];if(!list)return;
