@@ -8575,3 +8575,42 @@ H＝E×…
 - **发现（复验确认）**：①`pilot_compare.py` L127-133 `overlapping_gold_targets_not_exact += overlapping-located`：located 含 `satisfied` 候选、overlapping 排除之——target 仅被 satisfied 命中时贡献 **-1**（统计可为负，口径错）。②L55 `assert digest in json.dumps(frozen)`：子串包含式冻结校验，digest 十六进制出现在冻结记录任意字段即假通过（形同虚设风险）。③`replay_checkpoints.py` L42-44 task 级 fallback 只追加 `self.fallbacks` 而 main() 从不输出——重放可能静默用错上下文缓存且无证据；L32 `max_calls=1000` 死上限。
 - **状态**：open，报主线（统计口径与冻结校验强度属评测可信度面）。
 - **变更记录**：2026-11-01 新增。
+
+## 【报主线立号】EVAL 审计组D：死运行器族 3 高危 + 环境绑定/校验弱化族（2026-11-01，qa-feat-recall 复验确认，本线号池已尽）
+
+> 主审计复验确认（签名/端点逐一核对）；本线仅登记不修复（评测线工具归属主线）。建议主线立两号：**死运行器族**、**环境绑定/校验弱化族**。
+
+- **死运行器族（3 高危，均实证必崩/必拒）**：①`strictness_audit_20261028.py` L121 `_candidate_context` 返回三元组（fundlex/targeting.py L112 签名 `-> tuple[str, set[str], dict]`）此处二元解包 → `capacity_probes()` 必 `ValueError: too many values to unpack`；②`task_revision_run.py` L68 提交 `ruleset_version:"v2"` 且无 `engine_id` → 现行 API 必 422（fundlex/api.py L1296 RULESET_RETIRED/L1298 ENGINE_REQUIRED），整条 runner 对当前 API 已死；③`v2_pilot.py` L180 `POST /api/batches` → api.py L1566 无条件 410 RULESET_RETIRED，死引用。
+- **环境绑定族（低危 4）**：`strictness_audit` L57 硬编码 `/tmp/opencode`（缺则 FileNotFoundError）；L318 钉死历史产物绝对路径缺失静默减证；L243/L299 钉死语料文件名；`validator_shadow.py` L205 + `verify_downloaded_artifacts.py` L99 默认 `/home/opencode/data/funds_word`（机器绑定，`validator_shadow` 会静默全跳 source_missing 偷 FAIL 分母）。
+- **校验弱化族（低危 3）**：`verify_labels_v2_20261028.py` L105 `protected` 仅与同 labels 文件内自封字段互核（未对 DOCX settings.xml 复核，双字段同假即永真通过）+ L50 `case["relative"]` 缺键 KeyError 中止全体；`verify_downloaded_artifacts.py` L110 `cases[case_id]["file"]` schema 不符 KeyError 非记 problem。
+- **其他**：`v2_fixtures.py` L39 docx zip 时间戳随机构建 → fixture sha256 漂移，"冻结"期望不可跨机复验；`word_fixture.py` L13 相对 CWD 产出与消费方固定相对路径不一致；`v2_pilot.py` L194+ `ModelGateway.from_env()` 未 close 泄漏（×3/批）。
+- **状态**：open，待主线立号与处置。
+- **变更记录**：2026-11-01 新增。
+
+## 【报主线立号】EVAL 审计组A+B：评测证据致谎/统计口径族（2026-11-01，qa-feat-recall 复验确认，号尽）
+
+> 候选项逐一主审计复验；本线仅登记不修复。建议主线立号两族：本块「证据致谎/统计口径族」+ 下块「资源环境脆性族」。
+
+- **matching_audit.py L148-155**（中-高）：generate 模式 target 只有在可构造 names 模板时才评分，模板不可得时**确定性记 `wrong_content_or_artifact` 并计入 confirmed_wrong_edits**——「无法验证」被写成「确证错误」，系统性压低估量（审计员原称"恒 False"，复验修正为模板缺失路径恒 False，性质不变）。
+- **delivery_e2e.py L73-75**（中）：`xml.count(b"<w:ins")` 前缀命中 `<w:instrText`（实测 `startswith=True`）——TOC 域代码被计入修订 insertions，500+ 合同全有目录域，**修订统计口径致谎（产物证据层）**。
+- **controlled_regression.py L138/147**（中）：空输入目录时 `unchanged=all([])=True` 且 `0==0` → `completed=True` --- 零文档运行冒称完成（`--expected-count` 门默认不启用）。
+- **first_batch_label_20261028.py 三处**（中，**波及在制第二波标签线质量**）：①L1056/L1078 append 坐标用 compact 长度当原文坐标传入 `compact_offsets`，含空白段落坐标系统性偏小；②L1251 `locate_quote` 多命中静默取 `hits[0]` 且无歧义记录；③L1755 修复轮采纳条件仅比 issue 数，不比 target 数——模型静默删站点可被采纳，**标签分母可悄悄缩小**。
+- **compare_benchmark.py L12-16**（中）：p95 取秩 `int(len*frac)-1` 系统性低估尾部分位。
+- **p6_langfuse_sync.py L96-102**（中）：fc 分数须 `case["reported_complete"] is not None`，而 p6_score case 级无此键（只在聚合 delivery）→ **fc 观测分数静默永不发送**；另 docstring `--labels` 参数 argparse 未定义。
+- **action_fixture_audit.py L231**（中）：「拒绝通过」判定把引擎 `failed`（内部异常）与 principled refusal 混计，负例证据稀释。
+- **compare_gold.py L105 vs L91**（中）：零差异判定剔全部空白、逐 op 过滤只剔 `\n\t`——两套口径矛盾（空格级修改会 expected_zero=True 但 operations 非空）；L62 `_locate` 右闭区间错位一块。
+- **build_labels_v2_20261028.py L268-280**（低）：重复站点跳过 append 仍记 `applied=True`，`review_findings_applied` 口径混入未改动裁定。
+- **p6_label.py L177**（中）：类间泄漏防线仅按 `；/;` 切句——真实合同以句号分隔 A/C 句式时 service_fee 事实可能判错，直击标签分母。
+- **finalize_first_batch_labels_20261028.py L156-166**（中）：G05 补建 ValueError 被吞但质量告警无条件消音（未补也显示无缺口）+ 两处无保护 KeyError。
+- **finalize_second_batch_labels_20261031.py 两处**（低）：L713 `+2` 致窗口 -4/+6 不对称；L550 未知 rule_id `RULE_IDS.index` 裸崩（一期工具仅记 issue）。
+- **prepare_second_batch_run_20261031.py / verify_downloaded_artifacts.py / p6_label.py L378**（低）：无保护 KeyError/schema 假设。
+- **controlled/其他低危**：v2_compare L85 段级 delta 错位 + L253 死计算；p6_package 死函数（规约不计）。
+
+## 【报主线立号】EVAL 审计组A+B：资源/环境脆性族（2026-11-01，qa-feat-recall 复验确认，号尽）
+
+- **资源泄漏（中 ×2，扩波长跑风险）**：`recall_run.py` L115 循环内 `ModelGateway.from_env()` 且全文件无 `close()`（复验确认）——**500+ 扩波长跑时连接/fd 逐份累积**，第二波 100 起跑前建议必须修；`v2_pilot.py` L194/236/245 同型 ×3/批。
+- **环境绑定（低）**：`compare_e2e.py` L109 硬编码 `/tmp/fundlex-compare-corpus-v4`（已陈至 v5+、易失静默回退）；`build_revision_review_packet.py` L100 / `validator_shadow.py` L205 / `p6_label.py` L378 / `verify_downloaded_artifacts.py` L99 默认指向已退役 `/home/opencode/data*`；`development_gate_reconciliation.py` L241 sqlite 读写打开自称只读（对 budget_preflight `mode=ro`）；`strictness_audit/delivery_e2e` 硬编码 `/tmp/opencode`；`corpus_audit.py` L20 runtime fixture 缺失即崩；`word_fixture.py` L13 CWD 漂移；`v2_fixtures.py` L39 docx zip 时间戳致 fixture sha 漂移不可跨机复验；`prepare_second_batch` L97-147 CWD/ROOT 双口径 + L129 KeyError + select_second_batch L284 死 setdefault。
+- **文档陈旧（低，合记）**：`v2_handover.py` L9 / `recall_run.py` L6 / `action_fixture_audit.py` L11 / `release_evidence.py` L8 docstring 仍为已停用 Windows `.venv\Scripts` 路径；`first_batch_label` L11 声称默认模型与 argparse 实际默认值脱节。
+- **p6_run.py**（低 ×2）：preflight manifest O_EXCL 先于 run_dir 检查（重跑即撞 MANIFEST_ALREADY_EXISTS 死锁）；login 响应未查状态码裸取 token。
+- **状态**：open，待主线立号处置；**recall_run 泄漏建议列为第二波起跑前必办**。
+- **变更记录**：2026-11-01 新增。
