@@ -74,3 +74,10 @@
 | V2 form-stack input 圆角 | `8px` → `6px` | 控件圆角统一 |
 | V1 `.btn-link` 字重 | `700` → `600` | 行内主操作统一规格 |
 | V2 `.status-badge` | fw650+二次覆盖(border,3px 8px) → 令牌规格(650,3px 9px,无边框) | 徽标双形态消灭 |
+| gg-badge 默认灰 | `#f1f3f5`/`#56616d` → `#f0f2f4`/`#59646d` | 近色并值（与 .b-gray 统一） |
+| V2 `.data-table 任务名/链接` | 品牌色 fw650 → ink fw600（hover 品牌色+下划线） | 主键文本唯一规格 |
+| V2 占位文本 | `#9aa3ad` → `#98a1a9` | 近色并值（与 V1 统一） |
+| V2 focus 环强度 | rgba(181,71,30,.12) → rgba(181,71,30,.14) | 与令牌唯一环统一 |
+| feishu-wizard 自造环 | rgba(181,71,30,.10) → 令牌环 | 散写收编 |
+| V1 login/model-settings/#model-settings-form/feishu-wizard 控件圆角 | 7px/8px 混排 → 6px | 圆角统一 |
+| gg-table 容器边框 | `1px var(--line-soft)+圆角` → 无边框 | 容器语言并入列表体系 |

@@ -1,5 +1,5 @@
 :root {
-  font-family: Inter, "Noto Sans SC", system-ui, sans-serif;
+  font-family: var(--font-ui);
   color: #20252b;
   background: #f5f6f8;
   font-synthesis: none;

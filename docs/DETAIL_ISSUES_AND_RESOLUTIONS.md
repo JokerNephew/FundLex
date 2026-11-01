@@ -8192,39 +8192,48 @@ H＝E×…
 - **问题与影响**：V1 `body{font:14px "Segoe UI","Microsoft YaHei UI","PingFang SC"}`（app.css:2）与 V2 `Inter,"Noto Sans SC",system-ui`（src/styles/tokens.css:2）字体族不同——同为 13px 表体，视觉字号、字形灰度、数字宽度全不同，是用户「列表字体不同/看起来没改」根因之一。上轮 token 口径无法发现。
 - **证据**：`/tmp/opencode/qa/screenshots/design-audit-20261101/list-v1-overview.png` vs `list-v2-tasks.png` 并排对照。
 - **处理方法**：统一为 `Inter,"PingFang SC","Microsoft YaHei UI","Noto Sans SC",system-ui,sans-serif`（以 V2 栈为准、增中文回落），记入改动档。
-- **状态**：已登记，随批3 施工。
+- **变更记录 2026-11-01（批1 施工）**：V1 body 改引 `--font-ui`、V2 tokens.css :root 改引 `--font-ui`（新增中文回落位）；浏览器计算样式断言双端 fontFamily 均以 Inter 打头。
+- **状态**：已解决（批1 验收：`screenshots/design-b1b-after/`）。
+- **证据**：`/tmp/opencode/qa/screenshots/design-audit-20261101/list-v1-overview.png` vs `list-v2-tasks.png`（前）；`design-b1b-after/L1-overview.png`、`L4-v2-tasks.png`（后）。
 
 ## FL-D804 指引生成列表 .gg-table 独立散写（列表追责直证）（2026-11-01，qa-frontend 第三轮）
 
 - **问题与影响**：guide_generation.css:36/50-54 自建列表体系：表体 12px（全站 13px）、td padding 12px（token 10/12）、hover `#fdfbf9`（异色温）、容器自画圆角边框、行尾「查看」用框式 .btn-sm（其余列表为文本链接）。上轮漏网。
 - **证据**：`design-audit-20261101/list-v1-generation.png`。
 - **处理方法**：废除 .gg-table 收编 .table；hover 色改 `--surface-soft` 记档。
-- **状态**：已登记，随批3 施工。
+- **变更记录 2026-11-01（批1 施工）**：类名 `.gg-table/.gg-table-wrap/.gg-badge` 保留（测试锚不可破），规格全收编：表体 12px→13px、td padding 12px→10px/12px、hover `#fdfbf9`→`--list-row-hover-bg`、容器自画边框圆角删除、行尾「查看」框式 btn-sm→btn-link 文本链、td small 对齐 --list-meta-size。六项浏览器计算样式断言全过。
+- **状态**：已解决（批1 验收）。
 
 ## FL-D805 合同比对·合同组选择器游离列表语言（2026-11-01，qa-frontend 第三轮）
 
 - **问题与影响**：compare.js:74 合同组渲染为按钮式卡条 `.compare-pair-status`（圆点编号+双行文本），非列表行语言（compare.js:74）；且被折叠（联动 FL-D813）。
 - **处理方法**：重设计为列表行规格（编号+双侧文件名+状态徽标），平铺直呈。
-- **状态**：已登记，随批3/批4 施工。
+- **变更记录 2026-11-01（批1 施工）**：纯 CSS 行化（类名/数据属性/JS 零改动，锚点全保）：容器卡片网格→单列行列表；去卡描边/圆角/translateY 抬升；行 padding 10/12+border-bottom+hover --list-row-hover-bg；is-selected 改左侧 3px 品牌条+浅底；状态文本徽标化（is-done 绿/is-incomplete 黄/is-failed 红 pill 钩子）。折叠区平铺属批4（FL-D813）。
+- **状态**：行化已解决（批1 验收）；折叠平铺待批4。
 
 ## FL-D806 V2 Pagination 组件句式未统一（批2 漏网）（2026-11-01，qa-frontend 第三轮）
 
-- **问题与影响**：批2 统一了 V1 workspace/gg 分页句式，V2 Tasks Pagination 组件仍输出「第 1 / 2 页」独立句式（test_frontend_v2.py:503 锚定）。全站分页仍两套。
-- **处理方法**：V2 Pagination 收敛「共 N 条 · 第 x / y 页」+每页 select 对齐规格；测试锚改语义断言。
-- **状态**：已登记，随批3 施工。
+- **问题与影响**：批2 时误判 V2 Pagination 句式独立；批1 实施复核：句式「共 N 条 · 第 x / y 页」本就统一（组件源码已含），**真实差异=控件集与布局**：V2 无每页 select、按钮全尺寸、action-row 流式布局 vs V1 .pagination 左文右控件规格。
+- **处理方法**：V2 Pagination 按 V1 .pagination 规格重写（左「共 N 条 · 第 x / y 页」右 label+select+btn-sm 双按钮）；每页选项集双端统一 [20,50,100]（V1 app.js 删 10 档，grep 确认无测试锚）。
+- **验证**：tsc/vitest/build ✓；浏览器断言 每页 select 渲染+句式+游标样式。
+- **状态**：已解决（批1 验收）。
 
 ## FL-D807 V1 输入框/下拉无 hover/focus 状态态（用户"很丑"实锤）（2026-11-01，qa-frontend 第三轮）
 
 - **问题与影响**：V1 `input[type=search],select`（app.css:4）仅 rest 态：无 hover 边色、无聚焦环/聚焦边色、select 原生无 chevron。
 - **证据**：`design-audit-20261101/input-v1-rest/hover/focus.png` 三态截图——focus 与 rest 无视觉差别。
 - **处理方法**：按组件令牌 3.1 全状态矩阵补齐（聚焦环 rgba(181,71,30,.14)）。
-- **状态**：已登记，随批2 施工。
+- **变更记录 2026-11-01（批1 施工）**：V1 统一控件块落地——全类型 input/select/textarea 收编：hover 边 #aeb7c0、focus 边 accent+3px 环、禁用态、占位 #98a1a9、select appearance:none+唯一 chevron（SVG 数据链）、option 行高 28px。散写同步清除：login-card 7px、model-settings 8px、feishu-wizard 7px/38px/自造环、pagination select 适配。
+- **验证**：浏览器 5 项计算样式断言全过（hover/focus 环/chevron/圆角/占位色）；三态截图 `design-b1a-after/v1-*.png`。
+- **状态**：已解决（批1 验收）。
 
 ## FL-D808 V1/V2 控件规格相互不一致 + V2 内部分裂（2026-11-01，qa-frontend 第三轮）
 
 - **问题与影响**：①select 形态 V1 原生 vs V2 自定义 chevron；②V2 内部 `.form-stack input` radius 8px（src/styles/app.css:61）vs 全局 6px；③hover 边色 `#aeb8c1` vs `#aeb7c0` 近色双值；④占位/禁用/选项行高/滚动容器两形态皆未规格化。
 - **处理方法**：按令牌 3.1 双端统一；近色并值与 8px→6px 双项记档。
-- **状态**：已登记，随批2 施工。
+- **变更记录 2026-11-01（批1 施工）**：V2 控件块令牌化（--ctl-* 全引）、hover #aeb8c1→#aeb7c0、占位 #9aa3ad→#98a1a9、focus 环 .12→.14、补 disabled 态、focus outline:none（环代 outline，可访问性口径：ring 提供 3:1 对比提示）；form-stack input/textarea 8px 圆角散写删收编；data-table 第二处品牌色覆盖（app.css:161）揪出删除。
+- **验证**：浏览器断言 V2 hover/focus 环/form-stack 圆角=6px；三态截图 `design-b1a-after/v2-*.png`。
+- **状态**：已解决（批1 验收）。
 
 ## FL-D809 动效散写无统一令牌（2026-11-01，qa-frontend 第三轮）
 
@@ -8242,7 +8251,9 @@ H＝E×…
 
 - **问题与影响**：V1 `.badge` fw700（app.css:4）vs V2 `.status-badge` fw650 且 src/styles/app.css:155 二次覆盖（padding 3px 8px+border）——同语义徽标两形态。
 - **处理方法**：统一 `--badge-*`（pill/11px/fw650/3px 9px/无 border），删覆盖（记档）。
-- **状态**：已登记，随批3 施工。
+- **变更记录 2026-11-01（批1 施工）**：三形态归一——V1 .badge fw700→650 令牌化；V2 .status-badge 删 line 155 二次覆盖（border/padding 8px）；gg-badge radius 5px→pill、fw600→650、pad 4px 8px→3px 9px、默认灰近色并值（#f1f3f5→#f0f2f4、#56616d→#59646d）。compare 合同组状态文本同徽标规格（语义色钩子）。
+- **验证**：浏览器断言 V1/V2/gg 徽标 fw650+pill、V2 borderWidth=0。
+- **状态**：已解决（批1 验收）。
 
 ## FL-D812 三禁令·V1 overview「第一次使用」常驻引导卡（2026-11-01，qa-frontend 第三轮）
 

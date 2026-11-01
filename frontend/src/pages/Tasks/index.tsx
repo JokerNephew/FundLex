@@ -26,10 +26,10 @@ function taskSummary(task: { status: string; total?: number; completed?: number;
   return `正在处理 ${task.completed ?? 0}/${task.total ?? 0} 份合同。`
 }
 
-export function Pagination({ page, pageSize, total, onChange }: { page: number; pageSize: number; total: number; onChange: (page: number) => void }) {
+/** 全站唯一分页规格（FL-D806）：左「共 N 条 · 第 x / y 页」，右 每页 select+翻页；句式与 V1 app.js pagination() 一致 */
+export function Pagination({ page, pageSize, total, onChange, onPageSizeChange }: { page: number; pageSize: number; total: number; onChange: (page: number) => void; onPageSizeChange?: (size: number) => void }) {
   const pages = Math.max(1, Math.ceil(total / pageSize))
-  if (pages <= 1) return null
-  return <div className="action-row" aria-label="分页"><Button disabled={page <= 1} onClick={() => onChange(page - 1)}>上一页</Button><span className="muted">共 {total} 条 · 第 {page} / {pages} 页</span><Button disabled={page >= pages} onClick={() => onChange(page + 1)}>下一页</Button></div>
+  return <div className="pagination" aria-label="分页"><span>共 {total} 条 · 第 {page} / {pages} 页</span><div className="controls">{onPageSizeChange && <label className="muted">每页<Select className="control-select" value={pageSize} onChange={(event) => onPageSizeChange(Number(event.target.value))} aria-label="每页条数">{[20, 50, 100].map((n) => <option key={n} value={n}>{n}</option>)}</Select></label>}<Button disabled={page <= 1} onClick={() => onChange(page - 1)}>上一页</Button><Button disabled={page >= pages} onClick={() => onChange(page + 1)}>下一页</Button></div></div>
 }
 
 export function TasksPage() {
@@ -39,7 +39,7 @@ export function TasksPage() {
   const [guideVersionId, setGuideVersionId] = useState('')
   const [sort, setSort] = useState('newest')
   const [page, setPage] = useState(1)
-  const pageSize = 20
+  const [pageSize, setPageSize] = useState(20)
   const tasks = useTasks({ q: search, status, guide_version_id: guideVersionId, sort, page, page_size: pageSize }, { pollMs: 20_000 })
   const stats = useTaskStats()
   const guides = useGuideSettings()
@@ -65,6 +65,6 @@ export function TasksPage() {
       )}
       <p className="muted stats-connection" data-testid="stats-connection">{connectionText}{Boolean(stats.error) && <> · <Button type="button" variant="quiet" onClick={() => void stats.refetch()}>重试统计</Button></>}</p>
       <Card><form className="action-row" onSubmit={submitSearch} role="search"><label className="muted">搜索任务<input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="按任务名称搜索" /></label><label className="muted">状态<Select value={status} onChange={(event) => { setStatus(event.target.value as TaskStatus | ''); setPage(1) }}><option value="">全部状态</option><option value="queued">排队中</option><option value="running">处理中</option><option value="paused">已暂停</option><option value="completed">已完成</option><option value="completed_with_exceptions">已完成（含异常）</option><option value="failed">失败（含失败合同）</option></Select></label><label className="muted">指引<Select value={guideVersionId} onChange={(event) => { setGuideVersionId(event.target.value); setPage(1) }}><option value="">全部指引</option>{guides.data?.available?.map((guide) => <option key={guide.id} value={guide.id}>{guide.filename}</option>)}</Select></label><label className="muted">排序<Select value={sort} onChange={(event) => { setSort(event.target.value); setPage(1) }}><option value="newest">最新创建</option><option value="oldest">最早创建</option><option value="name">名称 A-Z</option><option value="name_desc">名称 Z-A</option></Select></label><Button type="submit" variant="primary">搜索</Button></form></Card>
-      <Card><div className="page-heading"><div><h2>任务清单</h2></div><Button onClick={() => void tasks.refetch()} disabled={tasks.refreshing}>{tasks.refreshing ? '刷新中…' : '刷新'}</Button></div>{tasks.error ? <ErrorState error={tasks.error} onRetry={() => void tasks.refetch()} /> : tasks.loading && !tasks.data ? <Spinner /> : !items.length ? <div className="empty-state">{search || status || guideVersionId ? '没有符合筛选条件的任务。' : <>还没有任务。<br /><Link to="/tasks/new">创建第一个合同任务</Link></>}</div> : <><div className="table-scroll"><table className="data-table"><thead><tr><th>任务</th><th>状态</th><th>行动提示</th><th>合同</th><th>指引快照</th><th>创建时间</th></tr></thead><tbody>{items.map((task) => <tr key={task.id}><td><Link to={`/tasks/${task.id}`}>{task.name}</Link></td><td><StatusBadge value={task.status} /></td><td>{taskSummary(task)}</td><td>{task.completed ?? 0}/{task.total ?? '—'}<div className="muted">异常 {task.exceptions ?? 0}</div></td><td>{task.guide_snapshot || task.ruleset_version ? '修改指引已锁定' : '—'}</td><td>{formatDate(task.created_at)}</td></tr>)}</tbody></table></div><Pagination page={tasks.data?.page ?? page} pageSize={tasks.data?.page_size ?? pageSize} total={tasks.data?.total ?? 0} onChange={setPage} /></>}</Card>
+      <Card><div className="page-heading"><div><h2>任务清单</h2></div><Button onClick={() => void tasks.refetch()} disabled={tasks.refreshing}>{tasks.refreshing ? '刷新中…' : '刷新'}</Button></div>{tasks.error ? <ErrorState error={tasks.error} onRetry={() => void tasks.refetch()} /> : tasks.loading && !tasks.data ? <Spinner /> : !items.length ? <div className="empty-state">{search || status || guideVersionId ? '没有符合筛选条件的任务。' : <>还没有任务。<br /><Link to="/tasks/new">创建第一个合同任务</Link></>}</div> : <><div className="table-scroll"><table className="data-table"><thead><tr><th>任务</th><th>状态</th><th>行动提示</th><th>合同</th><th>指引快照</th><th>创建时间</th></tr></thead><tbody>{items.map((task) => <tr key={task.id}><td><Link to={`/tasks/${task.id}`}>{task.name}</Link></td><td><StatusBadge value={task.status} /></td><td>{taskSummary(task)}</td><td>{task.completed ?? 0}/{task.total ?? '—'}<div className="muted">异常 {task.exceptions ?? 0}</div></td><td>{task.guide_snapshot || task.ruleset_version ? '修改指引已锁定' : '—'}</td><td>{formatDate(task.created_at)}</td></tr>)}</tbody></table></div><Pagination page={tasks.data?.page ?? page} pageSize={tasks.data?.page_size ?? pageSize} total={tasks.data?.total ?? 0} onChange={setPage} onPageSizeChange={(size) => { setPageSize(size); setPage(1) }} /></>}</Card>
   </>
 }
