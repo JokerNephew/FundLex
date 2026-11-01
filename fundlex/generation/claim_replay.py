@@ -1195,6 +1195,11 @@ def _filter_scoped_targets(targets: Sequence[Mapping[str, Any]],
 #: it can never legalize an unauthorized span, a broken occurrence identity or
 #: a changed outside span — those stay recorded forever (FL-D921).
 _STRUCTURAL_INTEGRITY_CODES = frozenset({
+    # validator-attested failures are physical integrity evidence too
+    # (consistent with delivery._ALWAYS_BLOCKING_CODES, QA double-blind flag).
+    "CLAIM_VALIDATION_FAILED",
+    "CLAIM_VALIDATION_UNKNOWN",
+    "CLAIM_VALIDATION_CONFLICT",
     "CLAIM_OPERATION_SPAN_UNAUTHORIZED",
     "CLAIM_OCCURRENCE_MISMATCH",
     "CLAIM_SITE_OCCURRENCE_UNRESOLVED",

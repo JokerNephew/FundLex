@@ -101,7 +101,7 @@ def validate_release_gate(action: dict[str, Any], policy: dict[str, Any]) -> Non
         raise RuleError("RELEASE_EVIDENCE_MISSING")
     threshold, actual = action.get("release_threshold"), action.get("evaluation_metrics")
     if not isinstance(threshold, dict) or not threshold.get("registration_id") or threshold.get("registered_before_full_evaluation") is not True or not isinstance(actual, dict):
-        raise RuleError("RELEASE_EVALUATION_PREREGISTERED")
+        raise RuleError("RELEASE_PREREGISTERED_EVALUATION_MISSING")
     _validate_context_shape(policy.get("evaluation_context"))
     if actual.get("tested_context") != policy["evaluation_context"]:
         raise RuleError("RELEASE_CONTEXT_UNVERIFIED")

@@ -91,7 +91,9 @@ def main(argv: list[str] | None = None) -> int:
     try:
         with gateway:
             source = extract_guide_source(args.source)
-            document = build_guide_document(source, gateway, max_repair_rounds=args.max_repair_rounds)
+            from fundlex.guide import _BUILTIN_GUIDE_COMPANION_NOTE
+            document = build_guide_document(source, gateway, max_repair_rounds=args.max_repair_rounds,
+                                            companion_note=_BUILTIN_GUIDE_COMPANION_NOTE)
     except GuideError as exc:
         print(json.dumps({"error": exc.code, "details": exc.details}, ensure_ascii=False))
         return 2
