@@ -353,11 +353,18 @@ def test_validation_rejects_bad_conditions_and_operations(tmp_path):
     result = validate_parsed_guide(source, parsed)
     codes = [error["code"] for error in result["errors"]]
     assert codes == ["GUIDE_GROUP_INVALID"] * 4
+    # Owner-facing detail is a Chinese sentence (FL-D883/S5); the technical
+    # phrasing for the model repair context stays in detail_tech.
     details = " | ".join(error["detail"] for error in result["errors"])
-    assert "class_count requires value 1" in details
-    assert "none requires value null" in details
-    assert "op 'move'" in details
-    assert "new_text must be a non-empty string" in details
+    assert "份额类别数量条件" in details
+    assert "「无条件」的取值必须为空" in details
+    assert "修改类型无效" in details
+    assert "缺少新条款文本" in details
+    tech = " | ".join(error["detail_tech"] for error in result["errors"])
+    assert "class_count requires value 1" in tech
+    assert "none requires value null" in tech
+    assert "op 'move'" in tech
+    assert "new_text must be a non-empty string" in tech
 
 
 def test_validation_rejects_rule_ids_and_ranges_and_slots(tmp_path):
@@ -380,7 +387,8 @@ def test_validation_reports_coverage_gaps_and_sequential_ids(tmp_path):
     result = validate_parsed_guide(source, parsed)
     codes = [error["code"] for error in result["errors"]]
     assert codes == ["GUIDE_RULE_ID_INVALID"]
-    assert "not sequential" in result["errors"][0]["detail"]
+    assert "不连续" in result["errors"][0]["detail"]
+    assert "not sequential" in result["errors"][0]["detail_tech"]
     assert result["coverage_gaps"] == [12, 13]
 
 

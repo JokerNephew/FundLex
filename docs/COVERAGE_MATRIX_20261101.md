@@ -1,0 +1,603 @@
+# 全覆盖检查矩阵（2026-11-01，用户第七轮+「不简化」铁律）
+
+> 用户原话：「让他们充分的对所有的代码、所有的各个页面挨个检查，不要有任何遗漏」「你不要简化我的要求…一个会话无法完成就拆分了之后交给多个对话，但是你简化我的要求是绝对的大忌」
+> 规则：矩阵中每个文件/页面必须有唯一负责线；负责线逐行签认（☐→✅+发现编号）；本矩阵是"无遗漏"的唯一证明，缺失即未做。
+
+## A. 页面（用户可见，逐页×逐状态）
+
+### V1（11 视图+全部子视图/弹层/空/加载/失败态）→ FE 前端主线
+
+- [ ] view-overview 工作台总览
+- [ ] view-workspace 工作台
+- [ ] view-task 合同修改任务
+- [ ] view-import 导入
+- [ ] view-compare 比对(list/new/detail/viewer四态)
+- [ ] view-document 合同详情
+- [ ] view-generation 指引生成
+- [ ] view-guide 我的指引(列表/详情/规则开关/版本对比)
+- [ ] view-models 模型配置
+- [ ] view-settings 设置
+- [ ] view-users 用户
+
+### V2（10 页面域+全部子路由/状态）→ V2 线
+
+- [ ] Auth
+- [ ] Compare(列表/新建/任务)
+- [ ] DocumentDetail
+- [ ] Guides
+- [ ] NewTask
+- [ ] Review
+- [ ] Settings
+- [ ] TaskDetail
+- [ ] Tasks
+- [ ] Users
+
+## B. 全部文件（逐文件）
+
+| 文件 | 负责线 | 签认 |
+| --- | --- | --- |
+| frontend/app.css | FE 前端主线 | ☐ |
+| frontend/app.js | FE 前端主线 | ☐ |
+| frontend/compare.css | CX 比对线 | ☐ |
+| frontend/compare.html | CX 比对线 | ☐ |
+| frontend/compare.js | CX 比对线 | ☐ |
+| frontend/eslint.config.js | FE 前端主线 | ☐ |
+| frontend/guide_generation.css | FE 前端主线 | ☐ |
+| frontend/guide_generation.html | FE 前端主线 | ☐ |
+| frontend/guide_generation.js | FE 前端主线 | ☐ |
+| frontend/index.html | FE 前端主线 | ☐ |
+| frontend/logic-demo.html | FE 前端主线 | ☐ |
+| frontend/src/api/client.ts | V2 V2线 | ☐ |
+| frontend/src/api/endpoints.ts | V2 V2线 | ☐ |
+| frontend/src/api/hooks.ts | V2 V2线 | ☐ |
+| frontend/src/api/index.ts | V2 V2线 | ☐ |
+| frontend/src/api/queryClient.ts | V2 V2线 | ☐ |
+| frontend/src/app/App.tsx | V2 V2线 | ☐ |
+| frontend/src/app/index.ts | V2 V2线 | ☐ |
+| frontend/src/components/document/DocumentAnchor.tsx | V2 V2线 | ☐ |
+| frontend/src/components/document/DocumentMarker.tsx | V2 V2线 | ☐ |
+| frontend/src/components/document/DocumentNavigator.tsx | V2 V2线 | ☐ |
+| frontend/src/components/document/DocumentViewer.tsx | V2 V2线 | ☐ |
+| frontend/src/components/document/SplitPane.tsx | V2 V2线 | ☐ |
+| frontend/src/components/document/index.ts | V2 V2线 | ☐ |
+| frontend/src/components/layout/AppShell.tsx | V2 V2线 | ☐ |
+| frontend/src/components/layout/index.ts | V2 V2线 | ☐ |
+| frontend/src/components/review/RevisionCard.tsx | V2 V2线 | ☐ |
+| frontend/src/components/review/RevisionPanel.tsx | V2 V2线 | ☐ |
+| frontend/src/components/review/RevisionTypes.ts | V2 V2线 | ☐ |
+| frontend/src/components/review/index.ts | V2 V2线 | ☐ |
+| frontend/src/components/ui/Button.tsx | V2 V2线 | ☐ |
+| frontend/src/components/ui/Card.tsx | V2 V2线 | ☐ |
+| frontend/src/components/ui/Select.tsx | V2 V2线 | ☐ |
+| frontend/src/components/ui/Spinner.tsx | V2 V2线 | ☐ |
+| frontend/src/components/ui/StatusBadge.tsx | V2 V2线 | ☐ |
+| frontend/src/components/ui/index.ts | V2 V2线 | ☐ |
+| frontend/src/main.tsx | V2 V2线 | ☐ |
+| frontend/src/pages/Auth/index.tsx | V2 V2线 | ☐ |
+| frontend/src/pages/Compare/ComparePage.tsx | V2 V2线 | ☐ |
+| frontend/src/pages/DocumentDetail/DocumentDetailPage.tsx | V2 V2线 | ☐ |
+| frontend/src/pages/DocumentDetail/index.ts | V2 V2线 | ☐ |
+| frontend/src/pages/Guides/CompareCard.tsx | V2 V2线 | ☐ |
+| frontend/src/pages/Guides/index.tsx | V2 V2线 | ☐ |
+| frontend/src/pages/NewTask/index.tsx | V2 V2线 | ☐ |
+| frontend/src/pages/Review/ReviewPage.tsx | V2 V2线 | ☐ |
+| frontend/src/pages/Review/index.ts | V2 V2线 | ☐ |
+| frontend/src/pages/Settings/ModelSettings.tsx | V2 V2线 | ☐ |
+| frontend/src/pages/Settings/index.tsx | V2 V2线 | ☐ |
+| frontend/src/pages/TaskDetail/TaskDetailIndexPage.tsx | V2 V2线 | ☐ |
+| frontend/src/pages/TaskDetail/index.tsx | V2 V2线 | ☐ |
+| frontend/src/pages/Tasks/index.tsx | V2 V2线 | ☐ |
+| frontend/src/pages/Users/index.tsx | V2 V2线 | ☐ |
+| frontend/src/stores/auth.ts | V2 V2线 | ☐ |
+| frontend/src/stores/index.ts | V2 V2线 | ☐ |
+| frontend/src/stores/workspace.ts | V2 V2线 | ☐ |
+| frontend/src/styles/app.css | V2 V2线 | ☐ |
+| frontend/src/styles/index.css | V2 V2线 | ☐ |
+| frontend/src/styles/tokens.css | V2 V2线 | ☐ |
+| frontend/src/types/api.ts | V2 V2线 | ☐ |
+| frontend/src/types/index.ts | V2 V2线 | ☐ |
+| frontend/status_labels.js | FE 前端主线 | ☐ |
+| frontend/tests/client.test.ts | FE 前端主线 | ☐ |
+| frontend/tests/compare.test.tsx | FE 前端主线 | ☐ |
+| frontend/tests/components.test.tsx | FE 前端主线 | ☐ |
+| frontend/tests/documentViewer.test.tsx | FE 前端主线 | ☐ |
+| frontend/tests/guides-compare.test.ts | FE 前端主线 | ☐ |
+| frontend/tests/review.test.tsx | FE 前端主线 | ☐ |
+| frontend/tests/setup.ts | FE 前端主线 | ☐ |
+| frontend/vite.config.ts | FE 前端主线 | ☐ |
+| frontend/vitest.config.ts | FE 前端主线 | ☐ |
+| frontend/workspace.js | FE 前端主线 | ☐ |
+| fundlex/__init__.py | EN2 引擎审计2线 | ✅ 无发现 |
+| fundlex/api.py | PL1 飞书线 | ☐ |
+| fundlex/api_content.py | PL1 飞书线 | ☐ |
+| fundlex/api_errors.py | PL1 飞书线 | ☐ |
+| fundlex/applicability.py | EN1 recall线 | ☐ |
+| fundlex/application/__init__.py | EN2 引擎审计2线 | ✅ 无发现 |
+| fundlex/application/task_service.py | EN2 引擎审计2线 | ✅ 无发现 |
+| fundlex/artifact_review.py | EN2 引擎审计2线 | ✅ FL-D921~937:FL-D937 |
+| fundlex/auth.py | PL1 飞书线 | ☐ |
+| fundlex/checkpoints.py | EN2 引擎审计2线 | ✅ 无发现 |
+| fundlex/compare/__init__.py | CX 比对线 | ☐ |
+| fundlex/compare/align.py | CX 比对线 | ☐ |
+| fundlex/compare/api.py | CX 比对线 | ☐ |
+| fundlex/compare/ingest.py | CX 比对线 | ☐ |
+| fundlex/compare/models.py | CX 比对线 | ☐ |
+| fundlex/compare/normalize.py | CX 比对线 | ☐ |
+| fundlex/compare/parser.py | CX 比对线 | ☐ |
+| fundlex/compare/presentation.py | CX 比对线 | ☐ |
+| fundlex/compare/render.py | CX 比对线 | ☐ |
+| fundlex/compare/revisions.py | CX 比对线 | ☐ |
+| fundlex/compare/selection.py | CX 比对线 | ☐ |
+| fundlex/compare/selection_writer.py | CX 比对线 | ☐ |
+| fundlex/compare/service.py | CX 比对线 | ☐ |
+| fundlex/compare/store.py | CX 比对线 | ☐ |
+| fundlex/compare/text_diff.py | CX 比对线 | ☐ |
+| fundlex/compare/worker.py | CX 比对线 | ☐ |
+| fundlex/config.py | PL1 飞书线 | ☐ |
+| fundlex/db.py | PL1 飞书线 | ☐ |
+| fundlex/delivery.py | EN2 引擎审计2线 | ✅ 无发现 |
+| fundlex/docx.py | EN2 引擎审计2线 | ✅ FL-D921~937:FL-D936 |
+| fundlex/edit_summary.py | EN1 recall线 | ☐ |
+| fundlex/fact_evidence.py | EN1 recall线 | ☐ |
+| fundlex/facts_recovery.py | EN1 recall线 | ☐ |
+| fundlex/fee_evidence.py | EN1 recall线 | ☐ |
+| fundlex/frozen.py | EN2 引擎审计2线 | ✅ FL-D921~937:FL-D935/936 |
+| fundlex/generation/__init__.py | EN2 引擎审计2线 | ✅ 无发现 |
+| fundlex/generation/atomic.py | EN2 引擎审计2线 | ✅ 无发现 |
+| fundlex/generation/claim_replay.py | EN2 引擎审计2线 | ✅ FL-D921~937:FL-D921/925/936 |
+| fundlex/generation/components.py | EN2 引擎审计2线 | ✅ FL-D921~937:FL-D937 |
+| fundlex/generation/coverage.py | EN2 引擎审计2线 | ✅ FL-D921~937:FL-D932 |
+| fundlex/generation/effects.py | EN2 引擎审计2线 | ✅ FL-D921~937:FL-D928 |
+| fundlex/generation/flags.py | EN2 引擎审计2线 | ✅ FL-D921~937:FL-D934 |
+| fundlex/generation/joint.py | EN2 引擎审计2线 | ✅ 无发现 |
+| fundlex/generation/registry.py | EN2 引擎审计2线 | ✅ 无发现 |
+| fundlex/generation/router.py | EN2 引擎审计2线 | ✅ FL-D921~937:FL-D933 |
+| fundlex/generation/template.py | EN2 引擎审计2线 | ✅ FL-D921~937:FL-D937 |
+| fundlex/generation/types.py | EN2 引擎审计2线 | ✅ 无发现 |
+| fundlex/generation/validators.py | EN2 引擎审计2线 | ✅ FL-D921~937:FL-D935/937 |
+| fundlex/guide.py | EN2 引擎审计2线 | ✅ FL-D921~937:FL-D931/936 |
+| fundlex/guide_canary.py | EN2 引擎审计2线 | ✅ FL-D921~937:FL-D930 |
+| fundlex/guide_diff.py | EN2 引擎审计2线 | ✅ 无发现 |
+| fundlex/guide_generation/__init__.py | GG gg线 | ☐ |
+| fundlex/guide_generation/api.py | GG gg线 | ☐ |
+| fundlex/guide_generation/authoring.py | GG gg线 | ☐ |
+| fundlex/guide_generation/benchmark.py | GG gg线 | ☐ |
+| fundlex/guide_generation/cli.py | GG gg线 | ☐ |
+| fundlex/guide_generation/corpus_catalog.py | GG gg线 | ☐ |
+| fundlex/guide_generation/corpus_segmenter.py | GG gg线 | ☐ |
+| fundlex/guide_generation/coverage.py | GG gg线 | ☐ |
+| fundlex/guide_generation/discovery.py | GG gg线 | ☐ |
+| fundlex/guide_generation/eligibility.py | GG gg线 | ☐ |
+| fundlex/guide_generation/engine_compat.py | GG gg线 | ☐ |
+| fundlex/guide_generation/export.py | GG gg线 | ☐ |
+| fundlex/guide_generation/human.py | GG gg线 | ☐ |
+| fundlex/guide_generation/lexical.py | GG gg线 | ☐ |
+| fundlex/guide_generation/model_router.py | GG gg线 | ☐ |
+| fundlex/guide_generation/models.py | GG gg线 | ☐ |
+| fundlex/guide_generation/pipeline.py | GG gg线 | ☐ |
+| fundlex/guide_generation/prompts.py | GG gg线 | ☐ |
+| fundlex/guide_generation/quality.py | GG gg线 | ☐ |
+| fundlex/guide_generation/repair.py | GG gg线 | ☐ |
+| fundlex/guide_generation/requirements.py | GG gg线 | ☐ |
+| fundlex/guide_generation/residual.py | GG gg线 | ☐ |
+| fundlex/guide_generation/scope.py | GG gg线 | ☐ |
+| fundlex/guide_generation/service.py | GG gg线 | ☐ |
+| fundlex/guide_generation/store.py | GG gg线 | ☐ |
+| fundlex/guide_generation/vector.py | GG gg线 | ☐ |
+| fundlex/guide_generation/worker.py | GG gg线 | ☐ |
+| fundlex/guide_report.py | EN2 引擎审计2线 | ✅ FL-D921~937:FL-D925 |
+| fundlex/guide_smoke.py | EN2 引擎审计2线 | ✅ 无发现 |
+| fundlex/guide_store.py | EN2 引擎审计2线 | ✅ FL-D921~937:FL-D923 |
+| fundlex/guide_text_diff.py | EN2 引擎审计2线 | ✅ 无发现 |
+| fundlex/html_view.py | EN2 引擎审计2线 | ✅ FL-D921~937:FL-D924 |
+| fundlex/integrations/__init__.py | PL1 飞书线 | ☐ |
+| fundlex/integrations/feishu/__init__.py | PL1 飞书线 | ☐ |
+| fundlex/integrations/feishu/cards.py | PL1 飞书线 | ☐ |
+| fundlex/integrations/feishu/client.py | PL1 飞书线 | ☐ |
+| fundlex/integrations/feishu/events.py | PL1 飞书线 | ☐ |
+| fundlex/integrations/feishu/oauth.py | PL1 飞书线 | ☐ |
+| fundlex/integrations/feishu/onboarding.py | PL1 飞书线 | ☐ |
+| fundlex/integrations/feishu/runtime.py | PL1 飞书线 | ☐ |
+| fundlex/integrations/feishu/service.py | PL1 飞书线 | ☐ |
+| fundlex/integrations/feishu/service_main.py | PL1 飞书线 | ☐ |
+| fundlex/integrations/store.py | PL1 飞书线 | ☐ |
+| fundlex/jobs.py | PL1 飞书线 | ☐ |
+| fundlex/model.py | PL1 飞书线 | ☐ |
+| fundlex/model_budget.py | PL1 飞书线 | ☐ |
+| fundlex/model_settings.py | PL1 飞书线 | ☐ |
+| fundlex/models/__init__.py | EN2 引擎审计2线 | ✅ 无发现 |
+| fundlex/models/config.py | EN2 引擎审计2线 | ✅ FL-D921~937:FL-D922/937 |
+| fundlex/models/roles.py | EN2 引擎审计2线 | ✅ FL-D921~937:FL-D936 |
+| fundlex/obligations.py | EN2 引擎审计2线 | ✅ FL-D921~937:FL-D935/937 |
+| fundlex/observability.py | EN2 引擎审计2线 | ✅ 无发现 |
+| fundlex/pipeline.py | EN2 引擎审计2线 | ✅ FL-D921~937:FL-D925/926 |
+| fundlex/proxy_headers.py | EN2 引擎审计2线 | ✅ 无发现 |
+| fundlex/qualification.py | EN2 引擎审计2线 | ✅ FL-D921~937:FL-D937 |
+| fundlex/qualification_evidence.py | EN2 引擎审计2线 | ✅ 无发现 |
+| fundlex/recall.py | EN1 recall线 | ☐ |
+| fundlex/recall_pipeline.py | EN1 recall线 | ☐ |
+| fundlex/recall_prompts.py | EN2 引擎审计2线 | ✅ 无发现 |
+| fundlex/reconciliation.py | EN2 引擎审计2线 | ✅ FL-D921~937:FL-D925/929 |
+| fundlex/recovery/__init__.py | EN2 引擎审计2线 | ✅ 无发现 |
+| fundlex/recovery/history.py | EN2 引擎审计2线 | ✅ 无发现 |
+| fundlex/recovery/orchestrator.py | EN2 引擎审计2线 | ✅ FL-D921~937:FL-D925/935 |
+| fundlex/recovery/policies.py | EN2 引擎审计2线 | ✅ FL-D921~937:FL-D936 |
+| fundlex/recovery/types.py | EN2 引擎审计2线 | ✅ 无发现 |
+| fundlex/regulatory/__init__.py | EN2 引擎审计2线 | ✅ 无发现 |
+| fundlex/regulatory/anchors.py | EN2 引擎审计2线 | ✅ 无发现 |
+| fundlex/regulatory/docx_parser.py | EN2 引擎审计2线 | ✅ 无发现 |
+| fundlex/regulatory/ingestion.py | EN2 引擎审计2线 | ✅ FL-D921~937:FL-D935 |
+| fundlex/regulatory/pdf_parser.py | EN2 引擎审计2线 | ✅ FL-D921~937:FL-D936 |
+| fundlex/retention.py | EN2 引擎审计2线 | ✅ 无发现 |
+| fundlex/rule_scope.py | EN1 recall线 | ☐ |
+| fundlex/rules.py | EN2 引擎审计2线 | ✅ FL-D921~937:FL-D937 |
+| fundlex/rules_v2.py | EN2 引擎审计2线 | ✅ FL-D921~937:FL-D937 |
+| fundlex/selective.py | EN2 引擎审计2线 | ✅ 无发现 |
+| fundlex/semantic_contract.py | EN2 引擎审计2线 | ✅ FL-D921~937:FL-D927 |
+| fundlex/semantic_evidence.py | EN1 recall线 | ☐ |
+| fundlex/stage_replay.py | EN2 引擎审计2线 | ✅ 无发现 |
+| fundlex/store.py | PL1 飞书线 | ☐ |
+| fundlex/targeting.py | EN1 recall线 | ☐ |
+| fundlex/tasks.py | PL1 飞书线 | ☐ |
+| fundlex/trace_sink.py | EN2 引擎审计2线 | ✅ FL-D921~937:FL-D936 |
+| fundlex/upload_guard.py | EN2 引擎审计2线 | ✅ FL-D921~937:FL-D925 |
+| fundlex/upload_validation.py | EN2 引擎审计2线 | ✅ 无发现 |
+| fundlex/user_model_connections.py | EN2 引擎审计2线 | ✅ FL-D921~937:FL-D937 |
+| fundlex/v2.py | EN2 引擎审计2线 | ✅ FL-D921~937:FL-D925/937 |
+| fundlex/v2_pipeline.py | EN2 引擎审计2线 | ✅ FL-D921~937:FL-D925/936 |
+| fundlex/variants.py | EN2 引擎审计2线 | ✅ FL-D921~937:FL-D935 |
+| fundlex/workspace.py | EN2 引擎审计2线 | ✅ 无发现 |
+| tests/browser/__init__.py | PL2 平台审计线 | ☐ |
+| tests/browser/test_compare_scroll_perf.py | PL2 平台审计线 | ☐ |
+| tests/browser/test_frontend_fixes.py | PL2 平台审计线 | ☐ |
+| tests/browser/test_frontend_v2.py | PL2 平台审计线 | ☐ |
+| tests/browser/test_guide_diff.py | PL2 平台审计线 | ☐ |
+| tests/browser/test_guide_generation.py | PL2 平台审计线 | ☐ |
+| tests/browser/test_guide_history.py | PL2 平台审计线 | ☐ |
+| tests/browser/test_tracked_upload.py | PL2 平台审计线 | ☐ |
+| tests/browser/test_v1_frontend_remediation.py | PL2 平台审计线 | ☐ |
+| tests/browser/test_workbench.py | PL2 平台审计线 | ☐ |
+| tests/guide_generation_fakes.py | PL2 平台审计线 | ☐ |
+| tests/test_absent_delete_coverage.py | PL2 平台审计线 | ☐ |
+| tests/test_absent_variant_refutation.py | PL2 平台审计线 | ☐ |
+| tests/test_api_store.py | PL2 平台审计线 | ☐ |
+| tests/test_append_applicability.py | PL2 平台审计线 | ☐ |
+| tests/test_applicability.py | PL2 平台审计线 | ☐ |
+| tests/test_approved_escalation.py | PL2 平台审计线 | ☐ |
+| tests/test_atomic_orphan_tail.py | PL2 平台审计线 | ☐ |
+| tests/test_audit_applicable_policy.py | PL2 平台审计线 | ☐ |
+| tests/test_auth.py | PL2 平台审计线 | ☐ |
+| tests/test_auth_last_admin.py | PL2 平台审计线 | ☐ |
+| tests/test_auth_register.py | PL2 平台审计线 | ☐ |
+| tests/test_backup_tools.py | PL2 平台审计线 | ☐ |
+| tests/test_budget_preflight.py | PL2 平台审计线 | ☐ |
+| tests/test_build_labels_v2_20261028.py | PL2 平台审计线 | ☐ |
+| tests/test_claim_duplicate_scope.py | PL2 平台审计线 | ☐ |
+| tests/test_claim_replay_boundary.py | PL2 平台审计线 | ☐ |
+| tests/test_claim_replay_operation_authorization.py | PL2 平台审计线 | ☐ |
+| tests/test_class_group_and_g18_variants.py | PL2 平台审计线 | ☐ |
+| tests/test_class_label_names.py | PL2 平台审计线 | ☐ |
+| tests/test_class_set_optional_fund_noun.py | PL2 平台审计线 | ☐ |
+| tests/test_class_site_and_delete_boundary.py | PL2 平台审计线 | ☐ |
+| tests/test_clause_residual_realization.py | PL2 平台审计线 | ☐ |
+| tests/test_compare_algorithm.py | PL2 平台审计线 | ☐ |
+| tests/test_compare_algorithm_review.py | PL2 平台审计线 | ☐ |
+| tests/test_compare_api.py | PL2 平台审计线 | ☐ |
+| tests/test_compare_auth.py | PL2 平台审计线 | ☐ |
+| tests/test_compare_batch.py | PL2 平台审计线 | ☐ |
+| tests/test_compare_corpus.py | PL2 平台审计线 | ☐ |
+| tests/test_compare_full_body_replacement.py | PL2 平台审计线 | ☐ |
+| tests/test_compare_merged_render.py | PL2 平台审计线 | ☐ |
+| tests/test_compare_polling_gate.py | PL2 平台审计线 | ☐ |
+| tests/test_compare_remediation_boundaries.py | PL2 平台审计线 | ☐ |
+| tests/test_compare_render.py | PL2 平台审计线 | ☐ |
+| tests/test_compare_sdt_locations_and_trailing_delete.py | PL2 平台审计线 | ☐ |
+| tests/test_compare_selection.py | PL2 平台审计线 | ☐ |
+| tests/test_compare_selection_api.py | PL2 平台审计线 | ☐ |
+| tests/test_compare_selection_writer.py | PL2 平台审计线 | ☐ |
+| tests/test_compare_store.py | PL2 平台审计线 | ☐ |
+| tests/test_compare_system_review.py | PL2 平台审计线 | ☐ |
+| tests/test_compare_tracked_changes.py | PL2 平台审计线 | ☐ |
+| tests/test_compare_worker.py | PL2 平台审计线 | ☐ |
+| tests/test_composite_bearer_boundary.py | PL2 平台审计线 | ☐ |
+| tests/test_composite_slice_delivery.py | PL2 平台审计线 | ☐ |
+| tests/test_condition_tri_state.py | PL2 平台审计线 | ☐ |
+| tests/test_db.py | PL2 平台审计线 | ☐ |
+| tests/test_db_mysql.py | PL2 平台审计线 | ☐ |
+| tests/test_delete_applicability.py | PL2 平台审计线 | ☐ |
+| tests/test_delivery_e2e.py | PL2 平台审计线 | ☐ |
+| tests/test_delivery_outcome.py | PL2 平台审计线 | ☐ |
+| tests/test_delivery_summary.py | PL2 平台审计线 | ☐ |
+| tests/test_dependency_lock.py | PL2 平台审计线 | ☐ |
+| tests/test_deploy_publisher.py | PL2 平台审计线 | ☐ |
+| tests/test_development_gate_reconciliation.py | PL2 平台审计线 | ☐ |
+| tests/test_document_compact_cache.py | PL2 平台审计线 | ☐ |
+| tests/test_docx.py | PL2 平台审计线 | ☐ |
+| tests/test_docx_a3_regressions.py | PL2 平台审计线 | ☐ |
+| tests/test_docx_overlay_contract.py | PL2 平台审计线 | ☐ |
+| tests/test_docx_single_read.py | PL2 平台审计线 | ☐ |
+| tests/test_docx_structures.py | PL2 平台审计线 | ☐ |
+| tests/test_docx_tracked_input.py | PL2 平台审计线 | ☐ |
+| tests/test_downloaded_artifact_verification.py | PL2 平台审计线 | ☐ |
+| tests/test_duplicate_copy_scope.py | PL2 平台审计线 | ☐ |
+| tests/test_edit_summary.py | PL2 平台审计线 | ☐ |
+| tests/test_effect_semantic_residual.py | PL2 平台审计线 | ☐ |
+| tests/test_evaluation_matching.py | PL2 平台审计线 | ☐ |
+| tests/test_export_user_package.py | PL2 平台审计线 | ☐ |
+| tests/test_facts_recovery.py | PL2 平台审计线 | ☐ |
+| tests/test_facts_status.py | PL2 平台审计线 | ☐ |
+| tests/test_fee_evidence.py | PL2 平台审计线 | ☐ |
+| tests/test_fee_fact_evidence.py | PL2 平台审计线 | ☐ |
+| tests/test_fee_rate_before_noun.py | PL2 平台审计线 | ☐ |
+| tests/test_feishu_app_onboarding.py | PL2 平台审计线 | ☐ |
+| tests/test_feishu_integration.py | PL2 平台审计线 | ☐ |
+| tests/test_feishu_oauth_api.py | PL2 平台审计线 | ☐ |
+| tests/test_ff4d749_gate_closure.py | PL2 平台审计线 | ☐ |
+| tests/test_final_validation_regressions.py | PL2 平台审计线 | ☐ |
+| tests/test_fingerprint_engine_build.py | PL2 平台审计线 | ☐ |
+| tests/test_first_batch_label_20261028.py | PL2 平台审计线 | ☐ |
+| tests/test_fl_d119_guards.py | PL2 平台审计线 | ☐ |
+| tests/test_fl_d286_api_safety.py | PL2 平台审计线 | ☐ |
+| tests/test_fl_d573_fragment_bounds.py | PL2 平台审计线 | ☐ |
+| tests/test_fl_d585_excised_by_replace.py | PL2 平台审计线 | ☐ |
+| tests/test_fl_d587_g08_variant.py | PL2 平台审计线 | ☐ |
+| tests/test_fl_d588_g08_variant_authorization.py | PL2 平台审计线 | ☐ |
+| tests/test_fl_d608_definition_group_chain.py | PL2 平台审计线 | ☐ |
+| tests/test_fl_d690_residual_clause_repair.py | PL2 平台审计线 | ☐ |
+| tests/test_fl_d692_scorer_classfold.py | PL2 平台审计线 | ☐ |
+| tests/test_fl_d790_append_window.py | PL2 平台审计线 | ☐ |
+| tests/test_fl_d791_sentence_boundary_probe.py | PL2 平台审计线 | ☐ |
+| tests/test_frontend_entry.py | PL2 平台审计线 | ☐ |
+| tests/test_frozen_replay.py | PL2 平台审计线 | ☐ |
+| tests/test_fullwidth_heading_guard.py | PL2 平台审计线 | ☐ |
+| tests/test_fuzzy_clause_unterminated_paragraph.py | PL2 平台审计线 | ☐ |
+| tests/test_g02_g04_occurrence.py | PL2 平台审计线 | ☐ |
+| tests/test_g06_absent_coverage_delete.py | PL2 平台审计线 | ☐ |
+| tests/test_g08_partial_policy.py | PL2 平台审计线 | ☐ |
+| tests/test_g08_same_sentence_exemption.py | PL2 平台审计线 | ☐ |
+| tests/test_g09_replay_proof.py | PL2 平台审计线 | ☐ |
+| tests/test_g11_class_prefix.py | PL2 平台审计线 | ☐ |
+| tests/test_g11_split_target.py | PL2 平台审计线 | ☐ |
+| tests/test_g12_allocation_variant.py | PL2 平台审计线 | ☐ |
+| tests/test_g12_list_prefix.py | PL2 平台审计线 | ☐ |
+| tests/test_g12_semicolon_variant.py | PL2 平台审计线 | ☐ |
+| tests/test_g14_fee_rate_variant.py | PL2 平台审计线 | ☐ |
+| tests/test_g15_business_notice.py | PL2 平台审计线 | ☐ |
+| tests/test_g15_cross_paragraph_delay.py | PL2 平台审计线 | ☐ |
+| tests/test_g15_payment_delay_boundary.py | PL2 平台审计线 | ☐ |
+| tests/test_g16_clause_duplicate_effect.py | PL2 平台审计线 | ☐ |
+| tests/test_g17_usage_site_closure.py | PL2 平台审计线 | ☐ |
+| tests/test_g22_variant_span.py | PL2 平台审计线 | ☐ |
+| tests/test_generation_claim_replay.py | PL2 平台审计线 | ☐ |
+| tests/test_generation_coverage.py | PL2 平台审计线 | ☐ |
+| tests/test_generation_registry.py | PL2 平台审计线 | ☐ |
+| tests/test_generation_router_escalation.py | PL2 平台审计线 | ☐ |
+| tests/test_generation_template.py | PL2 平台审计线 | ☐ |
+| tests/test_generation_tier1.py | PL2 平台审计线 | ☐ |
+| tests/test_generation_validators.py | PL2 平台审计线 | ☐ |
+| tests/test_generation_verify.py | PL2 平台审计线 | ☐ |
+| tests/test_guide.py | PL2 平台审计线 | ☐ |
+| tests/test_guide_api.py | PL2 平台审计线 | ☐ |
+| tests/test_guide_canary.py | PL2 平台审计线 | ☐ |
+| tests/test_guide_diff.py | PL2 平台审计线 | ☐ |
+| tests/test_guide_diff_api.py | PL2 平台审计线 | ☐ |
+| tests/test_guide_generation.py | PL2 平台审计线 | ☐ |
+| tests/test_guide_generation_mysql_schema.py | PL2 平台审计线 | ☐ |
+| tests/test_guide_generation_pipeline.py | PL2 平台审计线 | ☐ |
+| tests/test_guide_generation_transport_pause.py | PL2 平台审计线 | ☐ |
+| tests/test_guide_generation_vector.py | PL2 平台审计线 | ☐ |
+| tests/test_guide_parse_quality.py | PL2 平台审计线 | ☐ |
+| tests/test_guide_quality_gate.py | PL2 平台审计线 | ☐ |
+| tests/test_guide_remediation_config.py | PL2 平台审计线 | ☐ |
+| tests/test_guide_remediation_eligibility.py | PL2 平台审计线 | ☐ |
+| tests/test_guide_remediation_worker_engine.py | PL2 平台审计线 | ☐ |
+| tests/test_guide_smoke.py | PL2 平台审计线 | ☐ |
+| tests/test_guide_store.py | PL2 平台审计线 | ☐ |
+| tests/test_guide_text_diff_api.py | PL2 平台审计线 | ☐ |
+| tests/test_hard_fact_veto.py | PL2 平台审计线 | ☐ |
+| tests/test_inventory_location_normalisation.py | PL2 平台审计线 | ☐ |
+| tests/test_inventory_truncation.py | PL2 平台审计线 | ☐ |
+| tests/test_joint_compose.py | PL2 平台审计线 | ☐ |
+| tests/test_loop6_repairs.py | PL2 平台审计线 | ☐ |
+| tests/test_merged_definition_append.py | PL2 平台审计线 | ☐ |
+| tests/test_missing_group_components.py | PL2 平台审计线 | ☐ |
+| tests/test_model.py | PL2 平台审计线 | ☐ |
+| tests/test_model_roles.py | PL2 平台审计线 | ☐ |
+| tests/test_model_settings.py | PL2 平台审计线 | ☐ |
+| tests/test_multicomponent_satisfaction_guards.py | PL2 平台审计线 | ☐ |
+| tests/test_multiline_quote_verification.py | PL2 平台审计线 | ☐ |
+| tests/test_object_gc.py | PL2 平台审计线 | ☐ |
+| tests/test_obligations.py | PL2 平台审计线 | ☐ |
+| tests/test_observability.py | PL2 平台审计线 | ☐ |
+| tests/test_open_obligation_recovery.py | PL2 平台审计线 | ☐ |
+| tests/test_operation_execution_closure.py | PL2 平台审计线 | ☐ |
+| tests/test_p6_package.py | PL2 平台审计线 | ☐ |
+| tests/test_p6_run.py | PL2 平台审计线 | ☐ |
+| tests/test_p6_score_append.py | PL2 平台审计线 | ☐ |
+| tests/test_p6_score_first_batch_schema.py | PL2 平台审计线 | ☐ |
+| tests/test_p6_score_sites.py | PL2 平台审计线 | ☐ |
+| tests/test_pilot_compare.py | PL2 平台审计线 | ☐ |
+| tests/test_pipeline.py | PL2 平台审计线 | ☐ |
+| tests/test_pipeline_failure_metering.py | PL2 平台审计线 | ☐ |
+| tests/test_plan_output_guard.py | PL2 平台审计线 | ☐ |
+| tests/test_plan_rejected_replay_sites.py | PL2 平台审计线 | ☐ |
+| tests/test_policy_clause_number_preservation.py | PL2 平台审计线 | ☐ |
+| tests/test_qa_20261031_regressions.py | PL2 平台审计线 | ☐ |
+| tests/test_qa_worker_20261031.py | PL2 平台审计线 | ☐ |
+| tests/test_qualification_evidence.py | PL2 平台审计线 | ☐ |
+| tests/test_recall_core.py | PL2 平台审计线 | ☐ |
+| tests/test_recall_integration.py | PL2 平台审计线 | ☐ |
+| tests/test_recall_pipeline.py | PL2 平台审计线 | ☐ |
+| tests/test_reconciliation.py | PL2 平台审计线 | ☐ |
+| tests/test_recovery.py | PL2 平台审计线 | ☐ |
+| tests/test_recovery_conservatism.py | PL2 平台审计线 | ☐ |
+| tests/test_recovery_final_invariants.py | PL2 平台审计线 | ☐ |
+| tests/test_remediation_append_canonical.py | PL2 平台审计线 | ☐ |
+| tests/test_remediation_engine_approval_binding.py | PL2 平台审计线 | ☐ |
+| tests/test_remediation_engine_approved_delete_offsets.py | PL2 平台审计线 | ☐ |
+| tests/test_remediation_engine_delivery_classifier.py | PL2 平台审计线 | ☐ |
+| tests/test_remediation_engine_semantic_audit_site.py | PL2 平台审计线 | ☐ |
+| tests/test_remediation_engine_summary_scope.py | PL2 平台审计线 | ☐ |
+| tests/test_remediation_engine_targeting_pagination.py | PL2 平台审计线 | ☐ |
+| tests/test_remediation_tasks_delivery.py | PL2 平台审计线 | ☐ |
+| tests/test_remediation_tasks_feishu.py | PL2 平台审计线 | ☐ |
+| tests/test_replace_clause_closure.py | PL2 平台审计线 | ☐ |
+| tests/test_replay_pagination.py | PL2 平台审计线 | ☐ |
+| tests/test_replay_site_provenance.py | PL2 平台审计线 | ☐ |
+| tests/test_retention.py | PL2 平台审计线 | ☐ |
+| tests/test_review_render_index.py | PL2 平台审计线 | ☐ |
+| tests/test_revision_api.py | PL2 平台审计线 | ☐ |
+| tests/test_revision_view_cache.py | PL2 平台审计线 | ☐ |
+| tests/test_rule_recognition.py | PL2 平台审计线 | ☐ |
+| tests/test_rule_scope.py | PL2 平台审计线 | ☐ |
+| tests/test_rule_scope_integration.py | PL2 平台审计线 | ☐ |
+| tests/test_rule_scope_multileaf.py | PL2 平台审计线 | ☐ |
+| tests/test_rules_catalogue.py | PL2 平台审计线 | ☐ |
+| tests/test_run_store_fencing.py | PL2 平台审计线 | ☐ |
+| tests/test_runtime_budget_observation.py | PL2 平台审计线 | ☐ |
+| tests/test_selective.py | PL2 平台审计线 | ☐ |
+| tests/test_semantic_contract_v2.py | PL2 平台审计线 | ☐ |
+| tests/test_semantic_evidence.py | PL2 平台审计线 | ☐ |
+| tests/test_single_delete_orphan_connector.py | PL2 平台审计线 | ☐ |
+| tests/test_split_definition_append.py | PL2 平台审计线 | ☐ |
+| tests/test_store_query_budget.py | PL2 平台审计线 | ☐ |
+| tests/test_strategy_consistency.py | PL2 平台审计线 | ☐ |
+| tests/test_superset_target_dedupe.py | PL2 平台审计线 | ☐ |
+| tests/test_sweep_recovery_routing.py | PL2 平台审计线 | ☐ |
+| tests/test_sweep_rule_scope.py | PL2 平台审计线 | ☐ |
+| tests/test_sweep_section_windows.py | PL2 平台审计线 | ☐ |
+| tests/test_sweep_truncation.py | PL2 平台审计线 | ☐ |
+| tests/test_targeting.py | PL2 平台审计线 | ☐ |
+| tests/test_targeting_approval.py | PL2 平台审计线 | ☐ |
+| tests/test_tasks_api.py | PL2 平台审计线 | ☐ |
+| tests/test_trace_sink.py | PL2 平台审计线 | ☐ |
+| tests/test_tracked_changes_overlay.py | PL2 平台审计线 | ☐ |
+| tests/test_upload_guard.py | PL2 平台审计线 | ☐ |
+| tests/test_upload_validation.py | PL2 平台审计线 | ☐ |
+| tests/test_user_configuration.py | PL2 平台审计线 | ☐ |
+| tests/test_user_model_connections.py | PL2 平台审计线 | ☐ |
+| tests/test_v2_actions16.py | PL2 平台审计线 | ☐ |
+| tests/test_v2_artifact_pipeline.py | PL2 平台审计线 | ☐ |
+| tests/test_v2_artifact_review.py | PL2 平台审计线 | ☐ |
+| tests/test_v2_engine.py | PL2 平台审计线 | ☐ |
+| tests/test_v2_evaluation.py | PL2 平台审计线 | ☐ |
+| tests/test_v2_matching.py | PL2 平台审计线 | ☐ |
+| tests/test_v2_release.py | PL2 平台审计线 | ☐ |
+| tests/test_v2_workbench.py | PL2 平台审计线 | ☐ |
+| tests/test_v3_delivery_review_gate.py | PL2 平台审计线 | ☐ |
+| tests/test_validator_hard_gate.py | PL2 平台审计线 | ☐ |
+| tests/test_variants.py | PL2 平台审计线 | ☐ |
+| tests/test_workspace_api.py | PL2 平台审计线 | ☐ |
+| tools/build_builtin_guide.py | PL2 平台审计线 | ☐ |
+| tools/compare_frozen_replay.py | PL2 平台审计线 | ☐ |
+| tools/deploy/check_publish_drift.sh | PL2 平台审计线 | ☐ |
+| tools/deploy/cleanup_test_accounts.sh | PL2 平台审计线 | ☐ |
+| tools/deploy/cloud_task_run.py | PL2 平台审计线 | ☐ |
+| tools/deploy/cloud_verify.py | PL2 平台审计线 | ☐ |
+| tools/deploy/deploy_recall.py | PL2 平台审计线 | ☐ |
+| tools/deploy/diff_status.py | PL2 平台审计线 | ☐ |
+| tools/deploy/fundlex-publish.sh | PL2 平台审计线 | ☐ |
+| tools/deploy/migrate_baseline.py | PL2 平台审计线 | ☐ |
+| tools/deploy/migrate_data.py | PL2 平台审计线 | ☐ |
+| tools/deploy/migrate_fixup.py | PL2 平台审计线 | ☐ |
+| tools/deploy/migrate_verify.py | PL2 平台审计线 | ☐ |
+| tools/deploy/migrate_verify_full.py | PL2 平台审计线 | ☐ |
+| tools/deploy/migrate_workspace.py | PL2 平台审计线 | ☐ |
+| tools/deploy/migrate_workspace_diff.py | PL2 平台审计线 | ☐ |
+| tools/deploy/publish_workspace.sh | PL2 平台审计线 | ☐ |
+| tools/deploy/push_with_token.sh | PL2 平台审计线 | ☐ |
+| tools/deploy/remote_workspace_check.py | PL2 平台审计线 | ☐ |
+| tools/deploy/setup_fundlex_ops.sh | PL2 平台审计线 | ☐ |
+| tools/deploy/ssh_probe.py | PL2 平台审计线 | ☐ |
+| tools/deploy/verify_sandbox_templates.sh | PL2 平台审计线 | ☐ |
+| tools/evaluation/action_fixture_audit.py | EVAL 评测线 | ☐ |
+| tools/evaluation/budget_preflight.py | EVAL 评测线 | ☐ |
+| tools/evaluation/build_labels_v2_20261028.py | EVAL 评测线 | ☐ |
+| tools/evaluation/build_revision_review_packet.py | EVAL 评测线 | ☐ |
+| tools/evaluation/compare_benchmark.py | EVAL 评测线 | ☐ |
+| tools/evaluation/compare_e2e.py | EVAL 评测线 | ☐ |
+| tools/evaluation/compare_evaluate.py | EVAL 评测线 | ☐ |
+| tools/evaluation/compare_fixture_builder.py | EVAL 评测线 | ☐ |
+| tools/evaluation/compare_gold.py | EVAL 评测线 | ☐ |
+| tools/evaluation/compare_wave_runs_20261031.py | EVAL 评测线 | ☐ |
+| tools/evaluation/controlled_regression.py | EVAL 评测线 | ☐ |
+| tools/evaluation/corpus_audit.py | EVAL 评测线 | ☐ |
+| tools/evaluation/delivery_e2e.py | EVAL 评测线 | ☐ |
+| tools/evaluation/development_gate_reconciliation.py | EVAL 评测线 | ☐ |
+| tools/evaluation/finalize_first_batch_labels_20261028.py | EVAL 评测线 | ☐ |
+| tools/evaluation/finalize_second_batch_labels_20261031.py | EVAL 评测线 | ☐ |
+| tools/evaluation/first_batch_label_20261028.py | EVAL 评测线 | ☐ |
+| tools/evaluation/generation_mix.py | EVAL 评测线 | ☐ |
+| tools/evaluation/matching_audit.py | EVAL 评测线 | ☐ |
+| tools/evaluation/p6_label.py | EVAL 评测线 | ☐ |
+| tools/evaluation/p6_langfuse_sync.py | EVAL 评测线 | ☐ |
+| tools/evaluation/p6_package.py | EVAL 评测线 | ☐ |
+| tools/evaluation/p6_run.py | EVAL 评测线 | ☐ |
+| tools/evaluation/p6_score.py | EVAL 评测线 | ☐ |
+| tools/evaluation/p6_select.py | EVAL 评测线 | ☐ |
+| tools/evaluation/p6_trace_report.py | EVAL 评测线 | ☐ |
+| tools/evaluation/pilot_compare.py | EVAL 评测线 | ☐ |
+| tools/evaluation/prepare_second_batch_run_20261031.py | EVAL 评测线 | ☐ |
+| tools/evaluation/production_first_batch_e2e_20261028.py | EVAL 评测线 | ☐ |
+| tools/evaluation/production_v1_e2e_20261026.py | EVAL 评测线 | ☐ |
+| tools/evaluation/real_contract_e2e_20261023.py | EVAL 评测线 | ☐ |
+| tools/evaluation/real_resume.py | EVAL 评测线 | ☐ |
+| tools/evaluation/real_scenarios.py | EVAL 评测线 | ☐ |
+| tools/evaluation/recall_run.py | EVAL 评测线 | ☐ |
+| tools/evaluation/release_evidence.py | EVAL 评测线 | ☐ |
+| tools/evaluation/remediation_probe_20261028.py | EVAL 评测线 | ☐ |
+| tools/evaluation/replay_checkpoints.py | EVAL 评测线 | ☐ |
+| tools/evaluation/sample_corpus.py | EVAL 评测线 | ☐ |
+| tools/evaluation/sample_corpus_audit.py | EVAL 评测线 | ☐ |
+| tools/evaluation/score_first_batch_20261029.py | EVAL 评测线 | ☐ |
+| tools/evaluation/select_second_batch_20261031.py | EVAL 评测线 | ☐ |
+| tools/evaluation/select_unseen.py | EVAL 评测线 | ☐ |
+| tools/evaluation/strategy_consistency.py | EVAL 评测线 | ☐ |
+| tools/evaluation/strictness_audit_20261028.py | EVAL 评测线 | ☐ |
+| tools/evaluation/sweep_scope_probe.py | EVAL 评测线 | ☐ |
+| tools/evaluation/task_revision_run.py | EVAL 评测线 | ☐ |
+| tools/evaluation/task_workbench_acceptance.py | EVAL 评测线 | ☐ |
+| tools/evaluation/v2_compare.py | EVAL 评测线 | ☐ |
+| tools/evaluation/v2_fixtures.py | EVAL 评测线 | ☐ |
+| tools/evaluation/v2_handover.py | EVAL 评测线 | ☐ |
+| tools/evaluation/v2_pilot.py | EVAL 评测线 | ☐ |
+| tools/evaluation/v2_result_package.py | EVAL 评测线 | ☐ |
+| tools/evaluation/validator_shadow.py | EVAL 评测线 | ☐ |
+| tools/evaluation/verify_downloaded_artifacts.py | EVAL 评测线 | ☐ |
+| tools/evaluation/verify_first_batch_labels_20261028.py | EVAL 评测线 | ☐ |
+| tools/evaluation/verify_labels_v2_20261028.py | EVAL 评测线 | ☐ |
+| tools/evaluation/verify_second_batch_labels_20261031.py | EVAL 评测线 | ☐ |
+| tools/evaluation/word_fixture.py | EVAL 评测线 | ☐ |
+| tools/guide_parse_benchmark.py | PL2 平台审计线 | ☐ |
+| tools/guide_quality_smoke.py | PL2 平台审计线 | ☐ |
+| tools/maintenance/prune_orphan_objects.py | PL2 平台审计线 | ☐ |
+| tools/ops/codex_persistent.sh | PL2 平台审计线 | ☐ |
+| tools/ops/configure_codex_full_access.py | PL2 平台审计线 | ☐ |
+| tools/ops/fundlex_backup.py | PL2 平台审计线 | ☐ |
+| tools/ops/install_codex_persistence.py | PL2 平台审计线 | ☐ |
+| tools/ops/verify_codex_persistence.py | PL2 平台审计线 | ☐ |
+| tools/replay_stage.py | PL2 平台审计线 | ☐ |
+| tools/research/_batch_scan.py | PL2 平台审计线 | ☐ |
+| tools/research/_m0_scan.py | PL2 平台审计线 | ☐ |
+| tools/research/_ooxml_census.py | PL2 平台审计线 | ☐ |
+| tools/research/_ooxml_deep.py | PL2 平台审计线 | ☐ |
+| tools/research/_probe2.py | PL2 平台审计线 | ☐ |
+| tools/research/_probe_contracts.py | PL2 平台审计线 | ☐ |
+| tools/research/_variant_lib.py | PL2 平台审计线 | ☐ |
+| tools/validate_frozen_case.py | PL2 平台审计线 | ☐ |
+
+## C. 语料
+
+- [ ] funds_word 全量 500+ 结构剖析 → EVAL 评测线（CORPUS_TYPOLOGY）
+- [ ] 第二波 100 份标签冻结 → wave2 线
+
+## 负责线分布
+- CX 比对线：19 项
+- EN1 recall线：10 项
+- EN2 引擎审计2线：64 项
+- EVAL 评测线：58 项
+- FE 前端主线：19 项
+- GG gg线：27 项
+- PL1 飞书线：23 项
+- PL2 平台审计线：280 项
+- V2 V2线：49 项

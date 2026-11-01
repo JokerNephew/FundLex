@@ -9,11 +9,19 @@ import sys
 from pathlib import Path
 
 from ..store import RunStore
-from .corpus_catalog import sync_corpus
+from .corpus_catalog import CorpusConfigError, sync_corpus
 from .model_router import GuideModelRouter
 from .pipeline import GuidePipeline, PipelineConfig
 from .store import GuideGenerationStore
 from .worker import GuideGenerationWorker
+
+
+def _repo_root() -> Path:
+    return Path(__file__).resolve().parent.parent.parent
+
+
+def _default_corpus_dir() -> str:
+    return os.environ.get("FUNDLEX_GUIDE_CORPUS_DIR") or str(_repo_root() / "funds_word")
 
 
 def _store(args) -> RunStore:
@@ -24,10 +32,19 @@ def _store(args) -> RunStore:
 def cmd_sync_corpus(args) -> int:
     store = _store(args)
     gg = GuideGenerationStore(store)
-    result = sync_corpus(gg, args.corpus_dir, limit=args.limit, force=args.force)
+    try:
+        result = sync_corpus(gg, args.corpus_dir, limit=args.limit, force=args.force)
+    except CorpusConfigError as exc:
+        print(f"corpus configuration error [{exc.code}]: {exc.detail}", file=sys.stderr)
+        return 2
     print(json.dumps({"snapshot": result.snapshot.to_dict(), "parsed": result.parsed,
                       "reused": result.reused, "skipped": result.skipped,
+                      "eligible_files": result.eligible_files,
                       "errors": result.errors[:20]}, ensure_ascii=False, indent=2))
+    if not result.snapshot.contract_version_ids:
+        print(f"corpus directory {args.corpus_dir} contains no eligible contracts "
+              "(empty snapshot would fail a run with CORPUS_EMPTY)", file=sys.stderr)
+        return 3
     return 0
 
 
@@ -42,7 +59,7 @@ def cmd_create_run(args) -> int:
         raise SystemExit("only DOCX/PDF regulations are supported")
     digest = hashlib.sha256(data).hexdigest()
     config = json.loads(args.config_json or "{}")
-    config.setdefault("corpus_dir", args.corpus_dir or os.environ.get("FUNDLEX_GUIDE_CORPUS_DIR", "funds_word"))
+    config.setdefault("corpus_dir", args.corpus_dir or _default_corpus_dir())
     run = gg.create_run(owner=args.owner, filename=source.name, source_type=suffix[1:],
                         source_sha256=digest, title=source.stem,
                         payload={"config": config, "source_sha256": digest})
@@ -109,7 +126,7 @@ def main(argv: list[str] | None = None) -> int:
     sub = parser.add_subparsers(dest="command", required=True)
 
     p = sub.add_parser("sync-corpus")
-    p.add_argument("--corpus-dir", default=os.environ.get("FUNDLEX_GUIDE_CORPUS_DIR", "funds_word"))
+    p.add_argument("--corpus-dir", default=_default_corpus_dir())
     p.add_argument("--limit", type=int, default=None)
     p.add_argument("--force", action="store_true")
     p.set_defaults(func=cmd_sync_corpus)

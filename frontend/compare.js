@@ -13,11 +13,38 @@
   const fileName = file => String(file?.name || '').replace(/\\/g, '/').split('/').pop();
   const legacyDoc = file => /\.doc$/i.test(fileName(file));
   const legacyDocMessage = files => `检测到 Word 97-2003 格式（.doc）文件：${files.map(fileName).join('、')}。请用 Word/WPS 打开后“另存为” .docx，再重新选择。`;
-  const uploadErrorLabel = code => code==='LEGACY_DOC_UNSUPPORTED'?'请将 .doc 另存为 .docx':code;
+  // FL-D856: every upload rejection code needs a readable cause and an honest
+  // recovery path — a rejected slot cannot be replaced pre-seal (manifest binds
+  // name+size), so the remedy is creating a fresh task.
+  // 与服务端 FUNDLEX_MAX_UPLOAD_BYTES 默认值一致；超限仍以服务端校验为准（FL-D859）。
+  const MAX_UPLOAD_BYTES = 25*1024*1024;
+  const uploadErrorLabel = code => ({
+    LEGACY_DOC_UNSUPPORTED:'请将 .doc 另存为 .docx 后重新选择',
+    COMPARE_ENCRYPTED_DOCX:'文件有密码保护，请解除密码后新建对比任务上传',
+    COMPARE_UNSUPPORTED_FORMAT:'仅支持 .docx 文件，请转换格式后新建对比任务上传',
+    COMPARE_INVALID_DOCX:'文件不是可用的 .docx 文档，请检查后新建对比任务上传',
+    COMPARE_UPLOAD_REJECTED:'文件未通过上传校验（可能超过大小限制），请处理后新建对比任务上传',
+    MANIFEST_ENTRY_NOT_FOUND:'上传文件与任务清单不匹配，请新建对比任务上传',
+    MANIFEST_FILE_MISMATCH:'替换文件与首次选择的文件名或大小不一致；如需更换文件，请新建对比任务上传',
+    UPLOAD_IDENTITY_CONFLICT:'该文件位已有其他文件；如需更换，请新建对比任务上传',
+  })[code] || code || '上传被拒';
   const relativePath = file => {
     const raw=String(file?.webkitRelativePath || '').replace(/\\/g, '/');
     if(raw) return raw.split('/').filter(Boolean).slice(1).join('/') || fileName(file);
     return fileName(file);
+  };
+  // FL-D980: parser coverage warnings 是机读 token（后端协议，测试锁定），
+  // 用户必须看到可读的「哪部分内容未纳入比对」，不能直露 token。
+  const COVERAGE_STORY_LABELS = {header:'页眉',footer:'页脚',footnote:'脚注',endnote:'尾注',comment:'批注'};
+  const COVERAGE_MARKER_LABELS = {drawing:'图形/图片',pict:'图形',object:'嵌入对象',AlternateContent:'复合内容',txbxContent:'文本框',sym:'符号'};
+  const coverageWarningLabel = w => {
+    const m = /^UNSUPPORTED_VISIBLE_CONTENT:(.+)$/.exec(String(w||''));
+    if(!m)return String(w||'');
+    const parts=m[1].split(':');
+    if(parts[0]==='table-wrapper')return `表格中的${COVERAGE_MARKER_LABELS[parts[1]]||parts[1]||'内容'}`;
+    const story=COVERAGE_STORY_LABELS[parts[0]];
+    if(story)return parts[1]?`${story}中的${COVERAGE_MARKER_LABELS[parts[1]]||'非文本内容'}`:`${story}内容`;
+    return `正文中的${COVERAGE_MARKER_LABELS[parts[0]]||parts[0]}`;
   };
   function pairRow(pair = {}, index) {
     const selected = [pair.left?.name || fileName(pair._left), pair.right?.name || fileName(pair._right)].filter(Boolean).join(' / ');
@@ -31,7 +58,7 @@
   function syncInputIndexes() { document.querySelectorAll('#compare-pair-inputs .compare-pair-input').forEach((row,i)=>{ row.dataset.pairIndex=String(i); row.querySelector('[data-compare-left]')?.setAttribute('data-compare-left',String(i)); row.querySelector('[data-compare-right]')?.setAttribute('data-compare-right',String(i)); row.querySelector('[data-compare-remove]')?.setAttribute('data-compare-remove',String(i)); }); }
   function selectedFiles() { return (state.inputs || []).map(x => ({ left: x._left || x.left, right: x._right || x.right })).filter(x => x.left || x.right); }
   function resetFolders() { state.folderLeft=[]; state.folderRight=[]; for(const id of ['compare-left-folder','compare-right-folder'])if($(id))$(id).value=''; }
-  function showCreate(show=true) { $('compare-create').hidden = !show; if (show) { clearTimeout(state.poll); state.requestToken++; $('compare-detail').hidden=true; setFullscreenViewer(false); state.view=null; state.mergedMarks=state.leftMarks=state.rightMarks=null; state.uploadDraft=null; state.inputs=[{}]; resetFolders(); $('compare-upload-message').textContent=''; $('compare-retry').hidden=true; $('compare-lines')?.replaceChildren(); for(const pane of [$('compare-word-merged-pane'),$('compare-word-left-pane'),$('compare-word-right-pane'),$('compare-left-pane'),$('compare-right-pane')]){clearVirtual(pane);if(pane)pane.innerHTML='';} renderInputs(); } }
+  function showCreate(show=true) { $('compare-create').hidden = !show; if (show) { clearTimeout(state.poll); state.requestToken++; $('compare-detail').hidden=true; setViewerOpen(false); state.view=null; state.mergedMarks=state.leftMarks=state.rightMarks=null; state.uploadDraft=null; state.inputs=[{}]; resetFolders(); $('compare-upload-message').textContent=''; $('compare-retry').hidden=true; $('compare-lines')?.replaceChildren(); for(const pane of [$('compare-word-merged-pane'),$('compare-word-left-pane'),$('compare-word-right-pane'),$('compare-left-pane'),$('compare-right-pane')]){clearVirtual(pane);if(pane)pane.innerHTML='';} renderInputs(); } }
   function statusLabel(v) { return ({...(window.FUNDLEX_STATUS_LABELS||{}),pending:'待上传',succeeded:'已处理',incomplete:'覆盖不完整',failed:'失败',sealed:'已提交',completed:'已处理'}[v] || '—'); }
   function taskMetrics(task) {
     const pairs=task.pairs||[], counts=task.counts||{};
@@ -64,12 +91,23 @@
   function pairErrorLabel(p) {
     if (p.viewError) return p.viewError;
     if (!p.error_code) return '';
+    // FL-D857: a sealed-incomplete pair carries no diagnostics; the truthful
+    // cause lives in the per-file rejection codes the payload already delivers.
+    if (p.error_code==='COMPARE_PAIR_INCOMPLETE') {
+      const bad=['left','right'].map(side=>({side,file:p[side]})).filter(x=>!x.file||x.file.upload_status!=='accepted');
+      if(!bad.length) return '该组文件不完整，请稍后重试';
+      // FL-D981: 文件级原因自带的「新建对比任务上传」补救与尾句重复，
+      // 尾句只补充「该组已判失败」的结论，不再重复补救路径。
+      return bad.map(x=>{const tag=x.side==='left'?'合同A':'合同B';
+        return x.file?.error_code?`${tag}：${uploadErrorLabel(x.file.error_code)}`:`${tag} 未成功上传`;
+      }).join('；')+'。该组已判失败，须新建任务补救。';
+    }
     const failure=p.diagnostics?.failure;
     if (!failure || failure.error_code!==p.error_code) return `处理失败，请稍后重试`;
-    return `处理失败：${failureStageLabel(failure.stage)}环节出错${failure.retryable?'，可重试':'，请重新创建合同组'}`;
+    return `处理失败：${failureStageLabel(failure.stage)}环节出错${failure.retryable?'，可重试':'，请新建对比任务后重试；若仍失败请联系支持'}`;
   }
   function renderPairs() {
-    $('compare-pair-list').innerHTML=`<div class="compare-pair-statuses">${state.pairs.map((p,i)=>`<button type="button" class="compare-pair-status ${p.id===state.selectedPairId?'is-selected':''} ${['succeeded','incomplete'].includes(p.status)?'is-done':''} ${p.status==='incomplete'?'is-incomplete':''} ${p.status==='failed'||p.viewError?'is-failed':''}" data-compare-pair="${i}"><span class="compare-pair-number">${String(i+1).padStart(2,'0')}</span><span class="compare-pair-main"><strong>${esc(p.label||`第 ${i+1} 组`)}</strong><small>合同A：${esc(p.left?.name||'未命名')} / 合同B：${esc(p.right?.name||'未命名')}</small></span><span class="compare-pair-state">${esc(statusLabel(p.status))}${p.summary?` · ${p.summary.total} 处`:''}</span>${p.error_code||p.viewError?`<span class="compare-pair-error" role="status">${esc(pairErrorLabel(p))}</span>`:''}</button>`).join('')}</div>`;
+    $('compare-pair-list').innerHTML=`<div class="compare-pair-statuses">${state.pairs.map((p,i)=>`<button type="button" role="tab" aria-selected="${p.id===state.selectedPairId?'true':'false'}" class="compare-pair-status ${p.id===state.selectedPairId?'is-selected':''} ${['succeeded','incomplete'].includes(p.status)?'is-done':''} ${p.status==='incomplete'?'is-incomplete':''} ${p.status==='failed'||p.viewError?'is-failed':''}" data-compare-pair="${i}"><span class="compare-pair-number">${String(i+1).padStart(2,'0')}</span><span class="compare-pair-main"><strong>${esc(p.label||`第 ${i+1} 组`)}</strong><small>合同A：${esc(p.left?.name||'未命名')} / 合同B：${esc(p.right?.name||'未命名')}</small></span><span class="compare-pair-state">${esc(statusLabel(p.status))}${p.summary?` · ${p.summary.total} 处`:''}</span>${p.error_code||p.viewError?`<span class="compare-pair-error" role="status">${esc(pairErrorLabel(p))}</span>`:''}</button>`).join('')}</div>`;
   }
   function markFiles(form, files, pair) { const ids=[]; for (const side of ['left','right']) { form.append('files',files[side],pair[side].name); ids.push(pair[side].client_id); } form.append('client_ids', JSON.stringify(ids)); }
   async function continueUploads() {
@@ -93,6 +131,9 @@
     const files=selectedFiles(), message=$('compare-upload-message');
     const legacy=files.flatMap(x=>[x.left,x.right]).filter(f=>f&&legacyDoc(f));
     if(legacy.length){message.textContent=legacyDocMessage(legacy);return;}
+    // FL-D859: 超大文件在客户端先拦截——服务端拒绝后同清单不可替换，只能新建任务。
+    const oversize=files.flatMap(x=>[x.left,x.right]).filter(f=>f&&f.size>MAX_UPLOAD_BYTES);
+    if(oversize.length){message.textContent=`单个文件最大 25MB，超出：${oversize.map(fileName).join('、')}。请压缩或拆分后重新选择。`;return;}
     if (!files.length || files.some(x=>!x.left||!x.right)) { message.textContent='每组都需要同时选择合同A和合同B的 DOCX 文件。'; return; }
     const identity=state.identityToken; const name=($('compare-name').value||'').trim()||`合同比对 ${new Date().toLocaleString('zh-CN',{hour12:false})}`; const pairs=files.map((x,i)=>{const leftId=`L${i}-${crypto.randomUUID()}`,rightId=`R${i}-${crypto.randomUUID()}`;return {client_pair_id:`P${i+1}`,label:`合同 ${i+1}`,left:{client_id:leftId,name:fileName(x.left),size:x.left.size},right:{client_id:rightId,name:fileName(x.right),size:x.right.size}};});
     const key=`compare-${Date.now()}-${crypto.randomUUID()}`; message.textContent='正在创建对比任务…'; $('compare-submit').disabled=true;
@@ -531,21 +572,22 @@
     const box=$('compare-selection-downloads'); if(!box)return;
     const artifacts=state.selectionDirty?[]:(state.selection?.artifacts||[]);
     if(!artifacts.length){box.replaceChildren();return;}
-    const labels={selected_final:'下载选择结果 DOCX',selected_redline:'下载选择结果（带修订痕迹）DOCX',selection_report_markdown:'下载选择报告（Markdown）',selection_report_json:'下载选择报告（JSON）'};
-    box.innerHTML=artifacts.map(item=>`<div class="compare-artifact"><button class="btn btn-sm" type="button" data-selection-download="${esc(item.download_url)}" data-selection-filename="${esc(`compare-v${item.version}-${item.kind}${item.kind.endsWith('docx')?'.docx':''}`)}" ${item.status==='stale'?'title="该版本已过期，仅作追溯"':''}>${esc(labels[item.kind]||item.kind)} · v${item.version}${item.status==='stale'?' · 已过期':''}</button></div>`).join('');
+    // FL-D982: 后端产物 kind 恒为 final/redline（store.SELECTION_KINDS），
+    // 旧标签表的 selected_* 键名从不命中，下载按钮直露裸 kind。
+    const labels={final:'下载选择结果 DOCX',redline:'下载选择结果（带修订痕迹）DOCX',selected_final:'下载选择结果 DOCX',selected_redline:'下载选择结果（带修订痕迹）DOCX',selection_report_markdown:'下载选择报告（Markdown）',selection_report_json:'下载选择报告（JSON）'};
+    box.innerHTML=artifacts.map(item=>{const isDocx=item.kind.endsWith('docx')||['final','redline'].includes(item.kind);return `<div class="compare-artifact"><button class="btn btn-sm" type="button" data-selection-download="${esc(item.download_url)}" data-selection-filename="${esc(`compare-v${item.version}-${item.kind}${isDocx?'.docx':''}`)}" ${item.status==='stale'?'title="该版本已过期，仅作追溯"':''}>${esc(labels[item.kind]||item.kind)} · v${item.version}${item.status==='stale'?' · 已过期':''}</button></div>`;}).join('');
   }
   function renderSelection() {
-    const s=state.selection, node=$('compare-selection-progress'), buttons=document.querySelectorAll('#compare-selection-left-all,#compare-selection-right-all,#compare-selection-preview,#compare-selection-generate,#compare-selection-save,#compare-selection-pending');
+    const s=state.selection, node=$('compare-selection-progress'), buttons=document.querySelectorAll('#compare-selection-left-all,#compare-selection-right-all,#compare-selection-generate,#compare-selection-save,#compare-selection-pending');
     if(!s){if(node)node.textContent='正在读取选择状态…';buttons.forEach(x=>{x.disabled=true;});return;}
     const {counts,total,pending}=selectionCounts();
     if(node)node.textContent=`已选择 ${total-pending} / ${total} 处 · 待选择 ${pending}`;
     const ready=selectionCanGenerate();
     const blocked=selectionIssues().some(x=>x.blocking), busy=state.selectionSaving||state.selectionBusy;
     $('compare-selection-issues').textContent=selectionIssues().filter(x=>x.blocking).map(x=>x.detail||x.code).join(' ');
-    const preview=$('compare-selection-preview'), generate=$('compare-selection-generate');
-    if(preview)preview.disabled=busy||state.selectionDirty;
+    const generate=$('compare-selection-generate');
     if(generate){generate.disabled=!ready;generate.title=pending?'所有差异都需要明确选择合同A或合同B':blocked?'当前结果包含暂不支持的结构':'生成选择结果';}
-    buttons.forEach(x=>{if(x!==preview&&x!==generate)x.disabled=busy;});
+    buttons.forEach(x=>{if(x!==generate)x.disabled=busy;});
     $('compare-selection-save').disabled=busy||!state.selectionDirty;
     $('compare-selection-pending').disabled=busy||!pending;
     for(const side of ['left','right'])$(`compare-selection-${side}-all`).textContent=`全部采用 ${side==='left'?'A':'B'}`;
@@ -585,12 +627,13 @@
     const binding=selectionBinding();if(!binding||state.selectionSaving||state.selectionBusy||state.selectionDirty||(kind==='generate'&&!selectionCanGenerate()))return;
     if(kind==='generate'&&binding.expected_epoch<1&&!state.selectionSaved){selectionStatus('请先保存当前选择，再生成选择结果。',true);return;}
     const context=selectionContext();state.selectionBusy=true;
-    selectionStatus(kind==='generate'?'正在生成选择结果 DOCX，请稍候…':'正在检查生成条件…');renderSelection();syncSelectionControls();
+    selectionStatus('正在生成选择结果 DOCX，请稍候…');renderSelection();syncSelectionControls();
     const headers={'Content-Type':'application/json'};
     if(kind==='generate'){state.generationKey ||= `compare-${crypto.randomUUID()}`;headers['Idempotency-Key']=state.generationKey;}
     try {
-      const body=kind==='preview'?{decisions:{...state.selectionDraft}}
-        :{expected_epoch:binding.expected_epoch,decision_hash:state.selection?.draft?.decision_hash||state.selection?.decision_hash||'',result_sha256:binding.result_sha256};
+      // 预览可生成性按钮已随 FL-D844 删除：点「生成选择结果」即由服务端校验，
+      // 阻塞原因经 selection-issues / selection-status 内联展示。
+      const body={expected_epoch:binding.expected_epoch,decision_hash:state.selection?.draft?.decision_hash||state.selection?.decision_hash||'',result_sha256:binding.result_sha256};
       const result=await json(`/api/compare/pairs/${encodeURIComponent(context.pairId)}/selection/${kind}`,{method:'POST',headers,body:JSON.stringify(body)});
       if(!selectionCurrent(context))return;
       if(kind==='generate'){
@@ -599,11 +642,10 @@
         state.selection=latest;state.selectionDraft={...(latest?.decisions||{})};state.selectionDirty=false;state.generationKey=null;
         selectionStatus(`已生成版本 ${result.version}，可下载选择结果、带修订痕迹的选择结果和报告。`);
       }
-      else {state.selection={...state.selection,assessment:result.assessment};const pending=result.assessment.pending_ids.length,blocked=selectionIssues().some(x=>x.blocking);selectionStatus(pending?`仍有 ${pending} 处待选择，全部明确选择后才能生成。`:blocked?'当前结果包含暂不支持的结构，请查看说明。':'当前选择可以提交生成；生成时还会校验 DOCX 结构。',!!(pending||blocked));}
     } catch(e){if(selectionCurrent(context))selectionStatus(e.raw||e.message,true);}
     finally {if(selectionCurrent(context)){state.selectionBusy=false;renderSelection();syncSelectionControls();}}
   }
-  const previewSelection=()=>selectionAction('preview'), generateSelection=()=>selectionAction('generate');
+  const generateSelection=()=>selectionAction('generate');
   async function downloadSelection(url, filename) {
     const context=selectionContext();
     try {
@@ -743,10 +785,10 @@
     requestAnimationFrame(()=>requestAnimationFrame(()=>{state.focusScrolling=false;}));
     requestAnimationFrame(drawLines);
   }
-  const DIFF_ITEM_HEIGHT=136, DIFF_RENDER_COUNT=24;
+  const DIFF_ITEM_HEIGHT=44, DIFF_RENDER_COUNT=24;
   function diffItemHtml(x,index,choice,disabled){
     const kind=x.type==='modify'?'修改':x.type==='insert'?'插入':'删除';
-    return `<div class="compare-diff-item ${choice!=='pending'?'is-selected-choice':''}" data-compare-diff="${esc(x.id)}"><button type="button" class="compare-diff-jump" data-compare-diff="${esc(x.id)}"><span class="compare-diff-index">${index+1}</span><span class="compare-diff-kind is-${esc(x.type)}">${esc(kind)}</span><span class="compare-diff-preview"><span>${esc(x.section||'正文')} · ${esc(x.left?.text||'')} ${x.right?.text?'→ '+esc(x.right.text):''}</span></span></button><div class="compare-choice" role="group" aria-label="${esc(x.id)} 采用 A 或 B"><label class="${choice==='left'?'is-checked':''}"><input type="radio" name="choice-${esc(x.id)}" value="left" data-selection-choice="left" data-diff-id="${esc(x.id)}" ${choice==='left'?'checked':''} ${disabled?'disabled':''}>采用 A</label><label class="${choice==='right'?'is-checked':''}"><input type="radio" name="choice-${esc(x.id)}" value="right" data-selection-choice="right" data-diff-id="${esc(x.id)}" ${choice==='right'?'checked':''} ${disabled?'disabled':''}>采用 B</label></div></div>`;
+    return `<div class="compare-diff-item ${choice!=='pending'?'is-selected-choice':''}" data-compare-diff="${esc(x.id)}"><button type="button" class="compare-diff-jump" data-compare-diff="${esc(x.id)}"><span class="compare-diff-index">${index+1}</span><span class="compare-diff-kind is-${esc(x.type)}">${esc(kind)}</span><span class="compare-diff-preview"><span>${esc(x.section||'正文')} · ${esc(x.left?.text||'')} ${x.right?.text?'→ '+esc(x.right.text):''}</span></span></button><div class="compare-choice" role="group" aria-label="${esc(x.id)} 采用 A 或 B"><label class="${choice==='left'?'is-checked':''}"><input type="radio" name="choice-${esc(x.id)}" value="left" data-selection-choice="left" data-diff-id="${esc(x.id)}" ${choice==='left'?'checked':''} ${disabled?'disabled':''} title="采用合同A此版本">A</label><label class="${choice==='right'?'is-checked':''}"><input type="radio" name="choice-${esc(x.id)}" value="right" data-selection-choice="right" data-diff-id="${esc(x.id)}" ${choice==='right'?'checked':''} ${disabled?'disabled':''} title="采用合同B此版本">B</label></div></div>`;
   }
   function renderDiffWindow(start){
     const list=$('compare-diff-list'),items=state.diffList||[];if(!list)return;
@@ -1037,19 +1079,28 @@
     virtualize($('compare-right-pane'),ensureDoc('right'),{charsPerLine:40,collectMarks:true,onChange:onVirtualChange});
     state.classicRendered=true;state.diffPositions=null;refreshDiffMarks();markActiveDiff();
   }
-  function setFullscreenViewer(open) {
+  // The result area is an inline region below the task header (chip strip
+  // replaces the old fullscreen dialog: no backdrop, no Esc, no close button,
+  // FL-D843).
+  function setViewerOpen(open) {
     const viewer=$('compare-viewer'); if(!viewer)return;
-    document.body.classList.toggle('compare-fullscreen-open', Boolean(open));
     viewer.hidden=!open;
-    const backdrop=$('compare-viewer-backdrop'); if(backdrop)backdrop.hidden=!open;
-    if(open)requestAnimationFrame(()=>viewer.focus?.());
+    // preventScroll：region 化后聚焦不再把主滚动区甩到结果区顶部，
+    // 保持任务头/合同组 chip 条在视野内（FL-D843 走查发现的跳动）。
+    if(open)requestAnimationFrame(()=>viewer.focus?.({preventScroll:true}));
   }
-  function closeViewer() {
-    setFullscreenViewer(false);
-    document.querySelector('.compare-pair-status.is-selected')?.focus?.();
+  // Pairs without a result yet (processing / failed) still open the region so
+  // their status reason reads in place instead of leaving stale results of
+  // the previously selected pair on screen.
+  function setViewerEmpty(message) {
+    const viewer=$('compare-viewer'); if(!viewer)return;
+    const on=Boolean(message);
+    $('compare-viewer-empty').hidden=!on;
+    $('compare-viewer-empty').textContent=message||'';
+    viewer.querySelectorAll('.compare-summary-row,.compare-word-toolbar,.compare-view-body').forEach(el=>{el.hidden=on;});
   }
   function renderViewer(payload) {
-    state.view=payload; state.alignment=null; state.diffIndex=0; const d=payload.diffs||[]; setFullscreenViewer(true);
+    state.view=payload; state.alignment=null; state.diffIndex=0; const d=payload.diffs||[]; setViewerEmpty(''); setViewerOpen(true);
     const pairLabel=payload.pair?.label||'合同比对';
     $('compare-pair-title').textContent=pairLabel;
     const leftName=payload.left?.name||'合同A',rightName=payload.right?.name||'合同B';
@@ -1060,7 +1111,6 @@
     $('compare-merged-title').textContent=pairLabel;
     const s=payload.summary||{};
     $('compare-summary').textContent=`共 ${s.total||0} 处差异 · 修改 ${s.modify||0} · 新增 ${s.insert||0} · 删除 ${s.delete||0}`;
-    $('compare-revision-count').textContent=String(d.length);
     $('compare-revision-count-rail').textContent=String(d.length);
     const cov=payload.coverage||{}; const incomplete=cov.status!=='complete'; const warnings=cov.warnings||[];
     const chip=$('compare-coverage-chip'), chipSummary=$('compare-coverage-summary'), chipList=$('compare-coverage-list');
@@ -1070,7 +1120,7 @@
       chipList.replaceChildren();
       if(incomplete){
         const intro=document.createElement('p'); intro.textContent='以下内容未纳入比较，请人工复核，不要据此确认全文无差异。'; chipList.append(intro);
-        if(warnings.length){const ul=document.createElement('ul'); warnings.forEach(warning=>{const li=document.createElement('li');li.textContent=warning;ul.append(li);});chipList.append(ul);}
+        if(warnings.length){const ul=document.createElement('ul'); warnings.forEach(warning=>{const li=document.createElement('li');li.textContent=coverageWarningLabel(warning);ul.append(li);});chipList.append(ul);}
       }
     }
     state.classicRendered=false; state.wordSourcesRendered=false; state.diffPositions=null;
@@ -1093,11 +1143,15 @@
     const p=state.pairs[index];if(!p)return;
     if(!fromRoute&&state.view&&api.navigate&&api.route?.().pair!==p.id){api.navigate('compare',{mode:'detail',id:state.task.id,pair:p.id});return;}
     if(state.selectionDirty){selectionStatus('请先保存当前选择，再切换合同组。',true);return;}
-    if(state.view?.pair?.id===p.id){state.pairIndex=index;state.selectedPairId=p.id;renderPairs();setFullscreenViewer(true);await loadSelection(p.id);return;}
+    if(state.view?.pair?.id===p.id){state.pairIndex=index;state.selectedPairId=p.id;renderPairs();setViewerOpen(true);await loadSelection(p.id);return;}
     resetSelection();const token=++state.requestToken;
     state.pairIndex=index;state.selectedPairId=p.id;state.view=null;state.classicRendered=false;state.wordSourcesRendered=false;state.diffPositions=null;state.docs=null;state.rawDocs=null;state.mergedMarks=state.wordLeftMarks=state.wordRightMarks=state.leftMarks=state.rightMarks=null;renderPairs();
-    setFullscreenViewer(false);$('compare-lines')?.replaceChildren();for(const pane of [$('compare-word-merged-pane'),$('compare-word-left-pane'),$('compare-word-right-pane'),$('compare-left-pane'),$('compare-right-pane')]){clearVirtual(pane);if(pane)pane.innerHTML='';}$('compare-pair-counter').textContent=`${index+1} / ${state.pairs.length}`;
-    if(!['succeeded','incomplete'].includes(p.status))return;
+    setViewerOpen(false);$('compare-lines')?.replaceChildren();for(const pane of [$('compare-word-merged-pane'),$('compare-word-left-pane'),$('compare-word-right-pane'),$('compare-left-pane'),$('compare-right-pane')]){clearVirtual(pane);if(pane)pane.innerHTML='';}
+    if(!['succeeded','incomplete'].includes(p.status)){
+      setViewerOpen(true); $('compare-pair-title').textContent=p.label||`第 ${index+1} 组`;
+      setViewerEmpty(pairErrorLabel(p)||'该组正在处理或等待上传，暂无比对结果。');
+      return;
+    }
     try {const payload=await json(`/api/compare/pairs/${encodeURIComponent(p.id)}/view`);if(token===state.requestToken){p.viewError='';renderPairs();renderViewer(payload);await loadSelection(p.id);}}
     catch(e){if(token===state.requestToken){p.viewError=`读取结果失败：${e.message}`;renderPairs();}}
   }
@@ -1115,7 +1169,7 @@
      try{const task=await json(`/api/compare/tasks/${encodeURIComponent(id)}`);if(token!==state.requestToken)return;
        const previousPairId=api.route?.().pair||state.selectedPairId;renderTask(task);
        const kept=state.pairs.findIndex(p=>p.id===previousPairId),idx=kept>=0?kept:state.pairs.findIndex(p=>['succeeded','incomplete'].includes(p.status));
-       if(idx>=0){if(state.selectedPairId===state.pairs[idx]?.id&&state.view){$('compare-viewer').hidden=false;$('compare-pair-counter').textContent=`${idx+1} / ${state.pairs.length}`;}else await openPair(idx,true);}else $('compare-viewer').hidden=true;
+       if(idx>=0){if(state.selectedPairId===state.pairs[idx]?.id&&state.view)$('compare-viewer').hidden=false;else await openPair(idx,true);}else $('compare-viewer').hidden=true;
        if(['queued','running','uploading'].includes(state.task?.status))schedulePoll(id);
      }catch(e){
        if(token!==state.requestToken)return;
@@ -1123,18 +1177,18 @@
        // leave the previous identity's task and pair cards on screen.
        clearTimeout(state.poll);state.task=null;state.pairs=[];state.selectedPairId=null;state.view=null;state.docs=null;state.rawDocs=null;
        state.mergedMarks=state.wordLeftMarks=state.wordRightMarks=state.leftMarks=state.rightMarks=null;state.selection=null;state.selectionDraft=null;
-       setFullscreenViewer(false);$('compare-detail').hidden=false;$('compare-pair-list').replaceChildren();$('compare-pair-counter').textContent='0 / 0';$('compare-summary').textContent='';$('compare-revision-count').textContent='0';$('compare-revision-count-rail').textContent='0';$('compare-diff-counter').textContent='0 / 0';$('compare-diff-list').innerHTML='';$('compare-selection-downloads').replaceChildren();
+       setViewerOpen(false);$('compare-detail').hidden=false;$('compare-pair-list').replaceChildren();$('compare-summary').textContent='';$('compare-revision-count-rail').textContent='0';$('compare-diff-counter').textContent='0 / 0';$('compare-diff-list').innerHTML='';$('compare-selection-downloads').replaceChildren();
        $('compare-task-name').textContent='任务不可用';
        $('compare-task-status').innerHTML=`读取任务失败：${esc(e.message)} <button class="btn btn-sm" type="button" data-compare-back-list>返回比对任务列表</button>`;
      }
    }
   function applyRoute(route){
-    if(route.view!=='compare'){clearTimeout(state.poll);closeViewer();return;}
+    if(route.view!=='compare'){clearTimeout(state.poll);setViewerOpen(false);return;}
     const mode=['list','new','detail'].includes(route.mode)?route.mode:'list';$('view-compare').dataset.mode=mode;
     if(mode==='detail'&&state.task?.id!==route.id)$('compare-task-name').textContent='正在读取任务…';
     if(mode==='new'){if($('compare-create').hidden)showCreate(true);return;}
     $('compare-create').hidden=true;
-    if(mode==='list'){$('compare-search').value=route.q||'';$('compare-list-filter').value=route.status||'';$('compare-detail').hidden=true;closeViewer();clearTimeout(state.poll);if(api.ready?.())loadTasks();return;}
+    if(mode==='list'){$('compare-search').value=route.q||'';$('compare-list-filter').value=route.status||'';$('compare-detail').hidden=true;setViewerOpen(false);clearTimeout(state.poll);if(api.ready?.())loadTasks();return;}
     if(!api.ready?.())return;
     if(route.id)openTask(route.id);else{$('compare-task-status').textContent='请先从比对任务列表选择任务。';$('compare-detail').hidden=false;}
   }
@@ -1163,14 +1217,16 @@
     document.addEventListener('fundlex:identity-reset',resetSelection);
     window.addEventListener('beforeunload',event=>{if(state.selectionDirty){event.preventDefault();event.returnValue='';}});
     $('compare-new')?.addEventListener('click',()=>api.navigate?api.navigate('compare',{mode:'new'}):showCreate(true)); $('compare-add-pair')?.addEventListener('click',()=>{const index=state.inputs.length;state.inputs.push({});$('compare-pair-inputs')?.insertAdjacentHTML('beforeend',pairRow({},index));syncInputIndexes();}); $('compare-submit')?.addEventListener('click',createTask); $('compare-refresh')?.addEventListener('click',loadTasks);
-    $('compare-close-viewer')?.addEventListener('click',closeViewer);
-    $('compare-viewer-backdrop')?.addEventListener('click',closeViewer);
     document.addEventListener('click',event=>{const chip=$('compare-coverage-chip');if(chip&&chip.open&&!event.target.closest('#compare-coverage-chip'))chip.open=false;});
-    document.addEventListener('keydown',event=>{if(event.key==='Escape'&&!$('compare-viewer').hidden){event.preventDefault();closeViewer();}});
-    $('compare-prev-diff')?.addEventListener('click',()=>focusDiff(state.diffIndex-1)); $('compare-next-diff')?.addEventListener('click',()=>focusDiff(state.diffIndex+1)); $('compare-prev-pair')?.addEventListener('click',()=>openPair(Math.max(0,state.pairIndex-1))); $('compare-next-pair')?.addEventListener('click',()=>openPair(Math.min(state.pairs.length-1,state.pairIndex+1))); $('compare-selection-left-all')?.addEventListener('click',()=>setAllSelections('left')); $('compare-selection-right-all')?.addEventListener('click',()=>setAllSelections('right')); $('compare-selection-pending')?.addEventListener('click',()=>{const index=visibleDiffs().findIndex(item=>selectionDecision(item.id)==='pending');if(index>=0)focusDiff(index);}); $('compare-selection-save')?.addEventListener('click',()=>saveSelectionDraft()); $('compare-selection-preview')?.addEventListener('click',previewSelection); $('compare-selection-generate')?.addEventListener('click',generateSelection); $('compare-active-only')?.addEventListener('change',drawLines); $('compare-diff-filter')?.addEventListener('change',()=>{state.diffIndex=0;renderDiffList();focusDiff(0);}); $('compare-diff-list')?.addEventListener('scroll',onDiffListScroll,{passive:true}); $('compare-retry')?.addEventListener('click',continueUploads); document.querySelectorAll('[data-word-pane]').forEach(btn=>btn.addEventListener('click',()=>setMobilePane(btn.dataset.wordPane))); $('compare-show-sources')?.addEventListener('change',e=>setSourcesVisible(e.target.checked)); $('compare-markup-mode')?.addEventListener('change',e=>setMarkupMode(e.target.value)); document.querySelectorAll('[data-compare-sources-close]').forEach(btn=>btn.addEventListener('click',()=>setSourcesVisible(false)));
+    $('compare-prev-diff')?.addEventListener('click',()=>focusDiff(state.diffIndex-1)); $('compare-next-diff')?.addEventListener('click',()=>focusDiff(state.diffIndex+1)); $('compare-selection-left-all')?.addEventListener('click',()=>setAllSelections('left')); $('compare-selection-right-all')?.addEventListener('click',()=>setAllSelections('right')); $('compare-selection-pending')?.addEventListener('click',()=>{const index=visibleDiffs().findIndex(item=>selectionDecision(item.id)==='pending');if(index>=0)focusDiff(index);}); $('compare-selection-save')?.addEventListener('click',()=>saveSelectionDraft()); $('compare-selection-generate')?.addEventListener('click',generateSelection); $('compare-active-only')?.addEventListener('change',drawLines); $('compare-diff-filter')?.addEventListener('change',()=>{state.diffIndex=0;renderDiffList();focusDiff(0);}); $('compare-diff-list')?.addEventListener('scroll',onDiffListScroll,{passive:true}); $('compare-retry')?.addEventListener('click',continueUploads); document.querySelectorAll('[data-word-pane]').forEach(btn=>btn.addEventListener('click',()=>setMobilePane(btn.dataset.wordPane))); $('compare-show-sources')?.addEventListener('change',e=>setSourcesVisible(e.target.checked)); $('compare-markup-mode')?.addEventListener('change',e=>setMarkupMode(e.target.value)); document.querySelectorAll('[data-compare-sources-close]').forEach(btn=>btn.addEventListener('click',()=>setSourcesVisible(false)));
       document.addEventListener('click',e=>{ const back=e.target.closest('[data-compare-back-list]');if(back){api.navigate?.('compare',{mode:'list'});return;}const task=e.target.closest('[data-compare-task]');if(task){openTask(task.dataset.compareTask);return;}const pair=e.target.closest('[data-compare-pair]');if(pair){openPair(Number(pair.dataset.comparePair));return;}const download=e.target.closest('[data-selection-download]');if(download){downloadSelection(download.dataset.selectionDownload,download.dataset.selectionFilename);return;}const diff=e.target.closest('[data-compare-diff]');if(diff&&!e.target.closest('input')){focusDiff(visibleDiffs().findIndex(x=>x.id===diff.dataset.compareDiff));return;}const mark=e.target.closest('#compare-word-merged-pane [data-diff-id],#compare-word-left-pane [data-diff-id],#compare-word-right-pane [data-diff-id],#compare-left-pane [data-diff-id],#compare-right-pane [data-diff-id]');if(mark){focusDiff(visibleDiffs().findIndex(x=>x.id===mark.dataset.diffId));return;}const remove=e.target.closest('[data-compare-remove]');if(remove){const index=Number(remove.dataset.compareRemove),row=remove.closest('.compare-pair-input');state.inputs.splice(index,1);row?.remove();if(!state.inputs.length){state.inputs=[{}];renderInputs();}else syncInputIndexes();return;} });
      document.addEventListener('keydown',e=>{if((e.key==='Enter'||e.key===' ')&&e.target.matches('#compare-word-merged-pane [data-diff-id],#compare-word-left-pane [data-diff-id],#compare-word-right-pane [data-diff-id],#compare-left-pane [data-diff-id],#compare-right-pane [data-diff-id]')){e.preventDefault();focusDiff(visibleDiffs().findIndex(x=>x.id===e.target.dataset.diffId));}});
-      document.addEventListener('change',e=>{const choice=e.target.closest('[data-selection-choice]');if(choice){chooseSelection(choice.dataset.diffId,choice.value);return;}const row=e.target.closest('.compare-pair-input');if(row&&e.target.matches('input[type=file]')){const i=Number(row.dataset.pairIndex),entry=state.inputs[i]||(state.inputs[i]={});entry[e.target.matches('[data-compare-left]')?'_left':'_right']=e.target.files?.[0]||null;row.querySelector('.compare-file-label').textContent=[entry._left?.name,entry._right?.name].filter(Boolean).join(' / ')||'尚未选择文件';return;}if(e.target.id==='compare-left-folder'||e.target.id==='compare-right-folder'){const side=e.target.id.includes('left')?'left':'right';state[`folder${side[0].toUpperCase()+side.slice(1)}`]=[...e.target.files].filter(f=>fileName(f).toLowerCase().endsWith('.docx')).sort((a,b)=>relativePath(a).localeCompare(relativePath(b)));const other=side==='left'?state.folderRight:state.folderLeft;if(!other?.length)return;const left=state.folderLeft||[],right=state.folderRight||[],map=new Map(right.map(f=>[relativePath(f),f])),used=new Set(),entries=left.map(f=>{const r=map.get(relativePath(f));if(r)used.add(r);return {_left:f,_right:r||null};});for(const f of right)if(!used.has(f))entries.push({_left:null,_right:f});state.inputs=entries;renderInputs();$('compare-upload-message').textContent=`已按相对路径配对 ${entries.filter(x=>x._left&&x._right).length} 组；${entries.filter(x=>!x._left||!x._right).length} 个文件未配对，可手工补齐。`;}});
+      document.addEventListener('change',e=>{const choice=e.target.closest('[data-selection-choice]');if(choice){chooseSelection(choice.dataset.diffId,choice.value);return;}const row=e.target.closest('.compare-pair-input');if(row&&e.target.matches('input[type=file]')){const i=Number(row.dataset.pairIndex),entry=state.inputs[i]||(state.inputs[i]={}),file=e.target.files?.[0]||null;entry[e.target.matches('[data-compare-left]')?'_left':'_right']=file;row.querySelector('.compare-file-label').textContent=[entry._left?.name,entry._right?.name].filter(Boolean).join(' / ')||'尚未选择文件';
+        // FL-D859: 选择文件后同步更新卡片文件名、has-file 态与按钮文案，
+        // 原实现只更新 sr-only 摘要，用户无法确认选择成功。
+        const card=e.target.closest('.compare-file-card');
+        if(card){const name=file?fileName(file):'';card.classList.toggle('has-file',!!name);const nameEl=card.querySelector('.compare-file-name');if(nameEl){nameEl.textContent=name||'尚未选择合同';nameEl.title=name;}const btn=card.querySelector('[data-compare-choose]');if(btn)btn.textContent=name?'更换文件':'选择文件';}
+        return;}if(e.target.id==='compare-left-folder'||e.target.id==='compare-right-folder'){const side=e.target.id.includes('left')?'left':'right';state[`folder${side[0].toUpperCase()+side.slice(1)}`]=[...e.target.files].filter(f=>fileName(f).toLowerCase().endsWith('.docx')).sort((a,b)=>relativePath(a).localeCompare(relativePath(b)));const other=side==='left'?state.folderRight:state.folderLeft;if(!other?.length)return;const left=state.folderLeft||[],right=state.folderRight||[],map=new Map(right.map(f=>[relativePath(f),f])),used=new Set(),entries=left.map(f=>{const r=map.get(relativePath(f));if(r)used.add(r);return {_left:f,_right:r||null};});for(const f of right)if(!used.has(f))entries.push({_left:null,_right:f});state.inputs=entries;renderInputs();$('compare-upload-message').textContent=`已按相对路径配对 ${entries.filter(x=>x._left&&x._right).length} 组；${entries.filter(x=>!x._left||!x._right).length} 个文件未配对，可手工补齐。`;}});
      bindCompareSplitter();
     bindPanelSplitters();
       for(const pane of allPanels()){
@@ -1183,7 +1239,7 @@
       document.querySelectorAll('[data-compare-view-mode]').forEach(button=>button.addEventListener('click',()=>setViewMode(button.dataset.compareViewMode)));
       document.querySelectorAll('#compare-classic-view [data-compare-side]').forEach(button=>button.addEventListener('click',()=>setClassicSide(button.dataset.compareSide)));
       try { const storedSources=localStorage.getItem('fundlex-compare-show-sources'); setSourcesVisible(storedSources==='1',false); const storedMarkup=localStorage.getItem('fundlex-compare-markup'); if(storedMarkup)setMarkupMode(storedMarkup,false); const storedPane=localStorage.getItem('fundlex-compare-mobile-pane'); if(storedPane)setMobilePane(storedPane,false); const storedMode=localStorage.getItem('fundlex-compare-view-mode'); if(storedMode)setViewMode(storedMode,false); const storedSide=localStorage.getItem('fundlex-compare-classic-side'); if(storedSide)setClassicSide(storedSide,false); } catch {}
-      document.addEventListener('fundlex:view',e=>{if(e.detail==='compare'){drawLines();}}); document.addEventListener('fundlex:identity-reset',()=>{clearTimeout(state.poll);state.identityToken++;state.listToken++;state.tasks=[];state.task=null;state.pairs=[];state.selectedPairId=null;state.view=null;state.mergedMarks=state.wordLeftMarks=state.wordRightMarks=state.leftMarks=state.rightMarks=null;state.selection=null;state.selectionDraft=null;state.selectionDirty=false;state.uploadDraft=null;state.inputs=[{}];state.requestToken++;state.selectionToken++;resetFolders();$('compare-create').hidden=true;$('compare-submit').disabled=false;$('compare-retry').hidden=true;$('compare-upload-message').textContent='';$('compare-name').value='';$('compare-detail').hidden=true;setFullscreenViewer(false);for(const pane of [$('compare-word-merged-pane'),$('compare-word-left-pane'),$('compare-word-right-pane'),$('compare-left-pane'),$('compare-right-pane')]){clearVirtual(pane);if(pane)pane.innerHTML='';}$('compare-diff-list').innerHTML='';$('compare-selection-downloads').replaceChildren();selectionStatus('');$('compare-lines')?.replaceChildren();$('compare-diff-counter').textContent='0 / 0';$('compare-revision-count').textContent='0';$('compare-revision-count-rail').textContent='0';renderInputs();renderTasks();}); state.inputs=[{}];renderInputs();applyRoute(api.route?.()||{view:'compare',mode:'list'});
+      document.addEventListener('fundlex:view',e=>{if(e.detail==='compare'){drawLines();}}); document.addEventListener('fundlex:identity-reset',()=>{clearTimeout(state.poll);state.identityToken++;state.listToken++;state.tasks=[];state.task=null;state.pairs=[];state.selectedPairId=null;state.view=null;state.mergedMarks=state.wordLeftMarks=state.wordRightMarks=state.leftMarks=state.rightMarks=null;state.selection=null;state.selectionDraft=null;state.selectionDirty=false;state.uploadDraft=null;state.inputs=[{}];state.requestToken++;state.selectionToken++;resetFolders();$('compare-create').hidden=true;$('compare-submit').disabled=false;$('compare-retry').hidden=true;$('compare-upload-message').textContent='';$('compare-name').value='';$('compare-detail').hidden=true;setViewerOpen(false);for(const pane of [$('compare-word-merged-pane'),$('compare-word-left-pane'),$('compare-word-right-pane'),$('compare-left-pane'),$('compare-right-pane')]){clearVirtual(pane);if(pane)pane.innerHTML='';}$('compare-diff-list').innerHTML='';$('compare-selection-downloads').replaceChildren();selectionStatus('');$('compare-lines')?.replaceChildren();$('compare-diff-counter').textContent='0 / 0';$('compare-revision-count-rail').textContent='0';renderInputs();renderTasks();}); state.inputs=[{}];renderInputs();applyRoute(api.route?.()||{view:'compare',mode:'list'});
   }
   if (document.readyState==='loading') document.addEventListener('DOMContentLoaded',bind); else bind();
 })();

@@ -16,7 +16,10 @@ import { TasksPage } from '../pages/Tasks'
 import { UsersPage } from '../pages/Users'
 import { getBasePath } from '../api/client'
 
-const ComparePage = lazy(() => import('../pages/Compare/ComparePage').then((module) => ({ default: module.ComparePage })))
+// FL-D846：比对链路拆三路由（P1 列表 / P2 新建 / P3 比对工作台）
+const CompareListPage = lazy(() => import('../pages/Compare/CompareListPage').then((module) => ({ default: module.CompareListPage })))
+const CompareNewPage = lazy(() => import('../pages/Compare/CompareNewPage').then((module) => ({ default: module.CompareNewPage })))
+const CompareTaskPage = lazy(() => import('../pages/Compare/CompareTaskPage').then((module) => ({ default: module.CompareTaskPage })))
 
 function AppRoutes() {
   const auth = useAuthStore()
@@ -39,7 +42,9 @@ function AppRoutes() {
     <Route path="/settings" element={<SettingsPage />} />
     <Route path="/models" element={<ModelSettingsPage />} />
      <Route path="/users" element={<UsersPage />} />
-     <Route path="/compare" element={<Suspense fallback={<Spinner label="正在加载合同对比" />}><ComparePage /></Suspense>} />
+     <Route path="/compare" element={<Suspense fallback={<Spinner label="正在加载合同对比" />}><CompareListPage /></Suspense>} />
+     <Route path="/compare/new" element={<Suspense fallback={<Spinner label="正在加载新建对比" />}><CompareNewPage /></Suspense>} />
+     <Route path="/compare/:taskId" element={<Suspense fallback={<Spinner label="正在加载比对工作台" />}><CompareTaskPage /></Suspense>} />
     <Route path="*" element={<Navigate to="/tasks" replace />} />
   </Route></Routes>
 }

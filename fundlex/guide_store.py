@@ -23,6 +23,7 @@ import uuid
 from pathlib import Path
 from typing import Any
 
+from .guide import FINDING_KIND_LABELS
 from .store import Conflict, RunStore, StoreError
 
 BUILTIN_GUIDE_ID = "builtin-v1"
@@ -170,13 +171,24 @@ def _quality_failure_issues(validation: dict[str, Any]) -> dict[str, Any]:
     """Structured, user-facing reasons when the quality channel rejects a parse."""
     verification = validation.get("verification")
     verification = verification if isinstance(verification, dict) else {}
+    findings = []
+    for finding in verification.get("findings") or []:
+        if not isinstance(finding, dict):
+            findings.append(finding)
+            continue
+        enriched = dict(finding)
+        # The finding ``kind`` is a machine enum; the owner UI renders
+        # ``kind_zh`` instead of the raw token (FL-D883/S5).
+        enriched.setdefault("kind_zh", FINDING_KIND_LABELS.get(str(finding.get("kind") or ""),
+                                                               "解析核验发现"))
+        findings.append(enriched)
     issues: dict[str, Any] = {
         "error_code": "GUIDE_VALIDATION_UNCLEAN",
         "clean": False,
         "errors": validation.get("errors") or [],
         "warnings": validation.get("warnings") or [],
         "coverage_gaps": validation.get("coverage_gaps") or [],
-        "verification": {"findings": verification.get("findings") or [],
+        "verification": {"findings": findings,
                          "invalid_findings": verification.get("invalid_findings") or 0,
                          "coverage_explanation": verification.get("coverage_explanation") or ""},
         "rounds": validation.get("rounds") or 0,
@@ -232,6 +244,16 @@ def _parse_enrichment(store: RunStore, version_id: str | None,
                                                   rule_problems=problems or None)
         except Exception:  # noqa: BLE001
             pass
+    try:
+        # Advisory version-level quality checklist (FL-D898): presentation
+        # quality and code-map completeness on top of the existing gates.
+        from .guide_quality import check_parse_quality
+        validation = (document.get("validation") or {}) if isinstance(document, dict) else {}
+        extras["quality_checklist"] = check_parse_quality(
+            source, document, validation=validation, canary=canary_report,
+            error_code=error_code)
+    except Exception:  # noqa: BLE001
+        pass
     return extras
 
 

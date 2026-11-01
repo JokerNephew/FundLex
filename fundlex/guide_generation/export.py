@@ -241,7 +241,10 @@ def render_evidence_html(package: dict[str, Any], *, title: str = "候选修改�
         </details>""")
     residual_rows = "".join(
         f"<tr><td>{_e(round_item.get('round_no'))}</td><td>{_e(round_item.get('status'))}</td>"
-        f"<td>{_e(round_item.get('new_patterns'))}</td><td>{_e(round_item.get('new_impact_count', ''))}</td></tr>"
+        f"<td>{_e(round_item.get('new_patterns'))}</td>"
+        # Persisted payload key is ``new_impacts`` (pipeline), fall back to the
+        # legacy name so older artifact payloads still render (FL-D825).
+        f"<td>{_e(round_item.get('new_impacts', round_item.get('new_impact_count', '')))}</td></tr>"
         for round_item in rounds)
     return f"""<!doctype html>
 <html lang="zh-CN"><head><meta charset="utf-8"><title>{_e(title)}</title>

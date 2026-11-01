@@ -2568,6 +2568,25 @@ def _quote_is_authorized_removal(quote: str, location: str, before_text: str,
         for index in range(position, position + len(compact))) for position in positions)
 
 
+def _canonical_echoed_target_id(echoed: str) -> str:
+    """Tolerant canonical form for a model-echoed target id.
+
+    Target ids embed the scope list (``S04_S05_...``) before ``#``.  A model
+    echo can stutter one scope token (``..._S27_S27#1~a:T013``); the verdict is
+    semantically valid evidence and must not be discarded on a string-identity
+    technicality (FL-D981: a dropped ``completed`` verdict resurfaced as
+    AUDIT_VERDICT_MISSING and vetoed the whole delivery).  Canonicalization
+    collapses *consecutive* duplicate scope tokens, which is a no-op for
+    legitimate ids (scope lists never repeat a token consecutively).  Anything
+    beyond a token stutter still fails closed at the caller.
+    """
+    head, sep, tail = echoed.partition("#")
+    tokens = head.split("_")
+    deduped = [token for index, token in enumerate(tokens)
+               if index == 0 or token != tokens[index - 1]]
+    return "_".join(deduped) + (sep + tail if sep else "")
+
+
 def _run_audit(model: Any, rules_by_id: dict[str, dict], targets: Sequence[Target],
                planned: dict[str, Any], original: DocumentInspection, actual: DocumentInspection,
                *, only_rules: set[str] | None = None, facts: Facts | None = None,
@@ -2681,6 +2700,16 @@ def _run_audit(model: Any, rules_by_id: dict[str, dict], targets: Sequence[Targe
                 continue
             target_id = str(item.get("target_id") or "")
             verdict = str(item.get("verdict") or "")
+            echoed_target_id = ""
+            if target_id and target_id not in ledger_ids:
+                # FL-D981: repair a stuttered echo before discarding the verdict.
+                # Adoption is fail-closed: exactly one supplied target may share
+                # the echoed id's canonical form, otherwise the item is dropped.
+                candidates = [candidate.target_id for candidate in rule_targets
+                              if _canonical_echoed_target_id(candidate.target_id)
+                              == _canonical_echoed_target_id(target_id)]
+                if len(candidates) == 1:
+                    echoed_target_id, target_id = target_id, candidates[0]
             if target_id not in ledger_ids or verdict not in {"completed", "incomplete", "wrong"}:
                 dropped.append({"code": "AUDIT_TARGET_UNKNOWN", "rule_id": rule_id,
                                 "target_id": target_id, "verdict": verdict})
@@ -2730,6 +2759,8 @@ def _run_audit(model: Any, rules_by_id: dict[str, dict], targets: Sequence[Targe
                             "affected_fact": str(item.get("affected_fact") or ""),
                             "affected_obligation": str(item.get("affected_obligation") or "")})
             result = results[-1]
+            if echoed_target_id:
+                result["identity_repaired_from"] = echoed_target_id
             result["site_signature"] = _audit_site_signature(rule_id, targets, planned, actual)
             if not verified or verdict in {"wrong", "incomplete"}:
                 from .generation.effects import effect_proof_passed

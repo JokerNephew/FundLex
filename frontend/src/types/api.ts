@@ -337,15 +337,22 @@ export interface CompareTask {
   updated_at?: string
 }
 
+export interface ComparePairSide {
+  name: string
+  upload_status?: string
+  error_code?: string | null
+}
+
 export interface ComparePair {
   id: Id
   label?: string
   ordinal?: number
   status: string
-  left: { name: string }
-  right: { name: string }
+  left: ComparePairSide
+  right: ComparePairSide
   summary?: { total?: number; modify?: number; insert?: number; delete?: number }
   error_code?: string | null
+  diagnostics?: { failure?: { error_code?: string; stage?: string; retryable?: boolean } | null } | null
 }
 
 export interface CompareUploadResult {

@@ -24,7 +24,7 @@ export function UsersPage() {
       const result = await request<{ users: AdminUser[] }>('/api/admin/users')
       setUsers(result.users)
     } catch (nextError) {
-      setError(nextError instanceof Error ? nextError.message : '用户读取失败')
+      setError(nextError instanceof ApiError && nextError.status === 403 ? '只有管理员可以管理账号。' : nextError instanceof Error ? nextError.message : '用户读取失败')
     } finally {
       setLoading(false)
     }
@@ -74,7 +74,7 @@ export function UsersPage() {
       <Button onClick={() => void load()} disabled={loading}>刷新</Button>
     </div>
     {error && <ErrorState error={error} />}
-    <Card>
+    {!error && <Card>
       <h2>创建用户</h2>
       <form className="action-row" onSubmit={create}>
         <input aria-label="用户名" placeholder="用户名" value={username} onChange={(event) => setUsername(event.target.value)} minLength={3} required />
@@ -86,8 +86,8 @@ export function UsersPage() {
         </Select>
         <Button variant="primary" type="submit" disabled={busy === 'create'}>创建</Button>
       </form>
-    </Card>
-    <Card>
+    </Card>}
+    {!error && <Card>
       <h2>账号列表</h2>
       {loading ? <Spinner /> : !users.length ? <div className="empty-state">暂无账号。</div> : <div className="table-scroll">
         <table className="data-table">
@@ -100,6 +100,6 @@ export function UsersPage() {
           </tr>)}</tbody>
         </table>
       </div>}
-    </Card>
+    </Card>}
   </>
 }

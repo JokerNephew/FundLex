@@ -576,3 +576,62 @@ def test_review_concurrency_keeps_rule_order_and_runs_in_parallel(monkeypatch):
     assert gateway.max_inflight >= 2
     assert result["rules"] == ["G01", "G02"]
     assert [item["rule_id"] for item in result["results"]] == ["G01", "G02"]
+
+
+def _audit_gateway(echo_transform):
+    """Fake model that echoes the supplied ledger ids through ``echo_transform``."""
+    import json
+
+    class Gateway:
+        max_context_chars = 60000
+        budget = None
+
+        def call(self, *, task_type, bounded_context, **kwargs):
+            ledger_text = bounded_context.split("[TARGET_LEDGER]\n", 1)[1].split(
+                "\n\n", 1)[0]
+            ledger = json.loads(ledger_text)
+            return SimpleNamespace(value={"results": [
+                {"target_id": echo_transform(item["target_id"]),
+                 "verdict": "completed", "reason": "ok",
+                 "evidence_quote": "赎回费"} for item in ledger]})
+
+    return Gateway()
+
+
+def _single_rule_audit(echo_transform):
+    inspection = Inspection(["赎回费用全额计入基金财产。"])
+    real_id = "S04_S05_S27#1~a:T013"
+    targets = [Target(real_id, "G13", "p0", "赎回费", "needs_edit", "test",
+                      0, 3, "resolved", True)]
+    planned = {"ledger": [{"target_id": real_id, "status": "planned"}]}
+    rules = {"G13": {"rule_id": "G13", "title": "G13", "section_hint": "费用",
+                     "requirement": "requirement",
+                     "operations": [{"op": "delete", "old_text": "赎回费"}]}}
+    return _run_audit(_audit_gateway(echo_transform), rules, targets, planned,
+                      inspection, inspection, facts=Facts())
+
+
+def test_audit_echo_stuttered_scope_token_is_adopted():
+    """FL-D981: a model echo repeating one scope token must not drop the verdict."""
+    result = _single_rule_audit(lambda ident: ident.replace("S27#", "S27_S27#"))
+    assert [item["target_id"] for item in result["results"]] == ["S04_S05_S27#1~a:T013"]
+    assert result["results"][0]["verdict"] == "completed"
+    assert result["results"][0]["identity_repaired_from"] == \
+        "S04_S05_S27_S27#1~a:T013"
+    assert [item for item in result["dropped"]
+            if item.get("code") == "AUDIT_TARGET_UNKNOWN"] == []
+
+
+def test_audit_echo_unknown_id_still_dropped_fail_closed():
+    """Identity repair never invents a target: a foreign id stays dropped."""
+    result = _single_rule_audit(lambda ident: "S99_S27#1~a:T999")
+    assert result["results"] == []
+    assert [item["code"] for item in result["dropped"]] == ["AUDIT_TARGET_UNKNOWN"]
+    assert result["dropped"][0]["target_id"] == "S99_S27#1~a:T999"
+
+
+def test_audit_echo_exact_id_matching_is_unchanged():
+    """The canonical form is a no-op for legitimate ids (regression guard)."""
+    result = _single_rule_audit(lambda ident: ident)
+    assert [item["target_id"] for item in result["results"]] == ["S04_S05_S27#1~a:T013"]
+    assert "identity_repaired_from" not in result["results"][0]
