@@ -68,9 +68,24 @@ MySQL gg_runs/gg_steps 实测：INGEST/EXTRACT/VERIFY 完成后，BUILD_CORPUS_S
 - 测试口径：树内 venv（python 3.11.13）+ PYTHONPATH=$PWD，`import fundlex` 实测解析到本 worktree（FL-D593 陷阱复核）。
 - 真实 E2E：见第 7 节。
 
-## 7. 真实端到端验证（任务4）
+## 7. 真实端到端验证（任务4）——已通过
 
-（待补录：systemd-run ProtectHome=true 沙箱口径、独立 sqlite 数据目录、真实模型、语料 /var/lib/fundlex/corpus/funds_word、法规 references/source/附件1：公开募集证券投资基金销售费用管理规定.pdf，corpus_limit=2。结果、run id、门禁、账本、耗时在完成后补录。）
+**口径**：systemd-run ProtectHome=true（生产线沙箱口径）、真实模型（FL-D445，无预算门禁）、语料 `/var/lib/fundlex/corpus/funds_word`（新口径）、法规 `references/source/附件1：公开募集证券投资基金销售费用管理规定.pdf`（真实公开法规）、corpus_limit=2、sqlite 隔离数据目录与隔离账本（不触生产 MySQL/生产账本）；代码为经快照复制的本 worktree（含全部本线修复），venv editable finder 指向已改至 /tmp 复制树（FL-D593 口径复核）。
+
+**结果**（run `06fc7cd96c83443c96e7804cc1df91a0`，2026-11-01，wall 1h15m29s，unit 退出码 0）：
+
+- **15/15 stage 全部 completed**（INGEST→BUILD_EVIDENCE），无一步失败/重试。
+- **终态 complete_with_unresolved，候选未获机器资格**——门禁按设计 fail-closed：open critical=15、unresolved impacts=26、requirement gap=1；`independent_model_review_qualified=false`（本环境只有单一真实模型，author==reviewer，独立性门禁正确拒绝）；`quality.run_status=fail`、`coverage.run_status=complete_with_unresolved`。其余 7 项 checks 全 true。**这证明资格链不会把有未决问题的候选包装成 complete**。
+- **FL-D821 实证**：`corpus_sync={eligible_files:514, corpus_limit:2, parsed:2, errors:[]}`——新语料路径在 ProtectHome=true 下可读，截断账本字段按修复后形态落库。
+- **FL-D830 实证**：BUILD_CORPUS_SNAPSHOT 以 contract-segmenter-2 解析，errors=0。
+- 规模：requirements 60、impacts 645（definite 97 / possible 403）、sweep batches 60、guide_items 61、findings 218、模型调用 808 次（gg_model_calls 全量记账）。
+- **产物与哈希**：guide/guide_ai docx（49,582B）、evidence_json（6.24MB）、evidence_html（493KB）四件 artifact 落库，**逐字节重哈希与登记值一致**。
+- **账本（观测）**：隔离账本 812 次请求，charged $0.4542（reserved 估算 $4.646，观测口径不作门禁，符合 FL-D445）。
+- 延迟分布实测：抽取/扫描/复核/覆盖全链 LRU 无中断；单 run 1h15m 于 corpus_limit=2，为发布守门 PILOT run 提供了真实时长基线（limit=1 预期更短）。
+
+**负向冒烟（发布形态，FL-D821 语义实证）**：同沙箱口径下 `sync-corpus --corpus-dir /nonexistent/corpus` → **exit 2**（CORPUS_DIR_MISSING，stderr 明确提示）；`--corpus-dir /var/lib/fundlex/corpus/funds_word --limit 2` → **exit 0**。发布树形态下「默认回退不存在路径」的情形将显式失败为 CORPUS_DIR_MISSING，不再静默空语料。
+
+**结论**：默认任务入口在真实模型+生产沙箱口径下可完整跑通并按门禁交付候选工作文件（含人工复核面），未依赖任何临时开关；本线修复点（截断账本、分段器 v2、修复 finding 形态）在实际产物中可见，配置错误路径在发布形态下显式失败。
 
 ## 8. 遗留与边界（如实声明）
 

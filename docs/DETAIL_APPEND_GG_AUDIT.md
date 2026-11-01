@@ -4,7 +4,7 @@
 > - 新增 `tests/test_guide_generation_hardening.py` **15 项全部通过**，覆盖 FL-D821×9、FL-D823×1、FL-D825×1、FL-D826×2、FL-D830×2。
 > - 既有 gg 套件回归（test_guide_generation/pipeline/api/vector/guide/store/remediation_config/eligibility/worker_engine/transport_pause/mysql_schema，11 文件）**134 项全部通过**（76.5s，1 个 starlette deprecation warning）。
 > - 全部修改文件 py_compile 通过；`import fundlex` 解析路径实测指向本 worktree（FL-D593 口径）。
-> - 真实 E2E（真实模型、systemd-run ProtectHome=true、语料 /var/lib/fundlex/corpus/funds_word、sqlite 隔离数据目录）进行中，结果补录于 AUDIT_REPORT 第 7 节。
+> - **真实 E2E 已完成（2026-11-01）**：run 06fc7cd96c83443c96e7804cc1df91a0，真实模型、systemd-run ProtectHome=true、语料 /var/lib/fundlex/corpus/funds_word、隔离 sqlite/账本；15/15 stage completed，终态 complete_with_unresolved（门禁 fail-closed 合格），808 次调用全量记账，4 件 artifact 哈希一致；负向冒烟 exit 2/0 符合 FL-D821 语义。详见 AUDIT_REPORT 第 7 节；本线代码改动未发布（发布执行与守门属主线）。
 
 > 本附录为 qa-gg-audit 专项线（worktree `/home/opencode/.local/share/opencode/worktree/29a9a9/qa-gg-audit`，基线 158475f）在工作期间的登记草稿，编号段 FL-D820~829。合并时由主线统一并入 `docs/DETAIL_ISSUES_AND_RESOLUTIONS.md`，不重建编号、不删除历史结论。
 > 格式与集中记录一致：发现日期 / 问题与影响 / 证据 / 处理方法 / 状态与验证 / 下一步 / 变更记录。
@@ -16,7 +16,7 @@
 - 问题与影响：`scan_corpus_directory` 对不存在/不可读目录静默返回 `[]`（`is_dir()` 为 False 直接返回），缺失、无权限、真空目录三种情况统一汇入空快照；pipeline 只能在其后抛 `CORPUS_EMPTY`，运维无法区分「配置缺失」（部署形态问题）与「语料真的为空」。发布树 `/opt/fundlex-recall-first/funds_word` 不存在，一旦 `FUNDLEX_GUIDE_CORPUS_DIR` 未设置/被覆盖，回退路径即落入此含混失败。CLI `sync-corpus` 对空快照仍 `return 0`；`create-run` 的 corpus_dir 默认是相对路径 `funds_word`（随 CWD 漂移，旁路 `PipelineConfig` 的仓库根绝对回退）。
 - 证据：`fundlex/guide_generation/corpus_catalog.py` 原 67-76 行；`cli.py` 原 27-31/45/112 行；生产 run a552520cf648451c93ed82d954bdfe19 实际 error_code=`[Errno 13] Permission denied: '/home/opencode/data/funds_word'`（MySQL gg_runs/gg_steps，BUILD_CORPUS_SNAPSHOT 阶段），证明不可读目录的失败以裸 OSError 形式冒泡、随 Python 版本与权限形态不稳定。
 - 处理方法：新增 `CorpusConfigError`（稳定 code），`sync_corpus` 前 `_validated_corpus_root` 用 `os.listdir` 精确区分 `CORPUS_DIR_MISSING`（不存在/非目录/未配置）与 `CORPUS_DIR_UNREADABLE`（无权限）；glob 扫描异常同归为 UNREADABLE；`SyncResult.eligible_files` 记录 limit 截断前 eligible 文件数并写入 run payload `corpus_sync`（含 corpus_limit）。CLI：sync-corpus 配置错误 stderr+exit 2，空快照 stderr 警告+exit 3；CLI 全部 corpus 默认改为「env 或仓库根绝对路径」，删除相对 `funds_word` 默认。
-- 状态与验证：**代码已实施（本 worktree），新增单测 11 项（tests/test_guide_generation_hardening.py FL-D821 段）：缺失/空串/文件路径→MISSING、chmod 0→UNREADABLE、空目录空快照不报错、limit 截断 eligible_files=2、pipeline stage 传播、CLI 2/3/0 退出码、默认绝对路径**。pytest 已验证（见下）；systemd-run 沙箱口径 E2E 进行中。尚未发布到生产树（发布归属主线守门，见报告建议）。
+- 状态与验证：**代码已实施（本 worktree），新增单测 9 项（tests/test_guide_generation_hardening.py FL-D821 段）：缺失/空串/文件路径→MISSING、chmod 0→UNREADABLE、空目录空快照不报错、limit 截断 eligible_files=2、pipeline stage 传播、CLI 2/3/0 退出码、默认绝对路径**。pytest 已验证（见总账）；发布形态负向冒烟已验证（systemd-run ProtectHome=true：不存在目录 exit 2=CORPUS_DIR_MISSING、合法目录 exit 0）；真实 E2E 中 corpus_sync 落库形态实证（eligible_files=514/limit=2/errors=0）。尚未发布到生产树（发布归属主线守门，见报告建议）。
 - 下一步：主线合并后按发布守门（PILOT run 冒烟）发布并验证生产 run 的 error_code 变为稳定分类码。
 - 变更记录：2026-11-01 新增。
 
