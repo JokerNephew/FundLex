@@ -93,3 +93,7 @@
 ### 2026-11-01 10:4x 会话映射补充
 - **A4vO9d5**=guide-generation 专项（ses_e6b1fb214ffe9UIKWT7A4vO9d5，worktree qa-gg-audit）：FL-D820 后续全面检查/守门补强/错误人读化；号段 FL-D820~829
 - 第三轮需求追加 5 项已发前端主线合并施工
+
+### 2026-11-01 12:1x 会话映射补充
+- **HOKfnt**=compare-ux 线（ses_e6acc8f6effe1JmCR2hnHOKfnt，worktree qa-compare-ux）：比对滚动丝滑+比对链路重设计；号段 FL-D840~859；与前端主线 compare 文件域错峰约定
+- gg-audit（A4vO9d5）扩权：审计→补完开发+充分测试（用户第 17 点）
