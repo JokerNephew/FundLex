@@ -8948,3 +8948,19 @@ H＝E×…
 ## FL-D1001 解析→引擎注册断路：O 层直接可用率=0（2026-11-01，EVAL 黄金集实测，open）
 - EVAL A2/A3 实测：解析产物在引擎注册处断路，"用户原话核心指标=直接可用率"归零；EVAL 拒绝绕口径跑分（正确）。
 - 裁定：修复归 EN1（A5 接口闭环），禁黄金集特判；修复后 EVAL 用预留 17 对补测双口径；修复前如实报 gate=0。
+
+## FL-D991 V2 下拉框组件替换：原生 select → Headless UI Listbox（总指挥令，2026-11-01，qa-frontend-v2 树）
+
+- **用户原话**：「下拉框的风格依旧很丑，你找找网上有没有别的组件能用的」。
+- **问题**：生产至今仍是原生 `<select>`（Compare/shared.tsx、Guides/CompareCard.tsx、Settings/ModelSettings.tsx 裸用，其余 10 处走旧 Select 封装=原生内核），历史只粉刷未换组件，观感与各 OS 原生样式绑定，无法统一。
+- **处理方法**：①联网调研 React 生态（@headlessui/react 2.2.10 依赖 5 / @radix-ui/react-select 2.4.1 依赖 ~20 / @floating-ui/react 仅定位引擎 / antd 6.6.8 死依赖零引用）——选型 Headless UI Listbox（零样式包袱、WAI-ARIA 完整、className 全自控），理由一句话报主线备案；②做共享组件 `frontend/src/components/ui/Listbox.tsx`（string|number 泛型、value 直传、键盘可达、表单安全、无匹配回退首项不回显码），`.ui-listbox*` 样式并入 `--ctl-*` 控件令牌矩阵，新增 `--shadow-overlay` 令牌；③V2 域 16 处用法全量替换并删除旧 Select.tsx；④新增 vitest 8 项；⑤组件 API 文档 `docs/frontend/LISTBOX_COMPONENT_API_20261101.md`（含 V1 集成说明，V1 页面集成归 FE 线）。
+- **验证**：tsc 0 错 / vitest 7 文件 32 项全绿 / vite build ✓（gzip +33.4 kB 代价明示）/ 浏览器 3 用例 PASS（模型配置、新建任务文件筛、对比查看器回归）；浏览器锚点 2 处随本工单有意升级（select_option → button+option 点击）。
+- **状态**：已实施并验证（分支 qa-frontend-v2-20261101，增量 commit）。V1 侧对齐动作移交 FE 线。
+
+### FL-D991 变更记录（2026-11-01 晚·总攻收口）
+
+- 联网核实三家 license 全 MIT（npm registry 实据）；选型三维度备案（体积+33.4kB/维护度 Tailwind Labs/暗色令牌零冲突）写入 API 文档与完工报告；package.json 遗留改动即本选型安装，一并交代。
+- 屏幕阅读器语义补强：vitest +3（aria 矩阵/label 包裹命名/axe 零违规），35/35 绿（commit 825cd36）。
+- 前后对照截图 9 张（c03af74 独立 worktree 构建 pre-dist，同机同视口桌面+移动，已回读复核）存 docs/frontend/evidence/listbox-20261101/；完工报告 FL_D991_COMPLETION_REPORT_20261101.md（用户原话 U1/U2 断言全 ✅）。
+- 质量双保险：A=自拍截图自检（有）；B=质检子agent 环境无 subagent 工具，如实申报并申请主线补派。
+- 状态：全工单项完成（S1+组件测试绿+选型备案），待主线验收；V1 集成移交主线另行排期。

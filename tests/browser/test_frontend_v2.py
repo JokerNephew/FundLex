@@ -169,7 +169,8 @@ def test_model_roles_and_confirmed_connection_test(browser, live_app, monkeypatc
         expect(primary).to_contain_text("修改模型")
         expect(cards.nth(1)).to_contain_text("复核模型")
         primary.get_by_role("button", name="修改配置").click()
-        primary.get_by_label("使用方式").select_option("personal")
+        primary.get_by_label("使用方式").click()
+        page.get_by_role("option", name="使用自己的模型").click()
         primary.get_by_label("访问密钥（API Key）").fill("browser-fixture-test-key")
         primary.locator('input[list="model-primary-suggestions"]').fill("fixture-model")
 
@@ -515,7 +516,8 @@ def test_new_task_manifest_search_filter_pagination_and_compare_entry(browser, l
         page.get_by_placeholder("搜索当前待提交文件").fill("10.docx")
         assert page.locator(".upload-manifest-table tbody tr").count() == 1
         page.get_by_placeholder("搜索当前待提交文件").fill("")
-        page.get_by_role("combobox").last.select_option("issue")
+        page.get_by_role("button", name="全部文件").click()
+        page.get_by_role("option", name="异常文件").click()
         assert "说明.txt" in page.locator("body").inner_text()
         assert page.locator(".upload-manifest-table tbody tr").count() == 1
 

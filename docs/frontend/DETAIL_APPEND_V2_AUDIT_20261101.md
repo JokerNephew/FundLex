@@ -25,6 +25,22 @@
 - **本轮修复（令牌级/词典级，全绿）**：V2M-02 `--accent*`→`--brand*` 6 处、V2M-03 两处 10px→`--text-2xs`、V2M-19 kicker 词典统一（对照结果/原合同/改后的合同）、V2M-10 CompareListPage 徽章传原始码。tsc 0 / vitest 24/24 / build ✓ / 浏览器对比查看器用例 PASS。
 - **新登记**：V2M-19（已修）、V2M-20（sanjin 表1 解释句残留 5 处，待裁决）、V2M-21（shared.tsx 两处未映射码原文回显，V2M-01 同族）。
 
+## 第四轮（2026-11-01 晚：FL-D991 下拉框组件替换）
+
+- **选型**：联网调研（npm registry 实据）@headlessui/react 2.2.10（依赖 5）vs @radix-ui/react-select 2.4.1（依赖 ~20）vs @floating-ui/react（仅定位）vs antd 6.6.8（死依赖零引用）→ Headless UI Listbox，理由一句话已报主线备案，对比与体积代价（gzip +33.4 kB）记入 API 文档。
+- **实施**：新组件 `components/ui/Listbox.tsx`（泛型 value 直传/键盘可达/表单安全/无匹配首项兜底）；`.ui-listbox*` 并入控件令牌矩阵（app.css 状态矩阵收编 button，新增 `--shadow-overlay` 令牌）；16 处用法全量替换（Tasks 4/TaskDetail 4/Users 1/NewTask 1/shared 2/CompareCard 2/ModelSettings 2），旧 `Select.tsx` 删除、`.ui-select*`/`.control-select` 死样式清零（grep 实证零残留）。
+- **测试**：vitest +8 项（tests/listbox.test.tsx）；浏览器锚点 2 处随 FL-D991 有意升级（`select_option` → button+option，选项面板 Portal 到 body 需 page 级定位）。
+- **四闸**：tsc 0 / vitest 32 项全绿 / build ✓ / 浏览器 3 用例 PASS。
+- **交接**：`docs/frontend/LISTBOX_COMPONENT_API_20261101.md`（API + 样式契约 + V1 集成说明，V1 集成归 FE 线）；集中册立 FL-D991 条目。
+
+## 第五轮（2026-11-01 夜：FL-D991 总攻收口——语义补强+前后对照截图+完工报告）
+
+- **语义补强**（commit 825cd36）：vitest +3 项（aria 矩阵 haspopup/expanded/selected+焦点落 listbox、label 包裹命名=「状态」（与原生 select 语义等同，修初稿断言）、axe.run 零违规），vitest 35/35。
+- **license 联网核实**：headlessui/radix-select/floating-ui 全 MIT（npm registry 实据），兼容性无碍。
+- **前后对照截图**：`c03af74` 独立 worktree+同 node_modules 构建 pre-dist，同机同服务同视口拍摄，证据 9 张存 `docs/frontend/evidence/listbox-20261101/`（桌面 tasks/models 前后、打开面板、键盘焦点、移动 390px 前后+打开）。拍摄坑位：pre 版原生 select 的 option 文本为 hidden 需 `state="attached"`；label 包裹场景 button 可访问名=「状态」非值文本。
+- **完工报告**：`FL_D991_COMPLETION_REPORT_20261101.md`（U1/U2 用户原话断言表+T1~T4/W1~W3 工单要求断言，全 ✅）。
+- **无新发现问题**，无需申请 FL 号段；**质检子agent 环境无工具可派**（如实申报，已申请主线补派，见报告 §3）。
+
 ## 验证口径说明（本批直接修的验证）
 
 - tsc --noEmit 0 错；vitest 6 文件 24 项全绿；vite build 成功。

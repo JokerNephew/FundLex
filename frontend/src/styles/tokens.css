@@ -71,6 +71,7 @@
 
   --focus: #b5471e;
   --shadow: 0 4px 18px rgb(34 40 48 / 0.05);
+  --shadow-overlay: 0 10px 28px rgb(34 40 48 / 0.13);
 
   /* ── 第三轮设计令牌镜像（源：docs/frontend/DESIGN_TOKENS_20261101.md，与 V1 app.css 同名同值）── */
   /* 字体 */

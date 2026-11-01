@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { api } from '../../api/endpoints'
 import { useGuideDiff, useGuideTextDiff } from '../../api/hooks'
-import { Button, Card, Spinner } from '../../components/ui'
+import { Button, Card, Listbox, Spinner } from '../../components/ui'
 import { ErrorState } from '../Tasks'
 import type { GuideDiffResult, GuideSummary, GuideTextDiffResult } from '../../types'
 
@@ -227,16 +227,12 @@ export function CompareCard({ items, currentId }: { items: GuideSummary[]; curre
     </div>
     <div className="action-row">
       <label>基准版本（旧）
-        <select aria-label="基准版本" value={effectiveAgainst} onChange={(event) => setAgainst(event.target.value)}>
-          {candidates.filter((item) => item.id !== effectiveTarget).map((item) =>
-            <option key={item.id} value={item.id}>{label(item)}</option>)}
-        </select>
+        <Listbox label="基准版本" value={effectiveAgainst} onChange={(value) => setAgainst(value)}
+          options={candidates.filter((item) => item.id !== effectiveTarget).map((item) => ({ value: item.id, label: label(item) }))} />
       </label>
       <label>对比版本（新）
-        <select aria-label="对比版本" value={effectiveTarget} onChange={(event) => setTarget(event.target.value)}>
-          {candidates.filter((item) => item.id !== effectiveAgainst).map((item) =>
-            <option key={item.id} value={item.id}>{label(item)}</option>)}
-        </select>
+        <Listbox label="对比版本" value={effectiveTarget} onChange={(value) => setTarget(value)}
+          options={candidates.filter((item) => item.id !== effectiveAgainst).map((item) => ({ value: item.id, label: label(item) }))} />
       </label>
     </div>
     {effectiveTarget && effectiveAgainst && effectiveTarget !== effectiveAgainst ? <>

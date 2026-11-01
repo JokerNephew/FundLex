@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ApiError, request } from '../../api/client'
-import { Button, Card, Select, Spinner, StatusBadge } from '../../components/ui'
+import { Button, Card, Listbox, Spinner, StatusBadge } from '../../components/ui'
 import { ErrorState } from '../Tasks'
 import type { User } from '../../types'
 
@@ -80,10 +80,7 @@ export function UsersPage() {
         <input aria-label="用户名" placeholder="用户名" value={username} onChange={(event) => setUsername(event.target.value)} minLength={3} required />
         <input aria-label="显示名称" placeholder="显示名称" value={displayName} onChange={(event) => setDisplayName(event.target.value)} />
         <input aria-label="初始密码" type="password" placeholder="初始密码" value={password} onChange={(event) => setPassword(event.target.value)} minLength={8} required />
-        <Select aria-label="角色" value={role} onChange={(event) => setRole(event.target.value)}>
-          <option value="member">普通用户</option>
-          <option value="admin">管理员</option>
-        </Select>
+        <Listbox label="角色" value={role} onChange={(value) => setRole(value)} options={[{ value: 'member', label: '普通用户' }, { value: 'admin', label: '管理员' }]} />
         <Button variant="primary" type="submit" disabled={busy === 'create'}>创建</Button>
       </form>
     </Card>}

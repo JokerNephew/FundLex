@@ -1,5 +1,5 @@
 import { createElement, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from 'react'
-import { Button, Spinner } from '../../components/ui'
+import { Button, Listbox, Spinner } from '../../components/ui'
 import type { CompareDiff, ComparePair, ComparePairManifest, CompareTask, CompareView } from '../../types'
 export const DOCX = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
 export type DirectoryFile = File & { webkitRelativePath?: string }
@@ -228,13 +228,13 @@ export function CompareReader({ view, selectedPair, viewQuery, activeDiff, visib
           <Button type="button" aria-pressed={viewMode === 'classic'} onClick={() => setViewMode('classic')}>双栏对照</Button>
         </div>
         {viewMode === 'word' && <label className="compare-word-toggle"><input type="checkbox" checked={showSources} onChange={(event) => setShowSources(event.target.checked)} /> 显示源文档</label>}
-        {viewMode === 'word' && <label className="compare-word-markup">显示<select value={markup} onChange={(event) => setMarkup(event.target.value as 'all' | 'simple' | 'final')}><option value="all">全部修改痕迹</option><option value="simple">只标位置</option><option value="final">最终样子</option></select></label>}
+        {viewMode === 'word' && <label className="compare-word-markup">显示<Listbox value={markup} onChange={(value) => setMarkup(value)} options={[{ value: 'all', label: '全部修改痕迹' }, { value: 'simple', label: '只标位置' }, { value: 'final', label: '最终样子' }]} /></label>}
       </div>
     </div>
     <div className="compare-view-body" data-view-mode={viewMode}>
       <aside className="compare-diff-rail compare-word-revisions" aria-labelledby="compare-rail-title">
         <div className="compare-word-pane-head compare-word-revisions-head"><div><span className="compare-word-pane-kicker">修订</span><strong id="compare-rail-title">{visibleDiffs.length} 处修订</strong></div><div className="compare-diff-nav"><Button type="button" onClick={() => focusDiff(diffIndex - 1)} disabled={!visibleDiffs.length}>↑ 上一处</Button><strong>{visibleDiffs.length ? `${diffIndex + 1} / ${visibleDiffs.length}` : '0 / 0'}</strong><Button type="button" onClick={() => focusDiff(diffIndex + 1)} disabled={!visibleDiffs.length}>下一处 ↓</Button></div></div>
-        <div className="compare-diff-toolbar"><label className="muted">筛选 <select value={diffType} onChange={(event) => setDiffType(event.target.value)}><option value="">全部</option><option value="modify">修改</option><option value="insert">新增</option><option value="delete">删除</option></select></label></div>
+        <div className="compare-diff-toolbar"><label className="muted">筛选 <Listbox value={diffType} onChange={(value) => setDiffType(value)} options={[{ value: '', label: '全部' }, { value: 'modify', label: '修改' }, { value: 'insert', label: '新增' }, { value: 'delete', label: '删除' }]} /></label></div>
         {viewQuery.error ? <div className="error-state">读取结果失败：{messageOf(viewQuery.error, '结果暂时不可用')}</div> : viewQuery.loading && !view ? <Spinner label="正在读取对比结果" /> : <div className="compare-diff-list">{visibleDiffs.length ? visibleDiffs.map((diff, index) => <div className={`compare-diff-item ${index === diffIndex ? 'is-active' : ''}`} key={diff.id}><button type="button" className="compare-diff-jump" onClick={() => focusDiff(index)}><span className="compare-diff-index">{index + 1}</span><span className={`compare-diff-kind is-${diff.type}`}>{diff.type === 'modify' ? '修改' : diff.type === 'insert' ? '插入' : '删除'}</span><span className="compare-diff-preview"><span>{diff.section || '正文'} · {diff.left?.text || ''}{diff.right?.text ? ` → ${diff.right.text}` : ''}</span></span></button></div>) : <p className="empty-state">{view?.coverage?.status === 'complete' ? '两份合同没有文字差异。' : '已比对的部分没发现不同；没比对到的部分不敢保证一样。'}</p>}</div>}
       </aside>
       <div className="compare-word-view" hidden={viewMode !== 'word'}>

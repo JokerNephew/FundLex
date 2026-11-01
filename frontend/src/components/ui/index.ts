@@ -1,5 +1,5 @@
 export * from './Button'
 export * from './Card'
-export * from './Select'
+export * from './Listbox'
 export * from './Spinner'
 export * from './StatusBadge'
