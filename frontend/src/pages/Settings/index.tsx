@@ -124,9 +124,9 @@ export function SettingsPage() {
         <summary><h2>系统状态</h2><span className="muted">运行参数（管理员）</span></summary>
         {capabilities.error ? <ErrorState error={capabilities.error} /> : capabilities.loading && !capabilities.data ? <Spinner /> : <dl className="settings-capability-list">
           <dt>登录方式</dt><dd>{capabilityLabel(capabilities.data?.auth_mode, { password: '账号密码登录', dev: '开发身份登录' })}</dd>
-          <dt>处理引擎</dt><dd>{capabilityLabel(capabilities.data?.engine?.id, { recall_first: '召回优先修订引擎' })}</dd>
-          <dt>交付模式</dt><dd>{capabilityLabel(capabilities.data?.engine?.delivery_mode, { formal: '正式交付模式', evaluation: '评测模式' })}</dd>
-          <dt>正式写入</dt><dd>{capabilities.data?.engine?.auto_write_enabled ? '已启用' : '当前不可用'}</dd>
+          <dt>处理引擎</dt><dd>{capabilityLabel(capabilities.data?.engine?.id, { recall_first: '现行修订引擎' })}</dd>
+          <dt>交付模式</dt><dd>{capabilityLabel(capabilities.data?.engine?.delivery_mode, { formal: '正式', evaluation: '评测' })}</dd>
+          <dt>自动写入正式合同</dt><dd>{capabilities.data?.engine?.auto_write_enabled ? '可以' : '暂不可用'}</dd>
           <dt>单文件大小上限</dt><dd>{capabilities.data?.upload_limits?.max_file_bytes ? `${Math.round(capabilities.data.upload_limits.max_file_bytes / 1024 / 1024)} MB` : '—'}</dd>
         </dl>}
       </details>
@@ -134,7 +134,7 @@ export function SettingsPage() {
 
     <Card>
       <h2>飞书私聊绑定</h2>
-      <p>扫码或在飞书与 FundLex 机器人私聊发送一次性绑定码；绑定只关联当前账号。</p>
+      <p>在飞书私聊里发送绑定码，仅绑定当前账号。</p>
       {bindingError && <p className="form-error">{bindingError}</p>}
       {binding?.bound ? <><p>已绑定飞书账号 <code>{binding.subject_id?.slice(0, 12)}…</code></p><Button variant="danger" onClick={() => void revokeBinding()} disabled={bindingBusy}>解除绑定</Button></> : <>
         <div className="action-row">
@@ -158,6 +158,6 @@ export function SettingsPage() {
       </form>
     </Card>
 
-    {user?.role === 'admin' && <Card><h2>管理员</h2><p>账号管理与业务指引配置分开控制。</p><Link to="/users"><Button>打开用户管理</Button></Link></Card>}
+    {user?.role === 'admin' && <Card><h2>管理员</h2><Link to="/users"><Button>打开用户管理</Button></Link></Card>}
   </>
 }

@@ -69,7 +69,7 @@ export function UsersPage() {
       <div>
         <p><Link to="/settings">设置</Link> / 管理员</p>
         <h1>用户管理</h1>
-        <p>仅管理员可查看和管理账号状态。</p>
+        
       </div>
       <Button onClick={() => void load()} disabled={loading}>刷新</Button>
     </div>
@@ -81,7 +81,7 @@ export function UsersPage() {
         <input aria-label="显示名称" placeholder="显示名称" value={displayName} onChange={(event) => setDisplayName(event.target.value)} />
         <input aria-label="初始密码" type="password" placeholder="初始密码" value={password} onChange={(event) => setPassword(event.target.value)} minLength={8} required />
         <Select aria-label="角色" value={role} onChange={(event) => setRole(event.target.value)}>
-          <option value="member">成员</option>
+          <option value="member">普通用户</option>
           <option value="admin">管理员</option>
         </Select>
         <Button variant="primary" type="submit" disabled={busy === 'create'}>创建</Button>
@@ -95,8 +95,8 @@ export function UsersPage() {
           <tbody>{users.map((user) => <tr key={user.id}>
             <td>{user.display_name || user.username}<div className="muted">{user.username}</div></td>
             <td>{user.role === 'admin' ? '管理员' : '成员'}</td>
-            <td><StatusBadge value={user.disabled ? 'disabled' : 'accepted'} /></td>
-            <td><Button variant={user.disabled ? 'primary' : 'danger'} disabled={busy === user.id} onClick={() => void toggle(user)}>{user.disabled ? '启用账号' : '停用账号'}</Button></td>
+            <td><StatusBadge value={user.disabled ? 'disabled' : '使用中'} /></td>
+            <td><Button variant={user.disabled ? 'primary' : 'danger'} disabled={busy === user.id} onClick={() => void toggle(user)}>{user.disabled ? '恢复登录' : '禁止登录'}</Button></td>
           </tr>)}</tbody>
         </table>
       </div>}
