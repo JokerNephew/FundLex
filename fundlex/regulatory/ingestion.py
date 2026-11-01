@@ -58,9 +58,6 @@ def ingest_regulation(path: str | Path, *, original_filename: str = "", title_hi
                     consumed += 1
                 if consumed > 1 and any(token in merged for token in ("规定", "办法", "通知", "指引", "准则", "规则")):
                     document.title = merged
-                    for block in document.blocks[:consumed]:
-                        block.text = merged
-                        break
                     document.blocks = document.blocks[consumed:]
             return document
         document = parse_regulation_pdf(target, source_sha256=digest)
