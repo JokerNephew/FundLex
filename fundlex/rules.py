@@ -96,39 +96,39 @@ def verify_release_context(ruleset: Any, gateway: Any, actual_model: str, *, eve
 def validate_release_gate(action: dict[str, Any], policy: dict[str, Any]) -> None:
     """Require measured results for every preregistered action/profile gate."""
     if not action.get("approved") or policy.get("status") != "released":
-        raise ValueError("release approval missing")
+        raise RuleError("RELEASE_APPROVAL_MISSING")
     if not policy.get("evaluation_report_id") or not policy.get("approval_record") or not action.get("evaluation_report_id") or not action.get("approval_record"):
-        raise ValueError("release evidence missing")
+        raise RuleError("RELEASE_EVIDENCE_MISSING")
     threshold, actual = action.get("release_threshold"), action.get("evaluation_metrics")
     if not isinstance(threshold, dict) or not threshold.get("registration_id") or threshold.get("registered_before_full_evaluation") is not True or not isinstance(actual, dict):
-        raise ValueError("preregistered evaluation missing")
+        raise RuleError("RELEASE_EVALUATION_PREREGISTERED")
     _validate_context_shape(policy.get("evaluation_context"))
     if actual.get("tested_context") != policy["evaluation_context"]:
         raise RuleError("RELEASE_CONTEXT_UNVERIFIED")
     if actual.get("action_id") != action["action_id"] or actual.get("evaluation_report_id") != action["evaluation_report_id"] or actual.get("threshold_registration_id") != threshold["registration_id"]:
-        raise ValueError("evaluation provenance mismatch")
+        raise RuleError("RELEASE_PROVENANCE_MISMATCH")
     def check(gates: dict[str, Any], measured: dict[str, Any]) -> None:
         if not isinstance(gates, dict) or not gates or not isinstance(measured, dict):
-            raise ValueError("metrics missing")
+            raise RuleError("RELEASE_METRICS_MISSING")
         for name, bounds in gates.items():
             value = measured.get(name)
             if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) or value < 0:
-                raise ValueError("metric missing or invalid")
+                raise RuleError("RELEASE_METRIC_INVALID")
             if (name.endswith("cases") or name == "unsafe_edits") and (not isinstance(value, int)):
-                raise ValueError("count metric invalid")
+                raise RuleError("RELEASE_COUNT_METRIC_INVALID")
             if name in {"location_precision", "location_recall", "template_exactness", "accuracy", "precision", "recall"} and value > 1:
-                raise ValueError("rate metric invalid")
+                raise RuleError("RELEASE_RATE_METRIC_INVALID")
             if not isinstance(bounds, dict) or not bounds or not set(bounds).issubset({"min", "max"}):
-                raise ValueError("threshold invalid")
+                raise RuleError("RELEASE_THRESHOLD_INVALID")
             for operator, target in bounds.items():
                 if not isinstance(target, (int, float)) or isinstance(target, bool) or not math.isfinite(target):
-                    raise ValueError("threshold invalid")
+                    raise RuleError("RELEASE_THRESHOLD_INVALID")
                 if (operator == "min" and value < target) or (operator == "max" and value > target):
-                    raise ValueError("release metric below threshold")
+                    raise RuleError("RELEASE_METRIC_BELOW_THRESHOLD")
     check(threshold.get("metrics"), actual.get("metrics"))
     dependencies = threshold.get("profile_metrics", {})
     if set(dependencies) != set(action.get("requires_profile", [])):
-        raise ValueError("profile gates missing")
+        raise RuleError("RELEASE_PROFILE_GATES_MISSING")
     for field, gates in dependencies.items():
         check(gates, actual.get("profile_metrics", {}).get(field))
 
