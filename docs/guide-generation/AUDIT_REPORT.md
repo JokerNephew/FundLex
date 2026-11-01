@@ -33,8 +33,8 @@ MySQL gg_runs/gg_steps 实测：INGEST/EXTRACT/VERIFY 完成后，BUILD_CORPUS_S
 | FL-D826 | repair 单条失败完全不可见 | 代码+2 测试（major finding+落库） |
 | FL-D827 | 低危杂项 11 项（死代码/未接线/静默回退等） | 登记 |
 | FL-D828 | coverage/向量 fail-open 面 | 登记+阈值/徽章建议 |
-| FL-D830 | 正文"……"省略句误判 TOC，后续条款静默丢失；PARSER_VERSION 升 v2；发布后需 force resync | 代码+2 测试 |
-| FL-D831 | E2E 探针把 DB 连接串写入 journal | 已清除+复核干净；建议评估轮换 |
+| FL-D900 | 正文"……"省略句误判 TOC，后续条款静默丢失；PARSER_VERSION 升 v2；发布后需 force resync | 代码+2 测试 |
+| FL-D901 | E2E 探针把 DB 连接串写入 journal | 已清除+复核干净；建议评估轮换 |
 | FL-D829 | 失败 run 前端裸渲染 error_code、泄露服务器路径 | 登记（修复归前端线） |
 
 ## 4. 部署形态盲区排查结论（任务3）
@@ -63,7 +63,7 @@ MySQL gg_runs/gg_steps 实测：INGEST/EXTRACT/VERIFY 完成后，BUILD_CORPUS_S
 
 ## 6. 测试覆盖（任务4）
 
-- 新增 15 项单测（tests/test_guide_generation_hardening.py）：FL-D821×9（缺失/空串/文件路径/不可读/空目录/截断 eligible/stage 传播/CLI 三退出码/默认绝对路径）、FL-D823×1（窗口相关需求全保留）、FL-D825×1（HTML 计数渲染）、FL-D826×2（repair 失败可见+落库）、FL-D830×2（正文省略号不误判 TOC、真目录行仍跳过）——**15/15 通过**。
+- 新增 15 项单测（tests/test_guide_generation_hardening.py）：FL-D821×9（缺失/空串/文件路径/不可读/空目录/截断 eligible/stage 传播/CLI 三退出码/默认绝对路径）、FL-D823×1（窗口相关需求全保留）、FL-D825×1（HTML 计数渲染）、FL-D826×2（repair 失败可见+落库）、FL-D900×2（正文省略号不误判 TOC、真目录行仍跳过）——**15/15 通过**。
 - 既有 gg 套件 11 文件**回归 134/134 通过（76.5s）**，含 fake 模型端到端、fencing、API 全链路、门禁阻断。
 - 测试口径：树内 venv（python 3.11.13）+ PYTHONPATH=$PWD，`import fundlex` 实测解析到本 worktree（FL-D593 陷阱复核）。
 - 真实 E2E：见第 7 节。
@@ -77,7 +77,7 @@ MySQL gg_runs/gg_steps 实测：INGEST/EXTRACT/VERIFY 完成后，BUILD_CORPUS_S
 - **15/15 stage 全部 completed**（INGEST→BUILD_EVIDENCE），无一步失败/重试。
 - **终态 complete_with_unresolved，候选未获机器资格**——门禁按设计 fail-closed：open critical=15、unresolved impacts=26、requirement gap=1；`independent_model_review_qualified=false`（本环境只有单一真实模型，author==reviewer，独立性门禁正确拒绝）；`quality.run_status=fail`、`coverage.run_status=complete_with_unresolved`。其余 7 项 checks 全 true。**这证明资格链不会把有未决问题的候选包装成 complete**。
 - **FL-D821 实证**：`corpus_sync={eligible_files:514, corpus_limit:2, parsed:2, errors:[]}`——新语料路径在 ProtectHome=true 下可读，截断账本字段按修复后形态落库。
-- **FL-D830 实证**：BUILD_CORPUS_SNAPSHOT 以 contract-segmenter-2 解析，errors=0。
+- **FL-D900 实证**：BUILD_CORPUS_SNAPSHOT 以 contract-segmenter-2 解析，errors=0。
 - 规模：requirements 60、impacts 645（definite 97 / possible 403）、sweep batches 60、guide_items 61、findings 218、模型调用 808 次（gg_model_calls 全量记账）。
 - **产物与哈希**：guide/guide_ai docx（49,582B）、evidence_json（6.24MB）、evidence_html（493KB）四件 artifact 落库，**逐字节重哈希与登记值一致**。
 - **账本（观测）**：隔离账本 812 次请求，charged $0.4542（reserved 估算 $4.646，观测口径不作门禁，符合 FL-D445）。

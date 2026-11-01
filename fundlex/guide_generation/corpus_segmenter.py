@@ -24,7 +24,7 @@ Q = lambda local: f"{{{W}}}{local}"
 # contract-segmenter-2: TOC lines must end in dot leaders + a page number;
 # a body sentence that merely trails off with "……" no longer puts the parser
 # into a state that silently skips all paragraphs until the next part/chapter
-# heading (FL-D830).
+# heading (FL-D900).
 PARSER_VERSION = "contract-segmenter-2"
 MAX_FILE_BYTES = 80 * 1024 * 1024
 MAX_PART_BYTES = 64 * 1024 * 1024

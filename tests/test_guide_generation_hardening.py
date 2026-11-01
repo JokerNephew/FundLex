@@ -39,7 +39,7 @@ def _gg(tmp_path):
     return GuideGenerationStore(RunStore(tmp_path / "run"))
 
 
-# ---------------------------------------------------------------- FL-D830 --
+# ---------------------------------------------------------------- FL-D900 --
 def test_segmenter_body_ellipsis_does_not_silently_drop_clauses(tmp_path):
     """A body paragraph that trails off with "……" is not a TOC entry; the
     parser must not enter a state that skips the following clauses."""

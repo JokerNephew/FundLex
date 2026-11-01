@@ -1,7 +1,7 @@
 # 细节问题与处理记录 · 附录（qa-gg-audit 指引生成补完开发+充分测试专项线）
 
 > **测试验证总账（2026-11-01，worktree qa-gg-audit，树内 venv python 3.11.13，PYTHONPATH=$PWD 锁树内代码）**：
-> - 新增 `tests/test_guide_generation_hardening.py` **15 项全部通过**，覆盖 FL-D821×9、FL-D823×1、FL-D825×1、FL-D826×2、FL-D830×2。
+> - 新增 `tests/test_guide_generation_hardening.py` **15 项全部通过**，覆盖 FL-D821×9、FL-D823×1、FL-D825×1、FL-D826×2、FL-D900×2。
 > - 既有 gg 套件回归（test_guide_generation/pipeline/api/vector/guide/store/remediation_config/eligibility/worker_engine/transport_pause/mysql_schema，11 文件）**134 项全部通过**（76.5s，1 个 starlette deprecation warning）。
 > - 全部修改文件 py_compile 通过；`import fundlex` 解析路径实测指向本 worktree（FL-D593 口径）。
 > - **真实 E2E 已完成（2026-11-01）**：run 06fc7cd96c83443c96e7804cc1df91a0，真实模型、systemd-run ProtectHome=true、语料 /var/lib/fundlex/corpus/funds_word、隔离 sqlite/账本；15/15 stage completed，终态 complete_with_unresolved（门禁 fail-closed 合格），808 次调用全量记账，4 件 artifact 哈希一致；负向冒烟 exit 2/0 符合 FL-D821 语义。详见 AUDIT_REPORT 第 7 节；本线代码改动未发布（发布执行与守门属主线）。
@@ -100,7 +100,7 @@
 - 下一步：由主线/产品决定门禁松紧；若采纳阈值方案，本线可按同一容错口径补开发。
 - 变更记录：2026-11-01 新增。
 
-## FL-D830 【编号段溢出，并册时请主线确认】正文省略号误判为目录行，后续条款被静默跳过（2026-11-01）
+## FL-D900 【编号段溢出，并册时请主线确认】正文省略号误判为目录行，后续条款被静默跳过（2026-11-01）
 
 - 发现日期：2026-11-01，深查审计子任务报告的 TOC 状态机高危候选（原审计 #7）时确认。
 - 问题与影响：分段器 `_is_toc` 命中 `_TOC_LINE=(?:…{2,}|\.{4,}|·{4,})\s*\d*\s*$`——**页码是可选的**，任何 <140 字符且以「……」/点线收尾的正文段（中文合同极常见的列举省略，如“包括国债、央行票据……”）都会把解析器置为 in_toc，**其后直到下一个「第N部分/第N章」标题的所有段落被静默跳过**，条款丢失无任何 warning/统计。语料 514 份均在风险面内。
@@ -108,7 +108,7 @@
 - 处理方法：页码改为必选（`\d*`→`\d+`），真实目录行（点线+页码）照旧跳过；正文省略句不再触发 TOC 状态。PARSER_VERSION 升 `contract-segmenter-2`；pipeline BUILD_CORPUS_SNAPSHOT 的输入哈希改用实际常量（原为硬编码 "contract-segmenter-1" 副本）。
 - **连带部署动作（重要）**：`version_id` 只含 identity+日期+内容哈希、**不含 parser 版本**，存量 514 份已解析合同在下次 sync 会按原样复用（reuse），新分段逻辑不会自动生效。发布后须执行一次 `sync-corpus --force`（或等效运维步骤）重建条款分段，并核对 parse_failed 计数。此步骤写入发布守门。
 - 状态与验证：**代码已实施，新增单测 2 项（正文省略号条款保留、真目录行仍跳过）**。pytest 已验证（见下）。未做 514 份全量重分段前后 diff 评测（发布守门覆盖）。
-- 下一步：主线发布后按守门做 force resync+抽 diff；编号段（FL-D820~829）在本条溢出为 FL-D830，并册时由主线确认是否保留该编号。
+- 下一步：主线发布后按守门做 force resync+抽 diff；编号段（FL-D820~829）在本条溢出为 FL-D900，并册时由主线确认是否保留该编号。
 - 变更记录：2026-11-01 新增。
 
 ## FL-D829 run a5525 失败的前端展示问题（登记，修复归前端线）（2026-11-01）
@@ -121,7 +121,7 @@
 - 下一步：前端线实现错误码映射；与 FL-D821 后端稳定码一并验收。
 - 变更记录：2026-11-01 新增。
 
-## FL-D832 【编号段溢出，并册时请主线确认】指引版本对比「差异暂未算出来」兜底文案与后端实际语义不符；三成因共码、字段白名单漏 section_hint（2026-11-01）
+## FL-D902 【编号段溢出，并册时请主线确认】指引版本对比「差异暂未算出来」兜底文案与后端实际语义不符；三成因共码、字段白名单漏 section_hint（2026-11-01）
 
 - 发现日期：2026-11-01，应总指挥追加要求盘点「我的指引→版本对比」后端能力时逐行核对生产树（该功能代码不在本 worktree 基线 158475f，为生产树后续新增，见 MODULE_INVENTORY 专节版本差提醒）。
 - 问题与影响：①前端「差异暂未算出来，请稍后重试」（生产 app.js:1280）是**一切请求失败的统一兜底**，而两个 diff 端点（GET /api/guides/{id}/diff 与 /text-diff）均为请求内**同步、确定性、零模型**计算，不存在异步未就绪形态；"稍后重试"对「版本未解析出规则」（404 GUIDE_DIFF_UNAVAILABLE 来自 rules_json 空）恰好有效，但对「源文件缺失 GUIDE_SOURCE_UNAVAILABLE」「built-in 参与原文比对」无意义。②404 三种成因（版本不可见/未解析/源缺失）共用 GUIDE_DIFF_UNAVAILABLE，前端无法区分。③规则级 diff 的字段白名单（guide_diff.py RULE_FIELDS 6 字段）不含 `section_hint`，该字段变化的版本对比显示「无变化」；前端 guideDiffFieldLabel 已备 section_hint 映射，展示面预留但算法未覆盖。④原文 diff 的 GUIDE_SOURCE_UNAVAILABLE（非内置源缺失）前端无专属文案，落兜底。
@@ -131,7 +131,7 @@
 - 下一步：主线将本节结论并入 FL-D891 判定；并册时确认编号。
 - 变更记录：2026-11-01 新增。
 
-## FL-D831 【编号段溢出，并册时请主线确认】E2E 探针将数据库连接串回显进 systemd journal（已清除，建议评估轮换）（2026-11-01）
+## FL-D901 【编号段溢出，并册时请主线确认】E2E 探针将数据库连接串回显进 systemd journal（已清除，建议评估轮换）（2026-11-01）
 
 - 发现日期：2026-11-01，本线搭建真实 E2E 时。
 - 问题与影响：为诊断 systemd-run 环境注入行为，本线临时单元打印了 `repr(os.environ['FUNDLEX_DATABASE_URL'])`，该值含 MySQL 凭据，被写入 systemd journal（system 与 user-1002 两处持久化日志，root-only）。同样值也进入本次会话工具输出日志（无法自擦除，与 FL-D547 同类）。
