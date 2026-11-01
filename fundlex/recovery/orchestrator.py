@@ -10,8 +10,6 @@ moves to the next action or terminates with ``MARK_UNRESOLVED``.
 """
 from __future__ import annotations
 
-from typing import Iterable
-
 from .history import RecoveryHistory
 from .policies import RecoveryPolicy, load_policy
 from .types import FailureClass, RecoveryAction, RecoveryAttempt, RecoveryContext, RecoveryDecision
@@ -190,7 +188,3 @@ class RecoveryHandler:
     def __call__(self, action: RecoveryAction,
                  context: RecoveryContext) -> tuple[bool, str]:  # pragma: no cover - typing
         raise NotImplementedError
-
-
-def failure_codes(history: RecoveryHistory) -> Iterable[str]:
-    return (item.error_code for item in history.attempts if item.error_code)
