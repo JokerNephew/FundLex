@@ -8209,7 +8209,8 @@ H＝E×…
 - **问题与影响**：compare.js:74 合同组渲染为按钮式卡条 `.compare-pair-status`（圆点编号+双行文本），非列表行语言（compare.js:74）；且被折叠（联动 FL-D813）。
 - **处理方法**：重设计为列表行规格（编号+双侧文件名+状态徽标），平铺直呈。
 - **变更记录 2026-11-01（批1 施工）**：纯 CSS 行化（类名/数据属性/JS 零改动，锚点全保）：容器卡片网格→单列行列表；去卡描边/圆角/translateY 抬升；行 padding 10/12+border-bottom+hover --list-row-hover-bg；is-selected 改左侧 3px 品牌条+浅底；状态文本徽标化（is-done 绿/is-incomplete 黄/is-failed 红 pill 钩子）。折叠区平铺属批4（FL-D813）。
-- **状态**：行化已解决（批1 验收）；折叠平铺待批4。
+- **变更记录 2026-11-01（批1 实证捕获补漏）**：行化实证截图环节揪出两处漏删覆写——`compare-pair-statuses{grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:10px}` 后位卡片网格覆写、`compare-pair-status.is-incomplete{border-color:#b58829;background:#fffcf2}` 行底色覆写（状态色改由徽标钩子唯一承担），均已删并留注释。浏览器计算样式实证：单列容器 ✓、3 行渲染 ✓、hover `--list-row-hover-bg` rgb(247,249,250) ✓（注意：hover 断言须等 120ms 过渡结束，立即读取为过渡中间色属误判）。实证截图 `design-b1b-after/L5a/L5b-compare-rows.png`（种子：`POST /api/compare/tasks`+`/uploads` 三合同组真实 docx）。
+- **状态**：行化已解决（批1 验收+实证补漏）；折叠平铺待批4。
 
 ## FL-D806 V2 Pagination 组件句式未统一（批2 漏网）（2026-11-01，qa-frontend 第三轮）
 
