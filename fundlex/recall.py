@@ -6581,6 +6581,27 @@ def plan_composite_target(rule: dict, target: Target, inspection: DocumentInspec
             remaining -= length
         parts = bounded
         target.composite = tuple(f"{location}:{start}:{end}" for location, start, end in parts)
+    elif new_text:
+        # FL-D697: a composite whole-reference replacement is only authorized
+        # when the operation's own ``old_text`` covers the entire reference.
+        # (The G11 branch above already bounded the reference with its own
+        # bearer-end proof; every other rule needs this containment check.)
+        # A term-level replace (G02:A类基金份额→…) rebound onto a multi-paragraph
+        # composite reference must NOT swap the whole reference for the bare
+        # term: B05 p118+p119 collapsed two full definitions into the token
+        # "A类基金份额".  Fail closed (target-level hold) instead.
+        applicable = [rule["operations"][i] for i in
+                      _selected_operation_indices(rule, target, inspection, facts, None)
+                      if rule["operations"][i].get("op") == "replace"]
+        authorized_old = "".join(_compact(str(operation.get("old_text") or ""))
+                                 for operation in applicable)
+        reference = _compact("".join(
+            compact_offsets(inspection.by_location(location).text)[0][start:end]
+            for location, start, end in parts))
+        if not authorized_old or not compact_in(reference, authorized_old):
+            raise RecallError("RECALL_COMPOSITE_REPLACE_SCOPE_UNPROVEN", {
+                "target": target.target_id, "rule": target.rule_id,
+                "parts": [f"{loc}:{s}:{e}" for loc, s, e in parts]})
     edits: list[PlannedEdit] = []
     for index, (location, start_clean, end_clean) in enumerate(parts):
         span = inspection.by_location(location)
