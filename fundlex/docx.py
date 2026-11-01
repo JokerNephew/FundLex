@@ -1567,6 +1567,7 @@ def generate_artifacts(source: str | Path, plan: ValidatedPlan, redline_path: st
             manifest.append({"edit_id": edit.get("edit_id", f"edit-{number}"), "location": edit["location"],
                              "start": edit["start"], "end": edit["end"], "expected_old_text": edit["expected_old_text"],
                              "replacement": edit["replacement"], "template_id": edit.get("template_id", ""),
+                             "rule_id": edit.get("rule_id", ""), "section": edit.get("section", ""),
                              "del_id": del_id, "ins_id": ins_id})
         redline_xml = etree.tostring(root, encoding="UTF-8", xml_declaration=True)
         final_root = deepcopy(root)
