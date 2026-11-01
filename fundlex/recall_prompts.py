@@ -12,7 +12,6 @@ COMPOSE_PROMPT_VERSION = "recall_compose_v1"
 VERIFY_PROMPT_VERSION = "recall_verify_v1"
 AUDIT_PROMPT_VERSION = "recall_audit_v3"
 SWEEP_PROMPT_VERSION = "recall_sweep_v2"
-
 PROMPT_VERSIONS = {
     "facts": FACTS_PROMPT_VERSION,
     "scope": SCOPE_PROMPT_VERSION,
@@ -24,6 +23,25 @@ PROMPT_VERSIONS = {
 }
 
 FUND_TYPES = ("open_regular", "etf", "money_market", "interbank_cd", "qdii", "reits", "other")
+
+#: FL-D937(5)：qualification 独立认证的 prompt/schema 注册到同一治理表
+#: （不入 PROMPT_VERSIONS 映射：它会进入已冻 provenance/boundary 哈希）。
+QUALIFICATION_REVIEW_PROMPT_VERSION = "recall_qualification_review_v1"
+
+QUALIFICATION_REVIEW_SCHEMA = {
+    "type": "object", "required": ["fund_type", "quote", "reason"],
+    "properties": {
+        "fund_type": {"enum": list(FUND_TYPES)},
+        "quote": {"type": "string"},
+        "reason": {"type": "string"},
+    },
+}
+
+QUALIFICATION_REVIEW_INSTRUCTION = (
+    "Independently classify THIS fund contract's current product type. "
+    "A mention of another fund or future conversion is not its current type. "
+    "An ETF feeder (联接基金) is open_regular. Return an exact contiguous source "
+    "quote proving the current type; return other with empty quote if uncertain.")
 
 FACTS_SCHEMA = {
     "type": "object",
