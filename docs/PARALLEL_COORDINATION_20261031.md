@@ -97,3 +97,8 @@
 ### 2026-11-01 12:1x 会话映射补充
 - **HOKfnt**=compare-ux 线（ses_e6acc8f6effe1JmCR2hnHOKfnt，worktree qa-compare-ux）：比对滚动丝滑+比对链路重设计；号段 FL-D840~859；与前端主线 compare 文件域错峰约定
 - gg-audit（A4vO9d5）扩权：审计→补完开发+充分测试（用户第 17 点）
+
+### 2026-11-01 12:4x 收口进度（巡线32）
+- ✅ recall-miss r5 → aa30eaf（FL-D699 恒等类替换坍缩；21 测绿）；loop-8 冻结令已发
+- ✅ 前端第三轮全量 → 4173dec（设计令牌/输入下拉/动效/三禁令/列表统一/文案人话化/FL-D818 结果页重构；主线复验 vitest24/build/浏览器80 全绿+并排对照亲验）
+- 在跑：loop-8 dev20；gg-audit（扩权后观察中）；compare-ux 方案阶段
