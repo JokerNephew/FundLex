@@ -8721,3 +8721,203 @@ H＝E×…
 
 ## FL-D996/997 CX 比对线发现（改号自误占的 FL-D983/984）（2026-11-01，open）
 - CX 撞号事件：其发现先撞 EN1 的 FL-D981/982，改号 FL-D983/984 又撞 EVAL 已赐号段。主线裁决：CX 域两发现定为 FL-D996/997。号段纪律补充入看板：新发现先用主线看板号段登记再引用。
+
+## FL-D695 B15 loop-5 新回归：G09@p159 audit 翻转 needs_edit→absent（MISS_TARGET_RESOLUTION）→ 交付门诚实扣全案（complete→no artifact）（2026-11-01，qa-feat-recall）
+
+- **发现**：dev20 loop-5（9ebeacf，FL-D791+FL-D790）B15 从 loop-3/loop-4 二连 complete 翻 incomplete 且**无产物**（final.docx 缺）。
+- **实证链**：同一物理段 p159，loop-4 audit 判 `needs_edit`（「该赎回金额条款未按类别净值表述…需改」，正确识别）且该轮 G09 执行、全案 complete；loop-5 同站同文 audit 判 `absent`（「现有赎回金额条款措辞不同」）→ 目标零解析（MISS_TARGET_RESOLUTION/targeting）→ G09:0 FINAL_OPERATION_UNPROVEN「verified site missing」→ 验证层交付门诚实扣留全案产物（主线机制面诚实形态，report 诊断结构化：miss_class/stage_owner 中文可读）。
+- **机制面归因（不补规则）**：触发源为 audit 判定回摆——同文同站两轮相反判定，属 FL-D650/683 模型不确定族；与 loop-4→loop-5 引擎差（FL-D791 句界探测）的交互待主线判定是否并入 **FL-D792 同形观察项**（本线如实登记，不主张规则级修补）。
+- **影响**：B15 15 目标全 not_executed（-15）；loop-5 完成率 86.4%（352→337，全部由此案解释）；门槛「B15 T001 executed」无法达成（无产物无从双实证）。
+- **状态**：open，归主线判定 FL-D792 归属或新机制项。
+- **变更记录**：2026-11-01 新增。
+
+## FL-D696 B12 loop-5：FL-D791 治愈 G12+G13 合成遗漏（p244 重回计划），但新阻塞 G16 三站点 MISS_PLAN_GAP（p795/796/1270）→ 仍诚实 incomplete（2026-11-01，qa-feat-recall）
+
+- **发现**：loop-5 B12 仍 incomplete 无产物，门槛「B12 恢复 complete」未达。**但 FL-D791 目标病灶已愈**：loop-4 的 G12+G13 联合站点合成遗漏在 loop-5 恢复——plan 台账 `G12+G13` composite replace@p244 重新在场（与 loop-3 形态一致），T3001 补点退出。
+- **新阻塞**：G16:0 三站点（正文 p795/p796 + 摘要 p1270）全部 needs_edit 未计划：T002@p796（T3 追加句尾点）+Y012@p795/Y013@p1270（survey_reference 1.00）→ OPEN_OBLIGATION MISS_PLAN_GAP（plan stage）+ FINAL_COVERAGE_UNRESOLVED → 交付门扣全案。对照：loop-3 同案 complete（G16 经 `G15+G16` 合成完成）。
+- **机制面归因**：FL-D791 句界探测对多站点追加（append 双正文位+摘要位）的绑定/归并可能收紧；是否并入 FL-D792 同形观察项待主线。
+- **状态**：open，归主线机制处置。
+- **变更记录**：2026-11-01 新增。
+
+## FL-D697 B05 loop-6 新回归：G02/G16 破坏性编辑被 audit 诚实拦截 → 无产物（五连 complete 首负）（2026-11-01，qa-feat-recall）
+
+- **发现**：loop-6 B05 从 v1~loop-5 五连 complete 翻 incomplete 无产物。unresolved 仅 G02+G16：G02@p118 audit wrong「AFTER p118 contains only the bare term 'A类基金份额'; the entire definition …」；G16@p788/p1237 audit wrong「AFTER仅含新增文本，原销售服务费条款被删除，违反追加而非替换」。
+- **机制面归因（不补规则）**：模型本轮**生成质量恶化**（定义句被掏空、append 落成 replace），audit 正确识别为 wrong → 验证层交付门诚实扣全案。触发为模型级回摆（FL-D650/683 族），非冻结机制回退；audit+交付门按设计拦截——统计损失为防谎报的诚实成本。
+- **影响**：-13 targets（87.9% 完成率的主要扣项之一）。
+- **状态**：open，归主线观测（模型生成面回摆）；本线不动。
+- **变更记录**：2026-11-01 新增。
+
+## FL-D698 B12 loop-6 阻塞迁移收官：G12+G13 与 T014 形状 replay FAIL 均已消退，残余 G05:2@p162 保守扣件（FL-D792 归属待主线）（2026-11-01，qa-feat-recall）
+
+- **消退实证（冻结令验收项）**：loop-6 B12 unresolved 仅剩 G05 三条（G05:2@p162 OPEN_OBLIGATION verified site missing + FINAL_COVERAGE_UNRESOLVED site_evidence_missing）——**G12/G13 零出现（FL-D791 愈）、G16/G22 replay FAIL 形状零出现（FL-D696 消散，令中 T014 形状项达成）**。
+- **残余**：G05:2（branch B3 调低赎回费率→调低销售服务费率替换支）目标/site 证据未闭合 → 交付门保守扣全案，延续「无产物」形态。**是否计入 FL-D792 同形观察项由主线判定**：若计入，B12 门槛项按令不计 FAIL；本线如实登记不主张。
+- **状态**：open（残余 G05 支），待主线判定归属。
+- **变更记录**：2026-11-01 新增。
+
+## FL-D695 更新：变体反证机制实证生效——loop-6 B15 G09 不再 absent（2026-11-01）
+
+- loop-6 B15 G09 判定形态迁移：loop-5 的 `absent`→MISS_TARGET_RESOLUTION 在本轮**消失**（变体证据反证生效实证），残余为 G09 CLAIM_REPLAY_FAILED + G05:0/G05:2 双支 OPEN_OBLIGATION（含模型自述「按G05应将调低赎回费率改为调低销售服务费率」理由文本）→ 仍保守扣全案，T001 executed 无从达成。
+- 另 FL-D793（G11 schema 单发抖动）按冻结令核查：loop-6 全波 unresolved 无 G11，**未复发，自然销案**。
+- FL-D696 追加实证：B19 六波首次 complete（+19）——plan_rejected replay 防双计对长期开放的「恢复重复目标 vs satisfied 子集」冲突收口。
+
+## FL-D697 更新（loop-7）：容器校验机制精确拦截实证 — B05 G02 复合引用替换被判 SCOPE_UNPROVEN 诚实扣件；B12/B15 双消，单 B05 未愈（2026-11-01，qa-feat-recall）
+
+- **机制实证（正面）**：loop-7 B05 unresolved 出现新码 `RECALL_COMPOSITE_REPLACE_SCOPE_UNPROVEN@p118` + `CLAIM_OPERATION_NOT_PLANNED`（orphan_evidence）——FL-D697 容器校验**按设计精确介入**：模型本轮仍生成 G02 定义容器整换（与 loop-6 同源的生成面回摆），新校验拒绝为其证明作用域 → 验证层交付门诚实扣全案。loop-6 的 G16 兄弟操作盲区支本轮消退（G16 两站点 needs_edit 未入 unresolved，未阻塞；R033 satisfied 消歧在案）。
+- **未愈面**：B05 仍 incomplete 无产物（-13），为全波唯一 incomplete。**根因属性与 loop-6 一致：模型生成面对 G02 释义容器持续产出整换式编辑**（FL-D650/683 回摆族），校验从「事后 wrong」升级为「事前拒证」，诚实形态不变、谎报风险已被结构性排除，但统计损失未消。
+- **同波对照（双消实证）**：B12 complete（G05:2@p162 消退，FL-D698）；B15 complete（G05:0/G05:2+G09 replay 残渣消退，FL-D695 残余修复）。
+- **状态**：open（B05 模型生成面回摆支），归主线判定归族/再修量级；本线不动。
+- **变更记录**：2026-11-01 loop-6 新增 → 2026-11-01 loop-7 更新（机制拦截实证 + G16 支消退，G02 生成面残余）。
+
+## FL-D698 收口实证 + FL-D695 残余修复收口实证（loop-7，2026-11-01，qa-feat-recall）
+
+- **FL-D698**：B12 unresolved 全清零 → complete（19/19），G05:2@p162 同址 satisfied 双计歧义不再出现。
+- **FL-D695（残余修复）**：B15 complete（15/15）；T001（G03 append@基金份额类别）双实证——内部 replay 闭合过交付门 + 量具 p6-score-4 读实际 final.docx 判「appended policy text present at its declared site (p215)」。
+- 两机制无损邻案：全波 wrong=0、kept=0、fc=0；69 处 absent 单发判定均被变体反证兜住未致扣件（详见 FL-D695 登记与 loop-7 报告）。
+- **状态**：dev20 口径实证收口；留出验收待主线放行。
+
+## FL-D699 关联说明（loop-8 dev20 验收侧证据）：恒等坍缩生效，B05 satisfied 直达 complete；全波 390/390 首达 100%（2026-11-01，qa-feat-recall）
+
+> 机制条目归主线登记（FL-D699）。本块为 qa-feat-recall 线八段同量具验收证据，不重复立号（本线号段已用尽）。
+
+- **实证**：loop-8 B05 complete（13/13）；G02 两目标 `satisfied@p118/p119`（模型直接判已满足，符合冻结令「satisfied 直达不负分」口径），0 blocking hold、无永久 hold。全波 blocking_unresolved=0 案例 20/20，复合 rebind/恒等形态全部兜住（absent 66 处/14 案 100% 被变体反证兜住）。
+- **量级**：390/390 = **100.0%**（八波首达）；actual 20/20、reported 20/20、fc=0（五连：loop4~loop8）、wrong=0、kept=0、not_executed=0。B02 保 complete（FL-D690 五连无回摆）、B12/B15 不回摆（FL-D698/695 无回摆实证）。
+- **观察项**：FL-D794 G11 抖动全波 0 次维持销案；**B01 新现非阻塞复核项**——G12/G13@p207 替换后原句残留「其中，」悬空残句（AUDIT_NOT_COMPLETED `incomplete` ×2 + FINAL_COVERAGE_UNRESOLVED），交付形态=review_assisted + review_required（blocking=0，review_items 6）带标交付。**该非阻塞复核语义自 loop-6 起即在树**（loop-6 B01 同形 6 项、loop-7 B12/B15/B18 均带标交付），非 loop-8 新规；量具 T012/T013 目标级判 completed 与引擎「残句未清理」质量项不矛盾（目标语义无谎报、质量提示如实上报）。建议主线评估登记为一般质量观察项（本线无号可用，未立号）。
+- **账本第 10 段**：$0.5874/509 calls/63min。
+- **变更记录**：2026-11-01 新增（验收侧证据块）。
+
+## FL-D862 留出 BH07 适配面失效家族：applicability_unknown:FACT_PREREQUISITE_UNVERIFIED(service_fee) 22 连发 → 全案诚实扣件（2026-11-01，qa-feat-recall，留出首验）
+
+- **发现**：留出首验（aa30eaf，与 dev loop-8 同引擎）BH07（稳健养老 FOF）incomplete 无产物；unresolved 主因 `applicability_unknown:FACT_PREREQUISITE_UNVERIFIED:service_fee…` ×22 跨 G01/G02/G03/G04/G05/G08/G11/G14/G15/G16/G17/G18/G22 共 12 规 + RECALL_FACT_UNVERIFIED + AUDIT_VERDICT_MISSING——**销售服务费事实前提在 FOF 合同表述形态下未能实例化**，义务全军覆没于准入判定。
+- **影响**：BH07 8 目标全 not_executed（-8）。为留出完成率最大单因子之一，且为 dev20 未现的**新失败家族**（合同类型分布外：FOF/养老）。
+- **状态**：open，归主线机制判定（事实前提实例化的类型泛化）。不自行放第二波。
+- **变更记录**：2026-11-01 新增。
+
+## FL-D863 留出 BH04+BH05 站点/作用域解析失效家族：document-wide site recovery unresolved ×8 + g06_subsection_scope_missing（2026-11-01，qa-feat-recall，留出首验）
+
+- **发现**：BH04（景荣纯债，7 目标全丢）unresolved 主因「rule scope is unresolved or empty; document-wide site recovery …」×8 + CLAIM_REPLAY_FAILED ×10（跨 G01/02/03/04/15/16/17/18 八规）；BH05（港股通恒生 LOF，20 目标全丢）G06 `g06_subsection_scope_missing` + CLAIM_REPLAY_FAILED。**规则作用域/子节定位在留出合同版式（纯债短版式、LOF 特殊章节）下解析不了**。
+- **影响**：-7 / -20，合计 -27，为留出最大失分家族。
+- **状态**：open，归主线机制判定。
+- **变更记录**：2026-11-01 新增。
+
+## FL-D864 留出 BH02 单义务 replay 未闭：G18 CLAIM_REPLAY_FAILED + verified site missing（2026-11-01，qa-feat-recall，留出首验）
+
+- **发现**：BH02（全球稳健配置 QDII）仅 G18:0 一支未闭（QDII 特殊章节版式下站点证据未绑定）→ 交付门诚实扣全案，**-19 为「单义务连坐」形态统计放大**（与 dev 线 FL-D652~659 诚实扣件门同一设计语义：宁扣勿谎）。
+- **状态**：open，归主线评估连坐口径或 QDII 版式适配。
+- **变更记录**：2026-11-01 新增。
+
+## FL-D865 留出 BH06 DOCUMENT_PROTECTED（边界案）：inspect 阶段保护文档拒入，标签 0 目标不侵分母（2026-11-01，qa-feat-recall，留出首验）
+
+- **发现**：BH06（稳信六个月持有）运行时报 `DOCUMENT_PROTECTED`（stage=inspect）→ not_generated 无产物。标签库 BH06 本就 0 目标，**不侵占 111 分母**；按边界口径单列登记，不计失败家族。
+- **状态**：open（边界处理口径归主线：是否支持保护文档只读管线）。
+- **变更记录**：2026-11-01 新增。
+
+- **2026-11-01 语料剖析补充证据**：全语料 542 唯一份中仅 2 份带 `documentProtection` 标签；BH06 文件实际标签为 `w:edit="trackedChanges" w:enforcement="0"`（**未启用**）——引擎 inspect 判定疑似「在场即拒」过宽；同合同另有 `_20260821` 无保护副本在库。另发现物理 578 vs 唯一 542（18 名 ×3 副本），第二波/500+ 分母须按唯一名+sha256 去重（详见 docs/engine/CORPUS_TYPOLOGY_20261101.md §4-6/§5）。
+
+> **⚠️ 撞号登记（2026-11-01，qa-feat-recall 报主线裁断）**：qa-recall-miss 线经 229f030 并入的 FL-D866/867/868/869 四条（BH04/BH05/BH02/BH07 修复收口）与本线 EVAL 审计先占的同号四条（guide 条件化披露/p6_score 潜伏/入口自举族/统计校验弱口径族）**同号双义**。历史不删、双方原文俱在；检索时以块内「qa-recall-miss / qa-feat-recall」归属标注区分。请主线赐新号收编其中一族以清册。
+
+## FL-D866 留出二轮冻结附带规则工件语义变更（12 操作 condition 落地）——透明披露登记，非静默；round-2 与 round-1 非严格同 guide（2026-11-01，qa-feat-recall）
+
+- **发现**：主线 FL-D862/863/864 修复（a5bad78，merge 05c3ef1）将适用性词表机制**落到规则工件**：`guides/builtin_guide_v1.json` 12 个操作的 condition 从 `"kind":"none"` 改为 `class_count:multiple`（×7）、`has_service_fee`（×4）、`compound`（×1），±77 行。guide sha `e40e630d…`（loop-2b 起八连一致）→ `5e3bf31a…`。labels/selection sha 不变。
+- **口径影响（如实）**：留出 round-2 与 round-1 **非严格同 guide**——两轮并排呈现时须标注此差异（round-1 的 FL-D862 失败形态正是「前提无词表」，round-2 修复本身即含工件条件化，属**机制修复的载体**，非规避测试的特调）；同时提示主线：dev20 若复跑 05c3ef1，单类/无服务费合同的相关义务会转 NOT_APPLICABLE（类型学：批内仅 1 份零字母类，dev20 影响面≈1 案量级），不排除完成率分子/分母口径变动。
+- **历史教训对照**：同 08cb0e6（loop2→2b 规则工件改动致 loop2→3 增量混淆）已圈界的披露标准——本次在冻结时即显著披露，不事后追认。
+- **状态**：已披露（生效中）；第二轮报告强制并排标注。
+- **变更记录**：2026-11-01 新增。
+
+## FL-D867 评分量具三处潜伏缺陷（p6_score.py，现行波次评分无历史影响但须修）（2026-11-01，qa-feat-recall，EVAL 全覆盖审计组C）
+
+- **发现（审计员候选+主审计复验确认）**：①L542 段落哈希消歧读 `site.get("scope")`——`target_site()` 规范化产物只有 `site_scope` 键（L101），该查找恒 dead，仅因现行 labels 501/501 带顶层 `scope` 键在 `target.get("scope")` 兜底生效；labels 若仅带 `site_scope` 则 body/summary 消歧**静默失效**（同名段落错站当证据）。②L575 附近 `original_paragraphs[original_index]` 无越界检查：label 声明段落索引越界或源解析失败（`original_paragraphs=[]`）直接 IndexError 崩溃而非 graceful unknown。③L956-958 vs 930-933 `site_scoped_targets` 先累加死代码后重算，且重算用 `case["targets"]` 直接取键与前文容错不一致（label 缺 `targets` 键即 KeyError）；L887 `plain` 死赋值。
+- **历史影响核验**：labels 61a2c514 冻结件 501 target 全带顶层 `scope` → v1~loop8 全部历史评分**不受①影响**；②③未被触发。属潜伏族非现行错误。
+- **状态**：open，报主线立修（量具属主线资产，本线不改）。
+- **变更记录**：2026-11-01 新增。
+
+## FL-D868 评测脚本入口自举/默认路径漂移家族（5 文件入口 ImportError-by-path + 1 默认指向不存在件）（2026-11-01，qa-feat-recall，EVAL 组C）
+
+- **发现（复验确认）**：`score_first_batch_20261029.py` L21 `DEFAULT_SELECTION` 指向不存在的 `var/recall-first-evaluation/first-batch-20261028/...`（实际件在 `docs/evidence/`，实测 ls 证实）——默认参数运行即 FileNotFoundError（本线历次均显式传参，未触雷）。`production_first_batch_e2e_20261028.py` L29 / `real_contract_e2e_20261023.py` L48 / `real_resume.py` L7 / `sample_corpus_audit.py` L14：顶层 `from fundlex…/tools.evaluation…` 无 `sys.path` 引导，按文件路径直跑即 ImportError（同目录 p6_trace_report/remediation_probe 有引导，不一致）。
+- **关联低危**：`remediation_probe_20261028.py` L112（`next(iter(...))` 空集 StopIteration 出 try + L113 无条件再赋=死语句；L175-176 apply_facts 作用于全新对象返回值丢弃=无效调用）。
+- **状态**：open，报主线（入口规范：统一 `python -m` 或统一 sys.path 引导；废弃默认指向修正或删除）。
+- **变更记录**：2026-11-01 新增。
+
+## FL-D869 评测统计/校验弱口径家族（pilot_compare 可负统计 + 冻结校验子串假通过 + replay_checkpoints 静默 fallback）（2026-11-01，qa-feat-recall，EVAL 组C）
+
+- **发现（复验确认）**：①`pilot_compare.py` L127-133 `overlapping_gold_targets_not_exact += overlapping-located`：located 含 `satisfied` 候选、overlapping 排除之——target 仅被 satisfied 命中时贡献 **-1**（统计可为负，口径错）。②L55 `assert digest in json.dumps(frozen)`：子串包含式冻结校验，digest 十六进制出现在冻结记录任意字段即假通过（形同虚设风险）。③`replay_checkpoints.py` L42-44 task 级 fallback 只追加 `self.fallbacks` 而 main() 从不输出——重放可能静默用错上下文缓存且无证据；L32 `max_calls=1000` 死上限。
+- **状态**：open，报主线（统计口径与冻结校验强度属评测可信度面）。
+- **变更记录**：2026-11-01 新增。
+
+## FL-D983 死运行器族三高危：发布守门工具本身不可用（EVAL 组D，主审计复验确认）（2026-11-01，qa-feat-recall 登记，主线赐号 FL-D983）
+
+- **发现日期**：2026-11-01（EVAL 全覆盖审计组D；主线赐号 2026-11-01）。
+- **问题与影响**：三个评测/守门 runner 对现行代码与 API **确定必崩/必拒**——strictness_audit 是严格性守门工具，其崩溃意味着守门证据链本身缺一环。
+- **证据附录（逐项：文件:行号 | 证据 | 复验方式 | 后果）**：
+  1. `tools/evaluation/strictness_audit_20261028.py:121` | `_, allowed = _candidate_context(...)` 二元解包，而被调 `fundlex/targeting.py:112` 签名为 `-> tuple[str, set[str], dict[str, Any]]` 三元组 | **复验**：grep 签名 + 逐行比对 | `capacity_probes()` 调用即 `ValueError: too many values to unpack`，守门工具该探针全废。
+  2. `tools/evaluation/task_revision_run.py:66-69` | `POST /api/tasks` 携带 `ruleset_version:"v2"` 且无 `engine_id` | **复验**：`fundlex/api.py:1296` `raise HTTPException(422, "RULESET_RETIRED")` / `L1298` `422 "ENGINE_REQUIRED"` 命中分支逐条件核对 | 第一步即 422，整条 runner 死。
+  3. `tools/evaluation/v2_pilot.py:180-184` | `POST /api/batches` 带 `ruleset_version:"v2"` | **复验**：`fundlex/api.py:1566` `raise HTTPException(410, "RULESET_RETIRED")` 无条件分支 | 批量协议 runner 全死。
+- **处理方法（建议，归主线）**：①strictness 解包改三元（一行修复+补锁测试）；②两 runner 或退役删除（防守门引用假证据），或改造到现行 engine_id 调用面；③守门链健康自检纳入发布前检（runner 冒烟）。
+- **当前状态**：open，高危，归主线处置（本线仅审计登记，不改跨线工具）。
+- **验证结果**：候选项 3/3 经主审计逐行复验确认（签名表与 API 拒绝分支均现行实证）。
+- **变更记录**：2026-11-01 审计登记 → 2026-11-01 主线赐号 FL-D983、附录化。
+## FL-D984 评测证据致谎/统计口径族：审计度量自身可虚报（EVAL 组A+B，主审计复验确认）（2026-11-01，qa-feat-recall 登记，主线赐号 FL-D984）
+
+- **发现日期**：2026-11-01（EVAL 全覆盖审计）。
+- **问题与影响**：以下度量/审计脚本会把「无法验证」写成「确证错误」、把域代码计成修订、把空跑冒称完成、让标签分母可被静默缩小——**评测可信度面级问题**，其中 first_batch_label 三处直接波及在制的第二波标签线。
+- **证据附录（逐项 文件:行号 | 缺陷 | 复验状态）**：
+
+> 候选项逐一主审计复验；本线仅登记不修复。建议主线立号两族：本块「证据致谎/统计口径族」+ 下块「资源环境脆性族」。
+
+- **matching_audit.py L148-155**（中-高）：generate 模式 target 只有在可构造 names 模板时才评分，模板不可得时**确定性记 `wrong_content_or_artifact` 并计入 confirmed_wrong_edits**——「无法验证」被写成「确证错误」，系统性压低估量（审计员原称"恒 False"，复验修正为模板缺失路径恒 False，性质不变）。
+- **delivery_e2e.py L73-75**（中）：`xml.count(b"<w:ins")` 前缀命中 `<w:instrText`（实测 `startswith=True`）——TOC 域代码被计入修订 insertions，500+ 合同全有目录域，**修订统计口径致谎（产物证据层）**。
+- **controlled_regression.py L138/147**（中）：空输入目录时 `unchanged=all([])=True` 且 `0==0` → `completed=True` --- 零文档运行冒称完成（`--expected-count` 门默认不启用）。
+- **first_batch_label_20261028.py 三处**（中，**波及在制第二波标签线质量**）：①L1056/L1078 append 坐标用 compact 长度当原文坐标传入 `compact_offsets`，含空白段落坐标系统性偏小；②L1251 `locate_quote` 多命中静默取 `hits[0]` 且无歧义记录；③L1755 修复轮采纳条件仅比 issue 数，不比 target 数——模型静默删站点可被采纳，**标签分母可悄悄缩小**。
+- **compare_benchmark.py L12-16**（中）：p95 取秩 `int(len*frac)-1` 系统性低估尾部分位。
+- **p6_langfuse_sync.py L96-102**（中）：fc 分数须 `case["reported_complete"] is not None`，而 p6_score case 级无此键（只在聚合 delivery）→ **fc 观测分数静默永不发送**；另 docstring `--labels` 参数 argparse 未定义。
+- **action_fixture_audit.py L231**（中）：「拒绝通过」判定把引擎 `failed`（内部异常）与 principled refusal 混计，负例证据稀释。
+- **compare_gold.py L105 vs L91**（中）：零差异判定剔全部空白、逐 op 过滤只剔 `\n\t`——两套口径矛盾（空格级修改会 expected_zero=True 但 operations 非空）；L62 `_locate` 右闭区间错位一块。
+- **build_labels_v2_20261028.py L268-280**（低）：重复站点跳过 append 仍记 `applied=True`，`review_findings_applied` 口径混入未改动裁定。
+- **p6_label.py L177**（中）：类间泄漏防线仅按 `；/;` 切句——真实合同以句号分隔 A/C 句式时 service_fee 事实可能判错，直击标签分母。
+- **finalize_first_batch_labels_20261028.py L156-166**（中）：G05 补建 ValueError 被吞但质量告警无条件消音（未补也显示无缺口）+ 两处无保护 KeyError。
+- **finalize_second_batch_labels_20261031.py 两处**（低）：L713 `+2` 致窗口 -4/+6 不对称；L550 未知 rule_id `RULE_IDS.index` 裸崩（一期工具仅记 issue）。
+- **prepare_second_batch_run_20261031.py / verify_downloaded_artifacts.py / p6_label.py L378**（低）：无保护 KeyError/schema 假设。
+- **controlled/其他低危**：v2_compare L85 段级 delta 错位 + L253 死计算；p6_package 死函数（规约不计）。
+- **并入低危（组A/B/C 余项）**：`production_v1_e2e_20261026.py` L148/155 无 `wait_for` 即断言（SPA 渲染竞态假失败）+ 固定任务名无随机后缀可能挂陈旧任务取错证据；`p6_select.py` L74 manifest 三字段 split 对含空格文件名脆性；`p6_trace_report.py` L37 死常量 + L168 注释引用不存在逻辑；`p6_package.py` L?? `cli as _clip` 遮蔽（签名一致，行为等价，规约记录）。
+
+- **处理方法（建议，归主线）**：逐项按附录修复并对 matching/delivery/controlled 三件补锁测试；first_batch_label 三件在第二波标签 finalize 前处理。
+- **校验弱化并入项（组D，复验确认）**：`verify_labels_v2_20261028.py:105-108` `protected` 仅与 labels 文件内自封字段互核、未对 DOCX settings.xml 复核（双字段同假即永真通过）；`L50` `case["relative"]` 缺键 KeyError 中止全体验证；`verify_downloaded_artifacts.py:110` `cases[case_id]["file"]` schema 不符 KeyError 而非记 problem；`production_v1_e2e_20261026.py:148/155` 无 wait_for 断言 SPA 竞态假失败 + 固定任务名挂陈旧取错证据。
+- **当前状态**：open，归主线处置。
+- **验证结果**：全部候选项经主审计复验；含一处审计员过度表述已修正（matching_audit 为模板缺失路径恒 False，非无条件恒 False）。
+- **变更记录**：2026-11-01 审计登记 → 2026-11-01 主线赐号 FL-D984、附录化。
+## FL-D985 评测资源/环境脆性族：扩波长跑与环境漂移风险（EVAL 组A+B+D，主审计复验确认）（2026-11-01，qa-feat-recall 登记，主线赐号 FL-D985）
+
+- **发现日期**：2026-11-01（EVAL 全覆盖审计）。
+- **问题与影响**：资源泄漏在 500+ 扩波长跑可累积致 fd/连接耗尽；机器绑定绝对路径使跨机/重启后静默回退或偷工分母。
+- **证据附录（逐项 文件:行号 | 缺陷 | 复验状态）**：
+
+- **资源泄漏（中 ×2，扩波长跑风险）**：`recall_run.py` L115 循环内 `ModelGateway.from_env()` 且全文件无 `close()`（复验确认）——**500+ 扩波长跑时连接/fd 逐份累积**，第二波 100 起跑前建议必须修；`v2_pilot.py` L194/236/245 同型 ×3/批。
+- **环境绑定（低）**：`compare_e2e.py` L109 硬编码 `/tmp/fundlex-compare-corpus-v4`（已陈至 v5+、易失静默回退）；`build_revision_review_packet.py` L100 / `validator_shadow.py` L205 / `p6_label.py` L378 / `verify_downloaded_artifacts.py` L99 默认指向已退役 `/home/opencode/data*`；`development_gate_reconciliation.py` L241 sqlite 读写打开自称只读（对 budget_preflight `mode=ro`）；`strictness_audit/delivery_e2e` 硬编码 `/tmp/opencode`；`corpus_audit.py` L20 runtime fixture 缺失即崩；`word_fixture.py` L13 CWD 漂移；`v2_fixtures.py` L39 docx zip 时间戳致 fixture sha 漂移不可跨机复验；`prepare_second_batch` L97-147 CWD/ROOT 双口径 + L129 KeyError + select_second_batch L284 死 setdefault。
+- **文档陈旧（低，合记）**：`v2_handover.py` L9 / `recall_run.py` L6 / `action_fixture_audit.py` L11 / `release_evidence.py` L8 docstring 仍为已停用 Windows `.venv\Scripts` 路径；`first_batch_label` L11 声称默认模型与 argparse 实际默认值脱节。
+- **p6_run.py**（低 ×2）：preflight manifest O_EXCL 先于 run_dir 检查（重跑即撞 MANIFEST_ALREADY_EXISTS 死锁）；login 响应未查状态码裸取 token。
+- **状态**：open，待主线立号处置；**recall_run 泄漏建议列为第二波起跑前必办**。
+- **变更记录**：2026-11-01 新增。
+
+- **组D 环境并入项（复验确认）**：`strictness_audit_20261028.py:57` mkdtemp 硬编码 `/tmp/opencode`、`L318` 钉死历史产物绝对路径缺失静默减证、`L243/299` 钉死语料文件名；`v2_fixtures.py:39-40/155-158` docx zip 时间戳随构建漂移 → fixture sha256 不可跨机复验；`word_fixture.py:13` 相对 CWD 产出与消费方固定相对路径错位；`v2_pilot.py:194/236/245` `ModelGateway.from_env()` 未 close ×3/批（同 recall_run 泄漏族）。
+- **处理方法（建议，归主线）**：**recall_run gateway close() 列为第二波起跑前必办**；硬编码路径统一 repo-relative/tmp 规范；sqlite 只读改 `mode=ro`。
+- **当前状态**：open，归主线处置。
+- **验证结果**：recall_run 泄漏点复验确认（全文件无 close）；路径类逐项实测存在性。
+- **变更记录**：2026-11-01 审计登记 → 2026-11-01 主线赐号 FL-D985、附录化。
+## 留出 r2 病灶家族（FL-D864/863 命中实证、FL-D862 半命中、BH01 计划遗漏回摆）——主线已立 FL-D981/982 接修（2026-11-01，qa-feat-recall 登记）
+
+> **主线裁决（2026-11-01）**：第二波**不放行**（BH01 回摆 + BH07 新形态未决，门槛不满足）；EN1 已接第三轮修复令 **FL-D981/982**（与下两项一一对应，映射以主线登记为准）；r3 由本线在 EN1 修复并入后执行（冻结版另定）。
+
+- **命中实证**：BH02（unresolved 0，FL-D864 QDII 连坐消退）、BH04（8 规 site recovery 全愈，FL-D863a）、BH05（G06 子节愈，FL-D863b）；r2 83/111=74.8%（+23.4pp），fc=0/wrong=0。FL-D866 披露：r2 guide 条件化（12 ops），两轮非严格同 guide 已标注。
+- **FL-D862 半命中**：BH07 的 22 连发 FACT_PREREQUISITE_UNVERIFIED(service_fee) **全消退**（适用性词表实证生效）；残余新形态 G02/G04/G14 CLAIM_REPLAY_FAILED + `MISS_RECOVERY_GENERATED`（恢复通道补造 R022-R028 缺台账依据）→ 诚实扣件。建议主线立号（恢复通道生成剂量的台账锚定机制）。
+- **BH01 新回摆**：r1 complete/r2 incomplete——G13@p242 `AUDIT_VERDICT_MISSING`：audit 正确识 needs_edit（「应对短持有期赎回费表述删除」）但 **plan 台无 G13 项**（计划遗漏族形态，与 dev 线 FL-D693/791 家族同形）→ 单义务连坐扣全案 -20。是否修复副作用未确证（applicability 变更不影响 G13 TRUE）；建议主线立号并与计划守护机制族对照。
+- **状态**：BH07 恢复通道形态 + BH01 计划遗漏 → **主线 FL-D981/982 接修中**；FL-D862/863/864 机制生效已实证（残余另册）；第二波维持冻结。
+- **变更记录**：2026-11-01 新增。
+
+## 留出 r3 病灶收口（FL-D981 命中实证、qa-recall-miss FL-D869 命中实证、G14 天花板实证）——报主线复核第二波放行（2026-11-01，qa-feat-recall）
+
+- **总账**：r3 103/111=92.8%（r1 51.4→r2 74.8→r3），fc=0（硬门槛七连），wrong=0，actual=reported=6/8。账本段 13：$0.2124/168c/37.1min。
+- **FL-D981 命中实证（BH01 回摆消除）**：G13 T013@p242 重新落地 needs_edit 并执行，全案 unresolved 0 → complete 20/20；r2 的 AUDIT_VERDICT_MISSING plan 缺口未再出现。
+- **qa-recall-miss FL-D869（BH07 二阶）命中实证**：恢复通道生成目标 R022-R028 **清零**；G02/G04 全执行落地（T002/T005 needs_edit 执行、T003/T006 absent 闭合、-G02-1 satisfied）。**MISS_RECOVERY_GENERATED 形态灭绝**。
+- **G14 天花板实证（EN1 预交底兑现）**：BH07 残余 6 unresolved 全部 G14 MISS_TARGET_RESOLUTION（3 CLAIM_REPLAY + 3 FINAL_OPERATION_UNPROVEN「verified site missing」）——目标解析层天花板，EN1 声明「FL-D869 不为 G14 背书、r3 复发不记回摆、建议列第二波观测项」；单案 8 uncompleted 全系 G14 扣件连坐 not_executed，与诚实扣件门语义一致，非谎报。
+- **不回摆核验**：BH02/03/04/05/08 五连不回摆；无新回摆、无新家族。
+- **状态**：FL-D981 与（qa-recall-miss）FL-D869 视主线口径可标「留出实证收口」；BH07/G14 转第二波观测项；第二波放行与否请主线裁定（本线门槛全过）。
+- **变更记录**：2026-11-01 新增。

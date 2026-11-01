@@ -1602,10 +1602,10 @@ dev20 v2 闭环：修复循环直到 §7 门槛（无已确证严重错误、无
 - FL-D685 回复 e3d6135；FL-D688 addendum 已写入 loop-2 compare（var/ 不入库）；FL-D584/585/586/587/588/589 条目在册。
 
 ## 在途
-- 无后台进程、无运行中波次。**FL-D790 量具窗口完成（cc3c52f）+ 五波同量具（p6-score-4）重评**：v1 242/62.1%(fc4) / loop1 逐字不变 / loop2 逐字不变 / loop3 350/89.7%(fc0) / **loop4 352/90.3%(fc 1→0)**。逐案归因：loop1/2 不变、loop3 仅 B15 T001、v1 仅 B05 T001/T002+B15 T001（均合法后移落点实证）。
-- FL-D691「真实残余」子结论与 FL-D694 已按 p84 实证改判关闭（DETAIL 已记录，历史保留）。
-- **等主线**：复核合并 cc3c52f → engine 冻结 a0aa64d（含 FL-D791）→ loop-5 dev20 令。loop-5 门槛：fc=0/wrong=0/kept 不新增/B02 保 complete/B15 T001 executed/B12 恢复 complete（FL-D792 观察项如实登记不算 FAIL 因子）。**未发令前勿启动 dev20**。
-- FL-D693（B12 joint 合成通道）仍 open 待主线机制处置。号段余 FL-D695..699；FL-D790 系主线编号（700+ 族），非本池。
+- 无后台进程。**留出 r3 完成：103/111=92.8%（r1 51.4→r2 74.8→r3）、fc=0 七连、wrong=0、actual=reported=6/8**。报告 `qa-wave1-holdout-v3-20261101-r3/holdout-round3-report.md`（三轮并排）。账本段 13 $0.2124/168c/37.1min。
+- 实证：FL-D981 命中（BH01 G13@p242 落地、回摆消除、unresolved 0）；qa-recall-miss FL-D869 命中（R022-R028 恢复通道灭绝、G02/G04 落地）；BH07 残余=EN1 预交底 G14 MISS_TARGET_RESOLUTION 天花板（不记回摆，列第二波观测项）；五案不回摆、零新家族。
+- **等主线裁定**：第二波放行与否（本线门槛全过）+ FL-D866~869 撞号裁断（qa-recall-miss vs EVAL 同号双义）。
+- 待命下一令：第二波 100 起跑前 recall_run gateway close()（FL-D985 内）仍为主线必办项。
 ## 下一步（可执行顺序）
 1. 已向主线报 loop-2 指标与残余归属（本次回复）。
 2. 回归绿 → 提交 FL-D588 代码 → 报主线。等 feat-guide B15 单与 B19 修复专单齐 → 新 freeze 跑 loop-3。编号 580-589 已用尽，已向主线请新段。
