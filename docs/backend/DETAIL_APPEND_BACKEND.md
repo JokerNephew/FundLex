@@ -104,3 +104,22 @@
 ### 签认收尾声明
 
 PL1 飞书线 23 项全部逐行签认完毕；矩阵对应行已标 ✅。本支线有效发现：FL-D903（扩展定案，4+1 处）、FL-D906（新登记）；观察 6 项留档；其余文件「无发现」均以上表行级覆盖为依据。
+
+## G. FL-D900~906 分级处置提案（2026-11-01 总指挥「下一棒」口径：可直修/需裁决/需用户定三级）
+
+修法均为一句话级；行号以签认基线 HEAD(3cab25b) 为准。FL-D905 为正向结论归档，无处置项。
+
+| 编号 | 分级 | 修法一句话 |
+|---|---|---|
+| **FL-D900** 上传路由死代码 reasons 映射 | **可直修**（零风险） | 删除 `api.py:1413` 的九项 `reasons` 字面量（全文件引用为零，行为不变，无需回归） |
+| **FL-D902** guide_store canary/parse_report 静默 | **可直修**（低风险） | `guide_store.py:221/233` 两处 `except Exception: pass` 各补 `LOGGER.warning(..., exc_info=True)`，best-effort 语义不动 |
+| **FL-D903** 飞书线 4+1 处静默族 | **可直修**（低风险，一次过） | service.py:834/899/942 与 integrations/store.py:449/606（该模块新增 module logger）统一补 `warning` 日志并带 draft_id/dedupe_key，service.py sync_tasks:1271 补带 channel id 的日志；不改吞错/返值语义 |
+| **FL-D906** runtime 私有 `_disconnect` 依赖 | **可直修**（低风险双保险） | `_close_socket` 找不到私有方法时 `log.warning`；`_start_app` 的 handler 闭包头一行加 `if not entry["active"]: return` 活跃位闸（断连之外的第二道闸）；requirements 锁 lark-oapi 当前版本 |
+| **FL-D901** 模型设置中文 422 被信封吞 | **需裁决**（跨前后端+稳定码命名） | 后端三处改 `raise_api_error(422, "MODEL_SETTINGS_INVALID"/"MODEL_CONNECTION_INVALID")`，前端 `reasons` 表同步补两条人话译文——需主线裁决：稳定码命名定稿+前端改动归口（本线 Only 后三行，前端 reason 表在前端线名下） |
+| **FL-D904** feishu_health `__import__` 测不到 worker | **需用户定**（实为需运维一次确认） | 二选一取于「生产监控是否消费 `service_process_active` 字段」这一只有运维能答的事实：无消费者→直接改字段标记「仅同进程诊断」并改名（可直修级）；有消费者→做实跨进程探活（worker 心跳行落 integrations store 再聚合） |
+
+### 执行小结（待主线批单后施工）
+
+- 可直修 4 项（FL-D900/902/903/906）：合计约 15 行改动+1 个模块 logger，可一个 commit 完成，每条附 grep 校验（无 `except Exception` 无日志残留/死代码段消失/私有调用有兜底日志）。
+- 需裁决 1 项（FL-D901）：等主线定码名与前端归口后，本线只改 api.py 三行。
+- 需用户定 1 项（FL-D904）：请总指挥向运维确认 `service_process_active` 有无消费者，答复即定修法。
