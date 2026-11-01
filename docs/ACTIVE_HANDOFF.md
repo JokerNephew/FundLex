@@ -1602,9 +1602,10 @@ dev20 v2 闭环：修复循环直到 §7 门槛（无已确证严重错误、无
 - FL-D685 回复 e3d6135；FL-D688 addendum 已写入 loop-2 compare（var/ 不入库）；FL-D584/585/586/587/588/589 条目在册。
 
 ## 在途
-- 无后台进程。**待命 r3**：等 EN1 的 FL-D981/982 修复并入主线 + 新冻结令（引擎 commit + guide sha 若变须 FL-D866 式披露 + 门槛口径若调亦披露），随后同一留出 manifest 第三轮（labels 61a2c514 / selection d89f40b5 / scorer p6-score-4 不变，三轮并排）。
-- r3 发车纪律：运行时背景机制 + setsid + PYTHONUNBUFFERED=1 + 独立看门狗（禁裸 nohup&，批死 15 分钟内自报）。
-- 已收口：FL-D983/984/985 附录化（975acae）；CORPUS_TYPOLOGY r2 形态深化（矩阵两行+机制建议 8/9+r2 实证注记）；r2 病灶块已交叉引用 FL-D981/982 与第二波不放行裁决。
+- 无后台进程。**留出 r3 完成：103/111=92.8%（r1 51.4→r2 74.8→r3）、fc=0 七连、wrong=0、actual=reported=6/8**。报告 `qa-wave1-holdout-v3-20261101-r3/holdout-round3-report.md`（三轮并排）。账本段 13 $0.2124/168c/37.1min。
+- 实证：FL-D981 命中（BH01 G13@p242 落地、回摆消除、unresolved 0）；qa-recall-miss FL-D869 命中（R022-R028 恢复通道灭绝、G02/G04 落地）；BH07 残余=EN1 预交底 G14 MISS_TARGET_RESOLUTION 天花板（不记回摆，列第二波观测项）；五案不回摆、零新家族。
+- **等主线裁定**：第二波放行与否（本线门槛全过）+ FL-D866~869 撞号裁断（qa-recall-miss vs EVAL 同号双义）。
+- 待命下一令：第二波 100 起跑前 recall_run gateway close()（FL-D985 内）仍为主线必办项。
 ## 下一步（可执行顺序）
 1. 已向主线报 loop-2 指标与残余归属（本次回复）。
 2. 回归绿 → 提交 FL-D588 代码 → 报主线。等 feat-guide B15 单与 B19 修复专单齐 → 新 freeze 跑 loop-3。编号 580-589 已用尽，已向主线请新段。
