@@ -16,7 +16,7 @@ from fastapi.testclient import TestClient
 from fundlex import guide_store
 from fundlex.api import create_app
 from fundlex.docx import generate_unchanged_artifacts, validate_edit_plan
-from fundlex.guide import GUIDE_SCHEMA_VERSION
+from fundlex.guide import GUIDE_PARSE_PROMPT_VERSION, GUIDE_SCHEMA_VERSION, GUIDE_VERIFY_PROMPT_VERSION
 from fundlex.jobs import Worker
 from fundlex.model import ModelError
 from fundlex.recall_pipeline import RecallPipelineStop
@@ -292,7 +292,9 @@ def test_worker_parses_queued_guide_job(tmp_path, monkeypatch):
     assert parsed["status"] == "parsed" and parsed["rules_count"] == 2
     assert parsed["qualification_status"] == guide_store.QUALIFICATION_CERTIFIED
     assert parsed["parser_version"] == "guide-parse-1"
-    assert parsed["prompt_versions"] == {"guide_parse": "guide_parse_v1", "guide_verify": "guide_verify_v1"}
+    # FL-D931：guide_parse 升 v2（prompt 去掉固定组数暗示），锚随常量。
+    assert parsed["prompt_versions"] == {"guide_parse": GUIDE_PARSE_PROMPT_VERSION,
+                                         "guide_verify": GUIDE_VERIFY_PROMPT_VERSION}
     document = guide_store.guide_document(store, version["id"])
     assert document["schema_version"] == GUIDE_SCHEMA_VERSION and len(document["groups"]) == 2
     guide_store.set_current_guide(store, OWNER, version["id"])
