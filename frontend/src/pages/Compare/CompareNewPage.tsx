@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { Button, Card } from '../../components/ui'
 import { useCompareSealMutation, useCompareTaskMutation, useCompareUploadMutation, refetchCompareTask } from '../../api/hooks'
 import type { ComparePairManifest } from '../../types'
-import { PairInput, fileName, messageOf, relativePath, type PairDraft, type UploadDraft } from './shared'
+import { COMPARE_MAX_UPLOAD_BYTES, PairInput, fileName, messageOf, relativePath, uploadErrorLabel, type PairDraft, type UploadDraft } from './shared'
 
 // P2 新建比对（FL-D846：/compare/new）：任务名、A/B 文件夹配对、逐组文件与断点续传。
 // 提交成功后进入 /compare/:taskId 比对工作台。
@@ -43,7 +43,11 @@ export function CompareNewPage() {
         setMessage(`正在上传第 ${index + 1} / ${draft.files.length} 组…`)
         const result = await uploadMutation.mutateAsync({ id: draft.task.id, files: [files.left, files.right], clientIds: [manifest.left.client_id, manifest.right.client_id] })
         const receipts = result.receipts || []
-        if (receipts.some((receipt) => !['accepted', 'already_accepted'].includes(receipt.status))) throw new Error(`第 ${index + 1} 对还没上传完。`)
+        // FL-D859：拒收必须带文件级原因（与 V1 同构），不能只说「没传完」。
+        const bad = [manifest.left.client_id, manifest.right.client_id]
+          .map((clientId) => receipts.find((receipt) => receipt.client_id === clientId))
+          .filter((receipt) => !receipt || !['accepted', 'already_accepted'].includes(receipt.status))
+        if (bad.length) throw new Error(`第 ${index + 1} 组上传未完成：${bad.map((receipt) => (receipt ? uploadErrorLabel(receipt.error_code) : '缺少上传回执')).join('、')}`)
         draft.next = index + 1; setUploadDraft({ ...draft })
       }
       await sealMutation.mutateAsync(draft.task.id)
@@ -64,6 +68,13 @@ export function CompareNewPage() {
 
   const createTask = async () => {
     if (!pairs.length || pairs.some((pair) => !pair.left || !pair.right)) { setError('每组都需要同时选择原版和对比版 DOCX。'); return }
+    // FL-D859：与 V1 一致的客户端预检——.doc 与超大文件在服务端被拒后，
+    // 同一任务内不可替换文件（清单绑定），只能新建任务，因此先拦在本地。
+    const chosen = pairs.flatMap((pair) => [pair.left, pair.right]).filter((file): file is File => Boolean(file))
+    const legacy = chosen.filter((file) => /\.doc$/i.test(fileName(file)))
+    if (legacy.length) { setError(`检测到 Word 97-2003 格式（.doc）文件：${legacy.map(fileName).join('、')}。请用 Word/WPS 打开后"另存为" .docx 再重新选择。`); return }
+    const oversize = chosen.filter((file) => file.size > COMPARE_MAX_UPLOAD_BYTES)
+    if (oversize.length) { setError(`单个文件最大 25MB，超出：${oversize.map(fileName).join('、')}。请压缩或拆分后重新选择。`); return }
     const manifests: ComparePairManifest[] = pairs.map((pair, index) => ({ client_pair_id: `P${index + 1}`, label: `合同 ${index + 1}`, left: { client_id: `L${index}-${crypto.randomUUID()}`, name: fileName(pair.left), size: pair.left?.size || 0 }, right: { client_id: `R${index}-${crypto.randomUUID()}`, name: fileName(pair.right), size: pair.right?.size || 0 } }))
     try {
       const created = await createMutation.mutateAsync({ name: taskName.trim() || '合同对比', pairs: manifests, key: `compare-${crypto.randomUUID()}` })

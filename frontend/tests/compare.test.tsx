@@ -64,7 +64,10 @@ describe('Compare first-upload recovery', () => {
     mocks.oldTaskRefetch.mockReset()
     mocks.tasksRefetch.mockReset().mockResolvedValue(undefined)
     mocks.createMutateAsync.mockReset().mockResolvedValue(createdTask)
-    mocks.uploadMutateAsync.mockReset().mockResolvedValue({ receipts: [{ status: 'accepted' }, { status: 'accepted' }] })
+    // FL-D859 后回执按 client_id 匹配文件位（服务端真实回执恒带 client_id），
+    // mock 需回显实际传入的 clientIds，不能只有 status。
+    mocks.uploadMutateAsync.mockReset().mockImplementation(({ clientIds }: { clientIds: string[] }) =>
+      Promise.resolve({ receipts: clientIds.map((clientId) => ({ client_id: clientId, status: 'accepted' })) }))
     mocks.sealMutateAsync.mockReset().mockResolvedValue({ ...createdTask, status: 'sealed' })
     mocks.refetchCompareTask.mockReset().mockResolvedValue({ ...createdTask, status: 'sealed' })
   })

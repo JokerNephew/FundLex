@@ -458,7 +458,11 @@ def test_compare_first_upload_seals_and_refetches_explicit_task(browser, live_ap
         if path == f"/compare/tasks/{task_id}" and route.request.method == "GET":
             return json_route(route, task)
         if path == f"/compare/tasks/{task_id}/uploads":
-            return json_route(route, {"receipts": [{"client_id": "left", "status": "accepted"}, {"client_id": "right", "status": "accepted"}]})
+            # FL-D859 后页面按 client_id 匹配回执文件位（服务端恒回显），
+            # mock 须从 multipart 体的 client_ids 字段回显真实 id。
+            match = re.search(r'name="client_ids"[^[]*(\[[^\]]*\])', route.request.post_data or "")
+            client_ids = json.loads(match.group(1)) if match else []
+            return json_route(route, {"receipts": [{"client_id": cid, "status": "accepted"} for cid in client_ids]})
         if path == f"/compare/tasks/{task_id}/seal":
             return json_route(route, task)
         return route.continue_()

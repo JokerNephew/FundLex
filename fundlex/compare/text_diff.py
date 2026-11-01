@@ -61,7 +61,6 @@ def _symmetric_opcodes(left_values: list[str], right_values: list[str]):
     for tag, i1, i2, j1, j2 in matcher.get_opcodes():
         inverted.append((inverse_tag[tag], j1, j2, i1, i2))
     return inverted
-    return TextSpan(f"{side}-virtual", 0, 0, "")
 
 
 def diff_group(group: AlignmentGroup, *, id_start: int = 1) -> tuple[list[DiffItem], int]:

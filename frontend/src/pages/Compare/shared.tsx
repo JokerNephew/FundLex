@@ -36,6 +36,47 @@ export function statusLabel(status?: string): string {
 }
 export function pairDone(pair?: ComparePair): boolean { return Boolean(pair && ['succeeded', 'incomplete'].includes(pair.status)) }
 
+// FL-D856/858：上传拒绝码 → 可读原因 + 诚实补救路径（被拒文件位在密封前也
+// 不可替换——清单绑定文件名与大小，换文件只会得到 MANIFEST_FILE_MISMATCH——
+// 因此补救一律是新建对比任务上传）。
+// 与服务端 FUNDLEX_MAX_UPLOAD_BYTES 默认值一致；超限仍以服务端校验为准（FL-D859）。
+export const COMPARE_MAX_UPLOAD_BYTES = 25 * 1024 * 1024
+
+export const COMPARE_UPLOAD_ERROR_LABELS: Record<string, string> = {
+  LEGACY_DOC_UNSUPPORTED: '请将 .doc 另存为 .docx 后重新选择',
+  COMPARE_ENCRYPTED_DOCX: '文件有密码保护，请解除密码后新建对比任务上传',
+  COMPARE_UNSUPPORTED_FORMAT: '仅支持 .docx 文件，请转换格式后新建对比任务上传',
+  COMPARE_INVALID_DOCX: '文件不是可用的 .docx 文档，请检查后新建对比任务上传',
+  COMPARE_UPLOAD_REJECTED: '文件未通过上传校验（可能超过大小限制），请处理后新建对比任务上传',
+  MANIFEST_ENTRY_NOT_FOUND: '上传文件与任务清单不匹配，请新建对比任务上传',
+  MANIFEST_FILE_MISMATCH: '替换文件与首次选择的文件名或大小不一致；如需更换文件，请新建对比任务上传',
+  UPLOAD_IDENTITY_CONFLICT: '该文件位已有其他文件；如需更换，请新建对比任务上传',
+}
+
+export function uploadErrorLabel(code?: string | null): string {
+  return (code && COMPARE_UPLOAD_ERROR_LABELS[code]) || code || '上传被拒'
+}
+
+const COMPARE_FAILURE_STAGE_LABELS: Record<string, string> = {
+  claim_setup: '开始处理', input_integrity: '文件检查', compare: '文本比对', heartbeat: '处理中', finish: '保存结果',
+}
+
+// FL-D857/858：合同组失败的人类可读原因（V1 pairErrorLabel 同构）。
+// COMPARE_PAIR_INCOMPLETE 无 diagnostics，真实原因在随负载下发的文件级
+// error_code；其余走 worker diagnostics 的阶段提示。
+export function pairFailureLabel(pair: ComparePair): string {
+  if (!pair.error_code) return ''
+  if (pair.error_code === 'COMPARE_PAIR_INCOMPLETE') {
+    const bad = (['left', 'right'] as const).map((side) => ({ side, file: pair[side] })).filter((item) => !item.file || item.file.upload_status !== 'accepted')
+    if (!bad.length) return '该组文件不完整，请稍后重试'
+    return bad.map((item) => `${item.side === 'left' ? '合同A' : '合同B'}：${item.file?.error_code ? uploadErrorLabel(item.file.error_code) : '未成功上传'}`).join('；') + '。该组已判失败，请新建对比任务重新上传。'
+  }
+  const failure = pair.diagnostics?.failure
+  if (!failure || failure.error_code !== pair.error_code) return '处理失败，请稍后重试'
+  const stage = COMPARE_FAILURE_STAGE_LABELS[failure.stage || ''] || failure.stage || '未知阶段'
+  return `处理失败：${stage}环节出错${failure.retryable ? '，可重试' : '，请新建对比任务后重试；若仍失败请联系支持'}`
+}
+
 const safeTags = new Set(['article', 'blockquote', 'br', 'caption', 'col', 'colgroup', 'dd', 'del', 'div', 'dl', 'dt', 'em', 'figcaption', 'figure', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'hr', 'i', 'ins', 'li', 'mark', 'main', 'ol', 'p', 'pre', 'q', 'section', 'small', 'span', 'strong', 'sub', 'sup', 'table', 'tbody', 'td', 'tfoot', 'th', 'thead', 'tr', 'u', 'ul'])
 const voidTags = new Set(['br', 'col', 'hr'])
 
