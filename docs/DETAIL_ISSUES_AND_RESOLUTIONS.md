@@ -8615,3 +8615,11 @@ H＝E×…
 - **p6_run.py**（低 ×2）：preflight manifest O_EXCL 先于 run_dir 检查（重跑即撞 MANIFEST_ALREADY_EXISTS 死锁）；login 响应未查状态码裸取 token。
 - **状态**：open，待主线立号处置；**recall_run 泄漏建议列为第二波起跑前必办**。
 - **变更记录**：2026-11-01 新增。
+
+## 【报主线立号】留出 r2：FL-D864/863 双命中、FL-D862 半命中落新形态、BH01 G13 计划遗漏回摆（2026-11-01，qa-feat-recall）
+
+- **命中实证**：BH02（unresolved 0，FL-D864 QDII 连坐消退）、BH04（8 规 site recovery 全愈，FL-D863a）、BH05（G06 子节愈，FL-D863b）；r2 83/111=74.8%（+23.4pp），fc=0/wrong=0。FL-D866 披露：r2 guide 条件化（12 ops），两轮非严格同 guide 已标注。
+- **FL-D862 半命中**：BH07 的 22 连发 FACT_PREREQUISITE_UNVERIFIED(service_fee) **全消退**（适用性词表实证生效）；残余新形态 G02/G04/G14 CLAIM_REPLAY_FAILED + `MISS_RECOVERY_GENERATED`（恢复通道补造 R022-R028 缺台账依据）→ 诚实扣件。建议主线立号（恢复通道生成剂量的台账锚定机制）。
+- **BH01 新回摆**：r1 complete/r2 incomplete——G13@p242 `AUDIT_VERDICT_MISSING`：audit 正确识 needs_edit（「应对短持有期赎回费表述删除」）但 **plan 台无 G13 项**（计划遗漏族形态，与 dev 线 FL-D693/791 家族同形）→ 单义务连坐扣全案 -20。是否修复副作用未确证（applicability 变更不影响 G13 TRUE）；建议主线立号并与计划守护机制族对照。
+- **状态**：open ×2（BH07 恢复通道形态、BH01 计划遗漏）；FL-D862/863/864 视主线口径可标「机制生效、残余另册」。
+- **变更记录**：2026-11-01 新增。
