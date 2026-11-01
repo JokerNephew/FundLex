@@ -41,7 +41,7 @@ def test_legacy_batch_creation_is_retired(tmp_path: Path, monkeypatch):
     # The ruleset-only creation route is gone; reads of existing batches stay.
     retired = submit(client, docx_bytes())
     assert retired.status_code == 410
-    assert retired.json()["detail"] == "RULESET_RETIRED"
+    assert retired.json()["detail"] == "该上传入口已停用，请使用新版上传入口"
 
 
 def test_api_auth_scope_idempotency_and_download(tmp_path: Path, monkeypatch):

@@ -248,15 +248,15 @@ class UploadResourceMiddleware:
         now = time.monotonic()
         async with self._lock:
             if self._global_active >= self.settings.max_concurrent_global:
-                raise UploadGuardError(429, "UPLOAD_CONCURRENCY_LIMIT", "too many uploads in progress", 2)
+                raise UploadGuardError(429, "UPLOAD_CONCURRENCY_LIMIT", "当前上传任务较多，请稍后重试", 2)
             if self._ip_active[key] >= self.settings.max_concurrent_per_ip:
-                raise UploadGuardError(429, "UPLOAD_CONCURRENCY_LIMIT", "too many uploads from this client", 2)
+                raise UploadGuardError(429, "UPLOAD_CONCURRENCY_LIMIT", "您当前的上传任务较多，请稍后重试", 2)
             recent = self._recent[key]
             cutoff = now - 60.0
             while recent and recent[0] <= cutoff:
                 recent.popleft()
             if len(recent) >= self.settings.requests_per_minute + self.settings.burst:
-                raise UploadGuardError(429, "UPLOAD_RATE_LIMIT", "upload request rate exceeded", 60)
+                raise UploadGuardError(429, "UPLOAD_RATE_LIMIT", "上传请求过于频繁，请稍后重试", 60)
             recent.append(now)
             self._global_active += 1
             self._ip_active[key] += 1
@@ -297,7 +297,7 @@ class UploadResourceMiddleware:
 
         if scope.get("path") in self.RETIRED_PATHS:
             await self._response(UploadGuardError(
-                410, "RULESET_RETIRED", "RULESET_RETIRED"))(scope, receive, send)
+                410, "RULESET_RETIRED", "该上传入口已停用，请使用新版上传入口"))(scope, receive, send)
             return
 
         headers = Headers(scope=scope)
@@ -311,13 +311,13 @@ class UploadResourceMiddleware:
             else:
                 declared = None
         except ValueError:
-            await self._response(UploadGuardError(400, "INVALID_CONTENT_LENGTH", "invalid Content-Length header"))(scope, receive, send)
+            await self._response(UploadGuardError(400, "INVALID_CONTENT_LENGTH", "请求长度声明无效，请检查后重试"))(scope, receive, send)
             return
         if declared is not None and declared > limit:
-            await self._response(UploadGuardError(413, "UPLOAD_REQUEST_SIZE_LIMIT", "upload request body is too large"))(scope, receive, send)
+            await self._response(UploadGuardError(413, "UPLOAD_REQUEST_SIZE_LIMIT", "上传内容超过大小限制，请减少文件后重试"))(scope, receive, send)
             return
         if not headers.get("content-type", "").lower().startswith("multipart/form-data"):
-            await self._response(UploadGuardError(415, "MULTIPART_REQUIRED", "upload endpoints require multipart/form-data"))(scope, receive, send)
+            await self._response(UploadGuardError(415, "MULTIPART_REQUIRED", "请使用表单方式上传（multipart/form-data）"))(scope, receive, send)
             return
 
         key = self._client_key(scope)
@@ -336,16 +336,16 @@ class UploadResourceMiddleware:
             try:
                 message = await asyncio.wait_for(receive(), self.settings.receive_timeout_seconds)
             except asyncio.TimeoutError as exc:
-                raise UploadGuardError(408, "UPLOAD_RECEIVE_TIMEOUT", "upload receive timed out") from exc
+                raise UploadGuardError(408, "UPLOAD_RECEIVE_TIMEOUT", "上传超时未完成，请重试") from exc
             if message.get("type") == "http.request":
                 body = message.get("body", b"") or b""
                 received += len(body)
                 if received > limit:
-                    raise UploadGuardError(413, "UPLOAD_REQUEST_SIZE_LIMIT", "upload request body is too large")
+                    raise UploadGuardError(413, "UPLOAD_REQUEST_SIZE_LIMIT", "上传内容超过大小限制，请减少文件后重试")
                 elapsed = time.monotonic() - started
                 if (received and elapsed > self.settings.min_rate_grace_seconds
                         and received / elapsed < self.settings.min_rate_bytes_per_second):
-                    raise UploadGuardError(408, "UPLOAD_RATE_TOO_SLOW", "upload receive rate is too slow")
+                    raise UploadGuardError(408, "UPLOAD_RATE_TOO_SLOW", "上传速度过慢，连接已中断，请重试")
             return message
 
         async def guarded_send(message):
@@ -362,7 +362,7 @@ class UploadResourceMiddleware:
                 await self._response(error)(scope, receive, send)
         except asyncio.TimeoutError:
             if not response_started:
-                await self._response(UploadGuardError(408, "UPLOAD_TIMEOUT", "upload request timed out"))(scope, receive, send)
+                await self._response(UploadGuardError(408, "UPLOAD_TIMEOUT", "上传请求超时，请重试"))(scope, receive, send)
         finally:
             await self._release(key)
 

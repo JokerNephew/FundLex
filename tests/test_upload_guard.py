@@ -259,7 +259,7 @@ def test_retired_batch_route_is_rejected_before_multipart_parsing():
         _request_receive(b"not parsed"),
     ))
     assert messages[0]["status"] == 410
-    assert json.loads(messages[1]["body"])["detail"] == "RULESET_RETIRED"
+    assert json.loads(messages[1]["body"])["detail"] == "该上传入口已停用，请使用新版上传入口"
     assert seen is False
 
 
@@ -272,7 +272,7 @@ def test_app_rejects_retired_batch_and_guide_generation_oversize_before_routes(t
         data=b"--broken\r\nnot-a-header\r\n",
     )
     assert retired.status_code == 410
-    assert retired.json()["detail"] == "RULESET_RETIRED"
+    assert retired.json()["detail"] == "该上传入口已停用，请使用新版上传入口"
     oversized = client.post(
         "/api/guide-generation/runs", headers={"X-FundLex-User": "alice"},
         files={"file": ("regulation.docx", b"x" * 200)},
