@@ -761,8 +761,13 @@ def _model_summary(gateway: Any, rounds: int) -> dict:
     if callable(metrics):
         try:
             snapshot = metrics()
-        except Exception:
+        except Exception as exc:
+            # A missing metrics snapshot must not vanish silently: record the
+            # failure in the technical events dimension so cost/ledger gaps are
+            # explainable (FL-D936(8)).  This stays out of user-facing audits.
             snapshot = None
+            summary.setdefault("snapshot_errors", []).append(
+                {"kind": "metrics", "error_type": type(exc).__name__})
         if isinstance(snapshot, dict):
             summary["metrics"] = {key: snapshot.get(key) for key in (
                 "logical_calls", "http_attempts", "checkpoint_reuses", "prompt_tokens", "completion_tokens",
@@ -771,8 +776,9 @@ def _model_summary(gateway: Any, rounds: int) -> dict:
     if budget is not None and callable(getattr(budget, "snapshot", None)):
         try:
             summary["budget"] = budget.snapshot()
-        except Exception:
-            pass
+        except Exception as exc:
+            summary.setdefault("snapshot_errors", []).append(
+                {"kind": "budget", "error_type": type(exc).__name__})
     return summary
 
 
