@@ -1,0 +1,41 @@
+{
+  "word_merged_scroll": {
+    "longtaskCount": 1,
+    "longtaskTotalMs": 53,
+    "frames": 264,
+    "frameGapP95Ms": 33.3,
+    "framesOver25msPct": 10.6,
+    "lineRebuilds": 0,
+    "forceRefreshCalls": 4,
+    "forceRefreshMs": 32.2
+  },
+  "classic_left_scroll": {
+    "longtaskCount": 0,
+    "longtaskTotalMs": 0,
+    "frames": 257,
+    "frameGapP95Ms": 50.1,
+    "framesOver25msPct": 83.3,
+    "lineRebuilds": 242,
+    "forceRefreshCalls": 2,
+    "forceRefreshMs": 16.4
+  },
+  "word_splitter_drag": {
+    "longtaskCount": 0,
+    "longtaskTotalMs": 0,
+    "frames": 161,
+    "frameGapP95Ms": 16.8,
+    "framesOver25msPct": 1.9,
+    "lineRebuilds": 0,
+    "forceRefreshCalls": 76,
+    "forceRefreshMs": 472
+  },
+  "post_splitter_visible_index": {
+    "merged": 18,
+    "left": 1,
+    "right": 18
+  },
+  "post_gutter_visible_index": {
+    "left": 0,
+    "right": 18
+  }
+}
