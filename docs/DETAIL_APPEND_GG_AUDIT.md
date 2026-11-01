@@ -170,3 +170,221 @@
 - 状态与验证：**已登记，未修复（归属前端线）**；后端侧 kind_zh 已就绪并在 guide 系测试覆盖。
 - 下一步：前端线切换渲染字段并回归指引问题区块；并册时确认编号。
 - 变更记录：2026-11-01 新增。
+
+## FL-D906 requirements disposition_reason 被 walrus 无条件覆盖：确定性理由死赋值，兜底文案与实际处置矛盾（2026-11-01，全覆盖审计）
+
+- 发现日期：2026-11-01，27 文件全覆盖审计（子任务初报+主审计员读 requirements.py L90-162 亲验确认）。
+- 问题与影响：`_validate_requirement` L147-150 `if disposition_reason := str(item.get("disposition_reason") or "").strip(): pass else: disposition_reason = "模型对处置给出 uncertain…"`——无论模型是否给理由，L136/140/143/146 四条确定性改写分支刚写入的理由都被覆盖：①模型给了理由→模型理由胜出（与确定性改写的 disposition 不一致）；②模型没给→兜底文案固定写「uncertain」，而实际 disposition 可能是 no_contract_change/out_of_contract_scope/modify_contract。理由与处置事实矛盾，误导人工复核与下游 reason 展示。
+- 证据：requirements.py L136-150（L90-117 确认 disposition_reason 此前无初始化）。
+- 处理方法：本工单只读登记。修复方向：确定性理由优先（非空即留）→模型理由次之→按实际 disposition 生成兜底文案。
+- 状态与验证：**已登记，未修复**（本工单纪律只读）。正确性已主审计员亲验。
+- 下一步：修复工单纳入；补单测钉住三分支理由一致性。
+- 变更记录：2026-11-01 新增。
+
+## FL-D907 【P1】corpus_segmenter TOC 退出只认「第X部分/第X章」：正文以「第X条」起头的合同整篇正文静默漏切（FL-D900 同族未闭合变体）（2026-11-01，全覆盖审计）
+
+- 发现日期：2026-11-01，全覆盖审计（子任务初报+主审计员读 corpus_segmenter.py L24-68/L190-271 亲验确认）。
+- 问题与影响：FL-D900 修复了 TOC 进入侧（点线+页码才入 TOC 态），但退出侧 corpus_segmenter.py L244-248 只在 `level==1 and (_PART.match or _CHAPTER.match)` 时复位 in_toc；标题正则族根本没有「第X条」模式。真实目录之后正文若以第X条直接起头（无部分/章层级的基金合同常见形态），in_toc 永不复位，后续全部正文段落被 `continue` 静默跳过；表格在 in_toc 检查之前收集（L221-231），产出「只有表格条款」且 `if not raw` 不触发、无任何报错。
+- 证据：corpus_segmenter.py L34-41（标题/TOC 模式集）、L244-248（退出谓词）、L221-231（表格先行）、L270-271（raw 保护）。
+- 处理方法：本工单只读登记。修复方向：TOC 态下遇到任何非 TOC 形态的正文级标题（含第X条/一、/1.等）或连续 N 段非 TOC 文本即复位；PARSER_VERSION 升号并对受影响合同重切（同 FL-D900 守门节奏）。
+- 状态与验证：**已登记，未修复；影响面待量化**（需扫 514 份语料识别含目录且无部分/章层级的合同数）。
+- 下一步：修复+语料扫描量化+重切守门；与 FL-D900 并案评估是否同源补丁窗口。
+- 变更记录：2026-11-01 新增。
+
+## FL-D908 store fencing 长事务空窗：candidate_transaction 活跃连接跳过 _assert_fence，与 docstring「every write checked」矛盾（2026-11-01，全覆盖审计）
+
+- 发现日期：2026-11-01（子任务初报+主审计员读 store.py L248-277 亲验确认）。
+- 问题与影响：`_connect` L255-258 在 `_transaction_db` 活跃时直接 `yield active` 返回，不执行 L263-264 的 `_assert_fence`；而 fencing docstring（L268-273）声称每次写都在库上检查。candidate_transaction 长事务内（pipeline.py:941、human.py:38 调用）租约中途过期/被 reclaim 后，旧 worker 仍可在该事务内继续写候选版本，stale write 防护出现空窗。
+- 证据：store.py L253-265。
+- 处理方法：登记。修复方向：fencing 绑定后每次写前断言（含事务内复用连接），或事务提交前强制断言+失败回滚。
+- 状态与验证：**已登记，未修复**。
+- 下一步：修复工单纳入（与 fencing 单测同批做「租约中途失效」用例）。
+- 变更记录：2026-11-01 新增。
+
+## FL-D909 store start_step 显式 attempt 用 INSERT OR REPLACE 抹掉既有证据行（2026-11-01，全覆盖审计）
+
+- 发现日期：2026-11-01（子任务初报+主审计员读 store.py L845-870 亲验确认）。
+- 问题与影响：`start_step` 显式传入 attempt 时 L856-860 `INSERT OR REPLACE INTO gg_steps` 无条件清空该行 finished_at（置 NULL）、output_hash、error_code、payload——重跑同一 attempt 会抹掉此前已完成/失败 attempt 的证据行，破坏 gg_steps 可审计证据链；仅 attempt=None 路径（MAX+1）安全。另 L863-870 finish_step 与 update_impact/update_guide_item/update_requirement 的 UPDATE 均不查 rowcount，目标行不存在时静默空写（低危，并入本条登记）。
+- 证据：store.py L847-861、L863-870、L694-702、L1104-1110、L1158-1164。
+- 处理方法：登记。修复方向：start_step 显式 attempt 撞已完成行时拒绝或另起 attempt；四处 UPDATE 加 rowcount 校验抛 NotFound。
+- 状态与验证：**已登记，未修复**。
+- 下一步：修复工单纳入；补「重跑证据不丢」回归测试。
+- 变更记录：2026-11-01 新增。
+
+## FL-D910 store update_run/update_candidate payload 读-改-写无 BEGIN IMMEDIATE，并发丢失更新（2026-11-01，全覆盖审计）
+
+- 发现日期：2026-11-01（子任务初报+主审计员读 store.py L414-434 亲验确认）。
+- 问题与影响：`update_run` payload 路径 L421-428 读当前 payload_json→merge→写回，全程无 BEGIN IMMEDIATE（对比 enqueue L896/resume_run L1024 均有）；SQLite WAL 下两个并发 payload 更新各自读到同一基线，后提交者整包覆盖，payload 字段丢失更新（lost update）。update_candidate L479-487 同构。调用侧实例：worker.py L194 `{**get_run()...}` 全量回写会把并发新增键用陈旧副本覆盖。
+- 证据：store.py L419-433、L479-487；worker.py L192-198。
+- 处理方法：登记。修复方向：payload 合并放进 BEGIN IMMEDIATE 事务，或改 JSON_MERGE 服务端原子合并。
+- 状态与验证：**已登记，未修复**。
+- 下一步：修复工单纳入。
+- 变更记录：2026-11-01 新增。
+
+## FL-D911 store claim 退役谓词漏 'leased'：历史竞态残留的第二 job 可再被 claim，同 run 双活 epoch（2026-11-01，全覆盖审计）
+
+- 发现日期：2026-11-01（子任务初报+主审计员读 store.py L960-992 亲验确认）。
+- 问题与影响：claim 成功后退役同 run 重复 job 的 UPDATE（L984-986）`status IN ('queued','retry_wait')` 漏掉 'leased' 态；历史竞态留下的第二个 lease 已过期 job 不会被退役，其 claim 谓词 `status='leased' AND lease_until<now`（L976）仍通过，之后可被再次 claim——同一 run 出现两个活 epoch 并发处理。fence 能挡 stale 写，但浪费真实模型调用且重复副作用。
+- 证据：store.py L966-986。
+- 处理方法：登记。修复方向：退役谓词纳入 `'leased'`（lease 过期语义下安全）。
+- 状态与验证：**已登记，未修复**。
+- 下一步：修复工单纳入；补双活 epoch 回归用例。
+- 变更记录：2026-11-01 新增。
+
+## FL-D912 store 低危包：死旋钮/死表/反序列化防御不一致/注解契约失真（2026-11-01，全覆盖审计）
+
+- 发现日期：2026-11-01（子任务初报+抽查确认）。
+- 问题与影响：①L37 SCHEMA_VERSION="guide-generation-1" 定义后全仓库无引用（schema 演进无登记点）；②L221-223 gg_corpus_state 表建出后无任何读写（死表）；③L429-433 update_run 对 allowed 之外字段静默丢弃；④L838/844/1102/1126/1156 多处 `Model(**_loads(...))` 直接展开，合法 JSON 但键不符即 TypeError 打挂整表读取，与同文件 from_dict 键过滤风格不一；⑤L1344-1353 record_model_call 注 `-> None` 实返 call_id。
+- 证据：store.py 对应行号。
+- 处理方法：登记（与 FL-D827 低危登记同类，列新条目因属新一轮全覆盖审计的增量面）。
+- 状态与验证：**已登记，未修复**。
+- 下一步：并入下一轮低危清扫工单。
+- 变更记录：2026-11-01 新增。
+
+## FL-D913 worker 异常原文入 error_code/engine_error 并经 API 外泄——FL-D829 前端暴露的后端源头（2026-11-01，全覆盖审计）
+
+- 发现日期：2026-11-01（子任务初报；与 FL-D829 run a5525 实证互证）。
+- 问题与影响：worker.py L136/L186 `code = getattr(exc, "code", None) or str(exc)[:160] or type(exc).__name__`——未知异常以异常原文填充 error_code 入库，经 api.py `_public_run` 的 error_code 字段回前端（FL-D829 run a5525 的 `[Errno 13] Permission denied: '/home/opencode/data/funds_word'` 正是此路径产出）；engine 分支 L194-198 另把 `str(exc)[:500]` 写入 payload.engine_error。异常原文可含服务器路径/SQL/供应商报文，error_code 也不再是稳定枚举。
+- 证据：worker.py L136、L186-199；api.py public 字段；FL-D829 的 MySQL 实证记录。
+- 处理方法：登记。修复方向：未知异常统一映射 UNKNOWN_WORKER_ERROR（类名入 detail 字段，原文仅入服务端日志）；engine_error 同规则；api/public 输出白名单。
+- 状态与验证：**已登记，未修复**；与 FL-D829（前端渲染登记，修归前端线）构成前后端同一缺陷链，后端源头在本条。
+- 下一步：与 FL-D821 稳定码族并案修复；前端 FL-D829 联动验收。
+- 变更记录：2026-11-01 新增。
+
+## FL-D914 engine_compat 空 title 子串恒真：缺 title 解析组与任意条目「匹配」，capability gap 假阳性（2026-11-01，全覆盖审计）
+
+- 发现日期：2026-11-01（子任务初报+主审计员读 engine_compat.py L33-45 亲验确认）。
+- 问题与影响：L37 `if item.title and (item.title[:30] in title or title[:30] in item.title)`——guard 只验 item.title，未验解析组 title；解析组 title 为空时 `""[:30] in item.title` 恒真，该组与所有条目匹配，本应「无对应规则」的 ENGINE_CAPABILITY_GAP 被翻成 expressible，兼容性报告假阳性（对照 L39/L41 均双端非空守卫）。附带 P3：①L19-25 supported 与 unsupported_markers 词表重叠（直销/销售机构/持有期限/持续持有），unsupported 先判使 supported 四项成死代码；②L56-63 首个坏组即整体判 gap，结果依赖 matched 顺序；③L93 默认 output_dir=/tmp（共享可预测目录不清理）；④L109-111 错误码=异常类名（违反 FL-D821 稳定码原则，str(exc)[:500] 可带内部路径）；⑤L97 `router.gateways["primary"]` 硬编码键名，缺该键配置即永久 engine_error 而非显式配置错误。
+- 证据：engine_compat.py 对应行号。
+- 处理方法：登记。修复方向：title 分支加 `title and` 守卫；错误码稳定化；output_dir 默认受控目录。
+- 状态与验证：**已登记，未修复**。
+- 下一步：修复工单纳入；补空 title 组回归用例。
+- 变更记录：2026-11-01 新增。
+
+## FL-D915 benchmark 空分母记满分：「没测」被记成「全对」（2026-11-01，全覆盖审计）
+
+- 发现日期：2026-11-01（子任务初报+主审计员读 benchmark.py L92-152 亲验确认）。
+- 问题与影响：L98-99 `critical_requirement_recall = … if critical_requirements else 1.0`——gold 缺 critical 项时 recall 直接 100%；同形 L148-150 known_clause_pattern_recall、L169-171 condition_results。对照 pattern_results 内部 L148 用的是 `else None`（N/A 语义）——同一文件两种口径。空分母出现在 gold 缺项或语料无该 pattern 时，headline 指标失真。附带 P3：L122-132 无 impact 链路时任一 expected_action_term 命中即记 covered（无最少命中门槛）；L44/L87-91 gold JSON 无 schema 校验，缺键裸 KeyError。
+- 证据：benchmark.py 对应行号。
+- 处理方法：登记。修复方向：空分母输出 N/A/None 并单列分母；弱命中加门槛；gold 校验给稳定错误码。
+- 状态与验证：**已登记，未修复**。
+- 下一步：修复工单纳入；评测口径改动需同步冻结标签纪律（EVALUATION_AND_OPTIMIZATION_PLAN）。
+- 变更记录：2026-11-01 新增。
+
+## FL-D916 discovery sweep 窗口硬编码 [:8]，可配 max_requirements 调小即越界（FL-D823 修复引入的邻边缺口）（2026-11-01，全覆盖审计）
+
+- 发现日期：2026-11-01（子任务初报+主审计员读 discovery.py L470-500 亲验确认）。
+- 问题与影响：L479 `window = related[:8]` 硬编码 8；FL-D823 的补齐循环 `for item in related[8:]` 只在 `len(window) < max_requirements` 时追加。当配置把 path_b_max_requirements 调小到 <8 时，窗口恒为 8 超出自身上限，`_validate_sweep`（L390）按 max_requirement_ids 拒绝全部 finding，该批永远 model_error→重试→uncertain——配置小幅调低即静默亏覆盖。附带 P3：L552 模型返回的 impact_status 无白名单校验直接入 ImpactCandidate（脏串流进状态机被默默降权）；L715/731 changed 字典收集后未用；L283 source_sha256 为空串时跳过哈希校验属 FL-D828 同族 fail-open 分支（建议并入其登记）。
+- 证据：discovery.py L479-499、L390、L552。
+- 处理方法：登记。修复方向：`window = related[:min(8, max_requirements)]`；impact_status 白名单非法值归档到默认态并记 finding。
+- 状态与验证：**已登记，未修复**；FL-D823 主修复验证在。
+- 下一步：修复工单纳入；补 max_requirements<8 配置用例。
+- 变更记录：2026-11-01 新增。
+
+## FL-D917 pipeline 断点续跑 stage 哈希缺口：authoring/coverage 缓存不含 config/guide_scope/requirements（2026-11-01，全覆盖审计）
+
+- 发现日期：2026-11-01（子任务初报+主审计员读完哈希上下文确认）。
+- 问题与影响：L1119-1122 BUILD_LOCAL_GUIDE_CANDIDATES 的 stage 输入哈希只含 impacts id+identity；L1135-1138 SEMANTIC_COVERAGE 哈希漏 sweep evidence/requirements/config.semantic_applicability/guide_scope（对比 discovery/finalize 均含 config.to_dict()）。中途改 guide_scope_sections 或 semantic_applicability 配置后重跑，会静默复用过期 authoring/coverage 结果，破坏断点续跑的「输入变=缓存失效」正确性。附带 P3：L1093 INGEST_REGULATION 哈希硬编码 "regulation-1" 字面量，解析器升级不失效缓存。
+- 证据：pipeline.py L1117-1123、L1135-1138、L1093。
+- 处理方法：登记。修复方向：两个 stage 哈希纳入 config 相关字段与 requirements 内容哈希；INGEST 用 PARSER 常量。
+- 状态与验证：**已登记，未修复**。
+- 下一步：修复工单纳入；补「改配置重跑必失效缓存」回归。
+- 变更记录：2026-11-01 新增。
+
+## FL-D918 pipeline BUILD_EVIDENCE 排在 engine_compatibility 之前：开引擎兼容的 run 证据包永久记 engine "not_run"（2026-11-01，全覆盖审计）
+
+- 发现日期：2026-11-01（子任务初报+主审计员读完 L1154-1160/1219-1226 确认）。
+- 问题与影响：run() 内 BUILD_EVIDENCE stage 先于 `if self.config.run_engine_compatibility: self.run_engine_compatibility()` 执行，且 BUILD_EVIDENCE 的 stage 哈希不含 engine 结果；stage_evidence L1047 硬编码 `{"status": "not_run", …}` 读库。开了 engine 兼容的 run，最终 evidence 包永久记录 engine "not_run" 且不含 engine 模型调用/结果——证据包与 run 终态不一致，可审计性受损。
+- 证据：pipeline.py L1154-1160、L1219-1226、L1047。
+- 处理方法：登记。修复方向：engine 兼容挪到 BUILD_EVIDENCE 之前并纳入其输入哈希；或 evidence 阶段重读 engine 终态。
+- 状态与验证：**已登记，未修复**。
+- 下一步：修复工单纳入。
+- 变更记录：2026-11-01 新增。
+
+## FL-D919 repair/supersede 状态口径不一致与 repair target 不滤 status（2026-11-01，全覆盖审计）
+
+- 发现日期：2026-11-01（子任务初报+主审计员读 pipeline.py L683-690 与 repair.py 上下文确认）。
+- 问题与影响：①pipeline.py L687 supersede 过滤用 `finding.get("status") == "open"`，而全文件其余 critical/open 判定均用 `{"open","",None}`（L663/L636/L725）——status 为空串/None 的 finding 永不 supersede，既阻塞 repair 收敛又被 _refresh_quality_summary 继续计为 critical。②repair.py L65 by_item 收集 critical finding 时不滤 status，全部 critical 已 resolved 的条目仍被选为 repair target 白调一次模型并被无条件改写字段+升 version（无依据重写）。③同 run 两个 quality summary 口径不一（pipeline L638 major 统计不滤 status）。
+- 证据：pipeline.py L636-690；repair.py L38、L65。
+- 处理方法：登记。修复方向：统一 status 归一化谓词（一处定义全引用）；repair target 只取活跃 critical。
+- 状态与验证：**已登记，未修复**。
+- 下一步：修复工单纳入。
+- 变更记录：2026-11-01 新增。
+
+## FL-D920 corpus_catalog 目录扫描双缺口：符号链接跟随出语料目录 + 大写 .DOCX 静默缺席（2026-11-01，全覆盖审计）
+
+- 发现日期：2026-11-01（子任务初报+主审计员读 corpus_catalog.py L86-96 亲验确认）。
+- 问题与影响：①scan_corpus_directory 只验目录本身，目录内指向目录外的符号链接会被 read_bytes 跟随并解析入库——可写语料目录者能让系统读取/入库目录外 docx/PDF（风险取决于语料目录写权限边界）；②`root.glob("*.docx")` 顶层且大小写敏感，Linux 下 `XXX.DOCX` 被静默排除且不计入 errors，eligible_files 口径不含它，无任何痕迹。
+- 证据：corpus_catalog.py L86-96。
+- 处理方法：登记。修复方向：resolve 后校验前缀在语料根内（拒绝逃逸 symlink 并记 error）；后缀匹配大小写不敏感或把大写命中记入 errors。
+- 状态与验证：**已登记，未修复**。
+- 下一步：修复工单纳入。
+- 变更记录：2026-11-01 新增。
+
+## FL-D921 eligibility all_requirements_dispositioned 判据永真（死检查/语义待定）（2026-11-01，全覆盖审计）
+
+- 发现日期：2026-11-01（子任务初报+主审计员读 eligibility.py L80-90 与 models.py L177-185 亲验确认）。
+- 问题与影响：L85 `unhandled = sum(1 for item in requirements if not item.disposition)`——PolicyRequirement dataclass 默认 "uncertain" 且 __post_init__ 把空/非法 disposition 兜底为 "uncertain"，故 `not item.disposition` 对任何 PolicyRequirement 永 False，该闸门位恒通过（死检查）。「uncertain 算不算已处置」是业务语义问题：若不算，当前闸门把所有停留 uncertain 的 run 判格为合格；若算，该检查应删除或改名。另 L147 missing_topics 元素假设 dict（裸字符串列表会 AttributeError，数据漂移时 500 而非 fail-closed 输出）。
+- 证据：eligibility.py L38-52、L85、L147；models.py L177-185。
+- 处理方法：登记；语义取向上报主线裁定（uncertain 是否=已处置），按裁定改判据或删检查。
+- 状态与验证：**已登记，未修复（含业务待定项）**。
+- 下一步：主线裁定语义后修复。
+- 变更记录：2026-11-01 新增。
+
+## FL-D922 api.py 错误详情三形态：英文句子 detail、str(exc) 原文回吐、Content-Disposition 无转义（2026-11-01，全覆盖审计）
+
+- 发现日期：2026-11-01（主审计员横切补扫+子任务复核）。
+- 问题与影响：①L106/228/268/283/294/352 HTTPException detail 用英文句子（"guide generation run not found" 等），与同文件稳定码风格（UPPER_SNAKE）混用，前端若直渲 detail 即复现 FL-D829 类展示问题；②L200/214/230/232/350 `raise HTTPException(409, str(exc))` 异常原文回吐，当前抛点多是受控文案但无收口保证（store 层新增带路径异常时原样外泄）；③L296-299 未知 kind 回退文件名未经引号转义直接拼 Content-Disposition 带引号串（文件名含 `"` 时响应头拼坏）；④L368-371 rebuild-evidence 不校验 run 状态（对照 approve 有 RUN_NOT_COMPLETE 门），运行中的 run 可并发触发证据重建。
+- 证据：api.py 对应行号。
+- 处理方法：登记。修复方向：错误详情改稳定码白名单；str(exc) 仅在受控文案集内放行；文件名转义；rebuild 加状态门。
+- 状态与验证：**已登记，未修复**；16 路由鉴权与 owner 隔离逐路由核对通过（无鉴权缺口）。
+- 下一步：与 FL-D913/FL-D829 同批修复。
+- 变更记录：2026-11-01 新增。
+
+## FL-D923 quality.py 三处质量门表达/截断缺陷（2026-11-01，全覆盖审计）
+
+- 发现日期：2026-11-01（子任务初报+抽查确认）。
+- 问题与影响：①L216-217 复核上下文尾部 `text[:limit]` 硬截断，`[REAL_CONTRACT_EVIDENCE]` 恰为最后拼装段——超限最先丢合同证据，复核模型在无合同证据下判 fidelity，且截断无任何标记；②L285-294 `_normalise_reviewer_severity` 用英文关键词匹配模型自由文本 description（text_error_markers 全英文且定义后未用）——中文 critical 描述永不命中降级规则，归一化对中文输出名存实亡；③L161-165 「必须/应当+关联方」检查只验 new_text 同现、不验来源是否支持，描述却断言「来源未支持」——来源实际支持时产生事实性失真的 major finding。
+- 证据：quality.py L161-165、L216-217、L285-294。
+- 处理方法：登记。修复方向：截断重排关键段+加截断标记；severity 归一化改结构化输入；检出描述改为条件陈述。
+- 状态与验证：**已登记，未修复**。
+- 下一步：修复工单纳入。
+- 变更记录：2026-11-01 新增。
+
+## FL-D924 本轮全覆盖审计低危杂项包（各文件剩余 P3，按文件列全账）（2026-11-01，全覆盖审计）
+
+- 发现日期：2026-11-01。
+- 问题与影响（按文件，行号见签认表与审计报告）：
+  - prompts.py：指令「≤8 findings」与 schema maxItems=40 漂移（L445-446/L406）；全指令语料注入防护声明缺失（[Bxxxx] 仅声明地址性）；
+  - authoring.py：模型 related_but_different+uncertain 被无条件改写 no（L265-266）；_candidate_signature 死函数+死 hasattr 分支（L332-334）；merged 死赋值（L368）；死导入×4；_impact_context 字符截断静默丢尾部 impact（L205-210）；
+  - vector.py：embedding/Qdrant 请求无退避重试（L107-119/364-377）；rebuild 全量向量驻留内存（L244-247/398-401）；模块级 httpx 无连接复用；
+  - model_router.py：熔断重试 time.sleep(125) 持有 _call_gate 信号量，任一角色熔断即全局串行化一整冷却窗（L367/421-422）；env REQUEST_OPTIONS_JSON 裸 json.loads 无稳定错误码（L133-136）；
+  - lexical.py：avg_len 计算后未用于打分（L120）；token crc32 碰撞合并发帖表（L109）；注释称 section hints 不打分与实际相反（L83/L204-205）；
+  - models.py：RegulationBlock(**item) 无键过滤（L142）；PolicyRequirement.to_dict 字段被同名 payload 键覆盖（L189-197）；from_dict 不做类型矫正（L202）；
+  - human.py：AI 基线取「第一个 truthy guide_items」版本误取人工 draft（L55-58）；未知字段静默跳过（L63-65）；同批字节双读（L109-111）；
+  - service.py：_server_corpus_dir 死函数（L56-58）；FUNDLEX_GUIDE_DEFAULT_CORPUS_LIMIT 裸 int()（L118-119）；
+  - cli.py：read_bytes/json.loads 无包裹（L56/61）；errors[:20] 截断无溢出提示（L43）；
+  - export.py：DOCX 非原子写残留半成品（L71-74）；item.new_text 假非 None（L57-58）；
+  - residual.py：not_affected 小集合下负样本轮换失效（L117-119）；
+  - scope.py：双向子串匹配过宽（L56）；空 scope 静默 fail-open（L50-52，FL-D828 家族）；
+  - requirements.py：「可」单字过宽误判 permission（L262）；_EXPLICIT_CONDITION 吞整句（L176）；死参数 ordinal/existing_ids/run_id/prompt_versions（L98/L350-351）；corrections 通道标量字段无类型归一、requirement/subject/object 可被模型整段改写不重走校验（L568-579）；
+  - discovery.py：by_clause_id 循环内重复重建（L272）；旋转填充每轮重建 id set（L496）；docstring 与行为不符（"uncertain" vs 也处理 "affected"，L591/603）；
+  - coverage.py：_requirement_in_scope 内层全表扫 impacts（L384，O(V×R×I) 热点）；_sweep_state 死计算（L371）；unresolved↔uncertain 死分支（L528）；审计返回行全表扫 rows（L502/511）；覆盖层中止信号被 except Exception 吞并按 finding 继续（L465/566-605，与 discovery 策略不一）；
+  - pipeline.py：major 统计不滤 status 两 summary 口径不一（L638）；注释与 scope 过滤行为不符（L551-552）；candidate_transaction 内文件导出回滚留孤儿目录（L941-968）；_engine_html 英文技术串（L1252-1256）；跨模块导私有函数（L768）；rounds=0 被静默抬 1（L659/779）；clean_streak 记的是判定前旧值（L886）；L544 兜底候选绕过空文案守卫（触发路径经 requirements 校验不可达，降级登记）；L1224 engine attempt len+1 竞态（同 run 单活 job 弱化，降级登记）；
+  - engine_compat.py：四项异报告 P3 已并入 FL-D914；
+  - store.py：低危包见 FL-D912。
+- 证据：docs/guide-generation/FILE_AUDIT_SIGNOFF_20261101.md 签认表+六批审计报告行号。
+- 处理方法：统一登记，修复按主题分批；其中 fail-open 家族（scope L50-52、discovery L283）建议并入 FL-D828 的同一补丁窗口。
+- 状态与验证：**已登记，未修复**。
+- 下一步：低危清扫工单逐主题消化。
+- 变更记录：2026-11-01 新增。
+
+## FL-D925 corpus_segmenter 三处条款定位缺陷：数字起头句误判 heading 丢条文、anchor ordinal 撞号失真、title 判定优先级（2026-11-01，全覆盖审计）
+
+- 发现日期：2026-11-01（子任务初报+主审计员读 corpus_segmenter.py L190-271 复核确认）。
+- 问题与影响：①_NUM_ITEM(`^\d+[、．.]`)/_DOTTED(`^\d+(?:\.\d+)+`) 无「编号后须为短标题、无句读收尾」约束（对照 L156-158 对 bold heading 有 _SENTENCE_END 排除）——以十进制数起头且 ≤80 字的正文句子（费用率、比例列举段）被判 level-3 heading，而 heading 永不入 clauses，该句条文文本静默丢失且污染 section_stack 归属；②L228-229/L265-266 p 与 tbl 共用同一 ordinal 生成 xml_path，且空段/TOC 行被跳过不占号——ordinal 既非真实 OOXML 子节点序号，anchor 指向与 document.xml 实际位置不符，证据链追溯定位错误段落；③L250 运算符优先级使 title 判定实为 `endswith("基金合同") or ("基金合同" in text and len<=80)`，200 字内以基金合同结尾的长段可误判为 title（仅元数据，低危）。
+- 证据：corpus_segmenter.py L148-158、L228-229、L235-240、L250、L265-266、L304-305。
+- 处理方法：登记。修复方向：编号 heading 加句读排除与短标题约束；xml_path 改用真实 OOXML 子序号（含跳过元素）；title 判定加括号明确优先级。
+- 状态与验证：**已登记，未修复**。
+- 下一步：与 FL-D907 同一 segmenter 修复窗口处理；修后 PARSER_VERSION 升号+受影响合同重切。
+- 变更记录：2026-11-01 新增。
