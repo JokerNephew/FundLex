@@ -72,7 +72,7 @@ def test_value_summary_fee_copy_is_mapped_and_gets_only_real_operations():
     assert scopes["G15"].include_summary_copies is True
 
     body = _body_targets(inspection, {"G15": "p800", "G16": "p802", "G17": "p801"})
-    created = summary_copy_targets(body, RULES, inspection, sections, scopes)
+    created = summary_copy_targets(body, RULES, inspection, sections, scopes, facts=_facts())
     by_rule = {target.rule_id: target for target in created}
     assert set(by_rule) == {"G15", "G16"}
     assert by_rule["G15"].location == "p1258"
@@ -85,7 +85,7 @@ def test_value_summary_fee_copy_is_mapped_and_gets_only_real_operations():
 def test_value_summary_g15_g16_plan_without_compose_and_merge_to_new_policy():
     inspection, sections, scopes = _load(VALUE)
     body = _body_targets(inspection, {"G15": "p800", "G16": "p802", "G17": "p801"})
-    summary = summary_copy_targets(body, RULES, inspection, sections, scopes)
+    summary = summary_copy_targets(body, RULES, inspection, sections, scopes, facts=_facts())
     for target in summary:
         target.scope_id = f"{target.rule_id}:S25:L10"
     facts = _facts()
@@ -113,7 +113,7 @@ def test_jingning_summary_payment_and_usage_targets_are_recovered():
     assert scopes["G17"].include_summary_copies is True
 
     body = _body_targets(inspection, {"G15": "p769", "G16": "p769", "G17": "p770"})
-    created = summary_copy_targets(body, RULES, inspection, sections, scopes)
+    created = summary_copy_targets(body, RULES, inspection, sections, scopes, facts=_facts())
     mapping = {(target.rule_id, target.location): target for target in created}
     assert ("G15", "p1239") in mapping
     assert ("G16", "p1239") in mapping

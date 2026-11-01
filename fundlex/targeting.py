@@ -838,7 +838,8 @@ def _attach_candidate_coverage(target: Any, coverage: Mapping[str, Any]) -> Any:
 
 def summary_copy_targets(targets: Sequence[Any], rules_by_id: Mapping[str, dict],
                          inspection: Any, sections: Sequence[Any],
-                         scopes: Mapping[str, Any] | None = None) -> list[Any]:
+                         scopes: Mapping[str, Any] | None = None,
+                         *, facts: Any = None) -> list[Any]:
     """Create operation targets for real body->contract-summary clause copies.
 
     FL-D384/434/443 generalised this beyond byte-identical paragraphs.  A summary
@@ -875,7 +876,11 @@ def summary_copy_targets(targets: Sequence[Any], rules_by_id: Mapping[str, dict]
     active: list[Any] = [target for target in operation_targets
                          if getattr(target, "state", "") == "needs_edit"]
 
-    facts_stub = _facts_stub()
+    # FL-D863 follow-up: conditional guide rules (has_service_fee / class_count)
+    # must be probed with the product's REAL facts; the neutral stub makes every
+    # condition UNKNOWN and silently starves the summary-copy channel for every
+    # conditional rule (G05/G08/G11/G14/G15-G18/G19/G22).
+    facts_stub = facts if facts is not None else _facts_stub()
     created: list[Any] = []
     for rule_id, rule in rules_by_id.items():
         scope = scopes.get(rule_id) if scopes is not None else None
