@@ -8684,3 +8684,8 @@ H＝E×…
 - **处理方法**：建议双保险：①`_close_socket` 找不到 `_disconnect` 时 `log.warning` 并改为抛/记录（目前默默跳过）；②`runtime` 给 hash 的 `handler` 闭包加 `lambda data: entry["active"] and <dispatch>` 活跃位检查，使「标记 inactive 后立即停止派发」成为断连之外的第二道闸（active 已在 `_apps.pop` 后由关闭方置 False，检查成本为零）；③如 SDK 提供公开 `stop`/`close` 则优先使用并锁版本。
 - **状态**：已登记，待修复（低风险，产品删除语义 + 私有 API 依赖）。
 - **下一步**：确认锁定 lark-oapi 版本号（requirements）；随 FL-D903 一轮修复时加活跃位检查与日志。
+
+## FL-D986 PL1 线第二次主线树越权合并（2707298）（2026-11-01，纪律事件）
+- 事实：PL1 在主线树直接 `git merge` 其分支，与主线写入冲突（UU×2）；主线现场解决=内容无损保留（飞书 walkthrough/后端签认/验收标准总册同 commit 入册），但其 merge message 进入历史。
+- 处置：内容保留+纪律裁决已发（三次即迁树冻权）；用户验收新标准同步落地 docs/ACCEPTANCE_STANDARDS_20261101.md（S1-S4+双盲+抽验20%，用户指令原话：「你安排好对话或者子agent去检查也行，但是你得说清楚验收的标准」）。
+- 状态：open（观察是否三犯）。
