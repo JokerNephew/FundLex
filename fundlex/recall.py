@@ -13,7 +13,7 @@ from dataclasses import dataclass, field, replace
 from typing import Any, Iterable, Mapping, Sequence
 
 from .docx import BARRIER, DocxError, DocumentInspection, ParagraphSpan, TextSegment
-from .generation.flags import strategy_mode
+from .generation.flags import observe_registry_shadow, strategy_mode
 from .model import ModelError
 from .recall_prompts import (
     AUDIT_INSTRUCTION, AUDIT_PROMPT_VERSION, AUDIT_SCHEMA,
@@ -6806,7 +6806,13 @@ def append_separator(left: str, right: str) -> str:
 def _tier1_enabled() -> bool:
     """Phase-4 tier-1 generators are opt-in (plan §25): ``registry`` mode only."""
     try:
-        return strategy_mode() == "registry"
+        mode = strategy_mode()
+        if mode == "registry_shadow":
+            # FL-D934: shadow keeps the legacy outcome but observes what the
+            # registry decision would have been.  Two lines only, no behaviour.
+            observe_registry_shadow("tier1_enabled", "would_enable")
+            return False
+        return mode == "registry"
     except Exception:  # pragma: no cover - flag reading must never break planning
         return False
 

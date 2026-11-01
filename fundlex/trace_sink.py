@@ -197,6 +197,22 @@ def _write(record: dict[str, Any]) -> None:
         _LOGGER.warning("jsonl trace write failed for %s", target, exc_info=True)
 
 
+def record_event(kind: str, **fields: Any) -> None:
+    """Generic operational observation (registry-shadow telemetry etc.).
+
+    Shares the same never-fail discipline as every other sink path: when the
+    JSONL sink is off this is a no-op.
+    """
+    if not enabled():
+        return
+    seed = getattr(_ACTIVE, "seed", None)
+    record: dict[str, Any] = {"kind": kind}
+    if seed:
+        record["trace_id"] = trace_id_for(str(seed))
+    record.update(fields)
+    _write(record)
+
+
 @contextmanager
 def trace_document(*, name: str, document_id: str, metadata: dict | None = None,
                    tags: list[str] | None = None) -> Iterator[str]:
