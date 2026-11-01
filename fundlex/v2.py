@@ -1,4 +1,9 @@
-"""Rule-constrained AI locate / generate / verify engine (evaluation only).
+"""Rule-constrained AI locate / generate / verify engine (evaluation + delivery).
+
+This engine serves both lanes of ``v2_pipeline``: the evaluation harness and
+the formal delivery path (``delivery_status = complete`` when the review gate
+passes).  The doc-string previously claimed "evaluation only" (FL-D937(4)).
+
 
 The engine never trusts model-supplied character offsets or verification flags.
 Models propose evidence and text inside one contract paragraph plus labelled rule
