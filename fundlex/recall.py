@@ -7147,7 +7147,7 @@ def _validate_routed_policy(rule: dict, operations: Sequence[dict], facts: Facts
         # deterministic certification predicate (``fundlex.variants``) may add
         # wordings here; an anchored-but-uncertified candidate stays blocked.
         from .variants import authorized_variant_sentences
-        for sentence in authorized_variant_sentences(rule, operation, before):
+        for sentence in authorized_variant_sentences(operation, before):
             if sentence not in old_texts:
                 old_texts.append(sentence)
         new_text, slot_issues = instantiate_slots(fixed_text, facts)

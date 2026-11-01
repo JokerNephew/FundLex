@@ -456,12 +456,13 @@ def _evidence_matches_record(item: Mapping[str, Any], record: ObligationRecord) 
 
 
 def project(ledger: ObligationLedger, report: Mapping[str, Any], *,
-            rules_by_id: Mapping[str, Mapping[str, Any]] | None = None,
             scoped_rules: set[str] | None = None,
             scope_gaps: set[str] | None = None,
-            artifact_text: str | None = None,
             blocking_evidence: Iterable[Mapping[str, Any]] = ()) -> None:
     """Project only per-obligation artifact proof; scope/target absence never waives TRUE."""
+
+    # FL-D935(3): the old ``rules_by_id``/``artifact_text`` parameters were
+    # accepted but never consumed; the signature now matches reality.
     from .generation.effects import effect_proof_passed
     targets = _iter_targets(report)
     plans = _plan_by_target(report)
