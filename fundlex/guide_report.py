@@ -48,6 +48,15 @@ CODE_EXPLANATIONS: dict[str, dict[str, str]] = {
                                          "remedy": "按块报告改写指引保持一条义务一个指令块；新规政策需注册扩展"},
     "GUIDE_PARSE_ATTEMPTS_EXHAUSTED": {"zh": "解析多次失败已耗尽重试", "remedy": "请检查指引文件后重新上传"},
     "GUIDE_VERSION_SUPERSEDED": {"zh": "该版本已被更新的解析取代", "remedy": "请查看最新版本"},
+    "GUIDE_SECTION_HINT_EMPTY": {"zh": "该规则没有标注属于合同哪个章节",
+                                 "remedy": "多为解析波动，重试解析；持续出现请人工复核"},
+    "GUIDE_PARAGRAPH_ORDER": {"zh": "规则引用的来源段落顺序或唯一性不规范",
+                              "remedy": "多为解析波动，重试解析；持续出现请人工复核"},
+    "GUIDE_COVERAGE_GAP": {"zh": "指引有段落没有被任何规则覆盖",
+                           "remedy": "若为有效指引内容，请调整该段表述后重新上传解析；若为标题性文字属正常"},
+    "GUIDE_CANARY_LEGACY_RULE_UNREGISTERED": {"zh": "旧格式规则缺少可注册的操作标识（按兼容路径执行）",
+                                              "remedy": "建议重新解析为带操作标识的新格式；仅提示，不影响启用"},
+    "GUIDE_DOCUMENT_INVALID": {"zh": "已保存的解析文档不合法", "remedy": "请重新解析该版本"},
 }
 _MODEL_FAILED_PREFIX = "GUIDE_MODEL_FAILED:"
 
