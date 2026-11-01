@@ -388,3 +388,56 @@
 - 状态与验证：**已登记，未修复**。
 - 下一步：与 FL-D907 同一 segmenter 修复窗口处理；修后 PARSER_VERSION 升号+受影响合同重切。
 - 变更记录：2026-11-01 新增。
+
+## FL-D926 直驱冒烟工具把合同字节作为「指引源」上传：source_sha256 必不匹配，parsed 形态 engine drive 必败（2026-11-01，棒1 实战验证发现）
+
+- 发现日期：2026-11-01，棒1 多形态矩阵 engine drive 子项实证（worker 终态 error_code=GUIDE_NOT_CERTIFIED，failures=['source_sha256_mismatch']）。
+- 问题与影响：tools/guide_parse_benchmark.py::engine_smoke（约 L120-122）`create_custom_version(store,"qa",contract.name,contract.read_bytes())`——把**合同 DOCX 字节**当指引源上传；而版本 source_sha256 由上传字节哈希得出，_bound_guide_document→validate_runtime_guide 会核对文档内嵌 source_sha256（指南源 SHA）与版本记录值，二者必不同。因此「parsed（已解析自定义指引）形态直驱修订」在该工具下**永远无法真实通过**，此前该类 smoke 的交付证据实际只覆盖了 builtin 形态；生产上传路径本身无恙（指引源=用户上传指引文件）。
+- 证据：tools/guide_parse_benchmark.py:120-122；实证复现 /tmp/opencode/qa/guide-matrix drive 库 guide_versions.source_sha256 与 rules_json 内嵌 source_sha256 不一致；对照 fundlex/guide.py:971 validate_runtime_guide 与 jobs.py:573 _bound_guide_document。
+- 处理方法（已实施）：本线矩阵工具 tools/guide_parse_shape_matrix.py 已修正为传**指引文件字节**（engine_drive(document, guide_path, ...)，并在 docstring 写明原因）；benchmark 工具同款调用建议主线同步修正（本线只读不改正）。
+- 状态与验证：**本线工具已修复并复跑验证**；benchmark 侧修复属后续主线工单（登记，未修复）。
+- 下一步：主线修正 benchmark engine_smoke 的同源调用，并以驱动成功为证据闭环。
+- 变更记录：2026-11-01 新增。
+
+## FL-D927 replace/delete 操作 old_text_variant 为空仍可过门 certified：规则永不可达的解析质量空档（2026-11-01，棒1 矩阵实证）
+
+- 发现日期：2026-11-01，棒1 七形态真实模型矩阵×引擎直驱实证。
+- 问题与影响：S4 勘误微指引解析产出 `replace` 操作 old_text_variant=null、new_text="1.2%"；S2 表形态产出 `delete` 操作 old_text_variant=null。无锚点旧文的 replace/delete 在引擎侧**永不可达**（无处定位），但该版本仍能过全部认证门（validation clean + canary passed + checklist pass）并 enable，实际驱动总目标数恒 0——「解析通过却永远不改任何合同」的质量空档。canary 现有检查（OP_UNREGISTERED/ROUTE_BLOCKED/DEAD_CONDITION/COMPILE）覆盖注册路由与条件恒假，未覆盖「操作缺必要锚点参数」这一执行死端。
+- 证据：三跑驱动库 rules_json（S4 e8eb2bf9…G01 replace old_text_variant=null；S2 3067354e…G01 delete 同）；驱动 4 合同 total=0；对照 guide_canary.py L150-187 检查集无 op 参数完备性项。
+- 处理方法（建议，本线只读不动代码）：canary/guide_parse 确定性校验增加「replace/delete 须具非空 old_text_variant 或 anchor」的 fatal/advisory 项；并考虑 section_hint 缺失（泛化编号形态 S3）时 append 定位率下降的提示级检查。另注意同一语义在标准标题形态（S1）可命中而泛化编号形态（S3 G02）在 A50 合同 0 目标——形态影响定位率，属既有设计边界如实记录。
+- 状态与验证：**已登记，未修复（本线不改正）**；结论由真实模型链路产物直接实证。
+- 下一步：主线裁定检查级别（fatal 或 advisory）后在 canary/校验层实施，回归复跑本矩阵。
+- 变更记录：2026-11-01 新增。
+
+## FL-GGAPPLY-01【占位，号段申请中】指引提取层不读 OOXML 脚注：脚注承载规则的记忆性丢失（形态库 FF-1）（2026-11-01，总攻压测）
+
+- 占位说明：按总攻纪律③先向主线申请号段（主线已用至 FL-D997，申请 FL-D998~，见状态文件）；批复后替换占位号，条目内容不变。
+- 发现日期：2026-11-01，A6 形态压测 T5_footnote_rules（真实 OOXML footnotes.xml 承载修订执行口径，正文仅「见脚注①」）。
+- 问题与影响：`extract_guide_source` 只读 word/document.xml 的正文段与表（guide-parse-2），脚注文字对解析全链不可见——该形态下解析中空转：模型如实保守地 noop+notes 标记「引用悬空」，验证器中文诊断为「脚注①的具体内容未包含在指南文本中」，三轮修复无法收敛，版本终态 failed（fail-closed，方向正确；属提取层机制缺口）。
+- 证据：一轮实测版本 issues（verification.findings[kind=missing_reference, kind_zh=引用未解析]，区块报告 blocks_total=1）。
+- 处理方法（已实施，机制修复非单件特判）：提取层泛化读取 word/footnotes.xml——跳过 separator/continuation，按序号输出「脚注<n>：」标记段（正文索引不变，正文纯净文件的提取集合与 parse-2 完全一致，mutation 反例钉住）； malformed footnotes.xml 容错不炸；PARSER_VERSION 升 guide-parse-3。
+- 状态与验证：**已修复并复验通过（本树 commit e36548e）：相关 4 文件套件（test_guide.py 24 含 5 项脚注新测／test_guide_canary.py 10／test_guide_parse_quality.py 9／test_guide_smoke.py 3）合计 46 passed；parse-3 全量压测复验已通过（T5 failed→certified，见形态库/登记册）。**
+- 下一步（均已闭环）：T5 复验 failed→certified 已回填形态库与失败族登记册（0b6a31a/6bbd2a5）；剩余仅主线核拨正式编号。
+- 变更记录：2026-11-01 新增；2026-11-01 状态推进为复验通过（盲审 NOTES-2 修正口径）。
+
+## FL-GGAPPLY-02【占位，号段申请中】模型失败诊断把「内容不是指引」误诊为「服务暂不可用」（A7 空档）（2026-11-01，总攻压测）
+
+- 占位说明：同 FL-GGAPPLY-01。
+- 发现日期：2026-11-01，A6 压测 N3_garbage_semantic（菜谱/天气/纪要内容的合法 DOCX）。
+- 问题与影响：模型对非指引内容反复输出非法 schema，终码 GUIDE_MODEL_FAILED:MODEL_SCHEMA_INVALID；`guide_report._explain` 对 GUIDE_MODEL_FAILED:* 一律诊断为「模型服务调用失败…多为服务暂不可用或限流，稍后重试解析」——对非指引文件是**事实性误诊**（重试永无效），用户被引向无谓重试。
+- 证据：N3 版本 parse_report entries.reason_zh/remedy_zh 原文。
+- 处理方法（已实施，通用机制非单件特判）：说明文案改为双修因表述「模型未能解析该内容（码）→请确认上传文件确为修订指引（非指引内容无法解析出修订规则）；若确认是指引仍失败，多为服务暂不可用或限流…」——真暂态与真垃圾两种情形都不说谎。
+- 状态与验证：**已修复并复验通过（e36548e + d584602 文案钉测）；同套件 46 passed（基数同 FL-GGAPPLY-01）；N3 诊断原文已在压测版本 issues 实测为新双修因文案。**
+- 下一步（已闭环）：N3 复验 diagnosis 原文=新文案（6bbd2a5/报告抽查）；剩余仅主线核拨正式编号。
+- 变更记录：2026-11-01 新增；2026-11-01 状态推进为复验通过（盲审 NOTES-2 修正口径）。
+
+## FL-GGAPPLY-03【占位，号段申请中】admission 与执行双层对 generated 区位操作身份判定不一（FF-T7 缝隙，canary 守住）（2026-11-01，总攻压测深层取证）
+
+- 占位说明：同 FL-GGAPPLY-01（申请号段 FL-D998~）。
+- 发现日期：2026-11-01，A6 压测 T7_conditional「附条件适用」形态深层取证。
+- 问题与影响：对 bind 生成的 positional operation_id（如 T7 第二分支落到 `G01:1`，内置注册表无此键），三层判定不一：①`jobs._bound_guide_document` 的 admission 谓词 `generation.registry.operation_registry_coverage_gaps` **跳过** `operation_id_generated=True 且规则名在 STRATEGY_REGISTRY` 的操作→gaps=[](放行）；②运行时 `_registry_execution_authoritative`（recall.py）只看 operation_id 存在性，把这类规则当 authoritative→routed 执行对 `G01:1` 抛 `RECALL_OPERATION_REGISTRY_MISSING`（fail-closed 于执行中）；③启用门 `guide_canary.blocking_gaps` 同样判 fatal OP_UNREGISTERED→版本 needs_review 不可启用。也就是说：canary 的「严」是与执行一致的、保护性的；admission 谓词的「宽」才是缝隙——若无启用门，该版本会在修订执行中失败。我（本线）一度误向「canary 向 admission 看齐」修复，深挖后已整体回退并改钉测试（7d131f4），如实留史。
+- 证据：registry.py L295-318（generated 跳过条款）；recall.py L2694-2710（_registry_execution_authoritative 全面无视 generated 标记）；压测 T7 两轮 canary OP_UNREGISTERED=G01:1；对照 MERGED 夹具注释「runtime router failed closed on」与该夹具经 admission gaps=[] 的实测。
+- 处理方法（建议，需主线裁定，本线不改运行时语义）：二选一——a) registry.py admission 去掉 generated 跳过条款（与执行/enable 统一 fail-closed）；b) 运行时把 generated id 规则降级为 legacy 执行（语义放松，需证明兼容路径正确执行条件分支）。在裁定前，canary 保持现状（needs_review 拦截）。
+- 状态与验证：**已登记（未修，待主线裁定）**；本树已钉执行一致性测试（tests/test_guide_canary.py 三例：generated 越区位仍 fatal、出版方 id 未注册仍 fatal、未知规则名仍 fatal）+test_guide.py 24，合计 34 passed。
+- 下一步：主线裁定 a/b；裁定后统一三层谓词并复跑 T7 压测。
+- 变更记录：2026-11-01 新增（含本人修复方向误走的诚实回退记录）。

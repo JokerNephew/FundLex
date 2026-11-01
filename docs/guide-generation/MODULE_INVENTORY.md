@@ -172,7 +172,7 @@ worker claim(lease+fencing) ──> GuidePipeline.run() 逐 stage(输入哈希�
 > **明确留给后续工单**的全部缺口」的单列视图。每条给出处、定级与建议去向；均已入册
 > docs/DETAIL_APPEND_GG_AUDIT.md。本线审计纪律为只读代码，修复均不在本线实施。
 
-### A. 本线新发现（FL-D906~925，按处置优先级）
+### A. 本线新发现（FL-D906~927，按处置优先级）
 | 编号 | 定级 | 一句话 | 建议去向 |
 | --- | --- | --- | --- |
 | FL-D907 | **P1** | segmenter TOC 退出只认「第X部分/章」，正文以「第X条」起头的合同整篇正文静默漏切（FL-D900 同族未闭合变体） | 修复首刀：修正退出谓词+PARSER_VERSION 升号+语料扫描量化+受影响合同重切（同 FL-D900 守门节奏） |
@@ -194,6 +194,10 @@ worker claim(lease+fencing) ──> GuidePipeline.run() 逐 stage(输入哈希�
 | FL-D919 | P3 | repair/supersede status 口径不一+repair target 不滤 status 白调模型 | 低危清扫工单 |
 | FL-D923 | P3 | quality 复核截断先丢合同证据、severity 归一化英文化失效、检出描述失真 | 质量门表达修复工单 |
 | FL-D912 | P3 | store 低危包（死旋钮/死表/反序列化防御不一/注解契约失真） | 低危清扫工单 |
+### A0. 棒1 真实矩阵实证新增（FL-D926~927）
+| FL-D926 | P2 | benchmark 冒烟工具把合同字节当指引源上传，parsed 形态直驱必败（本线矩阵工具已修） | 主线修正 benchmark engine_smoke 同源调用并补驱动成功证据 |
+| FL-D927 | P2 | replace/delete old_text_variant 空锚点仍可 certified→规则永不可达（质量门空档，S2/S4 实证） | canary/校验层增锚点完备性检查（级别待主线裁定）后复跑矩阵回归 |
+
 | FL-D924 | P3 | 全文件低危杂项全账（无重试/内存驻留/死代码增补/截断面/注释漂移等 40+ 子项） | 低危清扫工单（fail-open 子项并入 FL-D828 同窗口） |
 
 ### B. 既往遗留（本线复核仍在、未闭合）
